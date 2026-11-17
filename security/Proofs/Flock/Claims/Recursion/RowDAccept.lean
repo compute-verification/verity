@@ -44,33 +44,7 @@ import Proofs.Flock.Claims.Recursion.VerdictRowG
 import Proofs.Flock.Claims.Recursion.VerdictRowRDeployed
 import Proofs.Flock.Soundness.Refine.Seam
 
-/-!
-# `TargetDMerkle` from what the parts accept
-
-`TargetDMerkle` (`NonVacuousRows`, the `DecompB` assembly's row D leaf) is asked at every decision `At` admits: every
-inner statement, messages and coins at which the base checks and the parts' pieces `P` hold, an adversarial prover's
-included (`hpieces_of_targets`, then `DecompB`'s `∀ c ws`). No honest prover's equation holds there, and the inner
-verifier's acceptance is what `DecompB` concludes, so neither can give it. What the decision does carry is the parts'
-own checks: row D's `rec-open` pieces among `P` (`openHolds`, each query's `QueryOpens`) and row C's decode (from the
-`shaped` base check), which fixes the caps' and openings' shapes.
-
-* `Rows.levelCheck_of_queries`: a level's Merkle check passes where its caps and openings have their shapes
-  (`CapsAt`, `LevelShaped`) and each query opens (`QueryOpens`), by `merkleCheck_of`.
-* `queryOpens_congr`: `QueryOpens` reads a side only through its schedule, `capAt` and `openAt`, so it moves between
-  sides that agree on those.
-* `DecAt.sideAtR_opens`: at a decision, the assembly's side `OpenLower.sideAtR rd` agrees with the decided side
-  `D.side` on the schedule, every level's cap (`FitsRep.cap`, `FitsRep.tops`) and every level's openings (both are the
-  last message's proof's, which `absorbedFrom` keeps). The two sides aren't equal: `absorbedFrom` takes the messages,
-  nonces, OOD values and `finalProof.yr` from the fitted proof, which `sideAtR` doesn't read.
-* `targetDMerkle_of_accept`: `TargetDMerkle` at any `P` that holds row D's pieces at a side and position (`hP`), where
-  the side agrees with the decision's on what `QueryOpens` reads (`hside`) and the positions are the verifier rows'
-  (`hpos`). The coins are the rep's recorded rounds (`cfOf`) from Ligerito's first round (`lgStart`), and the positions
-  are `DecAt.htie`.
-* `openHolds_of_vrows`: the parts' pieces `vrows` hold their `rec-open` pieces (`hP` at the assembly's `PD`).
-* `targetDMerkle_of_accept_rows`, `targetDMerkle_of_accept_sideAtR`: with nothing open, at the parts' pieces read at
-  `Rows.sideAt rd` (`DecAt.sideAt_eq`) or the assembly's `OpenLower.sideAtR rd` (`DecAt.sideAtR_opens`), and at
-  `Rows.posAt` (`DecAt.posAt_eq`).
--/
+/-! `TargetDMerkle` from what the parts accept, since at an adversarial decision no honest prover's equation holds and the inner verifier's acceptance is what `DecompB` concludes. -/
 
 @[expose] public section
 
@@ -88,8 +62,6 @@ open FlockComplete.Replay.Lg (qOff)
 
 namespace Rows
 
-/-- **A level's check passes where each of its queries opens**: at caps of the schedule's shape (`CapsAt`) and
-openings of `pos.size` queries' shape (`LevelShaped`), where every query opens at its position (`QueryOpens`). -/
 theorem levelCheck_of_queries {sch : Flock.Schedule} {cap : Array ByteArray} {p : LigeritoProof} {ℓ : ℕ}
     {pos : Array ℕ} (hℓ : ℓ < sch.levels.size) (hcaps : CapsAt sch cap p) (hsh : LevelShaped sch p ℓ pos.size)
     (hq : ∀ j < pos.size, QueryOpens sch cap p ℓ j pos[j]!) : levelCheck sch cap p ℓ pos = .ok () := by
@@ -109,8 +81,6 @@ theorem levelCheck_of_queries {sch : Flock.Schedule} {cap : Array ByteArray} {p 
   simp only [sibsOf, Array.length_toList, Array.size_extract]
   omega
 
-/-- **`QueryOpens` moves between sides that agree on what it reads**: the schedule, every level's cap (`capAt`) and
-every level's openings (`openAt`). -/
 theorem queryOpens_congr {s s' : OpenSide} (hs : s.sch = s'.sch)
     (hc : ∀ ℓ, FlockSoundness.Refine.capAt s.cap s.lig ℓ = FlockSoundness.Refine.capAt s'.cap s'.lig ℓ)
     (ho : ∀ R ℓ, FlockSoundness.Refine.openAt s.lig R ℓ = FlockSoundness.Refine.openAt s'.lig R ℓ) {ℓ j pos : ℕ}
@@ -119,7 +89,6 @@ theorem queryOpens_congr {s s' : OpenSide} (hs : s.sch = s'.sch)
     | (unfold QueryOpens at h ⊢; rwa [← hs, ← hc, ← ho])
     | (simp only [QueryOpens, hs, hc, ho] at h; exact h)
 
-/-- **What `readRep` reads is `absorbedFrom` of the opened proof**, at some fitted proof `a`. -/
 theorem readRep_absorbed {c : FlockDeploy.RepCtx} {rows : List (List ByteArray)} {q p : Flock.Proof}
     {ms : List Msg} (h : FlockDeploy.readRep c rows q = some (p, ms)) : ∃ a, p = FlockDeploy.absorbedFrom c a q := by
   by_cases hx : ∃ pT : Flock.Proof × F128, FlockDeploy.FitsRep c rows pT.1 pT.2
@@ -133,9 +102,6 @@ namespace DecAt
 variable {rd : Msg → Option FinalP} {x : Msg} {ms : List Msg} {cs : List Coin}
   (D : DecAt rd x ms cs) (cls : HClass) (i : ℕ)
 
-/-- **The assembly's side reads what the decided side opens**: at a decision, a piece of table `i < sts.size` and rep
-`r` reads, through `OpenLower.sideAtR rd`, the table's schedule, rep `r`'s decided level caps (`FitsRep.cap`,
-`FitsRep.tops`) and its openings (`absorbedFrom` keeps the last message's). -/
 theorem sideAtR_opens (hi : i < D.sts.size) (r : Fin 2) (q : OpenPiece) (ht : q.table = i) (hr : q.rep = r.val) :
     (OpenLower.sideAtR rd x ms q).sch = (D.side cls i r).sch ∧
       (∀ ℓ, FlockSoundness.Refine.capAt (OpenLower.sideAtR rd x ms q).cap (OpenLower.sideAtR rd x ms q).lig ℓ =
@@ -209,10 +175,6 @@ namespace Top
 variable {rd : Msg → Option FinalP} {P : Msg → List Msg → List Coin → Prop}
   {acc : Msg → List Msg → List Coin → ℕ → Array F128}
 
-/-- **`TargetDMerkle` from the parts' `rec-open` pieces**: wherever `P` holds row D's pieces at `side` and `posAt`
-(`hP`), and at a decision the side agrees with each rep's decided side on what `QueryOpens` reads (`hside`) and the
-positions are those its verifier rows sample (`hpos`). Each rep's proof passes `MerkleOk` at its recorded rounds from Ligerito's first round: row C's decode gives
-the caps' and openings' shapes, and the pieces open every query at the rows' positions (`DecAt.rowDPieces_cover`). -/
 theorem targetDMerkle_of_accept (key : ℕ → ℕ → ℕ → ℕ → ℕ × ℕ × ℕ × ℕ)
     (side : Msg → List Msg → OpenPiece → OpenSide) (posAt : Msg → List Coin → OpenPiece → ℕ)
     (hP : ∀ (x : Msg) (ms : List Msg) (cs : List Coin), P x ms cs →
@@ -271,8 +233,6 @@ theorem targetDMerkle_of_accept (key : ℕ → ℕ → ℕ → ℕ → ℕ × �
   rw [Rows.plain_opsWith_std, With.ofScheme_merkleCheck, Rows.opening_eq]
   simpa only [levelCheck, FlockVBridge.Family.Conss.getD_default] using hc
 
-/-- **The parts' pieces hold their `rec-open` pieces**: where every piece of `vrows` holds as `vholds` says, every
-`rec-open` piece holds (`targetDMerkle_of_accept`'s `hP` at the assembly's `DecompBR.PD`). -/
 theorem openHolds_of_vrows {resP : Msg → List ResPiece} {key : ℕ → ℕ → ℕ → ℕ → ℕ × ℕ × ℕ × ℕ}
     {capP : Msg → List CapPiece} {resH : ResPiece → Msg → List Msg → List Coin → Prop}
     {side : Msg → List Msg → OpenPiece → OpenSide} {posAt : Msg → List Coin → OpenPiece → ℕ}
@@ -282,9 +242,6 @@ theorem openHolds_of_vrows {resP : Msg → List ResPiece} {key : ℕ → ℕ →
     ∀ q ∈ Rows.rowDPieces key x, openHolds side posAt q x ms cs := fun q hq =>
   h (.opn q) (List.mem_append.2 (Or.inl (List.mem_append.2 (Or.inr (List.mem_map.2 ⟨q, hq, rfl⟩)))))
 
-/-- **`TargetDMerkle` at the parts' pieces, with nothing open**: at pieces whose `rec-open` ones are row D's read at
-`Rows.sideAt rd` and `Rows.posAt` (the assembly's `PD … (Rows.sideAt rd) Rows.posAt`), the side and position ties are
-`DecAt.sideAt_eq` and `DecAt.posAt_eq`. -/
 theorem targetDMerkle_of_accept_rows {resP : Msg → List ResPiece} {key : ℕ → ℕ → ℕ → ℕ → ℕ × ℕ × ℕ × ℕ}
     {capP : Msg → List CapPiece} {resH : ResPiece → Msg → List Msg → List Coin → Prop}
     {capH : CapPiece → Msg → List Msg → List Coin → Prop} :
@@ -301,10 +258,6 @@ theorem targetDMerkle_of_accept_rows {resP : Msg → List ResPiece} {key : ℕ �
         omega
       exact D.posAt_eq cls (acc x ms cs) i (D.names_nodup hst hf hx) hi hti r hv q ht hr)
 
-/-- **`TargetDMerkle` at the assembly's pieces, with nothing open**: at pieces whose `rec-open` ones are row D's read at
-the assembly's side `OpenLower.sideAtR rd` and at `Rows.posAt` (`DecompBR.PD … (OpenLower.sideAtR rd) Rows.posAt`),
-the side agrees with the decision's on what `QueryOpens` reads (`DecAt.sideAtR_opens`) and the position tie is
-`DecAt.posAt_eq`. -/
 theorem targetDMerkle_of_accept_sideAtR {resP : Msg → List ResPiece} {key : ℕ → ℕ → ℕ → ℕ → ℕ × ℕ × ℕ × ℕ}
     {capP : Msg → List CapPiece} {resH : ResPiece → Msg → List Msg → List Coin → Prop}
     {capH : CapPiece → Msg → List Msg → List Coin → Prop} :

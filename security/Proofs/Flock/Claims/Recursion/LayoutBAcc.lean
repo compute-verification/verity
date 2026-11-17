@@ -6,37 +6,7 @@ public import Proofs.Flock.Claims.Recursion.BoundAccepts
 public import Proofs.Flock.Claims.Recursion.RowsCover
 public import Proofs.Flock.Claims.Recursion.SchedDense
 
-/-!
-# V*'s bound layout with the `rec-acc` chain's rows as slots (`layoutBAcc`), and where the messages carry them
-
-V\* commits one `rec-acc` chain (`rec_outer.Chain`): rows `0 … 2n` for both reps' `n` openings each, rep-major, then by
-level and query, and R's openings after them. A level's unit reads its opening's row as `acc` (`RecVStar.accReads`,
-which `RecVStar.checkAccReads` holds the reads file to), and V\*'s algebra parts read the reps' ends as `acc0` (rows `0`
-and `n`) and `acc1` (rows `n` and `2n`) at instances `0` and `1` (`rec_vstage.stage_stacked`). `layoutBTops` places no
-row of it, so nothing reads the chain off the messages. `layoutBAcc rest` is `layoutBTops (finAcc rest)` with the chain's
-rows as `LayoutB`'s shared-row slots:
-
-* **The holdings** (`accHoldings`): at part `s`, each port and instance at which its statement reads row `p` of the
-  chain (`accRead`), each as the port's row at the instance (`rowHidden`, `accSegs`). A level's `acc_out` is an output
-  and no holding here: its row `p + 1` is the next unit's `acc`.
-* **The slots**: slot `Nat.pair p j` is row `p`'s `j`-th holding at a part. Row `p`'s owner (`accCanon`) is the first
-  part holding it once, else the first holding it at all; the owner holds every slot of row `p` at its first holding.
-* **Where the messages carry them** (`finAcc`, `accIn`): the bound last message, after `finOpen rest`'s pieces, carries
-  each held row once, as its owner holds it (`accBlock`), and every slot of row `p` sits there.
-* **The rows' hm96 calls** (`accCalls`): each holding's port's two calls at its instance (`hmCalls`), and at a level's
-  `acc` its unit's `acc_out` output row's (`accOutCalls`, the row at its output bits, `accOutForms`), beside
-  `layoutBTops`' calls (`layoutBAcc_calls`). `rowCall_held` and `outCall_held` place a holding's row call and its
-  unit's `acc_out` row call among its part's calls.
-
-`rowsLaid_layoutBAcc` proves `RowsLaid` with no hypothesis: the readers' messages carry each slot's owner's value where
-`accIn` places it. `chainAt rest` reads row `p` there as two elements, and `chainAt_held` proves it reads the row's
-owner's value. `heldB_layoutBAcc_dense` is `HeldB` (the extra pieces are parts', `finPieces_finAcc`), and
-`readsRows_layoutBAcc` is `ReadsRows` from `RowsAgree` (`readsRows_of_agree`), which `rowsAgree_of_commits` gives off the
-rows' commits and the verifier's evaluations (`layoutBAcc_owner` is its owner premise).
-
-The last message is the bound record's, read by `final` and the reader `rd`; the chain block follows `finOpen`'s pieces,
-so a `final` that reads those leaves it as a suffix of the element-level message.
--/
+/-! V*'s bound layout with the `rec-acc` chain's rows as slots (`layoutBAcc`), at which `RowsLaid` holds with no hypothesis. -/
 
 @[expose] public section
 
@@ -47,17 +17,13 @@ open Claims (Msg)
 open FlockDeploy (Coin)
 open Claims.Recursion.VStarB
 
-/-! ## The chain's holdings -/
-
 /-- A rep's openings at the inner shape's schedule (`RecVStar.opensBelow` at every level), `n`. -/
 def repOpens (r : XR) : ℕ :=
   ((fast100 r.shape.m).map fun sch => RecVStar.opensBelow sch sch.levels.size).getD 0
 
-/-- R's openings, which follow both reps' in the chain. -/
 def stackedOpens (r : XR) : ℕ :=
   ((r.shape.stacked.bind fun i => fast100 i.m).map fun sch => RecVStar.opensBelow sch sch.levels.size).getD 0
 
-/-- The chain's last row: `2n`, then R's openings. -/
 def chainTop (r : XR) : ℕ := 2 * repOpens r + stackedOpens r
 
 /-- **The chain's row statement `st` reads at port `nm`, instance `u`**: a level's (R's included) `acc` at the row
@@ -80,7 +46,6 @@ def accCands (r : XR) (st : VStar.Stmt) : List (String × ℕ) :=
     (List.range ((((RecVStar.accReads r.shape st).toOption.bind id).map Array.size).getD 0)).map
       fun u => ("acc", u)
 
-/-- **Part `s`'s holdings of row `p`**: each port and instance at which its statement reads it, in order. -/
 def accHoldings (r : XR) (s p : ℕ) : List (String × ℕ) :=
   match (RecVStar.statements r.shape).toOption.bind (·[s]?) with
   | some st => (accCands r st).filter fun h => accRead r st h.1 h.2 == some p
@@ -90,19 +55,14 @@ def accHoldings (r : XR) (s p : ℕ) : List (String × ℕ) :=
 def accSegs (c : Circuit) (h : String × ℕ) : List (Msg × List HmNets.Lin) :=
   [(([] : Msg), ((rowHidden c h.1 h.2).getD []).map HmNets.Lin.var)]
 
-/-- Part `s` with its circuit and first holding of row `p`, where it has both. -/
 def accHolder (r : XR) (p s : ℕ) : Option (ℕ × Circuit × (String × ℕ)) :=
   (r.w.parts[s]?.bind partCircuit).bind fun c => (accHoldings r s p).head?.map fun h => (s, c, h)
 
-/-- **Row `p`'s owner**: the first part holding it once, else the first holding it at all, with its circuit and first
-holding. -/
 def accCanon (r : XR) (p : ℕ) : Option (ℕ × Circuit × (String × ℕ)) :=
   ((List.range r.w.parts.length).findSome? fun s =>
     if (accHoldings r s p).length = 1 then accHolder r p s else none).or
   ((List.range r.w.parts.length).findSome? (accHolder r p))
 
-/-- **Slot `σ` at part `s`**: slot `Nat.pair p j` is row `p`'s `j`-th holding there; the owner holds every slot of row
-`p` at its first holding. -/
 def accRowAt (r : XR) (s σ : ℕ) : Option (List (Msg × List HmNets.Lin)) :=
   match accCanon r σ.unpair.1 with
   | some (o, c, h) =>
@@ -110,7 +70,6 @@ def accRowAt (r : XR) (s σ : ℕ) : Option (List (Msg × List HmNets.Lin)) :=
     else (r.w.parts[s]?.bind partCircuit).bind fun c' => ((accHoldings r s σ.unpair.1)[σ.unpair.2]?).map (accSegs c')
   | none => none
 
-/-- The circuit and holding at which part `s` holds slot `σ` (`accRowAt`'s). -/
 def accHoldAt (r : XR) (s σ : ℕ) : Option (Circuit × (String × ℕ)) :=
   match accCanon r σ.unpair.1 with
   | some (o, c, h) =>
@@ -118,11 +77,8 @@ def accHoldAt (r : XR) (s σ : ℕ) : Option (Circuit × (String × ℕ)) :=
     else (r.w.parts[s]?.bind partCircuit).bind fun c' => ((accHoldings r s σ.unpair.1)[σ.unpair.2]?).map (c', ·)
   | none => none
 
-/-- **The chain block**: each held row up to the chain's last, as its owner holds it, with the owner's part. -/
 def accBlock (r : XR) : List (ℕ × ℕ × List (Msg × List HmNets.Lin)) :=
   (List.range (chainTop r + 1)).filterMap fun p => (accCanon r p).map fun e => (p, e.1, accSegs e.2.1 e.2.2)
-
-/-! ## The chain's rows' hm96 calls -/
 
 /-- **Part `s`'s holdings of the chain, at any row**: each port and instance at which its statement reads a row of it. -/
 def accHeld (r : XR) (s : ℕ) : List (String × ℕ) :=
@@ -166,25 +122,18 @@ section Layout
 
 variable (rest : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin)))
 
-/-- **The last round's pieces with the chain**: `finOpen rest`'s, then the chain block's. -/
 def finAcc (x : Msg) : List (ℕ × List (Msg × List HmNets.Lin)) :=
   finOpen rest x ++ ((readX x).map fun r => (accBlock r).map fun e => e.2).getD []
 
-/-- Row `p`'s byte offset in the last message: past `finOpen rest`'s pieces and the chain block's rows before it. -/
 def accOff (x : Msg) (r : XR) (p : ℕ) : Option ℕ :=
   ((accBlock r).findIdx? (·.1 == p)).map fun k =>
     ((finOpen rest x).map fun q => pieceLen q.2).sum + (((accBlock r).take k).map fun e => pieceLen e.2.2).sum
 
-/-- **Where the messages carry slot `σ`**: the last round, at its row's offset (`accOff`), where the statement doesn't
-fix the last round. -/
 def accIn (x : Msg) (σ : ℕ) : Option (ℕ × ℕ) :=
   if (layoutBTops (finAcc rest)).fixedAt x (layoutOf.rounds x - 1) = none ∧ 0 < layoutOf.rounds x then
     (readX x).bind fun r => (accOff rest x r σ.unpair.1).map fun o => (layoutOf.rounds x - 1, o)
   else none
 
-/-- **V\*'s bound layout with the `rec-acc` chain's rows as slots**: `layoutBTops (finAcc rest)`, with the chain's
-holdings as slots (`accRowAt`), each row's owner (`accCanon`), where the last message carries them (`accIn`), and the
-hm96 calls on the chain's rows (`accCalls`) beside `layoutBTops`' calls. -/
 def layoutBAcc : LayoutB :=
   { layoutBTops (finAcc rest) with
     shaAt := fun x s => (layoutBTops (finAcc rest)).shaAt x s ++ ((readX x).map fun r => accCalls r s).getD []
@@ -192,16 +141,13 @@ def layoutBAcc : LayoutB :=
     rowOwner := fun x σ => (readX x).bind fun r => (accCanon r σ.unpair.1).map (·.1)
     rowIn := accIn rest }
 
-/-- **Row `p` of the chain as the messages `ms` carry it**: its two elements at slot `Nat.pair p 0`'s place (`accIn`),
-zero where it has none. V\* commits one chain, so the table index is unread. -/
+/-- V\* commits one chain, so the table index is unread. -/
 def chainAt (x : Msg) (ms : List Msg) (_i p : ℕ) : Array _root_.Flock.F128 :=
   match accIn rest x (Nat.pair p 0) with
   | some (i, o) => #[elemsOf ((ms.getD i []).drop o) 2 0, elemsOf ((ms.getD i []).drop o) 2 1]
   | none => #[0, 0]
 
 end Layout
-
-/-! ## The owner and the block -/
 
 theorem accHolder_spec {r : XR} {p s : ℕ} {e : ℕ × Circuit × (String × ℕ)} (h : accHolder r p s = some e) :
     e.1 = s ∧ r.w.parts[s]?.bind partCircuit = some e.2.1 ∧ (accHoldings r s p).head? = some e.2.2 := by
@@ -212,7 +158,6 @@ theorem accHolder_spec {r : XR} {p s : ℕ} {e : ℕ × Circuit × (String × �
   obtain ⟨hh, hh', rfl⟩ := h
   exact ⟨rfl, hc, hh'⟩
 
-/-- **Row `p`'s owner is a part holding it**, with its circuit and first holding. -/
 theorem accCanon_spec {r : XR} {p : ℕ} {e : ℕ × Circuit × (String × ℕ)} (h : accCanon r p = some e) :
     e.1 < r.w.parts.length ∧ r.w.parts[e.1]?.bind partCircuit = some e.2.1 ∧
       (accHoldings r e.1 p).head? = some e.2.2 := by
@@ -235,7 +180,6 @@ theorem accCanon_spec {r : XR} {p : ℕ} {e : ℕ × Circuit × (String × ℕ)}
     · exact key s hs hf
     · cases hf
 
-/-- **A part holding row `p` gives it an owner.** -/
 theorem accCanon_isSome {r : XR} {p s : ℕ} {e : ℕ × Circuit × (String × ℕ)} (hs : s < r.w.parts.length)
     (h : accHolder r p s = some e) : (accCanon r p).isSome := by
   unfold accCanon
@@ -255,9 +199,6 @@ theorem mem_accBlock {r : XR} {e : ℕ × ℕ × List (Msg × List HmNets.Lin)} 
   obtain ⟨a, ha, rfl⟩ := hp
   exact ⟨a.2.1, a.2.2, ha, rfl⟩
 
-/-! ## The last message's bytes -/
-
-/-- A piece of an assembled round off the witnesses, as `LayoutB.assembled` reads it. -/
 def pieceRead (ws : List Claims.Flock.Wit) (q : ℕ × List (Msg × List HmNets.Lin)) : Msg :=
   (ws[q.1]?.map fun w => readSegs w q.2).getD (List.replicate (pieceLen q.2) 0)
 
@@ -288,8 +229,6 @@ theorem finAcc_of_readX {x : Msg} {r : XR} (hr : readX x = some r) :
     finAcc rest x = finOpen rest x ++ (accBlock r).map fun e => e.2 := by
   simp only [finAcc, hr, Option.map_some, Option.getD_some]
 
-/-- **`FinPieces` at `finAcc`**, at every shape: `finOpen`'s (`finPieces_finOpen`), and each chain row at its owner,
-one of the list's parts (`accCanon_spec`). -/
 theorem finPieces_finAcc (shape : Claims.Recursion.Form → Prop) : FinPieces (finAcc rest) shape := by
   intro x st hst hsh
   obtain ⟨hne, hlt⟩ := finPieces_finOpen rest shape x st hst hsh
@@ -304,22 +243,17 @@ theorem finPieces_finAcc (shape : Claims.Recursion.Form → Prop) : FinPieces (f
     rw [hnS]
     exact (accCanon_spec hcan).1
 
-/-- **`HeldB` at `layoutBAcc`**: `heldB_layoutBTops` at `finAcc rest`, whose pieces are parts' (`finPieces_finAcc`).
-The slots change no round. -/
 theorem heldB_layoutBAcc {W : Type} (IV : Claims.Verifier Coin) (ivScope : Msg → Bool) (b : Brings)
     (I : Claims.Recursion.Inner Coin W) (hk : ∀ x, I.V.k x = (FlockDeploy.V false).k x)
     (shape : Claims.Recursion.Form → Prop) (hM : SchedMatches shape) (hP : CapPorts shape) (hR : RowsCover shape) :
     Claims.Recursion.VStarB.HeldB (deployRec IV ivScope b) I (layoutBAcc rest) shape :=
   heldB_layoutBTops IV ivScope b I hk (finAcc rest) shape hM hP hR (finPieces_finAcc rest shape)
 
-/-- **`HeldB` at `layoutBAcc` at the dense statements**, with no premise on the layout: the schedule matches
-(`schedMatches_dense`), RecCap's port and the rows' ports are named (`capPorts`, `rowsCover`). -/
 theorem heldB_layoutBAcc_dense {W : Type} (IV : Claims.Verifier Coin) (ivScope : Msg → Bool) (b : Brings)
     (I : Claims.Recursion.Inner Coin W) (hk : ∀ x, I.V.k x = (FlockDeploy.V false).k x) :
     Claims.Recursion.VStarB.HeldB (deployRec IV ivScope b) I (layoutBAcc rest) Claims.Recursion.Form.Dense :=
   heldB_layoutBAcc rest IV ivScope b I hk _ schedMatches_dense (capPorts _) (rowsCover _)
 
-/-- The last round's message off the witnesses is `finAcc rest`'s pieces, read off their parts. -/
 theorem msg_last {x : Msg} {ws : List Claims.Flock.Wit}
     (hfx : (layoutBTops (finAcc rest)).fixedAt x (layoutOf.rounds x - 1) = none) (hpos : 0 < layoutOf.rounds x)
     (hne : finAcc rest x ≠ []) :
@@ -339,8 +273,6 @@ theorem msg_last {x : Msg} {ws : List Claims.Flock.Wit}
   rw [ite_eq_right (by rw [List.isEmpty_iff]; exact hne)]
   rfl
 
-/-- **Slot `σ`'s owner's value**, where the owner is part `o` with circuit `c` and first holding `h`: what `o`'s witness
-reads at `accSegs c h`, empty where `o` has no witness. -/
 theorem row_layoutBAcc {x : Msg} {r : XR} (hr : readX x = some r) {σ o : ℕ}
     {c : Circuit} {h : String × ℕ} (hcan : accCanon r σ.unpair.1 = some (o, c, h)) :
     (layoutBAcc rest).rowOwner x σ = some o ∧
@@ -348,9 +280,6 @@ theorem row_layoutBAcc {x : Msg} {r : XR} (hr : readX x = some r) {σ o : ℕ}
   refine ⟨by simp [layoutBAcc, hr, hcan], fun w => ?_⟩
   simp [LayoutB.rowHeld, layoutBAcc, hr, accRowAt, hcan]
 
-/-- **The readers' messages carry every slot's owner's value where `accIn` places it** (`RowsLaid`), with no hypothesis:
-the last round is `finAcc rest`'s pieces read off their parts (`msg_last`), each piece the length its segments fix
-(`pieceRead_length`), so row `p`'s place in the chain block is its owner's reading of its first holding. -/
 theorem rowsLaid_layoutBAcc : (layoutBAcc rest).RowsLaid := by
   intro x ws σ i off hin
   change accIn rest x σ = some (i, off) at hin
@@ -402,14 +331,11 @@ theorem rowsLaid_layoutBAcc : (layoutBAcc rest).RowsLaid := by
       simp [pieceRead, hw, hseg]
     rw [hpr, List.take_left' rfl]
 
-/-- **The parts read the slots where the readers' messages carry them** (`ReadsRows`), wherever the parts agree on the
-slots: `readsRows_of_agree` at `rowsLaid_layoutBAcc`. -/
 theorem readsRows_layoutBAcc {H : Msg → Msg}
     (ha : ∀ x ws, (∀ e ∈ (layoutBAcc rest).allCalls x ws, H e.1 = e.2) → (layoutBAcc rest).RowsAgree x ws) :
     (layoutBAcc rest).ReadsRows H :=
   LayoutB.readsRows_of_agree (rowsLaid_layoutBAcc rest) ha
 
-/-- **Every held slot's owner holds it** (`rowsAgree_of_commits`' owner premise), where every part has a witness. -/
 theorem layoutBAcc_owner {x : Msg} {ws : List Claims.Flock.Wit} (hws : ws.length = nS x) :
     ∀ σ s w v, ws[s]? = some w → (layoutBAcc rest).rowHeld x s w σ = some v →
       ∃ o w' v', (layoutBAcc rest).rowOwner x σ = some o ∧ ws[o]? = some w' ∧
@@ -428,13 +354,11 @@ theorem layoutBAcc_owner {x : Msg} {ws : List Claims.Flock.Wit} (hws : ws.length
   obtain ⟨hown, hheld⟩ := row_layoutBAcc rest hr hcan
   exact ⟨o, ws[o]'(by omega), _, hown, List.getElem?_eq_getElem (by omega), hheld _⟩
 
-/-- `chainAt` at a placed slot: the two elements of round `i`'s bytes from offset `off`. -/
 theorem chainAt_of_accIn {x : Msg} {ms : List Msg} {p i off : ℕ} (hin : accIn rest x (Nat.pair p 0) = some (i, off))
     (t : ℕ) : chainAt rest x ms t p = #[elemsOf ((ms.getD i []).drop off) 2 0, elemsOf ((ms.getD i []).drop off) 2 1] := by
   unfold chainAt
   rw [hin]
 
-/-- Bytes starting with `v`, of at least two elements, carry `v`'s first two. -/
 theorem elems_of_take {L v : Msg} (h : L.take v.length = v) (hl : 32 ≤ v.length) :
     #[elemsOf L 2 0, elemsOf L 2 1] = #[elemsOf v 2 0, elemsOf v 2 1] := by
   have hl' : L.take (([] : Msg) ++ v).length = [] ++ v := by
@@ -445,8 +369,6 @@ theorem elems_of_take {L v : Msg} (h : L.take v.length = v) (hl : 32 ≤ v.lengt
   simp only [List.length_nil, List.drop_zero] at e0 e1
   rw [e0, e1]
 
-/-- **`chainAt` reads row `p`'s owner's value**: at the readers' messages, where slot `Nat.pair p 0` is placed and its
-owner `o` holds `v`, of at least two elements, `chainAt` reads `v`'s first two elements (`rowsLaid_layoutBAcc`). -/
 theorem chainAt_held {x : Msg} {ws : List Claims.Flock.Wit} {p i off o : ℕ} {w : Claims.Flock.Wit} {v : Msg}
     (hin : accIn rest x (Nat.pair p 0) = some (i, off)) (ho : (layoutBAcc rest).rowOwner x (Nat.pair p 0) = some o)
     (hw : ws[o]? = some w) (hv : (layoutBAcc rest).rowHeld x o w (Nat.pair p 0) = some v) (hl : 32 ≤ v.length)
@@ -456,9 +378,6 @@ theorem chainAt_held {x : Msg} {ws : List Claims.Flock.Wit} {p i off o : ℕ} {w
   rw [chainAt_of_accIn rest hin t]
   exact elems_of_take hlaid hl
 
-/-! ## The chain's calls -/
-
-/-- **`layoutBAcc`'s calls**: `layoutBTops`', then the chain's rows' (`accCalls`). -/
 theorem layoutBAcc_calls (x : Msg) (s : ℕ) (w : Claims.Flock.Wit) :
     (layoutBAcc rest).calls x s w = (layoutBTops (finAcc rest)).calls x s w ++
       (((readX x).map fun r => accCalls r s).getD []).map fun p => (p.1 ++ readForms w p.2.1, readForms w p.2.2) := by
@@ -480,7 +399,6 @@ theorem mem_accCalls {r : XR} {s : ℕ} {c : Circuit} (hc : r.w.parts[s]?.bind p
   simp only [Option.map_some, Option.getD_some]
   exact List.mem_flatMap.2 ⟨h, hh, hp⟩
 
-/-- A holding of a row is a holding of the chain. -/
 theorem mem_accHeld {r : XR} {s p : ℕ} {h : String × ℕ} (hh : h ∈ accHoldings r s p) : h ∈ accHeld r s := by
   unfold accHoldings at hh
   unfold accHeld
@@ -503,7 +421,6 @@ theorem accRowAt_eq (r : XR) (s σ : ℕ) : accRowAt r s σ = (accHoldAt r s σ)
       | none => rfl
       | some c' => cases (accHoldings r s σ.unpair.1)[σ.unpair.2]? <;> rfl
 
-/-- **What a part holds at a slot is one of its holdings of the slot's row**, at its circuit. -/
 theorem accHoldAt_spec {r : XR} {s σ : ℕ} {c : Circuit} {h : String × ℕ} (he : accHoldAt r s σ = some (c, h)) :
     r.w.parts[s]?.bind partCircuit = some c ∧ h ∈ accHoldings r s σ.unpair.1 := by
   unfold accHoldAt at he
@@ -523,13 +440,10 @@ theorem accHoldAt_spec {r : XR} {s σ : ℕ} {c : Circuit} {h : String × ℕ} (
       cases he
       exact ⟨hc'', List.mem_of_getElem? hj⟩
 
-/-- A held row's bytes: its port's row read at its instance (`rowHidden`). -/
 theorem readSegs_accSegs (w : Claims.Flock.Wit) (c : Circuit) (h : String × ℕ) :
     readSegs w (accSegs c h) = readForms w (((rowHidden c h.1 h.2).getD []).map HmNets.Lin.var) := by
   simp [readSegs, accSegs]
 
-/-- **A holding's row call**: where part `s`, of circuit `c`, holds the chain at `h`, at its port `q` (`pt`), it records
-the row's evaluation `SHA-512(rowPrefix words ‖ row) = d`, at the row it holds and its slot's digest (`hmDigest`). -/
 theorem rowCall_held {x : Msg} {r : XR} (hr : readX x = some r) {s : ℕ} {c : Circuit}
     (hc : r.w.parts[s]?.bind partCircuit = some c) {h : String × ℕ} (hh : h ∈ accHeld r s) {q : ℕ}
     (hq : c.ports.findIdx? (·.name == h.1) = some q) {pt : Port} (hpt : c.ports[q]? = some pt)
@@ -546,9 +460,6 @@ theorem rowCall_held {x : Msg} {r : XR} (hr : readX x = some r) {s : ℕ} {c : C
   rw [readSegs_accSegs]
   exact e
 
-/-- **A level unit's `acc_out` row call**: where part `s`, of circuit `c`, holds the chain at its unit `u`'s `acc`,
-and the circuit has the output port `acc_out` at `q` (`pt`), it records that row's evaluation at the output bits
-(`accOutForms`) and its slot's digest (`hmDigest`). -/
 theorem outCall_held {x : Msg} {r : XR} (hr : readX x = some r) {s : ℕ} {c : Circuit}
     (hc : r.w.parts[s]?.bind partCircuit = some c) {u : ℕ} (hh : ("acc", u) ∈ accHeld r s) {q : ℕ}
     (hq : c.ports.findIdx? (·.name == "acc_out") = some q) {pt : Port} (hpt : c.ports[q]? = some pt)

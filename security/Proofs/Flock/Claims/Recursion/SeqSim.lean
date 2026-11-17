@@ -2,32 +2,13 @@ module
 
 public import Proofs.Flock.Claims.Recursion.Seq
 
-/-!
-# The composed simulator is the claim's `Sim`
-
-`simM` (`Recursion.Seq`) runs the first part's simulator, then each V\* session's outer simulator at the statement its
-simulated history stages, nested as sequential composition nests them. At the claim's first-part simulator `simPre`
-(the inner session's and the staging round's commit strings to the zero digest under fresh salts, `Sim`'s first two
-parts), it is `Claims.Recursion.Sim` on coins in bijection with `Sim`'s (`simEquiv`): the two programs give one
-transcript against every verifier (`sim_eval`), so `ZKmalAt` at `simM` is `ZKmalAt` at `Sim` (`zkAt_sim`), where the
-inner protocol's rounds are the inner verifier's (`I.V.k = IV.k` at the inner statement).
-
-* `Claims.ZKMal.simRounds_eval`: `simRounds`' transcript extends the one it starts from, and where the run goes on it
-  has all its rounds, each answered with a message. So where `Sim`'s first part goes on, its transcript is `kPre x`
-  rounds of messages (`simPre_goesOn`), and the V\* statements `Sim` reads off it are the ones `simM` reads off each
-  session's simulated history (`xsOf_of_goesOn`).
-* `Claims.ZKMal.simOuter_eval`, `iterSimG_parts_eval`: both simulators' transcripts as a fold of one step per session.
-* `Claims.ZKMal.ZKmalAt.of_sim`: `ZKmalAt` carries over to a simulator with the same transcripts on coins in
-  bijection.
--/
+/-! The composed simulator is the claim's `Sim` (`sim_eval`, `zkAt_sim`). -/
 
 @[expose] public section
 
 namespace Claims.ZKMal
 
 open Claims
-
-/-! ## The claim's simulator combinators are `ZKMal`'s -/
 
 theorem recSpBind_eq {α β : Type} : ∀ (p : SP α) (f : α → SP β), Recursion.spBind p f = spBind p f
   | .ret _, _ => rfl
@@ -47,8 +28,6 @@ theorem recGoesOn_snoc (ms : List (Msg × Out)) (a : Msg) (o : Out) :
     Recursion.goesOn (ms ++ [(a, o)]) = isMsg o := by
   cases o <;> simp [Recursion.goesOn, isMsg]
 
-/-- **`simRounds`' transcript** extends the one it starts from by rounds `r`: where the run goes on after them, they are
-all `n` rounds, each answered with a message, and there are rounds only where the run went on before them. -/
 theorem simRounds_eval (H : Msg → Msg) (ask : List Msg → Out) (f : List (Msg × Out) → SP Msg) :
     ∀ (n : ℕ) (ms : List (Msg × Out)), ∃ r, (SP.eval H ask (Recursion.simRounds f n ms)).1 = ms ++ r ∧
       (Recursion.goesOn (ms ++ r) = true → r.length = n ∧ ∀ p ∈ r, isMsg p.2 = true) ∧
@@ -78,7 +57,6 @@ theorem simRounds_eval (H : Msg → Msg) (ask : List Msg → Out) (f : List (Msg
       · refine ⟨[], ?_, fun h => absurd (by simpa using h) hg, fun h => absurd rfl h⟩
         simp [Recursion.simRounds, hg, SP.eval]
 
-/-- A fold of steps that leave a stopped run as it is, from a stopped run, is that run. -/
 theorem foldl_stuck {ι : Type} (step : List (Msg × Out) → ι → List (Msg × Out))
     (hstep : ∀ τ i, Recursion.goesOn τ = false → step τ i = τ) :
     ∀ (l : List ι) (τ : List (Msg × Out)), Recursion.goesOn τ = false → l.foldl step τ = τ
@@ -87,8 +65,6 @@ theorem foldl_stuck {ι : Type} (step : List (Msg × Out) → ι → List (Msg �
       rw [List.foldl_cons, hstep τ i h]
       exact foldl_stuck step hstep l τ h
 
-/-- **`simOuter`'s transcript** against `ask`: one step per session in order, each running the session's simulator
-under the transcript so far while the run goes on. -/
 theorem simOuter_eval (H : Msg → Msg) (ask : List Msg → Out) {n : ℕ} (SO : Msg → ℕ → Recursion.OSim) (x : Msg)
     (xs : List Msg) (c : (s : Fin n) → (SO x s).C) :
     ∀ (l : List (Fin n)) (ms : List (Msg × Out)),
@@ -103,7 +79,6 @@ theorem simOuter_eval (H : Msg → Msg) (ask : List Msg → Out) {n : ℕ} (SO :
         simp only [Recursion.simOuter, hg', List.foldl_cons, Bool.false_eq_true, ite_false, SP.eval]
         exact (foldl_stuck _ (fun τ i h => by simp [h]) l ms hg').symm
 
-/-- A fold that keeps an invariant under which two steps agree is the other's fold. -/
 theorem foldl_congr_inv {α ι : Type} (P : α → Prop) (f g : α → ι → α) (h : ∀ a i, P a → f a i = g a i ∧ P (f a i)) :
     ∀ (l : List ι) (a : α), P a → l.foldl f a = l.foldl g a
   | [], _, _ => rfl
@@ -111,9 +86,6 @@ theorem foldl_congr_inv {α ι : Type} (P : α → Prop) (f g : α → ι → α
       rw [List.foldl_cons, List.foldl_cons, ← (h a i ha).1]
       exact foldl_congr_inv P f g h l _ (h a i ha).2
 
-/-! ## The nested coins -/
-
-/-- **`iterSimG`'s nested coins** are the first part's and one per session. -/
 noncomputable def iterCoins {WA WB : Type} (T₀ : SeqTape) (c : ℕ) (NB ΩB : Type) [Fintype NB] [Nonempty NB]
     [Fintype ΩB] [Nonempty ΩB] (Q : (n : ℕ) → Seq WA WB (T₀.at c NB ΩB n)) (S₀ : Simulator) (CB : ℕ → Msg → Type)
     [∀ n x, Fintype (CB n x)] [∀ n x, Nonempty (CB n x)]
@@ -142,7 +114,6 @@ theorem iterCoins_succ {WA WB : Type} (T₀ : SeqTape) (c : ℕ) (NB ΩB : Type)
       ((iterCoins T₀ c NB ΩB Q S₀ CB progB go x m a).1,
         Fin.snoc (α := fun s : Fin (m + 1) => CB s x) (iterCoins T₀ c NB ΩB Q S₀ CB progB go x m a).2 b') := rfl
 
-/-- **`ZKmalAt` at a simulator with the same transcripts** on coins in bijection. -/
 theorem ZKmalAt.of_sim {W N Ω : Type} [Fintype N] [Nonempty N] [Fintype Ω] [Nonempty Ω] {H : Msg → Msg} {k : ℕ}
     {P : W → Prover (N × Ω)} {R : W → Prop} {x : Msg} {C : Type} [Fintype C] {prog : C → SP (List (Msg × Out))}
     {ε γ : ℝ} (h : ZKmalAt H k P R x C prog ε γ) {C' : Type} [Fintype C'] (prog' : C' → SP (List (Msg × Out)))
@@ -166,16 +137,12 @@ open Claims.ZKMal (Layout ZKmalAt SeqTape iterSimG iterProver)
 
 variable (IV : Claims.Verifier Coin) (b : Brings)
 
-/-- **The claim's first-part simulator**: `Sim`'s first two parts, the inner session's commit strings to the zero
-digest under fresh salts, then the staging rounds with theirs. -/
 def simPre {W : Type} (D : Claims.Recursion.Deploy Coin) (I : Claims.Recursion.Inner Coin W) : Claims.Simulator where
   C x := (Fin (I.V.k (Claims.Recursion.xI D x)) → Fin D.saltLen → UInt8) ×
     (Fin (D.kS x) → Fin (D.nC x) → Fin D.saltLen → UInt8)
   prog x c := Claims.Recursion.spBind (Claims.Recursion.simInner D (I.V.k (Claims.Recursion.xI D x)) c.1) fun ms =>
     Claims.Recursion.simStage D x (I.V.k (Claims.Recursion.xI D x)) c.2 ms
 
-/-- **Where `Sim`'s first part goes on, it is `kPre x` rounds of messages**, at an inner protocol whose rounds at the
-inner statement are the inner verifier's. -/
 theorem simPre_goesOn {W : Type} (ivScope : Claims.Msg → Bool) (I : Claims.Recursion.Inner Coin W) (x : Claims.Msg)
     (hI : I.V.k (xIOf x) = IV.k (xIOf x)) (H : Claims.Msg → Claims.Msg) (ask : List Claims.Msg → Claims.Out)
     (c : (simPre (deployRec IV ivScope b) I).C x)
@@ -205,7 +172,6 @@ theorem simPre_goesOn {W : Type} (ivScope : Claims.Msg → Bool) (I : Claims.Rec
     · exact hm₁ p hp
     · exact hm₂ p hp
 
-/-- A transcript of messages read back from the prover's history is itself. -/
 theorem asRounds_histOf {τ : List (Claims.Msg × Claims.Out)} (h : ∀ p ∈ τ, Claims.ZKMal.isMsg p.2 = true) :
     asRounds (Claims.histOf τ) = τ := by
   simp only [asRounds, Claims.histOf, List.map_map]
@@ -216,7 +182,6 @@ theorem asRounds_histOf {τ : List (Claims.Msg × Claims.Out)} (h : ∀ p ∈ τ
   | acc => exact absurd (h _ hp) (by simp [Claims.ZKMal.isMsg])
   | rej => exact absurd (h _ hp) (by simp [Claims.ZKMal.isMsg])
 
-/-- **Past a first part of `kPre x` rounds of messages, the V\* statements `simM` reads are `Sim`'s.** -/
 theorem xsOf_of_goesOn (x : Claims.Msg) (s : ℕ) (τ₀ r : List (Claims.Msg × Claims.Out))
     (hl : τ₀.length = kPre IV x) (hm : ∀ p ∈ τ₀, Claims.ZKMal.isMsg p.2 = true) :
     xsOf IV b x s (Claims.histOf (τ₀ ++ r)) = (vstar b.st x τ₀).getD s [] := by
@@ -224,16 +189,12 @@ theorem xsOf_of_goesOn (x : Claims.Msg) (s : ℕ) (τ₀ r : List (Claims.Msg ×
   rw [Claims.ZKMal.histOf_append, List.take_append_of_le_length (by rw [Claims.ZKMal.histOf_length, hl]),
     List.take_of_length_le (by rw [Claims.ZKMal.histOf_length, hl]), asRounds_histOf hm]
 
-/-- One session's step of `simM`: while the run goes on, the session's outer simulator at the V\* statement the history
-so far stages, under the transcript so far. -/
 noncomputable def stepM (H : Claims.Msg → Claims.Msg) (ask : List Claims.Msg → Claims.Out)
     (SO : Claims.Msg → ℕ → Claims.Recursion.OSim) (x : Claims.Msg) (τ : List (Claims.Msg × Claims.Out)) (s : ℕ)
     (c : (SO x s).C) : List (Claims.Msg × Claims.Out) :=
   if Claims.Recursion.goesOn τ then τ ++ (Claims.SP.eval H ask (Claims.ZKMal.spUnder (τ.map Prod.fst)
     ((SO x s).prog (xsOf IV b x s (Claims.histOf τ)) c))).1 else τ
 
-/-- **`simM`'s nested simulator's transcript**: the first part's, then one `stepM` per session, on the coins
-`iterCoins` reads off the nested ones. -/
 theorem iterSimG_parts_eval (H : Claims.Msg → Claims.Msg) (ask : List Claims.Msg → Claims.Out) (T₀ : SeqTape)
     (NB ΩB : Type) [Fintype NB] [Nonempty NB] [Fintype ΩB] [Nonempty ΩB] (S₀ : Claims.Simulator)
     (SO : Claims.Msg → ℕ → Claims.Recursion.OSim) (x : Claims.Msg) :
@@ -258,7 +219,6 @@ theorem iterSimG_parts_eval (H : Claims.Msg → Claims.Msg) (ask : List Claims.M
         rfl
       · rfl
 
-/-- **`Sim`'s coins are `simM`'s** at the claim's first-part simulator: the first part's, and one per V\* session. -/
 noncomputable def simEquiv {W : Type} (ivScope : Claims.Msg → Bool) (I : Claims.Recursion.Inner Coin W)
     (T₀ : SeqTape) (NB ΩB : Type) [Fintype NB] [Nonempty NB] [Fintype ΩB] [Nonempty ΩB]
     (SO : Claims.Msg → ℕ → Claims.Recursion.OSim) (x : Claims.Msg) :
@@ -268,8 +228,6 @@ noncomputable def simEquiv {W : Type} (ivScope : Claims.Msg → Bool) (I : Claim
     (Layout.seq T₀ 0 NB ΩB (parts IV b (T₀.N × T₀.Ω))) (simPre (deployRec IV ivScope b) I) (fun j x => (SO x j).C)
     (fun j x u c => (SO x j).prog (xsOf IV b x j u) c) (fun _ _ => Claims.Recursion.goesOn) x (nS x)).symm
 
-/-- **`simM` at the claim's first-part simulator is `Sim`**: against every verifier, one transcript on the coins
-`simEquiv` matches, where the inner protocol's rounds at the inner statement are the inner verifier's. -/
 theorem sim_eval {W : Type} (ivScope : Claims.Msg → Bool) (I : Claims.Recursion.Inner Coin W) (T₀ : SeqTape)
     (NB ΩB : Type) [Fintype NB] [Nonempty NB] [Fintype ΩB] [Nonempty ΩB] (SO : Claims.Msg → ℕ → Claims.Recursion.OSim)
     (x : Claims.Msg) (hI : I.V.k (xIOf x) = IV.k (xIOf x)) (H : Claims.Msg → Claims.Msg)
@@ -311,8 +269,6 @@ theorem sim_eval {W : Type} (ivScope : Claims.Msg → Bool) (I : Claims.Recursio
   · rw [ite_eq_right hg, ite_eq_right hg]
     exact ⟨rfl, r, rfl, hr⟩
 
-/-- **`ZKmalAt` at `simM` is `ZKmalAt` at `Sim`**, at the claim's first-part simulator, where the inner protocol's
-rounds at the inner statement are the inner verifier's. -/
 theorem zkAt_sim {W : Type} (ivScope : Claims.Msg → Bool) (I : Claims.Recursion.Inner Coin W) (T₀ : SeqTape)
     (NB ΩB : Type) [Fintype NB] [Nonempty NB] [Fintype ΩB] [Nonempty ΩB] (SO : Claims.Msg → ℕ → Claims.Recursion.OSim)
     (x : Claims.Msg) (hI : I.V.k (xIOf x) = IV.k (xIOf x)) {H : Claims.Msg → Claims.Msg} {N Ω WP : Type} [Fintype N]
@@ -325,10 +281,6 @@ theorem zkAt_sim {W : Type} (ivScope : Claims.Msg → Bool) (I : Claims.Recursio
 
 open scoped NNReal
 
-/-- **`ZKBound` at the masked record**: `ZKBound`'s statement with the masked reference prover (`refPM` on the nested
-tape read flat, `nS x` sessions at `x`, on statement-indexed tapes: `ZKmalRx`) at the masked run's rounds `kM` (the
-compiled verifier's and one `Hello` per V\* session), the first part on `x`'s own tape `T₀ x`, which `pre x` reads as
-the inner prover's tape and the staging salts. `Sim`, `εzk` and `γzk` are the claim's. -/
 def ZKBoundM (H : Claims.Msg → Claims.Msg) (ivScope : Claims.Msg → Bool)
     (I : Claims.Recursion.Inner Coin Claims.Flock.Wit) (T₀ : Claims.Msg → SeqTape) (NB ΩB : Type) [Fintype NB]
     [Nonempty NB] [Fintype ΩB] [Nonempty ΩB] (pre : (x : Claims.Msg) → (T₀ x).N × (T₀ x).Ω → b.ref.TI × (ℕ → Salt))
@@ -345,11 +297,6 @@ theorem nums_εzk_nonneg (n : Claims.Recursion.Nums) (t : ℕ) (δ₁ : ℝ≥0)
   unfold Claims.Recursion.Nums.εzk
   positivity
 
-/-- **The recursion's zero knowledge at the masked record, by sequential composition**: `ZKBoundM` where the inner
-protocol's rounds are the inner verifier's (`hI`), and at each attempt budget `t ≥ 1` and `δ₁` at which hm96 leaves
-hide: the first part is `ZKmalAt` at `Sim`'s first two parts within `2δ₁` per commit string (`h₀`); each V\* session,
-at every history that starts it, is `ZKmalAt` at `SO t` within its proved `--zk` error and `4t·3^t` on the sessions'
-relation `RF` (`hS`); and there the witness `wit` gives is in `RF` (`hW`). -/
 theorem zkBoundM_of (H : Claims.Msg → Claims.Msg) (ivScope : Claims.Msg → Bool)
     (I : Claims.Recursion.Inner Coin Claims.Flock.Wit) (T₀ : Claims.Msg → SeqTape) (NB ΩB : Type) [Fintype NB]
     [Nonempty NB] [Fintype ΩB] [Nonempty ΩB] (pre : (x : Claims.Msg) → (T₀ x).N × (T₀ x).Ω → b.ref.TI × (ℕ → Salt))

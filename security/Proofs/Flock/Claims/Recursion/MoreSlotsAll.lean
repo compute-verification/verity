@@ -35,13 +35,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Recursion.AccFits
 
-/-!
-# `MoreSlotsTrue` at the outer relation, unconditionally
-
-`moreSlotsTrue` off its two leaves, both proved: `pastIn` (an output row's port is past the unit's inputs) and
-`accFits` (a statement reads `acc` only below its instances). The statement is KSLin2LayR's `MoreSlotsTrue` at
-`deployZkRec`, unfolded, so this file doesn't import KSLin2LayR.
--/
+/-! `MoreSlotsTrue` at the outer relation with no premise, its statement unfolded so that this file doesn't import KSLin2LayR. -/
 
 @[expose] public section
 

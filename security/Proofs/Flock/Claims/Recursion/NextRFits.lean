@@ -39,30 +39,7 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.DeployK
 import Proofs.Flock.Claims.Recursion.SchedCount
 
-/-!
-# The honest rows fit: `RepFits`
-
-An honest rep's proof fits the rows the honest prover sends (`repFits`), so one honest rep reads back (`repReadsBack`)
-and an honest prover's rounds read back at `nextR` (`readsBack`). The rows fit where the frames' chunks and the
-schedule's rounds agree round by round, on which rounds absorb element values and which tops each commits:
-
-* **The frames' side** (`roundPat`): which of a frame list's chunks carry element values (a `one` or `vec` frame), and
-  whether its pending frames do. It composes over `++` (`roundPat_append`, as `chunks_append`), and each part of a rep's
-  frames has a closed pattern: the zerocheck's, the lincheck's, the ring switch's, and Ligerito's, level by level
-  (`roundPat_zc`, `roundPat_lc`, `roundPat_rs`, `roundPat_levelFr`, `roundPat_lig`), so a rep's frames have
-  `schedPat`'s flags (`roundPat_repFrames`). This reads only the frames' constructors: any values, at a `fast100`
-  schedule.
-* **The schedule's side** (`schedPat`): `RecVStar.repRounds`' absorb flags and tops, round by round
-  (`repRounds_flagTop`), whose tops are the levels' caps after level 0, in order (`schedPat_tops`): the recursive caps'
-  node counts at a proof of the rep's shape (`tops_caps`).
-* **The rows** (`honestRows_fit`): where chunks absorb as rounds do and the rounds' tops are the caps' node counts, the
-  honest rows are one per round, their tops cut back into the caps, and each holds its chunk's values (`RowsAt`): a
-  round that absorbs nothing has a chunk with no values.
-
-`RepReadsBack`'s hypotheses hold together (`honest₀`): at `m = 22`, `k_log = 6`, two claims, a proof with every length
-its shape fixes and zero nonces (`sizedProof`), so one honest rep reads back on a run that exists (`readRep₀`).
-`ReadsBack`'s `SchedOf` holds at every rep whose table has a `fast100` schedule and extra claims (`schedOf_repCtx`).
--/
+/-! The honest rows fit (`RepFits`), so an honest prover's rounds read back at `nextR`, with the hypotheses met together at `m = 22`. -/
 
 @[expose] public section
 
@@ -73,9 +50,6 @@ open FlockSoundness.Refine (Frame colBytes)
 open FlockSoundness.Discharge.Exec (chunks closes glue chunks_append repFrames zcFrames lcFrames rsFrames ligFrames
   levelFr introFr queryFr chFr kFr capFr)
 
-/-! ## Which rounds absorb: the frames' side -/
-
-/-- A frame that carries element values. -/
 def carriesV : Frame → Bool
   | .one _ => true
   | .vec _ => true
@@ -84,19 +58,15 @@ def carriesV : Frame → Bool
   | .bytes _ => false
   | .sq _ _ => false
 
-/-- Whether frames carry element values. -/
 def anyV (fs : List Frame) : Bool := fs.any carriesV
 
-/-- Chunks' pattern: which carry element values, and whether the frames after the last do. -/
 def patOf (x : List (List Frame) × List Frame) : List Bool × Bool := (x.1.map anyV, anyV x.2)
 
-/-- `glue` on patterns. -/
 def glueP (a b : List Bool × Bool) : List Bool × Bool :=
   match b.1 with
   | [] => (a.1, a.2 || b.2)
   | c :: cs => (a.1 ++ (a.2 || c) :: cs, b.2)
 
-/-- Frames' round pattern: which of their chunks carry element values, and whether their pending frames do. -/
 def roundPat (F : List Frame) : List Bool × Bool := patOf (chunks F)
 
 theorem patOf_glue (a b : List (List Frame) × List Frame) : patOf (glue a b) = glueP (patOf a) (patOf b) := by
@@ -157,7 +127,6 @@ theorem roundPat_ones : ∀ l : List F128, roundPat (l.map Frame.one) = ([], !l.
   | [] => rfl
   | v :: l => by rw [List.map_cons, roundPat_one, roundPat_ones l]; rfl
 
-/-- **Blocks that each close one round carrying values.** -/
 theorem roundPat_blocks {F : ℕ → List Frame} (hF : ∀ i, roundPat (F i) = ([true], false)) :
     ∀ a k, roundPat ((List.range' a k).flatMap F) = (List.replicate k true, false)
   | _, 0 => rfl
@@ -165,7 +134,6 @@ theorem roundPat_blocks {F : ℕ → List Frame} (hF : ∀ i, roundPat (F i) = (
     rw [List.range'_succ, List.flatMap_cons, roundPat_append, hF, roundPat_blocks hF (a + 1) k, glueP_closed]
     rfl
 
-/-- **Blocks that each close their rounds.** -/
 theorem roundPat_flatMap {F : ℕ → List Frame} {G : ℕ → List Bool} :
     ∀ a k, (∀ i, a ≤ i → i < a + k → roundPat (F i) = (G i, false)) →
       roundPat ((List.range' a k).flatMap F) = ((List.range' a k).flatMap G, false)
@@ -227,24 +195,17 @@ theorem roundPat_rs {n : ℕ} (hn : n ≠ 0) (rs : Array (Array F128)) :
   unfold rsFrames
   simp only [roundPat_label, roundPat_append, hB, roundPat_sq _ hn, roundPat_nil, glueP_closed]
 
-/-! ## Which rounds absorb and what they commit: the schedule's side -/
-
-/-- A round's absorb flag and its tops' node counts. -/
 def flagTop (s : RecVStar.SchedRound) : Bool × List ℕ := (s.2.2.2, s.2.1.toList)
 
-/-- Level `l`'s top, as its node count. -/
 def topsAt (sch : Flock.Schedule) (l : ℕ) : List ℕ := [2 ^ (sch.levels.getD l default).cap]
 
-/-- Level `i`'s seven rounds: the first commits level `i + 1`'s top. -/
 def lvT (sch : Flock.Schedule) (i : ℕ) : List (Bool × List ℕ) :=
   [(true, topsAt sch (i + 1)), (true, []), (false, []), (true, []), (false, []), (false, []), (true, [])]
 
-/-- Pass `i` of the levels' loop, of `r` passes: four folding rounds, then level `i + 1`'s or the last level's. -/
 def passT (sch : Flock.Schedule) (r i : ℕ) : List (Bool × List ℕ) :=
   [(false, []), (true, []), (true, []), (true, [])] ++
     if i + 1 < r then lvT sch (i + 1) else [(true, []), (false, []), (false, [])]
 
-/-- **`RecVStar.repRounds`' absorb flags and tops**, round by round. -/
 def schedPat (sch : Flock.Schedule) (m kLog claims : ℕ) : List (Bool × List ℕ) :=
   [(false, []), (false, []), (true, [])] ++ List.replicate (m - 5) (true, []) ++ [(false, [])] ++
     List.replicate (kLog - 6) (true, []) ++ [(true, [])] ++ List.replicate claims (true, []) ++ [(false, [])] ++
@@ -313,7 +274,6 @@ theorem forIn_opt_map {σ β : Type} (f : ℕ → σ → Option (ForInStep σ)) 
 
 theorem rep3 {α : Type} (a : α) : List.replicate 3 a = [a, a, a] := rfl
 
-/-- **`RecVStar.repRounds`' flags and tops are `schedPat`'s.** -/
 theorem repRounds_flagTop {m kLog claims : ℕ} {sch : Flock.Schedule} {rs : Array RecVStar.SchedRound}
     (hs : fast100 m = some sch) (h : RecVStar.repRounds m kLog claims = some rs) :
     rs.toList.map flagTop = schedPat sch m kLog claims := by
@@ -351,7 +311,6 @@ theorem tops_loop (sch : Flock.Schedule) (r : ℕ) : ∀ (k a : ℕ), a + k + 1 
       List.map_cons]
     simp [passT, lvT, topsAt, hc]
 
-/-- **The tops `RecVStar.repRounds` commits**: level 1's, then each later level's but the last's. -/
 theorem schedPat_tops {sch : Flock.Schedule} {k : ℕ} (hk : sch.levels.size - 1 = k + 1) (m kLog claims : ℕ) :
     ((schedPat sch m kLog claims).map Prod.snd).flatten =
       2 ^ (sch.levels.getD 1 default).cap ::
@@ -372,8 +331,6 @@ theorem tops_caps {sch : Flock.Schedule} {rc : Array (Array ByteArray)} {k : ℕ
   cases i with
   | zero => rfl
   | succ j => simp
-
-/-! ## The honest rows fit -/
 
 theorem vals_nil_of_anyV : ∀ {fs : List Frame}, anyV fs = false → vals fs = []
   | [], _ => rfl
@@ -397,9 +354,6 @@ theorem map_nodeOf_caps (l : List (Array ByteArray)) :
   rw [List.map_map]
   exact List.map_congr_left fun a _ => map_nodeOf_nodeRow a.toList
 
-/-- **Rows the honest prover sends fit**: where the frames' chunks absorb as the schedule's rounds do, and the rounds'
-tops are the caps' node counts, the honest rows are one per round, cut at the tops into the caps, and hold each chunk's
-values. -/
 theorem honestRows_fit : ∀ (sched : List RecVStar.SchedRound) (chs : List (List Frame)) (caps : List (Array ByteArray)),
     chs.map anyV = sched.map (·.2.2.2) → (sched.map (·.2.1.toList)).flatten = caps.map Array.size →
     (honestRows sched chs caps).length = sched.length ∧ chs.length = sched.length ∧
@@ -442,18 +396,12 @@ theorem map_tops (l : List RecVStar.SchedRound) : l.map (·.2.1.toList) = (l.map
   rw [List.map_map]
   rfl
 
-/-- A `fast100` schedule's levels each query. -/
 theorem q_ne_zero {m : ℕ} {sch : Flock.Schedule} (hs : fast100 m = some sch) :
     ∀ i < sch.levels.size, (sch.levels.getD i default).q ≠ 0 := fun i hi => by
   rw [Array.getD_eq_getD_getElem?, Array.getElem?_eq_getElem hi, Option.getD_some]
   exact Nat.pos_iff_ne_zero.1
     ((FlockSoundness.Discharge.DecodeZL.fast100_small m sch hs).2.2 _ (Array.getElem_mem hi)).2.1
 
-/-! ## The statements -/
-
-/-- **The honest proof fits the honest rows**: its frames' chunks absorb as the rep's schedule's rounds do
-(`roundPat_repFrames`, `repRounds_flagTop`), and the rounds' tops are its recursive caps' node counts (`schedPat_tops`,
-`tops_caps`), so the honest rows fit (`honestRows_fit`). -/
 theorem repFits : RepFits := by
   intro c p T hsch hp hcap
   obtain ⟨hs, -, rs, hrs, hsc⟩ := hsch
@@ -487,22 +435,14 @@ theorem repFits : RepFits := by
       levels := hp.levels
       elems := fun j hj => l4 j (by rw [← l1]; exact hj) }
 
-/-- **One honest rep reads back** (`repFits`, `repReadsBack_of`). -/
 theorem repReadsBack : RepReadsBack := repReadsBack_of repFits
 
-/-- **An honest prover's rounds read back** (`repReadsBack`, `readsBack_of_rep`): on the honest prover's messages `decR`
-decides, and reads exactly the honest proofs. -/
 theorem readsBack : ReadsBack := readsBack_of_rep repReadsBack
 
-/-! ## Non-vacuity: an honest rep at `m = 22` -/
-
-/-- `n` zero bytes. -/
 def zeroBytes (n : ℕ) : ByteArray := ⟨Array.replicate n 0⟩
 
 theorem zeroBytes_size (n : ℕ) : (zeroBytes n).size = n := Array.size_replicate
 
-/-- **A proof with the lengths `sh` fixes** (`ProofSizes`): every entry zero or `default`, every nonce 0, and the
-unabsorbed fields as V\* takes them at `st`, `sch` and the point `z` (`sizedProof_unabsorbed`). -/
 def sizedProof (st : Flock.Setup) (sch : Flock.Schedule) (z : F128) (sh : Flock.Shape) : Flock.Proof where
   cap := .replicate (2 ^ (sh.sched.levels.getD 0 default).cap) (zeroBytes sh.hashLen)
   params := pcsParams st.merkle sch
@@ -524,7 +464,6 @@ def sizedProof (st : Flock.Setup) (sch : Flock.Schedule) (z : F128) (sh : Flock.
       claimNonces := .replicate (3 * (sh.sched.levels.size - 1) + 2) 0
       consistencyNonces := .replicate (sh.sched.levels.size - 1 + 1) 0 }
 
-/-- `sizedProof st sch z sh` has `sh`'s lengths. -/
 theorem sizedProof_sizes (st : Flock.Setup) (sch : Flock.Schedule) (z : F128) (sh : Flock.Shape) :
     FlockSoundness.Discharge.DecodeZL.ProofSizes sh (sizedProof st sch z sh) where
   r1ab := Array.size_replicate
@@ -549,7 +488,6 @@ theorem sizedProof_sizes (st : Flock.Setup) (sch : Flock.Schedule) (z : F128) (s
   claimNonces := Array.size_replicate
   consistencyNonces := Array.size_replicate
 
-/-- `sizedProof`'s nonces are 0. -/
 theorem sizedProof_nonces (st : Flock.Setup) (sch : Flock.Schedule) (z : F128) (sh : Flock.Shape) :
     (∀ n ∈ (sizedProof st sch z sh).ligerito.queryNonces, n = 0) ∧
       (∀ n ∈ (sizedProof st sch z sh).ligerito.claimNonces, n = 0) ∧
@@ -557,7 +495,6 @@ theorem sizedProof_nonces (st : Flock.Setup) (sch : Flock.Schedule) (z : F128) (
   ⟨fun _ h => (Array.mem_replicate.1 h).2, fun _ h => (Array.mem_replicate.1 h).2,
     fun _ h => (Array.mem_replicate.1 h).2⟩
 
-/-- `sizedProof`'s unabsorbed fields are V\*'s: the pinned `params`, the cap as `initialCap`, and `finalC` at `z`. -/
 theorem sizedProof_unabsorbed (st : Flock.Setup) (sch : Flock.Schedule) (z : F128) (sh : Flock.Shape) :
     (sizedProof st sch z sh).params = pcsParams st.merkle sch ∧
       (sizedProof st sch z sh).ligerito.initialCap = (sizedProof st sch z sh).cap ∧
@@ -565,17 +502,13 @@ theorem sizedProof_unabsorbed (st : Flock.Setup) (sch : Flock.Schedule) (z : F12
         dot (lagrange nodesL den6Inv z) (sizedProof st sch z sh).zerocheck.round1c :=
   ⟨rfl, rfl, rfl⟩
 
-/-- A setup at `m = 22`, `k_log = 6`, folding at its own `k_log`; everything else `default`. -/
 def st₀ : Flock.Setup :=
   { (default : Flock.Setup) with m := 22, kLog := 6, fold := { (default : CircuitFold) with kLog := 6 } }
 
-/-- `fast100`'s schedule at `m = 22`. -/
 def sch₀ : Flock.Schedule := (fast100 22).getD default
 
-/-- The honest proof at `st₀`, no extra claims: `sizedProof` at its shape. -/
 def p₀ : Flock.Proof := sizedProof st₀ sch₀ default (FlockSoundness.Refine.shapeOf st₀ sch₀ 0)
 
-/-- A rep at `st₀` with two claims, `repRounds`' schedule and `p₀`'s cap. -/
 def c₀ : RepCtx where
   st := st₀
   sch := sch₀
@@ -609,8 +542,6 @@ theorem honest₀ : SchedOf c₀ ∧ HonestRep c₀ p₀ ∧ p₀.cap.toList = c
 theorem readRep₀ (T : F128) : readRep c₀ (repRows c₀ p₀ T) p₀ = some (p₀, framesOf c₀ p₀ T) :=
   repReadsBack c₀ p₀ T honest₀.1 honest₀.2.1 honest₀.2.2
 
-/-- **`ReadsBack`'s `SchedOf` at a set-up rep**: rep `k`'s schedule is its frames' wherever its table has a `fast100`
-schedule and extra claims at the first coin's link points. -/
 theorem schedOf_repCtx {spec : SessionSpec} {sts : Array Stmt} {c₁ : Coin} {r₀ : List ByteArray} {cs : List Coin}
     {k : ℕ} {extras : Array Flock.Claim} (hk : k / 2 < sts.size) (hf : (fast100 sts[k / 2].m).isSome)
     (he : sts[k / 2].extraClaims (pointsOf spec c₁) = .ok extras) : SchedOf (repCtx spec sts c₁ r₀ cs k) := by

@@ -36,28 +36,7 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Recursion.DeployZK
 import Proofs.Flock.Claims.ZK.Flock
 
-/-!
-# The V\* sessions of the masked recursion, from Flock's zero knowledge
-
-`zkBoundM_of` takes each V\* session's `ZKmalAt` at every history that starts it (`hS`). Each session is a complete
-masked run of Flock at the staged statement, so `hS` is Flock's own zero knowledge (`Claims.Flock.ZKAt`) at a masked
-outer record `DF` whose rounds are the outer verifier's (`VO`), read at the staged statement on the slot's coins:
-
-* `VO_k_xsOf`: the staged statement's rounds are the slot's (`numsOf_vstarAt`).
-* `soOf`: the outer simulators of one session simulator `SF`, on coins `CB x j` (`progOf`: `SF` through a bijection).
-* `Shaped`: at every history that starts session `j`, `SF`'s coins at the staged statement are `CB x j` up to a
-  bijection, and its errors are within `εB x j` and `g`.
-* **`sessions_of_zkAt`**: `hS` from `Claims.Flock.ZKAt` at `DF`, where `DF`'s rounds are `VO`'s and the sessions are
-  `Shaped`. **`zkBoundM_of_zkAt`**: `ZKBoundM` at the outer simulators `soOf`, from `zkBoundM_of`'s first part (`h₀`),
-  the witness (`hW`, on `DF`'s relation) and Flock's zero knowledge at `DF` at each budget and hiding bound.
-
-Flock's zero knowledge at the outer record comes from the masked session's models (`Proto.TMsgLink`,
-`Proto.TablesOK`, `Proto.Binding`, the route `Flock.zk_deployZk_of_tables_bind` takes at `FlockDeploy.deployZk`) at any
-masked record whose rounds with `Hello` are the protocol's (`Flock.zkAt_of_tables_bind`), so at the outer record
-`deployZkRec` at a protocol of `VO.k − 1` coins (`Flock.zkAt_deployZkRec_of_tables_bind`). **`zkBoundM_of_tables`**
-assembles the two: `ZKBoundM` at `DF = deployZkRec relO` from the first part, the witness, the models at the recursive
-setup, the leaf counts within the record's (`Brings.zl`), and the record's hiding bound giving the pinned key's.
--/
+/-! The V\* sessions of the masked recursion, from Flock's zero knowledge (`zkBoundM_of_tables`). -/
 
 @[expose] public section
 
@@ -70,30 +49,20 @@ open scoped NNReal
 
 variable (IV : Claims.Verifier Coin) (b : Brings)
 
-/-- **The staged statement's rounds are the slot's**: the outer verifier's rounds at session `j`'s V\* statement are
-the record's `nums`'. -/
 theorem VO_k_xsOf (x : Claims.Msg) (j : ℕ) (u : List (Claims.Msg × Claims.Msg)) (hj : j < nS x) :
     VO.k (xsOf IV b x j u) = (nums b.st x j).rounds := by
   simp only [xsOf, vstar_getD _ _ _ hj]
   exact congrArg Claims.Recursion.Nums.rounds (numsOf_vstarAt _ _ _ _)
 
-/-- **The outer simulators of one session simulator** `SF`: at `x` and session `j`, `SF` on the coins `CB x j`,
-through a bijection with its coins at the staged statement (`progOf`). -/
 noncomputable def soOf (SF : Claims.Simulator) (CB : Claims.Msg → ℕ → Type) [∀ x j, Fintype (CB x j)]
     [∀ x j, Nonempty (CB x j)] : Claims.Msg → ℕ → Claims.Recursion.OSim :=
   fun x j => ⟨CB x j, fun xS c => progOf SF (CB x j) xS c⟩
 
-/-- **The V\* sessions at `x` are of one shape**: at every history that starts session `j < nS x`, the session
-simulator's coins at the staged statement are `CB x j` up to a bijection, and its errors there are within `εB x j` and
-`g`. -/
 def Shaped (T₀ : SeqTape) (SF : Claims.Simulator) (εF γF : Claims.Msg → ℝ) (CB : Claims.Msg → ℕ → Type)
     (εB : Claims.Msg → ℕ → ℝ) (g : ℝ) (x : Claims.Msg) : Prop :=
   ∀ j < nS x, ∀ u : List (Claims.Msg × Claims.Msg), u.length = (parts IV b (T₀.N × T₀.Ω)).start x j →
     Nonempty (CB x j ≃ SF.C (xsOf IV b x j u)) ∧ εF (xsOf IV b x j u) ≤ εB x j ∧ γF (xsOf IV b x j u) ≤ g
 
-/-- **Each V\* session is zero knowledge, from Flock's**: at a masked outer record `DF` whose rounds are `VO`'s, Flock's
-`ZKAt` at the session prover `PS` and simulator `SF` gives `zkBoundM_of`'s `hS` at the outer simulators `soOf SF CB`,
-on `DF`'s relation, where the sessions are `Shaped`. -/
 theorem sessions_of_zkAt {Col TF : Type} (H : Claims.Msg → Claims.Msg) (T₀ : SeqTape)
     (DF : Claims.Flock.Deploy Coin Col TF) {NB ΩB : Type} [Fintype NB] [Nonempty NB] [Fintype ΩB] [Nonempty ΩB]
     (PS : Claims.Flock.Wit → Claims.Prover (NB × ΩB)) (SF : Claims.Simulator) (εF γF : Claims.Msg → ℝ)
@@ -111,11 +80,6 @@ theorem sessions_of_zkAt {Col TF : Type} (H : Claims.Msg → Claims.Msg) (T₀ :
   rw [progOf_of hC]
   exact e.mono hε hγ
 
-/-- **The recursion's zero knowledge at the masked record, from Flock's at the outer record**: `ZKBoundM` at the outer
-simulators `soOf (SF t) (CB t)`, where the inner protocol's rounds are the inner verifier's (`hI`); the first part is
-`ZKmalAt` at `Sim`'s first two parts (`h₀`); at each budget `t ≥ 1` and `δ₁` at which hm96 leaves hide, Flock's
-`ZKAt` holds at a masked outer record `DF` of `VO`'s rounds (`hF`, `hk`) and the sessions are `Shaped` within the
-record's per-session error and `4t·3^t` (`hsh`); and the witness `wit` gives is in `DF`'s relation (`hW`). -/
 theorem zkBoundM_of_zkAt {Col TF : Type} (H : Claims.Msg → Claims.Msg) (ivScope : Claims.Msg → Bool)
     (I : Claims.Recursion.Inner Coin Claims.Flock.Wit) (T₀ : Claims.Msg → SeqTape) (NB ΩB : Type) [Fintype NB]
     [Nonempty NB] [Fintype ΩB] [Nonempty ΩB] (pre : (x : Claims.Msg) → (T₀ x).N × (T₀ x).Ω → b.ref.TI × (ℕ → Salt))
@@ -155,13 +119,10 @@ open Claims.ZKMal (Layout ZKmalAt SeqTape progOf progOf_of Proto)
 open FlockSoundness.Discharge
 open scoped NNReal
 
-/-- The outer verifier has at least one message, the last. -/
 theorem VO_k_pos (x : Claims.Msg) : 0 < VO.k x := by
   simp only [VO]
   split <;> omega
 
-/-- **The round count at the outer record**: a committed-coin protocol of `VO.k − 1` coins has `VO`'s messages and
-`Hello` before them. -/
 theorem deployZkRec_proto_k (rel : Readable.Parsed → Readable.Relation) (G : Proto Claims.Flock.Wit)
     (hK : ∀ x, G.K x = VO.k x - 1) (x : Claims.Msg) : (deployZkRec rel).V.k x + 1 = G.k x := by
   have := VO_k_pos x
@@ -169,8 +130,6 @@ theorem deployZkRec_proto_k (rel : Readable.Parsed → Readable.Relation) (G : P
   show VO.k x + 1 = G.K x + 2
   omega
 
-/-- **Flock's zero knowledge at the outer record**, at the session's tables: `Flock.zkAt_of_tables_bind` at
-`deployZkRec`, for a committed-coin protocol of `VO.k − 1` coins (the masked session at the recursive setup). -/
 theorem Flock.zkAt_deployZkRec_of_tables_bind (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation)
     (G : Proto Claims.Flock.Wit) [Fintype G.Coin] (t : ℕ) (ht : 0 < t) (hK : ∀ x, G.K x = VO.k x - 1)
     {δ₁ : ENNReal} (hT1 : Claims.Hm96Hiding ZkView.My ZkView.saltHash δ₁) (hδ₁ : δ₁ ≠ ⊤)
@@ -185,13 +144,6 @@ theorem Flock.zkAt_deployZkRec_of_tables_bind (H : Claims.Msg → Claims.Msg) (r
 
 variable (IV : Claims.Verifier Coin) (b : Brings)
 
-/-- **The recursion's zero knowledge at the masked record, from the masked session's models at the recursive setup**:
-`ZKBoundM` at the session prover `G.prover` and the outer simulators `soOf` of the models' simulator, on coins `CB t`,
-where the inner protocol's rounds are the inner verifier's (`hI`), the first part is `ZKmalAt` at `Sim`'s first two
-parts (`h₀`), the record's hiding bound is the pinned key's (`hkey`), the session's models link, hold and bind at the
-recursive setup (`hL`, `hOK`, `hC`) at `VO.k − 1` coins (`hK`), their leaf counts are the record's at each staged
-statement (`hnL`, `hnB`, `hzl`), the coins are in bijection (`hCB`), and the witness `wit` gives is in the outer
-record's relation (`hW`). -/
 theorem zkBoundM_of_tables (H : Claims.Msg → Claims.Msg) (ivScope : Claims.Msg → Bool)
     (I : Claims.Recursion.Inner Coin Claims.Flock.Wit) (relO : Readable.Parsed → Readable.Relation)
     (T₀ : Claims.Msg → SeqTape) (pre : (x : Claims.Msg) → (T₀ x).N × (T₀ x).Ω → b.ref.TI × (ℕ → Salt))

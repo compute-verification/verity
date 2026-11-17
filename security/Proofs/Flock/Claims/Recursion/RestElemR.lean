@@ -48,28 +48,7 @@ import Proofs.Flock.Soundness.Discharge.Hidden.Delta
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
 import Proofs.Flock.Soundness.Refine.Seam
 
-/-!
-# `ElemFramed` and `OpenedShaped` at the deployed last message `elemR`
-
-`RestRead.readsAt` takes three facts of the element-level last message. At U8's `elemR` two of them hold with no
-hypothesis, at every witness and every decision `rdR` reads:
-
-* `elemFramed_elemR`: `rdR` reads `elemR`'s pieces as the statement `xIOf x` and two proofs a table
-  (`rdR_elemR`). The statement `elemR` lays is `stmtOf`, which is `xIOf` where the reader parses `x` and `[]` where it
-  doesn't (`stmtOf_eq`), and it fits its word since the compiled statement's decoder read its length as 8 bytes
-  (`inner_lt`).
-* `openedShaped_elemR`: every proof `readPs` reads is `ProofShaped` at its file's shape. Its absorbed fields are a
-  proof's that fits the rep (`FitsRep.sizes`, `FitsRep.nonces`, which `readPs` demands), its openings are `elemR`'s,
-  whose sizes are its layout's for any witness (`opens_ok`), the inner table commits under plain SHA-512 with no salts
-  (`dense_merkle`: the dense inner statement is set up at `RecVStar.innerTags`), and the file fits a `u64` at a
-  `fast100` schedule, `m ≤ 35` and at most 2,048 extra claims (`fileBound_lt`, `tablesOk_of_read`). This holds for
-  adversarial witnesses too: nothing here reads a witness's values, only `elemR`'s layout.
-
-`readsAt_elemR` is `RestRead.readsAt` at `elemR` with only `OpenedFit` left. `OpenedFit` follows from the rows'
-sizes (`openedFit_of`): the honest proof fits its own rows (`repFits`), and a fit lifts to any rows of the same byte
-sizes (`RestRead.fitsLift`), so it is enough that the opened rounds have an honest rep's sizes (`OpenedSized`).
-`readsAt_elemR'` takes that one.
--/
+/-! `ElemFramed` and `OpenedShaped` at the deployed last message `elemR`, with no hypothesis and at adversarial witnesses too. -/
 
 @[expose] public section
 
@@ -85,8 +64,6 @@ open Lean (Json)
 open FlockSoundness.Discharge.ZkView renaming LevelOk → ZLevelOk, NoncesZero → ZNoncesZero
 open FlockSoundness.Refine renaming shapeOf → shapeR
 open FlockSoundness.Discharge.DecodeZL (ProofSizes)
-
-/-! ## The statement fits its word -/
 
 theorem rd_bind {α β : Type} {a : Rd α} {f : α → Rd β} {s : Msg} {r : β × Msg} (h : (a >>= f).run s = some r) :
     ∃ y s₁, a.run s = some (y, s₁) ∧ (f y).run s₁ = some r := by
@@ -119,7 +96,6 @@ theorem rdNat_lt {s s' : Msg} {n : ℕ} (h : rdNat.run s = some (n, s')) : n < 2
   rw [hl] at this
   exact lt_of_lt_of_eq this (by norm_num)
 
-/-- `RecX.read` after its format string. -/
 def readTail : Rd RecX := do
   let n ← rdNat
   let inner ← rdTake n
@@ -169,7 +145,6 @@ theorem read_of_decodeX {x : Msg} {w : RecX} (h : decodeX x = some w) : RecX.rea
     assumption
   · cases h
 
-/-- **The compiled statement's inner statement fits its word**: its decoder reads the length as 8 bytes. -/
 theorem inner_lt {x : Msg} {r : XR} (h : readX x = some r) : r.w.inner.length < 2 ^ 64 := by
   have hrun := read_of_decodeX (decodeX_of_readX h)
   rw [read_eq] at hrun
@@ -203,7 +178,6 @@ theorem stmtR_eq {x : Msg} {r : XR} (hr : readX x = some r) : stmtR r = xIOf x :
     · simp
   rw [stmtR, if_pos hlt, stmtOf_eq hr]
 
-/-- **`elemR` lays the element-level last message**: `rdR` reads its pieces as the statement and two proofs a table. -/
 theorem elemFramed_elemR : ElemFramed elemR := by
   intro x r hr ws hl
   have hpos : 0 < r.w.parts.length := by
@@ -222,10 +196,6 @@ theorem elemFramed_elemR : ElemFramed elemR := by
     simp [hn]
   · rw [rdR_elemR r hl hpos, stmtR_eq hr]
 
-/-! ## The inner table commits under plain SHA-512 -/
-
-/-- **A dense inner statement's one table commits under plain SHA-512**: it is set up at `RecVStar.innerTags`, whose
-leaves are `flock-leaf/sha512-unsalted`, by `setupHidden`. -/
 theorem dense_merkle {x : Msg} {s : FlockDeploy.Ins} {spec : SessionSpec} {st : Stmt}
     (hset : FlockDeploy.setupOf false x = some (s, spec, #[st])) (htags : s.read.tags = RecCoins.innerTags)
     (hpi : s.read.publicInputs = none) : st.merkle = MerkleScheme.sha512 "flock-leaf/sha512-unsalted" := by
@@ -242,8 +212,6 @@ theorem dense_merkle {x : Msg} {s : FlockDeploy.Ins} {spec : SessionSpec} {st : 
     exact FlockSoundness.Discharge.Hidden.setupHidden_plain hl hst
   · have : (#[st] : Array Stmt).size = 1 := rfl
     omega
-
-/-! ## The openings `elemR` lays -/
 
 theorem levelOk_levelProof (r : XR) (ws : List Claims.Flock.Wit) (k ℓ : ℕ) {sh : Flock.Shape} {l : Flock.Level}
     {w : ℕ} (hH : sh.hashLen = 64) (hsl : sh.saltLen = none ∨ sh.saltLen = some 0)
@@ -263,8 +231,6 @@ theorem levelOk_levelProof (r : XR) (ws : List Claims.Flock.Wit) (k ℓ : ℕ) {
     rw [FlockVBridge.Family.size_bytesAt, hH]
   · rcases hsl with h | h <;> simp [FlockSoundness.Discharge.ZkView.SaltsOk, h, levelProof]
 
-/-- **Rep `k`'s openings have their levels' shapes**: level 0's, the recursive levels' and the last level's, at a
-shape of 64-byte digests and no salts, for any witness. -/
 theorem opens_ok (r : XR) (ws : List Claims.Flock.Wit) (k : ℕ) {sh : Flock.Shape} {sch : Flock.Schedule}
     (hsR : schR r = sch) (hH : sh.hashLen = 64) (hsl : sh.saltLen = none ∨ sh.saltLen = some 0)
     (hl4 : ∀ i < sch.levels.size, 1 ≤ i → (sch.levels.getD i default).lanes = 4) (h2 : 2 ≤ sch.levels.size) :
@@ -293,8 +259,6 @@ theorem opens_ok (r : XR) (ws : List Claims.Flock.Wit) (k : ℕ) {sh : Flock.Sha
   · exact levelOk_levelProof r ws k ((schR r).levels.size - 1) hH hsl (hg _)
       (by rw [hl4 ((schR r).levels.size - 1) (by omega) (by omega)] <;> rfl)
 
-/-! ## A rep's proof is shaped for its file -/
-
 theorem readRep_absorbed {c : FlockDeploy.RepCtx} {rows : List (List ByteArray)} {q q₀ p : Flock.Proof}
     {ms : List Msg} (h : FlockDeploy.readRep c rows q = some (p, ms)) (hq : q = q₀) :
     ∃ a, p = FlockDeploy.absorbedFrom c a q₀ := by
@@ -310,7 +274,6 @@ theorem ps_get {r : XR} {ws : List Claims.Flock.Wit} {k : ℕ} (hk : k < nProofs
   rw [getElem!_pos _ k (by simpa using hk)]
   simp
 
-/-- **Rep `k`'s shape is its context's**, at its context's extra claims' count `e`, which is at most 2,048. -/
 theorem shapeAt_n {spec : SessionSpec} {sts : Array Stmt} {c₁ : Coin} {r₀ : List ByteArray} {cs : List Coin}
     {k e : ℕ} (hn : (FlockDeploy.repCtx spec sts c₁ r₀ cs k).n = 2 + e)
     (hb : ∀ E, (FlockDeploy.tabsOf sts)[k / 2]!.extra (FlockDeploy.pointsOf spec c₁) = .ok E → E.size ≤ 2048) :
@@ -335,8 +298,6 @@ theorem shapeAt_n {spec : SessionSpec} {sts : Array Stmt} {c₁ : Coin} {r₀ : 
     simp only [FlockDeploy.shapeAt, hx]
     first | rfl | skip
 
-/-- **A proof with a fitting rep's absorbed fields and plain openings of its levels' shapes is shaped for its file**,
-at a plain SHA-512 table of a `fast100` schedule with at most 2,048 extra claims. -/
 theorem shaped_of {c : FlockDeploy.RepCtx} {st : Stmt} {sch : Flock.Schedule} {e : ℕ} {a q p : Flock.Proof}
     (hp : p = FlockDeploy.absorbedFrom c a q)
     (hms : st.merkle = MerkleScheme.sha512 "flock-leaf/sha512-unsalted") (hsch : fast100 st.m = some sch)
@@ -373,8 +334,6 @@ theorem shaped_of {c : FlockDeploy.RepCtx} {st : Stmt} {sch : Flock.Schedule} {e
   · show 2 + e ≤ 2050
     omega
 
-/-- **The proofs read off the opened rounds are shaped for their files** at `elemR`, at every witness and every
-decision `rdR` reads: `OpenedShaped elemR`. -/
 theorem openedShaped_elemR : RestRead.OpenedShaped elemR := by
   intro x hx c ws hl _ os last hf _ v hv fl hfl pf hpf
   obtain ⟨st0, hst0, hd⟩ := id hx
@@ -452,16 +411,9 @@ theorem openedShaped_elemR : RestRead.OpenedShaped elemR := by
     exact shaped_of ha hms hsch hk35 hle hsz' hfit.nonces h0 hR hRi hF
   next => cases hpf
 
-/-- **The last step reads at the deployed readers at `elemR`**, wherever every rep's opened rounds fit
-(`OpenedFit elemR`): `ElemFramed` and `OpenedShaped` hold at `elemR` (`elemFramed_elemR`, `openedShaped_elemR`). -/
 theorem readsAt_elemR (hfit : RestRead.OpenedFit elemR) : RestRead.ReadsAt rdR finalR (restR elemR) :=
   RestRead.readsAt elemR elemFramed_elemR hfit openedShaped_elemR
 
-/-! ## `OpenedFit` from the rows' sizes -/
-
-/-- **The opened rounds have an honest rep's byte sizes**: at the same statements, witnesses and coins as
-`OpenedFit`, each rep's context is its frames' schedule (`SchedOf`), and some honest proof at it (`HonestRep`, its cap
-the context's) commits rows of the byte sizes of the rep's block of the opened rounds after the link. -/
 def OpenedSized (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))) : Prop :=
   ∀ x, DenseX x → ∀ (c : ℕ → Coin) (ws : List Claims.Flock.Wit), ws.length = nS x →
     (∀ e ∈ (RestRead.layAt (restR elem)).allCalls x ws, FlockDeploy.sha512 e.1 = e.2) →
@@ -479,16 +431,12 @@ def OpenedSized (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × 
               (FlockDeploy.repRows (FlockDeploy.repCtx v.2.1 v.2.2 (c 0) (RestRead.nodesR (os.headD []))
                 ((List.range (RestRead.kI x)).map c).tail.dropLast k) p T).map (·.map ByteArray.size)
 
-/-- **Every rep's opened rounds fit where they have an honest rep's sizes**: the honest proof fits its own rows
-(`repFits`), and a fit lifts to rows of the same byte sizes (`fitsLift`). -/
 theorem openedFit_of (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin)))
     (hS : OpenedSized elem) : RestRead.OpenedFit elem := by
   intro x hx c ws hl hT os last hf hos v hv k hk
   obtain ⟨hsc, p, T, hp, hcap, hsz⟩ := hS x hx c ws hl hT os last hf hos v hv k hk
   exact RestRead.fitsLift _ hsc.2.1 _ _ p T (FlockDeploy.repFits _ p T hsc hp hcap) hsz
 
-/-- **The last step reads at the deployed readers at `elemR`** wherever the opened rounds have an honest rep's
-sizes. -/
 theorem readsAt_elemR' (hS : OpenedSized elemR) : RestRead.ReadsAt rdR finalR (restR elemR) :=
   readsAt_elemR (openedFit_of elemR hS)
 

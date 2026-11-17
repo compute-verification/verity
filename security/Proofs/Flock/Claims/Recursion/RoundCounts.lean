@@ -36,20 +36,7 @@ import Proofs.Flock.Claims.Recursion.RecordCanon
 import Proofs.Flock.Claims.Recursion.VerdictRowDSide
 import Proofs.Flock.Claims.Recursion.VerdictRowG
 
-/-!
-# Each rep stream's round count is the schedule's
-
-The record a decision of `nextR` hands the verdict is the reader's (`recJ`), not the prover's JSON: rep `k`'s stream has
-`repLens` rounds, round `j` counting its schedule's coins (`recStreams`). So the decoded session's rep stream has the
-coins the live coins alone fix (`canonRounds`, `coins_of_decode`), stream by stream, not just in total. This is what the
-shipped recursion enforces of the inner record by check 5 (`RecVStar.innerCommits`/`repCoins` hold each rep stream's
-round count and coins to the challenger's live-coin part's, and `RecVStar.checkSchedule` the challenger's live-coin part's to the schedule).
-
-* `DecAt.rounds_canon`: rep `r` of table `i`'s coin rounds are `canonRounds` at rep `2 i + r`.
-* `DecAt.roundCount`: its round count is the schedule's (`repLens`).
-* `DecAt.hz`: row L's coin tie (`TargetZ`'s form): the stream's round-2 coin is the live one the reader read `z` from.
-* `DecAt.hsz_of_sched`: row R's `hsz`, where the schedule's coin counts are `roundSizes` at the table's shape.
--/
+/-! Each rep stream's round count is the schedule's, stream by stream and not just in total. -/
 
 @[expose] public section
 
@@ -88,8 +75,6 @@ namespace DecAt
 variable {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {ms : List Claims.Msg} {cs : List Coin}
   (D : DecAt rd x ms cs) (cls : HClass) (i : ℕ)
 
-/-- **Rep `r` of table `i`'s coin rounds are the live coins'**: the schedule's round count, round `j` the first `n_j`
-(its schedule's) values of the coin at the rep's offset plus `j` (`canonRounds`), at rep streams of distinct names. -/
 theorem rounds_canon (hnd : (D.spec.repStreams.toList.map (·.2.2)).Nodup) (hi : i < D.sts.size)
     (hti : i < D.spec.tables.size) (r : Fin 2) :
     ((D.files cls i).stream r).rounds.map (·.coins) = canonRounds D.spec D.sts cs.tail.dropLast (2 * i + r) := by
@@ -112,15 +97,12 @@ theorem rounds_canon (hnd : (D.spec.repStreams.toList.map (·.2.2)).Nodup) (hi :
   rw [hs, hsp', hsts']
   exact coins_of_decode _ hnd (readPs_blocks hpf) hdec hk hks
 
-/-- **Each rep stream's round count is the schedule's** (`repLens`), stream by stream. -/
 theorem roundCount (hnd : (D.spec.repStreams.toList.map (·.2.2)).Nodup) (hi : i < D.sts.size)
     (hti : i < D.spec.tables.size) (r : Fin 2) :
     ((D.files cls i).stream r).rounds.size = (repLens D.spec D.sts).getD (2 * i + r) 0 := by
   have h := congrArg Array.size (D.rounds_canon cls i hnd hi hti r)
   simpa [canonRounds] using h
 
-/-- **Row L's coin tie**: rep `r`'s round-2 coin, as the session records it, is the live coin the reader took the
-rep's zerocheck `z` from. -/
 theorem hz (hnd : (D.spec.repStreams.toList.map (·.2.2)).Nodup) (hi : i < D.sts.size)
     (hti : i < D.spec.tables.size) (r : Fin 2) :
     (((D.files cls i).stream r).rounds[2]!).coins.getD 0 0 = (D.ctx (2 * i + r)).z := by
@@ -153,8 +135,6 @@ theorem hz (hnd : (D.spec.repStreams.toList.map (·.2.2)).Nodup) (hi : i < D.sts
     rw [getElem!_neg R 2 h2]
     rfl
 
-/-- **Row R's `hsz`**: rep `r`'s coin rounds have the shape's sizes, where the schedule's coin counts at table `i`
-are `roundSizes` at its shape (`hsched`, an equation between the verifier's schedule and its algebra). -/
 theorem hsz_of_sched (acc : ℕ → Array F128) (hnd : (D.spec.repStreams.toList.map (·.2.2)).Nodup)
     (hi : i < D.sts.size) (hti : i < D.spec.tables.size) (r : Fin 2)
     (hsched : (RecDeploy.repSchedAt D.spec D.sts[i]!).map (·.1) = roundSizes (D.sh cls i)) :

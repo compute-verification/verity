@@ -41,25 +41,7 @@ import Proofs.Flock.Claims.Recursion.VerdictLoop
 import Proofs.Flock.Claims.Recursion.VerdictRowG
 import Proofs.Flock.Claims.Recursion.VerdictTargetL
 
-/-!
-# `NonVacuous`'s row targets from the rows' deployed forms
-
-`TargetR` and `TargetD` from what rows R and D leave open at the deployed reader, with each rep's coin rounds at the
-shape's sizes from `Top.hsz` (`RoundSizes`):
-
-* `targetR_of`: `TargetR` from `TargetRDep`, each rep's four accumulators (`hacc`) and the `rec-residuals` pieces with
-  their cover and ties (`hcoverR`, `hE`, `hvv`): S and its groups are `DecAt.structure_ok`, `hw` is `DecAt.hw_of_acc`
-  and `hparts` is `DecAt.partsZero_of_pieces`.
-* `targetD_of`: `TargetD` from `TargetDDep`, the passing level checks (`hlev`), with the pieces' sides and positions
-  at the decision (`DecAt.hside`, `DecAt.hpos`) and the verifier rows' run (`DecAt.rowsRun_of`): `DecAt.rowD_target`.
-* `targetDDep_of_merkle`: `TargetDDep` from `TargetDMerkle`, each rep's `MerkleOk` and the coin tie of its
-  positions (`DecAt.levels_of_merkleOk`).
-
-`TargetB` (`DecAt.framed_dense`), `TargetL` (`Top.targetL_holds`) and `TargetPublics` (`DecAt.publics_empty`) are
-proved. `targets_of_open`: every target from row E, `TargetRDep`, `TargetDMerkle` and `TargetDecode`;
-`targets_of_rows`: the same at row E's accumulators `accR`, with row E from its pieces' running sums (`targetE_rowD`);
-`targets_of_rowsJ`: with `TargetDecode` from `DecodeAt.decode_at`, with no JSON premise.
--/
+/-! `NonVacuous`'s row targets from what rows R, D and E leave open at the deployed reader. -/
 
 @[expose] public section
 
@@ -83,9 +65,6 @@ section Targets
 variable (rd : Msg → Option FinalP) (P : Msg → List Msg → List Coin → Prop)
   (acc : Msg → List Msg → List Coin → ℕ → Array F128)
 
-/-- **Row R's target at the deployed reader**: each rep's four accumulators, and `rec-residuals` pieces that hold, with one piece per (rep, group) at the copy `keyAt r p`
-(`hcoverR`), the copy's elements `w` at the group's row ports (`hE`) and its verifier values `verifierRows`' `v` at
-the group's `V` (`hvv`). -/
 def TargetRDep : Prop :=
   ∀ (x : Msg) (ms : List Msg) (cs : List Coin), At rd P x ms cs → ∀ (D : DecAt rd x ms cs) (cls : HClass) (i : ℕ),
     i < D.sts.size →
@@ -108,8 +87,6 @@ def TargetRDep : Prop :=
               (D.rep cls (acc x ms cs) i r).extras (D.rep cls (acc x ms cs) i r).comb = .ok (v, info, kappa) →
             ∀ p (hp : p < gs.size) k (hk : k < gs[p].2.2.size), vvAt x cs (keyAt r p) k = el v gs[p].2.2[k]
 
-/-- **Row D's target at the deployed reader**: some key for the `rec-open` pieces, and every verifier rows' run's
-level checks passing (`hlev`). The pieces' sides and positions are the decision's (`Rows.sideAt`, `Rows.posAt`). -/
 def TargetDDep : Prop :=
   ∀ (x : Msg) (ms : List Msg) (cs : List Coin), At rd P x ms cs → ∀ (D : DecAt rd x ms cs) (cls : HClass) (i : ℕ),
     i < D.sts.size →
@@ -121,8 +98,6 @@ def TargetDDep : Prop :=
             Rows.levelCheck (D.files cls i).sch ((D.files cls i).proof r).cap ((D.files cls i).proof r).ligerito ℓ
               (info.lg.conss[ℓ]!).pos = .ok ()
 
-/-- **Row D's level checks from the Merkle checks**: each rep's decoded proof passes `MerkleOk` at the standard hashes
-at query coins `cf` from round `k`, and any run of its verifier rows samples its positions from those coins. -/
 def TargetDMerkle : Prop :=
   ∀ (x : Msg) (ms : List Msg) (cs : List Coin), At rd P x ms cs → ∀ (D : DecAt rd x ms cs) (cls : HClass) (i : ℕ),
     i < D.sts.size → ∀ r : Fin 2, ∃ (cf : ℕ → ℕ → F128) (k : ℕ),
@@ -140,7 +115,6 @@ end Targets
 variable {rd : Msg → Option FinalP} {P : Msg → List Msg → List Coin → Prop}
   {acc : Msg → List Msg → List Coin → ℕ → Array F128}
 
-/-- **`TargetR` from row R's deployed form.** -/
 theorem targetR_of (h : TargetRDep rd P acc) : TargetR rd P acc := by
   intro x ms cs hA D cls i hi
   obtain ⟨⟨xo, sto, hst, hf, hx⟩, hr, hb, -⟩ := id hA
@@ -153,7 +127,6 @@ theorem targetR_of (h : TargetRDep rd P acc) : TargetR rd P acc := by
     fun r => D.partsZero_of_pieces cls (acc x ms cs) i r rpieces elemAt vvAt hres (keyAt r) (hcoverR S gs hS hg r)
       (hE S gs hS hg r) fun v info kappa hv => hvv S gs hS hg r v info kappa hv⟩
 
-/-- **`TargetD` from row D's deployed form**, with the reps' round sizes (`Top.hsz`) for the verifier rows' run. -/
 theorem targetD_of (h : TargetDDep rd P acc) : TargetD rd P acc := by
   intro x ms cs hA D cls i hi
   obtain ⟨⟨xo, sto, hst, hf, hx⟩, -, -, -⟩ := id hA
@@ -167,7 +140,6 @@ theorem targetD_of (h : TargetDDep rd P acc) : TargetD rd P acc := by
     (D.hpos cls (acc x ms cs) i hst hf hx hi hti (Rows.DecAt.rowDPiecesAt key i x))
     (D.rowsRun_of cls (acc x ms cs) hti hS (hsz acc hA D cls hi hS)) hlev
 
-/-- **`TargetDDep` from the Merkle checks** (`DecAt.levels_of_merkleOk`), at the copies `(t, r, ℓ, j)`. -/
 theorem targetDDep_of_merkle (h : TargetDMerkle rd P acc) : TargetDDep rd P acc := by
   intro x ms cs hA D cls i hi
   obtain ⟨⟨xo, sto, hst, hf, hx⟩, -, -, -⟩ := id hA
@@ -176,7 +148,6 @@ theorem targetDDep_of_merkle (h : TargetDMerkle rd P acc) : TargetDDep rd P acc 
   obtain ⟨cf, k, hM, htie⟩ := h x ms cs hA D cls i hi r
   exact D.levels_of_merkleOk cls (acc x ms cs) r Rows.plain_opsWith_std hG.fast hM htie
 
-/-- **Every target from what stays open**: row E, rows R's and D's deployed forms and the decoded record. -/
 theorem targets_of_open (rd : Msg → Option FinalP) {Q : Type} (rows : Msg → List Q)
     (holds : Q → Msg → List Msg → List Coin → Prop) (acc : Msg → List Msg → List Coin → ℕ → Array F128)
     (hR : TargetRDep rd (RowsHold rows holds) acc) (hD : TargetDMerkle rd (RowsHold rows holds) acc)
@@ -188,8 +159,6 @@ theorem targets_of_open (rd : Msg → Option FinalP) {Q : Type} (rows : Msg → 
     targetL_holds acc, targetD_of (targetDDep_of_merkle hD), targetR_of hR, hE, hDec,
     fun _ _ _ _ D => D.publics_empty⟩
 
-/-- **Every target at row E's accumulators**: `targets_of_open` at `accR rd chainAt`, with `TargetE` from
-`targetE_rowD` at row D's pieces, which hold their running sums where the rows do (`hholds`). -/
 theorem targets_of_rows (rd : Msg → Option FinalP) {Q : Type} (rows : Msg → List Q)
     (holds : Q → Msg → List Msg → List Coin → Prop) (chainAt : Msg → List Msg → ℕ → ℕ → Array F128)
     (key : ℕ → ℕ → ℕ → ℕ → ℕ × ℕ × ℕ × ℕ)
@@ -201,7 +170,6 @@ theorem targets_of_rows (rd : Msg → Option FinalP) {Q : Type} (rows : Msg → 
     Targets rd rows holds (accR rd chainAt) :=
   targets_of_open rd rows holds _ hR hD (targetE_rowD rd _ chainAt key hholds) hDec
 
-/-- **Every target from rows R, D and E**: `targets_of_rows` with `TargetDecode` from `DecodeAt.decode_at`. -/
 theorem targets_of_rowsJ (rd : Msg → Option FinalP) {Q : Type}
     (rows : Msg → List Q) (holds : Q → Msg → List Msg → List Coin → Prop)
     (chainAt : Msg → List Msg → ℕ → ℕ → Array F128) (key : ℕ → ℕ → ℕ → ℕ → ℕ × ℕ × ℕ × ℕ)

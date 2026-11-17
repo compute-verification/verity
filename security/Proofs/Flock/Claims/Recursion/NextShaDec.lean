@@ -40,36 +40,7 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Complete.Json.Decode
 import Proofs.Flock.Claims.DeployK
 
-/-!
-# The last step's decision with no proof file decoded (`decisionAtS_eval`)
-
-`decisionAtS` runs the plain verdict (`verifyJWithM`) on the proofs' files (`filesAt`) at the record's value with its
-proof digests the files' (`shaSubJ`) and its coins the live coins (`coinSubJ`). Run against `H`, that verdict is
-`verifyJPWith`: the same checks read off the decoded proofs, with no proof file decoded and no S17
-(`decisionAtS_eval`), wherever each proof is shaped for its file (`FlockVBridge.Family.ProofShaped` at `shapeAt`) and
-the rep streams' names are distinct (`NamesDistinct`).
-
-* **The verdict on the decoded proofs** (`verifyRepDWith`, `verifyJPWith`): `Flock.verifyRepWith` and
-  `Flock.verifyJWithM` with each rep's proof given, so neither decodes a proof file, and without S17, which compares the
-  files' digests with the record's.
-* **They agree** (`verifyRepWith_dec`, `verifyJWithM_eqP`): a rep's verdict on a file that decodes to `p` at the
-  verdict's shape is its verdict on `p`; the whole verdict on files is `verifyJPWith` on the proofs where S17 passes and
-  each rep agrees.
-* **At the substituted value** (`decodeJWith_sub`, `verifyJWithM_sub`): the decoder's link points are the first coin's
-  (`points_read`) and its proof digests are `shaArr`'s (`proof_{dk}` survives `coinSubJ`, `arr_coinSubJ_proof`), so
-  every rep's file is read at `shapeAt` (`decode_filesAt`) and S17 passes (`s17_canonical`).
-* **S17's two hypotheses** (`namesDistinct_of_setup`, `publicInputs_none_of_checksAtJ`): the file count is the
-  verdict's own check before S17 (`proofs.size != want.size`), so it is no hypothesis; the rep streams' names are
-  distinct at every statement that sets up with no public inputs (`KS.tables_nodup`, `KS.repNames_nodup`), and the
-  scope check among `checksAtJ` refuses public inputs.
-* **The decision** (`decisionAtS_evalJ`, `decisionAtS_eval`, `decisionAtS_ok_iff`): run against `H`, `decisionAtS` is
-  `verifyJPWith` at `hOf H` then `checksAtJ`, and at a statement that sets up it accepts exactly where both pass.
-
-**What stays.** Each rep's proof must be shaped for its file (`hsh`), a fact about the proofs the last message carries;
-the reader parts read them, and no part's check is yet known to hold it. The decoder still reads `proof_{dk}` at the
-substituted value, whose digests the decision computes from the files (`decisionAtS`'s `mapM`), and S17 then passes on
-them by construction.
--/
+/-! The last step's decision with no proof file decoded (`decisionAtS_eval`), at the hypothesis that each rep's proof is shaped for its file, which no part's check is known to hold. -/
 
 @[expose] public section
 
@@ -79,13 +50,10 @@ open Flock
 open Lean (Json)
 open FlockComplete.JsonRT (f128s_map array_mapM_ok_of dk_cases)
 
-/-! ## The verdict on the decoded proofs -/
-
 section Decoded
 
 variable {M : Type → Type} [Monad M] [MonadExceptOf String M] [MonadLiftT Flock.V M]
 
-/-- `Flock.verifyRepWith` with the proof read by `dec` at the rep's shape. -/
 def verifyRepDecWith (dec : Flock.Shape → M Flock.Proof) (hs : Flock.Hashes M) (spec : SessionSpec)
     (st : Flock.Setup) (sch : Flock.Schedule) (sess : RunRecord) (i r : ℕ) : M ByteArray := do
   let name := s!"{spec.tables[i]!}/rep{r}"
@@ -94,8 +62,6 @@ def verifyRepDecWith (dec : Flock.Shape → M Flock.Proof) (hs : Flock.Hashes M)
   let p ← dec (Flock.repFileShape st sch extras.size)
   verifyRepPWith hs spec st sch sess i r stream extras p
 
-/-- **A rep's verdict on its decoded proof `p`**: the rep's stream (S11), the statement's extra claims, then
-`Flock.verifyRepPWith` at `p`. No proof file is decoded. -/
 def verifyRepDWith (hs : Flock.Hashes M) (spec : SessionSpec) (st : Flock.Setup) (sch : Flock.Schedule)
     (sess : RunRecord) (i r : ℕ) (p : Flock.Proof) : M ByteArray := do
   let name := s!"{spec.tables[i]!}/rep{r}"
@@ -122,8 +88,6 @@ def verifyJPWith (hs : Flock.Hashes M) (spec : SessionSpec) (tabs : Array Flock.
     if c0 != c1 then throw s!"S18/R1: {spec.tables[i]!}: the reps' caps differ"
 
 end Decoded
-
-/-! ## Congruences in `V` -/
 
 theorem vok_bind {ε α β : Type} (a : α) (f : α → Except ε β) : (Except.ok a >>= f) = f a := rfl
 
@@ -175,8 +139,6 @@ theorem range_forIn_congr {n : ℕ} {f g : ℕ → Unit → Flock.V (ForInStep U
   simp only [Std.Legacy.Range.size, Nat.sub_zero, Nat.add_one_sub_one, Nat.div_one, List.mem_range'] at hi
   omega
 
-/-! ## The verdicts agree -/
-
 theorem verifyRepWith_eqDec (hs : Flock.Hashes Flock.V) (spec : SessionSpec) (st : Flock.Setup)
     (sch : Flock.Schedule) (sess : RunRecord) (i r : ℕ) (bytes : ByteArray) :
     verifyRepWith hs spec st sch sess i r bytes =
@@ -199,8 +161,6 @@ theorem verifyRepDecWith_congr (hs : Flock.Hashes Flock.V) (spec : SessionSpec) 
   · exact bind_congr_ok fun extras he => by rw [h extras he]
   · rfl
 
-/-- **A rep's verdict on a file that decodes to `p` is its verdict on `p`**, the file decoded at the verdict's shape
-(`Flock.repFileShape`) at the statement's extra claims. -/
 theorem verifyRepWith_dec (hs : Flock.Hashes Flock.V) (spec : SessionSpec) (st : Flock.Setup)
     (sch : Flock.Schedule) (sess : RunRecord) (i r : ℕ) {bytes : ByteArray} {p : Flock.Proof}
     (hdec : ∀ extras, st.extra sess.points = .ok extras →
@@ -218,9 +178,6 @@ theorem schs_of_mapM {f : Flock.Setup → Flock.V Flock.Schedule} {tabs : Array 
   rw [getElem!_pos tabs i hi, getElem!_pos schs i (hl ▸ hi)]
   exact hf _ _ (hall i hi)
 
-/-- **The verdict on files is `verifyJPWith` on the proofs**: in `V`, where as many files as proofs, S17 passing at
-every decoded session with as many files as rep streams (`h17`), and each rep's verdict on its file its verdict on its
-proof (`hrep`). -/
 theorem verifyJWithM_eqP (hs : Flock.Hashes Flock.V) (spec : SessionSpec) (tabs : Array Flock.Setup)
     (j : Lean.Json) {proofs : Array ByteArray} {ps : Array Flock.Proof} (hsize : proofs.size = ps.size)
     (h17 : ∀ sess, Record.decodeJWith hs spec j = .ok sess → proofs.size = spec.repStreams.size →
@@ -266,8 +223,6 @@ theorem verifyJWithM_eqP (hs : Flock.Hashes Flock.V) (spec : SessionSpec) (tabs 
   have e1 := hrep sess schs hsess hsch ht hn i hi 1 (by decide)
   exact bind_congr_left e0 fun c0 _ => bind_congr_left e1 fun c1 _ => rfl
 
-/-! ## The decoder at the substituted value -/
-
 theorem proofKey_ne_streams (spec : SessionSpec) : s!"proof_{spec.dk}" ≠ "streams" := by
   rcases dk_cases spec with e | e <;> simp [e, toString]
 
@@ -277,7 +232,6 @@ theorem proofKey_ne_link (spec : SessionSpec) : s!"proof_{spec.dk}" ≠ "link" :
 theorem sample_ne_proofKey (spec : SessionSpec) : "unit_draw" ≠ s!"proof_{spec.dk}" := by
   rcases dk_cases spec with e | e <;> simp [e, toString]
 
-/-- The decoder's reads of the link points and the proof digests. -/
 theorem decodeJWith_reads (hs : Flock.Hashes Flock.V) {spec : SessionSpec} {J : Json} {sess : RunRecord}
     (h : Record.decodeJWith hs spec J = .ok sess) :
     ∃ (l : Json) (pa a : Array Json), Record.fld J "link" = .ok l ∧ Record.arr l "points" = .ok pa ∧
@@ -296,7 +250,6 @@ theorem decodeJWith_reads (hs : Flock.Hashes Flock.V) {spec : SessionSpec} {J : 
     | (cases h
        exact ⟨_, _, _, by assumption, by assumption, by assumption, by assumption, by assumption⟩)
 
-/-- **The decoder's link points at the coin-substituted value are the first coin's.** -/
 theorem points_read {spec : SessionSpec} {c₁ : Coin} {mids : List (Claims.Msg × Coin)} {j l : Json}
     {pa : Array Json} {pts : Array (Array F128)} (hl : Record.fld (coinSubJ spec c₁ mids j) "link" = .ok l)
     (hpa : Record.arr l "points" = .ok pa)
@@ -318,7 +271,6 @@ theorem points_read {spec : SessionSpec} {c₁ : Coin} {mids : List (Claims.Msg 
   cases hpts
   rfl
 
-/-- `coinSubJ` maps only the link and the streams, so `proof_{dk}` reads through it. -/
 theorem arr_coinSubJ_proof (spec : SessionSpec) (c₁ : Coin) (mids : List (Claims.Msg × Coin)) (j : Json) :
     Record.arr (coinSubJ spec c₁ mids j) s!"proof_{spec.dk}" = Record.arr j s!"proof_{spec.dk}" := by
   simp only [coinSubJ, fillCoins, eraseCoins, mapRounds, setPoints]
@@ -327,15 +279,12 @@ theorem arr_coinSubJ_proof (spec : SessionSpec) (c₁ : Coin) (mids : List (Clai
       arr_mapKey_ne _ _ (proofKey_ne_streams spec), arr_mapKey_ne _ _ (proofKey_ne_link spec)])
   | (simp only [arr_mapKey_ne _ _ (proofKey_ne_streams spec), arr_mapKey_ne _ _ (proofKey_ne_link spec)])
 
-/-- **The decoder at the substituted value**: its link points are the first coin's, its proof digests `shaArr`'s. -/
 theorem decodeJWith_sub (hs : Flock.Hashes Flock.V) {spec : SessionSpec} {c₁ : Coin}
     {mids : List (Claims.Msg × Coin)} {ds : Array ByteArray} {j : Json} {sess : RunRecord}
     (h : Record.decodeJWith hs spec (coinSubJ spec c₁ mids (shaSubJ spec ds j)) = .ok sess) :
     sess.points = pointsOf spec c₁ ∧ sess.proofSha = (spec.repStreams.zip ds).map fun q => (q.1.2.2, hexOf q.2) := by
   obtain ⟨l, pa, a, hl, hpa, hpts, ha, hm⟩ := decodeJWith_reads hs h
   exact ⟨points_read hl hpa hpts, proofSha_read ((arr_coinSubJ_proof spec c₁ mids _).symm.trans ha) hm⟩
-
-/-! ## S17's hypotheses from the statement -/
 
 theorem namesDistinct_of_nodup {spec : SessionSpec} (h : (spec.repStreams.toList.map (·.2.2)).Nodup) :
     NamesDistinct spec := by
@@ -344,12 +293,10 @@ theorem namesDistinct_of_nodup {spec : SessionSpec} (h : (spec.repStreams.toList
       (spec.repStreams.toList.map (·.2.2))[k]'(by simpa using hk) := by simpa using e
   exact (List.Nodup.getElem_inj_iff h).1 e'
 
-/-- **The rep streams' names are distinct** at a statement that sets up with no public inputs. -/
 theorem namesDistinct_of_setup {s : Ins} {spec : SessionSpec} {sts : Array Stmt} (hs : s.setup = .ok (spec, sts))
     (hpi : s.read.publicInputs = none) : NamesDistinct spec :=
   namesDistinct_of_nodup (KS.repNames_nodup (KS.tables_nodup hs hpi))
 
-/-- **Checks that pass carry no public inputs**: `checksAtJ` runs the scope check. -/
 theorem publicInputs_none_of_checksAtJ {s : Ins} {spec : SessionSpec} {x : Claims.Msg}
     {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Claims.Msg × Coin)} {f : FinalJ} {j' : Json}
     (h : checksAtJ s spec x link c₁ mids f j' = .ok ()) : s.read.publicInputs = none := by
@@ -361,11 +308,6 @@ theorem publicInputs_none_of_checksAtJ {s : Ins} {spec : SessionSpec} {x : Claim
   obtain ⟨⟨⟩, h5, -⟩ := FlockSoundness.Refine.ebind_ok h
   exact Claims.Bridge.Custody.publicInputs_none_of_check h5
 
-/-! ## The verdict at the substituted value -/
-
-/-- **The verdict at the substituted value is `verifyJPWith`**: at the files' digests through `h`, where each proof is
-shaped for its file and the rep streams' names are distinct, the verdict on the proofs' files is the verdict on the
-proofs, with no file decoded and no S17. -/
 theorem verifyJWithM_sub (h : ByteArray → ByteArray) (spec : SessionSpec) (tabs : Array Flock.Setup) (c₁ : Coin)
     (mids : List (Claims.Msg × Coin)) (j : Json) {ps : Array Flock.Proof}
     (hsh : ∀ (k : ℕ) (hk : k < ps.size),
@@ -393,8 +335,6 @@ theorem verifyJWithM_sub (h : ByteArray → ByteArray) (spec : SessionSpec) (tab
       getElem!_pos ps (2 * i + r) hk]
     exact decode_filesAt hk (hsh _ hk)
 
-/-! ## The decision -/
-
 theorem liftV_run_eval {α : Type} (H : Claims.Msg → Claims.Msg) (v : Flock.V α) :
     (((monadLift v : Claims.OCV α).run).eval H).1 = v := by
   first
@@ -408,7 +348,6 @@ theorem evRun_bind {α β : Type} (H : Claims.Msg → Claims.Msg) (x : Claims.OC
   | (cases hx : ((x.run).eval H).1 <;> rfl)
   | (split <;> rfl)
 
-/-- **The verifier at a parsed value over `OC`, against `H`, is `verifyJWithM` at `hOf H`.** -/
 theorem verifyJOC_eval (H : Claims.Msg → Claims.Msg) (spec : SessionSpec) (tabs : Array Flock.Setup) (j : Json)
     (proofs : Array ByteArray) :
     ((verifyJWithM Claims.Hashes.oc spec tabs j proofs).run.eval H).1 =
@@ -421,7 +360,6 @@ theorem sampleOfJ_shaSubJ (spec : SessionSpec) (ds : Array ByteArray) (j : Json)
   unfold sampleOfJ shaSubJ
   rw [getObjVal?_mapKey_ne _ _ (sample_ne_proofKey spec)]
 
-/-- The checks after the verdict read the statement and the sample, which `shaSubJ` keeps, and no proof file. -/
 theorem checksAtJ_shaSubJ (s : Ins) (spec : SessionSpec) (x : Claims.Msg) (link : List ByteArray × List ByteArray)
     (c₁ : Coin) (mids : List (Claims.Msg × Coin)) (stmt : Claims.Msg) (ds : Array ByteArray) (j : Json)
     (bs : Array ByteArray) (j' : Json) :
@@ -432,8 +370,6 @@ theorem checksAtJ_shaSubJ (s : Ins) (spec : SessionSpec) (x : Claims.Msg) (link 
   | (unfold checksAtJ; rw [sampleOfJ_shaSubJ])
   | (unfold checksAtJ; dsimp only; rw [sampleOfJ_shaSubJ])
 
-/-- **`decisionAtS` run against `H`**: the plain verdict at `hOf H` on the proofs' files at the substituted value,
-then the checks after it. -/
 theorem decisionAtS_evalJ (H : Claims.Msg → Claims.Msg) (s : Ins) (spec : SessionSpec) (sts : Array Stmt)
     (x : Claims.Msg) (link : List ByteArray × List ByteArray) (c₁ : Coin) (mids : List (Claims.Msg × Coin))
     {stmt : Claims.Msg} {j : Json} {ps : Array Flock.Proof} :
@@ -452,9 +388,6 @@ theorem decisionAtS_evalJ (H : Claims.Msg → Claims.Msg) (s : Ins) (spec : Sess
   refine bind_congr_ok fun _ _ => ?_
   exact (liftV_run_eval H _).trans (checksAtJ_shaSubJ s spec x link c₁ mids stmt _ j _ _)
 
-/-- **The last step's decision with no proof file decoded**: run against `H`, where each proof is shaped for its file
-and the rep streams' names are distinct, `decisionAtS` is the verdict on the decoded proofs (`verifyJPWith`, no S17),
-then the checks after it. -/
 theorem decisionAtS_eval (H : Claims.Msg → Claims.Msg) (s : Ins) (spec : SessionSpec) (sts : Array Stmt)
     (x : Claims.Msg) (link : List ByteArray × List ByteArray) (c₁ : Coin) (mids : List (Claims.Msg × Coin))
     {stmt : Claims.Msg} {j : Json} {ps : Array Flock.Proof}
@@ -470,9 +403,6 @@ theorem decisionAtS_eval (H : Claims.Msg → Claims.Msg) (s : Ins) (spec : Sessi
             (FlockComplete.dgOf spec (Claims.hOf H))) j))) := by
   rw [decisionAtS_evalJ, verifyJWithM_sub (Claims.hOf H) spec (tabsOf sts) c₁ mids j hsh hnd]
 
-/-- **The decision accepts exactly where the verdict on the decoded proofs and the checks after it pass**, at a
-statement that sets up, where each proof is shaped for its file; S17's name hypothesis comes from the setup and the
-scope check (`namesDistinct_of_setup`, `publicInputs_none_of_checksAtJ`). -/
 theorem decisionAtS_ok_iff (H : Claims.Msg → Claims.Msg) (s : Ins) (spec : SessionSpec) (sts : Array Stmt)
     (x : Claims.Msg) (link : List ByteArray × List ByteArray) (c₁ : Coin) (mids : List (Claims.Msg × Coin))
     {stmt : Claims.Msg} {j : Json} {ps : Array Flock.Proof} (hset : s.setup = .ok (spec, sts))

@@ -40,25 +40,7 @@ import Proofs.Flock.Claims.Recursion.DeployMargin
 import Proofs.Flock.Claims.Recursion.DeploySessions
 import Proofs.Flock.Claims.Recursion.SetupCalls
 
-/-!
-# `DecompB` with each part's witness pinned to the parts' own (`DecompBP`)
-
-`PartAccepts` names some outer witness `w` at which part `s`'s circuit accepts, and `DecompB` reads it at the parts'
-own messages `L.msgs x ws`, so `w` need not be `ws[s]`: `DecompB`'s collision outcome and `Joint`'s no-collision
-conjunct, both over `L.allCalls x ws`, say nothing of `w`'s calls. Where a part's check must bind across parts
-through the recorded calls (a level part's `out` rows to RecCap's `top` rows), the witness has to be `ws[s]`.
-
-* `PartAcceptsP … s x c w ms`: `PartAccepts` at the witness `w` given.
-* `DecompBP`: `DecompB` with part `s`'s check read at `ws[s]`. It follows from `DecompB` at `PartAccepts`
-  (`decompBP_of_decompB`), so every route proved at `PartAccepts` gives it.
-* `JointP`: `OpenLower.Joint` with part `s`'s check at `ws[s]`, so a fact asked under it (`AtPieces`' `StagedAt`) may
-  read `ws[s]`'s calls inside `allCalls x ws`, which `JointP` has true and collision-free. It gives `Joint` at
-  `PartAccepts` (`joint_of_jointP`), and `decompBP_of_jointP` is `decompB_of_joint` with the pinned checks: a
-  composition proved under `JointP` lands on `DecompBP`.
-* `vstarAcceptsV_boundP` and `ksLin2_route_stagedP`: `vstarAcceptsV_boundW` and `ksLin2_route_staged` at `DecompBP`.
-  The route reads each part's check at the witness `E_O` extracted for that part, so it never needed more: `PartAcceptsP`
-  at `ws[s]` is built there from the same facts `PartChecksBV` was applied to, and no `PartChecksBV` is asked.
--/
+/-! `DecompB` with each part's check read at its own witness (`DecompBP`), which `DecompB` at `PartAccepts` gives. -/
 
 @[expose] public section
 
@@ -70,8 +52,6 @@ section Facts
 
 variable {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
 
-/-- **What part `s`'s circuit accepts at the outer witness `w`**, read at the inner messages `ms`: `PartAccepts` with
-its witness given. -/
 def PartAcceptsP (H : Msg → Msg) (D : Deploy Coin) (DO : Flock.Deploy Coin Col T) (L : LayoutB)
     (shape : Form → Prop) (shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop) (cmt : Msg → ℕ → Msg → Msg) (s : ℕ) (x : Msg)
     (c : ℕ → Coin) (w : Flock.Wit) (ms : List Msg) : Prop :=
@@ -82,9 +62,6 @@ def PartAcceptsP (H : Msg → Msg) (D : Deploy Coin) (DO : Flock.Deploy Coin Col
       (∀ i < L.rounds x, ∀ o m, (o, m) ∈ L.piecesOf x s w i → ((ms.getD i []).drop o).take m.length = m) ∧
       L.CmtAgrees cmt x xO ms ∧ L.RowsRead x s w ms
 
-/-- **`DecompB` with each part's check at its own witness**: at a compiled statement of the shape, wherever part `s`'s
-check holds at `ws[s]` and the parts' own messages, for every part, and the recorded calls are true, `IV` accepts the
-parts' messages or two recorded calls collide. -/
 def DecompBP (H : Msg → Msg) (D : Deploy Coin) (IV : Verifier Coin) (L : LayoutB) (shape : Form → Prop)
     (chk : ℕ → Msg → (ℕ → Coin) → Flock.Wit → List Msg → Prop) : Prop :=
   ∀ (x : Msg) (st : CompiledStatement), D.parse x = some st → shape st.form → ∀ (c : ℕ → Coin) (ws : List Flock.Wit),
@@ -102,7 +79,6 @@ theorem partAccepts_of_pin {H : Msg → Msg} {D : Deploy Coin} {DO : Flock.Deplo
   exact ⟨hst, xO, w, h1, h2, h3, h4, h5, h6, h7, h8⟩
 
 omit [Fintype Coin] [Nonempty Coin] in
-/-- **`DecompB` at `PartAccepts` pins**: a check at the given witness is one at some witness. -/
 theorem decompBP_of_decompB {H : Msg → Msg} {D : Deploy Coin} {DO : Flock.Deploy Coin Col T} {IV : Verifier Coin}
     {L : LayoutB} {shape : Form → Prop} {shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop} {cmt : Msg → ℕ → Msg → Msg}
     (hD : DecompB H D IV L shape (PartAccepts H D DO L shape shows cmt)) :
@@ -119,8 +95,6 @@ open Claims (Msg)
 open FlockDeploy (Coin)
 open Claims.Recursion.VStarB
 
-/-- **`Joint` with each part's check at its own witness**: `nS` witnesses, their recorded calls true and free of
-collisions, and part `s`'s check at `ws[s]` and the parts' own messages. -/
 def JointP (H : Msg → Msg) (D : Claims.Recursion.Deploy Coin) (L : LayoutB)
     (chk : ℕ → Msg → (ℕ → Coin) → Claims.Flock.Wit → List Msg → Prop) (x : Msg) (c : ℕ → Coin)
     (ws : List Claims.Flock.Wit) : Prop :=
@@ -134,8 +108,6 @@ theorem joint_of_jointP {Col T : Type} {H : Msg → Msg} {D : Claims.Recursion.D
     Joint H D L (PartAccepts H D DO L shape shows cmt) x c ws :=
   ⟨h.1, h.2.1, h.2.2.1, fun s hs => partAccepts_of_pin (h.2.2.2 s (lt_of_lt_of_eq hs h.1.symm))⟩
 
-/-- **`decompB_of_joint` with the pinned checks**: `DecompBP` at `chkP` wherever `DecompB` holds at `chk` and every
-part's `chkP` at its own witness gives every part's `chk` at the parts' own messages. -/
 theorem decompBP_of_jointP {H : Msg → Msg} {D : Claims.Recursion.Deploy Coin} {IV : Claims.Verifier Coin}
     {L : LayoutB} {shape : Claims.Recursion.Form → Prop} {chk : ℕ → Msg → (ℕ → Coin) → List Msg → Prop}
     {chkP : ℕ → Msg → (ℕ → Coin) → Claims.Flock.Wit → List Msg → Prop}
@@ -156,9 +128,6 @@ open Claims (Msg Out Prover run coinSeq replay findColl Collision)
 open FlockDeploy (Coin)
 open Claims.Recursion (Bound Inner)
 
-/-- **`VStarAcceptsV` at V\*'s bound layout, each part's check at its own witness**: `vstarAcceptsV_boundW` at
-`DecompBP` at `PartAcceptsP`, with no `PartChecksBV`: at each part, the facts `PartChecksBV` was applied to at
-`E_O`'s witness `ws[s]` are `PartAcceptsP` there. -/
 theorem vstarAcceptsV_boundP {W Col T : Type} (H : Msg → Msg) (I : Claims.Recursion.Inner Coin W)
     (ivScope : Msg → Bool) (b : Brings) (L : Claims.Recursion.VStarB.LayoutB) (DO : Claims.Flock.Deploy Coin Col T)
     (shape : Claims.Recursion.Form → Prop) (shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop)
@@ -248,9 +217,6 @@ theorem vstarAcceptsV_boundP {W Col T : Type} (H : Msg → Msg) (I : Claims.Recu
   · exact Or.inr (Claims.Recursion.VStar.coll_of_sub (fun e he => (List.mem_append.1 he).elim (htrue e) (hS e))
       (fun _ h => List.mem_append_left _ h) hd)
 
-/-- **`KSLin2` at the deployed records' dense statements, each part's check at its own witness**:
-`ksLin2_route_staged` with `PartChecksBV` and `DecompB` replaced by `DecompBP` at `PartAcceptsP`
-(`vstarAcceptsV_boundP`). -/
 theorem ksLin2_route_stagedP (rel relO : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (b : Brings)
     (L : Claims.Recursion.VStarB.LayoutB)
     (hRows : L.ReadsRows FlockDeploy.sha512) (hHW : L.HeldWhole) (Cp : Claims.Recursion.Caps Coin) :

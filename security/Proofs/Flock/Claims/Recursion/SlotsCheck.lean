@@ -53,28 +53,12 @@ import Proofs.Flock.Soundness.Discharge.Integrate.Accepted
 import Std.Data.String.ToNat
 import Std.Tactic.BVDecide.Normalize.Bool
 
-/-!
-# The hm96 slots' commit strings at the outer relation
-
-`HmSlotsCommit` from `StagedPart` and `Flock.check` (`hmSlotsCommit_of_full`): at a staged part, the outer relation's
-model is satisfied at the witness's table share (`layout_of_check`, `zOf`), and there `Hm.row_bc_flat` gives each slot's
-`b ‖ c` as the commit string of its row and salt, at the model's columns (`bcCol`, `saltCol`, `Typed.msgCol`). This file
-maps those columns onto the witness's hidden values that `SlotCommits` reads (`slotHid`, `rowHidden`): the out and salt
-bits (`bc_bit`, `salt_bit`), and each row bit's input column, which the unit copies from its message bit (`leaf_copy`),
-in either of `setupOne`'s branches (`table_rows`, `slotCommits_table`).
-
-The parse facts come from the verifier's checks at the staged part: one table's circuit is `partCircuit`'s
-(`partCircuit_staged`), in `ProvedScope.scopeOk` (`staged_scope`) and V\*'s parse (`checkParsed_ok`); every port a held
-row or RecCap reads is an input row (`in_block`, `ownPorts_held`), and a held row is rep `0` or `1`. The staged part
-is one table holding its whole population (`oneFull_staged`, `capFull_staged`), which the verifier's setup refuses
-otherwise (`RecSetup.oneFull`). `ksLin2_deployed_full` and `bitsLin2_deployed_full` drop `HmSlotsCommit`.
--/
+/-! The hm96 slots' commit strings at the outer relation (`hmSlotsCommit_of_full`). -/
 
 @[expose] public section
 
 namespace RecDeploy
 
-/-- **A block's bit at the table share is the witness's hidden value** at the share's interleaved address. -/
 theorem chunkBit_zOf (S : FlockSoundness.Model.Statement) (w : Claims.Flock.Wit) (J t : ℕ) (o : Fin (2 ^ S.nbl))
     {y : ℕ} (hy : y < 2 ^ S.kLog) :
     FlockSoundness.Discharge.Hm.chunkBit S (Flock.Readable.zOf J w t S.m) o y =
@@ -82,20 +66,17 @@ theorem chunkBit_zOf (S : FlockSoundness.Model.Statement) (w : Claims.Flock.Wit)
   rw [FlockSoundness.Discharge.Hm.chunkBit_of_lt S _ o hy]
   exact Flock.Readable.bit_toZ _
 
-/-- At one table, the share's address is the block's own: `slotHid`'s form. -/
 theorem chunkBit_zOf_one (S : FlockSoundness.Model.Statement) (w : Claims.Flock.Wit) (o : Fin (2 ^ S.nbl))
     {y : ℕ} (hy : y < 2 ^ S.kLog) :
     FlockSoundness.Discharge.Hm.chunkBit S (Flock.Readable.zOf 1 w 0 S.m) o y =
       w.hid.getD (o.val * 2 ^ S.kLog + y) false := by
   rw [chunkBit_zOf S w 1 0 o hy, Nat.mul_one, Nat.add_zero]
 
-/-- The hm96 net's output column, as `Hm.bcCol` reads it, is `hmOutCol`'s. -/
 theorem hmOut_eq (c : Flock.Circuit) : FlockSoundness.Discharge.Hm.hmOut c = hmOutCol c := by
   unfold FlockSoundness.Discharge.Hm.hmOut hmOutCol
   rw [Array.getD_eq_getD_getElem?]
   cases (Flock.portCols (c.nets.getD c.hmNet default).2.outGroups)[0]? <;> rfl
 
-/-- The hm96 net's `k`-th input column, as `Hm.saltCol` reads it, is `hmIn`'s. -/
 theorem hmIn_eq (c : Flock.Circuit) (k : ℕ) : FlockSoundness.Discharge.Hm.hmIn c k = hmIn c k := by
   unfold FlockSoundness.Discharge.Hm.hmIn hmIn
   rw [Array.getD_eq_getD_getElem?]
@@ -133,8 +114,6 @@ theorem salt_bit (S : FlockSoundness.Model.Statement) (w : Claims.Flock.Wit) (c 
   rw [FlockSoundness.Discharge.Hm.bitL_bytesOf _ _ (by omega), he, chunkBit_zOf_one S w _ (by rw [hk]; exact hy), hk]
   rfl
 
-/-! ## A row bit's input column copies its message bit -/
-
 theorem words_take_mono {α : Type} (f : α → ℕ) (l : List α) {a b : ℕ} (h : a ≤ b) :
     ((l.take a).map f).sum ≤ ((l.take b).map f).sum := by
   have e := List.take_append_drop a (l.take b)
@@ -158,7 +137,6 @@ theorem extract_words {α : Type} (f : α → ℕ) (as : Array α) (q : ℕ) :
   rw [← Array.foldl_toList, Array.toList_extract, foldl_words]
   simp [List.extract]
 
-/-- Two runs of consecutive lengths that both hold `x` start at one index. -/
 theorem words_disj {α : Type} (f : α → ℕ) (l : List α) {q q' x : ℕ} (hq : q < l.length) (hq' : q' < l.length)
     (h1 : ((l.take q).map f).sum ≤ x) (h2 : x < ((l.take q).map f).sum + f l[q])
     (h1' : ((l.take q').map f).sum ≤ x) (h2' : x < ((l.take q').map f).sum + f l[q']) : q' = q := by
@@ -171,7 +149,6 @@ theorem words_disj {α : Type} (f : α → ℕ) (l : List α) {q q' x : ℕ} (hq
     rw [words_take_succ f l hq'] at this
     omega
 
-/-- **The port `Flat.leafSrc` reads an input word from** is the one whose words hold it. -/
 theorem starts_find_eq (c : Flock.Circuit) {q x : ℕ} (hq : q < c.ports.size)
     (h1 : (FlockSoundness.Typed.starts c)[q]! ≤ x)
     (h2 : x < (FlockSoundness.Typed.starts c)[q]! + c.ports[q].words) :
@@ -200,11 +177,6 @@ variable {tags : Flock.Tags} {st : Flock.Stmt} (L : FlockSoundness.Layout st)
   (F : FlockSoundness.Discharge.Aliased.UnitFacts tags st)
 
 include F in
-/-- **Row bit `i` of port `q` at its input column is its message bit**, in every block of a satisfying witness, and
-that column is in the block: with unit `0`'s input leaves its `N` input words in order, the column (`portCol`'s, in
-template instance `g`'s first unit) is the leaf reading the port's word `i / 16`, whose copy position
-(`Aliased.copyAt`) is the row's message bit `i` (`Flat.leafSrc`), or a forced-zero row when that lies past the block,
-where the message bit reads 0 too. -/
 theorem leaf_copy {N g q i : ℕ} (hl : st.c.leavesIn.getD 0 #[] = (Array.range N).map Int.ofNat)
     (hupv : 0 < st.c.upv) (hg : g < st.c.g) (hq : q < st.c.ports.size)
     (hbw : st.c.ports[q].bits = 16 * st.c.ports[q].words)
@@ -289,12 +261,6 @@ theorem leaf_copy {N g q i : ℕ} (hl : st.c.leavesIn.getD 0 #[] = (Array.range 
 
 end copy
 
-/-! ## A table's rows at the outer relation -/
-
-/-- **What a table the verifier sets up gives at a satisfying witness of its model**, in either of `setupOne`'s
-branches (the hidden statement's through its flat twin, `Hidden.sat_flat`): its row ranges, a template instance, its
-blocks, each row's `b ‖ c` as the commit string of its message and salt (`Hm.row_bc_flat`), and each row bit's input
-column its message bit (`leaf_copy`). -/
 theorem table_rows {tags : Flock.Tags} {cf pf : ByteArray} {coins : _} {tables : List (String × ByteArray)}
     {draw partition : Option Lean.Json} {program : Option ByteArray} {st : Flock.Stmt} (ht : tags.typed = false)
     (hd : FlockSoundness.Discharge.HiddenExec.setupOne tags cf pf coins tables draw partition program = .ok st)
@@ -367,8 +333,6 @@ theorem findIdx_range_eq {N w : ℕ} (hw : w < N) :
     ((Array.range N).map Int.ofNat).findIdx? (· == (w : Int)) = some w :=
   Array.findIdx?_eq_some_iff_getElem.2 ⟨by simpa using hw, by simp, fun j hj => by simp; omega⟩
 
-/-- With unit `0`'s input leaves its `N` input words in order, row bit `i` of port `q` has its input column wherever
-its word is one of them. -/
 theorem portCol_eq {c : Flock.Circuit} {N q i : ℕ} (hl : c.leavesIn.getD 0 #[] = (Array.range N).map Int.ofNat)
     (hw : (c.ports.extract 0 q).foldl (· + ·.words) 0 + i / 16 < N) :
     portCol c 0 q i = some ((c.unit.inGroups.getD 0 default).col * Flock.WORD +
@@ -395,10 +359,8 @@ theorem rowHidden_eq {c : Flock.Circuit} {N q : ℕ} {nm : String} (n : ℕ)
   have e : ∀ C S : ℕ, C + 16 * (S + i / 16) + i % 16 = C + 16 * S + i := fun C S => by omega
   rw [portCol_eq hl (by omega), Option.map_some, e]
 
-/-- **Port `q`'s hm96 slot at instance `n` outputs its commit string**, at a table the verifier sets up whose model
-the witness's one-table share satisfies: its out columns are the model's `b ‖ c` (`bc_bit`), the commit string of the
-row's message and salt (`table_rows`), the message at the row's input columns (`rowHidden`, `leaf_copy`) and the
-salt at its salt columns (`salt_bit`). -/
+/-- Port `q`'s hm96 slot at instance `n` outputs its commit string, at a table the verifier sets up whose model the
+witness's one-table share satisfies. -/
 theorem slotCommits_table {tags : Flock.Tags} {cf pf : ByteArray} {coins : _} {tables : List (String × ByteArray)}
     {draw partition : Option Lean.Json} {program : Option ByteArray} {st : Flock.Stmt} (ht : tags.typed = false)
     (hd : FlockSoundness.Discharge.HiddenExec.setupOne tags cf pf coins tables draw partition program = .ok st)
@@ -460,8 +422,6 @@ theorem slotCommits_table {tags : Flock.Tags} {cf pf : ByteArray} {coins : _} {t
   rw [hpfx, hrow, hsalt, ← hbc o hgn hqs]
   exact (bc_bit (L.model regs) w st.c rfl hb hy ht).symm
 
-/-! ## The checks a staged part passed -/
-
 theorem sum_rows_le : ∀ (a : List String) (b : List ℕ) (k : ℕ),
     ((((a.zip b).map fun p => (p.1, p.2, 16 * p.2)).take k).map (·.2.1)).sum ≤ b.sum
   | [], _, _ => by simp
@@ -472,8 +432,6 @@ theorem sum_rows_le : ∀ (a : List String) (b : List ℕ) (k : ℕ),
     simp only [List.zip_cons_cons, List.map_cons, List.take_succ_cons, List.sum_cons]
     omega
 
-/-- Rows that run an input block of `16 · w`-bit rows, then rows named among `outs`: a row named outside `outs` is in
-the input block, so its words end within the block's. -/
 theorem in_block_list {β : Type} (f : β → String × ℕ × ℕ) (l : List β) (ins outs : List String)
     (ip : List ℕ)
     (B : List (String × ℕ × ℕ)) (hB : ∀ r ∈ B, r.1 ∈ outs)
@@ -504,8 +462,6 @@ theorem in_block_list {β : Type} (f : β → String × ℕ × ℕ) (l : List β
   rw [← htake, hsucc] at hs
   omega
 
-/-- **A port named outside V\*'s outputs is one of its input rows**, at the circuit V\*'s parse check passed
-(`checkParsed_ok`'s rows, `vstarRows`): its row ends within the unit's input words. -/
 theorem in_block {c : Flock.Circuit} {sub : VStar.Sub} {u : VStar.UnitC}
     (hr : c.ports.toList.map (fun p => (p.name, p.words, p.bits)) = Flock.RecVStar.vstarRows sub u)
     {nm : String} (hnm : nm ∉ sub.outputs) {q : ℕ} (hq : c.ports.findIdx? (·.name == nm) = some q) :
@@ -543,8 +499,6 @@ theorem cIndex_claim : Flock.RecVStar.cIndex Flock.RecVStar.CLAIM_VALUE = none :
   rw [show ("rec-claim".drop 5).toString = "laim" by decide +kernel]
   exact toNat_laim
 
-/-- **A statement's own ports are none of its outputs**, `out` (no `m<k>` nor `claim<k>`), and each row one registered
-under a `rec-c<k>` reads is rep `0` or `1`. -/
 theorem ownPorts_held {sv : VStar.Stmt} {q : String × String × Array (Option ℕ)}
     (hq : q ∈ Flock.RecVStar.ownPorts sv) :
     q.1 ∉ sv.sub.outputs ∧
@@ -601,7 +555,6 @@ theorem ownPorts_held {sv : VStar.Stmt} {q : String × String × Array (Option �
   | cap _ _ => simp [Flock.RecVStar.ownPorts] at hq
   | link _ _ _ => simp [Flock.RecVStar.ownPorts] at hq
 
-/-- What `heldRows` holds: a row a statement's own port reads, at the port's index among its circuit's ports. -/
 theorem mem_heldRows {r : XR} {s : ℕ} {sv : VStar.Stmt} {c : Flock.Circuit}
     (hs : (Flock.RecVStar.statements r.shape).toOption.bind (·[s]?) = some sv)
     (hc : r.w.parts[s]?.bind partCircuit = some c) {h : ℕ × String × ℕ × ℕ} (hh : h ∈ heldRows r s) :
@@ -661,8 +614,6 @@ theorem checkStmt_scopeOk {i : Flock.RecVStar.Inner} {tags : Flock.Tags} {tables
         · cases h
       · cases h
 
-/-- **What a staged part's tables passed**: each is in `ProvedScope.scopeOk`, and its population is the instance
-count of V\*'s statement `s` at the inner shape (`checkStmt`, `checkCircuit_ok`, `check_ok`). -/
 theorem staged_scope {st : Stage} {s : ℕ} {x xO : Claims.Msg} (h : StagedPart st s x xO)
     {p : Flock.Readable.Parsed}
     (hx : Flock.Readable.parseBytes readOfO xO = some p) {t : ℕ} (ht : t < p.sts.size) :
@@ -684,9 +635,6 @@ theorem staged_scope {st : Stage} {s : ℕ} {x xO : Claims.Msg} (h : StagedPart 
   obtain ⟨ss, hss, hs, -, hn, -⟩ := FlockSoundness.Discharge.Recursion.check_ok hck'
   exact ⟨r, ss, sv, hr, hss, hs, hn⟩
 
-/-! ## A staged part is one table holding its whole population -/
-
-/-- A setup that decodes has passed `RecSetup.oneFull` on its tables. -/
 theorem RecIns.setup_oneFull {s : RecIns} {spec : Flock.SessionSpec} {sts : Array Flock.Stmt}
     (h : s.setup = .ok (spec, sts)) : Flock.RecSetup.oneFull s.inner sts = .ok () := by
   unfold RecIns.setup at h
@@ -698,7 +646,6 @@ theorem RecIns.setup_oneFull {s : RecIns} {spec : Flock.SessionSpec} {sts : Arra
     subst h2
     assumption
 
-/-- Under an inner shape, `RecSetup.oneFull` passes only one table, whose instances are its population's. -/
 theorem oneFull_ok {i : Flock.RecVStar.Inner} {sts : Array Flock.Stmt}
     (h : Flock.RecSetup.oneFull (some i) sts = .ok ()) :
     sts.size = 1 ∧ ∀ t (ht : t < sts.size), Flock.RecVStar.population sts[t] ≤ sts[t].n := by
@@ -713,8 +660,6 @@ theorem oneFull_ok {i : Flock.RecVStar.Inner} {sts : Array Flock.Stmt}
     · cases h1
     · omega
 
-/-- **A staged part sets up one table holding its whole population**: its setup ran `RecSetup.oneFull` under the
-verifier's inner shape, which the staged statement carries (`insO_staged`). -/
 theorem oneFull_staged {st : Stage} {s : ℕ} {x xO : Claims.Msg} {i : RecIns} {spec : Flock.SessionSpec}
     {sts : Array Flock.Stmt} (h : StagedPart st s x xO) (hsu : setupO xO = some (i, spec, sts)) :
     sts.size = 1 ∧ ∀ t (ht : t < sts.size), Flock.RecVStar.population sts[t] ≤ sts[t].n := by
@@ -725,9 +670,7 @@ theorem oneFull_staged {st : Stage} {s : ℕ} {x xO : Claims.Msg} {i : RecIns} {
   rw [hinner] at h1
   exact oneFull_ok h1
 
-/-- **A staged RecCap part's table holds all its `N` instances**: `checkStmt` makes its population `N`
-(`staged_scope`), and `RecSetup.oneFull` its instances at least its population's (`oneFull_staged`), so a table sampled
-short, which proves only its sampled proof blocks (`HmRow.drawn`), never stages. -/
+/-- A staged RecCap part's table holds all its `N` instances, so a table sampled short never stages. -/
 theorem capFull_staged {st : Stage} {s : ℕ} {x xO : Claims.Msg} {i : RecIns} {spec : Flock.SessionSpec}
     {sts : Array Flock.Stmt} {r : XR} {l N : ℕ} (hS : StagedPart st s x xO) (hsu : setupO xO = some (i, spec, sts))
     (hr : readX x = some r) (hcap : (Flock.RecVStar.statements r.shape).toOption.bind (·[s]?) = some (.cap l N))
@@ -742,8 +685,6 @@ theorem capFull_staged {st : Stage} {s : ℕ} {x xO : Claims.Msg} {i : RecIns} {
   have hle := (oneFull_staged hS hsu).2 0 h0
   have hp : Flock.RecVStar.population sts[0] = N := hn
   omega
-
-/-! ## The slots commit at a staged part -/
 
 theorem div_lt_blocks {n m g e : ℕ} (hg : 0 < g) (hn : n < m)
     (he : e = max 3 (Flock.log2ceil (max ((m + g - 1) / g) 1))) : n / g < 2 ^ e := by
@@ -765,11 +706,6 @@ theorem div_lt_blocks_two {n m g e : ℕ} (hn : n < 2)
   have : (2 : ℕ) ^ 3 = 8 := by norm_num
   omega
 
-/-- **V\*'s hm96 slots output their commit strings at the outer relation**: a staged part sets up one table, and a
-RecCap part's table holds all its instances (`oneFull_staged`, `capFull_staged`), so at `Flock.check` its one table's
-model is satisfied at the witness (`layout_of_check`), the table is `setupOne`'s (`setupTables_setupOne`), in scope
-(`staged_scope`) and V\*'s parse (`checkParsed_ok`), and each held row's port and RecCap's `top` is an input row of
-V\*'s (`in_block`, `ownPorts_held`) at a block of the table (`div_lt_blocks`), so `slotCommits_table` applies. -/
 theorem hmSlotsCommit_of_full {st : Stage} : HmSlotsCommit (deployZkRec Flock.Readable.relation) st := by
   intro x ms s w r c hS hck hr hpc
   obtain ⟨p, r', sv, hx, ht, hpi, hr', ⟨ss, hss, hsv⟩, h0, htab⟩ := stagedTables hS
@@ -824,8 +760,6 @@ open Flock
 open Claims (Msg Out)
 open FlockDeploy (Coin)
 
-/-- **`KSLin2` at the model of the challenger's live-coin part's record (`recTr`), with the slots' commit strings proved**:
-`ksLin2_deployed_slots` with `HmSlotsCommit` from `hmSlotsCommit_of_full`. -/
 theorem ksLin2_deployed_full (b : Brings) (aux : Msg → ℕ → Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ)
     (hd : Msg → Flock.RecRecord.Record) (rest : Msg → List (Msg × Out) → List UInt8)
     (fin : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))) (wE : Msg → ℝ)
@@ -848,8 +782,6 @@ theorem ksLin2_deployed_full (b : Brings) (aux : Msg → ℕ → Flock.RecRecord
   intro bR L Bd D bL hP
   exact ksLin2_deployed_slots b aux nOf hd rest fin wE join final w hP hmSlotsCommit_of_full
 
-/-- **`BitsLin2` at the model of the challenger's live-coin part's record (`recTr`), with the slots' commit strings proved**:
-`bitsLin2_deployed_slots` with `HmSlotsCommit` from `hmSlotsCommit_of_full`. -/
 theorem bitsLin2_deployed_full (b : Brings) (aux : Msg → ℕ → Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ)
     (hd : Msg → Flock.RecRecord.Record) (rest : Msg → List (Msg × Out) → List UInt8)
     (fin : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))) (wE : Msg → ℝ)

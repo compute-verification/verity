@@ -38,34 +38,12 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Recursion.DeploySessions
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# The challenger's live-coin part's record reads back
-
-`Flock.RecRecord.readFull`, the record format's own total reader, reads back what `recordFullW` writes
-(`readFull_recordFullW`): the rounds, the record's kind and tops' format, the prover's Hello (`readHello_helloW`) and
-the link's level-0 tops and points (`readObj_objW`), piece by piece: literals, hex strings, escaped strings, decimal
-numbers, lists and objects at their indentation and coins. No JSON library is involved, so no property of one is
-assumed.
-
-At the deployment's model (`recTr`, `recRead`) the challenger's live-coin part's transcript of the inner rounds is that record, as
-`rec_live`'s live-coin part writes it (`recOf`): round 0's message, the link, as its table's level-0 top (one node a
-128-byte commit string, `nodesOf`) and its coin's values as the link points; each later round before the last as a
-recorded round, its message's first commit strings as its tops (as many a level as `aux` says) and the rest, where
-there is any, as its one `c_k`, with its coin's values; and no last round, whose openings the challenger's live-coin part never sees.
-Everything else (stream, index, level-0 count, kind, Hello, the record past the link points) is whatever `aux`, `hd`
-and `rest` say. `recRead` reads the transcript back to each round's message and sampled values before the last round,
-at every accepted run (`readsBack_recTr`, `ReadsBackB`). The difftest (`verity/protocols/proofs/flock/prover/tests/test_lean_rec_record.py`)
-holds the model to the honest records: `recordFullW` writes `rec_live.record_bytes`' bytes up to the link points, and
-the rounds `Record.msgs` shows are the link's and the recorded rounds', one fewer than the inner verifier's, each the
-schedule's count of commit strings. The model before it, which listed every inner round, set up no staged statement
-(`Flock.Test.RecSchedule`: `RecSetup.commits` holds the staged record to the schedule's rounds).
--/
+/-! The challenger's live-coin part's record reads back through the record format's own total reader, with no JSON library assumed. -/
 
 @[expose] public section
 
 namespace Flock.RecRecord
 
-/-- A literal reads off where it's written. -/
 @[simp] theorem lit_append (l r : List UInt8) : lit l (l ++ r) = some r := by
   induction l with
   | nil => rfl
@@ -80,7 +58,6 @@ namespace Flock.RecRecord
   | nil => rfl
   | cons a l ih => simp [ih]
 
-/-- Every byte's two hex digits read back, and the first is no quote. -/
 theorem hexB_nat : ∀ n < 256, unhexPair (hexDigit (n / 16)) (hexDigit (n % 16)) = some (UInt8.ofNat n) ∧
     hexDigit (n / 16) ≠ 34 := by
   decide +kernel
@@ -90,7 +67,6 @@ theorem hexB_spec (b : UInt8) : unhexPair (hexDigit (b.toNat / 16)) (hexDigit (b
   have h := hexB_nat b.toNat b.toNat_lt
   rwa [UInt8.ofNat_toNat] at h
 
-/-- Hex bytes read back up to their closing quote. -/
 theorem hexBytes_hexW (bs r : List UInt8) : hexBytes (hexW bs ++ 34 :: r) = some (bs, r) := by
   induction bs with
   | nil => cases r <;> simp [hexW, hexBytes]
@@ -99,11 +75,9 @@ theorem hexBytes_hexW (bs r : List UInt8) : hexBytes (hexW bs ++ 34 :: r) = some
     simp only [hexW, List.flatMap_cons, hexB] at ih ⊢
     simp [hexBytes, h1, h2, ih]
 
-/-- **A hex string reads back.** -/
 theorem readHex_hexStr (bs r : List UInt8) : readHex (hexStr bs ++ r) = some (bs, r) := by
   simp [readHex, hexStr, lit, hexBytes_hexW]
 
-/-- An escaped string's bytes read back up to its closing quote. -/
 theorem unesc_escW (bs r : List UInt8) : unesc (escW bs ++ 34 :: r) = some (bs, r) := by
   induction bs with
   | nil => cases r <;> simp [escW, unesc]
@@ -119,7 +93,6 @@ theorem unesc_escW (bs r : List UInt8) : unesc (escW bs ++ 34 :: r) = some (bs, 
       | nil => simp at hw
       | cons y t => rw [hw] at ih; simp [unesc, h34, h92, ih]
 
-/-- **A stream's name reads back.** -/
 theorem readStr_strStr (bs r : List UInt8) : readStr (strStr bs ++ r) = some (bs, r) := by
   simp [readStr, strStr, lit, unesc_escW]
 
@@ -128,7 +101,6 @@ theorem digit_spec (n : Nat) : isDigit (digit n) = true ∧ (digit n).toNat - 48
   have := h (n % 10) (Nat.mod_lt _ (by decide))
   simpa [digit, Nat.mod_mod] using this
 
-/-- A number's decimal digits read on from any value before them. -/
 theorem digits_decW (n : Nat) : ∀ acc r, digits acc (decW n ++ r) = digits (acc * 10 ^ (decW n).length + n) r := by
   induction n using Nat.strongRecOn with
   | _ n ih =>
@@ -148,7 +120,6 @@ theorem digits_decW (n : Nat) : ∀ acc r, digits acc (decW n ++ r) = digits (ac
       rw [Nat.add_mul, Nat.mul_assoc]
       omega
 
-/-- **A number reads back** where no digit follows it. -/
 theorem readNat_decW (n : Nat) (r : List UInt8) (hr : ∀ c t, r = c :: t → isDigit c = false) :
     readNat (decW n ++ r) = some (n, r) := by
   have hne : decW n ≠ [] := by
@@ -188,7 +159,6 @@ theorem length_tailW (d : Nat) (w : α → List UInt8) (es : List α) : es.lengt
   | nil => simp [tailW]
   | cons e es ih => simp only [tailW, List.length_cons, List.length_append]; omega
 
-/-- A list's elements read back, given enough fuel, where `p` reads each element back. -/
 theorem elems_tailW (d : Nat) (w : α → List UInt8) (p : P α) (hp : ∀ e r, p (w e ++ r) = some (e, r))
     (es : List α) : ∀ (e : α) (fuel : Nat) (r : List UInt8), es.length + 1 ≤ fuel →
       elems d p fuel (w e ++ (tailW d w es ++ r)) = some (e :: es, r) := by
@@ -203,7 +173,6 @@ theorem elems_tailW (d : Nat) (w : α → List UInt8) (p : P α) (hp : ∀ e r, 
     have h := ih e' f r (by simp at hf; omega)
     simp [elems, hp, tailW, h]
 
-/-- **A list reads back** where `p` reads each element back. -/
 theorem readList_listW (d : Nat) (w : α → List UInt8) (p : P α) (hp : ∀ e r, p (w e ++ r) = some (e, r))
     (es : List α) (r : List UInt8) : readList d p (listW d w es ++ r) = some (es, r) := by
   cases es with
@@ -221,7 +190,6 @@ theorem length_be (w v : Nat) : (be w v).length = w := by
   | zero => rfl
   | succ w ih => simp [be, ih]
 
-/-- A number's bytes read back to it, after any value before them. -/
 theorem foldl_be (w : Nat) : ∀ v acc, v < 256 ^ w →
     (be w v).foldl (fun a x => a * 256 + x.toNat) acc = acc * 256 ^ w + v := by
   induction w with
@@ -242,7 +210,6 @@ theorem unbe_be (v : UInt64) : UInt64.ofNat (unbe (be 8 v.toNat)) = v := by
   rw [unbe, foldl_be 8 _ 0 v.toNat_lt_size]
   simp
 
-/-- **A coin reads back.** -/
 theorem readCoin_coinStr (c : F128) (r : List UInt8) : readCoin (coinStr c ++ r) = some (c, r) := by
   have h8 := length_be 8 c.hi.toNat
   simp [readCoin, coinStr, readHex_hexStr, coinB, length_be, List.drop_left' h8, List.take_left' h8, unbe_be]
@@ -251,7 +218,6 @@ theorem readNat_fld (n d : Nat) (s : String) (r : List UInt8) :
     readNat (decW n ++ (fld d s ++ r)) = some (n, fld d s ++ r) :=
   readNat_decW n _ fun c t h => by simp [fld] at h; rw [← h.1]; decide
 
-/-- **A round reads back.** -/
 theorem readRound_roundW (x : Round) (r : List UInt8) : readRound (roundW x ++ r) = some (x, r) := by
   have hh : ∀ (bs : List UInt8) r, readHex (hexStr bs ++ r) = some (bs, r) := readHex_hexStr
   have ht : ∀ (t : List (List UInt8)) r, readList 4 readHex (listW 4 hexStr t ++ r) = some (t, r) :=
@@ -271,7 +237,6 @@ theorem readRound_roundW (x : Round) (r : List UInt8) : readRound (roundW x ++ r
     readList_listW 3 coinStr readCoin readCoin_coinStr, hb, lit_append, hb]
   rfl
 
-/-- **The record reads back**: `readRecord` reads the rounds `recordW` wrote, whatever the record's other fields. -/
 theorem readRecord_recordW (xs : List Round) (rest : List UInt8) : readRecord (recordW xs rest) = some xs := by
   simp [readRecord, recordW, readList_listW 1 roundW readRound readRound_roundW]
 
@@ -279,7 +244,6 @@ section Objects
 
 variable {α : Type}
 
-/-- An entry reads back where `p` reads its value back. -/
 theorem readEnt_entW (w : α → List UInt8) (p : P α) (hp : ∀ e r, p (w e ++ r) = some (e, r))
     (e : List UInt8 × α) (r : List UInt8) : readEnt p (entW w e ++ r) = some (e, r) := by
   simp [readEnt, entW, readStr_strStr, lit, hp]
@@ -305,7 +269,6 @@ theorem objElems_objTailW (d : Nat) (w : α → List UInt8) (p : P α) (hp : ∀
     have h := ih e' f r (by simp at hf; omega)
     simp [objElems, he, objTailW, h]
 
-/-- **An object reads back** where `p` reads each value back. -/
 theorem readObj_objW (d : Nat) (w : α → List UInt8) (p : P α) (hp : ∀ e r, p (w e ++ r) = some (e, r))
     (es : List (List UInt8 × α)) (r : List UInt8) : readObj d p (objW d w es ++ r) = some (es, r) := by
   cases es with
@@ -322,7 +285,6 @@ end Objects
 theorem readNat_nl (n : Nat) (l r : List UInt8) : readNat (decW n ++ ((10 :: l) ++ r)) = some (n, (10 :: l) ++ r) :=
   readNat_decW n _ fun c t h => by simp at h; rw [← h.1]; decide
 
-/-- **Hello reads back.** -/
 theorem readHello_helloW (h : Hello) (r : List UInt8) : readHello (helloW h ++ r) = some (h, r) := by
   have hb : ∀ {α β : Type} (a : α) (f : α → Option β), (some a >>= f) = f a := fun _ _ => rfl
   have hw : helloW h ++ r = (123 :: 10 :: (sp 2 ++ key "digests")) ++ (strStr h.digests ++ (fld 2 "flavor" ++
@@ -340,7 +302,6 @@ theorem readHello_helloW (h : Hello) (r : List UInt8) : readHello (helloW h ++ r
     readList_listW 2 strStr readStr readStr_strStr, hb, lit_append, hb]
   rfl
 
-/-- **The record reads back up to its link points**, whatever follows them. -/
 theorem readFull_recordFullW (x : Record) (rest : List UInt8) : readFull (recordFullW x rest) = some x := by
   have hb : ∀ {α β : Type} (a : α) (f : α → Option β), (some a >>= f) = f a := fun _ _ => rfl
   have ht : ∀ (t : List (List UInt8)) r, readList 3 readHex (listW 3 hexStr t ++ r) = some (t, r) :=
@@ -357,8 +318,6 @@ theorem readFull_recordFullW (x : Record) (rest : List UInt8) : readFull (record
     readObj_objW 2 _ _ ht, hb, lit_append, hb, readList_listW 2 coinStr readCoin readCoin_coinStr, hb]
   rfl
 
-
-/-! ## The model of the challenger's live-coin part's record -/
 
 /-- **A message's commit strings**: its 128-byte pieces in order, the last shorter where its length is no multiple
 of 128. -/
@@ -462,8 +421,6 @@ theorem length_msgs_recOf (cv : β → Nat → List F128) (aux : Nat → Round) 
     List.length_tail]
   omega
 
-/-- **The model shows each round it records as sent**: its `i`-th round is the `i`-th message round's message and
-its coin's values. -/
 theorem getD_msgs_recOf (cv : β → Nat → List F128) (aux : Nat → Round) (nOf : Nat → Nat) (hd : Record)
     (ms : List (List UInt8 × β)) (i : Nat) (hi : i < (recOf cv aux nOf hd ms).msgs.length) :
     (recOf cv aux nOf hd ms).msgs.getD i ([], []) =
@@ -484,7 +441,6 @@ theorem getD_msgs_recOf (cv : β → Nat → List F128) (aux : Nat → Round) (n
     simp [recOf, Record.msgs, List.getD_eq_getElem?_getD, List.getElem?_mapIdx, List.getElem?_eq_getElem hj,
       msg_roundD, coins_roundD]
 
-/-- **The model's rounds' messages are the message rounds' before the last.** -/
 theorem fst_recOf (cv : β → Nat → List F128) (aux : Nat → Round) (nOf : Nat → Nat) (hd : Record)
     (ms : List (List UInt8 × β)) (i : Nat) (hi : i + 1 < ms.length) :
     (((recOf cv aux nOf hd ms).msgs.map fun mc => (mc.1, mc.2.toArray)).map Prod.fst).getD i [] =
@@ -496,7 +452,6 @@ theorem fst_recOf (cv : β → Nat → List F128) (aux : Nat → Round) (nOf : N
     List.getElem?_map, List.getElem?_eq_getElem hl, List.getElem?_eq_getElem (show i < ms.length by omega)]
   simp [h, List.getElem?_eq_getElem (show i < ms.length by omega)]
 
-/-- **The model's rounds' coins are the message rounds' answers' values**, where there is a message round. -/
 theorem snd_recOf (cv : β → Nat → List F128) (aux : Nat → Round) (nOf : Nat → Nat) (hd : Record)
     (ms : List (List UInt8 × β)) (i : Nat)
     (hi : i < ((recOf cv aux nOf hd ms).msgs.map fun mc => (mc.1, mc.2.toArray)).length) :
@@ -538,10 +493,6 @@ noncomputable def recTr (aux : Msg → ℕ → Flock.RecRecord.Round) (nOf : Msg
 def recRead : TrReader := fun _ t =>
   (Flock.RecRecord.readFull t.data.toList).map fun r => r.msgs.map fun mc => (mc.1, mc.2.toArray)
 
-/-- **The record reads back at every accepted run, before the last round**: wherever the challenger's live-coin part's transcript is
-its record (`recTr`, whatever `aux`, `nOf`, `hd` and `rest`), `recRead` reads it back to the run's inner messages
-before the last, and every round it shows with the values its coin drew (`run_inner`: each inner round is answered
-by its coin's bytes). -/
 theorem readsBack_recTr (H : Msg → Msg) (IV : Claims.Verifier Coin) (b : Brings)
     (shape : Claims.Recursion.Form → Prop) (aux : Msg → ℕ → Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ)
     (hd : Msg → Flock.RecRecord.Record) (rest : Msg → List (Msg × Out) → List UInt8)

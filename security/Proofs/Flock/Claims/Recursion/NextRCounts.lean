@@ -41,23 +41,7 @@ import Proofs.Flock.Claims.Recursion.NextRFits
 import Proofs.Flock.Claims.Recursion.RepFramesBind
 import Proofs.Flock.Claims.Recursion.SchedCount
 
-/-!
-# A rep's rounds squeeze as its schedule's: `chunksOf_counts`
-
-Each round of a rep's frames closes at a squeeze, and its coin count (`sqCount`, what `FramedAt` asks each round to
-issue) is the count `RecVStar.repRounds` schedules for that round (`chunksOf_counts`). This is `NextRFits`' `roundPat`
-for the counts:
-
-* **The frames' side** (`closeNs`): the counts of a frame list's closing squeezes, in order, are its chunks' counts
-  (`chunks_counts`), and they compose over `++` and `flatMap` with no glue. Each part of a rep's frames has closed
-  counts (`closeNs_zc`, `closeNs_lc`, `closeNs_rs`, `closeNs_levelFr`, `closeNs_lig`), so a rep's frames have
-  `schedCnt`'s (`closeNs_repFrames`).
-* **The schedule's side** (`repRounds_counts`): `RecVStar.repRounds`' counts are `schedCnt`'s. Its loop's running
-  split is each level's columns plus one, which `fast100` gives (`fast100_cols`, with every level's `q ≥ 2`, where
-  `bitLength (q - 1)` is the frames' `(q - 1).log2 + 1`).
-* **`T`'s slot** (`valOf_T`): the witness a rep's chunks' values start reads its `T` slot (`wi_T`, right after the
-  prefix rounds and the claims' ring-switch blocks) at the `T` its frames were built at, given the proof's sizes.
--/
+/-! A rep's rounds squeeze as its schedule's (`chunksOf_counts`). -/
 
 @[expose] public section
 
@@ -69,14 +53,10 @@ open FlockSoundness.Discharge.Exec (chunks closes repFrames zcFrames lcFrames rs
   queryFr chFr kFr capFr)
 open FlockVBridge.Family (sqCount)
 
-/-! ## The frames' side -/
-
-/-- The coins a frame closes a round with: `[n]` at a squeeze of `n ≥ 1` coins, none otherwise. -/
 def sqN : Frame → List ℕ
   | .sq _ n => if n = 0 then [] else [n]
   | _ => []
 
-/-- The coin counts of a frame list's closing squeezes, in order. -/
 def closeNs (F : List Frame) : List ℕ := F.flatMap sqN
 
 @[simp] theorem closeNs_nil : closeNs [] = [] := rfl
@@ -109,7 +89,6 @@ theorem sqCount_open {f : Frame} (hf : closes f = false) (c : List Frame) : sqCo
   | nil => cases f <;> simp_all [sqCount, closes]
   | cons g c => simp only [sqCount, List.getLast?_cons_cons]
 
-/-- **A frame list's rounds close at its closing squeezes**: its chunks' counts are its closing squeezes', in order. -/
 theorem chunks_counts : ∀ F : List Frame, (chunks F).1.map sqCount = closeNs F
   | [] => rfl
   | f :: F => by
@@ -141,7 +120,6 @@ theorem flatMap_range'_congr {β : Type} {f g : ℕ → List β} :
     rw [List.range'_succ, List.flatMap_cons, List.flatMap_cons, h a (Nat.le_refl a) (by omega),
       flatMap_range'_congr (a + 1) k fun i h1 h2 => h i (by omega) (by omega)]
 
-/-- **Blocks that each close one round of `x` coins.** -/
 theorem closeNs_blocks {F : ℕ → List Frame} {x : ℕ} (hF : ∀ i, closeNs (F i) = [x]) (a k : ℕ) :
     closeNs ((List.range' a k).flatMap F) = List.replicate k x := by
   rw [closeNs_flatMap, show (fun i => closeNs (F i)) = fun _ => [x] from funext hF, flatMap_range'_const]
@@ -198,19 +176,14 @@ theorem closeNs_rs {n : ℕ} (hn : n ≠ 0) (rs : Array (Array F128)) :
   unfold rsFrames
   simp only [closeNs_cons, closeNs_append, hB, closeNs_nil, sqN_label, sqN_sq _ hn, List.nil_append, List.append_nil]
 
-/-! ## The counts a rep's rounds squeeze -/
-
-/-- Level `i`'s seven rounds' counts, its two intros at `dim` coins. -/
 def lvC (sch : Flock.Schedule) (i dim : ℕ) : List ℕ :=
   [dim, 1, dim, 1, (sch.levels.getD i default).q, RecVStar.bitLength ((sch.levels.getD i default).q - 1), 1]
 
-/-- Pass `i` of the levels' loop, of `r` passes: four folding rounds, then level `i + 1`'s or the last level's. -/
 def passC (sch : Flock.Schedule) (r i : ℕ) : List ℕ :=
   [2, 2, 2, 2] ++
     if i + 1 < r then lvC sch (i + 1) ((sch.levels.getD (i + 1) default).cols + 1)
     else [(sch.levels.getD r default).q, RecVStar.bitLength ((sch.levels.getD r default).q - 1), 1]
 
-/-- **`RecVStar.repRounds`' coin counts**, round by round. -/
 def schedCnt (sch : Flock.Schedule) (m kLog claims : ℕ) : List ℕ :=
   6 :: (m - 13) :: 1 :: (List.replicate (m - 5) 1 ++ 1 :: (List.replicate (kLog - 6) 1 ++ 1 ::
     (List.replicate claims 7 ++ claims :: sch.n :: 1 :: (List.replicate sch.k0 2 ++
@@ -249,7 +222,6 @@ theorem closeNs_lig {sch : Flock.Schedule} (T : F128) (cap : Array ByteArray) (p
     sqN_capFr, sqN_sq _ hn, sqN_sq _ Nat.one_ne_zero, lvC, List.nil_append, List.cons_append, List.append_assoc,
     List.append_nil]
 
-/-- **A rep's frames close their rounds at `schedCnt`'s counts.** -/
 theorem closeNs_repFrames {st : Flock.Setup} {sch : Flock.Schedule} (d : ByteArray) (n : ℕ) (p : Flock.Proof)
     (T : F128) (hm : 14 ≤ st.m) (hn : n ≠ 0) (hsn : sch.n ≠ 0)
     (hq : ∀ i < sch.levels.size, 2 ≤ (sch.levels.getD i default).q) (hL : 1 ≤ sch.levels.size) :
@@ -261,10 +233,6 @@ theorem closeNs_repFrames {st : Flock.Setup} {sch : Flock.Schedule} (d : ByteArr
     closeNs_lig T p.cap p.ligerito hsn hq hL, h5, List.nil_append, List.append_assoc, List.cons_append,
     List.singleton_append]
 
-/-! ## The schedule's side -/
-
-/-- **`fast100`'s levels**: level 0 has `n − k₀` columns, each later level three fewer than the one before, and every
-level queries at least twice. -/
 theorem fast100_cols {m : ℕ} {sch : Flock.Schedule} (hs : fast100 m = some sch) :
     (sch.levels.getD 0 default).cols = sch.n - sch.k0 ∧
       (∀ i, i + 1 < sch.levels.size →
@@ -293,7 +261,6 @@ theorem forIn_opt_inv {σ β : Type} (f : ℕ → σ → Option (ForInStep σ)) 
       obtain ⟨u, rfl, hu, hI'⟩ := hf a s0 t hI hfa
       rw [forIn_opt_inv f π g I hf k (a + 1) u s hI' h, hu, List.range'_succ, List.flatMap_cons, List.append_assoc]
 
-/-- **`RecVStar.repRounds`' counts are `schedCnt`'s.** -/
 theorem repRounds_counts {m kLog claims : ℕ} {sch : Flock.Schedule} {rs : Array RecVStar.SchedRound}
     (hs : fast100 m = some sch) (h : RecVStar.repRounds m kLog claims = some rs) :
     rs.toList.map (·.1) = schedCnt sch m kLog claims := by
@@ -324,10 +291,6 @@ theorem repRounds_counts {m kLog claims : ℕ} {sch : Flock.Schedule} {rs : Arra
   refine key.trans ?_
   simp [schedCnt, lvC]
 
-/-! ## The statement -/
-
-/-- **A rep's rounds squeeze as its schedule's**: at a rep whose schedule is its frames' (`SchedOf`), with a claim, the
-coins each chunk of its frames closes with are its schedule's round's, round by round. -/
 theorem chunksOf_counts {c : RepCtx} (hs : SchedOf c) (hn : c.n ≠ 0) (p : Flock.Proof) (T : F128) :
     (chunksOf c p T).map sqCount = c.sched.map (·.1) := by
   obtain ⟨hf, -, rs, hrs, hsc⟩ := hs
@@ -338,14 +301,11 @@ theorem chunksOf_counts {c : RepCtx} (hs : SchedOf c) (hn : c.n ≠ 0) (p : Floc
   rw [chunks_counts, closeNs_repFrames (st := c.st) (sch := c.sch) c.dom c.n p T (by omega) hn (by omega) hq hL1,
     hsc, repRounds_counts hf hrs]
 
-/-! ## `T`'s slot in w -/
-
 open Flock.RecAlgebra (Key wi wNames ligRounds preRounds rounds_split idxOf?_of blocks blocks_spec valOf hRound)
 open FlockC3.Reps (ligF1 ligF2 lig0 ligMid ligLast ligLevels ligRounds_eq)
 open FlockSoundness.Discharge.Exec (chunks_flatten repFrames_chunks_snd)
 open FlockSoundness.Discharge.DecodeZL (ProofSizes)
 
-/-- Rounds whose first is `T`'s alone. -/
 def TFirst (out : Array (Array Key)) : Prop := ∃ rest, out.toList = #[Key.T] :: rest
 
 theorem TFirst.push {out : Array (Array Key)} (h : TFirst out) (r : Array Key) : TFirst (out.push r) := by
@@ -392,7 +352,6 @@ theorem ligLevels_first {R : ℕ} {G1 G2 : ℕ × ℕ × Array (Array Key) → �
     · simp only [hn, ↓reduceIte, pure_bind]
       exact ligLevels_first h1 h2 l _ (h2 init h)
 
-/-- **Ligerito's first round is `T`'s alone.** -/
 theorem ligRounds_first (sch : Flock.Schedule) : TFirst (ligRounds sch) := by
   rw [ligRounds_eq]
   exact ligLevels_first ligMid_first (ligLast_first sch.ext) _ _ (lig0_first sch)
@@ -400,7 +359,6 @@ theorem ligRounds_first (sch : Flock.Schedule) : TFirst (ligRounds sch) := by
 theorem T_not_pre (sh : Shape) : Key.T ∉ (preRounds sh).flatten := by
   cases h : sh.holo <;> simp [preRounds, hRound, h, Array.mem_flatten]
 
-/-- **Where `T` is in w**: first after the ring switches. -/
 theorem wi_T (sh : Shape) : wi sh .T = some ((preRounds sh).flatten.size + 128 * sh.claims) := by
   obtain ⟨rest, hr⟩ := ligRounds_first sh.sched
   have hL : (ligRounds sh.sched).flatten[0]? = some Key.T := by
@@ -450,8 +408,6 @@ theorem preRounds_size {sh : Shape} (hh : sh.holo = false) :
   have h3 : (#[(Array.range 64).map Key.zp] : Array (Array Key)).flatten.size = 64 := by simp
   have h4 : (hRound sh).flatten.size = 0 := by simp [hRound, hh]
   simp only [preRounds, Array.flatten_append, Array.size_append, pairs_flat_size, h1, h2, h3, h4] <;> omega
-
-/-! ### The frames' values -/
 
 theorem vals_nil : vals ([] : List Frame) = [] := rfl
 theorem vals_cons_one (v : F128) (fs : List Frame) : vals (.one v :: fs) = v :: vals fs := rfl
@@ -518,8 +474,6 @@ theorem getElem!_mid (xs ys : List F128) (T : F128) (acc : Array F128) : ((xs ++
     List.getElem?_toArray,
     List.getElem?_append_right (Nat.le_refl _), Nat.sub_self, List.getElem?_cons_zero]
 
-/-- **w holds `T` at `T`'s slot**: at a proof of the lengths its shape fixes (`ProofSizes`), at a setup that folds at its
-own `k_log`, the value at `wi sh .T` of the values a rep's frames absorb, round by round, is `T`. -/
 theorem valOf_T {st : Flock.Setup} {sch : Flock.Schedule} {e : ℕ} (d : ByteArray) (p : Flock.Proof) (T : F128)
     (acc comb : Array F128) (cons : ℕ → ℕ → F128)
     (hs : ProofSizes (FlockSoundness.Refine.shapeOf st sch e) p) (hk : st.fold.kLog = st.kLog) :

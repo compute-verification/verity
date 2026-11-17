@@ -36,19 +36,7 @@ import Proofs.Flock.Soundness.Discharge.Hm.Nets
 import Proofs.Flock.Soundness.SparseRows
 import Proofs.Flock.Verifier.HmNets
 
-/-!
-# The trace assigner's hm96 slots commit (`slotsOk_assign`)
-
-`HpEarly.SlotsOk` at the trace assigner `VStarTrace.A mask`, from the assigner's definition: port `q`'s hm96 slot at
-instance `n` is `evalNet` of the hm96 net on the inputs `hmSlot` writes (`hm_bit`), the row's last chaining value at
-`cv`, its message's last block at `pad` and its salt at `y` (`slot_in`). `evalNet` computes every row of the net in
-order, so the slot holds the net's rows (`evalNet_rows`, `LaidRows`), and its inputs are the last chaining value and
-block of the row's `sha512/row/v1` message (`chain_cvs`, `block_eq`): `slotCommits_of_hm96` gives its commit string.
-
-What it reads besides `TraceOk`: the circuit's row nets are the verifier's (`HmNets.check`), the hm96 net's columns
-fit `Sparse`'s 32-bit encoding (`kLog ≤ 32`), and every port is a `sha512/row/v1` row of whole 128-byte chunks
-(`2 · words = 128 · chunks`), as the v1 parse makes it.
--/
+/-! The trace assigner's hm96 slots commit (`slotsOk_assign`). -/
 
 @[expose] public section
 
@@ -73,8 +61,6 @@ set_option hygiene false in
 local notation "𝑷" => Hm.padData (Hm.rowMsg (c.ports.getD q default).words
   (wordBytes rw.words (c.ports.getD q default).words).data.toList)
 
-/-! ## XOR folds -/
-
 theorem foldl_xor (g : ℕ → Bool) : ∀ (l : List ℕ) (s : Bool),
     l.foldl (fun s k => s ^^ g k) s = (s ^^ l.foldr (fun j b => g j ^^ b) false)
   | [], s => by simp
@@ -93,15 +79,11 @@ theorem xorRow_congr {v v' : ℕ → Bool} {cs : Array ℕ} (h : ∀ j ∈ cs.to
   | cons j l ih =>
     rw [List.foldr_cons, List.foldr_cons, h j List.mem_cons_self, ih fun k hk => h k (List.mem_cons_of_mem _ hk)]
 
-/-! ## `evalNet` computes the net's rows -/
-
-/-- One step of `evalNet`'s fold: row `i` set to its `A` and `B` XORs, the constant left. -/
 def evStep (net : Net) (z : Array Bool) (i : ℕ) : Array Bool :=
   if i == net.constPos then z
   else z.set! i ((net.a.row i).foldl (fun s k => s ^^ z.getD k false) false &&
     (net.b.row i).foldl (fun s k => s ^^ z.getD k false) false)
 
-/-- `evalNet`'s start: the input rows' bits and the constant. -/
 def ev0 (net : Net) (ins : Array Bool) : Array Bool :=
   (Array.range (2 ^ net.unitLog)).map fun i =>
     if i == net.constPos then true else i < net.inWords * WORD && (net.a.row i).size == 1 && ins.getD i false
@@ -134,9 +116,6 @@ theorem evFold_keep {net : Net} {k : ℕ} (l : List ℕ) (z : Array Bool) (h : �
     (l.foldl (evStep net) z).getD k false = z.getD k false :=
   foldl_keeps (p := fun j => k ≠ j ∨ j = net.constPos) (fun _ _ hj => evStep_keep hj) l z h
 
-/-- **`evalNet` holds the net's rows**: its constant is 1, and each computed row `i` (from the input rows to the
-constant) is the AND of its `A` and `B` XORs, the rows `ra` and `rb` the net's `A` and `B` read back, in the order
-`Net.checkOrder` checks. -/
 theorem evalNet_rows {net : Net} {ins : Array Bool} {ra rb : Array (Array ℕ)}
     (hra : ∀ i, net.a.row i = ra.getD i #[]) (hrb : ∀ i, net.b.row i = rb.getD i #[])
     (hord : FlockSoundness.RowOrder (net.inWords * WORD) net.constPos ra rb) (huse : net.useful = net.constPos + 1)
@@ -187,19 +166,15 @@ theorem evalNet_rows {net : Net} {ins : Array Bool} {ra rb : Array (Array ℕ)}
     · refine xorRow_congr fun k hk => ?_
       exact hkeep k ((hord i hi1 hi2 k (List.mem_append_right _ hk)).imp id And.left)
 
-/-! ## The slot's values and inputs -/
-
 /-- Port `q`'s hm96 slot at instance `n`, as the trace assigner computes it. -/
 abbrev slotE (c : Circuit) (pin : _root_.VStar.In.PartIn) (n q : ℕ) : Array Bool :=
   evalNet (hmN c) (hmSlot c pin ((Array.range c.ports.size).map fun p => chain c pin p n) n q)
 
-/-- The trace's witness bits at block `n / g`'s in-block columns. -/
 def slotW (mask : ℕ → ℕ → Bool) (c : Circuit) (pin : _root_.VStar.In.PartIn) (n : ℕ) (y : ℕ) : Bool :=
   (A mask c pin).hid.getD (n / c.g * 2 ^ c.kLog + y) false
 
 variable {c : Circuit} {pin : _root_.VStar.In.PartIn}
 
-/-- **The trace at port `q`'s hm96 slot** of instance `n`: column `t` of the slot holds the slot's value `t`. -/
 theorem hm_bit (h : TraceOk c pin) (mask : ℕ → ℕ → Bool) {q n t : ℕ} (hq : q < c.ports.size)
     (hn : n < _root_.VStar.Trace.count pin) (ht : t < 2 ^ (hmN c).unitLog) :
     slotW mask c pin n (c.slotCol c.hmNet (n % c.g) q + t) = (slotE c pin n q).getD t false := by
@@ -259,7 +234,6 @@ theorem putWords_spec (w : Array Bool) (col : ℕ) (ws : Array UInt64) :
 
 theorem getD_u64 (a : Array UInt64) (i : ℕ) : a.getD i 0 = a[i]! := Array.getElem!_eq_getD.symm
 
-/-- **The slot's inputs**: `cv` the chain's last value, `pad` the message's last block. -/
 theorem slot_in (hck : _root_.Flock.HmNets.check c = .ok ()) {q n : ℕ} (hq : q < c.ports.size)
     (hC8 : ((chain c pin q n).2.getD (c.ports.getD q default).chunks #[]).size = 8) :
     (∀ i < 512, (hmSlot c pin ((Array.range c.ports.size).map fun p => chain c pin p n) n q).getD i false =
@@ -293,8 +267,6 @@ theorem slot_in (hck : _root_.Flock.HmNets.check c = .ok ()) {q n : ℕ} (hq : q
       (putWords_spec w0 0 CV).2 i (by omega), ite_t (by omega), Nat.sub_zero]
   · rw [(putBytes_spec (putWords (putWords w0 0 CV) 512 BW) 1536 S).2 (512 + i) (by omega), ite_f (by omega),
       (putWords_spec (putWords w0 0 CV) 512 BW).2 (512 + i) (by omega), ite_t (by omega), Nat.add_sub_cancel_left]
-
-/-! ## The row's message and chain -/
 
 theorem wordBits_bytes (ws : Array ℕ) :
     Claims.Recursion.VStar.bytesOf (_root_.VStar.In.wordBits ws) = (wordBytes ws ws.size).data.toList := by
@@ -360,7 +332,6 @@ include hn hr hv2 hsg hwN
 theorem data_len : 𝑫.length = 128 * 𝑵 := by
   rw [← hwN]; simp [wordBytes]
 
-/-- **The row's message after its prefix**: its bytes, then the padding of `128 (chunks + 1)` bytes. -/
 theorem msg_data : (chain c pin q n).1.data.toList = 𝑫 ++ Hm.rowPadT 𝑵 := by
   have hsz : (wordBytes rw.words 𝑾).size = 2 * 𝑾 := by simp [wordBytes, ByteArray.size]
   have hby : (c.ports.getD q default).bytes = 2 * 𝑾 := by
@@ -380,13 +351,11 @@ theorem msg_data : (chain c pin q n).1.data.toList = 𝑫 ++ Hm.rowPadT 𝑵 := 
   have hz : (zeros 0).data.toList = [] := rfl
   rw [hby, he, hsz, Nat.sub_self, ByteArray.toList_data_append, ByteArray.toList_data_append, ht, hz, List.append_nil]
 
-/-- The padded `sha512/row/v1` message past its prefix block is the row's message. -/
 theorem pad_msg (y : ℕ) : 𝑷.get! (128 + y) = (chain c pin q n).1.get! y := by
   rw [Hm.get!_eq_getD, Hm.get!_eq_getD, Hm.rowMsg_pad (data_len hn hr hv2 hsg hwN), List.append_assoc,
     ← msg_data hn hr hv2 hsg hwN, List.getD_append_right _ _ _ _ (by rw [Hm.length_rowPrefix]; omega),
     Hm.length_rowPrefix, Nat.add_sub_cancel_left]
 
-/-- **The chain's last value** is the chaining value of the padded message before its last block. -/
 theorem chain_cvs : (chain c pin q n).2.getD 𝑵 #[] = Hm.chain 𝑷 (𝑵 + 1) := by
   have hd := data_len hn hr hv2 hsg hwN
   have hpre : _root_.Flock.HmRow.prefixOf (c.ports.getD q default) = _root_.Flock.HmRow.rowPrefix 𝑾 := by
@@ -412,7 +381,6 @@ theorem chain_cvs : (chain c pin q n).2.getD 𝑵 #[] = Hm.chain 𝑷 (𝑵 + 1)
   exact (fold_push (fun h k => _root_.Flock.Sha512.compress h (chain c pin q n).1 (128 * k))
     (fun k => Hm.chain 𝑷 (k + 1)) ha _).2.2 _ le_rfl
 
-/-- **The message's last block** is the padded message's last block. -/
 theorem block_eq {j : ℕ} (hj : j < 16) :
     (blockWords (chain c pin q n).1 𝑵)[j]! = Hm.wordBE 𝑷 (128 * (𝑵 + 1)) j := by
   unfold blockWords
@@ -423,11 +391,6 @@ theorem block_eq {j : ℕ} (hj : j < 16) :
 
 end Row
 
-/-! ## The slots commit -/
-
-/-- **The trace assigner's hm96 slots commit** (`HpEarly.SlotsOk`): where `TraceOk` holds, the circuit's row nets are
-the verifier's (`HmNets.check`), its blocks' columns fit 32 bits and every port is a `sha512/row/v1` row of whole
-chunks, each port's hm96 slot at an instance with a placed row outputs the commit string of its row and salt. -/
 theorem _root_.RecDeploy.HpEarly.slotsOk_assign (h : TraceOk c pin) (hck : _root_.Flock.HmNets.check c = .ok ())
     (hk : c.kLog ≤ 32)
     (hv1 : ∀ q (hq : q < c.ports.size), c.ports[q].v2 = false ∧ c.ports[q].segs = none ∧
@@ -440,7 +403,6 @@ theorem _root_.RecDeploy.HpEarly.slotsOk_assign (h : TraceOk c pin) (hck : _root
   obtain ⟨hws, -⟩ := h.rows q hqs n rw (hname ▸ hrw)
   obtain ⟨hv2, hsg, hwN⟩ := hv1 q hqs
   rw [← hget] at hws hv2 hsg hwN
-  -- the hm96 net's rows
   obtain ⟨-, ha, hb, huse, hcp, -, -, -, -, -, hordc, -, -, -, -⟩ := Net.ofRows_ok (Hm.hmNet_ofRows hck)
   have ha' : _root_.Flock.Sparse.ofRows (_root_.Flock.HmNets.hmLaid ()).ra (2 ^ (hmN c).unitLog) = .ok (hmN c).a := ha
   have hb' : _root_.Flock.Sparse.ofRows (_root_.Flock.HmNets.hmLaid ()).rb (2 ^ (hmN c).unitLog) = .ok (hmN c).b := hb
@@ -472,7 +434,6 @@ theorem _root_.RecDeploy.HpEarly.slotsOk_assign (h : TraceOk c pin) (hck : _root
     exact hlu _ _ _ _
   have evR := evalNet_rows (ins := hmSlot c pin ((Array.range c.ports.size).map fun p => chain c pin p n) n q)
     hra hrb hord huse' h.hm_const h.hm_log
-  -- the slot holds them
   have hv : ∀ t < 2 ^ (hmN c).unitLog,
       slotW mask c pin n (c.slotCol c.hmNet (n % c.g) q + t) = (slotE c pin n q).getD t false :=
     fun t ht => hm_bit h mask hqs hn ht
@@ -491,7 +452,6 @@ theorem _root_.RecDeploy.HpEarly.slotsOk_assign (h : TraceOk c pin) (hck : _root
           (cs := (_root_.Flock.HmNets.hmLaid ()).rb.getD i #[]) fun j hj => hv j (Hm.ofRows_cols_lt hb' i j hj),
         hv i hiu]
       exact evR.2 i (by rw [hW]; exact hi1) hi2'
-  -- the slot's inputs
   have hzin := Hidden.hm_zh_in c (slotW mask c pin n) (n % c.g) q
   have hzE : ∀ v < 3072, slotW mask c pin n (c.slotCol c.hmNet (n % c.g) q + v) =
       (hmSlot c pin ((Array.range c.ports.size).map fun p => chain c pin p n) n q).getD v false := by
@@ -503,7 +463,6 @@ theorem _root_.RecDeploy.HpEarly.slotsOk_assign (h : TraceOk c pin) (hck : _root
   have hC8 : ((chain c pin q n).2.getD (c.ports.getD q default).chunks #[]).size = 8 := by
     rw [chain_cvs hn hr' hv2 hsg hwN, Hm.chain_succ, Hm.size_compress]
   have hin := slot_in hck hqs hC8
-  -- the row's message
   have hP := placesR_assign h mask
   have hr : readForms (A mask c pin) (ps.map _root_.Flock.HmNets.Lin.var) =
       Claims.Recursion.VStar.bytesOf (_root_.VStar.In.wordBits rw.words) := by

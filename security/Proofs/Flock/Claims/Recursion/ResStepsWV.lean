@@ -37,14 +37,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Recursion.AccTies
 
-/-!
-# `StepsW` at the part statements' side condition (`XsW` at `AccV`)
-
-`stepsWG_of_commits` where the chain's commit strings are `accCommitV` (the brings list the registered reads,
-`RegSetup`), and at the deployed readers with the copy's outputs (`levelOutsW`) and openings (`openCopyW_deployed`)
-closed. What is left is the copy's coefficients (`CoefW`, `copyCoefTieRP_deployed`) and the next rows' owners
-(`NextHeldW`). `accPorts_of_G` (`ResEndsW`) takes the result to P3.
--/
+/-! `StepsW` at the part statements' side condition (`XsW` at `AccV`), from the copy's coefficients and the next rows' owners. -/
 
 @[expose] public section
 
@@ -55,8 +48,6 @@ open Claims (Msg)
 open FlockDeploy (Coin FinalP)
 open Claims.Recursion.VStarB
 
-/-- **`StepsWG` at `XsW … AccV`**, wherever the brings list the registered reads (`hRS`), from the copy's outputs
-(`hL`), openings (`hO`), coefficients (`hC`) and the next rows' owners (`hN`). -/
 theorem stepsWV_of (rd : Msg → Option FinalP) (key : ℕ → ℕ → ℕ → ℕ → ℕ × ℕ × ℕ × ℕ) (wE : Msg → ℝ)
     (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ) (b : Brings)
     (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))) (untr : TrReader)
@@ -80,8 +71,6 @@ theorem stepsWV_of (rd : Msg → Option FinalP) (key : ℕ → ℕ → ℕ → �
       exact accCommitV rd wE final w b elem untr cmt hRS x st hx hf c ws hJ xs hxs hcol hms)
     hN
 
-/-- **`StepsWG` at `XsW … AccV` at the deployed readers**: `stepsWV_of` with the copy's outputs (`levelOutsW`) and
-openings (`openCopyW_deployed`). -/
 theorem stepsWV_deployedR (key : ℕ → ℕ → ℕ → ℕ → ℕ × ℕ × ℕ × ℕ) (wE w : Msg → ℝ) (b : Brings) (untr : TrReader)
     (cmt : Msg → ℕ → Msg → Msg)
     (hC : CoefW DeployedR.rdR key wE DeployedR.finalR w b OpenRows.elemR Claims.Recursion.Form.Dense untr cmt)

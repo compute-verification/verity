@@ -34,19 +34,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# `SaltRowsJ` at `finalR` off the hm96 slots the openings sit at (`OpensSlots`)
-
-`SaltRowsJ` asks, at every round before the last and each of its commit strings, the salt's hash and the row's digest
-at the opening `finalR` cuts off the last message. Both are hm96's two recorded calls at the slot that commit string
-came from (`HmOpen.checks_of_calls`), so `SaltRowsJ` is a fact about the layout alone, with no hash in it:
-
-* `OpensSlots L`: at a dense compiled statement and witnesses one a part, each opening `finalR` cuts off the last
-  message is some part `s`'s row at port `nm` (`rowHidden`) and the salt of port `q`'s hm96 slot at instance `n`
-  (`hmSalt`), read off `ws[s]`; the commit string it opens is that slot's (`hmCommit`); the slot's calls (`hmCalls`)
-  are among `s`'s recorded calls; and the port's row prefix is the one `rowInDeployed` lays at the row's length.
-* `saltRowsJ_of_slots`: `OpensSlots L` gives `SaltRowsJ` at `finalR`.
--/
+/-! `SaltRowsJ` at `finalR` off the hm96 slots the openings sit at (`OpensSlots`), a fact about the layout alone with no hash in it. -/
 
 @[expose] public section
 
@@ -73,8 +61,6 @@ def OpensSlots (L : LayoutB) : Prop :=
           DeployedR.saltOf (readForms ws[s] (hmSalt cc q n))) ∧
         commitAt ((L.msgs x ws).getD j []) i = readForms ws[s] (hmCommit cc q n)
 
-/-- **`SaltRowsJ` at `finalR` from `OpensSlots`**: each opening's salt and row checks are its slot's two recorded calls,
-true where every recorded call is. -/
 theorem saltRowsJ_of_slots (rd : Msg → Option FinalP) (wE w : Msg → ℝ) (L : LayoutB) (hO : OpensSlots L) :
     SaltRowsJ rd wE DeployedR.finalR w L := by
   intro x hx j _ i _ c ws hl hT Q S

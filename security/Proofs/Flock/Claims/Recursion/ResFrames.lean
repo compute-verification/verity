@@ -37,16 +37,7 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Recursion.DecodeTiesW
 import Proofs.Flock.Claims.Recursion.VerdictRowDSide
 
-/-!
-# The frame values `framesRead` reads off the opened rounds
-
-P2 of `ResLowered` (`ResLower.FramePorts`) asks a `rec-residuals` copy's frame ports to be `Rows.elemReadC`'s, which
-reads rep `k`'s frame values off the opened messages (`Rows.framesRead`): a proof and `T` that fit the rep's opened
-rounds at no coin, its values at table 0's rounds. This file reads those values back as the opened rows' elements.
-
-* `framesRead_fits`: at the messages `Bound.opened` gives at the deployed join, wherever some proof fits rep `k`'s
-  opened rounds at some coins (`OpenedFit`), `framesRead` is the values of a proof that fits them there.
--/
+/-! The frame values `framesRead` reads off the opened rounds, read back as the opened rows' elements. -/
 
 @[expose] public section
 
@@ -59,10 +50,6 @@ open Flock.RecAlgebra (rounds)
 open FlockDecodeTies (keyVal)
 open RecDeploy.RestRead (rowsR nodesR mapM_map_some)
 
-/-- **`framesRead` at the opened messages is a fitting proof's values**: at a statement that sets up as `v`, with round
-0's opened rows `o₀` and the later rounds' `ot`, wherever a proof fits rep `k`'s block of `ot` at link coin `c₁` and
-coins `cs`, `framesRead` at `Bound.opened`'s messages is the values, at each element of table 0's rounds, of a proof that
-fits there (the one `framesRead` chooses, at no coin). -/
 theorem framesRead_fits {x : Msg} {v : FlockDeploy.Ins × SessionSpec × Array Stmt} (hv : setupOf false x = some v)
     {o₀ : List (Msg × Salt)} {ot : List (List (Msg × Salt))} (last : Msg) {k : ℕ} (hk : k / 2 < v.2.2.size)
     {c₁ : Coin} {cs : List Coin} {pT : Flock.Proof × F128}
@@ -94,9 +81,6 @@ theorem framesRead_fits {x : Msg} {v : FlockDeploy.Ins × SessionSpec × Array S
   dsimp only
   rw [dif_pos hex]
 
-/-- **A fitting proof's values at the rounds are its chunks' values, round by round**: where a proof and `T` fit a
-rep's rows at a context whose table folds at its own `k_log`, its values at each element of the rounds of its shape
-(`shapeOf`, at the context's extra claims) are the values its rounds' chunks absorb, in order. -/
 theorem frames_chunks {c : FlockDeploy.RepCtx} {rows : List (List ByteArray)} {p : Flock.Proof} {T : F128}
     (h : FitsRep c rows p T) (hkl : c.st.fold.kLog = c.st.kLog) :
     (rounds (FlockSoundness.Refine.shapeOf c.st c.sch (c.n - 2))).flatten.toList.map (keyVal p T) =
@@ -110,8 +94,6 @@ theorem frames_chunks {c : FlockDeploy.RepCtx} {rows : List (List ByteArray)} {p
     (fun k hk => FlockDecodeTies.rsEach_get hps (by simp [FlockSoundness.Refine.shapeOf]; omega))
     (FlockDecodeTies.yr_size hps)).symm
 
-/-- **A value row's elements are its values**: bytes that start with the values' (`colBytes`) hold value `i` at
-element `i`, below any count `n` past it. -/
 theorem elemsOf_colBytes {vs : List F128} (pad : List UInt8) {n i : ℕ} (hi : i < vs.length) (hn : i < n) :
     elemsOf (FlockSoundness.Refine.colBytes vs ++ pad) n i = vs[i] := by
   unfold elemsOf
@@ -122,8 +104,6 @@ theorem elemsOf_colBytes {vs : List F128} (pad : List UInt8) {n i : ℕ} (hi : i
     show (128 * i + t) / 128 = i by omega, show (128 * i + t) % 128 = t by omega,
     List.getD_eq_getElem?_getD, List.getElem?_eq_getElem hi, Option.getD_some]
 
-/-- **A round's value row holds the values its chunk absorbs**: where a round's rows hold values `vs` (`RowsAt`), the
-row after its tops holds value `i` at element `i`. -/
 theorem rowsAt_elem {s : RecVStar.SchedRound} {rs : List ByteArray} {vs : List F128} (h : FlockDeploy.RowsAt s rs vs)
     {n i : ℕ} (hi : i < vs.length) (hn : i < n) :
     elemsOf (rs.getD s.2.1.toList.sum default).data.toList n i = vs[i] := by

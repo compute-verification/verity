@@ -47,26 +47,7 @@ import Proofs.Flock.Recursive.ValueInner
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
 import Proofs.Flock.VBridge.Pinned
 
-/-!
-# Check 5's `dirs` tie at the deployed run
-
-`CopyDirsR` asks that a `rec-open` piece's copy hold, at its position columns (`idxCol`), the `dirs` row of the
-position the verifier drew (`DirsTie`). Check 5 (`RecCoins.checkOpen`, at the statement's recursive setup) holds each
-instance's public commit string of port `dirs` to `commitRow` of the verifier's own row `openDirs` under `verifierSalt`,
-and `DeployedR.layR` records the part's hm96 calls at `dirs` (`openPorts`, `portCalls_sub_layR_open`), whose verifier
-evaluations are `openSetupSt`. So `port_tie` gives the part's `dirs` bytes as the verifier's row, at every instance of
-the table, not only the first two.
-
-* `slotDirs_staged`: the `dirs` slot commits at a staged level part.
-* `dirsCols_staged`: port `dirs` is row 4 of the `rec-open` unit (`rowsOk`), from column `idxCol LANES HH 0` of each
-  copy (`preBits`, `inGroups_of_laid`), so its forms are the copy's position columns.
-* `openPos`, `openRows_dirs`: the position `openDirs` registers at instance `i`.
-* `dirsTie_staged`: the tie, at the position `openPos` reads off the inner session check 5 loads.
-* `dirsSideR_of`: `DirsSideR` from the verifier's checks at a dense statement, the deployed setup's listing
-  (`hset`), check 5's inner session at the inner statement's `m` (`InnerMR`, `InnerAt`'s), its `dirs` rows at the
-  coins (`DirsCoinR`, `PosTieR`'s statement); the staged tables' labels ascend (`LabelsAscendR`) at every stage, from the
-  setup's checks (`labelsAscendR`, `CopySite.labels_staged`).
--/
+/-! Check 5's `dirs` tie at the deployed run, at every instance of the table, not only the first two. -/
 
 @[expose] public section
 
@@ -81,10 +62,6 @@ open RecDeploy.DeployedR (rowForms openPorts)
 
 noncomputable section
 
-/-! ## The `rec-open` unit's `dirs` port -/
-
-/-- **Port `dirs` is the circuit's row 4**: the unit's first five rows are `row`, `aux`, `acc`, `coef`, `dirs`
-(`rowsOk`). -/
 theorem findIdx_dirs {c : Circuit} {L H : ℕ} (h : RecOpen.rowsOk c L H = true) :
     c.ports.findIdx? (·.name == "dirs") = some 4 := by
   have hnm : ∀ j < 5,
@@ -99,7 +76,6 @@ theorem findIdx_dirs {c : Circuit} {L H : ℕ} (h : RecOpen.rowsOk c L H = true)
     have e := (congrArg (· == "dirs") (hnj.trans (hnm j (by omega)))).symm.trans hc
     interval_cases j <;> exact absurd e (by decide)
 
-/-- **Port `dirs` starts at the position columns**: the words of the four rows before it are `idxCol`'s offset. -/
 theorem words_pre {c : Circuit} {L H : ℕ} (h : RecOpen.rowsOk c L H = true) :
     16 * (c.ports.extract 0 4).foldl (· + ·.words) 0 = OpenLower.idxCol L H 0 := by
   have hpre : ∀ i ≤ 5, 16 * ((c.ports.toList.take i).map (·.words)).sum = FlockC3.RegLevels.preBits L H i := by
@@ -125,10 +101,6 @@ theorem words_pre {c : Circuit} {L H : ℕ} (h : RecOpen.rowsOk c L H = true) :
 theorem idxCol_add (L H h : ℕ) : OpenLower.idxCol L H h = OpenLower.idxCol L H 0 + h := by
   simp [OpenLower.idxCol]
 
-/-- **Where a copy's `dirs` columns sit**: at a staged `rec-open` part, port `dirs` is row 4 (`findIdx_dirs`) of 64
-words, and instance `i`'s `dirs` row (`rowHidden_eq`) is copy `(i / g, i % g, 0)`'s columns from `idxCol LANES HH 0`
-(`words_pre`, the unit's one input group at column 0: `inGroups_of_laid`), below the unit's constant
-(`leaves_le_constPos`). -/
 theorem dirsCols_staged {st : Stage} {s : ℕ} {x xO : Msg} {w : Claims.Flock.Wit} (hS : StagedPart st s x xO)
     {r : XR} (hr : readX x = some r) {ss : Array VStar.Stmt} (hss : RecVStar.statements r.shape = .ok ss)
     {lv LANES HH n : ℕ} (hsv : ss[s]? = some (.recOpen lv LANES HH n)) {c : Circuit}
@@ -190,11 +162,6 @@ theorem dirsCols_staged {st : Stage} {s : ℕ} {x xO : Msg} {w : Claims.Flock.Wi
   rw [hel, formBit_var, hcol0, Nat.zero_mul, Nat.zero_add, ← hix, Claims.Recursion.VStar.copyOf_eq hj]
   simp [Claims.Recursion.VStar.copyIdx, hsz, hupv]
 
-/-! ## The `dirs` slot commits, at every instance -/
-
-/-- **A level part's `dirs` slot commits**: `dirs` is an input of the `rec-open` unit (its outputs are `out` and
-`acc_out`), so its row lies in the table's leaves (`in_block`); each instance `i < n` is one of the table's
-(`staged_scope`, `oneFull_staged`), so in one of its blocks (`div_lt_blocks`), and `slotCommits_table` applies. -/
 theorem slotDirs_staged {st : Stage} {s : ℕ} {x xO : Msg} {w : Claims.Flock.Wit} (hS : StagedPart st s x xO)
     (hck : Claims.Flock.check (deployZkRec Flock.Readable.relation).parse xO w = true) {r : XR} (hr : readX x = some r)
     {ss : Array VStar.Stmt} (hss : RecVStar.statements r.shape = .ok ss) {lv LANES HH n : ℕ}
@@ -250,10 +217,6 @@ theorem slotDirs_staged {st : Stage} {s : ℕ} {x xO : Msg} {w : Claims.Flock.Wi
     decide
   exact slotCommits_table ht' hd (by omega) hv1 hl L regs hz1 hqd (in_block hrows hout hqd) hb
 
-/-! ## The position check 5 registers -/
-
-/-- **The position of instance `i`** of a `rec-open` statement at `LANES` and `H`, at the inner session `inn`: rep
-`i / q`'s opening `i % q`'s query position at the one level `innerLevels` finds (`openDirs`' order). -/
 def openPos (inn : RecCoins.Inner) (LANES H i : ℕ) : ℕ :=
   match inn.algebra with
   | .error _ => 0
@@ -264,7 +227,6 @@ def openPos (inn : RecCoins.Inner) (LANES H i : ℕ) : ℕ :=
       | _, _ => 0
     | _ => 0
 
-/-- **Check 5's `dirs` row `i` is the `dirsRow` of `openPos`.** -/
 theorem openRows_dirs {inn : RecCoins.Inner} {LANES H : ℕ} {cr dr : Array (Array ℕ)}
     (h : FlockSoundness.Discharge.Recursion.openRows inn LANES H = some (cr, dr)) {i : ℕ} (hi : i < dr.size) :
     dr[i]! = RecCoins.dirsRow (openPos inn LANES H i) H := by
@@ -302,10 +264,6 @@ theorem dirsRow_size (pos H : ℕ) : (RecCoins.dirsRow pos H).size = 64 := by
 theorem getD_of_lt {a : Array ℕ} {j : ℕ} (hj : j < a.size) : a.getD j 0 = a[j]! := by
   rw [Array.getD_eq_getD_getElem?, Array.getElem?_eq_getElem hj, Option.getD_some, getElem!_pos a j hj]
 
-/-! ## The unit's inputs and rows at the deployed parameters -/
-
-/-- **`dirs` is an input of a `rec-open` unit**: its output rows start at port `nIn`, named `out` (`outsOk`), and its
-first five ports are its rows (`rowsOk`), none named `out`. -/
 theorem four_lt_nIn {c : Circuit} {L H : ℕ} (hr : RecOpen.rowsOk c L H = true) (ho : RecOpen.outsOk c = true) :
     4 < HmOut.nIn c := by
   unfold RecOpen.outsOk at ho
@@ -358,7 +316,6 @@ theorem shapeOk_sched {m k c : ℕ} {sh : Shape} (h : RecResiduals.shape? m k c 
     obtain ⟨-, rfl⟩ := h
     rfl
 
-/-- **The one level of `LANES` lanes and `H` siblings is any level of them.** -/
 theorem innerLevels_eq {sh : Shape} {LANES H l l' : ℕ}
     (h : FlockSoundness.Discharge.Recursion.innerLevels sh LANES H = [l])
     (hl' : l' < sh.sched.levels.size) (hL : 2 ^ (sh.sched.levels[l']!).lanes = LANES)
@@ -370,9 +327,6 @@ theorem innerLevels_eq {sh : Shape} {LANES H l l' : ℕ}
   rw [h] at hm
   simpa using hm
 
-/-- **Check 5's `dirs` rows are the statement's instances**: where check 5's inner session is at the inner statement's
-`m` (`InnerAt`'s first conjunct), its schedule is table 0's (`schAt`), whose level `s` is the statement's
-(`levelMatch`) and the one `openRows` finds (`innerLevels_eq`), of `2 q` rows. -/
 theorem drSize_staged {x : Msg} {st0 : Claims.Recursion.CompiledStatement} (hst : parse x = some st0)
     (hd : Claims.Recursion.Form.Dense st0.form) {r : XR} (hr : readX x = some r) {ss : Array VStar.Stmt}
     (hss : RecVStar.statements r.shape = .ok ss) {s lv LANES HH n : ℕ}
@@ -419,15 +373,6 @@ theorem drSize_staged {x : Msg} {st0 : Claims.Recursion.CompiledStatement} (hst 
             simp only [FlockSoundness.Discharge.Recursion.openDirs, Array.size_map, Array.size_range]
             rw [hn, hsl]
 
-/-! ## The tie -/
-
-/-- **Check 5's `dirs` tie at a level part's instance, at `layR`**: at a staged `rec-open` part whose calls at `layR`
-are true and collision-free with the verifier's evaluations, and whose check 5 runs `checkOpen` (`hso`, `hop`, `hsp`:
-the unit is no other recursive unit), the inner session check 5 loads gives `dirs` rows `dr`, and at each
-instance `i < n` of them, the copy `(i / g, i % g, 0)` holds `dirsRow` of the position `openPos` reads there
-(`DirsTie`): `port_tie` at the `dirs` slot (`slotDirs_staged`) and check 5's public row (`check5_bytes_lt`), with the
-verifier's evaluations of it in `openSetupSt` (`hset`), and the slot's forms the copy's position columns
-(`dirsCols_staged`). -/
 theorem dirsTie_staged {b : Brings} {IV : Claims.Verifier Coin}
     {elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))} {s : ℕ} {x xO : Msg}
     {w : Claims.Flock.Wit}
@@ -524,21 +469,12 @@ theorem dirsTie_staged {b : Brings} {IV : Claims.Verifier Coin}
   rw [hcol, ← bitL_readForms hl, hrb, wordBytes, bitL_wordBytes _ h hb16, List.getD_eq_getElem?_getD,
     Array.getElem?_toList, ← Array.getD_eq_getD_getElem?, getD_padTo, hdr, getD_of_lt hj]
 
-/-! ## `CopyDirsTieR` at `layR` -/
-
-/-- Piece `q`'s instance of its level's table: rep `r`'s opening `j` is `r · q + j` (`copyAtR`). -/
 def instR (xI : Msg) (q : OpenPiece) : ℕ := q.rep * OpenLower.qAt xI q.level + q.query
 
-/-- The deployed record over `DeployedR.layR elem`. -/
 abbrev DR (b : Brings) (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin)))
     (IV : Claims.Verifier Coin) : Claims.Recursion.Deploy Coin :=
   recBound _root_.Flock.Readable.relation b (DeployedR.layR elem) IV
 
-/-- **What `dirsTie_staged` takes beyond `StagedAt`**, at each piece a level part owns, at its instance `instR`: the
-part's circuit, with `dirs` among its inputs; the staged setup's registered rows (`hidx`, `hown`) and check 5's source
-(`hf`), its unit no other recursive unit (`hso`, `hop`, `hsp`), the setup listing `openSetupSt` (`hset`); the
-instance among the statement's, the public rows' and check 5's `dirs` rows; and check 5's `dirs` row there the one of
-the position `posAt` reads off the coins (the coin tie, `PosTieR`). -/
 def DirsSideR (b : Brings) (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin)))
     (IV : Claims.Verifier Coin) (shape : Claims.Recursion.Form → Prop) (untr : TrReader) (cmt : Msg → ℕ → Msg → Msg)
     (Bd : Claims.Recursion.Bound Coin (List FlockLevel3.GF128) Claims.Flock.PlainTrace)
@@ -563,8 +499,6 @@ def DirsSideR (b : Brings) (elem : (r : XR) → List (Fin r.w.parts.length × Li
           RecCoins.dirsRow (posAt (Claims.Recursion.xI (DR b elem IV) x)
             ((List.range (Bd.DE.V.k (Claims.Recursion.xI (DR b elem IV) x))).map cs) q) HH
 
-/-- **`CopyDirsTieR` at the layout of record `layR`**, from `DirsSideR`: `dirsTie_staged` at each piece's instance
-`instR`, whose block and VU are `copyAtR`'s (`partCircuit_staged`: the part's circuit is the staged table's). -/
 theorem copyDirsTieR_layR {b : Brings} {elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))}
     {IV : Claims.Verifier Coin} {shape : Claims.Recursion.Form → Prop} {untr : TrReader} {cmt : Msg → ℕ → Msg → Msg}
     {Bd : Claims.Recursion.Bound Coin (List FlockLevel3.GF128) Claims.Flock.PlainTrace}
@@ -602,7 +536,6 @@ theorem copyDirsTieR_layR {b : Brings} {elem : (r : XR) → List (Fin r.w.parts.
   rw [← hpos, openRows_dirs hor hdr]
   exact htie hdr h hh
 
-/-- **`CopyDirsR` at the layout of record `layR`**, from `DirsSideR` (`copyDirsR_of`: `HH ≤ 32` at a staged part). -/
 theorem copyDirsR_layR {b : Brings} {elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))}
     {IV : Claims.Verifier Coin} {shape : Claims.Recursion.Form → Prop} {untr : TrReader} {cmt : Msg → ℕ → Msg → Msg}
     {Bd : Claims.Recursion.Bound Coin (List FlockLevel3.GF128) Claims.Flock.PlainTrace}
@@ -612,21 +545,14 @@ theorem copyDirsR_layR {b : Brings} {elem : (r : XR) → List (Fin r.w.parts.len
   OpenLower.copyDirsR_of FlockDeploy.sha512 (DR b elem IV) shape untr b cmt (DeployedR.layR elem) Bd pieces posAt
     (copyDirsTieR_layR pieces posAt hside)
 
-/-! ## `DirsSideR` at the deployed parameters -/
-
-/-- **Check 5's inner session is at the inner statement's `m`** (`InnerAt`'s first conjunct): at a V\* statement `xO`
-part `s` stages at `x` and shows the coins `c` at, wherever check 5 loads the inner session from its source, its `m` is
-the inner statement's table 0's. -/
 def InnerMR (untr : TrReader) (b : Brings) (s : ℕ) (x : Msg) (c : ℕ → Coin) : Prop :=
   ∀ (xO : Msg), showsPart untr b s x xO c → ∀ (i : RecIns), insO xO = some i →
     ∀ (f : RecCoins.Source) (unit : String) (inn : RecCoins.Inner),
       RecCoins.Source.atC3 i.src i.inner i.commits = some f → f.load unit = .ok inn →
       ∃ v, FlockDeploy.setupOf false (xIOf x) = some v ∧ inn.m = (FlockDeploy.tabsOf v.2.2)[0]!.m
 
-/-- **Check 5's `dirs` row at a piece's instance is its coins' position's** (`PosTieR`'s statement): at a V\* statement
-`xO` part `s` stages at `x` and shows the coins `c` at, where check 5 loads the staged table's inner session and builds
-`rec-open`'s rows at the level part's `LANES`, `HH`, the `dirs` row of a piece `ownQR` gives part `s`, at instance
-`rep · q + query`, is the low `HH` bits of the position `posAt` reads off the coins. -/
+/-- Check 5's `dirs` row of a piece `ownQR` gives part `s`, at instance `rep · q + query`, is the low `HH` bits of
+the position `posAt` reads off the coins (`PosTieR`'s statement). -/
 def DirsCoinR (untr : TrReader) (b : Brings) (pieces : Msg → List OpenPiece)
     (posAt : Msg → List Coin → OpenPiece → ℕ) (Bk : Msg → ℕ) (s : ℕ) (x : Msg) (c : ℕ → Coin) : Prop :=
   ∀ (xO : Msg), showsPart untr b s x xO c → ∀ (i : RecIns) (spec : SessionSpec) (sts : Array Stmt),
@@ -639,22 +565,13 @@ def DirsCoinR (untr : TrReader) (b : Brings) (pieces : Msg → List OpenPiece)
         dr[q.rep * OpenLower.qAt (xIOf x) q.level + q.query]! =
           RecCoins.dirsRow (posAt (xIOf x) ((List.range (Bk (xIOf x))).map c) q) HH
 
-/-- **Every staged table's labels ascend** (`CopySite.LabelsAscend`), at the stage `st`. -/
 def LabelsAscendR (st : Stage) : Prop :=
   ∀ (s : ℕ) (x xO : Msg), StagedPart st s x xO → ∀ (i : RecIns) (spec : SessionSpec) (sts : Array Stmt),
     setupO xO = some (i, spec, sts) → ∀ h0 : 0 < sts.size, CopySite.LabelsAscend sts[0].pub
 
-/-- **`LabelsAscendR` holds at every stage**: the recursive setup's own checks (`CopySite.labels_staged`). -/
 theorem labelsAscendR (st : Stage) : LabelsAscendR st :=
   fun _ _ _ hS _ _ _ hsu h0 => CopySite.labels_staged hS hsu h0
 
-/-- **`DirsSideR` from the verifier's checks**, at the deployed reader's statements at the dense form and pieces in
-range: the part's circuit is the staged table's, whose unit check gives `dirs` among its inputs (`four_lt_nIn`); check
-5's site holds the registered reads, the inner session and its unit no other recursive unit (`copySite_staged`); the
-piece's instance is below the statement's `n = 2 q` (`levelMatch`), which is the table's population, at most its
-instances (`staged_scope`, `oneFull_staged`, `setupOne_n`), and check 5's `dirs` rows (`drSize_staged`, at `InnerMR`);
-so the labels are `0, …, n − 1` (`CopySite.idx_staged`, the labels ascending by `CopySite.labels_staged`), and the coin
-tie is `DirsCoinR`. -/
 theorem dirsSideR_of {b : Brings} {elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))}
     {IV : Claims.Verifier Coin} {shape : Claims.Recursion.Form → Prop} {untr : TrReader} {cmt : Msg → ℕ → Msg → Msg}
     {Bd : Claims.Recursion.Bound Coin (List FlockLevel3.GF128) Claims.Flock.PlainTrace}
@@ -687,7 +604,6 @@ theorem dirsSideR_of {b : Brings} {elem : (r : XR) → List (Fin r.w.parts.lengt
   cases hss'
   rw [hsv] at hsv'
   cases hsv'
-  -- the part's circuit, with `dirs` among its inputs
   obtain ⟨vs, hvs, -, hall⟩ := readX_partVStar hr
   rw [hss] at hvs
   cases hvs
@@ -703,7 +619,6 @@ theorem dirsSideR_of {b : Brings} {elem : (r : XR) → List (Fin r.w.parts.lengt
   have hou := Flock.RecOpen.outsOk_of_check P.recNet hpar
   rw [hc0] at hrk hou
   have hdin := four_lt_nIn hrk hou
-  -- check 5's site and rows
   rw [e0] at hpar
   obtain ⟨own, f, hown, hf', hso, hop, hsp, -⟩ := CopySite.copySite_staged hsu h0 (.inl (by simp [hpar]))
   obtain ⟨hins, hset0⟩ := setupO_some hsu
@@ -711,7 +626,6 @@ theorem dirsSideR_of {b : Brings} {elem : (r : XR) → List (Fin r.w.parts.lengt
   rw [hown, hf'] at hcoin
   obtain ⟨inn, hinn, hco⟩ := FlockSoundness.Discharge.Recursion.openCheck_of_check hcoin hso hop hsp hpar
   obtain ⟨cr, dr, hrows, -, what, hdv⟩ := FlockSoundness.Discharge.Recursion.open_of_check hco
-  -- the piece's level is the statement's
   obtain ⟨h0q, r2, ss2, hr2, hss2, L2, H2, n2, hsv2⟩ := OpenLower.ownQR_some ho
   rw [hr] at hr2
   cases hr2
@@ -734,7 +648,6 @@ theorem dirsSideR_of {b : Brings} {elem : (r : XR) → List (Fin r.w.parts.lengt
     generalize ((OpenLower.schAt (xIOf x) 0).levels[s]!).q = Q at hqry ⊢
     have h1 : q.rep * Q ≤ 1 * Q := Nat.mul_le_mul_right _ (by omega)
     omega
-  -- the statement's instances are the table's, at most its public file's
   obtain ⟨-, r3, ss3, sv3, hr3, hss3, hsv3, hpop⟩ := staged_scope hS hxp h0p
   rw [hr] at hr3
   cases hr3
@@ -753,7 +666,6 @@ theorem dirsSideR_of {b : Brings} {elem : (r : XR) → List (Fin r.w.parts.lengt
   have hnn := setupOne_n hd1
   rw [e0] at hpop' hnn
   have hnp : n ≤ sts[0].pub.n := by omega
-  -- check 5's `dirs` rows are the statement's instances
   have hdrs : dr.size = n := drSize_staged hx' hd hr hss hsv hlev
     (hI s x cs st hx' hd xO (And.intro hshow hS) i0 hins f _ inn hf' hinn) hrows
   have hidx := CopySite.idx_staged hsu h0 hown hdv (by omega) (CopySite.labels_staged hS hsu h0)

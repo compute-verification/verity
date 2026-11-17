@@ -41,22 +41,7 @@ import Proofs.Flock.Claims.Recursion.TopsOpens
 import Proofs.Flock.Claims.Recursion.VVTieOf
 import Proofs.Flock.Claims.Recursion.VerdictRowG
 
-/-!
-# P3's ends half: the copy's accumulator ports read the outer witnesses' chain at the rep's ends
-
-`EndsW` (`ResChainW`) asks, in a piece's port context, that every element of the copy whose `w` index is past the frame
-(`accBase`) be one of `w`'s last four, and that the copy read `chainW` there at its rep's ends (`D.accE`). The pieces:
-
-* `acc_elem`: an element of a part's `w` index at or past the frame values is element `o < 2` of port `B.size + b`
-  (`b < 2`, `acc0` or `acc1`), at `w`'s element `B.sum + 2b + o`.
-* `copy_rowElems` (CAPPIECES' `ResCopyRows`): the copy's element is element `o` of that port's committed row at the
-  piece's instance `n`.
-* `acc0_held`, `acc1_held`: an algebra part holds row `n · R` at `("acc0", n)` and row `n · R + R` at `("acc1", n)`
-  (`accRead`), so the row has an owner (`accCanon_some`), whose bytes `chainW` reads (`chainW_get`).
-* `InnerAccTieV` (AccTies): the holder's and the owner's slots carry one commit string, wherever the brings list the
-  registered reads (`innerAccTieV`), so they hold one row (`held_rows_eq`).
-* `repOpens_eq`: the rep's run length `R` is `D.accE`'s `nOpen` at table 0's schedule.
--/
+/-! P3's ends half: the copy's accumulator ports read the outer witnesses' chain at the rep's ends (`endsW_of`). -/
 
 @[expose] public section
 
@@ -66,8 +51,6 @@ open Flock
 open Claims (Msg)
 open FlockDeploy (Coin FinalP setupOf)
 open Claims.Recursion.VStarB
-
-/-! ## Arithmetic -/
 
 theorem split_sum : ∀ (ns : List ℕ) (e : ℕ), e < ns.sum →
     ∃ i, ∃ hi : i < ns.length, ∃ k < ns[i], e = (ns.take i).sum + k
@@ -106,9 +89,6 @@ theorem names_acc (n : ℕ) (f : ℕ → String) {b : ℕ} (hb : b < 2) :
     Array.getElem_append_right (by simp)]
   rcases (show b = 0 ∨ b = 1 by omega) with rfl | rfl <;> simp
 
-/-- **An element past the frame is an accumulator's**: where element `e` of a part's `w` index (`wIdx`, over ports of
-sizes `B ++ [2, 2]`) is `w`'s element `j ≥ B.sum`, it is element `o < 2` of the part's row port `i`, which is port
-`B.size + b` (`b < 2`), and `j = B.sum + 2b + o`. -/
 theorem acc_elem {B P : Array ℕ} {e j : ℕ} (he : (FlockVBridge.PartS.wIdx (B ++ #[2, 2]) P)[e]? = some j)
     (hj : B.toList.sum ≤ j) :
     ∃ i, ∃ hi : i < P.size, ∃ b < 2, ∃ o < 2, P[i] = B.size + b ∧ j = B.toList.sum + 2 * b + o ∧
@@ -158,9 +138,6 @@ theorem acc_elem {B P : Array ℕ} {e j : ℕ} (he : (FlockVBridge.PartS.wIdx (B
       rw [getElem!_neg (B ++ #[2, 2]) P[i] (by rw [hsz]; omega)] at ho'
       exact Nat.not_lt_zero _ ho'
 
-/-! ## The chain's owners -/
-
-/-- **`chainW` at an owned row**: its two elements are the owner's bytes' (`rowW`). -/
 theorem chainW_get {x : Msg} {ws : List Claims.Flock.Wit} {r : XR} (hr : readX x = some r) {p o : ℕ} {co : Circuit}
     {ho : String × ℕ} (hc : accCanon r p = some (o, co, ho)) {wo : Claims.Flock.Wit} (hw : ws[o]? = some wo) (t : ℕ)
     {k : ℕ} (hk : k < 2) : (chainW x ws t p)[k]! = elemsOf (readSegs wo (accSegs co ho)) 2 k := by
@@ -170,7 +147,6 @@ theorem chainW_get {x : Msg} {ws : List Claims.Flock.Wit} {r : XR} (hr : readX x
   rw [hW]
   rcases (show k = 0 ∨ k = 1 by omega) with rfl | rfl <;> rfl
 
-/-- **A held row has an owner**: where part `s`, of a circuit, holds row `p`, `accCanon` names one. -/
 theorem accCanon_some {r : XR} {p s : ℕ} (hs : s < r.w.parts.length) {c : Circuit}
     (hc : r.w.parts[s]?.bind partCircuit = some c) {h : String × ℕ} (hh : h ∈ accHoldings r s p) :
     ∃ e, accCanon r p = some e := by
@@ -201,7 +177,6 @@ theorem acc1_mem {j : ℕ} {nm : String} {pt : VStar.Part} (ha : "acc1" ∈ pt.S
     "acc1" ∈ RecVStar.accPorts (.inner j nm pt) :=
   List.mem_filter.2 ⟨ha, by decide⟩
 
-/-- **An algebra part holds its rep's first row at `acc0`**: row `n · R` at `("acc0", n)`, `n < 2`. -/
 theorem acc0_held {r : XR} {s j : ℕ} {nm : String} {pt : VStar.Part}
     (hsv : (RecVStar.statements r.shape).toOption.bind (·[s]?) = some (.inner j nm pt)) {n : ℕ} (hn : n < 2)
     (ha : "acc0" ∈ pt.S.ports.map (·.1)) : ("acc0", n) ∈ accHoldings r s (n * repOpens r) := by
@@ -214,7 +189,6 @@ theorem acc0_held {r : XR} {s j : ℕ} {nm : String} {pt : VStar.Part}
   unfold accCands
   rcases (show n = 0 ∨ n = 1 by omega) with rfl | rfl <;> simp
 
-/-- **An algebra part holds its rep's last row at `acc1`**: row `n · R + R` at `("acc1", n)`, `n < 2`. -/
 theorem acc1_held {r : XR} {s j : ℕ} {nm : String} {pt : VStar.Part}
     (hsv : (RecVStar.statements r.shape).toOption.bind (·[s]?) = some (.inner j nm pt)) {n : ℕ} (hn : n < 2)
     (ha : "acc1" ∈ pt.S.ports.map (·.1)) : ("acc1", n) ∈ accHoldings r s (n * repOpens r + repOpens r) := by
@@ -227,13 +201,9 @@ theorem acc1_held {r : XR} {s j : ℕ} {nm : String} {pt : VStar.Part}
   unfold accCands
   rcases (show n = 0 ∨ n = 1 by omega) with rfl | rfl <;> simp
 
-/-! ## The run length -/
-
 theorem nOpen_opensBelow (sch : Schedule) : Rows.nOpen sch = RecVStar.opensBelow sch sch.levels.size := by
   simp only [Rows.nOpen, RecVStar.opensBelow, Array.getElem!_eq_getD]
 
-/-- **The rep's run is `D.accE`'s**: at a decision whose setup is one table at the inner shape's `m`, the rows a rep's
-`acc0` and `acc1` read are `nOpen` apart at table 0's schedule. -/
 theorem repOpens_eq {rd : Msg → Option FinalP} {xi : Msg} {ms : List Msg} {cs : List Coin}
     (D : Rows.DecAt rd xi ms cs) {v : FlockDeploy.Ins × SessionSpec × Array Stmt} (hv : setupOf false xi = some v)
     {r : XR} {st : Stmt} (hst : v.2.2 = #[st]) (hm : st.m = r.shape.m) :
@@ -252,10 +222,6 @@ theorem repOpens_eq {rd : Msg → Option FinalP} {xi : Msg} {ms : List Msg} {cs 
   | none => rfl
   | some sch => exact (nOpen_opensBelow sch).symm
 
-/-! ## The ends -/
-
-/-- **A held row is its owner's**: where the holder's slot and the owner's carry one commit string (`hC`), part `s`'s
-row at a holding `h` of row `p` is what `chainW` reads at `p`, element by element. -/
 theorem held_chainW (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))) {x : Msg}
     {ws : List Claims.Flock.Wit} (hT : ∀ e ∈ (DeployedR.layR elem).allCalls x ws, FlockDeploy.sha512 e.1 = e.2)
     (hnc : (Claims.findColl ((DeployedR.layR elem).allCalls x ws)).isSome = false) {r : XR} (hr : readX x = some r)
@@ -281,8 +247,6 @@ theorem held_chainW (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg
   congr 1
   exact held_rows_eq elem hT hnc hr hpc hpco hw hwo (mem_accHeld hh) (mem_accHeld hho) hq hq' hcm
 
-/-- **`part`'s row sizes are its ports'**: where `part sh j` builds, S's structure and groups return at `sh`, group `j`
-is `(R, P, V)`, and the part's row sizes are `P`'s ports' (`portSizes`). -/
 theorem part_ns {sh : _root_.Flock.Shape} {jj : ℕ} {S : _root_.Flock.RecOpen.GfS} {ns : List ℕ} {nv : ℕ}
     (h : _root_.Flock.RecResiduals.part sh jj = .ok (S, ns, nv)) :
     ∃ (S0 : _root_.Flock.RecAlgebra.GfS) (gs : Array (Array ℕ × Array ℕ × Array ℕ)) (R P V : Array ℕ),
@@ -315,13 +279,7 @@ theorem partPorts_of {sh : _root_.Flock.Shape} {jj : ℕ} {S0 : _root_.Flock.Rec
   unfold RecVStar.partPorts
   simp only [hS, hg, hj, bind, Except.bind, pure, Except.pure]
 
--- one proof of over a hundred lines through the commit tie's hypotheses, `rw` and `omega` on the port and row indices
 set_option maxHeartbeats 1000000 in
-/-- **P3's ends half**, under the commit tie (`InnerAccTieV`): in a piece's port context, at a decision, each element
-of the copy past the frame is one of `w`'s last four, `acc0`'s or `acc1`'s element `o` (`acc_elem`), and the copy holds
-there its committed row's element at the piece's instance `n` (`copy_rowElems`), which is the row its port reads
-(`acc0_held`, `acc1_held`: `n · R`, `n · R + R`), so its owner's (`held_chainW`), which `D.accE` reads at the rep's ends
-(`repOpens_eq`). -/
 theorem endsW_of (rd : Msg → Option FinalP) (wE : Msg → ℝ) (final : Msg → Option (List (List (Msg × Salt)) × Msg))
     (w : Msg → ℝ) (b : Brings) (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin)))
     (untr : TrReader) (cmt : Msg → ℕ → Msg → Msg)
@@ -329,7 +287,6 @@ theorem endsW_of (rd : Msg → Option FinalP) (wE : Msg → ℝ) (final : Msg �
     EndsW rd wE final w b elem Claims.Recursion.Form.Dense untr cmt := by
   intro x st hx hf c ws hJ xs hxs hcol hms s wt hw r hr ss hss j nm pt hsv xO p hxs0 hxO hck hsh hAg hT hc q hq ho ht
     m k cl jj sh holo S ns nv hpar hshp hholo hpart os last hfin hos D e j' he hj
-  -- the piece's part is group `q.key.1`'s, at the read shape
   obtain ⟨r', ss', nm', pt', hr', hss', hsv'⟩ := DecompBR.ownRD_some ho
   obtain rfl : r = r' := Option.some.inj (hr.symm.trans hr')
   obtain rfl : ss = ss' := Except.ok.inj (hss.symm.trans hss')
@@ -350,7 +307,6 @@ theorem endsW_of (rd : Msg → Option FinalP) (wE : Msg → ℝ) (final : Msg �
       RecResiduals.unitName r.shape.m r.shape.kLog r.shape.claims q.key.1 :=
     (FlockVBridge.Family.resUnitName_params hpar).trans (hname.trans (DecompBR.inner_named hss hsv))
   obtain ⟨rfl, rfl, rfl, rfl⟩ := FlockVBridge.Family.resUnitName_inj hn
-  -- the statement's one table is plain, at the inner shape
   obtain ⟨-, i0, spec, sts, -, hsu, -⟩ := hsh.2
   have hholo0 : RecResiduals.holoOf p.sts[0].c = .ok false := by
     have hpe : p = { i0.base.read with sts } := Option.some.inj (hxO.symm.trans (parse_of_setupO hsu))
@@ -366,7 +322,6 @@ theorem endsW_of (rd : Msg → Option FinalP) (wE : Msg → ℝ) (final : Msg �
     rw [hshI]
     exact hpart
   have hshA := shI_alg (xo := x) (sto := st) D hx hf rfl hv
-  -- the element is `acc0`'s or `acc1`'s
   obtain ⟨S1, gs, R, P, V, hS1, hgs, hgj, hns⟩ := part_ns hpart'
   rw [elemPort_eq hv hshA hS1 hgs hgj e] at he
   rw [accBase_eq hv hshA] at hj ⊢
@@ -392,7 +347,6 @@ theorem endsW_of (rd : Msg → Option FinalP) (wE : Msg → ℝ) (final : Msg �
     exact ho2
   have he2 : e = ((P.toList.map ((_root_.Flock.RecResiduals.portSizes (DecompBR.shI v.2.1 v.2.2))[·]!)).take i).sum +
       o := by rw [hps]; exact he'
-  -- the copy's element is its committed row's, at the piece's instance `r0`
   obtain ⟨cS, hpc⟩ := staged_circuit hsh.2 hr
   have hc0 : p.sts[0].c = cS := partCircuit_staged hsh.2 hxO htg hpi hr hpc ht
   rw [hc0] at hpar hholo
@@ -418,7 +372,6 @@ theorem endsW_of (rd : Msg → Option FinalP) (wE : Msg → ℝ) (final : Msg �
     rw [hnm2]
     split_ifs <;> decide
   rw [hrow hnout, hnsi]
-  -- the row it reads is its rep's end, its owner's
   obtain ⟨-, -, hpa⟩ := htab 0 ht
   obtain ⟨u, hu, -, -, -, hrows⟩ := FlockSoundness.Discharge.Recursion.checkParsed_ok hpa
   rw [hc0] at hrows
@@ -455,7 +408,6 @@ theorem endsW_of (rd : Msg → Option FinalP) (wE : Msg → ℝ) (final : Msg �
     · exact (lit4_get _ _ _ _).2.2.1.symm
     · exact (lit4_get _ _ _ _).2.2.2.symm
 
-/-- **P3's ends half** wherever the brings list the registered reads (`RegSetup`, which holds at KS's brings). -/
 theorem endsW_of_reg (rd : Msg → Option FinalP) (wE : Msg → ℝ)
     (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ) (b : Brings)
     (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))) (untr : TrReader)
@@ -463,7 +415,6 @@ theorem endsW_of_reg (rd : Msg → Option FinalP) (wE : Msg → ℝ)
     EndsW rd wE final w b elem Claims.Recursion.Form.Dense untr cmt :=
   endsW_of rd wE final w b elem untr cmt (innerAccTieV rd wE final w b elem untr cmt hRS)
 
-/-- **P3 from its steps half**, wherever the brings list the registered reads. -/
 theorem accPorts_of_steps (rd : Msg → Option FinalP) (key : ℕ → ℕ → ℕ → ℕ → ℕ × ℕ × ℕ × ℕ) (wE : Msg → ℝ)
     (final : Msg → Option (List (List (Msg × Salt)) × Msg))
     (w : Msg → ℝ) (b : Brings) (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin)))
@@ -472,7 +423,6 @@ theorem accPorts_of_steps (rd : Msg → Option FinalP) (key : ℕ → ℕ → �
     AccPorts rd key wE final w b elem Claims.Recursion.Form.Dense untr cmt :=
   accPorts_of_WX rd key wE final w b elem untr cmt hS (endsW_of_reg rd wE final w b elem untr cmt hRS)
 
-/-- `StepsWX` is `StepsWG` at the side condition `XsW … AccV`, curried. -/
 theorem stepsWX_of_G (rd : Msg → Option FinalP) (key : ℕ → ℕ → ℕ → ℕ → ℕ × ℕ × ℕ × ℕ) (wE : Msg → ℝ)
     (final : Msg → Option (List (List (Msg × Salt)) × Msg))
     (w : Msg → ℝ) (b : Brings) (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin)))
@@ -482,7 +432,6 @@ theorem stepsWX_of_G (rd : Msg → Option FinalP) (key : ℕ → ℕ → ℕ →
     StepsWX rd key wE final w b elem shape untr cmt :=
   fun x st hx hf c ws hJ xs hxs hcol hms => h x st hx hf c ws hJ ⟨xs, hxs, hcol, hms⟩
 
-/-- **P3 from `StepsWG` at `XsW`**, wherever the brings list the registered reads. -/
 theorem accPorts_of_G (rd : Msg → Option FinalP) (key : ℕ → ℕ → ℕ → ℕ → ℕ × ℕ × ℕ × ℕ) (wE : Msg → ℝ)
     (final : Msg → Option (List (List (Msg × Salt)) × Msg))
     (w : Msg → ℝ) (b : Brings) (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin)))

@@ -5,34 +5,7 @@ public import Proofs.Flock.Soundness.ZK.HidingAdaptive
 public import Proofs.Flock.Soundness.ZK.RealLeaves
 public import Proofs.Flock.Claims.ZK.Rewind
 
-/-!
-# The masked recursion's first part, from `Hm96Hiding`
-
-`zkBoundM_of` takes the first part's `ZKmalAt` (`h₀`): the inner session and the staging round, against `Sim`'s first
-two parts, which send commit strings to the zero digest under fresh salts. Where the inner prover's messages are hm96
-commit strings of digests under fresh salts of its tape (`RefParts.PI`'s commit form) and the staged values' digests
-read no staging salt, the two are within `2δ₁` per commit string:
-
-* `XorBytes`: 64 bytes under XOR, the group the hm96 leaves' digests and masks add in.
-* `leaves_close`: `n` leaves of digests `x(ω)` are within `2n·δ₁` of `n` leaves of the zero digest (`ideal_leaves_swap`
-  twice: each side is within `n·δ₁` of ideal leaves).
-* `interact_leaves_close`: a run whose message `i` is a leaf whose digest reads the history before it is within
-  `2n·δ₁` of the run whose messages are leaves of the zero digest (`ideal_leaves_adaptive`: the run's histories are
-  functions of the leaves before them, `interact_adaptive`).
-* `prefix_close`: a first part of `kI` adaptive leaves, then a staging round of `nC` leaves (`prefixRun`), is within
-  `2(kI + nC)·δ₁` of the one of leaves of the zero digest.
-
-At `deployRec`, both sides are a `prefixRun`: `Sim`'s first part at the zero digest (`simPre_eval`), and the first
-part's prover `preP` where its inner messages are commit strings (`preP_eval`). So the first part is `ZKmalAt` within
-`2(k_I + k_S·n_C)·δ₁` (`zkAt_pre`), `zkBoundM_of`'s `h₀` holds where the first part commits by hm96 under fresh salts at
-every statement (`PreCommits`, `h0_of_commits`), and `zkBoundM_of_commits` is `zkBoundM_of_tables` without `h₀`.
-
-`PreCommits` holds at the reference prover whose inner prover commits (`RefParts.commit`: each inner message hm96's
-commit string of a digest of the witness, its other randomness and the history, under that round's salt), on each
-statement's own first-part tape (`preTape`: the other randomness, one salt per inner round, one per commit string),
-which reads as the inner prover's tape and the staging salts with the zero salt past them (`preOf`;
-`preCommits_commit`). On one tape for every statement, it would bound the inner rounds and the commit strings.
--/
+/-! The masked recursion's first part from `Hm96Hiding`, within `2δ₁` per commit string (`zkAt_pre`). -/
 
 @[expose] public section
 
@@ -42,16 +15,12 @@ open Claims
 open FlockSoundness.Game FlockSoundness.ZK
 open scoped ENNReal NNReal
 
-/-! ## 64 bytes under XOR -/
-
-/-- **64 bytes under XOR**, the group of hm96's digests and salt masks. -/
 def XorBytes : Type := Fin 64 → UInt8
 
 instance instFintypeXorBytes : Fintype XorBytes := inferInstanceAs (Fintype (Fin 64 → UInt8))
 
 instance instNonemptyXorBytes : Nonempty XorBytes := ⟨fun _ => 0⟩
 
-/-- XOR, bytewise. -/
 def xorBytes (a b : Fin 64 → UInt8) : Fin 64 → UInt8 := fun i => a i ^^^ b i
 
 instance instZeroXorBytes : Zero XorBytes := ⟨fun _ => 0⟩
@@ -69,14 +38,11 @@ instance instAddCommGroupXorBytes : AddCommGroup XorBytes where
   nsmul := nsmulRec
   zsmul := zsmulRec
 
-/-! ## Probabilities, both ways -/
-
 theorem Pr_le_of_prCoin {α β : Type} [Fintype α] [Nonempty α] [Fintype β] [Nonempty β] {p : α → Prop} {q : β → Prop}
     {e : ℝ≥0∞} (he : e ≠ ⊤) (h : prCoin p ≤ prCoin q + e) : Pr p ≤ Pr q + e.toReal := by
   rw [Pr_eq_prCoin, Pr_eq_prCoin, ← ENNReal.toReal_add (prCoin_ne_top q) he]
   exact ENNReal.toReal_mono (ENNReal.add_ne_top.2 ⟨prCoin_ne_top q, he⟩) h
 
-/-- **A one-sided bound on every event is a two-sided one.** -/
 theorem abs_Pr_le {α β : Type} [Fintype α] [Nonempty α] [Fintype β] [Nonempty β] (p : α → Prop) (q : β → Prop) {e : ℝ}
     (h1 : Pr p ≤ Pr q + e) (h2 : Pr (fun a => ¬ p a) ≤ Pr (fun b => ¬ q b) + e) : |Pr p - Pr q| ≤ e := by
   rw [Pr_compl, Pr_compl] at h2
@@ -89,11 +55,8 @@ theorem toReal_nat_mul (n : ℕ) (δ₁ : ℝ≥0) : ((n : ℝ≥0∞) * (δ₁ 
 theorem nat_mul_ne_top (n : ℕ) (δ₁ : ℝ≥0) : (n : ℝ≥0∞) * (δ₁ : ℝ≥0∞) ≠ ⊤ :=
   ENNReal.mul_ne_top (ENNReal.natCast_ne_top n) ENNReal.coe_ne_top
 
-/-! ## Leaves of a digest against leaves of the zero digest -/
-
 variable {Sa Gp Cm : Type} [Fintype Sa] [Nonempty Sa] [AddCommGroup Gp] [Fintype Gp]
 
-/-- **`n` leaves are within `n·δ₁` of ideal ones, both ways** (`ideal_leaves_swap` on the event and on its negation). -/
 theorem leaves_ideal_close (My : Sa → Gp) (c : Sa → Cm) {δ₁ : ℝ≥0} (hT1 : Claims.Hm96Hiding My c δ₁) {D : Type}
     (Hl : Gp × Cm → D) (n : ℕ) {Ω : Type} [Fintype Ω] [Nonempty Ω] (x : Ω → Fin n → Gp) (G : Ω → (Fin n → D) → Prop) :
     |Pr (fun p : Ω × (Fin n → Sa) => G p.1 fun i => Hl (x p.1 i + My (p.2 i), c (p.2 i))) -
@@ -103,7 +66,6 @@ theorem leaves_ideal_close (My : Sa → Gp) (c : Sa → Cm) {δ₁ : ℝ≥0} (h
   rw [toReal_nat_mul] at h1 h2
   exact abs_Pr_le _ _ h1 h2
 
-/-- **`n` leaves of digests `x(ω)` are within `2n·δ₁` of `n` leaves of the zero digest.** -/
 theorem leaves_close (My : Sa → Gp) (c : Sa → Cm) {δ₁ : ℝ≥0} (hT1 : Claims.Hm96Hiding My c δ₁) {D : Type}
     (Hl : Gp × Cm → D) (n : ℕ) {Ω : Type} [Fintype Ω] [Nonempty Ω] (x : Ω → Fin n → Gp) (G : Ω → (Fin n → D) → Prop) :
     |Pr (fun p : Ω × (Fin n → Sa) => G p.1 fun i => Hl (x p.1 i + My (p.2 i), c (p.2 i))) -
@@ -115,13 +77,8 @@ theorem leaves_close (My : Sa → Gp) (c : Sa → Cm) {δ₁ : ℝ≥0} (hT1 : C
     _ ≤ n * δ₁ + n * δ₁ := add_le_add h1 (by rwa [abs_sub_comm])
     _ = 2 * n * δ₁ := by ring
 
-/-! ## A run of adaptive leaves -/
-
-/-- The prover whose message `i` is `ℓ i`, `[]` past them. -/
 def lpm {m : ℕ} (ℓ : Fin m → Msg) (h : List (Msg × Msg)) : Msg := if hh : h.length < m then ℓ ⟨h.length, hh⟩ else []
 
-/-- **A run's message `i` is a leaf whose digest reads the history before it**: at history `h` of length `i < n`,
-`Hl(d(h) + M·y_i, c(y_i))`. -/
 def leafPm (Hl : Gp × Cm → Msg) (n : ℕ) (d : List (Msg × Msg) → Gp) (My : Sa → Gp) (c : Sa → Cm) (y : Fin n → Sa)
     (h : List (Msg × Msg)) : Msg :=
   if hh : h.length < n then Hl (d h + My (y ⟨h.length, hh⟩), c (y ⟨h.length, hh⟩)) else []
@@ -129,7 +86,6 @@ def leafPm (Hl : Gp × Cm → Msg) (n : ℕ) (d : List (Msg × Msg) → Gp) (My 
 theorem histOf_take_length (τ : List (Msg × Out)) {i : ℕ} (hi : i < τ.length) : (histOf (τ.take i)).length = i := by
   simp [histOf, List.length_take, Nat.min_eq_left hi.le]
 
-/-- **`i` rounds of `n`** are the first `i` rounds of the run. -/
 theorem interact_take (ask : List Msg → Out) (pm : List (Msg × Msg) → Msg) (hist : List (Msg × Msg)) {i n : ℕ}
     (h : i ≤ n) : (interact ask pm n hist).take i = interact ask pm i hist := by
   obtain ⟨r, rfl⟩ := Nat.exists_eq_add_of_le h
@@ -142,7 +98,6 @@ theorem interact_take (ask : List Msg → Out) (pm : List (Msg × Msg) → Msg) 
     exact List.take_of_length_le (le_of_eq (goesOn_length hg))
   · exact List.take_of_length_le hl
 
-/-- **The run of leaves `ℓ` for `i` rounds reads only the first `i`.** -/
 theorem interact_lpm_cast (ask : List Msg → Out) {n : ℕ} (ℓ : Fin n → Msg) (i : ℕ) (hi : i ≤ n) :
     interact ask (lpm fun j : Fin i => ℓ (Fin.castLE hi j)) i [] = interact ask (lpm ℓ) i [] := by
   refine interact_congr ask (lpm ℓ) _ i [] fun j hj => ?_
@@ -154,8 +109,6 @@ theorem interact_lpm_cast (ask : List Msg → Out) {n : ℕ} (ℓ : Fin n → Ms
   rfl
 
 omit [Fintype Sa] [Nonempty Sa] [Fintype Gp] in
-/-- **A run of adaptive leaves is the run of the leaves `adaptiveLeaves` gives**: leaf `i`'s digest is `d` at the
-history the leaves before it make. -/
 theorem interact_adaptive (Hl : Gp × Cm → Msg) (My : Sa → Gp) (c : Sa → Cm) (ask : List Msg → Out) (n : ℕ)
     (d : List (Msg × Msg) → Gp) (y : Fin n → Sa) :
     interact ask (leafPm Hl n d My c y) n [] =
@@ -172,9 +125,6 @@ theorem interact_adaptive (Hl : Gp × Cm → Msg) (My : Sa → Gp) (c : Sa → C
   simp only [List.nil_append, leafPm, lpm, hlen, hin, ↓reduceDIte]
   rw [hLi, interact_lpm_cast ask L i hin.le, ← interact_take ask (lpm L) [] hin.le]
 
-/-- **A run of adaptive leaves is within `2n·δ₁` of the run of leaves of the zero digest**: message `i` the leaf of the
-digest `d` reads at the history before it, against the leaf of the zero digest, under the same salts; any event may
-also read the other randomness `ω`. -/
 theorem interact_leaves_close (My : Sa → Gp) (c : Sa → Cm) {δ₁ : ℝ≥0} (hT1 : Claims.Hm96Hiding My c δ₁)
     (Hl : Gp × Cm → Msg) (ask : List Msg → Out) (n : ℕ) {Ω : Type} [Fintype Ω] [Nonempty Ω]
     (d : Ω → List (Msg × Msg) → Gp) (E : Ω → List (Msg × Out) → Prop) :
@@ -205,11 +155,6 @@ theorem interact_leaves_close (My : Sa → Gp) (c : Sa → Cm) {δ₁ : ℝ≥0}
     _ ≤ n * δ₁ + n * δ₁ := add_le_add hA (by rwa [abs_sub_comm])
     _ = 2 * n * δ₁ := by ring
 
-/-! ## Leaves, then a round of leaves -/
-
-/-- **A first part of leaves**: `kI` rounds of leaves of the digests `dI` reads under the salts `yI`, then, where they
-go on, one round whose message `stg` makes of the history and `nC` leaves of the digests `dS` reads under the salts
-`yS`. -/
 def prefixRun (Hl : Gp × Cm → Msg) (My : Sa → Gp) (c : Sa → Cm) (ask : List Msg → Out) (kI nC : ℕ)
     (dI : List (Msg × Msg) → Gp) (dS : List (Msg × Msg) → Fin nC → Gp)
     (stg : List (Msg × Msg) → (Fin nC → Msg) → Msg) (yI : Fin kI → Sa) (yS : Fin nC → Sa) : List (Msg × Out) :=
@@ -217,14 +162,10 @@ def prefixRun (Hl : Gp × Cm → Msg) (My : Sa → Gp) (c : Sa → Cm) (ask : Li
     (interact ask (fun h => stg h fun j => Hl (dS h j + My (yS j), c (yS j))) 1
       (histOf (interact ask (leafPm Hl kI dI My c yI) kI [])))
 
-/-- One round reads the prover only at the history it starts from. -/
 theorem interact_one (ask : List Msg → Out) (pm : List (Msg × Msg) → Msg) (hist : List (Msg × Msg)) :
     interact ask pm 1 hist = interact ask (fun _ => pm hist) 1 hist := by
   simp only [interact]
 
-/-- **A first part of leaves is within `2(kI + nC)·δ₁` of the one of leaves of the zero digest**: the staging round's
-`nC` leaves first (`leaves_close`, the salts before them fixed), then the `kI` adaptive leaves before it
-(`interact_leaves_close`, the staging round's salts fixed). The other randomness `R` the digests read drops out. -/
 theorem prefix_close (My : Sa → Gp) (c : Sa → Cm) {δ₁ : ℝ≥0} (hT1 : Claims.Hm96Hiding My c δ₁)
     (Hl : Gp × Cm → Msg) (ask : List Msg → Out) (kI nC : ℕ) {R : Type} [Fintype R] [Nonempty R]
     (dI : R → List (Msg × Msg) → Gp) (dS : R × (Fin kI → Sa) → List (Msg × Msg) → Fin nC → Gp)
@@ -287,19 +228,13 @@ open scoped NNReal
 
 variable (IV : Claims.Verifier Coin) (b : Brings)
 
-/-! ## The first part's leaves at the pinned key -/
-
-/-- hm96's commit string `b ‖ c` as a leaf. -/
 def hmLeaf (p : XorBytes × Claims.Msg) : Claims.Msg := List.ofFn p.1 ++ p.2
 
-/-- The pinned key's salt hash, `c = H(p_salt ‖ y)` (`Deploy.saltHash` at `deployRec`). -/
 def saltH (H : Claims.Msg → Claims.Msg) (y : Salt) : Claims.Msg :=
   H (Claims.toMsg Hm96.Default512.saltPrefix ++ List.ofFn y)
 
-/-- The pinned key's salt mask as 64 bytes under XOR (`Deploy.mask` at `deployRec`). -/
 def maskX (y : Salt) : XorBytes := maskOf y
 
-/-- **The staging message** at the history's first `n` rounds and the commit strings `ℓ`. -/
 noncomputable def stgOf (x : Claims.Msg) (n : ℕ) (h : List (Claims.Msg × Claims.Msg))
     (ℓ : Fin (b.nC x) → Claims.Msg) : Claims.Msg :=
   stageMsg b.hs x (asRounds (h.take n)) (List.ofFn ℓ)
@@ -308,8 +243,6 @@ theorem zero_leaf (H : Claims.Msg → Claims.Msg) (y : Salt) :
     hmLeaf (0 + maskX y, saltH H y) = List.ofFn (maskOf y) ++ saltH H y := by
   rw [zero_add]
   rfl
-
-/-! ## `Sim`'s first part is a first part of leaves of the zero digest -/
 
 theorem simRounds_stop (f : List (Claims.Msg × Claims.Out) → Claims.SP Claims.Msg) :
     ∀ (n : ℕ) (ms : List (Claims.Msg × Claims.Out)), Claims.Recursion.goesOn ms = false →
@@ -327,8 +260,6 @@ theorem recGoesOn_of_msgs {ms : List (Claims.Msg × Claims.Out)} (h : ∀ p ∈ 
     have := h _ (List.mem_of_getLast? hl)
     cases o <;> simp_all [Claims.ZKMal.isMsg]
 
-/-- **`simRounds` after a transcript of messages is a run**: of the prover whose message at a history is `f`'s at
-the transcript it reads as. -/
 theorem simRounds_interact (H : Claims.Msg → Claims.Msg) (ask : List Claims.Msg → Claims.Out)
     (f : List (Claims.Msg × Claims.Out) → Claims.SP Claims.Msg) :
     ∀ (n : ℕ) (ms : List (Claims.Msg × Claims.Out)), (∀ p ∈ ms, Claims.ZKMal.isMsg p.2 = true) →
@@ -384,7 +315,6 @@ theorem stage_eval (ivScope : Claims.Msg → Bool) (H : Claims.Msg → Claims.Ms
       stageMsg b.hs x ms cs :=
   rfl
 
-/-- **`Sim`'s inner rounds are leaves of the zero digest** under its inner salts. -/
 theorem simInner_eval (ivScope : Claims.Msg → Bool) (H : Claims.Msg → Claims.Msg) (ask : List Claims.Msg → Claims.Out)
     (n : ℕ) (salts : Fin n → Salt) :
     (Claims.SP.eval H ask (Claims.Recursion.simInner (deployRec IV ivScope b) n salts)).1 =
@@ -399,8 +329,6 @@ theorem simInner_eval (ivScope : Claims.Msg → Bool) (H : Claims.Msg → Claims
   · simp only [hl, hh, ↓reduceDIte, leafPm, zero_leaf, zeroCommit_eval]
   · simp only [hl, hh, ↓reduceDIte, leafPm, Claims.SP.eval]
 
-/-- **`Sim`'s staging round after `n` rounds of messages** is the staging message at commit strings to the zero
-digest under its staging salts. -/
 theorem simStage_eval (ivScope : Claims.Msg → Bool) (H : Claims.Msg → Claims.Msg) (ask : List Claims.Msg → Claims.Out)
     (x : Claims.Msg) (n : ℕ) (salts : Fin (kS x) → Fin (b.nC x) → Salt) (τ : List (Claims.Msg × Claims.Out))
     (hm : ∀ p ∈ τ, Claims.ZKMal.isMsg p.2 = true) (hl : τ.length = n) :
@@ -434,8 +362,6 @@ theorem simStage_eval (ivScope : Claims.Msg → Bool) (H : Claims.Msg → Claims
   funext j
   exact (zero_leaf H _).symm
 
-/-- **`Sim`'s first part is a first part of leaves of the zero digest**: its inner rounds' commit strings under its
-inner salts, then its staging round's under its staging salts. -/
 theorem simPre_eval {W : Type} (ivScope : Claims.Msg → Bool) (I : Claims.Recursion.Inner Coin W)
     (H : Claims.Msg → Claims.Msg) (ask : List Claims.Msg → Claims.Out) (x : Claims.Msg)
     (c : (simPre (deployRec IV ivScope b) I).C x) :
@@ -461,12 +387,8 @@ theorem simPre_eval {W : Type} (ivScope : Claims.Msg → Bool) (I : Claims.Recur
     · exact absurd (by simp [h0, Claims.interact, Claims.ZKMal.goesOn]) hg
     · exact (Claims.ZKMal.recGoesOn_interact ask _ (I.V.k (xIOf x)) [] h0).trans (Bool.eq_false_iff.2 hg)
 
-/-! ## The first part's prover is a first part of leaves -/
-
-/-- 64 bytes as a digest under XOR. -/
 def asX (d : Fin 64 → UInt8) : XorBytes := d
 
-/-- **Commit strings, then `k`**: `k` at the commit strings' hm96 leaves. -/
 theorem commitThen_eval (H : Claims.Msg → Claims.Msg) (k : List Claims.Msg → Claims.OC Claims.Msg) :
     ∀ (ps : List ((Fin 64 → UInt8) × Salt)) (cs : List Claims.Msg),
       ((commitThen k ps cs).eval H).1 =
@@ -478,9 +400,6 @@ theorem commitThen_eval (H : Claims.Msg → Claims.Msg) (k : List Claims.Msg →
       simp only [List.map_cons, List.append_assoc, List.singleton_append]
       rfl
 
-/-- **The first part's prover is a first part of leaves**: where its inner messages are hm96 commit strings of the
-digests `dI` reads under the inner salts `yI` (`hPI`), its staged values' digests are `dS`'s (`hdig`) and its staging
-salts are `yS` (`hsalt`). -/
 theorem preP_eval (H : Claims.Msg → Claims.Msg) (ask : List Claims.Msg → Claims.Out) {T : Type}
     (pre : T → b.ref.TI × (ℕ → Salt)) (w : Claims.Flock.Wit) (x : Claims.Msg) (t : T)
     (yI : Fin (IV.k (xIOf x)) → Salt) (yS : Fin (b.nC x) → Salt) (dI : List (Claims.Msg × Claims.Msg) → Fin 64 → UInt8)
@@ -529,13 +448,6 @@ theorem preP_eval (H : Claims.Msg → Claims.Msg) (ask : List Claims.Msg → Cla
       hsalt j (by simpa using h1)]
   · rfl
 
-/-! ## The first part's zero knowledge -/
-
-/-- **The first part is `ZKmalAt` at `Sim`'s first two parts within `2δ₁` per commit string**, at `x`: where the
-first part's tape splits evenly (`split`, every fiber of one size) into other randomness `R`, the inner salts and the
-staging salts; the inner prover's message at each inner round is hm96's commit string of a digest `dI` reads (the
-witness, the other randomness and the history) under that round's inner salt (`hPI`, `RefParts.PI`'s commit form);
-the staged values' digests read no staging salt (`hdig`); and the staging salts are the tape's (`hsalt`). -/
 theorem zkAt_pre (H : Claims.Msg → Claims.Msg) (ivScope : Claims.Msg → Bool)
     (I : Claims.Recursion.Inner Coin Claims.Flock.Wit) (T₀ : SeqTape) (pre : T₀.N × T₀.Ω → b.ref.TI × (ℕ → Salt))
     (x : Claims.Msg) (hI : I.V.k (xIOf x) = IV.k (xIOf x)) {R : Type} [Fintype R] [Nonempty R]
@@ -593,10 +505,6 @@ theorem zkAt_pre (H : Claims.Msg → Claims.Msg) (ivScope : Claims.Msg → Bool)
   rw [hI]
   simp only [kS, Nat.cast_one, one_mul, zero_mul, add_zero]
 
-/-- **The first part commits by hm96 under fresh salts** at `x` (`zkAt_pre`'s premises): its tape splits evenly into
-other randomness, the inner salts and the staging salts; each inner message is hm96's commit string of a digest the
-witness, the other randomness and the history give, under that round's inner salt (`RefParts.PI`'s commit form); the
-staged values' digests read no staging salt; and the staging salts are the tape's. -/
 def PreCommits (H : Claims.Msg → Claims.Msg) (T₀ : SeqTape) (pre : T₀.N × T₀.Ω → b.ref.TI × (ℕ → Salt))
     (x : Claims.Msg) : Prop :=
   ∃ (R : Type) (_ : Fintype R) (_ : Nonempty R)
@@ -611,8 +519,6 @@ def PreCommits (H : Claims.Msg → Claims.Msg) (T₀ : SeqTape) (pre : T₀.N ×
     (∀ w t h j (hj : j < b.nC x), (b.ref.digests w (pre t).1 h).getD j 0 = dS w (split t).1 h ⟨j, hj⟩) ∧
     (∀ t j (hj : j < b.nC x), (pre t).2 j = (split t).2 ⟨j, hj⟩)
 
-/-- **`zkBoundM_of`'s first part (`h₀`)**, where the inner protocol's rounds are the inner verifier's and the first
-part commits by hm96 under fresh salts at every statement. -/
 theorem h0_of_commits (H : Claims.Msg → Claims.Msg) (ivScope : Claims.Msg → Bool)
     (I : Claims.Recursion.Inner Coin Claims.Flock.Wit) (T₀ : Claims.Msg → SeqTape)
     (pre : (x : Claims.Msg) → (T₀ x).N × (T₀ x).Ω → b.ref.TI × (ℕ → Salt))
@@ -626,8 +532,6 @@ theorem h0_of_commits (H : Claims.Msg → Claims.Msg) (ivScope : Claims.Msg → 
   obtain ⟨R, _, _, split, m, dI, dS, hs, hPI, hdig, hsalt⟩ := hpre x
   exact zkAt_pre IV b H ivScope I (T₀ x) (pre x) x (hI x) split hs dI dS hPI hdig hsalt hδ
 
-/-- **The recursion's zero knowledge at the masked record, from the masked session's models and the first part's
-commit strings**: `zkBoundM_of_tables` with its first part (`h₀`) from `PreCommits` at every statement. -/
 theorem zkBoundM_of_commits (H : Claims.Msg → Claims.Msg) (ivScope : Claims.Msg → Bool)
     (I : Claims.Recursion.Inner Coin Claims.Flock.Wit) (relO : Readable.Parsed → Readable.Relation)
     (T₀ : Claims.Msg → SeqTape) (pre : (x : Claims.Msg) → (T₀ x).N × (T₀ x).Ω → b.ref.TI × (ℕ → Salt))
@@ -656,11 +560,6 @@ theorem zkBoundM_of_commits (H : Claims.Msg → Claims.Msg) (ivScope : Claims.Ms
   zkBoundM_of_tables IV b H ivScope I relO T₀ pre wit G Mp Mc nL nB CB hI
     (h0_of_commits IV b H ivScope I T₀ pre hI hpre) hkey hK hnL hnB hL hOK hC hzl hCB hW
 
-/-! ## A reference prover whose inner prover commits -/
-
-/-- **The inner prover that commits**: at each inner round, hm96's commit string of the digest `dI` reads (the
-witness, the other randomness `R` and the history) under that round's salt, on a tape of `R` and one salt per round;
-the staged values' digests (`dg`) and the outer witnesses (`wo`) read that tape. -/
 def RefParts.commit (R : Type) [Nonempty R]
     (dI : Claims.Flock.Wit → R → List (Claims.Msg × Claims.Msg) → Fin 64 → UInt8)
     (dg : Claims.Flock.Wit → R × (ℕ → Salt) → List (Claims.Msg × Claims.Msg) → List (Fin 64 → UInt8))
@@ -671,29 +570,22 @@ def RefParts.commit (R : Type) [Nonempty R]
   digests := dg
   wit := wo
 
-/-- What the deployment brings, its inner prover the one that commits. -/
 abbrev Brings.commit (b : Brings) (R : Type) [Nonempty R]
     (dI : Claims.Flock.Wit → R → List (Claims.Msg × Claims.Msg) → Fin 64 → UInt8)
     (dg : Claims.Flock.Wit → R × (ℕ → Salt) → List (Claims.Msg × Claims.Msg) → List (Fin 64 → UInt8))
     (wo : Claims.Flock.Wit → R × (ℕ → Salt) → List (Claims.Msg × Claims.Msg) → ℕ → Claims.Flock.Wit) : Brings :=
   { b with ref := RefParts.commit R dI dg wo }
 
-/-- **The first part's tape at `x`** for an inner prover that commits: the other randomness and one salt per inner
-round, then one staging salt per commit string. -/
 def preTape (R : Type) [Fintype R] [Nonempty R] (x : Claims.Msg) : SeqTape where
   N := R × (Fin (IV.k (xIOf x)) → Salt)
   Ω := Fin (b.nC x) → Salt
 
-/-- Salts on `Fin n` read on `ℕ`, the zero salt past `n`. -/
 def saltsOn {n : ℕ} (y : Fin n → Salt) (i : ℕ) : Salt := if h : i < n then y ⟨i, h⟩ else fun _ => 0
 
-/-- **The first part's tape at `x` read as the inner prover's tape and the staging salts.** -/
 def preOf (R : Type) [Fintype R] [Nonempty R] (x : Claims.Msg) :
     (preTape IV b R x).N × (preTape IV b R x).Ω → (R × (ℕ → Salt)) × (ℕ → Salt) :=
   fun t => ((t.1.1, saltsOn t.1.2), saltsOn t.2)
 
-/-- **The first part commits by hm96 under fresh salts** at the inner prover that commits, on `x`'s first-part tape:
-the tape is the split itself, so each fiber is one point. -/
 theorem preCommits_commit (H : Claims.Msg → Claims.Msg) (R : Type) [Fintype R] [Nonempty R]
     (dI : Claims.Flock.Wit → R → List (Claims.Msg × Claims.Msg) → Fin 64 → UInt8)
     (dg : Claims.Flock.Wit → R × (ℕ → Salt) → List (Claims.Msg × Claims.Msg) → List (Fin 64 → UInt8))

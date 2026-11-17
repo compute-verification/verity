@@ -40,41 +40,7 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Recursion.VerdictAssembly
 import Proofs.Flock.Claims.Recursion.VerdictRowG
 
-/-!
-# `RecursiveKS`'s premise at `nextR`, from the verdict's rows
-
-The recursion's top statement. `RecursiveKS` takes one premise, that V\*'s parts decompose the inner
-verifier (`DecompB` at `PartAccepts`). At the deployed reader `nextR` that premise is `RecKSDecompR` below, and
-`recKSDecompR_of_targets` proves it from named targets, one per open obligation. Each target is a `def … : Prop` with a
-fixed statement: a row's owner proves `theorem … : Target…` against it, and the integration replaces the argument with
-that lemma. When no argument is left, `RecKSDecompR` holds outright and `RecursiveKS` at `nextR` is not vacuous.
-
-**Where the rows are asked** (`At rd P x ms cs`): at an inner statement that a compiled statement read at the dense form
-has (`DenseInner`), where the last step reads (`ReadOkR`), the four base checks hold (`setup`, `shaped`, `names`,
-`after`) and the verdict's pieces hold (`P`, the parts' shares: whatever the pieces are, every target is monotone in
-`P`). Each table's targets range over every decision `D : DecAt rd x ms cs`, every class `cls` and table `i`.
-
-**The targets** (`acc` is rep `k`'s four accumulators, which the integration chooses once for every row):
-
-* `TargetB` (row B): each rep's stream rounds hold its frames at `w`'s `T` (`FramedAt`).
-* `TargetL` (row L): `RowL` at each rep.
-* `TargetD` (row D): `rec-open` pieces, their sides and positions, holding, tied to the decision's side (`hside`) and
-  the verifier rows' positions (`hpos`), and covering every query.
-* `TargetR` (row R): S, its groups, the rounds' sizes, `w`'s size and every part's residuals vanishing.
-* `TargetE` (row E): each rep's accumulator chain and position, with `UnitSums` and `ReadsEnds`.
-* `TargetDecode` (the record): at a decision, the record value the verdict reads decodes (S1–S14).
-* `TargetPublics` (the record): the session's public words are empty.
-
-Rows G and B's `finds`, `roundsWF`, `noEmpty` are proved (`runs_assembled`), and so are C's sizes, shapes and points:
-each rep's proof index is in range (`decR_fits`), shaped for its file (the `shaped` base check), and the session's link
-points are the first coin's (`DecAt.points_eq`). Row A's step 3 is proved (`DecAt.verdict_of_runs`): the decision sets
-up one table, which the spec names (`DecAt.tables_of_dense`), and every table's runs with row L make the verdict on the
-decoded proofs accept.
-
-**The pieces** (`Piece Q`): the parts' pieces `Q`, and one more, `dense`, which says the inner statement is a dense one.
-Its owner's lowering fact (`hlowP`) holds at every dense compiled statement, and with it the verdict is only ever asked
-at a dense inner statement.
--/
+/-! `RecursiveKS`'s premise at `nextR` (`RecKSDecompR`) from named targets, one per open obligation; `RecursiveKS` at `nextR` is non-vacuous once every target is proved. -/
 
 @[expose] public section
 
@@ -96,27 +62,19 @@ noncomputable section
 
 namespace Top
 
-/-! ## Where the rows are asked -/
-
-/-- **A dense inner statement**: the inner statement of a compiled statement read at the dense form. -/
 def DenseInner (x : Msg) : Prop :=
   ∃ (xo : Msg) (sto : Claims.Recursion.CompiledStatement), parse xo = some sto ∧ Claims.Recursion.Form.Dense sto.form ∧
     x = xIOf xo
 
-/-- **Where the rows are asked**: at a dense inner statement, where the last step reads, the four base checks hold and
-the verdict's pieces hold (`P`). -/
 def At (rd : Msg → Option FinalP) (P : Msg → List Msg → List Coin → Prop) (x : Msg) (ms : List Msg)
     (cs : List Coin) : Prop :=
   DenseInner x ∧ ReadOkR rd x ms cs ∧ (∀ b ∈ VerdictP.bases, holdsR FlockDeploy.sha512 rd b x ms cs) ∧ P x ms cs
-
-/-! ## The targets -/
 
 section Targets
 
 variable (rd : Msg → Option FinalP) (P : Msg → List Msg → List Coin → Prop)
   (acc : Msg → List Msg → List Coin → ℕ → Array F128)
 
-/-- **Row B's target, the frames**: each rep's stream rounds hold its frames at `w`'s batched value `T`. -/
 def TargetB : Prop :=
   ∀ (x : Msg) (ms : List Msg) (cs : List Coin), At rd P x ms cs → ∀ (D : DecAt rd x ms cs) (cls : HClass) (i : ℕ),
     i < D.sts.size → ∀ r : Fin 2,
@@ -126,13 +84,10 @@ def TargetB : Prop :=
         (valOf (D.sh cls i) (D.rep cls (acc x ms cs) i r).w (D.rep cls (acc x ms cs) i r).comb
           (D.rep cls (acc x ms cs) i r).cons .T))
 
-/-- **Row L's target**: the fields the reader fixes, at each rep. -/
 def TargetL : Prop :=
   ∀ (x : Msg) (ms : List Msg) (cs : List Coin), At rd P x ms cs → ∀ (D : DecAt rd x ms cs) (cls : HClass) (i : ℕ),
     i < D.sts.size → ∀ r : Fin 2, D.RowL cls (acc x ms cs) i r
 
-/-- **Row D's target, the openings**: `rec-open` pieces that hold, whose sides are the decision's (`hside`), whose
-positions are the verifier rows' (`hpos`), and which cover every query of every level of each rep. -/
 def TargetD : Prop :=
   ∀ (x : Msg) (ms : List Msg) (cs : List Coin), At rd P x ms cs → ∀ (D : DecAt rd x ms cs) (cls : HClass) (i : ℕ),
     i < D.sts.size →
@@ -147,8 +102,6 @@ def TargetD : Prop :=
         (∀ r : Fin 2, ∀ ℓ < (D.files cls i).sch.levels.size, ∀ j < ((D.files cls i).sch.levels[ℓ]!).q,
           ∃ q ∈ pieces, q.table = i ∧ q.rep = r.val ∧ q.level = ℓ ∧ q.query = j)
 
-/-- **Row R's target, the residuals**: the residuals' structure and groups at the table's shape, each rep's rounds at
-the shape's sizes, `w` at the structure's size, and every part's residuals vanishing. -/
 def TargetR : Prop :=
   ∀ (x : Msg) (ms : List Msg) (cs : List Coin), At rd P x ms cs → ∀ (D : DecAt rd x ms cs) (cls : HClass) (i : ℕ),
     i < D.sts.size →
@@ -158,8 +111,6 @@ def TargetR : Prop :=
         (∀ r : Fin 2, (D.rep cls (acc x ms cs) i r).w.size = S.nw) ∧
         ∀ r : Fin 2, D.PartsZero cls (acc x ms cs) i r gs
 
-/-- **Row E's target, the accumulators**: at each rep, an accumulator chain and position whose units sum
-(`UnitSums`) and whose ends the algebra reads (`ReadsEnds`). -/
 def TargetE : Prop :=
   ∀ (x : Msg) (ms : List Msg) (cs : List Coin), At rd P x ms cs → ∀ (D : DecAt rd x ms cs) (cls : HClass) (i : ℕ),
     i < D.sts.size →
@@ -168,8 +119,6 @@ def TargetE : Prop :=
         ∀ r : Fin 2, ReadsEnds (D.sh cls i) (D.rep cls (acc x ms cs) i r) (accC r)
           (D.opens cls (acc x ms cs) i r (p0 r))
 
-/-- **The record's target, the decode**: at a decision, the record value the verdict reads decodes at the setup
-SHA-512 gives. -/
 def TargetDecode : Prop :=
   ∀ (x : Msg) (ms : List Msg) (cs : List Coin), At rd P x ms cs → ∀ d : FlockDeploy.DecR,
     FlockDeploy.decR rd x ms cs = some d → ∀ (spec : SessionSpec) (sts : Array Stmt),
@@ -177,21 +126,17 @@ def TargetDecode : Prop :=
     ∃ sess, Record.decodeJWith (Flock.Hashes.ofSha512 (Claims.hOf FlockDeploy.sha512) : Flock.Hashes Flock.V) spec
       (FlockDeploy.jAt FlockDeploy.sha512 spec sts d.c₁ d.mids d.f) = .ok sess
 
-/-- **The record's target, the public words**: the session's public words are empty. -/
 def TargetPublics : Prop :=
   ∀ (x : Msg) (ms : List Msg) (cs : List Coin), At rd P x ms cs → ∀ D : DecAt rd x ms cs,
     (D.sess.publics.all fun p => p.size == 0) = true
 
 end Targets
 
-/-! ## What the base checks and the reading already give -/
-
 section Given
 
 variable {rd : Msg → Option FinalP} {P : Msg → List Msg → List Coin → Prop} {x : Msg} {ms : List Msg}
   {cs : List Coin}
 
-/-- At a decision, the last step decides on `decR`'s reading. -/
 theorem actR_of_dec (hr : ReadOkR rd x ms cs) (D : DecAt rd x ms cs) :
     FlockDeploy.actR rd x ms cs =
       .decide D.d.s D.d.spec D.d.sts D.d.link D.d.c₁ D.d.mids D.d.f := by
@@ -204,13 +149,11 @@ theorem actR_of_dec (hr : ReadOkR rd x ms cs) (D : DecAt rd x ms cs) :
     intro _
     rw [← Option.some.inj ((FlockDeploy.actR_decide h).symm.trans D.dec)]
 
-/-- **Row C's sizes**: each rep's proof index is in range (`decR_fits`). -/
 theorem idx_lt (D : DecAt rd x ms cs) {i : ℕ} (hi : i < D.sts.size) (r : Fin 2) : 2 * i + r < D.d.f.ps.size := by
   obtain ⟨-, -, -, -, hsz, -⟩ := FlockDeploy.decR_fits D.dec
   rw [hsz, ← (D.setup_eq).2]
   omega
 
-/-- **Row C's shapes**: each rep's proof is shaped for its file (the `shaped` base check). -/
 theorem shaped_of_base (hr : ReadOkR rd x ms cs) (hb : ∀ b ∈ VerdictP.bases, holdsR FlockDeploy.sha512 rd b x ms cs)
     (D : DecAt rd x ms cs) (k : ℕ) (hk : k < D.d.f.ps.size) :
     ProofShaped (shapeAt (tabsOf D.sts) (pointsOf D.spec D.d.c₁) k) D.d.f.ps[k] := by
@@ -221,14 +164,11 @@ theorem shaped_of_base (hr : ReadOkR rd x ms cs) (hb : ∀ b ∈ VerdictP.bases,
 
 end Given
 
-/-! ## The top statement at a table -/
-
 section Runs
 
 variable (rd : Msg → Option FinalP) (P : Msg → List Msg → List Coin → Prop)
   (acc : Msg → List Msg → List Coin → ℕ → Array F128)
 
-/-- **Every table's reps run where the rows are asked**: `runs_assembled`, each row's hypothesis its target. -/
 theorem runs_of_targets (hB : TargetB rd P acc) (hL : TargetL rd P acc) (hD : TargetD rd P acc)
     (hR : TargetR rd P acc) (hE : TargetE rd P acc) :
     ∀ (x : Msg) (ms : List Msg) (cs : List Coin), At rd P x ms cs →
@@ -261,8 +201,6 @@ def cls₀ : HClass where
   mPts := 0
   nnz := 0
 
-/-- **The verdict where the rows are asked**: at a decision, the record decodes (`TargetDecode`), and row A's step 3
-(`DecAt.verdict_of_runs`) at row G (`DecAt.rowG`), `runs_of_targets` and row L. -/
 theorem verdict_of_targets (hB : TargetB rd P acc) (hL : TargetL rd P acc) (hD : TargetD rd P acc)
     (hR : TargetR rd P acc) (hE : TargetE rd P acc) (hDec : TargetDecode rd P) (hPub : TargetPublics rd P) :
     ∀ (x : Msg) (ms : List Msg) (cs : List Coin), At rd P x ms cs → holdsR FlockDeploy.sha512 rd .verdict x ms cs := by
@@ -284,27 +222,20 @@ theorem verdict_of_targets (hB : TargetB rd P acc) (hL : TargetL rd P acc) (hD :
 
 end Runs
 
-/-! ## The pieces, with the dense one -/
-
-/-- **The verdict's pieces**: the parts' pieces `Q`, and `dense`, that the inner statement is a dense one. -/
 inductive Piece (Q : Type) where
   | dense
   | row (q : Q)
 
-/-- The pieces at `x`: `dense`, then the parts'. -/
 def pieces {Q : Type} (rows : Msg → List Q) (x : Msg) : List (Piece Q) := .dense :: (rows x).map .row
 
-/-- What a piece says: `dense` that `x` is a dense inner statement; a part's piece what `pholds` says. -/
 def pholds {Q : Type} (holds : Q → Msg → List Msg → List Coin → Prop) : Piece Q → Msg → List Msg → List Coin → Prop
   | .dense, x, _, _ => DenseInner x
   | .row q, x, ms, cs => holds q x ms cs
 
-/-- The parts' pieces all hold. -/
 def RowsHold {Q : Type} (rows : Msg → List Q) (holds : Q → Msg → List Msg → List Coin → Prop) (x : Msg)
     (ms : List Msg) (cs : List Coin) : Prop :=
   ∀ q ∈ rows x, holds q x ms cs
 
-/-- **Every target**, at the parts' pieces `rows` (what `holds` says of each) and the reps' accumulators `acc`. -/
 structure Targets (rd : Msg → Option FinalP) {Q : Type} (rows : Msg → List Q)
     (holds : Q → Msg → List Msg → List Coin → Prop) (acc : Msg → List Msg → List Coin → ℕ → Array F128) : Prop where
   b : TargetB rd (RowsHold rows holds) acc
@@ -315,7 +246,6 @@ structure Targets (rd : Msg → Option FinalP) {Q : Type} (rows : Msg → List Q
   decode : TargetDecode rd (RowsHold rows holds)
   publics : TargetPublics rd (RowsHold rows holds)
 
-/-- **`hpieces` at the pieces, from the targets.** -/
 theorem hpieces_of_targets (rd : Msg → Option FinalP) {Q : Type} (rows : Msg → List Q)
     (holds : Q → Msg → List Msg → List Coin → Prop) (acc : Msg → List Msg → List Coin → ℕ → Array F128)
     (h : Targets rd rows holds acc) :
@@ -329,28 +259,22 @@ theorem hpieces_of_targets (rd : Msg → Option FinalP) {Q : Type} (rows : Msg �
 
 end Top
 
-/-! ## The premise of `RecursiveKS` at `nextR` -/
-
 section Premise
 
-/-- The deployed bound record at `nextR rd`, with the columns the reader opens, trimmed (`deployPlainTrimR`). -/
 abbrev bdR (rd : Msg → Option FinalP) (wE : Msg → ℝ) (final : Msg → Option (List (List (Msg × Salt)) × Msg))
     (w : Msg → ℝ) :=
   bdDeployed _root_.Flock.Readable.relation (nextR rd)
     (FlockDeploy.deployPlainTrimR _root_.Flock.Readable.relation rd).cols wE FlockDeploy.joinR rowInDeployed final w
 
-/-- V\*'s bound layout at the last round's pieces `fin`. -/
 abbrev layR (fin : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))) : LayoutB :=
   layoutBTops (finOpen fin)
 
-/-- The compiled record at the challenger's live-coin part's transcript, whose inner view runs `IVStar` at `nextR rd`. -/
 abbrev recR (rd : Msg → Option FinalP) (b : Brings) (aux : Msg → ℕ → Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ)
     (hd : Msg → Flock.RecRecord.Record) (rest : Msg → List (Msg × Out) → List UInt8)
     (fin : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))) (wE : Msg → ℝ)
     (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ) :=
   recBound _root_.Flock.Readable.relation { b with tr := recTr aux nOf hd rest } (layR fin) (bdR rd wE final w).IVStar
 
-/-- What each part's circuit accepts, at the deployed outer `--zk` record and the challenger's live-coin part's record's reader. -/
 abbrev acceptsR (rd : Msg → Option FinalP) (b : Brings) (aux : Msg → ℕ → Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ)
     (hd : Msg → Flock.RecRecord.Record) (rest : Msg → List (Msg × Out) → List UInt8)
     (fin : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))) (wE : Msg → ℝ)
@@ -358,10 +282,8 @@ abbrev acceptsR (rd : Msg → Option FinalP) (b : Brings) (aux : Msg → ℕ →
   PartAccepts FlockDeploy.sha512 (recR rd b aux nOf hd rest fin wE final w) (deployZkRec _root_.Flock.Readable.relation)
     (layR fin) Claims.Recursion.Form.Dense (showsPart recRead { b with tr := recTr aux nOf hd rest }) (cmtTr recRead)
 
-/-- **`RecursiveKS`'s premise at the deployed reader**: `Flock.Assumptions.RecKSDecomp` with `IVStar`'s last
-step `nextR rd` and its rows joined by `joinR`. At the brings whose transcript is the challenger's live-coin part's record, V\*'s bound
-layout and the deployed outer `--zk` record, wherever every part's circuit accepts at a dense compiled statement,
-`IVStar` accepts or two of the parts' recorded calls collide. -/
+/-- `Flock.Assumptions.RecKSDecomp` at the deployed reader: wherever every part's circuit accepts at a dense
+compiled statement, `IVStar` accepts or two of the parts' recorded calls collide. -/
 def RecKSDecompR (rd : Msg → Option FinalP) (b : Brings) (aux : Msg → ℕ → Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ)
     (hd : Msg → Flock.RecRecord.Record) (rest : Msg → List (Msg × Out) → List UInt8)
     (fin : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))) (wE : Msg → ℝ)
@@ -375,20 +297,13 @@ variable (rd : Msg → Option FinalP) {Q : Type} (rows : Msg → List Q) (holds 
   (fin : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))) (wE : Msg → ℝ)
   (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ)
 
-/-- The split verdict at the pieces, where the targets hold. -/
 abbrev splitR (h : Top.Targets rd rows holds acc) :=
   lastSplitP FlockDeploy.sha512 rd (Top.pieces rows) (Top.pholds holds) (Top.hpieces_of_targets rd rows holds acc h)
 
-/-- The inventory's holders at the split verdict. -/
 abbrev holdersR (ownB : Msg → VerdictR → Option ℕ) (ownQ : Msg → Top.Piece Q → Option ℕ) :=
   ownHolders (recR rd b aux nOf hd rest fin wE final w) (layR fin)
     (ownDeploy (ownJ (recR rd b aux nOf hd rest fin wE final w) (layR fin) (ownP ownB ownQ)))
 
-/-- **The top statement: `RecursiveKS`'s premise at `nextR`, from the targets.** At the deployed reader `rd`, the
-parts' pieces `rows` (what `holds` says of each) and the reps' accumulators `acc`: where every target holds (`h`), the
-owners are the statement's parts (`hR`), the checks no part holds hold off any witnesses (`hrest`), and each part's
-circuit accepting implies its share of the other checks (`hlowR`) and of the pieces, `dense` among them (`hlowP`),
-`RecKSDecompR` holds. -/
 theorem recKSDecompR_of_targets (h : Top.Targets rd rows holds acc) (ownB : Msg → VerdictR → Option ℕ)
     (ownQ : Msg → Top.Piece Q → Option ℕ)
     (hR : ∀ (x : Msg) (st : Claims.Recursion.CompiledStatement), (recR rd b aux nOf hd rest fin wE final w).parse x = some st →

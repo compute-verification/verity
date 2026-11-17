@@ -42,29 +42,7 @@ import Proofs.Flock.Claims.DeployK
 import Proofs.Flock.Claims.Recursion.SchedCount
 import Proofs.Flock.Soundness.Discharge.DecodeZL.Sizes
 
-/-!
-# The honest session's proofs are its reps'
-
-`honestRun_decides` decides at `honestPs`, proofs of the reps' sizes. Here the proofs are the honest session's own.
-
-* **File `k` is table `k / 2`'s rep** (`sessionP_repRuns`): at any number of tables, the plain session's `k`th proof
-  file encodes the proof `repP` returns on table `k / 2`'s setup, schedule, trace, packed table and level-0
-  commitment, with its extra claims at the link's points and rep `k % 2`'s salts and nonces, from the empty transcript
-  at the rep's domain, after the link's send and the earlier reps' (`sendsP`, `RepRunP`). A rep's proof carries its
-  commitment's cap (`repP_cap`).
-* **The files decode to honest reps** (`sessionS_reps`): at a `sessionS` run whose tables are `TableOk` with at most
-  2,048 extra claims at the first coin's link points, file `k` decodes at `shapeAt` to that proof (`filePs`), whose
-  cap, its table's, has the table's level-0 node count, and which is an honest rep of `repCtx` (`honestRep_of_repP`)
-  wherever its `finalC` is the zerocheck's at the reader's `z`; that `finalC` is the zerocheck's at the reply the
-  rep's `z` is read from (`zAtP`, `JsonRT.repP_finalC`). So the honest run's last message carries `filesAt` of
-  those proofs (`honestRun_files`).
-* **The honest run decides at its own proofs** (`sessionRun_decides`): `ReadsBack` at `filePs` and each table's cap
-  (`fileCaps`), wherever their rows fit a message (`RowsFit`), the last message reads as `filePs`, and the files'
-  `finalC` are at the reader's `z` (`FilesFinalC`, which `NextRCoins` proves where the replies are the coins' bytes).
-
-The session's tables are taken to number the spec's (`sts.size = spec.tables.size`), as the masked scope proves
-(`ZkTables.tables_of_setup`).
--/
+/-! The honest session's proofs are its reps', so the honest run decides at its own proofs. -/
 
 @[expose] public section
 
@@ -77,7 +55,6 @@ theorem range_map_getElem! {β : Type} [Inhabited β] (g : ℕ → β) {n i : �
   rw [getElem!_pos ((Array.range n).map g) i (by simpa using hi)]
   simp
 
-/-- **A rep's proof carries its commitment's cap.** -/
 theorem repP_cap (resp : ℕ → Claims.Msg) (hsP : Hashes PS) (st : Setup) (sch : Schedule) (tr : Trace)
     (tbl : Array F128) (cm0 : Commit) (extras : Array Claim) (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64)
     (t : Transcript) :
@@ -90,8 +67,6 @@ theorem repP_cap (resp : ℕ → Claims.Msg) (hsP : Hashes PS) (st : Setup) (sch
   rw [StateT.run_pure]
   exact FlockComplete.Ret.pure rfl
 
-/-- **Rep `k`'s sends** in the plain session (`Replay.repP_count`): its zerocheck's, lincheck's, its ring switch's at
-its table's extra claims at the link's points, and Ligerito's at its table's `fast100` schedule. -/
 def sendsP (resp : ℕ → Claims.Msg) (spec : SessionSpec) (tabs : Array Setup) (k : ℕ) : ℕ :=
   (3 + (tabs[k / 2]!.m - 6)) + (3 + (tabs[k / 2]!.fold.kLog - 6)) +
     (2 + (match tabs[k / 2]!.extra (ptsOf spec (coinOf (resp 0))) with
@@ -99,10 +74,6 @@ def sendsP (resp : ℕ → Claims.Msg) (spec : SessionSpec) (tabs : Array Setup)
       | .error _ => 0) + 1) +
     (((fast100 tabs[k / 2]!.m).getD default).k0 + 5 + 11 * (((fast100 tabs[k / 2]!.m).getD default).levels.size - 1))
 
-/-- **Rep `k`'s run** in the plain session: on table `k / 2`'s setup, schedule, trace, packed table and level-0
-commitment, with the table's extra claims `e` at the link's points and rep `k % 2`'s salts and nonces, `repP` returns
-`pt` from the empty transcript at the rep's domain, after the link's send and the earlier reps' (`sendsP`), and `f` is
-its proof's file. -/
 def RepRunP (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (spec : SessionSpec) (tabs : Array Setup)
     (schs : Array Schedule) (trs : Array Trace) (cms : Array Commit) (tape : Tape) (k : ℕ) (f : ByteArray) : Prop :=
   ∃ e pt l l', tabs[k / 2]!.extra (ptsOf spec (coinOf (resp 0))) = .ok e ∧
@@ -112,8 +83,6 @@ def RepRunP (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (spec : Se
         (Transcript.init #[] (spec.domain spec.tables[k / 2]! (k % 2)).toUTF8)).go l = (.ok pt, l') ∧
     f = FlockVBridge.Family.encodeProof (FlockComplete.shapeOf tabs[k / 2]! schs[k / 2]! e.size) pt.1
 
-/-- **The plain session, rep by rep**, at any number of tables: each table's `fast100` schedule and level-0
-commitment, and the `k`th proof file is rep `k`'s (`RepRunP`). -/
 theorem sessionP_repRuns (H : Claims.Msg → Claims.Msg) (resp : ℕ → Claims.Msg) (spec : SessionSpec)
     (tabs : Array Setup) (trs : Array Trace) (tape : Tape) (hts : tabs.size = spec.tables.size)
     {r : String × Array ByteArray} {bodies : Array Claims.Msg}
@@ -205,14 +174,11 @@ namespace FlockDeploy
 
 open Flock FlockComplete
 
-/-- **The proofs the session's files decode to**: file `k` at `shapeAt`, table `k / 2`'s shape at the first coin's
-link points. -/
 def filePs (spec : SessionSpec) (sts : Array Stmt) (c₁ : Coin) (pfs : Array ByteArray) : Array Flock.Proof :=
   pfs.mapIdx fun k b => match decodeProof (shapeAt (tabsOf sts) (pointsOf spec c₁) k) b with
     | .ok p => p
     | .error _ => default
 
-/-- Each table's cap: its first rep's. -/
 def fileCaps (spec : SessionSpec) (sts : Array Stmt) (c₁ : Coin) (pfs : Array ByteArray) :
     Array (Array ByteArray) :=
   (Array.range sts.size).map fun i => (filePs spec sts c₁ pfs)[2 * i]!.cap
@@ -233,17 +199,9 @@ theorem fileCaps_size (spec : SessionSpec) (sts : Array Stmt) (c₁ : Coin) (pfs
     (fileCaps spec sts c₁ pfs).size = sts.size := by
   simp only [fileCaps, Array.size_map, Array.size_range]
 
-/-- The reply rep `k`'s zerocheck reads its `z` from in the plain session: after the link's send and the earlier reps'
-(`JsonRT.sendsP`), the rep's third. -/
 def zAtP (resp : ℕ → Claims.Msg) (spec : SessionSpec) (sts : Array Stmt) (k : ℕ) : ℕ :=
   1 + ((List.range k).map (JsonRT.sendsP resp spec (tabsOf sts))).sum + 2
 
-/-- **The honest session's files decode to honest reps**: at a `sessionS` run whose replies start with the coin `c₁`,
-at tables that are `TableOk` with at most 2,048 extra claims at `c₁`'s link points, there are two files a table, and
-file `k` decodes at `shapeAt` to the proof table `k / 2`'s rep returned (`filePs`), whose cap is its table's, of the
-table's level-0 node count, which is an honest rep of `repCtx` at the coins `cs` wherever its `finalC` is the
-zerocheck's at that rep's `z`, whose `finalC` is the zerocheck's at the reply `zAtP`, and which is shaped at
-`shapeAt`. -/
 theorem sessionS_reps {H : Claims.Msg → Claims.Msg} (h64 : Claims.Out64 H) {resp : ℕ → Claims.Msg}
     {spec : SessionSpec} {sts : Array Stmt} {w : Claims.Flock.Wit} {ω : Tape} {c₁ : Coin} (hc : resp 0 = c₁.bytes)
     (hts : sts.size = spec.tables.size)
@@ -317,9 +275,6 @@ theorem sessionS_reps {H : Claims.Msg → Claims.Msg} (h64 : Claims.Out64 H) {re
   refine ⟨h1, h2, h3, ?_, h5, h6⟩
   rw [h4, h4', show 2 * (k / 2) / 2 = k / 2 by omega]
 
-/-- **The honest run's last message carries its reps' proofs**: at a statement that sets up, where the pure session
-returns, the last message is `Final.encode` of the statement, the record and `filesAt` of the proofs its files decode
-to (`filePs`), each an honest rep (`sessionS_reps`). -/
 theorem honestRun_files {H : Claims.Msg → Claims.Msg} (h64 : Claims.Out64 H) {x : Claims.Msg}
     {w : Claims.Flock.Wit} {ω : Tape} {k : ℕ} (r : Fin k → Coin) {s : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hx : setupOf false x = some (s, spec, sts)) (hts : sts.size = spec.tables.size)
@@ -340,19 +295,13 @@ theorem honestRun_files {H : Claims.Msg → Claims.Msg} (h64 : Claims.Out64 H) {
   rw [hf]
   exact FlockComplete.honestRun_eq H x w ω r hx hS
 
-/-- **The honest files' `finalC` is the zerocheck's at the reader's `z`**: each proof the files decode to
-(`filePs`) has `finalC` at its rep's `z` in the coins `cs` (`repCtx`). This is plain zerocheck completeness at the
-reader's coin: `sessionRun_decides` takes it, and `filesFinalC` proves it where the replies are the coins' bytes. -/
+/-- Plain zerocheck completeness at the reader's coin, which `filesFinalC` proves where the replies are the coins'
+bytes. -/
 def FilesFinalC (spec : SessionSpec) (sts : Array Stmt) (c₁ : Coin) (cs : List Coin) (pfs : Array ByteArray) :
     Prop :=
   ∀ k < pfs.size, (filePs spec sts c₁ pfs)[k]!.zerocheck.finalC =
     dot (lagrange nodesL den6Inv (repCtx spec sts c₁ [] cs k).z) (filePs spec sts c₁ pfs)[k]!.zerocheck.round1c
 
-/-- **The honest run decides at its own proofs**: at a statement that sets up, where the pure session returns at
-replies that start with the first coin `c₁` and its tables are `TableOk` with at most 2,048 extra claims at `c₁`'s link
-points, `decR` decides on the honest messages from the proofs the session's files decode to (`filePs`) and their
-tables' caps (`fileCaps`), wherever their rows fit a message, the last message reads as `filePs` at the statement and
-the files' `finalC` are at the reader's `z` (`FilesFinalC`). The files decode to proofs shaped for them. -/
 theorem sessionRun_decides {H : Claims.Msg → Claims.Msg} (h64 : Claims.Out64 H) {rd : Claims.Msg → Option FinalP}
     {x last : Claims.Msg} {cs : List Coin} {s : Ins} {spec : SessionSpec} {sts : Array Stmt} {c₁ : Coin}
     {resp : ℕ → Claims.Msg} {w : Claims.Flock.Wit} {ω : Tape} {Ts : ℕ → F128} {fl : FinalP}

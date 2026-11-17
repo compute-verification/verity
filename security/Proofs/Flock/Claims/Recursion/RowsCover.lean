@@ -37,20 +37,7 @@ import Proofs.Flock.C3.VStarList.Shape
 import Proofs.Flock.Claims.Recursion.DeployScope
 import Std.Tactic.BVDecide.Normalize.Bool
 
-/-!
-# Every absorbing stream round is a part's row (`RowsCover`), from the verifier's checks
-
-`RowsCover` (`LayoutBCap.lean`) asks, at every compiled statement, that each stream round absorbing a message be held
-by some part through a port under its `rec-c<k>` (`heldRows`). Two checks give it at every shape:
-
-* **V\*'s list** (`RecVStar.checkRoundsListed`, in `RecVStar.statements`): each `k`-th message round of the inner
-  shape's rep schedule is a message-round port of one of the list's statements, `rec-c<k>` at both reps' rows
-  (`RecVStar.roundListed`). A list without one is refused.
-* **The parts' circuits** (`portsNamed`, in `readX`): part `s`'s circuit has a port of each name its statement
-  registers under a `rec-c<k>`. Each session refuses a part without (`checkOwn`, `checkPubRows`).
-
-`rowsCover`: `RowsCover` at every shape. `ksLin2_deployed_rows` is `ksLin2_deployed_tops` with it discharged.
--/
+/-! Every absorbing stream round is a part's row (`RowsCover`), from the verifier's checks. -/
 
 @[expose] public section
 
@@ -60,7 +47,6 @@ open Flock
 open Claims (Msg)
 open FlockDeploy (Coin)
 
-/-- **V\*'s list holds every message round a rep absorbs** wherever it builds (`RecVStar.checkRoundsListed`). -/
 theorem roundsListed_of_statements {i : RecVStar.Inner} {ss : Array VStar.Stmt}
     (h : RecVStar.statements i = .ok ss) : RecVStar.checkRoundsListed i ss = .ok () := by
   unfold RecVStar.statements at h
@@ -89,7 +75,6 @@ theorem roundsListed_of_statements {i : RecVStar.Inner} {ss : Array VStar.Stmt}
   cases u''
   exact hu
 
-/-- **Each rep's `k`-th message round is listed** where `checkRoundsListed` passes, at the shape's rep schedule. -/
 theorem roundListed_of_check {i : RecVStar.Inner} {ss : Array VStar.Stmt} {rs : Array RecVStar.SchedRound}
     (hrs : repSched i = some rs) (h : RecVStar.checkRoundsListed i ss = .ok ()) {k : ℕ}
     (hk : k < (RecVStar.commitRounds rs).length) : RecVStar.roundListed ss k = true := by
@@ -103,9 +88,6 @@ theorem roundListed_of_check {i : RecVStar.Inner} {ss : Array VStar.Stmt} {rs : 
   | none =>
     simpa using List.find?_eq_none.1 hf k (List.mem_range.2 hk)
 
-/-- What `readX` read of V*'s list and the parts: the list builds at the verifier's own inner shape, the parts number
-as its statements, each part's circuit names its statement's message-round ports (`portsNamed`), and the last part's
-circuit has RecCap's port `top` (`capPorted`). -/
 theorem readX_listed {x : Msg} {r : XR} (h : readX x = some r) :
     ∃ vs, RecVStar.statements r.shape = .ok vs ∧ r.w.parts.length = vs.size ∧ portsNamed r.w.parts vs = true ∧
       capPorted r.w.parts = true := by
@@ -121,7 +103,6 @@ theorem readX_listed {x : Msg} {r : XR} (h : readX x = some r) :
   obtain ⟨h2, h3⟩ := not_or.1 h2
   exact ⟨vs, toOption_eq_some hvs, not_not.1 h1, by simpa using h2, by simpa using h3⟩
 
-/-- **A part's circuit has each port its statement registers under a `rec-c<k>`**, where `portsNamed` passes. -/
 theorem port_of_portsNamed {parts : List PartX} {vs : Array VStar.Stmt} (h : portsNamed parts vs = true) {s : ℕ}
     (hs : s < vs.size) {q : String × String × Array (Option ℕ)} (hq : q ∈ RecVStar.ownPorts vs[s])
     {k : ℕ} (hk : RecVStar.cIndex q.2.1 = some k) :
@@ -141,10 +122,6 @@ theorem port_of_portsNamed {parts : List PartX} {vs : Array VStar.Stmt} (h : por
     rw [← Option.isSome_iff_exists]
     rw [Array.findIdx?_isSome]; exact hany
 
-/-- **`RowsCover` at every shape**: a stream round `j` that absorbs a message is rep `j / R`'s round `j % R` (`R` the
-rep schedule's rounds), its `k`-th message round for some `k` (`RecVStar.commitRounds`). V*'s list registers `rec-c<k>`
-at both reps' rows in some statement `s` (`roundsListed_of_statements`), and part `s`'s circuit has that port
-(`readX_listed`), so part `s` holds rep `j / R`'s row of round `j` (`heldRows`). -/
 theorem rowsCover (shape : Claims.Recursion.Form → Prop) : RowsCover shape := by
   intro x st _ _ r j sr hr hsr _ hA
   obtain ⟨vs, hvs, hlen, hpn, -⟩ := readX_listed hr
@@ -203,12 +180,8 @@ theorem rowsCover (shape : Claims.Recursion.Form → Prop) : RowsCover shape := 
     simp only [hck]
     exact List.mem_filterMap.2 ⟨some (j / rs.size), hrow, by simp [hmr, hqi]⟩
 
-/-- **`KSLin2` at the deployment's dense statements, at `layoutBTops`, with the rows' ports discharged**:
-`ksLin2_deployed_tops` with `RowsCover` from `rowsCover`. What stays at the dense form is the schedule (`SchedMatches`),
-RecCap's port (`CapPorts`), the last round's pieces (`FinPieces`, which holds at `finOpen`: `finPieces_finOpen`), and
-`VstarShowsB`, `PartChecksBV`, `PartOpensB` and `DecompB`; then `RunPairs` and the readers' three facts. This bounds no
-number by itself: those premises are open.
--/
+/-- This bounds no number by itself: `SchedMatches`, `CapPorts`, `FinPieces`, `VstarShowsB`, `PartChecksBV`,
+`PartOpensB`, `DecompB`, `RunPairs` and the readers' three facts are open. -/
 theorem ksLin2_deployed_rows (b : Brings) (fin : Msg → List (ℕ × List (Msg × List HmNets.Lin))) (wE : Msg → ℝ)
     (join : List Msg → Msg) (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ) :
     let L := layoutBTops fin

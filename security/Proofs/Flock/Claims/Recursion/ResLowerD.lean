@@ -37,36 +37,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Recursion.DeployScope
 
-/-!
-# The port facts `ResLowered` reads at the deployed constants
-
-`resPieces_computesAt` asks, at each piece a part owns, that the rows its copy reads (`rowsRead … (keyCopy …)`) be what
-`elemAt` reads off the opened messages and the coins. At `elemAt := Rows.elemReadC (Top.accRC rd key)` that holds on
-the frame ports only. On the accumulator ports (`acc0`, `acc1`, `portSizes`' last two, `w`'s last four elements past
-`accBase`) `accRC` reads `Top.chainC`, a chain chosen among those that carry row D's running sums (`ChainHolds`).
-`accHolds` steps each row from the one before it, so the chain's row 0 is free, and the copy's accumulators (the outer
-witness's own chain) are `accRC`'s up to one offset `δ c` per component `c`, shared by `acc0 c` and `acc1 c` (the
-chain step is additive, `consTerm`). The final check's residuals read the two as `acc1 c + acc0 c`
-(`RecAlgebra.accTerms`), so they vanish at the one where they vanish at the other.
-
-* `accBase X`, `elemPort X p e`: where `w`'s accumulators start, and the `w` index of group `p`'s row element `e`
-  (`Rows.portAt`), at the inner statement's setup.
-* `accOff X p δ e`: the offset at row element `e`: `δ ((j - accBase X) % 2)` at an accumulator `j`, else `0`.
-* `PartDec`, `showsDec`: part `s`'s own decision at its staged statement, and `showsPart` with it.
-* `PortsAt`: a piece's context, at a joint acceptance with each part at its own witness (`JointP`).
-* `PortsAtV`: `PortsAt` with the parts' staged statements `xs`: each part's check and decision there (`AccV`), and no
-  collision with the verifier's evaluations at `xs` (what `JointV` over `showsDec` gives).
-* `FramePorts`: on every frame port, the copy's row is `elemReadC acc`'s, at every `acc` (P2).
-* `AccPorts`: on the accumulator ports, in `PortsAtV`, the copy's row is `elemReadC (Top.accRC rd key)`'s plus one
-  `δ` (P3).
-* `ResLoweredP`: `ResLowered` at `JointP`, which KS holds where it reads `hres`; `resLowJP_of_resLoweredP` gives
-  `DecompBR.ResLowJP`.
-`ResLowerDD`'s `resLowered_D` is `ResLoweredPD` (at `JointV` over `showsDec`, part `s`'s own decision beside its
-staged statement) at the deployed constants from P2 and P3.
-
-Nothing downstream of `ResLoweredP` reads `accRC`'s values themselves: it concludes `resHolds`, the vanishing of each
-piece's residuals (`ResZero`), and that is all `ResLowJP` and KS's row R take from it.
--/
+/-! The port facts `ResLowered` reads at the deployed constants: P2 on the frame ports, and P3 on the accumulator ports up to one offset the residuals cancel. -/
 
 @[expose] public section
 
@@ -79,66 +50,49 @@ open Claims.Recursion.VStarB
 
 noncomputable section
 
-/-- Where the accumulators start in the inner statement's `w`: past table 0's rounds' elements (`portSizes`). -/
 def accBase (xi : Msg) : ℕ :=
   match setupOf false xi with
   | some v => (_root_.Flock.RecAlgebra.rounds (Rows.shapeNoCoin v.2.1 v.2.2)).flatten.size
   | none => 0
 
-/-- Row element `e` of group `p`, as an index of the inner statement's `w` (`Rows.portAt`). -/
 def elemPort (xi : Msg) (p e : ℕ) : Option ℕ :=
   match setupOf false xi with
   | some v => Rows.portAt (Rows.shapeNoCoin v.2.1 v.2.2) p e
   | none => none
 
-/-- **The accumulators' offset** at group `p`'s row element `e`: `δ c` at `acc0 c` and `acc1 c` (`w`'s elements
-`accBase X + c` and `accBase X + 2 + c`), `0` elsewhere. -/
 def accOff (xi : Msg) (p : ℕ) (δ : ℕ → _root_.Flock.F128) (e : ℕ) : _root_.Flock.F128 :=
   match elemPort xi p e with
   | some j => if accBase xi ≤ j then δ ((j - accBase xi) % 2) else 0
   | none => 0
 
-/-- The compiled record at the deployed layout. -/
 abbrev DRL (rd : Msg → Option FinalP) (wE : Msg → ℝ) (final : Msg → Option (List (List (Msg × Salt)) × Msg))
     (w : Msg → ℝ) (b : Brings) (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))) :
     Claims.Recursion.Deploy Coin :=
   recBound _root_.Flock.Readable.relation b (DeployedR.layR elem) (_root_.RecDeploy.bdR rd wE final w).IVStar
 
-/-- What each part's circuit accepts at the deployed layout, at its own witness. -/
 abbrev AccP (rd : Msg → Option FinalP) (wE : Msg → ℝ) (final : Msg → Option (List (List (Msg × Salt)) × Msg))
     (w : Msg → ℝ) (b : Brings) (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin)))
     (shape : Claims.Recursion.Form → Prop) (untr : TrReader) (cmt : Msg → ℕ → Msg → Msg) :=
   PartAcceptsP FlockDeploy.sha512 (DRL rd wE final w b elem) (deployZkRec _root_.Flock.Readable.relation)
     (DeployedR.layR elem) shape (showsPart untr b) cmt
 
-/-- **Part `s`'s decision**: the session at its staged statement `xO` decided, and its checks (`sampleDesign`, `sampleEq`) and
-last refusals (`fullSampleO`) passed. -/
 def PartDec (xO : Msg) (i : RecIns) : Prop :=
   ∃ (spec' : SessionSpec) (link : List ByteArray × List ByteArray) (c₁ : Coin) (mids : List (Msg × Coin))
     (f : FlockDeploy.Final), FlockDeploy.checks true i.base spec' xO link c₁ mids f = .ok () ∧ fullSampleO xO f = true
 
-/-- **What part `s` shows, with its decision**: `showsPart`, and part `s`'s own decision (`PartDec`) wherever its staged
-statement sets up. -/
 def showsDec (untr : TrReader) (b : Brings) (s : ℕ) (x xO : Msg) (c : ℕ → Coin) : Prop :=
   showsPart untr b s x xO c ∧ ∀ (i : RecIns) (spec : SessionSpec) (sts : Array Stmt),
     setupO xO = some (i, spec, sts) → PartDec xO i
 
-/-- What each part accepts at the deployed layout, at its staged statement `xO` and its own witness, showing its
-decision. -/
 abbrev AccV (rd : Msg → Option FinalP) (wE : Msg → ℝ) (final : Msg → Option (List (List (Msg × Salt)) × Msg))
     (w : Msg → ℝ) (b : Brings) (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin)))
     (shape : Claims.Recursion.Form → Prop) (untr : TrReader) (cmt : Msg → ℕ → Msg → Msg) :=
   PartAcceptsV FlockDeploy.sha512 (DRL rd wE final w b elem) (deployZkRec _root_.Flock.Readable.relation)
     (DeployedR.layR elem) shape (showsDec untr b) cmt
 
-/-- **The parts' statements `xs` staged at one prefix `ms` of messages**: the first `n` of them are `staged st x ms`'s,
-as an accepted run's V\* statements are (`RecDeploy.okRuns_deployRec`). The commit ties between two parts read both
-parts' rows at one `ms` (`accCommit_eq`). -/
 abbrev XsStaged (st : Stage) (x : Msg) (xs : List Msg) (n : ℕ) : Prop :=
   ∃ ms : List (Msg × Claims.Out), ∀ s < n, xs.getD s [] = staged st x ms s
 
-/-- Past `xs`'s end `getD` reads `[]`, which doesn't set up (`insO_nil`): a part's staged statement that sets up is one
-of `xs`. -/
 theorem getD_mem_of_setup {xs : List Msg} {s : ℕ} {v : RecIns × SessionSpec × Array Stmt}
     (h : setupO (xs.getD s []) = some v) : xs.getD s [] ∈ xs := by
   rw [List.getD_eq_getElem?_getD] at h ⊢
@@ -148,15 +102,8 @@ theorem getD_mem_of_setup {xs : List Msg} {s : ℕ} {v : RecIns × SessionSpec �
   · rw [List.getElem?_eq_none (by omega)] at h
     simp [setupO, insO_nil] at h
 
-/-- **A piece's port context**: at a compiled statement `x` of the shape, every part accepts at its own witness and the
-parts' own messages `ms = (layR elem).msgs x ws` (`JointP`: the calls of all parts true and free of collisions
-together), part `s`'s V\* statement is an algebra part, and at its witness `wt = ws[s]` and a staged statement `xO`
-that passes `Flock.check`, agrees with the messages and records true calls with no collision, `q` is a
-`rec-residuals` piece it owns (`resPD`, `ownRD`), at table 0's part `(S, ns, nv)`, and the last message reads as
-`(os, last)`. `P` is what holds there.
-
-Per-part acceptance is not enough: one part's `PartAccepts` leaves free the rounds it doesn't hold first (and with
-them the last message's trailer, which `elemReadC` reads), and the accumulator rows other parts' chain steps tie. -/
+/-- Per-part acceptance is not enough: one part's `PartAccepts` leaves free the rounds it doesn't hold first, and
+the accumulator rows other parts' chain steps tie. -/
 def PortsAt (rd : Msg → Option FinalP) (wE : Msg → ℝ) (final : Msg → Option (List (List (Msg × Salt)) × Msg))
     (w : Msg → ℝ) (b : Brings) (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin)))
     (shape : Claims.Recursion.Form → Prop) (untr : TrReader) (cmt : Msg → ℕ → Msg → Msg)
@@ -191,11 +138,6 @@ def PortsAt (rd : Msg → Option FinalP) (wE : Msg → ℝ) (final : Msg → Opt
           (Claims.Recursion.xI (DRL rd wE final w b elem) x))).map c)
         ((_root_.RecDeploy.bdR rd wE final w).opened os last) p ht wt q ns nv
 
-/-- **`PortsAt` at the parts' staged statements `xs`**: `PortsAt`'s context, with every part's check at
-`xs.getD s' []` showing its decision (`AccV`), no collision among the recorded calls and the verifier's own
-evaluations at `xs` (`setupCalls`), `xs` staged at one prefix of messages (`XsStaged`), and part `s`'s statement `xO`
-the one at `xs.getD s []`. This is what `JointV` over `showsDec` gives at an accepted run; a commit tie between two parts (`accCommit_eq`) reads both parts' setups and decisions, and the
-collision, there (`getD_mem_of_setup` puts each staged statement in `xs`). -/
 def PortsAtV (rd : Msg → Option FinalP) (wE : Msg → ℝ) (final : Msg → Option (List (List (Msg × Salt)) × Msg))
     (w : Msg → ℝ) (b : Brings) (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin)))
     (shape : Claims.Recursion.Form → Prop) (untr : TrReader) (cmt : Msg → ℕ → Msg → Msg)
@@ -235,10 +177,6 @@ def PortsAtV (rd : Msg → Option FinalP) (wE : Msg → ℝ) (final : Msg → Op
           (Claims.Recursion.xI (DRL rd wE final w b elem) x))).map c)
         ((_root_.RecDeploy.bdR rd wE final w).opened os last) p ht wt q ns nv
 
-/-- **P2, the frame ports**: in a piece's port context, on every row element of its group whose `w` index is a frame
-value (below `accBase`), the copy's row is what `elemReadC acc` reads, at every `acc`, where the opened messages decode
-(`Rows.DecAt`, which `ReadsAt` and `BasesHold` give at a joint acceptance; at one, `shI_alg` (ResLowerDA) ties `shI` to
-table 0's `shapeNoCoin`). -/
 def FramePorts (rd : Msg → Option FinalP) (wE : Msg → ℝ) (final : Msg → Option (List (List (Msg × Salt)) × Msg))
     (w : Msg → ℝ) (b : Brings) (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin)))
     (shape : Claims.Recursion.Form → Prop) (untr : TrReader) (cmt : Msg → ℕ → Msg → Msg) : Prop :=
@@ -248,11 +186,6 @@ def FramePorts (rd : Msg → Option FinalP) (wE : Msg → ℝ) (final : Msg → 
       j < accBase xi →
       _root_.Flock.Readable.rowsRead ns nv (keyCopy p ht wt q.key) e = Rows.elemReadC acc xi ms' cs q.key e
 
-/-- **P3, the accumulator ports**: in a piece's port context at the parts' staged statements (`PortsAtV`: every part's
-setup and decision, and the collision with the verifier's evaluations, which the chain's commit ties read), at a
-decision of the opened messages (`Rows.DecAt`, which `resLowered_D` derives from `ReadsAt` and the base checks), one
-offset `δ` such that on every row element of its group whose `w` index is an accumulator (`accBase X + i`, `i < 4`:
-`acc0 0, acc0 1, acc1 0, acc1 1`), the copy's row is what `elemReadC (Top.accRC rd key)` reads plus `δ (i % 2)`. -/
 def AccPorts (rd : Msg → Option FinalP) (key : ℕ → ℕ → ℕ → ℕ → ℕ × ℕ × ℕ × ℕ) (wE : Msg → ℝ)
     (final : Msg → Option (List (List (Msg × Salt)) × Msg))
     (w : Msg → ℝ) (b : Brings) (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin)))
@@ -263,9 +196,6 @@ def AccPorts (rd : Msg → Option FinalP) (key : ℕ → ℕ → ℕ → ℕ →
       _root_.Flock.Readable.rowsRead ns nv (keyCopy p ht wt q.key) e =
         Rows.elemReadC (Top.accRC rd key) xi ms' cs q.key e + δ ((j - accBase xi) % 2)
 
-/-- **`resPieces_computesAt` at a pinned witness and statement** (`PartAcceptsV`): the same share, asked only at the
-part's own witness `w` and its staged statement `xO`, at any `shows` that implies `showsPart` (which `hpc` then reads
-whole). -/
 theorem resPieces_computesV {H : Msg → Msg} {D : Claims.Recursion.Deploy Coin} {L : LayoutB}
     {shape : Claims.Recursion.Form → Prop} {untr : TrReader} {b : Brings} {cmt : Msg → ℕ → Msg → Msg} {s : ℕ}
     {x : Msg} {c : ℕ → Coin} {xO : Msg} {w : Claims.Flock.Wit} {ms : List Msg}
@@ -323,8 +253,6 @@ theorem resPieces_computesV {H : Msg → Msg} {D : Claims.Recursion.Deploy Coin}
   obtain ⟨rfl, -, htie, hE⟩ := hch m k cl jj sh holo S ns nv h1 h2 h3 h4
   exact hE os last hf hl (resVal_zero_of_tie hro htie)
 
-/-- **`resPieces_computesAt` at a pinned witness** (`PartAcceptsP`): `resPieces_computesV` at the statement the part's
-acceptance names. -/
 theorem resPieces_computesP {H : Msg → Msg} {D : Claims.Recursion.Deploy Coin} {L : LayoutB}
     {shape : Claims.Recursion.Form → Prop} {untr : TrReader} {b : Brings} {cmt : Msg → ℕ → Msg → Msg} {s : ℕ}
     {x : Msg} {c : ℕ → Coin} {w : Claims.Flock.Wit} {ms : List Msg} {shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop}
@@ -366,9 +294,6 @@ theorem resPieces_computesP {H : Msg → Msg} {D : Claims.Recursion.Deploy Coin}
   exact resPieces_computesV hsP ⟨hst, hck, hT, hc, hs, hh, hp, hm, hrw⟩ hr hss hsv Bd pieces ownQ elemAt vvAt
     (hpc xO)
 
-/-- **`ResLowered` at the parts' own witnesses**: at a compiled statement of the shape where every part accepts at its
-own witness and the parts' own messages (`JointP`), each algebra part's `rec-residuals` pieces hold
-(`resHolds elemAt vvAt`). This is the acceptance KS holds where it reads `hres` (`RestLowR`'s `hJ`). -/
 def ResLoweredP (rd : Msg → Option FinalP) (wE : Msg → ℝ) (final : Msg → Option (List (List (Msg × Salt)) × Msg))
     (w : Msg → ℝ) (b : Brings) (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin)))
     (shape : Claims.Recursion.Form → Prop) (untr : TrReader) (cmt : Msg → ℕ → Msg → Msg)
@@ -394,8 +319,6 @@ open Claims (Msg Out)
 open FlockDeploy (Coin FinalP)
 open Claims.Recursion.VStarB
 
-/-- **`ResLowJP` at the deployed layout from `ResLoweredP`**: the two are one statement at the brings `bB`, `Dense`,
-`recRead` and `cmtTr recRead`. -/
 theorem resLowJP_of_resLoweredP (rd : Msg → Option FinalP) (b : Brings) (aux : Msg → ℕ → Flock.RecRecord.Round)
     (nOf : Msg → ℕ → ℕ) (hd : Msg → Flock.RecRecord.Record) (rest : Msg → List (Msg × Out) → List UInt8)
     (wE : Msg → ℝ) (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ)

@@ -40,26 +40,7 @@ import Proofs.Flock.Soundness.Discharge.Hm.Bc
 import Proofs.Flock.Soundness.Discharge.Layout.OutShape
 import Proofs.Flock.VBridge.Pinned
 
-/-!
-# A level part's copy's `out` columns are its instance's `out` row (`OutSlotTie`'s column read)
-
-`OutSlotTie` asks, at a level part's piece `q`, for an opening `i < n` of the part's `out` port whose row's node is
-what the copy (`copyAtR`, instance `N = rep · q_l + query`) holds at `Family.outCol L H`, and whose slot carries
-RecCap's `top` commit string at `capIdx`. The instance is the copy's own, `N`:
-
-* `colsHold_out`: at a circuit `RecOpen.check` accepts at `rec-open/l<L>-h<H>`, `out` is output row 0 (`nIn = 5`, its
-  rows' names), at the copy's columns from `Family.outCol L H` (`colsHold_outRow` at row 0);
-* `outBytes_staged`: at a staged level part, its output rows one port each (`staged_hidden`, `outRowPorts_hidden`),
-  the copy's 64 bytes at `outCol` are the node of instance `m`'s `out` row (`bytesAt_node`, `bytesAt_of_cols`);
-* `outSlotTie_of`: `OutSlotTie` from the two facts the column read doesn't give, `OutIdxLt` (`N < n`) and
-  `OutCommitTie` (the two slots' commit strings at `N` and `capIdx`), and `outBindRP_of_leaves` the binding at
-  `layR` from them.
-
-`OutCommitTie` reads across two parts' setups: the level's `out` reads `rec-top-L<l>` at each opening's node
-(`RecCoins.checkLink`) and RecCap's `top` reads it at every node in order (`RecCoins.checkCap`), so the two slots are
-openings of one registration at one position, which bind only up to a collision among the setups' own evaluations
-(`setupCalls`), outside `JointP`'s escape.
--/
+/-! A level part's copy's `out` columns are its instance's `out` row; `OutCommitTie` binds only up to a collision among the setups' own evaluations, outside `JointP`'s escape. -/
 
 @[expose] public section
 
@@ -71,9 +52,6 @@ open Claims.Recursion.VStarB
 open FlockVBridge (ColsHold)
 open RecDeploy.ResLower (staged_hidden)
 
-/-- **A rec-open copy's `out` columns hold its unit's `out` row**: at a circuit `RecOpen.check` accepts at
-`rec-open/l<L>-h<H>`, of V*'s seven rows, one output port per output row, `out` is output row 0 (`colsHold_accOut`'s
-argument at row 0), at the copy's columns from `Family.outCol L H`. -/
 theorem colsHold_out {p : Flock.Readable.Parsed} (h1 : p.sts.size = 1) (h0 : 0 < p.sts.size) {c : Circuit}
     (hc0 : p.sts[0].c = c) {tags : Flock.Tags} (P : FlockSoundness.ParseFacts tags c) (ho : c.outNet = c.unitNet)
     {LANES HH : ℕ} (hn : c.unit.name = Flock.RecOpen.unitName LANES HH) (hsz : c.ports.size = 7)
@@ -129,7 +107,6 @@ theorem colsHold_out {p : Flock.Readable.Parsed} (h1 : p.sts.size = 1) (h0 : 0 <
   simp only [Nat.mul_zero, Nat.add_zero] at this
   exact this
 
-/-- The first 64 of 128 bytes a copy holds are their node (`nodeOf`). -/
 theorem bytesAt_node (f : ℕ → Bool) (base : ℕ) :
     FlockVBridge.Family.bytesAt f base 64 = FlockDeploy.nodeOf (FlockVBridge.Family.bytesAt f base 128) := by
   unfold FlockDeploy.nodeOf FlockVBridge.Family.bytesAt
@@ -137,9 +114,6 @@ theorem bytesAt_node (f : ℕ → Bool) (base : ℕ) :
   rw [← List.map_take, List.take_range]
   rfl
 
-/-- **The copy's `out` columns at a staged level part**: at a staged `.recOpen lv L H n` part with circuit `c`, whose
-output rows are one port each (hidden outputs, `outRowPorts_hidden`), copy `m` of its one table holds at
-`Family.outCol L H` the node of instance `m`'s `out` row. -/
 theorem outBytes_staged {st : Stage} {s : ℕ} {x xO : Msg} (hS : StagedPart st s x xO) {p : Flock.Readable.Parsed}
     (hx : Flock.Readable.parseBytes readOfO xO = some p) (h0 : 0 < p.sts.size) {r : XR} (hr : readX x = some r)
     {ss : Array VStar.Stmt} (hss : Flock.RecVStar.statements r.shape = .ok ss) {lv LANES HH n : ℕ}
@@ -180,16 +154,12 @@ variable (H : Msg → Msg) (D : Claims.Recursion.Deploy Coin) (shape : Claims.Re
   (untr : TrReader) (b : Brings) (cmt : Msg → ℕ → Msg → Msg) (L : LayoutB)
   (Bd : Claims.Recursion.Bound Coin (List FlockLevel3.GF128) Claims.Flock.PlainTrace)
 
-/-- **The piece's copy is one of the level statement's instances**: at a level part's piece, its instance
-`rep · q_l + query` (`copyAtR`'s) is below the statement's `n`. -/
 def OutIdxLt (pieces : Msg → List OpenPiece) : Prop :=
   AtPiecesP H D shape untr b cmt L pieces fun x _ _ LANES HH s _ _ _ _ q =>
     ∀ (r : XR) (ss : Array VStar.Stmt), readX x = some r → _root_.Flock.RecVStar.statements r.shape = .ok ss →
     ∀ (lv n : ℕ), ss[s]? = some (.recOpen lv LANES HH n) →
       q.rep * qAt (Claims.Recursion.xI D x) q.level + q.query < n
 
-/-- **The two slots carry one commit string** (`OutSlotTie`'s tie, at the copy's instance): the level part's `out`
-slot at the piece's instance `rep · q_l + query` and RecCap's `top` slot at `capIdx`. -/
 def OutCommitTie (pieces : Msg → List OpenPiece) (posAt : Msg → List Coin → OpenPiece → ℕ) : Prop :=
   AtPiecesP H D shape untr b cmt L pieces fun x c ws LANES HH s _ w _ _ q =>
     ∀ (r : XR) (ss : Array VStar.Stmt), readX x = some r →
@@ -204,9 +174,6 @@ def OutCommitTie (pieces : Msg → List OpenPiece) (posAt : Msg → List Coin �
           readForms w' (hmCommit c' qc (capIdx (Claims.Recursion.xI D x) q
             (posAt (Claims.Recursion.xI D x) ((List.range (Bd.DE.V.k (Claims.Recursion.xI D x))).map c) q) HH))
 
-/-- **`OutSlotTie` from its tie**: the opening is the copy's own instance, below `n` (`OutIdxLt`), whose slot carries
-RecCap's commit string (`OutCommitTie`); the copy's `out` columns are its row's node at every staged part
-(`outBytes_staged`). -/
 theorem outSlotTie_of (pieces : Msg → List OpenPiece) (posAt : Msg → List Coin → OpenPiece → ℕ)
     (hI : OutIdxLt H D shape untr b cmt L pieces) (hC : OutCommitTie H D shape untr b cmt L Bd pieces posAt) :
     OutSlotTie H D shape untr b cmt L Bd pieces posAt := by
@@ -218,8 +185,6 @@ theorem outSlotTie_of (pieces : Msg → List OpenPiece) (posAt : Msg → List Co
       hqo s' N' c' w' qc hs' hc' hw' hqc hlt, ?_⟩
   exact outBytes_staged hst.2.2.2.2.2.2.2.2 hst.1 ht hr' hss' hsv' hcc hqo w _
 
-/-- **`OutIdxLt` from the pieces' range**: a piece is of rep 0 or 1 and one of its level's `q_l` queries
-(`PiecesInRangeR`), and its level statement has `n = 2 q_l` (`levelMatch`), as in `copyFitsR_of`. -/
 theorem outIdxLt_of (pieces : Msg → List OpenPiece) (hP : ∀ x, D.parse x = parse x)
     (hS : ∀ f, shape f → Claims.Recursion.Form.Dense f) (hR : PiecesInRangeR pieces) :
     OutIdxLt H D shape untr b cmt L pieces := by
@@ -245,7 +210,6 @@ theorem outIdxLt_of (pieces : Msg → List OpenPiece) (hP : ∀ x, D.parse x = p
   have h1 : q.rep * Q ≤ 1 * Q := Nat.mul_le_mul_right _ (by omega)
   omega
 
-/-- **The binding at the layout of record, from the tie**: `outBindRP_of_slot` off `outSlotTie_of`. -/
 theorem outBindRP_of_leaves (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin)))
     (pieces : Msg → List OpenPiece) (posAt : Msg → List Coin → OpenPiece → ℕ)
     (hI : OutIdxLt FlockDeploy.sha512 D shape untr b cmt (DeployedR.layR elem) pieces)
@@ -254,8 +218,6 @@ theorem outBindRP_of_leaves (elem : (r : XR) → List (Fin r.w.parts.length × L
   outBindRP_of_slot D shape untr b cmt Bd elem pieces posAt
     (outSlotTie_of FlockDeploy.sha512 D shape untr b cmt (DeployedR.layR elem) Bd pieces posAt hI hC)
 
-/-- **The binding at the layout of record, from the commit tie alone**, at pieces in range (row D's are,
-`piecesInRangeR_rowDPieces`). -/
 theorem outBindRP_of_tie (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin)))
     (pieces : Msg → List OpenPiece) (posAt : Msg → List Coin → OpenPiece → ℕ)
     (hP : ∀ x, D.parse x = parse x) (hS : ∀ f, shape f → Claims.Recursion.Form.Dense f)

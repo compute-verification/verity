@@ -39,25 +39,7 @@ import Proofs.Flock.Claims.Recursion.ResTieVV
 import Proofs.Flock.Claims.Recursion.SlotsCheck
 import Proofs.Flock.Claims.Recursion.VVTieOf
 
-/-!
-# `ResLoweredPD` at the deployed constants (`resLowered_D`)
-
-The site facts need part `s`'s own decision at its staged statement (`PartDec`: table 0 labels its instances `0..n-1`
-only at a full sample, which only the decision checks), and a joint acceptance at arbitrary witnesses carries none. So the
-decision travels beside the staged statement, in what each part shows (`showsDec`: `showsPart` and `PartDec` wherever
-the statement sets up). The chain's commit ties between two parts read both parts' setups and a collision with the
-verifier's own evaluations there (`accCommit_eq`), so `ResLoweredPD` is `ResLoweredP` at `JointV` over `showsDec` (the
-parts' staged statements `xs`, staged at one prefix of messages: `XsStaged`, which the ties read too), and
-`DecompBR.ResLowJPD` is `ResLowJP` there. KS holds `JointV` where it reads `hres`, and at an accepted run each part's
-staged statement shows it (`staged_deployRec_part`, `partDec_run`) and the run's V\* statements are staged at one prefix
-of its messages (`okRuns_deployRec`).
-
-`resLowered_D`: `ResLoweredPD` at the dense form, `recRead`, `cmtTr recRead`, the concrete pieces and owners, `elemAt
-:= Rows.elemReadC (Top.accRC rd key)` and `vvAt := Rows.resVRead`, from the frame ports (P2) at `JointP` over
-`showsPart` (`jointP_of_jointV`, `jointP_shows`), the accumulator ports (P3) at that and `JointV`'s statements,
-decisions and collision (`PortsAtV`), `ReadsAt` and the base checks; the site facts are `resSite_of_dec`'s. Its steps
-are `ResLowerDA`'s.
--/
+/-! `ResLoweredPD` at the deployed constants (`resLowered_D`), with each part's decision beside its staged statement, since only the decision checks table 0's labels. -/
 
 @[expose] public section
 
@@ -67,7 +49,6 @@ open Claims (Msg)
 open FlockDeploy (Coin)
 open Claims.Recursion.VStarB
 
-/-- **`JointP` is monotone in what each part shows.** -/
 theorem jointP_shows {Col T : Type} {H : Msg → Msg} {D : Claims.Recursion.Deploy Coin}
     {DO : Claims.Flock.Deploy Coin Col T} {L : LayoutB} {shape : Claims.Recursion.Form → Prop}
     {shows shows' : ℕ → Msg → Msg → (ℕ → Coin) → Prop} {cmt : Msg → ℕ → Msg → Msg} {x : Msg} {c : ℕ → Coin}
@@ -90,9 +71,6 @@ open RecDeploy.OpenLower (jointP_shows)
 
 noncomputable section
 
-/-- **`ResLoweredP` with each part's decision, at the parts' staged statements** (`JointV` over `showsDec`: the
-collision conjunct widened to the verifier's own evaluations at `xs`, which the chain's commit ties read, with `xs`
-staged at one prefix of messages, `XsStaged`). -/
 def ResLoweredPD (rd : Msg → Option FinalP) (wE : Msg → ℝ) (final : Msg → Option (List (List (Msg × Salt)) × Msg))
     (w : Msg → ℝ) (b : Brings) (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin)))
     (shape : Claims.Recursion.Form → Prop) (untr : TrReader) (cmt : Msg → ℕ → Msg → Msg)
@@ -107,9 +85,6 @@ def ResLoweredPD (rd : Msg → Option FinalP) (wE : Msg → ℝ) (final : Msg �
       PiecesComputes (_root_.RecDeploy.bdR rd wE final w) (DRL rd wE final w b elem) pieces (resHolds elemAt vvAt) ownQ
         s x c ((DeployedR.layR elem).msgs x ws)
 
-/-- **`ResLoweredPD` at the deployed constants**: at the dense form, the deployed reader and its commitments, the
-concrete pieces and owners, `Rows.elemReadC (Top.accRC rd key)` and `Rows.resVRead`, from the frame ports (P2), the
-accumulator ports up to one offset (P3), `ReadsAt` and the base checks. -/
 theorem resLowered_D (rd : Msg → Option FinalP) (key : ℕ → ℕ → ℕ → ℕ → ℕ × ℕ × ℕ × ℕ) (wE : Msg → ℝ)
     (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ) (b : Brings)
     (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin)))
@@ -132,14 +107,12 @@ theorem resLowered_D (rd : Msg → Option FinalP) (key : ℕ → ℕ → ℕ →
     (_root_.RecDeploy.bdR rd wE final w) DecompBR.resPD DecompBR.ownRD _ _
     (fun p hxO hck hshD hAg hT hc q' hq' ho' => ?_) q hq ho
   generalize hxs : xs.getD s [] = xO at hxO hck hshD hAg hc
-  -- the staged statement: one table, `p` its parse
   have hsh := hshD.1
   obtain ⟨-, i, spec, sts, -, hsu, -⟩ := hsh.2
   have hpe : p = { i.base.read with sts } := Option.some.inj (hxO.symm.trans (parse_of_setupO hsu))
   subst hpe
   have h1 := (oneFull_staged hsh.2 hsu).1
   have ht : 0 < sts.size := by omega
-  -- the piece's part
   obtain ⟨r', ss', nm', pt', hr', hss', hsv'⟩ := DecompBR.ownRD_some ho'
   obtain ⟨⟨hG, hbd, hu⟩, hSt⟩ := resSite_of_dec rd wE final w b elem x st hx hf c ws hJ s ws[s] hw r' hr' ss'
     hss' _ nm' pt' hsv' xO _ hxO hck hsh hAg hT hc q' hq' ho' i spec hsu (hshD.2 i spec sts hsu) ht
@@ -150,7 +123,6 @@ theorem resLowered_D (rd : Msg → Option FinalP) (key : ℕ → ℕ → ℕ →
     ht m k cl jj sh holo S' ns nv hpar hshp hholo hpart
   have hAc := hA x st hx hf c ws hJ xs hJV.2.2.2 hJV.2.2.1 hms s ws[s] hw r' hr' ss' hss' _ nm' pt' hsv' xO _ hxs hxO
     hck hsh hAg hT hc q' hq' ho' ht m k cl jj sh holo S' ns nv hpar hshp hholo hpart
-  -- the unit name is the read shape's, at group `q'.key.1`
   obtain ⟨p', r'', sv, hx', -, -, hr'', ⟨ss'', hss'', hsv''⟩, -, htab⟩ := stagedTables hsh.2
   obtain rfl : p' = { i.base.read with sts } := Option.some.inj (hx'.symm.trans hxO)
   have hsv3 : sv = .inner q'.key.1 nm' pt' := by
@@ -167,7 +139,6 @@ theorem resLowered_D (rd : Msg → Option FinalP) (key : ℕ → ℕ → ℕ →
       _root_.Flock.RecResiduals.unitName r'.shape.m r'.shape.kLog r'.shape.claims q'.key.1 :=
     (FlockVBridge.Family.resUnitName_params hpar).trans (hname.trans (DecompBR.inner_named hss' hsv'))
   obtain ⟨rfl, rfl, rfl, rfl⟩ := FlockVBridge.Family.resUnitName_inj hn
-  -- table 0's part is `shI`'s, plain
   obtain ⟨v, hv, p0, r0, S0, ns0, nv0, hr0, hpart0, hk, hqS⟩ := DecompBR.mem_resPD' hq'
   obtain ⟨r3, ss3, sh0, hr3, -, hh, hsh0, hI, -⟩ := DecompBR.shI_tie (x := x) ⟨st, hx, hf⟩ hv
   have e3 : r3 = r' := Option.some.inj (hr3.symm.trans hr')
@@ -188,7 +159,7 @@ theorem resLowered_D (rd : Msg → Option FinalP) (key : ℕ → ℕ → ℕ →
     simp only [Except.ok.injEq, Prod.mk.injEq] at h
     exact h.1
   refine ⟨hSS.trans hqS.symm, rfl, ?_, ?_⟩
-  · -- check 5's tie
+  ·
     have hk' : q'.key = (q'.key.1, q'.key.2.1, q'.key.2.2.1, 0) := by simp only [hk]
     have hn2 : q'.key.2.1 + q'.key.2.2.1 < 2 := by simp only [hk]; omega
     rw [hk']
@@ -196,7 +167,7 @@ theorem resLowered_D (rd : Msg → Option FinalP) (key : ℕ → ℕ → ℕ →
       (o := q'.key.2.1) (g := q'.key.2.2.1) (n := q'.key.2.1 + q'.key.2.2.1) hx hf le_rfl hT hc hsh hck hr' hss'
       hsv' hpc hxO ht hsu ht hidx hpar (hset xO) hshp hholo hpart hG rfl hn2 hnp hqv hqo hvin hoout hptv hpto
       hrows hwo
-  · -- the residuals, at the decision `ReadsAt` gives
+  ·
     intro os last hfin hos hz
     have hRk := hRd x ⟨st, hx, hf⟩ c ws hJ.1 (fun e he => hJ.2.1 e (DecompBR.allCalls_layR elem x ws he)) os last
       hfin hos
@@ -216,8 +187,6 @@ theorem resLowered_D (rd : Msg → Option FinalP) (key : ℕ → ℕ → ℕ →
     rw [accBase_eq hv hshI]
     exact _root_.Flock.RecAlgebra.structureOf_accLow (by rw [hI]; exact hh) hS1
 
-/-- **`ResLoweredPD` at the deployed brings** (`bB (deployedB b) …`), whose setup lists the residual reads
-(`resSetup_deployedB`). -/
 theorem resLowered_DB (rd : Msg → Option FinalP) (key : ℕ → ℕ → ℕ → ℕ → ℕ × ℕ × ℕ × ℕ) (wE : Msg → ℝ)
     (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ) (b : Brings)
     (aux : Msg → ℕ → _root_.Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ) (hd : Msg → _root_.Flock.RecRecord.Record)
@@ -255,13 +224,10 @@ variable (rd : Msg → Option FinalP) (b : Brings) (aux : Msg → ℕ → Flock.
   (vvAt : Msg → List Coin → ℕ × ℕ × ℕ × ℕ → ℕ → _root_.Flock.F128)
   (ownR : Msg → ResPiece → Option ℕ)
 
-/-- What each part's circuit accepts at layout `L`, at its V\* statement and witness, showing its decision. -/
 abbrev acceptsLVD :=
   PartAcceptsV FlockDeploy.sha512 (recL rd b aux nOf hd rest wE final w L) (deployZkRec _root_.Flock.Readable.relation)
     L Claims.Recursion.Form.Dense (ResLower.showsDec recRead (bB b aux nOf hd rest)) (cmtTr recRead)
 
-/-- **`ResLowJP` with each part's decision, at the parts' V\* statements**: at `JointV` over `showsDec`, which an
-accepted run gives at its staged statements (`staged_deployRec_part`, `partDec_run`). -/
 def ResLowJPD : Prop :=
   ∀ (x : Msg) (st : Claims.Recursion.CompiledStatement), parse x = some st → Claims.Recursion.Form.Dense st.form →
     ∀ (c : ℕ → Coin) (xs : List Msg) (ws : List Claims.Flock.Wit),
@@ -273,8 +239,6 @@ def ResLowJPD : Prop :=
 
 end
 
-/-- **`ResLowJPD` at the deployed constants**: `resLowered_DB` at the concrete pieces and owners,
-`Rows.elemReadC (Top.accRC rd key)` and `Rows.resVRead`, from P2, P3, `ReadsAt` and the base checks. -/
 theorem resLowJP_D (rd : Msg → Option FinalP) (key : ℕ → ℕ → ℕ → ℕ → ℕ × ℕ × ℕ × ℕ) (b : Brings)
     (aux : Msg → ℕ → Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ) (hd : Msg → Flock.RecRecord.Record)
     (rest : Msg → List (Msg × Out) → List UInt8) (wE : Msg → ℝ)
