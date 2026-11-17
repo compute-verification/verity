@@ -16,7 +16,7 @@ untraced = [
     "test_serve.py",
 ]
 # The load's verbs read and write the store with `verity/protocols/resource_accounting/network/attester/load_relay.py`, which commits with the
-# certifier's transfer rows and PoUS's P2 scheme. The rehearsal unit's RuntimeMaxSec bounds the gate's --minutes.
+# network attester's transfer rows and PoUS's P2 scheme. The rehearsal unit's RuntimeMaxSec bounds the gate's --minutes.
 inputs = ["verity/protocols/resource_accounting/network/attester/load_relay.py", "verity/protocols/resource_accounting/network", "verity/protocols/resource_accounting/memory/pous",
           "verity/channel.py",
           "tools/research/src/research/pods/nebius/challenger/vy-certifier@.service",
@@ -24,8 +24,8 @@ inputs = ["verity/protocols/resource_accounting/network/attester/load_relay.py",
           "verity/protocols/proofs/spot/verifier/profile.py", "verity/protocols/proofs/spot/verifier/__init__.py",
           "verity/protocols/proofs/spot/verifier/challenger/challenger.py", "verity/protocols/proofs/spot/verifier/challenger/coins.py",
           "verity/protocols/proofs/spot/verifier/challenger/remote.py",
-          # test_auditor_network_attester holds a network certifier run's published files to the certifier's manifest (its verifier's
-          # `parties.py`), a deployment-layer party over SPOT's; test_auditor_network_attester_serve runs the certifier prover's
+          # test_auditor_network_attester holds a network certifier run's published files to the network attester's manifest (its verifier's
+          # `parties.py`), a deployment-layer party over SPOT's; test_auditor_network_attester_serve runs the network attester prover's
           # `scan_zk`, which proves through SPOT's service
           "verity/config.py", "verity/party.py", "verity/protocol.py",
           "verity/protocols/proofs/spot/verifier/parties.py", "verity/protocols/proofs/spot/verifier/service.py",

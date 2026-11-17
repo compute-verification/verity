@@ -498,8 +498,8 @@ class Negative:
 
 
 NEGATIVES = {n.name: n for n in [
-    Negative("late", "io", "plan", "the shim holds a window-0 session past every sync; the certifier faults the window "
-             "and certifies none of it", "the certifier (it certifies no incomplete status)", ISSUER_REFUSED),
+    Negative("late", "io", "plan", "the shim holds a window-0 session past every sync; the network attester faults the window "
+             "and certifies none of it", "the network attester (it certifies no incomplete status)", ISSUER_REFUSED),
     Negative("extra", "io", "plan", "the shim writes one event more than the endpoint sent; certified",
              "N2's counts against the profile", f"{HEAD}.counts", served=SERVED),
     Negative("drop", "io", "plan", "the shim drops the first event of a response; certified",

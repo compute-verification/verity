@@ -434,7 +434,7 @@ def test_a_step_that_cant_run_refuses_and_leaves_the_certifier_missing(case, tmp
     why = (piece / CP.REFUSED).read_text()
     assert {p.name for p in piece.iterdir()} - {"piece.json"} == {CP.REFUSED, "piece.log"}, why
     assert S.piece_row("communication", tmp_path / "pieces")["verdict"] == "missing"
-    assert {"no kept run": "no network certifier run kept", "corrupt fetch": "fetch.tar.gz: ReadError", "no report": "the chain wrote no report (exit 7)",
+    assert {"no kept run": "no network attester run kept", "corrupt fetch": "fetch.tar.gz: ReadError", "no report": "the chain wrote no report (exit 7)",
             "no build": "network-period check: FileNotFoundError",
             "no rows build": "network-rows check: FileNotFoundError", "time limit": "SIGTERM: the piece's time limit",
             "foreign answer": "no verity/certifier/v0 verdict"}[case] in why
@@ -490,7 +490,7 @@ def test_a_step_the_leak_guard_refuses_keeps_no_case_and_a_step_that_cant_start_
     (bare / CP.CASES / CP.CASE).write_text("{}")
     out = tmp_path / "bare-pieces" / "certifier"
     assert CP.main(["piece", str(bare), str(K), str(out), "--chain-cmd", "exit 7"]) == 3
-    assert "no network certifier run kept" in (out / CP.REFUSED).read_text() and not _named(tmp_path, CP.CASE)
+    assert "no network attester run kept" in (out / CP.REFUSED).read_text() and not _named(tmp_path, CP.CASE)
 
 
 def test_a_chain_file_holding_a_witness_value_is_moved_out_of_dir(tmp_path, network_attester):

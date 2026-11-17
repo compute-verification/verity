@@ -128,7 +128,7 @@ RESEARCH = TREE / "tools" / "research" / "src"
 
 PORTS = range(7951, 7959)
 """The ports a run listens on, each 127.0.0.1's, the tunnel account's `PermitOpen` (`12-vy-verifier.conf`): outside the
-challenger gate's 7811..7899, which a certifier coin link binds on a serving node."""
+challenger gate's 7811..7899, which a network attester coin link binds on a serving node."""
 GATE_PORTS = range(7811, 7900)
 PINNED = re.compile(r"[0-9a-f]{40}")
 NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:-]{0,63}")
@@ -186,7 +186,7 @@ SAMPLED_EXE = Path("verity/protocols/proofs/spot_flock_recursion/verifier/lean/.
 """Sampled proofs' Lean verifier in the pinned tree, as its pin built it: the record runs it rather than building one."""
 SUM_LINE = re.compile(r"([0-9a-f]{64})  (\S.*)")
 WITNESS_DIRS = {"values": "a committed value file", "prover": "a prover's input file (its rows and salts)",
-                "served_rows": "a window's committed rows and salts", "certifier-front": "the certifier front's group (its prompts)"}
+                "served_rows": "a window's committed rows and salts", "certifier-front": "the network attester front's group (its prompts)"}
 """A served run's witness, by a directory part of its path (`witness`): what the compose gate takes from no hand-off, each
 with why. The three tables and `witness` are the rule the sender holds its list to (`served_verdicts.py witness`), in the
 same order and word for word, which `tests/test_host.py` holds them to."""
