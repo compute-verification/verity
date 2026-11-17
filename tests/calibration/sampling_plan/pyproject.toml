@@ -27,7 +27,7 @@ inputs = ["verity/__init__.py", "verity/errors.py",
           "benchmarks/slowdown/data/hardware.toml",
           # glm53.py's stop class reads its two blocks' Definitions and their pins: the stop rule's Boolean lowering
           # (verity_vllm.definitions.registry, whose package loads the numerics and the evidence table) and the response tie
-          # (verity.protocols.resource_accounting.network.prover, which loads the certifier's verifier)
+          # (verity.protocols.resource_accounting.network.prover, which loads the network attester's verifier)
           "adapters/vllm/verity_vllm/definitions/registry", "adapters/vllm/verity_vllm/definitions/numerics",
           "adapters/vllm/verity_vllm/definitions/evidence.py", "adapters/vllm/verity_vllm/definitions/evidence.json",
           "verity/protocols/resource_accounting/network", "adapters/vllm/verity_vllm/__init__.py",
