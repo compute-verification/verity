@@ -1043,8 +1043,8 @@ class TransferBlocks:
             if lean is None or lean != claimed or any(w not in lean for w in registered):
                 why[PERIOD_DRAWN] = {"lean": lean if lean is not None else {"refused": no}, "drawn": claimed,
                                      "registered": registered,
-                                     "why": no or "the windows registered and proved are not the Lean verifier of "
-                                                  "record's sample on the period's coins"}
+                                     "why": no or "the windows registered and proved are not the Lean "
+                                                  "verifier's sample on the period's coins"}
         outcomes = {r["registration"]: r for r in stream.records}
         records: list[str | None] = [None] * n
         refused: list[int] = []

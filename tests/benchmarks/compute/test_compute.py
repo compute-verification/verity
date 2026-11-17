@@ -1050,7 +1050,7 @@ def of_record(argv: list[str]) -> list[str]:
 
 #: the fixture's detail before its coins: its sample size, δ and scheme
 DETAIL = "sample size 459, delta 1/100, scheme pearl-c-h100-v1-h3"
-#: the edits that make the fixture's coins live: a challenger's sample and salt coins, and the Lean verifier of record
+#: the edits that make the fixture's coins live: a challenger's sample and salt coins, and the Lean verifier
 LIVE = {"ANSWER": to("profile", "source_from", value="challenger"), "DEVELOPMENT": to("coin_source", value="challenger"),
         "LEAN_CHECK": lambda d: d.update(argv=of_record(d["argv"]))}
 
