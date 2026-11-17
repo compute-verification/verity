@@ -13,7 +13,7 @@ from verity import protocol
 from verity.circuits import partition_v2
 
 REG = Registry.load()
-CENSUS = Path(__file__).resolve().parents[3] / "benchmarks" / "census"
+CENSUS = Path(__file__).resolve().parents[3] / "calibration" / "census"
 
 
 def entries(path: Path) -> dict[str, dict]:
@@ -105,7 +105,7 @@ def test_what_another_file_states_is_read_from_it_and_no_file_restates_it(tmp_pa
     for key, value in stated.items():
         p = REG.param(key)
         assert (p.value, type(p.value), p.low, p.high) == (value, type(value), None, None), key
-        assert "benchmarks/census/" in p.source and p.status in params.STATUSES, key
+        assert "calibration/census/" in p.source and p.status in params.STATUSES, key
 
 
 def test_an_override_of_a_key_that_does_not_exist_is_an_error():

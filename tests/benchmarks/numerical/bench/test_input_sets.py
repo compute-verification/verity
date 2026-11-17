@@ -30,7 +30,7 @@ from verity_numerical.bench import generate as G
 DATA = Path(__file__).parent.parent.parent.parent / "verity" / "protocols" / "proofs" / "flock" / "prover" / "data" / "captured-101"
 CAPTURED = sorted((DATA / "manifests").glob("*.json"))
 SLICES = sorted(d for d in (DATA / "slices").iterdir() if d.is_dir())
-CENSUS = Path(__file__).resolve().parents[4] / "benchmarks" / "census"
+CENSUS = Path(__file__).resolve().parents[4] / "calibration" / "census"
 
 #: Small bindings of every template (fast under the gate reference too).
 SMALL = {"gemm-coordinate": dict(K=64), "attention-head": dict(D=16, BN=16, T="1:40"), "rope-head": dict(D=8),

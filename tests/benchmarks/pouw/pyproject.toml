@@ -173,7 +173,7 @@ inputs = ["verity/__init__.py", "tools/config/verity_config/verity_settings.py",
           "security/Definitions/Pouw", "security/Proofs/Pouw", "security/Proofs/Properties/Pouw", "security/lean-audit.json",
           "security/Proofs/ResourceAccounting/Gates/Rows.lean",
           "benchmarks/pouw/exact_kit/exact_kit", "verity/protocols/resource_accounting/compute/pouw/verifier/receipts", "benchmarks/pouw/filler", "verity/protocols/resource_accounting/compute/pouw/prover/kernels/filler",
-          "benchmarks/machine_model", "benchmarks/pouw/README.md",
+          "calibration/machine_model", "benchmarks/pouw/README.md",
           "benchmarks/hash/dither/dither_a.py", "benchmarks/hash/dither/dither_fused.py",
           "verity/protocols/experimental/dither/prover/j10r_ws.py",
           # test_mma_gate runs torch_gpu's build gate, which reads the build through verity/protocols/resource_accounting/compute/pouw/prover/sass_gate.py's mma_gate
@@ -238,7 +238,7 @@ paths = ["security/Definitions/Pouw", "security/Proofs/Pouw", "security/Proofs/P
 
 [[tool.verity.tests.reads]]
 tests = ["test_facet_break.py"]
-paths = ["benchmarks/machine_model/verity_machine_model", "calibration/pouw/opcode_probe"]
+paths = ["calibration/machine_model/verity_machine_model", "calibration/pouw/opcode_probe"]
 
 [[tool.verity.tests.reads]]
 tests = ["test_ffill.py"]

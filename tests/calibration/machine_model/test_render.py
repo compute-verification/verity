@@ -12,7 +12,7 @@ from verity_machine_model.cli import main
 from verity_machine_model.commands.render import SECTIONS, render
 from verity_machine_model.model import device, devices, model, rows, vectors
 
-README = Path(__file__).resolve().parents[3] / "benchmarks" / "machine_model" / "README.md"
+README = Path(__file__).resolve().parents[3] / "calibration" / "machine_model" / "README.md"
 TABLE_ROW = re.compile(r"\s*\|.*\|\s*$")
 CELL = re.compile(r"(?<!\\)\|")
 
