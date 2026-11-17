@@ -73,7 +73,7 @@ env = { POUW = "pearlplus", PEARLPLUS_TIE = "1", V3C_CLASS = "4,32,4", V3C_LAW =
 
 [run.window.coins.gate]
 main_line = true
-env = { PP_CHALLENGER = "gate:research@${VY_CHALLENGER_1_HOST}", PP_PEER = "vy-spot-glm53", PP_GATE_KEY = "${HOME}/.ssh/vllm_lane_ed25519", PP_CHALLENGER_KEY = "tests/benchmarks/pouw/fixtures/challenger-key.json" }
+env = { PP_CHALLENGER = "gate:research@${VY_CHALLENGER_1_HOST}", PP_GATE_KEY = "${HOME}/.ssh/vllm_lane_ed25519", PP_CHALLENGER_KEY = "tests/benchmarks/pouw/fixtures/challenger-key.json" }
 
 [run.window.coins.development]
 env = { PP_CHALLENGER = "local", PEARLC_CHALLENGER_GATE = "", DEVELOPMENT = "1" }

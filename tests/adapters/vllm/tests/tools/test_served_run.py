@@ -184,7 +184,7 @@ def test_development_coins_are_chosen_and_the_run_says_so(tmp_path):
     assert got.returncode == 0, got.stderr
     env = env_of(got)
     assert (env["PP_CHALLENGER"], env["DEVELOPMENT"]) == ("local", "1")
-    assert not {"PP_PEER", "PP_GATE_KEY", "PP_CHALLENGER_KEY"} & env.keys()
+    assert env["PP_PEER"] == "vy-spot-glm53" and not {"PP_GATE_KEY", "PP_CHALLENGER_KEY"} & env.keys()
     assert not [s for s in flags(got, "--send") if s.endswith("/main.txt")]
 
 
@@ -218,7 +218,20 @@ def test_the_compose_run_sends_the_windows_hand_off_to_the_compose_node(tmp_path
     words = shlex.split(got.stdout)
     assert words[words.index("--on") + 1] == "vy-nebius-cpu-14" == PLACEMENT["run"]["window"]["env"]["COMPOSE_NODE"]
     assert flags(got, "--send") == [str(d / "compose.tar"), str(d / "compose.tar.sha256")]
-    assert words[words.index("--") + 1:] == ["bash", "adapters/vllm/tools/served_run/compose.sh"] and not flags(got, "--env")
+    assert words[words.index("--") + 1:] == ["bash", "adapters/vllm/tools/served_run/compose.sh"]
+    assert flags(got, "--env") == ["PP_PEER=vy-nebius-cpu-14"]
+
+
+@pytest.mark.parametrize("args", [("window",), ("window", "--development"), ("window", "--tie"), ("setup",), ("copy",),
+                                  ("audit",), ("audit", "--development"), ("compose",)])
+def test_every_run_carries_its_nodes_name_in_the_cluster_as_pp_peer_gate_or_no_gate(tmp_path, args):
+    at = {**ROW_OF_CARDS, "SERVED_RUN": "r-window", "AUDIT_NODE": "vy-nebius-cpu-16"}
+    if args[0] == "compose":
+        at["HANDOFF"] = str(handoff(tmp_path, git(make_tree(tmp_path), "rev-parse", "HEAD")))
+    got = run(tmp_path, *args, "--dry-run", **at)
+    assert got.returncode == 0, got.stderr
+    words = shlex.split(got.stdout)
+    assert env_of(got)["PP_PEER"] == words[words.index("--on") + 1]
 
 
 def test_the_compose_run_refuses_another_commit_than_the_windows(tmp_path):
@@ -273,9 +286,9 @@ def test_the_settings_are_node_as_and_its_rows_and_name_no_address(tmp_path, tie
     got = run(tmp_path, "settings", f"some/{row[:14]}", VY_CHALLENGER_1_HOST=ADDRESS)
     assert got.returncode == 0, got.stderr
     env = dict(line.split("=", 1) for line in got.stdout.splitlines())
-    assert {k: env[k] for k in ("VENV", "HIDDEN_SO", "DISK_FLOOR_GB", "H1_PEER", "ROW_ID")} == {
+    assert {k: env[k] for k in ("VENV", "HIDDEN_SO", "DISK_FLOOR_GB", "H1_PEER", "PP_PEER", "ROW_ID")} == {
         "VENV": NODE_A["VENV"], "HIDDEN_SO": NODE_A["HIDDEN_SO"], "DISK_FLOOR_GB": NODE_A["DISK_FLOOR_GB"],
-        "H1_PEER": "vy-spot-glm53", "ROW_ID": row}
+        "H1_PEER": "vy-spot-glm53", "PP_PEER": "vy-spot-glm53", "ROW_ID": row}
     assert env["ROW"] == f"{NODE_A['LLAMA_ROOT']}/{NODE_A['builds'][row]}/{row}" and (env["POUW"] == "pearlplus") == tie
     assert not {"CARD", "CORES", "END", "PRODUCT", "PP_CHALLENGER"} & env.keys() and ADDRESS not in got.stdout
 
