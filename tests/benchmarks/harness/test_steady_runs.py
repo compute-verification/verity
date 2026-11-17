@@ -55,6 +55,13 @@ def test_the_newest_passing_run_is_taken_and_the_runs_that_are_not_it_are_said(p
     assert store.lookup()(spec, item, identity) == (newer, None)
 
 
+def test_a_trial_run_of_the_point_is_never_its_passing_run(planned):
+    spec, item, identity, store = planned
+    older = store.ran("r20231115-100000-0001", store.files(), identity=identity)
+    store.ran("r20231115-110000-0002", store.files(), identity=identity, env={"VERITY_BENCH_TRIAL": "1"})
+    assert store.lookup()(spec, item, identity) == (older, None)
+
+
 #: a run of the point that isn't its passing run: its exit, its tree, what its files hold, and what `plan` says
 NOT_IT = [
     ({"rc": 143}, {}, None),

@@ -39,7 +39,7 @@ from typing import Any
 
 from verity_config import sha256
 
-from verity_bench import jobs, prove_records, served_table, steady, steady_spec
+from verity_bench import jobs, kit, prove_records, served_table, steady, steady_spec
 from verity_bench.steady_spec import SteadyPoint, SteadySpec
 
 #: beside a labelled art's rows of a run (`prove_records.ART_RATES`): how each field the art added to the run's own rows
@@ -310,7 +310,7 @@ class SteadyCompletion:
                                    params={"identity": identity}, any_source=True)["attempts"]
         return [a["id"] for a in reversed(attempts)
                 if (a.get("status") or {}).get("rc") in (0, steady_spec.NOT_PASSED)
-                and (a.get("source") or {}).get("dirty") is False]
+                and (a.get("source") or {}).get("dirty") is False and not kit.trial_attempt(a)]
 
     def __call__(self, spec: SteadySpec, item: SteadyPoint, identity: str) -> tuple[str | None, str | None]:
         self._pull()
@@ -392,7 +392,8 @@ def direct_command(plan: jobs.Plan, source: str | Path, item: jobs.PlannedPoint,
     return jobs.slot_run(
         spec, root, node, campaign="steady-point", tool="verity_bench.tool:STEADY_POINT",
         store_read=point.row.stored is not None, cores=cores, end=end, now=now,
-        env=[flag for name, setting in jobs.point_environment(spec).items() for flag in ("--env", f"{name}={setting}")],
+        env=[flag for name, setting in jobs.point_environment(spec).items() for flag in ("--env", f"{name}={setting}")]
+        + (["--env", f"{kit.TRIAL}=1"] if kit.is_trial() else []),
         job=["bash", "benchmarks/harness/steady_point.sh", "--spec", jobs._relative_spec(source, root),
              "--point", item.point.id, "--identity", item.identity, *(["--card", str(card)] if card is not None else [])])
 
