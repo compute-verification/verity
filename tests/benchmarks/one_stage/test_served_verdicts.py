@@ -4226,14 +4226,18 @@ def test_v3c_reserves_no_session_on_a_run_root_the_gate_opened_or_while_its_lane
 
 def _not_development(challenger: str) -> str:
     return ("PREFLIGHT: V3c's audit is the sampled-proofs audit of record, and V3C_CHALLENGER (default PP_CHALLENGER) is "
-            f"{challenger}, a development session, which only a development run takes: set PP_CHALLENGER=gate:USER@HOST "
-            "with PP_PEER, PP_CHALLENGER_KEY and PP_GATE_KEY, or DEVELOPMENT=1")
+            f"{challenger}, a development session, which under REQUIRE_GATE_COINS=1 only a development run takes: set "
+            "PP_CHALLENGER=gate:USER@HOST with PP_PEER, PP_CHALLENGER_KEY and PP_GATE_KEY, DEVELOPMENT=1, or "
+            "REQUIRE_GATE_COINS unset")
 
 
 @pytest.mark.parametrize("extra, line", [
-    ({"DEVELOPMENT": None}, _not_development("local")),
-    ({"DEVELOPMENT": None, "V3C_CHALLENGER": "loopback:127.0.0.1:7000"}, _not_development("loopback:127.0.0.1:7000")),
+    ({"DEVELOPMENT": None, "REQUIRE_GATE_COINS": "1"}, _not_development("local")),
+    ({"DEVELOPMENT": None, "REQUIRE_GATE_COINS": "1", "V3C_CHALLENGER": "loopback:127.0.0.1:7000"},
+     _not_development("loopback:127.0.0.1:7000")),
     ({"DEVELOPMENT": "yes"}, "PREFLIGHT: DEVELOPMENT is 1, a development run, or unset, not yes"),
+    ({"REQUIRE_GATE_COINS": "yes"}, "PREFLIGHT: REQUIRE_GATE_COINS is 1, a run of record on the gate's coins only, or "
+                                    "unset, not yes"),
     ({"V3C_CHALLENGER": "gate:auditor"}, "PREFLIGHT: V3C_CHALLENGER (default PP_CHALLENGER) is local, loopback:HOST:PORT, "
                                          "gate:USER@HOST or command:WORDS, not gate:auditor"),
     ({"PP_CHALLENGER": LIVE, "PP_PEER": None}, "PREFLIGHT: PP_PEER is unset: this machine's name in the cluster, the "
@@ -4245,9 +4249,9 @@ def _not_development(challenger: str) -> str:
 ])
 def test_the_preflight_refuses_v3c_on_a_development_session_outside_a_development_run_or_a_live_one_it_cannot_hold(
         tmp_path, extra, line):
-    """V3c's audit is the SPOT audit of record, so its coins are the live challenger's: a local or loopback
-    session is refused unless the run is a development run (DEVELOPMENT=1, which is otherwise unset), and a live one with
-    no peer for its session to listen on or no key record to hold it to; each before anything runs."""
+    """Under REQUIRE_GATE_COINS=1 a local or loopback session for V3c's audit, the SPOT audit of record, is refused
+    unless the run is a development run (DEVELOPMENT=1, which is otherwise unset); a live one with no peer for its
+    session to listen on or no key record to hold it to is refused whatever it is set to; each before anything runs."""
     rc, lines, order, _limits = _v3c(tmp_path, **extra)
     assert (rc, lines, order) == (3, [line], [])
 
@@ -4268,14 +4272,31 @@ def test_a_gate_command_on_this_machine_runs_v3c_outside_a_development_run_on_co
 @pytest.mark.parametrize("challenger", [None, "loopback:127.0.0.1:7000"])
 def test_without_v3c_the_preflight_refuses_step_3s_development_session_outside_a_development_run(tmp_path, challenger):
     """With V3c off step 3's audit is the SPOT audit of record, whose SPOT the compose gate's Lean
-    holds to a challenger, so its local or loopback session is refused unless the run is a development run, before
-    anything runs."""
+    holds to a challenger, so under REQUIRE_GATE_COINS=1 its local or loopback session is refused unless the run is a
+    development run, before anything runs."""
     rc, lines, order, _limits = _v3c(tmp_path, (), HOST="vy-dc-h200", PP_PEER="vy-dc-h200", DEVELOPMENT=None, PP_CHALLENGER=challenger,
-                                     PATH=f"{_hosts(tmp_path)}:{tmp_path / 'bin'}:{os.defpath}", **NO_V3C)
+                                     PATH=f"{_hosts(tmp_path)}:{tmp_path / 'bin'}:{os.defpath}", REQUIRE_GATE_COINS="1",
+                                     **NO_V3C)
     assert (rc, lines, order) == (3, [
         "PREFLIGHT: with V3c off (V3C_CLASS empty) step 3's audit is the sampled-proofs audit of record, and PP_CHALLENGER "
-        f"is {challenger or 'local'}, a development session, which only a development run takes: set "
-        "PP_CHALLENGER=gate:USER@HOST with PP_PEER, PP_CHALLENGER_KEY and PP_GATE_KEY, or DEVELOPMENT=1"], [])
+        f"is {challenger or 'local'}, a development session, which under REQUIRE_GATE_COINS=1 only a development run "
+        "takes: set PP_CHALLENGER=gate:USER@HOST with PP_PEER, PP_CHALLENGER_KEY and PP_GATE_KEY, DEVELOPMENT=1, or "
+        "REQUIRE_GATE_COINS unset"], [])
+
+
+@pytest.mark.parametrize("challenger", ["local", "loopback:127.0.0.1:7000"])
+def test_a_run_of_record_takes_a_development_sessions_coins_as_simulated_unless_require_gate_coins(tmp_path, challenger):
+    """With REQUIRE_GATE_COINS unset, a run of record (DEVELOPMENT unset) on a local or loopback session passes the
+    preflight: V3c's audit runs on it and its COINS line says the coins are simulated, not the auditor's challenger's,
+    and step 3's audit of record with V3c off is let through too."""
+    rc, lines, order, _limits = _v3c(tmp_path, DEVELOPMENT=None, V3C_CHALLENGER=challenger)
+    assert rc == 0 and "audit" in order, (lines, order)
+    assert lines[0] == (f"COINS V3c's audit: a development challenger session where it runs (V3C_CHALLENGER {challenger}), "
+                        "simulated: not the auditor's challenger"), lines[0]
+    rc, lines, order, _limits = _v3c(tmp_path / "step-3", (), HOST="vy-dc-h200", PP_PEER="vy-dc-h200", DEVELOPMENT=None,
+                                     PP_CHALLENGER=challenger, PREFLIGHT_ONLY="1",
+                                     PATH=f"{_hosts(tmp_path)}:{tmp_path / 'step-3' / 'bin'}:{os.defpath}", **NO_V3C)
+    assert rc == 0 and len(lines) == 1 and lines[0].startswith("PREFLIGHT passed on vy-dc-h200"), lines
 
 
 @pytest.mark.parametrize("extra, other", [
