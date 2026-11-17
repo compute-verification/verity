@@ -7,7 +7,7 @@ public import Proofs.Flock.Recursive.ZkServerAny
 
 `ZkServerAny.liveOut_any` fixes the inner worker's requests, and how many salts are read for each, before any salt. The
 inner worker sends each request after reading what `flock-zk-server live` answered it (`Flock.ZkServer.liveWith`): what
-it sent the challenger's live-coin part for each request and the salts it drew for them, `{"sent", "salts"}`. Here the worker's next
+it sent the challenger's live-coin part for each request and the salts it sampled for them, `{"sent", "salts"}`. Here the worker's next
 request is any function of those answers, its tape, its randomness and the challenger's live-coin part's being its parameters, so the
 live coins it reads are too. Whatever it is, the live zk_server sends the schedule's transcript filled with commit
 strings `strs dg ys`, the `i`-th that of a 64-byte digest `dg i (ys.take i)` under salt `i`, cut after one of its
@@ -32,7 +32,7 @@ namespace FlockSoundness.Discharge.Recursion.ZkServerAdaptive
 
 open Flock Flock.ZkServer ZkServerRun ZkServerTemplate ZkServerLive ZkServerAny
 
-/-- **What the live zk_server answered so far**: per request, what it sent the challenger's live-coin part and the salts it drew. -/
+/-- **What the live zk_server answered so far**: per request, what it sent the challenger's live-coin part and the salts it sampled. -/
 abbrev History := List (List Sent × List ByteArray)
 
 /-- **An inner worker**: its next request, read from the answers so far, or `none` when it closes the session. Its
