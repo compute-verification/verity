@@ -705,7 +705,8 @@ def test_the_onsite_line_is_the_published_records_and_takes_none_of_its_accepts(
                                             "inference-only": "absent",
                                             **{T.RECORD_NAMES[k]: v for k, v in rows.items()}})
     assert line["coins"] == "simulated" and line["reason"] == reason and "combined_by" not in line
-    assert line["coins_on"] == {c: T.PROVER_NODE for c in ("pous", "bandwidth", "wipe")}
+    assert line["coins_on"] == {**{c: T.PROVER_NODE for c in ("pous", "bandwidth", "wipe")},
+                                **{c: T.GATE_HOST for c in ("sampled-proofs", "pouw")}}
     assert line["answer_from"] == {T.RECORD_NAMES[k]: f"{T.AS_WRITTEN} (its piece files in {k}/)"
                                    for k in ("integrity", "work", "space", "communication", "wipe", *rows)}
 

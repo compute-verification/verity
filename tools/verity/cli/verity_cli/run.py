@@ -68,7 +68,8 @@ as a line and written to ``STATE/record/verdicts.jsonl``:
 
 ``configuration`` is the file's hash and ``program`` the commit that ran, the running tree's (`run.json` holds both).
 ``coins_on`` gives each listed subprotocol with a channel that carries coins the machine its coins were flipped on: its
-sender's, or the workload's when this host stands for both.
+sender's, or the workload's when this host stands for both, unless the table's line names that machine itself (onsite's
+memory attesters, whose bindings say where they ran).
 
 onsite's ``block`` is its execution phase's seal digest, the one the served window publishes (`served_table.PHASE`).
 onsite's line reads a record the serving node composed, so its accepts, each row's and the combined one, read
@@ -658,7 +659,7 @@ def _parties(cfg: Mapping[str, Any], reg: Registry, state: Path, chosen: Sequenc
               "simulated": list(premises)}
              for x in (r.outcomes[VERIFIER]["outcome"] or {}).get("verdicts", [])]
     on = coins_on(cfg, reg, machines)
-    lines = [{**x, "coins_on": {**x.get("coins_on", {}), **on}} for x in lines]
+    lines = [{**x, "coins_on": {**on, **x.get("coins_on", {})}} for x in lines]
     if sharing(cfg, reg, machines):
         lines = [{**x, "coins": "simulated"} for x in lines]
     if (cid := K.composite(cfg["protocols"], reg.components)) in K.UNACCEPTED:
