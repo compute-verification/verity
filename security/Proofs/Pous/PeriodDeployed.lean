@@ -26,7 +26,7 @@ The empty period has probability 1 of the accept-all event, and the honest one h
 
 namespace Pous.Period.SecurityProofs
 
-open Pous.EndToEnd PousCheck PousCheck.Properties Pous.P2.Assumptions
+open Pous.EndToEnd PousVerifier PousVerifier.Properties Pous.P2.Assumptions
 open scoped ENNReal
 
 set_option exponentiation.threshold 20000

@@ -132,7 +132,7 @@
    "configFile": "lakefile.toml"},
   {"type": "path",
    "scope": "",
-   "name": "pous_check",
+   "name": "pous_verifier",
    "manifestFile": "lake-manifest.json",
    "inherited": true,
    "dir": "../../verity/protocols/resource_accounting/memory/pous/verifier/check",

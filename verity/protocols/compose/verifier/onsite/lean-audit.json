@@ -18,7 +18,7 @@
     "InferenceOnlyVerifier.Protocol",
     "NetworkVerifier.Period",
     "NetworkVerifier.Span",
-    "PousCheck.RunProtocol",
+    "PousVerifier.RunProtocol",
     "PouwVerifier.Period",
     "Poub.P2Protocol",
     "Spot.OneStage",

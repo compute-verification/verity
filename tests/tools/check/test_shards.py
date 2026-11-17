@@ -48,7 +48,7 @@ SPLIT = {"verity-core-composition": COMPOSITION, "verity-pouw-benchmarks": POUW,
          "verity/protocols/resource_accounting/network/verifier": ATTESTER,
          **{s: tuple(t[i] for t in THIRDS) for i, s in enumerate(ONE_PROCESS)}, "benchmarks/one_stage": ONE_STAGE}
 #: the lean-suites every plan runs beside the security analysis's audit, and beside lean-build; the rest go with the Rust build
-BESIDE_AUDIT = (VLLM[0], *FLOCK[:2], "lean-suites:verity-core-evaluate", "lean-suites:pous-check", ATTESTER[2], *THIRDS[0],
+BESIDE_AUDIT = (VLLM[0], *FLOCK[:2], "lean-suites:verity-core-evaluate", "lean-suites:pous-verifier", ATTESTER[2], *THIRDS[0],
                 COMPOSITION[2], POUW[2], ONE_STAGE[4])
 BESIDE_BUILD = (*FLOCK[2:], "lean-suites:verity/protocols/proofs/recursion/verifier/vstar_cli", ATTESTER[0], *THIRDS[1],
                 COMPOSITION[0], POUW[1])

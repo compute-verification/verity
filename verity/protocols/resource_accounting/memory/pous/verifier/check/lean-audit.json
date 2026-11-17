@@ -1,19 +1,19 @@
 {
  "format": 2,
- "roots": ["PousCheck"],
+ "roots": ["PousVerifier"],
  "exempt": {
-  "PousCheck.SetupProtocolMain": "the pous-setup executable's entry point, one line; its command is Core.Protocol.main of PousCheck.SetupProtocol.protocol, audited under PousCheck and CoreProtocol",
-  "PousCheck.SetupDifftestMain": "the pous-setup-difftest server's entry point, one line: Difftest.serve of PousCheck.SetupDifftest.table, which tests/test_setup_difftest.py drives against the Python reference; audited under PousCheck",
-  "PousCheck.TimedAuditMain": "the pous-timed-audit executable's entry point: with three files, PousCheck.TimedAudit.run, the timed audit's verdict of record, audited under PousCheck; with `serve`, Difftest.serve of PousCheck.TimedAudit.verdictFn, which timed_audit.py drives against memory_challenger.verdict",
-  "PousCheck.RunMain": "the pous-run executable's entry point: with four files (the verifier's trusted keys, the setup, the table, the session) and the designated id, PousCheck.Run.run, the composed check of a recorded run, audited under PousCheck; with `serve`, Difftest.serve of PousCheck.Run.runFn, which tests/test_run.py drives against run.check_at, and of PousCheck.RunProtocol.certifyFn, which tests/test_run_protocol.py drives against period.certify and period.profile",
-  "PousCheck.DifftestMain": "the difftest against the Python verifier, under `runs`: compiled evaluation of PousCheck.Difftest.main, audited under PousCheck, a test and not a proof; with `serve`, Difftest.serve of PousCheck.Difftest.transcript, which interop.py drives against wire.py",
-  "PousCheck.VerdictDifftestMain": "the pous-verdict-difftest server's entry point, one line: Difftest.serve of PousCheck.VerdictDifftest's gates and eval, which tests/test_verdict_difftest.py drives against the Definition verdict_circuit.PousVerdict, compiled; audited under PousCheck",
-  "PousCheck.RunProtocolMain": "the pous-run-protocol executable's entry point, one line: Core.Protocol.main of PousCheck.RunProtocol.protocol (testProtocol under --test), audited under PousCheck and CoreProtocol; tests/test_run_protocol.py drives its serve against the Python reference",
-  "PousCheck.SignedRunMain": "the pous-signed-run executable's entry point, one line: Core.Protocol.main of PousCheck.SignedRun.protocol (testProtocol under --test), audited under PousCheck and CoreProtocol; tests/test_signed_run.py drives its serve against the Python reference"
+  "PousVerifier.SetupProtocolMain": "the pous-setup executable's entry point, one line; its command is Core.Protocol.main of PousVerifier.SetupProtocol.protocol, audited under PousVerifier and CoreProtocol",
+  "PousVerifier.SetupDifftestMain": "the pous-setup-difftest server's entry point, one line: Difftest.serve of PousVerifier.SetupDifftest.table, which tests/test_setup_difftest.py drives against the Python reference; audited under PousVerifier",
+  "PousVerifier.TimedAuditMain": "the pous-timed-audit executable's entry point: with three files, PousVerifier.TimedAudit.run, the timed audit's verdict of record, audited under PousVerifier; with `serve`, Difftest.serve of PousVerifier.TimedAudit.verdictFn, which timed_audit.py drives against memory_challenger.verdict",
+  "PousVerifier.RunMain": "the pous-run executable's entry point: with four files (the verifier's trusted keys, the setup, the table, the session) and the designated id, PousVerifier.Run.run, the composed check of a recorded run, audited under PousVerifier; with `serve`, Difftest.serve of PousVerifier.Run.runFn, which tests/test_run.py drives against run.check_at, and of PousVerifier.RunProtocol.certifyFn, which tests/test_run_protocol.py drives against period.certify and period.profile",
+  "PousVerifier.DifftestMain": "the difftest against the Python verifier, under `runs`: compiled evaluation of PousVerifier.Difftest.main, audited under PousVerifier, a test and not a proof; with `serve`, Difftest.serve of PousVerifier.Difftest.transcript, which interop.py drives against wire.py",
+  "PousVerifier.VerdictDifftestMain": "the pous-verdict-difftest server's entry point, one line: Difftest.serve of PousVerifier.VerdictDifftest's gates and eval, which tests/test_verdict_difftest.py drives against the Definition verdict_circuit.PousVerdict, compiled; audited under PousVerifier",
+  "PousVerifier.RunProtocolMain": "the pous-run-protocol executable's entry point, one line: Core.Protocol.main of PousVerifier.RunProtocol.protocol (testProtocol under --test), audited under PousVerifier and CoreProtocol; tests/test_run_protocol.py drives its serve against the Python reference",
+  "PousVerifier.SignedRunMain": "the pous-signed-run executable's entry point, one line: Core.Protocol.main of PousVerifier.SignedRun.protocol (testProtocol under --test), audited under PousVerifier and CoreProtocol; tests/test_signed_run.py drives its serve against the Python reference"
  },
  "runs": {
-  "PousCheck.DifftestMain": {
-   "why": "generated instances on which PousCheck's definitions give what the Python verifier gives: the verification tree (reference.leaf, verifier.leaf_hash, root, path, wire.path_length, verify_path on honest and tampered paths), the challenges (verity.commitments.randomness; reference.audit_id, audit_key, round_key, each round's index and nonce), and the timed audit (wire.verify_audit's FINAL frame, fault or refusal on honest and adversarial sessions, at reduced width and at the deployment's, with the verifier's own root of a private setup, a wrong or missing one, a required seen set, flag bit 1 against a held, wrong or missing W, and an elapsed time past u64, on the spec's 31 negative and 3 positive audit vectors, and on named sessions at edges the two once read apart: a store whose payloads are not all below p, 2^79 blocks, a beacon round named twice, manifest numbers Python reads as floats), the certificate gate and StorageProfile (protocol.TimedAudit with P2's deadline refusals, and StorageProfile at schemes.p2.P2) of every accepted session and of 200 stores and audits at the certificate's edges, with the spec's section 7 pins of the audit files and frames",
+  "PousVerifier.DifftestMain": {
+   "why": "generated instances on which PousVerifier's definitions give what the Python verifier gives: the verification tree (reference.leaf, verifier.leaf_hash, root, path, wire.path_length, verify_path on honest and tampered paths), the challenges (verity.commitments.randomness; reference.audit_id, audit_key, round_key, each round's index and nonce), and the timed audit (wire.verify_audit's FINAL frame, fault or refusal on honest and adversarial sessions, at reduced width and at the deployment's, with the verifier's own root of a private setup, a wrong or missing one, a required seen set, flag bit 1 against a held, wrong or missing W, and an elapsed time past u64, on the spec's 31 negative and 3 positive audit vectors, and on named sessions at edges the two once read apart: a store whose payloads are not all below p, 2^79 blocks, a beacon round named twice, manifest numbers Python reads as floats), the certificate gate and StorageProfile (protocol.TimedAudit with P2's deadline refusals, and StorageProfile at schemes.p2.P2) of every accepted session and of 200 stores and audits at the certificate's edges, with the spec's section 7 pins of the audit files and frames",
    "args": ["{difftest/instances.jsonl}", "{difftest/python.jsonl}", "1462"],
    "data": {
     "difftest/instances.jsonl": "6f49803102d8e053e92b3b56533b64d250789af6eefb5b998907b43509711f93",
@@ -23,10 +23,10 @@
   }
  },
  "layers": {
-  "PousCheck": {
-   "imports": ["PousCheck", "Flock", "CoreProtocol", "Identity", "Randomness", "MemoryAttester"],
-   "except": ["PousCheck.SetupDifftest"],
-   "why": "the program is code: Lean core, Flock's executable primitives, the core protocol interface, the core primitives (identity, randomness) and the memory challenger's verdict (PousCheck.Run composes it with the setup) only, no Mathlib and nothing of Security"
+  "PousVerifier": {
+   "imports": ["PousVerifier", "Flock", "CoreProtocol", "Identity", "Randomness", "MemoryAttester"],
+   "except": ["PousVerifier.SetupDifftest"],
+   "why": "the program is code: Lean core, Flock's executable primitives, the core protocol interface, the core primitives (identity, randomness) and the memory challenger's verdict (PousVerifier.Run composes it with the setup) only, no Mathlib and nothing of Security"
   }
  },
  "guarantees": {},

@@ -738,7 +738,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--fit-batches", default="1,8,32,64,128")
     p.add_argument("--headroom-gib", type=float, default=2.0)
     p.add_argument("--load-batch", type=int, default=32)
-    p.add_argument("--pous-timed-audit", default="", help="the Lean judge of the audits (default: pous_check's, built once)")
+    p.add_argument("--pous-timed-audit", default="", help="the Lean judge of the audits (default: pous_verifier's, built once)")
     for name in ("audit", "fit-driver"):
         p = sub.choices.get(name) or sub.add_parser(name)
         p.add_argument("--max-model-len", type=int, default=8192)

@@ -45,7 +45,7 @@ public import MemoryAttester.WipeProtocol
 public import InferenceOnlyVerifier.Protocol
 public import NetworkVerifier.Period
 public import NetworkVerifier.Span
-public import PousCheck.RunProtocol
+public import PousVerifier.RunProtocol
 public import PouwVerifier.Period
 public import Poub.P2Protocol
 public import Spot.OneStage
@@ -60,7 +60,7 @@ meta import MemoryAttester.WipeProtocol
 meta import InferenceOnlyVerifier.Protocol
 meta import NetworkVerifier.Period
 meta import NetworkVerifier.Span
-meta import PousCheck.RunProtocol
+meta import PousVerifier.RunProtocol
 meta import PouwVerifier.Period
 meta import Poub.P2Protocol
 meta import Spot.OneStage
@@ -75,7 +75,7 @@ open Composition
 
 /-- Onsite's subprotocols, in the order of their ids. -/
 def components : List BlobProtocol :=
-  [NetworkVerifier.Period.protocol, InferenceOnlyVerifier.Protocol.protocol, PousCheck.RunProtocol.protocol, PouwVerifier.Period.protocol,
+  [NetworkVerifier.Period.protocol, InferenceOnlyVerifier.Protocol.protocol, PousVerifier.RunProtocol.protocol, PouwVerifier.Period.protocol,
     Poub.P2Protocol.protocol, VStar.Recursive.Sampled.protocol, MemoryAttester.WipeProtocol.protocol]
 
 /-- The subprotocols that must commit to one record: the policy and SPOT. -/
@@ -86,8 +86,8 @@ and the store the P2 session audits, the root its registration names (its commit
 `store_root`), each read by its own decoder. -/
 def store : Tie :=
   ⟨"store",
-    [(PousCheck.RunProtocol.protocol.id,
-        fun k => (PousCheck.RunProtocol.decodeCommitment k.commitment).toOption.map ([·.root])),
+    [(PousVerifier.RunProtocol.protocol.id,
+        fun k => (PousVerifier.RunProtocol.decodeCommitment k.commitment).toOption.map ([·.root])),
       (Poub.P2Protocol.protocol.id,
         fun k => (Poub.P2Protocol.decodeCommitment k.commitment).toOption.map ([·.held.reg.root]))]⟩
 
@@ -127,7 +127,7 @@ private def allRefused : Answer := answer (components.map refused)
   some "params: verity/inference-only/v0 is missing"
 -- a served run that leaves PoUS's case or the wipe's out of the composite gets a rejection naming the one missing
 private def without (id : String) : Answer := answer ((components.filter (·.id != id)).map refused)
-#guard [PousCheck.RunProtocol.protocol.id, MemoryAttester.WipeProtocol.protocol.id].all fun id =>
+#guard [PousVerifier.RunProtocol.protocol.id, MemoryAttester.WipeProtocol.protocol.id].all fun id =>
   (without id).verdict == .reject && (without id).published.isNone &&
     (without id).reason == some s!"params: {id} is missing"
 #guard (answer ((components.take 5).map refused ++
