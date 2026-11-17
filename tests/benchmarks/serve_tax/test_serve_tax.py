@@ -522,6 +522,23 @@ def test_max_model_len_replaces_the_base_context_limit():
     assert S.base_args() == S.BASE_ARGS and len(S.base_args(40960)) == len(S.BASE_ARGS)
 
 
+def test_prod_no_drafts_is_prods_line_without_the_recipes_speculative_decoding():
+    """Its line is prod's less each --speculative-config flag and its value, in either form; every other recipe flag
+    stays, so prod-no-drafts over prod is what the draft tokens buy stock."""
+    glm = S.MODELS["glm53"]
+    prod = S.server_argv(S.ARMS["prod"], glm, Path("/ck"), 8000, max_model_len=262144)
+    off = S.server_argv(S.ARMS["prod-no-drafts"], glm, Path("/ck"), 8000, max_model_len=262144)
+    at = prod.index("--speculative-config.method")
+    assert off == [*prod[:at], *prod[at + 4:]] and not any(x.startswith(S.DRAFTS) for x in off)
+    for flag in ("--kv-cache-dtype", "--tool-call-parser", "--reasoning-parser", "--enable-auto-tool-choice",
+                 "--tokenizer-mode"):
+        assert flag in off, flag
+    assert S.without_drafts(("--a", "1", "--speculative-config={}", "--speculative-config.method", "mtp", "--b")) \
+        == ("--a", "1", "--b")
+    assert S.ARMS["prod-no-drafts"].parent == "prod" and S.ARMS["prod-no-drafts"].published
+    assert all(a.drafts for n, a in S.ARMS.items() if n != "prod-no-drafts")
+
+
 def test_the_published_arm_starts_the_server_as_the_models_recipe_does(tmp_path, monkeypatch):
     """The arm's line is stock's with the recipe's flags added and the runner's limit on the requests at once dropped,
     and nothing else, at the job's context limit, and at the recipe's, not the runner's, where the job names none; a
@@ -595,7 +612,7 @@ def test_the_published_arm_starts_the_server_as_the_models_recipe_does(tmp_path,
     for name, m in S.MODELS.items():
         assert bool(m.published) == (m.published_context is not None) == (set(m.published_tokenizer) == set(S.FRONT_ENDS)), name
     assert [n for n, a in S.ARMS.items() if a.published] == ["published", "prod", "prod-again", "prod-record", "prod-seeded",
-                                                             "prod-trace"]
+                                                             "prod-no-drafts", "prod-trace"]
     assert S.ARMS["published"].parent == "compiled" and S.changes_of("published") == []
 
 

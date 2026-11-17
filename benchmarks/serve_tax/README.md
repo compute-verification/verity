@@ -30,6 +30,7 @@ its change to the arm it names as its parent (`serve_tax.ARMS`):
 | `prod` | nothing: `published`'s server, as the stock arm the arms made from it are costed over | `published` |
 | `prod-again` | nothing: `prod` in a second server lifetime, the noise floor of a cost over `prod` | `prod` |
 | `prod-record` | the scheduler's step trace on that server, as `record` is on `compiled`; each request's prompt ids and served ids, which a replay of a pass sent by vLLM's client is given and compared with; and the canonical DSA top-k, as `two-stage` has it (its counters kept on the node), which that replay runs under too | `prod` |
+| `prod-no-drafts` | the recipe's speculative decoding off (`serve_tax.DRAFTS`): `prod` with no draft tokens, the engine a replay step serves | `prod` |
 | `prod-seeded` | nothing on the server: `prod`, a sampled pass's client sending each user's seed as `prod-record`'s does | `prod` |
 | `prod-trace` | the step trace and each request's ids on that server: `prod-record` with the canonical top-k off; its client sends seeds, as `prod-record`'s does | `prod` |
 | `restore-base` | seeded sampling (the corpus's `seeded`), each sampled token's logprob returned | `record` |

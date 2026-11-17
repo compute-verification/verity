@@ -99,6 +99,8 @@ The arms, each one engine configuration; each adds its change to the arm it name
   given and compared with (`replay.window`), and the canonical DSA top-k, as ``two-stage`` has it: a row of more than
   2,048 keys is then a function of its inputs, which a replay that is to give the served tokens needs (it runs under
   the same plugin and environment: `replay.served_under`);
+- ``prod-no-drafts``: ``prod`` without the recipe's speculative decoding (`DRAFTS`), the engine a replay step serves today;
+  against ``prod``, what the draft tokens buy stock;
 - ``prod-seeded`` and ``prod-trace``: what ``prod-record`` differs from ``prod`` by, apart. ``prod-seeded`` is
   ``prod``'s server with no change of ours, its sampled client sending each user's seed as ``prod-record``'s does
   (`Arm.seeds`); ``prod-trace`` is ``prod-record`` with the canonical top-k off, vLLM selecting by its own rule. A
@@ -251,6 +253,8 @@ class Arm:
     #: whether its requests come through the network attester, which runs on another host than the engine: the arm
     #: is served by two commands, a side each (`certified`)
     certifier: bool = False
+    #: whether an arm that starts the server as the recipe does keeps the recipe's speculative decoding (`DRAFTS`)
+    drafts: bool = True
 
 
 BATCH_INVARIANT = {"VLLM_BATCH_INVARIANT": "1"}
@@ -325,6 +329,7 @@ ARMS = {
                        "the canonical DSA top-k", plugin=("record", "ids"), env=TOPK_ENV, general=TOPK, published=True),
     "prod-seeded": Arm("prod", "that server, a sampled pass's client sending each user's seed as prod-record's does: "
                        "what a seed moves in vLLM's sampling, read apart", published=True, seeds=True),
+    "prod-no-drafts": Arm("prod", "that server without the recipe's speculative decoding: no draft tokens, the engine a replay step serves", published=True, drafts=False),
     "prod-trace": Arm("prod", "+ the step trace and each request's ids, prod-record with the canonical top-k off: what "
                       "the canonical top-k moves, read apart", plugin=("record", "ids"), published=True),
 }
@@ -609,6 +614,25 @@ def published_context(arm: str, model_id: str | None, given: int | str | None) -
     return model.published_context if given is None else given
 
 
+#: the recipe's flags that make its engine decode speculatively, each with its value: an arm with ``drafts`` off
+#: leaves them off its line
+DRAFTS = "--speculative-config"
+
+
+def without_drafts(flags: Sequence[str]) -> tuple[str, ...]:
+    """``flags`` less each `DRAFTS` flag and the value after it."""
+    out: list[str] = []
+    skip = False
+    for x in flags:
+        if skip:
+            skip = False
+        elif x.split("=")[0].startswith(DRAFTS):
+            skip = "=" not in x
+        else:
+            out.append(x)
+    return tuple(out)
+
+
 def published_args(text: str | None) -> tuple[str, ...]:
     """``--published-args``: the flags of vLLM's own a job adds to the line of an arm that starts the server as the
     recipe does (the values a recipe leaves to the operator: the requests at once, the cards' share of memory, and the
@@ -637,7 +661,8 @@ def server_argv(arm: Arm, model: Model, checkpoint: Path, port: int, num_gpu_blo
     serve = (["vllm.entrypoints.cli.main", "serve", str(checkpoint)] if front == RUST
              else ["vllm.entrypoints.openai.api_server", "--model", str(checkpoint)])
     mode = model.published_tokenizer.get(front)
-    published = (*model.published, *(("--tokenizer-mode", mode) if mode else ())) if arm.published else ()
+    recipe = model.published if arm.drafts else without_drafts(model.published)
+    published = (*recipe, *(("--tokenizer-mode", mode) if mode else ())) if arm.published else ()
     line = [sys.executable, "-m", *serve, "--served-model-name",
             model.served, "--host", "127.0.0.1", "--port", str(port), *model.args, *published, *base, *arm.args,
             *(["--num-gpu-blocks-override", str(num_gpu_blocks)] if num_gpu_blocks else []),
