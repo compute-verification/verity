@@ -1,4 +1,4 @@
-"""What the memory challenger signs in a P2 session (`p2_case.close_of`) and the session's answer, held to the record of
+"""What the memory attester signs in a P2 session (`p2_case.close_of`) and the session's answer, held to the record of
 them (`p2_signed_sessions.json`): five sessions over `test_p2_party.py`'s store and channel, on the coins `b"\\x07" * 64`
 and the test clock, each closed by the test signer at leaf 0 (`pous_test_signer.AtLeaf`, which keeps no state): an
 honest prover accepted, one whose receipts skip a unit's reads, one whose openings are out of form, one gone mid-window

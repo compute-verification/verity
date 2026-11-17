@@ -271,7 +271,7 @@ class _Signer:
 
 
 class _Faulty(Certifier):
-    """A certifier that faults with `faults[t]` before releasing global bucket t."""
+    """A network attester that faults with `faults[t]` before releasing global bucket t."""
 
     def __init__(self, link, params, faults):
         super().__init__(link, params)

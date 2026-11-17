@@ -119,7 +119,7 @@ notation table's symbols (`TERMS`, `PHASE_TERMS`), each naming the public fields
 the public's ``scans[j]``), ℓ_{a,j} (``free``), k_{skip,j} (``faulty_sets``, ``faulty_bits`` and ``faulty_entries``) and
 the jitter T_j·log2 d_jit, T_j the phase's buckets (``jitter``). They sum to K, by which `NetTiming.Guarantees.MonitoringPeriodLeakAccepted` bounds what the serving node
 sends past its committed program except with δ_net over ``period_s`` seconds, the run's m execution phases of T buckets
-of τ (the certifier's case's ``schedule``). ``delta_net`` gives it term by term, each with its source: the answer's
+of τ (network attestation's case's ``schedule``). ``delta_net`` gives it term by term, each with its source: the answer's
 ``eps``, only its δ part (m · δ and each charged audit's δ, `EPS`), and m times each phase's knowledge, binding and
 collision errors ε_ks, ε_bind and ε_tap (`ERRORS`), which no check computes, so δ_net has no number here (`UNVALUED`);
 ``delta`` splits eps into the scans' δ and the charged audits', with eps a phase and each charged audit's reading at
@@ -230,7 +230,7 @@ ONSITE = "verity/remote-network/v0"
 VERDICTS = ("sampled proofs", "PoUW", "inference-only", "remote", "the network certifier", "onsite")
 #: the window report's rows, by verdict
 ROWS = {"sampled proofs": "integrity", "PoUW": "work", "the network certifier": "communication"}
-#: where the certifier piece leaves its period's case (`certifier_piece.CASE`), whose params carry the schedule and caps
+#: where the network attestation piece leaves its period's case (`certifier_piece.CASE`), whose params carry the schedule and caps
 CASE = Path("pieces") / "certifier" / "case.json"
 #: the run's advice registration as it publishes it (`served_verdicts.py public-registration`), its compiler's cap ℓ_a
 REGISTRATION = "registration.json"
@@ -435,7 +435,7 @@ NO_CHAIN_REPORT = f"the run published no chain report ({CHAIN_REPORT}), whose st
 CHARGED = ("MonitoringPeriodLeakAccepted's ℓ_{a,j}: the free inputs of each compute audit tied to execution phase j's scan, those "
            "its Program neither registers at a pinned root nor ties (NetworkCheck.Period's tiedAudits sums the "
            "parameters' audits[].free, #(freeInputs \\ reg); `records_audit.py period`'s free for V3c's window audit). "
-           "It reads no cap and no advice length: the advice is the compile unit's input, not the window Program's "
+           "It reads no cap and no advice length: the advice is the compile slice's proof block's input, not the window Program's "
            "(`records_audit.py declared_count`), so neither the advice registration's width ℓ_a (its compiler's "
            "cap_bits) nor |a_j| is in it. It is the tight form, the figure of record only once the period's check "
            "performs both checks it rests on and none of its premises is open (`CHECKS`, `DISCHARGE`, `OPEN`)")
@@ -1639,6 +1639,9 @@ def scan_state_pinned(out: Path, case: Any) -> dict[str, Any]:
     period, summary, rec = docs[PERIOD], docs[AUDIT_SUMMARY], docs[AUDIT]
     own = (summary.get("registered") or {}).get("own") if isinstance(summary.get("registered"), Mapping) else None
     pin = own.get(SCAN_STATE) if isinstance(own, Mapping) else None
+    if isinstance(own, Mapping) and (more := sorted(set(own) - {SCAN_STATE})):
+        return res | {"why": f"the run's {AUDIT_SUMMARY} takes {more} as the execution phase's own (registered.own), "
+                             f"and only {SCAN_STATE} is"}
     for i, entry in held:
         if regs[i] != period.get("registration"):
             return res | {"why": f"audit {i}'s registration registers {SCAN_STATE}, and the run's {PERIOD} "

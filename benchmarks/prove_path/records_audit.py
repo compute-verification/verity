@@ -195,6 +195,7 @@ sys.path.insert(0, str(HERE.parent / "one_stage"))
 from verity import device as ST  # noqa: E402
 from verity.protocols.registration.verifier import registration as G  # noqa: E402
 from verity.protocols.resource_accounting.compute.pouw.verifier import credit as CR  # noqa: E402
+from verity.protocols.resource_accounting.network.verifier import blocks as NB  # noqa: E402
 from verity.protocols.proofs.spot.verifier import service as S  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import registered as REG, docket as R  # noqa: E402
 from verity.circuits.codec import program_digest  # noqa: E402
@@ -206,6 +207,10 @@ PORTS = range(10000, 32000)
 #: a compile command's exit code for advice it refuses (not advice it compiles: malformed, over its cap, or a choice it can't
 #: compile), the reason on stderr; any other nonzero exit is an error. Either fails the compile check (``compiles``).
 REFUSED = 2
+#: the values an execution phase registers afresh under its open root, never an earlier record's: the scan's state, which
+#: the network verifier ties to its scan (stateTied); a circuit names it among its values and marks nothing else, so any
+#: other value it takes is W's
+PHASE_OWN = frozenset({NB.SCAN_STATE})
 
 
 def catalog_resolve(tid: str) -> Any:
@@ -575,13 +580,17 @@ def tie_of(circuit: Mapping[str, Any], w: Mapping[str, Any] | None, prefix: str 
     `credit.window_table` (PoUW H1's docket of the window, each value a Commit table in ``row/v2`` rows), or, with
     no prefix, by the value's own name (Pearl+'s window record, `pearl_c.window`: each call's A rows and y, FP32 words in
     ``row-seg/v1`` rows, beside each weight's B rows, which the circuit doesn't take). ``({}, {})`` for a circuit that
-    takes no values with no W. A value among ``own`` (the execution phase's own, `phase_values`) is registered afresh,
-    under the execution phase's open root: it is in ``registered`` and ``schemas`` and never W's. Refused (ValueError)
-    for values without W, W without values, and W registering a value other than once."""
+    takes no values with no W. A value of ``own`` (`phase_values`) that is the execution phase's own (`PHASE_OWN`) is
+    registered afresh, under the execution phase's open root: it is in ``registered`` and ``schemas`` and never W's. Refused
+    (ValueError) for values without W, W without values, W registering a value other than once, and W registering a
+    value the execution phase registers afresh."""
     reg = IF.declarations(circuit)[2]
     values = tuple(reg.values) if reg is not None else ()
-    mine = {v: own[v] for v in values if v in (own or {})}
+    mine = {v: own[v] for v in values if v in (own or {}) and v in PHASE_OWN}
     values = tuple(v for v in values if v not in mine)
+    named = {e.get("value") for e in ((w or {}).get("registered") or ()) if isinstance(e, Mapping)}
+    if both := sorted(v for v in mine if (v if prefix is None else CR.window_table(v, prefix)) in named or v in named):
+        raise ValueError(f"the execution phase registers {both} afresh, and the earlier registration registers them too")
     fresh = {"registered": {v: int(e["words"]) for v, e in mine.items()},
              "schemas": {v: IF.value_format(reg, v)[0] for v in mine}}
     if not values and w is None:
@@ -686,7 +695,7 @@ def tie_row(tied: Mapping[str, Any]) -> dict[str, Any]:
 
 
 def phase_values(rec: Mapping[str, Any], params: Iterable[str]) -> dict[str, dict[str, Any]]:
-    params, run, out = set(params), (rec.get("window") or {}).get("run"), {}
+    params, run, out = set(params) & PHASE_OWN, (rec.get("window") or {}).get("run"), {}
     for e in rec.get("registered") or ():
         v = e.get("value") if isinstance(e, Mapping) else None
         if v not in params or not isinstance(e.get("root"), str) or not isinstance(run, str):
@@ -1219,6 +1228,8 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--bin", required=True)
     p.add_argument("--lean", required=True)
     p.add_argument("--zk-server", required=True)
+    p.add_argument("--gpus", type=A5.cards, help="as a5's --gpus: the proof server's cards, their indices comma-separated "
+                   "(0,1), as nvidia-smi numbers them; default the CPU")
     p.add_argument("--out", required=True)
     p.add_argument("--delta", type=float, default=0.5)
     p.add_argument("--port", type=int, default=None, help="the sessions' base port (default a base whose --ports ports are "

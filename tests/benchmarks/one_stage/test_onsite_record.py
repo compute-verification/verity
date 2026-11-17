@@ -102,7 +102,7 @@ MEASURED = {"format": "verity/advice-charge/v2", "label": "measured on test run 
             "phase_bits": {"count": 1, "min": 2870, "median": 2870, "mean": 2870.0, "max": 2870, "total": 2870},
             "prompt_len": {"count": 5}, "output_len": {"count": 5}, "finishes": {"eos": 3, "length": 2, "abort": 0}}
 TREE = "ab12" * 10
-#: the certifier's published verdict line, after an earlier attempt's
+#: the network attester's published verdict line, after an earlier attempt's
 LINE = 'THE NETWORK CERTIFIER {"rc": 0, "verdict": "accept"}'
 #: SCHEDULE's egress capacity a phase: its 4 · 8 cells a bucket over 63 buckets exceed its caps' 252 · 4 = 1008 cells
 CAPACITY = 1008 * 512 * 8
@@ -1909,7 +1909,7 @@ def test_an_accepted_network_verdict_is_established_only_where_each_listed_circu
 def test_a_period_listing_no_circuit_files_holds_auditor_listing_and_one_with_no_case_doesnt(tmp_path, text, unread):
     """A period whose audits list no circuit files holds auditor-listing, listing none, with no published period read;
     with no certifier case, or one that can't be read or isn't an object, the run can't say what the period lists, so
-    it doesn't hold, saying why, the certifier's verdict is not established, both auditor-record and auditor-listing
+    it doesn't hold, saying why, the network attester's verdict is not established, both auditor-record and auditor-listing
     open, and there is no bound."""
     out = accepted(tmp_path)
     files_held = {"holds": True, "read_by": [OR.ONSITE], "compared": ["statement"]}
@@ -1967,6 +1967,8 @@ NO_OWN = (f"audit 0's registration registers {OR.SCAN_STATE}, and the run's {OR.
     ("another value, root and domain", f"the entry audit 0's registered reads opened {OR.SCAN_STATE} at isn't, by its "
                                        "value and root and domain, its registration's registered entry"),
     ("no reads of it", NO_OWN),
+    ("another value as its own too", f"the run's {OR.AUDIT_SUMMARY} takes ['pearl-a/0/0'] as the execution phase's own "
+                                     f"(registered.own), and only {OR.SCAN_STATE} is"),
     ("no registered reads", NO_OWN),
     ("no summary", f"audit 0's registration registers {OR.SCAN_STATE}, and the run's {OR.AUDIT_SUMMARY} "
                    "can't be read: FileNotFoundError"),
@@ -1990,7 +1992,10 @@ def test_the_network_and_composite_verdicts_are_established_only_where_v3cs_read
     pin = {"another root": dict(STATE_ENTRY, root="5b" * 64), "another domain": dict(STATE_ENTRY, domain="d6" * 64),
            "another value, root and domain": {"value": "weights/w@8", "root": "ef" * 64, "domain": "fe" * 64},
            "no reads of it": None}.get(how, STATE_ENTRY)
-    out = scan_state_run(tmp_path, None if how == "no registered reads" else {} if pin is None else {OR.SCAN_STATE: pin},
+    own = {} if pin is None else {OR.SCAN_STATE: pin}
+    if how == "another value as its own too":
+        own["pearl-a/0/0"] = {"value": "pearl-a/0/0", "root": "ef" * 64, "domain": "fe" * 64}
+    out = scan_state_run(tmp_path, None if how == "no registered reads" else own,
                          registration=NO_ADVICE if how == "another audit's period" else STATED,
                          accepted_=how != "not accepted",
                          audit=audit_record(reported={MEMBER: False}) if how == "reads not reported" else AUDITED)

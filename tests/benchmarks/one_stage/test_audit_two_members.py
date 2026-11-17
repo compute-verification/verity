@@ -72,6 +72,8 @@ from verity.protocols.proofs.spot.verifier.challenger import challenger_session 
 from verity.protocols.proofs.spot.verifier.one_stage import member_trees as MT  # noqa: E402
 import records_audit as RA  # noqa: E402
 
+STATE = next(iter(RA.PHASE_OWN))
+
 LEAN = ROOT / "verity" / "protocols" / "proofs" / "flock" / "verifier" / ".lake" / "build" / "bin"
 BUILD = ROOT / "verity" / "protocols" / "proofs" / "flock" / "prover" / "check_build.sh"
 #: `check_build.sh bin`'s exit where the machine has no Flock checkout, not its toolchain or not its crates
@@ -339,19 +341,19 @@ def test_a_member_with_one_bit_changed_is_refused(tmp_path, binaries):
 def test_a_value_the_program_takes_registered_afresh_with_no_earlier_record_passes_the_audit(tmp_path, binaries):
     """No other test runs a value the Program takes, registered afresh under the run root with no earlier record (no
     ``--tie``), through the stream's registration, the prover and the Lean verifier's registered reads."""
-    window = _window(tmp_path / "window", own="own/w")
+    window = _window(tmp_path / "window", own=STATE)
     rec = json.loads((window / "registration.json").read_text())
     (entry,) = rec["registered"]
     rc, row, _out, said = _audit(tmp_path, window, binaries, more={"FLOCK_CHALLENGER": "0"})
     assert rc == 0 and row.get("ok") is True, said
     assert row["audit"]["accepted"] is True, row["audit"]
-    assert row["registered"]["own"] == {"own/w": entry} and row["registered"]["members"] == 1, row["registered"]
-    assert row["leak"]["untied"] == ["own/w"] and "tie" not in row, row["leak"]
+    assert row["registered"]["own"] == {STATE: entry} and row["registered"]["members"] == 1, row["registered"]
+    assert row["leak"]["untied"] == [STATE] and "tie" not in row, row["leak"]
 
 
 def _answer(out: Path) -> dict:
     """SPOT's answer on the audit under ``out`` (`served_integrity.answer`, as the served run's record and the
-    certifier's period read it), its docket the one the audit registered."""
+    attestation period read it), its docket the one the audit registered."""
     from verity.protocols.proofs.spot.verifier.one_stage import served_integrity as SI  # beside a5, on the path `records_audit` put there
 
     return SI.answer(out, json.loads((out / "window" / "registration.json").read_text()))
