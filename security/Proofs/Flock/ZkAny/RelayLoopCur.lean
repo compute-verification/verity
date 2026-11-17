@@ -4,27 +4,7 @@ public import Proofs.Flock.ZkAny.RelayLoopKept
 public import Proofs.Flock.ZkAny.RelayLoopSalts
 public import Proofs.Flock.ZkAny.RelayGap
 
-/-!
-# The frame round's own rep one round on
-
-`loopKept_round` takes `RepJ` of the round's own rep at the session's next request. Here it is, case by case on the
-model's next round:
-
-* `rep_lt_two`: a rep stream's rep is `0` or `1`. `LoopModel.hist_ans`: the history one message on, where the auditor
-  answered coins as `V*` did, ends with their bytes.
-* `sched_of_placeOf`: where `placeOf` places the rep's next round, its schedule so far is one (the converse of
-  `Loop.placeOf_sched`).
-* **`repJ_next`**: past its stream's first round, where the next round is another stream's, the frame the session's
-  next request finds holds the history's words for each of its stream's rounds (`roundRun_last`, `count_last`).
-* `roundRun_alg`: in its algebraic phase a round leaves its rep's opening unbegun. `sameInv_salts_kept`: so a frame
-  keeping `SameInv` keeps it at salts the round lemmas read, the rep's from its opening's first round on.
-* `ofLoop_placeholder`, `ofLoop_cfgAlike`: past a rep's first round the loop's frame takes coins only at the rep's
-  placeholder, whose configuration is alike the tape's.
-* **`repJ_same`**: past its stream's first round and within the rep's schedule, at the loop's own frames, the
-  session's entry being the setup's and the model's own table the rep's level 0's, the model's coin step takes the
-  round's coins, and where the next round is the same stream's the frame the session's next request finds keeps
-  `SameInv` one round more of the rep (`roundRun_same`).
--/
+/-! The frame round's own rep one round on, past its stream's first round (`repJ_next`, `repJ_same`). -/
 
 @[expose] public section
 
@@ -35,7 +15,6 @@ open _root_.Flock (V F128 SessionSpec Stmt)
 open _root_.Flock.ZkServer.Frames (Sessions Rep Release)
 open _root_.Flock.ZkServer.Frame (Cfg Masker Place)
 
-/-- **A rep stream is among the setup's rep streams' indices.** -/
 theorem rep_lt_size {spec : SessionSpec} {i r : Nat} {s : String} (h : (i, r, s) ∈ spec.repStreams.toList) :
     2 * i + r < spec.repStreams.size := by
   have hme := rep_index h
@@ -43,7 +22,6 @@ theorem rep_lt_size {spec : SessionSpec} {i r : Nat} {s : String} (h : (i, r, s)
   rw [Array.getElem?_eq_none (by omega)] at hme
   cases hme
 
-/-- **A rep stream's rep is `0` or `1`.** -/
 theorem rep_lt_two {spec : SessionSpec} {i r : Nat} {s : String} (h : (i, r, s) ∈ spec.repStreams.toList) :
     r < 2 := by
   have hme := rep_index h
@@ -54,7 +32,6 @@ theorem rep_lt_two {spec : SessionSpec} {i r : Nat} {s : String} (h : (i, r, s) 
   omega
 
 open Claims.ZKMal in
-/-- **The history one message on ends with the coins' bytes** where the auditor answered coins to it as `V*` did. -/
 theorem LoopModel.hist_ans {W Rr : Type} (M : LoopModel W Rr) {j : Nat} {e : Env} (h : M.Ans j e) {a : ByteArray}
     (ha : e.ans = some a) (hb : byte? a 0 = some 2) :
     ∃ m', M.hist (j + 1) = M.hist j ++ [(m', a.data.toList)] := by
@@ -66,9 +43,6 @@ theorem LoopModel.hist_ans {W Rr : Type} (M : LoopModel W Rr) {j : Nat} {e : Env
   simp only [hA a ha hb, msgOf]
 
 open Loop in
-/-- **Where `placeOf` places the rep's next round, its schedule so far is one**: at a frame keeping its schedule so far
-(`Loop.RepInv`) on the table and extras its session gives it and the salts the loop's salts give it where `placeOf`
-reads them, the opening `placeOf` goes on with has not failed. -/
 theorem sched_of_placeOf {salts : Array (ByteArray × Nat × Array ByteArray)}
     {l0 : _root_.Flock.ZkServer.Level0.Level0} {s : Release} {p : Rep} {dom : ByteArray}
     {t : _root_.Flock.ZkServer.Finish.Tab} {xs : Array (Array F128)} {hi : Array ByteArray} {stm : Stmt}
@@ -112,11 +86,6 @@ theorem sched_of_placeOf {salts : Array (ByteArray × Nat × Array ByteArray)}
       subst hx
       exact ⟨_, rfl⟩
 
-/-- **The round's own rep one round on, where the next round is another stream's**: past its stream's first round,
-at a round of table `i`'s rep `r` that releases and whose coins the rep's frame took, where the history one message on
-ends with the coins' bytes, the frame the session's next request finds is the rep's, on the session's entry, table
-and level 0 as they stay, holding the history's words for each of its stream's rounds where the next round is the
-next stream's first (`roundRun_last`, `count_last`); `StreamAt` asks nothing else there. -/
 theorem repJ_next {W Rr : Type} {M : LoopModel W Rr} {sid : Nat} {spec : SessionSpec} {sts : Array Stmt}
     {st : State} {pl : Placed} {stream : String} {i r : Nat} {dom : ByteArray} {v : Claims.Msg} {e : Env}
     {σ σ' : LoopAt} {e0 : Claims.Msg × Claims.Msg} {h1 : List (Claims.Msg × Claims.Msg)} {q₀ j₀ : Nat}
@@ -186,9 +155,6 @@ theorem repJ_next {W Rr : Type} {M : LoopModel W Rr} {sid : Nat} {spec : Session
     rw [hcw, hcnt, hh', hh, List.cons_append, List.tail_cons]
     simp only [List.map_append, List.map_cons, List.map_nil]
 
-/-- **In its algebraic phase a round leaves its rep's opening unbegun**: past the stream's first round, where the
-found frame has fewer coins than its algebraic phase's rounds and has not begun its opening, `placeOf` places the round
-on the frame as it is (`Loop.placeOf_alg`), and the frame the session's next request finds has not begun it either. -/
 theorem roundRun_alg {sid : Nat} {st : State} {pl : Placed} {stream : String} {n i r : Nat}
     {dom content : ByteArray} {e : Env} {R : Sessions} {L0 : _root_.Flock.ZkServer.Level0.Slots} {R₃ : Sessions}
     (hr : RoundRun sid st pl stream n i r dom content e R L0 R₃) (hreq : st.request pl (.round stream n) = none)
@@ -223,10 +189,6 @@ theorem roundRun_alg {sid : Nat} {st : State} {pl : Placed} {stream : String} {n
     simp only [Loop.coinsOf, h1, h2]
   exact ⟨_, hat, key { q with st := st', vals := v } _ _ hto hop, hod⟩
 
-/-- **A frame keeping `SameInv` at a round past its stream's first keeps it at salts the round lemmas read, which are
-the rep's in the loop's frames from its opening's first round on**: as `sameInv_salts`, where the frame's salts are
-the rep's once its opening has begun, which it has not where its coins are as many as its algebraic phase's rounds
-(`StreamAt`'s). -/
 theorem sameInv_salts_kept {W Rr : Type} {L : LeanRelease W Rr} {x : Msg} {ρ : Rr} {h : List (Msg × Msg)}
     {cs : List FlockDeploy.Coin} {q₀ j : Nat} {t : _root_.Flock.ZkServer.Finish.Tab} {dom' : ByteArray}
     {xs : Array (Array F128)} {hi : Array ByteArray} {pre : List _root_.Flock.ZkServer.Frame.Req}
@@ -251,7 +213,6 @@ theorem sameInv_salts_kept {W Rr : Type} {L : LeanRelease W Rr} {x : Msg} {ρ : 
     obtain ⟨hop, hod⟩ := hord (by omega)
     exact saltsAt_of_find? (hs hle hod hop)
 
-/-- **The `Commit`'s words are as many as the loop requests**, within `Frames.COIN_MAX`. -/
 theorem wordsAt_zero_size (x : Msg) {cs : List FlockDeploy.Coin} (h : 0 < cs.length) :
     (Loop.wordsAt x cs 0).size = min (Loop.loopNr x 0) _root_.Flock.ZkServer.Frames.COIN_MAX := by
   cases cs with
@@ -259,9 +220,6 @@ theorem wordsAt_zero_size (x : Msg) {cs : List FlockDeploy.Coin} (h : 0 < cs.len
   | cons c cs => simp [Loop.wordsAt, FlockDeploy.Coin.vals]
 
 open Loop LeanRelease in
-/-- **Past a rep's first round the loop's frame takes coins only at the rep's placeholder**: where it takes the coins
-after `e0 :: h1`, the round after being past its stream's first, the frame state the rep's last round left owes them
-(`takeAt_ok`), which it does only where the rep's placeholder is one (`progOf_placeholder`). -/
 theorem ofLoop_placeholder (T : ZKMal.CoinLayer.TableData)
     (L₀ : LeanRelease Claims.Flock.Wit
       ((ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand))
@@ -303,9 +261,6 @@ theorem ofLoop_placeholder (T : ZKMal.CoinLayer.TableData)
     simp at hb
 
 open Loop LeanRelease in
-/-- **The configuration at the loop's own frames is of the placeholder's shape**: past `Hello` and the `Commit`, at
-the rep of the round after `h`, the tape's samples and the placeholder's zeros configure the rep alike
-(`cfgAlike_ofBytes`). -/
 theorem ofLoop_cfgAlike (T : ZKMal.CoinLayer.TableData)
     (L₀ : LeanRelease Claims.Flock.Wit
       ((ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand))
@@ -341,16 +296,6 @@ theorem ofLoop_cfgAlike (T : ZKMal.CoinLayer.TableData)
   exact Loop.cfgAlike_ofBytes lay _ _ (some mask)
 
 open Loop LeanRelease in
-/-- **The round's coins taken, and the round's own rep one round on where the next round is the same stream's**: the
-model's coin step takes the round's coins (`roundRun_same`, `ofLoop_fed_snd`), and as `repJ_next`, where the round
-after it is the rep's next (`hsame`), at the loop's own frames (`hrel`), the session's entry being the setup's with
-the `Commit`'s words as its link (`hK2`), the model's own table at the rep the one the rep's level 0 gives (`hK3`; it
-is of the placeholder's shape where `real` answers the loop's own, `hR`, within the bounds `hS` and `hP` give), and the
-round within the rep's schedule, not the inner proof's (`hin`): the frame the session's next request finds keeps
-`SameInv` one round more of the rep (`roundRun_same`), the placeholder, its configuration and its schedule being the
-model's (`ofLoop_placeholder`, `ofLoop_cfgAlike`, `Sched.schedSoFar_alike`) and the round's count the plan's
-(`Loop.loopNr_succ`, `Count.plan_sched`), at the rep's salts once its opening has begun (`sameInv_salts_kept`), not
-begun where its coins are as many as its algebraic phase's rounds (`roundRun_alg`). -/
 theorem repJ_same (T : ZKMal.CoinLayer.TableData)
     (L₀ : LeanRelease Claims.Flock.Wit
       ((ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand))

@@ -2,20 +2,7 @@ module
 
 public import Proofs.Flock.ZkAny.RelayLoop
 
-/-!
-# A frame round's slot at the deployed loop
-
-At a frame round's slot `envPre_inv`'s step reads the worker's value at the model's history (`LoopRead`'s round clause).
-Here its case, given what the loop's frames and the model hold there:
-
-* `slot_round_open`: a round's slot is for a stream whose `Open` left. `request_round_slot`: before a stop the session
-  lets a round at its slot through, the coin check (`coinsOf`) and the place (`State.place`) both passing.
-* `afterAnswer_coins`, `stepK_round_go`: a frame round the session goes on past released, the auditor answered it
-  coins the session took, and the rep's frame took them.
-* `RoundFacts`: what the loop's frames and the model hold at a frame round's slot, `envOk_round_run`'s premises and
-  every other rep stream's rep another. **`slotCase_round`**: the frame round's slot case, given `RoundFacts` there and
-  `J` kept.
--/
+/-! A frame round's slot case at the deployed loop, given `RoundFacts` there (`slotCase_round`). -/
 
 @[expose] public section
 
@@ -27,7 +14,6 @@ open _root_.Flock (SessionSpec Stmt)
 open _root_.Flock.ZkServer.Frame (Masker)
 open _root_.Flock.ZkServer.Frames (Sessions Rep)
 
-/-- **A round's slot is for a stream whose `Open` left.** -/
 theorem slot_round_open {S : State} {P : Placed} {s : String} {n : Nat} (h : slot S P = some (.round s n)) :
     (S.labels.extract 0 P.opens).any (·.1 == s) = true := by
   unfold slot at h
@@ -46,8 +32,6 @@ theorem slot_round_open {S : State} {P : Placed} {s : String} {n : Nat} (h : slo
   · repeat' split at h
     all_goals simp at h
 
-/-- **Before a stop the session lets a round at its slot through**: the round is the schedule's next opening, so the
-coin check passes, and its stream's `Open` left, so its place does. -/
 theorem request_round_slot {S : State} {P : Placed} {s : String} {n : Nat} (hR : Reach S P) (h : S.stop = none)
     (hsl : slot S P = some (.round s n)) : S.request P (.round s n) = none := by
   obtain ⟨hsent, hj, hlink, hq⟩ := slot_round hsl
@@ -69,7 +53,6 @@ theorem request_round_slot {S : State} {P : Placed} {s : String} {n : Nat} (hR :
   rw [e]
   simp only [hc, hp, Option.map_none]
 
-/-- **Coins the session took that the session goes on past, the round's rep's frame took.** -/
 theorem afterAnswer_coins {st : State} {s : String} {n : Nat} {a : ByteArray} {e : Env} (hb : byte? a 0 = some 2)
     (hs : (st.answer (.round s n) a).1.stop = none) (hn : (afterAnswer st (.round s n) a e).stop = none) :
     e.coins = .ok () := by
@@ -79,8 +62,6 @@ theorem afterAnswer_coins {st : State} {s : String} {n : Nat} {a : ByteArray} {e
     simp [hb, hs, hc, refuse_stop]
   · rfl
 
-/-- **A frame round at its slot the session goes on past released**, and the auditor answered it coins that the session
-took and the rep's frame took. -/
 theorem stepK_round_go {st : State} {pl : Placed} {s : String} {n : Nat} {e : Env} (hR : Reach st pl)
     (h : st.stop = none) (hs : slot st pl = some (.round s n))
     (hgo : ((stepK true st pl (some (tagOf (.round s n))) (.ok (.round s n)) e).go &&
@@ -110,7 +91,6 @@ theorem stepK_round_go {st : State} {pl : Placed} {s : String} {n : Nat} {e : En
           exact absurd hn' (Option.isSome_iff_ne_none.mp (noCoins_stop _ _ _))
       exact ⟨⟨o, rfl⟩, a, rfl, hb, hn', afterAnswer_coins hb hn' hn⟩
 
-/-- A frame at one rep's key is at no other rep's. -/
 theorem key_ne {sid i r i' r' : Nat} {p : Rep} (hk : keyOf p = (sid, i, r)) (hne : (i', r') ≠ (i, r)) :
     keyOf p ≠ (sid, i', r') := by
   rw [hk]
@@ -119,13 +99,6 @@ theorem key_ne {sid i r i' r' : Nat} {p : Rep} (hk : keyOf p = (sid, i, r)) (hne
   cases heq
   rfl
 
-/-- **What the loop's frames and the model hold at a frame round's slot** of session `sid`, the loop at `σ`, for the
-round of `n` coins of `stream` the loop ran on table `i`'s rep `r` at the domain frame `dom`, its content the worker's
-value `v` at the model's history so far: the model's coin count there is `n`, its round there masked, not its last,
-with a next message, and `v` crosses where it fails to pass; the rep has a frame, which `roundPlace` readies at the
-model's schedule, configuration and masking state but for `stopped`, as the stream's first round where `seen` has no
-round of it, with a stop exactly where the frames have one; the frames have stopped the session exactly where the
-model's run has; and every other rep stream of the setup is on another rep. -/
 structure RoundFacts {W Rr : Type} (M : LoopModel W Rr) (sid : Nat) (spec : SessionSpec) (seen : List String)
     (stream : String) (n i r : Nat) (dom : ByteArray) (v : Claims.Msg) (σ : LoopAt) : Prop where
   coins : M.L.coins M.x (M.hist σ.c).length = n
@@ -144,12 +117,6 @@ structure RoundFacts {W Rr : Type} (M : LoopModel W Rr) (sid : Nat) (spec : Sess
   stopped : σ.R.stopped sid = !M.L.toSrv.liveBefore M.wk M.x M.w M.ρ M.κ (M.hist σ.c)
   other : ∀ i' r' s', (i', r', s') ∈ spec.repStreams.toList → s' ≠ stream → (i', r') ≠ (i, r)
 
-/-- **The frame round's slot case**: where each of the run's messages is the deferred release's (`LoopModel.Own`),
-`RoundFacts` holds at each request at the slot as the loop answers it, the run having a message there, the rep's frame
-at the model's configuration and the round out, and `J` is kept there, what the relay read for the round is the
-model's next message, and `LoopP`
-holds at the session's next request, one model message on: the round's rep frame's puts touch no other rep's frame,
-so each rep of a stream with no round yet stays fresh. -/
 theorem slotCase_round {W Rr : Type} {M : LoopModel W Rr} {J : List String → State → LoopAt → Prop} {sid : Nat}
     {spec : SessionSpec} {sts : Array Stmt} {nonce : ByteArray} {stream : String} {n : Nat} (hOwn : M.Own)
     (hA : ∀ (seen : List String) (st : State) (pl : Placed) (e : Env) (σ σ' : LoopAt) (i r : Nat) (dom : ByteArray)

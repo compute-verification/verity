@@ -23,24 +23,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 import VCVio.Prelude.Core
 
-/-!
-# V*'s opening, both outputs
-
-`_steps` of `verity_flock.rec_open`'s `RecOpen_v3` (rec-step3 `273017068`, `rec_open.py:197-200`) and
-`RecOpen_v4`, as the verifier's builder (`Flock.HmNets`) states it. First the consistency term:
-`residual_forms` at `cons_structure(LANES)` over the row's elements and `acc`'s first two (`row + acc[:256]`) and the
-coefficients `coef`, then `_climb` at the directions `dirs[:32]` (`climbRow`). `out` is the climb; `acc_out` is the two
-residuals and then `acc[256:]`. The two versions share `_steps` and `cons_structure`. v4's `dirs` is 64 words where
-v3's is 8, and v4 reads `coef` and `dirs` as values the verifier registers where v3 takes them public; `recOpen` takes
-the ports as forms and reads only `dirs[:32]`, so everything here holds for both.
-
-`sound_recOpen`: whenever the rows hold, if the ports carry the bytes of the row's elements `r`, of `acc`'s first two
-elements `a` and the rest of `acc`, of the coefficients `c`, of 64-byte siblings, and the directions are the position's
-low bits, then `out` carries the verifier's climb of the row's SHA-512 leaf (`sound_climbRow`) and `acc_out`
-carries `a[k] + Σ_l c[k · LANES + l] · r[l]` for `k = 0, 1` (`rec_open.acc_ref`), then the rest of `acc`. Its byte layout
-is `MerkleScheme.rowBytes`, each element's 16 bytes `le64(lo) ‖ le64(hi)`, which puts bit `j` of element `i` at bit
-`128 i + j`, where `sound_residualForms` reads it (`bitL_rowBytes`).
--/
+/-! V*'s opening, `RecOpen_v3` or `RecOpen_v4`, computes the verifier's climb and the opening's consistency term (`sound_recOpen`). -/
 
 @[expose] public section
 
@@ -49,33 +32,19 @@ namespace FlockVBridge
 open Flock.HmNets hiding and
 open Flock FlockSoundness.Discharge.Hm
 
-/-! ## The builder -/
-
-/-- `rec_open.cons_structure` (`rec_open.py:107-112` in v3, `:110-115` in v4), `GfResiduals`' S for the consistency
-term: the operands are `w`'s first `LANES` elements (the row's), then `v`'s `2 · LANES` (the coefficients), and residual
-`r` is `Σ_l ops[LANES + r · LANES + l] · ops[l]` plus `w[LANES + r]` (`acc`'s element `r`). -/
 def consStructure (LANES : ℕ) : GfS where
   ops := (List.range LANES).map (fun l => [Term.w l]) ++ (List.range (2 * LANES)).map fun i => [Term.v i]
   res := (List.range 2).map fun r =>
     { mul := (List.range LANES).map fun l => (LANES + r * LANES + l, l), add := [Term.w (LANES + r)] }
 
-/-- `RecOpen_v3`'s and `RecOpen_v4`'s `_steps` (`rec_open.py:197-200` in v3): the residuals `t` over
-`row + acc[:256]` and `coef` first, then `_climb` at `dirs[:32]`; the result is `(out, t + acc[256:])`. -/
 def recOpen (LANES H : ℕ) (row aux acc coef dirs : List Lin) : M (List Lin × List Lin) := do
   let t ← residualForms (consStructure LANES) (row ++ acc.take 256) coef
   let out ← climbRow H row aux (dirs.take 32)
   pure (out, t ++ acc.drop 256)
 
-/-! ## What it computes -/
-
-/-- `rec_open.acc_ref`'s element `k`: `a[k] + Σ_l c[k · LANES + l] · r[l]`, summed in `l`'s order, from the row's
-elements `r`, `acc`'s first elements `a` and the coefficients `c` (zero past an array's end). -/
 def consTerm (LANES : ℕ) (r a c : Array F128) (k : ℕ) : F128 :=
   ((List.range LANES).map fun l => c[k * LANES + l]! * r[l]!).foldl (· + ·) a[k]!
 
-/-! ## The byte layout -/
-
-/-- An element's 16 bytes `le64(lo) ‖ le64(hi)` carry its bits: bit `t` of the bytes is bit `t` of the element. -/
 theorem bitL_toBytes (x : F128) {t : ℕ} (ht : t < 128) : bitL x.toBytes.data.toList t = bitOf x t := by
   rw [bitL, F128.toBytes, Array.toList_ofFn, List.getD_eq_getElem?_getD, List.getElem?_ofFn, dite_eq_left (by omega),
     Option.getD_some, bitOf, FlockLevel3.h_bit]
@@ -105,8 +74,6 @@ theorem bitL_colBytes : ∀ (L : List F128) (t : ℕ),
         show t / 128 = (t - 8 * 16) / 128 + 1 by omega, show t % 128 = (t - 8 * 16) % 128 by omega]
       rfl
 
-/-- A row's bytes (`MerkleScheme.rowBytes`) carry its elements laid end to end, element `i` at bit `128 i`, zero past
-the end: where `sound_residualForms` reads them (`wbit`). -/
 theorem bitL_rowBytes (r : Array F128) (t : ℕ) :
     bitL (MerkleScheme.rowBytes r).data.toList t = FlockVBridge.wbit (fun i => r.toList.getD i 0) t := by
   rw [FlockSoundness.Refine.rowBytes_data, bitL_colBytes]
@@ -136,7 +103,6 @@ theorem getD_toList (a : Array F128) (i : ℕ) : a.toList.getD i 0 = a[i]! := by
   · rw [List.getD_eq_default _ _ (by simp; omega), getElem!_neg a i h]
     rfl
 
-/-- Forms that carry bytes whose bits are `wbit w` give `sound_residualForms` its hypothesis, past their end too. -/
 theorem bit_eq_wbit {z : Var → Bool} {W : List Lin} {b : ByteArray} {w : ℕ → F128} (h : Carries z W b)
     (hb : ∀ t, bitL b.data.toList t = FlockVBridge.wbit w t) (q : ℕ) : bit z W q = FlockVBridge.wbit w q := by
   by_cases hq : q < W.length
@@ -151,7 +117,6 @@ theorem carries_of_wbit {z : Var → Bool} {W : List Lin} {b : ByteArray} {w : �
     Carries z W b :=
   ⟨hl, fun q hq => by rw [h q hq, hb]⟩
 
-/-- Forms that carry `b ++ b'` split into forms that carry `b` and forms that carry `b'`. -/
 theorem carries_split {z : Var → Bool} {w : List Lin} {b b' : ByteArray} (h : Carries z w (b ++ b')) :
     Carries z (w.take (8 * b.size)) b ∧ Carries z (w.drop (8 * b.size)) b' := by
   obtain ⟨hl, hb⟩ := h
@@ -166,8 +131,6 @@ theorem carries_split {z : Var → Bool} {w : List Lin} {b b' : ByteArray} (h : 
     have := hb (8 * b.size + t) (by omega)
     rw [ByteArray.toList_data_append, bitL_append_right _ (by omega), hbl, Nat.add_sub_cancel_left] at this
     rw [bit, List.getElem?_drop, ← bit, this]
-
-/-! ## The consistency term's value -/
 
 theorem zero_add_f128 (x : F128) : 0 + x = x := by
   cases x
@@ -205,7 +168,7 @@ theorem opVal_cons_v (LANES : ℕ) (w v : ℕ → F128) {i : ℕ} (hi : i < 2 * 
   simp only [List.map_cons, List.map_nil, termVal]
   exact foldl_add_single _
 
-/-- Products over a list, rewritten operand by operand. `F` stays opaque, so no step unfolds a product. -/
+/-- `F` stays opaque, so no step unfolds a product. -/
 theorem map_mul_congr {α : Type} (g : α → ℕ × ℕ) (F : ℕ → F128) (u v : α → F128) :
     ∀ L : List α, (∀ x ∈ L, F (g x).1 = u x) → (∀ x ∈ L, F (g x).2 = v x) →
       (L.map g).map (fun ab => F ab.1 * F ab.2) = L.map fun x => u x * v x
@@ -214,8 +177,6 @@ theorem map_mul_congr {α : Type} (g : α → ℕ × ℕ) (F : ℕ → F128) (u 
     rw [List.map_cons, List.map_cons, List.map_cons, hu x List.mem_cons_self, hv x List.mem_cons_self,
       map_mul_congr g F u v L (fun y hy => hu y (List.mem_cons_of_mem _ hy)) fun y hy => hv y (List.mem_cons_of_mem _ hy)]
 
-/-- At `consStructure`, with `w` the row's elements then `acc`'s and `v` the coefficients, residual `k`'s value
-(`sound_residualForms`' `resVal`) is `consTerm`. -/
 theorem resVal_consStructure (LANES : ℕ) (r a c : Array F128) (hr : r.size = LANES) (k : ℕ)
     (hk : k < (consStructure LANES).res.length) :
     resVal (consStructure LANES) (termVal (fun i => (r.toList ++ a.toList).getD i 0) (fun i => c.toList.getD i 0))
@@ -247,15 +208,6 @@ theorem resVal_consStructure (LANES : ℕ) (r a c : Array F128) (hr : r.size = L
   simp only [List.map_cons, List.map_nil, termVal]
   rw [foldl_add_single, hacc, map_mul_congr _ _ (fun l => c[k * LANES + l]!) (fun l => r[l]!) _ hu hv]
 
-/-! ## The opening -/
-
-/-- **V*'s opening computes the verifier's climb and the opening's consistency term.** For a Merkle scheme
-`ms` whose node is `SHA-512(l ‖ r)` and `H ≤ 32` levels (`rec_open._check`), whenever the rows of
-`recOpen LANES H row aux acc coef dirs` hold under `z`: if `row` carries the bytes of the `LANES` elements `r`, `acc`
-those of two elements `a` and then `rest`, `coef` those of `c`, the `H` sibling forms of `aux` carry 64-byte siblings
-`ss`, and the direction bit at level `h < H` is bit `h` of the position `idx`, then `out` carries
-`Flock.climb ms (SHA-512(rowBytes r)) idx ss` and 64 zero bytes (`rec_open.expected` of that node), and `acc_out` carries
-the bytes of `consTerm` at `k = 0, 1`, then `rest` (`rec_open.acc_ref`). -/
 theorem sound_recOpen (ms : MerkleScheme) (hms : ∀ l r, ms.node l r = Sha512.hash (l ++ r)) (LANES H : ℕ) (hH : H ≤ 32)
     (row aux acc coef dirs : List Lin) :
     Sound (recOpen LANES H row aux acc coef dirs) fun z o =>

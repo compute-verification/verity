@@ -2,26 +2,7 @@ module
 
 public import Proofs.Flock.ZkAny.RelayLoopCur
 
-/-!
-# The frame round's own rep one round on, past its schedule
-
-`loopKept_round`'s `hcur` at a round of a rep past its schedule so far, the inner proof's, where the next round is the
-same stream's:
-
-* `roundPlace_own_of`: where `placeOf` places the found frame's next round at the inner proof's own, the readied frame
-  is `placeOf`'s and the round's place the frame's own inner round (`Frame.innerSched` on the rounds the loop's finish
-  computed), at the inner round its masking state is at.
-* `answered_own0`: at the inner proof's round 0 the model's masking state has begun no inner round.
-  `innerSched_zero`: the frame's own round 0 is the inner proof's label frame and a 16-byte `final_c'`.
-* `round_unstop_own`: so a round the frame releases there, at a state alike the model's and at the model's
-  configuration, leaves a state alike the loop's after it (`Loop.progOf_own_step`).
-* `roundRun_step_own`, `roundRun_own`: at a `RoundRun` past the rep's schedule the model's coin step takes the
-  round's coins, and where the next round is the same rep's the frame the session's next request finds is its run one
-  round on, at the model's state for that round but for `stopped`, and keeps `SameInv` one round more of the rep.
-* **`repJ_own`**: as `repJ_same`, where the round is past the rep's schedule: the model's coin step takes the round's
-  coins, and where the next round is the same stream's the frame the session's next request finds keeps `SameInv` one
-  round more of the rep, its opening ended.
--/
+/-! The frame round's own rep one round on, past its schedule, at the inner proof's rounds (`repJ_own`). -/
 
 @[expose] public section
 
@@ -34,10 +15,6 @@ open _root_.Flock.ZkServer.Frames (Sessions Rep Release)
 open _root_.Flock.ZkServer.Frame (Cfg Masker Place Req labelFrame)
 
 set_option maxHeartbeats 1000000 in
-/-- **Past the opening the readied frame is `placeOf`'s, at its own inner round**: at the session `s`, its table
-`name` and its level 0 `l0`, where `placeOf` places the found frame's next round at the inner proof's own, the frame
-`roundPlace` readies is `placeOf`'s, and the round's place is the frame's own inner round at its masking state's, on
-the rounds the loop's finish computed. -/
 theorem roundPlace_own_of {R : Sessions} {L0 : _root_.Flock.ZkServer.Level0.Slots} {sid i r j : Nat}
     {dom content : ByteArray} {n : Nat} {p q : Rep} {pl : Place} {f : Bool} {nd : Option String}
     (hf : R.find sid i r = some (j, p))
@@ -59,8 +36,6 @@ theorem roundPlace_own_of {R : Sessions} {L0 : _root_.Flock.ZkServer.Level0.Slot
     | exact absurd (by assumption) throw_ne_ok
     | (cases h; exact ⟨rfl, rfl⟩)
 
-/-- **The frame's own inner round 0** is the inner proof's label frame and a 16-byte `final_c'` between its
-headers. -/
 theorem innerSched_zero (c : Cfg) (s : Masker) (fin : Array ByteArray) (n : Nat) :
     ∃ w : ByteArray, w.size = 16 ∧ (_root_.Flock.ZkServer.Frame.innerSched c s fin n 0).data.toList =
       (labelFrame _root_.Flock.Zk.LABEL_INNER.toUTF8 ++ header 3 1 1 ++ w ++ header 4 1 1).data.toList := by
@@ -70,9 +45,6 @@ theorem innerSched_zero (c : Cfg) (s : Masker) (fin : Array ByteArray) (n : Nat)
     Array.length_toList, Loop.words_size, Nat.mul_one]
 
 open Loop LeanRelease in
-/-- **At the inner proof's round 0 the model has begun no inner round**: where the round after `e0 :: h1` is a rep's
-past its first and the placeholder's schedule so far on the rep's coins, its rounds framed, is as long as them, the
-model's masking state for it has no inner round (`repState_inner`). -/
 theorem answered_own0 (T : ZKMal.CoinLayer.TableData)
     (L₀ : LeanRelease Claims.Flock.Wit
       ((ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand))
@@ -125,12 +97,6 @@ theorem answered_own0 (T : ZKMal.CoinLayer.TableData)
     fun k hk => hF k (by omega)) ha
 
 open Loop LeanRelease in
-/-- **A round past the rep's schedule, at the model's state for it, leaves the loop's state after it**: as
-`round_unstop`, where the placeholder's schedule so far on the rep's coins, its rounds framed, is no longer than them,
-so that the round is the inner proof's (`progOf_own_step`): the frame's release of a device round against the
-scheduled round `r`, at a state alike the model's and at the model's configuration, leaves a state alike the loop's
-after the coins with any next coin, `r` at the inner proof's round 0 being the ZK server's own round 0 at some
-`final_c'`. -/
 theorem round_unstop_own (T : ZKMal.CoinLayer.TableData)
     (L₀ : LeanRelease Claims.Flock.Wit
       ((ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand))
@@ -180,12 +146,6 @@ theorem round_unstop_own (T : ZKMal.CoinLayer.TableData)
   all_goals rfl
 
 open Loop LeanRelease in
-/-- **A rep's frame at the session's next round, at the model's state, past the rep's schedule**: as
-`roundRun_step`, where the placeholder's schedule so far on the rep's coins, its rounds framed, is no longer than them
-(`hle`) and the round is in the place of the scheduled round `rr`, the ZK server's own round 0 at some `final_c'` at
-the inner proof's round 0 (`hr0`): the model's coin step takes the round's coins (`roundRun_fed`), and where the next
-round is the same rep's (`hj`) the frame the session's next round finds is its run one round on, at the model's state
-for the history with `(v, a)` but for `stopped` (`round_unstop_own`, `roundRun_carry`). -/
 theorem roundRun_step_own (T : ZKMal.CoinLayer.TableData)
     (L₀ : LeanRelease Claims.Flock.Wit
       ((ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand))
@@ -251,14 +211,6 @@ theorem roundRun_step_own (T : ZKMal.CoinLayer.TableData)
   exact roundRun_carry T L₀ real x ρ e0 h1 hx hj hr hreq hfr hrp ho hput ha hb hs hco hR hcfg hu hA
 
 open Loop LeanRelease in
-/-- **A rep's frame keeps `SameInv` from one round of the rep past its schedule to the next**: as `roundRun_same`,
-where the frame's schedule on its coins (`sched`, of one shape with the placeholder's) ends before the round
-(`hle`), so `placeOf` places it at the inner proof's own and the round is in the place of the frame's own inner round
-(`roundPlace_own_of`), the ZK server's own round 0 at the inner proof's round 0, where the model has begun no inner round
-(`answered_own0`, `innerSched_zero`): the model's coin step takes the round's coins (`roundRun_step_own`), and where
-the next round is the same rep's the frame the session's next request finds keeps `SameInv` at the history with the
-worker's message and the auditor's answer (`roundRun_step_own`, `roundRun_repInv`, `roundRun_coins`,
-`roundRun_cfg`). -/
 theorem roundRun_own (T : ZKMal.CoinLayer.TableData)
     (L₀ : LeanRelease Claims.Flock.Wit
       ((ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand))
@@ -357,12 +309,6 @@ theorem roundRun_own (T : ZKMal.CoinLayer.TableData)
     exact hu5
 
 open Loop LeanRelease in
-/-- **The round's own rep one round on, past the rep's schedule**: as `repJ_same`, where the round is past the rep's
-schedule so far, the inner proof's (`hout`: the placeholder's schedule so far on the rep's coins no longer than them),
-and the placeholder's row of pads is within a `u64`'s count (`hRow`): the model's coin step takes the round's coins
-(`roundRun_own`, `ofLoop_fed_snd`), and where the next round is the same stream's (`hsame`) the frame the session's next
-request finds keeps `SameInv` one round more of the rep (`roundRun_own`), its schedule of one shape with the
-placeholder's (`Sched.schedSoFar_alike`), at the rep's salts, its algebraic phase's rounds no more than its coins. -/
 theorem repJ_own (T : ZKMal.CoinLayer.TableData)
     (L₀ : LeanRelease Claims.Flock.Wit
       ((ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand))

@@ -2,19 +2,7 @@ module
 
 public import Proofs.Flock.ZkAny.RelaySame
 
-/-!
-# A rep's frame after a round of it, whichever rep's round comes next
-
-`roundRun_same` carries a rep's frame to the rep's next round, at the model's configuration and masking state for it.
-What it carries besides, the frame's run, the history's words as its coins and its schedule so far, needs no next round
-of the rep:
-
-* **`roundRun_last`**: at a `RoundRun` past the rep's first round whose round releases and whose coins the rep's frame
-  took, where the found frame keeps `SameInv`, the frame the session's next request finds is its run one round on,
-  holds the history's words for the rep's rounds so far and keeps its schedule so far, whichever rep's round comes
-  next. After rep 0's last round, so, its frame holds the history's words for all its rounds, which rep 1's first
-  round reads (`roundPlace_switch1`).
--/
+/-! After a round past its first, a rep's frame keeps its run, words and schedule so far, whichever rep's round comes next (`roundRun_last`). -/
 
 @[expose] public section
 
@@ -26,12 +14,6 @@ open _root_.Flock.ZkServer.Frames (Sessions Rep)
 open _root_.Flock.ZkServer.Frame (Cfg Masker Req Place)
 
 open Loop in
-/-- **A rep's frame keeps its run, words and schedule so far after a round past its first**, whichever rep's round
-comes next: at a `RoundRun` at the loop's count whose content is the worker's message `v`, past the rep's first round
-(`hj₀`), whose round releases and whose coins the rep's frame took off the auditor's answer `a`, where the found frame
-keeps `SameInv` on the table and extras its session gives it and the salts the loop's salts give it at the opening's
-first round (`hsalt`), the frame the session's next request finds is its run one round on, holds the history's words
-with `(v, a)` for the rep's rounds so far, and keeps its schedule so far. -/
 theorem roundRun_last {W Rr : Type} {L : LeanRelease W Rr} {ρ : Rr} (x : Msg) (e0 : Msg × Msg)
     (h1 : List (Msg × Msg)) (v : Msg) {rs : List Nat} {q₀ j₀ : Nat} (hq : h1.length = q₀ + 1)
     (hj₀ : (ZKMal.CoinLayer.locate rs 0 q₀).2 = j₀ + 1)

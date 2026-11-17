@@ -3,20 +3,7 @@ module
 public import Definitions.Claims.SamplingGeneric
 public import Proofs.Flock.ZkAny.SampledSessionsTwo
 
-/-!
-# A two-stage sampled audit's view at any values, its sampled sessions a proof system for proof blocks'
-
-`sampledAuditTwo_zkOut` at a proof system for proof blocks `A` (`Claims.SamplingGeneric.ZkArg`) that is zero knowledge
-with a public outcome (`ZkArg.ZK`): every second-stage session runs `A`'s prover on its own nonce and rest. The
-guarantee is then the proof system's zero knowledge and the audit's contract over it, composed: from `A.ZK H` and
-`AuditZkTwo`, the two-stage audit's view.
-
-* `AuditZkTwo`: the two-stage audit's zero-knowledge contract over `A`: the stack reads no key, every session's
-  statement and witness are in `A`'s relation, its verifier runs `A`'s rounds, `A`'s error there is within `εS`, and the
-  values' ideal stream is within `δ` of the dummy values' at every first-stage sample.
-* `Flock.Guarantees.SampledAuditTwoZkArg`: at every `A` that is zero knowledge and every two-stage audit that meets the
-  contract over it, the audit's view is `SampledAuditTwoAny`'s bound at `A`'s simulator, with `A`'s errors added.
--/
+/-! A two-stage sampled audit's view at any values, its sampled sessions a zero-knowledge proof system for proof blocks' (`Flock.Guarantees.SampledAuditTwoZkArg`). -/
 
 @[expose] public section
 
@@ -26,12 +13,8 @@ open Claims Verity Verity.Game Verity.ValueSalts Verity.Assumptions
 open Claims.SamplingGeneric (ZkArg)
 open scoped ENNReal
 
-/-- **The two-stage audit's zero-knowledge contract** over the proof system for proof blocks `A`, at the value service
-`sv`, the values `v`, dummy values `v₀` and stack `st` (functions of the first-stage sample), the second-stage sessions
-`Q` of `A`'s prover, and the bounds `εS` and `δ`: the stack reads no key at any first-stage sample (`own`); every
-session's statement and witness are in `A`'s relation (`rel`); its verifier runs `A`'s rounds (`rounds`); `A`'s error
-there is at most `εS j` at each outcome (`err`); and at every first-stage sample an ideal stream of the values is within
-`δ` of one of the dummy values there (`hides`). -/
+/-- The stack reads no key (`own`), each session's statement and witness are in `A`'s relation (`rel`) and its verifier
+runs `A`'s rounds (`rounds`), `A`'s error is within `εS` (`err`), and the values hide within `δ` (`hides`). -/
 structure AuditZkTwo {Coin K S Ys V O T R X₁ X₂ Θ : Type} [Fintype S] [Fintype Ys] [Fintype T] [Fintype R]
     (A : ZkArg Coin) (sv : Service K S Ys V O T R) {r : ℕ} (m : Fin r → ℕ) (v v₀ : X₁ → Fin r → V)
     (st : X₁ → StreamStack K V S O T R r m)
@@ -52,14 +35,8 @@ open Claims Verity Verity.Game Verity.ValueSalts FlockSoundness.ZK
 open Claims.SamplingGeneric (ZkArg)
 open scoped ENNReal
 
-/-- **A two-stage sampled audit's view at any values, its sampled sessions a proof system for proof blocks'.** At every
-proof system for proof blocks `A` that is zero knowledge with a public outcome at `H` (`ZkArg.ZK`); every value service,
-stream of `r` registrations, values, dummy values and stack (functions of the first-stage sample), key `k₀` and `ℓ`
-second-stage sessions `Q` of `A`'s prover that meet the two-stage audit's contract over `A` (`AuditZkTwo`) within `εS`
-and `δ`; and the simulators' coins of session `j` those of `CB j` through `eC`: at the sessions' outcomes `s` and every
-event `E` on the records, both samples and the sessions' messages, the probability that the loop admits the stream and
-the audit shows `s` and `E` is at most `SampledAuditTwoAny`'s bound with `A`'s simulator run in turn (`Tup.sims`), plus
-`A`'s errors at `s` (`Tup.errs εS ℓ s`). -/
+/-- At every proof system for proof blocks `A` that is zero knowledge with a public outcome, and every two-stage audit
+meeting `AuditZkTwo` over it, the audit's view is `SampledAuditTwoAny`'s bound at `A`'s simulator, plus `A`'s errors. -/
 def _root_.Flock.Guarantees.SampledAuditTwoZkArg : Prop :=
   ∀ {Coin K S Ys V O T R X₁ X₂ Θ : Type} [Fintype K] [Fintype S] [Fintype Ys] [Fintype T] [Fintype R] [Fintype X₁]
     [Fintype X₂] {CB : ℕ → Type} [∀ j, Fintype (CB j)] [∀ j, Nonempty (CB j)] (A : ZkArg Coin) (H : Msg → Msg),

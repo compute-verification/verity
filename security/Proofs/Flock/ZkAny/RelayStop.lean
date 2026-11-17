@@ -4,27 +4,7 @@ public import Proofs.Flock.ZkAny.RelayFold
 public import Proofs.Flock.Claims.ZK.FrameRun
 public import Proofs.Flock.Claims.ZK.FrameStop
 
-/-!
-# A session's stop in the loop's frames
-
-A session stops at its first failure, every rep with it: `Frames.Sessions.stopped` holds once some rep's frame of the
-session stopped, and from then on `Frames.roundPlace` hands no rep's frame of it a device round. Here is what the loop's
-frames' updates do to that bit:
-
-* `stopped_iff`, `stopped_frameAt`, `stopped_of_frameAt`: the session stopped exactly where one of its reps' frames
-  did; so where it has not, no frame the loop finds for it has, and a stopped frame it finds stops it.
-* `stopped_put_self`, `stopped_put_live`, `stopped_put_other`: a put of a stopped frame at a rep's key stops the rep's
-  session, one of a frame not stopped leaves a session not stopped so, and a put of another session's frame leaves the
-  session's stop as it was.
-* **`roundStep_stopped`**: so a round of the session that releases stops it exactly where it had stopped or the
-  frame's check failed the round: a stopped session's rounds reach their frames as no device round, which the check
-  fails (`Ranked.check_empty`), and a live one's frames are not stopped, so the check stops them only where it fails
-  (`Ranked.check_stopped`).
-* `SessKeptStep`, `SessKept`: every update but a put of one of the session's frames, a start of a stopped frame, and
-  the session's own end, and any run of them; `stopped_sessKept`: those leave the session's stop as it was. The loop's
-  updates between two of a session's requests are these: the other sessions' requests, and the frames port's, whose
-  starts push a frame at the frame's start (`Frames.startRep`).
--/
+/-! A session stops at its first failure, every rep with it, and a released round stops it exactly where it had stopped or the frame's check failed the round (`roundStep_stopped`). -/
 
 @[expose] public section
 
@@ -33,14 +13,12 @@ namespace Claims.ZKServer.Relay
 open _root_.Flock (SessionSpec Stmt F128)
 open _root_.Flock.ZkServer.Frames (Sessions Rep)
 
-/-- **The session stopped exactly where one of its reps' frames did.** -/
 theorem stopped_iff {R : Sessions} {sid : Nat} :
     R.stopped sid = true ↔ ∃ p ∈ R.reps, p.sid = sid ∧ p.st.m.stopped = true := by
   unfold _root_.Flock.ZkServer.Frames.Sessions.stopped
   rw [Array.any_eq_true']
   simp only [Bool.and_eq_true, beq_iff_eq]
 
-/-- **Where the session has not stopped, no frame the loop finds for it has.** -/
 theorem stopped_frameAt {R : Sessions} {sid i r : Nat} {p : Rep} (hs : R.stopped sid = false)
     (hf : frameAt R sid i r = some p) : p.st.m.stopped = false := by
   have hm := Array.mem_of_find?_eq_some hf
@@ -52,14 +30,12 @@ theorem stopped_frameAt {R : Sessions} {sid i r : Nat} {p : Rep} (hs : R.stopped
     rw [hs] at this
     cases this
 
-/-- **A stopped frame the loop finds for a session stops it.** -/
 theorem stopped_of_frameAt {R : Sessions} {sid i r : Nat} {p : Rep} (hf : frameAt R sid i r = some p)
     (hp : p.st.m.stopped = true) : R.stopped sid = true := by
   have hk := Array.find?_some hf
   simp only [keyIs, Bool.and_eq_true, beq_iff_eq] at hk
   exact stopped_iff.mpr ⟨p, Array.mem_of_find?_eq_some hf, hk.1.1, hp⟩
 
-/-- **A put of another session's frame** leaves the session's stop as it was. -/
 theorem stopped_put_other {R : Sessions} {sid : Nat} {p : Rep} (hp : p.sid ≠ sid) :
     (R.put p).stopped sid = R.stopped sid := by
   unfold _root_.Flock.ZkServer.Frames.Sessions.put _root_.Flock.ZkServer.Frames.Sessions.stopped
@@ -74,7 +50,6 @@ theorem stopped_put_other {R : Sessions} {sid : Nat} {p : Rep} (hp : p.sid ≠ s
     simp only [beq_false_of_ne hp, beq_false_of_ne this, Bool.false_and]
   · rfl
 
-/-- **A put of a stopped frame at a rep's key** stops the rep's session. -/
 theorem stopped_put_self {R : Sessions} {p : Rep} (hfr : (frameAt R p.sid p.table p.rep).isSome)
     (hp : p.st.m.stopped = true) : (R.put p).stopped p.sid = true := by
   obtain ⟨q, hq⟩ := Option.isSome_iff_exists.mp hfr
@@ -88,7 +63,6 @@ theorem stopped_put_self {R : Sessions} {p : Rep} (hfr : (frameAt R p.sid p.tabl
   have hk' : (q.sid == p.sid && q.table == p.table && q.rep == p.rep) = true := hk
   simp only [hk', ↓reduceIte]
 
-/-- **A put of a frame not stopped, in a session not stopped,** leaves the session not stopped. -/
 theorem stopped_put_live {R : Sessions} {p : Rep} (hs : R.stopped p.sid = false) (hp : p.st.m.stopped = false) :
     (R.put p).stopped p.sid = false := by
   cases h : (R.put p).stopped p.sid
@@ -106,8 +80,6 @@ theorem stopped_put_live {R : Sessions} {p : Rep} (hs : R.stopped p.sid = false)
       rw [hs] at this
       cases this
 
-/-- **An update that keeps session `sid`'s stop**: any of `RegStep`'s but a put of one of the session's frames, a
-start of a stopped frame, and the session's own end. -/
 inductive SessKeptStep (sid : Nat) : Sessions → Sessions → Prop
   | begin (R : Sessions) (sid' : Nat) (spec : SessionSpec) (sts : Array Stmt) :
       SessKeptStep sid R (R.begin sid' spec sts)
@@ -122,12 +94,10 @@ inductive SessKeptStep (sid : Nat) : Sessions → Sessions → Prop
   | close (R : Sessions) (sid' : Nat) (roots : Array ByteArray) : sid' ≠ sid →
       SessKeptStep sid R (closeOf R sid' roots)
 
-/-- Any run of updates that keep the session's stop. -/
 inductive SessKept (sid : Nat) : Sessions → Sessions → Prop
   | refl (R : Sessions) : SessKept sid R R
   | step {R R' R'' : Sessions} : SessKept sid R R' → SessKeptStep sid R' R'' → SessKept sid R R''
 
-/-- Each `SessKeptStep` is one of the loop's frames' updates. -/
 theorem SessKeptStep.regStep {sid : Nat} {R R' : Sessions} (h : SessKeptStep sid R R') : RegStep R R' := by
   cases h with
   | begin => exact .begin _ _ _ _
@@ -139,7 +109,6 @@ theorem SessKeptStep.regStep {sid : Nat} {R R' : Sessions} (h : SessKeptStep sid
   | inner root r' j b hf => exact .inner root r' j b hf
   | close sid' roots _ => exact .close _ sid' roots
 
-/-- **An update that keeps the session's stop keeps it.** -/
 theorem stopped_sessKeptStep {sid : Nat} {R R' : Sessions} (h : SessKeptStep sid R R') :
     R'.stopped sid = R.stopped sid := by
   cases h with
@@ -177,16 +146,11 @@ theorem stopped_sessKeptStep {sid : Nat} {R R' : Sessions} (h : SessKeptStep sid
       refine ⟨p, Array.mem_filter.mpr ⟨hm, ?_⟩, hs, hp⟩
       simp [hs, Ne.symm hne]
 
-/-- **A run of updates that keep the session's stop keeps it.** -/
 theorem stopped_sessKept {sid : Nat} {R R' : Sessions} (h : SessKept sid R R') : R'.stopped sid = R.stopped sid := by
   induction h with
   | refl => rfl
   | step _ hs ih => exact (stopped_sessKeptStep hs).trans ih
 
-/-- **A released round of the session stops it exactly where it had stopped or the frame's check failed the round**:
-at a round at `roundPlace`'s scheduled place `rr` on the frame `q`, where a stopped session takes no device round and a
-live one's frame is not stopped, the frame the round puts back (`p₁`) is the frame's check's, and after its put the
-session is stopped where it was or where the check failed the round. -/
 theorem roundStep_stopped {R : Sessions} {L0 : _root_.Flock.ZkServer.Level0.Slots} {sid i r : Nat}
     {dom content : ByteArray} {n : Nat} {q p₁ : Rep} {rr : ByteArray} {f : Bool} {nd : Option String}
     {o : ByteArray} (hfr : (frameAt R sid i r).isSome)

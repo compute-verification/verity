@@ -15,17 +15,7 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 
-/-!
-# Flock's one-stage audit under hidden outputs is zero knowledge (trusted)
-
-`ZeroKnowledgeHidden` is the zero-knowledge half of `EndToEndHidden`, on the same plan: the verifier's joint view of the
-`J` tables of a hidden-output `--zk` session is simulatable. Its proof is
-`Flock.SecurityProofs.ZeroKnowledgeHidden : Flock.Guarantees.ZeroKnowledgeHidden`.
-
-Flock's definitions are still in its proofs package, so this module imports
-`Proofs.Flock.Soundness.Discharge.ZkHidden.View`, and `Definitions.lean`, which the `security` package builds without
-`security_proofs`, does not import it: `Proofs.Flock.ZeroKnowledgeHidden` does.
--/
+/-! The statement of Flock's zero-knowledge guarantee under hidden outputs, kept in the proofs package because Flock's definitions are there. -/
 
 @[expose] public section
 
@@ -69,11 +59,9 @@ table's statement avoids the mask slot, since `verify --zk` refuses one that mee
 (`FailClosed.SampleSetupZHJ.avoidsMask`). -/
 def ZeroKnowledgeHidden : Prop :=
   ∀ (n : ℕ) (Reg : Type) (P : LigProver)
-    -- the session's statement, the record's sample file, and the reference setup
     (I : Inputs) (_ht : I.tags.typed = false)
     (mPts : ℕ) (dj : Finset (Fin n) → Lean.Json) (S₀ : Finset (Fin n)) (d₀ : Lean.Json)
     (y₀ : SampleSetupZHJ (inputsJ I 0) mPts S₀ d₀)
-    -- a sample at which `verify --zk` sets every table up, and a registration
     (S : Finset (Fin n)) (R : Reg)
     (ys : ∀ j : Fin (nTab I), SampleSetupZHJ (inputsJ I j) mPts (partS I (dj S) S j) (drawJ I (dj S) j)),
     ZkViewAtJ (fun j => coinedOf P ((planZHJ (Reg := Reg) dj y₀ S R).get

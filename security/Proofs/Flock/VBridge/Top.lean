@@ -17,15 +17,7 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 
-/-!
-# VBridge G from V*'s facts
-
-`vbridge_of_vstar` is VBridge G at the compiled inner verifier, with every closed piece applied: the algebra from V*'s
-part residuals (`algebraDecodes_of_decode`, its `BitsOk` from `structureOf_bitsOk`), the running sums from V*'s opening
-units (`accChains_of_decode`), the inner verifier's acceptance from one table's files and both reps' runs
-(`stagesAccept_of_runs`), and `VFullR`, which V*'s full sample gives (`vFullR_of_read`). Its hypotheses are the pieces
-still open, each a fact about V*'s statements, registrations or files.
--/
+/-! VBridge G at the compiled inner verifier from V*'s facts (`vbridge_of_vstar`), its hypotheses each a fact about V*'s statements, registrations or files. -/
 
 @[expose] public section
 
@@ -47,7 +39,6 @@ variable (cls : HClass) (regs : List (Region cls.kLog (cls.m - cls.kLog))) (sch 
 
 local notation "ℐ" => flockInnerCL T CT execArith H512 enc512 InnerAccepts.leafPlain cls regs (schedOf sch)
 
-/-- **VBridge G from V*'s facts.** -/
 theorem vbridge_of_vstar
     (zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
     (dg : ByteArray → ByteArray) (N k Rw : ℕ) (x : Reg → L.Ω → Hidden cls)
@@ -56,7 +47,6 @@ theorem vbridge_of_vstar
     (cmt : (j : Fin S) → Cm → PosK (Vs j).c (Vs j).hU (Vs j).nv → (obK (Vs j).c (Vs j).hU (Vs j).nv).Dg)
     (msg : ℕ → ((j : Fin S) → PosK (Vs j).c (Vs j).hU (Vs j).nv → ValK (Vs j).c) → (ℐ).Msg)
     (sh : Shape) (rep : ((j : Fin S) → (Vs j).Bits) → Fin 2 → RepData)
-    -- the algebra: the shape's structure and groups, and V*'s part residuals at each rep
     {GS : Flock.RecAlgebra.GfS} (hS : structureOf sh = .ok GS)
     {gs : Array (Array ℕ × Array ℕ × Array ℕ)} (hg : groups GS (portSizes sh) = .ok gs)
     (sess : ℕ → Fin S) (un : (p : ℕ) → Fin (Vs (sess p)).nv) (cp : ℕ → ℕ)
@@ -69,7 +59,6 @@ theorem vbridge_of_vstar
       ResZeroAt (zs R ω t R₂ (sess p)) (layers zs dg N k Rw R ω t R₂ τ (sess p)) (un p) (cp p) sh gs p
         (el (rep (layers zs dg N k Rw R ω t R₂ τ) r).w) (rep (layers zs dg N k Rw R ω t R₂ τ) r).rounds
         (rep (layers zs dg N k Rw R ω t R₂ τ) r).extras (rep (layers zs dg N k Rw R ω t R₂ τ) r).comb)
-    -- the running sums: V*'s opening units at each rep's queries
     (acc : ((j : Fin S) → (Vs j).Bits) → ℕ → Array F128) (ops : ((j : Fin S) → (Vs j).Bits) → Fin 2 → Openings)
     (sessO : ℕ → Fin S) (unO : (ℓ : ℕ) → ℕ → Fin (Vs (sessO ℓ)).nv) (cpO : ℕ → ℕ → ℕ)
     (hu : ∀ R ω t R₂ τ o, Accepted (I := ℐ) zs dg N k Rw R ω t R₂ τ o → ∀ r, ∀ ℓ < sh.sched.levels.size,
@@ -87,7 +76,6 @@ theorem vbridge_of_vstar
     (hrd : ∀ R ω t R₂ τ o, Accepted (I := ℐ) zs dg N k Rw R ω t R₂ τ o → ∀ r,
       ReadsEnds sh (rep (layers zs dg N k Rw R ω t R₂ τ) r) (acc (layers zs dg N k Rw R ω t R₂ τ))
         (ops (layers zs dg N k Rw R ω t R₂ τ) r))
-    -- the inner verifier: one table's files and both reps' runs
     (files : ((j : Fin S) → (Vs j).Bits) → TableFiles cls) (hsch : ∀ l, (files l).sch = sch)
     (hfiles : ∀ R ω t R₂ τ o, Accepted (I := ℐ) zs dg N k Rw R ω t R₂ τ o →
       (files (layers zs dg N k Rw R ω t R₂ τ)).Valid regs (x R ω) T CT
@@ -96,7 +84,6 @@ theorem vbridge_of_vstar
       (∀ r, AlgebraHolds sh (rep (layers zs dg N k Rw R ω t R₂ τ) r) ∧
         AccHolds sh (rep (layers zs dg N k Rw R ω t R₂ τ) r)) →
       (files (layers zs dg N k Rw R ω t R₂ τ)).Runs)
-    -- V*'s public files
     (hcm : VCommits zs Sk cmt) (hdec : VDecodesR wmsg (fun _ _ a b => a = b) Sk msg) :
     Flock.Assumptions.VBridge (I := ℐ) zs dg N k Rw x wmsg Sk cmt msg :=
   vbridge_compiled T CT execArith H512 enc512 InnerAccepts.leafPlain cls regs (schedOf sch) zs dg N k Rw x wmsg Sk cmt msg sh rep

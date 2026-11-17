@@ -19,15 +19,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.VBridge.AlgHolds
 import Proofs.Flock.VBridge.PartsCover
 
-/-!
-# `AlgebraHolds` from each part's residuals vanishing
-
-`algebraHolds_of_resZero`: `algebraHolds_of_parts` with each part's residuals given as values, not as registered output
-columns. When every part `p` of S's groups (`RecResiduals.part sh p`) has its residuals zero at elements `E` and
-verifier values `vv` that read the rep's `w` at `wIdx` of the group's ports and the verifier's coefficients `v` at the
-group's `V`, `AlgebraHolds` holds. `vv`'s agreement with `v` is the tie a caller takes from check 5 (`ResTie`) at the
-verifier's values; it stays a hypothesis here.
--/
+/-! `AlgebraHolds` from each part's residuals vanishing, given as values rather than registered output columns (`algebraHolds_of_resZero`). -/
 
 @[expose] public section
 
@@ -40,10 +32,7 @@ open Flock.RecAlgebra (structureOf verifierRows el)
 open FlockVBridge.PartS (wIdx)
 open FlockVBridge.Compiled (RepData AlgebraHolds)
 
-/-- **The algebra holds when every part's residuals vanish at the rep's values.** At S (`structureOf`) with its wire
-bits in range (`BitsOk`), the verifier's coefficients `v` at the rep's coins (`verifierRows`), the sizes and S's groups:
-if for every group `p` the verifier's part `p` has every residual zero at elements `E` and verifier values `vv` that
-are the rep's `w` at `wIdx` of the group's ports and `v` at its `V`, every residual of S is zero. -/
+/-- `vv`'s agreement with `v` stays a hypothesis here; a caller takes it from check 5 (`ResTie`). -/
 theorem algebraHolds_of_resZero {sh : Shape} {d : RepData} {S : RecAlgebra.GfS} (hS : structureOf sh = .ok S)
     (hbits : S.BitsOk) {v : Array F128} {info kappa}
     (hvr : verifierRows sh d.rounds d.extras d.comb = .ok (v, info, kappa))

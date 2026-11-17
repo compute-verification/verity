@@ -16,23 +16,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 
-/-!
-# `VFull` and the verifier's U4
-
-`VFull` asks that each wire V* reads a stage from be a wire of a unit session `j`'s sampling design samples. V*'s sampling designs are the full
-sample (`VSamplingDesign.live`), so that is every unit (`vFull_of_whole`). The verifier's U4 (`Flock.Registered.checkFull`,
-`Flock.HmRow`) refuses a sampled statement unless every unit its own registered reads name for a round's commitment
-(`rec-c<i>`, `rec-top-L<l>`, R's `rec-opening-c<i>` and `rec-top-stacked-L<l>`, the sparse phase's messages) is sampled
-in full; under a stratified sample that is the stratum holding it.
-
-* `mem_unit`: a unit in one of a stratum's ranges is one of its `size` units (`Stratum.unit`).
-* `samplesInFull_of_checkFull`: U4's pass samples in full each unit that reads a round's commitment.
-* `roundCommitment_indexed`, `roundCommitment_named`: the values `Registered.roundCommitment` names are a round's
-  commitment, a prefix of `roundIndexed` followed by any index; `samplesInFull_of_checkFull_round`: U4's pass samples in full
-  each unit that reads one of them.
-* `full_stratum`: a unit a stratified sample samples in full is in a stratum it samples whole.
-* `vFull_of_whole`: `VFull` under the full sample (`--draw subset:N`), without U4.
--/
+/-! `VFull` under the full sample (`vFull_of_whole`), and the verifier's U4 check sampling in full each unit that reads a round's commitment (`samplesInFull_of_checkFull_round`). -/
 
 @[expose] public section
 
@@ -40,7 +24,6 @@ namespace FlockVBridge.Full
 
 open FlockSoundness FlockSoundness.Audit FlockSoundness.Discharge FlockSoundness.Discharge.Recursion
 
-/-- `Stratum.unit` over its ranges as a list. -/
 def unitL : List (ℕ × ℕ) → ℕ → ℕ
   | [], _ => 0
   | (lo, hi) :: rs, j => if j < hi - lo then lo + j else unitL rs (j - (hi - lo))
@@ -59,7 +42,6 @@ theorem unit_eq (s : Flock.Draw.Stratum) (j : ℕ) : s.unit j = unitL s.units.to
     · rfl
     · simpa using ih _
 
-/-- A stratum's size over its ranges as a list. -/
 def sizeL (l : List (ℕ × ℕ)) : ℕ := l.foldl (fun acc (lo, hi) => acc + (hi - lo)) 0
 
 theorem foldl_shift (l : List (ℕ × ℕ)) (a : ℕ) :
@@ -89,7 +71,6 @@ theorem mem_unitL : ∀ (l : List (ℕ × ℕ)) (u : ℕ), (∃ p ∈ l, p.1 ≤
         · omega
         · simpa using hu
 
-/-- **A unit in one of a stratum's ranges is one of its `size` units.** -/
 theorem mem_unit (s : Flock.Draw.Stratum) (u : ℕ) (h : s.units.any (fun (lo, hi) => lo ≤ u && u < hi) = true) :
     ∃ j < s.size, s.unit j = u := by
   rw [size_eq]
@@ -99,9 +80,6 @@ theorem mem_unit (s : Flock.Draw.Stratum) (u : ℕ) (h : s.units.any (fun (lo, h
   obtain ⟨i, hi, h1, h2⟩ := h
   exact ⟨s.units[i], Array.getElem_mem_toList hi, h1, h2⟩
 
-/-- **U4's pass samples in full each unit that reads a round's commitment**: when `checkFull` passes on the verifier's reads
-`own` and a sample `j` that parses as `d`, every unit a port of `own` of a round's commitment reads is one `d` samples in
-full. -/
 theorem samplesInFull_of_checkFull {own : Array Flock.Registered.Port} {j : Lean.Json} {d : Flock.Draw.UnitSample}
     (hok : Flock.Registered.checkFull (some own) (some j) = .ok ()) (hd : Flock.Draw.UnitSample.ofJson j = .ok d)
     {p : Flock.Registered.Port} (hp : p ∈ own) (hc : Flock.Registered.roundCommitment p.value = true)
@@ -125,7 +103,6 @@ theorem samplesInFull_of_checkFull {own : Array Flock.Registered.Port} {j : Lean
   rw [Array.getElem?_eq_getElem hlt] at hu
   simp_all
 
-/-- `roundCommitment`'s test at a prefix passes on the prefix followed by a number's decimal digits. -/
 theorem indexed_digits (pre : String) (n : ℕ) :
     ((pre ++ toString n).startsWith pre &&
       (!((pre ++ toString n).drop pre.length).toString.isEmpty &&
@@ -146,22 +123,16 @@ theorem indexed_digits (pre : String) (n : ℕ) :
   rw [Bool.and_eq_true, Bool.and_eq_true, hd]
   exact ⟨hpre, hne, hall⟩
 
-/-- **A prefix of `roundIndexed` followed by any index is a round's commitment.** -/
 theorem roundCommitment_indexed {pre : String} (h : pre ∈ Flock.Registered.roundIndexed) (n : ℕ) :
     Flock.Registered.roundCommitment (pre ++ toString n) = true := by
   unfold Flock.Registered.roundCommitment
   exact Bool.or_eq_true_iff.mpr (Or.inr (List.any_eq_true.mpr ⟨pre, h, indexed_digits pre n⟩))
 
-/-- **Each of `roundNamed` is a round's commitment.** -/
 theorem roundCommitment_named {v : String} (h : v ∈ Flock.Registered.roundNamed) :
     Flock.Registered.roundCommitment v = true := by
   unfold Flock.Registered.roundCommitment
   exact Bool.or_eq_true_iff.mpr (Or.inl (List.contains_iff_mem.mpr h))
 
-/-- **U4's pass samples in full each unit that reads one of the round commitments `roundCommitment` names**: V*'s
-`rec-c<i>` and `rec-top-L<l>`, R's `rec-opening-c<i>` and `rec-top-stacked-L<l>`, the sparse phase's `rec-sparse-pre<j>`
-and `rec-sparse-sc<j>` (each a prefix of `roundIndexed` and an index), and its `rec-sparse-v2`, `rec-sparse-u` and
-`rec-sparse-vt` (`roundNamed`). -/
 theorem samplesInFull_of_checkFull_round {own : Array Flock.Registered.Port} {j : Lean.Json} {d : Flock.Draw.UnitSample}
     (hok : Flock.Registered.checkFull (some own) (some j) = .ok ()) (hd : Flock.Draw.UnitSample.ofJson j = .ok d)
     {p : Flock.Registered.Port} (hp : p ∈ own)
@@ -173,8 +144,6 @@ theorem samplesInFull_of_checkFull_round {own : Array Flock.Registered.Port} {j 
   · rw [hn]; exact roundCommitment_indexed hpre n
   · exact roundCommitment_named hn
 
-/-- **The executable stratum of a unit a stratified sample samples in full**: one of `St`'s strata holds `u` in its ranges and
-samples all of its units. -/
 theorem full_stratum {m : ℕ} {St : Fin m → Flock.Draw.Stratum} {d : Flock.Draw.UnitSample} {Kd u : ℕ}
     (hlaw : d.samplingDesign = .stratified Kd (Array.ofFn St)) (hu : Flock.Registered.samplesInFull d u = true) :
     ∃ t : Fin m, (St t).units.any (fun (lo, hi) => lo ≤ u && u < hi) = true ∧ (St t).k = (St t).size := by
@@ -187,8 +156,6 @@ theorem full_stratum {m : ℕ} {St : Fin m → Flock.Draw.Stratum} {d : Flock.Dr
 
 variable {S : ℕ} {Vs : Fin S → VStmt}
 
-/-- **`VFull` under the full sample** (`--draw subset:N`): V*'s sampling designs sample every unit, so `VFull` needs only that each wire
-of `Sk i j` (`i < r`) is a wire of some unit. -/
 theorem vFull_of_whole (r : ℕ) (Sk : ℕ → (j : Fin S) → Finset (PosK (Vs j).c (Vs j).hU (Vs j).nv))
     (hio : ∀ i < r, ∀ j g, posK (Vs j).c (Vs j).hU (Vs j).nv g ∈ Sk i j →
       ∃ u, g ∈ ((Placed.keyProg (Vs j).c (Vs j).hU (Vs j).nv).partition (Layout.outsOf (Vs j).c (Vs j).hU (Vs j).nv)).io u) :

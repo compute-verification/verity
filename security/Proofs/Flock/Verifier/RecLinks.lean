@@ -1,19 +1,3 @@
-/-
-The link check's binding. A link row of a recursive session's table that V*'s `RecLink_v1` accepts, its outputs
-the two rows trees' roots the verifier builds (`RecLinkTree.rowsRoot`), opens to the reader's input row and the writer's
-output row the inner statement publishes, and the two rows commit one digest, unless SHA-512 collides: `link_binding`
-gives the explicit colliding pair (`treePair`), as `climb_binding` does for a Flock opening. One way: it says what an
-accepted row's outputs mean, not that every honest table is accepted. Collision-tolerant: a collision voids the conclusion
-for that row only, and names the two inputs.
-
-A leaf no row fills is `EMPTY = SHA-512("")`, no row leaf's input, and a root of 64 zero bytes (a failed row's output) is
-refused, so neither a missing row nor a failed one opens without a collision: no assumption beyond SHA-512's collision
-resistance, which a reader of this lemma takes as the premise its pair refutes.
-
-What is proved is about the unit's reference (`RecLinkRef.linkRef`), whose output is `linkOut`'s (`linkRef_ok`).
-That the circuit description (`VStar.linkUnit`) computes `linkOut` wherever its rows hold, on the bytes of its ports' words, is
-`Proofs.Flock.VBridge.RecLink` (`laid_linkUnit`, `linkB_words`); this file doesn't compose the two.
--/
 module
 
 public import Proofs.Flock.Verifier.Merkle
@@ -25,7 +9,7 @@ namespace Flock.RecLinkBind
 
 open RecLinkTree RecLinkRef RecLinks
 
-/-! ### A climb, from the top -/
+/-! The link check's binding: a link row V*'s `RecLink_v1` accepts opens to the reader's input row and the writer's output row, which commit one digest, or SHA-512 collides (`link_binding`). -/
 
 theorem climb_append (ms : MerkleScheme) (s : ByteArray) :
     ∀ (l : List ByteArray) (acc : ByteArray) (idx : Nat),
@@ -38,7 +22,6 @@ theorem climb_append (ms : MerkleScheme) (s : ByteArray) :
     simp only [List.cons_append, climb, List.length_cons]
     rw [climb_append ms s l, hd]
 
-/-- A climb reads only its position's low bits, one a sibling. -/
 theorem climb_mod (ms : MerkleScheme) :
     ∀ (l : List ByteArray) (acc : ByteArray) (idx : Nat), climb ms acc idx l = climb ms acc (idx % 2 ^ l.length) l
   | [], _, _ => rfl
@@ -49,9 +32,6 @@ theorem climb_mod (ms : MerkleScheme) :
     simp only [climb, List.length_cons, h2]
     rw [climb_mod ms l _ (idx / 2), climb_mod ms l _ (idx % 2 ^ (l.length + 1) / 2), hd]
 
-/-! ### The tree's leaf at a position, and its path -/
-
-/-- The leaf at `idx` of `sub e h leaves`: the first leaf the halves lead to, or `e 0`. -/
 def atLeaf (e : Nat → ByteArray) : Nat → List (Nat × ByteArray) → Nat → ByteArray
   | 0, [], _ => e 0
   | 0, (_, v) :: _, _ => v
@@ -59,7 +39,6 @@ def atLeaf (e : Nat → ByteArray) : Nat → List (Nat × ByteArray) → Nat →
     let p := leaves.partition (·.1 < 2 ^ h)
     if idx < 2 ^ h then atLeaf e h p.1 idx else atLeaf e h (p.2.map (shift h)) (idx - 2 ^ h)
 
-/-- `e` is a tree of empty subtrees to height `H`. -/
 def Empties (e : Nat → ByteArray) (H : Nat) : Prop := ∀ k, k < H → e (k + 1) = node (e k) (e k)
 
 theorem sub_succ {e : Nat → ByteArray} {h : Nat} (he : e (h + 1) = node (e h) (e h)) (leaves : List (Nat × ByteArray)) :
@@ -76,7 +55,6 @@ theorem subPath_length (e : Nat → ByteArray) : ∀ (h : Nat) (leaves : List (N
     simp only [subPath]
     split <;> simp [subPath_length e h]
 
-/-- **The path climbs to the root**: leaf `idx`'s siblings take `atLeaf` to `sub`. -/
 theorem climb_subPath (e : Nat → ByteArray) : ∀ (h : Nat) (leaves : List (Nat × ByteArray)) (idx : Nat),
     Empties e h → idx < 2 ^ h → climb scheme (atLeaf e h leaves idx) idx (subPath e h leaves idx) = sub e h leaves
   | 0, [], _, _, _ => rfl
@@ -98,9 +76,6 @@ theorem climb_subPath (e : Nat → ByteArray) : ∀ (h : Nat) (leaves : List (Na
       rw [climb_append, subPath_length, hb, climb_mod, subPath_length, hm, climb_subPath e h _ _ he' hlt]
       rfl
 
-/-! ### The leaf at a position is a leaf there, or `e 0` -/
-
-/-- Every leaf is 64 bytes and below `2^h`. -/
 def Good (h : Nat) (leaves : List (Nat × ByteArray)) : Prop := ∀ x ∈ leaves, x.2.size = 64 ∧ x.1 < 2 ^ h
 
 theorem good_lo {h : Nat} {leaves : List (Nat × ByteArray)} (hg : Good (h + 1) leaves) :
@@ -186,21 +161,14 @@ theorem subPath_size (e : Nat → ByteArray) : ∀ (h : Nat) (leaves : List (Nat
       · simp only [List.mem_singleton] at hs; subst hs
         exact sub_size e h _ (good_lo hg) (hes' h (Nat.le_refl h))
 
-/-! ### The extractor for one tree -/
-
-/-- Two SHA-512 inputs that collide: different, with one digest. -/
 def Collides (p : ByteArray × ByteArray) : Prop := p.1 ≠ p.2 ∧ Sha512.hash p.1 = Sha512.hash p.2
 
 theorem Collides.collision {p : ByteArray × ByteArray} (h : Collides p) :
     ∃ u v : ByteArray, u ≠ v ∧ Sha512.hash u = Sha512.hash v := ⟨p.1, p.2, h.1, h.2⟩
 
-/-- A rows tree's leaves, `rowLeaves`'s once its rows fit. -/
 def leavesOf (PB : Nat) (rows : List ((Nat × Nat) × ByteArray)) : List (Nat × ByteArray) :=
   rows.map fun ((u, r), bc) => (index u r PB, leaf bc)
 
-/-- **The extractor for an opening of a rows tree**: commit string `bc`'s leaf climbed by `sibs` at `idx`. If its leaf is
-not the tree's leaf there, the climb's colliding node inputs; if it is, a row there with that leaf and a different commit
-string gives the two leaf inputs, and no row there (the leaf is `EMPTY`) gives the leaf input and the empty string. -/
 def treePair (e : Nat → ByteArray) (h PB : Nat) (rows : List ((Nat × Nat) × ByteArray)) (idx : Nat) (bc : ByteArray)
     (sibs : List ByteArray) : ByteArray × ByteArray :=
   let L := atLeaf e h (leavesOf PB rows) idx
@@ -210,8 +178,6 @@ def treePair (e : Nat → ByteArray) (h PB : Nat) (rows : List ((Nat × Nat) × 
     | none => (Hm96.Default512.leafPrefix ++ bc, ByteArray.empty)
   else (climbPair scheme sibs (subPath e h (leavesOf PB rows) idx) (leaf bc) L idx).shaInputs
 
-/-- **An opening of a rows tree binds**: commit string `bc`'s leaf, climbed by 64-byte siblings at `idx` to the tree's
-root, is a row's at `idx`, or `treePair` collides. -/
 theorem tree_binding {e : Nat → ByteArray} {h PB : Nat} {rows : List ((Nat × Nat) × ByteArray)} {idx : Nat}
     {bc : ByteArray} {sibs : List ByteArray} (he : Empties e h) (hes : ∀ k, k ≤ h → (e k).size = 64) (h0 : e 0 = EMPTY)
     (hg : Good h (leavesOf PB rows)) (hi : idx < 2 ^ h) (hbc : 0 < bc.size) (hs : ∀ s ∈ sibs, s.size = 64)
@@ -255,12 +221,8 @@ theorem tree_binding {e : Nat → ByteArray} {h PB : Nat} {rows : List ((Nat × 
       (atLeaf_size e h _ idx hg hi (by rw [h0]; exact Sha512.hash_size _)) hL
       (by rw [hc, climb_subPath e h _ idx he hi])
 
-/-! ### The verifier's trees -/
-
-/-- The empty subtrees' roots `RecLinkTree.root` reads at depth `D`. -/
 def eOf (D : Nat) (k : Nat) : ByteArray := (empties D).getD k EMPTY
 
-/-- **What a rows tree's root is**: `sub` over the rows' leaves, every row in range, and not 64 zero bytes. -/
 theorem rowsRoot_ok {UB PB : Nat} {rows : List ((Nat × Nat) × ByteArray)} {R : ByteArray}
     (h : rowsRoot UB PB rows = .ok R) :
     R = sub (eOf (UB + PB)) (UB + PB) (leavesOf PB rows) ∧ (∀ x ∈ rows, x.1.1 < 2 ^ UB ∧ x.1.2 < 2 ^ PB) ∧
@@ -337,7 +299,6 @@ theorem wordsOf_get {a : ByteArray} (ha : a.size = 64) {j : Nat} (hj : j < 32) :
     (wordsOf a)[j]? = some ((a.get! (2 * j)).toNat + 256 * (a.get! (2 * j + 1)).toNat) := by
   simp [wordsOf, ha, hj]
 
-/-- A 64-byte root is its 32 words. -/
 theorem wordsOf_inj {a b : ByteArray} (ha : a.size = 64) (hb : b.size = 64) (h : wordsOf a = wordsOf b) : a = b := by
   apply ByteArray.eq_of_get!_64 ha hb
   intro i hi
@@ -361,7 +322,6 @@ theorem expected_zero : zeros = expected ⟨Array.replicate 64 0⟩ := by decide
 theorem expected_inj {a b : ByteArray} (ha : a.size = 64) (hb : b.size = 64) (h : expected a = expected b) : a = b :=
   wordsOf_inj ha hb (List.append_cancel_right h)
 
-/-- A root `rowsRoot` returns is no failed row's output. -/
 theorem expected_ne_zeros {R : ByteArray} (hR : R.size = 64) (hz : R.data.all (· == 0) = false) : expected R ≠ zeros := by
   intro h
   rw [expected_zero] at h
@@ -405,7 +365,6 @@ theorem climb_size (ms : MerkleScheme) (hs : ms.Sized) : ∀ (l : List ByteArray
     apply climb_size ms hs l
     split <;> exact hs.1 _ _
 
-/-- An output `linkRef` returns is `linkOut`'s, its ports of `portWords`' sizes. -/
 theorem linkRef_ok {UB PB : Nat} {trow xr yr raux xw yw waux : List Nat} {out : List Nat × List Nat}
     (h : linkRef UB PB trow xr yr raux xw yw waux = .ok out) :
     [trow, xr, yr, raux, xw, yw, waux].map (·.length) = portWords UB PB ∧
@@ -428,8 +387,6 @@ theorem commitString_pos (x y : ByteArray) : 0 < (Hm96.Default512.commitString x
   rw [ByteArray.size_append, Sha512.hash_size]
   omega
 
-/-- **One side's opening**: a climb to a rows tree's root from the leaf of `commitString(x, y)` at row `f2` of unit `f1`
-is that row's, or its `treePair` collides. -/
 theorem opens {UB PB : Nat} {rows : List ((Nat × Nat) × ByteArray)} {R : ByteArray} {f1 f2 : Nat} {x y aux : List Nat}
     (hR : rowsRoot UB PB rows = .ok R) (hf1 : f1 < 2 ^ UB) (hf2 : f2 < 2 ^ PB) (haux : aux.length = auxWords (UB + PB))
     (hc : climbRef (leafOf x y) (RecLinkRef.sibsOf aux (UB + PB)) (index f1 f2 PB) = R) :
@@ -448,13 +405,11 @@ theorem opens {UB PB : Nat} {rows : List ((Nat × Nat) × ByteArray)} {R : ByteA
     exact hz
   · exact Or.inr hcol
 
-/-- The reader's extractor: its opening's `treePair` in the input rows' tree, at the unit and port the row names. -/
 def readerPair (UB PB : Nat) (rowsIn : List ((Nat × Nat) × ByteArray)) (trow xr yr raux : List Nat) :
     ByteArray × ByteArray :=
   treePair (eOf (UB + PB)) (UB + PB) PB rowsIn (index (field (bytesOf trow) 1) (field (bytesOf trow) 2) PB)
     (Hm96.Default512.commitString (bytesOf xr) (bytesOf yr)) (RecLinkRef.sibsOf raux (UB + PB))
 
-/-- The writer's extractor: its opening's `treePair` in the output rows' tree, at the unit and row the row names. -/
 def writerPair (UB PB : Nat) (rowsOut : List ((Nat × Nat) × ByteArray)) (trow xw yw waux : List Nat) :
     ByteArray × ByteArray :=
   treePair (eOf (UB + PB)) (UB + PB) PB rowsOut (index (field (bytesOf trow) 3) (field (bytesOf trow) 4) PB)
@@ -470,11 +425,8 @@ theorem climbRef_size (start : ByteArray) (sibs : List ByteArray) (pos : Nat) (h
     (climbRef start sibs pos).size = 64 :=
   climb_size scheme (MerkleScheme.sha512_sized _) sibs start pos h
 
-/-- **An accepted link row binds its reader to its writer.** The verifier's two rows trees over the inner statement's
-rows (`rowsIn` the units' input rows, `rowsOut` their output rows, each `((unit, row), b ‖ c)`), and a link row whose unit
-`RecLink_v1{UB, PB}` (at its reference) outputs the two roots as registered rows: the input row at the reader's unit and
-port publishes `commitString(xr, yr)`, the output row at the writer's unit and row publishes `commitString(xw, yw)`, and
-`xr = xw`, the one digest both commit; or the reader's or the writer's extractor names a SHA-512 collision. -/
+/-- Says what an accepted row's outputs mean, not that every honest table is accepted. It is about the unit's reference
+(`RecLinkRef.linkRef`); that `VStar.linkUnit` computes it is `laid_linkUnit`, and this file doesn't compose the two. -/
 theorem link_binding {UB PB : Nat} {rowsIn rowsOut : List ((Nat × Nat) × ByteArray)} {R W : ByteArray}
     {trow xr yr raux xw yw waux : List Nat}
     (hR : rowsRoot UB PB rowsIn = .ok R) (hW : rowsRoot UB PB rowsOut = .ok W)
@@ -512,7 +464,6 @@ theorem link_binding {UB PB : Nat} {rowsIn rowsOut : List ((Nat × Nat) × ByteA
     · exact Or.inr (Or.inr hcw)
   · exact Or.inr (Or.inl hcr)
 
-/-- `link_binding` as a proposition: the rows bind, or SHA-512 has a collision. -/
 theorem link_binding_collision {UB PB : Nat} {rowsIn rowsOut : List ((Nat × Nat) × ByteArray)} {R W : ByteArray}
     {trow xr yr raux xw yw waux : List Nat}
     (hR : rowsRoot UB PB rowsIn = .ok R) (hW : rowsRoot UB PB rowsOut = .ok W)

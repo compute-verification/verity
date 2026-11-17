@@ -2,20 +2,7 @@ module
 
 public import Proofs.Flock.ZkAny.RelayPlace
 
-/-!
-# A rep's frame holds the history's words for its rounds so far
-
-The model reads a rep's schedule so far on the history's words for the rep's rounds (`Loop.schedSoFar` at
-`Loop.wordsAt`, the last `j + 1` coins before the round), and the loop's frame on the coins it took. Here the frame's
-coins stay those words from one round of the rep to the next:
-
-* `coinsAt_read`, `feedOf_words`: the coins the relay feeds a round's frame off the auditor's answer `a` are the
-  history's words at that round, once the history's last answer is `a`.
-* `window_snoc`, `coins_window_snoc`: the rep's words one round on are its words so far and the new round's.
-* **`roundRun_coins`**: so at a `RoundRun` whose round releases and whose coins the rep's frame took, where the frame
-  `roundPlace` readied holds the history's words for the rep's rounds so far, the frame the session's next round finds
-  holds them for the history with the auditor's answer.
--/
+/-! A rep's frame holds the history's words for its rounds so far, from one round of the rep to the next (`roundRun_coins`). -/
 
 @[expose] public section
 
@@ -26,7 +13,6 @@ open _root_.Flock.ZkServer.Session (State Placed byte?)
 open _root_.Flock.ZkServer.Frames (Sessions Rep)
 open _root_.Flock.ZkServer.Frame (Req Place)
 
-/-- **The coins the loop's frame reads after a history are its last answer's words**, as many as its request's count. -/
 theorem coinsAt_read (x : Msg) (e0 : Msg × Msg) (ops : List (Msg × Msg)) :
     Loop.coinsAt x (e0 :: ops) = Loop.readCoins x (ops.map fun p => ZKMal.CoinLayer.rd p.2) := by
   unfold Loop.coinsAt Loop.readCoins
@@ -35,8 +21,6 @@ theorem coinsAt_read (x : Msg) (e0 : Msg × Msg) (ops : List (Msg × Msg)) :
   · rfl
   · exact Loop.feedOf_rd _ b
 
-/-- **The coins the relay feeds a round's frame are the history's words there**: off the auditor's answer `a` to the
-round after `e0 :: h1`, at the loop's count, they are the words of the history with `(v, a)` at that round. -/
 theorem feedOf_words (x : Msg) (e0 : Msg × Msg) (h1 : List (Msg × Msg)) (v a : Msg) {q : Nat}
     (hq : h1.length = q + 1) :
     _root_.Flock.ZkServer.Frames.feedOf (Loop.loopNr x h1.length) a =
@@ -45,8 +29,6 @@ theorem feedOf_words (x : Msg) (e0 : Msg × Msg) (h1 : List (Msg × Msg)) (v a :
     simp [hq]
   rw [← coinsAt_cons_snoc x e0 h1 v a, coinsAt_read x e0, Loop.readCoins_eq x _ hlen]
 
-/-- **A window one step on**: the values at the `j + 1` places before `q + 1`, then the one at `q + 1`, are the values
-at the `j + 2` places up to `q + 1`, where the two functions agree up to `q`. -/
 theorem window_snoc {α : Type} (f g : Nat → α) {q j : Nat} (hj : j + 1 ≤ q) (hfg : ∀ i, i ≤ q → f i = g i) :
     ((Array.range (j + 1)).map fun i => f (q - (j + 1) + i + 1)).push (g (q + 1)) =
       (Array.range (j + 2)).map fun i => g (q + 1 - (j + 2) + i + 1) := by
@@ -63,8 +45,6 @@ theorem window_snoc {α : Type} (f g : Nat → α) {q j : Nat} (hj : j + 1 ≤ q
   rw [show q + 1 - (j + 2) = q - (j + 1) by omega]
   exact hfg _ (by omega)
 
-/-- **A rep's words one round on**: its words for its `j + 1` rounds before coin `q + 1`, then that coin's, are its
-words for its `j + 2` rounds in the coins with one more. -/
 theorem coins_window_snoc (x : Msg) (cs : List FlockDeploy.Coin) (d : FlockDeploy.Coin) {q j : Nat}
     (hq : cs.length = q + 1) (hj : j + 1 ≤ q) :
     ((Array.range (j + 1)).map fun k => Loop.wordsAt x cs (q - (j + 1) + k + 1)).push
@@ -73,10 +53,6 @@ theorem coins_window_snoc (x : Msg) (cs : List FlockDeploy.Coin) (d : FlockDeplo
   window_snoc (fun k => Loop.wordsAt x cs k) (fun k => Loop.wordsAt x (cs ++ [d]) k) hj
     fun k hk => (Loop.wordsAt_append x cs [d] (by omega)).symm
 
-/-- **A rep's frame holds the history's words one round on**: at a `RoundRun` at the loop's count after `e0 :: h1`
-whose round releases and whose coins the rep's frame took off the auditor's answer `a`, where the frame `roundPlace`
-readied holds the words of the rep's `j + 1` rounds so far, the frame the session's next round finds holds the words of
-its `j + 2` rounds in the history with `(v, a)`. -/
 theorem roundRun_coins (x : Msg) (e0 : Msg × Msg) (h1 : List (Msg × Msg)) (v : Msg) {q j : Nat}
     (hq : h1.length = q + 1) (hj : j + 1 ≤ q) {sid : Nat} {st : State} {pl : Placed} {stream : String} {i r : Nat}
     {dom content : ByteArray} {e : Env} {R : Sessions} {L0 : _root_.Flock.ZkServer.Level0.Slots} {R₃ : Sessions}

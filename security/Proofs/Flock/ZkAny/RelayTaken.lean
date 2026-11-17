@@ -2,23 +2,7 @@ module
 
 public import Proofs.Flock.Claims.ZK.FrameProg
 
-/-!
-# The coins the frame is handed and takes, before the rank stop
-
-The model's release takes the coins after a history in the frame's coin step, then, at a later round of the same rep,
-the rank stop on the state they leave (`LeanRelease.takeAt`). The loop's frame runs the coin step at the coins and the
-rank check at the next round's opening label, so what ties the loop's frame to the model between the two is the coin
-step alone:
-
-* `LeanRelease.takeAtR`, `frameAnswerR`, `answeredR`: `takeAt`, `frameAnswer` and `answered` without the rank stop.
-* `takeAtR_of_takeAt`, `frameAnswerR_of_frameAnswer`, **`answeredR_of_answered`**: where the model takes the coins,
-  so does the coin step, at the same state. `takeAt_of_takeAtR`, `frameAnswer_of_frameAnswerR`,
-  **`answered_of_answeredR`**: and back, where the rank stop passes that state.
-* `answeredR_ok`, `answeredR_of_opens`: as `answered_ok` and `answered_of_opens`.
-* `cfg_eq_cfgAt_pred`, `frameAnswerR_same`: at a later round of the same rep the coin step is the frame's taking of
-  the last coins at the rep's state.
-* `ofLoop_frameAnswerR_same`: at the loop's own frames, the loop's state after the rounds (`Loop.progOf`) taking them.
--/
+/-! The model's taking of the coins without the rank stop (`answeredR`), which ties the loop's frame to the model between a round's coins and the next round's opening label (`answered_of_answeredR`). -/
 
 @[expose] public section
 
@@ -29,13 +13,10 @@ open _root_.Flock.ZkServer.Frame (Cfg Masker)
 
 namespace LeanRelease
 
-/-- **`takeAt` before the rank stop**: at a round of the same rep, the frame's taking of the coins of round `n - 1`
-alone. -/
 def takeAtR (n : ℕ) (same : Bool) (cN cP : Cfg) (prog : Masker) (fresh : Except String Masker)
     (cs : Array F128) : Except String Masker :=
   if n ≤ 2 then fresh else if same then prog.answer cN cs else prog.answer cP cs >>= fun _ => fresh
 
-/-- **`frameAnswer` before the rank stop** (`takeAtR`). -/
 def frameAnswerR {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ : R) (h : List (Msg × Msg)) :
     Except String Masker :=
   match h.getLast? with
@@ -44,9 +25,6 @@ def frameAnswerR {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ : R) (h : List
       (L.prog x h) (L.fresh x h) (L.coinsOf x h)
   | none => pure (L.prog x h)
 
-/-- **`answered` before the rank stop**: where the transport's coin check passes the history and the frame took the
-coins after every earlier round, the frame's coin step on the last coins (`frameAnswerR`); else the transport's
-stop. -/
 def answeredR {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ : R) (h : List (Msg × Msg)) : Except String Masker :=
   if L.opens x ρ h && L.tookEarlier x ρ h then L.frameAnswerR x ρ h else .error coinRefused
 
@@ -66,8 +44,6 @@ theorem takeAtR_of_takeAt {n : ℕ} {b : Bool} {cN cP : Cfg} {p : Masker} {f : E
       simp only [Bool.false_eq_true, ↓reduceIte] at h ⊢
       exact h
 
-/-- **Back past the rank stop**: where the coin step leaves `m` and, at a later round of the same rep, the rank stop
-passes `m`, `takeAt` leaves `m`. -/
 theorem takeAt_of_takeAtR {n : ℕ} {b : Bool} {cN cP : Cfg} {p : Masker} {f : Except String Masker}
     {cs : Array F128} {m : Masker} (h : takeAtR n b cN cP p f cs = .ok m)
     (hr : ¬ n ≤ 2 → b = true → rankFails cN m = false) : takeAt n b cN cP p f cs = .ok m := by
@@ -122,8 +98,6 @@ theorem frameAnswerR_of_frameAnswer {W R : Type} {L : LeanRelease W R} {x : Msg}
     rw [frameAnswerR_cons]
     exact takeAtR_of_takeAt hf
 
-/-- **Back past the rank stop**, after a history: where the coin step leaves `m` and, at a later round of the same rep,
-the rank stop passes `m` at the round's configuration. -/
 theorem frameAnswer_of_frameAnswerR {W R : Type} {L : LeanRelease W R} {x : Msg} {ρ : R} {h : List (Msg × Msg)}
     {m : Masker} (hf : L.frameAnswerR x ρ h = .ok m)
     (hr : 3 ≤ h.length → L.rep x h.length = L.rep x (h.length - 1) → rankFails (L.cfg x ρ h) m = false) :
@@ -151,15 +125,12 @@ theorem answeredR_of_opens {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ : R)
   rw [ho, ht]
   rfl
 
-/-- **Where the model takes the coins after `h`, so does its coin step**, at the same state. -/
 theorem answeredR_of_answered {W R : Type} {L : LeanRelease W R} {x : Msg} {ρ : R} {h : List (Msg × Msg)}
     {m : Masker} (hA : L.answered x ρ h = .ok m) : L.answeredR x ρ h = .ok m := by
   obtain ⟨ho, ht, hf⟩ := answered_ok hA
   rw [L.answeredR_of_opens x ρ h ho ht]
   exact frameAnswerR_of_frameAnswer hf
 
-/-- **Where the coin step after `h` leaves `m` and the rank stop passes it**, at a later round of the same rep, the
-model takes the coins at `m`. -/
 theorem answered_of_answeredR {W R : Type} {L : LeanRelease W R} {x : Msg} {ρ : R} {h : List (Msg × Msg)}
     {m : Masker} (hA : L.answeredR x ρ h = .ok m)
     (hr : 3 ≤ h.length → L.rep x h.length = L.rep x (h.length - 1) → rankFails (L.cfg x ρ h) m = false) :
@@ -168,14 +139,11 @@ theorem answered_of_answeredR {W R : Type} {L : LeanRelease W R} {x : Msg} {ρ :
   rw [L.answered_of_opens x ρ h ho ht]
   exact frameAnswer_of_frameAnswerR hf hr
 
-/-- At a round of the rep that released the last, the round's configuration is that rep's. -/
 theorem cfg_eq_cfgAt_pred {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ : R) {h : List (Msg × Msg)}
     (hs : L.rep x h.length = L.rep x (h.length - 1)) : L.cfg x ρ h = L.cfgAt x ρ (h.length - 1) := by
   unfold cfg cfgAt
   rw [hs]
 
-/-- **At a later round of the same rep the coin step is the frame's taking of the last coins** at the state the rep
-left. -/
 theorem frameAnswerR_same {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ : R) {h : List (Msg × Msg)}
     (hn : 3 ≤ h.length) (hs : L.rep x h.length = L.rep x (h.length - 1)) :
     L.frameAnswerR x ρ h = (L.prog x h).answer (L.cfg x ρ h) (L.coinsOf x h) := by
@@ -186,8 +154,6 @@ theorem frameAnswerR_same {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ : R) 
     rw [if_neg (by omega), if_pos (decide_eq_true hs)]
 
 open Loop in
-/-- **At the loop's own frames, the coin step at a rep's round past its first** is the loop's state after the rounds
-(`progOf`) taking the transport's coins (`coinsAt`). -/
 theorem ofLoop_frameAnswerR_same (T : ZKMal.CoinLayer.TableData)
     (L₀ : LeanRelease Flock.Wit
       ((ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand))

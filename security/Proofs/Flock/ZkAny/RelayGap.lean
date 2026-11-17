@@ -2,20 +2,7 @@ module
 
 public import Proofs.Flock.ZkAny.RelayLast
 
-/-!
-# A rep's frame between its stream's last round and the next stream's first
-
-After a rep's round the session's next round finds the rep's frame as its run one round on (`roundRun_last`). Where the
-round was its stream's last, the next stream's first round comes next. Until then only updates that keep the rep's
-frame come (`Kept`), so that round finds it unchanged, holding the history's words for all the stream's rounds:
-
-* `locate_last`, `count_last`: where the round after a stream's round is the next stream's, the round is its stream's
-  last, and its stream's count is one more than the round's index in it.
-* **`roundRun_handoff`**: at a `RoundRun` of a stream's last round past its first, after updates that keep the rep's
-  frame, the frames hold the rep's frame with the history's words for all the stream's rounds, as many as its count.
-  At rep 0's last round this is the frame and the count rep 1's first round reads (`roundPlace_switch1`'s `h0`, `hn0`
-  and `hco`).
--/
+/-! Between its stream's last round and the next stream's first, a rep's frame holds the history's words for all the stream's rounds (`roundRun_handoff`). -/
 
 @[expose] public section
 
@@ -26,8 +13,6 @@ open _root_.Flock.ZkServer.Session (State Placed byte?)
 open _root_.Flock.ZkServer.Frames (Sessions Rep)
 open _root_.Flock.ZkServer.Frame (Req Place)
 
-/-- **A stream's last round**: where the round after the `i`th is another stream's, the `i`th round's index in its
-stream is one short of the stream's count. -/
 theorem locate_last : ∀ (rs : List Nat) (k i : Nat),
     (ZKMal.CoinLayer.locate rs k (i + 1)).1 ≠ (ZKMal.CoinLayer.locate rs k i).1 →
     (ZKMal.CoinLayer.locate rs k i).2 + 1 = rs.getD ((ZKMal.CoinLayer.locate rs k i).1 - k) 0
@@ -48,8 +33,6 @@ theorem locate_last : ∀ (rs : List Nat) (k i : Nat),
           (ZKMal.CoinLayer.locate cs (k + 1) (i - c)).1 - (k + 1) + 1 by omega, List.getD_cons_succ]
         exact locate_last cs (k + 1) (i - c) h
 
-/-- **The count of a stream whose last round is past its first**: where the round after the `q`th is the next
-stream's and the `q`th is its stream's round `j + 1`, the stream before the next one has `j + 2` rounds. -/
 theorem count_last {rs : List Nat} {q j : Nat} (hj : (ZKMal.CoinLayer.locate rs 0 q).2 = j + 1)
     (hnext : (ZKMal.CoinLayer.locate rs 0 (q + 1)).1 = (ZKMal.CoinLayer.locate rs 0 q).1 + 1) :
     rs.getD ((ZKMal.CoinLayer.locate rs 0 (q + 1)).1 - 1) 0 = j + 2 := by
@@ -59,10 +42,6 @@ theorem count_last {rs : List Nat} {q j : Nat} (hj : (ZKMal.CoinLayer.locate rs 
   omega
 
 open Loop in
-/-- **A rep's frame from its stream's last round to the next stream's first**: at `roundRun_last`'s `RoundRun`, where
-the round after it is the next stream's (`hnext`), after updates from the frames the session's next round reads that
-keep the rep's frame, the frames find the rep's frame holding the history's words with `(v, a)` for all the stream's
-rounds, as many as the stream's count. -/
 theorem roundRun_handoff {W Rr : Type} {L : LeanRelease W Rr} {ρ : Rr} (x : Msg) (e0 : Msg × Msg)
     (h1 : List (Msg × Msg)) (v : Msg) {rs : List Nat} {q₀ j₀ : Nat} (hq : h1.length = q₀ + 1)
     (hj₀ : (ZKMal.CoinLayer.locate rs 0 q₀).2 = j₀ + 1)

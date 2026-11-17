@@ -6,23 +6,7 @@ public import Proofs.Flock.ZkAny.RelayLoopOwnAt
 public import Proofs.Flock.ZkAny.RelayFreshStart
 import Proofs.Flock.Claims.ZK.Reference
 
-/-!
-# `EnvPre` at the deployed loop
-
-`envPre_loop` gives `EnvPre` from `LoopP` given `SlotCase` at the `Hello`, the `Commit`, each frame round and the
-`Finish`, and `J` kept at every other slot. Here they are at the invariant `LoopJ` on the loop's own tables:
-
-* `LoopModel.Deployed.last_eq`: the deployed model's last round is two past the setup's plan.
-* **`envPre_deployed`**: where each of the run's messages is the deferred release's, its first the `Hello` at the
-  sampled nonce, which is the tape's, the worker's link the ZK server's own, and `RoundFacts` holds at each request at a
-  frame round's slot as the loop answers it (`hRF`), `EnvPre` holds wherever `LoopP` at `LoopJ` does.
-* `ownSched_deployed`: at the release with the session loop's own rounds of the inner proof at the model's finish's
-  rounds, the inner proof's own place at each frame round's slot the model's scheduled round (`placeSched_own`),
-  from what the loop took (`LoopJ.took`).
-* **`envPre_withInner`**: at the release with the session loop's own rounds of the inner proof at the model's
-  finish's rounds, where the crossing passes below the `Finish`, `hRF` holds (`roundFacts_deployed`,
-  `ownSched_deployed`, `freshStart_deployed`), so `EnvPre` does wherever `LoopP` at `LoopJ` does.
--/
+/-! `EnvPre` at the deployed loop, from `LoopP` at `LoopJ` on the loop's own tables (`envPre_deployed`, `envPre_withInner`). -/
 
 @[expose] public section
 
@@ -31,8 +15,6 @@ namespace Claims.ZKServer.Relay
 open _root_.Flock.ZkServer.Session (State Placed planOf)
 open _root_.Flock (V SessionSpec Stmt)
 
-/-- **The deployed model's last round is two past the setup's plan**: the `Hello`, the link and each of the plan's
-rounds, the `Finish` the last. -/
 theorem LoopModel.Deployed.last_eq {T : ZKMal.CoinLayer.TableData}
     {M : LoopModel Claims.Flock.Wit
       ((ZKMal.CoinLayer.session Loop.loopNr T).refP.Nonce × (ZKMal.CoinLayer.session Loop.loopNr T).refP.Rand)}
@@ -48,16 +30,6 @@ theorem LoopModel.Deployed.last_eq {T : ZKMal.CoinLayer.TableData}
   rw [Loop.lastOf_eq, Claims.ZKMal.refK_of_flock hD.setup, Loop.rounds_eq hD.sizes, ← Loop.plan_size]
   omega
 
-/-- **`EnvPre` at the deployed loop**: at the loop's own tables on `src` (`LoopModel.Deployed` at `Loop.realOf src`),
-the loop handed `src`'s bytes (`hsrc`) whose level 0 are sampled from the tape (`Loop.Level0Src`) at a statement the
-masked session proves (`hlive`), where each of the run's messages is the deferred release's (`LoopModel.Own`), its
-first the `Hello` at the nonce the relay drew (`h0`), that
-nonce the tape's (`hn`), the worker's link the ZK server's own (`hwk`), and `RoundFacts` holds at each request at a
-frame round's slot as the loop answers it (`hRF`), `EnvPre` holds wherever `LoopP` at `LoopJ` does: `LoopJ` is kept at
-every slot that reads no model message (`loopKept_ctl_all`), at the `Hello` (the release checking the setup's `Hello`
-at the tape's nonce), at the `Commit` (below the `Finish`, the last round two past the plan) and at each frame round
-(`loopKept_round_deployed`), and at the `Finish` the session's stop is whether an earlier round failed
-(`LoopJ.stop`). -/
 theorem envPre_deployed {M : LoopModel Claims.Flock.Wit
       ((ZKMal.CoinLayer.session Loop.loopNr ZKMal.Masked.dataE).refP.Nonce ×
         (ZKMal.CoinLayer.session Loop.loopNr ZKMal.Masked.dataE).refP.Rand)}
@@ -92,12 +64,6 @@ theorem envPre_deployed {M : LoopModel Claims.Flock.Wit
     (fun _ _ => slotCase_round hOwn hRF (loopKept_round_deployed hD hsrc hS hlive hRF))
     (slotCase_finish hOwn fun _ _ _ _ hsl _ hJ => by rw [hJ.stop, slot_finish hsl, Bool.true_and])
 
-/-- **`OwnSched` at the deployed loop**: at the loop's own tables on `src` (`LoopModel.Deployed` at `Loop.realOf
-src`), whose release has the session loop's own rounds of the inner proof at the model's finish's rounds (`hfin`),
-the loop handed `src`'s bytes (`hsrc`) whose level 0 are sampled from the tape (`Loop.Level0Src`) at a statement the
-masked session proves (`hlive`): at each frame round's slot `placeSched_own`, the model's tables and salts the loop's
-by `realAt_slot`, and its coin step taking the coins before the round from what the loop took (`LoopJ.took`), the
-round of a stream seen being a later round of the same rep (`rep_seen`, `LeanRelease.answeredR_same`). -/
 theorem ownSched_deployed
     {L₁ : LeanRelease Claims.Flock.Wit
       ((ZKMal.CoinLayer.session Loop.loopNr ZKMal.Masked.dataE).refP.Nonce ×
@@ -129,14 +95,6 @@ theorem ownSched_deployed
     (realAt_slot hD hsrc hS hlive hsl hF hJ hsal) (LeanRelease.answeredR_same (htk.opens hC) htk.2.1 htk.2.2 h3 hs)
     hin hfin hrp hsn
 
-/-- **`EnvPre` at the deployed loop with the session loop's own rounds of the inner proof**: at the release
-`withFiles (withLink (withInner Masked.dataE L₁ (Loop.realOf src) fin) src) src` on the loop's own tables on `src`,
-the loop handed `src`'s bytes (`hsrc`) and its finish's rounds of the inner proof the model's (`hfin`), whose level 0
-are sampled from the tape (`Loop.Level0Src`) at a statement the masked session proves (`hlive`), where the crossing
-passes below the `Finish` (`LeanRelease.CrossPasses`), each of the run's messages is the deferred release's, its first
-the `Hello` at the sampled nonce, that nonce the tape's, and the worker's link the ZK server's own: `envPre_deployed`,
-its `hRF` by `roundFacts_deployed` with the inner proof's own place by `ownSched_deployed` and the next rep's start by
-`freshStart_deployed`. -/
 theorem envPre_withInner
     {L₁ : LeanRelease Claims.Flock.Wit
       ((ZKMal.CoinLayer.session Loop.loopNr ZKMal.Masked.dataE).refP.Nonce ×

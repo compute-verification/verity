@@ -3,29 +3,7 @@ module
 public import Proofs.Flock.ZkAny.RelayLoopFacts
 public import Proofs.Flock.SessionLoop.FinRepRows
 
-/-!
-# The next rep's start at a stream's first round
-
-`answered_of_round`'s `hfr` at a frame round's slot: where `seen` has no round of the stream, the model's next-rep state
-after the history so far (`Loop.freshOf`) is a masking state. The loop readied the round's frame (`roundPlace`), so the
-table's statement, name, level 0 and algebraic phase are there (`roundPlace_first_ok`), and the model's placeholder for
-the stream is one wherever the rep's frame starts at the table's statement (`Drive.start`):
-
-* `ofSamples_of_sizes`, `tab_of_sampled`: a level 0 is sampled at `m` from a packed table and samples of the sizes `m`'s
-  schedule takes, and one sampled at a statement's `m` gives a table where the statement commits under `hm96Sha512`.
-* `placeholder_of`: so the placeholder is one where the rep's frame starts and its zero level 0 gives a table.
-* `freshOf_of`: `Loop.freshOf` is a masking state where the placeholder and its algebraic phase are, rep 0's
-  algebraic-phase coins being in at rep 1 and the frame's step taking them there (`Frame.step`'s `prior`).
-* `repRun_prior_ok`: a frame's run on an earlier rep's coins took them (`step_prior_ok`).
-* **`fresh_of_slot`**: at a stream's first round of the deployed loop on a `Live` statement, where the rep's frame
-  starts at the table's statement, the model's next-rep state is a masking state. The placeholder's table is of the
-  shape of the table the loop's level 0 gives (`Sched.tabOfLevel0_alike`), so its algebraic phase is one as the loop's
-  is (`Sched.rounds_alike`); at rep 1 rep 0's frame holds the phase's coins (`roundPlace_prior_size`), which the
-  readied frame took (`roundPlace_prior`), as the placeholder's configuration takes them (`step_prior_alike`).
-* **`freshStart_deployed`**: so `FreshStart` holds at the deployed loop on a `Live` statement: where the round goes
-  out the loop readied its frame (`roundPlace_of_out`), and the rep's frame starts at its table's statement
-  (`StartOk`).
--/
+/-! `FreshStart` at the deployed loop on a `Live` statement: at a stream's first round the model's next-rep state is a masking state (`freshStart_deployed`). -/
 
 @[expose] public section
 
@@ -38,7 +16,6 @@ open _root_.Flock.ZkServer.Frame (Cfg Masker Place)
 
 variable {wideLeaf : Bool}
 
-/-- **Level 0's padded codeword has a row for each tree position.** -/
 theorem linkRows_size (lv : _root_.Flock.Level) (tPad : Nat) (g : Array F128) (extra lanePad : Nat → Nat → F128) :
     (_root_.Flock.ZkServer.Link.rows lv tPad g extra lanePad).size = 2 ^ lv.d := by
   unfold _root_.Flock.ZkServer.Link.rows
@@ -46,13 +23,11 @@ theorem linkRows_size (lv : _root_.Flock.Level) (tPad : Nat) (g : Array F128) (e
   · simp [_root_.Flock.ZkServer.Link.rowsFft]
   · simp [_root_.Flock.ZkServer.Link.rowsDirect]
 
-/-- **A built level 0 has a row for each tree position.** -/
 theorem buildRows_size (wide : Bool) (m : Nat) (lv : _root_.Flock.Level) (tPad : Nat) (g : Array F128)
     (extra pads : Array (Array F128)) (salts : ByteArray) :
     (_root_.Flock.ZkServer.Level0.build wide m lv tPad g extra pads salts).rows.size = 2 ^ lv.d := by
   exact linkRows_size _ _ _ _ _
 
-/-- **A level 0 is sampled at `m`** from a packed table and samples of the sizes `m`'s `--zk` schedule takes. -/
 theorem ofSamples_of_sizes {m : Nat} {s : _root_.Flock.Schedule} {tp : Nat}
     (hz : _root_.Flock.Zk.schedule wideLeaf m = .ok (s, tp)) {g : Array F128} {d : ByteArray}
     (hg : g.size = 2 ^ ((s.levels.getD 0 default).lanes + (s.levels.getD 0 default).cols))
@@ -63,8 +38,6 @@ theorem ofSamples_of_sizes {m : Nat} {s : _root_.Flock.Schedule} {tp : Nat}
     pure, Except.pure]
   all_goals exact ⟨_, rfl⟩
 
-/-- **A level 0 sampled at a statement's `m` and version gives a table** where the statement commits under
-`hm96Sha512`. -/
 theorem tab_of_sampled {stm : Stmt} (hmk : stm.merkle = _root_.Flock.MerkleScheme.hm96Sha512) {g : Array F128}
     {d : ByteArray} {l : _root_.Flock.ZkServer.Level0.Level0}
     (hl : _root_.Flock.ZkServer.Level0.ofSamples stm.wideLeaf stm.m g d = .ok l) :
@@ -79,7 +52,6 @@ theorem tab_of_sampled {stm : Stmt} (hmk : stm.merkle = _root_.Flock.MerkleSchem
     Except.pure]
   all_goals exact ⟨_, rfl⟩
 
-/-- Where the left of two related results is a value, the right is one too, related to it. -/
 theorem relV_ok_left {α β : Type} {S : α → β → Prop} {x : V α} {y : V β} {a : α} (h : Sched.RelV S x y)
     (hx : x = .ok a) : ∃ b, y = .ok b ∧ S a b := by
   subst hx
@@ -87,8 +59,6 @@ theorem relV_ok_left {α β : Type} {S : α → β → Prop} {x : V α} {y : V �
   | ok b => exact ⟨b, rfl, h⟩
   | error e => exact False.elim h
 
-/-- **Rep stream `k`'s placeholder is one** where the rep's frame starts at the stream's table's statement and the
-statement's zero level 0 gives a table. -/
 theorem placeholder_of {spec : SessionSpec} {sts : Array Stmt} {k : Nat} (link : Array F128) {stm : Stmt}
     (hk : sts[k / 2]! = stm) {lay : _root_.Flock.Zk.PadLayout} {mask : _root_.Flock.ZkServer.Frame.MaskSlot}
     (hst : _root_.Flock.ZkServer.Drive.start stm = .ok (lay, mask)) {sch : _root_.Flock.Schedule} {tp : Nat}
@@ -103,8 +73,6 @@ theorem placeholder_of {spec : SessionSpec} {sts : Array Stmt} {k : Nat} (link :
   simp only [hk, hst, hz, hl, ht, bind, Except.bind, pure, Except.pure]
   all_goals exact ⟨_, _, _, _, rfl⟩
 
-/-- **The loop's frame state at a rep's first round is a masking state** where the rep stream's placeholder and its
-algebraic phase are, and at rep 1 rep 0's algebraic phase ended and the placeholder's frame takes its coins. -/
 theorem freshOf_of (x : Msg) (cs : List FlockDeploy.Coin) {s0 : FlockDeploy.Ins} {spec : SessionSpec}
     {sts : Array Stmt} {q : Nat} (hx : FlockDeploy.setupOf true x = some (s0, spec, sts)) (hq : cs.length = q + 1)
     {c' : Cfg} {t : _root_.Flock.ZkServer.Finish.Tab} {dom : ByteArray} {xs : Array (Array F128)}
@@ -136,7 +104,6 @@ theorem freshOf_of (x : Msg) (cs : List FlockDeploy.Coin) {s0 : FlockDeploy.Ins}
     rw [ite_eq_right h0, hn0, ite_eq_right (Nat.not_lt.mpr hle), hst]
     exact ⟨_, rfl⟩
 
-/-- **The frame's step on an earlier rep's coins** that does not end the rep takes them. -/
 theorem step_prior_ok {c : Cfg} {st : _root_.Flock.ZkServer.Frame.State} {k : Nat} {b : ByteArray}
     (h : (_root_.Flock.ZkServer.Frame.step c st (.prior k b)).1.ends = false) :
     ∃ st', _root_.Flock.ZkServer.Frame.step c st (.prior k b) = (.ok, st') := by
@@ -156,7 +123,6 @@ theorem step_prior_ok {c : Cfg} {st : _root_.Flock.ZkServer.Frame.State} {k : Na
   · rw [ha] at h'
     cases h'
 
-/-- **A frame's run on an earlier rep's coins took them**: the run did not end, so its step on them answered `ok`. -/
 theorem repRun_prior_ok {k : Nat} {b : ByteArray} {q : Rep} (h : RepRun [.prior k b] [] q) :
     ∃ st', _root_.Flock.ZkServer.Frame.step q.cfg {} (.prior k b) = (.ok, st') := by
   have h1 : _root_.Flock.ZkServer.Frame.run q.cfg {} [.prior k b] = (q.st, false) := h.1
@@ -169,17 +135,6 @@ theorem repRun_prior_ok {k : Nat} {b : ByteArray} {q : Rep} (h : RepRun [.prior 
     simp at h1
 
 set_option maxHeartbeats 1000000 in
-/-- **The model's next-rep state at a stream's first round is a masking state**: at the slot of a round of `stream`,
-table `i`'s rep `r`, where `LoopFacts` and `LoopJ` hold at the deployed loop on a `Live` statement, `seen` has no round
-of `stream`, the rep's frame is at the model's configuration and starts at the table's statement (`hsk`), and
-`roundPlace` readies the round, `Loop.freshOf` after the history so far is a masking state. The rep's frame is fresh
-(`FreshAt`); `roundPlace` read the table's statement and level 0, which the loop drew (`BuiltAt`), and `withAlg`'s
-algebraic phase on it (`withAlg_alg`). The statement commits under `hm96Sha512` (`Loop.tabs_of_live`), so the
-placeholder's zero level 0 gives a table (`tab_of_sampled`), of the loop's table's shape (`Sched.tabOfLevel0_alike`),
-and the placeholder is one (`placeholder_of`) whose algebraic phase is one as `withAlg`'s (`Sched.rounds_alike`). At
-rep 1 rep 0's frame holds as many coins as the phase has rounds (`roundPlace_prior_size`), the history's words for
-rep 0's rounds (rep 0's stream seen, its `RepJ`), and the readied frame took them (`roundPlace_prior`,
-`repRun_prior_ok`), at the placeholder's configuration too (`step_prior_alike`, `ofLoop_cfgAlike`). -/
 theorem fresh_of_slot {T : ZKMal.CoinLayer.TableData}
     {M : LoopModel Claims.Flock.Wit
       ((ZKMal.CoinLayer.session Loop.loopNr T).refP.Nonce × (ZKMal.CoinLayer.session Loop.loopNr T).refP.Rand)}
@@ -377,9 +332,6 @@ theorem fresh_of_slot {T : ZKMal.CoinLayer.TableData}
   rw [← hsz, ← hn0]
   exact hpsz
 
-/-- **`FreshStart` at the deployed loop on a `Live` statement**: at a frame round's slot whose round goes out, the loop
-readied the round's frame (`roundPlace_of_out`), and where the rep's frame starts at its table's statement
-(`StartOk`), `fresh_of_slot` gives the model's next-rep state, a masking state. -/
 theorem freshStart_deployed {T : ZKMal.CoinLayer.TableData}
     {M : LoopModel Claims.Flock.Wit
       ((ZKMal.CoinLayer.session Loop.loopNr T).refP.Nonce × (ZKMal.CoinLayer.session Loop.loopNr T).refP.Rand)}

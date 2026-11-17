@@ -1,14 +1,3 @@
-/-
-Level 3: registered reads (`Flock.HmRow`). `check_ok`: when `Registered.check` accepts, each of the verifier's
-registered ports has the registered rows' width, and every instance's row of it climbs, from its frame-v3-sha512 leaf at
-the position the verifier's program reads for the instance's unit, to the registered root the verifier holds.
-`complete_opens`: when the complete check (`checkComplete`) accepts too, every port of the circuit is such a port.
-`opensLeaf_binding`: two openings the verifier accepts at
-one position under one registered root, with different leaves, give an explicit SHA-512 collision (`openPair`), and
-`opens_binding` the same of two commit strings (`bcPair`). No random oracle. `checkDescription_ok` (`Tags.withPlainLeaves`):
-when `Registered.checkDescription` accepts an inner statement, each of its registered rows opens the registered root at
-its own index, every instance reads one of them, and every one of them is read.
--/
 module
 
 public import Flock.Registered
@@ -18,7 +7,7 @@ public import Proofs.Flock.Verifier.Hash
 
 namespace Flock.Registered
 
-/-! ### Acceptance -/
+/-! Level 3 registered reads: an accepted check's registered ports open at their registered roots (`check_ok`, `complete_opens`), and two accepted openings at one position with different leaves give an explicit SHA-512 collision (`opensLeaf_binding`). -/
 
 theorem except_bind_ok {ε α β : Type} {x : Except ε α} {f : α → Except ε β} {b : β}
     (h : (x >>= f) = .ok b) : ∃ a, x = .ok a ∧ f a = .ok b := by
@@ -37,9 +26,6 @@ theorem forM_ok {ε α : Type} {f : α → Except ε Unit} : ∀ {l : List α}, 
     | head => exact hu
     | tail _ hx => exact forM_ok hrest x hx
 
-/-- A port `checkPort` accepts is the circuit's port `p`, of the registration's leaf schema, whose rows are the
-registered rows, and every instance's row of its table opens the registered root at the position the verifier's program
-reads for the instance's unit. -/
 theorem checkPort_ok {c : Circuit} {pub : Public} {t : Tables} {indices : Array Nat} {reg : Port}
     (h : checkPort c pub t indices reg = .ok ()) :
     ∃ p, p < c.ports.size ∧ c.ports[p]!.name = reg.name ∧ portSchema c.ports[p]! = reg.schema ∧
@@ -78,13 +64,6 @@ theorem checkPort_ok {c : Circuit} {pub : Public} {t : Tables} {indices : Array 
               · split at h <;> exact absurd h (throw_ne_ok _ _)
   · exact absurd h (throw_ne_ok _ _)
 
-/-- **`Registered.check` accepting.** If the verifier holds registered roots (`own`) and `check` accepts the statement, the
-units were derived from the verifier's own program, and for each of the verifier's registered ports `reg` (the circuit's
-port `p`, of `reg`'s leaf schema, whose rows are `reg`'s registered rows: `Port.fits`) and each instance `i`, the
-verifier's program reads a position `pos` of `reg`'s value in instance `i`'s unit (`indices`: the units the public
-file's header names, which the partition check derived), and instance `i`'s row (`Public.digest`, its `b ‖ c`) climbs
-from its frame-v3-sha512 leaf at `pos` (its hm96 leaf, framed at `pos` under `reg`'s domain and schema) through a path
-of one 64-byte sibling per level to `reg`'s root. -/
 theorem check_ok {c : Circuit} {pub : Public} {own : Array Port} {derived : Bool}
     (h : check c pub (some own) derived = .ok ()) :
     derived = true ∧ ∃ indices, unitIndices pub = .ok indices ∧
@@ -114,12 +93,6 @@ theorem check_ok {c : Circuit} {pub : Public} {own : Array Port} {derived : Bool
       · exact absurd h (throw_ne_ok _ _)
     · exact absurd h (throw_ne_ok _ _)
 
-/-- **Every port of a complete statement opens at its registered root.** If `check` accepts the statement and the
-complete check does too (`checkComplete`, which verity-verify-proof runs whenever `--registered` is given), and the
-circuit names each port once, then every port `q` of the circuit, each input port and each output row (so whatever an
-output's cone reads), is a port `reg` of `own` of its name, `reg`'s schema and rows, and every instance's row of it
-climbs, from its frame-v3-sha512 leaf at the position the verifier's program reads for the instance's unit, to `reg`'s
-root. -/
 theorem complete_opens {c : Circuit} {pub : Public} {own : Array Port} {derived : Bool}
     (h : check c pub (some own) derived = .ok ()) (hc : checkComplete c own = .ok ())
     (hN : ∀ p < c.ports.size, ∀ q < c.ports.size, c.ports[p]!.name = c.ports[q]!.name → p = q) :
@@ -138,12 +111,6 @@ theorem complete_opens {c : Circuit} {pub : Public} {own : Array Port} {derived 
   obtain rfl : p = q := hN p hp q hq (hpn.trans hname)
   exact ⟨reg, hreg, hname, hs, hf, hr⟩
 
-/-! ### The extractor: two accepted openings at one position give an explicit SHA-512 collision
-
-As in `FlockProofs.Merkle`, the extractor is computable (`climbPair`, `openPair`) and the theorem is that its output
-collides; a proposition "SHA-512 has a collision" follows (`opensLeaf_collision`) and says nothing on its own. -/
-
-/-- Two SHA-512 inputs that collide: different, with one digest. -/
 def Collides (x : ByteArray × ByteArray) : Prop := x.1 ≠ x.2 ∧ Sha512.hash x.1 = Sha512.hash x.2
 
 /-- One part of a frame-v3 frame: its 8-byte big-endian length, then its bytes. -/
@@ -176,12 +143,10 @@ theorem rowLeaf_eq (dom : ByteArray) (pos : Nat) (payload : ByteArray) :
 theorem leafAs_eq (schema : String) (dom : ByteArray) (pos : Nat) (payload : ByteArray) :
     leafAs schema dom pos payload = Sha512.hash (leafInAs schema dom pos payload) := rfl
 
-/-- `rowLeaf` is the leaf at `hm96-sha512/row/v1`. -/
 theorem leafAs_row : leafAs HmRow.ROW_SCHEMA = rowLeaf := rfl
 
 theorem leafInAs_row : leafInAs HmRow.ROW_SCHEMA = leafIn := rfl
 
-/-- `opensLeaf` at a port of `hm96-sha512/row/v1` rows climbs from `rowLeaf`. -/
 theorem opensLeaf_row {reg : Port} (hs : reg.schema = HmRow.ROW_SCHEMA) (payload : ByteArray) (pos : Nat)
     (path : ByteArray) :
     opensLeaf reg payload pos path = (decide (pos < reg.leaves) && decide (path.size = 64 * log2ceil reg.leaves) &&
@@ -191,8 +156,6 @@ theorem opensLeaf_row {reg : Port} (hs : reg.schema = HmRow.ROW_SCHEMA) (payload
 theorem step_size (acc p : ByteArray) : (step acc p).size = acc.size + (be64 p.size.toUInt64).size + p.size := by
   simp only [step, ByteArray.size_append]
 
-/-- A frame's last part: two frames one part longer than prefixes of one size, with last parts of one size, are one only
-when the prefixes are and the parts are. -/
 theorem step_inj {acc acc' p p' : ByteArray} (ha : acc.size = acc'.size) (hp : p.size = p'.size)
     (h : step acc p = step acc' p') : acc = acc' ∧ p = p' := by
   simp only [step] at h
@@ -202,14 +165,12 @@ theorem step_inj {acc acc' p p' : ByteArray} (ha : acc.size = acc'.size) (hp : p
   rw [h1] at h
   exact (ByteArray.append_right_inj _).mp h
 
-/-- A node's frame binds its two children, of one size each. -/
 theorem nodeIn_inj {dom : ByteArray} {d idx : Nat} {l r l' r' : ByteArray} (hl : l.size = l'.size) (hr : r.size = r'.size)
     (h : nodeIn dom d idx l r = nodeIn dom d idx l' r') : l = l' ∧ r = r' := by
   simp only [nodeIn, frame, List.foldl] at h
   have h2 := step_inj (by simp only [step_size, hl]) hr h
   exact ⟨(step_inj rfl hl h2.1).2, h2.2⟩
 
-/-- A leaf's frame binds its payload, of one size. -/
 theorem leafInAs_inj {schema : String} {dom : ByteArray} {pos : Nat} {x y : ByteArray} (hs : x.size = y.size)
     (h : leafInAs schema dom pos x = leafInAs schema dom pos y) : x = y := by
   simp only [leafInAs, frame, List.foldl] at h
@@ -230,8 +191,6 @@ def climbPair (dom : ByteArray) : ByteArray → ByteArray → Nat → Nat → Li
     else climbPair dom (Sha512.hash x) (Sha512.hash y) (idx / 2) (d + 1) rest rest2
   | a, b, _, _, _, _ => (a, b)
 
-/-- `climbPair`'s output collides: climbing from two different 64-byte digests to one root along sibling lists of one
-length, every sibling 64 bytes. -/
 theorem climbPair_collides (dom : ByteArray) :
     ∀ (s1 s2 : List ByteArray) (a b : ByteArray) (idx d : Nat), s1.length = s2.length →
       (∀ x ∈ s1, x.size = 64) → (∀ x ∈ s2, x.size = 64) → a.size = 64 → b.size = 64 → a ≠ b →
@@ -271,7 +230,6 @@ theorem climbPair_collides (dom : ByteArray) :
 theorem sibs_length (path : ByteArray) (depth : Nat) : (sibs path depth).length = depth := by
   simp [sibs]
 
-/-- A path of `depth` 64-byte siblings splits into 64-byte siblings. -/
 theorem sibs_size {path : ByteArray} {depth : Nat} (h : path.size = 64 * depth) : ∀ x ∈ sibs path depth, x.size = 64 := by
   intro x hx
   simp only [sibs, List.mem_map, List.mem_range] at hx
@@ -288,10 +246,6 @@ def openPair (reg : Port) (pos : Nat) (x path y path' : ByteArray) : ByteArray �
   else climbPair reg.domain (Sha512.hash lx) (Sha512.hash ly) pos 0 (sibs path (log2ceil reg.leaves))
     (sibs path' (log2ceil reg.leaves))
 
-/-- **Registered-path binding.** Two openings the verifier accepts (`opensLeaf`) at one position `pos` under one registered
-root, of two different 64-byte hm96 leaves `x ≠ y` of the port's schema: `openPair` computes two different SHA-512
-inputs with one digest from them. The frame binds the payload's position, the node's level and index, and each child's
-length, so the pair is a collision of two leaves' frames or of two nodes' frames. -/
 theorem opensLeaf_binding (reg : Port) (pos : Nat) (x path y path' : ByteArray) (hx : x.size = 64) (hy : y.size = 64)
     (hne : x ≠ y) (h1 : opensLeaf reg x pos path = true) (h2 : opensLeaf reg y pos path' = true) :
     Collides (openPair reg pos x path y path') := by
@@ -307,34 +261,24 @@ theorem opensLeaf_binding (reg : Port) (pos : Nat) (x path y path' : ByteArray) 
     exact climbPair_collides reg.domain _ _ _ _ pos 0 (by rw [sibs_length, sibs_length]) (sibs_size h1.1.2)
       (sibs_size h2.1.2) (Sha512.hash_size _) (Sha512.hash_size _) hl heq
 
-/-- The proposition `opensLeaf_binding` implies (satisfiable by counting on its own; `opensLeaf_binding` is the
-reduction). -/
 theorem opensLeaf_collision (reg : Port) (pos : Nat) (x path y path' : ByteArray) (hx : x.size = 64) (hy : y.size = 64)
     (hne : x ≠ y) (h1 : opensLeaf reg x pos path = true) (h2 : opensLeaf reg y pos path' = true) : Sha512.HasCollision :=
   let h := opensLeaf_binding reg pos x path y path' hx hy hne h1 h2
   ⟨_, _, h.1, h.2⟩
 
-/-- An opening's position is among the registered value's leaves. -/
 theorem opens_lt {reg : Port} {bc path : ByteArray} {pos : Nat} (h : opens reg bc pos path = true) :
     pos < reg.leaves := by
   simp only [opens, opensLeaf, Bool.and_eq_true, decide_eq_true_eq] at h
   exact h.1.1
 
-/-- No commit strings open a registered root at every position: the positions past its leaves open nothing. -/
 theorem not_opens_all (reg : Port) (bc path : Nat → ByteArray) : ¬ ∀ i, opens reg (bc i) i (path i) = true :=
   fun h => Nat.lt_irrefl _ (opens_lt (h reg.leaves))
 
-/-- **A commit string's extractor:** for commit strings `bc` and `bc'` opened through `path` and `path'` at one position
-`pos` under `reg`'s root, the two tree leaves' inputs if their tree leaves are one, else the opening's pair
-(`openPair`) of the two tree leaves. -/
 def bcPair (reg : Port) (pos : Nat) (bc path bc' path' : ByteArray) : ByteArray × ByteArray :=
   if Hm96.Default512.treeLeaf bc = Hm96.Default512.treeLeaf bc' then
     (Hm96.Default512.leafPrefix ++ bc, Hm96.Default512.leafPrefix ++ bc')
   else openPair reg pos (Hm96.Default512.treeLeaf bc) path (Hm96.Default512.treeLeaf bc') path'
 
-/-- **A registered root binds each position's commit string.** Two different commit strings the verifier opens at one
-position under one registered root (`opens`): `bcPair` computes two different SHA-512 inputs with one digest from them,
-the tree leaves' inputs (one leaf prefix, so they differ) or the opening's (`opensLeaf_binding`). -/
 theorem opens_binding (reg : Port) (pos : Nat) (bc path bc' path' : ByteArray) (hne : bc ≠ bc')
     (h1 : opens reg bc pos path = true) (h2 : opens reg bc' pos path' = true) :
     Collides (bcPair reg pos bc path bc' path') := by
@@ -345,21 +289,11 @@ theorem opens_binding (reg : Port) (pos : Nat) (bc path bc' path' : ByteArray) (
   · rename_i hl
     exact opensLeaf_binding reg pos _ path _ path' (Sha512.hash_size _) (Sha512.hash_size _) hl h1 h2
 
-/-! ### A recursive session's inner statement: its description (`Tags.withPlainLeaves`)
-
-`checkDescription_ok`: when `Registered.checkDescription` accepts, each of the verifier's registered ports `reg` is the
-circuit's port `p`, whose table is `reg`'s registration in order: table row `r` (`rowsOf c pub reg r`) opens `reg`'s root
-at `r` through the path the header gives it (`pathOf`) for every `r < reg.leaves`, every instance's row of the port is
-one of them, and each of them is some instance's row. -/
-
 theorem portOf_some {c : Circuit} {name : String} {p : Nat} (h : portOf c name = some p) :
     p < c.ports.size ∧ c.ports[p]!.name = name := by
   unfold portOf at h
   exact ⟨List.mem_range.mp (List.mem_of_find?_eq_some h), by simpa using List.find?_some h⟩
 
-/-- A port `checkDescriptionPort` accepts is the circuit's port `p`, of `reg`'s width, whose table has `reg.leaves` rows,
-row `r` opening `reg`'s root at `r` through its path; every instance's ref names one of them, and each is some instance's
-ref. -/
 theorem checkDescriptionPort_ok {c : Circuit} {pub : Public} {t : Tables} {reg : Port}
     (h : checkDescriptionPort c pub t reg = .ok ()) :
     ∃ p positions paths, portOf c reg.name = some p ∧ reg.fits c.ports[p]! = true ∧
@@ -409,8 +343,6 @@ theorem checkDescriptionPort_ok {c : Circuit} {pub : Public} {t : Tables} {reg :
                       simpa using hu
   · exact absurd h (throw_ne_ok _ _)
 
-/-- `checkDescription` accepting: the statement is a shared-row file, with tables `t`, and `checkDescriptionPort`
-accepts each of the verifier's registered ports. -/
 theorem checkDescription_tables {c : Circuit} {pub : Public} {own : Array Port}
     (h : checkDescription c pub own = .ok ()) :
     ∃ t, pub.tables = some t ∧ ∀ reg ∈ own, checkDescriptionPort c pub t reg = .ok () := by
@@ -424,11 +356,6 @@ theorem checkDescription_tables {c : Circuit} {pub : Public} {own : Array Port}
     · exact absurd h (throw_ne_ok _ _)
   · exact absurd h (throw_ne_ok _ _)
 
-/-- **`Registered.checkDescription` accepting.** For each of the verifier's registered ports `reg` (the circuit's port
-`p`, whose rows of u16 words are `reg`'s registered rows: `Port.fits`), every registered row `r < reg.leaves` of the
-statement (`rowsOf`, its `b ‖ c`) opens `reg`'s root at `r` through the path the header gives it (`pathOf`); every
-instance's row of the port (`Public.digest`) is the registered row its ref names; and every registered row is some
-instance's. -/
 theorem checkDescription_ok {c : Circuit} {pub : Public} {own : Array Port} (h : checkDescription c pub own = .ok ())
     {reg : Port} (hreg : reg ∈ own) :
     ∃ t p, pub.tables = some t ∧ portOf c reg.name = some p ∧ p < c.ports.size ∧ reg.fits c.ports[p]! = true ∧

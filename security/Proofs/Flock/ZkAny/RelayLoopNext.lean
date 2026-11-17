@@ -2,15 +2,7 @@ module
 
 public import Proofs.Flock.ZkAny.RelayLoopFirst
 
-/-!
-# The frame round's own rep one round on, from a stream of one round
-
-`loopKept_round`'s `hcur` at a round that is its stream's first, where the next round is another stream's:
-
-* **`repJ_next_first`**: the frame the session's next request finds holds the history's words for the stream's one
-  round (`roundRun_last_first`, `count_first`), the readied frame being the rep's run from its start and the table the
-  one its level 0 gives, as at `repJ_same_first`.
--/
+/-! The frame round's own rep one round on, from a stream of one round (`repJ_next_first`). -/
 
 @[expose] public section
 
@@ -22,16 +14,6 @@ open _root_.Flock.ZkServer.Frames (Sessions Rep Release)
 open _root_.Flock.ZkServer.Frame (Cfg Masker Place Req)
 
 open Loop LeanRelease in
-/-- **The round's own rep one round on, from its stream's first round, where the next round is another stream's**:
-at the loop's own frames (`hrel`), the session's entry being the setup's with the `Commit`'s words as its link
-(`hK2`), and every level 0 bound to the session the one the loop drew for its table (`BuiltAt`), the rep streams'
-names distinct (`hnd`), where the round is the first of table `i`'s rep `r`'s stream (`hk`) and the next round
-another stream's (`hne`), the rep's frame fresh (`FreshAt`): the frame the session's next request finds is the rep's,
-on the session's entry, table and level 0 as they stay, holding the history's words for the stream's one round where
-the next round is the next stream's first (`roundRun_last_first`, `count_first`), the frame `roundPlace` readied
-being the rep's run from its start (`repRun_start` at rep 0, `roundPlace_prior` at rep 1) and the table the one the
-rep's level 0 gives (`tab_of_placeholder`, `cap_of_sampled`); the rep's salts are not read, the algebraic phase having a
-round past the first's coins. -/
 theorem repJ_next_first (T : ZKMal.CoinLayer.TableData)
     (L₀ : LeanRelease Claims.Flock.Wit
       ((ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand))
@@ -104,7 +86,6 @@ theorem repJ_next_first (T : ZKMal.CoinLayer.TableData)
     · obtain ⟨j0, p0, h0⟩ := roundPlace_rep0 hf hrp hfst
       exact ⟨_, (roundPlace_prior hf hrp (fresh_repRun hp) hss hn hl0 hw h0).2⟩
   obtain ⟨pre, hRq⟩ := hRq
-  -- the model's side
   have hA₁ : (ofLoop T L₀ real).answered M.x M.ρ (e0 :: h1) = .ok m₀ := by
     rw [← hrel, ← hh]
     exact hA₀
@@ -140,7 +121,6 @@ theorem repJ_next_first (T : ZKMal.CoinLayer.TableData)
     have h := tab_of_placeholder (g := gb) (d := db) (l := l0) hph' (by rw [hdiv, hstmb]; exact hdb)
     rwa [hdiv, hstmb] at h
   have hcap : _root_.Flock.ZkServer.Finish.flat t.cm0.cap = l0.root := cap_of_sampled hdb htab
-  -- the frame's schedule on no coins, the algebraic phase `withAlg` scheduled
   obtain ⟨xs, hxsd⟩ : ∃ xs, xs = _root_.Flock.ZkServer.Drive.extras stm
       (_root_.Flock.ZkServer.Drive.linkPoints stm (wordsAt M.x (h1.map fun y => ZKMal.CoinLayer.rd y.2) 0)) :=
     ⟨_, rfl⟩

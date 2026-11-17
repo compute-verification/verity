@@ -16,21 +16,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.VBridge.PartS
 
-/-!
-# The verifier's `rec-opening/…` unit
-
-`RecOpening.check` accepts a `rec-opening/m<m>-c<claims>-p<j>` unit only if it is the net the verifier builds itself
-(`RecResiduals.unitLaid S ns nv`) for part `j` of the opening's algebra (`RecOpening.part`), which `RecResiduals`'
-grouping and renumbering cut from the opening's S (`RecOpening.structureOf`). The net and its layout are a
-`rec-residuals` part's, so `ResUnit`'s theorems read it unchanged.
-
-* `check_opening`: what `check` accepted, the verifier's net for part `j`.
-* `upv_of_check`: at one unit per VU.
-* `opening_small`: that part has at most 16 residuals (`groups_small`), as `laid_part` asks.
-* `decode_opening`: in a layer agreeing with the registrant, a copy of the unit whose row ports are registered bits of
-  `w` at the part's indices and whose `v` port registered bits of `vv` at `V` holds the part's residuals at part ports
-  that read them (`decode_resUnit`).
--/
+/-! The verifier's `rec-opening/…` unit is the net it builds for a part of the opening's algebra, a `rec-residuals` part's, so `ResUnit`'s theorems read it unchanged (`decode_opening`). -/
 
 @[expose] public section
 
@@ -39,8 +25,6 @@ namespace FlockVBridge.OfVStar
 open Flock.HmNets hiding and
 open Flock FlockSoundness.Discharge.Hm
 
-/-- **What `RecOpening.check` accepted**: a unit named `rec-opening/m<m>-c<claims>-p<j>` at a shape the verifier accepts
-is the net the verifier builds for part `j` of the opening's algebra at that shape. -/
 theorem check_opening {c : Flock.Circuit} (h : RecOpening.check c = .ok ()) {m cl j : ℕ}
     (hp : RecOpening.params c.unit.name = some (m, cl, j)) {sh : Flock.Shape}
     (hsh : RecOpening.shape? m cl = some sh) :
@@ -68,7 +52,6 @@ theorem check_opening {c : Flock.Circuit} (h : RecOpening.check c = .ok ()) {m c
             exact ⟨S, ns, nv, hpart, by rw [hcg]; exact hg⟩
           · cases h
 
-/-- **`RecOpening.check` accepts a `rec-opening/m<m>-c<claims>-p<j>` unit at one unit per VU only.** -/
 theorem upv_of_check {c : Flock.Circuit} (h : RecOpening.check c = .ok ()) {m cl j : ℕ}
     (hp : RecOpening.params c.unit.name = some (m, cl, j)) : c.upv = 1 := by
   unfold RecOpening.check at h
@@ -81,8 +64,6 @@ theorem upv_of_check {c : Flock.Circuit} (h : RecOpening.check c = .ok ()) {m cl
     · rename_i hv
       simpa using hv
 
-/-- **The verifier's opening part has at most 16 residuals** (`groups_small`): `partS` gives it one residual for each
-of its group's (`PartS.res_partS`). -/
 theorem opening_small {sh : Flock.Shape} {j : ℕ} {S : Flock.RecOpen.GfS} {ns : List ℕ} {nv : ℕ}
     (h : RecOpening.part sh j = .ok (S, ns, nv)) : 8 * S.res.length ≤ RecResiduals.RES_OUT_WORDS := by
   unfold RecOpening.part at h
@@ -110,12 +91,6 @@ open FlockVBridge.Decode
 variable {mPts nU J : ℕ} {Reg' : Type} {c : Flock.Circuit} {hU : Built c.unit} {hscope : Layout.scopeOk c = true}
   {Lv : SamplingDesign nU} (zo : ZkOuter mPts nU J Reg' c hU hscope Lv)
 
-/-- **An opening part the verifier pinned computes its residuals at the whole ports, in a layer agreeing with the
-registrant** (`decode_resUnit` at `check_opening`'s net). Let `RecOpening.check` accept `c`, its unit named for part `p`
-at a shape `sh` the verifier accepts, part `p` being `S` with row ports of `ns` elements and a `v` of `nv`. When copy `j`
-of unit `u`'s row ports are registered bits of the whole `w` at the part's indices `wI`, and its `v` port registered bits
-of `vv` at `V`, its output columns in `bits` hold the part's residuals at part ports `w'`, `v'` that read `w` at `wI` and
-`vv` at `V`. -/
 theorem decode_opening {bits : Fin (Layout.keyN c hU nU) → Bool} (hA : zo.RegAgree bits) (u : Fin nU) {j : ℕ}
     (hj : j < c.upv) (hone : bits (Const.Prog.oneAt (Placed.keyProg c hU nU) u) = true)
     (hc : RecOpening.check c = .ok ()) {m cl p : ℕ} (hp : RecOpening.params c.unit.name = some (m, cl, p))

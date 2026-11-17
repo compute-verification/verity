@@ -4,20 +4,7 @@ public import Proofs.Flock.ZkAny.RelayLoopFacts
 public import Proofs.Flock.ZkAny.RelayLoopNext
 public import Proofs.Flock.ZkAny.RelayLoopOwn
 
-/-!
-# The frame round's own rep one round on, at the deployed loop
-
-`loopKept_round`'s `hcur` at every frame round of the deployed loop:
-
-* `roundPlace_l0`: a round `roundPlace` places is on a session's entry whose table has a level 0 bound for the
-  session.
-* **`repJ_round`**: at a frame round of the deployed loop (`LoopModel.Deployed`), where the model's samples are the
-  tables the loop's level 0 give once the session's entry is the setup's and its level 0 are the ones the loop drew,
-  the round's own rep has `RepJ` at the session's next request and the model's coin step takes the round's coins: at
-  its stream's first round by `repJ_same_first` or `repJ_next_first`, past it by `repJ_same` within the rep's
-  schedule so far, `repJ_own` past it, and `repJ_next` where the next round is another stream's; the coin step is
-  `repJ_same_first`'s, `repJ_same`'s or `repJ_own`'s, whichever stream's round comes next.
--/
+/-! At every frame round of the deployed loop the round's own rep has `RepJ` one round on (`repJ_round`). -/
 
 @[expose] public section
 
@@ -28,8 +15,6 @@ open _root_.Flock (V F128 SessionSpec Stmt)
 open _root_.Flock.ZkServer.Frames (Sessions Rep Release)
 open _root_.Flock.ZkServer.Frame (Cfg Masker Place Req)
 
-/-- **A round `roundPlace` places has its table's level 0**: the session's entry is there, with the table's name, and
-a level 0 bound for the session under it. -/
 theorem roundPlace_l0 {R : Sessions} {L0 : _root_.Flock.ZkServer.Level0.Slots} {sid i r : Nat}
     {dom content : ByteArray} {n : Nat} {q : Rep} {pl : Place} {f : Bool} {nd : Option String}
     (h : _root_.Flock.ZkServer.Frames.roundPlace R L0 sid i r dom content n = .ok (q, pl, f, nd)) :
@@ -54,18 +39,6 @@ theorem roundPlace_l0 {R : Sessions} {L0 : _root_.Flock.ZkServer.Level0.Slots} {
   refine ⟨s, name, l0, ?_, ?_, ?_⟩ <;> first | rfl | assumption
 
 open Loop LeanRelease in
-/-- **`loopKept_round`'s `hcur` at the deployed loop**: at the loop's own frames (`LoopModel.Deployed`), `real`
-answering the loop's own tables (`hR`), and the model's samples at each rep the table its level 0 gives wherever the
-session's entry is the setup's and its level 0 the ones the loop drew (`hreal`): at a frame round of `stream`, table
-`i`'s rep `r`'s, the round's rep has `RepJ` at the session's next request and the model's coin step takes the round's
-coins, whichever stream's round comes next. The round's coins are the model's (`RoundFacts.coins`), its place,
-configuration and state the model's (`RoundFacts.place`), the session's entry the setup's (`LoopJ.sess`) linked to the
-history's coins (`LoopJ.link`, at the level 0 `roundPlace` read, `roundPlace_l0`), the setup's sizes within its frames'
-(`LoopJ.sizes`; they bound the placeholders' domains, extras and rows of pads, `Loop.sizesOk_at`), and the history one
-message on ends with the round's coins (`LoopModel.hist_ans`). At the stream's first round the rep's frame is fresh
-(`freshAt_cur`): `repJ_same_first` where the next round is the stream's, else `repJ_next_first`. Past it the rep has
-`RepJ` (`repJ_cur`): `repJ_next` where the next round is another stream's; `repJ_own` where the placeholder's schedule
-so far on the rep's coins is no longer than them, else `repJ_same`. -/
 theorem repJ_round (T : ZKMal.CoinLayer.TableData)
     {L₀ : LeanRelease Claims.Flock.Wit
       ((ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand)}

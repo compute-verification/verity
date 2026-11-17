@@ -2,24 +2,7 @@ module
 
 public import Proofs.Flock.ZkAny.RelayReg
 
-/-!
-# What a round reads of the loop's frames besides its rep's frame stays put
-
-A round reads, besides its rep's frame (`RelayReg`), its session's entry (`Frames.roundPlace`'s, with the `Commit`'s
-coins, `Sessions.link`'s) and the rep's salts for levels ≥ 1 (`Frames.placeOf`'s). Neither changes between the
-session's requests:
-
-* `StayStep`, `Stay`: the updates the loop's other tasks make between session `sid`'s requests, where the rep's table's
-  level-0 root is `root`: any of `RegStep`'s but a `link` of `sid` (its own `Commit`'s) and an end of `sid` or of a
-  session whose tables' level-0 roots contain `root`; and any run of them.
-* `sessAt`, `sessAt_stay`: session `sid`'s entry, as `Frames.roundPlace` finds it, where it has one, is kept: a `begin`
-  pushes behind it, and another session's `link` and end leave it.
-* `saltsAt`, `saltsAt_stay`: the salts for levels ≥ 1 of a rep on the table of level-0 root `root`, once kept, are
-  kept: `keepOf` keeps the first.
-
-Two sessions' tables share no level-0 root where the roots bind their samples (hash collision resistance), so another
-session's end leaves the rep's salts.
--/
+/-! What a round reads of the loop's frames besides its rep's frame, its session's entry and the rep's salts, stays put between the session's requests (`sessAt_stay`, `saltsAt_stay`). -/
 
 @[expose] public section
 
@@ -32,16 +15,13 @@ local instance lawfulBEqByteArrayStay : LawfulBEq ByteArray where
   eq_of_beq h := ByteArray.ext (beq_iff_eq.1 h)
   rfl {a} := by show (a.data == a.data) = true; exact beq_self_eq_true _
 
-/-- **Session `sid`'s entry** in the loop's frames `R`, as `Frames.roundPlace` finds it. -/
 def sessAt (R : Sessions) (sid : Nat) : Option Release := R.sessions.find? (·.sid == sid)
 
-/-- **The salts for levels ≥ 1 of rep `r` on the table of level-0 root `root`** in the loop's frames `R`, as
-`Frames.placeOf` finds them. -/
 def saltsAt (R : Sessions) (root : ByteArray) (r : Nat) : Option (Array ByteArray) :=
   (R.salts.find? fun x => x.1 == root && x.2.1 == r).map (·.2.2)
 
-/-- **An update the loop's other tasks make between session `sid`'s requests**, the rep's table's level-0 root being
-`root`: any of `RegStep`'s but `sid`'s own `link` and an end of `sid` or of a session with `root` among its roots. -/
+/-- Another session's end is excluded only where its tables' level-0 roots contain `root`: two sessions' tables share
+no level-0 root where the roots bind their samples (collision resistance). -/
 inductive StayStep (sid : Nat) (root : ByteArray) : Sessions → Sessions → Prop
   | begin (R : Sessions) (sid' : Nat) (spec : SessionSpec) (sts : Array Stmt) :
       StayStep sid root R (R.begin sid' spec sts)
@@ -57,12 +37,10 @@ inductive StayStep (sid : Nat) (root : ByteArray) : Sessions → Sessions → Pr
   | close (R : Sessions) (sid' : Nat) (roots : Array ByteArray) : sid' ≠ sid → roots.contains root = false →
       StayStep sid root R (closeOf R sid' roots)
 
-/-- Any run of those updates. -/
 inductive Stay (sid : Nat) (root : ByteArray) : Sessions → Sessions → Prop
   | refl (R : Sessions) : Stay sid root R R
   | step {R R' R'' : Sessions} : Stay sid root R R' → StayStep sid root R' R'' → Stay sid root R R''
 
-/-- Each `StayStep` is one of the loop's frames' updates. -/
 theorem StayStep.regStep {sid : Nat} {root : ByteArray} {R R' : Sessions} (h : StayStep sid root R R') :
     RegStep R R' := by
   cases h with
@@ -105,7 +83,6 @@ theorem sessions_innerRound {R R' : Sessions} {root : ByteArray} {r j : Nat} {b 
   · cases h
   · split at h <;> (cases h; exact ⟨rfl, rfl⟩)
 
-/-- **An update between the session's requests keeps its entry**, where it has one. -/
 theorem sessAt_stayStep {sid : Nat} {root : ByteArray} {R R' : Sessions} (h : StayStep sid root R R')
     (hs : (sessAt R sid).isSome) : sessAt R' sid = sessAt R sid := by
   cases h with
@@ -153,7 +130,6 @@ theorem sessAt_stayStep {sid : Nat} {root : ByteArray} {R R' : Sessions} (h : St
       have hb : (s.sid != sid') = true := by simp [hs', Ne.symm hne]
       simp [hb]
 
-/-- **Updates between the session's requests keep its entry**, where it has one. -/
 theorem sessAt_stay {sid : Nat} {root : ByteArray} {R R' : Sessions} (h : Stay sid root R R')
     (hs : (sessAt R sid).isSome) : sessAt R' sid = sessAt R sid := by
   induction h with
@@ -161,7 +137,6 @@ theorem sessAt_stay {sid : Nat} {root : ByteArray} {R R' : Sessions} (h : Stay s
   | step _ hst ih =>
     rw [sessAt_stayStep hst (by rw [ih]; exact hs), ih]
 
-/-- **An update between the session's requests keeps the rep's salts**, once kept. -/
 theorem saltsAt_stayStep {sid : Nat} {root : ByteArray} {R R' : Sessions} (h : StayStep sid root R R') (r : Nat)
     (hs : (saltsAt R root r).isSome) : saltsAt R' root r = saltsAt R root r := by
   cases h with
@@ -200,7 +175,6 @@ theorem saltsAt_stayStep {sid : Nat} {root : ByteArray} {R R' : Sessions} (h : S
       rw [hx, hroot]
       rfl
 
-/-- **Updates between the session's requests keep the rep's salts**, once kept. -/
 theorem saltsAt_stay {sid : Nat} {root : ByteArray} {R R' : Sessions} (h : Stay sid root R R') (r : Nat)
     (hs : (saltsAt R root r).isSome) : saltsAt R' root r = saltsAt R root r := by
   induction h with

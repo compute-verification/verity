@@ -2,18 +2,7 @@ module
 
 public import Proofs.Flock.Claims.ZK.L0PinBind
 
-/-!
-# The opening's first round
-
-Past the algebraic phase's rounds, a rep's schedule's next round, where it has one, is the opening's first
-(`Flags.PcsRound`): the ring switch's first claim round, from the PIOP's empty pending bytes, squeezing `7`.
-
-* **The cut ring switch at its first ask** (`Switch.ringSwitchCut_zero`): cut at round `0`, it stops past the openings
-  having sent its first body (`Switch.rsBody` at `0`), the loop's first step throwing (`Switch.forIn_first_err`).
-* **The opening fed** (`Bind.openStep_first`): where `openStep`, fed, sends anything, its first round is that body.
-* **The schedule** (`Bind.sched_pcs`): a schedule with a round at the algebraic phase's round count has the opening's
-  first round there, the opening's count `7`.
--/
+/-! Past the algebraic phase, a rep's schedule's next round is the opening's first, the ring switch's first claim round (`sched_pcs`). -/
 
 @[expose] public section
 
@@ -26,7 +15,6 @@ open FlockSoundness.Refine (Frame encs label_enc absorbSlice_enc framed_enc)
 open FlockComplete (PS asksCut ringSwitchCut)
 open FlockComplete.Replay (afterSq bind_go liftTM_ok)
 
-/-- **A loop whose first step throws**, then a continuation, throws with the first step's log. -/
 theorem forIn_first_err {σ β : Type} (body : ℕ → σ → TMW PS (ForInStep σ)) {n : ℕ} (hn : n ≠ 0) (s₀ : σ)
     (f : σ → TMW PS β) {t : Flock.Transcript} {l l' : Array Claims.Msg} {e : String}
     (h : ((body 0 s₀).run t).go l = (.error e, l')) :
@@ -43,8 +31,6 @@ theorem rsLoopB_zero (sv : ℕ → Array F128) (coin : ℕ → ℕ → F128) (L 
   rw [rsLoopB_eq, rsBody, ite_eq_left (Nat.pos_of_ne_zero hN), ite_eq_left rfl]
   simp only [rsLoopT, pcsT, label_enc, List.append_assoc]
 
-/-- **The cut ring switch, cut at its first ask**: from the empty log it stops past the openings having sent its first
-body after `t`'s pending bytes. -/
 theorem ringSwitchCut_zero (coin : ℕ → ℕ → F128) (sv : ℕ → Array F128) (claims : Array _root_.Flock.Claim)
     (hN : claims.size ≠ 0) (t : Flock.Transcript) :
     ((ringSwitchCut (asksCut coin 0) sv claims).run t).go #[] =
@@ -77,8 +63,6 @@ open FlockComplete.LigLock.Fed (feedR sentQ pendC feed_eq CoinAt repOpening_feed
 open Switch (rsBody)
 open Loop
 
-/-- **The opening's first round is the ring switch's first**: where `openStep`, fed, sends anything, its first round is
-the switch's first body from empty pending bytes, a claim's switched vector of `128` words. -/
 theorem openStep_first (t : _root_.Flock.ZkServer.Finish.Tab) (rep : ℕ) (dom : ByteArray)
     (xs : Array (Array F128)) (hi : Array ByteArray) (coins : Array (Array F128)) (hdom : dom.size < 2 ^ 64)
     (hdg : t.st.digest.size < 2 ^ 64) (hcn : (_root_.Flock.ZkServer.Finish.flat t.cm0.cap).size < 2 ^ 64)
@@ -127,8 +111,6 @@ theorem openStep_first (t : _root_.Flock.ZkServer.Finish.Tab) (rep : ℕ) (dom :
   simp only [Array.toList_append, List.nil_append, Array.size_empty, Nat.sub_zero, Nat.zero_add] at e2
   exact e2.symm
 
-/-- **A rep's round at the algebraic phase's round count is the opening's first**: fed at least the algebraic phase's
-coins, a rep's schedule that has a round there has the ring switch's first round, squeezing the opening's count `7`. -/
 theorem sched_pcs {t : _root_.Flock.ZkServer.Finish.Tab} {rep : ℕ} {dom : ByteArray} {xs : Array (Array F128)}
     {hi : Array ByteArray} {cr : Array (Array F128)} {alg sched : Array (ByteArray × ℕ)}
     (hal : _root_.Flock.ZkServer.Skeleton.rounds t.st t.sch.k0 (_root_.Flock.ZkServer.Finish.flat t.cm0.cap) dom =

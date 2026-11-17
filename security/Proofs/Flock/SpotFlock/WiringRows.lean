@@ -2,20 +2,7 @@ module
 
 public import Proofs.Flock.SpotFlock.Facts
 
-/-!
-# The wiring's clauses decided once per template give the ones stated bit by bit
-
-The design decides three clauses of the registered wiring once per template, over the rows one unit of the template's
-circuit reads its source bits at (`sourceRows`) and the rows it writes (`writtenRows`): `sourceRowsNamed`,
-`writtenRowsUnwired`, `writtenRowsRead`. The statements the connected program's proofs read range over every source
-bit and every written bit of the members' programs (`sourcesNamed`, `writtenUnwired`, `writtenRead`). Each follows
-from its clause, because a bit's row is one of its template's:
-
-* a source bit's row is one its member's circuit's units read at (`sourceBits_row`): the row map (`Bits.rowBit`)
-  reads a source gate's row off its input column's source, whatever the unit;
-* a written bit's row is one its member's circuit's units write (`writtenBits_row`): a returned output's bit is given
-  the name of one of the circuit's output row ports (`Bits.outPos`).
--/
+/-! The wiring's clauses the design decides once per template give the ones stated bit by bit (`sourcesNamed_of_rows`, `writtenUnwired_of_rows`, `writtenRead_of_rows`). -/
 
 @[expose] public section
 
@@ -23,9 +10,6 @@ namespace SpotFlock
 
 open Claims Claims.Sampling SamplingDeploy
 
-/-! ## A commitment position's row is one of its circuit's -/
-
-/-- A source's commitment position has the same row at every unit. -/
 theorem srcPos_row {c : _root_.Flock.Circuit} {u : ℕ} {s : Spot.Bits.Src} {rp : Spot.Bits.RowPos}
     (hs : Spot.Bits.srcPos c u s = some rp) :
     (Spot.Bits.srcPos c 0 s).map (fun x : Spot.Bits.RowPos => x.row) = some rp.row := by
@@ -35,7 +19,6 @@ theorem srcPos_row {c : _root_.Flock.Circuit} {u : ℕ} {s : Spot.Bits.Src} {rp 
     cases s <;> first | rfl | simp [Spot.Bits.srcPos]
   exact (key 0).trans (congrArg (Option.map fun x : Spot.Bits.RowPos => x.row) hs)
 
-/-- **A source gate's row is one its circuit's units read at.** -/
 theorem row_mem_sourceRows {c : _root_.Flock.Circuit} {n g : ℕ} {rp : Spot.Bits.RowPos}
     (hr : Spot.Bits.rowBit c n g = some rp) : rp.row ∈ sourceRows c := by
   unfold Spot.Bits.rowBit at hr
@@ -52,7 +35,6 @@ theorem row_mem_sourceRows {c : _root_.Flock.Circuit} {n g : ℕ} {rp : Spot.Bit
     exact List.mem_filterMap.2 ⟨(g - 2) % ((Spot.Bits.Rows.ofNet c.unit).stack c.upv).nIn,
       List.mem_range.2 (Nat.mod_lt _ (Nat.pos_of_ne_zero hB)), srcPos_row hr⟩
 
-/-- **A returned output bit's row is one its circuit's units write.** -/
 theorem row_mem_writtenRows {c : _root_.Flock.Circuit} {u k j t : ℕ} {rp : Spot.Bits.RowPos}
     (hr : Spot.Bits.outRowBit c u k j t = some rp) : rp.row ∈ writtenRows c := by
   unfold Spot.Bits.outRowBit at hr
@@ -65,12 +47,10 @@ theorem row_mem_writtenRows {c : _root_.Flock.Circuit} {u k j t : ℕ} {rp : Spo
 
 variable (h : Held)
 
-/-- Member `t`'s circuit is its template's reference statement's. -/
 theorem memberCircuit_ms {t : ℕ} (ht : t < h.ms.length) : memberCircuit h t = h.ms[t].1 := by
   simp [memberCircuit, Held.ms]
 
 variable {h} in
-/-- **A source bit's row is one its member's circuit's units read at**, and its member is one of the members. -/
 theorem sourceBits_row {x t : ℕ} {r : Spot.Bits.RowPos} (hs : (x, t, r) ∈ sourceBits h.ms) :
     t < h.ms.length ∧ r.row ∈ sourceRows (memberCircuit h t) := by
   unfold sourceBits at hs
@@ -98,7 +78,6 @@ theorem sourceBits_row {x t : ℕ} {r : Spot.Bits.RowPos} (hs : (x, t, r) ∈ so
     exact row_mem_sourceRows hr'
 
 variable {h} in
-/-- **A written bit's row is one its member's circuit's units write**, and its member is one of the members. -/
 theorem writtenBits_row {y t : ℕ} {r : Spot.Bits.RowPos} (hs : (y, t, r) ∈ writtenBits h.ms) :
     t < h.ms.length ∧ r.row ∈ writtenRows (memberCircuit h t) := by
   unfold writtenBits at hs
@@ -139,10 +118,6 @@ theorem writtenBits_row {y t : ℕ} {r : Spot.Bits.RowPos} (hs : (y, t, r) ∈ w
       rw [memberCircuit_ms h hm']
       exact row_mem_writtenRows hr
 
-/-! ## The clauses stated bit by bit -/
-
-/-- **Every source bit is at a port a link or a wire names** (`sourcesNamed`), where every row a template's units
-read source bits at is (`sourceRowsNamed`). -/
 theorem sourcesNamed_of_rows (hc : sourceRowsNamed h = true) : sourcesNamed h = true := by
   unfold sourcesNamed
   rw [List.all_eq_true]
@@ -151,8 +126,6 @@ theorem sourcesNamed_of_rows (hc : sourceRowsNamed h = true) : sourcesNamed h = 
   unfold sourceRowsNamed at hc
   exact List.all_eq_true.1 (List.all_eq_true.1 hc s.2.1 (List.mem_range.2 ht)) s.2.2.row hrow
 
-/-- **No wire names a port a member writes that no link names** (`writtenUnwired`), where none names a row a
-template's units write that no link names (`writtenRowsUnwired`). -/
 theorem writtenUnwired_of_rows (hc : writtenRowsUnwired h = true) : writtenUnwired h = true := by
   unfold writtenUnwired
   rw [List.all_eq_true]
@@ -161,8 +134,6 @@ theorem writtenUnwired_of_rows (hc : writtenRowsUnwired h = true) : writtenUnwir
   unfold writtenRowsUnwired at hc
   exact List.all_eq_true.1 (List.all_eq_true.1 hc y.2.1 (List.mem_range.2 ht)) y.2.2.row hrow
 
-/-- **Every port a member writes that no link names is some wire's writer port** (`writtenRead`), where every row a
-template's units write that no link names is (`writtenRowsRead`). -/
 theorem writtenRead_of_rows (hc : writtenRowsRead h = true) : writtenRead h = true := by
   unfold writtenRead
   rw [List.all_eq_true]
@@ -171,8 +142,6 @@ theorem writtenRead_of_rows (hc : writtenRowsRead h = true) : writtenRead h = tr
   unfold writtenRowsRead at hc
   exact List.all_eq_true.1 (List.all_eq_true.1 hc y.2.1 (List.mem_range.2 ht)) y.2.2.row hrow
 
-/-- **Every returned output bit of a circuit's unit sits on a computed row**, where the decision holds
-(`outsComputed`): its column is past the unit net's input columns and before its constant. -/
 theorem outsComputed_spec {c : _root_.Flock.Circuit} (hc : outsComputed c = true) :
     ∀ k < c.upv, ∀ j < (c.leavesOut.getD k #[]).size, ∀ t < 16,
       (Spot.Bits.Rows.ofNet c.unit).nIn ≤ Spot.Bits.outCol c j t ∧
@@ -186,8 +155,6 @@ theorem outsComputed_spec {c : _root_.Flock.Circuit} (hc : outsComputed c = true
   rw [Bool.and_eq_true] at h3
   exact ⟨of_decide_eq_true h3.1, of_decide_eq_true h3.2⟩
 
-/-- **Where the design evaluates, every returned output bit of each member's unit sits on a computed row**
-(`outsOk`), at the member as the partition lists it. -/
 theorem outs_of_two {s : AuditStatement} {d : Design.Two} (hd : two h s = some d) {t : ℕ} (ht : t < h.ms.length) :
     ∀ k < h.ms[t].1.upv, ∀ j < (h.ms[t].1.leavesOut.getD k #[]).size, ∀ b < 16,
       (Spot.Bits.Rows.ofNet h.ms[t].1.unit).nIn ≤ Spot.Bits.outCol h.ms[t].1 j b ∧
@@ -199,8 +166,6 @@ theorem outs_of_two {s : AuditStatement} {d : Design.Two} (hd : two h s = some d
   rw [memberCircuit_ms h ht] at h1
   exact outsComputed_spec h1
 
-/-- **Where the design evaluates, every source bit is at a port a link or a wire names, no wire names a port a
-member writes that no link names, and some wire reads it.** -/
 theorem namedRows_of_two {s : AuditStatement} {d : Design.Two} (hd : two h s = some d) :
     sourcesNamed h = true ∧ writtenUnwired h = true ∧ writtenRead h = true := by
   obtain ⟨-, -, hn, -, -, hu, hr, -, -, -⟩ := wiring_of_two h hd

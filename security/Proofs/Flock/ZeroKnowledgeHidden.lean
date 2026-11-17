@@ -17,13 +17,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.Soundness.CROnly.Hiding
 import Proofs.Flock.Soundness.Discharge.FailClosed.Mask
 
-/-!
-# Proof of Flock's zero-knowledge guarantee under hidden outputs
-
-`Flock.SecurityProofs.ZeroKnowledgeHidden : Flock.Guarantees.ZeroKnowledgeHidden` is `zk_session_viewHJ`. With
-`Flock.SecurityProofs.EndToEndHidden` at the same `dj` and `y₀` it is `zk_session_composedHJ`'s composition: sound and
-zero knowledge on one plan.
--/
+/-! Proof of Flock's zero-knowledge guarantee under hidden outputs (`zk_session_viewHJ`). -/
 
 @[expose] public section
 
