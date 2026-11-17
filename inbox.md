@@ -1,3 +1,0 @@
-[2026-11-17T18:57Z] 3d922137eaf2
-vllm coordinator 11:00 AM PST, add to your return: write these rows on node A calendar (infra says card 5 / cores 48-71 are free and ours once written): (1) tonight Tue 6:00 PM to 11:00 PM PST, card 5, cores 48-71: rehearsals of the two applications (verity run remote, then verity run onsite_full), lane vllm; (2) confirm or write Wednesday rows: 8:00 to 11:30 AM PST remote application, 12:00 to 3:00 PM PST onsite application (it needs about 2.5 hours with the network attester; lease and limits set for 3 hours), same card and cores. Note memory-accounting holds all cards and cores 4:15 to 5:15 PM PST today. Say the rows as written.
-
