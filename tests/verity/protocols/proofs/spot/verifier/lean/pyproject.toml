@@ -34,4 +34,3 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/protocols",
           "verity/circuits", "verity/commitments", "adapters/vllm/verity_vllm/definitions", "tools/difftest",
           "verity/channel.py",
           "verity"]
-parallel = true
