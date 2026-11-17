@@ -37,7 +37,7 @@ to end. Each driver's docstring says what it runs, what it publishes and what it
   proof blocks with Flock `prove --zk` behind the Lean ZK server and holds them by the Lean
   `verity-verify-proof verify --zk`: `n2_zk.py` (N2's registered proof block, N2's verdict of record), `n2_tie_zk.py`
   (the ingress tie), `egress_zk.py` (N2's egress bucket), `scan_zk.py` (the step-indexed scan), `scan_period.py` (the
-  scan's answers held by `NetworkCheck.Period`) and `compile_slice_zk.py` (the compile slice). `leak_scan.py`, in
+  scan's answers held by `NetworkVerifier.Period`) and `compile_slice_zk.py` (the compile slice). `leak_scan.py`, in
   `prover/` too, is the scan of what the verifier received that every one of them runs.
 - **The chain's run of record.** `chain_record.py` (`chain_record.sh`, below), with
   `prover/window_chain.py` (a served endpoint's Commit periods as one I1 v0 advice), `negatives.py` (what network
@@ -154,9 +154,8 @@ among them; `--received OUT` does so for what a verifier on another machine read
 around V3c (`CERTIFIER_CHAIN_CMD` and `CERTIFIER_PERIOD_CMD`), its `chain` runs the chain with the scan on V3c's
 committed execution phase (`scan_zk.py --v3c`: its scan state and slot entries are the scan's state and prog trees), and its
 `period` runs the consistency check on the rows case whose one compute audit is V3c's `period.json`, at any sample of
-V3c's; each step releases through its own hold. The check reads an audit's state entry among its `roots` and its
-`registered` alone, and a served execution phase's registration holds its `SCAN_STATE` in its `window`'s `activations.values`
-alone, so a served period's answer is a reject at the state tie.
+V3c's; each step releases through its own hold. The verifier reads an audit's state entry among its `roots` and its
+`registered` alone, and a workload's execution phase's registration holds its `SCAN_STATE` among its `registered`.
 
 ## A cheating server
 
@@ -357,7 +356,7 @@ binding and the two provers, and writes `out/report/report.json` and `report.md`
 | step | what it checks | its ε at δ | computed in the clear |
 |---|---|---|---|
 | custody | each gate run's files against the SHA-512s in its `end.json` | none: a check of files | the files' digests |
-| attestations | each execution phase's two attested records, at the client, under the network attester's key and attachment; with `CR_DEPLOYED=1`, a key that isn't LMS at H = 20 is refused | none: signatures | every LMS signature of the client's kept attestations by the Lean (`NetworkCheck.TransferBlocks.refusals`, `audit.certificate_refusals` its reference), and the Lean's audit (`NetworkCheck.Records`, `audit.Audit` its reference) of the run's attested heads, under no sync (the network attester's link declares none) |
+| attestations | each execution phase's two attested records, at the client, under the network attester's key and attachment; with `CR_DEPLOYED=1`, a key that isn't LMS at H = 20 is refused | none: signatures | every LMS signature of the client's kept attestations by the Lean (`NetworkVerifier.TransferBlocks.refusals`, `audit.certificate_refusals` its reference), and the Lean's audit (`NetworkVerifier.Records`, `audit.Audit` its reference) of the run's attested heads, under no sync (the network attester's link declares none) |
 | endpoint | the endpoint's own advice bound to the run (each Commit period opened to its registered root, rebuilt from the attested I/O off the network attester's cells: `chain_record.py endpoint`) | none: in the clear | all of it |
 | N2 | each execution phase's N2 proof block, proved `--zk` and decided by N2's verifier (`n2_zk.py`); not run on the advice profile, whose egress counts no N2 proof block holds | Selection All: no execution phase unsampled; a sample of k of n execution phases hides at most b incorrect ones except with probability δ (the report's `incorrect_at_delta`) | the registration, the sample, the attestations' public fields, the syncs, the pub row opened to the verifier's copy, the output word |
 | scan | the scan's ingress and egress proof blocks of an execution phase, one registration, `verify --zk --registered` | the audit's `wrong_units` at the sample's sampling design | each proof block's output bit; the I/O tie stays outside the proofs |
@@ -440,7 +439,7 @@ or a `WindowClass`'s `scan`); `datacenter` sums K over a datacenter's links; and
 one link's rate as a scope has machines. Each comes in two forms, beside its share of one copy of the weights and its
 ε. The terms are those of
 `NetTiming.Guarantees.MonitoringPeriodLeakAccepted` (`security/Definitions/Certifier/Guarantees/MonitoringPeriod.lean`, proved in
-`security/Proofs/Certifier.lean`) as `NetworkCheck.Period`'s rows form counts them, whose execution phases'
+`security/Proofs/Certifier.lean`) as `NetworkVerifier.Period`'s rows form counts them, whose execution phases'
 failures `NetTiming.monitoringPeriodLeak_le_sum` sums by a union bound (`security/Proofs/Certifier/MonitoringPeriodSum.lean`); the
 pooled form is `NetTiming.Guarantees.PooledLeakAccepted`
 (`security/Definitions/Certifier/Guarantees/PooledLeak.lean`). Both are about one device on one uplink. The sum
@@ -475,14 +474,14 @@ The terms, in the generator reading of the scan's statement (each proof block's 
   to a pacer that releases it at a time fixed before the bucket is made (`network_attester.NetworkAttester(paced=…)`, `network_attester_serve.py
   --paced-ms`), and a network attester on the host's clock always paces. Still, the host's state after the server's writes for
   the next bucket moves when a bucket reaches the client. The scan's period check (`scan_period.py`) passes the same
-  bound as `NetworkCheck.Period`'s `jitter`.
+  bound as `NetworkVerifier.Period`'s `jitter`.
 
 Each entry carries a read bit (`ingress_scan.entry_layout`: an occupied slot no Program reads is refused). Bucket t
-reads slot j's entry at row ⌊t / EVERY⌋ of lane j's entries, `scan/prog<j>` (`NetworkCheck.Period`'s `readsEntries`),
+reads slot j's entry at row ⌊t / EVERY⌋ of lane j's entries, `scan/prog<j>` (`NetworkVerifier.Period`'s `readsEntries`),
 and ignores it outside due and occupied slots, so an execution phase's entries are its NR·nb boundaries'. Unless each
 lane's `scan/prog<j>` is chunk j of a compute audit's `SlotEntry_v1` or `SelectEntry_v1` template's entries
 (`<descriptor id>/c<j>/o0`, one member a lane), the read bit is the prover's word (an entry of read 1 and no outputs
-passes the scan), so `NetworkCheck.Period` refuses the execution phase by name (`wired`). `wired` pins the template's
+passes the scan), so `NetworkVerifier.Period` refuses the execution phase by name (`wired`). `wired` pins the template's
 whole body by its closure digest (`entryPins`, `io_shell.SlotEntry_v1` at its circuit-check rows, and
 `SelectEntry_v1`'s), so the block round's `prog<j>`, the o0 of scan_zk's `SlotEntry_v1` stand-in's lane-j member,
 whose entries, read bit included, are the prover's, is refused there (scan_period.py). A slot's Program reads the
@@ -507,7 +506,7 @@ T = 3, `ingress-0` and `last`) are at one domain and root, and each is held to i
 registration's (`--group 1`, the only group the rows form reads). A schedule of fewer than two ticks has no constants
 (its one bucket would be the scan's first and its last, a member no scan is staged with), and the check refuses
 every execution phase under one.
-Tied (`NetworkCheck.Period`'s `progTied`, scan_zk's block round), the entries are a compute audit's outputs
+Tied (`NetworkVerifier.Period`'s `progTied`, scan_zk's block round), the entries are a compute audit's outputs
 and the scan's own free term is 0: the bits are that audit's free inputs (the stand-in's `x`), which the rows form's
 K charges to the execution phase's term (`tiedAudits`). The egress tie moves the free term from the scan's `prog` to the
 tied audit's inputs; K is unchanged in what it bounds, and the registered reading's free term is those slot entries.
@@ -519,7 +518,7 @@ The two forms:
 - The per-period form (`MonitoringPeriodLeakAccepted`) has no δ term with every proof block sampled.
 - Both are proved: `NetTiming.SecurityProofs.MonitoringPeriodLeakAccepted` and `NetTiming.SecurityProofs.PooledLeakAccepted`.
 - Beside either, ε = m·δ_scan is the scans' δ summed over the period's m execution phases and the links
-  (`NetworkCheck.Period`'s `eps`), each scan at its δ (`leak_bounds.SCAN_DELTA`, `scan_zk --delta`'s default).
+  (`NetworkVerifier.Period`'s `eps`), each scan at its δ (`leak_bounds.SCAN_DELTA`, `scan_zk --delta`'s default).
 
 The scale:
 - A week, a month and a year of one link, and of as many links as the census's reference datacenter
@@ -542,7 +541,7 @@ K also rests on these conditions:
 - The generator reading of the scan's statement, in which each proof block's registered rows are its boundary values.
   That reading is a claim, not yet a locked guarantee.
 - Each connection's limit is its lane's egress_cells, which the network attester holds a lane to and
-  `NetworkCheck.Period` doesn't check.
+  `NetworkVerifier.Period` doesn't check.
 - The scan proves execution phase 0. A monitoring period's figures scale its per-execution-phase and per-request terms at
   the run's rate.
 - J at D_j = 2, which the jitter term assumes (above).

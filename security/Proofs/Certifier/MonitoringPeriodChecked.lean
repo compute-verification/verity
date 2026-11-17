@@ -61,7 +61,7 @@ read, any other input in a proof block is opened, and no egress gate depends on 
 `Prog.Unread`), so the inputs move back to the trace's own values (`valOver_congr_held`), pinned at the free inputs:
 the run the relation accepts at is the run at the network attester's rows. An accepted audit escapes the relation
 only where `Compiled.KS` fails, the trace disagrees with a passing opening of the network attester, which is a
-collision (`certifierColl_of_disagree`, `Pr_certifierColl_le_Btap`), or one of the two checks misses on that run,
+collision (`attesterColl_of_disagree`, `Pr_attesterColl_le_Btap`), or one of the two checks misses on that run,
 which `CheckedWitness` at `certifierRun` bounds (`monitoringPeriodChecked_first`).
 
 **The count.** A window that meets `ExecutionPhaseGoodChecked`, whose observations the network attester registers, has them
@@ -395,7 +395,7 @@ theorem rLeakCertifierChecked_of (H : Msg → Msg) (D : Compiled Coin A) {L K S 
 /-- **Each window's bound**: the first part of `Guarantees.MonitoringPeriodLeakChecked`. An accepted run whose extracted witness
 is not in the leak relation at the network attester's rows with a valid run is outside the sampling relation, which
 `Compiled.KS` bounds, or disagrees with a passing opening of the network attester, a collision
-(`certifierColl_of_disagree`, `Pr_certifierColl_le_Btap`), or has a run at those rows that one of the two checks
+(`attesterColl_of_disagree`, `Pr_attesterColl_le_Btap`), or has a run at those rows that one of the two checks
 refuses, which `CheckedWitness` at `certifierRun` bounds (`rLeakCertifierChecked_of`). -/
 theorem monitoringPeriodChecked_first (H : Msg → Msg) (D : Compiled Coin A) (hks : D.KS H) (hb : D.commit.Binds H) (L K S : ℕ)
     (lay : AuditStatement → BoundaryGates L S) (k : AuditStatement → ℕ) (δ : ℝ) (hδ : 0 ≤ δ)
@@ -412,7 +412,7 @@ theorem monitoringPeriodChecked_first (H : Msg → Msg) (D : Compiled Coin A) (h
   rw [one_mul] at hks'
   have hm₁ := h₁ Ω P
   have hm₂ := h₂ Ω P
-  have hc := Pr_certifierColl_le_Btap H D tops P x
+  have hc := Pr_attesterColl_le_Btap H D tops P x
   unfold PrBad at hks' ⊢
   unfold PrCheckMiss at hm₁ hm₂
   refine (Pr_or4_le (fun s hs => ?_) hks' hc hm₁ hm₂).trans (le_of_eq (by ring))
@@ -428,7 +428,7 @@ theorem monitoringPeriodChecked_first (H : Msg → Msg) (D : Compiled Coin A) (h
       refine hng (rLeakCertifierChecked_of H D lay k hδ reg _ Dj tops hx hA
         (fun st hst hpass g hq b hwb => ?_) (fun st Pt hst hPt r hr => ?_))
       · by_contra hne
-        exact hnc (certifierColl_of_disagree H D hb tops P x s hst hpass hacc hw hq hwb hne)
+        exact hnc (attesterColl_of_disagree H D hb tops P x s hst hpass hacc hw hq hwb hne)
       · have hdisj : Disjoint (faulty H D.commit st Pt w) (allSlots st.design Pt) := by
           obtain ⟨s', P', hs', hP', hM⟩ := hA
           rw [hst] at hs'

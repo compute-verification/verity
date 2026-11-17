@@ -328,6 +328,10 @@ ARMS = {
                        "what a seed moves in vLLM's sampling, read apart", published=True, seeds=True),
     "prod-trace": Arm("prod", "+ the step trace and each request's ids, prod-record with the canonical top-k off: what "
                       "the canonical top-k moves, read apart", plugin=("record", "ids"), published=True),
+    "prod-record-bisect": Arm("prod", "prod-record with the canonical top-k's every failed row bisected by one program "
+                              "(VERITY_DSA_TOPK=canonical-bisect): what its refinement saves, read apart",
+                              plugin=("record", "ids"), env={**TOPK_ENV, "VERITY_DSA_TOPK": "canonical-bisect"},
+                              general=TOPK, published=True),
 }
 ARMS["two-stage-tick"] = replace(ARMS["two-stage"], parent="two-stage", what="+ admission on the certified tick", tick=True)
 ARMS["tick-certifier"] = replace(ARMS["tick"], parent="tick", what="+ the network certifier in front: every request "
@@ -343,7 +347,7 @@ CHANGES: dict[str, Callable[[Arm], bool]] = {
     "prefix caching off": lambda a: "--no-enable-prefix-caching" in a.args,
     "the two-stage boundary commitment": lambda a: "boundary_rows" in a.plugin,
     "the history tables": lambda a: bool(a.rows.get("tables")),
-    "the canonical top-k": lambda a: a.env.get("VERITY_DSA_TOPK") == "canonical",
+    "the canonical top-k": lambda a: a.env.get("VERITY_DSA_TOPK", "").startswith("canonical"),
     "admission on the certified tick": lambda a: a.tick,
     "the edge snapshot": lambda a: a.edges,
     "the network certifier in front": lambda a: a.attester,
@@ -476,15 +480,18 @@ MODELS = {
     # glm53's target is the cost model's share for serving (the spot figures' serving cost card, its `tokens`
     # configuration): extra GPU time at equal tokens, which reads no SLO, for a server that does not cut its cache at a
     # phase edge and keeps vLLM's prefix cache on, priced at one engine across eight H200s under the chat load at 384
-    # requests at once. None of its parts is measured here: a run measures a part where one of its arms turns on that
-    # part's changes alone (`cost_report`'s `measured`). It has no part for prefix caching off, the served ids or
-    # the network attester in front.
+    # requests at once, but for the canonical top-k's, which is measured (`total_cost.TOPK_SHARE`): a run measures a
+    # part where one of its arms turns on that part's changes alone (`cost_report`'s `measured`). It has no part for
+    # prefix caching off, the served ids or the network attester in front.
     "glm53": Model("zai-org/GLM-5.3", "aca966e4e02791568aa6a4ced368624b3d897f42", "glm-5.3",
-                   ("--tensor-parallel-size", "8"), (2.0, 0.08), target=2.13, target_basis="modeled",
+                   ("--tensor-parallel-size", "8"), (2.0, 0.08), target=10.25, target_basis="modeled",
                    target_parts=(
                        Part("the certified tick", 1.63, ("admission on the certified tick",),
                             "the queue-dependent tick's throughput, simulated on traces", "simulated"),
-                       Part("the tie order", 0.25, ("the canonical top-k",)),
+                       Part("the canonical top-k", 8.37, ("the canonical top-k",),
+                            "the old pass's cost, which bisects every wrong fast selection by one program: prod-record "
+                            "over prod-trace on the agentic load at 4 users; right for main today and an upper bound "
+                            "once the new select lands, until prod-record-bisect measures the new one", "measured"),
                        Part("the snapshot bundle", 0.17, ("the edge snapshot",),
                             "the pause to copy and hash the cache at each edge and the carried pages' hash, with "
                             "the prefix cache on"),
@@ -1886,7 +1893,7 @@ SERVER, CLIENT = "server", "client"
 #: the loopback port the id front listens on, on the node, and where the client's side reaches it (a forward's end)
 FRONT_PORT = 18746
 #: the network attester's schedule such an arm is served under, by the fields of its parameters; its lanes and its
-#: queue are by default the highest rung (`certifier_cells`). One cell, so one id, leaves a connection each slot of a
+#: queue are by default the highest rung (`attester_cells`). One cell, so one id, leaves a connection each slot of a
 #: bucket, the first ``delay`` buckets after the connection's admission; a request is at most ``ingress_cells`` cells,
 #: read within ``ingress_buckets`` buckets, and an answer at most the ids its last field, the response limit, allows
 CELLS = {"cell_bytes": 4096, "slots": 1, "bucket_ms": 250, "delay": 60, "window": 600, "ingress_cells": 4,
@@ -1924,7 +1931,7 @@ def certifiable(load: Load) -> bool:
     return load.file is not None and not load.sessions and not load.plan
 
 
-def certifier_cells(text: str | None, loads: dict[str, tuple[int, ...]]) -> dict[str, int]:
+def attester_cells(text: str | None, loads: dict[str, tuple[int, ...]]) -> dict[str, int]:
     """The network attester's schedule for ``loads``: `CELLS` with ``--cells NAME=N,...`` over it, its lanes and its
     queue by default the loads' highest rung. Refused where it is no schedule of the network attester's in the id form
     (`attester_schedule`), or where its queue is under a rung: vLLM's client opens a rung's connections at once,
@@ -2080,7 +2087,7 @@ def certified_server(a: argparse.Namespace, popen: Callable[..., subprocess.Pope
     arm, model = ARMS[a.arm], MODELS[a.model_id]
     checkpoint = Path(a.checkpoint) if a.checkpoint else model.checkpoint()
     loads = certified_loads(a.arm, a.loads)
-    cells = certifier_cells(a.cells, loads)
+    cells = attester_cells(a.cells, loads)
     stop_at = parse_stop_at(a.stop_at)
     tick = tick_args(a.tick_from, a.tick_ms, bucket_ms=cells["bucket_ms"])
     signal.signal(signal.SIGTERM, on_term)
@@ -2183,7 +2190,7 @@ def certified_client(a: argparse.Namespace, run: Callable[..., subprocess.Comple
     if not a.attester_windows or a.attester_windows < 1:
         raise SystemExit("--attester-windows N: the windows the network certifier runs, fixed when it starts: enough "
                          "for the warm-up and every pass, each as long as its longest answer's cells take")
-    cells = certifier_cells(a.cells, loads)
+    cells = attester_cells(a.cells, loads)
     datasets = parse_datasets(a.dataset, loads)
     sizes = parse_pass_prompts(a.pass_prompts, loads)
     passes = {pass_name(n, c): (n, c) for n, rungs in loads.items() for c in rungs}
@@ -4044,7 +4051,7 @@ def main(argv: list[str] | None = None) -> int:
                         "client's side reaches it")
     r.add_argument("--cells", metavar="NAME=N,...",
                    help="such an arm: the network certifier's schedule over CELLS, the same on both sides "
-                        "(certifier_cells)")
+                        "(attester_cells)")
     r.add_argument("--attester-windows", type=int, metavar="N",
                    help="such an arm's client side: the windows the network certifier runs, fixed when it starts")
     r.add_argument("--num-gpu-blocks", type=int, help="the KV pool's blocks (vLLM's --num-gpu-blocks-override)")

@@ -59,7 +59,7 @@ What the number is of, and the verifier that decides it. Change any of these and
   by come from the model's shape and the class (`MODELS`, `model_macs` in `run.py`); attention is counted and never
   credited.
 - **The verifier**: the Lean program `pouw-pearlplus` (package `pouw_pearlplus` in
-  `verity/protocols/resource_accounting/compute/pouw/verifier/lean/pearlplus/`, `PouwCheck.PearlPlus`'s `check`) and its Python twin
+  `verity/protocols/resource_accounting/compute/pouw/verifier/lean/pearlplus/`, `PouwVerifier.PearlPlus`'s `check`) and its Python twin
   `benchmarks/pouw/pearl_c_vllm/verify_run.py`, which must agree. The number needs the Lean verdict.
 - **The scheme**: `pearl-c-h100-v1-h3` alone (`schemeOf` refuses the RTX PRO 6000's schemes by name), with 64 × 64
   tiles and a matrix depth k (the length of the products' dot products) of at least 1,024 (`TILE`, `K_MIN`) or
@@ -274,9 +274,11 @@ The paths below are relative to the record directory.
   passes hold the LM head's calls, and `--per-call` prints it.
 - `out/pieces/pouw/development.json` (optional): the Pearl+ verifier's development document. Only its `coin_source`,
   where the passes' salt coins came from, is read.
-- `out/compute-run.json` (optional): what the serving command ran with. Only its `challenger` and `development` are
-  read, for the second line: `challenger` is `local` or `in-process`, and `development` true. A file saying the
-  challenger is `deployed`, or `development` false, is refused (exit 2).
+- `out/compute-run.json` (optional): what the serving command ran with. Only its `challenger`, `development` and
+  `card` are read. The first two are for the second line: `challenger` is `local` or `in-process`, and `development`
+  true. A file saying the challenger is `deployed`, or `development` false, is refused (exit 2). `card` is the name
+  nvidia-smi gives the card serve.sh checked and served on, and it names each measurement's member with the model
+  (`llama-3.2-1b-h200`); a file with no card writes no member.
 - `job.json` (optional): the run's own record of itself. The command prints its `run.id` as the run, and the commit
   its `store.conditions` name (`source.commit`, with `-dirty` when `source.dirty`). Without it the run is the
   directory's name and the commit is unknown. A `made_up` statement in it makes the record a made-up one: the output says so, and `result.json` marks each

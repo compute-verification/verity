@@ -1003,6 +1003,19 @@ def test_a_check_replaces_the_runs_the_loop_cancelled_for_a_candidate_sharing_a_
     assert replaced(lines, [5], now) == {} == replaced([], [2], now)
 
 
+def test_a_rebuild_replaces_the_runs_of_the_candidates_it_rebuilds_whatever_their_age():
+    from research.vqueue_loop import stamp
+
+    now = 1_800_000_000.0
+    lines = [{"action": "drop", "sha": "c0", "at": stamp(now - 5000), "members": [1], "beside_cancelled": ["r-c0"]},
+             {"action": "drop", "sha": "c1", "at": stamp(now - 600), "members": [2, 3],
+              "beside_cancelled": ["r-c1", "r-kept"], "beside_cancel_failed": {"r-kept": "left running: /data/keep names it"}},
+             {"action": "drop", "sha": "c9", "at": stamp(now - 600), "members": [2], "beside_cancelled": ["r-c9"]},
+             {"action": "drop", "sha": "c1", "at": "a while ago", "members": [2], "beside_cancelled": ["r-bad"]}]
+    assert replaced(lines, [2], now, ["c1", "c0"]) == {"r-c0": now - 5000, "r-c1": now - 600}
+    assert replaced(lines, [2], now) == {} == replaced(lines, [2], now, ["c7"])
+
+
 def test_a_run_has_left_its_passes_once_the_store_holds_its_attempt():
     """`check.run_packs` finds a run's packs through its attempt, which custody publishes once it ended; a store that can't
     answer, or none, finds none."""

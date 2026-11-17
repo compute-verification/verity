@@ -94,7 +94,7 @@ def PeriodHeldDeployed : Prop :=
 
 /-- **The honest device**, one H200 serving `C*`, with one tick a round of the session: `2^30` bits of on-chip state, at
 least the H200's 992,061,184 bits of registers, shared memory with L1 and L2 at its data sheet
-(`store` in `hardware/cards/h200-sxm-141gb.toml`); `C*`'s `2^19 · 16,448` bits of device memory; and one side
+(`store` in `calibration/hardware/cards/h200-sxm-141gb.toml`); `C*`'s `2^19 · 16,448` bits of device memory; and one side
 channel, its PCIe Gen 5 ×16 link at its 64 GB/s line rate, 437,248,000 bits over a round of `854 µs` (the measured
 GPU-to-host copy is 57.2 GB/s). -/
 def honestDevice : ResourceAccounting.Device Unit := ⟨2 ^ 30, FULL, fun _ => 0, 0, fun _ => 437248000⟩

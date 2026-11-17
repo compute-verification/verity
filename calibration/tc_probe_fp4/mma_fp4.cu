@@ -196,7 +196,7 @@ __global__ void fp4raw_tiles_kernel(const uint8_t* __restrict__ A, const uint8_t
     store_d(D + (size_t)warp * 128, df, lane);
 }
 
-// One warp per tile: bf16 m16n8k16 (identical to benchmarks/tc_probe/mma_tiles.cu, rebuilt for sm_120).
+// One warp per tile: bf16 m16n8k16 (identical to calibration/tc_probe/mma_tiles.cu, rebuilt for sm_120).
 __global__ void bf16_tiles_kernel(const uint16_t* __restrict__ A, const uint16_t* __restrict__ Bt, const uint32_t* __restrict__ C,
                                   uint32_t* __restrict__ D, int ntiles) {
     const int warp = (blockIdx.x * blockDim.x + threadIdx.x) >> 5;
