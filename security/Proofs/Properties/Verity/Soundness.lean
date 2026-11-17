@@ -271,11 +271,6 @@ theorem OpenTree.next_round {T : OpenTree} {s n : ℕ} {p : Fin T.spec.streams.s
     · cases h
   · cases h
 
-/-- **Opening a round counts it**: once stream `s`'s next round is opened, its count is one more and every other stream's
-is unchanged, so with `OpenTree.next_round` a stream's rounds are opened in order, each at most once. -/
-theorem OpenTree.bump_opened (T : OpenTree) (s j : Fin T.spec.streams.size) :
-    (T.bump s).opened j = if j = s then T.opened s + 1 else T.opened j := rfl
-
 /-- The device's releases have a strategy from any coins and coin trees left: the prover's close. -/
 theorem releases_nonempty : (k : ℕ) → (fs : List (String × ℕ)) → (ts : List OpenTree) →
     Nonempty (Game.Strategy (releases k fs ts))
@@ -402,11 +397,6 @@ theorem namedFinder_collides {h : Option Hash.Digest} {F R : Array ByteArray} (h
   unfold Claims.Finder.Pr Claims.Pr Claims.prUniform
   rw [Finset.filter_true_of_mem fun s _ => hs s, Finset.card_univ]
   exact div_self (Nat.cast_ne_zero.2 Fintype.card_ne_zero)
-
-/-- **A file finder's SHA-512 calls**: two on its one coin, at most `0 · calls(τ) + 2`. -/
-theorem namedFinder_calls (h : Option Hash.Digest) (F R : Array ByteArray) (x : (namedFinder h F R).S) (n : ℕ) :
-    (namedFinder h F R).cost x ≤ 0 * n + 2 := by
-  simp [namedFinder]
 
 /-- **`ecr/sha-512` at a further finder asked under it gives its premise**: its calls are within its budget on every
 coin (`FinderSpec.calls`), so where it meets `Claims.ExpectedCR` it finds a collision with probability at most its
