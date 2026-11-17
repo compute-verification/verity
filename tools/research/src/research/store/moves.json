@@ -5063,6 +5063,7 @@
         "benchmarks/slowdown/pyproject.toml": "tests/benchmarks/slowdown/pyproject.toml",
         "benchmarks/spot_figures/pyproject.toml": "tests/benchmarks/spot_figures/pyproject.toml",
         "benchmarks/spot_proved/pyproject.toml": "tests/benchmarks/spot_proved/pyproject.toml",
+        "benchmarks/stacked_share/pyproject.toml": "tests/benchmarks/stacked_share/pyproject.toml",
         "benchmarks/tc_probe/pyproject.toml": "tests/benchmarks/tc_probe/pyproject.toml",
         "benchmarks/tc_probe_fp4/pyproject.toml": "tests/benchmarks/tc_probe_fp4/pyproject.toml",
         "benchmarks/tensor_duty/pyproject.toml": "tests/benchmarks/tensor_duty/pyproject.toml",
