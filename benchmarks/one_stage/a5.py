@@ -810,10 +810,7 @@ def warm(a: argparse.Namespace, sets: dict, mine: CS.Window, jobs: int = 1, mem_
         raise ValueError("warm makes a5's compose cache: give --compose-cache")
     cache = Path(a.compose_cache)
     cache.mkdir(parents=True, exist_ok=True)
-    try:
-        before = json.loads((cache / WARM_SECONDS).read_text())
-    except (OSError, ValueError):
-        before = {}
+    before = json.loads((cache / WARM_SECONDS).read_text()) if (cache / WARM_SECONDS).exists() else {}
     todo = sorted(warm_todo(sets, mine), key=lambda t: -(before.get(t) or {}).get("seconds", float("inf")))
     need = {t: (before.get(t) or {}).get("peak_gib") or WARM_UNKNOWN_GIB for t in todo}
     _WARM.update(a=a, sets=sets, pd=mine.partition_digest, program=mine.partition["program"])

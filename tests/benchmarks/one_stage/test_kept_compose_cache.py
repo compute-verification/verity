@@ -102,7 +102,10 @@ AUDIT = '''    circuits = {}
     (out / "summary.json").write_text(json.dumps({"circuits": circuits}))
 '''
 #: what `test_served_verdicts.FAKE_RECORDS_AUDIT` prints for a warm and writes for an audit, which a5's own replace here
-STUBS = ('    print(json.dumps({"template": "a@0", "seconds": 1.5, "kept": False, "pin": "ab"}))\n'
+STUBS = ('    print("WARMING 3 templates, " + a[a.index("--jobs") + 1] + " at a time", flush=True)\n'
+         '    print("COMPOSED " + json.dumps({"template": "a@0", "seconds": 1.5, "kept": False, "pin": "ab", "n": 1, "of": 3}), flush=True)\n'
+         '    if os.environ.get("WARM_STOPPED"):\n'
+         '        sys.exit(124)\n'
          '    print("WARM " + json.dumps({"templates": 3, "kept": 0, "seconds": 2.0}, sort_keys=True))\n',
          '    (out / "summary.json").write_text("{}")\n')
 assert all(SV.FAKE_RECORDS_AUDIT.count(s) == 1 for s in STUBS), "FAKE_RECORDS_AUDIT's warm and audit are no longer these lines"
@@ -208,7 +211,7 @@ def test_without_v3c_compose_cache_the_warm_and_the_audit_get_the_windows_own_di
     argv, order, _limits, _lines, _chain = got["unset"]
     own = f"ROOT/serve/v3c-w7-{SV.VTAG}/compose-cache"
     assert argv["warm"] == ["warm", "--window", f"ROOT/serve/v3c-w7-{SV.VTAG}/window", "--sampling-design", SV.RULE,
-                            "--compose-cache", own, "--jobs", "3"]
+                            "--compose-cache", own, "--jobs", "3", "--mem-gb", "290"]
     assert argv["audit"][argv["audit"].index("--compose-cache") + 1] == own and argv["audit"].count(own) == 1
     assert order.index("warm") < order.index("audit")
     assert got["empty"] == got["unset"] == got["late"]
