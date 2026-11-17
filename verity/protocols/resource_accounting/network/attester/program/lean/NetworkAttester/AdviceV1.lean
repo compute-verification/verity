@@ -1,7 +1,7 @@
 module
 
 /-!
-# The certifier program: advice v1's charge
+# The network attester program: advice v1's charge
 
 The executable forms of `security/Definitions/Certifier/AdviceV1.lean` that the charge's difftest runs, under the
 same names in `NetworkAttester.AdviceV1`. Lean core only: `bitlen` is Lean core's `Nat.log2` plus one where the reference

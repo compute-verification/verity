@@ -89,7 +89,7 @@ variable {O I V Tick Adv S Q : Type}
 open scoped ENNReal in
 /-- PREMISE, the network attester's to discharge. **The releases are their traces' outputs**, except with probability
 `η`: on every run `run θ r`, some accepted window that releases released something other than its extracted trace's
-values on the egress slots `eg` (`Served.Traced.Tied`) with probability at most `η`. The certifier's egress tie gives it
+values on the egress slots `eg` (`Served.Traced.Tied`) with probability at most `η`. The network attester's egress tie gives it
 at `η = 0`: the released bytes are the extracted trace's outputs. -/
 def EgressTied (eg : O × I → S) (L : ℕ) (η : ℝ≥0∞)
     (run : Θ → R → Verity.Game (List (Served.Traced O (I → V) Tick Adv S V))) : Prop :=

@@ -26,7 +26,7 @@ theorem Obs.ext' {x y : Obs L K S} (h1 : x.rows = y.rows) (h2 : x.jitter = y.jit
     x = y := by
   cases x; cases y; simp_all
 
-/-- **W4 at the certifier: timing is occupancy.** Under packing, every recorded egress row is the fill of some frame
+/-- **W4 at the network attester: timing is occupancy.** Under packing, every recorded egress row is the fill of some frame
 sequence at its count, written as a one-bucket grid. -/
 theorem recorded_row_eq_fill {In Act Wire : Type} (w : Certifier L K S In Act Wire) (hW4 : Packed w)
     (k : ℕ) (xs : List In) (as : List Act) (ℓ : Fin L) :

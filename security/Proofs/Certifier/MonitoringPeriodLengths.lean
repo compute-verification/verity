@@ -160,7 +160,7 @@ structure LaneRecord (Cell : Type) where
   data : List Cell
   fail : Option ℕ
 
-/-- Connection `c`'s lane record, from the cells the certifier released and the fail cell it saw. -/
+/-- Connection `c`'s lane record, from the cells the network attester released and the fail cell it saw. -/
 def laneRecord (s : CertifierSchedule κ) (a : κ → Arrivals Cell) (v : κ → List (ℕ × CellView Cell)) (c : κ) :
     LaneRecord Cell :=
   ⟨(v c).length, laneData (v c), failCell s a c⟩
@@ -184,7 +184,7 @@ theorem certifierCode_length (s : CertifierSchedule κ) (a : κ → Arrivals Cel
   rw [certifierCode_eq]
   simp [clientView]
 
-/-- **The certifier's cells are the view of their lane records**, on a schedule the link's parameters give. -/
+/-- **The network attester's cells are the view of their lane records**, on a schedule the link's parameters give. -/
 theorem lanesView_laneRecord (θ : LinkParams κ) (s : CertifierSchedule κ) (hs : s = θ.sched s.cells)
     (a : κ → Arrivals Cell) : lanesView θ (laneRecord s a (certifierCode s a)) = certifierCode s a := by
   have hc : (fun c => (laneRecord s a (certifierCode s a) c).cells) = s.cells :=
@@ -208,7 +208,7 @@ namespace LengthsRows
 
 variable (F : LengthsRows κ Cell Ob)
 
-/-- **The lengths format**: the record is the layout's rows of the lane records of the cells the certifier released,
+/-- **The lengths format**: the record is the layout's rows of the lane records of the cells the network attester released,
 and the read is their view under the schedule's `r`, `D` and admissions. -/
 def format : RecordFormat κ Cell Ob where
   record s a v := F.write s (laneRecord s a v)

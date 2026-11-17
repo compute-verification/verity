@@ -317,7 +317,7 @@ verifier's own entries (`Docket.ownEntries`), each value it pinned before the re
 pins the value to) and neither fills (`supplied`) nor takes from an earlier run (`outputs`) has that root in the record's
 entry for it (`Docket.entryOf`, the last naming it). A window's certified input is such a value: the verifier pins
 the window's arrivals at the root the network attester signed for the window. So an arrival open at the previous
-window's edge, which continues as a fresh arrival `(id, P + e)` with the `e` outputs the certifier released of it, is
+window's edge, which continues as a fresh arrival `(id, P + e)` with the `e` outputs the network attester released of it, is
 registered at that root, and a record registering the window's arrivals under any other root, such as arrivals counted
 from the outputs serving computed (`P + n`) or the previous window's arrivals again, is refused. -/
 def PinnedHeld (rec : Json) (v : Docket.Verifier) : Prop :=

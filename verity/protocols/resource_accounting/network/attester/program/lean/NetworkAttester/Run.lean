@@ -3,7 +3,7 @@ module
 public import NetworkAttester.Grid
 
 /-!
-# The certifier program: statuses, observations, the egress prediction and acceptance
+# The network attester program: statuses, observations, the egress prediction and acceptance
 
 The executable forms of `security/Definitions/Certifier/Run.lean` that the difftest runs, under the same names in
 `NetworkAttester`, written as there. The interaction and its runs have no executable role and stay in the reference only.
@@ -29,7 +29,7 @@ inductive Status
   | notEstablished (r : Reason)
   deriving DecidableEq
 
-/-- What the certifiers of ∂X emit at one step: the row of each of the `L` egress links, the step's jitter class, and the
+/-- What the network attesters of ∂X emit at one step: the row of each of the `L` egress links, the step's jitter class, and the
 coverage status of each of the `K` boundary links. -/
 structure Obs (L K S : Nat) where
   rows : Fin L → Row S (List Bool)

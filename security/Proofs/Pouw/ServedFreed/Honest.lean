@@ -50,7 +50,7 @@ execution phases' inputs (`hacc`, `hsalt`, `hdraw`).
   use and worth `H`, beside one other job worth 1 a unit at one unit of the resource. `pd_dualOpt`: price 1 is its
   dual price, the honest strategy leaving nothing.
 * `outsource_fa`: on the flat machine nothing is exchanged, so every program is its own exchange-free replacement
-  (`OutsourceWithinEgress` at `β = 0`). `certified_fa`: a certifier that accepts every period meets
+  (`OutsourceWithinEgress` at `β = 0`). `certified_fa`: a network attester that accepts every period meets
   `CertifiedExchange` at `K = δ = 0`.
 * `servedFreed_honest`: at `c = N_p`, `p = 1` and `H = N_p·n`, the honest inventory meets every premise
   `ServedFreed` adds to `ServedWork`'s, so the conclusion holds there.
@@ -120,7 +120,7 @@ theorem outsource_fa (c : ℝ) : Pouw.Assumptions.OutsourceWithinEgress (fa c) (
   intro _ _ _ _ _ _ f
   exact ⟨f, fun _ => ⟨rfl, rfl, le_add_of_nonneg_right (by simp)⟩⟩
 
-/-- A certifier that accepts every period counts the flat machine's exchange at `K = δ = 0`. -/
+/-- A network attester that accepts every period counts the flat machine's exchange at `K = δ = 0`. -/
 theorem certified_fa (c : ℝ) {Ω St C O : Type} [Fintype Ω] {n : ℕ} (work : Ω → Fin n → (fa c).Mc.Alg (St × C) O)
     (i : Ω → Fin n → St × C) :
     CertifiedExchange (fun _ => True) (fun x => ∑ w, (fa c).ext (work x w) (i x w)) 0 0 := by
@@ -139,7 +139,7 @@ variable {nB mB : ℕ} (σ : Fin nB → Fin mB) (k : Fin mB → ℕ) (hk : ∀ s
 
 /-- **`ServedFreed`'s conclusion at the honest J10-R period with the honest inventory**: `j10r_meets` and
 `served_meets` give it `ServedWork`'s premises, and the flat machine's period (`pd`, at `H = N_p·n`), its
-exchange-free programs and a certifier that accepts every period the rest. -/
+exchange-free programs and a network attester that accepts every period the rest. -/
 theorem servedFreed_honest (hKd : 1 ≤ k sT) (hacc : ∀ c β, ExecutionPhaseAccepts (regOf c) (evOf c β))
     (hsalt : ∀ c, (PouwCheck.hex? (regOf c).salt).getD ByteArray.empty = enc c)
     (hdraw : ∀ c β, ∃ d : Array ℕ, creditDrawn (regOf c) (evOf c β) = .ok d ∧
@@ -176,7 +176,7 @@ theorem servedFreed_honest (hKd : 1 ≤ k sT) (hacc : ∀ c β, ExecutionPhaseAc
 
 /-- **`ServedFreed` is false without `SAKServed`.** On the free machine (`fa 0`), at the honest J10-R period of
 `n ≥ 17` execution phases, `δ_s = e^{−1}`, price 1 a word, no luck allowance, no degenerate salts, the honest inventory, the
-period `pd 0 H` at `H = N_p·n`, `β = K = δ = 0` and a certifier that accepts every period, every other premise of
+period `pd 0 H` at `H = N_p·n`, `β = K = δ = 0` and a network attester that accepts every period, every other premise of
 `ServedFreed` holds, in its order (`j10r_meets`, `served_rest`, `pd_dualOpt`, `outsource_fa`, `certified_fa`), and
 `SAKServed` fails (`not_sakServed_free`). The conclusion fails with it: every accepted path's execution phases use nothing, so
 the other job fits the whole period (`z = H`), worth `2H` against an honest strategy's `H`, and `ε(x) < 1` since its

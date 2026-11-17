@@ -96,7 +96,7 @@ registration's values
 `SampledLeakRegPlain` states it at the deployed plain record (`NetTiming.sampledLeak_registered_plain_sha512`). `Sanity` shows every named assumption satisfiable, and `Witnesses` gives each acceptance guarantee its honest and
 nontrivial lemmas; `CountWitnesses` gives the counts', and `PeriodWitnesses` two more instances of the pooled
 monitoring period's guarantee, at the instances of `Definitions.Certifier.Witness`, from what `WitnessToys`
-proves there. `Code` proves the certifier's program
+proves there. `Code` proves the network attester's program
 (`certifier_program`, `NetworkAttester`), which the difftest runs against the Python audit, equal to these definitions.
 
 `SampledAuditAccepted` proves that an accepted sampled audit is `Accepted` except at `ε` at `δ` over the selection, at

@@ -3,7 +3,7 @@ module
 public import NetworkAttester.Run
 
 /-!
-# The certifier program: acceptance as it bears on ingress
+# The network attester program: acceptance as it bears on ingress
 
 The executable form of `StatusComplete` from `security/Definitions/Certifier/Ingress.lean`, in `NetworkAttester`.
 -/

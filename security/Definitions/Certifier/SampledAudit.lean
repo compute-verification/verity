@@ -64,9 +64,9 @@ at step `t`'s egress gates. The advice is the inputs other than the ingress, plu
   Program every observation sequence and operator that the trace's transfer gates carry (`Carries`) with every status
   complete (`Covered`).
 
-**What this module does not model.** The certifier's signed rows and the operator's moves are tied to the transfer gates
-by the transfer-gate proof blocks and, beyond them, by the certifier's trust (`trusted-device`). That tie is the condition
-`Carries` picks out, inside the conclusion. The statuses are the certifier's published record, which the network check
+**What this module does not model.** The network attester's signed rows and the operator's moves are tied to the transfer gates
+by the transfer-gate proof blocks and, beyond them, by the network attester's trust (`trusted-device`). That tie is the condition
+`Carries` picks out, inside the conclusion. The statuses are the network attester's published record, which the network check
 reads (`Covered`).
 -/
 
@@ -145,7 +145,7 @@ def Carries {L K S : ℕ} (lay : BoundaryGates L S) (C : Prog) (ref : ℕ → Op
     (∀ ℓ, o[t].rows ℓ = rowOf (traceVal C ref) (lay.egress t ℓ)) ∧
       op t (o.take t) = (lay.ingress t).map (traceVal C ref)
 
-/-- Every boundary link's status is complete at each step before `k`: the certifier's published record, which the
+/-- Every boundary link's status is complete at each step before `k`: the network attester's published record, which the
 network check reads. -/
 def Covered {L K S : ℕ} (k : ℕ) (o : List (Obs L K S)) : Prop :=
   ∀ t (_ : t < k) (h : t < o.length), ∀ κ, o[t].status κ = Status.complete

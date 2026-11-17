@@ -11,7 +11,7 @@ public import Proofs.Pouw.Lemmas.Dither
 * `OnsiteFreed`: the guarantee `Definitions.Pouw.Guarantees.OnsiteFreed`. The outsourcing premise turns the prover
   into an exchange-free one with the same transcript, which the work check accepts wherever it accepts the prover. Off
   the remote floor's bad event that one spent at least `F`, so the prover spent at least `F − β · ext`, and the
-  certifier, which counts every exchanged bit and refuses counts past `K`, makes `ext ≤ K`. `FreedOfFloor` turns the
+  network attester, which counts every exchanged bit and refuses counts past `K`, makes `ext ≤ K`. `FreedOfFloor` turns the
   floor `F − β K` into freed compute, but with the floor's `κ`.
 * `outsourceMonitoringPeriod_of_perProgram`: the per-program `OutsourceWithinEgress` implies its period form, so
   `OutsourceWithinEgressPeriod` asks no more of the model. Each program is replaced by its exchange-free one; the state
@@ -21,14 +21,14 @@ public import Proofs.Pouw.Lemmas.Dither
   checks (`twWork`). Every premise holds there: the remote floor at `F = (1 − ε_W) C`, `ε_W = 1/7 + ln 2 / 2`
   `WorkSound`'s error at the witness, from `WorkSound`'s conclusion there (`witness_freed`) at the prover with every
   answer at no use (`fitAnswers`, which passes `WorkSound`'s devices' reading) by filling each resource the prover
-  leaves with its other job; the outsourcing premise at `β = 0` from the per-program one; the certifier's count
+  leaves with its other job; the outsourcing premise at `β = 0` from the per-program one; the network attester's count
   at counts of `0` and `K = 0`, since the witness machine exchanges nothing. The onsite verdict accepts the honest
   prover, and the bound is `ε = ε_W < 1` at `κ = 1/2`. With a work check that accepts everything, every premise but the
   remote floor still holds, the remote floor fails (a prover that does nothing is accepted and spends `0 < F`), and so
   does the conclusion: that prover leaves the period to other work worth 46 against at most `32 + ε C < 46`.
 
-**What the witness doesn't show.** The witness machine exchanges no bits, so `β = K = 0` and the certifier's check
-refuses nothing (`twNet`); the onsite statement's `β K` term and the certifier's refusals aren't exercised.
+**What the witness doesn't show.** The witness machine exchanges no bits, so `β = K = 0` and the network attester's check
+refuses nothing (`twNet`); the onsite statement's `β K` term and the network attester's refusals aren't exercised.
 -/
 
 @[expose] public section
@@ -394,8 +394,8 @@ open Pouw.Witness Pouw.SecurityProofs.DitherWitness Pouw.SecurityProofs.OnsiteFr
 /-- **`OnsiteFreed`'s honest witness**: at `Definitions.Pouw.Witness`'s machine, round and period,
 every premise of `OnsiteFreed` holds: the dual price, `C = 14 > 0`, `β = 0`, G1, G2, P1 and P2, the remote floor at
 `F = (1 − ε_W) C` and `κ = 1/2` (from `WorkSound` there), the period form of the outsourcing premise (from the
-per-program one) and the certifier's count, at counts of `0`. The bound says something (`ε = ε_W < 1`,
-`κ = 1/2`), and the onsite verdict, its certifier's check refusing counts past `K = 0`, accepts the honest prover,
+per-program one) and the network attester's count, at counts of `0`. The bound says something (`ε = ε_W < 1`,
+`κ = 1/2`), and the onsite verdict, its network attester's check refusing counts past `K = 0`, accepts the honest prover,
 which exchanges nothing, on every oracle and coins. -/
 theorem OnsiteFreed_honest :
     twPd.DualOpt twμ 1 ∧ 0 < ∑ r, twμ r * (1 * twPd.hon r) ∧ (0 : ℝ) ≤ 0 ∧
@@ -415,7 +415,7 @@ theorem OnsiteFreed_honest :
 /-- **`OnsiteFreed` is false without the remote floor**: at the honest witness's instance with a work check that
 accepts everything (`ε = ε_W`, `C = 14`, `β = K = 0`, `κ = 1/2`), every other premise of `OnsiteFreed` holds, in
 its order: the dual price, `C > 0`, `β = 0`, G1, G2, P1 and P2, the period form of the outsourcing premise and the
-certifier's count. `RemoteWorkFloor` fails: the quiet prover exchanges nothing, the work
+network attester's count. `RemoteWorkFloor` fails: the quiet prover exchanges nothing, the work
 check accepts it on every oracle and coins, and its timed work costs `0 < F`, so that event has probability
 `1 > κ`. The conclusion fails with it: the quiet prover leaves the period to other work worth 46, against at most
 `32 + ε C < 46` for any honest strategy, so its event has probability `1 > κ`. -/

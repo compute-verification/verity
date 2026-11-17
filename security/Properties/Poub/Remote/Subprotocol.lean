@@ -290,7 +290,7 @@ def honestTrace {Ω : Type} (node : Node) (passes : ℕ) (tick : Ω → ℕ → 
 /-- No device outside the node computes for it. -/
 def noOutside {Ω : Type} (T : Trace Ω) : Outside T := ⟨fun _ _ => ∅, fun _ _ => ∅⟩
 
-/-- Nothing but the verifier's messages enters the node, and the certifiers count nothing else. -/
+/-- Nothing but the verifier's messages enters the node, and the network attesters count nothing else. -/
 def quietIngress (Ω : Type) : Ingress Ω := ⟨fun _ _ => 0, fun _ _ => 0⟩
 
 /-- **An honest node's schedule**: the session has a window; its passes take a tick or more each; each sample's

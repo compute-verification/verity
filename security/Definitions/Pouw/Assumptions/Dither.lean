@@ -176,7 +176,7 @@ block's dither and check coins are its `Draw` and `Chk`, inputs of its programs,
   stream's reverse traffic (acknowledgements, flow control) as leaving. A stream told apart by its addresses or headers
   would let forged packets on it carry imports uncounted.
 
-**A replica on several nodes has one boundary**: a certifier on each node's links, the traffic between
+**A replica on several nodes has one boundary**: a network attester on each node's links, the traffic between
 its nodes carried certifier to certifier on the auditor's private links, never through the prover's network, and one
 count `cin`, `cout` that the replica's certifiers keep together. Everything else crossing between its nodes counts.
 Its cards are one pool (`poolCard`), so the traffic between them is the devices' own and not exchanged. Counting it
@@ -190,7 +190,7 @@ exchanged at most `K` bits**: the network attester sits on the period's devices'
 control, and signs the bits that cross them in either direction (its readings `dev`); the period's verdict reads its
 signed count and refuses a period past `K`. The challenger's coin stream isn't counted, and nothing else is left out
 (`CertifierSeesImports`, which gives it at the verdict `CountedWithin verdict cin cout K`). Open: the per-period form
-from the certifier's counts with `n_max · E_out`; the fold into `CertifierSeesImports` waits on `WorkSoundNoFold`'s
+from the network attester's counts with `n_max · E_out`; the fold into `CertifierSeesImports` waits on `WorkSoundNoFold`'s
 witnesses, since it changes that guarantee's statement. -/
 def ImportWithinCertifier (G : Accel) (P : RoundProto) (k : ℕ) {Obs : Type} (verdict : Verdict P k Obs)
     (dev : Readings G P k Obs) (K : ℝ) : Prop :=
@@ -219,7 +219,7 @@ def OwnDither (P : RoundProto) (k N : ℕ) {Ω : Type} [Fintype Ω] (coin : Ω �
 replica's coins reach no machine outside it before it has them**: a sampling block's dither and check coin are
 readable only inside its replica's certifier boundary until its root. For the MVP it holds by one device: the device
 that runs a server's network attester also produces that server's live coins, so the challenger issues them inside
-the boundary the certifier counts, and trust in that device and its host provider is `trusted-device`.
+the boundary the network attester counts, and trust in that device and its host provider is `trusted-device`.
 
 So the strategy a fleet runs on replica `u` (its prover `A u ω` at the challenger's randomness `ω`) may read every
 other replica's coins, past and future (a coalition at its worst), but none of its own: those reach `u` only through

@@ -10,7 +10,7 @@ public import CoreProtocol.Cli
 
 The auditor's check of one spatial unit's certified execution phases (record v2, `certificate.py`), as `audit.py`'s
 `Audit` runs it: `check_link` on every egress link in order, then `check_ingress_link` on every ingress link, each
-against the network attester's public key (`LmsKey`) in the certifier session the parameters name. The id is the
+against the network attester's public key (`LmsKey`) in the network attester session the parameters name. The id is the
 check's; the message a certificate signs has its own domain-separation tag, `verity/network-certificate-message/v2`
 (`messageTag`).
 
@@ -24,11 +24,11 @@ check's; the message a certificate signs has its own domain-separation tag, `ver
 The spatial unit's boundary links by direction, each list duplicate-free, a name at most 65,535 UTF-8 bytes, at least one
 link in all; the grid parameters of each direction (`GridParams`, with T, r, B and τ_b u32s, since a record encodes them so,
 and every value ≥ 1); Σ_sync (`SyncSet`: non-empty, every δ and every ρ = num/den listed once, num and den ≥ 1); the W ≥ 1
-windows checked; the LMS parameters (`lms.Params`) and the public key, 16 + N bytes; and the certifier session's id, the 32
-bytes the challenger sampled for the certifier's session, which every certificate's message binds.
+windows checked; the LMS parameters (`lms.Params`) and the public key, 16 + N bytes; and the network attester session's id, the 32
+bytes the challenger sampled for the network attester's session, which every certificate's message binds.
 
 **Commitment**: what the auditor holds before the check, the unit's certified records (`CertifiedRecord`: the record
-head, the 64 bytes the certifier sampled for it, `salt_c`, and the certificate that signs the head's digest salted by
+head, the 64 bytes the network attester sampled for it, `salt_c`, and the certificate that signs the head's digest salted by
 them), each in `service.encode`'s bytes, concatenated:
 
     RecordHead.encode() ‖ salt_c (64) ‖ u16be len(I) ‖ I ‖ u16be len(link) ‖ link ‖ u8 direction ‖ u64be window ‖
@@ -55,7 +55,7 @@ checks):
 * `duplicate`: more than one record;
 * `signature`: the certificate is not the key's (its I), names another link, direction or window than the head, signs
   another digest than the head's salted by the record's `salt_c` (`certificateDigest`), or its LMS signature doesn't
-  verify over `certificate_message` in the parameters' session (a certificate of another session of the certifier
+  verify over `certificate_message` in the parameters' session (a certificate of another session of the network attester
   included);
 * `status:<reason>`: the signed status is not complete;
 * `advice` (egress): the declared sync is outside Σ_sync or not the spatial unit's, the first egress link's;
@@ -122,7 +122,7 @@ def Certificate.signs (lms : Lms.Params) (key session : ByteArray) (c : Certific
     | .ok m, .ok sig => (Lms.verify lms key m sig).toOption == some true
     | _, _ => false
 
-/-- `certificate.CertifiedRecord`: the head, the certifier's salt for it (`salt_c`) and the certificate. -/
+/-- `certificate.CertifiedRecord`: the head, the network attester's salt for it (`salt_c`) and the certificate. -/
 structure Certified where
   head : RecordHead
   salt : ByteArray

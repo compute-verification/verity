@@ -188,7 +188,7 @@ inductive Form where
 def Form.maxTokensCap : Form → Option Nat
   | .rows s .. => s.maxTokensCap
 
-/-- One entry of the link's network attester's listed keys (`"keys"`), a certifier session's: its LMS public key, its
+/-- One entry of the link's network attester's listed keys (`"keys"`), a network attester session's: its LMS public key, its
 session, and the start of its stretch of execution phases, in the numbers the period's `first` is in. -/
 structure Entry where
   key : ByteArray
@@ -250,7 +250,7 @@ structure ExecutionPhase where
   certificates : Array Certificate
   registrations : Array Rows
 
-/-- A certifier session's signed start as the evidence shows it (`certificate.CertifiedStart`, as the run's
+/-- A network attester session's signed start as the evidence shows it (`certificate.CertifiedStart`, as the run's
 `deployment.json` holds it): where the session starts on its key's life, in milliseconds on the network
 attester's clock; its ordinal, the number of the key's sessions its device state started before it; the parameters
 digest of the schedule it runs under; and the certificate, which signs their start digest (`startDigest`). -/
@@ -805,13 +805,13 @@ def paramsOf (j : Json) : V Params := do
   let circuit := some circuit
   pure { audits, cells, first, jitter, link, lms, entries, program, form, windows, circuit }
 
-/-- The certifier's entries the parameters list (`"keys"`), each a key, its session and the start of its stretch, read
-through the period's own decoder (`paramsOf`): what a composition that pins its certifier's keys (an `AuditorPin`
+/-- The network attester's entries the parameters list (`"keys"`), each a key, its session and the start of its stretch, read
+through the period's own decoder (`paramsOf`): what a composition that pins its network attester's keys (an `AuditorPin`
 each, the pinned list `AuditorPins`) reads off the period's parameters, as `Core.Onsite.store` reads PoUS's root off its
 commitment through PoUS's decoder. -/
 def certifierEntries (j : Json) : V (Array Entry) := (·.entries) <$> paramsOf j
 
--- the parameters list the certifier's entries: two decode, in order, each with its key, its session and its start, a
+-- the parameters list the network attester's entries: two decode, in order, each with its key, its session and its start, a
 -- key listed in two sessions among them. Refused, each by name: no entry; an entry below the one before it; two entries
 -- with one start; one key identifier and one session twice; another key under a listed key's identifier; an entry that
 -- is the key alone, or lacks its start; a period that starts before the first entry; and the earlier forms `"key"`,

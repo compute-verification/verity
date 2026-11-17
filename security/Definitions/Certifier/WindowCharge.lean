@@ -36,7 +36,7 @@ n_order and n_lag tables' bin 0 for its `zeros`. A registration that sends no le
 
 **What is left.** That `ChargeCount_v2`'s circuit computes `executionPhase` is not proved in Lean. circuit-check holds the
 circuit to the Python reference, and these definitions are held to that reference by the execution phase charge's difftest
-(the certifier program's `NetworkAttester.WindowCharge`, which `Proofs.Certifier.Code` proves equal to these
+(network attestation's program's `NetworkAttester.WindowCharge`, which `Proofs.Certifier.Code` proves equal to these
 (`CodeChargesWhole`), against `reference_window`). The length terms go once a proof holds the length rule.
 
 **Refusals.** The reference refuses (ok 0) where the Python does, and then specifies nothing else, so each function here

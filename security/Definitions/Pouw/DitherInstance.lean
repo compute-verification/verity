@@ -321,12 +321,12 @@ end Cards
 
 section Certifier
 
-/-- **The verdict with the network attester's counts**: the service's verdict, and the certifier's signed counts of the
+/-- **The verdict with the network attester's counts**: the service's verdict, and the network attester's signed counts of the
 bits into (`cin`) and out of (`cout`) the period's devices, as the verdict reads them from the devices' readings, are
 within the caps `E_in` and `E_out`, fixed before the period at served traffic; a period past either is refused. The
 counts exclude the challenger's coin stream and nothing else, as `Assumptions.CertifierSeesImports` defines it: the
 dither coin is the sampling block's `Draw`, an input of its programs, not an exchanged bit (`Accel.ext`). A replica on
-several nodes has one pair of counts, its certifiers' together. -/
+several nodes has one pair of counts, its network attesters' together. -/
 def Counted {P : RoundProto} {k : ℕ} {Obs : Type} (verdict : Verdict P k Obs) (cin cout : Obs → ℝ)
     (Ein Eout : ℝ) : Verdict P k Obs :=
   fun o x tr ob => verdict o x tr ob ∧ cin ob ≤ Ein ∧ cout ob ≤ Eout
@@ -351,7 +351,7 @@ before any of its coins.
   dither coins.
 * The challenger issues every sampling block's check coin, which carries whether the block is selected, at `tc ob b`,
   and the period is refused if that was before every root of the block was in: a prover told early
-  that its block isn't selected could skip the block. The coin's message carries the digest of the certifier's
+  that its block isn't selected could skip the block. The coin's message carries the digest of the network attester's
   signed receipt of the roots, so the two times are on one clock.
 * Only selected sampling blocks are answered (`sel`, read from the block's check coin). A selected block's check coin
   is issued at least `τans` before the period's end, and the period is refused if its answer arrived (`ansAt ob b`)

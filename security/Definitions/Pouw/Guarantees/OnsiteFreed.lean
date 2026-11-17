@@ -22,7 +22,7 @@ composes:
 
 The remote and onsite forms differ in one premise: the remote form prices no outside machine, since the inventory is
 everything the prover runs, and the onsite form prices each bit that crosses the registered devices' boundary at `β`,
-the certifier bounding how many do.
+the network attester bounding how many do.
 
 At the served check (the J10-R period, `PouwCheck.Credit.window`) the same composition is
 `Properties.Pouw.Served.ServedFreed`, over `ServedWork` in the play's vocabulary, with no remote floor taken as a
@@ -48,10 +48,10 @@ devices, every period `Pd` of the registered devices and every price `μ` that i
   with probability `κ` (`RemoteWorkFloor`, the remote form),
 * every prover has an exchange-free one with the same transcript whose timed work costs at most `β` a bit more, over
   the period's programs together (`OutsourceWithinEgressPeriod`), and
-* the certifier's counts take in every exchanged bit (`CertifierSeesImports`),
+* the network attester's counts take in every exchanged bit (`CertifierSeesImports`),
 
 then for every prover, the probability over the oracle and the verifier's coins that the onsite verdict accepts its
-period (`onsiteVerdict vw (CountedWithin vn cin cout K)`: both checks, the certifier's refusing counts past `K`) and
+period (`onsiteVerdict vw (CountedWithin vn cin cout K)`: both checks, the network attester's refusing counts past `K`) and
 some other work `z` fits on the registered devices beside its sampling blocks' timed work with
 `rv + W_other(z) > OPT_honest + ε C` is at most `κ`, where `ε C = max(0, C − F + β K)`.
 
@@ -62,11 +62,11 @@ products as written (`SAKMatmul`) still fails there at a dual price that leaves 
 Open (stated so the red team can aim at them):
 * `RemoteWorkFloor` is the remote form's conclusion taken as a premise. At the served check it isn't needed:
   `Properties.Pouw.Served.ServedFreed` composes `ServedWork` itself;
-* `CertifierSeesImports` counts bits (`Prover.ext`) surely, while the certifier's guarantee
+* `CertifierSeesImports` counts bits (`Prover.ext`) surely, while the network attester's guarantee
   (`NetTiming.Guarantees.MonitoringPeriodLeakAccepted`) bounds the information an accepted period carries out (at most `2^K`
   values) in ResourceAccounting's device vocabulary, but with the period's error `n (δ + ε_ks + ε_bind + ε_tap)`: the step
   from one to the other is open;
-* `OutsourceWithinEgressPeriod` is claimed where the coins stay in the certifier's boundary (`CoinsConfidential`);
+* `OutsourceWithinEgressPeriod` is claimed where the coins stay in the network attester's boundary (`CoinsConfidential`);
   for the MVP that is placement (`WitnessPathPrivate`), whose discharge is the secure-transport workstream's. -/
 def OnsiteFreed : Prop :=
   ∀ (G : Accel) (P : RoundProto) (k : ℕ) (Obs : Type) (vw : Verdict P k Unit) (vn : Verdict P k Obs)

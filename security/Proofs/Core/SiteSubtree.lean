@@ -243,7 +243,7 @@ theorem within_of_not_shared {pinned : Finset String} {i y : String}
   by_contra hw
   exact h2 (by unfold sharedOf; exact Finset.mem_filter.2 ⟨h1, hw⟩)
 
-/-- The certifiers of the subtree at `i`, the challengers `units` and the subtree's other challengers are together the
+/-- The network attesters of the subtree at `i`, the challengers `units` and the subtree's other challengers are together the
 auditor's devices at the subtree. -/
 theorem units_union_sinks {pinned units : Finset String} {i : String} (hu : units ⊆ S.challengersOf pinned i) :
     S.certifiersOf i ∪ units ∪ (S.challengersOf pinned i \ units) = S.auditorsOf pinned i := by

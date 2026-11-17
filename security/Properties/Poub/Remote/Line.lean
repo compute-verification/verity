@@ -57,11 +57,11 @@ g = 1 is `Session.run`):
   session's `samples` s) and the record of outcome `ω` the prover's holding the deployed commitment `com ω`
   (`played`), whose trace of record (`ofRecord`, the trace over the registration's blocks with the Lean verifier's
   verdict on the record as its own) meets the line's premises (`Paced` at the record's groups `recordPace`, `Covers`,
-  `SketchBoundAt` at `δs`, the certifiers' coverage of the node's uplinks `Covered` and their count of what enters
+  `SketchBoundAt` at `δs`, the network attesters' coverage of the node's uplinks `Covered` and their count of what enters
   `IngressCounted` at δ_net, and the sample's `Live` at every fixed coin commitment, `Refused` at the receipts `R`,
   `Counted`, of the session the prover plays holding `com`, `play com`), the probability that the Lean verifier
   accepts the record's session, the
-  certifiers sign nothing but the verifier's messages entering the node over the credited passes (`Quiet` at
+  network attesters sign nothing but the verifier's messages entering the node over the credited passes (`Quiet` at
   `Ingress.counted`), and the line it reads off the Lean verifier's record (`lineOf`: its groups, samples and registered
   blocks the record's) credits more bits read than the trace's passes read (`ReadAt`) is at most
   `δs + δ_net + (δ + Σ_c s / 2^256 + Σ_c adv_c + Σ_c hide_c + bind)`, `δ` the one the line reads its pooled bound at
@@ -203,7 +203,7 @@ each record's opening sample at its `samples` s) and the record of each outcome 
 commitment (`played`), whose trace of record (`ofRecord`: over the registration's blocks, its verdict the Lean
 verifier's on the record) meets the line's premises at the record's groups, the network attesters' coverage of the
 node's uplinks (`Covered`) and count of what enters (`IngressCounted` at `δnet`), the probability that the Lean
-verifier accepts the record's session, the certifiers sign nothing but the verifier's messages entering the
+verifier accepts the record's session, the network attesters sign nothing but the verifier's messages entering the
 node over the credited passes, and the record's line credits more bits read than the passes read is at most
 `δs + δnet + (δ + Σ_c s / 2^256 + Σ_c adv_c + Σ_c hide_c + bind)`, `δ` the line's, `adv_c` the advantage on `prf c` of
 sample `c`'s distinguisher at it with leaf `c` of the coin commitment committing zeros, `hide_c` sample `c`'s hiding

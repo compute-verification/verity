@@ -10,7 +10,7 @@ Executable forms of `verity/protocols/accounting/certifier/verifier/certificate.
 spec: the frame tree (`frameLeaf`, `node`, `empty`, `depth`, `framesRoot`, `openFrame`, `verifyFrame`) over a window's real frames
 (`realFrames`), the parameters digest (`parametersDigest`, the manifest's identity bytes through `Flock.canonUtf8`), the record head's
 encoding and digest (`RecordHead.encode`, `RecordHead.digest`, `recordHead`), the digest a certificate signs, the record
-digest under the certifier's salt (`certificateDigest`), and the message it signs over it (`certificateMessage`,
+digest under the network attester's salt (`certificateDigest`), and the message it signs over it (`certificateMessage`,
 `verity.commitments.crypto.lms.certificate_message`). A Python `ValueError` is an `Except.error` here.
 `tagged_sha512` is core's `Identity.taggedSha512`, which refuses what Python refuses. Every other SHA-512 is
 `Flock.Sha512.hash`, and what each such call hashes has a name of its own (`leafInput`, `nodeInput`, `emptyInput`,
@@ -254,14 +254,14 @@ def recordHead (link : String) (direction : Direction) (window : Int) (grid : Ar
 /-- The signed digest's tag, `CERTIFICATE_TAG`. -/
 def certificateTag : ByteArray := "verity/net-cert/v1".toUTF8
 
-/-- The length of the certifier's salt for a record (`SALT_BYTES`). -/
+/-- The length of the network attester's salt for a record (`SALT_BYTES`). -/
 def saltBytes : Nat := 64
 
 /-- What `certificate_digest` hashes: `"verity/net-cert/v1" ‖ salt_c ‖ R`. -/
 def certificateInput (salt record : ByteArray) : ByteArray := certificateTag ++ salt ++ record
 
 /-- `certificate_digest`: the digest a certificate signs, the record digest `R` hidden under `salt_c`, the 64 bytes the
-certifier sampled for the record. -/
+network attester sampled for the record. -/
 def certificateDigest (salt record : ByteArray) : ByteArray := Sha512.hash (certificateInput salt record)
 
 /-- `[x] = u64be len(x) ‖ x` (`lms._field`). -/
@@ -271,7 +271,7 @@ def field (b : ByteArray) : ByteArray := be64 b.size.toUInt64 ++ b
 from the ids of the checks that read it (`verity/network-certificate/v4`, `verity/network-records/v3`). -/
 def messageTag : String := "verity/network-certificate-message/v2"
 
-/-- The length of a certifier session id (`lms.SESSION_BYTES`). -/
+/-- The length of a network attester session id (`lms.SESSION_BYTES`). -/
 def attachmentBytes : Nat := 32
 
 /-- What `certificate_message` hashes:
