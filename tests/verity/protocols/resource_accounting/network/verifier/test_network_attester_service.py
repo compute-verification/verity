@@ -16,7 +16,7 @@ from verity.circuits.program import Program
 from verity.protocols.resource_accounting.network.verifier import head_check as HC, service as SVC
 from verity.protocols.resource_accounting.network.verifier.certificate import (CertifiedRecord, Direction, Issuer, LmsSigner,
                                                                           RecordHead, parameters_digest)
-from verity.protocols.resource_accounting.network.verifier.grid import Certifier, GridParams, BlockGrid, occupancy
+from verity.protocols.resource_accounting.network.verifier.grid import Attester, GridParams, BlockGrid, occupancy
 from verity.protocols.resource_accounting.network.verifier.schedule import run_shaper
 from verity.commitments import hm96
 from verity.commitments.gates.frame_v3 import root_ref
@@ -55,7 +55,7 @@ class Clock:
 
 
 def egress_records():
-    return run_shaper(FRAMES, honest_ready(), SYNCS, Certifier(LINK, PARAMS))
+    return run_shaper(FRAMES, honest_ready(), SYNCS, Attester(LINK, PARAMS))
 
 
 def ingress_records(arrivals=([1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0])):
@@ -238,7 +238,7 @@ def test_a_head_of_another_size_class_is_a_reject(tmp_path):
     check takes it: rejected, though its attestation verifies and its status is complete."""
     run = Run(tmp_path)
     wide = GridParams(8, PARAMS.allocation, PARAMS.frame_bytes)
-    ingress = Certifier(LINK, wide)
+    ingress = Attester(LINK, wide)
     for _ in range(wide.buckets):
         ingress.tick()
     signed = run.issuer.certify(ingress.close_window(), INGRESS, wide, parameters_digest(wide))

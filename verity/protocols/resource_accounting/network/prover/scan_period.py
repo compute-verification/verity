@@ -3,7 +3,7 @@ and the scan's answer for it (`scan_zk.py prove --group 1`'s ``answers.json``), 
 and its Lean.
 
     python verity/protocols/resource_accounting/network/prover/scan_period.py --mirror PERIOD_CASE_PY --lean NETWORK_PERIOD --out DIR \
-        [--v3c PERIOD_JSON --circuit CIRCUIT_RECORD] NAME=NETWORK_CERTIFIER_RUN,SCAN_OUT[,tampered|chain|forged] ...
+        [--v3c PERIOD_JSON --circuit CIRCUIT_RECORD] NAME=NETWORK_ATTESTER_RUN,SCAN_OUT[,tampered|chain|forged] ...
 
 * **The case** (`rows_case`) of execution phase W: the parameters the network attester run's ``deployment.json`` (its key and its
   session, the one entry the parameters list, its stretch starting at execution phase 0, so the period's numbers are the
@@ -192,7 +192,7 @@ def main(argv=None) -> int:
     ap.add_argument("--circuit", type=Path, metavar="CIRCUIT_RECORD",
                     help="the verifier's own window-circuit record of V3c's class (prove_path.py window-circuit): its "
                          "program is the class circuit V3c's audit is held to; required with --v3c")
-    ap.add_argument("cases", nargs="+", help="NAME=NETWORK_CERTIFIER_RUN,SCAN_OUT[,tampered|chain|forged]")
+    ap.add_argument("cases", nargs="+", help="NAME=NETWORK_ATTESTER_RUN,SCAN_OUT[,tampered|chain|forged]")
     a = ap.parse_args(argv)
     if a.v3c and not a.circuit:
         ap.error("--v3c needs --circuit: V3c's audit is held to the verifier's own window-circuit record")

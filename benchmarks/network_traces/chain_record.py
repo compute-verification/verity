@@ -81,25 +81,25 @@ CLEAR = {
     "custody": "the SHA-512 of each fetched file against the gate's end.json (public files)",
     "endpoint": "at the auditor, on the endpoint's records and the run's certified I/O: each Commit window's advice "
                 "opened to its registered root and rebuilt from the certified I/O, and the I/O tie (IoTieRequest's "
-                "reference, network-e2e's stand-ins for the network certifier's rows and the Commit's port) on the honest run",
+                "reference, network-e2e's stand-ins for the network attester's rows and the Commit's port) on the honest run",
     "n2": "at the verifier: the registration records, the sample, the certificates' public fields, the clock syncs, the "
           "proof's pub row opened to the verifier's own copy and the o0 output word; never a record, head, leaf "
           "salt, sibling or the network attester's salt (n2_zk's RECEIVED, scanned for every piece)",
     "scan": "at the verifier: each unit's o0 output opened from the salts the prover sends; the I/O tie "
             "(IoTieRequest) stays in the clear, outside the proofs",
     "lean": "nothing: each proof is decided by the verifier's own Lean `verity-verify-proof verify --zk` run",
-    "warden_certificates": "at the auditor, on the network certifier's witness: the network certifier's own offline check "
+    "warden_certificates": "at the auditor, on the network attester's witness: the network attester's own offline check "
                            "(network_attester_serve.check: each record's certificate and its rows' registration under the "
-                           "network certifier's key and session, the audit and the client's view), and the public "
+                           "network attester's key and session, the audit and the client's view), and the public "
                            "certificates.jsonl held to the certified lines",
-    "warden_endpoint": "at the auditor, on the endpoint's records and the network certifier's certified I/O (network_attester_chain.io, off "
+    "warden_endpoint": "at the auditor, on the endpoint's records and the network attester's certified I/O (network_attester_chain.io, off "
                        "the records' cells): each Commit window's advice opened to its registered root and rebuilt "
                        "from the certified I/O",
     "warden_endpoint_served": "on the served node, the prover's, whose records hold request values and stay there: "
-                              "each Commit window's advice opened to its registered root and rebuilt from the network certifier's "
+                              "each Commit window's advice opened to its registered root and rebuilt from the network attester's "
                               "certified I/O sent to it (served_session.py endpoint); the chain reads its report",
     "tie": "at the verifier: each ingress bucket unit's pub row opened to the verifier's own copy (the advice's prompt "
-           "lengths and the network certifier's release) and its o0 verdict bit; never a cell or its salt (n2_tie_zk's RECEIVED, "
+           "lengths and the network attester's release) and its o0 verdict bit; never a cell or its salt (n2_tie_zk's RECEIVED, "
            "scanned for every piece)",
 }
 #: the network attester-only path (``--job``'s ``path``): the records are the attester rehearsal's alone
@@ -118,7 +118,7 @@ RESTS_WHY = ("the honest round's registration names {tied} tied: its acceptance 
 #: what a report on the network attester-only path stands on that isn't the chain's own
 STUBBED = (
     "the records come from the certifier-only path (a rehearsal's proxy in front of the endpoint), not the "
-    "network certifier's own cells as one device, so there are no network attester rows and the scan isn't run",
+    "network attester's own cells as one device, so there are no network attester rows and the scan isn't run",
     "the output tie (IoTieRequest) is computed in the clear at the auditor, outside the proofs",
     "the weights' load isn't certified: nothing here shows the endpoint served the registered weights")
 #: the network attester path (``--job``'s ``path``): every step reads an active network attester's own run
@@ -126,14 +126,14 @@ STUBBED = (
 NETWORK_ATTESTER = "warden"
 #: what a report on the network attester path stands on that isn't the chain's own
 NETWORK_ATTESTER_STUBBED = (
-    "the endpoint's advice is bound to the network certifier's certified I/O and rebuilt from it in the clear at the auditor, "
+    "the endpoint's advice is bound to the network attester's certified I/O and rebuilt from it in the clear at the auditor, "
     "and the output tie to the Commit's port isn't proved",
     "the weights' load isn't certified: nothing here shows the endpoint served the registered weights")
 #: an endpoint report's ``at`` when its step ran on the served node (`served_session.py endpoint`)
 SERVED_NODE = "the served node"
 #: `NETWORK_ATTESTER_STUBBED` when the endpoint's report is the served node's
 NETWORK_ATTESTER_SERVED_STUBBED = (
-    "the endpoint's advice is bound to the network certifier's certified I/O and rebuilt from it in the clear on the served node, "
+    "the endpoint's advice is bound to the network attester's certified I/O and rebuilt from it in the clear on the served node, "
     "the prover's, so the chain's endpoint step is the prover's report of that check, and the output tie to the "
     "Commit's port isn't proved", NETWORK_ATTESTER_STUBBED[1])
 #: the rehearsal's strategies its own check accepts: token's changed bytes only the tie refuses
@@ -297,7 +297,7 @@ def network_attester_endpoint_step(e: dict | None) -> dict:
     advice = {"bound": b.get("bound"), "rebuilt": b.get("rebuilt"), "why": b.get("bound_why") or b.get("why"),
               "commit_windows": len(windows), "bound_windows": sum(bool(c.get("bound") and c.get("rebuilt"))
                                                                    for c in windows)}
-    why = (f"the network certifier's certified I/O doesn't read whole off its cells: {io.get('violations')}"
+    why = (f"the network attester's certified I/O doesn't read whole off its cells: {io.get('violations')}"
            if not io.get("accepted") else None if advice["bound"] and advice["rebuilt"]
            else advice["why"] or "the endpoint's advice isn't bound to the certified I/O or rebuilt from it")
     return {"verdict": "refused" if why else "accepted", "why": why, "warden_run": e.get("warden_run"), "io": io,
@@ -327,7 +327,7 @@ def tie_step(t: dict | None, job: dict | None = None) -> dict:
 
 
 def on_network_attester(step: dict, doc: dict | None, run_id: str | None, what: str) -> dict:
-    """A network-certifier-path step held to the network attester run the attestations step read (``run_id``): refused
+    """A network-attester-path step held to the network attester run the attestations step read (``run_id``): refused
     by name (`network_attester_chain.PROXY`) when its input is a network attester rehearsal's (it names no active network attester run),
     and when it is another network attester run's."""
     from benchmarks.network_traces.network_attester_chain import PROXY
@@ -680,7 +680,7 @@ def d1_terms(cert: dict, n2: dict, scan: dict, custody_doc: dict, endpoint: dict
                 "the I/O tie (IoTieRequest) is checked in the clear, outside the proofs",
                 "Claims.SamplingGeneric.Compiled.KS is a hypothesis until Flock.Guarantees.SampledKSLive restates it "
                 "live",
-                "hdata (the network certifiers' arrivals are the framed egress of the network attester's observations) and Carries "
+                "hdata (the network attesters' arrivals are the framed egress of the network attester's observations) and Carries "
                 "are run conditions, not yet named assumptions",
                 "B_reg: the trace's values at reg are the registration's",
                 "#(freeInputs \\ reg) is not bounded by the advice bits until V3's padding: b_w is vacuous",
@@ -776,18 +776,18 @@ def leak(run: Path, scan: dict | None = None, weights=None) -> dict:
             "conditions": [
                 "the generator reading of the scan's statement (each proof block's registered rows its boundary "
                 "values): a claim, not yet a locked guarantee",
-                "each connection's cap is its lane's egress_cells, which the network certifier holds a lane to and "
+                "each connection's cap is its lane's egress_cells, which the network attester holds a lane to and "
                 "NetworkVerifier.Period doesn't check; the schedules and the fail cells are charged at that cap, "
                 "⌈log2(cap + 1)⌉ each a request, as its rows form charges them",
                 f"the jitter term is T bits a sampling block, one a bucket: {LB.JITTER}",
-                "the scan proves sampling block 0 of the network certifier run; a monitoring period's terms are its "
+                "the scan proves sampling block 0 of the network attester run; a monitoring period's terms are its "
                 "per-sampling-block and per-request terms at the run's request rate",
                 "the datacenter's rows sum as many identical links as the census's reference datacenter has machines, "
                 "and the world's as many as the world fleet has (leak_bounds.at_link_rate, its scaling by links), "
                 f"each link pooled at δ / links ({split}) and paying its own incorrect proof blocks: our "
                 "composition, which no Lean statement covers. Each link certifies the run's rate; a scope's requests "
                 "past its links' rate are uncertified, and no row counts them, so these rows are not the scope's K "
-                "(leak_bounds.table counts the network certifier's terms over every request a scope serves)",
+                "(leak_bounds.table counts the network attester's terms over every request a scope serves)",
                 "ε is the scans' δ summed over the period's sampling blocks and the links (NetworkVerifier.Period's "
                 "eps, m·δ), each scan at the scan's δ",
                 "the loop's (an untied compute audit's) free inputs don't enter K: its δ goes into JointPeriodLive's "
@@ -836,7 +836,7 @@ def merged_n2(paths: list[str] | None) -> dict | None:
 
 def stubbed(job: dict, custody_doc: dict, endpoint: dict | None = None) -> list[str]:
     """What a network attester-only report stands on that isn't the chain's own: `STUBBED`, and where its gate runs ran and
-    what served them when their ``request.json`` says (demo_chain.sh's); a network-certifier-path report's,
+    what served them when their ``request.json`` says (demo_chain.sh's); a network-attester-path report's,
     `NETWORK_ATTESTER_STUBBED`, or `NETWORK_ATTESTER_SERVED_STUBBED` when its endpoint step (``endpoint``) ran on the served node."""
     if job.get("path") == NETWORK_ATTESTER:
         return list(NETWORK_ATTESTER_SERVED_STUBBED if (endpoint or {}).get("at") == SERVED_NODE else NETWORK_ATTESTER_STUBBED)
@@ -910,7 +910,7 @@ def report(a) -> dict:
         certificates = on_network_attester(certificates, _json(a.certs), run_id, "the certificates step's input")
         endpoint = on_network_attester(endpoint, _json(a.endpoint), run_id, "the endpoint's report")
         n2 = on_network_attester(n2, merged, run_id, "N2's summary") | {
-            "clocks": {"source": "none", "by": "the network certifier link declares no sync and signs no clock (n2_zk "
+            "clocks": {"source": "none", "by": "the network attester link declares no sync and signs no clock (n2_zk "
                                                "--warden-run)"}}
         tie = on_network_attester(tie_step(tie_doc, job), tie_doc, run_id, "the tie's summary")
         scan = on_network_attester(scan, _json(a.scan), run_id, "the scan's summary")

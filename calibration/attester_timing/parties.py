@@ -60,7 +60,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 ATTACKS = ("delay", "write", "burst")
-CERTIFIERS = ("relay", "network")
+ATTESTERS = ("relay", "network")
 LOOPBACK = "127.0.0.1"
 OBSERVERS = ("plain", "spin")
 #: how long before a time the server stops sleeping and spins on the clock
@@ -493,7 +493,7 @@ async def network(cfg: dict) -> dict:
     kernel. Returns each tick's lateness, and from a paced one each bucket's release start and write end after its
     time."""
     from verity.protocols.resource_accounting.network.verifier.link_frame import HEADER
-    from verity.protocols.resource_accounting.network.verifier.network_attester import NetworkAttester as Certifier, NetworkAttesterParams as Parameters, cells
+    from verity.protocols.resource_accounting.network.verifier.network_attester import NetworkAttester, NetworkAttesterParams as Parameters, cells
 
     plan = plan_of(cfg)
     if HEADER.size != HEADER_BYTES:
@@ -518,7 +518,7 @@ async def network(cfg: dict) -> dict:
     def drop(record, grid) -> None:
         pass
 
-    w = Certifier(params, connect, origin=cfg["origin"], windows=-(-total // cfg["window"]), publish=drop,
+    w = NetworkAttester(params, connect, origin=cfg["origin"], windows=-(-total // cfg["window"]), publish=drop,
                   withhold=drop, paced=cfg["paced_ms"] / 1000 if cfg["paced_ms"] else None)
     if abs(w.clock() - now()) > 0.001:
         raise SystemExit("this tree's network attester ticks on another clock than CLOCK_MONOTONIC_RAW, the parties'")

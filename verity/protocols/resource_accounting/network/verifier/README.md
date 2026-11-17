@@ -409,14 +409,14 @@ grids, exempts only the verified, expected, once-only coin openings, and counts 
 
 ~~~python
 from verity.protocols.resource_accounting.network.verifier.audit import Audit
-from verity.protocols.resource_accounting.network.verifier.grid import GridParams, Certifier
+from verity.protocols.resource_accounting.network.verifier.grid import GridParams, Attester
 from verity.protocols.resource_accounting.network.verifier.schedule import ClockSync, LogicalFrame, SyncSet, run_shaper
 
 params = GridParams(buckets=600, allocation=1024, frame_bytes=4096)   # 1-min windows of 100 ms buckets
 sync_set = SyncSet(tuple(range(16)), tuple(range(1, 9)))              # 7 bits per window
 frames = [LogicalFrame(b"\0" * 4096, anchor=3, index=i) for i in range(5)]
 syncs = [ClockSync(delta=2, rho=4)]
-records = run_shaper(frames, ready=[4] * 5, syncs=syncs, attester=Certifier("responses", params))
+records = run_shaper(frames, ready=[4] * 5, syncs=syncs, attester=Attester("responses", params))
 audit = Audit()
 audit.check_link("responses", records, frames, syncs, sync_set, params)
 assert audit.accepted

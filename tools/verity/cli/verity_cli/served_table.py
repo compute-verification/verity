@@ -488,9 +488,9 @@ PARTIES: dict[str, dict[str, Piece]] = {
                        "chain on V3c's committed window (CERTIFIER_CHAIN_CMD), then the period check on V3c's "
                        "period.json (CERTIFIER_PERIOD_CMD)", scripts=(ATTESTER_PIECE,), reaches=NETWORK_ATTESTER,
                        binds=("gate", "peer"), hooks=_attester_piece),
-        NETWORK_ATTESTER: Piece("certifier", NETWORK_ATTESTER, GATE, "the network certifier behind the gate, "
+        NETWORK_ATTESTER: Piece("certifier", NETWORK_ATTESTER, GATE, "the network attester behind the gate, "
                                  "in front of serve-openai before the requests"),
-        VERIFIER: Piece("certifier", VERIFIER, CHECK, "the network certifier's row"),
+        VERIFIER: Piece("certifier", VERIFIER, CHECK, "the network attester's row"),
     },
     "wipe": {
         PROVER: Piece("wipe", PROVER, RUNTIME, "the streamed wipe of the card before its engine loads, its session "

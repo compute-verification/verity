@@ -30,7 +30,7 @@ from verity.protocols.resource_accounting.network.verifier import audit, lean_au
 from verity.protocols.resource_accounting.network.verifier.certificate import (CertifiedRecord, Direction, Issuer, LmsKey,
                                                         LmsSigner, parameters_digest)
 from verity.protocols.resource_accounting.network.verifier.commitment import commit
-from verity.protocols.resource_accounting.network.verifier.grid import Certifier, GridParams
+from verity.protocols.resource_accounting.network.verifier.grid import Attester, GridParams
 from verity.protocols.resource_accounting.network.verifier.schedule import ClockSync, LogicalFrame, SyncSet, run_shaper
 
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
@@ -148,7 +148,7 @@ def test_the_clock_is_the_first_link_checked_in_each_window(lean):
     ss = SyncSet((0, 1, 2), (Fraction(1), Fraction(1, 2)))
     s = [ClockSync(d, Fraction(1)) for d in (0, 1, 2, 0)]
     frames = [LogicalFrame(bytes([i]), i, 0) for i in range(6)]
-    recs = {n: run_shaper(frames, [0] * 6, sy, Certifier(n, g)) for n, sy in
+    recs = {n: run_shaper(frames, [0] * 6, sy, Attester(n, g)) for n, sy in
             (("a", s[:2]), ("b", s[:4]), ("c", [s[0], s[2], s[3]]))}
     for kind in ("raw", "committed"):
         published = [r if kind == "raw" else commit(r, g) for rs in recs.values() for r in rs]
@@ -173,7 +173,7 @@ def _certified(tmp_path, W, record=lambda w, r: r):
     syncs = [ClockSync(w % 2, Fraction(1)) for w in range(W)]
     signer = LmsSigner.create(lms.keygen(lms.Params(8, 8, 4, toy=True), bytes(range(8))), tmp_path / "signer-state.json")
     issuer = Issuer(signer, SESSION)
-    egress = run_shaper(SERVICE_FRAMES, [0] * len(SERVICE_FRAMES), syncs, Certifier("responses", g))
+    egress = run_shaper(SERVICE_FRAMES, [0] * len(SERVICE_FRAMES), syncs, Attester("responses", g))
     records = [issuer.certify(record(w, egress[w]), Direction.EGRESS, g, parameters_digest(g, ss)) for w in range(W)]
     return records, syncs, g, ss, signer.public_key()
 
@@ -199,7 +199,7 @@ def test_the_adapters_check_without_a_grid_is_the_leans_verdicts_no_grid(lean, t
         assert [v.violation for v in a.check_link("responses", [egress[1]], frames, *args[1:], grid=False)] == \
             ["no-verdict", None]
         assert a.lean == a.reference
-    raw = content(1, run_shaper(SERVICE_FRAMES, [0] * 8, syncs, Certifier("responses", g))[1])
+    raw = content(1, run_shaper(SERVICE_FRAMES, [0] * 8, syncs, Attester("responses", g))[1])
     for records in ([raw], [commit(raw, g)]):
         with pytest.raises(ValueError, match="only a certified record's grid is held by its head check"):
             lean_audit.Audit(server=lean).check_link("responses", records, *args, grid=False)
@@ -244,7 +244,7 @@ def test_outside_the_domain_it_refuses(lean, tmp_path):
     g = GridParams(1, 1, 1)
     ss = SyncSet((0,), (Fraction(1),))
     sync = [ClockSync(0, Fraction(1))]
-    rec = run_shaper([], [], sync, Certifier("a", g))[0]
+    rec = run_shaper([], [], sync, Attester("a", g))[0]
     certified = Issuer(V2._Signer(V2._key(4)), SESSION).certify(rec, Direction.EGRESS, g, parameters_digest(g, ss))
 
     class OtherKey:
@@ -292,11 +292,11 @@ def test_with_the_executable_named_it_needs_nothing_else(lean, tmp_path):
         ".SERVER._proc is None))\n"
         "from fractions import Fraction\n"
         "from verity.protocols.resource_accounting.network.verifier import lean_audit\n"
-        "from verity.protocols.resource_accounting.network.verifier.grid import Certifier, GridParams\n"
+        "from verity.protocols.resource_accounting.network.verifier.grid import Attester, GridParams\n"
         "from verity.protocols.resource_accounting.network.verifier.schedule import ClockSync, SyncSet, run_shaper\n"
         "g, s = GridParams(1, 1, 1), [ClockSync(0, Fraction(1))]\n"
         "a = lean_audit.Audit()\n"
-        "print(a.check_link('a', run_shaper([], [], s, Certifier('a', g)), [], s, SyncSet((0,), (Fraction(1),)), g))\n"
+        "print(a.check_link('a', run_shaper([], [], s, Attester('a', g)), [], s, SyncSet((0,), (Fraction(1),)), g))\n"
         "assert lean_audit.SERVER._proc is not None\n")
     p = subprocess.run([sys.executable, "-c", script], capture_output=True, text=True,
                        env={"PATH": str(tmp_path), "VERITY_NETWORK_RECORDS_EXE": str(lean.exe)})
@@ -308,7 +308,7 @@ def test_a_forked_process_starts_its_own_executable(lean):
     """A process forked after the parent's server started gets its own executable at its first request, and the parent's
     keeps answering on its own pipe."""
     g, ss, s = GridParams(1, 1, 1), SyncSet((0,), (Fraction(1),)), [ClockSync(0, Fraction(1))]
-    rec = run_shaper([], [], s, Certifier("a", g))
+    rec = run_shaper([], [], s, Attester("a", g))
     honest = [audit.Verdict("a", 0, None)]
     assert lean_audit.Audit(server=lean).check_link("a", rec, [], s, ss, g) == honest
     parent = lean._proc.pid

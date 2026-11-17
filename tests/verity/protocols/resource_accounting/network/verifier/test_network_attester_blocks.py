@@ -63,7 +63,7 @@ def roots(regs: list[dict]) -> dict[str, str]:
     return {SCAN_STATE: STATE_ROOT, **{r["value"]: r["root"] for r in regs}}
 
 
-class Certifier:
+class Attester:
     """The network attester on the host's uplink: its key, signer and session."""
 
     def __init__(self, tmp_path, link: str = UPLINK):
@@ -95,7 +95,7 @@ def tiny():
 
 def test_free_is_zero_only_with_the_loads_attested_pins_and_the_scans_state(tiny, tmp_path):
     _c, doc, lays = tiny
-    cert = Certifier(tmp_path)
+    cert = Attester(tmp_path)
     regs = cert.register(doc)
     pins = BK.pins(doc, lays, regs, UPLINK, cert.key())
     assert sorted(pins) == ["bias", "w"]
@@ -112,7 +112,7 @@ def test_a_load_of_32_bit_leaves_is_pinned_at_the_verifiers_width_alone(tiny, tm
     one 32-bit leaf a row: pinned when the verifier's ``formats`` name that width, refused at the default 16, and a
     format for no load, or a width that doesn't cut a load's rows, refused."""
     _c, doc, lays = tiny
-    cert = Certifier(tmp_path)
+    cert = Attester(tmp_path)
     regs = [r for r in cert.register(doc) if r["value"] != "bias"]
     wide = TR.Transfer.commit(UPLINK, Direction.INGRESS, BK.SESSION_WINDOW, "load", doc["program"], "bias",
                               [[lo | hi << 16] for lo, hi in values()["bias"]], word_bits=32)
@@ -131,7 +131,7 @@ def test_a_load_of_32_bit_leaves_is_pinned_at_the_verifiers_width_alone(tiny, tm
 
 def test_refuses_a_pin_without_a_attestation(tiny, tmp_path):
     _c, doc, lays = tiny
-    cert = Certifier(tmp_path)
+    cert = Attester(tmp_path)
     regs = cert.register(doc)
     with pytest.raises(ValueError, match="'w' .*no certificate"):
         BK.pins(doc, lays, [r for r in regs if r["value"] != "w"], UPLINK, cert.key())
@@ -152,7 +152,7 @@ def test_refuses_a_pin_without_a_attestation(tiny, tmp_path):
 @pytest.mark.parametrize("other,to", [("link", "s1/uplink"), ("window", 3), ("direction", Direction.EGRESS)])
 def test_refuses_a_attestation_for_another_phase_or_direction(tiny, tmp_path, other, to):
     _c, doc, lays = tiny
-    cert = Certifier(tmp_path)
+    cert = Attester(tmp_path)
     regs = cert.register(doc, at={"w": {other: to}})
     with pytest.raises(ValueError, match="'w' .*doesn't verify under the network attester's key"):
         BK.pins(doc, lays, regs, UPLINK, cert.key())

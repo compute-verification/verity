@@ -7,7 +7,7 @@ import pytest
 
 from verity.protocols.resource_accounting.network.verifier.audit import Audit
 from verity.protocols.resource_accounting.network.verifier.commitment import commit, record_digest, row_digest
-from verity.protocols.resource_accounting.network.verifier.grid import COMPLETE, GridParams, Reason, BlockGrid, Status, Certifier, fill
+from verity.protocols.resource_accounting.network.verifier.grid import COMPLETE, GridParams, Reason, BlockGrid, Status, Attester, fill
 from verity.protocols.resource_accounting.network.verifier.schedule import run_shaper
 
 from test_network_attester_audit import FRAMES, P, SYNC_SET, SYNCS, honest_ready
@@ -52,14 +52,14 @@ def verdicts(records):
 
 def test_committed_audit_matches_raw_audit():
     """Honest, late, tampered, faulted and duplicated runs get the same verdicts committed as raw."""
-    honest = run_shaper(FRAMES, honest_ready(), SYNCS, Certifier("responses", P))
+    honest = run_shaper(FRAMES, honest_ready(), SYNCS, Attester("responses", P))
     late_ready = honest_ready()
     late_ready[3] = 7
-    late = run_shaper(FRAMES, late_ready, SYNCS, Certifier("responses", P))
+    late = run_shaper(FRAMES, late_ready, SYNCS, Attester("responses", P))
     rows = [list(row) for row in honest[0].grid]
     rows[0][0] = b"\xff"
     tampered = [BlockGrid("responses", 0, tuple(tuple(r) for r in rows), COMPLETE)] + honest[1:]
-    w = Certifier("responses", P)
+    w = Attester("responses", P)
     faulted = run_shaper(FRAMES, honest_ready(), SYNCS[:1], w)
     w.fault(Reason.DROPPED)
     for _ in range(P.buckets):
@@ -75,7 +75,7 @@ def test_committed_audit_matches_raw_audit():
 
 def test_a_status_the_digest_disagrees_with_is_a_mismatch():
     """A network attester that faulted but publishes a complete status in the clear doesn't match the Program's digest."""
-    honest = run_shaper(FRAMES, honest_ready(), SYNCS, Certifier("responses", P))
+    honest = run_shaper(FRAMES, honest_ready(), SYNCS, Attester("responses", P))
     faulted_digest = record_digest("responses", 0, honest[0].grid, Status(Reason.DROPPED), P)
     lying = [commit(honest[0], P).__class__("responses", 0, faulted_digest, COMPLETE)] + [commit(r, P) for r in honest[1:]]
     assert verdicts(lying)[0] == "mismatch"

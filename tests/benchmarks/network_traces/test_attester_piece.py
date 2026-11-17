@@ -251,7 +251,7 @@ def test_the_pieces_attester_row_is_the_period_checks_accept_and_composes_into_t
                                                                 "verifier": node})
     assert where["steps"] == {"chain": node, "period": node}
     assert where[CP.PREMISE] == (
-        f"unmet: this piece establishes no trusted-device and gives no bound on that ground; the network certifier ran "
+        f"unmet: this piece establishes no trusted-device and gives no bound on that ground; the network attester ran "
         f"on {GATE_HOST}, not the developer's {node}; the chain's checks and samples ran on {node}, and the period "
         f"check and its proofs' challenges on {node}")
     assert [(x["name"], x["counted"]) for x in where["links"]] == [("certified", True), ("gate", False)]
@@ -327,7 +327,7 @@ def test_records_the_rows_audit_refuses_are_the_pieces_reject_before_any_chain(t
     env = dict(os.environ, CERTIFIER_CMD=_piece_cmd(tmp_path, tmp_path / "none", {}, rows=rows))
     got = S.pieces(d, K, tmp_path / "pieces", env=env)
     a = json.loads((tmp_path / "pieces" / "certifier" / "answer.json").read_text())
-    why = "the network certifier's records, audited as rows: egress bucket N isn't the schedule's"
+    why = "the network attester's records, audited as rows: egress bucket N isn't the schedule's"
     assert (a["verdict"], a["reason"]) == ("reject", why) and got["certifier"]["verdict"] == "reject"
     assert why in got["certifier"]["reason"] and not (d / CP.PRIVATE / RUN / "chain").exists()
     rec, line = _record(monkeypatch, capsys, d, tmp_path / "pieces")
@@ -618,7 +618,7 @@ def test_rows_check_takes_only_network_rows_verdict_and_leaves_no_case_behind(tm
     reject = {"protocol": CP.ROWS, "verdict": "reject", "reason": "egress bucket 2: not r cells a connection in "
               "ordinal order"}
     for check in (lambda exe: CP.rows_check(exe, run, record), lambda exe: CP.own_rows(exe)(run)):
-        with pytest.raises(CP.Rejected, match=r"^the network certifier's records, audited as rows: egress bucket N: "
+        with pytest.raises(CP.Rejected, match=r"^the network attester's records, audited as rows: egress bucket N: "
                                               r"not r cells a connection in ordinal order$"):
             check(str(_stub_rows(tmp_path, reject)))
     with pytest.raises(CP.NotRun, match="network-rows answered no verity/network-rows/v1 accept or reject"):
@@ -630,11 +630,11 @@ def test_rows_check_takes_only_network_rows_verdict_and_leaves_no_case_behind(tm
     with pytest.raises(CP.NotRun, match="network-rows check: SystemExit: network-rows check exited 3: oops"):
         CP.rows_check(str(failing), run, record)
     other = gate_run(tmp_path / "other", seed=b"another network certifier")
-    with pytest.raises(CP.NotRun, match="the network certifier's rows case: SystemExit: .*witness/deployment.json "
+    with pytest.raises(CP.NotRun, match="the network attester's rows case: SystemExit: .*witness/deployment.json "
                                         "names another key than the auditor's record's"):
         CP.rows_check(str(_stub_rows(tmp_path)), other, record)
     (WC.witness(run) / "certified.jsonl").unlink()
-    with pytest.raises(CP.NotRun, match="the network certifier's rows case: SystemExit: .*no certified.jsonl"):
+    with pytest.raises(CP.NotRun, match="the network attester's rows case: SystemExit: .*no certified.jsonl"):
         CP.rows_check(str(_stub_rows(tmp_path)), run, record)
     assert not list(unpacked.glob("rows-*"))
 
@@ -737,7 +737,7 @@ def test_the_placement_names_the_kept_gate_a_local_gate_the_prover_node_and_refu
     p = CP.placement(d, RUN)
     node = socket.gethostname()
     assert (p["kind"], p["links"]) == ("prover-node", [])
-    assert p[CP.PREMISE].startswith(f"{CP.UNMET}; the network certifier ran on the developer's node {node} ")
+    assert p[CP.PREMISE].startswith(f"{CP.UNMET}; the network attester ran on the developer's node {node} ")
     assert p["parties"]["network_certifier"] == p["parties"]["prover"] == node
     (d / CP.PRIVATE / RUN / CP.SESSION).unlink()
     with pytest.raises(CP.NotRun, match="keep the run with this tree's front"):
@@ -749,7 +749,7 @@ def test_the_steps_machines_are_labels_and_the_piece_establishes_no_trusted_devi
     the verifier's, and whatever they say, `trusted-device` reads `UNMET`, at the gate's machine and at a local gate."""
     d = _serve_dir(tmp_path / "serve", network_attester)
     steps = {"chain": "chain-machine", "period": "period-machine"}
-    names = (f"the network certifier ran on {GATE_HOST}, not the developer's {socket.gethostname()}; the chain's "
+    names = (f"the network attester ran on {GATE_HOST}, not the developer's {socket.gethostname()}; the chain's "
              "checks and samples ran on chain-machine, and the period check and its proofs' challenges on "
              "period-machine")
     where = CP.placement(d, RUN, steps)

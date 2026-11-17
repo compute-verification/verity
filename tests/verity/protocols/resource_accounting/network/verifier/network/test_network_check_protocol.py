@@ -3,7 +3,7 @@ harness's `ProtocolPort`.
 
 The reference decodes the protocol's formats (`NetworkCheck/Check.lean`'s module docstring) and runs the real `Audit`:
 `check_link` on each egress link, then `check_ingress_link` on each ingress link, under the attester's `LmsKey` in its
-session. The cases are generated spatial units: an honest network attester (`grid.Certifier` driven by
+session. The cases are generated spatial units: an honest network attester (`grid.Attester` driven by
 `schedule.run_shaper` on the egress links, fed directly on the ingress links) whose records `certificate.Issuer` signs with
 a small LMS key in a sampled attester session, then one change
 (`MUTATIONS`), each aimed at one path of the audit, and malformed parameters, commitments and evidence. The issuer
@@ -32,7 +32,7 @@ from verity.protocols.resource_accounting.network.verifier.audit import Audit
 from verity.protocols.resource_accounting.network.verifier.certificate import (SALT_BYTES, STATUS_CODES, Certificate, CertifiedRecord,
                                                                 Direction, Issuer, LmsKey, RecordHead, SignerRefused,
                                                                 certificate_digest, parameters_digest, record_head)
-from verity.protocols.resource_accounting.network.verifier.grid import COMPLETE, Certifier, GridParams, Reason, BlockGrid, Status
+from verity.protocols.resource_accounting.network.verifier.grid import COMPLETE, Attester, GridParams, Reason, BlockGrid, Status
 from verity.protocols.resource_accounting.network.verifier.schedule import ClockSync, LogicalFrame, SyncSet, expected_grids, run_shaper
 from verity.protocols.resource_accounting.network.verifier.service import encode
 
@@ -270,7 +270,7 @@ class _Signer:
         return lms.sign_at(self.key, (self.n - 1) % 2 ** self.key.params.H, message).encode()
 
 
-class _Faulty(Certifier):
+class _Faulty(Attester):
     """A network attester that faults with `faults[t]` before releasing global bucket t."""
 
     def __init__(self, link, params, faults):
