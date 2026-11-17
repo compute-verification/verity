@@ -2184,7 +2184,8 @@ def test_run_sh_takes_the_serving_costs_flags_and_refuses_before_it_holds_anythi
 def test_llama32_1bs_number_is_its_chat_and_long_loads_alone_as_a_point_of_glm53s_metric(monkeypatch: pytest.MonkeyPatch):
     """The prefix load fills the 1B's whole context, an engine of another limit than chat's and long's, so the 1B's
     number is written from those two loads alone, under the one id every model's points share, naming its model and
-    hardware. GLM-5.3's number still waits for the row on a repeated prefix."""
+    hardware, and as its member the model, the card and the arm over its reference, which tells its line from
+    GLM-5.3's. GLM-5.3's number still waits for the row on a repeated prefix."""
     arms = [both(n, chat, long) | {"model_id": "llama32-1b"} for n, chat, long in (
         ("compiled", [2.0, 2.0, 2.0], [1.0, 1.0, 1.0]), ("compiled-again", [1.98, 2.0, 2.02], [1.0, 1.0, 1.0]),
         ("record", [1.98, 1.99, 2.0], [0.99, 0.985, 0.98]))]
@@ -2200,3 +2201,8 @@ def test_llama32_1bs_number_is_its_chat_and_long_loads_alone_as_a_point_of_glm53
     from verity_bench import kit
     monkeypatch.setattr(kit, "host_stamp", lambda: {"card": "NVIDIA H200"})
     assert (S.hardware(S.MODELS["llama32-1b"]), S.hardware(S.MODELS["glm53"])) == ("1 × NVIDIA H200", "8 × NVIDIA H200")
+    assert (r["arm"], r["reference"]) == ("record", "compiled") and "member" not in ms[-1]
+    one = S.member(S.MODELS["llama32-1b"], r["arm"], r["reference"])
+    assert (one, S.member(S.MODELS["glm53"], "two-stage", "compiled")) == (
+        "llama-3.2-1b-h200-record-over-compiled", "glm-5.3-h200-two-stage-over-compiled")
+    assert S.result_of(r | {"hardware": "1 × NVIDIA H200", "member": one})[3][-1]["member"] == one

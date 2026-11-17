@@ -3679,7 +3679,8 @@ def result_of(r: dict) -> tuple[bool, str, dict, list[dict]]:
     The number is one under the model's metric id (`Model.metric`), the entry a reader of results takes it from, with
     its target, what the target rests on, the target's parts with the changes the arm left off, the arm's changes no
     part counts, its verdict (one of `verdict`'s three, or `NOT_COMPARABLE`), each load's cost beside it, and the
-    ``model`` and ``hardware`` it was measured on (a metric's points are of every model and card); it names the loads
+    ``model`` and ``hardware`` it was measured on (a metric's points are of every model and card) and, where given,
+    its ``member`` (`member`), which tells its line from another model's, card's or arm's; it names the loads
     as its inputs. Where a load has not run there is no such entry: one load's cost is not the number. The
     row on a repeated prefix is a measurement under its load's name, with no target and no verdict, whose ``value``
     is its cost in tokens a second with one request in flight, and None where its requests are sent as they arrive:
@@ -3718,18 +3719,32 @@ def result_of(r: dict) -> tuple[bool, str, dict, list[dict]]:
                   for c in r["loads"]]
         out.append(entry(r["id"], r, label=r["label"], prefix=under, load=r["load"], loads=beside,
                          inputs=[c["load"] for c in r["loads"]], target_parts=r["target_parts"],
-                         not_in_target=r["not_in_target"], model=r.get("checkpoint"), hardware=r.get("hardware")))
+                         not_in_target=r["not_in_target"], model=r.get("checkpoint"), hardware=r.get("hardware"),
+                         **({"member": r["member"]} if r.get("member") else {})))
     what = {"benchmark": "serve_tax", "model": r["model"], "arm": r["arm"], "reference": r["reference"],
             "loads": [*(c["load"] for c in r["loads"]), *([row["load"]] if row else [])], "vllm": r["vllm"]}
     return ok, cost_text(r).splitlines()[0], what, out
 
 
-def hardware(model: Model) -> str:
-    """A point's ``hardware``: how many cards the model is served on, of the kind nvidia-smi names on this host."""
+def card() -> str:
+    """The kind of card nvidia-smi names on this host (the kit's host stamp)."""
     kit()
     from verity_bench import kit as bench
 
-    return f"{tp_size(model)} × {bench.host_stamp()['card']}"
+    return bench.host_stamp()["card"]
+
+
+def hardware(model: Model) -> str:
+    """A point's ``hardware``: how many cards the model is served on, of the kind nvidia-smi names on this host."""
+    return f"{tp_size(model)} × {card()}"
+
+
+def member(model: Model, arm: str, reference: str | None = None) -> str:
+    """A point's ``member``, what tells its line from the lines of the metric's other configurations: the model's
+    served name, this host's card and the arm, over its reference where it has one, lower-case words joined by hyphens
+    (``llama-3.2-1b-h200-record-over-compiled``)."""
+    kind = card().removeprefix("NVIDIA ").lower().replace(" ", "-")
+    return "-".join((model.served, kind, arm, *(("over", reference) if reference else ())))
 
 
 def write_result(r: dict, out: Path) -> None:
@@ -3738,7 +3753,8 @@ def write_result(r: dict, out: Path) -> None:
     if not run_dir or not run_id:
         raise SystemExit("cost --result writes the run's result.json: run it under research run")
     model = next(m for m in MODELS.values() if m.served == r["model"])
-    ok, detail, what, measurements = result_of(r | {"hardware": hardware(model)})
+    ok, detail, what, measurements = result_of(r | {"hardware": hardware(model),
+                                                    "member": member(model, r["arm"], r["reference"])})
     kit()[1].write_result(Path(run_dir), run_id, out, "serving_cost.json", ok, detail, what, measurements)
 
 
