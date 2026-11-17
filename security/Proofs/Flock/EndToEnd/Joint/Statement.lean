@@ -4,45 +4,7 @@ public import Proofs.Flock.EndToEnd.Period.Run
 public import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundCustody
 public import Flock.Desc
 
-/-!
-# The joint stratified bound: one detection budget over a sampling block's whole sample, and over a period (trusted)
-
-A sampling block is the proof blocks one sample covers, committed and registered before the sample. Its sample is stratified
-by subcircuit: subcircuit `s` holds `n_s` of the sampling block's units, the verifier samples `k_s` of them uniformly
-without replacement, and an incorrect set `B` holds `x_s` of them. `B` escapes the sample with probability
-`∏_s C(n_s − x_s, k_s)/C(n_s, k_s) ≤ exp(−Σ_s k_s·x_s/n_s)`. So the prover has one detection budget,
-`Σ_s k_s·x_s/n_s ≤ ln(1/δ)`, spent across every subcircuit of the sampling block at once: there is no `δ` split by
-subcircuit and no sum of per-subcircuit worst cases.
-
-`StratifiedBlock` is such a sampling block: one hidden-output `--zk` session of one table (a stratified sample is a
-one-table session: verity-verify-proof takes only the subset sample at more than one table, `RecordCustodyZKJ`) whose units the
-challenger's coins sample by the live stratified sample (`Flock.Draw.drawWith` at `.stratified`, `SamplingDesign.execOS`), with every
-binder of `zk_session_soundH_custody` but the prover. Its incorrect proof blocks are `incorrectRegZ` in the committed transcript fixed
-at registration (`XplurZC`), as `SamplingBlock`'s are.
-
-* `JointStratified`, per sampling block: except with probability `δ + ε_ks + ε_bind`, if verity-verify-proof accepts, the
-  sampling block's incorrect proof blocks `B` lie in the confidence set (`SamplingDesign.stratified`'s missProb of `B` is at least `δ`), so they
-  spend at most the one budget, `Σ_s k_s·x_s/n_s ≤ ln(1/δ)`, and their ANDs and their output bits are each at most the
-  most any set in the confidence set holds (`StratifiedBlock.maxHarm`). Both harm bounds are read from the same sample,
-  at the same `δ`.
-* `JointStratifiedPooled`, pooled: the same over a period of `T` sampling blocks played by one adaptive prover, with
-  one budget for the whole period: except with probability `δ + Σ_t (ε_ks,t + ε_bind,t)`, if verity-verify-proof accepts every
-  sampling block, the product of their escapes is at least `δ`, the incorrect proof blocks of all of them spend at most
-  `Σ_t Σ_s k_{t,s}·x_{t,s}/n_{t,s} ≤ ln(1/δ)`, and their ANDs and output bits in all are each at most the most any
-  choice of incorrect sets the period's samples miss together with probability at least `δ` holds. The bound is absolute: it
-  does not grow with `T` but through the proof system's terms.
-
-ANDs and output bits are per-unit weights (`ands u`, the unit's own `Candidate.ands`; `bits u`, its output bits); the
-statements hold at every pair of weights. `ε_ks` is the sampling block's knowledge term at the worst registration
-(`StratifiedBlock.epsKs`) and `ε_bind` its binding term, `ε_bind` (`StratifiedBlock.link`). The named assumptions are
-`zk_session_soundH_custody`'s at every sampling block: A3 (`uniform/io-getrandombytes`) for its sample bytes,
-`live-verifier` (`StratifiedBlock.hCust`), and `cr/sha-512` (`TableCRZ`) and `ecr/sha-512` (`LinkCRZC`) at the
-strategy each sampling block is played with (in a period, at every strategy it is played with on some run,
-`Stratified.Plays`), stated flat. Their proofs are `Flock.SecurityProofs.JointStratified` and
-`Flock.SecurityProofs.JointStratifiedPooled` (`Joint/Bound.lean`).
-
-Flock's definitions are still in its proofs package, so, like `EndToEndHidden`, this module imports them.
--/
+/-! The joint stratified bound: one detection budget over a sampling block's whole sample, and over a period (trusted). -/
 
 @[expose] public section
 

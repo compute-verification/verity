@@ -6,37 +6,7 @@ public import Mathlib.Analysis.SpecialFunctions.Log.Basic
 import Mathlib.Algebra.Order.Algebra
 import Mathlib.Analysis.SpecialFunctions.Pow.NNReal
 
-/-!
-# The stratified sampling design's harm bound
-
-`IsHarmBound L h δ H` (`Audit/Harm.lean`) is `harm_bound`'s specification: every incorrect set that escapes with
-probability at least `δ` has harm at most `H`. This file proves it for the stratified sampling design (and so the work sampling design), at `H` in
-closed form. Stratum `s` has `n_s` units of which `k_s` are sampled uniformly without replacement, and a set `B` holds
-`c_s = |B ∩ stratum s|` of them.
-
-* `choose_div_le_exp`, `stratified_escape_le_exp`: **the closed form**. `B` escapes with probability at most
-  `exp(−∑ s k_s c_s / n_s)`, since `C(n − c, k)/C(n, k) ≤ (1 − c/n)^k ≤ exp(−k c / n)`. `work_escape_le_exp` is the work
-  sampling design's, whose `work_escape_le` bounds the same product through weighted AM-GM at the rule's sizes instead.
-* `stratified_risk_le`: a set escaping with probability at least `δ > 0` has `c_s ≤ n_s − k_s` in every stratum and
-  `∑ s k_s c_s / n_s ≤ ln(1/δ)`.
-* `stratified_isHarmBound_dual`, **the harm bound at a price**: with harm `g_s` per unit of stratum `s`, every `τ ≥ 0`
-  gives the harm bound `τ ln(1/δ) + ∑ s (n_s − k_s) max(0, g_s − τ k_s / n_s)`. That is weak duality for the fractional
-  knapsack `max ∑ s g_s x_s` over `0 ≤ x_s ≤ n_s − k_s` with `∑ s k_s x_s / n_s ≤ ln(1/δ)`.
-* `stratified_isHarmBound_fill`, **the knapsack's value**: a fill `x` that some `τ ≥ 0` separates (`x_s = n_s − k_s` where
-  `g_s > τ k_s / n_s`, `x_s = 0` where `g_s < τ k_s / n_s`, and `∑ s k_s x_s / n_s = ln(1/δ)` unless `τ = 0`) attains the
-  bound at `τ`, so its value `∑ s g_s x_s` is a harm bound. The greedy fill, strata taken whole in decreasing
-  `g_s n_s / k_s` until the budget `ln(1/δ)` runs out, the last one fractionally, is separated by that last stratum's
-  `g_s n_s / k_s`, or by `0` when the budget never runs out. This is `density_bound` in the sampling optimizer
-  (`verity.protocols.proofs.spot.prover.optimize`).
-* `work_isHarmBound_fill`: the same under the work sampling design with harm the credited work `w_s`, so its value bounds
-  `workOf σ w B`.
-* `IsHarmBound.natFloor`, `stratified_isHarmBound_bits`, `Partition.audit_exfiltration_stratified`: **the exfiltration
-  form**. With harm a unit's output bits `b_s`, the floor of the fill's value is `audit_exfiltration`'s `H`.
-* `stratumRisk`, `le_stratumRisk`, `stratified_isHarmBound_exact`: the same weak duality with each stratum's exact risk
-  `ln(C(n_s, k_s)/C(n_s − c, k_s))` in place of `k_s c / n_s`, which is at most it. Core's
-  `verity.protocols.proofs.spot.verifier.profile.Stratified.harm_bound` is that knapsack's value over the exact risk increments: below the
-  closed form's, and a harm bound by this theorem at the price its greedy fill stops at, not by the closed form.
--/
+/-! The stratified sampling design's harm bound, at `H` in closed form. -/
 
 @[expose] public section
 
@@ -49,10 +19,6 @@ namespace SamplingDesign
 
 variable {n m : ℕ}
 
-/-! ## The closed form -/
-
-/-- The hypergeometric missProb of `c` of `N` units under a uniform `k`-subset is at most `exp(−k c / N)`: it is at most
-`(1 − c/N)^k` (`choose_div_le_pow`), and `1 − x ≤ exp(−x)`. -/
 theorem choose_div_le_exp {N c k : ℕ} (hk : k ≤ N) (hc : c ≤ N) :
     ((N - c).choose k : ℝ) / (N.choose k : ℝ) ≤ Real.exp (-((k : ℝ) * c / N)) := by
   rcases Nat.eq_zero_or_pos N with h0 | hN
@@ -78,14 +44,12 @@ theorem choose_div_le_exp {N c k : ℕ} (hk : k ≤ N) (hc : c ≤ N) :
         congr 1
         ring
 
-/-- A hypergeometric factor in `ℝ≥0∞` is its real value. -/
 theorem choose_div_eq_ofReal {N c k : ℕ} (hk : k ≤ N) :
     ((N - c).choose k : ℝ≥0∞) / (N.choose k : ℝ≥0∞) =
       ENNReal.ofReal (((N - c).choose k : ℝ) / (N.choose k : ℝ)) := by
   have hC : (0 : ℝ) < N.choose k := by exact_mod_cast Nat.choose_pos hk
   rw [ENNReal.ofReal_div_of_pos hC, ENNReal.ofReal_natCast, ENNReal.ofReal_natCast]
 
-/-- A product of hypergeometric factors, `∏ s C(N_s − c_s, k_s)/C(N_s, k_s)`, is at most `exp(−∑ s k_s c_s / N_s)`. -/
 theorem prod_choose_div_le_exp (N c k : Fin m → ℕ) (hk : ∀ s, k s ≤ N s) (hc : ∀ s, c s ≤ N s) :
     ∏ s, ((N s - c s).choose (k s) : ℝ≥0∞) / ((N s).choose (k s) : ℝ≥0∞) ≤
       ENNReal.ofReal (Real.exp (-∑ s, (k s : ℝ) * c s / N s)) := by
@@ -96,8 +60,6 @@ theorem prod_choose_div_le_exp (N c k : Fin m → ℕ) (hk : ∀ s, k s ≤ N s)
   rw [← Finset.sum_neg_distrib, Real.exp_sum]
   exact Finset.prod_le_prod₀ (fun s _ => hnn s) fun s _ => choose_div_le_exp (hk s) (hc s)
 
-/-- A product of hypergeometric factors at least `δ > 0` has every factor positive, so `c_s + k_s ≤ N_s`, and
-`∑ s k_s c_s / N_s ≤ ln(1/δ)`. -/
 theorem risk_le_of_le_prod (N c k : Fin m → ℕ) (hk : ∀ s, k s ≤ N s) (hc : ∀ s, c s ≤ N s) {δ : ℝ≥0∞}
     (hδ : 0 < δ) (h : δ ≤ ∏ s, ((N s - c s).choose (k s) : ℝ≥0∞) / ((N s).choose (k s) : ℝ≥0∞)) :
     (∀ s, c s + k s ≤ N s) ∧ ∑ s, (k s : ℝ) * c s / N s ≤ Real.log δ.toReal⁻¹ := by
@@ -115,8 +77,6 @@ theorem risk_le_of_le_prod (N c k : Fin m → ℕ) (hk : ∀ s, k s ≤ N s) (hc
     rw [Real.log_inv]
     linarith
 
-/-- The exact form: with every `c_s + k_s ≤ N_s`, a product of hypergeometric factors at least `δ > 0` has
-`∑ s ln(C(N_s, k_s)/C(N_s − c_s, k_s)) ≤ ln(1/δ)`. -/
 theorem risk_exact_le_of_le_prod (N c k : Fin m → ℕ) (hk : ∀ s, k s ≤ N s) (hcap : ∀ s, c s + k s ≤ N s)
     {δ : ℝ≥0∞} (hδ : 0 < δ) (h : δ ≤ ∏ s, ((N s - c s).choose (k s) : ℝ≥0∞) / ((N s).choose (k s) : ℝ≥0∞)) :
     ∑ s, Real.log (((N s).choose (k s) : ℝ) / ((N s - c s).choose (k s) : ℝ)) ≤ Real.log δ.toReal⁻¹ := by
@@ -134,10 +94,6 @@ theorem risk_exact_le_of_le_prod (N c k : Fin m → ℕ) (hk : ∀ s, k s ≤ N 
   rw [Finset.sum_congr rfl fun s _ => he s, Finset.sum_neg_distrib, Real.log_inv]
   linarith
 
-/-! ## The fractional knapsack -/
-
-/-- **Weak duality**: counts with `c_s + k_s ≤ N_s` and `∑ s k_s c_s / N_s ≤ b` have `∑ s g_s c_s` at most
-`τ b + ∑ s (N_s − k_s) max(0, g_s − τ k_s / N_s)`, for every `τ ≥ 0`. -/
 theorem sum_le_dual (N c k : Fin m → ℕ) (g : Fin m → ℝ) {b τ : ℝ} (hτ : 0 ≤ τ) (hcap : ∀ s, c s + k s ≤ N s)
     (hb : ∑ s, (k s : ℝ) * c s / N s ≤ b) :
     ∑ s, g s * c s ≤ τ * b + ∑ s, ((N s - k s : ℕ) : ℝ) * max 0 (g s - τ * k s / N s) := by
@@ -153,9 +109,6 @@ theorem sum_le_dual (N c k : Fin m → ℕ) (g : Fin m → ℝ) {b τ : ℝ} (h�
         mul_le_mul_of_nonneg_left hc (le_max_left _ _)
     _ = _ := mul_comm _ _
 
-/-- **Complementary slackness**: a fill `x` that `τ` separates (`x_s = N_s − k_s` where `g_s > τ k_s / N_s`, `x_s = 0`
-where `g_s < τ k_s / N_s`, and `∑ s k_s x_s / N_s = b` unless `τ = 0`) has value `∑ s g_s x_s` equal to the dual bound
-at `τ`. -/
 theorem fill_eq_dual (N k : Fin m → ℕ) (g x : Fin m → ℝ) {b τ : ℝ}
     (hfull : ∀ s, τ * k s / N s < g s → x s = ((N s - k s : ℕ) : ℝ))
     (hempty : ∀ s, g s < τ * k s / N s → x s = 0)
@@ -179,7 +132,6 @@ theorem fill_eq_dual (N k : Fin m → ℕ) (g x : Fin m → ℝ) {b τ : ℝ}
   · rw [hfull s hgt, max_eq_right (by linarith)]
     ring
 
-/-- A set's harm, with harm `g_s` per unit of stratum `s`, is `∑ s g_s c_s`. -/
 theorem sum_comp_eq (σ : Fin n → Fin m) (g : Fin m → ℝ) (B : Finset (Fin n)) :
     ∑ u ∈ B, g (σ u) = ∑ s, g s * (B.filter (σ · = s)).card := by
   rw [← Finset.sum_fiberwise B σ fun u => g (σ u)]
@@ -192,10 +144,6 @@ theorem card_filter_le_stratum (σ : Fin n → Fin m) (s : Fin m) (B : Finset (F
   rw [filter_eq_inter_stratum]
   exact card_le_card inter_subset_right
 
-/-! ## The stratified sampling design -/
-
-/-- **The closed form**: sampling `k_s` of the `n_s` units of stratum `s` uniformly without replacement, a set with `c_s`
-units in stratum `s` escapes with probability at most `exp(−∑ s k_s c_s / n_s)`. -/
 theorem stratified_escape_le_exp (σ : Fin n → Fin m) (k : Fin m → ℕ) (hk : ∀ s, k s ≤ (stratum σ s).card)
     (B : Finset (Fin n)) :
     (stratified σ k hk).missProb B ≤
@@ -204,15 +152,11 @@ theorem stratified_escape_le_exp (σ : Fin n → Fin m) (k : Fin m → ℕ) (hk 
   exact prod_choose_div_le_exp (fun s => (stratum σ s).card) (fun s => (B.filter (σ · = s)).card) k hk
     (fun s => card_filter_le_stratum σ s B)
 
-/-- **The work sampling design in closed form**: a set with `c_s` units in stratum `s` escapes with probability at most
-`exp(−∑ s k_s c_s / n_s)`, `k_s = workK σ w f K s`, at any floors. -/
 theorem work_escape_le_exp (σ : Fin n → Fin m) (w f : Fin m → ℕ) (K : ℕ) (B : Finset (Fin n)) :
     (work σ w f K).missProb B ≤
       ENNReal.ofReal (Real.exp (-∑ s, (workK σ w f K s : ℝ) * (B.filter (σ · = s)).card / (stratum σ s).card)) :=
   stratified_escape_le_exp σ (workK σ w f K) (workK_le σ w f K) B
 
-/-- A set escaping with probability at least `δ > 0` holds at most `n_s − k_s` units of stratum `s`, and its closed-form
-risk `∑ s k_s c_s / n_s` is at most `ln(1/δ)`. -/
 theorem stratified_risk_le (σ : Fin n → Fin m) (k : Fin m → ℕ) (hk : ∀ s, k s ≤ (stratum σ s).card) {δ : ℝ≥0∞}
     (hδ : 0 < δ) {B : Finset (Fin n)} (hB : δ ≤ (stratified σ k hk).missProb B) :
     (∀ s, (B.filter (σ · = s)).card + k s ≤ (stratum σ s).card) ∧
@@ -221,8 +165,6 @@ theorem stratified_risk_le (σ : Fin n → Fin m) (k : Fin m → ℕ) (hk : ∀ 
   exact risk_le_of_le_prod (fun s => (stratum σ s).card) (fun s => (B.filter (σ · = s)).card) k hk
     (fun s => card_filter_le_stratum σ s B) hδ hB
 
-/-- **The harm bound at a price.** With harm `g_s` per unit of stratum `s`, for every `τ ≥ 0`,
-`τ ln(1/δ) + ∑ s (n_s − k_s) max(0, g_s − τ k_s / n_s)` is a harm bound at `δ > 0`. -/
 theorem stratified_isHarmBound_dual (σ : Fin n → Fin m) (k : Fin m → ℕ) (hk : ∀ s, k s ≤ (stratum σ s).card)
     (g : Fin m → ℝ) {δ : ℝ≥0∞} (hδ : 0 < δ) {τ : ℝ} (hτ : 0 ≤ τ) :
     IsHarmBound (stratified σ k hk) (fun u => g (σ u)) δ (τ * Real.log δ.toReal⁻¹ +
@@ -233,8 +175,7 @@ theorem stratified_isHarmBound_dual (σ : Fin n → Fin m) (k : Fin m → ℕ) (
   rw [sum_comp_eq]
   exact sum_le_dual (fun s => (stratum σ s).card) (fun s => (B.filter (σ · = s)).card) k g hτ hcap hrisk
 
-/-- **The knapsack's value is a harm bound.** With harm `g_s` per unit of stratum `s`, a fill `x` that some `τ ≥ 0`
-separates has value `∑ s g_s x_s`, which is a harm bound at `δ > 0`. The greedy fill (`density_bound`) is one. -/
+/-- The greedy fill (`density_bound` in the sampling optimizer) is one such fill. -/
 theorem stratified_isHarmBound_fill (σ : Fin n → Fin m) (k : Fin m → ℕ) (hk : ∀ s, k s ≤ (stratum σ s).card)
     (g x : Fin m → ℝ) {δ : ℝ≥0∞} (hδ : 0 < δ) {τ : ℝ} (hτ : 0 ≤ τ)
     (hfull : ∀ s, τ * k s / (stratum σ s).card < g s → x s = (((stratum σ s).card - k s : ℕ) : ℝ))
@@ -244,8 +185,6 @@ theorem stratified_isHarmBound_fill (σ : Fin n → Fin m) (k : Fin m → ℕ) (
   rw [fill_eq_dual (fun s => (stratum σ s).card) k g x hfull hempty hspent]
   exact stratified_isHarmBound_dual σ k hk g hδ hτ
 
-/-- **Free compute under the work sampling design**: with harm a unit's credited work `w_s`, a separated fill's value
-`∑ s w_s x_s` bounds the work `workOf σ w B` of every set escaping with probability at least `δ > 0`. -/
 theorem work_isHarmBound_fill (σ : Fin n → Fin m) (w f : Fin m → ℕ) (K : ℕ) (x : Fin m → ℝ) {δ : ℝ≥0∞} (hδ : 0 < δ)
     {τ : ℝ} (hτ : 0 ≤ τ)
     (hfull : ∀ s, τ * workK σ w f K s / (stratum σ s).card < w s →
@@ -255,7 +194,6 @@ theorem work_isHarmBound_fill (σ : Fin n → Fin m) (w f : Fin m → ℕ) (K : 
     IsHarmBound (work σ w f K) (fun u => (w (σ u) : ℝ)) δ (∑ s, (w s : ℝ) * x s) :=
   stratified_isHarmBound_fill σ (workK σ w f K) (workK_le σ w f K) (fun s => (w s : ℝ)) x hδ hτ hfull hempty hspent
 
-/-- Harm in whole bits: the floor of a harm bound is one. -/
 theorem _root_.FlockSoundness.Audit.IsHarmBound.natFloor {L : SamplingDesign n} {b : Fin n → ℕ} {δ : ℝ≥0∞} {H : ℝ}
     (hH : IsHarmBound L (fun u => (b u : ℝ)) δ H) : IsHarmBound L (fun u => (b u : ℝ)) δ (⌊H⌋₊ : ℕ) := by
   intro B hB
@@ -265,8 +203,6 @@ theorem _root_.FlockSoundness.Audit.IsHarmBound.natFloor {L : SamplingDesign n} 
   show ∑ u ∈ B, (b u : ℝ) ≤ ((⌊H⌋₊ : ℕ) : ℝ)
   exact_mod_cast Nat.le_floor h
 
-/-- **The exfiltration form**: with `b_s` output bits per unit of stratum `s`, the floor of a separated fill's value is a
-harm bound at `δ > 0`, the `H` that `audit_exfiltration` takes. -/
 theorem stratified_isHarmBound_bits (σ : Fin n → Fin m) (k : Fin m → ℕ) (hk : ∀ s, k s ≤ (stratum σ s).card)
     (b : Fin m → ℕ) (x : Fin m → ℝ) {δ : ℝ≥0∞} (hδ : 0 < δ) {τ : ℝ} (hτ : 0 ≤ τ)
     (hfull : ∀ s, τ * k s / (stratum σ s).card < b s → x s = (((stratum σ s).card - k s : ℕ) : ℝ))
@@ -276,13 +212,9 @@ theorem stratified_isHarmBound_bits (σ : Fin n → Fin m) (k : Fin m → ℕ) (
   IsHarmBound.natFloor (b := fun u => b (σ u))
     (stratified_isHarmBound_fill σ k hk (fun s => (b s : ℝ)) x hδ hτ hfull hempty hspent)
 
-/-! ## The exact risk -/
-
-/-- Stratum `s`'s exact risk with `c` of its units wrong, `ln(C(n_s, k_s)/C(n_s − c, k_s))`: minus the log of its missProb. -/
 noncomputable def stratumRisk (σ : Fin n → Fin m) (k : Fin m → ℕ) (s : Fin m) (c : ℕ) : ℝ :=
   Real.log (((stratum σ s).card.choose (k s) : ℝ) / (((stratum σ s).card - c).choose (k s) : ℝ))
 
-/-- The exact risk is at least the closed form's: `k_s c / n_s ≤ stratumRisk σ k s c` for `c + k_s ≤ n_s`. -/
 theorem le_stratumRisk (σ : Fin n → Fin m) (k : Fin m → ℕ) (hk : ∀ s, k s ≤ (stratum σ s).card) (s : Fin m) {c : ℕ}
     (hc : c + k s ≤ (stratum σ s).card) :
     (k s : ℝ) * c / (stratum σ s).card ≤ stratumRisk σ k s c := by
@@ -297,9 +229,8 @@ theorem le_stratumRisk (σ : Fin n → Fin m) (k : Fin m → ℕ) (hk : ∀ s, k
   rw [he]
   linarith
 
-/-- **The harm bound at a price, exact.** For every harm `h`, every `τ ≥ 0` and every `c` bounding each stratum's
-`∑ u ∈ A, h u − τ · stratumRisk σ k s |A|` over its sets `A` with `|A| + k_s ≤ n_s`, `τ ln(1/δ) + ∑ s c_s` is a harm
-bound at `δ > 0`. -/
+/-- Core's `Stratified.harm_bound`, the knapsack's value over the exact risk increments, is a harm bound by this
+theorem at the price its greedy fill stops at, not by the closed form. -/
 theorem stratified_isHarmBound_exact (σ : Fin n → Fin m) (k : Fin m → ℕ) (hk : ∀ s, k s ≤ (stratum σ s).card)
     (h : Fin n → ℝ) {δ : ℝ≥0∞} (hδ : 0 < δ) {τ : ℝ} (hτ : 0 ≤ τ) (c : Fin m → ℝ)
     (hc : ∀ s (A : Finset (Fin n)), A ⊆ stratum σ s → A.card + k s ≤ (stratum σ s).card →
@@ -325,10 +256,6 @@ namespace Partition
 
 variable {C : Verity.Boolean.Circuit} {n m : ℕ} (P : Partition C n)
 
-/-- **Exfiltration under the stratified sampling design**: `audit_exfiltration` at the harm bound of a separated fill of the output
-bits `b_s` per unit of stratum `s`. A prover that picks its strategy from a uniform message and a receiver that sees only
-what is delivered on `D` succeed together with probability at most
-`2^⌊∑ s b_s x_s⌋ · ∑_{i ≤ j} C(n, i) / |M| + δ + ε_ks + ε_bind + δ_in`, where `miss (j + 1) < δ`. -/
 theorem audit_exfiltration_stratified {σs : Fin n → Fin m} {k : Fin m → ℕ}
     {hk : ∀ s, k s ≤ (SamplingDesign.stratum σs s).card} {Reg : Type} {session : Finset (Fin n) → Reg → Game Bool}
     {X : (R : Reg) → Cont (SamplingDesign.stratified σs k hk) Reg session R → (Fin C.N → Bool)}

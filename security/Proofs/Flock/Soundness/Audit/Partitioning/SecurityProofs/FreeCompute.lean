@@ -5,11 +5,7 @@ public import Proofs.Flock.Soundness.Audit.Partitioning.SecurityProofs.Unequal.B
 import Proofs.Flock.Soundness.Audit.SamplingDesign
 import Proofs.Flock.Soundness.Game
 
-/-!
-# Optimal partitioning against free compute: the proofs
-
-The proofs of the free-compute statements of `Partitioning.Guarantees`.
--/
+/-! Optimal partitioning against free compute: the proofs. -/
 
 @[expose] public section
 
@@ -24,8 +20,6 @@ theorem incl_le_one {n : ℕ} (L : SamplingDesign n) (u : Fin n) : L.incl u ≤ 
   refine (avg_mono fun ω => ?_).trans (avg_const (C := L.Ω) 1).le
   split_ifs <;> simp
 
-/-- `C(n, j) (M − s)^j ≤ C(n − s, j) M^j` for `j ≤ K` and `s + K ≤ n`, where `M = n − K + 1`: each of the `j` factors
-`(n − s − i)/(n − i)` of `C(n − s, j)/C(n, j)` is at least `1 − s/M`. -/
 theorem choose_mul_pow_le (n K s : ℕ) (hs : s + K ≤ n) : ∀ j, j ≤ K →
     (n.choose j : ℝ) * (((n : ℝ) - K + 1) - s) ^ j ≤ ((n - s).choose j : ℝ) * ((n : ℝ) - K + 1) ^ j := by
   intro j
@@ -67,8 +61,6 @@ theorem choose_mul_pow_le (n K s : ℕ) (hs : s + K ≤ n) : ∀ j, j ≤ K →
       _ = ((n - s).choose (j + 1) * ((j : ℝ) + 1)) * M ^ (j + 1) := by rw [e2]; ring
       _ = ((n - s).choose (j + 1) : ℝ) * M ^ (j + 1) * (j + 1) := by ring
 
-/-- The tangent line of `t ↦ max(0, t)^K` at `t₀ > 0`, written `t₀^K (1 + K (t/t₀ − 1))`: Bernoulli's inequality for
-`t ≥ 0`, and a nonpositive line for `t < 0`. -/
 theorem tangent_le (K : ℕ) (hK : 0 < K) {t₀ : ℝ} (ht₀ : 0 < t₀) (t : ℝ) :
     t₀ ^ K * (1 + K * (t / t₀ - 1)) ≤ max 0 t ^ K := by
   rcases le_or_gt 0 t with ht | ht
@@ -170,7 +162,6 @@ theorem ConverseExact : Guarantees.ConverseExact := by
   calc M * (1 - δ ^ ((K : ℝ)⁻¹)) = (1 - δ ^ ((K : ℝ)⁻¹)) * M := mul_comm _ _
     _ ≤ meanSamples L := h2
 
-/-- `e^{−x} ≤ 1 − x + x²/2` for `x ≥ 0`: `e^x ≥ 1 + x + x²/2`, and `(1 + x + x²/2)(1 − x + x²/2) = 1 + x⁴/4`. -/
 theorem exp_neg_le (x : ℝ) (hx : 0 ≤ x) : Real.exp (-x) ≤ 1 - x + x ^ 2 / 2 := by
   have h1 := Real.quadratic_le_exp_of_nonneg hx
   have hq : 0 < 1 + x + x ^ 2 / 2 := by positivity
@@ -216,7 +207,6 @@ theorem ServedGranularityOptimum : Guarantees.ServedGranularityOptimum := by
   obtain ⟨L, hL, hc⟩ := hhi ε hε
   exact ⟨L, hL, by linarith⟩
 
-/-- `A·s + B/s` over `s > 0` is least at `t` with `t² = B/A`: the difference is `A (s − t)²/s`. -/
 theorem root_samplingDesign_le {A t s : ℝ} (hA : 0 ≤ A) (ht : 0 < t) (hs : 0 < s) :
     A * t + A * (t * t) / t ≤ A * s + A * (t * t) / s := by
   have hs0 : s ≠ 0 := hs.ne'

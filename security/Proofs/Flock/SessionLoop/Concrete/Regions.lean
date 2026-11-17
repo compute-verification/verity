@@ -57,19 +57,7 @@ import all Init.Data.String.Termination
 import all Init.Data.Array.Attach
 import all Init.WF
 
-/-! # The concrete table's public regions hold at the trace
-
-`HmRow.regions` gives the concrete table two regions (`regions_mem`): "digest 0", the `hm96` slot's output `b ‖ c`, and
-"out", the unit slot's returned output. The public file's one row digest and the circuit's pinned dummy are both `BC`
-(`bcChunk_BC`), and its one output and the pinned dummy output are 0 (`outVal_zero`).
-
-At "digest 0" the trace holds `BC`: the row's `b ‖ c` in a witness that satisfies the rows (`Hm.row_bc_setupH`, read at
-no regions) is the commit string of the row prefix and message its `sha512x3` slot reads, under the salt its `hm96` slot
-reads; in the trace both are 0 (`zIn_sha`, `zIn_hm`), the mask of a zero salt is 0 (`mask_zeros`), and the commit string
-of the zero row under the zero salt is `BC` (`commitString_zero`). At "out" the trace is 0 off the unit's constant
-(`zIn_unit`), and so are the packed outputs (`outBytes_false`). So the trace satisfies the table at its regions
-(`satisfies_regions_stW`).
--/
+/-! The concrete table's public regions hold at the trace. -/
 
 @[expose] public section
 
@@ -79,8 +67,6 @@ open Flock.HmNets hiding and
 set_option maxRecDepth 200000
 
 namespace FlockDeploy.Concrete.Trace
-
-/-! ## Bytes and bits -/
 
 theorem log2_one : Nat.log2 1 = 0 := Nat.log2_two_pow (n := 0)
 
@@ -97,7 +83,6 @@ theorem forall₂_mem_right {α β : Type} {R : α → β → Prop} : ∀ {L : L
       · obtain ⟨a, ha, hr⟩ := forall₂_mem_right hrest e h
         exact ⟨a, List.mem_cons_of_mem _ ha, hr⟩
 
-/-- A byte string whose bits are all 0 is zeros. -/
 theorem eq_zeros_of_bitL {l : List UInt8} {n : ℕ} (hl : l.length = n)
     (h : ∀ t < 8 * n, Discharge.Hm.bitL l t = false) : l = List.replicate n 0 := by
   refine List.ext_getElem (by rw [List.length_replicate, hl]) fun i h1 h2 => ?_
@@ -128,11 +113,9 @@ theorem foldl_xor_and_false (f : ℕ → Bool) : ∀ (l : List ℕ) (b : Bool),
     rw [List.foldl_cons, Bool.and_false, Bool.xor_false]
     exact foldl_xor_and_false f l b
 
-/-- The mask of a zero salt is 0, bit by bit. -/
 theorem maskV_false (key : ByteArray) (i : ℕ) : Discharge.Hm.maskV key (fun _ => false) i = false :=
   foldl_xor_and_false (fun j => Flock.Hm96.bit key (i + j)) _ false
 
-/-- **The mask of the zero salt is zero.** -/
 theorem mask_zeros : Refine.K512.mask (List.replicate 192 0) = List.replicate 64 0 := by
   refine eq_zeros_of_bitL (Refine.K512.mask_len _) fun t ht => ?_
   rw [Refine.K512_mask, Discharge.Hm.bitL_mask _ (show t < 512 by omega),
@@ -146,8 +129,6 @@ theorem xorBytes_zeros : ∀ l : List UInt8, Merkle.xorBytes l (List.replicate l
     unfold Merkle.xorBytes at ih ⊢
     simp only [List.length_cons, List.replicate_succ, List.zipWith_cons_cons, UInt8.xor_zero, ih]
 
-/-- **The commit string of the zero row under the zero salt is `BC`**, the row digest of the public file and the
-circuit's pinned dummy. -/
 theorem commitString_zero :
     Binding.commitString ((HmRow.rowPrefix 64).data.toList ++ List.replicate 128 0) (List.replicate 192 0) =
       BC.data.toList := by
@@ -166,10 +147,7 @@ theorem getD_zero (x : ℕ) : (#[0] : Array ℕ).getD x 0 = 0 := by
   rw [show (#[0] : Array ℕ) = Array.replicate 1 0 from rfl, Array.getD_eq_getD_getElem?, Array.getElem?_replicate]
   split <;> rfl
 
-/-! ## The concrete table's regions -/
-
 set_option maxHeartbeats 2000000 in
-/-- **`HmRow.regions` makes only "digest p" and "out" regions** in an untyped circuit whose unit returns the outputs. -/
 theorem regions_mem {c : Circuit} {pub : Public} {regs : Array Flock.Region} (h : HmRow.regions c pub = .ok regs)
     (ho : c.outNet = c.unitNet) (ht : c.typed = none) : ∀ r ∈ regs.toList,
       (∃ p < c.ports.size, ∃ name, mkRegion c.kLog name (Discharge.Layout.hmFree c) (Discharge.Layout.hmFixed c p)
@@ -200,7 +178,6 @@ theorem regions_mem {c : Circuit} {pub : Public} {regs : Array Flock.Region} (h 
     · exact Or.inl (hI x hx)
     · exact Or.inr hr
 
-/-- What the regions' proof reads of the concrete circuit and public file. -/
 structure RegionFacts (c : Circuit) (pub : Public) : Prop where
   kLog : c.kLog = 22
   g : c.g = 1
@@ -241,7 +218,6 @@ theorem ports_v1 : ∀ p ∈ c.ports.toList, p.v2 = false ∧ p.bits = 16 * p.wo
   rw [Array.getElem_toList, ← getElem!_pos c.ports 0 (by rw [F.nports]; omega), F.v2, F.bits, F.words, F.chunks]
   decide
 
-/-- Region "digest 0"'s `b ‖ c` at every block: the public file's one row digest, or the pinned dummy, both `BC`. -/
 theorem bcChunk_BC (b : ℕ) : Discharge.Layout.bcChunk c pub b 0 0 = BC := by
   unfold Discharge.Layout.bcChunk
   cases hi : c.instOf pub.n b 0 with
@@ -257,14 +233,12 @@ theorem bcChunk_BC (b : ℕ) : Discharge.Layout.bcChunk c pub b 0 0 = BC := by
     rw [F.nports]
     exact F.digest
 
-/-- Every output region "out" packs is 0: the public file's one output and the pinned dummy output. -/
 theorem outVal_zero (b k j : ℕ) : Discharge.Layout.outVal c pub b k j = 0 := by
   unfold Discharge.Layout.outVal
   cases c.instOf pub.n b (k / c.upv) with
   | none => show c.dummyOutputs.getD _ 0 = 0; rw [F.dout]; exact getD_zero _
   | some i => show pub.outputs.getD _ 0 = 0; rw [F.outputs]; exact getD_zero _
 
-/-- **Region "out"'s bytes are 0**: its one slot's one word packs the zero output. -/
 theorem outBytes_false {b i : ℕ} (hi : i < 128) :
     ((Discharge.Layout.outBytes c pub b).getD (i / 8) default).toNat.testBit (i % 8) = false := by
   have hslot : ((List.range c.unitRange.count).map (Discharge.Layout.slotBytes c pub b)).getD 0 [] =
@@ -298,8 +272,6 @@ theorem outBytes_false {b i : ℕ} (hi : i < 128) :
   refine (hP 0 hsz i hi).trans ?_
   rw [outVal_zero F, Nat.zero_testBit, Bool.and_false]
 
-/-- **The trace's `b ‖ c`** at the `hm96` slot's output, given the row's commit string there: the row's message and salt
-are 0 in the trace, so it is `BC`. -/
 theorem zIn_bcCol {w : ℕ → Bool} (hw : ∀ y < 2 ^ 22, w y = zIn y)
     (hbc : Discharge.Hm.bytesOf w 128 (Discharge.Hm.bcCol c 0 0) = Binding.commitString
       ((HmRow.rowPrefix c.ports[0]!.words).data.toList ++
@@ -337,8 +309,6 @@ end facts
 variable {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
   {draw partition : Option Lean.Json} {program : Option ByteArray} {st : Stmt}
 
-/-- The trace's `b ‖ c` at the concrete table's `hm96` slot, in a statement setupH accepted whose rows the trace
-satisfies. -/
 theorem zIn_bc (ht : tags.typed = false) (hset : Stmt.setupH tags cf pf coins tables draw partition program = .ok st)
     (hz : ((setupH_layout ht hset).model []).Satisfies (zC ((setupH_layout ht hset).model []).m))
     (F : RegionFacts st.c st.pub) {q : ℕ} (hq : q < 1024)
@@ -349,7 +319,6 @@ theorem zIn_bc (ht : tags.typed = false) (hset : Stmt.setupH tags cf pf coins ta
     (Discharge.Hm.row_bc_setupH ht hset F.outNet (ports_v1 F) hz o (by rw [F.g]; omega) (by rw [F.nports]; omega))
     hq h22
 
-/-- **The trace satisfies the concrete table at its regions**, where it satisfies its rows and pin. -/
 theorem satisfies_regions (L : FlockSoundness.Layout st) (ht : tags.typed = false)
     (hset : Stmt.setupH tags cf pf coins tables draw partition program = .ok st)
     (hz : ((setupH_layout ht hset).model []).Satisfies (zC ((setupH_layout ht hset).model []).m))
@@ -425,11 +394,9 @@ theorem satisfies_regions (L : FlockSoundness.Layout st) (ht : tags.typed = fals
       Discharge.Layout.get!_eq_getD, Discharge.Layout.outRegion_bytes hmk o.val]
     exact (outBytes_false F hi').symm
 
-/-! ## The concrete circuit's and public file's facts -/
-
 section cW
 
-set_option maxHeartbeats 2000000 -- the kernel evaluates the parsed circuit's and public file's fields
+set_option maxHeartbeats 2000000
 
 variable (ls lh : HmNets.Laid) (H : ByteArray) (A B A' B' : Sparse) (s1 s3 s4 s6 : String)
   (hello : ByteArray → Nat → String)
@@ -505,8 +472,6 @@ theorem regionFacts_stW :
 
 end cW
 
-/-- **The trace satisfies the concrete table**, its public regions included: its rows and pin (`satisfies_stW`), and at
-"digest 0" and "out" the public values (`satisfies_regions`). -/
 theorem satisfies_regions_stW (ls lh : HmNets.Laid) (H : ByteArray) (A B A' B' : Sparse) (s1 s3 s4 s6 : String)
     (hello : ByteArray → Nat → String) (ht : tags.typed = false)
     (hset : Stmt.setupH tags cf pf coins tables draw partition program = .ok (stW ls lh H A B A' B' s1 s3 s4 s6 hello))

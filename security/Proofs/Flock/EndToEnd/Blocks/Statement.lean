@@ -15,36 +15,7 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 
-/-!
-# The integrity audit per server-time block, and pooled over a monitoring period's blocks (trusted)
-
-A server's life is cut into server-time blocks by certified wipes. Over a monitoring period, its `--zk` sessions are
-numbered in serve order, session `t` a `SamplingBlock` `W t` with a fresh live subset sample, and block `b` is the
-sessions from `start b` up to `start (b + 1)` (`ServerBlocks`): a wipe separates block `b`'s last session from block
-`b + 1`'s first. One prover strategy plays every session of every block (`Period.game` over the monitoring period's
-sessions), adaptively, so a block's sessions may depend on everything the prover saw in the blocks before.
-
-* `IntegrityBlock`: for block `b`, the probability that every session of block `b` is accepted and its incorrect proof blocks total
-  at least `ln(1/δ)/q` is at most `δ + Σ_{t ∈ b} (ε_ks,t + ε_bind,t)`, where each of block `b`'s samples covers at least a
-  fraction `q` of its session's units. The block's bound holds inside the monitoring period, against the prover that
-  played the blocks before it. It is a lemma: the listed guarantee of the per-block reading is `IntegrityBlockCarried`,
-  which also covers carried state and is `IntegrityBlock` with no carried leaf.
-* `IntegrityBlocks`: the probability that some block is accepted with at least `ln(1/δ)/q` incorrect proof blocks is at most
-  `Σ_b (δ + Σ_{t ∈ b} (ε_ks,t + ε_bind,t))`: the per-block form a joint horizon over blocks sums with the other subprotocols.
-* `IntegrityPooledBlocks`: the probability that every session of every block is accepted and the incorrect proof blocks over the
-  horizon total at least `ln(1/δ)/q` is at most `δ + Σ_b Σ_{t ∈ b} (ε_ks,t + ε_bind,t)`, the pooled reading. It is a
-  lemma: the listed guarantee of the pooled reading is `IntegrityPooledCarried`, which also covers carried state.
-
-The named assumptions are `IntegrityPooled`'s, at the sessions each statement reads: A3 (`uniform/io-getrandombytes`)
-for each session's sample bytes, `live-verifier` (`SamplingBlock.hCust`), and `cr/sha-512` (`TableCRZ`) and `ecr/sha-512`
-(`LinkCRZC`) at every strategy a session is played with on some run (`Period.Plays`). The proofs are
-`Flock.SecurityProofs.IntegrityBlock`, `IntegrityBlocks` and `IntegrityPooledBlocks`.
-
-An incorrect proof block is counted in the session that holds it (`SamplingBlock.incorrectSet`). The state a block carries across a wipe
-(the KV cache, committed before the wipe and read after it) is an input of the next block's sessions, and these
-statements say nothing of whether the value a session reads there is the one the block before committed;
-`IntegrityBlockCarried` and `IntegrityPooledCarried` (`EndToEnd/Carry/Statement.lean`) do.
--/
+/-! The integrity audit per server-time block, and pooled over a monitoring period's blocks (trusted). -/
 
 @[expose] public section
 

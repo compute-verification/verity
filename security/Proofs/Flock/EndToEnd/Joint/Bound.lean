@@ -22,19 +22,7 @@ import Proofs.Flock.Soundness.Audit.HarmBound
 import Proofs.Flock.Soundness.Audit.SamplingDesign
 import Proofs.Flock.Soundness.Game
 
-/-!
-# Proof of the joint stratified bound, per sampling block and pooled over a period
-
-* `Flock.SecurityProofs.JointStratified`: if the sampling block's incorrect proof blocks `B` are in the confidence set
-  (`δ ≤` their missProb), they are within the one budget (`StratifiedBlock.within_of_le`), so the event is empty.
-  Otherwise an accepted sampling block outside the budget has a sampled proof block incorrect, at most `ε_ks + ε_bind`
-  (`StratifiedBlock.accepted_drawnIncorrect_le`), or its sample misses `B`, at most `B`'s missProb `< δ` under A3
-  (`StratifiedBlock.sampleMiss_le`).
-* `Flock.SecurityProofs.JointStratifiedPooled`: a run in which every sampling block is accepted and the incorrect proof blocks are
-  not within the period's budget either has a sampling block accepted with a sampled proof block incorrect, at most
-  `Σ_t (ε_ks,t + ε_bind,t)` by `monitoringPeriod_union`, or every sample misses with the product of the escapes below `δ` (else the
-  incorrect proof blocks would be within the budget, `Stratified.within_of_le`), at most `δ` by `monitoringPeriod_prod`.
--/
+/-! Proofs of the joint stratified bound, per sampling block and pooled over a period. -/
 
 @[expose] public section
 
@@ -47,7 +35,6 @@ namespace BlockRec
 
 variable {W : ℕ → StratifiedBlock}
 
-/-- The run's escapes, multiplied, are at most `exp(−Σ spend)`. -/
 theorem escape_prod_le (l : List (BlockRec W)) :
     (l.map BlockRec.missProb).prod ≤ ENNReal.ofReal (Real.exp (-(l.map BlockRec.spend).sum)) := by
   induction l with
@@ -63,7 +50,6 @@ namespace Stratified
 
 variable {W : ℕ → StratifiedBlock}
 
-/-- A run whose escapes multiply to at least `δ` holds at most the period's `maxHarm` of any weight. -/
 theorem harm_le_maxHarm (h : (t : ℕ) → Fin (W t).n → ℕ) {δ : ℝ} {l : List (BlockRec W)}
     (hl : ENNReal.ofReal δ ≤ (l.map BlockRec.missProb).prod) :
     (((l.map (BlockRec.harm h)).sum : ℕ) : ℝ) ≤ maxHarm W h δ l := by
@@ -79,7 +65,6 @@ theorem harm_le_maxHarm (h : (t : ℕ) → Fin (W t).n → ℕ) {δ : ℝ} {l : 
   rw [e]
   exact le_ciSup hb ⟨fun i => l[i].incorrect, hB⟩
 
-/-- **A run whose escapes multiply to at least `δ` is within the period's one budget.** -/
 theorem within_of_le {δ : ℝ} (hδ : 0 < δ) (ands bits : (t : ℕ) → Fin (W t).n → ℕ) {l : List (BlockRec W)}
     (hl : ENNReal.ofReal δ ≤ (l.map BlockRec.missProb).prod) : Within W δ ands bits l := by
   refine ⟨hl, ?_, harm_le_maxHarm ands hl, harm_le_maxHarm bits hl⟩
@@ -138,11 +123,9 @@ theorem JointStratifiedPooled : Flock.Guarantees.JointStratifiedPooled := by
   have hs : MonitoringPeriodGood (fun t => (W t).game) (fun t τ => t < T ∧ cr t τ) 0 T s :=
     monitoringPeriodGood_mono _ T 0 s (fun j τ _ hj hcr => ⟨by omega, hcr⟩)
       (monitoringPeriodGood_of_plays (fun t => (W t).game) cr T 0 s fun t τ hp => And.intro (hT t τ hp) (hL t τ hp))
-  -- some sampling block accepted with a sampled proof block incorrect
   have hA := monitoringPeriod_union (fun t => (W t).game) (StratifiedBlock.record W)
     (fun r => r.accepted ∧ r.sampledWrong) (fun t τ => t < T ∧ cr t τ) (fun t => (W t).epsKs + (W t).link)
     (fun t τ hτ => (W t).accepted_drawnIncorrect_le τ hτ.2.1 hτ.2.2) T 0 s hs
-  -- every sample misses, with the product of the escapes below `δ`
   have hB := monitoringPeriod_prod (fun t => (W t).game) (StratifiedBlock.record W) (fun r => ¬ r.sampledWrong)
     BlockRec.missProb (fun t τ => t < T ∧ cr t τ)
     (fun t τ hτ => ⟨(W t).ideal.missProb ((W t).incorrectSet τ),

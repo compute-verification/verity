@@ -4,27 +4,7 @@ public import Proofs.Flock.EndToEnd.Joint.V5.Member
 public import Proofs.Flock.EndToEnd.Joint.Prod
 public import Proofs.Flock.Soundness.Game
 
-/-!
-# Proof of the bound over a window's members, per window and pooled
-
-The proofs of `JointSampledV5`, `JointShareV5` and `JointPooledV5` (`Joint/V5/Statement.lean`):
-
-* `JointAuditV5.accepted_drawnIncorrect_le`: the window's audit accepts with a sampled proof block incorrect with
-  probability at most `Σ_m (ε_ks,m + ε_bind,m)`: an incorrect sampled proof block is member `m`'s, in its part of the
-  sample, and an accepted run's sample ended and it accepted the session of member `m`, which has that proof block in
-  its part (`forall₂_getElem?`), so a union over the members (`ZkSession.prob_exists_le`) of
-  `JointAuditV5.member_accepted_sampledIncorrect_le` bounds it;
-* `JointAuditV5.sampleMiss_le`: the sample misses a set `B` with probability at most the sampling design's own miss `P_a(B)`, under
-  A3 (`Bridge.execSel_escape_le`);
-* `Flock.SecurityProofs.JointSampledV5`: an accepted run with every proof block of `W` incorrect either has a sampled
-  proof block incorrect or its sample misses `W`;
-* `Flock.SecurityProofs.JointShareV5`: `JointSampledV5` at the window's incorrect proof blocks, whose `P_a` is at most
-  the most of any set of as many;
-* `Flock.SecurityProofs.JointPooledV5`: a run in which every window is accepted and the incorrect proof blocks are not
-  in the period's confidence set either has a window accepted with a sampled proof block incorrect, at most
-  `Σ_t Σ_m (ε_ks,t,m + ε_bind,t,m)` by `monitoringPeriod_union`, or every sample misses with the product of the `P_a`s below
-  `δ`, at most `δ` by `monitoringPeriod_prod`.
--/
+/-! Proofs of the bound over a window's members, per window and pooled. -/
 
 @[expose] public section
 
@@ -35,7 +15,6 @@ open FlockSoundness FlockSoundness.Game FlockSoundness.Audit FlockSoundness.Disc
   FlockSoundness.Discharge.Composed FlockSoundness.Discharge.ZkHidden
 open scoped ENNReal
 
-/-- **Every pair of `List.Forall₂`**: the `k`-th of the first list has its partner at the second's `k`-th place. -/
 theorem forall₂_getElem? {α β : Type} {R : α → β → Prop} :
     ∀ {l₁ : List α} {l₂ : List β}, List.Forall₂ R l₁ l₂ → ∀ k : Fin l₁.length, ∃ t, l₂[k.1]? = some t ∧ R (l₁.get k) t
   | [], [], .nil, k => k.elim0
@@ -48,8 +27,7 @@ open Classical
 
 variable (w : JointAuditV5)
 
-/-- **Where no outcome of the sample's coins ends the sample, no run is accepted**: every outcome of the window's
-audit carries a sample that ran out, which `Accepts` refuses. -/
+/-- Nothing asks that some outcome of the sample's coins ends the sample; where none does, no run is accepted. -/
 theorem prob_accepts_of_not_ends (h : ¬ Nonempty w.EndΩ) (τ : Strategy w.game) :
     prob (fun o => w.Accepts o) w.game τ = 0 := by
   have hle : prob (fun o => w.Accepts o) w.game τ ≤ avg fun _ : w.L.Ω => (0 : ℝ≥0∞) := by
@@ -67,8 +45,6 @@ section Ended
 
 variable [Nonempty w.EndΩ]
 
-/-- **The window's audit accepts with a sampled proof block incorrect** at the strategy `τ` that plays it: at most
-`Σ_m (ε_ks,m + ε_bind,m)`, under `cr/sha-512` and `ecr/sha-512` at each member's session played alone. -/
 theorem accepted_drawnIncorrect_le (τ : Strategy w.game)
     (hCR : ∀ k ω j, TableCRZ execArith hs512
       (planZHJP (w.ms.get k).dj (w.ms.get k).y₀ ((w.memberSamplingDesign τ k).draw ω) (reg (w.memberSim τ k))) j
@@ -95,9 +71,6 @@ theorem accepted_drawnIncorrect_le (τ : Strategy w.game)
 
 end Ended
 
-/-- **The window's audit accepts with a sampled proof block incorrect**, at every window: `accepted_drawnIncorrect_le`
-where some outcome of the stream ends the sample, which is where its premises are asked; where none does, no run is
-accepted. -/
 theorem accepted_sampledIncorrect_le (τ : Strategy w.game)
     (hCR : ∀ _ : Nonempty w.EndΩ, ∀ k ω j, TableCRZ execArith hs512
       (planZHJP (w.ms.get k).dj (w.ms.get k).y₀ ((w.memberSamplingDesign τ k).draw ω) (reg (w.memberSim τ k))) j
@@ -120,7 +93,6 @@ private theorem prob_const {α : Type} (Q : Prop) [Decidable Q] (g : Game α) (s
   · simp only [hQ, ite_false]
     exact prob_false g s
 
-/-- **The window's sample misses a set `B`** with the acceptance probability of its live sampling design. -/
 theorem prob_sampleMiss (B : Finset (Fin w.nJ)) (τ : Strategy w.game) :
     prob (fun o => ¬ ∃ u ∈ o.2.1, u ∈ B) w.game τ = w.L.missProb B := by
   show avg (fun ω => prob _
@@ -135,7 +107,6 @@ theorem prob_sampleMiss (B : Finset (Fin w.nJ)) (τ : Strategy w.game) :
   · rw [ite_eq_left (hiff.2 hd), ite_eq_left hd]
   · rw [ite_eq_right (mt hiff.1 hd), ite_eq_right hd]
 
-/-- **The window's sample misses a set `B`** with probability at most the sampling design's own miss `P_a(B)`, under A3. -/
 theorem sampleMiss_le (hA3 : Assumptions.UniformRandomBytes w.Lb w.src) (B : Finset (Fin w.nJ)) (τ : Strategy w.game) :
     prob (fun o => ¬ ∃ u ∈ o.2.1, u ∈ B) w.game τ ≤ ENNReal.ofReal (w.pa B) := by
   rw [prob_sampleMiss]
@@ -147,7 +118,6 @@ namespace JointMonitoringPeriodV5
 
 variable {W : ℕ → JointAuditV5}
 
-/-- A run whose `P_a`s multiply to at least `δ` holds at most the period's `maxHarm` of any weight. -/
 theorem harm_le_maxHarm (h : (t : ℕ) → Fin (W t).nJ → ℕ) {δ : ℝ} {l : List (AuditRecV5 W)}
     (hl : ENNReal.ofReal δ ≤ (l.map AuditRecV5.pa).prod) :
     (((l.map (AuditRecV5.harm h)).sum : ℕ) : ℝ) ≤ maxHarm W h δ l := by
@@ -164,7 +134,6 @@ theorem harm_le_maxHarm (h : (t : ℕ) → Fin (W t).nJ → ℕ) {δ : ℝ} {l :
   rw [e]
   exact le_ciSup hb ⟨fun i => l[i].incorrect, hB⟩
 
-/-- **A run whose `P_a`s multiply to at least `δ` is in the period's confidence set.** -/
 theorem within_of_le {δ : ℝ} (ands bits : (t : ℕ) → Fin (W t).nJ → ℕ) {l : List (AuditRecV5 W)}
     (hl : ENNReal.ofReal δ ≤ (l.map AuditRecV5.pa).prod) : Within W δ ands bits l :=
   ⟨hl, harm_le_maxHarm ands hl, harm_le_maxHarm bits hl⟩

@@ -61,14 +61,7 @@ import Flock.CanonForm
 import all Init.Data.Array.Attach
 import all Init.WF
 
-/-! # The concrete statement's inputs: `Raw.ins` and `Ins.setup`
-
-`wC` is the statement's `Raw`: the `verity/flock-circuit@eb90718f` statement, the circuit file `bytesOf`, the public
-file `pubOf` at the circuit's SHA-512, no lookup table, `--zk`, one table and nothing else. `ins_W` walks `Raw.ins` on
-it to `insC`, and `setup_W` walks `Ins.setup` to `setW`, at the session's tags (`tags_rC`) and setup (`setup_rC`). The
-canonical forms the setup compares (`canon`, `canonUtf8`) exist because each value holds only integers (`IntJ`), and
-are named (`s1C`, `s3C`, `s4Of`, `s6C`, `helloC`) so that no walk evaluates them.
--/
+/-! The concrete statement's inputs: the walks of `Raw.ins` and `Ins.setup`, the setup's canonical forms named so that no walk evaluates them. -/
 
 @[expose] public section
 open Flock RecDeploy.VStarNets FlockVBridge.Names
@@ -90,7 +83,6 @@ theorem nl_data : "\n".toByteArray.data.toList = [10] := by decide +kernel
 
 theorem nl_size : "\n".toByteArray.size = 1 := by decide +kernel
 
-/-- The first newline at or after `f` in `B ++ "\n" ++ R` ends `B` when `B` has none past `f`. -/
 theorem findByte_nl (B R : ByteArray) (f : Nat) (hf : f ≤ B.size) (hB : (10 : UInt8) ∉ B.data.toList.drop f) :
     findByte (B ++ ("\n".toByteArray ++ R)) 10 f = some B.size := by
   have hn : List.findIdx? (· == (10 : UInt8)) (B.data.toList.drop f) = none :=
@@ -107,7 +99,6 @@ theorem findByte_nl (B R : ByteArray) (f : Nat) (hf : f ≤ B.size) (hB : (10 : 
   have : B.data.size = B.size := rfl
   omega
 
-/-- `maskLogOf` of a file whose first two lines are `A` and `M` reads `M`. -/
 theorem maskLog_split (A M R : ByteArray) (hA : (10 : UInt8) ∉ A.data.toList) (hM : (10 : UInt8) ∉ M.data.toList) :
     Zk.maskLogOf (A ++ ("\n".toByteArray ++ (M ++ ("\n".toByteArray ++ R)))) =
       match String.fromUTF8? M with
@@ -158,7 +149,6 @@ theorem meta_noTen : (10 : UInt8) ∉ ("META " ++ metaText).toByteArray.data.toL
 
 theorem mask_mjC : (mjC.getObjValAs? Nat "mask_log").toOption.getD 14 = 14 := by decide +kernel
 
-/-- `maskLogOf` of a file whose second line `s` parses, past its first five characters, as `j`. -/
 theorem maskLog_of (A R : ByteArray) (s : String) (hA : (10 : UInt8) ∉ A.data.toList)
     (hM : (10 : UInt8) ∉ s.toByteArray.data.toList) {j : Json} (hj : JsonParse.parse (s.drop 5).toString = .ok j) :
     Zk.maskLogOf (A ++ ("\n".toByteArray ++ (s.toByteArray ++ ("\n".toByteArray ++ R)))) =
@@ -315,7 +305,6 @@ theorem intJ_arr {a : Array Json} (h : IntJ (.arr a) = true) {x : Json} (hx : x 
   obtain ⟨l⟩ := a
   exact intJs_mem h x (Array.mem_toList_iff.2 hx)
 
-/-- **`canon` refuses only a non-integer number.** -/
 theorem canon_ok : ∀ (n : Nat) (j : Json), sizeOf j < n → IntJ j = true → (canon j).isOk = true
   | 0, _, h, _ => absurd h (Nat.not_lt_zero _)
   | n + 1, j, hs, hi => by
@@ -340,7 +329,6 @@ theorem canon_ok : ∀ (n : Nat) (j : Json), sizeOf j < n → IntJ j = true → 
       have := sizeOf_lt_of_mem_toArray p.2
       omega
 
-/-- **`canonUtf8` refuses only a non-integer number.** -/
 theorem canonUtf8_ok : ∀ (n : Nat) (j : Json), sizeOf j < n → IntJ j = true → (canonUtf8 j).isOk = true
   | 0, _, h, _ => absurd h (Nat.not_lt_zero _)
   | n + 1, j, hs, hi => by
@@ -376,8 +364,6 @@ theorem canon_eq {j : Json} (h : IntJ j = true) : canon j = .ok ((canon j).toOpt
 theorem canonUtf8_eq {j : Json} (h : IntJ j = true) : canonUtf8 j = .ok ((canonUtf8 j).toOption.getD "") :=
   ok_of_isOk _ (canonUtf8_ok _ j (Nat.lt_succ_self _) h)
 
-/-! ### `HmNets.check` at nets equal to the verifier's -/
-
 theorem checkNet_of {nets : Array (String × Net)} {n : Nat} {name what : String} {gen : Thunk (Flock.V Net)} {g : Net}
     (hg : gen.get = .ok g) (h : (nets.getD n default).2 = g) : HmNets.checkNet nets n name what gen = .ok () := by
   unfold HmNets.checkNet
@@ -393,8 +379,6 @@ theorem check_of {N1 N2 : Net} (hsha : HmNets.netOf "sha512x3" (HmNets.shaLaid (
   rw [HmNets.checkNets, checkNet_of (HmNets.sha512x3Net_get.trans hsha) h1,
     checkNet_of (HmNets.hm96Net_get.trans hhm) h2]
   rfl
-
-/-! ### Canonical forms that exist (`canon` refuses only a non-integer number) -/
 
 def s4Of (H : ByteArray) : String := (canonUtf8 (hdrJ (hexOf H))).toOption.getD ""
 
@@ -414,8 +398,6 @@ theorem hello_isOk (σ : ByteArray) (m : Nat) : (helloOf tz σ m coins0).isOk = 
   canon_ok _ _ (Nat.lt_succ_self _) (by kernel_rfl)
 
 theorem hhello_of (σ : ByteArray) (m : Nat) : helloOf tz σ m coins0 = .ok (helloC σ m) := ok_of_isOk _ (hello_isOk σ m)
-
-/-! ### The units entry -/
 
 def UEJ : Json := Json.mkObj [("vus_per_block", Lean.toJson (1 : Nat)), ("units_per_vu", Lean.toJson (1 : Nat)),
   ("indices", Json.arr #[Lean.toJson (0 : Nat)]), ("blocks", Json.arr #[Json.arr #[Lean.toJson (0 : Nat)]])]

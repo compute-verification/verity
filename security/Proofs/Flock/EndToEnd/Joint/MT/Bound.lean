@@ -22,20 +22,7 @@ import Proofs.Flock.Soundness.Audit.HarmBound
 import Proofs.Flock.Soundness.Audit.SamplingDesign
 import Proofs.Flock.Soundness.Game
 
-/-!
-# Proof of the joint stratified bound over sampling blocks of `J` tables, per sampling block and pooled
-
-The proofs of `JointStratified` and `JointStratifiedPooled` (`Joint/Bound.lean`), at `StratifiedBlockMT`:
-
-* `Flock.SecurityProofs.JointStratifiedMT`: if the sampling block's incorrect proof blocks `B` are in the confidence set, they are
-  within the one budget (`StratifiedBlockMT.within_of_le`), so the event is empty. Otherwise an accepted sampling block
-  outside the budget has a sampled proof block incorrect, at most `ε_ks + ε_bind` (`StratifiedBlockMT.accepted_drawnIncorrect_le`), or
-  its sample misses `B`, at most `B`'s missProb `< δ` under A3 (`StratifiedBlockMT.sampleMiss_le`).
-* `Flock.SecurityProofs.JointStratifiedPooledMT`: a run in which every sampling block is accepted and the incorrect proof blocks
-  are not within the period's budget either has a sampling block accepted with a sampled proof block incorrect, at most
-  `Σ_t (ε_ks,t + ε_bind,t)` by `monitoringPeriod_union`, or every sample misses with the product of the escapes below `δ`, at most
-  `δ` by `monitoringPeriod_prod`.
--/
+/-! Proofs of the joint stratified bound over sampling blocks of `J` tables, per sampling block and pooled. -/
 
 @[expose] public section
 
@@ -48,7 +35,6 @@ namespace BlockRecMT
 
 variable {W : ℕ → StratifiedBlockMT}
 
-/-- The run's escapes, multiplied, are at most `exp(−Σ spend)`. -/
 theorem escape_prod_le (l : List (BlockRecMT W)) :
     (l.map BlockRecMT.missProb).prod ≤ ENNReal.ofReal (Real.exp (-(l.map BlockRecMT.spend).sum)) := by
   induction l with
@@ -64,7 +50,6 @@ namespace StratifiedMT
 
 variable {W : ℕ → StratifiedBlockMT}
 
-/-- A run whose escapes multiply to at least `δ` holds at most the period's `maxHarm` of any weight. -/
 theorem harm_le_maxHarm (h : (t : ℕ) → Fin (W t).n → ℕ) {δ : ℝ} {l : List (BlockRecMT W)}
     (hl : ENNReal.ofReal δ ≤ (l.map BlockRecMT.missProb).prod) :
     (((l.map (BlockRecMT.harm h)).sum : ℕ) : ℝ) ≤ maxHarm W h δ l := by
@@ -80,7 +65,6 @@ theorem harm_le_maxHarm (h : (t : ℕ) → Fin (W t).n → ℕ) {δ : ℝ} {l : 
   rw [e]
   exact le_ciSup hb ⟨fun i => l[i].incorrect, hB⟩
 
-/-- **A run whose escapes multiply to at least `δ` is within the period's one budget.** -/
 theorem within_of_le {δ : ℝ} (hδ : 0 < δ) (ands bits : (t : ℕ) → Fin (W t).n → ℕ) {l : List (BlockRecMT W)}
     (hl : ENNReal.ofReal δ ≤ (l.map BlockRecMT.missProb).prod) : Within W δ ands bits l := by
   refine ⟨hl, ?_, harm_le_maxHarm ands hl, harm_le_maxHarm bits hl⟩

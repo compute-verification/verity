@@ -5,53 +5,7 @@ public import Proofs.Flock.Bridge.V5.Statement
 public import Proofs.Flock.EndToEnd.Period.Run
 public import Proofs.Flock.Soundness.Finders
 
-/-!
-# One window's sample over several members, each verified in its own session (trusted)
-
-`SampledKSLiveV5` when one window's sample covers several members, each a hidden-output `--zk --public-inputs` session of
-its own statement at one table (`SampledKSLiveV5`'s binders: its circuit file's descriptor, public input ports and public
-file, and the verifier's own recomputation `own`), as one-stage v2 verifies them. The window's audit (`JointAuditV5`)
-registers every member, samples one sample over all their proof blocks on live coins with the deployed sample
-(`Bridge.execSel`, `Spot.Draw.sampleUnits` on one stream) under the registration's sampling design (`Bridge.SamplingDesignOn`: subset,
-stratified or work, a stratum free to span members), each member's proof blocks `MemberV5.emb` into the population, and
-then runs one verity-verify-proof session per member in the registration's order, member `m` proving its part of the sample
-(`MemberV5.part`, sampled by `subset |part|`). A member's sampled count is random and may be zero. The deployed sample
-ends or runs out of the stream's bytes (`sampleEnded`), and a sample that ran out is refused: the run accepts when the
-sample ended and the session of every member with a proof block in the sample accepts (`JointAuditV5.Accepts`).
-
-A prover may read every coin it has seen, so member `m`'s session is played with a strategy that read the sample and the
-earlier members' sessions. `JointAuditV5.memberSamplingDesign` and `JointAuditV5.memberStrat` are that session played alone at the
-samples that ended: its sampling design samples the sample's coins among those at which the sample ended
-(`JointAuditV5.EndΩ`) and the earlier sessions' coins together (`seqTape`), samples member `m`'s part, and plays the
-strategy `τ` leaves for member `m`'s session there (`seqStrat`). Member `m`'s incorrect proof blocks are
-`incorrectRegZc` at V5's canonical openings in the committed trace fixed at the joint registration (`XplurZC`), at that
-play; the window's are their images in the population (`JointAuditV5.incorrectSet`), fixed by `τ` before the sample.
-
-* `JointSampledV5`, per window, `EndToEndHiddenV5`'s form: a set `W` of the population's proof blocks is incorrect in an
-  accepted run, one whose sample ended, with probability at most the sampling design's own miss of `W` (`P_a(W)` of
-  `oneStageOf samplingDesign` on the strata `ns`) plus `Σ_m (ε_ks,m + ε_bind,m)`.
-* `JointShareV5`, per window, the share form: more than an `ε` share of the population incorrect in an accepted run, at
-  most the most the sampling design misses of any such set plus the same terms.
-* `JointPooledV5`, pooled over a monitoring period of `T` such windows played by one adaptive prover: except with
-  probability `δ + Σ_t Σ_m (ε_ks,t,m + ε_bind,t,m)`, if every window is accepted, their samples miss their incorrect proof
-  blocks together with probability at least `δ` (the product of their `P_a`s), and their ANDs and output bits are each at
-  most the most any choice in that confidence set holds.
-
-`ε_ks,m` is member `m`'s knowledge term at the worst registration and `ε_bind,m` its binding term `ε_bind`, each at the
-sampling design that samples member `m`'s part of the sample (`JointAuditV5.design`), as `SampledKSLiveV5` states them. A
-member with no proof block in the sample contributes nothing to `ε_bind,m` at that sample and the empty sample's knowledge term
-to `ε_ks,m`. Each member's session has one link-point count at every sample that ended (`JointAuditV5.hcls`), which the
-registration check makes so by refusing a member whose fewest and most sampled proof blocks have different counts; a
-sample that ran out samples every proof block and is asked nothing. Nothing asks that some outcome of the sample's coins
-ends the sample: where none does, no run is accepted (`JointAuditV5.prob_accepts_of_not_ends`), no proof block of the
-window is incorrect on record (`JointAuditV5.incorrectSet` is empty) and the two SHA-512 premises ask nothing (each stands
-under `Nonempty EndΩ`). The named assumptions
-are A3 (`uniform/io-getrandombytes`) for the sample's bytes, `live-verifier` at each member (`MemberV5.hCust`,
-`RecordCustodyZKJPLaw` at `subset |S|` for its part `S`), and `cr/sha-512` (`Assumptions.TableCRZAt`) and `ecr/sha-512`
-(`Assumptions.LinkCRZCAt`) at the strategy each member's session is played with alone at the samples that ended (in a
-period, at every window's strategy on some run, `JointMonitoringPeriodV5.Plays`), stated flat. Their proofs are in
-`Joint/V5/Bound.lean`.
--/
+/-! One window's sample over several members, each verified in its own session (trusted). -/
 
 @[expose] public section
 
@@ -134,11 +88,9 @@ noncomputable def game (L : SamplingDesign m.n) : Game (Reg × Finset (Fin m.n) 
 /-- The member's program's partition into proof blocks. -/
 noncomputable def P := (keyProgP m.D.unroll m.pi m.hU m.n).partition (Discharge.Layout.outsOfP m.D.unroll m.hU m.n m.pi)
 
-/-- The member's descriptor read as a statement (`Desc.parseStmt`), from its flat parse. -/
 theorem hDS : Flock.Desc.parseStmt (zkTags m.I) m.I.circuitFile m.I.tables = .ok m.D :=
   Flock.Desc.parseStmt_of_parse m.hD
 
-/-- The member's circuit file read as its statement circuit (`HmOut.parseStmt`), from its descriptor's flat parse. -/
 theorem hcS : HmOut.parseStmt (zkTags m.I) m.I.circuitFile m.I.tables = .ok m.D.unroll :=
   Flock.Desc.parseStmt_stmt m.hDS
 
@@ -283,7 +235,6 @@ noncomputable def memberStrat (τ : Strategy w.game) (k : Fin w.ms.length) :
     (seqStrat (fun m : MemberV5 w.Reg w.nJ => m.live (m.part (w.L.draw x.1.1)) τ.1) w.ms k.1 k.2
       (Strategy.ofMap (fun ts => ((τ.1, w.ended x.1.1), w.L.draw x.1.1, ts)) _ (τ.2 x.1.1)) (x.2 x.1))⟩
 
-/-- Member `k`'s part of every sample that ended has its session's link points, played alone at `τ`. -/
 theorem oneClass_memberSamplingDesign (τ : Strategy w.game) (k : Fin w.ms.length) : (w.ms.get k).OneClass (w.memberSamplingDesign τ k) :=
   fun x => w.hcls k x.1.1 x.1.2
 
@@ -302,7 +253,6 @@ ends the sample there are none: no run is accepted there (`prob_accepts_of_not_e
 noncomputable def incorrectSet (τ : Strategy w.game) : Finset (Fin w.nJ) :=
   if _ : Nonempty w.EndΩ then Finset.univ.biUnion fun k => (w.memberIncorrect τ k).image (w.ms.get k).emb else ∅
 
-/-- Where some outcome of the stream ends the sample, the window's incorrect proof blocks are its members'. -/
 theorem incorrectSet_eq [h : Nonempty w.EndΩ] (τ : Strategy w.game) :
     w.incorrectSet τ = Finset.univ.biUnion fun k => (w.memberIncorrect τ k).image (w.ms.get k).emb :=
   dite_eq_left h

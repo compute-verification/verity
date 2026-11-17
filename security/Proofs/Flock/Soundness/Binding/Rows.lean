@@ -4,24 +4,7 @@ public import Proofs.Flock.Soundness.Binding.Layout
 public import Proofs.Flock.Level3.RowV2
 import Mathlib.Combinatorics.Matroid.Init
 
-/-!
-# `hm96-sha512/row/v1` and `/row/v2` rows: the registration fact from `HmRowComputes`
-
-A layout's rows are the commit strings under the serving roots that hold `hm96-sha512/row/v1` or `/row/v2` leaves
-(`HmRows`): the circuit hashes each one's row in `sha512x3` slots and outputs its commit string `b ‖ c` from an `hm96` slot,
-the verifier hashes the public `b ‖ c` into frame-v3-sha512 roots and holds them to the public file's header
-(`HmRow.checkPublic`, stated by `FailClosed.flock_verify_public_ties`; that the header's roots are the registration's is
-the auditor's check, `matches_public`), and the statement pins the `hm96` slots' outputs to the public `b ‖ c`
-(`HmRow.regions`). The other
-commit strings (the returned outputs, u16 words hashed in the clear) have leaf schemes of their own (`other`). A
-`/row/v2` layout's rows are bit rows (`HmRows.v2`), hashed as `sha512/row/v2` hashes them (`FlockLevel3.RowV2.enc`), whose
-injectivity on rows of fewer than `2^64` bits is `FlockLevel3.RowV2.enc_inj`.
-
-The registration fact (`Layout.Registered`) for the scheme that puts `ExplicitLeaf.hm96` at the rows (`HmRows.scheme`)
-then follows from `Assumptions.HmRowComputes` (`HmRows.registered`): the `b ‖ c` a satisfying witness holds is the commit
-string of its row and salt, and its leaf is the registered one. So the value binding (`HmRows.binding`) takes
-`HmRowComputes` and the layout's facts, and nothing cryptographic.
--/
+/-! `hm96-sha512/row/v1` and `/row/v2` rows: the registration fact from `HmRowComputes`, with nothing cryptographic. -/
 
 @[expose] public section
 
@@ -58,9 +41,6 @@ structure HmRows (lay : Layout P plan tab decode) where
 
 attribute [instance] HmRows.decRow
 
-/-- **A layout's `hm96-sha512/row/v2` rows**: `HmRows` whose rows are bit rows of fewer than `2^64` bits (`bits`,
-injective on the layout's values), hashed as `sha512/row/v2` hashes them (`FlockLevel3.RowV2.enc`), so that `enc_inj` is
-`FlockLevel3.RowV2.enc_inj` after `bits`. -/
 def HmRows.v2 {lay : Layout P plan tab decode} (isRow : lay.Pos → Prop) [DecidablePred isRow]
     (bits : lay.Val → {bs : List Bool // bs.length < 2 ^ 64}) (hbits : Function.Injective bits)
     (other : lay.Pos → ExplicitLeaf lay.Val)
@@ -108,8 +88,6 @@ def Computes : Prop :=
     (fun w => lay.salt w.S w.R w.u w.M (lay.pos w.g))
     (fun w => bytesAt (wit plan tab w.S w.R w.u w.M) (rs.bcAt w.S w.R w.u (lay.pos w.g)))
 
-/-- **The registration fact from `HmRowComputes`**: at a row, the witness's `b ‖ c` is the commit string of its row and
-salt, so hm96's leaf of them is `SHA-512(leaf_prefix ‖ b ‖ c)`, the registered leaf; elsewhere it is `other_registered`. -/
 theorem registered (hHm : rs.Computes) : lay.Registered rs.scheme := by
   intro S R u hu M hM g hg
   unfold scheme

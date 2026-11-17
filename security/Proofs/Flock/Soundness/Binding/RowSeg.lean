@@ -4,21 +4,7 @@ public import Proofs.Flock.Soundness.Binding.Leaf
 public import Flock.HmRow
 import Mathlib.Combinatorics.Matroid.Init
 
-/-!
-# `hm96-sha512/row-seg/v1` leaves, with their extractor
-
-A `sha512/row-seg/v1` row of `l` bits hashes in two levels (`HmRow.segDigest`): each segment `j` of at most 8,192 bits
-under its own first block `S(j, s, m)` (`segMsg`), then the outer message `Q(l) ‖ d₀ ‖ … ‖ d_{s-1}` of the segments'
-digests (`enc`, `segDigest_eq`). The outer message is not injective in the row, so hm96's extractor can't stop at it:
-
-* `ExplicitLeaf.hm96X` is `ExplicitLeaf.hm96` for any row bytes `enc`, given an extractor for two different values with
-  the same bytes (`hm96XPair`: that one when the bytes agree, else hm96's).
-* `extPair` is row-seg's: the messages of the first segment where two rows differ (`diffSeg`). Two rows of `l` bits that
-  differ differ in a segment (`exists_segBytes_ne`), and equal outer messages hold equal digests of every segment
-  (`digest_eq_of_enc`), so that segment's messages collide (`extPair_spec`).
-* `ExplicitLeaf.rowSeg l` is the leaf of the rows of `l` bits, and `rowSeg_treeLeaf` ties it to the executable's: the
-  `Hm96.Default512.treeLeaf` of `Hm96.Default512.commitString (HmRow.segDigest l row) salt`.
--/
+/-! `hm96-sha512/row-seg/v1` leaves, with an extractor that goes past the outer message, which is not injective in the row. -/
 
 @[expose] public section
 
@@ -27,8 +13,6 @@ namespace FlockSoundness.Binding
 open Flock Refine Merkle
 
 variable {Val : Type}
-
-/-! ## Leaves whose bytes are not injective -/
 
 /-- **hm96's extractor over row bytes `enc`**, with `ext` for two values whose bytes agree: `ext` then, else hm96's
 (`hm96Pair`) on the two rows' bytes. -/
@@ -49,8 +33,6 @@ def ExplicitLeaf.hm96X (enc : Val → List UInt8) (ext : Val → Val → List UI
     · exact hext v v' hv he
     · exact hm96Pair_spec _ _ _ _ he h
 
-/-- **`hm96X`'s leaf is the executable's**: the `Hm96.Default512.treeLeaf` of the commit string of the row digest
-`Sha512.hash (enc v)` under the salt. -/
 theorem hm96X_treeLeaf (enc : Val → List UInt8) (ext : Val → Val → List UInt8 × List UInt8)
     (hext : ∀ v v', v ≠ v' → enc v = enc v' → Collides (ext v v')) (v : Val) (salt : ByteArray) :
     ((ExplicitLeaf.hm96X enc ext hext).leaf v salt.data.toList).1 =
@@ -65,8 +47,6 @@ theorem hm96X_treeLeaf (enc : Val → List UInt8) (ext : Val → Val → List UI
       Hm96.Default512.commitString (Sha512.hash ⟨(enc v).toArray⟩) salt)
   rw [← data_append Hm96.Default512.saltPrefix salt, bytes_of_list, ← data_append, ← data_append, bytes_of_list]
   rfl
-
-/-! ## `sha512/row-seg/v1` -/
 
 namespace RowSeg
 
@@ -108,7 +88,6 @@ theorem foldl_append_data (f : ℕ → ByteArray) (a : ByteArray) (n : ℕ) :
     rw [List.range_succ, List.foldl_append, List.foldl_cons, List.foldl_nil, data_append, ih, List.flatMap_append,
       List.flatMap_singleton, List.append_assoc]
 
-/-- **`HmRow.segDigest` is SHA-512 of `enc`**: the outer hash over `Q(l)` and each segment's digest. -/
 theorem segDigest_eq (l : ℕ) (row : List UInt8) :
     HmRow.segDigest l ⟨row.toArray⟩ = Sha512.hash ⟨(enc l row).toArray⟩ := by
   let f : ℕ → ByteArray := fun j => Sha512.hash (HmRow.segmentPrefix j (count l) (HmRow.segShape l).1[j]!.1 ++
@@ -147,7 +126,6 @@ theorem div_lt_count {l i : ℕ} (hi : i < (l + 7) / 8) : i / 1024 < count l := 
   unfold count HmRow.ROW_SEG_BITS
   omega
 
-/-- **Two different rows of `l` bits differ in a segment.** -/
 theorem exists_segBytes_ne {l : ℕ} {row row' : List UInt8} (hl : row.length = (l + 7) / 8)
     (hl' : row'.length = (l + 7) / 8) (hne : row ≠ row') : ∃ j < count l, segBytes l row j ≠ segBytes l row' j := by
   by_contra hall
@@ -175,7 +153,6 @@ theorem take_drop_flatMap_range {α : Type} {k : ℕ} {f : ℕ → List α} (hf 
     · subst hj
       rw [List.drop_left' (hlen _), List.take_of_length_le (by rw [hf])]
 
-/-- **Equal outer messages hold equal digests** of every segment. -/
 theorem digest_eq_of_enc {l : ℕ} {row row' : List UInt8} (h : enc l row = enc l row') {j : ℕ} (hj : j < count l) :
     H512 (segMsg l row j) = H512 (segMsg l row' j) := by
   have hd : digests l row = digests l row' := List.append_cancel_left h
@@ -193,8 +170,6 @@ def diffSeg (l : ℕ) (row row' : List UInt8) : ℕ :=
 def extPair (l : ℕ) (row row' : List UInt8) : List UInt8 × List UInt8 :=
   (segMsg l row (diffSeg l row row'), segMsg l row' (diffSeg l row row'))
 
-/-- **row-seg's extractor outputs a SHA-512 collision** whenever two different rows of `l` bits have one outer
-message: they differ in some segment, the first such segment's messages differ, and their digests agree. -/
 theorem extPair_spec {l : ℕ} {row row' : List UInt8} (hl : row.length = (l + 7) / 8)
     (hl' : row'.length = (l + 7) / 8) (hne : row ≠ row') (h : enc l row = enc l row') :
     Collides (extPair l row row') := by
@@ -215,17 +190,12 @@ theorem extPair_spec {l : ℕ} {row row' : List UInt8} (hl : row.length = (l + 7
 
 end RowSeg
 
-/-- **The rows of `l` bits**: their bytes, `(l + 7) / 8` of them. -/
 abbrev SegRow (l : ℕ) := {row : List UInt8 // row.length = (l + 7) / 8}
 
-/-- **`hm96-sha512/row-seg/v1`'s leaf** of the rows of `l` bits: hm96 over the outer message `Q(l) ‖ d₀ ‖ … ‖ d_{s-1}`,
-with row-seg's extractor (`RowSeg.extPair`) when two rows have one outer message. -/
 def ExplicitLeaf.rowSeg (l : ℕ) : ExplicitLeaf (SegRow l) :=
   ExplicitLeaf.hm96X (fun r => RowSeg.enc l r.1) (fun r r' => RowSeg.extPair l r.1 r'.1)
     fun r r' hne he => RowSeg.extPair_spec r.2 r'.2 (fun e => hne (Subtype.ext e)) he
 
-/-- **row-seg's leaf is the executable's**: the `Hm96.Default512.treeLeaf` of the commit string of the row's
-`HmRow.segDigest` under the salt, the leaf `HmRow.checkPublic` computes from a public `b ‖ c`. -/
 theorem rowSeg_treeLeaf (l : ℕ) (r : SegRow l) (salt : ByteArray) :
     ((ExplicitLeaf.rowSeg l).leaf r salt.data.toList).1 =
       Hm96.Default512.treeLeaf (Hm96.Default512.commitString (HmRow.segDigest l ⟨r.1.toArray⟩) salt) := by
