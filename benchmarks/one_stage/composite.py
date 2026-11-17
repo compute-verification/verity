@@ -218,7 +218,7 @@ def provenance(product: str, exe: Path, tree: Path) -> dict[str, Any]:
 
 
 def two_stage_accepted(cases: Sequence[dict[str, Any]]) -> bool:
-    """Whether the sampled-proofs case is in the two-stage form and its verifier accepted it."""
+    """Whether SPOT's case is in the two-stage form and its verifier accepted it."""
     return any(p["id"] == SAMPLED and p["params"].get("form") == TWO_STAGE
                and outcome(p["id"], p["answer"])["verdict"] == "accept" for p in cases)
 
