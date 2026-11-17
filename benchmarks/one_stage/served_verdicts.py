@@ -774,9 +774,9 @@ def challenger_coins(challenger: str) -> str:
 
 #: the challengers reached through the gate's verbs: the auditor device's over ssh, or a gate command on this machine
 GATES = ("gate:", "command:")
-#: sampled proofs' key in a record's ``coins_on``, as the served table's records name them
+#: SPOT's key in a record's ``coins_on``, as the served table's records name them
 SAMPLED_NAME = "sampled-proofs"
-#: the only words a sampled-proofs row on simulated coins gives its ε at δ in
+#: the only words SPOT's row on simulated coins gives its ε at δ in
 UNDER_AUDITOR = "what the same sample would establish under an auditor's challenger"
 
 
@@ -796,20 +796,20 @@ def sampled_coins(audit: Path, key_sha512: str | None) -> str:
 
 def with_coins(report: dict[str, Any], rec: dict[str, Any] | None, line: dict[str, Any],
                coins: tuple[str, str] = ("simulated", "unnamed")) -> None:
-    """`record`'s ``report``, block record ``rec`` and line ``line`` with the sampled proofs' ``coins`` (`sampled_coins`) and
-    the machine they were flipped on: its row as `on_coins` gives it, and its leg's ``at`` on coins other than live
+    """`record`'s ``report``, block record ``rec`` and line ``line`` with SPOT's ``coins`` (`sampled_coins`) and
+    the machine they were flipped on: its row as `on_coins` gives it, and its integrity subprotocol's ``at`` on coins other than live
     said to be `UNDER_AUDITOR`'s."""
     if "integrity" not in report["protocols"]:
         return
     report["protocols"]["integrity"] = on_coins(report["protocols"]["integrity"], *coins)
     line |= {"coins": coins[0], "coins_on": {SAMPLED_NAME: coins[1]}}
-    if rec is not None and (leg := rec["legs"].get("integrity")) is not None:
-        leg |= {"coins": coins[0], "coins_on": {SAMPLED_NAME: coins[1]},
-                **({"at_is": UNDER_AUDITOR} if coins[0] != "live" else {})}
+    if rec is not None and (integrity := rec["legs"].get("integrity")) is not None:
+        integrity |= {"coins": coins[0], "coins_on": {SAMPLED_NAME: coins[1]},
+                      **({"at_is": UNDER_AUDITOR} if coins[0] != "live" else {})}
 
 
 def on_coins(row: Mapping[str, Any], coins: str, on: str) -> dict[str, Any]:
-    """The sampled-proofs row ``row`` with its ``coins`` and ``coins_on``; on simulated coins its ε and δ only as
+    """SPOT's row ``row`` with its ``coins`` and ``coins_on``; on simulated coins its ε and δ only as
     `UNDER_AUDITOR` says them."""
     out = {**row, "coins": coins, "coins_on": {SAMPLED_NAME: on}}
     if coins != "live":
@@ -2699,7 +2699,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     r.add_argument("--tree", help="the commit of the tree composing the record, which composed_on names")
     r.add_argument("--tree-on", help="the branch the composing host pinned that tree from, with --tree")
     r.add_argument("--coins-on", default="unnamed",
-                   help="the machine the sampled proofs' challenger flipped its coins on, which the record names")
+                   help="the machine SPOT's challenger flipped its coins on, which the record names")
     r.add_argument("--key-sha512", help="the challenger key's pin Pearl+'s live coins are held to for a verdict of record "
                                         "(H1_KEY_SHA512)")
     r.add_argument("--lane", default="vllm", help="the lane whose own gate key Pearl+'s live session must be reserved "

@@ -778,10 +778,10 @@ def test_spot_alone_composes_to_an_undecided_block_record(tmp_path):
 
 
 def test_a_same_machine_gate_never_reads_as_live_coins_from_an_auditor_s_challenger(tmp_path):
-    """Sampled proofs' coins are live only when the audit's case names the challenger key this machine pins
+    """SPOT's coins are live only when the audit's case names the challenger key this machine pins
     (``--key-sha512``): a gate on the prover's machine signs with its own key, so its row says ``coins`` simulated and the
     machine, gives ε at δ only as what the same sample would establish under an auditor's challenger, and so do the
-    ``RECORD`` line and the block record's leg (`with_coins`, which the ``record`` command always applies); told nothing
+    ``RECORD`` line and the block record's integrity subprotocol (`with_coins`, which the ``record`` command always applies); told nothing
     of the coins, it says the same."""
     public = bytes(range(80))
     audit = tmp_path / "audit"
@@ -797,12 +797,12 @@ def test_a_same_machine_gate_never_reads_as_live_coins_from_an_auditor_s_challen
         report, rec, line = S.record(_rows(_accepted(), tmp_path / "pieces"), window=1, steps=(5, 11), node="vy-dc-h200",
                                      run="r1")
         S.with_coins(report, rec, line, *([coins] if coins else []))
-        row, leg = report["protocols"]["integrity"], rec["legs"]["integrity"]
-        assert (row["coins"], line["coins"], leg["coins"]) == ("simulated",) * 3
+        row, sub = report["protocols"]["integrity"], rec["legs"]["integrity"]
+        assert (row["coins"], line["coins"], sub["coins"]) == ("simulated",) * 3
         if coins:
-            assert row["coins_on"] == line["coins_on"] == leg["coins_on"] == on
+            assert row["coins_on"] == line["coins_on"] == sub["coins_on"] == on
         assert (row["epsilon"], row["delta"]) == (None, None)
-        assert row[S.UNDER_AUDITOR] == {"epsilon": "1/2", "delta": "1/100"} and leg["at_is"] == S.UNDER_AUDITOR
+        assert row[S.UNDER_AUDITOR] == {"epsilon": "1/2", "delta": "1/100"} and sub["at_is"] == S.UNDER_AUDITOR
         jsonschema.Draft202012Validator(SCHEMA).validate(rec)
         assert BR.check(rec) == {}
     report, rec, line = S.record(_rows(_accepted(), tmp_path / "pieces"), window=1, steps=(5, 11), node="vy-dc-h200",

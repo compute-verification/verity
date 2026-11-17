@@ -124,8 +124,8 @@ PIN = hashlib.sha512(bytes.fromhex(PUBLIC)).hexdigest()
 
 
 @pytest.mark.parametrize("pin", [PIN, None], ids=["live coins", "simulated coins"])
-@pytest.mark.parametrize("drawn", [[1], [0, 1]], ids=["a missed member", "every member"])
-def test_a_per_member_accept_that_missed_a_member_says_the_cite_does_not_cover_it(tmp_path, drawn, pin):
+@pytest.mark.parametrize("sample", [[1], [0, 1]], ids=["a missed member", "every member"])
+def test_a_per_member_accept_that_missed_a_member_says_the_cite_does_not_cover_it(tmp_path, sample, pin):
     """A missed member and simulated coins each qualify the cite, and both stand together in one ``not_covered``."""
     product = next(iter(C.CITES))
     tree = git_tree(tmp_path / "tree", [C.CITES[product]])
@@ -137,14 +137,14 @@ def test_a_per_member_accept_that_missed_a_member_says_the_cite_does_not_cover_i
         p = put(tmp_path / f"p{n}", id, params, bytes([n]), b"{}", bytes([n]) * 64, verdict="accept")
         if id == SAMPLED:
             a = json.loads((p / "answer.json").read_text())
-            (p / "answer.json").write_text(json.dumps(a | {"public": {"bound": 1, "drawn": drawn}}))
+            (p / "answer.json").write_text(json.dumps(a | {"public": {"bound": 1, "drawn": sample}}))
         cases += ["--cases", str(p)]
     assert C.main([product, *cases, *outs(tmp_path, tree=tree), "--exe", lean(tmp_path, {"verdict": "accept"}, 0),
                    *(["--key-sha512", pin] if pin else []), "--coins-on", "cpu-6"]) == 0
     ran = json.loads((tmp_path / "public" / "composite.json").read_bytes())["ran"]
     lines = (tmp_path / "public" / "verdicts.txt").read_text().splitlines()
     assert ran["cites"] == C.CITES[product]
-    missed = {"members": {"sampled": 1, "registered": 2}} if len(drawn) == 1 else {}
+    missed = {"members": {"sampled": 1, "registered": 2}} if len(sample) == 1 else {}
     simulated = {} if pin else {"coins": "simulated", "coins_on": "cpu-6"}
     said = ([f"NOT_COVERED {SAMPLED} 1 of 2 members sampled: {C.CITES[product]} does not cover it"] if missed else []) + (
         [f"NOT_COVERED {SAMPLED} coins: simulated on cpu-6: {C.CITES[product]} does not cover it"] if simulated else [])
@@ -326,7 +326,7 @@ def test_the_check_runs_the_products_executable_on_the_private_files_and_blobs(t
 
 def remote_accepted(tmp_path: Path, tree: Path, verdict: str = "accept", rc: int = 0, public: str | None = PUBLIC,
                     pin: str | None = PIN) -> tuple[int, dict, list[str]]:
-    """Remote-v1 composed on cases Lean accepts, sampled proofs' naming the challenger key ``public`` and this machine
+    """Remote-v1 composed on cases Lean accepts, SPOT's naming the challenger key ``public`` and this machine
     pinning ``pin``."""
     params = {"challenger": {"key": {"H": 5, "W": 4, "public": public}}} if public else {}
     v1 = put(tmp_path / "v1", SAMPLED, params, b"\x01", b"{}", b"\xaa" * 64, verdict="accept")
@@ -352,7 +352,7 @@ def test_an_accept_records_its_commit_its_executable_and_the_listed_guarantee_it
 
 @pytest.mark.parametrize("public, pin", [("cd" * 80, PIN), (PUBLIC, None), (None, PIN)],
                          ids=["a key this machine doesn't pin", "no pin", "a case naming no key"])
-def test_sampled_proofs_on_any_challenger_but_the_pinned_one_keep_the_cite_qualified_as_simulated(tmp_path, public, pin):
+def test_spot_on_any_challenger_but_the_pinned_one_keeps_the_cite_qualified_as_simulated(tmp_path, public, pin):
     """A challenger on the prover's machine (vllm's one-node gate) signs with a key of its own: the record says the
     coins are simulated whenever the case's key isn't the one this machine pins, a missing pin or key included, and the
     accept's cite stays, qualified by a ``NOT_COVERED`` line and ``ran.not_covered`` naming the coins and the machine."""

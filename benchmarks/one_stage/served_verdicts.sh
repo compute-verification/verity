@@ -671,7 +671,7 @@ v3c_gated() { [[ $V3C_CHALLENGER == gate:* || $V3C_CHALLENGER == command:* ]]; }
 # the gate opens once, ever, and V3c's is the SPOT audit of record
 SP_CHALLENGER=${PP_CHALLENGER:-local}
 [ -n "$V3C" ] && v3c_gated && SP_CHALLENGER=local
-coins_on() {  # the machine the sampled proofs' challenger flips its coins on, which the record names
+coins_on() {  # the machine SPOT's challenger flips its coins on, which the record names
   local c=$SP_CHALLENGER
   [ -z "$V3C" ] || c=$V3C_CHALLENGER
   case $c in gate:*) echo "${c#*@}" ;; *) echo "${V3C_AUDITED:-${SERVED_NODE:-$PP_PEER}}" ;; esac

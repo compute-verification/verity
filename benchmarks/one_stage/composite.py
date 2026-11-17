@@ -45,7 +45,7 @@ naming the missing case). Such a run is labelled ``NOT_ESTABLISHED``, naming wha
 controls: `served_composite.sh`): ``composite.json`` carries ``development`` WHY, and ``DEVELOPMENT WHY`` is the first
 line of its ``verdicts.txt`` and of what it prints after its ``COMPOSITE`` line.
 
-``composite.json`` says the sampled proofs' ``coins``: ``live`` only when their case's challenger key is the one this
+``composite.json`` says SPOT's ``coins``: ``live`` only when their case's challenger key is the one this
 machine pins (``--key-sha512``), else ``simulated``, and ``coins_on`` the machine (``--coins-on``). On simulated coins an
 accept's cite is kept and qualified: ``ran.not_covered`` names the coins and the machine, as does a ``NOT_COVERED``
 line.
@@ -258,7 +258,7 @@ def unestablished(p: dict[str, Any]) -> str | None:
 
 
 def sampled_coins(cases: Sequence[dict[str, Any]], key_sha512: str | None) -> str | None:
-    """``live`` when the sampled-proofs case's challenger key (its params' ``challenger.key``) is the one this machine pins
+    """``live`` when SPOT's case's challenger key (its params' ``challenger.key``) is the one this machine pins
     (``key_sha512``), else ``simulated``, a case naming no key and no pin included; None with no such case."""
     for p in cases:
         if p["id"] != SAMPLED:
@@ -382,9 +382,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--public-out", type=Path, required=True, help="verdicts, commitment digests and params digests only")
     ap.add_argument("--exe", help="the product's executable, to run its check")
     ap.add_argument("--development", help="why this composite claims no record: its outputs lead with it")
-    ap.add_argument("--key-sha512", help="the challenger key this machine pins: sampled proofs' coins are simulated unless "
+    ap.add_argument("--key-sha512", help="the challenger key this machine pins: SPOT's coins are simulated unless "
                                          "their case's challenger key is it")
-    ap.add_argument("--coins-on", default="unnamed", help="the machine sampled proofs' challenger flipped its coins on")
+    ap.add_argument("--coins-on", default="unnamed", help="the machine SPOT's challenger flipped its coins on")
     ap.add_argument("--tree", type=Path, default=Path(__file__).resolve().parents[2],
                     help="the checkout the executable was built from (default: this file's)")
     return run(ap.parse_args(argv))
