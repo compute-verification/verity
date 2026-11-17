@@ -59906,7 +59906,7 @@
    }
   },
   "Spot.LinkPoints": {
-   "digest": "8eb146e59962bafa269dc8cf0007f88aadc68ff7fb0e5a5b1ccc055ca00871cf",
+   "digest": "395cfbb6e63dcd7791f42678685a6124ba052b8ea9c359df94f00a9457ec21a7",
    "definitions": {
     "Spot.LinkPoints.NEVER_ENDS": "dbadf67581df496783ff4b5c517c168d5a3c38bdccc07706fff7b539050d3d99",
     "Spot.LinkPoints.bounds": "61c7de30eefd176851a10c9fa84d26ef1106c2d3bef17735a7bb78f6739a68e0",
@@ -59914,7 +59914,7 @@
     "Spot.LinkPoints.ends": "c9e3d42a7b1bebe4d8aecbc9c04886acbc2832a8970fdc8c76524c10b7819c59",
     "Spot.LinkPoints.nbl": "c290004880b57a8b0dd92c3d62a73a83030fa259bce7db9e5150707b90a5f465",
     "Spot.LinkPoints.overlap": "11352d0a004e3899fa19933517a0bda0866774b88283b8e40edcc9b4174561b4",
-    "Spot.LinkPoints.refused": "db0bddf21e2b863e39a4aacbb7b9f91d8d88d4c5419e7badfac7d116c9592861",
+    "Spot.LinkPoints.refused": "ab2b9a865897523dc68a29369be83d81ef459858f2cf3b0327fae36265a292bf",
     "Spot.LinkPoints.samplingDesignOf": "6b6ce51f077e814797d54957f4637a8179d939eccd4d3d7e0ed04d7e376c04fd",
     "Spot.LinkPoints.size": "c5778b1bd9dafaec374b911cfca0350fa6ba75586b40a0db480cea482813e277",
     "Spot.LinkPoints.strataEnded": "e4d070b4afd27bc42ac6b7ad62fd78993f2f75a323b9ad37fa0d22a58c968c7d"
