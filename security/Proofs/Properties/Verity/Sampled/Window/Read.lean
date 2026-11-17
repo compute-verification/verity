@@ -188,7 +188,7 @@ theorem executionPhaseSpotSound_sessions (K : ExecutionPhaseConstructions V) (T 
       (fun W _ _ _ _ _ => sessionDecoders reg (tb W) filesDec)
       (executionPhaseSampleMaps fieldEnc V (sessionReadings tb ev record₀ recordDigest) label (afterAt V k)
         fun W => W.srcCoinsAt nc)) S)
-    (hCov : ExecutionPhaseCovers V k S)
+    (hCov : ExecutionPhaseCovers V k S) (hTwo : TwoStageBound V k)
     (hP : ∀ θ F W, S θ F = some W → ∀ o : Exchange, o.params = θ → Lines.PrintsLog (dev o) o.log)
     (hS : ∀ θ F W, S θ F = some W → ∀ c, Binding.SignsPlay V dev θ F c)
     (hL : ∀ θ F W, S θ F = some W → W.Lb 0 = nc * 64)
@@ -202,7 +202,7 @@ theorem executionPhaseSpotSound_sessions (K : ExecutionPhaseConstructions V) (T 
         (CoinTape.run (V.game θ F c) σ z)) :
     V.SpotSound k :=
   executionPhaseSpotSound_assembled V k fieldEnc (sessionReadings tb ev record₀ recordDigest) K T dev
-    (fun W _ _ _ _ _ => sessionDecoders reg (tb W) filesDec) label nc hD hCov
+    (fun W _ _ _ _ _ => sessionDecoders reg (tb W) filesDec) label nc hD hCov hTwo
     (fun W θ F c σ => StepInv V θ F c W (sessionReadings tb ev record₀ recordDigest W θ F c) σ
       (executionPhaseSampleMaps fieldEnc V (sessionReadings tb ev record₀ recordDigest) label (afterAt V k)
         (fun W => W.srcCoinsAt nc) W θ F c σ))
