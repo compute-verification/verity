@@ -1,4 +1,4 @@
-"""Remote's configuration (`demos/remote.toml`) under the table (`served_table.py`): `verity run --dry-run` resolves
+"""Remote's configuration (`applications/remote.toml`) under the table (`served_table.py`): `verity run --dry-run` resolves
 every party, Pearl+'s included, and without bindings names the three Pearl+ lacks; the runner's variables under remote
 are Pearl+'s, onsite's carry none of them; Pearl+'s class is refused by name when it disagrees with the workload's slots
 or window-steps, and its uniform tie is asked for only by its parameter. The runner is a stand-in written by the test."""
@@ -13,8 +13,8 @@ from verity.protocols.proofs.spot.verifier import parties as SP
 from verity_cli import run as R
 
 ROOT = Path(R.ROOT)
-CONFIG = ROOT / "demos" / "remote.toml"
-ONSITE = ROOT / "demos" / "onsite_full.toml"
+CONFIG = ROOT / "applications" / "remote.toml"
+ONSITE = ROOT / "applications" / "onsite_full.toml"
 REG = R.registry()
 T = sys.modules["served_table"]
 PP = SP.IDS["pearl-plus"]
