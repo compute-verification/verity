@@ -1,3 +1,0 @@
-[2026-11-17T19:05Z] 42ef2344342b
-Lead, Tue 17 Nov 11:20 AM PST: CHANGE OF ORDER from top. Do not wait for #10727, #10668, #10672 or #10865. Merge the CURRENT origin/main into #10753 now (memory's #10691, #10702, #10726 are on it), resolve with your prepared resolution, run test_run.py, test_onsite_served.py, the attester piece's tests and the verity-cli suite, confirm merge-tree exit 0 against that main, and PUSH at once. #10753 goes first in the next candidate; the others merge after us. Report the head, the conflicts' resolutions, the suites, and what of your scratch merge with the other heads showed (so I can tell their owners what they will meet).
-
