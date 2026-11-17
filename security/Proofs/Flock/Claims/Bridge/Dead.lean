@@ -7,21 +7,7 @@ import Mathlib.Data.List.GetD
 import Mathlib.MeasureTheory.Integral.Bochner.Basic
 import VCVio.Prelude.Core
 
-/-!
-# A simulation's dead branches, answered with a fixed message
-
-A simulation (`Refine.Sim`) plays, past a live branch on which no live run is accepted, any model strategy (`Sim.dead`).
-`Sim.mapDead f` replaces each such strategy `σ` by `f σ`, and the transfer holds of the result (`Sim.prob_le_mapDead`),
-since a dead branch's live probability is `0` whatever the model plays there. `answerWith nul` is the transformer that
-answers every message of `nul`'s type with `nul` and plays `σ` elsewhere: at the salted session, empty openings, so a
-dead branch opens nothing.
-
-`Sim.All R D d` says what a simulation's nodes satisfy: `R` at each return, of the live and the model outcome, and `D`
-at each dead branch, of its model game and strategy. When every return's model outcome in an event `Q` has its live
-outcome in `P`, and no dead branch reaches `Q`, the model's `Q` against the simulated strategy is no likelier than the
-live `P` (`Sim.prob_le_of_all`). A dead branch at the tables' positions answered with `nul` reaches only outcomes whose
-every table's output is at the openings `nul` (`OutN`, `OutN.of_posOf`, `prob_posOf_answerWith`).
--/
+/-! A simulation's dead branches, answered with a fixed message. -/
 
 @[expose] public section
 
@@ -40,7 +26,6 @@ noncomputable def answerWith {α Op : Type} (nul : Op) : (g : Game α) → Strat
     else ⟨σ.1, answerWith nul (k σ.1) σ.2⟩ : (m : M) × Strategy (k m))
   | @Game.coin _ _ _ _ k, σ => fun c => answerWith nul (k c) (σ c)
 
-/-- **The dead branches' strategies replaced** by `f`'s. -/
 def Sim.mapDead {β α : Type} {pL : β → Prop} {pg : α → Prop} (f : (g : Game α) → Strategy g → Strategy g) :
     {L : Game β} → {g : Game α} → Sim pL pg L g → Sim pL pg L g
   | _, _, .ret h => .ret h
@@ -49,17 +34,11 @@ def Sim.mapDead {β α : Type} {pL : β → Prop} {pg : α → Prop} (f : (g : G
   | _, _, .coin e k => .coin e fun c => Sim.mapDead f (k c)
   | _, _, .dead h σ => .dead h (f _ σ)
 
-/-- **The transfer with the dead branches replaced**: the live verdict is no likelier than the model's against the
-simulated strategy. -/
 theorem Sim.prob_le_mapDead {β α : Type} {pL : β → Prop} {pg : α → Prop} (f : (g : Game α) → Strategy g → Strategy g)
     {L : Game β} {g : Game α} (d : Sim pL pg L g) (s : Strategy L) :
     prob pL L s ≤ prob pg g ((Sim.mapDead f d).strategy s) :=
   Sim.prob_le _ s
 
-/-! ## What a simulation's nodes say -/
-
-/-- **Every node of a simulation**: `R` of each return's live and model outcomes, `D` of each dead branch's model
-game and strategy. -/
 def Sim.All {β α : Type} {pL : β → Prop} {pg : α → Prop} (R : β → α → Prop) (D : (g : Game α) → Strategy g → Prop) :
     {L : Game β} → {g : Game α} → Sim pL pg L g → Prop
   | _, _, @Sim.ret _ _ _ _ b a _ => R b a
@@ -83,7 +62,6 @@ theorem Sim.All.mono {β α : Type} {pL : β → Prop} {pg : α → Prop} {R R' 
   | _, _, .coin _ k, h => fun c => Sim.All.mono hR hD (k c) (h c)
   | _, g, .dead _ σ, h => hD g σ h
 
-/-- The dead branches replaced: the returns as they were, each dead branch's new strategy as `f` makes it. -/
 theorem Sim.all_mapDead {β α : Type} {pL : β → Prop} {pg : α → Prop} (f : (g : Game α) → Strategy g → Strategy g)
     {R : β → α → Prop} {D D' : (g : Game α) → Strategy g → Prop} (hD : ∀ g σ, D g σ → D' g (f g σ)) :
     ∀ {L : Game β} {g : Game α} (d : Sim pL pg L g), Sim.All R D d → Sim.All R D' (Sim.mapDead f d)
@@ -105,9 +83,6 @@ theorem Sim.all_castR {β α : Type} {pL : β → Prop} {pg : α → Prop} {R : 
   subst h
   exact hd
 
-/-- **The transfer of a model event to a live one.** When every return's model outcome satisfying `Q` has its live
-outcome satisfying `P`, and no dead branch's strategy reaches `Q`, the model's `Q` against the simulated strategy is
-no likelier than the live `P`. -/
 theorem Sim.prob_le_of_all {β α : Type} {pL : β → Prop} {pg : α → Prop} {P : β → Prop} {Q : α → Prop} :
     ∀ {L : Game β} {g : Game α} (d : Sim pL pg L g),
       Sim.All (fun b a => Q a → P b) (fun g σ => prob Q g σ = 0) d →
@@ -129,8 +104,6 @@ theorem Sim.prob_le_of_all {β α : Type} {pL : β → Prop} {pg : α → Prop} 
       rw [h']
       exact zero_le
 
-/-! ## Outcomes when every message of one type is fixed -/
-
 /-- `OutN nul g b`: `b` is an outcome of `g` on a path every message of `nul`'s type on which is `nul`. -/
 inductive OutN {Op : Type} (nul : Op) : {β : Type} → Game β → β → Prop
   | ret {β : Type} (b : β) : OutN nul (.ret b) b
@@ -139,8 +112,6 @@ inductive OutN {Op : Type} (nul : Op) : {β : Type} → Game β → β → Prop
   | coin {β C : Type} {iF : Fintype C} {iN : Nonempty C} {k : C → Game β} (c : C) {b : β} :
       OutN nul (k c) b → OutN nul (@Game.coin β C iF iN k) b
 
-/-- **`answerWith nul` reaches only `OutN nul` outcomes**: on a game every message type of which is inhabited, an
-event no such outcome satisfies has probability `0` against it. -/
 theorem prob_answerWith {α Op : Type} (nul : Op) {Q : α → Prop} :
     ∀ {g : Game α}, AllInh g → (∀ a, OutN nul g a → ¬ Q a) → ∀ σ : Strategy g, prob Q g (answerWith nul g σ) = 0
   | .ret a, _, h, _ => by classical simp only [prob]; simp [h a (.ret a)]
@@ -220,7 +191,6 @@ theorem OutN.of_KgJ {P OutT Cp Op : Type} {J : ℕ} (out : Fin J → Cp → P ×
     rw [hm rfl]
     rfl
 
-/-- **At the tables' positions**, an `OutN nul` outcome is every table's output at its openings `nul`. -/
 theorem OutN.of_posOf {P OutT Cp Op : Type} {J : ℕ} (out : Fin J → Cp → P × P → Op → OutT) (nul : Op)
     (caps : Fin J → Cp) (gs : Fin J → Fin 2 → Game P) (dflt : OutT) {outs : List OutT}
     (h : OutN nul (posOf out caps gs) outs) (j : Fin J) :
@@ -240,7 +210,6 @@ theorem OutN.out {Op β : Type} {nul : Op} {g : Game β} {b : β} (h : OutN nul 
   | send m _ _ ih => exact .send m ih
   | coin c _ ih => exact .coin c ih
 
-/-- `OutN.of_posOf`, with each table's reps' outcomes `pend` outcomes of their games at the positions. -/
 theorem OutN.of_posOf_out {P OutT Cp Op : Type} {J : ℕ} (out : Fin J → Cp → P × P → Op → OutT) (nul : Op)
     (caps : Fin J → Cp) (gs : Fin J → Fin 2 → Game P) (dflt : OutT) {outs : List OutT}
     (h : OutN nul (posOf out caps gs) outs) (j : Fin J) :
@@ -254,8 +223,6 @@ theorem OutN.of_posOf_out {P OutT Cp Op : Type} {J : ℕ} (out : Fin J → Cp �
   rw [List.getD_eq_getElem _ _ (hl ▸ j.isLt)]
   exact OutN.of_KgJ out hk
 
-/-- `prob_posOf_answerWith` for an event no outcome satisfies whose reps' outcomes are outcomes of their games at the
-positions. -/
 theorem prob_posOf_answerWith_out {P OutT Cp Op : Type} [Nonempty Op] {J : ℕ}
     (out : Fin J → Cp → P × P → Op → OutT) (nul : Op) (caps : Fin J → Cp) {gs : Fin J → Fin 2 → Game P}
     (hg : ∀ j r, AllInh (gs j r)) (dflt : OutT) {Q : List OutT → Prop}
@@ -264,8 +231,6 @@ theorem prob_posOf_answerWith_out {P OutT Cp Op : Type} [Nonempty Op] {J : ℕ}
     (σ : Strategy (posOf out caps gs)) : prob Q (posOf out caps gs) (answerWith nul _ σ) = 0 :=
   prob_answerWith nul (allInh_posOf out caps hg) (fun outs h => hQ outs (OutN.of_posOf_out out nul caps gs dflt h)) σ
 
-/-- **No dead branch at the tables' positions reaches `Q`** when it answers the openings with `nul`, for an event `Q`
-no outcome with every table's openings `nul` satisfies. -/
 theorem prob_posOf_answerWith {P OutT Cp Op : Type} [Nonempty Op] {J : ℕ} (out : Fin J → Cp → P × P → Op → OutT)
     (nul : Op) (caps : Fin J → Cp) {gs : Fin J → Fin 2 → Game P} (hg : ∀ j r, AllInh (gs j r)) (dflt : OutT)
     {Q : List OutT → Prop} (hQ : ∀ outs, (∀ j : Fin J, ∃ pend, outs.getD j dflt = out j (caps j) pend nul) → ¬ Q outs)

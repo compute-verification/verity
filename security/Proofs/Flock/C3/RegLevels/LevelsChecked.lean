@@ -17,20 +17,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.C3.PubRows.Shape
 import Proofs.Flock.Soundness.Discharge.ZkExec.Setup
 
-/-!
-# n11: `regReads_of_check`'s `hlv` at R's levels, from check 5
-
-`regReads_of_check` and `regCols_of_check` (`OpensRegs.lean`) read an R level's unit where `checkStackedLevel` passes at
-its reads file (`hlv`). `ChecksC3`'s check 5 (`RecCoins.check` on each statement a session sets up) gives it:
-
-* `stackedLevel_of_check`: at a unit named `rec-open-stacked/l<L>-h<H>` (`RecCoins.stackedParams`), `RecCoins.check`
-  passes only with candidate 3's `C3` held, and is `checkStackedLevel` at it;
-* `CoinsAccepted`: where a session accepts, a transcript it accepts passes check 5 at some `C3` and source
-  (`CoinsChecked`); `coinsAccepted_checked`: at the checked family, as `checksAccepted_checked`;
-* `stackedLevel_of_accepted`: so at an accepted session whose unit is one of R's levels, `checkStackedLevel` passes at
-  its reads file (its first table's statement has its circuit, `setup_zero_c`); `levels_of_accepted`: at each of R's
-  levels of a map `M` (`StackedParams`).
--/
+/-! `regReads_of_check`'s `hlv` at R's levels, from `RecCoins.check`. -/
 
 @[expose] public section
 
@@ -40,9 +27,6 @@ open FlockSoundness FlockSoundness.Discharge FlockSoundness.Discharge.Recursion
 open Game Audit Exec Refine Model ZkSession ZkLink ZkExec Composed ZkReg
 open Flock FlockLevel3 Accounting ZkBind Integrate Placed StrictCR DecodeZL FlockVBridge.Compiled FlockC3.Compose
 
-/-- **`RecCoins.check` at one of R's levels is `checkStackedLevel`**: at a unit named `rec-open-stacked/l<L>-h<H>`
-(`stackedParams`), check 5 passes only where the verifier holds candidate 3's transcript and shape (`c3`), and then
-`checkStackedLevel` passes at them. -/
 theorem stackedLevel_of_check {sj : Flock.Stmt} {own : Array Flock.Registered.Port}
     {coins : Option Flock.RecCoins.Source} {c3 : Option Flock.RecCoins.C3}
     (h : Flock.RecCoins.check sj (some own) coins c3 = .ok ()) {LANES H : ℕ}
@@ -62,21 +46,15 @@ variable {nT r : ℕ} {T : Fin nT → Type} {CT : Fin r → Type} [∀ k, Fintyp
 
 local notation "ℐ" => holoInnerAt T CT st hp
 
-/-- **Check 5 at a session's statements** (`ChecksC3`'s third conjunct): `RecCoins.check` passes on each statement the
-session's record sets up, at the reads `own`, the source `coins` and candidate 3's `c3`. -/
 def CoinsChecked (c3 : Option Flock.RecCoins.C3) (coins : Option Flock.RecCoins.Source) (I : Inputs)
     (own : Array Flock.Registered.Port) (t : Exec.Transcript) : Prop :=
   ∃ spec sts, setupOf (zkInputs I) t.record = .ok (spec, sts) ∧
     sts.forM (Flock.RecCoins.check · (some own) coins c3) = .ok ()
 
-/-- **Where a session accepts, a transcript it accepts passes check 5** at some `C3` and source (`CoinsChecked`). -/
 def CoinsAccepted (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂) : Prop :=
   ∀ R ω t R₂ j, (∃ tr', AcceptsZKR (F.zs R ω t R₂ j).I (F.zs R ω t R₂ j).own tr') →
     ∃ tr' c3 coins, CoinsChecked c3 coins (F.zs R ω t R₂ j).I (F.zs R ω t R₂ j).own tr'
 
-/-- **The checked family passes check 5 where a session accepts**: a checked session that accepts kept its own list, so
-a transcript it accepts passes `ChecksC3`, whose third conjunct check 5 is (`checks_of_keepOwn`, as
-`checksAccepted_checked`). -/
 theorem coinsAccepted_checked {ish : RecVStar.Inner} {ss : Array VStar.Stmt}
     {hss : RecVStar.statements ish = .ok ss} {bind : Fin (vstarCount ish) → VStar.Bindings}
     {Vs : Fin (vstarCount ish) → VStmt} {hob : VStarParsesScoped Flock.Tags.circuit ish bind Vs}
@@ -99,9 +77,6 @@ theorem coinsAccepted_checked {ish : RecVStar.Inner} {ss : Array VStar.Stmt}
       exact ⟨_, _, spec, sts, hs, hco⟩) hex
   exact ⟨tr', hc⟩
 
-/-- **`regReads_of_check`'s `hlv` at an accepted session whose unit is one of R's levels** (`stackedLevel_of_check`):
-check 5 passes on the first table's statement, which has the session's circuit (`setup_zero_c`), so
-`checkStackedLevel` passes at the session's reads file, at some `C3` and public file. -/
 theorem stackedLevel_of_accepted {F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂} (hco : CoinsAccepted F)
     {dg : ByteArray → ByteArray} {N k Rw : ℕ} {R : Reg} {ω : L.Ω} {t : List (Cm × (ℐ).Coin)} {R₂ : Reg₂}
     {τ o}
@@ -116,8 +91,6 @@ theorem stackedLevel_of_accepted {F : C3Family T CT st hp xR L Reg Cm Reg' Reg�
   rw [hc0] at hlv
   exact ⟨c3, _, hlv⟩
 
-/-- **`hlv` at each of R's levels** (`stackedLevel_of_accepted` at `StackedParams`): at an accepted outcome, level
-`ℓ`'s session of the map `M` passes `checkStackedLevel` at `levelLanes` and `d - cap`. -/
 theorem levels_of_accepted {F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂} (hco : CoinsAccepted F)
     {stmt : Fin (vstarCount F.ish) → VStar.Stmt} (M : FlockC3.Reps.StackedMaps stmt F.Vs) {sh : Flock.Shape}
     (hP : StackedParams M sh) {dg : ByteArray → ByteArray} {N k Rw : ℕ} {R : Reg} {ω : L.Ω}

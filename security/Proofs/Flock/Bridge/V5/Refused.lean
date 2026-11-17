@@ -34,18 +34,8 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# `SampledKSLiveV5R`'s roots guard, read off `verify --zk`'s acceptance
-
-`verify --zk` refuses a public file two of whose ports' published roots are one root under different published domains
-(`Flock.PortRoots.collidesPub`), with or without shared rows. Each port's published root (`PortRoots.pubRoot`) is over
-its published domain and its table's rows, or one row per unit, at its schema: the root `rootsOfL` gives it at the
-public file's leaf map. So the refusal is `RootFixesDomainL` at that leaf map, the guard of V5's bound
-`SampledKSLiveV5R` (V5 itself pays for it with `ecr/sha-512` at the roots finder).
-
-* `rootsOfL_ofPublic_getD`: `rootsOfL` at `LeafMap.ofPublic` over the file's population is `pubRoot`'s.
-* `fixesL_of_collidesPub_false`: `collidesPub = false` is `RootFixesDomainL` there.
--/
+/-! `SampledKSLiveV5R`'s roots guard (`RootFixesDomainL`), read off `verify --zk`'s refusal of colliding
+published roots. -/
 
 @[expose] public section
 
@@ -53,8 +43,6 @@ namespace Flock.Bridge
 
 open Properties.Certifier.Bytes (bs bs_inj)
 
-/-- **The verifier's published roots are `rootsOfL`'s at the public file's leaf map**: port `q`'s published root
-(`Flock.PortRoots.pubRoot`) is `rootsOfL`'s at `LeafMap.ofPublic` over the file's population. -/
 theorem rootsOfL_ofPublic_getD (c : Flock.Circuit) (pub : Flock.Public) {q : ℕ} (hq : q < c.ports.size) :
     (rootsOfL c (LeafMap.ofPublic c pub pub.n)).getD q [] = bs (Flock.PortRoots.pubRoot c pub q) := by
   have hg : (rootsOfL c (LeafMap.ofPublic c pub pub.n)).getD q [] = bs (Flock.FV3.root
@@ -65,8 +53,6 @@ theorem rootsOfL_ofPublic_getD (c : Flock.Circuit) (pub : Flock.Public) {q : ℕ
     LeafMap.ofPublic leavesL
   cases pub.tables <;> rfl
 
-/-- **No colliding pair in the verifier's published roots fixes each root's domain**: `RootFixesDomainL` at the public
-file's leaf map over its population, with or without shared rows. -/
 theorem fixesL_of_collidesPub_false {c : Flock.Circuit} {pub : Flock.Public}
     (h : Flock.PortRoots.collidesPub c pub = false) : RootFixesDomainL c (LeafMap.ofPublic c pub pub.n) := by
   intro q q' hlt hq he

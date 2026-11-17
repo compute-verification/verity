@@ -20,22 +20,7 @@ import Proofs.Flock.Soundness.Discharge.ZkHidden.Sched
 import Proofs.Flock.Soundness.Refine.Seam
 import Proofs.Flock.Soundness.Refine.Setup
 
-/-!
-# Piece (a): the executable's parameters meet the runs lemma's hypotheses
-
-`holo_runs_sound` (`C3/Fork/Runs.lean`) is candidate 3's table in the form `RecursiveAuditHolo` reads: at a statement
-no table near the registered word makes true, two of an inner prover's runs clash, one opens R's level 0 to a row other
-than the word's (`RegClash`), or the table accepts with probability at most `holoError`. It composes the reps' count,
-the sparse phase's (`sparse_sound`, `C3/Fork/Sparse.lean`) and R's opening at unique decoding (`regOpen_sound`,
-`C3/Fork/RegOpen.lean`). `RecursiveAuditHolo` is about the word the prover's own runs open
-(`Recursive/RegExtract.lean`), whose registrant's openings it does not have, so its pick (`clashPickHL`) reads only
-clashes of two runs, and a `RegClash` is a fork against the run that opened the word (`regClash_fork`,
-`C3/Fork/Extract.lean`).
-
-* `holoAt_fast100`, `holoAt_linkLayout`, `holoAt_rsch`, `holoAt_units`: the executable parameters (`holoAt st hp`) meet
-  `holo_runs_sound`'s hypotheses, as `compiledForkSound_execClassAt` does for `execClassAt`; `holoAtτ_*` are the same
-  at a typing `τv`.
--/
+/-! The executable's parameters (`holoAt st hp`) meet `holo_runs_sound`'s hypotheses. -/
 
 @[expose] public section
 
@@ -48,7 +33,6 @@ open scoped ENNReal
 variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K] {D Sl : Type}
 variable {nT r : ℕ} (T : Fin nT → Type) (CT : Fin r → Type) [∀ k, Fintype (CT k)] [∀ k, Nonempty (CT k)]
 
-/-- **The reps' schedule at the executable's parameters is `fast100`'s**, at a statement whose class checks pass. -/
 theorem holoAt_fast100 {st : Flock.Stmt} (hp : HoloParams) (h : ClassOk (shapeOf st)) :
     Accounting.fast100 (holoAt st hp).cls.m = some (holoAt st hp).sch := by
   obtain ⟨-, -, _, hs⟩ := ClassOk.of_shape h
@@ -64,8 +48,6 @@ theorem holoAt_fast100 {st : Flock.Stmt} (hp : HoloParams) (h : ClassOk (shapeOf
   rw [e]
   exact hsch
 
-/-- **Every table's statement at the executable's parameters has the link layout**, at a statement whose class checks
-pass: the regions and link points are `execClassAt st`'s (`Refine.stmtOf_linkLayout`), and no table changes them. -/
 theorem holoAt_linkLayout {st : Flock.Stmt} (hp : HoloParams) (h : ClassOk (shapeOf st)) :
     ∀ R : RegTable (holoAt st hp).cls,
       (R.toStatement (holoAt st hp).τ (holoAt st hp).regs).LinkLayout (holoAt st hp).cls.ptLocal
@@ -79,8 +61,6 @@ theorem holoAt_linkLayout {st : Flock.Stmt} (hp : HoloParams) (h : ClassOk (shap
   have e : execClassAt st = ExecClass.ofStmt st h := dif_pos h
   exact fun _ => hl _ e
 
-/-- **R's registered schedule at the executable's parameters is empty or `fast100`'s at `mReg`**: `schedAt mReg`, which
-is `fast100`'s where it covers `mReg` and the default (empty levels) elsewhere, or the default. -/
 theorem holoAt_rsch (st : Flock.Stmt) (hp : HoloParams) :
     (holoAt st hp).rsch.sch.levels = [] ∨
       Accounting.fast100 (holoAt st hp).cls.shape.mReg = some (holoAt st hp).rsch.sch := by
@@ -107,8 +87,6 @@ theorem holoAt_rsch (st : Flock.Stmt) (hp : HoloParams) :
   · rw [e, if_neg hl]
     exact Or.inl rfl
 
-/-- **Every unit slot at the executable's parameters is within the table**: `HoloClass.ofExec` keeps the units below
-`2^(k_log − ℓ)`. -/
 theorem holoAt_units (st : Flock.Stmt) (hp : HoloParams) :
     ∀ σ, ∀ u ∈ (holoAt st hp).cls.units σ, u < 2 ^ ((holoAt st hp).cls.kLog - (holoAt st hp).cls.slotLog) := by
   intro σ u hu
@@ -116,14 +94,11 @@ theorem holoAt_units (st : Flock.Stmt) (hp : HoloParams) :
       u < 2 ^ ((execClassAt st).cls.kLog - (if hp.EllOk (execClassAt st).cls.kLog then hp.ell else 6)) := hu
   exact (Finset.mem_filter.1 hu').2
 
-/-- **`holoAt_fast100` at the typing `τv`**: `holoAtτ`'s class and schedule are `holoAt st hp`'s own. -/
 theorem holoAtτ_fast100 {st : Flock.Stmt} (hp : HoloParams) (h : ClassOk (shapeOf st))
     (τv : Fin (2 ^ hp.sLog) → Fin (2 ^ hp.tLog)) :
     Accounting.fast100 (holoAtτ st hp τv).cls.m = some (holoAtτ st hp τv).sch :=
   holoAt_fast100 hp h
 
-/-- **`holoAt_linkLayout` at the typing `τv`**: the layout reads nothing of the typing, so the proof is
-`holoAt_linkLayout`'s at `holoAtτ`'s fields. -/
 theorem holoAtτ_linkLayout {st : Flock.Stmt} (hp : HoloParams) (h : ClassOk (shapeOf st))
     (τv : Fin (2 ^ hp.sLog) → Fin (2 ^ hp.tLog)) :
     ∀ R : RegTable (holoAtτ st hp τv).cls,
@@ -138,13 +113,11 @@ theorem holoAtτ_linkLayout {st : Flock.Stmt} (hp : HoloParams) (h : ClassOk (sh
   have e : execClassAt st = ExecClass.ofStmt st h := dif_pos h
   exact fun _ => hl _ e
 
-/-- **`holoAt_rsch` at the typing `τv`**: R's registered schedule is `holoAt st hp`'s own. -/
 theorem holoAtτ_rsch (st : Flock.Stmt) (hp : HoloParams) (τv : Fin (2 ^ hp.sLog) → Fin (2 ^ hp.tLog)) :
     (holoAtτ st hp τv).rsch.sch.levels = [] ∨
       Accounting.fast100 (holoAtτ st hp τv).cls.shape.mReg = some (holoAtτ st hp τv).rsch.sch :=
   holoAt_rsch st hp
 
-/-- **`holoAt_units` at the typing `τv`**: the unit slots are `holoAt st hp`'s own. -/
 theorem holoAtτ_units (st : Flock.Stmt) (hp : HoloParams) (τv : Fin (2 ^ hp.sLog) → Fin (2 ^ hp.tLog)) :
     ∀ σ, ∀ u ∈ (holoAtτ st hp τv).cls.units σ,
       u < 2 ^ ((holoAtτ st hp τv).cls.kLog - (holoAtτ st hp τv).cls.slotLog) :=

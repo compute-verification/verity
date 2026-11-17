@@ -19,38 +19,8 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 import Proofs.Flock.Soundness.Registered.Binding
 
-/-!
-# The value tie: a registrant's row at a value the verifier registers itself is the verifier's, or SHA-512 collides
-
-`checkValue` (`RecCoins.checkValue`) accepts a port the verifier registers itself (`coef`, `dirs`) only when the
-registered root is the frame-v3-sha512 root of the verifier's own rows (`checkRows_root`, at any salt: `checkValue`'s
-`verifierSalt`, `checkZero`'s `zeroSalt`, whose zero rows the same ties cover). A registrant's record opens
-that root at the row's position (`ReadsX.committed`), so the registrant's row is the verifier's, or one of three
-SHA-512 bindings breaks, each with both preimages in hand:
-
-* the opening (frame-v3-sha512 against the root the verifier computes): `FV3.root` is a full tree (`lev`, `root_eq`), so
-  every leaf climbs to it through its siblings in the verifier's tree (`sibsV`, `climb_sibsV`), and two climbs from two
-  leaves to one root collide in a leaf's or a node's frame (`openPairV`, `climbPair_collides`);
-* the leaf preimage (`Hm96.Default512.treeLeaf`, `Registered.rowLeaf`) and `RecCoins.commitRow`'s row digest and salt
-  digest: one hm96 leaf over two rows' bytes is `hm96Pair`'s collision (`treeLeaf_commitRow`, `hm96Pair_spec`).
-
-`valueColl` computes the pair from public data and the registrant's record, and `valueColl_spec`, `tie_read`,
-`value_tie` are its spec, in knowledge form: the registrant's bits are the verifier's row's (`bits_of_rowInV`), or
-`valueColl` outputs two different SHA-512 inputs with one digest. `dirs_tie` is `dirs_of_check` without its `hval`.
-At the reads it takes `hone`, `hpos` and `hseg`, VBridge's `PartPortsOne`, `ReadsOwn` and `ReadsUnsegmented` at the
-read, which acceptance does not give.
-
-`tie_root` is `tie_read` at a root given as the verifier's tree over `rows` (`hroot`), in place of `checkValue`'s.
-`salt_tie` is link (d) at R's level 0: a read whose leaf is a node's commit string under the held salts (`TopOf`) is
-the node's row, or `saltFinder`'s pair collides (`Recursive/SaltFinder.lean`, where `rowInV` lives so the guarantee
-reads it). `valueColl` and the tree it climbs (`lev`, `sibsV`, `openPairV`, `leavesV`) are defined in
-`Recursive/ValueSrc.lean`, for the same reason.
-
-`valueColl` evaluates SHA-512 at most `3n + 2^(D+1) + 2D + 7` times, `n` the rows and `D = log2ceil n`: the
-verifier's tree once (`4n` for the leaves, row digest, salt digest, `treeLeaf` and `rowLeaf` each; `2^D - n` pads;
-`2^D - 1` nodes), the two hm96 leaves (3 each), the two frame-v3 leaves (2) and the climb (2 a level, `2D`). A row of
-`w` words hashes `128 · (1 + ⌈w/64⌉)` bytes; every other input is at most 3 blocks.
--/
+/-! The value tie: a registrant's row at a value the verifier registers itself is the verifier's, or SHA-512
+collides. -/
 
 @[expose] public section
 
@@ -61,8 +31,6 @@ open FlockSoundness FlockSoundness.Audit FlockSoundness.Discharge FlockSoundness
 open FlockSoundness.Refine (H512)
 open FlockSoundness.Binding (hm96Input hm96Pair hm96Pair_spec hm96_treeLeaf)
 open FlockSoundness.Discharge.HiddenExec (encPortH)
-
-/-! ## `FV3.root`'s tree -/
 
 theorem fold_lev (dom : ByteArray) (leaves : Array ByteArray) : ∀ k s,
     (List.range' s k).foldl (fun a d => up dom d a) (lev dom leaves s) = lev dom leaves (s + k)
@@ -91,7 +59,6 @@ theorem le_nextPow2 (n : ℕ) : n ≤ nextPow2 n := by
     rw [Nat.pow_succ]
     omega
 
-/-- **`FV3.root` is the top of the tree** `lev`. -/
 theorem root_eq (dom : ByteArray) (leaves : Array ByteArray) :
     FV3.root dom leaves Sha512.hash = (lev dom leaves (log2ceil leaves.size)).getD 0 ByteArray.empty := by
   unfold FV3.root
@@ -164,7 +131,6 @@ theorem climb_lev (dom : ByteArray) (leaves : Array ByteArray) {i : ℕ} (hi : i
     rw [List.range'_succ, List.map_cons, Registered.climbL, key, ← hj, show s + (k + 1) = s + 1 + k by omega]
     exact climb_lev dom leaves hi k (s + 1) (by omega)
 
-/-- **Leaf `i` climbs to `FV3.root`** through its siblings in the tree (`sibsV`). -/
 theorem climb_sibsV (dom : ByteArray) (leaves : Array ByteArray) {i : ℕ} (hi : i < leaves.size) :
     Registered.climbL dom leaves[i]! i 0 (sibsV dom leaves i) = FV3.root dom leaves Sha512.hash := by
   have hp := le_nextPow2 leaves.size
@@ -202,8 +168,6 @@ theorem sibsV_size (dom : ByteArray) (leaves : Array ByteArray) (h : ∀ x ∈ l
   rw [getElem!_pos (lev dom leaves d) _ hlt2]
   exact lev_width dom leaves h d _ (Array.getElem_mem _)
 
-/-- Two different 64-byte payloads whose leaves at `pos` climb to one root: `openPairV` collides
-(`Registered.opensLeaf_binding`'s argument, on sibling lists). -/
 theorem openPairV_collides {dom : ByteArray} {pos : ℕ} {x y : ByteArray} {s t : List ByteArray} (hx : x.size = 64)
     (hy : y.size = 64) (hne : x ≠ y) (hl : s.length = t.length) (hs : ∀ z ∈ s, z.size = 64)
     (ht : ∀ z ∈ t, z.size = 64)
@@ -219,8 +183,6 @@ theorem openPairV_collides {dom : ByteArray} {pos : ℕ} {x y : ByteArray} {s t 
   · rename_i hl'
     exact Registered.climbPair_collides dom _ _ _ _ pos 0 hl hs ht (Sha512.hash_size _) (Sha512.hash_size _) hl' h
 
-/-! ## The verifier's rows -/
-
 theorem leavesV_size (dom : ByteArray) (rows : Array (Array ℕ)) (salt : ℕ → ByteArray) :
     (leavesV dom rows salt).size = rows.size := by simp [leavesV]
 
@@ -235,9 +197,6 @@ theorem eq_of_not_bne {a b : ByteArray} (h : ¬ (a != b) = true) : a = b := by
   have hb : (a == b) = true := by simpa [bne] using h
   exact ByteArray.ext (beq_iff_eq.1 (hb : (a.data == b.data) = true))
 
-/-- **What `checkRows` checked of the registered root**: the reads file's entry `reg` of the port, of `rows.size`
-leaves, unit `i` reading row `i`, whose root is `FV3.root` of the verifier's rows under `salt` of META's
-`program_sha512` (`checkValue`'s `verifierSalt`, `checkZero`'s `zeroSalt`). -/
 theorem checkRows_root {salt : String → ℕ → ByteArray} {c : Flock.Circuit} {pub : Flock.Public}
     {own : Array Registered.Port} {port value : String} {rows : Array (Array ℕ)} {what : ℕ → String}
     (h : RecCoins.checkRows salt c pub own port value rows what = .ok ()) :
@@ -275,8 +234,6 @@ theorem checkRows_root {salt : String → ℕ → ByteArray} {c : Flock.Circuit}
     · cases h
   · cases h
 
-/-! ## What `commitRow` hashes -/
-
 theorem foldl_bytes : ∀ (ws : List ℕ) (pre : ByteArray),
     (ws.foldl (fun b w => (b.push (w % 256).toUInt8).push (w / 256 % 256).toUInt8) pre).data.toList =
       pre.data.toList ++ wordBytes ws
@@ -293,7 +250,6 @@ theorem rowDigest_eq (row : Array ℕ) :
   rw [← Array.foldl_toList, foldl_bytes]
   rfl
 
-/-- **`commitRow`'s tree leaf is hm96's leaf over `rowInV`** (`hm96_treeLeaf`). -/
 theorem treeLeaf_commitRow (row : Array ℕ) (salt : ByteArray) :
     Hm96.Default512.treeLeaf (RecCoins.commitRow row salt) = (H512 (hm96Input (rowInV row) salt.data.toList)).1 := by
   rw [RecCoins.commitRow, rowDigest_eq]
@@ -310,8 +266,6 @@ theorem capRow_size {top : ByteArray} (htop : top.size = 64) : (capRow top).size
   rw [capRow, topRows_of_size htop]
   simp
 
-/-- **A 64-byte node's commit string is `commitRow`'s of its row**: the row is 64 words, a whole block, so `commitRow`
-pads nothing. -/
 theorem commitRow_capRow {top : ByteArray} (htop : top.size = 64) (s : ByteArray) :
     RecCoins.commitRow (capRow top) s = Hm96.Default512.commitString (ZkServer.rowDigest (capRow top)) s := by
   unfold RecCoins.commitRow RecCoins.padTo Registered.rowWords
@@ -353,9 +307,6 @@ theorem testBit_hi (w t : ℕ) (ht : t < 8) : ((w / 256 % 256).toUInt8).toNat.te
     Nat.testBit_div_two_pow]
   simp [ht]
 
-/-- **The bits of a row whose bytes are the verifier's row's**: where a value's row bytes under a first block of 128
-bytes (`rowEncP`) are what `commitRow` hashes for `row` (`rowInV`), its bit `b` is bit `b % 16` of the row's word
-`b / 16`, zero past the row. -/
 theorem bits_of_rowInV {pre : ℕ → ByteArray} (hl : ∀ w, (pre w).data.toList.length = 128) {W : ℕ}
     {v : Layout.BitVal W} {row : Array ℕ} (h : Layout.rowEncP pre v = rowInV row) (b : ℕ) (hb : b < W) :
     v.2 ⟨b, hb⟩ = (row[b / 16]!).testBit (b % 16) := by
@@ -386,16 +337,12 @@ theorem bits_of_rowInV {pre : ℕ → ByteArray} (hl : ∀ w, (pre w).data.toLis
   · rw [hv.2 ⟨b, hb⟩ (by simp only; omega), getElem!_neg ws (b / 16) (by have := hv.1; omega)]
     simp
 
-/-! ## The extractor -/
-
 theorem some_collides {o : Option (List UInt8 × List UInt8)} {p : List UInt8 × List UInt8} (h : o = some p)
     (hc : FlockSoundness.Binding.Collides p) : ∃ a b, o = some (a, b) ∧ a ≠ b ∧ H512 a = H512 b := by
   obtain ⟨a, b⟩ := p
   exact ⟨a, b, h, hc⟩
 
-/-- **`valueColl`'s spec**: where the registered root is the verifier's (`hroot`), of `hm96-sha512/row/v1` rows (`hs`),
-and the registrant's hm96 leaf of `r` under `y` opens it at `i` (`opensLeaf`), `r` is the verifier's row's bytes, or
-`valueColl` collides. -/
+/-- `valueColl` evaluates SHA-512 at most `3n + 2^(D+1) + 2D + 7` times, `n` the rows and `D = log2ceil n`. -/
 theorem valueColl_spec {reg : Registered.Port} {rows : Array (Array ℕ)} {salt : ℕ → ByteArray} {i : ℕ}
     {r y : List UInt8} {path : ByteArray}
     (hroot : FV3.root reg.domain (leavesV reg.domain rows salt) Sha512.hash = reg.root) (hn : reg.leaves = rows.size)
@@ -433,8 +380,6 @@ theorem valueColl_spec {reg : Registered.Port} {rows : Array (Array ℕ)} {salt 
       (Registered.sibs_size hp) (sibsV_size _ _ (leavesV_width _ _ _) hiV) hcl
     exact some_collides rfl (FlockSoundness.Registered.collides_bytes _ hcol)
 
-/-! ## At a registrant's record -/
-
 section Reads
 
 variable {C : Verity.Boolean.Circuit} {n : ℕ} {P : Audit.Partition C n} {Reg : Type} {mPts : ℕ}
@@ -443,10 +388,6 @@ variable {C : Verity.Boolean.Circuit} {n : ℕ} {P : Audit.Partition C n} {Reg :
   {decode : Audit.Partition.DecoderB (C := C) (Reg := Reg) plan tab}
   {lay : FlockSoundness.Binding.Layout P plan tab decode} {rs : FlockSoundness.Binding.HmRowsX lay}
 
-/-- **A registered read of a value the verifier registers itself**: where `checkRows` accepted the port `port` at
-the verifier's `rows` under `salt`, the read's root is the reads file's one entry of that name (`hone`), and that entry's
-position for unit `u` is the read's (`hpos`), the read is of row `u`, and its row bytes are the verifier's row's
-(`rowInV`), or `valueColl` collides. -/
 theorem tie_read (rd : FlockSoundness.Registered.ReadsX lay rs) {p : lay.Pos} (hp : rd.isRead p)
     {salt : String → ℕ → ByteArray} {c : Flock.Circuit} {pub : Flock.Public} {own : Array Registered.Port}
     {port value : String} {rows : Array (Array ℕ)} {what : ℕ → String}
@@ -470,10 +411,6 @@ theorem tie_read (rd : FlockSoundness.Registered.ReadsX lay rs) {p : lay.Pos} (h
     exact rd.committed p hp
   · cases hpos
 
-/-- **A registered read of a root that is the verifier's tree over `rows`** (`tie_read` with the root in place of
-`checkValue`): where the read's port's root is `FV3.root` of `rows` under `salt` (`hroot`) over `rows.size` leaves
-(`hn`) of `hm96-sha512/row/v1` rows (`hs`), the read is of a row of `rows`, and its row bytes are that row's
-(`rowInV`), or `valueColl` collides. -/
 theorem tie_root (rd : FlockSoundness.Registered.ReadsX lay rs) {p : lay.Pos} (hp : rd.isRead p)
     {rows : Array (Array ℕ)} {salt : ℕ → ByteArray}
     (hroot : FV3.root (rd.port p).domain (leavesV (rd.port p).domain rows salt) Sha512.hash = (rd.port p).root)
@@ -487,11 +424,6 @@ theorem tie_root (rd : FlockSoundness.Registered.ReadsX lay rs) {p : lay.Pos} (h
   rw [← hn]
   exact ho.1.1
 
-/-- **A registered read of R's level-0 top at the held salts** (link (d) at level 0): where `bcs` are `cap`'s commit
-strings under `salt`, the salts the prover's workers committed R's level-0 top rows under (`TopOf`,
-`registrant-holds-openings`), and the read's leaf is `treeLeaf` of `bcs`'s string at its position (the table row the
-verifier holds there), the read's row bytes are that node's row's (`rowInV`), or its hm96 pair against the node under
-`salt` collides (`ReadsX.SaltClash`, `saltFinder`'s event). -/
 theorem salt_tie (rd : FlockSoundness.Registered.ReadsX lay rs) {p : lay.Pos} (hp : rd.isRead p)
     {lv : FlockSoundness.Accounting.Level} {cap : FlockSoundness.Model.Cap FlockSoundness.Refine.Dig}
     {salt : ℕ → ByteArray} {bcs : Array ByteArray} (htop : TopOf lv cap salt bcs) (hi : rd.readAt p < bcs.size)
@@ -511,18 +443,13 @@ theorem salt_tie (rd : FlockSoundness.Registered.ReadsX lay rs) {p : lay.Pos} (h
 
 end Reads
 
-/-! ## At V*'s sessions -/
-
 section Session
 
 variable {mPts nv J : ℕ} {Reg' : Type} {c : Flock.Circuit} {hU : Built c.unit} {hscope : Layout.scopeOk c = true}
   {Lv : SamplingDesign nv} (zo : ZkOuter mPts nv J Reg' c hU hscope Lv)
 
-/-- **A registrant's row at a value the verifier registers itself is the verifier's, or SHA-512 collides**: at a
-registered read `(u, q)` of a port without segments, where `checkRows` accepted the port at the verifier's `rows` under
-`salt` (at any public file: the tie reads only the registered root),
-the read is of row `u` and the registrant's bit `b` is bit `b % 16` of the row's word `b / 16` (R's `hval` at the read),
-or `valueColl` outputs two different SHA-512 inputs with one digest. -/
+/-- At any public file: the tie reads only the registered root. It takes `hone`, `hpos` and `hseg` (VBridge's
+`PartPortsOne`, `ReadsOwn` and `ReadsUnsegmented` at the read) as hypotheses, which acceptance does not give. -/
 theorem value_tie {salt : String → ℕ → ByteArray} {port value : String} {rows : Array (Array ℕ)} {what : ℕ → String}
     {pub : Flock.Public} (h : RecCoins.checkRows salt c pub zo.own port value rows what = .ok ()) {prog : String}
     (hprog : c.metaJ.getObjValAs? String "program_sha512" = .ok prog) {u : Fin nv} {q : Fin c.ports.size}
@@ -543,10 +470,6 @@ theorem value_tie {salt : String → ℕ → ByteArray} {port value : String} {r
       rowInV rows[u.val]! := (congrFun (FlockVBridge.Family.encPortH_of_none hseg) _).symm.trans he
   exact bits_of_rowInV (FlockVBridge.Family.rowPre_length _) he' b _
 
-/-- **An accepted `rec-open-stacked` unit's `dirs` are its openings' positions' bits, or SHA-512 collides**
-(`dirs_of_check` without `hval`): at the level `ℓ` the unit names and a registered read `(u, q)` of its `dirs` port
-(without segments), the read is of opening `u`, and the registrant's bit `b < H` is bit `b` of the verifier's
-position (`dirsRow pos H`'s), at every valid `H` (`H ≤ 32`), or `valueColl` collides. -/
 theorem dirs_tie {c3 : RecCoins.C3} {LANES H : ℕ} (h : RecCoins.checkStackedLevel c3 c zo.pub zo.own LANES H = .ok ())
     {o : RecCoins.RegisteredOpening} (hop : RecCoins.opening c3 c.unit.name = .ok o) {ℓ : ℕ} (hℓ : ℓ < o.sh.sched.levels.size)
     (hL : 2 ^ (o.sh.sched.levels[ℓ]!).lanes = LANES)

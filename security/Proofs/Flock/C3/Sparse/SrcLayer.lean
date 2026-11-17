@@ -18,24 +18,7 @@ import Mathlib.Tactic.ReduceModChar
 import Proofs.Flock.VBridge.Sparse.Unit
 import Proofs.Flock.Verifier.HmNets
 
-/-!
-# The sparse tie at V*'s layer
-
-`SparseTie` states a RecSparse unit's rows as `LaidRows` of `RecSparse.unitLaid` at some columns `v`. Here `v` is read
-off V*'s layer, as `ResLayer` does for `RecResiduals`: a copy's columns of the unit `check_sparse` accepted
-(`RecSparse.unitNet sh = .ok c.unit`), with each message column no computed row reads (`ReadCol`) set to its bit of `w`.
-
-* `inWords_sparse`, `rowCol_lt_nInS`: the laid-out unit's input rows are `sparseInBits`', and the message ports' columns
-  are input columns of the verifier's unit. `nw_le_msum`, `nv_le`: `w` and the verifier row have no more elements than
-  the message ports and `v`'s port hold.
-* `laid_sparseR`: if the unit's rows hold at `z` with 1 at the constant, and `z` holds `w` at the message columns some
-  computed row reads, `vv` on `v`'s and the slots' types on `tau`'s, then `z` with each unread message column set to its
-  bit of `w` gives `LaidRows` and `SparseIn`, and agrees with `z` from `sparseBase` on (`sat_of_read`).
-* `decode_sparseR`: the same at copy `j` of unit `u` in V*'s layer, the inputs registered bits (`RegBit`) and the
-  outputs read in the layer (`copyVal`).
-* `SparseTieL`, `sparseTie_of_layer`: `SparseTie` with the unit a copy in a good layer, its inputs registered and its
-  residuals' output columns 0 there, in place of `LaidRows`; it gives `SparseTie`.
--/
+/-! The sparse tie at V*'s layer. -/
 
 @[expose] public section
 
@@ -68,14 +51,12 @@ theorem offset_last_le (nm : String) (n : ℕ) : ∀ l : List (String × ℕ),
     · rw [offset_cons_ne _ _ ha]
       omega
 
-/-- `w`'s elements are at most the message ports'. -/
 theorem nw_le_msum (sh : Flock.RecSparse.Shape) : nw (shOf sh) ≤ ((messagePorts sh).map (·.2)).sum := by
   obtain ⟨l, hl⟩ : ∃ l, messagePorts sh = l ++ [("claim", 1)] := ⟨_, rfl⟩
   have h := offset_last_le "claim" 1 l
   rw [← hl, (mp_offsets sh).2.2.2.2.2.2] at h
   exact h
 
-/-- The verifier row's elements are at most `v`'s port's. -/
 theorem nv_le (sh : Flock.RecSparse.Shape) : FlockVBridge.Sparse.nv (shOf sh) ≤ Flock.RecSparse.nv sh := by
   rw [nv_eq sh, sum_degs sh]
   unfold FlockVBridge.Sparse.nv
@@ -88,7 +69,6 @@ theorem nv_le (sh : Flock.RecSparse.Shape) : FlockVBridge.Sparse.nv (shOf sh) �
     simp only [vEqp, vUr, vAy, vAx, vAlpha, pLog_shOf, shOf_ell, Flock.RecSparse.Shape.PP]
     omega
 
-/-- **The message ports' columns are input columns** of the verifier's `rec-sparse` unit. -/
 theorem rowCol_lt_nInS {c : Flock.Circuit} (hU : Built c.unit) {sh : Flock.RecSparse.Shape} {name : String}
     (hn : Flock.HmNets.netOf name (Flock.RecSparse.unitLaid sh) = .ok c.unit) {q : ℕ}
     (hq : q < 128 * ((messagePorts sh).map (·.2)).sum) : rowCol (messagePorts sh) 0 q < (Rows.ofNet hU).nIn := by
@@ -104,10 +84,6 @@ theorem rowCol_lt_nInS {c : Flock.Circuit} (hU : Built c.unit) {sh : Flock.RecSp
   rw [hN]
   omega
 
-/-- **The verifier's laid-out `rec-sparse` unit at its read columns** (`laid_partR`'s construction): when its rows hold
-at `z` with 1 at the constant, and `z` holds `w` at the message columns some computed row reads, `vv` on `v`'s and with
-`T > 1` the slots' types on `tau`'s, `z` with each unread message column set to its bit of `w` still satisfies the rows
-(`sat_of_read`), so it gives `LaidRows` and `SparseIn`, and it agrees with `z` past the inputs. -/
 theorem laid_sparseR {net : Flock.Net} (hB : Built net) (sh : Flock.RecSparse.Shape) {name : String}
     (hn : Flock.HmNets.netOf name (Flock.RecSparse.unitLaid sh) = .ok net) (hu : net.unitLog ≤ 32)
     (hlt : ∀ q < 128 * ((messagePorts sh).map (·.2)).sum, rowCol (messagePorts sh) 0 q < (Rows.ofNet hB).nIn)
@@ -179,9 +155,6 @@ open FlockVBridge.Decode
 variable {mPts nU J : ℕ} {Reg' : Type} {c : Flock.Circuit} {hU : Built c.unit} {hscope : Layout.scopeOk c = true}
   {Lv : SamplingDesign nU} (zo : ZkOuter mPts nU J Reg' c hU hscope Lv)
 
-/-- **Copy `j` of the verifier's `rec-sparse` unit in V*'s layer** (`laid_sparseR` at `sat_copy` of `fill`): the
-message columns some computed row reads registered bits of `w`, `v`'s of `vv` and `tau`'s of the slots' types give
-`LaidRows` and `SparseIn` at columns that agree with the copy's in the layer from `sparseBase` on. -/
 theorem decode_sparseR {bits : Fin (Layout.keyN c hU nU) → Bool} (hA : zo.RegAgree bits) (u : Fin nU) {j : ℕ}
     (hj : j < c.upv) (hone : bits (Const.Prog.oneAt (Placed.keyProg c hU nU) u) = true)
     (sh : Flock.RecSparse.Shape) (hn : Flock.RecSparse.unitNet sh = .ok c.unit) (hu : c.unit.unitLog ≤ 32)
@@ -231,10 +204,8 @@ variable {mPts nU J : ℕ} {Reg' : Type} {cc : Flock.Circuit} {hU : FlockSoundne
   {hscope : FlockSoundness.Discharge.Layout.scopeOk cc = true} {Lv : FlockSoundness.Audit.SamplingDesign nU}
   (zo : FlockSoundness.Discharge.Recursion.ZkOuter mPts nU J Reg' cc hU hscope Lv)
 
-/-- **(B)'s tie at V*'s layer**: `SparseTie`'s message words `w` and coins `c`, with the unit copy `j` of unit `un` of
-V*'s layer `zo` at `bits`: its circuit passes `RecSparse.check` at the session's shape, the copy's message columns some
-computed row reads are registered bits of `w`, `v`'s of the verifier row at `c` and with `T > 1` `tau`'s of the slots'
-types, and its residuals' output columns are 0 in the layer (`SparseTieLAt`, at those `w` and `c`). -/
+/-- The sparse tie at V*'s layer, at message words `w` and coins `c`: the copy's circuit passes
+`RecSparse.check` at the session's shape and its residuals' output columns are 0 in the layer. -/
 abbrev SparseTieLAt (bits : Fin (FlockSoundness.Discharge.Layout.keyN cc hU nU) → Bool) (e : ExecHolo) (u : C3Run e)
     (i : Fin 2) (w : Array Flock.F128) (c : SCoins) : Prop :=
   ∃ (un : Fin nU) (j : ℕ) (hj : j < cc.upv),
@@ -261,8 +232,6 @@ def SparseTieL (bits : Fin (FlockSoundness.Discharge.Layout.keyN cc hU nU) → B
     (i : Fin 2) : Prop :=
   ∃ (w : Array Flock.F128) (c : SCoins), SparseTieLAt zo bits e u i w c
 
-/-- **The tie at a good layer is the tie**, at the same `w` and `c` (`decode_sparseR`): `w` and the verifier row are 0
-past their sizes, which the message ports and `v`'s port cover (`nw_le_msum`, `nv_le`). -/
 theorem sparseTieAt_of_layer {bits : Fin (FlockSoundness.Discharge.Layout.keyN cc hU nU) → Bool} (hG : zo.Good bits)
     {e : ExecHolo} {u : C3Run e} {i : Fin 2} {w : Array Flock.F128} {c : SCoins} (h : SparseTieLAt zo bits e u i w c) :
     SparseTieAt e u i w c := by
@@ -280,7 +249,6 @@ theorem sparseTieAt_of_layer {bits : Fin (FlockSoundness.Discharge.Layout.keyN c
     (w := (w[·]!)) (vv := ((verifierRow e.cls.shape c)[·]!)) (τ := ((tauArr e)[·]!)) hrw hrv hrt hw0 hv0
   exact ⟨cc, v, hw, hc, hpub, hh, hs, hck, hpar, hL, hin, fun t ht => (hout t).trans (h0 t ht)⟩
 
-/-- `sparseTieAt_of_layer` at the layer's witnesses. -/
 theorem sparseTie_of_layer {bits : Fin (FlockSoundness.Discharge.Layout.keyN cc hU nU) → Bool} (hG : zo.Good bits)
     {e : ExecHolo} {u : C3Run e} {i : Fin 2} (h : SparseTieL zo bits e u i) : SparseTie e u i :=
   h.elim fun w h => h.elim fun c h => ⟨w, c, sparseTieAt_of_layer zo hG h⟩

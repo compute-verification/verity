@@ -16,17 +16,7 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 
-/-!
-# `SrcOK` at the reps' normalized tied source
-
-The source is `tiedSrc (normSrc (repsOfVals stp sh rep vals))`: the step source `stp` with its reps read off the
-values (`repsOfVals`), its salts and its openings from stratum 3 on set to defaults (`normSrc`), and its stages'
-outputs tied (`tiedSrc`). `srcOK_repsOfVals` is `srcOK_tied_norm` there: the reps' part is read by
-`repsMsgsRead_repsOfVals` (from `CapRead` and `TsRead`), and the openings at strata 0 and 1 by
-`opensReadAt_repsOfVals` (from `OpensOfLayers`). The other hypotheses are `srcOK_tied_norm`'s at
-`tiedSrc (repsOfVals stp sh rep vals)`: the committed rounds' read facts, the openings at R's stratum, `LigWhole`, and
-the shapes' types. The reps' tie carries over to the same source by `srcRepTie_norm`.
--/
+/-! `SrcOK` at the reps' normalized tied source. -/
 
 @[expose] public section
 
@@ -46,9 +36,6 @@ variable {nT r : ℕ} {T : Fin nT → Type} {CT : Fin r → Type} [∀ k, Fintyp
 
 local notation "ℐ" => holoInnerAt T CT st hp
 
-/-- **`SrcOK` at the reps' normalized tied source** `tiedSrc (normSrc (repsOfVals stp sh rep vals))`, from the cap's
-and the reps' rounds' reads (`CapRead`, `TsRead`), the values' openings read off the layers (`OpensOfLayers`), and
-`srcOK_tied_norm`'s other hypotheses at `tiedSrc (repsOfVals stp sh rep vals)`. -/
 theorem srcOK_repsOfVals {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'}
     {dg : ByteArray → ByteArray} {N k Rw : ℕ}
     {stp : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → C3Run (holoAt st hp)}

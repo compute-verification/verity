@@ -36,22 +36,7 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Soundness.Game
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# The live plain session decided by verity-verify-proof, and the old salted transfer
-
-`LiveZk` without `--zk`: the live session (`Live.liveV`) decided by verity-verify-proof's verdict on the transcript `wr x o`
-the outcome is written as, every SHA-512 call of the verdict an oracle query (`Hashes.oc`, `DeployOC`):
-
-* `verdictPL I t`: `Accepts`' steps as an `OC` program: the session's statement set up from `I` and the record's sample,
-  then `verifyWithM Hashes.oc`. `verdictPL_eval`: against `H`, it accepts exactly when `verifyWith (hOf H)` does;
-  `verdictPL_sha`: against SHA-512 (`shaH`), exactly when `Accepts` holds.
-* `Pr_acc_plain`: `Claims.run`'s acceptance with an event `Q` of the outcome, against SHA-512, is `liveSession`'s
-  probability of `Accepts I (wr x o) ∧ Q o`, the event the old theorems bound.
-* `Pr_acc_plain_le`: so the old salted transfer (`live_le_sessionBLJ`) bounds it by the salted session's acceptance
-  against the simulated strategy, whenever every table's decoder is right on the outcomes verity-verify-proof accepts.
-
-As in `LiveZk`, the setup reads `setupOf`'s pure SHA-512, a function of what the verifier reads.
--/
+/-! The live plain session decided by verity-verify-proof, and the salted transfer. -/
 
 @[expose] public section
 
@@ -60,7 +45,7 @@ namespace Claims.Bridge.LivePlain
 open FlockSoundness FlockSoundness.Game FlockSoundness.Discharge FlockSoundness.Discharge.Tables
   FlockSoundness.Discharge.Exec Claims.Bridge.Live Claims.Bridge.LiveZk
 
-/-- **verity-verify-proof's verdict as an oracle program**: `Accepts`' setup, then the verifier over `OC`. -/
+/-- The setup's SHA-512 (`setupOf`'s) is not an oracle query: it is a function of what the verifier reads. -/
 def verdictPL (I : Inputs) (t : Exec.Transcript) : OC Bool :=
   match setupOf I t.record with
   | .error _ => .ret false
@@ -70,7 +55,6 @@ def verdictPL (I : Inputs) (t : Exec.Transcript) : OC Bool :=
         | .ok () => true
         | .error _ => false)
 
-/-- **Against `H`, it is `verifyWith (hOf H)`'s verdict.** -/
 theorem verdictPL_eval (H : Msg → Msg) (I : Inputs) (t : Exec.Transcript) :
     ((verdictPL I t).eval H).1 = true ↔ ∃ spec sts, setupOf I t.record = .ok (spec, sts) ∧
       _root_.Flock.verifyWith (hOf H) spec (sts.map _root_.Flock.Setup.ofCircuit) t.record t.proofs = .ok () := by
@@ -90,7 +74,6 @@ theorem verdictPL_eval (H : Msg → Msg) (I : Inputs) (t : Exec.Transcript) :
     rcases _root_.Flock.verifyWith (hOf H) spec (sts.map _root_.Flock.Setup.ofCircuit) t.record t.proofs with
       e | ⟨⟩ <;> simp [OC.eval]
 
-/-- **Against SHA-512, it is verity-verify-proof's acceptance.** -/
 theorem verdictPL_sha (I : Inputs) (t : Exec.Transcript) : ((verdictPL I t).eval shaH).1 = true ↔ Accepts I t := by
   rw [verdictPL_eval, hOf_shaH]
   unfold Accepts
@@ -98,8 +81,6 @@ theorem verdictPL_sha (I : Inputs) (t : Exec.Transcript) : ((verdictPL I t).eval
   rw [_root_.Flock.verify_eq_verifyWith_of_returns (_root_.Flock.With.setupTables_named _ _ _ _ _ _ _ _ _ _ _ _ _) h1]
 
 open Classical in
-/-- **Acceptance with an event of the outcome, at verity-verify-proof**: `Pr_r[run = acc ∧ Q(outcome)]` against SHA-512 is
-`liveSession`'s probability that verity-verify-proof accepts the written transcript and `Q` holds. -/
 theorem Pr_acc_plain (nMax : ℕ) (J mPts N : Msg → ℕ) (dg : ByteArray → ByteArray)
     (w : (x : Msg) → Wire nMax (J x) (mPts x)) (I : Msg → Inputs)
     (wr : (x : Msg) → LiveOutJ (J x) (mPts x) → Exec.Transcript) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω)
@@ -115,9 +96,6 @@ theorem Pr_acc_plain (nMax : ℕ) (J mPts N : Msg → ℕ) (dg : ByteArray → B
   exact propext (and_congr_left' (verdictPL_sha _ _))
 
 open Classical in
-/-- **The old salted transfer bounds the run**: when every table's decoder is right on the outcomes verity-verify-proof accepts
-(`DecodesTable`, the hypothesis `live_le_sessionBLJ` takes), `Pr_r[run = acc ∧ Q(outcome)]` against SHA-512 is at
-most the salted session's acceptance against the simulated strategy of `liveStrat`. -/
 theorem Pr_acc_plain_le {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [Nonempty D] [Inhabited D]
     [Inhabited Sl] (nMax : ℕ) (mPts N : Msg → ℕ) (ts : (x : Msg) → List (TabSpec (mPts x)))
     (dg : ByteArray → ByteArray) (w : (x : Msg) → Wire nMax (ts x).length (mPts x)) (I : Msg → Inputs)

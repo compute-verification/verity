@@ -16,25 +16,8 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 
-/-!
-# n7's levels: `Opened` at R's consistency checks, from the `rec-open-stacked` units
-
-`levelTie_of_run` asks that every consistency check of R's opening run pass against the proof's cap (`Opened`). G
-proves it at V*'s plain openings (`openedAllAt_plain`) by climbing each `rec-open` unit, read with `keyProg_parse` at
-the name `RecOpen.params` parses. R's openings are `rec-open-stacked/l<LANES>-h<H>` units, a name `RecOpen.params` does
-not parse, so the climb here is `decode_recOpen`'s, at the copy's own row and sibling columns (`decode_recOpenCols`).
-
-* `OpensTopAt`: the unit facts `OpensAt` bundles (`SessionAt` (c)) at a given depth `H`, position `pos` (the `dirs`
-  registered, `RecCoins.checkStackedLevel`'s `dirsRow`) and siblings `ss`, with the row and the siblings in the copy's
-  own input columns, each an input wire of the unit (how R's map reads them, `readMaps`: R's units register neither),
-  and the climb's 512 output columns registered as the node `top` (a `rec-top-stacked-L<ℓ>` read). Those columns are
-  `fill`'s (`colsHold_fill_of_io`), so `decode_recOpen`'s argument holds there (`decode_recOpenCols`), and the climb
-  from the row's plain leaf is `top` (`climb_of_opensTop`).
-* `opened_of_climbs`: `Opened` at every context of a run whose contexts are its levels in order (`ConssAt`), from the
-  proof's openings and caps, each query's climb to its cap entry, and the messages' consistency sums.
-* `opened_of_units`: the same from R's units in V*'s sessions (`OpensTopAt`), at the messages w holds (`decodedO`) with
-  the opened rows' consistency sums (`consO`).
--/
+/-! `Opened` at R's consistency checks, from the `rec-open-stacked` units, whose name `RecOpen.params` does
+not parse. -/
 
 @[expose] public section
 
@@ -47,7 +30,6 @@ open FlockSoundness.Discharge.Hm (bitL)
 open FlockVBridge.Decode (RegBit)
 open FlockSoundness.Refine (capAt openAt)
 
-/-- A climb reads its scheme's nodes only. -/
 theorem climb_node {ms ms' : MerkleScheme} (h : ∀ l r, ms.node l r = ms'.node l r) :
     ∀ (ss : List ByteArray) (acc : ByteArray) (idx : ℕ), climb ms acc idx ss = climb ms' acc idx ss
   | [], _, _ => rfl
@@ -63,25 +45,18 @@ theorem sibsOf_length {s : Array ByteArray} {q w j : ℕ} (hs : s.size = q * w) 
   simp [sibsOf, hs]
   omega
 
-/-- **A run's consistency contexts are its levels, in order**, each with the level's `q` positions: the conclusion of
-G's `Conss.ligerito_conss`, which G proves of the symbolic run (`LM Lin`); R's opening runs Ligerito over F. -/
+/-- G's `Conss.ligerito_conss` is proved of the symbolic run (`LM Lin`), and a run over F does not give one
+over `Lin`; R's opening runs Ligerito over F. -/
 def ConssAt (sch : Flock.Schedule) (lg : RecAlgebra.LgPts) : Prop :=
   lg.conss.toList.map (fun c => (c.start, c.pos.size)) =
     (List.range sch.levels.size).map fun k => (k, (sch.levels[k]!).q)
-
-/-! ## One opening's climb, from its unit's registered columns -/
 
 section Copy
 
 variable {mPts nv J : ℕ} {Reg' : Type} {c : Flock.Circuit} {hU : Built c.unit} {hscope : Layout.scopeOk c = true}
   {Lv : SamplingDesign nv} (zo : ZkOuter mPts nv J Reg' c hU hscope Lv)
 
-/-- **Copy `j` of unit `u` opens row `r` at position `pos` through the siblings `ss` to the node `top`**: the unit is
-`recOpenLaid`'s at the depth `H`; the copy's own input columns hold the row and the siblings in the layer (how R's map
-reads them, `readMaps`; R's units register neither), each an input wire of the unit; `acc`, the coefficients and the
-`dirs` columns are registered, the last as `pos`'s bits (`RecCoins.checkStackedLevel` registers `dirsRow pos[j] H`);
-and the climb's 512 output columns are registered as `top`'s bits (the `rec-top-stacked-L<ℓ>` read of R's level
-node). -/
+/-- The row and the siblings are in the copy's own input columns, not registered: R's units register neither. -/
 def OpensTopAt (bits : Fin (Layout.keyN c hU nv) → Bool) (u : Fin nv) (j LANES : ℕ) (r a cf A : Array F128)
     (H pos : ℕ) (ss : List ByteArray) (top : ByteArray) : Prop :=
   ∃ (hj : j < c.upv), bits (Const.Prog.oneAt (Placed.keyProg c hU nv) u) = true ∧
@@ -108,8 +83,6 @@ def OpensTopAt (bits : Fin (Layout.keyN c hU nv) → Bool) (u : Fin nv) (j LANES
     top.size = 64 ∧ ∀ t < 512, RegOut zo u hj
       (Hm.outStart ((recOpenNet LANES H p).run Flock.HmNets.St.empty).2 p.bits outBits + t) (bitL top.data.toList t)
 
-/-- **A unit's input wires hold in `fill` what they hold in the layer** (`fill_io`): where copy `j`'s columns from
-`base` hold `B` in a layer agreeing with the registrant, each an input wire of unit `u`, they hold `B` in `fill`. -/
 theorem colsHold_fill_of_io {bits : Fin (Layout.keyN c hU nv) → Bool} (hA : zo.RegAgree bits) {u : Fin nv} {j : ℕ}
     (hj : j < c.upv) {base : ℕ} {B : ByteArray}
     (hio : ∀ t < 8 * B.size, base + t < (Rows.ofNet hU).nIn ∧ ∀ (hc : base + t < (Rows.ofNet hU).w),
@@ -123,10 +96,6 @@ theorem colsHold_fill_of_io {bits : Fin (Layout.keyN c hU nv) → Bool} (hA : zo
   refine (copyVal_input _ _ hj hin).trans (Eq.trans ?_ (copyVal_input _ _ hj hin).symm)
   exact Decode.fill_io zo hA (hw _)
 
-/-- **`decode_recOpen` at the copy's own row and sibling columns**: as `decode_recOpen`, with the row's and the
-siblings' columns holding them in the layer itself, each an input wire of the unit (so in `fill` too,
-`colsHold_fill_of_io`), in place of `RegBit`; `acc`, the coefficients and the position's bits are registered as
-there. -/
 theorem decode_recOpenCols {bits : Fin (Layout.keyN c hU nv) → Bool} (hA : zo.RegAgree bits) (u : Fin nv) {j : ℕ}
     (hj : j < c.upv) (hone : bits (Const.Prog.oneAt (Placed.keyProg c hU nv) u) = true)
     (ms : MerkleScheme) (hms : ∀ l r, ms.node l r = Sha512.hash (l ++ r)) (LANES H : ℕ) (hH : H ≤ 32)
@@ -168,9 +137,6 @@ theorem decode_recOpenCols {bits : Fin (Layout.keyN c hU nv) → Bool} (hA : zo.
   rw [Layout.ofNet_nIn_eq, inWords_recOpen hl]
   exact Decode.inRows_le_outStart _ _ _
 
-/-- **An opening's climb is its registered node** (`decode_recOpenCols`): in a `Good` layer, the copy's first 512
-output columns hold the climb under SHA-512 from the plain leaf of its row through `ss` at `pos`, and they are
-registered as `top`'s bits. -/
 theorem climb_of_opensTop {bits : Fin (Layout.keyN c hU nv) → Bool} (hG : zo.Good bits) {u : Fin nv}
     {j LANES H pos : ℕ} {r a cf A : Array F128} {ss : List ByteArray} {top : ByteArray}
     (h : OpensTopAt zo bits u j LANES r a cf A H pos ss top) (msId : String) :
@@ -195,12 +161,6 @@ theorem climb_of_opensTop {bits : Fin (Layout.keyN c hU nv) → Bool} (hG : zo.G
 
 end Copy
 
-/-! ## Every context of the run -/
-
-/-- **Every context of a run whose contexts are its levels passes** (`Opened`, at an unsalted SHA-512 scheme): the
-proof opens level `ℓ`'s rows `rows ℓ` with the siblings `sibs ℓ` and no salts, at the level's shapes, its caps have the
-schedule's shape (`CapsAt`), each query's climb from its row's plain leaf at the run's position reaches its cap entry,
-and the messages' consistency sums are the rows' at the run's `α`. -/
 theorem opened_of_climbs {msId : String} {sch : Flock.Schedule} {cap : Array ByteArray} {p : LigeritoProof}
     {M : RecAlgebra.Messages F128} {lg : RecAlgebra.LgPts} (hcs : ConssAt sch lg) (hcaps : Family.CapsAt sch cap p)
     (rows : ℕ → Array (Array F128)) (sibs : ℕ → Array ByteArray)
@@ -237,7 +197,6 @@ theorem opened_of_climbs {msId : String} {sch : Flock.Schedule} {cap : Array Byt
   simp only [Bool.and_eq_true, decide_eq_true_eq]
   exact ⟨⟨⟨hrow cs.start hℓ j hj', sibsOf_length (hss cs.start hℓ) hj'⟩, by simp; rfl⟩, hcl j hj'⟩
 
-/-- `decodedO`'s consistency sums are `cons`' (G's `decoded_cons`, at `valO`). -/
 theorem decodedO_cons (sh : Flock.Shape) (w : Array F128) (cons : ℕ → ℕ → F128) (ℓ : ℕ) (ea : Array F128) :
     (Opening.decodedO sh w cons).cons ℓ ea = (Array.range (2 ^ (sh.sched.levels[ℓ]!).lanes)).map (cons ℓ) := by
   show ((Array.range (2 ^ (sh.sched.levels[ℓ]!).lanes)).map (RecAlgebra.Lin.var ∘ RecAlgebra.Key.cons ℓ)).map
@@ -251,12 +210,6 @@ section Units
 
 variable {nS : ℕ} {Vs : Fin nS → VStmt} {Reg' : Type}
 
-/-- **(n7's levels) `Opened` at R's consistency checks, from R's units in V*'s sessions.** Let the sessions `zs` have
-`Good` layers `Lb`, R's run have its levels for contexts (`ConssAt`), and the proof open each level's rows `ops.rows ℓ`
-(R's openings') with the siblings `sibs ℓ` and no salts, at the level's shapes, its caps of the schedule's shape. If
-opening `j` of level `ℓ` is copy `cp ℓ j` of unit `un ℓ j` in session `sess ℓ`, opening its row at the run's position
-through its siblings in the proof to its cap entry (`OpensTopAt`), and R's openings have the level's `q` and the run's
-`α`, then every consistency check passes at the messages w holds with the opened rows' consistency sums. -/
 theorem opened_of_units (zs : (s : Fin nS) → (Vs s).Outer Reg') (Lb : (s : Fin nS) → (Vs s).Bits)
     (hG : ∀ s, (zs s).Good (Lb s)) {sh : Flock.Shape} {w : Array F128} {ops : FlockVBridge.AccChain.Openings}
     {msId : String} {cap : Array ByteArray} {p : LigeritoProof} {lg : RecAlgebra.LgPts} (hcs : ConssAt sh.sched lg)

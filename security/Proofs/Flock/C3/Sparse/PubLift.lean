@@ -17,18 +17,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.C3.Sparse.PubTie
 
-/-!
-# `SparseRepTie`'s pub conjunct at the tied source
-
-`pub_tie`: at a rep's unit (`RepUnit`) on a run's rep steps, where check 5's values at the unit's rounds are the coins
-`c`'s (`SparsePubRead`: `verifierRows`' points at the statement's `m` and `k_log`, and `layoutFactors` at the unit
-range for `U`), the tied run's rep output (`tie`, the rep's play's, `playOut_eq`) has `pubOf c` for `holoPub`'s values
-(`pub_of_unit`, `layoutFactors_U` at the points' sizes).
-`srcSparsePub_of_alg`: the conjunct at `tiedSrc stp` for every accepted outer proof, from `RepUnitOfAlg`'s units and
-the slots' units the unit range's (`UnitsOf`, `units_holoAt`); `srcSparsePub_repsOfVals` at `repsOfVals`, whose units
-are built from the reps' parts at the record's rounds (`repUnitOfAlg_of_parts`). `rep_tiedSrc_sparseOf`: the tied reps
-of `sparseOf stp w c` are `tiedSrc stp`'s, which `srcSparseTie_sparseOf` reads.
--/
+/-! `SparseRepTie`'s pub conjunct at the tied source. -/
 
 @[expose] public section
 
@@ -44,10 +33,6 @@ open FlockVBridge.Sparse (SCoins pubOf)
 open Flock.RecAlgebra (verifierRows)
 open FlockC3.HoloValues (repAt)
 
-/-- **Hypothesis: check 5's values at a rep's rounds are the coins `c`'s** (`RecCoins.checkSparse` at rep `i`, whose
-`Inner.rep` runs `verifierRows` at the record's rounds `inn.rounds i`, here `d.rounds`): `verifierRows` accepts `d`'s
-rounds at a shape of the statement's `m` and `k_log`, `c`'s `z`, `alpha`, `x_rest` and `y_rest` are the points it
-returns (`rec_sparse.inner_points`), and `c`'s `U` is the layout factors at those points and the unit range `rng`. -/
 def SparsePubRead (e : ExecHolo) (rng : Flock.Range) (d : RepData) (c : SCoins) : Prop :=
   ∃ (ash : Flock.Shape) (xs : Array Flock.Claim) (cb v : Array Flock.F128) (info : RecAlgebra.Info RecAlgebra.Lin)
     (kappa : Array (Array (Array Flock.F128))),
@@ -55,8 +40,6 @@ def SparsePubRead (e : ExecHolo) (rng : Flock.Range) (d : RepData) (c : SCoins) 
       c.z = info.zc.z ∧ c.alpha = info.lc.fold.alpha ∧ c.xRest = info.lc.fold.rhoIn ∧ c.yRest = info.lc.rIn ∧
       Flock.RecCoins.layoutFactors (unitShape e) c.xRest c.yRest rng = .ok c.U
 
-/-- **The tied rep's public values are `pubOf c`**: the rep's unit plays to outputs whose `holoPub` is `pubOf c`
-(`pub_of_unit`), and the tied run's rep is that play's (`playOut_eq`); the later stages keep it. -/
 theorem pub_tie {e : ExecHolo} {u : C3Run e} {i : Fin 2}
     (U : FlockC3.HoloValues.RepUnit (e.cls.pubStatement e.regs) e.sch
       (extraClaims (e.cls.pubStatement e.regs) e.cls.ptLocal e.cls.mPts u.pts) u.cap₀ u.os.1 i (u.ts i))
@@ -76,7 +59,6 @@ theorem pub_tie {e : ExecHolo} {u : C3Run e} {i : Fin 2}
   rw [e₁]
   exact hpub
 
-/-- **The class's slots' units are the unit range's below the block** where they are the range's (`UnitsOf`). -/
 theorem units_holoAt {st : Flock.Stmt} {hp : HoloParams} {rng : Flock.Range} (hu : UnitsOf st hp)
     (hrng : unitRangeOf st = .ok rng) (σ : Fin (2 ^ (holoAt st hp).cls.sLog)) :
     (holoAt st hp).cls.units σ = (if σ.val < rng.count then ({rng.pos0 + σ.val} : Finset ℕ) else ∅).filter
@@ -100,16 +82,11 @@ variable {nT r : ℕ} {T : Fin nT → Type} {CT : Fin r → Type} [∀ k, Fintyp
 
 local notation "ℐ" => holoInnerAt T CT st hp
 
-/-- **The tied reps of `sparseOf stp w c` are `tiedSrc stp`'s**: `sparseOf` sets only the sparse stages, which no rep
-reads. -/
 theorem rep_tiedSrc_sparseOf
     (w : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → Fin 2 → Array Flock.F128)
     (R : Reg) (ω : L.Ω) (t : List (Cm × (ℐ).Coin)) (Lb : (j : Fin S) → (Vs j).Bits) (i : Fin 2) :
     (tiedSrc (sparseOf stp w c) R ω t Lb).rep i = (tiedSrc stp R ω t Lb).rep i := rfl
 
-/-- **`SparseRepTie`'s pub conjunct at `tiedSrc stp`**, at every accepted outer proof: each rep's unit at its values
-`rep R ω t Lb i` (`RepUnitOfAlg` at the tied source, whose steps are `stp`'s, where E's preconditions hold: `halg`, `hacc`), check 5's values at their rounds the
-coins' (`SparsePubRead`) at the inner circuit's unit range, which the slots' units are (`UnitsOf`). -/
 theorem srcSparsePub_of_alg {rng : Flock.Range} (hu : UnitsOf st hp) (hrng : unitRangeOf st = .ok rng)
     (halg : AlgebraDecodes (I := ℐ) zs dg N k Rw sh rep) (hacc : AccChains (I := ℐ) zs dg N k Rw sh rep)
     (hU : RepUnitOfAlg zs dg N k Rw (tiedSrc stp) sh rep)
@@ -127,8 +104,6 @@ theorem srcSparsePub_of_alg {rng : Flock.Range} (hu : UnitsOf st hp) (hrng : uni
     rw [hd]; exact hr R ω t R₂ τ o hA i ha hc
   exact pub_tie (u := stp R ω t (layers zs dg N k Rw R ω t R₂ τ)) U (units_holoAt hu hrng) hrd
 
-/-- **The pub conjunct at `repsOfVals`**: its units are built from the reps' parts at the values, the record's rounds
-being the values' `rep R ω t Lb i` (`repUnitOfAlg_of_parts`, the steps' part by `stepsOfVals_repsOfVals`). -/
 theorem srcSparsePub_repsOfVals {rng : Flock.Range}
     {vals : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → Fin 2 → FlockC3.Reps.UnitVals}
     (hu : UnitsOf st hp) (hrng : unitRangeOf st = .ok rng)

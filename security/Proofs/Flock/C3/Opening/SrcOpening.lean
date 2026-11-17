@@ -16,20 +16,7 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 
-/-!
-# n7's opening: `OpeningReadAt` at the source, from V*'s sessions
-
-`openingRead_c3DecOf` asks for `OpeningReadAt (runSteps u) u` at the source's run `u` at every accepted outer proof.
-Past both sparse phases a run's own steps are its opening, its Ligerito and the openings (`afterSparse_runSteps`), so
-the tape prefix is the source's opening steps. The run, its zero residuals and the shape are V*'s sessions'
-(`SessionAt`, as in `openingRead_of_session`), on the messages w holds, so the prefix needs the source's opening
-steps to be the opening's on w's ring switches (`OpenTie`). `SrcOK` doesn't say that: it fixes the source's kinds,
-coins and types, not its messages' values, and `OpeningReadAt` at the source makes both of its ring switches pass
-their claims' checks (`checks_of_run`, `packed_check`).
-
-`openingReadAt_src` takes `SessionAt` and `OpenTie` at every accepted outer proof, and the claim tie (rec-lean's
-item 5, from `claimO` to the source's claims).
--/
+/-! `OpeningReadAt` at the source, from V*'s sessions. -/
 
 @[expose] public section
 
@@ -39,15 +26,14 @@ open FlockSoundness FlockSoundness.Discharge FlockSoundness.Discharge.Recursion
 open Game Audit Exec Refine Model ZkSession ZkLink ZkExec Composed ZkReg
 open Flock FlockLevel3 Accounting ZkBind Integrate Placed StrictCR DecodeZL FlockVBridge.Compiled FlockC3.Compose
 
-/-- **A run's own steps past both sparse phases** are its opening, its Ligerito and the openings. -/
 theorem afterSparse_runSteps {e : ExecHolo} (u : C3Run e) :
     afterSparse u (runSteps u) = u.op ++ (u.lg ++ [.inl ⟨Opens GF128 Dig × Salts (List UInt8), u.os⟩]) := by
   rw [afterSparse, runSteps, FlockC3.PubRows.holoSteps_eq, ← FlockC3.PubRows.firstSteps_length]
   simp only [List.drop_succ_cons, List.drop_zero, FlockC3.PubRows.stagesOf, List.append_assoc, ← List.drop_drop,
     List.drop_left]
 
-/-- **The source's opening is on w's ring switches**: a run's opening steps are the opening's on the ring switches
-w holds at R's openings' consistency sums, at some coins. -/
+/-- The source's opening is on w's ring switches; `SrcOK` does not give it: it fixes the source's kinds, coins
+and types, not its messages' values. -/
 def OpenTie (sh : Flock.Shape) (w : Array F128) (ops : FlockVBridge.AccChain.Openings) {e : ExecHolo} (u : C3Run e) :
     Prop :=
   ∃ (ρ : Fin 2 → Fin 7 → GF128) (γ : Fin 2 → GF128),
@@ -58,9 +44,6 @@ variable {nT r : ℕ} {T : Fin nT → Type} {CT : Fin r → Type} [∀ k, Fintyp
 
 local notation "ℐ" => holoInnerAt T CT st hp
 
-/-- **`OpeningReadAt` at one accepted outer proof**, from R's opening in V*'s sessions there (`SessionAt`), the claim
-tie at the claims `RecCoins.opening` builds, and the tape past both sparse phases beginning with the opening's steps on
-w's ring switches: `openingRead_of_session`'s argument at one outcome. -/
 theorem openingReadAt_of_sessionAt
     {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'} {dg : ByteArray → ByteArray}
     {N k Rw : ℕ} {R : Reg} {ω : L.Ω} {t : List (Cm × (ℐ).Coin)} {R₂ : Reg₂} {τ o}
@@ -102,11 +85,6 @@ theorem openingReadAt_of_sessionAt
   exact ⟨sh, decodedO sh w (consO ops), claimO sh w ![a, b], src, 0, k₁, rs, ρ, γ, hsh, hop', hzero,
     hclaim a b ha hb, hpre⟩
 
-/-- **(n7's opening) `OpeningReadAt` at the source**, as `openingRead_c3DecOf` asks for it, at R's shape `sh`, the
-coins `c3`, w and R's openings `ops` read off each history and its layers: at every accepted outer proof R's opening
-is in V*'s sessions (`SessionAt`), the claims `RecCoins.opening` builds at w's `claim` values are the source's two
-registered claims (`hclaim`, item 5's tie), and the source's opening steps are the opening's on w's ring switches
-(`OpenTie`, which `SrcOK` doesn't give). -/
 theorem openingReadAt_src
     {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'} {dg : ByteArray → ByteArray}
     {N k Rw : ℕ} {src : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → C3Run (holoAt st hp)}

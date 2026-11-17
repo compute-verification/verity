@@ -24,23 +24,7 @@ import Proofs.Flock.C3.VStarList.Shape
 import Proofs.Flock.Soundness.Discharge.ZkExec.Setup
 import Proofs.Flock.VBridge.Sparse.Unit
 
-/-!
-# The algebra unit reads rep `i`'s `h` at `m<hr>` (`hAlgRows_of_res`)
-
-`HAlgRows` (`HPortTie`), proved from the verifier's checks of V*'s holo list and each algebra part's `ResZeroAtLH`, the
-decoder tie `AlgebraDecodes` is proved from (`RepMaps.algebraDecodes`):
-
-* The list (`hRound_held`, `sparse_stmt_of_name`): at a holo shape `RecVStar.statements` refuses a list none of whose
-  groups holds `h`'s round `hRound m kLog` as a row port, and its RecSparse statement is `.sparse _ (hRound m kLog)`.
-* The layout (`rounds_holo`, `wi_h`, `portSizes_h`, `starts_h`, `portNames_h`): at a holo shape `h`'s round is the
-  64-element round `m<hRound>` after the zerocheck's and lincheck's (`zlRounds`), `h l` its `l`-th element of `w`.
-* The part (`readCol_h`, `rowBit_at`, `hRow_of_part`): `RecResiduals.check` refuses a holo part that reads an element of
-  `h` in fewer than 128 bits (`hUnread`), so each bit of the part's `m<hRound>` row is a computed row's input, which
-  `ResZeroAtLH`'s `hw` registers at the bit of `w` the part's `wIdx` puts there, `h l`'s.
-* `hAlgRows_of_res`: at every accepted outcome, rep `i`'s unit (`RepUnitOfAlg`) has `U.d` the decoder's rep, whose `h`
-  (`hOfW`) is `w`'s at `wi`, so the part's row at unit `i` holds it; `hAlgRows_withReads` at the reads' decoder
-  (`RepMaps.withReads`, `resZeroAtLH_wRead`).
--/
+/-! The algebra unit reads rep `i`'s `h` at `m<hr>` (`hAlgRows_of_res`). -/
 
 @[expose] public section
 
@@ -50,10 +34,6 @@ namespace HAlg
 
 open Flock FlockSoundness FlockSoundness.Audit FlockSoundness.Discharge FlockSoundness.Discharge.Recursion
 
-/-! ## The list -/
-
-/-- **A holo list holds `h`'s round in a group**: `RecVStar.statements` refuses a holo shape none of whose groups holds
-`hRound m kLog` as a row port. -/
 theorem hRound_held {i : RecVStar.Inner} {ss : Array VStar.Stmt} (h : RecVStar.statements i = .ok ss)
     (hh : i.holo = true) :
     ∃ sh0, RecResiduals.shape? i.m i.kLog i.claims = some sh0 ∧
@@ -81,8 +61,6 @@ theorem hRound_held {i : RecVStar.Inner} {ss : Array VStar.Stmt} (h : RecVStar.s
   obtain ⟨p, hp, hc⟩ : ∃ p, ∃ _ : p < gs.size, RecVStar.hRound i.m i.kLog ∈ gs[p].2.1 := by simpa using hany
   exact ⟨sh0, hsh, GS, gs, hGS, hgs, p, hp, hc⟩
 
-/-- **`checkStmt`'s statement and its parse and part checks**: the session's unit is the list's statement `j`, by name,
-and `checkParsed` and `checkPart` pass on it. -/
 theorem parsed_of_checkStmt {i : RecVStar.Inner} {tags : Flock.Tags} {tables : List (String × ByteArray)}
     {st : Flock.Stmt} {circuitB : ByteArray} {partition : Option Lean.Json} {program : Option ByteArray}
     {own : Array Flock.Registered.Port} {j : ℕ} {f : VStar.Bindings} {rows : Option (Array Flock.Registered.Port)}
@@ -108,7 +86,6 @@ theorem parsed_of_checkStmt {i : RecVStar.Inner} {tags : Flock.Tags} {tables : L
         exact ⟨ss, s, hss, hj, hname, hpa, hpt⟩
       · cases h
 
-/-- **The list's statement named as a RecSparse unit is its RecSparse statement**, at `h`'s round (`sparse_of_name`). -/
 theorem sparse_stmt_of_name {i : RecVStar.Inner} {ss : Array VStar.Stmt} (h : RecVStar.statements i = .ok ss)
     {s : VStar.Stmt} (hs : s ∈ ss) {sh : RecSparse.Shape} (hn : RecSparse.unitName sh = s.name) :
     ∃ sp, s = .sparse sp (RecVStar.hRound i.m i.kLog) := by
@@ -138,9 +115,6 @@ theorem sparse_stmt_of_name {i : RecVStar.Inner} {ss : Array VStar.Stmt} (h : Re
         · exact absurd hn (n3 _ _)
         · exact absurd hn (n4 _ _ _)
 
-/-! ## The layout of `h`'s round -/
-
-/-- The rounds before `h`'s at a holo shape: `RecAlgebra.preRounds` without its `h` round. -/
 def zlRounds (sh : Flock.Shape) : Array (Array RecAlgebra.Key) :=
   #[(Array.range 64).map .ab ++ (Array.range 64).map .c] ++
     (Array.range (sh.m - 6)).map (fun i => #[.g1 i, .ginf i]) ++ #[#[.fa, .fb]] ++
@@ -152,7 +126,6 @@ theorem rounds_holo {sh : Flock.Shape} (hh : sh.holo = true) :
   rw [RecAlgebra.rounds_split]
   simp only [RecAlgebra.preRounds, RecAlgebra.hRound, hh, ite_true, zlRounds, Array.append_assoc]
 
-/-- `h`'s round is round `hRound m kLog`. -/
 theorem zlRounds_size (sh : Flock.Shape) (hm : 6 ≤ sh.m) (hk : 6 ≤ sh.kLog) :
     (zlRounds sh).size = RecVStar.hRound sh.m sh.kLog := by
   simp only [zlRounds, RecVStar.hRound, Array.size_append, Array.size_map, Array.size_range]
@@ -177,7 +150,6 @@ theorem idxOf?_mid {xs hs ys : Array RecAlgebra.Key} {a : RecAlgebra.Key} {i : �
     · rw [Array.getElem?_append_right (by omega)] at he
       exact hlt (j - xs.size) (by omega) he
 
-/-- **`h l` is `w`'s element `l` of `h`'s round**. -/
 theorem wi_h {sh : Flock.Shape} (hh : sh.holo = true) {l : ℕ} (hl : l < 64) :
     RecAlgebra.wi sh (.h l) = some ((zlRounds sh).flatten.size + l) := by
   unfold RecAlgebra.wi RecAlgebra.wNames
@@ -209,8 +181,6 @@ theorem portNames_h {sh : Flock.Shape} (hh : sh.holo = true) :
   rw [rounds_holo hh, getElem!_pos _ _ (by simp; omega), Array.getElem_append_left (by simp; omega)]
   simp
 
-/-! ## The part's row of `h` -/
-
 theorem readBits_of_hUnread {wn : Array RecAlgebra.Key} {W : Array ℕ} {rd : Array Bool} {ns : List ℕ}
     (h : RecResiduals.hUnread wn W rd ns = none) {q : ℕ} (hq : q < W.size) {l : ℕ}
     (hk : wn[W[q]!]? = some (.h l)) : RecResiduals.readBits rd ns q = 128 := by
@@ -222,8 +192,6 @@ theorem readBits_of_hUnread {wn : Array RecAlgebra.Key} {W : Array ℕ} {rd : Ar
   · simp only [bne_iff_ne, ne_eq, h128, not_false_eq_true, ↓reduceIte, reduceCtorEq] at this
 
 open FlockVBridge.OfVStar (ReadCol rowCol partRep) in
-/-- **A holo part reads each bit of its elements of `h`** (`readCol_rs`'s at `h`): `RecResiduals.check`'s `hUnread`
-refuses an element of `h` read in fewer than 128 bits. -/
 theorem readCol_h {c : Flock.Circuit} (hU : Built c.unit) (h : RecResiduals.check c = .ok ())
     (hu : c.unit.unitLog ≤ 32) {m k cl p : ℕ} (hp : RecResiduals.params c.unit.name = some (m, k, cl, p))
     {sh : Flock.Shape} (hsh : RecResiduals.shape? m k cl = some sh) (hh : RecResiduals.holoOf c = .ok true)
@@ -249,7 +217,6 @@ theorem readCol_h {c : Flock.Circuit} (hU : Built c.unit) (h : RecResiduals.chec
   rw [ReadWhole.rowCol_eq] at hc
   exact ReadWhole.readCol_of_row hU hu hr hr' hc
 
-/-- **A part's rows are its statement's row ports, in order** (`srcKey_laid`), from its parse and `checkParsed`. -/
 theorem repKeys_of {tags : Flock.Tags} {c : Flock.Circuit} (hU : Built c.unit) (P : ParseFacts tags c)
     {p : ℕ} {nm : String} {pt : VStar.Part} (hpa : RecVStar.checkParsed (.inner p nm pt) c = .ok ())
     {S : Flock.RecOpen.GfS} {ns : List ℕ} {nv : ℕ} {name : String}
@@ -267,8 +234,6 @@ theorem repKeys_of {tags : Flock.Tags} {c : Flock.Circuit} (hU : Built c.unit) (
       show (pt.S.ports.map (·.1) ++ ["v"]).length = (FlockVBridge.OfVStar.repPorts pt.S).length
       rw [FlockVBridge.OfVStar.repPorts_length, List.length_append, List.length_map, List.length_singleton]) hq
 
-/-- **The row key of bit `e` of element `l` of row port `ih`** is the circuit's port `ih`, named as the port, at bit
-`128 l + e` (`srcKey_row`, `take_sum_inj`). -/
 theorem rowBit_at {c : Flock.Circuit} {S : VStar.RepS} (h : FlockVBridge.OfVStar.RepKeys c S) (n : ℕ)
     {sizes P : Array ℕ} {names : Array String} (hns : S.ports.map (·.2) = P.toList.map (sizes[·]!))
     (hnm : S.ports.map (·.1) = P.toList.map (names[·]!)) {ih l e : ℕ} (hih : ih < P.size)
@@ -311,9 +276,6 @@ theorem rowBit_at {c : Flock.Circuit} {S : VStar.RepS} (h : FlockVBridge.OfVStar
 open FlockVBridge (wbit bitOf) in
 open FlockVBridge.Decode (regVal) in
 open FlockVBridge.OfVStar (ResZeroAtLH) in
-/-- **A part holding `h`'s round registers it at unit `u`**: where `ResZeroAtLH` holds at a holo part whose row ports
-hold `h`'s round at index `ih`, the circuit's port `m<hRound>`, a row port of its statement, is read at unit `u`, and its
-bit `128 l + e` is bit `e` of `w`'s element `h l` (`readCol_h`, then `ResZeroAtLH`'s `hw` at that bit, `rowBit_at`). -/
 theorem hRow_of_part {V : VStmt} {Reg' : Type} (zo : V.Outer Reg') {p' : ℕ} {nm : String} {pt : VStar.Part}
     (hpa : RecVStar.checkParsed (.inner p' nm pt) V.c = .ok ())
     (hpt : RecVStar.checkPart (.inner p' nm pt) V.c = .ok ()) {bits : V.Bits} {u : Fin V.nv} {sh : Flock.Shape}
@@ -395,8 +357,6 @@ variable {nT r : ℕ} {T : Fin nT → Type} {CT : Fin r → Type} [∀ k, Fintyp
 
 local notation "ℐ" => holoInnerAt T CT st hp
 
-/-- **Each accepted session's statement passes the parse and part checks**: `ChecksAccepted`'s statement check at the
-session's circuit (`setup_zero_c`, `parsed_of_checkStmt`). -/
 theorem stmtAt_checked {F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂} {rows : Option (Array Flock.Registered.Port)}
     {wr : List (Cm × (ℐ).Coin) → Lean.Json × String} {reg : Lean.Json} (hchk : ChecksAccepted F rows wr reg)
     {dg : ByteArray → ByteArray} {N k Rw : ℕ} {R : Reg} {ω : L.Ω} {t : List (Cm × (ℐ).Coin)} {R₂ : Reg₂} {τ o}
@@ -411,12 +371,6 @@ theorem stmtAt_checked {F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂} {rows :
   exact ⟨sv, hj, hname, hpa, hpt⟩
 
 open FlockVBridge.OfVStar (ResZeroAtLH) in
-/-- **`HAlgRows` from the verifier's checks and the parts' decoder tie**: at a holo inner shape, where each algebra
-part holds `ResZeroAtLH` at the decoder's rep (`hres`, the premise `RepMaps.algebraDecodes` proves `AlgebraDecodes`
-from) and rep `i`'s unit is the decoder's rep (`RepUnitOfAlg`), a RecSparse copy's session is `.sparse _ (hRound m kLog)`
-(`sparse_stmt_of_name`), some group holds `h`'s round (`hRound_held`), and that group's part reads it at unit `i` with
-bit `128 l + e` bit `e` of `hOfW U.sh U.d.w`'s element `l` (`hRow_of_part`, `wi_h`, `hOf_holo`), the part's session at
-two units (`VStarParsesScoped`). -/
 theorem hAlgRows_of_res {F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂} {rows : Option (Array Flock.Registered.Port)}
     {wr : List (Cm × (ℐ).Coin) → Lean.Json × String} {reg : Lean.Json} (hchk : ChecksAccepted F rows wr reg)
     (hF : ∀ R ω t R₂ j, TagsFound (F.zs R ω t R₂ j).I) (hholo : F.ish.holo = true) {sh0 : Flock.Shape}
@@ -474,9 +428,6 @@ theorem hAlgRows_of_res {F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂} {rows 
   rw [hUsh, hUd, RecAlgebra.hOfW_get _ _ l.isLt, RecAlgebra.hOf_holo hh _ (wi_h hh l.isLt), RecAlgebra.getElem!_el]
 
 open FlockVBridge.OfVStar (ResZeroAtLH) in
-/-- **`HAlgRows` at the reads' decoder** (`RepMaps.withReads`, the decoder `withReads_algebraDecodes_atList` proves
-`AlgebraDecodes` at): `hAlgRows_of_res`, each part's `ResZeroAtLH` at `wRead`'s `w` from one `w` per rep at which every
-part holds it (`resZeroAtLH_wRead`). -/
 theorem hAlgRows_withReads {F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂}
     {rows : Option (Array Flock.Registered.Port)} {wr : List (Cm × (ℐ).Coin) → Lean.Json × String} {reg : Lean.Json}
     (hchk : ChecksAccepted F rows wr reg) (hF : ∀ R ω t R₂ j, TagsFound (F.zs R ω t R₂ j).I)

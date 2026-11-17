@@ -18,23 +18,7 @@ import Proofs.Flock.C3.RegLevels.AccReads
 import Proofs.Flock.C3.RegLevels.OpensRegs
 import Proofs.Flock.Soundness.Discharge.ZkExec.Setup
 
-/-!
-# `SharedOwnRoot`: two sessions register a shared value under one root, from `checkShared`
-
-`row_agree` reads two of V*'s accepted sessions' entries for one value at one root, leaf count, domain and leaf schema. The
-verifier's statement check runs `RecVStar.checkShared` against its record of V*'s shared rows (`--rec-rows`, one file
-for every session of the family): a port of a session's reads file reading a value some entry of `rows` reads has the
-first such entry's registration (`portDiff?` but reads), and a port reading R's tops `rec-top-stacked-L<l>`, or level 0's
-cap `rec-top-L0`, needs such an entry. So:
-
-* `site_of_checkShared`: each port of the reads file reading a value `SharedValue` names (one `rows` registers, or R's
-  tops) is the first entry of `rows` reading it, but in reads;
-* `shared_of_checkShared`: two reads files the check passed register such a value under one root, leaf count, domain
-  and leaf schema (both are that entry's, `site_of_portDiff`);
-* `sharedOwnRoot_of_checks`, `sharedOwnRoot_checked`: so at a family whose accepted sessions pass the statement check
-  (`ChecksAccepted`; the checked family's, `checksAccepted_checked`) `SharedOwnRoot` holds at `rows`. A value `rows`
-  does not register, other than R's tops, is not covered.
--/
+/-! `SharedOwnRoot`: two sessions register a shared value under one root, from `checkShared`. -/
 
 @[expose] public section
 
@@ -43,12 +27,9 @@ namespace FlockC3.RegLevels
 open Flock
 open FlockSoundness FlockSoundness.Audit FlockSoundness.Discharge FlockSoundness.Discharge.Recursion
 
-/-- **A value the verifier's shared rows register, or R's tops** (`checkShared`'s two cases). -/
 def SharedValue (rows : Option (Array Flock.Registered.Port)) (v : String) : Prop :=
   (rows.bind (·.find? (·.value == v))).isSome ∨ (RecVStar.stackedTopLevel v).isSome
 
-/-- **`checkShared`'s loop**: a port of `own` reading a `SharedValue` agrees, but in reads, with the first entry of `rows`
-reading its value. -/
 theorem site_of_checkShared {s : VStar.Stmt} {own : Array Flock.Registered.Port}
     {rows : Option (Array Flock.Registered.Port)} (h : RecVStar.checkShared s own rows = .ok ())
     {p : Flock.Registered.Port} (hp : p ∈ own) (hv : SharedValue rows p.value) :
@@ -86,8 +67,6 @@ theorem site_of_checkShared {s : VStar.Stmt} {own : Array Flock.Registered.Port}
     · rw [hw] at hv; cases hv
     · rw [hs] at hv; cases hv
 
-/-- **Two reads files `checkShared` passed at one `rows` register a `SharedValue` under one root, leaf count, domain
-and leaf schema**: both entries are the first entry of `rows` reading it, but in reads. -/
 theorem shared_of_checkShared {s s' : VStar.Stmt} {own own' : Array Flock.Registered.Port}
     {rows : Option (Array Flock.Registered.Port)} (h : RecVStar.checkShared s own rows = .ok ())
     (h' : RecVStar.checkShared s' own' rows = .ok ()) {p p' : Flock.Registered.Port} (hp : p ∈ own) (hp' : p' ∈ own')
@@ -110,8 +89,8 @@ open Flock FlockLevel3 Accounting ZkBind Integrate Placed StrictCR DecodeZL Floc
 variable {nT r : ℕ} {T : Fin nT → Type} {CT : Fin r → Type} [∀ k, Fintype (CT k)] [∀ k, Nonempty (CT k)]
   {st : Flock.Stmt} {hp : HoloParams} {xR : HoloReg GF128 Dig} {n : ℕ} {L : SamplingDesign n} {Reg Cm Reg' Reg₂ : Type}
 
-/-- **Two of V*'s accepted sessions at a history register a shared value under one root, leaf count, domain and leaf
-schema**: a value the verifier's shared rows `rows` register, or R's tops (`SharedValue`). -/
+/-- Only a value the verifier's shared rows `rows` register, or R's tops (`SharedValue`); any other value is
+not covered. -/
 def SharedOwnRoot (rows : Option (Array Flock.Registered.Port)) (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂) :
     Prop :=
   ∀ R ω t R₂ j j', (∃ tr, AcceptsZKR (F.zs R ω t R₂ j).I (F.zs R ω t R₂ j).own tr) →
@@ -119,8 +98,6 @@ def SharedOwnRoot (rows : Option (Array Flock.Registered.Port)) (F : C3Family T 
     ∀ p ∈ (F.zs R ω t R₂ j).own, ∀ p' ∈ (F.zs R ω t R₂ j').own, p.value = p'.value → SharedValue rows p.value →
       p.root = p'.root ∧ p.leaves = p'.leaves ∧ p.domain = p'.domain ∧ p.schema = p'.schema
 
-/-- **`SharedOwnRoot` where the accepted sessions pass the statement check** (`ChecksAccepted`): each session's first
-statement's check (`setup_zero_c`) ran `checkShared` on its reads file against `rows` (`regs_of_checkStmt`). -/
 theorem sharedOwnRoot_of_checks {F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂}
     {rows : Option (Array Flock.Registered.Port)}
     {wr : List (Cm × (holoInnerAt T CT st hp).Coin) → Lean.Json × String} {reg : Lean.Json}
@@ -145,7 +122,6 @@ variable {ish : RecVStar.Inner} {ss : Array VStar.Stmt} {hss : RecVStar.statemen
   {dec : ℕ → ((j : Fin (vstarCount ish)) → (Vs j).Bits) → (holoInnerAt T CT st hp).Msg}
   {wr : List (Cm × (holoInnerAt T CT st hp).Coin) → Lean.Json × String} {reg : Lean.Json}
 
-/-- **The checked family's `SharedOwnRoot`** at its shared rows (`checksAccepted_checked`, `sharedOwnRoot_of_checks`). -/
 theorem sharedOwnRoot_checked {coins : String → Option Flock.RecCoins.Source}
     {rows : Option (Array Flock.Registered.Port)}
     {zr : Reg → L.Ω → List (Cm × (holoInnerAt T CT st hp).Coin) → Reg₂ → (j : Fin (vstarCount ish)) →

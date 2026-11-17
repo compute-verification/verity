@@ -18,28 +18,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 
-/-!
-# `RoundReads` and `WRoundReads` at the verifier's message-round ports
-
-At `own := fun j => ownAt ss j`, the verifier's message ports of each statement, the reads file of each statement holds
-the statement's message-round ports (`OwnHas`, `ownHas_ownAt`), so U's links (`C3/Reps/RoundLinks.lean`) give the
-entries `RoundReads` and `WRoundReads` ask for: R's opening part's `m<i>` under `rec-opening-c<i>` at row 0
-(`roundRead_opening`), a residuals' part's `m<m>` under `rec-c<m>` at rep `ρ`'s row (`wRoundRead_inner`), each where
-the circuit has the port and `checkMsgNames` passed. The accepted sessions' reads hold `ownAt`'s ports (`OwnIn`,
-`ownIn_checked`, from `checkOwn`). At the map's `sel` (`holoMap`), R's first two message rounds are R's rounds 0 and 1,
-one history round apart (`stackedRounds_open`, by evaluating `stackedRounds`; `roundAt_opening`), so the map reads
-`rec-opening-c<i>` at `c₀ + i`, `c₀` R's round 0's history round (`holoSel_opening_at`). At the reps' rounds the map
-reads a part's port `m<m>` at `stageOf σ c₀` (`holoSel_parts`, from `holoSel_stageOf`) where `m` is one of the reps'
-message rounds and `roundOf σ m` the reps' history rounds before its stream round (`hm`, left as a hypothesis, with
-`c₀` rep 0's history rounds). Left as hypotheses too: a part's session's unit name (`hpar`, `wSel_of_rounds`' `hck`)
-and the unit a rep reads at (`hun`).
-
-* `roundReads_ownAt`, `roundReads_checked`: `RoundReads` at `ownAt ss`, and at the checked family; at the map's `sel`
-  and `c₀ := roundAt L .stacked 0`, `roundReads_checked` takes `holoSel_opening_at` as its `hsel`.
-* `holoSel_parts`: `wRoundReads_checked`'s `hsel` at the map's `sel` and `stageOf σ c₀`.
-* `wRoundReads_ownAt`, `wRoundReads_checked`: `WRoundReads` at `ownAt ss` where some outer proof is accepted
-  (`AcceptedAt`), and at the checked family.
--/
+/-! `RoundReads` and `WRoundReads` at the verifier's message-round ports. -/
 
 @[expose] public section
 
@@ -58,7 +37,6 @@ theorem mem_ownAt {ss : Array VStar.Stmt} {j : ℕ} {s : VStar.Stmt} (hj : ss[j]
   simp only [ownAt, hj, Option.map_some, Option.getD_some, List.map_toArray, List.mem_toArray]
   exact List.mem_map_of_mem (List.mem_append_left _ hq)
 
-/-- **`ownAt` holds each statement's message-round ports** (`OwnHas`, U's `hown`). -/
 theorem ownHas_ownAt {ish : RecVStar.Inner} {ss : Array VStar.Stmt} (hss : RecVStar.statements ish = .ok ss) (j : ℕ)
     (ss' : Array VStar.Stmt) (sv : VStar.Stmt) (hss' : RecVStar.statements ish = .ok ss') (hj : ss'[j]? = some sv) :
     OwnHas (ownAt ss j) sv := by
@@ -73,9 +51,6 @@ variable {nT r : ℕ} {T : Fin nT → Type} {CT : Fin r → Type} [∀ k, Fintyp
 
 local notation "ℐ" => holoInnerAt T CT st hp
 
-/-- **`RoundReads` at the verifier's message-round ports**: at a copy whose circuit has a port `m<i>`,
-`roundRead_opening` at `ownAt ss` (`ownHas_ownAt`), where stage `c₀ + i` reads `rec-opening-c<i>` at row 0
-(`hsel`). -/
 theorem roundReads_ownAt {ish : RecVStar.Inner} {bind : Fin S → VStar.Bindings}
     {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'}
     {dg : ByteArray → ByteArray} {N k Rw : ℕ} {sh : Flock.Shape}
@@ -88,10 +63,7 @@ theorem roundReads_ownAt {ish : RecVStar.Inner} {bind : Fin S → VStar.Bindings
   intro i hi _ _ _ _ _ hO q hq
   exact roundRead_opening hob hst hmn (fun s => ownHas_ownAt hss s) (hsel i hi) hO q hq
 
-/-- **`WRoundReads` at the verifier's message-round ports**, where some outer proof is accepted (`hA`): at part `p`'s
-session, whose unit is named as a part's (`hpar`) and whose circuit has a port `m<m>`, `wRoundRead_inner` at `ownAt ss`
-(`ownHas_ownAt`), at rep `ρ`'s unit (`hun`) where rep `ρ`'s stage of round `m` reads `rec-c<m>` at row `ρ`
-(`hsel`). -/
+/-- It leaves as hypotheses the part's session's unit name (`hpar`) and the unit a rep reads at (`hun`). -/
 theorem wRoundReads_ownAt {ish : RecVStar.Inner} {bind : Fin S → VStar.Bindings}
     {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'}
     {dg : ByteArray → ByteArray} {N k Rw : ℕ} {sh : Flock.Shape} {ss : Array VStar.Stmt}
@@ -111,8 +83,6 @@ theorem wRoundReads_ownAt {ish : RecVStar.Inner} {bind : Fin S → VStar.Binding
 
 end Ats
 
-/-! ## R's opening's rounds at the map -/
-
 section Opening
 
 open Flock.RecVStar Flock.Guarantees
@@ -123,9 +93,6 @@ private theorem bind_some {α β : Type} {x : Option α} {f : α → Option β} 
   | none => cases h
   | some a => exact ⟨a, rfl, h⟩
 
-/-- **R's stream opens with its two message rounds**: its rounds 0 and 1 absorb its first two messages, and round 0 takes
-one history round, by evaluating `stackedRounds` at each `m` below 36; past 35 `fast100` has none, nor has
-`stackedRounds`. -/
 theorem stackedRounds_open {m : ℕ} {rs : Array SchedRound} (h : stackedRounds ⟨m, STACKED_CLAIMS⟩ = some rs) :
     (msgRounds rs).take 2 = [0, 1] ∧ heldBefore .stacked rs 1 = 1 := by
   by_cases hm : m < 36
@@ -148,8 +115,6 @@ theorem stackedRounds_open {m : ℕ} {rs : Array SchedRound} (h : stackedRounds 
     rw [hn] at h
     cases h
 
-/-- **R's rounds take their history rounds after every other stream's**: in streams ending in R's, R's round `k` is its
-round 0's history round plus R's rounds before `k`. -/
 theorem roundIn_stacked (P : List (HoloStream × Array SchedRound)) (hP : ∀ e ∈ P, e.1.idx ≠ HoloStream.stacked.idx)
     (rs : Array SchedRound) (k : ℕ) :
     roundIn (P ++ [(.stacked, rs)]) .stacked k = roundIn (P ++ [(.stacked, rs)]) .stacked 0 + heldBefore .stacked rs k := by
@@ -169,8 +134,6 @@ theorem roundIn_stacked (P : List (HoloStream × Array SchedRound)) (hP : ∀ e 
     rw [if_neg hne, if_neg hne, ih']
     omega
 
-/-- **`holoStreams` ends in R's stream** where the inner shape names R: the streams before it are the reps' and the
-sparse phases', and R's rounds are `stackedRounds`'. -/
 theorem holoStreams_stacked {m kLog claims : ℕ} {sp : Option RecSparse.Shape} {r : StackedShape}
     {L : List (HoloStream × Array SchedRound)} (h : holoStreams m kLog claims sp (some r) = some L) :
     ∃ rep, holoRounds m kLog claims = some rep ∧ ∃ P rs, L = P ++ [(.stacked, rs)] ∧
@@ -183,8 +146,6 @@ theorem holoStreams_stacked {m kLog claims : ℕ} {sp : Option RecSparse.Shape} 
   intro e he
   cases sp <;> simp at he <;> rcases he with rfl | rfl | rfl | rfl <;> simp [HoloStream.idx]
 
-/-- **R's first two message rounds take consecutive history rounds**, the first at R's round 0's, where the inner shape
-names R at `STACKED_CLAIMS` claims. -/
 theorem roundAt_opening {m kLog claims mR : ℕ} {sp : Option RecSparse.Shape} {L : List (HoloStream × Array SchedRound)}
     (h : holoStreams m kLog claims sp (some ⟨mR, STACKED_CLAIMS⟩) = some L) :
     ∃ rep, holoRounds m kLog claims = some rep ∧ ∃ rs, stackedRounds ⟨mR, STACKED_CLAIMS⟩ = some rs ∧
@@ -212,9 +173,6 @@ theorem roundAt_opening {m kLog claims mR : ℕ} {sp : Option RecSparse.Shape} {
   · rw [h1]
     omega
 
-/-- **The map reads R's opening's round `i` at `rec-opening-c<i>`, row 0, at R's round 0's history round plus `i`**
-(`holoSel_opening` at `roundAt_opening`), where the inner shape names R at `STACKED_CLAIMS` claims
-(`FlockC3.VStarList.stacked_of_candidate3`). -/
 theorem holoSel_opening_at {st : Flock.Stmt} {hp : HoloParams} {Cm : Type} {ish : RecVStar.Inner} {tbl : String}
     {bm : Cm → String → ℕ → List UInt8} {L : List (HoloStream × Array SchedRound)}
     (hS : holoStreams ish.m ish.kLog ish.claims ish.sparse ish.stacked = some L) {mR : ℕ}
@@ -231,9 +189,8 @@ theorem holoSel_opening_at {st : Flock.Stmt} {hp : HoloParams} {Cm : Type} {ish 
 theorem heldBefore_rep (ρ : Fin 2) (rs : Array SchedRound) (k : ℕ) :
     heldBefore (.rep ρ) rs k = heldBefore (.rep 0) rs k := rfl
 
-/-- **The map reads each part's round `m` at rep `ρ`'s stage of it** (`holoSel_stageOf`), where `c₀` is rep 0's history
-rounds and, at each port `m<m>` of a part's circuit, `m` is one of the reps' message rounds whose stream round has
-`roundOf σ m` of the reps' history rounds before it (`hm`): `WRoundReads`' stage selector at the map. -/
+/-- It leaves `hm` as a hypothesis: each part's port `m<m>` names one of the reps' message rounds, with
+`roundOf σ m` of the reps' history rounds before its stream round. -/
 theorem holoSel_parts {st : Flock.Stmt} {hp : HoloParams} {Cm : Type} {ish : RecVStar.Inner} {tbl : String}
     {bm : Cm → String → ℕ → List UInt8} {rs : Array SchedRound} {L : List (HoloStream × Array SchedRound)}
     (hS : holoStreams ish.m ish.kLog ish.claims ish.sparse ish.stacked = some ((.rep 0, rs) :: (.rep 1, rs) :: L))
@@ -262,9 +219,6 @@ local notation "ℐ" => holoInnerAt T CT st hp
 -- `variable` whose binders use a local notation over section variables makes Lean silently drop every declaration
 -- after it (the audit's `dropped` check refuses the package).
 
-/-- **`RoundReads` at the checked family** (`C3Family.checked`), at `ownAt ss`: `SessStmt` from the prover's sessions'
-tags (`sessStmt_checked`, the guarantee's `_hF`), `MsgNamesAt` from the verifier's checks (`msgNamesAt_of_accepted`,
-`checksAccepted_checked`). -/
 theorem roundReads_checked {xR : HoloReg GF128 Dig} {ish : RecVStar.Inner} {ss : Array VStar.Stmt}
     {hss : RecVStar.statements ish = .ok ss} {bind : Fin (vstarCount ish) → VStar.Bindings}
     {Vs : Fin (vstarCount ish) → VStmt} {hob : VStarParsesScoped Flock.Tags.circuit ish bind Vs}
@@ -285,8 +239,6 @@ theorem roundReads_checked {xR : HoloReg GF128 Dig} {ish : RecVStar.Inner} {ss :
       (F := C3Family.checked (xR := xR) ish hss bind hob zr hCust h coins rows own sel bc dec wr reg)
       checksAccepted_checked) hss hsel
 
-/-- **`WRoundReads` at the checked family** (`C3Family.checked`), at `ownAt ss`, where one of its outer proofs is
-accepted: `wRoundReads_ownAt` with `SessStmt` and `MsgNamesAt` as `roundReads_checked` has them. -/
 theorem wRoundReads_checked {xR : HoloReg GF128 Dig} {ish : RecVStar.Inner} {ss : Array VStar.Stmt}
     {hss : RecVStar.statements ish = .ok ss} {bind : Fin (vstarCount ish) → VStar.Bindings}
     {Vs : Fin (vstarCount ish) → VStmt} {hob : VStarParsesScoped Flock.Tags.circuit ish bind Vs}

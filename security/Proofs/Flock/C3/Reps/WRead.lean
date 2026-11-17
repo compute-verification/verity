@@ -15,24 +15,7 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 
-/-!
-# `rep₀`'s `w` read off the layers: `WDecodes`, and each part's `hres` at it
-
-`wRead` reads element `i` of rep `ρ`'s `w` where a part `p` has it at position `a` of its row ports, each of its 128
-bits at a column a computed row of the part's session reads and a row-port bit keys (`WLoc`, one chosen by `wLoc`):
-bit `b` is copy 0's at column `128 a + b` of the part's unit for `ρ` (`bitAt`), and 0 where no part has it.
-
-* `wDecodes_of_read`: `WDecodes` at `wLoc`'s session, unit and columns, for maps whose `rep₀` reads `w` so, given each
-  session's `upv > 0` (`upv_of_outer`, from any outer proof).
-* `resZeroAtLH_wRead`: each part's `ResZeroAtLH` at one `w` holds at `wRead`'s, where an element a part reads a bit of
-  is read whole at some part (`ResReadCol`): at a registered bit a good layer holds the registrant's value
-  (`bitAt_of_regBit`), which is `w`'s in every part.
-
-Not every column of a part's row ports is read: a part's row ports hold the whole of each port of `w` its residuals
-touch, and first-fit packing can leave elements of a touched port that none of the part's residuals reads (at V*'s
-shape `m = 25, k = 22, c = 8`, part 1 reads no bit of `m76`'s first four elements), so `ResReadCol` asks only of the
-bits some part reads.
--/
+/-! `rep₀`'s `w` read off the layers: `WDecodes`, and each part's `hres` at it. -/
 
 @[expose] public section
 
@@ -48,37 +31,30 @@ open FlockVBridge.OfVStar (ReadCol ResZeroAtLH rowCol partRep)
 open FlockVBridge.Decode (RegBit)
 open FlockVBridge.PartS (wIdx)
 
-/-- Column `c` of `Q`'s unit is an input column a computed row reads, keyed at copy 0 by bit `kq` of a row port `q`. -/
 def KeyedCol (Q : VStmt) (c : ℕ) : Prop :=
   c < (Rows.ofNet Q.hU).nIn ∧ ReadCol (Rows.ofNet Q.hU) c ∧
     ∃ (q : Fin Q.c.ports.size) (kq : ℕ), kq < Layout.portRowW Q.c q ∧
       Aliased.srcKey Q.c (0 * (Rows.ofNet Q.hU).nIn + c) = .msg q.val (kq / 8) (kq % 8)
 
-/-- Position `a` of part `p`'s row ports (`pa = (p, a)`) is element `i` of `w`, its bits at keyed columns. -/
 def WLoc {S : ℕ} (Vs : Fin S → VStmt) (sh : Flock.Shape) (sess : ℕ → Fin S) (i : ℕ) (pa : ℕ × ℕ) : Prop :=
   pa.1 < (partsOf sh).size ∧ (wIOf sh pa.1)[pa.2]? = some i ∧
     ∀ b < 128, KeyedCol (Vs (sess pa.1)) (rowColOf sh pa.1 (128 * pa.2 + b))
 
 open Classical in
-/-- Where `w`'s element `i` is read: a part and position holding it (`WLoc`). -/
 def wLoc {S : ℕ} (Vs : Fin S → VStmt) (sh : Flock.Shape) (sess : ℕ → Fin S) (i : ℕ) : ℕ × ℕ :=
   if h : ∃ pa, WLoc Vs sh sess i pa then Classical.choose h else (0, 0)
 
-/-- The session element `i` of `w` is read in. -/
 def wSes {S : ℕ} (Vs : Fin S → VStmt) (sh : Flock.Shape) (sess : ℕ → Fin S) (i : ℕ) : Fin S :=
   sess (wLoc Vs sh sess i).1
 
-/-- Rep `ρ`'s unit element `i` of `w` is read in. -/
 def wUn {S : ℕ} (Vs : Fin S → VStmt) (sh : Flock.Shape) (sess : ℕ → Fin S)
     (un : (p : ℕ) → Fin 2 → Fin (Vs (sess p)).nv) (ρ : Fin 2) (i : ℕ) : Fin (Vs (wSes Vs sh sess i)).nv :=
   un (wLoc Vs sh sess i).1 ρ
 
-/-- The columns element `i` of `w` is read at, none where no part holds it. -/
 def wCols {S : ℕ} (Vs : Fin S → VStmt) (sh : Flock.Shape) (sess : ℕ → Fin S) (i c : ℕ) : Prop :=
   (∃ pa, WLoc Vs sh sess i pa) ∧ ∃ b < 128, c = rowColOf sh (wLoc Vs sh sess i).1 (128 * (wLoc Vs sh sess i).2 + b)
 
 open Classical in
-/-- **Rep `ρ`'s `w` read off the layers `Lb`**: element `i`'s bit `b` is the layer's at `wLoc`'s column. -/
 def wRead {S : ℕ} (Vs : Fin S → VStmt) (sh : Flock.Shape) (sess : ℕ → Fin S)
     (un : (p : ℕ) → Fin 2 → Fin (Vs (sess p)).nv) (Lb : (j : Fin S) → (Vs j).Bits) (ρ : Fin 2) : Array F128 :=
   Array.ofFn (n := nwOf sh) fun i => if ∃ pa, WLoc Vs sh sess i.val pa then
@@ -86,9 +62,8 @@ def wRead {S : ℕ} (Vs : Fin S → VStmt) (sh : Flock.Shape) (sess : ℕ → Fi
       (wUn Vs sh sess un ρ i.val) (rowColOf sh (wLoc Vs sh sess i.val).1 (128 * (wLoc Vs sh sess i.val).2 + b))
   else 0
 
-/-- **Hypothesis on V*'s circuits: an element of `w` a part reads is read whole at some part**: where a computed row of
-part `p`'s session reads bit `b` of position `a` of its row ports (`ReadCol`), some part `p₀` holds the same element at
-a position `a₀` all 128 of whose columns a computed row of `p₀`'s session reads. -/
+/-- It asks only of bits some part reads: first-fit packing can leave elements of a touched port that none of
+the part's residuals reads. -/
 def ResReadCol {S : ℕ} (Vs : Fin S → VStmt) (sh : Flock.Shape) (sess : ℕ → Fin S) : Prop :=
   ∀ p a b, p < (partsOf sh).size → (_ : a < (wIOf sh p).size) → b < 128 →
     ReadCol (Rows.ofNet (Vs (sess p)).hU) (rowColOf sh p (128 * a + b)) →
@@ -127,7 +102,6 @@ theorem el_wRead (Lb : (j : Fin S) → (Vs j).Bits) (ρ : Fin 2) {i : ℕ} (hi :
   rw [Array.getD_eq_getD_getElem?, Array.getElem?_eq_getElem hs, Option.getD_some,
     ← getElem!_pos (wRead Vs sh sess un Lb ρ) i hs, getElem!_wRead Lb ρ hi, ite_eq_left hex]
 
-/-- **A statement V* is sampled over has `upv > 0`**, given any outer proof of it (`upv_pos`). -/
 theorem upv_of_outer {Q : VStmt} {Reg' : Type} (zo : Q.Outer Reg') : 0 < Q.c.upv :=
   FlockVBridge.Family.upv_pos zo.hc Q.hscope
 
@@ -137,10 +111,6 @@ theorem bitAt_eq {Q : VStmt} {bits : Q.Bits} {u : Fin Q.nv} {col : ℕ} (hj : 0 
   unfold FlockVBridge.Family.bitAt
   rw [dite_eq_left hj]
 
-/-- **Each part's `hres` at `wRead`**: where every part `p` of rep `ρ`'s unit holds part `p` at one `w` in a good layer
-(`ResZeroAtLH`), each at `w`'s registered bits, it does at `wRead`'s: element `(wIOf sh p)[a]`'s bit `b` is the
-layer's at `wLoc`'s part `p₀` (`el_wRead`), which holds `w`'s bit there (`bitAt_of_regBit`), a part reading the element
-whole where `p` reads the bit (`ResReadCol`), each of its columns keyed (`RegBit`). -/
 theorem resZeroAtLH_wRead {Reg' : Type} (hrc : ResReadCol Vs sh sess) {zs : (s : Fin S) → (Vs s).Outer Reg'}
     {Lb : (s : Fin S) → (Vs s).Bits} (hA : ∀ s, (zs s).RegAgree (Lb s)) {GS : Flock.RecAlgebra.GfS}
     {gs : Array (Array ℕ × Array ℕ × Array ℕ)} (hS : Flock.RecAlgebra.structureOf sh = .ok GS)
@@ -229,8 +199,6 @@ variable {nT r : ℕ} {T : Fin nT → Type} {CT : Fin r → Type} [∀ k, Fintyp
   {st : Flock.Stmt} {hp : HoloParams} {n : ℕ} {L : SamplingDesign n} {Reg Cm : Type} {S : ℕ} {Vs : Fin S → VStmt}
   {stmt : Fin S → VStar.Stmt} {sh : Flock.Shape}
 
-/-- **`WDecodes` where `rep₀` reads `w` off the layers** (`wRead`): element `i` at `wLoc`'s session, unit and columns,
-each keyed and read (`KeyedCol`, `ioColAt_of_readCol`), and the same at layers agreeing there (`ofBits_congr`). -/
 theorem wDecodes_of_read (M : RepMaps stmt Vs sh Reg L.Ω (Cm × (holoInnerAt T CT st hp).Coin))
     (hupv : ∀ s, 0 < (Vs s).c.upv) (hM : ∀ Lb ρ, (M.rep₀ Lb ρ).w = wRead Vs sh M.sess M.un Lb ρ) :
     WDecodes M (fun _ => wSes Vs sh M.sess) (wUn Vs sh M.sess M.un) (fun _ => wCols Vs sh M.sess) := by

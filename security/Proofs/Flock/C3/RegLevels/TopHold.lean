@@ -9,15 +9,7 @@ import all Init.Data.String.Pattern.Basic
 import all Init.Data.String.Defs
 import Batteries.Tactic.OpenPrivate
 
-/-!
-# R's stream's first top makes R's registered entry
-
-`RecVStar.candidate3` holds a stream only with a round `k = 0` among its rounds (its count check), and walks the stream's
-rounds sorted by `k` (`Array.qsort`), so round 0, R's binding round, comes first (`qsort_min`, through core's private
-`qsort.sort` and `qpartition.loop`: a least key is first). R's stream starts with no tops, its binding round commits one,
-and the session refuses a binding round whose first top does not make `regR` (`Made`). So R's stream's first top makes
-`regR` (`candidate3_top`), which `RecVStar.innerCommits` takes from the registration (`innerCommits_top`).
--/
+/-! R's stream's first top makes R's registered entry. -/
 
 @[expose] public section
 
@@ -29,7 +21,6 @@ section QSort
 
 variable {α : Type} {n : Nat}
 
-/-- `bs` holds the elements `as` holds on `[lo, hi]` there, as a set, and `as`'s own elements outside it. -/
 def SameOn (lo hi : Nat) (as bs : Vector α n) : Prop :=
   (∀ j (hj : j < n), (j < lo ∨ hi < j) → bs[j] = as[j]) ∧
     ∀ x, (∃ j, ∃ hj : j < n, lo ≤ j ∧ j ≤ hi ∧ as[j] = x) ↔ (∃ j, ∃ hj : j < n, lo ≤ j ∧ j ≤ hi ∧ bs[j] = x)
@@ -100,7 +91,6 @@ private theorem loop_sameOn :
     · exact (sameOn_swap as _ _ ilo (by omega) (by omega) (by omega)).trans (ih _ _ _ _ _ _ (by omega))
     · exact ih _ _ _ _ _ _ (by omega)
 
-/-- The loop's split: past its pivot's place, no element is below the pivot, which it puts there. -/
 private theorem loop_split :
     ∀ (d : Nat) (as : Vector α n) (i k : Nat) (ilo : lo ≤ i) (ik : i ≤ k) (w : k ≤ hi), hi - k = d →
       as[hi] = pivot → (∀ j (hj : j < n), i ≤ j → j < k → lt as[j] pivot = false) →
@@ -146,7 +136,6 @@ private theorem loop_split :
       · subst hjk; simpa using hlt
       · exact hb j hj h1 (by omega)
 
-/-- The loop puts its pivot before `hi` once it has passed a place `mid < hi` whose element is not below it. -/
 private theorem loop_lt {mid : Nat} (hmid : mid < hi) :
     ∀ (d : Nat) (as : Vector α n) (i k : Nat) (ilo : lo ≤ i) (ik : i ≤ k) (w : k ≤ hi), hi - k = d →
       (i < k ∨ (k ≤ mid ∧ lt (as[mid]'(by omega)) pivot = false)) →
@@ -262,7 +251,6 @@ private theorem sort_spec (lt : α → α → Bool) (hasym : ∀ a b, lt a b = t
       · rfl
       · have := hasym _ _ h; rw [h] at this; cases this
 
-/-- **`Array.qsort` by a key puts a least key first**. -/
 theorem qsort_min (as : Array α) (f : α → Nat) {x y : α} (hx : x ∈ as)
     (hy : (as.qsort fun a b => decide (f a < f b))[0]? = some y) : f y ≤ f x := by
   have hasym : ∀ a b, decide (f a < f b) = true → decide (f b < f a) = false := by
@@ -298,7 +286,6 @@ theorem mem_of_sameOn {as : Array α} {r : Vector α as.size} {lo hi : Nat} (hS 
     obtain ⟨j', hj', -, -, e⟩ := (hS.2 as[j]).1 ⟨j, hj, Nat.zero_le _, by omega, rfl⟩
     exact ⟨j', hj', e⟩
 
-/-- **`Array.qsort` keeps its elements**, under an order whose negation is transitive. -/
 theorem qsort_mem (as : Array α) (lt : α → α → Bool) (hasym : ∀ a b, lt a b = true → lt b a = false)
     (htr : ∀ a b c, lt a b = false → lt b c = false → lt a c = false) (x : α) : x ∈ as.qsort lt ↔ x ∈ as := by
   unfold Array.qsort
@@ -344,8 +331,6 @@ theorem eok_bind {ε α β : Type} {x : Except ε α} {f : α → Except ε β} 
   | error e => cases h
   | ok a => exact ⟨a, rfl, h⟩
 
-/-- `bcs` makes R's registered entry: `regR` is the registration's `program` and `stacked` entry, and `topEntry` at
-`bcs` has the entry's canonical form. -/
 def Made (regR : Option (String × Json)) (bcs : Array ByteArray) : Prop :=
   ∃ prog e, regR = some (prog, e) ∧ topEntryFields prog bcs e = .ok true ∧
     ∃ e' str, topEntry prog bcs = .ok e' ∧ Flock.canon e' = .ok str ∧ Flock.canon e = .ok str
@@ -396,7 +381,6 @@ theorem push_keep {β : Type} {t : Array β} {b x : β} (h : t[0]? = some b) : (
     · exact e
   simp [Nat.ne_of_lt this, h]
 
-/-- **Candidate 3's session holds R's binding top**: the first top of the session's `stacked/rep0` stream makes `regR`. -/
 theorem candidate3_top {tr : Json} {rounds : Array Json} {t : String} {names : List String}
     {msgs : Array (String × Nat × ByteArray)} {regR : Option (String × Json)} {shape : Option StackedShape}
     {out : Array InnerStream} (ht : (t.dropEnd 1).toString ≠ "stacked")
@@ -614,8 +598,6 @@ theorem candidate3_top {tr : Json} {rounds : Array Json} {t : String} {names : L
       cases hbcs
       exact hm
 
-/-- **The verifier's hold of the inner transcript holds R's registered top**: R's stream's first top makes the `stacked`
-entry of the registration `reg` binds. -/
 theorem innerCommits_top {tr : Json} {record : String} {reg : Json} {bound : Option String}
     {shape : Option StackedShape} {cs : InnerCommits} {s : InnerStream} {bcs : Array ByteArray}
     (h : innerCommits tr record (some reg) bound shape = .ok cs) (hs : cs.stream? "stacked/rep0" = some s)

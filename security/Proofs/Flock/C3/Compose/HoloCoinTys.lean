@@ -19,26 +19,8 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.Soundness.Discharge.ZkHidden.Sched
 
-/-!
-# `CoinTys` at candidate 3
-
-The family's `CoinTys` and `vCT` describe the plain inner protocol's coins: the link points, then each of both reps'
-rounds a coin of the size the verifier takes there, as `coinArr` types it (`coinTy`, a scalar at one word).
-Candidate 3's inner protocol has the coins of its coin kinds (`holoCTs`), which keep each coin's form: a vector of one
-coordinate is a vector there, where `coinTy 1` is a scalar.
-
-* `holoForms`: each coin kind's form in `holoKinds`' order, `none` for a scalar and `some n` for a vector of `n`
-  coordinates; `kindCoinTys_holoKinds`: `holoKinds`' coin types are those forms' types (`formTy`), for every class;
-  `holoCTs_succ`: coin `1 + j` is of form `j`.
-* `formTy_coinTy`: a form other than a vector of one coordinate types its coin as `coinTy` of its size (`formSize`).
-  `holoForms_ne_one`: no form at `holoAt st hp` is one, for every inner statement and sparse parameters
-  (`ligForms_schedAt`: none of `fast100`'s schedules samples one).
-* `coinArr_roundWords`: at such a form every history round's coin is the coin step its words read as, which is what
-  the map's `coin` reads off the history's prefix; `roundWords_one`: at a vector of one coordinate its words read as the
-  coin, as `coinArr` reads them or as the vector of their words (`coinWords_vec`).
-* `holoSizes`: the coin sizes of the history's rounds in the streams of the verifier's map, which the forms' sizes are
-  to match.
--/
+/-! `CoinTys` at candidate 3, whose coins keep their form: a vector of one coordinate is a vector, where
+`coinTy 1` is a scalar. -/
 
 @[expose] public section
 
@@ -48,22 +30,15 @@ open Flock Flock.RecVStar Flock.Guarantees FlockSoundness.Discharge.Exec FlockSo
 open FlockSoundness.Discharge.Recursion FlockSoundness.Refine FlockLevel3
 open FlockVBridge.Family (coinTy exists_coinArr)
 
-/-- **The coin sizes of the history's rounds after the link points** in the streams `L`, in order: a sparse phase's
-stream round of `n` coins takes `n` rounds of one coin, every other stream's round of `n > 0` coins one round of `n`
-(`HoloStream.group`). -/
 def holoSizes (L : List (HoloStream × Array SchedRound)) : List ℕ :=
   L.flatMap fun e => e.2.toList.flatMap fun q => match e.1 with
     | .sparse _ => List.replicate q.1 1
     | _ => if q.1 = 0 then [] else [q.1]
 
-/-! ## The coins' forms -/
-
-/-- **A coin's type by its form**: a scalar (`none`) or a vector of `n` coordinates (`some n`). -/
 def formTy : Option ℕ → Type
   | none => GF128
   | some n => Fin n → GF128
 
-/-- A form's size: one word for a scalar, `n` for a vector of `n` coordinates. -/
 def formSize : Option ℕ → ℕ
   | none => 1
   | some n => n
@@ -72,30 +47,23 @@ theorem formTy_coinTy : ∀ s : Option ℕ, s ≠ some 1 → formTy s = coinTy (
   | none, _ => (if_pos rfl : coinTy 1 = GF128).symm
   | some n, h => (if_neg fun e => h (congrArg some e) : coinTy n = (Fin n → GF128)).symm
 
-/-- The zerocheck's coin forms (`zcShape`). -/
 def zcForms (m : ℕ) : List (Option ℕ) := some 6 :: some (m - 13) :: none :: List.replicate (m - 6) none
 
-/-- The lincheck's with hidden units (`holoLcShape`). -/
 def lcForms (kLog : ℕ) : List (Option ℕ) := none :: none :: (List.replicate (kLog - 6) none ++ [none])
 
-/-- The opening's for `n` claims (`opShape`). -/
 def opForms (n : ℕ) : List (Option ℕ) := List.replicate n (some 7) ++ [some n]
 
-/-- The two out-of-domain samples' (`oodShape`). -/
 def oodForms (dim : ℕ) : List (Option ℕ) := [some dim, none, some dim, none]
 
-/-- A level's queries' (`qbShape`). -/
 def qbForms (lv : FlockSoundness.Accounting.Level) : List (Option ℕ) :=
   [some lv.queries, some (FlockSoundness.Accounting.ceilLog2 lv.queries), none]
 
-/-- The recursive levels' (`recShape`). -/
 def recForms : List FlockSoundness.Accounting.Level → List (Option ℕ)
   | [] => []
   | [lv] => List.replicate lv.lanes (some 2) ++ qbForms lv
   | lv :: lv' :: rest =>
       List.replicate lv.lanes (some 2) ++ (oodForms (lv'.logCols + lv'.lanes) ++ (qbForms lv ++ recForms (lv' :: rest)))
 
-/-- Compiled Ligerito's (`ligShape`). -/
 def ligForms (sch : FlockSoundness.Accounting.Schedule) : List (Option ℕ) :=
   match sch.levels with
   | [] => []
@@ -104,19 +72,15 @@ def ligForms (sch : FlockSoundness.Accounting.Schedule) : List (Option ℕ) :=
       | [] => []
       | _ :: _ => oodForms (sch.m - 7 - sch.k0 + 1) ++ (qbForms lv₀ ++ recForms rest))
 
-/-- A sparse phase's, all scalars (`sparseKinds`). -/
 def sparseForms (sh : FlockSoundness.Model.SparseShape) : List (Option ℕ) :=
   List.replicate (12 + sh.nu + sh.sLog + sh.pLog + sh.tLog) none
 
-/-- **The forms of candidate 3's coins after the link points**, in `holoKinds`' order. -/
 noncomputable def holoForms (e : ExecHolo) : List (Option ℕ) :=
   (zcForms (e.cls.pubStatement e.regs).m ++ (lcForms (e.cls.pubStatement e.regs).kLog ++
       (opForms (2 * (e.cls.pubStatement e.regs).regions.length + 2) ++ ligForms e.sch))) ++
     ((zcForms (e.cls.pubStatement e.regs).m ++ (lcForms (e.cls.pubStatement e.regs).kLog ++
       (opForms (2 * (e.cls.pubStatement e.regs).regions.length + 2) ++ ligForms e.sch))) ++
     (sparseForms e.cls.shape ++ (sparseForms e.cls.shape ++ (opForms 2 ++ ligForms e.rsch.sch))))
-
-/-! ## No coin is a vector of one coordinate -/
 
 theorem zcForms_ne_one {m : ℕ} (h : m ≠ 14) : some 1 ∉ zcForms m := by
   have h' : 1 ≠ m - 13 := by omega
@@ -131,8 +95,6 @@ theorem sparseForms_ne_one (sh : FlockSoundness.Model.SparseShape) : some 1 ∉ 
 
 theorem ligForms_default : some 1 ∉ ligForms (default : FlockSoundness.Accounting.Schedule) := by decide
 
-/-- **`fast100`'s schedules sample no vector of one coordinate**, by evaluating `fast100` at each `m` below 36; past 35
-it has none (`Schedule.lean:48`), and `schedAt` is the default. -/
 theorem ligForms_schedAt (m : ℕ) : some 1 ∉ ligForms (schedAt m) := by
   by_cases hm : m < 36
   · have key : ∀ m' < 36, some 1 ∉ ligForms (schedAt m') := by decide +kernel
@@ -152,10 +114,6 @@ theorem holoForms_ne_one_of (e : ExecHolo) (hm : (e.cls.pubStatement e.regs).m �
     opForms_ne_one (by omega : 2 * (e.cls.pubStatement e.regs).regions.length + 2 ≠ 1),
     opForms_ne_one (by decide : (2 : ℕ) ≠ 1), sparseForms_ne_one, hs, hr, or_self, not_false_eq_true]
 
-/-- **No coin of candidate 3 is a vector of one coordinate**, at every inner statement and sparse parameters: the
-class's `m` is from 25 to 35 where its checks pass (`ZkHidden.schedule_range`) and 13 at the fixed class, so the
-zerocheck's second coin has `m − 13 ≠ 1` coordinates; the reps' and R's schedules are `fast100`'s or the default
-(`ligForms_schedAt`); and the openings are of `2·regions + 2` and 2 claims. -/
 theorem holoForms_ne_one (st : Flock.Stmt) (hp : HoloParams) : some 1 ∉ holoForms (holoAt st hp) := by
   refine holoForms_ne_one_of _ ?_ ?_ ?_
   · show (execClassAt st).cls.m ≠ 14
@@ -194,12 +152,9 @@ theorem getD_ne_one {l : List (Option ℕ)} (hl : some 1 ∉ l) (j : ℕ) : (l[j
     rw [e, Option.getD_some] at h
     exact hl (h ▸ List.mem_of_getElem? e)
 
-/-- Every form of `holoForms`, read as `holoCTs_succ` reads it, is other than a vector of one coordinate. -/
 theorem holoForms_getD_ne_one (st : Flock.Stmt) (hp : HoloParams) (j : ℕ) :
     ((holoForms (holoAt st hp))[j]?).getD none ≠ some 1 :=
   getD_ne_one (holoForms_ne_one st hp) j
-
-/-! ## `holoKinds`' coin types are the forms' -/
 
 theorem kindCoinTys_append :
     ∀ σ τ : List FlockSoundness.Discharge.Exec.Kind, kindCoinTys (σ ++ τ) = kindCoinTys σ ++ kindCoinTys τ
@@ -207,7 +162,6 @@ theorem kindCoinTys_append :
   | .msg _ :: σ, τ => kindCoinTys_append σ τ
   | .coin C :: σ, τ => congrArg (C :: ·) (kindCoinTys_append σ τ)
 
-/-- `n` rounds of `f`, each sampling one coin of form `s`. -/
 theorem kindCoinTys_rounds (C : Type) (f : ℕ → List FlockSoundness.Discharge.Exec.Kind) (hf0 : f 0 = [])
     (hf : ∀ n, kindCoinTys (f (n + 1)) = C :: kindCoinTys (f n)) (s : Option ℕ) (hs : formTy s = C) :
     ∀ n, kindCoinTys (f n) = (List.replicate n s).map formTy
@@ -270,7 +224,6 @@ theorem kindCoinTys_sparseKinds (sh : FlockSoundness.Model.SparseShape) :
   congr 2
   omega
 
-/-- **`holoKinds`' coin types are the forms'**, for every class, regions and schedules. -/
 theorem kindCoinTys_holoKinds (e : ExecHolo) : kindCoinTys (holoKinds e) = (holoForms e).map formTy := by
   rw [holoKinds, holoForms, kindCoinTys_append, kindCoinTys_append, kindCoinTys_append, kindCoinTys_append,
     kindCoinTys_append, kindCoinTys_holoRepShape, kindCoinTys_sparseKinds, kindCoinTys_ligShape, opShape,
@@ -288,8 +241,6 @@ theorem nthTy_map {α : Type} (f : α → Type) :
   | _ :: _, 0, _ => rfl
   | _ :: l, j + 1, hj => nthTy_map f l j (Nat.lt_of_succ_lt_succ hj)
 
-/-- **Coin `1 + j` is of form `j`**: the type of coin `1 + j`, after the link points, is that of `holoForms`' `j`-th
-form. -/
 theorem holoCTs_succ (st : Flock.Stmt) (hp : HoloParams) (j : ℕ)
     (h : 1 + j < 1 + (kindCoinTys (holoKinds (holoAt st hp))).length) :
     holoCTs st hp ⟨1 + j, h⟩ = formTy (((holoForms (holoAt st hp))[j]?).getD none) := by
@@ -301,17 +252,12 @@ theorem holoCTs_succ (st : Flock.Stmt) (hp : HoloParams) (j : ℕ)
   show nthTy (kindCoinTys (holoKinds (holoAt st hp))) j = _
   rw [kindCoinTys_holoKinds, nthTy_map formTy _ j hj, List.getElem?_eq_getElem hj, Option.getD_some]
 
-/-! ## The map's coin words read back as the coins -/
-
-/-- **A coin's words read back as the coin**, wherever some array reads as it. -/
 theorem coinArr_coinWords {C : Type} {c : C} (h : ∃ a : Array F128, coinArr fOf a = ⟨C, c⟩) :
     coinArr fOf (coinWords C c) = ⟨C, c⟩ := by
   unfold coinWords
   rw [dif_pos h]
   exact h.choose_spec
 
-/-- **A vector coin's words read back as the coin**: as `coinArr` reads them or, at one coordinate, which `coinArr`
-reads as a scalar, as the vector of their words. -/
 theorem coinWords_vec {C : Type} {n : ℕ} (hC : C = (Fin n → GF128)) (c : C) :
     coinArr fOf (coinWords C c) = ⟨C, c⟩ ∨
       (⟨Fin (coinWords C c).size → GF128, fun i => fOf (coinWords C c)[i.val]!⟩ : FlockSoundness.Game.Msg) =
@@ -338,9 +284,6 @@ theorem coinWords_vec {C : Type} {n : ℕ} (hC : C = (Fin n → GF128)) (c : C) 
     rw [dif_neg h, dif_pos hv]
     exact hv.choose_spec
 
-/-- **Every history round's coin is the coin step its words read as**, at a form other than a vector of one
-coordinate: at round `1 + j` of the history's coins `cs`, `coinArr` of the round's words (`roundWords`) is coordinate
-`1 + j` of its coin. -/
 theorem coinArr_roundWords {st : Flock.Stmt} {hp : HoloParams}
     (cs : List ((k : Fin (1 + (kindCoinTys (holoKinds (holoAt st hp))).length)) → holoCTs st hp k)) (j : ℕ)
     (h : 1 + j < 1 + (kindCoinTys (holoKinds (holoAt st hp))).length) (hc : 1 + j < cs.length)
@@ -354,8 +297,6 @@ theorem coinArr_roundWords {st : Flock.Stmt} {hp : HoloParams}
   rw [dif_pos h]
   exact coinArr_coinWords ⟨a, ha.symm.trans (Sigma.ext e (cast_heq e _).symm).symm⟩
 
-/-- **At a vector of one coordinate, the round's words read as its coin**, as `coinArr` reads them or as the vector
-of their words. -/
 theorem roundWords_one {st : Flock.Stmt} {hp : HoloParams}
     (cs : List ((k : Fin (1 + (kindCoinTys (holoKinds (holoAt st hp))).length)) → holoCTs st hp k)) (j : ℕ)
     (h : 1 + j < 1 + (kindCoinTys (holoKinds (holoAt st hp))).length) (hc : 1 + j < cs.length)

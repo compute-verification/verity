@@ -17,20 +17,7 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 
-/-!
-# The reps' openings at G's values, read from the layers' read wires
-
-G's values open rep `r`'s Ligerito rows from V*'s layers (`ligOfRead` over `RepMaps`' `sessO`, `unO`, as
-`VStarFamily.ligRead`): level `ℓ`'s opening `j` is copy 0 of unit `unO ℓ r j` of session `sessO ℓ`, its row the first
-`2^lanes` elements of its columns, its `h`-th sibling the 64 bytes from column `128 · 2^lanes + 512 h`. Those are
-input columns its rows read, so at `W` every position the masked layer has them, and `SrcOpensOfLayers` holds.
-
-* `colOf_mask`: an input column a row reads is the same in the masked layer (`copyVal_input`, `IoColAt`);
-  `elems_congr`, `bytesAt_congr`, `levelOf_congr`, `openRow_ligOfRead_congr`: the openings read only those columns, at
-  in-range queries and siblings (levels past the schedule open nothing; `openRow` reads no cap and no salt).
-* `RepMaps.OpenCols` (the hypothesis, `OpenKeys`' form): every `row` and `aux` column of each level's unit is an input
-  column a row reads. `srcOpensOfLayers` and `opensReadAt` follow at any `b` whose openings are `ligOfRead`'s.
--/
+/-! The reps' openings at G's values, read from the layers' read wires. -/
 
 @[expose] public section
 
@@ -88,7 +75,6 @@ theorem levelOf_congr {H : ℕ} {sl : Option ℕ} {q w n : ℕ} {row row' : ℕ 
     have hn : 0 < n := Nat.pos_of_ne_zero (by rintro rfl; omega)
     rw [hs (k.val / n) (Nat.div_lt_of_lt_mul (by rw [Nat.mul_comm n q]; exact hk)) (k.val % n) (Nat.mod_lt _ hn)]
 
-/-- **`openRow` reads only the levels' openings**, not the caps or the nonces. -/
 theorem openRow_ligOfRead_congr {sl : Option ℕ} {sch : Flock.Schedule} {x x' : LigRead}
     (h : ∀ ℓ w, levAt sl sch x ℓ w = levAt sl sch x' ℓ w) (ℓ j : ℕ) :
     openRow (ligOfRead 64 sl sch x) sch ℓ j = openRow (ligOfRead 64 sl sch x') sch ℓ j := by
@@ -99,7 +85,6 @@ theorem openRow_ligOfRead_congr {sl : Option ℕ} {sch : Flock.Schedule} {x x' :
   unfold openRow
   rw [e]
 
-/-- **An input column a row reads is the same in the masked layer** at `W` every position. -/
 theorem colOf_mask {S : ℕ} {Vs : Fin S → VStmt} (i : ℕ) (Xs : (j : Fin S) → (Vs j).Bits) (j : Fin S)
     (u : Fin (Vs j).nv) {c : ℕ} (hc : c < (Rows.ofNet (Vs j).hU).nIn) (hio : IoColAt (Vs j) u c) :
     colOf (Vs j) (maskOf Vs (fun _ _ => Finset.univ) i Xs j) u c = colOf (Vs j) (Xs j) u c := by
@@ -123,25 +108,20 @@ namespace RepMaps
 
 variable {Ω C : Type} (M : RepMaps stmt Vs sh Reg Ω C)
 
-/-- Copy 0 of opening `j` of level `ℓ` of rep `r`'s unit, in the layers `l` (`VStarFamily.openCol`). -/
 def openCol (l : (j : Fin S) → (Vs j).Bits) (r : Fin 2) (ℓ j : ℕ) : ℕ → Bool :=
   colOf (Vs (M.sessO ℓ)) (l (M.sessO ℓ)) (M.unO ℓ r j)
 
-/-- **Rep `r`'s reads in the layers `l`** at the schedule `sch` (`VStarFamily.ligRead`), its caps `cp`. -/
 def ligRead (sch : Flock.Schedule) (cp : ℕ → ℕ → ByteArray) (l : (j : Fin S) → (Vs j).Bits) (r : Fin 2) : LigRead where
   row ℓ j := elems (M.openCol l r ℓ j) 0 (2 ^ (sch.levels.getD ℓ default).lanes)
   sib ℓ j h := bytesAt (M.openCol l r ℓ j) (128 * 2 ^ (sch.levels.getD ℓ default).lanes + 512 * h) 64
   salt _ _ := ByteArray.empty
   cap := cp
 
-/-- **Hypothesis: the openings' `row` and `aux` columns are input columns a row reads** (`OpenKeys`' `ReadCol` form):
-at each level `ℓ` of `sch`, every column below `128 · 2^lanes + 512 (d − cap)` of its session's unit. -/
 def OpenCols (sch : Flock.Schedule) : Prop :=
   ∀ ℓ < sch.levels.size, ∀ c < 128 * 2 ^ (sch.levels.getD ℓ default).lanes +
       512 * ((sch.levels.getD ℓ default).d - (sch.levels.getD ℓ default).cap),
     c < (Rows.ofNet (Vs (M.sessO ℓ)).hU).nIn ∧ ReadCol (Rows.ofNet (Vs (M.sessO ℓ)).hU) c
 
-/-- Rep `i`'s opening at level `ℓ`, query `q`, read off the layers `l`. -/
 def rdOpen (sch : Flock.Schedule) (i : Fin 2) (ℓ q : ℕ) (l : (j : Fin S) → (Vs j).Bits) : List 𝔽 × List Dig :=
   openRow (ligOfRead 64 none sch (M.ligRead sch (fun _ _ => ByteArray.empty) l i)) sch ℓ q
 
@@ -153,7 +133,6 @@ theorem openCol_mask {sch : Flock.Schedule} (hk : M.OpenCols sch) (i : ℕ) (Xs 
   colOf_mask i Xs (M.sessO ℓ) (M.unO ℓ r j) (hk ℓ hℓ c hc).1
     (ioColAt_of_readCol (M.unO ℓ r j) (hk ℓ hℓ c hc).1 (hk ℓ hℓ c hc).2)
 
-/-- **The openings are the same in the masked layer**, at any caps. -/
 theorem openRow_mask {sch : Flock.Schedule} (hk : M.OpenCols sch) (i : ℕ) (Xs : (j : Fin S) → (Vs j).Bits)
     (r : Fin 2) (cp cp' : ℕ → ℕ → ByteArray) (ℓ q : ℕ) :
     openRow (ligOfRead 64 none sch (M.ligRead sch cp Xs r)) sch ℓ q =
@@ -168,8 +147,6 @@ theorem openRow_mask {sch : Flock.Schedule} (hk : M.OpenCols sch) (i : ℕ) (Xs 
   · refine levelOf_congr (fun _ hj => absurd hj ?_) (fun _ hj => absurd hj ?_) <;>
       rw [FlockVBridge.Family.Conss.getD_default, getElem!_neg sch.levels ℓ' hℓ] <;> exact Nat.not_lt_zero _
 
-/-- **`SrcOpensOfLayers` at G's values**: at `W` every position, any `b` whose openings are `ligOfRead`'s over the
-maps' units (`hb`, at any caps) has them read off the layers by `rdOpen`. -/
 theorem srcOpensOfLayers {sch : Flock.Schedule} (hk : M.OpenCols sch)
     {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'} {dg : ByteArray → ByteArray}
     {N k Rw : ℕ} {cp : ((j : Fin S) → (Vs j).Bits) → Fin 2 → ℕ → ℕ → ByteArray}
@@ -181,7 +158,6 @@ theorem srcOpensOfLayers {sch : Flock.Schedule} (hk : M.OpenCols sch)
   rw [h1, h2]
   exact M.openRow_mask hk i.val _ i _ _ ℓ q
 
-/-- **`OpensReadAt` at reps 0 and 1 at G's values** (`opensReadAt_src` at `srcOpensOfLayers`). -/
 theorem opensReadAt {sch : Flock.Schedule} (hk : M.OpenCols sch)
     {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'} {dg : ByteArray → ByteArray}
     {N k Rw : ℕ} {stp : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → C3Run (holoAt st hp)}

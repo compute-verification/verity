@@ -18,21 +18,7 @@ import Mathlib.Tactic.ReduceModChar
 import Proofs.Flock.Soundness.SparseRows
 import Proofs.Flock.Verifier.HmNets
 
-/-!
-# The opening unit reads its row columns (`openRowRead`)
-
-`OpenRowRead LANES H`, proved. The unit is `unitLaid LANES H`, `recOpenNet`'s run from the empty state laid out.
-
-* The builder (`rowReads_unit`): `recOpen` computes the residuals first, and residual 0's product `l` multiplies
-  `coef`'s element `l` by the row's (`consStructure`). Karatsuba's leaves include each position's pair of bits
-  (`mem_leaves`), so `leafSums` ANDs `coef`'s bit `c` with the row's, two input bits, which `and` makes a row
-  (`reads_and`). Every builder after it keeps the rows it starts from (`Keeps`: `fresh` puts its row in front), so that
-  row stays (`Reads`, `RowReads`).
-* The layout (`laid_reads`): the `k`-th row in creation order is the laid-out row `inRows + k`, below the constant, its
-  forms' columns those of their variables, an input bit's its own (`layout_rows`, `col_input`).
-* The net (`readCol_of_laid`): a laid-out row below the constant is a computed row of `Rows.ofNet`, reading the same
-  columns, at `unitLog ≤ 32`.
--/
+/-! The opening unit reads its row columns (`openRowRead`). -/
 
 @[expose] public section
 
@@ -43,9 +29,6 @@ section Builder
 open Flock.HmNets hiding and
 open Flock.RecOpen
 
-/-! ## The rows a builder starts from stay -/
-
-/-- `m` keeps the rows it starts from: `fresh` only puts rows in front. -/
 def Keeps {α : Type} (m : M α) : Prop := ∀ s : St, s.rows <:+ (m.run s).2.rows
 
 namespace Keeps
@@ -171,8 +154,6 @@ theorem keeps_climbFrom (d : List Lin) : ∀ (h : Nat) (cur : List Lin) (ss : Li
 theorem keeps_climbRow (H : Nat) (row aux d : List Lin) : Keeps (climbRow H row aux d) :=
   Keeps.bind' (keeps_shaFrom _ _ _) fun _ => Keeps.bind' (keeps_climbFrom _ _ _ _) fun _ => Keeps.pure' _
 
-/-! ## A row reading a variable -/
-
 /-- A row of `s` reads variable `v`, in `A` or in `B`. -/
 def RowReads (s : St) (v : Var) : Prop := ∃ r ∈ s.rows, v ∈ r.a.s ++ r.b.s
 
@@ -214,7 +195,6 @@ theorem reads_fresh {a b : Lin} {v : Var} (hv : v ∈ a.s ++ b.s) : Reads (fresh
   show RowReads ⟨s.next + 1, ⟨s.next, a, b⟩ :: s.rows⟩ v
   exact ⟨⟨s.next, a, b⟩, List.mem_cons.2 (Or.inl rfl), hv⟩
 
-/-- An AND of two non-constant forms of different supports is a row. -/
 theorem reads_and {a b : Lin} {v : Var} (ha : a.s ≠ []) (hb : b.s ≠ []) (hab : a.s ≠ b.s) (hv : v ∈ a.s ++ b.s) :
     Reads (Flock.HmNets.and a b) v := by
   have h1 : ¬ a.isConst = true := by simpa [Lin.isConst] using ha
@@ -222,15 +202,12 @@ theorem reads_and {a b : Lin} {v : Var} (ha : a.s ≠ []) (hb : b.s ≠ []) (hab
   unfold Flock.HmNets.and
   exact Reads.ite_neg h1 (Reads.ite_neg h2 (Reads.ite_neg hab (reads_fresh hv)))
 
-/-! ## Residual 0's leaves -/
-
 theorem getD_take {l : List Lin} {k i : Nat} (h : i < k) : (l.take k).getD i Lin.zero = l.getD i Lin.zero := by
   simp [List.getD_eq_getElem?_getD, h]
 
 theorem getD_drop (l : List Lin) (k i : Nat) : (l.drop k).getD i Lin.zero = l.getD (k + i) Lin.zero := by
   simp [List.getD_eq_getElem?_getD, List.getElem?_drop]
 
-/-- **Karatsuba's leaves include each position's pair of operand bits**. -/
 theorem mem_leaves : ∀ (n : Nat) (a b : List Lin) (i : Nat), i < 2 ^ n →
     (a.getD i Lin.zero, b.getD i Lin.zero) ∈ leaves n a b
   | 0, a, b, i, hi => by
@@ -274,8 +251,6 @@ theorem reads_residualsGo (S : GfS) (W V : List Lin) {v : Var} {r : Res} (hr : R
       · exact Reads.bind_left hr fun _ => Keeps.bind' (keeps_residualsGo S W V rs) fun _ => Keeps.pure' _
       · exact Reads.bind_right fun _ => Reads.bind_left (reads_residualsGo S W V hr rs h) fun _ => Keeps.pure' _
 
-/-! ## The operand forms -/
-
 theorem ops_w {LANES l : Nat} (hl : l < LANES) : (consStructure LANES).ops.getD l [] = [Term.w l] := by
   simp [consStructure, List.getD_eq_getElem?_getD, List.getElem?_append_left, hl]
 
@@ -309,10 +284,6 @@ theorem s_zero_xor_var (u : Var) : (Lin.zero ^^^ Lin.var u).s = [u] := by
   show Flock.HmNets.symm [] [u] = [u]
   rw [Flock.HmNets.symm.eq_1]
 
-/-! ## Residual 0 reads the row -/
-
-/-- **Residual 0 ANDs bit `c` of `V` with bit `c` of `W`**: its product `l = c / 128` multiplies `V`'s element `l` by
-`W`'s, and Karatsuba's leaf `c % 128` is their bits `c`; where those are variables `w ≠ u`, a row reads `u`. -/
 theorem reads_residualForms {LANES : Nat} {W V : List Lin} {c : Nat} (hc : c < 128 * LANES) {u w : Var}
     (hW : W.getD c Lin.zero = Lin.var u) (hV : V.getD c Lin.zero = Lin.var w) (huw : w ≠ u) :
     Reads (residualForms (consStructure LANES) W V) u := by
@@ -362,7 +333,6 @@ theorem recOpenNet_run (LANES H : Nat) (p : Ports) (s : St) :
         ((List.range p.dirs).map fun i => Lin.var (s.next + p.row + p.aux + p.acc + p.coef + i))).run
         ⟨s.next + p.row + p.aux + p.acc + p.coef + p.dirs, s.rows⟩ := rfl
 
-/-- **The opening's builder leaves a row reading each row bit.** -/
 theorem rowReads_unit (LANES H : Nat) {c : Nat} (hc : c < 128 * LANES) :
     RowReads ((recOpenNet LANES H (ports LANES H)).run St.empty).2 c := by
   rw [recOpenNet_run]
@@ -374,15 +344,11 @@ theorem rowReads_unit (LANES H : Nat) {c : Nat} (hc : c < 128 * LANES) :
     change @Ne Nat _ _
     omega
 
-/-! ## In the laid-out unit -/
-
 theorem mem_cols {nIn inRows cp : Nat} {f : Lin} {v : Var} (hv : v ∈ f.s) (hlt : v < nIn) :
     v ∈ (cols nIn inRows cp f).toList := by
   simp only [cols, Array.toList_append]
   exact List.mem_append_left _ (List.mem_map.2 ⟨v, hv, col_input hlt⟩)
 
-/-- **The laid-out unit has a computed row for each input bit a builder row reads**: the `k`-th AND, at row
-`inRows + k`, its forms' columns those of their variables. -/
 theorem laid_reads_of (LANES H : Nat) {c : Nat} (hr : RowReads ((recOpenNet LANES H (ports LANES H)).run St.empty).2 c)
     (hlt : c < 128 * LANES + (ports LANES H).aux) :
     ∃ k, groupWords ((wordPorts ((ports LANES H).bits.foldl (· + ·) 0)).foldl (· + ·) 0) * Flock.WORD + k <
@@ -415,7 +381,6 @@ theorem laid_reads_of (LANES H : Nat) {c : Nat} (hr : RowReads ((recOpenNet LANE
     · exact List.mem_append_left _ (mem_cols hv hlt)
     · exact List.mem_append_right _ (mem_cols hv hlt)
 
-/-- **The laid-out unit has a computed row reading each row bit**. -/
 theorem laid_reads (LANES H : Nat) {c : Nat} (hc : c < 128 * LANES) :
     ∃ k, groupWords ((wordPorts ((ports LANES H).bits.foldl (· + ·) 0)).foldl (· + ·) 0) * Flock.WORD + k <
         (unitLaid LANES H).constPos ∧
@@ -440,9 +405,6 @@ section Net
 
 open FlockSoundness FlockSoundness.Audit
 
-/-- **A laid-out row below the constant is a computed row of the net**, reading the same columns: the net is
-`Net.ofRows`' (`netOf`) of the layout's rows, its computed rows `Rows.ofNet`'s from its input rows' end, at
-`unitLog ≤ 32` (`ofRows_row`, `Rows.ofNet_a`, `Rows.ofNet_b`). -/
 theorem readCol_of_laid {net : Flock.Net} (hU : Built net) {name : String} {l : Flock.HmNets.Laid}
     (hl : Flock.HmNets.netOf name l = .ok net) (hu : net.unitLog ≤ 32) {k c : ℕ}
     (hk : net.inWords * Flock.WORD + k < l.constPos)
@@ -474,8 +436,6 @@ end FlockC3.Reps.RowRead
 
 namespace FlockC3.Reps
 
-/-- **The opening unit reads its row columns** (`OpenRowRead`): residual 0's AND of `coef`'s bit `c` and the row's
-(`laid_reads`) is a computed row of the unit's net (`readCol_of_laid`). -/
 theorem openRowRead (LANES H : ℕ) : OpenRowRead LANES H := by
   intro net hU hn hu c hc
   obtain ⟨k, hk, hmem⟩ := RowRead.laid_reads LANES H hc

@@ -35,26 +35,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# The coin distribution: a game played on `Claims`' coin sequence
-
-The live games (`FlockSoundness.Game`) flip a coin of their own type at each `coin` node; `Claims.run` gives the
-verifier one coin `r_j : Coin` per round, answering the prover's message `a_j`. This file plays a game on the round
-coins and proves that the result has the game's distribution.
-
-* `Iface Coin g`: how the game's moves and coins sit in `Claims`' messages: at each `send` node a total decoder of the
-  prover's bytes (`dec`), at each `coin` node a uniform projection of the round coin onto the game's coin (`CoinIf`),
-  with the bytes of the verifier's reply that carries it. Only decoded moves need an interface below them.
-* `RStrat g I`: a prover that sends bytes at every `send` node; `toStrat` reads it as a `Strategy` of the game.
-* `playOn g I s p r`: the game played on the round coins `r`, one per round. A round opens with the prover's message:
-  at a `send` node it is the move, and the round's coin `r_j` stays pending; a `coin` node right after reads the pending
-  coin (its projection), any other `coin` node opens a round of its own, whose message the game ignores.
-* `RoundsLe g I s p n`: the interaction ends within `n` rounds, counting the round that carries the decision.
-* `ex_playOn` (**the coin distribution**): `Ex_r f(playOn … r) = expect f g (toStrat s)` over `r : Fin n → Coin` uniform: each
-  game coin is uniform, independent of the other coins, and sampled after the message it answers.
-* `forkX`, `ex_fork`: the same for two plays sharing their first `j` round coins (`Claims.forkCoins j`), the sampling design of
-  `B`'s two runs: one play to round `j`, then two independent continuations.
--/
+/-! The coin distribution: a game played on `Claims`' round coins has the game's distribution. -/
 
 @[expose] public section
 
@@ -82,7 +63,6 @@ def Iface : Game β → Type
   | .send M k => (dec : Msg → M) × ((a : Msg) → Iface (k (dec a)))
   | @Game.coin _ C iF _ k => @CoinIf Coin C _ iF × ((c : C) → Iface (k c))
 
-/-- A prover that sends bytes at every `send` node, as a function of the history (its position in the tree). -/
 def RStrat : (g : Game β) → Iface Coin g → Type
   | .ret _, _ => PUnit
   | .send _ k, I => (a : Msg) × RStrat (k (I.1 a)) (I.2 a)
@@ -92,7 +72,6 @@ end Iface
 
 variable {β Coin : Type} [Fintype Coin]
 
-/-- The bytes prover as a strategy of the game: its moves are its bytes, decoded. -/
 def toStrat : (g : Game β) → (I : Iface Coin g) → RStrat Coin g I → Strategy g
   | .ret _, _, _ => PUnit.unit
   | .send _ k, I, s => ⟨I.1 s.1, toStrat (k (I.1 s.1)) (I.2 s.1) s.2⟩
@@ -118,24 +97,18 @@ def RoundsLe : (g : Game β) → (I : Iface Coin g) → RStrat Coin g I → Bool
   | @Game.coin _ _ _ _ _, _, _, false, 0 => False
   | @Game.coin _ _ _ _ k, I, s, false, n + 1 => ∀ c, RoundsLe (k c) (I.2 c) (s c) false n
 
-/-- The expectation of `f` from a position with the pending coin `p`: the game's own `expect`, a pending coin read by a
-`coin` node. -/
 noncomputable def expectP (f : β → ℝ) : (g : Game β) → (I : Iface Coin g) → RStrat Coin g I → Option Coin → ℝ
   | .ret b, _, _, _ => f b
   | .send M k, I, s, _ => expect f (.send M k) (toStrat _ I s)
   | @Game.coin _ _ _ _ k, I, s, some u => expect f (k (I.1.proj u)) (toStrat _ _ (s (I.1.proj u)))
   | @Game.coin _ C iF iN k, I, s, none => expect f (@Game.coin _ C iF iN k) (toStrat _ I s)
 
-/-- **Two plays forked at round `j`**: the plays share their first `j` round coins and then continue independently;
-`F` read on the two outcomes, in expectation. -/
 noncomputable def forkX (F : β → β → ℝ) : ℕ → (g : Game β) → (I : Iface Coin g) → RStrat Coin g I → Option Coin → ℝ
   | 0, g, I, s, p => expectP (fun b => expectP (F b) g I s p) g I s p
   | _ + 1, .ret b, _, _, _ => F b b
   | j + 1, .send _ k, I, s, _ => Ex fun u : Coin => forkX F j (k (I.1 s.1)) (I.2 s.1) s.2 (some u)
   | j + 1, @Game.coin _ _ _ _ k, I, s, some u => forkX F (j + 1) (k (I.1.proj u)) (I.2 _) (s _) none
   | j + 1, @Game.coin _ _ _ _ k, I, s, none => Ex fun u : Coin => forkX F j (k (I.1.proj u)) (I.2 _) (s _) none
-
-/-! ## Uniform averages over round coins -/
 
 theorem Ex_cons {n : ℕ} (f : (Fin (n + 1) → Coin) → ℝ) :
     Ex f = Ex fun c : Coin => Ex fun r : Fin n → Coin => f (Fin.cons c r) := by
@@ -172,7 +145,6 @@ theorem Ex_equiv {α γ : Type} [Fintype α] [Fintype γ] (e : α ≃ γ) (f : �
   unfold Ex
   rw [Fintype.sum_equiv e (fun a => f (e a)) f (fun _ => rfl), Fintype.card_congr e]
 
-/-- **A uniform projection through an equivalence**: the round coin is a pair, and the game coin its first part. -/
 def CoinIf.ofEquiv {C D : Type} [Fintype C] [Fintype D] [Nonempty D] (e : Coin ≃ C × D) (enc : C → Msg)
     (dec : Msg → C) (dec_enc : ∀ c, dec (enc c) = c) : CoinIf Coin C where
   proj u := (e u).1
@@ -187,22 +159,18 @@ section Mk
 
 variable {M C : Type} [Fintype C] [Nonempty C]
 
-/-- The interface at a `send` node. -/
 def Iface.mkSend {k : M → Game β} (dec : Msg → M) (next : (a : Msg) → Iface Coin (k (dec a))) :
     Iface Coin (.send M k) :=
   ⟨dec, next⟩
 
-/-- The interface at a `coin` node. -/
 def Iface.mkCoin {k : C → Game β} (ci : CoinIf Coin C) (next : (c : C) → Iface Coin (k c)) :
     Iface Coin (.coin C k) :=
   (ci, next)
 
-/-- The interface at the end. -/
 def Iface.mkRet (b : β) : Iface Coin (.ret b) := PUnit.unit
 
 end Mk
 
-/-- More rounds do. -/
 theorem RoundsLe.mono : ∀ (g : Game β) (I : Iface Coin g) (s : RStrat Coin g I) (p : Bool) (n m : ℕ),
     RoundsLe g I s p n → n ≤ m → RoundsLe g I s p m := by
   intro g
@@ -278,15 +246,12 @@ theorem playOn_coin_cons {C : Type} [Fintype C] [Nonempty C] {k : C → Game β}
   simp only [playOn]
   rw [coinSeq_cons_zero, coinSeq_cons_succ]
 
-/-! ## The coin distribution -/
-
 omit [Inhabited Coin] in
 theorem expectP_none (f : β → ℝ) (g : Game β) (I : Iface Coin g) (s : RStrat Coin g I) :
     expectP f g I s none = expect f g (toStrat g I s) := by
   cases g <;> rfl
 
 omit [Inhabited Coin] in
-/-- A pending coin, averaged, is a coin not yet sampled: the projection is uniform. -/
 theorem ex_expectP_some [Nonempty Coin] (f : β → ℝ) (g : Game β) (I : Iface Coin g) (s : RStrat Coin g I) :
     Ex (fun u : Coin => expectP f g I s (some u)) = expectP f g I s none := by
   cases g with
@@ -297,8 +262,6 @@ theorem ex_expectP_some [Nonempty Coin] (f : β → ℝ) (g : Game β) (I : Ifac
     rw [I.1.unif (fun c => expect f (k c) (toStrat _ _ (s c)))]
     rfl
 
-/-- **The coin distribution**: the game played on uniform round coins has the game's distribution, `expect` against the decoded
-strategy, whenever it ends within the rounds. -/
 theorem ex_playOn [Nonempty Coin] (f : β → ℝ) : ∀ (g : Game β) (I : Iface Coin g) (s : RStrat Coin g I)
     (p : Option Coin) (n : ℕ), RoundsLe g I s p.isSome n →
       Ex (fun r : Fin n → Coin => f (playOn g I s p (coinSeq r))) = expectP f g I s p := by
@@ -336,7 +299,6 @@ theorem ex_playOn [Nonempty Coin] (f : β → ℝ) : ∀ (g : Game β) (I : Ifac
           I.1.unif (fun c => expect f (k c) (toStrat _ _ (s c)))]
         rfl
 
-/-- The coin distribution at the root: no round open. -/
 theorem ex_playOn_root [Nonempty Coin] (f : β → ℝ) (g : Game β) (I : Iface Coin g) (s : RStrat Coin g I) (n : ℕ)
     (hR : RoundsLe g I s false n) :
     Ex (fun r : Fin n → Coin => f (playOn g I s none (coinSeq r))) = expect f g (toStrat g I s) :=
@@ -354,8 +316,6 @@ theorem ex_fork_zero [Nonempty Coin] (F : β → β → ℝ) (g : Game β) (I : 
     funext fun r => ex_playOn (F (playOn g I s p (coinSeq r))) g I s p n hR]
   exact ex_playOn (fun b => expectP (F b) g I s p) g I s p n hR
 
-/-- **The fork sampling design**: two plays sharing their first `j` round coins, the rest independent, have the sampling design `forkX`: one
-play to round `j`, then two independent continuations. -/
 theorem ex_fork [Nonempty Coin] (F : β → β → ℝ) : ∀ (g : Game β) (I : Iface Coin g) (s : RStrat Coin g I)
     (p : Option Coin) (n j : ℕ) (hj : j < n), RoundsLe g I s p.isSome n →
       Ex (fun rr : (Fin n → Coin) × (Fin n → Coin) =>

@@ -16,15 +16,7 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 
-/-!
-# The read fact from the source's sparse phases
-
-`SrcSparseOK`: at every accepted outer proof, each rep's sparse phase plays on the source's run's stage `u.sp i` to
-some claim. `sparseReadAt_of_ok`: then `SparseReadAt` holds on the run's own steps, which is what
-`sparseRead_c3DecOf` takes. Each play is a RecSparse unit's steps (`unit_of_playsT`; the slots' types are below `T` as
-`ExecHolo` types them), and on `runSteps u` the reps' sparse stages sit right past the reps' steps (`sps_prefix`), so
-no decode of the steps is needed.
--/
+/-! The read fact from the source's sparse phases. -/
 
 @[expose] public section
 
@@ -38,7 +30,6 @@ open Flock FlockLevel3 Accounting ZkBind Integrate Placed StrictCR DecodeZL Floc
 open FlockC3.Compose FlockC3.PubRows
 open FlockVBridge.InnerAccepts (firstSteps)
 
-/-- **On a run's own steps, past the reps' steps, come the reps' sparse stages.** -/
 theorem sps_prefix {e : ExecHolo} (u : C3Run e) : u.sp 0 ++ u.sp 1 <+: afterReps (runSteps u) u := by
   have hl : (firstSteps (u.ts 0) ++ u.ts 1).length = 2 * (u.ts 0).length + (u.ts 1).length := by
     rw [List.length_append, firstSteps_length]
@@ -47,7 +38,6 @@ theorem sps_prefix {e : ExecHolo} (u : C3Run e) : u.sp 0 ++ u.sp 1 <+: afterReps
   rw [← List.append_assoc (firstSteps (u.ts 0)), List.drop_left' hl]
   exact ⟨_, List.append_assoc _ _ _⟩
 
-/-- **The read fact on a run's own steps**, from each rep's sparse phase playing on its stage to some claim. -/
 theorem sparseReadAt_of_plays {e : ExecHolo} {u : C3Run e}
     (hpl : ∀ i : Fin 2, ∃ x, PlaysT (sparseAt e u i) (u.sp i) (some x)) : SparseReadAt e (runSteps u) u := by
   have key := fun i => (hpl i).elim fun _ hx => unit_of_playsT e.cls.shape hx fun _ σ => (e.τ σ).isLt
@@ -65,14 +55,11 @@ section source
 
 variable {S : ℕ} {Vs : Fin S → VStmt}
 
-/-- **The source's sparse phases play**: at every accepted outer proof, each rep's sparse phase plays on the source's
-run's stage `u.sp i` to some claim. -/
 def SrcSparseOK (zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
     (dg : ByteArray → ByteArray) (N k Rw : ℕ)
     (src : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → C3Run (holoAt st hp)) : Prop :=
   AtSrc zs dg N k Rw src fun _ u => ∀ i : Fin 2, ∃ x, PlaysT (sparseAt (holoAt st hp) u i) (u.sp i) (some x)
 
-/-- **The read fact on the source's runs' own steps**, from its sparse phases. -/
 theorem sparseReadAt_of_ok {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'}
     {dg : ByteArray → ByteArray} {N k Rw : ℕ}
     {src : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → C3Run (holoAt st hp)}

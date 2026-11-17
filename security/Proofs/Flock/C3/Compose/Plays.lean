@@ -15,13 +15,7 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 
-/-!
-# A stage's decode is its play
-
-A game plays on at most one prefix of a tape, to one output (`playsT_prefix`), so `stageOf` at a tape a game plays a
-prefix of is that play (`stageOf_of_playsT`). The read facts' dischargers (`hSparse_of_read`, `hRegLevels_of_read`)
-decode their stages through it.
--/
+/-! A stage's decode is its play. -/
 
 @[expose] public section
 
@@ -29,7 +23,6 @@ namespace FlockC3.Compose
 
 open FlockSoundness FlockSoundness.Game
 
-/-- **A game plays on at most one prefix of a tape**, to one output. -/
 theorem playsT_prefix {α : Type} {g : Game α} {p : List Step} {a : α} (ha : PlaysT g p a) :
     ∀ {p' : List Step} {a' : α} {l : List Step}, PlaysT g p' a' → p <+: l → p' <+: l → p' = p ∧ a' = a := by
   induction ha with
@@ -57,7 +50,6 @@ theorem playsT_prefix {α : Type} {g : Game α} {p : List Step} {a : α} (ha : P
           obtain ⟨rfl, rfl⟩ := ih hk (List.prefix_append _ t) hq
           exact ⟨rfl, rfl⟩
 
-/-- **A stage's decode is its play** on any prefix of the tape it plays on. -/
 theorem stageOf_of_playsT {α : Type} {g : Game α} {l p : List Step} {a : α} (d : α) (h : PlaysT g p a)
     (hp : p <+: l) : stageOf g l d = (p, a) := by
   have hex : ∃ q : List Step × α, q.1 <+: l ∧ PlaysT g q.1 q.2 := ⟨(p, a), hp, h⟩

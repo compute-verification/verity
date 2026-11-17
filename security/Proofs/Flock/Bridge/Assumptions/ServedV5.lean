@@ -4,16 +4,8 @@ public import Flock.Witness
 public import Flock.Desc
 public import Flock.PortRoots
 
-/-!
-# The served registered session's files parse at public inputs
-
-`SampledKSLiveV5` takes a circuit file that parses to a descriptor `D` in `scopeOkH`, the circuit's public input ports
-`pi` (`HmIn.parse`), and a public file that loads over them (`HmIn.loadPublic`) whose ports' published domains are
-pairwise distinct (`PortRoots.dupId`). Whether the
-served files do is a computation on a 56 MB circuit file, which the kernel can't run, so it is one named premise, stated
-with the verifier's own functions on the files `verify --zk` reads, each pinned by its SHA-512, and checked by running
-those functions on them.
--/
+/-! That the served registered session's files parse at public inputs: a named premise, since the kernel can't
+run the parse on the circuit file, checked by running the verifier's functions on the pinned files. -/
 
 @[expose] public section
 
