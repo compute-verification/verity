@@ -180,7 +180,7 @@ if has gpu; then
   echo "== gpu $(date -u +%T)"
   export -f session spec gpu_sample free_port wait_serving stamp
   export B O FW PCPU VCPU NC VC NS WARM RUNS STATEMENTS PLAIN_STATEMENTS DRAW SANITY ROWS NSB NSYS NSYS_STATEMENT
-  GPU_LEASE_WHO=${GPU_LEASE_WHO:-flock-s8-block} gpu-lease 1 --wait --max-min ${LEASE_MIN:-20} -- bash -c '
+  GPU_LEASE_WHO=${GPU_LEASE_WHO:-flock-s8-block} gpu-lease 1 --wait ${LEASE_CORES:+--cores $LEASE_CORES} --max-min ${LEASE_MIN:-20} -- bash -c '
     nvidia-smi -L > $O/lease-gpu.txt
     [ "${SANITY:-1}" = 1 ] && session 64:2 gpu
     for kn in $STATEMENTS; do session $kn gpu; done
@@ -238,4 +238,34 @@ if has lean; then
 fi
 echo "== summary $(date -u +%T)"
 python3 $REPO/benchmarks/flock_s8_block/summary.py $O | tee $O/summary.json
+python3 - $O "$STATEMENTS" "$CPU_STATEMENTS" $ROWS <<'EOF' || LEAN_BAD=10
+import json, sys
+from pathlib import Path
+out = Path(sys.argv[1])
+sys.path.insert(0, "benchmarks/harness")
+from verity_bench import kit
+res = kit.writer(out)
+card = res.stamp["card"]
+card = "cpu" if card == "none" else card.split(", ")[0].removeprefix("NVIDIA ").lower().replace(" ", "-")
+st = json.loads((out / "summary.json").read_text())["statements"]
+bad = []
+for mode, specs, machine in (("gpu", sys.argv[2], card), ("cpu", sys.argv[3], "cpu")):
+    for spec in specs.split():
+        if spec.startswith("served"):
+            continue
+        k, n, *r = spec.split(":")
+        rows = int(r[0]) if r else int(sys.argv[4])
+        name = f"k{k}-n{n}-r{rows}"
+        s = st.get(name, {}).get(mode, {})
+        ok = s.get("timed") and s.get("verifier_accepted") == [True] * s.get("sessions", -1)
+        bad += [] if ok else [f"{name} {mode}"]
+        res.measurement("proofs/flock-s8-block-zk-prove-seconds", s.get("prove_total_s") if ok else None, "s",
+                        mark="measured", member=f"{name}-{machine}",
+                        why=None if ok else s.get("error", "the verifier did not accept every session")[-300:],
+                        extra={"k": int(k), "instances": int(n), "rows": rows, "mode": mode,
+                               "e2e_s": s.get("e2e_s"), "proof_bytes": s.get("proof_bytes"),
+                               "gpu_busy_s_per_session": s.get("gpu_busy_s_per_session")})
+res.validation("failed" if bad else "passed", "the verifier recorded and accepted every session of each statement",
+               "; ".join(bad) or "all accepted")
+EOF
 exit $LEAN_BAD

@@ -1,0 +1,9 @@
+[[metric]]
+id = "proofs/flock-s8-block-zk-prove-seconds"
+title = "Flock zk prove time, int8 row blocks"
+owner = "proofs"
+unit = "s"
+axis = "Median prove seconds of a timed loopback Flock --zk session over a statement of N proof blocks of R adjacent cells of one int8 GEMM output row at K, one line per statement and machine as its member names them (kK-nN-rR, then the card, or cpu for the CPU prover on the same node); the point has no value unless the verifier recorded and accepted every session of it."
+better = "lower"
+command = "research run --on vy-spot-glm53 --project verity --source . --cwd source --timeout 60m -- taskset -c 60-79 bash benchmarks/flock_s8_block/run.sh GPU_LEASE_WHO=proofs LEASE_CORES=60-79 LEASE_MIN=30"
+every = "7d"
