@@ -70,6 +70,7 @@ from verity.commitments.periods import interface as IF
 from verity.protocols.registration.verifier import registration as RL
 from verity.protocols.resource_accounting.memory.pous.verifier import wipe_period as W
 from verity.protocols.proofs.spot.verifier.one_stage import docket as REG
+from verity.protocols.proofs.spot.verifier.one_stage.verdict_record import DESIGN
 from verity.protocols.resource_accounting.memory.poub.verifier import ledger
 
 HERE = Path(__file__).resolve().parent
@@ -2537,7 +2538,7 @@ def _pearlplus_piece(tmp_path: Path, monkeypatch, live, case: str = "of record",
     committed = _committed("rate:1/1000000000" if case == "rule not R's" else rule)
     (audit / S.WINDOW_REGISTRATION).write_text(json.dumps(
         {"format": REG.FORMAT_V2, "previous": "ab" * 64 if case == "R not after W" else PEARL_W, "registered": [],
-         "population": PEARL_BLOCKS, "law": committed}))
+         "population": PEARL_BLOCKS, DESIGN: committed}))
     summary = {"tie": {"record": PEARL_W}, "sampling_design": rule,
                "audit": {"rejected": {"accepted": False}, "unsaid": {}}.get(case, {"accepted": True})}
     (audit / S.AUDIT_SUMMARY).write_text(json.dumps({} if case == "audit untied" else summary))
@@ -7793,3 +7794,27 @@ def test_the_serve_steps_python_path_names_the_import_root_of_every_workspace_pa
     reached = _workspace_reach("verity_vllm.pipeline.cli", "verity_vllm.pipeline.serve_openai")
     assert {"verity", "verity_vllm", "verity_config"} <= set(reached), reached
     assert sorted(f"{top} ({where})" for top, where in reached.items() if where not in named) == []
+
+
+@pytest.mark.parametrize("sealed", [True, False])
+def test_the_window_verb_publishes_the_execution_phase_in_a_fresh_out_or_stops(tmp_path, sealed):
+    """`served_verdicts.sh window` in an $OUT with no serve/ writes serve/phase.json, the picked window's seal's SHA-512;
+    with no seal of that window it writes none and stops at 21."""
+    tree, d, venv = tmp_path / "tree", tmp_path / "serve", tmp_path / "venv" / "bin"
+    (tree / "benchmarks").mkdir(parents=True)
+    (tree / "benchmarks" / "one_stage").symlink_to(HERE.parents[2] / "benchmarks" / "one_stage", target_is_directory=True)
+    _script(venv / "python", '[ "$1" = benchmarks/one_stage/served_verdicts.py ] && [ "$2" = window ] && '
+                             f'{{ echo \'{{"window": 7}}\'; exit 0; }}\nexec {sys.executable} "$@"')
+    (d / "private").mkdir(parents=True)
+    seal = json.dumps({"window": 7, "run_root": "ab" * 64})
+    (d / "seals.jsonl").write_text(json.dumps({"window": 3}) + "\n" + (seal + "\n" if sealed else ""))
+    env = {"PATH": os.defpath, "HOME": str(tmp_path), "VENV": str(venv.parent), "D": str(d), "OUT": str(tmp_path / "out")}
+    run = subprocess.run(["bash", "benchmarks/one_stage/served_verdicts.sh", "window"], cwd=tree, env=env, check=False,
+                         capture_output=True, text=True)
+    phase = tmp_path / "out" / "serve" / "phase.json"
+    if sealed:
+        assert run.returncode == 0, (run.stdout, run.stderr)
+        assert json.loads(phase.read_text()) == {"seal_sha512": hashlib.sha512(seal.encode()).hexdigest()}
+    else:
+        assert run.returncode == 21 and not phase.exists(), (run.stdout, run.stderr)
+        assert "STOP at window (exit 21)" in run.stdout.splitlines()
