@@ -4455,6 +4455,21 @@ def test_a_move_map_retires_its_rows_old_paths_and_dotted_modules_and_a_word_map
     assert not capsys.readouterr().err
 
 
+def test_a_landed_move_that_adds_its_own_map_judges_a_head_lacking_it_by_that_map_read_at_the_move(world):
+    """A move may add the map it runs by, which its base lacks (restack.py's `own_map`): `lacked_moves` reads that map at the
+    move, so a head below it whose own change names none of its retired names is taken, and one that names one is left out
+    for that name, not for a map it couldn't read."""
+    base = _move_main(world, {"base.txt": "b\n"})
+    files = {"c.txt": None, "moved/c.txt": "c\n", "tools/move/own_map.toml": '[paths]\n"c.txt" = "moved/c.txt"\n'}
+    tree = _git(world.dev, "rev-parse", f"{world.change(files, base=base)}^{{tree}}")
+    move = _git(world.dev, "commit-tree", tree, "-p", base, "-m", "Move\n\nLayout-move: tools/move/own_map.toml")
+    _git(world.dev, "push", "-q", "origin", f"{move}:refs/heads/main")
+    clean = world.change({"b.txt": "1\n"}, base=base)
+    names = world.change({"e.txt": "reads c.txt\n"}, base=base)
+    assert Q.lacked_moves(world.origin, move, clean) == []
+    assert Q.lacked_moves(world.origin, move, names) == [(move, "tools/move/own_map.toml", ["c.txt"])]
+
+
 def test_a_head_crosses_a_move_in_flight_whose_map_at_its_head_and_on_main_retires_nothing_its_own_change_names(world):
     """`crossed` reads `lacked_moves`'s predicate against a move PR's map at its head, and `main`'s copy beside it: a head
     whose files or added lines name neither copy's retired names crosses it, and none crosses a move whose map can't be read
