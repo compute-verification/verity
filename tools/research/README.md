@@ -197,8 +197,7 @@ python = "python3"
 ~~~
 
 The pod registry (`src/research/pods/registry.py`) is the same table as one file per machine,
-`machines.d/<name>.toml` in the notes repo, so creating a pod never means
-hand-merging a shared file: `research pods create --name N --max-hours H ... --register
+`machines.d/<name>.toml` in the notes repo: `research pods create --name N --max-hours H ... --register
 --project P`, or `research pods register N --pod-id ID --project P` for an
 existing pod. `register` and `run --on` use one directory: `$RESEARCH_MACHINES_D`,
 else `~/.research/notes/machines.d` (`none` turns it off, and `register` refuses).
@@ -207,7 +206,7 @@ The two sources merge, and a name they bind to different pods is refused.
 --apply` seeds `machines.d` from machines.toml.
 
 A machine that isn't a RunPod pod is `provider = "ssh"`: `host`, and optionally `port` (22), `user` (root) and
-`rate_usd_per_hour` (the attempts' cost rate), reached with the same research key. `research pods register NAME --host ADDR
+`rate_usd_per_hour`, reached with the same research key. `research pods register NAME --host ADDR
 --user U --rate R --project P` writes it, refusing a host where `hostname` doesn't answer over ssh; `research pods ssh NAME`
 reaches it. The Nebius nodes are such machines (`src/research/pods/nebius/`): `launch.sh` brings one up (`--dry-run`
 needs no credentials), `teardown.sh` stops or deletes it, `n1_replacement.sh` plans n1's replacement, `check.py` is the
@@ -216,12 +215,14 @@ Runs share a node's GPUs through `gpu-lease N -- CMD` (`sh/gpu_lease.sh`: a floc
 `--cores CPUS` pins CMD to those CPUs and holds the leases to the machine's CPU quota: the script's header says how.
 
 What runs on the Nebius nodes outside a run (infra's loops and the files they read) is listed in `src/research/pods/nebius/deploy.toml`,
-each with its repository file and owner (a Slack handle), and goes there only through `research deploy install NODE --by WHO
+each with its repository file and owner, and goes there only through `research deploy install NODE --by WHO
 [PATH ...] --apply` (else a dry run) from a pushed commit (`main`, or a PR's head for a hotfix). Each loop is a systemd unit
-(`units/` beside the manifest, settings in `env/`), never tmux; `install` restarts a running service whose unit, env file
+(`units/` beside the manifest, settings in `env/`); `install` restarts a running service whose unit, env file
 or running file changed, once the node is `quiet`. A `hold` entry is reported, never installed.
 A file of machines' addresses (`/etc/vy/peers`) is a template the register of machines fills at install time (`register =
 true`; `infra/ops/verity_ops/deploy.py`), and `research deploy roll PATH --by WHO [--apply]` puts it on every node, one at a time.
+A machine marked stopped (`research pods stopped NAME`; `--back` clears it), or `unreachable_since` for an hour, is asked
+nothing by `--on auto` and leaves every list at the next roll (`--allow-shrink`).
 `research deploy drift` (`ops deploy`) reads each node and names every file that isn't main's (`stale`, `ahead`, `unknown`,
 `missing`), every process running a file replaced since it started (`restart`, unless its entry says `no_restart`),
 and every file in a managed directory that no entry lists (`stray`); the monitors relay's hourly `drift` monitor opens
@@ -263,8 +264,7 @@ and `source_archive_sha256`.
 The commit travels as git objects when it can: the launcher `git push`es it
 into the machine's bare repository `<root>/git/verity.git` through its own ssh
 argv (`remote.git_push_url`, an `ext::` URL; no credential anywhere), so only
-the objects the machine lacks cross the uplink (the first push to a new pod
-carries the history). The machine checks the commit's tree hash, extracts
+the objects the machine lacks cross the uplink. The machine checks the commit's tree hash, extracts
 `git archive` of it, and lists every file's sha256, which must equal the
 launcher's archive manifest (`READY.json` `verified:
 git-push+tree+file-sha256`, `transport: git`; job.json
