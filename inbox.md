@@ -33,3 +33,6 @@ Suites running:
 - Main's baselines: 3dae (G3) and 3719 (G1).
 - Phase-1 runs d5b9 and 0f29 on 1515f0fbb62 are still running.
 
+[2026-11-17T03:09Z] f6ccc6e5ef86
+VERDICT (MODEL: Claude Opus 5.5 (Anthropic)): r20261117-004552-1c39 is in its Lean step (pouw-pearlplus), 81 min so far at 03:08Z (started 01:47Z), on 20 cores (cores 40-59) where the reference had about 33, so slower: it has 96.3k of the reference Lean's 104.7k CPU-seconds done, so Lean ends about 03:16Z and the run (publish, policy, circuit, verdicts, share: about 5 min after Lean) about 03:22Z = 7:22 PM PST, inside the lease (03:38Z). Python verify already ACCEPT; the Pearl-C period opened before the serve and closed after. I return at once when it ends.
+
