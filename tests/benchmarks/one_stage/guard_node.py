@@ -1,8 +1,8 @@
 """`TwoGuard.lean` on a node's warm Lean tree:
 
     research run --on NODE --pool research --as proofs --project verity --source . --cwd clone -- \\
-      python3 tests/benchmarks/two_stage/guard_node.py DIR check|diag|files [M2] [+ DIR check|diag|files [M2] ...]
-    ... -- python3 tests/benchmarks/two_stage/guard_node.py --pytest [PYTEST ARGS]
+      python3 tests/benchmarks/one_stage/guard_node.py DIR check|diag|files [M2] [+ DIR check|diag|files [M2] ...]
+    ... -- python3 tests/benchmarks/one_stage/guard_node.py --pytest [PYTEST ARGS]
 
 It holds the node's `build` Lean slot and its tree as `lean_changed.py --try` does (the slot, the tree's lock, the sync of
 `security/Proofs`' closure from this checkout, the tree's kept dependencies) and builds the two modules the script imports
