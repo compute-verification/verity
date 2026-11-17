@@ -228,12 +228,9 @@ def members_reached(cases: Sequence[dict[str, Any]]) -> tuple[int, int] | None:
         proofs = p["params"].get("proofs") if p["id"] == SAMPLED else None
         if not isinstance(proofs, dict) or not isinstance(proofs.get("members"), dict):
             continue
-        try:
-            a = json.loads(p["answer"])
-        except ValueError:
+        if outcome(p["id"], p["answer"])["verdict"] != "accept":
             return None
-        if not isinstance(a, dict) or a.get("verdict") != "accept":
-            return None
+        a = json.loads(p["answer"])
         drawn = (a.get("public") or {}).get("drawn") or []
         ms = proofs["members"].values()
         return sum(any(lo <= u < hi for u in drawn for lo, hi in m["units"]) for m in ms), len(ms)
