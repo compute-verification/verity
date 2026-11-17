@@ -83,13 +83,8 @@ in 24 hours, and a goal due within 24 hours not written in the 24 before its due
   | 3 Repository reorganized: one layout, clean slices, public | Repository reorganized and published |
   | 11 Onsite demo: all four protocols accept | Onsite demo done |
   | The check reads what the serve registers | Inference-only demo done |
-  | The eleven's numbers live on the console | Console shows core system metrics |
   | The certifier's term is zero without a failure | Network certification adds no exfiltration capacity unless a connection fails |
-  | ci's slice reads clean | CI code cleaned up for review |
-  | A candidate's check launch registers in three minutes | Check launches within three minutes |
-  | GLM-5.3's long DSA rows in provable units | 128k-context attention fits in proof blocks |
   | Remote theorem rests on no open proof | Remote demo's soundness fully proved |
-  | The Commit's share of the served step, measured | Commitment overhead measured |
 - **One owner** (`--owner`): the lead of the area the goal mostly builds, who keeps it true. Another area's part of
   it is that lead's goal, linked; a check the remote demo runs is the demo lead's goal even when proofs writes it in
   Lean.
@@ -101,16 +96,15 @@ in 24 hours, and a goal due within 24 hours not written in the 24 before its due
 - **A priority**, 1 to 3: anyone may set one (`research goals priority ID 1|2|3|clear`), and the page shows
   who set it and when. A goal nobody set takes the highest priority of the goals waiting on it.
 - **A status:** `on-track`, `off-track`, `parked` or `done`, your forecast of whether it will be true by its date.
-  - **Only the goal where work is late is set off track.** That is a goal whose own work will miss its date, with no
-    open goal under it that explains why. Its `--blockers` say what stops it today, in one or two plain sentences.
-    The reason is today's: each day it stays off track, rewrite it, or `confirm` it if every word holds.
-  - **A goal that waits on open goals takes its status from them.** The page shows it off track when one of them is
-    off track, past its date, parked, or due after it, and lists the goals where the trouble starts as links. The
-    page's Bottlenecks view lists only those, which is how Daniel finds what to unblock. So leave such a goal on
-    track with no blockers: the site refuses a new off-track status or reason on it.
-  - **If it will be late and nothing under it is,** the late work has no goal yet. Write it as a subgoal with its
-    owner and date, link it, and set that one off track.
-  - Parked is a goal nobody works toward for now. Its `--blockers` say what it is parked behind.
+  - **Only the goal where work is late is set off track:** one whose own work will miss its date, with no open goal
+    under it that explains why. Its `--blockers` say what stops it today, in one or two plain sentences. Each day it
+    stays off track, rewrite them, or `confirm` it if every word holds.
+  - **A goal that waits on open goals takes its status from them.** The page shows it off track when one under it
+    is off track, past its date, parked or due after it, and names that one; its Bottlenecks view lists only those.
+    Leave such a goal on track with no blockers: the site refuses a new off-track status or reason on it. If it will
+    be late and nothing under it is, the late work has no goal yet: write it as a subgoal with its owner and date,
+    link it, and set that one off track.
+  - Parked: nobody works toward it for now; its `--blockers` say what it is parked behind.
   - Done needs evidence named in the description: a run, a lock change or a landed commit.
 - **Tags** (`--tag`, repeated) are the development areas responsible for the goal, from one fixed list in
   Daniel's words: `remote-demo`, `onsite-demo`, `proofs`, `circuits`, `lean`, `vllm`, `compute-accounting`,
@@ -128,16 +122,14 @@ in 24 hours, and a goal due within 24 hours not written in the 24 before its due
   - Why a goal matters isn't a tag: it's the goal above it.
 - **Goals and subgoals.** Everything is a goal, and a goal under another is its subgoal: the goal waits on it
   (`--wait goal:ID`). Don't call a goal a "project", a "piece", a "step" or a "tier".
-  - **The top goals are a list Daniel chooses:** about a dozen, each one he would name himself. Only the page's
-    editor (`@dashboard-goals`) adds one, and the site refuses anyone else's `--tier 1`: send the editor its title,
-    owner and date. A top goal's description opens with the state that finishes it.
-  - **Every other goal sits under a top goal that is being worked on:** that goal, or a subgoal of it, waits on
-    yours. A goal nothing waits on isn't a top goal. The page lists it under "Under no top goal" until it is linked
-    under the goal it serves, or parked.
-  - The soundness theorem and the H200 accounting are subgoals of the remote demo.
-  - **Before adding a goal,** look for it under every owner, and find the goal it serves. If nothing holds it only
-    because an umbrella is missing, add the umbrella or ask its owner to; if the umbrella would be a top goal, ask
-    the editor. A merge isn't a goal of Daniel's.
+  - **The top goals are a list Daniel chooses:** about a dozen he would name himself. Only the page's
+    editor (`@dashboard-goals`) adds one: send it the title, owner and date. The site refuses anyone else's
+    `--tier 1`. A top goal's description opens with the state that finishes it.
+  - **Every other goal sits under a top goal being worked on,** which waits on it directly or through a subgoal.
+    A goal nothing waits on isn't a top goal: the page lists it under "Under no top goal" until it is linked under
+    the goal it serves, or parked.
+  - **Before adding a goal,** look for it under every owner, and find the goal it serves. If that goal is missing,
+    add it or ask its owner to, or the editor if it would be a top goal. A merge isn't a goal of Daniel's.
 
 ## What it waits on
 
@@ -148,11 +140,11 @@ Links only (`--wait goal:ID`, `--wait ask:CARD`, repeated for each; `--no-wait` 
 - If what blocks you isn't in the plan, add it as a subgoal, owned by whoever delivers it, or ask that owner to.
 - A decision of Daniel's is its ask (`ask:<card id>`, from `research msg ask-daniel`).
 - A link carries nothing else. The dependency's state lives on it; why you need it goes in your description.
-- Your own work isn't a dependency of a goal that waits on nothing open: slow or risky work is its status. On a goal
-  that waits on open goals, your own late work is one more subgoal (A goal's fields, status).
+- Your own work isn't a dependency: slow or risky work is your status. On a goal that waits on open goals, it is one
+  more subgoal.
 
-A goal's peek shows what it waits on and what needs it in one timeline around its own due date, so a link due after
-it shows red. Fix the cause (re-date, re-scope, or chase the dependency) rather than the status.
+A link due after you shows red and sets you off track on the page. Fix the cause: re-date, re-scope, or chase the
+dependency.
 
 ## The description
 
@@ -225,17 +217,6 @@ each shape. Today that is inferred from the adapter's rule for choosing between 
 second kernel ever having run.
 ~~~
 
-A measurement:
-
-~~~markdown
-Dashboard shows how much slower GLM-5.3 serves with Verity on than stock vLLM does under the same load.
-
-### Target
-
-At most $2.05$ points slower than stock. Verity's whole compute budget is 10%.
-
-~~~
-
 Parallel items, and a limit:
 
 ~~~markdown
@@ -256,7 +237,7 @@ Of the $25$ open parts:
 ## Commands
 
 ~~~bash
-research goals show                              # every goal by due date, with what each waits on
+research goals show                              # every goal by due date
 research goals set proofs/zero-knowledge --title "Zero knowledge proved for an honest worker" --owner proofs \
   --due 2026-11-06T18:00-08:00 --status on-track --tag proofs --wait goal:proofs/firewall-checks-provable \
   --description @zk.md
