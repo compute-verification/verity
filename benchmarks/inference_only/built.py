@@ -39,7 +39,7 @@ from verity.device import load_card
 
 import policy as P
 
-CARD_FILES = Path(__file__).resolve().parents[2] / "hardware/cards"
+CARD_FILES = Path(__file__).resolve().parents[2] / "calibration/hardware/cards"
 
 # a served step's pricing, `block_work`'s
 sys.path.append(str(P.ROOT / "benchmarks" / "one_stage"))

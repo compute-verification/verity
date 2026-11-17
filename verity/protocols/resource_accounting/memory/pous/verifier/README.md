@@ -48,5 +48,3 @@ print(audit.run_timed(v, blocks.__getitem__).accepted)                  # True
 
 [`DESIGN.md`](DESIGN.md) states what each codec and the wipe rest on, word for word, and holds the entry points, the
 lifecycle through the generic protocol, the memory attester's records and P2's construction.
-[`PROTOCOL.md`](PROTOCOL.md) describes the lifecycle, the API and the byte formats, and
-[`DISCREPANCIES.md`](DISCREPANCIES.md) lists where the Lean model, the prose spec and this code differ.

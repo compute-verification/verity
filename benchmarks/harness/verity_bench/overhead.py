@@ -39,7 +39,7 @@ from functools import cached_property
 from pathlib import Path
 from typing import Any
 
-CARD_FILES = Path(__file__).resolve().parents[3] / "hardware/cards"
+CARD_FILES = Path(__file__).resolve().parents[3] / "calibration/hardware/cards"
 
 POINTS_SCHEMA = "verity-bench/overhead-points/v1"
 RUN_SCHEMA = "verity-bench/overhead/v1"
@@ -64,7 +64,7 @@ class Gpu:
     harness's build target, host CPU core-seconds' weight in SM-seconds (the
     node's CPU capacity over its GPUs'), and the scalings and libraries its
     fastest stock kernel is chosen among; `bridge`: its CUTLASS and DeepGEMM are vLLM's, through torch (`bench.py --bridge`),
-    since the harness's own CUTLASS is sm_120's; `datasheet`: its dense FP8 rate's id in `benchmarks/census/hardware.json`
+    since the harness's own CUTLASS is sm_120's; `datasheet`: its dense FP8 rate's id in `calibration/census/hardware.json`
     (the H200's is the H100's: the same compute with more HBM)."""
 
     gpu: str

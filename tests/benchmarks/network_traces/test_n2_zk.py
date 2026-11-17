@@ -1,7 +1,7 @@
 """n2_zk's execution phases on an active network attester's synthetic run (the chain tests' `gate_run`): every
 honest execution phase's output word is verdict 1 and deadline 1, and window 0's egress head one count off, committed
 by the prover, fails on its signed digest alone. The verifier's own ``pub`` row, from public fields and the
-certificates alone, is the prover's, in whole u16 words. The scan of what the verifier received leaves out exactly the
+attestations alone, is the prover's, in whole u16 words. The scan of what the verifier received leaves out exactly the
 witness pieces the public circuit holds. ``--jobs`` is 1 unless given and 2 is refused, naming the rule
 (`n2_zk.ONE_SESSION`). The printed log is public: a child's or the driver's failure text and every witness line go to
 the witness side's ``n2.log``, and without ``--witness`` nowhere. Nothing here lowers or proves (`n2_zk.prove` does, on
@@ -69,7 +69,7 @@ def _needles(blobs: dict[str, bytes]) -> dict[bytes, str]:
 def test_the_scan_leaves_out_only_the_pieces_the_public_circuit_holds(runs):
     scan = SimpleNamespace(PIECE=16, needles=_needles, find=lambda data, t: {n: 1 for nd, n in t.items() if nd in data})
     blobs, held = n2.blobs_of(runs["honest"])
-    assert {k.rsplit(" ", 1)[0] for k in blobs} >= {"head egress", "head salt ingress", "certifier salt egress",
+    assert {k.rsplit(" ", 1)[0] for k in blobs} >= {"head egress", "head salt ingress", "attester salt egress",
                                                      "record salt ingress", "sibling 1 egress"}
     assert any(len(b) % 16 for b in blobs.values())  # a head's tail (403 bytes), which only the last pieces cover
     every = {b[o:o + 16].ljust(16, b"\0") for b in blobs.values()
