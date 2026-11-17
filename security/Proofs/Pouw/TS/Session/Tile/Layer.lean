@@ -33,30 +33,8 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# A tile unit's proof layer with its Definition's checks, through its Flock sessions
-
-`ResourceAccounting.TS.Checked.checkedLayer` reads its relation, `CheckedRel`, as `PouwH1TileZy_v1` with `ok = 1` only through
-`ResourceAccounting.Served`'s prose: `CheckedRel` says the opened rows are one wire assignment the circuit's evaluation agrees
-with, not what the tile's Definition computes. This layer states that, on words, at the same sessions:
-
-* `TileView`: what unit `u` of a `PouwH1TileZy_v1` session reads, decoded from the session's registered reads: its `R`
-  A rows and `C` B rows (each `K` codes and a scale) and its `R × C` z/y record. Words are integers as
-  `ResourceAccounting.Served` reads them (codes s8, z s32, scales and y their encodings);
-* `TileOk`: the Definition's checks at `ok = 1`, every cell with `z = Σ_k a_k b_k` and `y = dq [z, s_a, s_b]`, the
-  tile counterpart of `ResourceAccounting.TS.Lanes.LaneOk`'s cells;
-* `TileRel`: `CheckedRel`, and every sampled proof block's decoded view meets `TileOk`, or the `ok` tie collides (`OkColl`);
-* `tileLayer`: proof `i` of round `w` is accepted where verity-verify-proof `--zk --registered` accepts its session at the
-  registered file's known content (`Registered.checkKnownAll`) and the file names every port of the circuit
-  (`Registered.checkComplete`), opens the committed rows at the registered reads (`openedReg`), and its relation is
-  `TileRel`.
-
-What ties the circuit to the Definition is the premise `ResourceAccounting.TS.Tile.TileComputes`, from which
-`tileChecks_of_computes` gives `ResourceAccounting.Assumptions.TS.TileChecks`.
-
-These definitions read `RowsSession`, in the proofs package, so they sit here under `reads_exempt`'s
-`Proofs.Pouw.TS.Session`, as `ResourceAccounting.TS.Held`'s do.
--/
+/-! A tile unit's proof layer through its Flock sessions, whose relation `TileRel` states on words what the tile's
+Definition checks. -/
 
 @[expose] public section
 

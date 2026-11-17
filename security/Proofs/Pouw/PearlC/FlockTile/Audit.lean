@@ -3,14 +3,8 @@ module
 public import Definitions.Pouw.PearlC.FlockTile.Audit
 public import Proofs.Core.Game.Prob
 
-/-!
-# Flock's hidden audit: a `TileGame` per sampled tile
-
-The TileRead session, Flock's `HiddenAudit` value over it and its two open obligations are in
-`Definitions.Pouw.PearlC.FlockTile.Audit`. Here: `TileReadSession.tileGame`, a `TileGame` for every tile of every
-in-domain workload, from `TileReadSound` (T3, giving `bad_le`) and `TileReadBinds` (the binding, giving
-`good_of_accept`).
--/
+/-! Flock's hidden audit as a `TileGame` per sampled tile, from T3 (`TileReadSound`) and the binding
+(`TileReadBinds`). -/
 
 @[expose] public section
 
@@ -18,8 +12,6 @@ namespace Pouw.PearlC.FlockTile
 
 variable {Q R S : Type}
 
-/-- **A `TileGame` per tile from T3 and the binding.** Tile `g`'s proof game is the session's game (`game_eq` by
-definition); its `Bad` is the session's; `bad_le` is `TileReadSound`; and `good_of_accept` is `TileReadBinds`. -/
 def TileReadSession.tileGame [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (P : Protocol Q R S)
     (TR : TileRules Q R S) (D : Layout → Prop) (F : TileReadSession Q R S) (δzk : ℕ → ℝ) (h0 : ∀ q, 0 ≤ δzk q)
     (hT3 : TileReadSound P D F δzk) (hbind : TileReadBinds P TR D F) (U : Workload) (hU : U.InDomain P D)

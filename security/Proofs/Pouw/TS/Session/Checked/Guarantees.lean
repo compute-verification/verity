@@ -35,29 +35,8 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# A checked unit's proof layer is sound through its Flock sessions (the statement)
-
-`ResourceAccounting.Guarantees.TS.CheckedSessionSound`: the realization `ResourceAccounting.Served`'s docstring asks of a proof layer
-for a value-checked `zTree` window, at `ResourceAccounting.Guarantees.TS.SessionSoundAt`'s premises, for the checked layer
-`ResourceAccounting.TS.Checked.checkedLayer` (its unit `PouwH1TileZy_v1`, its check word `ok`). Of `SessionSoundAt`'s four
-premises on the layer, it proves three and the window's sampling design stays a premise:
-
-* `AcceptedLive`: the layer accepts exactly where verity-verify-proof `--zk --registered` accepts;
-* `ServedChecksHold`: the relation, the unit's Definition with `ok` registered, holds at the session's value layer
-  wherever its sampled proof blocks are right (`RowsSession.RowsAt` is the circuit's evaluation there);
-* `ServedRootsLinked` at `δs = 0`: under full checking (`kd = n`) every outcome of the session's game samples every unit,
-  and `Flock.SecurityProofs.ServedRowsLinked` puts the registered rows at the value layer on each sampled proof block, where
-  every unit's served roots are registered (`RowsSession.ServedRegistered`);
-
-and so `pf.SoundAt δ`. It sits in the proofs package because the sessions do (`reads_exempt`).
-
-It proves the checked layer only. Its relation, `CheckedRel`, says the opened rows are one wire assignment the circuit's
-evaluation agrees with, and nothing of what the circuit computes: don't cite it for the product or `dq`. The tile's
-Definition with `ok = 1` (each cell `z = Σ_k a_k b_k` and `y = dq [z, s_a, s_b]`) is
-`ResourceAccounting.Guarantees.TS.TileSessionSound`'s, under its premise `ResourceAccounting.TS.Tile.TileComputes`; the registered
-circuit's checks are `ResourceAccounting.Guarantees.TS.HeldSessionSound`'s.
--/
+/-! The statement that a checked unit's proof layer is sound through its fully checked Flock sessions, which says
+nothing of what the circuit computes. -/
 
 @[expose] public section
 

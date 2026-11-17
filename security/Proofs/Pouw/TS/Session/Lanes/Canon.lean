@@ -35,20 +35,8 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.C3.Compose.RowsReg
 
-/-!
-# A session's registered reads built from `own`, its registrants' openings as data
-
-`RowsSession.rdU` is each unit's registrant's opening, a free field: which commit strings it reads, through which port
-and at which position, and the rows, salts and paths it opened there. `RowsSession.canon s op` is the session `s` with
-`rdU` built from the verifier's own registered reads `own` (`canonReads`): unit `u` reads its row of every circuit port
-that `own` names (`CanonRead`), through `own`'s first port of that name (`ownPort`), at that port's one position
-(`oneRead`), and only the rows, salts and paths come from the registrant (`Openings`, whose `committed` opens each such
-read at `own`'s root). Every other field of `s` is kept.
-
-`servedRegistered_canon`: where every port of `own` has one read (the leaf verifier's `PouwWindow.Lanes.checkOneRead`),
-every unit of `canon s op` has its served roots registered (`ServedRegistered`). A read's position at any sample is that
-port's position at the unit's index, and with one read only index `0` has one.
--/
+/-! A session's registered reads built from the verifier's `own`, with only the rows, salts and paths from its
+registrants' openings. -/
 
 @[expose] public section
 
@@ -117,9 +105,6 @@ def canonReads (op : s.Openings) (u : Fin s.n) : Registered.ReadsX s.canonLay s.
 (`canonReads`). -/
 def canon (op : s.Openings) : RowsSession := { s with rdU := s.canonReads op }
 
-/-- **At one read per port, the reads built from `own` register the served roots**: where every port of `own` has one
-read, each unit of `canon s op` reads exactly its rows of the ports `own` names, through `ownPort`, at the position
-`ownPort` gives it at every sample that proves it (only index `0` has a position). -/
 theorem servedRegistered_canon (op : s.Openings) (h1 : ∀ pt ∈ s.own, pt.reads.size = 1) (u : Fin s.n) :
     (s.canon op).ServedRegistered u := by
   refine ⟨fun _ => Iff.rfl, fun q hn => ⟨rfl, ?_⟩⟩

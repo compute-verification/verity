@@ -33,13 +33,8 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# The served layer is sound through its Flock sessions (the statement)
-
-`ResourceAccounting.Guarantees.TS.SessionSoundAt`, the bridge `Flock.SoundAtBridge` on the proof layer `pf` itself, with the
-bridge's `AcceptedLive`, `ExecutionPhaseDesign`, `RelOfRows` and `OpenedPlurAt` taken from named premises
-(`ResourceAccounting.Assumptions.TS`). Its conclusion is `pf.SoundAt`, so `BindingAt`, `Of` and `RightFixed` keep reading `pf`'s
-served openings. It sits in the proofs package because the sessions do (`reads_exempt`). -/
+/-! The statement `SessionSoundAt`: `Flock.SoundAtBridge` on the proof layer `pf` itself, with the bridge's premises
+taken from named premises, concluding `pf.SoundAt`. -/
 
 @[expose] public section
 

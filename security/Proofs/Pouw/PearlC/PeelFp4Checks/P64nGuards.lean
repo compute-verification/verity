@@ -17,8 +17,6 @@ namespace Pouw.PearlC.PeelFp4Checks
 open Pouw.PearlC Pouw.PearlC.Fp4 Pouw.PearlC.Fp4Dev Pouw.PearlC.PeelExact Pouw.PearlC.PeelFp4Proofs
   Pouw.PearlC.PeelFp4Vectors
 
-/-! `prod-64-nvfp4`'s factor chains by evaluation (`#guard`, not a proof): its selected rows of `A′·F_B` and `B̃·F_A`, and its whole `G`. -/
-
 #guard (List.ofFn fun q => ch4 sm120Nvf4 (rowA sm120Nvf4 p64n 0).1 (colF (basis p64n.k p64n.fb) q)
     (rowA sm120Nvf4 p64n 0).2 (onesScales sm120Nvf4 p64n.k)).mapM id = some (p64n.af.getD 0 [])
 
