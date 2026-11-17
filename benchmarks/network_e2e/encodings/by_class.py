@@ -436,7 +436,7 @@ def _aborts(a: dict[str, Any]) -> str:
     if a["certifier_failed"] is not None:
         def by(kind: str) -> str:
             return ", ".join(f"{n:,} `{k}`" for k, n in sorted(a["certifier_failed"][kind].items())) or "none"
-        out += (f"; the network certifier failed connections after their request's release: {by('released')}; and before "
+        out += (f"; the network attester failed connections after their request's release: {by('released')}; and before "
                 f"it: {by('unreleased')}")
     return out
 
@@ -466,7 +466,7 @@ def _facts(row: dict[str, Any]) -> dict[str, str]:
     (`serve_of`) and, for a trace with a table, the registration's."""
     s = row["serve"]
     out = {"model": s["model"] or "not named", "cards": str(s["cards"]), "vLLM": s["vllm"] or "not in the server's log",
-           "the draft": "on" if s["draft"] else "off", "where the network certifier ran": s["certifier"] or "not said"}
+           "the draft": "on" if s["draft"] else "off", "where the network attester ran": s["certifier"] or "not said"}
     if "error" not in row:
         g, t = row["engine"], row["tick"]
         tick = "on arrival" if t is None else (f"under the certified tick (τ_b = {t['bucket_us']:,}, τ_sat = {t['sat_us']:,}, "

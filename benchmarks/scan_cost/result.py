@@ -302,15 +302,16 @@ def no_verifier(doc: dict) -> str | None:
 
 
 def measurements(doc: dict) -> list[dict]:
-    """A document's numbers as the kit's writer takes them: the two metrics under their ids, each naming the
-    measurements it is computed from, then those: the round's seconds by stage and the group's execution phases'."""
-    n, r = doc["numbers"], doc["round"]
+    """A document's numbers as the kit's writer takes them: the two metrics under their ids, each with the scan class
+    as its member and naming the measurements it is computed from, then those: the round's seconds by stage and the
+    group's execution phases'."""
+    n, r, cls = doc["numbers"], doc["round"], doc["identity"]["class"]
     stages = [name for name, key in PARTS[2:7] if r[key] is not None]
     out = [{"name": PROVING, "value": n["proving"], "unit": "proving seconds a second of execution phase",
-            "inputs": ["sessions", "staging", "execution phases", *stages]},
+            "member": cls, "inputs": ["sessions", "staging", "execution phases", *stages]},
            {"name": "proving seconds a tick", "value": n["proving_s_a_tick"], "unit": "s",
             "inputs": ["sessions", "staging"]},
-           {"name": VERIFIER, "value": n["verifier"],
+           {"name": VERIFIER, "value": n["verifier"], "member": cls,
             "unit": "Lean verifier CPU seconds a second of execution phase, on one core",
             "inputs": [] if n["verifier"] is None else ["Lean verifier CPU", "execution phases"],
             **({"why": why} if (why := no_verifier(doc)) else {})},

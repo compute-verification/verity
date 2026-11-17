@@ -1,7 +1,7 @@
 [project]
 name = "verity-attester-timing"
 version = "0.0.0"
-description = "The bits an interval a server moves through when the network certifier releases its bytes."
+description = "The bits an interval a server moves through when the network attester releases its bytes."
 requires-python = ">=3.12"
 dependencies = ["verity", "verity-config"]
 

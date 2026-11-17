@@ -1,4 +1,4 @@
-"""network-certifier-zk: the network attester's bucket rows read by the proof system. A toy proof block over one row's bits, its
+"""network-attester-zk: the network attester's bucket rows read by the proof system. A toy proof block over one row's bits, its
 port registered against the network attester's signed egress root (`network_attester_rows`), proved by Flock `prove --zk` behind
 the Lean ZK server and held by the Lean verifier's registered reads (`verity-verify-proof verify --zk --registered`), through
 the one-stage audit as `n2_zk.py` proves N2's head checks.
@@ -6,7 +6,7 @@ the one-stage audit as `n2_zk.py` proves N2's head checks.
     python benchmarks/network_traces/zk_drivers.py network_attester_zk prove --run DIR --bin flock-circuit --lean verity-verify-proof --out DIR
       [--units 16] [--dry]
 
-* **The run.** A network-certifier-serve run's directory (`network_attester_serve.py rehearse`'s): `deployment.json`, the records, and the
+* **The run.** A network-attester-serve run's directory (`network_attester_serve.py rehearse`'s): `deployment.json`, the records, and the
   rows the network attester committed and signed while serving, a row a bucket: `cells.jsonl` (each execution phase's
   registration) and `cells.salts` (the rows' salts and the wiring's, witness, which the network attester hands the
   prover alone).
@@ -352,11 +352,11 @@ def audit_member(M, a, sg, m: dict, at: SimpleNamespace, out: Path, port: int) -
         roots.append({"port": f"{name}/{p_}", "root": fv["roots"][p_], "leaves": w["leaves"], "domain": fv["domain_ids"][p_]})
     leaf_layer = hashlib.sha512(M.canonical_json({name: a0.sha512_file(m["dir"] / f"pub-{n}.bin")})).hexdigest()
     law = M.D.parse_design(f"stratified:{n}")
-    win = {"kind": "stand-in", "of": f"the bucket rows of {n} cells of connection {at.connection} in the network certifier's "
+    win = {"kind": "stand-in", "of": f"the bucket rows of {n} cells of connection {at.connection} in the network attester's "
                                       f"egress execution phase {at.window} (network_attester_zk.py)",
            "members": {name: {"template": P.template_id(m["defn"]), "units": [m["base"], m["base"] + n]}},
            "units": {"cells": [list(c) for c in at.units.cells], "digest": at.units.digest().hex()},
-           "link": f"registered: port {m['port']} reads {at.units.value(at.head)} at the network certifier's signed root; "
+           "link": f"registered: port {m['port']} reads {at.units.value(at.head)} at the network attester's signed root; "
                    f"{', '.join(m['committed'])} the member's committed value at its registered root"}
     rec = R.record(sg.program, sg.query, law, a0.SCHEME, roots, win, leaf_layer=leaf_layer)
     (out / "registration.json").write_text(json.dumps(rec, indent=1, sort_keys=True))
@@ -509,7 +509,7 @@ def main(argv=None) -> int:
     sub = ap.add_subparsers(dest="command", required=True)
     p = sub.add_parser("prove", help="the toy proof block's ports registered against the network attester's egress root, "
                                      "proved --zk")
-    p.add_argument("--run", required=True, type=Path, help="a network-certifier-serve run's directory")
+    p.add_argument("--run", required=True, type=Path, help="a network-attester-serve run's directory")
     p.add_argument("--bin")
     p.add_argument("--lean")
     p.add_argument("--out", required=True)

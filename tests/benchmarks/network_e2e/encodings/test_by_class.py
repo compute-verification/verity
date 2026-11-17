@@ -443,12 +443,12 @@ def test_a_serve_is_set_beside_the_serve_that_exercised_what_it_did_not(tmp_path
     assert refused["serve"]["vllm"] is None and other["serve"]["vllm"] == row["serve"]["vllm"]
     assert b["differs"]["vLLM"] == ["0.9.1rc2.dev3+gabc123", "not in the server's log"]
     assert a["differs"] == {"model": ["big", "little"], "cards": ["8", "1"],
-                            "where the network certifier ran": ["on the auditor's device", "beside the server"],
+                            "where the network attester ran": ["on the auditor's device", "beside the server"],
                             "the pool": ["4,096 blocks of 16 tokens", "8 blocks of 16 tokens"]}
     assert set(a["same"]) == {"vLLM", "the draft", "requests a step", "tokens a step", "admission", "the prefix cache",
                               "the registered codebook", "ℓ", "T"}
     assert a["same"]["admission"] == "under the certified tick (τ_b = 100,000, τ_sat = 30,000, τ_free = 40,000 µs)"
-    assert set(b["differs"]) == {"model", "cards", "vLLM", "where the network certifier ran"} and set(b["same"]) == {"the draft"}
+    assert set(b["differs"]) == {"model", "cards", "vLLM", "where the network attester ran"} and set(b["same"]) == {"the draft"}
     assert text.count("| all |") == 1 and "**there**" not in text and "**gone**" not in text
     assert "Beside `there`:\n\n- aborts: not exercised here; not exercised in `there` either.\n" in text
     assert f"- resumes and lag: not exercised here; in `there`: resumptions {theirs['resumptions']}.\n" in text
@@ -457,7 +457,7 @@ def test_a_serve_is_set_beside_the_serve_that_exercised_what_it_did_not(tmp_path
     assert "none here and some in `gone`" not in text
     assert ("- the same in both serves: vLLM: 0.9.1rc2.dev3+gabc123; the draft: off; requests a step: at most 4; tokens a "
             "step: at most 64; admission: under the certified tick") in text
-    assert ("- differing: model: big here, little in `there`; cards: 8 here, 1 in `there`; where the network certifier "
+    assert ("- differing: model: big here, little in `there`; cards: 8 here, 1 in `there`; where the network attester "
             "ran: on the auditor's device here, beside the server in `there`; the pool: 4,096 blocks of 16 tokens here, 8 "
             "blocks of 16 tokens in `there`.\n") in text
     assert "Scaled, not measured: at this serve's own rate on its 8 cards, its " in text

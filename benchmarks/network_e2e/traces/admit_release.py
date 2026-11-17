@@ -276,7 +276,7 @@ def release_of(d: Path, ids: list[str], add_lag_s: float) -> Release:
         a = [int(reqs[i]["warden"]["released"]) for i in ids]
         return Release(o, tau, a, [int(reqs[i]["warden"]["ordinal"]) for i in ids],
                        [float(reqs[i]["engine_add_unix"]) for i in ids],
-                       f"the network certifier's release bucket and ordinal ({w['egress_base']}); ready = the engine's add",
+                       f"the network attester's release bucket and ordinal ({w['egress_base']}); ready = the engine's add",
                        [o + (b + D) * tau for b in a])
     tau = 0.1
     sends = {i: float(reqs[i]["send_unix"]) for i in ids}
@@ -458,7 +458,7 @@ def markdown(results: list[dict[str, Any]]) -> str:
                        f"{fmt(t['p50'])} / {fmt(t['p95'])} / {fmt(t['p99'])} / {fmt(t['max'])} | {fmt(w['tok_per_s_base'], 0)} -> "
                        f"{fmt(w['tok_per_s_cf'], 0)} | {fmt(w['tok_per_s_change_pct'], 2)}% |")
     out += ["", ("| trace | TTFT from the engine's add, base p50 / p95 / max (ms) | frontend not ready at the boundary "
-            "| held behind an earlier release (hold) | first token to the network certifier's first egress cell, min base -> hold "
+            "| held behind an earlier release (hold) | first token to the network attester's first egress cell, min base -> hold "
             "-> aligned (ms) |"), "|---|---|---|---|---|"]
     for r in results:
         b, h, al = r["base"], r["variants"]["hold"], r["variants"]["aligned"]

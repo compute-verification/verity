@@ -29,7 +29,7 @@ from pathlib import Path
 
 import verity.protocols.resource_accounting.network.verifier
 from verity.protocols.resource_accounting.network.verifier.audit import Audit
-from verity.protocols.resource_accounting.network.verifier.grid import GridParams, Reason, BlockGrid, Status, Certifier
+from verity.protocols.resource_accounting.network.verifier.grid import GridParams, Reason, BlockGrid, Status, Attester
 from verity.protocols.resource_accounting.network.verifier.schedule import (ClockSync, LogicalFrame, SyncSet, expected_grids, handing_buckets,
                                             run_shaper)
 
@@ -104,14 +104,14 @@ def instance(seed: int) -> dict:
         if mode == "malformed" and fs:
             k = rng.randrange(len(fs))
             sent = fs[:k] + [LogicalFrame(fs[k].payload + b"\x00", fs[k].anchor, fs[k].index)] + fs[k + 1:]
-        rs = run_shaper(sent, ready, clock, Certifier(link, params))
+        rs = run_shaper(sent, ready, clock, Attester(link, params))
         if mode == "forged":
             w = rng.randrange(windows)
             rs[w] = _forge(rng, rs[w], [f.payload for f in fs], allocation)
         records += rs
     for link in ingress:
         fs = _frames(rng, horizon, buckets, allocation, size)
-        records += run_shaper(fs, [0] * len(fs), unit, Certifier(link, params))
+        records += run_shaper(fs, [0] * len(fs), unit, Attester(link, params))
     recorded = windows if rng.random() < 0.85 else rng.randrange(windows)
     statuses = [Status(rng.choice(list(Reason))) if rng.random() < 0.04 else None for _ in records]
     records = [BlockGrid(r.link, r.window, r.grid, s or r.status) for r, s in zip(records, statuses, strict=True)

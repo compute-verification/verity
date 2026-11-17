@@ -1,4 +1,4 @@
-"""The continuation rule (`continuation`) on the network attester's own records: ten network-certifier-form id
+"""The continuation rule (`continuation`) on the network attester's own records: ten network-attester-form id
 requests and their responses of id events, ticked through the network attester's ingress and egress
 (`scan_traffic.serve`: built traffic, nothing served) over five execution phases of T = 8 buckets, r = 2 cells a
 bucket, D = 3. At each close b the stamps are the open responses' (q, N, e) in release order: every response released

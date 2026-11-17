@@ -28,7 +28,7 @@ from verity.commitments.rowleaf import row_leaf
 from verity.protocols.resource_accounting.network.verifier import head_check as HC, io_tie as IT, network_attester as W, network_attester_rows as WR
 from verity.protocols.resource_accounting.network.verifier.link_frame import DATA, HEADER, PAD
 from verity.protocols.resource_accounting.network.verifier.certificate import Direction
-from verity.protocols.resource_accounting.network.verifier.grid import Certifier
+from verity.protocols.resource_accounting.network.verifier.grid import Attester
 
 #: the circuits' shape: three bucket rows of 4 lanes of r = 2 slots, each bucket's 4 port rows of 4 ids from a session
 #: of 8 steps, M = 16 routed positions
@@ -84,7 +84,7 @@ def serve(shape: IT.Shape, params: W.NetworkAttesterParams, arrivals: list[int],
             c.egress += IT.TRAILER
         c.egress_ended = k not in late
         conns.append(c)
-    queue, active, grid, rows, records = deque(conns), [], Certifier("responses", params.grid), [], []
+    queue, active, grid, rows, records = deque(conns), [], Attester("responses", params.grid), [], []
     for t in range(buckets):
         while queue and queue[0].arrived <= t and len(active) < params.lanes:
             c = queue.popleft()

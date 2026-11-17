@@ -23,7 +23,7 @@ the honest round on the challenger's coins (``--challenger``), a `service.Stream
   KO 8, KI 100) and 16-bucket execution phases, whose units a CPU proves in minutes; and ``test2`` (`TEST2`), test's over two
   execution phases, with a fourth request admitted in the first and anchored at the second's first boundary.
 * **The run** (`scan_traffic.serve`: the network attester's own `_ingress` and `_egress`, ticked as `NetworkAttester._tick`
-  ticks them) carries the setup's network-certifier-form id requests and their responses: w63's five (3, 40, 64, 8 and 5 ids; the
+  ticks them) carries the setup's network-attester-form id requests and their responses: w63's five (3, 40, 64, 8 and 5 ids; the
   fifth waits in the queue until request 1's egress ends at bucket 27 and takes its slot at 28), w63k4's five at w63's
   arrivals (prompts of at most 32 ids, responses of 3, 4, 1, 4 and 2, the fifth in request 1's slot at 28 as w63's),
   test's three (the third in the first's slot past its egress). Each execution phase of each link is committed by the
@@ -947,7 +947,7 @@ def link(out: Path, run: Path | None = None, setup: Setup = W63, group: int = 1,
     try:
         ch = traffic.chain(cls, ingress, egress, got.outputs)
     except (ValueError, KeyError) as e:
-        raise SystemExit(f"the scan refuses execution phases {windows}' rows: {e!r} (the scan reads network-certifier-form id "
+        raise SystemExit(f"the scan refuses execution phases {windows}' rows: {e!r} (the scan reads network-attester-form id "
                          "requests at its class, answered id-form: network_attester_serve.py rehearse --ids)")
     bad = [t for t in range(group * T) if EG.outputs(cls.egress, ch.view(t)) != (EG.ACCEPT, ch.egress[t])]
     void = [t for t, row in enumerate(ch.egress) if any(row[s * cls.B] == W.FAIL for s in range(cls.egress.R))]
@@ -1775,7 +1775,7 @@ def audit(M, a, at: SimpleNamespace, pg: SimpleNamespace, name: str, members: li
                                      f"at {at.setup.name}'s class (scan_zk.py)",
            "members": {m["name"]: {"template": P.template_id(m["defn"]), "units": [m["base"], m["base"] + m["n"]]}
                        for m in members},
-           "link": "registered: each network attester row port, input or output, at the network certifier's signed root of its "
+           "link": "registered: each network attester row port, input or output, at the network attester's signed root of its "
                    "execution phase, unit base + k row k of the member's rows; the scan's state, each lane's prog<j> and "
                    "view, inputs and outputs, at the prover's registered roots (scan/*)"}
     reads = state_reads([json.loads(Path(m["registered_file"]).read_text())["ports"] for m in members])
