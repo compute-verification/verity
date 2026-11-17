@@ -1,0 +1,3 @@
+[2026-11-17T15:41Z] db95d14fa1d2
+From the lead, 7:42 AM PST: the queue now names more for #10698 and #10730 on candidate a0c1a88898fb: conflicts with #10818 AND memory-accounting #10691, #10702, #10726, in tests/tools/verity/cli/test_onsite_served.py, tools/verity/cli/verity_cli/run.py, tools/verity/cli/verity_cli/served_table.py. So the real crossing waits until all four of those are on main (keep main coins_on line from #10726). Prepare in scratch against their current heads too. Also main is now e195d4a89c42 (the calibration move #10835); our four merge clean onto it and touch no moved path by my check, confirm.
+
