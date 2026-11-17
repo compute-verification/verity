@@ -24,8 +24,8 @@ Each gate's value is the Python evaluator's, transcribed on `Nat`, its operands 
 - E3: the tensor-core dot steps of `Evaluate.TC.Dots`, an array operand's words in leaf order.
 - E4: PoUW's and NCP's word primitives (`Evaluate.Words`), the sampler's (`Evaluate.Libdevice`), the MUFU primitives
   (`Evaluate.Mufu`), the reference kinds' correctly rounded exp, erf and tanh (`Evaluate.Decimal`), the activations and
-  RoPE's outputs (`Evaluate.Act`), and the lazy families `TableRead{IB}x{EW}_v1`, `GatherBf16x{V}_v1` and `GatherF32x{V}_v1`,
-  which read their operands by index.
+  RoPE's outputs (`Evaluate.Act`), the lazy families `TableRead{IB}x{EW}_v1`, `GatherBf16x{V}_v1` and `GatherF32x{V}_v1`,
+  which read their operands by index, and the wiring families `BitOf{W}x{I}_v1` and `WordOf{W}_v1`.
 
 A primitive is recognized by its id and must declare the signature the registry holds for it, parameter names included
 (`codec.decode_program`'s check). Every other primitive is refused by name, never guessed.
@@ -290,6 +290,30 @@ def lazyFamily? (id : String) : Option (Prim × Array (String × Ty) × Ty) := d
     return (.lazy (Act.gather v Fp32.F32_NAN), #[("token", f32), ("column", .array v f32)], f32)
   else none
 
+/-- `population.bit_of(w, i)`: bit `i` of the word, least significant first, `(x >> i) & 1`. -/
+def bitOf (i x : Nat) : Nat := (x >>> i) &&& 1
+
+/-- `population.word_of(w)`: the word whose bit `i` is operand `i`'s low bit, `sum((b & 1) << i for i, b in enumerate(bits))`. -/
+def wordOf (bits : Array Nat) : Nat :=
+  (List.range bits.size).foldl (fun acc i => acc + ((bits[i]! &&& 1) <<< i)) 0
+
+/-- The wiring families by id, `^BitOf(\d+)x(\d+)_v1$` (`population.bit_of`, which refuses `i ≥ w`) and `^WordOf(\d+)_v1$`
+(`population.word_of`), each number in canonical decimal and `w ≥ 1`, with the signatures their makers give them. -/
+def wiringFamily? (id : String) : Option (Prim × Array (String × Ty) × Ty) := do
+  guard (id.endsWith "_v1")
+  let s := (id.dropEnd 3).toString
+  if s.startsWith "BitOf" then
+    let [a, b] := (s.drop 5).toString.splitOn "x" | none
+    let w ← digits? a
+    let i ← digits? b
+    guard (0 < w && i < w)
+    return (.gate (unary (bitOf i)), #[("word", .value w)], bit)
+  else if s.startsWith "WordOf" then
+    let w ← digits? (s.drop 6).toString
+    guard (0 < w)
+    return (.gate wordOf, #[("bits", .array w bit)], .value w)
+  else none
+
 /-- The primitive an id denotes, with the signature the registry holds for it, or none. -/
 def byId? (id : String) : Option (Prim × Array (String × Ty) × Ty) :=
   match arity? "And" id, arity? "Xor" id, constId? id with
@@ -300,7 +324,7 @@ def byId? (id : String) : Option (Prim × Array (String × Ty) × Ty) :=
     if id == "Not_v1" then some (.gate (unary notBit), #[("a", bit)], bit)
     else match ((scalars ++ floats ++ dots ++ words ++ sampler ++ mufu ++ decimals ++ activations).lookup id) with
       | some (params, ret, f) => some (.gate f, params, ret)
-      | none => lazyFamily? id
+      | none => lazyFamily? id <|> wiringFamily? id
 
 private def sameParams (a b : Array (String × Ty)) : Bool :=
   a.size == b.size && (a.zip b).all fun (x, y) => x.1 == y.1 && x.2 == y.2

@@ -9,9 +9,9 @@ this package adds the primitives. It is code, so it requires nothing of `securit
 - `Evaluate/Prims.lean`: the primitives implemented, each with the signature the registry holds for it. E0 is the Boolean
   profile (§9: `And<n>_v1`, `Xor<n>_v1`, `Not_v1`), `Input<w>_v1` and `RegisteredInput<w>_v1`; E1 the constant family
   `Const<w>[0x<hex>]_v1` and the scalar primitives; E2 the FP32 and BF16 arithmetic and the casts that read no table; E3 the
-  tensor-core dot steps; E4 the rest of the registry's gate primitives and the lazy families `TableRead{IB}x{EW}_v1`,
-  `GatherBf16x{V}_v1` and `GatherF32x{V}_v1`. Any other primitive (the lifting families, `BitAtx`, `TopPMaskWordx`, ...)
-  is refused by name.
+  tensor-core dot steps; E4 the rest of the registry's gate primitives, the lazy families `TableRead{IB}x{EW}_v1`,
+  `GatherBf16x{V}_v1` and `GatherF32x{V}_v1`, and the wiring families `BitOf{W}x{I}_v1` and `WordOf{W}_v1`. Any other
+  primitive (the lifting families, `BitAtx`, `TopPMaskWordx`, ...) is refused by name.
 - `Evaluate/Scalar.lean`: the scalar primitives (`verity.circuits.ops.scalar`, and the vLLM integration's `I32Sub`,
   `I64ToI32`, `U32And`, `U32Xor`, `BitXor`, `SelectBit`), transcribed branch for branch from the Python. Each names the
   definition of `security/Definitions/Core/Scalar.lean` it must equal, or that Security has none yet; the equalities are
@@ -73,7 +73,7 @@ registry and the constant ids the Python reads; E4's primitives each on the grid
 for a one-operand bf16 primitive, and a sweep of every binade's edges for an FP32 one), on sampled words and on words out of
 range, and on their captures (the L40S SiLU and RoPE slices, the H100 and L40S log probe, test_mufu's fingerprints and the
 RTX 4090 tanh sample); the MUFU tables against the library's SHA-512 and the registered tables against Flock's SHA-256;
-`TanhF32Rn_v2` and `GeluTanhMulBf16_v3` reading a table named in the request; the lazy families on their index edges;
+`TanhF32Rn_v2` and `GeluTanhMulBf16_v3` reading a table named in the request; the lazy families on their index edges; the wiring families on every bit position;
 a registered input bound like a run input; and explicit examples: the pinned 2-bit adder of
 `tests/verity/circuits/boolean_vectors.json`, Boolean Definitions traced from their Python definitions (up to the
 Ampere BF16 tensor-core step), and malformed programs and inputs.
