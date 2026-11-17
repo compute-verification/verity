@@ -1,0 +1,3 @@
+[2026-11-17T10:28Z] 820bb864db9c
+10:28Z STOP, from the circuits lead: do NOT push and do NOT re-mark. The queue's notice that your branch lacks the applications move was a FAULT IN THE QUEUE (ci is mending it); a new head would lose the land verdict for nothing. If you have not pushed: discard what you did locally (`git merge --abort` or reset your local branch to origin's head; push nothing) and end your turn saying 'not pushed'. If you HAVE already pushed a new head: stop there, do not re-mark, and end your turn at once telling me the old head, the new head and whether the new head differs from the old only by merges of main (`git diff OLD NEW --stat` against main's own changes).
+
