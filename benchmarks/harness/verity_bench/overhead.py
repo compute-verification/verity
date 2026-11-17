@@ -102,7 +102,7 @@ CARDS = {card.gpu: card for card in (
          ("cublaslt", "cutlass", "deepgemm"), True, "h100-sxm5-80gb/e4m3"),
     Gpu("h100", "H100", "9.0", "h100-sxm-80gb", "sm_90a", 0.48, {"fp8": FP8},
         ("cublaslt", "cutlass", "deepgemm"), True, "h100-sxm5-80gb/e4m3",
-        "its host CPU weighed at the H200 node's 0.48 SM-s a core-second"),
+        "its host CPU weighed at 0.48 SM-s a core-second, its Xeon Platinum 8468's (xeon-platinum-8468-2s)"),
     Gpu("rtx-pro-6000", "RTX PRO 6000", "12.0", "rtx-pro-6000-server", "sm_120a", 1.64,
          {"fp8": FP8, "nvfp4": ("nvfp4",)}, ("cublaslt", "cutlass"), False, "rtx-pro-6000-server/e4m3"),
 )}

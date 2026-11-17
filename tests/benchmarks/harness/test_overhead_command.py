@@ -242,9 +242,9 @@ def test_a_run_that_keeps_its_reports_goes_through_the_door_and_is_never_of_reco
 
 def test_the_h100_s_door_sweeps_times_and_records_on_its_own_node_with_the_h200_node_s_host_weight(tmp_path, monkeypatch,
                                                                                                     scheme):
-    """The H100 is a card of its own records (its SMs, L2 and datasheet rate), its host CPU weighed at the H200 node's 0.48,
-    which every point it times says; its sweep and timed run launch on its node and pass the door, and its run of record is
-    a row of its own beside the H200's, whose note is unchanged."""
+    """The H100 is a card of its own records (its SMs, L2 and datasheet rate), its host CPU weighed at its Xeon Platinum
+    8468's 0.48, which every point it times says; its sweep and timed run launch on its node and pass the door, and its
+    run of record is a row of its own beside the H200's, whose note is unchanged."""
 
     h100, h200 = O.CARDS["h100"], O.CARDS["h200"]
     assert (h100.sms, h100.l2_bytes, h100.arch, h100.datasheet) == (132, 50 << 20, "sm_90a", h200.datasheet)
