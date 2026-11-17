@@ -1,0 +1,6 @@
+[tool.pytest.ini_options]
+testpaths = ["."]
+
+[tool.verity.tests]
+inputs = ["benchmarks/compile_cost", "verity/__init__.py", "verity/device.py", "verity/channel.py", "verity/errors.py",
+          "hardware/cards/h200-sxm-141gb.toml"]
