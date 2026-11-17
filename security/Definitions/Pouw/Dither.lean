@@ -153,7 +153,7 @@ structure RoundProto where
   Inst : Type
   Draw : Type
   Chk : Type
-  [instDraw : Fintype Draw]
+  [instSample : Fintype Draw]
   [instChk : Fintype Chk]
   Orc : Type
   [instOrc : Fintype Orc]
@@ -165,7 +165,7 @@ structure RoundProto where
   Ans : Type
   accept : Orc → Inst → Draw → Chk → Root → Ans → Prop
 
-attribute [instance] RoundProto.instDraw RoundProto.instChk RoundProto.instOrc
+attribute [instance] RoundProto.instSample RoundProto.instChk RoundProto.instOrc
 
 /-- A word: integers mod `2^32`. Protocol v3.2's proof block checks a 16-bit `T_s` instead
 (`Guarantees.Dither.WorkSound`'s Open). -/
@@ -184,7 +184,7 @@ structure NoFold where
   nb : ℕ
   L : ℕ
   Draw : Type
-  [instDraw : Fintype Draw]
+  [instSample : Fintype Draw]
   noise : (Fin n → Fin (nb * L) → Word) × (Fin (nb * L) → Fin n' → Word) → Draw →
     (Fin n → Fin (nb * L) → Word) × (Fin (nb * L) → Fin n' → Word)
   s : ℕ
@@ -198,7 +198,7 @@ structure NoFold where
   Path : Type
   opens : Orc → Root → Fin n × Fin n' × Fin nb → Word → Path → Prop
 
-attribute [instance] NoFold.instDraw NoFold.instChk NoFold.instOrc
+attribute [instance] NoFold.instSample NoFold.instChk NoFold.instOrc
 
 /-- **A no-fold word** at cell `(i, j)` and segment `b`: the noised product's prefix sum at the end of segment `b`,
 `Σ_{t < (b+1) L} Ã_it B̃_tj` mod `2^32`. -/

@@ -83,7 +83,7 @@ def AcceptedInRange : Prop :=
 
 /-- An accepted window's sample is `K′` distinct units of its `N`, `K′` the window's exact `kPrime` at its ε and δ, and the
 record was for that sampling design over that population. -/
-def AcceptedDraw : Prop :=
+def AcceptedSample : Prop :=
   ∀ (p : Params) (c : ExecutionPhaseCommitmentRecord) (e : Evidence) (pub : Public) (prof : Core.Integrity),
     protocol.check p c e = .accept pub prof →
       pub.work = Work.at p.gridBits pub.work.level ∧

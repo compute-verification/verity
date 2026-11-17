@@ -545,7 +545,7 @@ def draw_reason(directory: str | os.PathLike | None, heads: Sequence[str | os.Pa
         ledger = Ch.ledger_head([R.ledger_lines(p) for p in heads], key, lms_verify)
     except Ch.CoinError as e:
         return f"the draw session: {e}"
-    return (Wd.draw_epoch_reason(commitment) or (None if Ch.withheld_on(ledger, after.hex()) else Ch.WITHHELD)
+    return (Wd.sample_epoch_reason(commitment) or (None if Ch.withheld_on(ledger, after.hex()) else Ch.WITHHELD)
             or (None if roots[Wd.DRAW] == (after,) else "the draw session's challenger received another root than the "
                                                          "draw root")
             or Ch.order_reason(commitment, Wd.DRAW, roots[Wd.DRAW], draw))
@@ -571,7 +571,7 @@ def check(directory: str | os.PathLike, coins: dict, heads: Sequence[str | os.Pa
     r's root (`rounds_reason` over the challenger's roots); each salt is `h1tile.live_salt` of the opened coin; and the
     sampling coin, or none opened when `draw_after` is None, is its own sample session's, `draw_out` as infra's gate publishes
     it: the session the ledger opens on `draw_after` (`audited_window`), opened withheld (`challenger.withheld_on`), a
-    sample session's layout (`window.draw_epoch_reason`), and its sampling coin opened once after `draw_after`.  ``ok`` only
+    sample session's layout (`window.sample_epoch_reason`), and its sampling coin opened once after `draw_after`.  ``ok`` only
     when all hold."""
     from verity.protocols.resource_accounting.compute.pouw.prover.circuit import h1tile as HT
     d = published(directory)

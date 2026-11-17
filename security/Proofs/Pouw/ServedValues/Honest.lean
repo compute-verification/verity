@@ -114,7 +114,7 @@ theorem size_blocks {N : ℕ} (t : Fin N) : (blocks N).size ∅ t = 1 := by
 section Witnesses
 
 variable {nB mB : ℕ} (σ : Fin nB → Fin mB) (k : Fin mB → ℕ) (hk : ∀ s, k s ≤ (stratum σ s).card) (sT : Fin mB)
-  (unitOf : Fin nB → ℕ) (regOf : Bool → PreDraw)
+  (unitOf : Fin nB → ℕ) (regOf : Bool → PreSample)
   (evOf : Bool → Equiv.Perm (Fin (tileCount σ sT)) × Unit → Answered) (enc : Bool → ByteArray)
 
 /-- **`RightValues`'s bound at the honest J10-R period**: `j10r_meets` gives every
@@ -122,7 +122,7 @@ premise but `UnitFixed`, which the guarantee doesn't take, at `N_p` one-word blo
 `δ_s > 0` and `δ_bind = δ_ks = 0`. -/
 theorem right_values_honest (hKd : 1 ≤ k sT) (hacc : ∀ c β, ExecutionPhaseAccepts (regOf c) (evOf c β))
     (hsalt : ∀ c, (PouwCheck.hex? (regOf c).salt).getD ByteArray.empty = enc c)
-    (hdraw : ∀ c β, ∃ d : Array ℕ, creditDrawn (regOf c) (evOf c β) = .ok d ∧
+    (hdraw : ∀ c β, ∃ d : Array ℕ, creditSampled (regOf c) (evOf c β) = .ok d ∧
       ∀ u : ℕ, u ∈ d.toList ↔ ∃ i : Fin (k sT), unitOf (tileAt σ sT (drawOf (hk sT) β i)) = u)
     (n : ℕ) (hn : 0 < n) {δs : ℝ} (hδs : 0 < δs) :
     prob (fun x => (play Unit (tileCount σ sT) (k sT) n).accepts x ∧
@@ -220,7 +220,7 @@ theorem credit_pos {σ ε S : ℝ} (hS : 0 < S) (hσ : σ = 1) (hε : ε < 1) : 
 section Witnesses
 
 variable {nB mB : ℕ} (σ : Fin nB → Fin mB) (k : Fin mB → ℕ) (hk : ∀ s, k s ≤ (stratum σ s).card) (sT : Fin mB)
-  (unitOf : Fin nB → ℕ) (regOf : Bool → PreDraw)
+  (unitOf : Fin nB → ℕ) (regOf : Bool → PreSample)
   (evOf : Bool → Equiv.Perm (Fin (tileCount σ sT)) × Unit → Answered) (enc : Bool → ByteArray)
 
 /-- **The skipping period's live words are `N·n`** when every window is credited. -/

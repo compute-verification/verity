@@ -22,8 +22,8 @@ structure PublicItem where
 
 /-- `PUBLIC`. -/
 def publicItems : List PublicItem := [
-  ⟨"verdict", "output", "outcome", "what the credit rests on: every drawn tile was proved and opened, or not"⟩,
-  ⟨"work", "output", "window", "the credited work, as the tile count padded to a grid level: the draw ranges over its N " ++
+  ⟨"verdict", "output", "outcome", "what the credit rests on: every sampled tile was proved and opened, or not"⟩,
+  ⟨"work", "output", "window", "the credited work, as the tile count padded to a grid level: the sample ranges over its N " ++
     "tiles and the auditor credits its work; one level, so at most log2 q bits"⟩,
   ⟨"check", "structure", "parameter", "the check's identity: the tile template, its work per tile and the commitment " ++
     "scheme fix the auditor's verifier"⟩,
@@ -31,7 +31,7 @@ def publicItems : List PublicItem := [
     "is stated in them"⟩,
   ⟨"length", "structure", "parameter", "the workloads of record's fixed length: each slot's max_tokens, served whatever it " ++
     "samples (ignore_eos), so the useful work is public"⟩,
-  ⟨"drawn", "coins", "outcome", "the verifier's own draw, after the receipt"⟩,
+  ⟨"drawn", "coins", "outcome", "the verifier's own sample, after the receipt"⟩,
   ⟨"root_W", "commitment", "parameter", "the weights' salted root: what the tiles' weight rows are committed to, hiding"⟩]
 
 /-- `REGISTERED`: the items an execution phase's execution phase commitment record carries; the verdict and the sample come after

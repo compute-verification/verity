@@ -208,7 +208,7 @@ theorem oCells_eq (c c' : OCells 1 (fun _ => 1) (fun _ => 1) (fun _ => 1)) : c =
 def oTarget : (OBits 1 (fun _ => 1) 1 7 (fun _ => 1) (fun _ => 1) → ZMod (2 ^ 32)) → ZMod (2 ^ 32) :=
   fun z => dTarget fun v => z ⟨0, v⟩
 
-theorem oTarget_merge (U : ODraws 1 (fun _ => 1) 1 7 (fun _ => 1) (fun _ => 1)) :
+theorem oTarget_merge (U : OSamples 1 (fun _ => 1) 1 7 (fun _ => 1) (fun _ => 1)) :
     (fun z => oTarget (mergeAt U 0 z)) = dTarget :=
   funext fun z => congrArg dTarget (mergeAt_one U z)
 
@@ -309,7 +309,7 @@ theorem card_jStage : Fintype.card (Paths (JStage 1 1 1 1 1) 1) = 2 ^ 10 := by
 def ojTarget : (OJBits 1 (fun _ => 1) 1 (fun _ => 1) (fun _ => 1) → ZMod (2 ^ 32)) → ZMod (2 ^ 32) :=
   fun z => jTarget fun v => z ⟨0, v⟩
 
-theorem ojTarget_merge (U : OJDraws 1 (fun _ => 1) 1 (fun _ => 1) (fun _ => 1)) :
+theorem ojTarget_merge (U : OJSamples 1 (fun _ => 1) 1 (fun _ => 1) (fun _ => 1)) :
     (fun z => ojTarget (mergeAt U 0 z)) = jTarget :=
   funext fun z => congrArg jTarget (mergeAt_one U z)
 

@@ -334,7 +334,7 @@ def KScopeOverlapAffine (Mc : Machine) (S : Service) (run : ORunMap Mc S R St n 
       (∀ w j, ((run Ω' M r).prog x w).isProd j = true → AffMulAt (((run Ω' M r).prog x w).prod j)) ∧
       (∀ w c, (run Ω' M r).play.errAt x w c = fun z => ((run Ω' M r).prog x w).val z ((run Ω' M r).word x w c) -
         dPrefix ((run Ω' M r).pc x w c.1) ((run Ω' M r).vq x w c.1) wt c.2.1 c.2.2.1 c.2.2.2.val fun v => z ⟨c.1, v⟩) ∧
-      ∀ w (W : ODraws St n L np B n') c c',
+      ∀ w (W : OSamples St n L np B n') c c',
         (∀ U : Finset (DBits (n c.1) L np (B c.1) (n' c.1)), U.card ≤ 2 →
           (run Ω' M r).play.errAt x w c (mergeAt W c.1 (bitInd U)) = 0) →
         (∀ U : Finset (DBits (n c'.1) L np (B c'.1) (n' c'.1)), U.card ≤ 2 →

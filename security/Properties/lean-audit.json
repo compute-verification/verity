@@ -1280,13 +1280,13 @@
    "honest": ["MemoryChallenger.Attest.Properties.SecurityProofs.periodSound_honest"],
    "nontrivial": "MemoryChallenger.Attest.Properties.SecurityProofs.periodSound_nontrivial"
   },
-  "Properties.Pouw.Credit.SecurityProofs.groupedDrawMisses": {
-   "honest": ["Properties.Pouw.Credit.SecurityProofs.groupedDrawMisses_honest"],
-   "nontrivial": "Properties.Pouw.Credit.SecurityProofs.groupedDrawMisses_nontrivial"
+  "Properties.Pouw.Credit.SecurityProofs.groupedSampleMisses": {
+   "honest": ["Properties.Pouw.Credit.SecurityProofs.groupedSampleMisses_honest"],
+   "nontrivial": "Properties.Pouw.Credit.SecurityProofs.groupedSampleMisses_nontrivial"
   },
-  "Properties.Pouw.Credit.SecurityProofs.drawWithheld": {
+  "Properties.Pouw.Credit.SecurityProofs.sampleWithheld": {
    "honest": ["Properties.Pouw.Credit.SecurityProofs.sampleWithheld_honest"],
-   "nontrivial": "Properties.Pouw.Credit.SecurityProofs.drawWithheld_nontrivial"
+   "nontrivial": "Properties.Pouw.Credit.SecurityProofs.sampleWithheld_nontrivial"
   },
   "Properties.Site.refuses": {
    "honest": ["Properties.Site.refuses_honest"],
@@ -1475,7 +1475,7 @@
    "nontrivial": "Properties.Pouw.PearlPlus.planMeans_nontrivial"
   },
   "Properties.Pouw.PearlPlus.acceptMeans": {
-   "honest": ["Properties.Pouw.PearlPlus.acceptMeans_honest", "Properties.Pouw.PearlPlus.acceptMeans_drawn"],
+   "honest": ["Properties.Pouw.PearlPlus.acceptMeans_honest", "Properties.Pouw.PearlPlus.acceptMeans_sampled"],
    "nontrivial": "Properties.Pouw.PearlPlus.acceptMeans_nontrivial"
   },
   "Properties.Pouw.PearlPlus.refusedBeforeTheCoin": {
@@ -1515,16 +1515,16 @@
    "nontrivial": "Pous.Component.SecurityProofs.wipeAccepts_complete_nontrivial"
   },
   "Properties.Pouw.PearlPlus.workIsTheCredit": {
-   "honest": ["Properties.Pouw.PearlPlus.workIsTheCredit_honest", "Properties.Pouw.PearlPlus.workIsTheCredit_drawn"],
+   "honest": ["Properties.Pouw.PearlPlus.workIsTheCredit_honest", "Properties.Pouw.PearlPlus.workIsTheCredit_sampled"],
    "nontrivial": "Properties.Pouw.PearlPlus.workIsTheCredit_acceptAll"
   },
   "Properties.Pouw.PearlPlus.coinBytesGiveUniformTickets": {
    "honest": ["Properties.Pouw.PearlPlus.coinBytesGiveUniformTickets_honest"],
    "nontrivial": "Properties.Pouw.PearlPlus.coinBytesGiveUniformTickets_nontrivial"
   },
-  "Properties.Pouw.PearlPlus.drawIsOnItsStreams": {
-   "honest": ["Properties.Pouw.PearlPlus.drawIsOnItsStreams_honest"],
-   "nontrivial": "Properties.Pouw.PearlPlus.drawIsOnItsStreams_nontrivial"
+  "Properties.Pouw.PearlPlus.sampleIsOnItsStreams": {
+   "honest": ["Properties.Pouw.PearlPlus.sampleIsOnItsStreams_honest"],
+   "nontrivial": "Properties.Pouw.PearlPlus.sampleIsOnItsStreams_nontrivial"
   },
   "Properties.ZkServer.admitNext": {
    "honest": ["Properties.ZkServer.admitNext_honest"],
@@ -2034,7 +2034,7 @@
    "type_hash": "545ca67099062d0dd1c98c4469e8dc936d2200557cb1cf253be4196afe8f360e",
    "unfolded_hash": "4f1283c07c5f4a0ccf083a4da0e81800413a5b4c6575a96d62a0fca888b4a995"
   },
-  "Properties.Pouw.Check.acceptedDraw": {
+  "Properties.Pouw.Check.acceptedSample": {
    "type_hash": "5f9f29337f12c4f3ebedddade268afd4f5256e64f1177e1ee333437f0cefae9e",
    "unfolded_hash": "ff1e9f61e4fad1e11b86d73e381802a5369fb47f45a8c61b7e885b071a290e7f"
   },
@@ -2078,11 +2078,11 @@
    "type_hash": "3027f3c9a6bed6a9a79e76b844ba678bcb31f3a8001b6b67436a898a30e7583b",
    "unfolded_hash": "dd24b3b1682b8dc1106fc85f2f987e78d859ce692452dce6c6c864d01733cad3"
   },
-  "Properties.Pouw.Commit.drawCoinAccepts": {
+  "Properties.Pouw.Commit.samplingCoinAccepts": {
    "type_hash": "94d38a0225cde06f3731a9af9350f6b5d174a69e88a3bb9db608658d77be19a1",
    "unfolded_hash": "2d5e1b9f34e0eaa023977c50ebcb0d6720813c5e0f5970e9b56381ee5c938468"
   },
-  "Properties.Pouw.Commit.drawShape": {
+  "Properties.Pouw.Commit.sampleShape": {
    "type_hash": "a9b27ef9d784124ffefdc3f62ee866098fa0560ff916a4dfa2c1b28e149e9239",
    "unfolded_hash": "2804f1ee2bd2bc349e0f7800ad5a542faa51b81ff7c7051284e9b37bd1a961de"
   },
@@ -2126,7 +2126,7 @@
    "type_hash": "c03e3c77fda8ce7a3f84f025ba5617b90e2db2dfdab66fcbb3f209aadeaa67ab",
    "unfolded_hash": "bf22d57ee8c0d640485032a8badf071f2cf467bfc4ca9f9cc82371da676c4ade"
   },
-  "Properties.Pouw.Credit.SecurityProofs.workDrawMisses": {
+  "Properties.Pouw.Credit.SecurityProofs.workSampleMisses": {
    "type_hash": "85dfc451b2cc6aabc2843616ef9c53e6a6b25c1575a984df7ad9302704ee591c",
    "unfolded_hash": "fe087516eeb74a84a2f18d8d310e399006dcc4ea257e122b2a2b885e67160349"
   },
@@ -13792,7 +13792,7 @@
     "function": "PouwCheck.protocol.check",
     "outcome": "accept"
    },
-   "Properties.Pouw.Check.acceptedDraw": {
+   "Properties.Pouw.Check.acceptedSample": {
     "function": "PouwCheck.protocol.check",
     "outcome": "accept"
    },
@@ -13854,12 +13854,12 @@
     "function": "PouwCommit.Domain.mk?",
     "outcome": "accept"
    },
-   "Properties.Pouw.Commit.drawCoinAccepts": {
-    "function": "PouwCommit.drawCoin",
+   "Properties.Pouw.Commit.samplingCoinAccepts": {
+    "function": "PouwCommit.flipCoin",
     "outcome": "accept"
    },
-   "Properties.Pouw.Commit.drawShape": {
-    "function": "PouwCommit.weightedDraw",
+   "Properties.Pouw.Commit.sampleShape": {
+    "function": "PouwCommit.weightedSample",
     "outcome": "accept"
    },
    "Properties.Pouw.Commit.epochSaltAccepts": {
@@ -14134,7 +14134,7 @@
     "function": "Spot.Fleet.run",
     "outcome": "accept"
    },
-   "Properties.Pouw.Credit.SecurityProofs.workDrawMisses": {
+   "Properties.Pouw.Credit.SecurityProofs.workSampleMisses": {
     "function": ["PouwCheck.Credit.strata", "PouwCheck.Credit.law", "PouwWindow.kPrime"],
     "outcome": "accept"
    },
@@ -14266,11 +14266,11 @@
     "function": "NetworkCheck.Period.check",
     "outcome": "accept"
    },
-   "Properties.Pouw.Credit.SecurityProofs.groupedDrawMisses": {
+   "Properties.Pouw.Credit.SecurityProofs.groupedSampleMisses": {
     "function": ["PouwCheck.Credit.strata", "PouwCheck.Credit.law", "PouwWindow.kPrime"],
     "outcome": "accept"
    },
-   "Properties.Pouw.Credit.SecurityProofs.drawWithheld": {
+   "Properties.Pouw.Credit.SecurityProofs.sampleWithheld": {
     "function": "PouwCheck.Credit.Internal.credited",
     "outcome": "accept"
    },
@@ -14518,7 +14518,7 @@
     "function": "FlockSoundness.Randomness.uniformOn",
     "outcome": "none"
    },
-   "Properties.Pouw.PearlPlus.drawIsOnItsStreams": {
+   "Properties.Pouw.PearlPlus.sampleIsOnItsStreams": {
     "function": "PouwCheck.PearlPlus.draw",
     "outcome": "none"
    },
@@ -14982,7 +14982,7 @@
    "Properties.Pouw.MonitoringPeriod.SecurityProofs.h1CheckedCreditMonitoringPeriod": "frozen (no-function,world-unlisted): CheckedCreditMonitoringPeriod at H1's tile unit on the torch loop (PouwH1Tile_v1 K=64 R=4 C=8, N_p = 144, K_d = 24, one round a window, rho = 8/9, lucks 7/8 and 1/2, a = b = 1, Lambda = 67/8 from SplitRateClosed), Pins from SaltIsLiveCoin and StagedPins; not one acceptance hypothesis, a Pouw.RelativeSecurity.prob event that shape.events does not list. Its five premises beyond CheckedCreditMonitoringPeriod's claims are listed under assumptions, each a named Prop with its own record (ASK-133, option A, decided by the lane): SampleIsCoin, StagedPins and RegisteredBeforeDraw protocol-code facts to prove (the loop's registration has anchors [] and wires [], so it commits no row before the draw, CMP-91's to fix with ALLP-WIRE's anchors); ServiceSound standard crypto (C-Flock's soundness); SaltIsLiveCoin a deployment gap until CMP-90 (#4405: the loop is given its salt before serving and nothing binds it to a live coin). Non-vacuous: Proofs.Pouw.MonitoringPeriod.Accept evaluates the deployed check to an accept at #4351's parameters for every draw (N = 144, K' = 24), and Proofs.Pouw.MonitoringPeriod.Honest builds a live-salt period meeting every premise (h1_meets).",
    "Properties.Pouw.MonitoringPeriodJ10R.SecurityProofs.h1J10RCheckedCreditMonitoringPeriod": "frozen (no-function,world-unlisted): CheckedCreditMonitoringPeriod at J10-R's tile stratum s_T of the sampling block's stratified draw (N_p = |stratum sigma s_T|, padded with wordless fillers, K_d = k s_T), with PouwCheck.Credit.window as the verdict, H1's lucks 7/8 and 1/2, a = b = 1, wmax = 1 and Lambda = j10rRate (k s_T) rho = 8(1 + K rho)/(rho K) from SplitRateClosed (8 + 8/k s_T at the demo shape's rho = 1); the pin is pinnedAt, the unit's tile at its public-row noise and keys (#2352's pin, one description), from SaltIsLiveCoin; not one acceptance hypothesis, a Pouw.RelativeSecurity.prob event that shape.events does not list. Its new premises, decided by lane (Asks for Daniel, Decided by lane, A), each listed under assumptions: TileSampleIsCoin, a code fact once CMP-126's verifier draws the tiles inside the stratified draw (a SHA-512 random oracle, R-ACCEL-3, if the draw's stream is expanded from the live coin); TileServiceSound, a fact to prove (C-Flock's soundness at each drawn unit under live coins); SharedNoiseLucks, a claim, computational (Theorem O's one slot, its form FOLD-LUCK's, CMP-134); RegisteredBeforeDraw, as H1CheckedCreditMonitoringPeriod's (a deployment gap). SaltIsLiveCoin as H1CheckedCreditMonitoringPeriod's; UnitFixed to be made provable from the code (ASSUMPTION-AUDIT). TileStratumEscape, the stratum's hypergeometric escape of the tile coordinate, is a lemma to prove with STRATJOINT's per-stratum projection (LEAN-56). Proved from CircuitCreditMonitoringPeriod at tileRun (Proofs.Pouw.MonitoringPeriodJ10R).",
    "Properties.Pouw.MonitoringPeriodJ10RStrata.SecurityProofs.h1J10RCheckedCreditMonitoringPeriodStrata": "frozen (no-function,world-unlisted): H1J10RCheckedCreditMonitoringPeriod over a finite set S of the sampling block's tile strata, one a contraction K (16,384 and 65,536 in H1's served layout), each s in S with its own N_s = |stratum sigma s|, K_d = k s, declared circuit, rho s and Lambda_s = j10rRate (k s) (rho s), so its own eps_s(j); the fixed words and the credits are summed over S and the error is the union bound, the sum over S of each stratum's delta_s + n(delta_bind + delta_ks) (the strata's permutations are independent coordinates of the draw, but every stratum's game reads the window's one round coin and the prover adapts across strata, so no sharper bound is claimed). Not one acceptance hypothesis, a Pouw.RelativeSecurity.prob event that shape.events does not list, as the one-stratum statement's. Period-wide premises, on the period's coins (StrataCoin): RegisteredBeforeDraw and SaltIsLiveCoin, as the one-stratum statement's (one registration and one salt a window), and StrataSampleIsCoin, listed under assumptions, in place of TileSampleIsCoin: the window's drawn proof blocks are exactly the union over S of the strata's coordinates (TileSampleIsCoin read per stratum is false at a window over two non-empty strata), a code fact once the verifier draws the tiles inside the stratified draw, one stratum a K (a SHA-512 random oracle, R-ACCEL-3, if the draw's stream is expanded from the live coin). Per stratum, at stratum s's view (pathsAt): the one-stratum statement's other premises, TileServiceSound, SharedNoiseLucks and UnitFixed among them. Proved from CircuitCreditMonitoringPeriod at each stratum's tileRun, as Proofs.Pouw.MonitoringPeriodJ10R applies it, then the union bound (Proofs.Pouw.MonitoringPeriodJ10RStrata). Honest: HonestStrata.strata_meets_period, strata_meets_stratum and strata_credit (HonestJ10R's instance at every stratum, every premise met); nontrivial: HonestStrata.strata_nontrivial (at the verdict that credits every window, the provers that fix no word break the bound once Lambda_s ln(1/delta_s) < n at each stratum) (Proofs.Pouw.MonitoringPeriodJ10RStrata.Honest).",
-   "Properties.Pouw.MonitoringPeriodJ10R.TileStratumAcceptProb": "unstated: proved in security_proofs by Properties.Pouw.MonitoringPeriodJ10R.SecurityProofs.tileStratumAcceptProb (Proofs.Pouw.MonitoringPeriodJ10R.Stratum): the tile coordinate (tileDraw, the first k s_T places of a uniform permutation of stratum s_T) misses B with stratum s_T's hypergeometric factor, since a uniform permutation's k-prefix misses B with C(N - |B|, k)/C(N, k) exactly (miss_eq), and that escape equals the escape of Law.stratified's coordinate s_T (Law.stratified_proj_escape, by tileStratumAcceptProb_eq_proj). A lemma, not a premise: no guarantee states it, since its proof is security_proofs' and stratum is restated here until it moves to Definitions.",
+   "Properties.Pouw.MonitoringPeriodJ10R.TileStratumAcceptProb": "unstated: proved in security_proofs by Properties.Pouw.MonitoringPeriodJ10R.SecurityProofs.tileStratumAcceptProb (Proofs.Pouw.MonitoringPeriodJ10R.Stratum): the tile coordinate (tileSample, the first k s_T places of a uniform permutation of stratum s_T) misses B with stratum s_T's hypergeometric factor, since a uniform permutation's k-prefix misses B with C(N - |B|, k)/C(N, k) exactly (miss_eq), and that escape equals the escape of Law.stratified's coordinate s_T (Law.stratified_proj_escape, by tileStratumAcceptProb_eq_proj). A lemma, not a premise: no guarantee states it, since its proof is security_proofs' and stratum is restated here until it moves to Definitions.",
    "Properties.NetworkPeriod.AnswersVerified": "unstated: the period check accepts an execution phase only where the compiled Lean verifier verified every answer it reads; not yet proved, since the check reads the answers as the evidence states them",
    "Properties.NetworkPeriod.RatioReadsBack": "unstated: a ratio in lowest terms with a positive denominator reads back from Core.Ratio.toString's text, the step a profile's delta takes when the check reads an audit's answer; no theorem proves it yet",
    "Properties.NetworkPeriod.RowsEntriesKeyNontrivial": "unstated: RowsEntriesParsed's nontrivial case of keys (acceptAllRows accepts, and check refuses, a period listing two keys under one key identifier); no theorem proves it yet",

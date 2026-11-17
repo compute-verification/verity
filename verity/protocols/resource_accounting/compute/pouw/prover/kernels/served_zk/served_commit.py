@@ -804,7 +804,7 @@ def draw_bytes(key: Key, sampling_design: Mapping[str, Any], n: int) -> bytes:
 def python_sampler(sampling_design: Mapping[str, Any], n: int, src: bytes) -> list[int]:
     units = CC.stream_subset(sampling_design["k"], n, src)
     if units is None:
-        raise _refused("sampler", "the draw's stream ran out")
+        raise _refused("sampler", "the sample's stream ran out")
     return units
 
 
@@ -842,7 +842,7 @@ def _signed_coins(path: str | os.PathLike | None, key: Ch.ChallengerKey | None) 
         raise ValueError(f"a certified window's draw coin opens against its challenger's signed record: {e}") from None
     if not same:
         raise ValueError(f"the challenger record at {path} changed while the challenger read it")
-    if (why := Wd.draw_epoch_reason(trusted)) is not None:
+    if (why := Wd.sample_epoch_reason(trusted)) is not None:
         raise ValueError(f"a certified window's draw coin is a live window's draw session's: {why}")
     return trusted, {"key": key.to_json(), "record": doc}
 

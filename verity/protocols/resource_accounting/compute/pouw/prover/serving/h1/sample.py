@@ -39,7 +39,7 @@ def draw_session_reason(commits: Mapping[str, Any], key: ChallengerKey, lines: l
     auditor's ledger `lines` opens on the window's sample root under `key`, run from a commit the pins log `pins` records
     on `main` (`challenger.trusted_session_of` over its files `files`, as infra's gate publishes them; None names none),
     opened withheld (`challenger.withheld_on`), so its challenger released its coin root only after that root, of a sample
-    session's layout (`window.draw_epoch_reason`), and the coin its draw coin 0 opened after that root
+    session's layout (`window.sample_epoch_reason`), and the coin its draw coin 0 opened after that root
     (`draw_reason`); None when it is."""
     root = _draw(commits).get("root")
     if not (isinstance(root, str) and _ROOT.match(root)):
@@ -54,7 +54,7 @@ def draw_session_reason(commits: Mapping[str, Any], key: ChallengerKey, lines: l
         return f"the window's draw session is not trusted: {e}"
     if not Ch.withheld_on(lines, root):
         return f"the window's draw session: {Ch.WITHHELD}"
-    why = Wd.draw_epoch_reason(trusted)
+    why = Wd.sample_epoch_reason(trusted)
     if why is not None:
         return f"the window's draw session's signed coins: {why}"
     return draw_reason(commits, trusted, received.get(Wd.DRAW, ()))

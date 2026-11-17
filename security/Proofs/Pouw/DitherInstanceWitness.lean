@@ -180,7 +180,7 @@ theorem freedSound_fails_at (c : Verity.Accel.Card) (hρ : ∀ r, 0 < c.ρ r) (h
     (cardAccel_onCard c x (devs c hr) u twRound (idLayout c x hr) hρ (devs_oth_pos c hr hh)
       (devs_mem c hr)).2.2.1.1
   have : Nonempty (twRound.Orc × (Fin 2 → twRound.Draw × twRound.Chk)) :=
-    (inferInstance : Nonempty (Unit × (Fin 2 → TDraw × Fin 2)))
+    (inferInstance : Nonempty (Unit × (Fin 2 → TSample × Fin 2)))
   have h1 := h (idleAt c x hr u)
   rw [Pouw.SecurityProofs.DitherWitness.prob_of_forall] at h1
   · norm_num at h1

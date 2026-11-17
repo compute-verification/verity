@@ -23,8 +23,8 @@ TT_OUT per tile at `ρr`, through (C2) at `ρr`:
   over its inert-work bound and credits it nothing. The strict forms are its case `u 0 = ε_s`, `u x = 1` otherwise
   (`gapSampled_of_tol`).
 * **The audit sampled as the run samples** (`pearlCSampledDrawDevRev1RowInertBoundAtTol`, `GGapSampledDrawTol`): each trace sampled
-  by its records' tickets (`pearlCDrawRev1`), at the same g, since a declaration consistent with a tile weighs it at most
-  its credited rows' `W_ref` (`pearlCDrawRev1_le`, `wrefRowRev1_le`).
+  by its records' tickets (`pearlCSampleRev1`), at the same g, since a declaration consistent with a tile weighs it at most
+  its credited rows' `W_ref` (`pearlCSampleRev1_le`, `wrefRowRev1_le`).
 * **GLM-5.3's down projection on the H100 record**, `m × 6144 × 256` at any `m`, `ρ = 1/400`, `ρr = 1/100`, sampled as
   the run samples, from `TTOutTilePearlCH100Rev1` at 1/100, C1 and C3 (`pearlCSampledH100v1RowSeedRowInertShare100_6144x256Tol`),
   and its code form (`-h3`) with C1-h3 and C5 (`pearlCSampledH100v1RowSeedCodeRowInertShare100_6144x256Tol`), both at the
@@ -186,23 +186,23 @@ theorem wrefRowRev1_le (d : PearlCDevice) (hadd : 0 ≤ d.prices.add) (s : Shape
     rw [hY, hX]
     exact mul_le_mul_of_nonneg_left (add_le_add (max_le (by linarith) (by linarith)) hrest) hm
 
-theorem pearlCDrawRev1_nonneg (d : PearlCDevice) (hbf : 0 ≤ d.prices.bf16) (L : Layout) (g : ℕ) (dc : Decl) :
-    0 ≤ pearlCDrawRev1 d L g dc := by
-  unfold pearlCDrawRev1
+theorem pearlCSampleRev1_nonneg (d : PearlCDevice) (hbf : 0 ≤ d.prices.bf16) (L : Layout) (g : ℕ) (dc : Decl) :
+    0 ≤ pearlCSampleRev1 d L g dc := by
+  unfold pearlCSampleRev1
   have := wrefRowRev1_nonneg d hbf dc.kept (L.shape ((auditTiling 64 64 L).unit g)).n
   positivity
 
 /-- **A consistent declaration weighs a tile at most its credited rows' `W_ref`**: with the declared kept width within
 the unit's `k` (`32·G` dividing `k > 0`) and the declared credited rows passing Π's rules, the sample's weight under rev1
 is at most `wrefDevRev1` times the tile's share of its passing rows and columns. -/
-theorem pearlCDrawRev1_le (d : PearlCDevice) (hadd : 0 ≤ d.prices.add) (hbf : 0 ≤ d.prices.bf16)
+theorem pearlCSampleRev1_le (d : PearlCDevice) (hadd : 0 ≤ d.prices.add) (hbf : 0 ≤ d.prices.bf16)
     (sem : PearlCSem Q R S) (L : Layout) (g : ℕ) (dc : Decl) (act : Codes)
     (hm : 0 < (L.shape ((auditTiling 64 64 L).unit g)).m) (hk : 0 < (L.shape ((auditTiling 64 64 L).unit g)).k)
     (hg : d.G = 0 ∨ 32 * d.G ∣ (L.shape ((auditTiling 64 64 L).unit g)).k)
     (hkept : dc.kept ≤ (L.shape ((auditTiling 64 64 L).unit g)).k)
     (hrows : ∀ i ∈ (auditTiling 64 64 L).rows g, i ∈ dc.rows →
       sem.RowOK (L.shape ((auditTiling 64 64 L).unit g)).m (L.shape ((auditTiling 64 64 L).unit g)).k act i) :
-    pearlCDrawRev1 d L g dc ≤ wrefDevRev1 d (L.shape ((auditTiling 64 64 L).unit g)) *
+    pearlCSampleRev1 d L g dc ≤ wrefDevRev1 d (L.shape ((auditTiling 64 64 L).unit g)) *
       tileShare (L.shape ((auditTiling 64 64 L).unit g))
         (sem.passRows (L.shape ((auditTiling 64 64 L).unit g)) act ((auditTiling 64 64 L).rows g))
         ((auditTiling 64 64 L).cols g) := by
@@ -220,7 +220,7 @@ theorem pearlCDrawRev1_le (d : PearlCDevice) (hadd : 0 ≤ d.prices.add) (hbf : 
   have hw := wrefRowRev1_le d hadd sh hk hg hkept
   have hw0 := wrefRowRev1_nonneg d hbf dc.kept sh.n
   have hmq : (0 : ℚ) < sh.m := by exact_mod_cast hm
-  unfold pearlCDrawRev1 tileShare
+  unfold pearlCSampleRev1 tileShare
   rw [← hsh]
   rcases Nat.eq_zero_or_pos sh.n with hn | hn
   · simp [hn]
@@ -371,9 +371,9 @@ theorem pearlCSampledDevRev1KRowInertBoundAt (CM : CostModel Q R S) (d : PearlCD
     ring
 
 /-- **The row-seeded TT_OUT per audit tile at both caps gives `GGapSampledDrawTol`**, the audit sampled by rev1's tickets
-(`pearlCDrawRev1`), at `γ = 1 − (399/400)·(1 − ρr)/((1 − ρ)·ω)` where `wrefDevRev1 = ω·(1 − ρ)·creditDevRev1`
+(`pearlCSampleRev1`), at `γ = 1 − (399/400)·(1 − ρr)/((1 − ρ)·ω)` where `wrefDevRev1 = ω·(1 − ρ)·creditDevRev1`
 (`gapSampledDrawTol`): a consistent declaration weighs a tile at most its credited rows' `W_ref`
-(`pearlCDrawRev1_le`), which is `ω` times its credit. -/
+(`pearlCSampleRev1_le`), which is `ω` times its credit. -/
 theorem pearlCSampledDrawDevRev1RowInertBoundAtTol (CM : CostModel Q R S) (d : PearlCDevice) (sem : PearlCSem Q R S)
     (ρ ρr : ℚ) (s : Shape) (ω γ : ℚ) (hadd : 0 ≤ d.prices.add) (hbf : 0 ≤ d.prices.bf16) (hρ : ρ < 1) (hρr : ρr < 1)
     (hω0 : 0 < ω) (hω : wrefDevRev1 d s = ω * ((1 - ρ) * creditDevRev1 d s))
@@ -381,7 +381,7 @@ theorem pearlCSampledDrawDevRev1RowInertBoundAtTol (CM : CostModel Q R S) (d : P
     (hTT : TTOutTileRowSeed CM (pearlCProtocolDevRev1RowInertBound d sem ρr) (pearlCTilesDevRev1RowInertBound d sem ρr)
       (pearlCDomainDev d) (1 / 400)) :
     GGapSampledDrawTol CM (pearlCProtocolDevRev1RowInertBoundAt d sem ρ ρr) (pearlCTilesDevRev1RowInertBoundAt d sem ρ ρr)
-      (fun L => pearlCDomainDevAt d s L ∧ rowsOf L ≤ 2 ^ 64) (pearlCDrawRev1 d) (γ : ℝ)
+      (fun L => pearlCDomainDevAt d s L ∧ rowsOf L ≤ 2 ^ 64) (pearlCSampleRev1 d) (γ : ℝ)
       (fun q N => δPearlC q (N * s.m)) := by
   have hr : (0 : ℚ) < 1 - ρ := by linarith
   have hr' : (0 : ℚ) < 1 - ρr := by linarith
@@ -399,7 +399,7 @@ theorem pearlCSampledDrawDevRev1RowInertBoundAtTol (CM : CostModel Q R S) (d : P
       mul_pos (by norm_num) (by exact_mod_cast div_pos hr' hr)
     linarith
   · intro U _ g _ dc
-    exact pearlCDrawRev1_nonneg d hbf U.layout g dc
+    exact pearlCSampleRev1_nonneg d hbf U.layout g dc
   · intro U hU H s' g hg act _
     have hD := hU.2.1.1 _ (auditTiling_unit_lt 64 64 U.layout hg)
     have hc := creditDevRev1_nonneg d hadd hbf _ hD.2.2.1 hD.2.2.2.2.1
@@ -412,11 +412,11 @@ theorem pearlCSampledDrawDevRev1RowInertBoundAtTol (CM : CostModel Q R S) (d : P
     have hu := auditTiling_unit_lt 64 64 U.layout hg
     have hD := hU.2.1.1 _ hu
     have hsh : U.layout.shape ((auditTiling 64 64 U.layout).unit g) = s := hU.2.1.2 _ hu
-    have hle := pearlCDrawRev1_le d hadd hbf sem U.layout g dc act hD.1 hD.2.2.1 hD.2.2.2.2.1 hkept hrows
+    have hle := pearlCSampleRev1_le d hadd hbf sem U.layout g dc act hD.1 hD.2.2.1 hD.2.2.2.2.1 hkept hrows
     simp only [pearlCTilesDevRev1RowInertBoundAt, pearlCTilesDevRev1]
     rw [hsh] at hle ⊢
     rw [hω] at hle
-    have hle' : pearlCDrawRev1 d U.layout g dc ≤ ω * ((1 - ρ) * creditDevRev1 d s *
+    have hle' : pearlCSampleRev1 d U.layout g dc ≤ ω * ((1 - ρ) * creditDevRev1 d s *
         tileShare s (sem.passRows s act ((auditTiling 64 64 U.layout).rows g)) ((auditTiling 64 64 U.layout).cols g)) :=
       hle.trans_eq (by ring)
     exact_mod_cast hle'
@@ -429,7 +429,7 @@ theorem pearlCSampledDrawDevRev1RowInertBoundAt (CM : CostModel Q R S) (d : Pear
     (hTT : TTOutTileRowSeed CM (pearlCProtocolDevRev1RowInertBound d sem ρr) (pearlCTilesDevRev1RowInertBound d sem ρr)
       (pearlCDomainDev d) (1 / 400)) :
     GGapSampledDraw CM (pearlCProtocolDevRev1RowInertBoundAt d sem ρ ρr) (pearlCTilesDevRev1RowInertBoundAt d sem ρ ρr)
-      (fun L => pearlCDomainDevAt d s L ∧ rowsOf L ≤ 2 ^ 64) (pearlCDrawRev1 d) (g : ℝ)
+      (fun L => pearlCDomainDevAt d s L ∧ rowsOf L ≤ 2 ^ 64) (pearlCSampleRev1 d) (g : ℝ)
       (fun q N => δPearlC q (N * s.m)) :=
   gapSampledDraw_of_tol
     (pearlCSampledDrawDevRev1RowInertBoundAtTol CM d sem ρ ρr s ω g hadd hbf hρ hρr hω0 hω hg hTT)
@@ -458,14 +458,14 @@ variable (CM : CostModel Q R S) {sem sem' semC : PearlCSem Q R S}
 
 /-- **GLM-5.3's down projection, `m × 6144 × 256` at any `m`, on the H100 record with per-row seeds per audit tile, the
 tile cap 1/400 and the row cap 1/100, under the tolerant audit sampled as the run samples, at the deployed table**
-(`pearlCDrawRev1`, the records' tickets; `u 0 = ε_s`, `u x = 1` otherwise), from `TTOutTilePearlCH100Rev1` at 1/100, C1
+(`pearlCSampleRev1`, the records' tickets; `u 0 = ε_s`, `u x = 1` otherwise), from `TTOutTilePearlCH100Rev1` at 1/100, C1
 and C3: `g = 1 − (399/400)·(99/100)/((399/400)·ω) = 32437/2521000` (1.28667%) at `ω = 25210/25137`, with the error at
 the `m·N` rows. -/
 theorem pearlCSampledH100v1RowSeedRowInertShare100_6144x256Tol (m : ℕ)
     (hTT : TTOutTilePearlCH100Rev1 CM sem (1 / 100)) (hN : RowSeedNoise sem sem') (hCM : CM.SplitClosed) :
     GGapSampledDrawTolThreshold CM (pearlCProtocolDevRev1RowInertBoundAt devH100 sem' (1 / 400) (1 / 100))
       (pearlCTilesDevRev1RowInertBoundAt devH100 sem' (1 / 400) (1 / 100))
-      (fun L => pearlCDomainDevAt devH100 ⟨m, 6144, 256⟩ L ∧ rowsOf L ≤ 2 ^ 64) (pearlCDrawRev1 devH100)
+      (fun L => pearlCDomainDevAt devH100 ⟨m, 6144, 256⟩ L ∧ rowsOf L ≤ 2 ^ 64) (pearlCSampleRev1 devH100)
       ((32437 / 2521000 : ℚ) : ℝ) (fun q N => δPearlC q (N * m)) :=
   gapSampledDrawTolThreshold_of_tol
     (pearlCSampledDrawDevRev1RowInertBoundAtTol CM devH100 sem' (1 / 400) (1 / 100) ⟨m, 6144, 256⟩ (25210 / 25137) _
@@ -481,7 +481,7 @@ theorem pearlCSampledH100v1RowSeedRowInertShare100_6144x256 (m : ℕ)
     (hTT : TTOutTilePearlCH100Rev1 CM sem (1 / 100)) (hN : RowSeedNoise sem sem') (hCM : CM.SplitClosed) :
     GGapSampledDraw CM (pearlCProtocolDevRev1RowInertBoundAt devH100 sem' (1 / 400) (1 / 100))
       (pearlCTilesDevRev1RowInertBoundAt devH100 sem' (1 / 400) (1 / 100))
-      (fun L => pearlCDomainDevAt devH100 ⟨m, 6144, 256⟩ L ∧ rowsOf L ≤ 2 ^ 64) (pearlCDrawRev1 devH100)
+      (fun L => pearlCDomainDevAt devH100 ⟨m, 6144, 256⟩ L ∧ rowsOf L ≤ 2 ^ 64) (pearlCSampleRev1 devH100)
       ((32437 / 2521000 : ℚ) : ℝ) (fun q N => δPearlC q (N * m)) :=
   gapSampledDraw_of_threshold (pearlCSampledH100v1RowSeedRowInertShare100_6144x256Tol CM m hTT hN hCM)
 
@@ -493,7 +493,7 @@ theorem pearlCSampledH100v1RowSeedCodeRowInertShare100_6144x256Tol {π : Layout 
     (hCM : CM.SplitClosed) (hCM' : CM.RelabelClosed) :
     GGapSampledDrawTolThreshold CM (pearlCProtocolDevRev1RowInertBoundAt devH100 semC (1 / 400) (1 / 100))
       (pearlCTilesDevRev1RowInertBoundAt devH100 semC (1 / 400) (1 / 100))
-      (fun L => pearlCDomainDevAt devH100 ⟨m, 6144, 256⟩ L ∧ rowsOf L ≤ 2 ^ 64) (pearlCDrawRev1 devH100)
+      (fun L => pearlCDomainDevAt devH100 ⟨m, 6144, 256⟩ L ∧ rowsOf L ≤ 2 ^ 64) (pearlCSampleRev1 devH100)
       ((32437 / 2521000 : ℚ) : ℝ) (fun q N => δPearlC q (N * m)) :=
   gapSampledDrawTolThreshold_of_tol
     (pearlCSampledDrawDevRev1RowInertBoundAtTol CM devH100 semC (1 / 400) (1 / 100) ⟨m, 6144, 256⟩ (25210 / 25137) _
@@ -510,7 +510,7 @@ theorem pearlCSampledH100v1RowSeedCodeRowInertShare100_6144x256 {π : Layout →
     (hCM : CM.SplitClosed) (hCM' : CM.RelabelClosed) :
     GGapSampledDraw CM (pearlCProtocolDevRev1RowInertBoundAt devH100 semC (1 / 400) (1 / 100))
       (pearlCTilesDevRev1RowInertBoundAt devH100 semC (1 / 400) (1 / 100))
-      (fun L => pearlCDomainDevAt devH100 ⟨m, 6144, 256⟩ L ∧ rowsOf L ≤ 2 ^ 64) (pearlCDrawRev1 devH100)
+      (fun L => pearlCDomainDevAt devH100 ⟨m, 6144, 256⟩ L ∧ rowsOf L ≤ 2 ^ 64) (pearlCSampleRev1 devH100)
       ((32437 / 2521000 : ℚ) : ℝ) (fun q N => δPearlC q (N * m)) :=
   gapSampledDraw_of_threshold (pearlCSampledH100v1RowSeedCodeRowInertShare100_6144x256Tol CM m hTT hN hC hCM hCM')
 

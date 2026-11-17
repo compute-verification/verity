@@ -32,7 +32,7 @@ open Pouw.RelativeSecurity Properties.Certifier.JointBridge Properties.Certifier
 /-- **A window's drawn-unit failures are a union of its unsound sessions**: the window is accepted and some sampled proof block
 fails its relation with probability at most `n_π · δ` when each session of the layer is unsound with probability at
 most `δ`. -/
-theorem prob_drawn_le {Ω U V : Type} [Fintype Ω] {n nπ : ℕ} (acc : Paths Ω n → Fin n → Prop)
+theorem prob_sampled_le {Ω U V : Type} [Fintype Ω] {n nπ : ℕ} (acc : Paths Ω n → Fin n → Prop)
     (drawn : Paths Ω n → Fin n → U → Prop) (key : U → ℕ)
     (opened : Paths Ω n → Fin n → ℕ → ℕ → V) (rel : Paths Ω n → Fin n → U → (ℕ → V) → Prop)
     (sessOf : Paths Ω n → Fin n → U → Fin nπ) {δ : ℝ}
@@ -49,11 +49,11 @@ theorem prob_drawn_le {Ω U V : Type} [Fintype Ω] {n nπ : ℕ} (acc : Paths Ω
     _ = nπ * δ := by simp
 
 /-- **PoUW's proof system is sound against its check, from its sessions' soundness**
-(`Properties.Certifier.JointBridge.CheckProofSystemSound`): `prob_drawn_le` at the check's layer, whose verdict is the
+(`Properties.Certifier.JointBridge.CheckProofSystemSound`): `prob_sampled_le` at the check's layer, whose verdict is the
 check's acceptance and whose sampled proof blocks are the units it publishes. -/
 theorem CheckProofSystemSound : Properties.Certifier.JointBridge.CheckProofSystemSound := by
   intro C Ξ V _ _ m Np n nπ p ws opened rel sessOf δ h w
-  refine (prob_mono fun x hx => ?_).trans (prob_drawn_le _ _ Fin.val opened rel sessOf h w)
+  refine (prob_mono fun x hx => ?_).trans (prob_sampled_le _ _ Fin.val opened rel sessOf h w)
   obtain ⟨pub, prof, hc, u, hu, hr⟩ := hx
   exact ⟨⟨pub, prof, hc⟩, u, ⟨pub, prof, hc, hu⟩, hr⟩
 

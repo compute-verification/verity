@@ -110,7 +110,7 @@ EXPECT = {
     "answer-level-bernoulli": "profile: its levels", "answer-level-stratified": "profile: its levels",
     "answer-level-work": "profile: its levels",
     "answer-level-name": "evidence: profile: not in the form toJson writes", "answer-levels-two": "profile: its levels",
-    "answer-delta": "profile: delta", "answer-drawn": "profile: drawn", "answer-draw-k": "draw: subset:",
+    "answer-delta": "profile: delta", "answer-drawn": "profile: sampled", "answer-draw-k": "draw: subset:",
     "answer-draw-population": "draw: subset:", "answer-units-order": "draw: its", "answer-units-range": "draw: its",
     "answer-units-count": "draw: its", "answer-unsorted-lists": "evidence: profile: not in the form toJson writes",
     "answer-commitment-odd": "evidence: odd-length hex", "answer-commitment-upper": "evidence: not lowercase hex",
@@ -591,7 +591,7 @@ DRAW_EXPECT = {
     "epoch": ("coin", "the draw's coin is epoch"),
     "foreign": ("coin", "the draw's coin does not open"), "tampered": ("coin", "the draw's coin does not open"),
     "early": ("coin", "the draw's coin was not opened after what the verifier recorded"),
-    "units": ("draw", "the units are not the draw coin's subset:"), "other-key": ("draw", "the units are not the draw coin's"),
+    "units": ("draw", "the units are not the sampling coin's subset:"), "other-key": ("draw", "the units are not the draw coin's"),
     "early-coins-live": ("coin", "the draw's coin does not open"),
     "live-coins": ("coin", "the challenger record is malformed: "),
     "live-not-epoch": ("coin", "the coin commitment's coins are not a live window's draw session's"),
@@ -609,7 +609,7 @@ DRAW_EXPECT = {
     "live-foreign": ("coin", "the draw's coin does not open against"),
     "live-tampered": ("coin", "the draw's coin does not open against"),
     "live-early": ("coin", "the draw's coin was not opened after what the verifier recorded"),
-    "live-units": ("draw", "the units are not the draw coin's subset:"),
+    "live-units": ("draw", "the units are not the sampling coin's subset:"),
 }
 
 

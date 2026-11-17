@@ -120,10 +120,10 @@ def Devices.machine {c : Verity.Accel.Card} (D : Devices c) (x : Verity.Accel.Op
   ⟨poolCard c D.n D.n_pos, x⟩
 
 /-- **Where a round's coin and words sit in the cards' memory**: the dither coin written into the memory a words
-program starts from (`putDraw`), and the words read from the memory it ends with (`getTr`), as the deployed kernel lays
+program starts from (`putSample`), and the words read from the memory it ends with (`getTr`), as the deployed kernel lays
 them out. A round plan moves words; it computes nothing. The headline holds at every round plan. -/
 structure RoundPlan (m : Verity.Accel.Machine) (P : RoundProto) where
-  putDraw : P.Draw → m.Mem → m.Mem
+  putSample : P.Draw → m.Mem → m.Mem
   getTr : m.Mem → P.Tr
 
 /-- A run of `Prg` on the schedule `sched` from the memory `M`, every thread at its text's start. -/
@@ -162,11 +162,11 @@ def OnCard (G : Accel) (c : Verity.Accel.Card) (x : Verity.Accel.Open) (D : Devi
     G.mem = ((D.machine x).bits : ℝ) + D.oth.mem ∧
     (G.P1 ↔ c.Exact x) ∧ (G.P2 ↔ x.ProductForm) ∧
     ∀ (M₀ : (D.machine x).Mem) (Prg : (D.machine x).Prog ℕ) (sched : List ℕ) (T : P.Draw → ℚ≥0),
-      (∀ d, Verity.Accel.Machine.Fits Prg ⟨L.putDraw d M₀, fun _ => 0⟩ sched (T d)) →
+      (∀ d, Verity.Accel.Machine.Fits Prg ⟨L.putSample d M₀, fun _ => 0⟩ sched (T d)) →
       ∃ Mw : G.Mc.Alg ((D.machine x).Mem × P.Draw) P.Tr, ∀ d,
-        G.Mc.eval Mw (M₀, d) = L.getTr (cardRun (D.machine x) Prg (L.putDraw d M₀) sched).1.mem ∧
+        G.Mc.eval Mw (M₀, d) = L.getTr (cardRun (D.machine x) Prg (L.putSample d M₀) sched).1.mem ∧
         (∀ r, G.use Mw (M₀, d) (e.symm (.inl r)) =
-          (cardUnits (D.machine x) (cardRun (D.machine x) Prg (L.putDraw d M₀) sched).2 r : ℝ)) ∧
+          (cardUnits (D.machine x) (cardRun (D.machine x) Prg (L.putSample d M₀) sched).2 r : ℝ)) ∧
         (∀ h, G.use Mw (M₀, d) (e.symm (.inr h)) = 0) ∧
         G.wall Mw (M₀, d) = (T d : ℝ) ∧ G.ext Mw (M₀, d) = 0 ∧ G.calls Mw (M₀, d) = 0
 

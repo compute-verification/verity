@@ -54,7 +54,7 @@ computes it:
 * cell-block `(i, l, t)`'s frame (`jFrame`): its `x` bits are row `i`'s dither bits of segment `t`, its `y` bits column
   `l`'s coin bits of segment `t`, so mod 2 its target is `⟨x, y⟩` plus terms blind to one side, with no plane weight;
 * charging purity at those frames (`SlpG.ChargePureJ`; across samples, `SlpG.ChargePureAtJ`), one-sided products per sample
-  (`OneSidedAtJ`), a round's coins (`JStage`; overlapped, `OJBits`, `OJDraws`, `OJSpot`) and an adversary's window run
+  (`OneSidedAtJ`), a round's coins (`JStage`; overlapped, `OJBits`, `OJSamples`, `OJSpot`) and an adversary's window run
   on the call design (`JStagedRun`, `JRunMap`; `JOverlapRun`, `JORunMap`).
 
 The digit words `O'` and `D_d` (`U · A_d`, over the digit coins `z`) are not in the design, as no digit word is in
@@ -148,12 +148,12 @@ abbrev JRunMap (Mc : Machine) (S : Service) (R St n L B n' : ℕ) (Ar : Type) [C
 abbrev OJBits (St : ℕ) (n : Fin St → ℕ) (L : ℕ) (B n' : Fin St → ℕ) : Type := Σ t, JBits (n t) L (B t) (n' t)
 
 /-- A round's samples with overlapping calls: call `t`'s bits. -/
-abbrev OJDraws (St : ℕ) (n : Fin St → ℕ) (L : ℕ) (B n' : Fin St → ℕ) : Type :=
+abbrev OJSamples (St : ℕ) (n : Fin St → ℕ) (L : ℕ) (B n' : Fin St → ℕ) : Type :=
   ∀ t, Finset (JBits (n t) L (B t) (n' t))
 
 /-- A round's coins with overlapping calls: the check's cell-block, among every call's, and every call's sample. -/
 abbrev OJSpot (St : ℕ) (n : Fin St → ℕ) (L : ℕ) (B n' : Fin St → ℕ) : Type :=
-  OCells St n n' B × OJDraws St n L B n'
+  OCells St n n' B × OJSamples St n L B n'
 
 section J10ROverlap
 
@@ -162,13 +162,13 @@ variable {St : ℕ} {Ar : Type} [CommRing Ar] {n B n' : Fin St → ℕ} {L : ℕ
 /-- **One-sided products per call**: at every bit point of the other calls, one-sided on call `t`'s bits (its rows'
 against its columns'), for every call `t`. -/
 def OneSidedAtJ (π : (OJBits St n L B n' → Ar) → Ar) : Prop :=
-  ∀ (W : OJDraws St n L B n') (t : Fin St), OneSided fun z => π (mergeAt W t z)
+  ∀ (W : OJSamples St n L B n') (t : Fin St), OneSided fun z => π (mergeAt W t z)
 
 /-- **Charging purity across calls**: at every bit point of the samples, no product is two-sided at the frames
 (`jFrame`) of two cell-blocks, of any calls, whose words read it with odd coefficients (mod 2 through `φ`). -/
 def SlpG.ChargePureAtJ (φ : Ar →+* ZMod 2) {N : ℕ} (P : SlpG (OJBits St n L B n') Ar N)
     (word : OCells St n n' B → Fin N) : Prop :=
-  ∀ (W : OJDraws St n L B n') (c c' : OCells St n n' B) i, c ≠ c' → φ (P.coef (word c) i) ≠ 0 →
+  ∀ (W : OJSamples St n L B n') (c c' : OCells St n n' B) i, c ≠ c' → φ (P.coef (word c) i) ≠ 0 →
     TwoSidedAt (jFrame c.2) φ (fun z => P.prod i (mergeAt W c.1 z)) → φ (P.coef (word c') i) ≠ 0 →
       ¬TwoSidedAt (jFrame c'.2) φ fun z => P.prod i (mergeAt W c'.1 z)
 

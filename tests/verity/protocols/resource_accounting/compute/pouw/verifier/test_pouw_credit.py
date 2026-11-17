@@ -43,7 +43,7 @@ cases, rc, h1 = (sys.modules[n] for n in ("pouw_credit_cases", "pouw_rounds_case
 
 SEEDS = range(3)
 #: a sample root no withheld session opened on: its sampling coin was never sampled after it
-NO_DRAW_SESSION = "the draw's session is not trusted: the auditor's ledger opens no challenger session for this window"
+NO_DRAW_SESSION = "the sample's session is not trusted: the auditor's ledger opens no challenger session for this window"
 
 #: each `_credited` mutation's refusal: its code and its reason's start
 CREDIT_EXPECT = {
@@ -53,13 +53,13 @@ CREDIT_EXPECT = {
     "calls-form": ("manifest", Cr.CALLS_FORM), "salt-form": ("manifest", Cr.SALT_FORM),
     "served-form": ("manifest", Cr.SERVED_FORM), "commit-form": ("commit", Cr.COMMIT_FORM), "rounds-form": ("rounds", ""),
     "draw-form": ("draw", Cr.DRAW_FORM),
-    "no-draw": ("draw", Cr.NO_DRAW), "draw-coin": ("coin", "the draw coin: "),
+    "no-draw": ("draw", Cr.NO_DRAW), "draw-coin": ("coin", "the sampling coin: "),
     "key-form": ("coin", "the verifier's challenger key is malformed"),
-    "forged-ledger": ("coin", "the draw's session is not trusted: "),
-    "unpinned": ("coin", "the draw's session is not trusted: session "),
-    "branch-pin": ("coin", "the draw's session is not trusted: session "),
+    "forged-ledger": ("coin", "the sample's session is not trusted: "),
+    "unpinned": ("coin", "the sample's session is not trusted: session "),
+    "branch-pin": ("coin", "the sample's session is not trusted: session "),
     "unwithheld": ("coin", Ch.WITHHELD), "draw-elsewhere": ("coin", NO_DRAW_SESSION),
-    "draw-session": ("coin", "the draw's session is not trusted: "), "draw-after-other": ("draw", Cr.CHANGED),
+    "draw-session": ("coin", "the sample's session is not trusted: "), "draw-after-other": ("draw", Cr.CHANGED),
 }
 #: a session pinned to a logged commit off main's first-parent line
 OFF_MAIN = "which the host's pins log records but which is not on main's first-parent line"
@@ -90,7 +90,7 @@ DRAWN_EXPECT = {
     "k-form": ("budget", Cr.K_FORM), "k-past-units": ("budget", FEWER),
 }
 WINDOW_DRAWN_EXPECT = {
-    "coin-form": ("coin", "the draw coin: " + Ch.OPENING_FORM), "args-form": ("draw", Cr.DRAW_ARGS),
+    "coin-form": ("coin", "the sampling coin: " + Ch.OPENING_FORM), "args-form": ("draw", Cr.DRAW_ARGS),
     "descriptor-hex": ("layout", Cr.DESCRIPTOR_HEX), "k-form": ("budget", Cr.K_FORM), "k-past-units": ("budget", FEWER),
 }
 OUTCOME_EXPECT = {

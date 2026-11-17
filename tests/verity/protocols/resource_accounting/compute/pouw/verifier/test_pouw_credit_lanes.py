@@ -236,10 +236,10 @@ def test_a_leaf_with_a_statement_missing_or_no_lanes_evidence_is_refused(world, 
     i = _leaf_statements(evidence, 6)[-1]
     short = {**evidence, "statements": [s for j, s in enumerate(evidence["statements"]) if j != i]}
     assert verified(world, short, files, runner(proved))[1] == ("missing", (
-        "drawn leaf 6 has no statement ['combine', None]: every drawn leaf's lanes and combine are proved and verified, "
+        "sampled leaf 6 has no statement ['combine', None]: every sampled leaf's lanes and combine are proved and verified, "
         "and a leaf with one missing refuses the window (no partial credit)"))
     got, why = verified(world, [], files, runner(proved))
-    assert got is None and why[0] == "missing" and why[1].startswith("drawn leaf 1 is at a lanes-form K")
+    assert got is None and why[0] == "missing" and why[1].startswith("sampled leaf 1 is at a lanes-form K")
 
 
 def test_leaf_statements_the_sample_did_not_ask_for_are_refused(world, lanes, tmp_path):
@@ -249,11 +249,11 @@ def test_leaf_statements_the_sample_did_not_ask_for_are_refused(world, lanes, tm
     evidence, proved = prove(world, tmp_path, files)
     s = evidence["statements"][_leaf_statements(evidence)[0]]
     for extra, why in (
-            (s, ("drawn leaf 1's statement ['lane', 0] is proved twice: each statement is proved and verified once, and a "
+            (s, ("sampled leaf 1's statement ['lane', 0] is proved twice: each statement is proved and verified once, and a "
                  "retry never reproves it")),
-            ({**s, "unit": 0}, ("unit 0 has a leaf statement and is no drawn lanes-form leaf: only the draw's leaves at a K "
+            ({**s, "unit": 0}, ("unit 0 has a leaf statement and is no sampled lanes-form leaf: only the draw's leaves at a K "
                                 "committed as lanes are proved as lanes")),
-            ({**s, "statement": ["lane", 4]}, ("drawn leaf 1's statement ['lane', 4] is none of leaf_lanes.statements(8, "
+            ({**s, "statement": ["lane", 4]}, ("sampled leaf 1's statement ['lane', 4] is none of leaf_lanes.statements(8, "
                                                "16): a lane with its index or the combine"))):
         got = verified(world, {**evidence, "statements": evidence["statements"] + [extra]}, files, runner(proved))
         assert got == (None, ("outcome", why))
@@ -265,7 +265,7 @@ def test_a_rejected_leaf_session_or_one_proving_other_units_is_refused(world, la
     first = evidence["statements"][_leaf_statements(evidence, 3)[2]]["public"]
     Path(first).parent.joinpath("circuit.txt").write_bytes(b"another circuit")
     got, why = verified(world, evidence, files, runner(proved))
-    assert got is None and why[0] == "failed" and why[1].startswith("drawn leaf 3's lane416 session ")
+    assert got is None and why[0] == "failed" and why[1].startswith("sampled leaf 3's lane416 session ")
     Path(first).parent.joinpath("circuit.txt").write_bytes(circuit("lane416"))
     for change in ({"units": (0, 1)}, {"program": "ab" * 64}):
         got, why = verified(world, evidence, files, runner(proved, lambda p, f: {**f, **change} if p == first else f))
@@ -310,7 +310,7 @@ def test_a_leaf_opening_other_values_roots_or_rows_is_refused(world, lanes, tmp_
                                                                               f"fails {codes}"), why
     receipt = HW.place(world["prog"], 6, STEPS)[LL.RECEIPT][0]
     got, why = verified(world, evidence, files, runner(proved), entries=[e for e in world["entries"] if e["value"] != receipt])
-    assert got is None and why[0] == "registration" and why[1].startswith("drawn leaf 6's combine reads its call's receipts")
+    assert got is None and why[0] == "registration" and why[1].startswith("sampled leaf 6's combine reads its call's receipts")
     partials = LL.served(PREFIX, LL.PARTIALS, 3)
 
     def other_opening(p, f):
@@ -332,7 +332,7 @@ def test_a_sampled_leaf_outside_leaflanessound_is_refused_lanes_shape(world, tmp
     files = files_of()
     evidence, proved = prove(world, tmp_path, files)
     got, why = verified(world, evidence, files, runner(proved))
-    assert got is None and why[0] == "lanes-shape" and why[1].startswith("drawn leaf 1: the window's 8 × 16 tile")
+    assert got is None and why[0] == "lanes-shape" and why[1].startswith("sampled leaf 1: the window's 8 × 16 tile")
     tile = {"tile": [32, 32]}
     plain, j10r = {"tiles": {k: {"j10r": False} for k in (352, 384, 400, 14336, 4096)}}, {"tiles": {4096: {"j10r": True}}}
     assert Cr.lanes_shape(tile, plain, 384) is None

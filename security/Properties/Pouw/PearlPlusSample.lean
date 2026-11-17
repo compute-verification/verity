@@ -9,11 +9,11 @@ public import Mathlib.Algebra.BigOperators.Fin
 # Pearl+'s run sample is `t` uniform work-weighted tickets (`PouwCheck.PearlPlus.draw`)
 
 The sample a verdict opens (`PlanMeans`'s tiles): `t` work-weighted samples with replacement over every retained pass's
-tickets together (`tickets`, `pearlDraw`'s `weightedDraw`). Its units are the run's tiles in `tickets`' order, tile `u`
+tickets together (`tickets`, `pearlSample`'s `weightedSample`). Its units are the run's tiles in `tickets`' order, tile `u`
 holding `weightsOf tk u` tickets, so a sample is a `Pouw.Ticket (weightsOf tk) tk.length`: the sampling design `Pouw.MissBound` is
 stated over. Two statements tie the code's sample to that sampling design:
 
-* `DrawIsOnItsStreams`: sample `j` reads its own stream of the run's sample key, index `("u", j)`, `sampleBytes` bytes long,
+* `SampleIsOnItsStreams`: sample `j` reads its own stream of the run's sample key, index `("u", j)`, `sampleBytes` bytes long,
   takes the uniform integer `uniformOn` gives below the tickets' total `W`, and names the tile of the ticket with that
   number in `Ticket`'s order (`ticketAt`, unit by unit and each unit's tickets in order, which is the running sum
   `bisectRight` inverts). It throws exactly where a stream runs out. A run whose tickets hold no weight gets the empty
@@ -22,7 +22,7 @@ stated over. Two statements tie the code's sample to that sampling design:
   number fall in any event no more often than `t` uniform tickets do. A word `uniformOn` rejects takes probability from
   every ticket alike, and a stream that runs out refuses the run (`plan`'s `ValueError`), so it lands in no event.
 
-The streams are modelled as independent and uniform, as `Properties.Pouw.Credit.WorkDrawMisses` models the window
+The streams are modelled as independent and uniform, as `Properties.Pouw.Credit.WorkSampleMisses` models the window
 sample's: the run derives sample `j`'s as `stream key ["u", j] (sampleBytes tk)`, its index distinct for each sample, and this
 is that derivation in the random-oracle model. They add no named assumption: the probability is over the streams'
 bytes. The key is `derive(source, "verity/pouw/pearl-plus-run-draw/v1", {run})` on the run's commitment, fixed before
@@ -38,8 +38,8 @@ open PouwCommit PouwCheck.PearlPlus
 /-- The run's ticket total `W`: each sample's uniform integer is below it. -/
 def ticketTotal (tk : List ((ℕ × ℕ) × ℕ)) : ℕ := (tk.map (·.2)).sum
 
-/-- The bytes of each sample's stream the sample reads (`DRAW_WORDS` words at `uniform`'s width for `W`). -/
-def sampleBytes (tk : List ((ℕ × ℕ) × ℕ)) : ℕ := DRAW_WORDS * Flock.Draw.width (ticketTotal tk)
+/-- The bytes of each sample's stream the sample reads (`SAMPLE_WORDS` words at `uniform`'s width for `W`). -/
+def sampleBytes (tk : List ((ℕ × ℕ) × ℕ)) : ℕ := SAMPLE_WORDS * Flock.Draw.width (ticketTotal tk)
 
 /-- The tickets of the run's `u`-th tile, none past the last. -/
 def weightsOf (tk : List ((ℕ × ℕ) × ℕ)) (u : ℕ) : ℕ := (tk.getD u ((0, 0), 0)).2
@@ -53,10 +53,10 @@ def ticketAt (tk : List ((ℕ × ℕ) × ℕ)) (r : Fin (∑ u : Fin tk.length, 
 def tileOf (tk : List ((ℕ × ℕ) × ℕ)) (c : _root_.Pouw.Ticket (weightsOf tk) tk.length) : ℕ × ℕ := (tk.get c.1).1
 
 /-- **The run's sample is `t` tickets on its key's streams**: where the run's tickets hold no weight (`W = 0`), `draw`
-returns the empty sample (`pearlDraw`'s empty filter); otherwise it (`pearlDraw`'s `weightedDraw`) names, for sample
+returns the empty sample (`pearlSample`'s empty filter); otherwise it (`pearlSample`'s `weightedSample`) names, for sample
 `j`, the tile of the ticket numbered by the uniform integer below `W` its stream gives (index `("u", j)`, `sampleBytes`
 long), and throws exactly where a stream gives none. -/
-def DrawIsOnItsStreams : Prop :=
+def SampleIsOnItsStreams : Prop :=
   ∀ (passes : List Pass) (key : ByteArray) (t : ℕ),
     (draw passes key t).toOption =
       if ticketTotal (tickets passes) = 0 then some [] else

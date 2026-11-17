@@ -9,8 +9,8 @@ public import Spot.Challenger
 PoUW's live execution phase is the proof system's challenger's first client (`Spot.Challenger`). The check item's
 optional `coins` is the execution phase's coin mode (`mode`, Compose's `CoinMode`), seeded when the item names none. A live
 execution phase's coins are the layout `liveFamilies R` under `LIVE_SCHEME`: its salt coin and `R` round coins (`pouw/round`,
-rounds numbered from 0), all committed before the execution phase. Its sampling coin is a session of its own (`DRAW_FAMILIES`, which
-`drawEpochReason` checks), opened withheld on the execution phase's sample root. Round `r`'s coin opens once, after the verifier
+rounds numbered from 0), all committed before the execution phase. Its sampling coin is a session of its own (`SAMPLE_FAMILIES`, which
+`sampleEpochReason` checks), opened withheld on the execution phase's sample root. Round `r`'s coin opens once, after the verifier
 recorded round `r`'s root. `liveEpochReason` is `live_epoch_reason`, `roundsReason` is `rounds_reason`, the rule on an
 execution phase's round coins, and `roundKey` is `round_key`, round `r`'s noise key from its opened coin and the round's root.
 A Pearl-C pass's live session is reserved for its salt coin alone (`SALT_FAMILIES`), which `saltEpochReason`
@@ -26,7 +26,7 @@ open Spot.Challenger (LiveCommitment LiveOpening)
 def COINS : String := "coins"
 def LIVE_SCHEME : String := Domains.POUW_EPOCH_COINS_LIVE
 def SALT : String := "pouw/salt"
-def DRAW : String := "pouw/draw"
+def SAMPLE : String := "pouw/draw"
 def ROUND : String := "pouw/round"
 def ROUND_NOISE_DOMAIN : String := Domains.POUW_ROUND_NOISE
 
@@ -61,15 +61,15 @@ def liveEpochReason (c : LiveCommitment) : Option String :=
     | [s, (r, _)] => if s == (SALT, 1) && r == ROUND then none else some NOT_LIVE_EPOCH
     | _ => some NOT_LIVE_EPOCH
 
-/-- `DRAW_FAMILIES`: a live execution phase's sample session's layout, its sampling coin alone. -/
-def DRAW_FAMILIES : List (String × Nat) := [(DRAW, 1)]
+/-- `SAMPLE_FAMILIES`: a live execution phase's sample session's layout, its sampling coin alone. -/
+def SAMPLE_FAMILIES : List (String × Nat) := [(SAMPLE, 1)]
 
-def NOT_DRAW_EPOCH : String := "the coin commitment's coins are not a live window's draw session's: its draw coin alone"
+def NOT_SAMPLE_EPOCH : String := "the coin commitment's coins are not a live window's sampling session's: its sampling coin alone"
 
-/-- `draw_epoch_reason`: why `c` is not a live execution phase's sample session's coin commitment; `none` when it is. -/
-def drawEpochReason (c : LiveCommitment) : Option String :=
+/-- `sample_epoch_reason`: why `c` is not a live execution phase's sample session's coin commitment; `none` when it is. -/
+def sampleEpochReason (c : LiveCommitment) : Option String :=
   if c.scheme != LIVE_SCHEME then some s!"the coin commitment's scheme is {c.scheme}, not {LIVE_SCHEME}"
-  else if c.families != DRAW_FAMILIES then some NOT_DRAW_EPOCH
+  else if c.families != SAMPLE_FAMILIES then some NOT_SAMPLE_EPOCH
   else none
 
 /-- `SALT_FAMILIES`: a Pearl-C pass's live layout, its salt coin alone, so a session reserved with it is complete exactly

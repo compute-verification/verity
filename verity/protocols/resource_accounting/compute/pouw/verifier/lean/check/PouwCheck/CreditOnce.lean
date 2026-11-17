@@ -8,7 +8,7 @@ import all Spot.ChallengerSession
 
 `Credit.periodCredit` reads the auditor's ledger through `Spot.Challenger.checked` (each line's parse, the hash chain and
 each entry's LMS signature) once in `Credit.period` and five more times a window: `creditedChallengePhase` for the
-window and for its sample session, `drawChallengePhase`, `roundsCheck` and `periodWeights`, each through `auditedOpen`. Each
+window and for its sample session, `sampleChallengePhase`, `roundsCheck` and `periodWeights`, each through `auditedOpen`. Each
 reads it at the same ledger and the key `Credit.periodCredit` reads, so one replay does.
 
 Each function on that path has a twin here, its body as written with `checked ledger` a parameter `replay`
@@ -139,41 +139,41 @@ open Spot.Challenger.Once (Replay trustedChallengePhaseOfWith auditedChallengePh
   replayAt replayAt_checked)
 open PouwCheck.Once (roundsCheckWith)
 
-/-- `drawChallengePhase` with `replay` its ledger's replay. -/
-def drawSessionWith (replay : Replay) (ledger : Json) (k : ChallengerKey) (pins main session : Json) (root : String) :
+/-- `sampleChallengePhase` with `replay` its ledger's replay. -/
+def samplingSessionWith (replay : Replay) (ledger : Json) (k : ChallengerKey) (pins main session : Json) (root : String) :
     R (Spot.Challenger.LiveCommitment × Spot.Challenger.Roots) := do
   let got ← (trustedChallengePhaseOfWith replay (Json.mkObj [("root", Json.str root)]) k pins main session).mapError
-    fun e => ("coin", s!"the draw's session is not trusted: {e}")
+    fun e => ("coin", s!"the sample's session is not trusted: {e}")
   unless Spot.Challenger.withheldOn ledger root do throw ("coin", Spot.Challenger.WITHHELD)
   pure got
 
-theorem drawSession_eq (ledger : Json) (k : ChallengerKey) (pins main session : Json) (root : String) :
-    drawChallengePhase ledger k pins main session root =
-      drawSessionWith (Spot.Challenger.checked ledger) ledger k pins main session root := rfl
+theorem samplingSession_eq (ledger : Json) (k : ChallengerKey) (pins main session : Json) (root : String) :
+    sampleChallengePhase ledger k pins main session root =
+      samplingSessionWith (Spot.Challenger.checked ledger) ledger k pins main session root := rfl
 
-/-- `Internal.creditedDraw` with `replay` its ledger's replay. -/
-def creditedDrawWith (replay : Replay) (ledger : Json) (k : ChallengerKey) (pins main draw : Json) (root : ByteArray) :
+/-- `Internal.creditedSample` with `replay` its ledger's replay. -/
+def creditedSampleWith (replay : Replay) (ledger : Json) (k : ChallengerKey) (pins main draw : Json) (root : ByteArray) :
     R Unit := do
-  unless (str? (get draw "root")) == some (Flock.hexOf root) do throw ("draw", DRAW_ROOT)
-  let (c, received) ← drawSessionWith replay ledger k pins main (get draw "session") (Flock.hexOf root)
-  let got := (received.lookup PouwWindow.DRAW).getD []
-  if got.isEmpty then throw ("draw", NO_DRAW)
+  unless (str? (get draw "root")) == some (Flock.hexOf root) do throw ("draw", SAMPLE_ROOT)
+  let (c, received) ← samplingSessionWith replay ledger k pins main (get draw "session") (Flock.hexOf root)
+  let got := (received.lookup PouwWindow.SAMPLE).getD []
+  if got.isEmpty then throw ("draw", NO_SAMPLE)
   unless got == [root] do throw ("draw", CHANGED)
   let why := match LiveOpening.ofJson (get draw "coin") with
     | .error e => some e
-    | .ok o => match liveReason c o PouwWindow.DRAW 0 root with
+    | .ok o => match liveReason c o PouwWindow.SAMPLE 0 root with
       | .error e => some e
       | .ok w => w
-  if let some w := why then throw ("coin", s!"the draw coin: {w}")
+  if let some w := why then throw ("coin", s!"the sampling coin: {w}")
 
-theorem creditedDraw_eq (ledger : Json) (k : ChallengerKey) (pins main draw : Json) (root : ByteArray) :
-    Internal.creditedDraw ledger k pins main draw root =
-      creditedDrawWith (Spot.Challenger.checked ledger) ledger k pins main draw root := rfl
+theorem creditedSample_eq (ledger : Json) (k : ChallengerKey) (pins main draw : Json) (root : ByteArray) :
+    Internal.creditedSample ledger k pins main draw root =
+      creditedSampleWith (Spot.Challenger.checked ledger) ledger k pins main draw root := rfl
 
 /-- `Internal.credited` with `replay` its ledger's replay. -/
 def creditedWith (replay : Replay) (key ledger pins main salt calls served commit rounds draw : Json) : R (List Nat) := do
   let (k, out, root) ← Internal.creditedRoot key salt calls served commit rounds draw
-  creditedDrawWith replay ledger k pins main draw root
+  creditedSampleWith replay ledger k pins main draw root
   pure out
 
 theorem credited_eq (key ledger pins main salt calls served commit rounds draw : Json) :
@@ -238,7 +238,7 @@ def executionPhaseLayoutWith (replay : Replay)
   let rows ← Internal.servedRows calls layout log.size t
   let maxTokens ← committedLength ledger name
   Internal.length maxTokens rows layout log.size
-  proved (← executionPhaseDrawn window draw k ss) proofs
+  proved (← executionPhaseSampled window draw k ss) proofs
   Internal.registration ((str? (get window "root")).getD "") program ((str? (prefixOf P)).getD "") entries proofs ss
     layout log.size sid
   Internal.live live t log.size ((str? (prefixOf P)).getD "") program ((str? (get window "root")).getD "") entries rows
@@ -332,8 +332,8 @@ def periodCreditWith (replay : Replay) (key ledger pins main name windows : Json
     if let some why := pinHygiene nm i main a.pinned periodPin floor then throw why
     let dr ← (creditedChallengePhaseWith replay (Json.mkObj [("root", rootOf (f "draw"))]) k pins main
       d).mapError fun e =>
-      ("circuit", s!"window {i}'s draw session of period {nm} doesn't count toward it, so the period earns nothing: {e}")
-    if let some why := pinHygiene nm i main dr.pinned periodPin floor DRAW_UNIT then throw why
+      ("circuit", s!"window {i}'s sampling session of period {nm} doesn't count toward it, so the period earns nothing: {e}")
+    if let some why := pinHygiene nm i main dr.pinned periodPin floor SAMPLE_UNIT then throw why
     let (got, layout, rows) ← (executionPhaseLayoutWith replay key ledger pins main (f "window") (f "session") (f "salt")
       (f "calls") (f "served") (f "commit") (f "rounds") (f "draw") (f "descriptor") (f "entries") (f "proofs")
       (f "live") (Lean.toJson bigK) (Lean.toJson t)).mapError

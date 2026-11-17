@@ -749,7 +749,7 @@ def run(a: argparse.Namespace) -> dict:
         coins.update(scheme=Wd.LIVE_SCHEME, commitment=cs.commitment.to_json(), salt_coin=live_salt.to_json(),
                      draw_coin=sample.to_json(), draw_after=sample_after.hex(),
                      draw_session=cs.draw_session and cs.draw_session.id, draw_commitment=cs.draw_commitment.to_json(),
-                     draw_reason=Wd.draw_epoch_reason(cs.draw_commitment)
+                     draw_reason=Wd.sample_epoch_reason(cs.draw_commitment)
                      or Ch.live_reason(cs.draw_commitment, sample, Wd.DRAW, 0, sample_after),
                      rounds=round_log, rounds_reason=Wd.rounds_reason(commitment, roots, openings),
                      rounds_cover_steps=[r["round"] for r in round_log] == list(range(s_max)),

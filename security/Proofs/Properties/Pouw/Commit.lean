@@ -312,22 +312,22 @@ theorem epochSaltAccepts : EpochSaltAccepts := fun c o wr s => (epochSalt_iff c 
 
 /-- `draw_coin` gives a coin exactly when the opening is the epoch's sampling coin opened after what the verifier recorded,
 and the coin is the opened one; an epoch without a coin commitment gives none. -/
-theorem drawCoin_iff :
-    (∀ c o after coin, drawCoin (some c) o after = .ok (.ok coin) ↔ CoinOpens c o "draw" after ∧ coin = o.coin) ∧
-      ∀ o after coin, drawCoin none o after ≠ .ok (.ok coin) := by
+theorem samplingCoin_iff :
+    (∀ c o after coin, flipCoin (some c) o after = .ok (.ok coin) ↔ CoinOpens c o "draw" after ∧ coin = o.coin) ∧
+      ∀ o after coin, flipCoin none o after ≠ .ok (.ok coin) := by
   refine ⟨fun c o after coin => ?_, fun o after coin => ?_⟩
   · rw [← coinAccepts_iff c o "draw" after]
-    unfold drawCoin
+    unfold flipCoin
     cases h : coinReason c o "draw" after with
     | error e => simp [h, bind, Except.bind]
     | ok r => cases r <;> simp [h, bind, Except.bind, pure, Except.pure, eq_comm]
-  · simp [drawCoin, pure, Except.pure]
+  · simp [flipCoin, pure, Except.pure]
 
-theorem drawCoinAccepts : DrawCoinAccepts := by
+theorem samplingCoinAccepts : SamplingCoinAccepts := by
   intro cc o after coin h
   cases cc with
-  | none => exact absurd h (drawCoin_iff.2 o after coin)
-  | some c => exact ⟨c, rfl, (drawCoin_iff.1 c o after coin).1 h⟩
+  | none => exact absurd h (samplingCoin_iff.2 o after coin)
+  | some c => exact ⟨c, rfl, (samplingCoin_iff.1 c o after coin).1 h⟩
 
 theorem mapM_shape {α β : Type} (f : α → Except String β) :
     ∀ (l : List α) (ys : List β), l.mapM f = .ok ys → ys.length = l.length ∧ ∀ y ∈ ys, ∃ x ∈ l, f x = .ok y := by
@@ -354,7 +354,7 @@ theorem mapM_shape {α β : Type} (f : α → Except String β) :
         · obtain ⟨x, hx, hfx⟩ := hmem y hy
           exact ⟨x, by simp [hx], hfx⟩
 
-theorem draw_uniform_lt (n : Nat) (hn : 0 < n) (src : ByteArray) :
+theorem sample_uniform_lt (n : Nat) (hn : 0 < n) (src : ByteArray) :
     ∀ fuel pos r, Draw.uniform n src fuel pos = some r → r.1 < n := by
   intro fuel
   induction fuel with
@@ -399,9 +399,9 @@ theorem bisectRight_lt (l : List Nat) (x : Nat) (last : Nat) (h : l.getLast? = s
     bisectRight l x < l.length :=
   takeWhile_length_lt _ l last (List.mem_of_getLast? h) (by simp; omega)
 
-theorem drawShape : DrawShape := by
+theorem sampleShape : SampleShape := by
   intro key tickets t ids h
-  unfold weightedDraw at h
+  unfold weightedSample at h
   by_cases ht : t = 0
   · subst ht; simp [pure, Except.pure] at h; subst h; simp
   simp only [ht, ite_false] at h
@@ -422,7 +422,7 @@ theorem drawShape : DrawShape := by
       have hrr : rr < total := by
         simp only [FlockSoundness.Randomness.uniform, FlockSoundness.Randomness.uniformOn, Option.map_eq_some_iff] at hu
         obtain ⟨p, hp, rfl⟩ := hu
-        exact draw_uniform_lt total hpos _ _ _ _ hp
+        exact sample_uniform_lt total hpos _ _ _ _ hp
       have := bisectRight_lt _ rr total hl hrr
       simp at hsize
       simpa [hsize] using this
@@ -774,12 +774,12 @@ theorem epochSalt_instance : ∃ s, epochSalt (zeroCoins 0 0) (zeroOpening 0 "sa
   obtain ⟨s, hs⟩ := salt_complete.1 (zeroCoins 0 0) (zeroBytes 32) ByteArray.empty (by rw [zeroBytes_size]; decide)
   exact ⟨s, epochSalt_complete _ _ _ _ (zeroCoins_open "salt" 0 0 _ (by decide)) hs⟩
 
-theorem drawCoin_complete (c : CoinCommitment) (o : CoinOpening) (after : ByteArray) (h : CoinOpens c o "draw" after) :
-    drawCoin (some c) o after = .ok (.ok o.coin) :=
-  (drawCoin_iff.1 c o after o.coin).2 ⟨h, rfl⟩
+theorem samplingCoin_complete (c : CoinCommitment) (o : CoinOpening) (after : ByteArray) (h : CoinOpens c o "draw" after) :
+    flipCoin (some c) o after = .ok (.ok o.coin) :=
+  (samplingCoin_iff.1 c o after o.coin).2 ⟨h, rfl⟩
 
-theorem drawCoin_instance :
-    drawCoin (some (zeroCoins 0 1)) (zeroOpening 0 "draw" ByteArray.empty) ByteArray.empty = .ok (.ok (zeroBytes 32)) :=
-  drawCoin_complete _ _ _ (zeroCoins_open "draw" 1 0 _ (by decide))
+theorem samplingCoin_instance :
+    flipCoin (some (zeroCoins 0 1)) (zeroOpening 0 "draw" ByteArray.empty) ByteArray.empty = .ok (.ok (zeroBytes 32)) :=
+  samplingCoin_complete _ _ _ (zeroCoins_open "draw" 1 0 _ (by decide))
 
 end Properties.Pouw.Commit

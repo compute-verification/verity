@@ -94,7 +94,7 @@ def passOf (j : Json) : Except String Json := do
 
 def drawOf (j : Json) : Except String Json := do
   let f := get j
-  refusal (fun _ => Json.null) (drawCheck (← f "coins") (← flag j "recorded") (← f "opening") (← f "stream")
+  refusal (fun _ => Json.null) (sampleCheck (← f "coins") (← flag j "recorded") (← f "opening") (← f "stream")
     (← f "registration") (← f "receipt") (← f "k") (← f "population") (← f "units") (Spot.getD j "key"))
 
 def saltOf (j : Json) : Except String Json := do

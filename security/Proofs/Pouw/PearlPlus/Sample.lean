@@ -10,23 +10,23 @@ public import Proofs.Pouw.PearlC.Records
 # Pearl+'s bridge, the sample: the run's tickets and acceptance as the game's sample reads them
 
 `Definitions/Pouw/PearlC/TileSample.lean` states γ for the sample the run makes: each tile's tickets from the declarations
-its unit's record makes before the coin (`drawTickets`), and an audit that accepts a sampled tile that is good and whose
+its unit's record makes before the coin (`sampleTickets`), and an audit that accepts a sampled tile that is good and whose
 declaration is consistent with it (`goodDeclTiles`). This file reads the code's sample and acceptance in those terms.
 
 * (c) A passed tile's declaration is consistent: a tile that `checkTile` passes, or finds only over its inert-work
   bound, has `declOK` under its record's declaration (`declOf`). Its kept width is within `k` (a loaded pass's records
   keep `UnitRecord`'s rule, `load_facts`), and each credited A row it declares passes `RowOK`: `rowsFailure` holds the row to `row_passes`, on the words its opening parses to and their `s5_stats`, which
   `RowsAreTheRules` reads as `RowOK` at the committed activations.
-* (d) The code's tickets are `drawTickets` (`ticketsAreTheDraw`): on a run laid out as the game's workload, an
+* (d) The code's tickets are `sampleTickets` (`ticketsAreTheSample`): on a run laid out as the game's workload, an
   injective map from `tickets`' entries to the game's tiles, onto every tile with a ticket, takes each entry to its
-  `TileOf` tile, its tickets that tile's `drawTickets` of `pearlCDrawRev1 devH100` under the records' declarations
+  `TileOf` tile, its tickets that tile's `sampleTickets` of `pearlCSampleRev1 devH100` under the records' declarations
   (`decOf`). Its parts: `wref 1 k n` is `wrefRowRev1 devH100 k n`, `ticketWeight` is the weight's numerator and
   denominator, and the run's lcm fold is `Finset.lcm` over the tiles.
 * (d) Acceptance is the tolerant audit's (`acceptGivesTheAudit`): when the check accepts, every sample of the game on
   tiles the verdict opened is in `goodDeclTiles ∪ blankTiles` or over the inert-work bound (`overInertBoundTiles`), or SHA-512
   collides on an opened tile. A sampled tile's check gives its words (`TilePassGivesTheWords`) and its declaration
   (`TilePassGivesTheDecl`), so it is good within the game's inert-work bound (`inertBoundOK`) and over the bound otherwise.
-  The tile's fixed-operand rows passing the rules is a hypothesis (`DrawnOn.weights`), as in `TilePassGivesTheWords`: the
+  The tile's fixed-operand rows passing the rules is a hypothesis (`SampledOn.weights`), as in `TilePassGivesTheWords`: the
   check holds only credited B rows to the rules (an excluded row must fail them and a voluntary one is unread), where
   `TileGood` reads every column.
 
@@ -1032,15 +1032,15 @@ theorem cell_tileOf (hL : RunLayout passes U τ) {c : Cell} (hc : c ∈ cells pa
 
 theorem cell_weight {Q R S : Type} {TR : TileRules Q R S} (hTR : ∀ L, TR.tiling L = auditTiling 64 64 L)
     (hL : RunLayout passes U τ) {c : Cell} (hc : c ∈ cells passes) :
-    drawWeight TR (pearlCDrawRev1 devH100) U τ (decOf passes) (gOf U.layout c) = tileWeight c.r c.rows c.cols := by
+    sampleWeight TR (pearlCSampleRev1 devH100) U τ (decOf passes) (gOf U.layout c) = tileWeight c.r c.rows c.cols := by
   obtain ⟨hpi, hrec, -⟩ := mem_cells.1 hc
   obtain ⟨hpm, hrm, -, hrows, hcols⟩ := cell_facts hL hc
   obtain ⟨-, -, -, hn, -, hτ⟩ := hL.unit _ hpm _ hrm
   obtain ⟨-, hunit, hrows', hcols'⟩ := cell_audit hL hc
-  unfold drawWeight
+  unfold sampleWeight
   rw [hTR, hunit, ite_eq_right (by rw [Option.isNone_iff_eq_none]; exact Option.isSome_iff_ne_none.1 hτ),
     decOf_eq hL hpi hrec]
-  unfold pearlCDrawRev1
+  unfold pearlCSampleRev1
   rw [hunit, hrows', hcols', hn]
   have hr : (c.rows.toFinset ∩ (declOf c.r).rows).card = (c.r.credited c.rows c.cols).1.length := by
     refine card_inter_filter (by rw [hrows]; exact block_nodup _ _ _) c.r.realRows _ fun i _ hi => ?_
@@ -1055,15 +1055,15 @@ theorem cell_weight {Q R S : Type} {TR : TileRules Q R S} (hTR : ∀ L, TR.tilin
 
 theorem lcm_eq {Q R S : Type} {TR : TileRules Q R S} (hTR : ∀ L, TR.tiling L = auditTiling 64 64 L)
     (hL : RunLayout passes U τ) (hsurj : ∀ g < (TR.tiling U.layout).NT,
-      drawWeight TR (pearlCDrawRev1 devH100) U τ (decOf passes) g ≠ 0 → ∃ c ∈ cells passes, gOf U.layout c = g) :
-    (range (TR.tiling U.layout).NT).lcm (fun g => (drawWeight TR (pearlCDrawRev1 devH100) U τ (decOf passes) g).den) =
+      sampleWeight TR (pearlCSampleRev1 devH100) U τ (decOf passes) g ≠ 0 → ∃ c ∈ cells passes, gOf U.layout c = g) :
+    (range (TR.tiling U.layout).NT).lcm (fun g => (sampleWeight TR (pearlCSampleRev1 devH100) U τ (decOf passes) g).den) =
       lcmOf ((cells passes).map Cell.weight) := by
-  have hden : ∀ c ∈ cells passes, (drawWeight TR (pearlCDrawRev1 devH100) U τ (decOf passes) (gOf U.layout c)).den =
+  have hden : ∀ c ∈ cells passes, (sampleWeight TR (pearlCSampleRev1 devH100) U τ (decOf passes) (gOf U.layout c)).den =
       c.weight.2.2 := fun c hc => by
     rw [cell_weight hTR hL hc, Cell.weight, ticketWeight_eq _ _ _ (cell_n_pos hL hc)]
   refine Nat.dvd_antisymm (Finset.lcm_dvd fun g hg => ?_) (lcmOf_dvd fun e he => ?_)
   · rw [Finset.mem_range] at hg
-    by_cases hv : drawWeight TR (pearlCDrawRev1 devH100) U τ (decOf passes) g = 0
+    by_cases hv : sampleWeight TR (pearlCSampleRev1 devH100) U τ (decOf passes) g = 0
     · rw [hv, Rat.den_zero]
       exact Nat.one_dvd _
     · obtain ⟨c, hc, rfl⟩ := hsurj g hg hv
@@ -1077,16 +1077,16 @@ theorem lcm_eq {Q R S : Type} {TR : TileRules Q R S} (hTR : ∀ L, TR.tiling L =
 
 theorem cell_of_weight {Q R S : Type} {TR : TileRules Q R S} (hTR : ∀ L, TR.tiling L = auditTiling 64 64 L)
     (hL : RunLayout passes U τ) {g : ℕ} (hg : g < (TR.tiling U.layout).NT)
-    (hv : drawWeight TR (pearlCDrawRev1 devH100) U τ (decOf passes) g ≠ 0) :
+    (hv : sampleWeight TR (pearlCSampleRev1 devH100) U τ (decOf passes) g ≠ 0) :
     ∃ c ∈ cells passes, gOf U.layout c = g := by
   rw [hTR] at hg
   obtain ⟨u, hu, x, hx, rfl, -⟩ := gridTiles_inv (List.getElem?_eq_getElem hg)
   obtain ⟨-, hunit, -, -⟩ := audit_at hu hx
-  unfold drawWeight at hv
+  unfold sampleWeight at hv
   rw [hTR, hunit] at hv
   rcases decOf_cases passes u with h | ⟨i, p, pos, r, hp, hr, rfl, -⟩
   · rw [h] at hv
-    unfold pearlCDrawRev1 at hv
+    unfold pearlCSampleRev1 at hv
     simp at hv
   · obtain ⟨hM, hN⟩ := hL.tile64 _ (List.mem_of_getElem? hp)
     obtain ⟨-, hm, -, hn, -⟩ := hL.unit _ (List.mem_of_getElem? hp) _ (List.mem_of_getElem? hr)
@@ -1118,22 +1118,22 @@ theorem gOf_inj (hL : RunLayout passes U τ) {c c' : Cell} (hc : c ∈ cells pas
 
 /-- **The code's tickets are the sample's.** Over a run laid out on the game's workload (`RunLayout`), with each unit's
 declaration read from its record (`decOf`), each of `Run.tickets`' entries is a tile of its pass on a game tile, whose
-`drawTickets` under `pearlCDrawRev1 devH100` are the entry's tickets; distinct entries are on distinct game tiles, and
+`sampleTickets` under `pearlCSampleRev1 devH100` are the entry's tickets; distinct entries are on distinct game tiles, and
 every game tile with a ticket has an entry. -/
-def TicketsAreTheDraw : Prop :=
+def TicketsAreTheSample : Prop :=
   ∀ {Q R S : Type} (TR : TileRules Q R S) (passes : List Pass) (U : Pouw.PearlC.Workload) (τ : Pouw.PearlC.Trace),
     (∀ L, TR.tiling L = auditTiling 64 64 L) → RunLayout passes U τ →
     ∃ φ : ℕ → ℕ,
       (∀ j id t, (tickets passes)[j]? = some (id, t) →
-        TileOf passes[id.1]! id.2 U (φ j) ∧ t = drawTickets TR (pearlCDrawRev1 devH100) U τ (decOf passes) (φ j)) ∧
+        TileOf passes[id.1]! id.2 U (φ j) ∧ t = sampleTickets TR (pearlCSampleRev1 devH100) U τ (decOf passes) (φ j)) ∧
       (∀ j j', j < (tickets passes).length → j' < (tickets passes).length → φ j = φ j' → j = j') ∧
-      ∀ g, drawTickets TR (pearlCDrawRev1 devH100) U τ (decOf passes) g ≠ 0 →
+      ∀ g, sampleTickets TR (pearlCSampleRev1 devH100) U τ (decOf passes) g ≠ 0 →
         ∃ j < (tickets passes).length, φ j = g
 
-theorem ticketsAreTheDraw : TicketsAreTheDraw := by
+theorem ticketsAreTheSample : TicketsAreTheSample := by
   intro Q R S TR passes U τ hTR hL
   have hsurj : ∀ g < (TR.tiling U.layout).NT,
-      drawWeight TR (pearlCDrawRev1 devH100) U τ (decOf passes) g ≠ 0 → ∃ c ∈ cells passes, gOf U.layout c = g :=
+      sampleWeight TR (pearlCSampleRev1 devH100) U τ (decOf passes) g ≠ 0 → ∃ c ∈ cells passes, gOf U.layout c = g :=
     fun g hg hv => cell_of_weight hTR hL hg hv
   have hlen : (tickets passes).length = (cells passes).length := by rw [tickets_eq, List.length_map, List.length_map]
   refine ⟨fun j => if h : j < (cells passes).length then gOf U.layout (cells passes)[j] else 0, ?_, ?_, ?_⟩
@@ -1154,7 +1154,7 @@ theorem ticketsAreTheDraw : TicketsAreTheDraw := by
         obtain ⟨hil, hip⟩ := List.getElem?_eq_some_iff.1 hpi
         rw [getElem!_pos passes c.i hil, hip]
       refine ⟨by rw [Cell.weight, hp!]; exact cell_tileOf hL hc, ?_⟩
-      unfold drawTickets ticketsOf
+      unfold sampleTickets ticketsOf
       rw [lcm_eq hTR hL hsurj, hTR, ite_eq_left (cell_audit hL hc).1, cell_weight hTR hL hc, Cell.weight,
         ticketWeight_eq _ _ _ (cell_n_pos hL hc)]
   · intro j j' hj hj' h
@@ -1166,11 +1166,11 @@ theorem ticketsAreTheDraw : TicketsAreTheDraw := by
   · intro g hg
     have hNT : g < (TR.tiling U.layout).NT := by
       by_contra hn
-      unfold drawTickets ticketsOf at hg
+      unfold sampleTickets ticketsOf at hg
       rw [ite_eq_right hn] at hg
       exact hg rfl
-    have hv : drawWeight TR (pearlCDrawRev1 devH100) U τ (decOf passes) g ≠ 0 := fun h0 => by
-      unfold drawTickets ticketsOf at hg
+    have hv : sampleWeight TR (pearlCSampleRev1 devH100) U τ (decOf passes) g ≠ 0 := fun h0 => by
+      unfold sampleTickets ticketsOf at hg
       rw [h0] at hg
       simp at hg
     obtain ⟨c, hc, rfl⟩ := hsurj g hNT hv
@@ -1182,7 +1182,7 @@ theorem ticketsAreTheDraw : TicketsAreTheDraw := by
 /-- What the game reads of the plan's tile `(pi, tid)` on audit tile `g`: the verdict opens it, it is `g` (`TileOf`),
 its pass's salt is the game's, its fixed operand's root is the semantics', each fixed-operand row of its columns passes `P`'s rules,
 and its openings are its unit's commitment. -/
-structure DrawnOn {Q R S : Type} (saltOf : S → List ℕ) (rootOf : ℕ → List ℕ) (P : Pouw.PearlC.Protocol Q R S) (s : S)
+structure SampledOn {Q R S : Type} (saltOf : S → List ℕ) (rootOf : ℕ → List ℕ) (P : Pouw.PearlC.Protocol Q R S) (s : S)
     (pl : Plan) (opener : ℕ → ℕ → Except String TileOpening) (U : Pouw.PearlC.Workload) (τ : Pouw.PearlC.Trace)
     (pi tid g : ℕ) : Prop where
   todo : (pi, tid) ∈ pl.todo
@@ -1198,7 +1198,7 @@ structure DrawnOn {Q R S : Type} (saltOf : S → List ℕ) (rootOf : ℕ → Lis
 
 /-- **(d) Acceptance is the tolerant audit's**: at rules `P`, `TR` that read the deployed tiles, rules and words, when
 the check accepts a run laid out as the game's workload, every sample `c` of the game whose tiles the verdict opened
-(`DrawnOn`) is accepted by `AuditAcceptsTol` over `goodDeclTiles ∪ blankTiles`, with the tiles over the inert-work bound
+(`SampledOn`) is accepted by `AuditAcceptsTol` over `goodDeclTiles ∪ blankTiles`, with the tiles over the inert-work bound
 (`overInertBoundTiles`) tolerated, under the records' declarations; or SHA-512 collides on two different messages of an opened
 tile, one hashed in digesting the words the check forms and one in digesting the commitment's words. -/
 def AcceptGivesTheAudit : Prop :=
@@ -1211,9 +1211,9 @@ def AcceptGivesTheAudit : Prop :=
     P.useful = (protocolH3 saltOf rootOf ρ : Pouw.PearlC.Protocol Q R S).useful →
     P.fixedOK = (protocolH3 saltOf rootOf ρ : Pouw.PearlC.Protocol Q R S).fixedOK →
     (check i opener).accept = true → plan i = .ok pl → RunLayout pl.passes U τ →
-    (∀ j, ∃ pi tid, DrawnOn saltOf rootOf P s pl opener U τ pi tid (c j).1) →
+    (∀ j, ∃ pi tid, SampledOn saltOf rootOf P s pl opener U τ pi tid (c j).1) →
     AuditAcceptsTol (goodDeclTiles P TR U H s τ (decOf pl.passes) ∪ blankTiles TR U τ) (overInertBoundTiles TR U H s τ) c ∨
-      ∃ pi tid g o cm, DrawnOn saltOf rootOf P s pl opener U τ pi tid g ∧ opener pi tid = .ok o ∧
+      ∃ pi tid g o cm, SampledOn saltOf rootOf P s pl opener U τ pi tid g ∧ opener pi tid = .ok o ∧
         τ ((auditTiling 64 64 U.layout).unit g) = some cm ∧
         ∃ x ∈ leafHashed pl.passes[pi]! tid o, ∃ y ∈ commitHashed pl.passes[pi]! tid cm, x ≠ y ∧
           Flock.Sha512.hash x = Flock.Sha512.hash y
@@ -1226,7 +1226,7 @@ theorem acceptGivesTheAudit (hA : Properties.Pouw.PearlPlus.AcceptMeans)
   rw [hplan, Except.ok.injEq] at hpl'
   subst hpl'
   have hload := (hP i pl hplan).2.1
-  by_cases hcol : ∃ pi tid g o cm, DrawnOn saltOf rootOf P s pl opener U τ pi tid g ∧ opener pi tid = .ok o ∧
+  by_cases hcol : ∃ pi tid g o cm, SampledOn saltOf rootOf P s pl opener U τ pi tid g ∧ opener pi tid = .ok o ∧
       τ ((auditTiling 64 64 U.layout).unit g) = some cm ∧
       ∃ x ∈ leafHashed pl.passes[pi]! tid o, ∃ y ∈ commitHashed pl.passes[pi]! tid cm, x ≠ y ∧
         Flock.Sha512.hash x = Flock.Sha512.hash y

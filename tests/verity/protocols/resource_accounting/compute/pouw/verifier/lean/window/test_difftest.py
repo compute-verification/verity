@@ -745,9 +745,9 @@ def live_epoch_reason(v: dict) -> str | None:
     return why
 
 
-def draw_epoch_reason(v: dict) -> str | None:
-    why = Wd.draw_epoch_reason(Ch.LiveCommitment.from_json(v["commitment"]))
-    SEEN["draw_epoch_reason"].add("accept" if why is None else "scheme" if "scheme" in why else "coins")
+def sample_epoch_reason(v: dict) -> str | None:
+    why = Wd.sample_epoch_reason(Ch.LiveCommitment.from_json(v["commitment"]))
+    SEEN["sample_epoch_reason"].add("accept" if why is None else "scheme" if "scheme" in why else "coins")
     return why
 
 
@@ -777,7 +777,7 @@ REACHES = {"k_prime": {"refused", "capped", "k > 10,000", "n > 2^50", "exact"},
            "layout_problem": {"accept", *LAYOUT}, "record_problem": {"accept", *RECORD},
            "length_problem": {"accept", *LENGTH},
            "window_problem": {"accept", "refused", *WINDOW}, "live_epoch_reason": {"accept", "scheme", "coins"},
-           "draw_epoch_reason": {"accept", "scheme", "coins"}}
+           "sample_epoch_reason": {"accept", "scheme", "coins"}}
 SEEN: dict[str, set[str]] = {fn: set() for fn in REACHES}
 
 
@@ -865,7 +865,7 @@ PORTS = {
                           instance_ts_in), 1000),
     "public_inputs": (_port("public_inputs", public_inputs, public_inputs_in), 500),
     "live_epoch_reason": (_port("live_epoch_reason", live_epoch_reason, live_commitment_in), 300),
-    "draw_epoch_reason": (_port("draw_epoch_reason", draw_epoch_reason, live_commitment_in), 300),
+    "sample_epoch_reason": (_port("sample_epoch_reason", sample_epoch_reason, live_commitment_in), 300),
     "round_key": (_port("round_key", round_key, round_key_in, rejects=(ValueError, TypeError)), 300),
     "layout_constants": (D.Port(EXE, "layout_constants", reference=layout_constants, inputs=st.just({}), package=LEAN,
                                 need_rejects=False, of_record=V.RECORD_VERDICT), 1),

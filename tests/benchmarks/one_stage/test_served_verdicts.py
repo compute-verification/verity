@@ -2360,7 +2360,7 @@ def _pearlplus_piece(tmp_path: Path, monkeypatch, live, case: str = "of record")
                 "session refused": {"coins": {**doc["coins"], "check": {**doc["coins"]["check"],
                                                                          "reason": "pass 2: coin: bad"}}},
                 "draw refused": {"coins": {**doc["coins"], "draw": {**checked,
-                                                                     "reason": "ValueError: the record's draw coin: bad"}}},
+                                                                     "reason": "ValueError: the record's sampling coin: bad"}}},
                 "unpublished coin": {"coin": None}}.get(case, {}))
     (piece / S.DEVELOPMENT).write_text(json.dumps(doc))
     (piece / S.PEARLPLUS_ANSWER).write_text(json.dumps(answer))
@@ -2491,15 +2491,15 @@ def test_the_record_reads_pearlpluss_tie_from_the_window_tied_to_w_under_window_
     ("H1 period", "the live session joined period p-h1, H1's (its open commits draw_k, rows): a Pearl-C salt session is "
                   "credited in a Pearl-C period alone"),
     ("node draw", S.PEARLPLUS_NODE_SAMPLE),
-    ("draw refused", "the draw session's check refused it: ValueError: the record's draw coin: bad"),
+    ("draw refused", "the draw session's check refused it: ValueError: the record's sampling coin: bad"),
     ("draw key", "the draw session's challenger key is not the compose's pin: the challenger key at "),
     ("period open", "the piece's ledger doesn't close the Pearl-C period p-pc, so no draw follows it"),
     ("drawn again", f"the draw session {DSID} is not lane vllm's first reserve after its Pearl-C period p-pc closed "
                     "(that is s-first): a draw is taken once"),
     ("draw not withheld", f"the draw session {DSID} was not reserved withheld with a draw session's layout alone"),
     ("second open", f"the ledger opens ['{DSID}', 's-other'] on the run's commitment, not the draw session {DSID} alone"),
-    ("draw off C", "the record's draw coin: "),
-    ("source not coin", "the record's source is not its draw session's coin"),
+    ("draw off C", "the record's sampling coin: "),
+    ("source not coin", "the record's source is not its sampling session's coin"),
     ("unpublished coin", "the verdict is not held to the coin published at its draw: none published"),
     ("untied", "Pearl+'s verdict holds its passes to no window record W (served_passes.py verify --tie W), so nothing "
                "ties them to the window"),
@@ -2569,8 +2569,8 @@ def _sample_answers(calls: list, public: bytes = PUBLIC):
     ("other commitment", "ValueError: the record's draw commitment is not the one the draw session's challenger signed"),
     ("other root", "ValueError: the draw session's log does not show the run's commitment as the one root its draw coin "
                    "followed"),
-    ("off C", "ValueError: the record's draw coin: "),
-    ("other source", "ValueError: the record's source is not its draw session's coin"),
+    ("off C", "ValueError: the record's sampling coin: "),
+    ("other source", "ValueError: the record's source is not its sampling session's coin"),
 ])
 def test_the_pearlplus_piece_holds_the_verifiers_sample_to_its_sample_session(tmp_path, monkeypatch, case, reason):
     """`pearlplus_draw`: a challenger sample's session fetched through the gate with the ledger and pins, its key held to

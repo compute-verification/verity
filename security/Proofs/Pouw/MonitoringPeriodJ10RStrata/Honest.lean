@@ -50,7 +50,7 @@ sample (`evOf`). Given three facts of those inputs, the witness meets every prem
 
 * `Credit.window` credits every window (`hacc`);
 * the registered salt, hex-decoded, is the round coin's bytes (`hsalt`);
-* the proof blocks `Credit.descriptorDrawn` samples are the union over `S` of the strata's coordinates of the block's sample
+* the proof blocks `Credit.descriptorSampled` samples are the union over `S` of the strata's coordinates of the block's sample
   (`hdraw`), `StrataSampleIsCoin`'s body on every window.
 
 At each stratum `s` the instance is `HonestJ10R`'s at `N_s = |stratum σ s|` with the rest of the block's sample as `Ξ`:
@@ -91,7 +91,7 @@ theorem rounds1 (N : ℕ) : (HonestJ10R.circuit N).rounds = 1 :=
 
 /-- The period's executionPhases as `Credit.window` reads them: window `w` registers `regOf` of its round coin, and the rest of
 its inputs are `evOf` of its round coin and the block's sample. -/
-def executionPhases (regOf : Bool → PreDraw) (evOf : Bool → BlockDraw σ → Answered) (n : ℕ) :
+def executionPhases (regOf : Bool → PreSample) (evOf : Bool → BlockSample σ → Answered) (n : ℕ) :
     CreditExecutionPhases (StrataCoin Bool 1 σ) n where
   reg x w := regOf (coinAt (coinAt x w).1 ⟨0, Nat.one_pos⟩)
   ev x w := evOf (coinAt (coinAt x w).1 ⟨0, Nat.one_pos⟩) (coinAt x w).2
@@ -101,15 +101,15 @@ end Instance
 section Meets
 
 variable {nB mB : ℕ} (σ : Fin nB → Fin mB) (k : Fin mB → ℕ) (hk : ∀ s, k s ≤ (stratum σ s).card)
-  (S : Finset (Fin mB)) (unitOf : Fin nB → ℕ) (regOf : Bool → PreDraw) (evOf : Bool → BlockDraw σ → Answered)
+  (S : Finset (Fin mB)) (unitOf : Fin nB → ℕ) (regOf : Bool → PreSample) (evOf : Bool → BlockSample σ → Answered)
   (enc : Bool → ByteArray)
 
 /-- **The period-wide premises**, and the accepted prefix is every window: the registration reads only the round coin,
 which the splice at window `w` after its one round keeps; the salt is the round coin's bytes; the sample is the strata's. -/
 theorem strata_meets_period (hacc : ∀ c β, ExecutionPhaseAccepts (regOf c) (evOf c β))
     (hsalt : ∀ c, (PouwCheck.hex? (regOf c).salt).getD ByteArray.empty = enc c)
-    (hdraw : ∀ c β, ∃ d : Array ℕ, creditDrawn (regOf c) (evOf c β) = .ok d ∧
-      ∀ u : ℕ, u ∈ d.toList ↔ ∃ s ∈ S, ∃ b ∈ tileDraw σ k hk s (β s), unitOf b = u) (n : ℕ) :
+    (hdraw : ∀ c β, ∃ d : Array ℕ, creditSampled (regOf c) (evOf c β) = .ok d ∧
+      ∀ u : ℕ, u ∈ d.toList ↔ ∃ s ∈ S, ∃ b ∈ tileSample σ k hk s (β s), unitOf b = u) (n : ℕ) :
     RegisteredBeforeDraw (executionPhases σ regOf evOf n) ∧ StrataSampleIsCoin σ k hk S unitOf (executionPhases σ regOf evOf n) ∧
     Properties.Pouw.MonitoringPeriod.SaltIsLiveCoin Nat.one_pos (saltOf (executionPhases σ regOf evOf n)) enc ∧
     ∀ x, (executionPhases σ regOf evOf n).prefixLen x = n := by
@@ -221,8 +221,8 @@ theorem strata_meets_stratum (s : Fin mB) (hKd : 1 ≤ k s) (n : ℕ) (hn : 0 < 
 summed over `S`, are at least the sum over `S` of `(1 − ε_s(n))₊` of stratum `s`'s `N_s·n` live words. -/
 theorem strata_credit (hKd : ∀ s ∈ S, 1 ≤ k s) (hacc : ∀ c β, ExecutionPhaseAccepts (regOf c) (evOf c β))
     (hsalt : ∀ c, (PouwCheck.hex? (regOf c).salt).getD ByteArray.empty = enc c)
-    (hdraw : ∀ c β, ∃ d : Array ℕ, creditDrawn (regOf c) (evOf c β) = .ok d ∧
-      ∀ u : ℕ, u ∈ d.toList ↔ ∃ s ∈ S, ∃ b ∈ tileDraw σ k hk s (β s), unitOf b = u)
+    (hdraw : ∀ c β, ∃ d : Array ℕ, creditSampled (regOf c) (evOf c β) = .ok d ∧
+      ∀ u : ℕ, u ∈ d.toList ↔ ∃ s ∈ S, ∃ b ∈ tileSample σ k hk s (β s), unitOf b = u)
     (n : ℕ) (hn : 0 < n) {δs : Fin mB → ℝ} (hδs : ∀ s ∈ S, 0 < δs s) :
     prob (fun x : Paths (StrataCoin Bool 1 σ) n =>
       (∀ s ∈ S, (HonestJ10R.play (Rest σ s) (tileCount σ s) (k s) n).accepts (pathsAt Bool (rounds1 (tileCount σ s)) σ s n x)) ∧

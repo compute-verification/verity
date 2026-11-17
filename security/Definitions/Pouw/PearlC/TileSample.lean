@@ -14,12 +14,12 @@ the trace. This file states γ for that sample.
 - **A declaration** (`Decl`) is what a record declares of a committed unit before the coin: its kept width |K| and the
   rows and columns it credits (real, neither excluded nor voluntary). The prover fixes its declarations with the
   trace, so the statements take them as any function of the oracle and the salt.
-- **The sample's weight** of a tile (`drawWeight`) is a weight `Wd` at its unit's declaration, and nothing on a blank
-  unit's tile. Pearl-C's (`pearlCDrawRev1`) is `ticketWeight`'s: the tile's declared credited cells, each at
+- **The sample's weight** of a tile (`sampleWeight`) is a weight `Wd` at its unit's declaration, and nothing on a blank
+  unit's tile. Pearl-C's (`pearlCSampleRev1`) is `ticketWeight`'s: the tile's declared credited cells, each at
   `wrefRowRev1 d |K| n / n`, rev1's `W_ref` of one row at the declared kept width with its promotions counted per whole
   group, as `wref(1, |K|, n)` counts them.
 - **The tickets** (`ticketsOf`) are the weights scaled to integers by the lcm of their denominators, as `Run.tickets`
-  scales them, and **the claimed work** (`claimedDraw`) is their total, the run's `Σ` ticket weight.
+  scales them, and **the claimed work** (`claimedSample`) is their total, the run's `Σ` ticket weight.
 - **The probability** is the average over the oracle and the salt (`Claims.Ex`) of each trace's sample probability
   over its own tickets (`pr`), so that every `(H, s)` weighs the same whatever its number of tickets. A trace with
   no tickets has no sample, and every event has probability `0` on it.
@@ -52,7 +52,7 @@ variable {Q R S : Type}
 
 /-- The sample's weight of tile `g` of `τ` under the declarations `dec`: `Wd` at its unit's declaration, and nothing on a
 blank unit's tile. -/
-def drawWeight (TR : TileRules Q R S) (Wd : Layout → ℕ → Decl → ℚ) (U : Workload) (τ : Trace)
+def sampleWeight (TR : TileRules Q R S) (Wd : Layout → ℕ → Decl → ℚ) (U : Workload) (τ : Trace)
     (dec : ℕ → Decl) (g : ℕ) : ℚ :=
   if (τ ((TR.tiling U.layout).unit g)).isNone then 0 else Wd U.layout g (dec ((TR.tiling U.layout).unit g))
 
@@ -62,14 +62,14 @@ def ticketsOf (NT : ℕ) (v : ℕ → ℚ) (g : ℕ) : ℕ :=
   if g < NT then (v g).num.toNat * ((range NT).lcm (fun i => (v i).den) / (v g).den) else 0
 
 /-- The sample's tickets of `τ` under `dec`. -/
-def drawTickets (TR : TileRules Q R S) (Wd : Layout → ℕ → Decl → ℚ) (U : Workload) (τ : Trace)
+def sampleTickets (TR : TileRules Q R S) (Wd : Layout → ℕ → Decl → ℚ) (U : Workload) (τ : Trace)
     (dec : ℕ → Decl) : ℕ → ℕ :=
-  ticketsOf (TR.tiling U.layout).NT (drawWeight TR Wd U τ dec)
+  ticketsOf (TR.tiling U.layout).NT (sampleWeight TR Wd U τ dec)
 
 /-- The work `τ` claims under `dec`: the sample's weights of all its tiles, the run's `Σ` ticket weight. -/
-def claimedDraw (TR : TileRules Q R S) (Wd : Layout → ℕ → Decl → ℚ) (U : Workload) (τ : Trace)
+def claimedSample (TR : TileRules Q R S) (Wd : Layout → ℕ → Decl → ℚ) (U : Workload) (τ : Trace)
     (dec : ℕ → Decl) : ℝ :=
-  ∑ g ∈ range (TR.tiling U.layout).NT, (drawWeight TR Wd U τ dec g : ℝ)
+  ∑ g ∈ range (TR.tiling U.layout).NT, (sampleWeight TR Wd U τ dec g : ℝ)
 
 /-- Tile `g`'s declaration is consistent with `τ`: its kept width is within the unit's `k`, and every credited row it
 declares in the tile passes Π's rules. The audit checks both of a sampled tile. -/
@@ -87,7 +87,7 @@ noncomputable def goodDeclTiles (P : Protocol Q R S) (TR : TileRules Q R S) (U :
 /-- **The γ-gap property under the tolerant sampled audit, sampled as the run samples.** For every in-domain workload, budget
 `T`, oracle bound `q ≤ 2^64`, adversary, declarations `dec` (fixed with the trace before the coin) and miss-bound
 table `u` at `δ` (`MissBound`): averaged over the oracle and the salt, the probability over `t` samples by the trace's
-tickets (`drawTickets`) that the audit accepts (every sampled tile passes, is of a blank unit, or is over its inert-work
+tickets (`sampleTickets`) that the audit accepts (every sampled tile passes, is of a blank unit, or is over its inert-work
 bound) while `T` is below `(1 − γ)·(1 − u(X_O))` of the claimed work, `X_O` the samples on tiles over their bound, is
 at most `δ + η(q, N)`. -/
 def GGapSampledDrawTol [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S) (P : Protocol Q R S)
@@ -95,13 +95,13 @@ def GGapSampledDrawTol [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM :
   ∀ U : Workload, U.InDomain P D → ∀ T : ℝ, 0 ≤ T → ∀ q : ℕ, q ≤ 18446744073709551616 → ∀ A : Adversary CM,
     A.Bounded U T q → ∀ dec : (Q → R) → S → ℕ → Decl, ∀ (t : ℕ) (u : ℕ → ℝ) (δ : ℝ), MissBound t u δ →
       Claims.Ex (fun x : (Q → R) × S =>
-        pr (fun c : Fin t → Ticket (drawTickets TR Wd U (A.trace U x.1 x.2) (dec x.1 x.2))
+        pr (fun c : Fin t → Ticket (sampleTickets TR Wd U (A.trace U x.1 x.2) (dec x.1 x.2))
             (TR.tiling U.layout).NT =>
           AuditAcceptsTol (goodDeclTiles P TR U x.1 x.2 (A.trace U x.1 x.2) (dec x.1 x.2) ∪
               blankTiles TR U (A.trace U x.1 x.2))
             (overInertBoundTiles TR U x.1 x.2 (A.trace U x.1 x.2)) c ∧
-          T < (1 - γ) * (1 - u (drawsIn (overInertBoundTiles TR U x.1 x.2 (A.trace U x.1 x.2)) c)) *
-            claimedDraw TR Wd U (A.trace U x.1 x.2) (dec x.1 x.2)))
+          T < (1 - γ) * (1 - u (samplesIn (overInertBoundTiles TR U x.1 x.2 (A.trace U x.1 x.2)) c)) *
+            claimedSample TR Wd U (A.trace U x.1 x.2) (dec x.1 x.2)))
         ≤ δ + η q U.layout.N
 
 /-- **The gap property under the sampled audit, sampled as the run samples**: `GGapSampledDrawTol`'s audit when it accepts
@@ -112,11 +112,11 @@ def GGapSampledDraw [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : Co
   ∀ U : Workload, U.InDomain P D → ∀ T : ℝ, 0 ≤ T → ∀ q : ℕ, q ≤ 18446744073709551616 → ∀ A : Adversary CM,
     A.Bounded U T q → ∀ dec : (Q → R) → S → ℕ → Decl, ∀ (t : ℕ) (εs : ℝ), εs ≤ 1 →
       Claims.Ex (fun x : (Q → R) × S =>
-        pr (fun c : Fin t → Ticket (drawTickets TR Wd U (A.trace U x.1 x.2) (dec x.1 x.2))
+        pr (fun c : Fin t → Ticket (sampleTickets TR Wd U (A.trace U x.1 x.2) (dec x.1 x.2))
             (TR.tiling U.layout).NT =>
           AuditAccepts (goodDeclTiles P TR U x.1 x.2 (A.trace U x.1 x.2) (dec x.1 x.2) ∪
               blankTiles TR U (A.trace U x.1 x.2)) c ∧
-          T < (1 - g) * (1 - εs) * claimedDraw TR Wd U (A.trace U x.1 x.2) (dec x.1 x.2)))
+          T < (1 - g) * (1 - εs) * claimedSample TR Wd U (A.trace U x.1 x.2) (dec x.1 x.2)))
         ≤ (1 - εs) ^ t + δ q U.layout.N
 
 /-- **The γ-gap property under the tolerant sampled audit, sampled as the run samples, at the deployed table**:
@@ -129,13 +129,13 @@ def GGapSampledDrawTolThreshold [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype
   ∀ U : Workload, U.InDomain P D → ∀ T : ℝ, 0 ≤ T → ∀ q : ℕ, q ≤ 18446744073709551616 → ∀ A : Adversary CM,
     A.Bounded U T q → ∀ dec : (Q → R) → S → ℕ → Decl, ∀ (t : ℕ) (εs : ℝ), εs ≤ 1 →
       Claims.Ex (fun x : (Q → R) × S =>
-        pr (fun c : Fin t → Ticket (drawTickets TR Wd U (A.trace U x.1 x.2) (dec x.1 x.2))
+        pr (fun c : Fin t → Ticket (sampleTickets TR Wd U (A.trace U x.1 x.2) (dec x.1 x.2))
             (TR.tiling U.layout).NT =>
           AuditAcceptsTol (goodDeclTiles P TR U x.1 x.2 (A.trace U x.1 x.2) (dec x.1 x.2) ∪
               blankTiles TR U (A.trace U x.1 x.2))
             (overInertBoundTiles TR U x.1 x.2 (A.trace U x.1 x.2)) c ∧
-          T < (1 - γ) * (1 - (if drawsIn (overInertBoundTiles TR U x.1 x.2 (A.trace U x.1 x.2)) c = 0 then εs else 1)) *
-            claimedDraw TR Wd U (A.trace U x.1 x.2) (dec x.1 x.2)))
+          T < (1 - γ) * (1 - (if samplesIn (overInertBoundTiles TR U x.1 x.2 (A.trace U x.1 x.2)) c = 0 then εs else 1)) *
+            claimedSample TR Wd U (A.trace U x.1 x.2) (dec x.1 x.2)))
         ≤ (1 - εs) ^ t + η q U.layout.N
 
 /-! ## Pearl-C's sample under rev1 -/
@@ -151,7 +151,7 @@ def wrefRowRev1 (d : PearlCDevice) (k n : ℕ) : ℚ :=
 
 /-- **The sample's weight of a Pearl-C audit tile under rev1**, as the run's `ticketWeight` weighs it: the tile's declared
 credited cells (its rows among `dc.rows`, its columns among `dc.cols`), each at `wrefRowRev1 d |K| n / n`. -/
-def pearlCDrawRev1 (d : PearlCDevice) (L : Layout) (g : ℕ) (dc : Decl) : ℚ :=
+def pearlCSampleRev1 (d : PearlCDevice) (L : Layout) (g : ℕ) (dc : Decl) : ℚ :=
   wrefRowRev1 d dc.kept (L.shape ((auditTiling 64 64 L).unit g)).n *
       (((auditTiling 64 64 L).rows g ∩ dc.rows).card * ((auditTiling 64 64 L).cols g ∩ dc.cols).card : ℚ) /
     (L.shape ((auditTiling 64 64 L).unit g)).n

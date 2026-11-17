@@ -16,7 +16,7 @@ Beside `PouwCheck.Difftest`'s, behind the same `pouw-check-difftest` (`PouwCheck
   `Credit.Internal.credited`): `{"credited": [indices]}`, or `{"refused": [code, why]}`.
 * `drawn` (`coin`, `stream`, `registration`, `receipt`, `layout`, as `credit.drawn` takes them): `{"drawn": [units]}`,
   or `{"refused": [code, why]}`.
-* `window-drawn` (`window`, `draw`, `descriptor` in hex, `k`): `Credit.descriptorDrawn`, `credit._window_drawn` over
+* `window-sampled` (`window`, `draw`, `descriptor` in hex, `k`): `Credit.descriptorSampled`, `credit._window_drawn` over
   the strata of the `layoutOf` of the descriptor's Program: `{"drawn": [units]}`, or `{"refused": [code, why]}`.
 * `outcome` (`drawn`'s and `proofs`, as `credit._outcome` takes them) and `a-link` (`rounds`, `entries`, `calls`, the
   execution phase's call count, and `rows`, `{value: rows}` the layout gives or null for none, as `credit._a_link` takes them),
@@ -58,10 +58,10 @@ def drawnOf (j : Json) : Except String Json := do
   PouwCheck.Difftest.refusal (fun out => Json.mkObj [("drawn", toJson out)])
     (Credit.drawn (← f "coin") (← f "stream") (← f "registration") (← f "receipt") (← f "layout") (← f "k"))
 
-def executionPhaseDrawnOf (j : Json) : Except String Json := do
+def executionPhaseSampledOf (j : Json) : Except String Json := do
   let f := PouwCheck.Difftest.get j
   PouwCheck.Difftest.refusal (fun out => Json.mkObj [("drawn", toJson out)])
-    (Credit.descriptorDrawn (← f "window") (← f "draw") (← f "descriptor") (← f "k"))
+    (Credit.descriptorSampled (← f "window") (← f "draw") (← f "descriptor") (← f "k"))
 
 def outcomeOf (j : Json) : Except String Json := do
   let f := PouwCheck.Difftest.get j
@@ -140,7 +140,7 @@ def commitParsersOf (j : Json) : Except String Json := do
   pure (Json.mkObj [("core", read Json.parse), ("total", read Flock.JsonParse.parse)])
 
 def table : String → Option _root_.Difftest.Fn := _root_.Difftest.table [
-  ("commit-parsers", commitParsersOf), ("credit", creditOf), ("drawn", drawnOf), ("window-drawn", executionPhaseDrawnOf), ("outcome", outcomeOf),
+  ("commit-parsers", commitParsersOf), ("credit", creditOf), ("drawn", drawnOf), ("window-sampled", executionPhaseSampledOf), ("outcome", outcomeOf),
   ("window", executionPhaseOf), ("period", periodOf), ("a-link", aLinkOf), ("weights", weightsOf), ("registered-file", registeredFileOf), ("leaf-words", leafWordsOf),
   ("passes-distinct", passesDistinctOf)]
 

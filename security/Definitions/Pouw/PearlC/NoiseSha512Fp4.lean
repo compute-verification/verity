@@ -77,7 +77,7 @@ def line (seed : List ℕ) (role i : ℕ) (t : Fin 32) : Nib :=
   ⟨(lineList seed role i).getD t.val 0 % 16, Nat.mod_lt _ (by decide)⟩
 
 /-- `E_A` (role 0, from `seed_A`) and `F_A` (role 1, from `seed_B`) of a unit of shape `sh`. -/
-def drawA (sh : Shape) (seedA seedB : List ℕ) : Matrix (Fin sh.m) (Fin 32) Nib × Matrix (Fin sh.k) (Fin 32) Nib :=
+def sampleA (sh : Shape) (seedA seedB : List ℕ) : Matrix (Fin sh.m) (Fin 32) Nib × Matrix (Fin sh.k) (Fin 32) Nib :=
   (fun i t => line seedA 0 i t, fun l t => line seedB 1 l t)
 
 /-- **`B̃`'s lines from `seed_B`**: `E_B`'s `n` lines (role 2) and `F_B`'s `k` lines (role 3) of a unit of shape `sh`. -/

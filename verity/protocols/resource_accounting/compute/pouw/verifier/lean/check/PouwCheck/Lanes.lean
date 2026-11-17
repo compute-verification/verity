@@ -48,7 +48,7 @@ def LANES_FORM : String :=
   "the window's lanes evidence is not {leaf_programs, produced, statements}: each lanes-form K's lane and " ++
   "combine leaf Program's descriptor in lowercase hex by lane<K> and combine<K>, the produced record " ++
   "(verity/registration/produced/v1) and the statements, each a call's {call, circuit, public, sessions} " ++
-  "or a drawn leaf's {unit, statement, circuit, public, sessions}"
+  "or a sampled leaf's {unit, statement, circuit, public, sessions}"
 /-- `credit.LEAF_FN`: a sampled leaf's statements' wrappers. -/
 def leafFn (kind : String) : String := if kind == LANE then "PouwH1WindowLane_v1" else "PouwH1WindowCombine_v1"
 /-- `credit.LEAF_UNIT`: their units over the window's template's TILE. -/
@@ -118,7 +118,7 @@ def lanesFiles (files : Json) : Option String := Id.run do
         s!"lane{k} and combine{k}")
     if (PouwWindow.field? files s!"k{k}").isSome then
       return some (s!"K = {k} commits both k{k} and lane{k} + combine{k}: each K is in one form, one tile statement a " ++
-        "call or each drawn leaf's lanes and combine")
+        "call or each sampled leaf's lanes and combine")
   let names := (byK.flatMap fun (k, _) => [s!"{LANE}{k}", s!"{COMBINE}{k}"]).mergeSort fun a b => a ≤ b
   let progs := match PouwWindow.field? files LEAF_PROGRAMS with
     | some .null | none => none
@@ -334,7 +334,7 @@ def leafRegisteredFile (program : String) (layout : Json) (shape : Shape) (u : N
       (rc, sizes.getD call 0, tile.receipt)]
   let rcs := rootsAt roots rc
   if rcs.length != 1 then
-    throw ("registration", s!"drawn leaf {u}'s combine reads its call's receipts {rc}, which the window registers " ++
+    throw ("registration", s!"sampled leaf {u}'s combine reads its call's receipts {rc}, which the window registers " ++
       s!"{if rcs.isEmpty then "not" else "twice"}: a lanes-form call registers its receipt table once, the receipts " ++
       "the combine checks the lanes' XOR against")
   let lanes := r / 4 * (c / 8)
@@ -348,13 +348,13 @@ def leafRegisteredFile (program : String) (layout : Json) (shape : Shape) (u : N
       else do
         let got := rootsAt roots table
         if got.length != 1 then
-          throw ("registration", s!"drawn leaf {u}'s statement {st.repr} reads {table}, which the window " ++
+          throw ("registration", s!"sampled leaf {u}'s statement {st.repr} reads {table}, which the window " ++
             s!"registers {if got.isEmpty then "not" else "twice"}: register each of a call's tables and its weights once")
         let (leaves, ws) := (rowsOf.lookup table).getD (0, 0)
         pure (got[0]!, leaves, ws,
           ← regErr (Spot.Registered.domainAt program table ws leaves 16 (if table == b then none else some window)))
     let some _ := digest? root
-      | throw ("registration", s!"drawn leaf {u}'s statement {st.repr} reads {table}, whose root the verifier does " ++
+      | throw ("registration", s!"sampled leaf {u}'s statement {st.repr} reads {table}, whose root the verifier does " ++
           "not hold as a SHA-512 digest")
     let j := portJson table ((str? root).getD "") leaves words_ domain (base + row)
     let full := v == "a" || v == "b" || v == PARTIALS
@@ -362,7 +362,7 @@ def leafRegisteredFile (program : String) (layout : Json) (shape : Shape) (u : N
       | true, .obj kvs => .obj (kvs.insert READ_IN_FULL (.bool true))
       | _, j => j)]
   let (some ra, some rb) := (digest? ((rootsAt roots a).headD .null), digest? ((rootsAt roots b).headD .null))
-    | throw ("registration", s!"drawn leaf {u}'s pub row reads the roots of {a} and {b}, which are not both " ++
+    | throw ("registration", s!"sampled leaf {u}'s pub row reads the roots of {a} and {b}, which are not both " ++
         "SHA-512 digests (128 lowercase hex): register each table at its tree's root")
   let rows : List (String × String × Array Nat) := match st with
     | (_, [some l]) =>
@@ -398,8 +398,8 @@ def lanesRecord (rec layout : Json) (shape : Shape) (program registration draw :
   let codes := Spot.Produced.check rec registration draw (mine.qsort (·.value < ·.value))
   unless codes.isEmpty do
     throw ("registration", s!"the window's produced record ({Spot.Produced.FORMAT}) fails " ++
-      s!"{", ".intercalate codes.toList}: it holds each drawn lanes-form leaf's partials@<u> under the window's " ++
-      "draw root, fixed after the draw coin, and every row's opening once")
+      s!"{", ".intercalate codes.toList}: it holds each sampled lanes-form leaf's partials@<u> under the window's " ++
+      "sample root, fixed after the sampling coin, and every row's opening once")
   pure <| match get rec "produced" with
     | .arr es => es.toList.filterMap fun e => (str? (get e "value")).map fun v => (v, (str? (get e "root")).getD "")
     | _ => []
@@ -457,11 +457,11 @@ def leafAsks (lanes : Option Json) (leafs : Array (Nat × Nat × St)) (files : J
   let tileAt := fun (k : Nat) => (shape.tiles.lookup k).getD { fn := "", a := 0, b := 0, zy := 0 }
   let drawn := units.filter fun u => formOf files (kOf u) == some "lanes"
   for u in drawn do
-    if let some why := lanesShape r c (tileAt (kOf u)) (kOf u) then return (#[], some ("lanes-shape", s!"drawn leaf {u}: {why}"))
+    if let some why := lanesShape r c (tileAt (kOf u)) (kOf u) then return (#[], some ("lanes-shape", s!"sampled leaf {u}: {why}"))
   if drawn.isEmpty && leafs.isEmpty then return (#[], none)
   let some ev := lanes
-    | return (#[], some ("missing", s!"drawn leaf {drawn.headD 0} is at a lanes-form K and the window carries no " ++
-        s!"lanes evidence ({", ".intercalate LANES_KEYS}): prove every drawn lanes-form leaf as its lanes and combine"))
+    | return (#[], some ("missing", s!"sampled leaf {drawn.headD 0} is at a lanes-form K and the window carries no " ++
+        s!"lanes evidence ({", ".intercalate LANES_KEYS}): prove every sampled lanes-form leaf as its lanes and combine"))
   let mut progs : List (String × String × String) := []
   for k in (drawn.map kOf).eraseDups.mergeSort (· ≤ ·) do
     for kind in [LANE, COMBINE] do
@@ -480,11 +480,11 @@ def leafAsks (lanes : Option Json) (leafs : Array (Nat × Nat × St)) (files : J
       progs := progs ++ [(name, Flock.hexOf (Flock.Sha512.hash leaf), unit)]
   let some registration := (if isObj draw then (digest? (get draw "root")).map fun _ => (str? (get draw "root")).getD ""
       else none)
-    | return (#[], some ("registration", "the window's draw root, the produced record's registration, is not a " ++
+    | return (#[], some ("registration", "the window's sample root, the produced record's registration, is not a " ++
         "SHA-512 digest"))
   let coin ← match Spot.Challenger.LiveOpening.ofJson (get draw "coin") with
     | .ok o => pure (Flock.hexOf o.coin)
-    | .error e => return (#[], some ("registration", s!"the window's draw coin, the produced record's draw, is not a " ++
+    | .error e => return (#[], some ("registration", s!"the window's sampling coin, the produced record's sample, is not a " ++
         s!"live opening: {e}"))
   let produced ← match lanesRecord (get ev "produced") layout shape program registration coin drawn with
     | .ok p => pure p
@@ -493,13 +493,13 @@ def leafAsks (lanes : Option Json) (leafs : Array (Nat × Nat × St)) (files : J
   let mut seen : List (Nat × St) := []
   for (i, u, st) in leafs do
     unless drawn.contains u do
-      return (out, some ("outcome", s!"unit {u} has a leaf statement and is no drawn lanes-form leaf: only the " ++
-        "draw's leaves at a K committed as lanes are proved as lanes"))
+      return (out, some ("outcome", s!"unit {u} has a leaf statement and is no sampled lanes-form leaf: only the " ++
+        "sample's leaves at a K committed as lanes are proved as lanes"))
     unless (statementsOf (r / 4 * (c / 8))).contains st do
-      return (out, some ("outcome", s!"drawn leaf {u}'s statement {st.repr} is none of leaf_lanes.statements({r}, " ++
+      return (out, some ("outcome", s!"sampled leaf {u}'s statement {st.repr} is none of leaf_lanes.statements({r}, " ++
         s!"{c}): a lane with its index or the combine"))
     if seen.contains (u, st) then
-      return (out, some ("outcome", s!"drawn leaf {u}'s statement {st.repr} is proved twice: each statement is " ++
+      return (out, some ("outcome", s!"sampled leaf {u}'s statement {st.repr} is proved twice: each statement is " ++
         "proved and verified once, and a retry never reproves it"))
     seen := seen ++ [(u, st)]
     let name := s!"{st.1}{kOf u}"
@@ -516,7 +516,7 @@ def leafAsks (lanes : Option Json) (leafs : Array (Nat × Nat × St)) (files : J
       partition := leafPartitionOf sha unit, leaf := name, unit := u, known := known, windowPorts := windowPorts }
   for u in drawn do
     if let some left := (statementsOf (r / 4 * (c / 8))).find? fun st => !seen.contains (u, st) then
-      return (out, some ("missing", s!"drawn leaf {u} has no statement {left.repr}: every drawn leaf's lanes and " ++
+      return (out, some ("missing", s!"sampled leaf {u} has no statement {left.repr}: every sampled leaf's lanes and " ++
         "combine are proved and verified, and a leaf with one missing refuses the window (no partial credit)"))
   return (out, none)
 
@@ -541,16 +541,16 @@ registered finding is not exactly the file's ports at their values and roots (`r
 def judged (a : LeafAsk) (session : String) (accepted : Bool) (why : String) (program registered : Json)
     (units : List Nat) (openings : Json) (held : Held) : R Held := do
   unless accepted do
-    throw ("failed", s!"drawn leaf {a.unit}'s {a.leaf} session {session} was rejected by the verifier " ++
+    throw ("failed", s!"sampled leaf {a.unit}'s {a.leaf} session {session} was rejected by the verifier " ++
       s!"({why}): a failed statement refuses the whole window (no partial credit, and no retry)")
   unless units == [0] && program == get a.partition "program" do
-    throw ("proof", s!"drawn leaf {a.unit}'s {a.leaf} session {session} proved units {listStr units} of another " ++
-      "program than its leaf Program's one unit: a leaf statement's draw is every unit of its population of one " ++
+    throw ("proof", s!"sampled leaf {a.unit}'s {a.leaf} session {session} proved units {listStr units} of another " ++
+      "program than its leaf Program's one unit: a leaf statement's sample is every unit of its population of one " ++
       "(checkFull)")
   let want := (fields (get a.registered "ports")).map fun (p, e) =>
     (p, (str? (get e "value")).getD "", (str? (get e "root")).getD "")
   unless finding? registered == some want do
-    throw ("registration", s!"drawn leaf {a.unit}'s {a.leaf} session {session} opened its ports at other values or " ++
+    throw ("registration", s!"sampled leaf {a.unit}'s {a.leaf} session {session} opened its ports at other values or " ++
       "roots than the verifier's own registered file (or a pub, admit or o0 row other than the known one)")
   let tag := s!"s{a.statement}"
   let mine := ((held.ports.find? (·.1 == a.unit)).map (·.2)).getD #[]

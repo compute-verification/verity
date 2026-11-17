@@ -816,7 +816,7 @@ def test_a_windows_leaves_have_no_lanes_but_over_h1zys_unit():
         HW.leaf_unit(prog, 32, LL.LANE)
     with pytest.raises(ValueError, match="no template at K = 48"):
         HW.leaf_program(prog, 48, LL.COMBINE)
-    with pytest.raises(ValueError, match="a drawn leaf's statement"):
+    with pytest.raises(ValueError, match="a sampled leaf's statement"):
         HW.leaf_unit(prog, 32, "tile")
 
 

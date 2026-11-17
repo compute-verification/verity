@@ -159,8 +159,8 @@ def notV5 (nm : String) (i k : Nat) : String :=
   "lanes and their combine"
 
 def manyStrata (nm : String) (i : Nat) (ks : List Nat) : String :=
-  s!"window {i} of period {nm} has units at {ks.length} K's ({Credit.listStr ks}), so its draw is over that many " ++
-  s!"strata, and {GUARANTEE} draws from one tile stratum (TileSampleIsCoin): serve a window's linears at one K"
+  s!"window {i} of period {nm} has units at {ks.length} K's ({Credit.listStr ks}), so its sample is over that many " ++
+  s!"strata, and {GUARANTEE} samples from one tile stratum (TileSampleIsCoin): serve a window's linears at one K"
 
 /-- Why window `i` of period `nm` is a form `GUARANTEE` doesn't cover, read from its evidence alone: a Pearl-C pass,
 a circuit that is not an H1 window, a template over per-unit noise, a J10-R unit over a tile other than

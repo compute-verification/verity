@@ -187,14 +187,14 @@ theorem ascending_of_pairwise : ∀ (l : List ℕ), l.Pairwise (· < ·) → Asc
   | [_], _ => trivial
   | _ :: b :: t, h => ⟨List.rel_of_pairwise_cons h List.mem_cons_self, ascending_of_pairwise (b :: t) h.of_cons⟩
 
-theorem draw_inj (β : Equiv.Perm (Fin 144) × Unit) : Function.Injective fun i : Fin 24 => (drawOf hK24 β i).val :=
+theorem sample_inj (β : Equiv.Perm (Fin 144) × Unit) : Function.Injective fun i : Fin 24 => (drawOf hK24 β i).val :=
   fun _ _ h => Fin.castLE_injective hK24 (β.1.injective (Fin.ext h))
 
 /-- **The sample's units are 24 ascending distinct units below 144.** -/
 theorem unitsOk (β : Equiv.Perm (Fin 144) × Unit) : UnitsOk (unitsOf β) 24 144 := by
   refine ⟨?_, ?_, fun u hu => ?_⟩
   · simp only [unitsOf, List.size_toArray, Finset.length_sort]
-    rw [Finset.card_image_of_injective _ (draw_inj β), Finset.card_univ, Fintype.card_fin]
+    rw [Finset.card_image_of_injective _ (sample_inj β), Finset.card_univ, Fintype.card_fin]
   · simp only [unitsOf, List.toList_toArray]
     exact ascending_of_pairwise _
       (((Finset.pairwise_sort (s := Finset.univ.image fun i : Fin 24 => (drawOf hK24 β i).val)

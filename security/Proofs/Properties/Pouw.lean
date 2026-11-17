@@ -129,7 +129,7 @@ theorem kPrimeLeast : KPrimeLeast := by
   exact hr
 
 theorem sampleMisses : DrawMisses := fun eps δ credited n w B k hk =>
-  draw_misses eps δ credited n w B k (kPrimeRefuses eps δ credited n w k hk) hk
+  sample_misses eps δ credited n w B k (kPrimeRefuses eps δ credited n w k hk) hk
 
 /-! ## Completeness
 

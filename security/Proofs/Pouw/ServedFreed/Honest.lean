@@ -134,7 +134,7 @@ theorem certified_fa (c : ℝ) {Ω St C O : Type} [Fintype Ω] {n : ℕ} (work :
 section Meets
 
 variable {nB mB : ℕ} (σ : Fin nB → Fin mB) (k : Fin mB → ℕ) (hk : ∀ s, k s ≤ (stratum σ s).card) (sT : Fin mB)
-  (unitOf : Fin nB → ℕ) (regOf : Bool → PreDraw)
+  (unitOf : Fin nB → ℕ) (regOf : Bool → PreSample)
   (evOf : Bool → Equiv.Perm (Fin (tileCount σ sT)) × Unit → Answered) (enc : Bool → ByteArray)
 
 /-- **`ServedFreed`'s conclusion at the honest J10-R period with the honest inventory**: `j10r_meets` and
@@ -142,7 +142,7 @@ variable {nB mB : ℕ} (σ : Fin nB → Fin mB) (k : Fin mB → ℕ) (hk : ∀ s
 exchange-free programs and a certifier that accepts every period the rest. -/
 theorem servedFreed_honest (hKd : 1 ≤ k sT) (hacc : ∀ c β, ExecutionPhaseAccepts (regOf c) (evOf c β))
     (hsalt : ∀ c, (PouwCheck.hex? (regOf c).salt).getD ByteArray.empty = enc c)
-    (hdraw : ∀ c β, ∃ d : Array ℕ, creditDrawn (regOf c) (evOf c β) = .ok d ∧
+    (hdraw : ∀ c β, ∃ d : Array ℕ, creditSampled (regOf c) (evOf c β) = .ok d ∧
       ∀ u : ℕ, u ∈ d.toList ↔ ∃ i : Fin (k sT), unitOf (tileAt σ sT (drawOf (hk sT) β i)) = u)
     (n : ℕ) (hn : 0 < n) {δs : ℝ} (hδs : 0 < δs) :
     prob (fun x => (play Unit (tileCount σ sT) (k sT) n).accepts x ∧ True ∧
@@ -183,7 +183,7 @@ the other job fits the whole period (`z = H`), worth `2H` against an honest stra
 credit is positive (`creditPrefix_pos`). So its event has probability 1, past the bound `e^{−1}`. -/
 theorem servedFreed_nontrivial (hKd : 1 ≤ k sT) (hacc : ∀ c β, ExecutionPhaseAccepts (regOf c) (evOf c β))
     (hsalt : ∀ c, (PouwCheck.hex? (regOf c).salt).getD ByteArray.empty = enc c)
-    (hdraw : ∀ c β, ∃ d : Array ℕ, creditDrawn (regOf c) (evOf c β) = .ok d ∧
+    (hdraw : ∀ c β, ∃ d : Array ℕ, creditSampled (regOf c) (evOf c β) = .ok d ∧
       ∀ u : ℕ, u ∈ d.toList ↔ ∃ i : Fin (k sT), unitOf (tileAt σ sT (drawOf (hk sT) β i)) = u)
     (n : ℕ) (hn : 17 ≤ n) :
     (∀ s, k s ≤ (stratum σ s).card) ∧ 0 < n ∧ (circuit (tileCount σ sT)).units ≤ tileCount σ sT ∧

@@ -82,7 +82,7 @@ def saltReason (p : Params) (t : Option Tile) (salt : Option ByteArray) : Option
   let salted := t.bind (·.salted)
   if (executionPhaseOf p.context).isSome then
     if salted.isNone then
-      some "the window is certified, and its template's unit reads no salt: no drawn proof of it is held to the window's certified salt"
+      some "the window is certified, and its template's unit reads no salt: no sampled proof of it is held to the window's certified salt"
     else if (salt.filter (·.size == SALT_BYTES)).isNone then
       some s!"the window is certified, and the verifier holds no {SALT_BYTES}-byte certified salt for it"
     else none

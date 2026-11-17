@@ -26,7 +26,7 @@ An `outcome` case is a `drawn` case's arguments and one accepted proof outcome f
 mutations drop one (``missing``), reject one (``failed``), repeat one, add an unsampled unit, prove the units of another
 coin the prover chose (``chosen``), and break the forms.
 
-A `window-drawn` case is what `credit._window_drawn` reads of an execution phase, the sample `Credit.descriptorDrawn` gives the
+A `window-sampled` case is what `credit._window_drawn` reads of an execution phase, the sample `Credit.descriptorDrawn` gives the
 J10-R credit period's statement (`Properties.Pouw.MonitoringPeriodJ10R.creditDrawn`): the execution phase's open root, its sample (its coin's live
 opening, its root and its receipts), its circuit's descriptor (today's units or J10-R's) and a committed K. Its
 mutations break the coin's opening, the root and receipts the sample is keyed by, the descriptor's hex and K's form, and
@@ -1067,7 +1067,7 @@ def _draw_coin(rng: random.Random) -> dict:
 
 
 def window_drawn_instance(rng: random.Random, name: str = "honest") -> dict:
-    """One `window-drawn` case: an execution phase's open root, its sample (its coin's live opening, its root and its receipts), its
+    """One `window-sampled` case: an execution phase's open root, its sample (its coin's live opening, its root and its receipts), its
     circuit's descriptor (`descriptor`, today's units or J10-R's) and a committed K, then mutation `name`."""
     lay, j10r = layout(rng), rng.random() < 0.5
     if j10r:

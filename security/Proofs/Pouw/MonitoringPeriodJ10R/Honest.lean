@@ -51,19 +51,19 @@ function of the window's round coin (`regOf`) and the rest of whose inputs a fun
 * `Credit.window` credits every window (`hacc`);
 * the registered salt, hex-decoded, is the round coin's bytes (`hsalt`), so `SaltIsLiveCoin` holds with no round trip
   through `hex?`;
-* the units `Credit.descriptorDrawn` samples are the tile coordinate's at the sampling coin (`hdraw`), `TileSampleIsCoin`'s
+* the units `Credit.descriptorSampled` samples are the tile coordinate's at the sampling coin (`hdraw`), `TileSampleIsCoin`'s
   body on every window.
 
 They are facts of the code on honest executionPhases, which Lean doesn't evaluate here (`Credit.window` reads SHA-512 trees and
 Flock's proofs). The compiled verifier evidences them: PouwCheck's `test_difftest` has `pouw-check-difftest`'s
 `window` entry (`Credit.window`) credit honest J10-R executionPhases (`window_instance`'s `j10r`) as the Python verifier does,
-and its `window-drawn` entry sample the Python verifier's units on generated coins.
+and its `window-sampled` entry sample the Python verifier's units on generated coins.
 
 * The circuit (`circuit N`): `N = N_p` committed words of no operands, one a unit, one live round, so every tile's late
   cone is its own word and its share `1/N` (`shareCone_eq`): `ρ = 1` meets `ρ·N_p·share ≤ 1` with equality.
 * The scheme is the ComposeMonitoringPeriod twin's (operand luck pinned, `r_B = ½`, guess `½`).
 * The registration reads the round coin and not the sampling coin, so it is fixed before the sample
-  (`registeredBeforeDraw`, by `coinAt_spliceAt`).
+  (`registeredBeforeSample`, by `coinAt_spliceAt`).
 * Every tile is live and paid with its words right, the openings are in `Unit` and the unit's relation is `True`, so
   binding holds at `δ_bind = 0` and the service's soundness at `δ_ks = 0`; the three lucks hold of the honest games
   (`SharedNoiseLucks`), and the play fixes and folds `N` words a window (`UnitFixed`).
@@ -200,7 +200,7 @@ abbrev Ω1 : Type := Coin Bool Unit (circuit (tileCount σ sT)).rounds σ sT
 
 /-- The period's executionPhases as `Credit.window` reads them: window `w` registers `regOf` of its round coin, and the rest of
 its inputs are `evOf` of its round coin and its sampling coin. -/
-def executionPhases (regOf : Bool → PreDraw) (evOf : Bool → Equiv.Perm (Fin (tileCount σ sT)) × Unit → Answered)
+def executionPhases (regOf : Bool → PreSample) (evOf : Bool → Equiv.Perm (Fin (tileCount σ sT)) × Unit → Answered)
     (n : ℕ) : CreditExecutionPhases (Ω1 σ sT) n where
   reg x w := regOf (coinAt (coinAt x w).1 ⟨0, hr1 _⟩)
   ev x w := evOf (coinAt (coinAt x w).1 ⟨0, hr1 _⟩) (coinAt x w).2
@@ -229,7 +229,7 @@ noncomputable def play (B : Type) (N Kd n : ℕ) : Play (WCoin N B) n Unit Unit 
 
 /-- **The registration is fixed before the sampling coin**: it reads only the round coin, which the splice at window `w`
 after its one round keeps. -/
-theorem registeredBeforeDraw {nB mB : ℕ} (σ : Fin nB → Fin mB) (sT : Fin mB) (regOf : Bool → PreDraw)
+theorem registeredBeforeSample {nB mB : ℕ} (σ : Fin nB → Fin mB) (sT : Fin mB) (regOf : Bool → PreSample)
     (evOf : Bool → Equiv.Perm (Fin (tileCount σ sT)) × Unit → Answered) (n : ℕ) :
     RegisteredBeforeDraw (executionPhases σ sT regOf evOf n) := by
   intro x z w
@@ -298,7 +298,7 @@ theorem sum_div_le {N n : ℕ} (hn : 0 < n) (f : Fin n → Fin N → ℝ)
 section Meets
 
 variable {nB mB : ℕ} (σ : Fin nB → Fin mB) (k : Fin mB → ℕ) (hk : ∀ s, k s ≤ (stratum σ s).card) (sT : Fin mB)
-  (unitOf : Fin nB → ℕ) (regOf : Bool → PreDraw)
+  (unitOf : Fin nB → ℕ) (regOf : Bool → PreSample)
   (evOf : Bool → Equiv.Perm (Fin (tileCount σ sT)) × Unit → Answered) (enc : Bool → ByteArray)
 
 /-- **Every window credited**, its prefix every window. -/
@@ -325,11 +325,11 @@ theorem creditLive_all (hacc : ∀ c β, ExecutionPhaseAccepts (regOf c) (evOf c
 /-- **An honest J10-R period meets every premise of `H1J10RCheckedCreditMonitoringPeriod`**, in its order, at `N_p = |stratum σ
 s_T|` one-word units, one round, `ρ = 1`, the twin's lucks, any `δ_s > 0`, `δ_bind = δ_ks = 0` and `N_p` fixed and
 folded words a window, given that `Credit.window` credits every window (`hacc`), that the registered salt is the
-round coin's bytes (`hsalt`) and that `Credit.descriptorDrawn`'s units are the tile coordinate's at the sampling coin
+round coin's bytes (`hsalt`) and that `Credit.descriptorSampled`'s units are the tile coordinate's at the sampling coin
 (`hdraw`); the accepted prefix is then the whole period and its live words are `N_p·n`. -/
 theorem j10r_meets (hKd : 1 ≤ k sT) (hacc : ∀ c β, ExecutionPhaseAccepts (regOf c) (evOf c β))
     (hsalt : ∀ c, (PouwCheck.hex? (regOf c).salt).getD ByteArray.empty = enc c)
-    (hdraw : ∀ c β, ∃ d : Array ℕ, creditDrawn (regOf c) (evOf c β) = .ok d ∧
+    (hdraw : ∀ c β, ∃ d : Array ℕ, creditSampled (regOf c) (evOf c β) = .ok d ∧
       ∀ u : ℕ, u ∈ d.toList ↔ ∃ i : Fin (k sT), unitOf (tileAt σ sT (drawOf (hk sT) β i)) = u)
     (n : ℕ) (hn : 0 < n) {δs : ℝ} (hδs : 0 < δs) :
     (circuit (tileCount σ sT)).units ≤ tileCount σ sT ∧ (circuit (tileCount σ sT)).rounds = 1 ∧
@@ -374,7 +374,7 @@ theorem j10r_meets (hKd : 1 ≤ k sT) (hacc : ∀ c β, ExecutionPhaseAccepts (r
   refine ⟨le_rfl, rfl, scope _ hδs, fun t => ?_, fun j => ?_, fun t _ => ?_, rfl,
     period_every (Ω := Ω1 σ sT) (N := tileCount σ sT)
       (P := fun live _ => DeadConeDead Honest.scheme (circuit (tileCount σ sT)) (tileCount σ sT) live) (fun _ _ ht _ => by simp at ht) n,
-    fun x j _ => acceptsUpTo_period _ _ _ _ n j x, fun w => ?_, registeredBeforeDraw σ sT regOf evOf n,
+    fun x j _ => acceptsUpTo_period _ _ _ _ n j x, fun w => ?_, registeredBeforeSample σ sT regOf evOf n,
     fun _ _ _ => hdraw _ _, fun w => ?_, fun _ _ => hsalt _,
     ⟨every_perLiveTile (P := fun k G _ => OperandHMu (Honest.scheme.mu k) G)
       (fun k t => Honest.operandHMu_of_zero _ _ _ _ _ (paid_share .folded (by decide) t)) n,
@@ -417,7 +417,7 @@ theorem j10r_meets (hKd : 1 ≤ k sT) (hacc : ∀ c β, ExecutionPhaseAccepts (r
 premise, so except with probability `δ_s` its fixed words are at least `(1 − ε(n))₊` of its `N_p·n` live words. -/
 theorem j10r_credit (hKd : 1 ≤ k sT) (hacc : ∀ c β, ExecutionPhaseAccepts (regOf c) (evOf c β))
     (hsalt : ∀ c, (PouwCheck.hex? (regOf c).salt).getD ByteArray.empty = enc c)
-    (hdraw : ∀ c β, ∃ d : Array ℕ, creditDrawn (regOf c) (evOf c β) = .ok d ∧
+    (hdraw : ∀ c β, ∃ d : Array ℕ, creditSampled (regOf c) (evOf c β) = .ok d ∧
       ∀ u : ℕ, u ∈ d.toList ↔ ∃ i : Fin (k sT), unitOf (tileAt σ sT (drawOf (hk sT) β i)) = u)
     (n : ℕ) (hn : 0 < n) {δs : ℝ} (hδs : 0 < δs) :
     prob (fun x => (play Unit (tileCount σ sT) (k sT) n).accepts x ∧

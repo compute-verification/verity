@@ -45,21 +45,21 @@ call, the sample's population), where `K` is the K the period's open committed a
 (`strata`, then `samplingDesign`; `drawnOf` runs it). These say what that ε means: the sample misses a set of the window's units doing
 at least ε of the credited work with probability at most δ.
 
-* `WorkDrawMisses`: the work sampling design at `K ≥ K′ = kPrime ε δ C W 1` over strata of work `W` misses a set of units of work
+* `WorkSampleMisses`: the work sampling design at `K ≥ K′ = kPrime ε δ C W 1` over strata of work `W` misses a set of units of work
   at least `ε·C` with probability at most `δ`, for every `C` (`kPrime` refuses `C` outside `(0, W]`).
 * `EpsAtSound`: the same at the ε `epsAt K δ C W 1` answers.
 * `EstablishedSound`: the same at the ε `established` answers, with `C` the credited calls' served work
   (`creditedWork`) and `δ = DELTA`: `strata` tiles the window's units call by call at their calls' work
   (`Properties.Pouw.Strata.StrataTile`, proved), so its `W` is the strata's.
-* `DrawWithheld`: a credited window's sampling coin comes from a session the auditor's ledger opens withheld on the window's
+* `SampleWithheld`: a credited window's sampling coin comes from a session the auditor's ledger opens withheld on the window's
   sample root, so the challenger released its coin commitment only after the prover's commitment was in, and no
   statement here takes a hiding premise on that commitment.
-* `GroupedDrawMisses`: the same sample, where each sampled proof block (a leaf) is proved as its group of blocks (a leaf past the
+* `GroupedSampleMisses`: the same sample, where each sampled proof block (a leaf) is proved as its group of blocks (a leaf past the
   block cap as its lanes and their combine, `pouw.leaf_lanes`): a set of blocks doing at least `ε·C` of the work, no
   leaf's blocks doing more than the leaf, has no block in a sampled group with probability at most `δ`. δ counts leaves.
 
 The sample is the one `PouwCheck.workUnits` runs: `Flock.Draw.stratified` over the strata `samplingDesign` gives, stratum `i` sampling
-`Flock.Draw.subset` of its `k_i` units from its own stream of `need` bytes (`drawnOn`). The streams are modelled as
+`Flock.Draw.subset` of its `k_i` units from its own stream of `need` bytes (`sampledOn`). The streams are modelled as
 independent and uniform, as `Properties.Served.SampleMissesSubset` models them: the service derives stratum `i`'s stream
 as `stream key ["draw", template] need`, its label distinct for each stratum (the templates are distinct,
 `StrataTile`), and these are that derivation in the random-oracle model. They add no named assumption: the probability
@@ -78,7 +78,7 @@ open Properties.Pouw.Strata (unitWork)
 /-- The units the work sample over `strata` samples from the streams `g`, one per stratum (`PouwCheck.workUnits`'s
 `Flock.Draw.stratified`, stratum `i`'s stream `g i`'s bytes, as `Properties.Spot.bytesOf` reads them); none
 where a stream runs out. -/
-def drawnOn (strata : Array Flock.Draw.Stratum) (g : (i : Fin strata.size) → Fin strata[i].need → Fin 256) :
+def sampledOn (strata : Array Flock.Draw.Stratum) (g : (i : Fin strata.size) → Fin strata[i].need → Fin 256) :
     Option (Array ℕ) :=
   Flock.Draw.stratified strata (Array.ofFn fun i => Properties.Spot.bytesOf (g i))
 
@@ -91,18 +91,18 @@ def creditedWork (layout : Json) (got served : List ℕ) : ℕ :=
 
 /-- **The work sampling design at `K ≥ K′` misses a set of work `ε·C` with probability at most `δ`**, the claim behind every ε a
 credit reports: wherever `strata` accepts a layout with strata `ss`, `samplingDesign` puts them under `work:K`, and
-`kPrime ε δ C W 1` (`W` the strata's work) answers `K′ ≤ K`, the sample over uniform streams (`drawnOn`) samples no unit of a
+`kPrime ε δ C W 1` (`W` the strata's work) answers `K′ ≤ K`, the sample over uniform streams (`sampledOn`) samples no unit of a
 set `B` whose units do at least `ε·C` of the work (`unitWork`) with probability at most `δ`. The streams are independent
 and uniform, as `Properties.Served.SampleMissesSubset` models them: the service derives stratum `i`'s as
 `stream key ["draw", template] need`, its label distinct for each stratum, and this is that derivation in the
 random-oracle model. -/
-def WorkDrawMisses : Prop :=
+def WorkSampleMisses : Prop :=
   ∀ (layout : Json) (ss : Array Flock.Draw.WorkStratum) (K : ℕ) (strata : Array Flock.Draw.Stratum) (eps δ : ℚ)
     (C k' : ℕ),
     PouwCheck.Credit.strata layout = .ok ss → PouwCheck.Credit.samplingDesign ss (toJson K) = .ok strata →
       PouwWindow.kPrime eps δ C (Flock.Draw.totalWork ss) 1 = .ok k' →
       ∀ B : Finset ℕ, k' ≤ K → eps * C ≤ ((∑ u ∈ B, unitWork ss u : ℕ) : ℚ) →
-        prob (fun g => ∃ d, drawnOn strata g = some d ∧ ∀ u ∈ B, u ∉ d) ≤ (δ : ℝ)
+        prob (fun g => ∃ d, sampledOn strata g = some d ∧ ∀ u ∈ B, u ∉ d) ≤ (δ : ℝ)
 
 /-- **The ε `epsAt` answers is established**: wherever `strata` accepts a layout with strata `ss`, `samplingDesign` puts them under
 `work:K`, and `epsAt K δ C W 1` (`W` the strata's work) answers `ε`, the sample over uniform streams samples no unit of a set
@@ -112,7 +112,7 @@ def EpsAtSound : Prop :=
     PouwCheck.Credit.strata layout = .ok ss → PouwCheck.Credit.samplingDesign ss (toJson K) = .ok strata →
       PouwWindow.epsAt K δ C (Flock.Draw.totalWork ss) 1 = .ok e →
       ∀ B : Finset ℕ, e * C ≤ ((∑ u ∈ B, unitWork ss u : ℕ) : ℚ) →
-        prob (fun g => ∃ d, drawnOn strata g = some d ∧ ∀ u ∈ B, u ∉ d) ≤ (δ : ℝ)
+        prob (fun g => ∃ d, sampledOn strata g = some d ∧ ∀ u ∈ B, u ∉ d) ≤ (δ : ℝ)
 
 /-- **The ε a credit reports is established**, the claim behind every ε `periodCredit` reports: wherever `strata` accepts
 a layout with strata `ss`, `samplingDesign` puts them under `work:K`, and `established layout got served K` answers `ε` for the
@@ -124,7 +124,7 @@ def EstablishedSound : Prop :=
     PouwCheck.Credit.strata layout = .ok ss → PouwCheck.Credit.samplingDesign ss (toJson K) = .ok strata →
       PouwCheck.Credit.established layout got served K = some e →
       ∀ B : Finset ℕ, e * creditedWork layout got served ≤ ((∑ u ∈ B, unitWork ss u : ℕ) : ℚ) →
-        prob (fun g => ∃ d, drawnOn strata g = some d ∧ ∀ u ∈ B, u ∉ d) ≤ (PouwCheck.Credit.DELTA : ℝ)
+        prob (fun g => ∃ d, sampledOn strata g = some d ∧ ∀ u ∈ B, u ∉ d) ≤ (PouwCheck.Credit.DELTA : ℝ)
 
 /-- **A credited window's sampling coin comes from a withheld session on its sample root** (a challenger releases its coin
 commitment only after the prover's commitment is in). Wherever `credited` accepts a window,
@@ -132,19 +132,19 @@ the sample's `root` is a string `r` (the root `draw_root` gives over the window'
 round log, which `credited` recomputes), and the auditor's ledger opens a session on `r` and marks every open of it
 withheld (`withheldOn`, `remote.open_session(..., withhold=True)`): that session released only its coins' raw bytes
 until it closed, so its commitment came after the prover's sample root. -/
-def DrawWithheld : Prop :=
+def SampleWithheld : Prop :=
   ∀ key ledger pins main salt calls served commit rounds draw got,
     PouwCheck.Credit.Internal.credited key ledger pins main salt calls served commit rounds draw = .ok got →
       ∃ r, PouwCheck.get draw "root" = .str r ∧ Spot.Challenger.withheldOn ledger r = true
 
 /-- **The grouped sample at `K ≥ K′` misses a set of blocks of work `ε·C` with probability at most `δ`**: the work sampling design
-samples leaves (`drawnOn`, as in `WorkDrawMisses`), and each sampled leaf `u` is proved as its group, every block `b` with
+samples leaves (`sampledOn`, as in `WorkSampleMisses`), and each sampled leaf `u` is proved as its group, every block `b` with
 `leafOf b = u` (a leaf past the block cap: its lanes and their combine, each a one-unit statement). Wherever `strata`
 accepts a layout with strata `ss`, `samplingDesign` puts them under `work:K`, and `kPrime ε δ C W 1` (`W` the strata's work)
 answers `K′ ≤ K`, a set `Bb` of blocks whose work `w` sums to at least `ε·C`, the blocks of `Bb` in any one leaf doing at
 most that leaf's work (`unitWork`), has no block in a sampled leaf's group with probability at most `δ`. The streams are
-uniform and independent, as in `WorkDrawMisses`. -/
-def GroupedDrawMisses : Prop :=
+uniform and independent, as in `WorkSampleMisses`. -/
+def GroupedSampleMisses : Prop :=
   ∀ (layout : Json) (ss : Array Flock.Draw.WorkStratum) (K : ℕ) (strata : Array Flock.Draw.Stratum) (eps δ : ℚ)
     (C k' : ℕ),
     PouwCheck.Credit.strata layout = .ok ss → PouwCheck.Credit.samplingDesign ss (toJson K) = .ok strata →
@@ -152,11 +152,11 @@ def GroupedDrawMisses : Prop :=
       ∀ {β : Type} (leafOf w : β → ℕ) (Bb : Finset β), k' ≤ K →
         (∀ u, ∑ b ∈ Bb.filter (fun b => leafOf b = u), w b ≤ unitWork ss u) →
         eps * C ≤ ((∑ b ∈ Bb, w b : ℕ) : ℚ) →
-          prob (fun g => ∃ d, drawnOn strata g = some d ∧ ∀ b ∈ Bb, leafOf b ∉ d) ≤ (δ : ℝ)
+          prob (fun g => ∃ d, sampledOn strata g = some d ∧ ∀ b ∈ Bb, leafOf b ∉ d) ≤ (δ : ℝ)
 
 /-! ## A window of leaves proved as their lanes and combines
 
-The instances `GroupedDrawMisses`'s two lemmas read (`Proofs.Pouw.Credit`). Its honest lemma: a served H1 window of
+The instances `GroupedSampleMisses`'s two lemmas read (`Proofs.Pouw.Credit`). Its honest lemma: a served H1 window of
 sixteen 32 × 32 leaves at K = 2048, past the block cap, each proved as its 32 lanes (its 4 × 8 tiles, each doing
 4·8·2048 of its MACs) and their combine (doing none), sampled under `work:8` at ε = 1/2 and δ = 1/256, where `K′ = 8`.
 Its nontrivial lemma: a sampling design that accepts everything may hand the sample no strata, and then every block escapes. -/

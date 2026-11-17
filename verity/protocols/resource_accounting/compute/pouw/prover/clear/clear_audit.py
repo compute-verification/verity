@@ -60,7 +60,7 @@ def draw_coin(epoch: Epoch, challenger: Challenger, after: bytes) -> tuple[bytes
     """The epoch's sampling coin, asked of the challenger once the verifier recorded `after`, and checked against the
     epoch's coin commitment: (coin, None), or (None, why it is refused)."""
     if epoch.coins is None:
-        return None, "the epoch has no coin commitment for its draw coin to open against"
+        return None, "the epoch has no coin commitment for its sampling coin to open against"
     opening = challenger.open("draw", after)
     reason = coin_reason(epoch.coins, opening, "draw", after)
     return (None, f"the draw's {reason}") if reason is not None else (opening.coin, None)

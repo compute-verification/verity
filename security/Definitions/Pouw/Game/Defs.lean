@@ -265,7 +265,7 @@ def AuditAccepts {w : ℕ → ℕ} {N t : ℕ} (K : Finset ℕ) (c : Fin t → T
   ∀ i, ((c i).1 : ℕ) ∈ K
 
 /-- The number of the `t` samples that land in `O`, each sample counted once. -/
-def drawsIn {w : ℕ → ℕ} {N t : ℕ} (O : Finset ℕ) (c : Fin t → Ticket w N) : ℕ :=
+def samplesIn {w : ℕ → ℕ} {N t : ℕ} (O : Finset ℕ) (c : Fin t → Ticket w N) : ℕ :=
   (univ.filter fun i => ((c i).1 : ℕ) ∈ O).card
 
 /-- The tolerant audit accepts iff every sampled proof block is in `K`, checked and credited, or in `O`, accepted and credited
@@ -279,6 +279,6 @@ the sampling tolerance read off the samples. Clopper–Pearson's one-sided upper
 `u x = 1` otherwise is the audit that accepts only checked units, at `δ = (1 − ε_s)^t`. -/
 def MissBound (t : ℕ) (u : ℕ → ℝ) (δ : ℝ) : Prop :=
   ∀ (N : ℕ) (w : ℕ → ℕ) (S : Finset ℕ), S ⊆ range N →
-    pr (fun c : Fin t → Ticket w N => u (drawsIn S c) * ∑ g ∈ range N, (w g : ℝ) < ∑ g ∈ S, (w g : ℝ)) ≤ δ
+    pr (fun c : Fin t → Ticket w N => u (samplesIn S c) * ∑ g ∈ range N, (w g : ℝ) < ∑ g ∈ S, (w g : ℝ)) ≤ δ
 
 end Pouw

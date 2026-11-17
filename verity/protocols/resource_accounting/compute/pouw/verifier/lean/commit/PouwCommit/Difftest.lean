@@ -22,7 +22,7 @@ is not it, naming the Lean's. The kinds:
 * `salt_of`, `unverified_salt`: the execution phase's salt from a coin, and `Epoch.unverified`'s from a seed;
 * `epoch_salt`, `draw_coin`: `Epoch.start`'s salt and `draw_coin`'s coin, or their refusals in their words (`{"reason"}`);
 * `key`: the audit, sample and replay keys and `draw_after`;
-* `sampled`, `pearl_draw`: the clear audit's work-weighted samples over given tickets, `Sampled.select`'s and
+* `sampled`, `pearl_sample`: the clear audit's work-weighted samples over given tickets, `Sampled.select`'s and
   `clear_work.draw`'s (`verity/protocols/accounting/pouw/prover/clear`).
 -/
 
@@ -131,21 +131,21 @@ def outcome (kind : String) (i : Json) : E Json := do
       | .null => pure none
       | j => pure (some (← CoinCommitment.ofJson j))
     let o ← CoinOpening.ofJson (← field i "opening")
-    return refusable (← drawCoin c o (← unhexField i "after"))
+    return refusable (← flipCoin c o (← unhexField i "after"))
   | "key" =>
     let (tr, rd, salt) := (← unhexField i "transcript", ← unhexField i "records", ← unhexField i "salt")
     match ← str i "which" with
     | "audit" => return hexJ (← auditKey (← unhexField i "source") tr salt)
     | "draw" => return hexJ (← drawKey (← unhexField i "source") tr rd salt)
     | "replay" => return hexJ (← replayKey (← nat i "round") (← unhexField i "source") tr rd salt)
-    | "after" => return hexJ (drawAfter tr rd)
+    | "after" => return hexJ (flipAfter tr rd)
     | w => throw s!"no key {w}"
   | "sampled" =>
     let key ← auditKey (← unhexField i "source") (← unhexField i "transcript") (← unhexField i "salt")
-    return draws (← weightedDraw key (← tickets i) (← nat i "t"))
-  | "pearl_draw" =>
+    return draws (← weightedSample key (← tickets i) (← nat i "t"))
+  | "pearl_sample" =>
     let key ← drawKey (← unhexField i "source") (← unhexField i "transcript") (← unhexField i "records") (← unhexField i "salt")
-    return draws (← pearlDraw key (← tickets i) (← nat i "t"))
+    return draws (← pearlSample key (← tickets i) (← nat i "t"))
   | k => throw s!"no kind {k}"
 where
   unhexField (j : Json) (k : String) : E ByteArray := do unhex (← str j k)

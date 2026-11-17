@@ -30,7 +30,7 @@ open PouwCommit
 
 def PROTOCOL : String := "verity/pouw/pearl-plus/v1"
 def RUN_TAG : String := "verity/pouw/pearl-plus/run/v1"
-def RUN_DRAW_DOMAIN : String := "verity/pouw/pearl-plus-run-draw/v1"
+def RUN_SAMPLE_DOMAIN : String := "verity/pouw/pearl-plus-run-draw/v1"
 def COIN_SCHEMA : String := "verity-pouw/pearl-plus-coin/v2"
 def COIN_SCHEMA_V1 : String := "verity-pouw/pearl-plus-coin/v1"
 /-- The named assumption a run of the H100's scheme is credited at (`verify_run.ASSUMPTION_H100`). -/
@@ -100,7 +100,7 @@ def runCommitment (passes : List Pass) : ByteArray :=
     [.bytes p.transcriptRoot, .bytes p.recordsRoot, .bytes p.salt] ++ p.yRoots.map fun y => .bytes (y.getD ByteArray.empty))
 
 /-- The verifier's record of its coin: the run commitment it was sampled on, the source (a challenger sampling coin's 64 bytes,
-or the node's 32), the record's schema and its `draw` as the record carries it (`Coins.drawReason` reads it). -/
+or the node's 32), the record's schema and its `draw` as the record carries it (`Coins.sampleReason` reads it). -/
 structure CoinRecord where
   commitment : ByteArray
   source : ByteArray
@@ -108,7 +108,7 @@ structure CoinRecord where
   draw : Lean.Json := .null
 
 def AFTER_COIN : String × String :=
-  ("after-coin", "the retained passes or their records are not those the verifier's coin was drawn on: a retention change " ++
+  ("after-coin", "the retained passes or their records are not those the verifier's coin was sampled on: a retention change " ++
     "or a give-up after the coin is refused, and a retry never redraws")
 
 /-- A tile's ticket weight as a fraction `num/den` in lowest terms: |credited rows|·|credited columns| cells at the cell's
@@ -130,12 +130,12 @@ def tickets (passes : List Pass) : List ((Nat × Nat) × Nat) :=
   ws.map fun (id, (n, d)) => (id, n * (den / d))
 
 /-- The run's sample key on the verifier's source. -/
-def drawKey (source root : ByteArray) : Except String ByteArray := key? source RUN_DRAW_DOMAIN [("run", .bytes root)]
+def drawKey (source root : ByteArray) : Except String ByteArray := key? source RUN_SAMPLE_DOMAIN [("run", .bytes root)]
 
 /-- `t` work-weighted samples over every pass's tickets together, each a (pass, tile id), in the sample's order. -/
 def draw (passes : List Pass) (key : ByteArray) (t : Nat) : Except String (List (Nat × Nat)) := do
   let tk := tickets passes
-  let picks ← pearlDraw key (tk.map (·.2)) t
+  let picks ← pearlSample key (tk.map (·.2)) t
   pure (picks.map fun i => (tk[i]!).1)
 
 /-- The tiles the verdict opens, (pass, tile id), in its order: each pass's sampled tiles in the sample's order, then its

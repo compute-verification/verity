@@ -845,7 +845,7 @@ theorem yIsTheUnscale : YIsTheUnscale := by
 /-- Once `plan` succeeds, `check` publishes the credit on its own verdicts when it accepts, and none when it rejects. -/
 theorem check_work {i : Input} {pl : Plan} (opener : Nat → Nat → Except String TileOpening) (hp : plan i = .ok pl) :
     ((check i opener).accept = true → (check i opener).work = some (testCredit i.testInstance
-        (creditAtAssumption pl.passes i.draws (overInertBoundDraws pl (check i opener).verdicts) DELTA))) ∧
+        (creditAtAssumption pl.passes i.draws (overInertBoundSamples pl (check i opener).verdicts) DELTA))) ∧
       ((check i opener).accept = false → (check i opener).work = none) := by
   unfold check
   rw [hp]
@@ -869,7 +869,7 @@ one names its plan, since `WorkIsTheCredit` is a conjunction and the lock reads 
 theorem workIsTheCredit_acceptAll :
     ¬ (acceptAllCheck emptyRun noOpening).work = some (testCredit emptyRun.testInstance
       (creditAtAssumption acceptAllPlan.passes emptyRun.draws
-        (overInertBoundDraws acceptAllPlan (acceptAllCheck emptyRun noOpening).verdicts) DELTA)) := by
+        (overInertBoundSamples acceptAllPlan (acceptAllCheck emptyRun noOpening).verdicts) DELTA)) := by
   intro h
   cases h
 

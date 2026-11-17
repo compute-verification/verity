@@ -87,7 +87,7 @@ def test_the_tree_cases_reach_every_branch():
 
 
 def test_the_salt_and_draw_cases_reach_every_branch():
-    for kind in ("salt_of", "unverified_salt", "key", "sampled", "pearl_draw"):
+    for kind in ("salt_of", "unverified_salt", "key", "sampled", "pearl_sample"):
         outcomes = [c["python"] for c in _of(kind)]
         assert any("ok" in o for o in outcomes), kind
         assert any("error" in o for o in outcomes), kind
@@ -100,11 +100,11 @@ def test_the_salt_and_draw_cases_reach_every_branch():
         assert any("ok" in o for o in outcomes) and any("error" in o for o in outcomes), kind
         for start in starts:
             assert any(o.get("reason", "").startswith(start) for o in outcomes), start
-    draws = [c for c in _of("sampled") + _of("pearl_draw") if "ok" in c["python"]]
+    draws = [c for c in _of("sampled") + _of("pearl_sample") if "ok" in c["python"]]
     assert any(len(c["python"]["ok"]) > 1 and sum(c["in"]["tickets"]) > 2**64 for c in draws), "a total past 64 bits"
     assert any(0 in c["in"]["tickets"] and c["python"]["ok"] for c in draws), "zero tickets among drawn ones"
     assert any(c["in"]["t"] == 0 for c in draws)
-    assert any(c["python"]["ok"] == [] and c["in"]["t"] > 0 for c in _of("pearl_draw") if "ok" in c["python"]), "none above 0"
+    assert any(c["python"]["ok"] == [] and c["in"]["t"] > 0 for c in _of("pearl_sample") if "ok" in c["python"]), "none above 0"
 
 
 def test_no_case_names_an_outcome_of_its_own():

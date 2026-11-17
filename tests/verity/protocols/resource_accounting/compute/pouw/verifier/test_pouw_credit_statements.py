@@ -263,13 +263,13 @@ def test_statements_the_sample_did_not_ask_for_are_refused(seed, tmp_path, verif
     of another call, and a sampled call with no statement: each refuses the window."""
     d, statements = window(seed, tmp_path)
     assert credit(d, statements + [statements[0]])[1] == (
-        "outcome", (f"call {statements[0]['call']} has two statements: a call's drawn units are proved in one "
+        "outcome", (f"call {statements[0]['call']} has two statements: a call's sampled units are proved in one "
                     "statement and verified once, and a retry never reproves them"))
     lay = _layout(d)
     idle = [c for c in range(len(lay["calls"])) if c not in {s["call"] for s in statements}]
     if idle:
         assert credit(d, statements + [{**statements[0], "call": idle[0]}])[1] == (
-            "outcome", f"call {idle[0]} has a statement and no drawn unit: only the draw's units are proved")
+            "outcome", f"call {idle[0]} has a statement and no sampled unit: only the sample's units are proved")
     got, refused = credit(d, statements[1:])
     assert got is None and refused[0] == "missing", refused
     assert credit(d, [{**statements[0], "call": len(lay["calls"])}])[1] == ("proof", Cr.STATEMENTS_FORM)

@@ -41,9 +41,9 @@ Three additions, also definitions only:
   `SkipSetU`, `undebitedSkippable` and `fragCount`, which `fragSkip_count_le` (`RowSeedFragment.lean`) bounds a skip
   program's undebited slots by.
 - **The fragment argument's skip class** (option (a) of the fragment-draw ruling):
-  `SkipProgram` and its class, `SkipEmbed`, (C4) `CostModel.FragmentPriced`, (C6) `PearlCSem.RowDrawn`, `rowWords` and
+  `SkipProgram` and its class, `SkipEmbed`, (C4) `CostModel.FragmentPriced`, (C6) `PearlCSem.RowSampled`, `rowWords` and
   `QTree.hits`, which `qtree_union_bound` and `ttOutRowSeed_skipClass` (`RowSeedSkip.lean`) read. The corollary's one
-  named assumption, `Assumptions.FragDraw`, is in `RowSeedAssumptions.lean`. P2 rests on `ttOutRowSeed_of_ttOut` (and
+  named assumption, `Assumptions.FragSample`, is in `RowSeedAssumptions.lean`. P2 rests on `ttOutRowSeed_of_ttOut` (and
   its tile twin) alone, with no named assumption; the corollary is a supporting line, and it takes no TT_OUT.
 -/
 
@@ -356,8 +356,8 @@ abstract. At salt `s` on unit `u` of `U`, `sem` reads the per-job noise (`F_A`, 
 job's input `xJ` only, and row `i`'s `E_A` line from the oracle at `key i w` and `xJ` only, `w` the row's `k` words.
 On the unit's rows and their 32-bit words, the keys a row leaf commits, `key` is injective (commitments are ideal here:
 it abstracts the row leaf's collision resistance) and never `xJ`. Over every `ℕ` index and word no injective `key` into
-a finite `Q` exists; `rowDrawn_satisfiable` shows this form can hold. -/
-def PearlCSem.RowDrawn (sem : PearlCSem Q R S) (s : S) (U : Workload) (u : ℕ) (xJ : Q)
+a finite `Q` exists; `rowSampled_satisfiable` shows this form can hold. -/
+def PearlCSem.RowSampled (sem : PearlCSem Q R S) (s : S) (U : Workload) (u : ℕ) (xJ : Q)
     (key : ℕ → (Fin (U.layout.shape u).k → ℕ) → Q) : Prop :=
   (∀ (i i' : Fin (U.layout.shape u).m) (a a' : Fin (U.layout.shape u).k → ℕ), (∀ l, a l < 2 ^ 32) →
       (∀ l, a' l < 2 ^ 32) → key i a = key i' a' → i = i' ∧ a = a') ∧

@@ -80,8 +80,8 @@ def published (i : Input) (ans : RunAnswer) : Option Published :=
   ans.work.map fun w =>
     match ans.plan, ans.tie.bind (·.load) with
     | some pl, some _ =>
-      let exact := creditAtAssumption pl.passes i.draws w.overInertBoundDraws DELTA
-      let g := gridWork (structuralCredit pl.passes i.draws w.overInertBoundDraws DELTA) exact
+      let exact := creditAtAssumption pl.passes i.draws w.overInertBoundSamples DELTA
+      let g := gridWork (structuralCredit pl.passes i.draws w.overInertBoundSamples DELTA) exact
       { work := testCredit i.testInstance g.work, giveUp := some g.giveUp, exact := some w }
     | _, _ => { work := w }
 

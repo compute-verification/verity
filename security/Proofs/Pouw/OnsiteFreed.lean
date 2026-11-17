@@ -242,7 +242,7 @@ theorem one_le_twμ (r : Fin 3) : 1 ≤ twμ r := by
   unfold twμ
   split_ifs <;> norm_num
 
-theorem timedUse_nonneg (A : Prover tw twRound 2) (o : Unit) (x : Fin 2 → TDraw × Fin 2) (r : Fin 3) :
+theorem timedUse_nonneg (A : Prover tw twRound 2) (o : Unit) (x : Fin 2 → TSample × Fin 2) (r : Fin 3) :
     0 ≤ A.timedUse o x r :=
   sum_nonneg fun b _ =>
     add_nonneg ((tw_G2.2 (A.commit b) (A.commitIn o x b)).2 r).1 ((tw_G2.2 (A.work b) (A.workIn o x b)).2 r).1
@@ -315,7 +315,7 @@ theorem fitAnswers_timedUse (A : Prover tw twRound 2) (o : twRound.Orc)
     (x : Fin 2 → twRound.Draw × twRound.Chk) : (fitAnswers A).timedUse o x = A.timedUse o x :=
   funext (withPrograms_timedUse A (fa := fun b => freeAnswer (A.answer b)) o x)
 
-theorem fitAnswers_dev (A : Prover tw twRound 2) (o : Unit) (x : Fin 2 → TDraw × Fin 2) :
+theorem fitAnswers_dev (A : Prover tw twRound 2) (o : Unit) (x : Fin 2 → TSample × Fin 2) :
     twDev (fitAnswers A) o x :=
   fun _ _ => show (0 : ℝ) ≤ 1 * 8 by norm_num
 
@@ -339,7 +339,7 @@ theorem twFloor : RemoteWorkFloor tw twRound 2 twWork twμ twF (1 / 2) := by
   exact fill_not_freed (A.timedUse ox.1 ox.2) (timedUse_nonneg A ox.1 ox.2) hlt3 hε
 
 /-- A quiet sampling block's work: a constant state and root, at no use. -/
-noncomputable def quietWork : TAlg (Unit × Unit × TDraw) (Unit × TRoot) where
+noncomputable def quietWork : TAlg (Unit × Unit × TSample) (Unit × TRoot) where
   run _ := ((), fun _ _ _ => 0)
   use _ _ := 0
   use_nonneg _ _ := le_rfl
@@ -351,7 +351,7 @@ noncomputable def quietWork : TAlg (Unit × Unit × TDraw) (Unit × TRoot) where
   work _ _ _ _ := by simp [nonconst]
 
 /-- A quiet answer: a constant, at no use. -/
-noncomputable def quietAnswer : TAlg (Unit × Unit × (Fin 2 → TDraw × Fin 2)) (Fin 1 → Word × Unit) where
+noncomputable def quietAnswer : TAlg (Unit × Unit × (Fin 2 → TSample × Fin 2)) (Fin 1 → Word × Unit) where
   run _ := fun _ => (0, ())
   use _ _ := 0
   use_nonneg _ _ := le_rfl
@@ -371,7 +371,7 @@ noncomputable def quiet : Prover tw twRound 2 where
   absorb _ s _ := s
   answer _ := quietAnswer
 
-theorem quiet_timedUse (o : Unit) (x : Fin 2 → TDraw × Fin 2) (r : Fin 3) : quiet.timedUse o x r = 0 := by
+theorem quiet_timedUse (o : Unit) (x : Fin 2 → TSample × Fin 2) (r : Fin 3) : quiet.timedUse o x r = 0 := by
   show ∑ _b : Fin 2, ((0 : ℝ) + 0) = 0
   simp
 
@@ -430,7 +430,7 @@ theorem OnsiteFreed_nontrivial :
         twPd 1 (fun _ => max 0 (∑ r, twμ r * (1 * twPd.hon r) - twF + 0 * 0) / ∑ r, twμ r * (1 * twPd.hon r))
         (∑ r, twμ r * (1 * twPd.hon r)) (fun _ => 1 / 2) := by
   have : Nonempty (twRound.Orc × (Fin 2 → twRound.Draw × twRound.Chk)) :=
-    (inferInstance : Nonempty (Unit × (Fin 2 → TDraw × Fin 2)))
+    (inferInstance : Nonempty (Unit × (Fin 2 → TSample × Fin 2)))
   have hq : ∀ ox : twRound.Orc × (Fin 2 → twRound.Draw × twRound.Chk),
       2 * quiet.timedUse ox.1 ox.2 0 + quiet.timedUse ox.1 ox.2 1 + quiet.timedUse ox.1 ox.2 2 < twF := fun ox => by
     have h0 := quiet_timedUse ox.1 ox.2 0

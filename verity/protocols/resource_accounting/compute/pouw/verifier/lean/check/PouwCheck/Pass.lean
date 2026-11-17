@@ -26,7 +26,7 @@ before its salt (`pouwRecord`, `salt.pouw_record`), and passes only a pass salte
 `pouwSalt`, `salt.pouw_salt`); no other verifier passes such a pass. A refusal is `coin` (the coin rule's, Python's
 `DomainError`) or `manifest` (a manifest it can't read, or not the execution phase's pass), with Python's words.
 
-`drawCheck` is `core_check.draw`: the execution phase's sampling coin opens after the registration, and the sampled proof blocks are
+`sampleCheck` is `core_check.draw`: the execution phase's sampling coin opens after the registration, and the sampled proof blocks are
 `Flock.Draw.subset` of the stream `"draw"` of the key the coin derives under the stream, the registration and its
 receipt.
 
@@ -64,7 +64,7 @@ def WEIGHTS_ROOT_BYTES : Nat := 64
 def STREAM_BYTES : Nat := 64
 def PROVER_BYTES : Nat := 64
 def COINS_RECORDED : String := Domains.POUW_EPOCH_COINS_RECORDED
-def DRAW_DOMAIN : String := "verity/pouw/served-zk-draw/v1"
+def SAMPLE_DOMAIN : String := "verity/pouw/served-zk-draw/v1"
 def U64 : Int := 2 ^ 64
 def OPENING_FORM : String :=
   "a coin opening is {epoch, label, after, coin, salt, path}: an integer, a string, hex, and SHA-512 digests"
@@ -497,21 +497,21 @@ def SIGNED_LIVE : String :=
     "(`challenger.trusted_commitment`), not a bare commitment"
 
 /-- `core_check.NO_PINNED_KEY`, `OTHER_KEY` and `SEEDED_PINNED`: the reasons of a `coin-key` refusal. -/
-def NO_PINNED_KEY : String := "the window's parameters pin no challenger key for its draw's record"
+def NO_PINNED_KEY : String := "the window's parameters pin no challenger key for its sample's record"
 def OTHER_KEY : String :=
   "the challenger record is signed under a key other than the challenger key the window's parameters pin"
 def SEEDED_PINNED : String :=
-  "the window's parameters pin a challenger key, so its draw's coins are that challenger's signed record, " ++
+  "the window's parameters pin a challenger key, so its sample's coins are that challenger's signed record, " ++
     "not seeded coins"
 
 /-- `core_check.draw`: none when `units` are the execution phase's sample, else the refusal. Seeded coins (`coinsOf`) have their
 `draw` coin, and are refused (`coin-key`) when the execution phase's parameters pin a challenger key; live ones
-(`PouwWindow.LIVE_SCHEME`, a certified execution phase's) are read only from its sample session's (`PouwWindow.DRAW_FAMILIES`)
+(`PouwWindow.LIVE_SCHEME`, a certified execution phase's) are read only from its sample session's (`PouwWindow.SAMPLE_FAMILIES`)
 signed record with the key it is signed under, `{key, record}`: that key must be `key`, the challenger key the execution phase's parameters pin (`coin-key`, so a
 record the prover signed under a key of its own, over coins it holds, is refused), this check verifies the record under
 it (`Spot.Challenger.recordReason`; a bare live commitment is refused, `SIGNED_LIVE`), and they have their
 `pouw/draw` coin 0 (`Spot.Challenger.liveReason`). -/
-def drawCheck (coins : Json) (recorded : Bool) (opening stream registration receipt k population units key : Json) :
+def sampleCheck (coins : Json) (recorded : Bool) (opening stream registration receipt k population units key : Json) :
     R Unit := do
   let liveScheme := match PouwWindow.field? coins "scheme" with
     | some (.str s) => s == PouwWindow.LIVE_SCHEME
@@ -528,7 +528,7 @@ def drawCheck (coins : Json) (recorded : Bool) (opening stream registration rece
       let record := Spot.getD coins "record"
       if let some why ← port (Spot.Challenger.recordReason want record) then coin why
       let c := (← port (Spot.Challenger.ChallengerRecord.ofJson record)).commitment
-      if let some why := PouwWindow.drawEpochReason c then coin why
+      if let some why := PouwWindow.sampleEpochReason c then coin why
       pure (.inr c)
     else match key with
       | .null => .inl <$> (coinsOf coins recorded).mapError malformed
@@ -554,21 +554,21 @@ def drawCheck (coins : Json) (recorded : Bool) (opening stream registration rece
         pure (why, old, o.coin)
     | .inr c => do
         let o ← (LiveOpening.ofJson opening).mapError opened
-        pure ((← port (Spot.Challenger.liveReason c o PouwWindow.DRAW 0 after)), false, o.coin)
+        pure ((← port (Spot.Challenger.liveReason c o PouwWindow.SAMPLE 0 after)), false, o.coin)
   if let some why := why then coin s!"the draw's {why}"
   let ctx := [("stream", FlockSoundness.Randomness.Part.str st), ("registration", FlockSoundness.Randomness.Part.str reg),
     ("receipt", FlockSoundness.Randomness.Part.str (receiptDigest kvs))]
   let bytes := 2 * k * Flock.Draw.width n + 64
-  let src ← if old then pure (streamV1 (deriveV1 drawn DRAW_DOMAIN ctx) [.str "draw"] bytes)
-    else do pure (FlockSoundness.Randomness.stream (← port (PouwCommit.key? drawn DRAW_DOMAIN ctx)) [.str "draw"] bytes)
+  let src ← if old then pure (streamV1 (deriveV1 drawn SAMPLE_DOMAIN ctx) [.str "draw"] bytes)
+    else do pure (FlockSoundness.Randomness.stream (← port (PouwCommit.key? drawn SAMPLE_DOMAIN ctx)) [.str "draw"] bytes)
   let some got := Flock.Draw.subset k n src
-    | throw ("sampler", "the draw's stream ran out")
+    | throw ("sampler", "the sample's stream ran out")
   let same := match units with
     | .arr us => us.toList.mapM PouwWindow.natOf? == some got.toList
     | _ => false
-  if !same then throw ("draw", s!"the units are not the draw coin's subset:{k} over {n}")
+  if !same then throw ("draw", s!"the units are not the sampling coin's subset:{k} over {n}")
 
-/-- `core_check.work_units`: `drawCheck`'s rule under the sampling design `work:k`, the units the sampling coin `coin` samples over the
+/-- `core_check.work_units`: `sampleCheck`'s rule under the sampling design `work:k`, the units the sampling coin `coin` samples over the
 work strata `strata`, ascending. Stratum s is `Flock.Draw.subset` of its `k_s` over its units on the stream
 `["draw", template]` of the key the coin derives under the stream's digest, the registration and the receipt's
 (`receiptDigest`), its local index j its j-th unit (`Flock.Draw.stratified`); `none` when a stream runs out. -/
@@ -577,7 +577,7 @@ def workUnits (coin : ByteArray) (stream registration : String) (receipt : List 
   let ctx := [("stream", FlockSoundness.Randomness.Part.str stream),
     ("registration", FlockSoundness.Randomness.Part.str registration),
     ("receipt", FlockSoundness.Randomness.Part.str (receiptDigest receipt))]
-  let key ← PouwCommit.key? coin DRAW_DOMAIN ctx
+  let key ← PouwCommit.key? coin SAMPLE_DOMAIN ctx
   pure (Flock.Draw.stratified strata (strata.map fun s =>
     FlockSoundness.Randomness.stream key [.str "draw", .str s.template] s.need))
 
@@ -586,7 +586,7 @@ written: tied here to its entry of the table (`Identity.Domains`), it reads the 
 example : MANIFEST_SCHEMA = Domains.VLLM_PEARL_C_RUN := rfl
 example : WINDOW_OPEN_TAG = Domains.POUW_PERIOD_OPEN.toUTF8 := rfl
 example : EPOCH_OPEN_TAG = Domains.POUW_EPOCH_OPEN.toUTF8 := rfl
-example : DRAW_DOMAIN = Domains.POUW_SERVED_ZK_SAMPLING := rfl
+example : SAMPLE_DOMAIN = Domains.POUW_SERVED_ZK_SAMPLING := rfl
 example : ("verity/pouw/weights/v1" : String) = Domains.POUW_WEIGHTS_ROOT := rfl
 
 end PouwCheck

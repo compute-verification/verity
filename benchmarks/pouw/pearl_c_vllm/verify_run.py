@@ -94,7 +94,7 @@ among them; it is written before any replay, and once asked for a sample is neve
 
 A reader holds a challenger sample to: ``opening`` is coin ``pouw/draw`` 0 of ``commitment`` opened after C
 (`challenger.live_reason`) and its coin is S; ``commitment`` is the one the session's challenger signed, of a sample
-session's layout (`window.draw_epoch_reason`); the auditor's ledger, under the pinned key, opens that session alone on C,
+session's layout (`window.sample_epoch_reason`); the auditor's ledger, under the pinned key, opens that session alone on C,
 withheld (`challenger.withheld_on`); and that session is its lane's first reserve after the lane's Pearl-C period closed
 (`served_verdicts.pearlplus_live_sample`, over `pouw_h1_window.after_close`), so a prover who tries again under another
 session holds a sample no reader takes.
@@ -919,7 +919,7 @@ def verify_passes(paths: list[Path], draws: int, jobs: int, commit: str, coins: 
         held = json.loads(record.read_text())
         if held["commitment"] != root.hex() or (source is not None and source.hex() != held["source"]):
             out["refused"] = list(AFTER_COIN)
-            return reject(f"{AFTER_COIN[0]}: {AFTER_COIN[1]} (its coin was drawn on run {held['commitment'][:16]}, "
+            return reject(f"{AFTER_COIN[0]}: {AFTER_COIN[1]} (its coin was sampled on run {held['commitment'][:16]}, "
                           f"these passes are run {root.hex()[:16]})")
         source, drew = bytes.fromhex(held["source"]), held.get("draw")
     elif asked is not None and asked.exists():

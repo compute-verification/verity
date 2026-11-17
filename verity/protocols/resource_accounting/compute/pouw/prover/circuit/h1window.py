@@ -670,12 +670,12 @@ def _leaf_ports(S: Any) -> Any:
 PouwH1WindowLane = CompositeDefinition(
     "PouwH1WindowLane", 1, ("UNIT", "K"), lambda S: S.UNIT.signature(), lambda B, S, *args: B.call(S.UNIT, *args),
     register=False, ports=_leaf_ports,
-    doc="A drawn leaf's lane statement at contraction K: one call of UNIT, the lane (h1zy's PouwH1LaneZy) over the tile of "
+    doc="A sampled leaf's lane statement at contraction K: one call of UNIT, the lane (h1zy's PouwH1LaneZy) over the tile of "
         "the window's template at K, with its parameters and ports.")
 PouwH1WindowCombine = CompositeDefinition(
     "PouwH1WindowCombine", 1, ("UNIT", "K"), lambda S: S.UNIT.signature(), lambda B, S, *args: B.call(S.UNIT, *args),
     register=False, ports=_leaf_ports,
-    doc="A drawn leaf's combine statement at contraction K: one call of UNIT, the combine (h1zy's PouwH1Combine) over the "
+    doc="A sampled leaf's combine statement at contraction K: one call of UNIT, the combine (h1zy's PouwH1Combine) over the "
         "tile of the window's template at K, with its parameters.")
 
 
@@ -701,7 +701,7 @@ def leaf_unit(program: Program, k: int, kind: str, ch: int | None = None) -> Any
     J10-R's `PouwH1Tile_v5` (`h1zy.J10R_LANE_TILES`, the one tile whose lanes are staged in chunks), and a leaf
     `h1zy.lane` or `h1zy.combine` doesn't stage (an R not a multiple of 16, a combine below `h1zy.LEAST_K`)."""
     if kind not in (LL.LANE, LL.CHUNK, LL.COMBINE):
-        raise ValueError(f"a drawn leaf's statement is a {LL.LANE}, a {LL.CHUNK} or its {LL.COMBINE}, not {kind!r}")
+        raise ValueError(f"a sampled leaf's statement is a {LL.LANE}, a {LL.CHUNK} or its {LL.COMBINE}, not {kind!r}")
     tile = _tile_of(program, k)
     n = W.chunks(int(k))
     if tile.defn.id not in Z.J10R_LANE_TILES:
@@ -712,14 +712,14 @@ def leaf_unit(program: Program, k: int, kind: str, ch: int | None = None) -> Any
         return Z.lane(tile)
     if n > 1 and kind == LL.CHUNK and ch is not None and 0 <= int(ch) < n:
         return Z.lane_chunk(tile, n, int(ch))
-    raise ValueError(f"K = {k}'s lanes are {'whole' if n == 1 else f'{n} chunk lanes each (weights.chunks)'}: a drawn "
+    raise ValueError(f"K = {k}'s lanes are {'whole' if n == 1 else f'{n} chunk lanes each (weights.chunks)'}: a sampled "
                      f"leaf's statement there is {'a lane' if n == 1 else f'a chunk of 0 .. {n - 1}'}, not {(kind, ch)!r}"
                      + ("" if n == 1 else ", the chunk lanes"))
 
 
 def _whole_rows(k: int) -> None:
     if W.chunks(int(k)) > 1:
-        raise ValueError(f"K = {k}'s rows are {W.chunks(int(k))} chunk leaves each (weights.chunks): a drawn leaf's lanes "
+        raise ValueError(f"K = {k}'s rows are {W.chunks(int(k))} chunk leaves each (weights.chunks): a sampled leaf's lanes "
                          "there are the chunk lanes, which read chunk rows, not h1zy.lane's whole rows; they are staged "
                          "over J10-R's PouwH1Tile_v5 only")
 

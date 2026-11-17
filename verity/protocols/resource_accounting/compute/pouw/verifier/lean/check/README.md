@@ -87,11 +87,11 @@ the PoUW execution phase its context names (`<prefix>/pouw-window/<p>/<the pass'
 the record the attester made before it sampled that salt (`pouwRecord` of the weights' root, the stream and the prover,
 `salt.pouw_record`), and passes only a pass whose salt is `pouwSalt` of them (`salt.pouw_salt`) over those weights, a v3
 manifest; no other verifier passes a v3 manifest. The difftest's pass cases (below) hold honest certified
-execution phases and a mutation per certified refusal too. `drawCheck` holds the execution phase's sampled proof blocks to the execution phase's sampling coin,
+execution phases and a mutation per certified refusal too. `sampleCheck` holds the execution phase's sampled proof blocks to the execution phase's sampling coin,
 opened after the registration: `Flock.Draw.subset` of the key it derives under the stream, the registration and its
 receipt. The coin is a seeded execution phase's `draw` coin, or a live execution phase's `pouw/draw` coin 0 (`PouwWindow.LIVE_SCHEME`, a
 certified execution phase's). A live execution phase's coins are `{key, record}`, the challenger's signed record and the key it names,
-and its input carries the challenger key the execution phase's parameters pin (`key`): `drawCheck` refuses coins naming another
+and its input carries the challenger key the execution phase's parameters pin (`key`): `sampleCheck` refuses coins naming another
 key, a live sample with no pin, and seeded coins under a pin (`coin-key`), verifies the record's signature under the
 pinned key (`Spot.Challenger.recordReason`, `challenger.record_reason`) and reads the commitment from it,
 refuses a bare commitment, and checks the opening against it
@@ -106,7 +106,7 @@ difftest reaches), so no caller credits an execution phase with a step skipped.
 credited row its z table's root (`tables.z`), and the sample root over the rows (`calls_root`), the last round's receipts
 and every round's root and coin must be the one root the challenger's log shows its sampling coin followed, read through the
 session the auditor's ledger opens for the execution phase; so a bit changed after the sampling coin is refused, and the credited
-calls are the rows whose bit is true. `drawn`: the proof blocks the sampling coin selects, never a list handed in: `drawCheck`'s rule
+calls are the rows whose bit is true. `drawn`: the proof blocks the sampling coin selects, never a list handed in: `sampleCheck`'s rule
 under the sampling design `work:k` (`workUnits`), over the execution phase's layout (`h1window.program`'s arguments, its proof blocks the compiled
 Program's, call by call, each call's tiles row block major), one stratum per K (`strata`), each proof block's work R·C·K, at
 the K its credit period's open committed (`samplingDesign`; `committedK` reads `draw_k`, and an execution phase with fewer proof blocks than K is refused).

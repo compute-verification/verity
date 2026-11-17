@@ -2307,7 +2307,7 @@ def test_the_live_draw_reserves_a_withheld_draw_session_outside_any_period_and_o
     assert drew["from"] == "challenger" and (drew["label"], drew["index"]) == (Wd.DRAW, 0) and drew["reserved"] == want
     opening = Ch.LiveOpening.from_json(drew["opening"])
     assert coin == opening.coin and len(coin) == 64 and opening.after == root
-    assert Wd.draw_epoch_reason(Ch.LiveCommitment.from_json(drew["commitment"])) is None
+    assert Wd.sample_epoch_reason(Ch.LiveCommitment.from_json(drew["commitment"])) is None
     assert drew["session"] == {"session": reserved["session"], "root": root.hex()}
 
     for case, why in (("plain", "plain, not withheld"), ("period", "joined period p2"), ("open", "period p1 is open")):
