@@ -25,7 +25,7 @@ each a named `Prop` on a trace, the session's record of computation off the node
   entered.
 
 In the per-party names, `Covered` is `Covered` (every uplink from the prover's server passes through an active
-certifier) and `IngressCounted` is `Faithful` of the network attesters (what they sign is what crossed their links); neither
+network attester) and `IngressCounted` is `Faithful` of the network attesters (what they sign is what crossed their links); neither
 names the prover, whose strategy is arbitrary. The line reads no `Secret`, `Confined` or `WitnessPathPrivate`: those
 keep what the network attesters sign from the auditor, and the bits-read bound needs only that it was counted.
 
@@ -63,11 +63,11 @@ computation off the node reaches the receipts the verifier takes only by coming 
 nothing off the node computed for it.
 
 It is what `ProviderLockdown T O applied lifted` became: the provider's security group, admitting packets only from and
-to the auditor's devices over `[applied, lifted)`, is replaced by certifiers on every uplink, which count what enters
+to the auditor's devices over `[applied, lifted)`, is replaced by network attesters on every uplink, which count what enters
 (`Ingress.counted`, observed in the line's event) rather than being trusted to block it, so the lockdown's interval
 and its records go. The network attesters see every frame on an uplink, so two of the lockdown's gaps close: name resolution
 over an uplink, and a flow opened before the lockdown, which a stateful rule kept admitting. What this assumes besides
-certifiers on every uplink, the gaps left:
+network attesters on every uplink, the gaps left:
 
 * the paths the node's host serves without an uplink: the provider's resolver and metadata service at link-local
   addresses, and its management plane;
@@ -80,7 +80,7 @@ def Covered (T : Trace Ω) (O : Outside T) (I : Ingress Ω) : Prop :=
 
 variable [Fintype Ω]
 
-/-- **The network attesters' count of what enters, at δ_net** (`trusted-device`: each certifier is the auditor's device, running
+/-- **The network attesters' count of what enters, at δ_net** (`trusted-device`: each network attester is the auditor's device, running
 its stated code): except with probability `δ` when the audit accepts, where the network attesters on the node's uplinks
 sign nothing but the verifier's messages entering it over the credited passes, nothing else entered over them. `δ` is
 δ_net, the network attesters' error at the session's boundary: their sampled audit's `δ + ε_ks + ε_bind`

@@ -53,7 +53,7 @@ is `Plays` with them named), a verdict `ver` and a record `sum` the receipts are
 `LineHeld`, which `Properties.Poub.Remote.Line` states. The honest instance the witnesses
 read is the deployed period's parameters with no event yet (`honestParams`, `honestEvidence`) and a node that holds its
 whole store in memory throughout (`honestTrace`), with no outside device (`noOutside`) and nothing but the verifier's
-messages entering it, as its certifiers count (`quietIngress`), on a schedule that runs each pass inside its window
+messages entering it, as its network attesters count (`quietIngress`), on a schedule that runs each pass inside its window
 (`HonestSchedule`).
 -/
 

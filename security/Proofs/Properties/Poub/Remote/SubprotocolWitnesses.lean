@@ -30,7 +30,7 @@ Each of `Properties.Poub.Subprotocol`'s three properties, and the memory line
   `publishedEps_nontrivial`).
 * **LineHeld** (`LineHeldBy`) and **LineHeldAtSubprotocol** (`LineHeldAtSubprotocolBy`), which take the same premises.
   Honest: every premise holds at a node that holds its whole store in memory throughout, every receipt correct, no
-  outside device, nothing but the verifier's messages entering it as its certifiers count, and the sampler's fallbacks
+  outside device, nothing but the verifier's messages entering it as its network attesters count, and the sampler's fallbacks
   0, on a schedule that runs each pass inside its window with each sample's receipts fixed (`HonestSchedule`), and at
   its correct receipts the distinguishers' advantage and the hiding terms are 0 (`lineHeldAtSubprotocol_honest`); and
   there the event is empty: the network attesters count nothing else entering and every line credits no more bits read than the
@@ -166,7 +166,7 @@ theorem refused_honest {n m : ℕ} {s : Fin n → ℕ} {κ : ℕ} {X : Type} [Fi
 /-- **The premises of `LineHeld` and `LineHeldAtSubprotocol` hold at the honest node.** On any node, at any records of
 the prover's whose schedule is honest (`HonestSchedule`), the honest trace (`honestTrace`: the whole store in node
 memory at every tick, nothing on a chip, rebuilt or read in, every receipt correct), no outside device (`noOutside`),
-nothing but the verifier's messages entering it as its certifiers count (`quietIngress`), correct receipts holding
+nothing but the verifier's messages entering it as its network attesters count (`quietIngress`), correct receipts holding
 every receipt a sample can have and the sampler's fallbacks 0, every premise holds: `Paced` at the record's groups,
 `Covers`, `SketchBoundAt` at 0, `Covered`, `IngressCounted` at 0, the sample's `Live` at every commitment, `Refused`
 and `Counted`; and the bound's terms the prover could raise are 0: each sample's distinguisher has no advantage on its
