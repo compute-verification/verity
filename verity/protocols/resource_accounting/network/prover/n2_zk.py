@@ -18,7 +18,7 @@ the witness lines go to ``n2.log`` beside ``--witness``, and without ``--witness
 * **The run** (``--warden-run``): an active network attester's run (`network_attester_serve.py`'s, or the gate's
   ``warden-rehearse``'s), read by `network_attester_chain`: its own certified records under its key and session, on the network
   attester link (`service.NetworkAttesterProfile`: both heads at the network attester's grid and parameters digest, no sync
-  declared or charged), a certifier rehearsal's run refused by name. Which execution phases its signer refused follows
+  declared or charged), a network attester rehearsal's run refused by name. Which execution phases its signer refused follows
   what the node sent, so the public summary of a run whose signer refused any holds each member's
   ``certifier_refused`` and ``ok`` alone, nothing per window, and the members whole go to ``--witness``.
 * **Members.** One stream each, over all of the run's execution phases: ``honest``; ``tampered``, the honest records
@@ -188,7 +188,7 @@ def _without_clear(body: dict) -> dict:
 def network_attester_link(run: Path) -> tuple[TransferBlocks, dict, dict, list]:
     """A network attester run's link (`network_attester_chain.link`: the active network attester's own records, its key and
     session, no sync), the plan it stands for (its windows, no syncs), its certified records by (direction, window) and
-    the signer's refusals. A certifier rehearsal's run is refused by name (`network_attester_chain.PROXY`)."""
+    the signer's refusals. A network attester rehearsal's run is refused by name (`network_attester_chain.PROXY`)."""
     WC = proof_drivers.drivers().network_attester_chain
     lw, dep, _ = WC.link(run)
     got, refused = WC.pairs(run, dep)

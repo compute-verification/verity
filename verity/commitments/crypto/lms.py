@@ -154,7 +154,7 @@ ROLES = {"network-certificate": "verity/network-certificate-message/v2",
          "period-root": "verity/period-root/v1",
          "liveness": "verity/liveness/v1"}
 DIRECTIONS = ("egress", "ingress")
-#: the length of a certifier session id, which the challenger samples for each session of the certifier
+#: the length of a network attester session id, which the challenger samples for each session of the network attester
 SESSION_BYTES = 32
 
 
@@ -170,7 +170,7 @@ def _digest(role: str, I: bytes, context: bytes, record: bytes) -> bytes:
 
 def certificate_message(I: bytes, session: bytes, link: str, direction: str, window: int, record: bytes) -> bytes:
     """The message a network certificate signs: ``SHA-512(tag || I || context || record)``, the tag
-    ``verity/network-certificate-message/v2``, the context the certifier session's id (`SESSION_BYTES`), the link's name,
+    ``verity/network-certificate-message/v2``, the context the network attester session's id (`SESSION_BYTES`), the link's name,
     the direction (``egress`` or ``ingress``) and the window's index, each field but I and the window prefixed with its
     length (u64)."""
     if direction not in DIRECTIONS or isinstance(window, bool) or not 0 <= window < 2 ** 64:

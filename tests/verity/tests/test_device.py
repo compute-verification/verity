@@ -361,7 +361,7 @@ QUIET = Link("n0/eth0", ("n0", OUTSIDE), None, 0, NO_LINE_RATE)
 
 def _ways(host: str = "n0", storage: int | None = None, eth0: int | None = 25 * 10 ** 9) -> tuple[tuple, ...]:
     """`NODE_FILE`'s ways out under `host` as `ways_out` gives them: each interface with its
-    rate in whole bits a second, rounded up, which a certifier may split, then the storage path at `storage`, which
+    rate in whole bits a second, rounded up, which a network attester may split, then the storage path at `storage`, which
     none may, where the file states one."""
     ports = ((f"{host}/eth0", eth0, True), (f"{host}/eth1", 1_000_000_001, True))
     return ports if storage is None else (*ports, (f"{host}/storage", storage, False))
@@ -462,7 +462,7 @@ def test_a_nodes_interfaces_are_its_own_boundary_links() -> None:
 
 
 def test_a_stand_in_certifier_is_registered_beside_the_nodes_own_links() -> None:
-    """With a certifier's id and key the entry also holds the certifier under the site and a certified way out, host
+    """With a network attester's id and key the entry also holds the network attester under the site and a certified way out, host
     to certifier and certifier to outside, each at the interfaces' rates summed. The interfaces' own links stay, so
     onsite still refuses the entry by `uncertified`, naming them and not the certified link."""
     node = NODE_FILE
@@ -491,12 +491,12 @@ def test_a_stand_in_certifier_is_registered_beside_the_nodes_own_links() -> None
 
 def test_a_nodes_storage_path_is_a_boundary_link_no_certifier_is_linked_to() -> None:
     """A file that states a storage path registers it as a link from the host to the outside, after the interfaces',
-    at the path's rate, saying why no certifier splits it. A certifier's two links stay at the interfaces' rates
+    at the path's rate, saying why no certifier splits it. A network attester's two links stay at the interfaces' rates
     summed: the path's rate is not in the sum, and no certifier is at an end of its link. So onsite refuses the entry
     by `uncertified` with the interfaces' bare links, naming them and not the path's, and accepts it without them,
     the path's link and all; the site is then not mediated, and the log is refused at its end by `inventory`, since
     the auditor's figures list the interfaces the entry left out. Where the file's one interface has no rate, the entry's
-    links are that interface's, with no capacity, and the path's, and a certifier named on the node is refused."""
+    links are that interface's, with no capacity, and the path's, and a network attester named on the node is refused."""
     node = {**NODE_FILE, "storage": STORAGE}
     auditor = _audit(node, _ways(storage=DISKS), cert0="dummy-cert0-key", chal0="")
     plain = _entry_of(Registration("remote"), node, "n0", ways=_ways(storage=DISKS))
@@ -647,7 +647,7 @@ def test_a_locations_and_the_auditors_encodings_are_the_leans() -> None:
 def test_a_nodes_figures_are_the_ones_its_entry_states() -> None:
     """`node_figures` gives the auditor's figures for a node from the files `node_entry` reads: each leaf of the
     host's at its rate and bytes, and the host's on-chip state in bits, its cards, its tiers' shared rates and its ways
-    out at their rates. The entry states the same on the host and its leaves, and a certifier's key and scheme are
+    out at their rates. The entry states the same on the host and its leaves, and a network attester's key and scheme are
     the ones its caller gives."""
     node = {**NODE_FILE, "storage": STORAGE}
     ways = _ways(storage=DISKS)
@@ -951,7 +951,7 @@ def g_vm(parent: str = "site0") -> Loc:
 
 
 def test_an_auditors_host_is_the_auditors_own_at_the_site() -> None:
-    """An auditor's device, as the guards state it. `Kinds`: it is at the site, a certifier or a challenger may be in
+    """An auditor's device, as the guards state it. `Kinds`: it is at the site, a network attester or a challenger may be in
     it, it is under no host of the prover's, holds no device and no memory leaf, and no link ends at it. `Owners`: it
     is the auditor's own, with its key, and states its time base, the auditor's for it, held as its key is: refused
     with none, with another, or where the auditor has none for the host; no other location states one, the auditor's

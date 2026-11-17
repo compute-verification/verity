@@ -789,7 +789,7 @@ def sampled_line(records: Mapping[str, Any], partition: Mapping[str, Any] | None
     return f"{over}, {drawn}{coins}: RECORDS {json.dumps(row, sort_keys=True)}"
 
 
-#: The certifier front's session fields the CERTIFIER-FRONT line says. The rest (its prompts, request, kept fetch, gate
+#: The network attester front's session fields the CERTIFIER-FRONT line says. The rest (its prompts, request, kept fetch, gate
 #: and verdict's cells) count or name the group's requests, and stay in the serve dir.
 FRONT_PUBLIC = ("rc", "run", "ended", "session_s", "pinned", "leaked_removed")
 
@@ -819,7 +819,7 @@ def pieces(serve_dir: Path, window: int, out: Path, env: Mapping[str, str] | Non
            product: str = "onsite") -> dict[str, dict[str, Any]]:
     """Each piece of `PIECES` run where ``<COMPONENT>_CMD`` names it, under `timeout` at its limit, else named missing;
     one line each on stdout, its verdict the one `piece` gives the record. ``only`` and ``skip`` name components: those
-    alone, or all but those, so one piece can run beside the others (`served_verdicts.sh` starts the certifier's early).
+    alone, or all but those, so one piece can run beside the others (`served_verdicts.sh` starts the network attester's early).
     A piece ``product`` drops isn't run, whatever its command (`dropped_row`)."""
     from verity_e2e_demo import block_record as BR
 

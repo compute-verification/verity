@@ -26,7 +26,7 @@ def _pins(module) -> dict:
 
 
 def blocks_of(outputs: int, stop_ids: int = G.STOP_IDS):
-    """A stop class's stop block at T = ``outputs`` and the certifier's response tie at O = T."""
+    """A stop class's stop block at T = ``outputs`` and the network attester's response tie at O = T."""
     return (bind(boolean_stop_rule.StopRule16V2, T=outputs, NSTOP=stop_ids),
             response_tie.block(response_tie.Shape(outputs, True)))
 

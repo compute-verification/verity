@@ -1142,7 +1142,7 @@ over them. Until `public()` is trimmed to match (it already keeps `stale` out), 
     proof block's to check, inside zero knowledge, against the prover's memory map and the circuit's requirement
     (I4). The verifier here checks only that each pass names a step above the last.
   - *The timing.* The step says which reads a pass stands for, not when serving made them: nothing yet shows that the
-    pass at \(s\) ran while serving executed \(s\). A certifier that stamps each step's record and each pass's root
+    pass at \(s\) ran while serving executed \(s\). A network attester that stamps each step's record and each pass's root
     on one clock would. A prover may run serving ahead of its passes (`Ahead` in `verity/protocols/resource_accounting/memory/poub/prover/remote_session/prover.py`),
     at most \(k\) steps past the pass in flight, \(k\) its own choice: each pass covers the newest step serving has
     handed, the steps serving ran past in between have no pass and are credited nothing, and the pass at \(s\) reads
