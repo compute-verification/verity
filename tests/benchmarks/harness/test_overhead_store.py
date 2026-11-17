@@ -222,20 +222,3 @@ def test_a_row_carries_the_note_of_its_own_run_and_the_same_numbers_with_it_or_w
     assert table["covers"] in said and O.WITHOUT_Y in said
     monkeypatch.setitem(O.LEFT_OUT, O.KERNEL_MODEL, ())
     assert O.covers() == "Each γ is over the 4 linears of one llama3.1-70b layer (qkv, o, gate_up, down)."
-
-
-@pytest.mark.parametrize(("gamma", "floor"), [(0.5, "useful work at least half"), (2.65, "useful work under half")])
-def test_a_gamma_of_record_carries_pouw_s_floor_and_its_verdict_beside_the_gate_s(tmp_path, scheme, gamma, floor):
-    s = Store(tmp_path)
-    art = stored_points(tmp_path, s, "r20261104-020000-0001")
-    assert R.record_run(s.store, timed(tmp_path, s, art, "pearl-plus", "r20261104-030000-0002")) == []
-    table = R.build(s.fresh(), root=REPO)
-    for r in table["rows"]:
-        r["gamma"]["gamma"] = gamma
-    own = next(m for m in R.measurements(table, {"m": "pearl-plus/h200/C"}) if "member" not in m)
-    assert (own["value"], own["target"], own["verdict"]) == (gamma, O.GAMMA_MAX, "within target")
-    assert (own["extra"]["floor"], own["extra"]["floor_verdict"]) == (O.USEFUL_FLOOR, floor) == (1.0, floor)
-    lines = R.render(table).splitlines()
-    assert "| γ ≤ 10 | PoUW's floor, γ ≤ 1 | Run | Note |" in next(ln for ln in lines if ln.startswith("| Scheme | Card | Point | m |"))
-    row = next(ln for ln in lines if ln.startswith("| pearl-plus | h200 | C | "))
-    assert f"| {gamma:.3f} [" in row and f"| yes | {floor} | r20261104-030000-0002 |" in row

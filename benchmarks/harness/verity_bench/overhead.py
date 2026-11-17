@@ -54,8 +54,6 @@ RULE = {"c_share": C_SHARE, "l_slack": L_SLACK, "grid": GRID, "m_max": M_MAX}
 MIN_REPS, HALF_WIDTH, CROSS_CHECK = 20, 0.05, 0.05
 #: the scheme gate: γ at most this at each point
 GAMMA_MAX = 10.0
-#: PoUW's floor: the useful work at least half the honest developer's GPU effort, so γ at most this at each point
-USEFUL_FLOOR = 1.0
 POINTS = ("C", "L")
 
 

@@ -335,16 +335,12 @@ def build(store: Any = None, *, root: Path | None = None, local_only: bool = Fal
     return {"schema": "verity-bench/overhead-table/v1", "census": c, "covers": O.covers(), "rows": rows}
 
 
-def floor_verdict(gamma: float) -> str:
-    return "useful work at least half" if gamma <= O.USEFUL_FLOOR else "useful work under half"
-
-
 def measurements(table: Mapping, metrics: Mapping[str, str]) -> list[dict]:
     """The measurements `record` writes: for each of `metrics`, an id for the γ of a row named ``scheme/card/point``, and
     for each model that row's γ of record with its interval (the kernel model's as the metric's own reading, every other
     model's as its `member`, `MEMBER_MODEL`'s words and the card), measured, held to the scheme gate (`overhead.GAMMA_MAX`)
-    as its target and to PoUW's floor (`overhead.USEFUL_FLOOR`) beside it, from its run and its points' art, with its note
-    and what the γ is over; where the table has no γ of record there, no value and why."""
+    as its target, from its run and its points' art, with its note and what the γ is over; where the table has no γ of
+    record there, no value and why."""
 
     rows = {(r["scheme"], r["card"], r["model"], r["point"]): r for r in table["rows"]}
     out = []
@@ -364,10 +360,9 @@ def measurements(table: Mapping, metrics: Mapping[str, str]) -> list[dict]:
                 out.append(m | {"value": None, "why": f"no γ of record: {why}"})
                 continue
             verdict = "within target" if g["gamma"] <= O.GAMMA_MAX else "over target"
-            floor = {"floor": O.USEFUL_FLOOR, "floor_verdict": floor_verdict(g["gamma"])}
             out.append(m | {"value": g["gamma"], "interval": g.get("ci95"), "verdict": verdict,
                             "inputs": [r["run"], r["points_art"]],
-                            "extra": m["extra"] | floor | ({"note": r["note"]} if r.get("note") else {})})
+                            "extra": m["extra"] | ({"note": r["note"]} if r.get("note") else {})})
     return out
 
 
@@ -421,19 +416,17 @@ def render(table: Mapping) -> str:
 
 
 def _section(c: Mapping, rows: list[dict], covers: str) -> str:
-    lines = ["| Scheme | Card | Point | m | γ, × stock − 1 [95% CI] | over least-SM stock | weight side bound | A/A | ε | "
-             f"γ ≤ {O.GAMMA_MAX:g} | PoUW's floor, γ ≤ {O.USEFUL_FLOOR:g} | Run | Note |",
-             "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |"]
+    lines = ["| Scheme | Card | Point | m | γ, × stock − 1 [95% CI] | over least-SM stock | weight side bound | A/A | ε | γ ≤ 10 | Run | Note |",
+             "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |"]
     refused = []
     for r in rows:
         if not r["of_record"]:
             refused.append(r)
             continue
-        gate, gamma = r.get("gate") or {}, (r["gamma"] or {}).get("gamma")
+        gate = r.get("gate") or {}
         lines.append(f"| {r['scheme']} | {r['card']} | {r['point']} | {r['m']} | {_g(r['gamma'])} | {_g(r['gamma_least_sm'])} "
                      f"| {_g(r['gamma_weight_side_bound'])} | {_g(r['aa'])} | {_eps(r['epsilon'])} | "
-                     f"{'yes' if gate.get('passes') else 'no'} | {'—' if gamma is None else floor_verdict(gamma)} | "
-                     f"{r['run']} | {r.get('note') or ''} |")
+                     f"{'yes' if gate.get('passes') else 'no'} | {r['run']} | {r.get('note') or ''} |")
     lines += ["", covers,
               "", (f"Per monitoring period, over all compute: the {c['datacenter']} datacenter's {c['gpus']:,} GPUs in "
                    f"{c['window_s']} s windows, spending the share γ/(1+γ) of its compute on proving, and the world's "

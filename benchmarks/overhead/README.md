@@ -2,9 +2,7 @@
 
 γ is a PoUW scheme's prover overhead over stock: how much more busy GPU time, with the host CPU time it adds at a
 weight, the scheme spends than stock does for the same useful output, at a card's operating points. It is a fraction,
-so 0.1 is ten percent over stock and 10, the scheme gate, is eleven times stock. The table shows two verdicts for a γ
-of record: against the scheme gate (γ at most 10) and against PoUW's floor (γ at most 1, useful work at least half the
-effort).
+so 0.1 is ten percent over stock and 10, the scheme gate, is eleven times stock.
 `verity bench overhead` is the one front door for it: it gives γ from labelled runs of record alone. Its code is the
 harness's ([`benchmarks/harness`](../harness/README.md)); this directory holds its runner.
 
