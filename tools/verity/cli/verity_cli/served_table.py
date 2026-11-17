@@ -20,7 +20,8 @@ A piece is what one party does in the run (`Piece`), in one of four ways (``runs
   this machine hands it its party key (`held`). What doesn't reach the table yet (the served store, the card, setup's
   request, the party key) raises `NotImplementedError` (`NOT_YET`) before anything starts;
 - ``check``: the verifier's onsite check, `served_verdicts.py record` over the served window's public record, whose
-  composed verdict is the period's; under remote, the record the compose answer holds (`remote_check`).
+  composed verdict is the period's; under remote, the record the compose answer holds (`remote_check`). PoUW's row
+  there is Pearl+'s verdict under ``pearl-plus`` (the runner's ``POUW=pearlplus``), H1's under ``pouw``.
 
 A piece names the scripts it runs (``scripts``), which must be in the tree, and the deploy bindings it reads: those of
 the party it reaches (``reaches``, default its own), ``party.component.key`` each, the ``binds`` ones bound before the run
@@ -78,7 +79,7 @@ VERDICTS_SCRIPT = "benchmarks/one_stage/served_verdicts.py"
 ATTESTER_PIECE = "benchmarks/network_traces/attester_piece.py"
 PEARLPLUS_GATE = "benchmarks/one_stage/pearlplus_local_e2e.py"
 PEARLPLUS_SCRIPT = "benchmarks/one_stage/served_pearlplus.sh"
-ONSITE = "verity/onsite/v0"
+ONSITE = "verity/onsite/v1"
 REMOTE = "verity/remote/v1"
 #: the deploy bindings `begin` keeps beside the run (`verity_cli.run.BINDINGS`)
 BINDINGS = "bindings.json"
@@ -88,11 +89,11 @@ STARTS: dict[str, Start] = {}
 WORKERS, ZK_SERVER, PROVER, VERIFIER = SP.WORKERS, SP.ZK_SERVER, WP.PROVER, SP.VERIFIER
 CHALLENGER, MEMORY_ATTESTER = SP.CHALLENGER, WP.CHALLENGER
 BANDWIDTH_VERIFIER, NETWORK_ATTESTER = P2.CLOSER_PARTY, NC.NETWORK_ATTESTER
-#: served_verdicts.py's record reads each piece's answer by its runner name
+#: served_verdicts.py's record reads each piece's answer by its runner name, and the subprotocol each row is, by its
+#: configuration's name: PoUW's row (``work``) is Pearl+'s verdict or H1's, as the configuration lists
 RECORD_NAMES = {"integrity": "sampled-proofs", "work": "pouw", "inference-only": "inference-only", "space": "pous",
                 "bandwidth": "bandwidth", "communication": "certifier", "wipe": "wipe"}
-#: each component's row in the record: Pearl+'s is ``work``, as H1's is
-ROWS = {v: k for k, v in RECORD_NAMES.items()} | {"pearl-plus": "work"}
+ROWS = {**{v: k for k, v in RECORD_NAMES.items()}, "pearl-plus": "work"}
 #: served_verdicts.py's ``answer_from`` for a row it carries from a file the served node wrote (its ``AS_WRITTEN``)
 AS_WRITTEN = "as the served node wrote it"
 
@@ -201,8 +202,8 @@ SERVED = Workload(SERVED_WINDOW, frozenset({"windows", "noise", "store", "receip
                   (Role(WORKERS, "developer", needs=("serve",)),), _served,
                   {"model": "verity-int8/Llama-3.2-1B-INT8", "revision": "15b0976d400d796ee589e7737d03a919526bf800",
                    "precision": "verity_int8", "slots": 4, "window-steps": 16, "load": "varied"})
-#: onsite's subprotocols, the seven `Core.Composites.composites` holds for it
-ONSITE_COMPONENTS = ("sampled-proofs", "pouw", "inference-only", "pous", "bandwidth", "certifier", "wipe")
+#: onsite's subprotocols, the seven `Core.Composites.composites` holds for it, PoUW's Pearl+'s run verdict
+ONSITE_COMPONENTS = ("sampled-proofs", "pearl-plus", "inference-only", "pous", "bandwidth", "certifier", "wipe")
 PROTOCOLS = ONSITE_COMPONENTS
 #: each application's subprotocols, the file `applications/NAME.toml` that `verity run NAME` runs: onsite's seven, its two smaller
 #: sets (`verity.config.UNACCEPTED`) and remote's
@@ -916,7 +917,9 @@ def onsite_check(cfg: Mapping[str, Any], state: Path) -> dict[str, Any]:
         verdict = "undecided"
     if held and verdict == "undecided":
         reason = "; ".join(x for x in (reason, "not accepted: " + ", ".join(f"{h} {AS_WRITTEN}" for h in held)) if x)
-    on, developer = coins_on(cfg, bindings_of(state)), {p["machine"] for p in cfg["party"] if p["principal"] == "developer"}
+    on = coins_on(cfg, bound := bindings_of(state))
+    on |= {c: m for c, m in gate_coins_on(cfg, bound).items() if c == "pearl-plus"}
+    developer = {p["machine"] for p in cfg["party"] if p["principal"] == "developer"}
     return {"block": seal, "components": components, "answer_from": answer_from, "product": product, "reason": reason,
             "registration": None, "coins": "simulated" if developer & set(on.values()) else coins_of(cfg),
             "coins_on": on, "verdict": verdict}

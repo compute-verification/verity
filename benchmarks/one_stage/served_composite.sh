@@ -50,7 +50,9 @@
 # (`served_verdicts.sh`'s) reads no PoUS or wipe case and no ONSITE_PIECES, and runs remote's Lean alone: under
 # POUW=pearlplus remote's composite of record (`remote-v1`, `Core.Remote.V1`, whose work
 # subprotocol is Pearl+'s run verdict, served_cases.py's Pearl+ case; composite.py remote-v1), and where the tree
-# lacks it none (`COMPOSITE: not run`, exit 1), else v0.
+# lacks it none (`COMPOSITE: not run`, exit 1), else v0. PRODUCT=onsite runs remote beside onsite: under
+# POUW=pearlplus, where the tree has it, remote-v1, whose work is Pearl+'s run verdict as onsite's is, else v0, so that
+# under POUW=h1 onsite's Lean rejects naming Pearl+'s case missing.
 # On the served node itself (SERVED_NODE unset or its own host), which the prover controls, a composite claims no record:
 # it is refused (COMPOSITE refused, exit 1) unless COMPOSE_OFF_NODE=0, and then composed as a development check, its
 # first line COMPOSITE DEVELOPMENT and each product's composite.json and verdicts.txt led by it (composite.py
@@ -82,7 +84,9 @@ elif [ "${SERVED_NODE:-$(hostname)}" = "$(hostname)" ]; then
 fi
 PRODUCT=${PRODUCT:-onsite}
 case $PRODUCT in
-  onsite) products=(remote onsite) ;;
+  onsite) products=(remote onsite)
+    [ "${POUW:-}" = pearlplus ] && [ -f verity/protocols/compose/verifier/remote/RemoteV1Main.lean ] \
+      && products=(remote-v1 onsite) ;;
   remote) products=(remote)
     if [ "${POUW:-}" = pearlplus ]; then
       [ -f verity/protocols/compose/verifier/remote/RemoteV1Main.lean ] \
