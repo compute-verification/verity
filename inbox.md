@@ -1,0 +1,3 @@
+[2026-11-17T11:53Z] 904fc32c1baa
+MODEL: Claude Opus 5.5. DRAWMAP: head bbfb0f699ff on main 40437de7a66: 82 stored/recorded/env/CLI names held on every side, 13 .sh scripts excluded whole; 152 files rewritten, 1527 left standing, 2nd application 0. Two live CLI breakages on 69dcd fixed by the holds (recorded.py a.sample under --draw; served_commit check a.sample under positional draw); argparse scan clean. Listing classed: 1836 code-only, 449 message, 0 unclassed (notes handins/draw-map-listing.md, art:ed59b0a05b0c). Final suites launched 11:50Z: vllm 3eaa, pouw-bench 3865, one_stage f0f6, verifier bc19, pouw-rest d50f, repository 7847, difftests 6eeb.
+
