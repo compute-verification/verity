@@ -13,3 +13,24 @@ RECORD to the training lead, 02:21Z.
 - #10556's suite run r20261116-215836-155e is cancelled at the slot's 2 h limit with verity-flock and verity-vllm unfinished, as its body already says.
 - #10611: still open as of 02:17Z.
 
+[2026-11-17T02:22Z] 232a76e8ec16
+From NAMES2, 6:22 PM PST. #10687 (tiers): the Lean builds and the records update passes. The lock commits are pushed onto its branch, head b6512c57167, a fast-forward from PAGE's efbdf5ab5f4. No mark.
+- Runs, by id and state:
+  - r20261117-011615-5a40 failed: the first run, at bbc079433d2, with the body's 18/4/2/12/9/13/8 entries removed by hand. security PASS and regenerated; its requirer security/Properties failed to build on #10564's leftover root.
+  - r20261117-015124-4f06 done: at b4d1f4d8b46. security PASS with nothing more to regenerate. Properties PASS after it regenerated one entry, which I committed as b6512c57167. [ran]
+- Lock diff against efbdf5ab5f4 [ran]: 2 files, +4/-705.
+  - Exactly the body's list: guarantees 18, witnesses 4, unwitnessed 2, shape.frozen 12, shape.inline 9, open 13, reads 8 module records, and the Witnesses and Witness definitions. Every entry of either lock that names a deleted declaration or module is in that list; nothing outside it does.
+  - Also regenerated: reads drops Verity.Game.prPMFReal (Definitions.Core.Prob), Slowdown.Witness.mb0 and σ0, and recomputes those three digests. Only the deleted guarantees read them.
+  - Also four #10564 leftovers, which #10687 needs in order to build:
+    - security/Properties roots: Properties.InferenceOnly.Desc.Cover, whose file #10564 deletes;
+    - open Slowdown.Cover.MulBlocks.Upstream, in both locks;
+    - the Witnesses reads' CoverTraining_{honest,nontrivial}.
+    RECORD has the list (5:50 PM). If #10564 makes the same removals, the merge into #10687 is clean.
+- The merge with my two, once they land [ran: trial merge of my #10613 merged with main into efbdf5ab5f4]:
+  - Two files conflict, three hunks, each the union of both deletions.
+    - security/Proofs/Slowdown.lean's docstring becomes "...the work and product counts of threads, fit and layered references, covering at one and two costs, the training formalism (`Formalism`), and their witnesses."
+    - compose's remote README: "`Verity.Guarantees.Counting` and the floor."; mine drops "The local bounds" bullets and #10687 drops "Results per monitoring period", so both go.
+  - Definitions.lean, the Witnesses imports, security/README.md, the retired-terms list and both locks merge on their own. merge.py merged the locks; both keep their layout, and every security import resolves.
+- #10703 (threads) after mine: the same two content conflicts, plus security/Proofs/Slowdown/Witnesses.lean (a modify/delete), which resolves as the deletion. Then security/Definitions/Slowdown/Capability/Toy.lean, the one Capability file #10611 keeps, is imported by nothing, so the Lean check fails it as orphan.file. #10703's merge of main must delete Toy.lean and its lock record reads."Definitions.Slowdown.Capability.Toy". Nothing else names it [ran].
+#10703's records are running at 5058ca7762c, which merges #10687's b4d1f4d8b46: security r20261117-020910-2560 and security/Properties r20261117-021001-6997. #10713: r20261117-020728-2db2, running.
+
