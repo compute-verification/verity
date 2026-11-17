@@ -123,7 +123,7 @@ def _reader(p: Path, data: Path):
                 for k in tok.split("."):
                     e = e.get(k) if isinstance(e, dict) else None
                 if not (isinstance(e, dict) and "value" in e):
-                    raise SystemExit(f"{p}: hardware/cards/{cards[0]['sku']}.toml has no entry {tok}")
+                    raise SystemExit(f"{p}: calibration/hardware/cards/{cards[0]['sku']}.toml has no entry {tok}")
                 y = number(e)
             x = x * y if op == "*" else x / y
         return x

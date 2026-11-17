@@ -15,7 +15,7 @@ import kappa  # noqa: E402
 import tiers as T  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[3]
-CARD_FILES = ROOT / "hardware/cards"
+CARD_FILES = ROOT / "calibration/hardware/cards"
 
 
 #: the defaults at the threading ReferenceThreaded gives under its conjecture, where the closed-form memory cap binds
