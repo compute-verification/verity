@@ -10,9 +10,9 @@ import numpy as np
 import pytest
 from verity.circuits.defs import bind
 from verity.circuits.program import Program
-from verity_vllm.definitions.registry import moe as Q
 
 from tests.engine.test_gen_ov_moe import INTER, OV, TOPK, C, E, H, _eval
+from verity_vllm.definitions.registry import moe as Q
 from verity_vllm.observe.fold.resolver import Compute, Unsupported
 
 REPO = (Path(__file__).resolve().parents[5] / "adapters" / "vllm")

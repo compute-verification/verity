@@ -220,6 +220,31 @@ theorem StreamedWipeMeets2600GB : Pous.Guarantees.StreamedWipeMeets2600GB :=
 theorem StreamedWipeMeetsFamily : Pous.Guarantees.StreamedWipeMeetsFamily :=
   PousStreamedWipe.streamed_wipe_meets_family
 theorem StreamedWipeMeets96GiB : Pous.Guarantees.StreamedWipeMeets96GiB := PousStreamedWipe.streamed_wipe_meets_96GiB
+
+/-- **`StreamedWipeMeets96GiB`'s honest lemma**: on the RTX PRO 6000's device memory filled whole (96 GiB,
+`1,610,612,736` labels of 512 bits) with no egress and prior content at the published figure (`43,401,774,781` bits),
+both domain premises hold, and some prover, the honest server (`PousStreamedWipe.honest`), is accepted by the wipe's own
+acceptance (`StreamedWipe.Accepts`) with probability 1, with labels sampled by the PRF that outputs its 512-bit key. -/
+theorem StreamedWipeMeets96GiB_honest :
+    Pous.StreamedWipe.FillsSegment 1610612736 ∧ Pous.StreamedWipe.PriorAtLeastForeignBits 1610612736 0 43401774781 ∧
+      ∃ (prf : Pous.Bits 512 → Fin 1610612736 → Pous.Bits 512)
+        (P : Pous.StreamedWipe.Prover 1610612736 2152 512 43401774781 (1610612736 * 512) 0),
+        Pous.pr (fun x : (Pous.Bits 43401774781 × (Fin 2152 → Fin 1610612736)) × Pous.Bits 512 =>
+          Pous.StreamedWipe.Accepts P x.1.1 (prf x.2) x.1.2) = 1 :=
+  ⟨(by decide : 2 ^ 19 ≤ 1610612736), (by decide : (1610612736 * 512 + 18) / 19 + 0 ≤ 43401774781),
+    fun K _ => K, PousStreamedWipe.honest 1610612736 2152 512 43401774781,
+    Pous.Claims.pr_of_forall fun _ => PousStreamedWipe.honest_accepts _ _ _⟩
+
+/-- **`StreamedWipeMeets96GiB`'s nontrivial lemma**: its bound is false at `StreamedWipe.acceptAll`, on the honest
+lemma's instance, for some key-free PRF and a prover (`keepAll`) keeping the figure's `43,401,774,781` bits. -/
+theorem StreamedWipeMeets96GiB_nontrivial :
+    ∃ (prf : Pous.Bits 0 → Fin 1610612736 → Pous.Bits 512)
+      (P : Pous.StreamedWipe.Prover 1610612736 2152 512 43401774781 (1610612736 * 512) 0),
+      ¬ Pous.StreamedWipe.winRealBy Pous.StreamedWipe.acceptAll prf P ≤
+        (2⁻¹ : ENNReal) ^ 128 + Pous.StreamedWipe.prfAdvantage prf
+          (Pous.StreamedWipe.wipeDistinguisherBy Pous.StreamedWipe.acceptAll P) :=
+  ⟨Pous.Claims.noKey 1610612736, Pous.Claims.keepAll 1610612736 2152 512 43401774781 (1610612736 * 512) 0
+    (by norm_num), Pous.Claims.keepAll_not_within (by norm_num) (by norm_num) _⟩
 theorem StreamedWipeMeetsReads : Pous.Guarantees.StreamedWipeMeetsReads := PousStreamedWipe.streamed_wipe_meets_reads
 theorem StreamedWipeMeetsH200 : Pous.Guarantees.StreamedWipeMeetsH200 := PousStreamedWipe.streamed_wipe_meets_H200
 

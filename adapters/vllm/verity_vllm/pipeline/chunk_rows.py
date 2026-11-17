@@ -11,7 +11,8 @@ from collections.abc import Iterable, Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
-from verity.commitments.periods import interface as IF, rows as CS
+from verity.commitments.periods import interface as IF
+from verity.commitments.periods import rows as CS
 
 #: flock-circuit's spec shape (`verity/protocols/proofs/flock/prover/live/src/circuit.rs`'s `shape_in_range`, `benchmarks/one_stage/a6.py`'s `M_MAX`):
 #: a statement's dense size m = k_log + nbl, nbl = max(3, ceil(log2 blocks)), is at most 35
@@ -83,7 +84,9 @@ def _piece_tables(prim: Any) -> frozenset[str]:
         import inspect
 
         from verity.circuits.evaluation.reference import signature_of
-        from verity_flock import ir_lower as IL, read_slots as RS, tail as TL
+        from verity_flock import ir_lower as IL
+        from verity_flock import read_slots as RS
+        from verity_flock import tail as TL
 
         tables: frozenset[str] = frozenset()
         if prim.params and prim.id in IL.PIECES and getattr(inspect.unwrap(IL.PIECES[prim.id]), "ands", None) is None:
@@ -127,6 +130,7 @@ def zk_refusal(tp: Any) -> str | None:
         return None
     from verity.circuits.codec import descriptor_id
     from verity.circuits.ops.boolean import versions as BB
+
     import verity_vllm.definitions  # noqa: F401  (registers the vLLM registry with the Boolean-versions lookup)
 
     try:
@@ -162,7 +166,9 @@ def unit_rows(tp: Any) -> tuple[list[tuple[str, str, int, list[str]]], list[tupl
     ``sw[c]``, v2), then the v2 output row ``o0``: each operand packed with its scale in one row is the layout serving
     commits (`serving_rows`' s8 row tables), where
     `interface.unit_rows` would give ``x``, ``sx``, ``wrow`` and ``sw`` a row each."""
-    from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG as SEG, SCHEMA_HM96_SHA512_ROW_V2 as V2
+    from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG as SEG
+    from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
+
     from verity_vllm.pipeline import chain_rows as CH
     from verity_vllm.query.program_view import spec_base, spec_statics
 
