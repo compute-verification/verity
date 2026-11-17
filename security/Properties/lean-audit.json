@@ -874,12 +874,6 @@
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "Slowdown.Cover.Assumptions.UpdateHardness": {
-   "owner": "@training",
-   "digest": "320c3e1c89ef1e210271cc490151deecded13279ca9f7514b47b7f65b4efaf89",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
   "Slowdown.Cover.MulBlocks.Upstream": {
    "owner": "@training",
    "digest": "56a4eaf3bd6d46fab7599fd8370ce2f50d8f2473f007100a30dc08103aa537c8",
@@ -1626,6 +1620,9 @@
   "Properties.NetworkPeriod.sampleBoundCharged": {
    "honest": ["Properties.NetworkPeriod.sampleBoundCharged_honest"],
    "nontrivial": "Properties.NetworkPeriod.sampleBoundCharged_nontrivial"
+  },
+  "Properties.Poub.Shared.openingsUnreadUntilSampled": {
+   "honest": ["Properties.Poub.Line.SecurityProofs.lineHeld_honest"]
   }
  },
  "unwitnessed": {
@@ -1640,10 +1637,6 @@
   "InferenceOnlyCheck.Properties.SecurityProofs.CheckRefuses": {
    "type_hash": "bf67363b68eb9485c28baad438542a3bdebd7d4e4ea8764b96df7b6884d4f215",
    "unfolded_hash": "8fb346cadce9e47a8e8e8ee7f7caefa2b091a43f5a57f03d9d64df4d244f77b5"
-  },
-  "InferenceOnlyCheck.Properties.SecurityProofs.CheckedCoverTraining": {
-   "type_hash": "72b8c538521510f9f0fd5ef0954ed51a3c6f8fef0b78f83f2102371f195c7298",
-   "unfolded_hash": "09cf71fa07e394fa1ce69cdacf467b7ba842144cedffa8036d943d8c08d1bf15"
   },
   "InferenceOnlyCheck.Properties.SecurityProofs.Decodes": {
    "type_hash": "7051803b3edd6bca3b39ebfac1093f510cc35570847829bd96f8df818f7d4f68",
@@ -1911,6 +1904,8 @@
   },
   "Properties.Poub.Shared.openingsUnreadUntilSampled": {
    "type_hash": "6de85e25d5f1ad61e45f3d6a7bbee4c67bcc0c0151bbc84cadd28b273027710f",
+   "missing": "nontrivial",
+   "why": "its conclusion is an equation between two runs of `Shared.run` from coins that agree up to the sampled windows, and no lemma yet shows it fails for a run that reads a later window's coin before that window is sampled; MEM-354, Fri 27 Nov",
    "unfolded_hash": "e2a556570e32e3c401e97ce707293230a0ccd401da66027fd22dd835a642f5ad"
   },
   "Properties.Poub.Shared.recordKeptAfterSample": {
@@ -2357,6 +2352,17 @@
     "Properties.Pous.InProofs"
    ],
    "why": "a property is stated over the definitions and the code it is about, never over a proof"
+  },
+  "Properties.Pous.InProofs": {
+   "imports": [
+    "MemoryChallenger.Verdict",
+    "Properties.Pous",
+    "PousCheck.SetupInProofs",
+    "Definitions.Core.Interaction",
+    "Definitions.Core.Boolean"
+   ],
+   "except": [],
+   "why": "PoUS's setup and session checked inside proofs are stated against the memory challenger's verdict (MemoryChallenger.Verdict), the setup's check inside proofs (PousCheck.SetupInProofs) and PoUS's properties (Properties.Pous), with the circuits and live-coin interactions every proof system's claims read (Definitions.Core.Boolean, Definitions.Core.Interaction); never a proof"
   },
   "Properties.Pous.Period": {
    "imports": [
@@ -2824,6 +2830,17 @@
    "why": "the properties are stated against the verifier's own functions, on Lean core: nothing of Mathlib or of `security`",
    "sealed": true
   },
+  "Properties.Poub.Remote.InProofs": {
+   "imports": [
+    "Poub.Span",
+    "Definitions.Core.Boolean",
+    "Definitions.Core.Interaction",
+    "Properties.Poub.Remote",
+    "Properties.Verity.Sha512"
+   ],
+   "except": [],
+   "why": "the read session proved in zero knowledge is stated against the verifier's span check (Poub.Span) and the read session's own statements (Properties.Poub.Remote), the circuits and live-coin interactions every proof system's claims read (Definitions.Core.Boolean, Definitions.Core.Interaction), and SHA-512 as the code computes it (Properties.Verity.Sha512) for the rows' collision event; never a proof"
+  },
   "Properties.Poub.Remote.Line": {
    "imports": [
     "Definitions.Pouw.Basic",
@@ -2921,29 +2938,6 @@
    },
    "type_hash": "bf67363b68eb9485c28baad438542a3bdebd7d4e4ea8764b96df7b6884d4f215",
    "unfolded_hash": "8fb346cadce9e47a8e8e8ee7f7caefa2b091a43f5a57f03d9d64df4d244f77b5"
-  },
-  "InferenceOnlyCheck.Properties.SecurityProofs.CheckedCoverTraining": {
-   "owner": "@training",
-   "signature": [
-    "InferenceOnlyCheck.Properties.SecurityProofs.CheckedCoverTraining : InferenceOnlyCheck.Properties.CheckedCoverTraining"
-   ],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [
-     "InferenceOnly.Assumptions.ThetaRegistered",
-     "InferenceOnlyCheck.Properties.Expands",
-     "InferenceOnlyCheck.Properties.LaysOut",
-     "InferenceOnlyCheck.Properties.Names",
-     "InferenceOnlyCheck.Properties.Parses",
-     "Slowdown.Cover.Assumptions.UpdateHardness",
-     "Slowdown.Cover.MulBlocks.Upstream"
-    ],
-    "reads": []
-   },
-   "type_hash": "72b8c538521510f9f0fd5ef0954ed51a3c6f8fef0b78f83f2102371f195c7298",
-   "unfolded_hash": "09cf71fa07e394fa1ce69cdacf467b7ba842144cedffa8036d943d8c08d1bf15"
   },
   "InferenceOnlyCheck.Properties.SecurityProofs.Decodes": {
    "owner": "@network-accounting",
@@ -14671,10 +14665,6 @@
     "function": "InferenceOnlyCheck.Desc.evaluate",
     "outcome": "accept"
    },
-   "InferenceOnlyCheck.Properties.SecurityProofs.CheckedCoverTraining": {
-    "function": "InferenceOnlyCheck.Theta.evaluate",
-    "outcome": "accept"
-   },
    "InferenceOnlyCheck.Properties.SecurityProofs.ProtocolAccepts": {
     "function": "InferenceOnlyCheck.Protocol.check",
     "outcome": "accept"
@@ -18655,50 +18645,11 @@
     "ResourceAccounting.Window.steps": "db931219b30dab11e55759567a15e8879b50199dee41c5878e7bc35d40516b10"
    }
   },
-  "Definitions.Slowdown.Assumptions.Cover": {
-   "digest": "806f719f454c544144c7b81f7e23503ceba17cb59a99e3fae748476cac32a786",
-   "definitions": {
-    "Slowdown.Cover.Assumptions.UpdateHardness": "320c3e1c89ef1e210271cc490151deecded13279ca9f7514b47b7f65b4efaf89"
-   }
-  },
   "Definitions.Slowdown.Assumptions.Threads": {
    "digest": "3edd87a3f6081e34961b59a8fc0355bc1b33932928a46a6d424eb1bcfd66cb97",
    "definitions": {
     "Slowdown.Assumptions.WeightsIncompressible": "992c852103a0d8cee942980d4fe7141b22a2516b816ef2090b00f59e11f9d3b7",
     "Slowdown.Assumptions.WeightsIncompressibleSlots": "d6e434b3bed5d4cd3385ffbbf2d4244535dbf98347ecbc869f52a3a2d9ba771f"
-   }
-  },
-  "Definitions.Slowdown.BitView": {
-   "digest": "fafa54a9cbfbde4eb54049b36735fc158fec411a86482138e0aba948f3e949e8",
-   "definitions": {
-    "Slowdown.Cover.BitView.Bit": "c2ead428f84701e63c39d075ee2ff9e00664fba7fe8e3d7c5db942a41c543fde",
-    "Slowdown.Cover.BitView.W": "99daec6dfbbc61ffc9bd742d5a4de649cdd821eb3a7930b1de30ec42f7851dc8",
-    "Slowdown.Cover.BitView.bitPred": "a3e7f887d24e6b63071a5e2be5f2df121fc65b7d28f945e5491fa119e7b6b02b",
-    "Slowdown.Cover.BitView.bits": "30603690b7bb0f3e533a96ceb7aab6a2417c0fd733655dc2cb6dc6af8ac8e5bf",
-    "Slowdown.Cover.BitView.enc": "8faeabe9c8bb482b3aa4246acab8fd9cc451b63d4f4915601528176d6dc7bccb",
-    "Slowdown.Cover.BitView.free": "9fe96fba84de5329c4d9421bebcd14606bcab1510f05f869f3db0fc02e8f0ea9",
-    "Slowdown.Cover.Circuit.ofDecl": "b2ae990d6da8a34b405eb0ea4880cb4f69100d5cc7dcff2e4294c6889ca57c4a"
-   }
-  },
-  "Definitions.Slowdown.Cover": {
-   "digest": "8f727931df35d5e545f92f1e6cdd186a842e11b5bddb029e73be74a9bf849c78",
-   "definitions": {
-    "Slowdown.Cover.Circuit": "73de61d4add26c133fbacd8a539028c411e72a19c48a2b7327dbcd4fd46a5f63",
-    "Slowdown.Cover.Circuit.IsPath": "8ff06accb7ecbb05de57dff1b84f0c216de00cdfbd92474508e6df0ab8f42a42",
-    "Slowdown.Cover.Circuit.N": "cfeccd842a29f8f109bad40c1117102756e916c74ca5cb5ffd4a0b0e4a726abd",
-    "Slowdown.Cover.Circuit.ReachesIn": "809e8200af63af9cfeca28e82f050450627555cf813ca67bf5992da75aa70f19",
-    "Slowdown.Cover.Circuit.computed": "0d0e0b13ad085ff2200dcbd174d85674c025b6d4aedc020e8ee9e9b969d4961c",
-    "Slowdown.Cover.Circuit.inputs": "cf33f70d11212aad62d0ea64beaaea5fb83e560e3fecf95ce49715f52029af8e",
-    "Slowdown.Cover.Circuit.outputs": "f6426221bdce28c219ccce444c82a7e8a8ae15eb1f4f7f70acc0842c84b5b248",
-    "Slowdown.Cover.Circuit.pred": "47a95dc44cd4cf92ce86f12cc51b25da0d67a6f7262ef5cee540859417d74743",
-    "Slowdown.Cover.Circuit.θ": "34577c7adf0b751fb3715cec394d1b78c145dc9cf148ce7e2d0d826996b0e8d3",
-    "Slowdown.Cover.MulBlocks": "be58be6023b1355e4ada34af6c3c69413115798defce31d8654eb5635f08e872",
-    "Slowdown.Cover.MulBlocks.P": "5e2b9957e6f4994d8b6a30dbec3b5b835a013dcddb866d795dad0425fde18e89",
-    "Slowdown.Cover.MulBlocks.Pall": "d03fc0f1569ea5ed2a9a7e9ccae0653c39d04984c1c3fb8a5e2784eaedccc22b",
-    "Slowdown.Cover.MulBlocks.Upstream": "56a4eaf3bd6d46fab7599fd8370ce2f50d8f2473f007100a30dc08103aa537c8",
-    "Slowdown.Cover.MulBlocks.m": "e36953d716a21577da75ab2406d7ce36b550a7c5dae435ae568bea983c369594",
-    "Slowdown.Cover.MulBlocks.o": "f3a1a6ec8e895af516913a0c22deb575cea8408c302c18e359eefd89f0865155",
-    "Slowdown.Cover.MulBlocks.uses": "2260719b2d46c629b9a2200e53968b195efc7d6421c2a357d01f2264e5aa1f5a"
    }
   },
   "Definitions.Slowdown.Dark": {
@@ -26082,13 +26033,6 @@
     "InferenceOnlyCheck.Properties.ExpandsOwner": "66b538c8fc34cd6a805ce1f608d874b4b53616a45b03fdc3c5306bd4894a554e",
     "InferenceOnlyCheck.Properties.ExpandsTheta": "be537d87657d58332bb3e19bddd5381a9aa1eecfd00af989f6bf1fe33745429a",
     "InferenceOnlyCheck.Properties.nodeGates": "e69525e2642f71bcf7f6b04fa2d5d591b515f3880f2529337791ace2f8761893"
-   }
-  },
-  "Properties.InferenceOnly.Desc.Cover": {
-   "digest": "7f37d749ce00e201ace15e6241d7f85e378cec5ae5c7d79f7daea6ad096ac595",
-   "definitions": {
-    "InferenceOnlyCheck.Properties.CheckedCoverTraining": "a9bab14b95b06ac503980cd3719cbb9df49fc16e4bcf6ca6f90174cda38ce747",
-    "InferenceOnlyCheck.Properties.CoverTrained": "6f01d43f8c73b39d368c3d90420ec7b23da3b497592355a116b980acf68ba8ef"
    }
   },
   "Properties.InferenceOnly.Desc.Verdict": {
