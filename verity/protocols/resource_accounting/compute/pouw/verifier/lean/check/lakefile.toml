@@ -2,12 +2,12 @@
 # `verity/protocols/resource_accounting/compute/pouw/verifier/core_check.py`: the verifier's parameters, the window's registration and its digest,
 # the proof system's answer, and PoUW's rule over them. Lean core only; its properties are stated in
 # `security/Properties/Pouw/Check.lean`, and the difftest (`tests/test_difftest.py`, on the shared harness) holds
-# `pouw-verifier serve` and `pouw-verifier-difftest` (a unit's opening, `PouwVerifier.Opening`; the window's pass and draw,
-# `PouwVerifier.Pass`; a live window's round coins, `PouwVerifier.Rounds`; a served window's credit, `PouwVerifier.Credit`) to
-# the Python on generated cases. `pouw-period` is a period's credit as a core protocol (`PouwVerifier.Period`,
+# `pouw-check serve` and `pouw-check-difftest` (a unit's opening, `PouwCheck.Opening`; the window's pass and draw,
+# `PouwCheck.Pass`; a live window's round coins, `PouwCheck.Rounds`; a served window's credit, `PouwCheck.Credit`) to
+# the Python on generated cases. `pouw-period` is a period's credit as a core protocol (`PouwCheck.Period`,
 # `verity/pouw/period/v1`, onsite's work component), held to `period_check.py` by `tests/test_period_difftest.py`.
 # `pouw-leaf-own-window` is the leaf verifier's check of a window unit's leaf statement's `--registered` file at the
-# unit's placement, from the window's descriptor and round log (`PouwVerifier.LeafOwn`).
+# unit's placement, from the window's descriptor and round log (`PouwCheck.LeafOwn`).
 name = "pouw_verifier"
 defaultTargets = ["PouwVerifier", "pouw-verifier", "pouw-period", "pouw-verifier-difftest", "pouw-leaf-own-window"]
 
@@ -24,12 +24,12 @@ path = "../../../../../../interface"
 name = "pouw_window"
 path = "../window"
 
-# `pouw-verifier-difftest`'s `passes-distinct` answers with Pearl+'s own `PouwVerifier.PearlPlus.passesDistinct`
+# `pouw-check-difftest`'s `passes-distinct` answers with Pearl+'s own `PouwCheck.PearlPlus.passesDistinct`
 [[require]]
 name = "pouw_pearlplus"
 path = "../pearlplus"
 
-# `PouwVerifier.Credit` embeds the model pin (`include_str`), which Lake tracks only as this target
+# `PouwCheck.Credit` embeds the model pin (`include_str`), which Lake tracks only as this target
 [[input_file]]
 name = "models"
 path = "models.json"

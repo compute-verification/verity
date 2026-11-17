@@ -1,4 +1,4 @@
-"""The salted H1 tile unit's pin (`core_check.TILES`, `PouwVerifier/Tile.lean`): `h1unit.Shape(64)`'s staged flat circuit (`lowering/h1unit.py`; the
+"""The salted H1 tile unit's pin (`core_check.TILES`, `PouwCheck/Tile.lean`): `h1unit.Shape(64)`'s staged flat circuit (`lowering/h1unit.py`; the
 flat statement, `Shape.stager`'s default) is the one the verifier pins for its template, with the salted layout the opening reads: R A rows, C B rows, then the public row of
 salt, position and roots, each `hm96-sha512/row/v2`. The opening refuses a proof over any other circuit, so a change to
 `PouwH1Tile`'s Definition or to Flock's lowering lands its new digest in both tables. `test_pouw_core_check` ties the

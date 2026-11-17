@@ -55,7 +55,7 @@ function of the window's round coin (`regOf`) and the rest of whose inputs a fun
   body on every window.
 
 They are facts of the code on honest executionPhases, which Lean doesn't evaluate here (`Credit.window` reads SHA-512 trees and
-Flock's proofs). The compiled verifier evidences them: PouwVerifier's `test_difftest` has `pouw-verifier-difftest`'s
+Flock's proofs). The compiled verifier evidences them: PouwCheck's `test_difftest` has `pouw-check-difftest`'s
 `window` entry (`Credit.window`) credit honest J10-R executionPhases (`window_instance`'s `j10r`) as the Python verifier does,
 and its `window-drawn` entry sample the Python verifier's units on generated coins.
 

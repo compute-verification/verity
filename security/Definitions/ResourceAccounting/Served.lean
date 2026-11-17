@@ -635,7 +635,7 @@ def Llama31Shape : Prop :=
 (`Tie`, which fixes its live rounds at `F.rounds L`), and each window's timed run
 starts at the salt's release `release` (`Pouw.TimedRun.ts`; the service's `salted_at`, `spot.service`), so
 every window of the salt is accounted in one `(t_s, t_d]`. One salt spans an epoch's windows (`SaltWindows`,
-`PouwVerifier.epochSalt`). Every window is in `Tie`'s live order, which every served arm is to use:
+`PouwCheck.epochSalt`). Every window is in `Tie`'s live order, which every served arm is to use:
 * a call's A rows and their scales go under its round's root before that round's live coin, and so do its `z` and `y`
   leaves in a form of a round a step;
 * its receipts, which read the coin, follow it under a later round's root, by the sample (the next round's at the

@@ -24,7 +24,7 @@ The remote and onsite forms differ in one premise: the remote form prices no out
 everything the prover runs, and the onsite form prices each bit that crosses the registered devices' boundary at `β`,
 the certifier bounding how many do.
 
-At the served check (the J10-R period, `PouwVerifier.Credit.window`) the same composition is
+At the served check (the J10-R period, `PouwCheck.Credit.window`) the same composition is
 `Properties.Pouw.Served.ServedFreed`, over `ServedWork` in the play's vocabulary, with no remote floor taken as a
 premise.
 -/
