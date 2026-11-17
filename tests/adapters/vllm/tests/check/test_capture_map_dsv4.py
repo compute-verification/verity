@@ -19,7 +19,6 @@ import re
 from pathlib import Path
 
 import pytest
-from verity_vllm.definitions.registry import catalog
 
 from tests.check.capture_map_check import check, check_target, report
 from tests.check.test_capture_map_versions import violations
@@ -27,6 +26,7 @@ from verity_vllm.acquire.sources import moe_source, route_source
 from verity_vllm.commit import capture_map as CM
 from verity_vllm.commit import identity as ID
 from verity_vllm.commit.committer.native_host import ACQUIRE_CLASSES
+from verity_vllm.definitions.registry import catalog
 from verity_vllm.engine import meta_inventory as MI
 
 HERE = Path(__file__).parent

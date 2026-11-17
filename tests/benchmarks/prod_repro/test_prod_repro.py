@@ -1195,26 +1195,40 @@ def test_under_research_run_the_runs_result_names_what_the_report_rests_on(tmp_p
     # the run's own out/: a job with no result gets one, whose validation is the tokens line's
     monkeypatch.setenv("RESEARCH_RUN_DIR", str(tmp_path))
     monkeypatch.setenv("RESEARCH_RUN_ID", "r-1")
-    run(out)
+    _, _, r = run(out)
     doc = json.loads((tmp_path / "result.json").read_text())
     files = ["out/prod_repro.json", "out/prod_repro.txt", "out/replay-compiled/replay.json"]
     assert doc["artifacts"] == files and (doc["schema"], doc["run_id"]) == ("research/result/v0.1", "r-1")
+    # its validation carries the cost's verdict against its target as a field of its own, and its detail says it
+    against = {"value": S._pct(r["cost"]["value"]), "target": 1.0, "verdict": "not shown"}
     assert doc["validation"] == {
         "status": "passed", "checker": "verity bench prod_repro", "evidence": ["out/prod_repro.json"],
-        "detail": "tokens: reproduced: 2 requests replayed, 4 served tokens compared with 4 replayed, 0 differ in 0 requests"}
+        "detail": "tokens: reproduced: 2 requests replayed, 4 served tokens compared with 4 replayed, 0 differ in 0 "
+                  "requests; the cost against its target of under 1%: not shown", "target": against}
     assert all((tmp_path / f).is_file() for f in files)
     # a result the benchmark's cost wrote keeps what it says, with the files added to its own
     (tmp_path / "result.json").write_text(json.dumps({"schema": "research/result/v0.1", "run_id": "r-1", "validation": {"status": "failed"},
                                                       "measurement_files": ["out/serving_cost.json"], "artifacts": ["out/kept"]}))
     run(out)
     doc = json.loads((tmp_path / "result.json").read_text())
-    assert doc["artifacts"] == ["out/kept", *files] and doc["validation"] == {"status": "failed"}
+    assert doc["artifacts"] == ["out/kept", *files] and doc["validation"] == {
+        "status": "failed", "detail": "the cost against its target of under 1%: not shown", "target": against}
     assert doc["measurement_files"] == ["out/serving_cost.json"]
     # replayed tokens that differ fail the validation of a result the report writes
     (tmp_path / "result.json").unlink()
     shutil.rmtree(out / "replay-compiled")
     replayed(out, tokens={rid(f"{LOAD}1", 0): [8, 0]})
     assert run(out)[0] == 1 and json.loads((tmp_path / "result.json").read_text())["validation"]["status"] == "failed"
+
+
+def test_a_cost_over_its_target_says_so_in_the_validation_whose_status_stays_the_gates():
+    """The validation reads "passed" where the run's own gates held, whatever the cost: the verdict against the target
+    is its own field, and a miss is in the detail too."""
+    c = {"measured": True, "value": 0.0918, "target": 1.0, "verdict": P.OVER, "metric": "vllm/prod-serving-cost-glm53"}
+    v = P.against_target({"status": "passed", "checker": "c", "detail": "tokens: reproduced", "evidence": []}, c)
+    assert v["status"] == "passed" and v["target"] == {"value": 9.18, "target": 1.0, "verdict": "over"}
+    assert v["detail"] == "tokens: reproduced; MISSES its target: +9.18% of stock's serving time, against under 1%"
+    assert P.against_target({}, {"measured": False})["target"] == {"value": None, "target": P.TARGET, "verdict": P.NOT_SHOWN}
 
 
 def declared(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, c: dict, stock: str = "prod", ours: str = "prod-record") -> list[dict]:
@@ -1249,7 +1263,7 @@ def test_under_research_run_glm53s_cost_at_the_recipes_settings_is_its_metric_wh
         "mark": "measured", "better": "lower", "target": 1.0, "ci95": own["ci95"], "verdict": "under", "load": S.AGENTIC, "stock": "prod",
         "ours": "prod-record", "lifetimes": 3, "commit": "c" * 40, "run": "r-1",
         "inputs": [f"measured: prod-record's serving time over prod's on the {S.AGENTIC} load, the mean over 3 server "
-                   "lifetimes an arm"]}]
+                   "lifetimes an arm (serving time, one node, one load at 4 users, unsaturated)"]}]
     # the first input opens with the entry's mark, which the Metrics tab shows beside the value
     assert got[1]["inputs"][0].startswith("measured: ")
     assert P._pct(c["value"]) == f"{got[1]['value']:+.2f}%" == "+0.52%"
@@ -1260,7 +1274,7 @@ def test_under_research_run_glm53s_cost_at_the_recipes_settings_is_its_metric_wh
     got = declared(tmp_path, monkeypatch, c)
     assert [(x["name"], x["value"]) for x in got] == [(S.AGENTIC, 0.5), ("vllm/prod-serving-cost-glm53", 0.5)]
     assert (got[1]["ci95"], got[1]["verdict"], got[1]["lifetimes"]) == (None, "not shown", 1)
-    assert got[1]["inputs"][0].startswith("measured: ") and got[1]["inputs"][0].endswith("over 1 server lifetime an arm")
+    assert got[1]["inputs"][0].startswith("measured: ") and got[1]["inputs"][0].endswith("over 1 server lifetime an arm (serving time, one node, one load at 4 users, unsaturated)")
     # the arms at other settings: the figure is not our changes' cost, and the entry an earlier report wrote is dropped
     assert declared(tmp_path, monkeypatch, c | {"settings_differ": ["the context limit"]}) == [theirs]
     # the arms did not do the same work: the benchmark's own cost does not stand, nor does the line

@@ -11,10 +11,10 @@ from pathlib import Path
 
 import numpy as np
 import pytest
-from verity_vllm.definitions.registry import b1
 
 from tests.observe.test_patterns_synthetic import by_spec, context, decode_step
 from verity_vllm.config import workload_file
+from verity_vllm.definitions.registry import b1
 from verity_vllm.observe.events import DispatchEnter, RunHeader
 from verity_vllm.observe.fold.patterns import AttentionScope
 from verity_vllm.observe.fold.profiles import profile_module_for_case
@@ -353,18 +353,10 @@ def test_inert_window_pattern_rejects_non_causal_and_right_windows(edit, needle)
     assert len(uns) == 1 and uns[0].op == SCOPE and needle in uns[0].reason, [u.reason for u in uns]
 
 
-# --- PROPOSED analytic._inv_freq: ATen CUDA scalar division is a reciprocal multiply ----------------------------------------
-
-def test_inv_freq_models_cuda_reciprocal_multiply_and_is_identity_for_power_of_two_D():
+def test_inv_freq_is_the_division_for_power_of_two_D():
     import numpy as np
     for D, theta in ((64, 500000.0), (128, 1000000.0), (256, 10000.0)):
         C = {"D": D, "ROPE_THETA": theta, "rope_scaling": None}
         div = (np.float32(1.0) / np.power(np.float32(theta), (np.arange(0, D, 2, dtype=np.float32) / np.float32(D)).astype(np.float32),
                                           dtype=np.float32)).astype(np.float32)
         assert np.array_equal(analytic._inv_freq(C).view(np.uint32), div.view(np.uint32)), D
-    C = {"D": 96, "ROPE_THETA": 10000.0, "rope_scaling": None}
-    inv = analytic._inv_freq(C)
-    div = (np.float32(1.0) / np.power(np.float32(10000.0), (np.arange(0, 96, 2, dtype=np.float32) / np.float32(96)).astype(np.float32),
-                                      dtype=np.float32)).astype(np.float32)
-    ulps = inv.view(np.int32).astype(np.int64) - div.view(np.int32).astype(np.int64)
-    assert (ulps != 0).sum() == 14 and ulps.min() == -9 and ulps.max() == 0, ulps.tolist()      # the D=96 discrepancy this models

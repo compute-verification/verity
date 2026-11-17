@@ -6,7 +6,8 @@ cards), once stock and once with our changes, then replays what ours served unde
 what the serve turned on and three lines:
 
 - **tokens**: whether the replay gave back every served token;
-- **cost**: what our changes add to stock's serving time;
+- **cost**: what our changes add to stock's serving time, as a share of serving time on one node at one load, scaled
+  to nothing;
 - **advice**: the bits a request that the served schedule costs as advice.
 
 It measures nothing of its own: the serve, the load, the cost and the replay are the serving cost benchmark's
