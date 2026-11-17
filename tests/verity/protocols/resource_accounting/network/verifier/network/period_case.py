@@ -1,8 +1,8 @@
-"""The network attester's period check (`NetworkVerifier.Period`, `verity/certifier/v0`) in Python, for every difftest
+"""The network attester's period check (`NetworkCheck.Period`, `verity/certifier/v0`) in Python, for every difftest
 that runs it: its mirror, `answer` (as `reference`), and its cases, `build` and `case`.
 
 `answer(case)` is the outcome of one `serve` line in the core interface's answer format
-(`verity_difftest.protocol.answer`): it decodes the protocol's formats (`NetworkVerifier/Period.lean`'s module docstring)
+(`verity_difftest.protocol.answer`): it decodes the protocol's formats (`NetworkCheck/Period.lean`'s module docstring)
 and checks a period with the Python the period's pieces already have: one-stage's answers and integrity profiles as PoUW
 reads them (`pouw.core_check.answer_of` and `integrity`), the network attester's certificates, each under the listed
 entry its execution phase picks (`certifier.certificate`, `_entry_at`: the entry's LMS key, its session, and that

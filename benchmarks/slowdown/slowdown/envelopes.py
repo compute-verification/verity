@@ -280,7 +280,7 @@ DECLARED_IO = ("cell_bytes", "cell_rate", "lanes", "cells", "id_bits", "hold", "
 
 
 def clog2(x: float) -> int:
-    """`⌈log₂ x⌉` for `x ≥ 1`, as `NetworkVerifier.Period.clog2`."""
+    """`⌈log₂ x⌉` for `x ≥ 1`, as `NetworkCheck.Period.clog2`."""
     return (int(x) - 1).bit_length()
 
 
