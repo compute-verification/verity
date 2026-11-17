@@ -2296,6 +2296,17 @@ def test_own_files_of_a_head_with_one_merge_base_are_its_change_and_of_one_that_
     assert Q.own_text(repo, clash, head) == "lib/b.py\nx.txt\n+x by head"
 
 
+def test_own_files_of_a_head_lacking_a_move_main_landed_keep_the_paths_the_move_retired(tmp_path):
+    repo, base = _repo(tmp_path)
+    _git(repo, "checkout", "-q", "-b", "head", base)
+    head = _commit(repo, {"lib/a.py": "a = 1\nmore = 3\n"}, "head")
+    _git(repo, "checkout", "-q", "main")
+    _git(repo, "mv", "lib", "src")
+    main = _commit(repo, {}, "move lib to src")
+    assert Q.own_files(repo, main, head) == {"lib/a.py"}
+    assert Q.own_text(repo, main, head) == "lib/a.py\n+more = 3"
+
+
 def test_the_review_listing_says_low_risk_of_a_head_the_loops_rule_lands_on_its_mark_and_never_of_a_move_or_held_pr(world, capsys):
     """The verified queue's loop takes a marked head on its mark alone when drive.toml at `main` excludes none of its files
     (`lands_on_mark`), so its row says so instead of waiting on a reviewer: one whose owner's own land verdict doesn't count

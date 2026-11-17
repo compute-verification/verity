@@ -1400,14 +1400,18 @@ LOWRISK_ROW = "low-risk: lands on its mark"
 
 
 def _own_range(repo: Path, main: str, head: str) -> tuple[str, ...]:
-    r = _git(repo, "merge-tree", "--write-tree", "--no-messages", main, head, check=False)
-    return (main, r.stdout.split()[0]) if r.returncode == 0 and r.stdout.split() else (f"{main}...{head}",)
+    if len(_git(repo, "merge-base", "--all", main, head, check=False).stdout.split()) > 1:
+        r = _git(repo, "merge-tree", "--write-tree", "--no-messages", main, head, check=False)
+        if r.returncode == 0 and r.stdout.split():
+            return main, r.stdout.split()[0]
+    return (f"{main}...{head}",)
 
 
 def own_files(repo: Path, main: str, head: str) -> frozenset[str]:
-    """The files landing ``head`` changes: ``main`` against its merge with ``head`` (`git merge-tree`), so a head with more than
-    one merge base with ``main`` reads only its own, or against its merge base while that merge conflicts: the change the
-    low-risk rule reads (`lands_on_mark`)."""
+    """The files ``head`` changes against its merge base with ``main``; with more than one (a criss-cross), the files landing it
+    changes, ``main`` against its merge with ``head`` (`git merge-tree`, which follows renames, so not for one base, where a
+    path a move retired stays the head's own), unless that merge conflicts: the change the low-risk rule reads
+    (`lands_on_mark`)."""
     return frozenset(_out(repo, "diff", "--name-only", "--no-renames", *_own_range(repo, main, head)).splitlines())
 
 
