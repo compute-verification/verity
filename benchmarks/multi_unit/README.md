@@ -1,28 +1,30 @@
 # Multi-unit statement forms
 
-One Definition, `ScaledMmFp8Block_v2{K,N,128}`, can be handed to Flock as one statement, as two statements joined by a
-row, or as two tables with glue. This benchmark states it each way (`verity_flock.multi_unit`) at a few shapes and proves
-each on CPUs, so the forms can be compared on what the prover and verifier pay: nonzeros, proving and verifying seconds,
-peak memory and proof bytes.
+Three ways to state `ScaledMmFp8Block_v2{K,N,128}` for Flock (`verity_flock.multi_unit`), measured side by side on CPUs at
+each shape `K:N:n` (n instances, one x row each):
 
-## Try it
+- `c`: one statement, N * K/128 k-step proof blocks and a scale stage of N slots per VU, the stage returning the outputs;
+- `b`: two statements joined by a row, the writer's proof blocks returning temp and s and the reader's proof blocks the scale stage;
+- `a`: two tables with glue, `c`'s proof block and stage circuits as tables and every stage port a glue relation (no rows, no `--zk`).
 
-Stage the one-statement form at a small shape, K = 1024, N = 4, four instances:
+For each shape, `stage.py` stages `c` and `b` from synthetic values (checked against the served kernel's numpy twin and, when
+small enough, the Definition's evaluation); `prove.py` runs one loopback session of each without `--zk` and one with it,
+sampling every instance, with the prover's and verifier's peak memory; the Lean verifier checks each `--zk` session;
+flock-live's test binary runs `a`; and selected shapes run `c`'s selftest negatives. After each shape the job runs `summarize.py`, which gathers every shape
+into one table (`summary.json`): each slot type's nonzeros, k_log, the committed m, prover and verifier seconds and peak memory,
+proof bytes and the verdict.
 
-~~~sh
-uv run python benchmarks/multi_unit/stage.py c 1024 4 4 /tmp/multi_unit
-~~~
-
-It checks every instance against the served kernel's numpy twin and the Definition's evaluation, prints one JSON line
-(each slot type's ANDs and nonzeros, k_log, seconds) and writes it to `/tmp/multi_unit/c/stage.json`; it takes about a
-minute.
-
-The whole comparison, every form at every shape with its proofs, runs in a proofs slot (its settings are the
-environment variables `job.sh` lists at its top):
+Run it from the source tree's root in a proofs slot; there is no `run.py` or `run.sh`, so not through `verity bench`:
 
 ~~~text
 research run --pool proofs --cwd source -- bash benchmarks/multi_unit/job.sh
 ~~~
+
+Its settings are environment variables: `MU_SHAPES` (default `1024:4:4 6144:16:2`), `MU_SELFTEST`, `MU_SELFTEST_ALL`,
+`MU_CASES` and `MU_CACHE` (where the builds are cached). It builds with `benchmarks/pouw/hidden_zk/job.sh` (sourced: flock-circuit,
+the Lean `verity-verify-proof`, a venv with numpy) and builds flock-live's tests from an upstream Flock checkout with `verity/protocols/proofs/flock/prover`'s patches.
+Results go to `$RESEARCH_RUN_DIR/out`, one directory per shape (`k<K>-n<N>-i<n>/`), and scratch to a temporary directory the job
+removes.
 
 Status: a comparison of statement forms, not a served path. The verifier refuses a form its soundness proof doesn't cover, and
 the Lean verifier refuses each `--zk` session for want of a Program once every check has passed; the table reports each verdict
