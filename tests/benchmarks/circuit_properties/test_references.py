@@ -53,7 +53,8 @@ def test_boolean_gemm_partitions(gemm):
 
 
 def test_no_configuration_states_a_shape_of_its_own():
-    """Each configuration is a served one of b1's, or b1's Definitions at a shape benchmarks/slowdown states (`models.toml`,
+    """Each configuration is a served one (one of b1's, or Llama 3.2 1B's as the adapter reads its pinned config.json),
+    or b1's Definitions at a shape benchmarks/slowdown states (`models.toml`,
     read through its loader), differing from the base only by that shape and what is no shape (the model's name, the
     norm's epsilon, the QKV bias); and a served configuration whose model the slowdown calculator has a row for has that row's shape."""
     from verity_vllm.definitions.registry import b1
@@ -61,7 +62,7 @@ def test_no_configuration_states_a_shape_of_its_own():
     models = R.slowdown_models()
     constructed = []
     for name, (C, _) in R.configs().items():
-        if any(C is s for s in served):
+        if any(C is s for s in served) or C == R.pinned(R.LLAMA32_1B):
             if name in models:
                 assert R.shape(models[name]).items() <= C.items(), name
         else:
@@ -121,8 +122,8 @@ def test_smollm2_layer():
 
 def test_a_run_of_every_configuration_writes_the_least_s_x_under_the_metrics_id(tmp_path, monkeypatch, capsys):
     """With every configuration measured (a tiny b1 layer here, beside the Boolean GEMM), the least s_× of the circuits
-    goes into the run's result under the id `metrics.toml` declares, measured; a run of some configurations
-    (`--models`) writes none."""
+    goes into the run's result under the id `metrics.toml` declares, measured; a run of one configuration writes it
+    partial, with that configuration's model, and each prints its point as one line; a run of some writes none."""
     import json
     import sys
     import tomllib
@@ -135,11 +136,22 @@ def test_a_run_of_every_configuration_writes_the_least_s_x_under_the_metrics_id(
         monkeypatch.delenv(name, raising=False)
     monkeypatch.setattr(kit, "host_stamp", lambda: {"commit": None})
     tiny = dict(b1.B0_CONFIG, H=16, NH=1, KVH=1, D=16, I=16, QKV=48, GU=32, V=64, NL=1)
-    monkeypatch.setattr(R, "configs", lambda: {"tiny": (tiny, "a test's"), "other": (b1.B0_CONFIG, "a test's")})
+    monkeypatch.setattr(R, "configs", lambda: {"tiny": (tiny, "a test's"), "again": (tiny, "a test's"),
+                                               "other": (b1.B0_CONFIG, "a test's")})
     (row,) = tomllib.loads((Path(run.__file__).parent / "metrics.toml").read_text())["metric"]
-    monkeypatch.setattr(sys, "argv", ["run.py", "--models", "tiny", "--out", str(tmp_path / "some")])
+    monkeypatch.setattr(sys, "argv", ["run.py", "--models", "tiny,again", "--out", str(tmp_path / "some")])
     assert run.main() == 0 and (tmp_path / "some" / "properties.json").is_file()
     assert not (tmp_path / "some" / "result.json").exists()
+    capsys.readouterr()
+    monkeypatch.setattr(sys, "argv", ["run.py", "--models", "tiny", "--out", str(tmp_path / "one")])
+    assert run.main() == 0
+    circuits = json.loads((tmp_path / "one" / "properties.json").read_text())
+    (m,) = json.loads((tmp_path / "one" / "result.json").read_text())["measurements"]
+    assert (m["name"], m["value"], m["mark"], m["model"]) == (row["id"], min(c["s_x"] for c in circuits), "partial",
+                                                              tiny["model"])
+    assert json.loads(capsys.readouterr().out.splitlines()[-1]) == {
+        "name": row["id"], "value": m["value"], "unit": row["unit"], "mark": "partial", "model": tiny["model"],
+        "card": None}
     monkeypatch.setattr(R, "configs", lambda: {"tiny": (tiny, "a test's")})
     monkeypatch.setattr(sys, "argv", ["run.py", "--out", str(tmp_path / "every")])
     assert run.main() == 0

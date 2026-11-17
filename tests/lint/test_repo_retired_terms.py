@@ -252,18 +252,14 @@ OWN_NAME = {term: tuple((re.compile(pattern), files) for pattern, _, files in na
 #: refused as stale); when an owner writes a new key beside the old one, the entry's reason gets the day the old key stops
 #: being read.  A file's entry in the list falls by its held sites (``--prune``) and never rises for them.
 HELD_KEYS = {
-    "firewall": (("benchmarks/recursion_e2e/rec_profile.py",), "reads a stored recursion run, benchmarks'"),
-    "flock_firewall": (("benchmarks/recursion_e2e/rec_profile.py",), "reads a stored recursion run, benchmarks'"),
-    "flock-firewall": (("benchmarks/recursion_e2e/rec_profile.py", "benchmarks/recursion_e2e/README.md"),
-                       "reads a stored recursion run, benchmarks'"),
-    "FIREWALL-REFUSED": (("benchmarks/recursion_e2e/rec_profile.py", "benchmarks/recursion_e2e/README.md",
-                          "tests/benchmarks/recursion_e2e/test_recursion_e2e.py"),
-                         "reads a stored recursion run, benchmarks'"),
-    "t.firewall_recheck": (("benchmarks/recursion_e2e/rec_profile.py",), "reads a stored recursion run, benchmarks'"),
     "sampled-proofs:*": (("benchmarks/harness/README.md", "benchmarks/harness/specs/llama31-8b-fp8-1gpu-commit-served.toml",
                           "tests/benchmarks/harness/test_bench.py", "benchmarks/harness/verity_bench/vllm/commit_arm.py"),
                          "a stored run's arm key, vllm's"),
-    "coin_source": (("benchmarks/harness/verity_bench/vllm/runner.py", "tests/benchmarks/harness/test_bench.py"),
+    "coin_source": (("benchmarks/harness/verity_bench/vllm/runner.py", "tests/benchmarks/harness/test_bench.py",
+                     "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/__init__.py",
+                     "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/challenger.py",
+                     "verity/protocols/resource_accounting/compute/pouw/prover/serving/lead/__init__.py",
+                     "verity/protocols/resource_accounting/compute/pouw/prover/serving/pearl_c/window.py"),
                     "the PoUW commitment's key, compute-accounting's"),
 }
 #: a character of an identifier a held key stands in
@@ -1136,12 +1132,6 @@ def test_the_adapter_s_row_of_record_and_h1_s_period_auditor_keep_their_words_on
     assert [w.split("'")[1] for _, w in sites(text, "verity/a.py")] == ["row of record", "row_of_record", "_PeriodAuditor"]
 
 
-RECORDED_KEYS = ('ZK_SERVER_MODE, RECORDED_MODE = "zk_server", "firewall"\n'
-                 'LOOP, RECORDED_LOOP = "lean_session_loop", "flock_firewall"\n'
-                 'LOOP_PROCESSES = ("flock-zk-server", "flock-firewall")\n'
-                 "#: a recorded run's ZK server refused as ``FIREWALL-REFUSED``\n"
-                 'STOPS = ("ZK-SERVER-REFUSED", "FIREWALL-REFUSED", "PROVER-STOPPED")\n'
-                 'RECORDED_BUCKETS = {"t.firewall_recheck": "t.zk_server_recheck"}\n')
 ARM_KEYS = ('bound_arm, _control = resolve_arms("sampled-proofs:hm96,stock-fp8")\n'
             'assert build_bound(bound_arm) == ("sampled-proofs:hm96",)\n'
             'live = _pearl_c_gate(Run(exact_y, coin_source="challenger", session=session, pass_index=0))\n')
@@ -1156,9 +1146,6 @@ def retired(text: str, path: str) -> list[tuple[int, str]]:
 def test_a_held_key_in_a_file_its_entry_doesn_t_name_still_counts() -> None:
     """A key is held only in the files its entry names: in a file beside them, and in a file another key's entry names,
     every site of it counts."""
-    recorded = [(1, "firewall"), (2, "firewall"), (3, "flock-firewall"), (4, "FIREWALL"), (5, "FIREWALL"), (6, "firewall")]
-    assert retired(RECORDED_KEYS, RECURSION + "forge_after.py") == recorded
-    assert retired(RECORDED_KEYS, HARNESS + "verity_bench/vllm/runner.py") == recorded
     assert retired(ARM_KEYS, HARNESS + "verity_bench/vllm/runner.py") == [(1, "sampled-proofs"), (2, "sampled-proofs")]
     assert retired(ARM_KEYS, HARNESS + "verity_bench/vllm/commit_arm.py") == [(3, "coin_source")]
     assert retired(ARM_KEYS, "benchmarks/one_stage/run.py") == [(1, "sampled-proofs"), (2, "sampled-proofs"),
@@ -1168,11 +1155,6 @@ def test_a_held_key_in_a_file_its_entry_doesn_t_name_still_counts() -> None:
 def test_the_word_in_prose_or_in_a_new_name_in_a_listed_file_still_counts() -> None:
     """In a file its entry names, a key is held only where it stands whole: the bare word, a plain word unquoted or quoted
     with more beside it, another spelling, and a longer name holding the key still count."""
-    recursion = ('# the firewall refused it: mode = firewall, "the firewall", FIREWALL\n'
-                 'firewall_mode, "firewall_v2", flock_firewall_loop, "FIREWALL-REFUSED-AGAIN", "t.firewall_recheck2"\n')
-    assert retired(recursion, RECURSION + "rec_profile.py") == [
-        (1, "firewall"), (1, "firewall"), (1, "firewall"), (1, "FIREWALL"),
-        (2, "firewall"), (2, "firewall"), (2, "firewall"), (2, "FIREWALL"), (2, "firewall")]
     harness = ('# the coin source, coin_source_v2, c["coin_sources"]; the sampled proofs, "sampled-proofs", sampled-proofs:\n')
     assert retired(harness, "tests/" + HARNESS + "test_bench.py") == [
         (1, "coin source"), (1, "coin_source"), (1, "coin_sources"), (1, "sampled proofs"), (1, "sampled-proofs"),
@@ -1182,12 +1164,6 @@ def test_the_word_in_prose_or_in_a_new_name_in_a_listed_file_still_counts() -> N
 def test_a_held_key_in_a_listed_file_is_not_a_site() -> None:
     """Each key where it stands whole in a file its entry names, quoted or as the identifier it is, in code, a comment or
     Markdown; a site beside it on the same line still counts."""
-    assert retired(RECORDED_KEYS, RECURSION + "rec_profile.py") == []
-    readme = ("  `FIREWALL-REFUSED`) or Lean refused it\n"
-              "  cost is read from `flock-zk-server`'s (`flock-firewall`'s in a recorded run) CPU seconds\n")
-    assert retired(readme, RECURSION + "README.md") == []
-    stop = '(d / "prove.err").write_text("FIREWALL-REFUSED R7: the witness does not open the registered row; no proof\\n")\n'
-    assert retired(stop + 'assert "FIREWALL-REFUSED" in outer["note"]\n', "tests/" + RECURSION + "test_recursion_e2e.py") == []
     assert retired(ARM_KEYS, "tests/" + HARNESS + "test_bench.py") == []
     coins = ('check.coins = ({"source": c["coin_source"]} if c.get("coin_source", "in-process") != "in-process"\n'
              "               else {}  # the firewall's coins\n")

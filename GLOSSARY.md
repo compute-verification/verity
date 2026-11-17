@@ -76,7 +76,7 @@ Code, docs, CLI help and output fields use these terms. When a term changes, thi
 - **Adapter**: what makes Verity work end to end with a real system (`ARCHITECTURE.md`'s section 4, "The parts and their interfaces"). Code keeps its older names, integration and frontend (`verity_torch.frontend` is the PyTorch adapter's translator to circuits, `verity_vllm.program.frontend` its vLLM half).
 - **Configuration**: the file `verity run` reads, a `.toml` in `demos/`, the only Verity artifact: the protocols it runs on one registration, where each party runs, its channels, and the keys the auditor pinned for its devices, by party and protocol. A machine runs `verity run CONFIG --party ROLE`, or every role it is given, and `verity config new|check|hash` writes, checks and hashes one. Verity has no deploy verb; its code reaches a machine by ordinary packaging. Remote and onsite are compose's two lists of protocols with their ties (Lean's `Composite`); a configuration names one.
 - **Parameter**: a value a protocol's behaviour depends on and does not fix: a sampling rate, a period's length, a size class, a hardware figure. A protocol takes every parameter as a public input and holds none. `security/` states what holds as a function of the parameters, calibration chooses them, and an application sets them all.
-- **Calibration**: choosing parameters from measurements and data sheets (`calibration/`): the hardware's data sheets, the probes of a card, and the harnesses that test an assumption a parameter rests on. Its output is a parameter's value with its source. Nothing imports calibration code.
+- **Calibration**: choosing parameters from measurements and data sheets (`calibration/`): the hardware's data sheets, the probes of a card, and the harnesses that test an assumption a parameter rests on. Its output is a parameter's value with its source: a data sheet, a measurement of ours, or a named premise. Nothing imports calibration code.
 - **Application**: a configuration that sets every parameter of a run, one file in `applications/`; `verity run NAME` runs `applications/NAME.toml`. Remote and onsite are applications.
 - **Channel**: what two parties exchange messages over, declared in a configuration.
 - **Serving** and **proving**: serving is the live inference path, whose cost (computing commitments while serving, say) is serving overhead; proving is proof generation, whose cost is proving overhead. Neither is called "production".
@@ -315,7 +315,8 @@ run side by side are one workload. vLLM's workload files (`adapters/vllm/workloa
   served cap of S bits charges each replay block at most F S.
 - **Benchmark**: one command that measures and records its numbers (`verity bench NAME`, a directory's runner under
   `benchmarks/`). A benchmark measures performance or cost and nothing else: it decides no verdict and chooses no
-  parameter, and a run that chooses a parameter or tests an assumption one rests on is calibration.
+  parameter, and a run that chooses a parameter or tests an assumption one rests on is calibration. What a guarantee
+  gives at an application's parameters is a security figure, not a benchmark.
 - **Metric**: one named number a benchmark records, declared as one `[[metric]]` of its directory's `metrics.toml`
   (`benchmarks/README.md`).
 - **Benchmark result**: what one run of a benchmark recorded in one configuration. A proof benchmark's

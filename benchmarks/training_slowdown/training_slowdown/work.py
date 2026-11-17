@@ -2,21 +2,21 @@
 depend on the update, with each operand's β and each output's width.
 
 A step's record is a job's trace (`run.trace_step`'s: the capture's raw product rows at each k of the console's dial,
-which `priced` prices), or the products stated from one over a run's steps (`products_of_trace`, which
-`formalism.measure` keeps as `Measured.products`). `he_of_rows` states M from a step's priced rows at a k: the
-products it leaves out, each operand's β and each output's width. `classified_at` is a record's products at a
-policy's k. The reasons a record states no M are here too.
+which `priced` prices), or the products stated from one over a run's steps (`products_of_trace`). `he_of_rows` states
+M from a step's priced rows at a k: the products it leaves out, each operand's β and each output's width.
+`classified_at` is a record's products at a policy's k. The reasons a record states no M are here too.
 
 Nothing here computes a slowdown or reads the slowdown calculator: `calculator.slowdown` reads this work and asks it.
 """
 from __future__ import annotations
 
+import json
 import math
 
-from .gates import gates
+from .gates import gates, split_key
 
 #: what every string a panel publishes calls this code, which names no module, function or constant of it
-#: (tests/test_formalism.py's code-name check)
+#: (tests/test_grade.py's code-name check)
 THE_CODE = "training's slowdown code"
 #: the premise the products term takes on the step's elementwise ops, as published strings state it
 P_MATCH = "elementwise steps don't fan out (P-match)"
@@ -56,7 +56,7 @@ SYSTEM_FROM = "4.12.1"
 #: positions the job counted as repeats on its batch's tokens (`batch_count`), and where it has no count, takes
 #: `P_BATCH`
 SHARED_PREFIX = 1
-#: why the products kind is unmeasured where a trace isn't of the run's own program (`formalism.other_program`): a
+#: why the products kind is unmeasured where a trace isn't of the run's own program (`grade.other_program`): a
 #: products term is priced only on its run's own program
 OTHER_PROGRAM = ("unmeasured: the trace isn't of the run's own program: {unmatched} of the {shapes} matrix-product "
                  "shapes its traced step runs are none of the {ran} the run's op log ran (the largest by "
@@ -151,7 +151,7 @@ def products_of_trace(block: dict, steps: float | None = None, batch: dict | Non
     the trace's P-match check, and the products term's M over the steps of the block's tokens (`he`, `he_of_rows`,
     less the repeats `batch` counts over those steps: `batch_count`'s), at the k the capture classified them at, and
     at each k of the console's dial where the trace keeps rows there (`at`). The steps are ones after the run's first
-    update (`formalism.of_record` counts no step before it, whose products read only registered weights; None: a step
+    update (no step before it counts, whose products read only registered weights; None: a step
     captured on its own, which stands for one after it)."""
     kinds = dict.fromkeys(PRODUCT_KINDS, 0.0)
     for r in block["rows"]:
@@ -163,6 +163,90 @@ def products_of_trace(block: dict, steps: float | None = None, batch: dict | Non
         rest = {x: v for x, v in block.items() if x != "at"}
         got["at"] = {x: products_of_trace(rest | b, steps, batch) for x, b in block["at"].items()}
     return got
+
+
+TRACED_PRODUCTS = ("measured (trace): the traced step's products of two fresh operands, each at its passed widths and "
+                   "gates a MAC, times the traced steps' tokens over the traced step's")
+#: what the products' label adds where the job counted its batch's repeats (`work.batch_count`)
+COUNTED_PRODUCTS = ("less the positions the job's own batch repeats by its tokens, counted on its steps and left out of "
+                    "every token-indexed product at their share of the steps' tokens")
+
+
+def traced_label(batch: dict | None) -> str:
+    """The products' label where they come from a trace over a run's steps (`TRACED_PRODUCTS`), with what M left out
+    where the job counted its batch's repeats (`batch`, `work.batch_count`'s)."""
+    return f"{TRACED_PRODUCTS}, {COUNTED_PRODUCTS}" if batch else TRACED_PRODUCTS
+#: the products' approximation where a run's traced steps differ in shape (their structures, or their tokens)
+STAND_IN = ("approximated: the run's traced steps differ in shape, so the dominant traced step's products stand in "
+            "for all of them, scaled by tokens")
+
+
+#: the matrix products a trace's rows and a run's op log both give as (m, K, n), by one rule (training_slowdown.capture.
+#: structure's GEMMs and `log_products`): a batched product is left out, since a capture's attention, by the math
+#: backend, has no counterpart in a record written before training_slowdown 4.22.0, which holds a fused attention
+#: kernel as one row
+PLAIN_PRODUCTS = ("mm", "_int_mm", "_scaled_mm", "addmm", "addmm_", "mv", "addmv", "addmv_", "dot", "vdot", "addr",
+                  "addr_")
+#: the fused attention kernels an op log written before training_slowdown 4.22.0 names, one row a kernel call
+SDPA = ("_scaled_dot_product_flash_attention", "_scaled_dot_product_efficient_attention",
+        "_scaled_dot_product_cudnn_attention")
+
+
+def log_products(op: str, shapes: list) -> list[tuple[int, int, int, int]] | None:
+    """An op log's op's matrix products as (b, m, K, n), from its tensor operands' shapes in training_slowdown.flops's
+    order; None for an op this doesn't place, and an error for shapes that aren't its operands'. A fused attention
+    kernel's row (`SDPA`, [B, H, L, E] operands) is its products as torch's FLOP formula counts them, which is how
+    the record that holds it was counted: the query heads sharing a key head stacked as rows of one product."""
+    s = [tuple(x) for x in shapes]
+    if op in ("mm", "_int_mm", "_scaled_mm"):
+        (m, K), (_, n) = s[0], s[1]
+    elif op in ("addmm", "addmm_", "_addmm_activation"):
+        (m, K), (_, n) = s[1], s[2]
+    elif op == "bmm":
+        (b, m, K), (_, _, n) = s[0], s[1]
+        return [(b, m, K, n)]
+    elif op in ("baddbmm", "baddbmm_"):
+        (b, m, K), (_, _, n) = s[1], s[2]
+        return [(b, m, K, n)]
+    elif op in ("addbmm", "addbmm_"):
+        (b, m, K), (_, _, n) = s[1], s[2]
+        K *= b
+    elif op == "mv":
+        (m, K), n = s[0], 1
+    elif op in ("addmv", "addmv_"):
+        (m, K), n = s[1], 1
+    elif op in ("dot", "vdot"):
+        (K,), m, n = s[0], 1, 1
+    elif op in ("addr", "addr_"):
+        (m,), (n,), K = s[1], s[2], 1
+    elif op in SDPA or op.removesuffix("_backward") in SDPA:
+        back = op.endswith("_backward")
+        (B, hq, L, E), (_, hkv, S, _), (*_, Ev) = s[1:4] if back else s[0:3]
+        b, rows = B * hkv, hq // hkv * L
+        scores = (b, rows, E, S)
+        if not back:
+            return [scores, (b, rows, S, Ev)]
+        return [scores, (b, rows, Ev, S), (b, S, rows, Ev), (b, rows, S, E), (b, S, rows, E)]
+    else:
+        return None
+    return [(1, m, K, n)]
+
+
+def products_of_log(log: dict) -> tuple[dict[str, list], list[str]]:
+    """An op log's matrix products, as every reader of a log's shapes takes them: each of its `ops`' keys that
+    `log_products` places with its products (b, m, K, n), and the keys it couldn't read, whose shapes aren't their
+    op's operands'."""
+    placed, unread = {}, []
+    for key in log.get("ops", {}):
+        op, shapes = split_key(key)[2:4]
+        try:
+            prods = log_products(op, json.loads(shapes))
+        except (ValueError, TypeError, IndexError, ZeroDivisionError):
+            unread.append(key)
+            continue
+        if prods:
+            placed[key] = prods
+    return placed, unread
 
 
 def classified_at(p: dict, k: float) -> dict | None:

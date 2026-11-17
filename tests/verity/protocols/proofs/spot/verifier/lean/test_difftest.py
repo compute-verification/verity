@@ -6462,17 +6462,19 @@ def test_link_points_holds_the_per_member_forms_members_as_the_python_does(piece
     PAIR's two proof blocks and TRIPLE's eighteen, a template each, and one template's twenty-four cut in half. A row
     is a sampling design with each member's fewest and most sampled proof blocks over the samples that end, the members
     a sample that ends misses (fewest none) and the members whose fewest and most open different link points (3 up to
-    eight proof blocks, 4 up to sixteen, 5 past). The `link_points` piece answers those counts and the members of
-    either list, and the docket is refused, for `link-points` alone, exactly where a list holds a member:
+    eight proof blocks, 4 up to sixteen, 5 past). The `link_points` piece answers those counts and the members whose link
+    points differ, and the docket is refused, for `link-points` alone, exactly where that list holds a member, a member a
+    sample misses passing:
 
     * a stratum inside each member (`stratified:10` over the two templates), or a subset that leaves out one proof
       block (`subset:19`, `subset:23`): no sample misses a member and each has one count, so the docket passes;
-    * `subset:9` over two and eighteen misses PAIR's member and holds seven to nine of TRIPLE's, 3 link points or 4;
+    * `subset:9` over two and eighteen misses PAIR's member, which passes, and holds seven to nine of TRIPLE's, 3 link
+      points or 4, which is refused;
     * `subset:20` over the halves holds eight to twelve of each, 3 link points or 4, and misses neither;
     * `subset:2` over two and eighteen, and `stratified:1` over the halves, whose one stratum holds both members,
-      miss either member and give each one count: link points alone pass them;
+      miss either member and give each one count: link points pass them;
     * a Bernoulli sampling design of rate 0 samples nothing, so each member's fewest and most are none: link points
-      alone pass it.
+      pass it.
 
     With no members, the one-statement form's, every record passes. Then dockets of such windows and of small
     ones, their members cut at random and some broken, agree, a share of them refused for their link points and a
@@ -6492,7 +6494,7 @@ def test_link_points_holds_the_per_member_forms_members_as_the_python_does(piece
         rec = _record_of(s, None, design, WINDOW, leaf_layer=LEAF)
         assert [i for i, (lo, _) in enumerate(bounds) if lo == 0] == missed, design
         assert [i for i, (lo, hi) in enumerate(bounds) if LP.nbl(1, lo) != LP.nbl(1, hi)] == differ, design
-        refused = sorted({*missed, *differ})
+        refused = differ
         counts = {"law": rec["law"], "members": members, "population": rec["population"]}
         assert link_points(counts) == {"bounds": bounds, "refused": refused}, design
         assert D.replay(LINK_POINTS, counts, pieces) == ("output", D.canonical(link_points(counts))), design

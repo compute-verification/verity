@@ -217,6 +217,22 @@ def provenance(product: str, exe: Path, tree: Path) -> dict[str, Any]:
     return {"commit": commit, "clean": clean, "verifier_sha512": file_sha512(exe), "cites": cites, "lock": lock}
 
 
+def members_reached(cases: Sequence[dict[str, Any]]) -> tuple[int, int] | None:
+    """Of the SPOT case in the per-member form, the members its accepted sample reached and the members it
+    registers; None for any other case."""
+    for p in cases:
+        proofs = p["params"].get("proofs") if p["id"] == SAMPLED else None
+        if not isinstance(proofs, dict) or not isinstance(proofs.get("members"), dict):
+            continue
+        if outcome(p["id"], p["answer"])["verdict"] != "accept":
+            return None
+        a = json.loads(p["answer"])
+        sample = (a.get("public") or {}).get("drawn") or []
+        ms = proofs["members"].values()
+        return sum(any(lo <= u < hi for u in sample for lo, hi in m["units"]) for m in ms), len(ms)
+    return None
+
+
 def two_stage_accepted(cases: Sequence[dict[str, Any]]) -> bool:
     """Whether SPOT's case is in the two-stage form and its verifier accepted it."""
     return any(p["id"] == SAMPLED and p["params"].get("form") == TWO_STAGE
@@ -312,6 +328,9 @@ def run(a: argparse.Namespace) -> int:
         rc = p.returncode
         ran = provenance(a.product, Path(shutil.which(a.exe) or a.exe), a.tree)
         lines.append(f"RAN {ran['commit']} clean={ran['clean']} sha512={ran['verifier_sha512']} cites={ran['cites']}")
+        if ran["cites"] is not None and (got := members_reached(cases)) is not None and got[0] < got[1]:
+            ran["not_covered"] = {"id": SAMPLED, "members": {"sampled": got[0], "registered": got[1]}}
+            lines.append(f"NOT_COVERED {SAMPLED} {got[0]} of {got[1]} members sampled: {ran['cites']} does not cover it")
         if ran["cites"] is not None and two_stage_accepted(cases):
             ran["not_covered"] = {"id": SAMPLED, "form": TWO_STAGE}
             lines.append(f"NOT_COVERED {SAMPLED} {TWO_STAGE} form: {ran['cites']} does not cover it, its form is not yet proved")

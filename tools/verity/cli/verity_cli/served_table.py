@@ -55,7 +55,6 @@ from verity.protocols.resource_accounting.network.verifier import parties as NC
 from verity.protocols.workload_classification.training_detection.inference_only.verifier import parties as IO
 from verity.protocols.resource_accounting.memory.poub.verifier import p2_parties as P2
 from verity.protocols.resource_accounting.memory.pous.attester import challenger_session as CS
-from verity.protocols.resource_accounting.memory.pous.attester import onsite
 from verity.protocols.registration.verifier import registration as RL
 from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
 from verity.protocols.resource_accounting.memory.pous.verifier import streamed_wipe as sw
@@ -79,7 +78,7 @@ ONSITE = "verity/onsite/v0"
 BINDINGS = "bindings.json"
 WORKERS, ZK_SERVER, PROVER, VERIFIER = SP.WORKERS, SP.ZK_SERVER, WP.PROVER, SP.VERIFIER
 CHALLENGER, MEMORY_ATTESTER = SP.CHALLENGER, WP.CHALLENGER
-BANDWIDTH_VERIFIER, NETWORK_CERTIFIER = "bandwidth-verifier", NC.NETWORK_CERTIFIER
+BANDWIDTH_VERIFIER, NETWORK_CERTIFIER = P2.CLOSER_PARTY, NC.NETWORK_CERTIFIER
 #: served_verdicts.py's record reads each piece's answer by its runner name
 RECORD_NAMES = {"integrity": "sampled-proofs", "work": "pouw", "inference-only": "inference-only", "space": "pous",
                 "bandwidth": "bandwidth", "communication": "certifier", "wipe": "wipe"}
@@ -191,7 +190,8 @@ PLACEMENT = {WORKERS: PROVER_NODE, ZK_SERVER: PROVER_NODE, PROVER: PROVER_NODE, 
              VERIFIER: AUDITOR_HOST}
 #: the configuration this table's demo runs, whose `[[pin]]` entries are the only statement of the keys the auditor pinned
 CONFIG = ROOT / "demos" / "onsite_full.toml"
-_NOT_YET = "`verity run` stops on it with NotImplementedError until goal demos/onsite-demo brings it."
+_UNDECIDED = ("`verity run` records each period's verdict under that id, undecided unless the line says who",
+              "combined it: no composite takes it.")
 #: each demo file's header
 HEADERS = {
     "onsite_full": (
@@ -202,11 +202,11 @@ HEADERS = {
     "onsite_compute": (
         "The served window under SPOT, PoUW, the inference-only policy, the network certifier and the memory",
         "wipe (verity/onsite-compute/v0, a deployment of its own, never onsite): onsite without PoUS and PoUB,",
-        "each party on its machine, and the key the auditor pinned for its memory attester.", _NOT_YET),
+        "each party on its machine, and the key the auditor pinned for its memory attester.", *_UNDECIDED),
     "onsite_network": (
         "The served window under the network certifier, SPOT and the memory wipe (verity/onsite-network/v0, a",
         "deployment of its own, never onsite), each party on its machine, and the key the auditor pinned for",
-        "its memory attester.", _NOT_YET),
+        "its memory attester.", *_UNDECIDED),
     "remote": (
         "The served window under remote's subprotocols (verity/remote/v1): SPOT, PoUW's Pearl+ run verdict and the",
         "inference-only policy. No auditor's device is at the site: the developer's parties are on the prover node",
@@ -304,7 +304,10 @@ class Piece:
     """One party's piece of the served window (module docstring): ``hooks(cfg, params, bound)`` gives the runner's
     variables for it from the configuration, the component's checked parameters and the bindings of the party it
     reaches (``bound``: each of ``binds``, a ``<party.component.key>`` placeholder while unbound, and each bound one of
-    ``optional``). A ``runtime`` piece's ``session`` is the protocol it is a party of."""
+    ``optional``). A ``runtime`` piece's ``session`` is the protocol it is a party of. The workload's piece names the
+    runner's verbs it stands for (``verbs``, `RUNNER`'s ``served_verdicts.sh VERB``, in the order its main path runs
+    them) and what they write that the other pieces read (``writes``: under the serve dir, ``D/``, or the public record,
+    ``OUT/``); `live` still runs the runner whole (`served_window`)."""
 
     component: str
     party: str
@@ -316,6 +319,8 @@ class Piece:
     optional: tuple[str, ...] = ()
     hooks: Hooks = _none
     session: Session | None = None
+    verbs: tuple[str, ...] = ()
+    writes: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         if self.runs not in RUNS:
@@ -350,7 +355,8 @@ class Piece:
         what it raises; a protocol whose halves aren't all in this tree is ``absent``, by module."""
         out = {"component": self.component, "runs": self.runs, "what": self.what, "scripts": list(self.scripts),
                "reaches": self.reaches or self.party, "missing": self.missing(),
-               "hooks": self.variables(cfg, bindings), "unbound": self.unbound(bindings)}
+               "hooks": self.variables(cfg, bindings), "unbound": self.unbound(bindings),
+               **({"verbs": list(self.verbs), "writes": list(self.writes)} if self.verbs else {})}
         if self.session is None:
             return out
         s, machine = self.session, {p["name"]: p["machine"] for p in cfg["party"]}[self.party]
@@ -400,13 +406,12 @@ POUS = Session(("verity.protocols.resource_accounting.memory.pous.attester.chall
                MEMORY_ATTESTER)
 #: onsite PoUB over PoUS's P2 store (`p2_parties`' verifier, `p2_party_prover`'s prover), beside the served window, on
 #: the verifier's monotonic clock; the verifier reads the memory attester's PoUS key from that party's run beside it
-#: on the auditor's device (``challenger``), checked against the configuration's pin by PoUS's device (`onsite.pin`,
-#: `onsite.signer`), which the table hands its start
+#: on the auditor's device (``challenger``)
 POUB = Session(("verity.protocols.resource_accounting.memory.poub.verifier.p2_parties:PROTOCOLS",
                 "verity.protocols.resource_accounting.memory.poub.prover.p2_party_prover:PROTOCOL"),
                {BANDWIDTH_VERIFIER: P2.VERIFIER, PROVER: P2.PROVER}, {P2.VERIFIER: (time.monotonic_ns, MONOTONIC)},
                BANDWIDTH_VERIFIER, reads={BANDWIDTH_VERIFIER: {"challenger": ("pous", MEMORY_ATTESTER)}},
-               starts=P2.starts(onsite.pin, onsite.signer))
+               starts=P2.starts())
 
 
 #: what the network attester's front asks of serve-openai: its id-form requests answered in the id form, an id event the
@@ -421,7 +426,8 @@ SCAN_CLASS = "8,32,4,4,16"
 def _certifier_piece(cfg, params, bound):
     py = ".venv/bin/python"
     return {"SERVE_ARGS": ID_FORM,
-            "CERTIFIER_FRONT": f'{py} {CERTIFIER_PIECE} front "$1" "$2" "$3" --gate {shlex.quote(bound["gate"])}',
+            "CERTIFIER_FRONT": f'{py} {CERTIFIER_PIECE} front "$1" "$2" "$3" --gate {shlex.quote(bound["gate"])} '
+                               f'--peer {shlex.quote(bound["peer"])}',
             "CERTIFIER_CHAIN_CMD": f'{py} {CERTIFIER_PIECE} chain "$@"',
             "CERTIFIER_PERIOD_CMD": f'{py} {CERTIFIER_PIECE} period "$@"',
             "V3C_CLASS": SCAN_CLASS, "CLASSES": f"4,32,4 {SCAN_CLASS}"}
@@ -430,7 +436,10 @@ def _certifier_piece(cfg, params, bound):
 SERVE = Piece(SERVED_WINDOW, WORKERS, SERVED_WINDOW, "Execution: serve-openai on the prover node under its GPU lease, the "
               "requests, every closed window sealed and the audited window picked; then SPOT's records audit "
               "(Flock --zk behind the Lean ZK server, the Lean verifier) and each listed component's piece",
-              scripts=(RUNNER, VERDICTS_SCRIPT), hooks=_serve)
+              scripts=(RUNNER, VERDICTS_SCRIPT), hooks=_serve,
+              verbs=("predict", "serve", "seal", "window", "advice", "circuits", "publish"),
+              writes=("D/requests.jsonl", "D/windows.jsonl", "D/seals.jsonl", "D/serve.json", "D/windows/w<K>/",
+                      "D/advice/w<K>/", "OUT/serve/", "OUT/machine.txt"))
 #: each listed component's party -> its piece
 PARTIES: dict[str, dict[str, Piece]] = {
     "sampled-proofs": {
@@ -477,7 +486,7 @@ PARTIES: dict[str, dict[str, Piece]] = {
                        "requests (CERTIFIER_FRONT, which the served window runs), and its piece split around V3c: the "
                        "chain on V3c's committed window (CERTIFIER_CHAIN_CMD), then the period check on V3c's "
                        "period.json (CERTIFIER_PERIOD_CMD)", scripts=(CERTIFIER_PIECE,), reaches=NETWORK_CERTIFIER,
-                       binds=("gate",), hooks=_certifier_piece),
+                       binds=("gate", "peer"), hooks=_certifier_piece),
         NETWORK_CERTIFIER: Piece("certifier", NETWORK_CERTIFIER, GATE, "the network certifier behind the gate, "
                                  "in front of serve-openai before the requests"),
         VERIFIER: Piece("certifier", VERIFIER, CHECK, "the network certifier's row"),

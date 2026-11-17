@@ -456,7 +456,7 @@ def test_a_host_that_makes_no_scope_starts_no_check_unless_it_says_so(tmp_path, 
     assert all((tmp_path / f"{n}.seen").exists() for n in ("v1", "sampled", "reg")) and not scope.exists()
 
 
-def test_a_host_that_makes_no_scope_runs_each_check_behind_prlimit_at_the_same_size_and_its_blob_cap(
+def test_a_host_that_makes_no_scope_runs_each_check_behind_prlimit_at_the_same_size_and_its_blob_limit(
         tmp_path, capsys, scope, monkeypatch):
     program, query = toy()
     v1 = v1_case(program, query)
@@ -517,10 +517,7 @@ def test_the_lean_answers_behind_prlimit_at_the_default_limit_as_under_none(tmp_
         assert line == SC.lean_answer(exe, case, tmp_path / "scratch", cmd, none)[1]
 
 
-def test_a_v2_case_in_the_per_member_form_is_not_asked(tmp_path, capsys, scope):
-    """A v2 case whose proofs are several members' statements, not one statement's sessions, is the form one-stage v2
-    refuses once it has read every blob: neither SPOT's check nor the bare v2 check is started on it, each
-    line saying so beside the blobs' sum and the limit, and no answer is written in the Lean's place."""
+def test_a_v2_case_in_the_per_member_form_is_asked(tmp_path, capsys, scope):
     program, query = toy()
     v1 = v1_case(program, query)
     audit = audit_dir(tmp_path, v1)
@@ -532,13 +529,9 @@ def test_a_v2_case_in_the_per_member_form_is_not_asked(tmp_path, capsys, scope):
     rc, cases, refused, out = run(capsys, "--audit", audit, "--private", tmp_path / "private", "--alpha", "1", "--gamma", 1,
                                   *stand_ins(tmp_path, v1), "--v2", "--v2-exe",
                                   stand_in(tmp_path, "v2", answer(SC.V2, digest_of(v1))))
-    total = sum(len(Path(b).read_bytes()) for b in case["blobs"])
-    assert rc == 1 and refused == [] and [c["protocol"] for c in cases] == [V1, INF], out
-    assert not_started(out) == [{"protocol": id, "reason": SC.PER_MEMBER, "blobs": 2, "blob_bytes": total,
-                                 "limit_bytes": SC.CHECK_BLOBS_GB * 10**9} for id in (SAMPLED, SC.V2)]
-    assert not (tmp_path / "sampled.seen").exists() and not (tmp_path / "v2.seen").exists()
-    assert sorted(p.name for p in (tmp_path / "private").iterdir()) == sorted([SC.DIRS[V1], SC.DIRS[INF], "scratch"])
-    assert len(scope.read_text().splitlines()) == 2
+    assert refused == [] and not_started(out) == [], out
+    assert sorted(c["protocol"] for c in cases) == sorted([V1, SAMPLED, INF, SC.V2]), out
+    assert (tmp_path / "sampled.seen").exists() and (tmp_path / "v2.seen").exists()
 
 
 def test_without_v2_no_v2_case_is_made(tmp_path, capsys):
