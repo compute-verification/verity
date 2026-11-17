@@ -106,6 +106,15 @@ def test_the_model_arm_s_member_is_its_model_and_its_card_s_short_name() -> None
         R.model_member("unsloth/Llama-3.2-1B", None)
 
 
+def test_a_model_that_wasnt_served_is_refused_with_its_log_s_last_lines(tmp_path) -> None:
+    log = tmp_path / "vllm.log"
+    log.write_text("".join(f"line {i}\n" for i in range(100)))
+    said = R.not_served("unsloth/Llama-3.2-1B", log).splitlines()
+    assert said[0] == f"vLLM didn't serve unsloth/Llama-3.2-1B ({log}); its last 60 lines:"
+    assert said[1:] == [f"line {i}" for i in range(40, 100)]
+    assert R.not_served("m", tmp_path / "none.log").splitlines()[1:] == ["(no log)"]
+
+
 def test_an_arm_whose_guard_failed_writes_no_number(monkeypatch, tmp_path) -> None:
     n, got = written(monkeypatch, arm_doc(["planted"]), tmp_path)
     assert n == 0 and got == []

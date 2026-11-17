@@ -355,6 +355,13 @@ def model_member(model: str, gpu: str | None) -> str:
     return f"{slug(model.rsplit('/', 1)[-1])}-{kit.card_short(gpu or '', directory=CARD_FILES)}"
 
 
+def not_served(model: str, log: Path, lines: int = 60) -> str:
+    """The model arm's refusal when vLLM didn't serve: the log's path and its last `lines` lines, since the log is in a
+    temporary directory the run doesn't keep."""
+    tail = log.read_text(errors="replace").splitlines()[-lines:] if log.is_file() else ["(no log)"]
+    return "\n".join([f"vLLM didn't serve {model} ({log}); its last {len(tail)} lines:", *tail])
+
+
 def model_arm(a: argparse.Namespace, s: dict[str, int], work: Path) -> dict:
     """The model arm: vLLM's OpenAI server of `--model` on this machine's card, the network attester in the bytes form;
     refused before serving unless one card record names the card."""
@@ -373,7 +380,7 @@ def model_arm(a: argparse.Namespace, s: dict[str, int], work: Path) -> dict:
                 break
             except OSError:
                 if server.poll() is not None or time.monotonic() > deadline:
-                    raise SystemExit(f"vLLM didn't serve {a.model} ({work / 'vllm.log'})") from None
+                    raise SystemExit(not_served(a.model, work / "vllm.log")) from None
                 time.sleep(2)
         return arm(name, ("127.0.0.1", port), s, a, work, egress="bytes", model=a.model,
                    fields={"card": gpu, "endpoint": f"vLLM's OpenAI server of {a.model}"})
