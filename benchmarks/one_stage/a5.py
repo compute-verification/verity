@@ -253,7 +253,7 @@ from verity.protocols.proofs.spot.verifier.one_stage import (
 )  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import registered as REG  # noqa: E402
 from verity.commitments.periods import flock_inputs as FI, interface as IF, rows as CS, tables as TB  # noqa: E402
-from verity.commitments.periods import wiring as WI  # noqa: E402
+from verity.commitments.periods import population as PO, wiring as WI  # noqa: E402
 
 RANK_PORTS = 16
 #: what a plain audit covers until proofs' multi-table coverage lands (`Flock.ProvedScope`, `ProvedScope.sampleDesign`)
@@ -799,19 +799,22 @@ def stage(served: Path, mm: dict, files: tuple[dict, dict]) -> None:
             raise RuntimeError(f"member {mm['k']}'s prover's file is not under the header its public file was held to")
 
 
-def member_form(mine: CS.Binding, rec: dict) -> tuple[list, dict[str, dict]] | str:
+def member_form(mine: CS.Binding, rec: dict, wiring: dict | None = None) -> tuple[list, dict[str, dict]] | str:
     """What the per-member form holds each member's public file to (`members.population_why`), read off the verifier's
     window ``mine`` and the docket ``rec``: the docket's strata and each member's slice of the record
     (`members.slices`, Lean's `OneStageZk.Member.slice`: its units, the roots the record names under its name, the
     scheme), or Lean's reason why there is none. A member's public file names a root for each of its ports, a wired
     port with no tree of its own at its writer's root (`rows.Committed.frame_entry`), which the record names under its
-    writer's name alone: the slices here read no wiring, so such a member is refused by name (`members.unwired_why`),
-    as Lean's is where the parameters name no wiring (`OneStageZk.membersRootsOf`). A window's row tables' root
+    writer's name alone: the slices read it there through ``wiring`` (`members_wiring`, the parameters' own), as Lean's
+    `OneStageZk.membersRootsOf` does, and with no wiring, or one naming no writer for it, such a member is refused by
+    name (`members.unwired_why`). A window's row tables' root
     (`rows.TABLE_PORT`) is the window's and no member's: the per-member form refuses such a window, and this audit, its
     stand-in there, holds that root by `tables.check_row_tables` and reads the slices of the record's other roots."""
     record = {**rec, "roots": [r for r in rec["roots"] if r.get("port") != CS.TABLE_PORT]} if mine.row_tables else rec
     try:
-        return P.strata(mine.program, mine.query), MB.slices({m.key: [[m.base, m.base + m.n]] for m in mine.members}, record)
+        ranges = [[tid, lo, n] for _k, tid, lo, n in PO.template_partition(mine.program, mine.query).ranges] if wiring else ()
+        return P.strata(mine.program, mine.query), MB.slices({m.key: [[m.base, m.base + m.n]] for m in mine.members}, record,
+                                                             wiring, ranges)
     except (P.QueryRefused, ValueError) as e:
         return str(e)
 
@@ -871,12 +874,13 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
 
     rec = json.loads((served / "registration.json").read_text())
     shutil.copy(served / "registration.json", out / "registration.json")
+    wiring = members_wiring(served / "circuit.json", summary.get("circuit"))
 
     # each member: the verifier's circuit, the public file under it, and every check on that file before the sample; the prover's
     # file and the circuit's link only for a sampled member, after the sample (`stage`)
     files = (json.loads((served / "window.json").read_text()), rec)
     roots = {r["port"]: r for r in rec["roots"]}
-    form = member_form(mine, rec)
+    form = member_form(mine, rec, wiring)
     members, publics, checks, composed, programs_ok, kept, read = [], {}, {}, {}, {}, {}, set()
     t_stage = time.time()
     for k, m in enumerate(mine.members):
@@ -1250,7 +1254,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
                                 sessions=sessions, served=sorted(served_units), session_roots=session_roots)
         if drawn is not None:
             result["own_reads"] = True
-        pm = members_proof(members, done, not plain(a), one=on_stage)
+        pm = members_proof(members, done, not plain(a), one=on_stage, wiring=wiring)
         write_case(out, program, query, sampling_design, want, leaf_layer, a.delta, table, rec,
                    {"draw": union_sample, "proved_units": sorted(proved), "receipt": receipt, "statement": statement,
                     "verdicts": verdicts}, instances=instances, sessions=sessions, session_roots=session_roots,
@@ -1275,7 +1279,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
             return summary, False
         result["coins"] = {"source": "challenger", "segment": segment, "read": read.hex(),
                            "outcome": summary["coins"]["outcome"], "verified": summary["coins"]["verified"]}
-        pm = members_proof(members, done, not plain(a))
+        pm = members_proof(members, done, not plain(a), wiring=wiring)
         write_case(out, program, query, sampling_design, want, leaf_layer, a.delta, table, rec,
                    {"draw": union_sample, "proved_units": given["proved_units"], "receipt": receipt, "statement": statement,
                     "verdicts": verdicts}, instances=instances, sessions=sessions, session_roots=session_roots,
@@ -1507,7 +1511,7 @@ def case_v2(case: dict, sessions: Sequence[str], *, proof, circuit: str, public:
             "params": {**case["params"], "proofs": {"circuit": circuit, "public": public, "registered": registered}}}
 
 
-def case_members(case: dict, *, members: Sequence, tables: Sequence[Path]) -> dict:
+def case_members(case: dict, *, members: Sequence, tables: Sequence[Path], wiring: dict | None = None) -> dict:
     """v1's ``case`` in `Spot.OneStageZk`'s per-member form, for a window of several `members` (`proofs.Member`, every
     one of the window's): the params with ``proofs`` the members, each with its circuit and public files' digests, taken
     when it was staged before the sample, its registered file, its units and its circuit's ``vus_per_block``; the
@@ -1518,7 +1522,8 @@ def case_members(case: dict, *, members: Sequence, tables: Sequence[Path]) -> di
     each path once: a template's members share one circuit file, and v2 finds a blob by its digest (`Core.Blobs.get`).
     The statements' sessions must be v1's ``sessions`` in order, as v2 reads them. v2 checks a case of this form by
     `OneStageZk.checkMembersAt` (`members.case_check`); `proofs.members_parsed` is what its parsers read of the
-    case."""
+    case. With ``wiring`` (`members_wiring`'s), the params' ``proofs`` name it, and v2 holds the sample's wired rows to
+    their writers' (`OneStageZk.wiresHeld`)."""
     RP = own_replay()
     from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
 
@@ -1530,7 +1535,8 @@ def case_members(case: dict, *, members: Sequence, tables: Sequence[Path]) -> di
                          "in order: the sampled members' sessions ran in another order")
     evidence = {k: v for k, v in v1.items() if k != "verdicts"} | {"proofs": pe}
     return {"blobs": list(dict.fromkeys(str(b) for b in (*blobs, *tables))), "commitment": case["commitment"],
-            "evidence": RP.DT.canonical(evidence).encode().hex(), "params": {**case["params"], "proofs": pm}}
+            "evidence": RP.DT.canonical(evidence).encode().hex(),
+            "params": {**case["params"], "proofs": {**pm, "wiring": wiring} if wiring is not None else pm}}
 
 
 def case_coins(case: dict, coins: dict, key: dict | None, label: str | None, window_root: str | None) -> dict:
@@ -1648,7 +1654,26 @@ def looked_up_tables(st_dir: Path) -> list[Path]:
     return sorted(f for f in tdir.glob("*.u32") if f.is_file() and f.stem in looked_up)
 
 
-def members_proof(members: Sequence[dict], done: Sequence[dict], zk: bool, one: bool = False) -> dict | str | None:
+def members_wiring(circuit: Path, digest: str | None) -> dict | None:
+    """The per-member form's ``proofs.wiring`` (`OneStageZkStatement.wiringOf`) of the window's registered circuit record
+    ``circuit``, read only where it is the record the audit holds by SHA-512 (``digest``) and names a wire: SPOT's
+    wiring as `InferenceOnlyVerifier.Record`'s piece writes it, each template's units, its ports' rows (words, outer)
+    and its outputs' words, with the record's cuts, wires and order."""
+    if digest is None or not circuit.is_file() or hashlib.sha512(circuit.read_bytes()).hexdigest() != digest:
+        return None
+    doc = json.loads(circuit.read_text())
+    if not doc.get("wires"):
+        return None
+    templates = {}
+    for tid, n in doc["templates"]:
+        lay = IF.layout(IF.resolve(tid))
+        templates[tid] = {"units": n, "rows": {p: [w, o] for (p, w), o in zip(lay.rows, lay.outer)}, "outs": dict(lay.outs)}
+    out = {"templates": templates, "cuts": doc.get("cuts") or {}, "wires": doc["wires"]}
+    return {**out, "order": doc["order"]} if doc.get("order") is not None else out
+
+
+def members_proof(members: Sequence[dict], done: Sequence[dict], zk: bool, one: bool = False,
+                  wiring: dict | None = None) -> dict | str | None:
     """`case_members`'s members and tables from the window's staged ``members``, every one of them, and the sampled
     members' sessions (`member_checks`'s ``done``): each member's circuit and public files' digests as staged before
     the sample, its circuit file its template's (the one its first member composed: a later member has no file of its
@@ -1657,7 +1682,8 @@ def members_proof(members: Sequence[dict], done: Sequence[dict], zk: bool, one: 
     statement to its own circuit's tables among the blobs (`OneStageZk.ownTables`) and reads every member's files. A
     template's tables are staged beside the circuit file its first member composed. None for a window of one member,
     whose form is the one statement's (`v2_proof`), unless ``one`` (its sessions ran on a caller's stage's challenger
-    session, `stage_trees`); or why the audit has no per-member case."""
+    session, `stage_trees`); or why the audit has no per-member case. ``wiring`` (`members_wiring`'s) goes to the
+    case's parameters as it is."""
     from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
 
     if len(members) < 2 and not one:
@@ -1676,7 +1702,7 @@ def members_proof(members: Sequence[dict], done: Sequence[dict], zk: bool, one: 
         out.append(PF.Member(m.key, PF.Proof(mm["circuit"], st["dir"] / f"pub-{m.n}.bin", sessions), mm["pin"],
                              st["public"], json.loads(reads.read_text()) if reads else None, ((m.base, m.base + m.n),), g))
         tables.update((f.name, f) for f in looked_up_tables(mm["circuit"].parent) if f.name not in tables)
-    return {"members": out, "tables": [tables[x] for x in sorted(tables)]}
+    return {"members": out, "tables": [tables[x] for x in sorted(tables)], "wiring": wiring}
 
 
 def streamed(a: argparse.Namespace) -> bool:

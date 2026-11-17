@@ -404,6 +404,12 @@ MEMBERS_COVER = ("each sampled proof block proved in its own kind's statement ag
                  "coins; members with no sampled proof block were not proved, and no theorem yet covers a sample that "
                  "misses members; the wires between members are not held; the circuit files' digests are fixed before "
                  "the coins in the parameters but not signed in the docket")
+#: ... where the case's parameters name the members' wiring, which the accept held (`OneStageZk.wiresHeld`)
+MEMBERS_WIRED_COVER = MEMBERS_COVER.replace(
+    "the wires between members are not held",
+    "each wired row of a sampled proof block is its writer's output row, one committed row in both members' public "
+    "files, the writer proved only where its own proof block was sampled; a wire into a proof block the sample missed, "
+    "so every wire into a member with no sampled proof block, is not held")
 #: ... PoUW's where Pearl+'s piece is its verdict of record (`pearlplus_of_record`)
 PEARLPLUS_FROM = (f"{AS_WRITTEN} (its piece files in pouw/): Pearl+'s Lean verdict of record (PouwVerifier.PearlPlus), "
                   "the prover side's, run on the served node over the retained passes; no auditor device re-checks it, since "
@@ -1866,7 +1872,8 @@ def lean_sampled_row(audit_dir: Path, scratch: Path, exe: str | os.PathLike | No
     was not started (`served_cases.NotStarted`: its blob files sum past the limit, or the host makes no memory scope):
     the row is `spot_row`'s, ``answer_from`` and ``not_started`` naming why, the sum and the limit. A case the Lean
     doesn't make or answer, or an answer about another record, is the row's error. An accept of a case in the
-    per-member form carries ``covers`` (`MEMBERS_COVER`), ``members`` (sampled of registered) and each sampled
+    per-member form carries ``covers`` (`MEMBERS_WIRED_COVER` where its parameters name the wiring, else
+    `MEMBERS_COVER`), ``members`` (sampled of registered) and each sampled
     member's bound over its own proof blocks (``bounds``), and no ε over the workload."""
     import served_cases as SC
 
@@ -1881,7 +1888,8 @@ def lean_sampled_row(audit_dir: Path, scratch: Path, exe: str | os.PathLike | No
         row = {**row_of(INTEGRITY_OWNER, answer, audit_dir, run), "answer_from": LEAN_HERE}
         proofs = case["params"].get("proofs")
         if isinstance(proofs, dict) and "members" in proofs and row["verdict"] == "accept":
-            return {**row, "covers": MEMBERS_COVER, "epsilon": None, **members_reached(proofs["members"], answer)}
+            return {**row, "covers": MEMBERS_WIRED_COVER if "wiring" in proofs else MEMBERS_COVER, "epsilon": None,
+                    **members_reached(proofs["members"], answer)}
         return row
     except SC.NotStarted as e:
         return {**spot_row(audit_dir, run), "not_started": {"reason": str(e), **e.line},

@@ -1560,6 +1560,11 @@ def test_a_spot_row_the_lean_here_accepts_in_the_per_member_form_says_what_it_co
     assert row["members"] == {"sampled": 2, "registered": 3}, row
     assert row["bounds"] == ["at most 1 incorrect of member m0's 2 proof blocks at δ 1/100",
                              "at most 0 incorrect of member m2's 1 proof block at δ 1/100"], row
+    proofs = {"members": members, "wiring": {"templates": {}, "cuts": {}, "wires": []}}
+    (w / "case-v2.json").write_text(json.dumps({**case, "params": {**case["params"], "proofs": proofs}}))
+    _rc, _line, rows = _recorded(tmp_path, argv, capsys)
+    covers = rows["integrity"]["covers"]
+    assert covers == S.MEMBERS_WIRED_COVER and "wires between members are not held" not in covers, rows["integrity"]
     integrity = json.loads((tmp_path / "record" / "block-record.json").read_text())[BR.BY_SUBPROTOCOL]["integrity"]
     why = ("the sample reached 2 of 3 members, so no bound over the workload's 4 proof blocks holds; at most 1 "
            "incorrect of member m0's 2 proof blocks at δ 1/1000000; at most 0 incorrect of member m2's 1 proof block "

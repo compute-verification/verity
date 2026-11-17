@@ -60,7 +60,7 @@ from verity.protocols.proofs.spot.verifier.one_stage import draw as D, members a
 from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate_batch
-from verity.circuits.ops import gemm as G
+from verity.circuits.ops import gemm as G, rows as RW
 from verity.commitments.periods import interface as IF
 
 HERE = ((Path(__file__).resolve().parents[3] / "benchmarks" / "one_stage"))
@@ -80,6 +80,12 @@ TEMPLATES = tuple(bind(G.ScaledMmS8Coordinate, K=k, **G.GEMM_SM120_S8) for k in 
 DESIGN = "stratified:1"
 RULE = "stratified-rate:1/2"
 RUN = "ab" * 64
+#: the wired window's (`_wired_window`): the K = 128 block's output, one word, read as a one-word residual add's ``a``
+WRITER, READER = TEMPLATES[0], bind(RW.Bf16AddRow, N=1)
+WIRE = IF.Wire(descriptor_id(READER), "a", descriptor_id(WRITER), "o0", 0, [1], 0, [0])
+#: `OneStageZk.WIRES_SAMPLED`
+WIRES_SAMPLED = ("wiring: a wired row of a unit of the sample is not its writer's output row: its b || c in its "
+                 "member's public file is not the writer's row's in the writer's member's")
 #: what the steps after a served window's audit read of its record (`served_verdicts.sh`'s hand-off, `records_audit.period`)
 RECORD = ("summary.json", "window/audit.json", "window/registration.json", "window/program.json", "window/case.json")
 #: a member's verdicts in the audit record: the prover's own verifier's, Lean's of the session, and Lean's of its sample
@@ -110,6 +116,27 @@ def _window(d: Path, flipped: bool = False) -> Path:
         if flipped and k == KS[-1]:
             out.reshape(-1)[0] ^= 1
         win.record(t, ins, [out])
+    win.write(win.close(salt_key=bytes(32)), d, {"label": "test"}, registrar=R)
+    return d
+
+
+def _wired_window(d: Path, wired: bool = True) -> Path:
+    """`WRITER`'s one proof block's output read by `READER`'s one proof block as its ``a``, written to ``d`` as `_window`
+    writes its window. ``wired``: through the circuit's wire `WIRE`, the reader's row its writer's, committed under the
+    writer's salt; else the circuit names no wire and the reader's ``a`` is its own row, the writer's output with bit 0
+    of its word flipped."""
+    win = IF.Window(IF.Circuit("wired-members", ((WRITER, 1), (READER, 1)), wires=(WIRE,) if wired else ()), RUN,
+                    D.parse_design(DESIGN), 4)
+    rng = np.random.default_rng(0)
+    x, w = (rng.integers(-128, 128, (1, KS[0])).astype(np.int8) for _ in range(2))
+    sx, sw = ((np.abs(rng.standard_normal(1)) / 127).astype(np.float32) for _ in range(2))
+    ins = [x.view(np.uint8), sx.view(np.uint32), w.view(np.uint8), sw.view(np.uint32)]
+    out = np.asarray(evaluate_batch(WRITER, *ins, kernel="reference"), dtype=np.uint16)
+    win.record(WRITER, ins, [out])
+    a, b = out.reshape(1, 1).copy(), np.array([[0x3F80]], dtype=np.uint16)
+    if not wired:
+        a ^= 1
+    win.record(READER, [a, b], [np.asarray(evaluate_batch(READER, a, b, kernel="reference"), dtype=np.uint16)])
     win.write(win.close(salt_key=bytes(32)), d, {"label": "test"}, registrar=R)
     return d
 
@@ -330,3 +357,32 @@ def _answer(out: Path) -> dict:
     from verity.protocols.proofs.spot.verifier.one_stage import served_integrity as SI  # beside a5, on the path `records_audit` put there
 
     return SI.answer(out, json.loads((out / "window" / "registration.json").read_text()))
+
+
+def test_a_wire_between_two_sampled_members_is_held_by_one_accept(tmp_path, binaries):
+    """A window whose second member reads the first's output through the circuit's wire: the audit accepts, its
+    negatives (the wiring's among them) all refused, and writes the per-member case with the registered circuit's
+    wiring in its parameters (`a5.members_wiring`), on which Lean's one check accepts, holding the sampled reader's
+    row to its writer's (`OneStageZk.wiresHeld`). The same two members with no wire, the reader's row its own and not
+    the writer's output, pass an audit that holds no wire; under that same wiring in the parameters Lean refuses the
+    case for the wire."""
+    window = _wired_window(tmp_path / "window")
+    rc, row, out, said = _audit(tmp_path, window, binaries, "--deployed-key")
+    assert rc == 0 and row.get("ok") is True and row["audit"]["accepted"] is True, said
+    assert row["draw"] == [0, 1] and row["negatives"] and all(row["negatives"].values()), row["negatives"]
+    assert any("wired" in n for n in row["negatives"]), sorted(row["negatives"])
+    case = json.loads((out / "window" / "case-v2.json").read_text())
+    wiring = case["params"]["proofs"]["wiring"]
+    assert wiring["wires"] == [WIRE.doc()] and wiring["cuts"] == {} and "order" not in wiring
+    assert wiring["templates"] == {descriptor_id(WRITER): {"units": 1, "rows": {"x": [64, 128], "sx": [2, 1], "wrow": [64, 128],
+                                                                                  "sw": [2, 1]}, "outs": {"o0": 1}},
+                                   descriptor_id(READER): {"units": 1, "rows": {"a": [1, 1], "b": [1, 1]}, "outs": {"o0": 1}}}
+    assert M.case_check(case) == ("accept", None)
+
+    bad = _wired_window(tmp_path / "unwired" / "window", wired=False)
+    rc, row, out, said = _audit(tmp_path / "unwired", bad, binaries, "--deployed-key")
+    assert rc == 0 and row.get("ok") is True and row["audit"]["accepted"] is True, said
+    case = json.loads((out / "window" / "case-v2.json").read_text())
+    assert "wiring" not in case["params"]["proofs"] and M.case_check(case) == ("accept", None)
+    held = {**case, "params": {**case["params"], "proofs": {**case["params"]["proofs"], "wiring": wiring}}}
+    assert M.case_check(held) == ("reject", f"proofs: {WIRES_SAMPLED}")
