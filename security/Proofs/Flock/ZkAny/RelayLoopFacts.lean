@@ -603,7 +603,7 @@ theorem placeSched_seen {T : ZKMal.CoinLayer.TableData}
 `LoopFacts` and `LoopJ` hold, `seen` has no round of `stream`, the model's tables and salts are the loop's (`RealAt`)
 and the model answers the round, the round's place is the model's scheduled round (`roundPlace_scheduled_first`). The
 rep's frame is fresh (`FreshAt`); `roundPlace` read the session's entry, the table's statement, name and level 0 and
-`withAlg`'s frame (`roundPlace_first_ok`); the level 0 is the one the loop drew (`BuiltAt`), so it gives a table as the
+`withAlg`'s frame (`roundPlace_first_ok`); the level 0 is the one the loop sampled (`BuiltAt`), so it gives a table as the
 model's placeholder for the round does (`tab_of_placeholder`), whose commitment's cap is its root (`cap_of_sampled`); and
 the algebraic phase has a round (`Loop.rounds_pos`), so the round reads no salts and is not the inner proof's own. -/
 theorem placeSched_first {T : ZKMal.CoinLayer.TableData}
@@ -927,7 +927,7 @@ theorem placeSt_first1 {T : ZKMal.CoinLayer.TableData}
 /-- **`RealAt` at a frame round's slot of the deployed loop**: at the slot of a round, where `LoopFacts` and `LoopJ`
 hold for the run of the loop's own tables on `src` (`Loop.realOf src`), the loop handed `src`'s bytes (`M.src`), and
 the salts the loop keeps are the ones it was handed (`SaltsSrc`, `LoopRead`'s round clause), the model's tables and
-salts are the loop's (`realAt_of`): past the `Commit` each level 0 bound to the session is the one the loop drew
+salts are the loop's (`realAt_of`): past the `Commit` each level 0 bound to the session is the one the loop sampled
 (`LoopJ.built`) on the setup's entry (`LoopJ.sess`), so its table is `src`'s (`realAt_h0`). -/
 theorem realAt_slot {M : LoopModel Claims.Flock.Wit
       ((ZKMal.CoinLayer.session Loop.loopNr ZKMal.Masked.dataE).refP.Nonce ×

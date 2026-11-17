@@ -109,7 +109,7 @@ left (`AudReads`). They read `Flock.ZkServer.Session.relay`'s loop body (`stepK`
 it puts on the auditor's connection (`sendFrame a`) and the answers it reads there (`recvFrame a`), the rep frames'
 tasks it calls on the shared frames (`Frames.round` on the request's `roundContent`, `Frames.coins` on the auditor's
 coins, `Frames.finish`; their pure updates `RegStep`, `RoundRun`), the `Commit`'s `Level0.commit` against the level
-0s `Session.level0` drew (`Level0.draw`), the `Link`'s put, the loop's own proofs (`ownProofs`) and the updates of the
+0s `Session.level0` sampled (`Level0.draw`), the `Link`'s put, the loop's own proofs (`ownProofs`) and the updates of the
 loop's other requests between the session's (`Between`, `Stays`), with the rep frames' starts (`Frames.startRep`,
 `StartOk`), the rounds of the inner proof the loop's finish computes (`Sessions.innerRound`, `InnerSrc`) and the salts
 `Finish.serve` keeps (`SaltsSrc`), each against the model's run `M`; a frame round's content being the worker's round

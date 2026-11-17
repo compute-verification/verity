@@ -8,7 +8,7 @@ public import Proofs.Flock.Claims.ZK.FinExe
 # The loop's tables at its level-0 source
 
 Where `src` samples the tape's level 0 (`Loop.Level0Src`, `Loop.Src`'s level-0 half), each table the loop's finish proves
-on (`Loop.realOf`, `tabOfLevel0` at the level 0 it drew) holds the tape's packed table, and its extra lanes and lane
+on (`Loop.realOf`, `tabOfLevel0` at the level 0 it sampled) holds the tape's packed table, and its extra lanes and lane
 paddings within level 0's sizes:
 
 * `Finish.tabOfLevel0_fields`: a table from a level 0 holds that level 0's own inputs (`toIn`).
@@ -125,7 +125,7 @@ theorem Loop.Level0Src.realOf_lanes {src : Msg → Flock.Wit →
   exact ⟨fun e c hc => by rw [he]; exact if_pos hc, fun l i hl hi => by rw [hp]; exact if_pos ⟨hl, hi⟩⟩
 
 /-- **The loop's rep salts are the source's**: where the loop's table and salts at rep stream `k` are `(tb, hi)`, the source
-drew `hi` there. -/
+sampled `hi` there. -/
 theorem Loop.realOf_src {R : Type} {src : Msg → Flock.Wit → R → ℕ → V (Array F128 × ByteArray × Array ByteArray)}
     {x : Msg} {w : Flock.Wit} {ρ : R} {k : ℕ} {tb : _root_.Flock.ZkServer.Finish.Tab} {hi : Array ByteArray}
     (h : Loop.realOf src x w ρ k = .ok (tb, hi)) : ∃ g d, src x w ρ k = .ok (g, d, hi) := by

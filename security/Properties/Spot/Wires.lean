@@ -23,7 +23,7 @@ their statements read no proof.
 rows apart from its writers', so a wire holds only where the reader's row is its writer's row, a comparison `same` of
 the two rows that the statement gives. `miswired` is the reader units with a covered row that `same` refuses, and
 `WiredCorrect` a unit that is correct on its own rows and has none. The sampled check
-(`Spot.Wires.Summary.drawnOk`) accepts exactly when no unit it drew is in `miswired` (`Spot.Wires.drawnOk_iff`).
+(`Spot.Wires.Summary.drawnOk`) accepts exactly when no unit it sampled is in `miswired` (`Spot.Wires.drawnOk_iff`).
 -/
 
 @[expose] public section
