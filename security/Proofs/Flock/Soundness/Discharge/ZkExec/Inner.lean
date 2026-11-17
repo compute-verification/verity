@@ -3,13 +3,7 @@ module
 public import Proofs.Flock.Soundness.Discharge.ZkExec.Statements
 import Mathlib.Combinatorics.Matroid.Init
 
-/-!
-# verity-verify-proof `--zk`'s inner proof accepts (live/PROTOCOL.md §5)
-
-`verifyInner_ok : ZkInnerOk`: `Zk.verifyInner` accepts only with the pinned sizes, `β ≠ 0`, `τ` opening its
-commitment, the batched constraint, and every queried column consistent with `Y` and climbing to the pads' root under
-its `hm96` leaf. The run is peeled step by step (`Refine.Exec`); the column loop's checks come from `forIn_each`.
--/
+/-! verity-verify-proof `--zk`'s inner proof accepts only with every check it runs holding (`verifyInner_ok`). -/
 
 @[expose] public section
 
@@ -17,7 +11,6 @@ namespace FlockSoundness.Discharge.ZkExec
 
 open Flock Transcript Refine
 
-/-- A loop whose every step yields and establishes `P i` establishes `P i` at every index it ran. -/
 theorem forIn_each {σ : Type} (P : ℕ → Prop) (body : ℕ → σ → TM (ForInStep σ))
     (hbody : ∀ i s t b t', body i s t = .ok (b, t') → P i ∧ ∃ s', b = .yield s') :
     ∀ (n a : ℕ) (s : σ) (t t' : Transcript) (out : σ),

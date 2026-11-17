@@ -28,20 +28,7 @@ import Proofs.Flock.Soundness.Discharge.Tables.Accepts
 import Proofs.Flock.Soundness.Refine.Seam
 import Proofs.Flock.Soundness.Refine.Setup
 
-/-!
-# The decoder is right at a plain session of `J` tables
-
-`decodesOnPJ_exec`: `DecodesOnJ` at `planPJ`, table by table, at every number of tables (`DecodeZLJ.decodesOnJ_exec`
-reads `1 < count` and `planJ`'s fallback tables; here one table is the session's statement, `Composed.drawJ`). At an
-outcome verity-verify-proof accepts, at table `j`:
-
-* `RecordsLiveJ` gives the record's sample `dj S`, the proof files, the link points, and table `j`'s root and streams.
-* `setupOf_tablePJ` sets table `j` up with setupH under `tagsAt` at `drawJ` (`setupTables_ok` at one table,
-  `Tables.setupTables_parts` at several); `SampleOkPJ` gives its proved units and link points, so a `SampleSetup` exists, and
-  `planPJ`'s table `j` is its table (`tablePJ_of`), `stmtOf` of setupH's statement (`table_stmtOf`).
-* `accepts_reps_at` gives each rep's run and rounds and the salted verdict; `repRun_at` makes each run a `RepRun` for
-  `decJ`, and `playsT_of_repRun` a run on its tape.
--/
+/-! The decoder is right at a plain session of `J` tables (`decodesOnPJ_exec`). -/
 
 @[expose] public section
 
@@ -56,9 +43,6 @@ local notation "𝔽" => FlockLevel3.GF128
 
 variable {n mPts : ℕ} {Reg : Type}
 
-/-- **verity-verify-proof sets table `j` up under its tags at its sample**, without `--zk`: at the record's sample `d`, `setupTables`
-at `I` has `nTab I` tables, table `j` setupH's statement under `tagsAt` at `drawJ` (`Composed.setupOf_tableJ` at the
-plain inputs). -/
 theorem setupOf_tablePJ {I : Inputs} {record : String} {d : Lean.Json} {spec : SessionSpec} {sts : Array Flock.Stmt}
     (hh : I.tags.hiddenOutputs = false) (hd : recordDraw record = some d) (hs : setupOf I record = .ok (spec, sts)) :
     sts.size = nTab I ∧ ∀ (j : ℕ) (hj : j < sts.size),
@@ -97,12 +81,7 @@ private theorem stmtOf_congr {a b : Flock.Stmt} (h : a = b) (ha : StmtWF a) (hb 
 variable {I : Inputs} (ht : I.tags.typed = false) (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
   {d₀ : Lean.Json} (x₀ : SampleSetup (inputsPJ I 0) mPts S₀ d₀)
 
--- one proof down the opened statement's decode (`opnPJ`), a bind step per value it reads and `rw` on each
 set_option maxHeartbeats 4000000 in
-/-- **The decoder is right at a plain session of `J` tables** (the decoder premise at `--plain-tables --session-tables J`): given the
-tags, `wr` the challenger's record and the challenger's samples setting each table up at `mPts` link points, `DecodesOnJ`
-holds at `planPJ` with the decoder `decJ` on each table's two streams, single coins as field elements, no final
-messages, table `j`'s cap from its root `root_B[j]` (`capOfRoot`) and its openings `opnPJ`. -/
 theorem decodesOnPJ_exec (L : SamplingDesign n)
     (wr : (S : Finset (Fin n)) → (R : Reg) → LiveOutJ (planPJ (Reg := Reg) ht dj x₀ S R).length mPts → Exec.Transcript)
     (hT : TagsOkZJ I) (hwr : RecordsLiveJ I dj (fun S R => (planPJ (Reg := Reg) ht dj x₀ S R).length) wr)

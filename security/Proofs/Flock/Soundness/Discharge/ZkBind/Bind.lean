@@ -5,25 +5,7 @@ public import Proofs.Flock.Soundness.Binding.Layout
 import Mathlib.Combinatorics.Matroid.Init
 import Proofs.Flock.Soundness.Lowering
 
-/-!
-# `--zk` value binding: the committed values are the sampled proof blocks' own
-
-The compiled `--zk` count curve (`ZkLink.zk_flock_countC_execOS_cr`) takes the binding of wires to registered commit
-strings for `--zk` tables as a named structure (`vb : ZkLink.ValueBindingZ … (decodeOfPlace … place) Hc`). This is
-`Binding.Layout` and `Binding.HmRows` (the public path's `HmRows.binding`) for plans of `TabZK` tables:
-
-* `LayoutZ`: the commit strings and their values, where a sampled proof block's `--zk` table's witness holds each one's value and
-  salt, and `decode_row` (in a satisfying witness the decoder's bit on each of the unit's wires is the bit of the row
-  the witness holds at the wire's commit string);
-* `HmRowsZ`: its `hm96-sha512/row/v1` or `/row/v2` rows, with `HmRowsZ.Computes`, `Assumptions.HmRowComputes` at the
-  sampled proof blocks' rows of `--zk` tables;
-* `HmRowsZ.bindingZ`: the `ValueBindingZ`, with `collide_spec` proved (explicit SHA-512 collisions, `Refine.H512`), and
-  the registration fact from `HmRowComputes` (`HmRowsZ.registered`).
-
-`bindingZ_bit` says what the binding binds: at a placed sampled proof block, the value every satisfying witness opens a wire's
-commit string to carries, on that wire, the bit of the unit's own column in its block, and its commitment is the
-registered one.
--/
+/-! `--zk` value binding: the committed values are the sampled proof blocks' own (`bindingZ_bit`). -/
 
 @[expose] public section
 
@@ -166,7 +148,6 @@ def Computes : Prop :=
     (fun w => lay.salt w.S w.R w.u w.M (lay.pos w.g))
     (fun w => bytesAt (witZ A planZ tab w.S w.R w.u w.M) (rs.bcAt w.S w.R w.u (lay.pos w.g)))
 
-/-- **The registration fact from `HmRowComputes`**, for `--zk` tables (`HmRows.registered`'s). -/
 theorem registered (hHm : rs.Computes) : lay.Registered rs.scheme := by
   intro S R u hu M hM g hg
   unfold scheme
@@ -185,10 +166,6 @@ noncomputable def bindingZ (hHm : rs.Computes) : ValueBindingZ A P planZ tab dec
 
 end HmRowsZ
 
-/-- **What the `--zk` value binding binds: a placed sampled proof block's own columns.** With the decoder of the sampled proof blocks'
-places (`decodeOfPlace`), in every witness of sampled proof block `u`'s `--zk` table that satisfies its statement, the opening of
-the commit string of each of `u`'s wires (`inst.wire x`, the wire of the unit's column `x`) has the registered
-commitment, and its value's bit on that wire is the witness's bit at the unit's column `x` in its block. -/
 theorem bindingZ_bit (place : ∀ S R u, u ∈ S → UnitPlace P (tabOfZ planZ tab S R u).S u)
     {lay : LayoutZ A P planZ tab (decodeOfPlace A P planZ tab place)} (rs : HmRowsZ lay) (hHm : rs.Computes)
     (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u ∈ S) (M : MsgZ planZ tab S R u) (hM : SatZ A planZ tab S R u M)

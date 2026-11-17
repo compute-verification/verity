@@ -7,13 +7,7 @@ public import Proofs.Flock.Soundness.Discharge.ZkCoins.Basic
 import Mathlib.Analysis.SpecialFunctions.Pow.Real
 import Mathlib.Tactic.Positivity.Finset
 
-/-!
-# Product sampling designs on committed rounds
-
-The hybrid of `Hybrid.lean` runs on `ω : I → Z` sampled from a product of per-round sampling designs `μ j` (`W μ ω`, the weight of
-`ω`). `resample` resamples one coordinate `k` from its own sampling design inside the sum, and `reweight` changes `k`'s sampling design under a
-function that does not read `ω k`.
--/
+/-! Product sampling designs on committed rounds (`resample`, `reweight`). -/
 
 @[expose] public section
 
@@ -26,10 +20,8 @@ section Weights
 
 variable {I Z : Type} [Fintype I] [DecidableEq I] [Fintype Z]
 
-/-- The weight of `ω` under the product of the sampling designs `μ j`. -/
 noncomputable def W (μ : I → Z → ℝ≥0∞) (ω : I → Z) : ℝ≥0∞ := ∏ j, μ j (ω j)
 
-/-- The weight of `ω`'s coordinates other than `k`. -/
 noncomputable def Wo (μ : I → Z → ℝ≥0∞) (k : I) (ω : I → Z) : ℝ≥0∞ := ∏ j, if j = k then 1 else μ j (ω j)
 
 theorem sum_W (μ : I → Z → ℝ≥0∞) : ∑ ω, W μ ω = ∏ j, ∑ z, μ j z := by
@@ -63,7 +55,6 @@ theorem Wo_congr {μ μ' : I → Z → ℝ≥0∞} {k : I} (h : ∀ j, j ≠ k �
   · rw [if_pos hj, if_pos hj]
   · rw [if_neg hj, if_neg hj, h j hj]
 
-/-- Moving the fiber `ω k = z'` onto the fiber `ω k = z` by setting coordinate `k`. -/
 theorem fiber_shift [DecidableEq Z] (k : I) (z z' : Z) (Φ : (I → Z) → ℝ≥0∞) :
     ∑ ω, (if ω k = z then Φ ω else 0) = ∑ ω, (if ω k = z' then Φ (update ω k z) else 0) := by
   have hinv : Involutive fun ω : I → Z => update ω k (Equiv.swap z z' (ω k)) := by
@@ -85,7 +76,6 @@ theorem fiber_shift [DecidableEq Z] (k : I) (z z' : Z) (Φ : (I → Z) → ℝ�
       exact Equiv.swap_apply_left z z'
     rw [if_neg h, if_neg hs]
 
-/-- Grouping a sum by coordinate `k`. -/
 theorem sum_group [DecidableEq Z] (k : I) (h : Z → ℝ≥0∞) (Φ : (I → Z) → ℝ≥0∞) :
     ∑ ω, h (ω k) * Φ ω = ∑ z, h z * ∑ ω, (if ω k = z then Φ ω else 0) := by
   simp only [Finset.mul_sum]
@@ -102,7 +92,6 @@ theorem sum_fiber_update [DecidableEq Z] (μ : I → Z → ℝ≥0∞) (k : I) (
   refine Finset.sum_congr rfl fun ω _ => ?_
   rw [Wo_update]
 
-/-- **Redrawing coordinate `k` from its own sampling design** leaves the sum unchanged. -/
 theorem resample {μ : I → Z → ℝ≥0∞} {k : I} (hμ : ∑ z, μ k z = 1) (F : (I → Z) → ℝ≥0∞) :
     ∑ ω, W μ ω * F ω = ∑ ω, W μ ω * ∑ z, μ k z * F (update ω k z) := by
   classical
@@ -124,7 +113,6 @@ theorem resample {μ : I → Z → ℝ≥0∞} {k : I} (hμ : ∑ z, μ k z = 1)
   refine Finset.sum_congr rfl fun ω _ => ?_
   ring
 
-/-- **Changing coordinate `k`'s sampling design** under a function that does not read `ω k`. -/
 theorem reweight {μ μ' : I → Z → ℝ≥0∞} {k : I} (hoff : ∀ j, j ≠ k → μ j = μ' j) (hμ : ∑ z, μ k z = 1)
     (hμ' : ∑ z, μ' k z = 1) (G : (I → Z) → ℝ≥0∞) (hG : ∀ ω z, G (update ω k z) = G ω) :
     ∑ ω, W μ ω * G ω = ∑ ω, W μ' ω * G ω := by

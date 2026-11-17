@@ -18,15 +18,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 import Proofs.Flock.Soundness.Refine.Plays
 
-/-!
-# The inner proof's runs
-
-`zk_inner_plays`: `Zk.verifyInner` on seven rows refines the model's compiled inner proof. After `final_c'` (absorbed,
-no coin), the executable samples `ε`, absorbs `[ρ, σ]`, flips the ten batching coins (seven rows and the triple's
-three), absorbs `τ`'s commitment, samples `β`, absorbs `Y` and samples the `Q` query words; the model samples and receives the
-same, in order. What follows the last coin is checks only (`forIn_keeps`). `zk_inner_coins` is the four rounds read,
-and `innerGameC_plays` the model's run on them, which records each query's position from the fourth round's coin.
--/
+/-! `Zk.verifyInner` on seven rows refines the model's compiled inner proof (`zk_inner_plays`). -/
 
 @[expose] public section
 
@@ -36,7 +28,6 @@ open Flock Refine Exec Game Model DecodeZL Transcript
 
 local notation "𝔽" => FlockLevel3.GF128
 
-/-- A loop whose every step yields and leaves the transcript as it was leaves the transcript as it was. -/
 theorem forIn_keeps {σ : Type} (body : ℕ → σ → TM (ForInStep σ))
     (hbody : ∀ i s t b t', body i s t = .ok (b, t') → ∃ s', b = ForInStep.yield s' ∧ t' = t) :
     ∀ (n a : ℕ) (s : σ) (t t' : Flock.Transcript) (s' : σ),
@@ -50,8 +41,6 @@ theorem forIn_keeps {σ : Type} (body : ℕ → σ → TM (ForInStep σ))
       obtain ⟨s₁, rfl, ht⟩ := hbody a s t r t₁ h₁
       exact (forIn_keeps body hbody n (a + 1) s₁ t₁ t' s' h₂).trans ht
 
-/-- **The coins `Zk.verifyInner` reads**: four rounds from `t.k`, of one coin (`ε`), `7 + 3` (the batching coins), one
-(`β`) and `Q` (the query words, the fourth round's coins). -/
 theorem zk_inner_coins {lay : Zk.PadLayout} {pr : Zk.InnerProof} {finalC : F128} {cons : Array (String × Zk.Lin)}
     {t t' : Flock.Transcript} (hcons : cons.size = 7) (hwf : RoundsWF t.rounds)
     (h : Zk.verifyInner lay pr finalC cons t = .ok ((), t')) :
@@ -110,8 +99,6 @@ theorem zk_inner_coins {lay : Zk.PadLayout} {pr : Zk.InnerProof} {finalC : F128}
     rfl
   exact ⟨hr₉, hk₉, c₀, c₁, c₂, c₃, hsz₀, hsz₁, hsz₂, hsz₃, by rw [hc₃, hr₈, hk₈], hcoins⟩
 
-/-- **The compiled inner proof's run on four rounds of coins**: played with the proof's `[ρ, σ]`, `τ`'s commitment and
-`Y`, it records at query `jj` the position `pos` gives the fourth round's coin `jj` (`qposOf`). -/
 theorem innerGameC_plays {Sl : Type} (Hs : ZkLink.Hashes 𝔽 Dig Sl) {N : ℕ} (dom : Fin N ↪ 𝔽) (np nP : ℕ)
     (pos : 𝔽 → Fin N) (rows : Fin 7 → ZkSession.Lin 𝔽 np) (tr : ZkSession.Triple np) (root : Dig)
     (pr : Zk.InnerProof) {c₀ c₁ c₂ c₃ : Array F128} (hsz₀ : c₀.size = 1) (hsz₁ : c₁.size = 7 + 3)

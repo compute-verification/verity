@@ -27,28 +27,8 @@ import Proofs.Flock.Soundness.ZK.RealLeaves
 import Proofs.Flock.Soundness.ZK.Refusal
 import Proofs.Flock.Verifier.Hash
 
-/-!
-# One `--zk` session is zero knowledge at every coin vector
-
-`Composed.zk_session_view` holds at the coin vectors the honest prover doesn't refuse (`Admits`). At every coin vector,
-with the verifier's coins uniform:
-
-* where the prover refuses (`¬ Admits`, `refused_coins`, a zerocheck outer coin `1` among them), it stops, and what it
-  sent is a function of a cut of its view (`Table.abort`). The refusal reads only the coins, which are public, so the
-  simulator aborts at exactly those coins and outputs the honest prefix on the dummy witness (`simAll`). Lemma A at every
-  coin vector (`table_prefinal_indep_pub`) and T1 on every pre-final leaf bound the difference by `2·|LeafPos|·δ₁`
-  (`Table.table_abort_hm96`), with no hypothesis on the coins: every leaf is unopened at a refusal, so T1 is paid on all
-  of them, and Lemma B's re-randomization of the opened rows (`PadOnto`, which `CoinedOK` gives only where the prover
-  doesn't refuse) isn't needed;
-* where it doesn't refuse, Lemma B (`zkViewAt_of_ok`), within `2·|Hid|·δ₁ ≤ 2·|LeafPos|·δ₁`.
-
-No coin vector is left: the outer coin `1`, where the view would not be simulated, is a refusal.
-
-* `zkViewAll_of_ok`: `ZkViewAll` at a `CoinedSetup` from `CoinedOK` and `hash-derived-key`.
-* `outer_one_le`: at a sample's tables, the prover refuses for an outer coin `1` with probability at most
-  `2·(m − 13)·2^-128` (completeness).
-* `zk_session_view_all`: at every sample `verify --zk` sets up, `ZkViewAll` at `2^-193`.
--/
+/-! One `--zk` session is zero knowledge at every coin vector, because the outer coin `1`, where the view would not be
+simulated, is a refusal. -/
 
 @[expose] public section
 
@@ -84,7 +64,6 @@ theorem card_pre (C : CoinedSetup) (c : CoinsZK C.Rest) :
   change C.z.nS + (2 * C.z.nQ + 2) + (C.z.nU + 2 * C.z.nPU) = C.z.nS + C.z.nU + (2 * (C.z.nQ + C.z.nPU) + 2)
   ring
 
-/-- `τ`'s commitment is the hm96 leaf of `SHA-512(TAU_TAG ‖ τ)` (`leafSplit`). -/
 theorem leafT_hm96 (C : CoinedSetup) (c : CoinsZK C.Rest) (t : 𝔽) (y : ZkView.Salt) :
     (C.T c).tab.leafT t y = (C.T c).hm96.H
       (ZkView.bitsOf (Sha512.hash (Zk.TAU_TAG ++ F128.toBytes t)) + (C.T c).hm96.My y, (C.T c).hm96.cs y) := by
@@ -92,8 +71,6 @@ theorem leafT_hm96 (C : CoinedSetup) (c : CoinsZK C.Rest) (t : 𝔽) (y : ZkView
   exact ZkView.leafSplit (Sha512.hash (Zk.TAU_TAG ++ F128.toBytes t)) y (Sha512.hash_size _)
 
 open Classical in
-/-- **One coin vector, at any hm96 hiding bound `δ`**: the prover's and the simulator's probabilities at `c` are within
-`2·|LeafPos|·δ`. -/
 theorem coin_close_le (C : CoinedSetup) (hC : CoinedOK execArith (Refine.fOf Flock.Zk.PAD_C) C)
     {δ : ℝ≥0∞} (hT1 : Claims.Hm96Hiding ZkView.My ZkView.saltHash δ)
     (w w0 : Witness C.S.m) (hv : C.Valid w) (hreg : ∀ c, (C.T c).tab.sReg w = (C.T c).tab.pubReg)
@@ -133,8 +110,6 @@ theorem coin_close_le (C : CoinedSetup) (hC : CoinedOK execArith (Refine.fOf Flo
     exact h
 
 open Classical in
-/-- **One coin vector**: the prover's and the simulator's probabilities at `c` are within `2·|LeafPos|·2^-193`
-(`coin_close_le` under `hash-derived-key`). -/
 theorem coin_close (C : CoinedSetup) (hC : CoinedOK execArith (Refine.fOf Flock.Zk.PAD_C) C)
     (hKey : Assumptions.Zk.HashDerivedKeyHm96)
     (w w0 : Witness C.S.m) (hv : C.Valid w) (hreg : ∀ c, (C.T c).tab.sReg w = (C.T c).tab.pubReg)
@@ -147,8 +122,6 @@ theorem coin_close (C : CoinedSetup) (hC : CoinedOK execArith (Refine.fOf Flock.
           + 2 * Fintype.card (LeafPos C.z) * (2 : ℝ≥0∞) ^ (-193 : ℤ) :=
   coin_close_le C hC (δ := (2 : ℝ≥0∞) ^ (-193 : ℤ)) hKey w w0 hv hreg E c
 
-/-- **Zero knowledge at every coin vector at a `CoinedSetup` from its facts**: Lemma B where the prover doesn't refuse
-(`zkViewAt_of_ok`), and the refusal where it does (`Table.table_abort_hm96`, which reads nothing of `CoinedOK`). -/
 theorem zkViewAll_of_ok (C : CoinedSetup) [Fintype (CoinsZK C.Rest)]
     (hC : CoinedOK execArith (Refine.fOf Flock.Zk.PAD_C) C)
     (hKey : Assumptions.Zk.HashDerivedKeyHm96) :
@@ -165,8 +138,6 @@ theorem zkViewAll_of_ok (C : CoinedSetup) [Fintype (CoinsZK C.Rest)]
     gcongr
     exact avg_const_le _
 
-/-- **A coordinate that can be overwritten in place is uniform**: if `upd c x` puts `x` at `f`'s coordinate and nowhere
-else, `f` of a uniform `c` hits any value with probability at most `1/|Val|`. -/
 theorem prCoin_coord_le {Ω Val : Type} [Fintype Ω] [Fintype Val] [DecidableEq Val] (f : Ω → Val) (upd : Ω → Val → Ω)
     (h1 : ∀ c x, f (upd c x) = x) (h2 : ∀ c x y, upd (upd c x) y = upd c y) (h3 : ∀ c, upd c (f c) = c) (x : Val) :
     prCoin (fun c => f c = x) ≤ (Fintype.card Val : ℝ≥0∞)⁻¹ := by
@@ -191,12 +162,10 @@ theorem prCoin_coord_le {Ω Val : Type} [Fintype Ω] [Fintype Val] [DecidableEq 
 theorem card_f128 : Fintype.card F128 = 2 ^ 128 := by
   rw [Fintype.card_congr f128Equiv, Fintype.card_prod, Fintype.card_fin, ← pow_add]
 
-/-- Rep `r`'s `j`-th zerocheck outer coin of a sample's coins, overwritten with `x`. -/
 noncomputable def setOuter (P : LigProver) {mPts : ℕ} (Tz : TabZK 𝔽 mPts) (st : Stmt) (r : Fin 2) (j : Fin (st.m - 13))
     (c : CoinsZK (coinedOf P Tz st).Rest) (x : F128) : CoinsZK (coinedOf P Tz st).Rest :=
   { c with rest := { c.rest with rOuter := Function.update c.rest.rOuter r (Function.update (c.rest.rOuter r) j x) } }
 
-/-- **Each zerocheck outer coin is uniform over F128**: it is `1` with probability at most `2^-128`. -/
 theorem prCoin_outer_one (P : LigProver) {mPts : ℕ} (Tz : TabZK 𝔽 mPts) (st : Stmt) (r : Fin 2) (j : Fin (st.m - 13)) :
     prCoin (fun c : CoinsZK (coinedOf P Tz st).Rest => c.rest.rOuter r j = 1) ≤ (2 : ℝ≥0∞) ^ (-128 : ℤ) := by
   classical
@@ -209,8 +178,6 @@ theorem prCoin_outer_one (P : LigProver) {mPts : ℕ} (Tz : TabZK 𝔽 mPts) (st
   · rw [card_f128, ENNReal.zpow_neg, Nat.cast_pow, Nat.cast_ofNat]
     norm_cast
 
-/-- **The prover refuses for an outer coin `1` rarely** (completeness), at a sample's tables: each of the `m − 13` outer
-coins of each of the two reps is uniform over F128. -/
 theorem outer_one_le (P : LigProver) {mPts : ℕ} (Tz : TabZK 𝔽 mPts) (st : Stmt) :
     prCoin (fun c : CoinsZK (coinedOf P Tz st).Rest => ¬ ∀ r, ∀ x ∈ (coinedOf P Tz st).rOuter c r, x ≠ 1)
       ≤ 2 * (st.m - 13 : ℕ) * (2 : ℝ≥0∞) ^ (-128 : ℤ) := by
@@ -235,20 +202,8 @@ theorem outer_one_le (P : LigProver) {mPts : ℕ} (Tz : TabZK 𝔽 mPts) (st : S
 
 variable {mPts n : ℕ} {Reg : Type} (P : LigProver)
 
-/-- **One `--zk` sampled session is zero knowledge at every coin vector.** At every sample `verify --zk` sets up, with the
-verifier's coins uniform: for every event on the coins and what the honest prover sends (its view, or the prefix of it
-before it stops at a refused coin), at any valid witness whose registered values are the public ones, its probability
-and its probability under the simulator (`S_shvzk`, or the honest prefix on the dummy witness where the prover refuses,
-at any `w0`) are within `2·|LeafPos|·2^-193`, both ways, T1's on every leaf. A zerocheck outer coin `1` is a refusal
-(`CoinedSetup.Admits`), so no coin vector is left unsimulated.
-
-As `Composed.zk_session_view`, this is for coins fixed independently of the prover; a verifier that chooses them is
-covered by the challenger's commitment at `Hello`, before the prover's first message (`coin_tree.rs`), whose binding is
-`keyed-cr`, which no statement here models yet.
-
-For an untyped statement (`ht`) whose Δ and regions avoid the mask slot (`avoidsMask`, a named hypothesis until the
-verifier's D11 refusal in `Net.ofRows` discharges it), and for any prover of Ligerito's levels ≥ 1 (`LigProver`), as
-`Composed.zk_session_view`. -/
+/-- Holds for coins fixed independently of the prover; the challenger's commitment at `Hello` covers a verifier that
+chooses them, and its binding (`keyed-cr`) is modelled by no statement here. -/
 theorem zk_session_view_all (I : Inputs) (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
     (y₀ : SampleSetupZK I mPts S₀ (dj S₀)) (ht : I.tags.typed = false)
     (hdm : ∀ (S : Finset (Fin n)) (y : SampleSetupZK I mPts S (dj S)), avoidsMask y.x.st = true)

@@ -17,15 +17,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.Soundness.Refine.Final
 
-/-!
-# Ligerito under `--zk`, as frames
-
-`zkLigerito_frames`: a `Zk.ligerito` run that succeeds on retained rounds emits `ligFramesZ`. Its steps are the non-ZK
-session's (`Exec.ligerito_frames`) with three changes: `LABEL_OPEN` follows the cap; the last lane round's coin is
-followed by level 0's hiding frames (`l0Fr`, through `laneFr`); and level 0's queries open rows `EXTRA_LANES` wider
-(`queryLevel0_emit`), followed by a pure loop over the extra lanes that emits nothing. The final check is
-`Refine.finalProg`'s text returning the lane phase's record (`finalProgZ`), and it emits nothing (`finalProgZ_ok`).
--/
+/-! Ligerito under `--zk`, as frames (`zkLigerito_frames`). -/
 
 @[expose] public section
 
@@ -34,8 +26,6 @@ namespace FlockSoundness.Discharge.ZkExec
 open Flock Refine Exec Transcript
 
 variable {β : Type}
-
-/-! ## Level 0's queries -/
 
 theorem queryLevel0_emit {ms : MerkleScheme} {p : LigeritoProof} {lv : Flock.Level} {cap : Array ByteArray}
     {fold : Array F256} (hq : lv.q ≠ 0)
@@ -67,10 +57,6 @@ theorem queryLevel0_emit {ms : MerkleScheme} {p : LigeritoProof} {lv : Flock.Lev
     obtain ⟨rfl, rfl, rfl⟩ := lpure_ok h₁
     exact ⟨qn, cn, _, _, hqn, hcn, e₃.trans (e₄.trans (e₅.trans e₆)), h₂⟩
 
-/-! ## The lane rounds -/
-
-/-- Lane round `i`'s frames: its `K` coin, then (after the last lane round's coin) level 0's hiding frames, then the
-round's message. -/
 def laneFr (p : LigeritoProof) (z : Zk.Level0Msgs) (k0 i : ℕ) : List Frame :=
   .sq 2 2 :: ((if i + 1 = k0 then l0Fr z else []) ++ kFr p.messages[1 + i]!)
 
@@ -89,10 +75,6 @@ theorem laneFr_flat (p : LigeritoProof) (z : Zk.Level0Msgs) (k0 : ℕ) (hk : 1 �
   simp only [List.flatMap_cons, List.flatMap_nil, List.append_nil, laneFr, Nat.add_sub_cancel, Nat.zero_add,
     Nat.one_mul, Nat.add_zero, Nat.add_comm 1 k, ite_true]
 
-/-! ## The final check, as `Zk.ligerito` runs it -/
-
-/-- `Zk.ligerito`'s final check (live PROTOCOL.md §7, §13.6) and its record: `Refine.finalProg`'s text, returning the
-lane phase's record. -/
 def finalProgZ (p : LigeritoProof) (basisAt : Array F256 → Nat → Array F256) (n : Nat) (T : F128)
     (initCh : Array F256) (rho : F256 × F256) (levels : Array (Array F256)) (ext : Nat) : LM Zk.L0Rec := do
     let st ← get
@@ -199,10 +181,6 @@ theorem finalProgZ_ok {p : LigeritoProof} {basisAt : Array F256 → ℕ → Arra
   obtain ⟨-, -, rfl⟩ := lpure_ok h3
   rfl
 
-/-! ## Ligerito under `--zk` -/
-
--- one proof of a few hundred lines down `Zk.ligerito`'s unfolded run, a `*_bind` step per bind and `rw` and `omega` on
--- the frames' indices
 set_option maxHeartbeats 4000000 in
 theorem zkLigerito_frames (ms : MerkleScheme) (sch : Flock.Schedule) (T : F128) (cap : Array ByteArray)
     (p : LigeritoProof) (basisAt : Array F256 → ℕ → Array F256) (zl : Zk.Level0) (hdim : DimSeam sch)

@@ -10,16 +10,7 @@ import Mathlib.Combinatorics.Matroid.Init
 import Proofs.Flock.Soundness.Refine.Setup
 import Proofs.Flock.Soundness.Refine.Walk
 
-/-!
-# verity-verify-proof's tables at `count > 1`
-
-`Stmt.setupTables` at `count > 1`, under a tag without hidden outputs (`setupTables_parts`): the tag allows several
-tables and `count ≤ Tags.MAX_TABLES`; the sample, when there is one, is a subset or stratified sample (`Draw.tablesWhy`), and
-the session's units are its
-units (without one, the population's every unit); they split into `count` nonempty equal parts; and table `j` is
-`setupH`'s statement under `Tags.tableIdentity count j` at the subset sample of part `j`, the consecutive units
-`j·k … j·k + k − 1` with `k = units/count`.
--/
+/-! verity-verify-proof's tables at `count > 1`, under a tag without hidden outputs (`setupTables_parts`). -/
 
 @[expose] public section
 
@@ -82,7 +73,6 @@ variable {tags : Tags} {cf pf : ByteArray} {coins : Coins} {count : ℕ} {tables
   {stratified : Option ℕ} {closure : Option (Std.HashMap ℕ (Array ℕ))} {spec : SessionSpec} {sts : Array Stmt}
 
 set_option maxHeartbeats 4000000 in
-/-- **`setupTables`'s tables at `count > 1`** (`Stmt.setupTables`) under a tag without hidden outputs (`hh`). -/
 theorem setupTables_parts (hh : tags.hiddenOutputs = false) (hc1 : 1 < count)
     (h : Stmt.setupTables tags cf pf coins count tables draw partition program work stratified closure =
       .ok (spec, sts)) :

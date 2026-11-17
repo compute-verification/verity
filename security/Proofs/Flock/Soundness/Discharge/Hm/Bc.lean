@@ -20,12 +20,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.Soundness.Discharge.Hm.Nets
 
-/-!
-A row's `b ‖ c` in a satisfying witness of the untyped statement `Stmt.setupH` accepted (`row_bc_setupH`): the commit
-string of the row and salt its slots read. Δ's one copy at each `cv` and `pad` input bit (`inBit_copyL`) gives
-`port_commit_rows` its four facts (`row_copies_flat`); the constant bits read the pin (`pin_bit`) and the unit range's
-forced-zero row (`zero_bit`).
--/
+/-! A row's `b ‖ c` in a satisfying witness of the untyped statement `Stmt.setupH` accepted. -/
 
 @[expose] public section
 
@@ -39,7 +34,6 @@ section Bc
 
 variable {tags : Tags} {st : Stmt} (L : Layout st) (F : Aliased.UnitFacts tags st)
 
-/-- The pin carries 1, in every block of a witness that satisfies the statement off some rows (`SatEx`). -/
 theorem pin_bit_ex {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {D : ℕ → Prop}
     {z : Model.Witness (L.model regs).m} (hz : SatEx (L.model regs) D z) (o : Fin (2 ^ (L.model regs).nbl)) :
     chunkBit (L.model regs) z o st.pin = true := by
@@ -48,15 +42,12 @@ theorem pin_bit_ex {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {D 
   rw [hpin, hz.2.1 o]
   rfl
 
-/-- The pin carries 1, in every block of a satisfying witness. -/
 theorem pin_bit {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z : Model.Witness (L.model regs).m}
     (hz : (L.model regs).Satisfies z) (o : Fin (2 ^ (L.model regs).nbl)) :
     chunkBit (L.model regs) z o st.pin = true :=
   pin_bit_ex L (hz.ex fun _ => False) o
 
 include F in
-/-- The unit range's first slot's forced-zero row carries 0, in every block of a witness that satisfies every row but
-the unit input rows (`SatEx`, `UnitIn`), when the range has a slot. -/
 theorem zero_bit_ex (hupv : 0 < st.c.upv) (hg : 0 < st.c.g) {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))}
     {z : Model.Witness (L.model regs).m} (hz : SatEx (L.model regs) (UnitIn st.c) z)
     (o : Fin (2 ^ (L.model regs).nbl)) :
@@ -70,17 +61,12 @@ theorem zero_bit_ex (hupv : 0 < st.c.upv) (hg : 0 < st.c.g) {regs : List (Model.
   rfl
 
 include F in
-/-- The unit range's first slot's forced-zero row carries 0, in every block of a satisfying witness, when the range has
-a slot. -/
 theorem zero_bit (hupv : 0 < st.c.upv) (hg : 0 < st.c.g) {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))}
     {z : Model.Witness (L.model regs).m} (hz : (L.model regs).Satisfies z) (o : Fin (2 ^ (L.model regs).nbl)) :
     chunkBit (L.model regs) z o (zeroCol st.c) = false :=
   zero_bit_ex L F hupv hg (hz.ex _) o
 
 include F in
-/-- **The four copies into template instance `g`'s row `p`**, in every block of a satisfying witness of the untyped statement: the first
-compression's `cv` is the row prefix's midstate, each later compression's `cv` the previous one's output, the `hm96`
-slot's `cv` the last compression's output, and its `pad` the padding block. -/
 theorem row_copies_flat (hda : st.da = (HmRow.delta st.c st.pin).1) (hupv : 0 < st.c.upv)
     (hv1 : ∀ p ∈ st.c.ports.toList, p.v2 = false ∧ p.bits = 16 * p.words ∧ 0 < p.chunks)
     {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z : Model.Witness (L.model regs).m}
@@ -139,8 +125,6 @@ theorem row_copies_flat (hda : st.da = (HmRow.delta st.c st.pin).1) (hupv : 0 < 
     exact chunkBit_constSrc _ _ hpin hzero
 
 include F in
-/-- **A row's `b ‖ c`**, in every block of a satisfying witness of the untyped statement: the commit string of the row
-prefix and message its `sha512x3` slots read, and the salt its `hm96` slot reads, for `sha512/row/v1` rows (`hv1`). -/
 theorem row_bc_flat (hda : st.da = (HmRow.delta st.c st.pin).1) (hupv : 0 < st.c.upv)
     (hv1 : ∀ p ∈ st.c.ports.toList, p.v2 = false ∧ p.bits = 16 * p.words ∧ 0 < p.chunks)
     {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z : Model.Witness (L.model regs).m}
@@ -161,8 +145,6 @@ theorem row_bc_flat (hda : st.da = (HmRow.delta st.c st.pin).1) (hupv : 0 < st.c
 
 end Bc
 
-/-- A unit that returns the outputs has a slot per template instance at least: the check's power of two of unit slots.
--/
 theorem upv_pos {c : Circuit} (C : CheckFacts c) (ho : c.outNet = c.unitNet) : 0 < c.upv := by
   have h := C.unit_pow2 ho
   rw [C.unit_range.2] at h
@@ -173,9 +155,6 @@ theorem upv_pos {c : Circuit} (C : CheckFacts c) (ho : c.outNet = c.unitNet) : 0
 variable {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
   {draw partition : Option Lean.Json} {program : Option ByteArray} {st : Stmt}
 
-/-- **A row's `b ‖ c` at the untyped statement `Stmt.setupH` accepted**: in every block of a satisfying witness, template instance `g`'s
-row `p`'s `hm96` slot outputs the commit string of the row prefix and message its `sha512x3` slots read, under the salt
-its `hm96` slot reads, when the unit returns the outputs (`ho`) and the rows are `sha512/row/v1` rows (`hv1`). -/
 theorem row_bc_setupH (ht : tags.typed = false)
     (h : Stmt.setupH tags cf pf coins tables draw partition program = .ok st)
     (ho : st.c.outNet = st.c.unitNet)

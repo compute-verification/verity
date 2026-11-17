@@ -10,40 +10,12 @@ import Proofs.Flock.Soundness.ExecFlatCopies
 
 set_option Elab.async false
 
-/-!
-# `KeysRow` from the parse
-
-`keyProg_valPinned` takes `KeysRow`: every input a computed row reads has the zero or a row bit as its key. At the row
-widths `16 · words` (`portRowW`), in an untyped circuit whose unit reads any number of input groups, it is what the
-verifier checks, once every input a unit row reads is a port bit (`PortReads`) and no wire reaches the unit
-(`CutsFromRows`; `keysRow_of_cuts`). A unit with only its leaf group has no wire into it (`cutsFromRows_of_single`), so
-`keysRow_of_parse` is that case:
-
-* `Aliased.srcKey_leaf`, restated with the key: a stacked leaf port bit's key is the zero or message bit `t % 8`
-  of byte `2 (x − start q) + t / 8` of the port `q` holding leaf word `x`, for the port bit `t`;
-* a cut port bit's key is the same at its one leaf cut's row word (`check_facts`' `wired`: with no wire into the unit,
-  each cut port of each unit copy has exactly one leaf cut), or the zero past the cut word's 16 bits;
-* `check_in`, `check_cuts`: `HmRow.check` has each leaf input word and each leaf cut's row word below `inWords`, and
-  `check_facts` the leaf ports 16 bits;
-* `starts_find`: `Typed.starts` holds the ports' first words, so the last port starting at or before a word below
-  `inWords` holds it.
-
-A unit whose cut input a wire feeds (another net's output, as every multi-group unit the vLLM lowerings emit has: an
-RMSNorm unit's scalar from the tail's `lookup:rsq` stage, a GEMM coordinate's chained accumulator) has the key
-`Src.wire` there, which no gate of `keyProg` computes: its template instance is the unit's rows stacked `upv` times. Such
-a unit needs a key program over the whole template instance (the unit copies, the stages and the lookup slots, joined by
-Δ's wires in an order the verifier checks acyclic), not this condition (`Inst.instKeysRow_of_parse`).
-
-`PortReads` is a circuit condition. `Net.ofRows` refuses a row that reads an input column whose row is empty
-(`checkOrder`), and has each port bit's row a self row (`inputsOk`), but an input column outside every port may also be a
-self row, and then a row may read it: Δ copies nothing into it, so its bit is the prover's.
--/
+/-! `KeysRow` from the parse, under the circuit condition `PortReads`: an input column outside every port may be a
+self row a row reads, and Δ copies nothing into it, so its bit is the prover's. -/
 
 namespace FlockSoundness.Discharge.Layout
 
 open Flock FlockLevel3
-
-/-! ## The ports' first words -/
 
 theorem foldl_starts (l : List Port) (acc : Array ℕ) (s : ℕ) :
     (l.foldl (fun (a : Array ℕ × ℕ) p => (a.1.push a.2, a.2 + p.words)) (acc, s)).1.toList =
@@ -107,7 +79,6 @@ theorem find_rev_range {n : ℕ} {p : ℕ → Bool} {q : ℕ} (h : (List.range n
       · rw [e]; exact hp
       · exact h3 q' hq1 (by omega)
 
-/-- **The port holding a word**: the last port starting at or before a word below `inWords` holds it. -/
 theorem starts_find (c : Circuit) {x q : ℕ} (hx : x < c.inWords)
     (hq : ((List.range (Typed.starts c).size).reverse.find? (fun q => (Typed.starts c)[q]! ≤ x)).getD 0 = q) :
     ∃ hq : q < c.ports.size, (Typed.starts c)[q]! ≤ x ∧ x < (Typed.starts c)[q]! + c.ports[q].words := by
@@ -143,9 +114,6 @@ theorem starts_find (c : Circuit) {x q : ℕ} (hx : x < c.inWords)
       rw [starts_get c hlt, ← htake, hall]
       exact hx
 
-/-! ## The leaf inputs' words -/
-
-/-- **What `HmRow.check` checks of the leaf inputs' words**, in an untyped circuit: each is below `inWords`. -/
 theorem check_in {c : Circuit} {tags : Tags} {ls : Lean.Json} (ht : c.typed = none)
     (h : HmRow.check c tags ls = .ok ()) :
     ∀ u < c.upv, ∀ x ∈ (c.leavesIn[u]!).toList, x < (c.inWords : Int) := by
@@ -178,8 +146,6 @@ theorem check_in {c : Circuit} {tags : Tags} {ls : Lean.Json} (ht : c.typed = no
       exact (hc.1.2 x (Array.mem_def.2 hx)).2) hseen
   exact fun u hu => leaves u (Nat.zero_le _) hu
 
-/-- **What `HmRow.check` checks of the leaf cuts' row words and the block**, in an untyped circuit: each leaf cut's row
-word is below `inWords`, and a block has a template instance. -/
 theorem check_cuts {c : Circuit} {tags : Tags} {ls : Lean.Json} (ht : c.typed = none)
     (h : HmRow.check c tags ls = .ok ()) : (∀ e ∈ c.leafCuts.toList, e.2.2 < c.inWords) ∧ 0 < c.g := by
   unfold HmRow.check at h
@@ -212,9 +178,6 @@ theorem check_cuts {c : Circuit} {tags : Tags} {ls : Lean.Json} (ht : c.typed = 
   simp only [Bool.or_eq_true, decide_eq_true_eq, not_or, not_le, not_lt] at hc
   exact hc.2
 
-/-! ## A stacked row's inputs -/
-
-/-- **A stacked row's input** is copy `i / (nComp + 1)`'s input, one its row reads. -/
 theorem stackRow_input {R : Rows} {k : ℕ} {f : Fin R.nComp → List (Fin R.w)} {i : Fin (k * (R.nComp + 1))}
     {x : Fin (R.stackW k)} (hx : x ∈ R.stackRow k f i) (hxn : x.val < k * R.nIn) :
     ∃ (j : Fin R.nComp) (y : Fin R.w), y ∈ f j ∧ y.val < R.nIn ∧ i.val / (R.nComp + 1) < k ∧
@@ -233,8 +196,6 @@ theorem stackRow_input {R : Rows} {k : ℕ} {f : Fin R.nComp → List (Fin R.w)}
     · rename_i h
       rw [dite_eq_right h] at hxn
       split at hxn <;> simp only at hxn <;> omega
-
-/-! ## `KeysRow` -/
 
 variable (c : Flock.Circuit) (hU : Built c.unit)
 
@@ -257,12 +218,9 @@ theorem ofNet_nIn_eq : (Rows.ofNet hU).nIn = c.unit.inWords * WORD := by
   exact Nat.min_eq_left hk.2.2.2.2.2.2.2.1
 
 variable (c) in
-/-- **No wire reaches the unit**: its cut inputs, in every input group past the leaf group, are all leaf cuts, each a
-word of the rows. A circuit condition. -/
+/-- No wire reaches the unit; a circuit condition. -/
 def CutsFromRows : Prop := ∀ w ∈ c.wires.toList, w.dst.1 ≠ c.unitNet
 
-/-- **A unit with only its leaf group has no wire into it**, in a circuit `HmRow.parse` accepted with nets `pre` first:
-`HmRow.check` refuses a wire into a leaf port, and that group's ports are all the unit's. -/
 theorem cutsFromRows_of_singlePre {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteArray)}
     {pre : Array (String × Net)} (h : HmRow.parse tags bytes tables (pre := pre) = .ok c)
     (h1 : c.unit.inGroups.size = 1) : CutsFromRows c := by
@@ -283,14 +241,10 @@ theorem cutsFromRows_of_singlePre {tags : Tags} {bytes : ByteArray} {tables : Li
   rw [hgs, hsz] at h2
   omega
 
-/-- **A unit with only its leaf group has no wire into it** (`cutsFromRows_of_singlePre` with no net ahead of the
-file). -/
 theorem cutsFromRows_of_single {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteArray)}
     (h : HmRow.parse tags bytes tables = .ok c) (h1 : c.unit.inGroups.size = 1) : CutsFromRows c :=
   cutsFromRows_of_singlePre h h1
 
-/-- **Every port-bit input of a unit slot has a row key**, in an untyped circuit `HmRow.parse` accepted with nets `pre`
-first, with no wire into its unit (`CutsFromRows`), at the row widths `16 · words`. -/
 theorem rowKey_of_cutsPre {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteArray)}
     {pre : Array (String × Net)} (h : HmRow.parse tags bytes tables (pre := pre) = .ok c) (hcr : CutsFromRows c)
     (hnd : (portBits c.unit.inGroups).Nodup) {x : ℕ} (hm : x % (c.unit.inWords * WORD) ∈ portBits c.unit.inGroups)
@@ -377,8 +331,6 @@ theorem rowKey_of_cutsPre {tags : Tags} {bytes : ByteArray} {tables : List (Stri
     simp only [Fin.getElem_fin]
     omega
 
-/-- **`KeysRow` from each port-bit input's row key**: every input a computed row reads is, when every input a unit row
-reads is a port bit (`PortReads`), a port bit of a unit slot. -/
 theorem keysRow_of_rowKey (hpr : PortReads c hU)
     (hk : ∀ x, x % (c.unit.inWords * WORD) ∈ portBits c.unit.inGroups → x / (c.unit.inWords * WORD) < c.upv →
       RowKey c (portRowW c) x) : KeysRow c hU (portRowW c) := by
@@ -403,33 +355,21 @@ theorem keysRow_of_rowKey (hpr : PortReads c hU)
     rw [hxy, Nat.mul_comm, Nat.mul_add_div (by omega), Nat.div_eq_of_lt hyn, Nat.add_zero]
   exact hk x.val (by rw [hmod]; exact hm) (by rw [hdiv]; exact hu)
 
-/-- **`KeysRow` from the parse, for a unit reading any number of input groups**: in an untyped circuit `HmRow.parse`
-accepted with nets `pre` first, with no wire into its unit (`CutsFromRows`), at the row widths `16 · words`, every
-input a computed row reads has the zero or a row bit as its key, when every input a unit row reads is a port bit
-(`PortReads`). -/
 theorem keysRow_of_cutsPre {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteArray)}
     {pre : Array (String × Net)} (h : HmRow.parse tags bytes tables (pre := pre) = .ok c) (hcr : CutsFromRows c)
     (hpr : PortReads c hU) : KeysRow c hU (portRowW c) :=
   keysRow_of_rowKey hpr fun _ hm hu => rowKey_of_cutsPre h hcr (Aliased.portBits_nodup hU) hm hu
 
-/-- **`KeysRow` from the parse, for a unit reading any number of input groups** (`keysRow_of_cutsPre` with no net ahead
-of the file). -/
 theorem keysRow_of_cuts {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteArray)}
     (h : HmRow.parse tags bytes tables = .ok c) (hcr : CutsFromRows c) (hpr : PortReads c hU) :
     KeysRow c hU (portRowW c) :=
   keysRow_of_cutsPre h hcr hpr
 
-/-- **`KeysRow` from the parse, with nets `pre` first** (a unit given ahead of the file): in an untyped circuit whose
-unit has only its leaf group, at the row widths `16 · words`, every input a computed row reads has the zero or a row bit
-as its key, when every input a unit row reads is a port bit (`PortReads`). -/
 theorem keysRow_of_parsePre {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteArray)}
     {pre : Array (String × Net)} (h : HmRow.parse tags bytes tables (pre := pre) = .ok c)
     (h1 : c.unit.inGroups.size = 1) (hpr : PortReads c hU) : KeysRow c hU (portRowW c) :=
   keysRow_of_cutsPre h (cutsFromRows_of_singlePre h h1) hpr
 
-/-- **`KeysRow` from the parse**: in an untyped circuit whose unit has only its leaf group, at the row widths
-`16 · words`, every input a computed row reads has the zero or a row bit as its key, when every input a unit row reads is
-a port bit (`PortReads`). -/
 theorem keysRow_of_parse {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteArray)}
     (h : HmRow.parse tags bytes tables = .ok c) (h1 : c.unit.inGroups.size = 1) (hpr : PortReads c hU) :
     KeysRow c hU (portRowW c) :=

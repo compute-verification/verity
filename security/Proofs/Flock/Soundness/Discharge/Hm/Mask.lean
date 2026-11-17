@@ -1,7 +1,3 @@
-/-
-The executable's mask `Hm96.Default512.mask` (per-byte tables of `M`'s columns, built by loops) is `maskV`, bit for bit:
-bit `t < 512` of `M·y` is `⊕_{j < 1536} key_{t+j} · y_j`.
--/
 module
 
 public import Mathlib.Algebra.Group.Nat.Defs
@@ -34,9 +30,8 @@ open Flock.HmNets hiding and
 
 open Flock
 
-/-! ## Sums over ℤ/2 as Boolean folds -/
+/-! The executable's mask `Hm96.Default512.mask` is `maskV`, bit for bit. -/
 
-/-- `⊕_{j ∈ l} f j`. -/
 def xsum (l : List ℕ) (f : ℕ → Bool) : Bool := l.foldl (fun acc j => acc ^^ f j) false
 
 theorem xsum_nil (f : ℕ → Bool) : xsum [] f = false := rfl
@@ -89,8 +84,6 @@ theorem xsum_range_mul (f : ℕ → Bool) (m : ℕ) : ∀ n : ℕ,
     rw [Nat.mul_succ, List.range_add, xsum_append, xsum_range_mul f m n, List.range_succ, xsum_append, xsum_cons,
       xsum_nil, Bool.xor_false, xsum_map]
 
-/-! ## Arrays and words, bit by bit -/
-
 theorem get!_set! {a : Array UInt64} {i j : ℕ} {x : UInt64} (hj : j < a.size) :
     (a.set! i x)[j]! = if i = j then x else a[j]! := by
   rw [Array.set!_eq_setIfInBounds, getElem!_pos (a.setIfInBounds i x) j (by simpa using hj),
@@ -116,9 +109,6 @@ theorem testBit_shl (x : UInt64) {s b : ℕ} (hs : s < 64) (hb : b < 64) :
   rw [this]
   simp [hb]
 
-/-! ## The key's bits -/
-
-/-- Key bit `t` (`Hm96.bit`). -/
 abbrev kb (t : ℕ) : Bool := Hm96.bit Hm96.Default512.key t
 
 theorem kb_eq (t : ℕ) : kb t = (Hm96.Default512.key.get! (t / 8)).toNat.testBit (t % 8) := by
@@ -126,7 +116,6 @@ theorem kb_eq (t : ℕ) : kb t = (Hm96.Default512.key.get! (t / 8)).toNat.testBi
   generalize (Hm96.Default512.key.get! (t / 8)).toNat / 2 ^ (t % 8) % 2 = r
   by_cases h : r = 1 <;> simp [h]
 
-/-- `Hm96.Default512.keyBit`. -/
 def keyBitU (t : ℕ) : UInt64 := ((Hm96.Default512.key.get! (t / 8)).toUInt64 >>> (t % 8).toUInt64) &&& 1
 
 theorem testBit_keyBitU (t b : ℕ) : (keyBitU t).toNat.testBit b = (decide (b = 0) && kb t) := by
@@ -142,8 +131,6 @@ theorem testBit_keyBitU (t b : ℕ) : (keyBitU t).toNat.testBit b = (decide (b =
       simp [Ne.symm hb]
     rw [show (1 : UInt64).toNat = 1 from rfl, this]
     simp [hb]
-
-/-! ## Loops as folds -/
 
 theorem foldl_range'_induct {α : Type} (P : ℕ → α → Prop) (f : α → ℕ → α) (s : ℕ) :
     ∀ (n : ℕ) (a : α), P s a → (∀ i a, s ≤ i → i < s + n → P i a → P (i + 1) (f a i)) →
@@ -192,10 +179,6 @@ theorem mask_eq (salt : ByteArray) : Hm96.Default512.mask salt =
     Nat.div_one]
   rfl
 
-/-! ## `cols`: column `j` of `M` -/
-
-/-- After the first `N` of `cols`' writes (in loop order, write `512 j + i` sets bit `i % 64` of limb `i / 64` of column
-`j`), bit `b` of entry `c` is key bit `64 (c % 8) + b + c / 8` if written, else 0. -/
 def ColsInv (N : ℕ) (out : Array UInt64) : Prop :=
   out.size = 8 * 1536 ∧ ∀ c < 8 * 1536, ∀ b < 64,
     (out[c]!).toNat.testBit b = (decide (512 * (c / 8) + 64 * (c % 8) + b < N) && kb (64 * (c % 8) + b + c / 8))
@@ -238,21 +221,16 @@ theorem colsInv_final : ColsInv (512 * 1536) Hm96.Default512.cols := by
       rwa [Nat.mul_succ]
   simpa using this
 
-/-- **`cols`**: bit `b` of limb `l` of column `j` is key bit `64 l + b + j`. -/
 theorem cols_bit {j l b : ℕ} (hj : j < 1536) (hl : l < 8) (hb : b < 64) :
     (Hm96.Default512.cols[8 * j + l]!).toNat.testBit b = kb (64 * l + b + j) := by
   rw [colsInv_final.2 _ (by omega) b hb, show (8 * j + l) / 8 = j by omega, show (8 * j + l) % 8 = l by omega]
   simp [show 512 * j + 64 * l + b < 512 * 1536 by omega]
 
-/-! ## `tables`: the XOR of `M`'s columns over a byte's set bits -/
-
-/-- Bit `b` of limb `k` of table entry `256 p + v`: `⊕_{s < 8} v_s · key_{64k + b + 8p + s}`. -/
 def tabB (p v k b : ℕ) : Bool := xsum (List.range 8) fun s => v.testBit s && kb (64 * k + b + (8 * p + s))
 
 theorem tabB_zero (p k b : ℕ) : tabB p 0 k b = false := by
   rw [tabB, xsum_congr (g := fun _ => false) fun s _ => by simp, xsum_false]
 
-/-- A byte's lowest set bit: `v &&& (256 - v)` is `2^L`, and `v &&& (v - 1)` is `v` without bit `L`. -/
 theorem lowBit_facts : ∀ v < 256, 0 < v → ∃ L < 8, v &&& 256 - v = 2 ^ L ∧
     ∀ s < 8, v.testBit s = ((v &&& v - 1).testBit s ^^ decide (s = L)) := by
   decide +kernel
@@ -269,8 +247,6 @@ theorem tabB_rec {p v k b L : ℕ} (hL : L < 8) (h : ∀ s < 8, v.testBit s = ((
       cases (v &&& v - 1).testBit s <;> simp
     · simp [hsL], xsum_xor, xsum_single _ 8 hL]
 
-/-- After the writes before `N` (write `8 (256 p + v) + k` sets limb `k` of entry `256 p + v`), bit `b` of limb `k` of
-entry `256 p + v` is `tabB p v k b` if written, else 0. -/
 def TabInv (N : ℕ) (t : Array UInt64) : Prop :=
   t.size = 8 * 256 * 192 ∧ ∀ p < 192, ∀ v < 256, ∀ k < 8, ∀ b < 64,
     (t[8 * (256 * p + v) + k]!).toNat.testBit b = (decide (8 * (256 * p + v) + k < N) && tabB p v k b)
@@ -325,15 +301,11 @@ theorem tabInv_final : TabInv (8 * 256 * 192) Hm96.Default512.tables := by
       rwa [show 8 * (256 * (p + 1)) = 8 * (256 * p + (1 + 255)) by ring]
   simpa using this
 
-/-- **`tables`**: bit `b` of limb `k` of entry `256 p + v` is `⊕_{s < 8} v_s · key_{64k + b + 8p + s}`. -/
 theorem tables_bit {p v k b : ℕ} (hp : p < 192) (hv : v < 256) (hk : k < 8) (hb : b < 64) :
     (Hm96.Default512.tables[8 * (256 * p + v) + k]!).toNat.testBit b = tabB p v k b := by
   rw [tabInv_final.2 p hp v hv k hk b hb]
   simp [show 8 * (256 * p + v) + k < 8 * 256 * 192 by omega]
 
-/-! ## `mask` -/
-
-/-- After the salt's first `P` bytes, bit `b` of limb `k` of the accumulator is `⊕_{p < P} tabB p y_p k b`. -/
 def AccInv (salt : ByteArray) (P : ℕ) (acc : Array UInt64) : Prop :=
   acc.size = 8 ∧ ∀ k < 8, ∀ b < 64,
     (acc[k]!).toNat.testBit b = xsum (List.range P) fun p => tabB p (salt.get! p).toNat k b
@@ -389,8 +361,6 @@ theorem getD_flatten_range' (g : ℕ → ℕ → UInt8) (m : ℕ) : ∀ (n : ℕ
         List.getD_eq_getElem?_getD, List.getElem?_map, List.getElem?_range' (by omega), Option.map_some,
         Option.getD_some, Nat.zero_add, Nat.one_mul]
 
-/-- **The executable's mask is `maskV`**: bit `t < 512` of `Hm96.Default512.mask y` (byte-string order) is
-`⊕_{j < 1536} key_{t+j} · y_j` (the bytes of `y` past 192 are not read). -/
 theorem bitL_mask (s : List UInt8) {t : ℕ} (ht : t < 512) :
     bitL (Hm96.Default512.mask ⟨s.toArray⟩).data.toList t = maskV Hm96.Default512.key (bitL s) t := by
   rw [mask_eq, foldl_push2, show (ByteArray.emptyWithCapacity 64).data.toList = [] from rfl, List.nil_append, bitL,

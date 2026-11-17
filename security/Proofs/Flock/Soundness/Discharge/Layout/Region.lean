@@ -6,19 +6,7 @@ public import Proofs.Flock.Soundness.Refine.Regions
 public import Proofs.Flock.Soundness.Refine.Setup
 import Mathlib.Combinatorics.Matroid.Init
 
-/-!
-# What a region pins in a satisfying witness
-
-The model's statement pins each region's bits (`Statement.Satisfies`): at block `o`, region bit `i` sits at the
-in-block address `Region.inBlock i` and equals `bits o i`. For a region of the executable's statement, read as the
-model's (`Refine.regionOf`), bit `k` of block `o` is bit `k % 8` of byte `k / 8` of the region's bytes there
-(`regionOf_bit`), so a satisfying witness holds those bits (`region_read`).
-
-Where they sit: a region `mkRegion` builds puts its free bits at the given positions and its fixed bits at `fixed`
-(`mkRegion_spec`), so region bit `i`'s address is `fixed` plus `i`'s bits spread over the free positions
-(`inBlock_mkRegion`, `spread`); and every in-block address of a region with distinct free bits is in the block
-(`inBlock_lt`).
--/
+/-! What a region of the executable's statement pins in a satisfying witness, and where. -/
 
 @[expose] public section
 
@@ -26,7 +14,6 @@ namespace FlockSoundness.Discharge.Layout
 
 open Model Flock
 
-/-- Bit `k % 8` of a byte, as the executable reads it. -/
 theorem uint8_bit (x : UInt8) (k : ℕ) : ((x >>> (k % 8).toUInt8) % 2 == 1) = x.toNat.testBit (k % 8) := by
   have h8 : (k % 8).toUInt8.toNat = k % 8 := by
     rw [Nat.toUInt8, UInt8.toNat_ofNat']; omega
@@ -39,7 +26,6 @@ theorem uint8_bit (x : UInt8) (k : ℕ) : ((x >>> (k % 8).toUInt8) % 2 == 1) = x
   rw [beq_iff_eq, decide_eq_true_iff, ← UInt8.toNat_inj]
   rfl
 
-/-- **A region's bit, read as the model's**: bit `k` of block `b` is bit `k % 8` of byte `k / 8` of its bytes there. -/
 theorem regionOf_bit (kl nbl : ℕ) (reg : Flock.Region) (b : Fin (2 ^ nbl)) (k : ℕ) :
     bit ((Refine.regionOf kl nbl reg).bits b k) = ((reg.bytes b.val).get! (k / 8)).toNat.testBit (k % 8) := by
   simp only [Refine.regionOf, uint8_bit]
@@ -55,9 +41,6 @@ theorem region_read {S : Statement} {z : Witness S.m} (hz : S.Satisfies z) {reg 
   rw [hz.2.2 _ hR o k hk ha]
   exact regionOf_bit _ _ reg o k
 
-/-! ### Where a region's bits sit -/
-
-/-- The sum of `2^j` over the first `k` bit positions is `2^k - 1`, one short of `2^k`. -/
 theorem sum_two_pow_fin : ∀ k : ℕ, ∑ j : Fin k, 2 ^ j.val + 1 = 2 ^ k
   | 0 => by simp
   | k + 1 => by
@@ -67,8 +50,6 @@ theorem sum_two_pow_fin : ∀ k : ℕ, ∑ j : Fin k, 2 ^ j.val + 1 = 2 ^ k
       rw [pow_succ]
       omega
 
-/-- **Every in-block address of a region with distinct free bits is in the block**: the free bits and the fixed bits
-off them are distinct positions below `k_log`. -/
 theorem inBlock_lt {kl nbl : ℕ} (R : Model.Region kl nbl) (hnd : R.free.Nodup) (i : ℕ) : R.inBlock i < 2 ^ kl := by
   classical
   unfold Model.Region.inBlock
@@ -99,7 +80,6 @@ theorem inBlock_lt {kl nbl : ℕ} (R : Model.Region kl nbl) (hnd : R.free.Nodup)
   have := sum_two_pow_fin kl
   omega
 
-/-- A number's bits spread over the positions `F`: bit `t` of `i` to position `F[t]`. -/
 def spread : List ℕ → ℕ → ℕ
   | [], _ => 0
   | f :: F, i => (if i.testBit 0 then 2 ^ f else 0) + spread F (i / 2)
@@ -139,9 +119,6 @@ theorem spread_range : ∀ (n lo i : ℕ), spread ((List.range n).map (lo + ·))
       · have h0 : i % 2 = 0 := by omega
         simp [h0]; ring
 
-/-! ### The regions `mkRegion` builds -/
-
-/-- The mask of a list of free bits, as `mkRegion` folds it. -/
 def freeMask (free : Array ℕ) : ℕ := free.foldl (fun acc b => acc ||| 2 ^ b) 0
 
 theorem testBit_foldl_or : ∀ (F : List ℕ) (x j : ℕ),
@@ -157,9 +134,6 @@ theorem testBit_freeMask (free : Array ℕ) (j : ℕ) : (freeMask free).testBit 
   rw [freeMask, ← Array.foldl_toList, testBit_foldl_or]
   simp
 
-/-- **What `mkRegion` returns**: the region of the given name, free bits, fixed bits and bytes, with the mask of the
-non-free in-block bits, once `fixed` is in the block and off the free bits, and the free bits are distinct, at most
-`PT_LOCAL`, each in the block. -/
 theorem mkRegion_spec {kl : ℕ} {name : String} {free : Array ℕ} {fixed : ℕ} {bytes : ℕ → ByteArray} {r : Region}
     (h : mkRegion kl name free fixed bytes = .ok r) :
     r = ⟨name, free, (2 ^ kl - 1) &&& ((2 ^ kl - 1) ^^^ freeMask free), fixed, bytes⟩ ∧ fixed < 2 ^ kl ∧
@@ -185,13 +159,10 @@ theorem filterMap_fin_map (kl : ℕ) : ∀ (L : List ℕ), (∀ b ∈ L, b < kl)
       simp only [hlt b List.mem_cons_self, ↓reduceDIte, List.map_cons]
       rw [filterMap_fin_map kl L fun x hx => hlt x (List.mem_cons_of_mem _ hx)]
 
-/-- The model's free bits of a region whose free bits are in the block: the same positions. -/
 theorem regionOf_free_map (kl nbl : ℕ) (reg : Region) (hlt : ∀ b ∈ reg.free.toList, b < kl) :
     (Refine.regionOf kl nbl reg).free.map Fin.val = reg.free.toList :=
   filterMap_fin_map kl _ hlt
 
-/-- **A region's in-block address**, for a region `mkRegion` builds: `fixed` plus the region bit's bits spread over the
-free positions. -/
 theorem inBlock_mkRegion {kl nbl : ℕ} {name : String} {free : Array ℕ} {fixed : ℕ} {bytes : ℕ → ByteArray}
     {r : Region} (h : mkRegion kl name free fixed bytes = .ok r) (i : ℕ) :
     (Refine.regionOf kl nbl r).inBlock i = spread free.toList i + fixed := by

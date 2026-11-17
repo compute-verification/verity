@@ -19,13 +19,7 @@ import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysRep
 import Proofs.Flock.Soundness.Discharge.ZkExec.RunsCut
 import Proofs.Flock.Soundness.Discharge.ZkExec.RunsFrames
 
-/-!
-# A `--zk` rep's `RepRun`
-
-`zk_rep_run`: `zk_rep_plays`'s run, cut by `zk_cut` along `repShapeZ`, is a `RepRun` for the decoder `decZ`. The cut's
-size hypotheses come from the run itself (`repProg_sizes`: `Zk.ligerito`'s shape check on `ybar`, `verifyInner`'s
-on `τ`'s commitment and `Y`), and `repShapeZ` is `shapeZE` at the executable's dimensions (`ZkTabSeam`).
--/
+/-! A `--zk` rep's `RepRun` (`zk_rep_run`). -/
 
 @[expose] public section
 
@@ -47,8 +41,6 @@ theorem ligerito_ybar (ms : MerkleScheme) (sch : Flock.Schedule) (T : F128) (cap
   simp only [Bool.and_eq_true, beq_iff_eq] at hc
   exact hc.1
 
-/-- **The sizes a run of `repProg` checks**: `ybar`'s `t_pad` elements (`Zk.ligerito`), `τ`'s 64-byte commitment and
-`Y`'s `len + K_PAD` words (`verifyInner`). -/
 theorem repProg_sizes (st : Setup) (sch : Flock.Schedule) (tPad r : ℕ) (extras : Array Flock.Claim)
     (zp : Zk.ZkProof) {t tr : Flock.Transcript}
     (hrun : (repProg st sch tPad r extras zp).run t = .ok ((), tr)) :

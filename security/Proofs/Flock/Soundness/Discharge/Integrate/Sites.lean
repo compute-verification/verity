@@ -16,28 +16,7 @@ public import Proofs.Flock.Soundness.Discharge.Exec.Verdict
 public import Proofs.Flock.Soundness.Discharge.Exec.VerifyKJ
 public import Proofs.Flock.Soundness.Discharge.Exec
 
-/-!
-# The tables and sites of a one-table session
-
-`Prog.flock_headline_live` takes a table `T S R` at every sample `S` and each sampled proof block's site in it (`Placed.Sites`).
-This file builds both from the session's inputs `I : Inputs` (the verify command's flags: one circuit file, one public
-file, one table), at the sample the challenger writes for `S` (`dj S`, the sample's JSON):
-
-* `SampleSetup I mPts S d`: `Stmt.setupH` on `I` accepts the sample `d`, which decodes to a sample `D` proving every unit of
-  `S`; the statement's blocks hold `D`'s proved units, its `fast100` schedule has two levels or more, and its link
-  points are `mPts`.
-* `SampleSetup.table`: its table, the statement `(setupH_layout ht h).model (regionsOf st)` (what `Placed.Accepted` reads,
-  so `Accepted.hT` is `rfl`), and each unit `u`'s site: its rank `r` among `D.proved`, block `r / c.g` and template
-  instance `r % c.g`. Distinct units have distinct ranks and so distinct sites (`table_site_inj`).
-* `SampleSetup.refused`: at a sample with no `SampleSetup`, a table no witness satisfies (`refused_unsat`): a reference
-  setup's statement with two regions pinning the same bit to 0 and to 1.
-* `tableAt`: the sample's table, `table` when the sample has a `SampleSetup` and `refused` otherwise; `tableAt_stmt` says it
-  is setupH's statement wherever setupH accepts.
-* `sitesAt`, `sitesAt_parse`: the `Sites` of the plan `fun S R => [tableAt … S]`, and `hparse` from the session's one
-  circuit file.
-* `sitesAt_bcSite`: `Discharge/Layout`'s site fact `BcSite` at every satisfiable site: at a `SampleSetup` table by the rank, and at
-  a refused table vacuously.
--/
+/-! The tables and sites of a one-table session, at the sample the challenger writes for `S`. -/
 
 @[expose] public section
 
@@ -142,7 +121,6 @@ noncomputable def table : Table mPts S where
   hvu _ _ := Nat.mod_lt _ x.hg
   o u h := ⟨x.rank u / x.st.c.g, x.rank_div_lt h⟩
 
-/-- **Distinct sampled proof blocks have distinct sites** in the sample's table. -/
 theorem table_site_inj {u u' : Fin n} (h : u ∈ S) (h' : u' ∈ S)
     (e : ((x.table ht).o u h).val = ((x.table ht).o u' h').val ∧ (x.table ht).vu u h = (x.table ht).vu u' h') :
     u = u' := by
@@ -161,7 +139,6 @@ theorem contra_wf {kl nbl : ℕ} : ∀ R ∈ contra kl nbl, R.free.Nodup ∧ R.f
   simp only [contra, List.mem_cons, List.not_mem_nil, or_false] at hR
   rcases hR with rfl | rfl <;> exact ⟨List.nodup_nil, Nat.zero_le _⟩
 
-/-- No witness satisfies a statement with `contra`'s regions. -/
 theorem contra_unsat {S : Model.Statement} (hS : contra S.kLog S.nbl ⊆ S.regions) (z : Witness S.m) :
     ¬ S.Satisfies z := by
   rintro ⟨-, -, hR⟩
@@ -180,7 +157,6 @@ theorem contra_unsat {S : Model.Statement} (hS : contra S.kLog S.nbl ⊆ S.regio
   rw [a, b] at e
   exact zero_ne_one (α := ZMod 2) e
 
-/-- The regions of a refused sample's table: the reference setup's, and `contra`'s. -/
 theorem refused_wf : ∀ R ∈ regionsOf x.st ++ contra x.st.c.kLog (x.st.m - x.st.c.kLog),
     R.free.Nodup ∧ R.free.length ≤ PT_LOCAL := by
   intro R hR
@@ -226,8 +202,6 @@ and otherwise the reference setup `x₀`'s refused table. -/
 noncomputable def tableAt (S : Finset (Fin n)) : Table mPts S :=
   if h : Nonempty (SampleSetup I mPts S (dj S)) then (Classical.choice h).table ht else x₀.refused ht S
 
-/-- **The table is setupH's statement wherever setupH accepts**: at a sample with a `SampleSetup` at `dj S`, the table's
-statement is `Layout.model` of setupH's statement at its regions, and its acceptance's sample is `dj S`. -/
 theorem tableAt_stmt {S : Finset (Fin n)} (x : SampleSetup I mPts S (dj S)) :
     ∃ y : SampleSetup I mPts S (dj S), y.st = x.st ∧ tableAt ht dj x₀ S = y.table ht := by
   refine ⟨Classical.choice ⟨x⟩, ?_, by unfold tableAt; rw [dite_eq_left_of_eq_true (eq_true ⟨x⟩)]⟩
@@ -241,7 +215,6 @@ theorem tableAt_cases (S : Finset (Fin n)) :
   · exact .inl ⟨_, rfl⟩
   · exact .inr rfl
 
-/-- **A refused sample's table is unsatisfiable**: at a sample with no `SampleSetup`, no witness satisfies the table. -/
 theorem tableAt_unsat {S : Finset (Fin n)} (hS : ¬ Nonempty (SampleSetup I mPts S (dj S)))
     (z : Witness (tableAt ht dj x₀ S).T.S.m) : ¬ (tableAt ht dj x₀ S).T.S.Satisfies z := by
   revert z
@@ -273,7 +246,6 @@ noncomputable def sitesAt : Placed.Sites (planAt (Reg := Reg) ht dj x₀) (tabAt
 
 variable {c : Flock.Circuit}
 
-/-- **One circuit per session**: every site's acceptance parses the session's one circuit file to `c`. -/
 theorem sitesAt_parse (hc : HmRow.parse I.tags I.circuitFile I.tables = .ok c) :
     ∀ (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u ∈ S),
       HmRow.parse ((sitesAt ht dj x₀).acc S R u h).tags ((sitesAt ht dj x₀).acc S R u h).cf
@@ -284,8 +256,6 @@ theorem sitesAt_parse (hc : HmRow.parse I.tags I.circuitFile I.tables = .ok c) :
   rw [e1, e2, e3]
   exact hc
 
-/-- **Distinct sampled proof blocks have distinct sites** wherever verity-verify-proof sets up the sample (the count judges each site
-once). -/
 theorem sitesAt_inj {S : Finset (Fin n)} (hS : Nonempty (SampleSetup I mPts S (dj S))) (R : Reg) {u u' : Fin n}
     (h : u ∈ S) (h' : u' ∈ S)
     (e : ((sitesAt ht dj x₀).o S R u h).val = ((sitesAt ht dj x₀).o S R u' h').val ∧
@@ -299,9 +269,6 @@ theorem sitesAt_inj {S : Finset (Fin n)} (hS : Nonempty (SampleSetup I mPts S (d
 
 variable {pop : Public}
 
-/-- **The site fact at the sample's table**, with or without shared rows: at a sample verity-verify-proof sets up, each sampled
-proof block's site is `BcSite`: the acceptance's sample is `dj S`, which decodes to `D`, and the unit's block and template
-instance index its rank in `D.proved`. -/
 theorem table_bcSiteS (hc : HmRow.parse I.tags I.circuitFile I.tables = .ok c) (ho : c.outNet = c.unitNet)
     (hpop : HmRow.loadPublic I.tags c I.publicFile = .ok pop)
     {S : Finset (Fin n)} (x : SampleSetup I mPts S (dj S)) {u : Fin n} (h : u ∈ S) :
@@ -319,15 +286,12 @@ theorem table_bcSiteS (hc : HmRow.parse I.tags I.circuitFile I.tables = .ok c) (
     exact x.proved_rank h
 
 set_option linter.unusedVariables false in
-/-- **The site fact at the sample's table** (`table_bcSiteS`). -/
 theorem table_bcSite (hc : HmRow.parse I.tags I.circuitFile I.tables = .ok c) (ho : c.outNet = c.unitNet)
     (hpop : HmRow.loadPublic I.tags c I.publicFile = .ok pop) (hpt : pop.tables = none)
     {S : Finset (Fin n)} (x : SampleSetup I mPts S (dj S)) {u : Fin n} (h : u ∈ S) :
     Layout.BcSite (x.table ht).acc pop ((x.table ht).o u h) ((x.table ht).vu u h) u.val :=
   table_bcSiteS ht dj hc ho hpop x h
 
-/-- **`BcSite` at every satisfiable site** of the one-table plan: at a sample verity-verify-proof sets up by `table_bcSite`; at a
-refused sample no message satisfies the table (`refused_unsat`). -/
 theorem sitesAt_bcSite (hc : HmRow.parse I.tags I.circuitFile I.tables = .ok c) (ho : c.outNet = c.unitNet)
     (hpop : HmRow.loadPublic I.tags c I.publicFile = .ok pop) (hpt : pop.tables = none) :
     ∀ (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u ∈ S) (M : Binding.Msg (planAt ht dj x₀) (tabAt ht dj x₀) S R u),

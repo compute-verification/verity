@@ -20,20 +20,7 @@ import Proofs.Flock.Soundness.Refine.Arith
 import Proofs.Flock.Soundness.Refine.Plays
 import Proofs.Flock.Soundness.Refine.Zerocheck
 
-/-!
-# The masked replay's runs
-
-`zk_replay_plays`: `Zk.replay` refines the model's masked zerocheck and lincheck, with the two masked claims' points.
-The executable samples exactly the clear verifier's coins (§1, §4); its messages are the masked proof's, and its checks
-on them are constraints, so nothing it does after a coin depends on whether a check holds.
-
-* `forIn_push`: a loop that consumes one one-coin round per step and pushes that coin keeps the coins, in order.
-* `residualZK_plays`, `lcRoundsZK_plays`: the model's masked residual and lincheck rounds, fed round `i`'s messages and
-  coins, end with those coins and the claim `resOut`, `lcRoundsOut` computes.
-
-The replay's claims are `abcClaims` on the coins: `ab`'s point is the lincheck's (its rounds' coins reversed, then the
-zerocheck's residual coins), `c`'s is `(L_s(z), pinned ++ r_rest)`, which `zcVector_eq` reads as the model's `r`.
--/
+/-! `Zk.replay` refines the model's masked zerocheck and lincheck (`zk_replay_plays`). -/
 
 @[expose] public section
 
@@ -43,8 +30,6 @@ open Flock Refine Exec Game Model DecodeZL Transcript
 
 local notation "𝔽" => FlockLevel3.GF128
 
-/-- **A loop that pushes its rounds' coins.** If every step consumes the next round, which issued one coin, and pushes
-that coin onto the state's array, the loop over `n` steps consumes `n` rounds and pushes their coins, in order. -/
 theorem forIn_push {σ : Type} (body : ℕ → σ × Array F128 → TM (ForInStep (σ × Array F128)))
     (hbody : ∀ i s t b t', body i s t = .ok (b, t') →
       (t.rounds[t.k]!).n = 1 ∧ t'.rounds = t.rounds ∧ t'.k = t.k + 1 ∧
@@ -70,7 +55,6 @@ theorem forIn_push {σ : Type} (body : ℕ → σ × Array F128 → TM (ForInSte
       · rw [ho, List.range_succ_eq_map]
         simp [Nat.add_assoc, Nat.add_comm 1, Function.comp_def]
 
-/-- The pushed coins, read back: the array has one per step, step `i`'s at `i`. -/
 theorem push_get (a : Array F128) (n : ℕ) (f : ℕ → F128) (h : a = #[] ++ ((List.range n).map f).toArray) :
     a.size = n ∧ ∀ i < n, a[i]! = f i := by
   subst h
@@ -78,7 +62,7 @@ theorem push_get (a : Array F128) (n : ℕ) (f : ℕ → F128) (h : a = #[] ++ (
   rw [getElem!_pos _ _ (by simp; omega)]
   simp
 
-/-- The `c` claim (stated so `simp` reaches it without unfolding `skipWeights`). -/
+/-- Stated so `simp` reaches it without unfolding `skipWeights`. -/
 theorem abcClaims_one (m kLog : ℕ) (zc : Flock.ZcOut) (lc : Flock.LcOut) :
     (abcClaims m kLog zc lc)[1]! = { value := zc.vC, skip := skipWeights zc.z, x := zc.rRest } := rfl
 
@@ -86,15 +70,12 @@ section Rounds
 
 variable {np : ℕ} (P : ZkSession.PadsA np) (rounds : Array (F128 × F128)) (C : ℕ → Array F128)
 
-/-- The claim the masked residual rounds end with, fed round `a + i`'s messages and coins at step `i`. -/
 noncomputable def resOut : (n : ℕ) → ℕ → ℕ → (Fin n → 𝔽) → ZkSession.LinF 𝔽 np → ZkSession.LinF 𝔽 np
   | 0, _, _, _, cl => cl
   | n + 1, a, j, req, cl => resOut n (a + 1) (j + 1) (Fin.tail req)
       (ZkSession.residualStepL (req 0) (fOf (C a)[0]!) cl (ZkSession.mskF (P.ml j 0) (pairOf rounds[a]!).1)
         (ZkSession.mskF (P.ml j 1) (pairOf rounds[a]!).2))
 
-/-- **The masked residual rounds.** Fed round `a + i`'s messages and coins at step `i`, they end with those coins and
-the claim `resOut`. -/
 theorem residualZK_plays : ∀ (n a j : ℕ) (req : Fin n → 𝔽) (cl : ZkSession.LinF 𝔽 np),
     (∀ i ∈ List.range' a n, (C i).size = 1) →
     Plays fOf (ZkSession.residualRoundsZK P n j req cl)
@@ -126,7 +107,6 @@ theorem residualZK_plays : ∀ (n a j : ℕ) (req : Fin n → 𝔽) (cl : ZkSess
         · simp [Nat.add_assoc, Nat.add_comm 1]
       · simp [resOut]
 
-/-- The claim the masked lincheck rounds end with, fed round `a + i`'s messages and coins at step `i`. -/
 noncomputable def lcRoundsOut : ℕ → ℕ → ℕ → ZkSession.LinF 𝔽 np → ZkSession.LinF 𝔽 np
   | 0, _, _, cl => cl
   | n + 1, a, j, cl =>
@@ -136,8 +116,6 @@ noncomputable def lcRoundsOut : ℕ → ℕ → ℕ → ZkSession.LinF 𝔽 np �
       let e₀ := cl + q₁
       lcRoundsOut n (a + 1) (j + 1) ((t ^ 2) • q₂ + t • (e₀ + q₁ + q₂) + e₀)
 
-/-- **The masked lincheck rounds.** Fed round `a + i`'s messages and coins at step `i`, they end with those coins and
-the claim `lcRoundsOut`. -/
 theorem lcRoundsZK_plays : ∀ (n a j : ℕ) (cl : ZkSession.LinF 𝔽 np),
     (∀ i ∈ List.range' a n, (C i).size = 1) →
     Plays fOf (ZkSession.lincheckRoundsZK P n j cl)
@@ -210,7 +188,6 @@ theorem zk_replay_plays : ZkReplayPlays := by
   obtain ⟨lt₁₉, n₁₉, t₂₀, r₂₀, kk₂₀, h⟩ := sample_bind h
   obtain ⟨hrp, ht'⟩ := pure_ok h
   subst hrp
-  -- the loops: one one-coin round per step, its coin pushed
   rw [forIn_range_eq] at hloop hloop'
   obtain ⟨hr₁₂, hk₁₂, hn₁₂, hs⟩ := forIn_push _ (fun i st' tt b tt' hb => by
       obtain ⟨tt₁, kk₁, hb⟩ := absorbF_bind hb
@@ -232,7 +209,6 @@ theorem zk_replay_plays : ZkReplayPlays := by
       refine ⟨by rw [← e1, ← e2]; exact nn, by rw [rr₃, e1], by rw [kk₃, e2], ?_⟩
       rw [← e1, ← e2]
       exact ⟨_, rfl⟩) (S.kLog - 6) 0 _ t₁₇ t₁₈ s' hloop'
-  -- the rounds and the counter, in terms of `t`
   have hr₆ : t₆.rounds = t.rounds := by rw [k₆.2, k₅.2, k₄.2, k₃.2, k₂.2, k₁.2]
   have hk₆' : t₆.k = t.k := by rw [k₆.1, k₅.1, k₄.1, k₃.1, k₂.1, k₁.1]
   have hr₇ : t₇.rounds = t.rounds := by rw [r₇, hr₆]
@@ -269,7 +245,6 @@ theorem zk_replay_plays : ZkReplayPlays := by
     rw [hC]; simp only; rw [RoundsWF.get (hr₁₁ ▸ hwf), hn₁₂ i (by simpa using hi)]
   have hC'sz : ∀ i ∈ List.range' 0 (S.kLog - 6), (C' i).size = 1 := fun i hi => by
     rw [hC']; simp only; rw [RoundsWF.get (hr₁₇ ▸ hwf), hn₁₈ i (by simpa using hi)]
-  -- the coins consumed, split at the lincheck's first
   have hcoins₁ : consumed t.rounds t.k (t.k + 3 + (S.m - 6)) = c₀ :: c₁ :: c₂ :: (List.range' 0 (S.m - 6)).map C := by
     rw [consumed_append t.rounds (show t.k ≤ t.k + 1 by omega) (by omega),
       consumed_append t.rounds (show t.k + 1 ≤ t.k + 2 by omega) (by omega),
@@ -284,7 +259,6 @@ theorem zk_replay_plays : ZkReplayPlays := by
         (by omega), consumed_succ, consumed_succ, consumed_succ, consumed_eq_map, hcα, hcβ, hcr, hC', hr₁₅, hk₁₅,
       hr₁₆, hk₁₆, hr₁₇, hk₁₇, hr₁₉, hk₁₉]
     simp
-  -- the coins the loops pushed
   obtain ⟨hssz, hsget⟩ := push_get s.2 (S.m - 6) _ hs
   obtain ⟨hs'sz, hs'get⟩ := push_get s'.2 (S.kLog - 6) _ hs'
   have hzM : fOf c₂[0]! = fOf (c₂.getD 0 0) := by rw [getElem!_eq_getD]

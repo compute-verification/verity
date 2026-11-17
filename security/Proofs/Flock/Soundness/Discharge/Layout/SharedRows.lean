@@ -10,25 +10,13 @@ import Proofs.Flock.Soundness.Refine.Walk
 
 set_option Elab.async false
 
-/-!
-# Shared-row populations
-
-A shared-row population keeps its tables' rows as its `b ‖ c` and reads instance `i`'s row `p` at table `p`'s row
-`refs[i · np + p]` (`Public.digest`); `HmRow.drawn` keeps the rows and takes the proved units' refs. So a sampled instance's
-`b ‖ c` is its proved unit's in the population (`sampled_digestW`), and every one is 128 bytes (`pop_digest_sizeW`:
-`HmRow.loadPublic` checks every ref against its table's count, and the tables' rows are `BC_BYTES`-long pieces of the
-body, `loadPublic_shared`). `bc_sampledS` is `bc_sampled` without `pop.tables = none`: a registered value's rows are read
-from a shared-row file's tables (`Flock.Registered.check` refuses any other), so a statement with registered reads
-needs it. The shared-row lemmas keep their names in `Hidden`, where the hidden-output path first needed them.
--/
+/-! Shared-row populations: a sampled instance's `b ‖ c` is its proved unit's in the population (`bc_sampledS`). -/
 
 open Flock FlockLevel3
 
 namespace FlockSoundness.Discharge.Hidden
 
 open FlockSoundness.Discharge.Layout
-
-/-! ## A table's rows -/
 
 theorem foldl_push_prefix (cs : List ℕ) (A : Array ℕ) (s : ℕ) {i : ℕ} (hi : i < A.size) :
     (cs.foldl (fun (acc : Array ℕ × ℕ) r => (acc.1.push acc.2, acc.2 + r)) (A, s)).1.getD i 0 = A.getD i 0 := by
@@ -60,7 +48,6 @@ theorem foldl_starts (cs : List ℕ) (A : Array ℕ) (s : ℕ) {p : ℕ} (hp : p
       rw [Array.size_push, show A.size + 1 + p = A.size + (p + 1) by omega] at this
       simpa only [List.getD_cons_succ] using this
 
-/-- **A row below table `p`'s count is among the tables' rows**: `starts[p] + x < Σ counts` for `x < counts[p]`. -/
 theorem starts_lt {counts : Array ℕ} {p x : ℕ} (hx : x < counts[p]!) :
     (counts.foldl (fun (acc : Array ℕ × ℕ) r => (acc.1.push acc.2, acc.2 + r)) (#[], 0)).1.getD p 0 + x <
       counts.foldl (· + ·) 0 := by
@@ -74,7 +61,6 @@ theorem starts_lt {counts : Array ℕ} {p x : ℕ} (hx : x < counts[p]!) :
   rw [Array.foldl_toList, Array.foldl_toList, Array.size_empty, Nat.zero_add, ← hcp] at this
   omega
 
-/-- `HmRow.loadPublic`'s shared-row branch: the body's length check and the refs' check against their tables' counts. -/
 theorem tables_facts {body : ByteArray} {counts : Array ℕ} {n np K R S : ℕ} (f : ℕ → ℕ)
     (hbody : ¬(body.size != HmRow.BC_BYTES * K + R + S) = true)
     (hany : ¬((Array.range ((Array.range (n * np)).map f).size).any fun k =>
@@ -105,10 +91,7 @@ theorem tables_facts {body : ByteArray} {counts : Array ℕ} {n np K R S : ℕ} 
     simp only [Array.getElem_range, decide_eq_true_eq]
     omega
 
--- `walk_step` down `HmRow.loadPublic`'s unfolded do-block, a goal per branch
 set_option maxHeartbeats 2000000 in
-/-- **What `HmRow.loadPublic` reads of a population's `b ‖ c`**: each is 128 bytes, and a shared-row file's refs are one
-per instance and port, each below its table's count, into tables of consecutive rows. -/
 theorem loadPublic_shared {tags : Tags} {c : Circuit} {file : ByteArray} {pop : Public}
     (h : HmRow.loadPublic tags c file = .ok pop) :
     (∀ x ∈ pop.digests, x.size = 128) ∧ ∀ t, pop.tables = some t →
@@ -135,7 +118,6 @@ theorem loadPublic_shared {tags : Tags} {c : Circuit} {file : ByteArray} {pop : 
        exact extract_size hbody hi)
     | exact tables_facts _ ‹_› ‹_› (by rfl)
 
-/-- **A population unit's `b ‖ c` is 128 bytes**, with or without shared rows. -/
 theorem pop_digest_sizeW {tags : Tags} {c : Circuit} {file : ByteArray} {pop : Public}
     (h : HmRow.loadPublic tags c file = .ok pop) {u p : ℕ} (hu : u < pop.n) (hp : p < c.ports.size) :
     (pop.digest u p c.ports.size).size = 128 := by
@@ -160,8 +142,6 @@ theorem pop_digest_sizeW {tags : Tags} {c : Circuit} {file : ByteArray} {pop : P
     rw [Array.getD_eq_getD_getElem?, Array.getElem?_eq_getElem hi, Option.getD_some]
     exact h128 _ (Array.getElem_mem hi)
 
-/-- **Instance `r`'s `b ‖ c` in a sampled statement is its proved unit's in the population's**, with or without shared
-rows. -/
 theorem sampled_digestW {tags : Tags} {c : Circuit} {file : ByteArray} {pop pub : Public} {d : Lean.Json}
     {D : Draw.UnitSample} (hload : HmRow.loadPublic tags c file = .ok pop) (h : HmRow.drawn c pop d = .ok pub)
     (hD : Draw.UnitSample.ofJson d = .ok D) (hlt : ∀ u ∈ D.proved, u < D.population) {r p : ℕ}
@@ -184,8 +164,6 @@ theorem sampled_digestW {tags : Tags} {c : Circuit} {file : ByteArray} {pop pub 
     rw [hrs, ← hpopn]
     nlinarith
 
-/-- **A sampled statement's `hm96` chunk at block `o`, template instance `g`** is, at a proved unit, that unit's
-population `b ‖ c`, with or without shared rows. -/
 theorem bcChunk_sampledW {tags : Tags} {c : Circuit} {file : ByteArray} {pop pub : Public} {d : Lean.Json}
     {D : Draw.UnitSample} (hload : HmRow.loadPublic tags c file = .ok pop) (h : HmRow.drawn c pop d = .ok pub)
     (hD : Draw.UnitSample.ofJson d = .ok D) (hlt : ∀ u ∈ D.proved, u < D.population) {o g p : ℕ}
@@ -205,8 +183,6 @@ namespace FlockSoundness.Discharge.Layout
 
 open Refine FlockSoundness.Discharge.Hidden
 
-/-- **`bc_sampled` with or without shared rows**: the `b ‖ c` a satisfying witness of a sampled statement holds at a proved
-unit's `hm96` slot is the unit's `b ‖ c` in the registered population's public file, at every row. -/
 theorem bc_sampledS {tags : Tags} {circuitFile publicFile : ByteArray} {coins : Coins}
     {tables : List (String × ByteArray)} {d : Lean.Json} {partition : Option Lean.Json} {program : Option ByteArray}
     {st : Stmt} (h : Stmt.setupH tags circuitFile publicFile coins tables (some d) partition program = .ok st)

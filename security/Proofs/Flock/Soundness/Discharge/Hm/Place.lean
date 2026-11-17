@@ -21,15 +21,7 @@ import Mathlib.Tactic.ReduceModChar
 import Proofs.Flock.Soundness.Lowering
 import Proofs.Flock.Soundness.SparseRows
 
-/-!
-A row net's slot in the accepted template statement. At a row of a `sha512x3` or `hm96` slot past the net's input rows,
-the block matrices' row is the net's row placed in the slot plus Δ's first-loop pairs (`rowNet_entry`): Δ's other flat
-pairs are at the row nets' input bits (`TemplateLayout.deltaIn`), and the typed tail's at unit columns, which are in the
-root's and the parts' slots. So in every satisfying witness the slot holds its net's rows (`laidRows_of_sat`): the
-computed rows hold, and the constant column is 1 (its row is `pin · pin`, or the pin itself). With `HmNets.check`,
-template instance `g`'s `sha512x3` and `hm96` slots hold the verifier's layouts past their 8192 and 4096 input rows
-(`shaSlot_of_sat`, `hmSlot_of_sat`), `port_commit_rows`'s `hsha` and `hhm`.
--/
+/-! A row net's slot in the accepted template statement holds its net's rows in every satisfying witness. -/
 
 @[expose] public section
 
@@ -39,7 +31,6 @@ namespace FlockSoundness.Discharge.Hm
 
 open Compose Flock.DeriveAll Types.Dag
 
-/-- The block's bit at column `y` of block `o` (0 past the block). -/
 def chunkBit (S : Model.Statement) (z : Model.Witness S.m) (o : Fin (2 ^ S.nbl)) (y : ℕ) : Bool :=
   FlockSoundness.bit (if h : y < 2 ^ S.kLog then S.block z o ⟨y, h⟩ else 0)
 
@@ -69,7 +60,6 @@ theorem bit_sum_row (f : ℕ → ZMod 2) (b : ℕ) (r : Array ℕ) :
   | nil => rfl
   | cons y l ih => simp only [List.map_cons, List.sum_cons, bit_add, ih, List.foldr_cons]
 
-/-- A row of `Sparse.ofRows`'s rows, its columns below the width. -/
 theorem ofRows_cols_lt {rows : Array (Array ℕ)} {width : ℕ} {m : Sparse} (h : Sparse.ofRows rows width = .ok m)
     (i : ℕ) : ∀ y ∈ (rows.getD i #[]).toList, y < width := by
   intro y hy
@@ -107,8 +97,6 @@ theorem rowNet_lt (T : TemplateLayout st tb words done 𝒖) {n : ℕ} (hn : n =
   · exact T.shaNet.1
   · exact T.hmNet.1
 
-/-- **The block rows at a row net's row past its input rows**: the net's row, placed in the slot, and Δ's first-loop
-pairs there. -/
 theorem rowNet_entry (hd : deriveChecked types ls info words unit = .ok done) (hul : unit < ls.size)
     (T : TemplateLayout st tb words done 𝒖) (U : UnitShape done 𝒖) {n s off x : ℕ}
     (hn : n = st.c.shaNet ∨ n = st.c.hmNet) (hat : AtSlot st.c n s off x)
@@ -162,8 +150,6 @@ theorem rowNet_entry (hd : deriveChecked types ls info words unit = .ok done) (h
     rw [add_zero, sparseEntry_ofRows hb, ofRows_row hb hw, count_slot _ (by rw [hsl]; exact hlb) j]
     push_cast; ring
 
-/-- **A row net's slot holds its net's rows** in every block of a satisfying witness of the accepted template
-statement: each computed row past the input rows holds, and the slot's constant column is 1. -/
 theorem laidRows_of_sat (hd : deriveChecked types ls info words unit = .ok done) (hul : unit < ls.size)
     (T : TemplateLayout st tb words done 𝒖) (U : UnitShape done 𝒖)
     {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z : Model.Witness (T.model regs).m}
@@ -261,8 +247,6 @@ theorem slot_lt_count (T : TemplateLayout st tb words done 𝒖) {n g i : ℕ} (
     _ = (g + 1) * st.c.perVu.getD n 0 := (Nat.succ_mul _ _).symm
     _ ≤ st.c.g * st.c.perVu.getD n 0 := Nat.mul_le_mul_right _ hg
 
-/-- **Template instance `g`'s `sha512x3` slot `i` holds the verifier's `sha512x3` rows**, past its 8192 input rows, in
-every block of a satisfying witness of the accepted template statement whose circuit passed `HmNets.check`. -/
 theorem shaSlot_of_sat (hd : deriveChecked types ls info words unit = .ok done) (hul : unit < ls.size)
     (T : TemplateLayout st tb words done 𝒖) (U : UnitShape done 𝒖)
     {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z : Model.Witness (T.model regs).m}
@@ -273,7 +257,6 @@ theorem shaSlot_of_sat (hd : deriveChecked types ls info words unit = .ok done) 
   rw [shaNet_inRows hck] at h
   exact h
 
-/-- **Template instance `g`'s `hm96` slot `i` holds the verifier's `hm96` rows**, past its 4096 input rows. -/
 theorem hmSlot_of_sat (hd : deriveChecked types ls info words unit = .ok done) (hul : unit < ls.size)
     (T : TemplateLayout st tb words done 𝒖) (U : UnitShape done 𝒖)
     {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z : Model.Witness (T.model regs).m}

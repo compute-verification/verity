@@ -7,30 +7,13 @@ import all Init.Data.String.Defs
 
 set_option Elab.async false
 
-/-!
-# The bytes `sha512/row/v1` hashes for a row
-
-`Binding.HmRows.enc` is the byte string `HmRowComputes` says a row's `hm96` slot commits to: for port `p`'s row of
-`words` u16 words, the circuit's `sha512x3` slots hash `rowPrefix words` and the row's `2 · words` bytes at
-`Typed.msgCol` (`Discharge.Hm.port_commit`). The layout's values carry their width (`BitVal`), so one
-injective `enc` recovers each port's words from its value:
-
-* `rowEnc`: `rowPrefix w ‖ bytes` for a value of `16 w` bits with nothing set past them (`RowShaped`), and a longer code
-  of every other value; `rowEnc_inj`;
-* `rowEnc_row`: at a row of `16 k` bits it is `rowPrefix k` and the row's `2 k` bytes;
-* `keyRow_enc`: at `keyProg`'s places, row port `q` of `16 · words` bits (`rowW q`) holds a value whose `rowEnc` is
-  `rowPrefix words` and the `2 · words` bytes the witness holds at the sampled proof block's message columns, `port_commit`'s
-  row with the block's bits at the site;
-* `keyRowsEnc`: `rs` there (`keyRowsOut`) with `enc := rowEnc` and `bitCode` for the other commit strings.
--/
+/-! The bytes `sha512/row/v1` hashes for a row (`rowEnc`), one injective encoding because the layout's values carry
+their width (`BitVal`). -/
 
 namespace FlockSoundness.Discharge.Layout
 
 open Flock Binding
 
-/-! ## Bytes and their bits -/
-
-/-- **The bits of a sum of bits' powers** are the bits. -/
 theorem sumBits_testBit : ∀ (k : ℕ) (b : Fin k → Bool) (i : ℕ),
     (∑ t : Fin k, if b t then 2 ^ t.val else 0).testBit i = if h : i < k then b ⟨i, h⟩ else false
   | 0, b, i => by simp
@@ -59,7 +42,6 @@ theorem sumBits_testBit : ∀ (k : ℕ) (b : Fin k → Bool) (i : ℕ),
         rfl
       · rw [dif_neg hi, dif_neg (by omega)]
 
-/-- **A byte's bits**: bit `t` of `byteOf b` is `b t`. -/
 theorem byteOf_bit (b : Fin 8 → Bool) (t : Fin 8) : (byteOf b).toNat.testBit t.val = b t := by
   have hlt : (∑ t : Fin 8, if b t then 2 ^ t.val else 0) < 2 ^ 8 :=
     Nat.lt_pow_two_of_testBit _ fun i hi => by rw [sumBits_testBit, dif_neg (by omega)]
@@ -71,8 +53,6 @@ theorem byteOf_bit (b : Fin 8 → Bool) (t : Fin 8) : (byteOf b).toNat.testBit t
 theorem byteOf_inj {a b : Fin 8 → Bool} (h : byteOf a = byteOf b) : a = b :=
   funext fun t => by rw [← byteOf_bit a t, h, byteOf_bit]
 
-/-! ## The row prefix -/
-
 theorem be32_size (x : UInt32) : (be32 x).size = 4 := by
   simp only [be32, Id.run, Std.Legacy.Range.forIn_eq_forIn_range', List.forIn_pure_yield_eq_foldl, pure_bind,
     Std.Legacy.Range.size]
@@ -82,7 +62,6 @@ theorem be32_size (x : UInt32) : (be32 x).size = 4 := by
 theorem rowLabel_size : ("verity/sha512-row/v1".toUTF8.push 0 ++ ByteArray.mk #[1, 16]).size = 23 := by
   decide
 
-/-- **`sha512/row/v1`'s first block is one SHA-512 block**, 128 bytes, at every word count. -/
 theorem rowPrefix_size (w : ℕ) : (HmRow.rowPrefix w).size = 128 := by
   unfold HmRow.rowPrefix Hm96.pad
   rw [ByteArray.size_append, ByteArray.size_append, rowLabel_size, be32_size]
@@ -91,8 +70,6 @@ theorem rowPrefix_size (w : ℕ) : (HmRow.rowPrefix w).size = 128 := by
 theorem rowPrefix_length (w : ℕ) : (HmRow.rowPrefix w).data.toList.length = 128 := by
   rw [Array.length_toList]
   exact rowPrefix_size w
-
-/-! ## The encoding -/
 
 variable {W : ℕ}
 
@@ -154,8 +131,6 @@ theorem get_of_rowBytes {v w : BitVal W} (hv : RowShaped v) (hk : v.1 = w.1) (h 
   simp only [BitVal.get, show 8 * (i.val / 8) + i.val % 8 = i.val by omega, i.isLt, ↓reduceDIte] at this
   exact this
 
-/-- **`rowEnc` is injective**: a row's length fixes its words, its bytes its bits; every other value is longer, and
-`bitCode` is injective. -/
 theorem rowEnc_inj : Function.Injective (rowEnc (W := W)) := by
   intro v w h
   have hv1 := v.1.isLt
@@ -179,8 +154,6 @@ theorem rowEnc_inj : Function.Injective (rowEnc (W := W)) := by
   · simp only [rowEnc, hv, hw, ↓reduceIte] at h
     exact bitCode_inj (List.append_inj h rfl).2
 
-/-- **`rowEnc` of a row of `16 k` bits**: `rowPrefix k` and the row's `2 k` bytes, byte `j`'s bit `t` its bit
-`8 j + t`. -/
 theorem rowEnc_row {K k : ℕ} (hK : K = 16 * k) (hKW : K ≤ W) (b : Fin K → Bool) :
     rowEnc (widthOf W K, (padBits b : Fin W → Bool)) =
       (HmRow.rowPrefix k).data.toList ++
@@ -201,8 +174,6 @@ theorem rowEnc_row {K k : ℕ} (hK : K = 16 * k) (hKW : K ≤ W) (b : Fin K → 
   funext t
   have hj : 8 * j + t.val < K := by simp at h2; omega
   simp only [BitVal.get, show 8 * j + t.val < W by omega, ↓reduceDIte, padBits, hj]
-
-/-! ## Under any 128-byte prefix -/
 
 /-- **`rowEnc` under the first block `pre w`** of a row of `w` words, for any `pre` of 128 bytes: a `sha512/row/v2`
 row's (`Hidden.rowPre`) as well as `sha512/row/v1`'s. -/
@@ -239,7 +210,6 @@ theorem rowEncP_inj {pre : ℕ → ByteArray} (hpre : ∀ w, (pre w).size = 128)
   · simp only [rowEncP, hv, hw, ↓reduceIte] at h
     exact bitCode_inj (List.append_inj h rfl).2
 
-/-- **`rowEncP` of a row of `16 k` bits**: `pre k` and the row's `2 k` bytes. -/
 theorem rowEncP_row (pre : ℕ → ByteArray) {K k : ℕ} (hK : K = 16 * k) (hKW : K ≤ W) (b : Fin K → Bool) :
     rowEncP pre (widthOf W K, (padBits b : Fin W → Bool)) =
       (pre k).data.toList ++ List.ofFn fun j : Fin (2 * k) => byteOf fun t => b ⟨8 * j.val + t.val, by omega⟩ := by
@@ -260,8 +230,6 @@ theorem rowEncP_row (pre : ℕ → ByteArray) {K k : ℕ} (hK : K = 16 * k) (hKW
   have hj : 8 * j + t.val < K := by simp at h2; omega
   simp only [BitVal.get, show 8 * j + t.val < W by omega, ↓reduceDIte, padBits, hj]
 
-/-! ## At `keyProg`'s rows -/
-
 open Placed
 
 variable {c : Flock.Circuit} {hU : Built c.unit} {n : ℕ} {rowW : Fin c.ports.size → ℕ} {Reg : Type} {mPts : ℕ}
@@ -273,10 +241,8 @@ variable {c : Flock.Circuit} {hU : Built c.unit} {n : ℕ} {rowW : Fin c.ports.s
   (outs : Finset (Fin (keyN c hU n))) (saltCol : Flock.Circuit → ℕ → ℕ → ℕ → ℕ → ℕ) (popOf : Reg → Public)
   (outBit : Reg → Fin (keyN c hU n) → Bool)
 
-/-- **The bytes `sha512/row/v1` hashes for a row at `keyProg`'s places**: at a sampled proof block `u`'s site, the value a
-message holds at row port `q` of unit `u'`, `16 · words` bits (`rowW q`), has `rowEnc` the row prefix of `words` and the
-`2 · words` bytes the witness holds at the unit's VU's message columns (`Typed.msgCol`) in its block: `Discharge.Hm`'s
-`port_commit` row, with the block's bits at the site. -/
+/-- At a sampled proof block `u`'s site, the value at row port `q` of unit `u'` has `rowEnc` the row prefix of
+`words` and the `2 · words` bytes the witness holds at the unit's VU's message columns in its block. -/
 theorem keyRow_enc (encO : BitVal (Finset.univ.sup rowW + 1) → List UInt8) {S : Finset (Fin n)} {R : Reg} {u : Fin n}
     (hu : u ∈ S) (M : Binding.Msg plan tab S R u) (u' : Fin n) (q : Fin c.ports.size) {words : ℕ}
     (hrw : rowW q = 16 * words) :

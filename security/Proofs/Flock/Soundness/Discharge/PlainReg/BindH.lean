@@ -20,13 +20,8 @@ import Proofs.Flock.Soundness.Discharge.HiddenExec.Setup
 
 set_option Elab.async false
 
-/-!
-# The rows at the hidden tables, with or without shared rows
-
-`HiddenExec.rsAtH` takes `pub.tables = none`, which `verify --registered F` does not give (its registered check accepts
-only a shared-row public file), and reads it nowhere: `sitesAtH_bcSite` is `tableH_bcSiteS` at every sampled table. So
-here are `sitesAtH_bcSiteS`, `rsAtHS` and `rsAtHS_computes`, the same without it, at the layout `HiddenExec.layAtH`.
--/
+/-! The rows at the hidden tables with or without shared rows, because `verify --registered F` accepts only a
+shared-row public file. -/
 
 namespace FlockSoundness.Discharge.PlainReg
 
@@ -39,8 +34,6 @@ variable {n : ℕ} {I : Inputs} {mPts : ℕ} (ht : I.tags.typed = false) {c : Fl
   {pub : Public} (hpub : HmOut.loadPublic I.tags c I.publicFile = .ok pub) {Reg : Type}
 
 include hU hpub in
-/-- **`BcSiteH` at every satisfiable site** of the one-table hidden plan, with or without shared rows: at a sample
-verity-verify-proof sets up by `tableH_bcSiteS`; at a refused sample no message satisfies the table (`tableAtH_unsat`). -/
 theorem sitesAtH_bcSiteS :
     ∀ (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u ∈ S)
       (M : Binding.Msg (planAtH dj x₀) (tabAtH dj x₀) S R u), Binding.Sat (planAtH dj x₀) (tabAtH dj x₀) S R u M →
@@ -66,7 +59,6 @@ noncomputable abbrev rsAtHS : Binding.HmRowsX (layAtH ht hc hscope dj x₀ hU (p
     (Layout.keysRow_of_parse (parse_untyped ht hc).1 (Layout.scopeOkH_spec hU hscope).1
       (Layout.scopeOkH_spec hU hscope).2.2)
 
-/-- **`hHm` at the hidden tables, with or without shared rows** (`keyRowsH_computes`). -/
 theorem rsAtHS_computes : (rsAtHS ht hc hscope dj x₀ hU hpub (Reg := Reg)).Computes :=
   keyRowsH_computes (sitesAtH_parse ht hc (rowsFit_of_scopeH ht hc hscope) dj x₀) (Layout.outsOf c hU n) (fun _ => pub)
     (Layout.scopeOkH_spec hU hscope).2.1 (rowsFit_of_scopeH ht hc hscope) (Layout.outsOut_outsOf c hU n)
