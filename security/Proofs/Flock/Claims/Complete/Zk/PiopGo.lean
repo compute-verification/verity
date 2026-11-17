@@ -35,14 +35,8 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# The masked prover's zerocheck and lincheck in closed form
-
-`zerocheckPZk_go` and `lincheckPZk_go`: the masked prover's zerocheck and lincheck (`zerocheckPZk`, `lincheckPZk`) in
-the pure session, at the coins of the replies to its sends. Each message is the plain prover's (`Zc.msg`, `Lc.msg`)
-plus its pad, the outputs are the plain prover's (`Zc.out`, `Lc.out`), and the transcripts absorb the padded messages,
-zerocheck's binding the pads' root after its label (`ZcZ.tEnd`, `LcZ.tEnd`).
--/
+/-! The masked prover's zerocheck and lincheck in closed form, each message the plain prover's plus its pad
+(`zerocheckPZk_go`, `lincheckPZk_go`). -/
 
 @[expose] public section
 
@@ -54,7 +48,6 @@ namespace ZcZ
 
 open Zc
 
-/-- Residual round `i`'s padded message. -/
 def msg (lay : Zk.PadLayout) (h : Array F128) (tr : Trace) (n : ℕ) (r : Array F128) (z : F128) (ρ : ℕ → F128)
     (i : ℕ) : F128 × F128 :=
   ((Zc.msg tr n r z ρ i).1 + h[lay.ml i 0]!, (Zc.msg tr n r z ρ i).2 + h[lay.ml i 1]!)
@@ -65,14 +58,12 @@ def r1ab (lay : Zk.PadLayout) (h : Array F128) (tr : Trace) (n : ℕ) (r : Array
 def r1c (lay : Zk.PadLayout) (h : Array F128) (tr : Trace) (n : ℕ) (r : Array F128) : Array F128 :=
   (Array.range 64).map fun i => (Zc.r1c tr n r)[i]! + h[lay.r1c i]!
 
-/-- **The masked prover's zerocheck proof**: the plain one's values, each plus its pad. -/
 def proof (lay : Zk.PadLayout) (h : Array F128) (m : ℕ) (cs : Zc.Challenges) (tr : Trace) : ZerocheckProof :=
   ⟨r1ab lay h tr (m - 6) (cs.r m), r1c lay h tr (m - 6) (cs.r m),
     pushes (msg lay h tr (m - 6) (cs.r m) cs.z cs.ρ) (m - 6),
     (tab (m - 6) cs.z cs.ρ tr.az (m - 6))[0]! + h[lay.fa]!, (tab (m - 6) cs.z cs.ρ tr.bz (m - 6))[0]! + h[lay.fb]!,
     dot (lagrange nodesL den6Inv cs.z) (Zc.r1c tr (m - 6) (cs.r m)) + h[lay.fc]!⟩
 
-/-- The prover's transcript at the residual rounds, from `t₀`. -/
 def loopT (lay : Zk.PadLayout) (h : Array F128) (m : ℕ) (cs : Zc.Challenges) (tr : Trace) (t₀ : Transcript) : ℕ → Transcript
   | 0 => t₀
   | i + 1 =>
@@ -80,7 +71,6 @@ def loopT (lay : Zk.PadLayout) (h : Array F128) (m : ℕ) (cs : Zc.Challenges) (
     let g := msg lay h tr (m - 6) (cs.r m) cs.z cs.ρ i
     afterSq ⟨t.rounds, t.k, pF g.2 (pF g.1 t.pending)⟩ 1 1 (cs.cr i)
 
-/-- The binding's transcript: the statement's digest, the cap and the pads' root absorbed. -/
 def t₁ (digest cap root : ByteArray) (t : Transcript) : Transcript :=
   ⟨t.rounds, t.k, pBytes root (pLabel Zk.LABEL_PADS (pLabel "flock-zerocheck-v0"
     (pBytes cap (pBytes digest (pLabel "flock-r1cs-v0" t.pending)))))⟩
@@ -91,7 +81,6 @@ def t₂ (digest cap root : ByteArray) (cs : Zc.Challenges) (t : Transcript) : T
 def t₃ (m : ℕ) (digest cap root : ByteArray) (cs : Zc.Challenges) (t : Transcript) : Transcript :=
   afterSq (t₂ digest cap root cs t) 2 (m - 13) cs.c1
 
-/-- Round 1's transcript: the padded `round1_ab` and `round1_c` absorbed. -/
 def t₄ (lay : Zk.PadLayout) (h : Array F128) (m : ℕ) (digest cap root : ByteArray) (cs : Zc.Challenges) (tr : Trace)
     (t : Transcript) : Transcript :=
   let t := t₃ m digest cap root cs t
@@ -101,7 +90,6 @@ def t₅ (lay : Zk.PadLayout) (h : Array F128) (m : ℕ) (digest cap root : Byte
     (t : Transcript) : Transcript :=
   afterSq (t₄ lay h m digest cap root cs tr t) 1 1 cs.c2
 
-/-- **The masked prover's transcript after zerocheck**: the residual rounds, then the padded `final_a`, `final_b`. -/
 def tEnd (lay : Zk.PadLayout) (h : Array F128) (m : ℕ) (digest cap root : ByteArray) (cs : Zc.Challenges) (tr : Trace)
     (t : Transcript) : Transcript :=
   let t := loopT lay h m cs tr (t₅ lay h m digest cap root cs tr t) (m - 6)
@@ -113,22 +101,18 @@ namespace LcZ
 
 open Lc
 
-/-- Round `j`'s padded message. -/
 def msg (lay : Zk.PadLayout) (h : Array F128) (c : CircuitFold) (m : ℕ) (tr : Trace) (zc : ZcOut) (full : Array F128)
     (cs : Lc.Challenges) (j : ℕ) : F128 × F128 :=
   ((Lc.msg c m tr zc full cs j).1 + h[lay.lc j 0]!, (Lc.msg c m tr zc full cs j).2 + h[lay.lc j 1]!)
 
-/-- The padded `z_partial`. -/
 def zp (lay : Zk.PadLayout) (h : Array F128) (c : CircuitFold) (m : ℕ) (tr : Trace) (zc : ZcOut) (cs : Lc.Challenges) :
     Array F128 :=
   (Array.range 64).map fun i => (zrT c m tr zc cs (c.kLog - 6))[i]! + h[lay.zp i]!
 
-/-- **The masked prover's lincheck proof.** -/
 def proof (lay : Zk.PadLayout) (h : Array F128) (c : CircuitFold) (m : ℕ) (tr : Trace) (zc : ZcOut) (full : Array F128)
     (cs : Lc.Challenges) : LincheckProof :=
   ⟨pushes (msg lay h c m tr zc full cs) (c.kLog - 6), zp lay h c m tr zc cs⟩
 
-/-- The prover's transcript at the rounds, from `Lc.t₃`. -/
 def loopT (lay : Zk.PadLayout) (h : Array F128) (c : CircuitFold) (m : ℕ) (tr : Trace) (zc : ZcOut) (full : Array F128)
     (cs : Lc.Challenges) (t : Transcript) : ℕ → Transcript
   | 0 => t₃ cs t
@@ -137,13 +121,11 @@ def loopT (lay : Zk.PadLayout) (h : Array F128) (c : CircuitFold) (m : ℕ) (tr 
     let g := msg lay h c m tr zc full cs i
     afterSq ⟨T.rounds, T.k, pF g.2 (pF g.1 T.pending)⟩ 1 1 (cs.cr i)
 
-/-- The padded `z_partial` absorbed. -/
 def t₄ (lay : Zk.PadLayout) (h : Array F128) (c : CircuitFold) (m : ℕ) (tr : Trace) (zc : ZcOut) (full : Array F128)
     (cs : Lc.Challenges) (t : Transcript) : Transcript :=
   let T := loopT lay h c m tr zc full cs t (c.kLog - 6)
   ⟨T.rounds, T.k, pSlice (zp lay h c m tr zc cs) T.pending⟩
 
-/-- **The masked prover's transcript after lincheck**: `r'` squeezed. -/
 def tEnd (lay : Zk.PadLayout) (h : Array F128) (c : CircuitFold) (m : ℕ) (tr : Trace) (zc : ZcOut) (full : Array F128)
     (cs : Lc.Challenges) (t : Transcript) : Transcript :=
   afterSq (t₄ lay h c m tr zc full cs t) 1 1 cs.cf
@@ -152,7 +134,6 @@ end LcZ
 
 open Zc
 
-/-- **The masked prover's zerocheck, in closed form**, at the coins of the replies to its sends. -/
 theorem zerocheckPZk_go (resp : ℕ → Claims.Msg) {m : ℕ} (hm : 14 ≤ m) (digest cap root : ByteArray)
     (lay : Zk.PadLayout) (h : Array F128) (tr : Trace) (t : Transcript) (l : Array Claims.Msg) :
     ∃ l', l'.size = l.size + 3 + (m - 6) ∧
@@ -200,8 +181,6 @@ theorem zerocheckPZk_go (resp : ℕ → Claims.Msg) {m : ℕ} (hm : 14 ≤ m) (d
 
 open Lc
 
-/-- **The masked prover's lincheck, in closed form**, at the coins of the replies to its sends, where the statement's
-circuit fold at `α` returns `full`. -/
 theorem lincheckPZk_go (resp : ℕ → Claims.Msg) (c : CircuitFold) (m : ℕ) (lay : Zk.PadLayout) (h : Array F128)
     (tr : Trace) (zc : ZcOut) (full : Array F128) (t : Transcript) (l : Array Claims.Msg)
     (hfold : c.fold (coinOf (resp l.size) 0) (skipWeights zc.z) (zc.rho.extract 0 (c.kLog - 6)) = .ok full) :

@@ -40,15 +40,7 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Complete.Json.RoundTrip
 import Std.Data.TreeMap.Raw.Lemmas
 
-/-!
-# The honest record is in its canonical text (S0)
-
-S0 (`Flock.RecordText.check`) accepts a record that is `printT` of what it parses to. The honest prover prints its
-record with `printJ`, which is `printT` (`printJ_eq`), and alike values print alike (`printJ_same`: an object's fields
-print in its tree's order, which for a well-formed tree is its keys' sorted order, `Std.TreeMap.Raw.ordered_keys`). The
-verifier's parser reads a printable value's text back as an alike value (`FlockComplete.JsonRT.parse_print`), so S0
-accepts the honest record (`check_printJ`), with no assumption.
--/
+/-! S0 accepts the honest record (`check_printJ`), with no assumption. -/
 
 @[expose] public section
 
@@ -94,7 +86,6 @@ theorem fieldsJ_toList (t : Impl String (fun _ => Json)) :
   rw [Impl.Const.toList_eq_toListModel_map, List.map_map]
   rfl
 
-/-- Two lists of strings in strictly increasing order with the same members are one list. -/
 theorem strings_eq_of_sorted : ∀ {l₁ l₂ : List String}, l₁.Pairwise (fun a b => compare a b = .lt) →
     l₂.Pairwise (fun a b => compare a b = .lt) → (∀ k, k ∈ l₁ ↔ k ∈ l₂) → l₁ = l₂
   | [], [], _, _, _ => rfl
@@ -143,7 +134,6 @@ theorem keys_eq_of_same {m n : Std.TreeMap.Raw String Json} (hm : m.WF) (hn : n.
     Std.TreeMap.Raw.contains_eq_isSome_getElem? hn]
   exact iff_of_eq (congrArg (· = true) (hk k))
 
-/-- **Alike values print alike**: `printJ` is one text on `Same` values, objects' keys printed in their sorted order. -/
 theorem printJ_same {a b : Json} (h : Claims.Json.Same a b) : printJ a = printJ b := by
   induction h with
   | null => rfl
@@ -186,7 +176,6 @@ theorem printJ_same {a b : Json} (h : Claims.Json.Same a b) : printJ a = printJ 
         ((Std.TreeMap.Raw.mem_toList_iff_getElem?_eq_some hn).1 hb)]
     exact key _ _ (List.getElem_mem h1) (List.getElem_mem h2) hfst
 
-/-- **S0 accepts the honest record**: the text `printJ` prints of a printable value. -/
 theorem check_printJ {j : Json} (hg : Claims.Json.Good j) : Flock.RecordText.check (printJ j) = .ok () := by
   obtain ⟨j', hp, hs⟩ := FlockComplete.JsonRT.parse_print j hg
   exact Flock.RecordText.check_of hp (by rw [← printJ_eq, printJ_same hs])

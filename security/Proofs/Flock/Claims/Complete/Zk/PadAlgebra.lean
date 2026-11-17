@@ -3,25 +3,8 @@ module
 public import Proofs.Flock.Claims.Complete.Zk.Inner
 public import Proofs.Flock.Soundness.Discharge.Composed.Inner.ZerocheckMasked
 
-/-!
-# The honest pads' algebra
-
-The masked prover stops (`innerP`) unless the batched constraint `l.c + ⟨l.a, h⟩` vanishes at its pads, `l` the
-batching coins' combination of every constraint the rep hands the inner proof and the triple's three. Here:
-
-* `batched_of_holds`: where every constraint vanishes at `h` (`ConsHold`), the batched one does at every batching coin
-  (`evalL_combo`), so `innerP`'s first refusal reads no coin.
-* `triple_holds`: at a rep's pads (`padsOf`: `h_ab = h_a·h_b`, `w = x·y`, `padsOf_hab`, `padsOf_tw`) and the prover's
-  openings `ρ = ε h_a + x`, `σ = h_b + y`, the triple's three constraints vanish at every sacrifice coin `ε`
-  (characteristic 2).
-* `innerP_batched`: so at a rep's pads, the batched constraint `innerP` checks holds at every `ε` and every batching
-  coin once the rep's own constraints vanish there.
-
-The verifier's checks on the honest inner proof (`Zk.verifyInnerWith`), on `Y = (h ‖ pad_h) + β (μ ‖ pad_μ)`
-(`innerY`): the batched check `⟨c, Y⟩ = t + β τ` at `τ = ⟨c, μ⟩` where the prover's own check passed
-(`innerY_batched`, from `dot_innerY`), and each column check `code(Y)_j = code(h ‖ pad_h)_j + β code(μ ‖ pad_μ)_j`
-(`innerY_column`, from `codeAt_innerY`: the code is linear, `of_codeAt`).
--/
+/-! The honest pads' algebra: at a rep's pads the batched constraint `innerP` checks holds at every coin once the rep's
+own constraints vanish (`innerP_batched`). -/
 
 @[expose] public section
 
@@ -30,7 +13,6 @@ namespace FlockComplete
 open Flock FlockLevel3 FlockSoundness.Discharge.Composed.ZerocheckMasked
 open FlockSoundness.Discharge.Composed.Zerocheck (eq_of_of of_one' mul_sum')
 
-/-- **Every constraint of `cons` vanishes at the pads `h`**, each on `h`'s length. -/
 def ConsHold (cons : Array (String × Zk.Lin)) (h : Array F128) : Prop :=
   ∀ q ∈ cons, q.2.a.size = h.size ∧ evalL q.2 h = 0
 
@@ -43,7 +25,6 @@ theorem ConsHold.append {c₁ c₂ : Array (String × Zk.Lin)} {h : Array F128} 
 
 theorem default_F128 : (default : F128) = 0 := rfl
 
-/-- **The batched constraint vanishes where every constraint does**, at every batching coin. -/
 theorem batched_of_holds {cons : Array (String × Zk.Lin)} {h : Array F128} (hc : ConsHold cons h)
     (ws : Array F128) : evalL (Zk.Lin.combo ws (cons.map (·.2)) h.size) h = 0 := by
   rw [evalL_combo ws _ h.size h (fun l hl => by
@@ -63,14 +44,11 @@ theorem batched_of_holds {cons : Array (String × Zk.Lin)} {h : Array F128} (hc 
   refine Finset.sum_eq_zero fun k _ => ?_
   rw [hz k, ← GF128.zero_eq, mul_zero]
 
-/-! ## Sparse forms -/
-
 theorem of_dot_replicate (s : ℕ) (h : Array F128) : GF128.of (dot (Array.replicate s 0) h) = 0 := by
   rw [of_dot_range _ h s (by simp)]
   refine Finset.sum_eq_zero fun k hk => ?_
   rw [get_replicate s k (Finset.mem_range.1 hk), ← GF128.zero_eq, zero_mul]
 
-/-- Setting a zero coefficient `i` to `v` adds `v·h_i`. -/
 theorem of_dot_set (a h : Array F128) (i : ℕ) (v : F128) (hi : i < a.size) (h0 : a[i]! = 0) :
     GF128.of (dot (a.set! i v) h) = GF128.of (dot a h) + GF128.of v * GF128.of h[i]! := by
   rw [of_dot_range _ h a.size (by simp), of_dot_range a h a.size rfl]
@@ -88,8 +66,6 @@ theorem get_set_ne (a : Array F128) (i k : ℕ) (v : F128) (hk : k < a.size) (hk
     (a.set! i v)[k]! = a[k]! := by
   rw [get_set a i k v hk, ite_eq_right hki]
 
-/-! ## The layout's triple indices -/
-
 theorem hab_lt_tx (lay : Zk.PadLayout) : lay.hab < lay.tx := by simp only [Zk.PadLayout.tx]; omega
 theorem tx_lt_ty (lay : Zk.PadLayout) : lay.tx < lay.ty := by
   simp only [Zk.PadLayout.tx, Zk.PadLayout.ty]; omega
@@ -97,12 +73,9 @@ theorem ty_lt_tw (lay : Zk.PadLayout) : lay.ty < lay.tw := by
   simp only [Zk.PadLayout.ty, Zk.PadLayout.tw]; omega
 theorem tw_lt_len (lay : Zk.PadLayout) : lay.tw < lay.len := by simp only [Zk.PadLayout.len]; omega
 
-/-! ## A rep's pads -/
-
 theorem padsOf_size (tape : TapeZk) (i r : ℕ) (lay : Zk.PadLayout) : (padsOf tape i r lay).h.size = lay.len := by
   simp [padsOf]
 
-/-- The pads at `h_a`, `h_b`, `x`, `y` are the tape's. -/
 theorem padsOf_get (tape : TapeZk) (i r : ℕ) (lay : Zk.PadLayout) (k : ℕ) (hk : k < lay.len) (h1 : k ≠ lay.hab)
     (h2 : k ≠ lay.tw) : (padsOf tape i r lay).h[k]! = tape.h i r k := by
   simp only [padsOf]
@@ -110,7 +83,6 @@ theorem padsOf_get (tape : TapeZk) (i r : ℕ) (lay : Zk.PadLayout) (k : ℕ) (h
     getElem!_pos _ k (by simpa using hk)]
   simp
 
-/-- **`h_ab = h_a·h_b`** at a rep's pads. -/
 theorem padsOf_hab (tape : TapeZk) (i r : ℕ) (lay : Zk.PadLayout) :
     (padsOf tape i r lay).h[lay.hab]! = (padsOf tape i r lay).h[lay.fa]! * (padsOf tape i r lay).h[lay.fb]! := by
   have := fa_lt_fb lay; have := fb_lt_hab lay; have := hab_lt_tx lay; have := tx_lt_ty lay
@@ -122,7 +94,6 @@ theorem padsOf_hab (tape : TapeZk) (i r : ℕ) (lay : Zk.PadLayout) :
     getElem!_pos _ lay.fa (by simp; omega), getElem!_pos _ lay.fb (by simp; omega)]
   simp
 
-/-- **`w = x·y`** at a rep's pads. -/
 theorem padsOf_tw (tape : TapeZk) (i r : ℕ) (lay : Zk.PadLayout) :
     (padsOf tape i r lay).h[lay.tw]! = (padsOf tape i r lay).h[lay.tx]! * (padsOf tape i r lay).h[lay.ty]! := by
   have := fa_lt_fb lay; have := fb_lt_hab lay; have := hab_lt_tx lay; have := tx_lt_ty lay
@@ -135,10 +106,6 @@ theorem padsOf_tw (tape : TapeZk) (i r : ℕ) (lay : Zk.PadLayout) :
     getElem!_pos _ lay.ty (by simp; omega)]
   simp
 
-/-! ## The triple -/
-
-/-- **The triple's constraints vanish** at pads with `h_ab = h_a·h_b` and `w = x·y`, at the openings
-`ρ = ε h_a + x`, `σ = h_b + y`, for every sacrifice coin `ε`. -/
 theorem triple_holds (lay : Zk.PadLayout) (h : Array F128) (hs : h.size = lay.len)
     (hab : h[lay.hab]! = h[lay.fa]! * h[lay.fb]!) (htw : h[lay.tw]! = h[lay.tx]! * h[lay.ty]!) (eps : F128) :
     ConsHold (Zk.triple lay eps (eps * h[lay.fa]! + h[lay.tx]!) (h[lay.fb]! + h[lay.ty]!)) h := by
@@ -183,9 +150,6 @@ theorem triple_holds (lay : Zk.PadLayout) (h : Array F128) (hs : h.size = lay.le
       GF128.of eps * GF128.of h[lay.fa]! * GF128.of h[lay.ty]! + GF128.of h[lay.tx]! * GF128.of h[lay.fb]! +
       2 * GF128.of h[lay.tx]! * GF128.of h[lay.ty]!)
 
-/-- **The honest-pad algebra**: at a rep's pads, once every constraint the rep hands the inner proof vanishes there,
-the batched constraint `innerP` checks (with the triple at the prover's openings) holds at every sacrifice coin `ε` and
-every batching coin, so `innerP`'s first refusal never fires and reads no coin. -/
 theorem innerP_batched (tape : TapeZk) (i r : ℕ) (lay : Zk.PadLayout) {cons : Array (String × Zk.Lin)}
     (hc : ConsHold cons (padsOf tape i r lay).h) (eps : F128) (gammas : Array F128) :
     let p := padsOf tape i r lay
@@ -202,9 +166,6 @@ theorem innerP_batched (tape : TapeZk) (i r : ℕ) (lay : Zk.PadLayout) {cons : 
   rw [e]
   rfl
 
-/-! ## The inner proof's checks on `Y = (h ‖ pad_h) + β (μ ‖ pad_μ)` -/
-
-/-- The masked dot product's `Y` (`innerP`'s `y`): entry `i` is `hv_i + β mv_i`. -/
 def innerY (hv mv : Array F128) (beta : F128) : Array F128 :=
   (Array.range hv.size).map fun i => hv[i]! + beta * mv[i]!
 
@@ -222,7 +183,6 @@ theorem f128_beq_self (x : F128) : (x == x) = true := by cases x; simp [BEq.beq,
 
 theorem isZero_eq {a : F128} (h : a.isZero = true) : a = 0 := FlockLevel3.F128.isZero_iff a h
 
-/-- **`⟨c, Y⟩ = ⟨c, h⟩ + β ⟨c, μ⟩`** on the pads' rows, `c` on `h`'s length. -/
 theorem dot_innerY (a h mu padH padMu : Array F128) (beta : F128) (ha : a.size = h.size) (hm : mu.size = h.size) :
     dot a (innerY (h ++ padH) (mu ++ padMu) beta) = dot a h + beta * dot a mu := by
   apply eq_of_of
@@ -233,7 +193,6 @@ theorem dot_innerY (a h mu padH padMu : Array F128) (beta : F128) (ha : a.size =
   rw [innerY_get _ _ _ (by simp; omega), get_append_left _ _ hk', get_append_left _ _ (by omega), of_add, of_mul]
   ring
 
-/-- **The batched check passes** on `Y` and `τ = ⟨c, μ⟩` where the prover's `c + ⟨c, h⟩` vanished. -/
 theorem innerY_batched (l : Zk.Lin) (h mu padH padMu : Array F128) (beta : F128) (ha : l.a.size = h.size)
     (hm : mu.size = h.size) (hz : (l.c + dot l.a h).isZero = true) :
     (dot l.a (innerY (h ++ padH) (mu ++ padMu) beta) == l.c + beta * dot l.a mu) = true := by
@@ -257,7 +216,6 @@ theorem of_horner (x : F128) : ∀ l : List F128,
       · rw [List.getD_cons_succ, pow_succ, mul_assoc]
       · simp
 
-/-- **The inner code at column `j`** is `Σ y_i X^i` at `X = j + 1`. -/
 theorem of_codeAt (y : Array F128) (j : ℕ) :
     GF128.of (Zk.codeAt y j) = ∑ i ∈ Finset.range y.size, GF128.of y[i]! * GF128.of ⟨(j + 1).toUInt64, 0⟩ ^ i := by
   show GF128.of (y.foldr (fun c acc => acc * (⟨(j + 1).toUInt64, 0⟩ : F128) + c) 0) = _
@@ -267,7 +225,6 @@ theorem of_codeAt (y : Array F128) (j : ℕ) :
   have e : y.toList.getD i 0 = y[i]! := by simp [List.getD_eq_getElem?_getD, hi']
   rw [e]
 
-/-- **`Y`'s code is the rows' codes combined**: `code(Y)_j = code(hv)_j + β code(mv)_j`. -/
 theorem codeAt_innerY (hv mv : Array F128) (beta : F128) (hs : mv.size = hv.size) (j : ℕ) :
     Zk.codeAt (innerY hv mv beta) j = Zk.codeAt hv j + beta * Zk.codeAt mv j := by
   apply eq_of_of
@@ -276,7 +233,6 @@ theorem codeAt_innerY (hv mv : Array F128) (beta : F128) (hs : mv.size = hv.size
   rw [innerY_get _ _ _ (Finset.mem_range.1 hi), of_add, of_mul]
   ring
 
-/-- **The column check passes** at an opened column `j < n` of the rows' codewords. -/
 theorem innerY_column (hv mv : Array F128) (beta : F128) (hs : mv.size = hv.size) (n j : ℕ) (hj : j < n) :
     (Zk.codeAt (innerY hv mv beta) j ==
       ((Array.range n).map (Zk.codeAt hv))[j]! + beta * ((Array.range n).map (Zk.codeAt mv))[j]!) = true := by

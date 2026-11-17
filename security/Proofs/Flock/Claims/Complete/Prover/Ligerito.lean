@@ -3,29 +3,7 @@ module
 public import Proofs.Flock.Claims.Complete.Prover.Piop
 public import Flock.Ligerito
 
-/-!
-# The honest prover's Ligerito opening
-
-`Flock.Ligerito`, `Flock.Merkle` from the prover's side. Ligerito proves `Σ_y t(y)·W(y) = s` for the committed table `t` and a weight
-`W` that starts as the batched basis `b` (`basisVals`) with `s = T`; every claim the verifier adds (an out-of-domain
-value, a consistency sum) adds its weight to `W`, scaled by its coin.
-
-* **Commitments** (`commitP`, `Flock.Ligerito`, `Flock.Merkle`). A level's F-table `g` of `2^(lanes + cols)` entries has lanes
-  `M[ℓ][c] = g[c·2^lanes + ℓ]`, codeword `C[q][ℓ] = Σ_c M[ℓ][c]·X̂_c(ω_q)` for `q < 2^d` (the verifier's `whats`), leaf `q`
-  the scheme's leaf of row `C[q]` under its salt, and the Merkle cap the `2^cap` nodes `d − cap` levels up. An opening
-  (`openP`) is the rows at the query positions, their siblings leaf side first, and their salts.
-* **Sumcheck** (`Flock.Ligerito`). The table and the weight are K-tables, folded at each challenge on the low variable
-  (`foldK`); a message is `(q(0), q`'s leading coefficient`)` for `q(X) = Σ_{x'} t(X, x')·W(X, x')` (`roundPoly`).
-* **Splits.** After a level's last challenge the folded K-table `f = f₀ + u·f₁` is split into the next level's F-table
-  `g(b, x) = f_b(x)` (`splitK`, `b` the new low variable), and the weight into `W'(b, x) = u^b·W(x)` (`liftU`), so
-  `Σ g·W' = Σ f·W`; the next message is `g`'s round polynomial in `b`.
-* **Claims.** An out-of-domain sample `z` at a level adds `β·eq(z, ·)` with value `g̃(z)` (`mleF`); level `i`'s queries
-  add `β·u^b·V` on the next level's table, `V(c) = Σ_j eq(α)[j]·X̂_c(ω_{pos_j})` (`consW`).
-* **The last level** sends `yr`, the folded K-table as `F` pairs. The message read after its last challenge enters no
-  equation (`Flock.Ligerito`); the prover sends upstream's plain fold message there, the round polynomial of the folded, unsplit
-  K-table and weight in their next variable (`recursive_prover_with_basis_impl`, whose last round at the last level is
-  `sumcheck.fold`), not the split coordinate's.
--/
+/-! The honest prover's Ligerito opening: `Flock.Ligerito` and `Flock.Merkle` from the prover's side. -/
 
 @[expose] public section
 

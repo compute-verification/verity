@@ -3,14 +3,8 @@ module
 import all Init.Data.Array.QSort.Basic
 import Batteries.Tactic.OpenPrivate
 
-/-!
-# The coin tree's four names sort to themselves
-
-`CoinTree.checkRecord` sorts the record's `coin_tree` keys with `Array.qsort` and compares them with
-`key, nonce, root, spec`. `qsort_coinTree` runs that sort on the four names: three partitions (`qpart03`, `qpart01`,
-`qpart23`) and the one-element sorts. It sits in a module of its own, on core's `simp` set, where string comparisons
-reduce by `decide`.
--/
+/-! The coin tree's four names sort to themselves under `Array.qsort` (`qsort_coinTree`), in a module of its own on
+core's `simp` set, where string comparisons reduce by `decide`. -/
 
 @[expose] public section
 
@@ -41,7 +35,6 @@ private theorem sort_one (n : Nat) (v : Vector String 4) (h0 : n < 4) :
   rw [Array.qsort.sort]
   simp
 
-/-- **The coin tree's four names sort to themselves**, as `checkRecord` sorts them. -/
 theorem qsort_coinTree :
     #["key", "nonce", "root", "spec"].qsort (· < ·) = #["key", "nonce", "root", "spec"] := by
   unfold Array.qsort

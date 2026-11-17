@@ -40,15 +40,7 @@ import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Complete.Replay.LigeritoMerkle
 
-/-!
-# The pads' commitment opens at every column
-
-`innerCommitP_tree`: the pads' commitment (`innerCommitP`) is its Merkle tree (`InnerTree`): `n` columns, `n` a power
-of two, leaf `j` the `hm96-sha512/v1` leaf of `SHA-512(C_h[j] ‖ C_μ[j])` under its salt, layer `h + 1` the nodes of
-layer `h`'s pairs, and the root layer `log₂ n`'s entry. So each column's siblings, as `innerP` opens them, climb from
-its leaf to the root, which is the Merkle check `Zk.verifyInnerWith` makes at each query (`inner_column_opens`, from
-the plain Ligerito's `climb_ok`).
--/
+/-! The pads' commitment is its Merkle tree and opens at every column (`inner_column_opens`). -/
 
 @[expose] public section
 
@@ -56,14 +48,11 @@ namespace FlockComplete
 
 open Flock Transcript FlockComplete.Replay.Lg
 
-/-- The inner code's length, `nextPow2(s) · 2^INNER_LOG_INV_RATE` columns for `s` symbols, is a power of two. -/
 theorem innerCols_pow (s : ℕ) : s.nextPowerOfTwo * 2 ^ Zk.INNER_LOG_INV_RATE =
     2 ^ Nat.log2 (s.nextPowerOfTwo * 2 ^ Zk.INNER_LOG_INV_RATE) := by
   obtain ⟨k, hk⟩ := Nat.isPowerOfTwo_nextPowerOfTwo s
   rw [hk, ← Nat.pow_add, Nat.log2_two_pow]
 
-/-- **The pads' commitment as its Merkle tree**, through `hs`: `n` columns and salts, leaf `j` the leaf of column `j`
-under its salt, layer `h + 1` the nodes of layer `h`'s pairs, and the root layer `log₂ n`'s first entry. -/
 structure InnerTree (hs : Hashes V) (n : ℕ) (ic : InnerCommit) : Prop where
   ch : ic.ch.size = n
   cm : ic.cm.size = n
@@ -74,8 +63,6 @@ structure InnerTree (hs : Hashes V) (n : ℕ) (ic : InnerCommit) : Prop where
     (MerkleOps.hm96With hs).node (ic.layers[h]!)[2 * i]! (ic.layers[h]!)[2 * i + 1]! = .ok (ic.layers[h + 1]!)[i]!
   root : ic.root = (ic.layers[Nat.log2 n]!)[0]!
 
-/-- **The pads' commitment is its Merkle tree**, at `n = nextPow2(s + K_PAD) · 2^INNER_LOG_INV_RATE` columns for the
-`s + K_PAD` symbols of `h ‖ pad_h`. -/
 theorem innerCommitP_tree {hs : Hashes V} {p : PadsZk} {salt : ℕ → ByteArray} {ic : InnerCommit}
     (h : innerCommitP hs p salt = .ok ic) :
     InnerTree hs ((p.h ++ p.padH).size.nextPowerOfTwo * 2 ^ Zk.INNER_LOG_INV_RATE) ic := by
@@ -133,8 +120,6 @@ theorem innerCommitP_tree {hs : Hashes V} {p : PadsZk} {salt : ℕ → ByteArray
     exact this
   · exact congrArg (·[0]!) hcur
 
-/-- **Each column's siblings climb to the root**: at a column below `n`, the siblings `innerP` opens (layer `k`'s entry
-beside the column's ancestor, for `k < log₂ n`) climb from the column's leaf to the root. -/
 theorem innerTree_climb {hs : Hashes V} {n : ℕ} {ic : InnerCommit} (ht : InnerTree hs n ic)
     (hn : n = 2 ^ Nat.log2 n) {j : ℕ} (hj : j < n) :
     climbWith (MerkleOps.hm96With hs) (ic.layers[0]!)[j]! j
@@ -147,9 +132,6 @@ theorem innerTree_climb {hs : Hashes V} {n : ℕ} {ic : InnerCommit} (ht : Inner
   rw [Array.toList_map, Array.toList_range, List.range_eq_range', ht.root]
   exact hc
 
-/-- **The pads' commitment opens at every column** (`Zk.verifyInnerWith`'s Merkle check): at a column `j` below `n`,
-the column's leaf, from its two codeword entries and its salt, climbs through the siblings `innerP` opens to the
-root. -/
 theorem inner_column_opens {hs : Hashes V} {p : PadsZk} {salt : ℕ → ByteArray} {ic : InnerCommit}
     (h : innerCommitP hs p salt = .ok ic) {j : ℕ} (hj : j < ic.ch.size) :
     (do
@@ -167,12 +149,10 @@ theorem inner_column_opens {hs : Hashes V} {p : PadsZk} {salt : ℕ → ByteArra
   rw [hl]
   exact innerTree_climb ht (innerCols_pow _) hj
 
-/-- A rep's pads have `len + K_PAD` symbols, so their commitment has the verifier's `n` columns. -/
 theorem padsOf_symbols (tape : TapeZk) (i r : ℕ) (lay : Zk.PadLayout) :
     ((padsOf tape i r lay).h ++ (padsOf tape i r lay).padH).size = lay.len + Zk.K_PAD := by
   simp [padsOf]
 
-/-- `τ`'s salt is `TAU_SALT_BYTES` long, as the verifier checks. -/
 theorem padsOf_tauSalt_size (tape : TapeZk) (i r : ℕ) (lay : Zk.PadLayout) :
     (padsOf tape i r lay).tauSalt.size = Zk.TAU_SALT_BYTES :=
   fitBytes_size' _ _

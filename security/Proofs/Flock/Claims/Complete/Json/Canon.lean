@@ -47,16 +47,8 @@ import Mathlib.Topology.Sheaves.Init
 import Std.Data.TreeMap.Raw.Lemmas
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# What completeness reads of `canon`, proved
-
-`Flock.canon` is total, so what completeness reads of it alone is proved, not assumed: `canon` is the same on alike
-values (`canon_same`: alike values are equivalent, `same_jsonEquiv`, and `canon` prints equivalent values alike,
-`FlockDeploy.canon_jsonEquiv`), and returns on printable ones a text of ASCII without DEL (`canon_ok`: every number an
-integer, so the one refusal never fires, and `canon_ascii`: `canonStr` writes every character outside printable ASCII
-as a `\u` escape, `escU`). The round trips through the verifier's parser `Flock.JsonParse.parse` (the printer's and
-`canon`'s) are proved too (`RoundTrip.lean`), and the parser's trees are well formed (`Parse.lean`).
--/
+/-! What completeness reads of the total `Flock.canon`, proved rather than assumed: it is the same on alike values and
+returns ASCII without DEL on printable ones. -/
 
 @[expose] public section
 set_option backward.privateInPublic true
@@ -109,7 +101,6 @@ theorem foldl_ascii (f : String → Char → String) (hf : ∀ b a, Claims.Json.
   | nil => intro out h; simpa using h
   | cons c cs ih => intro out h; rw [List.foldl_cons]; exact ih _ (hf _ _ h)
 
-/-- What `canonStr` writes for one character. -/
 def esc (c : Char) : List Char :=
   match c with
   | '"' => ['\\', '"']
@@ -160,7 +151,6 @@ theorem esc_ascii (c : Char) : ∀ x ∈ esc c, x.toNat < 0x7f := by
     rintro x rfl
     exact h.2
 
-/-- `canonStr` writes ASCII without DEL. -/
 theorem canonStr_ascii (s : String) : Claims.Json.Ascii (Flock.canonStr s) := by
   intro x hx
   rw [canonStr_toList] at hx
@@ -299,11 +289,9 @@ theorem canon_ascii_lt
 
 end Ascii
 
-/-- **`canon` writes ASCII without DEL.** -/
 theorem canon_ascii (j : Json) {s : String} (h : canon j = .ok s) : Claims.Json.Ascii s :=
   Ascii.canon_ascii_lt (fun a x hx => (FlockSoundness.Audit.SampleExec.mem_qsort a _ x).1 hx) _ j (Nat.lt_succ_self _) h
 
-/-- **Alike values are equivalent** (`FlockDeploy.JsonEquiv`): one form, whatever their objects' key order. -/
 theorem same_jsonEquiv : ∀ {a b : Json}, Same a b → FlockDeploy.JsonEquiv a b
   | _, _, .null => rfl
   | _, _, .bool _ => rfl
@@ -313,11 +301,9 @@ theorem same_jsonEquiv : ∀ {a b : Json}, Same a b → FlockDeploy.JsonEquiv a 
   | _, _, .obj hm hn hk hv =>
     (FlockDeploy.jsonEquiv_obj_iff hm hn).2 ⟨hk, fun k a b ha hb => same_jsonEquiv (hv k a b ha hb)⟩
 
-/-- **`canon` is the same on alike values**. -/
 theorem canon_same (a b : Json) (h : Same a b) : canon a = canon b :=
   FlockDeploy.canon_jsonEquiv (same_jsonEquiv h)
 
-/-- **`canon` returns on printable values.** -/
 theorem canon_ok_some : ∀ j : Json, Good j → ∃ s, canon j = .ok s
   | _, .null => ⟨_, by rw [canon]; rfl⟩
   | _, .bool _ => ⟨_, by rw [canon]; rfl⟩
@@ -339,7 +325,6 @@ theorem canon_ok_some : ∀ j : Json, Good j → ∃ s, canon j = .ok s
         exact ⟨_, by rw [hs]; rfl⟩
     exact ⟨_, by rw [canon, hr]; rfl⟩
 
-/-- **`canon` returns on printable values a text of ASCII without DEL**. -/
 theorem canon_ok (j : Json) (h : Good j) : ∃ s, canon j = .ok s ∧ Claims.Json.Ascii s :=
   let ⟨s, hs⟩ := canon_ok_some j h
   ⟨s, hs, canon_ascii j hs⟩

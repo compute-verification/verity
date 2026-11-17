@@ -5,27 +5,8 @@ public import Proofs.Flock.Level3.GF256
 public import Proofs.Flock.Soundness.Discharge.Composed.Base
 public import Proofs.Flock.Claims.Deploy
 
-/-!
-# The mask slot's rank
-
-The `--zk` prover refuses coins at which the mask slot's weights are rank-deficient (`flock-circuit.rs`, "degenerate
-coins"): with the claims' points `p_1, …, p_k` (both reps' `ab` and `c` claims so far, cumulative), the vectors
-`v_x = (eq(p_1, x), …, eq(p_k, x))` over the slot's `N = 2^D` words `x` must have GF(2)-rank `128·k`. In
-`A = GF(2^128)^k` with pointwise product, `v_x = ∏_t eq(c_t, x_t)` at `c_t = (p_{1,t}, …, p_{k,t})`, where
-`eq(c, 1) = c` and `eq(c, 0) = 1 + c`; the GF(2)-span is the additive subgroup the `v_x` generate (`span`), and the rank
-is full when it is `⊤` (`RankFull`).
-
-* `span_cons`: one more coordinate `c₀` takes the span `U` to `U + c₀·U` (the recursion every bound runs on);
-* `span_map`, `rankFull_sub`: the span commutes with a ring hom, so full rank at the `k` points gives full rank at any
-  subset: rep 1's check passing means rep 0's passed, and the refusal is one event per table;
-* `RankBound`: the bound's statement, the fraction of coins at which the rank is deficient, with some coordinates
-  fixed (the `c` claims' pinned word coordinates).
-* `maskRankOk`: the prover's check itself, on the executable's `F128` (`eqWord`, `zk_veil::eq_word`), at the points
-  a rep reads from its coins (`claimPoints`, `claim_word_points`; `roundPoints` off its rounds) over the slot's words
-  (`maskWordsOf`, `mask_words`); `maskRankOk_iff`: it holds exactly when the weight vectors' GF(2)-span is all of
-  `GF(2^128)^k`; `maskRankOk_append_left`: rep 1's check at all four points covers rep 0's.
-* `maskWords_ge`: a statement the `--zk` setup admits has `N = 2^D` mask words with `D ≥ 10`.
--/
+/-! The mask slot's rank, at which the `--zk` prover refuses rank-deficient coins (`maskRankOk`), and the rank bound's
+statement (`RankBound`). -/
 
 @[expose] public section
 
@@ -35,10 +16,8 @@ section Ring
 
 variable {A : Type*} [CommRing A]
 
-/-- The eq-vector at the Boolean point `x`: `∏_t eq(c_t, x_t)`, with `eq(c, 1) = c` and `eq(c, 0) = 1 + c`. -/
 def eqProd {D : ℕ} (c : Fin D → A) (x : Fin D → Bool) : A := ∏ t, if x t then c t else 1 + c t
 
-/-- **The GF(2)-span of the eq-vectors**: in characteristic 2, the additive subgroup they generate. -/
 def span {D : ℕ} (c : Fin D → A) : AddSubgroup A := AddSubgroup.closure (Set.range (eqProd c))
 
 theorem eqProd_cons {D : ℕ} (c₀ : A) (c : Fin D → A) (b : Bool) (x : Fin D → Bool) :
@@ -59,8 +38,6 @@ theorem range_eqProd_cons {D : ℕ} (c₀ : A) (c : Fin D → A) :
     · exact ⟨Fin.cons false x, by rw [eqProd_cons]; simp⟩
     · exact ⟨Fin.cons true x, by rw [eqProd_cons]; simp⟩
 
-/-- **The span recursion**: one more coordinate `c₀` takes the span `U` to `U + c₀·U`, since
-`(1 + c₀)·v + c₀·v = v` in characteristic 2. -/
 theorem span_cons (h2 : ∀ a : A, a + a = 0) {D : ℕ} (c₀ : A) (c : Fin D → A) :
     span (Fin.cons c₀ c : Fin (D + 1) → A) = span c ⊔ (span c).map (AddMonoidHom.mulLeft c₀) := by
   apply le_antisymm
@@ -85,7 +62,6 @@ theorem span_cons (h2 : ∀ a : A, a + a = 0) {D : ℕ} (c₀ : A) (c : Fin D �
       rw [range_eqProd_cons]
       exact Or.inr ⟨v, hv, rfl⟩
 
-/-- **The span commutes with a ring hom**: the image of the span is the span of the images. -/
 theorem span_map {B : Type*} [CommRing B] (π : A →+* B) {D : ℕ} (c : Fin D → A) :
     (span c).map π.toAddMonoidHom = span (fun t => π (c t)) := by
   rw [span, AddMonoidHom.map_closure, span, ← Set.range_comp]
@@ -100,12 +76,8 @@ theorem span_top_of_map {B : Type*} [CommRing B] (π : A →+* B) (hπ : Functio
 
 end Ring
 
-/-! ## At the deployed field -/
-
 open FlockLevel3
 
-/-- **The mask slot's weights have full rank** at the points `p` (point `i`'s word coordinate `t`): the eq-vectors over
-the slot's `2^D` words span `GF(2^128)^k` over GF(2), i.e. have GF(2)-rank `128·k`. -/
 def RankFull {k D : ℕ} (p : Fin k → Fin D → GF128) : Prop := span (fun t i => p i t) = ⊤
 
 theorem add_self_pi {k : ℕ} (a : Fin k → GF128) : a + a = 0 := funext fun i => CharTwo.add_self_eq_zero (a i)
@@ -127,10 +99,8 @@ theorem rankFull_sub {j k D : ℕ} (e : Fin j ↪ Fin k) (p : Fin k → Fin D �
   rw [← key]
   exact span_top_of_map π hπ _ h
 
-/-- **Nonzero scalars per point keep the rank.** The prover's check evaluates `eq` over the whole word index, so the
-slot's fixed in-block bits multiply point `i`'s weights by `γ i`, the product of their `eq` factors. Where every `γ i`
-is nonzero that is a GF(2)-automorphism of `GF(2^128)^k`: the scaled vectors have full rank exactly at `RankFull`, and
-the refusal's other cause is a coin at the one value that zeroes its `eq` factor. -/
+/-- The prover's check evaluates `eq` over the whole word index, so the slot's fixed in-block bits scale point `i`'s
+weights by `γ i`; the refusal's other cause is a coin that zeroes one of those factors. -/
 theorem rankFull_scale_iff {k D : ℕ} (γ : Fin k → GF128) (hγ : ∀ i, γ i ≠ 0) (p : Fin k → Fin D → GF128) :
     AddSubgroup.closure (Set.range fun x => γ * eqProd (fun t i => p i t) x) = ⊤ ↔ RankFull p := by
   have hl : γ⁻¹ * γ = 1 := funext fun i => inv_mul_cancel₀ (hγ i)
@@ -151,9 +121,6 @@ theorem rankFull_scale_iff {k D : ℕ} (γ : Fin k → GF128) (hγ : ∀ i, γ i
   exact ⟨fun h => AddSubgroup.map_injective hinj (h.trans htop.symm), fun h => h ▸ htop⟩
 
 open Classical in
-/-- **The rank bound's statement** at `k` points with `D` word coordinates each: coordinate `t` of point `i` is the
-constant `fix i t` where that is `some`, else its own uniform coin; at most a fraction `2^-κ` of the coins leave the
-mask slot's weights rank-deficient. -/
 def RankBound (k D : ℕ) (fix : Fin k → Fin D → Option GF128) (κ : ℕ) : Prop :=
   (Finset.univ.filter fun r : Fin k → Fin D → GF128 => ¬ RankFull fun i t => (fix i t).getD (r i t)).card * 2 ^ κ ≤
     Fintype.card (Fin k → Fin D → GF128)
@@ -164,12 +131,9 @@ coordinate a coin of its own. -/
 def deployedFix (i : Fin 4) (t : Fin 10) : Option GF128 :=
   if i.val % 2 = 1 ∧ t.val < 6 then some (Flock.pinned[t.val + 1]!) else none
 
-/-- **The deployed rank bound**: at most `2^-122 = 64·2^-128` of the coins refuse, the part of a table's `4·m·2^-128`
-the ten coordinates the bridge chooses take (`rankBoundAt_of_deployed`, in `Zk.RankBridge`; the other `m − 17` take
-`4·(m − 17)·2^-128`). Proved: `deployedRankBound`, in `Zk.RankDeployed`. -/
+/-- At most `2^-122 = 64·2^-128` of the coins refuse: the part of a table's `4·m·2^-128` that the ten coordinates the
+bridge chooses take. -/
 def DeployedRankBound : Prop := RankBound 4 10 deployedFix 122
-
-/-! ## The prover's check -/
 
 open Flock (F128)
 open FlockSoundness.Discharge.Composed (eqWord maskWordsOf)
@@ -191,7 +155,6 @@ def maskRankOk (pts : Array (List F128)) (words : List ℕ) : Bool :=
   decide (∀ a : Fin pts.size → F128, ∃ f : Fin words.length → Bool,
     ∀ i, sumSel f (fun j => eqWord pts[i] words[j]) = a i)
 
-/-- The weight vector at the word `x`, in `GF(2^128)^k`: `eq(p_i, x)` at every point. -/
 def weights (pts : Array (List F128)) (x : ℕ) : Fin pts.size → GF128 := fun i => GF128.of (eqWord pts[i] x)
 
 theorem of_foldl_sel {n : ℕ} (f : Fin n → Bool) (g : Fin n → F128) :
@@ -208,8 +171,6 @@ theorem of_sumSel {n : ℕ} (f : Fin n → Bool) (g : Fin n → F128) :
     GF128.of (sumSel f g) = ∑ j, if f j then GF128.of (g j) else 0 := by
   rw [sumSel, of_foldl_sel, ← GF128.zero_eq, zero_add, Fin.sum_univ_def]
 
-/-- **The check is the span's**: `maskRankOk` holds exactly when the weight vectors over the words generate
-`GF(2^128)^k` as an additive group, their GF(2)-span. -/
 theorem maskRankOk_iff (pts : Array (List F128)) (words : List ℕ) :
     maskRankOk pts words = true ↔
       AddSubgroup.closure (Set.range fun j : Fin words.length => weights pts words[j]) = ⊤ := by
@@ -258,8 +219,6 @@ theorem maskRankOk_iff (pts : Array (List F128)) (words : List ℕ) :
 
 end
 
-/-- **Full rank at the points gives it at their first ones** (rep 0's check, from rep 1's at the four points): the
-projection to the first points is a surjective ring hom carrying each weight vector to the shorter one. -/
 theorem maskRankOk_append_left {A B : Array (List F128)} {words : List ℕ} (h : maskRankOk (A ++ B) words = true) :
     maskRankOk A words = true := by
   rw [maskRankOk_iff] at h ⊢
@@ -304,39 +263,24 @@ theorem masksOf_getElem! {sts : Array Flock.Stmt} {i : ℕ} (hi : i < sts.size) 
   rw [getElem!_pos (masksOf sts) i (by simpa [masksOf] using hi), getElem!_pos sts i hi]
   simp [masksOf]
 
-/-! ## At the verifier's coins -/
-
 open FlockDeploy (Coin setupOf Ins)
 
-/-- **A rep's claim points at the verifier's coins** `r`, the rep's first coin the `n`th: its round `j`'s element `e`
-is coin `n + j`'s. -/
 def claimsAt (st : Flock.Stmt) {k : ℕ} (r : Fin k → Coin) (n : ℕ) : Array (List F128) :=
   claimPoints st.m st.c.kLog fun j e => (Claims.coinSeq r (n + j)).at e
 
-/-- **A table's rank checks pass** at the coins `r` (`MaskRankT`): its rep `0`'s claim points from coin `n₀` and its rep
-`1`'s from coin `n₁`, the four points rep `1`'s check reads, have full rank over the mask slot's words. -/
 def MaskRankAt (st : Flock.Stmt) {k : ℕ} (r : Fin k → Coin) (n₀ n₁ : ℕ) : Prop :=
   maskRankOk (claimsAt st r n₀ ++ claimsAt st r n₁) (maskWordsOf st) = true
 
-/-- **What the rank bound reads of a table**, which every table of a masked session in scope has
-(`layoutOk_of_scope`): it passes `Zk.shapeOk` (`25 ≤ m ≤ 35`, a mask slot of `2^13` bits or more and `N ≥ 576`
-words), its `m` is `k_log + nbl`, and its mask slot is at least a word and inside the block. -/
 def LayoutOk (st : Flock.Stmt) : Prop :=
   Flock.Zk.shapeOk st = .ok () ∧ st.m = st.c.kLog + st.nbl ∧
     ∀ r ∈ st.c.ranges.toList, r.kind = Flock.Kind.mask → 7 ≤ r.slotLog ∧ r.start + 2 ^ r.slotLog ≤ 2 ^ st.c.kLog
 
-/-- **The rank bound at one table**: where rep `1`'s coins come after rep `0`'s claim points, the coins at which its
-rank checks refuse have probability at most `4·m/2^128`. -/
 def RankBoundAt (st : Flock.Stmt) : Prop :=
   ∀ k n₀ n₁ : ℕ, n₀ + (st.m + st.c.kLog) ≤ n₁ →
     Claims.Pr (fun r : Fin k → Coin => n₁ + (st.m + st.c.kLog) ≤ k ∧ ¬ MaskRankAt st r n₀ n₁) ≤ 4 * st.m / 2 ^ 128
 
-/-- **The rank bound at the verifier's coins**: `RankBoundAt` at every table of the layout the setup admits. It follows
-from `DeployedRankBound` and `SmallSlotBound` (`maskRankBound_of`, in `Zk.RankBridge`), both proved, so it holds
-(`maskRankBound`, in `Zk.RankDeployed`). -/
+/-- `RankBoundAt` at every table of the layout the setup admits; it holds (`maskRankBound`). -/
 def MaskRankBound : Prop := ∀ st : Flock.Stmt, LayoutOk st → RankBoundAt st
-
-/-! ## The slot's size -/
 
 theorem maskWordsOf_length (st : Flock.Stmt) (r : Flock.Range)
     (hr : st.c.ranges.find? (·.kind == Flock.Kind.mask) = some r) :
@@ -346,8 +290,6 @@ theorem maskWordsOf_length (st : Flock.Stmt) (r : Flock.Range)
   rw [hr]
   simp [List.length_flatMap]
 
-/-- **An in-scope masked table has `N = 2^D ≥ 1024` mask words** (`D ≥ 10`): the setup refuses a `--zk` statement with
-fewer than `128·4 + 64 = 576` (`Zk.shapeOk`, `zk_shape_ok`), and `N = 2^(nbl + slot_log − 7)` is a power of two. -/
 theorem maskWords_ge {st : Flock.Stmt} (h : Flock.Zk.shapeOk st = .ok ()) :
     ∃ D, 10 ≤ D ∧ (maskWordsOf st).length = 2 ^ D := by
   unfold Flock.Zk.shapeOk at h

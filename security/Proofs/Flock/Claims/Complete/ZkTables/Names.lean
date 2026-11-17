@@ -45,20 +45,8 @@ import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
 import Std.Data.String.ToNat
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# The tables' names and the rep streams' are distinct
-
-The record keys each table's `root_B` by the table's name and finds each rep's stream and proof digest by the stream's
-name, so at several tables those names must differ.
-
-* `tableNames_nodup`: `Tags.tableNames` names each table `{table}-{j}`, `j` padded to two digits, so each name's
-  suffix reads back as its index (`pad_toNat?`, through `String.toNat?`) and no two names agree (`tableName_inj`).
-* `repNames_nodup`: rep `r < 2` of table `t` is `{t}/rep{r}`, so distinct tables give distinct rep streams
-  (`repName_inj`, the last digit then the prefix).
-* `rootBList_distinct`: the record's `root_b` object has one key per table.
-* `Case.names`: at a good case of several tables the spec names its tables `Tags.tableNames`, so they are distinct
-  (`Case.tables_nodup`, at any number of tables).
--/
+/-! The tables' names and the rep streams' are distinct, because the record keys each table's `root_B` and each rep's
+stream by them. -/
 
 @[expose] public section
 
@@ -68,7 +56,6 @@ namespace FlockComplete.ZkTables
 
 open FlockSoundness FlockSoundness.Refine FlockSoundness.Discharge FlockSoundness.Discharge.Exec JsonRT
 
-/-- **A table name's suffix reads back as its index**: `j` padded to two digits. -/
 theorem pad_toNat? (j : ℕ) : (toString (if j < 10 then "0" else "") ++ toString j).toNat? = some j := by
   show ((if j < 10 then "0" else "") ++ Nat.repr j).toNat? = some j
   split
@@ -93,7 +80,6 @@ theorem tableName_inj (t : String) {j k : ℕ}
   rw [pad_toNat?, pad_toNat?] at this
   exact Option.some.inj this
 
-/-- **`Tags.tableNames` names no two tables alike.** -/
 theorem tableNames_nodup (t : Tags) (count : ℕ) : (t.tableNames count).toList.Nodup := by
   unfold Tags.tableNames
   split
@@ -109,7 +95,6 @@ theorem repName_inj {a b : String} {r r' : ℕ} (hr : r < 2) (hr' : r' < 2) (h :
     simp [String.toList_append, show Nat.toDigits 10 1 = ['1'] from rfl] at this
     try exact ⟨String.toList_inj.1 this, rfl⟩
 
-/-- **Distinct tables give distinct rep streams.** -/
 theorem repNames_nodup {spec : SessionSpec} (h : spec.tables.toList.Nodup) :
     (spec.repStreams.toList.map (·.2.2)).Nodup := by
   rw [FlockDeploy.repStreams_toList, List.map_map]
@@ -123,7 +108,6 @@ theorem repNames_nodup {spec : SessionSpec} (h : spec.tables.toList.Nodup) :
   have := (List.Nodup.getElem_inj_iff h).1 h1
   omega
 
-/-- **The record's `root_b` object has one key per table.** -/
 theorem rootBList_distinct {spec : SessionSpec} (h : spec.tables.toList.Nodup) (f : ByteArray → ByteArray)
     {rootB : Array ByteArray} (hs : rootB.size = spec.tables.size) : JsonRT.Distinct (rootBList spec f rootB) := by
   unfold rootBList JsonRT.Distinct
@@ -136,7 +120,6 @@ theorem rootBList_distinct {spec : SessionSpec} (h : spec.tables.toList.Nodup) (
 
 variable {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
 
-/-- **At a good case of several tables the spec names its tables `Tags.tableNames`.** -/
 theorem Case.names (c : Case H rel) (hc : 1 < c.sts.size) : ∃ t : Tags, c.spec.tables = t.tableNames c.sts.size := by
   obtain ⟨p, hp, hsc⟩ := (Readable.scope_iff (deployZk rel) rel (readOf true) rfl
     (fun _ _ h => readOf_zk h) c.x).1 c.scope
@@ -156,7 +139,6 @@ theorem Case.names (c : Case H rel) (hc : 1 < c.sts.size) : ∃ t : Tags, c.spec
     simp at hc
   · exact ⟨_, by rw [(setupTables_names hc' hset).1, hsz]⟩
 
-/-- **At a good case no two tables are named alike.** -/
 theorem Case.tables_nodup (c : Case H rel) : c.spec.tables.toList.Nodup := by
   rcases (show c.sts.size = 1 ∨ 1 < c.sts.size by have := c.tables.1; omega) with h1 | hc
   · obtain ⟨-, -, hsp, -⟩ := c.tables

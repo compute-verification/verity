@@ -4,21 +4,7 @@ public import Flock.With.Zk
 public import Proofs.Flock.Claims.Complete.Zk.Ligerito
 public import Proofs.Flock.Claims.Complete.Zk.Tape
 
-/-!
-# The masked prover's inner proof
-
-Live PROTOCOL.md §5 from the prover's side (upstream's `InnerCommit` and `prove_inner`), as `Zk.verifyInnerWith` reads
-it.
-
-* **The pads' commitment** (`innerCommitP`): the rows `h ‖ pad_h` and `μ ‖ pad_μ` encoded (`Zk.codeAt` at the
-  `n = 8·nextPow2(s + K_PAD)` columns), leaf `j` the `hm96-sha512/v1` leaf of `SHA-512(C_h[j] ‖ C_μ[j])` under its
-  salt, SHA-512 nodes up to the root. The root is bound before the zerocheck's first coin (`zerocheckPZk`).
-* **The inner proof** (`innerP`): after `LABEL_INNER` and the masked `final_c`, the sacrifice coin `ε` and the triple's
-  openings `ρ = ε h_a + x`, `σ = h_b + y`, the batching coins over every constraint and the triple's, then (if the
-  batched constraint holds on the pads, as upstream's `SelfCheck::Stop` checks) `τ = ⟨c, μ⟩` committed, `β` (refused
-  at `0`, as upstream does), `Y = (h ‖ pad_h) + β (μ ‖ pad_μ)`, and the opened columns at the query coins with their
-  salts and paths.
--/
+/-! The masked prover's inner proof (live PROTOCOL.md §5 from the prover's side), as `Zk.verifyInnerWith` reads it. -/
 
 @[expose] public section
 

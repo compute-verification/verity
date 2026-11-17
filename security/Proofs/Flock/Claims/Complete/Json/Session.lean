@@ -39,29 +39,8 @@ import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# What the one-table honest session returns and sends
-
-`sessionP_facts`: at one table, with no keyed coin tree, a run of the pure session from no sends returns the printed
-honest record (`printJ` of `recordObj`) of a non-empty `root_B` under `2^64` bytes, the link's points off the first
-reply's coin (`ptsOf`), and one well-formed stream per rep stream (`RoundsOk`); the table's extra claims evaluate at
-those points; and its sends are the link of that `root_B` and no public words, then the streams' rounds in order
-(`SessionFacts`). It rests on two facts about the prover's pieces, taken as hypotheses: the commitment's cap, at the
-schedule's first level, is non-empty and under `2^64` bytes, and each rep records a round, each of at most `65536` coins
-(`RepOk`).
-
-* **Returns through `throw`, `monadLift` and `mapM`** (`Ret.throw'`, `Ret.monadLift`, `Ret.mapM_array`), on top of
-  `Shape`'s `Ret`.
-* **The record's JSON is `recordObj`** (`recordJson_eq`): `recordJson` through `Hashes.ofSha512 h` returns it,
-  printed (`printJ`).
-* **The sends**: the schedules and the commitment send nothing (`Still`; `pureS` runs a computation of `V` in `PS`, so
-  `commitP` there is `commitP` in `V`, `commitP_pureS`), the link pushes its body (`link_go`), and a `for` loop keeps an
-  invariant of its state and the sends (`forIn_array_inv`).
-* **The rounds**: a rep's transcript records a round exactly where it sends one (`squeezeP`), so the rounds a rep adds
-  are the sends it adds, in order, each with the coin at its index (`Recs`). The simulation `recS` relates a transcript
-  computation of the pure session to itself when every run adds rounds and sends that way (`Rec`); every prover function
-  from the squeeze to the rep is one (`squeezeP_rec`, …, `repP_rec`).
--/
+/-! What the one-table honest session returns and sends (`sessionP_facts`), from two facts about the prover's pieces
+taken as hypotheses: the commitment cap's size and `RepOk`. -/
 
 @[expose] public section
 
@@ -121,7 +100,6 @@ theorem foldl_push_map {α β : Type} (f : α → β) (xs : Array α) :
     xs.foldl (fun b a => b.push (f a)) #[] = xs.map f := by
   simp
 
-/-- **The session's record JSON is `recordObj`, printed**, with no keyed coin tree. -/
 theorem recordJson_eq (h : ByteArray → ByteArray) {spec : SessionSpec} (hct : spec.coinTree = none)
     (rootB : Array ByteArray) (points : Array (Array F128)) (streams : Array (Array Round)) (proofs : Array ByteArray) :
     recordJson (Hashes.ofSha512 h : Hashes PS) spec rootB points streams proofs =
@@ -133,17 +111,13 @@ theorem recordJson_eq (h : ByteArray → ByteArray) {spec : SessionSpec} (hct : 
   unfold recordObj recordList linkObj linkList rootBList streamObj streamList roundObj proofObj proofList lbOf yOf
   rfl
 
-/-- A recorded rep stream S12 accepts: it records a round, each of `1 ≤ n ≤ 65536` coins. -/
 def RoundsOk (rs : Array Round) : Prop := 0 < rs.size ∧ ∀ r ∈ rs, 1 ≤ r.n ∧ r.n ≤ 65536 ∧ r.coins.size = r.n
 
-/-- What a rep's recorded rounds need beyond being its sends (`Recs`): a round, each of at most `65536` coins. -/
 def RepOk (rs : Array Round) : Prop := 0 < rs.size ∧ ∀ r ∈ rs, r.n ≤ 65536
 
-/-- The link's points read off the link's coin. -/
 def ptsOf (spec : SessionSpec) (c : ℕ → F128) : Array (Array F128) :=
   (Array.range spec.points).map fun p => (Array.range spec.mPts).map fun j => c (p * spec.mPts + j)
 
-/-- One table's two rep streams. -/
 theorem repStreams_one {spec : SessionSpec} {t : String} (ht : spec.tables = #[t]) :
     spec.repStreams = #[(0, 0, s!"{t}/rep{(0 : Nat)}"), (0, 1, s!"{t}/rep{(1 : Nat)}")] := by
   unfold SessionSpec.repStreams
@@ -158,9 +132,6 @@ theorem eq_singleton_of {α : Type} {xs : Array α} (h : xs.size = 1) : xs = #[x
     subst this
     rfl
 
-/-! ## The sends -/
-
-/-- A computation that leaves the sends as they were. -/
 def Still {α : Type} (y : PS α) : Prop := ∀ l, (y.go l).2 = l
 
 theorem go_pure {α : Type} (a : α) (l : Array Claims.Msg) : (Pure.pure a : PS α).go l = (.ok a, l) := rfl
@@ -209,7 +180,6 @@ theorem Still.go {α : Type} {y : PS α} (hy : Still y) {l l' : Array Claims.Msg
 theorem Ret.go {α : Type} {y : PS α} {P : α → Prop} (hy : Ret y P) {l l' : Array Claims.Msg} {a : α}
     (h : y.go l = (.ok a, l')) : P a := hy l a l' h
 
-/-- The pure computations of `V`, run in `PS`: each leaves the sends as they were. -/
 def pureS : With.Sim V PS where
   R x y := ∀ l, y.go l = (x, l)
   pure _ _ := rfl
@@ -246,7 +216,6 @@ theorem Still.of_pureS {α : Type} {x : V α} {y : PS α} (h : pureS.R x y) : St
 theorem monadLift_go {α : Type} (v : V α) (l : Array Claims.Msg) : (monadLift v : PS α).go l = (v, l) := by
   cases v <;> rfl
 
-/-- A `for` loop over a list in `s`, with an invariant of the steps taken, the loop's state and the sends. -/
 theorem forIn_list_inv {α β : Type} (f : α → β → PS (ForInStep β)) (inv : ℕ → β → Array Claims.Msg → Prop)
     (s : List α) (hs : ∀ k a b l r l', a ∈ s → inv k b l → (f a b).go l = (.ok r, l') →
       ∃ b', r = .yield b' ∧ inv (k + 1) b' l') :
@@ -263,7 +232,6 @@ theorem forIn_list_inv {α β : Type} (f : α → β → PS (ForInStep β)) (inv
     have := forIn_list_inv f inv s hs xs (fun x hx' => hx x (List.mem_cons_of_mem a hx')) (k + 1) b₁ l₁ b' l' h₁ e2
     rwa [List.length_cons, show k + (xs.length + 1) = k + 1 + xs.length by omega]
 
-/-- A `for` loop over an array, with an invariant of the steps taken, the loop's state and the sends. -/
 theorem forIn_array_inv {α β : Type} (xs : Array α) (f : α → β → PS (ForInStep β))
     (inv : ℕ → β → Array Claims.Msg → Prop) (hs : ∀ k a b l r l', a ∈ xs → inv k b l → (f a b).go l = (.ok r, l') →
       ∃ b', r = .yield b' ∧ inv (k + 1) b' l')
@@ -274,14 +242,9 @@ theorem forIn_array_inv {α β : Type} (xs : Array α) (f : α → β → PS (Fo
     xs.toList (fun _ h => h) 0 b l b' l' h0 e
   simpa using this
 
-/-! ## The rounds -/
-
-/-- Round `r` is the send `b` at index `i`: its retained bytes are the send's body, and its coins, at least one, the
-first `n` of the coin `resp i` reads back as. -/
 def RoundIs (resp : ℕ → Claims.Msg) (i : ℕ) (b : Claims.Msg) (r : Round) : Prop :=
   ∃ c, r.bytes = some c ∧ b = Claims.toMsg c ∧ 0 < r.n ∧ r.coins = (Array.range r.n).map (coinOf (resp i))
 
-/-- The rounds `rs` are the sends `bs` from index `i` on. -/
 def Recs (resp : ℕ → Claims.Msg) : ℕ → List Round → List Claims.Msg → Prop
   | _, [], [] => True
   | i, r :: rs, b :: bs => RoundIs resp i b r ∧ Recs resp (i + 1) rs bs
@@ -314,7 +277,6 @@ theorem Recs.append {resp : ℕ → Claims.Msg} :
   | _, [], _ :: _, _, _, h, _ => h.elim
   | _, _ :: _, [], _, _, h, _ => h.elim
 
-/-- A transcript computation of the pure session that adds, on every run, rounds that are the sends it adds. -/
 def Rec (resp : ℕ → Claims.Msg) {α : Type} (y : TMW PS α) : Prop :=
   ∀ (t : Transcript) (l : Array Claims.Msg) (a : α) (t' : Transcript) (l' : Array Claims.Msg),
     (y.run t).go l = (.ok (a, t'), l') →
@@ -325,7 +287,6 @@ theorem Rec.same {resp : ℕ → Claims.Msg} {t t' : Transcript} {l l' : Array C
     ∃ rs bs, t'.rounds.toList = t.rounds.toList ++ rs ∧ l'.toList = l.toList ++ bs ∧ Recs resp l.size rs bs :=
   ⟨[], [], by simp [ht], by simp [hl], trivial⟩
 
-/-- **The simulation of `Rec`**: a transcript computation of the pure session is related to itself when it is `Rec`. -/
 def recS (resp : ℕ → Claims.Msg) : With.Sim (TMW PS) (TMW PS) where
   R _ y := Rec resp y
   pure a t l a' t' l' h := by
@@ -380,7 +341,6 @@ theorem squeezeP_rec (resp : ℕ → Claims.Msg) (kind : UInt8) (n : ℕ) :
       [Claims.toMsg (t.framed kind n)], by simp, by simp, ⟨t.framed kind n, rfl, rfl, Nat.pos_of_ne_zero hn, rfl⟩,
       trivial⟩
 
-/-- A verifier action that keeps the rounds. -/
 theorem liftTM_rec (resp : ℕ → Claims.Msg) {α : Type} (x : TM α)
     (hx : ∀ t a t', x t = .ok (a, t') → t'.rounds = t.rounds) : (recS resp).R (liftTM x : TMW PS α) (liftTM x) := by
   intro t l a t' l' h
@@ -489,7 +449,6 @@ theorem ligeritoP_rec (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) 
     challengeP_rec resp, oodIntroP_rec resp, queryP_rec resp, commitP_rec resp h, label_rec resp, absorbF_rec resp,
     absorbBytes_rec resp]
 
-/-- **A rep's new rounds are its new sends.** -/
 theorem repP_rec (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (st : Setup) (sch : Schedule) (tr : Trace)
     (t : Array F128) (cm0 : Commit) (extras : Array Claim) (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64) :
     (recS resp).R (repP (asksS resp) (Hashes.ofSha512 h) st sch tr t cm0 extras salt nonce)
@@ -502,10 +461,6 @@ theorem Rec.go {resp : ℕ → Claims.Msg} {α : Type} {y : TMW PS α} (hy : (re
     ∃ rs bs, t'.rounds.toList = t.rounds.toList ++ rs ∧ l'.toList = l.toList ++ bs ∧ Recs resp l.size rs bs :=
   hy t l a t' l' h
 
-/-- **What the one-table session returns and sends**: its record is the honest record of a non-empty `root_B`, the
-link's points off the first reply's coin, and one well-formed stream per rep stream; the table's extra claims evaluate
-at those points; and its sends are the link of that `root_B` and no public words, then the streams' rounds in order,
-each from index `1` on (`Recs`). -/
 def SessionFacts (h : ByteArray → ByteArray) (resp : ℕ → Claims.Msg) (spec : SessionSpec) (st : Setup)
     (r : String × Array ByteArray) (bodies : Array Claims.Msg) : Prop :=
   ∃ rb streams, r.1 = printJ (recordObj spec h #[rb] (ptsOf spec (coinOf (resp 0))) streams r.2) ∧
@@ -513,7 +468,6 @@ def SessionFacts (h : ByteArray → ByteArray) (resp : ℕ → Claims.Msg) (spec
     (∃ e, st.extra (ptsOf spec (coinOf (resp 0))) = .ok e) ∧
     ∃ bs, bodies.toList = linkBody [rb] [ByteArray.empty] :: bs ∧ Recs resp 1 (streams.toList.flatMap Array.toList) bs
 
-/-- **The one-table session's facts**, given a non-empty commitment cap under `2^64` bytes and well-formed rep rounds. -/
 theorem sessionP_facts (H : Claims.Msg → Claims.Msg) (resp : ℕ → Claims.Msg) {spec : SessionSpec} {t : String}
     (ht : spec.tables = #[t]) (hct : spec.coinTree = none) (st : Setup) (trs : Array Trace) (tape : Tape)
     (hC : ∀ sch, fast100 st.m = some sch → ∀ g salt cm,

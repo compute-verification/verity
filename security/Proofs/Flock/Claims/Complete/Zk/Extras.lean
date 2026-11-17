@@ -43,14 +43,7 @@ import Proofs.Flock.Claims.Scope.Sizes
 import Proofs.Flock.Claims.Scope.StmtOf
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# The extra claims' ring-switch algebra at the deployed relation (`RsExtrasZk`)
-
-`rsExtrasZk`: at `Readable.relation`, from `RelS` alone, every extra claim a masked rep opens is met by its switched
-vector of the honest trace, as at the plain record (`claims_switch`): the masked case's one table is the statement the
-soundness proof plays, satisfied by the witness's bits (`CaseZk.model`, as `Case.model`), and the record's link points
-have `m_pts` coordinates (`RunZk.sess_points`).
--/
+/-! `RsExtrasZk` at the deployed relation, from `RelS` alone (`rsExtrasZk`). -/
 
 @[expose] public section
 
@@ -60,8 +53,6 @@ open Flock FlockDeploy FlockSoundness.Refine
 
 variable {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
 
-/-- **The statement the masked verifier parsed** at a good case: its tables are the case's, and the witness satisfies
-it. -/
 theorem _root_.FlockComplete.CaseZk.parsed (c : CaseZk H rel) :
     ∃ p : Readable.Parsed, Readable.parseBytes (readOf true) c.x = some p ∧ p.sts = c.sts ∧
       Claims.Flock.RelS (Readable.toReadable rel p) c.w := by
@@ -81,8 +72,6 @@ theorem _root_.FlockComplete.CaseZk.parsed (c : CaseZk H rel) :
   simp only [Except.ok.injEq, Prod.mk.injEq] at this
   exact this.2
 
-/-- **The masked case's statement, satisfied**: at a good masked case of the deployed relation, the one table `st` is
-well formed, its table's matrices are `stmtOf`'s, and the witness's bits satisfy `stmtOf st hwf (regionsOf st)`. -/
 theorem _root_.FlockComplete.CaseZk.model (c : CaseZk H Readable.relation) :
     ∃ st, c.sts = #[st] ∧ ∃ hwf : StmtWF st, RegionsWF st ∧
       (∀ a b : Fin (2 ^ st.c.kLog), FlockLevel3.placedA st a b = matA st a.val b.val ∧
@@ -122,7 +111,6 @@ theorem _root_.FlockComplete.CaseZk.model (c : CaseZk H Readable.relation) :
   rw [hA, hB] at this
   exact this
 
-/-- The masked record's link points have `m_pts` coordinates: `Record.decodeWith` checks it (S9). -/
 theorem _root_.FlockComplete.RunZk.sess_points (o : RunZk H rel) {st : Stmt} (hspec : o.spec = st.spec) :
     ∀ p ∈ o.sess.points.toList, p.size = st.mPts := by
   unfold RunZk.sess
@@ -144,7 +132,6 @@ open Flock FlockDeploy FlockSoundness.Refine FlockComplete.Replay
 
 local notation "𝔽" => FlockLevel3.GF128
 
-/-- **The extra claims' ring-switch algebra at the deployed relation**, from `RelS` alone. -/
 theorem rsExtrasZk (H : Claims.Msg → Claims.Msg) : RsExtrasZk H Readable.relation := by
   intro o i hi k hk
   obtain ⟨st, hsts, hwf, hrw, -, hsat⟩ := o.model

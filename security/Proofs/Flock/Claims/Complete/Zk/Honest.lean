@@ -34,20 +34,8 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# Flock's honest prover at the deployed masked verifier (`honestPZk`)
-
-The prover of `CompleteWith H (deployZk rel) honestPZk (δcZk H)`, against B's masked record
-(`FlockDeploy.V true`): `honestP`'s program (`PI`, the sends `asks`, SHA-512 the oracle `Hashes.pi`, `feed`) on the
-masked session (`sessionPZk`), with its tape `TapeZk`. It reads table `i`'s bit `a` at `i·2^m + a` (`tracesOf`), the
-relation's only at one table; the masked record's reference prover (`(deployZk rel).P`) is `ZkTables.honestPR`, which
-runs `ZkTables.honestP` (each table on its share, `honestPZk` at one table) at the tape's mask words.
-
-* **Its program on a statement** (`progZk`): on the session `setupOf true x` sets up, each table's trace from the
-  witness (`tracesOf`, the mask slot's words the witness's), the honest masked session, and the last message
-  `Final.encode ⟨x, record, proofs⟩`.
-* **The prover** (`honestPZk`): at the history `hist`, the program fed the verifier's replies so far.
--/
+/-! Flock's honest prover at the deployed masked verifier (`honestPZk`), whose reading of the witness is the relation's
+only at one table; the masked record's reference prover is `ZkTables.honestPR`. -/
 
 @[expose] public section
 

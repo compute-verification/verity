@@ -35,19 +35,8 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Complete.ZkTables.Count
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# The masked prover's message from the session's run
-
-A masked session that does not return (it throws at a refused coin) is sent by `prog` as the empty message, and the
-prover sends it once each of the session's sends is answered; before that, the prover sends the session's next body.
-
-* `feed_sim_ge`: fed at least as many answers as the program sends, `feed` returns the program's result.
-* `honestP_stops`: fed answers at which the session stops having sent at most that many, `honestP` sends `[]`.
-  `honestP_err`: fed `1 + rounds` answers (the session's sends are at most that many, `sessionPZk_sends`), at a session
-  that does not return at those answers. `honestPR_stops` and `honestPR_err` are the same for `honestPR`.
-* `honestP_sent`: fed fewer answers than the session sends, `honestP` sends the session's body at their count, tagged
-  `0`; `honestPR_sent` the same for `honestPR` where the answers show no outer coin `1`.
--/
+/-! A masked session that does not return is sent as `[]` once its sends are answered; before that the prover sends its
+next body. -/
 
 @[expose] public section
 
@@ -55,7 +44,6 @@ namespace FlockComplete
 
 open Flock FlockDeploy
 
-/-- **Fed at least the program's sends, `feed` returns its result.** -/
 theorem feed_sim_ge (H : Claims.Msg → Claims.Msg) (resp : ℕ → Claims.Msg) (p : PI Claims.Msg) :
     ∀ (i j : ℕ), (p.sim H resp i).1.length ≤ j →
       ((feed p ((List.range j).map fun k => resp (i + k))).eval H).1 = (p.sim H resp i).2 := by
@@ -84,8 +72,6 @@ namespace FlockComplete.ZkTables
 
 open Flock FlockDeploy
 
-/-- **A masked session that stops within the answers is sent as `[]`**: fed the answers `bs`, where the session
-answered by `bs` stops having sent at most `|bs|`, the honest masked prover's message is `[]`. -/
 theorem honestP_stops (H : Claims.Msg → Claims.Msg) (x : Claims.Msg) (w : Claims.Flock.Wit) (ω : TapeZk)
     {s : Ins} {spec : SessionSpec} {sts : Array Flock.Stmt} (hs : setupOf true x = some (s, spec, sts))
     (bs : List Claims.Msg) {e : String} {L : Array Claims.Msg}
@@ -114,8 +100,6 @@ theorem honestP_stops (H : Claims.Msg → Claims.Msg) (x : Claims.Msg) (w : Clai
   simp only [Nat.zero_add, map_getD_range] at key
   rw [key, hsim]
 
-/-- **Fed fewer answers than the session sends, `honestP` sends its next body**: fed the answers `bs`, where the
-session answered by `bs` sends more than `|bs|` bodies, the honest masked prover's message is body `|bs|`, tagged `0`. -/
 theorem honestP_sent (H : Claims.Msg → Claims.Msg) (x : Claims.Msg) (w : Claims.Flock.Wit) (ω : TapeZk)
     {s : Ins} {spec : SessionSpec} {sts : Array Flock.Stmt} (hs : setupOf true x = some (s, spec, sts))
     (bs : List Claims.Msg) {R : Except String (String × Array ByteArray)} {L : Array Claims.Msg}
@@ -145,9 +129,6 @@ theorem honestP_sent (H : Claims.Msg → Claims.Msg) (x : Claims.Msg) (w : Claim
     List.getD_eq_getElem _ _ (by rw [List.length_map]; exact hl), List.getElem_map,
     getElem!_pos bs'.toArray bs.length (by rw [List.size_toArray]; exact hl), List.getElem_toArray]
 
-/-- **A masked session that does not return is sent as `[]`**: fed the answers `bs`, at least `1 + rounds` of them, where
-the session answered by `bs` does not return, the honest masked prover's message is `[]` (`honestP_stops`; the
-session sends at most `1 + rounds`, `sessionPZk_sends`). -/
 theorem honestP_err (H : Claims.Msg → Claims.Msg) (x : Claims.Msg) (w : Claims.Flock.Wit) (ω : TapeZk)
     {s : Ins} {spec : SessionSpec} {sts : Array Flock.Stmt} (hs : setupOf true x = some (s, spec, sts))
     (hspec : spec.tables.size = sts.size) (hm : ∀ j (hj : j < sts.size), 6 ≤ sts[j].m)
@@ -163,8 +144,6 @@ theorem honestP_err (H : Claims.Msg → Claims.Msg) (x : Claims.Msg) (w : Claims
   | ok r => exact absurd hY (herr r L)
   | error e => exact honestP_stops H x w ω hs bs hY (by omega)
 
-/-- **`honestPR` sends `[]` after a session that does not return**: at a history whose answers `bs`, at least
-`1 + rounds` of them, leave the session on the mask witness (`maskWOf`) not returning. -/
 theorem honestPR_err (H : Claims.Msg → Claims.Msg) (x : Claims.Msg) (w : Claims.Flock.Wit) (ω : TapeZk)
     {s : Ins} {spec : SessionSpec} {sts : Array Flock.Stmt} (hs : setupOf true x = some (s, spec, sts))
     (hspec : spec.tables.size = sts.size) (hm : ∀ j (hj : j < sts.size), 6 ≤ sts[j].m)
@@ -181,8 +160,6 @@ theorem honestPR_err (H : Claims.Msg → Claims.Msg) (x : Claims.Msg) (w : Claim
   · rw [honestPR_stop ho]
     rfl
 
-/-- **`honestPR` sends `[]` after a session that stops within the answers**: at a history whose answers `bs` leave the
-session on the mask witness (`maskWOf`) stopped having sent at most `|bs|`. -/
 theorem honestPR_stops (H : Claims.Msg → Claims.Msg) (x : Claims.Msg) (w : Claims.Flock.Wit) (ω : TapeZk)
     {s : Ins} {spec : SessionSpec} {sts : Array Flock.Stmt} (hs : setupOf true x = some (s, spec, sts))
     (hist : List (Claims.Msg × Claims.Msg)) (bs : List Claims.Msg) (hh : hist.map Prod.snd = bs)
@@ -201,9 +178,6 @@ theorem honestPR_stops (H : Claims.Msg → Claims.Msg) (x : Claims.Msg) (w : Cla
   · rw [honestPR_stop ho]
     rfl
 
-/-- **`honestPR` sends the session's next body at a history with no outer hit**: where the answers `bs` show no outer
-coin `1` and the session on the mask witness (`maskWOf`), answered by them, sends more than `|bs|` bodies, its message
-is body `|bs|`, tagged `0` (`honestP_sent`). -/
 theorem honestPR_sent (H : Claims.Msg → Claims.Msg) (x : Claims.Msg) (w : Claims.Flock.Wit) (ω : TapeZk)
     {s : Ins} {spec : SessionSpec} {sts : Array Flock.Stmt} (hs : setupOf true x = some (s, spec, sts))
     (hist : List (Claims.Msg × Claims.Msg)) (bs : List Claims.Msg) (hh : hist.map Prod.snd = bs)

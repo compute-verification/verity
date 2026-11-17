@@ -44,17 +44,8 @@ import Proofs.Flock.Claims.Complete.Zk.Level0Shape
 import Proofs.Flock.Soundness.Discharge.ZkExec.RunsSeams
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# The honest masked Ligerito meets the masked model's final identity
-
-`Lg.honest` for the masked prover (`ligeritoPZk`) against the masked verifier's model (`outZ`).
-
-* **The `--zk` schedule's facts** (`zkSch_facts`): fast100's dimensions and levels, and level 0's `t_pad ≤ 2^cols`.
-* **Level 0 ends in `Mid`** (`mid_lv0Z`): after the lane rounds the prover's table is the split of the blinded fold
-  `y₁' = f + ρ_0 R_{2r} + ρ_1 R_{2r+1}` and the claim is `T' = ⟨W, y₁'⟩`; level 0's masked consistency claim
-  (`Sync.closeZk`, the padding cancelled by `ybar`) then keeps it as plain's close does.
-* **The last level** (`goal_lastZ`): plain's `goal_last` at the masked model's level loop.
--/
+/-! The honest masked Ligerito against the masked verifier's model: level 0 ends in `Mid`, and the last level meets the
+final identity. -/
 
 @[expose] public section
 
@@ -66,10 +57,6 @@ local notation "𝕂" => FlockLevel3.GF256
 
 variable {wideLeaf : Bool}
 
-/-! ## The `--zk` schedule -/
-
-/-- **The `--zk` schedule's facts**: fast100's dimensions, levels and caps, and level 0's `t_pad` padding coefficients
-within its `2^cols` columns. -/
 theorem zkSch_facts {m : ℕ} (h1 : 25 ≤ m) (h2 : m ≤ 35) {v : Schedule × ℕ} (h : Zk.schedule wideLeaf m = .ok v) :
     v.1.n ≠ 0 ∧ 1 ≤ v.1.k0 ∧ 2 ≤ v.1.levels.size ∧ v.1.k0 + 3 * (v.1.levels.size - 1) ≤ v.1.n ∧
       (∀ j < v.1.levels.size, (v.1.levels.getD j default).q ≠ 0) ∧
@@ -101,13 +88,10 @@ theorem zkSch_facts {m : ℕ} (h1 : 25 ≤ m) (h2 : m ≤ 35) {v : Schedule × �
     hlig.cap, by have := hlig.dims; omega⟩
   exact Nat.pos_iff_ne_zero.1 (hlv _ (getD_mem _ hj)).2.1
 
-/-! ## The masked prover's own steps -/
-
 section Steps
 
 variable {p : LigeritoProof} {L : ℕ} {β : Type}
 
-/-- An F256 absorbed, read by the model as `vM`: they agree once the rest of the run fixes `v = vM`. -/
 theorem HRuns.absorbKM (v vM : F256) (c : Cur) (tm : Transcript) (J : TW → Prop) :
     HRuns p L (liftT (liftTM (absorbK v))) c tm c (ap (pKv vM) tm) (fun _ => True) (fun _ => v = vM) J
       fun _ => J := by
@@ -118,7 +102,6 @@ theorem HRuns.absorbKM (v vM : F256) (c : Cur) (tm : Transcript) (J : TW → Pro
   · exact (HRuns.absorb (p := p) (L := L) _ (pKv v) (fun t => Flock.RecAlgebra.absorbSlice_eq _ t) c tm J).2
       st t l b st' t' l' hl h hE trivial hc ht hJ
 
-/-- F coordinates absorbed, read by the model as `vsM`: they agree once the rest of the run fixes `vs = vsM`. -/
 theorem HRuns.absorbSliceM (vs vsM : Array F128) (c : Cur) (tm : Transcript) (J : TW → Prop) :
     HRuns p L (liftT (liftTM (absorbSlice vs))) c tm c (ap (pSlice vsM) tm) (fun _ => True) (fun _ => vs = vsM) J
       fun _ => J := by
@@ -134,7 +117,6 @@ theorem HRuns.label (s : String) (c : Cur) (tm : Transcript) (J : TW → Prop) :
       fun _ => J :=
   HRuns.absorb _ _ (fun t => Flock.RecAlgebra.label_eq s t) c tm J
 
-/-- A refusal followed by anything never returns. -/
 theorem HRuns.throwBind {α : Type} (e : String) (f : α → LP PS β) (c c' : Cur) (tm tm' : Transcript)
     (Q Xb : β → Prop) (J : TW → Prop) (J' : β → TW → Prop) :
     HRuns p L (throw e >>= f) c tm c' tm' Q Xb J J' := by
@@ -144,8 +126,6 @@ theorem HRuns.throwBind {α : Type} (e : String) (f : α → LP PS β) (c c' : C
 
 end Steps
 
-/-! ## Level 0 -/
-
 section Mid
 
 variable {P : LigeritoProof} {cf : ℕ → ℕ → F128}
@@ -154,10 +134,6 @@ theorem preZ_size (P : LigeritoProof) (cf : ℕ → ℕ → F128) (sch : Schedul
     (zl : Zk.Level0) (t : Transcript) : (preZ P cf sch T cap zl t).1.1.size = sch.k0 :=
   (laneRun_fields P cf sch.k0 zl.msgs _ _ sch.k0 le_rfl).2.2.2.2.2.2.1
 
-/-- **Level 0 ends in `Mid`** at the masked model's level-loop start: from the claim `T'` after the lane rounds on the
-split of the blinded fold `y₁'`, the honest prover's commitment `cm1` of that split, two out-of-domain claims on it, its
-query against the masked level-0 commitment `cm0` of `tb` and its padded consistency claim (`ybar` the padding's
-combination at the lane coins and the pair's coins). -/
 theorem mid_lv0Z {sch : Schedule} {T : F128} {cap : Array ByteArray} {t : Transcript} {zl : Zk.Level0}
     {cm0 cm1 : Commit} {tb b : Array F128} {extra lanePad : ℕ → ℕ → F128} (hb : b.size = 2 ^ sch.n)
     (hk : sch.k0 ≤ sch.n) (hseam : LevelSeam (sch.levels.getD 0 default))
@@ -278,9 +254,6 @@ theorem mid_lv0Z {sch : Schedule} {T : F128} {cap : Array ByteArray} {t : Transc
     rw [hf.2.2.2.2.2.2.2.2, hH.2.2.2.2.2.2.1]
     simp
 
-/-- **The last level meets the final identity**: from `Mid` before the last level (the last commitment `cm` at level
-`R`), the honest prover's four challenges, whose split fold is the proof's `y_r`, and its query against `cm`, whose rows
-are the proof's last opening, the masked verifier's model ends with `lhsE y_r ext res = s`. -/
 theorem goal_lastZ {sch : Schedule} {T : F128} {cap : Array ByteArray} {t : Transcript} {zl : Zk.Level0}
     {b : Array F128} {basisAt : Array F256 → ℕ → Array F256} {j : ℕ} {x : Vars × LState × Transcript}
     (hx : x = loop P cf sch (x₀Z P cf sch T cap zl t) j) (hjR : j + 1 = sch.levels.size - 1)

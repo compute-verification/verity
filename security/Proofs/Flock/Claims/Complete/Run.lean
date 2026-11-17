@@ -35,23 +35,8 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# The honest run against the plain verifier
-
-The prover's side of `Claims.run` for a prover that replays a program (`feed`), and the plain verifier's side for a run
-whose sends are all of tag `0`.
-
-* **The program's run** (`PI.sim`): against `H`, send `i` answered by `resp i`; its sends and its result. `feed_sim`:
-  fed the first `j` answers, `feed` returns the program's `j`-th message (its sends, then its result).
-* **An accepted run** (`stepWith_acc`): a prover whose `j`-th message is `seq j` once it has seen the answers
-  `resp 0, …, resp (j − 1)`, against a verifier that answers each of the first `N` messages with `resp j` and accepts the
-  `(N + 1)`-th, is accepted within `N + 1` rounds.
-* **The honest run** (`honestRun`): the honest program's sends and last message, each send answered by its coin's
-  bytes. `run_acc_of`: when the statement sets up, against `H` as at SHA-512, the sends are all of tag `0`, fit the
-  verifier's rounds, the first
-  decodes as the link message and the last message as `Final`, and the shipped verdict and the custody checks pass on
-  that last message, `honestP` is accepted.
--/
+/-! The honest run against the plain verifier: `honestP` is accepted when the statement sets up and the honest run's
+messages pass the verifier's checks (`run_acc_of`). -/
 
 @[expose] public section
 
@@ -65,7 +50,6 @@ def PI.sim {α : Type} (H : Claims.Msg → Claims.Msg) (resp : ℕ → Claims.Ms
   | .query q k, i => PI.sim H resp (k (H q)) i
   | .ask m k, i => (m :: (PI.sim H resp (k (resp i)) (i + 1)).1, (PI.sim H resp (k (resp i)) (i + 1)).2)
 
-/-- **Fed the first `j` answers, the program sends its `j`-th message**: its sends, then its result. -/
 theorem feed_sim (H : Claims.Msg → Claims.Msg) (resp : ℕ → Claims.Msg) (p : PI Claims.Msg) :
     ∀ (i j : ℕ), j ≤ (p.sim H resp i).1.length →
       ((feed p ((List.range j).map fun k => resp (i + k))).eval H).1 =
@@ -95,8 +79,6 @@ theorem feed_sim (H : Claims.Msg → Claims.Msg) (resp : ℕ → Claims.Msg) (p 
       simp only [feed, PI.sim, List.cons_append, List.getD_cons_succ]
       exact ih (resp i) (i + 1) j hj
 
-/-- **An accepted run**: the prover's `j`-th message is `seq j` once it has seen `resp 0, …, resp (j − 1)`; the verifier
-answers each of the first `N` messages with `resp j` and accepts the next; with `N + 1` rounds, the run accepts. -/
 theorem stepWith_acc {Ω : Type} (H : Claims.Msg → Claims.Msg) (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω)
     (vnext : List Claims.Msg → Claims.OC Claims.Out) (seq resp : ℕ → Claims.Msg) (N : ℕ)
     (hP : ∀ j ≤ N, ∀ hist : List (Claims.Msg × Claims.Msg), hist.map Prod.snd = (List.range j).map resp →
@@ -127,7 +109,6 @@ theorem stepWith_acc {Ω : Type} (H : Claims.Msg → Claims.Msg) (P : Claims.Pro
     simp only [Claims.stepWith, hP j (by omega) hist hh, e, hV j (by omega)]
     exact ih (j + 1) (by omega) n (by omega) _ _ hh'
 
-/-- A last message of tag `0` is answered by its coin. -/
 theorem act_coin {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin} {s : Ins} {spec : SessionSpec}
     {sts : Array Flock.Stmt} {t : Claims.Msg} {c : Coin} (hs : setupOf false x = some (s, spec, sts))
     (ha : as.getLast? = some (0 :: t)) (hc : cs.getLast? = some c) : act false x as cs = .coin c := by
@@ -135,7 +116,6 @@ theorem act_coin {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin} {s : I
   rw [hs, ha, hc]
   rfl
 
-/-- The last message is decided: after the link message, on the link, its coin, the round messages with theirs. -/
 theorem act_final {x : Claims.Msg} {a₁ : Claims.Msg} {rest : List Claims.Msg} {c₁ : Coin} {crest : List Coin}
     {s : Ins} {spec : SessionSpec} {sts : Array Flock.Stmt} {f : Claims.Msg} {F : Final}
     {link : List ByteArray × List ByteArray} (hs : setupOf false x = some (s, spec, sts))
@@ -164,14 +144,10 @@ theorem act_final {x : Claims.Msg} {a₁ : Claims.Msg} {rest : List Claims.Msg} 
   · rename_i h
     cases h
 
-/-- **The honest run** at the coins `r`: the honest program's sends, each answered by its coin's bytes, and its last
-message. -/
 def honestRun (H : Claims.Msg → Claims.Msg) (x : Claims.Msg) (w : Claims.Flock.Wit) (ω : Tape) {k : ℕ}
     (r : Fin k → Coin) : List Claims.Msg × Claims.Msg :=
   (prog x w ω).sim H (fun j => (Claims.coinSeq r j).bytes) 0
 
-/-- The round messages and their coins, as the verifier's decision reads them (`act`): every message after the first
-but the last, its tag dropped, with its coin. -/
 def midsOf : List Claims.Msg → List Coin → List (Claims.Msg × Coin)
   | _ :: rest, _ :: crest => (rest.dropLast.map List.tail).zip crest.dropLast
   | _, _ => []
@@ -183,10 +159,6 @@ theorem map_getD_range (L : List Claims.Msg) :
   simp only [List.getElem_map, List.getElem_range, List.getD_eq_getElem?_getD, List.getElem?_eq_getElem h2,
     Option.getD_some]
 
-/-- **The honest prover is accepted** at the coins `r` when the statement sets up, against `H` as at SHA-512 (the
-verifier's setup), the honest run's sends are of tag `0`,
-fit the verifier's rounds, and start with a link message, its last message decodes, and the shipped verdict and the
-checks pass on it. -/
 theorem run_acc_of (H : Claims.Msg → Claims.Msg) (w : Claims.Flock.Wit) (x : Claims.Msg) (ω : Tape)
     (r : Fin ((V false).k x) → Coin) {s : Ins} {spec : SessionSpec} {sts : Array Flock.Stmt}
     {link : List ByteArray × List ByteArray} {F : Final} (hs : setupOf false x = some (s, spec, sts))

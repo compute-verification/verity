@@ -43,25 +43,8 @@ import Proofs.Flock.Claims.Complete.ZkTables.Scope
 import Proofs.Flock.Claims.DeployK
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# The honest masked run's proof files, at several tables
-
-`Zk/Json/Files.lean` at a run of any number of tables: what the record's checks ask of the proof files (`FilesAt`;
-`FilesJ` at several tables) from the per-table form of `RepShapedZk` (`RepShapedAt`; `RepShapedJ` at several tables)
-and the record's size, which `ready` gives (`Run.recordFits`).
-
-* `sessionPZk_filesJ`: `Zk/Walk.lean`'s `sessionPZk_walk` at several tables. The masked session's `j`th proof file
-  encodes a masked proof that table `j / 2`'s rep `j % 2` returned on its share's trace, its masked level-0 commitment
-  and its extra claims at the link's points, with the tape's pads committed, and its `j`th stream is the rounds that
-  rep ended at (`RepFileJ`); the record is the honest masked record of the commitments' caps and those streams, and the
-  sends are the link of the caps, then the streams' rounds. The session's loop is walked by index
-  (`forIn_array_idx`).
-* `Run.repJ`: at a run, each table's `root_B` is its commitment's cap, and each rep's file decodes at the masked
-  verifier's shape to that rep's proof, of the commitment's cap, the table's PCS parameters, and its pads' root
-  (`repPZk_fields`), a 64-byte digest (`innerCommitP_root`).
-* `filesAt`, `filesJ`: `FilesAt` from `RepShapedAt`, `FilesJ` from `RepShapedJ`; so `complete` holds with it for
-  `RecordJ` (`completeJR`).
--/
+/-! The honest masked run's proof files at any number of tables, from the per-table form of `RepShapedZk` (`filesAt`,
+`filesJ`). -/
 
 @[expose] public section
 
@@ -70,10 +53,6 @@ namespace FlockComplete.ZkTables
 open Flock Transcript FlockComplete FlockDeploy JsonRT
 open Lean (Json JsonNumber)
 
-/-- Table `i`'s rep `rep`'s masked proof file `b` and stream `rs`: at the table's extra claims `e` at the points `pts`,
-`b` encodes, at the rep's shape, a masked proof the rep returned on the table's trace, its packed table, its masked
-level-0 commitment, and the tape's pads, committed, from `n` sends, ending at the rounds `rs`, its rank check over
-the table's `words` at some earlier claim points. -/
 def RepFileJ (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (spec : SessionSpec) (tabs : Array Setup)
     (words : Array (List ℕ)) (schs : Array (Schedule × ℕ)) (cms : Array Commit) (trs : Array Trace) (tape : TapeZk)
     (pts : Array (Array F128)) (n i rep : ℕ) (rs : Array Round) (b : ByteArray) : Prop :=
@@ -87,10 +66,6 @@ def RepFileJ (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (spec : S
       (tape.lanePad i) (tape.salt i rep) (tape.nonce i rep) prior words[i]!).run
       (Transcript.init #[] (spec.domain spec.tables[i]! rep).toUTF8)).go l = (.ok (p, t'), l')
 
-/-- **The masked session's proof files and streams**, at any number of tables: each table's `--zk` schedule and masked
-level-0 commitment; the record is the honest masked record of the commitments' caps and one well-formed stream per rep
-stream; the sends are the link of the caps, then the streams' rounds in order; and the `j`th proof file and stream are
-table `j / 2`'s rep `j % 2`'s (`RepFileJ`). -/
 theorem sessionPZk_filesJ (H : Claims.Msg → Claims.Msg) (resp : ℕ → Claims.Msg) {spec : SessionSpec}
     {ct : CoinTree.Spec} (hct : spec.coinTree = some ct) {own : Json} (hown : Flock.JsonParse.parse spec.hello = .ok own)
     {hz : String} (hc : canon (helloJ own) = .ok hz) (tabs : Array Setup) (words : Array (List ℕ))
@@ -223,10 +198,6 @@ theorem sessionPZk_filesJ (H : Claims.Msg → Claims.Msg) (resp : ℕ → Claims
 
 variable {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
 
-/-- **The honest masked rep proof fits its shape** (`RepShapedZk`), at each table of a good case: on table `i`'s
-`--zk` schedule `v`, its masked level-0 commitment `cm` of its share's packed table, its extra claims `e` at the link's
-points and its pads' commitment `ic`, each masked proof a rep returns (`repRunJ`, at any earlier claim points) is
-`Shaped` at the shape the masked verifier decodes it at. -/
 def RepShapedAt (c : Case H rel) : Prop :=
   ∀ i < c.sts.size, ∀ v cm e,
     Zk.schedule (Setup.ofCircuit c.sts[i]!).wideLeaf (Setup.ofCircuit c.sts[i]!).m = .ok v →
@@ -241,13 +212,8 @@ def RepShapedAt (c : Case H rel) : Prop :=
       FlockSoundness.Discharge.ZkView.Shaped (shapeZk (Setup.ofCircuit c.sts[i]!) v.1 e.size) pt.1
 
 variable (H rel) in
-/-- **The honest masked rep proof fits its shape** (`RepShapedZk`), at each table of every good case of several
-tables. -/
 def RepShapedJ : Prop := ∀ c : Case H rel, 1 < c.sts.size → RepShapedAt c
 
-/-- **Each rep's decoded masked proof is the honest one**, at a run of any number of tables: two proof files per
-table, each under `2^64` bytes, and each rep's file decodes at the masked verifier's shape to a proof of the table's
-PCS parameters, with the table's `root_B` as its cap and a 64-byte pads' root. -/
 theorem Run.repJ (h64 : Out64 H) (o : Run H rel) (hS : StmtAt o.toCase) (hR : RepShapedAt o.toCase) :
     o.proofs.size = 2 * o.tabs.size ∧ (∀ b ∈ o.proofs, b.size < 2 ^ 64) ∧ ∀ i < o.tabs.size, ∀ r < 2,
       Zk.decode (shapeZk o.tabs[i]! (o.sch i) (o.extras i).size) (o.bytes i r) = .ok (o.zp i r) ∧
@@ -365,8 +331,6 @@ theorem Run.repJ (h64 : Out64 H) (o : Run H rel) (hS : StmtAt o.toCase) (hR : Re
     rw [hzp, htabi, hsch i hi', hroot i hi']
     exact ⟨by rw [← htabi, ← hsch i hi', hdec], hpar, by rw [hcp], hrt⟩
 
-/-- **What the record's checks ask of the proof files**, at a run where the statement's `hello` prints and the rep
-proofs fit their shapes, with the record's size (`Run.recordFits`, `ready`'s). -/
 theorem filesAt (h64 : Out64 H) (o : Run H rel) (hS : StmtAt o.toCase) (hR : RepShapedAt o.toCase) :
     FilesAt o := by
   obtain ⟨hsz, hb, hrep⟩ := Run.repJ h64 o hS hR
@@ -382,12 +346,9 @@ theorem filesAt (h64 : Out64 H) (o : Run H rel) (hS : StmtAt o.toCase) (hR : Rep
   · rw [(hrep i hi r hr).2.2.1, bne, bytes_beq_self]
     rfl
 
-/-- **What the record's checks ask of the proof files**, at every run of several tables, from `RepShapedJ`. -/
 theorem filesJ (h64 : Out64 H) (hS : StmtOkJ H rel) (hR : RepShapedJ H rel) : FilesJ H rel :=
   fun o hc => filesAt h64 o (hS o.toCase hc) (hR o.toCase hc)
 
-/-- **Flock's masked verifier is complete** for the honest masked prover on each table's share, with error `δc H`, at
-any number of tables: `completeJ` with what the record's checks ask of the proof files from `RepShapedJ` (`filesJ`). -/
 theorem completeJR (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation)
     (h64 : JsonRT.Out64 H) (hS : JsonRT.StmtOkZk H rel) (hR : JsonRT.RepShapedZk H rel)
     (hPR : JsonRT.ProverRunsZk H rel) (hRS : FlockComplete.RingSwitchZk H rel) (hLg : FlockComplete.LigeritoZk H rel)

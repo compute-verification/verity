@@ -40,13 +40,7 @@ import Proofs.Flock.Claims.Complete.Json.RoundTrip
 import Std.Data.TreeMap.Raw.Lemmas
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# The verifier's parser builds well-formed trees
-
-`Flock.JsonParse.parse` is total, so what completeness reads of its trees is a theorem (`parse_wf`): an object is
-`∅` with its members inserted one by one (`Std.TreeMap.Raw.WF.insert`), by induction on the parser's fuel through its
-three mutual readers (`wf_all`).
--/
+/-! The verifier's total parser `Flock.JsonParse.parse` builds only well-formed trees (`parse_wf`). -/
 
 @[expose] public section
 
@@ -56,7 +50,6 @@ open Lean (Json)
 
 open Flock.JsonParse
 
-/-- A literal reads as its value. -/
 theorem word_ok {w : String} {j : Json} {cs : List Char} {o : Nat} {rest : List Char} {o' : Nat} {v : Json}
     (h : word w j cs o = .ok rest o' v) : v = j := by
   unfold word at h
@@ -64,7 +57,6 @@ theorem word_ok {w : String} {j : Json} {cs : List Char} {o : Nat} {rest : List 
   · injection h with _ _ h; exact h.symm
   · cases h
 
-/-- A member inserted into a well-formed object of well-formed values leaves it so. -/
 theorem ins_wf {m : Std.TreeMap.Raw String Json} (hm : m.WF) (h : ∀ k v, m.get? k = some v → Wf v)
     (key : String) {v : Json} (hv : Wf v) :
     (m.insert key v).WF ∧ ∀ k w, (m.insert key v).get? k = some w → Wf w := by
@@ -74,8 +66,6 @@ theorem ins_wf {m : Std.TreeMap.Raw String Json} (hm : m.WF) (h : ∀ k v, m.get
   · injection hw with hw; exact hw ▸ hv
   · exact h k w (by rw [Std.TreeMap.Raw.get?_eq_getElem?]; exact hw)
 
-/-- At every fuel, a value read is well formed, and so is every element an array adds and every object built from a
-well-formed one. -/
 theorem wf_all : ∀ k,
     (∀ cs o rest o' v, value k cs o = .ok rest o' v → Wf v) ∧
     (∀ acc cs o rest o' a, array k acc cs o = .ok rest o' a → (∀ x ∈ acc, Wf x) → ∀ x ∈ a, Wf x) ∧
@@ -167,8 +157,6 @@ theorem wf_all : ∀ k,
           · cases h
       · cases h
 
-/-- **`Flock.JsonParse.parse` builds only well-formed trees**: every
-object it returns is `∅` with its members inserted, and every value in it is well formed. -/
 theorem parse_wf (s : String) (j : Json) (h : parse s = .ok j) : Wf j := by
   rw [parse_eq] at h
   unfold parseList at h

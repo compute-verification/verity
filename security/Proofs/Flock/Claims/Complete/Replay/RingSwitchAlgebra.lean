@@ -45,24 +45,7 @@ import Proofs.Flock.Soundness.Discharge.Layout.Region
 import Proofs.Flock.Soundness.Refine.Arith
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# The ring switch's algebra at the deployed relation
-
-`RsAlgebra` at `Readable.relation`, from `RelS` alone: every claim a rep opens has the value of the witness's extension
-at its point, so its switched vector of the honest trace meets it (`switch_of`: `Σ_v w[v]·s[v]` is the claim's
-evaluation, `claim_eval_eq` and `fOf_claimCheck`, with `s[v]` the honest `ŝ[v]`).
-
-* **Lincheck's claim** (`ab_eval`): `w = Σ_s L_s(r')·zr[s]`, and `zr` is the witness's columns folded at the outer
-  coins (`zr0_hcol`) and halved at the round coins (`foldAll_lcV`): `Σ_s L_s(r')·z_partial[s]`, the claim's evaluation
-  (`sum_zPartialOf`).
-* **Zerocheck's claim** (`c_claim_eval`): `P_c(ζ)` is the honest `final_c` (`c_eval`, on the prover's `round1_c`,
-  `Zc.r1c_eq`), the claim's evaluation (`finalC_eq_eval`).
-* **The extra claims** (`Region.regionClaim_holds`): a region claim at any link point evaluates to its value when the
-  witness's region bits are the region's (`Satisfies`): the in-block part of its point vanishes off the region's
-  addresses (`sum_low`), and on them it is the free coordinates' weight. Each extra claim is the model's
-  (`regionClaim_rel'`) at link points of `m_pts` coordinates, which `Record.decodeWith` checks (S9,
-  `decodeWith_points`).
--/
+/-! `RsAlgebra` at the deployed relation, from `RelS` alone (`rsAlgebra`). -/
 
 @[expose] public section
 
@@ -86,13 +69,10 @@ theorem fixed_factor (b f : Bool) :
 
 variable (S : Statement) (R : Region S.kLog S.nbl) (ptLocal mPts : ℕ) (r : Fin mPts → F)
 
-/-- A region point's in-block coordinates. -/
 def lowPoint : Fin S.kLog → F := fun j => regionPoint S R ptLocal mPts r ⟨j.val, lt_of_lt_of_le j.isLt S.hk⟩
 
-/-- The link coordinates a region's free bits read. -/
 def freePoint : Fin R.free.length → F := fun t => if ht : t.val < mPts then r ⟨t.val, ht⟩ else 0
 
-/-- The link coordinates a region's block bits read. -/
 def highPoint : Fin S.nbl → F := fun i => if hc : ptLocal + i.val < mPts then r ⟨ptLocal + i.val, hc⟩ else 0
 
 omit [Fintype F] [DecidableEq F] [CharP F 2] in
@@ -117,8 +97,6 @@ theorem regionValue_eq :
       ∑ i ∈ Finset.range (2 ^ R.free.length), eqAt (freePoint S R mPts r) i * ((R.bits b i).val : F) := rfl
 
 omit [Fintype F] in
-/-- **The in-block weight of a region point**: over the block's addresses, it vanishes off the region's addresses
-`R.inBlock i`, and at `R.inBlock i` it is the free coordinates' weight at `i`. -/
 theorem sum_low (hR : R.free.Nodup) (g : ℕ → F) :
     ∑ c ∈ Finset.range (2 ^ S.kLog), eqAt (lowPoint S R ptLocal mPts r) c * g c =
       ∑ i ∈ Finset.range (2 ^ R.free.length), eqAt (freePoint S R mPts r) i * g (R.inBlock i) := by
@@ -210,8 +188,6 @@ theorem sum_low (hR : R.free.Nodup) (g : ℕ → F) :
   · by_contra hne
     exact hnc (h2 c (Finset.mem_range.1 hc) (left_ne_zero_of_mul hne))
 
-/-- **A region claim holds at every link point** when the witness's region bits are the region's: its evaluation is
-its value. -/
 theorem regionClaim_holds (z : Witness S.m) (hR : R.free.Nodup)
     (hz : ∀ (o : Fin (2 ^ S.nbl)) (i : ℕ) (_hi : i < 2 ^ R.free.length) (h : R.inBlock i < 2 ^ S.kLog),
       S.block z o ⟨R.inBlock i, h⟩ = R.bits o i) :
@@ -248,8 +224,6 @@ open Flock FlockLevel3 FlockSoundness FlockSoundness.Refine
 
 local notation "𝔽" => FlockLevel3.GF128
 
-/-! ## A switched vector meets its claim's evaluation -/
-
 namespace Rs
 
 theorem eval_congr {m : ℕ} (c c' : Model.Claim 𝔽 m) (hs : ∀ s, c.skip s = c'.skip s) (hx : ∀ i, c.x i = c'.x i)
@@ -257,8 +231,6 @@ theorem eval_congr {m : ℕ} (c c' : Model.Claim 𝔽 m) (hs : ∀ s, c.skip s =
   unfold Model.Claim.eval
   rw [funext hs, funext hx]
 
-/-- **The honest `ŝ` of a claim**, on a trace whose bits are the witness's, has the claim's evaluation as its packed
-weights' sum. -/
 theorem switch_eval {m : ℕ} (hm : 7 ≤ m) (c : Claim) (hx : c.x.size = m - 6) (tr : Trace) (w : Model.Witness m)
     (hz : ∀ a : Fin (2 ^ m), Zc.bitF tr.z a.val = ((w a).val : 𝔽)) :
     fOf (dot (wOf c) (switchVec tr c)) = (Discharge.Composed.RingSwitch.claimOf m c).eval w := by
@@ -293,7 +265,6 @@ theorem switch_eval {m : ℕ} (hm : 7 ≤ m) (c : Claim) (hx : c.x.size = m - 6)
     exact GF128.zero_eq.symm
   · rw [ite_eq_left rfl, ite_eq_left rfl, mul_one]
 
-/-- A claim whose evaluation is its value is met by its honest `ŝ`. -/
 theorem switch_of {m : ℕ} (hm : 7 ≤ m) (c : Claim) (hx : c.x.size = m - 6) (tr : Trace) (w : Model.Witness m)
     (hz : ∀ a : Fin (2 ^ m), Zc.bitF tr.z a.val = ((w a).val : 𝔽))
     (hc : (Discharge.Composed.RingSwitch.claimOf m c).eval w = fOf c.value) :
@@ -301,8 +272,6 @@ theorem switch_of {m : ℕ} (hm : 7 ≤ m) (c : Claim) (hx : c.x.size = m - 6) (
   Discharge.Composed.Zerocheck.eq_of_of ((switch_eval hm c hx tr w hz).trans hc)
 
 end Rs
-
-/-! ## Lincheck's claim -/
 
 namespace Lc
 
@@ -312,8 +281,6 @@ theorem zrT_foldl (c : CircuitFold) (m : ℕ) (tr : Trace) (zc : ZcOut) (cs : Ch
   | zero => rfl
   | succ j ih => simp only [pushes, Array.foldl_push, ih, zrT]
 
-/-- **The witness's folded columns** (`zr0`): at column `k`, `Σ_o eq(ρ_out, o)·z[k + 2^kLog·o]`, at the zerocheck's
-outer coins `ρ_out`. -/
 theorem zr0_hcol (S : Model.Statement) (c : CircuitFold) (hK : c.kLog = S.kLog) (tr : Trace) (zc : ZcOut)
     (hrho : zc.rho.size = S.m - 6) (w : Model.Witness S.m)
     (hz : ∀ a : Fin (2 ^ S.m), Zc.bitF tr.z a.val = ((w a).val : 𝔽)) (rOut : Fin S.nbl → 𝔽)
@@ -352,8 +319,6 @@ theorem zr0_hcol (S : Model.Statement) (c : CircuitFold) (hK : c.kLog = S.kLog) 
     exact GF128.zero_eq.symm
   · rw [ite_eq_left rfl, ite_eq_left rfl, mul_one]
 
-/-- **Lincheck's claim is the witness's extension at its point**: `w = Σ_s L_s(r')·zr[s]` of the prover's last halved
-columns is the evaluation of the claim `(L(r'), ρ_in' ‖ ρ_out)` (`ρ_in'` the round coins, last first). -/
 theorem ab_eval (S : Model.Statement) (c : CircuitFold) (hK : c.kLog = S.kLog) (tr : Trace) (zc : ZcOut)
     (hrho : zc.rho.size = S.m - 6) (w : Model.Witness S.m)
     (hz : ∀ a : Fin (2 ^ S.m), Zc.bitF tr.z a.val = ((w a).val : 𝔽)) (cs : Challenges) (v : F128) :
@@ -379,10 +344,6 @@ theorem ab_eval (S : Model.Statement) (c : CircuitFold) (hK : c.kLog = S.kLog) (
 
 end Lc
 
-/-! ## Zerocheck's claim -/
-
-/-- **Zerocheck's claim is the witness's extension at its point**: `P_c(ζ)` of the prover's `round1_c` is the
-evaluation of the claim `(L(ζ), r)`. -/
 theorem Zc.c_claim_eval {m : ℕ} (hm : 13 ≤ m) (zcs : Zc.Challenges) (tr : Trace) (w : Model.Witness m)
     (hz : ∀ a : Fin (2 ^ m), Zc.bitF tr.z a.val = ((w a).val : 𝔽)) (v : F128) :
     fOf (Zc.out m zcs tr).vC =
@@ -392,8 +353,6 @@ theorem Zc.c_claim_eval {m : ℕ} (hm : 13 ≤ m) (zcs : Zc.Challenges) (tr : Tr
     (Zc.bitF tr.z) w hz (zcs.r m) (pushes zcs.ρ (m - 6)) zcs.z
   rw [← Discharge.Composed.Zerocheck.c_eval, ← Zc.r1c_eq tr (m - 6) (zcs.r m) (Zc.r_size m hm zcs)] at h
   exact h.trans (Rs.eval_congr _ _ (fun _ => rfl) (fun _ => rfl) w)
-
-/-! ## The extra claims -/
 
 theorem mem_right {α β : Type} {R : α → β → Prop} : ∀ {l₁ : List α} {l₂ : List β}, List.Forall₂ R l₁ l₂ →
     ∀ {b : β}, b ∈ l₂ → ∃ a ∈ l₁, R a b
@@ -415,8 +374,6 @@ theorem mem_of_forall₂ {α β γ : Type} {P : α → β → γ → Prop} {pts 
     · obtain ⟨a, ha, p, hp, hpe⟩ := mem_of_forall₂ h he
       exact ⟨a, List.mem_cons_of_mem _ ha, p, hp, hpe⟩
 
-/-- **Every claim a rep opens is met by its honest `ŝ`**, for a statement's table, on a trace whose bits satisfy its
-statement, at link points of `m_pts` coordinates. -/
 theorem claims_switch (st : Stmt) (hwf : StmtWF st) (hrw : RegionsWF st) (hm : 22 ≤ st.m) (w : Model.Witness st.m)
     (hsat : (stmtOf st hwf (regionsOf st)).Satisfies w) (tr : Trace)
     (hz : ∀ a : Fin (2 ^ st.m), Zc.bitF tr.z a.val = ((w a).val : 𝔽)) (zcs : Zc.Challenges) (cs : Lc.Challenges)
@@ -459,9 +416,6 @@ theorem claims_switch (st : Stmt) (hwf : StmtWF st) (hrw : RegionsWF st) (hm : 2
       exact (Rs.eval_congr _ _ (fun s => (hrel.skip s).symm) (fun i => (hrel.x i).symm) w).trans
         (hhold.trans hrel.value)
 
-/-! ## The record's link points -/
-
-/-- The record's link points have `m_pts` coordinates: `Record.decodeWith` checks it (S9). -/
 theorem decodeWith_points (hs : Hashes Flock.V) {spec : SessionSpec} {text : String} {sess : RunRecord}
     (h : Record.decodeWith hs spec text = .ok sess) : ∀ p ∈ sess.points.toList, p.size = spec.mPts := by
   unfold Record.decodeWith Record.decodeJWith at h
@@ -492,14 +446,11 @@ theorem _root_.FlockComplete.Run.sess_points (o : Run H rel) {st : Stmt} (hspec 
     rw [hspec] at hp
     exact hp
 
-/-! ## At the deployed relation -/
-
 theorem switch_all {claims : Array Claim} {tr : Trace} (h : ∀ c ∈ claims, dot (wOf c) (switchVec tr c) = c.value) :
     ∀ k < claims.size, dot (wOf claims[k]!) (switchVec tr claims[k]!) = claims[k]!.value := fun k hk => by
   rw [getElem!_pos claims k hk]
   exact h _ (Array.getElem_mem hk)
 
-/-- **The ring switch's algebra at the deployed relation**, from `RelS` alone. -/
 theorem rsAlgebra (H : Claims.Msg → Claims.Msg) : RsAlgebra H Readable.relation := by
   intro o i hi r _ k hk
   obtain ⟨st, hsts, hwf, hrw, -, hsat⟩ := o.model
@@ -527,7 +478,6 @@ theorem rsAlgebra (H : Claims.Msg → Claims.Msg) : RsAlgebra H Readable.relatio
   exact switch_all (claims_switch st hwf hrw h22 _ hsat (o.trace 0) hzb (o.zcCoins 0 r) (o.lcCoins 0 r) o.sess.points
     (o.sess_points hspec)) k hk
 
-/-- **The ring-switch goal at the deployed relation**, at every rep the session walk aligns. -/
 theorem ringSwitch_relation (H : Claims.Msg → Claims.Msg)
     (hzc : ∀ o : Run H Readable.relation, ∀ i < o.tabs.size, ∀ r < 2, ZcAt o i r)
     (hlc : ∀ o : Run H Readable.relation, ∀ i < o.tabs.size, ∀ r < 2, LcAt o i r)

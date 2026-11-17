@@ -45,25 +45,7 @@ import Proofs.Flock.Claims.Complete.Zk.Replay
 import Proofs.Flock.Claims.Complete.ZkTables.Count
 import Proofs.Flock.Claims.Complete.ZkTables.Scope
 
-/-!
-# Masked completeness at any number of tables, from named premises
-
-* **One table is `Zk/`'s**: a good case of one table is a `CaseZk` (`Case.toZk`: `ready` gives `readyZk`), its session
-  `sessionSZk`'s (`sessionS_one`), and a run of one table a `RunZk` (`Run.toZk`), at which every method is the same. So
-  every goal `complete_zk` rests on, or proves, holds at a run of one table, the record's size from `ready`
-  (`Run.recordFits`), as `complete_zk`'s from `readyZk` (`RunZk.recordFits`).
-* **At every number of tables**: the scope's goals (`tables_goal`, `schedules_goal`, `proofCount_goal`), the link
-  message first (`linkFirst_goal`) and the sends (`sends_goal`).
-* **Several tables**: the session runs from `StmtOkJ` and `ProverRunsJ` (`sessionRunsJ_goal`, `complete_zk`'s
-  `StmtOkZk` and `ProverRunsZk` at several tables, the latter per table); and what `complete_zk` asks or proves at one
-  table, at a run of several, as named `Prop`s: the record checks that `Zk/Json/` proves at one table from the record's
-  premises (`RecordAt`, `RecordJ`), and the rep's checks (`OpenAt`, `OpenJ`: per rep the masked replay, the ring
-  switch, the masked Ligerito, level 0's lanes, the inner proof and every round consumed), of which `complete_zk`
-  takes the ring switch, the masked Ligerito and the inner proof at one table and proves the rest.
-* `complete`: Flock's masked verifier is complete for `honestP` with error `δc H`
-  (`Claims.Flock.Complete H (deployZk rel)`), from `complete_zk`'s premises and
-  these four.
--/
+/-! Masked completeness at any number of tables, from named premises (`complete`). -/
 
 @[expose] public section
 
@@ -73,9 +55,6 @@ namespace FlockComplete.ZkTables
 
 variable {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
 
-/-! ## One table -/
-
-/-- **`ready` at a setup of one table is `readyZk`.** -/
 theorem readyZk_of_ready {x : Claims.Msg} (h : ready H x = true) {s : Ins} {spec : SessionSpec}
     {sts : Array Flock.Stmt} (hs : setupOf true x = some (s, spec, sts)) (h1 : sts.size = 1) : readyZk H x = true := by
   unfold ready at h
@@ -85,28 +64,21 @@ theorem readyZk_of_ready {x : Claims.Msg} (h : ready H x = true) {s : Ins} {spec
   simp only [Bool.and_eq_true, beq_iff_eq, decide_eq_true_eq]
   exact ⟨⟨⟨⟨⟨⟨h1, h.1.1.1.1.1⟩, h.1.1.1.1.2⟩, h.1.1.1.2⟩, h.1.1.2⟩, h.1.2⟩, (recordFitsAt_one h1).1 h.2⟩
 
-/-- **A good case of one table is a good masked case.** -/
 def Case.toZk (c : Case H rel) (h1 : c.sts.size = 1) : CaseZk H rel :=
   ⟨c.x, c.w, c.ω, c.r, c.s, c.spec, c.sts, c.scope, c.rel_w, readyZk_of_ready c.ready c.setup h1, c.good, c.setup⟩
 
-/-- **At one table the session is `sessionSZk`'s.** -/
 theorem sessionS_one {resp : ℕ → Claims.Msg} {spec : SessionSpec} {sts : Array Flock.Stmt} (h1 : sts.size = 1)
     (w : Claims.Flock.Wit) (ω : TapeZk) : sessionS H resp spec sts w ω = sessionSZk H resp spec sts w ω := by
   unfold sessionS sessionSZk
   rw [traces_one h1]
 
-/-- **A run of one table is a masked run.** -/
 def Run.toZk (o : Run H rel) (h1 : o.sts.size = 1) : RunZk H rel :=
   ⟨o.toCase.toZk h1, o.record, o.proofs, o.bodies, (sessionS_one h1 o.w o.ω).symm.trans o.ran⟩
-
-/-! ## Several tables -/
 
 section Several
 
 variable (H rel)
 
-/-- **The record's checks at a run**: `Goals`' checks on the record and the proof files, which `Zk/Json/` proves at one
-table from the record's premises. -/
 structure RecordAt (o : Run H rel) : Prop where
   finalFits : o.record.toUTF8.size < 2 ^ 64 ∧ o.proofs.size < 2 ^ 64 ∧ ∀ b ∈ o.proofs, b.size < 2 ^ 64
   draw : sampleEq (FlockSoundness.Discharge.Exec.recordDraw o.record) o.s.read.draw = true
@@ -133,11 +105,8 @@ structure RecordAt (o : Run H rel) : Prop where
   padsRoot : ∀ i < o.tabs.size, ∀ r < 2, ((o.zp i r).inner.root.size != 64) = false
   capCommitted : ∀ i < o.tabs.size, ∀ r < 2, (flat (o.zp i r).proof.cap != o.sess.rootB[i]!) = false
 
-/-- **The record's checks at every run of several tables.** -/
 def RecordJ : Prop := ∀ o : Run H rel, 1 < o.sts.size → RecordAt H rel o
 
-/-- **The rep's checks, at a run**: per rep the masked replay, the ring switch, the masked Ligerito, level 0's lane
-phase, the inner proof and every round consumed. -/
 structure OpenAt (o : Run H rel) : Prop where
   replay : ∀ i < o.tabs.size, ∀ r < 2,
     (Zk.replayWith o.hs o.tabs[i]! (o.lay i) (o.zp i r).proof (o.zp i r).inner.root).run (o.t₀ i r) = .ok (o.rp i r)
@@ -154,19 +123,14 @@ structure OpenAt (o : Run H rel) : Prop where
       (repConsZk (o.rp i r).1 (o.zp i r).proof ++ o.lanes i r)).run (o.lg i r).2 = .ok (o.inner i r)
   consumed : ∀ i < o.tabs.size, ∀ r < 2, ((o.inner i r).2.k != (o.stream i r).rounds.size) = false
 
-/-- **The rep's checks, at every run of several tables.** -/
 def OpenJ : Prop := ∀ o : Run H rel, 1 < o.sts.size → OpenAt H rel o
 
 end Several
-
-/-! ## The composition -/
 
 theorem Case.one_or_several (c : Case H rel) : c.sts.size = 1 ∨ 1 < c.sts.size := by
   have := c.tables.1
   omega
 
-/-- **Masked completeness at any number of tables** from the session running at every good case, and the record's
-checks and the rep's checks at every run. -/
 theorem complete_of_at (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation)
     (h64 : JsonRT.Out64 H) (hSR : SessionRunsZk H rel) (hRec : ∀ o : Run H rel, RecordAt H rel o)
     (hOp : ∀ o : Run H rel, OpenAt H rel o) (hMR : MaskRank.MaskRankBound) (hMF : MaskFree rel) :
@@ -204,10 +168,6 @@ theorem complete_of_at (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed �
       consumed := fun o => (hOp o).consumed
       capCommitted := fun o => (hRec o).capCommitted }
 
-/-- **Flock's masked verifier is complete** for the honest masked prover on each table's share, with error `δc H`, at
-any number of tables: from `complete_zk`'s premises, which give every check at one
-table, and at several tables the statement's and the prover's pieces' (`StmtOkJ`, `ProverRunsJ`), the record's checks
-(`RecordJ`) and the rep's checks (`OpenJ`). -/
 theorem complete (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation)
     (h64 : JsonRT.Out64 H) (hS : JsonRT.StmtOkZk H rel) (hR : JsonRT.RepShapedZk H rel)
     (hPR : JsonRT.ProverRunsZk H rel) (hRS : FlockComplete.RingSwitchZk H rel) (hLg : FlockComplete.LigeritoZk H rel)

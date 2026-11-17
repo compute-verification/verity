@@ -37,18 +37,8 @@ import Mathlib.Tactic.Polynomial.Basic
 import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# The honest prover's zerocheck passes its final check
-
-`fold_final`: when the trace satisfies the block R1CS bitwise (`az ∧ bz = z`) and no `r_outer` coin is `1`, the residual
-claim the verifier folds over the prover's zerocheck (`zcFold`, from `zcStart`) ends at `final_a · final_b`, the
-hypothesis `zerocheckWith_of` asks for.
-
-The prover's messages (`Zc.proof`, in the executable's `sumF`, `eqTable`, `skipHat` and `foldLow`) are the soundness
-analysis's honest messages (`Zerocheck.honest`, in the field's sums, `eqR`, `skipAt` and `foldN`) on the trace's bits
-(`bitF`), the zerocheck vector and the residual coins; the fold is that analysis's replayed claim (`zcFold_fst`), and
-`Zerocheck.final_ab` closes it.
--/
+/-! The honest prover's zerocheck passes its final check when the trace satisfies the block R1CS and no `r_outer` coin
+is `1` (`fold_final`). -/
 
 @[expose] public section
 
@@ -58,10 +48,7 @@ open Flock FlockLevel3 FlockSoundness.Discharge.Composed.Zerocheck
 
 local notation "𝔽" => FlockLevel3.GF128
 
-/-- A bit table as field values. -/
 noncomputable def bitF (bits : Array Bool) (i : ℕ) : 𝔽 := if bits[i]! then 1 else 0
-
-/-! ## The executable's sums as the field's -/
 
 theorem of_sumF (n : ℕ) (f : ℕ → F128) : GF128.of (sumF n f) = ∑ x ∈ Finset.range n, GF128.of (f x) := by
   unfold sumF
@@ -103,8 +90,6 @@ theorem of_eqTable_extract (r : Array F128) (a hi : ℕ) (hhi : hi = r.size) (ha
   rw [h]
   rfl
 
-/-! ## The prover's tables and messages -/
-
 theorem tab_size (n : ℕ) (z : F128) (ρ : ℕ → F128) (bits : Array Bool) :
     ∀ i ≤ n, (tab n z ρ bits i).size = 2 ^ (n - i)
   | 0, _ => by simp [tab]
@@ -113,8 +98,6 @@ theorem tab_size (n : ℕ) (z : F128) (ρ : ℕ → F128) (bits : Array Bool) :
     rw [tab_size n z ρ bits i (by omega), show n - i = n - (i + 1) + 1 by omega, pow_succ,
       Nat.mul_div_cancel _ (by norm_num)]
 
-/-- **The prover's folded tables are the honest ones**: its table `i` at row `x` is the skip row at `z`, folded at the
-residual coins `rho` (which read `ρ`). -/
 theorem of_tab (n : ℕ) (z : F128) (ρ : ℕ → F128) (bits : Array Bool) (rho : Array F128)
     (hρ : ∀ k < n, rho[k]! = ρ k) :
     ∀ i ≤ n, ∀ x < 2 ^ (n - i),
@@ -136,7 +119,6 @@ theorem of_tab (n : ℕ) (z : F128) (ρ : ℕ → F128) (bits : Array Bool) (rho
       of_tab n z ρ bits rho hρ i (by omega) _ h2]
     simp only [coin, hρ i (by omega)]
 
-/-- **The prover's residual round `j` is the honest message.** -/
 theorem msg_eq (tr : Trace) (n : ℕ) (r : Array F128) (hr : r.size = n) (z : F128) (ρ : ℕ → F128)
     (rho : Array F128) (hρ : ∀ k < n, rho[k]! = ρ k) (j : ℕ) (hj : j < n) :
     msg tr n r z ρ j =
@@ -170,9 +152,6 @@ theorem msg_eq (tr : Trace) (n : ℕ) (r : Array F128) (hr : r.size = n) (z : F1
       hb _ (by have := hk k hk''; omega)]
     ring
 
-/-! ## The fold is the replayed claim -/
-
-/-- The verifier's residual fold (`zcFold`) is the soundness analysis's replayed claim on the same coins. -/
 theorem zcFold_fst (r : Array F128) (p : ZerocheckProof) (C : ℕ → Array F128) (rho : Array F128) (N : ℕ)
     (hC : ∀ k < N, (C k).getD 0 0 = rho[k]!) (z : F128) :
     ∀ n ≤ N, (Flock.RecAlgebra.zcFold r p C n (Flock.RecAlgebra.zcStart p z)).1 = claim p r rho z n
@@ -193,8 +172,6 @@ theorem claim_congr {p q : ZerocheckProof} (r rho : Array F128) (z : F128) (n : 
   | 0, _ => by simp only [claim, claim0, h1, h2]
   | j + 1, hj => by rw [claim, claim, claim_congr r rho z n h1 h2 h3 j (by omega), h3 j (by omega)]
 
-/-! ## The final check -/
-
 theorem r_size (m : ℕ) (hm : 13 ≤ m) (cs : Challenges) : (cs.r m).size = m - 6 := by
   simp only [Challenges.r, Array.size_append, pinned_size, Array.size_map, Array.size_range]
   omega
@@ -211,8 +188,6 @@ theorem r1c_eq (tr : Trace) (n : ℕ) (r : Array F128) (hrs : r.size = n) (a b :
   rw [of_mul, of_eqTable _ x (by rw [hrs]; exact Finset.mem_range.mp hx), hrs, of_skipHat]
   rfl
 
-/-- **The prover's zerocheck passes the final check** (Piop.lean:98): for a trace satisfying the block R1CS bitwise and
-`r_outer` coins other than `1`, the residual fold ends at `final_a · final_b`. -/
 theorem fold_final {m : ℕ} (hm : 14 ≤ m) (cs : Challenges) (tr : Trace)
     (hR1CS : ∀ i < 2 ^ m, (tr.az[i]! && tr.bz[i]!) = tr.z[i]!) (hc1 : ∀ k < m - 13, cs.c1 k ≠ 1) :
     (Flock.RecAlgebra.zcFold (cs.r m) (proof m cs tr) (fun i => #[cs.ρ i]) (m - 6)

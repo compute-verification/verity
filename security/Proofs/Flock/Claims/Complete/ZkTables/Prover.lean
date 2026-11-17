@@ -47,14 +47,7 @@ import Proofs.Flock.Soundness.Discharge.HiddenExec.Setup
 import Proofs.Flock.VBridge.Family.Lig
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# What the record needs of the masked prover's pieces, at every table
-
-`Zk/ProverOk.lean` and `Zk/RepRounds.lean` at every table of a good case of any number of tables: the session links at
-two points and each table has at most 1,024 regions (`Case.points_regions`), so each table's masked level-0 cap is
-non-empty and under `2^64` bytes (`commitPZk_cap`) and each masked rep, on the table's extra claims at the link's
-points, records a round, each of at most `65536` coins (`repPZk_grows`): `proverOkJ`.
--/
+/-! What the record needs of the masked prover's pieces at every table (`proverOkJ`). -/
 
 @[expose] public section
 
@@ -66,7 +59,6 @@ open FlockSoundness FlockSoundness.Discharge FlockSoundness.Discharge.Exec JsonR
 
 variable {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
 
-/-- **At a good case the session links at two points and every table has at most 1,024 regions.** -/
 theorem Case.points_regions (c : Case H rel) : c.spec.points = 2 ∧ ∀ st ∈ c.sts, st.regions.size ≤ 1024 := by
   obtain ⟨p, hp, hsc⟩ := (Readable.scope_iff (deployZk rel) rel (readOf true) rfl
     (fun _ _ h => readOf_zk h) c.x).1 c.scope
@@ -92,9 +84,6 @@ theorem Case.points_regions (c : Case H rel) : c.spec.points = 2 ∧ ∀ st ∈ 
 
 variable (H rel)
 
-/-- **What the record needs of the masked prover's pieces** (`ProverOkZk`), at every table of every good case: the
-masked commitment's cap, at the `--zk` schedule's first level, is non-empty and under `2^64` bytes, and each masked rep,
-on the table's extra claims at the link's points, records a round, each of at most `65536` coins. -/
 def ProverOkJ : Prop :=
   ∀ c : Case H rel, ∀ st ∈ c.sts,
     (∀ v, Zk.schedule (Setup.ofCircuit st).wideLeaf (Setup.ofCircuit st).m = .ok v → ∀ g extra lanePad salt cm,
@@ -108,7 +97,6 @@ def ProverOkJ : Prop :=
 
 variable {H rel}
 
-/-- **The masked prover's pieces are what the record needs**, at every table, at an oracle of 64-byte outputs. -/
 theorem proverOkJ (h64 : Out64 H) : ProverOkJ H rel := by
   intro c st hst
   obtain ⟨j, hj, rfl⟩ := Array.mem_iff_getElem.1 hst

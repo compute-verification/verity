@@ -38,14 +38,7 @@ import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# The decoder's polynomial representations
-
-The counted decoder computes on plain data: a univariate polynomial is its coefficient list, lowest degree first
-(`toPolyL`, evaluated by Horner's rule, `horner`), and a bivariate polynomial `Q(X, Y)` is its coefficient table
-`P i j` (the coefficient of `X^i Y^j`) on the box `i ≤ D`, `j ≤ L` (`toBi`). These are the readings into Mathlib's
-`F[X]` and `F[X][X]` that the correctness proofs use.
--/
+/-! The decoder's polynomial representations: coefficient lists and tables, read into Mathlib's `F[X]` and `F[X][X]`. -/
 
 @[expose] public section
 
@@ -73,7 +66,6 @@ theorem natDegree_toPolyL_lt {F : Type} [Field F] (cs : List F) (h : cs ≠ []) 
     rw [List.getD_eq_default _ _ hle] at this
     exact h0 (leadingCoeff_eq_zero.1 this)
 
-/-- Coefficient lists of one length read as one polynomial only if they are equal. -/
 theorem toPolyL_inj {F : Type} [Field F] {cs cs' : List F} (hl : cs.length = cs'.length)
     (h : toPolyL cs = toPolyL cs') : cs = cs' := by
   refine List.ext_getElem hl fun i h1 h2 => ?_
@@ -81,7 +73,6 @@ theorem toPolyL_inj {F : Type} [Field F] {cs cs' : List F} (hl : cs.length = cs'
   simp only [coeff_toPolyL] at this
   rwa [List.getD_eq_getElem _ _ h1, List.getD_eq_getElem _ _ h2] at this
 
-/-- The first `k` coefficients of `p`. -/
 def coeffList {F : Type} [Field F] (k : ℕ) (p : F[X]) : List F := (List.range k).map p.coeff
 
 theorem length_coeffList {F : Type} [Field F] (k : ℕ) (p : F[X]) : (coeffList k p).length = k := by
@@ -107,11 +98,10 @@ theorem horner_eq {F : Type} [Field F] : ∀ (cs : List F) (x : F), horner cs x 
     rw [this]
     simp [toPolyL]
 
-/-- Row `j` of the table `P` as a polynomial in `X`, on `i ≤ D`. -/
 noncomputable def rowX {F : Type} [Field F] (P : ℕ → ℕ → F) (D j : ℕ) : F[X] :=
   ∑ i ∈ Finset.range (D + 1), monomial i (P i j)
 
-/-- **The bivariate polynomial of a table**: `Σ_{i ≤ D, j ≤ L} P i j · X^i Y^j`, `Y` the outer variable. -/
+/-- `Y` is the outer variable. -/
 noncomputable def toBi {F : Type} [Field F] (P : ℕ → ℕ → F) (D L : ℕ) : F[X][X] :=
   ∑ j ∈ Finset.range (L + 1), monomial j (rowX P D j)
 
@@ -128,7 +118,6 @@ theorem coeff_toBi {F : Type} [Field F] (P : ℕ → ℕ → F) (D L i j : ℕ) 
   simp only [Finset.mem_range, Nat.lt_succ_iff, coeff_rowX]
   split_ifs <;> simp_all
 
-/-- The table vanishes off the box `i ≤ D`, `j ≤ L`. -/
 def Boxed {F : Type} [Field F] (P : ℕ → ℕ → F) (D L : ℕ) : Prop := ∀ i j, P i j ≠ 0 → i ≤ D ∧ j ≤ L
 
 theorem coeff_toBi_of_boxed {F : Type} [Field F] {P : ℕ → ℕ → F} {D L : ℕ} (h : Boxed P D L) (i j : ℕ) :

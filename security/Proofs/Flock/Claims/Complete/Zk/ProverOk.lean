@@ -41,16 +41,7 @@ import Proofs.Flock.Claims.Complete.Zk.Discharge
 import Proofs.Flock.Claims.Complete.Zk.Link
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# The masked prover's pieces at every good case (`ProverOkZk`)
-
-`proverOk` at the masked record: at an oracle of 64-byte outputs (`Out64`), `ProverOkZk` from its rep half alone,
-`RepRoundsZk` (each masked rep on the table's extra claims records a round, each of at most `65536` coins).
-
-* The masked level-0 commitment's cap is non-empty and under `2^64` bytes (`commitPZk_cap`): the masked table commits
-  under `hm96-sha512/v1` (`CaseZk.hm96`), whose cap is `2^cap` digests of 64 bytes (`commitRowsP_capSize`), and the
-  `--zk` schedule's level 0 caps at most its depth and at most `32` (`zkSchedule_cap0`).
--/
+/-! `ProverOkZk` at an oracle of 64-byte outputs, from its rep half `RepRoundsZk` alone (`proverOkZk`). -/
 
 @[expose] public section
 
@@ -60,7 +51,6 @@ open Flock Transcript FlockComplete FlockDeploy
 
 variable {wideLeaf : Bool}
 
-/-- The `--zk` schedule's level 0 caps at most its depth, and at most `32`. -/
 theorem zkSchedule_cap0 {m : ℕ} (h1 : 25 ≤ m) (h2 : m ≤ 35) {v : Schedule × ℕ} (h : Zk.schedule wideLeaf m = .ok v) :
     (v.1.levels.getD 0 default).cap ≤ (v.1.levels.getD 0 default).d ∧ (v.1.levels.getD 0 default).cap ≤ 32 := by
   have key : ∀ (w : Bool) (k : Fin 11), (match Zk.schedule w (k.val + 25) with
@@ -72,8 +62,6 @@ theorem zkSchedule_cap0 {m : ℕ} (h1 : 25 ≤ m) (h2 : m ≤ 35) {v : Schedule 
   simp only [show m - 25 + 25 = m by omega, h, decide_eq_true_eq] at this
   exact this
 
-/-- **A level's cap under `hm96-sha512/v1` has `2^cap` digests**, for a SHA-512 of 64-byte outputs, at a level that
-caps at most its depth. -/
 theorem commitRowsP_capSize {h : ByteArray → ByteArray} (h64 : ∀ b, (h b).size = 64) (lv : Level)
     (hcap : lv.cap ≤ lv.d) (rows : Array (Array F128)) (salt : ℕ → ByteArray) {c : Commit}
     (hc : (commitRowsP (Hashes.ofSha512 h) MerkleScheme.hm96Sha512 lv rows salt : V Commit) = .ok c) :
@@ -101,8 +89,6 @@ theorem commitRowsP_capSize {h : ByteArray → ByteArray} (h64 : ∀ b, (h b).si
     congr 1
     omega
 
-/-- **Level 0's masked commitment's cap is non-empty and under `2^64` bytes**, for a SHA-512 of 64-byte outputs, at
-the `--zk` schedule's level 0. -/
 theorem commitPZk_cap {h : ByteArray → ByteArray} (h64 : ∀ b, (h b).size = 64) {m : ℕ} (h1 : 25 ≤ m) (h2 : m ≤ 35)
     {v : Schedule × ℕ} (hv : Zk.schedule wideLeaf m = .ok v) {g : Array F128} {extra lanePad : ℕ → ℕ → F128}
     {salt : ℕ → ByteArray} {cm : Commit}
@@ -119,8 +105,6 @@ theorem commitPZk_cap {h : ByteArray → ByteArray} (h64 : ∀ b, (h b).size = 6
 
 variable {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
 
-/-- **Each masked rep records a round, each of at most `65536` coins**: `ProverOkZk`'s rep half, at every good masked
-case's table, on the table's extra claims at the link's points. -/
 def RepRoundsZk (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) : Prop :=
   ∀ c : CaseZk H rel, ∀ st ∈ c.sts,
     ∀ v, Zk.schedule (Setup.ofCircuit st).wideLeaf (Setup.ofCircuit st).m = .ok v →
@@ -129,8 +113,6 @@ def RepRoundsZk (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Reada
       Ret ((repPZk (asksS c.resp) (Hashes.ofSha512 (Claims.hOf H)) (Setup.ofCircuit st) v.1 v.2 rep dom tr tb cm₀
         extras pads ic extra lanePad salt nonce prior ws).run (Transcript.init #[] dom)) fun pt => RepOk pt.2.rounds
 
-/-- **What the record needs of the masked prover's pieces** (`ProverOkZk`), at an oracle of 64-byte outputs, from its
-rep half (`RepRoundsZk`). -/
 theorem proverOkZk (h64 : Claims.Out64 H) (hR : RepRoundsZk H rel) : ProverOkZk H rel := by
   intro c st hst
   obtain ⟨st', hst', -, hm1, hm2⟩ := c.table

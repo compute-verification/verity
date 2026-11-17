@@ -40,21 +40,7 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Complete.Replay.LigeritoMerkle
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# The verifier's masked Ligerito returns on the model's rounds
-
-`ligeritoWithZ_of`: plain's `Lg.ligeritoWith_of` for the masked verifier (`Zk.ligeritoWith`). From a transcript that has
-recorded its rounds, on rounds that carry the masked model's (`outZ`), the masked verifier returns the lane phase's
-record where the model's transcript ends, given the proof's list sizes, the level-0 hiding messages' shape, independent
-pair coins, each level's Merkle check at its query coins (`MerkleOkZ`, level 0's rows `EXTRA_LANES` wider) and the final
-identity at the model's values.
-
-* **The model** (`outZ`): `LABEL_OPEN` after plain's start (`startZ`), plain's head, the lane rounds (`laneRun`: plain's
-  challenge, then at the last lane round the pair's sums, its coins `ρ`, `LABEL_CLOSE`, the blinded claim and `ybar`,
-  `chalZ`), level 0's cap, intros and query, its value the padded `consE0 + extraE` (`lv0Z`), then plain's level loop.
-* **Its cursors** (`inv_x₀Z`): plain's `Inv` from round `k + 2` (the pair's two rounds); the level loop's invariant from
-  any start (`inv_loop_of`, `done_of`).
--/
+/-! The verifier's masked Ligerito returns on the masked model's rounds (`ligeritoWithZ_of`). -/
 
 @[expose] public section
 
@@ -62,22 +48,15 @@ namespace FlockComplete.L0
 
 open Flock Transcript FlockComplete Replay Replay.Lg
 
-/-! ## The model -/
-
-/-- The pending bytes after `absorbK v`. -/
 def pKv (v : F256) (P : ByteArray) : ByteArray := pSlice #[v.c0, v.c1] P
 
-/-- `ybar`'s coordinates, as the verifier absorbs them. -/
 def ybarFlat (ybar : Array F256) : Array F128 := ybar.foldl (fun acc v => (acc.push v.c0).push v.c1) #[]
 
-/-- The transcript once the masked verifier has absorbed its label, `T`, the level-0 cap and `LABEL_OPEN`. -/
 def startZ (cap : Array ByteArray) (T : F128) (t : Transcript) : Transcript :=
   ap (pLabel Zk.LABEL_OPEN) (start cap T t)
 
 @[simp] theorem startZ_k (cap : Array ByteArray) (T : F128) (t : Transcript) : (startZ cap T t).k = t.k := rfl
 
-/-- **The last lane round** from `(st, t)`: the coin `r`, `s ← q(r)`, the pair's sums, the pair's coins `ρ`,
-`LABEL_CLOSE`, the blinded claim `T'` (which `s` becomes) and `ybar`, then the next message `m` and `q ← (m, T')`. -/
 def chalZ (p : LigeritoProof) (cf : ℕ → ℕ → F128) (zm : Zk.Level0Msgs) (st : LState) (t : Transcript) :
     F256 × (F256 × F256) × LState × Transcript :=
   let r : F256 := ⟨cf t.k 0, cf t.k 1⟩
@@ -91,7 +70,6 @@ def chalZ (p : LigeritoProof) (cf : ℕ → ℕ → F128) (zm : Zk.Level0Msgs) (
       q := Poly.ofMsg m zm.tPrime },
     ap (pK m) t₄)
 
-/-- Lane round `j` of `k0`: plain's challenge, or the last lane round's (`chalZ`), on the loop's challenges and pair. -/
 def laneStep (p : LigeritoProof) (cf : ℕ → ℕ → F128) (k0 : ℕ) (zm : Zk.Level0Msgs) (j : ℕ)
     (x : (Array F256 × F256 × F256) × LState × Transcript) : (Array F256 × F256 × F256) × LState × Transcript :=
   if j + 1 = k0 then
@@ -101,14 +79,11 @@ def laneStep (p : LigeritoProof) (cf : ℕ → ℕ → F128) (k0 : ℕ) (zm : Zk
     let y := chal p cf x.2.1 x.2.2
     ((x.1.1.push y.1, x.1.2), y.2.1, y.2.2)
 
-/-- The lane rounds after `j` steps from `(st, t)`. -/
 def laneRun (p : LigeritoProof) (cf : ℕ → ℕ → F128) (k0 : ℕ) (zm : Zk.Level0Msgs) (st : LState) (t : Transcript) :
     ℕ → (Array F256 × F256 × F256) × LState × Transcript
   | 0 => ((#[], 0, 0), st, t)
   | j + 1 => laneStep p cf k0 zm j (laneRun p cf k0 zm st t j)
 
-/-- Level 0 after the lane rounds, on their challenges `initCh` and pair `rho`: level 1's cap and two out-of-domain
-intros, level 0's query, its value the padded one, closed. -/
 def lv0Z (p : LigeritoProof) (cf : ℕ → ℕ → F128) (sch : Schedule) (zl : Zk.Level0) (initCh : Array F256)
     (rho : F256 × F256) (st : LState) (t : Transcript) : LState × Transcript :=
   let x₁ := ood p cf (sch.n - sch.k0 + 1) 0 st (ap (pBytes (capBytes p.recursiveCaps[0]!)) t)
@@ -120,7 +95,6 @@ def lv0Z (p : LigeritoProof) (cf : ℕ → ℕ → F128) (sch : Schedule) (zl : 
       zl.msgs.ybar
   close p cf (sch.n - sch.k0) 0 (qr.1.1, qr.1.2.1, e) qr.2.1 qr.2.2
 
-/-- Up to the level loop: the lane rounds' challenges and pair, and the state and transcript after level 0. -/
 def preZ (p : LigeritoProof) (cf : ℕ → ℕ → F128) (sch : Schedule) (T : F128) (cap : Array ByteArray)
     (zl : Zk.Level0) (t : Transcript) : (Array F256 × F256 × F256) × LState × Transcript :=
   let h := head p cf sch.n (init T) (startZ cap T t)
@@ -128,21 +102,16 @@ def preZ (p : LigeritoProof) (cf : ℕ → ℕ → F128) (sch : Schedule) (T : F
   let y := lv0Z p cf sch zl c.1.1 c.1.2 c.2.1 c.2.2
   (c.1, y.1, y.2)
 
-/-- The level loop's start. -/
 def x₀Z (p : LigeritoProof) (cf : ℕ → ℕ → F128) (sch : Schedule) (T : F128) (cap : Array ByteArray)
     (zl : Zk.Level0) (t : Transcript) : Vars × LState × Transcript :=
   ((sch.n - sch.k0 + 1, p.recursiveCaps[0]!, #[], 0), (preZ p cf sch T cap zl t).2.1, (preZ p cf sch T cap zl t).2.2)
 
-/-- **The masked verifier's Ligerito, in closed form**: the level loop's variables, state and transcript at its end. -/
 def outZ (p : LigeritoProof) (cf : ℕ → ℕ → F128) (sch : Schedule) (T : F128) (cap : Array ByteArray)
     (zl : Zk.Level0) (t : Transcript) : Vars × LState × Transcript :=
   loop p cf sch (x₀Z p cf sch T cap zl t) (sch.levels.size - 1)
 
-/-- The record the masked verifier's Ligerito returns, at the state `st` it ends in and the lane phase's `(ch, rho)`. -/
 def recZ (p : LigeritoProof) (T : F128) (st : LState) (ch : Array F256 × F256 × F256) : Zk.L0Rec :=
   { target := T, ood := #[((st.oods[0]!).beta, p.oodValues[0]!)], challenges := ch.1, rho := ch.2 }
-
-/-! ## Its cursors -/
 
 theorem laneRun_fields (p : LigeritoProof) (cf : ℕ → ℕ → F128) (k0 : ℕ) (zm : Zk.Level0Msgs) (st : LState)
     (t : Transcript) : ∀ j, j ≤ k0 →
@@ -250,10 +219,6 @@ theorem done_of (p : LigeritoProof) (cf : ℕ → ℕ → F128) (sch : Schedule)
   rw [hj, loop_stepL p cf sch _ (by omega)]
   exact (inv_loop_of p cf sch h0 hsd j (by omega)).last (by omega) hsd
 
-/-! ## The Merkle openings -/
-
-/-- **Every level's Merkle check passes** at its query coins, the coins of round `k + qOff sch j`: level 0's rows
-`2^lanes + EXTRA_LANES` wide, the others as plain's. -/
 def MerkleOkZ (hs : Hashes V) (ms : MerkleScheme) (sch : Schedule) (cap : Array ByteArray) (p : LigeritoProof)
     (cf : ℕ → ℕ → F128) (k : ℕ) : Prop :=
   merkleCheckWith (M := V) (ms.opsWith hs) ms cap (sch.levels.getD 0 default).cap (sch.levels.getD 0 default).d
@@ -280,8 +245,6 @@ theorem MerkleOkZ.at {hs : Hashes V} {ms : MerkleScheme} {sch : Schedule} {cap :
   rw [hk]
   exact this
 
-/-! ## The masked verifier's own steps -/
-
 variable {F : Array Round} {k₀ : ℕ}
 
 theorem Runs.absorbK (v : F256) (st : LState) (t : Transcript) :
@@ -296,8 +259,6 @@ theorem Runs.label (s : String) (st : LState) (t : Transcript) :
     Runs F k₀ (lift (label s)) st t () st (ap (pLabel s) t) :=
   Runs.stay rfl rfl fun _ => lift_of (Flock.RecAlgebra.label_eq _ _)
 
-/-- **Level 0's masked query** (`Zk.queryLevel0With`): plain's query, its rows `EXTRA_LANES` wider in the Merkle check,
-its value the first `2^lanes` lanes folded (`consE0`). -/
 theorem Runs.queryLevel0 (hs : Hashes V) (ms : MerkleScheme) (p : LigeritoProof) (cf : ℕ → ℕ → F128)
     (lv : Flock.Level) (cap : Array ByteArray) (fold : Array F256) (st : LState) (t : Transcript) (hq : lv.q ≠ 0)
     (hqn : st.qn < p.queryNonces.size) (hcn : st.cn < p.consistencyNonces.size)
@@ -320,7 +281,6 @@ theorem Runs.queryLevel0 (hs : Hashes V) (ms : MerkleScheme) (p : LigeritoProof)
     FlockSoundness.Refine.range_size, ← List.range_eq_range']
   exact Runs.pure _ _ _
 
-/-- A loop over `[0:n]` whose every step yields a function of the step and the state. -/
 theorem Runs.forInPure {σ : Type} (n : ℕ) (s : σ) (g : ℕ → σ → σ) (st : LState) (t : Transcript) :
     Runs F k₀ (forIn [:n] s fun j a => (Pure.pure (ForInStep.yield (g j a)) : LM (ForInStep σ))) st t
       ((List.range' 0 n).foldl (fun a j => g j a) s) st t := by
@@ -337,11 +297,7 @@ theorem MerkleOkZ.at0 {hs : Hashes V} {ms : MerkleScheme} {sch : Schedule} {cap 
   rw [hk]
   exact h.1
 
-/-! ## The final check -/
-
 open FlockSoundness.Refine in
-/-- **The masked verifier's final check passes** (`Flock.RecAlgebra.finalProg_of`, returning the lane phase's record):
-on a state that meets its shape checks, its value check and its leftover-list check. -/
 theorem finalProgZ_of {p : LigeritoProof} {basisAt : Array F256 → ℕ → Array F256} {n : ℕ} {T : F128}
     {initCh : Array F256} {rho : F256 × F256} {levels : Array (Array F256)} {ext : ℕ} {st : LState}
     {tr : Transcript}
@@ -383,17 +339,7 @@ theorem finalProgZ_of {p : LigeritoProof} {basisAt : Array F256 → ℕ → Arra
   rw [ite_eq_right (by simp [hlhs]), ite_eq_right (by simp [e1, e2, e3, e4])]
   rfl
 
-/-! ## The walk -/
-
--- one proof down `Zk.ligeritoWith`'s unfolded rounds against the masked model, `omega` on the round indices at each
--- step
 set_option maxHeartbeats 4000000 in
-/-- **The masked verifier's Ligerito returns** on rounds `R` that carry the masked model's from `t.k` on: from a
-transcript that has recorded its rounds, at a proof with the lengths fast100's `R + 1 ≥ 2` levels fix, whose level-0 cap
-is the commitment's, whose hiding messages have their shape (`hzl`), whose pair coins are independent at the model's
-(`hrho`), whose Merkle openings pass at their query coins (`hmo`) and whose final identity holds at the model's values
-(`hfin`), it returns the lane phase's record at the model's position and pending bytes, and that position is the
-model's round count. -/
 theorem ligeritoWithZ_of (hs : Hashes V) (ms : MerkleScheme) (sch : Schedule) (T : F128) (cap : Array ByteArray)
     (p : LigeritoProof) (basisAt : Array F256 → ℕ → Array F256) (zl : Zk.Level0) (cf : ℕ → ℕ → F128)
     (t : Transcript) (hk : t.k = t.rounds.size) {R : Array Round}
