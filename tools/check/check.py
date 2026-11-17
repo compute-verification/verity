@@ -2867,11 +2867,13 @@ STEPS_LOG = "steps.jsonl"
 
 def preflight() -> list[tuple[str, list[str] | str, Path]]:
     """The steps before the groups: `uv lock --check` (a current lock needs no index), then `LINTS` (without bytecode or
-    pytest's cache, so they leave nothing in the tree), then `fetchable_fixtures`. Under `uv run`, `$UV` names uv."""
+    pytest's cache, so they leave nothing in the tree) under this interpreter when it has pytest, else under `uv run --locked`
+    (a shipped tree's system python3 has none), then `fetchable_fixtures`. Under `uv run`, `$UV` names uv."""
     uv = SETTINGS.UV or shutil.which("uv")
     lock = [uv, "lock", "--check"] if uv else "failed: no `uv` here to check `uv.lock` (run check through `uv run`)"
+    python = [sys.executable] if uv is None or importlib.util.find_spec("pytest") else [uv, "run", "--locked", "python"]
     return [("preflight-lock", lock, ROOT),
-            ("preflight-lints", [sys.executable, "-B", "-m", "pytest", "-q", "-p", "no:cacheprovider", *LINTS], ROOT),
+            ("preflight-lints", [*python, "-B", "-m", "pytest", "-q", "-p", "no:cacheprovider", *LINTS], ROOT),
             ("preflight-fixtures", [sys.executable, "-B", str(Path(__file__).resolve()), "--fixtures"], ROOT)]
 
 

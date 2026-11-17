@@ -4176,7 +4176,7 @@ def test_research_queue_ready_runs_the_preflight_unless_no_preflight(world, monk
     assert goal_gates == [Q.goal_gate] * 3                                               # the goal gate isn't the preflight's
     with pytest.raises(SystemExit) as e:
         research_main(["queue", "status", "--no-preflight"])
-    assert e.value.code == 2 and "--no-preflight is for ready only" in capsys.readouterr().err
+    assert e.value.code == 2 and "--no-preflight is for ready only, not status" in capsys.readouterr().err
 
 
 def test_research_queue_judge_marks_through_the_goal_gate(world, monkeypatch):
@@ -5121,9 +5121,11 @@ def test_research_queue_ready_takes_one_of_on_and_local(world, monkeypatch, caps
         assert e.value.code == 2 and "ready takes one of --on MACHINE" in capsys.readouterr().err
     for argv, why in ((["queue", "judge"], "judge needs the quick tier's run id"),
                       (["queue", "eject", "r20261004-160000-abcd", "--reason", "x"], "eject: 'r20261004-160000-abcd' is not a PR number"),
-                      (["queue", "eject", "1", "--reason", "x", "--dry-run"], "--dry-run is for sync only: `eject` would act"),
-                      (["queue", "ready", "1", "--local", "--dry-run"], "--dry-run is for sync only: `ready` would act"),
-                      (["queue", "status", "--priority-file", "p"], "--priority-file is for sync only")):
+                      (["queue", "eject", "1", "--reason", "x", "--dry-run"], "--dry-run is for sync, open, edit only, not eject"),
+                      (["queue", "ready", "1", "--local", "--dry-run"], "--dry-run is for sync, open, edit only, not ready"),
+                      (["queue", "status", "--priority-file", "p"], "--priority-file is for sync only"),
+                      (["queue", "cross", "--title", "x"], "--title is for open, edit only, not cross"),
+                      (["queue", "stats", "--mark"], "--mark is for ready only, not stats")):
         with pytest.raises(SystemExit) as e:
             research_main(argv)
         assert e.value.code == 2 and why in capsys.readouterr().err

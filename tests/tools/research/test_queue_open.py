@@ -196,7 +196,7 @@ def test_open_needs_an_issue_and_refuses_a_bad_one_before_anything_is_sent(tmp_p
     assert "none:REASON needs the reason" in capsys.readouterr().err
     with pytest.raises(SystemExit):
         research_main(["queue", "status", "--issue", "ENG-1"])
-    assert "--issue is for open and link only" in capsys.readouterr().err
+    assert "--issue is for open, link only, not status" in capsys.readouterr().err
 
 
 def test_open_resolves_the_key_opens_the_pr_with_its_refs_and_goal_lines_then_links_it_through_the_linear_app(opening, capsys):

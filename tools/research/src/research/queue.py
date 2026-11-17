@@ -790,6 +790,17 @@ DELETED_KEYS = ("max_lean_checks", "nonlean_first", "reviewed_first")
 #: what every command says to a `--first`, refusing it: the landing order is the priority file's alone
 FIRST_RETIRED = ("--first is retired: the verified queue's priority file (`research queue vqueue --priority-file`) holds the "
                  "landing order; list the PRs there, first to land first")
+#: the commands that read each command's own flag; a flag not named here is every command's
+COMMAND_FLAGS = {
+    "--jobs": ("map-moves", "cross"), "--main": ("cross",), "--move-commit": ("cross",), "--only": ("cross",),
+    "--push": ("cross",), "--from": ("cross",), "--reason": ("eject",), "--on": ("ready", "judge"), "--local": ("ready",),
+    "--mark": ("ready",), "--again": ("ready",), "--no-preflight": ("ready",), "--priority-file": ("sync",),
+    "--land": ("review",), "--hold": ("review",), "--ref": ("review",), "--over": ("review",), "--head": ("open",),
+    "--draft": ("open",), "--base": ("open",), "--title": ("open", "edit"), "--body-file": ("open", "edit"),
+    "--issue": ("open", "link"), "--dry-run": ("sync", "open", "edit"), "--sha": ("open", "ready", "eject", "review"),
+    "--json": ("status", "ready", "review", "stats", "checked-heads"), "--tip": ("checked-heads", "map-moves"),
+    "--out": ("checked-heads", "map-moves", "cross"), "--log": ("stats",), "--short": ("stats",), "--rounds": ("stats",),
+    "--reds": ("stats",), "--hours": ("stats",), "--until": ("stats",), "--tips": ("shadow-report",), "--days": ("delegate",)}
 #: what `DriveFlags.signed_verdicts` "on" keeps off the low-risk lane: who holds each handle, and the code that judges a label
 SIGNED_GUARDS = (str(REGISTRY), "tools/research/src/research/labelauth.py", "tools/research/src/research/queue.py",
                  "tools/research/src/research/landing.py")
@@ -7141,6 +7152,10 @@ def main(argv: list[str]) -> int:
         ap.error("vqueue comes first, its options after it: research queue vqueue --help")
     if a.first is not None:
         ap.error(FIRST_RETIRED)
+    for act in ap._actions:
+        verbs = COMMAND_FLAGS.get(act.option_strings[0] if act.option_strings else "", (a.command,))
+        if a.command not in verbs and getattr(a, act.dest, act.default) != act.default:
+            ap.error(f"{act.option_strings[0]} is for {', '.join(verbs)} only, not {a.command}")
     global MERGED_ROOT
     MERGED_ROOT = a.preflight_root or MERGED_ROOT
     if a.command == "stats":
@@ -7158,7 +7173,11 @@ def main(argv: list[str]) -> int:
     if a.command == "cross":
         if a.from_dir is not None and not a.push:
             ap.error("cross: --from DIR goes with --push: it pushes what a dry run left in DIR")
-        return _cross(a)
+        try:
+            return _cross(a)
+        except QueueError as e:
+            print(f"research queue: {e}", file=sys.stderr)
+            return 1
     if a.command == "shadow-report":
         from .executor import shadow_records, shadow_report
         from .store.local import LocalStore
@@ -7166,8 +7185,6 @@ def main(argv: list[str]) -> int:
         text, _ = shadow_report(shadow_records(LocalStore(a.store), log=lambda s: print(s, file=sys.stderr)), max(a.tips, 1))
         print(text)
         return 0
-    if a.issue is not None and a.command not in ("open", "link"):
-        ap.error("--issue is for open and link only")
     if a.command == "link":
         if not (a.pr and a.pr.isdigit() and a.issue and ISSUE_KEY_RE.fullmatch(a.issue)) or a.dry_run:
             ap.error("link needs the PR number and --issue KEY (its Linear issue, like ENG-123), and has no --dry-run")
@@ -7223,16 +7240,10 @@ def main(argv: list[str]) -> int:
         except (QueueError, OSError) as e:
             print(f"research queue: {e}", file=sys.stderr)
             return 1
-    if a.priority_file and a.command != "sync":
-        ap.error("--priority-file is for sync only")
     if a.marked_after and not MARK_TIME_RE.fullmatch(a.marked_after):
         ap.error(f"--marked-after {a.marked_after!r}: a UTC time as YYYY-MM-DDTHH:MM:SSZ, as labels record it")
-    if a.dry_run and a.command != "sync":
-        ap.error(f"--dry-run is for sync only: `{a.command}` would act for real")
     if a.command == "ready" and bool(a.on) + a.local + a.mark != 1:
         ap.error("ready takes one of --on MACHINE (the quick tier as a run there, in a check slot), --local (here) and --mark (no tier)")
-    if a.no_preflight and a.command != "ready":
-        ap.error("--no-preflight is for ready only")
     if a.command == "judge" and not a.pr:
         ap.error("judge needs the quick tier's run id")
     if a.command in ("ready", "judge") and not a.by:

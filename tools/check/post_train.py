@@ -14,7 +14,7 @@ rebuilds' rows (`regression fail:<row>`), and the owner of the workloads of reco
 as ci, with the run to read.  A carried verdict rings no one: the run it carries from rang.
 
 COMMIT (default origin/main) must be a landing: its `Check: <attempt>` trailer names the check that let it in, or, for a train
-`research queue drive` or the verified queue fast-forwarded main to, the store's passing check of that commit does (`passed`:
+the verified queue fast-forwarded main to, the store's passing check of that commit does (`passed`:
 the whole check, or shard 1 of the queue's sharded one).  Drive passes the check it landed
 on as `--attempt RID`, taken when RID ran on COMMIT or on the train COMMIT merges onto a moved main (its second parent): a landing
 with deferred steps has no passing check in the store when this starts.  Its tree is checked
@@ -119,7 +119,7 @@ def git(*args: str, cwd: Path = ROOT, check: bool = True) -> str:
 def check_attempt(commit: str, cwd: Path = ROOT, attempt: str | None = None) -> str | None:
     """The attempt a landing of main was admitted on: its `Check:` line (`research merge`; a paragraph of its own, which git's
     `%(trailers)` doesn't read), else, for a commit on origin/main, the check that passed on its clean tree (`passed`): a train
-    `research queue drive` or the verified queue fast-forwards main to was checked as it is, so it has no trailer.  None for any
+    the verified queue fast-forwards main to was checked as it is, so it has no trailer.  None for any
     other commit.
 
     With ``attempt`` (`--attempt`, the check drive landed on), that attempt, when it ran on the commit (a fast-forward) or on the
