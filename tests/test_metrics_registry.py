@@ -157,7 +157,7 @@ def test_a_row_that_breaks_a_rule_is_refused() -> None:
         "'infra/serving-cost-glm53'"]
     assert _problems({**good, "owner": "nobody", "command": "echo"}, {"vllm"}, here) == [
         f"owner 'nobody' is no handle in {HANDLES}",
-        "its command names no script under benchmarks/, applications/, infra/ or tools/"]
+        "its command names no script under benchmarks/, calibration/, applications/, infra/ or tools/"]
     assert _problems({**good, "id": "vllm/serving-cost-glm53"}, {"vllm"}, "benchmarks/landing") == [
         "nothing under benchmarks/landing/ records a measurement named 'vllm/serving-cost-glm53'"]
 

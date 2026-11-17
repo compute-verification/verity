@@ -19,7 +19,7 @@ header). `ResourceAccounting.SecurityProofs.Bridge.SpaceOfPeriodHeld` proves it 
 
 namespace ResourceAccounting.Bridge
 
-open Pous Pous.EndToEnd PousCheck PousCheck.Properties Pous.Period
+open Pous Pous.EndToEnd PousVerifier PousVerifier.Properties Pous.Period
 open scoped ENNReal
 
 set_option exponentiation.threshold 20000
