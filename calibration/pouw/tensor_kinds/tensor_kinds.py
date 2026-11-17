@@ -1,12 +1,12 @@
-"""Fit each MMA form's joint issue coefficient from a tensor_kinds run (sm_120, or sm_89 with
-TK_ARCH=89 or sm_100 with TK_ARCH=100: there each form also has an alone4 point, and JI3e, sm_120's rows, isn't
-loaded). A spec point whose run recorded each role's own cycles also gets the exact co-run reading: the MMA warps'
+"""Fit each MMA form's joint issue coefficient from a tensor_kinds run (sm_120, or sm_90, sm_100 or sm_89: there each
+form also has an alone4 point, and JI3e, sm_120's rows, isn't loaded). A spec point whose run recorded each role's own cycles also gets the exact co-run reading: the MMA warps'
 SMSP-cycles a MMA and the lane warps' instructions a SMSP-cycle, each over its own time.
 
     python tensor_kinds.py OUT_DIR            # reads OUT_DIR/tensor_kinds.jsonl and OUT_DIR/sass/tensor_kinds.sass
     python tensor_kinds.py refit OUT_DIR...   # VF3n-16's JI3n rows from every program of these runs, as JSON
     python tensor_kinds.py search OUT_DIR     # a search.sh run (M1c): every schedule's program, the control, the gates
     python tensor_kinds.py refit OUT_DIR... --search SEARCH_DIR...   # VF3o-16's JI3o rows, the margin measured
+    python tensor_kinds.py target CARD        # the TK_SM run.sh builds for the card nvidia-smi names CARD
 
 For every timed case it reads the kernel's loops in the SASS (a loop is the instructions from a label to the backward
 branch that targets it), counts MMA and other instructions an iteration, and turns the run's per-SM counts into
@@ -34,10 +34,15 @@ import sys
 from collections import defaultdict
 from pathlib import Path
 
-__all__ = ["KIND", "MMA", "NOISE", "SCHED", "analyze", "main"]
+__all__ = ["KIND", "MMA", "NOISE", "SCHED", "analyze", "main", "target"]
 
 MMA = re.compile(r"^(IMMA|HMMA|QMMA|OMMA|DMMA|BMMA)")
 REF = "imma_s8_m16n8k32"
+#: The one SASS instruction `REF`'s PTX MMA is on every target: a reference that lowers otherwise measures something else.
+REF_SASS = "IMMA.16832.S8.S8"
+CARDS = Path(__file__).resolve().parents[2] / "hardware/cards"
+#: A card record's `arch` -> the TK_SM tensor_kinds.cu has forms for.
+TARGETS = {"sm_120a": 120, "sm_90a": 90, "sm_100a": 100, "sm_89": 89}
 NOISE = 0.02
 #: The mixed points' lane op (IADD3 and FFMA alternating) alone must issue at least this many warp instructions a
 #: SMSP-cycle, or the mixed points bind on a pipe's own rate instead of the issue facet and overstate a.
@@ -199,6 +204,8 @@ def analyze(out: Path) -> tuple[dict, list[str]]:
         fails.append(f"sm_89: groups {sorted(groups)} finished, want 0-3")
     if arch == 100 and done and 0 not in groups:
         fails.append(f"sm_100: groups {sorted(groups)} finished, want 0 (int8)")
+    if arch == 90 and done and groups != {0, 1}:
+        fails.append(f"sm_90: groups {sorted(groups)} finished, want 0-1")
     sass = parse_sass((out / "sass" / "tensor_kinds.sass").read_text())
     kl = {}
     for fn, body in sass.items():
@@ -239,6 +246,9 @@ def analyze(out: Path) -> tuple[dict, list[str]]:
         sass_per_ptx = ml["mma"] / PTX_MMAS[base]
         if ml["mma"] % PTX_MMAS[base]:
             fails.append(f"{key}: {ml['mma']} SASS MMAs a loop, not a multiple of {PTX_MMAS[base]}")
+        if form == REF and (ml["mma_ops"] != [REF_SASS] or sass_per_ptx != 1):
+            fails.append(f"{key}: the loop's MMAs are {ml['mma']} {', '.join(ml['mma_ops'])} for {PTX_MMAS[base]} PTX "
+                         f"MMAs, want one {REF_SASS} each")
         want_iadd3 = 8 * R if base == "mixu" else 0
         if base == "mixu" and ml["iadd3"] + ml["ffma"] < want_iadd3:
             fails.append(f"{key}: {ml['iadd3'] + ml['ffma']} IADD3 and FFMA in the loop, want >= {want_iadd3}")
@@ -441,21 +451,42 @@ def search_report(out: Path) -> tuple[str, list[str]]:
 METRIC = "compute-research/eight-bit-mma-issue-cost"
 
 
-def record(out: Path, summary: dict, fails: list[str]) -> None:
-    """Writes the run's validation and, when no gate failed, `REF`'s `a` as `METRIC` into the run's result, its member the
-    card's `short`, or no value where no card record names the run's card."""
+def target(card: str, directory: Path = CARDS) -> tuple[str, int]:
+    """(short, TK_SM) of the card record in `directory` whose `driver` holds `card`, the name nvidia-smi gives the GPU;
+    refused, naming why, for a card no record holds (`kit.card_short`) or an `arch` tensor_kinds.cu has no forms for."""
+    from verity.device import load_card, skus
     from verity_bench import kit
-    from verity_bench.overhead import CARD_FILES
+
+    short = kit.card_short(card, directory=directory)
+    [rec] = [c for c in (load_card(s, directory=directory) for s in skus("gpu", directory=directory))
+             if card in {d["value"] for d in c.get("driver", ())}]
+    if rec.get("arch") not in TARGETS:
+        raise SystemExit(f"tensor_kinds: the {short} card's arch is {rec.get('arch')!r}, and tensor_kinds.cu has forms "
+                         f"for {', '.join(TARGETS)} only: no build, no point")
+    return short, TARGETS[rec["arch"]]
+
+
+def _built(out: Path) -> int | None:
+    rows = [json.loads(x) for x in (out / "tensor_kinds.jsonl").read_text().splitlines() if x.startswith("{")]
+    return next((r.get("sm", 120) for r in rows if r.get("done")), None)
+
+
+def record(out: Path, summary: dict, fails: list[str]) -> None:
+    """Writes the run's validation and, when no gate failed, `REF`'s `a` as `METRIC` into the run's result, its member
+    the short of the card the stamp names, which must be the card the binaries were built for."""
+    from verity_bench import kit
 
     w = kit.writer(out)
+    try:
+        card, sm = target(w.stamp["card"])
+    except SystemExit as ex:
+        fails = [*fails, str(ex)]
+    else:
+        if (built := _built(out)) not in (None, sm):
+            fails = [*fails, f"the binaries are sm_{built}'s, and the {card} card is sm_{sm}"]
     detail = "; ".join(fails) if fails else f"every gate held over {len(summary)} forms"
     w.validation("failed" if fails else "passed", "tensor_kinds.analyze", detail)
     if fails:
-        return
-    try:
-        card = kit.card_short(w.stamp["card"], directory=CARD_FILES)
-    except SystemExit as refused:
-        w.measurement(METRIC, None, "issue cycles a MMA", mark="measured", why=str(refused), extra={"form": REF})
         return
     s = summary.get(REF) or {}
     a = s.get("a")
@@ -468,6 +499,9 @@ def main(argv: list[str]) -> int:
     """`--record` beside OUT_DIR also writes the run's result (`record`)."""
     if rec := "--record" in argv:
         argv = [x for x in argv if x != "--record"]
+    if argv[1] == "target":
+        print(target(argv[2])[1])
+        return 0
     if argv[1] == "refit":
         args = argv[2:]
         cut = args.index("--search") if "--search" in args else len(args)
