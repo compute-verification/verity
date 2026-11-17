@@ -252,7 +252,9 @@ one card (`TOPK_CUT.jsonl`, the timing of `benchmarks/dsa_topk`'s passes at the 
 serving_cost` reads by the run's id (`stage.py`: its `kind`, its fingerprint and a validation that names every gap):
 
 - **`--stage capture --minify RUN [--exact RUN]`**, on the full model: `serving-cost-capture/v1`, with the minify run
-  (and the exact run) in its fingerprint. It passes where `out/` holds what `priced.py` reads: each arm of ours on the
+  (and the exact run) in its fingerprint, beside `served` and `card`, the member's model and card as
+  `serve_tax.member` gives them: the served name of the model `prod_repro.json` names, and the `short` of the one card
+  record naming the cards `out/gpus.csv` lists from inside the lease. It passes where `out/` holds what `priced.py` reads: each arm of ours on the
   canonical top-k paired lifetime for lifetime with `prod-trace`, each lifetime with a step trace, counted passes and
   the top-k's counts, and the job's measured `prod-trace` over `prod` with an interval.
 - **`--stage minify`**, on a stand-in (`glm53-standin`): `serving-cost-minify/v1`. After the arms, `topk_units.py`

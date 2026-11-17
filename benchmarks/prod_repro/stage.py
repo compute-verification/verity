@@ -2,12 +2,13 @@
 stage's `kind`, its fingerprint's fields and its validation, which passes only where the run holds what the next stage
 reads, each gap named.
 
-    stage.py capture OUT --minify RUN [--exact RUN] [--reference prod-trace] [--stock prod] [--ours ARM ...]
+    stage.py capture OUT --model ID --minify RUN [--exact RUN] [--reference prod-trace] [--stock prod] [--ours ARM ...]
     stage.py minify OUT --model ID
 
 ``capture``: OUT as `priced.py` reads it, on the full model: each arm of ours that served on the canonical top-k paired
 lifetime for lifetime with the reference, each lifetime with a step trace, counted passes and the top-k's counts (by
-step, or the lifetime's totals), and the job's measured reference over stock with an interval. ``minify``: a stand-in's
+step, or the lifetime's totals), and the job's measured reference over stock with an interval; its fingerprint names
+the member's model and card (``served``, ``card``) as `serve_tax.member` does. ``minify``: a stand-in's
 run (`serve_tax.MODELS`' ``stand_in``) holding `topk_units.py`'s `UNITS`, with both kinds of time for every pass its
 pin offers, timed to its last shape; it writes the units' table, its ranges and how they were measured to
 `SUMMARY`. Either fails where the run's own validation did.
@@ -30,7 +31,7 @@ from verity_config.settings import SHARED  # noqa: E402 (the tree's tools/config
 KINDS = {stage: f"serving-cost-{stage}/v1" for stage in ("minify", "capture")}
 RESULT = "research/result/v0.1"
 RUN_ID = re.compile(r"r\d{8}-\d{6}-[0-9a-f]{4}")
-UNITS, SUMMARY = "units.jsonl", "units.json"
+UNITS, SUMMARY, GPUS = "units.jsonl", "units.json", "gpus.csv"
 #: what `priced.counted` reads of a pass's record
 PASS = frozenset({"load", "rep", "t0_unix", "wall_s"})
 #: what a price can't read from a minify record yet: the top-k at prefill shapes has no unit time
@@ -70,6 +71,31 @@ def capture_gaps(out: Path, reference: str = "prod-trace", stock: str = "prod",
     if not (below and below.get("ci95")):
         gaps.append(f"the job measured no {reference} over {stock} with an interval")
     return gaps
+
+
+def member_parts(out: Path, model: str) -> tuple[dict, list[str]]:
+    """``served`` and ``card`` as `serve_tax.member` gives them, from the job's own records: the model it served and
+    the cards it was leased (`GPUS`, which serve_tax's run.sh writes from nvidia-smi inside the lease)."""
+    m, gaps, fields = S.MODELS.get(model), [], {}
+    if m is None or m.stand_in:
+        gaps.append(f"{model} is {'a stand-in' if m else 'no model of serve_tax.MODELS'}: a capture serves the full model")
+    else:
+        kept = out / "prod_repro.json"
+        ran = json.loads(kept.read_text()).get("model") if kept.is_file() else None
+        if ran != f"{m.repo}@{m.revision}":
+            gaps.append(f"{kept.name} names the model {ran!r}, not {model}'s {m.repo}@{m.revision}")
+        else:
+            fields["served"] = m.served
+    f = out / GPUS
+    names = {x.split(",")[0].strip() for x in f.read_text().splitlines()[1:] if x.strip()} if f.is_file() else set()
+    if len(names) != 1:
+        gaps.append(f"{GPUS} names {len(names)} kinds of card, not the one the job was leased")
+    else:
+        try:
+            fields["card"] = S.card_record(names.pop())["short"]
+        except SystemExit as e:
+            gaps.append(str(e))
+    return fields, gaps
 
 
 def minify_gaps(out: Path, model: str) -> tuple[list[str], dict | None]:
@@ -128,6 +154,7 @@ def main(argv: list[str] | None = None) -> int:
     sub = ap.add_subparsers(dest="stage", required=True)
     c = sub.add_parser("capture")
     c.add_argument("out", type=Path)
+    c.add_argument("--model", required=True)
     c.add_argument("--minify", required=True, metavar="RUN")
     c.add_argument("--exact", metavar="RUN")
     c.add_argument("--reference", default="prod-trace")
@@ -141,8 +168,9 @@ def main(argv: list[str] | None = None) -> int:
         for flag, run in (("--minify", a.minify), ("--exact", a.exact)):
             if run is not None and not RUN_ID.fullmatch(run):
                 raise SystemExit(f"stage capture: {flag} {run!r} is not a run id")
-        gaps = capture_gaps(a.out, a.reference, a.stock, tuple(a.ours))
-        fields = {"minify": a.minify, **({"exact": a.exact} if a.exact else {})}
+        parts, named = member_parts(a.out, a.model)
+        gaps = [*capture_gaps(a.out, a.reference, a.stock, tuple(a.ours)), *named]
+        fields = {**parts, "minify": a.minify, **({"exact": a.exact} if a.exact else {})}
         evidence = ["out/prod_repro.json"]
     else:
         gaps, summary = minify_gaps(a.out, a.model)

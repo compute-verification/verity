@@ -19,30 +19,38 @@ def run(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     return tmp_path
 
 
+def leased(out: Path, card: str = "NVIDIA H200", model: str = "zai-org/GLM-5.3@aca966e4e02791568aa6a4ced368624b3d897f42") -> Path:
+    kept = out / "prod_repro.json"
+    kept.write_text(json.dumps(json.loads(kept.read_text()) | {"model": model}))
+    (out / G.GPUS).write_text("name, uuid, driver_version\n" + "".join(f"{card}, GPU-{k}, 580\n" for k in range(8)))
+    return out
+
+
 def result(run: Path) -> dict:
     return json.loads((run / "result.json").read_text())
 
 
 def test_a_capture_holding_what_a_price_reads_is_a_passed_capture_record_naming_its_minify_run(run: Path):
-    out = job(run, COUNTS, [BELOW])
+    out = leased(job(run, COUNTS, [BELOW]))
     (run / "result.json").write_text(json.dumps({
         "schema": G.RESULT, "run_id": "r20261117-120000-abcd", "measurements": [{"name": "m"}],
         "workload_fingerprint": {"benchmark": "prod_repro"},
         "validation": {"status": "passed", "detail": "tokens: reproduced"}}))
-    assert G.main(["capture", str(out), "--minify", "r20261117-110000-0001", "--exact", "r20261117-113000-0002"]) == 0
+    assert G.main(["capture", str(out), "--model", "glm53", "--minify", "r20261117-110000-0001",
+                   "--exact", "r20261117-113000-0002"]) == 0
     r = result(run)
     assert r["kind"] == "serving-cost-capture/v1" and r["validation"]["status"] == "passed"
-    assert r["workload_fingerprint"] == {"benchmark": "prod_repro", "minify": "r20261117-110000-0001",
-                                         "exact": "r20261117-113000-0002"}
+    assert r["workload_fingerprint"] == {"benchmark": "prod_repro", "served": "glm-5.3", "card": "h200",
+                                         "minify": "r20261117-110000-0001", "exact": "r20261117-113000-0002"}
     assert "the run's own: tokens: reproduced" in r["validation"]["detail"] and r["measurements"] == [{"name": "m"}]
     assert r["validation"]["evidence"] == ["out/prod_repro.json"]
 
 
 def test_a_capture_missing_a_part_of_what_a_price_reads_fails_naming_each(run: Path):
-    out = job(run, None)
+    out = leased(job(run, None))
     for f in (out / "prod-record.2" / "server").glob("step_trace.*"):
         f.unlink()
-    assert G.main(["capture", str(out), "--minify", "r20261117-110000-0001"]) == 1
+    assert G.main(["capture", str(out), "--model", "glm53", "--minify", "r20261117-110000-0001"]) == 1
     v = result(run)["validation"]
     assert v["status"] == "failed"
     for gap in ("prod-record.1 kept no top-k counts", "prod-record.2 kept no step trace",
@@ -53,17 +61,29 @@ def test_a_capture_missing_a_part_of_what_a_price_reads_fails_naming_each(run: P
 
 
 def test_a_capture_whose_run_failed_its_own_gates_fails_and_one_of_another_kind_is_refused(run: Path):
-    out = job(run, COUNTS, [BELOW])
+    out = leased(job(run, COUNTS, [BELOW]))
     (run / "result.json").write_text(json.dumps({"schema": G.RESULT, "run_id": "r", "measurements": [],
                                                  "validation": {"status": "failed", "detail": "a token differs"}}))
-    assert G.main(["capture", str(out), "--minify", "r20261117-110000-0001"]) == 1
+    assert G.main(["capture", str(out), "--model", "glm53", "--minify", "r20261117-110000-0001"]) == 1
     assert "the run's own validation failed: a token differs" in result(run)["validation"]["detail"]
     with pytest.raises(SystemExit, match="is a serving-cost-capture/v1 result"):
         G.main(["minify", str(out), "--model", "glm53-standin"])
     with pytest.raises(SystemExit, match="is not a run id"):
-        G.main(["capture", str(out), "--minify", "out/minify"])
+        G.main(["capture", str(out), "--model", "glm53", "--minify", "out/minify"])
     with pytest.raises(SystemExit, match="not this research run's out/"):
-        G.main(["capture", str(run / "elsewhere"), "--minify", "r20261117-110000-0001"])
+        G.main(["capture", str(run / "elsewhere"), "--model", "glm53", "--minify", "r20261117-110000-0001"])
+
+
+def test_a_capture_names_its_members_model_and_card_only_from_the_jobs_records(tmp_path: Path):
+    out = leased(job(tmp_path, COUNTS, [BELOW]))
+    assert G.member_parts(out, "glm53") == ({"served": "glm-5.3", "card": "h200"}, [])
+    assert G.member_parts(out, "glm53-standin") == (
+        {"card": "h200"}, ["glm53-standin is a stand-in: a capture serves the full model"])
+    fields, gaps = G.member_parts(leased(out, card="NVIDIA A100", model="org/Other@1"), "glm53")
+    assert fields == {} and "names the model 'org/Other@1', not glm53's" in gaps[0]
+    assert "have 'NVIDIA A100', the card nvidia-smi names here, in `driver`" in gaps[1]
+    (out / G.GPUS).unlink()
+    assert G.member_parts(out, "glm53")[1][1] == "gpus.csv names 0 kinds of card, not the one the job was leased"
 
 
 def test_a_stand_ins_unit_costs_are_a_passed_minify_record_with_their_table_ranges_and_how(run: Path):

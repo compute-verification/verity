@@ -203,7 +203,7 @@ fi
 report "$OUT" job; r=$?
 s=0
 if [ -n "$STAGE" ]; then
-  stage=(capture "$OUT" --minify "${MINIFY_RUN:-}" ${EXACT_RUN:+--exact "$EXACT_RUN"} ${STOCK:+--stock "$STOCK"})
+  stage=(capture "$OUT" --model "$MODEL_ID" --minify "${MINIFY_RUN:-}" ${EXACT_RUN:+--exact "$EXACT_RUN"} ${STOCK:+--stock "$STOCK"})
   [ "$STAGE" = capture ] || stage=(minify "$OUT" --model "$MODEL_ID")
   "$PY" "$here/stage.py" "${stage[@]}"; s=$?
 fi
