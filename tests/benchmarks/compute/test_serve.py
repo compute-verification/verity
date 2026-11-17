@@ -96,8 +96,9 @@ def test_compute_run_names_the_card_the_preflight_checked_as_nvidia_smi_names_it
     script = (f"PY={sys.executable} OUT={out} TREE={tmp_path} COINS=in-process CLASS=4,32,4 DRAWS=459 DELTA=1/100 "
               f"SCHEME=s REPO=unsloth/Llama-3.2-1B REV=r AUDITOR=a PIECE={out}/pieces/pouw GPU=0\n{line[0]}\n{fn[0]}\n"
               "coins\n")
-    subprocess.run(["bash", "-c", script], env={**os.environ, "PATH": f"{bin_}:{os.environ['PATH']}"},
-                   capture_output=True, text=True, check=True)
+    env = {**os.environ}
+    subprocess.run(["bash", "-c", script], env={**env, "PATH": f"{bin_}:{env['PATH']}"}, capture_output=True, text=True,
+                   check=True)
     assert json.loads((out / "compute-run.json").read_text())["card"] == card
 
 
