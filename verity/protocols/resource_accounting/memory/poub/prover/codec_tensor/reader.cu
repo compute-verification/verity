@@ -521,13 +521,15 @@ __device__ void salt_of(u64 c, u64 (&S)[24]) {
 }
 
 // The hm96 leaf over x (a row's sha512/row/v2 digest) at position c under its salt S (salt_of(c)), and its frame-v3
-// leaf, into d.
-__device__ __forceinline__ void hm96_leaf(u64 c, const u64 (&x)[8], const u64 (&S)[24], u64 (&d)[8]) {
+// leaf, into d. nib is the nibble table: gNib through L1, or (LDG false) a copy in shared memory.
+template <bool LDG = true>
+__device__ __forceinline__ void hm96_leaf(u64 c, const u64 (&x)[8], const u64 (&S)[24], u64 (&d)[8],
+                                          const uint8_t *nib = gNib) {
   u64 Y[24], my[8], cd[8];
 #pragma unroll
   for (int i = 0; i < 24; ++i) Y[i] = bswap64(S[i]);
   u32 m[16];
-  rc::mask<false>(rc::NibTab<true>{gNib}, Y, m);
+  rc::mask<false>(rc::NibTab<LDG>{nib}, Y, m);
   rc::mask_words(m, my);
   rc::salt_digest(kL, Y, cd);
   rc::frame_first_rt(kL, c, d);
@@ -578,6 +580,12 @@ __global__ void __launch_bounds__(128) leaves_kernel(const u64 *__restrict__ ys,
   const u64 tid = blockIdx.x * (u64)blockDim.x + threadIdx.x, t = tid < nl ? tid : nl - 1;
   const u64 c = c0 + t, leaves = (kC.positions + PER_LEAF - 1) / PER_LEAF;
   const int m = c + 1 < leaves ? PER_LEAF : (int)(kC.positions - PER_LEAF * c);
+  // The nibble table read from shared memory, and the salts stored before the leaf so S is not live across it: without
+  // either, the kernel spills at 255 registers.
+  __shared__ __align__(16) uint8_t nib[rc::TN_BYTES];
+  for (int i = threadIdx.x; i < rc::TN_BYTES / 16; i += blockDim.x)
+    reinterpret_cast<uint4 *>(nib)[i] = reinterpret_cast<const uint4 *>(gNib)[i];
+  __syncthreads();
   const u64 *Y = ys + t * PER_LEAF * 8;
   u64 x[8], w[16];
 #pragma unroll
@@ -596,11 +604,11 @@ __global__ void __launch_bounds__(128) leaves_kernel(const u64 *__restrict__ ys,
 
   u64 S[24], d[8];
   salt_of(c, S);
-  hm96_leaf(c, x, S, d);
-  store_digest(dig, tid, nl, d);
   if (salts && tid < nl)
     for (int i = 0; i < 24; ++i)
       for (int b = 0; b < 8; ++b) salts[t * SALT + 8 * i + b] = (uint8_t)(S[i] >> (8 * b));
+  hm96_leaf<false>(c, x, S, d, nib);
+  store_digest(dig, tid, nl, d);
 }
 
 // --- nodes -------------------------------------------------------------------------------------------------------
