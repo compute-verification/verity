@@ -1,5 +1,6 @@
 module
 
+public import Proofs.Flock.Soundness.Discharge.Recursion.Registrants
 public import Proofs.Flock.Recursive.Stage
 public import Proofs.Flock.Recursive.StageRead
 import Mathlib.Tactic.Echelon.Zsqrtd
@@ -49,6 +50,7 @@ the audit once and outputs the pair where the outcome's history has one.
 namespace FlockSoundness.Registered
 
 open Game Refine Binding Audit
+
 open scoped ENNReal
 
 section Clash
@@ -118,16 +120,12 @@ namespace FlockSoundness.Discharge.Recursion
 
 open Game Audit Exec Refine Flock FlockLevel3 Model Accounting ZkSession ZkLink ZkExec ZkBind Integrate Placed StrictCR
   DecodeZL Composed ZkReg
+
 open scoped ENNReal
 
 variable {S : ℕ} {Vs : Fin S → VStmt} {Reg' Reg₂ : Type}
-variable {n : ℕ} {L : SamplingDesign n} {Reg : Type} {I : Inner} {Cm : Type}
 
-/-- **Two of V*'s sessions clash at a history**: at the history `(R, ω, t)` and registration `R₂`, the registrant
-records of some sessions `j`, `j'` clash (`ReadsX.Clash`). -/
-def RegColl (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg') (R : Reg) (ω : L.Ω)
-    (t : List (Cm × I.Coin)) (R₂ : Reg₂) : Prop :=
-  ∃ j j', (zs R ω t R₂ j).rd.Clash (zs R ω t R₂ j').rd
+variable {n : ℕ} {L : SamplingDesign n} {Reg : Type} {I : Inner} {Cm : Type}
 
 /-- **A history's candidates**: each two sessions' registrant records' (`ReadsX.clashCands`), at the sessions' commit
 strings in their written-out order (`ZkOuterD.posList`). -/
@@ -178,41 +176,11 @@ theorem prob_regColl_le (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ �
   exact (ENNReal.le_ofReal_iff_toReal_le (ne_top_of_le_ne_top ENNReal.one_ne_top (prob_le_one _ _ _))
     (by positivity)).2 hev
 
-/-- **`VBridge` off `Bad`**: at every history `(R, ω, t)` and registration `R₂` where `Bad` fails, and strategies `τ` of
-V*'s sessions there, at every record that is a genuine session-game outcome (each session's outcome is one its game
-reaches against `τ j`, `Game.Outcome`), when every session accepts and every layer is `Good`, the inner verifier
-accepts the messages `wmsg` reads from the layers. -/
-def VBridgeOff (Bad : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → Prop)
-    (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
-    (dg : ByteArray → ByteArray) (N k Rw : ℕ) (x : Reg → L.Ω → I.Stmt)
-    (wmsg : ((j : Fin S) → (Vs j).Bits) → List I.Msg) : Prop :=
-  ∀ R ω t R₂, ¬ Bad R ω t R₂ → ∀ (τ : (j : Fin S) → Strategy ((zs R ω t R₂ j).game dg N))
-    (o : (j : Fin S) → Reg' × Finset (Fin (Vs j).nv) × Exec.Transcript),
-    (∀ j, Game.Outcome ((zs R ω t R₂ j).game dg N) (τ j) (o j)) →
-    (∀ j, LiveAcceptsZKR (zs R ω t R₂ j).I (zs R ω t R₂ j).own (o j) ∧
-      (zs R ω t R₂ j).Good ((zs R ω t R₂ j).layer dg N k Rw (τ j))) →
-    I.accepts (x R ω) ((wmsg fun j => (zs R ω t R₂ j).layer dg N k Rw (τ j)).zip (t.map Prod.snd))
-
 theorem VBridge.off {Bad : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → Prop}
     {zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'} {dg : ByteArray → ByteArray}
     {N k Rw : ℕ} {x : Reg → L.Ω → I.Stmt} {wmsg : ((j : Fin S) → (Vs j).Bits) → List I.Msg}
     (h : Recursion.VBridge zs dg N k Rw x wmsg) : VBridgeOff Bad zs dg N k Rw x wmsg :=
   fun R ω t R₂ _ τ o _ => h R ω t R₂ τ o
-
-/-- **`VBridgeOff` at a `Bad` of the sessions' outcomes**: as `VBridgeOff`, with `Bad` reading the record `o` of
-genuine session-game outcomes too, so asked only at the records where `Bad R ω t R₂ o` fails. -/
-def VBridgeOffOut
-    (Bad : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ →
-      ((j : Fin S) → Reg' × Finset (Fin (Vs j).nv) × Exec.Transcript) → Prop)
-    (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
-    (dg : ByteArray → ByteArray) (N k Rw : ℕ) (x : Reg → L.Ω → I.Stmt)
-    (wmsg : ((j : Fin S) → (Vs j).Bits) → List I.Msg) : Prop :=
-  ∀ R ω t R₂ (τ : (j : Fin S) → Strategy ((zs R ω t R₂ j).game dg N))
-    (o : (j : Fin S) → Reg' × Finset (Fin (Vs j).nv) × Exec.Transcript),
-    (∀ j, Game.Outcome ((zs R ω t R₂ j).game dg N) (τ j) (o j)) → ¬ Bad R ω t R₂ o →
-    (∀ j, LiveAcceptsZKR (zs R ω t R₂ j).I (zs R ω t R₂ j).own (o j) ∧
-      (zs R ω t R₂ j).Good ((zs R ω t R₂ j).layer dg N k Rw (τ j))) →
-    I.accepts (x R ω) ((wmsg fun j => (zs R ω t R₂ j).layer dg N k Rw (τ j)).zip (t.map Prod.snd))
 
 /-- `VBridgeOff` is `VBridgeOffOut` at a `Bad` that reads no outcome. -/
 theorem VBridgeOff.out {Bad : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → Prop}

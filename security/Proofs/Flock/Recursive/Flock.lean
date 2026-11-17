@@ -1,5 +1,6 @@
 module
 
+public import Proofs.Flock.Soundness.Discharge.Recursion.Flock
 public import Proofs.Flock.Recursive.Finds
 public import Proofs.Flock.Recursive.Sound
 public import Proofs.Flock.Soundness.Discharge.Composed.Sound
@@ -70,11 +71,13 @@ namespace FlockSoundness.Discharge.Recursion
 
 open Game Audit Exec Refine Flock FlockLevel3 Model Accounting ZkSession ZkLink ZkExec ZkBind Integrate Placed StrictCR
   DecodeZL Composed ZkReg
+
 open ZkHidden (planZHJ tabZHJ planZHJ_length SampleSetupZHJ TagsOkZHJ SampleOkZKHJ layShHJ)
+
 open FlockSoundness.Discharge.Tables (LiveOutJ liveSession)
+
 open scoped ENNReal
 
-set_option genSizeOfSpec false in
 set_option genInjectivity false in
 /-- **V*'s `--zk --registered` session at one history, but for its record's custody**: what its soundness takes besides
 the circuit `c` (fixed: V* is public), its number of tables `J`, the sampling design `Lv` of V*'s units, the record's custody
@@ -121,7 +124,6 @@ theorem ZkOuterD.mem_posList {mPts nv J : ℕ} {Reg' : Type} {c : Flock.Circuit}
     p ∈ z.posList :=
   Positions.mem (P := (Fin nv × Fin c.ports.size) ⊕ Fin _) p
 
-set_option genSizeOfSpec false in
 set_option genInjectivity false in
 /-- **V*'s `--zk --registered` session at one history**: `ZkOuterD`'s, with the record's custody `hRec` (the record
 `verify --zk` reads is the challenger's of the live session of `J` tables, `RecordsLiveZKJ`). -/
@@ -501,18 +503,6 @@ theorem accepts_le {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin 1 → ℕ) (
 
 end ZkOuter
 
-/-- **The sampling design of a public verifier's units**: the full sample, the live subset sampling design of all `nv` units over `[0, nv)` on a
-byte source (`live`, `--draw subset:<units>`, as V* is staged), and the model's uniform `nv`-subset it escapes no more
-often than (`model`, which misses no unit). -/
-structure VSamplingDesign (nv : ℕ) : Type 1 where
-  Ω : Type
-  [fintypeΩ : Fintype Ω]
-  [nonemptyΩ : Nonempty Ω]
-  Lb : Fin 1 → ℕ
-  src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256
-
-attribute [instance] VSamplingDesign.fintypeΩ VSamplingDesign.nonemptyΩ
-
 namespace VSamplingDesign
 
 variable {nv : ℕ} (samplingDesign : VSamplingDesign nv)
@@ -525,16 +515,6 @@ abbrev live : SamplingDesign nv := SamplingDesign.execOS (n := nv) samplingDesig
 abbrev model (_samplingDesign : VSamplingDesign nv) : SamplingDesign nv := SamplingDesign.subset nv nv le_rfl
 
 end VSamplingDesign
-
-/-- **A public verifier**: its circuit `c` over `nv` units, proved in sessions of `J` tables, and its sampling design. -/
-structure VStmt : Type 1 where
-  nv : ℕ
-  mPts : ℕ
-  J : ℕ
-  c : Flock.Circuit
-  hU : Built c.unit
-  hscope : Layout.scopeOk c = true
-  samplingDesign : VSamplingDesign nv
 
 namespace VStmt
 

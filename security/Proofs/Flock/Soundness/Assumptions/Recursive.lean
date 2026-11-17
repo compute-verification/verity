@@ -1,6 +1,7 @@
 module
 
-public import Proofs.Flock.Recursive.Registrants
+public import Proofs.Flock.Soundness.Discharge.Recursion.Registrants
+public import Proofs.Flock.Soundness.Discharge.Recursion.Stage
 import Mathlib.Tactic.Echelon.Zsqrtd
 import Mathlib.Tactic.NormNum.Irrational
 import Mathlib.Tactic.NormNum.IsCoprime
@@ -30,9 +31,9 @@ for those sessions to mean it: V* accepts at its public inputs (the ZK server's 
 files) and at the values it registers itself (the rounds' coins and the comb `coef`, in its record `ZkOuter.rd`) only
 when the inner verifier accepts the inner transcript those commitments open to.
 
-Flock's definitions are still in its proofs package (`Proofs.Flock.Soundness`), and so is the recursion's model
-(`Proofs.Flock.Recursive`), so this module imports `Proofs.Flock.Recursive.Registrants`, and `Definitions.lean`, which
-the `security` package builds without `security_proofs`, does not import it: `Proofs.Flock.Recursive` does.
+Flock's definitions are still in its proofs package (`Proofs.Flock.Soundness`), and so is what this module reads of the
+recursion's model (`Proofs.Flock.Soundness.Discharge.Recursion`), so `Definitions.lean`, which the `security` package
+builds without `security_proofs`, does not import it: `Proofs.Flock.Recursive` does.
 -/
 
 @[expose] public section

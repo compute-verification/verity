@@ -1,5 +1,6 @@
 module
 
+public import Proofs.Flock.Soundness.Discharge.Recursion.Defs
 public import Proofs.Flock.Soundness.StrictCR
 import Mathlib.Combinatorics.Matroid.Init
 import Proofs.Flock.Soundness.Game
@@ -46,12 +47,6 @@ for the sampled proof blocks and the public coins, accepts.
 namespace FlockSoundness.Game
 
 variable {α : Type}
-
-/-- **An outcome the strategy reaches**: `s` plays `g` to `a` at some coins. -/
-def Outcome : (g : Game α) → Strategy g → α → Prop
-  | .ret b, _, a => b = a
-  | .send _ k, s, a => Outcome (k s.1) s.2 a
-  | @Game.coin _ _ _ _ k, s, a => ∃ c, Outcome (k c) (s c) a
 
 /-- **An outcome of a sequenced game, decomposed**: it passes through an outcome of `g` against the induced strategy,
 from which some strategy of the continuation reaches it. -/
@@ -108,6 +103,7 @@ end FlockSoundness.StrictCR
 namespace FlockSoundness.Discharge.Recursion
 
 open Game Audit
+
 open scoped ENNReal
 
 /-- **`r` committed rounds**: in each, the prover sends a message of type `M`, and then the verifier flips a live coin from
@@ -115,22 +111,6 @@ open scoped ENNReal
 def rounds (M C : Type) [Fintype C] [Nonempty C] {β : Type} : ℕ → (List (M × C) → Game β) → Game β
   | 0, f => f []
   | r + 1, f => .send M fun m => .coin C fun ρ => rounds M C r fun t => f ((m, ρ) :: t)
-
-/-- **An inner protocol**: an interactive verifier with `r` rounds of public coins, messages committed before coins. In
-each round the prover sends a message of type `Msg` and the verifier flips a uniform coin from `Coin`; after the last
-round it decides `accepts x t` from the statement `x` and the transcript `t`, first round first. `holds x` is the
-statement's truth. -/
-structure Inner : Type 1 where
-  Stmt : Type
-  Msg : Type
-  Coin : Type
-  [fintype : Fintype Coin]
-  [nonempty : Nonempty Coin]
-  r : ℕ
-  accepts : Stmt → List (Msg × Coin) → Prop
-  holds : Stmt → Prop
-
-attribute [instance] Inner.fintype Inner.nonempty
 
 /-- The inner verifier's side of the interaction, its output the transcript. -/
 def Inner.game (I : Inner) : Game (List (I.Msg × I.Coin)) := rounds I.Msg I.Coin I.r .ret
@@ -352,6 +332,7 @@ theorem leafAvg_relabel {N δ : Type} (Q : δ → Prop) : ∀ (r : ℕ) (f : Lis
         (fun p c => ref ((s.1, ρ) :: p) c) (fun t => h ((ref [] s.1, ρ) :: t)) (s.2 ρ))
 
 omit [Fintype C] [Nonempty C] in
+
 theorem zip_eq_relabel {N : Type} : ∀ (ref : List (M × C) → M → N) (t : List (M × C)) (w : List N),
     (∀ k < t.length, w[k]? = (t[k]?).map fun e => ref (t.take k) e.1) → w.zip (t.map Prod.snd) = relabel ref t
   | _, [], _, _ => by simp [relabel]

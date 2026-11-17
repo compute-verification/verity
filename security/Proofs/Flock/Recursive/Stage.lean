@@ -1,5 +1,6 @@
 module
 
+public import Proofs.Flock.Soundness.Discharge.Recursion.Stage
 public import Proofs.Flock.Recursive.Flock
 import Mathlib.Tactic.Echelon.Zsqrtd
 import Mathlib.Tactic.NormNum.Irrational
@@ -57,19 +58,14 @@ namespace FlockSoundness.Discharge.Recursion
 
 open Game Audit Exec Refine Flock FlockLevel3 Model Accounting ZkSession ZkLink ZkExec ZkBind Integrate Placed StrictCR
   DecodeZL Composed ZkReg
+
 open ZkHidden (planZHJ tabZHJ)
+
 open scoped ENNReal
 
 section Fixed
 
 variable (c : Flock.Circuit) (hU : Built c.unit) (n : ℕ)
-
-/-- **V*'s commit strings**: unit `u`'s row of port `q`, or a single gate (`Readers.ofRows`' positions at
-`HiddenExec.keyReadersH`). -/
-abbrev PosK : Type := (Fin n × Fin c.ports.size) ⊕ Fin ((keyProg c hU n).circuit (Layout.outsOf c hU n)).N
-
-/-- **Their values**: bit strings of at most the widest row's `16 · words` bits, with their width. -/
-abbrev ValK : Type := Layout.BitVal (Finset.univ.sup (Layout.portRowW c) + 1)
 
 /-- **Each commit string's leaf scheme**: `hm96X` of the bytes its port's hash reads (`HiddenExec.encKeyH`:
 `sha512/row/v1`'s, `/row/v2`'s or `/row-seg/v1`'s, `HiddenExec.encPortH`) at a row, `SHA-512(bitCode v)` at a single
@@ -93,25 +89,6 @@ noncomputable def obK : Openings H512 (ValK c) where
     simp only [Prod.mk.injEq] at hc
     obtain ⟨rfl, hl⟩ := hc
     exact (schemeK c hU n p).pair_spec v y v' y' hv hl
-
-/-- The commit string holding wire `g` (`Readers.ofRows`' `pos`): its row when `HiddenExec.rowOfH` has one (an input
-row's bit, or a returned output's bit of its output row), else its own. -/
-noncomputable def posK (g : Fin ((keyProg c hU n).circuit (Layout.outsOf c hU n)).N) : PosK c hU n :=
-  match HiddenExec.rowOfH c hU n (Layout.outsOf c hU n) g with
-  | some (u, ⟨q, _⟩) => .inl (u, q)
-  | none => .inr g
-
-/-- Wire `g`'s place in its commit string's value (`Readers.ofRows`' `idx`): bit `k` of its row, or a single gate's
-only bit. -/
-noncomputable def idxK (g : Fin ((keyProg c hU n).circuit (Layout.outsOf c hU n)).N) :
-    Fin (Finset.univ.sup (Layout.portRowW c) + 1) :=
-  match HiddenExec.rowOfH c hU n (Layout.outsOf c hU n) g with
-  | some (_, ⟨q, k⟩) => Fin.castLE ((Finset.le_sup (Finset.mem_univ q)).trans (Nat.le_succ _)) k
-  | none => ⟨0, Nat.succ_pos _⟩
-
-/-- Wire `g`'s bit in the value `v` of its commit string. -/
-noncomputable def bitK (v : ValK c) (g : Fin ((keyProg c hU n).circuit (Layout.outsOf c hU n)).N) : Bool :=
-  v.2 (idxK c hU n g)
 
 /-- A sample of `Lv` reads commit string `pos`: a sampled proof block reads a wire it holds. -/
 def ReadsSampleK (Lv : SamplingDesign n) (pos : PosK c hU n) (ω : Lv.Ω) : Prop :=
@@ -529,34 +506,6 @@ sampling design, the full sample, samples it. -/
 def VFull (r : ℕ) (Sk : ℕ → (j : Fin S) → Finset (PosK (Vs j).c (Vs j).hU (Vs j).nv)) : Prop :=
   ∀ i < r, ∀ j g, posK (Vs j).c (Vs j).hU (Vs j).nv g ∈ Sk i j →
     ∃ u, g ∈ ((keyProg (Vs j).c (Vs j).hU (Vs j).nv).partition (Layout.outsOf (Vs j).c (Vs j).hU (Vs j).nv)).io u
-
-variable (Vs) in
-/-- **Wire `g` of session `j` is read**: a committed wire of some unit. -/
-def ReadW (j : Fin S) (g : Fin ((keyProg (Vs j).c (Vs j).hU (Vs j).nv).circuit
-    (Layout.outsOf (Vs j).c (Vs j).hU (Vs j).nv)).N) : Prop :=
-  ∃ u, g ∈ ((keyProg (Vs j).c (Vs j).hU (Vs j).nv).partition (Layout.outsOf (Vs j).c (Vs j).hU (Vs j).nv)).io u
-
-/-- **`VDecodes` at the read wires**: layers whose bits on the read wires of each `Sk i j` are those of the values `v j`
-hold a round-`i` message the inner verifier reads as `msg i v`, at any coins. It asks more than `VDecodes` (the message
-must be fixed by the read wires alone), and it is true at V* when every wire `wmsg` depends on is some unit's `io`,
-which is what VBridge G's `vbridgeRead_assembled` builds. -/
-def VDecodesR (wmsg : ((j : Fin S) → (Vs j).Bits) → List I.Msg) (same : ℕ → List I.Coin → I.Msg → I.Msg → Prop)
-    (Sk : ℕ → (j : Fin S) → Finset (PosK (Vs j).c (Vs j).hU (Vs j).nv))
-    (msg : ℕ → ((j : Fin S) → PosK (Vs j).c (Vs j).hU (Vs j).nv → ValK (Vs j).c) → I.Msg) : Prop :=
-  ∀ i < I.r, ∀ (ρs : List I.Coin) (Xt : (j : Fin S) → (Vs j).Bits)
-    (v : (j : Fin S) → PosK (Vs j).c (Vs j).hU (Vs j).nv → ValK (Vs j).c),
-    (∀ j g, posK (Vs j).c (Vs j).hU (Vs j).nv g ∈ Sk i j → ReadW Vs j g →
-      Xt j g = bitK (Vs j).c (Vs j).hU (Vs j).nv (v j (posK (Vs j).c (Vs j).hU (Vs j).nv g)) g) →
-    Option.Rel (same i ρs) (wmsg Xt)[i]? (some (msg i v))
-
-/-- **`VFull` at the read wires**: each read wire of `Sk i j` (`i < r`) is a wire of some unit, which holds of every read
-wire (`vFullR_of_read`). -/
-def VFullR (r : ℕ) (Sk : ℕ → (j : Fin S) → Finset (PosK (Vs j).c (Vs j).hU (Vs j).nv)) : Prop :=
-  ∀ i < r, ∀ j g, posK (Vs j).c (Vs j).hU (Vs j).nv g ∈ Sk i j → ReadW Vs j g →
-    ∃ u, g ∈ ((keyProg (Vs j).c (Vs j).hU (Vs j).nv).partition (Layout.outsOf (Vs j).c (Vs j).hU (Vs j).nv)).io u
-
-theorem vFullR_of_read (r : ℕ) (Sk : ℕ → (j : Fin S) → Finset (PosK (Vs j).c (Vs j).hU (Vs j).nv)) : VFullR r Sk :=
-  fun _ _ _ _ _ h => h
 
 /-- **The recursive audit with V*'s `--zk --registered` sessions as the outer proof is sound, with its stages' transfer
 from V*'s sessions**: `zk_sessions_recursive_upto` at V*'s tagged openings `obS`, stage `i`'s trial for each tagged
