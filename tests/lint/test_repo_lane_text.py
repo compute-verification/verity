@@ -60,7 +60,7 @@ LEFT_OUT = ()
 #: prose that is data, by path prefix (or a whole path), each with its reason
 SKIP = {
     "fixtures/": "replicated fixtures and their notes are data, named by what they hold",
-    "benchmarks/census/": "data only (AGENTS.md: verity never reads it)",
+    "calibration/census/": "data only (AGENTS.md: verity never reads it)",
     f"tests/lint/test_{NAME}.py": "its examples are the lane text it refuses",
 }
 #: the kinds a path prefix's prose may hold, each with its reason
