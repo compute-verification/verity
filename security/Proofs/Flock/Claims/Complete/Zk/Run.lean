@@ -35,13 +35,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# The honest run against the masked verifier
-
-`run_acc_of` at `V true` for `honestPZk`: the masked verifier's side is the plain one's (`act`, `next` read `zk` only
-through `setupOf` and the verdict), so `act_coin` and `act_final` hold at any `zk` (`act_coin_any`, `act_final_any`),
-and the prover's side is `feed_sim` and `stepWith_acc` as for `honestP`.
--/
+/-! The honest run against the masked verifier, whose side is the plain one's (`run_acc_of_zk`). -/
 
 @[expose] public section
 
@@ -49,7 +43,6 @@ namespace FlockComplete
 
 open Flock FlockDeploy
 
-/-- A last message of tag `0` is answered by its coin, at either verifier. -/
 theorem act_coin_any {zk : Bool} {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin} {s : Ins}
     {spec : SessionSpec} {sts : Array Flock.Stmt} {t : Claims.Msg} {c : Coin} (hs : setupOf zk x = some (s, spec, sts))
     (ha : as.getLast? = some (0 :: t)) (hc : cs.getLast? = some c) : act zk x as cs = .coin c := by
@@ -57,7 +50,6 @@ theorem act_coin_any {zk : Bool} {x : Claims.Msg} {as : List Claims.Msg} {cs : L
   rw [hs, ha, hc]
   rfl
 
-/-- The last message is decided, at either verifier. -/
 theorem act_final_any {zk : Bool} {x : Claims.Msg} {a₁ : Claims.Msg} {rest : List Claims.Msg} {c₁ : Coin}
     {crest : List Coin} {s : Ins} {spec : SessionSpec} {sts : Array Flock.Stmt} {f : Claims.Msg} {F : Final}
     {link : List ByteArray × List ByteArray} (hs : setupOf zk x = some (s, spec, sts))
@@ -86,15 +78,10 @@ theorem act_final_any {zk : Bool} {x : Claims.Msg} {a₁ : Claims.Msg} {rest : L
   · rename_i h
     cases h
 
-/-- **The honest masked run** at the coins `r`: the program's sends, each answered by its coin's bytes, and its last
-message. -/
 def honestRunZk (H : Claims.Msg → Claims.Msg) (x : Claims.Msg) (w : Claims.Flock.Wit) (ω : TapeZk) {k : ℕ}
     (r : Fin k → Coin) : List Claims.Msg × Claims.Msg :=
   (progZk x w ω).sim H (fun j => (Claims.coinSeq r j).bytes) 0
 
-/-- **The honest masked prover is accepted** at the coins `r` when the statement sets up, against `H` as at SHA-512
-(the verifier's setup), the honest run's sends are of tag `0`, fit the verifier's rounds, and start with a link
-message, its last message decodes, and the masked verdict and the checks pass on it. -/
 theorem run_acc_of_zk (H : Claims.Msg → Claims.Msg) (w : Claims.Flock.Wit) (x : Claims.Msg) (ω : TapeZk)
     (r : Fin ((V true).k x) → Coin) {s : Ins} {spec : SessionSpec} {sts : Array Flock.Stmt}
     {link : List ByteArray × List ByteArray} {F : Final} (hs : setupOf true x = some (s, spec, sts))

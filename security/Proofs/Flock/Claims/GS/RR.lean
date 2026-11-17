@@ -46,36 +46,14 @@ import Mathlib.Topology.Sheaves.Init
 import Std.Tactic.BVDecide.Normalize.BitVec
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# The Y-roots of `Q(X, Y)` of degree below `k`: Roth–Ruckenstein, counted
-
-`rr rf D L T k` lists the coefficient lists (length `k`) of the polynomials `P` with `deg P < k` and `Q(X, P(X)) = 0`,
-for `Q ≠ 0` given as its coefficient table `T` on the box `i ≤ D`, `j ≤ L` (`T` stores row `i` as the list of
-`Q`'s coefficients at `X^i Y^j`, `j ≤ L`; `mkTab`, `tget`). A univariate root finder `rf` (`RootFinder`: the distinct
-roots of a nonzero polynomial given by its coefficient list, with its operation count) does the field work.
-
-The search is breadth first over the coefficients of `P`, lowest first (Roth and Ruckenstein's recursion). A node is a
-prefix `P_0, …, P_{d−1}` and a table `Q_d`. Its lowest nonzero row `v` (`lowRow`) splits `Q_d = X^v·Q_v`
-(`tpoly_eq_mul`); the next coefficient is a root `a` of row `v` read as a polynomial in `Y`, which is `Q_v(0, Y)`, and
-the child for `a` is `Q_v(X, XY + a)` (`childTab`, `shiftEntry`). If `Q_d(X, g) = 0` with `g = a + X·g'`, then
-`Q_v(0, a) = 0` and the child vanishes at `g'`. Its table is exact on the box as long as `Q_d` has
-`(1, w)`-weighted degree at most `D` with `w ≥ 1` (`tpoly_childTab`), and the weight drops by one per level, from
-`k − 1` at the root, so the first `k − 1` levels are exact (`mem_rr`, completeness).
-
-Each level after the root has at most `L` nodes (`length_level_le`), so the output has at most `L + 1` prefixes
-(`length_rr_le`), distinct and each of `k` coefficients (`rr_shape`): the root multiplicity `μ` of `a` in a node's row
-polynomial bounds the degree of its child's row polynomial (`phi_child_le`), and the multiplicities of a polynomial's
-distinct roots sum to at most its degree (`expand_le`). The operation count (`rrCost`) is at most
-`k·(L + 1)·((D + 1)(L + 1) + ρ(L + 1) + (D + 1)(L + 1)²(L + 4))`, with `ρ` the root finder's bound (`rrCost_le`).
--/
+/-! Roth–Ruckenstein, counted: the `Y`-roots of `Q(X, Y)` of degree below `k` (`rr`), every one listed (`mem_rr`), at
+most `L + 1` of them (`length_rr_le`), within `rrCost_le`'s count. -/
 
 @[expose] public section
 
 namespace Claims.GS
 
 open Polynomial
-
-/-! ## Tables stored as rows -/
 
 /-- Entry `(i, j)` of a table stored as rows. -/
 def tget {F : Type} [Zero F] (T : List (List F)) (i j : ℕ) : F := (T.getD i []).getD j 0
@@ -112,8 +90,6 @@ theorem length_getD_mkTab_le {F : Type} (D L : ℕ) (f : ℕ → ℕ → F) (i :
     ((mkTab D L f).getD i []).length ≤ L + 1 := by
   rw [getD_mkTab]; split_ifs <;> simp
 
-/-! ## The lowest nonzero row -/
-
 /-- The lowest row of the box with a nonzero entry: `Q = X^v·Q_v` with `Q_v(0, Y) ≠ 0`. A zero test per entry. -/
 def lowRow {F : Type} [Zero F] [DecidableEq F] (D L : ℕ) (T : List (List F)) : Option ℕ :=
   (List.range (D + 1)).find? fun i => (List.range (L + 1)).any fun j => decide (tget T i j ≠ 0)
@@ -149,8 +125,6 @@ theorem lowRow_le {F : Type} [Zero F] [DecidableEq F] {D L : ℕ} {T : List (Lis
     by_contra hlt
     exact hne ((lowRow_some h).2.2 i (by omega) j hj)
 
-/-! ## The child `Q_v(X, XY + a)` -/
-
 /-- Entry `(u, l)` of `Q_v(X, XY + a)`, where `Q_v(X, Y) = Q(X, Y)/X^v`: `Σ_j Q_{u−l+v, j}·C(j, l)·a^(j−l)` for
 `l ≤ u`. -/
 def shiftEntry {F : Type} [Field F] (L : ℕ) (T : List (List F)) (v : ℕ) (a : F) (u l : ℕ) : F :=
@@ -164,17 +138,13 @@ def childTab {F : Type} [Field F] (D L : ℕ) (T : List (List F)) (v : ℕ) (a :
 multiplications), a binomial coefficient's image and two products, and their sum. -/
 def childCost (D L : ℕ) : ℕ := (D + 1) * (L + 1) * ((L + 1) * (L + 4))
 
-/-- The bivariate polynomial of a table on the box. -/
 noncomputable def tpoly {F : Type} [Field F] (D L : ℕ) (T : List (List F)) : F[X][X] := toBi (tget T) D L
 
-/-- `Q_v = Q / X^v`. -/
 noncomputable def lowPart {F : Type} [Field F] (D L : ℕ) (T : List (List F)) (v : ℕ) : F[X][X] :=
   toBi (fun i j => tget T (i + v) j) D L
 
-/-- Row `v` read as a polynomial in `Y`. -/
 noncomputable def rowPolyY {F : Type} [Field F] (T : List (List F)) (v : ℕ) : F[X] := toPolyL (T.getD v [])
 
-/-- **`Q = X^v·Q_v`** at the lowest nonzero row `v`. -/
 theorem tpoly_eq_mul {F : Type} [Field F] [DecidableEq F] {D L : ℕ} {T : List (List F)} (hB : Boxed (tget T) D L)
     {v : ℕ} (hv : lowRow D L T = some v) : tpoly D L T = C (X ^ v) * lowPart D L T v := by
   obtain ⟨hvD, _, hlow⟩ := lowRow_some hv
@@ -219,7 +189,6 @@ theorem coeff_shiftY_pow {F : Type} [Field F] (a : F) (j l : ℕ) :
     rw [Nat.choose_eq_zero_of_lt (by omega)]
     simp
 
-/-- The coefficients of `S(X, XY + a)`. -/
 theorem coeff_comp_shiftY {F : Type} [Field F] (S : F[X][X]) (L : ℕ) (hS : S.natDegree < L + 1) (a : F) (u l : ℕ) :
     ((S.comp (C X * X + C (C a))).coeff l).coeff u =
       if l ≤ u then ∑ j ∈ Finset.range (L + 1), (S.coeff j).coeff (u - l) * (j.choose l : F) * a ^ (j - l)
@@ -240,7 +209,6 @@ theorem natDegree_toBi_lt {F : Type} [Field F] (P : ℕ → ℕ → F) (D L : �
   ext i
   rw [coeff_toBi, ite_eq_right (by omega), coeff_zero]
 
-/-- **The child's table is `Q_v(X, XY + a)`** when `Q` has `(1, w)`-weighted degree at most `D`, `w ≥ 1`. -/
 theorem tpoly_childTab {F : Type} [Field F] {D L w : ℕ} {T : List (List F)}
     (hW : ∀ i j, tget T i j ≠ 0 → i + w * j ≤ D) (hw : 1 ≤ w) (v : ℕ) (a : F) :
     tpoly D L (childTab D L T v a) = (lowPart D L T v).comp (C X * X + C (C a)) := by
@@ -277,7 +245,6 @@ theorem tpoly_childTab {F : Type} [Field F] {D L w : ℕ} {T : List (List F)}
     · rw [shiftEntry, ite_eq_right hlu]
     · rfl
 
-/-- The child's weighted degree drops by one. -/
 theorem wdeg_childTab {F : Type} [Field F] {D L w : ℕ} {T : List (List F)}
     (hW : ∀ i j, tget T i j ≠ 0 → i + w * j ≤ D) (hw : 1 ≤ w) (v : ℕ) (a : F) :
     ∀ u l, tget (childTab D L T v a) u l ≠ 0 → u + (w - 1) * l ≤ D := by
@@ -311,7 +278,6 @@ theorem tpoly_childTab_ne_zero {F : Type} [Field F] [DecidableEq F] {D L w : ℕ
   · have := congrArg (fun q : F[X][X] => q.coeff 1) hc
     simp at this
 
-/-- The child vanishes at `g'` when `Q` vanishes at `a + X·g'`. -/
 theorem eval_childTab {F : Type} [Field F] [DecidableEq F] {D L w : ℕ} {T : List (List F)}
     (hB : Boxed (tget T) D L) (hW : ∀ i j, tget T i j ≠ 0 → i + w * j ≤ D) (hw : 1 ≤ w) {v : ℕ}
     (hv : lowRow D L T = some v) {g : F[X]} (hg : (tpoly D L T).eval g = 0) :
@@ -324,7 +290,6 @@ theorem eval_childTab {F : Type} [Field F] [DecidableEq F] {D L w : ℕ} {T : Li
   rw [tpoly_eq_mul hB hv, eval_mul, eval_C] at hg
   exact (mul_eq_zero.1 hg).resolve_left (pow_ne_zero _ X_ne_zero)
 
-/-- The next coefficient is a root of row `v`: `Q_v(0, g(0)) = 0`. -/
 theorem rowPolyY_isRoot {F : Type} [Field F] [DecidableEq F] {D L : ℕ} {T : List (List F)}
     (hB : Boxed (tget T) D L) {v : ℕ} (hv : lowRow D L T = some v) {g : F[X]} (hg : (tpoly D L T).eval g = 0) :
     (rowPolyY T v).IsRoot (g.coeff 0) := by
@@ -361,8 +326,6 @@ theorem rowPolyY_ne_zero {F : Type} [Field F] [DecidableEq F] {D L : ℕ} {T : L
   have := congrArg (fun p : F[X] => p.coeff j) h
   simp only [rowPolyY, coeff_toPolyL, coeff_zero] at this
   exact hj this
-
-/-! ## The search -/
 
 /-- **A univariate root finder**: the distinct roots of a nonzero polynomial given by its coefficient list, lowest
 degree first, with its field-operation count, at most `bound` at the list's length. -/
@@ -440,8 +403,6 @@ theorem coeffList_succ {F : Type} [Field F] (d : ℕ) (P : F[X]) :
     coeffList (d + 1) P = coeffList d P ++ [P.coeff d] := by
   simp [coeffList, List.range_succ]
 
-/-- **Roth–Ruckenstein is complete**: from a nonzero `Q` of `(1, k−1)`-weighted degree at most `D` on the box, every
-`P` of degree below `k` with `Q(X, P(X)) = 0` is listed, as its first `k` coefficients. -/
 theorem mem_rr {F : Type} [Field F] [DecidableEq F] (rf : RootFinder F) {D L k : ℕ} {f0 : ℕ → ℕ → F}
     (hT : tpoly D L (mkTab D L f0) ≠ 0) (hW : ∀ i j, tget (mkTab D L f0) i j ≠ 0 → i + (k - 1) * j ≤ D)
     {P : F[X]} (hP : P.natDegree < k) (hE : (tpoly D L (mkTab D L f0)).eval P = 0) :
@@ -483,8 +444,6 @@ theorem mem_rr {F : Type} [Field F] [DecidableEq F] (rf : RootFinder F) {D L k :
   rw [rr, e]
   exact List.mem_map.2 ⟨_, mem_level_succ hmem hv ha, rfl⟩
 
-/-! ## The size of each level -/
-
 theorem sum_map_flatMap {α β : Type} (l : List α) (f : α → List β) (g : β → ℕ) :
     ((l.flatMap f).map g).sum = (l.map fun a => ((f a).map g).sum).sum := by
   induction l with
@@ -498,7 +457,6 @@ noncomputable def phi {F : Type} [Field F] [DecidableEq F] (D L : ℕ) (nd : Sea
   | none => 0
   | some v => (rowPolyY nd.2 v).natDegree
 
-/-- The coefficients of `p(X + a)`. -/
 theorem coeff_comp_X_add_C {F : Type} [Field F] (p : F[X]) (L : ℕ) (hp : p.natDegree < L + 1) (a : F) (l : ℕ) :
     (p.comp (X + C a)).coeff l = ∑ j ∈ Finset.range (L + 1), p.coeff j * (j.choose l : F) * a ^ (j - l) := by
   conv_lhs => rw [p.as_sum_range' (L + 1) hp]
@@ -513,7 +471,6 @@ theorem natDegree_rowPolyY_lt {F : Type} [Field F] (D L : ℕ) (f : ℕ → ℕ 
   rw [rowPolyY, coeff_toPolyL]
   exact List.getD_eq_default _ _ (by have := length_getD_mkTab_le D L f v; omega)
 
-/-- **The child's row polynomial has degree at most the root's multiplicity.** -/
 theorem phi_child_le {F : Type} [Field F] [DecidableEq F] {D L : ℕ} (hLD : L ≤ D) (pre : List F)
     (f : ℕ → ℕ → F) {v : ℕ} (hv : lowRow D L (mkTab D L f) = some v) (a : F) :
     phi D L (pre ++ [a], childTab D L (mkTab D L f) v a) ≤ (rowPolyY (mkTab D L f) v).rootMultiplicity a := by
@@ -553,7 +510,6 @@ theorem phi_child_le {F : Type} [Field F] [DecidableEq F] {D L : ℕ} (hLD : L �
   · rw [shiftEntry, ite_eq_right (by omega)]
   · rfl
 
-/-- **A node's children**: at most its potential, and so is the sum of theirs. -/
 theorem expand_le {F : Type} [Field F] [DecidableEq F] (rf : RootFinder F) {D L : ℕ} (hLD : L ≤ D) (pre : List F)
     (f : ℕ → ℕ → F) :
     (expand rf D L (pre, mkTab D L f)).length ≤ phi D L (pre, mkTab D L f) ∧
@@ -589,7 +545,6 @@ theorem expand_le {F : Type} [Field F] [DecidableEq F] (rf : RootFinder F) {D L 
       refine le_trans (List.sum_le_sum fun a ha => ?_) hsum
       exact phi_child_le hLD pre f hv a
 
-/-- **Each level has at most `L` nodes after the root**, by the potential. -/
 theorem length_level_le {F : Type} [Field F] [DecidableEq F] (rf : RootFinder F) {D L : ℕ} (hLD : L ≤ D)
     (f0 : ℕ → ℕ → F) : ∀ d, (level rf D L (mkTab D L f0) (d + 1)).length ≤ L ∧
       ((level rf D L (mkTab D L f0) (d + 1)).map (phi D L)).sum ≤ L := by
@@ -627,13 +582,10 @@ theorem length_level_le' {F : Type} [Field F] [DecidableEq F] (rf : RootFinder F
   | zero => simp [level]
   | succ d => exact (length_level_le rf hLD f0 d).1.trans (Nat.le_succ L)
 
-/-- The output has at most `L + 1` prefixes. -/
 theorem length_rr_le {F : Type} [Field F] [DecidableEq F] (rf : RootFinder F) {D L : ℕ} (hLD : L ≤ D)
     (f0 : ℕ → ℕ → F) (k : ℕ) : (rr rf D L (mkTab D L f0) k).length ≤ L + 1 := by
   rw [rr, List.length_map]
   exact length_level_le' rf hLD f0 k
-
-/-! ## The output's shape -/
 
 theorem nodup_level {F : Type} [Field F] [DecidableEq F] (rf : RootFinder F) {D L : ℕ} (f0 : ℕ → ℕ → F) :
     ∀ d, ((level rf D L (mkTab D L f0) d).map Prod.fst).Nodup
@@ -668,14 +620,11 @@ theorem nodup_level {F : Type} [Field F] [DecidableEq F] (rf : RootFinder F) {D 
       simp only [Function.comp] at h'
       exact hne (List.append_inj h' (by rw [hl, hl'])).1.symm
 
-/-- **The output lists distinct prefixes, each of `k` coefficients.** -/
 theorem rr_shape {F : Type} [Field F] [DecidableEq F] (rf : RootFinder F) {D L : ℕ} (f0 : ℕ → ℕ → F) (k : ℕ) :
     (rr rf D L (mkTab D L f0) k).Nodup ∧ ∀ cs ∈ rr rf D L (mkTab D L f0) k, cs.length = k := by
   refine ⟨nodup_level rf f0 k, fun cs hcs => ?_⟩
   obtain ⟨nd, hnd, rfl⟩ := List.mem_map.1 hcs
   exact (shape_level k nd hnd).1
-
-/-! ## The count -/
 
 theorem eval_mono_nat (p : Polynomial ℕ) {a b : ℕ} (h : a ≤ b) : p.eval a ≤ p.eval b := by
   rw [eval_eq_sum, eval_eq_sum, Polynomial.sum_def, Polynomial.sum_def]
@@ -693,7 +642,6 @@ theorem expandCost_le {F : Type} [Field F] [DecidableEq F] (rf : RootFinder F) (
     have := (rf.cost_le _).trans (eval_mono_nat rf.bound (length_getD_mkTab_le D L f v))
     linarith
 
-/-- **Roth–Ruckenstein's count**: at most `k·(L + 1)·((D + 1)(L + 1) + ρ(L + 1) + childCost D L)`. -/
 theorem rrCost_le {F : Type} [Field F] [DecidableEq F] (rf : RootFinder F) {D L : ℕ} (hLD : L ≤ D)
     (f0 : ℕ → ℕ → F) (k : ℕ) :
     rrCost rf D L (mkTab D L f0) k ≤ k * ((L + 1) * ((D + 1) * (L + 1) + rf.bound.eval (L + 1) + childCost D L)) := by

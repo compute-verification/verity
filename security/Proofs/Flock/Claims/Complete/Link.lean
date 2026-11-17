@@ -45,16 +45,7 @@ import Proofs.Flock.Soundness.Discharge.HiddenExec.Setup
 import Proofs.Flock.Soundness.Refine.Seam
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# The first send is the link message
-
-* **Quiet runs** (`quietS`): a pure-session run related to a verdict `x` returns `x` and leaves the bodies as they were.
-  The schedules and the level-0 commitments are quiet (`schedsP_quiet`, `commitsP_quiet`), with the verdict-monad runs'
-  values.
-* **The session in three parts** (`sessionP_eq`): the schedules (`schedsP`), the level-0 commitments (`commitsP`), then
-  the link message and what follows its coin (`afterLinkP`), whose sends only append to the bodies (`afterLinkP_sim`).
-* `sessionS_link`: a pure session that returns sent the link message of its level-0 caps, with no public words, first.
--/
+/-! The pure session's first send is the link message of its level-0 caps, with no public words (`linkFirst_goal`). -/
 
 @[expose] public section
 
@@ -64,7 +55,6 @@ namespace FlockComplete
 
 open With
 
-/-- **Quiet runs**: the pure session's run returns `x` and leaves the bodies as they were. -/
 def quietS : With.Sim V PS where
   R x y := ∀ l, y.go l = (x, l)
   pure _ _ := rfl
@@ -83,9 +73,6 @@ theorem quietS_hashes (h : ByteArray → ByteArray) :
   blake3 _ _ := rfl
   blake3Keyed _ _ _ := rfl
 
-/-! ## The session in three parts -/
-
-/-- The session's schedules: each table's fast100 schedule. -/
 def schedsP {M : Type → Type} [Monad M] [MonadExceptOf String M] (tabs : Array Setup) : M (Array Schedule) :=
   tabs.mapM fun st => match fast100 st.m with
     | some sch => pure sch
@@ -95,13 +82,11 @@ def schedsP {M : Type → Type} [Monad M] [MonadExceptOf String M] (tabs : Array
 def tablesP (tabs : Array Setup) (trs : Array Trace) : Array (Array F128) :=
   (Array.range tabs.size).map fun i => packed trs[i]! tabs[i]!.m
 
-/-- Each table's level-0 commitment, salted from the tape's level `0`. -/
 def commitsP {M : Type → Type} [Monad M] [MonadExceptOf String M] [MonadLiftT V M] (hs : Hashes M)
     (tabs : Array Setup) (schs : Array Schedule) (tbls : Array (Array F128)) (tape : Tape) : M (Array Commit) :=
   (Array.range tabs.size).mapM fun i =>
     commitP hs tabs[i]!.merkle (schs[i]!.levels.getD 0 default) tbls[i]! (tape.salt i 0 0)
 
-/-- The session from the link message's coin `c1` on: the rep streams, the record and the proof files. -/
 def afterLinkP {M : Type → Type} [Monad M] [MonadExceptOf String M] [MonadLiftT V M] (io : Asks M) (hs : Hashes M)
     (spec : SessionSpec) (tabs : Array Setup) (trs : Array Trace) (tape : Tape) (schs : Array Schedule)
     (tbls : Array (Array F128)) (cms : Array Commit) (c1 : ℕ → F128) : M (String × Array ByteArray) := do
@@ -119,7 +104,6 @@ def afterLinkP {M : Type → Type} [Monad M] [MonadExceptOf String M] [MonadLift
   let record ← recordJson hs spec rootB points streams proofs
   return (record, proofs)
 
-/-- **The session in three parts**: the schedules, the level-0 commitments, the link message, and the rest. -/
 theorem sessionP_eq {M : Type → Type} [Monad M] [MonadExceptOf String M] [MonadLiftT V M] (io : Asks M)
     (hs : Hashes M) (spec : SessionSpec) (tabs : Array Setup) (trs : Array Trace) (tape : Tape) :
     sessionP io hs spec tabs trs tape = (do
@@ -157,8 +141,6 @@ theorem afterLinkP_sim (H : Claims.Msg → Claims.Msg) (resp : ℕ → Claims.Ms
 theorem asksS_link_go (resp : ℕ → Claims.Msg) (a b : Array ByteArray) (l : Array Claims.Msg) :
     ((asksS resp).link a b).go l = (.ok (coinOf (resp l.size)), l.push (linkBody a.toList b.toList)) := rfl
 
-/-- **The first send is the link message**: a pure session that returns ran its schedules and level-0 commitments
-(their verdict-monad runs return), then sent the link message of the caps, with no public words, first. -/
 theorem sessionS_link {H : Claims.Msg → Claims.Msg} {resp : ℕ → Claims.Msg} {spec : SessionSpec}
     {sts : Array Flock.Stmt} {w : Claims.Flock.Wit} {ω : Tape} {rec : String} {pfs : Array ByteArray}
     {bodies : Array Claims.Msg} (h : sessionS H resp spec sts w ω = (.ok (rec, pfs), bodies)) :
@@ -193,15 +175,12 @@ theorem sessionS_link {H : Claims.Msg → Claims.Msg} {resp : ℕ → Claims.Msg
       rw [hl]
       simp
 
-/-! ## The caps' sizes -/
-
 theorem except_ok_bind {ε α β : Type} {x : Except ε α} {f : α → Except ε β} {v : β} (h : (x >>= f) = .ok v) :
     ∃ a, x = .ok a ∧ f a = .ok v := by
   cases x with
   | error _ => cases h
   | ok a => exact ⟨a, rfl, h⟩
 
-/-- An invariant of every step holds of a loop's result. -/
 theorem except_forIn_inv {ε α β : Type} (P : β → Prop) {f : α → β → Except ε (ForInStep β)}
     (hf : ∀ a b r, P b → f a b = .ok r → P r.value) :
     ∀ (l : List α) (b r : β), P b → forIn l b f = .ok r → P r := by
@@ -220,7 +199,6 @@ theorem except_forIn_inv {ε α β : Type} (P : β → Prop) {f : α → β → 
     | done b' => cases h; exact hf a b _ hb hs
     | yield b' => exact ih b' r (hf a b _ hb hs) h
 
-/-- A traversal whose every step returns 64 bytes returns one 64-byte value per element. -/
 theorem mapM_sized {α : Type} {xs : Array α} {f : α → V ByteArray} {ys : Array ByteArray}
     (hf : ∀ a r, f a = .ok r → r.size = 64) (h : xs.mapM f = .ok ys) : ys.size = xs.size ∧ ∀ b ∈ ys, b.size = 64 := by
   obtain ⟨hsz, hall⟩ := FlockSoundness.Discharge.Exec.array_mapM_ok_getElem h
@@ -258,8 +236,6 @@ theorem plain_node {h : ByteArray → ByteArray} (h64 : ∀ b, (h b).size = 64) 
   cases hr
   exact h64 _
 
-/-- **A level's cap under `hm96-sha512/v1` or plain SHA-512 leaves**, for a SHA-512 of 64-byte outputs: at most `2^d`
-digests of 64 bytes. -/
 theorem commitP_cap {h : ByteArray → ByteArray} (h64 : ∀ b, (h b).size = 64) (lv : Level) (g : Array F128)
     (salt : ℕ → ByteArray) {c : Commit} {ms : MerkleScheme}
     (hms : ms = MerkleScheme.hm96Sha512 ∨ ms = MerkleScheme.sha512 "flock-leaf/sha512-unsalted")
@@ -288,7 +264,6 @@ theorem commitP_cap {h : ByteArray → ByteArray} (h64 : ∀ b, (h b).size = 64)
   rw [Array.size_range] at hN
   exact ⟨hN.1.trans_le ((Nat.div_le_self _ _).trans h1), hN.2⟩
 
-/-- 64 bytes per digest: `flat` of `n` of them is `64 n` bytes. -/
 theorem flat_size {cap : Array ByteArray} (h : ∀ b ∈ cap, b.size = 64) : (flat cap).size = 64 * cap.size := by
   unfold flat
   rw [← Array.foldl_toList]
@@ -306,7 +281,6 @@ theorem flat_size {cap : Array ByteArray} (h : ∀ b ∈ cap, b.size = 64) : (fl
       hl b List.mem_cons_self, List.length_cons]
     ring
 
-/-- fast100's level 0 has `d ≤ 56` at every `m`. -/
 theorem fast100_d0 {m : ℕ} {sch : Schedule} (h : fast100 m = some sch) : (sch.levels.getD 0 default).d ≤ 56 := by
   by_cases hm : m < 40
   · have key : ∀ m : Fin 40, (fast100 m.val).all (fun s => decide ((s.levels.getD 0 default).d ≤ 56)) = true := by
@@ -317,8 +291,6 @@ theorem fast100_d0 {m : ℕ} {sch : Schedule} (h : fast100 m = some sch) : (sch.
   · rw [FlockSoundness.Refine.exec_fast100_none m (by omega)] at h
     cases h
 
-/-- **The case's statement is one table, and commits with the scope check's leaf scheme**: `hm96-sha512/v1`, or plain
-SHA-512 leaves under hidden outputs. -/
 theorem Case.leaf {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation} (c : Case H rel) :
     ∃ st, c.sts = #[st] ∧ c.spec = st.spec ∧
       (st.merkle = MerkleScheme.hm96Sha512 ∨ st.merkle = MerkleScheme.sha512 "flock-leaf/sha512-unsalted") := by
@@ -360,7 +332,6 @@ theorem Case.leaf {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Rea
         ((FlockSoundness.Discharge.HiddenExec.setupOne_hidden hh).symm.trans hst))
   · omega
 
-/-- One table's schedules: its fast100 schedule. -/
 theorem schedsP_one {st : Stmt} {schs : Array Schedule} (hs : (schedsP #[Setup.ofCircuit st] : V _) = .ok schs) :
     ∃ sch, fast100 st.m = some sch ∧ schs = #[sch] := by
   unfold schedsP at hs
@@ -378,10 +349,6 @@ theorem schedsP_one {st : Stmt} {schs : Array Schedule} (hs : (schedsP #[Setup.o
     subst this
     exact (Except.ok.inj h0).symm
 
-/-! ## The goal -/
-
-/-- **The first send is the link message**, each length in its word: the goal `LinkFirst`, for a SHA-512 of 64-byte
-outputs. -/
 theorem linkFirst_goal (H : Claims.Msg → Claims.Msg) (hH : ∀ m, (H m).length = 64)
     (rel : Readable.Parsed → Readable.Relation) : LinkFirst H rel := by
   intro o

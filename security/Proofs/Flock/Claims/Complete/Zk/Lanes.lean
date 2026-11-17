@@ -37,18 +37,7 @@ import Proofs.Flock.Claims.DeployRounds
 import Proofs.Flock.Soundness.Discharge.ZkExec.RunsSizes
 import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictLane
 
-/-!
-# Level 0's lane phase gives its constraints wherever the masked Ligerito returns (`LaneConstraints`)
-
-`laneConstraints_goal`: `Zk.ligeritoConstraints` throws only when the record is not the layout's (one out-of-domain
-value, `k0` lane challenges, at least `k0` sumcheck messages), and otherwise folds without failing.
-
-* `lforIn_count`: a loop whose every step yields, adding one to a count, adds its length.
-* `zkLigeritoWith_rec`: the record the masked Ligerito returns has one out-of-domain value and `k0` lane challenges, one
-  pushed per lane round, whatever the hashes are.
-* `ligeritoConstraints_ok`: on such a record, and `k0` messages, the lane phase returns.
-* The messages: a decoded masked proof has `k0 + 8 + 7 (R − 1)` (`zk_decode_sizes`).
--/
+/-! Level 0's lane phase gives its constraints wherever the masked Ligerito returns (`laneConstraints_goal`). -/
 
 @[expose] public section
 
@@ -56,7 +45,6 @@ namespace FlockComplete
 
 open Flock Transcript FlockSoundness.Refine FlockSoundness.Discharge.ZkExec FlockDeploy
 
-/-- **A loop whose every step yields, adding one to `sz`**, adds its length to `sz`. -/
 theorem lforIn_count {σ : Type} (body : ℕ → σ → LM (ForInStep σ)) (sz : σ → ℕ)
     (hb : ∀ i s st t b st' t', body i s st t = .ok ((b, st'), t') → ∃ s', b = .yield s' ∧ sz s' = sz s + 1) :
     ∀ (n a : ℕ) (s : σ) (st : LState) (t : Transcript) (s' : σ) (st' : LState) (t' : Transcript),
@@ -72,9 +60,7 @@ theorem lforIn_count {σ : Type} (body : ℕ → σ → LM (ForInStep σ)) (sz :
       have := lforIn_count body sz hb n (a + 1) s₁ st₁ t₁ s' st' t' h₂
       omega
 
--- one proof down `Zk.ligeritoWith`'s unfolded run, a `*_bind` step per bind, each step's state in context
 set_option maxHeartbeats 1000000 in
-/-- **The masked Ligerito's record**: one out-of-domain value and `k0` lane challenges, whatever the hashes are. -/
 theorem zkLigeritoWith_rec (hs : Hashes V) (ms : MerkleScheme) (sch : Schedule) (T : F128)
     (cap : Array ByteArray) (p : LigeritoProof) (basisAt : Array F256 → ℕ → Array F256) (zl : Zk.Level0)
     {t t' : Transcript} {rc : Zk.L0Rec} (h : Zk.ligeritoWith hs ms sch T cap p basisAt zl t = .ok (rc, t')) :
@@ -148,7 +134,6 @@ theorem zkLigeritoWith_rec (hs : Hashes V) (ms : MerkleScheme) (sch : Schedule) 
   subst hrec
   exact ⟨rfl, by simpa using hsz⟩
 
-/-- **The lane phase returns** on a record of the layout's shape and at least `k0` sumcheck messages. -/
 theorem ligeritoConstraints_ok {lay : Zk.PadLayout} {rec : Zk.L0Rec} {lg : LigeritoProof} {msgs : Zk.Level0Msgs}
     (ho : rec.ood.size = lay.nOod0) (hc : rec.challenges.size = lay.k0) (hm : lay.k0 ≤ lg.messages.size) :
     ∃ v, Zk.ligeritoConstraints lay rec lg msgs = .ok v := by
@@ -163,8 +148,6 @@ theorem ligeritoConstraints_ok {lay : Zk.PadLayout} {rec : Zk.L0Rec} {lg : Liger
 
 variable {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
 
-/-- **Level 0's lane phase gives its constraints** wherever the masked Ligerito returns on a decoded proof: the goal
-`LaneConstraints`. -/
 theorem laneConstraints_goal (hLg : LigeritoZk H rel) (hD : RepDecodesZk H rel) : LaneConstraints H rel := by
   intro o i hi r hr
   obtain ⟨ho, hc⟩ := zkLigeritoWith_rec _ _ _ _ _ _ _ _ (t' := (o.lg i r).2) (rc := (o.lg i r).1) (hLg o i hi r hr)

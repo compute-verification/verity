@@ -44,17 +44,7 @@ import Proofs.Flock.Soundness.Discharge.ZkExec.RunsSeams
 import Std.Data.String.ToNat
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# Every recorded round of a masked rep is consumed (`ConsumedZk`)
-
-`consumedZk_goal`: where the masked rep's steps return, the inner proof ends at its stream's last round.
-
-* `verifyInnerWith_end`: the inner proof ends within its rounds, its last coins read from a recorded round.
-* `RunZk.inner_k`: where the masked replay, the ring switch, the masked Ligerito and the inner proof return, the inner
-  proof ends at the rep's round count (as `zkVerifyRepWith_rounds` counts it), within the rep's stream.
-* The two streams together are the sends after the link (`Recs`), at most `rounds true` (`sendCountZk_goal`), so each
-  holds exactly its rep's round count.
--/
+/-! Every recorded round of a masked rep is consumed where its steps return (`consumedZk_goal`). -/
 
 @[expose] public section
 
@@ -62,7 +52,6 @@ namespace FlockComplete
 
 open Flock Transcript FlockSoundness.Refine FlockSoundness.Discharge.ZkExec FlockDeploy
 
-/-- **The inner proof ends within its rounds**: its last coins are read from a recorded round. -/
 theorem verifyInnerWith_end (hs : Hashes V) {lay : Zk.PadLayout} {pr : Zk.InnerProof} {finalC : F128}
     {cons : Array (String × Zk.Lin)} {t t' : Transcript} {u : Unit}
     (h : Zk.verifyInnerWith hs lay pr finalC cons t = .ok (u, t')) : t'.k ≤ t'.rounds.size := by
@@ -100,8 +89,6 @@ theorem verifyInnerWith_end (hs : Hashes V) {lay : Zk.PadLayout} {pr : Zk.InnerP
 
 variable {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
 
-/-- **Where a masked rep's steps return, the inner proof ends at the rep's round count**, within the rep's stream: the
-replay's `m + (kLog − 6)`, the ring switch's `claims + 1`, Ligerito's `k0 + 7 + 11 R` and the inner proof's `4`. -/
 theorem RunZk.inner_k (hRp : Replay H rel) (hRS : RingSwitchZk H rel) (hLg : LigeritoZk H rel) (hIn : Inner H rel)
     (o : RunZk H rel) {st : Flock.Stmt} (htabs : o.tabs = #[Setup.ofCircuit st]) {v : Schedule × ℕ}
     (hv : Zk.schedule st.wideLeaf st.m = .ok v) (hsch : o.sch 0 = v.1) {r : ℕ} (hr : r < 2) :
@@ -128,7 +115,6 @@ theorem RunZk.inner_k (hRp : Replay H rel) (hRS : RingSwitchZk H rel) (hLg : Lig
   · rw [hr₄, hr₃, hr₂, hr₁] at hend
     exact hend
 
-/-- **Every recorded round of a masked rep is consumed** wherever its steps return: the goal `ConsumedZk`. -/
 theorem consumedZk_goal (h64 : Claims.Out64 H) (hS : JsonRT.StmtOkZk H rel)
     (hP : JsonRT.ProverOkZk H rel) (hRp : Replay H rel) (hRS : RingSwitchZk H rel) (hLg : LigeritoZk H rel)
     (hIn : Inner H rel) : ConsumedZk H rel := by

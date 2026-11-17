@@ -34,24 +34,8 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# Flock's honest prover at the deployed plain verifier (`honestP`)
-
-The plain record's reference prover (`(deployPlain rel).P`), the prover of `Claims.Flock.Complete H (deployPlain rel)`
-(at its error `δc H`), against B's plain record (`FlockDeploy.V false`).
-
-* **Its program** (`PI`): oracle queries, and sends, each answered by the verifier's reply. `PV := ExceptT String PI`
-  is a verdict monad the session prover (`sessionP`) runs in, with SHA-512 the oracle (`Hashes.pi`) and the two sends of
-  `Asks` (`asks`): the link message `0 :: linkBody rootB publics` and each round's framed bytes `0 :: c`, each answered
-  by the coin's bytes (`Coin.bytes`), read back by `coinOf`.
-* **Its program on a statement** (`prog`): on the session `setupOf false x` sets up, each table's trace from the
-  witness (`traceOf`), the honest session, and the last message `Final.encode ⟨x, record, proofs⟩`.
-* **The prover** (`honestP`): at the history `hist`, the program fed the verifier's replies so far (`feed`): the first
-  send not yet answered, or the last message. It keeps no state: each message is the program replayed on the replies.
-
-The witness is the trace (`Claims.Flock.Wit.hid`, table `i`'s address `a` at `i·2^m + a`); `A·z` and `B·z` are the level-0
-matrices the verifier folds (`FlockLevel3.placedA`, `placedB`) applied block by block (`mulBlocks`), entry by entry.
--/
+/-! Flock's honest prover at the deployed plain verifier (`honestP`), which keeps no state: each message is its program
+replayed on the verifier's replies. -/
 
 @[expose] public section
 

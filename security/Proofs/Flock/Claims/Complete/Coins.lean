@@ -36,30 +36,14 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Prob
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# δc: where the honest prover can fail
-
-Plain Flock is perfectly complete but for one step. Zerocheck's round `i` recovers `g(0) = (claim + r·g(1))·(1 + r)⁻¹`
-at the outer coin `r = r_i` (`bindAndZerocheckWith`), and `F128.inv 0 = 0`: at `r = 1` the verifier's `g(0)` is `0`
-whatever the honest prover's is, and the next claim need not hold. So the honest prover can fail only where some
-zerocheck outer coin is `1` (`Bad`), at most `2^-128` per coin element (`pr_slot_le`).
-
-* **The bound** (`pr_bad_le`): `Pr[Bad] ≤ ε`, a union bound over the outer coins (`outerSlots`, `Complete.Ready`).
-* **The composition** (`complete_of`): if the honest prover is accepted at every coin outside `Bad` on every statement in
-  scope, ready (`ready H`), with a witness in the relation, then `Claims.Flock.Complete H (deployPlain rel)`, at the
-  record's error `δc H` (`Complete.Ready`, which states where it is `1`), whose prover is the record's (`honestP`).
-* **The error is below `1`** where the verifier can accept, at the sessions the numbers are stated at (`PlainIn`,
-  `ZkIn`: at most `200` tables at `m ≤ 35`): at most `44` outer coins per table (`Claims.Flock.Complete_meets_plain`),
-  and `190` coins at the masked verifier's one table (`Claims.Flock.Complete_meets_zk`).
--/
+/-! The honest prover's completeness error `δc`: it fails only where a zerocheck outer coin is `1`, where `F128.inv 0 =
+0`. -/
 
 @[expose] public section
 
 namespace FlockComplete
 
 open Flock FlockDeploy
-
-/-! ## The probability of the bad coins -/
 
 theorem Pr_or_le {α : Type} [Fintype α] (p q : α → Prop) :
     Claims.Pr (fun a => p a ∨ q a) ≤ Claims.Pr p + Claims.Pr q := by
@@ -73,7 +57,6 @@ theorem Pr_or_le {α : Type} [Fintype α] (p q : α → Prop) :
   simp only [Finset.mem_filter, Finset.mem_union, Finset.mem_univ, true_and]
   exact id
 
-/-- **The union bound** over a list of events. -/
 theorem Pr_exists_le {α β : Type} [Fintype α] (E : β → α → Prop) :
     ∀ L : List β, Claims.Pr (fun a => ∃ b ∈ L, E b a) ≤ (L.map fun b => Claims.Pr (E b)).sum
   | [] => by simp [Claims.Pr_false]
@@ -109,7 +92,6 @@ theorem Pr_not {α : Type} [Fintype α] [Nonempty α] (p : α → Prop) :
     mul_one]
   field_simp
 
-/-- **A coin element is `1` with probability at most `2^-128`**, at any index (`0` past the coins or the elements). -/
 theorem pr_slot_le {k : ℕ} (j i : ℕ) :
     Claims.Pr (fun r : Fin k → Coin => (Claims.coinSeq r j).at i = 1) ≤ 1 / 2 ^ 128 := by
   by_cases hj : j < k
@@ -143,12 +125,9 @@ theorem pr_slot_le {k : ℕ} (j i : ℕ) :
       · decide
     · rw [Claims.Pr_false]; positivity
 
-/-! ## The bad coins -/
-
 /-- **The bad coins**: a zerocheck outer coin is `1`, where the verifier's `(1 + r)⁻¹` is `0⁻¹ = 0`. -/
 def Bad (x : Claims.Msg) {k : ℕ} (r : Fin k → Coin) : Prop := ∃ p ∈ outerSlots x, (Claims.coinSeq r p.1).at p.2 = 1
 
-/-- **`Pr[Bad] ≤ ε`**: the union bound over the outer coins. -/
 theorem pr_bad_le (x : Claims.Msg) {k : ℕ} : Claims.Pr (fun r : Fin k → Coin => Bad x r) ≤ ε x := by
   have h1 := Pr_exists_le (fun p (r : Fin k → Coin) => (Claims.coinSeq r p.1).at p.2 = 1) (outerSlots x)
   have h2 : ((outerSlots x).map fun p =>
@@ -161,11 +140,6 @@ theorem pr_bad_le (x : Claims.Msg) {k : ℕ} : Claims.Pr (fun r : Fin k → Coin
       ring
   exact le_trans h1 h2
 
-/-! ## The composition -/
-
-/-- **Completeness from acceptance at the good coins**: if, on every statement in scope that the verifier can accept
-and every witness in the relation, the honest prover is accepted at every tape and every coin outside `Bad`, then Flock's
-plain verifier is complete for `honestP` at the record's error, `δc H`. -/
 theorem complete_of (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation)
     (hacc : ∀ x w, Claims.Flock.Scope (deployPlain rel) x → Claims.Flock.R (deployPlain rel).parse x w →
       ready H x = true → ∀ (ω : Tape) (r : Fin ((V false).k x) → Coin), ¬ Bad x r →
@@ -185,8 +159,6 @@ theorem complete_of (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → R
   · rw [sub_self]
     exact Claims.Pr_nonneg _
 
-/-! ## The error is below `1` -/
-
 theorem length_flatMap_range_le {β : Type} (n c : ℕ) (f : ℕ → List β) (h : ∀ q < n, (f q).length ≤ c) :
     ((List.range n).flatMap f).length ≤ n * c := by
   rw [List.length_flatMap]
@@ -201,7 +173,6 @@ theorem m_sub_le {sts : Array Flock.Stmt} (hm : ∀ st ∈ sts.toList, st.m ≤ 
   have := hm sts[q / 2]! (by rw [getElem!_pos sts (q / 2) hi]; exact Array.getElem_mem_toList hi)
   omega
 
-/-- **At most `22` outer coins per rep**, two reps per table, at tables of `m ≤ 35`. -/
 theorem outerSlots_length_le {x : Claims.Msg} {s : Ins} {spec : SessionSpec} {sts : Array Flock.Stmt}
     (hs : setupOf false x = some (s, spec, sts)) (hm : ∀ st ∈ sts.toList, st.m ≤ 35) :
     (outerSlots x).length ≤ 2 * sts.size * 22 := by
@@ -236,7 +207,6 @@ theorem sum_flatMap_range_le (n c : ℕ) (f : ℕ → List ℕ) (h : ∀ q < n, 
     rw [List.range_succ, List.flatMap_append, List.sum_append, List.flatMap_singleton, Nat.succ_mul]
     exact Nat.add_le_add (ih fun q hq => h q (by omega)) (h n (by omega))
 
-/-- **At most `4·35` rank-check coins per table**, at tables of `m ≤ 35`. -/
 theorem rankSlotsZk_sum_le {x : Claims.Msg} {s : Ins} {spec : SessionSpec} {sts : Array Flock.Stmt}
     (hs : setupOf true x = some (s, spec, sts)) (hm : ∀ st ∈ sts.toList, st.m ≤ 35) :
     ((rankSlotsZk x).map fun s => 4 * s.1.m).sum ≤ sts.size * 140 := by

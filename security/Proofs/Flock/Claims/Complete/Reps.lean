@@ -37,21 +37,8 @@ import Proofs.Flock.Claims.Complete.Discharge
 import Proofs.Flock.Soundness.Refine.Arith
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# The honest reps return
-
-`proverRuns`: the hypothesis `ProverRuns` holds, so `sessionRuns_goal` proves the goal `SessionRuns` with no premise
-(`sessionRuns_of`).
-No coin makes a rep throw. The one refusal on the rep's path is the lincheck's fold (`Stmt.fold`), and what it asks is
-the statement's: `ρ` of `k_log − 6` coins (the zerocheck's has `m − 6`, `zerocheckP_tot`), 64 weights
-(`skipWeights_size`), and each range's slot type its fold's (`SlotOk`), which `HmRow.check` establishes
-(`hm_check_kinds`) for the scope's untyped row circuit (`Case.table`). The level-0 and recursive commitments return
-through `Hashes.ofSha512` (`commitP_ok`), and every other step is a sample, an absorb or a `pure`.
-
-`Total M`: the computations of `M` that return, with a postcondition (`T x P`), closed under `pure`, `bind` and
-returning lifts, and lifted over a state (`Total.st`). `totS` is it on `PS` from any sends; `totT` and `totL` add the
-transcript and Ligerito's state. The walks apply the steps whose postcondition is `True` (`Total.bind'`, …).
--/
+/-! The honest reps return (`proverRuns`): no coin makes a rep throw, and the one refusal on its path, the lincheck's
+fold, asks only what `HmRow.check` establishes. -/
 
 @[expose] public section
 
@@ -59,7 +46,6 @@ namespace FlockComplete.JsonRT
 
 open Flock Transcript FlockComplete FlockDeploy FlockSoundness.Refine
 
-/-- **Returning** on a verdict monad's computations: `T x P`, `x` returns, with `P` of its value. -/
 structure Total (M : Type → Type) [Monad M] [MonadLiftT V M] where
   T : {α : Type} → M α → (α → Prop) → Prop
   mono : ∀ {α : Type} {x : M α} {P Q : α → Prop}, T x P → (∀ a, P a → Q a) → T x Q
@@ -70,15 +56,12 @@ structure Total (M : Type → Type) [Monad M] [MonadLiftT V M] where
 
 namespace Total
 
-/-- `C` on the runs from each state of `σ`, on their values. -/
 def st {M : Type → Type} [Monad M] [MonadLiftT V M] (C : Total M) (σ : Type) : Total (StateT σ M) where
   T x P := ∀ s, C.T (x s) fun p => P p.1
   mono h hq s := C.mono (h s) fun p hp => hq p.1 hp
   pure a h s := C.pure (a, s) h
   bind hx hf s := C.bind (hx s) fun p hp => hf p.1 hp p.2
   lift v a hv h s := C.bind (C.lift v a hv h) fun b hb => C.pure (b, s) hb
-
-/-! The walk's steps, each returning with `True`. -/
 
 theorem bind' {M : Type → Type} [Monad M] [MonadLiftT V M] (C : Total M) {α β : Type} {x : M α} {f : α → M β}
     {P : β → Prop} (hx : C.T x fun _ => True) (hf : ∀ a, C.T (f a) P) : C.T (x >>= f) P :=
@@ -135,7 +118,6 @@ theorem forIn_array {M : Type → Type} [Monad M] [MonadLiftT V M] (C : Total M)
   rw [← Array.forIn_toList]
   exact C.forIn_list xs.toList b fun a ha => h a (Array.mem_toList_iff.1 ha)
 
-/-- A loop over `[0:n]` that keeps `I`, at the steps taken. -/
 theorem forIn_upto {M : Type → Type} [Monad M] [MonadLiftT V M] (C : Total M) {β : Type} (n : Nat) (b : β)
     {f : Nat → β → M (ForInStep β)} (I : Nat → β → Prop) (h0 : I 0 b)
     (h : ∀ i < n, ∀ b, I i b → C.T (f i b) fun r => ∃ b', r = .yield b' ∧ I (i + 1) b') :
@@ -156,7 +138,6 @@ theorem forIn_upto {M : Type → Type} [Monad M] [MonadLiftT V M] (C : Total M) 
     obtain ⟨b', rfl, hb'⟩ := hr
     exact ih (s + 1) b' (by omega) hb'
 
-/-- A loop over `[0:n]` that keeps `I`, then a computation from its end. -/
 theorem forIn_bind_upto {M : Type → Type} [Monad M] [MonadLiftT V M] (C : Total M) {β γ : Type} (n : Nat) (b : β)
     {f : Nat → β → M (ForInStep β)} {g : β → M γ} {P : γ → Prop} (I : Nat → β → Prop) (h0 : I 0 b)
     (h : ∀ i < n, ∀ b, I i b → C.T (f i b) fun r => ∃ b', r = .yield b' ∧ I (i + 1) b')
@@ -173,7 +154,6 @@ theorem liftTM {M : Type → Type} [Monad M] [MonadLiftT V M] (C : Total M) {α 
 
 end Total
 
-/-- **The pure session's computations that return** from any sends. -/
 def totS : Total PS where
   T y P := ∀ l, ∃ a l', y.go l = (.ok a, l') ∧ P a
   mono h hq l := let ⟨a, l', e, hp⟩ := h l; ⟨a, l', e, hq a hp⟩
@@ -184,13 +164,9 @@ def totS : Total PS where
     exact ⟨b, l'', by rw [go_bind, e]; exact e', hp⟩
   lift v a hv h l := ⟨a, l, by rw [monadLift_go, hv], h⟩
 
-/-- Returning over the transcript. -/
 abbrev totT : Total (TMW PS) := totS.st Transcript
 
-/-- Returning over Ligerito's state too. -/
 abbrev totL : Total (LP PS) := totT.st LigState
-
-/-! ## The transcript's and Ligerito's steps return -/
 
 theorem squeezeP_tot (resp : ℕ → Claims.Msg) (kind : UInt8) (n : ℕ) :
     totT.T (squeezeP (asksS resp) kind n) fun _ => True := by
@@ -276,13 +252,11 @@ theorem queryP_tot (resp : ℕ → Claims.Msg) (nonce : ℕ → ℕ → UInt64) 
     | (with_reducible apply liftT_tot)
     | (with_reducible apply sampleVecP_tot))
 
-/-- **A level's commitment returns** in `PS` through `Hashes.ofSha512`. -/
 theorem commitP_tot (h : ByteArray → ByteArray) (ms : MerkleScheme) (lv : Level) (g : Array F128)
     (salt : ℕ → ByteArray) : totS.T (commitP (Hashes.ofSha512 h : Hashes PS) ms lv g salt) fun _ => True := fun l =>
   let ⟨cm, hcm⟩ := commitP_ok h ms lv g salt
   ⟨cm, l, by rw [commitP_pureS h ms lv g salt l, hcm], trivial⟩
 
-/-- **Ligerito returns** where each level's commitment does. -/
 theorem ligeritoP_tot (resp : ℕ → Claims.Msg) (hs : Hashes PS)
     (hc : ∀ ms lv g salt, totS.T (commitP hs ms lv g salt) fun _ => True) (ms : MerkleScheme) (sch : Schedule)
     (T : F128) (cm0 : Commit) (t b : Array F128) (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64) :
@@ -313,9 +287,6 @@ theorem ligeritoP_tot (resp : ℕ → Claims.Msg) (hs : Hashes PS)
     | (with_reducible apply Total.liftTM; intro _; exact ⟨_, rfl⟩)
     | split)
 
-/-! ## The PIOP's provers return -/
-
-/-- **The zerocheck returns**, its `ρ` one coin per residual round. -/
 theorem zerocheckP_tot (resp : ℕ → Claims.Msg) (m : ℕ) (digest cap : ByteArray) (tr : Trace) :
     totT.T (zerocheckP (asksS resp) m digest cap tr) fun p => p.2.rho.size = m - 6 := by
   unfold zerocheckP
@@ -339,7 +310,6 @@ theorem fold_ne_error {c : CircuitFold} {lw ρ : Array F128} (hfold : ∀ α, �
   intro h
   cases h
 
-/-- **The lincheck returns** where the statement's fold returns at the zerocheck's point. -/
 theorem lincheckP_tot (resp : ℕ → Claims.Msg) (c : CircuitFold) (m : ℕ) (tr : Trace) (zc : ZcOut)
     (hfold : ∀ α, ∃ v, c.fold α (skipWeights zc.z) (zc.rho.extract 0 (c.kLog - 6)) = .ok v) :
     totT.T (lincheckP (asksS resp) c m tr zc) fun _ => True := by
@@ -355,7 +325,6 @@ theorem lincheckP_tot (resp : ℕ → Claims.Msg) (c : CircuitFold) (m : ℕ) (t
     | (exfalso; exact fold_ne_error hfold ‹_›)
     | split)
 
-/-- **The ring switch returns.** -/
 theorem ringSwitchP_tot (resp : ℕ → Claims.Msg) (tr : Trace) (claims : Array Claim) :
     totT.T (ringSwitchP (asksS resp) tr claims) fun _ => True := by
   unfold ringSwitchP
@@ -368,16 +337,11 @@ theorem ringSwitchP_tot (resp : ℕ → Claims.Msg) (tr : Trace) (claims : Array
     | (with_reducible apply Total.forIn_range)
     | (with_reducible apply Total.liftTM; intro _; exact ⟨_, rfl⟩))
 
-/-! ## The statement's fold returns
-
-`Stmt.fold` refuses a point of the wrong size, or a range whose slot type it can't fold: a compression slot, or a net
-range whose slots aren't its net's. `HmRow.check` refuses both ranges. -/
-
-/-- What a range's slot type needs for its fold: it is no compression slot, and a net range's slots are its net's. -/
+/-- What a range's slot type needs for `Stmt.fold`, which refuses a compression slot or a net range whose slots aren't
+its net's; `HmRow.check` refuses both. -/
 def SlotOk (c : Circuit) (r : Range) : Prop :=
   r.kind ≠ .comp ∧ ∀ i, r.kind = .net i → (c.nets.getD i default).2.unitLog = r.slotLog
 
-/-- **A checked row circuit's ranges fold** (`HmRow.check`'s range loop). -/
 theorem hm_check_kinds {c : Circuit} {tags : Tags} {ls : Lean.Json} (h : HmRow.check c tags ls = .ok ()) :
     ∀ r ∈ c.ranges.toList, SlotOk c r := by
   unfold HmRow.check at h
@@ -395,7 +359,6 @@ theorem hm_check_kinds {c : Circuit} {tags : Tags} {ls : Lean.Json} (h : HmRow.c
     refine ⟨⟨fun hk => by simp_all, fun j hj => ?_⟩, _, rfl⟩
     simp_all
 
-/-- The scope's untyped row circuit passed `HmRow.check`. -/
 theorem circuitOf_check {tags : Tags} {file : ByteArray} {tables : List (String × ByteArray)} {c : Circuit}
     (ht : tags.typed = false) (h : ProvedScope.circuitOf tags file tables = .ok c) :
     ∃ ls, HmRow.check c tags ls = .ok () := by
@@ -428,7 +391,6 @@ theorem foldRanges_ok (st : Stmt) (α : F128) (lw ρ : Array F128) :
       rw [hb]
       exact ih _ _
 
-/-- **The fold returns** at a point of the block's size, on ranges whose slot types it folds. -/
 theorem fold_ok (st : Stmt) (hk : 6 ≤ st.c.kLog) (hs : ∀ r ∈ st.c.ranges.toList, SlotOk st.c r) (α : F128)
     {lw ρ : Array F128} (hlw : lw.size = 64) (hρ : ρ.size = st.c.kLog - 6) : ∃ v, st.fold α lw ρ = .ok v := by
   unfold Stmt.fold
@@ -441,10 +403,6 @@ theorem fold_ok (st : Stmt) (hk : 6 ≤ st.c.kLog) (hs : ∀ r ∈ st.c.ranges.t
   simp only [Bool.false_eq_true, ↓reduceIte, hv]
   exact ⟨_, rfl⟩
 
-/-! ## A rep returns -/
-
-/-- **A rep returns** on a statement whose fold returns at the zerocheck's point, on any level-0 commitment, extra
-claims, salts and nonces. -/
 theorem repP_tot (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (st : Stmt) (hk : 6 ≤ st.c.kLog)
     (hkm : st.c.kLog ≤ st.m) (hs : ∀ r ∈ st.c.ranges.toList, SlotOk st.c r) (sch : Schedule) (tr : Trace)
     (t : Array F128) (cm0 : Commit) (extras : Array Claim) (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64) :
@@ -467,7 +425,6 @@ theorem repP_tot (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (st :
   dsimp only
   exact totT.bind' (ligeritoP_tot resp _ (commitP_tot h) _ _ _ _ _ _ _ _) fun _ => totT.pure' _
 
-/-- **The prover's reps return**: the hypothesis `ProverRuns`. -/
 theorem proverRuns (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) : ProverRuns H rel := by
   intro c st sch hst _ _ cm e _ _ salt nonce d l
   obtain ⟨st', hst', -, -, -, ⟨tags, file, tables, hty, hcirc⟩, hm, hk⟩ := c.table
@@ -478,7 +435,6 @@ theorem proverRuns (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Re
     salt nonce (Transcript.init #[] d) l
   exact ⟨pt, l', e'⟩
 
-/-- **The session runs**: the goal `SessionRuns`. -/
 theorem sessionRuns_goal {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation} :
     SessionRuns H rel :=
   sessionRuns_of (proverRuns H rel)

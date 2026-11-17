@@ -43,16 +43,8 @@ import Proofs.Flock.Claims.Complete.Replay.Trace
 import Proofs.Flock.Soundness.Refine.Seam
 import Std.Tactic.BVDecide.Normalize.Bool
 
-/-!
-# The honest Ligerito meets its final identity
-
-`Lg.Honest` (`Lg.honest`), by carrying the honest prover's table and weight through its Ligerito against the model's
-steps: a precondition some value's (`Lg.HRuns.exPre`) and a fact carried through a step (`Lg.HRuns.frame`); fast100's
-levels (`Lg.sch_facts`); the model's final identity (`Lg.Final`) and `Lg.Mid` for the table and weight's own equation
-(`Lg.MidR`). So at the deployed relation `LgFinal` rests on the session walk on the packed table alone
-(`lgFinal_walkP`), and the skeleton's `Ligerito` and `Consumed` on the walk's facts and the schemes' widths
-(`ligerito_walkP`, `consumed_walkP`).
--/
+/-! The honest Ligerito meets its final identity (`Lg.honest`), so at the deployed relation `LgFinal` rests on the
+session walk on the packed table alone. -/
 
 @[expose] public section
 
@@ -66,19 +58,16 @@ namespace Lg
 
 variable {p : LigeritoProof} {L : ℕ} {β : Type}
 
-/-- A precondition that is some `g`'s, from a run for each `g`. -/
 theorem HRuns.exPre {γ : Type} [Inhabited γ] {y : LP PS β} {c c' : Cur} {tm tm' : Transcript} {Q Xb : β → Prop}
     {J : γ → TW → Prop} {J' : β → TW → Prop} (h : ∀ g, HRuns p L y c tm c' tm' Q Xb (J g) J') :
     HRuns p L y c tm c' tm' Q Xb (fun x => ∃ g, J g x) J' :=
   ⟨(h default).1, fun st t l b st' t' l' hl e hE hx hc ht ⟨g, hg⟩ => (h g).2 st t l b st' t' l' hl e hE hx hc ht hg⟩
 
-/-- A fact `R` about neither table nor weight carried from the precondition to the postcondition. -/
 theorem HRuns.frame (R : Prop) {y : LP PS β} {c c' : Cur} {tm tm' : Transcript} {Q Xb : β → Prop} {J : TW → Prop}
     {J' : β → TW → Prop} (h : HRuns p L y c tm c' tm' Q Xb J J') :
     HRuns p L y c tm c' tm' Q Xb (fun x => J x ∧ R) fun b x => J' b x ∧ R :=
   ⟨h.1, fun st t l b st' t' l' hl e hE hx hc ht hJ => ⟨h.2 st t l b st' t' l' hl e hE hx hc ht hJ.1, hJ.2⟩⟩
 
-/-- fast100's levels: each level's seam, level 0's `k0` lanes, four lanes after, and `3` columns fewer per level. -/
 theorem sch_facts {m : ℕ} {sch : Schedule} (h : fast100 m = some sch) :
     (∀ i < sch.levels.size, LevelSeam (sch.levels.getD i default)) ∧ (sch.levels.getD 0 default).lanes = sch.k0 ∧
       (∀ i < sch.levels.size, 1 ≤ i → (sch.levels.getD i default).lanes = 4) ∧
@@ -94,14 +83,12 @@ theorem sch_facts {m : ℕ} {sch : Schedule} (h : fast100 m = some sch) :
       rw [ih (by omega)] at this
       omega
 
-/-- The model's final identity. -/
 def Final (P : LigeritoProof) (cf : ℕ → ℕ → F128) (sch : Schedule) (T : F128) (cap : Array ByteArray)
     (t : Transcript) (basisAt : Array F256 → ℕ → Array F256) : Prop :=
   lhsE P.finalProof.yr (out P cf sch T cap t).1.2.2.2 (resE basisAt sch.n (pre P cf sch T cap t).1
     (out P cf sch T cap t).1.2.2.1 (out P cf sch T cap t).1.2.2.2 (out P cf sch T cap t).2.1) =
     (out P cf sch T cap t).2.1.s
 
-/-- `Mid` but for the table and weight's own equation. -/
 def MidR (n : ℕ) (b : Array F128) (initG : List 𝕂) (x : Vars × LState × Transcript) (cm : Commit) (lv : Level)
     (g : Array F128) (w : Array F256) : Prop :=
   cm.rows = encodeRows lv g ∧ Sync x.2.1.s x.2.1.q (embedF g) w (x.1.1 - 1) ∧
@@ -109,14 +96,8 @@ def MidR (n : ℕ) (b : Array F128) (initG : List 𝕂) (x : Vars × LState × T
     PreOK initG (levelsOf x.1.2.2.1) (x.2.1.oods.toList.map oodOf) (x.2.1.conss.toList.map consOf) (x.1.1 - 1) ∧
     ∀ cs ∈ x.2.1.conss.toList, cs.pos.size ≤ 2 ^ cs.alpha.size
 
-/-- The prover's level-loop state: the split dimension, the last commitment, the caps, the openings and the final
-proof. -/
 abbrev LS := ℕ × Commit × Array (Array ByteArray) × Array LevelProof × FinalProof
 
-/-- **The honest Ligerito meets its final identity** (`Lg.Honest`): on its table at ring switching's `T` and basis, the
-model's final identity holds on the proof the prover returns. Through level 0 the prover reaches `Mid`, each inner level
-keeps it, and the last level meets `Final`; the loop's state carries the caps and openings, prefixes of the returned
-proof's. -/
 theorem honest : Honest := by
   intro resp h ms m sch T cm0 tb b salt nonce L basisAt t l P t' l' hsch htb hb hT hcm0 hbasis hl hrun
   obtain ⟨hn, hL, hsd, hq, -⟩ := fast100_ligerito hsch
@@ -360,15 +341,10 @@ theorem honest : Honest := by
 
 end Lg
 
-/-- **Ligerito's final identity at the deployed relation** (`LgFinal`) at every rep the session walk runs on its packed
-table (`RepWalkP`). -/
 theorem lgFinal_walkP (H : Claims.Msg → Claims.Msg)
     (hw : ∀ o : Run H Readable.relation, ∀ i < o.tabs.size, ∀ r < 2, RepWalkP o i r) : LgFinal H Readable.relation :=
   lgFinal_relation H hw Lg.honest
 
-/-- **The Ligerito goal at the deployed relation from the session walk**: the walk's facts at every rep (`ZcAt`,
-`LcAt`, `RsAt`, `RepWalk`, `RepWalkP`), the reps' proofs decoding (`RepDecodes`) and the schemes' widths
-(`SchemeWidths`). -/
 theorem ligerito_walkP (H : Claims.Msg → Claims.Msg)
     (hzc : ∀ o : Run H Readable.relation, ∀ i < o.tabs.size, ∀ r < 2, ZcAt o i r)
     (hlc : ∀ o : Run H Readable.relation, ∀ i < o.tabs.size, ∀ r < 2, LcAt o i r)
@@ -378,8 +354,6 @@ theorem ligerito_walkP (H : Claims.Msg → Claims.Msg)
     (hW : SchemeWidths H Readable.relation) : Ligerito H Readable.relation :=
   ligerito_goal_walk H _ (traceR1CS H) hzc hlc (lcAlgebra H) hrs (rsAlgebra H) hD hw hW (lgFinal_walkP H hwP)
 
-/-- **The consumption goal at the deployed relation from the session walk** (S15): every recorded round is consumed,
-from the same walk facts and the schemes' widths. -/
 theorem consumed_walkP (H : Claims.Msg → Claims.Msg)
     (hzc : ∀ o : Run H Readable.relation, ∀ i < o.tabs.size, ∀ r < 2, ZcAt o i r)
     (hlc : ∀ o : Run H Readable.relation, ∀ i < o.tabs.size, ∀ r < 2, LcAt o i r)

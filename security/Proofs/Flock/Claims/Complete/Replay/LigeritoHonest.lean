@@ -6,18 +6,8 @@ public import Proofs.Flock.Claims.Complete.Replay.LigeritoFinal
 import all Init.Data.Array.Basic
 import all Init.Data.Range.Basic
 
-/-!
-# The honest Ligerito against the model's steps
-
-The honest prover's Ligerito carried through the model's steps with its claim and weight: binds whose rest's
-postcondition is the whole's (`Lg.HRuns.bindC`, `Lg.HRuns.bindDC`, `Lg.HRuns.bindYC`); the claim kept at each of the
-model's steps (`Lg.sync_chal`, `Lg.sync_chalSplit`, `Lg.sync_ood`, `Lg.sync_close`, and level 0's first claim,
-`Lg.head_sync`); the weight the model's (`Lg.WOK`: at an out-of-domain claim, `Lg.wok_ood`, a consistency claim,
-`Lg.wok_close`, a level's challenges, `Lg.wok_level`, level 0's, `Lg.wok_lv0`, and the lists fit for the next level,
-`Lg.preok_next`); the challenge loops (`Lg.HRuns.initChals`, `Lg.HRuns.levelChals`); and the prover between levels,
-`Lg.Mid`, reached after level 0 (`Lg.mid_lv0`) and kept by an inner level's step (`Lg.mid_stepN`, folding the weight by
-`Lg.wok_fold`), from which the last level meets the final identity (`Lg.goal_last`).
--/
+/-! The honest prover's Ligerito carried through the model's steps with its claim and weight, to the final identity at
+the last level (`Lg.goal_last`). -/
 
 @[expose] public section
 
@@ -29,8 +19,6 @@ local notation "𝔽" => FlockLevel3.GF128
 local notation "𝕂" => FlockLevel3.GF256
 
 namespace Lg
-
-/-! ## Binds whose rest's postcondition is the whole's -/
 
 theorem HRuns.bindDC {p : LigeritoProof} {L : ℕ} {α β : Type} {x : LP PS α} {f : α → LP PS β} {c₁ c₂ c₃ : Cur}
     {tm₁ tm₂ tm₃ : Transcript} {Qa Ya : α → Prop} {Qf Xf : α → β → Prop} {Q Xb : β → Prop} {J₁ : TW → Prop}
@@ -51,8 +39,6 @@ theorem HRuns.bindYC {p : LigeritoProof} {L : ℕ} {α β : Type} {x : LP PS α}
     (hf : ∀ a, Qa a → HRuns p L (f a) c₂ tm₂ c₃ tm₃ Q Xb (J₂ a) J₃) (hY : ∀ a b, Qa a → Q b → Xb b → Ya a) :
     HRuns p L (x >>= f) c₁ tm₁ c₃ tm₃ Q Xb J₁ J₃ :=
   HRuns.bindDC (Qf := fun _ => Q) (Xf := fun _ => Xb) hx hf (fun _ _ _ h => h) fun a b ha hb h => ⟨hY a b ha hb h, h⟩
-
-/-! ## Small facts -/
 
 theorem fast100_k0 {m : ℕ} {sch : Schedule} (h : fast100 m = some sch) : 1 ≤ sch.k0 := by
   by_cases hm : m < 40
@@ -77,8 +63,6 @@ theorem levelsOf_push (levels : Array (Array F256)) (ch : Array F256) :
 
 theorem levelsOf_length (levels : Array (Array F256)) : (levelsOf levels).length = levels.size := by
   simp [levelsOf]
-
-/-! ## The claim, step by step against the model's -/
 
 section Sync
 
@@ -125,7 +109,6 @@ theorem sync_close {cols start : ℕ} {sm : LState} {tm : Transcript} (lv : Leve
   rw [hm, hr]
   exact Sync.close lv g r.1 r.2.1 ch hch hg hpos hn h _
 
-/-- **Level 0's claim** after its out-of-domain sample and first message: `Σ t·b = T` and the out-of-domain value. -/
 theorem head_sync (n : ℕ) (T : F128) (tm : Transcript) (tb b : Array F128) (hn : n ≠ 0) (htb : tb.size = 2 ^ n)
     (hb : b.size = 2 ^ n) (hT : dot tb b = T) (ho : P.oodValues[0]! = mleF tb (vec cf tm n))
     (hm : P.messages[0]! = roundPoly (embedF tb) (addScaled (embedF b) (embedF (eqTable (vec cf tm n)))
@@ -150,13 +133,10 @@ theorem head_sync (n : ℕ) (T : F128) (tm : Transcript) (tb b : Array F128) (hn
 
 end Sync
 
-/-! ## The weight, step by step against the model's lists -/
-
 section Weight
 
 variable {P : LigeritoProof} {cf : ℕ → ℕ → F128}
 
-/-- **The prover's weight is the model's** on a model state's lists: `preW` at `N`. -/
 def WOK (n : ℕ) (b : Array F128) (initG : List 𝕂) (levels : Array (Array F256)) (st : LState) (N : ℕ)
     (w : Array F256) : Prop :=
   ∀ i < 2 ^ (N + 1), gv w i = preW execArith n (bOf b) initG (levelsOf levels) (st.oods.toList.map oodOf)
@@ -193,7 +173,6 @@ theorem ch4 {ch : Array F256} (hch : ch.size = 4) : ∃ c cs, ch.toList.map gOf 
   | [] => have := congrArg List.length h'; simp [hl] at this
   | c :: cs => exact ⟨c, cs, rfl, by have := congrArg List.length h'; simp [hl] at this; omega⟩
 
-/-- **A level's four challenges** fold the weight from `preW` before the level to the model's `resAt` after it. -/
 theorem wok_fold {n : ℕ} {b : Array F128} {initG : List 𝕂} {levels : Array (Array F256)} {sm : LState} {M : ℕ}
     {w : Array F256} (h : WOK n b initG levels sm (M + 3) w)
     (hok : PreOK initG (levelsOf levels) (sm.oods.toList.map oodOf) (sm.conss.toList.map consOf) (M + 3))
@@ -217,7 +196,6 @@ theorem wok_fold {n : ℕ} {b : Array F128} {initG : List 𝕂} {levels : Array 
     norm_num at hx ⊢
     omega
 
-/-- **A level's four challenges and split** carry the weight from `preW` before the level to `preW` after it. -/
 theorem wok_level {n : ℕ} {b : Array F128} {initG : List 𝕂} {levels : Array (Array F256)} {sm : LState} {M : ℕ}
     {w : Array F256} (h : WOK n b initG levels sm (M + 3) w)
     (hok : PreOK initG (levelsOf levels) (sm.oods.toList.map oodOf) (sm.conss.toList.map consOf) (M + 3))
@@ -236,8 +214,6 @@ theorem wok_level {n : ℕ} {b : Array F128} {initG : List 𝕂} {levels : Array
   · rw [hs]; simp
   · rw [hs]; intro he; simp only [Option.some.injEq] at he; omega
 
-/-- **Level 0's challenges and split** carry its weight, the batched basis plus the first out-of-domain claim, to
-`preW` with the challenges as the original ones. -/
 theorem wok_lv0 {n : ℕ} {b : Array F128} {sm : LState} (z : Array F128) (b0 : F128) (ch : Array F256)
     (hb : b.size = 2 ^ n) (hz : z.size = n) (hch : ch.size ≤ n) (hoods : sm.oods = #[⟨z, b0, none⟩])
     (hconss : sm.conss = #[]) :
@@ -277,7 +253,6 @@ theorem wok_lv0 {n : ℕ} {b : Array F128} {sm : LState} (z : Array F128) (b0 : 
   rw [key, hoods, hconss]
   rfl
 
-/-- **The lists before a level's challenges**: after its two out-of-domain claims and its consistency claim. -/
 theorem preok_next {initG : List 𝕂} {levels : List (List 𝕂)} {M : ℕ} {sm sm' : LState} (o₁ o₂ : OodCtx)
     (cc : ConsCtx) (hok : PostOK initG levels (sm.oods.toList.map oodOf) (sm.conss.toList.map consOf) M)
     (hoods : sm'.oods = (sm.oods.push o₁).push o₂) (hconss : sm'.conss = sm.conss.push cc)
@@ -294,10 +269,6 @@ theorem preok_next {initG : List 𝕂} {levels : List (List 𝕂)} {M : ℕ} {sm
 
 end Weight
 
-/-! ## The challenge loops -/
-
-/-- **The table and weight after `j` of `k` challenges** from the model's `(sm, tm)`, on `A` and `W` with the claim at
-`N + k - 1` variables: folded at the model's coins, the last fold split, the claim kept. -/
 def JC (P : LigeritoProof) (cf : ℕ → ℕ → F128) (sm : LState) (tm : Transcript) (k N : ℕ) (A W : Array F256)
     (j : ℕ) (y : TW) : Prop :=
   (j < k → y = (foldKs (chals P cf #[] sm tm j).1.toList A, foldKs (chals P cf #[] sm tm j).1.toList W) ∧
@@ -309,7 +280,6 @@ theorem jc_zero {P : LigeritoProof} {cf : ℕ → ℕ → F128} {sm : LState} {t
     (hk : 1 ≤ k) (h : Sync sm.s sm.q A W (N + k - 1)) : JC P cf sm tm k N A W 0 (A, W) :=
   ⟨fun _ => ⟨rfl, h⟩, fun h0 => absurd h0 (by omega)⟩
 
-/-- **A challenge** keeps `JC`: a fold, split at the last. -/
 theorem jc_step {P : LigeritoProof} {cf : ℕ → ℕ → F128} {sm : LState} {tm : Transcript} {k N j : ℕ}
     {A W : Array F256} {x y : TW} (hj : j < k) (hx : JC P cf sm tm k N A W j x) (split : Bool)
     (hs : split = (j + 1 == k))
@@ -335,7 +305,6 @@ theorem jc_step {P : LigeritoProof} {cf : ℕ → ℕ → F128} {sm : LState} {t
 
 variable {p : LigeritoProof} {L : ℕ}
 
-/-- **Level 0's `k0` challenges**, with the table and weight. -/
 theorem HRuns.initChals (resp : ℕ → Claims.Msg) (k0 N : ℕ) (sm : LState) (tm : Transcript)
     (A W : Array F256) :
     HRuns p L (forIn [:k0] PUnit.unit fun j (_ : PUnit) => do
@@ -355,9 +324,8 @@ theorem HRuns.initChals (resp : ℕ → Claims.Msg) (k0 N : ℕ) (sm : LState) (
     (fun _ _ _ _ _ _ _ _ => trivial) _ trivial).mono (fun _ _ => trivial) (fun _ _ _ => trivial) (fun _ h => h)
     fun _ _ _ _ h => h
 
-/-- **A level's four challenges**, with the table and weight: three folds, then a fold whose table is kept, split. The
-claim is the kept table's sum against the folded weight, and in step with the split table and weight except at the
-last level (`last`), whose message is the unsplit table's. -/
+/-- The claim stays in step with the split table and weight except at the last level (`last`), whose message is the
+unsplit table's. -/
 theorem HRuns.levelChals (resp : ℕ → Claims.Msg) (last : Bool) (sm : LState) (tm : Transcript) (A W : Array F256)
     (M : ℕ) :
     HRuns p L (forIn [:4] (#[] : Array F256) fun i (f : Array F256) =>
@@ -452,15 +420,10 @@ theorem HRuns.levelChals (resp : ℕ → Claims.Msg) (last : Bool) (sm : LState)
   · rintro f y _ _ ⟨-, hf⟩
     exact hf rfl
 
-/-! ## Between levels -/
-
 section Mid
 
 variable {P : LigeritoProof} {cf : ℕ → ℕ → F128}
 
-/-- **The prover between levels**, against the model's level-loop state `x`: its table is an F-table `g` whose codeword
-rows at `lv` the last commitment `cm` holds, the claim is its sum against the weight `w`, which is the model's, the
-model's lists are fit for the next level's challenges, and every consistency claim's positions fit its coins. -/
 def Mid (n : ℕ) (b : Array F128) (initG : List 𝕂) (x : Vars × LState × Transcript) (cm : Commit) (lv : Level)
     (y : TW) : Prop :=
   ∃ g w, y = (embedF g, w) ∧ cm.rows = encodeRows lv g ∧ Sync x.2.1.s x.2.1.q (embedF g) w (x.1.1 - 1) ∧
@@ -476,8 +439,6 @@ theorem pos_lt {lv : Level} (hl : LevelSeam lv) (coins : Array F128) :
   rw [getElem!_pos _ i hi]
   exact positions_lt_d hl coins _ (Array.getElem_mem hi)
 
-/-- **A level's consistency claim, closed**: from the claim and weight after its two out-of-domain claims, on the
-split fold `F` of the last commitment's table `g`, the claim and weight after its query and close. -/
 theorem close_step {n : ℕ} {b : Array F128} {initG : List 𝕂} {levels : Array (Array F256)} {N cols start : ℕ}
     {sm : LState} {tm : Transcript} {w : Array F256} (lv : Level) (g : Array F128) (ch : Array F256)
     (rows : Array (Array F128)) (hseam : LevelSeam lv) (hch : ch.size = lv.lanes)
@@ -511,9 +472,6 @@ theorem close_step {n : ℕ} {b : Array F128} {initG : List 𝕂} {levels : Arra
   rw [hn]
   exact this
 
-/-- **An inner level's step keeps `Mid`**: from `Mid` at the level-loop state `x` (the last commitment `cm` at level
-`j + 1`), the honest prover's four challenges, its commitment `cmN` of the split fold `F`, two out-of-domain claims on
-`F`, its query against `cm` and its consistency claim end in `Mid` at the model's step, with `cmN` at level `j + 2`. -/
 theorem mid_stepN {n : ℕ} {b : Array F128} {initG : List 𝕂} {sch : Schedule} {j M : ℕ}
     {x : Vars × LState × Transcript} {cm cmN : Commit} {g : Array F128} {w : Array F256}
     (hrows : cm.rows = encodeRows (sch.levels.getD (j + 1) default) g)
@@ -588,9 +546,6 @@ theorem mid_stepN {n : ℕ} {b : Array F128} {initG : List 𝕂} {sch : Schedule
     rw [hC.2.2.2.2.2.2.2.2]
     exact hcs
 
-/-- **Level 0 ends in `Mid`** at the model's level-loop start: from level 0's claim after its `k0` challenges, the
-honest prover's commitment `cm1` of the split fold `F`, two out-of-domain claims on `F`, its query against the level-0
-commitment `cm0` of `tb` and its consistency claim. -/
 theorem mid_lv0 {sch : Schedule} {T : F128} {cap : Array ByteArray} {t : Transcript} {cm0 cm1 : Commit}
     {tb b : Array F128} (hb : b.size = 2 ^ sch.n) (hk : sch.k0 ≤ sch.n) (hseam : LevelSeam (sch.levels.getD 0 default))
     (hlanes : (sch.levels.getD 0 default).lanes = sch.k0)
@@ -660,9 +615,6 @@ theorem mid_lv0 {sch : Schedule} {T : F128} {cap : Array ByteArray} {t : Transcr
     rw [hC.2.2.2.2.2.2.2.2, hH.2.2.2.2.2.2.1]
     simp
 
-/-- **The last level meets the final identity**: from `Mid` before the last level (the last commitment `cm` at level
-`R`), the honest prover's four challenges, whose split fold is the proof's `y_r`, and its query against `cm`, whose rows
-are the proof's last opening, the verifier's model ends with `lhsE y_r ext res = s`. -/
 theorem goal_last {sch : Schedule} {T : F128} {cap : Array ByteArray} {t : Transcript} {b : Array F128}
     {basisAt : Array F256 → ℕ → Array F256} {j : ℕ} {x : Vars × LState × Transcript}
     (hx : x = loop P cf sch (x₀ P cf sch T cap t) j) (hjR : j + 1 = sch.levels.size - 1) (hL : 2 ≤ sch.levels.size)

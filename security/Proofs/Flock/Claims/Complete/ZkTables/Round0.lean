@@ -41,24 +41,8 @@ import Proofs.Flock.Soundness.Refine.Arith
 import Std.Tactic.BVDecide.Normalize.BitVec
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# The masked prover's first message, from its level-0 leaves
-
-Round `0` of the masked session on the executable's side: `ZkTables.honestPR`'s first message is the link message of
-the tables' level-0 caps (`honestPR_first`), and each cap is a function of its level's leaves alone.
-
-* `layerOf`: layer `h` of a Merkle tree over `2^d` leaves, as `commitRowsP` builds it.
-* `commitRowsP_cap_eq`: through `Hashes` whose node and leaf are functions, `commitRowsP` returns, and its cap is layer
-  `d − cap` of the tree over the rows' leaves under their salts.
-* `commitsPZk_caps`: at `SHA-512` and `hm96-sha512/v1`, each table's level-0 cap is layer `d − cap` of the tree of
-  `MerkleScheme.hm96Sha512.leaf` over `encodeRowsZk`'s rows under the tape's level-0 salts.
-* `encodeRowsZk_entry`: a row's entry at position `q` and lane `l`, as the model writes a level-0 column: the lane's
-  message encoded at `ω_q` (`X̂_c(ω_q)`), plus its `t_pad` padding coefficients on Flock ZK's padding columns
-  (`fOf_padF`, `ZkExec.padAt_eq` at `c₀ = PAD_C`).
-* `sessionPZk_go_head`: once the schedules and the level-0 commitments return, the pure masked session's first body
-  is the link message of the caps, whatever the session does after its coin.
-* `honestPR_first`: so `ZkTables.honestPR`'s message before any reply is that link message, tagged `0`.
--/
+/-! The masked prover's first message is the link message of its tables' level-0 caps, each a function of its level's
+leaves (`honestPR_first`, `commitsPZk_caps`). -/
 
 @[expose] public section
 
@@ -67,8 +51,6 @@ open Flock FlockDeploy
 namespace FlockComplete
 
 open With
-
-/-! ## A level's cap from its leaves -/
 
 /-- **Layer `h` of a Merkle tree** over the leaves `lf q` (`q < 2^d`) with the node `nd`, as `commitRowsP` builds it:
 layer `h + 1` holds the nodes of layer `h`'s pairs. -/
@@ -95,7 +77,6 @@ theorem mapM_ok_mem {α β : Type} {f : α → V β} (g : α → β) (xs : Array
   rw [Array.mapM_eq_mapM_toList, list_mapM_ok_mem g xs.toList fun a ha => hf a (Array.mem_toList_iff.1 ha)]
   exact congrArg Except.ok (Array.ext' (by simp))
 
-/-- A loop over `[0:n]` whose every step yields returns, and keeps an invariant that each step carries. -/
 theorem forIn_ok_inv {β : Type} (n : ℕ) (b : β) {f : ℕ → β → V (ForInStep β)} (I : ℕ → β → Prop) (h0 : I 0 b)
     (h : ∀ i < n, ∀ b, I i b → ∃ b', f i b = .ok (.yield b') ∧ I (i + 1) b') :
     ∃ r, forIn [0:n] b f = .ok r ∧ I n r := by
@@ -124,8 +105,6 @@ theorem forIn_ok_inv' {β : Type} (n : ℕ) (b : β) {f : ℕ → β → V (ForI
   subst he
   exact forIn_ok_inv n b I h0 h
 
-/-- **A level's cap is layer `d − cap` of its leaves' tree**: through `Hashes` whose node is `nd` and whose leaf is
-`lf`, `commitRowsP` returns, and its cap is that layer of the tree over the rows' leaves under their fitted salts. -/
 theorem commitRowsP_cap_eq {hs : Hashes V} {ms : MerkleScheme} {nd : ByteArray → ByteArray → ByteArray}
     {lf : Array F128 → ByteArray → ByteArray} (hn : ∀ l r, (ms.opsWith hs).node l r = .ok (nd l r))
     (hl : ∀ row s, (ms.opsWith hs).leaf row s = .ok (lf row s)) (lv : Level) (rows : Array (Array F128))
@@ -154,21 +133,14 @@ theorem commitRowsP_cap_eq {hs : Hashes V} {ms : MerkleScheme} {nd : ByteArray �
   subst hr
   exact ⟨_, rfl, hI⟩
 
-/-- `hm96-sha512/v1` through `SHA-512` is its own leaf. -/
 theorem hm96_leaf_std (row : Array F128) (s : ByteArray) :
     (MerkleScheme.hm96Sha512.opsWith (Hashes.ofSha512 Sha512.hash : Hashes V)).leaf row s =
       .ok (MerkleScheme.hm96Sha512.leaf row s) := rfl
 
-/-- `hm96-sha512/v1` through `SHA-512` is its own node. -/
 theorem hm96_node_std (l r : ByteArray) :
     (MerkleScheme.hm96Sha512.opsWith (Hashes.ofSha512 Sha512.hash : Hashes V)).node l r =
       .ok (Sha512.hash (l ++ r)) := rfl
 
-/-! ## The masked level-0 caps -/
-
-/-- **Each table's masked level-0 cap from its leaves**: at `SHA-512`, where every table commits under
-`hm96-sha512/v1`, the level-0 commitments return, one per table, table `i`'s cap layer `d − cap` of the tree of
-`MerkleScheme.hm96Sha512.leaf` over its `encodeRowsZk` rows under the tape's level-0 salts, fitted to 192 bytes. -/
 theorem commitsPZk_caps (tabs : Array Setup) (schs : Array (Schedule × ℕ)) (tbls : Array (Array F128))
     (tape : TapeZk) (hms : ∀ i < tabs.size, tabs[i]!.merkle = MerkleScheme.hm96Sha512) :
     ∃ cms, (commitsPZk (Hashes.ofSha512 Sha512.hash) tabs schs tbls tape : V _) = .ok cms ∧ cms.size = tabs.size ∧
@@ -209,8 +181,6 @@ theorem commitsPZk_caps (tabs : Array Setup) (schs : Array (Schedule × ℕ)) (t
   rw [getElem!_pos _ i (by simpa using hi), Array.getElem_map, Array.getElem_range]
   exact hcap
 
-/-! ## A masked level-0 row -/
-
 section Rows
 
 open FlockSoundness FlockSoundness.Refine FlockLevel3
@@ -218,8 +188,6 @@ open FlockSoundness FlockSoundness.Refine FlockLevel3
 theorem fOf_sumF (n : ℕ) (f : ℕ → F128) : fOf (sumF n f) = ∑ x ∈ Finset.range n, fOf (f x) :=
   Replay.Zc.of_sumF n f
 
-/-- **A lane's padding at a position is the model's** (`ZkExec.padAt_eq` at `c₀ = PAD_C`): for `t_pad ≤ 2^cols`
-coefficients `μ`, `Σ_j μ_j·(c₀·X̂_j(ω_p) + X̂_{2^cols+j}(ω_p))`. -/
 theorem fOf_padF (p cols tPad : ℕ) (mu : Array F128) (hy : mu.size = tPad) (ht : tPad ≤ 2 ^ cols) :
     fOf (padF (whats (svTable (cols + 1)) p (cols + 1)) cols mu) =
       ∑ j : Fin tPad, fOf mu[j.val]! * (fOf Zk.PAD_C * execArith.Xhat j.val (cols + 1) (execArith.omega p) +
@@ -248,8 +216,6 @@ theorem encodeRowsZk_size (lv : Level) (tPad : ℕ) (g : Array F128) (extra lane
   rw [getElem!_pos _ q (by simpa using hq)]
   simp
 
-/-- **A masked level-0 row's entry** at position `q < 2^d`, lane `l`: the lane's message (the table's witness lane `l`,
-or extra lane `l − 2^lanes`) encoded at `ω_q`, plus its padding by its `t_pad` coefficients. -/
 theorem encodeRowsZk_entry (lv : Level) (tPad : ℕ) (g : Array F128) (extra lanePad : ℕ → ℕ → F128) {q l : ℕ}
     (hq : q < 2 ^ lv.d) (hl : l < 2 ^ lv.lanes + Zk.EXTRA_LANES) (ht : tPad ≤ 2 ^ lv.cols) :
     fOf ((encodeRowsZk lv tPad g extra lanePad)[q]!)[l]! =
@@ -273,10 +239,6 @@ theorem encodeRowsZk_entry (lv : Level) (tPad : ℕ) (g : Array F128) (extra lan
 
 end Rows
 
-/-! ## The first send -/
-
-/-- **The first body is the link message**: once the schedules and the level-0 commitments return, the pure masked
-session's first body is the link message of the caps, with no public words, whatever the session does after its coin. -/
 theorem sessionPZk_go_head (H : Claims.Msg → Claims.Msg) (resp : ℕ → Claims.Msg) (spec : SessionSpec)
     (tabs : Array Setup) (words : Array (List ℕ)) (trs : Array Trace) (tape : TapeZk) {schs : Array (Schedule × ℕ)}
     {cms : Array Commit} (hs : (schedsPZk tabs : V _) = .ok schs)
@@ -295,8 +257,6 @@ theorem sessionPZk_go_head (H : Claims.Msg → Claims.Msg) (resp : ℕ → Claim
   rw [hl]
   simp
 
-/-- **`ZkTables.honestPR`'s first message is the link message of the level-0 caps**: before any reply, at a statement
-that sets up, once the schedules and the level-0 commitments of the tables at the tape's mask words return. -/
 theorem honestPR_first (H : Claims.Msg → Claims.Msg) (w : Claims.Flock.Wit) (x : Claims.Msg) (ω : TapeZk)
     {s : Ins} {spec : SessionSpec} {sts : Array Flock.Stmt} (hset : setupOf true x = some (s, spec, sts))
     {schs : Array (Schedule × ℕ)} {cms : Array Commit} (hs : (schedsPZk (tabsOf sts) : V _) = .ok schs)

@@ -42,23 +42,8 @@ import Proofs.Flock.Claims.Complete.Link
 import Proofs.Flock.Claims.Complete.Zk.Json.Session
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# The honest masked run's proof files
-
-`Files.lean` at the masked run: the rep goals on the masked proof files, `RepDecodesZk`, `RepParamsZk`, `PadsRoot` and
-`CapCommittedZk`, and `FinalFitsZk` (the record's length from `readyZk`, `RunZk.recordFits`), at every honest masked
-run, under the masked record goals' hypotheses (`Out64`, `StmtOkZk`, `ProverOkZk`) and one more:
-
-* `RepShapedZk`: each masked proof a rep returns, on the case's trace, its masked level-0 commitment under the case's
-  tape, the table's extra claims at the link's points, and the tape's pads committed, is `Shaped` at the shape the
-  masked verifier decodes it at, so `ZkView.decode_encode` reads it back.
-
-`sessionPZk_files`: each proof file of the one-table masked session encodes a masked proof its rep returned
-(`RepFileZk`), and the first send is the link of the masked commitment's cap. `RunZk.rep`: at the run, the masked
-verifier's decoded proof is that rep's proof, whose cap is the commitment's (the record's `root_B`), whose PCS
-parameters are the table's, and whose pads' root is their commitment's (`repPZk_fields`, `innerP_root`), a 64-byte
-digest at 64-byte oracle outputs (`innerCommitP_root`).
--/
+/-! The rep goals on the masked proof files and `FinalFitsZk`, at every honest masked run, under the masked record
+goals' hypotheses and `RepShapedZk`. -/
 
 @[expose] public section
 
@@ -66,7 +51,6 @@ namespace FlockComplete.JsonRT
 
 open Flock Transcript FlockComplete FlockDeploy
 
-/-- A `throw` in the transcript monad never returns. -/
 theorem Ret.run_throw {α : Type} {P : α × Transcript → Prop} (e : String) (t : Transcript) :
     Ret ((throw e : TMW PS α).run t) P := by
   intro l a l' h
@@ -74,13 +58,11 @@ theorem Ret.run_throw {α : Type} {P : α × Transcript → Prop} (e : String) (
   rw [go_bind] at h
   cases h
 
-/-- Nor does anything after it. -/
 theorem Ret.run_throw_bind {α β : Type} {P : β × Transcript → Prop} (e : String) (f : α → TMW PS β)
     (t : Transcript) : Ret ((throw e >>= f : TMW PS β).run t) P := by
   rw [StateT.run_bind]
   exact Ret.bind (Q := fun _ => False) (Ret.run_throw e t) fun _ h => h.elim
 
-/-- **The inner proof carries its commitment's root.** -/
 theorem innerP_root (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (lay : Zk.PadLayout) (p : PadsZk)
     (ic : InnerCommit) (finalC : F128) (cons : Array (String × Zk.Lin)) (t : Transcript) :
     Ret ((innerP (asksS resp) (Hashes.ofSha512 h) lay p ic finalC cons).run t) fun pt => pt.1.root = ic.root := by
@@ -104,7 +86,6 @@ theorem innerP_root (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (l
   refine Ret.bind (Ret.true _) fun n _ => ?_
   exact Ret.pure rfl
 
-/-- **A masked rep's proof carries the commitment's cap, the table's PCS parameters and its pads' root.** -/
 theorem repPZk_fields (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (st : Setup) (sch : Schedule)
     (tPad rep : ℕ) (dom : ByteArray) (tr : Trace) (t : Array F128) (cm0 : Commit) (extras : Array Claim)
     (pads : PadsZk) (ic : InnerCommit) (extra lanePad : ℕ → ℕ → F128) (salt : ℕ → ℕ → ByteArray)
@@ -126,9 +107,6 @@ theorem repPZk_fields (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) 
   exact Ret.pure ⟨rfl, rfl, hi⟩
 
 
-/-- A masked proof file of a rep: it encodes, at the rep's shape, a masked proof the rep returned on the table's trace
-`tr`, its packed table, the masked level-0 commitment `cm`, the extra claims `e`, and the tape's pads, committed, at
-some rank check. -/
 def RepFileZk (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (st : Setup) (v : Schedule × ℕ) (tr : Trace)
     (cm : Commit) (e : Array Claim) (tape : TapeZk) (b : ByteArray) : Prop :=
   ∃ p rep ic d l t' l' prior ws, innerCommitP (Hashes.ofSha512 h : Hashes V)
@@ -138,9 +116,6 @@ def RepFileZk (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (st : Se
       (padsOf tape 0 rep (Zk.PadLayout.new st.m st.kLog v.1.k0)) ic (tape.extra 0) (tape.lanePad 0) (tape.salt 0 rep)
       (tape.nonce 0 rep) prior ws).run (Transcript.init #[] d)).go l = (.ok (p, t'), l')
 
-/-- **The one-table masked session's proof files**: the table's `--zk` schedule, its masked level-0 commitment `cm` and
-its extra claims `e` at the link's points; the first send is the link of `cm`'s cap; one proof file per rep stream,
-each a `RepFileZk`. -/
 theorem sessionPZk_files (H : Claims.Msg → Claims.Msg) (resp : ℕ → Claims.Msg) {spec : SessionSpec} {t : String}
     (ht : spec.tables = #[t]) {ct : CoinTree.Spec} (hct : spec.coinTree = some ct) {own : Lean.Json}
     (hown : Flock.JsonParse.parse spec.hello = .ok own) {hz : String} (hc : canon (helloJ own) = .ok hz) (st : Setup)
@@ -233,10 +208,6 @@ theorem sessionPZk_files (H : Claims.Msg → Claims.Msg) (resp : ℕ → Claims.
 
 variable {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
 
-/-- **The honest masked rep proof fits its shape**: at every good masked case, on its table's trace, the trace's packed
-table committed at the `--zk` schedule's first level under the case's tape (`cm`), the table's extra claims at the
-link's points (`e`), and the tape's pads committed (`ic`), each masked proof a rep returns is `Shaped` at the shape the
-masked verifier decodes it at. -/
 def RepShapedZk (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) : Prop :=
   ∀ c : CaseZk H rel, ∀ st v cm e, c.sts = #[st] → Zk.schedule (Setup.ofCircuit st).wideLeaf (Setup.ofCircuit st).m = .ok v →
     commitPZk (Hashes.ofSha512 (Claims.hOf H) : Hashes V) (Setup.ofCircuit st).merkle (v.1.levels.getD 0 default) v.2
@@ -252,10 +223,6 @@ def RepShapedZk (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Reada
       (c.ω.extra 0) (c.ω.lanePad 0) (c.ω.salt 0 rep) (c.ω.nonce 0 rep) prior ws).run (Transcript.init #[] d)) fun pt =>
       FlockSoundness.Discharge.ZkView.Shaped (shapeZk (Setup.ofCircuit st) v.1 e.size) pt.1
 
-/-- **Each rep's decoded masked proof is the honest one**: at the run's one table, with `--zk` schedule `v` and masked
-level-0 commitment `cm`, the record's `root_B` is `cm`'s cap, two proof files, each under `2^64` bytes, and each rep's
-file decodes at the masked verifier's shape to a proof with `cm`'s cap, the table's PCS parameters, and the root of its
-pads' commitment. -/
 theorem RunZk.rep (h64 : Claims.Out64 H) (hS : StmtOkZk H rel)
     (hP : ProverOkZk H rel) (hR : RepShapedZk H rel) (o : RunZk H rel) :
     ∃ (st : Flock.Stmt) (v : Schedule × ℕ) (cm : Commit), o.tabs = #[Setup.ofCircuit st] ∧ o.sch 0 = v.1 ∧
@@ -326,7 +293,6 @@ theorem RunZk.rep (h64 : Claims.Out64 H) (hS : StmtOkZk H rel)
     exact ⟨hdec, hc, hpar, hin⟩
 
 
-/-- A loop whose every step yields, and takes an invariant at `n + 1` remaining steps to it at `n`, ends at `0`. -/
 theorem except_forIn_count {ε α β : Type} (P : ℕ → β → Prop) {f : α → β → Except ε (ForInStep β)}
     (hf : ∀ a b r n, P (n + 1) b → f a b = .ok r → ∃ v, r = .yield v ∧ P n v) :
     ∀ (l : List α) (b r : β), P l.length b → forIn l b f = .ok r → P 0 r := by
@@ -344,8 +310,6 @@ theorem except_forIn_count {ε α β : Type} (P : ℕ → β → Prop) {f : α �
     obtain ⟨v, rfl, hv⟩ := hf a b s l.length hb hs
     exact ih v r hv h
 
-/-- **The pads' root is a digest**, for a SHA-512 of 64-byte outputs: the tree has `2^k` leaves, each level halves it,
-and the root is the one node left. -/
 theorem innerCommitP_root {h : ByteArray → ByteArray} (h64 : ∀ b, (h b).size = 64) (p : PadsZk)
     (salt : ℕ → ByteArray) {ic : InnerCommit}
     (hc : (innerCommitP (Hashes.ofSha512 h) p salt : V InnerCommit) = .ok ic) : ic.root.size = 64 := by
@@ -372,7 +336,6 @@ theorem innerCommitP_root {h : ByteArray → ByteArray} (h64 : ∀ b, (h b).size
   · simpa [List.length_range', Std.Legacy.Range.size, Nat.log2_two_pow] using hL
 
 
-/-- **The rep's masked proof file decodes** at its shape: the goal `RepDecodesZk`. -/
 theorem repDecodesZk_goal (h64 : Claims.Out64 H) (hS : StmtOkZk H rel)
     (hP : ProverOkZk H rel) (hR : RepShapedZk H rel) : RepDecodesZk H rel := by
   intro o i hi r hr
@@ -381,7 +344,6 @@ theorem repDecodesZk_goal (h64 : Claims.Out64 H) (hS : StmtOkZk H rel)
   obtain rfl : i = 0 := by simpa using hi
   exact (hrep r hr).1
 
-/-- **The rep's PCS parameters are the `--zk` schedule's** (R7/F2): the goal `RepParamsZk`. -/
 theorem repParamsZk_goal (h64 : Claims.Out64 H) (hS : StmtOkZk H rel)
     (hP : ProverOkZk H rel) (hR : RepShapedZk H rel) : RepParamsZk H rel := by
   intro o i hi r hr
@@ -391,7 +353,6 @@ theorem repParamsZk_goal (h64 : Claims.Out64 H) (hS : StmtOkZk H rel)
   rw [(hrep r hr).2.2.1, hsch0, show o.tabs[0]! = Setup.ofCircuit st by rw [htabs]; rfl]
   exact FlockVBridge.Family.pcs_bne_self _
 
-/-- **The pads' root is 64 bytes**: the goal `PadsRoot`. -/
 theorem padsRoot_goal (h64 : Claims.Out64 H) (hS : StmtOkZk H rel)
     (hP : ProverOkZk H rel) (hR : RepShapedZk H rel) : PadsRoot H rel := by
   intro o i hi r hr
@@ -402,7 +363,6 @@ theorem padsRoot_goal (h64 : Claims.Out64 H) (hS : StmtOkZk H rel)
   rw [hroot, innerCommitP_root (hOf_size h64) _ _ hic]
   rfl
 
-/-- **The rep's cap is the committed `root_B`** (S16): the goal `CapCommittedZk`. -/
 theorem capCommittedZk_goal (h64 : Claims.Out64 H) (hS : StmtOkZk H rel)
     (hP : ProverOkZk H rel) (hR : RepShapedZk H rel) : CapCommittedZk H rel := by
   intro o i hi r hr
@@ -414,8 +374,6 @@ theorem capCommittedZk_goal (h64 : Claims.Out64 H) (hS : StmtOkZk H rel)
   rw [bne, bytes_beq_self]
   rfl
 
-/-- **The last message's lengths fit their words**: the goal `FinalFitsZk`, the printed record's length from `readyZk`
-(`RunZk.recordFits`). -/
 theorem finalFitsZk_goal (h64 : Claims.Out64 H) (hS : StmtOkZk H rel)
     (hP : ProverOkZk H rel) (hR : RepShapedZk H rel) : FinalFitsZk H rel := by
   intro o

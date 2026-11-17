@@ -35,14 +35,7 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Complete.Shaped.Walk
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# The honest PIOP's lengths
-
-The honest rep's first three phases return messages of the lengths `decodeProof` checks, whatever their coins:
-`zerocheckP_shape` (two 64-entry first-round messages, and `m − 6` rounds and challenges), `lincheckP_shape` (its
-`kLog − 6` rounds and a 64-entry partial table, at a circuit whose fold returns at every challenge; the loop halves the
-folded table `2^kLog` once a round, `halve_size`) and `ringSwitchP_shape` (one 128-entry switch vector per claim).
--/
+/-! The honest rep's first three phases return messages of the lengths `decodeProof` checks, whatever their coins. -/
 
 @[expose] public section
 

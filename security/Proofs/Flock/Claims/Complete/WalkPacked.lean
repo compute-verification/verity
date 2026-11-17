@@ -44,18 +44,8 @@ import Proofs.Flock.Claims.Complete.Walk
 import Proofs.Flock.Claims.DeployK
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# The session walk on the packed table
-
-The honest session commits each table's packed trace at level 0 and runs both reps on it (`sessionP_reps` at
-`sessionS`), so the session walk holds on the packed table at every rep (`Run.repWalkP`, `RepWalkP`). With ring
-switching's claim and the verifier's basis proved at the deployed relation (`lgFinal_relation`), Ligerito's final
-identity there rests on the honest Ligerito's alone (`lgFinal_walk`), and so does Flock's completeness at the deployed
-plain verifier, beside the record's JSON and the oracle's 64-byte outputs (`complete_plain_honest`). With the honest
-Ligerito's final identity proved (`Lg.honest`), `LgFinal` rests on the record's JSON and the oracle's 64-byte outputs
-alone (`lgFinal_json`, by `lgFinal_walkP`), and Flock's completeness at the deployed plain verifier on the record's JSON
-alone (`complete_plain_json`): `Claims.Complete` reads the oracle's 64-byte outputs (`Out64`) itself.
--/
+/-! The session walk on the packed table, on which Flock's completeness at the deployed plain verifier rests on the
+record's JSON alone (`complete_plain_json`). -/
 
 @[expose] public section
 
@@ -63,9 +53,6 @@ namespace FlockComplete.Replay
 
 open Flock Transcript FlockDeploy
 
-/-- **The session walk at a run's rep, on the packed table**: rep `r` of the run's one table, run on the trace's packed
-table and the table's level-0 commitment of it, from the rep's first send on and its own transcript's start, returns
-the decoded proof. -/
 theorem _root_.FlockComplete.Run.walkP {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
     (h64 : Claims.Out64 H) (hP : JsonRT.ProverOk H rel) (o : Run H rel)
     {r : ℕ} (hr : r < 2) : RepWalkP o 0 r := by
@@ -159,35 +146,25 @@ theorem _root_.FlockComplete.Run.walkP {H : Claims.Msg → Claims.Msg} {rel : Re
     · rw [htab0, hsch0, hext0, hp]
       exact hr₁
 
-/-- **The session walk on the packed table at every rep** (`RepWalkP`). -/
 theorem _root_.FlockComplete.Run.repWalkP {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
     (h64 : Claims.Out64 H) (hP : JsonRT.ProverOk H rel) (o : Run H rel)
     {i : ℕ} (hi : i < o.tabs.size) {r : ℕ} (hr : r < 2) : RepWalkP o i r := by
   obtain rfl : i = 0 := by have := o.tabs_size_one; omega
   exact o.walkP h64 hP hr
 
-/-- **Ligerito's final identity at the deployed relation** (`LgFinal`), from the honest Ligerito's (`Lg.Honest`), at the
-record's JSON and the oracle's 64-byte outputs. -/
 theorem lgFinal_walk (H : Claims.Msg → Claims.Msg) (h64 : Claims.Out64 H)
     (hH : Lg.Honest) : LgFinal H Readable.relation :=
   lgFinal_relation H (fun o _ hi _ hr => o.repWalkP h64 (proverOk h64) hi hr) hH
 
-/-- **Flock's completeness at the deployed plain verifier**, at the deployed relation and the record's error, from the
-oracle's 64-byte outputs (`Out64`) and the honest Ligerito's final identity
-(`Lg.Honest`). -/
 theorem complete_plain_honest (H : Claims.Msg → Claims.Msg) 
     (h64 : Claims.Out64 H) (hH : Lg.Honest) : Claims.Flock.Complete H (deployPlain Readable.relation) :=
   complete_plain H h64 (lgFinal_walk H h64 hH)
 
-/-- **Ligerito's final identity at the deployed relation** (`LgFinal`), at the record's JSON and the oracle's 64-byte
-outputs. -/
 theorem lgFinal_json (H : Claims.Msg → Claims.Msg) (h64 : Claims.Out64 H) :
     LgFinal H Readable.relation :=
   lgFinal_walkP H fun o _ hi _ hr => o.repWalkP h64 (proverOk h64) hi hr
 
-/-- **Flock's completeness at the deployed plain verifier**, at the deployed relation, of the record's reference prover
-(`honestP`) at the record's error (`δc H`), with no premise: the oracle's 64-byte outputs (`Out64`) are
-`Claims.Complete`'s own antecedent. -/
+/-- With no premise: the oracle's 64-byte outputs (`Out64`) are `Claims.Complete`'s own antecedent. -/
 theorem complete_plain_json (H : Claims.Msg → Claims.Msg) :
     Claims.Flock.Complete H (deployPlain Readable.relation) := fun h64 =>
   complete_plain H h64 (lgFinal_json H h64) h64

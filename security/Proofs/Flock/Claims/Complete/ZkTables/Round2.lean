@@ -36,21 +36,8 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# The masked prover's third message: table `0` rep `0`'s outer zerocheck point
-
-Round `2` of the masked session on the executable's side. Right after the zerocheck's first squeeze (`rSkip`, six
-coins) the masked zerocheck squeezes its outer point (`rOuter`, `m − 13` coins) with nothing absorbed in between, so its
-third body is that squeeze's frame of a transcript whose pending bytes are empty: the header of `m − 13` coins of kind
-`2` alone (`Replay.framed_afterSq`), whatever the coins, the cut or the witness.
-
-* `pv_sim_pre`, `st_sim_pre`, `pv_sim_cons`, `st_sim_cons`: a bind's bodies start with its first part's, and a part
-  that sends one body and returns is followed by the rest's from the next index.
-* `sampleVecP_pv`: a squeeze of `n ≠ 0` coins in `PV` sends its frame and returns the reply's first `n` coins.
-* `zerocheckPZk_pv_head2`, `repPZk_pv_head2`, `afterLinkPZk_pv_head2`: the first two bodies of a rep, and of the session
-  after the link's coin where rep `0` of table `0` is the first stream and its extra claims return.
-* `sessionPZk_pv_round2`, `sessionPZk_go_round2`: the session's first three bodies, and its third at the pure session.
--/
+/-! The masked prover's third message: table `0` rep `0`'s outer zerocheck point squeeze, with nothing pending whatever
+the coins, the cut or the witness (`sessionPZk_go_round2`). -/
 
 @[expose] public section
 
@@ -84,8 +71,6 @@ theorem st_sim_cons {σ α β : Type} {x : StateT σ PV α} {f : α → StateT �
   rw [StateT.run_bind]
   exact pv_sim_cons H resp hx
 
-/-- **A squeeze of `n ≠ 0` coins in `PV`** sends its frame, tagged `0`, and returns the reply's first `n` coins and
-the transcript after it. -/
 theorem sampleVecP_pv {n : ℕ} (hn : n ≠ 0) (t : Transcript) (i : ℕ) :
     ((sampleVecP asks n).run t).run.sim H resp i =
       ([0 :: Claims.toMsg (Transcript.framed t 2 n)],
@@ -93,14 +78,10 @@ theorem sampleVecP_pv {n : ℕ} (hn : n ≠ 0) (t : Transcript) (i : ℕ) :
   simp only [sampleVecP, squeezeP, StateT.run, hn, ite_false]
   rfl
 
-/-- **After a squeeze nothing is pending**: the next frame is its header alone. -/
 theorem Replay.framed_afterSq (t : Transcript) (kind : UInt8) (n : ℕ) (coin : ℕ → F128) (kind' : UInt8) (n' : ℕ) :
     Transcript.framed (Replay.afterSq t kind n coin) kind' n' = Transcript.framed ⟨#[], 0, ByteArray.empty⟩ kind' n' :=
   rfl
 
-/-- **The masked zerocheck's first two bodies**: its first squeeze's frame, of the transcript with the circuit's
-digest, the level-0 cap and the pads' root absorbed (`Replay.ZcZ.t₁`), then its outer point's, of `m − 13` coins
-squeezed right after. -/
 theorem zerocheckPZk_pv_head2 (m : ℕ) (hm : 14 ≤ m) (digest cap root : ByteArray) (lay : Zk.PadLayout)
     (h : Array F128) (tr : Trace) (t : Transcript) (i : ℕ) :
     ∃ bs, (((zerocheckPZk asks m digest cap root lay h tr).run t).run.sim H resp i).1 =
@@ -137,9 +118,6 @@ theorem repPZk_pv_head2 (st : Setup) (hm : 14 ≤ st.m) (sch : Schedule) (tPad r
   exact st_sim_pre H resp (zerocheckPZk_pv_head2 H resp st.m hm st.digest (flat cm0.cap) ic.root
     (Zk.PadLayout.new st.m st.kLog sch.k0) pads.h tr T i)
 
-/-- **The session's first two bodies after the link's coin**, where table `0`'s rep `0` is the first stream and its
-extra claims and pads' commitment return: that rep's first zerocheck squeeze, from the domain's transcript, then its
-outer point's. -/
 theorem afterLinkPZk_pv_head2 (spec : SessionSpec) (tabs : Array Setup) (hm : 14 ≤ tabs[0]!.m)
     (words : Array (List ℕ)) (trs : Array Trace)
     (tape : TapeZk) (schs : Array (Schedule × ℕ)) (tbls : Array (Array F128)) (cms : Array Commit) (c1 : ℕ → F128)
@@ -168,8 +146,6 @@ theorem afterLinkPZk_pv_head2 (spec : SessionSpec) (tabs : Array Setup) (hm : 14
     (tape.extra 0) (tape.lanePad 0) (tape.salt 0 0) (tape.nonce 0 0) (priorOf tabs[0]! #[] 0) words[0]!
     (Transcript.init #[] (spec.domain spec.tables[0]! 0).toUTF8) i)
 
-/-- **The masked session's first three bodies** in `PV`: the link message of the level-0 caps, then table `0` rep `0`'s
-first zerocheck squeeze and its outer point's. -/
 theorem sessionPZk_pv_round2 (spec : SessionSpec) (tabs : Array Setup) (hm : 14 ≤ tabs[0]!.m)
     (words : Array (List ℕ)) (trs : Array Trace)
     (tape : TapeZk) {schs : Array (Schedule × ℕ)} {cms : Array Commit}
@@ -195,9 +171,6 @@ theorem sessionPZk_pv_round2 (spec : SessionSpec) (tabs : Array Setup) (hm : 14 
     (coinOf (resp 0)) h0 he hi 1
   exact ⟨bs, by rw [hb]⟩
 
-/-- **The pure masked session's third body** is table `0` rep `0`'s outer zerocheck point squeeze, untagged: the
-header of `m − 13` coins of kind `2` alone, where the schedules, the level-0 commitments, that table's extra claims
-at the link points and its pads' commitment return. -/
 theorem sessionPZk_go_round2 (spec : SessionSpec) (tabs : Array Setup) (hm : 14 ≤ tabs[0]!.m)
     (words : Array (List ℕ)) (trs : Array Trace)
     (tape : TapeZk) {schs : Array (Schedule × ℕ)} {cms : Array Commit}

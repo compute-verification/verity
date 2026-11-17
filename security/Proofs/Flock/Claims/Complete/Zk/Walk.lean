@@ -42,17 +42,8 @@ import Proofs.Flock.Claims.Complete.Zk.Json.Session
 import Std.Data.String.ToNat
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# The masked session's reps, by index
-
-`sessionPZk_facts` and `sessionPZk_files` together, with each stream and proof file tied to the rep that made it
-(`sessionPZk_walk`): the session's `j`th stream is the rounds rep `j` ends at, and its `j`th proof file encodes the
-proof rep `j` returns, on the table's trace, its masked commitment, the extra claims at the link's points, and rep
-`j`'s pads committed (`RepRunZk`). The loop is walked with its index (`forIn_array_idx`).
-
-`RunZk.walk`: at the run, the record decodes to those streams, every recorded round retained, and each rep's decoded
-masked proof is the proof that rep returned (`ZkView.decode_encode`, given `RepShapedZk`).
--/
+/-! The masked session's reps by index, each stream and proof file tied to the rep that made it (`sessionPZk_walk`,
+`RunZk.walk`). -/
 
 @[expose] public section
 
@@ -61,8 +52,6 @@ namespace FlockComplete.JsonRT
 open Flock Transcript FlockComplete FlockDeploy With
 open Lean (Json)
 
-/-- A `for` loop over a list, from position `k` of `s`, with an invariant of the position, the loop's state and the
-sends; each step sees the element at its position. -/
 theorem forIn_list_idx {α β : Type} (f : α → β → PS (ForInStep β)) (inv : ℕ → β → Array Claims.Msg → Prop)
     (s : List α) (hs : ∀ k a b l r l', s[k]? = some a → inv k b l → (f a b).go l = (.ok r, l') →
       ∃ b', r = .yield b' ∧ inv (k + 1) b' l') :
@@ -87,8 +76,6 @@ theorem forIn_list_idx {α β : Type} (f : α → β → PS (ForInStep β)) (inv
     have := forIn_list_idx f inv s hs xs (k + 1) hd' b₁ l₁ b' l' h₁ e2
     rwa [List.length_cons, show k + (xs.length + 1) = k + 1 + xs.length by omega]
 
-/-- A `for` loop over an array, with an invariant of the steps taken, the loop's state and the sends; each step sees
-the element at its index. -/
 theorem forIn_array_idx {α β : Type} (xs : Array α) (f : α → β → PS (ForInStep β))
     (inv : ℕ → β → Array Claims.Msg → Prop) (hs : ∀ k a b l r l', xs[k]? = some a → inv k b l →
       (f a b).go l = (.ok r, l') → ∃ b', r = .yield b' ∧ inv (k + 1) b' l')
@@ -106,9 +93,6 @@ theorem push_getElem!_lt {α : Type} [Inhabited α] (xs : Array α) (x : α) {j 
 theorem push_getElem!_size {α : Type} [Inhabited α] (xs : Array α) (x : α) : (xs.push x)[xs.size]! = x := by
   rw [getElem!_pos (xs.push x) xs.size (by simp), Array.getElem_push_eq]
 
-/-- **Rep `rep`'s run**: the rep, on the table's trace `tr`, its packed table, the masked level-0 commitment `cm`, the
-extra claims `e`, and rep `rep`'s pads committed as `ic`, returns a proof with `q`, from the empty transcript at its
-domain, ending at the rounds `rs`, its rank check at some earlier claim points and mask words. -/
 def RepRunZk (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (spec : SessionSpec) (st : Setup)
     (v : Schedule × ℕ) (tr : Trace) (cm : Commit) (e : Array Claim) (tape : TapeZk) (rep : ℕ) (rs : Array Round)
     (q : Zk.ZkProof → Prop) : Prop :=
@@ -120,8 +104,6 @@ def RepRunZk (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (spec : S
       (tape.lanePad 0) (tape.salt 0 rep) (tape.nonce 0 rep) prior ws).run
         (Transcript.init #[] (spec.domain spec.tables[0]! rep).toUTF8)).go l = (.ok (p, t'), l')
 
-/-- **The one-table masked session, rep by rep**: `sessionPZk_facts` and `sessionPZk_files` on the same streams, the
-`j`th stream and proof file being rep `j`'s rounds and proof (`RepRunZk`). -/
 theorem sessionPZk_walk (H : Claims.Msg → Claims.Msg) (resp : ℕ → Claims.Msg) {spec : SessionSpec} {t : String}
     (ht : spec.tables = #[t]) {ct : CoinTree.Spec} (hct : spec.coinTree = some ct) {own : Json}
     (hown : Flock.JsonParse.parse spec.hello = .ok own) {hz : String} (hc : canon (helloJ own) = .ok hz) (st : Setup)
@@ -254,10 +236,6 @@ theorem sessionPZk_walk (H : Claims.Msg → Claims.Msg) (resp : ℕ → Claims.M
 
 variable {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
 
-/-- **The honest masked run, rep by rep**: at the run's one table, with `--zk` schedule `v`, the record decodes to two
-streams whose every round is retained, rep `r`'s recorded rounds are its stream's as the decoder reads them back, the
-verifier's extra claims are the prover's, the table has `25 ≤ m`, and rep `r`'s decoded masked proof is the proof it
-returned, ending at that stream. -/
 theorem RunZk.walk (h64 : Claims.Out64 H) (hS : StmtOkZk H rel)
     (hP : ProverOkZk H rel) (hR : RepShapedZk H rel) (o : RunZk H rel) :
     ∃ (st : Flock.Stmt) (v : Schedule × ℕ) (cm : Commit) (e : Array Claim) (streams : Array (Array Round)),

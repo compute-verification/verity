@@ -40,16 +40,7 @@ import Proofs.Flock.Level3.Assembly
 import Proofs.Flock.Level3.LookupRows
 import Proofs.Flock.Soundness.Refine.Arith
 
-/-!
-# Ring switching's claim is the packed table's
-
-`RsSum` at the deployed relation (`rsSum_relation`): at every rep, `Σ_y packed(y)·basisVals(y)` is ring switching's
-batched value `T = Σ_k γ_k·Σ_u eq(r''_k, u)·t_k[u]`.
-
-Both sides are `Σ_k γ_k Σ_u eq(r''_k, u) Σ_v x^v Σ_y z[128y + v]·bit_u(eq(z_k, y))` (`Lg.rsSum_eq`). On the right,
-`t_k[u] = Σ_v bit_u(s_k[v])·x^v` with `s_k[v] = Σ_y z[128y + v]·eq(z_k, y)`, and a bit of a sum is the sum of the
-bits (`Lg.bF_bit_sumF`: bits are the packing basis's coordinates, `unpack`, which is additive).
--/
+/-! `RsSum` at the deployed relation: ring switching's claim is the packed table's (`rsSum_relation`). -/
 
 @[expose] public section
 
@@ -61,7 +52,6 @@ local notation "𝔽" => FlockLevel3.GF128
 
 namespace Lg
 
-/-- A bit as a field element. -/
 noncomputable def bF (b : Bool) : 𝔽 := if b then 1 else 0
 
 theorem fOf_ite (b : Bool) (a : F128) : fOf (if b = true then a else 0) = bF b * fOf a := by
@@ -92,15 +82,11 @@ theorem fOf_dot_rng (a b : Array F128) (n : ℕ) (ha : a.size = n) :
     fOf (dot a b) = ∑ i ∈ Finset.range n, fOf a[i]! * fOf b[i]! := by
   rw [fOf_dot a b n ha, Fin.sum_univ_eq_sum_range (fun i => fOf a[i]! * fOf b[i]!) n]
 
-/-! ## A bit of a sum -/
-
-/-- **Bits are the packing basis's coordinates**, as field elements. -/
 theorem bF_bit (a : F128) (u : ℕ) (hu : u < 128) :
     bF (a.bit u) = ZMod.castHom (dvd_refl 2) 𝔽 (FlockLevel3.unpack (fOf a) ⟨u, hu⟩) := by
   rw [unpack_fOf]
   cases a.bit u <;> simp [bF]
 
-/-- **A bit of a sum is the sum of the bits**: bit `u` of `Σ_y [c_y]·e_y` is `Σ_y [c_y]·bit_u(e_y)` in the field. -/
 theorem bF_bit_sumF (N : ℕ) (c : ℕ → Bool) (e : ℕ → F128) (u : ℕ) (hu : u < 128) :
     bF ((sumF N fun y => if c y = true then e y else 0).bit u) =
       ∑ y ∈ Finset.range N, bF (c y) * bF ((e y).bit u) := by
@@ -118,8 +104,6 @@ theorem bF_bit_sumF (N : ℕ) (c : ℕ → Bool) (e : ℕ → F128) (u : ℕ) (h
   · simp only [ite_true]
     rw [← bF_bit _ u hu]
     simp [bF]
-
-/-! ## The two sides -/
 
 theorem fOf_packed (tr : Trace) (m y : ℕ) (hy : y < 2 ^ (m - 7)) :
     fOf (packed tr m)[y]! = ∑ v ∈ Finset.range 128, bF tr.z[128 * y + v]! * fOf (F128.monomial v) := by
@@ -162,8 +146,7 @@ theorem sws_get (claims : Array Claim) (cs : Rs.Challenges) (k : ℕ) (hk : k < 
   rw [Rs.sws, FlockSoundness.Refine.getElem!_range_map _ hk, Rs.perClaim, pushes_get _ _ k hk, Rs.gamma,
     FlockSoundness.Refine.getElem!_range_map _ hk]
 
-/-- The sums' reordering (over any commutative semiring: `Finset.mul_sum` doesn't rewrite at `GF128`'s instances,
-but they unify with it). -/
+/-- Over any commutative semiring: `Finset.mul_sum` doesn't rewrite at `GF128`'s instances, but they unify with it. -/
 theorem sum_reorder {K : Type} [CommSemiring K] (N n : ℕ) (c : ℕ → ℕ → K) (b : ℕ → ℕ → ℕ → K) (xv G : ℕ → K)
     (R : ℕ → ℕ → K) :
     ∑ y ∈ Finset.range N, (∑ v ∈ Finset.range 128, c y v * xv v) *
@@ -176,8 +159,6 @@ theorem sum_reorder {K : Type} [CommSemiring K] (N n : ℕ) (c : ℕ → ℕ →
       (Finset.sum_congr rfl fun v _ => Finset.sum_congr rfl fun y _ => ?_)))
   ring
 
-/-- **Ring switching's claim is the packed table's**: at claims of `m − 6` coordinates,
-`Σ_y packed(y)·basisVals(y) = T`. -/
 theorem rsSum_eq (tr : Trace) (m : ℕ) (claims : Array Claim) (cs : Rs.Challenges)
     (hx : ∀ c ∈ claims, c.x.size = m - 6) :
     dot (packed tr m) (basisVals (Rs.sws claims cs) (m - 7)) = Rs.T tr claims cs := by
@@ -222,12 +203,9 @@ theorem rsSum_eq (tr : Trace) (m : ℕ) (claims : Array Claim) (cs : Rs.Challeng
 
 end Lg
 
-/-- **`RsSum` at the deployed relation**: at every rep, ring switching's claim is the packed table's. -/
 theorem rsSum_relation (H : Claims.Msg → Claims.Msg) : RsSum H Readable.relation :=
   fun o i hi r _ => Lg.rsSum_eq (o.trace i) _ (o.claims i r) (o.rsCoins i r) (o.claims_xsize hi r)
 
-/-- **Ligerito's final identity at the deployed relation** (`LgFinal`), at every rep the walk runs on its packed table,
-from the honest Ligerito's. -/
 theorem lgFinal_relation (H : Claims.Msg → Claims.Msg)
     (hw : ∀ o : Run H Readable.relation, ∀ i < o.tabs.size, ∀ r < 2, RepWalkP o i r) (hH : Lg.Honest) :
     LgFinal H Readable.relation :=

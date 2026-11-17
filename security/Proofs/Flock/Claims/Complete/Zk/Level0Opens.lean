@@ -41,14 +41,8 @@ import Proofs.Flock.Claims.Complete.Zk.Level0Shape
 import Std.Tactic.BVDecide.Normalize.BitVec
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# The honest masked Ligerito's openings pass the masked verifier's Merkle checks
-
-`merkleOkZ_of_opens`: plain's `Lg.merkleOk_of_opens` for the masked verifier (`MerkleOkZ`). Level 0's commitment
-(`commitPZk`) is a Merkle tree over rows `2^lanes + EXTRA_LANES` wide (`TreeW`, `commitRowsP_tree`), whose openings pass
-the check at that width (`merkle_openW`). The masked prover's Ligerito opens every level honestly (`Lg.Opens`) at the
-query coins of the rounds two after plain's, the pair's two coins coming between (`ligeritoPZk_opens`).
--/
+/-! The honest masked Ligerito's openings pass the masked verifier's Merkle checks (`merkleOkZ_of_opens`), level 0's
+over rows `EXTRA_LANES` wider. -/
 
 @[expose] public section
 
@@ -56,9 +50,6 @@ namespace FlockComplete.L0
 
 open Flock Transcript FlockComplete Replay Replay.Lg
 
-/-! ## Level 0's commitment, as its Merkle tree -/
-
-/-- **A commitment as its Merkle tree** over rows `W` wide: `Lg.Tree` at any row width. -/
 structure TreeW (ops : MerkleOps V) (ms : MerkleScheme) (lv : Level) (W w : ℕ) (cm : Commit) : Prop where
   rows : cm.rows.size = 2 ^ lv.d
   rowW : ∀ q < 2 ^ lv.d, cm.rows[q]!.size = W
@@ -79,8 +70,6 @@ theorem commitRowsP_rows {hs : Hashes V} {ms : MerkleScheme} {lv : Level} {rows 
   cases h
   rfl
 
-/-- **A commitment of given rows is their Merkle tree**, through `Hashes` whose node and leaf digests are `w` bytes:
-`Lg.commitP_tree` for `commitRowsP`, on `2^d` rows of `W` elements. -/
 theorem commitRowsP_tree {hs : Hashes V} {ms : MerkleScheme} {lv : Level} {rows : Array (Array F128)} {W : ℕ}
     {salt : ℕ → ByteArray} {cm : Commit} {w : ℕ} (hn : ∀ l r v, (ms.opsWith hs).node l r = .ok v → v.size = w)
     (hlf : ∀ row s v, (ms.opsWith hs).leaf row s = .ok v → v.size = w) (hcap : lv.cap ≤ lv.d)
@@ -150,7 +139,6 @@ theorem commitRowsP_tree {hs : Hashes V} {ms : MerkleScheme} {lv : Level} {rows 
     rw [h0]
     exact this
 
-/-- **Merkle completeness at any row width**: `Lg.merkle_open` for a tree over rows `W` wide, checked at width `W`. -/
 theorem merkle_openW {ops : MerkleOps V} {ms : MerkleScheme} {lv : Level} {W : ℕ} {cm : Commit}
     (ht : TreeW ops ms lv W ms.digestLen cm) (hcap : lv.cap ≤ lv.d) {pos : Array ℕ} (hp : ∀ p ∈ pos, p < 2 ^ lv.d) :
     merkleCheckWith ops ms cm.cap lv.cap lv.d pos (openP ms cm lv pos).rows (openP ms cm lv pos).siblings
@@ -246,7 +234,6 @@ theorem merkle_openW {ops : MerkleOps V} {ms : MerkleScheme} {lv : Level} {W : �
     rfl]
   rfl
 
-/-- **Level 0's masked commitment is its Merkle tree** over rows `2^lanes + EXTRA_LANES` wide. -/
 theorem commitPZk_tree {hs : Hashes V} {ms : MerkleScheme} {lv : Level} {tPad : ℕ} {g : Array F128}
     {extra lanePad : ℕ → ℕ → F128} {salt : ℕ → ByteArray} {cm : Commit} {w : ℕ}
     (hn : ∀ l r v, (ms.opsWith hs).node l r = .ok v → v.size = w)
@@ -258,18 +245,12 @@ theorem commitPZk_tree {hs : Hashes V} {ms : MerkleScheme} {lv : Level} {tPad : 
   rw [getElem!_pos _ q (by omega)]
   exact Array.getElem_mem _
 
-/-! ## The masked prover's openings -/
-
-/-- A refusal followed by anything never returns. -/
 theorem KRuns.throwBind {L : ℕ} {α β : Type} (e : String) (f : α → LP PS β) (k k' : ℕ) (Q : β → Prop) :
     KRuns L (throw e >>= f) k k' Q := by
   intro st t l b st' t' l' _ _ h
   obtain ⟨_, _, _, _, h0, _⟩ := lp_bind_ok h
   cases h0
 
-/-- **The honest masked prover's Ligerito opens honestly**: run from round `k` with `L + k` bodies sent, it opens
-level `j`'s commitment at the positions of round `k + 2 + qOff sch j`'s coins, the replies' coins (`cfOf resp L`):
-plain's `ligeritoP_opens`, two rounds later, after the pair's coins. -/
 theorem ligeritoPZk_opens (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (ms : MerkleScheme) (sch : Schedule)
     (T : F128) (cm0 : Commit) (tb b : Array F128) (lay : Zk.PadLayout) (hv : Array F128) (rep tPad : ℕ)
     (extra lanePad : ℕ → ℕ → F128) (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64) (L : ℕ)
@@ -399,11 +380,6 @@ theorem ligeritoPZk_opens (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArr
   obtain ⟨hcs, hrs, hlast⟩ := hfin rfl
   exact ⟨hop0, hcs, hrs, fun i hi => hloop i hi (by omega), hlast⟩
 
-/-! ## Every level's check passes at the honest openings -/
-
-/-- **Every level's Merkle check passes at the masked prover's openings** (`MerkleOkZ`): level `0`'s of a tree over
-rows `2^lanes + EXTRA_LANES` wide, every later level's of its own (`Lg.Opens`), through a scheme whose node and leaf
-digests are its width, at levels that cap at most their depth and query below `2^d`. -/
 theorem merkleOkZ_of_opens {hs : Hashes V} {ms : MerkleScheme} {sch : Schedule} {cm0 : Commit} {p : LigeritoProof}
     {cf : ℕ → ℕ → F128} {k : ℕ} (hn : ∀ l r v, (ms.opsWith hs).node l r = .ok v → v.size = ms.digestLen)
     (hlf : ∀ row s v, (ms.opsWith hs).leaf row s = .ok v → v.size = ms.digestLen) (hL : 2 ≤ sch.levels.size)

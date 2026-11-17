@@ -46,19 +46,7 @@ import Std.Data.String.ToNat
 import Std.Tactic.BVDecide.Normalize.Bool
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# The honest record decodes (S1–S14)
-
-`decode_recordObj`: with no premise on the JSON library, `Record.decodeWith` through
-`Hashes.ofSha512 h` reads the printed honest record (`printJ` of `recordObj`) back as `sessOf`, its every check passing,
-for one table, no keyed coin tree, a printable sample that decodes (`SampleOk`), a non-empty `Σ` and `root_B`, the
-configured point shape, one recorded stream per rep stream and well-formed rounds, with `h`'s outputs 64 bytes (S12
-compares each round's digest length with the empty message's).
-
-* **Reads through `mapM` and `mapIdxM`** (`array_mapM_ok_of`, `array_mapIdxM_ok_of`): elementwise returns compose.
-* **The decoded session** (`sessOf`): `Σ` as `root_F`, the `root_B`, no public words, the points, `y = 0`, each rep
-  stream with its rounds' digests (`streamRec`, `roundRec`) and each proof file's digest.
--/
+/-! The printed honest record decodes (S1–S14) as `sessOf`, with no premise on the JSON library. -/
 
 @[expose] public section
 
@@ -117,33 +105,25 @@ theorem array_mapIdxM_ok_of {α β : Type} (f : Nat → α → V β) (a : Array 
       simpa using hf i (by simpa using h₁) (by simpa using h₂)]
   simp
 
-/-- What the decoder's U1–U3 need of the statement's sample: none, or a non-null printable sample that decodes, its proved
-units the statement's instances. -/
 def SampleOk (spec : SessionSpec) : Prop :=
   match spec.unitSample with
   | none => True
   | some d => d ≠ Json.null ∧ Good d ∧ ∃ D, Draw.UnitSample.ofJson d = .ok D ∧ D.proved.size = spec.instances
 
-/-- A recorded round as the decoder reads it back: its digest the retained bytes'. -/
 def roundRec (spec : SessionSpec) (h : ByteArray → ByteArray) (r : Round) : Round :=
   ⟨r.n, dgOf spec h (r.bytes.getD ByteArray.empty), r.coins, some (r.bytes.getD ByteArray.empty)⟩
 
-/-- A rep stream as the decoder reads it back. -/
 def streamRec (spec : SessionSpec) (h : ByteArray → ByteArray) (rootB : Array ByteArray)
     (q : (Nat × Nat × String) × Array Round) : StreamRec :=
   ⟨q.1.2.2, "", spec.domain spec.tables[q.1.1]! q.1.2.1, 0, some (hexOf (dgOf spec h rootB[q.1.1]!)),
     q.2.map (roundRec spec h)⟩
 
-/-- **The honest record, decoded.** -/
 def sessOf (spec : SessionSpec) (h : ByteArray → ByteArray) (rootB : Array ByteArray) (points : Array (Array F128))
     (streams : Array (Array Round)) (proofs : Array ByteArray) : RunRecord :=
   { rootF := spec.sigma, rootB, publics := spec.tables.map fun _ => ByteArray.empty, points, y := yOf spec,
     streams := (spec.repStreams.zip streams).map (streamRec spec h rootB),
     proofSha := (spec.repStreams.zip proofs).map fun q => (q.1.2.2, hexOf (dgOf spec h q.2)) }
 
-/-- **The honest record decodes** (S1–S14) as `sessOf`: one table `t`, no keyed coin tree, the statement's sample
-`SampleOk`, a non-empty `Σ` and `root_B`, the configured points, one recorded stream per rep stream, each with rounds of
-`1 ≤ n ≤ 65536` coins, and `h`'s outputs 64 bytes. -/
 theorem decode_recordObj {h : ByteArray → ByteArray}
     (h64 : ∀ b, (h b).size = 64) {spec : SessionSpec} {t : String} (ht : spec.tables = #[t])
     (hct : spec.coinTree = none)
@@ -207,7 +187,6 @@ theorem decode_recordObj {h : ByteArray → ByteArray}
       rfl
   rw [hdc _ (fun e => by subst e; rfl) (fun hn => by cases dv <;> first | rfl | exact absurd rfl hn)]
   simp only [ok_bind]
-  -- S5
   obtain ⟨ob, hob, hobs⟩ := fld_same hls (gL (k := "root_b") (v := Json.mkObj (rootBList spec id #[rb]))
     (by simp [linkList]))
   obtain ⟨od, hod, hods⟩ := fld_same hls (gL (k := s!"root_b_{spec.dk}")
@@ -224,13 +203,11 @@ theorem decode_recordObj {h : ByteArray → ByteArray}
       decide_eq_true hrb, check_true, beq_self_eq_true]
     rfl]
   simp only [ok_bind]
-  -- S6
   have hrf : Record.str l "root_f" = .ok (hexOf spec.sigma) := str_same hls (gL (v := hexJ spec.sigma) (by simp [linkList]))
   have hrfd : Record.str l s!"root_f_{spec.dk}" = .ok (hexOf (dgOf spec h spec.sigma)) :=
     str_same hls (gL (v := hexJ (dgOf spec h spec.sigma)) (by simp [linkList]))
   simp only [hrf, hrfd, ok_bind, unhex_hexOf, dgWith_ofSha512, decide_eq_true hsig, check_true, beq_self_eq_true,
     bytes_beq_self]
-  -- S7
   obtain ⟨op, hop, hops⟩ := fld_same hls (gL (k := "publics") (v := Json.mkObj []) (by simp [linkList]))
   obtain ⟨oq, hoq, hoqs⟩ := fld_same hls (gL (k := s!"publics_{spec.dk}") (v := Json.mkObj []) (by simp [linkList]))
   simp only [hop, hoq, ok_bind]
@@ -239,7 +216,6 @@ theorem decode_recordObj {h : ByteArray → ByteArray}
       Bool.and_self, Bool.not_true, Bool.false_eq_true, ite_true, ite_false]
     rfl]
   simp only [ok_bind]
-  -- S9, S10
   have hpt : Record.arr l "points" = .ok (points.map fun p => Json.arr (p.map f128J)) :=
     arr_plain hls (gL (by simp [linkList])) (.arr fun x hx => by
       obtain ⟨p, -, rfl⟩ := Array.mem_map.1 hx
@@ -255,7 +231,6 @@ theorem decode_recordObj {h : ByteArray → ByteArray}
   simp only [hpts] at hall
   simp only [yOf, Array.size_replicate] at hyz
   simp only [ok_bind, hpts, hall, beq_self_eq_true, Bool.and_self, check_true, hyz, yOf, Array.size_replicate]
-  -- S12
   obtain ⟨sj, hsj, hsjs, hsje⟩ := arr_same hs (gR (k := "streams")
     (v := Json.arr ((spec.repStreams.zip streams).map (streamObj spec h #[rb]))) (by simp [recordList]))
   simp only [hsj, ok_bind]
@@ -312,7 +287,6 @@ theorem decode_recordObj {h : ByteArray → ByteArray}
     simp only [ok_bind, hroot, hpar, hlab, hat]
     rfl]
   simp only [ok_bind]
-  -- S11, S13
   have hrs1 : spec.repStreams = #[(0, 0, s!"{t}/rep{(0 : Nat)}"), (0, 1, s!"{t}/rep{(1 : Nat)}")] := by
     unfold SessionSpec.repStreams
     rw [ht]
@@ -339,12 +313,10 @@ theorem decode_recordObj {h : ByteArray → ByteArray}
     List.any_cons, List.all_nil, List.any_nil, streamRec, beq_self_eq_true, hne, hne', Bool.or_false, Bool.false_or,
     check_true, ok_bind, List.forIn_toArray, List.forIn_cons, List.forIn_nil, List.find?_toArray,
     List.find?_cons, Array.size_map, decide_eq_true h0, decide_eq_true h1, Bool.and_self]
-  -- S14
   have hlk : Record.str j s!"link_{spec.dk}" = .ok (hexOf (dgOf spec h (lbOf spec #[rb] points))) :=
     str_same hs (gR (v := hexJ (dgOf spec h (lbOf spec #[rb] points))) (by simp [recordList]))
   simp only [lbOf, yOf] at hlk
   simp only [Array.forIn_pure_yield_eq_foldl, pure_bind, hlk, ok_bind, beq_self_eq_true, check_true]
-  -- the proof digests
   obtain ⟨pj, hpj, hpjs, hpje⟩ := arr_same hs (gR (k := s!"proof_{spec.dk}")
     (v := Json.arr ((spec.repStreams.zip proofs).map (proofObj spec h))) (by simp [recordList]))
   simp only [hpj, ok_bind]

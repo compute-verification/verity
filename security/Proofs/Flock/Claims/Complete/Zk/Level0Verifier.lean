@@ -5,25 +5,7 @@ public import Proofs.Flock.Claims.Complete.Zk.Level0HonestRun
 public import Proofs.Flock.Claims.Complete.Zk.Exact
 import Proofs.Flock.Claims.Complete.Json.Session
 
-/-!
-# Level 0's verifier premise
-
-`ZkTables.Level0.Verifier` asks that wherever the masked prover's Ligerito (`ligeritoPZk`) returns, the masked verifier's
-(`Zk.ligeritoWith`) returns its record at its final position. `ligeritoWithZ_of` gives the verifier's return on the
-masked model's rounds (`outZ`) from the proof's lengths, its cap, the pair's coins' independence at the model's, its
-Merkle openings and the model's final identity; `honestZ` puts the prover's final transcript at the model's and gives
-the final identity. This file links the prover's run to the rest of `ligeritoWithZ_of`'s premises and proves
-`verifier : ZkTables.Level0.Verifier`:
-
-* `ligeritoPZk_initialCap`: the proof's level-0 cap is the commitment's.
-* `preZ_rho`, `preZ_rhoIndependent`: the model's pair coins at the replies (`cfOf resp L`) are the prover's
-  (`ZkTables.Level0.laneRho`), so they are independent wherever the prover returns (`ligeritoPZk_exact`).
-* `outZ_ood0`: the model's level loop keeps level 0's out-of-domain point first, so the record's out-of-domain coin is
-  the reply to the send after the claim (`step_oods0`, `loop_oods0`, `x₀Z_ood0`).
-* `preZ_ch`, `recZ_eq`: the model's lane coins are the prover's (`ZkTables.Level0.laneCh`), so the verifier's record is
-  the prover's (`ZkTables.Level0.LaneForm.record`).
-* `commitPZk_rows`: level 0's masked commitment holds its encoded rows, which `honestZ` reads.
--/
+/-! Level 0's verifier premise `ZkTables.Level0.Verifier`, proved (`verifier`). -/
 
 @[expose] public section
 
@@ -31,7 +13,6 @@ namespace FlockComplete.L0
 
 open Flock Transcript FlockComplete Replay Replay.Lg
 
-/-- **The masked prover's Ligerito proof carries level 0's commitment's cap.** -/
 theorem ligeritoPZk_initialCap (resp : ℕ → Claims.Msg) (hs : Hashes PS) (ms : MerkleScheme) (sch : Schedule)
     (T : F128) (cm0 : Commit) (tb b : Array F128) (lay : Zk.PadLayout) (hv : Array F128) (rep tPad : ℕ)
     (extra lanePad : ℕ → ℕ → F128) (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64) {t t' : Transcript}
@@ -52,8 +33,6 @@ theorem ligeritoPZk_initialCap (resp : ℕ → Claims.Msg) (hs : Hashes PS) (ms 
   subst hP
   rfl
 
-/-- **The masked model's pair coins at the replies are the prover's**: at the coins `cfOf resp L` from a transcript at
-position `k`, the lane phase's pair `ρ` is `laneRho` at `L + k` sends. -/
 theorem preZ_rho (resp : ℕ → Claims.Msg) (L : ℕ) (P : LigeritoProof) (sch : Schedule) (T : F128)
     (cap : Array ByteArray) (zl : Zk.Level0) (t : Transcript) (hk0 : 1 ≤ sch.k0) :
     (preZ P (cfOf resp L) sch T cap zl t).1.2 = ZkTables.Level0.laneRho resp sch.k0 (L + t.k) := by
@@ -69,9 +48,6 @@ theorem preZ_rho (resp : ℕ → Claims.Msg) (L : ℕ) (P : LigeritoProof) (sch 
     show L + (t.k + 2 + sch.k0 + 1) = L + t.k + 3 + sch.k0 by omega]
   rfl
 
-/-- **The masked model's pair coins are independent wherever the masked prover's Ligerito returns**: run from `L + k`
-bodies sent (`k` its position), the prover's pair coins are independent (`ligeritoPZk_exact`), and they are the model's
-at the replies (`preZ_rho`). -/
 theorem preZ_rhoIndependent (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (ms : MerkleScheme) (sch : Schedule)
     (T : F128) (cm0 : Commit) (tb b : Array F128) (lay : Zk.PadLayout) (hv : Array F128) (rep tPad : ℕ)
     (extra lanePad : ℕ → ℕ → F128) (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64) (hn : sch.n ≠ 0)
@@ -85,13 +61,10 @@ theorem preZ_rhoIndependent (resp : ℕ → Claims.Msg) (h : ByteArray → ByteA
   rw [preZ_rho resp L P sch T cap zl t hk0, ← hl]
   exact (ligeritoPZk_exact resp h ms sch T cm0 tb b lay hv rep tPad extra lanePad salt nonce hn hk0 hL hq hrun).2
 
-/-! ## The record's out-of-domain coin -/
-
 theorem push2_get0 {α : Type} [Inhabited α] {a : Array α} (x y : α) (h : 0 < a.size) :
     ((a.push x).push y)[0]! = a[0]! := by
   rw [push_get_lt (a := a.push x) (j := 0) y (by simp only [Array.size_push]; omega), push_get_lt (j := 0) x h]
 
-/-- **A level step keeps the first out-of-domain point**: an inner level's pushes two, the last level's none. -/
 theorem step_oods0 (p : LigeritoProof) (cf : ℕ → ℕ → F128) (sch : Schedule) (i : ℕ) (x : Vars × LState × Transcript)
     (h : 0 < x.2.1.oods.size) :
     0 < (step p cf sch i x).2.1.oods.size ∧ (step p cf sch i x).2.1.oods[0]! = x.2.1.oods[0]! := by
@@ -109,7 +82,6 @@ theorem step_oods0 (p : LigeritoProof) (cf : ℕ → ℕ → F128) (sch : Schedu
     rw [e]
     exact ⟨h, rfl⟩
 
-/-- **The level loop keeps the first out-of-domain point.** -/
 theorem loop_oods0 (p : LigeritoProof) (cf : ℕ → ℕ → F128) (sch : Schedule) (x : Vars × LState × Transcript)
     (h : 0 < x.2.1.oods.size) :
     ∀ j, 0 < (loop p cf sch x j).2.1.oods.size ∧ (loop p cf sch x j).2.1.oods[0]! = x.2.1.oods[0]!
@@ -120,7 +92,6 @@ theorem loop_oods0 (p : LigeritoProof) (cf : ℕ → ℕ → F128) (sch : Schedu
     rw [show loop p cf sch x (j + 1) = step p cf sch j (loop p cf sch x j) from rfl]
     exact ⟨h3, h4.trans h2⟩
 
-/-- **The level loop starts with level 0's out-of-domain point first**, whose coin is round `k + 1`'s. -/
 theorem x₀Z_ood0 (p : LigeritoProof) (cf : ℕ → ℕ → F128) (sch : Schedule) (T : F128) (cap : Array ByteArray)
     (zl : Zk.Level0) (t : Transcript) :
     0 < (x₀Z p cf sch T cap zl t).2.1.oods.size ∧ ((x₀Z p cf sch T cap zl t).2.1.oods[0]!).beta = cf (t.k + 1) 0 := by
@@ -129,7 +100,6 @@ theorem x₀Z_ood0 (p : LigeritoProof) (cf : ℕ → ℕ → F128) (sch : Schedu
   simp only [x₀Z, preZ, lv0Z, close_fields, query_fields, ood_fields, h8, head_fields, init_fields]
   exact ⟨by simp, rfl⟩
 
-/-- **The masked model's first out-of-domain coin is round `k + 1`'s.** -/
 theorem outZ_ood0 (p : LigeritoProof) (cf : ℕ → ℕ → F128) (sch : Schedule) (T : F128) (cap : Array ByteArray)
     (zl : Zk.Level0) (t : Transcript) : ((outZ p cf sch T cap zl t).2.1.oods[0]!).beta = cf (t.k + 1) 0 := by
   obtain ⟨h0, hb⟩ := x₀Z_ood0 p cf sch T cap zl t
@@ -137,10 +107,6 @@ theorem outZ_ood0 (p : LigeritoProof) (cf : ℕ → ℕ → F128) (sch : Schedul
   rw [(loop_oods0 p cf sch _ h0 _).2]
   exact hb
 
-/-! ## The record -/
-
-/-- **The masked model's lane coins at the replies are the prover's**: at the coins `cfOf resp L` from a transcript at
-position `k`, `laneCh` at `L + k` sends. -/
 theorem preZ_ch (resp : ℕ → Claims.Msg) (L : ℕ) (P : LigeritoProof) (sch : Schedule) (T : F128)
     (cap : Array ByteArray) (zl : Zk.Level0) (t : Transcript) :
     (preZ P (cfOf resp L) sch T cap zl t).1.1 = (ZkTables.Level0.laneCh resp sch.k0 (L + t.k)).toArray := by
@@ -163,9 +129,6 @@ theorem preZ_ch (resp : ℕ → Claims.Msg) (L : ℕ) (P : LigeritoProof) (sch :
     rw [show L + (t.k + 2 + i) = L + t.k + 2 + i by omega]
     rfl
 
-/-- **The masked verifier's record on the model is the prover's lane record**: at the coins `cfOf resp L` from a
-transcript at position `k`, the target, the reply to send `L + k + 1`'s first coin with the proof's first out-of-domain
-value, and the lane and pair coins at `L + k` sends. -/
 theorem recZ_eq (resp : ℕ → Claims.Msg) (L : ℕ) (P : LigeritoProof) (sch : Schedule) (T : F128)
     (cap : Array ByteArray) (zl : Zk.Level0) (t : Transcript) (hk0 : 1 ≤ sch.k0) :
     recZ P T (outZ P (cfOf resp L) sch T cap zl t).2.1 (preZ P (cfOf resp L) sch T cap zl t).1 =
@@ -179,7 +142,6 @@ theorem recZ_eq (resp : ℕ → Claims.Msg) (L : ℕ) (P : LigeritoProof) (sch :
     Zk.L0Rec) = _
   rw [show L + (t.k + 1) = L + t.k + 1 by omega]
 
-/-- **Level 0's masked commitment holds its encoded rows.** -/
 theorem commitPZk_rows {hs : Hashes V} {ms : MerkleScheme} {lv : Level} {tPad : ℕ} {g : Array F128}
     {extra lanePad : ℕ → ℕ → F128} {salt : ℕ → ByteArray} {cm : Commit}
     (h : commitPZk hs ms lv tPad g extra lanePad salt = .ok cm) : cm.rows = encodeRowsZk lv tPad g extra lanePad := by
@@ -189,19 +151,11 @@ theorem commitPZk_rows {hs : Hashes V} {ms : MerkleScheme} {lv : Level} {tPad : 
   cases h
   rfl
 
-/-! ## The premise -/
-
 local instance lawfulBEqByteArrayL0 : LawfulBEq ByteArray where
   eq_of_beq h := ByteArray.ext (beq_iff_eq.1 h)
   rfl {a} := by show (a.data == a.data) = true; exact beq_self_eq_true _
 
--- one application of `ligeritoWithZ_of`, whose premises unify against `outZ` and `FinalZ` at the prover's run
 set_option maxHeartbeats 4000000 in
-/-- **`ZkTables.Level0.Verifier` holds**: where the masked prover's Ligerito returns, it ends at the masked model's
-transcript and meets its final identity (`honestZ`), so the masked verifier's Ligerito returns on the model's rounds
-(`ligeritoWithZ_of`): the proof has the schedule's lengths (`L0.proverShape`), carries the commitment's cap
-(`ligeritoPZk_initialCap`), its pair coins are independent (`preZ_rhoIndependent`) and its openings pass
-(`merkleOkZ_of_opens`); the record it returns is the prover's (`recZ_eq`, `L0.lanes`). -/
 theorem verifier : ZkTables.Level0.Verifier := by
   intro wideLeaf resp h m v T cm0 tb b lay hv rep extra lanePad salt0 salt nonce basisAt L t t' l l' P zl rc R
     h64 h25 h35 hv0 hrep htb hb _ hcm hbasis hbs htk hl hrun hAg

@@ -37,19 +37,8 @@ import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Complete.Json.Session
 
-/-!
-# The masked prover's Ligerito record, by send position
-
-`ligeritoPZk_pos`: a masked Ligerito prover (`ligeritoPZk`) that returns, run in the pure session from the bodies `l`,
-records the target it was given, level 0's out-of-domain coin as the reply to send `|l| + 1`, its `k_0` lane coins as
-the replies to sends `|l| + 2` on, and its pair's coins as the replies to the next two sends: the prover's half of
-the record agreement whose verifier half is `zkLigeritoWith_pos`.
-
-* **Steps** (`LP PS`, read forward from a run that returns): a squeeze is answered by the reply to the next send and
-  sends one body (`lsampleKP_bind`, `lsampleP_bind`, `lsampleVecP_bind`); a step that sends nothing (`LSilent`: the
-  transcript's actions, the state's, a message, a nonce) leaves the bodies as they were (`lsilent_bind`); a loop over
-  `[0:n]` keeps an invariant of its state and the bodies (`lforIn_inv`).
--/
+/-! What a masked Ligerito prover that returns records, by send position (`ligeritoPZk_pos`): the prover's half of the
+record agreement. -/
 
 @[expose] public section
 
@@ -59,10 +48,8 @@ open Flock Transcript Replay Replay.Lg
 
 variable {α β : Type}
 
-/-- The coin pair a reply carries, as `sampleKP` samples it. -/
 def coinKOf (m : Claims.Msg) : F256 := ⟨coinOf m 0, coinOf m 1⟩
 
-/-- A prover step that sends nothing. -/
 def LSilent (x : LP PS α) : Prop :=
   ∀ st t l a st' t' l', ((x.run st).run t).go l = (.ok ((a, st'), t'), l') → l' = l
 
@@ -134,8 +121,6 @@ theorem lsampleVecP_bind (resp : ℕ → Claims.Msg) {n : ℕ} (hn : n ≠ 0) {f
   obtain ⟨rfl, rfl, rfl, rfl⟩ := ok_inj h₁
   exact ⟨_, _, by simp, h₂⟩
 
-/-- **A loop over `[0:n]`** whose every step, from a state and bodies with `I j`, yields a state and bodies with
-`I (j + 1)`, ends with `I n`. -/
 theorem lforIn_inv {σ : Type} (body : ℕ → σ → LP PS (ForInStep σ)) (I : ℕ → σ → Array Claims.Msg → Prop) (n : ℕ)
     (hb : ∀ j < n, ∀ s st t l r st' t' l', I j s l → (((body j s).run st).run t).go l = (.ok ((r, st'), t'), l') →
       ∃ s', r = .yield s' ∧ I (j + 1) s' l')
@@ -174,9 +159,6 @@ theorem push_get!_of {γ : Type} [Inhabited γ] {a : Array γ} {x : γ} {f : ℕ
     congr 1
     omega
 
-/-- **What a masked Ligerito prover that returns records, by send position**: run in the pure session from the bodies
-`l`, its record's target is `T`, its out-of-domain coin is the reply to send `|l| + 1`, its lane coins are the replies
-to sends `|l| + 2` to `|l| + 1 + k_0`, and its pair's coins the replies to the next two. -/
 theorem ligeritoPZk_pos (resp : ℕ → Claims.Msg) (hs : Hashes PS) (ms : MerkleScheme) (sch : Schedule) (T : F128)
     (cm0 : Commit) (tb b : Array F128) (lay : Zk.PadLayout) (hv : Array F128) (rep tPad : ℕ)
     (extra lanePad : ℕ → ℕ → F128) (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64) (hn : sch.n ≠ 0)

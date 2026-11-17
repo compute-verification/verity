@@ -40,22 +40,8 @@ import Proofs.Flock.Claims.Complete.Zk.RingSwitch
 import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysRep
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# The masked replay's coins are the prover's, and its five rows vanish on the honest run
-
-`ConsReplay`'s `replay_rows_zero_honest` takes seven coin identities: the replay's `z`, `r_outer`, `ρ`, `α`, `β`, `t_j`
-and `r′` are the masked prover's. Live coins give them: the replay reads each coin off the round the prover's send made.
-
-* `zc_coins_at`, `lc_coins_at`, `replay_coins`: all seven, on rounds carrying the masked prover's zerocheck and
-  lincheck rounds (`Agrees`, as `rs_of` takes it), by `zc_coins` and the rounds' positions in `ZcZ.tEnd` and
-  `LcZ.tEnd`. The lincheck half is stated from any start of the right length: the kernel then never unfolds
-  `ZcZ.tEnd`, which it otherwise times out on;
-* `replay_rows_zero_agrees`: `Zk.replay`'s five rows vanish at the pads on such rounds, from the plain lemmas'
-  conclusions alone;
-* `consHold_of_rows`, `replay_consHold_agrees`: the same as `ConsHold` (`verifyInnerWith_of`'s hypothesis) on the
-  rows `Zk.verify` hands `verifyInner` ahead of level 0's lane rows: `rp.cons` (three, `replay_cons_size`) and the two
-  ring-switch rows.
--/
+/-! The masked replay's seven coins are the prover's on the honest run, so its five rows vanish there
+(`replay_consHold_agrees`). -/
 
 @[expose] public section
 
@@ -70,8 +56,6 @@ theorem coin_of_carries {R : Array Round} {j : ℕ} {T : Transcript} {f : ℕ �
   rw [coins_of hc]
   simp [sent]
 
-/-- **Zerocheck's coins at the stream**: on rounds carrying the masked prover's zerocheck from `t₀`, a replay from
-round `t₀.k` reads the prover's `z`, `r_outer` and `ρ`. -/
 theorem zc_coins_at {lay : Zk.PadLayout} {hp : Array F128} {m : ℕ} {digest cap root : ByteArray} {cz : Zc.Challenges}
     {tr : Trace} (t₀ : Transcript) (hk : t₀.k = t₀.rounds.size) (t : Transcript) (ht : t.k = t₀.k)
     (hZ : Agrees t.rounds (ZcZ.tEnd lay hp m digest cap root cz tr t₀).rounds 0) :
@@ -90,8 +74,8 @@ theorem zc_coins_at {lay : Zk.PadLayout} {hp : Array F128} {m : ℕ} {digest cap
     simp only [zcAt, Zc.out, pushes_get _ _ j hj, FlockComplete.coinAt] at this
     simp only [Lincheck.coinAt, ht, ← Nat.add_assoc, this]
 
-/-- **Lincheck's coins at the stream**: on rounds carrying the masked prover's lincheck from `T₁`, which starts
-`3 + (m − 6)` rounds after the replay, the replay reads the prover's `α`, `β`, `t_j` and `r′`. -/
+/-- Stated from any start `T₁` of the right length, so the kernel never unfolds `ZcZ.tEnd`, which it otherwise times out
+on. -/
 theorem lc_coins_at {lay : Zk.PadLayout} {hp : Array F128} {c : CircuitFold} {m : ℕ} {tr : Trace} {zc : ZcOut}
     {full : Array F128} {cl : Lc.Challenges} (T₁ t : Transcript) (hTs : T₁.rounds.size = t.k + 3 + (m - 6))
     (hR : Agrees t.rounds (LcZ.tEnd lay hp c m tr zc full cl T₁).rounds 0) :
@@ -121,8 +105,6 @@ theorem lc_coins_at {lay : Zk.PadLayout} {hp : Array F128} {c : CircuitFold} {m 
       simp only [LcZ.t₄, LcZ.loopT_size, hTs]; omega] at hc
     exact coin_of_carries hc
 
-/-- **The seven coin identities** at a replay from round `t₀.k` of rounds carrying the masked prover's zerocheck and
-lincheck from `t₀` (A9's `Agrees`, as `rs_of` takes it). -/
 theorem replay_coins {lay : Zk.PadLayout} {hp : Array F128} {c : CircuitFold} {m : ℕ} {digest cap root : ByteArray}
     {cz : Zc.Challenges} {tr : Trace} {full : Array F128} {cl : Lc.Challenges} (t₀ : Transcript) (hk : t₀.k = t₀.rounds.size)
     (t : Transcript) (ht : t.k = t₀.k)
@@ -135,8 +117,6 @@ theorem replay_coins {lay : Zk.PadLayout} {hp : Array F128} {c : CircuitFold} {m
   obtain ⟨hz, hr, hρ⟩ := zc_coins_at t₀ hk t ht (hR.of_prefix (LcZ.prefix_start _))
   exact ⟨hz, hr, hρ, lc_coins_at _ t (by rw [ZcZ.tEnd_size, ← hk, ← ht]) hR⟩
 
-/-- **`Zk.replay`'s five rows vanish at the pads on rounds carrying the masked prover's zerocheck and lincheck**, from
-`Zc.fold_final`'s, `Lc.lcAlgebra_of`'s and `claims_switch`'s conclusions. -/
 theorem replay_rows_zero_agrees (st : Setup) (lay : Zk.PadLayout) (h : Array F128) (p : Proof) (root : ByteArray)
     (hm : 14 ≤ st.m) {t t' : Transcript} {rp : Zk.Replayed} (hrun : Zk.replay st lay p root t = .ok (rp, t'))
     (c : CircuitFold) (tr : Trace) (zcs : Zc.Challenges) (cs : Lc.Challenges) (full : Array F128)
@@ -167,8 +147,6 @@ theorem replay_rows_zero_agrees (st : Setup) (lay : Zk.PadLayout) (h : Array F12
   exact replay_rows_zero_honest st lay h p root hm hrun c tr zcs cs full hfd hk hpz hpl hn hn' hab hz hr hρ hα hβ
     hτ hr' hF hL svAb svC hRab hRc
 
-/-- **The replay's rows and the two ring-switch rows hold** (`ConsHold`, as `verifyInnerWith_of` takes it), on pads of
-the layout's length, wherever the five rows vanish: `Zk.verify`'s row list ahead of level 0's lane rows. -/
 theorem consHold_of_rows (st : Setup) (lay : Zk.PadLayout) (h : Array F128) (p : Proof) (root : ByteArray)
     (hm : 14 ≤ st.m) {t t' : Transcript} {rp : Zk.Replayed} (hrun : Zk.replay st lay p root t = .ok (rp, t'))
     (hsz : h.size = lay.len) (svAb svC : Array F128)
@@ -202,8 +180,6 @@ theorem consHold_of_rows (st : Setup) (lay : Zk.PadLayout) (h : Array F128) (p :
       rw [hsz, hcv]
       simp [Zk.Lin.addConst, ZerocheckMasked.fcL]
 
-/-- **`Zk.verify`'s rows ahead of the lane rows hold on rounds carrying the masked prover's zerocheck and lincheck**,
-from the plain lemmas' conclusions: `replay_rows_zero_agrees` as `ConsHold`. -/
 theorem replay_consHold_agrees (st : Setup) (lay : Zk.PadLayout) (h : Array F128) (p : Proof) (root : ByteArray)
     (hm : 14 ≤ st.m) {t t' : Transcript} {rp : Zk.Replayed} (hrun : Zk.replay st lay p root t = .ok (rp, t'))
     (hsz : h.size = lay.len)

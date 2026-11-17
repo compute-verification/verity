@@ -40,18 +40,7 @@ import Proofs.Flock.Claims.Complete.Replay.LigeritoRep
 import Proofs.Flock.Soundness.Refine.Seam
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# A returning rep's rounds are few and small
-
-`repP_repOk`: a rep that returns (`repP`) from the empty transcript records a round, each of at most `65536` coins
-(`RepOk`), at a table of `14 ≤ m ≤ 35` with `fast100`'s schedule and at most `65534` extra claims. Its transcript is
-`Lg.out`'s after the ring switch's, lincheck's and zerocheck's (`repP_ligerito`), and each squeeze of those models is of
-a few coins: zerocheck's `6`, `m − 13` and `1`; lincheck's `1`; the ring switch's `7` and one per claim; Ligerito's `2`,
-`1`, the schedule's `n` and split dimensions (at most `n + 1`), and each level's `q` and `⌊log₂(q − 1)⌋ + 1`.
-
-* `Bnd B N t`: `t` holds at least `N` rounds, each of at most `B` coins; kept by every absorb (`Lg.ap`) and by a squeeze
-  of at most `B` coins (`Bnd.afterSq`).
--/
+/-! A returning rep records a round, each of at most `65536` coins (`repP_repOk`). -/
 
 @[expose] public section
 
@@ -59,7 +48,6 @@ namespace FlockComplete.Replay
 
 open Flock Transcript
 
-/-- `t` holds at least `N` rounds, each of at most `B` coins. -/
 def Bnd (B N : ℕ) (t : Transcript) : Prop := N ≤ t.rounds.size ∧ ∀ x ∈ t.rounds, x.n ≤ B
 
 namespace Bnd
@@ -83,7 +71,6 @@ theorem of_rounds {t t' : Transcript} (h : Bnd B N t) (hr : t'.rounds = t.rounds
   rw [hr]
   exact h
 
-/-- A squeeze from `t`'s rounds, at any cursor and absorbed bytes. -/
 theorem sq {t : Transcript} (h : Bnd B N t) {n : ℕ} (hn : n ≤ B) (k : ℕ) (P : ByteArray) (kind : UInt8)
     (coin : ℕ → F128) : Bnd B N (Replay.afterSq ⟨t.rounds, k, P⟩ kind n coin) :=
   Bnd.afterSq (t := ⟨t.rounds, k, P⟩) (of_rounds h rfl) hn kind coin
@@ -99,7 +86,6 @@ theorem bnd_loopT {B N m : ℕ} {cs : Challenges} {tr : Trace} {t₀ : Transcrip
     simp only [loopT]
     exact Bnd.sq (bnd_loopT h h1 i) h1 _ _ _ _
 
-/-- Zerocheck's squeezes are of `6`, `m − 13` and `1` coins. -/
 theorem bnd_tEnd {B N m : ℕ} {digest cap : ByteArray} {cs : Challenges} {tr : Trace} {t : Transcript} (h : Bnd B N t)
     (h6 : 6 ≤ B) (hm : m - 13 ≤ B) : Bnd B N (tEnd m digest cap cs tr t) := by
   have h₂ : Bnd B N (t₂ digest cap cs t) := Bnd.sq h h6 _ _ _ _
@@ -120,7 +106,6 @@ theorem bnd_loopT {B N : ℕ} {c : CircuitFold} {m : ℕ} {tr : Trace} {zc : ZcO
     simp only [loopT]
     exact Bnd.sq (bnd_loopT h h1 i) h1 _ _ _ _
 
-/-- Lincheck's squeezes are of one coin. -/
 theorem bnd_tEnd {B N : ℕ} {c : CircuitFold} {m : ℕ} {tr : Trace} {zc : ZcOut} {full : Array F128} {cs : Challenges}
     {t : Transcript} (h : Bnd B N t) (h1 : 1 ≤ B) : Bnd B N (tEnd c m tr zc full cs t) :=
   Bnd.sq (bnd_loopT h h1 _) h1 _ _ _ _
@@ -134,7 +119,6 @@ theorem bnd_loopT {B N : ℕ} {tr : Trace} {claims : Array Claim} {cs : Challeng
   | 0 => Bnd.of_rounds h rfl
   | k + 1 => Bnd.sq (bnd_loopT h h7 k) h7 _ _ _ _
 
-/-- The ring switch's squeezes are of `7` coins and one per claim. -/
 theorem bnd_tEnd {B N : ℕ} {tr : Trace} {claims : Array Claim} {cs : Challenges} {t : Transcript} (h : Bnd B N t)
     (h7 : 7 ≤ B) (hc : claims.size ≤ B) : Bnd B N (tEnd tr claims cs t) :=
   Bnd.afterSq (bnd_loopT h h7 _) hc _ _
@@ -213,8 +197,6 @@ theorem bnd_loop {B N : ℕ} {p : LigeritoProof} {cf : ℕ → ℕ → F128} {sc
     · exact bnd_stepN h' hs' h2 hq
     · exact bnd_stepL h' hs' h2 hq
 
-/-- **Ligerito's squeezes are few coins**: `2`, `1`, the schedule's `n` and split dimensions, and each level's `q`
-and `⌊log₂(q − 1)⌋ + 1`. -/
 theorem bnd_out {B N : ℕ} {p : LigeritoProof} {cf : ℕ → ℕ → F128} {sch : Schedule} {T : F128}
     {cap : Array ByteArray} {t : Transcript} (h : Bnd B N t) (h2 : 2 ≤ B) (hn : sch.n + 1 ≤ B)
     (hq : ∀ j, (sch.levels.getD j default).q + 1 ≤ B) : Bnd B N (out p cf sch T cap t).2.2 := by
@@ -230,7 +212,6 @@ theorem fast100_lt {m : ℕ} {s : Schedule} (h : fast100 m = some s) : m < 40 :=
   rw [FlockSoundness.Refine.exec_fast100_none m (by omega)] at h
   cases h
 
-/-- fast100's schedules squeeze few coins: `n + 1` and every level's `q + 1` are at most `65536`. -/
 theorem fast100_small {m : ℕ} {s : Schedule} (h : fast100 m = some s) :
     s.n + 1 ≤ 65536 ∧ ∀ j, (s.levels.getD j default).q + 1 ≤ 65536 := by
   have key : ∀ m : Fin 40, ∀ s ∈ fast100 m.val, decide (s.n + 1 ≤ 65536 ∧
@@ -243,8 +224,6 @@ theorem fast100_small {m : ℕ} {s : Schedule} (h : fast100 m = some s) :
   · rw [Array.getD, dite_eq_right (fun h => absurd h hj)]
     decide
 
-/-- **A returning rep records a round, each of at most `65536` coins** (`RepOk`), from the empty transcript, at a
-table of `m ≥ 14` with `fast100`'s schedule and at most `65534` extra claims. -/
 theorem repP_repOk (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (st : Setup) (sch : Schedule) (tr : Trace)
     (tbl : Array F128) (cm0 : Commit) (extras : Array Claim) (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64)
     (hm : 14 ≤ st.m) (hsch : fast100 st.m = some sch) (hx : extras.size + 2 ≤ 65536) (d : ByteArray) :

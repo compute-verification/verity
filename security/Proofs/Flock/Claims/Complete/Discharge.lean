@@ -41,16 +41,7 @@ import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
 import Proofs.Flock.Soundness.Refine.Seam
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# The skeleton's goals discharged
-
-The goals of `Goals` proved at every honest run, from the scope alone:
-
-* `Case.table`: the case's statement has one table, of `22 ≤ m ≤ 35`, and the session spec is its own (the scope's
-  `count ≤ 1` and table-0 bounds, through `setupTables_okAny`); its circuit is an untyped row circuit the scope parsed.
-* `tables_goal` (`Tables`, §3): one statement per table.
-* `schedules_goal` (`Schedules`): `fast100` has a schedule at the table's `m` (`fast100_isSome`).
--/
+/-! The skeleton's goals `Case.table`, `Tables` and `Schedules`, proved at every honest run from the scope alone. -/
 
 @[expose] public section
 
@@ -58,8 +49,6 @@ open Flock FlockDeploy
 
 namespace FlockComplete
 
-/-- **The scope at the case's setup**: one table, of `22 ≤ m ≤ 35`, and the session spec is its own; its circuit is an
-untyped row circuit the scope parsed, of `m = k_log + nbl` and `6 ≤ k_log`. -/
 theorem Case.table {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation} (c : Case H rel) :
     ∃ st, c.sts = #[st] ∧ c.spec = st.spec ∧ 22 ≤ st.m ∧ st.m ≤ 35 ∧
       (∃ tags file tables, tags.typed = false ∧ ProvedScope.circuitOf tags file tables = .ok st.c) ∧
@@ -100,13 +89,11 @@ theorem Case.table {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Re
     exact (Readable.mMin_ge _).trans ((Readable.sizesOk_iff _ _).1 hsz _ (by rw [hsts]; simp [Setup.ofCircuit]))
   · omega
 
-/-- `fast100` has a schedule at every `m` from 22 to 35. -/
 theorem fast100_isSome {m : ℕ} (h1 : 22 ≤ m) (h2 : m ≤ 35) : (fast100 m).isSome = true := by
   have h : (FlockSoundness.Accounting.fast100 m).isSome = true := by interval_cases m <;> rfl
   rw [← FlockSoundness.Refine.fast100_schedOf, Option.isSome_map] at h
   exact h
 
-/-- **One statement per table** (§3): the goal `Tables`. -/
 theorem tables_goal (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) : Tables H rel := by
   intro o
   obtain ⟨st, hsts, hspec, -, -⟩ := o.table
@@ -114,7 +101,6 @@ theorem tables_goal (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → R
   rw [hsts, hspec]
   simp [Stmt.spec]
 
-/-- **Each table has its fast100 schedule**: the goal `Schedules`. -/
 theorem schedules_goal (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) :
     Schedules H rel := by
   intro o st hst

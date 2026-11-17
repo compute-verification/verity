@@ -36,21 +36,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Std.Tactic.BVDecide.Normalize.Bool
 
-/-!
-# The masked verdict accepts when each of its checks passes
-
-The masked counterpart of `Verdict.lean`: each step of `Zk.verifyRepWith` and `Zk.verifyWithM`, as its own hypothesis,
-composes into acceptance. B's checks are the plain ones (`checks_ok`, generic in `zk`).
-
-* **A masked rep** (`zk_verifyRepWith_ok`): its stream is recorded (S11), the extra claims evaluate, the masked proof
-  file decodes at the rep's shape (`shapeZk`), its PCS parameters are the `--zk` schedule's, the pads' root is 64 bytes;
-  the masked replay (`Zk.replayWith`), the ring switch on the replay's claims valued by their checks (`ringClaimsZk`),
-  the masked Ligerito (`Zk.ligeritoWith`), level 0's lane phase as constraints (`Zk.ligeritoConstraints`) and the inner
-  proof on every constraint (`Zk.verifyInnerWith`, `repConsZk`) each pass from the transcript the previous one left;
-  every recorded round is consumed (S15) and the cap is the committed `root_B` (S16).
-* **The masked verdict** (`zk_verifyWith_ok`): `verifyWith_ok`'s checks, the keyed coin tree, and each table's `--zk`
-  schedule (`zkSchedsOf`) in place of fast100's.
--/
+/-! The masked verdict accepts when each of its checks passes; B's checks are the plain ones. -/
 
 @[expose] public section
 
@@ -60,20 +46,16 @@ namespace FlockComplete
 
 variable {wideLeaf : Bool}
 
-/-! ## A masked rep -/
-
-/-- The ring switch's claims at a masked rep: the replay's two claims, each valued by its check on the switched vector
-(their values are masked, so each check is a constraint, `repConsZk`). -/
+/-- Each claim is valued by its check on the switched vector: the values are masked, so each check is a constraint
+(`repConsZk`). -/
 def ringClaimsZk (rp : Zk.Replayed) (p : Proof) : Array Claim :=
   #[{ rp.claims[0]! with value := Zk.claimCheck rp.claims[0]! p.ringSwitches[0]! },
     { rp.claims[1]! with value := Zk.claimCheck rp.claims[1]! p.ringSwitches[1]! }]
 
-/-- The masked rep's constraints before level 0's: the replay's, and the two ring-switch claims' checks. -/
 def repConsZk (rp : Zk.Replayed) (p : Proof) : Array (String × Zk.Lin) :=
   rp.cons ++ #[("ring switch ab", rp.abValue.addConst (Zk.claimCheck rp.claims[0]! p.ringSwitches[0]!)),
     ("ring switch c", rp.cValue.addConst (Zk.claimCheck rp.claims[1]! p.ringSwitches[1]!))]
 
-/-- **A masked rep accepts** when each of its checks passes, each from the transcript the previous one left. -/
 theorem zk_verifyRepWith_ok (hs : Flock.Hashes V) (spec : SessionSpec) (st : Setup) (sch : Schedule) (tPad : ℕ)
     (sess : RunRecord) (i r : ℕ) (bytes : ByteArray) {stream : StreamRec} {extras : Array Claim} {zp : Zk.ZkProof}
     {rp : Zk.Replayed} {T : F128} {sws : Array Switched} {rec : Zk.L0Rec} {lg : Array (String × Zk.Lin)}
@@ -107,18 +89,14 @@ theorem zk_verifyRepWith_ok (hs : Flock.Hashes V) (spec : SessionSpec) (st : Set
     hG, hC, pure_bind, hN, hK, hB]
   rfl
 
-/-! ## The masked verdict -/
-
 /-- A table's `--zk` schedule and `t_pad`, `default` where it has none. -/
 def schedZkOf (wideLeaf : Bool) (m : ℕ) : Schedule × ℕ :=
   match Zk.schedule wideLeaf m with
   | .ok v => v
   | .error _ => default
 
-/-- Each table's `--zk` schedule and `t_pad`. -/
 def zkSchedsOf (tabs : Array Setup) : Array (Schedule × ℕ) := tabs.map fun st => schedZkOf st.wideLeaf st.m
 
-/-- **The masked verdict accepts** when each of its checks passes. -/
 theorem zk_verifyWith_ok (h : ByteArray → ByteArray) (spec : SessionSpec) (tabs : Array Setup) (record : String)
     (proofs : Array ByteArray) {sess : RunRecord}
     (hT : (tabs.size != spec.tables.size || tabs.size == 0) = false)

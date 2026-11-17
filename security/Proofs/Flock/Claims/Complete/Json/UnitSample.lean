@@ -38,14 +38,7 @@ import Proofs.Flock.Claims.Scope.Check
 import Proofs.Flock.Claims.Scope.Sizes
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
 
-/-!
-# The session's sample at one table
-
-At one table the session's `unitSample` is the public file's header's (`Stmt.spec`). In scope, Flock's plain verifier sets
-a sampled statement up through `setupOne`, which writes the sample into that header (`HmRow.drawn`), so the session's sample
-is the statement's, and not `null` (`unitSample_one`): what `stmtOk` shows at a good case, from the scope and the setup
-alone.
--/
+/-! In scope, at one table, the session's sample is the statement's (`unitSample_one`). -/
 
 @[expose] public section
 
@@ -55,7 +48,6 @@ open Flock FlockDeploy
 open Lean (Json JsonNumber)
 open FlockSoundness FlockSoundness.Refine
 
-/-- **In scope, at one table, the session's sample is the statement's.** -/
 theorem unitSample_one {rel : Readable.Parsed → Readable.Relation}
     {x : Claims.Msg} {s : Ins} {spec : SessionSpec} {sts : Array Flock.Stmt}
     (hsc : Claims.Flock.Scope (deployPlain rel) x) (hset : setupOf false x = some (s, spec, sts))

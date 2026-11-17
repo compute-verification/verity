@@ -37,16 +37,7 @@ import Proofs.Flock.Claims.Scope.StmtOf
 import Proofs.Flock.Claims.ZK.MaskedTables
 import Proofs.Flock.Soundness.Discharge.FailClosed.Mask
 
-/-!
-# The deployed relation does not read the mask slots
-
-`maskFree_relation`: at the deployed relation (`Readable.relation`), a witness with every table's mask slot set to any
-words (`maskWOf`) is in the relation wherever the witness is (`MaskFree`). At a statement of the masked scope each
-table is a `MaskSetup` that avoids the mask (`Readable.tableAt_zk`, `avoidsMask_of_shapeOk`), so its mask slot is
-isolated (`maskIsolated_of_layout`): its rows hold at any bits, and no other row, the pin or a region reads it. Table
-`c`'s share of the mask witness is `Composed.zWith` at the share of `w` and the words' bits (`zOf_maskW`), which
-satisfies the table's lowered statement where `w`'s share does (`satisfies_zWith`).
--/
+/-! The deployed relation does not read the mask slots (`maskFree_relation`). -/
 
 @[expose] public section
 
@@ -54,8 +45,6 @@ namespace FlockComplete.ZkTables
 
 open Flock FlockDeploy FlockSoundness FlockSoundness.Discharge
 
-/-- **Table `c`'s share of the mask witness is `zWith`'s**: the share of `w` with the mask slot's word `k` set to
-`μ c k`'s bits. -/
 theorem zOf_maskW (sts : Array Flock.Stmt) (w : Claims.Flock.Wit) (μ : ℕ → ℕ → F128) {c : ℕ} (hc : c < sts.size) :
     Readable.zOf sts.size (maskW sts w μ) c sts[c].m =
       Composed.zWith sts[c] (Readable.zOf sts.size w c sts[c].m)
@@ -70,7 +59,6 @@ theorem zOf_maskW (sts : Array Flock.Stmt) (w : Claims.Flock.Wit) (μ : ℕ → 
     simp only [Readable.zOf]
     rw [maskW_table_off sts w μ hc hk]
 
-/-- **The deployed relation does not read the mask slots.** -/
 theorem maskFree_relation : MaskFree Readable.relation := by
   intro x w μ hsc hR
   unfold maskWOf

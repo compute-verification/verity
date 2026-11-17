@@ -37,16 +37,8 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Complete.Replay.ZerocheckAlgebra
 import Proofs.Flock.Soundness.Refine.Arith
 
-/-!
-# The consistency value on an honest opening
-
-A level's consistency value (`consE`) reads the opened codeword rows, folded at the level's challenges and batched by
-`eq(α)`. On rows the honest prover committed (`encodeRows` of its F-table `g`), it is the sum of `g` folded at the
-challenges against the prover's consistency weight `V = consW` (`consE_honest`): row `pos_j`'s lane `ℓ` is
-`Σ_c g[c·2^lanes + ℓ]·X̂_c(ω_{pos_j})`, so folding the lanes folds `g`'s low variables (`foldLoL`), and batching the
-rows by `eq(α)` batches the `X̂_c(ω_{pos_j})` into `V(c)`. The prover's iterated `foldK` is the model's `foldLoL`
-(`gv_foldKs`).
--/
+/-! On rows the honest prover committed, a level's consistency value is its F-table folded at the level's challenges
+against its consistency weight (`consE_honest`). -/
 
 @[expose] public section
 
@@ -59,7 +51,6 @@ local notation "𝕂" => FlockLevel3.GF256
 
 namespace Lg
 
-/-- A K-table folded at each challenge in turn, lowest variable first. -/
 def foldKs (ch : List F256) (a : Array F256) : Array F256 := ch.foldl (fun a r => foldK r a) a
 
 theorem foldKs_size : ∀ (ch : List F256) (a : Array F256), (foldKs ch a).size = a.size / 2 ^ ch.length
@@ -68,7 +59,6 @@ theorem foldKs_size : ∀ (ch : List F256) (a : Array F256), (foldKs ch a).size 
       rw [show foldKs (r :: rs) a = foldKs rs (foldK r a) from rfl, foldKs_size rs, foldK_size, List.length_cons,
         pow_succ, Nat.div_div_eq_div_mul, mul_comm]
 
-/-- **The prover's folds are the model's**: entry `y` of the iterated fold is `foldLoL` of the table's entries. -/
 theorem gv_foldKs : ∀ (ch : List F256) (a : Array F256) (y : ℕ), y < a.size / 2 ^ ch.length →
     gv (foldKs ch a) y = foldLoL (ch.map gOf) (gv a) y
   | [], a, y, _ => by simp [foldKs, foldLoL]
@@ -99,15 +89,12 @@ theorem cons_reorder {K : Type} [CommSemiring K] (J L C : ℕ) (e : ℕ → K) (
         simp only [Finset.mul_sum, Finset.sum_mul]
         exact Finset.sum_congr rfl fun _ _ => Finset.sum_congr rfl fun _ _ => Finset.sum_congr rfl fun _ _ => by ring
 
-/-- A committed row: lane `ℓ` of the codeword at `q`. -/
 theorem encodeRows_get (lv : Level) (g : Array F128) {q : ℕ} (hq : q < 2 ^ lv.d) :
     (encodeRows lv g)[q]! = (Array.range (2 ^ lv.lanes)).map fun l =>
       sumF (2 ^ lv.cols) fun c => g[c * 2 ^ lv.lanes + l]! * (xhats (svTable (lv.cols + 1)) q lv.cols)[c]! := by
   unfold encodeRows
   exact getElem!_range_map _ hq
 
-/-- **The consistency value on an honest opening**: the rows the prover committed at level `lv`, opened at `pos` and
-folded at the level's challenges `ch`, batched by `eq(α)`, give `g` folded at `ch` against the consistency weight. -/
 theorem consE_honest (lv : Level) (g : Array F128) (pos : Array ℕ) (alpha : Array F128) (ch : Array F256)
     (hch : ch.size = lv.lanes) (hg : g.size = 2 ^ (lv.lanes + lv.cols)) (hpos : ∀ j < pos.size, pos[j]! < 2 ^ lv.d) :
     gOf (consE (pos.map fun p => (encodeRows lv g)[p]!) pos.size alpha ch) =
@@ -164,8 +151,6 @@ theorem consE_honest (lv : Level) (g : Array F128) (pos : Array ℕ) (alpha : Ar
 theorem consW_size (cols : ℕ) (pos : Array ℕ) (alpha : Array F128) : (consW cols pos alpha).size = 2 ^ cols := by
   simp [consW]
 
-/-- **The consistency value is the folded table's sum** against the consistency weight, the prover's fold of its
-F-table at the level's challenges. -/
 theorem consE_fold (lv : Level) (g : Array F128) (pos : Array ℕ) (alpha : Array F128) (ch : Array F256)
     (hch : ch.size = lv.lanes) (hg : g.size = 2 ^ (lv.lanes + lv.cols)) (hpos : ∀ j < pos.size, pos[j]! < 2 ^ lv.d) :
     gOf (consE (pos.map fun p => (encodeRows lv g)[p]!) pos.size alpha ch) =
@@ -177,8 +162,6 @@ theorem consE_fold (lv : Level) (g : Array F128) (pos : Array ℕ) (alpha : Arra
   rw [gv_foldKs _ _ _ (by rw [embedF_size, hg, Array.length_toList, hch, pow_add, Nat.mul_div_cancel_left _
       (Nat.two_pow_pos _)]; exact hx'), gv_embedF _ (by rw [consW_size]; exact hx')]
 
-/-- **A level's consistency claim**, on the split of the prover's fold `f` of the level's F-table at its challenges:
-the claim gains `b·consE`, the weight `b·u^bit·V`. -/
 theorem Sync.close {s : F256} {q : Poly} {w : Array F256} {n : ℕ} (lv : Level) (g : Array F128) (pos : Array ℕ)
     (alpha : Array F128) (ch : Array F256) (hch : ch.size = lv.lanes) (hg : g.size = 2 ^ (lv.lanes + lv.cols))
     (hpos : ∀ j < pos.size, pos[j]! < 2 ^ lv.d) (hn : lv.cols = n)

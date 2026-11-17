@@ -45,23 +45,8 @@ import Proofs.Flock.Claims.Scope.InScope
 import Proofs.Flock.Claims.Scope.StmtOf
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
 
-/-!
-# The masked ring switch at several tables
-
-`Zk/RingSwitch.lean` and `Zk/Extras.lean` at every table of a run of any number of tables.
-
-* `ringSwitchJ`: at every table and rep, the verifier's ring switch on the replay's claims, each valued by its check,
-  and the extra claims returns, given the extra claims' algebra (`RsExtrasAt`): the rep ran zerocheck, lincheck and
-  the ring switch in closed form (`repPZk_rs`), and the replay's claims have the prover's points (`rs_of`), on the
-  table's stream (`Run.walkJ`).
-* `Run.rsExtras`: at the deployed relation the extra claims' algebra holds at every table from `RelS` alone: table `i`
-  is the statement the soundness proof plays, satisfied by its share of the witness's bits (`Case.model`), each
-  table's link points have the session's `m_pts` (`Case.mPts`, `Run.sess_points`), and `claims_switch`.
-* `completeR`, `completeRel`: completeness at any number of tables with the ring switch dropped from the rep's checks
-  (`LgInnerAt`: the masked Ligerito and the inner proof), given `RsExtrasAt`, which the deployed relation gives.
-  `completeJRel`: the same from `complete_zk_relation`'s premises at one table, the ring switch there from
-  `ringSwitchZk_goal` and `rsExtrasZk`.
--/
+/-! The masked ring switch at any number of tables, its extra claims' algebra from `RelS` alone at the deployed relation
+(`ringSwitchJ`, `Run.rsExtras`). -/
 
 @[expose] public section
 
@@ -73,13 +58,10 @@ local notation "𝔽" => FlockLevel3.GF128
 
 variable {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
 
-/-- **The extra claims' ring-switch algebra at a run**: at every table, each extra claim's switched vector of the
-table's trace meets its value. -/
 def RsExtrasAt (o : Run H rel) : Prop :=
   ∀ i < o.tabs.size, ∀ k < (o.extras i).size,
     dot (wOf (o.extras i)[k]!) (switchVec (traces o.sts o.w)[i]! (o.extras i)[k]!) = (o.extras i)[k]!.value
 
-/-- **The masked ring switch replays** at every table and rep of a run, given the extra claims' algebra there. -/
 theorem ringSwitchJ (h64 : Out64 H) (o : Run H rel) (hS : StmtAt o.toCase)
     (hR : RepShapedAt o.toCase) (hX : RsExtrasAt o) :
     ∀ i < o.tabs.size, ∀ r < 2,
@@ -118,8 +100,6 @@ theorem ringSwitchJ (h64 : Out64 H) (o : Run H rel) (hS : StmtAt o.toCase)
   exact rs_of (hs := o.hs) (st := Setup.ofCircuit o.sts[i]!) (hk := rfl) (h₀ := rfl) (hs₀ := rfl)
     (hR := hAg.of_prefix hpre) (hcl := hcl) (hsw := hsw) (hX := fun k hk => hX i hi k hk)
 
-/-- **Table `i` of a good case of the deployed relation, satisfied**: it is well formed, and its share of the
-witness's bits (`Readable.zOf J w i`) satisfies `stmtOf` at its regions. -/
 theorem Case.model (c : Case H Readable.relation) {i : ℕ} (hi : i < c.sts.size) :
     ∃ hwf : StmtWF c.sts[i], RegionsWF c.sts[i] ∧
       (stmtOf c.sts[i] hwf (regionsOf c.sts[i])).Satisfies (Readable.zOf c.sts.size c.w i c.sts[i].m) := by
@@ -162,7 +142,6 @@ theorem Run.sess_points (o : Run H rel) : ∀ p ∈ o.sess.points.toList, p.size
     simp at hp
   | ok s => exact decodeWith_points o.hs h
 
-/-- **The extra claims' ring-switch algebra at the deployed relation**, at every table of a run, from `RelS` alone. -/
 theorem Run.rsExtras (o : Run H Readable.relation) : RsExtrasAt o := by
   intro i hi k hk
   have hi' := Run.lt_sts hi
@@ -190,7 +169,6 @@ theorem Run.rsExtras (o : Run H Readable.relation) : RsExtrasAt o := by
   exact key _ (Array.mem_append.2 (Or.inr (Array.getElem_mem hk)))
 
 variable (H rel) in
-/-- **The rep's checks but the ring switch, at a run**: per rep the masked Ligerito and the inner proof. -/
 structure LgInnerAt (o : Run H rel) : Prop where
   ligerito : ∀ i < o.tabs.size, ∀ r < 2,
     (Zk.ligeritoWith o.hs o.tabs[i]!.merkle (o.sch i) (o.sw i r).1.1 (o.zp i r).proof.cap (o.zp i r).proof.ligerito
@@ -199,16 +177,12 @@ structure LgInnerAt (o : Run H rel) : Prop where
     (Zk.verifyInnerWith o.hs (o.lay i) (o.zp i r).inner (o.zp i r).proof.zerocheck.finalC
       (repConsZk (o.rp i r).1 (o.zp i r).proof ++ o.lanes i r)).run (o.lg i r).2 = .ok (o.inner i r)
 
-/-- **The rep's checks at a run**, from the extra claims' algebra, the masked Ligerito and the inner proof there. -/
 theorem repChecksAt_of (h64 : Out64 H) (o : Run H rel) (hS : StmtAt o.toCase)
     (hR : RepShapedAt o.toCase) (hX : RsExtrasAt o) (hC : LgInnerAt H rel o) : RepChecksAt H rel o :=
   { ringSwitch := ringSwitchJ h64 o hS hR hX
     ligerito := hC.ligerito
     inner := hC.inner }
 
-/-- **Flock's masked verifier is complete** for the honest masked prover on each table's share, with error `δc H`, at
-any number of tables, from the per-table premises at every good case (`StmtAt`, `ProverRunsAt`, `RepShapedAt`), the
-extra claims' algebra (`RsExtrasAt`), and per rep the masked Ligerito and the inner proof (`LgInnerAt`). -/
 theorem completeR (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) 
     (h64 : JsonRT.Out64 H) (hS : ∀ c : Case H rel, StmtAt c) (hPR : ∀ c : Case H rel, ProverRunsAt c)
     (hR : ∀ c : Case H rel, RepShapedAt c) (hX : ∀ o : Run H rel, RsExtrasAt o)
@@ -217,10 +191,6 @@ theorem completeR (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Rea
   completeAll H rel h64 hS hPR hR (fun o => repChecksAt_of h64 o (hS o.toCase) (hR o.toCase) (hX o) (hC o)) hMR
     hMF
 
-/-- **Flock's masked verifier is complete at the deployed relation** for the honest masked prover on each table's
-share, with error `δc H`, at any number of tables: the statement's premise at one table (`StmtOkZk`), the prover's
-pieces and the rep proofs' shapes per table (`ProverRunsAt`, `RepShapedAt`), and per rep the masked Ligerito and the
-inner proof (`LgInnerAt`). -/
 theorem completeRel (H : Claims.Msg → Claims.Msg) (h64 : JsonRT.Out64 H)
     (hS : JsonRT.StmtOkZk H Readable.relation) (hPR : ∀ c : Case H Readable.relation, ProverRunsAt c)
     (hR : ∀ c : Case H Readable.relation, RepShapedAt c) (hC : ∀ o : Run H Readable.relation, LgInnerAt H _ o)
@@ -228,13 +198,8 @@ theorem completeRel (H : Claims.Msg → Claims.Msg) (h64 : JsonRT.Out64 H)
   completeR H Readable.relation h64 (stmtAt_of hS) hPR hR Run.rsExtras hC hMR maskFree_relation
 
 variable (H rel) in
-/-- **The rep's checks but the ring switch, at every run of several tables.** -/
 def LgInnerJ : Prop := ∀ o : Run H rel, 1 < o.sts.size → LgInnerAt H rel o
 
-/-- **Flock's masked verifier is complete at the deployed relation** for the honest masked prover on each table's
-share, with error `δc H`, at any number of tables: from `complete_zk_relation`'s premises, and at
-several tables the prover's pieces (`ProverRunsJ`), the proof files' (`RepShapedJ`), and per rep the masked Ligerito
-and the inner proof (`LgInnerJ`). -/
 theorem completeJRel (H : Claims.Msg → Claims.Msg) (h64 : JsonRT.Out64 H)
     (hS : JsonRT.StmtOkZk H Readable.relation) (hR : JsonRT.RepShapedZk H Readable.relation)
     (hPR : JsonRT.ProverRunsZk H Readable.relation) (hLg : FlockComplete.LigeritoZk H Readable.relation)

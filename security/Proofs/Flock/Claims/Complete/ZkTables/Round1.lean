@@ -38,26 +38,8 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Complete.Zk.Count
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# The masked prover's second message: table `0` rep `0`'s first zerocheck coin
-
-Round `1` of the masked session on the executable's side. After the link message's coin the session opens table `0`'s
-rep `0`: its extra claims at the link points, its pads' commitment (quiet), then the zerocheck's first squeeze. Its
-second body is that squeeze's frame, of a transcript the coin does not reach: the domain's, with the circuit digest,
-the level-0 cap and the pads' root absorbed (`Replay.ZcZ.t₁`). Where the extra claims throw, the session stops after
-the link message.
-
-* `pv_sim_bind`, `pv_sim_quiet`, `pv_sim_head`, `pv_sim_err` (and `st_sim_quiet`, `st_sim_head` under `StateT`): the
-  bodies of a bind in the verdict-and-oracle monad `PV`, the first part's then the rest's.
-* `pv_sim_of_quiet`: a `PV` program related (`simS`) to a quiet pure one sends nothing and returns its verdict; so
-  the schedules, the level-0 commitments and the pads' commitment (`schedsPZk_pv`, `commitsPZk_pv`, `innerCommitP_pv`).
-* `zerocheckPZk_pv_head`, `repPZk_pv_head`, `afterLinkPZk_pv_head`: the first body of a rep, and of the session after
-  the link's coin where rep `0` of table `0` is the first stream and its extra claims return.
-* `sessionPZk_pv_round1`, `sessionPZk_go_round1`: the session's first two bodies, the link message and that squeeze,
-  in `PV` and at the pure session.
-* `afterLinkPZk_pv_err`, `sessionPZk_pv_round1_err`, `sessionPZk_go_round1_err`: where table `0`'s extra claims throw,
-  the session stops having sent the link message alone.
--/
+/-! The masked prover's second message: table `0` rep `0`'s first zerocheck squeeze, or none where its extra claims
+throw (`sessionPZk_go_round1`). -/
 
 @[expose] public section
 
@@ -67,7 +49,6 @@ namespace FlockComplete
 
 variable (H : Claims.Msg → Claims.Msg) (resp : ℕ → Claims.Msg)
 
-/-- **A bind's bodies in `PV`**: the first part's, then, where it returns, the rest's from the next index. -/
 theorem pv_sim_bind {α β : Type} (x : PV α) (f : α → PV β) (i : ℕ) :
     (x >>= f).run.sim H resp i =
       ((x.run.sim H resp i).1 ++ (match (x.run.sim H resp i).2 with
@@ -107,7 +88,6 @@ theorem st_sim_head {σ α β : Type} {x : StateT σ PV α} {f : α → StateT �
   rw [StateT.run_bind]
   exact pv_sim_head H resp hx
 
-/-- **A `PV` program related to a quiet pure one sends nothing** and returns the pure one's verdict. -/
 theorem pv_sim_of_quiet {α : Type} {x : PV α} {y : PS α} {v : V α} (hR : (simS H resp).R x y)
     (hq : ∀ l, y.go l = (v, l)) (i : ℕ) : x.run.sim H resp i = ([], v) := by
   obtain ⟨bs, h1, h2⟩ := hR (Array.replicate i [])
@@ -137,8 +117,6 @@ theorem squeezeP_pv_head (kind : UInt8) {n : ℕ} (hn : n ≠ 0) (t : Transcript
   simp only [squeezeP, StateT.run, hn, ite_false]
   exact ⟨_, rfl⟩
 
-/-- **The masked zerocheck's first body** is its first squeeze's frame, of the transcript with the circuit's digest,
-the level-0 cap and the pads' root absorbed (`Replay.ZcZ.t₁`). -/
 theorem zerocheckPZk_pv_head (m : ℕ) (digest cap root : ByteArray) (lay : Zk.PadLayout) (h : Array F128) (tr : Trace)
     (t : Transcript) (i : ℕ) :
     ∃ bs, (((zerocheckPZk asks m digest cap root lay h tr).run t).run.sim H resp i).1 =
@@ -169,7 +147,6 @@ theorem repPZk_pv_head (st : Setup) (sch : Schedule) (tPad rep : ℕ) (dom : Byt
   exact st_sim_head H resp (zerocheckPZk_pv_head H resp st.m st.digest (flat cm0.cap) ic.root
     (Zk.PadLayout.new st.m st.kLog sch.k0) pads.h tr T i)
 
-/-- The pads' commitment in `PV` sends nothing and returns its verdict at `hOf H`. -/
 theorem innerCommitP_pv (p : PadsZk) (salt : ℕ → ByteArray) (i : ℕ) :
     (innerCommitP Hashes.pi p salt).run.sim H resp i =
       ([], (innerCommitP (Hashes.ofSha512 (Claims.hOf H)) p salt : V InnerCommit)) :=
@@ -177,8 +154,6 @@ theorem innerCommitP_pv (p : PadsZk) (salt : ℕ → ByteArray) (i : ℕ) :
 
 theorem monadLift_pv {α : Type} (v : V α) (i : ℕ) : (monadLift v : PV α).run.sim H resp i = ([], v) := rfl
 
-/-- **The session's first body after the link's coin**, where table `0`'s rep `0` is the first stream and its extra
-claims and pads' commitment return: that rep's first zerocheck squeeze, from the domain's transcript. -/
 theorem afterLinkPZk_pv_head (spec : SessionSpec) (tabs : Array Setup) (words : Array (List ℕ)) (trs : Array Trace)
     (tape : TapeZk) (schs : Array (Schedule × ℕ)) (tbls : Array (Array F128)) (cms : Array Commit) (c1 : ℕ → F128)
     {n : String} {rest : List (ℕ × ℕ × String)} (h0 : spec.repStreams.toList = (0, 0, n) :: rest)
@@ -220,8 +195,6 @@ theorem link_pv_sim {β : Type} (rb pub : Array ByteArray) (f : (ℕ → F128) �
   rw [pv_sim_bind]
   rfl
 
-/-- **The masked session's first two bodies** in `PV`: the link message of the level-0 caps, then table `0` rep `0`'s
-first zerocheck squeeze. -/
 theorem sessionPZk_pv_round1 (spec : SessionSpec) (tabs : Array Setup) (words : Array (List ℕ)) (trs : Array Trace)
     (tape : TapeZk) {schs : Array (Schedule × ℕ)} {cms : Array Commit}
     (hs : (schedsPZk tabs : V _) = .ok schs)
@@ -255,7 +228,6 @@ theorem link_pv_sim' {β : Type} (rb pub : Array ByteArray) (f : (ℕ → F128) 
   rw [pv_sim_bind]
   rfl
 
-/-- **Where table `0`'s extra claims throw**, the session after the link's coin sends nothing and throws. -/
 theorem afterLinkPZk_pv_err (spec : SessionSpec) (tabs : Array Setup) (words : Array (List ℕ)) (trs : Array Trace)
     (tape : TapeZk) (schs : Array (Schedule × ℕ)) (tbls : Array (Array F128)) (cms : Array Commit) (c1 : ℕ → F128)
     {n : String} {rest : List (ℕ × ℕ × String)} (h0 : spec.repStreams.toList = (0, 0, n) :: rest)
@@ -284,8 +256,6 @@ theorem sessionPZk_pv_round1_err (spec : SessionSpec) (tabs : Array Setup) (word
   rw [link_pv_sim', afterLinkPZk_pv_err H resp spec tabs words trs tape schs (tablesP tabs trs) cms
     (coinOf (resp 0)) h0 he]
 
-/-- **The pure masked session's second body** is table `0` rep `0`'s first zerocheck squeeze, untagged, where the
-schedules, the level-0 commitments, that table's extra claims at the link points and its pads' commitment return. -/
 theorem sessionPZk_go_round1 (spec : SessionSpec) (tabs : Array Setup) (words : Array (List ℕ)) (trs : Array Trace)
     (tape : TapeZk) {schs : Array (Schedule × ℕ)} {cms : Array Commit}
     (hs : (schedsPZk tabs : V _) = .ok schs)
@@ -311,8 +281,6 @@ theorem sessionPZk_go_round1 (spec : SessionSpec) (tabs : Array Setup) (words : 
     refine ⟨by simp, ?_⟩
     simp [hb.2.1]
 
-/-- **Where table `0`'s extra claims throw, the pure masked session stops after the link message**: it throws
-having sent that message alone. -/
 theorem sessionPZk_go_round1_err (spec : SessionSpec) (tabs : Array Setup) (words : Array (List ℕ))
     (trs : Array Trace) (tape : TapeZk) {schs : Array (Schedule × ℕ)} {cms : Array Commit}
     (hs : (schedsPZk tabs : V _) = .ok schs)

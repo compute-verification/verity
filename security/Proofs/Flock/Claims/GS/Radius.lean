@@ -39,35 +39,14 @@ import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
 import VCVio.Prelude.Core
 
-/-!
-# List decoding within a radius, at Flock's level-0 code
-
-The list-decoding spec in its radius form (`Flock.ListWithin`): the opened columns are written into the zero-filled
-word of the trace's codeword length `n` (`Flock.fill`: at each position the first opened column there, zero where none
-was opened, positions from `n` on ignored), and the decoder lists every trace `M` whose encoding agrees with that word
-on at least `(1 − θ M)·n` positions. The radius `θ`, like the length `n`, is read per trace. Agreement is counted over
-all `n` positions, so a prover gains nothing by leaving positions unopened. `fill` and `ListWithin` are the spec's
-(`Definitions/Claims.lean`).
-
-At Flock's level-0 code (`n = 2^level₀.logLen`, rate `ρ = 2^logCols / 2^logLen`, `θ = 1 − √ρ − 1/200`):
-
-* `flockDecodeR h`: fill the word, then `flockDecode` (the counted Guruswami–Sudan decoder) on its `n` points
-  `(i, fill n os i)` at agreement `√ρ + 1/200`.
-* `listWithin_flockDecodeR`: it meets `ListWithin` at `θ`. The `n` points are distinct, and the Johnson count fits the
-  codeword (`johnsonCount_flock_le`): at agreement `√ρ + 1/200` the count of `k` columns is at most `n` once
-  `n·k > 10^4` (`johnsonCount_le_len`), and every `fast100` level 0 has at least `2^9` message columns, so
-  `n·k ≥ 2^18`.
-* `flockDecodeR_complexity`: its count (`n` lookups of at most `os.length` comparisons each and one step per point, then
-  `flockCounted` on the `n` points) is at most `flockPolyR = flockPoly + X^2 + X` at the size `(os.length + n)·2^k0·128`.
--/
+/-! List decoding within a radius at Flock's level-0 code (`flockDecodeR`): it meets `ListWithin` at `θ = 1 − √ρ −
+1/200` (`listWithin_flockDecodeR`) within `flockPolyR` (`flockDecodeR_complexity`). -/
 
 @[expose] public section
 
 namespace Claims.GS
 
 open Polynomial FlockSoundness FlockSoundness.Model FlockLevel3
-
-/-! ## The zero-filled word, counted -/
 
 /-- The zero-filled word's `n` points `(i, fill n os i)`. -/
 def fillPts {Col : Type} [Zero Col] (n : ℕ) (os : List (ℕ × Col)) : List (ℕ × Col) :=
@@ -106,7 +85,6 @@ theorem fillPtsC_fst {Col : Type} [Zero Col] (n : ℕ) (os : List (ℕ × Col)) 
     (fillPtsC n os).1 = fillPts n os := by
   simp only [fillPtsC, fillPts, Flock.fill, lookupC_fst]
 
-/-- **The fill step's count**: at most `n·(os.length + 1)`. -/
 theorem fillPtsC_snd_le {Col : Type} [Zero Col] (n : ℕ) (os : List (ℕ × Col)) :
     (fillPtsC n os).2 ≤ n * (os.length + 1) := by
   have := List.sum_le_length_nsmul ((List.finRange n).map fun i => (lookupC i.val os).2 + 1) (os.length + 1)
@@ -133,8 +111,6 @@ theorem length_filter_finRange {n : ℕ} (p : Fin n → Prop) [DecidablePred p] 
   rw [← List.toFinset_card_of_nodup ((List.nodup_finRange n).filter _), List.toFinset_filter, List.toFinset_finRange]
   simp
 
-/-- The points of the zero-filled word a trace's encoding agrees with are as many as the word's positions it agrees
-with. -/
 theorem length_filter_fillPts {Col : Type} [DecidableEq Col] [Zero Col] (enc : ℕ → Col) (n : ℕ)
     (os : List (ℕ × Col)) :
     ((fillPts n os).filter fun p => decide (enc p.1 = p.2)).length =
@@ -142,10 +118,6 @@ theorem length_filter_fillPts {Col : Type} [DecidableEq Col] [Zero Col] (enc : �
   rw [fillPts, List.filter_map, List.length_map]
   exact length_filter_finRange fun i : Fin n => enc i.val = Flock.fill n os i
 
-/-! ## The Johnson count fits the codeword -/
-
-/-- **The Johnson count fits the codeword**: at rate `ρ = k/n` and agreement `√ρ + 1/200`, the Johnson count of `k` is
-at most `n` once `n·k > 10^4` (that is, `n·√ρ > 100`). -/
 theorem johnsonCount_le_len {k n : ℕ} (hn : 0 < n) (hnk : 10000 < n * k) :
     johnsonCount k (Real.sqrt ((k : ℝ) / n) + 1 / 200) ≤ n := by
   set s := Real.sqrt ((k : ℝ) / n)
@@ -168,7 +140,6 @@ theorem johnsonCount_le_len {k n : ℕ} (hn : 0 < n) (hnk : 10000 < n * k) :
   unfold johnsonCount
   omega
 
-/-- Every `fast100` schedule's level 0 has `n·k > 10^4`: at least `2^9` message columns, and `n ≥ k`. -/
 theorem fast100_level₀_nk {m : ℕ} {sch : Accounting.Schedule} (h : Accounting.fast100 m = some sch) :
     10000 < 2 ^ sch.level₀.logLen * 2 ^ sch.level₀.logCols := by
   have hc := (Flock.fast100_level₀_queries h).2
@@ -184,8 +155,6 @@ theorem agreeR_pos (sch : Accounting.Schedule) : 0 < agreeR sch := by
   unfold agreeR
   positivity
 
-/-- **The Johnson count fits Flock's level-0 codeword**: at agreement `√ρ + 1/200` it is at most `n = 2^logLen`, for
-every `fast100` schedule. -/
 theorem johnsonCount_flock_le {m : ℕ} {sch : Accounting.Schedule} (h : Accounting.fast100 m = some sch) :
     johnsonCount (2 ^ sch.level₀.logCols) (agreeR sch) ≤ 2 ^ sch.level₀.logLen := by
   have := johnsonCount_le_len (k := 2 ^ sch.level₀.logCols) (n := 2 ^ sch.level₀.logLen) (by positivity)
@@ -193,26 +162,19 @@ theorem johnsonCount_flock_le {m : ℕ} {sch : Accounting.Schedule} (h : Account
   push_cast at this
   exact this
 
-/-! ## The radius decoder at Flock's level-0 code -/
-
 /-- **The radius decoder at Flock's level-0 code**: the zero-filled word of length `n = 2^logLen`, then `flockDecode`
 on its `n` points at agreement `√ρ + 1/200`. -/
 noncomputable def flockDecodeR {m : ℕ} {sch : Accounting.Schedule} (h : Accounting.fast100 m = some sch)
     (os : List (ℕ × (Fin (2 ^ sch.k0) → GF128))) : List (Message GF128 sch.k0 sch.level₀.logCols) :=
   flockDecode h (agreeR sch) (fillPts (2 ^ sch.level₀.logLen) os)
 
-/-- `flockDecodeR` with its count: the fill step's (`fillPtsC`), then `flockCounted`'s on the `n` points. -/
 noncomputable def flockCountedR {m : ℕ} {sch : Accounting.Schedule} (h : Accounting.fast100 m = some sch)
     (os : List (ℕ × (Fin (2 ^ sch.k0) → GF128))) : List (Message GF128 sch.k0 sch.level₀.logCols) × ℕ :=
   ((flockCounted h (agreeR sch) (fillPtsC (2 ^ sch.level₀.logLen) os).1).1,
     (fillPtsC (2 ^ sch.level₀.logLen) os).2 + (flockCounted h (agreeR sch) (fillPtsC (2 ^ sch.level₀.logLen) os).1).2)
 
-/-- **The radius decoder's complexity polynomial**: `flockPoly + X^2 + X`, that is
-`20·X^9 + 171·X^7 + 9·X^6 + 12·X^4 + 2·X^2 + 2·X + 1 + 3·64·129²·X^2·(3X + 3)^4 + 2·(X + 1)·X^2`. -/
 noncomputable def flockPolyR : Polynomial ℕ := flockPoly + X ^ 2 + X
 
-/-- **The radius decoder meets `ListWithin`** at Flock's level-0 code, at `θ = 1 − √ρ − 1/200`, for every `fast100`
-schedule. -/
 theorem listWithin_flockDecodeR {m : ℕ} {sch : Accounting.Schedule} (h : Accounting.fast100 m = some sch) :
     Flock.ListWithin (fun _ => 2 ^ sch.level₀.logLen) (Flock.levelZeroEnc execArith sch.k0 sch.level₀.logCols)
       (fun _ => 1 - Real.sqrt ((2 : ℝ) ^ sch.level₀.logCols / 2 ^ sch.level₀.logLen) - 1 / 200) (flockDecodeR h) := by
@@ -226,7 +188,6 @@ theorem listWithin_flockDecodeR {m : ℕ} {sch : Accounting.Schedule} (h : Accou
   rw [e]
   exact hM
 
-/-- **The radius decoder's complexity**: at most `flockPolyR` at the size `(os.length + n)·2^k0·128`. -/
 theorem flockDecodeR_complexity {m : ℕ} {sch : Accounting.Schedule} (h : Accounting.fast100 m = some sch) :
     DecoderComplexity (flockDecodeR h) (flockCountedR h)
       (fun os => (os.length + 2 ^ sch.level₀.logLen) * 2 ^ sch.k0 * 128) flockPolyR := by

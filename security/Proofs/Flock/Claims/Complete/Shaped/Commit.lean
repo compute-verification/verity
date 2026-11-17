@@ -40,18 +40,7 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Complete.Json.Goals
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# A level's commitment and opening, by their shapes
-
-* `commitP_shape`: a level's commitment `commitP` returned through `Hashes` whose node and leaf digests are `hl` bytes
-  has the shape the opening reads (`CommitOk`): `2^d` rows of `2^lanes` elements, `2^d` salts of the scheme's size, the
-  Merkle layers below the cap, layer `h` of `2^(d − h)` digests, and a cap of `2^cap` digests, each digest `hl` bytes.
-* `opsWith_sizes`: every registered scheme's digests are its `digestLen` bytes through `Hashes.ofSha512` at an oracle of
-  64-byte outputs (`Claims.Out64`).
-* `positions_facts`: a level's query positions are `q` rows of its `2^d`.
-* `openP_ok`: an opening at such positions of a commitment of that shape has the shape the decoder reads
-  (`ZkView.LevelOk`).
--/
+/-! A level's commitment and opening have the shapes the opening and the decoder read. -/
 
 @[expose] public section
 
@@ -89,9 +78,6 @@ theorem forIn_upto_V {β : Type} (n : ℕ) (b : β) {f : ℕ → β → V (ForIn
     obtain ⟨b', rfl, hb'⟩ := h s (by omega) b r' hb hr'
     exact ih (s + 1) b' (by omega) hb' e
 
-/-- **A level's commitment, by its shape**: `2^d` rows of `2^lanes` elements and `2^d` salts of the scheme's size,
-the Merkle layers below the cap, layer `h` of `2^(d − h)` digests, and a cap of `2^cap` digests, each of `hl`
-bytes. -/
 def CommitOk (hl sb : ℕ) (lv : Level) (cm : Commit) : Prop :=
   cm.rows.size = 2 ^ lv.d ∧ (∀ r ∈ cm.rows, r.size = 2 ^ lv.lanes) ∧ cm.salts.size = 2 ^ lv.d ∧
     (∀ x ∈ cm.salts, x.size = sb) ∧
@@ -155,7 +141,6 @@ theorem opsWith_of_lookup {M : Type → Type} [Monad M] [MonadExceptOf String M]
   unfold MerkleScheme.opsWith
   rw [h]
 
-/-- **Every registered scheme's digests have its width** through `Hashes.ofSha512` at an oracle of 64-byte outputs. -/
 theorem opsWith_sizes {H : Claims.Msg → Claims.Msg} (h64 : Claims.Out64 H) {ms : MerkleScheme}
     (hms : ms ∈ MerkleScheme.all) :
     (∀ l r v, (ms.opsWith (Hashes.ofSha512 (Claims.hOf H) : Hashes V)).node l r = .ok v → v.size = ms.digestLen) ∧
@@ -197,7 +182,6 @@ theorem opsWith_sizes {H : Claims.Msg → Claims.Msg} (h64 : Claims.Out64 H) {ms
         Except.ok.injEq] at e
       rw [← e]; exact h512 _⟩
 
-/-- **The query positions**: `q` of them, each a row of the level's `2^d`. -/
 theorem positions_facts (lv : Level) (hl : LevelSeam lv) (coins : Array F128) :
     (positions lv coins).size = lv.q ∧ ∀ p ∈ positions lv coins, p < 2 ^ lv.d := by
   have e := positions_eq lv hl coins
@@ -252,8 +236,6 @@ theorem siblings_facts {hl : ℕ} {lv : Level} {cm : Commit}
     rw [e1, Array.size_append, Array.size_map, Array.size_range, List.length_cons]
     ring
 
-/-- **A level's opening, by its commitment's shape**: at `q` positions below `2^d`, rows of the commitment's width,
-`q·(d − cap)` siblings of `hashLen` bytes, and the salts the shape reads. -/
 theorem openP_ok {sh : Shape} {ms : MerkleScheme} {lv : Level} {cm : Commit} {pos : Array ℕ}
     (hc : CommitOk sh.hashLen ms.saltBytes lv cm) (hq : pos.size = lv.q) (hp : ∀ p ∈ pos, p < 2 ^ lv.d)
     (hsl : (sh.saltLen = none ∧ ms.saltBytes = 0) ∨ sh.saltLen = some ms.saltBytes) :

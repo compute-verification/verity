@@ -39,18 +39,7 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Complete.ZkTables.Scope
 import Proofs.Flock.Claims.DeployK
 
-/-!
-# The honest masked session's sends fit the masked verifier's rounds, at several tables
-
-`Zk/Count.lean`'s per-step bounds at every table, summed over the rep streams:
-
-* `forIn_array_sum`: a loop whose step at `a` costs `k a` costs their sum.
-* `rounds_eq`: the session's recorded rounds are each table's two reps' (`repRounds`), summed over the tables; the rep
-  streams, two per table, sum to the same (`repStreams_sum`).
-* `afterLinkPZk_sendsJ`: after the link message, table `i`'s rep sends at most `repRounds true spec sts[i]` rounds
-  (`repPZk_sends`, `zkSchedule_shape`), so the session after the link sends at most `rounds true spec sts`.
-* `sends_goal` (`SendCountZk`) at any number of tables.
--/
+/-! The honest masked session's sends fit the masked verifier's rounds at any number of tables (`sends_goal`). -/
 
 @[expose] public section
 
@@ -60,7 +49,6 @@ namespace FlockComplete.ZkTables
 
 open With
 
-/-- **A loop whose step at `a` costs `k a`** costs their sum. -/
 theorem forIn_list_sum {M : Type → Type} [Monad M] [MonadExceptOf String M] [MonadLiftT V M] (C : Cost M)
     {α β : Type} (l : List α) (b : β) {f : α → β → M (ForInStep β)} (k : α → ℕ)
     (h : ∀ a ∈ l, ∀ b, C.P (f a b) (k a)) : C.P (forIn l b f) (l.map k).sum := by
@@ -73,7 +61,6 @@ theorem forIn_list_sum {M : Type → Type} [Monad M] [MonadExceptOf String M] [M
     | done b => exact C.mono (C.pure b) (Nat.zero_le _)
     | yield b => exact ih b fun a ha => h a (List.mem_cons_of_mem _ ha)
 
-/-- **A loop over an array whose step at `a` costs `k a`** costs their sum. -/
 theorem forIn_array_sum {M : Type → Type} [Monad M] [MonadExceptOf String M] [MonadLiftT V M] (C : Cost M)
     {α β : Type} (xs : Array α) (b : β) {f : α → β → M (ForInStep β)} (k : α → ℕ)
     (h : ∀ a ∈ xs, ∀ b, C.P (f a b) (k a)) : C.P (forIn xs b f) (xs.toList.map k).sum := by
@@ -105,20 +92,17 @@ theorem toList_range {α : Type} [Inhabited α] (xs : Array α) :
   simp only [List.getElem_map, List.getElem_range, Array.getElem_toList]
   rw [getElem!_pos xs i (by simpa using h1)]
 
-/-- **The session's recorded rounds** are each table's two reps', summed over the tables. -/
 theorem rounds_eq (zk : Bool) (spec : SessionSpec) (sts : Array Stmt) :
     rounds zk spec sts = 2 * ((List.range sts.size).map fun i => repRounds zk spec sts[i]!).sum := by
   unfold rounds
   rw [← Array.foldl_toList, foldl_add_two (repRounds zk spec), toList_range sts, List.map_map, Nat.zero_add]
   rfl
 
-/-- **The rep streams, two per table**, sum a table's cost twice. -/
 theorem repStreams_sum (spec : SessionSpec) (K : ℕ → ℕ) :
     (spec.repStreams.toList.map fun a => K a.1).sum = 2 * ((List.range spec.tables.size).map K).sum := by
   rw [FlockDeploy.repStreams_toList, List.map_map]
   exact sum_range_two _ K
 
-/-- **The masked session after the link** sends at most each table's two masked reps' rounds. -/
 theorem afterLinkPZk_sendsJ (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (spec : SessionSpec)
     (sts : Array Stmt) (words : Array (List ℕ)) (schs : Array (Schedule × ℕ)) (trs : Array Trace) (tape : TapeZk)
     (tbls : Array (Array F128)) (cms : Array Commit) (c1 : ℕ → F128) (hspec : spec.tables.size = sts.size)
@@ -163,7 +147,6 @@ theorem afterLinkPZk_sendsJ (resp : ℕ → Claims.Msg) (h : ByteArray → ByteA
   · rw [repStreams_sum spec (fun i => repRounds true spec sts[i]!), hspec, rounds_eq]
     omega
 
-/-- **The masked session sends at most `1 + rounds`**, whether it returns or stops, at any answers. -/
 theorem sessionPZk_sends (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (spec : SessionSpec)
     (sts : Array Stmt) (words : Array (List ℕ)) (trs : Array Trace) (ω : TapeZk)
     (hspec : spec.tables.size = sts.size) (hm : ∀ j (hj : j < sts.size), 6 ≤ sts[j].m) :
@@ -185,7 +168,6 @@ theorem sessionPZk_sends (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArra
 
 variable {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
 
-/-- **The masked sends fit the masked verifier's rounds**, at any number of tables: the goal `SendCountZk`. -/
 theorem sends_goal (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) :
     SendCountZk H rel := by
   intro o

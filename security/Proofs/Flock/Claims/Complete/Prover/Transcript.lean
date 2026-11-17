@@ -2,20 +2,8 @@ module
 
 public import Flock.With.Transcript
 
-/-!
-# The honest prover's transcript
-
-The plain prover's side of the replay transcript (`Flock.Transcript`). Its state is the verifier's own `Transcript`: what the
-prover absorbs it absorbs with the verifier's actions (`label`, `absorbF`, `absorbSlice`, `absorbBytes`, `pow`, lifted by
-`liftTM`), so the pending bytes evolve as the verifier's do. Only the squeeze differs: where the verifier reads round `k`
-from the record, the prover sends the framed bytes as the round's message (`Asks.round`), takes the live coin it is
-answered with, and records the round (its count, coins and framed bytes) in `rounds`, which is what the session record
-lists.
-
-The prover runs in any verdict monad `M` with the two sends (`Asks`): the link message, answered by the link's coin, and
-a round's framed bytes, answered by the round's. A coin is its elements (`Nat → F128`); a round of `n` coins reads the
-first `n`.
--/
+/-! The plain prover's side of the replay transcript: it absorbs with the verifier's own actions, and only its squeeze
+differs. -/
 
 @[expose] public section
 

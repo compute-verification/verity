@@ -41,19 +41,7 @@ import Proofs.Flock.Claims.Complete.Zk.Discharge
 import Proofs.Flock.Claims.Complete.Zk.Json.Session
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# The honest masked session runs
-
-`Runs.lean` at the masked session: the goal `SessionRunsZk`, given `StmtOkZk` (the masked record's
-`hello` prints) and one named hypothesis on the masked prover's pieces, `ProverRunsZk`: at every good masked case's
-table, on the masked level-0 commitment, the extra claims at the link's points (which return, the table's regions
-fitting by `readyZk`) and the tape's pads committed, rep `0` returns from the link's send and rep `1` from where rep `0`
-stopped (`repRunZk`), so
-each samples the case's coins at the session's rounds, where `¬ BadZk` passes the masked prover's coin checks. The table's
-`--zk` schedule returns (`zkSchedule_ok`), and through `Hashes.ofSha512` so do the masked level-0 commitment
-(`commitPZk_ok`) and the pads' commitment (`innerCommitP_ok`); the session walks its two rep streams in order
-(`Runs.forIn_idx`).
--/
+/-! The goal `SessionRunsZk`, given `StmtOkZk` and the named hypothesis `ProverRunsZk` on the masked prover's pieces. -/
 
 @[expose] public section
 
@@ -61,7 +49,6 @@ namespace FlockComplete.JsonRT
 
 open Flock Transcript FlockComplete FlockDeploy
 
-/-- **Level 0's masked commitment returns** through `Hashes.ofSha512`. -/
 theorem commitPZk_ok (h : ByteArray → ByteArray) (ms : MerkleScheme) (lv : Level) (tPad : ℕ) (g : Array F128)
     (extra lanePad : ℕ → ℕ → F128) (salt : ℕ → ByteArray) :
     ∃ cm, commitPZk (Hashes.ofSha512 h : Hashes V) ms lv tPad g extra lanePad salt = .ok cm := by
@@ -72,7 +59,6 @@ theorem commitPZk_ok (h : ByteArray → ByteArray) (ms : MerkleScheme) (lv : Lev
   dsimp only
   exact ok_bind (g := ForInStep.yield) (mapM_array_ok _ (fun _ => hn _ _) _) fun _ => ⟨_, rfl⟩
 
-/-- **The pads' commitment returns** through `Hashes.ofSha512`. -/
 theorem innerCommitP_ok (h : ByteArray → ByteArray) (p : PadsZk) (salt : ℕ → ByteArray) :
     ∃ ic, innerCommitP (Hashes.ofSha512 h : Hashes V) p salt = .ok ic := by
   unfold innerCommitP
@@ -83,9 +69,6 @@ theorem innerCommitP_ok (h : ByteArray → ByteArray) (p : PadsZk) (salt : ℕ �
 
 variable {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
 
-/-- Rep `rep` of a good masked case's one table as the session runs it, from its stream's domain: on the masked level-0
-commitment `cm`, the extra claims `e` and the pads' commitment `ic`, its rank check at the earlier claim points
-`prior` over the table's mask words. -/
 def repRunZk (c : CaseZk H rel) (st : Flock.Stmt) (v : Schedule × ℕ) (cm : Commit) (e : Array Claim) (rep : ℕ)
     (ic : InnerCommit) (prior : Array (List F128)) : PS (Zk.ZkProof × Transcript) :=
   (repPZk (asksS c.resp) (Hashes.ofSha512 (Claims.hOf H)) (Setup.ofCircuit st) v.1 v.2 rep
@@ -96,11 +79,6 @@ def repRunZk (c : CaseZk H rel) (st : Flock.Stmt) (v : Schedule × ℕ) (cm : Co
     (FlockSoundness.Discharge.Composed.maskWordsOf st)).run
     (Transcript.init #[] (c.spec.domain c.spec.tables[0]! rep).toUTF8)
 
-/-- **The masked prover's pieces return**, at every good masked case's table with its `--zk` schedule: on the masked
-level-0 commitment of the trace's packed table under the case's tape, the extra claims at the link's points, and the
-tape's pads committed, rep `0` returns from the link's send and rep `1` from where rep `0` stopped, its rank check
-at rep `0`'s claim points too. The reps' coins are the case's at the session's rounds, where the masked prover's coin
-checks (level 0's pair, the inner `β`, the rank checks) pass by `¬ BadZk`. -/
 def ProverRunsZk (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) : Prop :=
   ∀ c : CaseZk H rel, ∀ st v, c.sts = #[st] → Zk.schedule (Setup.ofCircuit st).wideLeaf (Setup.ofCircuit st).m = .ok v →
     ∀ cm e, commitPZk (Hashes.ofSha512 (Claims.hOf H) : Hashes V) (Setup.ofCircuit st).merkle
@@ -119,8 +97,6 @@ theorem Runs.weaken {α : Type} {y : PS α} {l : Array Claims.Msg} {P Q : α →
   obtain ⟨a, l', e, hp⟩ := h
   exact ⟨a, l', e, hPQ a l' hp⟩
 
-/-- A loop over a list runs when its step at each index `k` runs from the invariant at `j + k` to the invariant at
-`j + k + 1`. -/
 theorem Runs.forIn_idx {α β : Type} (f : α → β → PS (ForInStep β)) (inv : ℕ → β → Array Claims.Msg → Prop) :
     ∀ (xs : List α) (j : ℕ), (∀ k a, xs[k]? = some a → ∀ b l, inv (j + k) b l →
       Runs (f a b) l fun r l' => ∃ b', r = .yield b' ∧ inv (j + k + 1) b' l') →
@@ -137,7 +113,6 @@ theorem Runs.forIn_idx {α β : Type} (f : α → β → PS (ForInStep β)) (inv
     rw [show j + (x :: xs).length = j + 1 + xs.length by simp; omega]
     exact ih
 
-/-- **The masked session runs**: the goal `SessionRunsZk`. -/
 theorem sessionRunsZk_goal (hS : StmtOkZk H rel)
     (hR : ProverRunsZk H rel) : SessionRunsZk H rel := by
   intro c

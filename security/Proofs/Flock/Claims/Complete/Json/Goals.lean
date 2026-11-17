@@ -45,26 +45,7 @@ import Std.Data.String.ToNat
 import Std.Tactic.BVDecide.Normalize.Bool
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# B's record checks at the honest run
-
-The goals of `Goals` on the record, proved at every honest run (`Run`) from two named hypotheses (what the
-verifier's parser reads back of the honest prover's printer `printJ` is proved, `RoundTrip.lean`):
-
-* `Claims.Out64 H`: the oracle's outputs are 64 bytes, as SHA-512's, which `Claims.Complete` reads. S12 compares each
-  round digest's length with the empty message's, so an oracle with outputs of varying length fails the honest record.
-* `ProverOk`: at the case's table, the commitment's cap is non-empty and under `2^64` bytes, and each rep, on the
-  table's extra claims, records a round, each of at most `65536` coins (`RepOk`); it holds at `Out64`
-  (`Replay.proverOk`).
-
-What they read of the statement, `StmtOk` (no keyed coin tree, a non-empty `Σ`, a printable sample that decodes, and the
-statement's sample), holds at every good case (`stmtOk`, `Stmt`).
-
-`Run.json` is the record at the run: `Record.decodeWith` reads `sessOf` and `liveOf` the live session, its points the
-first coin's (`coinOf_bytes`: a coin's bytes read back are the coin), the first send is the link of its `root_B`, and
-the rest are its streams' rounds (`Recs`). The goals follow: `Decodes`, `LiveReads`, `SampleMatches`, `CustodyRootB`,
-`CustodyPublics`, `CustodyPoints`, `Publics`, `ProofList`, `ProofDigests`, `RepStream`, `RepExtras` and `CustodyRounds`.
--/
+/-! B's record checks at the honest run, proved from the named hypotheses `Claims.Out64` and `ProverOk`. -/
 
 @[expose] public section
 
@@ -77,9 +58,6 @@ theorem hOf_size {H : Claims.Msg → Claims.Msg} (h : Claims.Out64 H) (b : ByteA
   simp only [Claims.hOf, Claims.ofMsg, ByteArray.size, List.size_toArray]
   exact h _
 
-/-- **What the record needs of the prover's pieces**, at every good case's table: the commitment's cap, at the
-schedule's first level, is non-empty and under `2^64` bytes, and each rep, on the table's extra claims at the link's
-points, records a round, each of at most `65536` coins. -/
 def ProverOk (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) : Prop :=
   ∀ c : Case H rel, ∀ st ∈ c.sts,
     (∀ sch, fast100 (Setup.ofCircuit st).m = some sch → ∀ g salt cm,
@@ -118,7 +96,6 @@ theorem u64OfLE_past (b : ByteArray) (o : ℕ) (ho : b.size ≤ o) : u64OfLE b o
   simp only [this]
   decide
 
-/-- A coin's bytes read back: each element is the coin's, and `0` past its 65536. -/
 theorem coinOf_bytes (c : Coin) (i : ℕ) : coinOf c.bytes i = c.at i := by
   by_cases hi : i < 65536
   · rw [show c.at i = c ⟨i, hi⟩ by simp [Coin.at, hi]]
@@ -146,9 +123,6 @@ theorem ptsOf_coin (spec : SessionSpec) (c : Coin) : ptsOf spec (coinOf c.bytes)
 
 variable {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
 
-/-- **The honest run's record**, at one table: it is the printed honest record, `Record.decodeWith` reads it as `sessOf`
-and `liveOf` as its live session, its points the first coin's, the link is its `root_B` and no public words, and the
-sends after the link are its streams' rounds. -/
 theorem Run.json (h64 : Claims.Out64 H) (hP : ProverOk H rel) (o : Run H rel) :
     ∃ st rb streams, o.sts = #[st] ∧ o.spec.tables = #[st.tags.table] ∧ o.tabs = #[Setup.ofCircuit st] ∧
       streams.size = o.spec.repStreams.size ∧ o.proofs.size = o.spec.repStreams.size ∧
@@ -206,7 +180,6 @@ theorem Run.json (h64 : Claims.Out64 H) (hP : ProverOk H rel) (o : Run H rel) :
   rw [hsend, linkOf_linkBody (by simp) (by simp) (by simpa using hrb64) (by simp)]
   rfl
 
-/-- **The record decodes** (S1–S14): the goal `Decodes`. -/
 theorem decodes_goal (h64 : Claims.Out64 H) (hP : ProverOk H rel) :
     Decodes H rel := by
   intro o
@@ -214,7 +187,6 @@ theorem decodes_goal (h64 : Claims.Out64 H) (hP : ProverOk H rel) :
     Run.json h64 hP o
   rw [hdec, ← hsess]
 
-/-- **The record's live session reads**: the goal `LiveReads`. -/
 theorem liveReads_goal (h64 : Claims.Out64 H) (hP : ProverOk H rel) :
     LiveReads H rel := by
   intro o
@@ -222,8 +194,6 @@ theorem liveReads_goal (h64 : Claims.Out64 H) (hP : ProverOk H rel) :
     Run.json h64 hP o
   exact hlv
 
-/-- **The record is in its canonical text** (S0): the goal `RecordCanonical`, the printed honest record
-(`check_printJ`). -/
 theorem canonical_goal (h64 : Claims.Out64 H) (hP : ProverOk H rel) :
     RecordCanonical H rel := by
   intro o
@@ -239,7 +209,6 @@ theorem canonical_goal (h64 : Claims.Out64 H) (hP : ProverOk H rel) :
   rw [hrec]
   exact check_printJ (good_recordObj ht _ rb _ streams o.proofs hd)
 
-/-- **Alike values are equivalent** (`JsonEquiv`, what `sampleEq` decides). -/
 theorem Same.jsonEquiv {a b : Json} (h : Same a b) : JsonEquiv a b := by
   induction h with
   | null => rfl
@@ -249,7 +218,6 @@ theorem Same.jsonEquiv {a b : Json} (h : Same a b) : JsonEquiv a b := by
   | arr hs _ ih => exact (jsonEquiv_arr_iff _ _).2 ⟨hs, ih⟩
   | obj hm hn hk _ ih => exact (jsonEquiv_obj_iff hm hn).2 ⟨hk, ih⟩
 
-/-- **The record's sample is the statement's**: the goal `SampleMatches`. -/
 theorem sampleMatches_goal (h64 : Claims.Out64 H) (hP : ProverOk H rel) :
     SampleMatches H rel := by
   intro o
@@ -272,7 +240,6 @@ theorem list_bytes_beq_self (l : List ByteArray) : (l == l) = true := by
   | nil => rfl
   | cons b l ih => simp only [List.cons_beq_cons, bytes_beq_self, ih, Bool.and_self]
 
-/-- **Custody: the record's `root_B` is the link message's**: the goal `CustodyRootB`. -/
 theorem custodyRootB_goal (h64 : Claims.Out64 H) (hP : ProverOk H rel) :
     CustodyRootB H rel := by
   intro o
@@ -281,7 +248,6 @@ theorem custodyRootB_goal (h64 : Claims.Out64 H) (hP : ProverOk H rel) :
   rw [hlive, hlink]
   exact list_bytes_beq_self _
 
-/-- **Custody: the record's public words are the link message's**: the goal `CustodyPublics`. -/
 theorem custodyPublics_goal (h64 : Claims.Out64 H) (hP : ProverOk H rel) :
     CustodyPublics H rel := by
   intro o
@@ -293,7 +259,6 @@ theorem custodyPublics_goal (h64 : Claims.Out64 H) (hP : ProverOk H rel) :
   simp only [List.map_toArray, List.map_cons, List.map_nil, List.toList_toArray]
   exact list_bytes_beq_self _
 
-/-- **Custody: the record's link points are the first coin's**: the goal `CustodyPoints`. -/
 theorem custodyPoints_goal (h64 : Claims.Out64 H) (hP : ProverOk H rel) :
     CustodyPoints H rel := by
   intro o
@@ -302,7 +267,6 @@ theorem custodyPoints_goal (h64 : Claims.Out64 H) (hP : ProverOk H rel) :
   rw [hlive]
   exact beq_self_eq_true _
 
-/-- **Each table's public words are its statement's**: the goal `Publics`. -/
 theorem publics_goal (h64 : Claims.Out64 H) (hP : ProverOk H rel) :
     Publics H rel := by
   intro o
@@ -320,7 +284,6 @@ theorem two_of {α : Type} {xs : Array α} (h : xs.size = 2) : ∃ a b, xs = #[a
   rcases xs with ⟨_ | ⟨a, _ | ⟨b, _ | ⟨_, _⟩⟩⟩⟩ <;> simp at h
   exact ⟨a, b, rfl⟩
 
-/-- **The record's proof digests list exactly the rep streams** (S17): the goal `ProofList`. -/
 theorem proofList_goal (h64 : Claims.Out64 H) (hP : ProverOk H rel) :
     ProofList H rel := by
   intro o
@@ -334,7 +297,6 @@ theorem proofList_goal (h64 : Claims.Out64 H) (hP : ProverOk H rel) :
   simp only [List.all_toArray, List.any_toArray]
   simp
 
-/-- **Each proof file is the one the record's digest names** (S17): the goal `ProofDigests`. -/
 theorem proofDigests_goal (h64 : Claims.Out64 H) (hP : ProverOk H rel) :
     ProofDigests H rel := by
   intro o
@@ -353,7 +315,6 @@ theorem proofDigests_goal (h64 : Claims.Out64 H) (hP : ProverOk H rel) :
   · simp
   · simp
 
-/-- **The rep's stream is recorded** (S11): the goal `RepStream`. -/
 theorem repStream_goal (h64 : Claims.Out64 H) (hP : ProverOk H rel) :
     RepStream H rel := by
   intro o
@@ -372,7 +333,6 @@ theorem repStream_goal (h64 : Claims.Out64 H) (hP : ProverOk H rel) :
   · simp
   · simp
 
-/-- **The table's extra claims evaluate** at the link's points: the goal `RepExtras`. -/
 theorem repExtras_goal (h64 : Claims.Out64 H) (hP : ProverOk H rel) :
     RepExtras H rel := by
   intro o
@@ -389,8 +349,6 @@ theorem repExtras_goal (h64 : Claims.Out64 H) (hP : ProverOk H rel) :
   simp only [sessOf, he]
   rfl
 
-/-- Rounds that are sends from index `i` on, each answered by its coin's bytes, pass custody's round check against
-those sends and coins. -/
 theorem recs_all {k : ℕ} (r : Fin k → Coin) :
     ∀ (i : ℕ) (rs : List Round) (bs : List Claims.Msg), Recs (fun j => (Claims.coinSeq r j).bytes) i rs bs →
       ((rs.map liveRound).zip (bs.zip ((List.range bs.length).map fun j => Claims.coinSeq r (i + j)))).all
@@ -422,7 +380,6 @@ theorem range_succ_dropLast {α : Type} (f : ℕ → α) (n : ℕ) :
     ((List.range (n + 1)).map f).dropLast = (List.range n).map f := by
   rw [List.range_succ, List.map_append, List.map_singleton, List.dropLast_concat]
 
-/-- **Custody: each recorded round is its message and its coin's first `n` elements**: the goal `CustodyRounds`. -/
 theorem custodyRounds_goal (h64 : Claims.Out64 H) (hP : ProverOk H rel) :
     CustodyRounds H rel := by
   intro o

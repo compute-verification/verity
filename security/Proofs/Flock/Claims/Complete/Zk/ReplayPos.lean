@@ -37,16 +37,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# Where the masked replay stops, and the coins its claims read
-
-`replayWith_ret`: a masked replay (`Zk.replayWith`) that returns from round `k₀` of rounds `R` stops at round
-`k₀ + 3 + (m − 6) + 3 + (kLog − 6)` with nothing pending, and its claims are `abcClaims` at the coins it read there
-(`zcAt`, `lcAt`), whatever the proof. It reads only rounds' coins and positions, so no prover is involved.
-
-* **Runs that return** (`RetV x t P`): every run of `x` from `t` that returns ends in `P`; composed by `RetV.bind`,
-  through loops by `RetV.forIn_range`.
--/
+/-! Where a masked replay that returns stops, and the coins its claims read, whatever the proof (`replayWith_ret`). -/
 
 @[expose] public section
 
@@ -54,7 +45,6 @@ namespace FlockComplete
 
 open Flock Transcript FlockComplete.Replay
 
-/-- **Every run of `x` from `t` that returns ends in `P`.** -/
 def RetV {α : Type} (x : TMW V α) (t : Transcript) (P : α → Transcript → Prop) : Prop :=
   ∀ a t', x t = .ok (a, t') → P a t'
 
@@ -74,7 +64,6 @@ theorem pure {α : Type} {a : α} {t : Transcript} {P : α → Transcript → Pr
 theorem throw {α : Type} {e : String} {t : Transcript} {P : α → Transcript → Prop} :
     RetV (MonadExcept.throw e : TMW V α) t P := fun _ _ h => by cases h
 
-/-- A step that returns `a` at `t₁`, then `f a`. -/
 theorem ok_then {α β : Type} {x : TMW V α} {f : α → TMW V β} {t t₁ : Transcript} {a : α}
     {P : β → Transcript → Prop} (hx : x t = .ok (a, t₁)) (h : RetV (f a) t₁ P) : RetV (x >>= f) t P :=
   bind fun a' t' e => by
@@ -85,7 +74,6 @@ theorem ok_then {α β : Type} {x : TMW V α} {f : α → TMW V β} {t t₁ : Tr
 theorem mono {α : Type} {x : TMW V α} {t : Transcript} {P Q : α → Transcript → Prop} (h : RetV x t P)
     (hPQ : ∀ a t', P a t' → Q a t') : RetV x t Q := fun a t' e => hPQ a t' (h a t' e)
 
-/-- A gate on a returned `Bool` that returns `v` returned it. -/
 theorem gate_ok {β : Type} {ob : V Bool} {why : String} {v w : β}
     (e : (ob >>= fun ok => if (!ok) = true then MonadExcept.throw why else Pure.pure v : V β) = .ok w) : v = w := by
   rcases ob with _ | b
@@ -96,7 +84,6 @@ theorem gate_ok {β : Type} {ob : V Bool} {why : String} {v w : β}
       cases e
       rfl
 
-/-- **A squeeze that returns** read round `t.k`'s coins and moved to the next round with nothing pending. -/
 theorem squeeze (hs : Hashes V) (kind : UInt8) {n : ℕ} (hn : n ≠ 0) {t : Transcript}
     {P : Array F128 → Transcript → Prop} (h : P (t.rounds[t.k]!).coins ⟨t.rounds, t.k + 1, ByteArray.empty⟩) :
     RetV (squeezeWith hs kind n) t P := by
@@ -129,7 +116,6 @@ theorem sample (hs : Hashes V) {t : Transcript} {P : F128 → Transcript → Pro
   unfold sampleWith
   exact bind (squeeze hs 1 one_ne_zero (pure h))
 
-/-- **A loop whose every returning step yields** keeps its invariant. -/
 theorem forIn_range {σ : Type} (n : ℕ) (f : ℕ → σ → TMW V (ForInStep σ)) (inv : ℕ → σ → Transcript → Prop)
     (hf : ∀ i b t, i < n → inv i b t → RetV (f i b) t fun r t' => ∃ b', r = .yield b' ∧ inv (i + 1) b' t')
     (b : σ) (t : Transcript) (h0 : inv 0 b t) : RetV (forIn [:n] b f) t fun b' t' => inv n b' t' := by
@@ -152,7 +138,6 @@ theorem forIn_range {σ : Type} (n : ℕ) (f : ℕ → σ → TMW V (ForInStep �
 
 end RetV
 
-/-- The verifier's coin at round `j` of `R`: its first. -/
 def coinAt (R : Array Round) (j : ℕ) : F128 := (R[j]!).coins.getD 0 0
 
 /-- **The masked replay's zerocheck output** at the coins of rounds `R` from `k₀` (its values masked, so `0`). -/
@@ -165,8 +150,6 @@ def lcAt (m kLog : ℕ) (R : Array Round) (k₀ : ℕ) : LcOut :=
   { w := 0, rPrime := coinAt R (k₀ + 3 + (m - 6) + 2 + (kLog - 6)),
     rIn := (pushes (fun j => coinAt R (k₀ + 3 + (m - 6) + 2 + j)) (kLog - 6)).reverse }
 
-/-- **A masked replay that returns** from round `k₀` of `R` stops `3 + (m − 6) + 3 + (kLog − 6)` rounds on with
-nothing pending, and its claims are `abcClaims` at the coins it read. -/
 theorem replayWith_ret (hs : Hashes V) (st : Setup) (hm : 14 ≤ st.m) (lay : Zk.PadLayout) (p : Proof)
     (root : ByteArray) (R : Array Round) (k₀ : ℕ) (pend : ByteArray) :
     RetV (Zk.replayWith hs st lay p root) ⟨R, k₀, pend⟩ fun rp t' =>

@@ -36,20 +36,8 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Std.Tactic.BVDecide.Normalize.BitVec
 
-/-!
-# A replay that returns on the prover's rounds returns on rounds that carry them
-
-The masked prover replays its own zerocheck and lincheck (`Zk.replay`, inside `repPZk`) on its rounds; the verifier
-replays them (`Zk.replayWith`) on the record's. A replay reads a round's count, coins and retained bytes only, and
-compares retained bytes without hashing (`squeezeWith`), so it returns the same on any rounds that carry the
-prover's, whatever the hashes.
-
-* **Carrying** (`Carry t u`): `u` is at `t`'s round with `t`'s pending bytes, and every round of `t` is retained and
-  carried by `u`'s (`Replay.Carries`).
-* **The simulation** (`xferS`): a run from `t` that returns is matched by one from any `u` carrying `t`, with the same
-  result, ending where it carries the first's end. The squeezes (`squeezeWith_xfer`) and the transcript actions that
-  read only the pending bytes (`tm_xfer`) are related, so the replay is (`replayWith_xfer`).
--/
+/-! A replay that returns on the prover's rounds returns on any rounds that carry them, whatever the hashes
+(`replayWith_xfer`). -/
 
 @[expose] public section
 
@@ -57,7 +45,6 @@ namespace FlockComplete
 
 open Flock Transcript FlockComplete.Replay
 
-/-- **`u` carries `t`**: the same round and pending bytes, and every round of `t` retained and carried by `u`'s. -/
 def Carry (t u : Transcript) : Prop :=
   u.k = t.k ∧ u.pending = t.pending ∧
     ∀ j (h : j < t.rounds.size), t.rounds[j].bytes.isSome ∧ Carries u.rounds j t.rounds[j]
@@ -75,8 +62,6 @@ theorem stateT_bind_of {σ α β : Type} {x : StateT σ V α} {f : α → StateT
   rw [h]
   rfl
 
-/-- **The transfer simulation**: a run from `t` that returns is matched, from any `u` carrying `t`, by a run with the
-same result that ends carrying the first's end. -/
 def xferS : With.Sim (TMW V) (TMW V) where
   R x y := ∀ t u a t', Carry t u → x t = .ok (a, t') → ∃ u', y u = .ok (a, u') ∧ Carry t' u'
   pure a t u a' t' hc h := by
@@ -98,7 +83,6 @@ def xferS : With.Sim (TMW V) (TMW V) where
       cases h
       exact ⟨u, rfl, hc⟩
 
-/-- **A transcript action that reads only the pending bytes** and keeps the rounds is related to itself. -/
 theorem tm_xfer {α : Type} (x : TM α)
     (hx : ∀ t a t', x t = .ok (a, t') → t'.rounds = t.rounds ∧
       ∀ u : Transcript, u.k = t.k → u.pending = t.pending → x u = .ok (a, ⟨u.rounds, t'.k, t'.pending⟩)) :
@@ -109,7 +93,6 @@ theorem tm_xfer {α : Type} (x : TM α)
   rw [hr]
   exact hc.2.2
 
-/-- An action that only rewrites the pending bytes. -/
 theorem pending_xfer (x : TM Unit) (g : ByteArray → ByteArray)
     (hx : ∀ t : Transcript, x t = .ok ((), { t with pending := g t.pending })) :
     xferS.R (liftTM x : TMW V Unit) (liftTM x) :=
@@ -141,8 +124,6 @@ theorem check_xfer (c : Bool) (why : String) :
       cases h
       exact ⟨rfl, fun u hk hp => by rw [Flock.RecAlgebra.check_eq rfl, ← hk, ← hp]⟩
 
-/-- **A squeeze is related to itself under any two oracles**: a returning squeeze read a retained round, whose bytes
-are compared without hashing. -/
 theorem squeezeWith_xfer (hs₁ hs₂ : Hashes V) (kind : UInt8) (n : ℕ) :
     xferS.R (squeezeWith hs₁ kind n) (squeezeWith hs₂ kind n) := by
   intro t u a t' hc h
@@ -187,7 +168,6 @@ theorem sampleWith_xfer (hs₁ hs₂ : Hashes V) : xferS.R (sampleWith hs₁) (s
 theorem sampleVecWith_xfer (hs₁ hs₂ : Hashes V) (n : ℕ) : xferS.R (sampleVecWith hs₁ n) (sampleVecWith hs₂ n) :=
   squeezeWith_xfer hs₁ hs₂ 2 n
 
-/-- **The masked replay is related to itself under any two oracles.** -/
 theorem replayWith_xfer (hs₁ hs₂ : Hashes V) (st : Setup) (lay : Zk.PadLayout) (p : Proof) (root : ByteArray) :
     xferS.R (Zk.replayWith hs₁ st lay p root) (Zk.replayWith hs₂ st lay p root) := by
   unfold Zk.replayWith

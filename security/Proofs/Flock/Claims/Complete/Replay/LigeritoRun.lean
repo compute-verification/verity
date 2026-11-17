@@ -38,25 +38,8 @@ import Mathlib.Topology.Sheaves.Init
 import Std.Tactic.BVDecide.Normalize.BitVec
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# The verifier's Ligerito returns on the model's rounds
-
-`ligeritoWith_of`: from a transcript that has recorded its rounds, on rounds that carry the model's (`out`), the
-verifier's Ligerito (`ligeritoWith`) returns where the model's transcript ends, given the proof's list sizes, fast100's
-dimensions, each level's Merkle check at its query coins (`MerkleOk`), and the final identity at the model's values.
-
-* **The model** (`out`): level 0's out-of-domain sample and first message (`head`), the `k0` challenges, level 0's cap,
-  intros and query (`lv0`), then the level loop (`loop`): an inner level's step (`stepN`) or the last's (`stepL`).
-* **Its cursors** (`Inv`, `inv_loop`): before step `j` the split dimension is `n − k0 + 1 − 3j`, the previous cap is
-  `recursiveCaps[j]`, the cursors are `k0 + 4 + 7j` messages, `3 + 2j` out-of-domain values, `4 + 3j` claim nonces and
-  `1 + j` query and consistency nonces, the transcript is `k0 + 9 + 11j` rounds on, and every context has its level's
-  dimensions. At the end (`Done`, `done_out`) every list is read to its end and the transcript is `k0 + 5 + 11R` rounds
-  on, `R + 1` levels.
-* **The Merkle openings** (`MerkleOk`): level `j`'s query coins are those of round `k + qOff sch j`, its cap and opened
-  rows `opening`'s.
-* **The final check** (`finalProg_of`): its dimension checks from the contexts' (`origE_size`, `oodFixed_size`,
-  `consFixed_size`), its value check the hypothesis `hfin`, and its leftover check from `Done`.
--/
+/-! The verifier's Ligerito returns on the model's rounds (`ligeritoWith_of`), given the proof's list sizes, fast100's
+dimensions, each level's Merkle check and the final identity. -/
 
 @[expose] public section
 
@@ -66,11 +49,8 @@ open Flock Transcript
 
 namespace Lg
 
-/-- `cap`'s digests, concatenated: the bytes the verifier absorbs for a cap. -/
 def capBytes (cap : Array ByteArray) : ByteArray := cap.foldl (· ++ ·) ByteArray.empty
 
-/-- After a level's query `r`: its message `m`, the claim nonce and the batching coin `b`, folded into the claim, and the
-level's consistency context of `cols` columns from level `start` recorded. -/
 def close (p : LigeritoProof) (cf : ℕ → ℕ → F128) (cols start : ℕ) (r : Array ℕ × Array F128 × F256) (st : LState)
     (t : Transcript) : LState × Transcript :=
   let m := p.messages[st.msg]!
@@ -81,7 +61,6 @@ def close (p : LigeritoProof) (cf : ℕ → ℕ → F128) (cols start : ℕ) (r 
       conss := st.conss.push ⟨cols, r.1, r.2.1, b, start⟩ },
     afterSq t₁ 1 1 (cf t₁.k))
 
-/-- After the last level's query `r`: the claim nonce and the batching coin `b`, folded into the sum. -/
 def closeLast (p : LigeritoProof) (cf : ℕ → ℕ → F128) (cols start : ℕ) (r : Array ℕ × Array F128 × F256)
     (st : LState) (t : Transcript) : LState × Transcript :=
   let t₁ := ap (pN p.claimNonces[st.cbn]!) t
@@ -90,7 +69,6 @@ def closeLast (p : LigeritoProof) (cf : ℕ → ℕ → F128) (cols start : ℕ)
       s := st.s + r.2.2.smul b, conss := st.conss.push ⟨cols, r.1, r.2.1, b, start⟩ },
     afterSq t₁ 1 1 (cf t₁.k))
 
-/-- Level 0's out-of-domain sample (no message) and the first sumcheck message, from `(st, t)`. -/
 def head (p : LigeritoProof) (cf : ℕ → ℕ → F128) (n : ℕ) (st : LState) (t : Transcript) : LState × Transcript :=
   let z := vec cf t n
   let t₁ := afterSq t 2 n (cf t.k)
@@ -103,7 +81,6 @@ def head (p : LigeritoProof) (cf : ℕ → ℕ → F128) (n : ℕ) (st : LState)
       s := s, oods := st.oods.push ⟨z, b, none⟩ } with msg := st.msg + 1 } with q := Poly.ofMsg m s },
     ap (pK m) (afterSq t₂ 1 1 (cf t₂.k)))
 
-/-- Level 0 after its `k0` challenges `initCh`: level 1's cap and two out-of-domain intros, level 0's query, closed. -/
 def lv0 (p : LigeritoProof) (cf : ℕ → ℕ → F128) (sch : Schedule) (initCh : Array F256) (st : LState)
     (t : Transcript) : LState × Transcript :=
   let x₁ := ood p cf (sch.n - sch.k0 + 1) 0 st (ap (pBytes (capBytes p.recursiveCaps[0]!)) t)
@@ -111,11 +88,8 @@ def lv0 (p : LigeritoProof) (cf : ℕ → ℕ → F128) (sch : Schedule) (initCh
   let qr := query p cf (sch.levels.getD 0 default) p.initialProof.rows initCh x₂.1 x₂.2
   close p cf (sch.n - sch.k0) 0 qr.1 qr.2.1 qr.2.2
 
-/-- The level loop's own variables: the split dimension, the previous cap, the levels' challenges and `ext`. -/
 abbrev Vars := ℕ × Array ByteArray × Array (Array F256) × ℕ
 
-/-- **An inner level's step `i`**: four challenges, the next level's cap and two out-of-domain intros, and its query
-against the previous cap, closed. -/
 def stepN (p : LigeritoProof) (cf : ℕ → ℕ → F128) (sch : Schedule) (i : ℕ) (x : Vars × LState × Transcript) :
     Vars × LState × Transcript :=
   let c := chals p cf #[] x.2.1 x.2.2 4
@@ -127,7 +101,6 @@ def stepN (p : LigeritoProof) (cf : ℕ → ℕ → F128) (sch : Schedule) (i : 
   let y := close p cf ext (i + 1) qr.1 qr.2.1 qr.2.2
   ((ext + 1, capN, x.1.2.2.1.push c.1, ext), y.1, y.2)
 
-/-- **The last level's step**: four challenges, `y_r` absorbed, and the last query against the previous cap, closed. -/
 def stepL (p : LigeritoProof) (cf : ℕ → ℕ → F128) (sch : Schedule) (x : Vars × LState × Transcript) :
     Vars × LState × Transcript :=
   let c := chals p cf #[] x.2.1 x.2.2 4
@@ -137,25 +110,20 @@ def stepL (p : LigeritoProof) (cf : ℕ → ℕ → F128) (sch : Schedule) (x : 
   let y := closeLast p cf ext (sch.levels.size - 1) qr.1 qr.2.1 qr.2.2
   ((x.1.1, x.1.2.1, x.1.2.2.1.push c.1, ext), y.1, y.2)
 
-/-- **The level loop's step `i`**: an inner level's, or the last level's. -/
 def step (p : LigeritoProof) (cf : ℕ → ℕ → F128) (sch : Schedule) (i : ℕ) (x : Vars × LState × Transcript) :
     Vars × LState × Transcript :=
   if i + 1 < sch.levels.size - 1 then stepN p cf sch i x else stepL p cf sch x
 
-/-- The level loop after `j` steps from `x`. -/
 def loop (p : LigeritoProof) (cf : ℕ → ℕ → F128) (sch : Schedule) (x : Vars × LState × Transcript) :
     ℕ → Vars × LState × Transcript
   | 0 => x
   | j + 1 => step p cf sch j (loop p cf sch x j)
 
-/-- The verifier's Ligerito state at the start, on the batched claim `T`. -/
 def init (T : F128) : LState := ⟨F256.ofF T, ⟨0, 0, 0⟩, 0, 0, 0, 0, 0, #[], #[]⟩
 
-/-- The transcript once the verifier has absorbed its label, `T` and the level-0 cap. -/
 def start (cap : Array ByteArray) (T : F128) (t : Transcript) : Transcript :=
   ap (pBytes (capBytes cap)) (ap (pF T) (ap (pLabel "flock-ligerito-basis-f256-split-v0") t))
 
-/-- Up to the level loop: the `k0` challenges `initCh`, and the state and transcript after level 0. -/
 def pre (p : LigeritoProof) (cf : ℕ → ℕ → F128) (sch : Schedule) (T : F128) (cap : Array ByteArray)
     (t : Transcript) : Array F256 × LState × Transcript :=
   let h := head p cf sch.n (init T) (start cap T t)
@@ -163,17 +131,13 @@ def pre (p : LigeritoProof) (cf : ℕ → ℕ → F128) (sch : Schedule) (T : F1
   let y := lv0 p cf sch c.1 c.2.1 c.2.2
   (c.1, y.1, y.2)
 
-/-- The level loop's start: its variables, and the state and transcript after level 0. -/
 def x₀ (p : LigeritoProof) (cf : ℕ → ℕ → F128) (sch : Schedule) (T : F128) (cap : Array ByteArray)
     (t : Transcript) : Vars × LState × Transcript :=
   ((sch.n - sch.k0 + 1, p.recursiveCaps[0]!, #[], 0), (pre p cf sch T cap t).2.1, (pre p cf sch T cap t).2.2)
 
-/-- **The verifier's Ligerito, in closed form**: the level loop's variables, the state and the transcript at its end. -/
 def out (p : LigeritoProof) (cf : ℕ → ℕ → F128) (sch : Schedule) (T : F128) (cap : Array ByteArray)
     (t : Transcript) : Vars × LState × Transcript :=
   loop p cf sch (x₀ p cf sch T cap t) (sch.levels.size - 1)
-
-/-! ## The model's cursors, positions and contexts, read off each step -/
 
 @[simp] theorem ap_k (f : ByteArray → ByteArray) (t : Transcript) : (ap f t).k = t.k := rfl
 
@@ -245,21 +209,14 @@ def out (p : LigeritoProof) (cf : ℕ → ℕ → F128) (sch : Schedule) (T : F1
 @[simp] theorem vec_size (cf : ℕ → ℕ → F128) (t : Transcript) (n : ℕ) : (vec cf t n).size = n := by
   simp [vec]
 
-/-! ## The level loop's invariant -/
-
-/-- An out-of-domain sample's dimension: level 0's first, all `n` coordinates; one at level `s < R`, the split
-dimension there. -/
 def OodDim (sch : Schedule) (o : OodCtx) : Prop :=
   match o.split with
   | none => o.z.size = sch.n
   | some s => s < sch.levels.size - 1 ∧ o.z.size = sch.n - sch.k0 + 1 - 3 * s
 
-/-- A consistency context's columns: level `start ≤ R`'s, `3` fewer per level. -/
 def ConsDim (sch : Schedule) (cs : ConsCtx) : Prop :=
   cs.start ≤ sch.levels.size - 1 ∧ cs.cols = sch.n - sch.k0 - 3 * cs.start
 
-/-- **The level loop before step `j`**, from round `k`: the split dimension and the previous cap, `j` levels of four
-challenges, the cursors and the position, and every context's dimensions. -/
 structure Inv (p : LigeritoProof) (sch : Schedule) (k j : ℕ) (x : Vars × LState × Transcript) : Prop where
   sd : x.1.1 = sch.n - sch.k0 + 1 - 3 * j
   cap : x.1.2.1 = p.recursiveCaps[j]!
@@ -274,8 +231,6 @@ structure Inv (p : LigeritoProof) (sch : Schedule) (k j : ℕ) (x : Vars × LSta
   oods : ∀ o ∈ x.2.1.oods.toList, OodDim sch o
   conss : ∀ cs ∈ x.2.1.conss.toList, ConsDim sch cs
 
-/-- **The level loop done**, from round `k`: `R` levels of four challenges, the last `ext`, the cursors at the lists'
-ends, the position, and every context's dimensions. -/
 structure Done (p : LigeritoProof) (sch : Schedule) (k : ℕ) (x : Vars × LState × Transcript) : Prop where
   lvs : x.1.2.2.1.size = sch.levels.size - 1
   lv4 : ∀ l ∈ x.1.2.2.1.toList, l.size = 4
@@ -393,8 +348,6 @@ theorem done_out (p : LigeritoProof) (cf : ℕ → ℕ → F128) (sch : Schedule
   rw [hj, loop_stepL p cf sch _ (by omega)]
   exact (inv_loop p cf sch T cap t hL hsd j (by omega)).last (by omega) hsd
 
-/-! ## The final check's dimensions -/
-
 theorem tails_length (L : List (Array F256)) (h : ∀ l ∈ L, l.size = 4) :
     (L.map fun l => l.toList.tail).flatten.length = 3 * L.length := by
   induction L with
@@ -431,14 +384,11 @@ theorem oodFixed_size (levels : Array (Array F256)) (h : ∀ l ∈ levels.toList
   simp only [Array.length_toList]
   omega
 
-/-! ## The Merkle openings -/
-
 /-- Where level `j`'s query coins are flipped, counted from Ligerito's first round: level 0's after `k0 + 6` rounds, an
 inner level's eleven later per level, and the last level's four rounds sooner than an inner level's would be. -/
 def qOff (sch : Schedule) (j : ℕ) : ℕ :=
   if j < sch.levels.size - 1 then sch.k0 + 6 + 11 * j else sch.k0 + 2 + 11 * j
 
-/-- The cap level `j`'s query opens against, and its opened rows, siblings and salts, of `R + 1` levels. -/
 def opening (p : LigeritoProof) (cap : Array ByteArray) (R j : ℕ) :
     Array ByteArray × Array (Array F128) × Array ByteArray × Array ByteArray :=
   if j = 0 then (cap, p.initialProof.rows, p.initialProof.siblings, p.initialProof.salts)
@@ -447,7 +397,6 @@ def opening (p : LigeritoProof) (cap : Array ByteArray) (R j : ℕ) :
       p.recursiveProofs[j - 1]!.salts)
   else (p.recursiveCaps[j - 1]!, p.finalProof.rows, p.finalProof.siblings, p.finalProof.salts)
 
-/-- **Every level's Merkle check passes** at its query coins, the coins of the round `k + qOff sch j`. -/
 def MerkleOk (hs : Hashes V) (ms : MerkleScheme) (sch : Schedule) (cap : Array ByteArray) (p : LigeritoProof)
     (cf : ℕ → ℕ → F128) (k : ℕ) : Prop :=
   ∀ j < sch.levels.size,
@@ -457,7 +406,6 @@ def MerkleOk (hs : Hashes V) (ms : MerkleScheme) (sch : Schedule) (cap : Array B
       (opening p cap (sch.levels.size - 1) j).2.1 (opening p cap (sch.levels.size - 1) j).2.2.1
       (opening p cap (sch.levels.size - 1) j).2.2.2 (2 ^ (sch.levels.getD j default).lanes) = .ok ()
 
-/-- Level `j`'s Merkle check, at a query sampled at round `k + qOff sch j`. -/
 theorem MerkleOk.at {hs : Hashes V} {ms : MerkleScheme} {sch : Schedule} {cap : Array ByteArray}
     {p : LigeritoProof} {cf : ℕ → ℕ → F128} {k : ℕ} (h : MerkleOk hs ms sch cap p cf k) {j : ℕ}
     (hj : j < sch.levels.size) {k' : ℕ} (hk : k' = k + qOff sch j) {c : Array ByteArray}
@@ -471,10 +419,6 @@ theorem MerkleOk.at {hs : Hashes V} {ms : MerkleScheme} {sch : Schedule} {cap : 
   rw [hk]
   exact this
 
-/-- **The verifier's Ligerito returns** on rounds `R` that carry the model's from `t.k` on: from a transcript that has
-recorded its rounds, at a proof with the lengths fast100's `R + 1 ≥ 2` levels fix, whose level-0 cap is the
-commitment's, whose Merkle openings pass at their query coins (`hmo`) and whose final identity holds at the model's
-values (`hfin`), it ends at the model's position and pending bytes, and that position is the model's round count. -/
 theorem ligeritoWith_of (hs : Hashes V) (ms : MerkleScheme) (sch : Schedule) (T : F128) (cap : Array ByteArray)
     (p : LigeritoProof) (basisAt : Array F256 → ℕ → Array F256) (cf : ℕ → ℕ → F128) (t : Transcript)
     (hk : t.k = t.rounds.size) {R : Array Round} (hR : Agrees R (out p cf sch T cap t).2.2.rounds t.k)

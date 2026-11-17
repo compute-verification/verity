@@ -42,19 +42,8 @@ import Proofs.Flock.Claims.Complete.Zk.Json.Files
 import Std.Tactic.BVDecide.Normalize.Bool
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# The masked prover's inner proof, and the verifier's inner check on it
-
-* **The prover** (`innerP_go`): the masked prover's inner proof (`innerP`) in the pure session, at the coins of the
-  replies to its four sends (`ε`, the batching coins, `β`, the query coins), where its two refusals don't fire: the
-  batched constraint holds on the pads, and `β ≠ 0`. Its proof is `InZ.proof` and its transcript `InZ.tEnd`. At a
-  rep's pads whose constraints vanish, the first refusal never fires, whatever the coins (`innerP_go_pads`).
-* **The verifier** (`verifyInnerWith_of`): on rounds carrying those four sends, from the prover's round and pending
-  bytes, `Zk.verifyInnerWith` passes on `InZ.proof` at a rep's pads whose constraints vanish (`ConsHold`), where
-  `β ≠ 0` and the hash's digests are 64 bytes: the proof has its sizes (`innerCommitP_root`, `tcOf_size`), the coins are
-  the prover's, `τ` opens its commitment, the batched check holds (`innerP_batched`, `innerY_batched`), and each
-  query's column is consistent with `Y` (`innerY_column`) and climbs to the pads' root (`innerTree_climb`).
--/
+/-! The masked prover's inner proof in closed form where its two refusals don't fire, and the verifier's inner check
+passing on it (`verifyInnerWith_of`). -/
 
 @[expose] public section
 
@@ -64,7 +53,6 @@ open Flock Transcript
 
 namespace InZ
 
-/-- The inner proof's coins, each the reply to its send: `ε`, the batching coins, `β` and the query coins. -/
 structure Challenges where
   ce : ℕ → F128
   cg : ℕ → F128
@@ -81,16 +69,13 @@ def rho : F128 := cs.ce 0 * p.h[lay.fa]! + p.h[lay.tx]!
 
 def sigma : F128 := p.h[lay.fb]! + p.h[lay.ty]!
 
-/-- Every constraint and the triple's, at the sacrifice coin. -/
 def all : Array (String × Zk.Lin) := cons ++ Zk.triple lay (cs.ce 0) (rho lay p cs) (sigma lay p)
 
-/-- The batched constraint. -/
 def lin : Zk.Lin :=
   Zk.Lin.combo ((Array.range (all lay p cons cs).size).map cs.cg) ((all lay p cons cs).map (·.2)) lay.len
 
 def tau : F128 := dot (lin lay p cons cs).a p.mu
 
-/-- `τ`'s commitment through `h`. -/
 def tcOf (tau : F128) (salt : ByteArray) : ByteArray := Zk.tauCommitmentWith (Hashes.ofSha512 h : Hashes Id) tau salt
 
 def y : Array F128 :=
@@ -98,7 +83,6 @@ def y : Array F128 :=
 
 def qs : Array ℕ := ((Array.range Zk.Q).map cs.cq).map fun w => w.lo.toNat % ic.ch.size
 
-/-- **The masked prover's inner proof.** -/
 def proof : Zk.InnerProof :=
   { root := ic.root, rho := rho lay p cs, sigma := sigma lay p, tauCommit := tcOf h (tau lay p cons cs) p.tauSalt,
     tauSalt := p.tauSalt, tau := tau lay p cons cs, y := y p cs,
@@ -125,7 +109,6 @@ def t₇ (t : Transcript) : Transcript :=
   ⟨(t₆ lay p finalC cons h cs t).rounds, (t₆ lay p finalC cons h cs t).k,
     pSlice (y p cs) (t₆ lay p finalC cons h cs t).pending⟩
 
-/-- **The masked prover's transcript after its inner proof**: the query coins squeezed. -/
 def tEnd (t : Transcript) : Transcript := afterSq (t₇ lay p finalC cons h cs t) 2 Zk.Q cs.cq
 
 end InZ
@@ -133,8 +116,6 @@ end InZ
 theorem tauCommitmentWith_ofSha512 (h : ByteArray → ByteArray) (tau : F128) (salt : ByteArray) :
     Zk.tauCommitmentWith (Hashes.ofSha512 h : Hashes PS) tau salt = pure (InZ.tcOf h tau salt) := rfl
 
-/-- **The masked prover's inner proof, in closed form**, at the coins of the replies to its sends, where the batched
-constraint holds on the pads and `β ≠ 0`. -/
 theorem innerP_go (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (lay : Zk.PadLayout) (p : PadsZk)
     (ic : InnerCommit) (finalC : F128) (cons : Array (String × Zk.Lin)) (t : Transcript) (l : Array Claims.Msg)
     (hz : ((InZ.lin lay p cons (InZ.coinsAt resp l.size)).c +
@@ -164,9 +145,8 @@ theorem innerP_go (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (lay
   rw [pure_go]
   exact ⟨_, by simp, rfl⟩
 
-/-- **At a rep's pads, the masked prover's inner proof refuses only at `β = 0`**: where the rep's constraints vanish at
-its pads (`ConsHold`), the batched constraint holds at every sacrifice and batching coin (`innerP_batched`), so `innerP`
-returns in closed form at every reply but one whose `β` is `0`. -/
+/-- Where the rep's constraints vanish at its pads (`ConsHold`), the masked prover's inner proof refuses only at `β =
+0`. -/
 theorem innerP_go_pads (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (lay : Zk.PadLayout) (tape : TapeZk)
     (i r : ℕ) (ic : InnerCommit) (finalC : F128) {cons : Array (String × Zk.Lin)}
     (hc : ConsHold cons (padsOf tape i r lay).h) (t : Transcript) (l : Array Claims.Msg)
@@ -179,13 +159,10 @@ theorem innerP_go_pads (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray)
     (innerP_batched tape i r lay hc _ ((Array.range (InZ.all lay (padsOf tape i r lay) cons
       (InZ.coinsAt resp l.size)).size).map (InZ.coinsAt resp l.size).cg)) hb
 
-/-! ## The verifier's inner check on the prover's inner proof -/
-
 theorem bytes_beq_refl (b : ByteArray) : (b == b) = true := by
   show (b.data == b.data) = true
   simp
 
-/-- A loop over `[0:n]` each of whose steps yields and keeps the transcript keeps it. -/
 theorem forIn_keep (body : ℕ → PUnit → TM (ForInStep PUnit)) (n : ℕ) (u : Transcript)
     (h : ∀ k < n, body k PUnit.unit u = .ok (.yield PUnit.unit, u)) :
     (forIn [:n] PUnit.unit body : TM PUnit) u = .ok (PUnit.unit, u) := by
@@ -204,7 +181,6 @@ theorem tcOf_size {h : ByteArray → ByteArray} (h64 : ∀ b, (h b).size = 64) (
     (InZ.tcOf h tau salt).size = 64 :=
   h64 _
 
-/-- The pads' commitment's two rows are the codewords of `h ‖ pad_h` and `μ ‖ pad_μ`. -/
 theorem innerCommitP_rows {hs : Hashes V} {p : PadsZk} {salt : ℕ → ByteArray} {ic : InnerCommit}
     (h : innerCommitP hs p salt = .ok ic) :
     ic.ch = (Array.range ((p.h ++ p.padH).size.nextPowerOfTwo * 2 ^ Zk.INNER_LOG_INV_RATE)).map
@@ -231,9 +207,6 @@ theorem qs_get {cq : ℕ → F128} {N k : ℕ} (hk : k < Zk.Q) :
   rw [getElem!_pos _ k (by simpa using hk)]
   simp
 
-/-- **The verifier's inner check passes on the masked prover's inner proof**, from a transcript at the prover's round
-and pending bytes whose rounds carry the prover's four sends: at a rep's pads, where the constraints vanish at the
-pads (`ConsHold`), `β ≠ 0` and `h`'s digests are 64 bytes. -/
 theorem verifyInnerWith_of (h : ByteArray → ByteArray) (h64 : ∀ b, (h b).size = 64) (lay : Zk.PadLayout)
     (tape : TapeZk) (i r : ℕ) (salt : ℕ → ByteArray) {ic : InnerCommit}
     (hic : innerCommitP (Hashes.ofSha512 h : Hashes V) (padsOf tape i r lay) salt = .ok ic) (finalC : F128)

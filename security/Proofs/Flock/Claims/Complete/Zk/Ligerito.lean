@@ -3,26 +3,8 @@ module
 public import Proofs.Flock.Claims.Complete.Prover.Ligerito
 public import Flock.Zk
 
-/-!
-# The masked prover's Ligerito opening
-
-Live PROTOCOL.md §7 (VEIL Figs. 8–9) from the prover's side: `ligeritoP` with level 0's hiding, as `Zk.ligeritoWith`
-reads it.
-
-* **Level 0's commitment** (`encodeRowsZk`, `commitPZk`): each row carries the table's `2^lanes` witness lanes and four
-  uniform extra lanes `R_e` (the tape's), and every lane `l` is padded by `(c + Ŵ_cols)·Σ_{i < t_pad} μ_l[i]·X_i`
-  (`padF`, `Zk.padAt` on F, `c = PAD_C`): lane `l`'s entry at position `q` is `Enc(lane)(ω_q) + padF(μ_l)(ω_q)`. Both
-  reps share it.
-* **The lane phase** (`ligeritoPZk`): after `LABEL_OPEN`, the level-0 out-of-domain value and the first `k_0` sumcheck
-  messages are sent masked (`lgOod`, `lgMsg`; `maskMsg`). After the last lane challenge, rep `r` sends its pair's sums
-  `e_i = ⟨W, R_{2r+i}⟩` masked (`lgE`), samples `ρ_0, ρ_1`, refuses dependent ones (as upstream does), and after
-  `LABEL_CLOSE` sends the blinded claim `T' = ⟨W, y₁'⟩` for `y₁' = f + ρ_0 R_{2r} + ρ_1 R_{2r+1}` and the padding's
-  combination `ybar = Σ_l eq(r̄)_l μ_l + ρ_0 μ_{L+2r} + ρ_1 μ_{L+2r+1}`; the opening goes on from `y₁'` as
-  `ligeritoP` from the split table, the last level's last message upstream's plain fold message (the folded, unsplit
-  table's round polynomial). The row check then cancels the padding: the verifier adds `padAt(ybar)`.
-* It returns the proof, level 0's hiding messages, and the lane phase's record (`L0Rec`, the verifier's), from which
-  the prover builds the lane phase's constraints (`Zk.ligeritoConstraints`).
--/
+/-! The masked prover's Ligerito opening (live PROTOCOL.md §7 from the prover's side): `ligeritoP` with level 0's
+hiding, as `Zk.ligeritoWith` reads it. -/
 
 @[expose] public section
 
@@ -107,7 +89,6 @@ def ligeritoPZk (io : Asks M) (hs : Hashes M) (ms : MerkleScheme) (sch : Schedul
       initCh := initCh.push r
       modify fun st => { st with tab := foldK r st.tab, w := foldK r st.w }
       if j + 1 == sch.k0 then
-        -- the pair's sums, its coins, the blinded claim and the padding's combination
         let st ← get
         let r0 := (Array.range st.tab.size).map (extra (2 * rep))
         let r1 := (Array.range st.tab.size).map (extra (2 * rep + 1))

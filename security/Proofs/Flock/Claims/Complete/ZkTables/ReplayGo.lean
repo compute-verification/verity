@@ -35,21 +35,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Complete.Zk.RingSwitch
 
-/-!
-# The masked replay returns on the prover's rounds
-
-`replayWith_ok`: on rounds that carry the masked prover's zerocheck and lincheck rounds (`Agrees`), from the prover's
-start position and pending bytes, the verifier's masked replay (`Zk.replayWith`) returns under any hash, wherever the
-circuit fold at the prover's coins returns a vector of width `64`. Each squeeze reads the round the prover's matching
-send recorded, whose bytes are the ones the replay framed, since the replay absorbs the prover's messages
-(`ZcZ.proof`, `LcZ.proof`) in the prover's order; its only refusals are the fold's and the width check.
-
-* **Runs that return** (`OkV x t P`): some run of `x` from `t` returns and ends in `P`; composed by `OkV.bind`,
-  through loops by `OkV.forIn_range` (`RetV`'s forward forms).
-* `zc_carries`, `lc_carries`: such rounds carry each squeeze at its position. Each is its own declaration, and the
-  replay names the prover's transcripts in full rather than through `set`: the kernel times out on the combined
-  proof otherwise.
--/
+/-! The masked replay returns on rounds that carry the prover's, under any hash (`replayWith_ok`). -/
 
 @[expose] public section
 
@@ -57,7 +43,6 @@ namespace FlockComplete
 
 open Flock Transcript FlockComplete.Replay
 
-/-- **A run of `x` from `t` returns, and ends in `P`.** -/
 def OkV {α : Type} (x : TMW V α) (t : Transcript) (P : α → Transcript → Prop) : Prop :=
   ∃ a t', x t = .ok (a, t') ∧ P a t'
 
@@ -72,7 +57,6 @@ theorem pure {α : Type} {a : α} {t : Transcript} {P : α → Transcript → Pr
     OkV (Pure.pure a : TMW V α) t P :=
   ⟨a, t, rfl, h⟩
 
-/-- A step that returns `a` at `t₁`, then `f a`. -/
 theorem ok_then {α β : Type} {x : TMW V α} {f : α → TMW V β} {t t₁ : Transcript} {a : α}
     {P : β → Transcript → Prop} (hx : x t = .ok (a, t₁)) (h : OkV (f a) t₁ P) : OkV (x >>= f) t P :=
   bind ⟨a, t₁, hx, h⟩
@@ -82,7 +66,6 @@ theorem mono {α : Type} {x : TMW V α} {t : Transcript} {P Q : α → Transcrip
   obtain ⟨a, t', e, hP⟩ := h
   exact ⟨a, t', e, hPQ a t' hP⟩
 
-/-- **A loop each of whose steps returns and yields** keeps its invariant and returns. -/
 theorem forIn_range {σ : Type} (n : ℕ) (f : ℕ → σ → TMW V (ForInStep σ)) (inv : ℕ → σ → Transcript → Prop)
     (hf : ∀ i b t, i < n → inv i b t → OkV (f i b) t fun r t' => ∃ b', r = .yield b' ∧ inv (i + 1) b' t')
     (b : σ) (t : Transcript) (h0 : inv 0 b t) : OkV (forIn [:n] b f) t fun b' t' => inv n b' t' := by
@@ -106,14 +89,12 @@ end OkV
 
 namespace Replay
 
-/-- Zerocheck's residual round `i` before its squeeze, from `t₀`: its padded message absorbed. -/
 def ZcZ.pre (lay : Zk.PadLayout) (h : Array F128) (m : ℕ) (cs : Zc.Challenges) (tr : Trace) (t₀ : Transcript) (i : ℕ) :
     Transcript :=
   ⟨(ZcZ.loopT lay h m cs tr t₀ i).rounds, (ZcZ.loopT lay h m cs tr t₀ i).k,
     pF (ZcZ.msg lay h tr (m - 6) (cs.r m) cs.z cs.ρ i).2
       (pF (ZcZ.msg lay h tr (m - 6) (cs.r m) cs.z cs.ρ i).1 (ZcZ.loopT lay h m cs tr t₀ i).pending)⟩
 
-/-- Lincheck's round `j` before its squeeze, from `t`: its padded message absorbed. -/
 def LcZ.pre (lay : Zk.PadLayout) (h : Array F128) (c : CircuitFold) (m : ℕ) (tr : Trace) (zc : ZcOut)
     (full : Array F128) (cs : Lc.Challenges) (t : Transcript) (j : ℕ) : Transcript :=
   ⟨(LcZ.loopT lay h c m tr zc full cs t j).rounds, (LcZ.loopT lay h c m tr zc full cs t j).k,
@@ -122,7 +103,8 @@ def LcZ.pre (lay : Zk.PadLayout) (h : Array F128) (c : CircuitFold) (m : ℕ) (t
 
 variable {R : Array Round} {lay : Zk.PadLayout} {h : Array F128} {m : ℕ} {tr : Trace}
 
-/-- **Rounds carrying the masked prover's zerocheck carry each of its squeezes**, at its position. -/
+/-- Its own declaration, as is `lc_carries`, and the replay names the prover's transcripts in full rather than through
+`set`: the kernel times out on the combined proof otherwise. -/
 theorem zc_carries {digest cap root : ByteArray} {zcs : Zc.Challenges} {t₀ : Transcript} (hk₀ : t₀.k = t₀.rounds.size)
     (hZ : Agrees R (ZcZ.tEnd lay h m digest cap root zcs tr t₀).rounds 0) :
     Carries R (ZcZ.t₁ digest cap root t₀).k (sent (ZcZ.t₁ digest cap root t₀) 2 6 zcs.c0) ∧
@@ -147,8 +129,6 @@ theorem zc_carries {digest cap root : ByteArray} {zcs : Zc.Challenges} {t₀ : T
       rw [ZcZ.loopT_size, ZcZ.loopT_k]
       simp [ZcZ.t₅, ZcZ.t₄, ZcZ.t₃, ZcZ.t₂, ZcZ.t₁, afterSq, hk₀]] at this
 
-/-- **Rounds carrying the masked prover's lincheck carry each of its squeezes**, at its position, from any start `T₁`
-whose earlier rounds are recorded. -/
 theorem lc_carries {c : CircuitFold} {zc : ZcOut} {full : Array F128} {lcs : Lc.Challenges} (T₁ : Transcript)
     (hT₁k : T₁.k = T₁.rounds.size) (hR : Agrees R (LcZ.tEnd lay h c m tr zc full lcs T₁).rounds 0) :
     Carries R (Lc.t₁ T₁).k (sent (Lc.t₁ T₁) 1 1 lcs.ca) ∧
@@ -170,10 +150,6 @@ theorem lc_carries {c : CircuitFold} {zc : ZcOut} {full : Array F128} {lcs : Lc.
 
 end Replay
 
-/-- **The masked replay returns on the prover's rounds**: on rounds `R` that carry the masked prover's zerocheck and
-lincheck rounds from `t₀` (`t₀.k` its position, every earlier round recorded), on its proof (`ZcZ.proof`,
-`LcZ.proof`) under the cap `p.cap`, from `t₀`'s position and pending bytes, the verifier's masked replay returns under
-any hash, wherever the circuit fold at the prover's coins returns a vector of width `64`. -/
 theorem replayWith_ok (hs : Hashes V) (st : Setup) (hm : 14 ≤ st.m) (lay : Zk.PadLayout) (h : Array F128)
     (p : Proof) (root : ByteArray) (zcs : Zc.Challenges) (lcs : Lc.Challenges) (full : Array F128) (tr : Trace)
     (t₀ : Transcript) (hk₀ : t₀.k = t₀.rounds.size) {R : Array Round}

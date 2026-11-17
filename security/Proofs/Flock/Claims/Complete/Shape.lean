@@ -35,16 +35,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# What the pure session returns
-
-A small program logic over the pure session's monad `PS`, for the goals that read the session's outputs:
-
-* `Ret y P`: every value `y` returns satisfies `P`, from every state. `Ret.pure`, `Ret.bind`, `Ret.true`, and the loops
-  (`Ret.forIn_list`, `Ret.forIn_array`, by an invariant on the iteration count).
-* `sessionP_proofs`: the session returns one proof file per rep stream.
-* `proofCount_goal` (`ProofCount`): one proof file per rep stream at every honest run.
--/
+/-! A small program logic (`Ret`) over the pure session's monad, and the goal `ProofCount`. -/
 
 @[expose] public section
 
@@ -52,7 +43,6 @@ open Flock FlockDeploy
 
 namespace FlockComplete
 
-/-- **`y` returns only values satisfying `P`**, from every state. -/
 def Ret {α : Type} (y : PS α) (P : α → Prop) : Prop :=
   ∀ l a l', y.go l = (.ok a, l') → P a
 
@@ -96,7 +86,6 @@ theorem Ret.forIn_array {α β : Type} (xs : Array α) (b : β) (f : α → β �
   have := Ret.forIn_list f inv hs xs.toList 0 b h0
   simpa using this
 
-/-- **The session returns one proof file per rep stream.** -/
 theorem sessionP_proofs (h : ByteArray → ByteArray) (resp : ℕ → Claims.Msg) (spec : SessionSpec)
     (tabs : Array Setup) (trs : Array Trace) (tape : Tape) :
     Ret (sessionP (asksS resp) (Hashes.ofSha512 h) spec tabs trs tape) fun r => r.2.size = spec.repStreams.size := by
@@ -113,7 +102,6 @@ theorem sessionP_proofs (h : ByteArray → ByteArray) (resp : ℕ → Claims.Msg
     refine Ret.bind (Ret.true _) fun _ _ => ?_
     exact Ret.pure hk
 
-/-- **One proof file per rep stream**: the goal `ProofCount`. -/
 theorem proofCount_goal (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) :
     ProofCount H rel := by
   intro o
