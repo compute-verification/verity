@@ -69,11 +69,12 @@ def place(out: Path | None) -> Path:
 
 
 def minify(a: argparse.Namespace) -> int:
-    refuse("minify", "no command makes its record yet. It is to serve serve_tax's stand-in model, a small copy of the "
-                     "model from random weights on one card that keeps the selectors choosing each code path, which "
-                     "is vllm's and not in the tree, and to time each part on each code path it takes, in the form "
-                     f"price reads (`priced.units`: a top-k call's device time by rows and keys, {UNITS}), for which "
-                     "proofs' benchmarks/dsa_topk has no command. Its record: a passed result of kind "
+    refuse("minify", "no command makes its record yet. The copy runs today: vllm's glm53-standin "
+                     "(verity_vllm.engine.profiles.stand_in), served by `benchmarks/prod_repro/run.sh --model "
+                     "glm53-standin`, whose runs keep each arm's steps and seconds and the top-k's counters but no "
+                     "unit cost and no measurement. Missing is each part's time on each code path the copy takes, in "
+                     f"the form price reads (`priced.units`: a top-k call's device time by rows and keys, {UNITS}), "
+                     "for which proofs' benchmarks/dsa_topk has no command. Its record: a passed result of kind "
                      f"{KINDS['minify']} holding {UNITS}")
 
 
@@ -82,8 +83,8 @@ def exact(a: argparse.Namespace) -> int:
     refuse("exact", "no command makes its record yet. Its two checks run today without storing one: circuit-check on "
                     "the full model's bindings (circuits' `uv run circuit-check`) keeps its verdicts in its own cache, "
                     "and the replay on the copy is benchmarks/serve_tax/replay.py's (proofs'), on a record arm of the "
-                    f"copy minify serves. Its record: a passed result of kind {KINDS['exact']} naming the minify run and "
-                    "whether the replay was the Python replay or a proof the Lean verifier accepted")
+                    f"copy minify serves. Its record: a passed result of kind {KINDS['exact']} naming the minify run "
+                    "and whether the replay was the Python replay or a proof the Lean verifier accepted")
 
 
 def capture(a: argparse.Namespace) -> int:

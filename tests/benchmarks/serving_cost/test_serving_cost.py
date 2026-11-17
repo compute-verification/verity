@@ -111,7 +111,7 @@ def test_minify_refuses_saying_what_is_missing_and_whose():
     with pytest.raises(SystemExit) as e:
         S.main(["minify"])
     said = str(e.value)
-    assert "stand-in model" in said and "vllm's" in said and "proofs' benchmarks/dsa_topk" in said
+    assert "vllm's glm53-standin" in said and "no unit cost" in said and "proofs' benchmarks/dsa_topk" in said
     assert S.KINDS["minify"] in said and S.UNITS in said
 
 

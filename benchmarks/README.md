@@ -251,15 +251,16 @@ five stages, each `verity bench serving_cost STAGE` (`serving_cost/run.py`) run 
 stage reads the stage before it from the evidence store by the id of the run that stored it (`--minify RUN`,
 `--capture RUN`), never by a path, and refuses a run whose result is not that stage's kind or did not pass, naming the
 command that makes the missing record. Price and confirm compute their figures. Minify, exact and capture have no
-code that makes their records yet, and refuse saying what is missing and whose it is: parts of two run today under
-other names, stage 2's check of bindings as `circuit-check` on a Definition module's sidecar and its replay as
+code that makes their records yet, and refuse saying what is missing and whose it is: parts of them run today under
+other names without storing a stage's record, stage 1's copy as `serve_tax`'s `glm53-standin` (whose runs keep no
+unit cost), stage 2's check of bindings as `circuit-check` on a Definition module's sidecar and its replay as
 `serve_tax/replay.py`'s, and stage 3's run as `prod_repro/run.sh`'s. A stage's numbers are measurements under
 "Metrics"' rules, and a stage whose record is a verdict is to record what the check or the verifier returned ("What a
 benchmark may import and write").
 
 | Stage | What it runs | What it stores |
 | --- | --- | --- |
-| 1. Minify | a small copy of the model from random weights on one card, keeping the selectors that choose each code path | the copy's identity, the selectors it keeps and its size class; and for each part and each code path the part can take, a unit cost in seconds a call or a step, `measured`, with the count of calls behind it |
+| 1. Minify | a small copy of the model from random weights on one card, keeping the selectors that choose each code path (`serve_tax`'s `glm53-standin`) | the copy's identity, the selectors it keeps and its size class; and for each part and each code path the part can take, a unit cost in seconds a call or a step, `measured`, with the count of calls behind it |
 | 2. Exact | `circuit-check` on the full model's bindings, and a replay on the copy | a verdict, not a number: `circuit-check`'s on the bindings, and the replay's on the copy (its tokens equal to the served tokens, its steps reproduced), saying whether the replay was the Python replay or a proof the Lean verifier accepted, so that exact is not read as proved |
 | 3. Capture | a short run of the real model | for each part and code path its counts (calls a step, steps a request), the baseline step time, and the value-dependent inputs a price needs |
 | 4. Price | stage 1's unit costs times stage 3's counts, over stage 3's baseline step time | the priced serving cost under the real model's metric and `member`, `modeled`, with the stage 1 and stage 3 runs it read among its `inputs`, and every (part, code path) it could not price |
