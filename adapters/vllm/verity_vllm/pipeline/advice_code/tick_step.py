@@ -67,25 +67,9 @@ from dataclasses import dataclass
 from types import SimpleNamespace
 
 from verity_vllm.compiler import replay_step as RS
-from verity_vllm.pipeline.advice_code.schedule import Tick
+from verity_vllm.pipeline.advice_code.schedule import Rule, Tick
 
 __all__ = ["Inputs", "Out", "Rule", "State", "empty", "reference"]
-
-
-@dataclass(frozen=True)
-class Rule:
-    """The tick's constants in the clock's unit, a `Tick`'s being microseconds with ``token`` 0 and ``quiet``. A step with
-    rows also advances T by ``token`` for each token it schedules. With ``quiet`` T jumps to the next arrival's bucket close
-    only when nothing runs or waits, else whenever nothing waits."""
-
-    bucket: int
-    sat: int
-    free: int
-    token: int = 0
-    quiet: bool = True
-
-    def close(self, a: int) -> int:
-        return (a + 1) * self.bucket
 
 
 @dataclass(frozen=True)

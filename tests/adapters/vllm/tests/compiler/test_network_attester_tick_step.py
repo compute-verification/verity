@@ -6,6 +6,7 @@ from types import SimpleNamespace
 import pytest
 
 from tests.pipeline import test_tick_step as TT
+from verity.circuits.evaluation.bits import evaluate_bits
 from verity_vllm.compiler import replay_step as RS
 from verity_vllm.compiler import tick_step as TK
 from verity_vllm.pipeline.advice_code import schedule as SC
@@ -93,21 +94,27 @@ def test_the_circuit_is_the_reference_on_the_small_engines(name: str, asy: bool,
     held(st_, scan(SimpleNamespace(**st_), rule, ios, released))
 
 
+@pytest.mark.parametrize("name", RULES)
 @TT.BOTH
-def test_the_circuit_is_the_reference_on_the_replays_prefix_hits(asy: bool, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_the_circuit_is_the_reference_on_the_replays_prefix_hits(name: str, asy: bool,
+                                                                monkeypatch: pytest.MonkeyPatch) -> None:
+    rule = RULES[name]
     e = TT.engine(asy)
     ios, released = TT.plan()
-    _, units = TT.record(monkeypatch, e, ios, released)
-    st_ = binding(e, TT.N, 4, 4, 5, TODAY)
+    rp, units = TT.record(monkeypatch, e, ios, released, rule)
+    st_ = binding(e, TT.N, 4, 4, 5, rule)
     S = SimpleNamespace(**st_)
     st, cursor, steps = TS.empty(S), 0, []
     for u in (u for u in units if not u.idle):
         inp = TT.inputs(S, st.step, cursor, ios, released, u)
-        out = TS.reference(S, TT.TICK, st, inp)
+        out = TS.reference(S, rule, st, inp)
         assert out.ok and out.state is not None
         steps.append((st, inp, out))
         st, cursor = out.state, cursor + out.taken
     assert cursor == TT.N and any(any(inp.hit) for _, inp, _ in steps)
+    with_rows = [o for _, _, o in steps if o.rows]
+    assert [[(i, start, n) for _, i, _, start, n in o.rows] for o in with_rows] == [s.rows for s in rp.steps]
+    assert [o.state.clock for o in with_rows if o.state is not None] == rp.clock
     held(st_, steps)
 
 
@@ -123,8 +130,31 @@ def test_a_bucket_count_past_32_bits_is_refused() -> None:
     assert [o.ok for o, _ in TK.evaluate(st_, cases)] == [False, True, False, True]
 
 
+def test_a_remainder_at_a_bucket_or_past_it_is_refused() -> None:
+    e = SC.Engine(max_num_seqs=2, max_num_batched_tokens=64, max_model_len=64, num_gpu_blocks=16, block_size=16)
+    st_ = binding(e, 2, 2, 2, 3, CHOSEN)
+    S = SimpleNamespace(**st_)
+    empty = RS.empty(S)
+    running = RS.State((RS.Req(0, 4, 3, out=1, comp=4),), (), empty.free - 1)
+    at = [name for name, _n, _w in TK._in_fields(S)].index("tick_r")
+    cases = []
+    for r in (CHOSEN.bucket - 1, CHOSEN.bucket, CHOSEN.bucket + 1):
+        args = TK.arguments(S, running, 0, RS.Inputs(()), ())
+        args[at] = RS._bits(r, TK.widths(S).RW)
+        cases.append(args)
+    flat = evaluate_bits(TK.unit(**st_), *([list(c) for c in zip(*cases)])).reshape(len(cases), -1).tolist()
+    got = [TK.decode(S, row) for row in flat]
+    assert [o.ok for o, _ in got] == [True, False, False]
+    want = TS.reference(S, CHOSEN, TS.State(running, CHOSEN.bucket - 1), TS.Inputs((), ())).state
+    assert want is not None and got[0][1] == want.clock > CHOSEN.bucket
+
+
 def test_the_binding_refuses_an_advance_that_reaches_a_bucket() -> None:
     e = SC.Engine(max_num_seqs=8, max_num_batched_tokens=2048, max_model_len=512, num_gpu_blocks=64, block_size=16)
+    most = CHOSEN.sat + CHOSEN.token * 2048
+    binding(e, 2, 8, 1, 9, dataclasses.replace(CHOSEN, bucket=most + 1))
+    with pytest.raises(ValueError, match=rf"max\(CSAT, CFREE\) \+ C1·T = {most} reaches the bucket TAU = {most}:"):
+        binding(e, 2, 8, 1, 9, dataclasses.replace(CHOSEN, bucket=most))
     binding(e, 2, 8, 1, 9, CHOSEN)
     with pytest.raises(ValueError, match=r"max\(CSAT, CFREE\) \+ C1·T = 154791192 reaches the bucket TAU = 100000000"):
         binding(dataclasses.replace(e, max_num_batched_tokens=8192), 2, 8, 1, 9, CHOSEN)

@@ -59,7 +59,7 @@ def _build(C, S, *elements):
     idle = waits.inv() if S.CU else C.AND(waits.inv(), or_reduce(C, [e[0] for e in ins["run_valid"]]).inv())
     a1 = add(C, list(bucket[0]), const_bits(1, QW + 1), width=QW + 1)
     jump = and_reduce(C, [idle, valid[0], RS._lt(C, q, a1)])
-    bad = [C.AND(jump, a1[QW])]
+    bad = [RS._lt(C, r, const_bits(S.TAU, Z.RW + 1)).inv(), C.AND(jump, a1[QW])]
     q = mux(C, jump, a1[:QW], q)
     r = RS._sel(C, jump.inv(), r)
     given, g = [], ONE
@@ -109,7 +109,9 @@ TickStep = _part(
     "to the next arrival's bucket close when nothing runs or waits (CU = 0) or nothing waits (CU = 1); the step is given "
     "the leading arrivals whose buckets have closed; after a step with rows T advances by CSAT if it preempted, left a "
     "request waiting or left a given arrival, else CFREE, plus C1 for each token it schedules; 0 for ok to refuse what "
-    "`ReplayStep_v1` refuses or a bucket count past 32 bits (`pipeline.advice_code.tick_step.reference`)")
+    "`ReplayStep_v1` refuses, a remainder r ≥ TAU or a bucket count past 32 bits "
+    "(`pipeline.advice_code.tick_step.reference`). It rests on three things: T starts at 0; r < TAU, which it refuses "
+    "otherwise; and the arrivals' buckets are bound only once the slice ties them")
 
 
 def statics(R: int, W: int, A: int, engine: dict, IW: int, *, tau: int, sat: int, free: int, token: int = 0,

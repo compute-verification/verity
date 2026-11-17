@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-#: session 8eb1's engine under its AsyncScheduler, whose class is (R, W, A) = (8, 1, 9)
+#: the served engine under its AsyncScheduler, whose class is (R, W, A) = (8, 1, 9)
 SERVED = {"max_num_seqs": 8, "max_num_batched_tokens": 2048, "max_model_len": 512, "num_gpu_blocks": 101626, "block_size": 16,
           "enable_chunked_prefill": True, "enable_prefix_caching": False, "async_scheduling": True}
 #: today's rule in microseconds (the difftest's constants), and the chosen rule in nanoseconds
