@@ -1,8 +1,7 @@
 # Flock interactive soundness: what the theorems assume
 
 For the expert reviewer and for Table 1. This file states every named assumption and every named hypothesis the Flock
-soundness theorems take, each in full; the detail behind them is in `assumption-notes/`. What is proved is in `README.md`
-and, for the audit layer, `Audit/README.md`. `DESIGN.md` holds the derivations.
+soundness theorems take, each in full; the detail behind them is in `assumption-notes/`. What is proved is in `README.md`.
 
 **The guarantee of record** for the one-stage `--zk` audit is `Flock.Guarantees.EndToEnd`
 (`../EndToEnd/Statement.lean`, proved as `Flock.SecurityProofs.EndToEnd`). It bounds the executable verifier's
@@ -58,7 +57,7 @@ hash, nor false of every hash.
 **`SHA512CRStrict`. Strict-time collision resistance of SHA-512** (`cr/sha-512`).
 
 - **Statement.** A collision finder that makes at most `q` SHA-512 evaluations on every outcome succeeds with probability
-  at most `q²/2^513`: the generic birthday bound `q(q − 1)/(2·2^512)` for a budget fixed in advance (`DESIGN.md` §1).
+  at most `q²/2^513`: the generic birthday bound `q(q − 1)/(2·2^512)` for a budget fixed in advance.
 - **The budgets are not checked.** `StrictCR.Finder.CR H F q` takes `SHA512CRStrict` with the cost `q` on every outcome,
   so nothing in Lean ties `q` to the evaluations the finder makes. Each budget must bound its finder's real SHA-512
   evaluations, for `t′` the prover's in one session run and `v` one opening's verification:
@@ -182,7 +181,7 @@ and two verifications; a one-run finder's `qS` one run and one verification; `qT
 |---|---|---|---|
 | the compiled theorem | `SHA512CRStrict` | `table_sound_compiled_strict` (`CompiledCR`) | `tableError + √(2^{log N₀}·2Q₀·qF²/2^513) + Σ_{r<2} Σ_ℓ √(2^{log N_ℓ}·Q_ℓ·qF²/2^513) + qS²/2^513` |
 | `ε_ks`, the knowledge term | `SHA512CRStrict` | `ksBoundAccB_le_strict`, `ksAvgBE_le_strict` (`TableCR`, `hKS`) | `ksAvgStrict`: per table `ksStrict = tableError + Σ_{r<2} Σ_ℓ √(2^{log N_ℓ}·Q_ℓ·qF²/2^513) + qS²/2^513 + √(k·qF²/2^513)`, over `1 − N₀/(ek)`, its largest after each sample averaged over the sample |
-| `δ_tree`, the serving roots' binding | `SHA512CRStrict` | `tree_le_strict`, `TreeRewind.le` (`tr`, `hT`) | `TreeRewind.bound qT = √(N_s·Q_s·qT²/2^513)` (`DESIGN.md` §1) |
+| `δ_tree`, the serving roots' binding | `SHA512CRStrict` | `tree_le_strict`, `TreeRewind.le` (`tr`, `hT`) | `TreeRewind.bound qT = √(N_s·Q_s·qT²/2^513)` |
 | `δ_reg`, the registered reads' path binding | `SHA512CRStrict` | `Reads.prob_off_le` (`hR`) | `qR²/2^513` |
 | `ε_bind`, the binding error | `SHA512CRExpected` | `flock_batched_linkSoundE` (`LinkCR`, `hCR`) | `linkBoundE`, finite at the provers whose link finders satisfy it |
 | `ε_bind`, under `cr/sha-512` alone | `SHA512CRStrict` | `CROnly.linkCR_of_strict` (`LinkCRStrict`, `hCRs`: the same finders stopped at `q` evaluations) | `linkBoundE` at per-run cost `strictRunCost t' q = 2^256·(t'/q + q²/2^513)`; at `q³ = t'·2^512` the hash part is `3(1 + k)·t'^{2/3}/2^{512/3}` (`CROnly.linkBoundE_at_cube`) |
@@ -406,8 +405,7 @@ ArkLib (`README.md` §1.6; watch entries `A1-johnson-mca` and `udr-mca`).
     and VU), and `aliased` from the flat statement's copies, which `unitPlace_of_setupH` takes as a hypothesis
     (`Layout.Aliased`).
 
-**The audit layer's named hypotheses** (`Prop`s taken as hypotheses; no `axiom`; the theorems are in
-`Audit/README.md`):
+**The audit layer's named hypotheses** (`Prop`s taken as hypotheses; no `axiom`):
 
 | Hypothesis | Term | Meaning | To be discharged by |
 |---|---|---|---|
@@ -432,8 +430,7 @@ before the session's first coin, not bounds state by state.
 
 - **SHA-512 for the Merkle openings** (`Flock.Merkle`, with SHA-512 leaves and nodes), under the two forms above: the
   compiled theorem needs only `SHA512CRStrict`, for every classical prover, and the audit's value layer adds
-  `SHA512CRExpected`. DESIGN.md §1 explains why SHA-512 rather than SHA-256, and how the bound depends on the hash's
-  width.
+  `SHA512CRExpected`.
 - **No assumption for the rounds.** The verifier keeps each round's bytes, then flips that round's coins, and the
   replay compares bytes. This replaces the SHA-256 round digests. Keeping the bytes costs about the proof size, 0.7 MB
   per rep.
@@ -452,8 +449,8 @@ before the session's first coin, not bounds state by state.
 - **`tree` coins** (`--zk`, `--coins tree`; `coin-tree/hm96-sha512/v2`): the `--zk` headlines' coins, and a plain
   one's under `--coins tree`. Soundness pays `N·2^-256` for the commitment's statistical hiding (A6, tree coins); zero
   knowledge uses its binding (`cr/sha-512`).
-- **The random-oracle model is not used.** Its version of the compiled bound is only a cross-check (DESIGN.md §2).
-- **Quantum provers** (DESIGN.md §9). The oracle layer holds against them, but the compiled theorem is classical. The
+- **The random-oracle model is not used.** Its version of the compiled bound is only a cross-check.
+- **Quantum provers.** The oracle layer holds against them, but the compiled theorem is classical. The
   compiled protocol is post-quantum sound only asymptotically, and only if SHA-512 is collapsing, which is a conjecture
   (Table 1 would need `collapsing/sha-512`). No concrete post-quantum bound is known at these parameters, and none is
   claimed.
@@ -463,37 +460,10 @@ before the session's first coin, not bounds state by state.
 
 ## What the lock records
 
-`lean-audit.json` records each guarantee's statement (`guarantees`) and the definitions it reads (`reads`). The audit
-fails when either changes until the record is rewritten. A rewritten record is shown when it lands on `main`; nobody
-signs off and nothing waits on it. The
-guarantees include the table theorems (`README.md` §1.1 and §1.2, with their `_exec` forms) and `execArith_correct`;
-none takes a named assumption. So do the knowledge-soundness theorems of `README.md` §1.3
-(`table_knowledge_sound`, `table_knowledge_sound_joint`, `table_knowledge_sound_joint_tight`, `session_knowledge_sound`,
-and the batched session's `flock_batched_knowledgeSoundE`), and the link theorem, `flock_batched_linkSoundE`, whose bound is
-`linkBoundCR`: finite exactly at the provers whose link finders satisfy `SHA512CRExpected`. The end-to-end skeleton's `flock_e2e_count` and
-`flock_e2e_sampled` are guarantees too; they take `SHA512CRExpected` for `σ`'s link finders as `hCR`. So are the four
-`flock_e2e_*_hm96`, which also take `SHA512CRStrict` for the knowledge term's finders (`hKS`) and `δ_tree`'s (`hT`).
-So are the headline, `Prog.flock_headline` (its footprint is The headline, above), and the theorems the footprints cite
-as proved: the `StrictCR` terms (`table_sound_compiled_strict`, `ksBoundAccB_le_strict`, `ksAvgBE_le_strict`,
-`tree_le_strict`, `TreeRewind.le`, `TreeRewind.ofNever_bound`), `Teeth`'s four (`strict_of_injective`,
-`expected_of_injective`, `not_strict_const`, `not_expected_const`), `Prog.flock_e2e_count` and `Prog.flock_e2e_sampled`.
-The `cr/sha-512` restatements are guarantees beside them (`FlockSoundness.CROnly`: `expected_of_strict`, `linkCR_of_strict`,
-`linkBoundE_at_cube`, each `flock_e2e_*`, `uprog_e2e_*`, `prog_e2e_*` and `flock_headline`), and so is zero knowledge's
-`Hm96Hiding`, proved: `hm96Hiding_gap` (no hypothesis, at `δ₁` the hiding gap), the leftover hash lemma
-(`sum_hidingGap_le`, `hankel_universal`), hm96-sha512's values (`hm96_sha512_sum`: mean `2^-257` over a uniform key;
-`hm96_sha512_bad_keys`: `Hm96Hiding` at `2^-193` fails for at most `2^-64` of the keys), and Lemma B and Lemma C with it
-discharged (`session_shvzk_gap`, `session_shvzk_le`, `adaptive_prefinal_gap`, `adaptive_prefinal_le`,
-`adaptive_prefinal_key`, `adaptive_prefinal_hm96_sha512`). What zero knowledge's guarantees leave open about the key is
-that the pinned key's gap is small: they are stated at it, and `hash-derived-key` (`hm96/PROTOCOL.md` §2a) bounds it by
-`2^-193` only where a lemma or `RecursiveAudit` states that bound.
-Zero knowledge's Theorem GK is a guarantee (`ZK/GK/`): `Model.gk_simulate` with its coin-tree forms
-`Model.gk_simulate_coins` and `Model.gk_simulate_coins_keyed`, `gk_simulate_hm96` and `gk_simulate_avg`, the run bounds
-`Model.sim_runs_le`, `Model.sim_runs_ev` and `Model.sim_runs_tail`, the two distances `prefinalClose_hm96` and
-`rewindClose_hm96`, and T6's extraction (`coinColl_isColl`, `coinCollKeyed_isColl`, `bindColl_isColl`,
-`bindCollKeyed_isColl`, and its cost `coinPairs_length_le`).
-`flock_inputs_sound`, `flock_session_sound`, `lowering_sound` and `mcaError_le_bchks25` are not
-guarantees. A theorem that is not in `guarantees` is still audited (standard axioms, kernel replay), but a change to its statement
-would not fail the audit.
+`security/lean-audit.json` lists the guarantees, Flock's under `Flock.SecurityProofs` and `Flock.Guarantees`, and records
+each one's statement, the definitions it reads and the premises it takes; a changed statement is a changed record. The
+theorems this file names are proofs under those guarantees and not guarantees themselves: each is still audited
+(standard axioms, kernel replay), but a change to its statement changes no record.
 
 ## Upstream status
 

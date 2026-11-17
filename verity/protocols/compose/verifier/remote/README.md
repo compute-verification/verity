@@ -14,15 +14,15 @@ verifier from four open premises: SPOT's and PoUW's targets (`Vocab.SpotSound`, 
 whose clause is proved on the Program its check judges, the two statements that tie it to the committed files
 (`Vocab.WiresSound`, `GateARow`).
 
-This file is an outline with signposts; the Lean is the definition. The vocabulary is `ARCHITECTURE.md`'s
-Glossary, with `GLOSSARY.md` for the notation and the older names. In Lean's older
+This file is an outline with signposts; the Lean is the definition. The vocabulary is `GLOSSARY.md`,
+the Glossary, with the notation and the older names. In Lean's older
 names, `Session*` means a run of a subprotocol.
 
 **Which "remote".** Four things in the tree are called "remote", and this page means the first:
 
 - the remote protocol, this one: `Core.Remote` (`CoreRemote.lean`, id `verity/remote/v1`; v0 is development);
 - PoUB, an onsite subprotocol whose code names still say "remote": `verity/protocols/resource_accounting/memory/poub/verifier/`, `Poub`,
-  `ResourceAccounting.Remote*`, `verity/remote-bandwidth/v0`, `benchmarks/remote_session/` and serve-openai's `--remote-verifier`;
+  `ResourceAccounting.Remote*`, `verity/remote-bandwidth/v0`, `benchmarks/poub_session/` and serve-openai's `--remote-verifier`;
 - `RemoteChallenger` (`verity/protocols/proofs/spot/verifier/challenger/remote.py`), a remote challenger's client;
 - the slowdown bound's remote regime (`Slowdown.Guarantees.SlowdownRemote`, the slowdown calculator's `regime.remote`): a bound over this
   protocol, not in it (part 6 below);
@@ -40,11 +40,11 @@ names, `Session*` means a run of a subprotocol.
 - **How the coins reach the developer.** The challenger opens each coin only after the developer's commitment is
   recorded, over one TCP stream that the developer's client opens at its own `127.0.0.1` port (`RemoteChallenger`).
   Deployed, on an auditor device, that port is the far end of a coin link the auditor device opens to the
-  developer's machine: `ssh -N -R` straight to that machine's sshd, relayed and counted by network certification's
+  developer's machine: `ssh -N -R` straight to that machine's sshd, relayed and counted by network attestation's
   code running on the auditor device (`verity/protocols/compose/verifier/live_challenger/coin_link.py`). No coin path of remote's own, with no
   network attester anywhere, is specified yet.
-- **No auditor devices at the site.** There are no network attesters or memory attesters. So network certification,
-  PoUS and PoUB are onsite's, not remote's, and memory wipes are neither composite's yet. For network certification,
+- **No auditor devices at the site.** There are no network attesters or memory attesters. So network attestation,
+  PoUS and PoUB are onsite's, not remote's, and memory wipes are neither composite's yet. For network attestation,
   see `security/Definitions/Certifier` and its `Guarantees`.
 
 ## Subprotocols
@@ -467,7 +467,7 @@ SPOT (`benchmarks/prove_path/README.md`, "What an accepted audit means"):
   table and link finders as `TableCRZAt` and `LinkCRZCAt`.
 - `trusted-device` (`Verity.Assumptions.TrustedDevice`, `security/Definitions/Core/Assumptions.lean`): the challenger is
   the auditor's device on a host the developer doesn't control, and the custody above rests on it; the verifier runs
-  on an auditor device too. In Lean, only onsite's guarantees (network certification's) read `TrustedDevice`.
+  on an auditor device too. In Lean, only onsite's guarantees (network attestation's) read `TrustedDevice`.
 - `CoinsAfterCommitment`: the challenger's coins reach the developer's machine only over paths the auditor's devices
   control, and only after the commitment. Prose only: no guarantee takes it. Onsite's `CoinsConfidential`
   (`Pouw.Assumptions.CoinsConfidential`, which `Pouw.Guarantees.Dither.FleetSound` takes) is another assumption: a
@@ -558,4 +558,4 @@ suite `verity-pouw-check-difftest`; `verity/protocols/resource_accounting/comput
 - `security/README.md`: the definitions, properties and proofs trees, the locks, and the remote protocol in Lean.
 - `benchmarks/prove_path/README.md` and `benchmarks/prove_path/e2e_chains/README.md`: what an accepted audit means, and
   each protocol's end-to-end chain.
-- `ARCHITECTURE.md` (with the Glossary) and `GLOSSARY.md`: the architecture, the terms, the notation and the older names.
+- `ARCHITECTURE.md` and `GLOSSARY.md` (the Glossary): the architecture, the terms, the notation and the older names.

@@ -1,13 +1,13 @@
 """The timed audit with sequential reveal (Lean `seqAccepts`), strict: every answer correct and on time.
 
-The memory challenger samples `k` indices uniformly with replacement from `0..B-1` through `verity.commitments.randomness`,
+The memory attester samples `k` indices uniformly with replacement from `0..B-1` through `verity.commitments.randomness`,
 keyed by its own secret and bound to `vk`'s root, and reveals index `j` only once answer `j - 1` is in.
 
 The deadline is `Δ = deadline_ns` (0.5 ms: `docs/p3-gpu-measurements.md` found 300 µs fails about 1.5% of honest
-132-answer audits on the host clock) plus `rtt_allowance_ns`, the memory challenger's network round trip and its jitter,
+132-answer audits on the host clock) plus `rtt_allowance_ns`, the memory attester's network round trip and its jitter,
 which it cannot tell apart from the responder's time and so also grants the adversary.
 
-Two clocks.  `UnsignedRounds` is the memory challenger's timed rounds, unsigned (`memory_challenger` signs them): it measures
+Two clocks.  `UnsignedRounds` is the memory attester's timed rounds, unsigned (`memory_attester` signs them): it measures
 each answer's wall-clock latency from the reveal and rejects any over the deadline.  `simulate` is the model's: the responder
 answers each index with a `Prog` (Lean `SeqResponderBy.step`, state kept inside the responder), `oracle.run` counts the
 answer's rounds, and any answer over the round budget or `work` queries is late.  The budget is the deadline over `call_ns`,
@@ -37,7 +37,7 @@ DEADLINE_NS = 500_000
 """Δ: the strict per-answer deadline, 0.5 ms (`docs/p3-gpu-measurements.md` §1)."""
 
 RTT_ALLOWANCE_NS = 0
-"""The default network round-trip allowance added to Δ: none, until the memory challenger's RTT is measured."""
+"""The default network round-trip allowance added to Δ: none, until the memory attester's RTT is measured."""
 
 CALL_NS = 242_000
 """The fastest whole oracle call: `P_T`'s Feistel-SHAKE256 floor at 64 KB, 242 µs; a `Π₂` call is at least 480 µs
@@ -59,8 +59,8 @@ reading holds in the ideal-permutation model only; at the reference Feistel-SHAK
 
 AUDIT_CAP = 1505
 """The most call-times a graded audit may last, from its first challenge's send to its last answer's receipt
-(`Pous.Rebuild.auditCap`, which `Pous.SecurityProofs.BackgroundRebuildExcluded` requires the memory challenger to
-enforce): at 241.5 µs per call, `1,505 × 241.5 µs ≈ 363.5` ms.  Past it the memory challenger aborts the audit without
+(`Pous.Rebuild.auditCap`, which `Pous.SecurityProofs.BackgroundRebuildExcluded` requires the memory attester to
+enforce): at 241.5 µs per call, `1,505 × 241.5 µs ≈ 363.5` ms.  Past it the memory attester aborts the audit without
 accepting, as for a missed hard deadline, and never retries it with fresh challenges.  What the cap excludes
 (re-encoding a segment from `W`) is counted in whole `Π₂` calls, so it holds in the ideal-permutation model only: at the
 reference Feistel-SHAKE256 `Π₂` a prover needs no re-encode, answering from 1.53% of `C` (`primitives.pi2_keccak_f`)."""
@@ -71,7 +71,7 @@ def _challenges(vk: VerifierKey) -> int:
 
 
 def challenge_key(source: bytes, vk: VerifierKey) -> Key:
-    """The audit's key: `source` is the memory challenger's own secret, kept secret until the audit starts, never a
+    """The audit's key: `source` is the memory attester's own secret, kept secret until the audit starts, never a
     public beacon or the prover's root. A public source makes every challenged index computable before the audit, so a
     prover holding little of `C` can rebuild only the challenged blocks within the deadline and pass."""
     return derive(source, CHALLENGE_DOMAIN, {"root": vk.root, "salt": vk.salt})
@@ -160,7 +160,7 @@ def simulate(vk: VerifierKey, responder: Responder, prims: Primitives, key: Key,
 
 
 class UnsignedRounds:
-    """The memory challenger's sequential reveal with a strict wall-clock deadline per answer, its rounds unsigned.
+    """The memory attester's sequential reveal with a strict wall-clock deadline per answer, its rounds unsigned.
 
     For the band codec it refuses a deadline past the cliff (`band.check_deployment`: the effective `D` must not
     exceed `d`).  `challenge()` reveals the next index and starts its clock; `respond(block)` stops it, is on time within
@@ -171,8 +171,8 @@ class UnsignedRounds:
     `late_deadline_ns` (`Δ_late`, at least `Δ`) adds a hard deadline: it is refused when `Δ_late + RTT` fits more than
     `LATE_ROUNDS` calls of the parameters' `call_ns`, or more than the band's `d`.  An answer past `Δ_late + RTT` is
     rejected without checking its block.  Once that deadline has passed with no answer, `expire()` closes the challenge
-    as rejected, and so does the next `challenge()` before it reveals another index.  Without it, the memory challenger
-    waits for each answer however late it is.  The continuous audit runs on `continuous.ContinuousMemoryChallenger`,
+    as rejected, and so does the next `challenge()` before it reveals another index.  Without it, the memory attester
+    waits for each answer however late it is.  The continuous audit runs on `continuous.ContinuousMemoryAttester`,
     never on this class alone: `respond(block)` names no challenge, so a stale answer to an expired challenge would
     answer the next one.
 
@@ -226,7 +226,7 @@ class UnsignedRounds:
 
     @property
     def sent_ns(self) -> int | None:
-        """The open challenge's send time on the memory challenger's clock, or None."""
+        """The open challenge's send time on the memory attester's clock, or None."""
         return None if self._open is None else self._open[1]
 
     @property
@@ -236,7 +236,7 @@ class UnsignedRounds:
 
     @property
     def ends_at(self) -> int | None:
-        """The first challenge's send time plus `cap_ns`: on the memory challenger's clock past it, the audit is
+        """The first challenge's send time plus `cap_ns`: on the memory attester's clock past it, the audit is
         aborted.  None without a cap, or before the first challenge."""
         return None if self.cap_ns is None or self._first is None else self._first + self.cap_ns
 
@@ -288,7 +288,7 @@ class UnsignedRounds:
         if self._open is None:
             raise RuntimeError("no challenge is open")
         if self.late_limit_ns is None and self.cap_ns is None:
-            raise RuntimeError("no hard deadline: the memory challenger waits for the answer")
+            raise RuntimeError("no hard deadline: the memory attester waits for the answer")
         a = self._expire(self.clock())
         if a is None:
             cap = "" if self.cap_ns is None else " and the audit's cap"
@@ -321,7 +321,7 @@ def run_timed(challenger: UnsignedRounds, respond: Callable[[int], bytes | tuple
               path: Callable[[int], tuple[bytes, ...]] | None = None) -> AuditResult:
     """Drive `challenger` against `respond(index)` until all `k` are answered.  `respond` returns the block, or
     `(block, report)` to keep the responder's own record in the `ChallengeReply`; `path(index)` serves a root-only
-    memory challenger."""
+    memory attester."""
     while not challenger.done:
         i = challenger.challenge()
         out = respond(i)

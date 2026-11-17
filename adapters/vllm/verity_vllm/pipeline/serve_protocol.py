@@ -1,7 +1,7 @@
 """`verity-vllm serve-openai`'s completion protocol: each ``/v1/completions`` request parsed and each response framed as vLLM's
 OpenAI server does it. `VllmProtocol` is that server's own classes; `PlainProtocol` is the same framing without vLLM, for the
 CPU tests; `framing_agrees` holds the two to each other. `IdsProtocol` (``--protocol ids``) streams the scan's id form
-instead to the network attester's id requests, since the certifier forwards the server's bytes into its cells unchanged,
+instead to the network attester's id requests, since it forwards the server's bytes into its cells unchanged,
 and answers every other request as vLLM does (`of`)."""
 from __future__ import annotations
 
@@ -63,7 +63,7 @@ def should_include_usage(stream_options: Mapping[str, Any] | None, force: bool) 
 
 
 class PlainProtocol:
-    """vLLM's completion protocol for what the certifier sends, without vLLM: request fields and defaults as
+    """vLLM's completion protocol for what the network attester sends, without vLLM: request fields and defaults as
     ``CompletionRequest``'s, chunks serialized as ``completion_stream_generator`` serializes its pydantic models
     (``exclude_unset=True`` for a choice chunk, ``exclude_none=True`` for the usage chunk)."""
 

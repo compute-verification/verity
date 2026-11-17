@@ -35,9 +35,11 @@ untraced = [
     "test_commit_records.py",
     "test_compute_local_pair.py",
     "test_composite.py", "test_member_seconds.py", "test_members_tables.py",
+    "test_served_advice_day.py",
     "test_served_bandwidth.py",
     "test_served_overhead.py",
     "test_served_verdicts.py",
+    "test_proof_layers_script.py",
 ]
 # The Lean verifier and the ZK server's Lean, which `test_audit_two_members` runs and skips without: check's lean-build step
 # builds them before this suite (`AFTER_LEAN`). Its flock-circuit is `verity/protocols/proofs/flock/prover/check_build.sh bin`'s,
@@ -87,6 +89,8 @@ parts = 7
 # (its `test_pearl_c_vllm` and what that imports by path), with PouwCheck.PearlPlus's `pouw-pearlplus`.
 # `benchmarks/prove_path/prove_path.py`, its `sources.json` and the checkpoint manifests it reads: inference_only's class
 # circuit under a φ (`prove_path.registered_of_serve`), which refuses a BF16 checkpoint under the int8 serve's.
+# `benchmarks/prove_path/llama32_1b_tg_l0_step1.json`: the Pearl+ tie's default step 3 partition, which served_verdicts.sh's
+# preflight must pass.
 # `benchmarks/spot_proved/stage.py`: its allreduce and cuBLAS GEMM staging on fake captures,
 # and the match gate's a11, which imports a6's `benchmarks/served_units/stage.py` and its circuit-check targets.
 # network_e2e's endpoint advice: `verity-vllm advice`'s output, which advice_charge's tests read.
@@ -134,6 +138,7 @@ inputs = ["tools/config/verity_config", "verity/protocols/resource_accounting/co
           "verity/protocols/resource_accounting/memory/poub/prover/p2_stage/layout.py", "verity/protocols/resource_accounting/memory/poub/prover/p2_stage/stage.py",
           "benchmarks/torch_gpu/p2_stage/full.py", "benchmarks/torch_gpu/p2_stage/gemm.py",
           "verity/protocols/resource_accounting/memory/poub/attester/live_verifier/host.py", "benchmarks/prove_path/prove_path.py", "benchmarks/prove_path/sources.json",
+          "benchmarks/prove_path/llama32_1b_tg_l0_step1.json",
           "adapters/vllm/manifests/checkpoints.json", "adapters/vllm/manifests/checkpoints-int8.json", "benchmarks/one_stage"]
 
 # What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,

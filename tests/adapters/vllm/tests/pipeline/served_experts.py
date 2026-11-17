@@ -35,8 +35,8 @@ from types import SimpleNamespace
 from typing import Any
 
 import numpy as np
-
 from verity.commitments.periods import rows as CS
+
 from verity_vllm.commit import step_rows
 from verity_vllm.pipeline import cpu_replay as CPU
 from verity_vllm.pipeline import replay_bundle as RB
@@ -88,6 +88,7 @@ def specs() -> SimpleNamespace:
     from verity.circuits.codec import descriptor_id
     from verity.circuits.defs import bind
     from verity.circuits.ops.prims import HopperE4m3MmaV2Dot32, HopperE4m3QgmmaDot32
+
     from verity_vllm.definitions.registry import act, deepgemm, fp8_moe_experts, moe
 
     return SimpleNamespace(
@@ -234,7 +235,7 @@ def weights_tree(served: dict[str, np.ndarray]) -> dict[str, Any]:
     geo, wk = bytes(range(64)), bytes(range(64))
     names, roots = [], []
     for i, (_key, (name, shape, bits)) in enumerate(fields()):
-        raw = served[name.removeprefix(WRAP)].view(np.uint8)
+        raw: np.ndarray = served[name.removeprefix(WRAP)].view(np.uint8)
         names.append([name.removeprefix(WRAP), DTYPES[bits], list(shape), int(raw.size)])
         roots.append(step_rows.tensor_root(geo, i, names[-1], raw, wk))
     return step_rows.weights_tree(geo, names, roots, wk)
@@ -246,6 +247,7 @@ def partition() -> dict[str, Any]:
     slots stay out of the window."""
     from verity.circuits.codec import descriptor_id
     from verity.commitments.gates.embedding import read
+
     from verity_vllm.pipeline import serving_rows as SRW
     from verity_vllm.pipeline.serving_templates import FUSED
     from verity_vllm.query.program_view import spec_base, spec_statics
@@ -358,7 +360,7 @@ SAME = ("format", "program", "query", "law", "partition", "population", "scheme"
 
 def same_commitment(a: Path, b: Path) -> None:
     """Windows ``a`` and ``b`` commit one thing, or an AssertionError naming what differs: one population program, partition,
-    law and port domains (which bind the run root), one circuit record and index, the same registered roots, and in every
+    sampling design and port domains (which bind the run root), one circuit record and index, the same registered roots, and in every
     member the same committed rows on the ports its own file holds, among them each unit's opening of its table (the table's
     row, its salt and its path, the committer's under its key).  Each window salts its own rows, so the roots of its members'
     trees are its own."""
@@ -377,8 +379,8 @@ def same_commitment(a: Path, b: Path) -> None:
 
     assert shape(wa) == shape(wb), "the members"
     ba, bb = CS.Bodies(a, wa), CS.Bodies(b, wb)
-    for k, m in enumerate(wa["members"]):
-        oa, ob = ba.own(k), bb.own(k)
+    for i, m in enumerate(wa["members"]):
+        oa, ob = ba.own(i), bb.own(i)
         assert oa and oa.keys() == ob.keys(), f"member {m['name']}: the ports its own file holds"
         for q in oa:
             assert np.array_equal(oa[q][0], ob[q][0]), f"member {m['name']}: the rows of port {q}"
