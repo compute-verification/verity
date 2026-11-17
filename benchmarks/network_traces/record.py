@@ -2,7 +2,7 @@
 
 One job (`run.sh`, queued on one leased GPU) starts vLLM's OpenAI-compatible server on that GPU from
 the node's local weights, replays recorded request mixes open-loop with a streaming client on the same host, and records
-on the monotonic clock when each request was sent and when each streamed chunk arrived. The client stands where a certifier
+on the monotonic clock when each request was sent and when each streamed chunk arrived. The client stands where a network attester
 in front of the server would: every streamed token is one egress frame, ready when its chunk arrives, and a request is
 ⌈bytes/B⌉ ingress frames that arrive when it is sent.
 

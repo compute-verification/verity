@@ -309,12 +309,12 @@ def _changed(requests, j: int, k: int, **fields):
 
 
 @pytest.mark.parametrize("j,k,field,value,names", [
-    (0, 1, "outputs", 7, "n = 7 and the network certifier signed 8"),
-    (0, 1, "outputs", 9, "n = 9 and the network certifier signed 8"),
-    (5, 0, "outputs", 0, "n = 0 and the network certifier signed 2"),
-    (0, 0, "prompt", 4, "bytes = 413 and the network certifier signed 402"),
-    (0, 1, "prompt", 39, "bytes = 802 and the network certifier signed 813"),
-    (5, 0, "prompt", 103, "bytes = 1522 and the network certifier signed 1481"),
+    (0, 1, "outputs", 7, "n = 7 and the network attester signed 8"),
+    (0, 1, "outputs", 9, "n = 9 and the network attester signed 8"),
+    (5, 0, "outputs", 0, "n = 0 and the network attester signed 2"),
+    (0, 0, "prompt", 4, "bytes = 413 and the network attester signed 402"),
+    (0, 1, "prompt", 39, "bytes = 802 and the network attester signed 813"),
+    (5, 0, "prompt", 103, "bytes = 1522 and the network attester signed 1481"),
 ])
 def test_another_length_is_refused(signed, j, k, field, value, names):
     """A request row that states another output count or another prompt length than the released request's (a
@@ -348,10 +348,10 @@ def test_an_output_count_below_the_cells_sent_before_a_fail_is_refused(signed):
 
 
 @pytest.mark.parametrize("cells,names,accepts", [
-    (((0, 0), (1, 2)), "slot 0: the request row gives n = 4 and the network certifier signed 0", True),
-    (((1, 0), (0, 0)), "slot 1: the request row gives n = 6 and the network certifier signed 2", True),
-    (((1, 0), (1, 3)), "slot 1: the request row gives n = 3 and the network certifier signed 2", True),
-    (((1, 1), (1, 2)), "slot 0: the request row gives n = 1 and the network certifier signed 0", True),
+    (((0, 0), (1, 2)), "slot 0: the request row gives n = 4 and the network attester signed 0", True),
+    (((1, 0), (0, 0)), "slot 1: the request row gives n = 6 and the network attester signed 2", True),
+    (((1, 0), (1, 3)), "slot 1: the request row gives n = 3 and the network attester signed 2", True),
+    (((1, 1), (1, 2)), "slot 0: the request row gives n = 1 and the network attester signed 0", True),
     (((1, 0), (1, 7)), "slot 1: the connection failed after 7 outputs and its request has 6", False),
     (((1, 0), (2, 2)), "slot 1: the fails slot's class is 2, not 0 or 1", False),
     (((1, 0), (0, 2)), "slot 1: the fails slot has no failure and at = 2, not 0", False),
@@ -396,15 +396,15 @@ def test_another_release_index_is_refused(signed):
             f"registered reads: table row {rows_differ[0]} does not open the registered root at position {rows_differ[0]}"
 
     refused(_changed(requests, 0, 1, order=2), "row 0: slot 1: the request row gives N \\+ 1 = 3 and the network "
-            "certifier signed 2", [0])
+            "attester signed 2", [0])
     refused(_changed(requests, 5, 0, order=1), "row 5: slot 0: the request row gives N \\+ 1 = 2 and the network "
-            "certifier signed 3", [5])
+            "attester signed 3", [5])
     refused([requests[0][::-1], *requests[1:]], "row 0: slot 0: the request row gives N \\+ 1 = 2 and the network "
-            "certifier signed 1", [0])
+            "attester signed 1", [0])
     moved = [requests[0], requests[5], *requests[2:5], requests[1], *requests[6:]]
-    refused(moved, "row 1: slot 0: the request row gives N \\+ 1 = 3 and the network certifier signed 0", [1, 5])
+    refused(moved, "row 1: slot 0: the request row gives N \\+ 1 = 3 and the network attester signed 0", [1, 5])
     refused([requests[0][:1], *requests[1:]], "row 0: slot 1: the request row gives N \\+ 1 = 0 and the network "
-            "certifier signed 2", [0])
+            "attester signed 2", [0])
     # the signed rows themselves, two slot strides' in each other's place: under their own salts and paths the
     # verifier's program reads other positions, and under the positions' they open nothing
     swapped = [0, 5, 2, 3, 4, 1, 6, 7]
