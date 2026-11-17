@@ -724,6 +724,8 @@ def challenger_coins(challenger: str) -> str:
 
 #: the challengers reached through the gate's verbs: the auditor device's over ssh, or a gate command on this machine
 GATES = ("gate:", "command:")
+#: sampled proofs' key in a record's ``coins_on``, as the served table's records name them
+SAMPLED_NAME = "sampled-proofs"
 #: the only words a sampled-proofs row on simulated coins gives its ε at δ in
 UNDER_AUDITOR = "what the same sample would establish under an auditor's challenger"
 
@@ -743,7 +745,7 @@ def sampled_coins(audit: Path, key_sha512: str | None) -> str:
 def on_coins(row: Mapping[str, Any], coins: str, on: str) -> dict[str, Any]:
     """The sampled-proofs row ``row`` with its ``coins`` and ``coins_on``; on simulated coins its ε and δ only as
     `UNDER_AUDITOR` says them."""
-    out = {**row, "coins": coins, "coins_on": {NAMES["integrity"]: on}}
+    out = {**row, "coins": coins, "coins_on": {SAMPLED_NAME: on}}
     if coins != "live":
         said = {k: out.pop(k) for k in ("epsilon", "delta") if k in out}
         out |= {"epsilon": None, "delta": None, UNDER_AUDITOR: said}
@@ -2406,7 +2408,7 @@ def record(rows: Mapping[str, Mapping[str, Any]], *, window: int, steps: tuple[i
     def said_coins(report: dict[str, Any], line: dict[str, Any]) -> None:
         if "integrity" in report["protocols"]:
             report["protocols"]["integrity"] = on_coins(report["protocols"]["integrity"], *coins)
-            line |= {"coins": coins[0], "coins_on": {NAMES["integrity"]: coins[1]}}
+            line |= {"coins": coins[0], "coins_on": {SAMPLED_NAME: coins[1]}}
 
     host = socket.gethostname()
     if off_node and host == node:
@@ -2477,7 +2479,7 @@ def record(rows: Mapping[str, Mapping[str, Any]], *, window: int, steps: tuple[i
             "deployment": rec["monitoring_period"]["deployment"]["id"]}
     said_coins(report, line)
     if (leg := rec["legs"].get("integrity")) is not None:
-        leg |= {"coins": coins[0], "coins_on": {NAMES["integrity"]: coins[1]},
+        leg |= {"coins": coins[0], "coins_on": {SAMPLED_NAME: coins[1]},
                 **({"at_is": UNDER_AUDITOR} if coins[0] != "live" else {})}
     return report, rec, line
 

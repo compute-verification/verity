@@ -790,7 +790,7 @@ def test_a_same_machine_gate_never_reads_as_live_coins_from_an_auditor_s_challen
     assert S.sampled_coins(audit, pin) == "live"
     assert {S.sampled_coins(audit, "0" * 128), S.sampled_coins(audit, None), S.sampled_coins(tmp_path, pin)} == {"simulated"}
     assert S.challenger_coins("command:python3 -I local_gate.py /gate").startswith("simulated: ")
-    on = {S.NAMES["integrity"]: "vy-dc-h200"}
+    on = {S.SAMPLED_NAME: "vy-dc-h200"}
     for coins in ((S.sampled_coins(audit, "0" * 128), "vy-dc-h200"), None):
         report, rec, line = S.record(_rows(_accepted(), tmp_path / "pieces"), window=1, steps=(5, 11), node="vy-dc-h200",
                                      run="r1", **({"coins": coins} if coins else {}))
