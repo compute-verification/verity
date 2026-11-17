@@ -8585,7 +8585,7 @@ def test_a_run_whose_lake_a_build_is_still_writing_fails_loudly(tmp_path, monkey
 
 
 def test_an_update_keeps_the_run_records_it_could_not_rederive(tmp_path, monkeypatch):
-    entry = {"args": ["{v.txt}"], "data": {"v.txt": sha("12\n")}}
+    entry = {"args": ["{v.txt}"], "data": {"v.txt": sha("12\n"), "w.txt": sha("13\n")}}
     pkg, ran, tests = _runs(tmp_path, monkeypatch, entry)
     with A._WROTE:
         A._WRITING.add(pkg.resolve() / ".lake")
@@ -8595,7 +8595,8 @@ def test_an_update_keeps_the_run_records_it_could_not_rederive(tmp_path, monkeyp
         with A._WROTE:
             A._WRITING.discard(pkg.resolve() / ".lake")
     assert fails[0].startswith("runs: a build is still writing") and now == {"T": entry} and ran == []
-    assert tests(update=True) == ([f"runs: T's data v.txt is missing from {pkg}"], {"T": entry}) and ran == []
+    assert tests(update=True) == ([f"runs: T's data v.txt is missing from {pkg}", f"runs: T's data w.txt is missing from {pkg}"],
+                                  {"T": {"args": ["{v.txt}"], "data": {"v.txt": sha("12\n")}}}) and ran == []
 
 
 def test_a_run_names_paths_outside_its_package_only_through_repo(tmp_path):

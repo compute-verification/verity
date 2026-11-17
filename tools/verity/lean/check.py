@@ -6464,7 +6464,9 @@ def tests(pkg: Path, policy: dict, files: dict[str, str], work: Path, repo: Path
             if data[name] != want and not update:
                 bad.append(Failure("runs.data-digest", mod, f"runs: {mod}'s data {name} has SHA-256 {data[name]}, not the "
                                    f"record's {want or '(none)'}: run `check.py --update` when the data changed on purpose"))
-        now[mod] = entry | {"data": entry.get("data", {}) | data} if update else entry
+        named = {a[1:-1] for a in entry.get("args", []) if a.startswith("{") and a.endswith("}")}
+        now[mod] = entry | {"data": {n: data.get(n, d) for n, d in sorted(entry.get("data", {}).items())
+                                     if n in data or n in named}} if update else entry
         if bad:
             fails += bad
             continue
