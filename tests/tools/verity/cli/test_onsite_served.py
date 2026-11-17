@@ -44,7 +44,7 @@ BINDINGS = {
     "challenger": {"pouw": {"gate": "gate-command", "peer": "peer-1", "key-sha512": KEY}},
     "memory-challenger": {"pous": {"address": "192.0.2.1:7000"}, "wipe": {"address": "192.0.2.1:7001"}},
     "bandwidth-verifier": {"bandwidth": {"host": "192.0.2.2"}},
-    "network-certifier": {"certifier": {"gate": "user@gate-1"}},
+    "network-certifier": {"certifier": {"gate": "user@gate-1", "peer": "peer-1"}},
 }
 #: `BINDINGS` with the address PoUB's runtime parties read (`runtime`)
 RUNTIME_BINDINGS = {**BINDINGS, "bandwidth-verifier": {"bandwidth": {"address": "192.0.2.2:7002"}}}
@@ -57,7 +57,7 @@ VARIABLES = {
     "CERTIFIER_PERIOD_CMD": '.venv/bin/python benchmarks/network_traces/certifier_piece.py period "$@"',
     "CLASSES": "4,32,4 8,32,4,4,16", "V3C_CLASS": "8,32,4,4,16",
     "CERTIFIER_FRONT": '.venv/bin/python benchmarks/network_traces/certifier_piece.py front "$1" "$2" "$3" '
-                       "--gate user@gate-1",
+                       "--gate user@gate-1 --peer peer-1",
     "DEVELOPMENT": "1", "H1_GATE": "gate-command", "H1_KEY_SHA512": KEY, "H1_PEER": "peer-1", "LOAD": "varied",
     "PRECISION": "verity_int8", "REPO": "verity-int8/Llama-3.2-1B-INT8",
     "REV": "15b0976d400d796ee589e7737d03a919526bf800", "SERVE_ARGS": "--protocol ids --id-payload 503", "SLOTS": "4",
@@ -68,7 +68,8 @@ VARIABLES = {
                  f"--bw-trusted-sha512 {PIN['bandwidth']} --bw-host 192.0.2.2",
     "BANDWIDTH_CMD": '"$PY" benchmarks/one_stage/served_bandwidth.py collect --serve-dir "$1" --window "$2" --out "$3"',
 }
-KEYS = ["challenger.pouw.gate", "challenger.pouw.peer", "challenger.pouw.key-sha512", "network-certifier.certifier.gate"]
+KEYS = ["challenger.pouw.gate", "challenger.pouw.peer", "challenger.pouw.key-sha512", "network-certifier.certifier.gate",
+        "network-certifier.certifier.peer"]
 #: each runtime party: its protocol (None while a half isn't in the tree), its role there, its machine and its clock
 RUNTIME = {
     ("memory-challenger", "pous"): ("verity/pous/memory-challenger", "memory-challenger", "auditor-host",
@@ -248,7 +249,7 @@ def test_a_dry_run_resolves_every_party_channel_and_piece(tmp_path, capsys):
     assert {e["component"]: e["hooks"]["SERVE_ARGS"] for x in got["plan"] for e in x["entries"]
             if "SERVE_ARGS" in e["hooks"]} == {"certifier": T.ID_FORM}
     assert (hooks["H1_GATE"], hooks["H1_PEER"], hooks["H1_KEY_SHA512"]) == ("gate-command", "peer-1", KEY)
-    assert hooks["CERTIFIER_FRONT"].endswith("--gate user@gate-1") and "PP_CHALLENGER" not in hooks
+    assert hooks["CERTIFIER_FRONT"].endswith("--gate user@gate-1 --peer peer-1") and "PP_CHALLENGER" not in hooks
     assert hooks["DEVELOPMENT"] == "1"
 
 
@@ -308,7 +309,8 @@ def test_the_runners_variables_and_the_bindings_keys_are_these():
     assert T.unbound(cfg, {}) == KEYS and T.unbound(cfg, BINDINGS) == [] and sorted(KEYS) == UNBOUND
     unbound = T.variables(cfg, {})
     assert set(unbound) == set(VARIABLES) - {"WIPE_ADDRESS"} | set(deployed)
-    assert unbound["CERTIFIER_FRONT"].endswith("--gate '<network-certifier.certifier.gate>'")
+    assert unbound["CERTIFIER_FRONT"].endswith("--gate '<network-certifier.certifier.gate>' "
+                                               "--peer '<network-certifier.certifier.peer>'")
     assert all(unbound[k] == VARIABLES[k] for k in ("CERTIFIER_CHAIN_CMD", "CERTIFIER_PERIOD_CMD"))
 
 
@@ -316,7 +318,7 @@ def test_the_certifiers_script_is_its_developer_sides_and_no_gate_piece_names_on
     cfg = R.load(CONFIG, REG)
     side, device = REG.parties["certifier"][NC.WORKERS], REG.parties["certifier"][NC.NETWORK_CERTIFIER]
     assert (side.runs, side.scripts, side.reaches, side.binds) == (T.SERVED_WINDOW, (T.CERTIFIER_PIECE,),
-                                                                    NC.NETWORK_CERTIFIER, ("gate",))
+                                                                    NC.NETWORK_CERTIFIER, ("gate", "peer"))
     assert set(side.variables(cfg, BINDINGS)) == {"SERVE_ARGS", "CERTIFIER_FRONT", "CERTIFIER_CHAIN_CMD",
                                                     "CERTIFIER_PERIOD_CMD", "V3C_CLASS", "CLASSES"}
     assert device.runs == T.GATE
@@ -693,7 +695,7 @@ NETWORK = ROOT / "demos" / "onsite_network.toml"
 NETWORK_PIN = next(p["key-sha512"] for p in tomllib.loads(NETWORK.read_text())["pin"] if p["protocol"] == "wipe")
 NETWORK_BINDINGS = {"memory-challenger": {"wipe": {"address": "192.0.2.1:7001", "host": "auditor-1",
                                                    "command": "ssh auditor-1"}},
-                    "network-certifier": {"certifier": {"gate": "user@gate-1"}}}
+                    "network-certifier": {"certifier": {"gate": "user@gate-1", "peer": "peer-1"}}}
 
 
 def test_the_wipe_runs_in_the_workload_under_the_configurations_pin_and_no_party_of_it_raises(tmp_path, monkeypatch):
