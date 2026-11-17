@@ -81,5 +81,4 @@ For x [M, K] bf16, W [N, K] int8 and s_w [N] float32:
     quantizer, lm_head, attention, norms and elementwise, sampling and the gaps.
 
 Outside this directory, `benchmarks/hash/dither/sbench.py`'s `exact` and `exact-fused` arms are one engine, the ops'
-CUDA bodies as registered, and `benchmarks/kernels/s8_linear` times `int8_fused` with `kbench.py`'s helpers (`timed`,
-`copies_for`, `nvml`).
+CUDA bodies as registered.
