@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""The remote demo's minutes from its first command to its verdict, read off its finished runs' records: the metric
-``vllm/remote-demo-minutes`` (`benchmarks/demo_minutes/metrics.toml`). Standard library only; the onsite demo's reader
+"""The remote application's minutes from its first command to its verdict, read off its finished runs' records: the metric
+``vllm/remote-demo-minutes`` (`benchmarks/demo_minutes/metrics.toml`). Standard library only; the onsite application's reader
 (`benchmarks/demo_minutes/onsite_minutes.py`) is this one with its own verdict.
 
     research run --cwd source -- python3 benchmarks/demo_minutes/minutes.py FIRST_RUN [RUN ...] VERDICT_RUN
         [--runs-dir DIR] [--main REF]
 
-The arguments are the demo's research runs in the order it ran them: the first is the vLLM served run's
+The arguments are the application's research runs in the order it ran them: the first is the vLLM served run's
 (`adapters/vllm/tools/served_run/run.sh`), the last the one
 that composed remote's verdict on the auditor's machine (``served_verdicts.sh compose``). Each is a run id under
 ``--runs-dir`` (default ``$RESEARCH_RUNS``, else ``~/.research/runs``), where ``research fetch RUN --all`` copies a run's
@@ -21,7 +21,7 @@ It refuses, with no measurement and the reason (exit 1):
   composed as a development check, on the served node;
 - a served commit (the first run's ``computation.tree_sha``, in its ``job.json``) that is not a commit of ``--main``
   (default ``origin/main``) in the tree this file is in;
-- a verdict other than accept: the demo's minutes are those of a demo that ended accepting, so its line gives the verdict
+- a verdict other than accept: the application's minutes are those of an application that ended accepting, so its line gives the verdict
   and the minutes for the log, and the result holds no value.
 
 Under ``research run`` it writes its own run's ``result.json``: the minutes under `METRIC`, with the verdict, the runs
@@ -42,7 +42,7 @@ from pathlib import Path
 import settings
 
 METRIC = "vllm/remote-demo-minutes"
-#: remote's composite of record, whose verdict is the demo's, as `served_composite.sh` writes it under the run's out/
+#: remote's composite of record, whose verdict is the application's, as `served_composite.sh` writes it under the run's out/
 PRODUCT = "remote-v1"
 #: the three checks the goal names, each a subprotocol of `PRODUCT`
 CHECKS = ("verity/inference-only/v0", "verity/pouw/pearl-plus/v1", "verity/sampled-proofs/v1")
@@ -109,7 +109,7 @@ def on_main(sha: str, ref: str, repo: Path) -> None:
 
 def minutes(runs: list[str], root: Path, ref: str, repo: Path | None = None, *,
             read: Callable[[Path], str] = verdict, metric: str = METRIC) -> dict:
-    """The measurement for the demo's ``runs``, first to last, whose last run's verdict ``read`` gives; `Refused` where
+    """The measurement for the application's ``runs``, first to last, whose last run's verdict ``read`` gives; `Refused` where
     it can't stand. ``repo`` is the tree holding ``ref`` (default this file's)."""
     ds = [run_dir(r, root) for r in runs]
     start, end = utc(ds[0], "started_utc"), utc(ds[-1], "ended_utc")
@@ -136,7 +136,7 @@ def result(run_id: str, runs: list[str], m: dict | None, why: Refused | None, me
 def main(argv: list[str] | None = None, *, read: Callable[[Path], str] = verdict, metric: str = METRIC,
          checker: str = "benchmarks/demo_minutes/minutes.py", nargs: str | int = "+", doc: str = __doc__) -> int:
     ap = argparse.ArgumentParser(description=doc.split("\n\n")[0])
-    ap.add_argument("runs", nargs=nargs, metavar="RUN", help="the demo's runs, first to last (module docstring)")
+    ap.add_argument("runs", nargs=nargs, metavar="RUN", help="the application's runs, first to last (module docstring)")
     ap.add_argument("--runs-dir", type=Path, default=settings.runs_root())
     ap.add_argument("--main", default="origin/main", help="the ref the served commit must be a commit of")
     a = ap.parse_args(argv)

@@ -103,7 +103,7 @@ def test_the_configuration_is_the_tables_byte_for_byte():
 
 @pytest.mark.parametrize("demo", sorted(set(T.DEMOS) - {"onsite_full"}))
 def test_each_smaller_demo_is_the_tables_byte_for_byte_and_its_own_composite(demo):
-    """Each other demo file is the table's configuration of its subprotocols, at onsite_full's commit, whose composite
+    """Each other application's file is the table's configuration of its subprotocols, at onsite_full's commit, whose composite
     (or onsite's smaller set) is its own id; only the subprotocols it lists have parameters and pins."""
     path = ROOT / "applications" / f"{demo}.toml"
     cfg = T.configuration(K.parse(CONFIG.read_text())["program"]["commit"], demo)

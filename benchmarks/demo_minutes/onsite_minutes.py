@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
-"""The onsite demo's minutes from its first command to its verdict, read off its two runs' records: the metric
+"""The onsite application's minutes from its first command to its verdict, read off its two runs' records: the metric
 ``vllm/onsite-demo-minutes`` (`benchmarks/demo_minutes/metrics.toml`). Standard library only.
 
     research run --cwd source -- python3 benchmarks/demo_minutes/onsite_minutes.py PROVER_RUN AUDITOR_RUN
         [--runs-dir DIR] [--main REF]
 
-A run of record runs the demo's two commands each under
+A run of record runs the application's two commands each under
 ``research run``: PROVER_RUN is the prover node's, AUDITOR_RUN the auditor device's, whose log (``stdout.log``) holds
 the period's ``VERDICT`` line. The minutes run from PROVER_RUN's ``started_utc`` to AUDITOR_RUN's ``ended_utc``. Finding
 the runs, the served commit (the prover node's run's), what is refused and what is written are `minutes.py`'s, the
-remote demo's reader, whose code this one runs with its own verdict (`verdict`). It also refuses an AUDITOR_RUN whose
+remote application's reader, whose code this one runs with its own verdict (`verdict`). It also refuses an AUDITOR_RUN whose
 log holds no ``VERDICT`` line, a line whose ``run`` is ``local`` (a `verity run` outside any research run, whose record
 holds no time), and one whose ``components`` give a verdict on fewer than the goal's seven checks (`CHECKS`).
 """
@@ -27,7 +27,7 @@ HERE = Path(__file__).resolve().parent
 
 
 def _reader():
-    """The remote demo's reader, loaded by its path under a name of its own, with its directory first on the path for
+    """The remote application's reader, loaded by its path under a name of its own, with its directory first on the path for
     the `settings` it imports."""
     sys.path.insert(0, str(HERE))
     spec = importlib.util.spec_from_file_location("remote_demo_minutes", HERE / "minutes.py")

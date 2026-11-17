@@ -195,7 +195,7 @@ PROVER_ONLY = {
 #: process (the layout's ``verity/runtime/``, ``tests/tree.toml``).
 RUNTIME = ("verity.runtime", *sorted(f"verity.runtime.{p.stem}" for p in (ROOT / "verity" / "runtime").glob("*.py")
                                      if p.stem != "__init__"))
-#: The trees whose files import no module of the runtime: only what starts a run does (a demo, a benchmark, the `verity`
+#: The trees whose files import no module of the runtime: only what starts a run does (an application, a benchmark, the `verity`
 #: command), and it hands a protocol's file the stream, the side or the driver it needs.
 RUNTIME_FREE = ("verity/protocols/", "adapters/")
 #: Files of ``RUNTIME_FREE``, outside its tests, that import the runtime all the same, each with its owner and what it

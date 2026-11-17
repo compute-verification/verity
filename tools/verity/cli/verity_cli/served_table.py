@@ -1,5 +1,5 @@
 """The served window's table for `verity run` (`verity_cli.run.Registry`): onsite's and remote's components as a
-configuration declares them (`MANIFESTS`), the ``served-window`` workload (`SERVED`), each demo's subprotocols and the
+configuration declares them (`MANIFESTS`), the ``served-window`` workload (`SERVED`), each application's subprotocols and the
 configuration its file holds (`DEMOS`, `configuration`), each party's piece (`PARTIES`), and the run of the pieces placed
 on a machine (`live`). Pearl+ has no piece yet, so `verity run` refuses remote by name (``no-party``).
 
@@ -176,7 +176,7 @@ SERVED = Workload(SERVED_WINDOW, frozenset({"windows", "noise", "store", "receip
 #: onsite's subprotocols, the seven `Core.Composites.composites` holds for it
 ONSITE_COMPONENTS = ("sampled-proofs", "pouw", "inference-only", "pous", "bandwidth", "certifier", "wipe")
 PROTOCOLS = ONSITE_COMPONENTS
-#: each demo's subprotocols, the file `applications/NAME.toml` that `verity demo NAME` runs: onsite's seven, its two smaller
+#: each application's subprotocols, the file `applications/NAME.toml` that `verity demo NAME` runs: onsite's seven, its two smaller
 #: sets (`verity.config.UNACCEPTED`) and remote's
 DEMOS = {"onsite_full": ONSITE_COMPONENTS,
          "onsite_compute": ("sampled-proofs", "pouw", "inference-only", "certifier", "wipe"),
@@ -189,10 +189,10 @@ AUDITOR_REMOTE = "auditor-remote"
 PLACEMENT = {WORKERS: PROVER_NODE, ZK_SERVER: PROVER_NODE, PROVER: PROVER_NODE, CHALLENGER: GATE_HOST,
              NETWORK_CERTIFIER: GATE_HOST, MEMORY_CHALLENGER: AUDITOR_HOST, BANDWIDTH_VERIFIER: AUDITOR_HOST,
              VERIFIER: AUDITOR_HOST}
-#: the configuration this table's demo runs, whose `[[pin]]` entries are the only statement of the keys the auditor pinned
+#: the configuration this table's application runs, whose `[[pin]]` entries are the only statement of the keys the auditor pinned
 CONFIG = ROOT / "applications" / "onsite_full.toml"
 _NOT_YET = "`verity run` stops on it with NotImplementedError until goal demos/onsite-demo brings it."
-#: each demo file's header
+#: the header of each application's file
 HEADERS = {
     "onsite_full": (
         "The onsite run of the served window: onsite's seven subprotocols, each party on its machine, and the keys",
@@ -217,10 +217,10 @@ HEADER = HEADERS["onsite_full"]
 
 def configuration(commit: str, demo: str = "onsite_full",
                   pins: Sequence[Mapping[str, str]] | None = None) -> dict[str, Any]:
-    """The configuration `applications/<demo>.toml` holds, at program ``commit``: `config new`'s over the demo's subprotocols
+    """The configuration `applications/<demo>.toml` holds, at program ``commit``: `config new`'s over the application's subprotocols
     (`DEMOS`), each party at its `PLACEMENT` (remote's auditor parties at `AUDITOR_REMOTE`), the workload's and PoUS's
     parameters stated, and ``pins``, the keys the auditor pinned for its devices (by default `CONFIG`'s own `[[pin]]`
-    entries for the subprotocols the demo lists: no code states a key)."""
+    entries for the subprotocols the application lists: no code states a key)."""
     protocols = DEMOS[demo]
     cfg = K.new(SERVED_WINDOW, list(protocols), MANIFESTS, {SERVED_WINDOW: SERVED}, commit)
     cfg["workload"]["params"] = dict(SERVED.default_params)

@@ -42,7 +42,7 @@ HERE = Path(__file__).resolve().parent
 
 
 def _reader():
-    """The remote demo's reader, loaded by its path under a name of its own, with its directory first on the path for
+    """The remote application's reader, loaded by its path under a name of its own, with its directory first on the path for
     the `settings` it imports."""
     sys.path.insert(0, str(HERE))
     spec = importlib.util.spec_from_file_location("remote_demo_minutes", HERE / "minutes.py")
