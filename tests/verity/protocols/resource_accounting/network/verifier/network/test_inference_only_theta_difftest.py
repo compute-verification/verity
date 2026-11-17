@@ -1,10 +1,10 @@
-"""The difftest of θ's provenance check (`InferenceOnlyCheck.Theta`): the Python half.
+"""The difftest of θ's provenance check (`InferenceOnlyVerifier.Theta`): the Python half.
 
 `verity/protocols/workload_classification/training_detection/inference_only/verifier/lean/scripts/theta_difftest_vectors.py` writes 1,218 declarations with θ, θ's
 provenance and the service's trusted input (the deployment's registration log, the run and its parameters), each expanded
 gate by gate where the policy check gives a verdict, and `scripts/inference_only_reference.py`'s `check_theta` on each. `check`
-runs the Lean half in its Lean audit (`runs` in that package's `lean-audit.json`): `InferenceOnlyCheck/ThetaDifftestMain.lean`
-fails unless `InferenceOnlyCheck.Theta.check` gives Python's result on every case and `InferenceOnlyCheck.Theta.checkUnrolled` the same
+runs the Lean half in its Lean audit (`runs` in that package's `lean-audit.json`): `InferenceOnlyVerifier/ThetaDifftestMain.lean`
+fails unless `InferenceOnlyVerifier.Theta.check` gives Python's result on every case and `InferenceOnlyVerifier.Theta.checkUnrolled` the same
 on every expansion. As for the inference-only check's other two difftests, the audit checks the data against the record's SHA-256 and caches
 its pass on the Lean package's files alone, so the first test is what says the data is still what the generator and the
 reference write. The second checks that the random cases reach every refusal code and an acceptance, the third that each
@@ -39,7 +39,7 @@ def _load(name: str):
 
 vectors = _load("theta_difftest_vectors")
 reference = vectors.reference
-RUN = json.loads((LEAN / "lean-audit.json").read_text())["runs"]["InferenceOnlyCheck.ThetaDifftestMain"]
+RUN = json.loads((LEAN / "lean-audit.json").read_text())["runs"]["InferenceOnlyVerifier.ThetaDifftestMain"]
 
 
 @pytest.mark.slow

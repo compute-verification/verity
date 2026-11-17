@@ -13,8 +13,8 @@ number, also written into the run's result under the metric's id (`METRIC`).
 With no record read it prices the stated policy alone, says so under its first line (`STATED`), and its number is the
 served policy's, modeled. With `--from DIR` (`kit.record_dir`; or where `record.OF_RECORD` names a served run of
 record) it follows the core benchmarks' interface (`benchmarks/README.md`): a served run's record (`record.py`) comes
-first, the check's verdicts in their public form (`InferenceOnlyCheck.Record.check`,
-`InferenceOnlyCheck.RecordCount.check`) and its cost, PoUW's share and tie, and the value at the record's share; the
+first, the check's verdicts in their public form (`InferenceOnlyVerifier.Record.check`,
+`InferenceOnlyVerifier.RecordCount.check`) and its cost, PoUW's share and tie, and the value at the record's share; the
 stated policy's number follows, labelled as not the result. `kit.report` prints the coins and parameters the record
 states (`record.made_with`) under the first line, and gives the record's number, at its mark, only where the record
 holds a PoUW accept of record and the check ran and both rules comply; otherwise no number and why, and exit code 1.

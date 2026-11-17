@@ -1,19 +1,19 @@
 module
 
 public import Definitions.InferenceOnly
-public import InferenceOnlyCheck.Check
+public import InferenceOnlyVerifier.Check
 
 /-!
 # The inference-only check's properties, stated against the Lean function
 
-`InferenceOnlyCheck.evaluate` (`verity/protocols/policy/inference_only/verifier/lean/InferenceOnlyCheck/Check.lean`, package `inference_only_check`) is
+`InferenceOnlyVerifier.evaluate` (`verity/protocols/policy/inference_only/verifier/lean/InferenceOnlyVerifier/Check.lean`, package `inference_only_verifier`) is
 the verifier's check of a declared division against the inference-only policy at its rate,
 `InferenceOnly.CompliesRate c α` (`Definitions/InferenceOnly.lean`), at the gate budget `c = gamma` and the rate
-`α = num / den`, and `InferenceOnlyCheck.check` is `evaluate` with a refusal written `{"error": code}` (with a `message` giving
+`α = num / den`, and `InferenceOnlyVerifier.check` is `evaluate` with a refusal written `{"error": code}` (with a `message` giving
 the fix for some codes). θ, the registered information, holds only input gates bound at registration (`IsBoundAtRegistration`):
 one bound per run is refused. The difftest holds it to the Python reference on random instances; the statements here say
 what it computes on every instance. Each is a named `Prop`, proved as
-`InferenceOnlyCheck.Properties.SecurityProofs.X : InferenceOnlyCheck.Properties.X` in `Proofs.Properties.InferenceOnly`, and a guarantee of
+`InferenceOnlyVerifier.Properties.SecurityProofs.X : InferenceOnlyVerifier.Properties.X` in `Proofs.Properties.InferenceOnly`, and a guarantee of
 this package (`lean-audit.json`).
 
 Each statement has one shape (the lean-proofs skill, "One shape"): for every instance, if the check gives a verdict (or
@@ -27,7 +27,7 @@ and gives a verdict on every well-formed instance, are completeness, in `Proofs.
   The conditions are written over `j`'s JSON and what Flock's decoder returns for the program (`Flock.Program.decode`,
   then `Prog.gate` per gate), never over the check's own state.
 * `AcceptsExactly`: `evaluate j` gives a verdict only when `WellFormed j`.
-* `CheckRefuses`, `CheckAccepts`: the same of `InferenceOnlyCheck.check`, whose `error` field is the refusal's code and which has
+* `CheckRefuses`, `CheckAccepts`: the same of `InferenceOnlyVerifier.check`, whose `error` field is the refusal's code and which has
   none on a verdict.
 
 **A verdict is the definition's.** The decoded Program is the definition's circuit as the check's docstring maps
@@ -54,7 +54,7 @@ the statements read the decoder only through what it returns.
 
 @[expose] public section
 
-namespace InferenceOnlyCheck.Properties
+namespace InferenceOnlyVerifier.Properties
 
 open Lean (Json toJson)
 open Flock.Program (Prog)
@@ -269,4 +269,4 @@ def Witnessed (j out : Json) : Prop :=
 def Witnesses : Prop :=
   ∀ (j out : Json), evaluate j = .ok out → Witnessed j out
 
-end InferenceOnlyCheck.Properties
+end InferenceOnlyVerifier.Properties
