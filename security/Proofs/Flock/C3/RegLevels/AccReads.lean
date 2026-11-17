@@ -6,36 +6,7 @@ public import Proofs.Flock.VBridge.Family.AccRows
 public import Proofs.Flock.Recursive.Raw
 public import Proofs.Flock.Recursive.Stage
 
-/-!
-# n11: `OpenKeysS`' reads-file conjuncts at a level's `acc` and `acc_out`, from `checkAcc` and `checkAccReads`
-
-`OpenKeysS` (`Family/AccRows.lean`) keys each opening's `acc` (`acc_out`) column at one registration, `rec-acc`'s, read
-at the opening's row of the chain (`ColKeyedS`: the reads file names the column's port, the read's port has the
-registration, and the read is at the position). A level's session's reads file gives all three where the verifier
-checked its statement (`checkAcc_of_checkStmt`):
-
-* `names_of_checkAcc`: `checkAcc` refuses a reads file naming a port twice (`checkNames`), so two entries of `own`
-  with one name are one, which `find?`'s first entry of a name, all `checkAcc` and `checkAccReads` read, needs;
-* `value_of_checkAcc`, `site_of_checkAcc`: `checkAcc` finds each of the statement's `accPorts` reading `rec-acc`, and
-  every entry reading `rec-acc` has the registration (`site`) of `acc0` in the verifier's shared rows
-  (`site_of_portDiff`);
-* `reads_of_checkAccReads`: `checkAccReads` finds `acc` reading `accReads`' rows, and `acc_out` the next ones
-  (`accReads_recOpen`: the table's level `l`'s unit `u` reads row `u / q · n + opensBelow l + u % q`;
-  `accReads_recOpenStacked`: R's level `l`'s unit `u` reads row `2 · n + opensBelow' l + u`; `getElem?_accRow`);
-* `accPort_of_checks`, `accPort_of_checkStmt`: so `own`'s entry of each name has `acc0`'s registration and those reads;
-* `accRead_sampled`: at a sampled proof block, `OwnReadsHJ` puts a registered read of an `acc` (`acc_out`) column at `own`'s entry
-  of its name, so the reads file names the column's port and the read's port has `acc0`'s registration; its position
-  is `accReads`' row at the sampled statement's label of the unit (`idx`, which `OwnReadsHJ` reads), not at the unit;
-* `readsOwn_of_hown`: V*'s sessions sample every unit (`VSamplingDesign.live`, `execOS_subset_full_mem`), so at an accepted outcome
-  the session's game reaches (`Reached`) `OwnReadsHJ` holds at every registered read: its port is `own`'s entry of its
-  name, read at the sampled statement's label of the unit (`AtLabel`; `HmRow.drawn` labels unit `u` with the registered
-  population's `units.indices` at `u`, which no check here holds to `u`);
-* `accRead_of_checked`: so at such an outcome of a session whose statements the verifier checked (`ChecksAccepted`), the
-  read is also at `accReads`' row of the unit's label;
-* `accRead_at_unit`: where the verifier's checks at candidate 3 also pass at the outcome's own transcript (`ChecksC3`,
-  as the event's `ChecksVR` states them), its label check (`RecVStar.checkLabels`) makes that label the unit
-  (`PubRows.label_of_checked`), so the read is at `accReads`' row of the unit, which `OpenKeysS` reads.
--/
+/-! `OpenKeysS`' reads-file conjuncts at a level's `acc` and `acc_out`, from `checkAcc` and `checkAccReads`. -/
 
 @[expose] public section
 
@@ -48,9 +19,6 @@ local instance lawfulBEqByteArrayAcc : LawfulBEq ByteArray where
   eq_of_beq h := ByteArray.ext (beq_iff_eq.1 h)
   rfl {a} := by show (a.data == a.data) = true; exact beq_self_eq_true _
 
-/-! ## The verifier's checks -/
-
-/-- **Two ports `portDiff?` finds no field of, but reads, apart have one registration.** -/
 theorem site_of_portDiff {a b : Flock.Registered.Port} (h : Flock.RecVStar.portDiff? a b false = none) :
     FlockVBridge.Family.site a = FlockVBridge.Family.site b := by
   have e1 : a.value = b.value := Classical.byContradiction fun hne => by
@@ -69,7 +37,6 @@ theorem site_of_portDiff {a b : Flock.Registered.Port} (h : Flock.RecVStar.portD
     simp [Flock.RecVStar.portDiff?, e1, e2, e3, e4, e5, e6, hne] at h
   simp only [FlockVBridge.Family.site, e1, e2, e3, e4, e5, e6, e7]
 
-/-- **`checkAcc` names each port once** (`checkNames`): two entries of `own` with one name are one. -/
 theorem names_of_checkAcc {s : VStar.Stmt} {own : Array Flock.Registered.Port}
     {rows : Option (Array Flock.Registered.Port)} (h : Flock.RecVStar.checkAcc s own rows = .ok ()) :
     ∀ p ∈ own, ∀ p' ∈ own, p.name = p'.name → p = p' := by
@@ -82,8 +49,6 @@ theorem names_of_checkAcc {s : VStar.Stmt} {own : Array Flock.Registered.Port}
     intro p hp p' hp' he
     exact Flock.Registered.dupName?_none hd p' (Array.mem_toList_iff.2 hp') p (Array.mem_toList_iff.2 hp) he
 
-/-- **`checkAcc`'s first loop**: each of the statement's `accPorts` is `own`'s first entry of its name, reading
-`rec-acc`. -/
 theorem value_of_checkAcc {s : VStar.Stmt} {own : Array Flock.Registered.Port}
     {rows : Option (Array Flock.Registered.Port)} (h : Flock.RecVStar.checkAcc s own rows = .ok ()) :
     ∀ nm ∈ Flock.RecVStar.accPorts s, ∃ p, own.find? (·.name == nm) = some p ∧ p.value = Flock.RecVStar.ACC_VALUE := by
@@ -104,8 +69,6 @@ theorem value_of_checkAcc {s : VStar.Stmt} {own : Array Flock.Registered.Port}
   · obtain ⟨_, h2, -⟩ := FlockSoundness.Refine.ebind_ok hr
     cases h2
 
-/-- **`checkAcc`'s registration**: every entry of `own` reading `rec-acc` has the registration of `acc0` in the
-verifier's shared rows (the entries reading `rec-acc` have the first one's, and it is `acc0`'s). -/
 theorem site_of_checkAcc {s : VStar.Stmt} {own : Array Flock.Registered.Port}
     {rows : Option (Array Flock.Registered.Port)} (h : Flock.RecVStar.checkAcc s own rows = .ok ())
     {b : Flock.Registered.Port} (hb : b ∈ own) (hv : b.value = Flock.RecVStar.ACC_VALUE) :
@@ -159,8 +122,6 @@ theorem site_of_checkAcc {s : VStar.Stmt} {own : Array Flock.Registered.Port}
     rw [Array.getElem?_eq_getElem (Nat.lt_of_le_of_lt (Nat.zero_le i) hi)] at ha
     exact (ha _ rfl).elim
 
-/-- **`checkAccReads`' loop**: `own`'s first entries named `acc` and `acc_out` read `accReads`' rows, the second one
-on. -/
 theorem reads_of_checkAccReads {i : Flock.RecVStar.Inner} {s : VStar.Stmt} {own : Array Flock.Registered.Port}
     (h : Flock.RecVStar.checkAccReads i s own = .ok ()) {want : Array (Option ℕ)}
     (hw : Flock.RecVStar.accReads i s = .ok (some want)) :
@@ -187,8 +148,6 @@ theorem reads_of_checkAccReads {i : Flock.RecVStar.Inner} {s : VStar.Stmt} {own 
   · obtain ⟨_, h2, -⟩ := FlockSoundness.Refine.ebind_ok hr
     cases h2
 
-/-- **The table's level `l`'s rows of the chain** (`accReads` at `.recOpen`): unit `u` reads row
-`u / q · n + opensBelow l + u % q`. -/
 theorem accReads_recOpen {i : Flock.RecVStar.Inner} {sch : Flock.Schedule} (hsch : Flock.fast100 i.m = some sch)
     (l LANES H q : ℕ) : Flock.RecVStar.accReads i (.recOpen l LANES H q) =
       .ok (some ((Array.range (2 * (sch.levels[l]!).q)).map fun u => some (u / (sch.levels[l]!).q *
@@ -197,8 +156,6 @@ theorem accReads_recOpen {i : Flock.RecVStar.Inner} {sch : Flock.Schedule} (hsch
   simp only [Flock.RecVStar.accReads, hsch]
   rfl
 
-/-- **R's level `l`'s rows of the chain** (`accReads` at `.recOpenStacked`): unit `u` reads row
-`2 · n + opensBelow' l + u`, past both reps' openings. -/
 theorem accReads_recOpenStacked {i : Flock.RecVStar.Inner} {sch sr : Flock.Schedule}
     {r : Flock.RecVStar.StackedShape} (hsch : Flock.fast100 i.m = some sch) (hr : i.stacked = some r)
     (hsr : Flock.fast100 r.m = some sr) (l LANES H q : ℕ) :
@@ -208,14 +165,10 @@ theorem accReads_recOpenStacked {i : Flock.RecVStar.Inner} {sch sr : Flock.Sched
   simp only [Flock.RecVStar.accReads, hsch, hr, hsr]
   rfl
 
-/-- A unit's row in `accReads`' list, `d` on. -/
 theorem getElem?_accRow (f : ℕ → ℕ) {m d u : ℕ} (hu : u < m) :
     (((Array.range m).map fun u => some (f u)).map (·.map (· + d)))[u]? = some (some (f u + d)) := by
   simp [hu]
 
-/-- **A level's `acc` or `acc_out` entry, from `checkAcc` and `checkAccReads`**, `own` naming each port once
-(`names_of_checkAcc`): the entry `pa` of the name has `acc0`'s registration in the verifier's shared rows and reads
-`accReads`' rows, the second one on. -/
 theorem accPort_of_checks {i : Flock.RecVStar.Inner} {s : VStar.Stmt} {own : Array Flock.Registered.Port}
     {rows : Option (Array Flock.Registered.Port)} (hacc : Flock.RecVStar.checkAcc s own rows = .ok ())
     (hrd : Flock.RecVStar.checkAccReads i s own = .ok ()) (hl : Flock.RecVStar.accPorts s = ["acc", "acc_out"])
@@ -236,8 +189,6 @@ theorem accPort_of_checks {i : Flock.RecVStar.Inner} {s : VStar.Stmt} {own : Arr
   obtain rfl : p' = p := Option.some.inj (hf'.symm.trans hf)
   exact ⟨site_of_checkAcc hacc hpa hv, hr⟩
 
-/-- **`accPort_of_checks` at a statement the verifier checked as V*'s statement `j`** (`checkAcc_of_checkStmt`), the
-list's `s` (`hj`). -/
 theorem accPort_of_checkStmt {i : Flock.RecVStar.Inner} {tags : Flock.Tags} {tables : List (String × ByteArray)}
     {st : Flock.Stmt} {circuitB : ByteArray} {partition : Option Lean.Json} {program : Option ByteArray}
     {own : Array Flock.Registered.Port} {j : ℕ} {f : VStar.Bindings} {rows : Option (Array Flock.Registered.Port)}
@@ -254,8 +205,6 @@ theorem accPort_of_checkStmt {i : Flock.RecVStar.Inner} {tags : Flock.Tags} {tab
   obtain rfl : s' = s := Option.some.inj (hs'.symm.trans (hj ss hss))
   exact accPort_of_checks hacc hrd hl hw hnm hpa hpn
 
-/-! ## At a sampled proof block -/
-
 section Drawn
 
 open FlockSoundness.Discharge.ZkReg (LiveAcceptsZKR)
@@ -263,15 +212,9 @@ open FlockSoundness.Discharge.ZkReg (LiveAcceptsZKR)
 variable {mPts nv J : ℕ} {Reg' : Type} {c : Flock.Circuit} {hU : Built c.unit} {hscope : Layout.scopeOk c = true}
   {Lv : SamplingDesign nv} (zo : ZkOuter mPts nv J Reg' c hU hscope Lv)
 
-/-- An outcome the session's game reaches: the registration sent, the sampling design's sample at some coins, and the transcript the
-session writes there (`ZkOuter.game`'s outcomes, `prob_auditLive_liveOfZJ_mono`'s). -/
 def Reached (o : Reg' × Finset (Fin nv) × Exec.Transcript) : Prop :=
   ∃ ω R' x, o = (R', Lv.draw ω, zo.wr (Lv.draw ω) R' x)
 
-/-- **A sampled proof block's registered read of a level's `acc` (`acc_out`) column, from `OwnReadsHJ`** (`zo.hown`) and the
-verifier's checks of the session's statement `s` (`accPort_of_checks`): the reads file names the column's port, and the
-read's port has `acc0`'s registration; its position is `accReads`' row at some index (the sampled statement's label of
-the unit, `OwnReadsHJ`'s). -/
 theorem accRead_sampled {ω : Lv.Ω} {R' : Reg'} {o}
     (hacc : LiveAcceptsZKR zo.I zo.own (R', Lv.draw ω, zo.wr (Lv.draw ω) R' o)) {u : Fin nv} (hu : u ∈ Lv.draw ω)
     {q : Fin c.ports.size} (hr : zo.rd.isRead (.inl (u, q))) {i : Flock.RecVStar.Inner} {s : VStar.Stmt}
@@ -298,8 +241,6 @@ theorem accRead_sampled {ω : Lv.Ω} {R' : Reg'} {o}
 
 end Drawn
 
-/-! ## At the family's accepted sessions -/
-
 section Family
 
 open FlockSoundness FlockSoundness.Discharge FlockSoundness.Discharge.Recursion
@@ -311,9 +252,7 @@ variable {nT r : ℕ} {T : Fin nT → Type} {CT : Fin r → Type} [∀ k, Fintyp
 
 local notation "ℐ" => holoInnerAt T CT st hp
 
-/-- **`reads` reads `pos` at the sampled statement's label of unit `u`** (`OwnReadsHJ`'s position): at the sample the
-transcript `tr` records, `u`'s table's sampled statement labels `u` with `idx.getD (D.proved.idxOf u.val) 0`
-(`Registered.unitIndices`), which `loadPublic` holds only to ascending; the verifier's label check holds it to `u`
+/-- `loadPublic` holds the label only to ascending; the verifier's label check holds it to `u`
 (`accRead_at_unit`). -/
 def AtLabel (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂) (R : Reg) (ω : L.Ω) (t : List (Cm × (ℐ).Coin)) (R₂ : Reg₂)
     (j : Fin (vstarCount F.ish)) (tr : Exec.Transcript) (u : Fin (F.Vs j).nv) (reads : Array (Option ℕ)) (pos : ℕ) :
@@ -324,9 +263,6 @@ def AtLabel (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂) (R : Reg) (ω : L.
       .ok dp ∧ Registered.unitIndices dp = .ok idx ∧ u.val ∈ D.proved ∧
     reads[idx.getD (D.proved.idxOf u.val) 0]? = some (some pos)
 
-/-- **`OwnReadsHJ`'s conclusion at every unit, from `hown`**: V*'s sessions sample every unit (`VSamplingDesign.live`, the full sample,
-`execOS_subset_full_mem`), so at an accepted outcome a session's game reaches (`Reached`) every registered read is a
-sampled proof block's: its port is `own`'s entry of its name, read at the unit's label (`AtLabel`). -/
 theorem readsOwn_of_hown {F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂}
     {dg : ByteArray → ByteArray} {N k Rw : ℕ} {R : Reg} {ω : L.Ω} {t : List (Cm × (ℐ).Coin)} {R₂ : Reg₂} {τ o}
     (h : Accepted (I := ℐ) F.zs dg N k Rw R ω t R₂ τ o) (j : Fin (vstarCount F.ish))
@@ -348,11 +284,6 @@ theorem readsOwn_of_hown {F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂}
   rw [ho]
   exact ⟨hmem, h1.symm, d, D, dp, idx, hd, hD, hdp, hidx, hu, hpos⟩
 
-/-- **`OpenKeysS`' reads-file conjuncts at an accepted session's level** (`accPort_of_checkStmt`): where the verifier
-checked the session's statements (`ChecksAccepted`; the first table's, `setup_zero_c`), at an accepted outcome the
-session reaches (`Reached`), a registered read of the level's `acc` (`acc_out`) column at unit `u` is a read of a port
-the reads file names, of `acc0`'s registration in the shared rows, at `accReads`' row (the next one) of `u`'s label
-(`AtLabel`). `OpenKeysS` reads it at `u`'s own row (`accRead_at_unit`). -/
 theorem accRead_of_checked {F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂} {rows : Option (Array Flock.Registered.Port)}
     {wr : List (Cm × (ℐ).Coin) → Lean.Json × String} {reg : Lean.Json}
     (hchk : FlockC3.PubRows.ChecksAccepted F rows wr reg) {dg : ByteArray → ByteArray}
@@ -376,10 +307,6 @@ theorem accRead_of_checked {F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂} {ro
   rw [← hreads]
   exact hpos
 
-/-- **`OpenKeysS`' reads-file conjuncts at the unit's own row**: where moreover the verifier's checks at candidate 3
-pass at the outcome's own transcript (`ChecksC3`, which the event's `ChecksVR` states there), its label check
-(`RecVStar.checkLabels`) labels the sampled proof block `u` with itself (`PubRows.label_of_checked`), so the read
-`accRead_of_checked` puts at `u`'s label is at `accReads`' row (the next one) of `u`. -/
 theorem accRead_at_unit {F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂} {rows : Option (Array Flock.Registered.Port)}
     {wr : List (Cm × (ℐ).Coin) → Lean.Json × String} {reg : Lean.Json}
     (hchk : FlockC3.PubRows.ChecksAccepted F rows wr reg) {dg : ByteArray → ByteArray}

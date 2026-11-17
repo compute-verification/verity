@@ -21,18 +21,12 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.Soundness.ExecSetup
 import VCVio.Prelude.Core
 
-/-!
-# Piece (h): V*'s files parse
-
-What `vstarParsesScoped_of_list` rests on: `built_of_parse`, a parsed circuit's unit is a net `Net.ofRows` built.
--/
+/-! V*'s files parse: a parsed circuit's unit is a net `Net.ofRows` built. -/
 
 @[expose] public section
 
 namespace FlockC3.VStarList
 
-/-- **A parsed circuit's unit is built**: `HmRow.parse`'s nets are `Net.ofRows`'s or lookup slots, and its check
-refuses a lookup slot as the unit. -/
 theorem built_of_parse {tags : Flock.Tags} {cf : ByteArray} {c : Flock.Circuit}
     (h : Flock.HmRow.parse tags cf [] = .ok c) : FlockSoundness.Built c.unit := by
   have P := FlockSoundness.parse_facts h

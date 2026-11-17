@@ -19,23 +19,7 @@ import Mathlib.Tactic.ReduceModChar
 import Proofs.Flock.Recursive.HoloRepCoins
 public import Proofs.Flock.C3.Reps.RoundReads
 
-/-!
-# A rep's message rounds along `holoRepShape`
-
-`holoSel_parts`' `hm` puts message `m` of a rep's kinds `σ := holoRepShape …` at the reps' round `(msgRounds rs)[m]`:
-`roundOf σ m = heldBefore (.rep 0) rs ((msgRounds rs)[m])`, at `holoRounds`' `rs`. It holds at the messages of the
-zerocheck, the lincheck and the opening, V*'s parts' (`m + kLog + nExtra - 6` of them at `nExtra + 2` claims), and not
-past them: compiled Ligerito's rounds absorb its tops, which `ligShape` has no message for, and a round that commits a
-top and absorbs elements is two messages there.
-
-* `roundOf_eq_skel`: `roundOf` reads only which kinds are messages (`isMsg`).
-* `roundOfB_rskel`: along a round list's messages and coins in its order (`rskel`: a round's message, then its coins as
-  one step, as `heldBefore` groups a rep's rounds), message `i`'s round is the coin rounds before its round.
-* `skel_head`: the zerocheck's, lincheck's and opening's kinds are `holoRounds`' head in that order (`holoHead`,
-  `repHead` with z_partial's round split), by replicate algebra.
-* `roundOf_holoRepShape`: `hm`'s equation at each of those messages, at any Ligerito schedule (`roundOfB_append`: a
-  message of the head is placed by the head alone).
--/
+/-! A rep's message rounds along `holoRepShape`. -/
 
 @[expose] public section
 
@@ -47,9 +31,6 @@ open Flock.Guarantees (holoRounds msgRounds heldBefore HoloStream zpRound)
 open FlockC3.Compose (repHead repRounds_tail repRounds_m)
 open Flock.Guarantees.HoloRepCoins (obind_some)
 
-/-! ## Skeletons -/
-
-/-- Whether a kind is a message. -/
 def isMsg : Kind → Bool
   | .msg _ => true
   | .coin _ => false
@@ -70,17 +51,12 @@ theorem roundOf_eq_skel : ∀ (σ : List Kind) (i : ℕ), FlockC3.Sparse.roundOf
 /-- A round's steps: its message, if it absorbs one, then its coins, as one step, if it samples any. -/
 def rstep (q : SchedRound) : List Bool := (if q.2.2.2 then [true] else []) ++ (if q.1 = 0 then [] else [false])
 
-/-- A round list's steps in its order. -/
 def rskel (l : List SchedRound) : List Bool := l.flatMap rstep
 
-/-! ## Message rounds on lists -/
-
-/-- `msgRounds` on a list. -/
 def msgL : List SchedRound → List ℕ
   | [] => []
   | q :: l => (if q.2.2.2 then [0] else []) ++ (msgL l).map (· + 1)
 
-/-- `heldBefore` at a rep's stream on a list. -/
 def heldL : List SchedRound → ℕ → ℕ
   | [], _ => 0
   | _ :: _, 0 => 0
@@ -113,7 +89,6 @@ theorem heldBefore_toArray : ∀ (l : List SchedRound) (k : ℕ), heldBefore (.r
       | (rw [List.range_succ_eq_map, List.map_cons, List.sum_cons, List.map_map]
          simp [HoloStream.group, Function.comp_def, Nat.min_def])
 
-/-- **Message `i`'s round is the coin rounds before its round**, along a round list's steps. -/
 theorem roundOfB_rskel : ∀ (l : List SchedRound) (i : ℕ) (hi : i < (msgL l).length),
     roundOfB (rskel l) i = heldL l ((msgL l)[i]'hi)
   | [], _, hi => absurd hi (by simp [msgL])
@@ -147,8 +122,6 @@ theorem roundOfB_rskel : ∀ (l : List SchedRound) (i : ℕ) (hi : i < (msgL l).
       simp only [hm, List.getElem_map, heldL]
       omega
 
-/-! ## `holoRounds`' steps -/
-
 /-- `holoRounds`' head: `repHead` with z_partial's round split into one that absorbs it and one that absorbs h and
 samples `r′`. -/
 def holoHead (m kLog claims : ℕ) : List SchedRound :=
@@ -156,7 +129,6 @@ def holoHead (m kLog claims : ℕ) : List SchedRound :=
     [(1, #[], 0, false)] ++ List.replicate (kLog - 6) (1, #[], 0, true) ++ [(0, #[], 0, true), (1, #[], 0, true)] ++
     List.replicate claims (7, #[], 0, true) ++ [(claims, #[], 0, false)]
 
-/-- `repHead` before z_partial's round. -/
 def zpPre (m kLog : ℕ) : List SchedRound :=
   [(6, #[], 1, false), (m - 13, #[], 0, false), (1, #[], 0, true)] ++ List.replicate (m - 5) (1, #[], 0, true) ++
     [(1, #[], 0, false)] ++ List.replicate (kLog - 6) (1, #[], 0, true)
@@ -170,7 +142,6 @@ theorem repHead_toList (m kLog claims : ℕ) :
       (List.replicate claims (7, #[], 0, true) ++ [(claims, #[], 0, false)]) := by
   simp [repHead, zpPre]
 
-/-- **`holoRounds` is `holoHead` and `repRounds`' tail**, at `fast100`'s tables. -/
 theorem holoRounds_toList {m kLog claims : ℕ} {rs : Array SchedRound} (hk : 6 ≤ kLog)
     (h : holoRounds m kLog claims = some rs) :
     22 ≤ m ∧ ∃ T : List SchedRound, rs.toList = holoHead m kLog claims ++ T := by
@@ -200,8 +171,6 @@ theorem holoRounds_toList {m kLog claims : ℕ} {rs : Array SchedRound} (hk : 6 
   rw [List.take_left' rfl, hd, List.take_of_length_le (by simp [hs]; omega)]
   simp [holoHead, zpPre]
 
-/-! ## `holoRepShape`'s steps -/
-
 /-- `n` rounds that absorb a message and flip a coin. -/
 def pairsB : ℕ → List Bool
   | 0 => []
@@ -228,8 +197,6 @@ theorem pairsB_succ' : ∀ n, pairsB (n + 1) = pairsB n ++ [true, false]
   | 0 => rfl
   | n + 1 => congrArg (fun s => true :: false :: s) (pairsB_succ' n)
 
-/-- **The heads agree**: the zerocheck's, lincheck's (with z_partial's split round) and opening's steps are
-`holoHead`'s, at the opening's two claims and two per region. -/
 theorem skel_head {m kLog nExtra : ℕ} (hm : 22 ≤ m) (F : Type) :
     (zcShape F m ++ (FlockC3.HoloValues.holoLcShape F kLog ++ opShape F (nExtra + 2))).map isMsg =
       rskel (holoHead m kLog (nExtra + 2)) := by
@@ -239,8 +206,6 @@ theorem skel_head {m kLog nExtra : ℕ} (hm : 22 ≤ m) (F : Type) :
   rw [rskel_replicate _ rfl (by decide), rskel_replicate _ rfl (by decide), rskel_replicate _ rfl (by decide)]
   simp [zcShape, FlockC3.HoloValues.holoLcShape, opShape, isMsg, skel_pairRounds, skel_switches, rskel, rstep,
     pairsB_succ']
-
-/-! ## `hm` -/
 
 theorem count_rskel : ∀ l : List SchedRound, (rskel l).count true = (msgL l).length
   | [] => rfl
@@ -256,7 +221,6 @@ theorem msgL_length : ∀ l : List SchedRound, (msgL l).length = l.countP fun q 
     rw [msgL, List.length_append, List.length_map, msgL_length l, List.countP_cons]
     by_cases ha : q.2.2.2 = true <;> simp [ha, Nat.add_comm]
 
-/-- **A message of the head is placed by the head alone.** -/
 theorem roundOfB_append : ∀ (s₁ s₂ s₂' : List Bool) (i : ℕ), i < s₁.count true →
     roundOfB (s₁ ++ s₂) i = roundOfB (s₁ ++ s₂') i
   | [], _, _, _, h => absurd h (by simp)
@@ -264,9 +228,8 @@ theorem roundOfB_append : ∀ (s₁ s₂ s₂' : List Bool) (i : ℕ), i < s₁.
   | true :: s, s₂, s₂', i + 1, h => roundOfB_append s s₂ s₂' i (by simp at h; omega)
   | false :: s, s₂, s₂', i, h => congrArg (· + 1) (roundOfB_append s s₂ s₂' i (by simpa using h))
 
-/-- **`hm`'s equation**: at `holoRounds`' `rs`, message `i` of `holoRepShape`'s kinds, one of the zerocheck's, the
-lincheck's and the opening's (`i < m + kLog + nExtra - 6`), is at the reps' round `(msgRounds rs)[i]`, at any Ligerito
-schedule. -/
+/-- It holds only at the zerocheck's, lincheck's and opening's messages: compiled Ligerito's rounds absorb its
+tops, which `ligShape` has no message for. -/
 theorem roundOf_holoRepShape {F K D : Type} {m kLog nExtra : ℕ} {sch : FlockSoundness.Accounting.Schedule}
     {rs : Array SchedRound} (hk : 6 ≤ kLog) (h : holoRounds m kLog (nExtra + 2) = some rs) {i : ℕ}
     (hi : i < m + kLog + nExtra - 6) :
@@ -291,8 +254,6 @@ theorem roundOf_holoRepShape {F K D : Type} {m kLog nExtra : ℕ} {sch : FlockSo
     roundOfB_rskel _ i hi', heldBefore_toArray]
   simp only [msgRounds_toArray]
 
-/-- **`holoSel_parts`' `hm`** at `holoRepShape`, where each part's `m<m>` port names a message of the zerocheck, the
-lincheck or the opening. -/
 theorem hm_of_names {F K D : Type} {m kLog nExtra : ℕ} {sch : FlockSoundness.Accounting.Schedule}
     {rs : Array SchedRound} (hk : 6 ≤ kLog) (h : holoRounds m kLog (nExtra + 2) = some rs) {S : ℕ}
     {Vs : Fin S → FlockSoundness.Discharge.Recursion.VStmt} {sh : Flock.Shape} {sess : ℕ → Fin S}

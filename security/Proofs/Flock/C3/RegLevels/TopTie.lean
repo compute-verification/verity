@@ -20,21 +20,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.C3.RegLevels.ValueTie
 import Proofs.Flock.Soundness.Discharge.ZkReg.CheckedHJ
 
-/-!
-# `opensTopAt_of_regs`' `hT` at R's levels `ℓ ≥ 1`, from a root over the cap's rows
-
-`opensTopAt_of_regs` takes `htop` and `hT`: the unit's `out` columns are the cap entry's 512 bits, registered. A level's
-cap entry `top` is 64 bytes (`capAt_size`, from `CapsAt`), its row is 64 words (`capRow`), and bit `b < 512` of that row
-is bit `b` of `top` (`capRow_bit`). So where `out`'s row is a registered read of a root that is the verifier's tree over
-rows whose read row is `top`'s (`tie_root`'s `hroot`), `hT_of_root`: each `out` column is registered as `top`'s bit
-(`regOuts_of_laid` at output 0, `bits_of_rowInV`; `hT_of_enc`), or `valueColl` outputs two different SHA-512 inputs
-with one digest.
-
-By the read's leaf instead (`hT_of_leaf`): at an accepted session the registrant's leaf at a row read is the table's,
-`treeLeaf` of the public file's digest there (`regLeaf_inl`), or the read's two openings conflict (`leaf_of_accepts`,
-`LeafColl`'s event); where that digest is a node's commit string under the held salts (`TopOf`), `salt_tie` gives the
-node's row, or `saltFinder`'s pair collides.
--/
+/-! `opensTopAt_of_regs`' `hT` at R's levels, from a root over the cap's rows or from the read's leaf. -/
 
 @[expose] public section
 
@@ -54,8 +40,6 @@ theorem getD_get! {top : ByteArray} {k : ℕ} : top.get! k = top.data.toList.get
   simp only [ByteArray.get!, getElem!_def, List.getD_eq_getElem?_getD, Array.getElem?_toList]
   cases top.data[k]? <;> rfl
 
-/-- **Bit `b` of a 64-byte node's row is the node's bit `b`**: word `b / 16` is bytes `b / 8` (low) and `b / 8 + 1`
-(high) of the node, little-endian (`ZkServer.topRows`). -/
 theorem capRow_bit {top : ByteArray} (htop : top.size = 64) {b : ℕ} (hb : b < 512) :
     ((capRow top)[b / 16]!).testBit (b % 16) = bitL top.data.toList b := by
   rw [capRow, topRows_of_size htop, List.headD_cons, getElem!_pos _ (b / 16)
@@ -67,7 +51,6 @@ theorem capRow_bit {top : ByteArray} (htop : top.size = 64) {b : ℕ} (hb : b < 
   · rw [show 64 * 0 + 2 * (b / 16) = b / 8 by omega, show b % 16 = b % 8 by omega]
   · rw [show 64 * 0 + 2 * (b / 16) + 1 = b / 8 by omega, show b % 16 - 8 = b % 8 by omega]
 
-/-- **A level's cap entry is 64 bytes** (`CapsAt`), at each index below the level's `2^cap`. -/
 theorem capAt_size {sch : Flock.Schedule} {cap : Array ByteArray} {lig : Flock.LigeritoProof}
     (h : FlockVBridge.Family.CapsAt sch cap lig) {ℓ : ℕ} (hℓ : ℓ < sch.levels.size) {i : ℕ}
     (hi : i < 2 ^ (sch.levels[ℓ]!).cap) :
@@ -81,8 +64,6 @@ section Session
 variable {mPts nv J : ℕ} {Reg' : Type} {c : Flock.Circuit} {hU : Built c.unit} {hscope : Layout.scopeOk c = true}
   {Lv : SamplingDesign nv} (zo : ZkOuter mPts nv J Reg' c hU hscope Lv)
 
-/-- **The registered `out` row's bits are `top`'s**: `hT_of_root`'s conclusion where `out`'s row bytes are `top`'s
-row's (`rowInV (capRow top)`). -/
 theorem hT_of_enc {u : Fin nv} {j : ℕ} (hj : j < c.upv) {LANES H : ℕ} {p : Ports} {outBits : Array ℕ}
     {name : String} (hl : Flock.HmNets.netOf name (recOpenLaid LANES H p outBits) = .ok c.unit)
     (hob : 2048 ≤ outBits.foldl (· + ·) 0) (hlaid : OutsLaid c j) (hq : HmOut.nIn c < c.ports.size)
@@ -104,10 +85,6 @@ theorem hT_of_enc {u : Fin nv} {j : ℕ} (hj : j < c.upv) {LANES H : ℕ} {p : P
     (capRow_bit htop ht)
   convert hreg using 1 <;> first | omega | exact e.symm
 
-/-- **`opensTopAt_of_regs`' `hT`, or SHA-512 collides**: at copy `j` of unit `u` built from `recOpenLaid` with V*'s
-output layout (`OutsLaid`), where `out`'s row (port `nIn`, without segments) is a registered read of a root that is the
-verifier's tree over `rows` under `salt` (`hroot`, `hn`) and the read row is the 64-byte `top`'s (`hrow`), each of the
-first 512 output columns is registered as `top`'s bit, or `valueColl` collides. -/
 theorem hT_of_root {u : Fin nv} {j : ℕ} (hj : j < c.upv) {LANES H : ℕ} {p : Ports} {outBits : Array ℕ}
     {name : String} (hl : Flock.HmNets.netOf name (recOpenLaid LANES H p outBits) = .ok c.unit)
     (hob : 2048 ≤ outBits.foldl (· + ·) 0) (hlaid : OutsLaid c j) (hq : HmOut.nIn c < c.ports.size)
@@ -129,11 +106,6 @@ theorem hT_of_root {u : Fin nv} {j : ℕ} (hj : j < c.upv) {LANES H : ℕ} {p : 
   obtain ⟨-, hor⟩ := tie_root zo.rd hp hroot hn hs
   exact hor.imp (fun he => hT_of_enc zo hj hl hob hlaid hq hp hseg htop (he.trans (congrArg rowInV hrow))) id
 
-/-- **`opensTopAt_of_regs`' `hT` at R's level 0, by the read's leaf**: `hT_of_root` with the read's leaf in place of
-the root. Where `bcs` are `cap`'s commit strings under the held salts `salt` (`TopOf`), the read's leaf is `treeLeaf`
-of `bcs`'s string at its position (`hleaf`: `leaf_of_accepts` where the public file's digest there is that string) and
-the node's row is `top`'s (`hrow`), each of the first 512 output columns is registered as `top`'s bit, or the read's
-hm96 pair against the node under `salt` collides (`ReadsX.SaltClash`, `saltFinder`'s event at level 0). -/
 theorem hT_of_leaf {u : Fin nv} {j : ℕ} (hj : j < c.upv) {LANES H : ℕ} {p : Ports} {outBits : Array ℕ}
     {name : String} (hl : Flock.HmNets.netOf name (recOpenLaid LANES H p outBits) = .ok c.unit)
     (hob : 2048 ≤ outBits.foldl (· + ·) 0) (hlaid : OutsLaid c j) (hq : HmOut.nIn c < c.ports.size)
@@ -149,7 +121,6 @@ theorem hT_of_leaf {u : Fin nv} {j : ℕ} (hj : j < c.upv) {LANES H : ℕ} {p : 
   (salt_tie zo.rd hp htc hi hleaf).imp
     (fun he => hT_of_enc zo hj hl hob hlaid hq hp hseg htop (he.trans (congrArg rowInV hrow))) id
 
-/-- **The table's leaf at a row read** is `treeLeaf` of the public file's digest there, at every registration. -/
 theorem regLeaf_inl (R : Reg') (u : Fin nv) (q : Fin c.ports.size) :
     (zo.lay.regLeaf R (.inl (u, q))).1 = Hm96.Default512.treeLeaf (zo.pub.digest u.val q.val c.ports.size) := by
   show (FlockSoundness.Refine.H512
@@ -160,10 +131,6 @@ theorem regLeaf_inl (R : Reg') (u : Fin nv) (q : Fin c.ports.size) :
     Sha512.hash (Hm96.Default512.leafPrefix ++ zo.pub.digest u.val q.val c.ports.size)
   rw [← FlockSoundness.Refine.data_append, FlockSoundness.Refine.bytes_of_list]
 
-/-- **A registered row read's leaf is the table's, or its two openings conflict**: at an outcome `o` the session
-accepts, where the reads `A` keeps are the verifier's own (`hown`), the registrant's leaf at a read `(u, q)` that `A`
-keeps is `treeLeaf` of the public file's digest there (`regLeaf_inl`), or its opening under `o`'s registration through
-the public file header's path (`regPathsHJ`) and the registrant's conflict (`LeafColl`'s event). -/
 theorem leaf_of_accepts (o : Reg' × Finset (Fin nv) × FlockSoundness.Discharge.Exec.Transcript)
     (hacc : ZkReg.LiveAcceptsZKR zo.I zo.own o)
     {A : zo.lay.Pos → Prop}

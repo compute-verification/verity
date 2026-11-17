@@ -4,16 +4,8 @@ public import Flock.Witness
 public import Flock.Desc
 public import Flock.PortRoots
 
-/-!
-# The deployed session's files parse
-
-`SampledKSLiveV2`, `SampledKSLiveV3` and `SampledKSLivePub` take a circuit file that parses to a descriptor `D` and a
-public file that loads at it with no shared-row tables, and V2 and `SampledKSLivePub` take `scopeOkH` at `D` and ports
-whose published domains are pairwise distinct (`PortRoots.dupId`). Whether
-the deployed files do is a computation on a 97 MB circuit file, which the kernel can't run, so it is one named premise,
-stated with the verifier's own functions on the files `verify --zk` reads, each pinned by its SHA-512, and checked by
-running the verifier on them.
--/
+/-! That the deployed session's files parse: a named premise, since the kernel can't run the parse on the
+circuit file, checked by running the verifier on the pinned files. -/
 
 @[expose] public section
 

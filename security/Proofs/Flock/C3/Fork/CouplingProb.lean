@@ -19,15 +19,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 import Proofs.Flock.Soundness.Game
 
-/-!
-# a1l, step 7: the compiled holographic table on a clash-free set, against one prover
-
-`holoTableCL_prob_le`: on a set `W` of outcomes no two of which clash, a prover makes the compiled holographic table
-end accepted in `W` no more often than the oracle table's value at the registered word. It is `table_prob_clashFree`'s
-argument on `lockHoloL`: the oracle prover sends `W`'s tables (`tab₀W` at the prover's cap, `chH` at the reps' and R's),
-so `holo_bad_zero` leaves the coupling no bad term, and the coupling's oracle game is no better than the oracle table
-(`holoOrcL_value_le`).
--/
+/-! The compiled holographic table on a clash-free set, against one prover. -/
 
 @[expose] public section
 
@@ -39,8 +31,6 @@ open scoped ENNReal
 
 variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K] {D Sl : Type}
 
-/-- **The compiled holographic table on a clash-free set, against one prover**: accepted in `W` no more often than
-the oracle table's value at the registered word `x.w`. -/
 theorem holoTableCL_prob_le [Inhabited D] (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D)
     (Lf : Merkle.Leaf (List F) Sl D H) (S : Statement) (sch : Schedule) (hlen : 2 ≤ sch.levels.length)
     (hk0 : (sch.levels.headD default).lanes = sch.k0) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ) (sh : SparseShape)

@@ -17,19 +17,8 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 
-/-!
-# The map's coins and points at candidate 3
-
-`pointsEncoded_holoMap`: the verifier's map's link points read back as the history's first coin (`PointsEncoded` at
-`holoPts`).
-`coinsEncoded_holoMap`: where a stream round takes one history round (`holoSelOne`: the reps' and R's rounds of coins,
-a sparse phase's of one), the coin the map reads off the history's prefix is that round's coin (`CoinsEncoded`), at
-every inner statement and sparse parameters. A sparse phase's round of `n > 1` coins is not one: the map reads its `n`
-history rounds' words as one array, while each of those rounds flips a coin of one word.
-`roundAt_reps`: the history order of the reps' rounds at the map read, rep 0's from round 1 and rep 1's past all of rep
-0's coin rounds (`repStart`), the `j + p` that `StageHeld` reads; `holoSelOne_rep` selects rep `i`'s rounds of coins
-there.
--/
+/-! The verifier's map's link points and coins are the history's, where a stream round takes one history round
+(a sparse phase's round of `n > 1` coins does not). -/
 
 @[expose] public section
 
@@ -39,7 +28,6 @@ open Flock Flock.RecVStar Flock.Guarantees FlockSoundness.Discharge.Exec FlockSo
 open FlockSoundness.Discharge.Recursion FlockSoundness.Refine FlockLevel3
 open FlockC3.Reps (CoinsEncoded PointsEncoded repStart)
 
-/-- The link points a session record's points read as: entry `b` of its `a`-th array. -/
 def holoPts (mPts : ℕ) (A : Array (Array F128)) : Fin 2 → Fin mPts → GF128 :=
   fun a b => GF128.of ((A[a.val]!)[b.val]!)
 
@@ -57,8 +45,6 @@ theorem holoPts_ofFn {mPts : ℕ} (c : Fin 2 → Fin mPts → GF128) :
     Array.getElem_ofFn]
   rfl
 
-/-- **The map's link points are the history's first coin** (`PointsEncoded`): `holoPts` of the points `holoMap` gives
-at a coin is its coordinate 0. -/
 theorem pointsEncoded_holoMap (st : Flock.Stmt) (hp : HoloParams) (Cm : Type) (ish : RecVStar.Inner) (tbl : String)
     (bc : Cm → String → Nat → List UInt8) :
     PointsEncoded (CT := holoCTs st hp) (holoPts (holoAt st hp).cls.mPts) (holoMap st hp Cm ish tbl bc).points := by
@@ -66,9 +52,6 @@ theorem pointsEncoded_holoMap (st : Flock.Stmt) (hp : HoloParams) (Cm : Type) (i
   exact congrArg (fun p : Fin 2 → Fin (holoAt st hp).cls.mPts → GF128 => (⟨_, p⟩ : FlockSoundness.Game.Msg))
     (holoPts_ofFn (c ⟨0, h⟩))
 
-/-- **`holoMap`'s samples where a stream round takes one history round**: round `i` samples round `q` of the stream named
-`s`, which takes history round `i` alone (`HoloStream.group` 1: a round of coins of a rep's or R's stream, or of one
-coin of a sparse phase's). -/
 def holoSelOne (ish : RecVStar.Inner) (tbl : String) (i : ℕ) (s : String) (q : ℕ) : Prop :=
   ∃ L e, holoStreams ish.m ish.kLog ish.claims ish.sparse ish.stacked = some L ∧
     L.find? (fun e => e.1.name tbl == s) = some e ∧ e.1.group (e.2.getD q default).1 = 1 ∧ i = roundAt L e.1 q
@@ -85,10 +68,6 @@ theorem roundWords_take {st : Flock.Stmt} {hp : HoloParams}
   unfold roundWords
   rw [List.getElem?_take_of_lt h]
 
-/-- **The map's coins are the history's** (`CoinsEncoded`, the `CoinTys`/`vCT` analogue) where a stream round takes
-one history round: there the map reads the words of that round's coin off the history's prefix, and they read back as
-the coin (`coinArr_roundWords`, at a form other than a vector of one coordinate, which no coin is:
-`holoForms_getD_ne_one`). -/
 theorem coinsEncoded_holoMap {st : Flock.Stmt} {hp : HoloParams} {Cm : Type} {ish : RecVStar.Inner} {tbl : String}
     {bc : Cm → String → Nat → List UInt8} :
     CoinsEncoded (CT := holoCTs st hp) (holoSelOne ish tbl) (holoMap st hp Cm ish tbl bc).coin := by
@@ -110,9 +89,6 @@ theorem roundIn_cons_ne {s' s : HoloStream} {rs : Array SchedRound} {L : List (H
     (h : ¬s'.idx = s.idx) : roundIn ((s', rs) :: L) s k = heldBefore s' rs rs.size + roundIn L s k :=
   ite_eq_right h
 
-/-- **The reps' history order at the map read** (lean (i)): in `holoStreams`' order, rep 0's rounds `rs` and then rep
-1's, rep `i`'s round `q` is history round `repStart c₀ i` (1, or past rep 0's `c₀` coin rounds) plus rep `i`'s coin
-rounds before `q`. -/
 theorem roundAt_reps (rs : Array SchedRound) (L : List (HoloStream × Array SchedRound)) (i : Fin 2) (q : ℕ) :
     roundAt ((.rep 0, rs) :: (.rep 1, rs) :: L) (.rep i) q =
       repStart (heldBefore (.rep 0) rs rs.size) i + heldBefore (.rep i) rs q := by
@@ -123,9 +99,6 @@ theorem roundAt_reps (rs : Array SchedRound) (L : List (HoloStream × Array Sche
     omega
   · exact absurd hn (by omega)
 
-/-- **Rep `i`'s rounds of coins at the map read**: where the session's streams are rep 0's rounds `rs`, rep 1's and
-then the rest (`holoStreams`' order), the stream named `s` is rep `i`'s (`hf`) and its round `q` flips coins,
-`holoSelOne` samples it at history round `repStart c₀ i` plus rep `i`'s coin rounds before `q`. -/
 theorem holoSelOne_rep {ish : RecVStar.Inner} {tbl s : String} {rs : Array SchedRound}
     {L : List (HoloStream × Array SchedRound)} {i : Fin 2} {q : ℕ}
     (hS : holoStreams ish.m ish.kLog ish.claims ish.sparse ish.stacked = some ((.rep 0, rs) :: (.rep 1, rs) :: L))
@@ -135,15 +108,12 @@ theorem holoSelOne_rep {ish : RecVStar.Inner} {tbl s : String} {rs : Array Sched
     holoSelOne ish tbl (repStart (heldBefore (.rep 0) rs rs.size) i + heldBefore (.rep i) rs q) s q :=
   ⟨_, _, hS, hf, Nat.min_eq_right hq, (roundAt_reps rs L i q).symm⟩
 
-/-- **The reps' stream names differ**: at any table `t`, rep 0's (`t ++ "rep0"`) is not rep 1's. -/
 theorem repName_ne (t : String) : (HoloStream.rep 0).name t ≠ (HoloStream.rep 1).name t := by
   intro h
   have h := congrArg String.toList h
   simp only [HoloStream.name, String.toList_append, toString, Nat.toList_repr, List.append_assoc] at h
   exact absurd (List.append_cancel_left (List.append_cancel_left h)) (by decide)
 
-/-- **`holoStreams`' order finds rep `i` by its name**: rep 0's and rep 1's streams first, the name rep `i`'s
-(`repName_ne`). -/
 theorem find?_repName (tbl : String) (rs : Array SchedRound) (L : List (HoloStream × Array SchedRound)) (i : Fin 2) :
     ((HoloStream.rep 0, rs) :: (HoloStream.rep 1, rs) :: L).find? (fun e => e.1.name tbl == (HoloStream.rep i).name tbl) =
       some (.rep i, rs) := by
@@ -155,8 +125,6 @@ theorem find?_repName (tbl : String) (rs : Array SchedRound) (L : List (HoloStre
       fun h => repName_ne tbl (beq_iff_eq.1 h)).trans (List.find?_cons_of_pos (beq_iff_eq.2 rfl))
   · exact absurd hn (by omega)
 
-/-- **Rep `i`'s rounds of coins at the map read, by its stream's name**: `holoSelOne_rep` at `(HoloStream.rep i).name`,
-which `holoStreams`' order finds as rep `i`'s (`find?_repName`). -/
 theorem holoSelOne_repName {ish : RecVStar.Inner} {tbl : String} {rs : Array SchedRound}
     {L : List (HoloStream × Array SchedRound)} {i : Fin 2} {q : ℕ}
     (hS : holoStreams ish.m ish.kLog ish.claims ish.sparse ish.stacked = some ((.rep 0, rs) :: (.rep 1, rs) :: L))

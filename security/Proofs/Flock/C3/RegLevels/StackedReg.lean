@@ -17,22 +17,12 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 
-/-!
-# n7's levels: the coef `checkStackedLevel` registers (`hreg`)
-
-`level_of_check`: an accepted `rec-open-stacked/l<LANES>-h<H>` unit (`RecCoins.checkStackedLevel`) ran
-`RecCoins.opening`, its `[l] := ls` filter picks out every level with `LANES` lanes and `H` siblings below its cap,
-and its `coef` port passed `checkValue` at the verifier's rows: opening `j`'s `coefAt (o.kappa[l]!) LANES eq(α_l)[j]`,
-α the verifier's (`o.lg.conss[l]!`). `hreg_of_check` is `Kappa`'s `hreg` at that level, at any `ops` whose `coef` is
-the values the check accepted (`hval`), and `coef_of_check` is `SessionAt`'s coef conjunct there (`alpha_of_opening`).
--/
+/-! The coef `checkStackedLevel` registers (`hreg`). -/
 
 @[expose] public section
 
 namespace FlockC3.RegLevels
 
-/-- **What an accepted `rec-open-stacked` unit checked**: `RecCoins.opening` returned `o`, every level of `LANES` lanes
-and `H` siblings below its cap is the filter's `l`, and the `coef` port holds the verifier's rows at `l`. -/
 theorem level_of_check {c3 : Flock.RecCoins.C3} {c : Flock.Circuit} {pub : Flock.Public}
     {own : Array Flock.Registered.Port} {LANES H : ℕ}
     (h : Flock.RecCoins.checkStackedLevel c3 c pub own LANES H = .ok ()) :
@@ -58,8 +48,6 @@ theorem level_of_check {c3 : Flock.RecCoins.C3} {c : Flock.Circuit} {pub : Flock
       exact List.mem_singleton.mp hm
   · cases h
 
-/-- **`hreg` from the check** at the level `ℓ` the unit names: at any `ops` whose level-`ℓ` `coef` is the values the
-check accepted (`hval`), opening `j`'s is the verifier's, at its own α. -/
 theorem hreg_of_check {c3 : Flock.RecCoins.C3} {c : Flock.Circuit} {pub : Flock.Public}
     {own : Array Flock.Registered.Port} {LANES H : ℕ}
     (h : Flock.RecCoins.checkStackedLevel c3 c pub own LANES H = .ok ())
@@ -80,8 +68,6 @@ theorem hreg_of_check {c3 : Flock.RecCoins.C3} {c : Flock.Circuit} {pub : Flock.
   rw [hL]
   exact hval _ what hcv
 
-/-- **`SessionAt`'s coef tie from the check**: at the level the unit names, an `ops` whose `coef` is the values the
-check accepted (`hval`) and whose α is the run's (`halpha`, `alpha_of_opening`) has `coef` at its own α. -/
 theorem coef_of_check {c3 : Flock.RecCoins.C3} {c : Flock.Circuit} {pub : Flock.Public}
     {own : Array Flock.Registered.Port} {LANES H : ℕ}
     (h : Flock.RecCoins.checkStackedLevel c3 c pub own LANES H = .ok ())

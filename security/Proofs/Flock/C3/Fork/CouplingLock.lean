@@ -3,16 +3,7 @@ module
 public import Definitions.Flock.HoloCompiled
 public import Proofs.Flock.C3.Fork.CouplingPull
 
-/-!
-# a1l, step 3: the holographic table in lockstep
-
-The compiled holographic table below the level-0 cap (`holoTableCmpL`) in lockstep with an oracle game
-(`holoOrcL`): both reps as `lockTableL`'s (`lockHoloRep`, on `holoRepO`, which is `holoRep` with Ligerito's verdict
-beside its outputs, so that the sparse phase runs on both sides whatever Ligerito said), their sparse phases and the
-registered opening as the same games (`lockRegPhase`), and R's Ligerito on the registered word `w` as rep 0's
-pulled from `2` (`lockLigR`). R's tables sit beside the reps' (`liftL`, `liftR`): the reps' at even slots, R's at
-odd ones. The leaf relation (`TopRelH`) is `TopRelL`'s with R's stream as a third rep.
--/
+/-! The compiled holographic table in lockstep with the coupling's oracle game. -/
 
 @[expose] public section
 
@@ -24,8 +15,8 @@ variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K
 
 noncomputable section
 
-/-- **One rep with hidden units, the coupling's oracle side**: `holoRep` with Ligerito's verdict beside the
-zerocheck's and lincheck's outputs, which it hands on at every verdict, as `holoRepC` does. -/
+/-- `holoRep` with Ligerito's verdict beside its outputs, handed on at every verdict, so that the sparse phase
+runs on both sides whatever Ligerito said. -/
 def holoRepO (A : Arith F K) (S : Statement) (sch : Schedule) (hm : 13 ≤ S.m) (C₀ : Oracle F)
     (extra : List (Claim F S.m)) : Game (Option (ZcOut F S.m × HoloLcOut F S.m (S.kLog - 6)) × Bool) := do
   match ← zerocheck A S.m with
@@ -40,8 +31,6 @@ def holoRepO (A : Arith F K) (S : Statement) (sch : Schedule) (hm : 13 ≤ S.m) 
         let ok ← ligerito A sch op.T op.b C₀
         pure (some (zc, lc), ok)
 
-/-- **A rep with hidden units in lockstep**: the PIOP phases are the same games, Ligerito is `lockLig`, and both
-sides hand on the same outputs. -/
 def lockHoloRep (A : Arith F K) (r : ℕ) (hr : r < 2) (S : Statement) (m k0 : ℕ) (l₀ l₁ : Level)
     (rest : List Level) (ext : ℕ) (hk0 : l₀.lanes = k0) (hm : 13 ≤ S.m) (C₀ : Oracle F)
     (extra : List (Claim F S.m)) :
@@ -76,8 +65,6 @@ def lockHoloRep (A : Arith F K) (r : ℕ) (hr : r < 2) (S : Statement) (m k0 : �
           (Lock.same (holoLincheck A S zc)))
     (Lock.same (zerocheck A S.m))
 
-/-- **R's Ligerito in lockstep**, as rep `2` on the registered word `w`, at a schedule of no level (both sides
-reject) or of at least two whose level 0 folds `k0` lanes: rep 0's lockstep, its openings pulled from `2`. -/
 def lockLigR (A : Arith F K) (rsch : Schedule)
     (hsh : rsch.levels = [] ∨ 2 ≤ rsch.levels.length ∧ (rsch.levels.headD default).lanes = rsch.k0)
     (T : F) (b : ℕ → F) (w : Oracle F) :
@@ -91,8 +78,6 @@ def lockLigR (A : Arith F K) (rsch : Schedule)
       exact Lock.map id (pullP 2) (fun _ _ _ h => RecRel.pull h)
         (lockLig A 0 (by norm_num) m k0 l₀ l₁ rest ext (by simpa using h) T b w)
 
-/-- **The reps' sparse phases and the registered opening in lockstep**: the same games on the reps' outputs, and
-`fin`'s lockstep on the opening's. -/
 def lockRegPhase {α β I T D' : Type} {get : I → ℕ → Option (T × D')} {R : I → α → β → Prop} {i : I}
     (A : Arith F K) (S : Statement) (sh : SparseShape) (units : Fin (2 ^ sh.sLog) → Finset ℕ)
     (τ : Fin (2 ^ sh.sLog) → ℕ) {no : α} {no' : β} (hno : R i no no') {fin : OpenOut F → Game α}
@@ -129,9 +114,6 @@ def lockRegPhase {α β I T D' : Type} {get : I → ℕ → Option (T × D')} {R
   | (none, _) => .ret hno
   | (some (_, _), none) => .ret hno
 
-/-- **The coupling's oracle game** after the level-0 table `C₀`: the link points, both reps as `holoRepO`, their
-sparse phases and the registered opening with Ligerito on the registered word `w`, and a dummy last message.
-Accepted iff both reps' Ligerito and R's accept. -/
 def holoOrcL {Sl : Type} (A : Arith F K) (S : Statement) (sch : Schedule) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ)
     (sh : SparseShape) (units : Fin (2 ^ sh.sLog) → Finset ℕ) (τ : Fin (2 ^ sh.sLog) → ℕ) (rsch : Schedule)
     (w C₀ : Oracle F) : Game Bool :=
@@ -142,7 +124,6 @@ def holoOrcL {Sl : Type} (A : Arith F K) (S : Statement) (sch : Schedule) (hm : 
     Game.send (Opens F D × Salts Sl) fun _ => Game.ret (reps.1.2 && reps.2.2 && okR)
 
 open Classical in
-/-- The compiled holographic table's continuation after the level-0 cap. -/
 def holoTableCmpL {Sl : Type} (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D)
     (Lf : Merkle.Leaf (List F) Sl D H) (S : Statement) (sch : Schedule) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ)
     (sh : SparseShape) (units : Fin (2 ^ sh.sLog) → Finset ℕ) (τ : Fin (2 ^ sh.sLog) → ℕ) (rsch : Schedule)
@@ -157,8 +138,6 @@ def holoTableCmpL {Sl : Type} (A : Arith F K) (H : List UInt8 → D) (E : Merkle
         decide (OpensOKL H E Lf cap₀ 0 reps.1.2 os.1 os.2 ∧ OpensOKL H E Lf cap₀ 1 reps.2.2 os.1 os.2 ∧
           OpensOKL H E Lf capReg 2 pendR os.1 os.2), cap₀, (reps.1.2, reps.2.2), pendR, os.1, os.2⟩
 
-/-- **The holographic table's leaf relation** below the level-0 cap `cap₀`: `TopRelL`'s, with R's stream a third
-rep whose level 0 is the registered word `w` under the registered cap `capReg`, and its tables `i.2`. -/
 def TopRelH {Sl : Type} (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H)
     (sch rsch : Schedule) (C₀ w : Oracle F) (cap₀ capReg : Cap D) (i : (IRep F D × IRep F D) × IRep F D)
     (v : Bool) (out : OutHL F D Sl) : Prop :=
@@ -170,9 +149,6 @@ def TopRelH {Sl : Type} (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf :
       OpensOKL H E Lf capReg 2 out.pendR out.opens out.salts) ∧
     RecStruct sch i.1.1 out.pend.1 ∧ RecStruct sch i.1.2 out.pend.2 ∧ RecStruct rsch i.2 out.pendR
 
-/-- **The holographic table in lockstep** below the level-0 cap: the link points, both reps interleaved
-(`lockHoloRep`, at the even slots), their sparse phases and the registered opening with R's Ligerito (`lockLigR`, at
-the odd slots), and the openings. -/
 def lockHoloL [Inhabited D] {Sl : Type} (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D)
     (Lf : Merkle.Leaf (List F) Sl D H) (S : Statement) (m k0 : ℕ) (l₀ l₁ : Level) (rest : List Level) (ext : ℕ)
     (hk0 : l₀.lanes = k0) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ) (sh : SparseShape)

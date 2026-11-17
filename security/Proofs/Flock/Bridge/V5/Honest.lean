@@ -6,28 +6,15 @@ public import Proofs.Flock.Bridge.Deployed
 public import Proofs.Flock.Soundness.Discharge.Hidden.Facts
 public import Proofs.Flock.Soundness.Discharge.FailClosed.Scope
 
-/-!
-# `SampledKSLiveV5`'s file hypotheses hold at the served registered session
-
-`SampledKSLiveV5` says something only if its hypotheses on the files can hold. `Flock.Guarantees.SampledKSLiveV5Honest`
-concludes them at the served registered session's files, from the one named premise that those files parse at public
-inputs (`Flock.Bridge.Assumptions.ServedFilesParseV5`): inputs `I` whose files have the served SHA-512 digests, at
-`verity/flock-circuit`'s tags with one table and no session tables, at which the circuit file parses to `D`, its public
-input ports `pi` parse and the public file loads over them, `D` is in `scopeOkH` and has
-the row layout it needs (`RowsOk`), no two of its ports' published domains are one (`PortRoots.dupId`), every sample size divides into the session's tables,
-and the tags are the hidden-output ones at which the statement gives its bound (`TagsOkZHJ`). The registration's
-population (`PopMatches`) is a statement about the registration, not the files, and is no conjunct here; the statement takes no hypothesis on the
-sampling design it samples under (it is `designAt`'s, never a Bernoulli sampling design) or on the registration's roots (its `ecr/sha-512` term at the roots finder pays for them), and the finders' collision resistance
-is no hypothesis either: the statement takes it as `TableCRZ` and `LinkCRZC`.
--/
+/-! `SampledKSLiveV5`'s file hypotheses hold at the served registered session's files, from the one named
+premise that they parse (`ServedFilesParseV5`); `PopMatches`, a statement about the registration, is not among
+them. -/
 
 @[expose] public section
 
 namespace Flock.Bridge
 
-/-- **`verify --zk`'s inputs for one session of the files `cf` and `pf`**: `verity/flock-circuit`'s tags, one table, no
-session tables, on the coin tree `verify --zk` samples them on. The partition and the program it also reads are none here:
-no hypothesis on the files reads them. -/
+/-- The partition and the program it also reads are none here: no hypothesis on the files reads them. -/
 def servedIV5 (cf pf : ByteArray) : FlockSoundness.Discharge.Exec.Inputs :=
   { tags := Flock.Tags.circuit, circuitFile := cf, publicFile := pf,
     coins := .tree (Flock.Zk.coinSpec (Flock.Tags.circuit.tableNames 1)), count := 1, tables := [], partition := none,

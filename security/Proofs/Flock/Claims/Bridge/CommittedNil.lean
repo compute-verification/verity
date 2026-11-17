@@ -36,26 +36,8 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Bridge.Transport
 import VCVio.Prelude.Core
 
-/-!
-# Committed coins at a verifier that may answer a round with nothing
-
-`Committed.lean` bounds the committed-coins run at a verifier that answers every round with its coin (`AnswersCoin`).
-The recursion's compiled verifier doesn't: it answers a V\* session that accepts before the last one with `[]`
-(`RecDeploy.sessOut`), and there the deployment opens no coin, each V\* session's coin tree ending at its decision.
-
-* `AnswersCoinOrNil H V x ans`: every message `V` answers round `j` with is `ans` of coin `j`, or `[]`.
-* `CProver.atM`, `runCM` (**the committed-coins run with masked openings**): the prover reads round `i`'s opening with
-  its answer where that answer is not `[]`, and no opening where it is.
-* `OnlineSim.LastOnly`: the simulator's opening of round `j` reads only its tape, `j` and round `j`'s answer, as the hm96
-  tree's simulator's does (`Hm96Tree.sim_lastOnly`).
-* `simProverM S k P`: the prover with `S`'s root and openings, masked as `runCM` masks them.
-* `runCM_near`: every event of the masked committed run is within `δ_hide` of the same event at `Claims.run` of
-  `simProverM`, wherever the tree hides at `δ_hide` against a simulator that reads only the last answer;
-  `Pr_runCM_le_hm96` is the one-sided bound at the hm96 tree, `δ_hide = 2 · k(x) · δ₁`.
-* `Pr_acc_runCM_le`: knowledge soundness at those coins, from `PrBad` at live ones: the masked committed run accepts at
-  most as often as the extractor, run on `simProverM`, recovers a witness, plus `PrBad` at `simProverM` and
-  `2 · k(x) · δ₁`.
--/
+/-! Committed coins at a verifier that may answer a round with nothing, as the recursion's compiled verifier
+does. -/
 
 @[expose] public section
 
@@ -91,8 +73,6 @@ def runCM {Coin Ω T : Type} [Inhabited Coin] (H : Msg → Msg) (P : CProver Ω)
     (C : CoinTree Coin T (V.k x)) (ω : Ω) (r : Fin (V.k x) → Coin) (τ : T) : Transcript :=
   run H (P.atM (C.hello r τ) (openSeq (C.opn r τ))) V x ω r
 
-/-- **The simulator's opening reads only its round's answer**: two answer lists of one length with one last answer get
-one opening. -/
 def OnlineSim.LastOnly (S : OnlineSim) : Prop :=
   ∀ (σ : S.Tape) (as bs : List Msg), as.length = bs.length → as.getLast? = bs.getLast? → S.opn σ as = S.opn σ bs
 
@@ -103,9 +83,6 @@ def simProverM {Ω : Type} (S : OnlineSim) (k : Msg → ℕ) (P : CProver Ω) : 
   ⟨fun x hist ω => P.next x (S.hello ω.2) hist
     (maskOpen (fun i => if i < k x then S.opn ω.2 ((hist.take (i + 1)).map Prod.snd) else []) hist) ω.1⟩
 
-/-! ## Two provers that agree on the histories a run reaches -/
-
-/-- The history answers each round `i` with `ans` of the coin `r i`, or with `[]`. -/
 def AnsweredOr {Coin : Type} (ans : Coin → Msg) (r : ℕ → Coin) (hist : List (Msg × Msg)) : Prop :=
   ∀ i (hi : i < hist.length), hist[i].2 = ans (r i) ∨ hist[i].2 = []
 
@@ -124,9 +101,6 @@ theorem answeredOr_snoc {Coin : Type} {ans : Coin → Msg} {r : ℕ → Coin} {h
     subst hi'
     simpa using hm
 
-/-- **Provers that agree on every history the run can reach run alike**: against a verifier that answers with its
-coins or with nothing, two provers whose next messages agree on every history answering each round with its coin or
-with `[]` have the same rounds. -/
 theorem stepWith_congrOr {Coin : Type} (H : Msg → Msg) {Ω Ω' : Type} (P : Prover Ω) (P' : Prover Ω')
     (V : Verifier Coin) (x : Msg) (ω : Ω) (ω' : Ω') (ans : Coin → Msg) (r : ℕ → Coin)
     (hV : AnswersCoinOrNil H V x ans) (hP : ∀ hist, AnsweredOr ans r hist → P.next x hist ω = P'.next x hist ω') :
@@ -157,8 +131,6 @@ theorem stepWith_congrOr {Coin : Type} (H : Msg → Msg) {Ω Ω' : Type} (P : Pr
     | acc => rfl
     | rej => rfl
 
-/-- **The simulating prover's run** is the committed prover's at the simulator's root and openings, both masked,
-wherever the simulator's opening reads only its round's answer. -/
 theorem run_simProverM {Coin : Type} [Inhabited Coin] (H : Msg → Msg) (V : Verifier Coin) (x : Msg) {Ω : Type}
     (S : OnlineSim) (hS : S.LastOnly) (P : CProver Ω) (ans : Coin → Msg) (hV : AnswersCoinOrNil H V x ans) (ω : Ω)
     (σ : S.Tape) (r : Fin (V.k x) → Coin) :
@@ -187,12 +159,6 @@ theorem run_simProverM {Coin : Type} [Inhabited Coin] (H : Msg → Msg) (V : Ver
     simp [ha]
   · rw [if_neg hk, dif_neg hk]
 
-/-! ## Masked committed coins against fresh ones -/
-
-/-- **Masked committed coins are within `δ_hide` of fresh ones.** Against a verifier that answers each round with its
-coin or with nothing (`AnswersCoinOrNil`), at a tree that hides at distance `δ_hide` against a simulator `S` whose
-opening reads only its round's answer: every event of the masked committed run, with the prover's tape and the coins,
-has probability within `δ_hide` of the same event at `Claims.run` of the simulating prover (`simProverM`). -/
 theorem runCM_near {Coin Ω T : Type} [Fintype Coin] [Inhabited Coin] [Fintype Ω] [Nonempty Ω] [Fintype T]
     (H : Msg → Msg) (V : Verifier Coin) (x : Msg) (C : CoinTree Coin T (V.k x)) (ans : Coin → Msg) (S : OnlineSim)
     {δ_hide : ℝ} (hS : SimHides C ans S δ_hide) (hL : S.LastOnly) (hV : AnswersCoinOrNil H V x ans) (P : CProver Ω)
@@ -222,14 +188,10 @@ theorem runCM_near {Coin Ω T : Type} [Fintype Coin] [Inhabited Coin] [Fintype �
   rw [hL', hR]
   exact abs_Ex_sub_le fun ω => hS fun r h π => Ev ω r (run H (P.atM h (openSeq π)) V x ω r)
 
-/-! ## At the hm96 coin tree -/
-
 namespace Hm96Tree
 
 variable {Coin B Y C T₀ : Type} {k : ℕ} (T : Hm96Tree Coin B Y C T₀ k)
 
-/-- **The hm96 tree's simulator reads only the last answer**: its round-`j` opening is the tree's at the coin the last
-answer decodes to. -/
 theorem sim_lastOnly [Add B] [Fintype Coin] [Nonempty Coin] [Fintype Y] [Nonempty Y] [Fintype T₀] [Nonempty T₀]
     (dec : Msg → Coin) : (T.sim dec).LastOnly := by
   intro σ as bs hl hg
@@ -253,10 +215,6 @@ theorem sim_lastOnly [Add B] [Fintype Coin] [Nonempty Coin] [Fintype Y] [Nonempt
 
 end Hm96Tree
 
-/-- **The bound a KS proof charges, with masked openings, from `Hm96Hiding`**: against a verifier that answers each
-round with its coin, through an injective `ans`, or with nothing, and an hm96 coin tree whose leaves hide at `δ₁ ≠ ∞`,
-an event of the masked committed run is at most `2 · k(x) · δ₁` likelier than at `Claims.run` of a prover that reads a
-simulator's root and openings, masked alike. -/
 theorem Pr_runCM_le_hm96 {Coin B Y C T₀ : Type} [Fintype Coin] [Inhabited Coin] [AddGroup B] [Fintype B] [Fintype Y]
     [Nonempty Y] [Fintype T₀] [Nonempty T₀] (H : Msg → Msg) (V : Verifier Coin) (x : Msg)
     (T : Hm96Tree Coin B Y C T₀ (V.k x)) {δ₁ : ℝ≥0∞} (hH : Hm96Hiding T.My T.cs δ₁) (hδ : δ₁ ≠ ⊤) (ans : Coin → Msg)
@@ -273,10 +231,6 @@ theorem Pr_runCM_le_hm96 {Coin B Y C T₀ : Type} [Fintype Coin] [Inhabited Coin
     (T.simHides hH hδ ans _ (Function.leftInverse_invFun hans)) (T.sim_lastOnly _) hV P Ev)).2
   linarith
 
-/-- **Knowledge soundness at masked committed coins, from `PrBad` at live ones**: against a verifier that answers each
-round with its coin, through an injective `ans`, or with nothing, and an hm96 coin tree whose leaves hide at `δ₁ ≠ ∞`,
-one simulator `S` of the tree serves every prover: the masked committed run accepts at most as often as the extractor
-`E`, run on the simulating prover `simProverM S`, recovers a witness, plus `PrBad` at that prover and `2 · k(x) · δ₁`. -/
 theorem Pr_acc_runCM_le {Coin W B Y C T₀ : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [AddGroup B]
     [Fintype B] [Fintype Y] [Nonempty Y] [Fintype T₀] [Nonempty T₀] (H : Msg → Msg) (V : Verifier Coin) (R : Rel W)
     (E : Extractor Coin W V) (x : Msg) (T : Hm96Tree Coin B Y C T₀ (V.k x)) {δ₁ : ℝ≥0∞}

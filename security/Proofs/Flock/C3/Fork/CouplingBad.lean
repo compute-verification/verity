@@ -17,15 +17,7 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 
-/-!
-# a1l, step 5: no accepted run in `W` disagrees with `W`'s tables
-
-The coupling's oracle prover sends `W`'s tables (`chH`): at a rep's slot, the rows the reps' part of an outcome of `W`
-opens there (`tabRW` at `WC W`); at R's, the rows R's part opens (`tabRW` at `WR W x`, R's stream as rep 0 of a
-compiled table at the registered cap). `holo_bad_zero`: where the tables a run records are those, an accepted run in
-`W` that disagrees with them clashes with a run in `W` (`ClashHL`): on the reps as in `bad_zero_of_fixed`, on R's
-levels `ℓ ≥ 1` the same way at R's part, and on R's level 0, whose table is the registered word, by a `RegClash`.
--/
+/-! No accepted run in `W` disagrees with `W`'s tables (`holo_bad_zero`). -/
 
 @[expose] public section
 
@@ -36,13 +28,10 @@ open FlockSoundness.Discharge.Exec FlockSoundness.Discharge.Recursion
 
 variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K] {D Sl : Type}
 
-/-- The reps' parts of `W`'s outcomes, as compiled-table outcomes. -/
 def WC (W : OutHL F D Sl → Prop) (c : OutCL F D Sl) : Prop := ∃ o, W o ∧ o.circ = c
 
-/-- R's parts of `W`'s outcomes, as compiled-table outcomes whose rep 0 is R's stream at the registered cap. -/
 def WR (W : OutHL F D Sl → Prop) (x : HoloReg F D) (c : OutCL F D Sl) : Prop := ∃ o, W o ∧ o.reg x.cap = c
 
-/-- **`W`'s tables**, at the lockstep's slots: a rep's at the even ones, R's at the odd ones. -/
 noncomputable def chH (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H)
     (sch rsch : Schedule) (W : OutHL F D Sl → Prop) (x : HoloReg F D) (s : ℕ) (d : Cap D) : Oracle F :=
   if s % 2 = 0 then tabRW H E Lf sch (WC W) (s / 2) d else tabRW H E Lf rsch (WR W x) (s / 2) d
@@ -52,7 +41,6 @@ theorem not_of_ind_le_zero {α : Type} {p : α → Prop} {a : α} (h : ind p a �
   rw [if_pos hp] at h
   exact not_le.2 zero_lt_one h
 
-/-- **The reps agree with `W`'s tables**: `bad_zero_of_fixed` at the reps' part, whose clashes are `ClashHL`'s first. -/
 theorem holo_reps_agree (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H)
     (sch rsch : Schedule) (x : HoloReg F D) (W : OutHL F D Sl → Prop)
     (hW : ∀ o o', W o → W o' → ¬ ClashHL H E Lf sch rsch x o o') (cap₀ : Cap D)
@@ -82,8 +70,6 @@ theorem holo_reps_agree (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf :
   by_contra hn
   exact not_of_ind_le_zero hz ⟨hacc, ⟨b, hb, rfl⟩, hn⟩
 
-/-- **R's level 0**: an opening of R's level 0 off the registered word, in R's part of a run, is a `RegClash`. R's part
-has no rep 1, so its level-0 openings are R's own. -/
 theorem regClash_of_off₀ (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H)
     (rsch : Schedule) (x : HoloReg F D) (b : OutHL F D Sl) {p : Fin (2 ^ (lvOf rsch 0).logLen)}
     (hoff : Rewinding.Off (op₀L H E Lf rsch x.cap) (rowT _ _ x.w) (b.reg x.cap) p) :
@@ -101,9 +87,6 @@ theorem regClash_of_off₀ (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (L
   rw [List.getD_eq_getElem?_getD, List.getElem?_map, List.getElem?_range lane.isLt]
   rfl
 
-/-- **R agrees with the registered word and `W`'s tables**: `rep_badL` at R's part, rep 0 of a compiled table at the
-registered cap. A clash there is `ClashHL`'s second; an opening of level 0 off `x.w` is a `RegClash`; an opening of a
-level `ℓ ≥ 1` off the table recorded there, which `hfix` makes `W`'s, conflicts with a run of `W`. -/
 theorem holo_regR_agree (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H)
     (sch rsch : Schedule) (x : HoloReg F D) (W : OutHL F D Sl → Prop)
     (hW : ∀ o o', W o → W o' → ¬ ClashHL H E Lf sch rsch x o o')
@@ -131,9 +114,6 @@ theorem holo_regR_agree (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf :
   · exact hW b b hb hb
       (Or.inr (Or.inl (Or.inl (Or.inr ⟨0, by norm_num, ℓ, (Finset.mem_Icc.1 hℓ).1, d, hc, hcl⟩))))
 
-/-- **An accepted run in `W` agrees with `W`'s tables**: at the level-0 table `W`'s at the run's cap, R's level 0 the
-registered word, and the tables the run records `W`'s (`chH`), disagreeing would be a clash of the run with a run of
-`W`. -/
 theorem holo_bad_zero (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H)
     (sch rsch : Schedule) (x : HoloReg F D) (W : OutHL F D Sl → Prop)
     (hW : ∀ o o', W o → W o' → ¬ ClashHL H E Lf sch rsch x o o') (cap₀ : Cap D)

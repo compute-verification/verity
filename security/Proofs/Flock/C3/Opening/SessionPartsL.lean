@@ -18,19 +18,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.VBridge.AlgHolds
 import Proofs.Flock.VBridge.OpeningUnit
 
-/-!
-# n4's session (a) at the columns the rows read: `OpeningZeroAtL`
-
-`OpeningZeroAt` asks a registered bit of `w` at every row-port column of an opening part's unit. A part's row ports hold
-the whole of each port of `w` its residuals touch, and first-fit packing leaves elements of a touched port that no
-computed row of the part's unit reads (at `m = 22`, `m24`'s first four elements), so nothing registers them. As
-`ResZeroAtL` does for `rec-residuals`, the row ports are asked for `w` here only at the columns some computed row reads
-(`ReadCol`): the unit's other columns do not reach its outputs (`sat_of_read`).
-
-* `decode_openingR`: `decode_opening` from the read row columns (`decode_resUnitR` at `check_opening`'s net).
-* `OpeningZeroAtL`, `partCols_of_openingZeroAtL`: `OpeningZeroAt` with the row ports registered at the read columns,
-  and the part's residuals, zero, from it as from `OpeningZeroAt`; `openingZeroAtL_of` weakens `OpeningZeroAt` to it.
--/
+/-! `OpeningZeroAtL`: the opening's parts' zero columns, at the columns the rows read. -/
 
 @[expose] public section
 
@@ -47,8 +35,6 @@ open FlockVBridge.AccChain (RegOut copyVal_regOut)
 variable {mPts nU J : ℕ} {Reg' : Type} {c : Flock.Circuit} {hU : Built c.unit} {hscope : Layout.scopeOk c = true}
   {Lv : SamplingDesign nU} (zo : ZkOuter mPts nU J Reg' c hU hscope Lv)
 
-/-- **`decode_opening` from the read row columns** (`decode_resUnitR` at `check_opening`'s net): the row ports
-registered bits of `w` only at the columns some computed row of the unit reads. -/
 theorem decode_openingR {bits : Fin (Layout.keyN c hU nU) → Bool} (hA : zo.RegAgree bits) (u : Fin nU) {j : ℕ}
     (hj : j < c.upv) (hone : bits (Const.Prog.oneAt (Placed.keyProg c hU nU) u) = true)
     (hc : RecOpening.check c = .ok ()) {m cl p : ℕ} (hp : RecOpening.params c.unit.name = some (m, cl, p))
@@ -67,10 +53,8 @@ theorem decode_openingR {bits : Fin (Layout.keyN c hU nU) → Bool} (hA : zo.Reg
   exact ⟨sub wI w, sub V vv, sub_lt wI w, sub_lt V vv,
     decode_resUnitR zo hA u hj hone S ns nv (opening_small hpart) hn hu _ _ (sub_ge w hwI) (sub_ge vv hV) hw hv⟩
 
-/-- **Copy `j` of unit `u` is opening part `p` of the groups `gs`, its row ports registered where they are read**
-(`OpeningZeroAt` with `ResZeroAtL`'s guard): the unit `RecOpening.check` accepted for part `p` at `sh`, its row ports
-registered bits of `w` at `wIdx` of group `p`'s ports at the columns some computed row of the unit reads (`ReadCol`),
-its `v` port registered bits of `v` at the group's `V`, and every output column of the part a registered 0. -/
+/-- Row ports are asked for `w` only at the columns some computed row reads: first-fit packing leaves elements
+of a touched port that no computed row reads, which nothing registers. -/
 def OpeningZeroAtL (bits : Fin (Layout.keyN c hU nU) → Bool) (u : Fin nU) (j : ℕ) (sh : Shape)
     (gs : Array (Array ℕ × Array ℕ × Array ℕ)) (p : ℕ) (w v : ℕ → F128) : Prop :=
   ∃ (hpg : p < gs.size) (hj : j < c.upv), bits (Const.Prog.oneAt (Placed.keyProg c hU nU) u) = true ∧
@@ -82,15 +66,12 @@ def OpeningZeroAtL (bits : Fin (Layout.keyN c hU nU) → Bool) (u : Fin nU) (j :
       (∀ q < 128 * nv, RegBit zo u j (vBase (partRep ns nv) + q) (wbit (sub gs[p].2.2 v) q)) ∧
       ∀ t < 16 * RecResiduals.RES_OUT_WORDS, RegOut zo u hj (partBase S ns nv + t) false
 
-/-- `OpeningZeroAt` asks more: a registered bit at every row-port column. -/
 theorem openingZeroAtL_of {bits : Fin (Layout.keyN c hU nU) → Bool} {u : Fin nU} {j : ℕ} {sh : Shape}
     {gs : Array (Array ℕ × Array ℕ × Array ℕ)} {p : ℕ} {w v : ℕ → F128} (h : OpeningZeroAt zo bits u j sh gs p w v) :
     OpeningZeroAtL zo bits u j sh gs p w v :=
   let ⟨hpg, hj, hone, hc, hu, m, cl, hp, hsh, S, ns, nv, hpart, hw, hv, hz⟩ := h
   ⟨hpg, hj, hone, hc, hu, m, cl, hp, hsh, S, ns, nv, hpart, fun q hq _ => hw q hq, hv, hz⟩
 
-/-- **An opening part's residuals, zero, from its unit's copy in a good layer, its row ports registered where they are
-read** (`decode_openingR`), as `partCols_of_openingZeroAt`. -/
 theorem partCols_of_openingZeroAtL {bits : Fin (Layout.keyN c hU nU) → Bool} (hG : zo.Good bits) {u : Fin nU}
     {j : ℕ} {sh : Shape} {S0 : RecAlgebra.GfS} {gs : Array (Array ℕ × Array ℕ × Array ℕ)}
     (hS : RecOpening.structureOf sh = .ok S0) (hg : groups S0 (RecOpening.portSizes sh) = .ok gs) {p : ℕ}

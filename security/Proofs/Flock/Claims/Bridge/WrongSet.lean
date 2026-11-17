@@ -35,24 +35,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# The claims' incorrect set inside the game's wrong set
-
-`Claims.Sampling.faulty` counts the slots of the claims' partition whose proof block no interior makes correct on the
-witness's openings; `FlockSoundness.Discharge.ZkLink.incorrectRegZ` counts the game's units not right on the registration at
-a transcript (`EndToEnd` reads it at `XplurZC`). `faulty_card_le_incorrectRegZ`: when every slot is some game unit's
-(`slot`), at most as many slots are faulty as units are wrong, given two facts per game unit `u` at the slot's proof
-block `b u`, each a hypothesis here:
-
-* `Lowers`: the claims program's gates `need` of `b u` (its gates and the gates they read) map to the game circuit's
-  wires (`φ`), and on values that are the circuit's evaluation at those wires `b u` is correct (`Prog.Correct`). It reads no prover: it is the claims program and the game circuit agreeing on the unit.
-* `Binds`: every opening family that opens `u`'s registered commit strings on its committed wires (`ValueBindingZ.cs`)
-  agrees with the witness's opened value (`Wit.val`) at each committed, non-constant gate of `need` that `b u` reads or
-  commits, at a wire of `P.io u`. It is the event that the witness's openings and the registration's agree, which a
-  collision breaks.
-
-So a unit right on the registration has its slot not faulty (`not_faulty_of_rightRegZ`), at the interior that is the
-circuit's evaluation. -/
+/-! The claims' incorrect set inside the game's wrong set. -/
 
 @[expose] public section
 
@@ -67,19 +50,13 @@ variable (A : Arith F K) {C : Verity.Boolean.Circuit} {n : ℕ} (P : Audit.Parti
   {decode : DecoderZK (C := C) planZ tab} {Dh : Type} {Hc : List UInt8 → Dh}
   (vb : ValueBindingZ A P planZ tab decode Hc)
 
-/-- The claims program's gates a proof block reads or computes: its gates, and the gates they read. -/
 def need (Cp : Claims.Sampling.Prog) (b : List ℕ) : List ℕ :=
   b ++ b.flatMap fun g => (Cp.gates[g]?.map Claims.Sampling.BGate.reads).getD []
 
-/-- **The claims unit lowers to the game unit**: on values that are the circuit's evaluation on `Xv`'s inputs at the
-wires `φ` maps `need` to (constants aside), the proof block `b` is correct. -/
 def Lowers (Cp : Claims.Sampling.Prog) (b : List ℕ) (φ : ℕ → Fin C.N) (Xv : Fin C.N → Bool) : Prop :=
   ∀ ref : ℕ → Option Bool, (∀ g ∈ need Cp b, (∀ c, Cp.gates[g]? ≠ some (.const c)) → ref g = some (C.eval Xv (φ g))) →
     Cp.Correct ref b
 
-/-- **The witness's openings agree with the registration's** at game unit `u`: every opening family that opens `u`'s
-registered commit strings on its committed wires has, at each non-constant gate of `need` that `b` reads from outside or
-commits, a wire of `P.io u` whose opened bit is the witness's opened value. -/
 def Binds (H : Claims.Msg → Claims.Msg) (Cm : Claims.Sampling.CommitmentScheme Bool) (s : Claims.Sampling.AuditStatement)
     (w : Claims.Sampling.Wit) (b : List ℕ)
     (φ : ℕ → Fin C.N) (R : Reg) (u : Fin n) : Prop :=
@@ -90,7 +67,6 @@ def Binds (H : Claims.Msg → Claims.Msg) (Cm : Claims.Sampling.CommitmentScheme
 
 variable {A P planZ tab vb}
 
-/-- **A unit right on the registration has its slot not faulty**, at the interior that is the circuit's evaluation. -/
 theorem not_faulty_of_rightRegZ {H : Claims.Msg → Claims.Msg} {Cm : Claims.Sampling.CommitmentScheme Bool}
     {s : Claims.Sampling.AuditStatement}
     {Pc : Claims.Sampling.Partition} {w : Claims.Sampling.Wit} {R : Reg} {Xv : Fin C.N → Bool} {u : Fin n} {v : ℕ}
@@ -110,9 +86,8 @@ theorem not_faulty_of_rightRegZ {H : Claims.Msg → Claims.Msg} {Cm : Claims.Sam
     obtain ⟨hio, hw⟩ := hbind op (fun g hg => (hop g hg).1) g hg hc hB
     rw [hw, (hop (φ g) hio).2]
 
-/-- **At most as many slots are faulty as game units are wrong on the registration**: every slot is some unit's
-(`slot`), and at each unit its slot's proof block lowers to it (`Lowers`) and the witness's openings agree with the
-registration's (`Binds`). -/
+/-- `Lowers` and `Binds` are hypotheses here: `Lowers` reads no prover, and `Binds` is the event that the
+witness's openings and the registration's agree, which a collision breaks. -/
 theorem faulty_card_le_incorrectRegZ (H : Claims.Msg → Claims.Msg) (Cm : Claims.Sampling.CommitmentScheme Bool)
     (s : Claims.Sampling.AuditStatement)
     (Pc : Claims.Sampling.Partition) (w : Claims.Sampling.Wit) (R : Reg) (Xv : Fin C.N → Bool) (slot : Fin n → ℕ)

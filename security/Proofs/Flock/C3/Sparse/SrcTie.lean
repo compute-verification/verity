@@ -19,18 +19,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 import Proofs.Flock.C3.Sparse.SrcTape
 
-/-!
-# The source's sparse phases from V*'s RecSparse units
-
-`SrcSparseTie`: at every accepted outer proof, each rep's sparse stage `u.sp i` is the steps (`stepsOf`) of message
-words `w` and coins `c` at the rep's values, held by a RecSparse unit V*'s check accepted (`SparseTie`): the circuit
-passes `RecSparse.check` at the session's shape (`unitShape`), the laid-out unit's rows hold at `v`, its input columns
-hold `w`, the verifier row at `c` and the slots' types (`tauArr`), and its residuals' output columns are zero. The tie
-states the rows as `LaidRows` of `RecSparse.unitLaid`; `SrcLayer` reads them off V*'s layers, as `ResLayer` does for
-`RecResiduals` (`sparseTie_of_layer`). `srcSparseOK_of_tie`: then the source's sparse phases play (`SrcSparseOK`).
-`check_sparse` bounds `T_LOG`, and `laid_sparse` reads the zero columns as the unit's residuals being zero, so the unit
-accepts and plays its phase on its steps (`playsT_of_unit`).
--/
+/-! The source's sparse phases from V*'s RecSparse units. -/
 
 @[expose] public section
 
@@ -48,16 +37,12 @@ open FlockVBridge.Sparse (SCoins nw nc verifierRow outOf outOf_eq tail_iff shOf 
 open FlockVBridge.OfVStar (bitOf_zero)
 open FlockVBridge.AccChain (eq_of_bitOf)
 
-/-- The verifier's `RecSparse.Shape` at the session's class (`shOf` of it is `e.cls.shape`). -/
 def unitShape (e : ExecHolo) : Flock.RecSparse.Shape := ⟨e.cls.nu, e.cls.slotLog, e.cls.sLog, e.cls.tLog⟩
 
-/-- The slots' types, as the unit's `tau` port holds them. -/
 def tauArr (e : ExecHolo) : Array ℕ := Array.ofFn fun σ => (e.τ σ).val
 
-/-- **Rep `i`'s sparse stage is a RecSparse unit V*'s check accepted**: words `w` and coins `c` at the rep's values
-(all of `SparseUnit` but its acceptance), whose steps are the stage, and a circuit `RecSparse.check` accepted at the
-session's shape whose laid-out unit's rows hold at `v`, with its input columns holding `w`, the verifier row at `c` and
-the slots' types, and its residuals' output columns zero (`SparseTieAt`, at those `w` and `c`). -/
+/-- Rep `i`'s sparse stage is a RecSparse unit V*'s check accepted, at words `w` and coins `c`: its rows hold
+at `v` and its residuals' output columns are zero. -/
 abbrev SparseTieAt (e : ExecHolo) (u : C3Run e) (i : Fin 2) (w : Array Flock.F128) (c : SCoins) : Prop :=
   ∃ (cc : Flock.Circuit) (v : ℕ → Bool),
     w.size = nw e.cls.shape ∧ nc e.cls.shape ≤ c.cs.size ∧
@@ -84,7 +69,6 @@ theorem outOf_size (sh : Flock.RecSparse.Shape) (rs w v : Array Flock.F128) (τ 
       omega
     simp [ht, hst, Flock.RecSparse.residualNames]
 
-/-- **A rep tied to an accepted unit plays its sparse phase on its stage** to some claim. -/
 theorem plays_of_tie {e : ExecHolo} {u : C3Run e} {i : Fin 2} (h : SparseTie e u i) :
     ∃ x, PlaysT (sparseAt e u i) (u.sp i) (some x) := by
   obtain ⟨w, c, cc, v, hw, hc, hpub, hh, hs, hck, hpar, hL, hin, h0⟩ := h
@@ -111,14 +95,11 @@ local notation "ℐ" => holoInnerAt T CT st hp
 
 variable {S : ℕ} {Vs : Fin S → VStmt}
 
-/-- **The source tied to V*'s RecSparse units**: at every accepted outer proof, each rep's sparse stage is the steps
-of a RecSparse unit V*'s check accepted, at the rep's values (`SparseTie`). -/
 def SrcSparseTie (zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
     (dg : ByteArray → ByteArray) (N k Rw : ℕ)
     (src : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → C3Run (holoAt st hp)) : Prop :=
   AtSrc zs dg N k Rw src fun _ u => ∀ i : Fin 2, SparseTie (holoAt st hp) u i
 
-/-- **The source's sparse phases play** at a source tied to V*'s RecSparse units. -/
 theorem srcSparseOK_of_tie {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'}
     {dg : ByteArray → ByteArray} {N k Rw : ℕ}
     {src : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → C3Run (holoAt st hp)}

@@ -23,25 +23,7 @@ import Proofs.Flock.C3.HoloValues.Shape
 import Proofs.Flock.Soundness.Refine.HoloRefines
 import Proofs.Flock.Soundness.Refine.Seam
 
-/-!
-# n2's read fact: each rep's accepting run from the tape
-
-`RepsRead`: at every accepted outcome, the inner transcript's steps past the cap's and the points' begin with rep 0's
-steps and then rep 1's, in the reps' interleaving (`firstSteps`), and each rep's steps are an accepting run of the
-executable's holo rep (`RepUnit`): values V*'s sessions hold that meet E's preconditions (`AlgebraHolds`, `AccHolds`,
-the proof's zerocheck and lincheck messages, the circuit fold at `verifierRows`' points), on a record from round 0
-whose rounds' coins are the values' and which answers the rep's frames, through ring switching and Ligerito on a
-`fast100` schedule that is the model's; the steps take the kinds of `holoRepC`'s shape (`holoRepShape`), their
-messages are the proof's (`holoRepMsgs`) and their coin steps the rounds the program consumes but `z_partial`'s; the
-proof's level-0 cap is the run's, and the run's openings at the rep are the proof's rows (`openRow`). It reads the
-tape and the run, not the decoder of V*'s messages.
-
-`hReps_of_read`: `HReps` from `RepsRead`, at any family whose run decodes the reps from the tape as `decodeRun` does
-(`HRepStages`, which the honest family has: `hRepStages_honest`). Each unit's program runs (`holoProg_of_zclc`), it
-refines to `holoRepC` (`holoRep_refines`), the run is a play on the unit's steps (`playsT_of_spine`) and its openings
-pass the plain leaf's path checks (`opensOK_of`); two games play on at most one pair of prefixes of a tape in the
-reps' interleaving (`Read.repsOf_of_playsT`), so the reps the run decodes are those plays.
--/
+/-! Each rep's accepting run, read from the tape (`RepsRead`), and `HReps` from it. -/
 
 @[expose] public section
 
@@ -73,7 +55,6 @@ theorem prefix_drop {a b l : List Step} (h : a ++ b <+: l) : b <+: l.drop a.leng
   rw [List.append_assoc, List.drop_left]
   exact List.prefix_append _ _
 
-/-- **Two games play on at most one pair of prefixes of a tape** in the reps' interleaving, to one pair of outputs. -/
 theorem reps_unique {α β : Type} {g₀ : Game α} {g₁ : Game β} {l p₀ p₁ q₀ q₁ : List Step} {a a' : α} {b b' : β}
     (h₀ : PlaysT g₀ p₀ a) (h₁ : PlaysT g₁ p₁ b) (hp : firstSteps p₀ ++ p₁ <+: l) (hq : firstSteps q₀ ++ q₁ <+: l)
     (hq₀ : PlaysT g₀ q₀ a') (hq₁ : PlaysT g₁ q₁ b') : q₀ = p₀ ∧ a' = a ∧ q₁ = p₁ ∧ b' = b := by
@@ -86,7 +67,6 @@ theorem reps_unique {α β : Type} {g₀ : Game α} {g₁ : Game β} {l p₀ p�
   obtain ⟨rfl, rfl⟩ := playsT_prefix h₁ hq₁ (prefix_drop hp) (prefix_drop hq)
   exact ⟨rfl, rfl, rfl, rfl⟩
 
-/-- **The reps' decode is their plays** on any prefix of the tape they play on in the reps' interleaving. -/
 theorem repsOf_of_playsT {α β : Type} {g₀ : Game α} {g₁ : Game β} {l p₀ p₁ : List Step} {a : α} {b : β}
     (d : List Step × α × List Step × β) (h₀ : PlaysT g₀ p₀ a) (h₁ : PlaysT g₁ p₁ b)
     (hp : firstSteps p₀ ++ p₁ <+: l) : repsOf g₀ g₁ l d = (p₀, a, p₁, b) := by
@@ -99,8 +79,6 @@ theorem repsOf_of_playsT {α β : Type} {g₀ : Game α} {g₁ : Game β} {l p�
 
 end Read
 
-/-! ## One rep's unit -/
-
 section Unit
 
 open Flock FlockSoundness FlockSoundness.Refine
@@ -111,15 +89,6 @@ open FlockSoundness.Discharge.Exec (kindOf)
 open FlockSoundness.Discharge.PlaysCoin (coinArr)
 open FlockSoundness.Model (holoRepC OpensOKL)
 
-/-- **One rep's accepting run of the executable** at rep `r`, on the tape steps `ts`, for the model's statement `S`,
-schedule `sch₀` and extra claims `extra`, the level-0 cap `cap₀` and the openings `os`: values `d` at a shape `sh`
-meeting E's preconditions, the proof's zerocheck and lincheck messages and the circuit fold at `verifierRows`' points
-(`holoProg_of_zclc`'s), on a record `t` from round 0 whose rounds' coins are `d`'s and which answers the rep's frames
-with hidden units (`HoloLcAnswered`), then ring switching from past `r'`'s round and Ligerito to `t₄`, at a setup
-whose `m`, `k_log` and circuit fold are `S`'s, on a `fast100` schedule `sch` whose model schedule is `sch₀`, with the
-extra claims `extras` the model's claim by claim. The steps take the kinds of `holoRepC`'s shape, their messages are
-the proof's and `h` (`holoRepMsgs`), their coin steps the rounds the program consumes but `z_partial`'s; the proof's
-level-0 cap is `cap₀`, and the openings at rep `r` are the proof's rows and siblings (`openRow`). -/
 structure RepUnit (S : Model.Statement) (sch₀ : FlockSoundness.Accounting.Schedule) (extra : List (Model.Claim 𝔽 S.m))
     (cap₀ : Model.Cap Dig) (os : Model.Opens 𝔽 Dig) (r : ℕ) (ts : List Game.Step) : Type where
   sh : Flock.Shape
@@ -189,9 +158,6 @@ structure RepUnit (S : Model.Statement) (sch₀ : FlockSoundness.Accounting.Sche
   cap : capDig p.cap = cap₀
   opens : ∀ ℓ j, os r ℓ j = openRow p.ligerito sch ℓ j
 
-/-- **A rep's unit plays `holoRepC` to an output** on its steps, whose result accepts the openings and whose level-0
-paths verify against `cap₀` at any salts; the output's zerocheck `z` and `ρ` and lincheck `alpha` and `ts` are the
-coins of the rounds of the unit's record that sample them (`holoRep_refines_coins`). -/
 theorem rep_of_unit_coins {S : Model.Statement} {sch₀ : FlockSoundness.Accounting.Schedule} {extra : List (Model.Claim 𝔽 S.m)}
     {cap₀ : Model.Cap Dig} {os : Model.Opens 𝔽 Dig} {r : ℕ} {ts : List Game.Step} (hm : 13 ≤ S.m)
     (U : RepUnit S sch₀ extra cap₀ os r ts) :
@@ -226,7 +192,6 @@ theorem rep_of_unit_coins {S : Model.Statement} {sch₀ : FlockSoundness.Account
   rw [← U.cap]
   exact opensOK_of U.msId U.sch hlv U.p.cap U.p.ligerito r pend os hcaps hreqs' U.opens
 
-/-- **A rep's unit plays `holoRepC` to an output**: `rep_of_unit_coins` without the coins. -/
 theorem rep_of_unit {S : Model.Statement} {sch₀ : FlockSoundness.Accounting.Schedule} {extra : List (Model.Claim 𝔽 S.m)}
     {cap₀ : Model.Cap Dig} {os : Model.Opens 𝔽 Dig} {r : ℕ} {ts : List Game.Step} (hm : 13 ≤ S.m)
     (U : RepUnit S sch₀ extra cap₀ os r ts) :
@@ -237,26 +202,18 @@ theorem rep_of_unit {S : Model.Statement} {sch₀ : FlockSoundness.Accounting.Sc
 
 end Unit
 
-/-! ## The read fact -/
-
 open FlockSoundness FlockSoundness.Discharge FlockSoundness.Discharge.Recursion
 open Game Audit Exec Refine Model ZkSession ZkLink ZkExec Composed ZkReg
 open Flock FlockLevel3 Accounting ZkBind Integrate Placed StrictCR DecodeZL FlockC3.Compose
 open FlockVBridge.InnerAccepts (firstSteps)
 
-/-- Rep `r`'s game at the run `u`, as `HReps` and `decodeRun` take it. -/
 abbrev repAt (e : ExecHolo) (u : C3Run e) (r : ℕ) :=
   holoRepC (D := Dig) execArith r (e.cls.pubStatement e.regs) e.sch e.cls.hm
     (extraClaims (e.cls.pubStatement e.regs) e.cls.ptLocal e.cls.mPts u.pts)
 
-/-- The two reps' decode at the run `u` from the tape `l`, past the cap's and the points' steps, as `decodeRun` takes
-it. -/
 def repsAt (e : ExecHolo) (l : List Step) (u : C3Run e) :=
   repsOf (repAt e u 0) (repAt e u 1) (l.drop 2) ([], (none, PendL.reject), [], (none, PendL.reject))
 
-/-- **The read fact at a tape** `l` and a run `u`: past the cap's and the points' steps, `l` begins with rep 0's steps
-and then rep 1's in the reps' interleaving, each an accepting run of the executable's holo rep (`RepUnit`) at the
-run's statement, schedule, extra claims at the run's points, level-0 cap and openings. -/
 def RepsReadAt (e : ExecHolo) (l : List Step) (u : C3Run e) : Prop :=
   ∃ ts₀ ts₁ : List Step, firstSteps ts₀ ++ ts₁ <+: l.drop 2 ∧
     Nonempty (RepUnit (e.cls.pubStatement e.regs) e.sch
@@ -264,8 +221,6 @@ def RepsReadAt (e : ExecHolo) (l : List Step) (u : C3Run e) : Prop :=
     Nonempty (RepUnit (e.cls.pubStatement e.regs) e.sch
       (extraClaims (e.cls.pubStatement e.regs) e.cls.ptLocal e.cls.mPts u.pts) u.cap₀ u.os.1 1 ts₁)
 
-/-- **The run's reps are the tape's**, as `decodeRun` decodes them: each rep's steps and pending result are the
-reps' decode's (`repsAt`), and each rep's output is the decode's where it is one. -/
 def RepStages (e : ExecHolo) (l : List Step) (u : C3Run e) : Prop :=
   u.ts 0 = (repsAt e l u).1 ∧ u.ts 1 = (repsAt e l u).2.2.1 ∧ u.pend 0 = (repsAt e l u).2.1.2 ∧
     u.pend 1 = (repsAt e l u).2.2.2.2 ∧ (∀ x, (repsAt e l u).2.1.1 = some x → u.rep 0 = x) ∧
@@ -286,8 +241,6 @@ theorem rep_at {e : ExecHolo} {u : C3Run e} {i : Fin 2} {ts : List Step} {zl} {p
   subst hts hp hr
   exact ⟨hT, hv, ho⟩
 
-/-- **Each rep plays `holoRepC` to its decoded output**, whose result accepts the openings and whose level-0 paths
-verify against the run's cap, at a tape whose reps' units the read fact gives. -/
 theorem reps_of_readAt {e : ExecHolo} {l : List Step} {u : C3Run e} (hs : RepStages e l u)
     (hR : RepsReadAt e l u) :
     ∀ i : Fin 2, PlaysT (repAt e u i) (u.ts i) (some (u.rep i), u.pend i) ∧ (u.pend i).verdict u.os.1 = true ∧
@@ -304,21 +257,15 @@ theorem reps_of_readAt {e : ExecHolo} {l : List Step} {u : C3Run e} (hs : RepSta
 variable {nT r : ℕ} {T : Fin nT → Type} {CT : Fin r → Type} [∀ k, Fintype (CT k)] [∀ k, Nonempty (CT k)]
   {st : Flock.Stmt} {hp : HoloParams} {xR : HoloReg GF128 Dig} {n : ℕ} {L : SamplingDesign n} {Reg Cm Reg' Reg₂ : Type}
 
-/-- **(n2's read fact) Each rep's accepting run is on the inner transcript**: at every accepted outcome, the inner
-transcript's steps (V*'s layers' messages zipped with the rounds' coins) hold, past the cap's and the points' steps,
-rep 0's and then rep 1's accepting runs of the executable's holo rep in the reps' interleaving (`RepsReadAt`). -/
+/-- It reads the tape and the run, not the decoder of V*'s messages. -/
 def RepsRead (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂) (dg : ByteArray → ByteArray) (N k Rw : ℕ) : Prop :=
   F.AtAccepted dg N k Rw fun R ω t Lb =>
     RepsReadAt (holoAt st hp) (schedSteps T CT 0 ((F.wmsg Lb).zip (t.map Prod.snd))) (F.run R ω t Lb)
 
-/-- **The family's run decodes the reps from the inner transcript's steps** as `decodeRun` does, at every accepted
-outcome. -/
 def HRepStages (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂) (dg : ByteArray → ByteArray) (N k Rw : ℕ) : Prop :=
   F.AtAccepted dg N k Rw fun R ω t Lb =>
     RepStages (holoAt st hp) (schedSteps T CT 0 ((F.wmsg Lb).zip (t.map Prod.snd))) (F.run R ω t Lb)
 
-/-- **(n2) Each rep plays `holoRepC` to its decoded output, from the read fact**, at any family whose run decodes the
-reps as `decodeRun` does. -/
 theorem hReps_of_read {F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂} {dg : ByteArray → ByteArray} {N k Rw : ℕ}
     (hst : HRepStages F dg N k Rw) (hread : RepsRead F dg N k Rw) : HReps F dg N k Rw := by
   intro R ω t R₂ τ o hacc
@@ -336,12 +283,10 @@ variable {ish : RecVStar.Inner} {ss : Array VStar.Stmt} {hss : RecVStar.statemen
 
 local notation "𝓗" => C3Family.honest (xR := xR) ish hss bind hob zs own sel bc dec wr reg
 
-/-- The honest family's run is `decodeRun` of the inner transcript's steps, at any decoder `dec`. -/
 theorem hRepStages_honest {dg : ByteArray → ByteArray} {N k Rw : ℕ} : HRepStages 𝓗 dg N k Rw := by
   intro _ _ _ _ _ _ _
   exact repStages_decodeRun (holoAt st hp) _
 
-/-- **(n2) at the honest family, from the read fact.** -/
 theorem hReps_honest_of_read {dg : ByteArray → ByteArray} {N k Rw : ℕ} (hread : RepsRead 𝓗 dg N k Rw) :
     HReps 𝓗 dg N k Rw :=
   hReps_of_read hRepStages_honest hread

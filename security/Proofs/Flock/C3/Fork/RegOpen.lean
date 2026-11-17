@@ -19,21 +19,8 @@ import Proofs.Flock.Soundness.Accounting.Fast100
 import Proofs.Flock.Soundness.Game
 import Proofs.Flock.Soundness.Refine.Seam
 
-/-!
-# Piece (a), R's opening count: the registered opening is sound at unique decoding
-
-After both reps' sparse phases, `Model.regPhase` opens their two registered claims together (`opening`, the ring
-switches and `γ`) and runs Ligerito at R's registered schedule on the registered word `w` (`regOpening`). Level 0 of
-`fast100`'s schedule at `mReg` holds R's stacked bits exactly at rate at most `1/2` (`fast100_uniqueDecoding`), so a
-message within `(1 − ρ)/2 − η` of `w` is the only one there. `regOpen_sound`: where no such message packs a table on
-which both claims hold, the opening accepts with probability at most `regOpenError`, with no list (the reps' level 0 is
-at the list-decoding radius; R's is not).
-
-Ligerito's level 0 is `ligerito_sound_at`'s at the unique-decoding radius `udRadius`: its doom is over the (at most one)
-message within `udRadius` of `w` (`card_closeL_ud_le`), the folds' MCA events stay at the Johnson radius, and the level's
-queries catch a fold `udRadius`-far from it at a cost of `udQueryError` (`udQueryError_eq`). Every later level is
-`ligerito_sound`'s.
--/
+/-! R's registered opening is sound at unique decoding, with no list: R's level 0 holds its bits at rate at
+most `1/2`. -/
 
 @[expose] public section
 
@@ -43,8 +30,6 @@ open FlockSoundness FlockSoundness.Discharge.Recursion
 open Game Model Accounting
 open scoped ENNReal
 
-/-- **`fast100`'s schedule at `M` holds `M` bits at level 0 at rate `1/2`**: level 0 has `k₀` lanes of `2^logCols`
-packed elements of 128 bits, `k₀ + logCols + 7 = M`, for every `M` it covers. -/
 theorem fast100_uniqueDecoding (M : ℕ) (s : FlockSoundness.Accounting.Schedule) (hs : Accounting.fast100 M = some s) :
     s.levels ≠ [] ∧ s.m = M ∧ s.level₀.lanes = s.k0 ∧ s.k0 + s.level₀.logCols + 7 = M ∧
       1 ≤ s.level₀.logInvRate := by
@@ -57,17 +42,12 @@ theorem fast100_uniqueDecoding (M : ℕ) (s : FlockSoundness.Accounting.Schedule
 
 variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K]
 
-/-- **R's opening**, as `regPhase` runs it after both sparse phases: the two registered claims opened together, then
-Ligerito at R's schedule `rsch` on the registered word `w`. -/
 def regOpening (A : Arith F K) (sh : SparseShape) (hreg : 7 ≤ sh.mReg) (rsch : Schedule) (c₁ c₂ : RegClaim F sh)
     (w : Oracle F) : Game Bool := do
   match ← opening A hreg [c₁.toClaim, c₂.toClaim] with
   | none => pure false
   | some op => ligerito A rsch op.T op.b w
 
-/-! ## The unique-decoding radius -/
-
-/-- Level `l`'s unique-decoding radius `(1 − ρ)/2 − η`. -/
 noncomputable def udRadius (l : Level) : ℝ := (1 - l.rate) / 2 - eta
 
 theorem udRadius_le (l : Level) : udRadius l ≤ l.radius := by
@@ -81,7 +61,6 @@ theorem udQueryError_eq (l : Level) : udQueryError l = (1 - udRadius l) ^ l.quer
   congr 1
   ring
 
-/-- **At most one message is within `udRadius` of a table**: two such agree on more than `2^logCols` positions. -/
 theorem card_closeL_ud_le (A : Arith F K) (hA : A.Correct) (l : Level) (hf : l.Fits) (lanes : ℕ)
     (C : Oracle F) : (closeL A (udRadius l) lanes l.logCols l.logLen C).card ≤ 1 := by
   classical
@@ -129,11 +108,6 @@ theorem card_closeL_ud_le (A : Arith F K) (hA : A.Correct) (l : Level) (hf : l.F
   have := Fintype.linearIndependent_iff.1 (xP_linearIndependent A hA l.logCols hf.1) _ hsum c
   exact sub_eq_zero.1 this
 
-/-! ## R's opening -/
-
-/-- **R's opening is sound at unique decoding**: at `fast100`'s schedule for the stacked table, if no message within
-level 0's unique-decoding radius of `w` packs a table on which both claims hold, the opening accepts with probability at
-most `regOpenError`. -/
 theorem regOpen_sound (A : Arith F K) (hA : A.Correct) (sh : SparseShape) (rsch : Schedule)
     (hf : Accounting.fast100 sh.mReg = some rsch) (hreg : 7 ≤ sh.mReg) (c₁ c₂ : RegClaim F sh) (w : Oracle F)
     (hdoom : ∀ M : Message F rsch.k0 rsch.level₀.logCols,

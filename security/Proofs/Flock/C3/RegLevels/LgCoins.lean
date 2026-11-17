@@ -20,33 +20,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.C3.RegLevels.TopHold
 
-/-!
-# n14: R's Ligerito stage's coins, as the verifier holds R's stream
-
-At `MapsLeft`'s weave, R's Ligerito's coin steps are `stacked/rep0`'s rounds of coins (`rep0`) from the ring switches'
-`k₂`, as many as the stage takes (`LgHeld.lgCoins_of_weave`). `rep0` reads the verifier's hold of that stream
-(`C3.coins`, `commits.stream?`'s coins), so they are `StageHeld`'s first two parts at `stacked/rep0`, which
-`laterCoins_of_held`'s `h5` (and, from round 0, `h4`) reads:
-
-* `commits_c3Of`, `heldCoins_rep0`: at the `C3` the verifier builds of its hold `cs` (`c3Of`), the coins it holds of
-  `stacked/rep0` at round `q` are `rep0`'s round `q`;
-* `heldStage_of_lgCoins`: a stage whose coin steps are `rep0`'s `n` rounds from `k₂` has them as the coins the
-  verifier holds of `stacked/rep0` at those rounds (`StageHeld`'s first two parts at `ix = id`);
-* `roundIn_stacked`, `holoSelOne_stacked`: R's stream last in `holoStreams`' order, its round `q` of coins is sampled at
-  history round one past every earlier stream's and R's rounds before `q` (`roundAt_reps`, `holoSelOne_rep` at R);
-* `sampled_stacked`: where R's rounds from `k₂` each sampling coins, the history's rounds from R's round `k₂`'s sample them in
-  order (`StageHeld`'s last part);
-* `stackedRounds_coins`: every round of R's stream flips coins, at each shape `fast100` has (`sampled_stacked`'s `hpos`).
-
-* `stackedCoins_of_innerCommitsAt`: where the verifier holds the inner transcript and R's stream, META names R's shape,
-  at R's two claims, and the stream holds a round of coins for each round of `stackedRounds` there
-  (`StackedCoins.innerCommits_held`), which `rep0`'s round count reads.
-
-`RRounds.lean` reads `holoStreams`' R rounds (at the verifier's `ish.stacked`) as META's (`stackedStreams_of_covers`).
-`LgHeld.lean` assembles `h4` and `h5` (`stageHeld_stacked`; at R's run and `MapsLeft`, `stagesHeld_of_run`): each
-stage's start at its first round's history round (`stageStarts`), and its third part from the run's round total
-(`Compose.coins_total_holo`).
--/
+/-! R's Ligerito stage's coins, as the verifier holds R's stream. -/
 
 @[expose] public section
 
@@ -55,7 +29,6 @@ namespace FlockC3.RegLevels
 open FlockSoundness.Assumptions (heldCoins)
 open FlockSoundness.Discharge.PlaysCoin (coinArr)
 
-/-- **The `C3` the verifier builds of its hold holds its commits** (`c3Of`). -/
 theorem commits_c3Of {ish : Flock.RecVStar.Inner} {cs : Flock.RecVStar.InnerCommits} {c3 : Flock.RecCoins.C3}
     (hc3 : Flock.Guarantees.c3Of ish (some cs) = some c3) : c3.commits = cs := by
   unfold Flock.Guarantees.c3Of at hc3
@@ -63,8 +36,6 @@ theorem commits_c3Of {ish : Flock.RecVStar.Inner} {cs : Flock.RecVStar.InnerComm
   | none => rw [hsp] at hc3; cases hc3
   | some sp => rw [hsp] at hc3; cases hc3; rfl
 
-/-- **`rep0` is the verifier's hold of `stacked/rep0`**: at the `C3` it builds of its hold `cs`, the coins it holds of
-the stream at round `q` are `rep0`'s round `q` (none where it holds no such stream, and `rep0` is empty). -/
 theorem heldCoins_rep0 {ish : Flock.RecVStar.Inner} {cs : Flock.RecVStar.InnerCommits} {c3 : Flock.RecCoins.C3}
     (hc3 : Flock.Guarantees.c3Of ish (some cs) = some c3) (unit : String) (q : ℕ) :
     heldCoins (.ok cs) s!"{Flock.RecVStar.STACKED}/rep0" q = (FlockC3.Opening.rep0 c3 unit)[q]? := by
@@ -85,10 +56,6 @@ theorem heldCoins_rep0 {ish : Flock.RecVStar.Inner} {cs : Flock.RecVStar.InnerCo
     rw [hst]
     rfl
 
-/-- **R's Ligerito stage's coins are the verifier's hold of `stacked/rep0`** (`StageHeld`'s first two parts at
-`ix = id`): a stage whose coin steps are `rep0`'s `n` rounds from `k₂` (at `MapsLeft`'s weave, a prefix of the rounds
-from `k₂` on) has them as the coins `g q := rep0[q]!`, `q` over those rounds, each the coins the verifier holds of the
-stream at round `q` (`heldCoins_rep0`). -/
 theorem heldStage_of_lgCoins {ish : Flock.RecVStar.Inner} {cs : Flock.RecVStar.InnerCommits}
     {c3 : Flock.RecCoins.C3} (hc3 : Flock.Guarantees.c3Of ish (some cs) = some c3) {unit : String}
     {ts : List FlockSoundness.Game.Step} {k₂ n : ℕ}
@@ -112,8 +79,6 @@ theorem heldBefore_succ (s : HoloStream) (rs : Array SchedRound) {k : ℕ} (hk :
     List.sum_append]
   simp only [List.map_cons, List.map_nil, List.sum_cons, List.sum_nil, Nat.add_zero]
 
-/-- **R's rounds of coins from `k₂` on**: where its `p` rounds from `k₂` each sampling coins, the history rounds R's stream
-takes before round `k₂ + p` are `p` past those before `k₂`. -/
 theorem heldBefore_stacked {rs : Array SchedRound} {k₂ : ℕ} (p : ℕ)
     (h : ∀ p' < p, 0 < (rs.getD (k₂ + p') default).1) :
     heldBefore .stacked rs (k₂ + p) = heldBefore .stacked rs k₂ + p := by
@@ -130,8 +95,6 @@ theorem heldBefore_stacked {rs : Array SchedRound} {k₂ : ℕ} (p : ℕ)
     show _ + min _ 1 = _
     omega
 
-/-- **R's stream last in the history's order** (`holoStreams`' order): past streams `L` none of which is R's, R's round
-`q` takes the history rounds after all of `L`'s and R's rounds before `q`. -/
 theorem roundIn_stacked (rs : Array SchedRound) (q : ℕ) :
     ∀ L : List (HoloStream × Array SchedRound), (∀ e ∈ L, e.1.idx ≠ HoloStream.idx .stacked) →
       roundIn (L ++ [(.stacked, rs)]) .stacked q =
@@ -145,9 +108,6 @@ theorem roundIn_stacked (rs : Array SchedRound) (q : ℕ) :
       roundIn_stacked rs q L fun e he => h e (by simp [he]),
       Nat.add_assoc]
 
-/-- **R's rounds of coins at the map read** (`holoSelOne_rep`'s analogue at R): where the session's streams are `L`
-and then R's rounds `rs` (`holoStreams`' order), the stream named `s` is R's (`hf`) and its round `q` flips coins,
-`holoSelOne` samples it at history round one past all of `L`'s and R's rounds before `q`. -/
 theorem holoSelOne_stacked {ish : Flock.RecVStar.Inner} {tbl s : String} {rs : Array SchedRound}
     {L : List (HoloStream × Array SchedRound)} {q : ℕ}
     (hS : holoStreams ish.m ish.kLog ish.claims ish.sparse ish.stacked = some (L ++ [(.stacked, rs)]))
@@ -158,8 +118,6 @@ theorem holoSelOne_stacked {ish : Flock.RecVStar.Inner} {tbl s : String} {rs : A
       (1 + (L.map fun e => heldBefore e.1 e.2 e.2.size).sum + heldBefore .stacked rs q) s q :=
   ⟨_, _, hS, hf, Nat.min_eq_right hq, by rw [Nat.add_assoc, ← roundIn_stacked rs q L hL]; rfl⟩
 
-/-- **R's Ligerito stage's samples** (`StageHeld`'s last part at `ix = id`): where R's `n` rounds from `k₂` each sampling
-coins, the history's round `p` past R's round `k₂`'s (`holoSelOne_stacked`) samples R's round `k₂ + p`. -/
 theorem sampled_stacked {ish : Flock.RecVStar.Inner} {tbl s : String} {rs : Array SchedRound}
     {L : List (HoloStream × Array SchedRound)} {k₂ n : ℕ}
     (hS : holoStreams ish.m ish.kLog ish.claims ish.sparse ish.stacked = some (L ++ [(.stacked, rs)]))
@@ -175,8 +133,6 @@ theorem sampled_stacked {ish : Flock.RecVStar.Inner} {tbl s : String} {rs : Arra
   have h := holoSelOne_stacked (q := k₂ + p) hS hL hf (hpos p hlt)
   rwa [heldBefore_stacked p fun p' hp' => hpos p' (by omega), ← Nat.add_assoc] at h
 
-/-- **Every round of R's stream flips coins** (`sampled_stacked`'s `hpos` at every `k₂`): at R's two claims, each of the
-fourteen shapes `fast100` has (`m` from 22 to 35) by evaluation, and past them `stackedRounds` is none. -/
 theorem stackedRounds_coins {sh : Flock.RecVStar.StackedShape} (hc : sh.claims = Flock.RecVStar.STACKED_CLAIMS)
     {rs : Array SchedRound} (h : Flock.RecVStar.stackedRounds sh = some rs) :
     ∀ q < rs.size, 0 < (rs.getD q default).1 := by
@@ -191,9 +147,6 @@ theorem stackedRounds_coins {sh : Flock.RecVStar.StackedShape} (hc : sh.claims =
       simp [show m > 35 by omega]
     simp [Flock.RecVStar.stackedRounds, hf] at h
 
-/-- **R's held coins are a round each of R's schedule**: where the verifier holds the inner transcript
-(`innerCommitsAt`) and its stream `stacked/rep0`, the inner statement's META names R's shape, at R's two claims, and the
-stream holds a round of coins for each round of `stackedRounds` at it (`StackedCoins.innerCommits_held`). -/
 theorem stackedCoins_of_innerCommitsAt {tr : Lean.Json} {record : String} {st : Flock.Stmt} {reg : Lean.Json}
     {cs : Flock.RecVStar.InnerCommits}
     (h : FlockSoundness.Discharge.Recursion.innerCommitsAt tr record st reg = .ok cs)

@@ -3,19 +3,8 @@ module
 public import Proofs.Flock.Bridge.V5.Statement
 public import Proofs.Flock.Bridge.TransportsRefs
 
-/-!
-# Canonical registered openings open the deployed commitment at public inputs (`Bridge.TransportsLiveV5`, proved)
-
-`TransportsRefs.lean` at `keyProgP` and `ZkHidden.rsZHJP`:
-
-* `Bridge.ref_lt_cntP`: `ref_lt_cnt` at `HmIn.loadPublic`, which is `HmRow.loadPublic` on the circuit whose output ports
-  are the public input words (`Hidden.loadPublic_inRows`), with the same row ports;
-* `Bridge.vbP` and its `pos`, `bit`, `cs` and `com` at a row (`vbS`'s at `keyReadersHP`, whose rows' `b ‖ c` is the
-  population's, `fun _ => pub`);
-* `Bridge.rowsOfLP`, `Bridge.transports_shapedP`: `transports_shapedS` at these; `Bridge.transports_shapedP_at` names
-  the datum that opens, `opens_commitDepL`'s `Bridge.dataAt` (the salt, the row's registration path and its bits);
-* `Bridge.transportsLiveV5 : Bridge.TransportsLiveV5`.
--/
+/-! Canonical registered openings open the deployed commitment at public inputs (`Bridge.TransportsLiveV5`,
+proved). -/
 
 @[expose] public section
 
@@ -25,8 +14,6 @@ open Claims Claims.Sampling
 open FlockSoundness.Refine FlockSoundness.Binding
 open FlockSoundness.Discharge.Layout (BitVal RowShaped)
 
-/-- **The verifier's leaf map at public inputs holds every proof block's row** (`ref_lt_cnt` at `HmIn.loadPublic`, through
-`Hidden.loadPublic_inRows`: `inRows` changes only the output ports). -/
 theorem ref_lt_cntP {tags : Flock.Tags} {c : Flock.Circuit} {pi : Flock.HmIn.Ports} {file : ByteArray}
     {pub : Flock.Public} (h : Flock.HmIn.loadPublic tags c pi file = .ok pub) {nl u q : ℕ} (hu : u < nl)
     (hq : q < c.ports.size) :
@@ -52,8 +39,6 @@ theorem ref_lt_cntP {tags : Flock.Tags} {c : Flock.Circuit} {pi : Flock.HmIn.Por
       rw [getElem!_pos t.counts q hqc]
       exact hpos _ (Array.getElem_mem hqc)
 
-/-- **The datum that opens a row's bit under the deployed commitment** at a leaf map `L` (`opens_commitDepL`'s): the
-opening's salt `y`, row `r`'s registration path at `L` padded to `L.d` levels, and the row's bits `v`. -/
 def dataAt (c : Flock.Circuit) (L : LeafMap) (r : RowAt) {W : ℕ} (v : BitVal W) (y : List UInt8) : Claims.Msg :=
   dataOfL y (FlockC3.RegLevels.sibsV (L.dom r.port) (leavesL c L r.port) r.leaf) (L.d - Flock.log2ceil (L.cnt r.port))
     (List.ofFn fun k : Fin r.width => v.get k.val)
@@ -72,7 +57,6 @@ variable {n mPts : ℕ} {Reg : Type} {I : Inputs} {own : Option ByteArray} (dj :
   (hpi : Flock.HmIn.parse c = .ok pi) {pub : Flock.Public}
   (hpub : Flock.HmIn.loadPublic (zkTags I) c pi I.publicFile = .ok pub)
 
-/-- **The game's value binding at public inputs** (`TransportsLiveV5`'s `vb`). -/
 noncomputable abbrev vbP := (rsZHJP (Reg := Reg) dj y₀ ht hc hscope hU hpi hpub).bindingZ
   (rsZHJP_computes dj y₀ ht hc hscope hU hpi hpub)
 
@@ -138,7 +122,6 @@ theorem vbP_cs_row (h : HiddenExec.rowOfHP c hU n pi (Discharge.Layout.outsOfP c
   rw [vbP_pos_row h]
   exact vbP_cs_inl R u q
 
-/-- **A registered opening of a row's commit string is a leaf equation** at public inputs. -/
 theorem vbP_leaf_row (h : HiddenExec.rowOfHP c hU n pi (Discharge.Layout.outsOfP c hU n pi) g = some (u, ⟨q, k⟩))
     (R : Reg) (p : PosHP c hU n pi) (v : ValH c) (y : List UInt8)
     (he : (vbP dj y₀ ht hc hscope hU hpi hpub (Reg := Reg)).com (p, v, y) =
@@ -155,15 +138,11 @@ theorem vbP_leaf_row (h : HiddenExec.rowOfHP c hU n pi (Discharge.Layout.outsOfP
     rw [vbP_com_fst] at h1
     cases h1
 
-/-- **The deployed layout's rows at a leaf map at public inputs**: `TransportsLiveV5`'s `rows`, the game's row map with
-each row at its proof block's leaf `L.ref`. -/
 noncomputable def rowsOfLP (c : Flock.Circuit) (hU : Built c.unit) (n : ℕ) (pi : Flock.HmIn.Ports) (L : LeafMap) :
     Fin ((keyProgP c pi hU n).circuit (Discharge.Layout.outsOfP c hU n pi)).N → Option RowAt := fun g =>
   (HiddenExec.rowOfHP c hU n pi (Discharge.Layout.outsOfP c hU n pi) g).map fun r =>
     ⟨r.2.1.val, L.ref r.2.1.val r.1.val, Discharge.Layout.portRowW c r.2.1, r.2.2.val⟩
 
-/-- **A shaped registered opening opens the deployed commitment at the public file's leaf map, at its row's datum**, at
-public inputs (`transports_shapedS` at `keyProgP`, with `opens_commitDepL`'s datum `dataAt`). -/
 theorem transports_shapedP_at (R : Reg) (hrows : RowsOk c)
     (hfirst : ∀ q q' : ℕ, q' < q → q < c.ports.size →
       (rootsOfL c (LeafMap.ofPublic c pub n)).getD q' [] ≠ (rootsOfL c (LeafMap.ofPublic c pub n)).getD q [])
@@ -193,8 +172,6 @@ theorem transports_shapedP_at (R : Reg) (hrows : RowsOk c)
     (rowsOk_bits hrows q) (by simp [Discharge.Layout.portRowW]) k.isLt (fun q' h => hfirst q.val q' h q.isLt) hle hv hvw
     hy hl
 
-/-- **A shaped registered opening opens the deployed commitment at the public file's leaf map** at public inputs
-(`transports_shapedP_at`). -/
 theorem transports_shapedP (R : Reg) (hrows : RowsOk c)
     (hfirst : ∀ q q' : ℕ, q' < q → q < c.ports.size →
       (rootsOfL c (LeafMap.ofPublic c pub n)).getD q' [] ≠ (rootsOfL c (LeafMap.ofPublic c pub n)).getD q [])
@@ -225,8 +202,6 @@ open FlockSoundness FlockSoundness.Game FlockSoundness.Audit FlockSoundness.Disc
 open FlockSoundness.Discharge.Tables (LiveOutJ)
 open scoped ENNReal
 
-/-- **`Bridge.TransportsLiveV5` holds** (`transports_shapedP`): `dupId` and `RootFixesDomainL` give distinct roots,
-and the verifier's public-file check every proof block's ref below its port's count (`ref_lt_cntP`). -/
 theorem _root_.Flock.Bridge.transportsLiveV5 : Bridge.TransportsLiveV5 := by
   intro n Reg I own ht D hD hU pi hpi pub hpub hscope hrows hdup hroots samplingDesign kd hdiv dj S₀ d₀ y₀ wr dg N L hTags hCust hsz
     τ P vb σ Cc Lm rows κ roots Cd u g _ _ o he hcan

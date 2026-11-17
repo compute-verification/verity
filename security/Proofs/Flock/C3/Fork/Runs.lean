@@ -19,23 +19,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.Recursive.CompileRuns
 import Proofs.Flock.Soundness.Game
 
-/-!
-# Piece (a), the assembly: candidate 3's table on one prover's runs
-
-`holo_runs_sound`, `compiled_runs_sound`'s analogue at `Model.holoTableCL`: two runs of the prover's own strategy that
-clash (`ClashHL`), or the table accepts with probability at most `holoError`. As there, with no clash between two runs
-satisfying `G`, their outcomes are a clash-free set, every accepted run satisfying `G` ends in it, and the schedule's
-simulation (`sched_prob_le_value`) reads the compiled table's value there. That value is bounded by two pieces:
-
-* the coupling (`holoTable_value_le_oracle`, `C3/Fork/Coupling.lean`): on a clash-free set the compiled table is
-  accepted no more often than the oracle table at the registered word;
-* the oracle count (`holoTable_sound`, `C3/Fork/OracleTable.lean`), where a1s and a1r are used: the oracle table
-  accepts while no table close to `w` is committed with probability at most `holoError`. At a statement no close table
-  satisfies, no close table is committed (`satisfiable_of_committed`), so that is its acceptance.
-
-No registrant's openings are read: a clash may be a run opening R's level 0 off the word (`RegClash`), which the
-knowledge form reads against another of the prover's runs (`Recursive/RegExtract.lean`).
--/
+/-! Candidate 3's table on one prover's runs (`holo_runs_sound`), reading no registrant's openings. -/
 
 @[expose] public section
 
@@ -48,10 +32,6 @@ open scoped ENNReal
 variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K] {D Sl : Type}
 variable {nT r : ℕ} (T : Fin nT → Type) (CT : Fin r → Type) [∀ k, Fintype (CT k)] [∀ k, Nonempty (CT k)]
 
-/-- **Candidate 3's table on one prover's runs.** At a registration no table near whose word makes the hidden statement
-true, for every `G` and every prover `s` of `holoInnerCL`: two transcripts `s` reaches that satisfy `G` play the table
-to outcomes that clash (`ClashHL`), or `s` makes the inner verifier accept a transcript satisfying `G` with
-probability at most `holoError`. -/
 theorem holo_runs_sound (A : Arith F K) (hA : A.Correct) [Inhabited D] [Inhabited Sl]
     (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H) (e : ExecHolo)
     (hsch : Accounting.fast100 e.cls.m = some e.sch)

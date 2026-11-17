@@ -17,23 +17,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 import Proofs.Flock.VBridge.Sparse.Unit
 
-/-!
-# The sparse tie from V*'s sessions
-
-`SessionAt` says what V*'s sessions give for R's opening; `SparseSessionAt` says it for rep `i`'s sparse phase, in its
-style. The verifier's coins accept the phase at its shape (`RecCoins.sparseCoins` at the verifier's RecSparse shape,
-`unitShape`), the phase's coins `c.cs` being the challenger's live-coin part's in the order sampled (`sparseCs`). Some copy of the
-`rec-sparse` unit in some session (`SparseCopyAt`, which `MsgsLayers` reads at a fixed copy per rep) registers w at the
-message columns some computed row reads, the verifier row at `c`
-on `v`'s and with `T > 1` the slots' types on `tau`'s, its residuals' output columns registered zero (`RegOut`). The
-unit is one whole net (`RecSparse.check` against `unitNet`), so unlike R's opening there is no part to choose.
-
-* `sparseCoins_size`: `sparseCoins`' count check fixes the coins' number, `12 + NU + S_LOG + P_LOG + T_LOG`.
-* `SparseSrcAt`: what the source reads there: rep `i`'s public values are the coins' (`pubOf`), its `h` is w's first 64
-  elements, and its sparse stage is the steps of w at the coins (`stepsOf`).
-* `sparseTieL_of_session`, `sparseTie_of_session`: the two give `SparseTieL` at that session's layer, its outputs from
-  their registered zeros (`copyVal_regOut`), so `SparseTie` (`sparseTie_of_layer`).
--/
+/-! The sparse tie from V*'s sessions. -/
 
 @[expose] public section
 
@@ -78,8 +62,6 @@ theorem want_get (a b n : ℕ) (t : Array ℕ) :
     · rw [getElem!_neg _ (n + 2) (by simp only [Array.size_append, Array.size_replicate, Array.size_singleton]; omega),
         getElem!_neg t 0 ht]
 
-/-- **`sparseCoins`' count check fixes the coins' number**: 6 for `ζ_c`, one a round for H2's 6 and H3's
-`NU + S_LOG`, `P_LOG` for `ζ_p` and `T_LOG` for `ρ_t`. -/
 theorem sparseCoins_size {c3 : Flock.RecCoins.C3} {unit : String} {r : ℕ} {sc : Flock.RecCoins.SparseCoins}
     (h : Flock.RecCoins.sparseCoins c3 unit r = .ok sc) :
     (sparseCs sc).size = 12 + c3.sparse.degrees.length + c3.sparse.pLog + c3.sparse.tLog := by
@@ -115,8 +97,6 @@ theorem sparseCoins_size {c3 : Flock.RecCoins.C3} {unit : String} {r : ℕ} {sc 
       simp only [hst, Bool.false_eq_true, ↓reduceIte, Array.size_empty]
       omega
 
-/-- **What the source reads at the sparse session**: rep `i`'s public values are the coins `c`'s, its `h` is w's first
-64 elements, and its sparse stage is the steps of w at `c`'s phase coins. -/
 def SparseSrcAt (e : ExecHolo) (u : C3Run e) (i : Fin 2) (w : Array Flock.F128) (c : SCoins) : Prop :=
   FlockVBridge.Sparse.pubOf e.cls.shape c =
       holoPub (e.cls.pubStatement e.regs) e.cls.shape e.cls.units (u.rep i).1 (u.rep i).2 ∧
@@ -126,10 +106,6 @@ section Sessions
 
 variable {nS : ℕ} {Vs : Fin nS → VStmt} {Reg' : Type}
 
-/-- **Copy `j` of unit `un` in session `s` holds a sparse phase** at w and the phase's coins `c`: it is of a circuit
-`RecSparse.check` accepted at the verifier's RecSparse shape, its message columns some computed row reads registered
-bits of w, `v`'s of the verifier row at `c`, with `T > 1` `tau`'s of the slots' types, and its residuals' output columns
-registered 0 (`RegOut`). -/
 def SparseCopyAt (zs : (s : Fin nS) → (Vs s).Outer Reg') (Lb : (s : Fin nS) → (Vs s).Bits) (e : ExecHolo)
     (w : Array Flock.F128) (c : SCoins) (s : Fin nS) (un : Fin (Vs s).nv) (j : ℕ) (hj : j < (Vs s).c.upv) : Prop :=
   Flock.RecSparse.check (Vs s).c = .ok () ∧ Flock.RecSparse.params (Vs s).c.unit.name = some (unitShape e) ∧
@@ -146,18 +122,12 @@ def SparseCopyAt (zs : (s : Fin nS) → (Vs s).Outer Reg') (Lb : (s : Fin nS) �
     ∀ t < 128 * (Flock.RecSparse.residualNames (unitShape e)).length,
       RegOut (zs s) un hj (sparseBase (unitShape e) + t) false
 
-/-- **(n7) Rep `i`'s sparse phase in V*'s sessions**, at the sessions `zs` and their layers `Lb`, the verifier's coins
-`c3`, w and the phase's coins `c`: `RecCoins.sparseCoins` accepts rep `i`'s coins at the verifier's RecSparse shape and
-`c.cs` is them, w has its elements, and some copy holds the phase (`SparseCopyAt`). -/
 def SparseSessionAt (zs : (s : Fin nS) → (Vs s).Outer Reg') (Lb : (s : Fin nS) → (Vs s).Bits) (e : ExecHolo)
     (c3 : Flock.RecCoins.C3) (unit : String) (i : Fin 2) (w : Array Flock.F128) (c : SCoins) : Prop :=
   (∃ sc, Flock.RecCoins.sparseCoins c3 unit i.val = .ok sc ∧ c3.sparse = unitShape e ∧ c.cs = sparseCs sc) ∧
     w.size = nw e.cls.shape ∧
     ∃ (s : Fin nS) (un : Fin (Vs s).nv) (j : ℕ) (hj : j < (Vs s).c.upv), SparseCopyAt zs Lb e w c s un j hj
 
-/-- **(n7's sparse tie from V*'s sessions)** At good layers, the sparse session and what the source reads there give
-`SparseTieL` at the session's layer: the coins' count is `nc`'s (`sparseCoins_size`), and the residuals' output
-columns, past the unit's inputs, are 0 in the layer (`copyVal_regOut`). At the session's `w` and `c`. -/
 theorem sparseTieLAt_of_session {zs : (s : Fin nS) → (Vs s).Outer Reg'} {Lb : (s : Fin nS) → (Vs s).Bits}
     {e : ExecHolo} {c3 : Flock.RecCoins.C3} {unit : String} {i : Fin 2} {w : Array Flock.F128} {c : SCoins}
     {u : C3Run e} (hG : ∀ s, (zs s).Good (Lb s)) (hs : SparseSessionAt zs Lb e c3 unit i w c)
@@ -179,14 +149,12 @@ theorem sparseTieLAt_of_session {zs : (s : Fin nS) → (Vs s).Outer Reg'} {Lb : 
     copyVal_regOut (zs s) (hG s).2 (FlockVBridge.keyProg_correct (Vs s).hU (Vs s).nv (hG s).1 un) hj (by omega)
       (h0 t ht)⟩
 
-/-- `sparseTieLAt_of_session` at the session's witnesses. -/
 theorem sparseTieL_of_session {zs : (s : Fin nS) → (Vs s).Outer Reg'} {Lb : (s : Fin nS) → (Vs s).Bits}
     {e : ExecHolo} {c3 : Flock.RecCoins.C3} {unit : String} {i : Fin 2} {w : Array Flock.F128} {c : SCoins}
     {u : C3Run e} (hG : ∀ s, (zs s).Good (Lb s)) (hs : SparseSessionAt zs Lb e c3 unit i w c)
     (hsrc : SparseSrcAt e u i w c) : ∃ s, SparseTieL (zs s) (Lb s) e u i :=
   (sparseTieLAt_of_session hG hs hsrc).elim fun s h => ⟨s, w, c, h⟩
 
-/-- **The sparse tie from V*'s sessions** (`sparseTie_of_layer` at the session's layer). -/
 theorem sparseTie_of_session {zs : (s : Fin nS) → (Vs s).Outer Reg'} {Lb : (s : Fin nS) → (Vs s).Bits}
     {e : ExecHolo} {c3 : Flock.RecCoins.C3} {unit : String} {i : Fin 2} {w : Array Flock.F128} {c : SCoins}
     {u : C3Run e} (hG : ∀ s, (zs s).Good (Lb s)) (hs : SparseSessionAt zs Lb e c3 unit i w c)

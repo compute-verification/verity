@@ -21,27 +21,7 @@ import Proofs.Flock.Soundness.Discharge.ZkExec.Setup
 import Proofs.Flock.VBridge.Pinned
 import Std.Data.String.ToNat
 
-/-!
-# The round reads' links
-
-`RoundReads` and `WRoundReads` (`Compose/RsFacts.lean`) say a session's unit reads round `i`'s commitment at port
-`m<i>` where the round's stage reads it. Their links to the verifier and the map, at a circuit port named `m<i>`:
-
-* **The statement's port.** `checkStmt` refuses a part's or R's opening part's circuit port named `m<k>` that is none
-  of the statement's message-round ports (`checkMsgNames`), so the statement has the port `m<k>` under `rec-c<k>`
-  read at both reps' rows (`inner_port_of_msgNames`), or under `rec-opening-c<k>` read at row 0
-  (`opening_port_of_msgNames`). `MsgNamesAt` is the check at each accepted session (`msgNamesAt_of_checks`,
-  `msgNamesAt_of_accepted`).
-* **The statement's form.** A `rec-opening` copy's session is one of R's opening parts (`opening_of_name`); a session
-  whose unit is named as a part's is one of V*'s parts (`inner_of_resName`), of two instances.
-* **The unit's read.** A `rec-opening` copy is unit 0 (`nv_of_copy`); a part's unit `ρ` is rep `ρ`'s (`un` at two
-  instances), so the reads file's entry, the statement's port (`OwnHas`), reads row `ρ`.
-* **The stage.** The map's `sel` (`holoMap`) reads rep `ρ`'s round `m` at `rec-c<m>`, row `ρ`, at `repStart c₀ ρ` plus
-  rep `ρ`'s rounds before it (`holoSel_rep`), which is `stageOf σ c₀ ρ m` where `roundOf σ` counts those rounds
-  (`holoSel_stageOf`); and R's round `i` at `rec-opening-c<i>`, row 0, at R's stream round (`holoSel_opening`).
-
-`roundRead_opening` and `wRoundRead_inner` compose them, at the port.
--/
+/-! The round reads' links to the verifier and the map, at a circuit port named `m<i>`. -/
 
 @[expose] public section
 
@@ -51,8 +31,6 @@ open FlockSoundness FlockSoundness.Discharge FlockSoundness.Discharge.Recursion
 open Game Audit Exec Refine Model ZkSession ZkLink ZkExec Composed ZkReg
 open Flock FlockLevel3 Accounting ZkBind Integrate Placed StrictCR DecodeZL FlockVBridge.Compiled
 open Flock.RecVStar Flock.Guarantees FlockC3.Compose
-
-/-! ## Names -/
 
 theorem index_pre (p : String) (k : ℕ) {n : ℕ} (hn : p.length = n) :
     (if (p ++ toString k).startsWith p = true then ((p ++ toString k).drop n).toString.toNat? else none) = some k := by
@@ -82,11 +60,6 @@ theorem cIndex_opening (k : ℕ) : cIndex s!"rec-opening-c{k}" = none := by
   unfold cIndex
   simp only [hn, Bool.false_eq_true, ↓reduceIte]
 
-/-! ## The statement's port -/
-
-/-- **An accepted part port names one of its rep's message rounds**: when the part name fixes its recursive shape and
-`checkMsgNames` accepts a circuit port named `m<i>`, the shape has its rep's rounds `rs` (`holoRepRounds`' at a holo
-shape), and `i` is below their message rounds. -/
 theorem inner_round_lt_of_checkMsgNames
     {p m kLog claims partNo i : ℕ} {name : String} {part : VStar.Part} {c : Flock.Circuit} {holo : Bool}
     (hp : RecResiduals.params name = some (m, kLog, claims, partNo))
@@ -119,8 +92,6 @@ theorem inner_round_lt_of_checkMsgNames
   | none => rw [hrs] at hB; simp at hB; omega
   | some rs => rw [hrs] at hB; exact ⟨rs, rfl, by simp at hB; omega⟩
 
-/-- **`checkMsgNames` passing at a part or a part of R's opening**: each circuit port named `m<k>` is the name of one
-of the statement's message-round ports. -/
 theorem ownName_of_msgNames {s : VStar.Stmt} {c : Flock.Circuit} {holo : Bool}
     (hs : (∃ j nm p, s = .inner j nm p) ∨ ∃ m cl j S ps nv, s = .opening m cl j S ps nv)
     (h : checkMsgNames s c holo = .ok ()) {q : Fin c.ports.size} {k : ℕ}
@@ -144,8 +115,6 @@ theorem ownName_of_msgNames {s : VStar.Stmt} {c : Flock.Circuit} {holo : Bool}
   obtain ⟨e, he, he1⟩ := List.any_eq_true.1 hany
   exact ⟨e, he, beq_iff_eq.1 he1⟩
 
-/-- **A part's circuit port `m<k>` is its `rec-c<k>` message-round port**, read at both reps' rows, where
-`checkMsgNames` passes. -/
 theorem inner_port_of_msgNames {j : ℕ} {nm : String} {p : VStar.Part} {c : Flock.Circuit} {holo : Bool}
     (h : checkMsgNames (.inner j nm p) c holo = .ok ()) {q : Fin c.ports.size} {k : ℕ} (hq : c.ports[q].name = s!"m{k}") :
     (s!"m{k}", s!"rec-c{k}", #[some 0, some 1]) ∈ ownPorts (.inner j nm p) := by
@@ -165,8 +134,6 @@ theorem inner_port_of_msgNames {j : ℕ} {nm : String} {p : VStar.Part} {c : Flo
     rw [← ha1]
     exact he
 
-/-- **A part of R's opening's circuit port `m<k>` is its `rec-opening-c<k>` message-round port**, read at row 0 (R's
-one stream's), where `checkMsgNames` passes. -/
 theorem opening_port_of_msgNames {m cl j nv : ℕ} {S : Flock.RecOpen.GfS} {ps : List (String × ℕ)} {c : Flock.Circuit}
     {holo : Bool} (h : checkMsgNames (.opening m cl j S ps nv) c holo = .ok ()) {q : Fin c.ports.size} {k : ℕ}
     (hq : c.ports[q].name = s!"m{k}") :
@@ -183,9 +150,6 @@ theorem opening_port_of_msgNames {m cl j nv : ℕ} {S : Flock.RecOpen.GfS} {ps :
   dsimp only
   rw [mIndex_m]
 
-/-! ## The statement's form -/
-
-/-- **The list's statement named `unitName m c j` is one of R's opening parts** (`instances_of_openingName`'s form). -/
 theorem opening_of_name {i : RecVStar.Inner} {ss : Array VStar.Stmt} (h : RecVStar.statements i = .ok ss)
     {s : VStar.Stmt} (hs : s ∈ ss) {m c j : ℕ} (hn : RecOpening.unitName m c j = s.name) :
     ∃ m' c' j' S' ps nv, s = .opening m' c' j' S' ps nv := by
@@ -216,8 +180,6 @@ theorem opening_of_name {i : RecVStar.Inner} {ss : Array VStar.Stmt} (h : RecVSt
         · exact absurd hn (n3 _ _)
         · exact ⟨_, _, _, _, _, _, rfl⟩
 
-/-- **No statement but a part's is named as a part's unit**: V*'s levels, R's levels, RecSparse and R's opening are
-named `rec-open/`, `rec-open-…`, `rec-spars…`, `rec-openi…` and `rec-cap/n`. -/
 theorem resName_ne (m k c j : ℕ) :
     (∀ L H : ℕ, RecResiduals.unitName m k c j ≠ s!"rec-open/l{L}-h{H}") ∧
     (∀ L H, RecResiduals.unitName m k c j ≠ VStar.recOpenStackedName L H) ∧
@@ -230,7 +192,6 @@ theorem resName_ne (m k c j : ℕ) :
     rw [take_nine (by decide), take_nine (by decide)] at h <;>
     exact absurd h (by decide)
 
-/-- **The link table's part is no part's unit**: it is named `rec-link/…`. -/
 theorem resName_ne_link (m k c j UB PB : ℕ) : RecResiduals.unitName m k c j ≠ VStar.linkName UB PB := by
   intro h
   have h := congrArg (fun s : String => s.toList.take 9) h
@@ -239,7 +200,6 @@ theorem resName_ne_link (m k c j UB PB : ℕ) : RecResiduals.unitName m k c j �
   rw [take_nine (by decide), take_nine (by decide)] at h
   exact absurd h (by decide)
 
-/-- **The list's statement named `unitName m k c j` (a part's unit's) is one of V*'s parts.** -/
 theorem inner_of_resName {i : RecVStar.Inner} {ss : Array VStar.Stmt} (h : RecVStar.statements i = .ok ss)
     {s : VStar.Stmt} (hs : s ∈ ss) {m k c j : ℕ} (hn : RecResiduals.unitName m k c j = s.name) :
     ∃ j' nm p, s = .inner j' nm p := by
@@ -270,8 +230,6 @@ theorem inner_of_resName {i : RecVStar.Inner} {ss : Array VStar.Stmt} (h : RecVS
         · exact absurd hn (n2 _ _)
         · exact absurd hn.symm ((openingName_ne m' c' k').2.1 m k c j)
 
-/-! ## The map's `sel` -/
-
 theorem valueRound_rep {rep : Array SchedRound} {sp : Option RecSparse.Shape} {stk : Option (Array SchedRound)}
     (ρ : Fin 2) {m : ℕ} (hm : m < (msgRounds rep).length) :
     valueRound rep sp stk s!"rec-c{m}" ρ.val = some (.rep ρ, (msgRounds rep)[m]) := by
@@ -289,8 +247,6 @@ theorem valueRound_opening {rep rsR : Array SchedRound} {sp : Option RecSparse.S
 variable {st : Flock.Stmt} {hp : HoloParams} {Cm : Type} {ish : RecVStar.Inner} {tbl : String}
   {bc : Cm → String → ℕ → List UInt8}
 
-/-- **The map reads rep `ρ`'s round `m` at `rec-c<m>`, row `ρ`**, at rep `ρ`'s first history round (`repStart`) plus
-its rounds before `m`'s stream round (`roundAt_reps`). -/
 theorem holoSel_rep {rs : Array SchedRound} {L : List (HoloStream × Array SchedRound)}
     (hS : holoStreams ish.m ish.kLog ish.claims ish.sparse ish.stacked = some ((.rep 0, rs) :: (.rep 1, rs) :: L))
     (hr : holoRounds ish.m ish.kLog ish.claims = some rs) (ρ : Fin 2) {m : ℕ} (hm : m < (msgRounds rs).length) :
@@ -298,8 +254,6 @@ theorem holoSel_rep {rs : Array SchedRound} {L : List (HoloStream × Array Sched
       heldBefore (.rep ρ) rs (msgRounds rs)[m]) s!"rec-c{m}" ρ.val :=
   ⟨_, rs, .rep ρ, _, hS, hr, valueRound_rep ρ hm, roundAt_reps rs L ρ _⟩
 
-/-- **`holoSel_rep` at `stageOf σ c₀ ρ m`**, where `c₀` is rep 0's history rounds and `roundOf σ m` rep `ρ`'s before
-round `m`'s stream round. -/
 theorem holoSel_stageOf {rs : Array SchedRound} {L : List (HoloStream × Array SchedRound)}
     (hS : holoStreams ish.m ish.kLog ish.claims ish.sparse ish.stacked = some ((.rep 0, rs) :: (.rep 1, rs) :: L))
     (hr : holoRounds ish.m ish.kLog ish.claims = some rs) (ρ : Fin 2) {m : ℕ} (hm : m < (msgRounds rs).length)
@@ -320,7 +274,6 @@ theorem holoSel_stageOf {rs : Array SchedRound} {L : List (HoloStream × Array S
   rw [he, hσ, hc₀]
   exact holoSel_rep hS hr ρ hm
 
-/-- **The map reads R's round `i` at `rec-opening-c<i>`, row 0**, at R's stream round of its `i`-th message. -/
 theorem holoSel_opening {L : List (HoloStream × Array SchedRound)} {rep rsR : Array SchedRound}
     (hS : holoStreams ish.m ish.kLog ish.claims ish.sparse ish.stacked = some L)
     (hr : holoRounds ish.m ish.kLog ish.claims = some rep) (hR : ish.stacked.bind stackedRounds = some rsR) {i : ℕ}
@@ -328,9 +281,6 @@ theorem holoSel_opening {L : List (HoloStream × Array SchedRound)} {rep rsR : A
     (holoMap st hp Cm ish tbl bc).sel (roundAt L .stacked (msgRounds rsR)[i]) s!"rec-opening-c{i}" 0 :=
   ⟨L, rep, .stacked, _, hS, hr, valueRound_opening hR hi, rfl⟩
 
-/-! ## At the sessions -/
-
-/-- **The reads file has each of the statement's message-round ports** (named; `checkOwn`'s second half). -/
 def OwnHas (own : Array Flock.Registered.Port) (sv : VStar.Stmt) : Prop :=
   ∀ e ∈ ownPorts sv, ∃ pt ∈ own, (pt.name, pt.value, pt.reads) = e
 
@@ -346,19 +296,16 @@ variable {nT r : ℕ} {T : Fin nT → Type} {CT : Fin r → Type} [∀ k, Fintyp
 
 local notation "ℐ" => holoInnerAt T CT st hp
 
-/-- **Each accepted session passed `checkMsgNames`** as V*'s statement of its index (named; `msgNamesAt_of_checks`). -/
 def MsgNamesAt (ish : RecVStar.Inner) (zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
     (dg : ByteArray → ByteArray) (N k Rw : ℕ) : Prop :=
   ∀ R ω t R₂ τ o, FlockVBridge.Compiled.Accepted (I := ℐ) zs dg N k Rw R ω t R₂ τ o → ∀ s : Fin S,
     ∃ (ss : Array VStar.Stmt) (sv : VStar.Stmt), RecVStar.statements ish = .ok ss ∧ ss[(s : ℕ)]? = some sv ∧
       RecVStar.checkMsgNames sv (Vs s).c ish.holo = .ok ()
 
-/-- **Some outer proof is accepted** (named; at its history and registration). -/
 def AcceptedAt (zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
     (dg : ByteArray → ByteArray) (N k Rw : ℕ) : Prop :=
   ∃ R ω t R₂ τ o, FlockVBridge.Compiled.Accepted (I := ℐ) zs dg N k Rw R ω t R₂ τ o
 
-/-- **`MsgNamesAt` from the verifier's statement check** (`StmtsChecked`, as `sessStmt_of_checks`). -/
 theorem msgNamesAt_of_checks {bind : Fin S → VStar.Bindings}
     {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'}
     {dg : ByteArray → ByteArray} {N k Rw : ℕ} {rows : Option (Array Flock.Registered.Port)}
@@ -373,7 +320,6 @@ theorem msgNamesAt_of_checks {bind : Fin S → VStar.Bindings}
   rw [hc0] at hm
   exact ⟨ss, sv, hss, hj, hm⟩
 
-/-- **`MsgNamesAt` where the verifier's checks pass** (`ChecksAccepted`'s statement check). -/
 theorem msgNamesAt_of_accepted {xR : HoloReg GF128 Dig} {F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂}
     {rows : Option (Array Flock.Registered.Port)} {wr : List (Cm × (ℐ).Coin) → Lean.Json × String} {reg : Lean.Json}
     (hca : FlockC3.PubRows.ChecksAccepted F rows wr reg) {dg : ByteArray → ByteArray} {N k Rw : ℕ} :
@@ -382,8 +328,6 @@ theorem msgNamesAt_of_accepted {xR : HoloReg GF128 Dig} {F : C3Family T CT st hp
     obtain ⟨tr, -, -, hs⟩ := hca R ω t R₂ s h
     exact ⟨tr, hs⟩)
 
-/-- **A session whose unit is named as a part's has the part's port `m<i>` and two units**, where its circuit has a
-port `m<i>`. -/
 theorem roundPort_inner {bind : Fin S → VStar.Bindings}
     {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'} {dg : ByteArray → ByteArray} {N k Rw : ℕ}
     (hob : VStarParsesScoped Flock.Tags.circuit ish bind Vs) (hst : SessStmt ish bind zs dg N k Rw)
@@ -401,9 +345,6 @@ theorem roundPort_inner {bind : Fin S → VStar.Bindings}
     ((FlockVBridge.Family.resUnitName_params hpar).trans (name_of_filter hf).2.symm)
   exact ⟨_, _, hss, hj, inner_port_of_msgNames hm hq, (hob s _ _ cf _ hss hj hcf hc (Vs s).hscope).2⟩
 
-/-- **`WRoundReads`' read at a part's session**: where the session's unit is named as a part's, its circuit has a port
-`m<m>` and the map reads `rec-c<m>` row `ρ` at `stage ρ m`, the reads file reads it at unit `ρ` (`un` at two
-units). -/
 theorem wRoundRead_inner {bind : Fin S → VStar.Bindings}
     {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'} {dg : ByteArray → ByteArray} {N k Rw : ℕ}
     (hob : VStarParsesScoped Flock.Tags.circuit ish bind Vs)
@@ -425,9 +366,6 @@ theorem wRoundRead_inner {bind : Fin S → VStar.Bindings}
   · rfl
   · omega
 
-/-- **`RoundReads`' read at a `rec-opening` copy**, at a port `m<i>` of its circuit (`RsKeys`' port): the copy is
-unit 0 of one of R's opening parts (`nv_of_copy`, `opening_of_name`), whose port `m<i>` the reads file reads at row
-0, where the map reads `rec-opening-c<i>` at `c₀ + i`. -/
 theorem roundRead_opening {bind : Fin S → VStar.Bindings}
     {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'} {dg : ByteArray → ByteArray} {N k Rw : ℕ}
     (hob : VStarParsesScoped Flock.Tags.circuit ish bind Vs)

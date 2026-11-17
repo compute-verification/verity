@@ -19,29 +19,7 @@ import Mathlib.Tactic.ReduceModChar
 import Proofs.Flock.Soundness.Discharge.Aliased.Rows
 import Proofs.Flock.Verifier.HmNets
 
-/-!
-# n11: `OpensTopAt`'s registered ports, from the unit's registered columns and the verifier's check
-
-`OpensAtMaps` asks each opening's unit for `OpensTopAt`: the row and the siblings in the copy's own columns
-(`rowCols_readMaps`, `ioCols_of_open`), and `acc`, the coefficients, the `dirs` and the outputs registered. Here:
-
-* `regBits_of_cols`, `regOuts_of_cols`: where each column of a run of copy `j`'s inputs (outputs) is a registered bit
-  (`RegBit`, `RegOut`), the run holds the bytes the registrant holds there (`regCol`, `outReg`) as registered bits. So
-  `opensTopAt_of_regs`: `OpensTopAt`'s `a`, `rest`, `cf` and `A` are those bytes, from columns that are registered.
-* `dirs_of_check`: an accepted `rec-open-stacked/l<LANES>-h<H>` unit registered `dirsRow pos H` at each opening's
-  position (`RecCoins.checkStackedLevel`, `dirsLevel_of_check`), the run's from round 0 of `stacked/rep0`'s coins
-  (`lg_eq_of_opening`). Where the opening's `dirs` columns are the bits of the first two words of the rows
-  `checkValue` accepted (`hval`), they are the position's low `H` bits, at every valid `H` (`H ≤ 32`): `dirsRow` holds
-  them 16 a word.
-* `srcKey_opening`, `regBit_opening`: at a unit `RecOpen.check` accepted, the statement's first five rows are the
-  opening's (`rowsOk`) and every copy reads their words in order (`leavesOk`), so copy `j`'s input bit `preBits q + k`
-  has the Δ key of bit `k` of row `q` (`srcKey_inOrder`), a registered bit wherever unit `u`'s row `q` is a registered
-  read. `accCoef_of_check` and `dirsCols_of_check` are `opensTopAt_of_regs`' `acc`, `coef` and `dirs` columns so.
-* `regReads_of_check`, `regCols_of_check`: at an accepted R level's unit, rows 2–4 (`acc`, `coef`, `dirs`) are registered
-  reads, so those columns registered bits, where the session registers each row of a port its reads file names (`hread`,
-  VBridge's `RowsRegistered` at the unit, which acceptance does not give): the reads file names `acc` (`checkAcc`,
-  `acc_of_checkStmt`) and `coef` and `dirs` (`checkStackedLevel`'s `checkValue`s, `own_of_checkValue`).
--/
+/-! `OpensTopAt`'s registered ports, from the unit's registered columns and the verifier's check. -/
 
 @[expose] public section
 
@@ -53,15 +31,12 @@ open FlockVBridge FlockVBridge.AccChain
 open FlockSoundness.Discharge.Hm (bitL)
 open FlockVBridge.Decode (RegBit)
 
-/-! ## Registered columns hold the registrant's bytes -/
-
 section Copy
 
 variable {mPts nv J : ℕ} {Reg' : Type} {c : Flock.Circuit} {hU : Built c.unit} {hscope : Layout.scopeOk c = true}
   {Lv : SamplingDesign nv} (zo : ZkOuter mPts nv J Reg' c hU hscope Lv)
 
 open Classical in
-/-- Copy `j`'s input column `col` of unit `u` at the registrant, where it is a registered bit (`RegBit`). -/
 noncomputable def regCol (u : Fin nv) (j col : ℕ) : Bool :=
   if h : ∃ b, RegBit zo u j col b then Classical.choose h else false
 
@@ -72,7 +47,6 @@ theorem regBit_regCol {u : Fin nv} {j col : ℕ} {b : Bool} (h : RegBit zo u j c
   rw [dite_eq_left hex]
   exact Classical.choose_spec hex
 
-/-- **A run of registered input columns holds the registrant's bytes**, as registered bits. -/
 theorem regBits_of_cols {u : Fin nv} {j base : ℕ} {B : ByteArray}
     (hr : ∀ t < 8 * B.size, ∃ b, RegBit zo u j (base + t) b) (hB : ColsHold (regCol zo u j) base B) :
     ∀ t < 8 * B.size, RegBit zo u j (base + t) (bitL B.data.toList t) := by
@@ -82,7 +56,6 @@ theorem regBits_of_cols {u : Fin nv} {j base : ℕ} {B : ByteArray}
   exact regBit_regCol zo hb
 
 open Classical in
-/-- Copy `j`'s output column `col` of unit `u` as registered (`RegOut`). -/
 noncomputable def outReg (u : Fin nv) {j : ℕ} (hj : j < c.upv) (col : ℕ) : Bool :=
   if h : ∃ b, RegOut zo u hj col b then Classical.choose h else false
 
@@ -93,7 +66,6 @@ theorem regOut_outReg {u : Fin nv} {j : ℕ} {hj : j < c.upv} {col : ℕ} {b : B
   rw [dite_eq_left hex]
   exact Classical.choose_spec hex
 
-/-- **A run of registered output columns holds the registrant's bytes**, as registered outputs. -/
 theorem regOuts_of_cols {u : Fin nv} {j : ℕ} {hj : j < c.upv} {base : ℕ} {B : ByteArray}
     (hr : ∀ t < 8 * B.size, ∃ b, RegOut zo u hj (base + t) b) (hB : ColsHold (outReg zo u hj) base B) :
     ∀ t < 8 * B.size, RegOut zo u hj (base + t) (bitL B.data.toList t) := by
@@ -102,9 +74,6 @@ theorem regOuts_of_cols {u : Fin nv} {j : ℕ} {hj : j < c.upv} {base : ℕ} {B 
   rw [← hB t ht]
   exact regOut_outReg zo hb
 
-/-- **`OpensTopAt` from the unit's registered columns**: where each `acc` and coefficient column of copy `j` is a
-registered bit and each of the first 256 columns of its `acc_out` half a registered output, `a` and `rest`, `cf` and
-`A` are the bytes the registrant holds there (`regBits_of_cols`, `regOuts_of_cols`); the rest is `OpensTopAt`'s. -/
 theorem opensTopAt_of_regs {bits : Fin (Layout.keyN c hU nv) → Bool} {u : Fin nv} {j LANES H pos : ℕ}
     {r : Array F128} {ss : List ByteArray} {top : ByteArray} (hj : j < c.upv)
     (hone : bits (Const.Prog.oneAt (Placed.keyProg c hU nv) u) = true) (ms : MerkleScheme)
@@ -172,8 +141,6 @@ theorem opensTopAt_of_regs {bits : Fin (Layout.keyN c hU nv) → Bool} {u : Fin 
 
 end Copy
 
-/-! ## The `dirs` the verifier registers -/
-
 theorem dirsRow_zero (pos H : ℕ) : (Flock.RecCoins.dirsRow pos H)[0]! = pos % 2 ^ H % 2 ^ 16 := by
   rw [Flock.RecCoins.dirsRow,
     getElem!_pos (#[pos % 2 ^ H % 2 ^ 16, pos % 2 ^ H / 2 ^ 16] ++
@@ -188,7 +155,6 @@ theorem dirsRow_one (pos H : ℕ) : (Flock.RecCoins.dirsRow pos H)[1]! = pos % 2
     Array.getElem_append_left (by simp)]
   rfl
 
-/-- Bit `b < H` of the position, `b < 32`, is bit `b % 16` of `dirsRow pos H`'s word `b / 16`. -/
 theorem dirsRow_testBit (pos H : ℕ) {b : ℕ} (hb : b < H) (h32 : b < 32) :
     ((Flock.RecCoins.dirsRow pos H)[b / 16]!).testBit (b % 16) = pos.testBit b := by
   rcases Nat.lt_or_ge b 16 with h | h
@@ -203,8 +169,6 @@ theorem getElem!_map_range {α : Type} [Inhabited α] (f : ℕ → α) {n j : �
   rw [getElem!_pos ((Array.range n).map f) j (by simpa using hj)]
   simp
 
-/-- **What an accepted `rec-open-stacked` unit checked of its `dirs`**: as `level_of_check`, with the `dirs` port
-holding `dirsRow` of each opening's position at the filter's level `l`. -/
 theorem dirsLevel_of_check {c3 : Flock.RecCoins.C3} {c : Flock.Circuit} {pub : Flock.Public}
     {own : Array Flock.Registered.Port} {LANES H : ℕ}
     (h : Flock.RecCoins.checkStackedLevel c3 c pub own LANES H = .ok ()) :
@@ -230,11 +194,6 @@ theorem dirsLevel_of_check {c3 : Flock.RecCoins.C3} {c : Flock.Circuit} {pub : F
       exact List.mem_singleton.mp hm
   · cases h
 
-/-- **An accepted `rec-open-stacked` unit's `dirs` are its openings' positions' bits** (`hdir`): at the level `ℓ` the
-unit names, where opening `j`'s `dirs` column `b < 32` holds bit `b % 16` of word `b / 16` of row `j` of the rows
-`checkValue` accepted (`P j b`, `hval`), it holds bit `b < H` of the verifier's position (`dirsRow_testBit`; it is the
-run's at `lg_eq_of_opening`), at every valid `H` (`H ≤ 32`, `RecOpen.valid`): `dirsRow` holds the position's low `H` bits
-16 a word in its first two words. -/
 theorem dirs_of_check {c3 : Flock.RecCoins.C3} {c : Flock.Circuit} {pub : Flock.Public}
     {own : Array Flock.Registered.Port} {LANES H : ℕ}
     (h : Flock.RecCoins.checkStackedLevel c3 c pub own LANES H = .ok ()) {o : Flock.RecCoins.RegisteredOpening}
@@ -254,11 +213,6 @@ theorem dirs_of_check {c3 : Flock.RecCoins.C3} {c : Flock.Circuit} {pub : Flock.
   have e := hval _ what hdv j (by simpa using hj) b (by omega)
   rwa [getElem!_map_range _ hj, dirsRow_testBit _ _ hb (by omega)] at e
 
-/-! ## The opening's keys, from the verifier's check -/
-
-/-- **In a unit of one group of 16-bit ports from column 0, a copy that reads the leaf words in order reads each port's
-row**: the Δ key of copy `j`'s input bit `16 · starts[q] + k` is message bit `k % 8` of byte `k / 8` of port `q`, for `k`
-within the row. -/
 theorem srcKey_inOrder {c : Flock.Circuit} {g : Flock.Group} (hg : c.unit.inGroups = #[g]) (hg0 : g.col = 0)
     (h16 : ∀ b ∈ g.bits.toList, b = 16) (hnd : (FlockSoundness.portBits c.unit.inGroups).Nodup) {j : ℕ}
     (hlv : c.leavesIn.getD j #[] = (Array.range g.bits.size).map Int.ofNat) {q k : ℕ} (hq : q < c.ports.size)
@@ -343,7 +297,6 @@ theorem srcKey_inOrder {c : Flock.Circuit} {g : Flock.Group} (hg : c.unit.inGrou
   rw [hQ, hs, getElem!_pos c.ports q hq, ite_eq_left (by omega)]
   congr 1 <;> omega
 
-/-- **What `checkAt` accepted of the statement's rows and its copies' leaves** (`rowsOk`, `leavesOk`). -/
 theorem checkAt_rows {c : Flock.Circuit} {name : String} {L H : ℕ} (h : Flock.RecOpen.checkAt c name L H = .ok ()) :
     Flock.RecOpen.rowsOk c L H = true ∧ Flock.RecOpen.leavesOk c L H = true := by
   unfold Flock.RecOpen.checkAt at h
@@ -359,7 +312,6 @@ theorem checkAt_rows {c : Flock.Circuit} {name : String} {L H : ℕ} (h : Flock.
         · rename_i hv
           exact ⟨by simpa using hr, by simpa using hv⟩
 
-/-- **What `check` accepted of a `rec-open/…` or `rec-open-stacked/…` unit's rows and leaves.** -/
 theorem check_rows {c : Flock.Circuit} (h : Flock.RecOpen.check c = .ok ()) {L H : ℕ}
     (hp : Flock.RecOpen.params c.unit.name = some (L, H) ∨ Flock.RecOpen.stackedParams c.unit.name = some (L, H)) :
     Flock.RecOpen.rowsOk c L H = true ∧ Flock.RecOpen.leavesOk c L H = true := by
@@ -378,7 +330,6 @@ theorem rows_snd (L H : ℕ) {q : ℕ} (hq : q < 5) :
   obtain rfl | rfl | rfl | rfl | rfl : q = 0 ∨ q = 1 ∨ q = 2 ∨ q = 3 ∨ q = 4 := by omega
   all_goals rfl
 
-/-- **`rowsOk`, row by row**: the statement's row `q < 5` is the opening's input row `q`, by name and width. -/
 theorem rowsOk_get {c : Flock.Circuit} {L H : ℕ} (h : Flock.RecOpen.rowsOk c L H = true) {q : ℕ} (hq : q < 5) :
     ∃ hq' : q < c.ports.size, c.ports[q].name = ((Flock.RecOpen.rows L H)[q]!).1 ∧
       16 * c.ports[q].words = (Flock.RecOpen.ports L H).bits[q]! ∧
@@ -397,7 +348,6 @@ theorem rowsOk_get {c : Flock.Circuit} {L H : ℕ} (h : Flock.RecOpen.rowsOk c L
   simp only [Prod.mk.injEq] at e2
   exact ⟨e2.1, e2.2.1, e2.2.2⟩
 
-/-- **`leavesOk` at copy `j`**: its leaves are the rows' words in order. -/
 theorem leavesOk_get {c : Flock.Circuit} {L H : ℕ} (h : Flock.RecOpen.leavesOk c L H = true) {j : ℕ}
     (hj : j < c.leavesIn.size) :
     c.leavesIn.getD j #[] = (Array.range ((Flock.RecOpen.ports L H).bits.foldl (· + ·) 0 / 16)).map Int.ofNat := by
@@ -407,7 +357,6 @@ theorem leavesOk_get {c : Flock.Circuit} {L H : ℕ} (h : Flock.RecOpen.leavesOk
   rw [Array.getD_eq_getD_getElem?, Array.getElem?_eq_getElem hj, Option.getD_some]
   simpa using this
 
-/-- The opening's input bits before its row `q` (`row`, `aux`, `acc`, `coef`, `dirs`, in that order). -/
 def preBits (LANES H q : ℕ) : ℕ := (((Flock.RecOpen.ports LANES H).bits.toList).take q).sum
 
 theorem preBits_le (L H : ℕ) {q : ℕ} (hq : q < 5) :
@@ -423,9 +372,6 @@ theorem inGroups_of_laid {name : String} {L H : ℕ} {net : Flock.Net}
   rw [(Flock.Net.ofRows_ok hl).2.2.2.2.2.1]
   rfl
 
-/-- **An accepted opening's copies read its rows** (`srcKey_inOrder`): at the verifier's net at `L` and `H`, with the
-statement's first five rows the opening's (`rowsOk`) and copy `j` reading their words in order (`leavesOk`), the Δ key
-of copy `j`'s input bit `preBits q + k`, for `k` within row `q < 5`, is bit `k` of the statement's row `q`. -/
 theorem srcKey_opening {c : Flock.Circuit} {name : String} {L H : ℕ}
     (hl : Flock.HmNets.netOf name (Flock.RecOpen.unitLaid L H) = .ok c.unit)
     (hrows : Flock.RecOpen.rowsOk c L H = true) (hlv : Flock.RecOpen.leavesOk c L H = true)
@@ -498,9 +444,6 @@ theorem bits_coef (L H : ℕ) : (Flock.RecOpen.ports L H).bits[3]! = (Flock.RecO
 
 theorem bits_dirs (L H : ℕ) : (Flock.RecOpen.ports L H).bits[4]! = (Flock.RecOpen.ports L H).dirs := rfl
 
-/-! ## The ports the reads file names -/
-
-/-- **A port `checkRows` accepted is a port of the reads file.** -/
 theorem own_of_checkRows {salt : String → ℕ → ByteArray} {c : Flock.Circuit} {pub : Flock.Public}
     {own : Array Flock.Registered.Port} {port value : String} {rows : Array (Array ℕ)} {what : ℕ → String}
     (h : Flock.RecCoins.checkRows salt c pub own port value rows what = .ok ()) : ∃ pt ∈ own, pt.name = port := by
@@ -511,13 +454,11 @@ theorem own_of_checkRows {salt : String → ℕ → ByteArray} {c : Flock.Circui
     exact ⟨reg, Array.mem_of_find?_eq_some hf, by simpa using Array.find?_some hf⟩
   · cases h
 
-/-- **A port `checkValue` accepted is a port of the reads file** (`own_of_checkRows` under `verifierSalt`). -/
 theorem own_of_checkValue {c : Flock.Circuit} {pub : Flock.Public} {own : Array Flock.Registered.Port}
     {port value : String} {rows : Array (Array ℕ)} {what : ℕ → String}
     (h : Flock.RecCoins.checkValue c pub own port value rows what = .ok ()) : ∃ pt ∈ own, pt.name = port :=
   own_of_checkRows (salt := fun p => Flock.RecCoins.verifierSalt p value) h
 
-/-- **A statement whose `rec-acc` ports are a level's has `acc` in the reads file `checkAcc` accepted.** -/
 theorem acc_of_checkAcc {s : VStar.Stmt} {own : Array Flock.Registered.Port}
     {rows : Option (Array Flock.Registered.Port)} (hs : RecVStar.accPorts s = ["acc", "acc_out"])
     (h : RecVStar.checkAcc s own rows = .ok ()) : ∃ pt ∈ own, pt.name = "acc" := by
@@ -532,8 +473,6 @@ theorem acc_of_checkAcc {s : VStar.Stmt} {own : Array Flock.Registered.Port}
     exact ⟨p, Array.mem_of_find?_eq_some hf, by simpa using Array.find?_some hf⟩
   · cases h
 
-/-- **`checkStmt` ran `checkAcc`, `checkAccReads` and `checkShared` on V*'s statement `j`** at the verifier's own
-reads (`checkStmt_ok`'s walk). -/
 theorem regs_of_checkStmt {i : RecVStar.Inner} {tags : Flock.Tags} {tables : List (String × ByteArray)}
     {st : Flock.Stmt} {circuitB : ByteArray} {partition : Option Lean.Json} {program : Option ByteArray}
     {own : Array Flock.Registered.Port} {j : ℕ} {f : VStar.Bindings} {rows : Option (Array Flock.Registered.Port)}
@@ -564,7 +503,6 @@ theorem regs_of_checkStmt {i : RecVStar.Inner} {tags : Flock.Tags} {tables : Lis
         exact ⟨ss, s, hss, hj, hacc, hrd, h⟩
       · cases h
 
-/-- **`checkStmt` ran `checkAcc` and `checkAccReads` on V*'s statement `j`** (`regs_of_checkStmt`). -/
 theorem checkAcc_of_checkStmt {i : RecVStar.Inner} {tags : Flock.Tags} {tables : List (String × ByteArray)}
     {st : Flock.Stmt} {circuitB : ByteArray} {partition : Option Lean.Json} {program : Option ByteArray}
     {own : Array Flock.Registered.Port} {j : ℕ} {f : VStar.Bindings} {rows : Option (Array Flock.Registered.Port)}
@@ -575,8 +513,6 @@ theorem checkAcc_of_checkStmt {i : RecVStar.Inner} {tags : Flock.Tags} {tables :
   let ⟨ss, s, hss, hj, hacc, hrd, _⟩ := regs_of_checkStmt h
   ⟨ss, s, hss, hj, hacc, hrd⟩
 
-/-- **An R level's checked session has `acc` in its reads file**: where V*'s statement `j` is R's level `l`
-(`hj`), `checkStmt` ran `checkAcc` on it (`checkAcc_of_checkStmt`), whose `rec-acc` ports are `acc` and `acc_out`. -/
 theorem acc_of_checkStmt {i : RecVStar.Inner} {tags : Flock.Tags} {tables : List (String × ByteArray)}
     {st : Flock.Stmt} {circuitB : ByteArray} {partition : Option Lean.Json} {program : Option ByteArray}
     {own : Array Flock.Registered.Port} {j : ℕ} {f : VStar.Bindings} {rows : Option (Array Flock.Registered.Port)}
@@ -593,10 +529,6 @@ section Keyed
 variable {mPts nv J : ℕ} {Reg' : Type} {c : Flock.Circuit} {hU : Built c.unit} {hscope : Layout.scopeOk c = true}
   {Lv : SamplingDesign nv} (zo : ZkOuter mPts nv J Reg' c hU hscope Lv)
 
-/-- **An accepted opening's input columns are registered bits where its rows are registered reads**
-(`srcKey_opening`): at a unit the verifier accepted as `rec-open/l<L>-h<H>` or `rec-open-stacked/l<L>-h<H>`, copy `j`'s
-column `preBits q + k`, bit `k` of its row `q < 5`, is a registered bit wherever unit `u`'s row `q` is a registered
-read. -/
 theorem regBit_opening (hrec : Flock.RecOpen.check c = .ok ()) {L H : ℕ}
     (hp : Flock.RecOpen.params c.unit.name = some (L, H) ∨ Flock.RecOpen.stackedParams c.unit.name = some (L, H))
     {j : ℕ} (hj : j < c.leavesIn.size) {u : Fin nv} {q : ℕ} (hq : q < 5)
@@ -612,8 +544,6 @@ theorem regBit_opening (hrec : Flock.RecOpen.check c = .ok ()) {L H : ℕ}
   rw [← FlockSoundness.Discharge.Layout.ofNet_nIn_eq (hU := hU)] at hcol hkey
   exact ⟨_, hcol, ⟨q, hq'⟩, k, hk', hkey, hread hq', rfl⟩
 
-/-- **`opensTopAt_of_regs`' `hacc` and `hcoef` from the verifier's check** (`regBit_opening`): where unit `u`'s `acc`
-and `coef` rows (rows 2 and 3) are registered reads, each of copy `j`'s `acc` and `coef` columns is a registered bit. -/
 theorem accCoef_of_check (hrec : Flock.RecOpen.check c = .ok ()) {L H : ℕ}
     (hp : Flock.RecOpen.params c.unit.name = some (L, H) ∨ Flock.RecOpen.stackedParams c.unit.name = some (L, H))
     {j : ℕ} (hj : j < c.leavesIn.size) {u : Fin nv}
@@ -629,8 +559,6 @@ theorem accCoef_of_check (hrec : Flock.RecOpen.check c = .ok ()) {L H : ℕ}
   · have := regBit_opening zo hrec hp hj (q := 3) (by decide) hcoef (k := t) (by rw [bits_coef]; exact ht)
     rwa [preBits_coef] at this
 
-/-- **The `dirs` columns `opensTopAt_of_regs` reads are keyed** (`regBit_opening`): where unit `u`'s `dirs` row (row 4)
-is a registered read, each of copy `j`'s `dirs` columns is a registered bit; which bit is `dirs_of_check`'s. -/
 theorem dirsCols_of_check (hrec : Flock.RecOpen.check c = .ok ()) {L H : ℕ}
     (hp : Flock.RecOpen.params c.unit.name = some (L, H) ∨ Flock.RecOpen.stackedParams c.unit.name = some (L, H))
     {j : ℕ} (hj : j < c.leavesIn.size) {u : Fin nv}
@@ -641,11 +569,8 @@ theorem dirsCols_of_check (hrec : Flock.RecOpen.check c = .ok ()) {L H : ℕ}
   have := regBit_opening zo hrec hp hj (q := 4) (by decide) hdirs (k := t) (by rw [bits_dirs]; exact ht)
   rwa [preBits_dirs] at this
 
-/-- **An accepted R level's unit reads its rows 2–4 as registered reads** (`accCoef_of_check`'s `hacc` and `hcoef`,
-`dirsCols_of_check`'s `hdirs`), where the session registers each row of a port its reads file names (`hread`, VBridge's
-`RowsRegistered` at unit `u`): the verifier names the unit's rows 2–4 `acc`, `coef` and `dirs` (`rowsOk_get`), and the
-reads file has a port of each name, `acc` by `checkAcc` (`hacc`, `acc_of_checkStmt`), `coef` and `dirs` by
-`checkStackedLevel`'s `checkValue`s (`own_of_checkValue`). -/
+/-- `hread`, that the session registers each row of a port its reads file names (VBridge's `RowsRegistered` at
+unit `u`), is a hypothesis: acceptance does not give it. -/
 theorem regReads_of_check (hrec : Flock.RecOpen.check c = .ok ()) {L H : ℕ}
     (hp : Flock.RecOpen.stackedParams c.unit.name = some (L, H)) {c3 : Flock.RecCoins.C3} {pub : Flock.Public}
     (hlv : Flock.RecCoins.checkStackedLevel c3 c pub zo.own L H = .ok ()) (hacc : ∃ pt ∈ zo.own, pt.name = "acc")
@@ -667,9 +592,6 @@ theorem regReads_of_check (hrec : Flock.RecOpen.check c = .ok ()) {L H : ℕ}
     fun hq => hname 3 (by decide) hq "coef" rfl (own_of_checkValue hcoef),
     fun hq => hname 4 (by decide) hq "dirs" rfl (own_of_checkValue hdirs)⟩
 
-/-- **`opensTopAt_of_regs`' `acc`, `coef` and `dirs` columns are registered bits at an accepted R level's unit**
-(`regReads_of_check`, `accCoef_of_check`, `dirsCols_of_check`), where the session registers each row of a port its reads
-file names (`hread`); which bit each `dirs` column holds is `dirs_of_check`'s. -/
 theorem regCols_of_check (hrec : Flock.RecOpen.check c = .ok ()) {L H : ℕ}
     (hp : Flock.RecOpen.stackedParams c.unit.name = some (L, H)) {c3 : Flock.RecCoins.C3} {pub : Flock.Public}
     (hlv : Flock.RecCoins.checkStackedLevel c3 c pub zo.own L H = .ok ()) (hacc : ∃ pt ∈ zo.own, pt.name = "acc")

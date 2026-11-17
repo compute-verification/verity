@@ -20,17 +20,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.C3.RegLevels.SrcRun
 import Proofs.Flock.Soundness.Refine.Seam
 
-/-!
-# n7's levels: `hR`'s `OpenRel` from R's opening's run
-
-`openRel_of_plays` asks that the messages' transposes be their ring switches' (`hT`). At the messages w holds
-(`decodedO`) they are: ring switch `k` is w's 128 elements at its slots (`decodedO_rs_eq`, `wiO_rs`), and its transpose
-is the term `wt` at the first of them (`valO`), `tOf` of those elements (`decodedO_rsT`). `openRel_of_run` is
-`openRel_of_plays` where R's opening's run returns zero residuals (ring switching's are among them: `opening_parts`), at
-`RecOpening.shape?`'s shape, whose schedule's `m` is `mReg` (`shape_spec`, `fast100_dims`). `hR_of_run` and
-`hR_of_units` are `levelTie_of_run`'s and `levelTie_of_units`' (so `levelTie_of_reads`') `hR` with that conjunct given
-and the others left; at the units' messages `hT` holds and `OpenTie` is `hmsg`.
--/
+/-! `hR`'s `OpenRel` from R's opening's run. -/
 
 @[expose] public section
 
@@ -41,7 +31,6 @@ open Game Audit Exec Refine Model ZkSession ZkLink ZkExec Composed ZkReg
 open Flock FlockLevel3 Accounting ZkBind Integrate Placed StrictCR DecodeZL FlockC3.Compose
 open FlockSoundness.Discharge.PlaysCoin (coinArr)
 
-/-- Ring switch `k` of the messages w holds is w's 128 elements from `128 k`. -/
 theorem decodedO_rs_eq (sh : Flock.Shape) (w : Array Flock.F128) (cons : ℕ → ℕ → Flock.F128) {k : ℕ}
     (hk : k < sh.claims) :
     (FlockC3.Opening.decodedO sh w cons).rs[k]! = (Array.range 128).map fun v => w[128 * k + v]! := by
@@ -55,8 +44,6 @@ theorem decodedO_rs_eq (sh : Flock.Shape) (w : Array Flock.F128) (cons : ℕ →
     simp only [Array.getElem_map, Array.getElem_range, Function.comp, Flock.RecAlgebra.Lin.eval_var,
       FlockC3.Opening.valO, FlockC3.Opening.wiO_rs sh hk h1']
 
-/-- **The messages w holds have their ring switches' transposes** (`openRel_of_plays`' `hT`): ring switch `k`'s
-transpose is the term `wt` at its first slot of w (`valO`), `tOf` of its 128 elements there. -/
 theorem decodedO_rsT (sh : Flock.Shape) (w : Array Flock.F128) (cons : ℕ → ℕ → Flock.F128) {k : ℕ}
     (hk : k < sh.claims) :
     (FlockC3.Opening.decodedO sh w cons).rsT[k]! = tOf (FlockC3.Opening.decodedO sh w cons).rs[k]! := by
@@ -74,8 +61,6 @@ theorem decodedO_rsT (sh : Flock.Shape) (w : Array Flock.F128) (cons : ℕ → �
     rw [getElem!_pos _ v (by simpa using hv)]
     simp only [Array.getElem_map, Array.getElem_range]
 
-/-- **`hR`'s `OpenRel` from R's opening's run**: `openRel_of_plays` at ring switching's output in a run of R's opening
-returning zero residuals, at `RecOpening.shape?`'s shape at `mReg`, whose schedule's `m` is `mReg`. -/
 theorem openRel_of_run {e : ExecHolo} {u : C3Run e} {cl : ℕ} {sh : Flock.Shape}
     {M : Flock.RecAlgebra.Messages Flock.F128} {a : Array (Flock.RecAlgebra.AClaim Flock.F128)}
     {c : Array (Array Flock.F128)} {k₀ k₁ k₂ : ℕ} {res rsr : Array Flock.F128} {rs : Flock.RecAlgebra.RsPts Flock.F128}
@@ -96,8 +81,8 @@ theorem openRel_of_run {e : ExecHolo} {u : C3Run e} {cl : ℕ} {sh : Flock.Shape
   rw [(FlockSoundness.Refine.fast100_dims _ _ (shape_spec hsh).2).2]
   exact openRel_of_plays h₁ (fun x hx => hz x (by simp [hx])) hne ha hshape hT hcl hpl hmsg hcoin
 
-/-- **`levelTie_of_run`'s `hR`** with its `OpenRel` from the run (`openRel_of_run`); left are its `Opened` and the
-Ligerito steps' coins (`hR'`), and the opening steps' coins from ring switching's first round (`hcoin`). -/
+/-- Leaves `Opened` and the Ligerito steps' coins (`hR'`), and the opening steps' coins from ring switching's
+first round (`hcoin`), as hypotheses. -/
 theorem hR_of_run {e : ExecHolo} {u : C3Run e} {cl : ℕ} {sh : Flock.Shape}
     {M : Flock.RecAlgebra.Messages Flock.F128} {a : Array (Flock.RecAlgebra.AClaim Flock.F128)}
     {c : Array (Array Flock.F128)} {k₀ k₁ : ℕ} {res : Array Flock.F128}
@@ -130,10 +115,8 @@ theorem hR_of_run {e : ExecHolo} {u : C3Run e} {cl : ℕ} {sh : Flock.Shape}
   fun rsr rs k₂ lgr lg h₁ h₂ => ⟨(hR' rsr rs k₂ lgr lg h₁ h₂).1,
     openRel_of_run hsh hrun hz hne ha hshape hT hcl hpl hmsg h₁ (hcoin rsr rs k₂ h₁), (hR' rsr rs k₂ lgr lg h₁ h₂).2⟩
 
-/-- **`levelTie_of_units`' (and `levelTie_of_reads`') `hR`** with its `OpenRel` from the run (`openRel_of_run`), at
-the messages w holds: their transposes are their ring switches' (`decodedO_rsT`) and `OpenTie` is the opening steps'
-messages. Left are the openings' `α`, their units and the Ligerito steps' weave (`hR'`), and the opening steps' coins
-from ring switching's first round (`hcoin`). -/
+/-- Leaves the openings' `α`, their units and the Ligerito steps' weave (`hR'`), and the opening steps' coins
+from ring switching's first round (`hcoin`), as hypotheses. -/
 theorem hR_of_units {nS : ℕ} {Vs : Fin nS → VStmt} {Reg' : Type} {zs : (s : Fin nS) → (Vs s).Outer Reg'}
     {Lb : (s : Fin nS) → (Vs s).Bits} {e : ExecHolo} {u : C3Run e} {sh : Flock.Shape} {w : Array Flock.F128}
     {ops : FlockVBridge.AccChain.Openings} {a : Array (Flock.RecAlgebra.AClaim Flock.F128)}

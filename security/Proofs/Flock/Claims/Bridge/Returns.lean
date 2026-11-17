@@ -6,20 +6,7 @@ import Mathlib.Combinatorics.Matroid.Init
 import Mathlib.MeasureTheory.Integral.Bochner.Basic
 import VCVio.Prelude.Core
 
-/-!
-# The simulation's returns are the decoded live outcomes
-
-The session's simulation (`simSession`) returns only where the live verdict holds, and there the model's outcome is
-every table's output on its reps' runs of their whole decoded tapes, at the cap the roots decode to and the openings
-the proof files decode to (`RetOK`). Its dead branches are at the tables' positions, each rep's game there a position
-of its game at the session's link points (`DeadAt`, `Resid`), so each rep's outcome there is an outcome of its game
-(`Resid.out`). Both hold of every node (`all_simSession`), by the rounds' recursion, carrying that each rep's position
-was reached by its tape's prefix (`Reach`).
-
-So with the dead branches answering the openings with `nul`, a model event `Q` that no outcome at the openings `nul`
-satisfies is no likelier, against the simulated strategy, than a live outcome that passes the live verdict and whose
-decoded model outcome is in `Q` (`prob_le_decoded`): the model's escapes arise only on runs the live verdict accepts.
--/
+/-! The simulation's returns are the decoded live outcomes. -/
 
 @[expose] public section
 
@@ -29,7 +16,6 @@ open FlockSoundness FlockSoundness.Game FlockSoundness.Refine FlockSoundness.Dis
 
 local notation "𝔽" => FlockLevel3.GF128
 
-/-- A run from where the model lands after following messages is a run of the messages, then that run. -/
 theorem plays_of_follow {α : Type} : ∀ {g : Game α} {ms : List Msg} {g' : Game α} {t : List Step} {a : α},
     follow g ms = some g' → PlaysT g' t a → PlaysT g (ms.map .inl ++ t) a
   | _, [], _, _, _, h, hp => by
@@ -45,14 +31,12 @@ theorem plays_of_follow {α : Type} : ∀ {g : Game α} {ms : List Msg} {g' : Ga
   | .ret _, _ :: _, _, _, _, h, _ => by simp [follow] at h
   | @Game.coin _ _ _ _ _, _ :: _, _, _, _, h, _ => by simp [follow] at h
 
-/-- **`g'` is a position of `g`**: reached from it by messages and coins. -/
 inductive Resid {α : Type} (g : Game α) : Game α → Prop
   | refl : Resid g g
   | send {M : Type} {k : M → Game α} (m : M) : Resid g (.send M k) → Resid g (k m)
   | coin {C : Type} {iF : Fintype C} {iN : Nonempty C} {k : C → Game α} (c : C) :
       Resid g (@Game.coin α C iF iN k) → Resid g (k c)
 
-/-- An outcome at a position of `g` is an outcome of `g`. -/
 theorem Resid.out {α : Type} {g g' : Game α} {a : α} (h : Resid g g') (ha : Out g' a) : Out g a := by
   induction h with
   | refl => exact ha
@@ -97,8 +81,6 @@ theorem resid_upd_of {P : Type} {J mPts : ℕ} {G : Fin J → (Fin 2 → Fin mPt
     · rw [upd_ne _ _ hjr]
       exact h j' r') fun _ => hg
 
-/-- **The positions were reached by the tapes' prefixes**: on every outcome of the live subgame `L`, a run of rep
-`(j, r)`'s position `gs j r` on its remaining tape `ts j r` is a run of its initial game on its whole tape. -/
 def Reach {P : Type} {J mPts : ℕ} (dec : Fin J → ℕ → ByteArray → List Msg) (one : Fin J → ℕ → Bool)
     (fin : Fin J → Fin 2 → Array ByteArray → List Msg) (G : Fin J → (Fin 2 → Fin mPts → 𝔽) → Fin 2 → Game P)
     (pts : Fin 2 → Fin mPts → 𝔽) (L : Game (LiveOutJ J mPts)) (gs : Fin J → Fin 2 → Game P)
@@ -163,9 +145,6 @@ theorem reach_coin {P : Type} {J mPts : ℕ} (dg : ByteArray → ByteArray) (dec
   · rw [upd_ne _ _ hjr, restJ_other dec one fin rs hjr] at hp
     rwa [upd_ne _ _ hjr, upd_ne _ _ hjr]
 
-/-- **A return of the session's simulation**: the live outcome `b` passes the live verdict, and the model outcome `a`
-is every table's output on its reps' runs `pend` of their whole decoded tapes, at the cap `b`'s roots decode to and
-the openings its proof files decode to. -/
 def RetOK {P OutT Cp Op : Type} {J mPts : ℕ} (out : Fin J → Cp → P × P → Op → OutT) (pL : LiveOutJ J mPts → Prop)
     (opn : Array ByteArray → Fin J → Op) (dec : Fin J → ℕ → ByteArray → List Msg) (one : Fin J → ℕ → Bool)
     (fin : Fin J → Fin 2 → Array ByteArray → List Msg) (capOf : Array ByteArray → Fin J → Cp)
@@ -173,8 +152,6 @@ def RetOK {P OutT Cp Op : Type} {J mPts : ℕ} (out : Fin J → Cp → P × P �
   pL b ∧ ∃ pend : Fin J → P × P, (∀ j r, PlaysT (G j b.pts r) (repTapeJ dec one fin b j r) (sel (pend j) r)) ∧
     a = List.ofFn fun j => out j (capOf b.rootB j) (pend j) (opn b.proofs j)
 
-/-- **A dead branch at the tables' positions**, every rep's game there with its message types inhabited and a position
-of the rep's game `G j pts r` at the session's link points. -/
 def DeadAt {P OutT Cp Op : Type} {J mPts : ℕ} (out : Fin J → Cp → P × P → Op → OutT)
     (G : Fin J → (Fin 2 → Fin mPts → 𝔽) → Fin 2 → Game P) (g : Game (List OutT)) (_ : Strategy g) : Prop :=
   ∃ (caps : Fin J → Cp) (pts : Fin 2 → Fin mPts → 𝔽) (gs : Fin J → Fin 2 → Game P), (∀ j r, AllInh (gs j r)) ∧
@@ -298,8 +275,6 @@ theorem all_simRJ {P OutT Cp Op : Type} [Nonempty Op] {J mPts : ℕ} (out : Fin 
             all_simRJ out ok dflt pL opn dg dec one fin capOf G rootB pts n _ gs' h' hI' hR' hres')
           (hR.mono fun _ h => .send (some (⟨j, r, b, k⟩ : SubmitJ J)) h) hres
 
-/-- **Every node of the session's simulation**: its returns are the decoded live outcomes the live verdict accepts,
-and its dead branches are at the tables' positions. -/
 theorem all_simSession {P OutT Cp Op : Type} [Nonempty Op] {J mPts : ℕ} (out : Fin J → Cp → P × P → Op → OutT)
     (ok : Fin J → OutT → Prop) (dflt : OutT) (pL : LiveOutJ J mPts → Prop) (opn : Array ByteArray → Fin J → Op)
     (dg : ByteArray → ByteArray) (dec : Fin J → ℕ → ByteArray → List Msg) (one : Fin J → ℕ → Bool)
@@ -311,9 +286,6 @@ theorem all_simSession {P OutT Cp Op : Type} [Nonempty Op] {J mPts : ℕ} (out :
   fun rootB pts => all_simRJ out ok dflt pL opn dg dec one fin capOf G rootB pts N _ _ _ _
     (reach_init dec one fin G pts _) fun _ _ => .refl
 
-/-- **The model's escapes arise only on accepted live runs.** With the dead branches answering the openings with
-`nul`, a model event `Q` that no outcome with every table's openings `nul` satisfies is no likelier, against the
-simulated strategy, than a live outcome passing the live verdict whose decoded model outcome is in `Q`. -/
 theorem prob_le_decoded {P OutT Cp Op : Type} [Nonempty Op] {J mPts : ℕ} (out : Fin J → Cp → P × P → Op → OutT)
     (ok : Fin J → OutT → Prop) (dflt : OutT) (pL : LiveOutJ J mPts → Prop) (opn : Array ByteArray → Fin J → Op)
     (dg : ByteArray → ByteArray) (dec : Fin J → ℕ → ByteArray → List Msg) (one : Fin J → ℕ → Bool)

@@ -18,23 +18,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 import Proofs.Flock.Verifier.HmNets
 
-/-!
-# The `rec-residuals` unit reads the columns its products read (`readCol_resUnit`)
-
-`RecResiduals.unitLaid S ns nv` is the unit `RecResiduals.check` and `RecOpening.check` accept for a part: its S, row
-ports of `ns` elements and a `v` of `nv`. Every input column a row of its builder reads is one a computed row of the net
-reads, under any name; in particular each column a product of two one-term operands reads.
-
-* The builder (`rowReads_partRun`): a residual's product ANDs each position's pair of operand bits (Karatsuba's leaves,
-  `mem_leaves`), so where bit `j` of two one-term operands are input bits `c₁ ≠ c₂` (`termCol`: `w`'s on the row ports,
-  `v`'s after them) a row reads both (`ResReads`).
-* The layout and the net (`laidRes_reads`, `readCol_resUnit`): the builder's `k`-th row is the laid-out row
-  `inRows + k`, a computed row of the net at `unitLog ≤ 32` (`readCol_of_laid`).
-* An element (`readCol_resUnit_el`): a product of `v`'s element `i` and `w`'s element `e` reads all 128 of `e`'s
-  columns.
-* At the checks (`readCol_opening`, `readCol_residuals`): the unit `RecOpening.check` or `RecResiduals.check` accepted
-  for part `p` reads each column its part's products read.
--/
+/-! The `rec-residuals` unit reads the columns its products read (`readCol_resUnit`). -/
 
 @[expose] public section
 
@@ -55,8 +39,6 @@ def termCol (ns : List ℕ) (nv : ℕ) : Term → ℕ → Option ℕ
     if 128 * (e + j) + u < 128 * ns.sum then some (rowCol (partRep ns nv).ports 0 (128 * (e + j) + u)) else none
   | .v i, j => if 128 * i + j < 128 * nv then some (vBase (partRep ns nv) + (128 * i + j)) else none
 
-/-- **Column `c` is one a product of the part's residuals reads**: a product of two one-term operands whose bits `j` are
-input bits `c₁ ≠ c₂`, `c` one of them. -/
 def ResReads (S : GfS) (ns : List ℕ) (nv : ℕ) (c : ℕ) : Prop :=
   ∃ r ∈ S.res, ∃ ab ∈ r.mul, ∃ t₁ t₂, S.ops.getD ab.1 [] = [t₁] ∧ S.ops.getD ab.2 [] = [t₂] ∧
     ∃ j < 128, ∃ c₁ c₂, termCol ns nv t₁ j = some c₁ ∧ termCol ns nv t₂ j = some c₂ ∧ c₁ ≠ c₂ ∧ (c = c₁ ∨ c = c₂)
@@ -98,8 +80,6 @@ theorem vBase_lt_innerIn (ns : List ℕ) {nv q : ℕ} (hq : q < 128 * nv) :
   rw [hn] at h
   omega
 
-/-- **`termCol` is where the term's forms read**: bit `j` of term `t`'s forms on the part's `w` and `v` is the input bit
-`termCol` gives. -/
 theorem termCol_spec {ns : List ℕ} {nv : ℕ} {t : Term} {j c : ℕ} (hj : j < 128) (h : termCol ns nv t j = some c) :
     (termForms (rowForms (partRep ns nv).ports 0) (vars (vBase (partRep ns nv)) (128 * nv)) t).getD j Lin.zero =
       Lin.var c ∧ c < innerIn (partRep ns nv) := by
@@ -137,7 +117,6 @@ theorem termCol_spec {ns : List ℕ} {nv : ℕ} {t : Term} {j c : ℕ} (hj : j <
       exact ⟨by rw [getD_termForms_v _ _ _ hj]; exact getD_inputs _ _ _ hq, vBase_lt_innerIn ns hq⟩
     · cases h
 
-/-- **A residual's product ANDs bit `j` of its operands**: where those are input bits `u₁ ≠ u₂`, a row reads each. -/
 theorem reads_residualForms_of {S : GfS} {W V : List Lin} {r : Res} (hr : r ∈ S.res) {ab : ℕ × ℕ} (hab : ab ∈ r.mul)
     {j : ℕ} (hj : j < 128) {u₁ u₂ : Var} (h₁ : (opForms S W V ab.1).getD j Lin.zero = Lin.zero ^^^ Lin.var u₁)
     (h₂ : (opForms S W V ab.2).getD j Lin.zero = Lin.zero ^^^ Lin.var u₂) (hne : u₁ ≠ u₂) {u : Var}
@@ -159,7 +138,6 @@ theorem reads_residualForms_of {S : GfS} {W V : List Lin} {r : Res} (hr : r ∈ 
   exact reads_residualsGo S W V
     (reads_residual S W V r (by rw [List.isEmpty_iff]; exact List.ne_nil_of_mem hab) hr0) S.res hr
 
-/-- **The part's builder has a row reading each column its products read**, an input bit. -/
 theorem rowReads_partRun {S : GfS} {ns : List ℕ} {nv c : ℕ} (h : ResReads S ns nv c) :
     RowReads (partRun S ns nv).2 c ∧ c < innerIn (partRep ns nv) := by
   obtain ⟨r, hr, ab, hab, t₁, t₂, h₁, h₂, j, hj, c₁, c₂, hc₁, hc₂, hne, hc⟩ := h
@@ -170,8 +148,6 @@ theorem rowReads_partRun {S : GfS} {ns : List ℕ} {nv c : ℕ} (h : ResReads S 
   rw [← FlockVBridge.residualForms_eq]
   exact reads_residualForms_of hr hab hj (by rw [getD_opForms h₁ hj, hf₁]) (by rw [getD_opForms h₂ hj, hf₂]) hne hc _
 
-/-- **The laid-out unit has a computed row for each input bit a builder row reads**: the `k`-th AND, at row
-`inRows + k`, its forms' columns those of their variables. -/
 theorem laidRes_reads {S : GfS} {ns : List ℕ} {nv c : ℕ} (hr : RowReads (partRun S ns nv).2 c)
     (hlt : c < innerIn (partRep ns nv)) :
     ∃ k, inRowsOf (partIn ns nv) + k < (Flock.RecResiduals.unitLaid S ns nv).constPos ∧
@@ -211,8 +187,6 @@ section Net
 open FlockSoundness FlockSoundness.Audit
 open FlockVBridge.OfVStar (ReadCol partRep partRun rowCol vBase innerIn)
 
-/-- **The `rec-residuals` unit reads every input column its builder reads**: under any name, a row of the part's
-residual computation (`partRun`) reading input bit `c` is a computed row of the net reading column `c`. -/
 theorem readCol_resUnit {S : Flock.RecOpen.GfS} {ns : List ℕ} {nv : ℕ} {name : String} {net : Flock.Net}
     (hU : Built net) (hn : Flock.HmNets.netOf name (Flock.RecResiduals.unitLaid S ns nv) = .ok net)
     (hu : net.unitLog ≤ 32)
@@ -221,14 +195,12 @@ theorem readCol_resUnit {S : Flock.RecOpen.GfS} {ns : List ℕ} {nv : ℕ} {name
   rw [← FlockVBridge.OfVStar.inWords_unitLaid hn] at hk hmem
   exact readCol_of_laid hU hn hu hk hmem
 
-/-- **The `rec-residuals` unit reads each column its products read** (`ResReads`). -/
 theorem readCol_of_resReads {S : Flock.RecOpen.GfS} {ns : List ℕ} {nv : ℕ} {name : String} {net : Flock.Net}
     (hU : Built net) (hn : Flock.HmNets.netOf name (Flock.RecResiduals.unitLaid S ns nv) = .ok net)
     (hu : net.unitLog ≤ 32)
     {c : ℕ} (hr : ResReads S ns nv c) : ReadCol (Rows.ofNet hU) c :=
   readCol_resUnit hU hn hu (rowReads_partRun hr).1 (rowReads_partRun hr).2
 
-/-- **A product of `v`'s element `i` and `w`'s element `e` reads all 128 of `e`'s columns.** -/
 theorem readCol_resUnit_el {S : Flock.RecOpen.GfS} {ns : List ℕ} {nv : ℕ} {name : String} {net : Flock.Net}
     (hU : Built net) (hn : Flock.HmNets.netOf name (Flock.RecResiduals.unitLaid S ns nv) = .ok net)
     (hu : net.unitLog ≤ 32)
@@ -242,7 +214,6 @@ theorem readCol_resUnit_el {S : Flock.RecOpen.GfS} {ns : List ℕ} {nv : ℕ} {n
   · simp only [termCol, show 128 * i + b < 128 * nv by omega, ↓reduceIte]
   · simp only [termCol, hq, ↓reduceIte]
 
-/-- **The unit `RecOpening.check` accepted for part `p` reads each column its part's products read.** -/
 theorem readCol_opening {c : Flock.Circuit} (hU : Built c.unit) (h : Flock.RecOpening.check c = .ok ())
     (hu : c.unit.unitLog ≤ 32) {m cl p : ℕ} (hp : Flock.RecOpening.params c.unit.name = some (m, cl, p))
     {sh : Flock.Shape} (hsh : Flock.RecOpening.shape? m cl = some sh) {S : Flock.RecOpen.GfS} {ns : List ℕ} {nv : ℕ}
@@ -253,7 +224,6 @@ theorem readCol_opening {c : Flock.Circuit} (hU : Built c.unit) (h : Flock.RecOp
   cases hpart₁
   exact readCol_of_resReads hU hn hu hr
 
-/-- **The unit `RecResiduals.check` accepted for part `p` reads each column its part's products read.** -/
 theorem readCol_residuals {c : Flock.Circuit} (hU : Built c.unit) (h : Flock.RecResiduals.check c = .ok ())
     (hu : c.unit.unitLog ≤ 32) {m k cl p : ℕ} (hp : Flock.RecResiduals.params c.unit.name = some (m, k, cl, p))
     {sh : Flock.Shape} (hsh : Flock.RecResiduals.shape? m k cl = some sh) {holo : Bool}

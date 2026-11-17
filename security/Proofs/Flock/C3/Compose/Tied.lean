@@ -23,20 +23,7 @@ import Proofs.Flock.Recursive.ForkRuns
 import Proofs.Flock.Soundness.Refine.Basis
 import Proofs.Flock.Soundness.Refine.Seam
 
-/-!
-# n7: the tied source, each stage's output its play's
-
-`tie u` keeps a run's steps, cap, link points and openings, and sets each stage's output to the one its game plays to
-on the run's steps for it (`playOut`), stage by stage, since each game reads the outputs before it: `repAt` reads the
-link points, `sparseAt` its rep's output, `openingAt` the claims and `ligAt` the opening's output. Where each stage
-plays on its steps to some output (`StagesPlay`), `RunPlays` holds at `tie u` (`runPlays_tie`), so `srcOK_of_plays`
-applies at the tied source `tiedSrc stp` of any source of steps `stp` (`srcOK_tied`).
-
-The stages play where the source is tied (`stagesPlay_of_ties`): each rep by its unit (`RepTie`, `rep_of_unit`), each
-sparse phase by its RecSparse unit (`SparseTie`, `plays_of_tie`), R's opening on w's ring switches (`OpenTie`) where
-its read fact's checks pass (`OpeningReadAt`), and R's Ligerito by its accepting run (`LevelTie`). A stage's message
-types follow from its kinds (`tysAt_of_kinds`) where the shape's are among `T`.
--/
+/-! The tied source, each stage's output its play's. -/
 
 @[expose] public section
 
@@ -52,10 +39,7 @@ open FlockC3.Sparse (sparseAt)
 open FlockC3.Opening (openingAt)
 open FlockC3.RegLevels (ligAt)
 
-/-! ## A stage's output -/
-
 open Classical in
-/-- A game's output on the steps `ts`: the one it plays to there, where it plays to one, else `d`. -/
 def playOut {α : Type} (g : Game α) (ts : List Step) (d : α) : α :=
   if h : ∃ a, PlaysT g ts a then h.choose else d
 
@@ -66,38 +50,29 @@ theorem playOut_eq {α : Type} {g : Game α} {ts : List Step} {a : α} (d : α) 
   rw [dite_eq_left hx]
   exact PlaysT.det hx.choose_spec h
 
-/-! ## The tied run -/
-
 variable {e : ExecHolo}
 
-/-- `u` with each rep's output and pending result its play's on `u.ts i`. -/
 def tieReps (u : C3Run e) : C3Run e :=
   { u with
     rep := fun i => ((playOut (repAt e u i) (u.ts i) (some (u.rep i), u.pend i)).1).getD (u.rep i)
     pend := fun i => (playOut (repAt e u i) (u.ts i) (some (u.rep i), u.pend i)).2 }
 
-/-- `u` with each rep's registered claim its sparse phase's on `u.sp i`. -/
 def tieSparse (u : C3Run e) : C3Run e :=
   { u with claim := fun i => (playOut (sparseAt e u i) (u.sp i) (some (u.claim i))).getD (u.claim i) }
 
-/-- `u` with R's opening's output its play's on `u.op`. -/
 def tieOpening (u : C3Run e) : C3Run e :=
   { u with opened := (playOut (openingAt u) u.op (some u.opened)).getD u.opened }
 
-/-- `u` with R's Ligerito's result its play's on `u.lg`. -/
 def tieLig (u : C3Run e) : C3Run e :=
   { u with pendR := playOut (ligAt e u) u.lg u.pendR }
 
-/-- **The tied run**: `u`'s steps, each stage's output its play's, in the stages' order. -/
 def tie (u : C3Run e) : C3Run e := tieLig (tieOpening (tieSparse (tieReps u)))
 
-/-- **Each stage plays on the run's steps for it to some output**, at the run's own earlier outputs. -/
 def StagesPlay (e : ExecHolo) (u : C3Run e) : Prop :=
   (∀ i : Fin 2, ∃ a p, PlaysT (repAt e u i) (u.ts i) (some a, p)) ∧
     (∀ i : Fin 2, ∃ a, PlaysT (sparseAt e u i) (u.sp i) (some a)) ∧
     (∃ a, PlaysT (openingAt u) u.op (some a)) ∧ ∃ p, PlaysT (ligAt e u) u.lg p
 
-/-- **`RunPlays` at a tied run** where each stage plays on its steps to some output. -/
 theorem runPlays_tie {u : C3Run e} (h : StagesPlay e (tie u)) : RunPlays e (tie u) := by
   obtain ⟨h₀, h₁, h₂, h₃⟩ := h
   refine ⟨fun i => ?_, fun i => ?_, ?_, ?_⟩
@@ -131,16 +106,12 @@ theorem runPlays_tie {u : C3Run e} (h : StagesPlay e (tie u)) : RunPlays e (tie 
     rw [e₁]
     exact hp'
 
-/-! ## The stages play where the source is tied -/
-
-/-- **A rep tied to a rep unit plays on its steps to an output.** -/
 theorem reps_plays_of_tie {u : C3Run e} {i : Fin 2} (h : FlockC3.Reps.RepTie e u i) :
     ∃ a p, PlaysT (repAt e u i) (u.ts i) (some a, p) := by
   obtain ⟨U⟩ := h
   obtain ⟨zc, lc, pend, hpl, -⟩ := FlockC3.HoloValues.rep_of_unit e.cls.hm U
   exact ⟨(zc, lc), pend, hpl⟩
 
-/-- **R's Ligerito tied to an accepting run plays on its steps** (`regLevels_of_readAt`'s play). -/
 theorem lig_plays_of_levelTie {cap₀ : Cap Dig} {u : C3Run e} (h : FlockC3.RegLevels.LevelTie cap₀ e u) :
     ∃ p, PlaysT (ligAt e u) u.lg p := by
   obtain ⟨msId, m, sch, Tw, sws, nc, cap, p, rt, rt', hf, hsch, -, hop, hwf, hlig, hk, hl, hr, ho⟩ := h
@@ -153,8 +124,6 @@ theorem lig_plays_of_levelTie {cap₀ : Cap Dig} {u : C3Run e} (h : FlockC3.RegL
   rw [hsch] at hpl
   exact ⟨pend, FlockC3.RegLevels.Read.playsT_lig_of_tape hpl hk hl hr⟩
 
-/-- **R's opening on w's ring switches plays on its steps to an output** where its read fact's checks pass: the read
-fact's opening steps are a prefix of the run's past both sparse phases, of `u.op`'s length, so they are `u.op`. -/
 theorem opening_plays_of {st : Flock.Stmt} {hp : HoloParams} {u : C3Run (holoAt st hp)} {sh : Flock.Shape}
     {w : Array F128} {ops : FlockVBridge.AccChain.Openings} (ht : FlockC3.Opening.OpenTie sh w ops u)
     (hr : OpeningReadAt (runSteps u) u) : ∃ a, PlaysT (openingAt u) u.op (some a) := by
@@ -177,8 +146,6 @@ theorem opening_plays_of {st : Flock.Stmt} {hp : HoloParams} {u : C3Run (holoAt 
   rw [← he]
   exact ⟨x, hpl⟩
 
-/-- **Each stage plays at a tied run**: the reps by their units, the sparse phases by their RecSparse units, R's
-opening on w's ring switches where its read fact holds, and R's Ligerito by its accepting run. -/
 theorem stagesPlay_of_ties {st : Flock.Stmt} {hp : HoloParams} {u : C3Run (holoAt st hp)} {cap₀ : Cap Dig}
     {sh : Flock.Shape} {w : Array F128} {ops : FlockVBridge.AccChain.Openings}
     (hr : ∀ i, FlockC3.Reps.RepTie (holoAt st hp) u i) (hs : ∀ i, FlockC3.Sparse.SparseTie (holoAt st hp) u i)
@@ -187,19 +154,15 @@ theorem stagesPlay_of_ties {st : Flock.Stmt} {hp : HoloParams} {u : C3Run (holoA
   ⟨fun i => reps_plays_of_tie (hr i), fun i => FlockC3.Sparse.plays_of_tie (hs i), opening_plays_of ho hor,
     lig_plays_of_levelTie hl⟩
 
-/-- **A stage's messages are typed by `T`** where its kinds are a prefix of a shape whose message types are. -/
 theorem tysAt_of_kinds {nT : ℕ} {T : Fin nT → Type} {l : List Step} {σ : List Exec.Kind} (hk : l.map kindOf <+: σ)
     (hT : ∀ M, Exec.Kind.msg M ∈ σ → ∃ j, T j = M) : TysAt T l := fun m hm =>
   hT m.1 (hk.subset (List.mem_map.2 ⟨.inl m, hm, rfl⟩))
 
-/-- **A play's messages are typed by `T`** where its game's spine's message types are among `T`. -/
 theorem tysAt_of_plays {nT : ℕ} {T : Fin nT → Type} {α : Type} {g : Game α} {ts : List Step} {a : α}
     {σ : List Exec.Kind} (hp : PlaysT g ts a) (hs : Exec.Spine g σ) (hT : ∀ M, Exec.Kind.msg M ∈ σ → ∃ j, T j = M) :
     TysAt T ts :=
   tysAt_of_kinds (Exec.Spine.prefix hp hs) hT
 
-/-- **`T` holds the message types of the stages' shapes** at the run `u`: the reps' (`holoRepShape`), the sparse
-phases' (`sparseKinds`), R's opening's (`opShape` at two claims) and R's Ligerito's (`ligShape`). -/
 def ShapeTys {nT : ℕ} (T : Fin nT → Type) (e : ExecHolo) (u : C3Run e) : Prop :=
   (∀ M, Exec.Kind.msg M ∈ FlockC3.HoloValues.holoRepShape GF128 GF256 Dig (e.cls.pubStatement e.regs).m
       (e.cls.pubStatement e.regs).kLog (extraClaims (e.cls.pubStatement e.regs) e.cls.ptLocal e.cls.mPts u.pts).length
@@ -208,8 +171,6 @@ def ShapeTys {nT : ℕ} (T : Fin nT → Type) (e : ExecHolo) (u : C3Run e) : Pro
     (∀ M, Exec.Kind.msg M ∈ Exec.opShape GF128 2 → ∃ j, T j = M) ∧
     ∀ M, Exec.Kind.msg M ∈ Exec.ligShape GF128 GF256 Dig e.rsch.sch → ∃ j, T j = M
 
-/-- **Each stage's messages are typed by `T`** where each stage plays on its steps (`RunPlays`) and `T` holds the
-message types of the stages' shapes: each play's kinds follow its game's spine. -/
 theorem tysAt_of_runPlays {nT : ℕ} {T : Fin nT → Type} {e : ExecHolo} {u : C3Run e} (h : RunPlays e u)
     (hT : ShapeTys T e u) :
     TysAt T (u.ts 0) ∧ TysAt T (u.ts 1) ∧ TysAt T (u.sp 0) ∧ TysAt T (u.sp 1) ∧ TysAt T u.op ∧ TysAt T u.lg := by
@@ -222,8 +183,6 @@ theorem tysAt_of_runPlays {nT : ℕ} {T : Fin nT → Type} {e : ExecHolo} {u : C
   exact ⟨hr 0, hr 1, hs 0, hs 1, tysAt_of_plays h₂ (Exec.opening_exact _ _ _).spine hop,
     tysAt_of_plays h₃ (Exec.ligeritoC_spine _ _ _ _ _) hlg⟩
 
-/-! ## The tied source -/
-
 section src
 
 variable {nT r : ℕ} {T : Fin nT → Type} {CT : Fin r → Type} [∀ k, Fintype (CT k)] [∀ k, Nonempty (CT k)]
@@ -231,12 +190,10 @@ variable {nT r : ℕ} {T : Fin nT → Type} {CT : Fin r → Type} [∀ k, Fintyp
 
 local notation "ℐ" => holoInnerAt T CT st hp
 
-/-- **The tied source** of a source of steps `stp`: each run's steps are `stp`'s, and its outputs its stages' plays'. -/
 def tiedSrc (stp : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → C3Run (holoAt st hp)) :
     Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → C3Run (holoAt st hp) :=
   fun R ω t Lb => tie (stp R ω t Lb)
 
-/-- **`SrcOK` at the tied source**: `srcOK_of_plays`, with `RunPlays` from each stage playing at the tied runs. -/
 theorem srcOK_tied {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'}
     {dg : ByteArray → ByteArray} {N k Rw : ℕ}
     {stp : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → C3Run (holoAt st hp)}
@@ -252,8 +209,6 @@ theorem srcOK_tied {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ →
   srcOK_of_plays hleaf hcoins hread hcap hbool hos htys fun R ω t R₂ τ o h =>
     runPlays_tie (u := stp R ω t (layers zs dg N k Rw R ω t R₂ τ)) (hplay R ω t R₂ τ o h)
 
-/-- **`SrcOK` at the tied source, its message types from the plays**: `srcOK_tied`, each stage's `TysAt` from its play
-at the tied run and `T` holding the stages' shapes' message types (`tysAt_of_runPlays`). -/
 theorem srcOK_tied_of_shapes {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'}
     {dg : ByteArray → ByteArray} {N k Rw : ℕ}
     {stp : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → C3Run (holoAt st hp)}

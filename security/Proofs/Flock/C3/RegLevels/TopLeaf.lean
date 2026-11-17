@@ -20,28 +20,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.Soundness.Registered.Binding
 
-/-!
-# `hT_of_leaf`'s `hleaf` at R's levels' `out` reads, and two sessions' reads of one row
-
-`hT_of_leaf` takes the read's leaf as `treeLeaf` of the node's commit string. At an accepted session:
-
-* `fixedRow_top`, `heldRow_top`: `fixedRow` at `rec-top-stacked-L<l>` and row `x` is node `x` of R's level-`l` tops in
-  `stacked/rep0` (`stackedTopLevel_top`; neither `cIndex` nor `openingIndex` reads the name);
-* `port_of_topRead`, `read_of_topRead`: where the reads file names each port once (`hnd`), its `out` entry is
-  `TopRead`'s, of value `rec-top-stacked-L<l>`, and unit `u`'s read there is at node `pos[u] >>> H`;
-* `digest_top`: the public file's row at such a read is the node's commit string (`HPubRows` at the verifier's hold,
-  `hrow`);
-* `leaf_top`: so the read's leaf is `treeLeaf` of that string, or its two openings conflict (`leaf_of_accepts` at the
-  outcome, with `ReadsOwnAt`'s port); `leaf_sampled`: `leaf_of_accepts` at a sampled outcome, whose reads the session's
-  `hown` gives.
-
-Two registrant records' reads at one root, leaf count, domain and leaf schema, at one position, have one row, or the
-records clash (`enc_eq_of_not_clash`, from `TwoOpenings.collides` and `hm96Pair_spec`). At an accepted history no two
-of V*'s sessions clash (`Accepted`'s `¬ RegColl`), so two sessions' reads of one registered value at one position have
-one row where the value is one the verifier's shared rows register, or R's tops (`SharedValue`), so the two sessions'
-entries for it share their root, leaf count, domain and leaf schema (`SharedOwnRoot rows`, from `checkShared`:
-`sharedOwnRoot_checked`; `row_agree`).
--/
+/-! `hT_of_leaf`'s `hleaf` at R's levels' `out` reads, and two sessions' reads of one row. -/
 
 @[expose] public section
 
@@ -62,9 +41,6 @@ variable {C : Verity.Boolean.Circuit} {n : ℕ} {P : Audit.Partition C n} {Reg :
   {decode' : Audit.Partition.DecoderB (C := C') (Reg := Reg₁) plan' tab'}
   {lay' : Binding.Layout P' plan' tab' decode'} {rs' : HmRowsX lay'}
 
-/-- **Two registered reads at one root, leaf count, domain, leaf schema and position have one row**, or the records
-clash: their leaves differ and both open the root there (`TwoOpenings.collides`), or the leaves agree over two rows
-(`hm96Pair_spec`). -/
 theorem enc_eq_of_not_clash {rd : ReadsX lay rs} {rd' : ReadsX lay' rs'} (hc : ¬ rd.Clash rd') {p : lay.Pos}
     {p' : lay'.Pos} (hp : rd.isRead p) (hp' : rd'.isRead p') (hroot : (rd.port p).root = (rd'.port p').root)
     (hn : (rd.port p).leaves = (rd'.port p').leaves) (hdom : (rd.port p).domain = (rd'.port p').domain)
@@ -90,12 +66,9 @@ open Flock
 open Flock.RecVStar (cIndex openingIndex stackedTopLevel fixedRow InnerCommits InnerStream STACKED)
 open FlockSoundness FlockSoundness.Audit FlockSoundness.Discharge FlockSoundness.Discharge.Recursion
 
-/-! ## `fixedRow` at R's level tops -/
-
 theorem stackedTopLevel_top (l : ℕ) : stackedTopLevel s!"rec-top-stacked-L{l}" = some l :=
   FlockC3.Reps.index_pre "rec-top-stacked-L" l rfl
 
-/-- R's tops are a `SharedValue` at any shared rows (`checkShared`'s second case). -/
 theorem sharedValue_top (rows : Option (Array Flock.Registered.Port)) (l : ℕ) :
     SharedValue rows s!"rec-top-stacked-L{l}" :=
   Or.inr (by rw [stackedTopLevel_top]; rfl)
@@ -116,7 +89,6 @@ theorem openingIndex_top (l : ℕ) : openingIndex s!"rec-top-stacked-L{l}" = non
   unfold openingIndex
   simp only [top_not_startsWith l (p := "rec-opening-c") (by decide) (by decide), Bool.false_eq_true, ↓reduceIte]
 
-/-- **`fixedRow` at `rec-top-stacked-L<l>`, row `x`**: node `x` of R's level-`l` tops. -/
 theorem fixedRow_top {cs : InnerCommits} {l x : ℕ} {sparse : Option RecSparse.Shape} {s : InnerStream}
     {bcs : Array ByteArray} (hs : cs.stream? s!"{STACKED}/rep0" = some s) (ht : s.tops[l]? = some bcs)
     (hx : x < bcs.size) :
@@ -134,9 +106,6 @@ theorem heldRow_top {cs : InnerCommits} {sparse : Option RecSparse.Shape} {l x :
 theorem bytes_of_toList (b : ByteArray) : (⟨b.toList.toArray⟩ : ByteArray) = b := by
   rw [FlockC3.PubRows.bytes_toList_eq]
 
-/-! ## `TopRead`'s entry -/
-
-/-- **The reads file's `out` entry is `TopRead`'s**, where it names each port once. -/
 theorem port_of_topRead {own : Array Flock.Registered.Port} {l qq H : ℕ} {pos : Array ℕ}
     (ht : TopRead own l qq H pos) (hnd : ∀ p ∈ own, ∀ p' ∈ own, p.name = p'.name → p = p')
     {p : Flock.Registered.Port} (hp : p ∈ own) (hn : p.name = "out") :
@@ -146,7 +115,6 @@ theorem port_of_topRead {own : Array Flock.Registered.Port} {l qq H : ℕ} {pos 
     ((by simpa using Array.find?_some hf : pt.name = "out").trans hn.symm)
   exact ⟨hv, hr⟩
 
-/-- **Unit `u`'s read of `TopRead`'s entry is at node `pos[u] >>> H`**, one of the `qq` openings. -/
 theorem read_of_topRead {qq H u x : ℕ} {pos : Array ℕ} {reads : Array (Option ℕ)}
     (hr : reads = (Array.range qq).map fun j => some (pos[j]! >>> H)) (hx : reads[u]? = some (some x)) :
     u < qq ∧ x = pos[u]! >>> H := by
@@ -156,14 +124,11 @@ theorem read_of_topRead {qq H u x : ℕ} {pos : Array ℕ} {reads : Array (Optio
     exact ⟨hu, hx.symm⟩
   · simp [hu] at hx
 
-/-! ## At a sampled outcome -/
-
 section Session
 
 variable {mPts nv J : ℕ} {Reg' : Type} {c : Flock.Circuit} {hU : Built c.unit} {hscope : Layout.scopeOk c = true}
   {Lv : SamplingDesign nv} (zo : ZkOuter mPts nv J Reg' c hU hscope Lv)
 
-/-- **`leaf_of_accepts` at a sampled outcome**: the session's `hown` gives the sampled proof blocks' reads. -/
 theorem leaf_sampled {ω : Lv.Ω} {R' : Reg'} {o}
     (hacc : ZkReg.LiveAcceptsZKR zo.I zo.own (R', Lv.draw ω, zo.wr (Lv.draw ω) R' o)) {u : Fin nv}
     (hu : u ∈ Lv.draw ω) {q : Fin c.ports.size} (hp : zo.rd.isRead (.inl (u, q))) :
@@ -173,8 +138,6 @@ theorem leaf_sampled {ω : Lv.Ω} {R' : Reg'} {o}
   leaf_of_accepts zo _ hacc (zo.hown ω R' o hacc) hp hu
 
 end Session
-
-/-! ## At the family's accepted sessions -/
 
 section Family
 
@@ -186,8 +149,6 @@ variable {nT r : ℕ} {T : Fin nT → Type} {CT : Fin r → Type} [∀ k, Fintyp
 
 local notation "ℐ" => holoInnerAt T CT st hp
 
-/-- **The public file's row at a read of R's level-`l` tops is the node's commit string**: `HPubRows` at the verifier's
-hold of the inner transcript (`hrow`), where it holds `stacked/rep0`'s level-`l` tops `bcs`. -/
 theorem digest_top {F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂} (hpr : FlockC3.PubRows.HPubRows F)
     {wr : List (Cm × (ℐ).Coin) → Lean.Json × String} {reg : Lean.Json}
     (hrow : ∀ v x t, F.row v x t =
@@ -204,11 +165,6 @@ theorem digest_top {F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂} (hpr : Floc
   (hpr R ω t R₂ j hacc pt hpt u q x hq hx bcs[x].toList (by rw [hrow, hcs, hv]; exact heldRow_top hs ht hi)).trans
     (bytes_of_toList _)
 
-/-- **`hT_of_leaf`'s `hleaf` at an accepted session its game reaches** (`Reached`, so the session writes the
-transcript `HPubRows` reads): where a registered read's port is `own`'s entry of its name
-read at the unit's position (`ReadsOwnAt`), registering R's level-`l` tops, and the outcome's reads `A` keeps are the
-verifier's own (`hown`), the read's leaf is `treeLeaf` of node `readAt`'s commit string in the verifier's hold, or its
-two openings conflict (`LeafColl`'s event). -/
 theorem leaf_top {F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂} (hpr : FlockC3.PubRows.HPubRows F)
     {wr : List (Cm × (ℐ).Coin) → Lean.Json × String} {reg : Lean.Json}
     (hrow : ∀ v x t, F.row v x t =
@@ -234,10 +190,6 @@ theorem leaf_top {F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂} (hpr : FlockC
   rw [← digest_top hpr hrow ⟨R', (o j).2.2, ⟨ω', x, by rw [ho]⟩, (h.1 j).1⟩ hmem hv hname.symm hpos hcs hs ht hi]
   exact leaf_of_accepts (F.zs R ω t R₂ j) (o j) (h.1 j).1 hown hp hA
 
-/-- **Two sessions' reads of one registered value at one position have one row** at an accepted history (no two
-sessions clash, `Accepted`'s `¬ RegColl`), where the value is a `SharedValue` of the verifier's shared rows
-`rows`, whose entries share their root (`SharedOwnRoot rows`), and each read's port is its reads file's entry
-(`ReadsOwnAt`). -/
 theorem row_agree {F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂} {rows : Option (Array Flock.Registered.Port)}
     (hsh : SharedOwnRoot rows F)
     {dg : ByteArray → ByteArray} {N k Rw : ℕ} (hro : FlockC3.HPort.ReadsOwnAt F dg N k Rw)
@@ -255,9 +207,6 @@ theorem row_agree {F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂} {rows : Opti
     (hro R ω t R₂ τ o h j u q hp).1 _ (hro R ω t R₂ τ o h j' u' q' hp').1 hv hs
   exact FlockSoundness.Registered.enc_eq_of_not_clash (fun hc => h.2.1 ⟨j, j', hc⟩) hp hp' hroot hn hdom hsch hpos
 
-/-- **A chosen row for one read of R's level-`l` tops is the row at every other read of that node**:
-`row_agree` at the shared value `rec-top-stacked-L<l>`: every opening at that node has the same encoded row off
-`RegColl`. -/
 theorem top_row_agree {F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂}
     {rows : Option (Array Flock.Registered.Port)} (hsh : SharedOwnRoot rows F)
     {dg : ByteArray → ByteArray} {N k Rw : ℕ} (hro : FlockC3.HPort.ReadsOwnAt F dg N k Rw)

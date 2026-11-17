@@ -15,21 +15,7 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 
-/-!
-# n9: `MsgsReadC3` at the normalized tied source
-
-The last round's message is the openings step, `os`, which V* holds only in part: the openings at the reps (strata 0
-and 1) and at R (stratum 2). The salts (candidate 3's leaf is plain) and the strata from 3 on are on no read wire, and
-no stage reads them. `normOs` sets them to defaults, so the source is `tiedSrc (normSrc stp)`, and every tie, the
-stages' plays and `SrcOK`'s other clauses carry over (`repTie_normOs`, `levelTie_normOs`, `openingReadAt_normOs`,
-`srcOK_tied_norm`).
-
-`msgsReadC3_of_parts` is `MsgsReadC3` from a read fact per part of the steps: at a committed round (`i < r`, where the
-mask is the commit strings', `maskOf_skLeaf`) the round closes in the reps' part, the sparse phases', R's opening's or
-R's Ligerito's (`RepsMsgsRead`, `SparseMsgsRead`, `OpenMsgsRead`, `LigMsgsRead`); the last round is the openings step
-alone where R's Ligerito ends in a coin (`LigWhole`), and the openings are read from the layers stratum by stratum
-(`OpensReadAt`); past it both runs have no messages. `msgsReadC3_tied` is it at the normalized tied source.
--/
+/-! `MsgsReadC3` at the normalized tied source, whose openings no stage reads are set to defaults (`normOs`). -/
 
 @[expose] public section
 
@@ -44,17 +30,13 @@ open FlockVBridge.Family (skOf maskOf)
 open FlockVBridge.InnerAccepts (firstSteps)
 open FlockC3.Reps (cutOf repPart RepsMsgsRead RepTie)
 
-/-! ## The normalized run and the parts of its steps -/
-
 section run
 
 variable {e : ExecHolo}
 
-/-- `u` with the openings no stage reads set to defaults: the strata from 3 on, and every salt. -/
 def normOs (u : C3Run e) : C3Run e :=
   { u with os := (fun s => if s < 3 then u.os.1 s else fun _ _ => ([], []), fun _ _ _ => []) }
 
-/-- **A run's openings are normal**: every salt and every stratum from 3 on is the default. -/
 def OsNormal (u : C3Run e) : Prop :=
   u.os.2 = (fun _ _ _ => []) ∧ ∀ s, 3 ≤ s → u.os.1 s = fun _ _ => ([], [])
 
@@ -67,14 +49,11 @@ theorem os_eq_of_normal {u u' : C3Run e} (hn : OsNormal u) (hn' : OsNormal u') (
   Prod.ext (funext fun s => (Nat.lt_or_ge s 3).elim (h s) fun hs => (hn.2 s hs).trans (hn'.2 s hs).symm)
     (hn.1.trans hn'.1.symm)
 
-/-- **The sparse phases' part of a run's steps**: the reps' part, then both sparse phases. -/
 def sparsePart (u : C3Run e) : List Step := (runSteps u).take 2 ++ (firstSteps (u.ts 0) ++ u.ts 1 ++ u.sp 0 ++ u.sp 1)
 
-/-- **R's opening's part**: the sparse phases' part, then R's opening. -/
 def openPart (u : C3Run e) : List Step :=
   (runSteps u).take 2 ++ (firstSteps (u.ts 0) ++ u.ts 1 ++ u.sp 0 ++ u.sp 1 ++ u.op)
 
-/-- **R's Ligerito's part**: every step but the openings'. -/
 def ligPart (u : C3Run e) : List Step := (runSteps u).take 2 ++ FlockC3.PubRows.stagesOf u
 
 theorem runSteps_lig (u : C3Run e) :
@@ -101,14 +80,11 @@ theorem open_lig (u : C3Run e) : openPart u <+: ligPart u :=
 
 theorem lig_run (u : C3Run e) : ligPart u <+: runSteps u := ⟨_, (runSteps_lig u).symm⟩
 
-/-! ## Messages cut at coins -/
-
 theorem cutOf_prefix {a l : List Step} (h : a <+: l) {i : ℕ} (hi : i < (a.filterMap Sum.getRight?).length) :
     (cutOf l)[i]? = (cutOf a)[i]? := by
   obtain ⟨b, rfl⟩ := h
   exact FlockC3.Reps.cutOf_append b a i hi
 
-/-- **After a last coin, one message is the last group.** -/
 theorem cutOf_last (c m : Game.Msg) : ∀ a : List Step,
     (cutOf (a ++ [.inr c] ++ [.inl m]))[(a.filterMap Sum.getRight?).length + 1]? = some [m]
   | [] => rfl
@@ -125,7 +101,6 @@ theorem cutOf_last (c m : Game.Msg) : ∀ a : List Step,
       rw [List.getElem?_cons_succ]
       exact ih
 
-/-- **The last group is the openings step** where R's Ligerito ends in a coin. -/
 theorem cutOf_runSteps_last {u : C3Run e} {l : List Step} {c : Game.Msg} {i : ℕ} (hl : u.lg = l ++ [.inr c])
     (hi : ((ligPart u).filterMap Sum.getRight?).length = i) :
     (cutOf (runSteps u))[i]? = some [⟨Opens GF128 Dig × Salts (List UInt8), u.os⟩] := by
@@ -143,8 +118,6 @@ theorem cutOf_runSteps_none {u : C3Run e} {i : ℕ} (hi : ((ligPart u).filterMap
     (FlockVBridge.Family.length_cut (runSteps u)).trans (congrArg (· + 1) (coins_runSteps u))
   exact List.getElem?_eq_none_iff.2 (by omega)
 
-/-- **A round before both runs' last coins**, from the part it closes in, part by part: each part's fact is asked
-only where the round closes in that part in both runs and not in the one before it in both. -/
 theorem cutOf_runSteps_eq {u u' : C3Run e} {i : ℕ} (hi : i < ((ligPart u).filterMap Sum.getRight?).length)
     (hi' : i < ((ligPart u').filterMap Sum.getRight?).length)
     (hrp : i < ((repPart u).filterMap Sum.getRight?).length → i < ((repPart u').filterMap Sum.getRight?).length →
@@ -178,8 +151,6 @@ theorem cutOf_runSteps_eq {u u' : C3Run e} {i : ℕ} (hi : i < ((ligPart u).filt
   · rw [cutOf_prefix pl hi, cutOf_prefix pl' hi']
     exact hlg hO
 
-/-! ## The ties under `normOs`: they read the openings at strata 0–2 only -/
-
 theorem repTie_normOs {u : C3Run e} {i : Fin 2} (h : RepTie e u i) : RepTie e (normOs u) i := by
   obtain ⟨U⟩ := h
   exact ⟨{ U with opens := fun ℓ j =>
@@ -191,8 +162,6 @@ theorem levelTie_normOs {cap₀ : Cap Dig} {u : C3Run e} (h : FlockC3.RegLevels.
   exact ⟨msId, m, sch, Tw, sws, nc, cap, p, rt, rt', h₁, h₂, h₃, h₄, h₅, h₆, h₇, h₈, h₉,
     fun ℓ j => (congrFun (congrFun (normOs_os_of_lt (u := u) (by decide : 2 < 3)) ℓ) j).trans (h₁₀ ℓ j)⟩
 
-/-- `SparseTie` and `OpenTie` read no openings, so they hold at `normOs u` as at `u`, definitionally. R's opening's
-read fact needs the opening's steps to be `u.op`, which `OpenTie` gives (`opening_plays_of`). -/
 theorem openingReadAt_normOs {st : Flock.Stmt} {hp : HoloParams} {u : C3Run (holoAt st hp)} {sh : Flock.Shape}
     {w : Array F128} {ops : FlockVBridge.AccChain.Openings} (ht : FlockC3.Opening.OpenTie sh w ops u)
     (h : OpeningReadAt (runSteps u) u) : OpeningReadAt (runSteps (normOs u)) (normOs u) := by
@@ -209,10 +178,8 @@ theorem openingReadAt_normOs {st : Flock.Stmt} {hp : HoloParams} {u : C3Run (hol
   rw [FlockC3.Opening.afterSparse_runSteps, he]
   exact List.prefix_append _ _
 
-/-! ## The tied run under `normOs`: the same steps
-
-Stated field by field and rewritten, not unfolded: checking `tie (normOs v)` against `tie v` by unfolding compares the
-stages' plays. -/
+/-! Stated field by field and rewritten, not unfolded: checking `tie (normOs v)` against `tie v` by unfolding
+compares the stages' plays. -/
 
 theorem tie_normOs_steps (v : C3Run e) :
     (tie (normOs v)).cap₀ = (tie v).cap₀ ∧ (tie (normOs v)).pts = (tie v).pts ∧ (tie (normOs v)).ts = (tie v).ts ∧
@@ -258,8 +225,6 @@ theorem os_norm (v : C3Run e) {s : ℕ} (hs : s < 3) : (tie (normOs v)).os.1 s =
 
 end run
 
-/-! ## The read facts -/
-
 section src
 
 variable {nT r : ℕ} {T : Fin nT → Type} {CT : Fin r → Type} [∀ k, Fintype (CT k)] [∀ k, Nonempty (CT k)]
@@ -267,14 +232,10 @@ variable {nT r : ℕ} {T : Fin nT → Type} {CT : Fin r → Type} [∀ k, Fintyp
 
 local notation "ℐ" => holoInnerAt T CT st hp
 
-/-- **The normalized source** of a source of steps `stp`: each run `normOs`'s. -/
 def normSrc (stp : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → C3Run (holoAt st hp)) :
     Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → C3Run (holoAt st hp) :=
   fun R ω t Lb => normOs (stp R ω t Lb)
 
-/-- **`MsgsReadC3` on the part `part` of the steps, past the part `prev`** (`RepsMsgsRead`'s form): two accepted outer
-proofs whose layers agree on the read wires of stage `i`'s commit strings have the same round-`i` messages in the
-source's parts `part`, at a round that closes in `part` in both runs and not in `prev` in both. -/
 def PartMsgsRead (prev part : C3Run (holoAt st hp) → List Step)
     (zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
     (dg : ByteArray → ByteArray) (N k Rw : ℕ)
@@ -291,29 +252,24 @@ def PartMsgsRead (prev part : C3Run (holoAt st hp) → List Step)
     (cutOf (part (src R ω t (layers zs dg N k Rw R ω t R₂ τ))))[i]? =
       (cutOf (part (src R' ω' t' (layers zs dg N k Rw R' ω' t' R₂' τ'))))[i]?
 
-/-- **The sparse phases' committed rounds** (named; from each phase's tie, `SparseTie`). -/
 abbrev SparseMsgsRead (zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
     (dg : ByteArray → ByteArray) (N k Rw : ℕ)
     (src : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → C3Run (holoAt st hp))
     (own : Fin S → Array Flock.Registered.Port) (sel : ℕ → String → ℕ → Prop) : Prop :=
   PartMsgsRead repPart sparsePart zs dg N k Rw src own sel
 
-/-- **R's opening's committed rounds** (named; from `OpenTie`). -/
 abbrev OpenMsgsRead (zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
     (dg : ByteArray → ByteArray) (N k Rw : ℕ)
     (src : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → C3Run (holoAt st hp))
     (own : Fin S → Array Flock.Registered.Port) (sel : ℕ → String → ℕ → Prop) : Prop :=
   PartMsgsRead sparsePart openPart zs dg N k Rw src own sel
 
-/-- **R's Ligerito's committed rounds** (named; from `LevelTie`). -/
 abbrev LigMsgsRead (zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
     (dg : ByteArray → ByteArray) (N k Rw : ℕ)
     (src : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → C3Run (holoAt st hp))
     (own : Fin S → Array Flock.Registered.Port) (sel : ℕ → String → ℕ → Prop) : Prop :=
   PartMsgsRead openPart ligPart zs dg N k Rw src own sel
 
-/-- **The openings at stratum `s` are read from the layers** (named; for the reps from `RepUnit.opens`, for R from
-`LevelTie`'s): two accepted outer proofs whose layers agree on every read wire have the same openings at `s`. -/
 def OpensReadAt (zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
     (dg : ByteArray → ByteArray) (N k Rw : ℕ)
     (src : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → C3Run (holoAt st hp)) (s : ℕ) : Prop :=
@@ -322,20 +278,14 @@ def OpensReadAt (zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j
     (∀ j g, ReadW Vs j g → layers zs dg N k Rw R ω t R₂ τ j g = layers zs dg N k Rw R' ω' t' R₂' τ' j g) →
     (src R ω t (layers zs dg N k Rw R ω t R₂ τ)).os.1 s = (src R' ω' t' (layers zs dg N k Rw R' ω' t' R₂' τ')).os.1 s
 
-/-- **R's Ligerito ends in a coin** at every accepted outer proof (named; from an accepting `LevelTie`, whose run
-consumes the last level's queries, `qbShape lv false`), so the last group is the openings step alone
-(`cutOf_runSteps_last`). -/
 def LigWhole (zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
     (dg : ByteArray → ByteArray) (N k Rw : ℕ)
     (src : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → C3Run (holoAt st hp)) : Prop :=
   AtSrc zs dg N k Rw src fun _ u => ∃ (l : List Step) (c : Game.Msg), u.lg = l ++ [.inr c]
 
-/-! ## `MsgsReadC3` from the parts -/
-
 theorem skLeaf_of_not_lt {own : Fin S → Array Flock.Registered.Port} {sel : ℕ → String → ℕ → Prop} {m i : ℕ}
     (hi : ¬ i + 1 < m) (j : Fin S) : skLeaf Vs own sel m i j = Finset.univ := ite_eq_right hi
 
-/-- **At the last round the mask is every read wire.** -/
 theorem read_of_maskLeaf {own : Fin S → Array Flock.Registered.Port} {sel : ℕ → String → ℕ → Prop} {m i : ℕ}
     (hi : ¬ i + 1 < m) {Xs Xs' : (j : Fin S) → (Vs j).Bits}
     (h : maskOf Vs (skLeaf Vs own sel m) i Xs = maskOf Vs (skLeaf Vs own sel m) i Xs') :
@@ -346,7 +296,6 @@ theorem read_of_maskLeaf {own : Fin S → Array Flock.Registered.Port} {sel : �
   rw [skLeaf_of_not_lt hi j] at hj
   simpa [hg] using hj
 
-/-- **A run has `r` coins** at an accepted outer proof, from the whole history and each stage's coins. -/
 theorem coins_src {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'}
     {dg : ByteArray → ByteArray} {N k Rw : ℕ}
     {src : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → C3Run (holoAt st hp)}
@@ -359,9 +308,6 @@ theorem coins_src {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → 
   rw [← coins_runSteps, coinClause_of_stageCoins hr (hcoins R ω t R₂ τ o hA)]
   exact FlockVBridge.Family.length_coinSteps CT hr
 
-/-- **`MsgsReadC3` from the parts' read facts**, at a source whose runs have `r` coins (`HLeafC3`, `StageCoins`), normal
-openings (`OsNormal`), openings read from the layers at strata 0–2 (`OpensReadAt`) and a Ligerito ending in a coin
-(`LigWhole`). -/
 theorem msgsReadC3_of_parts {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'}
     {dg : ByteArray → ByteArray} {N k Rw : ℕ}
     {src : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → C3Run (holoAt st hp)}
@@ -390,8 +336,6 @@ theorem msgsReadC3_of_parts {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → R
         fun s hs => hos s hs R ω t R₂ τ o R' ω' t' R₂' τ' o' hA hA' hrd]
   · rw [cutOf_runSteps_none (u := src R ω t (layers zs dg N k Rw R ω t R₂ τ)) (i := i) (by omega),
       cutOf_runSteps_none (u := src R' ω' t' (layers zs dg N k Rw R' ω' t' R₂' τ')) (i := i) (by omega)]
-
-/-! ## At the normalized tied source -/
 
 theorem part_norm {part : C3Run (holoAt st hp) → List Step} (hpart : ∀ v, part (tie (normOs v)) = part (tie v))
     (stp : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → C3Run (holoAt st hp)) (R : Reg)
@@ -429,7 +373,6 @@ theorem ligWhole_norm {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ 
   obtain ⟨l, c, hl⟩ := h R ω t R₂ τ o hA
   exact ⟨l, c, (tie_normOs_steps (stp R ω t (layers zs dg N k Rw R ω t R₂ τ))).2.2.2.2.2.trans hl⟩
 
-/-- **`MsgsReadC3` at the normalized tied source**, from the read facts at the tied source `tiedSrc stp`. -/
 theorem msgsReadC3_tied {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'}
     {dg : ByteArray → ByteArray} {N k Rw : ℕ}
     {stp : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → C3Run (holoAt st hp)}
@@ -451,8 +394,6 @@ theorem msgsReadC3_tied {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg�
           (os_norm (stp R' ω' t' (layers zs dg N k Rw R' ω' t' R₂' τ')) hs).symm))
     (ligWhole_norm hw)
 
-/-- **`SrcOK` at the normalized tied source**: `srcOK_tied_of_shapes` at `normSrc stp`, its reads `msgsReadC3_tied`,
-and its other clauses as at `tiedSrc stp`, since no stage reads what `normOs` changes. -/
 theorem srcOK_tied_norm {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'}
     {dg : ByteArray → ByteArray} {N k Rw : ℕ}
     {stp : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → C3Run (holoAt st hp)}
@@ -469,7 +410,6 @@ theorem srcOK_tied_norm {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg�
   srcOK_tied_of_shapes (stp := normSrc stp) hleaf hcoins (msgsReadC3_tied hleaf hcoins hrp hsp hop hlg hos hw) hcap
     hbool hty hT hplay
 
-/-- **The reps' tie at the normalized tied source** (`repTie_normOs`). -/
 theorem srcRepTie_norm {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'}
     {dg : ByteArray → ByteArray} {N k Rw : ℕ}
     {stp : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → C3Run (holoAt st hp)}

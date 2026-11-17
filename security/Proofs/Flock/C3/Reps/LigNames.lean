@@ -17,16 +17,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 
-/-!
-# Ligerito's names in w: `wKey` at its sumcheck messages, out-of-domain values and final `yr`
-
-`ligRounds` builds Ligerito's rounds in a loop; `ligRounds_eq` writes it as folds of its two pushes (`ligF1`, a message;
-`ligF2`, an out-of-domain value with a message) and its level loop (`ligLevels`, a middle level `ligMid` or the last
-`ligLast`). Tracking the message and out-of-domain counters through them, `ligRounds_has` finds in its rounds every
-message `j` below `k₀ + 4`, and below `k₀ + 4 + 7n + 4` at `n + 1` levels after the first, every out-of-domain value
-below `3`, and below `3 + 2n` there, and there the final `yr`'s `2^(ext+1)` entries. Those rounds are w's
-(`mem_wNames_of_lig`), so these keys pass `wKey` (`ligKeys_wKey`).
--/
+/-! Ligerito's names in w: `wKey` at its sumcheck messages, out-of-domain values and final `yr`. -/
 
 @[expose] public section
 
@@ -34,7 +25,6 @@ namespace FlockC3.Reps
 
 open Flock.RecAlgebra (Key msgNames ligRounds)
 
-/-- `x` is an element of one of the rounds `out`. -/
 def InRound (out : Array (Array Key)) (x : Key) : Prop := ∃ r ∈ out, x ∈ r
 
 theorem InRound.push {out : Array (Array Key)} {r : Array Key} {x : Key} (h : InRound out x) :
@@ -60,24 +50,20 @@ def ligF1 (b : ℕ × Array (Array Key)) (_ : ℕ) : ℕ × Array (Array Key) :=
 def ligF2 (b : ℕ × ℕ × Array (Array Key)) (_ : ℕ) : ℕ × ℕ × Array (Array Key) :=
   (b.fst + 1, b.snd.fst + 1, b.snd.snd.push (#[Key.ood b.snd.fst] ++ msgNames b.fst))
 
-/-- `ligRounds` before its level loop. -/
 def lig0 (sch : Flock.Schedule) : ℕ × ℕ × Array (Array Key) :=
   let a := List.foldl ligF2 ((List.foldl ligF1 (0, #[#[Key.T], #[Key.ood 0]]) (List.range' 0 (sch.k0 + 1))).fst, 1,
     (List.foldl ligF1 (0, #[#[Key.T], #[Key.ood 0]]) (List.range' 0 (sch.k0 + 1))).snd) (List.range' 0 2)
   (a.fst + 1, a.snd.fst, a.snd.snd.push (msgNames a.fst))
 
-/-- A level of `ligRounds`' loop but the last. -/
 def ligMid (s : ℕ × ℕ × Array (Array Key)) : ℕ × ℕ × Array (Array Key) :=
   let a := List.foldl ligF2 ((List.foldl ligF1 (s.fst, s.snd.snd) (List.range' 0 4)).fst, s.snd.fst,
     (List.foldl ligF1 (s.fst, s.snd.snd) (List.range' 0 4)).snd) (List.range' 0 2)
   (a.fst + 1, a.snd.fst, a.snd.snd.push (msgNames a.fst))
 
-/-- The last level of `ligRounds`' loop, with the final `yr`. -/
 def ligLast (ext : ℕ) (s : ℕ × ℕ × Array (Array Key)) : ℕ × ℕ × Array (Array Key) :=
   let a := List.foldl ligF1 (s.fst, s.snd.snd) (List.range' 0 3)
   (a.fst + 1, s.snd.fst, a.snd.push (msgNames a.fst ++ Array.map Key.yr (Array.range (2 <<< ext))))
 
-/-- `ligRounds`' level loop over the levels `l`, of `R` after the first: `G1` at each but the last, `G2` there. -/
 def ligLevels (R : ℕ) (G1 G2 : ℕ × ℕ × Array (Array Key) → ℕ × ℕ × Array (Array Key)) (l : List ℕ)
     (init : ℕ × ℕ × Array (Array Key)) : ℕ × ℕ × Array (Array Key) :=
   Id.run (forIn l init fun i s => if i + 1 < R then pure (ForInStep.yield (G1 s)) else pure (ForInStep.yield (G2 s)))
@@ -204,8 +190,6 @@ theorem ligLast_has (ext : ℕ) (s : ℕ × ℕ × Array (Array Key)) :
   · rintro _ ⟨j, hj, rfl⟩
     exact InRound.last (Array.mem_append_right _ (Array.mem_map.2 ⟨j, Array.mem_range.2 hj, rfl⟩))
 
-/-- **The level loop's rounds**, from level `s` of `R = s + n + 1`: `init`'s, its next `7n + 4` messages and `2n`
-out-of-domain values, and the last level's `P`. -/
 theorem ligLevels_has {R : ℕ} {P : Key → Prop}
     {G1 G2 : ℕ × ℕ × Array (Array Key) → ℕ × ℕ × Array (Array Key)}
     (h1 : ∀ s, (G1 s).1 = s.1 + 7 ∧ (G1 s).2.1 = s.2.1 + 2 ∧ (∀ x, InRound s.2.2 x → InRound (G1 s).2.2 x) ∧
@@ -246,7 +230,6 @@ theorem ligLevels_has {R : ℕ} {P : Key → Prop}
       · have := o (t - 2) (by omega)
         rwa [c2, show init.2.1 + 2 + (t - 2) = init.2.1 + t by omega] at this
 
-/-- **Ligerito's rounds hold its messages, out-of-domain values and final `yr`** below the schedule's counts. -/
 theorem ligRounds_has (sch : Flock.Schedule) :
     (∀ j < sch.k0 + 4, ∀ a < 2, ∀ b < 2, InRound (ligRounds sch) (.msg j a b)) ∧
     (∀ j < 3, InRound (ligRounds sch) (.ood j)) ∧
@@ -279,8 +262,6 @@ theorem mem_wNames_of_lig {sh : Flock.Shape} {x : Key} (h : InRound (ligRounds s
   let ⟨r, hr, hx⟩ := h
   mem_wNames (by unfold Flock.RecAlgebra.rounds; exact Array.mem_append_right _ hr) hx
 
-/-- **Ligerito's keys pass `wKey`**: its messages' and out-of-domain values' below the schedule's counts, and the final
-`yr`'s at a level after the first. -/
 theorem ligKeys_wKey (sh : Flock.Shape) :
     (∀ j < sh.sched.k0 + 4, ∀ a < 2, ∀ b < 2, wKey sh (.msg j a b) = true) ∧
     (∀ j < 3, wKey sh (.ood j) = true) ∧

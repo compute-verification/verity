@@ -16,32 +16,13 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 
-/-!
-# The checks' whole reads: `RsReadCol` and `ResReadCol`
-
-`RecOpening.check` refuses a `rec-opening` part whose computed rows read an element of a claim's ring switch or of a
-running sum in fewer than 128 bits (`rsUnread`), and both it and `RecResiduals.check` a part whose computed rows read a
-row-port element in some but not all of them (`partlyRead`), all over `readIns`, the input columns the net's computed
-rows read.
-
-* `getD_readIns`: `readIns` marks exactly those columns; `readCol_of_row`, `row_of_readCol`: they are the audit's
-  `ReadCol` at `unitLog ≤ 32` (`Rows.ofNet_a`, `Rows.ofNet_b`).
-* `check_rsWhole`, `check_whole`: what each check accepted, with its refusals passed.
-* `readCol_whole`: a part's net that passed `partlyRead` reads a row-port element whole where it reads one of its bits;
-  `readCol_openWhole` at the opening's check, and `openReadCol_whole`, at `unitLog ≤ 32`.
-* `readCol_rs`, `readCol_acc`: the opening's part reads each column of its ring-switch and running-sum elements.
-
-This file imports no session, so the sessions read these directly: `RsReadCol` is `rsReadCol` (`RsFacts`, from
-`readCol_rsAt`).
--/
+/-! The checks' whole reads: `RsReadCol` and `ResReadCol`. -/
 
 @[expose] public section
 
 namespace FlockC3.Reps.ReadWhole
 
 open Flock
-
-/-! ## `readIns` -/
 
 theorem size_foldl_set (xs : List ℕ) (rd : Array Bool) :
     (xs.foldl (fun rd c => rd.setIfInBounds c true) rd).size = rd.size := by
@@ -92,7 +73,6 @@ theorem getD_foldl_rows (g : Net) (L : List ℕ) (rd : Array Bool) (col : ℕ) :
         · exact Or.inl (Or.inr ⟨h1, h3⟩)
         · exact Or.inr ⟨h1, r', h2, h3⟩
 
-/-- **`readIns` marks exactly the input columns a computed row reads.** -/
 theorem getD_readIns (g : Net) (col : ℕ) :
     (RecResiduals.readIns g).getD col false = true ↔
       col < min (g.inWords * WORD) g.constPos ∧ ∃ r, min (g.inWords * WORD) g.constPos ≤ r ∧ r < g.constPos ∧
@@ -108,7 +88,6 @@ theorem getD_readIns (g : Net) (col : ℕ) :
   · rintro ⟨h1, r, h2, h3, h4⟩
     exact Or.inr ⟨h1, r, ⟨h2, by omega⟩, h4⟩
 
-/-- **All 128 of element `q`'s columns are read** where `readBits` counts 128. -/
 theorem getD_of_readBits {rd : Array Bool} {ns : List ℕ} {q : ℕ} (h : RecResiduals.readBits rd ns q = 128)
     {b : ℕ} (hb : b < 128) : rd.getD (RecResiduals.rowCol ns 0 (128 * q + b)) false = true := by
   unfold RecResiduals.readBits at h
@@ -121,7 +100,6 @@ theorem readBits_pos {rd : Array Bool} {ns : List ℕ} {q b : ℕ} (hb : b < 128
   unfold RecResiduals.readBits
   exact Nat.pos_iff_ne_zero.1 (List.length_pos_of_mem (List.mem_filter.2 ⟨List.mem_range.2 hb, h⟩))
 
-/-- `RecResiduals.rowCol` is the bridge's, at the part's ports (`partRep`'s, unnamed). -/
 theorem rowCol_eq : ∀ (ns : List ℕ) (k q : ℕ),
     RecResiduals.rowCol ns k q = FlockVBridge.OfVStar.rowCol (ns.map ("", ·)) k q
   | [], _, _ => rfl
@@ -132,9 +110,6 @@ theorem rowCol_eq : ∀ (ns : List ℕ) (k q : ℕ),
     rw [rowCol_eq ns]
     rfl
 
-/-! ## The refusals -/
-
-/-- **`partlyRead` passes only where each element is read in no bit or in all 128.** -/
 theorem readBits_of_partlyRead {rd : Array Bool} {ns : List ℕ} (h : RecResiduals.partlyRead rd ns = none)
     {q : ℕ} (hq : q < ns.sum) : RecResiduals.readBits rd ns q = 0 ∨ RecResiduals.readBits rd ns q = 128 := by
   unfold RecResiduals.partlyRead at h
@@ -144,7 +119,6 @@ theorem readBits_of_partlyRead {rd : Array Bool} {ns : List ℕ} (h : RecResidua
   · exact Or.inl h0
   · exact Or.inr (this h0)
 
-/-- **`rsUnread` passes only where each ring-switch element of the part's w is read in all 128 bits.** -/
 theorem readBits_of_rsUnread {sh : Shape} {W : Array ℕ} {rd : Array Bool} {ns : List ℕ}
     (h : RecOpening.rsUnread sh W rd ns = none) {q : ℕ} (hq : q < W.size) {k u : ℕ}
     (hk : (RecOpening.wNames sh)[W[q]!]? = some (.rs k u)) : RecResiduals.readBits rd ns q = 128 := by
@@ -155,7 +129,6 @@ theorem readBits_of_rsUnread {sh : Shape} {W : Array ℕ} {rd : Array Bool} {ns 
   · exact h128
   · simp only [bne_iff_ne, ne_eq, h128, not_false_eq_true, ↓reduceIte, reduceCtorEq] at this
 
-/-- **`rsUnread` passes only where each running-sum element of the part's w is read in all 128 bits.** -/
 theorem readBits_of_accUnread {sh : Shape} {W : Array ℕ} {rd : Array Bool} {ns : List ℕ}
     (h : RecOpening.rsUnread sh W rd ns = none) {q : ℕ} (hq : q < W.size) {r : ℕ}
     (hk : (RecOpening.wNames sh)[W[q]!]? = some (.acc0 r) ∨ (RecOpening.wNames sh)[W[q]!]? = some (.acc1 r)) :
@@ -176,7 +149,6 @@ theorem getElem?_of_wi {sh : Shape} {k : RecAlgebra.Key} {e : ℕ} (h : RecOpeni
   obtain ⟨hl, he, -⟩ := h
   rw [List.getElem?_toArray, List.getElem?_eq_getElem hl, he]
 
-/-- **`partW` is `wIdx` of the part's group's row ports.** -/
 theorem partW_eq {sh : Shape} {S0 : RecAlgebra.GfS} {gs : Array (Array ℕ × Array ℕ × Array ℕ)}
     (hS : RecOpening.structureOf sh = .ok S0) (hg : RecResiduals.groups S0 (RecOpening.portSizes sh) = .ok gs)
     {p : ℕ} (hp : p < gs.size) {W : Array ℕ} (h : RecOpening.partW sh p = .ok W) :
@@ -206,7 +178,6 @@ theorem getElem?_of_wiA {sh : Shape} {k : RecAlgebra.Key} {e : ℕ} (h : RecAlge
   obtain ⟨hl, he, -⟩ := h
   rw [List.getElem?_toArray, List.getElem?_eq_getElem hl, he]
 
-/-- **The residuals' `partW` is `wIdx` of the part's group's row ports.** -/
 theorem partW_eqR {sh : Shape} {S0 : RecAlgebra.GfS} {gs : Array (Array ℕ × Array ℕ × Array ℕ)}
     (hS : RecAlgebra.structureOf sh = .ok S0) (hg : RecResiduals.groups S0 (RecResiduals.portSizes sh) = .ok gs)
     {p : ℕ} (hp : p < gs.size) {W : Array ℕ} (h : RecResiduals.partW sh p = .ok W) :
@@ -227,10 +198,6 @@ theorem partW_eqR {sh : Shape} {S0 : RecAlgebra.GfS} {gs : Array (Array ℕ × A
     exact h.symm
   · cases h
 
-/-- **What `RecOpening.check` accepted reads its ring-switch elements whole, every other element whole or not at
-all, and keys each ring switch's bits by its claim's port**: the verifier's net for part `j`, whose computed rows read
-each element of a claim's ring switch at `partW`'s slots in all 128 bits, each row-port element in all 128 or in none,
-and whose bits of claim `i`'s ring-switch element are keyed by ports named `m<i>`. -/
 theorem check_rsWhole {c : Circuit} (h : RecOpening.check c = .ok ()) {m cl j : ℕ}
     (hp : RecOpening.params c.unit.name = some (m, cl, j)) {sh : Shape} (hsh : RecOpening.shape? m cl = some sh) :
     ∃ S ns nv W, RecOpening.part sh j = .ok (S, ns, nv) ∧
@@ -273,9 +240,6 @@ theorem check_rsWhole {c : Circuit} (h : RecOpening.check c = .ok ()) {m cl j : 
               · cases h
           · cases h
 
-/-- **What `RecResiduals.check` accepted reads its row-port elements whole or not at all, keyed by their rounds'
-ports**: the verifier's net for part `j`, whose computed rows read each row-port element in all 128 bits or in none,
-and whose bits of an element of w a round holds are keyed by ports named for each round holding it. -/
 theorem check_whole {c : Circuit} (h : RecResiduals.check c = .ok ()) {m k cl j : ℕ}
     (hp : RecResiduals.params c.unit.name = some (m, k, cl, j)) {sh : Shape}
     (hsh : RecResiduals.shape? m k cl = some sh) {holo : Bool} (hh : RecResiduals.holoOf c = .ok holo) :
@@ -331,14 +295,11 @@ theorem part_ok {sh : Shape} {p : ℕ} {x : RecOpen.GfS × List ℕ × ℕ} (h :
   · obtain ⟨gs, hg, -⟩ := FlockVBridge.PartS.bind_ok h
     exact ⟨S0, gs, hS0, hg⟩
 
-/-! ## The audit's reads -/
-
 section Net
 
 open FlockSoundness FlockSoundness.Audit
 open FlockVBridge.OfVStar (ReadCol rowCol partRep)
 
-/-- **A net row from the inputs' end to the constant is a computed row** of the audit's rows, reading its columns. -/
 theorem readCol_of_row {net : Net} (hU : Built net) (hu : net.unitLog ≤ 32) {r col : ℕ}
     (hr : min (net.inWords * WORD) net.constPos ≤ r) (hr' : r < net.constPos)
     (hc : col ∈ (net.a.row r).toList ++ (net.b.row r).toList) : ReadCol (Rows.ofNet hU) col := by
@@ -353,7 +314,6 @@ theorem readCol_of_row {net : Net} (hU : Built net) (hu : net.unitLog ≤ 32) {r
   obtain ⟨x, hx, rfl⟩ := List.mem_map.1 hc
   exact ⟨⟨_, hj⟩, x, hx, rfl⟩
 
-/-- **A column a computed row reads is in a net row** from the inputs' end to the constant. -/
 theorem row_of_readCol {net : Net} (hU : Built net) (hu : net.unitLog ≤ 32) {col : ℕ}
     (h : ReadCol (Rows.ofNet hU) col) :
     ∃ r, min (net.inWords * WORD) net.constPos ≤ r ∧ r < net.constPos ∧
@@ -366,8 +326,6 @@ theorem row_of_readCol {net : Net} (hU : Built net) (hu : net.unitLog ≤ 32) {c
   rw [← Rows.ofNet_a hU hu i, ← Rows.ofNet_b hU hu i, ← List.map_append]
   exact List.mem_map.2 ⟨x, hx, rfl⟩
 
-/-- **The unit `RecOpening.check` accepted for part `p` reads each column of its ring-switch elements**: bit `b` of the
-part's row-port element `q`, slot `e` of the opening's w holding ring switch `i`'s element `t`. -/
 theorem readCol_rs {c : Flock.Circuit} (hU : Built c.unit) (h : RecOpening.check c = .ok ()) (hu : c.unit.unitLog ≤ 32)
     {m cl p : ℕ} (hp : RecOpening.params c.unit.name = some (m, cl, p)) {sh : Flock.Shape}
     (hsh : RecOpening.shape? m cl = some sh) {S0 : RecAlgebra.GfS} {gs : Array (Array ℕ × Array ℕ × Array ℕ)}
@@ -389,8 +347,6 @@ theorem readCol_rs {c : Flock.Circuit} (hU : Built c.unit) (h : RecOpening.check
   rw [rowCol_eq] at hc
   exact readCol_of_row hU hu hr hr' hc
 
-/-- **The unit `RecOpening.check` accepted for part `p` reads each column of its running-sum elements**: bit `b` of the
-part's row-port element `q`, slot `e` of the opening's w holding `acc0 r` or `acc1 r`. -/
 theorem readCol_acc {c : Flock.Circuit} (hU : Built c.unit) (h : RecOpening.check c = .ok ()) (hu : c.unit.unitLog ≤ 32)
     {m cl p : ℕ} (hp : RecOpening.params c.unit.name = some (m, cl, p)) {sh : Flock.Shape}
     (hsh : RecOpening.shape? m cl = some sh) {S0 : RecAlgebra.GfS} {gs : Array (Array ℕ × Array ℕ × Array ℕ)}
@@ -411,7 +367,6 @@ theorem readCol_acc {c : Flock.Circuit} (hU : Built c.unit) (h : RecOpening.chec
   rw [rowCol_eq] at hc
   exact readCol_of_row hU hu hr hr' hc
 
-/-- **The unit `RecResiduals.check` accepted reads a row-port element whole where it reads one of its bits.** -/
 theorem readCol_whole {c : Flock.Circuit} (hU : Built c.unit) (hu : c.unit.unitLog ≤ 32) {S : RecOpen.GfS}
     {ns : List ℕ} {nv : ℕ} {name : String} (hn : HmNets.netOf name (RecResiduals.unitLaid S ns nv) = .ok c.unit)
     (hw : RecResiduals.partlyRead (RecResiduals.readIns c.unit) ns = none) {q b : ℕ} (hq : q < ns.sum)
@@ -429,8 +384,6 @@ theorem readCol_whole {c : Flock.Circuit} (hU : Built c.unit) (hu : c.unit.unitL
     rw [rowCol_eq] at hmem'
     exact readCol_of_row hU hu hr1' hr2' hmem'
 
-/-- **The unit `RecOpening.check` accepted for part `p` reads a row-port element whole where it reads one of its bits**
-(`readCol_whole` at the part's net, whose `partlyRead` the check passed). -/
 theorem readCol_openWhole {c : Flock.Circuit} (hU : Built c.unit) (h : RecOpening.check c = .ok ())
     (hu : c.unit.unitLog ≤ 32) {m cl p : ℕ} (hp : RecOpening.params c.unit.name = some (m, cl, p)) {sh : Flock.Shape}
     (hsh : RecOpening.shape? m cl = some sh) {S₁ : RecOpen.GfS} {ns : List ℕ} {nv : ℕ}
@@ -442,8 +395,6 @@ theorem readCol_openWhole {c : Flock.Circuit} (hU : Built c.unit) (h : RecOpenin
     simpa only [Prod.mk.injEq] using Except.ok.inj (hpart.symm.trans hpart₂)
   exact readCol_whole hU hu hn hw hq hb hr hb₀
 
-/-- **An element a `rec-opening` part holds is read whole or not at all** (at the unit's `unitLog ≤ 32` that
-`OpeningZeroAtL` carries): `readCol_openWhole` at each circuit. -/
 theorem openReadCol_whole (sh : Flock.Shape) :
     ∀ (c : Flock.Circuit) (hU : Built c.unit) (m cl p : ℕ), Flock.RecOpening.check c = .ok () →
       c.unit.unitLog ≤ 32 → Flock.RecOpening.params c.unit.name = some (m, cl, p) →

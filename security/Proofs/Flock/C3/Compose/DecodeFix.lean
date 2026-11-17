@@ -16,19 +16,8 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.C3.Compose.Plays
 
-/-!
-# n7: `SrcOK`'s decode fixed point
-
-`decodeRun` reads the cap and the link points off a tape's first two steps, then each stage on the prefix of what is
-left that its game plays on, to the output it plays to there (`repsOf`, `stageOf`), and the openings off the step
-after them. On a run's own steps (`runSteps`) each stage's prefix is the run's own steps for it, so the decode is the
-run where each stage plays on its steps to the run's own output (`RunPlays`, the plays `HReps`, `HSparse`, `HOpening`
-and `HRegLevels` state): `decodeRun_runSteps`, and at the source `srcDecode_of_plays`, `SrcOK`'s last clause.
-
-The outputs are needed, not only the plays: `decodeRun` copies each play's output into its run, and a later stage's
-game reads it. A sparse phase that plays on the run's own steps to `x` decodes to the claim `x`
-(`claim_of_decodeRun`), so `SrcSparseOK`'s `∃ x` gives the fixed point only where `x` is the run's claim.
--/
+/-! `SrcOK`'s decode fixed point: a run is the decode of its own steps where each stage plays on them to its
+output. -/
 
 @[expose] public section
 
@@ -46,8 +35,8 @@ open FlockC3.Sparse (sparseAt afterReps sparseStages_decodeRun)
 open FlockC3.Opening (openingAt afterSparse decodeRun_op decodeRun_opened)
 open FlockC3.RegLevels (ligAt tapeR lgStages_decodeRun)
 
-/-- **Each stage plays on the run's own steps to the run's own output**: each rep to its output and pending result,
-each rep's sparse phase to its claim, R's opening to its output and R's Ligerito to its result. -/
+/-- Outputs, not only plays: `decodeRun` copies each play's output into its run, and a later stage's game
+reads it. -/
 def RunPlays (e : ExecHolo) (u : C3Run e) : Prop :=
   (∀ i : Fin 2, PlaysT (repAt e u i) (u.ts i) (some (u.rep i), u.pend i)) ∧
     (∀ i : Fin 2, PlaysT (sparseAt e u i) (u.sp i) (some (u.claim i))) ∧
@@ -61,7 +50,6 @@ theorem c3Run_ext {e : ExecHolo} {u v : C3Run e} (h₁ : u.cap₀ = v.cap₀) (h
   simp only [C3Run.mk.injEq]
   exact ⟨h₁, h₂, h₃, h₄, h₅, h₆, h₇, h₈, h₉, h₁₀, h₁₁, h₁₂⟩
 
-/-- **A run's own steps past the cap and the link points**: its reps', then its later stages' and the openings. -/
 theorem tape_runSteps {e : ExecHolo} (u : C3Run e) : (runSteps u).drop 2 = (firstSteps (u.ts 0) ++ u.ts 1) ++
     (u.sp 0 ++ (u.sp 1 ++ (u.op ++ (u.lg ++ [.inl ⟨Opens GF128 Dig × Salts (List UInt8), u.os⟩])))) := by
   rw [runSteps, holoSteps_eq]
@@ -71,9 +59,6 @@ theorem afterReps_runSteps {e : ExecHolo} (u : C3Run e) : afterReps (runSteps u)
     u.sp 0 ++ (u.sp 1 ++ (u.op ++ (u.lg ++ [.inl ⟨Opens GF128 Dig × Salts (List UInt8), u.os⟩]))) := by
   rw [afterReps, tape_runSteps, ← firstSteps_length, ← List.length_append, List.drop_left]
 
-/-- **(n7) A run is the decode of its own steps** where each stage plays on its steps to its output: the reps' decode
-is their plays (`repsOf_of_playsT`), each later stage's is its play (`stageOf_of_playsT`) at the outputs before it,
-and the cap, the link points and the openings are the steps around them. -/
 theorem decodeRun_runSteps {e : ExecHolo} {u : C3Run e} (h : RunPlays e u) : decodeRun e (runSteps u) = u := by
   obtain ⟨hr, hs, ho, hl⟩ := h
   have hcap : (decodeRun e (runSteps u)).cap₀ = proverAt (Cap Dig) (runSteps u)[0]? (c3Default e).cap₀ := rfl
@@ -141,8 +126,6 @@ theorem decodeRun_runSteps {e : ExecHolo} {u : C3Run e} (h : RunPlays e u) : dec
     (funext (Fin.forall_fin_two.2 ⟨hsp₀, hsp₁⟩)) hcl hop hopd hlg hpR
     (hos u.os (by rw [htr, hlg, List.drop_left, List.getElem?_cons_zero]))
 
-/-- **The fixed point fixes each sparse claim**: where a run is the decode of its own steps, a rep's sparse phase
-that plays on the run's steps for it to `x` ends at the run's claim. -/
 theorem claim_of_decodeRun {e : ExecHolo} {u : C3Run e} (hfix : decodeRun e (runSteps u) = u) :
     ∀ (i : Fin 2) (x : RegClaim GF128 e.cls.shape), PlaysT (sparseAt e u i) (u.sp i) (some x) → x = u.claim i := by
   have hS := sparseStages_decodeRun e (runSteps u)
@@ -161,7 +144,6 @@ variable {nT r : ℕ} {T : Fin nT → Type} {CT : Fin r → Type} [∀ k, Fintyp
 
 local notation "ℐ" => holoInnerAt T CT st hp
 
-/-- **(n7) `SrcOK`'s decode fixed point** at a source whose runs' stages play on their own steps to their outputs. -/
 theorem srcDecode_of_plays {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'}
     {dg : ByteArray → ByteArray} {N k Rw : ℕ}
     {src : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → C3Run (holoAt st hp)}

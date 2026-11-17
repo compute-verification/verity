@@ -4,20 +4,8 @@ public import Proofs.Flock.Bridge.V5.Statement
 public import Proofs.Flock.Bridge.Assembly
 public import Proofs.Flock.Bridge.Count
 
-/-!
-# V5's assembly (`Bridge.AssemblyTargetV5`, proved)
-
-`Assembly.lean` at the verifier's public inputs, under the sampling design the verifier samples under from the registration, which
-`PopMatches` puts on the registration's strata (`Bridge.samplingDesignOn_samplesUnder`): outside `RelS` at `δ` the faulty population
-slots' `P_a` is at most `δ` (`pa_partOf_window`), and `EndToEndHiddenV5` at those proof blocks bounds the event, since
-each is a proof block faulty on the registration with canonical openings, so wrong, as a proof block right in that sense
-is not faulty (`FaultyRightTargetC`, with its transport from `TransportsLiveV5` at the wires `constsOfP` doesn't fix).
-Inside `RelS` the event is empty. No count of faulty slots enters, so the bound holds at every sampling design `Bridge.SamplingDesignOn`
-admits.
-
-`constsOfP_isInput`: `constsOfP` fixes only input gates, the constant, the zero and the public gates, each below
-`2 + n·B` (`Layout.keyPubOf_spec`), the program inputs of `keyProgP` (`Layout.unit_uniform_input`).
--/
+/-! V5's assembly (`Bridge.AssemblyTargetV5`), proved at every sampling design `Bridge.SamplingDesignOn`
+admits. -/
 
 @[expose] public section
 
@@ -29,8 +17,6 @@ open FlockSoundness FlockSoundness.Game FlockSoundness.Audit FlockSoundness.Disc
 open FlockSoundness.Discharge.Tables (LiveOutJ)
 open scoped ENNReal
 
-/-- **The constants at public inputs are input gates**: `constsOfP` fixes `oneG`, `zeroG` and the public gates, all
-below `2 + n·B`, which are program inputs of `keyProgP` (`Layout.unit_uniform_input`), so no proof block's. -/
 theorem _root_.Flock.Bridge.constsOfP_isInput {c : Flock.Circuit} {hU : Built c.unit} {n : ℕ} {pi : HmIn.Ports}
     {pub : Public} (outs : Finset (Fin (Discharge.Layout.keyN c hU n))) {g : Fin (Discharge.Layout.keyN c hU n)}
     {b : Bool} (h : Bridge.constsOfP c hU n pi pub g = some b) :
@@ -55,7 +41,6 @@ theorem _root_.Flock.Bridge.constsOfP_isInput {c : Flock.Circuit} {hU : Built c.
         (Discharge.Aliased.keyIdxP c pi (Discharge.Layout.keyB c hU)))
       n g hg)
 
-/-- **V5's assembly** (`Bridge.AssemblyTargetV5`). -/
 theorem _root_.Flock.Bridge.assemblyTargetV5 : Bridge.AssemblyTargetV5 := by
   intro hT hF hE n Reg I own ht D hD hU pi hpi pub hpub hscope hv2 hdup hroots desc qr hpop lj tb samplingDesign kd hlaw hb hdiv dj
     S₀ d₀ y₀ wr dg N Ω _ _ Lb src hA3 hTags hCust k Rw M hk hRw hM ρ hρ hr t' ht' B τ qF qS q L P vb σ Xr Cc Lm rows

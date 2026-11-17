@@ -4,27 +4,8 @@ public import Proofs.Flock.Soundness.ExecSampleOS
 public import Proofs.Flock.Claims.Sampling.Select.SecondWitness
 public import Proofs.Flock.Claims.Sampling.Select.Size
 
-/-!
-# A sample runs out of bytes with probability at most `k·2⁻⁶⁴`
-
-`Flock.Draw.subset k n` returns `none` when its stream runs out before its `k` values are sampled. Each value is one
-`width`-byte word unless the rejection sampler rejects it, and a uniform word is rejected with probability
-`(2^(8w) mod m)/2^(8w) ≤ 2⁻⁶⁴`, a word being 64 bits wider than `m`. On a stream of `k·width n` bytes the sample
-therefore runs out only if one of its `k` steps rejects its first word.
-
-* `reject_nat`, `avg_reject_le`: a uniform word is rejected with probability at most `2⁻⁶⁴`.
-* `failL`, `failL_le`: the loop's stream runs out with probability at most `c·2⁻⁶⁴` over `c` steps, on a uniform stream
-  of at least `c·width n` bytes.
-* `subset_none_le`: `Flock.Draw.subset k n` on a uniform stream of at least `k·width n` bytes returns `none` with
-  probability at most `k·2⁻⁶⁴`.
-* `onWith_first`, `runOS_subset_none`: the live sample reads `2·k·width n + 64` bytes first and extends the stream only
-  when the sampler returns `none` on them. So on a source holding that many bytes it runs out only if the sampler
-  does on its first read.
-* `runOS_subset_none_le`: the live subset sample runs out with probability at most `k·2⁻⁶⁴`, on a uniform source (A3)
-  of at least `2·k·width n + 64` bytes. A shorter source runs out always, its first read failing, so `k·width n`
-  bytes do not suffice for the live sample.
-* `execOS_subset_sample_card_le`: a live subset sample that does not run out holds at most `k` units.
--/
+/-! A sample runs out of bytes with probability at most `k·2⁻⁶⁴`; the live sample needs `2·k·width n + 64`
+bytes for that, not `k·width n`. -/
 
 @[expose] public section
 
@@ -33,22 +14,17 @@ namespace FlockSoundness.Audit.SampleExec
 open Game Finset
 open scoped ENNReal
 
-/-! ## A uniform word is rejected with probability at most `2⁻⁶⁴` -/
-
 theorem log2_mono {a b : ℕ} (h : a ≤ b) : a.log2 ≤ b.log2 := by
   rcases Nat.eq_zero_or_pos a with rfl | ha
   · rw [Nat.log2_zero]
     exact Nat.zero_le _
   · exact (Nat.le_log2 (by omega)).2 ((Nat.log2_self_le (by omega)).trans h)
 
-/-- A larger population's words are at least as wide. -/
 theorem sampleWidth_mono {a b : ℕ} (h : a ≤ b) : Flock.Draw.width a ≤ Flock.Draw.width b := by
   have := log2_mono h
   unfold Flock.Draw.width
   omega
 
-/-- **The words `uniform m` rejects are at most a `2⁻⁶⁴` share**: there are `2^(8w) mod m < m` of them, and a word
-is 64 bits wider than `m`. -/
 theorem reject_nat (m : ℕ) (hm : 0 < m) :
     2 ^ (8 * Flock.Draw.width m) % m * 2 ^ 64 ≤ 2 ^ (8 * Flock.Draw.width m) := by
   have h1 : 2 ^ (8 * Flock.Draw.width m) % m ≤ 2 ^ (m.log2 + 1) :=
@@ -79,7 +55,6 @@ theorem div_le_inv_of_mul_le {R S N : ℕ} (hN : 0 < N) (h : R * N ≤ S) :
         rw [← mul_assoc, ENNReal.inv_mul_cancel hN' (ENNReal.natCast_ne_top _), one_mul]
     _ ≤ (N : ℝ≥0∞)⁻¹ * S := mul_le_mul' le_rfl hNR
 
-/-- **A uniform word is rejected with probability at most `2⁻⁶⁴`.** -/
 theorem avg_reject_le (m : ℕ) (hm : 0 < m) :
     avg (fun a : Fin (Flock.Draw.width m) → Fin 256 =>
       if beL (bsOf a) < 2 ^ (8 * Flock.Draw.width m) - 2 ^ (8 * Flock.Draw.width m) % m
@@ -99,7 +74,6 @@ theorem avg_reject_le (m : ℕ) (hm : 0 < m) :
   rw [hc] at h
   exact (le_of_eq havg).trans h
 
-/-- One step of the rejection sampler on a stream whose first word is `a`. -/
 theorem uniformL_step (m fuel : ℕ) {ℓ' : ℕ} (a : Fin (Flock.Draw.width m) → Fin 256) (b : Fin ℓ' → Fin 256) :
     uniformL m (fuel + 1) (bsOf a ++ bsOf b) =
       if beL (bsOf a) < 2 ^ (8 * Flock.Draw.width m) - 2 ^ (8 * Flock.Draw.width m) % m
@@ -108,9 +82,6 @@ theorem uniformL_step (m fuel : ℕ) {ℓ' : ℕ} (a : Fin (Flock.Draw.width m) 
   simp only [uniformL, List.length_append, hl, length_bsOf, List.take_left' hl, List.drop_left' hl]
   simp
 
-/-! ## The loop runs out with probability at most `c·2⁻⁶⁴` -/
-
-/-- **The loop's stream runs out**: one of its steps' samples returns nothing. -/
 def failL (n F : ℕ) : List ℕ → List UInt8 → Prop
   | [], _ => False
   | i :: is, bs => match uniformL (n - i) F bs with
@@ -149,7 +120,6 @@ theorem loopP_none_of_loopSw (n : ℕ) (src : ByteArray) : ∀ (l : List ℕ) (s
       rw [hu] at h
       exact ih _ _ _ h
 
-/-- A `subset` sample that returns `none` on a stream has its loop run out on that stream's bytes. -/
 theorem subset_none_failL {L : ℕ} (f : Fin L → Fin 256) (k n : ℕ)
     (h : Flock.Draw.subset k n (SamplingDesign.streamOf f) = none) : failL n (L + 1) (List.range' 0 k) (bsOf f) := by
   rw [SampleExec.subset_eq] at h
@@ -161,9 +131,6 @@ theorem subset_none_failL {L : ℕ} (f : Fin L → Fin 256) (k n : ℕ)
     exact failL_of_loopL_none n (L + 1) _ _ _ hp
 
 open Classical in
-/-- **The loop runs out with probability at most `c·2⁻⁶⁴`** over its `c` steps from `i`, on a uniform stream of at
-least `c·width n` bytes: each step's first word is there, and the step reads past it only if it rejects it
-(`avg_reject_le`). -/
 theorem failL_le (n F : ℕ) : ∀ (c i ℓ : ℕ), i + c ≤ n → c * Flock.Draw.width n ≤ ℓ →
     prCoin (fun h : Fin ℓ → Fin 256 => failL n (F + 1) (List.range' i c) (bsOf h)) ≤
       (c : ℝ≥0∞) * (2 ^ 64 : ℝ≥0∞)⁻¹ := by
@@ -221,8 +188,6 @@ theorem failL_le (n F : ℕ) : ∀ (c i ℓ : ℕ), i + c ≤ n → c * Flock.Dr
           rw [Nat.cast_add, Nat.cast_one]
           ring
 
-/-- **`Flock.Draw.subset k n` runs out with probability at most `k·2⁻⁶⁴`**, on a uniform stream of at least
-`k·width n` bytes. -/
 theorem subset_none_le (k n L : ℕ) (hk : k ≤ n) (hL : k * Flock.Draw.width n ≤ L) :
     prCoin (fun f : Fin L → Fin 256 => Flock.Draw.subset k n (SamplingDesign.streamOf f) = none) ≤
       (k : ℝ≥0∞) * (2 ^ 64 : ℝ≥0∞)⁻¹ :=
@@ -237,10 +202,6 @@ open scoped ENNReal
 
 variable {n : ℕ}
 
-/-! ## The live sample's first read -/
-
-/-- **The sampler on a stream's first `N` bytes runs out with probability at most `k·2⁻⁶⁴`**, on a uniform stream of
-at least `N ≥ k·width n` bytes. -/
 theorem subset_prefix_none_le (n k : ℕ) (hk : k ≤ n) (N L : ℕ) (hN : k * Flock.Draw.width n ≤ N) (hL : N ≤ L) :
     prCoin (fun g : Fin L → Fin 256 => Flock.Draw.subset k n ((streamOf g).extract 0 N) = none) ≤
       (k : ℝ≥0∞) * (2 ^ 64 : ℝ≥0∞)⁻¹ := by
@@ -260,8 +221,6 @@ theorem onWithFuel_succ_some {m : Type → Type} [Monad m] (get : ℕ → m Byte
     _root_.Properties.Spot.SecurityProofs.onWithFuel get need run (f + 1) src = pure (some u) := by
   simp only [_root_.Properties.Spot.SecurityProofs.onWithFuel, h]
 
-/-- **`onWith` in the model returns on its first read** when the sampler samples on it: from a stream not yet read
-that holds `need` bytes. -/
 theorem onWith_first (T : ℕ → ByteArray) (i need : ℕ) (run : ByteArray → Option (Array ℕ)) (D : Array ℕ)
     (pos : ℕ → ℕ) (hpos : pos i = 0) (hT : need ≤ (T i).size) (hrun : run ((T i).extract 0 need) = some D) :
     (Flock.Draw.onWith (tapeGet T i) need run).run pos = some (some D, Function.update pos i need) := by
@@ -277,8 +236,6 @@ theorem onWith_first (T : ℕ → ByteArray) (i need : ℕ) (run : ByteArray →
     Option.bind_eq_bind, Option.bind_some]
   exact hfuel
 
-/-- **A live subset sample that runs out has its sampler run out on the first read**, on a source that holds the
-first read's `2·k·width n + 64` bytes. -/
 theorem runOS_subset_none {L : Fin 1 → ℕ} (f : (i : Fin 1) → Fin (L i) → Fin 256) (k n : ℕ)
     (hL : 2 * k * Flock.Draw.width n + 64 ≤ L 0) (h : runOS f (.subset k) n = none) :
     Flock.Draw.subset k n ((streamOf (f 0)).extract 0 (2 * k * Flock.Draw.width n + 64)) = none := by
@@ -293,7 +250,6 @@ theorem runOS_subset_none {L : Fin 1 → ℕ} (f : (i : Fin 1) → Fin (L i) →
     rw [sampleWith_subset_run, hrun] at h
     simp at h
 
-/-- **A live subset sample that returns a sample returns the sampler's on the whole stream** (`onWith_tape`). -/
 theorem runOS_subset_some {L : Fin 1 → ℕ} (f : (i : Fin 1) → Fin (L i) → Fin 256) (k n : ℕ)
     (d : Flock.Draw.UnitSample) (hd : runOS f (.subset k) n = some d) :
     Flock.Draw.subset k n (streamOf (f 0)) = some d.units := by
@@ -315,8 +271,6 @@ theorem runOS_subset_some {L : Fin 1 → ℕ} (f : (i : Fin 1) → Fin (L i) →
       rw [h2] at h1
       rw [← hD]; exact h1
 
-/-- **The live subset sample runs out with probability at most `k·2⁻⁶⁴`**, on a uniform byte source (A3) that holds
-the first read's `2·k·width n + 64` bytes. -/
 theorem runOS_subset_none_le (n k : ℕ) (hk : k ≤ n) {Ω : Type} [Fintype Ω] (L : Fin 1 → ℕ)
     (t : Ω → (i : Fin 1) → Fin (L i) → Fin 256) (ht : Assumptions.UniformRandomBytes L t)
     (hL : 2 * k * Flock.Draw.width n + 64 ≤ L 0) :
@@ -341,9 +295,6 @@ theorem runOS_subset_none_le (n k : ℕ) (hk : k ≤ n) {Ω : Type} [Fintype Ω]
         rw [Fin.prod_univ_one]
         exact subset_prefix_none_le n k hk _ (L 0) hkW hL
 
-/-! ## A sample that does not run out holds at most `k` units -/
-
-/-- The units of `[0, n)` an array holds are at most its size. -/
 theorem card_filter_mem_le (n : ℕ) (D : Array ℕ) {dec : DecidablePred fun u : Fin n => u.val ∈ D} :
     (@Finset.filter (Fin n) (fun u => u.val ∈ D) dec univ).card ≤ D.size := by
   classical
@@ -358,8 +309,6 @@ theorem card_filter_mem_le (n : ℕ) (D : Array ℕ) {dec : DecidablePred fun u 
     _ ≤ D.toList.length := List.toFinset_card_le _
     _ = D.size := Array.length_toList
 
-/-- **A live subset sample that does not run out holds at most `k` units**: it holds the units of the sampler's `k`
-values (`subset_size`). -/
 theorem execOS_subset_sample_card_le {Ω : Type} [Fintype Ω] [Nonempty Ω] {L : Fin 1 → ℕ}
     (t : Ω → (i : Fin 1) → Fin (L i) → Fin 256) (k : ℕ) (ω : Ω) (h : runOS (t ω) (.subset k) n ≠ none) :
     ((execOS (n := n) t (.subset k) n).draw ω).card ≤ k := by

@@ -21,17 +21,7 @@ import Proofs.Flock.Soundness.Accounting.Numbers
 import Proofs.Flock.Soundness.Game
 import Proofs.Flock.Soundness.RepSound
 
-/-!
-# Piece (a), the oracle count: one rep with its sparse phase
-
-At a registered table `R`, a rep with hidden units (`holoRep` on the public statement) whose prover sends the hidden
-fold `h = hiddenFold` is `rep` on the hidden statement `R.toStatement τ regs`: the zerocheck, the opening and Ligerito
-are the same games, and `holoLincheck` then checks what `lincheck` checks (`holoFold_eq`), so `holoLincheck_le`
-simulates `lincheck` and `rep_sound`'s phases bound the rep (`holoRep_honest_le`, `repError`). A prover sending another
-`h` is caught by the rep's sparse phase (`sparse_sound`), unless its registered claim fails on `R`'s cells; so a rep
-followed by its sparse phase hands on a claim true on `R` with probability at most `repError + sparseError`
-(`holoRep_stage_le`).
--/
+/-! One rep with its sparse phase, at a registered table. -/
 
 @[expose] public section
 
@@ -43,7 +33,6 @@ open scoped ENNReal
 
 variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K]
 
-/-- **One rep's sparse phase** on the rep's outputs, as `regPhase` runs it; no claim where the rep rejected. -/
 def stage (A : Arith F K) (S : Statement) (sh : SparseShape) (units : Fin (2 ^ sh.sLog) → Finset ℕ)
     (τ : Fin (2 ^ sh.sLog) → ℕ) :
     Option (ZcOut F S.m × HoloLcOut F S.m (S.kLog - 6)) → Game (Option (RegClaim F sh))
@@ -55,8 +44,6 @@ variable (A : Arith F K) (hA : A.Correct) (cls : HoloClass) (regs : List (Region
   (hunits : ∀ σ, ∀ u ∈ cls.units σ, u < 2 ^ (cls.kLog - cls.slotLog))
 
 include hA hunits in
-/-- **`holoLincheck` with the hidden fold is `lincheck` on the hidden statement**: it ends with the hidden fold as `h`
-and an `ab` claim in `Q` no more often than `lincheck` on `R.toStatement τ regs` ends in `Q`. -/
 theorem holoLincheck_le (zc : ZcOut F cls.m) (Q : Option (Claim F cls.m) → Prop) :
     value (fun o => ∃ lc, o = some lc ∧ lc.h = hiddenFold A cls regs τ R zc lc.alpha lc.ts ∧ Q (some lc.ab))
       (holoLincheck A (cls.pubStatement regs) zc) ≤ value Q (lincheck A (R.toStatement τ regs) zc) := by
@@ -76,8 +63,6 @@ theorem holoLincheck_le (zc : ZcOut F cls.m) (Q : Option (Claim F cls.m) → Pro
     (congrArg (_ + ·) (congrFun hh s).symm))
 
 include hA hunits in
-/-- **A rep whose prover sends the hidden fold is a rep on the hidden statement**: from a doomed start on
-`R.toStatement τ regs`, it accepts with the hidden fold as `h` with probability at most `repError`. -/
 theorem holoRep_honest_le (sch : Schedule) (hsch : fast100 cls.m = some sch) (mPts : ℕ) (C₀ : Oracle F)
     (extra : List (Claim F cls.m)) (hextra : extra.length = 2 * regs.length)
     (hdoom : RepDoomed A (R.toStatement τ regs) sch C₀ extra) :
@@ -154,8 +139,6 @@ theorem holoRep_honest_le (sch : Schedule) (hsch : fast100 cls.m = some sch) (mP
       _ = _ := by ring
 
 include hA hunits in
-/-- **One rep and its sparse phase**: from a doomed start on `R.toStatement τ regs`, the rep's sparse phase hands on a
-registered claim that holds on `R`'s cells with probability at most `repError + sparseError`. -/
 theorem holoRep_stage_le (sch : Schedule) (hsch : fast100 cls.m = some sch) (mPts : ℕ) (C₀ : Oracle F)
     (extra : List (Claim F cls.m)) (hextra : extra.length = 2 * regs.length)
     (hdoom : RepDoomed A (R.toStatement τ regs) sch C₀ extra) :

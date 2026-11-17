@@ -21,27 +21,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.Polynomial.Basic
 import Mathlib.Tactic.ReduceModChar
 
-/-!
-# The sparse phases' and R's streams at the model's coins
-
-The inner shape's sparse phases' and R's streams (`holoStreams`, at the verifier's RecSparse shape and R's
-`StackedShape`) sample the coins the model's stages sample (`holoForms`' tail), round for round in size (`holoSizes`):
-
-* `degrees_length`: H3's rounds are the entries' and the slots' (`nu + sLog`); `stacked_iff`: the verifier's ρ_t round
-  (`stacked`) is where the model has its message (`tLog ≠ 0`); `pLog_sparseOf`, `mReg_sparseOf`: the planes' bits and
-  R's table are the model's at `sparseOf`; `shape_holoAt`: `sparseOf` of the inner shape's `sparse` entry is the
-  shape of candidate 3's class (`holoAt`) where `ℓ` is in its range.
-* `holoSizes_sparse`: a sparse phase's stream samples `sparseForms`' scalars.
-* `holoSizes_stacked`: R's stream samples R's opening's two claims' coins and compiled Ligerito's at `fast100`'s schedule
-  (`opForms 2 ++ ligForms (schedAt m)`), by evaluating `stackedRounds` at each `m` below 36.
-* `holoSizes_holoStreams`: together, after the reps', where the inner shape names R at its table, as
-  `candidate3Statements` checks.
-* `holoStreams_eq`, `holoStreams_sparse_eq`: the streams start with both reps' at `holoRounds`, then, where the inner
-  shape names a RecSparse shape, both sparse phases', then R's.
-* `holoSizes_reps`: both reps' streams sample `repForms`' coins at `fast100`'s schedule (`repRounds_sizes`): the rounds
-  `kLog` and `claims` reach are the head (`repHead`, `repRounds_tail`), and past it, evaluating `repRounds` at each `m`
-  below 36 at one `kLog` and `claims` gives the rest.
--/
+/-! The sparse phases' and R's streams sample the coins the model's stages sample, round for round in size. -/
 
 @[expose] public section
 
@@ -50,16 +30,11 @@ namespace FlockC3.Compose
 open Flock Flock.RecVStar Flock.Guarantees FlockSoundness.Discharge.Exec FlockSoundness.Discharge.PlaysCoin
 open FlockSoundness.Discharge.Recursion FlockSoundness.Refine FlockLevel3
 
-/-! ## The sparse phases' streams -/
-
-/-- **The model's sparse shape of the verifier's** (`RecSparse.Shape`, `rec-inner --sparse`). -/
 def sparseOf (sp : RecSparse.Shape) : FlockSoundness.Model.SparseShape := ⟨sp.nu, sp.ell, sp.sLog, sp.tLog⟩
 
-/-- **H3's rounds are the entries' and the slots'**: `degrees` has one per entry and one per slot. -/
 theorem degrees_length (sp : RecSparse.Shape) : sp.degrees.length = sp.nu + sp.sLog := by
   simp [RecSparse.Shape.degrees]
 
-/-- **ρ_t's round is where the model has it**: the verifier's at `stacked`, the model's at `tLog ≠ 0`. -/
 theorem stacked_iff (sp : RecSparse.Shape) : sp.stacked = true ↔ sp.tLog ≠ 0 := by
   simp only [RecSparse.Shape.stacked, decide_eq_true_eq]
   exact Nat.pos_iff_ne_zero
@@ -68,14 +43,11 @@ theorem pLog_sparseOf (sp : RecSparse.Shape) : (sparseOf sp).pLog = sp.pLog := b
   show Nat.log2 (2 * sp.ell + 1) + 1 = Nat.log2 (2 * sp.ell + 2 - 1) + 1
   rw [show 2 * sp.ell + 2 - 1 = 2 * sp.ell + 1 by omega]
 
-/-- **R's table is the model's**: the verifier's `tableM` is the model's registered table's variables. -/
 theorem mReg_sparseOf (sp : RecSparse.Shape) : (sparseOf sp).mReg = tableM sp := by
   show max 22 (sp.nu + (sparseOf sp).pLog + sp.tLog) = max PAD_TO (sp.nu + sp.pLog + sp.tLog)
   rw [pLog_sparseOf]
   rfl
 
-/-- **The model's sparse shape is the verifier's**: at `hp` the inner shape's `sparse` entry `sp` (`SparseIs`) and `ℓ`
-in the class's range, candidate 3's class at `hp` (`holoAt`) has `sparseOf sp`'s shape. -/
 theorem shape_holoAt {st : Flock.Stmt} {hp : HoloParams} {ish : Flock.RecVStar.Inner} {sp : RecSparse.Shape}
     (hsp : FlockC3.VStarList.SparseIs ish hp) (hs : ish.sparse = some sp) (hell : hp.EllOk (execClassAt st).cls.kLog) :
     (holoAt st hp).cls.shape = sparseOf sp := by
@@ -95,7 +67,6 @@ theorem holoSizes_append (L L' : List (HoloStream × Array SchedRound)) :
     holoSizes (L ++ L') = holoSizes L ++ holoSizes L' :=
   List.flatMap_append
 
-/-- **A sparse phase's stream flips the model's coins**: one scalar per coin of `sparseKinds` at the model's shape. -/
 theorem holoSizes_sparse (x : Fin 2) (sp : RecSparse.Shape) :
     holoSizes [(.sparse x, sparseRounds sp)] = (sparseForms (sparseOf sp)).map formSize := by
   have hs : holoSizes [(.sparse x, sparseRounds sp)] =
@@ -113,10 +84,6 @@ theorem holoSizes_sparse (x : Fin 2) (sp : RecSparse.Shape) :
   · simp [sparseRounds, RecSparse.PRE_ROUNDS, h, degrees_length, sparseOf]
     omega
 
-/-! ## R's stream -/
-
-/-- **R's stream flips the model's coins**: R's opening's two (`opShape 2`) and compiled Ligerito's at `fast100`'s
-schedule, by evaluating `stackedRounds` at each `m` below 36; past 35 `fast100` has none, nor has `stackedRounds`. -/
 theorem holoSizes_stacked {m : ℕ} {rs : Array SchedRound} (h : stackedRounds ⟨m, STACKED_CLAIMS⟩ = some rs) :
     holoSizes [(.stacked, rs)] = (opForms 2 ++ ligForms (schedAt m)).map formSize := by
   by_cases hm : m < 36
@@ -139,11 +106,6 @@ theorem holoSizes_stacked {m : ℕ} {rs : Array SchedRound} (h : stackedRounds �
     rw [hn] at h
     cases h
 
-/-! ## The sparse phases' and R's streams together -/
-
-/-- **The sparse phases' and R's streams flip the model's coins** where the inner shape names a RecSparse shape and R
-at its table (`candidate3Statements` checks R's `m` is `tableM` and its claims `STACKED_CLAIMS`): after the reps', the
-history's coin sizes are those of `holoForms`' tail at the model's shape (`sparseOf`) and R's schedule at its table. -/
 theorem holoSizes_holoStreams {m kLog claims : ℕ} {sp : RecSparse.Shape} {L : List (HoloStream × Array SchedRound)}
     (h : holoStreams m kLog claims (some sp) (some ⟨tableM sp, STACKED_CLAIMS⟩) = some L) :
     ∃ rep, holoRounds m kLog claims = some rep ∧ holoSizes L = holoSizes [(.rep 0, rep), (.rep 1, rep)] ++
@@ -168,11 +130,8 @@ theorem holoSizes_holoStreams {m kLog claims : ℕ} {sp : RecSparse.Shape} {L : 
         holoSizes_append, holoSizes_sparse, holoSizes_sparse, holoSizes_stacked hs, mReg_sparseOf]
       simp only [List.map_append, List.append_assoc]
 
-/-! ## The streams' list -/
-
 open Flock.Guarantees.HoloRepCoins (obind_some repRounds_coins fast100_facts)
 
-/-- **The streams start with both reps'**, at `holoRounds`. -/
 theorem holoStreams_eq {m kLog claims : ℕ} {sp : Option RecSparse.Shape} {sk : Option StackedShape}
     {L : List (HoloStream × Array SchedRound)} (h : holoStreams m kLog claims sp sk = some L) :
     ∃ rs L', holoRounds m kLog claims = some rs ∧ L = (.rep 0, rs) :: (.rep 1, rs) :: L' := by
@@ -185,7 +144,6 @@ theorem holoStreams_eq {m kLog claims : ℕ} {sp : Option RecSparse.Shape} {sk :
     obtain ⟨R, -, h⟩ := obind_some h
     exact ⟨rs, _, hr, (Option.some.inj h).symm⟩
 
-/-- **The streams at a RecSparse shape**: both reps', both sparse phases', then R's, if any. -/
 theorem holoStreams_sparse_eq {m kLog claims : ℕ} {sp : RecSparse.Shape} {sk : Option StackedShape}
     {L : List (HoloStream × Array SchedRound)} (h : holoStreams m kLog claims (some sp) sk = some L) :
     ∃ rs R, holoRounds m kLog claims = some rs ∧ (∀ e ∈ R, e.1 = .stacked) ∧
@@ -200,29 +158,21 @@ theorem holoStreams_sparse_eq {m kLog claims : ℕ} {sp : RecSparse.Shape} {sk :
     obtain ⟨rs', -, rfl⟩ := Option.map_eq_some_iff.1 hR
     exact ⟨rs, [(.stacked, rs')], hr, by simp, by simpa using (Option.some.inj h).symm⟩
 
-/-! ## The reps' streams -/
-
-/-- **`repRounds`' rounds before compiled Ligerito's**: the zerocheck's, the lincheck's and each claim's ring switch, the
-only rounds `kLog` and `claims` reach. -/
 def repHead (m kLog claims : ℕ) : Array SchedRound :=
   #[(6, #[], 1, false), (m - 13, #[], 0, false), (1, #[], 0, true)] ++ Array.replicate (m - 5) (1, #[], 0, true) ++
     #[(1, #[], 0, false)] ++ Array.replicate (kLog - 6) (1, #[], 0, true) ++ #[(1, #[], 0, true)] ++
     Array.replicate claims (7, #[], 0, true) ++ #[(claims, #[], 0, false)]
 
-/-- Compiled Ligerito's rounds at `sch` before its levels' loop. -/
 def ligStart (sch : Flock.Schedule) : Array SchedRound :=
   #[(sch.n, #[], 1, true), (1, #[], 0, true)] ++ Array.replicate sch.k0 (2, #[], 0, true) ++
     #[(sch.n - sch.k0 + 1, #[2 ^ (sch.levels.getD (0 + 1) default).cap], 0, true), (1, #[], 0, true),
       (sch.n - sch.k0 + 1, #[], 0, false), (1, #[], 0, true), ((sch.levels.getD 0 default).q, #[], 0, false),
       (bitLength ((sch.levels.getD 0 default).q - 1), #[], 0, false), (1, #[], 0, true)]
 
-/-- The loop step `pre ++ ·` puts before a step's output. -/
 def preStep {α : Type} (pre : Array α) : ForInStep (Array α × ℕ) → ForInStep (Array α × ℕ)
   | .done p => .done (pre ++ p.1, p.2)
   | .yield p => .yield (pre ++ p.1, p.2)
 
-/-- **A loop that only appends** to its array: its output is its input followed by what it appends, which is the same
-from every input array. -/
 theorem forIn_append_sim {α : Type} {F : ℕ → Array α × ℕ → Option (ForInStep (Array α × ℕ))}
     (hF : ∀ i pre s, F i (pre, s) = (F i (#[], s)).map (preStep pre)) :
     ∀ (L : List ℕ) (pre : Array α) (s : ℕ) (v : Array α × ℕ), forIn L (pre, s) F = some v →
@@ -246,7 +196,6 @@ theorem forIn_append_sim {α : Type} {F : ℕ → Array α × ℕ → Option (Fo
       rw [List.forIn_cons, hF, hz, ← Array.append_assoc]
       exact hall (pre' ++ p.1)
 
-/-- **`repRounds` is its head and a tail no `kLog` or `claims` reaches.** -/
 theorem repRounds_tail {m kLog claims : ℕ} {out : Array SchedRound} (h : repRounds m kLog claims = some out) :
     ∃ T, out = repHead m kLog claims ++ T ∧
       ∀ kLog' claims', repRounds m kLog' claims' = some (repHead m kLog' claims' ++ T) := by
@@ -272,7 +221,6 @@ theorem repRounds_tail {m kLog claims : ℕ} {out : Array SchedRound} (h : repRo
       simp only [repHead, ligStart, Array.append_assoc]
       rfl
 
-/-- **`repRounds` is at `fast100`'s tables**, `22 ≤ m < 36`. -/
 theorem repRounds_m {m kLog claims : ℕ} {out : Array SchedRound} (h : repRounds m kLog claims = some out) :
     22 ≤ m ∧ m < 36 := by
   unfold repRounds at h
@@ -287,8 +235,6 @@ theorem repRounds_m {m kLog claims : ℕ} {out : Array SchedRound} (h : repRound
   rw [h0] at hf
   cases hf
 
-/-- **The forms of a rep's coins** at `m`, `kLog` and `claims`: the zerocheck's, the lincheck's, the opening's and
-compiled Ligerito's at `fast100`'s schedule. -/
 def repForms (m kLog claims : ℕ) : List (Option ℕ) :=
   zcForms m ++ (lcForms kLog ++ (opForms claims ++ ligForms (schedAt m)))
 
@@ -298,9 +244,6 @@ theorem repHead_sizes {m : ℕ} (hm : 6 ≤ m) (kLog claims : ℕ) :
   simp only [repHead, zcForms, show m + 6 - 5 = m + 1 by omega, show m + 6 - 6 = m by omega]
   simp [lcForms, opForms, formSize, List.map_replicate, List.replicate_succ']
 
-/-- **`repRounds`' rounds sample `repForms`' coins**: the head's at every `kLog` and `claims` (`repHead_sizes`), and the
-tail's, which neither reaches (`repRounds_tail`), by evaluating `repRounds` at each `m` below 36 at `kLog = 6` and one
-claim. -/
 theorem repRounds_sizes {m kLog claims : ℕ} {out : Array SchedRound} (h : repRounds m kLog claims = some out) :
     out.toList.map (·.1) = (repForms m kLog claims).map formSize := by
   obtain ⟨hm22, hm⟩ := repRounds_m h
@@ -317,7 +260,6 @@ theorem repRounds_sizes {m kLog claims : ℕ} {out : Array SchedRound} (h : repR
   rw [Array.toList_append, List.map_append, repHead_sizes (by omega), hT, repForms, ← List.map_append]
   simp only [List.append_assoc]
 
-/-- The coin sizes of a stream's rounds other than a sparse phase's: one per round that flips coins. -/
 def nzSizes (l : List SchedRound) : List ℕ := l.flatMap fun q => if q.1 = 0 then [] else [q.1]
 
 theorem nzSizes_append (l l' : List SchedRound) : nzSizes (l ++ l') = nzSizes l ++ nzSizes l' := List.flatMap_append
@@ -332,7 +274,6 @@ theorem nzSizes_pos : ∀ l : List SchedRound, (∀ x ∈ l, 0 < x.1) → nzSize
 theorem holoSizes_rep_nz (x : Fin 2) (rs : Array SchedRound) : holoSizes [(.rep x, rs)] = nzSizes rs.toList := by
   simp [holoSizes, nzSizes]
 
-/-- **z_partial's round samples nothing**: `holoRounds`' coin sizes are `repRounds`'. -/
 theorem nzSizes_holoRounds {m kLog claims : ℕ} {rs : Array SchedRound} (h : holoRounds m kLog claims = some rs) :
     ∃ out, repRounds m kLog claims = some out ∧ nzSizes rs.toList = nzSizes out.toList := by
   unfold holoRounds at h
@@ -359,7 +300,6 @@ theorem nzSizes_holoRounds {m kLog claims : ℕ} {rs : Array SchedRound} (h : ho
     simp only [Array.toList_append, Array.toList_extract, List.extract, nzSizes_append]
     simp [nzSizes, List.take_of_length_le]
 
-/-- **A rep's stream flips the model's coins**: `repForms`' at a claim. -/
 theorem holoSizes_rep (x : Fin 2) {m kLog claims : ℕ} {rs : Array SchedRound} (hc : 0 < claims)
     (h : holoRounds m kLog claims = some rs) :
     holoSizes [(.rep x, rs)] = (repForms m kLog claims).map formSize := by
@@ -367,7 +307,6 @@ theorem holoSizes_rep (x : Fin 2) {m kLog claims : ℕ} {rs : Array SchedRound} 
   rw [holoSizes_rep_nz, e, nzSizes_pos _ fun y hy => repRounds_coins hc hout y (Array.mem_def.2 hy),
     repRounds_sizes hout]
 
-/-- **Both reps' streams flip the model's coins**: `repForms`' twice, at a claim. -/
 theorem holoSizes_reps {m kLog claims : ℕ} {rs : Array SchedRound} (hc : 0 < claims)
     (h : holoRounds m kLog claims = some rs) :
     holoSizes [(.rep 0, rs), (.rep 1, rs)] = (repForms m kLog claims ++ repForms m kLog claims).map formSize := by

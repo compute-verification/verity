@@ -17,25 +17,7 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 
-/-!
-# n4 from V*'s sessions: `OpeningRead` but the claim tie and the tape prefix
-
-`openingRead_of_rows` asks five things of each accepted outcome. Three of them are V*'s sessions' and the verifier's
-coins', with no decoder (`SessionAt`):
-
-* item 2, the coins: `RecCoins.opening` accepted R's opening at its shape (`opening_ok`): its two claims of value zero,
-  `RecOpening.run` at its coins, the passes from `kappa` zero;
-* item 1 (a) and (b): every part of the shape's S is a copy of its `rec-opening` unit whose row ports are w where its
-  computed rows read them and whose `v` port is the opening's `v`, its outputs registered zero (`OpeningZeroAtL`), so
-  all of S's residuals are zero (`residuals_zero_of_cols`), S being the passes' S (`opening_ok`'s "structure moved"
-  check);
-* item 1 (c): each opening of R's levels is a copy of its `rec-open-stacked` unit chaining `rec-acc` (`OpensAt`), at the
-  `coef` the verifier registers at the opening's `kappa` (`RecCoins.coefAt`), and w's `acc0`, `acc1` are the chain's
-  rows at R's ends, so `hacc` holds at the opened rows' consistency sums (`hacc_of_units`).
-
-`openingRead_of_session` keeps the other two as hypotheses: the claim tie (item 3, at the claims `RecCoins.opening`
-builds, `coinClaim`) and the tape prefix (item 4, at the messages w holds with those consistency sums).
--/
+/-! `OpeningRead` from V*'s sessions, but for the claim tie and the tape prefix, which it keeps as hypotheses. -/
 
 @[expose] public section
 
@@ -49,13 +31,6 @@ section Sessions
 
 variable {nS : ℕ} {Vs : Fin nS → VStmt} {Reg' : Type}
 
-/-- **(n4 items 1 and 2) R's opening in V*'s sessions**, at the sessions `zs` and their layers `Lb`, R's shape `sh`,
-the verifier's coins `c3`, w and R's openings `ops`. `RecCoins.opening` accepts R's opening `o` at `sh`, and w has its
-elements. (a) Each part `p` of the groups `gs` of the shape's S is copy `cp p` of unit `un p` in session `sess p`, its
-row ports w where a computed row of the unit reads them and its `v` port `o`'s `v`, its outputs registered zero
-(`OpeningZeroAtL`). (c) Opening `j` of level `ℓ` is copy `cp ℓ j` of unit `un ℓ j` in session `sess ℓ`, opening its row
-at its `coef` with `acc`'s rows at its chain position before and after (`OpensAt`); that `coef` is the verifier's
-(`RecCoins.coefAt` at `o`'s `kappa`), and w's `acc0`, `acc1` are `acc`'s rows at R's ends. -/
 def SessionAt (zs : (s : Fin nS) → (Vs s).Outer Reg') (Lb : (s : Fin nS) → (Vs s).Bits) (sh : Flock.Shape)
     (unit : String) (c3 : Flock.RecCoins.C3) (w : Array F128) (ops : FlockVBridge.AccChain.Openings) : Prop :=
   ∃ o : Flock.RecCoins.RegisteredOpening, Flock.RecCoins.opening c3 unit = .ok o ∧ o.sh = sh ∧
@@ -81,11 +56,6 @@ end Sessions
 variable {nT r : ℕ} {T : Fin nT → Type} {CT : Fin r → Type} [∀ k, Fintype (CT k)] [∀ k, Nonempty (CT k)]
   {st : Flock.Stmt} {hp : HoloParams} {xR : HoloReg GF128 Dig} {n : ℕ} {L : SamplingDesign n} {Reg Cm Reg' Reg₂ : Type}
 
-/-- **(n4's read fact from V*'s sessions) `OpeningRead`**, at R's shape `sh` (`m = mReg`, two claims), the coins
-`c3`, w and R's openings `ops` read off each history and its layers: at every accepted outcome R's opening is in V*'s
-sessions (`SessionAt`), the claims `RecCoins.opening` builds at w's `claim` values are the run's two registered claims
-(item 3), and the tape past both sparse phases begins with the opening's steps on the ring switches w holds, at the
-opened rows' consistency sums (item 4). -/
 theorem openingRead_of_session (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂) {dg : ByteArray → ByteArray}
     {N k Rw : ℕ} {sh : Flock.Shape} (hsh : RecOpening.shape? (holoAt st hp).cls.shape.mReg 2 = some sh)
     (unit : String)
