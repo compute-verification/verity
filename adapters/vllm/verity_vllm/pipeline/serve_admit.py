@@ -349,8 +349,7 @@ class TickGate:
     ``pull()``, if given, returns the records that came since its last call (a `tick_plugin.FeedReader`). The rest runs
     on the engine's thread: `add` is the scheduler's ``add_request``, `finished` its ``finish_requests``, `ready` comes
     before each engine iteration and `scheduled` after each ``schedule()``. ``clock`` (seconds) times only the holds and
-    the waits, ``log`` gets one dict per admission and per event; an admission's ``held_steps`` are, for each request it
-    adds, the steps the engine scheduled between the request's arrival and its admission.
+    the waits, ``log`` gets one dict per admission (each request's steps held, ``held_steps``) and per event.
 
     After a line that names N lost, N is in ``lost`` for the rest of its run and the gate holds no request of N's: the
     one it held is dropped, never added to the scheduler, and so is one that comes later (`add`). ``next`` steps over N
@@ -379,13 +378,12 @@ class TickGate:
         self._reset()
 
     def _reset(self) -> None:
-        self.T = 0
-        self.next = 0
+        self.T = self.next = 0
         self.lines: list[int] = []                      # bucket t -> the watermark's n
         self.ended = False
         self.held: dict[int, tuple[Any, Callable[[Any], Any]]] = {}     # N -> (request, the scheduler's add)
         self.held_ids: dict[str, int] = {}
-        self.held_at: dict[int, int] = {}               # N -> the gate's step count when its request came
+        self.held_at: dict[int, int] = {}               # N -> the step count when its request came
         self.held_steps: list[int] = []
         self.buckets: dict[int, int] = {}               # N -> its x-verity-release-bucket
         self.gone: set[int] = set()                     # N past `next` that won't reach the engine
@@ -444,7 +442,6 @@ class TickGate:
         self.lost.add(n)
         self.counts["lost"] += 1
         held = self.held.pop(n, None)
-        self.held_at.pop(n, None)
         if held is not None:
             self.held_ids.pop(held[0].request_id, None)
             self.dropped_ids.add(held[0].request_id)
@@ -508,7 +505,6 @@ class TickGate:
                 rest.append(rid)
                 continue
             del self.held[n]
-            self.held_at.pop(n, None)
             self.gone.add(n)
             self.counts["aborted"] += 1
         return rest
