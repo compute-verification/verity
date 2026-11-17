@@ -236,7 +236,7 @@ def component_case(draw, C, kind: str | None) -> dict:
         case = C.cases[kind][0]
     elif C is R.POUW_PERIOD:
         case = draw(st.sampled_from(pouw_periods()[kind]))
-    elif C is R.CERTIFIER:
+    elif C is R.ATTESTER:
         case = NP.build(draw(st.sampled_from(PERIOD_CASES[kind])), draw(st.integers(0, 1 << 16)), small=True)
     elif C is R.INFERENCE_ONLY:
         case = draw(R.INFERENCE.sampled(draw(st.sampled_from(INFERENCE_CASES[kind]))))

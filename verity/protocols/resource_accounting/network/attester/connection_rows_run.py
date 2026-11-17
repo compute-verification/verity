@@ -125,7 +125,7 @@ import time
 from collections.abc import Sequence
 from pathlib import Path
 
-from verity.protocols.resource_accounting.network.attester import certifier_key as ck
+from verity.protocols.resource_accounting.network.attester import attester_key as ck
 from verity.protocols.resource_accounting.network.verifier import connection_rows as CR
 from verity.protocols.resource_accounting.network.verifier import content_rows as CT
 from verity.protocols.resource_accounting.network.verifier.id_form import id_request

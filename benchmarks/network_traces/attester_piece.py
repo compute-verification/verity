@@ -1,20 +1,20 @@
-"""certifier-piece: the network attester's piece of `served_verdicts.sh` (its ``CERTIFIER_CMD``), and the front that puts
-the active network attester in front of serve-openai there (its ``CERTIFIER_FRONT``).
+"""attester-piece: the network attester's piece of `served_verdicts.sh` (its ``CERTIFIER_CMD``), and the front that puts
+the active network attester in front of serve-openai there (its ``ATTESTER_FRONT``).
 
-    python certifier_piece.py front PORT SERVE_DIR OUT --peer NAME [--gate USER@HOST | --gate local] [--key KEY]
+    python attester_piece.py front PORT SERVE_DIR OUT --peer NAME [--gate USER@HOST | --gate local] [--key KEY]
         [--prompts 4] [--prompt-ids 24] [--tokens 4] [--vocab 128000] [--scan-class w63k4] [--height 10]
         [--minutes M] [--bucket-ms MS] [--warmup N]
-    python certifier_piece.py piece SERVE_DIR WINDOW DIR [--eos-ids IDS] [--lean EXE] [--rows EXE] [--draw K]
+    python attester_piece.py piece SERVE_DIR WINDOW DIR [--eos-ids IDS] [--lean EXE] [--rows EXE] [--draw K]
         [--chain-cmd CMD] [CR_K=V ...]
-    python certifier_piece.py chain SERVE_DIR WINDOW DIR V3C [--eos-ids IDS] [--rows EXE] [--draw K] [--class w63k4]
+    python attester_piece.py chain SERVE_DIR WINDOW DIR V3C [--eos-ids IDS] [--rows EXE] [--draw K] [--class w63k4]
         [--chain-cmd CMD] [CR_K=V ...]
-    python certifier_piece.py period SERVE_DIR WINDOW DIR V3C [--lean EXE] [--rows EXE]
-    python certifier_piece.py relay --listen PORT --to PORT
-    python certifier_piece.py front PORT SERVE_DIR OUT --peer NAME --session --client-port PORT --windows N
+    python attester_piece.py period SERVE_DIR WINDOW DIR V3C [--lean EXE] [--rows EXE]
+    python attester_piece.py relay --listen PORT --to PORT
+    python attester_piece.py front PORT SERVE_DIR OUT --peer NAME --session --client-port PORT --windows N
         [--gate ...] [--key KEY] [--scan-class w63k4] [--height H] [--minutes M] [--bucket-ms MS]
-    python certifier_piece.py close SERVE_DIR OUT
+    python attester_piece.py close SERVE_DIR OUT
 
-* **front** runs before served_verdicts.sh's requests when ``CERTIFIER_FRONT`` names it: the gate's scan rehearsal
+* **front** runs before served_verdicts.sh's requests when ``ATTESTER_FRONT`` names it: the gate's scan rehearsal
   (`served_session.session`, ``warden-rehearse --scan --prompts --window-per-group``) against serve-openai on PORT, one
   group of ``--prompts`` requests (at most the scan's 4 lanes) of ``--prompt-ids`` ids below ``--vocab``, each answered
   with exactly ``--tokens`` ids, sampled from a fresh secret seed. A group is sent half a bucket into execution phase 0
@@ -99,9 +99,9 @@ the active network attester in front of serve-openai there (its ``CERTIFIER_FRON
   ended, so a step never outlives the refusal either. ``--draw K`` is the scan's sample, K proof blocks (every proof
   block by default); a CR_K=V goes to the chain; ``--chain-cmd`` replaces the chain (a test's, which writes the report
   and the scan's answers under RESEARCH_RUN_DIR/out).
-* **chain** and **period** are the piece split in two around V3c (`served_verdicts.sh`'s ``CERTIFIER_CHAIN_CMD`` and
-  ``CERTIFIER_PERIOD_CMD``, each run as ``bash -c CMD _ D K DIR V3C``, e.g. ``CERTIFIER_CHAIN_CMD='python
-  benchmarks/network_traces/certifier_piece.py chain "$@"'``), so the period's compute audit is V3c's audit of the
+* **chain** and **period** are the piece split in two around V3c (`served_verdicts.sh`'s ``ATTESTER_CHAIN_CMD`` and
+  ``ATTESTER_PERIOD_CMD``, each run as ``bash -c CMD _ D K DIR V3C``, e.g. ``ATTESTER_CHAIN_CMD='python
+  benchmarks/network_traces/attester_piece.py chain "$@"'``), so the period's compute audit is V3c's audit of the
   workload itself. **chain** runs steps 1 to 4 once V3c's window is committed, its scan on V3c's trees
   (``scan_zk.py --class CLASS --v3c V3C/window`` in CR_SCAN_ARGS: the window's committed scan state and slot entries):
   a reject is DIR/answer.json as the piece's, an accept DIR/`CHAINED`. **period** runs once V3c's audit wrote
@@ -397,7 +397,7 @@ def gate_status(a: argparse.Namespace, keep: Path, run: str) -> dict | None:
     if a.gate == "local":
         host = SS.scratch_host(keep / "local-gate", a.peer)
         rc, got = SS.A.gate(["--ssh", f"status {run}", "--key", SS.LANE], host,
-                            certifier_active=lambda r: a.unit is not None and live(a.unit))
+                            attester_active=lambda r: a.unit is not None and live(a.unit))
         got = got if rc == 0 else None
     else:
         got = SS.status(a, run)
@@ -441,7 +441,7 @@ def open_session(a: argparse.Namespace, keep: Path, out: Path, *, sleep: Callabl
         if a.minutes is None:
             tick = a.bucket_ms or SS.A.SCAN["--bucket-ms"]
             a.minutes = min(SS.A.session_minutes(a.windows, a.height, SS.A.SCAN["--window"] * tick) + SS.MARGIN,
-                            SS.A.CERTIFIER_MINUTES[1])
+                            SS.A.ATTESTER_MINUTES[1])
         with tempfile.TemporaryDirectory() as d:
             try:
                 SS.A.REHEARSALS[SS.words(a)[0]](SS.words(a)[1:], SS.scratch_host(Path(d), a.peer))
@@ -449,7 +449,7 @@ def open_session(a: argparse.Namespace, keep: Path, out: Path, *, sleep: Callabl
                 raise SS.Refused(f"the gate refuses it: {e}") from None
         if opened := open_sessions(keep):
             raise SS.Refused(f"relay session {opened[0]['run']} is open under {keep}: close it first "
-                             "(certifier_piece.py close)")
+                             "(attester_piece.py close)")
         if a.gate == "local":
             _, run = SS.local_start(a, b"", keep)
             (keep / run).mkdir(mode=0o700, exist_ok=True)
@@ -492,7 +492,7 @@ def ended_fetch(a: argparse.Namespace, keep: Path, hold: Path, sleep: Callable[[
     (hold / "status.json").write_text(json.dumps({k: v for k, v in st.items() if k != "relay"}, sort_keys=True) + "\n")
     try:
         if a.gate == "local":
-            return SS.A.certifier_fetch(a.run, SS.scratch_host(keep / "local-gate", a.peer), witness=True)
+            return SS.A.attester_fetch(a.run, SS.scratch_host(keep / "local-gate", a.peer), witness=True)
         return SS.fetch(a, a.run)
     except subprocess.CalledProcessError as e:
         raise Unready(f"relay session {a.run}: the gate's fetch failed (exit {e.returncode}): "
@@ -538,7 +538,7 @@ def kept_run(serve_dir: Path) -> str:
     runs = sorted(p.parent.name for p in (serve_dir / PRIVATE).glob("*/fetch.tar.gz"))
     if len(runs) != 1:
         raise NotRun(f"{len(runs)} network attester runs kept under {serve_dir / PRIVATE} ({runs[:4]}), not one: the run's "
-                        "load goes through the network certifier only with CERTIFIER_FRONT")
+                        "load goes through the network certifier only with ATTESTER_FRONT")
     return runs[0]
 
 
@@ -1023,7 +1023,7 @@ def refuse(d: Path, why: str) -> int:
     try:
         rm(*(p for p in d.iterdir() if p.name not in LOGS))
         (d / REFUSED).write_text(why + "\n")
-        print(f"CERTIFIER refused: {why}", flush=True)
+        print(f"ATTESTER refused: {why}", flush=True)
     finally:
         signal.signal(signal.SIGTERM, was)
     return 3
@@ -1041,7 +1041,7 @@ def ended(limit: str) -> Callable[[int, object], None]:
 
 
 def said(got: dict) -> int:
-    print(f"CERTIFIER {json.dumps({k: got.get(k) for k in ('verdict', 'reason', 'public')}, sort_keys=True)}",
+    print(f"ATTESTER {json.dumps({k: got.get(k) for k in ('verdict', 'reason', 'public')}, sort_keys=True)}",
           flush=True)
     return 0 if got.get("verdict") == "accept" else 1
 
@@ -1067,7 +1067,7 @@ def close_open(serve_dir: Path, *, sleep: Callable[[float], object] = time.sleep
         raise NotRun(f"relay session {opened[0]['run']}, which no close ended, couldn't be closed here: {e}") from None
     finally:
         rm(hold)
-    print(f"relay session {doc['run']} closed here: no close ran after the load (certifier_piece.py close)", flush=True)
+    print(f"relay session {doc['run']} closed here: no close ran after the load (attester_piece.py close)", flush=True)
 
 
 def settle(serve_dir: Path, window: int, d: Path, limit: str,
@@ -1086,7 +1086,7 @@ def settle(serve_dir: Path, window: int, d: Path, limit: str,
         close_open(serve_dir)
         if not any((serve_dir / PRIVATE).glob("*/fetch.tar.gz")):
             raise NotRun(f"no network attester run kept under {serve_dir / PRIVATE}: the run's load didn't go through the "
-                         "network attester's front (CERTIFIER_FRONT unset, or the gate, its tunnel or ssh failed)")
+                         "network attester's front (ATTESTER_FRONT unset, or the gate, its tunnel or ssh failed)")
         (serve_dir / PRIVATE / "held").mkdir(mode=0o700, exist_ok=True)
         hold = Path(tempfile.mkdtemp(dir=serve_dir / PRIVATE / "held", prefix=f"window-{window}-"))
         got, unpacked = step(hold)
@@ -1172,7 +1172,7 @@ def chain_step(a: argparse.Namespace) -> int:
         return said(got)
     (d / CHAINED).write_text(json.dumps({"chain": "accepted", "ran_on": socket.gethostname(), "v3c": str(v3c)},
                                         indent=1, sort_keys=True) + "\n")
-    print(f"CERTIFIER-CHAIN accepted on V3c's window {v3c / 'window'}: the period step checks its period.json",
+    print(f"ATTESTER-CHAIN accepted on V3c's window {v3c / 'window'}: the period step checks its period.json",
           flush=True)
     return 0
 
@@ -1181,26 +1181,26 @@ def period_step(a: argparse.Namespace) -> int:
     serve_dir, d, v3c = a.serve_dir.resolve(), a.dir.resolve(), a.v3c.resolve()
     d.mkdir(parents=True, exist_ok=True)
     if (d / REFUSED).is_file():
-        print(f"CERTIFIER refused at the chain: {(d / REFUSED).read_text().strip()}", flush=True)
+        print(f"ATTESTER refused at the chain: {(d / REFUSED).read_text().strip()}", flush=True)
         return 3
     if (d / "answer.json").is_file():
         return said(json.loads((d / "answer.json").read_text()))
 
     def step(hold: Path) -> tuple[dict | None, Path | None]:
         if not (d / CHAINED).is_file():
-            raise NotRun(f"no {CHAINED} in DIR: the chain step (CERTIFIER_CHAIN_CMD) didn't run, or didn't finish")
+            raise NotRun(f"no {CHAINED} in DIR: the chain step (ATTESTER_CHAIN_CMD) didn't run, or didn't finish")
         exe, rows = lean_exe("network-period", a.lean), lean_exe("network-rows", a.rows)
         return decide(serve_dir, a.window, hold, chain=None, check=lambda c, p: period_check(exe, c, p),
                       rows=own_rows(rows), case=v3c_case(v3c))
     try:
-        got = settle(serve_dir, a.window, d, "CERTIFIER_PERIOD_TIMEOUT", step, d / CHAINED)
+        got = settle(serve_dir, a.window, d, "ATTESTER_PERIOD_TIMEOUT", step, d / CHAINED)
     except NotRun as e:
         return refuse(d, str(e))
     return said(got)
 
 
 def parser() -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser(prog="certifier_piece.py", description=__doc__.split("\n\n")[0])
+    p = argparse.ArgumentParser(prog="attester_piece.py", description=__doc__.split("\n\n")[0])
     sub = p.add_subparsers(dest="cmd", required=True)
     f = sub.add_parser("front")
     f.add_argument("port", type=int)

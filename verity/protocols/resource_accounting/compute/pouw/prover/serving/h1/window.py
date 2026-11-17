@@ -19,7 +19,7 @@ from a sample session of its own (`DrawSession`, the pouw setting ``draw_session
 commitment is in, its open answering no root (`gate_of`), so its challenger releases its coin commitment only after
 that commitment. The challenger is auditor-trusted
 (`trusted-device`): it runs on a machine the prover doesn't control, and the serving process reaches it on its own
-127.0.0.1, through its certifier coin link.
+127.0.0.1, through its attester coin link.
 
 A reserve joins its lane's open period, and a Pearl-C salt-only session is a window H1's checks refuse
 (`window.live_epoch_reason`), so one reserved in an H1 period (`H1_PERIOD`) is a wasted session whose period earns

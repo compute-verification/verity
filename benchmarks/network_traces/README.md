@@ -43,7 +43,7 @@ to end. Each driver's docstring says what it runs, what it publishes and what it
   `prover/window_chain.py` (a served endpoint's Commit periods as one I1 v0 advice), `negatives.py` (what network
   attestation must refuse, each by the check and code that refuse it), `leak_guard.py` (the record's leak guard, below)
   and `prover/released_keys.py` (the keys a record releases, each declared public by name, below).
-  `prover/block_certifier.py` writes a period's accepted answer into the block record.
+  `prover/block_attester.py` writes a period's accepted answer into the block record.
   `served_session.py` is the served session's runbook (below).
 - **The weights' load:** the network attester's `attester/load_relay.py`, `load_bench.py` and `load_commit.py` (below).
 - **A memory wipe's egress:** `wipe_gate.sh` and `wipe_egress.py` (below).
@@ -91,7 +91,7 @@ its own function, `wipe_monitoring.counted` (`verity/protocols/resource_accounti
 `served_session.py` is the runbook of the served session of record, the network attester in front of a served model.
 `plan` checks the request with this tree's gate and prints each run's command and the endpoint's flags. The gate is
 `site.json`'s `gate`, whose host is the name of the environment variable that holds the challenger host's address
-(`VY_CHALLENGER_1_HOST`): the session, the front (`certifier_piece.py front`), a chain on the gate's coins and
+(`VY_CHALLENGER_1_HOST`): the session, the front (`attester_piece.py front`), a chain on the gate's coins and
 `wipe_gate.sh` read it there, and without it and with no gate given (`--gate`, `CHALLENGER`) each ends naming it.
 `session` runs the gate's scan rehearsal (`warden-rehearse --scan --prompts`) against the endpoint on the peer's loopback, by default
 the H200 peer's `serve-openai` on :18782, inside the scan's class: prompts of 256 ids from a fresh secret seed (prompts
@@ -116,8 +116,8 @@ runs on, which the challenger's coin link reaches through that node's own line o
 network attester run's witness never go on the developer's machine. Without the gate's coins the chain samples on the verifier's
 (`--coins verifier`, the default).
 
-`certifier_piece.py` is the network attester's piece of `benchmarks/one_stage/served_verdicts.sh`. Its `front`
-(`CERTIFIER_FRONT`) runs before that run's requests: the gate's scan rehearsal sends one group of the execution phase circuit's
+`attester_piece.py` is the network attester's piece of `benchmarks/one_stage/served_verdicts.sh`. Its `front`
+(`ATTESTER_FRONT`) runs before that run's requests: the gate's scan rehearsal sends one group of the execution phase circuit's
 class (4 prompts of 24 ids, 4 ids out, `--window-per-group`) to serve-openai, all of it in execution phase 0, the
 network attester at the schedule of that class's scan (`--scan-class w63k4`, 5 egress cells, the one the chain's
 `scan_zk.py prove --class w63k4` takes), so the engine closes it into the run's earliest execution phase, the one it audits,
@@ -126,7 +126,7 @@ admission, 2.7 s at the scan's 100 ms tick; for a slower endpoint `--bucket-ms` 
 4000 ms (108 s). Under that runner's `LOAD=session` the load is the caller's own, and neither the runner nor the gate
 sends a request: `front --session` opens the gate's relay session in the rehearsal's place and returns once its relay
 listens, the caller's command (`LOAD_CMD`, given the session's `relay.json` and the serve dir) sends the load to the
-client address that file names, and `close` (`CERTIFIER_CLOSE`) waits for the session's end and keeps its fetch where a
+client address that file names, and `close` (`ATTESTER_CLOSE`) waits for the session's end and keeps its fetch where a
 rehearsal's is. The runner refuses a session without all three, and under any other `LOAD` each of them. A session's
 records cover the connections that crossed the relay; that no other route reaches the endpoint is the placement's.
 Its `piece` (`CERTIFIER_CMD`) runs the chain's network attester path on that fetch with the serve dir's
@@ -151,7 +151,7 @@ answers are the case's evidence less its certificates. The leak guard (`--public
 declare out of its directory. `kind_scan.py DIR` reads a piece's files field by field and reports each one that is of
 none of the four public kinds and no certificate of the network attester's, a case or a scan's answers left there
 among them; `--received OUT` does so for what a verifier on another machine reads of a workload's OUT. Split in two
-around V3c (`CERTIFIER_CHAIN_CMD` and `CERTIFIER_PERIOD_CMD`), its `chain` runs the chain with the scan on V3c's
+around V3c (`ATTESTER_CHAIN_CMD` and `ATTESTER_PERIOD_CMD`), its `chain` runs the chain with the scan on V3c's
 committed execution phase (`scan_zk.py --v3c`: its scan state and slot entries are the scan's state and prog trees), and its
 `period` runs the consistency check on the rows case whose one compute audit is V3c's `period.json`, at any sample of
 V3c's; each step releases through its own hold. The check reads an audit's state entry among its `roots` and its
@@ -220,7 +220,7 @@ Then the table again, once the server's record of the tries' sampled ids is ther
   connection at the cell after a response the front sent whole. A row refused for anything else didn't do what its
   check says: a server that answers out of the id form, or stops, is never a deviation refused.
 - The receiver reads a cell's bucket, never when inside its bucket it arrived. That channel is
-  `benchmarks/certifier_timing`'s to measure: `verity bench certifier_timing run --attacks burst`.
+  `benchmarks/attester_timing`'s to measure: `verity bench attester_timing run --attacks burst`.
 - The command exits 0 when honest was accepted and each other class was refused by its check, or wasn't shown to the
   client; 1 when a class did otherwise, honest was refused, or a try wrote no check (it has no row, and the classes
   after it are still tried); and 2 when none of those and a row is shown neither way, as `tokens` and `length` are
@@ -285,12 +285,12 @@ forward's end and the server's port:
   kept at 130. A packet with eight bytes of IP options or more is kept too short for its headers, and the reader
   refuses the file by that name.
 - The two sides are one address, told apart by the server's port: the reader takes them as
-  `--server 127.0.0.1:PORT --certifier 127.0.0.1`.
+  `--server 127.0.0.1:PORT --attester 127.0.0.1`.
 - The filter and the length are for a server reached over IPv4. Reached over IPv6, the server leaves no packet in
   this file, since `ip host` keeps IPv4 alone, and the reader refuses nothing in a file of no packet: it counts no
   flow, says each direction differs by the record's whole count and pairs no connection, and nothing names the
   cause. That server's capture is `tcpdump -i lo -U -s 74 -w run.pcap 'ip6 host ::1 and tcp port PORT'`, read with
-  `--server [::1]:PORT --certifier ::1`. IPv6's header is 40 bytes where IPv4's is 20, so a TCP packet's headers are
+  `--server [::1]:PORT --attester ::1`. IPv6's header is 40 bytes where IPv4's is 20, so a TCP packet's headers are
   never under 74 and that file holds no byte of content either. A packet under an IPv6 extension header never enters
   it: the filter looks for TCP's header right after IPv6's.
 - The count is of what the server's port received and sent. The link under the forward carries the forward's own
@@ -309,7 +309,7 @@ link between two machines under the capture.
 **Reading it:**
 
     python benchmarks/network_traces/capture_flows.py --capture run.pcap --server SERVER[:PORT] \
-        --certifier CERTIFIER --run RUN --out capture_flows.json
+        --attester ATTESTER --run RUN --out capture_flows.json
 
 `RUN` is the relay's run directory (`network_attester_serve.py serve`); without it the capture is summed and listed only. The
 result file holds every flow's sums, and the table is:
@@ -331,7 +331,7 @@ result file holds every flow's sums, and the table is:
   other bytes and stays in the sum from the server: that direction is then a bound, lower by as many bytes as the
   capture counts from the server on the largest flow in no pair, and the line says so.
 - Every other flow with a given address on one side, a line each: what the given side sent (`out`) and received
-  (`in`). Machines are named `server`, `certifier` and `other-N`, with their ports: no address is printed or written.
+  (`in`). Machines are named `server`, `attester` and `other-N`, with their ports: no address is printed or written.
 
 It exits 0 when it read the capture and 2 when it refused it.
 
@@ -408,7 +408,7 @@ files whose lists aren't written yet (`not_yet` in the declared data) by step, a
 A JSON file under no list and no `not_yet` glob fails as an undeclared key does. A file with no keys (a binary, a log,
 free text) can't be read this way and is only counted. The check is linear in the bytes it reads.
 
-**The relay path** (`CR_PATH=warden`, `chain_record.NETWORK_CERTIFIER`). Every step reads the relay's own run (the gate's
+**The relay path** (`CR_PATH=warden`, `chain_record.NETWORK_ATTESTER`). Every step reads the relay's own run (the gate's
 `warden-rehearse`, its witness under `witness/`; `network_attester_chain.py`), and a proxy rehearsal's run, whose records came
 through the network attester's older proxy in front of the endpoint, is refused by name wherever it is given: that code is
 gone, and kept records of its runs are refused by the form that stays. The certificates step reruns
@@ -549,5 +549,5 @@ K also rests on these conditions:
 - An untied compute audit's (the loop's) free inputs don't enter K: its δ goes into JointPeriodLive's sum. The tied
   audit's (the `SlotEntry_v1` stand-in's) are the execution phase's free inputs above.
 
-The report names what it stands on beyond the theorem (`chain_record.STUBBED`, `NETWORK_CERTIFIER_STUBBED` and
+The report names what it stands on beyond the theorem (`chain_record.STUBBED`, `NETWORK_ATTESTER_STUBBED` and
 `POOLED_CONDITION`) and what the theorem doesn't cover (its `uncovered`).

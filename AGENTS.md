@@ -187,7 +187,7 @@ The rules in force, each stated as itself; the friction skill has the standing r
 - **The audited hardware is untrusted, and so is its vendor.** No guarantee rests on a GPU attesting its own
   SKU, firmware or clocks. Hardware constants (f_max, peak rates) come from the data sheet under two or three readings,
   and later from a separate physical calibration. A device's capacity is an assumed bound on its true peak compute
-  capacity, and nothing else: no power certifier, power ceiling, energy floor or meter enters a protocol, premise or
+  capacity, and nothing else: no power attester, power ceiling, energy floor or meter enters a protocol, premise or
   plan.
 - **Lean is the definition and the verifier.** The provers' Python (the listing's untrusted places) mirrors it for
   the prover's speed, held to it by difftest. Each protocol switches by the friction skill's switching ruling; until

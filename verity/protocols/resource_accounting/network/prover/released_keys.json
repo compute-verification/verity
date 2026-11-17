@@ -123,7 +123,7 @@
     "stager/bits/*": "structure",
     "stager/ands": "structure",
     "staging/statements": "structure",
-    "members/*/certifier_refused": "output",
+    "members/*/attester_refused": "output",
     "members/*/ok": "output",
     "members/*/reference/*/window": "structure",
     "members/*/reference/*/word": "output",

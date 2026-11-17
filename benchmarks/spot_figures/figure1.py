@@ -41,7 +41,7 @@ block's outputs under one-stage, outside the budget, and the token ids under two
 * `two-stage-capped` and `two-stage-capped-uniform`, `two-stage-patterns` and `two-stage-patterns-uniform`: the same
   designs with each request charged at most the bits it serves (the `served_bits` input: each of its tokens served
   as the token select's output word, at most the network attester's registered response cap where the model's
-  `certifier` card registers one, else every one of its tokens), in `two_stage_exfil`'s sets' form
+  `attester` card registers one, else every one of its tokens), in `two_stage_exfil`'s sets' form
   (`card_influenceTwo_le_served_min`), which still counts which of a request's proof blocks are incorrect, and never
   above the scope's served bits (`card_influenceTwo_le_min`), or its patterns' form (`card_influenceTwo_le_patterns`),
   which counts a request's sets of more than its served bits once, at most the served bits too
@@ -225,7 +225,7 @@ def cards(model: str = "GLM-5.3", request: str = "census", serving: str = "assum
     """Every input: the model's slot cards', those read from the census and the slowdown calculator's reference, and the bits a request
     serves, each of its tokens as the token select's output word, the `design` card's `token_bytes`.  A request is
     the census's mean or, under `request="workload"`, the `workload` card's.  It serves at most the response cap its
-    `certifier` card's schedule registers (`max_tokens_cap`, the parameters its digest binds), where the card registers
+    `attester` card's schedule registers (`max_tokens_cap`, the parameters its digest binds), where the card registers
     one and `served` isn't "request", else every one of its tokens.  Under `serving="measured"` the inputs hold the
     `serving_rate` card's rate (`serving_rate`), which the lines that price serving then read in place of the slowdown calculator's
     utilization; under the default they hold none, whatever cards exist."""
@@ -300,14 +300,14 @@ def cards(model: str = "GLM-5.3", request: str = "census", serving: str = "assum
     if served not in (None, *SERVED):
         raise ValueError(f"a request's served tokens are one of {SERVED}, not {served!r}")
     if served == "cap" and cap is None:
-        raise ValueError(f"{model} has no certifier card registering a response cap, so a request serves every one of "
+        raise ValueError(f"{model} has no attester card registering a response cap, so a request serves every one of "
                          "its tokens (served='request')")
     if served == "request" or cap is None:
         out["served_bits"] = InputCard(tokens * bits, "bit", "modeled", f"every one of a request's {tokens:,} tokens "
                                        f"{word}")
         return out
     out["max_tokens_cap"] = InputCard(cap, "token", cert["status"],
-                                      f"certifier card's schedule, parameters digest {schedule.digest.hex()}, which "
+                                      f"attester card's schedule, parameters digest {schedule.digest.hex()}, which "
                                       "every record head binds: the network certifier refuses at ingress a request "
                                       "whose max_tokens exceeds the cap and releases at most a request's max_tokens "
                                       f"tokens of its response ({CAP_RULE}): {cert['source']}", cert["provisional"])

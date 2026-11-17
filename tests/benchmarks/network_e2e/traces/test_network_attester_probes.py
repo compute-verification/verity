@@ -180,7 +180,7 @@ def test_time_keeps_times_each_keep_as_the_publisher_process_calls_it(tmp_path, 
     assert [json.loads(line) for line in lines] == [[10.0, 0.5, "requests", 0], [11.0, 0.5, "responses", 1]]
 
 
-def test_a_probe_given_no_clock_reads_the_network_certifiers_own(tmp_path, probe_mod, runner, monkeypatch):
+def test_a_probe_given_no_clock_reads_the_network_attesters_own(tmp_path, probe_mod, runner, monkeypatch):
     """A probe's times are laid against the network attester's origin, a reading of its host's raw clock: with no
     clock given, the probe, its collections and the publisher's keeps each read that clock, by its clock id."""
     from verity.protocols.resource_accounting.network.verifier import pacer

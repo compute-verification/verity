@@ -102,7 +102,7 @@ ids as the network attester's cells carry them and its finish (`finish`): the en
 certified I/O, not the prover's record of it. The certified I/O is ``io``'s file, written in KEEP on `AUDITOR`: it
 reaches the served node over a private route (``endpoint --io -`` on an ssh stdin, or a ``--send`` the step moves out of
 the run dir), never through a run's custody, and the served node already holds its values. The check then runs on the
-developer's node, and the chain's report says so (`chain_record.NETWORK_CERTIFIER_SERVED_STUBBED`). Its art (``--endpoint ART``,
+developer's node, and the chain's report says so (`chain_record.NETWORK_ATTESTER_SERVED_STUBBED`). Its art (``--endpoint ART``,
 ``endpoint``'s ``$OUT``) is report.json, windows.jsonl and serve.json.
 
 The runs (the lane's gate key is on `AUDITOR`, a CPU node; KEEP is the lane's gate directory there; a run that asks
@@ -257,7 +257,7 @@ def prompts(n: int, ids: int, vocab: int, seed: bytes) -> list[list[int]]:
 
 def words(a: argparse.Namespace) -> list[str]:
     """The request's words: the gate's scan rehearsal, or its relay session where ``a`` names a ``client_port``
-    (`certifier_piece.py front --session`: the relay kept up for the workload's own load, no traffic of ours)."""
+    (`attester_piece.py front --session`: the relay kept up for the workload's own load, no traffic of ours)."""
     tick = getattr(a, "bucket_ms", None)
     if getattr(a, "client_port", None) is not None:
         return ["relay-session", "--peer", a.peer, "--port", str(a.port), "--client-port", str(a.client_port),
@@ -284,8 +284,8 @@ def check(a: argparse.Namespace, data: bytes) -> dict:
         raise Refused(f"--prompt-ids {a.prompt_ids}: the scan's class takes 1 to KI = {ki} prompt ids a request")
     if not 1 <= a.tokens <= ko:
         raise Refused(f"--tokens {a.tokens}: the scan's class answers 1 to KO = {ko} ids a request")
-    if not 2 <= a.vocab <= 1 << A.NETWORK_CERTIFIER_PROMPT_ID_BITS:
-        raise Refused(f"--vocab {a.vocab}: 2 to 2^{A.NETWORK_CERTIFIER_PROMPT_ID_BITS}, the scan's ids")
+    if not 2 <= a.vocab <= 1 << A.NETWORK_ATTESTER_PROMPT_ID_BITS:
+        raise Refused(f"--vocab {a.vocab}: 2 to 2^{A.NETWORK_ATTESTER_PROMPT_ID_BITS}, the scan's ids")
     with tempfile.TemporaryDirectory() as d:
         try:
             req = A.parse_network_attester(words(a)[1:], scratch_host(Path(d), a.peer))
@@ -400,7 +400,7 @@ def start(a: argparse.Namespace, data: bytes, keep: Path) -> str:
     got = subprocess.run([*gate_ssh(a), shlex.join(words(a))], input=data, capture_output=True)
     try:
         run = json.loads(got.stdout)["run"]
-        if not A.CERTIFIER_RUN.fullmatch(run):
+        if not A.ATTESTER_RUN.fullmatch(run):
             raise ValueError(run)
     except (ValueError, KeyError, TypeError):
         raise Refused(f"the gate didn't start the session (exit {got.returncode}): {got.stdout[:400]!r} "
@@ -453,8 +453,8 @@ def local_start(a: argparse.Namespace, data: bytes, keep: Path) -> tuple[A.Host,
     runs."""
     host = scratch_host(keep / "local-gate", a.peer)
     rc, start = A.gate(["--ssh", shlex.join(words(a)), "--key", LANE], host, now=datetime.now(UTC),
-                       token=secrets.token_hex(2), own=lambda p: None, certifier_active=lambda r: False,
-                       start_certifier=lambda r: None, read=lambda n: data[:n])
+                       token=secrets.token_hex(2), own=lambda p: None, attester_active=lambda r: False,
+                       start_attester=lambda r: None, read=lambda n: data[:n])
     if rc != 0:
         raise Refused(f"the gate didn't start the session (exit {rc}): {start[:400]!r}")
     run = json.loads(start)["run"]
@@ -472,7 +472,7 @@ def local(a: argparse.Namespace, data: bytes, keep: Path) -> bytes:
             str(a.tokens), "--vocab", str(a.vocab), "--out", str(endpoint)]
     A.certifier_run(host, run, pinned=pinned(),
                     tunnel_argv=getattr(a, "tunnel", None) or (lambda ssh, port: [*stub, "--port", str(port)]))
-    return A.certifier_fetch(run, host, witness=True)
+    return A.attester_fetch(run, host, witness=True)
 
 
 class Ended(BaseException):
@@ -485,7 +485,7 @@ def _ended(signum, _frame):
 
 def _session(a: argparse.Namespace, data: bytes, ps: list[list[int]], keep: Path, hold: Path) -> tuple[dict, Path]:
     """The session, its files written to `hold`: its outcome and the kept fetch. A run opened earlier is ended by
-    ``a.close`` (``hold -> the lane's fetch``: `certifier_piece.py close`, a relay session's), which starts none."""
+    ``a.close`` (``hold -> the lane's fetch``: `attester_piece.py close`, a relay session's), which starts none."""
     if a.at:
         wait_until(a.at)
     if getattr(a, "close", None) is not None:
@@ -559,7 +559,7 @@ def session(a: argparse.Namespace, data: bytes, ps: list[list[int]]) -> int:
 
 def served_peer(fetch: Path) -> str | None:
     """The node the kept gate run served on: its request's peer, which the gate's fetch holds in the witness's
-    ``request.json`` alone (`auditor.certifier_fetch`), so in a fetch with the run's own lane's key. A fetch kept
+    ``request.json`` alone (`auditor.attester_fetch`), so in a fetch with the run's own lane's key. A fetch kept
     from a gate that still named the peer in the run's own ``request.json`` is read there."""
     with tarfile.open(fetch, "r:gz") as tar:
         for m in tar:

@@ -126,13 +126,13 @@ def run_shaper(
     frames: Sequence[LogicalFrame],
     ready: Sequence[int],
     syncs: Sequence[ClockSync],
-    certifier: Certifier,
+    attester: Certifier,
 ) -> list[BlockGrid]:
     """An honest sender's shaper driving a network attester over len(syncs) windows.
 
     Frame k is handed at its logical bucket h(k), or later if it wasn't ready by then. A late frame delays those behind
     it, so the grid deviates from the Program's and the window is a violation. Returns the network certificates."""
-    params = certifier.params
+    params = attester.params
     handed = handing_buckets(frames, syncs, params.buckets)
     actual, last = [], 0
     for h, r in zip(handed, ready, strict=True):
@@ -141,9 +141,9 @@ def run_shaper(
     records, k = [], 0
     for t in range(len(syncs) * params.buckets):
         while k < len(frames) and actual[k] == t:
-            certifier.enqueue(frames[k].payload)
+            attester.enqueue(frames[k].payload)
             k += 1
-        certifier.tick()
+        attester.tick()
         if (t + 1) % params.buckets == 0:
-            records.append(certifier.close_window())
+            records.append(attester.close_window())
     return records

@@ -125,7 +125,7 @@ def test_the_tied_window_runs_with_the_settings_the_tree_writes(tmp_path):
     assert lean + 3600 <= piece <= window - 1800, "Pearl+'s Lean follows its tie and Python check inside its piece, which ends inside the window's"
     assert env["NVDISASM_PATH"] == "/usr/local/cuda-13.0/bin" != f"{env['CUDA_HOME']}/bin", "the Pearl-C cubin's SASS needs nvdisasm"
     assert env["ROW_ID"] == PLACEMENT["tied_row"] and "__bf16__" in env["ROW"] and env["ROW"].endswith(PLACEMENT["tied_row"])
-    assert not {"H1_TIE", "CERTIFIER_FRONT", "LOAD", "SLOTS", "PROMPTS"} & env.keys()
+    assert not {"H1_TIE", "ATTESTER_FRONT", "LOAD", "SLOTS", "PROMPTS"} & env.keys()
     assert "--prefix-caching" not in env.get("SERVE_ARGS", "")
     assert [s for s in flags(got, "--send") if s.endswith("/main.txt")], "the gate's Pearl+ salts need main's line too"
     assert f"adapters/vllm/workloads/{PLACEMENT['tied_row']}.json" in flags(got, "--send")

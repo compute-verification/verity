@@ -156,7 +156,7 @@ def network_attester_trace(root):
     return d
 
 
-def test_summary_orders_arrivals_along_the_wire_and_writes_the_network_certifiers_views(tmp_path, mod):
+def test_summary_orders_arrivals_along_the_wire_and_writes_the_network_attesters_views(tmp_path, mod):
     summary = mod("summary")
     d = network_attester_trace(tmp_path)
     t = summary.summarize(tmp_path)["traces"]["w"]

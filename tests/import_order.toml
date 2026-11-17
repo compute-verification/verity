@@ -898,6 +898,6 @@ loaded_by = [
     "verity/protocols/resource_accounting/memory/pous/prover/challenger_prover.py",
     "verity/protocols/resource_accounting/memory/pous/prover/wipe_prover.py",
     "verity/protocols/resource_accounting/memory/pous/prover/workload.py",
-    "verity/protocols/resource_accounting/network/prover/block_certifier.py",
+    "verity/protocols/resource_accounting/network/prover/block_attester.py",
     "verity/protocols/resource_accounting/network/prover/workload.py",
 ]

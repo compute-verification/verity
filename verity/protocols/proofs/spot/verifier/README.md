@@ -238,7 +238,7 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
   reads in `security/Properties/Spot/MonitoringPeriodLedger.lean`.
 - **The challenger** (`challenger`, Lean of record `Spot/Challenger.lean`): every protocol's live coins, by
   label and index, each opened once, after its root is recorded. On the auditor device its coins reach the developer's
-  machine only through that machine's certifier coin link (`verity/protocols/compose/verifier/live_challenger/auditor.py`, the coins' path).
+  machine only through that machine's attester coin link (`verity/protocols/compose/verifier/live_challenger/auditor.py`, the coins' path).
   A remote prover reads them the same way: one TCP stream at its own `127.0.0.1` port (`RemoteChallenger`), deployed
   as the far end of that coin link (`verity/protocols/compose/verifier/live_challenger/coin_link.py`).
   - **Remote's coin path in Lean** (`security/Definitions/Core/Challenger.lean`, assumptions in its `Assumptions/`, in the
@@ -252,7 +252,7 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
     in the lock), whose docstring is its statement, and ACCEL's pooled guarantee
     `Pouw.Guarantees.Dither.FleetSound` takes it. A path across a host the developer controls would need an encrypted,
     authenticated channel, which the challenger doesn't have. Deployed, one auditor device runs the challenger and the
-    network attester, and a run's coins leave it only on the peer's certifier coin link, which the gate refuses to open
+    network attester, and a run's coins leave it only on the peer's attester coin link, which the gate refuses to open
     without (`auditor.coin_ports`).
   - `OneClock`, an assumption under the trusted auditor device, with no Lean statement yet: the challenger's release times and the network attester's
     ingress and receipt times are read on one clock. Deployed, that is the auditor device's. A challenger on a device of its own would have to keep its clock within
