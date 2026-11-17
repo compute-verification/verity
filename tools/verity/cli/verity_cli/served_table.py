@@ -984,9 +984,10 @@ def coins_on(cfg: Mapping[str, Any], bindings: Mapping[str, Any]) -> dict[str, s
 
 def gate_coins_on(cfg: Mapping[str, Any], bindings: Mapping[str, Any]) -> dict[str, str]:
     """The machine each listed component's challenger coins are flipped on, for the workers' pieces whose gate is
-    optional: the challenger's where its gate is bound, else the workload's."""
+    optional: the challenger's where its gate or its loopback host is bound, else the workload's."""
     at = {p["name"]: p["machine"] for p in cfg["party"]}
-    return {c: at[CHALLENGER] if "gate" in x._bindings(bindings) else at[WORKERS] for c in cfg["protocols"]
+    return {c: at[CHALLENGER] if {"gate", "loopback"} & set(x._bindings(bindings)) else at[WORKERS]
+            for c in cfg["protocols"]
             if (x := PARTIES.get(c, {}).get(WORKERS)) and x.reaches == CHALLENGER and "gate" in x.optional}
 
 
