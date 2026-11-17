@@ -638,6 +638,25 @@ def refused_after(branch: str, late: str, base: str, move: str, command: list[st
             "the new layout, and check that the merge's tree holds the branch's own files at the new paths")
 
 
+def hand_ours(tree: str, files: list[str], base: str, ours: str, theirs: str, cwd: str | None) -> str:
+    """``tree`` with each of ``files`` merged from ``base`` to ``ours`` and ``theirs`` by `git merge-file --ours`: a hunk
+    where a hand change meets the branch's own line keeps the branch's line, in the script's names (`HAND_OURS=1`)."""
+    with tempfile.TemporaryDirectory() as tmp:
+        sides = [os.path.join(tmp, s) for s in ("ours", "base", "theirs")]
+        env = {**os.environ, "GIT_INDEX_FILE": os.path.join(tmp, "index")}
+        subprocess.run(["git", "read-tree", tree], cwd=cwd, env=env, check=True)
+        for f in files:
+            for path, commit in zip(sides, (ours, base, theirs)):
+                with open(path, "wb") as fh:
+                    fh.write(git("show", f"{commit}:{f}", cwd=cwd).stdout)
+            merged = subprocess.run(["git", "merge-file", "-p", "--ours", *sides], capture_output=True).stdout
+            oid = git("hash-object", "-w", "--stdin", cwd=cwd, input=merged).stdout.decode().strip()
+            mode = out("ls-tree", ours, "--", f, cwd=cwd).split(" ")[0]
+            subprocess.run(["git", "update-index", "--cacheinfo", f"{mode},{oid},{f}"], cwd=cwd, env=env, check=True)
+        return subprocess.run(["git", "write-tree"], cwd=cwd, env=env, check=True, capture_output=True,
+                              text=True).stdout.strip()
+
+
 def restack(branch: str, move: str, onto: str | None = None, base: str | None = None, python: str = sys.executable,
             cwd: str | None = None, pins: bool = True, main: str | None = None) -> dict:
     head, move = rev(branch, cwd), rev(move, cwd)
@@ -683,6 +702,9 @@ def restack(branch: str, move: str, onto: str | None = None, base: str | None = 
             hand = sorted({*hand_of(move, cwd), *([own] if own else [])})
             script_on_base = commit_tree(generated, [], f"restack: what {SCRIPT} writes on {base[:12]}\n", cwd)
             tree, conflicts = merge_trees(tip, move, cwd, base=script_on_base)
+            if conflicts and os.environ.get("HAND_OURS"):
+                tree = hand_ours(tree, conflicts, script_on_base, tip, move, cwd)
+                r["hand_ours"], conflicts = conflicts, []
             if conflicts:
                 return {**r, "status": "conflicted", "step": "hand", "files": conflicts}
             if tree != tree_of(tip, cwd):
