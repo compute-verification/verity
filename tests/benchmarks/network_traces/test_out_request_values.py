@@ -70,19 +70,6 @@ def test_chain_record_publishes_no_rehearsals_request_values(tmp_path):
         "out/honest/out-records.jsonl", "out/honest/check.json", "out/honest/client/certificates.jsonl"))
 
 
-def test_n2_zk_publishes_a_network_attester_runs_public_files_and_not_its_traffic_or_responses(tmp_path):
-    r, out = tmp_path / "run", tmp_path / "OUT"
-    public = {"deployment.json": {"windows": 2}, "cells.jsonl": [{"registration": {"root": "ab"}}],
-              "certified.jsonl": [{"window": 0, "head": "cd"}], "check.json": {"accepted": True},
-              "warden.json": {"process": {}}}
-    put(r, {**public, "traffic.json": [{"at": 0, "body": {"prompt": PROMPT}}],
-            "client.json": {"connections": [{"index": 0, "response": {"ids": PROMPT}}]}})
-    out.mkdir()
-    got = run(block("n2_zk.sh", 'mkdir -p "$OUT/run"', "done"), RUN=r, OUT=out)
-    assert got.returncode == 0, got.stderr
-    assert published(out) == sorted(f"run/{f}" for f in public)
-
-
 def test_scan_zk_copies_six_files_of_its_own_rehearsal_and_not_its_traffic_or_responses(tmp_path):
     """The six files the scan's job copies of its own rehearsal hold no request value. They are not public files:
     `cells.jsonl` holds each registration whole with its cost, which a gate's run keeps on its private side (the

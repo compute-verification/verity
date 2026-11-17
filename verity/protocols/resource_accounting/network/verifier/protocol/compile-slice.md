@@ -79,8 +79,7 @@ decisions past the count with en 0, and 33 idle steps). The seal's rows are in `
 (`verity_vllm.compiler.served_rows.step_rows`), each held to its request's slot through ``map``.
 - It proves w212's charge of its decisions. Its order's charge is the I/O tie's, outside this proof (What a proof of
   the slice covers, above).
-- `compile_slice_zk` refuses a w212 fixture whose engine isn't the trace header's. `replay_vectors --slice` replays an
-  execution phase at the trace's own scheduler unless asked for the sync class (`--AS 0`).
+- `replay_vectors --slice` replays an execution phase at the trace's own scheduler unless asked for the sync class (`--AS 0`).
 - The proof block is 1,021,302 ANDs, 123,120 of them the map's ([served-shape.md](served-shape.md)). Of them,
   ChargeLink_v1{32} is 97,159, and 5,509 are its copies of the words it carries from decision to decision
   ([charge-chain.md](charge-chain.md)).
@@ -105,31 +104,3 @@ decisions past the count with en 0, and 33 idle steps). The seal's rows are in `
   bits.
   - With the served rows in ``srv``, they are refused by ``rows``.
   - With their own rows there, the proof block accepts them, and the native ``srv`` b‖c check refuses them.
-
-**In zero knowledge** (`benchmarks/network_traces/compile_slice_zk.py prove --slice w212 --out DIR --bin FLOCK --lean
-VERIFY`, and `--slice demo`; `compile_slice_zk.sh` builds Flock's `flock-circuit` and the Lean `verity-verify-proof` and
-runs it as a job of 16 CPUs and 64 GB), each proof
-block, a `CompileSlice_v7`, is proved by Flock `prove --zk` behind the Lean ZK server and held by Lean
-`verify --zk`. The verifier opens only ``pub`` and the verdict, and runs the bindings, the carry chain's among them, on
-the proof blocks' b‖c. What the verifier received holds no witness piece: the ``wit`` and ``srv`` rows, every row's
-salt, and the ``cin`` and ``cout`` rows whole. With ``--plain`` the same statement is proved on Flock's plain path
-(``FC_COINS=tree``, Lean `verify --coins tree`), whose guarantee is soundness alone.
-- The scan's rule is the lane's one, field-aligned (`leak_scan.scan`, `verity/protocols/resource_accounting/network/prover/leak_scan.py`). It
-  replaces the phase-18 attack's rule.
-  - A find of a witness piece or carry row counts only if it lies inside one field: one read Flock's proof format
-    makes of a repetition's stream (`circuit.rep*.bin`, `redigest.layout`), or one record of a round message
-    (`rounds[*].msg`, as `transcript_check.T` frames them). A match across two fields doesn't count, and neither does
-    hex a nibble off.
-  - A counted find is excused only if its bytes are in what the statement fixes: ``pub``'s rows (`pub-*.bin`), the
-    statement or the circuit's definition, the streams' integer fields (lengths and parameters, not nonces), and the
-    round messages' headers, domain and labels.
-  - No piece is excused for its byte count or its witness class. A differential against a proof of a different witness
-    is evidence for a manual analysis only.
-  - The rule misses a leak written at a byte shift across fields.
-- The driver scans for every piece but those the staged circuit holds, and for each carry row whole.
-  `compile_slice_zk.py rescan` takes a finished run's scan again under the rule, its pieces recomputed; a salt the run
-  sampled isn't, so a salt it found reads leaked.
-  - Each witness row is cut whole (`leak_scan.public_pieces`). A row shorter than the 16-byte piece is found whole, as
-    the carry rows are: at G < P, the ``srv`` rows of a few steps (10 bytes at the demo's G = 2).
-  - Earlier runs cut with `n2_zk.public_pieces`, which skipped a row's bytes past its last 16-byte boundary and every
-    row shorter than 16 bytes.

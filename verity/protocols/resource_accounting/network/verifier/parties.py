@@ -1,6 +1,6 @@
 """The network attester's manifest on the deployment layer (`verity.runtime`): its parties and the two
 channels that carry what the device hands another party, which a deployment configuration's table declares from
-here. It is the manifest alone: the device's party and the `ProtocolDef` are `../attester/device_party.py`'s.
+here. It is the manifest alone.
 
 ~~~text
 network-certifier -> workers    out-opening {link, window}, the output value's witness its body (private)

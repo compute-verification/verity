@@ -1,6 +1,5 @@
 """A fake upstream's egress served through the network attester, and the slot state each egress bucket reads: the
-egress tests' traffic (`test_network_attester_egress.py`) and `verity/protocols/resource_accounting/network/prover/egress_zk.py`'s. It imports no
-test framework, so a node's bare venv runs it."""
+egress tests' traffic (`test_network_attester_egress.py`)."""
 
 from __future__ import annotations
 
