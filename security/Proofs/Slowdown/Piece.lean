@@ -3,13 +3,7 @@ module
 public import Definitions.InferenceOnly.Assumptions.Theta
 public import Proofs.Core.Circuit
 
-/-!
-# Pieces of a partial containment
-
-Through a partial containment the pieces (`piece`) divide only the gates `S` that `d` computes, and the dark gates are in
-none. The same holds of each piece, with one more case for what it reads (`freshInput_piece`): a dark value enters `d` as
-an input gate, which lies in no inference block, so the inference block reads it too, and it is outside `d`'s θ by `ThetaRegistered`.
--/
+/-! Pieces of a partial containment. -/
 
 @[expose] public section
 
@@ -28,14 +22,12 @@ theorem ofContainment_S {c d : RegisteredCircuit} (M : Containment c.D d.D) :
 
 variable {c d : RegisteredCircuit} (M : PartialContainment c d) {n : ℕ} (P : Partition d.D n)
 
-/-- The piece of `c` that inference block `u` of `d` computes: the gates of `S` whose images lie in `u`. -/
 def piece (u : Fin n) : Finset (Fin c.D.N) := M.S.filter fun g => P.unit (M.emb g) = some u
 
 variable {M P}
 
 theorem mem_dark {g : Fin c.D.N} : g ∈ M.dark ↔ g ∈ c.D.computed ∧ g ∉ M.S := mem_sdiff
 
-/-- Computed gates outside `S` are dark. -/
 theorem card_le_dark_add_inter (M : PartialContainment c d) {A : Finset (Fin c.D.N)} (hA : A ⊆ c.D.computed) :
     A.card ≤ M.dark.card + (A ∩ M.S).card := by
   rw [← card_sdiff_add_card_inter A M.S]
@@ -48,7 +40,6 @@ theorem piece_subset (u : Fin n) : piece M P u ⊆ M.S := filter_subset _ _
 
 theorem piece_subset_computed (u : Fin n) : piece M P u ⊆ c.D.computed := (piece_subset u).trans M.S_computed
 
-/-- A gate outside a piece that the piece reads is in `S`, or outside `S` and read by it. -/
 theorem into_piece_subset (u : Fin n) : c.D.into (piece M P u) ⊆ M.S ∪ c.D.into M.S := by
   intro a ha
   simp only [Circuit.into, mem_filter, mem_univ, true_and] at ha
@@ -59,15 +50,11 @@ theorem into_piece_subset (u : Fin n) : c.D.into (piece M P u) ⊆ M.S ∪ c.D.i
     simp only [Circuit.into, mem_filter, mem_univ, true_and]
     exact ⟨haS, g, piece_subset u hg, hag⟩
 
-/-- A piece has no more gates than its inference block: `emb` is injective on `S`. -/
 theorem card_piece_le (u : Fin n) : (piece M P u).card ≤ (P.gates u).card :=
   card_le_card_of_injOn M.emb (fun g hg => mem_coe.2 (mem_piece.1 (mem_coe.1 hg)).2)
     fun a ha b hb h => M.emb_inj a (mem_union_left _ (piece_subset u (mem_coe.1 ha))) b
       (mem_union_left _ (piece_subset u (mem_coe.1 hb))) h
 
-/-- **A piece reads no more fresh input than its inference block.** A fresh input value the piece reads is a gate of `S` outside the
-piece, whose image is a computed gate outside the inference block, or a gate outside `S`, whose image is an input gate of `d` outside
-its θ (`ThetaRegistered`) and so in no inference block; either way the inference block reads the image, which is as wide. -/
 theorem freshInput_piece (hB : Assumptions.ThetaRegistered c d M) (u : Fin n) :
     freshInput c (piece M P u) ≤ freshInput d (P.gates u) := by
   have hA : ∀ a ∈ c.D.into (piece M P u) \ c.θ, a ∈ M.S ∪ c.D.into M.S := fun a ha =>
@@ -102,7 +89,6 @@ theorem freshInput_piece (hB : Assumptions.ThetaRegistered c d M) (u : Fin n) :
         exact sum_congr rfl fun a ha => (M.emb_w a (hA a ha)).symm
     _ ≤ ∑ b ∈ d.D.into (P.gates u) \ d.θ, d.D.w b := sum_le_sum_of_subset (image_subset_iff.2 hmaps)
 
-/-- **The pieces divide `S`**: a gate of `S` is in the piece of its image's inference block, and in no other. -/
 theorem sum_card_filter_piece {β : Type*} (B : Finset β) (f : β → Fin c.D.N) :
     ∑ u, (B.filter fun b => f b ∈ piece M P u).card = (B.filter fun b => f b ∈ M.S).card := by
   rw [card_eq_sum_card_fiberwise (s := B.filter fun b => f b ∈ M.S) (f := fun b => P.unit (M.emb (f b)))

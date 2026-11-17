@@ -1,9 +1,3 @@
-/-
-SHA-512 over message words as the read's generators build it (`sound_shaW`); the verifier's SHA-512 of a message after a
-prefix of whole blocks as the same chain (`hash_chainW`: the prefix's chaining value, then one compression a block of the
-rest and its padding, each block's words big-endian); and the words' bytes as the read's ports hold them in leaf order
-(`wordsBytes_eq`, `wordsDigest_bytes`).
--/
 module
 
 public import Flock.ReadNet.Sha
@@ -49,27 +43,20 @@ namespace ResourceAccounting.ReadUnit.Gates
 open Flock.HmNets hiding and
 open FlockSoundness.Discharge.Hm
 
-/-- `n` compressions from the chaining value `cv` over the words `ws`, sixteen a block. -/
 def chainW : ℕ → List (BitVec 64) → List (BitVec 64) → List (BitVec 64)
   | 0, cv, _ => cv
   | n + 1, cv, ws => chainW n (compressV cv (ws.take 16)) (ws.drop 16)
 
-/-- Words' bytes, each word big-endian: a digest's 64 bytes from its eight words. -/
 def bytesBE (ws : List (BitVec 64)) : Hash.Msg := ws.flatMap fun w => Hash.be 8 w.toNat
 
-/-- A byte string's 64-bit words, each big-endian. -/
 def wordsBE (l : List UInt8) : List (BitVec 64) := (List.range (l.length / 8)).map fun i => (wordL l 0 i).toBitVec
 
-/-- `G` is the verifier's SHA-512 (`Flock.Sha512.hash`) on every message. -/
 def IsSha512 (G : Hash.Msg → Verity.Digest) : Prop := ∀ m, (G m).bytes = (Flock.Sha512.hash ⟨m.toArray⟩).data.toList
 
-/-- The blocks of a message of `total` bytes once padded. -/
 def blocks (total : ℕ) : ℕ := (total + 17 + zeroPad total) / 128
 
-/-! ## The block generator -/
+/-! SHA-512 over message words as the read's generators build it, and the verifier's SHA-512 as the same chain. -/
 
-/-- **The block generator computes the chain**: whenever its rows hold, `shaW`'s output words are `chainW` of its
-chaining value's and message's. -/
 theorem sound_shaW : ∀ (n : ℕ) (cv msg : List Word), Sound (Flock.ReadNet.shaW n cv msg) fun z out =>
     cv.length = 8 → Words64 cv → msg.length = 16 * n → Words64 msg →
       out.length = 8 ∧ Words64 out ∧ out.map (bv z) = chainW n (cv.map (bv z)) (msg.map (bv z))
@@ -86,8 +73,6 @@ theorem sound_shaW : ∀ (n : ℕ) (cv msg : List Word), Sound (Flock.ReadNet.sh
     rw [o3, s2]
     simp only [chainW, List.map_take, List.map_drop]
 
-/-! ## The padding and the chain -/
-
 theorem padTail_bytes (total : ℕ) :
     Flock.ReadNet.padTail total = ([128] : List UInt8) ++ List.replicate (zeroPad total) (0 : UInt8) ++ lenBytes total :=
   rfl
@@ -102,7 +87,6 @@ theorem blocks_mul (total : ℕ) : 128 * blocks total = total + (Flock.ReadNet.p
   unfold zeroPad
   omega
 
-/-- The chain over the first `n` blocks reads only those blocks. -/
 theorem chain_prefix {d d' : ByteArray} (n : ℕ) (h : ∀ i < 128 * n, d.get! i = d'.get! i) :
     chain d n = chain d' n := by
   induction n with
@@ -119,8 +103,6 @@ theorem size_chain (d : ByteArray) {k : ℕ} (hk : 0 < k) : (chain d k).size = 8
 theorem chainV_toBV (d : ByteArray) {k : ℕ} (hk : 0 < k) : chainV d k = toBV (chain d k) := by
   rw [chainV, map_range_eq_toBV _ (size_chain d hk)]
 
-/-- **The words of a padded message's blocks are its chain's**: if every block from `b` on is `W`'s next sixteen words,
-`chainW` from the chaining value after `b` blocks is the chaining value after `b + k`. -/
 theorem chainW_eq_chainV (P : ByteArray) : ∀ (k b : ℕ) (W : List (BitVec 64)),
     (∀ j < k, (W.drop (16 * j)).take 16 = blockV P (b + j)) → chainW k (chainV P b) W = chainV P (b + k)
   | 0, b, _, _ => rfl
@@ -147,7 +129,6 @@ theorem take_drop_map_range {α : Type} (g : ℕ → α) {n a k : ℕ} (h : a + 
   · intro i h1 h2
     simp only [List.getElem_take, List.getElem_drop, List.getElem_map, List.getElem_range]
 
-/-- Block `np + j` of `pre ‖ rest`, for `pre` of `np` blocks, is the sixteen words of `rest` from word `16 j`. -/
 theorem blockV_eq {P : ByteArray} {pre rest : List UInt8} (hP : P.data.toList = pre ++ rest) {np : ℕ}
     (hpre : pre.length = 128 * np) {j : ℕ} (hj : 16 * j + 16 ≤ rest.length / 8) :
     ((wordsBE rest).drop (16 * j)).take 16 = blockV P (np + j) := by
@@ -161,8 +142,6 @@ theorem blockV_eq {P : ByteArray} {pre rest : List UInt8} (hP : P.data.toList = 
   rw [List.getD_append_right _ _ _ _ (by omega)]
   congr 1
   omega
-
-/-! ## Bytes of words -/
 
 theorem getD_flatMap8 {α : Type} (f : α → List UInt8) (hf : ∀ a, (f a).length = 8) (d : α) :
     ∀ (l : List α) (i : ℕ), i < 8 * l.length → (l.flatMap f).getD i 0 = (f (l.getD (i / 8) d)).getD (i % 8) 0
@@ -202,7 +181,6 @@ theorem toUInt8_shift (w : UInt64) {k : ℕ} (hk : k < 8) :
   simp only [Nat.reducePow, Nat.mod_mod]
   try rfl
 
-/-- **A chaining value's digest is its words' big-endian bytes.** -/
 theorem digestOf_eq_bytesBE (h : Array UInt64) (hs : h.size = 8) :
     (FlockSoundness.Discharge.Hm.digestOf h).data.toList = bytesBE (toBV h) := by
   have hl : (toBV h).length = 8 := by simp [toBV, hs]
@@ -215,11 +193,6 @@ theorem digestOf_eq_bytesBE (h : Array UInt64) (hs : h.size = 8) :
       getD_bytesBE (ws := toBV h) (by rw [hl]; omega), getD_toBV]
     exact toUInt8_shift _ (Nat.mod_lt _ (by norm_num))
 
-/-! ## SHA-512 after a prefix of whole blocks -/
-
-/-- **The verifier's SHA-512 after a prefix of whole blocks is the chain from the prefix's chaining value**: the digest
-of `pre ‖ data`, for `pre` of `np` blocks, is the chain from `pre`'s chaining value over the words of `data` and its
-padding, as big-endian bytes. -/
 theorem hash_chainW {G : Hash.Msg → Verity.Digest} (hG : IsSha512 G) {pre data : List UInt8} {np : ℕ}
     (hpre : pre.length = 128 * np) :
     (G (pre ++ data)).bytes =
@@ -257,7 +230,6 @@ theorem hash_chainW {G : Hash.Msg → Verity.Digest} (hG : IsSha512 G) {pre data
       fun j hj => blockV_eq hP' hpre (by rw [hrest]; omega),
     Nat.add_sub_cancel' hnp, chainV_toBV P hpos, digestOf_eq_bytesBE _ (size_chain P hpos)]
 
-/-- The verifier's SHA-512 is a hash `IsSha512` describes. -/
 theorem isSha512_sha512 : IsSha512 Verity.sha512 := by
   intro m
   have hs : (Flock.Sha512.hash ⟨m.toArray⟩).data.size = 64 := by
@@ -273,9 +245,6 @@ theorem isSha512_sha512 : IsSha512 Verity.sha512 := by
     show (Flock.Sha512.hash ⟨m.toArray⟩).data.getD i 0 = _
     rw [Array.getD_eq_getD_getElem?, Array.getElem?_eq_getElem hi, Option.getD_some]
 
-/-! ## Words in leaf order -/
-
-/-- Bits `[a, a + k)` of a number's bits are its `k` bits from bit `a`. -/
 theorem num_chunk (l : List Bool) {a k : ℕ} (h : a + k ≤ l.length) :
     num ((l.drop a).take k) = num l / 2 ^ a % 2 ^ k := by
   have e := num_append (l.take a) (l.drop a)
@@ -340,7 +309,6 @@ theorem be8_word (z : Var → Bool) {w : Word} (hw : w.length = 64) :
   simp only [num_chunk _ hl, num_evs_word z hw, e1, Nat.toUInt8_eq, show 8 - 1 - m = 7 - m by omega]
   try rfl
 
-/-- The bytes words hold in leaf order are their values' big-endian bytes. -/
 theorem wordsBytes_eq (z : Var → Bool) {n : ℕ} {ws : List Word} (h : Shaped n ws) :
     wordsBytes z ws = bytesBE (ws.map (bv z)) := by
   induction ws generalizing n with
@@ -354,7 +322,6 @@ theorem wordsBytes_eq (z : Var → Bool) {n : ℕ} {ws : List Word} (h : Shaped 
       show ReadUnit.bytesOf (evs z ws.flatten) = wordsBytes z ws from rfl, ih', be8_word z hw]
     simp only [bytesBE, List.map_cons, List.flatMap_cons]
 
-/-- The digest 8 words hold in leaf order has their values' big-endian bytes. -/
 theorem wordsDigest_bytes (z : Var → Bool) {ws : List Word} (h : Shaped 8 ws) :
     (wordsDigest z ws).bytes = bytesBE (ws.map (bv z)) := by
   rw [← wordsBytes_eq z h]
@@ -364,8 +331,6 @@ theorem wordsDigest_bytes (z : Var → Bool) {ws : List Word} (h : Shaped 8 ws) 
   · intro i h1 h2
     simp only [Verity.Digest.bytes, List.getElem_ofFn, wordsDigest, ReadUnit.digestOf]
     exact List.getD_eq_getElem _ _ h2
-
-/-! ## Bits of big-endian bytes -/
 
 theorem testBit_byte (v : BitVec 64) {k b : ℕ} (hb : b < 8) :
     ((v.toNat / 256 ^ (7 - k) % 256).toUInt8).toNat.testBit b = v.getLsbD (8 * (7 - k) + b) := by
@@ -390,7 +355,6 @@ theorem wordL_bytesBE {vs : List (BitVec 64)} (pad : List UInt8) {i : ℕ} (hi :
 
 theorem length_wordsBE (l : List UInt8) : (wordsBE l).length = l.length / 8 := by simp [wordsBE]
 
-/-- The words of words' bytes and a tail are the words and the tail's words. -/
 theorem wordsBE_append (vs : List (BitVec 64)) (pad : List UInt8) :
     wordsBE (bytesBE vs ++ pad) = vs ++ wordsBE pad := by
   apply List.ext_getElem
@@ -409,7 +373,6 @@ theorem wordsBE_append (vs : List (BitVec 64)) (pad : List UInt8) :
       congr 1
       omega
 
-/-- Bit `t` of the bytes words hold is the form at `wordBit t` of their bits. -/
 theorem ev_getD_wordBit (z : Var → Bool) {ws : List Word} (hw : Words64 ws) {t : ℕ} (ht : t < 64 * ws.length) :
     ev z (ws.flatten.getD (wordBit t) Lin.zero) = bitL (bytesBE (ws.map (bv z))) t := by
   have h1 : ev z (ws.flatten.getD (wordBit t) Lin.zero) = FlockSoundness.Discharge.Hm.bit z ws.flatten (wordBit t) := by
@@ -420,8 +383,6 @@ theorem ev_getD_wordBit (z : Var → Bool) {ws : List Word} (hw : Words64 ws) {t
   congr 1
   rw [List.getD_eq_getElem?_getD, List.getD_eq_getElem?_getD, List.getElem?_map]
   cases ws[t / 64]? <;> rfl
-
-/-! ## The constants a part's message carries -/
 
 theorem chain_one (pre : ByteArray) : chain pre 1 = Flock.Sha512.compress Flock.Sha512.iv pre 0 := by
   rw [chain_succ, Nat.mul_zero]
@@ -456,7 +417,6 @@ theorem words64_constWords (l : List UInt8) : Words64 (Flock.ReadNet.constWords 
 theorem length_constWords (l : List UInt8) : (Flock.ReadNet.constWords l).length = l.length / 8 := by
   simp [Flock.ReadNet.constWords]
 
-/-- A chaining value after one block of `pre` and its bytes' chain is the hash of `pre ‖ data`. -/
 theorem hash_mid {G : Hash.Msg → Verity.Digest} (hG : IsSha512 G) {pre : ByteArray} (hpre : pre.size = 128)
     (data : List UInt8) :
     (G (pre.data.toList ++ data)).bytes =
@@ -465,8 +425,6 @@ theorem hash_mid {G : Hash.Msg → Verity.Digest} (hG : IsSha512 G) {pre : ByteA
   have hl : pre.data.toList.length = 128 := by rw [Array.length_toList, ByteArray.size_data, hpre]
   have hb : (⟨pre.data.toList.toArray⟩ : ByteArray) = pre := ByteArray.ext (by simp)
   rw [hash_chainW hG (np := 1) (by omega), hb, hl]
-
-/-! ## Byte strings of the code -/
 
 theorem pad_data (b : ByteArray) (n : ℕ) : (Flock.Hm96.pad b n).data.toList = Hash.padTo n b.data.toList := by
   rw [Flock.Hm96.pad, ByteArray.toList_data_append, Hash.padTo]

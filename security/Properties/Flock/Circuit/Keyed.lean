@@ -4,14 +4,7 @@ public import Properties.Flock.Circuit.Rows
 public import Properties.Flock.Circuit.Keys
 import Mathlib.Tactic.Ring.RingNF
 
-/-!
-# The circuit's program on Δ's source keys
-
-`keyProg c hU n` is the program of `n` units of the circuit `c`'s template instance rows (`circuitRows`, the unit
-net's rows stacked `units_per_vu` times), each unit's input `x` on the input gate of its key (`Aliased.keyIdx`):
-`uniform` on the source-indexed input gates (`inGates`, `insOf`, `circuitProg`). Moved unchanged from
-`Proofs.Flock.Soundness.Discharge.Placed.{Setup,Wiring,Keyed}`; the lemmas about them stay there.
--/
+/-! The circuit's program on Δ's source keys. -/
 
 @[expose] public section
 
@@ -71,7 +64,6 @@ theorem srcGate_val_ge {u : ℕ} (hu : u < nU) (s : Option (Fin B)) : 1 ≤ (src
   · simp [srcGate, zeroGate]
   · simp only [srcGate]; omega
 
-/-- No input column reads the constant's gate. -/
 theorem insOf_ne_one (u : ℕ) (x : Fin nIn) : insOf nU B src u x ≠ oneGate nU B := fun h => by
   have : 1 ≤ (insOf nU B src u x).val := by
     unfold insOf

@@ -12,15 +12,8 @@ public import Proofs.Core.Circuit
 public import Mathlib.Analysis.SpecialFunctions.Pow.Real
 public import Mathlib.Tactic.Linarith
 
-/-!
-# The inference-only policy's guarantees: proofs of their witnesses
-
-Each witness of `Definitions.Slowdown.Guarantees.Witnesses`, at the toy (`Slowdown.Capability.Toy`) and the instances of
-`Slowdown.Witness`. The facts they share come first: the toy's one proof block is a `(2, 1)`-partition of exactly two gates,
-so the toy complies at `Γ = 2` and the rate `α = 1/2`, and with the token registered at `α = 0`; the threading `T1` is
-`(1, 0)`-threaded and its weights incompressible at half a bit each, read off the toy's sixteen sets of gates; and `T0`
-has no counted multiplication and bound `e`.
--/
+/-! Proofs of the inference-only policy's guarantees' witnesses, at the toy (`Slowdown.Capability.Toy`) and the
+instances of `Slowdown.Witness`. -/
 
 @[expose] public section
 
@@ -34,11 +27,9 @@ theorem isCK_D : P1.IsCK D 2 1 := { boolean := ⟨fun _ => rfl, by decide⟩, ca
 
 theorem isCK_Dθ : P1.IsCK Dθ 2 0 := { boolean := ⟨fun _ => rfl, by decide⟩, card := by decide, reads := by decide }
 
-/-- The toy's one proof block is two gates reading one fresh bit, the token: it complies at `Γ = 2` and `α = 1/2`. -/
 theorem compliesRate_D : CompliesRate 2 (1 / 2) D := by
   simpa only [Nat.cast_one, Nat.cast_ofNat] using SecurityProofs.compliesRate_of_complies isCK_D (by decide)
 
-/-- With the token registered too, the toy's one proof block reads no fresh bit: it complies at `α = 0`. -/
 theorem compliesRate_Dθ : CompliesRate 2 0 Dθ := by
   simpa only [Nat.cast_zero, zero_div] using SecurityProofs.compliesRate_of_complies isCK_Dθ (by decide)
 

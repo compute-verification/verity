@@ -3,23 +3,7 @@ module
 public import Proofs.Flock.Claims.Sampling.Count
 public import Proofs.WeightSecurity.Deployed
 
-/-!
-# The deployed sampling designs' detection pressure
-
-`TheftServedDeployed` takes `pa B ≤ x^|B|` for each window's sampling design. It holds at every strata design (all,
-uniform subset, stratified and work) whose strata each sample at most their size and miss one more incorrect proof block
-with probability at most `x`, that is `fac n k 0 = (n − k)/n ≤ x`.
-
-* `gr_le_pow`: a stratum misses `m` incorrect proof blocks with probability at most `x^m`.
-* `strataPa_le_pow`: a strata sample misses `B` with probability at most `x^|B|`.
-* `pa_le_pow`: so does a window's sampling design, at its strata.
-* `registered_strata`: a registered sampling design's strata cover its population and each sample at most their size.
-* `pa_le_pow_of_fac`: so a registered window's sampling design misses `B` with probability at most `x^|B|` once each
-  of its strata has `fac n k 0 ≤ x`.
-* `fac_le_of_rate`, `pa_le_pow_of_rate`: a sampling design that samples each stratum at the rate `num/den` or more, as
-  a rate rule's does, has `x = 1 − num/den`, whatever sizes the prover registers.
-* `TheftServedDeployedRate`: `TheftServedDeployed` at such designs, with `(1 − num/den)^M` in its bound.
--/
+/-! The deployed sampling designs' detection pressure, `pa B ≤ x^|B|`, which `TheftServedDeployed` takes. -/
 
 @[expose] public section
 
@@ -43,8 +27,6 @@ theorem strataPa_le_pow (ss : List (ℕ × ℕ)) (hk : ∀ p ∈ ss, p.2 ≤ p.1
   rw [List.getD_eq_getElem _ _ (mem_range.1 hi)]
   exact List.getElem_mem _
 
-/-- **A window's sampling design misses `B` with probability at most `x^|B|`** when its strata `ss` cover its
-population, each samples at most its size and misses one more incorrect proof block with probability at most `x`. -/
 theorem pa_le_pow (w : JointAuditV5) {ss : List (ℕ × ℕ)}
     (hss : (Properties.Spot.oneStageOf w.samplingDesign).strata w.ns = some ss) (hk : ∀ p ∈ ss, p.2 ≤ p.1)
     (hcov : (ss.map Prod.fst).sum = w.ns.sum) {x : ℝ} (hf : ∀ p ∈ ss, fac p.1 p.2 0 ≤ x) (B : Finset (Fin w.nJ)) :
@@ -58,7 +40,6 @@ theorem pa_le_pow (w : JointAuditV5) {ss : List (ℕ × ℕ)}
     rw [hcov]
     exact mem_range.1 (hB hv)
 
-/-- **A registered sampling design's strata** cover its population and each sample at most their size. -/
 theorem registered_strata {samplingDesign : Flock.Draw.SamplingDesign} {ns : List ℕ} {kd : ℕ} (h : Flock.Bridge.SamplingDesignOn samplingDesign ns kd) :
     ∃ ss, (Properties.Spot.oneStageOf samplingDesign).strata ns = some ss ∧ (∀ p ∈ ss, p.2 ≤ p.1) ∧
       (ss.map Prod.fst).sum = ns.sum := by
@@ -87,16 +68,12 @@ theorem registered_strata {samplingDesign : Flock.Draw.SamplingDesign} {ns : Lis
       exact min_le_left _ _
     · rw [hfst, List.map_fst_zip hlen]
 
-/-- **A registered window's sampling design misses `B` with probability at most `x^|B|`** when each of its strata misses
-one more incorrect proof block with probability at most `x`. -/
 theorem pa_le_pow_of_fac (w : JointAuditV5) {x : ℝ}
     (hf : ∀ ss, (Properties.Spot.oneStageOf w.samplingDesign).strata w.ns = some ss → ∀ p ∈ ss, fac p.1 p.2 0 ≤ x)
     (B : Finset (Fin w.nJ)) : w.pa B ≤ x ^ B.card := by
   obtain ⟨ss, hss, hk, hcov⟩ := registered_strata w.hlaw
   exact pa_le_pow w hss hk hcov (hf ss hss) B
 
-/-- **A stratum sampled at the rate `num/den` or more** (`num · n ≤ den · k`) misses one more incorrect proof block
-with probability at most `1 − num/den`. -/
 theorem fac_le_of_rate {num den n k : ℕ} (hd : 0 < den) (hq : num ≤ den) (h : num * n ≤ den * k) :
     fac n k 0 ≤ 1 - (num : ℝ) / den := by
   have hden : (0 : ℝ) < den := by exact_mod_cast hd
@@ -114,8 +91,6 @@ theorem fac_le_of_rate {num den n k : ℕ} (hd : 0 < den) (hq : num ≤ den) (h 
   rw [Nat.cast_sub hk.le, sub_div, div_self hn'.ne']
   exact sub_le_sub_left ((div_le_div_iff₀ hden hn').2 h') 1
 
-/-- **A registered window's sampling design at a rate** misses `B` with probability at most `(1 − num/den)^|B|` when
-each of its strata samples at the rate `num/den` or more, however the prover sizes them. -/
 theorem pa_le_pow_of_rate (w : JointAuditV5) {num den : ℕ} (hd : 0 < den) (hq : num ≤ den)
     (hr : ∀ ss, (Properties.Spot.oneStageOf w.samplingDesign).strata w.ns = some ss → ∀ p ∈ ss, num * p.1 ≤ den * p.2)
     (B : Finset (Fin w.nJ)) : w.pa B ≤ (1 - (num : ℝ) / den) ^ B.card :=
@@ -124,10 +99,6 @@ theorem pa_le_pow_of_rate (w : JointAuditV5) {num den : ℕ} (hd : 0 < den) (hq 
 open FlockSoundness FlockSoundness.Game FlockSoundness.Audit FlockSoundness.Discharge.Exec FlockSoundness.Refine
   FlockSoundness.Discharge.ZkLink FlockSoundness.Discharge.ZkExec FlockSoundness.Discharge.Placed
   FlockSoundness.Discharge.Composed FlockSoundness.Discharge.ZkHidden WeightSecurity.Assumptions in
-/-- **Model weight security at the deployed audit, at a rate.** `TheftServedDeployed` when each window's sampling
-design samples every stratum at the rate `num/den` or more: the audit leaves `M` incorrect proof blocks undetected with
-probability at most the windows' knowledge and binding terms plus `(1 − num/den)^M`, whatever populations the prover
-registers. -/
 theorem TheftServedDeployedRate {Ω R Θ Q Adv O V Tick Θ' : Type} [Fintype Ω] [Fintype R] [Fintype Adv]
     [Inhabited Adv] [Fintype O] [DecidableEq O] [Fintype V] [Fintype Tick] [Inhabited Tick]
     (W : ℕ → JointAuditV5) (T L E M num den : ℕ) (hd : 0 < den) (hq : num ≤ den)

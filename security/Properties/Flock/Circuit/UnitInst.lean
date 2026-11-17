@@ -3,14 +3,7 @@ module
 public import Properties.Flock.Circuit.CircuitOf
 public import Properties.Flock.Circuit.ProgRows
 
-/-!
-# A unit of the key program as an instance of the circuit's rows
-
-`unitInst D hU n u`: unit `u` of the key program as an instance of the circuit's template instance rows
-(`IsRowsUnit`), wired as the program wires them (`Const.Prog.rowsWireC`, cast along `rows_keyProg`); `constGate`, the
-gate on those rows' constant column. Moved unchanged from `Proofs.Flock.Bridge.UnitRows`, which holds the lemmas
-about them.
--/
+/-! A unit of the key program as an instance of the circuit's rows. -/
 
 @[expose] public section
 

@@ -13,28 +13,7 @@ import Mathlib.Logic.Equiv.PartialEquiv
 import Proofs.Spot.Determinacy
 meta import Lean.Meta.Tactic.NormCast
 
-/-!
-# Exfiltration before detection: from the sample and the population to the probability of theft
-
-* `indepSample_acceptCoins`: the sample that catches unit `u` independently, when its coin `p u` comes up `true`, lets the
-  incorrect set `B` escape with probability exactly `Π_{u ∈ B} P(p u = false)`.
-* `pressure_of_sample`, `pressure_indepSample`: **detection pressure from the sample and the cone.** A window whose leak is at
-  most its incorrect proof blocks' cone egress `Σ_{u ∈ B} E(u)`, under a sample that catches `u` with probability
-  at least `κ E(u)`, meets `DetectionPressure κ`.
-* `Dataflow.card_changed_le`: **a checked population is cone-local.** The egress slots where an assignment differs from
-  the honest one, with the same inputs, number at most `Σ_{u ∈ incorrect} E(u)` (POP1's `eq_off_cone`, `card_coneEgress_le`).
-* `guess_le`: **bits to probability.** A view that is a deviation `d ∈ 𝓓` applied to the honest view gives up the target
-  with probability at most `Pr[d ∉ 𝓓] + #𝓓 · g`, when the honest view alone gives it with probability at most `g`.
-* `card_devBall_le`: the deviations that change at most `K` of `m` slots number at most `Σ_{j ≤ K} C(m, j) · |V| ^ K`.
-* `exfiltration_bound`: **the end-to-end bound.** If every deployment's egress is its honest egress with at most
-  `cum + Δ` slots changed, `cum` what leaves through the first detection under an adaptive strategy with detection
-  pressure `κ` and per-window leak `ℓ`, then any decoder of the egress and the side channel `Y` outputs the target
-  with probability at most `exp (-κ (K - Δ - ℓ)) + Σ_{j ≤ K} C(m, j) · |V| ^ K · |Y| · g`, for every `K`.
-* `card_changedThrough_le`, `exfiltration_bound_runs`: **over a deployment's windows.** The slots the windows change
-  through the first detection number at most `cum`, so the deviation-size premise holds whenever each window's egress
-  differs from honest only on the slots it changes (`Dataflow.card_changed_le` bounds those by its incorrect proof
-  blocks' cone egress), plus at most `Δ` slots after the detection. The count is over the deployment's `n · |O|` slots.
--/
+/-! Exfiltration before detection: from the sample and the population to the probability of theft. -/
 
 @[expose] public section
 
@@ -43,9 +22,6 @@ namespace Population.Exfil
 open Finset
 open Verity.Game (iid piDistribution_toReal prodDistribution prodDistribution_toReal)
 
-/-! ## Detection pressure from the sample and the cone -/
-
-/-- A catch coin comes up `false` with the probability it doesn't come up `true`. -/
 theorem toReal_false_eq (q : PMF Bool) : (q false).toReal = 1 - (q true).toReal := by
   have h := Verity.Game.sum_toReal_pmf q
   rw [Fintype.sum_bool] at h
@@ -56,8 +32,6 @@ theorem toReal_true_le_one (q : PMF Bool) : (q true).toReal ≤ 1 := by
   rw [Fintype.sum_bool] at h
   linarith [ENNReal.toReal_nonneg (a := q false)]
 
-/-- **The independent sample's acceptance probability**: the incorrect set `B` escapes with probability
-`Π_{u ∈ B} P(p u = false)`. -/
 theorem indepSample_acceptCoins {U : Type} [Fintype U] [DecidableEq U] (p : U → PMF Bool) (B : Finset U) :
     Verity.Game.prPMFReal (indepSample p) (· ∈ acceptCoins B) = ∏ u ∈ B, (p u false).toReal := by
   rw [Verity.Game.prPMFReal_mem]
@@ -83,9 +57,6 @@ theorem indepSample_acceptCoins {U : Type} [Fintype U] [DecidableEq U] (p : U �
   rw [acceptCoins, sum_filter, sum_congr rfl fun c _ => hpt c, ← Fintype.prod_sum, prod_congr rfl fun u _ => hsum u,
     prod_ite_mem, univ_inter]
 
-/-- **Detection pressure from the sample and the cone**: if each window's leak is at most its incorrect proof blocks' cone
-egress `Σ_{u ∈ B} E(u)`, and the window escapes with probability at most `Π_{u ∈ B} (1 - a u)` for catch probabilities
-`a u ≥ κ E(u)`, the strategy meets detection pressure `κ`. -/
 theorem pressure_of_sample {Ω U : Type} {μ : PMF Ω} {κ : ℝ} (hκ : 0 ≤ κ) (A : Strategy Ω)
     (B : List Ω → Finset U) (E a : U → ℝ) (ha : ∀ u, 0 ≤ a u ∧ a u ≤ 1) (hκE : ∀ u, κ * E u ≤ a u)
     (hleak : ∀ h, A.leak h ≤ ∑ u ∈ B h, E u)
@@ -99,9 +70,6 @@ theorem pressure_of_sample {Ω U : Type} {μ : PMF Ω} {κ : ℝ} (hκ : 0 ≤ �
   have h2 : κ * A.leak h ≤ κ * ∑ u ∈ B h, E u := mul_le_mul_of_nonneg_left (hleak h) hκ
   linarith
 
-/-- **The independent sample gives detection pressure**: a strategy whose window escapes exactly when its incorrect set `B h`
-does, and leaks at most `Σ_{u ∈ B h} E(u)`, meets detection pressure `κ` under the sample catching `u` with probability
-`P(p u = true) ≥ κ E(u)`. -/
 theorem pressure_indepSample {U : Type} [Fintype U] [DecidableEq U] {κ : ℝ} (hκ : 0 ≤ κ) (E : U → ℝ)
     (p : U → PMF Bool) (hκE : ∀ u, κ * E u ≤ (p u true).toReal) (A : Strategy (U → Bool))
     (B : List (U → Bool) → Finset U) (hA : ∀ h, A.esc h = acceptCoins (B h)) (hleak : ∀ h, A.leak h ≤ ∑ u ∈ B h, E u) :
@@ -111,12 +79,7 @@ theorem pressure_indepSample {U : Type} [Fintype U] [DecidableEq U] {κ : ℝ} (
     rw [hA h, indepSample_acceptCoins]
     exact (prod_congr rfl fun u _ => toReal_false_eq (p u)).le
 
-/-! ## Bits to probability -/
-
-/-- **Bits to probability**: if the view is `F d` of the honest view `hon d` for a deviation `d = dv z`, and the honest
-view alone gives the target up with probability at most `g` for every `d ∈ 𝓓`, then any decoder of the view gets the
-target with probability at most `Pr[dv ∉ 𝓓] + #𝓓 · g`. The honest view may itself depend on the deviation (users who
-adapt to what they saw). -/
+/-- The honest view may itself depend on the deviation (users who adapt to what they saw). -/
 theorem guess_le {Z D H X T : Type} [Fintype Z] (ρ : PMF Z) (S : Z → T) (𝓓 : Finset D)
     (hon : D → Z → H) (F : D → H → X) (dv : Z → D) {g : ℝ} (hT : ∀ d ∈ 𝓓, TrustedModel ρ S (hon d) g)
     (dec : X → T) :
@@ -150,12 +113,10 @@ theorem guess_le {Z D H X T : Type} [Fintype Z] (ρ : PMF Z) (S : Z → T) (𝓓
         refine add_le_add le_rfl ((sum_le_sum fun d hd => hT' d hd).trans ?_)
         rw [sum_const, nsmul_eq_mul]
 
-/-- The deviations that change at most `K` slots. -/
 noncomputable def devBall (Slot V : Type) [Fintype Slot] [DecidableEq Slot] [Fintype V] (K : ℕ) :
     Finset (Dev Slot V) :=
   (univ.filter fun C : Finset Slot => C.card ≤ K).sigma fun _ => univ
 
-/-- **The Hamming-ball count**: at most `Σ_{j ≤ K} C(m, j) · |V| ^ K` deviations change at most `K` of `m` slots. -/
 theorem card_devBall_le (Slot V : Type) [Fintype Slot] [DecidableEq Slot] [Fintype V] [Nonempty V] (K : ℕ) :
     (devBall Slot V K).card ≤ (∑ j ∈ range (K + 1), (Fintype.card Slot).choose j) * Fintype.card V ^ K := by
   have hV : 1 ≤ Fintype.card V := Fintype.card_pos
@@ -173,15 +134,6 @@ theorem card_devBall_le (Slot V : Type) [Fintype Slot] [DecidableEq Slot] [Finty
   · rw [sum_const, smul_eq_mul]
     exact Nat.mul_le_mul_right _ hfilter
 
-/-! ## The end-to-end bound -/
-
-/-- **The end-to-end bound.** The weights `w` are sampled from `ρ` and the deployment's `n` windows' coins from `μ`. The
-prover plays the adaptive strategy `A w`, with detection pressure `κ` and per-window leak at most `ℓ`. The outsider sees
-the egress, which is the honest egress `hon (d, y)` with the deviation `d = dv` applied, and the side channel
-`y = side ∈ Y`. Suppose the deviation changes at most `cum + Δ` slots, where `cum` is what leaves through the first
-detection and `Δ` covers the windows between that detection and the halt. Suppose also that the honest egress alone
-gives the target up with probability at most `g`. Then for every `K`, any decoder outputs the target with probability
-at most `exp (-κ (K - Δ - ℓ)) + Σ_{j ≤ K} C(m, j) · |V| ^ K · |Y| · g`, where `m` is the number of egress slots. -/
 theorem exfiltration_bound {Ω W T Slot V Y : Type} [Fintype Ω] [DecidableEq Ω] [Fintype W] [Fintype Slot]
     [DecidableEq Slot] [Fintype V] [Nonempty V] [Fintype Y] {μ : PMF Ω} {ρ : PMF W}
     {κ ℓ Δ g : ℝ} (hκ : 0 ≤ κ) (hg : 0 ≤ g) (n K : ℕ) (A : W → Strategy Ω)
@@ -222,10 +174,6 @@ theorem exfiltration_bound {Ω W T Slot V Y : Type} [Fintype Ω] [DecidableEq Ω
           ENNReal.toReal_nonneg
     _ = _ := by rw [← sum_mul, Verity.Game.sum_toReal_pmf, one_mul]
 
-/-! ## A deployment's windows -/
-
-/-- **The windows' changed slots add up to `cum`**: when each window leaks at least the number of egress slots it
-changes, the slots changed through the first detection number at most what leaves through it. -/
 theorem card_changedThrough_le {Ω O : Type} [DecidableEq Ω] [DecidableEq O] (A : Strategy Ω) (chg : List Ω → Finset O)
     (hchg : ∀ h, ((chg h).card : ℝ) ≤ A.leak h) :
     ∀ (n : ℕ) (h : List Ω) (cs : Fin n → Ω), ((changedThrough A chg n h cs).card : ℝ) ≤ A.cum n h cs
@@ -240,11 +188,6 @@ theorem card_changedThrough_le {Ω O : Type} [DecidableEq Ω] [DecidableEq O] (A
       exact card_changedThrough_le A chg hchg n (cs 0 :: h) (Fin.tail cs)
     · simp
 
-/-- **The end-to-end bound over a deployment's windows.** Window `i` of `n` has egress slots `O`, so the deployment
-has `n · |O|`. The window after history `h` changes the slots `chg w h`, and its leak is their number. The egress
-deviates from honest only on the slots changed through the first detection and on at most `Δ` slots after it, before
-the halt. Then any decoder of the egress and the side channel outputs the target with probability at most
-`exp (-κ (K - Δ - ℓ)) + Σ_{j ≤ K} C(n |O|, j) · |V| ^ K · |Y| · g`. -/
 theorem exfiltration_bound_runs {Ω W T O V Y : Type} [Fintype Ω] [DecidableEq Ω] [Fintype W] [Fintype O]
     [DecidableEq O] [Fintype V] [Nonempty V] [Fintype Y] {μ : PMF Ω} {ρ : PMF W} {κ ℓ g : ℝ} (hκ : 0 ≤ κ)
     (hg : 0 ≤ g) (n K Δ : ℕ) (A : W → Strategy Ω)
@@ -274,16 +217,12 @@ theorem exfiltration_bound_runs {Ω W T O V Y : Type} [Fintype Ω] [DecidableEq 
 
 end Population.Exfil
 
-/-! ## A checked population is cone-local -/
-
 namespace Population.Dataflow
 
 open Finset
 
 variable {U S : Type} (P : Dataflow U S)
 
-/-- **A checked population is cone-local**: an assignment that holds the honest run's inputs differs from it on at most
-`Σ_{u ∈ incorrect} E(u)` egress slots, `E(u) = |coneEgress O {u}|`. -/
 theorem card_changed_le [Fintype U] (hc : P.Covered) (ha : P.Acyclic) {V : Type} [DecidableEq V] (f : P.Fns V)
     (O : Finset S) {σ honest : S → V} (hin : ∀ t ∈ P.input, σ t = honest t) (hh : ∀ u, P.Correct f honest u) :
     (O.filter fun s => σ s ≠ honest s).card ≤ ∑ u ∈ P.incorrect f σ, (P.coneEgress O {u}).card := by

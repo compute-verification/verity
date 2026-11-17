@@ -3,20 +3,7 @@ module
 public import Definitions.ResourceAccounting.Guarantees.Requirement
 import Mathlib.Algebra.Order.BigOperators.Group.Finset
 
-/-!
-# A registered circuit's requirement, from what the audit credits
-
-The values a store placement packs in one block total at most the block's `b` bits (`bits_filter_block_le`): their bit
-ranges are disjoint intervals of `[0, b)`. So the values of a set `S`, each in a block of `R`, outside the blocks `H`
-total at most `|R \ H|·b` bits (`bits_le_bitsAt_add`), and those that lie in one block per group at most `b` per group
-(`bits_le_groups`). `ResourceAccounting.SecurityProofs.RequirementHeld` applies the first to the credited values and the
-resident blocks, `ResourceAccounting.SecurityProofs.RequirementMoved` to the credited reads and the plan, and
-`ResourceAccounting.SecurityProofs.RequirementUncredited` and `ResourceAccounting.SecurityProofs.RequirementUnplanned` the second to
-the values in incomplete blocks. Each uses only that every credited block is resident, or planned: other resident or
-planned blocks hold none of `W`'s credited values. `ResourceAccounting.SecurityProofs.RequirementHeldLive` and
-`ResourceAccounting.SecurityProofs.RequirementDense` sum the credited bits block by block. An execution that follows its wiring
-reads only live values (`reads_subset_live`).
--/
+/-! A registered circuit's requirement, from what the audit credits. -/
 
 @[expose] public section
 
@@ -24,7 +11,6 @@ namespace ResourceAccounting.Requirement
 
 variable {G : Type} [DecidableEq G]
 
-/-- A step reads only values live when it begins. -/
 theorem reads_subset_live {W : Wiring G} {e : Execution G} (h : e.Follows W) (t : ℕ) :
     reads W e t ⊆ live W e t := by
   intro v hv
@@ -35,12 +21,10 @@ theorem reads_subset_live {W : Wiring G} {e : Execution G} (h : e.Follows W) (t 
 variable (W : Wiring G) (ℓ : Store.Placement G)
 
 omit [DecidableEq G] in
-/-- A subset of a packed set is packed. -/
 theorem packs_mono {b : ℕ} {S T : Finset G} (h : Packs W ℓ b S) (hT : T ⊆ S) : Packs W ℓ b T :=
   fun u hu => ⟨(h u (hT hu)).1, fun v hv => (h u (hT hu)).2 v (hT hv)⟩
 
 omit [DecidableEq G] in
-/-- The values of a packed set in one block total at most the block's `b` bits. -/
 theorem bits_filter_block_le {b : ℕ} {S T : Finset G} (hT : T ⊆ S) (h : Packs W ℓ b S) (j : ℕ) :
     bits W (T.filter fun v => ℓ.block v = j) ≤ b := by
   set U := T.filter fun v => ℓ.block v = j
@@ -63,8 +47,6 @@ theorem bits_filter_block_le {b : ℕ} {S T : Finset G} (hT : T ⊆ S) (h : Pack
     _ = b := Finset.card_range b
 
 omit [DecidableEq G] in
-/-- The values of a packed set `S`, each in a block of `R`, total at most their bits in the blocks `H` and `b` for each
-block of `R` outside `H`. -/
 theorem bits_le_bitsAt_add {b : ℕ} {S : Finset G} {R : Finset ℕ} (H : Finset ℕ) (hR : ∀ v ∈ S, ℓ.block v ∈ R)
     (h : Packs W ℓ b S) : bits W S ≤ bitsAt W ℓ S H + (R \ H).card * b := by
   have hmaps : ∀ v ∈ S.filter (fun v => ℓ.block v ∉ H), ℓ.block v ∈ R \ H := fun v hv =>
@@ -80,8 +62,6 @@ theorem bits_le_bitsAt_add {b : ℕ} {S : Finset G} {R : Finset ℕ} (H : Finset
     _ ≤ bitsAt W ℓ S H + (R \ H).card * b := Nat.add_le_add_left hout _
 
 omit [DecidableEq G] in
-/-- The values of a subset `T` of a packed set that lie in one block per group of `g` total at most `b` bits per
-group. -/
 theorem bits_le_groups {K : Type} [DecidableEq K] {b : ℕ} {S T : Finset G} (hT : T ⊆ S) (h : Packs W ℓ b S)
     (g : G → K) (hone : OneBlockEach ℓ g T) : bits W T ≤ (T.image g).card * b := by
   have hmaps : ∀ v ∈ T, g v ∈ T.image g := fun v hv => Finset.mem_image_of_mem g hv

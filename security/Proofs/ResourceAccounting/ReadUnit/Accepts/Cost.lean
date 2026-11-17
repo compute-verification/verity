@@ -3,13 +3,7 @@ module
 public import Flock.ReadNet.Template
 public import Proofs.Flock.Soundness.Discharge.Hm.Fresh
 
-/-!
-# How many variables a builder program adds
-
-`Cost k m Q`: from any state, `m` advances the next variable by at most `k`, and its result satisfies `Q`. It composes
-through `bind`, `if` and `mapM`, so a bound on a generator's rows follows its code. SHA-512's compression adds at most
-`COMPRESS` variables on words of at most 64 bits (`cost_compress`), and `shaW n` at most `n` times that (`cost_shaW`).
--/
+/-! How many variables a builder program adds (`Cost`), composed through `bind`, `if` and `mapM`. -/
 
 @[expose] public section
 
@@ -17,7 +11,6 @@ namespace ResourceAccounting.ReadUnit.Accepts
 
 open Flock.HmNets hiding and
 
-/-- From any state, `m` advances the next variable by at most `k`, and its result satisfies `Q`. -/
 def Cost {α : Type} (k : ℕ) (m : M α) (Q : α → Prop) : Prop :=
   ∀ s : St, (m.run s).2.next ≤ s.next + k ∧ Q (m.run s).1
 
@@ -68,8 +61,6 @@ theorem mapM' {k : ℕ} (f : β → M α) {P : β → Prop} {Q : α → Prop} (h
 
 end Cost
 
-/-! ## The builder's gadgets -/
-
 theorem cost_fresh (a b : Lin) : Cost 1 (fresh a b) fun _ => True := fun _ => ⟨Nat.le_refl _, trivial⟩
 
 theorem cost_and (a b : Lin) : Cost 1 (Flock.HmNets.and a b) fun _ => True := by
@@ -92,12 +83,8 @@ theorem cost_carryCommit (i : ℕ) (c : Lin) : Cost 1 (carryCommit i c) fun _ =>
   unfold carryCommit
   exact Cost.ite' (fun _ => cost_commit c) fun _ => Cost.pure' _ trivial
 
-/-! ## Words -/
-
-/-- Every word at most 64 bits. -/
 def W64 (l : List Word) : Prop := ∀ x ∈ l, x.length ≤ 64
 
-/-- At most eight words, each at most 64 bits: a chaining value or a digest. -/
 def W8 (l : List Word) : Prop := l.length ≤ 8 ∧ W64 l
 
 theorem sum_map_le {γ : Type} (l : List γ) (f : γ → ℕ) (c : ℕ) (h : ∀ x ∈ l, f x ≤ c) :
@@ -177,8 +164,6 @@ theorem cost_add2_64 (a b : Word) (ha : a.length ≤ 64) : Cost 128 (add2 a b) f
 theorem cost_commitW_64 (w : Word) (hw : w.length ≤ 64) : Cost 64 (commitW w) fun c => c.length ≤ 64 :=
   Cost.mono (cost_commitW w) hw fun c hc => (by omega : c.length ≤ 64)
 
-/-! ## SHA-512's compression -/
-
 theorem getD_le {w : List Word} (hw : W64 w) (i : ℕ) : (w.getD i []).length ≤ 64 := by
   rw [List.getD_eq_getElem?_getD]
   cases h : w[i]? with
@@ -206,7 +191,6 @@ theorem cost_schedule : ∀ (n : ℕ) (w : List Word), W64 w → Cost (448 * n) 
   | n + 1, w, hw => Cost.mono (Cost.bind' (cost_schedStep w hw) fun w' hw' => cost_schedule n w' hw') (by omega)
       fun _ h => h
 
-/-- SHA-512's eight working variables, each at most 64 bits. -/
 def RegsOk (r : Regs Word) : Prop := ∀ x ∈ r.toList, x.length ≤ 64
 
 theorem cost_roundW (k : BitVec 64) (wt : Word) (r : Regs Word) (hr : RegsOk r) : Cost 1152 (roundW k wt r) RegsOk := by
@@ -248,7 +232,6 @@ theorem regsOk_ofList {cv : List Word} (hcv : W64 cv) : RegsOk (Regs.ofList cv) 
   simp only [Regs.ofList, Regs.toList, List.mem_cons, List.not_mem_nil, or_false] at hx
   rcases hx with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl <;> exact getElem!_le hcv _
 
-/-- The variables one SHA-512 compression adds, at most: the schedule's, the rounds' and the feed-forward's. -/
 def COMPRESS : ℕ := 448 * 64 + 1152 * 80 + 1024
 
 theorem cost_compress (cv msg : List Word) (hcv : W64 cv) (hmsg : W64 msg) : Cost COMPRESS (compress cv msg) W8 := by

@@ -1,8 +1,3 @@
-/-
-Values of the frame-v3 read's forms at `z`: numbers from bits and their bits (`testBit_num`), a byte's value (`byteV`),
-indexing a list of equal-length chunks (`getD_flatMap`), and words holding bytes (`HoldsBytes`): bit `p` of word `i` is
-bit `p % 8` of byte `8 i + 7 - p / 8`, each word's bytes big-endian and each byte least significant bit first.
--/
 module
 
 public import Proofs.ResourceAccounting.ReadUnit.Net
@@ -18,13 +13,12 @@ open FlockSoundness.Discharge.Hm
 open Flock.ReadNet Flock.ReadNet.Frame
 open ResourceAccounting.ReadUnit.Gates
 
-/-! ## Numbers from bits -/
+/-! Values of the frame-v3 read's forms: numbers from bits, bytes, chunked lists and words holding bytes. -/
 
 theorem num_nil : ReadUnit.num [] = 0 := rfl
 
 theorem num_cons (b : Bool) (bs : List Bool) : ReadUnit.num (b :: bs) = b.toNat + 2 * ReadUnit.num bs := rfl
 
-/-- Bit `q` of the number bits hold is bit `q` of the list, 0 past its end. -/
 theorem testBit_num : ∀ (l : List Bool) (q : ℕ), (ReadUnit.num l).testBit q = l.getD q false
   | [], q => by simp [num_nil]
   | b :: l, 0 => by
@@ -46,7 +40,6 @@ theorem testBit_num_evs (z : Var → Bool) (l : List Lin) (q : ℕ) :
 theorem num_evs_lt (z : Var → Bool) (l : List Lin) : ReadUnit.num (evs z l) < 2 ^ l.length := by
   simpa [evs] using num_lt (l.map (ev z))
 
-/-- Two bytes with the same 8 low bits are equal. -/
 theorem uint8_ext {a b : UInt8} (h : ∀ q < 8, a.toNat.testBit q = b.toNat.testBit q) : a = b := by
   apply UInt8.toNat_inj.1
   refine Nat.eq_of_testBit_eq fun q => ?_
@@ -58,12 +51,8 @@ theorem uint8_ext {a b : UInt8} (h : ∀ q < 8, a.toNat.testBit q = b.toNat.test
     have hb : b.toNat < 2 ^ q := lt_of_lt_of_le hb8 (Nat.pow_le_pow_right (by norm_num) (by omega))
     rw [Nat.testBit_lt_two_pow ha, Nat.testBit_lt_two_pow hb]
 
-/-! ## Bytes -/
-
-/-- The byte a byte's forms hold at `z`. -/
 def byteV (z : Var → Bool) (b : Byte) : UInt8 := UInt8.ofNat (ReadUnit.num (evs z b))
 
-/-- The bytes byte forms hold at `z`. -/
 def bytesV (z : Var → Bool) (bs : List Byte) : Hash.Msg := bs.map (byteV z)
 
 theorem testBit_byteV (z : Var → Bool) {b : Byte} (hb : b.length = 8) {q : ℕ} (_hq : q < 8) :
@@ -94,7 +83,6 @@ theorem getD_bytesV (z : Var → Bool) (a : List Byte) (j : ℕ) : (bytesV z a).
   rw [bytesV, List.getD_eq_getElem?_getD, List.getD_eq_getElem?_getD, List.getElem?_map]
   cases a[j]? <;> rfl
 
-/-- Every byte of `bs` is 8 forms. -/
 def Bytes8 (bs : List Byte) : Prop := ∀ b ∈ bs, b.length = 8
 
 theorem bytes8_constBytes (m : List UInt8) : Bytes8 (constBytes m) := by
@@ -112,8 +100,6 @@ theorem length_getD_of_bytes8 {bs : List Byte} (h : Bytes8 bs) {j : ℕ} (hj : j
   rw [List.getD_eq_getElem?_getD, List.getElem?_eq_getElem hj]
   exact h _ (List.getElem_mem hj)
 
-/-! ## Lists of equal-length chunks -/
-
 theorem getD_append_left' {α : Type} {l l' : List α} {d : α} {n : ℕ} (h : n < l.length) :
     (l ++ l').getD n d = l.getD n d := by
   rw [List.getD_eq_getElem?_getD, List.getD_eq_getElem?_getD, List.getElem?_append_left h]
@@ -122,7 +108,6 @@ theorem getD_append_right' {α : Type} {l l' : List α} {d : α} {n : ℕ} (h : 
     (l ++ l').getD n d = l'.getD (n - l.length) d := by
   rw [List.getD_eq_getElem?_getD, List.getD_eq_getElem?_getD, List.getElem?_append_right h]
 
-/-- Entry `k i + j` of chunks of length `k` is entry `j` of chunk `i`. -/
 theorem getD_flatMap {α β : Type} (f : α → List β) (k : ℕ) (a₀ : α) (d : β) :
     ∀ l : List α, (∀ a ∈ l, (f a).length = k) → ∀ i j : ℕ, i < l.length → j < k →
       (l.flatMap f).getD (k * i + j) d = (f (l.getD i a₀)).getD j d
@@ -145,16 +130,11 @@ theorem length_flatMap_const {α β : Type} (f : α → List β) (k : ℕ) :
       length_flatMap_const f k l fun b hb => hl b (List.mem_cons_of_mem _ hb), List.length_cons]
     ring
 
-/-! ## Words holding bytes -/
-
-/-- **Words hold bytes** at `z`: `ws` are 64-bit words, eight bytes each, and bit `p` of word `i` is bit `p % 8` of byte
-`8 i + 7 - p / 8` of `bs`. -/
 def HoldsBytes (z : Var → Bool) (ws : List Word) (bs : List UInt8) : Prop :=
   Words64 ws ∧ 8 * ws.length = bs.length ∧
     ∀ i < ws.length, ∀ p < 64,
       ev z ((ws.getD i []).getD p Lin.zero) = (bs.getD (8 * i + 7 - p / 8) 0).toNat.testBit (p % 8)
 
-/-- The words `wordsB` makes of 8-form bytes hold the bytes' values. -/
 theorem holds_wordsB (z : Var → Bool) {data : List Byte} (h8 : Bytes8 data) (hm : data.length % 8 = 0) :
     HoldsBytes z (wordsB data) (bytesV z data) := by
   have hchunk : ∀ k < data.length / 8, ∀ b ∈ List.range 8, (data.getD (8 * k + 7 - b) []).length = 8 := by

@@ -4,27 +4,7 @@ public import Definitions.Core.Site
 public import CoreProtocol.Site
 public import RegistrationLog.SiteCheck
 
-/-!
-# The Site's code: its fold and its check are the spec's
-
-`Core.Site` (`verity/protocols/interface/CoreProtocol/Site.lean`, package `core_protocol`) and registration's check on
-it (`verity/protocols/accounting/registration/verifier/lean/RegistrationLog/SiteCheck.lean`, package
-`core_registration`) are code, so they require nothing of `security/`: they copy `Verity.Site` and `Verity.Registration` (`Definitions.Core.Site`) over types
-of its own. These are its properties, each a `Prop` stated against the code's functions and the spec's definitions, on
-the Site, log, digests and auditor a code value denotes (`site`, `log`, `digests`, `auditor`), and
-`Proofs.Properties.Core.Site` proves every one:
-
-* `Fold`: the code's Site of a log is the spec's Site of the log it denotes (`Verity.Site.ofLog`).
-* `Refuses`: an entry's refusal in code is the spec's (`Verity.Registration.Entry.refusal`), check for check, so
-  `EntryValid`: the code accepts an entry exactly when it is valid (`Verity.Registration.Entry.Valid`).
-* `Checks`: the code's check of a log accepts it exactly when the log is valid (`Verity.Registration.Valid`) and its
-  Site is complete against the auditor's figures (`Verity.Registration.Complete`), with the spec's Site of it, and
-  `RefusedAt`: when it refuses, the index it names is the first entry the spec refuses, with that refusal, or the log's
-  end, where every entry passes and the log's Site is not complete.
-
-The code's difftest (`site-difftest`) holds it to `verity.device`, so these carry the Python Site to the spec. A code
-figure (`Core.Site.Figure`, a nonnegative `Rat`) denotes the same rational in `ℚ≥0` (`figure`).
--/
+/-! The Site's code: its fold and its check are the spec's. -/
 
 @[expose] public section
 
@@ -222,10 +202,6 @@ def Checks : Prop :=
         some (Verity.Site.ofLog (log l))
       else none
 
-/-- **A refusal names the first invalid entry, or the log's end**: when the check refuses a log at index `i` with
-refusal `r`, the log's first `i` entries are valid, and either `i` is an entry's index and the spec refuses entry `i`
-against them with `r`, or `i` is the log's length, `r` is `inventory`, and the log's Site is not complete against the
-auditor's figures. -/
 def RefusedAt : Prop :=
   ∀ (D : Core.Site.Registration.Digests) (A : Core.Site.Registration.Auditor) (c : Core.Site.Registration.Composite)
     (l : Core.Site.Registration) (i : Nat) (r : Core.Site.Registration.Refusal),
@@ -237,11 +213,6 @@ def RefusedAt : Prop :=
               (regEntry l[i]) = some (refusal r)) ∨
           (i = l.length ∧ r = .inventory ∧
             ¬Verity.Registration.Complete (digests D) (auditor A) (Verity.Site.ofLog (log l))))
-
-/-! ## The witnesses' instances
-
-A log the check accepts and one it refuses, hand-built, and the checks that accept everything: what the
-guarantees' honest and nontrivial witnesses (`Proofs.Properties.Core.Site`) are stated at. -/
 
 /-- Digests that name each kind of thing by one string: the genesis is `genesis`, and every entry is `entry`. -/
 def witnessDigests : Core.Site.Registration.Digests := ⟨fun _ => "sheet", fun _ => "entry", fun _ => "genesis"⟩

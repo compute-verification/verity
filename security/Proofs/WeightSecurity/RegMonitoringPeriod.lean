@@ -8,23 +8,7 @@ import Proofs.Flock.Claims.Sampling.Session
 import Proofs.Flock.SamplingGeneric
 import Proofs.Flock.SamplingGeneric.Reg
 
-/-!
-# A period of one-stage windows at the committed traces, proved
-
-`MonitoringPeriodReg` is `period_undetected` at `oneRegRec`. Each record reads only the strategy its window is played with, so
-both of a window's bounds hold at every strategy: `hacc` is `Compiled.KSReg`'s first conjunct at the statement and
-prover it sends, and `hstage` is the contract's sample (`Compiled.Sessions.draws`) at the committed incorrect set,
-which the statement and prover fix before the run's coins.
-
-* `oneRegRec_accepted_le`: a window is accepted with a sampled proof block in the committed incorrect set with
-  probability at most `ε_reg` at the statement and prover it sends, and never out of scope.
-* `oneRegRec_missed_le`: its sample misses the committed incorrect set with probability at most `x^n`, `n` the count
-  its strategy fixes.
-* `monitoringPeriodReg_of`: `MonitoringPeriodReg` from each window's `KSReg` and contract, at designs that miss each set `B` with
-  probability at most `x^{|B|}`.
-* `compilerMonitoringPeriodReg_of`: `CompilerMonitoringPeriodReg` from `CompilerKSReg`. So **`CompilerMonitoringPeriodReg` is proved**
-  (`compilerMonitoringPeriodReg`), at `compilerKSReg`.
--/
+/-! A period of one-stage windows at the committed traces, proved. -/
 
 @[expose] public section
 
@@ -37,17 +21,12 @@ open scoped ENNReal
 variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg Coin} {O V Tick Adv : Type}
 
 open Classical in
-/-- **The count a window fixes** is `0`, or its statement is in scope and the count is the committed incorrect set's
-size. -/
 theorem oneRegCount_cases (H : Msg → Msg) (L : Compiled Coin A) (x : Msg) (P : Prover Unit) :
     oneRegCount H L x P = 0 ∨ L.Scope x ∧ oneRegCount H L x P = (L.Freg H P x ()).card := by
   by_cases hx : L.Scope x
   · exact Or.inr ⟨hx, by rw [oneRegCount, ite_eq_left hx]⟩
   · exact Or.inl (by rw [oneRegCount, ite_eq_right hx])
 
-/-- **A window is accepted with a sampled proof block in the committed incorrect set** at most as often as `ε_reg` at
-the statement and prover it sends, at a statement in scope by `Compiled.KSReg` at a prover with no tape, and out of
-scope never, since the verifier refuses it. -/
 theorem oneRegRec_accepted_le (H : Msg → Msg) (L : Compiled Coin A) (hks : L.KSReg H)
     (href : ∀ x (P : Prover Unit) r, (run H P L.V x () r).out = .acc → L.Scope x) (n : ℕ)
     (τ : Strategy (oneGame L ((O → V) × Tick × Adv))) :
@@ -65,9 +44,6 @@ theorem oneRegRec_accepted_le (H : Msg → Msg) (L : Compiled Coin A) (hks : L.K
       Verity.Game.prCoin_false]
     exact zero_le
 
-/-- **A window's sample misses the committed incorrect set** with probability at most `x^n`, `n` the count its strategy
-fixes: in scope by the contract's sample at that set (`Sessions.draws`), which the statement and prover fix before the
-coins, and the design's `P_a(B) ≤ x^{|B|}`; out of scope the count is `0`. -/
 theorem oneRegRec_missed_le (H : Msg → Msg) (L : Compiled Coin A) (hS : L.Sessions H) {x : ℝ} (hx0 : 0 ≤ x)
     (hpa : ∀ y s P, L.parse y = some s → L.partition s = some P → InScope P s →
       ∀ B ⊆ Finset.range P.blocks.length, s.design.Pa P B ≤ x ^ B.card)
@@ -100,9 +76,6 @@ theorem oneRegRec_missed_le (H : Msg → Msg) (L : Compiled Coin A) (hS : L.Sess
       _ ≤ s.design.Pa Pt (L.Freg H P y ()) := hEesc
       _ ≤ x ^ (L.Freg H P y ()).card := hpa y s Pt hs hPt hin _ hsub
 
-/-- **The period at the committed traces, from each window's committed form and contract**: when every window's
-verifier meets `Compiled.KSReg` and the contract, and every statement in its scope has a sampling design that misses
-each set `B` of proof blocks with probability at most `x^{|B|}`, `MonitoringPeriodReg` holds. -/
 theorem monitoringPeriodReg_of (H : Msg → Msg) (Lv : ℕ → Compiled Coin A) {x : ℝ} (hx0 : 0 ≤ x) (hx1 : x ≤ 1)
     (hks : ∀ t, (Lv t).KSReg H) (hS : ∀ t, (Lv t).Sessions H)
     (hpa : ∀ t y s P, (Lv t).parse y = some s → (Lv t).partition s = some P → InScope P s →
@@ -122,13 +95,10 @@ theorem monitoringPeriodReg_of (H : Msg → Msg) (Lv : ℕ → Compiled Coin A) 
   rw [← ENNReal.ofReal_pow hx0] at h
   exact h
 
-/-- **The period bound from the committed form**: `CompilerKSReg` gives `CompilerMonitoringPeriodReg`, with each window's miss
-from its sampling design and its refusal of what is out of scope, both from its contract (`Compiled.Sessions`). -/
 theorem compilerMonitoringPeriodReg_of (hks : CompilerKSReg) : CompilerMonitoringPeriodReg := by
   intro Coin _ _ _ A O V Tick Adv H Lv x hA hS hx0 hx1 hpa
   exact monitoringPeriodReg_of H Lv hx0 hx1 (fun t => hks Coin A (Lv t) H hA (hS t).1 (hS t).2) (fun t => (hS t).2) hpa
 
-/-- **The period bound at the committed traces**: `compilerMonitoringPeriodReg_of` at `compilerKSReg`. -/
 theorem compilerMonitoringPeriodReg : CompilerMonitoringPeriodReg :=
   compilerMonitoringPeriodReg_of compilerKSReg
 

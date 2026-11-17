@@ -4,25 +4,7 @@ public import Proofs.Flock.EndToEnd.Joint.V5.Bound
 public import Proofs.WeightSecurity.Served
 public import Proofs.WeightSecurity.Stop
 
-/-!
-# Weight security at the deployed audit
-
-`TheftServed` at the deployed one-stage audit. Each window, the datacenter releases what leaves on the egress slots, at
-its timing bucket and on its advice, and then the window's audit runs (`JointAuditV5`: every member's `SampledKSLiveV5`
-session on one live sample). The probability that it leaves `M` incorrect proof blocks undetected is at most
-$$\sum_t \sum_m (\varepsilon_{ks,t,m} + \varepsilon_{bind,t,m}) + x^M$$
-by `period_undetected`. A window is accepted with a sampled incorrect proof block with probability at most its members'
-knowledge and binding terms (`JointAuditV5.accepted_sampledIncorrect_le`). Its sample misses its `w` incorrect proof
-blocks with probability at most `P_a ≤ x^w` (`JointAuditV5.sampleMiss_le`, with `x` the sampling design's per-block
-miss: a premise on its `P_a`, which `pa_le_pow_of_fac` discharges at every registered sampling design whose strata
-each have `(n − k)/n ≤ x`). The named assumptions are `JointPooledV5`'s, at every window, and weight security's own.
-
-The two SHA-512 premises are asked only of a window where some outcome of its stream ends its sample. Where none
-does, the window's audit rejects every run (`JointAuditV5.prob_accepts_of_not_ends`) and the window has no incorrect
-proof block on record (`JointAuditV5.incorrectSet` is empty there, so `servedRec`'s `incorrect` is `0`). `Served.Local`
-then allows that window's release no changed slot, so any change there is counted in the bound's last term, the
-probability that the releases are not local: at such a window the bound is weaker, never stronger.
--/
+/-! Weight security at the deployed one-stage audit (`TheftServed`). -/
 
 @[expose] public section
 
@@ -35,28 +17,21 @@ open scoped ENNReal
 
 variable {O V Tick Adv : Type}
 
-/-- A window's release: what leaves on the egress slots, its timing bucket and the advice it ran on. -/
 abbrev Release (O V Tick Adv : Type) := (O → V) × Tick × Adv
 
-/-- **A window served at the deployed audit**: the datacenter commits the window's release, then the window's audit
-runs. -/
 noncomputable def servedGame (w : JointAuditV5) (Rel : Type) :
     Game (Rel × ((w.Reg × Bool) × Finset (Fin w.nJ) × List Discharge.Exec.Transcript)) :=
   .send Rel fun m => w.game.map fun o => (m, o)
 
-/-- The audit's strategy that a served window's strategy plays. -/
 noncomputable def servedAudit (w : JointAuditV5) {Rel : Type} (τ : Strategy (servedGame w Rel)) : Strategy w.game :=
   Strategy.ofMap (fun o => (τ.1, o)) w.game τ.2
 
-/-- A served window's record: its verdict, whether its sample holds an incorrect proof block, how many it has, and its
-release. -/
 noncomputable def servedRec (w : JointAuditV5) (τ : Strategy (servedGame w (Release O V Tick Adv)))
     (b : Release O V Tick Adv × ((w.Reg × Bool) × Finset (Fin w.nJ) × List Discharge.Exec.Transcript)) :
     Served O V Tick Adv :=
   ⟨w.Accepts b.2, ∃ u ∈ b.2.2.1, u ∈ w.incorrectSet (servedAudit w τ), (w.incorrectSet (servedAudit w τ)).card,
     b.1.1, b.1.2.1, b.1.2.2⟩
 
-/-- The deployment's run over `T` windows at the datacenter's strategy `s`. -/
 noncomputable def servedRun (W : ℕ → JointAuditV5) (T : ℕ)
     (s : Strategy (monitoringPeriodG (fun t => servedGame (W t) (Release O V Tick Adv)) 0 T)) :
     Game (List (Served O V Tick Adv)) :=
@@ -87,9 +62,6 @@ theorem servedRec_miss_le (w : JointAuditV5) (hA3 : Assumptions.UniformRandomByt
   rw [prob_map, ← ENNReal.ofReal_pow hx]
   exact (w.sampleMiss_le hA3 _ (servedAudit w τ)).trans (ENNReal.ofReal_le_ofReal (hpa _))
 
-/-- **Model weight security at the deployed audit.** `TheftServed` with the probability of leaving `M` incorrect proof
-blocks undetected bounded by the windows' knowledge and binding terms plus `x^M`, at every datacenter strategy `s θ r`,
-under `JointPooledV5`'s named assumptions at every window and weight security's `HonestUseHard` and `Simulable`. -/
 theorem TheftServedDeployed {Ω R Θ Q Adv O V Tick Θ' : Type} [Fintype Ω] [Fintype R] [Fintype Adv] [Inhabited Adv]
     [Fintype O] [DecidableEq O] [Fintype V] [Fintype Tick] [Inhabited Tick]
     (W : ℕ → JointAuditV5) (T L E M : ℕ) (x : ℝ) (hx0 : 0 ≤ x) (hx1 : x ≤ 1)

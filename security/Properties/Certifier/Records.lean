@@ -3,32 +3,7 @@ module
 public import NetworkCheck.RecordsGrid
 public import Properties.Certifier.Check
 
-/-!
-# The records check: what acceptance by its Lean code (`NetworkCheck.Records.protocol`) means
-
-`verity/network-records/v3` is the network audit's verifier: `audit.py`'s `Audit` over raw, committed and
-certified records. `AcceptMeans` is what its acceptance establishes about the unit's records, stated over the check's
-inputs (the parameters, the published records, the evidence) and never over its internals: every execution phase of the
-unit has exactly one record, complete, and it is the Program's (`ProgramRecords`). `AnswerAcceptMeans` is the same for
-the bytes `Core.Protocol.answer` decodes. The check keeps each payload as its bytes (`Records.ByteEvidence`), and the
-conclusion reads that evidence as `verity/network-certificate/v4` reads the same JSON (`ByteEvidence.toEvidence`, each
-payload its bits, which `RecordsBytes.evidenceOf_toEvidence` proves is `Check.evidenceOf`). `Proofs.Properties.Certifier.Records` proves both, and that the check accepts
-every unit whose records are the Program's (`programRecords_accepted`, completeness).
-
-Without the grid (`Records.evaluateNoGrid`, `check_link(grid=False)`, N2's, whose head check holds each certified
-head's grid), the check's verdicts are `evaluate`'s but for the egress grid comparison (`GridOnly`): `NoGridMeans` says
-that where it answers, `evaluate` answers too, and each execution phase has the same verdict or an egress `mismatch` that it
-accepts; `NoGridAcceptsMore`, that where `evaluate` answers it answers so too, unless a raw or committed record names an
-egress link, which it refuses. So it accepts every execution phase `evaluate` accepts.
-
-The Program's grid of an egress execution phase is `programGrid`, rows of `NetworkAttester.expectedRow` under the syncs
-the link declares, which the check reads through `Records.expectedGridsOfBytes` (`RecordsBytes.expectedGridsOfBytes_eq`). Nothing is
-assumed of SHA-512 or LMS. A committed record's digest is the one `commitment.py` gives the Program's grid,
-and any grid of `B`-byte frames with that digest holds the Program's frames, or two distinct strings the two digests
-hash have one SHA-512 digest. A certified record's certificate verifies under the parameters' key over its message in
-their certifier session (LMS's verifier accepts it; that only the key's holder could sign is not claimed), and its head
-is the record head of the Program's grid, or two distinct strings the two heads' digests hash have one SHA-512 digest.
--/
+/-! The records check: what acceptance by its Lean code (`NetworkCheck.Records.protocol`) means. -/
 
 @[expose] public section
 
@@ -38,8 +13,6 @@ open NetworkAttester (ClockSync)
 open Properties.Certifier (EvidenceFits ParamsDigests Declares SyncAdmitted programGrid LmsVerifies headStrings)
 
 namespace Properties.NetworkRecords
-
-/-! ## An execution phase's records -/
 
 /-- The published records naming execution phase `(d, l, w)`, in the commitment's order: a raw or committed record of link
 `l` and window `w`, which carries no direction, and a certified record whose head names `(d, l, w)`. -/
@@ -63,8 +36,6 @@ def CertificateVerifies (p : Params) (d : Direction) (l : String) (w : Nat) (r :
     r.certificate.window = w ∧
     ∃ m, certificateMessage (p.key.extract 0 16) p.session l d w (certificateDigest r.salt dg) = .ok m ∧
       LmsVerifies p m r.certificate.signature
-
-/-! ## What a committed record's digest hashes (`commitment.py`) -/
 
 /-- What `row_digest` hashes for a row, `tagged_sha512`'s input (`Properties.Identity.taggedInput`): its count and its
 real frames, padding elided. -/
@@ -99,8 +70,6 @@ def frames (grid : Records.RawGrid) : List (List ByteArray) := grid.toList.map f
 /-- `grid`'s frames are `B ≥ 1` bytes each. -/
 def FramesOf (B : Nat) (grid : Records.RawGrid) : Prop :=
   0 < B ∧ ∀ row ∈ grid.toList, ∀ f ∈ (row.filterMap id).toList, f.size = B
-
-/-! ## A record is the Program's -/
 
 /-- A committed record of `(l, w)` with digest `dg` commits to `P`: `dg` is the record digest of `P`, and every grid of
 `B`-byte frames with that digest holds `P`'s frames row by row, or two distinct strings the two digests hash have one
@@ -161,8 +130,6 @@ def ProgramRecords (p : Params) (c : Records.Commitment) (e : Evidence) : Prop :
     (∀ l link, (l, link) ∈ p.egress.toList.zip e.links.toList → ∀ w < p.windows, EgressRecord p c e eg l link w) ∧
     ∀ l ∈ p.ingress.toList, ∀ w < p.windows, IngressRecord p c ig l w
 
-/-! ## Acceptance -/
-
 /-- **What the records check's acceptance means.** If `NetworkCheck.Records.protocol` accepts the parameters, the
 published records and the evidence `e`, the unit's records are the Program's under `e`, its payloads read as bits. -/
 def AcceptMeans : Prop :=
@@ -176,8 +143,6 @@ def AnswerAcceptMeans : Prop :=
     ∃ (p : Params) (c : Records.Commitment) (e : Records.ByteEvidence),
       (Core.canonicalJson a >>= Records.protocol.params) = .ok p ∧
       Records.protocol.commitment b = .ok c ∧ Records.protocol.evidence v = .ok e ∧ ProgramRecords p c e.toEvidence
-
-/-! ## Without the grid (`check_link(grid=False)`, N2's) -/
 
 /-- Execution phase `v'` is `v` but for the egress grid comparison: the same execution phase, with the same verdict, or `v` an
 egress `mismatch` that `v'` accepts. So `v'` accepts every execution phase `v` accepts. -/

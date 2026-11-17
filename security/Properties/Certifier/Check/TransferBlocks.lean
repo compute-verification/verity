@@ -3,27 +3,7 @@ module
 public import NetworkCheck.TransferBlocks
 public import Lms.Sign
 
-/-!
-# N2's execution phase verdict of record: what its Lean code (`NetworkCheck.TransferBlocks`) does
-
-The property of `NetworkCheck.TransferBlocks.verdict`, the verdict of record on one execution phase of N2
-(`service.OF_RECORD` in `verity/protocols/accounting/certifier/verifier/service.py`), stated against its functions as they run: for
-every case, if the verdict accepts, the execution phase's proof block was proved, its rows opened to an output word of
-3, both certificates are the certifier's, its declared sync is one of Σ_sync (on a network attester link, which
-declares none, nothing is asked of the syncs, and the public row its ``pub`` commitment opens to holds both ends' grids
-at the network attester's parameters digest), and its public outputs are verdict 1 and deadline 1.
-`Proofs.Properties.Certifier.Check.TransferBlocks` proves it.
-
-The predicates below say what the findings, the public file's row commitments, the certificates and the sync are, in the
-verdict's own terms. The public row (`pubRow`), the commitments' parse (`commitments`), the LMS verifier and the
-certificate's message are the code's own functions, read as they are.
-
-Its two lemmas (`Proofs.Properties.Certifier.Check.TransferBlocks`) read the predicates below that, which put another
-function in the verdict's place (`TransferBlocksAcceptMeansBy`, `AcceptsAll`) and say what the certifier's device signs
-(`CertifierSigned`): the honest one, that an execution phase the property's conclusion holds of is accepted, and on a
-network attester link one whose certificates the device signed whatever its syncs; the nontrivial one, that no verifier
-accepting every execution phase has the property.
--/
+/-! N2's execution phase verdict of record: what its Lean code (`NetworkCheck.TransferBlocks`) does. -/
 
 @[expose] public section
 
@@ -90,25 +70,15 @@ network attester link, no sync asked), and its public outputs are verdict 1 and 
 def TransferBlocksAcceptMeans : Prop :=
   ∀ c : Case, (verdict c).map Verdict.accepted = .ok true → ExecutionPhaseAccepted c ∧ ExecutionPhaseVerdict c
 
-/-! ## Another verifier in the verdict's place, and the certifier's device -/
-
-/-- `ExecutionPhaseVerdict` with `v`'s result in place of the verdict's. -/
 def ExecutionPhaseVerdictBy (v : Case → Flock.V Verdict) (c : Case) : Prop :=
   ∃ w, v c = .ok w ∧ w.outputs = acceptedOutputs ∧ verdictDigest c true w.outputs = .ok w.digest
 
-/-- `TransferBlocksAcceptMeans` with `v` in place of the verdict of record: `v`'s acceptance of an execution phase
-establishes what the property says the verdict's does. -/
 def TransferBlocksAcceptMeansBy (v : Case → Flock.V Verdict) : Prop :=
   ∀ c : Case, (v c).map Verdict.accepted = .ok true → ExecutionPhaseAccepted c ∧ ExecutionPhaseVerdictBy v c
 
-/-- `v` accepts every execution phase, whatever it publishes. -/
 def AcceptsAll (v : Case → Flock.V Verdict) : Prop :=
   ∀ c : Case, (v c).map Verdict.accepted = .ok true
 
-/-- The execution phase's two certificates as the certifier's device issues them under its key `k` (on a network
-attester link, where it functions as an active network attester): the link's key is `k`'s public key, and each end's
-certificate (egress first) names the link, the end and the window, carries `k`'s identifier, and its signature is the
-encoding of the one `Lms.signAt` gives, at a leaf of `k`, over the certificate's message in the session. -/
 def CertifierSigned (c : Case) (k : Lms.PrivateKey) : Prop :=
   c.key = k.publicKey ∧ c.certificates.size = 2 ∧ ∀ d < 2, ∃ x m q sig, c.certificates[d]? = some (some x) ∧
     x.link = c.link ∧ x.direction.code = d ∧ x.window = c.window ∧ x.keyId = k.I ∧

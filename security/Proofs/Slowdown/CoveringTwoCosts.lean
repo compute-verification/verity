@@ -3,18 +3,7 @@ module
 public import Definitions.Slowdown.Guarantees.CoveringTwoCosts
 public import Proofs.Slowdown.Covering
 
-/-!
-# The covering bound at two costs
-
-`CoveringBound`'s proof (`Proofs.Slowdown.Covering`) with each cost where it is used. Charge each chained multiplication block
-to a block `S` of the covering that computes its output gate; at most `k` are not completed by `S`. The completed ones lie
-in `θ'_S × J_S`: `|θ'_S| ≤ k / c_w` by parameter-hardness at `c_w`, so `|θ'_S| < D` since `c_w D > k`; with `Q = θ'_S`
-the inputs of `S` in `T_j` cut the activation off for each token `j ∈ J_S`, so they are at least `c_a` and
-`|J_S| ≤ k / c_a`. That count for one block is `CoveringTwoCosts.card_charged_le`.
-
-At `c_w = c_a = r · b` the assumptions are `ParameterHard` and `ActivationChained` by definition, and the bound is
-`CoveringBound`'s (`coveringBound_of_twoCosts`). `CoveringBound` keeps its own proof.
--/
+/-! The covering bound at two costs: `CoveringBound`'s proof with each cost where it is used. -/
 
 @[expose] public section
 
@@ -30,7 +19,6 @@ theorem parameterHard_iff (s : ℕ) (r b : ℝ) :
 theorem chainedBlocks_eq (D : ℕ) (r b : ℝ) :
     Assumptions.chainedBlocks d B D r b = Assumptions.chainedBlocksAt d B D (r * b) := rfl
 
-/-- At one cost, `c_w = c_a = r · b`, the two-cost bound is `CoveringBound`'s statement. -/
 theorem coveringBound_of_twoCosts (h : Guarantees.CoveringBoundTwoCosts) : Guarantees.CoveringBound := by
   intro d B s k D r b n I hkD hhard hcov
   have hc : 0 < r * b := by
@@ -46,9 +34,6 @@ namespace Slowdown.SecurityProofs
 
 open Verity Finset Slowdown.Covering Slowdown.SecurityProofs.Covering
 
-/-- **One block's chained count at two costs**: an `(s, k)`-inference block `S` of an `(s, c_w)`-parameter-hard `d`,
-with `c_w D > k` and `c_a > 0`, computes the output gates of at most `(k / c_w)(k / c_a) + k` multiplication blocks
-chained at `(D, c_a)`: at most `k` that it doesn't complete, and the completed ones in `θ'_S × J_S`. -/
 theorem CoveringTwoCosts.card_charged_le {d : RegisteredCircuit} (B : MulBlocks d) {s k D : ℕ} {cw ca : ℝ}
     (hkD : (k : ℝ) < cw * D) (hca : 0 < ca) (hhard : Assumptions.ParameterHardAt d B s cw) {S : Subcircuit d.D}
     (hS : InferenceBlock d s k S) :

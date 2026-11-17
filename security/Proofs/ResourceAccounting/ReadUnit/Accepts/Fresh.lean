@@ -3,14 +3,7 @@ module
 public import Flock.ReadNet.Template
 public import Proofs.Flock.Soundness.Discharge.Hm.Fresh
 
-/-!
-# Each part's run writes fresh variables
-
-Every generator the read's parts run adds rows only as `fresh` does (`FlockSoundness.Discharge.Hm.Fresh`): SHA-512's
-compressions under `shaW`, the row segment and its outer hash, the hm96 leaf, the frame's leaf and node hashes, the
-digest comparison and the select. So each part's run, from its inputs on, writes each row's variable past its inputs and
-before its next (`runOk_parts`), at every `V` and `H`.
--/
+/-! Each part of the read's check writes fresh variables, at every `V` and `H`. -/
 
 @[expose] public section
 
@@ -105,7 +98,6 @@ theorem fresh_select (V : ℕ) (tok : List Lin) (opened : Lin) (row : List Lin) 
     Fresh.bind' (Fresh.mapM' _ (fun _ => Fresh.bind' (fresh_and _ _) fun _ => Fresh.pure' _) _) fun _ =>
       Fresh.bind' (fresh_and _ _) fun _ => Fresh.pure' _
 
-/-- Each of the read's parts runs a program that adds rows only as `fresh` does. -/
 theorem fresh_parts (V H : ℕ) : ∀ p ∈ parts V H, Fresh p.prog := by
   intro p hp
   simp only [parts, List.mem_toArray, List.mem_cons, List.not_mem_nil, or_false] at hp
@@ -122,7 +114,6 @@ theorem fresh_parts (V H : ℕ) : ∀ p ∈ parts V H, Fresh p.prog := by
   · exact Fresh.bind' (Frame.fresh_eqDigest _ _) fun _ => Fresh.pure' _
   · exact Fresh.bind' (fresh_select _ _ _ _) fun _ => Fresh.pure' _
 
-/-- **Each part's run writes fresh variables**, at every `V` and `H`. -/
 theorem runOk_parts (V H : ℕ) : (parts V H).all (fun p => runOk p.ins p.run) = true := by
   rw [Array.all_eq_true_iff_forall_mem]
   intro p hp

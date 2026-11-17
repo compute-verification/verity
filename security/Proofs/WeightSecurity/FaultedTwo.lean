@@ -3,16 +3,7 @@ module
 public import Proofs.WeightSecurity.Faulted
 public import Proofs.WeightSecurity.Two
 
-/-!
-# The restated theft theorem at a two-stage audit
-
-`TheftFaulted` over windows each audited by SPOT's two-stage verifier (`CompiledTwo`), at the budget
-`M = T·(K − 1) + 1` that `two_undetected` leaves undetected with probability at most `Σ_t ε_t`. A two-stage window's
-incorrect count (`twoRec`) is the fewest replay blocks an extraction in `RTwo` marks, so here a fault pattern names
-replay blocks: `size φ` counts replay blocks, and a fault overrides a replay block's outputs. It takes `TheftFaulted`'s
-cut `κ`: `FaultedUseHard` is taken only at the replay-block patterns `κ` doesn't cut (`Cut.Interiors`), and a pattern
-`κ` cuts costs its hint.
--/
+/-! `TheftFaulted` at a two-stage audit, over windows each audited by SPOT's two-stage verifier (`CompiledTwo`). -/
 
 @[expose] public section
 
@@ -24,13 +15,8 @@ open scoped ENNReal
 
 variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg Coin} {O V Tick Adv : Type}
 
-/-- **`TheftFaulted` at a two-stage audit**: with each window's verifier knowledge sound at the footprint, refusing
-what is out of scope, and capped at `K` (`ExecutionPhaseCap`), the outsider steals the weights with probability at most the
-atypical weights' probability, plus the fault channel's `|S|·N^(λ−1)·p` at the budget `M = T·(K − 1) + 1` incorrect
-replay blocks, plus `Σ_t ε_t`, each `ε_t` bounding window `t`'s `KSLinOn` error at every strategy the run plays it with,
-plus the probability that an accepted release is not the faulted circuit's run at a pattern of at most its window's
-incorrect replay blocks. `N` counts only the patterns the cut `κ` doesn't cut, at which alone `FaultedUseHard` is taken;
-a pattern `κ` cuts adds its hint to `|S|`. -/
+/-- `N` counts only the patterns the cut `κ` doesn't cut, at which alone `FaultedUseHard` is taken; a pattern `κ`
+cuts adds its hint to `|S|`. -/
 theorem TheftFaultedTwo {Ω R Θ Q Θ' F : Type} [Fintype Ω] [Fintype R] [Fintype Adv] [Inhabited Adv]
     [Fintype O] [DecidableEq O] [Fintype V] [Fintype Tick] [Inhabited Tick] [Fintype F]
     (H : Msg → Msg) (Lv : ℕ → CompiledTwo Coin A) (T L K : ℕ) {δ : ℝ} (hδ : 0 ≤ δ) (ε : ℕ → ℝ)

@@ -8,33 +8,7 @@ import Proofs.Spot.Egress
 import Proofs.Spot.Leakage
 import Proofs.Spot.Work
 
-/-!
-# Long values buy nothing
-
-A prover may commit a value of any length, since an hm96 leaf's inner hash takes any length. The verifier's view is the
-roots, the openings it accepts and its coins, and it refuses an opening of another length than the slot's width before
-it reads it. So a long value is the prover's private memory plus one ordinary leaf: the slot it sits in has no opening
-of its width (or the run holds a collision), the verifier's view of it is ⊥, and its writer and every reader are incorrect.
-
-* **The openings.** `view_congr`, `view_add_long`: the view reads only openings of the declared width, so a run that
-  also commits long values has the view it would have without them. `view_of_accepts`, `long_value`: under
-  `CollisionStep` (a named assumption: two strings that climb to one position give a collision among the run's hashed
-  strings), an accepted opening is the view, and a slot a long value climbs to is ⊥, or the run holds a collision.
-  `optCorrect_of_opened`, `opened_of_optCorrect`: a unit's proof holds exactly when the unit is correct in the view.
-  `long_value_incorrect`: the writer and every reader of a long value's slot are incorrect.
-* **⊥ is weakly dominated by a short incorrect value.** `incorrect_fill_subset`: putting any value of the slot's width in place
-  of every ⊥ gives an assignment whose incorrect proof blocks are among the ⊥ assignment's (`fill_mem_egressAt`: within the same
-  budget, and showing the same values wherever the ⊥ assignment shows one). A unit that reads or writes ⊥ is incorrect
-  (`mem_optIncorrect_of_read_none`, `mem_optIncorrect_of_write_none`).
-* **T1–T4 over `Option V`.** `liftFns f` applies `f` when every read holds a value and writes ⊥ otherwise; a unit
-  correct over `Option V` is correct under it (`incorrect_lift_subset`), so the population theorems hold over `Option V`
-  with the incorrect proof blocks of `optIncorrect`: robust determinacy and the cone (`opt_eq_of_writes`, `opt_eq_off_down`,
-  `opt_eq_honest_off_down`), the egress count with `|V| + 1` for `|V|` (`card_optEgress_le`, `card_optEgressAt_le`,
-  `card_optEgressAt_le_reach`), leakage beyond the honest egress (`opt_card_leak_le_coneEgress`,
-  `opt_card_leak_le_reach`), and the skipped work (`opt_skipped_work_le_wt`, `opt_skipped_work_le_wt_of_luck`). The
-  extra symbol is ⊥ itself, `log₂ (1 + 1/|V|)` bits a slot at most, and it costs its writer's and readers' correctness;
-  read with ⊥ replaced by any short value, the counts are the population's with `|V|` (`fill_card_leak_le_coneEgress`).
--/
+/-! Long values buy nothing: a long value is the prover's private memory plus one ordinary leaf. -/
 
 @[expose] public section
 
@@ -47,7 +21,6 @@ namespace Dataflow
 variable {U S : Type} (P : Dataflow U S)
 
 open Classical in
-/-- `f` over `Option V`: a unit applies `f` when every slot it reads holds a value, and writes ⊥ otherwise. -/
 noncomputable def liftFns {V : Type} (f : P.Fns V) : P.Fns (Option V) := fun u r s =>
   if h : ∀ t, (r t).isSome then some (f u (fun t => (r t).get (h t)) s) else none
 
@@ -55,7 +28,6 @@ theorem liftFns_of_isSome {V : Type} (f : P.Fns V) {u : U} {r : P.reads u → Op
     (s : P.writes u) : P.liftFns f u r s = some (f u (fun t => (r t).get (h t)) s) := by
   simp only [liftFns, dite_eq_left h]
 
-/-- A unit correct over `Option V` is correct under `liftFns f`. -/
 theorem correct_lift_of_optCorrect {V : Type} {f : P.Fns V} {σ : S → Option V} {u : U}
     (h : P.OptCorrect f σ u) : P.Correct (P.liftFns f) σ u := by
   obtain ⟨x, hr, hw⟩ := h
@@ -64,7 +36,6 @@ theorem correct_lift_of_optCorrect {V : Type} {f : P.Fns V} {σ : S → Option V
   intro s
   rw [P.liftFns_of_isSome f hs s, hx, hw s]
 
-/-- A unit whose reads all hold values and which is correct under `liftFns f` is correct over `Option V`. -/
 theorem optCorrect_of_correct_lift {V : Type} {f : P.Fns V} {σ : S → Option V} {u : U}
     (hr : ∀ r : P.reads u, (σ r).isSome) (h : P.Correct (P.liftFns f) σ u) : P.OptCorrect f σ u := by
   refine ⟨fun r => (σ r).get (hr r), fun r => (Option.some_get (hr r)).symm, fun s => ?_⟩
@@ -76,7 +47,6 @@ theorem incorrect_lift_subset [Fintype U] {V : Type} {f : P.Fns V} {σ : S → O
   simp only [incorrect, optIncorrect, mem_filter, mem_univ, true_and] at hu ⊢
   exact fun hc => hu (P.correct_lift_of_optCorrect hc)
 
-/-- Over assignments that hold a value everywhere, correctness over `Option V` is correctness. -/
 theorem optCorrect_some_iff {V : Type} {f : P.Fns V} {τ : S → V} {u : U} :
     P.OptCorrect f (fun s => some (τ s)) u ↔ P.Correct f τ u := by
   constructor
@@ -91,7 +61,6 @@ theorem optIncorrect_some [Fintype U] {V : Type} (f : P.Fns V) (τ : S → V) :
   ext u
   simp only [optIncorrect, incorrect, mem_filter, mem_univ, true_and, P.optCorrect_some_iff]
 
-/-- **The writer of ⊥ is incorrect.** -/
 theorem mem_optIncorrect_of_write_none [Fintype U] {V : Type} (f : P.Fns V) {σ : S → Option V} {u : U} {s : S}
     (hs : s ∈ P.writes u) (h : σ s = none) : u ∈ P.optIncorrect f σ := by
   simp only [optIncorrect, mem_filter, mem_univ, true_and]
@@ -99,7 +68,6 @@ theorem mem_optIncorrect_of_write_none [Fintype U] {V : Type} (f : P.Fns V) {σ 
   have := hw ⟨s, hs⟩
   simp [h] at this
 
-/-- **Every reader of ⊥ is incorrect.** -/
 theorem mem_optIncorrect_of_read_none [Fintype U] {V : Type} (f : P.Fns V) {σ : S → Option V} {u : U} {r : S}
     (hr : r ∈ P.reads u) (h : σ r = none) : u ∈ P.optIncorrect f σ := by
   simp only [optIncorrect, mem_filter, mem_univ, true_and]
@@ -107,13 +75,10 @@ theorem mem_optIncorrect_of_read_none [Fintype U] {V : Type} (f : P.Fns V) {σ :
   have := hx ⟨r, hr⟩
   simp [h] at this
 
-/-! ## ⊥ is weakly dominated by a short incorrect value -/
-
 theorem fill_of_some {V : Type} {d : S → V} {σ : S → Option V} {s : S} {v : V} (h : σ s = some v) :
     fill d σ s = v := by
   simp [fill, h]
 
-/-- A unit correct over `Option V` is correct once ⊥ is filled with anything. -/
 theorem correct_fill_of_optCorrect {V : Type} {f : P.Fns V} {σ : S → Option V} {u : U} (d : S → V)
     (h : P.OptCorrect f σ u) : P.Correct f (fill d σ) u := by
   obtain ⟨x, hr, hw⟩ := h
@@ -122,8 +87,6 @@ theorem correct_fill_of_optCorrect {V : Type} {f : P.Fns V} {σ : S → Option V
   rw [hx]
   exact fill_of_some (hw s)
 
-/-- **⊥ is weakly dominated by a short incorrect value**: filling every ⊥ with any value of the slot's width wrongs no unit
-that was correct. -/
 theorem incorrect_fill_subset [Fintype U] {V : Type} (f : P.Fns V) (σ : S → Option V) (d : S → V) :
     P.incorrect f (fill d σ) ⊆ P.optIncorrect f σ := by
   intro u hu
@@ -134,31 +97,22 @@ theorem holds_fill {V : Type} {a : S → V} {X : Finset S} {σ : S → Option V}
     P.Holds a X (fill d σ) :=
   fun s hs hsX => fill_of_some (h s hs hsX)
 
-/-- **Within the same budget**: an assignment over `Option V` with at most `m` incorrect proof blocks, ⊥ filled with any short
-values, is an assignment the population's count already covers. -/
 theorem fill_mem_egressAt [Fintype U] [Fintype S] {V : Type} [Fintype V] (f : P.Fns V) {a : S → V}
     {X O : Finset S} {m : ℕ} {σ : S → Option V} (d : S → V) (hσa : P.OptHolds a X σ)
     (hσm : (P.optIncorrect f σ).card ≤ m) : (fun o : O => fill d σ o) ∈ P.egressAt f a X O m := by
   simp only [egressAt, mem_image, mem_filter, mem_univ, true_and]
   exact ⟨fill d σ, ⟨P.holds_fill d hσa, (card_le_card (P.incorrect_fill_subset f σ d)).trans hσm⟩, rfl⟩
 
-/-! ## T1: robust determinacy and the cone over `Option V` -/
-
-/-- **Robust determinacy over `Option V`**: an assignment is determined by its inputs and the writes of a set
-containing its incorrect proof blocks, ⊥ included. -/
 theorem opt_eq_of_writes [Fintype U] (hc : P.Covered) (ha : P.Acyclic) {V : Type} (f : P.Fns V) {B : Finset U}
     {σ τ : S → Option V} (hin : ∀ s ∈ P.input, σ s = τ s) (hσ : P.optIncorrect f σ ⊆ B) (hτ : P.optIncorrect f τ ⊆ B)
     (hB : ∀ u ∈ B, ∀ s ∈ P.writes u, σ s = τ s) : σ = τ :=
   P.eq_of_writes hc ha (P.liftFns f) hin (P.incorrect_lift_subset.trans hσ) (P.incorrect_lift_subset.trans hτ) hB
 
-/-- **The cone over `Option V`**. -/
 theorem opt_eq_off_down [Fintype U] (hc : P.Covered) (ha : P.Acyclic) {V : Type} (f : P.Fns V) {B : Finset U}
     {σ τ : S → Option V} (hin : ∀ s ∈ P.input, σ s = τ s) (hσ : P.optIncorrect f σ ⊆ B) (hτ : P.optIncorrect f τ ⊆ B) :
     ∀ v, v ∉ P.down B → ∀ s ∈ P.writes v, σ s = τ s :=
   P.eq_off_down hc ha (P.liftFns f) hin (P.incorrect_lift_subset.trans hσ) (P.incorrect_lift_subset.trans hτ)
 
-/-- **Integrity against the honest run over `Option V`**: off the downstream cone of the incorrect proof blocks, every slot holds
-its honest value, never ⊥. -/
 theorem opt_eq_honest_off_down [Fintype U] (h : P.Checked) {V : Type} (f : P.Fns V) (a : S → V)
     {honest : S → V} {σ : S → Option V} (hh : ∀ s ∈ P.input, honest s = a s) (hc : ∀ u, P.Correct f honest u)
     (hσ : ∀ s ∈ P.input, σ s = some (a s)) :
@@ -166,8 +120,6 @@ theorem opt_eq_honest_off_down [Fintype U] (h : P.Checked) {V : Type} (f : P.Fns
   P.eq_off_down (P.covered_of_singleAssignment h.1) h.2 (P.liftFns f) (τ := fun s => some (honest s))
     (fun s hs => by rw [hσ s hs, hh s hs]) P.incorrect_lift_subset
     (P.incorrect_lift_subset.trans (by rw [P.optIncorrect_some, P.incorrect_eq_empty hc]; exact empty_subset _))
-
-/-! ## T2: the egress count over `Option V` -/
 
 theorem optEgress_subset [Fintype U] [Fintype S] {V : Type} [Fintype V] (f : P.Fns V) (a : S → V)
     (X O : Finset S) (B : Finset U) :
@@ -185,14 +137,12 @@ theorem optEgressAt_subset [Fintype U] [Fintype S] {V : Type} [Fintype V] (f : P
   obtain ⟨σ, ⟨hσa, hσm⟩, rfl⟩ := he
   exact ⟨σ, ⟨hσa, (card_le_card P.incorrect_lift_subset).trans hσm⟩, rfl⟩
 
-/-- **The capacity at an incorrect set over `Option V`**: at most `(|V| + 1) ^ |writes B|` egress values. -/
 theorem card_optEgress_le [Fintype U] [Fintype S] (hc : P.Covered) (ha : P.Acyclic) {V : Type} [Fintype V]
     (f : P.Fns V) (a : S → V) {X O : Finset S} {B : Finset U} (hX : ∀ s ∈ X, s ∉ P.up O) :
     (P.optEgress f a X O B).card ≤ (Fintype.card V + 1) ^ (P.writesOf B).card := by
   rw [← Fintype.card_option]
   exact (card_le_card (P.optEgress_subset f a X O B)).trans (P.card_egress_le hc ha (P.liftFns f) _ hX)
 
-/-- **The capacity with at most `m` incorrect proof blocks over `Option V`**. -/
 theorem card_optEgressAt_le [Fintype U] [Fintype S] (hc : P.Covered) (ha : P.Acyclic) {V : Type} [Fintype V]
     (f : P.Fns V) (a : S → V) {X O : Finset S} (hX : ∀ s ∈ X, s ∉ P.up O) (m w : ℕ)
     (hw : ∀ u, (P.writes u).card ≤ w) :
@@ -201,8 +151,6 @@ theorem card_optEgressAt_le [Fintype U] [Fintype S] (hc : P.Covered) (ha : P.Acy
   rw [← Fintype.card_option]
   exact (card_le_card (P.optEgressAt_subset f a X O m)).trans (P.card_egressAt_le hc ha (P.liftFns f) _ hX m w hw)
 
-/-- **Control reach over `Option V`**: with the inputs fixed, at most
-`(∑_{j ≤ m} C(|U|, j)) · (|V| + 1) ^ min(m w, R)` egress values. -/
 theorem card_optEgressAt_le_reach [Fintype U] [Fintype S] (hc : P.Covered) (ha : P.Acyclic) {V : Type} [Fintype V]
     (f : P.Fns V) (a : S → V) (O : Finset S) (m w R : ℕ) (hw : ∀ u, (P.writes u).card ≤ w)
     (hR : ∀ B : Finset U, B.card ≤ m → (P.coneEgress O B).card ≤ R) :
@@ -211,8 +159,6 @@ theorem card_optEgressAt_le_reach [Fintype U] [Fintype S] (hc : P.Covered) (ha :
   rw [← Fintype.card_option]
   exact (card_le_card (P.optEgressAt_subset f a ∅ O m)).trans
     (P.card_egressAt_le_reach hc ha (P.liftFns f) _ O m w R hw hR)
-
-/-! ## T3: leakage beyond the honest egress over `Option V` -/
 
 theorem card_image_some_le {ι : Type} {O : Finset S} {V : Type} [Fintype V] [DecidableEq V] (Cl : Finset ι)
     (honest : ι → S → V) :
@@ -224,8 +170,6 @@ theorem card_image_some_le {ι : Type} {O : Finset S} {V : Type} [Fintype V] [De
   rw [this]
   exact card_image_le
 
-/-- **The uniform form over `Option V`**: with at most `m` incorrect proof blocks and every unit's cone egress `E(u) ≤ E`, the
-egress takes at most `#honest · C(|U|, m) · (|V| + 1) ^ (m E)` values. -/
 theorem opt_card_leak_le_coneEgress [Fintype U] (hc : P.Covered) (ha : P.Acyclic) {V : Type} [Fintype V]
     [DecidableEq V] (f : P.Fns V) (O : Finset S) {m E : ℕ} (hmU : m ≤ Fintype.card U)
     (hE : ∀ u, (P.coneEgress O {u}).card ≤ E) {ι : Type} (Cl : Finset ι) (σ : ι → S → Option V)
@@ -239,8 +183,6 @@ theorem opt_card_leak_le_coneEgress [Fintype U] (hc : P.Covered) (ha : P.Acyclic
   rw [Fintype.card_option] at h
   exact h.trans (Nat.mul_le_mul_right _ (Nat.mul_le_mul_right _ (card_image_some_le Cl honest)))
 
-/-- **Leakage about the secrets is at most influence reach, over `Option V`**: at most
-`#honest · (∑_{j ≤ m} C(|U|, j)) · (|V| + 1) ^ R` egress values. -/
 theorem opt_card_leak_le_reach [Fintype U] (hc : P.Covered) (ha : P.Acyclic) {V : Type} [Fintype V] [DecidableEq V]
     (f : P.Fns V) (O : Finset S) (m R : ℕ) (hR : ∀ B : Finset U, B.card ≤ m → (P.coneEgress O B).card ≤ R)
     {ι : Type} (Cl : Finset ι) (σ : ι → S → Option V) (honest : ι → S → V)
@@ -254,8 +196,6 @@ theorem opt_card_leak_le_reach [Fintype U] (hc : P.Covered) (ha : P.Acyclic) {V 
   rw [Fintype.card_option] at h
   exact h.trans (Nat.mul_le_mul_right _ (Nat.mul_le_mul_right _ (card_image_some_le Cl honest)))
 
-/-- **Read with ⊥ filled, the count is the population's**: whatever short values stand in for ⊥, the egress takes at
-most `#honest · C(|U|, m) · |V| ^ (m E)` values. -/
 theorem fill_card_leak_le_coneEgress [Fintype U] (hc : P.Covered) (ha : P.Acyclic) {V : Type} [Fintype V]
     [DecidableEq V] [Nonempty V] (f : P.Fns V) (O : Finset S) {m E : ℕ} (hmU : m ≤ Fintype.card U)
     (hE : ∀ u, (P.coneEgress O {u}).card ≤ E) {ι : Type} (Cl : Finset ι) (σ : ι → S → Option V)
@@ -267,15 +207,11 @@ theorem fill_card_leak_le_coneEgress [Fintype U] (hc : P.Covered) (ha : P.Acycli
     (fun i hi t ht => fill_of_some (hin i hi t ht)) hh
     (fun i hi => (card_le_card (P.incorrect_fill_subset f (σ i) (d i))).trans (hm i hi))
 
-/-! ## T4: the skipped work over `Option V` -/
-
 theorem skipsLucky_lift {V : Type} {f : P.Fns V} {honest : S → V} {σ : S → Option V} {K L : Finset U}
     (hl : P.OptSkipsLucky f honest σ K L) : P.SkipsLucky (P.liftFns f) (fun s => some (honest s)) σ K L :=
   fun u hu hr hc => hl u hu hr
     (P.optCorrect_of_correct_lift (fun r => by rw [hr r.1 r.2]; rfl) hc)
 
-/-- **The skipped work over `Option V`**: at most `F · wt(incorrect)` plus the lucky work, the incorrect proof blocks those of
-`optIncorrect`, the readers and writers of ⊥ among them. -/
 theorem opt_skipped_work_le_wt [Fintype U] [DecidableEq U] (h : P.Checked) {V : Type} (f : P.Fns V) (a : S → V)
     {honest : S → V} {σ : S → Option V} (hh : ∀ s ∈ P.input, honest s = a s) (hc : ∀ u, P.Correct f honest u)
     (hσ : ∀ s ∈ P.input, σ s = some (a s)) {K L : Finset U} (hl : P.OptSkipsLucky f honest σ K L) (wt : U → ℕ)
@@ -286,8 +222,6 @@ theorem opt_skipped_work_le_wt [Fintype U] [DecidableEq U] (h : P.Checked) {V : 
     (P.skipsLucky_lift hl) wt F hF).trans
     (Nat.add_le_add_right (Nat.mul_le_mul_left _ (sum_le_sum_of_subset P.incorrect_lift_subset)) _)
 
-/-- **The skipped work under weighted sampling and a luck rate, over `Option V`**:
-`(den − num) · W ≤ den · (F M + slack)`. -/
 theorem opt_skipped_work_le_wt_of_luck [Fintype U] [DecidableEq U] (h : P.Checked) {V : Type} (f : P.Fns V)
     (a : S → V) {honest : S → V} {σ : S → Option V} (hh : ∀ s ∈ P.input, honest s = a s)
     (hc : ∀ u, P.Correct f honest u) (hσ : ∀ s ∈ P.input, σ s = some (a s)) {K L : Finset U}
@@ -304,8 +238,6 @@ theorem opt_skipped_work_le_wt_of_luck [Fintype U] [DecidableEq U] (h : P.Checke
   omega
 
 end Dataflow
-
-/-! ## The openings: a long value is ⊥ -/
 
 namespace Openings
 
@@ -325,7 +257,6 @@ theorem exists_of_view_eq_some {s : S} {v : V} (h : O.view s = some v) : ∃ x, 
   · rw [view, dite_eq_right he] at h
     cases h
 
-/-- **An accepted opening is the view**, or the run holds a collision. -/
 theorem view_of_accepts {D : Type} {H : List UInt8 → D} (hcs : CollisionStep H O) {s : S} {x : List UInt8}
     (hx : O.Accepts s x) : O.view s = some (O.read s x) ∨ Collides H O.hashed := by
   have he : ∃ y, O.Accepts s y := ⟨x, hx⟩
@@ -334,8 +265,6 @@ theorem view_of_accepts {D : Type} {H : List UInt8 → D} (hcs : CollisionStep H
     rw [view, dite_eq_left he, hxy]
   · exact Or.inr (hcs s _ he.choose_spec.2 x hx.2 hxy)
 
-/-- **A long value leaves its slot ⊥**: when a string whose length is not the slot's width climbs to the slot's
-position, the verifier's view of the slot is ⊥, or the run holds a collision. -/
 theorem long_value {D : Type} {H : List UInt8 → D} (hcs : CollisionStep H O) {s : S} {x : List UInt8}
     (hx : x ∈ O.climbs s) (hlen : x.length ≠ O.width s) : O.view s = none ∨ Collides H O.hashed := by
   by_cases he : ∃ y, O.Accepts s y
@@ -343,9 +272,6 @@ theorem long_value {D : Type} {H : List UInt8 → D} (hcs : CollisionStep H O) {
     exact Or.inr (hcs s x hx y hy fun e => hlen ((congrArg List.length e).trans hyl))
   · exact Or.inl (O.view_eq_none_iff.2 fun y hy => he ⟨y, hy⟩)
 
-/-- **The view reads only openings of the declared width**: two runs with the same widths and decoding, whose climbing
-strings of the declared width are the same, have the same view, whatever strings of other lengths climb in either and
-whatever they hash. -/
 theorem view_congr {O' : Openings S V} (hw : O.width = O'.width) (hr : O.read = O'.read)
     (hc : ∀ s x, x.length = O.width s → (x ∈ O.climbs s ↔ x ∈ O'.climbs s)) : O.view = O'.view := by
   have hA : O.Accepts = O'.Accepts := by
@@ -358,8 +284,6 @@ theorem view_congr {O' : Openings S V} (hw : O.width = O'.width) (hr : O.read = 
   unfold view
   rw [hA, hr]
 
-/-- **Long values do not reach the view**: committing long values as well, and hashing anything more, leaves the
-verifier's view as it was. -/
 theorem view_add_long (L : S → Set (List UInt8)) (hL : ∀ s, ∀ x ∈ L s, x.length ≠ O.width s)
     (T : Set (List UInt8)) : ({ O with climbs := fun s => O.climbs s ∪ L s, hashed := T } : Openings S V).view =
       O.view := by
@@ -372,7 +296,6 @@ namespace Dataflow
 
 variable {U S V : Type} (P : Dataflow U S) (O : Openings S V)
 
-/-- **A unit's proof makes it correct in the view**, or the run holds a collision. -/
 theorem optCorrect_of_opened {D : Type} {H : List UInt8 → D} (hcs : CollisionStep H O) {f : P.Fns V} {u : U}
     (h : P.Opened O f u) : P.OptCorrect f O.view u ∨ Collides H O.hashed := by
   by_cases hcol : Collides H O.hashed
@@ -387,14 +310,11 @@ theorem optCorrect_of_opened {D : Type} {H : List UInt8 → D} (hcs : CollisionS
       rw [← hyv]
       exact (O.view_of_accepts hcs hy).resolve_right hcol
 
-/-- **A unit correct in the view has a proof to give**: accepted openings of every slot it reads and writes. -/
 theorem opened_of_optCorrect {f : P.Fns V} {u : U} (h : P.OptCorrect f O.view u) : P.Opened O f u := by
   obtain ⟨x, hr, hw⟩ := h
   exact ⟨x, fun r => O.exists_of_view_eq_some (hr r), fun s => O.exists_of_view_eq_some (hw s)⟩
 
-/-- **The long-value lemma**: when a string whose length is not slot `s`'s width climbs to `s`'s position, `s`'s writer
-and every unit that reads `s` are incorrect in the verifier's view, or the run holds a collision. With
-`incorrect_fill_subset`, the attack is weakly dominated by writing a short incorrect value at `s`. -/
+/-- With `incorrect_fill_subset`, the attack is weakly dominated by writing a short incorrect value at `s`. -/
 theorem long_value_incorrect [Fintype U] {D : Type} {H : List UInt8 → D} (hcs : CollisionStep H O) (f : P.Fns V)
     {s : S} {x : List UInt8} (hx : x ∈ O.climbs s) (hlen : x.length ≠ O.width s) :
     ((∀ u, s ∈ P.writes u → u ∈ P.optIncorrect f O.view) ∧ ∀ u, s ∈ P.reads u → u ∈ P.optIncorrect f O.view) ∨

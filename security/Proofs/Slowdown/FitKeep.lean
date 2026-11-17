@@ -2,23 +2,8 @@ module
 
 public import Proofs.Slowdown.Fit
 
-/-!
-# The fit bound with counted multiplications left out
-
-`FitsSlots` and `ReachSlots` are adopted for dense recipes with two kinds of work left out:
-initialization windows (each server's first window, which builds its weights from a seed, so `FitsSlots`'s slot half
-fails there) and threads that aren't the trained model's tokens (side computations inside the training circuit, such as
-data filters). `keep T s` is `T` with its counted multiplications cut to the gates in `s`, and `keepSlots σ s` is `σ` on
-it. `fitBoundSlots_keep` is `fitBoundSlots_start` at `keep T s`, with the counted multiplications outside `s` added to
-the bound: a citation that leaves work out charges it.
-
-* `fitBoundSlots_init` cuts by window: `s` is every gate outside the windows in `I`. It asks `FitsSlots` of the other
-  windows only, and `ReachSlots`, counted outside `I`, of the threads started outside `I`. A thread an initialization
-  window starts has every kept multiplication in a window it entered, whose entry fee pays for it, so it needs no
-  `ReachSlots`. The charge is the counted multiplications inside `I` (`benchmarks/nci/fit.py`, `left_out`).
-* `fitBoundSlots_threads` cuts by thread: `s` is the counted multiplications of the threads in `K`, under `ReachSlots`
-  and `FitsSlots` at `keep T s`.
--/
+/-! The fit bound with counted multiplications left out: initialization windows, and threads that aren't the trained
+model's tokens. -/
 
 @[expose] public section
 
@@ -30,7 +15,6 @@ open Verity Finset
 
 variable {c : RegisteredCircuit}
 
-/-- `T` with its counted multiplications cut to the gates in `s`. -/
 abbrev keep (T : Threading c) (s : Finset (Fin c.D.N)) : Threading c where
   m := T.m
   W := T.W
@@ -47,7 +31,6 @@ abbrev keep (T : Threading c) (s : Finset (Fin c.D.N)) : Threading c where
   reuse := T.reuse
   reuse_le w t := le_trans (card_le_card (filter_subset_filter _ (filter_subset _ _))) (T.reuse_le w t)
 
-/-- A slot map of `T` on `keep T s`. -/
 def keepSlots {T : Threading c} (σ : T.Slots) (s : Finset (Fin c.D.N)) : (keep T s).Slots where
   p := σ.p
   slot := σ.slot
@@ -74,8 +57,6 @@ theorem keep_entered_subset (T : Threading c) (s : Finset (Fin c.D.N)) {k : ℕ}
   obtain ⟨⟨g, hg⟩, hj⟩ := ht
   exact ⟨⟨g, ((mem_keep_threadMults T s _ t g).1 hg).1⟩, hj⟩
 
-/-- **The fit bound with work left out**: under `fitBoundSlots_start`'s premises at `keep T s`, `T`'s counted
-multiplications number at most its bound plus those outside `s`, written multiplied out. -/
 theorem fitBoundSlots_keep (T : Threading c) (σ : T.Slots) (s : Finset (Fin c.D.N)) {k : ℕ} (P : Partition c.D k)
     (start : Fin T.m → Fin k) (Nstar : ℕ) (S b_w w_e : ℝ) (hgap : S < Nstar * b_w)
     (hS : ∀ j, (freshInput c (P.gates j) : ℝ) ≤ S)
@@ -93,7 +74,6 @@ theorem fitBoundSlots_keep (T : Threading c) (σ : T.Slots) (s : Finset (Fin c.D
   rw [hsplit, mul_add]
   exact add_le_add hk le_rfl
 
-/-- The gates outside the windows in `I`. -/
 def outside {k : ℕ} (P : Partition c.D k) (I : Finset (Fin k)) : Finset (Fin c.D.N) :=
   univ.filter fun g => ∀ j ∈ I, g ∉ P.gates j
 
@@ -103,9 +83,6 @@ theorem keep_outside_mults {T : Threading c} {k : ℕ} (P : Partition c.D k) {I 
   simp only [Threading.mults, outside, mem_inter, mem_filter, mem_univ, true_and] at hg
   exact hg.1.2 j hj hg.2
 
-/-- **The fit bound with initialization windows left out**: `FitsSlots` at every window outside `I`, and `ReachSlots`
-outside `I` for the threads started outside `I` that do counted work in their start window, bound `T`'s counted
-multiplications by `FitBoundSlots`'s bound plus those inside `I`. -/
 theorem fitBoundSlots_init (T : Threading c) (σ : T.Slots) {k : ℕ} (P : Partition c.D k) (I : Finset (Fin k))
     (start : Fin T.m → Fin k) (Nstar : ℕ) (S b_w w_e : ℝ) (hbw : 0 ≤ b_w) (hwe : 0 ≤ w_e) (hgap : S < Nstar * b_w)
     (hS : ∀ j, (freshInput c (P.gates j) : ℝ) ≤ S)
@@ -153,12 +130,9 @@ theorem fitBoundSlots_init (T : Threading c) (σ : T.Slots) {k : ℕ} (P : Parti
     simp only [outside, mem_filter, mem_univ, true_and, not_forall, not_not, exists_prop]
   rwa [hout] at hk
 
-/-- The counted multiplications of the threads in `K`. -/
 def threadGates (T : Threading c) (K : Finset (Fin T.m)) : Finset (Fin c.D.N) :=
   T.M.filter fun g => ∃ t ∈ K, T.thread (T.act g) = some t
 
-/-- **The fit bound with threads left out**: `ReachSlots` and `FitsSlots` at `T` cut to the threads in `K` bound `T`'s
-counted multiplications by `FitBoundSlots`'s bound plus those of the other threads. -/
 theorem fitBoundSlots_threads (T : Threading c) (σ : T.Slots) (K : Finset (Fin T.m)) {k : ℕ} (P : Partition c.D k)
     (start : Fin T.m → Fin k) (Nstar : ℕ) (S b_w w_e : ℝ) (hgap : S < Nstar * b_w)
     (hS : ∀ j, (freshInput c (P.gates j) : ℝ) ≤ S)

@@ -4,16 +4,7 @@ public import Definitions.Slowdown.Guarantees.FitRate
 public import Proofs.ResourceAccounting.Actual.ServerBlocks
 public import Proofs.Slowdown.Fit
 
-/-!
-# Proof of the fit bound on a run
-
-`ServerBlocksAt` at the run's cuts divides the developer's declaration into the windows `A[X i, [τ j, τ (j + 1))]`, each
-reading in `G` at most the part in `G` of its server's state at `τ j` plus `β_{X i} (τ (j + 1) − τ j)`. At `G` the image
-of `c`'s novel gates, the windows pulled into `c` (`pull`) read at most that (`freshInput_pull_le_readsIn_compl`), so at
-most `R + r ω`, and `FitBound` gives the count over the `n J` windows. Its compute-rate hypothesis holds at `Φ = A.N`
-(`computeRate_N`), and the count does not read `Φ`. Windows of at least `ω₀` ticks number at most `t / ω₀`
-(`cuts_mul_le`), which gives the rate.
--/
+/-! Proof of the fit bound on a run. -/
 
 @[expose] public section
 
@@ -23,8 +14,6 @@ namespace Slowdown.SecurityProofs
 
 open Verity ResourceAccounting Finset
 
-/-- Through a containment `M : c ≼ d`, the piece of `c` that a unit of `d` induces reads at most what the unit reads in
-the image of `c`'s novel gates. -/
 theorem freshInput_pull_le_readsIn_compl {c d : RegisteredCircuit} (M : Containment c.D d.D) {n : ℕ} (P : Partition d.D n)
     (u : Fin n) : freshInput c ((pull M P).gates u) ≤ readsIn d (P.gates u) ((c.θᶜ).map ⟨M.emb, M.emb_inj⟩) := by
   unfold freshInput readsIn
@@ -34,7 +23,6 @@ theorem freshInput_pull_le_readsIn_compl {c d : RegisteredCircuit} (M : Containm
   exact mem_inter.2 ⟨into_pull_map u (mem_map_of_mem _ (mem_sdiff.1 ha).1),
     mem_map_of_mem _ (Finset.mem_compl.2 (mem_sdiff.1 ha).2)⟩
 
-/-- Every actual circuit does at most `A.N` gates a tick at any location, so the compute rate holds at `Φ = A.N`. -/
 theorem computeRate_N {L : Type*} (A : Placed L) (𝒳 : Set (Finset L)) :
     A.ComputeRate 𝒳 (fun _ => 1) (fun _ => A.N) := by
   intro X _ a b
@@ -51,7 +39,6 @@ theorem computeRate_N {L : Type*} (A : Placed L) (𝒳 : Set (Finset L)) :
     rw [hempty, card_empty]
     exact Nat.zero_le _
 
-/-- Cuts of `[0, t)` into windows of at least `ω₀` ticks number at most `t / ω₀`. -/
 theorem cuts_mul_le {t : ℕ} (κ : Cuts t) {ω₀ : ℕ} (h : ∀ j : Fin κ.J, ω₀ ≤ κ.τ j.succ - κ.τ j.castSucc) :
     κ.J * ω₀ ≤ t := by
   have key : ∀ k (hk : k ≤ κ.J), k * ω₀ ≤ κ.τ ⟨k, Nat.lt_succ_of_le hk⟩ := by

@@ -4,30 +4,12 @@ public import Mathlib
 public import Proofs.ResourceAccounting.RegisteredCircuit.Credit
 public import Proofs.ResourceAccounting.RegisteredCircuit.Run
 
-/-!
-# A registered circuit's space and bandwidth from an accepted audit
-
-`ResourceAccounting.SecurityProofs.RegisteredCircuitRequirement`, the theorem of
-`ResourceAccounting.Guarantees.RegisteredCircuitRequirement`. A carrier of the registered circuit's over at most `L` of the audit's
-windows carries at most `C` bits (`Carrier.card_le_census`), so every pass rebuilds at most `X_r·τ + C` bits of its
-appended tiles, and its tiles of `W` are appended tiles. Each window's reads in its passes' tiles of `W`, with each
-pass's tiles short of the store counted as read, against the window's correct receipts: a window short by more than a
-pass's slack, `k` tiles more, has a pass unpaid on its tiles of `W` (`SketchDeployedWindow.exists_unpaid_tiles`), which
-at signs of rank 12 holds a guessed tag or `k + 1` correct digests behind unobtained positions
-(`Prover.unpaid_tiles_split`), priced at each pass's prefix (`pr_run_le`). The samples then bound the windows' and the
-session's reads so counted (`SketchDeployedRun.pr_deployed_of_unpaid_causal`), and a pass's credit is at most a
-tile's bits for each of its tiles of `W` (`Requirement.credit_le_tiles`), so the shortfall against the credit is the
-shortfall against the store (`Requirement.sum_lt_of_credit`, `Requirement.lt_of_credit`).
--/
+/-! `RegisteredCircuitRequirement`: a registered circuit's space and bandwidth from an accepted audit. -/
 
 @[expose] public section
 
 namespace ResourceAccounting.RateSketch.Carrier
 
-/-- **A carrier of a registered circuit's over at most `L` of the audit's windows carries at most `C` bits**: its inputs
-at most `8·R_L` and its encodes at most `⌈1024·L·c·P·N·4096/E⌉`, the nonlinear units of each of its windows within the
-caps' `c = caps.total` units a byte of the window's certified reads, at most `P·N·4096` bytes, under the encode bound
-at 1024-bit words and `E` nonlinear units a word. -/
 theorem card_le_census {N m P L B εnum εden E : ℕ} {ι : Type} {Wc : Gates.IntDag ι} {caps : Gates.Caps}
     {Aud : Gates.Audit} (hE : Gates.EncodeBound Gates.p1024 3 B E εnum εden)
     (hE0 : 0 < E) (hprop : Gates.Property caps Aud Wc)
@@ -85,8 +67,6 @@ end ResourceAccounting.RateSketch.Carrier
 
 namespace ResourceAccounting.RateSketch.SketchDeployedWindow
 
-/-- Passes whose reads `r` and one slack each fall short of their correct receipts `c`, less what their tiles `u` and
-credits `cr` leave of the store, have one that falls short of its correct receipts in its tiles `ci`. -/
 theorem exists_lt_of_shares {P : ℕ} (r c ci u cr : Fin P → ℕ) (N slack : ℕ)
     (hc : ∀ j, c j ≤ ci j + (N - u j)) (hu : ∀ j, u j ≤ N) (hcr : ∀ j, cr j ≤ u j * 32768)
     (hx : ∑ j, r j + (P * (N * 32768) - ∑ j, cr j) + P * slack < (∑ j, c j) * 32768) :
@@ -110,10 +90,6 @@ theorem exists_lt_of_shares {P : ℕ} (r c ci u cr : Fin P → ℕ) (N slack : �
   obtain ⟨j, -, hj⟩ := Finset.exists_lt_of_sum_lt hlt
   exact ⟨j, hj⟩
 
-/-- **A window short on its passes' tiles has a pass unpaid on its tiles.** If the window's reads in the tiles `U j` of
-each pass `j`, with each pass's store outside its credit `cr j ≤ |U j|` tiles counted as read, and one slack a pass,
-fall short of its correct receipts, some pass's reads in its tiles and the slack fall short of its correct receipts
-there. -/
 theorem exists_unpaid_tiles {P N ρ h S L q ks G : ℕ} (A : SketchDeployedWindow P N 128 ρ h S L q ks G)
     (E : Fin P → SketchStore N 128) (σ : SketchSigns ks 128) (ω : Fin P → SketchPassCoins N ρ h ks G)
     (U : Fin P → Finset (Fin N)) (cr : Fin P → ℕ) (slack : ℕ) (hcr : ∀ j, cr j ≤ (U j).card * 32768)
@@ -147,8 +123,6 @@ end ResourceAccounting.RateSketch.SketchDeployedWindow
 
 namespace ResourceAccounting.Requirement
 
-/-- Reads short of the credit by `g·M` over the windows, each window's read counting its store outside its credit,
-at most `K` bits, are short of `(1 − g)·M` when the windows' stores total `M`. -/
 theorem sum_lt_of_credit {n : ℕ} (rd ri cs : Fin n → ℕ) (K : ℕ) (g M : ℝ) (hrd : ∀ w, rd w = ri w + (K - cs w))
     (hcs : ∀ w, cs w ≤ K) (hM : (n : ℝ) * K = M)
     (h : ((∑ w, ri w : ℕ) : ℝ) < ((∑ w, cs w : ℕ) : ℝ) - g * M) :
@@ -166,8 +140,6 @@ theorem sum_lt_of_credit {n : ℕ} (rd ri cs : Fin n → ℕ) (K : ℕ) (g M : �
   rw [sub_mul, one_mul]
   linarith
 
-/-- A window's reads short of its credit by `g·M`, its read counting its store outside its credit, at most `K = M`
-bits, are short of `(1 − g)·M`. -/
 theorem lt_of_credit (rd ri cs K : ℕ) (g M : ℝ) (hrd : rd = ri + (K - cs)) (hcs : cs ≤ K) (hM : (K : ℝ) = M)
     (h : (ri : ℝ) < (cs : ℝ) - g * M) : (rd : ℝ) < (1 - g) * M := by
   have hreal : (rd : ℝ) + cs = ri + K := by

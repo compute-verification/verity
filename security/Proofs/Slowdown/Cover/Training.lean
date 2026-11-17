@@ -6,17 +6,7 @@ public import Proofs.Slowdown.Cover.Area
 public import Proofs.Slowdown.Cover.Bits
 public import Proofs.Slowdown.Cover.Sum
 
-/-!
-# The cover theorem on a declaration that complies with the inference-only policy, proved
-
-Pull a compliant division of `d` back to `c` (`pull`): piece `u` has at most `σ_u ≤ Γ` gates (`card_pull_gates_le`) and
-reads at most `α σ_u` fresh input bits (`freshInput_pull`). Its block in `c`'s bit view (`block`) is handed
-`k_u ≤ α σ_u` bits outside the free bits (`translation`) and has at most `s` bits (`card_block_le`), so it finishes at
-most `(k_u² + b k_u) / b` counted products (`intensity`). Every counted product's output bit reads something,
-so its gate is a computed gate of `c`, in some piece, whose block computes it (`mem_computed_block_of_pred`). Summed over
-the inference blocks (`sum_area_le`), `b #P ≤ (α² Γ + b α) size(d)`. `training_of_block_bound` is this route for any per-block
-bound of the same form, which the whole-word variant (`Aligned`) reuses.
--/
+/-! The cover theorem on a declaration that complies with the inference-only policy, proved. -/
 
 @[expose] public section
 
@@ -26,8 +16,6 @@ namespace Slowdown.Cover.SecurityProofs
 
 open Finset
 
-/-- **The counted products are finished by the pieces' blocks**: every counted product's output bit is computed by the
-block of the piece that holds its gate. -/
 theorem card_P_le_sum_finished {c d : Verity.RegisteredCircuit} (M : Verity.Containment c.D d.D) {n : ℕ}
     (P : Verity.Partition d.D n) {J L : Type} [DecidableEq J] [DecidableEq L]
     (Mb : MulBlocks (Circuit.ofDecl c) J L) :
@@ -47,9 +35,6 @@ theorem card_P_le_sum_finished {c d : Verity.RegisteredCircuit} (M : Verity.Cont
     ((InferenceOnly.SecurityProofs.pull M P).mem_gates).2 hu
   exact mem_biUnion.2 ⟨u, mem_univ _, mem_filter.2 ⟨hp, mem_computed_block_of_pred hne hgR⟩⟩
 
-/-- **The per-block bounds summed over a compliant division pulled back to `c`**: if the block of every set of `c`'s
-gates, when it has at most `s` bits and is handed `k < b D` bits outside the free bits, finishes at most `(k² + e k) / e`
-counted products, then `α₀ e size(c) ≤ (α² Γ + e α) size(d)`. `CoverTraining` is this at `e = b`, from `intensity`. -/
 theorem training_of_block_bound {Γ : ℕ} {α b α₀ e : ℝ} {c d : Verity.RegisteredCircuit} (M : Verity.Containment c.D d.D)
     {J L : Type} [DecidableEq J] [DecidableEq L] (Mb : MulBlocks (Circuit.ofDecl c) J L) {s D w₀ : ℕ}
     (he : 0 ≤ e) (hα : 0 ≤ α) (hC : InferenceOnly.CompliesRate Γ α d)

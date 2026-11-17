@@ -2,16 +2,7 @@ module
 
 public import Proofs.ResourceAccounting.ReadUnit.Check.Copies
 
-/-!
-# The read's root composes its calls into the read
-
-At the root's references' values `g`, each call's copy holds its part's run on the values its inputs bind (`root_facts`).
-Each part's statement then reads as a fact about lists of bit values: a copy's input forms hold the values of the root
-columns its call binds (`evs_copy`), and its returned forms hold the root's values at the call's output columns
-(`copy_outs`). The facts chain the parts in order: the segments and the outer hash give the row's
-`sha512/row-seg/v1` digest (`root_rowSeg`), then the hm96 leaf, the frame's leaf hash, its nodes up the path and the
-comparison with the root (`root_climb`), then the select (`root_read`).
--/
+/-! The read's root composes its calls into the read. -/
 
 @[expose] public section
 
@@ -19,8 +10,6 @@ namespace ResourceAccounting.ReadUnit.Gates
 
 open FlockSoundness FlockSoundness.TmplSpec FlockSoundness.Discharge.Hm Flock.ReadNet
 open Flock.HmNets hiding and
-
-/-! ## Bit-value lists -/
 
 theorem bytesOf_append (B : List Bool) : ∀ (n : ℕ) {A : List Bool}, A.length = 64 * n →
     ReadUnit.bytesOf (A ++ B) = ReadUnit.bytesOf A ++ ReadUnit.bytesOf B
@@ -45,8 +34,6 @@ theorem num_replicate_false : ∀ m, ReadUnit.num (List.replicate m false) = 0
 
 theorem num_append_false (A : List Bool) (m : ℕ) : ReadUnit.num (A ++ List.replicate m false) = ReadUnit.num A := by
   rw [num_append, num_replicate_false, Nat.mul_zero, Nat.add_zero]
-
-/-! ## A part's forms -/
 
 theorem bitsAt_add (k a b : ℕ) : bitsAt k (a + b) = bitsAt k a ++ bitsAt (k + a) b := by
   simp only [bitsAt, List.range_add, List.map_append, List.map_map]
@@ -73,7 +60,6 @@ theorem length_bitsAt (k n : ℕ) : (bitsAt k n).length = n := by simp [bitsAt]
 theorem evs_bitsAt (f : Var → Bool) (k n : ℕ) : evs f (bitsAt k n) = (List.range n).map fun t => f (k + t) := by
   simp [evs, bitsAt, Function.comp_def]
 
-/-- A digest's bytes are its 512 bits' bytes. -/
 theorem digestOf_bytes {bs : List Bool} (h : bs.length = 512) :
     (ReadUnit.digestOf bs).bytes = ReadUnit.bytesOf bs := by
   have hs : Shaped 8 (wordsAt 0 8) := shaped_wordsAt 0 8
@@ -85,7 +71,6 @@ theorem digestOf_bytes {bs : List Bool} (h : bs.length = 512) :
   have := (wordsDigest_bytes (fun x => bs.getD x false) hs).trans (wordsBytes_eq _ hs).symm
   rwa [wordsDigest, wordsBytes, he] at this
 
-/-- Two lists of words whose bits hold the same values hold the same words. -/
 theorem valN_congr {z z' : Var → Bool} : ∀ {w w' : Word}, evs z w = evs z' w' → valN z w = valN z' w'
   | [], [], _ => rfl
   | f :: w, f' :: w', h => by
@@ -115,8 +100,6 @@ theorem sound_flat {m : M (List Word)} {P : (Var → Bool) → List Word → Pro
 theorem shaped_flatten_length {k : ℕ} {ws : List Word} (h : Shaped k ws) : ws.flatten.length = 64 * k := by
   rw [length_flatten_of_shaped h, Nat.mul_comm]
 
-/-! ## A copy, read at the root -/
-
 section copy
 
 variable {ins : ℕ} {r : List Lin × St} {v : ℕ → Bool} {g : ℕ → Bool} {cs : List ℕ}
@@ -129,7 +112,6 @@ theorem partVal_lt (hlen : cs.length = ins) {x : ℕ} (hx : x < ins) :
     List.getD_eq_getElem?_getD, List.getElem?_map, List.getD_eq_getElem?_getD, List.getElem?_eq_getElem (by omega)]
   rfl
 
-/-- **A copy's input forms** at `k` hold the values of the root columns its call binds there. -/
 theorem evs_copy (hlen : cs.length = ins) {P Q R : List ℕ} (hcs : cs = P ++ (Q ++ R)) {k n : ℕ}
     (hk : P.length = k) (hn : Q.length = n) : evs (partVal ins r v (cs.map g)) (bitsAt k n) = Q.map g := by
   subst hk hn
@@ -147,7 +129,6 @@ theorem evs_copy_words (hlen : cs.length = ins) {P Q R : List ℕ} (hcs : cs = P
     evs (partVal ins r v (cs.map g)) (wordsAt k m).flatten = Q.map g := by
   rw [flatten_wordsAt, evs_copy hlen hcs hk hm]
 
-/-- **A copy's returned forms** hold its own columns that commit them. -/
 theorem evs_copy_outs (hp : PartHolds ins r v (cs.map g)) :
     evs (partVal ins r v (cs.map g)) r.1 = (List.range r.1.length).map fun j => v (r.2.next - ins + j) := by
   apply List.ext_getElem (by simp [evs])
@@ -157,17 +138,13 @@ theorem evs_copy_outs (hp : PartHolds ins r v (cs.map g)) :
 
 end copy
 
-/-! ## The root's calls -/
-
 section root
 
 variable {V H : ℕ} {z : ℕ → Bool}
 
-/-- The values the root's columns hold at call `i`'s first `n` outputs. -/
 def outV (V H : ℕ) (z : ℕ → Bool) (i n : ℕ) : List Bool :=
   (List.range n).map fun k => rootVal V H z ((lay V H).outAt i k)
 
-/-- The values `n` root columns from `k` hold. -/
 def colV (V H : ℕ) (z : ℕ → Bool) (k n : ℕ) : List Bool := (List.range n).map fun t => rootVal V H z (k + t)
 
 theorem map_at (k n : ℕ) : ((List.range n).map (k + ·)).map (rootVal V H z) = colV V H z k n := by
@@ -196,15 +173,12 @@ theorem base_cols_le {i : ℕ} (hi : i < nCalls V H) :
   rw [lay_const]
   omega
 
-/-- The value a copy of call `i`'s part gives its run's variables. -/
 abbrev copyV (V H : ℕ) (z : ℕ → Bool) (i : ℕ) (p : Part) : Var → Bool :=
   partVal p.ins p.run (fun y => z ((lay V H).base i + y)) ((inputs V H (lay V H) i).map (rootVal V H z))
 
-/-- What `root_facts` gives call `i`'s copy of part `p`. -/
 abbrev CopyHolds (V H : ℕ) (z : ℕ → Bool) (i : ℕ) (p : Part) : Prop :=
   PartHolds p.ins p.run (fun y => z ((lay V H).base i + y)) ((inputs V H (lay V H) i).map (rootVal V H z))
 
-/-- **A copy's returned forms** hold the root's values at its call's output columns. -/
 theorem copy_outs {i : ℕ} (hi : i < nCalls V H) {p : Part} (hp : p ∈ (parts V H)[partOf V H i]?)
     (hP : CopyHolds V H z i p) (hn : p.run.1.length = nOut V H i) :
     evs (copyV V H z i p) p.run.1 = outV V H z i (nOut V H i) := by
@@ -220,12 +194,10 @@ theorem copy_outs {i : ℕ} (hi : i < nCalls V H) {p : Part} (hp : p ∈ (parts 
     omega
   rw [hout, rootVal_le (by omega)]
 
-/-- A copy's statement, from its part's generator's. -/
 theorem copy_run {i : ℕ} {p : Part} (hP : CopyHolds V H z i p) {P : (Var → Bool) → List Lin → Prop}
     (hm : Sound p.prog P) : P (copyV V H z i p) p.run.1 :=
   (hm ⟨p.ins, []⟩).2 _ hP.1
 
-/-- The words a copy returns hold the root's values at its call's output columns. -/
 theorem copy_words_out {i : ℕ} (hi : i < nCalls V H) {p : Part} (hp : p ∈ (parts V H)[partOf V H i]?)
     (hP : CopyHolds V H z i p) {o : List Word} {k : ℕ} (ho : p.run.1 = o.flatten) (hs : Shaped k o)
     (hn : nOut V H i = 64 * k) : evs (copyV V H z i p) o.flatten = outV V H z i (64 * k) := by
@@ -233,14 +205,10 @@ theorem copy_words_out {i : ℕ} (hi : i < nCalls V H) {p : Part} (hp : p ∈ (p
 
 end root
 
-/-! ## Each call's part, inputs and outputs -/
-
 theorem rsb : Flock.HmRow.ROW_SEG_BITS = 8192 := rfl
 
-/-- Segment `j`'s bits. -/
 def segM (H j : ℕ) : ℕ := min (16 * H - Flock.HmRow.ROW_SEG_BITS * j) Flock.HmRow.ROW_SEG_BITS
 
-/-- Segment `j`'s chaining value's columns: the constant where its bit is set, else the zero column. -/
 def cvRefs (L : Layout) (H j : ℕ) : List ℕ :=
   (List.range 8).flatMap fun w => (List.range 64).map fun b =>
     if (Flock.Sha512.compress Flock.Sha512.iv (Flock.HmRow.segmentPrefix j (segs H) (segM H j)) 0)[w]!.toBitVec.getLsbD b

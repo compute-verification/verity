@@ -3,15 +3,7 @@ module
 public import Definitions.ResourceAccounting.Actual
 import Mathlib.Algebra.Order.BigOperators.Group.Finset
 
-/-!
-# The split: what a region reads is what its location carried in plus what crossed its boundary
-
-A gate that `A[X, [t, t'))` reads from outside itself is placed outside `X`, and counts in `ingress X [t, t')`, or in
-`X`. In `X` it is an input gate, or a computed gate placed before `t`: one placed at or after `t'` would be read by a gate
-of the region, which runs before `t'`, before its own tick, which `Forward X` refuses. Either way `A[X, [t, ∞))` reads it
-from outside itself, so it counts in `state X t`. The same holds of the reads in any set `G` of gates, with
-`stateIn X t G` in place of `state X t` (`width_into_region_inter_le`).
--/
+/-! The split: what a region reads is what its location carried in plus what crossed its boundary. -/
 
 @[expose] public section
 
@@ -42,9 +34,6 @@ theorem stateIn_univ (X : Finset L) (t : ℕ) : A.stateIn X t univ = A.state X t
   unfold Placed.stateIn Placed.state
   rw [inter_univ]
 
-/-- **The split in `G`**: what `A[X, [t, t'))` reads from outside itself in the gates `G` is at most the part in `G` of
-what `X` carries across `t` plus what crossed `X`'s boundary during `[t, t')`, when wires run forward in time inside
-`X`. -/
 theorem width_into_region_inter_le (X : Finset L) (t t' : ℕ) (G : Finset (Fin A.N)) (h : A.Forward X) :
     A.width (A.into (A.region X (Set.Ico t t')) ∩ G) ≤ A.stateIn X t G + A.ingress X (Set.Ico t t') := by
   classical
@@ -62,8 +51,6 @@ theorem width_into_region_inter_le (X : Finset L) (t t' : ℕ) (G : Finset (Fin 
       exact (mem_region A).2 ⟨hgi, hgx, hgt⟩
   · exact Or.inr ⟨hai, hx⟩
 
-/-- **The split**: what `A[X, [t, t'))` reads from outside itself is at most what `X` carries across `t` plus what
-crossed `X`'s boundary during `[t, t')`, when wires run forward in time inside `X`. -/
 theorem width_into_region_le (X : Finset L) (t t' : ℕ) (h : A.Forward X) :
     A.width (A.into (A.region X (Set.Ico t t'))) ≤ A.state X t + A.ingress X (Set.Ico t t') := by
   have := width_into_region_inter_le A X t t' univ h

@@ -6,13 +6,7 @@ public import Mathlib.Analysis.SpecialFunctions.Pow.Real
 public import Mathlib.Probability.Distributions.Uniform
 public import Mathlib.Tactic.Linarith
 
-/-!
-# Local bounds: proofs of their witnesses
-
-Each witness of `Definitions.Slowdown.Guarantees.Capability.Witnesses`, at the toy instance (`Slowdown.Capability.Toy`). The
-facts about the toy they share come first: its `(2, 1)`-partition, a block program's bits, what the block recomputes,
-the decoder's description lengths, and the budgets of items priced one bit each.
--/
+/-! Local bounds: proofs of their witnesses at the toy instance (`Slowdown.Capability.Toy`). -/
 
 @[expose] public section
 
@@ -69,7 +63,6 @@ theorem eval_three (a : C.Trace) : (C.eval a 3).getLsbD 0 = ((a 0).getLsbD 0 && 
   rw [C.eval_input a (g := 0) (by decide), C.eval_input a (g := 1) (by decide)]
   simp
 
-/-- The run whose every input is `1`: honest, its token set, so gates `2` and `3` hold `11`. -/
 theorem honest_ones : R1.Honest fun _ => 1 := fun _ _ => rfl
 
 theorem eval_ones : z (C.eval fun _ => 1) = [true, true] := by
@@ -81,7 +74,6 @@ theorem selection_two (T : C.Trace) (σ : Fin 1 → Finset (Fin 4)) (hσ : σ 0 
     rw [Finset.sort_insert _ (by decide) (by decide), Finset.sort_singleton]
   simp [selectionBits, hσ, this, Circuit.bits, z]
 
-/-- Every program `M` accepts is nonempty. -/
 theorem ldl_pos (t : ℕ) (y : List Bool) : (1 : ℕ∞) ≤ LDL M t () y := by
   unfold LDL
   refine le_iInf₂ fun p hp => ?_
@@ -90,22 +82,18 @@ theorem ldl_pos (t : ℕ) (y : List Bool) : (1 : ℕ∞) ≤ LDL M t () y := by
     simp [M, decode] at hp
   exact_mod_cast List.length_pos_of_ne_nil this
 
-/-- `M` describes `11` in one bit. -/
 theorem ldl_eleven (t : ℕ) : LDL M t () [true, true] ≤ 1 :=
   iInf₂_le_of_le [false] rfl (by simp)
 
-/-- Source hardness at deficiency `1` for the value of gates `2` and `3`: every description is at least one bit. -/
 theorem sourceHard : Assumptions.SourceHard R1 M () 0 z 2 1 := fun _ _ =>
   calc ENNReal.ofReal (2 - 1) ≤ ((1 : ℕ∞) : ℝ≥0∞) := by norm_num
     _ ≤ _ := ENat.toENNReal_le.2 (ldl_pos _ _)
 
-/-- `11`'s one-bit description refutes every price above one bit for it. -/
 theorem not_le_ldl_eleven (t : ℕ) {p : ℝ} (hp : 1 < p) : ¬ ENNReal.ofReal p ≤ (LDL M t () [true, true] : ℝ≥0∞) := by
   intro h
   have h1 : (LDL M t () [true, true] : ℝ≥0∞) ≤ 1 := by exact_mod_cast ENat.toENNReal_le.2 (ldl_eleven t)
   exact absurd (ENNReal.ofReal_le_one.1 (h.trans h1)) (not_le.2 hp)
 
-/-- No description is shorter than two bits at deficit `0` once it is one bit: `11`'s refutes a price of two. -/
 theorem not_two_le_ldl_eleven (t : ℕ) : ¬ ENNReal.ofReal 2 ≤ (LDL M t () [true, true] : ℝ≥0∞) :=
   not_le_ldl_eleven t one_lt_two
 
@@ -117,7 +105,6 @@ theorem sum_price_le {ι : Type} [Fintype ι] (X : Items C ι) (hp : ∀ i, X.pr
 theorem held_W2_R1 : HeldPriceAtMost R1 W2 2 := fun _ U _ _ _ =>
   (sum_price_le W2 (fun _ => rfl) U).trans (by norm_num)
 
-/-- `W2` is priced two bits in all, so no consumer needs state above `2`. -/
 theorem not_requires_K2 : ¬ K2.RequiresState W2 2 := by
   intro h
   obtain ⟨U, σ, -, -, hlt⟩ := h 0
@@ -135,7 +122,6 @@ theorem overlapWeights : K.OverlapWeights fun _ => 1 := by
   rw [sum_const, nsmul_one]
   exact_mod_cast (card_le_univ _).trans (by simp)
 
-/-- Weight `2` is over what gate `1`'s one region allows. -/
 theorem not_overlapWeights_two : ¬ K.OverlapWeights fun _ => 2 := fun h => by
   have := h.2 (1 : Fin 4)
   norm_num [K, Consumers.ofUses] at this

@@ -8,19 +8,7 @@ import Mathlib.Algebra.BigOperators.Group.Finset.Basic
 import Mathlib.Algebra.Order.BigOperators.Group.Finset
 import Mathlib.Algebra.Order.BigOperators.Ring.Finset
 
-/-!
-# The leak limit as a sum over the trusted devices
-
-`B4`'s limit has the count of the trusted devices' joint record as a factor. With each device's record within its
-limit (`RecordsWithin`), the joint record is within the limits' sum, and the limit is a sum over the devices.
-
-* `records_encard_le`: the joint record is the union of each device's, its part at that leaf, so it takes at most
-  `2 ^ ∑ K` values (`seen_record_single_Ico`, `encard_le_two_pow_sum`).
-* `leak_le_sum_K`: `B4` with the joint record's count replaced by `2 ^ ∑ K`.
-* `leak_le_sum_K_sinks`, `leak_le_sum_K_sealed`: a location with sinks. An uncovered link across the boundary of
-  `X ∪ sink` is one of `X`'s or one of the sinks' (`uncertifiedLinkCapacity_union_le`), and sealed sinks have none.
-* `LeakParts`: a memory challenger is a sealed sink or a trusted device, the guarantee.
--/
+/-! `B4`'s leak limit as a sum over the trusted devices' record limits. -/
 
 @[expose] public section
 
@@ -28,7 +16,6 @@ namespace ResourceAccounting
 
 open Verity Finset
 
-/-- One device's record placed during `[a, b)`, as seen, is the devices' at its leaf. -/
 theorem seen_record_single_Ico {L : Type*} (R : Actual.Run L) {cert : Finset L} (cells : L → Set ℕ) {y : L}
     (hy : y ∈ cert) (a b : ℕ) :
     R.seen '' ↑((R.record {y} cells).filter fun g => a ≤ R.A.t g ∧ R.A.t g < b) =
@@ -42,8 +29,6 @@ theorem seen_record_single_Ico {L : Type*} (R : Actual.Run L) {cert : Finset L} 
   · rintro ⟨⟨g, ⟨⟨-, hc⟩, ht⟩, rfl⟩, hgy⟩
     exact ⟨g, ⟨⟨hgy, hc⟩, ht⟩, rfl⟩
 
-/-- **A value read back from its parts takes at most the product of the parts' counts**: where every `z` of `Zs` is
-`dec` of its views and view `j` takes at most `2 ^ K j` values over `Zs`, `Zs` holds at most `2 ^ ∑ K` values. -/
 theorem encard_le_two_pow_sum {Z ι : Type*} [Fintype ι] {V : ι → Type*} (Zs : Set Z) (view : ∀ j, Z → V j)
     (dec : (∀ j, V j) → Z) (hdec : ∀ z ∈ Zs, dec (fun j => view j z) = z) (K : ι → ℕ)
     (hK : ∀ j, (view j '' Zs).encard ≤ ((2 ^ K j : ℕ) : ℕ∞)) :
@@ -58,8 +43,6 @@ theorem encard_le_two_pow_sum {Z ι : Type*} [Fintype ι] {V : ι → Type*} (Zs
     _ = ((∏ j, 2 ^ K j : ℕ) : ℕ∞) := (Nat.cast_prod _ _).symm
     _ = ((2 ^ ∑ j, K j : ℕ) : ℕ∞) := by rw [Finset.prod_pow_eq_pow_sum]
 
-/-- **The devices' joint record is within the sum of their limits**: the joint record during `[a, b)` is the union of
-each device's, its part at that leaf, so it takes at most `2 ^ ∑ K` values. -/
 theorem records_encard_le {Ω L : Type*} (S : Ω → Actual.Run L) (cert : Finset L) (record : L → Set ℕ) (a b : ℕ)
     (K : L → ℕ) (hK : RecordsWithin S cert record a b K) :
     (Set.range fun r =>
@@ -92,9 +75,6 @@ theorem records_encard_le {Ω L : Type*} (S : Ω → Actual.Run L) (cert : Finse
       exact ⟨_, ⟨r, rfl⟩, (seen_record_single_Ico (S r) record j.2 a b).symm⟩
   · rw [Finset.sum_coe_sort cert K]
 
-/-- **A location's leak is at most the sum of its trusted devices' record limits**, and what its uncertified links
-carry: under `B4`'s premises, with each device's record within its `K` (`RecordsWithin`), what the outside does during
-`[a, b)` takes at most `2 ^ (∑ K + jitter · buckets · #cert + β°_X (b − a))` values. -/
 theorem leak_le_sum_K {L E Ω : Type*} [LinearOrder L] [Fintype L] [Fintype E] (S : Ω → Actual.Run L)
     (ℓ : L → L → ℕ) (ends : E → L × L) (β : E → ℕ) (link : ∀ r, Fin (S r).A.N → Fin (S r).A.N → E)
     (𝒱 cert X : Finset L) (spec : ∀ r, (S r).A.Spec) (record : L → Set ℕ) (bucket : ℕ → ℕ) (jitter a b : ℕ)
@@ -112,8 +92,6 @@ section Sinks
 
 variable {L E : Type*} [Fintype E]
 
-/-- **The uncovered links of a location with sinks**: an uncovered link across the boundary of `X ∪ Y`, for `X` and
-`Y` apart, is an uncovered link of `X` that ends at no place of `Y`, or one of `Y` that ends at no place of `X`. -/
 theorem uncertifiedLinkCapacity_union_le [DecidableEq L] (ends : E → L × L) (β : E → ℕ) (cert X Y : Finset L)
     (hXY : Disjoint X Y) :
     uncertifiedLinkCapacity ends β cert (X ∪ Y) ≤
@@ -132,11 +110,7 @@ theorem uncertifiedLinkCapacity_union_le [DecidableEq L] (ends : E → L × L) (
 
 end Sinks
 
-/-- **A location with sinks.** With the sinks `sink` apart from `X`, `B4`'s premises at the location `X ∪ sink` and
-each trusted device's record within its `K`: what the outside of `X`, the sinks and the devices does during `[a, b)`
-takes at most `2 ^ (∑ K + jitter · buckets · #cert + (β° + β°ₛ) (b − a))` values, `β°` the capacity of the links across
-`X`'s boundary with neither a device nor a sink at an end and `β°ₛ` that of the links from a sink to a place outside
-`X`, the sinks and the devices. A sink adds no `K` and no jitter share, and nothing is asked of what it does. -/
+/-- A sink adds no `K` and no jitter share, and nothing is asked of what it does. -/
 theorem leak_le_sum_K_sinks {L E Ω : Type*} [LinearOrder L] [Fintype L] [Fintype E] (S : Ω → Actual.Run L)
     (ℓ : L → L → ℕ) (ends : E → L × L) (β : E → ℕ) (link : ∀ r, Fin (S r).A.N → Fin (S r).A.N → E)
     (𝒱 cert X sink : Finset L) (spec : ∀ r, (S r).A.Spec) (record : L → Set ℕ) (bucket : ℕ → ℕ) (jitter a b : ℕ)
@@ -152,9 +126,6 @@ theorem leak_le_sum_K_sinks {L E Ω : Type*} [LinearOrder L] [Fintype L] [Fintyp
   exact Nat.mono_cast (Nat.pow_le_pow_right Nat.two_pos (Nat.add_le_add_left
     (Nat.mul_le_mul_right _ (uncertifiedLinkCapacity_union_le ends β cert X sink hXs)) _))
 
-/-- **A location with sealed sinks** (`Covered` at the sinks, with the devices and `X` as what covers them): the
-sinks' own term drops, and what is left of `β°` is the capacity of the links across `X`'s boundary with neither a
-device nor a sink at an end. -/
 theorem leak_le_sum_K_sealed {L E Ω : Type*} [LinearOrder L] [Fintype L] [Fintype E] (S : Ω → Actual.Run L)
     (ℓ : L → L → ℕ) (ends : E → L × L) (β : E → ℕ) (link : ∀ r, Fin (S r).A.N → Fin (S r).A.N → E)
     (𝒱 cert X sink : Finset L) (spec : ∀ r, (S r).A.Spec) (record : L → Set ℕ) (bucket : ℕ → ℕ) (jitter a b : ℕ)

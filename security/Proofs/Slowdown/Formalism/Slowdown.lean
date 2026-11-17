@@ -7,25 +7,7 @@ public import Proofs.Slowdown.Formalism.Fit
 public import Mathlib.Algebra.Order.BigOperators.Group.Finset
 public import Mathlib.Tactic.GCongr
 
-/-!
-# The training formalism v2: the counting lemma over kinds, the token kind's cap, Slowdown and Security
-
-Each lower bound `X ≤ ρ` is proved as `X ≤ m c / |C|` for a partition `P` into `m` inference blocks
-(`le_slowdown_iff`):
-
-1. **Counting.** `P`'s blocks split each kind's work `B_K` (`sum_card_inter_gates`) and each holds at most `cap_K` of
-   it, so `|B_K| ≤ m cap_K`, which puts the kind's bound at most `m c / |C|` (`kindBound_le`): a cap a block gives a
-   partition-level bound (`partitionBound_kindBound`), and a kind with a partition-level bound gives it at `P`.
-2. **The token kind's cap.** By A1 an inference block `I` reads `u_I + Σ_T a_T(e_T(I)) ≤ |in(I) \ θ| ≤ k`, summed over
-   the tokens it works on, so those tokens, its entry profile `e_T(I)` and its shared bits `u_I` are within A1's budget,
-   where the token-work bound (`TokenWork`) caps `Σ_T W_T(e_T(I), u_I)`. `X` lies in the token blocks, so
-   `|I ∩ X| ≤ Σ_T |I ∩ T ∩ X|` over the same tokens (`card_inter_le_sum_worksOn`), and each term is at most
-   `W_T(e_T(I), u_I)`, the most a block entering `T` there holds (`card_le_entryWork`). The clean form, which gives the
-   token-work bound from a bound on the work per bit: `Σ_T W_T(f_T, ν) ≤ r(ν) Σ_T a_T(f_T) ≤ r(ν) (k - ν)`.
-3. **Slowdown** is the counting lemma at the kinds and at the token kind, whose work is a set of gates since the token
-   blocks are (`tokenGates_subset`), with its cap a block; **Security** is it with A2:
-   `ρ̲ p H(ℓ*) ≤ ρ̲ |C| ≤ m c ≤ N n c`.
--/
+/-! The training formalism v2: the counting lemma over kinds, the token kind's cap, Slowdown and Security. -/
 
 @[expose] public section
 
@@ -38,17 +20,14 @@ open scoped NNReal ENNReal
 
 variable {d : RegisteredCircuit} {L : Type} [Fintype L]
 
-/-- **A lower bound on `ρ`** is one on `|𝓘| c / |C|` for every partition `𝓘` into inference blocks. -/
 theorem le_slowdown_iff {c k : ℕ} {X : ℝ≥0∞} :
     X ≤ slowdown d c k ↔ ∀ (B : ℕ) (P : Partition d.D B), P.IsCK d c k → X ≤ partitionSlowdown d B c := by
   simp only [slowdown, le_iInf_iff]
 
-/-- A partition into inference blocks has inference blocks for blocks. -/
 theorem inferenceBlock_gates {B c k : ℕ} {P : Partition d.D B} (hP : P.IsCK d c k) (u : Fin B) :
     InferenceBlock d c k (P.gates u) :=
   ⟨P.gates_subset_computed u, hP.card u, hP.reads u⟩
 
-/-- A partition's blocks split any set of computed gates. -/
 theorem sum_card_inter_gates {B : ℕ} (P : Partition d.D B) {S : Finset (Fin d.D.N)} (hS : S ⊆ d.D.computed) :
     ∑ v, (P.gates v ∩ S).card = S.card := by
   classical
@@ -72,7 +51,6 @@ theorem sum_card_inter_gates {B : ℕ} (P : Partition d.D B) {S : Finset (Fin d.
     rw [mem_inter, P.mem_gates] at hv hw
     exact Option.some_injective _ (hv.1.symm.trans hw.1)
 
-/-- **The counting step**: a kind's bound `(|S| / |C|) / (cap / c)` is at most `m c / |C|` when `|S| ≤ m cap`. -/
 theorem kindBound_le {m c : ℕ} {S : Finset (Fin d.D.N)} {cap : ℝ≥0} (h : (S.card : ℝ≥0) ≤ m * cap)
     (hS : S.card ≤ d.D.computed.card) : kindBound d c S cap ≤ partitionSlowdown d m c := by
   unfold kindBound
@@ -95,8 +73,6 @@ theorem kindBound_le {m c : ℕ} {S : Finset (Fin d.D.N)} {cap : ℝ≥0} (h : (
     mul_div_cancel₀ _ hc']
   exact h
 
-/-- **A cap a block is the special case of a partition-level bound**: a kind whose every inference block holds at most
-`cap_K` of its work `B_K` has `|B_K| ≤ m cap_K` for every partition into `m` inference blocks, which split `B_K`. -/
 theorem partitionBound_kindBound {c k : ℕ} {κ : Type} {B : κ → Finset (Fin d.D.N)} {cap : κ → ℝ≥0}
     (hcaps : Caps d c k B cap) (K : κ) : PartitionBound d c k (kindBound d c (B K) (cap K)) := by
   intro m P hP
@@ -107,11 +83,9 @@ theorem partitionBound_kindBound {c k : ℕ} {κ : Type} {B : κ → Finset (Fin
     _ ≤ ∑ _v : Fin m, cap K := sum_le_sum fun v _ => hcap _ (inferenceBlock_gates hP v)
     _ = m * cap K := by rw [sum_const, card_univ, Fintype.card_fin, nsmul_eq_mul]
 
-/-- The token blocks of a valid annotation are sets of gates. -/
 theorem tokenGates_subset (A : Annotation d L) (hA : A.Valid) : A.tokenGates ⊆ d.D.computed :=
   biUnion_subset.2 fun T _ => hA.tokens_computed T
 
-/-- `|I ∩ X| ≤ Σ_T |I ∩ T ∩ X|` when `X` lies in the token blocks. -/
 theorem card_inter_le_sum (A : Annotation d L) {X : Finset (Fin d.D.N)} (hX : X ⊆ A.tokenGates)
     (I : Finset (Fin d.D.N)) : (I ∩ X).card ≤ ∑ T, (I ∩ A.tokens.holds T ∩ X).card := by
   refine (card_le_card (t := univ.biUnion fun T => I ∩ A.tokens.holds T ∩ X) fun g hg => ?_).trans card_biUnion_le
@@ -121,7 +95,6 @@ theorem card_inter_le_sum (A : Annotation d L) {X : Finset (Fin d.D.N)} (hX : X 
   obtain ⟨T, -, hT⟩ := hgT
   exact mem_biUnion.2 ⟨T, mem_univ T, mem_inter.2 ⟨mem_inter.2 ⟨hg.1, hT⟩, hg.2⟩⟩
 
-/-- The sum is over the tokens `I` works on: the others' terms are `0`. -/
 theorem card_inter_le_sum_worksOn (A : Annotation d L) {X : Finset (Fin d.D.N)} (hX : X ⊆ A.tokenGates)
     (I : Finset (Fin d.D.N)) : (I ∩ X).card ≤ ∑ T ∈ A.worksOn I, (I ∩ A.tokens.holds T ∩ X).card := by
   have hsum : ∑ T ∈ A.worksOn I, (I ∩ A.tokens.holds T ∩ X).card = ∑ T, (I ∩ A.tokens.holds T ∩ X).card := by
@@ -132,8 +105,6 @@ theorem card_inter_le_sum_worksOn (A : Annotation d L) {X : Finset (Fin d.D.N)} 
   rw [hsum]
   exact card_inter_le_sum A hX I
 
-/-- An inference block holds at most `W_T(e_T(I), u_I)` gates of `X` in `T`, the most any block entering `T` where it
-does with as many shared bits holds. -/
 theorem card_le_entryWork (A : Annotation d L) {c k : ℕ} {E : Type} (e : Finset (Fin d.D.N) → L → E)
     (𝒲 : Finset (Finset (Fin d.D.N))) (X : Finset (Fin d.D.N)) {I : Finset (Fin d.D.N)} (hI : InferenceBlock d c k I)
     (T : L) : (I ∩ A.tokens.holds T ∩ X).card ≤ A.entryWork c k e 𝒲 X T (e I T) (A.blockShared e 𝒲 I) := by

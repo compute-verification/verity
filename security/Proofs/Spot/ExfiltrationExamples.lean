@@ -13,21 +13,7 @@ import Mathlib.Data.Fintype.BigOperators
 import Proofs.Spot.Determinacy
 import Proofs.Spot.Exfiltration
 
-/-!
-# Exfiltration before detection: tightness, and what fails without each assumption
-
-* `tight_cum`, `tight_exists`: **the stopping-time bound is attained.** A strategy that leaks `ℓ` every window and
-  escapes each window with probability exactly `exp (-κ ℓ)` reaches `(j + 1) ℓ` with probability exactly `exp (-κ j ℓ)`, which
-  is `tail_cum`'s bound at `x = (j + 1) ℓ`; for every `κ ≥ 0` and `ℓ > 0` there is such a sample.
-* `no_pressure_cum`, `not_pressure_univ`: **without detection pressure** (a leak no sample catches: no incorrect proof
-  block, a sample known before the commitment, or an uncertified link) `n` windows leak `n ℓ` with probability one.
-* `no_halt_cumUpTo`, `pressure_empty`: **without a halt**, a strategy caught in every window still leaks `n ℓ`, and it
-  meets detection pressure at every `κ`.
-* `seedCopy_checked`, `seed_egress`: **without bound inputs**, a checked population whose units copy a prover-chosen
-  seed to the egress shows all `2 ^ k` values with no incorrect proof block, so no sample sees it.
-* `not_trustedModel_of_reveal`: **without a trusted model**, an honest model whose outputs determine the target gives it
-  to any guesser.
--/
+/-! Exfiltration before detection: tightness, and what fails without each assumption. -/
 
 @[expose] public section
 
@@ -37,7 +23,6 @@ open Finset
 
 variable {Ω : Type} [Fintype Ω] [DecidableEq Ω] {μ : PMF Ω}
 
-/-- Leak `ℓ` in every window and escape on the coins `s`. -/
 def constStrategy (ℓ : ℝ) (s : Finset Ω) : Strategy Ω := ⟨fun _ => ℓ, fun _ => s⟩
 
 omit [Fintype Ω] [DecidableEq Ω] in
@@ -54,10 +39,6 @@ omit [DecidableEq Ω] in
 theorem prob_true (n : ℕ) : prob μ n (fun _ => True) = 1 :=
   Verity.Game.prPMFReal_true _
 
-/-! ## Tightness -/
-
-/-- **The constant strategy, exactly**: it reaches `(j + 1) ℓ` within `n > j` windows exactly when its first `j` coins
-escape, with probability `a ^ j`, `a` the acceptance probability. -/
 theorem tight_cum {ℓ : ℝ} (hℓ : 0 < ℓ) (s : Finset Ω) :
     ∀ (n j : ℕ) (h : List Ω), j < n →
       prob μ n (fun cs => ((j : ℝ) + 1) * ℓ ≤ (constStrategy ℓ s).cum n h cs) = Verity.Game.prPMFReal μ (· ∈ s) ^ j
@@ -89,8 +70,6 @@ theorem tight_cum {ℓ : ℝ} (hℓ : 0 < ℓ) (s : Finset Ω) :
     simp only [key]
     rw [sum_ite_esc, pow_succ']
 
-/-- **`tail_cum` is attained**: when every window's acceptance probability is exactly `exp (-κ ℓ)`, the constant
-strategy reaches `(j + 1) ℓ` with probability `exp (-κ ((j + 1) ℓ - ℓ))`, the bound itself. -/
 theorem tight_tail {κ ℓ : ℝ} (hℓ : 0 < ℓ) {s : Finset Ω} (hs : Verity.Game.prPMFReal μ (· ∈ s) = Real.exp (-(κ * ℓ)))
     {n j : ℕ} (h : List Ω) (hj : j < n) :
     prob μ n (fun cs => ((j : ℝ) + 1) * ℓ ≤ (constStrategy ℓ s).cum n h cs) =
@@ -98,8 +77,6 @@ theorem tight_tail {κ ℓ : ℝ} (hℓ : 0 < ℓ) {s : Finset Ω} (hs : Verity.
   rw [tight_cum hℓ s n j h hj, hs, ← Real.exp_nat_mul]
   ring_nf
 
-/-- **The bound is tight for every `κ ≥ 0` and `ℓ > 0`**: some sample and some strategy meet detection pressure `κ` and the
-per-window bound `ℓ`, and reach `(j + 1) ℓ` with probability exactly `tail_cum`'s bound, at every horizon `n > j`. -/
 theorem tight_exists {κ ℓ : ℝ} (hκ : 0 ≤ κ) (hℓ : 0 < ℓ) :
     ∃ (μ : PMF Bool) (A : Strategy Bool), DetectionPressure μ κ A ∧ LeakBounded ℓ A ∧
       ∀ (n j : ℕ), j < n → prob μ n (fun cs => ((j : ℝ) + 1) * ℓ ≤ A.cum n [] cs) =
@@ -116,9 +93,6 @@ theorem tight_exists {κ ℓ : ℝ} (hκ : 0 ≤ κ) (hℓ : 0 < ℓ) :
   refine ⟨μ, constStrategy ℓ {true}, fun _ => hs.le, const_leakBounded hℓ.le _, fun n j hj => ?_⟩
   exact tight_tail hℓ hs [] hj
 
-/-! ## Without detection pressure -/
-
-/-- **No sample catches it**: a strategy that escapes on every coin leaks `ℓ` in each of the `n` windows. -/
 theorem no_pressure_cum (ℓ : ℝ) : ∀ (n : ℕ) (h : List Ω) (cs : Fin n → Ω),
     (constStrategy ℓ univ).cum n h cs = n * ℓ
   | 0, _, _ => by simp [Strategy.cum]
@@ -128,7 +102,6 @@ theorem no_pressure_cum (ℓ : ℝ) : ∀ (n : ℕ) (h : List Ω) (cs : Fin n �
     ring
 
 omit [DecidableEq Ω] in
-/-- A positive leak that every coin lets escape meets no detection pressure `κ > 0`. -/
 theorem not_pressure_univ {κ ℓ : ℝ} (hκ : 0 < κ) (hℓ : 0 < ℓ) :
     ¬ DetectionPressure μ κ (constStrategy ℓ univ) := by
   intro hP
@@ -137,11 +110,7 @@ theorem not_pressure_univ {κ ℓ : ℝ} (hκ : 0 < κ) (hℓ : 0 < ℓ) :
   have : Real.exp (-(κ * ℓ)) < 1 := Real.exp_lt_one_iff.2 (by nlinarith)
   linarith
 
-/-! ## Without a halt -/
-
 omit [Fintype Ω] in
-/-- **Caught every window, still leaking**: with no halt, a strategy that every coin catches leaks `ℓ` per window up
-to the `n`-th detection. -/
 theorem no_halt_cumUpTo (ℓ : ℝ) : ∀ (n : ℕ) (h : List Ω) (cs : Fin n → Ω),
     (constStrategy ℓ ∅).cumUpTo n n h cs = n * ℓ
   | 0, _, _ => by simp [Strategy.cumUpTo]
@@ -152,21 +121,15 @@ theorem no_halt_cumUpTo (ℓ : ℝ) : ∀ (n : ℕ) (h : List Ω) (cs : Fin n �
     ring
 
 omit [Fintype Ω] [DecidableEq Ω] in
-/-- It meets detection pressure at every `κ`: its acceptance probability is zero. -/
 theorem pressure_empty (κ ℓ : ℝ) : DetectionPressure μ κ (constStrategy ℓ (∅ : Finset Ω)) :=
   fun _ => by simpa [constStrategy, Verity.Game.prPMFReal_false] using (Real.exp_pos _).le
 
 omit [Fintype Ω] in
-/-- With the halt, the same strategy leaks one window's `ℓ`. -/
 theorem halt_cum (ℓ : ℝ) (n : ℕ) (h : List Ω) (cs : Fin (n + 1) → Ω) :
     (constStrategy ℓ (∅ : Finset Ω)).cum (n + 1) h cs = ℓ := by
   rw [← Fin.cons_self_tail cs, cum_cons]
   simp [constStrategy]
 
-/-! ## Without a trusted model -/
-
-/-- **A model that reveals the target**: if the honest outputs determine `S`, a guesser gets it with probability one,
-so no `g < 1` is a trusted-model bound. -/
 theorem not_trustedModel_of_reveal {W H T : Type} [Fintype W] {ρ : PMF W} {S : W → T}
     {hon : W → H} (dec : H → T) (hdec : ∀ w, dec (hon w) = S w) {g : ℝ} (hg : g < 1) :
     ¬ TrustedModel ρ S hon g := by
@@ -177,19 +140,15 @@ theorem not_trustedModel_of_reveal {W H T : Type} [Fintype W] {ρ : PMF W} {S : 
 
 end Population.Exfil
 
-/-! ## Without bound inputs: a prover-chosen seed -/
-
 namespace Population
 
 open Finset
 
-/-- Unit `i` reads seed slot `inl i` and writes egress slot `inr i`. The seeds are inputs. -/
 def seedCopy (k : ℕ) : Dataflow (Fin k) (Fin k ⊕ Fin k) where
   input := univ.image Sum.inl
   reads i := {Sum.inl i}
   writes i := {Sum.inr i}
 
-/-- Each unit copies its seed. -/
 def seedFns (k : ℕ) : (seedCopy k).Fns Bool := fun i r _ => r ⟨Sum.inl i, mem_singleton_self _⟩
 
 theorem seedCopy_checked (k : ℕ) : (seedCopy k).Checked := by
@@ -205,8 +164,6 @@ theorem seedCopy_checked (k : ℕ) : (seedCopy k).Checked := by
     rw [hsw] at hsr
     cases hsr
 
-/-- **No incorrect proof block, every seed on the egress**: with the seed slots left to the prover (`X` = the inputs),
-the assignments with no incorrect proof block show all `2 ^ k` egress values. -/
 theorem seed_egress (k : ℕ) :
     2 ^ k ≤ ((seedCopy k).egress (seedFns k) (fun _ => false) (seedCopy k).input (univ.image Sum.inr) ∅).card := by
   classical

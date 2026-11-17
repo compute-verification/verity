@@ -4,18 +4,7 @@ public import Mathlib
 public import Proofs.ResourceAccounting.RegisteredCircuit
 public import Proofs.ResourceAccounting.RegisteredCircuit.Slack
 
-/-!
-# The session's passes, each priced at its prefix
-
-The pieces of `ResourceAccounting.SecurityProofs.RegisteredCircuitRequirement` that price the passes of the stacked session. The
-codec and the append coins and pass `j`'s own coins are uniform and independent of the prefix before the pass, so an
-event of the three is bounded at every prefix (`pr_at_pass_le`). At every store some candidate holds a correct tag of a
-tile it never queried with probability at most `G·N/2^h` (`pr_guess_family_le`). At signs of rank 12, some candidate
-made `k + 1` correct digest queries behind unobtained positions with probability at most
-`2^a·(q_tot/2^96)^(k+1) + δ`: key binding at the steered layout, with the union over the `2^a` summaries inside the
-uniform blocks (`pr_badK_pass_le`). With the rank tail once a window, a session in which some window has rank-poor signs
-or some pass one of the two events costs `n·ε + n·P·G·N/2^512 + n·P·(2^a·(q_tot/2^96)^(k+1) + δ)` (`pr_run_le`).
--/
+/-! The stacked session's passes, each priced at its prefix. -/
 
 @[expose] public section
 
@@ -25,19 +14,16 @@ open Pous (pr)
 open scoped ENNReal
 open Bandwidth (pr_exists_le pr_le_of_card pr_mono pr_or_le)
 
-/-- The oracle family of a pass's `G` grinding candidates is finite. -/
 local instance instFintypeOracleFamSession (N ρ h ks G : ℕ) :
     Fintype (Fin G → Oracle N ρ h Sector (Fin ks → ZMod (2 ^ 32))) := by
   letI : Fintype (Oracle N ρ h Sector (Fin ks → ZMod (2 ^ 32))) := inferInstance
   exact inferInstance
 
-/-- An event of a pair bounded at every first coordinate is bounded. -/
 theorem pr_le_of_fiber_fst {X Y : Type} [Fintype X] [Fintype Y] (P : X × Y → Prop) (ε : ℝ≥0∞)
     (h : ∀ x, pr (fun y => P (x, y)) ≤ ε) : pr P ≤ ε := by
   rw [Rate.pr_equiv (Equiv.prodComm X Y)]
   exact Rate.pr_le_of_fiber _ _ fun x => (pr_mono fun y hy => by simpa using hy).trans (h x)
 
-/-- An event of one member of a uniform family has that member's probability. -/
 theorem pr_family_coord_le {β : Type} [Fintype β] {G : ℕ} (g : Fin G) (Q : β → Prop) {ε : ℝ≥0∞}
     (hQ : pr Q ≤ ε) : pr (fun Os : Fin G → β => Q (Os g)) ≤ ε := by
   classical
@@ -47,8 +33,6 @@ theorem pr_family_coord_le {β : Type} [Fintype β] {G : ℕ} (g : Fin G) (Q : �
   simp only [e1] at hb
   exact hb
 
-/-- The blocks of a pass's tiles and its own coins, read as the pass's data and its candidates' oracles: an event of
-the data and the oracles bounded on uniform data at every oracle family is bounded on uniform blocks. -/
 theorem pr_blocks_le {N m ρ h ks G : ℕ}
     (B : Data N m ρ Sector → (Fin G → Oracle N ρ h Sector (Fin ks → ZMod (2 ^ 32))) → Prop) {p : ℝ≥0∞}
     (hB : ∀ Os, pr (fun D => B D Os) ≤ p) :
@@ -73,7 +57,6 @@ namespace Prover
 
 variable {N m ρ h S L q ks : ℕ}
 
-/-- A correct tag of a tile the run never queried has probability at most `1/2^h` over the oracle, at every data. -/
 theorem pr_guess_at_le (A : Prover N m ρ h S L q 256 Sector (SketchSigns ks m) (Fin ks → ZMod (2 ^ 32)))
     (σ : SketchSigns ks m) (D : Data N m ρ Sector) (t : Fin N) :
     pr (fun O : Oracle N ρ h Sector (Fin ks → ZMod (2 ^ 32)) =>
@@ -92,9 +75,6 @@ section Passes
 
 variable {Y : Type} [Fintype Y]
 
-/-- **A guessed tag at every store.** Over a pass's stream and its candidates' oracles, beside coins `y` that the
-devices and the store may read, some candidate holds a correct tag of a tile it never queried with probability at most
-`G·N/2^h`. -/
 theorem pr_guess_family_le {N m ρ h S L q ks G : ℕ}
     (dv : Y → Fin G → Prover N m ρ h S L q 256 Sector (SketchSigns ks m) (Fin ks → ZMod (2 ^ 32)))
     (σ : SketchSigns ks m) (st : Y → SketchStore N m) :
@@ -122,9 +102,6 @@ theorem pr_guess_family_le {N m ρ h S L q ks G : ℕ}
   refine (Finset.sum_le_sum fun g _ => hg g).trans (le_of_eq ?_)
   simp [Finset.sum_const, Finset.card_univ, nsmul_eq_mul]
 
-/-- **A pass's coins are fresh at its prefix.** The coins `y` are sampled beside the session and pass `j` of window `w`
-flips its own coins after the prefix before it, so an event of the prefix, `y` and the pass's coins that is bounded at
-every prefix is bounded. -/
 theorem pr_at_pass_le {n P N m ρ h ks G d : ℕ} (w : Fin n) (j : Fin P)
     (F : SketchPrefix n P N m ρ h ks G d → Y → SketchPassCoins N ρ h ks G → Prop) (p : ℝ≥0∞)
     (hF : ∀ c, pr (fun a : Y × SketchPassCoins N ρ h ks G => F c a.1 a.2) ≤ p) :
@@ -182,16 +159,12 @@ section Session
 
 variable {n P N ρ S L q G T M a : ℕ} {Ω Ca Ch : Type}
 
-/-- Candidate `g` of pass `c.j` of window `c.w`, at the prefix `c` before the pass and the codec and the append coins
-`y`: the device of the session of the summary `steer c y` the pass is told. -/
 abbrev passDev (A : SketchSummaryRun a n P N 128 ρ 512 S L q 16 G 2773)
     (steer : SketchPrefix n P N 128 ρ 512 16 G 2773 → Ω × (Fin T → Ca) → Pous.Bits a)
     (c : SketchPrefix n P N 128 ρ 512 16 G 2773) (y : Ω × (Fin T → Ca)) (g : Fin G) :
     Prover N 128 ρ 512 S L q 256 Sector (SketchSigns 16 128) (Fin 16 → ZMod (2 ^ 32)) :=
   ((A.session (steer c y)).window c.w c.windows).device c.j c.passes g
 
-/-- **A guessed tag** at pass `c.j` of window `c.w`, on its store and its coins `pc`: some candidate holds a correct
-tag of a tile it never queried. -/
 abbrev PassGuess (A : SketchSummaryRun a n P N 128 ρ 512 S L q 16 G 2773)
     (steer : SketchPrefix n P N 128 ρ 512 16 G 2773 → Ω × (Fin T → Ca) → Pous.Bits a)
     (enc : Ω → Fin T → Ch → (Fin T → Ca) → Fin M → (Fin 128 → Sector))
@@ -203,8 +176,6 @@ abbrev PassGuess (A : SketchSummaryRun a n P N 128 ρ 512 S L q 16 G 2773)
       (Data.ofParts (steeredStore enc choose layout c y) pc.1) ∧
     t ∉ queried (passDev A steer c y g) sketch c.signs (pc.2 g) (Data.ofParts (steeredStore enc choose layout c y) pc.1)
 
-/-- **`k + 1` correct digests behind unobtained positions** at pass `c.j` of window `c.w`, on its store and its coins
-`pc`, at signs of rank 12. -/
 abbrev PassBadK (k : ℕ) (A : SketchSummaryRun a n P N 128 ρ 512 S L q 16 G 2773)
     (steer : SketchPrefix n P N 128 ρ 512 16 G 2773 → Ω × (Fin T → Ca) → Pous.Bits a)
     (enc : Ω → Fin T → Ch → (Fin T → Ca) → Fin M → (Fin 128 → Sector))
@@ -216,11 +187,6 @@ abbrev PassBadK (k : ℕ) (A : SketchSummaryRun a n P N 128 ρ 512 S L q 16 G 27
     BadK (passDev A steer c y g) sketch c.signs (pc.2 g) (Data.ofParts (steeredStore enc choose layout c y) pc.1)
       fun i => (ι i : ℕ)
 
-/-- **The slack's price at a prefix, on the steered layout.** At the prefix `c`, over the codec, the append coins and
-the pass's own coins, some candidate of the pass made `k + 1` correct digest queries behind unobtained positions, at
-signs of rank 12, with probability at most `2^a·(q_tot/2^96)^(k+1) + δ`: key binding at the layout `slot c` of the
-summary, the union over the `2^a` summaries inside the uniform blocks (`KeyBinding.pr_steered_le`), and on uniform
-blocks `Prover.pr_badK_family_le` at each summary's devices. -/
 theorem pr_badK_pass_le [Fintype Ω] [Fintype Ca] {k qtot : ℕ} {δ : ℝ≥0∞}
     {enc : Ω → Fin T → Ch → (Fin T → Ca) → Fin M → (Fin 128 → Sector)}
     (hKB : Assumptions.KeyBinding T M δ enc)
@@ -265,10 +231,6 @@ theorem pr_badK_pass_le [Fintype Ω] [Fintype Ca] {k qtot : ℕ} {δ : ℝ≥0�
           rw [Rate.Pooled.pr_false]
           exact bot_le
 
-/-- **The session's passes priced.** Some window has signs of rank below 12, or some pass a guessed tag or `k + 1`
-correct digests behind unobtained positions, with probability at most
-`n·ε + n·P·G·N/2^512 + n·P·(2^a·(q_tot/2^96)^(k+1) + δ)`: the rank tail once a window, and at each pass the guess at
-every store and the slack's price on the steered layout, each at the prefix before the pass. -/
 theorem pr_run_le [Fintype Ω] [Fintype Ca] {k qtot : ℕ} {ε δ : ℝ≥0∞}
     {enc : Ω → Fin T → Ch → (Fin T → Ca) → Fin M → (Fin 128 → Sector)}
     (hRank : Assumptions.SketchRank 16 128 12 ε) (hKB : Assumptions.KeyBinding T M δ enc)
