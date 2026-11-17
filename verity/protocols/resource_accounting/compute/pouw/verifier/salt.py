@@ -1,6 +1,6 @@
 """PoUW's read of the network attester's per-execution-phase salt.
 
-PoUW execution phase p is k = `pouw_window` certifier windows p·k … p·k + k − 1, aligned at 0. The network attester device samples
+PoUW execution phase p is k = `pouw_window` attester windows p·k … p·k + k − 1, aligned at 0. The network attester device samples
 p's 512-bit salt and releases it into the block only (`CertifierDevice`'s `SaltSource`, under
 `verity/protocols/resource_accounting/network/attester/lean/`); the reveal and its custody are outside the device. PoUW reads
 the network attester as an interface and imports none of it: `revealed` takes any object whose `reveal(p, registration)` gives
@@ -10,10 +10,10 @@ recorded for p before the salt.
 * `registered(registration)` is PoUW's reader of the execution phase a registration is for: PoUW's served execution
   phase ``{"kind": "served", "context", "public"}`` (`core_check.commitment`'s), whose context names PoUW execution phase p as
   ``<prefix>/pouw-window/<p>/<the pass manifest's SHA-512>`` (`context`).
-* `revealed(certifier, p, registration)` is p's certifier salt, or `Unrevealed`: it fails closed when the registration
+* `revealed(attester, p, registration)` is p's attester salt, or `Unrevealed`: it fails closed when the registration
   isn't p's (unregistered), when the network attester refuses (on its own rules), and when what it gives isn't 64 bytes
   (missing).
-* `committed(certifier, p, registration)` is what PoUW recorded with the network attester for p before it sampled p's salt
+* `committed(attester, p, registration)` is what PoUW recorded with the network attester for p before it sampled p's salt
   (a record the prover registered with the network attester signed), or `Unrevealed` (refused, or uncommitted): the
   `pouw_record` of the weights' root, the stream and the prover. The salt binds no weights, so a certified execution phase passes only weights,
   a stream and a prover recorded before its salt (`core_check.pass_epoch_twin`).
@@ -24,7 +24,7 @@ recorded for p before the salt.
   prover, taken when the challenger receives the execution phase, before its sample and any proof. It is not the execution phase's credit,
   which is its outcome's verdict.
 * `unit_reason(unit)` is why a certified execution phase can't credit a sampled proof block: it credits only units that read its salt.
-* `pouw_window(windows, k)` is the PoUW execution phase certifier windows make up, refusing any that aren't one whole, aligned
+* `pouw_window(windows, k)` is the PoUW execution phase attester windows make up, refusing any that aren't one whole, aligned
   PoUW execution phase.
 * `window_open_root(weights_root, requests_root, session)` is a live execution phase's open root: what the auditor's gate opens
   the execution phase's challenger session on and its salt coin opens after, which the verifier recomputes from the execution phase's
@@ -77,7 +77,7 @@ _NAT = re.compile(r"0|[1-9][0-9]*")
 
 
 class Unrevealed(DomainError):
-    """A PoUW execution phase whose certifier salt, or weights recorded before it, the verifier doesn't have: unregistered,
+    """A PoUW execution phase whose attester salt, or weights recorded before it, the verifier doesn't have: unregistered,
     early, missing or uncommitted."""
 
 
@@ -266,14 +266,14 @@ def registered(registration: WindowCommitmentRecord) -> int | None:
     return window_of(w["context"])
 
 
-def revealed(certifier: Any, window: int, registration: WindowCommitmentRecord | None) -> bytes:
-    """PoUW execution phase `window`'s certifier salt, `certifier.reveal(window, registration)`, given the execution phase's registration
+def revealed(attester: Any, window: int, registration: WindowCommitmentRecord | None) -> bytes:
+    """PoUW execution phase `window`'s attester salt, `attester.reveal(window, registration)`, given the execution phase's registration
     as the proof system returned it. It fails closed (`Unrevealed`): unregistered (`registered` doesn't read `window`
     off the registration), refused by the network attester (on its own rules), or missing (what the network attester gave isn't a 64-byte salt)."""
     if registered(registration) != _window(window):
         raise Unrevealed(f"unregistered: no registration of PoUW window {window}")
     try:
-        salt = certifier.reveal(window, registration)
+        salt = attester.reveal(window, registration)
     except (RuntimeError, ValueError) as e:
         raise Unrevealed(f"the network attester doesn't reveal PoUW window {window}'s salt: {e}") from None
     if type(salt) is not bytes or len(salt) != SALT_BYTES:
@@ -281,16 +281,16 @@ def revealed(certifier: Any, window: int, registration: WindowCommitmentRecord |
     return salt
 
 
-def committed(certifier: Any, window: int, registration: WindowCommitmentRecord | None) -> bytes:
+def committed(attester: Any, window: int, registration: WindowCommitmentRecord | None) -> bytes:
     """What PoUW recorded with the network attester for PoUW execution phase `window` before it drew the execution phase's salt, the 64-byte
-    `pouw_record` of the weights' root, the stream and the prover: `certifier.committed(window, registration)`
+    `pouw_record` of the weights' root, the stream and the prover: `attester.committed(window, registration)`
     (recorded signed by the registered prover), given the execution phase's registration. It fails
     closed (`Unrevealed`): unregistered, as `revealed`; refused by the network attester (on its own rules, or nothing recorded
     before the sample); or uncommitted, when what the network attester gives isn't 64 bytes."""
     if registered(registration) != _window(window):
         raise Unrevealed(f"unregistered: no registration of PoUW window {window}")
     try:
-        record = certifier.committed(window, registration)
+        record = attester.committed(window, registration)
     except (RuntimeError, ValueError) as e:
         raise Unrevealed(f"the network attester doesn't give what PoUW recorded for window {window}: {e}") from None
     if type(record) is not bytes or len(record) != WEIGHTS_ROOT_BYTES:
@@ -300,14 +300,14 @@ def committed(certifier: Any, window: int, registration: WindowCommitmentRecord 
 
 
 def pouw_window(windows: Sequence[int], k: int) -> int:
-    """The PoUW execution phase certifier windows `windows` make up, k certifier windows each: p when they are p·k … p·k + k − 1
+    """The PoUW execution phase attester windows `windows` make up, k attester windows each: p when they are p·k … p·k + k − 1
     in order, one whole PoUW execution phase aligned at 0; else `DomainError`."""
     if not (type(k) is int and k >= 1):
-        raise DomainError(f"a PoUW window is a positive number of certifier windows, not {k!r}")
+        raise DomainError(f"a PoUW window is a positive number of attester windows, not {k!r}")
     ws = list(windows)
     if not ws or any(type(w) is not int for w in ws) or ws[0] < 0 or ws[0] % k or ws != list(range(ws[0], ws[0] + k)) \
             or ws[0] // k >= U64:
-        raise DomainError(f"certifier windows {ws} are not one PoUW window of {k}: p·{k} … p·{k} + {k - 1}, aligned at 0")
+        raise DomainError(f"attester windows {ws} are not one PoUW window of {k}: p·{k} … p·{k} + {k - 1}, aligned at 0")
     return ws[0] // k
 
 

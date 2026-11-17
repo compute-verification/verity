@@ -6,9 +6,9 @@ path none of its records enters the chain. The older network attester's code is 
 the refusal stays with the form that reads them.
 
 * `deployment`: ``deployment.json``, a network attester's (its link, its schedule and their digest, its key and
-  session), never a network attester's (``certifier_key``, ``links``), in a run holding no certifier rehearsal's file
-  (`CERTIFIER_FILES`).
-* `deployment_of`: the run's deployment held to the auditor's record of it (`RECORD`, ``CERTIFIER_KEY``'s form: the
+  session), never a network attester's (``certifier_key``, ``links``), in a run holding no attester rehearsal's file
+  (`ATTESTER_FILES`).
+* `deployment_of`: the run's deployment held to the auditor's record of it (`RECORD`, ``ATTESTER_KEY``'s form: the
   gate's own ``out/deployment.json`` of the run as the auditor read it off the gate, its SHA-512, key and session):
   every ``deployment.json`` the run holds must be the record's, whose deployment the checks then read, so the network
   attester's key and session are the auditor's, never a file the prover's node holds; a copy beside the one the
@@ -64,19 +64,19 @@ sys.path.append(str(Path(__file__).resolve().parents[2]))  # the root, for bench
 PROXY = ("a network attester rehearsal's run (its records through the older network attester's proxy in front of the endpoint): "
          "the network certifier path reads an active network attester's own run (network_attester_serve.py's, or the gate's warden-rehearse)")
 #: what only a network attester rehearsal's run holds (per strategy under a fetched gate run's ``out/``)
-CERTIFIER_FILES = ("plan.json", "calibration.json", "proxy.json.gz")
+ATTESTER_FILES = ("plan.json", "calibration.json", "proxy.json.gz")
 #: an id request's fields (`id_form.id_request`'s keywords but the frame's)
 FIELDS = ("model", "user", "prompt", "max_tokens", "temperature", "top_p", "seed")
 #: a network attester link declares no sync, so its Σ_sync is never read (`service.TransferBlocks`'s ``network_attester``); one
 #: value for the field
 UNREAD_SYNCS = SyncSet((0,), (Fraction(1),))
-#: the auditor's record of a network attester run, ``CERTIFIER_KEY``'s form: ``deployment``, the gate's own
+#: the auditor's record of a network attester run, ``ATTESTER_KEY``'s form: ``deployment``, the gate's own
 #: ``out/deployment.json`` of the run as the auditor read it off the gate, ``deployment_sha512`` its bytes' SHA-512 (hex),
 #: and ``key`` and ``session``, the deployment's; the fields the gate's run also gives it (``host``, ``run``, ``pinned``,
 #: ``peer``, ``request``, ``end``) the reader of its ``status`` checks, and no check here reads them
 RECORD = "certifier-key/v1"
 #: the counts of `network_attester_serve.check`'s summary `certificates` writes: the gate's own list of what a network attester
-#: run's end publishes (`auditor.NETWORK_CERTIFIER_COUNTS`), key for key, with `cell_rows` cut as the gate cuts it
+#: run's end publishes (`auditor.NETWORK_ATTESTER_COUNTS`), key for key, with `cell_rows` cut as the gate cuts it
 #: (`auditor.CELL_ROWS`). The summary's other keys count the traffic (the requests and how each ended, the cells, their
 #: bits and their lateness, the execution phases the signer refused) or are made from the witness (a connection's
 #: bytes before padding, the requests' tokens and finish reasons, the attester's clocks and stalls) and stay there.
@@ -113,7 +113,7 @@ def deployment(run: Path) -> tuple[dict, W.NetworkAttesterParams]:
     """The run's ``deployment.json`` and the network attester's schedule, refused by name where the run is a network attester
     rehearsal's (`PROXY`) or its digest isn't its parameters'."""
     for d in (run, run / "witness", run / "out", run / "out" / "honest", run / "honest"):
-        if hit := next((d / f for f in CERTIFIER_FILES if (d / f).is_file()), None):
+        if hit := next((d / f for f in ATTESTER_FILES if (d / f).is_file()), None):
             raise SystemExit(f"{run}: {PROXY} ({hit} is there)")
     dep = json.loads(found(run, "deployment.json").read_text())
     if "certifier_key" in dep or "links" in dep or "params" not in dep or dep.get("link") != RC.LINK:
