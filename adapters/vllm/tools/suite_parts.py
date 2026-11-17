@@ -143,7 +143,7 @@ JOB = ("uv sync -q --all-packages --extra torch-cpu && P=$(python3 adapters/vllm
        " && test -n \"$P\" && uv run tools/check/suites.py verity-vllm"
        " --jobs \"$(nproc)\" --logs \"$OUT/logs\"{opts} -- $P")
 #: the memory each part's job asks for: 4 CPUs' workers, one at the suite's worker_gb and the rest at its typical_worker_gb
-JOB_MEM_GB = 34
+JOB_MEM_GB = 38
 
 
 def _skipped(name: str) -> bool:
