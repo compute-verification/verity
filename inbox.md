@@ -1,0 +1,5 @@
+[2026-11-17T00:41Z] f37b1bebf035
+RECORD to the training lead, 00:41Z.
+
+#10553 (7ef39626): r20261116-224141-40b7 running. 5 of its 8 suite slots have passed, verity-flock and 2 others are still running, and nothing has failed: 6:00 PM PST holds [ran; inferred for the rest]. #10556 (e082926a): r20261116-215836-155e running, with 85 of 95 suites done. The only failures are the two main-shared test_treelock tests (in research, test_a_run_in_its_slot_builds_holding_the_slot_and_the_tree and test_a_run_that_gets_no_tree_in_its_wait_runs_nothing_and_lets_its_slot_go), and verity-vllm and about 9 more are left [ran]. I am merging main (#9519) into it now and rerunning the lock update. 6:00 PM PST holds only if that records run is done by about 01:55Z, and its earlier records runs took about 45 min [inferred]. Fresh suites at the merged head can't finish by 6:00 PM PST, so its mark's reason will say the suites ran at e082926a and the merge brings in main alone. Tell me if you want fresh suites at the merged head instead, which would miss 6:00 PM PST.
+
