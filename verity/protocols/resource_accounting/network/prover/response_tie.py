@@ -7,7 +7,7 @@ row it reads and the response row it returns (`content_rows`' "The tables"); no 
 class, whose rows have a stop word, and `ResponseTieNoStop` in a no-stop class, whose rows have none. Each takes
 every connection its kind of class holds, however the connection ended. It reads ``egress``, the compute side's
 committed row of the connection's O ids, O its class's size; in a stop class ``stop``, the compute
-side's committed stop word of the same connection; and ``end``, the network attester's end row of it, a certified
+side's committed stop word of the same connection; and ``end``, the network attester's end row of it, an attested
 input. Its outputs are ``o0``, a u16 whose bit 0 is 1 (`ACCEPT`) exactly when every check
 of its form holds and whose other 15 bits are 0, and ``o1``, the response row. The row is gates of the circuit, never
 an input: a statement that commits o1 under the salt of the network attester's response row and registers it as a

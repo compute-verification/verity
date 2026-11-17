@@ -7,7 +7,7 @@ network-certifier -> workers    out-opening {link, window}, the output value's w
                                 records {link, window, record}, an execution phase's packed record its body (private)
                                 cells-salts {link, window}, the execution phase's rows' salts and wiring's its body (private)
 network-certifier -> verifier   out-record {link, window}, the output value's record its body
-                                certificate {link, window}, an execution phase's certificate its body
+                                attestation {link, window}, an execution phase's attestation its body
                                 registration {link, window}, the execution phase's rows' registration its body
                                 deployment {}, the run's key, session, schedule and origin its body (structure)
                                 groups {}, a grouped run's requests and execution phases its body (structure)
@@ -35,7 +35,7 @@ execution phase ``(link, window)`` their heads name:
 
 The device's run hands out the rest, each a message of its kind on the same two channels:
 
-- ``certificate`` carries a line of the run's ``certified.jsonl``: an execution phase's record certified under the link's
+- ``certificate`` carries a line of the run's ``certified.jsonl``: an execution phase's record attested under the link's
   name and direction, or that execution phase refused. Public, as ``out-record`` is: what it signs is a hiding
   commitment.
 - ``registration`` carries a line of ``cells.jsonl``: the execution phase's rows' signed head (`network_attester_rows.registration`),
@@ -50,7 +50,7 @@ The device's run hands out the rest, each a message of its kind on the same two 
   as the device keeps it, and ``cells-salts`` the execution phase's rows' salts and the wiring's (`network_attester_rows.read_witness`).
   Both are the prover's witness: private.
 
-A head's ``link`` is the link's name as the certificate signs it and its ``window`` the window's index, a u64
+A head's ``link`` is the link's name as the attestation signs it and its ``window`` the window's index, a u64
 (`lms.certificate_message`). The parameters are the core protocol's (`ID`): the ``PARAMS`` its Lean executable's check
 reads, the core command line ``network-period check PARAMS COMMITMENT EVIDENCE``.
 """
@@ -75,7 +75,7 @@ DEPLOYMENT, GROUPS = "deployment", "groups"
 RECORD_NAMES = ("requests", "responses", "fails")
 #: a frame's largest body (`runtime.framing.HEADER`: a u32 length) in whole salts: the most rows one opening carries
 MAX_OPENING = ((1 << 32) - 1) // O.SALT_BYTES * O.SALT_BYTES
-#: a record is its head and one certificate, whose signature is about 70 kB in hex at `lms.DEPLOYED`
+#: a record is its head and one attestation, whose signature is about 70 kB in hex at `lms.DEPLOYED`
 MAX_RECORD = 1 << 20
 #: a frame's largest body (`runtime.framing.HEADER`: a u32 length): an execution phase's packed record
 MAX_PACKED = (1 << 32) - 1

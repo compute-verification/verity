@@ -1,8 +1,8 @@
 """Regressions on the network attester's bucket rows (`network_attester_rows`): replays of real network-certifier-signed roots
-and certificates across windows and directions, and a certificate the network attester signed over another digest, stay
+and attestations across windows and directions, and an attestation the network attester signed over another digest, stay
 refused. Two gaps are closed:
 - the layout is bound: the signed head carries S, T and the wiring's digest, and the domain S and T, so a head of
-  another layout is another digest, which the certificate doesn't sign;
+  another layout is another digest, which the attestation doesn't sign;
 - the reads aren't the prover's: a read is (connection, cell), and the verifier places it with the network attester's
   signed wiring, so a crossed, duplicate or padding read, and a wiring the network attester didn't sign, are refused,
   and no read carries log2 N bits.
@@ -62,9 +62,9 @@ def test_the_honest_registration_reads_back(tmp_path):
 
 
 def test_a_real_cross_window_root_and_certificate_replay_is_refused(tmp_path):
-    """A REAL network-certifier-signed window-0 root and certificate can't be presented for window 1: the window-0
-    document is refused by the field check, and relabelling it to window 1 with the window-0 root and certificate is
-    refused because the certificate signs the window-0 head."""
+    """A REAL network-certifier-signed window-0 root and attestation can't be presented for window 1: the window-0
+    document is refused by the field check, and relabelling it to window 1 with the window-0 root and attestation is
+    refused because the attestation signs the window-0 head."""
     issuer = _issuer(tmp_path)
     c0, c1 = _commit(0, Direction.EGRESS), _commit(1, Direction.EGRESS)
     cert0 = _attest(issuer, c0)
@@ -90,7 +90,7 @@ def test_a_real_cross_direction_replay_is_refused(tmp_path):
 
 
 def test_a_network_attester_certificate_over_another_digest_is_not_a_cells_certificate(tmp_path):
-    """The wire record's certificate signs `certificate_digest(salt, record_digest)`. A certificate the network
+    """The wire record's attestation signs `certificate_digest(salt, record_digest)`. An attestation the network
     attester really signed over such a digest verifies on its own, but is refused here: `cert.digest` must be
     `head.digest()`."""
     issuer = _issuer(tmp_path)
@@ -110,7 +110,7 @@ def test_a_network_attester_certificate_over_another_digest_is_not_a_cells_certi
 def test_the_layout_is_bound_by_the_signed_head(tmp_path):
     """Was `test_the_layout_is_schedule_checked_but_not_bound_by_the_root`. A disagreeing layout is refused by the field
     check, and the head's signed bytes now carry the layout: B, S, T and the wiring's digest. A head of another slot
-    count, row count or wiring is another digest, which the network attester's certificate doesn't sign."""
+    count, row count or wiring is another digest, which the network attester's attestation doesn't sign."""
     issuer = _issuer(tmp_path)
     c0 = _commit(0, Direction.EGRESS)
     cert = _attest(issuer, c0)

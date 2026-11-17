@@ -17,7 +17,7 @@ no id and no request: the same traffic with other ids has the same stamps. The c
 - one with an id cell in bucket b itself is stamped and continued with that id still to come, `max_tokens` − e = 1;
 - a request whose cells straddle b, and a response the attester failed before b, have none.
 
-A continuation is the certified request with the released ids after its prompt and `max_tokens` − e left, the pair
+A continuation is the attested request with the released ids after its prompt and `max_tokens` − e left, the pair
 (q, P + e); rendered as an id request and released as an arrival of another session it reads back as itself. No cell
 at or after b moves a stamp: the records before b give the same edge alone, and beside any later records. Each
 disagreement between a record's stamps and the records is refused by its name (a stamp dropped, of a continued
