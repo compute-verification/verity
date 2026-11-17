@@ -194,6 +194,7 @@ import argparse
 import ast
 import concurrent.futures
 import contextlib
+import functools
 import hashlib
 import importlib.metadata
 import importlib.util
@@ -1263,6 +1264,7 @@ class Modules:
         base = "" if suite.path == "." else suite.path + "/"
         self.testpaths = [base + t.strip("/") if t not in (".", "") else suite.path for t in cfg.get("testpaths", ["."])]
         self.inner = list(suite.inner)
+        self._narrowable: dict[str, bool] = {}
         self.texts = {p: t for p, t in texts.items() if _under(p, self.testpaths) and not _under(p, self.inner)}
         self.scans = {p: scan(t) for p, t in self.texts.items()}
         by_name: dict[str, list[str]] = {}
@@ -1275,9 +1277,12 @@ class Modules:
 
     def narrowable(self, path: str) -> bool:
         """A test module a key may leave out: a `test_*.py` file under the test paths, outside a data directory."""
-        parts = path.split("/")
-        return (parts[-1].startswith("test_") and parts[-1].endswith(".py") and not _DATA_DIRS.intersection(parts[:-1])
-                and _under(path, self.testpaths) and not _under(path, self.inner))
+        if (got := self._narrowable.get(path)) is None:
+            parts = path.split("/")
+            got = self._narrowable[path] = (parts[-1].startswith("test_") and parts[-1].endswith(".py")
+                                            and not _DATA_DIRS.intersection(parts[:-1]) and _under(path, self.testpaths)
+                                            and not _under(path, self.inner))
+        return got
 
     def modules(self) -> list[str]:
         return sorted(p for p in self.texts if self.narrowable(p))
@@ -1398,12 +1403,17 @@ def traced_key(suite: Suite, module: str, keep: set[str] | None, mods: Modules, 
     runner whole, its suite's configuration, and the suite's test modules ``keep`` names (all with ``keep`` None); not the
     directories the suite depends on, whose files a traced entry's read set holds one by one."""
     config = "pyproject.toml" if suite.path == "." else f"{suite.path}/pyproject.toml"
-    inputs = {p: i for p, i in ids.items() if p != suite.path and not (ROOT / p).is_dir()}
+    inputs = {p: i for p, i in ids.items() if p != suite.path and not _is_dir(ROOT / p)}
     inputs.update({f: i for f, i in own.items() if f == config or (mods.narrowable(f) and (keep is None or f in keep))})
     blob = json.dumps({"schema": "traced/v2", "suite": suite.name, "depth": depth(suite), "module": _rel(suite.path, module),
                        "inputs": _rel_keys(suite.path, inputs), "artifacts": _rel_keys(suite.path, artifact_ids(suite)),
                        "resolved": deps or {}, "environment": env, "pytest": args}, sort_keys=True)
     return hashlib.sha256(blob.encode()).hexdigest()
+
+
+@functools.cache
+def _is_dir(path: Path) -> bool:
+    return path.is_dir()
 
 
 def per_test_dir(suite: Suite) -> Path:
@@ -1427,6 +1437,7 @@ class PerTest:
         module's unless ``sets_of(module)`` gives its own (`own_sets`)."""
         self.suite, self.tree = suite, tree
         self.dir = per_test_dir(suite)
+        _is_dir.cache_clear()
         cut = dropped(suite, [p for p in ids if not p.startswith("fixture:")])
         self.own = {f: i for f, i in own_ids(tree, suite.path).items()
                     if (markdown(suite) or not f.endswith(".md")) and not _under(f, cut)}
@@ -1733,9 +1744,9 @@ def _changed_files(old: str | None, new: str | None) -> list[str] | None:
     return r.stdout.split() if r.returncode == 0 else None
 
 
-def explain_changes(was: dict, now: dict, own: str = ".") -> list[str]:
-    """What differs between two suites' key components (`components`), one line each, a changed directory with its files, by
-    their paths from the root for the suite at ``own``."""
+def explain_changes(was: dict, now: dict, own: str = ".", files: bool = True) -> list[str]:
+    """What differs between two suites' key components (`components`), one line each, a changed directory with its files (without
+    ``files``, without them: as many lines, and no `git diff-tree`), by their paths from the root for the suite at ``own``."""
     out = []
     wi, ni = was.get("inputs", {}), now["inputs"]
     for q in sorted(set(wi) | set(ni)):
@@ -1746,12 +1757,12 @@ def explain_changes(was: dict, now: dict, own: str = ".") -> list[str]:
             out.append(f"input {p}: no longer an input")
         elif wi[q] != ni[q]:
             wt, nt = was.get("trees", {}).get(q, wi[q]), now.get("trees", {}).get(q, ni[q])
-            files = _changed_files(wt, nt)
-            if files is not None and q in now.get("trees", {}):
+            changed = _changed_files(wt, nt) if files else None
+            if changed is not None and q in now.get("trees", {}):
                 nested = now.get("nested", {}).get(q, [])
-                files = [f for f in files if not (f.endswith(".md") and not ni[q].startswith("cut+md:")) and not _under(f, nested)]
-            where = "" if files is None else f": {', '.join(f'{p.rstrip(chr(47))}/{f}' if p != '.' else f for f in files[:8])}" + \
-                (f" and {len(files) - 8} more" if len(files) > 8 else "")
+                changed = [f for f in changed if not (f.endswith(".md") and not ni[q].startswith("cut+md:")) and not _under(f, nested)]
+            where = "" if changed is None else f": {', '.join(f'{p.rstrip(chr(47))}/{f}' if p != '.' else f for f in changed[:8])}" + \
+                (f" and {len(changed) - 8} more" if len(changed) > 8 else "")
             out.append(f"input {p} changed ({wi[q][:12]} -> {ni[q][:12]}){where}")
     if was.get("depth") != now.get("depth"):
         out.append(f"depth: {was.get('depth')} -> {now.get('depth')} (its tests find the root by counting parents)")
@@ -1824,9 +1835,8 @@ def nearest(passes: list[dict], now: dict, own: str) -> tuple[dict, list[str]] |
     """The pass of ``passes`` whose components differ least from ``now``, with what differs (`explain_changes`)."""
     if not passes:
         return None
-    diffs = [(explain_changes(d["components"], now, own), d) for d in passes]
-    lines, best = min(diffs, key=lambda x: (len(x[0]), x[1].get("when", "")))
-    return best, lines
+    best = min(passes, key=lambda d: (len(explain_changes(d["components"], now, own, files=False)), d.get("when", "")))
+    return best, explain_changes(best["components"], now, own)
 
 
 def forced_by(s: Suite, now: dict, passes: list[dict], held: bool, fresh: bool) -> dict:

@@ -1655,6 +1655,20 @@ def test_each_suite_that_runs_says_what_forced_it(tmp_path):
     assert forced("--fresh") == {"why": ["--fresh"]}
 
 
+def test_the_nearest_pass_is_ranked_without_git_and_only_it_names_its_changed_files(tmp_path, monkeypatch):
+    S = _suites(monkeypatch, tmp_path)
+    asked = []
+    monkeypatch.setattr(S, "_changed_files", lambda old, new: asked.append((old, new)) or ["f.py"])
+    base = {"inputs": {"a": "1", "b": "1"}, "trees": {"a": "ta1", "b": "tb1"}, "artifacts": {}, "resolved": {},
+            "environment": {}, "pytest": []}
+    now = {**base, "inputs": {"a": "2", "b": "2"}, "trees": {"a": "ta2", "b": "tb2"}}
+    far = {"components": base, "when": "2026-01-01 00:00"}
+    near = {"components": {**base, "inputs": {"a": "1", "b": "2"}, "trees": {"a": "ta1", "b": "tb2"}}, "when": "2026-01-02 00:00"}
+    best, lines = S.nearest([far, near, far], now, ".")
+    assert best is near and lines == ["input a changed (1 -> 2): a/f.py"]
+    assert asked == [("ta1", "ta2")], "git diff-tree for the pass it picks, not for each pass kept"
+
+
 def _until_written_or_exited(fifo: Path, p: subprocess.Popen) -> tuple[bool, bytes]:
     """(whether something was written to ``fifo`` before ``p`` closed its stdout, ``p``'s output read meanwhile), never waiting
     on a bare blocking ``open``: a runner that dies before the writer starts would leave that waiting forever."""
