@@ -4,15 +4,7 @@ public import Proofs.Flock.Claims.Recursion.RegSetup
 public import Proofs.Flock.Claims.Recursion.OpensReads
 public import Proofs.Flock.Soundness.Discharge.ZkReg.Checked
 
-/-!
-# The setup's registered openings open (`regOpenings_opens`)
-
-Wherever the recursive setup accepts a V\* statement (`setupO`), it ran `checkRegistered` on each of its statements
-(`OpensReads`' `RecIns.setup_registered`), so `checkPort` accepted each of the verifier's registered ports there, and
-the row each instance's ref names opens the registered root at its position through its path (`checkPort_at`). So every
-opening `regOpenings` lists opens (`regOpenings_opens`), and `bc_eq_of_setup` is `bc_eq_of_regOpenings` with nothing
-about the openings assumed.
--/
+/-! The setup's registered openings open (`regOpenings_opens`), so `bc_eq_of_setup` assumes nothing about them. -/
 
 @[expose] public section
 
@@ -22,8 +14,6 @@ end Flock.Registered
 
 namespace RecDeploy
 
-/-- **A statement `checkRegistered` accepts at the verifier's `own` opens every row `portOpenings` lists**: each is the
-row an instance's ref names, which `checkPort` opens (`checkPort_at`). -/
 theorem portOpenings_opens {st : _root_.Flock.Stmt} {own : Array _root_.Flock.Registered.Port}
     (h : _root_.Flock.checkRegistered st (some own) = .ok ()) {reg : _root_.Flock.Registered.Port}
     (hreg : reg ∈ own.toList) : ∀ o ∈ portOpenings st reg, _root_.Flock.Registered.opens reg o.1 o.2.1 o.2.2 = true := by
@@ -36,7 +26,6 @@ theorem portOpenings_opens {st : _root_.Flock.Stmt} {own : Array _root_.Flock.Re
   obtain ⟨i, hi, rfl⟩ := ho
   exact (hall i hi).2.2
 
-/-- **Every opening the recursive setup lists opens.** -/
 theorem regOpenings_opens {xO : Claims.Msg} {reg : _root_.Flock.Registered.Port} {bc path : ByteArray} {pos : ℕ}
     (ho : (reg, bc, pos, path) ∈ regOpenings xO) : _root_.Flock.Registered.opens reg bc pos path = true := by
   cases hS : setupO xO with
@@ -53,9 +42,6 @@ theorem regOpenings_opens {xO : Claims.Msg} {reg : _root_.Flock.Registered.Port}
       rw [hown] at hcr
       exact portOpenings_opens hcr hreg' (bc, pos, path) hoo
 
-/-- **`bc_eq_of_regOpenings` at the setup's own openings**: two openings the setup lists at V\* statements of `xs`, at
-one position under one tree, have one commit string wherever the true calls `l` and the setup's evaluations at `xs`
-have no collision. -/
 theorem bc_eq_of_setup {Coin : Type} {D : Claims.Recursion.Deploy Coin} (hD : RegListed D)
     {l : List (Claims.Msg × Claims.Msg)} (hl : ∀ e ∈ l, FlockDeploy.sha512 e.1 = e.2) {xs : List Claims.Msg}
     (hc : (Claims.findColl (l ++ Claims.Recursion.setupCalls FlockDeploy.sha512 D xs)).isSome = false)

@@ -39,25 +39,7 @@ import Proofs.Flock.Claims.Recursion.DeployChecked
 import Proofs.Flock.Claims.Recursion.RestFinal
 import Proofs.Flock.Claims.Recursion.RestLens
 
-/-!
-# `ReadsAt` at the deployed readers `rdR`, `finalR` and `restR elem`
-
-`hrest_read` takes `ReadsAt rd final fin`. At `rdR`, `finalR` and `restR elem` it holds wherever `elem` lays the
-element-level last message (`ElemFramed elem`), every rep's opened rounds fit (`OpenedFit elem`) and the proofs read
-off them are shaped for their files (`OpenedShaped elem`) (`readsAt`). Every other input of `readOkR_of` is proved
-here:
-
-* the inner statement sets up and passes its scope check (`parse_innerOk`);
-* `finalR` reads `elem`'s pieces as the last message (`finalR_last`), which `rdR` reads (`ElemFramed`), so its tag is
-  `1`;
-* each earlier round reads back as its opened rows at every length (`rowsOf_joinR'`), round 0 as many as the link's
-  nodes and the rounds after it as many as the reps' schedules (`finalReads`' counts);
-* the record value reads as custody's (`decLive`).
-
-`OpenedFit elem` and `OpenedShaped elem` are the parts that read the opened rows' contents: every rep's block of the
-rounds after the link fits some proof and `T` (`FitsRep`), at round 0's nodes (`nodesR`), and the proofs `readPs` reads
-there are shaped (`ShapedAt`).
--/
+/-! `ReadsAt` at the deployed readers `rdR`, `finalR` and `restR elem`, wherever `elem` lays the last message and its opened rounds fit with shaped proofs. -/
 
 @[expose] public section
 
@@ -70,15 +52,10 @@ open RecDeploy.DeployedR
 open FlockDeploy (Coin FinalP ReadOkR FitsRep repCtx repLens cutLens joinR rowsOf rowsOf_joinR')
 open Lean (Json)
 
-/-- A round's opened rows, as `rowsOf` reads them back. -/
 def rowsR (o : List (Msg × Salt)) : List ByteArray := (o.map Prod.fst).map fun r => (⟨r.toArray⟩ : ByteArray)
 
-/-- Round 0's link nodes, as `decR` reads them off the opened rows. -/
 def nodesR (o : List (Msg × Salt)) : List ByteArray := (rowsR o).map FlockDeploy.nodeOf
 
-/-- **Every rep's opened rounds fit**: at a dense compiled statement, witnesses one a part whose calls are true, and
-coins `c`, wherever `finalR` reads the last message as `k - 1` rounds, each rep's block of the rounds after the link
-fits some proof and `T` at the rep's context. -/
 def OpenedFit (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))) : Prop :=
   ∀ x, DenseX x → ∀ (c : ℕ → Coin) (ws : List Claims.Flock.Wit), ws.length = nS x →
     (∀ e ∈ (layAt (restR elem)).allCalls x ws, FlockDeploy.sha512 e.1 = e.2) →
@@ -88,8 +65,6 @@ def OpenedFit (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × Li
           FitsRep (repCtx v.2.1 v.2.2 (c 0) (nodesR (os.headD [])) ((List.range (kI x)).map c).tail.dropLast k)
             ((cutLens (repLens v.2.1 v.2.2) (os.tail.map rowsR)).getD k []) pT.1 pT.2
 
-/-- **The proofs read off the opened rounds are shaped for their files** (`decR`'s `ShapedAt` filter), at the same
-places as `OpenedFit`, at the last message's proof. -/
 def OpenedShaped (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))) : Prop :=
   ∀ x, DenseX x → ∀ (c : ℕ → Coin) (ws : List Claims.Flock.Wit), ws.length = nS x →
     (∀ e ∈ (layAt (restR elem)).allCalls x ws, FlockDeploy.sha512 e.1 = e.2) →
@@ -104,8 +79,6 @@ theorem mapM_map_some {α β γ : Type} {f : β → Option γ} {g : α → β} {
   | [] => rfl
   | a :: l => by simp [List.mapM_cons, hf, mapM_map_some hf l]
 
-/-- **The last step reads at the deployed readers**, wherever `elem` lays the element-level last message and every
-rep's opened rounds fit, with shaped proofs. -/
 theorem readsAt (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin)))
     (hE : ElemFramed elem) (hfit : OpenedFit elem) (hsh : OpenedShaped elem) :
     ReadsAt rdR finalR (restR elem) := by

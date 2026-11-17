@@ -39,14 +39,7 @@ import Proofs.Flock.Claims.Recursion.CutOpens
 import Proofs.Flock.Claims.Recursion.HmOpen
 import Proofs.Flock.Claims.Recursion.RestFinal
 
-/-!
-# The row a stream round opens is its first holder's
-
-`finalR` cuts the last message at `layR elem` back into each round's openings, slot by slot (`opensSlots_layR`'s
-first half), so each round's opened rows are its slots' rows read off their parts' witnesses (`os_rows`). A stream
-round's slots are its tops' instances, then its row's slot (`roundSlots`), so the row past the tops' rows is the
-round's `rowSlot`'s (`opened_row`).
--/
+/-! The row a stream round opens is its first holder's (`opened_row`). -/
 
 @[expose] public section
 
@@ -58,8 +51,6 @@ open Claims.Recursion.VStarB
 open RecDeploy.DeployedR
 open RecDeploy.RestRead
 
-/-- **The opened rows are the slots' rows**: wherever `finalR` reads the last message at `layR elem` as `(os, last)`,
-round `j`'s opened rows are round `j`'s slots' rows, each off its part's witness. -/
 theorem os_rows (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))) {x : Msg}
     (hx : DenseX x) {ws : List Claims.Flock.Wit} (hl : ws.length = nS x) (d : Claims.Flock.Wit) {os last}
     (hf : finalR (((DeployedR.layR elem).msgs x ws).getD (kI x - 1) []) = some (os, last)) :
@@ -96,7 +87,6 @@ theorem os_rows (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × 
   rw [hL]
   simp [rowsR, Slot.opening, List.map_map, Function.comp_def]
 
-/-- A stream round's tops' slots number its tops' instances. -/
 theorem capSlots_flat_length (r : XR) (rs : Array RecVStar.SchedRound) (j : ℕ) :
     ((List.range ((rs.getD (j % rs.size) default).2.1).size).flatMap (capSlotsAt r rs j)).length =
       ((rs.getD (j % rs.size) default).2.1).toList.sum := by
@@ -110,7 +100,6 @@ theorem capSlots_flat_length (r : XR) (rs : Array RecVStar.SchedRound) (j : ℕ)
     simp [capSlotsAt, capSlots, Array.getD_eq_getD_getElem?, Array.getElem?_eq_getElem hi']
   rw [e]
 
-/-- **A stream round's row slot sits past its tops' slots.** -/
 theorem roundSlots_row {r : XR} {rs : Array RecVStar.SchedRound} {j : ℕ} {σ : Slot} (h : rowSlot r j = some σ) :
     (roundSlots r rs j)[((rs.getD (j % rs.size) default).2.1).toList.sum]? = some σ := by
   unfold roundSlots
@@ -118,9 +107,6 @@ theorem roundSlots_row {r : XR} {rs : Array RecVStar.SchedRound} {j : ℕ} {σ :
     capSlots_flat_length, Nat.sub_self]
   rfl
 
-/-- **Stream round `j`'s opened row is its `rowSlot`'s**: wherever `finalR` reads the last message at `layR elem` as
-`(os, last)`, round `j + 1`'s opened row past its tops' rows is the row of stream round `j`'s first holder's slot, off
-that holder's witness. -/
 theorem opened_row (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))) {x : Msg}
     (hx : DenseX x) {ws : List Claims.Flock.Wit} (hl : ws.length = nS x) (d : Claims.Flock.Wit) {os last}
     (hf : finalR (((DeployedR.layR elem).msgs x ws).getD (kI x - 1) []) = some (os, last)) {r : XR}

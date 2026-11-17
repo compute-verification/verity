@@ -45,17 +45,7 @@ import Proofs.Flock.Claims.Recursion.DeployMargin
 import Proofs.Flock.Claims.Recursion.FlockKSDeploy
 import Proofs.Flock.Claims.Recursion.LastBindsClosed
 
-/-!
-# (P4) at the element-level inner verifier
-
-The columns half at `VE` (`FlockDeploy.KS.plainE_cols_tied`), by `plain_cols_tied`'s proof: it reads the verdict only
-through the rep streams' round counts (`streams_sizes_plainK`, `rounds_ns_plainK`), table 0's query round
-(`runOf_queryRound_plainK`), the reps' checks (`verifyWithMK_tables`) and the decoder's live part (`decodeWithK_live`),
-all at any `keep`, and none of them reads a digest of an encoding. With the calls half at `VE`
-(`RecDeploy.plainCallsBindOrSlackE_sha512`) and V*'s canonical proof-file decoder, `VE` binds its last message
-(`RecDeploy.plainLastBindsE_sha512`), and the deployed bound record at `VE`'s steps meets (P4) modulo what `E*` reads,
-with no premise (`RecDeploy.lastBindsEC_deployedE_sha512`).
--/
+/-! (P4) at the element-level inner verifier `VE`, at SHA-512 with no premise. -/
 
 @[expose] public section
 
@@ -66,7 +56,6 @@ open FlockSoundness.Refine (ebind_ok merkleCheck_cap)
 
 local notation "𝔽" => FlockLevel3.GF128
 
-/-- `streams_coins_eq` at `verifyWithMK keep` and `keep'`. -/
 theorem streams_coins_eqK (keep keep' : Bool → Bool) (hs hs' : Hashes Flock.V) {spec : SessionSpec}
     {sts : Array Stmt} {record record' : String} {proofs proofs' : Array ByteArray} {lv lv' : Live}
     {link link' : List ByteArray × List ByteArray} {c₁ c₁' : Coin} {mids : List (Claims.Msg × Coin)}
@@ -81,7 +70,6 @@ theorem streams_coins_eqK (keep keep' : Bool → Bool) (hs hs' : Hashes Flock.V)
     coins_of_forall₂ (Claims.Bridge.Custody.custody_ok hc').2.2.2 (fun _ _ h => h.2),
     rounds_ns_plainK keep hs hv hl, rounds_ns_plainK keep' hs' hv' hl']
 
-/-- `rawCols_keys` at `verifyWithMK keep` and `keep'`. -/
 theorem rawCols_keysK (keep keep' : Bool → Bool) {hs hs' : Hashes Flock.V} {seen seen' : Claims.Seen}
     {f f' : Final} {ins : Ins} {spec : SessionSpec} {sts : Array Stmt} {st : Stmt} {extras : Array Flock.Claim}
     {lv lv' : Live} (hf : lastFinal seen = some f) (hf' : lastFinal seen' = some f')
@@ -134,8 +122,6 @@ theorem rawCols_keysK (keep keep' : Bool → Bool) {hs hs' : Hashes Flock.V} {se
   rw [rawCols_eq hr, rawCols_eq hr', List.map_append, List.map_append, key 0 (hmem lv f).1 (hmem lv' f').1,
     key 1 (hmem lv f).2 (hmem lv' f').2]
 
-/-- `plain_opening_at` at the element-level verdict: an element-level decision's reps open a column only as a Merkle
-opening of table 0's level 0 within the calls `L` its verdict ran in. -/
 theorem plainE_opening_at {x : Claims.Msg} {seen : Claims.Seen} {L : List (Claims.Msg × Claims.Msg)} {s : Ins}
     {spec : SessionSpec} {sts : Array Stmt} {link : List ByteArray × List ByteArray} {c₁ : Coin}
     {mids : List (Claims.Msg × Coin)} {f : Final} (hs : setupOf false x = some (s, spec, sts))
@@ -236,8 +222,6 @@ theorem plainE_opening_at {x : Claims.Msg} {seen : Claims.Seen} {L : List (Claim
   · rw [← hjq]
     exact hlog j hj
 
-/-- **Two last messages the element-level verifier accepts after the same rounds and coins, that differ in table 0's
-opened columns, collide among the two decisions' calls**, at SHA-512 (`plain_cols_tied` at `nextE`). -/
 theorem plainE_cols_tied {x : Claims.Msg} {ms : List Claims.Msg} {l l' : Claims.Msg} {cs : List Coin}
     (hc : cs.length = ms.length + 1)
     (hacc : ((nextE x (ms ++ [l]) cs).eval sha512).1 = .acc)
@@ -343,7 +327,6 @@ open Claims (Msg Out OC)
 open Claims.Recursion (Bound bindOC)
 open FlockDeploy (Coin)
 
-/-- `PlainColsBind` at the element-level verifier. -/
 def PlainColsBindE (H : Msg → Msg) : Prop :=
   ∀ (x : Msg) (ms : List Msg) (l l' : Msg) (cs : List Coin), ms.length + 1 = FlockDeploy.VE.k x →
     cs.length = ms.length + 1 →
@@ -355,13 +338,11 @@ def PlainColsBindE (H : Msg → Msg) : Prop :=
       ∃ q' ∈ (((FlockDeploy.nextE x (ms ++ [l]) cs).eval H).2 ++
         ((FlockDeploy.nextE x (ms ++ [l']) cs).eval H).2).map Prod.fst, Claims.Collision H q q'
 
-/-- **The columns half at `VE`, at SHA-512.** -/
 theorem plainColsBindE_sha512 : PlainColsBindE FlockDeploy.sha512 := by
   intro x ms l l' cs _ hc hacc hacc' hne
   obtain ⟨u, v, hcol, hu, hv⟩ := FlockDeploy.KS.plainE_cols_tied hc hacc hacc' hne
   exact ⟨u, hu, v, hv, hcol⟩
 
-/-- `PlainLastBinds` at the element-level verifier. -/
 def PlainLastBindsE (H : Msg → Msg) : Prop :=
   ∀ (x : Msg) (ms : List Msg) (l l' : Msg) (cs : List Coin), ms.length + 1 = FlockDeploy.VE.k x →
     cs.length = ms.length + 1 →
@@ -377,8 +358,6 @@ def PlainLastBindsE (H : Msg → Msg) : Prop :=
       ∃ q' ∈ (((FlockDeploy.nextE x (ms ++ [l]) cs).eval H).2 ++
         ((FlockDeploy.nextE x (ms ++ [l']) cs).eval H).2).map Prod.fst, Claims.Collision H q q'
 
-/-- **`PlainLastBindsE` from a canonical decoder and its two halves** (`plainLastBinds_of_canonical` with
-`plainLastBindsOrSlack_of`, at `VE`). -/
 theorem plainLastBindsE_of {H : Msg → Msg} (hC : CanonicalProofFiles) (hcols : PlainColsBindE H)
     (hK : PlainCallsBindOrSlackE H) : PlainLastBindsE H := by
   intro x ms l l' cs hk hc hearly hacc hacc' hne
@@ -388,11 +367,9 @@ theorem plainLastBindsE_of {H : Msg → Msg} (hC : CanonicalProofFiles) (hcols :
     · exact hcol
     · exact absurd (hC sh b b' p hd hd') hbb
 
-/-- **`VE` binds its last message, at SHA-512, with no premise.** -/
 theorem plainLastBindsE_sha512 : PlainLastBindsE FlockDeploy.sha512 :=
   plainLastBindsE_of canonicalProofFiles plainColsBindE_sha512 plainCallsBindOrSlackE_sha512
 
-/-- `next_lastStep` at `nextE`: `VE`'s last step reads no last coin. -/
 theorem nextE_lastStep (H : Msg → Msg) (x : Msg) (ms : List Msg) (L : List Coin) (c c' : Coin)
     (hk : ms.length = FlockDeploy.VE.k x) (hc : L.length + 1 = ms.length) :
     (bindOC (FlockDeploy.nextE x ms (L ++ [c])) fun b => OC.ret (decide (b = Out.acc))).eval H =
@@ -430,7 +407,6 @@ theorem nextE_lastStep (H : Msg → Msg) (x : Msg) (ms : List Msg) (L : List Coi
         simp only [FlockDeploy.nextE, FlockDeploy.act_cons_snoc false x ms c₀ l c c' ha]
       rw [heq]
 
-/-- **`LastStepFree` at every bound record whose `DE` steps as `VE`.** -/
 theorem lastStepFree_of_VE {Col T : Type} (H : Msg → Msg) (Bd : Bound Coin Col T) (hV : Bd.DE.V = FlockDeploy.VE) :
     Bd.LastStepFree H := by
   intro x ms cs cs' hk hc hc' hd
@@ -450,8 +426,6 @@ theorem lastStepFree_of_VE {Col T : Type} (H : Msg → Msg) (Bd : Bound Coin Col
   rw [hV]
   exact nextE_lastStep H x ms L c c' hk (by simp only [List.length_append, List.length_singleton] at hc; exact hc)
 
-/-- **`LastStepBinds` at every bound record whose `DE` steps as `VE`**, answers a round with its coin's bytes and reads
-a view's columns only through table 0's, from `PlainLastBindsE` (`lastStepBinds_of_V` at `VE`). -/
 theorem lastStepBinds_of_VE {T : Type} (H : Msg → Msg) (Bd : Bound Coin (List FlockLevel3.GF128) T)
     (hV : Bd.DE.V = FlockDeploy.VE) (hans : ∀ c, Bd.ans c = c.bytes)
     (hcols : ∀ v v' : Claims.Seen, FlockDeploy.cols false v 0 = FlockDeploy.cols false v' 0 →
@@ -465,9 +439,6 @@ theorem lastStepBinds_of_VE {T : Type} (H : Msg → Msg) (Bd : Bound Coin (List 
   rw [hview, hview] at hne
   exact h x ms l l' cs hk hc hearly hacc hacc' (hne.imp_left fun hc0 heq => hc0 (hcols _ _ heq))
 
-/-- **(P4) modulo what `E*` reads, at the deployed bound record at `VE`'s steps, at SHA-512, with no premise**
-(`lastBindsEC_deployed_sha512_closed` at `VE`): at `VE`'s steps, the deployed plain record's trimmed columns and the
-deployed rows' digest input, whatever the code side's weights, join and `final`. -/
 theorem lastBindsEC_deployedE_sha512 (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
     (wE : Msg → ℝ) (join : List Msg → Msg) (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ) :
     (bdDeployed rel FlockDeploy.VE.next (FlockDeploy.deployPlainTrim rel).cols wE join rowInDeployed final

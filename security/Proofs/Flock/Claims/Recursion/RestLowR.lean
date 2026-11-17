@@ -37,40 +37,7 @@ import Proofs.Flock.Claims.Recursion.DecodeAt
 import Proofs.Flock.Claims.Recursion.RestLens
 import Proofs.Flock.Claims.Recursion.SchedDense
 
-/-!
-# The rest's lowering (`RestLowR`, `SaltRowRest`) at the layout of record, and its joint form
-
-`recKSDecompL_of_leaves` takes two leaves on the checks that are no pieces: `SaltRowRest` (the salts and rows of a
-round before the last that no part holds) and `RestLowR` (`hlowR`: where part `s`'s circuit accepts at messages `ms`,
-the salts and rows of the rounds `s` holds first, and the record's reading where it holds the last round first).
-
-**The record's reading is never a part's** at `DeployedR.layR elem`: its `msgAt` is `layoutBTops`', so no part holds
-the last round (`firstHolder_last_layR`), and `RestLowR`'s second conjunct holds outright (`restLowR_read`).
-
-**`RestLowR`'s first conjunct is asked where it can't hold.** A salt or row check of round `j` reads the opening
-`final` takes off the last message, `ms.getD (k - 1) []`. `PartAccepts` ties that message to part `s` only through
-`s`'s own pieces (each a window `((ms.getD i []).drop o).take m.length` at an offset the statement fixes): its other
-bytes, its length and so the trailer `finalR` reads off its end (`finalR_trailer`) are free in such an `ms`, and with
-them the cut, so the opening it reads for round `j` is any bytes. `CmtAgrees` leaves the last round out. This is
-`OpenLower`'s obstruction for `hcopy`, at `hlowR`. `DecompB` reads the parts' checks only at the parts' own messages
-`L.msgs x ws`, every part accepting there (`decompB_of_joint`), so the lowering is asked there.
-
-**Each part's check is pinned to its own witness** (`DecompBP`, `JointP`): the cap tie (`OutBindRP`) binds a level
-part's `out` row to RecCap's `top` row through the calls of the parts' own witnesses `ws[s]`, which only `JointP` has
-true and free of collisions. The facts that don't read across parts stay at `Joint` (`joint_of_jointP`).
-
-* `decompBP_lastSplitP_sharesJR`: `decompB_lastSplitP_sharesJ` with `hlowR` asked only at `JointP`, as `hlowP` is,
-  landing on `DecompBP` (`decompBP_of_jointP`).
-* `RestLowJ`: `RestLowR` at the parts' own messages, every part accepting there.
-* `SaltRowsJ`: every round before the last, each commit string's salt and row, at the readers' messages of witnesses
-  one a part whose calls are true. It gives `SaltRowRest` (`saltRowRest_of`) and, at the layout of record, `RestLowJ`
-  (`restLowJ_of`), the reading's half being `restLowR_read`'s.
-* `decompBV_lastSplitP_sharesJRV`: the same with both shares asked under `JointV`, landing on `DecompBV`, so a share
-  may tie two parts through the compiled verifier's own evaluations (row E's, `Top.RowEJoint`).
-* `recKSDecompLV_of_leavesJ` is `recKSDecompL_of_leaves` with `RestLowJ` for `RestLowR`, the cap tie pinned
-  (`CopyTopRP`), at `DecompBV` (`RecKSDecompLV`), and `recKSDecompDV_of_leavesJ` its instance at `DeployedR.layR elem`,
-  where `SaltRowsJ` alone stands for both leaves and the cap tie is `OutBindRP` and `SideCapR` (`capTop_ofP`).
--/
+/-! The rest's lowering at the layout of record, asked at the parts' own messages, since at one part's messages `RestLowR`'s first conjunct can't hold. -/
 
 @[expose] public section
 
@@ -87,8 +54,6 @@ open RecDeploy.DecompBR
 
 noncomputable section
 
-/-! ## The composition with the rest's share at the parts' own messages -/
-
 section Compose
 
 variable (H : Msg → Msg) (rd : Msg → Option FinalP) {Q : Type} (pieces : Msg → List Q)
@@ -100,9 +65,6 @@ variable (H : Msg → Msg) (rd : Msg → Option FinalP) {Q : Type} (pieces : Msg
   (colsE : Claims.Seen → ℕ → List (ℕ × List FlockLevel3.GF128)) (wE : Msg → ℝ)
   (rowIn : Msg → Msg) (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ)
 
-/-- **The composition with both shares at the parts' own messages, each part's check at its own witness**:
-`decompB_lastSplitP_sharesJ` with the rest's share `hlowR` asked, like the pieces' share, only where every part's
-check holds at its own witness and the parts' own messages (`JointP`), landing on `DecompBP`. -/
 theorem decompBP_lastSplitP_sharesJR (ownB : Msg → VerdictR → Option ℕ) (ownQ : Msg → Q → Option ℕ)
     (rel' : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (b : Brings) (L : LayoutB)
     (IV : Claims.Verifier Coin) (shape : Claims.Recursion.Form → Prop) {Col' T' : Type}
@@ -154,10 +116,6 @@ theorem decompBP_lastSplitP_sharesJR (ownB : Msg → VerdictR → Option ℕ) (o
   exact partComputes_of_shares H rd pieces pholds hpieces rel colsE wE rowIn final w ownB ownQ _ L
     (hlowR x st hx hf c ws hJ s hs) (hlowP x st hx hf c ws hJ s hs)
 
-/-- **The composition with both shares under `JointV`**: `decompBP_lastSplitP_sharesJR` with both shares asked where
-every part accepts at its V\* statement and witness and no recorded call collides with another or with the compiled
-verifier's own evaluations at the statements (`JointV`), the pieces' share also where `ok` holds there, landing on
-`DecompBVS` at `PartAcceptsV` and `ok`. -/
 theorem decompBV_lastSplitP_sharesJRV (ownB : Msg → VerdictR → Option ℕ) (ownQ : Msg → Q → Option ℕ)
     (rel' : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (b : Brings) (L : LayoutB)
     (IV : Claims.Verifier Coin) (shape : Claims.Recursion.Form → Prop) {Col' T' : Type}
@@ -214,10 +172,6 @@ theorem decompBV_lastSplitP_sharesJRV (ownB : Msg → VerdictR → Option ℕ) (
 
 end Compose
 
-/-! ## The record's reading is never a part's at the layout of record -/
-
-/-- **No part holds the last round at the layout of record**: `DeployedR.layR elem` holds what `layoutBTops` does
-(`firstHolder_last`). -/
 theorem firstHolder_last_layR (D : Claims.Recursion.Deploy Coin)
     (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))) {x : Msg} (hx : DenseX x) :
     firstHolder D (DeployedR.layR elem) x (kI x - 1) = none :=
@@ -229,8 +183,6 @@ variable (rd : Msg → Option FinalP) (b : Brings) (aux : Msg → ℕ → Flock.
   (hd : Msg → Flock.RecRecord.Record) (rest : Msg → List (Msg × Out) → List UInt8) (wE : Msg → ℝ)
   (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ) (L : LayoutB)
 
-/-- **`RestLowR`'s second conjunct at the layout of record**: wherever part `s` accepts, it holds the last round
-first nowhere, so the record's reading is never its. -/
 theorem restLowR_read (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin)))
     {s : ℕ} {x : Msg} {c : ℕ → Coin} {ms : List Msg}
     (hacc : acceptsL rd b aux nOf hd rest wE final w (DeployedR.layR elem) s x c ms) :
@@ -243,9 +195,6 @@ theorem restLowR_read (elem : (r : XR) → List (Fin r.w.parts.length × List (M
   rw [firstHolder_last_layR _ elem ⟨st, hst, hf⟩] at h
   cases h
 
-/-- **Every commit string before the last round has its salt and row at the parts' own messages**: at a dense compiled
-statement, round `j < k - 1`, commit string `i` the schedule counts, at the readers' messages of witnesses one a part
-whose recorded calls are true, at any coins and any split of the element-level checks. -/
 def SaltRowsJ : Prop :=
   ∀ x, DenseX x → ∀ j < kI x - 1, ∀ i < nAtSched (xIOf x) j, ∀ (c : ℕ → Coin) (ws : List Claims.Flock.Wit),
     ws.length = nS x → (∀ e ∈ L.allCalls x ws, FlockDeploy.sha512 e.1 = e.2) →
@@ -253,9 +202,6 @@ def SaltRowsJ : Prop :=
       (IVCheck.salt j i : IVCheck Q).Holds FlockDeploy.sha512 (bdR rd wE final w) S (xIOf x) c (L.msgs x ws) ∧
       (IVCheck.row j i : IVCheck Q).Holds FlockDeploy.sha512 (bdR rd wE final w) S (xIOf x) c (L.msgs x ws)
 
-/-- **`RestLowR` at the parts' own messages** (`hlowR` as `decompB_lastSplitP_sharesJR` asks it): where every part
-accepts at the parts' own messages, part `s`'s salts and rows of the rounds it holds first, and the record's reading
-where it holds the last round first, there. -/
 def RestLowJ : Prop :=
   ∀ (x : Msg) (st : Claims.Recursion.CompiledStatement), parse x = some st → Claims.Recursion.Form.Dense st.form →
     ∀ (c : ℕ → Coin) (ws : List Claims.Flock.Wit),
@@ -271,12 +217,9 @@ def RestLowJ : Prop :=
             os.length + 1 = kI x →
             ReadOkR rd (xIOf x) ((bdR rd wE final w).opened os last) ((List.range (kI x)).map c))
 
-/-- **`SaltRowRest` from `SaltRowsJ`**: the rounds no part holds are among all of them. -/
 theorem saltRowRest_of (h : SaltRowsJ rd wE final w L) : SaltRowRest rd b aux nOf hd rest wE final w L :=
   fun x hx j hj _ i hi c ws hl hT _ S => h x hx j hj i hi c ws hl hT S
 
-/-- **`RestLowJ` at the layout of record from `SaltRowsJ`**: the salts and rows at every round, and the record's
-reading never a part's (`firstHolder_last_layR`). -/
 theorem restLowJ_of (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin)))
     (h : SaltRowsJ rd wE final w (DeployedR.layR elem)) :
     RestLowJ rd b aux nOf hd rest wE final w (DeployedR.layR elem) := by
@@ -287,8 +230,6 @@ theorem restLowJ_of (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg
   cases hs
 
 end Leaves
-
-/-! ## The assembly with the rest's share at the parts' own messages -/
 
 section Assembly
 
@@ -301,10 +242,6 @@ variable (rd : Msg → Option FinalP) (b : Brings) (aux : Msg → ℕ → Flock.
   (side : Msg → List Msg → OpenPiece → OpenSide) (posAt : Msg → List Coin → OpenPiece → ℕ)
   (ownR : Msg → ResPiece → Option ℕ)
 
-/-- **`RecKSDecompR` at layout `L` at the V\* statements, from its leaves, at any `shows` implying `showsPart`**: both
-shares under `JointV` over `shows`, the residuals (`hres`) read there and where `ok` holds, every other leaf at
-`showsPart` (`jointV_shows`), landing on `DecompBVS` at `ok`. `recKSDecompLV_of_leavesJ` is it at `showsPart` and no
-side condition, `recKSDecompLV_of_leavesJD` at each part's decision (`showsDec`) and `ResLower.XsStaged`. -/
 theorem recKSDecompLV_of_leavesJS (shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop)
     (hsP : ∀ {s x xO c}, shows s x xO c → showsPart recRead (bB b aux nOf hd rest) s x xO c)
     (ok : Msg → List Msg → List Claims.Flock.Wit → Prop)
@@ -367,10 +304,10 @@ theorem recKSDecompLV_of_leavesJS (shows : ℕ → Msg → Msg → (ℕ → Coin
     rowInDeployed final w noB (ownD ownR) _root_.Flock.Readable.relation (bB b aux nOf hd rest) L
     (bdR rd wE final w).IVStar Claims.Recursion.Form.Dense (deployZkRec _root_.Flock.Readable.relation)
     shows (cmtTr recRead) ok ?_ ?_ ?_ ?_
-  · -- hR
+  ·
     intro x st hx hf r hr s hs
     exact VPieces.ownP_lt ownR ownQR (fun _ _ => none) hs
-  · -- hrest
+  ·
     intro x st hx hf q hq hown hlast c ws hl hT'
     have hX : DenseX x := ⟨st, hx, hf⟩
     rcases mem_ivChecks _ _ _ hq with rfl | ⟨j, hj, rfl⟩ | ⟨j, hj, i, hi, rfl | rfl⟩ | ⟨q', hq', rfl⟩
@@ -403,7 +340,7 @@ theorem recKSDecompLV_of_leavesJS (shows : ℕ → Msg → Msg → (ℕ → Coin
           have hown' : vown ownR ownQR (fun _ _ => none) x p = none := hown
           rw [hs] at hown'
           cases hown'
-  · -- hlowR
+  ·
     intro x st hx hf c xs ws hJD s hs q hq hown hnp
     have hJ := OpenLower.jointV_shows (shows' := showsPart recRead (bB b aux nOf hd rest)) hsP hJD
     obtain ⟨hSRl, hRdl⟩ := hlowR x st hx hf c ws (joint_of_jointP (OpenLower.jointP_of_jointV hJ)) s hs
@@ -424,7 +361,7 @@ theorem recKSDecompLV_of_leavesJS (shows : ℕ → Msg → Msg → (ℕ → Coin
           cases v with
           | base _ => cases (hown : (none : Option ℕ) = some s)
           | piece p => exact (hnp p rfl).elim
-  · -- hlowP
+  ·
     intro x st hx hf c xs ws hJD hok s hs
     have hJ := OpenLower.jointV_shows (shows' := showsPart recRead (bB b aux nOf hd rest)) hsP hJD
     have hJP := OpenLower.jointP_of_jointV hJ
@@ -442,10 +379,6 @@ theorem recKSDecompLV_of_leavesJS (shows : ℕ → Msg → Msg → (ℕ → Coin
     · intro q hq
       simp at hq
 
-/-- **`RecKSDecompR` at layout `L` at the V\* statements, from its leaves, the rest's share at the parts' own
-messages**: `recKSDecompL_of_leaves` with `RestLowJ` for `RestLowR` and the cap tie pinned (`CopyTopRP`), both shares
-under `JointV` (`decompBV_lastSplitP_sharesJRV`), the leaves stated under `Joint` or `JointP` read through
-`jointP_of_jointV`. -/
 theorem recKSDecompLV_of_leavesJ
     (hRdep : Top.TargetRDep rd (PD rd resP key elemAt vvAt side posAt) (Top.accRC rd key))
     (hDm : Top.TargetDMerkle rd (PD rd resP key elemAt vvAt side posAt) (Top.accRC rd key))
@@ -486,10 +419,6 @@ variable (rd : Msg → Option FinalP) (b : Brings) (aux : Msg → ℕ → Flock.
   (vvAt : Msg → List Coin → ℕ × ℕ × ℕ × ℕ → ℕ → _root_.Flock.F128)
   (ownR : Msg → ResPiece → Option ℕ)
 
-/-- **`RecKSDecompR`'s premise at the layout of record, each part's check at its own witness, the rest's two leaves
-as one**: `recKSDecompD_of_leaves` with `SaltRowRest` and `RestLowR` replaced by `SaltRowsJ` (`saltRowRest_of`,
-`restLowJ_of`), through `recKSDecompLV_of_leavesJ`, at the decision's positions `Rows.posAt`, where `TargetDMerkle` is
-proved (`targetDMerkle_PD`), the cap tie from the pinned binding `OutBindRP` and the reader (`capTop_ofP`). -/
 theorem recKSDecompDV_of_leavesJ
     (hRdep : Top.TargetRDep rd (PD rd resP key elemAt vvAt (OpenLower.sideAtR rd) Rows.posAt) (Top.accRC rd key))
     (hEJ : Top.RowEJoint rd key FlockDeploy.sha512 (recL rd b aux nOf hd rest wE final w (DeployedR.layR elem))

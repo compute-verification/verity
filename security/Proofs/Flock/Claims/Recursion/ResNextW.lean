@@ -42,22 +42,7 @@ import Proofs.Flock.C3.VStarList.Shape
 import Proofs.Flock.Claims.Recursion.PartsVStar
 import Proofs.Flock.Claims.Recursion.SchedDense
 
-/-!
-# The next rows' owners (`NextHeldW`)
-
-Where a level part's unit holds `acc` at row `p` of the chain (`RecVStar.accReads`: unit `u` of level `l` reads
-`u / q · n + opensBelow l + u % q`), row `p + 1` has an owner:
-
-* within the level, the next unit holds it (`acc_holding`);
-* at the level's last unit, the next level with openings holds it at its rep's first unit (`next_open`: the levels
-  between have none, so `opensBelow` stands still across them);
-* past the last level (the chain's end, `p + 1 = rep · n + n`), an algebra part holds it at `acc1` (`acc1_held`),
-  wherever some algebra part reads `acc1` (`AccEndHeldW`).
-
-`AccEndHeldW` is a statement about the verifier's reader alone. It holds because Ligerito's final check carries a
-consistency sum in both of its residuals (level 0's `queryFold` always adds one, and `Lin`'s operations keep every key),
-so `RecAlgebra.accTerms` adds `acc1` to them and `RecResiduals.groups` puts `acc1`'s port in a part's `P`.
--/
+/-! The next rows' owners (`NextHeldW`), wherever some algebra part reads `acc1`. -/
 
 @[expose] public section
 
@@ -68,22 +53,17 @@ open Claims (Msg)
 open FlockDeploy (Coin FinalP)
 open Claims.Recursion.VStarB
 
-/-- **Some algebra part reads `acc1`**: at every dense shape the reader reads, some `.inner` statement's part has an
-`acc1` port (proved from V*'s algebra and parts: `ResAccEnd.accEndHeldW`). -/
+/-- Proved from V*'s algebra and parts (`ResAccEnd.accEndHeldW`). -/
 def AccEndHeldW : Prop :=
   ∀ (x : Msg) (r : XR), readX x = some r → r.shape.holo = false → r.shape.sparse = none →
     ∀ (ss : Array VStar.Stmt), _root_.Flock.RecVStar.statements r.shape = .ok ss →
     ∃ s : ℕ, ∃ j nm pt, ss[s]? = some (.inner j nm pt) ∧ "acc1" ∈ pt.S.ports.map (·.1)
-
-/-! ## The levels' rows -/
 
 theorem opensBelow_succ (sch : Schedule) (l : ℕ) :
     RecVStar.opensBelow sch (l + 1) = RecVStar.opensBelow sch l + (sch.levels[l]!).q := by
   simp only [RecVStar.opensBelow, List.range_succ, List.map_append, List.sum_append, List.map_cons, List.map_nil,
     List.sum_cons, List.sum_nil, Nat.add_zero]
 
-/-- From `a`, either a level `l'` with openings comes within `d` levels and the sums before it and before `a` agree, or
-none does and the sum stands still across all `d`. -/
 theorem next_open (f : ℕ → ℕ) (a : ℕ) : ∀ d : ℕ,
     (∃ l', a ≤ l' ∧ l' < a + d ∧ 0 < f l' ∧ ((List.range l').map f).sum = ((List.range a).map f).sum) ∨
       ((List.range (a + d)).map f).sum = ((List.range a).map f).sum
@@ -98,7 +78,6 @@ theorem next_open (f : ℕ → ℕ) (a : ℕ) : ∀ d : ℕ,
         simp only [List.map_cons, List.map_nil, List.sum_cons, List.sum_nil]
         omega
 
-/-- A dense statement's read shape has no holo flag and no sparse phase. -/
 theorem dense_shape {x : Msg} {st : Claims.Recursion.CompiledStatement} (hst : parse x = some st)
     (hd : Claims.Recursion.Form.Dense st.form) {r : XR} (hr : readX x = some r) :
     r.shape.holo = false ∧ r.shape.sparse = none := by
@@ -111,7 +90,6 @@ theorem dense_shape {x : Msg} {st : Claims.Recursion.CompiledStatement} (hst : p
   | none => rfl
   | some _ => simp [hs] at h2
 
-/-- **Level `l`'s statement is the `l`-th**, at a dense shape: `statementsOf` lists the levels first. -/
 theorem recOpen_at_dense {i : RecVStar.Inner} {ss : Array VStar.Stmt} (h : RecVStar.statements i = .ok ss)
     (hsp : i.sparse = none) (hh : i.holo = false) {sch : Schedule} (hf : fast100 i.m = some sch) {l : ℕ}
     (hl : l < sch.levels.size) :
@@ -125,7 +103,6 @@ theorem recOpen_at_dense {i : RecVStar.Inner} {ss : Array VStar.Stmt} (h : RecVS
   rw [Array.append_empty, Array.append_assoc, Array.getElem?_append_left (by simpa using hl)]
   simp only [List.getElem?_toArray, List.getElem?_map, List.getElem?_range hl, Option.map_some]
 
-/-- A level's statement sits below the levels' count. -/
 theorem recOpen_lt {i : RecVStar.Inner} {ss : Array VStar.Stmt} (h : RecVStar.statements i = .ok ss)
     (hsp : i.sparse = none) (hh : i.holo = false) {s lv LANES HH n : ℕ} (hsv : ss[s]? = some (.recOpen lv LANES HH n))
     {sch : Schedule} (hf : fast100 i.m = some sch) : s < sch.levels.size := by
@@ -141,8 +118,6 @@ theorem recOpen_lt {i : RecVStar.Inner} {ss : Array VStar.Stmt} (h : RecVStar.st
   · simp at hm
   · rcases FlockC3.VStarList.tail_cases hK hLk n0 _ hm with ⟨_, _, hlN⟩ | ⟨_, _, _, hlN⟩ <;> cases hlN
 
-/-- **A level unit's `acc` row** (`accReads`): where unit `u` of level `lv`'s statement holds `acc` at row `p`,
-`u < 2q` and `p = u / q · n + opensBelow lv + u % q`. -/
 theorem acc_of_holding {r : XR} {ss : Array VStar.Stmt} (hss : _root_.Flock.RecVStar.statements r.shape = .ok ss)
     {s lv LANES HH n : ℕ} (hsv : ss[s]? = some (.recOpen lv LANES HH n)) {sch : Schedule}
     (hf : fast100 r.shape.m = some sch) {u p : ℕ} (hh : ("acc", u) ∈ accHoldings r s p) :
@@ -175,7 +150,6 @@ theorem acc_of_holding {r : XR} {ss : Array VStar.Stmt} (hss : _root_.Flock.RecV
     | exact hR
     | omega
 
-/-- A holding at a statement of the reader's list gives the row an owner (`accCanon_some`). -/
 theorem canon_of_holding {x : Msg} {r : XR} (hr : readX x = some r) {ss : Array VStar.Stmt}
     (hss : _root_.Flock.RecVStar.statements r.shape = .ok ss) {s : ℕ} (hs : s < ss.size) {h : String × ℕ} {p : ℕ}
     (hh : h ∈ accHoldings r s p) : (accCanon r p).isSome := by
@@ -186,10 +160,6 @@ theorem canon_of_holding {x : Msg} {r : XR} (hr : readX x = some r) {ss : Array 
   obtain ⟨e, he⟩ := accCanon_some (by omega) hc hh
   simp [he]
 
-/-! ## `NextHeldW` -/
-
-/-- **The next rows' owners**, wherever some algebra part reads `acc1` (`hE`): within a level the next unit, at a
-level's last unit the next level with openings, and at the chain's end the algebra part's `acc1`. -/
 theorem nextHeldW_of (rd : Msg → Option FinalP) (wE : Msg → ℝ) (final : Msg → Option (List (List (Msg × Salt)) × Msg))
     (w : Msg → ℝ) (b : Brings) (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin)))
     (hE : AccEndHeldW) : NextHeldW rd wE final w b elem Claims.Recursion.Form.Dense := by
@@ -207,7 +177,7 @@ theorem nextHeldW_of (rd : Msg → Option FinalP) (wE : Msg → ℝ) (final : Ms
     omega
   have hj : u % (sch.levels[lv]!).q < (sch.levels[lv]!).q := Nat.mod_lt _ hq
   by_cases hA : u % (sch.levels[lv]!).q + 1 < (sch.levels[lv]!).q
-  · -- the level's next unit
+  ·
     have hh' := acc_holding hss hsv hfs hrep hA
     have e : u / (sch.levels[lv]!).q * RecVStar.opensBelow sch sch.levels.size + RecVStar.opensBelow sch lv +
         (u % (sch.levels[lv]!).q + 1) = p + 1 := by
@@ -220,7 +190,7 @@ theorem nextHeldW_of (rd : Msg → Option FinalP) (wE : Msg → ℝ) (final : Ms
     have hN : lv + 1 + (sch.levels.size - (lv + 1)) = sch.levels.size := by omega
     rcases next_open (fun k => (sch.levels[k]!).q) (lv + 1) (sch.levels.size - (lv + 1)) with
       ⟨l', h1, h2, h3, h4⟩ | hend
-    · -- the next level with openings, at the rep's first unit
+    ·
       have hl' : l' < sch.levels.size := by omega
       have h4' : RecVStar.opensBelow sch l' = RecVStar.opensBelow sch (lv + 1) := h4
       have hsv' := recOpen_at_dense hss hsp hho hfs hl'
@@ -231,7 +201,7 @@ theorem nextHeldW_of (rd : Msg → Option FinalP) (wE : Msg → ℝ) (final : Ms
         omega
       rw [e] at hh'
       exact canon_of_holding hr hss (Array.getElem?_eq_some_iff.1 hsv').1 hh'
-    · -- the chain's end: an algebra part's `acc1`
+    ·
       rw [hN] at hend
       have hend' : RecVStar.opensBelow sch sch.levels.size = RecVStar.opensBelow sch (lv + 1) := hend
       obtain ⟨s', j', nm, pt, hsv', ha⟩ := hE x r hr hho hsp ss hss
@@ -249,9 +219,6 @@ theorem nextHeldW_of (rd : Msg → Option FinalP) (wE : Msg → ℝ) (final : Ms
       rw [e] at hh'
       exact canon_of_holding hr hss (Array.getElem?_eq_some_iff.1 hsv').1 hh'
 
-/-! ## At the deployed readers and brings -/
-
-/-- **`StepsWG` at `XsW … AccV` at KS's brings**, wherever some algebra part reads `acc1` (`hE`). -/
 theorem stepsWV_deployedE (key : ℕ → ℕ → ℕ → ℕ → ℕ × ℕ × ℕ × ℕ) (wE w : Msg → ℝ) (b : Brings)
     (aux : Msg → ℕ → _root_.Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ) (hd : Msg → _root_.Flock.RecRecord.Record)
     (rest : Msg → List (Msg × Claims.Out) → List UInt8) (cmt : Msg → ℕ → Msg → Msg) (hE : AccEndHeldW) :
@@ -262,7 +229,6 @@ theorem stepsWV_deployedE (key : ℕ → ℕ → ℕ → ℕ → ℕ × ℕ × �
           Claims.Recursion.Form.Dense recRead cmt)) :=
   stepsWV_deployed key wE w b aux nOf hd rest cmt (nextHeldW_of _ _ _ _ _ _ hE)
 
-/-- **P3 at KS's brings** (`accPorts_of_G`), wherever some algebra part reads `acc1` (`hE`). -/
 theorem accPorts_deployedE (key : ℕ → ℕ → ℕ → ℕ → ℕ × ℕ × ℕ × ℕ) (wE w : Msg → ℝ) (b : Brings)
     (aux : Msg → ℕ → _root_.Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ) (hd : Msg → _root_.Flock.RecRecord.Record)
     (rest : Msg → List (Msg × Claims.Out) → List UInt8) (cmt : Msg → ℕ → Msg → Msg) (hE : AccEndHeldW) :

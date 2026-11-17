@@ -36,27 +36,7 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Recursion.Transport
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# The registered reads' evaluations in the V\* setup's (`RegSetup`)
-
-The compiled verifier opens each registered port's table rows itself (`Flock.Registered.checkPort`, which
-`checkRegistered` runs on every statement of the recursive setup, `RecIns.setup`): each row's `b ‖ c` is hashed into its
-tree leaf, framed at its position, and climbed to the registered root (`Flock.Registered.opens`). Those are SHA-512
-evaluations outside the oracle, and `DecompBV`'s escape (`setupCalls`) searches them once the brought setup lists them.
-
-* `opensInputs reg bc pos path`: what `opens` hashes, the tree leaf's input, the frame-v3 leaf's and each climb node's
-  (`climbInputs`, `leafInputs`). `opens_coll`: two different commit strings opened at one position under one root give
-  two different inputs among them with one SHA-512 digest (`opens_binding`, keeping where the pair sits).
-* `regOpenings xO`: each opening the recursive setup at the V\* statement `xO` makes of a row an instance reads,
-  `(reg, b ‖ c, position, path)` of the table row each statement's instance's ref names in each of the verifier's
-  registered ports, as `checkPort` reads them (`portOpenings`). Rows no instance references are left out: no conclusion
-  reads them, and their number is the prover's to stage. `regIns xO`: their inputs, as messages.
-* `RegSetup b`: the brings' setup lists `regIns` at every V\* statement; `withReg b` is `b` with them appended
-  (`regSetup_withReg`), and the records `recBound` compiles list them (`regListed_recBound`).
-* `bc_eq_of_regOpenings`: at a record listing them, two listed openings at one position under one root (`SameRoot`),
-  both of which open, have one commit string, or the recorded calls and the setup's evaluations collide: so a lowering
-  under `JointV`'s no-collision conjunct reads two parts' commit strings as one.
--/
+/-! The registered reads' evaluations in the V\* setup (`RegSetup`), which `DecompBV`'s escape searches once the brought setup lists them. -/
 
 @[expose] public section
 
@@ -82,8 +62,6 @@ def leafInputs (reg : Port) (payload : ByteArray) (pos : Nat) (path : ByteArray)
 def opensInputs (reg : Port) (bc : ByteArray) (pos : Nat) (path : ByteArray) : List ByteArray :=
   (Hm96.Default512.leafPrefix ++ bc) :: leafInputs reg (Hm96.Default512.treeLeaf bc) pos path
 
-/-- **Two climbs to one root from different digests collide among their inputs** (`climbPair_collides`, keeping
-where the pair sits). -/
 theorem climb_coll (dom : ByteArray) :
     ∀ (s1 s2 : List ByteArray) (a b : ByteArray) (idx d : Nat), s1.length = s2.length →
       (∀ x ∈ s1, x.size = 64) → (∀ x ∈ s2, x.size = 64) → a.size = 64 → b.size = 64 → a ≠ b →
@@ -125,8 +103,6 @@ theorem climb_coll (dom : ByteArray) :
             ih rest2 _ _ (idx / 2) (d + 1) hl' hr1 hr2 (Sha512.hash_size _) (Sha512.hash_size _) he h
           exact ⟨u, List.mem_cons.2 (Or.inr hu), v, List.mem_cons.2 (Or.inr hv), huv⟩
 
-/-- **Two accepted openings at one position of different leaves collide among their inputs** (`opensLeaf_binding`,
-keeping where the pair sits). -/
 theorem opensLeaf_coll (reg : Port) (pos : Nat) (x path y path' : ByteArray) (hx : x.size = 64) (hy : y.size = 64)
     (hne : x ≠ y) (h1 : opensLeaf reg x pos path = true) (h2 : opensLeaf reg y pos path' = true) :
     ∃ u ∈ leafInputs reg x pos path, ∃ v ∈ leafInputs reg y pos path', u ≠ v ∧ Sha512.hash u = Sha512.hash v := by
@@ -142,8 +118,6 @@ theorem opensLeaf_coll (reg : Port) (pos : Nat) (x path y path' : ByteArray) (hx
       (sibs_size h1.1.2) (sibs_size h2.1.2) (Sha512.hash_size _) (Sha512.hash_size _) hl heq
     exact ⟨u, List.mem_cons.2 (Or.inr hu), v, List.mem_cons.2 (Or.inr hv), huv⟩
 
-/-- **Two different commit strings opened at one position under one root collide among their inputs**
-(`opens_binding`, keeping where the pair sits). -/
 theorem opens_coll (reg : Port) (pos : Nat) (bc path bc' path' : ByteArray) (hne : bc ≠ bc')
     (h1 : opens reg bc pos path = true) (h2 : opens reg bc' pos path' = true) :
     ∃ u ∈ opensInputs reg bc pos path, ∃ v ∈ opensInputs reg bc' pos path', u ≠ v ∧
@@ -155,7 +129,6 @@ theorem opens_coll (reg : Port) (pos : Nat) (bc path bc' path' : ByteArray) (hne
       opensLeaf_coll reg pos _ path _ path' (Sha512.hash_size _) (Sha512.hash_size _) hl h1 h2
     exact ⟨u, List.mem_cons.2 (Or.inr hu), v, List.mem_cons.2 (Or.inr hv), huv⟩
 
-/-- Two registered ports with one tree: what `opens` reads of a port (its leaves, domain, schema and root) is one. -/
 def SameRoot (reg reg' : Port) : Prop :=
   reg'.leaves = reg.leaves ∧ reg'.domain = reg.domain ∧ reg'.schema = reg.schema ∧ reg'.root = reg.root
 
@@ -207,13 +180,10 @@ def regOpenings (xO : Claims.Msg) : List (_root_.Flock.Registered.Port × ByteAr
 def regIns (xO : Claims.Msg) : List Claims.Msg :=
   (regOpenings xO).flatMap fun o => (_root_.Flock.Registered.opensInputs o.1 o.2.1 o.2.2.1 o.2.2.2).map Claims.toMsg
 
-/-- **The brings' setup lists every registered read's evaluations** at every V\* statement. -/
 def RegSetup (b : Brings) : Prop := ∀ xO, ∀ u ∈ regIns xO, u ∈ b.setup xO
 
-/-- A record whose setup lists every registered read's evaluations at every V\* statement. -/
 def RegListed {Coin : Type} (D : Claims.Recursion.Deploy Coin) : Prop := ∀ xO, ∀ u ∈ regIns xO, u ∈ D.setup xO
 
-/-- `b` with the registered reads' evaluations appended to its setup. -/
 def withReg (b : Brings) : Brings := { b with setup := fun xO => b.setup xO ++ regIns xO }
 
 theorem regSetup_withReg (b : Brings) : RegSetup (withReg b) := fun _ _ hu => List.mem_append_right _ hu
@@ -221,7 +191,6 @@ theorem regSetup_withReg (b : Brings) : RegSetup (withReg b) := fun _ _ hu => Li
 theorem regSetup_with_tr {b : Brings} (h : RegSetup b) (t : Claims.Msg → List (Claims.Msg × Claims.Out) → ByteArray) :
     RegSetup { b with tr := t } := h
 
-/-- **The compiled record lists them where the brings do**: `recBound`'s setup is the brings'. -/
 theorem regListed_recBound (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) {b : Brings}
     (h : RegSetup b) (L : Claims.Recursion.VStarB.LayoutB) (IV : Claims.Verifier FlockDeploy.Coin) :
     RegListed (recBound rel b L IV) := h
@@ -249,17 +218,12 @@ theorem toMsg_mem_regIns {xO : Claims.Msg} {reg : _root_.Flock.Registered.Port} 
   unfold regIns
   exact List.mem_flatMap.2 ⟨_, ho, List.mem_map.2 ⟨u, hu, rfl⟩⟩
 
-/-- A listed evaluation at a V\* statement of `xs` is among the setup's evaluations at `xs`. -/
 theorem mem_setupCalls_of_listed {Coin : Type} {H : Claims.Msg → Claims.Msg} {D : Claims.Recursion.Deploy Coin}
     {xs : List Claims.Msg} {xO u : Claims.Msg} (hx : xO ∈ xs) (hu : u ∈ D.setup xO) :
     (u, H u) ∈ Claims.Recursion.setupCalls H D xs := by
   unfold Claims.Recursion.setupCalls
   exact List.mem_flatMap.2 ⟨xO, hx, List.mem_map.2 ⟨u, hu, rfl⟩⟩
 
-/-- **A registered root binds the commit strings the setup opens, up to a collision the escape sees.** At a record
-whose setup lists the registered reads' evaluations (`RegListed`), two openings the setup makes at V\* statements of
-`xs`, at one position under one tree (`SameRoot`), both of which open, have one commit string, wherever the true calls
-`l` and the setup's evaluations at `xs` have no collision (`JointV`'s conjunct, at `l := L.allCalls x ws`). -/
 theorem bc_eq_of_regOpenings {Coin : Type} {D : Claims.Recursion.Deploy Coin} (hD : RegListed D)
     {l : List (Claims.Msg × Claims.Msg)} (hl : ∀ e ∈ l, FlockDeploy.sha512 e.1 = e.2) {xs : List Claims.Msg}
     (hc : (Claims.findColl (l ++ Claims.Recursion.setupCalls FlockDeploy.sha512 D xs)).isSome = false)

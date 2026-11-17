@@ -40,38 +40,7 @@ import Proofs.Flock.C3.VStarList.Shape
 import Proofs.Flock.Claims.Recursion.KSLin2PlainClosed
 import Std.Tactic.BVDecide.Normalize.Bool
 
-/-!
-# V*'s bound layout with every level's tops at its RecCap (`layoutBTops`), and `HeldB` there
-
-`layoutBCap` holds round 0 at RecCap and leaves each stream round that commits tops to a parameter, `topsAt`, which
-asks for a part holding the round whole (`TopsHeld`). None does: such a round's message is the salted tops it commits,
-one string a node, then one row where it absorbs a message (`nAtSched`), and the row is another part's. V*'s list now
-holds every later level's tops at fixed rows: the later levels' caps (`VStar.levelCapStatements`, `rec-cap/n<N>-l<l>`),
-the list's statements just before the link table's part (`linkParts`) and level 0's RecCap, the `g`-th over both reps'
-nodes of the reps' schedule's `g`-th top (`RecVStar.checkTopsListed`), instance `rep · n + t` reading node `t` of rep
-`rep`'s top as its port `top`.
-`layoutBTops` is `layoutBCap` with each tops round assembled from pieces instead:
-
-* **The tops** (`topsPiecesAt`): the round's `e`-th top, the schedule's `g`-th, at the list's `g`-th later cap
-  (`capsFrom`, `topsBefore`), as the commit strings of the rep's `n` instances in order, each the `b ‖ c` of port
-  `top`'s hm96 slot (`topPiece`).
-* **The row** (`rowPiece`): where the round absorbs a message, the first part whose port under its `rec-c<k>` reads that
-  rep's row (`heldRows`), as that port's hm96 slot's output.
-* Every cap's hm96 calls at port `top` (`capsCalls`), level 0's included.
-
-Everything else is `layoutBCap`'s. `heldB_layoutBTops` proves `HeldB` there from `SchedMatches`, `CapPorts`,
-`RowsCover` and `FinPieces`: a tops round's pieces exist and each is a part's (`topsPieces_held`), since the list's
-later caps are as many as the schedule's tops (`topsListed_size`) and come before level 0's RecCap, the list's last
-(`FlockC3.Reps.list_ok`). So `TopsHeld` is gone. `ksLin2_deployed_tops` is `ksLin2_deployed_plain_closed` at
-`layoutBTops`, with `HeldB` replaced by those four facts. `RowsCover` holds at every shape (`rowsCover`,
-`RowsCover.lean`, from the verifier's `RecVStar.checkRoundsListed` and `portsNamed`), and `ksLin2_deployed_rows` drops
-it; `CapPorts` holds at every shape too (`capPorts`, `CapPorts.lean`, from `capPorted`), and `ksLin2_deployed_caps`
-drops it.
-
-`HeldB` is structural: it asks that every round is fixed, held or assembled from pieces of the parts. That the pieces
-read the round's bytes (a top's strings at its cap's port, the row at its part's) is what `PartChecksBV`,
-`PartOpensB` and `DecompB` take, unchanged here.
--/
+/-! V*'s bound layout with every level's tops at its RecCap (`layoutBTops`), and `HeldB` there from `SchedMatches`, `CapPorts`, `RowsCover` and `FinPieces`. -/
 
 @[expose] public section
 
@@ -80,8 +49,6 @@ namespace RecDeploy
 open Flock
 open Claims (Msg)
 open FlockDeploy (Coin)
-
-/-! ## The later levels' caps -/
 
 /-- The tops the schedule `rs` commits before its round `k`, one entry a top. -/
 def topsBefore (rs : Array RecVStar.SchedRound) (k : ℕ) : ℕ := ((rs.toList.take k).flatMap (·.2.1.toList)).length
@@ -163,17 +130,6 @@ def layoutBTops (fin : Msg → List (ℕ × List (Msg × List HmNets.Lin))) : Cl
     | j + 1 => (streamRound x j).bind fun sr => if sr.2.1.isEmpty && !sr.2.2.2 then some [] else none
   pieceAt x i := stepPieces fin x i
 
-/-! ## What the parts record
-
-Every call a part records at `layoutBTops` is an hm96 salt or row call, whose input starts with the salt's tag
-`verity/hm96-sha512/salt/v1` or a row's `verity/sha512-row/v1`, byte 7 `h` or `s` (`calls_layoutBTops_tagged`). The
-plain setup's statement digest, `SHA-512(h)` with `h` starting with the statement's tag (`Stmt.setupHWith`), reads
-`verity/flock-circuit` at the inner tags, byte 7 `f`, so no part records it (`calls_layoutBTops_not_stmt`). Every
-deciding step of the plain verifier makes that call first (`next_decide_calls`), so a premise asking the inner run's
-calls to be recorded ones, or a collision among them, fails at every honest accepted run. -/
-
-/-- **A tagged hm96 input**: byte 7 is `h` (104), as in the salt's `verity/hm96-sha512/salt/v1`, or `s` (115), as in a
-row's `verity/sha512-row/v1`. -/
 def HmTagged (m : Msg) : Prop := m[7]? = some 104 ∨ m[7]? = some 115
 
 theorem pad_data (b : ByteArray) (n : ℕ) :
@@ -207,7 +163,6 @@ theorem hmCalls_tagged (c : Circuit) (nm : String) {q : ℕ} (hq : q < c.ports.s
   · simp only [Array.getElem?_eq_getElem hq, Option.map_some, Option.getD_some]
     exact rowPrefix_tagged _
 
-/-- A held row's port is one of its part's circuit's ports. -/
 theorem heldRows_port {r : XR} {s : ℕ} {c : Circuit} (hc : r.w.parts[s]?.bind partCircuit = some c)
     {h : ℕ × String × ℕ × ℕ} (hh : h ∈ heldRows r s) : h.2.2.1 < c.ports.size := by
   unfold heldRows at hh
@@ -258,7 +213,6 @@ theorem shaAt_layoutBTops_tagged (fin : Msg → List (ℕ × List (Msg × List H
     exact hmCalls_tagged c h.2.1 (heldRows_port hc hh) h.2.2.2 p hp
   · exact capsCalls_tagged r s p hp
 
-/-- **Every call a part records at `layoutBTops` has a tagged input**: an hm96 salt or row call's. -/
 theorem calls_layoutBTops_tagged (fin : Msg → List (ℕ × List (Msg × List HmNets.Lin))) (x : Msg) (s : ℕ)
     (w : Claims.Flock.Wit) : ∀ e ∈ (layoutBTops fin).calls x s w, HmTagged e.1 := by
   intro e he
@@ -268,8 +222,8 @@ theorem calls_layoutBTops_tagged (fin : Msg → List (ℕ × List (Msg × List H
   unfold HmTagged at ht ⊢
   rwa [List.getElem?_append_left (by omega)]
 
-/-- **No part records the plain setup's statement digest at the inner tags**: no recorded input starts with the inner
-statement's tag, `verity/flock-circuit`, as `Stmt.setupHWith`'s digest input `h` does. -/
+/-- No part records the plain setup's statement digest, which every deciding step of the plain verifier calls
+first, so a premise asking the inner run's calls to be recorded ones fails at every honest accepted run. -/
 theorem calls_layoutBTops_not_stmt (fin : Msg → List (ℕ × List (Msg × List HmNets.Lin))) (x : Msg) (s : ℕ)
     (w : Claims.Flock.Wit) (t : Msg) :
     ∀ e ∈ (layoutBTops fin).calls x s w, e.1 ≠ RecVStar.innerTags.statement.toUTF8.data.toList ++ t := by
@@ -281,10 +235,6 @@ theorem calls_layoutBTops_not_stmt (fin : Msg → List (ℕ × List (Msg × List
   rw [heq, List.getElem?_append_left (by omega), h.2] at ht
   simp at ht
 
-/-! ## The pieces' parts -/
-
-/-- **The later caps are as many as the schedule's tops**: `checkTopsListed` compares their node counts with the
-schedule's, one a top. -/
 theorem topsListed_size {i : RecVStar.Inner} {K : Array VStar.Stmt} {rs : Array RecVStar.SchedRound}
     (h : RecVStar.checkTopsListed i K = .ok ()) (hrs : repSched i = some rs) :
     K.size = (RecVStar.topSizes rs).length := by
@@ -299,8 +249,6 @@ theorem topsListed_size {i : RecVStar.Inner} {K : Array VStar.Stmt} {rs : Array 
     have := congrArg List.length he
     simpa using this
 
-/-- **A round's tops come before the schedule's last**: the `e`-th top of round `k` is the schedule's
-`topsBefore rs k + e`-th, of `(topSizes rs).length`. -/
 theorem topsBefore_lt {rs : Array RecVStar.SchedRound} {k e : ℕ} (hk : k < rs.size)
     (he : e < ((rs.getD k default).2.1).size) : topsBefore rs k + e < (RecVStar.topSizes rs).length := by
   unfold topsBefore RecVStar.topSizes
@@ -313,7 +261,6 @@ theorem topsBefore_lt {rs : Array RecVStar.SchedRound} {k e : ℕ} (hk : k < rs.
   simp only [List.flatMap_append, List.flatMap_cons, List.length_append, Array.length_toList]
   omega
 
-/-- The row piece is a part's. -/
 theorem rowPiece_lt {r : XR} {j : ℕ} {p : ℕ × List (Msg × List HmNets.Lin)} (hp : p ∈ rowPiece r j) :
     p.1 < r.w.parts.length := by
   unfold rowPiece at hp
@@ -325,14 +272,11 @@ theorem rowPiece_lt {r : XR} {j : ℕ} {p : ℕ × List (Msg × List HmNets.Lin)
   obtain ⟨c, -, rfl⟩ := hfa
   exact List.mem_range.1 ha
 
-/-- A round with no tops has no pieces of its own. -/
 theorem topsPiecesAt_empty {r : XR} {rs : Array RecVStar.SchedRound} {j : ℕ}
     (ht : ((rs.getD (j % rs.size) default).2.1).isEmpty = true) : topsPiecesAt r rs j = [] := by
   unfold topsPiecesAt
   rw [if_pos ht]
 
-/-- **A round that commits tops is assembled from parts' pieces**: it has some, its first its first top's, and each is
-a part's, where the later caps are as many as the schedule's tops and V\*'s list holds them before its last statement. -/
 theorem topsPiecesAt_held {r : XR} {rs : Array RecVStar.SchedRound} {j : ℕ} (hpos : 0 < rs.size)
     (ht : ((rs.getD (j % rs.size) default).2.1).isEmpty = false)
     (hlen : (RecVStar.topSizes rs).length ≤ r.w.parts.length - 1) :
@@ -358,9 +302,6 @@ theorem topsPiecesAt_held {r : XR} {rs : Array RecVStar.SchedRound} {j : ℕ} (h
       omega
     · exact rowPiece_lt hp
 
-/-- **V\*'s list holds the later caps before its last statement**, wherever `readX` reads the statement: its parts
-number as the list's statements, which end with the later caps and then level 0's RecCap (`FlockC3.Reps.list_ok`), as
-many later caps as the schedule's tops (`topsListed_size`). -/
 theorem topsLen_readX {x : Msg} {r : XR} {rs : Array RecVStar.SchedRound} (h : readX x = some r)
     (hrs : repSched r.shape = some rs) : (RecVStar.topSizes rs).length ≤ r.w.parts.length - 1 := by
   obtain ⟨vs, hvs, hlen⟩ := readX_statements h
@@ -368,8 +309,6 @@ theorem topsLen_readX {x : Msg} {r : XR} {rs : Array RecVStar.SchedRound} (h : r
   rw [hlen, ← topsListed_size hT hrs]
   simp only [Array.size_append, Array.size_singleton]
   omega
-
-/-! ## `HeldB` at `layoutBTops` -/
 
 section Layout
 
@@ -382,11 +321,8 @@ theorem layoutBTops_fixedAt_zero (x : Msg) : (layoutBTops fin).fixedAt x 0 = non
 
 end Layout
 
-/-- **`HeldB` at `layoutBTops`**, at every inner verifier of the deployed plain verifier's rounds, from the named facts:
-round 0 is RecCap's part's (`capAt_readX`, `CapPorts`); a stream round with no tops is fixed where it absorbs no message
-and held where it absorbs one (`RowsCover`); one that commits tops is assembled from its tops at their caps and its row
-(`topsPiecesAt_held`, from V\*'s list and the schedule alone); the last round is assembled (`FinPieces`) and held whole
-by no part. -/
+/-- `HeldB` is structural: that the pieces read the round's bytes is what `PartChecksBV`, `PartOpensB` and
+`DecompB` take. -/
 theorem heldB_layoutBTops {W : Type} (IV : Claims.Verifier Coin) (ivScope : Msg → Bool) (b : Brings)
     (I : Claims.Recursion.Inner Coin W) (hk : ∀ x, I.V.k x = (FlockDeploy.V false).k x)
     (fin : Msg → List (ℕ × List (Msg × List HmNets.Lin))) (shape : Claims.Recursion.Form → Prop)
@@ -466,14 +402,6 @@ theorem heldB_layoutBTops {W : Type} (IV : Claims.Verifier Coin) (ivScope : Msg 
   · rw [hkx, show 2 + 2 * rs.size - 1 = 2 * rs.size + 1 by omega]
     simp [layoutBTops, hsr']
 
-/-! ## `KSLin2` at `layoutBTops` -/
-
-/-- **`KSLin2` at the deployment's dense statements, at `layoutBTops`, with `HeldB` restated**:
-`ksLin2_deployed_plain_closed` at the layout with round 0 at RecCap and each tops round at its level's caps, where at
-the dense form `HeldB` comes from `heldB_layoutBTops`. What stays at the dense form is the schedule (`SchedMatches`),
-RecCap's port (`CapPorts`), the rows' ports (`RowsCover`), the last round's pieces (`FinPieces`, which holds at
-`finOpen`: `finPieces_finOpen`), and `VstarShowsB`, `PartChecksBV`, `PartOpensB` and `DecompB`; then `RunPairs` and the
-readers' three facts. `ksLin2_deployed_cap`'s `TopsHeld` is not among them. -/
 theorem ksLin2_deployed_tops (b : Brings) (fin : Msg → List (ℕ × List (Msg × List HmNets.Lin))) (wE : Msg → ℝ)
     (join : List Msg → Msg) (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ) :
     let L := layoutBTops fin

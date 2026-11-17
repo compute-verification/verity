@@ -4,29 +4,7 @@ public import Proofs.Flock.Claims.Recursion.LastBindsDeployed
 public import Proofs.Flock.Claims.KS.ConflictTied
 public import Proofs.Flock.Claims.KS.RoundsN
 
-/-!
-# The deployed plain verifier binds its last message's columns
-
-`RecDeploy.PlainLastBindsOrSlack` splits at its last hypothesis: two last messages that differ in table 0's opened
-columns (`RecDeploy.PlainColsBind`), or in the decision's calls (`RecDeploy.PlainCallsBindOrSlack`)
-(`RecDeploy.plainLastBindsOrSlack_of`). The columns half holds at SHA-512 (`RecDeploy.plainColsBind_sha512`):
-
-* both decisions read one link message, its coin and the same round messages with their coins (`act_decide_parts`),
-  so custody pins both records' rounds to those coins, at the counts the statement fixes (`rounds_ns_plain`): the two
-  records' rep streams carry the same coins round by round (`streams_coins_eq`);
-* so table 0's reps query level 0 at the same positions in both, and each passes its Merkle check there with one row
-  per position (`merkleCheckWith_rows`): their columns sit at the same positions (`rawCols_keys`);
-* columns that differ then differ at one position (`exists_mem_snd_ne`), where both are openings against the link's
-  `root_B[0]`, every SHA-512 input of each in its decision's calls (`plain_opening_at`), which collide
-  (`tiedColl_of_openings`).
-
-The calls half compares the two decisions' calls as sets: `Record.decodeWith` hashes the rounds in the
-record's own stream order, which only S11's count and names constrain, so two records that list the streams in two
-orders are accepted with permuted calls and no collision.
-It holds at SHA-512 (`RecDeploy.plainCallsBindOrSlack_sha512`, in `CallsOfProofs`).
-`RecDeploy.plainLastBinds_sha512_of_calls` reduces `PlainLastBinds` to it and `CanonicalProofFiles`, and
-`RecDeploy.lastBindsEC_deployed_sha512` gives (P4) at the deployed bound record from the same two.
--/
+/-! The deployed plain verifier binds its last message's columns, at SHA-512. -/
 
 @[expose] public section
 
@@ -37,9 +15,6 @@ open FlockSoundness.Refine (ebind_ok entries_eq_of_flat flat_data merkleCheck_ca
 
 local notation "𝔽" => FlockLevel3.GF128
 
-/-! ## A step that accepts decides -/
-
-/-- **A step that accepts decides**, within its own calls. -/
 theorem next_acc_decide {zk : Bool} {H : Claims.Msg → Claims.Msg} {x : Claims.Msg} {as : List Claims.Msg}
     {cs : List Coin} (h : ((next zk x as cs).eval H).1 = .acc) :
     ∃ s spec sts link c₁ mids f, act zk x as cs = .decide s spec sts link c₁ mids f ∧
@@ -57,8 +32,6 @@ theorem next_acc_decide {zk : Bool} {H : Claims.Msg → Claims.Msg} {x : Claims.
     rw [hl]
     exact Runs.self H (outOf_acc H _ ha)
 
-/-- **A decision reads the link from the first message, its coin from the first coin, and pairs the messages between
-the first and the last with their coins.** -/
 theorem act_decide_parts {zk : Bool} {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin} {s : Ins}
     {spec : SessionSpec} {sts : Array Stmt} {link : List ByteArray × List ByteArray} {c₁ : Coin}
     {mids : List (Claims.Msg × Coin)} {f : Final} (h : act zk x as cs = .decide s spec sts link c₁ mids f) :
@@ -71,8 +44,6 @@ theorem act_decide_parts {zk : Bool} {x : Claims.Msg} {as : List Claims.Msg} {cs
     all_goals first
       | (cases h; done)
       | (cases h; exact ⟨_, _, _, rfl, rfl, by assumption, rfl⟩)
-
-/-! ## Lists -/
 
 theorem map_fst_zip_congr {α β γ : Type} : ∀ (l₁ : List α) (l₂ : List β) (l₃ : List γ), l₂.length = l₃.length →
     (l₁.zip l₂).map Prod.fst = (l₁.zip l₃).map Prod.fst
@@ -89,7 +60,6 @@ theorem map_fst_map_pair {α β γ : Type} (g : α × β → γ) : ∀ L : List 
   | [] => rfl
   | p :: L => by simp only [List.map_cons, map_fst_map_pair g L]
 
-/-- Two lists of pairs with the same keys that differ differ at one key. -/
 theorem exists_mem_snd_ne {α β : Type} : ∀ {L₁ L₂ : List (α × β)}, L₁.map Prod.fst = L₂.map Prod.fst → L₁ ≠ L₂ →
     ∃ a b b', (a, b) ∈ L₁ ∧ (a, b') ∈ L₂ ∧ b ≠ b'
   | [], [], _, hne => absurd rfl hne
@@ -104,8 +74,6 @@ theorem exists_mem_snd_ne {α β : Type} : ∀ {L₁ L₂ : List (α × β)}, L�
       exact ⟨c, d, d', List.mem_cons_of_mem _ h₁, List.mem_cons_of_mem _ h₂, hd⟩
     · exact ⟨a, b, b', List.mem_cons_self .., List.mem_cons_self .., hb⟩
 
-/-! ## The coins of two records under one custody -/
-
 theorem coins_of_forall₂ {R : Round → Claims.Msg × Coin → Prop} :
     ∀ {rs : List Round} {ms : List (Claims.Msg × Coin)}, List.Forall₂ R rs ms →
       (∀ rd am, R rd am → rd.coins = am.2.vals rd.n) →
@@ -114,7 +82,6 @@ theorem coins_of_forall₂ {R : Round → Claims.Msg × Coin → Prop} :
   | rd :: _, am :: _, .cons hab h, hR => by
     simp only [List.map_cons, List.zipWith_cons_cons, hR rd am hab, coins_of_forall₂ h hR]
 
-/-- Streams of the same sizes whose rounds, read in order, carry the same coins carry them stream by stream. -/
 theorem coins_streams_eq : ∀ {S S' : List (Array Round)}, S.map (fun s => s.size) = S'.map (fun s => s.size) →
     (S.flatMap (·.toList)).map Round.coins = (S'.flatMap (·.toList)).map Round.coins →
     S.map (fun s => s.toList.map Round.coins) = S'.map (fun s => s.toList.map Round.coins)
@@ -128,7 +95,6 @@ theorem coins_streams_eq : ∀ {S S' : List (Array Round)}, S.map (fun s => s.si
     obtain ⟨h₁, h₂⟩ := List.append_inj hf hlen
     simp only [List.map_cons, h₁, coins_streams_eq hl.2 h₂]
 
-/-- **An accepted plain record's rep streams have the sizes its statement fixes.** -/
 theorem streams_sizes_plain (hs : Hashes Flock.V) {spec : SessionSpec} {sts : Array Stmt} {record : String}
     {proofs : Array ByteArray} {lv : Live} (hv : verifyWithM hs spec (tabsOf sts) record proofs = .ok ())
     (hl : liveOf spec record = .ok lv) :
@@ -141,8 +107,6 @@ theorem streams_sizes_plain (hs : Hashes Flock.V) {spec : SessionSpec} {sts : Ar
   rw [← hall i hi]
   simp only [List.length_map, Array.length_toList]
 
-/-- **Two accepted plain records of one session under custody of the same round messages carry the same coins, stream
-by stream**, whatever hashes each verdict ran with. -/
 theorem streams_coins_eq (hs hs' : Hashes Flock.V) {spec : SessionSpec} {sts : Array Stmt} {record record' : String}
     {proofs proofs' : Array ByteArray} {lv lv' : Live} {link link' : List ByteArray × List ByteArray} {c₁ c₁' : Coin}
     {mids : List (Claims.Msg × Coin)}
@@ -182,8 +146,6 @@ theorem coins_at {S S' : Array (Array Round)}
     rw [e₁] at h
     simp at h
 
-/-! ## Table 0's columns at two records -/
-
 theorem merkleCheckWith_rows {ops : MerkleOps Flock.V} {ms : MerkleScheme} {cap : Array ByteArray} {c d : ℕ}
     {pos : Array ℕ} {rows : Array (Array F128)} {sibs salts : Array ByteArray} {lanes : ℕ}
     (h : merkleCheckWith ops ms cap c d pos rows sibs salts lanes = .ok ()) : rows.size = pos.size := by
@@ -204,7 +166,6 @@ theorem zkRepCols_keys (lv₀ : Flock.Level) (c : Array F128) {rows rows' : Arra
   rw [e, e]
   exact map_fst_zip_congr _ _ _ (by simp [h])
 
-/-- What `runOf` takes of table 0 at a plain record whose statement's first table is `st`. -/
 def plainRun0 (st : Stmt) (extras : Array Flock.Claim) (lv : Live) (f : Final) : Claims.Flock.ZkRun :=
   { m := (Setup.ofCircuit st).m, kLog := (Setup.ofCircuit st).kLog, claims := 2 + extras.size,
     hashLen := (Setup.ofCircuit st).merkle.digestLen, saltLen := saltLenOf false (Setup.ofCircuit st),
@@ -252,8 +213,6 @@ theorem rawCols_eq {seen : Claims.Seen} {st : Stmt} {extras : Array Flock.Claim}
   rw [h]
   simp only [plainRun0, List.flatMap_cons, List.flatMap_nil, List.append_nil]
 
-/-- **Two accepted plain records whose rep streams carry the same coins open table 0 at the same positions**: each
-rep queries level 0 at its query round's coins, and its Merkle check passes there with one row per position. -/
 theorem rawCols_keys {hs hs' : Hashes Flock.V} {seen seen' : Claims.Seen} {f f' : Final} {ins : Ins}
     {spec : SessionSpec} {sts : Array Stmt} {st : Stmt} {extras : Array Flock.Claim} {lv lv' : Live}
     (hf : lastFinal seen = some f) (hf' : lastFinal seen' = some f')
@@ -306,8 +265,6 @@ theorem rawCols_keys {hs hs' : Hashes Flock.V} {seen seen' : Claims.Seen} {f f' 
   rw [rawCols_eq hr, rawCols_eq hr', List.map_append, List.map_append, key 0 (hmem lv f).1 (hmem lv' f').1,
     key 1 (hmem lv f).2 (hmem lv' f').2]
 
-/-- **A plain decision's reps open a column only as a Merkle opening** of table 0's level 0 within the calls `L` its
-verdict ran in: `plain_opening_raw` at a decision, before the run that made it. -/
 theorem plain_opening_at {x : Claims.Msg} {seen : Claims.Seen} {L : List (Claims.Msg × Claims.Msg)} {s : Ins}
     {spec : SessionSpec} {sts : Array Stmt} {link : List ByteArray × List ByteArray} {c₁ : Coin}
     {mids : List (Claims.Msg × Coin)} {f : Final} (hs : setupOf false x = some (s, spec, sts))
@@ -405,8 +362,6 @@ theorem plain_opening_at {x : Claims.Msg} {seen : Claims.Seen} {L : List (Claims
   · rw [← hjq]
     exact hlog j hj
 
-/-- **Two last messages the deployed plain verifier accepts after the same rounds and coins, that differ in table 0's
-opened columns, collide among the two decisions' calls**, at SHA-512. -/
 theorem plain_cols_tied {x : Claims.Msg} {ms : List Claims.Msg} {l l' : Claims.Msg} {cs : List Coin}
     (hc : cs.length = ms.length + 1)
     (hacc : ((next false x (ms ++ [l]) cs).eval sha512).1 = .acc)
@@ -509,8 +464,6 @@ namespace RecDeploy
 open Claims (Msg Out OC)
 open FlockDeploy (Coin)
 
-/-- **The deployed plain verifier binds its last message's columns**: two last messages it accepts after the same
-rounds and coins, that differ in table 0's opened columns, show a SHA-512 collision among the two decisions' calls. -/
 def PlainColsBind (H : Msg → Msg) : Prop :=
   ∀ (x : Msg) (ms : List Msg) (l l' : Msg) (cs : List Coin), ms.length + 1 = (FlockDeploy.V false).k x →
     cs.length = ms.length + 1 →
@@ -522,14 +475,8 @@ def PlainColsBind (H : Msg → Msg) : Prop :=
       ∃ q' ∈ (((FlockDeploy.next false x (ms ++ [l]) cs).eval H).2 ++
         ((FlockDeploy.next false x (ms ++ [l']) cs).eval H).2).map Prod.fst, Claims.Collision H q q'
 
-/-- **The deployed plain verifier binds its last message's calls, up to the decoder's slack**: two last messages it
-accepts after the same rounds and coins, where it answered each earlier round with that round's coin, that differ in
-the set of the decision's calls, show a collision among those calls, or two proof files at one position that differ in
-their bytes and decode alike (`ProofSlack`). The calls are compared as sets: two records that list the same
-streams in two orders give permuted calls, and a table's empty publics may come with their digest `H(ε)`, which S12
-already calls, or without. Proved at SHA-512 (`plainCallsBindOrSlack_sha512`): where a proof file differs, two reps
-accepted on one stream bind (`FlockDeploy.KS.plain_calls_tied`); where the files agree, the calls are one set
-(`plainCallsOfProofs_sha512`). -/
+/-- The calls are compared as sets: two records that list the same streams in two orders give permuted calls,
+and a table's empty publics may come with their digest `H(ε)` or without. -/
 def PlainCallsBindOrSlack (H : Msg → Msg) : Prop :=
   ∀ (x : Msg) (ms : List Msg) (l l' : Msg) (cs : List Coin), ms.length + 1 = (FlockDeploy.V false).k x →
     cs.length = ms.length + 1 →
@@ -545,7 +492,6 @@ def PlainCallsBindOrSlack (H : Msg → Msg) : Prop :=
         ((FlockDeploy.next false x (ms ++ [l']) cs).eval H).2).map Prod.fst, Claims.Collision H q q') ∨
     ProofSlack l l'
 
-/-- `PlainLastBindsOrSlack` is its columns half and its calls half. -/
 theorem plainLastBindsOrSlack_of {H : Msg → Msg} (hC : PlainColsBind H) (hK : PlainCallsBindOrSlack H) :
     PlainLastBindsOrSlack H := by
   intro x ms l l' cs hk hc hearly hacc hacc' hne
@@ -553,20 +499,15 @@ theorem plainLastBindsOrSlack_of {H : Msg → Msg} (hC : PlainColsBind H) (hK : 
   · exact Or.inl (hC x ms l l' cs hk hc hacc hacc' hne)
   · exact hK x ms l l' cs hk hc hearly hacc hacc' hne
 
-/-- **The columns half at SHA-512.** -/
 theorem plainColsBind_sha512 : PlainColsBind FlockDeploy.sha512 := by
   intro x ms l l' cs _ hc hacc hacc' hne
   obtain ⟨u, v, hcol, hu, hv⟩ := FlockDeploy.KS.plain_cols_tied hc hacc hacc' hne
   exact ⟨u, hu, v, hv, hcol⟩
 
-/-- **`PlainLastBinds` at SHA-512 from the decoder's canonicity and the calls half** (`PlainCallsBindOrSlack`, which
-holds at SHA-512: `plainLastBinds_sha512_of_canonical`). -/
 theorem plainLastBinds_sha512_of_calls (hC : CanonicalProofFiles)
     (hK : PlainCallsBindOrSlack FlockDeploy.sha512) : PlainLastBinds FlockDeploy.sha512 :=
   plainLastBinds_of_canonical hC (plainLastBindsOrSlack_of plainColsBind_sha512 hK)
 
-/-- **(P4) modulo what `E*` reads at the deployed bound record, at SHA-512**, from the decoder's canonicity and the
-calls half; the columns half is `plainColsBind_sha512`. -/
 theorem lastBindsEC_deployed_sha512 (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
     (wE : Msg → ℝ) (join : List Msg → Msg) (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ)
     (hC : CanonicalProofFiles) (hK : PlainCallsBindOrSlack FlockDeploy.sha512) :

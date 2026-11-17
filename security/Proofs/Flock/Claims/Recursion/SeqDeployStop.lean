@@ -4,24 +4,7 @@ public import Proofs.Flock.Claims.Recursion.SeqStop
 public import Proofs.Flock.Claims.Recursion.SeqDeploy
 public import Proofs.Flock.Claims.Recursion.DeployStop
 
-/-!
-# The recursion's `ZKStop` at the masked record with the deployed stop
-
-`Claims.Recursion.ZKStop` at `deployRecMStop`: the masked record `deployRecM` whose reference prover stops where the
-deployed stop `stopsRec` holds at the first part's rounds (`stopP (refPM …) (sR …) (kPre IV)`), each inner round one
-commit string (`nAt = 1`, `innerMsg` the commit string itself), so `εzkStop` is `εzk`.
-
-* `prover_deployRecMStop`: the record's prover at `x` is `zkAtStop`'s, the masked reference prover with the stop at
-  `pre x` on `x`'s tape read flat.
-* `simStop_eval`: `SimStop` at the record is `simMStop` at the claim's first-part simulator, against every verifier,
-  on the coins `stopEquiv` matches: the first part is a run of `pmZ` with the stop (`simPre_pm`,
-  `Claims.ZKMal.interact_censor`), and past it the sessions run where the stop hasn't fired and are silent where it
-  has (`tail_eval`).
-* `zkStop_deployRecMStop`: `ZKStop` from the first part's zero knowledge (`h₀`), each session's where the stop hasn't
-  fired (`hS`), and the sessions' witness at every live first part (`LiveWit`).
-* `zkStop_deployRecMStop_commit_sha512`: at SHA-512, the inner prover that commits, and the session's tables at the
-  recursive setup, whose premises remain, with `LiveWit` at the outer record's relation.
--/
+/-! The recursion's `ZKStop` at the masked record with the deployed stop, where `εzkStop` is `εzk`. -/
 
 @[expose] public section
 
@@ -33,13 +16,10 @@ open Claims.ZKMal (Layout SeqTape Proto ZKmalAt iterSimG)
 open FlockSoundness.Discharge
 open scoped NNReal
 
-/-- **The deployed stop on the prover's history**: `stopsRec` at the transcript the history reads as. -/
 noncomputable def sR (IV : Claims.Verifier Coin) (ivScope : Claims.Msg → Bool) (b : Brings) (x : Claims.Msg)
     (h : List (Claims.Msg × Claims.Msg)) : Bool :=
   stopsRec IV ivScope b.st x (asRounds h)
 
-/-- **The masked record with the deployed stop**: `deployRecM` with the masked reference prover stopped where `sR`
-holds at the first part's rounds, and `stopsRec` its stop; each inner round one commit string, sent as it is. -/
 noncomputable def deployRecMStop (IV : Claims.Verifier Coin) (ivScope : Claims.Msg → Bool) (b : Brings)
     (VM : Claims.Verifier Coin)
     (iv : (Claims.Msg → Claims.Msg) → (x : Claims.Msg) → (Fin (VM.k x) → Coin) → List Claims.Flock.Wit → Claims.Seen)
@@ -54,9 +34,6 @@ noncomputable def deployRecMStop (IV : Claims.Verifier Coin) (ivScope : Claims.M
     innerMsg := fun _ _ cs => Claims.OC.ret cs.flatten
     stops := fun _ => stopsRec IV ivScope b.st }
 
-/-- **The live witness**: at every history that starts session `j` whose first part is the first part's prover's on
-some tape `t₀` and where the stop hasn't fired, the witness `wit` gives is in the sessions' relation `RF` at the
-statement the history stages. -/
 def LiveWit (H : Claims.Msg → Claims.Msg) (IV : Claims.Verifier Coin) (ivScope : Claims.Msg → Bool) (b : Brings)
     (I : Claims.Recursion.Inner Coin Claims.Flock.Wit) (T₀ : Claims.Msg → SeqTape)
     (pre : (x : Claims.Msg) → (T₀ x).N × (T₀ x).Ω → b.ref.TI × (ℕ → Salt))
@@ -86,7 +63,6 @@ local notation "𝔓" => Claims.ZKMal.stopProgB (sR IV ivScope b) (kPre IV) (fun
 
 theorem nAt_deployRecMStop (x : Claims.Msg) (i : ℕ) : (𝔇).nAt x i = 1 := rfl
 
-/-- The record's commit strings to the zero digest are `deployRec`'s. -/
 theorem zeroCommits_deployRecMStop (ys : List (Fin (𝔇).saltLen → UInt8)) :
     (𝔇).toDeploy.zeroCommits ys = (deployRec IV ivScope b).zeroCommits ys := by
   induction ys with
@@ -104,7 +80,6 @@ theorem innerMsg_eval (H : Claims.Msg → Claims.Msg) (ask : List Claims.Msg →
     (Claims.SP.eval H ask (Claims.Recursion.spOf ((𝔇).innerMsg x ms cs))).1 = cs.flatten :=
   rfl
 
-/-- **The record's stop is `sR`'s** on the transcript a history reads as. -/
 theorem halted_asRounds (H : Claims.Msg → Claims.Msg) (k : ℕ) (x : Claims.Msg) (h : List (Claims.Msg × Claims.Msg)) :
     (𝔇).halted H k x (asRounds h) = Claims.ZKMal.fired (sR IV ivScope b x) k h := by
   have hl : (asRounds h).length = h.length := List.length_map _
@@ -117,8 +92,6 @@ theorem halted_asRounds (H : Claims.Msg → Claims.Msg) (k : ℕ) (x : Claims.Ms
     | simp only [asRounds, List.map_take]
     | simp [asRounds, List.map_take]
 
-/-- **The record's prover at `x` is `zkAtStop`'s**: the masked reference prover with the stop at `pre x` on the
-nested tape of `x`'s sessions read flat. -/
 theorem prover_deployRecMStop : (𝔇).prover =
     fun w x => (Claims.ZKMal.stopP (refPM IV b (pre x) wit PS w) (sR IV ivScope b) (kPre IV)).comap
       (Layout.flatten (T₀ x) 0 NB ΩB (nS x)) := by
@@ -147,8 +120,6 @@ theorem stageRound_eval (H : Claims.Msg → Claims.Msg) (ask : List Claims.Msg �
   simp only [Claims.ZKMal.recSpBind_eq, Claims.ZKMal.spBind_eval, zeroCommits_stop_eval]
   rfl
 
-/-- **`SimStop`'s coins are `simMStop`'s** at the claim's first-part simulator: the one salt of each inner round, the
-staging salts, and one per V\* session. -/
 noncomputable def stopEquiv (I : Claims.Recursion.Inner Coin Claims.Flock.Wit)
     (SO' : Claims.Msg → ℕ → Claims.Recursion.OSim) (H : Claims.Msg → Claims.Msg) (x : Claims.Msg) :
     (Claims.Recursion.SimStop 𝔇 I SO' H).C x ≃
@@ -162,9 +133,6 @@ noncomputable def stopEquiv (I : Claims.Recursion.Inner Coin Claims.Flock.Wit)
         fun j x u c => (SO' x j).prog (xsOf IV b x j u) c)
       (fun _ _ => Claims.Recursion.goesOn) x (nS x)).symm)
 
-/-- **Past the first part, `SimStop` is `simMStop`'s sessions**: after a first part of `kPre x` rounds of messages,
-where the stop has fired the empty message for the rest of `VM`'s rounds, as many as the sessions' silent rounds;
-where it hasn't, each session's outer simulator at the V\* statement the history stages. -/
 theorem tail_eval (H : Claims.Msg → Claims.Msg) (SO' : Claims.Msg → ℕ → Claims.Recursion.OSim) (x : Claims.Msg)
     (hk : VM.k = kM IV b) (ask : List Claims.Msg → Claims.Out) (cs : (s : Fin ((𝔇).nS x)) → (SO' x s).C)
     (τ : List (Claims.Msg × Claims.Out))
@@ -238,9 +206,6 @@ theorem tail_eval (H : Claims.Msg → Claims.Msg) (SO' : Claims.Msg → ℕ → 
     · rw [Claims.ZKMal.simOuter_eval]
       exact Claims.ZKMal.foldl_stuck _ (fun τ' i h => by simp [h]) _ τ hg0
 
-/-- **`SimStop` at the record is `simMStop` at the claim's first-part simulator**: against every verifier, one
-transcript on the coins `stopEquiv` matches, where the inner protocol's rounds at the inner statement are the inner
-verifier's and the masked verifier's rounds are the masked run's. -/
 theorem simStop_eval (H : Claims.Msg → Claims.Msg) (I : Claims.Recursion.Inner Coin Claims.Flock.Wit)
     (SO' : Claims.Msg → ℕ → Claims.Recursion.OSim) (x : Claims.Msg) (hI : I.V.k (xIOf x) = IV.k (xIOf x))
     (hk : VM.k = kM IV b) (ask : List Claims.Msg → Claims.Out) (c : (Claims.Recursion.SimStop 𝔇 I SO' H).C x) :
@@ -337,7 +302,6 @@ theorem simStop_eval (H : Claims.Msg → Claims.Msg) (I : Claims.Recursion.Inner
       simp only [Claims.ZKMal.goesOn, Bool.and_eq_true, List.all_eq_true] at hg
       exact hg.2⟩
 
-/-- **`ZKmalAt` at `simMStop` is `ZKmalAt` at `SimStop`**, at the claim's first-part simulator. -/
 theorem zkAt_simStop (H : Claims.Msg → Claims.Msg) (I : Claims.Recursion.Inner Coin Claims.Flock.Wit)
     (SO' : Claims.Msg → ℕ → Claims.Recursion.OSim) (x : Claims.Msg) (hI : I.V.k (xIOf x) = IV.k (xIOf x))
     (hk : VM.k = kM IV b) {N Ω WP : Type} [Fintype N] [Nonempty N] [Fintype Ω] [Nonempty Ω] {k : ℕ}
@@ -349,7 +313,6 @@ theorem zkAt_simStop (H : Claims.Msg → Claims.Msg) (I : Claims.Recursion.Inner
   h.of_sim _ (stopEquiv IV ivScope b VM iv T₀ NB ΩB pre wit PS SO I SO' H x)
     (simStop_eval IV ivScope b VM iv T₀ NB ΩB pre wit PS SO H I SO' x hI hk)
 
-/-- **`εzkStop` at the record is `εzk`**: one commit string per inner round. -/
 theorem εzkStop_deployRecMStop (I : Claims.Recursion.Inner Coin Claims.Flock.Wit) (t : ℕ) (δ₁ : ℝ)
     (x : Claims.Msg) :
     Claims.Recursion.εzkStop 𝔇 I t δ₁ x = Claims.Recursion.εzk (deployRec IV ivScope b) I t δ₁ x := by
@@ -359,12 +322,6 @@ theorem εzkStop_deployRecMStop (I : Claims.Recursion.Inner Coin Claims.Flock.Wi
 
 end Stop
 
-/-- **The recursion's `ZKStop` at the masked record with the deployed stop**, where the masked verifier's rounds are
-the masked run's (`hk`) and the inner protocol's rounds the inner verifier's (`hI`), at each attempt budget `t ≥ 1`
-and `δ₁` at which hm96 leaves hide: the first part is `ZKmalAt` at `Sim`'s first two parts within `2δ₁` per commit
-string (`h₀`); each V\* session, at every history that starts it and where the stop hasn't fired, is `ZKmalAt` at
-`SO t` within its proved `--zk` error and `4t·3^t` on the sessions' relation `RF` (`hS`); and the live witness
-(`LiveWit`). The bound is `εzk + γzk · Pr[Fork]`, `εzkStop` at one commit string per inner round. -/
 theorem zkStop_deployRecMStop (H : Claims.Msg → Claims.Msg) (IV : Claims.Verifier Coin) (ivScope : Claims.Msg → Bool)
     (b : Brings) (I : Claims.Recursion.Inner Coin Claims.Flock.Wit) (relO : Readable.Parsed → Readable.Relation)
     (VM : Claims.Verifier Coin)
@@ -409,8 +366,6 @@ theorem zkStop_deployRecMStop (H : Claims.Msg → Claims.Msg) (IV : Claims.Verif
       | rfl
       | simp only [Claims.Recursion.γzk, deployRecMStop, deployRecM, deployRec]
 
-/-- **Each V\* session is zero knowledge at the session's tables at the recursive setup**: `zkBoundM_of_tables`'s
-sessions, at every history that starts one. -/
 theorem sessions_of_tables (IV : Claims.Verifier Coin) (b : Brings) (H : Claims.Msg → Claims.Msg)
     (ivScope : Claims.Msg → Bool) (relO : Readable.Parsed → Readable.Relation) (T₀ : Claims.Msg → SeqTape)
     (G : Proto Claims.Flock.Wit) [Fintype G.Coin] (Mp : ∀ x, G.Nonce → G.TPreModel x)
@@ -453,11 +408,8 @@ theorem sessions_of_tables (IV : Claims.Verifier Coin) (b : Brings) (H : Claims.
     have e2 : (nB (xsOf IV b x j u) : ℝ) ≤ (b.zl (staged b.st x (pick b.st x j) j)).2 := by exact_mod_cast h2
     gcongr
 
-/-- **The recursion's `ZKStop` at the masked record with the deployed stop, at SHA-512, at the inner prover that
-commits**, on each statement's first-part tape, from the session's tables at the recursive setup: the first part from
-its commit strings (`h0_of_commits`, `preCommits_commit`), the sessions from Flock's zero knowledge at the outer
-record (`sessions_of_tables`, `hiding_sha512`), whose premises remain, and the live witness at the outer record's
-relation (`hW`). -/
+/-- `zkStop_deployRecMStop` at SHA-512, at the inner prover that commits; the premises of Flock's zero knowledge at
+the outer record remain. -/
 theorem zkStop_deployRecMStop_commit_sha512 (IV : Claims.Verifier Coin) (b : Brings) (ivScope : Claims.Msg → Bool)
     (I : Claims.Recursion.Inner Coin Claims.Flock.Wit) (relO : Readable.Parsed → Readable.Relation)
     (VM : Claims.Verifier Coin)

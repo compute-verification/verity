@@ -34,24 +34,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# The circuit at a staged part, from `PartAccepts`
-
-`decompB_lastSplitP`'s lowering fact `hlow` starts from `PartAccepts` at the deployed outer record
-(`deployZkRec relation`) and the staging `showsPart`: some V\* statement `xO`, shown on the coins and staged, has an
-outer witness `w` passing `Flock.check`, its recorded calls true and none colliding, and agreeing with the messages. This
-file reads the circuit's semantics off that, with no premise beyond `PartAccepts`:
-
-* `partAccepts_staged`: the staged statement parses untyped, without public input words, to tables each of part `s`'s
-  V\* statement `sv` at `x`'s inner shape, and every copy of every table holds its unit's outputs at what its input
-  columns read (`StmtCopies`): `stagedReads` for the staging, `allOuts_of_check` for the outputs.
-* `partAccepts_inner`: at a part whose V\* statement is an algebra part (`.inner`), every copy of every table computes
-  the verifier's part's residuals (`ResOuts`: `PartCols` at the elements the copy reads, `laid_part`'s conclusion), the
-  part being the one `RecResiduals.check` derives from the unit's name and META (`innerCopies`).
-
-What is left of a residuals piece's `hlow` is not the circuit's: the input tie (the elements the copy reads are the held
-messages' rows and the coins' coefficients) and the output tie (the residuals there give the piece).
--/
+/-! The circuit's semantics at a staged part from `PartAccepts` alone; a residuals piece's input and output ties are left to `hlow`. -/
 
 @[expose] public section
 
@@ -61,11 +44,6 @@ open Claims (Msg)
 open FlockDeploy (Coin)
 open Claims.Recursion.VStarB
 
-/-- **What part `s`'s circuit accepting gives at its staged statement**: at the deployed outer record and the staging
-`showsPart`, `PartAccepts` names a staged V\* statement `xO` and an outer witness `w` agreeing with `ms`, whose recorded
-calls are true and don't collide, at which `xO` parses untyped, without public input words, to at least one table, each
-a table of part `s`'s V\* statement `sv` at `x`'s inner shape, and every copy of every table holds its unit's outputs at
-what its input columns read (`StmtCopies`). -/
 theorem partAccepts_staged {H : Msg → Msg} {D : Claims.Recursion.Deploy Coin} {L : LayoutB}
     {shape : Claims.Recursion.Form → Prop} {untr : TrReader} {b : Brings} {cmt : Msg → ℕ → Msg → Msg} {s : ℕ}
     {x : Msg} {c : ℕ → Coin} {ms : List Msg}
@@ -84,12 +62,6 @@ theorem partAccepts_staged {H : Msg → Msg} {D : Claims.Recursion.Deploy Coin} 
     _root_.Flock.Readable.stmtCopies_of_allOuts htab (_root_.Flock.Readable.allOuts_of_check hck' hx ht hpi),
     ⟨hh, hp, hm, hrw⟩, hT, hc, hs.1⟩
 
-/-- **An algebra part's copies compute its residuals, from `PartAccepts`**: at the deployed outer record and the staging
-`showsPart`, where part `s`'s V\* statement at `x`'s inner shape is an algebra part (`.inner`), `PartAccepts` names a
-staged V\* statement and an outer witness `w` agreeing with `ms`, whose recorded calls are true and don't collide, at
-which every copy (block `o`, VU `g`, copy `u`) of every table `t` holds, on its output columns, the residuals of the
-verifier's part (`RecResiduals.part` at the shape, holo flag and part the unit's name and META give) at the elements its
-input columns read (`ResOuts`, which is `laid_part`'s `PartCols` at those elements). -/
 theorem partAccepts_inner {H : Msg → Msg} {D : Claims.Recursion.Deploy Coin} {L : LayoutB}
     {shape : Claims.Recursion.Form → Prop} {untr : TrReader} {b : Brings} {cmt : Msg → ℕ → Msg → Msg} {s : ℕ}
     {x : Msg} {c : ℕ → Coin} {ms : List Msg}

@@ -45,28 +45,7 @@ import Proofs.Flock.Claims.Recursion.RestLens
 import Proofs.Flock.Claims.Recursion.SchedDense
 import Proofs.Flock.Claims.Recursion.SlotsCheck
 
-/-!
-# The element-level last message at the `rec-open` copies (`elemR`), and `CopyOpensR` there (U8)
-
-`restR elem` leaves one choice open, `elem`: the pieces of the element-level last message, which `rdR` reads as the
-statement and each rep's proof's openings (`encLast`). `elemR` lays every opening at the columns of the copy that opens
-it, so a `rec-open` copy reads exactly the row and siblings the last message carries:
-
-* **The pieces** (`elemR`): the tag, the statement and the proofs' count, constant bytes at the last part; then, for
-  each rep `k`, its proof's openings level by level (`proofPieces`): level `ℓ`'s, at part `ℓ` (`levelPiece`), are its
-  `q` opened rows, query `j`'s the `128 LANES` columns of instance `k q + j`'s copy from column 0 (`rowSeg`), then its
-  `q · HH` siblings, sibling `h` of query `j` the 512 columns from `128 LANES + 512 h` (`sibSeg`), then no salts
-  (`levelSegs`). A column is the copy's (`colForm`: `copyCol`'s hidden value up to the unit's constant, zero past it),
-  at the part's circuit (`circOf`) and table 0's schedule (`schR`).
-* **They read as `encLast`** (`readPieces_elemR`, `encLevel_levelSegs`): a row's bits are `elems`' (`colsHold_elems`,
-  `encF_toBytes`), a sibling's `bytesAt`'s (`colsHold_bytesAt`). Every length fits its word (`fast100_small`), so `rdR`
-  reads the openings back (`rdR_elemR`).
-* **A part's pieces are its witness's** (`readSegs_piece`): `Agrees`' second conjunct holds part `s`'s pieces of the last
-  round to its staged witness `w`, and the round is assembled off `ws`, so both read the same bytes there; `encLevel`
-  reads back (`rdLevel_encLevel`), so the level's rows and siblings are `w`'s.
-* `copyOpensR_elemR`: `CopyOpensR` at any layout with `layAt (restR elemR)`'s messages and pieces, the deployed
-  `final`, `opened` and `k`, and `sideAtR rdR`, for pieces in range; `copyOpensR_layR` at the layout of record.
--/
+/-! The element-level last message laid at the `rec-open` copies (`elemR`), at which each copy reads the row and siblings the last message carries. -/
 
 @[expose] public section
 
@@ -84,8 +63,6 @@ open FlockVBridge.Family (elems bytesAt)
 open Lean (Json)
 
 noncomputable section
-
-/-! ## The pieces -/
 
 /-- The inner statement's bytes at a compiled statement's reading: `xIOf`'s wherever the setup's checks accept it. -/
 def stmtOf (r : XR) : Msg := if _root_.Flock.RecScope.accepts (readOf r) = true then r.w.inner else []
@@ -120,7 +97,6 @@ def colForm (c : Circuit) (n t : ℕ) : HmNets.Lin :=
   if t ≤ c.unit.constPos then HmNets.Lin.var (n / c.g * 2 ^ c.kLog + (c.unitRange.slot (n % c.g * c.upv) + t))
   else HmNets.Lin.const false
 
-/-- Instance `n`'s copy's columns off a witness `u`. -/
 def colBits (u : Claims.Flock.Wit) (c : Circuit) (n : ℕ) : ℕ → Bool := fun t => formBit u (colForm c n t)
 
 /-- An opened row: its length, then instance `n`'s copy's `128 LANES` columns from column 0. -/
@@ -163,34 +139,25 @@ def elemR (r : XR) : List (Fin r.w.parts.length × List (Msg × List HmNets.Lin)
       (List.range (nProofs r)).flatMap (proofPieces r h)
   else []
 
-/-! ## What they read -/
-
-/-- A level's rows off a witness `u`: query `j`'s, instance `k q + j`'s copy's `LANES` elements. -/
 def lvlRows (u : Claims.Flock.Wit) (c : Circuit) (q LANES k : ℕ) : Array (Array F128) :=
   ((List.range q).map fun j => elems (colBits u c (k * q + j)) 0 LANES).toArray
 
-/-- A level's siblings off a witness `u`: query `j`'s `HH`, sibling `h` 64 bytes from column `128 LANES + 512 h`. -/
 def lvlSibs (u : Claims.Flock.Wit) (c : Circuit) (q LANES HH k : ℕ) : Array ByteArray :=
   ((List.range q).flatMap fun j => (List.range HH).map fun h =>
     bytesAt (colBits u c (k * q + j)) (128 * LANES + 512 * h) 64).toArray
 
-/-- The witness of part `i`. -/
 def wAt (ws : List Claims.Flock.Wit) (i : ℕ) : Claims.Flock.Wit := ws.getD i ⟨[]⟩
 
-/-- Level `ℓ`'s openings at rep `k`, off its part's witness. -/
 def levelProof (r : XR) (ws : List Claims.Flock.Wit) (k ℓ : ℕ) : LevelProof :=
   { rows := lvlRows (wAt ws (partIdx r ℓ)) (circOf r ℓ) ((schR r).levels[ℓ]!).q (2 ^ ((schR r).levels[ℓ]!).lanes) k,
     siblings := lvlSibs (wAt ws (partIdx r ℓ)) (circOf r ℓ) ((schR r).levels[ℓ]!).q
       (2 ^ ((schR r).levels[ℓ]!).lanes) (((schR r).levels[ℓ]!).d - ((schR r).levels[ℓ]!).cap) k,
     salts := #[] }
 
-/-- **Rep `k`'s proof as the last message carries it**: its levels' openings, every other field default. -/
 def proofR (r : XR) (ws : List Claims.Flock.Wit) (k : ℕ) : Flock.Proof :=
   opensOnly (levelProof r ws k 0)
     ((List.range ((schR r).levels.size - 2)).map fun i => levelProof r ws k (i + 1)).toArray
     (levelProof r ws k ((schR r).levels.size - 1)).rows (levelProof r ws k ((schR r).levels.size - 1)).siblings #[]
-
-/-! ## Bytes -/
 
 theorem byte_eq (v : UInt64) (i : ℕ) (hi : i < 8) :
     (v.toNat / 256 ^ i).toUInt8 = (v >>> (8 * i).toUInt64).toUInt8 := by
@@ -232,8 +199,6 @@ theorem rowBytes_encF (row : Array F128) : (MerkleScheme.rowBytes row).data.toLi
 theorem readForms_nil (u : Claims.Flock.Wit) : readForms u [] = [] :=
   List.eq_nil_of_length_eq_zero (by rw [readForms_length]; rfl)
 
-/-- **Forms read the bytes their columns hold**: forms whose bits off `u` are columns `base …` of `f`, as many as `b`'s
-bits, read `b` where those columns hold it. -/
 theorem readForms_cols {u : Claims.Flock.Wit} {fs : List HmNets.Lin} {f : ℕ → Bool} {base : ℕ} {b : ByteArray}
     (hfs : fs.map (formBit u) = (List.range (8 * b.size)).map fun t => f (base + t)) (hb : FlockVBridge.ColsHold f base b) :
     readForms u fs = b.data.toList := by
@@ -289,7 +254,6 @@ theorem length_flatMap_range {β : Type} (q H : ℕ) (g : ℕ → ℕ → β) :
 
 theorem encList_eq {α : Type} (e : α → Msg) (l : List α) : encList e l = encNat l.length ++ l.flatMap e := rfl
 
-/-- **A level's openings read as `encLevel`** of its rows and siblings off the witness, and no salts. -/
 theorem encLevel_levelSegs (u : Claims.Flock.Wit) (c : Circuit) (q LANES HH k : ℕ) :
     readSegs u (levelSegs c q LANES HH k) = encLevel (lvlRows u c q LANES k) (lvlSibs u c q LANES HH k) #[] := by
   have hL : readSegs u (levelSegs c q LANES HH k) =
@@ -310,8 +274,6 @@ theorem encLevel_levelSegs (u : Claims.Flock.Wit) (c : Circuit) (q LANES HH k : 
     simp only [List.map_map, List.length_map, List.length_range, List.flatMap_map, List.flatMap_assoc,
       Function.comp_apply, List.length_nil, List.flatMap_nil, List.append_nil, List.append_assoc]
   rw [hL, hR]
-
-/-! ## The last message's openings -/
 
 theorem mapM_map_some {α β γ : Type} {f : β → Option γ} {g : α → β} {h : α → γ} (hf : ∀ a, f (g a) = some (h a)) :
     ∀ l : List α, (l.map g).mapM f = some (l.map h)
@@ -378,7 +340,6 @@ theorem readPieces_proofPieces (r : XR) (h : 0 < r.w.parts.length) {ws : List Cl
   rw [encList_eq, List.length_map, List.length_range]
   simp only [List.append_assoc]
 
-/-- **`elemR`'s pieces read as `encLast`** of the statement and each rep's proof off the witnesses. -/
 theorem readPieces_elemR (r : XR) {ws : List Claims.Flock.Wit} (hl : ws.length = r.w.parts.length)
     (h : 0 < r.w.parts.length) :
     readPieces ((elemR r).map fun p => (p.1.val, p.2)) ws =
@@ -389,9 +350,6 @@ theorem readPieces_elemR (r : XR) {ws : List Claims.Flock.Wit} (hl : ws.length =
   simp only [readPieces_proofPieces r h hl, encLast, encList_eq, List.length_map, List.length_range, List.flatMap_map,
     List.cons_append, List.append_assoc]
 
-/-! ## Every length fits its word -/
-
-/-- A schedule whose counts fit their words: at most 7 levels, each's `q` and `d` under `2^16` and `lanes` under 16. -/
 def Small (s : Flock.Schedule) : Prop :=
   s.levels.size ≤ 7 ∧ ∀ l ∈ s.levels, l.q < 2 ^ 16 ∧ l.lanes < 16 ∧ l.d < 2 ^ 16
 
@@ -451,7 +409,6 @@ theorem levelFits (u : Claims.Flock.Wit) (c : Circuit) {q LANES HH : ℕ} (k : �
     rw [FlockVBridge.Family.size_bytesAt]
     norm_num
 
-/-- Level `ℓ`'s counts at the inner statement fit 32 bits. -/
 theorem schR_fits (r : XR) (ℓ : ℕ) : ((schR r).levels[ℓ]!).q < 2 ^ 32 ∧
     2 ^ ((schR r).levels[ℓ]!).lanes < 2 ^ 32 ∧
     ((schR r).levels[ℓ]!).d - ((schR r).levels[ℓ]!).cap < 2 ^ 32 := by
@@ -474,7 +431,6 @@ theorem proofR_fits (r : XR) (ws : List Claims.Flock.Wit) (k : ℕ) : OpensFit (
     obtain ⟨i, -, rfl⟩ := List.mem_map.1 hq'
     exact levelProof_fits r ws k (i + 1)
 
-/-- **`rdR` reads `elemR`'s pieces back**: the statement, and each rep's proof's openings. -/
 theorem rdR_elemR (r : XR) {ws : List Claims.Flock.Wit} (hl : ws.length = r.w.parts.length)
     (h : 0 < r.w.parts.length) :
     rdR (readPieces ((elemR r).map fun p => (p.1.val, p.2)) ws) =
@@ -493,8 +449,6 @@ theorem rdR_elemR (r : XR) {ws : List Claims.Flock.Wit} (hl : ws.length = r.w.pa
     obtain ⟨k, -, rfl⟩ := List.mem_map.1 hp
     exact proofR_fits r ws k
 
-/-! ## The openings a level opens -/
-
 theorem openAt_caps (p : Flock.LigeritoProof) (c : Array (Array ByteArray)) (R ℓ : ℕ) :
     openAt { p with recursiveCaps := c } R ℓ = openAt p R ℓ := by
   unfold openAt
@@ -506,7 +460,6 @@ theorem openAt_opensOf (p : Flock.Proof) (R ℓ : ℕ) :
   unfold openAt opensOf opensOnly
   split_ifs <;> exact ⟨rfl, rfl⟩
 
-/-- **Level `ℓ`'s openings in rep `k`'s proof** are `levelProof`'s, at every level of the schedule. -/
 theorem openAt_proofR (r : XR) (ws : List Claims.Flock.Wit) (k : ℕ) {ℓ : ℕ} (hℓ : ℓ < (schR r).levels.size) :
     (openAt (proofR r ws k).ligerito ((schR r).levels.size - 1) ℓ).1 = (levelProof r ws k ℓ).rows ∧
       (openAt (proofR r ws k).ligerito ((schR r).levels.size - 1) ℓ).2.1 = (levelProof r ws k ℓ).siblings := by
@@ -531,7 +484,6 @@ theorem openAt_proofR (r : XR) (ws : List Claims.Flock.Wit) (k : ℕ) {ℓ : ℕ
     subst e
     exact ⟨rfl, rfl⟩
 
-/-- The rows' `j`-th, at a query of the level. -/
 theorem lvlRows_get (u : Claims.Flock.Wit) (c : Circuit) {q j : ℕ} (LANES k : ℕ) (hj : j < q) :
     (lvlRows u c q LANES k)[j]! = elems (colBits u c (k * q + j)) 0 LANES := by
   rw [getElem!_pos (lvlRows u c q LANES k) j (by simpa [lvlRows] using hj)]
@@ -555,7 +507,6 @@ theorem take_drop_blocks {β : Type} (g : ℕ → List β) {H : ℕ} (hg : ∀ j
       exact take_drop_blocks g hg q j h
     · rw [List.drop_left' hlen, List.take_of_length_le (le_of_eq (hg _))]
 
-/-- The siblings' `j`-th block, at a query of the level. -/
 theorem sibsOf_lvlSibs (u : Claims.Flock.Wit) (c : Circuit) {q j : ℕ} (LANES HH k : ℕ) (hj : j < q) :
     Flock.sibsOf (lvlSibs u c q LANES HH k) HH j =
       (List.range HH).map fun h => bytesAt (colBits u c (k * q + j)) (128 * LANES + 512 * h) 64 := by
@@ -563,8 +514,6 @@ theorem sibsOf_lvlSibs (u : Claims.Flock.Wit) (c : Circuit) {q j : ℕ} (LANES H
   rw [Array.toList_extract, List.extract_eq_take_drop, List.toList_toArray, show j * HH + HH - j * HH = HH by omega]
   exact take_drop_blocks (fun j => (List.range HH).map fun h =>
     bytesAt (colBits u c (k * q + j)) (128 * LANES + 512 * h) 64) (fun _ => by simp) q j hj
-
-/-! ## A part's pieces are its witness's -/
 
 theorem foldl_keep (w : Claims.Flock.Wit) (s : ℕ) :
     ∀ (l : List (ℕ × List (Msg × List HmNets.Lin))) (o : ℕ) (acc : List (ℕ × Msg)) (e : ℕ × Msg), e ∈ acc →
@@ -597,7 +546,6 @@ theorem foldl_at (w : Claims.Flock.Wit) (s : ℕ) (p : ℕ × List (Msg × List 
       (if q.1 = s then acc ++ [(o, readSegs w q.2)] else acc)
     simpa [Nat.add_assoc] using this
 
-/-- **Each of a round's pieces at part `s` is among part `s`'s**, at its offset (`LayoutB.mem_piecesOf`'s converse). -/
 theorem piecesOf_mem {L : LayoutB} {x : Msg} {s : ℕ} {w : Claims.Flock.Wit} {i : ℕ}
     {pre post : List (ℕ × List (Msg × List HmNets.Lin))} {p : ℕ × List (Msg × List HmNets.Lin)}
     (hl : L.pieceAt x i = pre ++ p :: post) (hp : p.1 = s) :
@@ -606,8 +554,6 @@ theorem piecesOf_mem {L : LayoutB} {x : Msg} {s : ℕ} {w : Claims.Flock.Wit} {i
   rw [hl]
   simpa using foldl_at w s p hp post pre 0 []
 
-/-- **A part's piece of an assembled round reads the same off its staged witness as off its own**: the round agrees
-with part `s`'s pieces at `w` (`Agrees`' second conjunct) and is assembled off `ws`. -/
 theorem readSegs_piece {L : LayoutB} {x : Msg} {s : ℕ} {w : Claims.Flock.Wit} {ws : List Claims.Flock.Wit} {i : ℕ}
     (hA : ∀ i < L.rounds x, ∀ o m, (o, m) ∈ L.piecesOf x s w i →
       (((L.msgs x ws).getD i []).drop o).take m.length = m)
@@ -624,8 +570,6 @@ theorem readSegs_piece {L : LayoutB} {x : Msg} {s : ℕ} {w : Claims.Flock.Wit} 
   rw [hlen] at h1
   exact h1.symm.trans h2
 
-/-- **The last round at a dense compiled statement**: it is in range, the statement doesn't fix it, and its pieces are
-the openings then `restR elem`'s (`lastAt_parts`'). -/
 theorem lastPieces (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))) {x : Msg}
     (hx : DenseX x) :
     ∃ r, readX x = some r ∧ kI x - 1 < (layAt (restR elem)).rounds x ∧
@@ -664,8 +608,6 @@ theorem mem_proofPieces (r : XR) (h : 0 < r.w.parts.length) (k : ℕ) {ℓ : ℕ
       subst e
       simp
 
-/-! ## `CopyOpensR` at `elemR` -/
-
 theorem stmtOf_xIOf {x : Msg} {st : Claims.Recursion.CompiledStatement} (hst : parse x = some st) {r : XR}
     (hr : readX x = some r) : xIOf x = stmtOf r := by
   obtain ⟨r', hr', ha, rfl⟩ := parse_read hst
@@ -674,7 +616,6 @@ theorem stmtOf_xIOf {x : Msg} {st : Claims.Recursion.CompiledStatement} (hst : p
   have hx : xIOf x = r.w.inner := by unfold xIOf; rw [hst]; rfl
   rw [hx, stmtOf, ite_eq_left ha]
 
-/-- **A copy's columns are `colForm`'s**, at its part's circuit, at a one-table statement. -/
 theorem copyOf_colBits {p : _root_.Flock.Readable.Parsed} (ht : 0 < p.sts.size) (hsz : p.sts.size = 1)
     {c : Circuit} (hc : p.sts[0].c = c) (w : Claims.Flock.Wit) (n : ℕ) :
     _root_.Flock.Readable.copyOf p 0 ht w (n / p.sts[0]!.c.g) (n % p.sts[0]!.c.g) 0 = colBits w c n := by
@@ -687,7 +628,6 @@ theorem copyOf_colBits {p : _root_.Flock.Readable.Parsed} (ht : 0 < p.sts.size) 
     simp
   · rw [formBit_const]
 
-/-- **`encLevel` reads back**: two witnesses whose level openings encode alike open the same rows and siblings. -/
 theorem lvl_eq {u v : Claims.Flock.Wit} {c : Circuit} {q LANES HH : ℕ} (k : ℕ) (hq : q < 2 ^ 32)
     (hL : LANES < 2 ^ 32) (hH : HH < 2 ^ 32)
     (h : encLevel (lvlRows u c q LANES k) (lvlSibs u c q LANES HH k) #[] =
@@ -703,11 +643,6 @@ theorem lvl_eq {u v : Claims.Flock.Wit} {c : Circuit} {q LANES HH : ℕ} (k : �
 variable (H : Msg → Msg) (D : Claims.Recursion.Deploy Coin) (shape : Claims.Recursion.Form → Prop)
   (untr : TrReader) (b : Brings) (cmt : Msg → ℕ → Msg → Msg) (L : LayoutB)
 
-/-- **`CopyOpensR` at `elemR`**: at a layout with `layAt (restR elemR)`'s rounds, messages and pieces (`layR elemR`),
-the deployed bound record `bdR`, `sideAtR rdR` and pieces in range, each piece's copy reads
-the row and siblings the last message opens. The last message is `elemR`'s pieces (`finalR_last`), which `rdR` reads
-back as each rep's openings off the witnesses (`rdR_elemR`); part `s`'s are its staged witness's (`readSegs_piece`),
-and those are its copy's columns (`copyOf_colBits`). -/
 theorem copyOpensR_elemR (pieces : Msg → List OpenPiece) (hP : ∀ x, D.parse x = parse x)
     (hS : ∀ f, shape f → Claims.Recursion.Form.Dense f) (hN : ∀ x, D.nS x = nS x)
     (hLr : ∀ x, L.rounds x = (layAt (restR elemR)).rounds x)
@@ -725,7 +660,6 @@ theorem copyOpensR_elemR (pieces : Msg → List OpenPiece) (hP : ∀ x, D.parse 
   have hxs : xIOf x = stmtOf r := stmtOf_xIOf hx' hr
   have hn : nS x = r.w.parts.length := by simp [nS, hr]
   have hl : ws.length = r.w.parts.length := by rw [hJ.1, hN, hn]
-  -- the piece's part and level
   obtain ⟨h0, r', ss', hr', hss', L', H', n', hsv'⟩ := ownQR_some ho
   rw [hr] at hr'
   cases hr'
@@ -743,7 +677,6 @@ theorem copyOpensR_elemR (pieces : Msg → List OpenPiece) (hP : ∀ x, D.parse 
   have hsp : s < r.w.parts.length := by omega
   have hpos : 0 < r.w.parts.length := by omega
   have hsw : s < ws.length := by omega
-  -- the staged copy
   obtain ⟨hxO, -, -, hAg, -, -, -, -, hSP⟩ := hst
   obtain ⟨p', r'', sv, hxO', htyp, hpi, _, _, h0p, _⟩ := stagedTables hSP
   rw [hxO] at hxO'
@@ -753,7 +686,6 @@ theorem copyOpensR_elemR (pieces : Msg → List OpenPiece) (hP : ∀ x, D.parse 
   have hpe : p = { i0.base.read with sts := sts0 } := Option.some.inj (hxO.symm.trans (parse_of_setupO hsu))
   have hsz : p.sts.size = 1 := by rw [hpe]; exact (oneFull_staged hSP hsu).1
   have hcirc : circOf r s = cc := by unfold circOf; rw [hpc']; rfl
-  -- the inner statement sets up at one table: two proofs, and `k ≥ 2`
   obtain ⟨r2, rs, s0, spec, st0, hr2, -, hset, -, -, hkI⟩ := schedBridge hD
   rw [hr] at hr2
   cases hr2
@@ -761,7 +693,6 @@ theorem copyOpensR_elemR (pieces : Msg → List OpenPiece) (hP : ∀ x, D.parse 
     unfold nProofs tablesR
     rw [← hxs, hset]
     simp
-  -- the last message
   have hfn' : finalR (((layAt (restR elemR)).msgs x ws).getD (kI x - 1) []) = some (os, last) := by
     have h := hfn
     rw [hLm] at h
@@ -781,7 +712,6 @@ theorem copyOpensR_elemR (pieces : Msg → List OpenPiece) (hP : ∀ x, D.parse 
     cases os with
     | nil => rw [List.length_nil] at hos'; omega
     | cons o₀ ot => exact ⟨o₀, ot, rfl⟩
-  -- the side's proof
   have hsetI : FlockDeploy.setupOf false (Claims.Recursion.xI D x) = some (s0, spec, #[st0]) := by rw [hxI]; exact hset
   have hop : bdR.opened (o₀ :: ot) last = (o₀ :: ot).map (fun o => joinR (o.map Prod.fst)) ++ [last] := rfl
   have hlig : ∀ R ℓ, openAt (sideAtR rdR (Claims.Recursion.xI D x) (bdR.opened (o₀ :: ot) last) q).lig R ℓ =
@@ -801,7 +731,6 @@ theorem copyOpensR_elemR (pieces : Msg → List OpenPiece) (hP : ∀ x, D.parse 
     unfold ligR
     rw [hsetI, hgl, hh, ht']
     exact openAt_caps _ _ R ℓ
-  -- the level's openings
   have hq0 : q.table = 0 := h0
   have hsch : (sideAtR rdR (Claims.Recursion.xI D x) (bdR.opened (o₀ :: ot) last) q).sch = schR r := by
     show schAt (Claims.Recursion.xI D x) q.table = schAt (stmtOf r) 0
@@ -821,7 +750,6 @@ theorem copyOpensR_elemR (pieces : Msg → List OpenPiece) (hP : ∀ x, D.parse 
     simp
   obtain ⟨hO1, hO2⟩ := openAt_opensOf (proofR r ws q.rep) ((schR r).levels.size - 1) q.level
   obtain ⟨hP1, hP2⟩ := openAt_proofR r ws q.rep hℓ
-  -- part `s`'s pieces read off `w`
   obtain ⟨r3, hr3, hiR, hfx, hpcs⟩ := lastPieces elemR hD
   rw [hr] at hr3
   cases hr3
@@ -856,7 +784,6 @@ theorem copyOpensR_elemR (pieces : Msg → List OpenPiece) (hP : ∀ x, D.parse 
     rw [← encLevel_levelSegs, ← encLevel_levelSegs]
     exact hseg
   obtain ⟨hRw, hSw⟩ := lvl_eq q.rep hfit.1 hfit.2.1 hfit.2.2 hseg'
-  -- the copy's columns
   have hcopy : copyR (Claims.Recursion.xI D x) w p ht q =
       colBits w (circOf r q.level) (q.rep * ((schR r).levels[q.level]!).q + q.query) := by
     unfold copyR copyAtR qAt
@@ -877,8 +804,6 @@ theorem copyOpensR_elemR (pieces : Msg → List OpenPiece) (hP : ∀ x, D.parse 
     rw [← hwA, ← hSw, sibsOf_lvlSibs _ _ _ _ _ hqq, hLr', hHr']
     rfl
 
-/-- **`CopyOpensR` at the layout of record `layR elemR`**: its rounds, messages and pieces are `layAt (restR elemR)`'s
-(`layR` adds only calls). -/
 theorem copyOpensR_layR (pieces : Msg → List OpenPiece) (hP : ∀ x, D.parse x = parse x)
     (hS : ∀ f, shape f → Claims.Recursion.Form.Dense f) (hN : ∀ x, D.nS x = nS x) (hrange : PiecesInRangeR pieces) :
     CopyOpensR H D shape untr b cmt (layR elemR) bdR (sideAtR rdR) pieces :=

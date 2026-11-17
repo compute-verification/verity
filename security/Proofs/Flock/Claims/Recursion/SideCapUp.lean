@@ -40,27 +40,7 @@ import Proofs.Flock.Claims.Recursion.RestFinal
 import Proofs.Flock.Claims.Recursion.RestLens
 import Proofs.Flock.Claims.Recursion.TopsOpens
 
-/-!
-# The reader's caps above level 0 (`SideCapUp`), at the deployed `finalR` and `DeployedR.layR`
-
-Above level 0 a piece's cap is the side's `recursiveCaps[ℓ - 1]` (`FlockSoundness.Refine.capAt`), which `ligR` reads
-off the opened messages as `topGroups`: rep `k`'s stream rounds' rows, each round cut at its tops' node counts. At the
-deployed last message those rows are the rounds' openings (`openPieces`), so the groups are RecCap parts' `top` rows:
-
-* `finalR` cuts every stream round `j` at its openings' row lengths (`openLens`), and reads back the rows the
-  openings read off the witnesses (`cutRound_segs`, `cutRound_pieces`, `cutRounds_pieces`, `opened_rows`);
-* round `j = k R + i`'s rows start with its tops' openings, the `e`-th at the later cap's part
-  `capsFrom + topsBefore rs i + e` over rep `k`'s instances `k n + t` (`capOpenAt`), so cutting at the round's top
-  sizes gives exactly those blocks (`round_cut`), and rep `k`'s groups are the blocks of its rounds in order
-  (`topGroups_rep`);
-* group `g` is round `i`'s top `e` with `g = topsBefore rs i + e`, the schedule's `g`-th top of `n` nodes
-  (`topSizes_at`), at V\*'s later cap `.cap (g + 1) (2n)` (`capStmt_at`), and `n = 2^cap` at level `g + 1` of
-  `fast100`'s schedule (`topSize_cap`), which `capFirst` reads.
-
-`capEntry_up` is `CapEntryR` above level 0 at every reading of the deployed last message where the last step reads it.
-`sideCapUp_of` gives `SideCapUp` at SHA-512, `layR elem` and the bound record at `finalR` from `ReadsAt` and
-the opened position's range (`PosCapUp`), and `sideCapR_deployed` puts it with level 0 (`sideCapR_of`).
--/
+/-! The reader's caps above level 0 (`SideCapUp`) at the deployed `finalR` and `DeployedR.layR`. -/
 
 @[expose] public section
 
@@ -72,8 +52,6 @@ open FlockDeploy (Coin FinalP nodeOf)
 open Claims.Recursion.VStarB
 open RecDeploy.OpenLower (AtPieces AtOpened sideAtR capR ligR ownQR)
 open RecDeploy.RestRead (DenseX)
-
-/-! ## Lists -/
 
 theorem flatMap_congr_mem {α β : Type} {l : List α} {f g : α → List β} (h : ∀ a ∈ l, f a = g a) :
     l.flatMap f = l.flatMap g := by
@@ -121,7 +99,6 @@ theorem toList_range_getD {α : Type} [Inhabited α] (a : Array α) :
     a.toList = (List.range a.size).map (a.getD · default) := by
   rw [← take_toList_range a (Nat.le_refl _), List.take_of_length_le (by simp)]
 
-/-- Cutting blocks laid end to end at their own lengths gives the blocks back, whatever follows. -/
 theorem cutLens_blocks {α : Type} : ∀ (bs : List (List α)) (rest : List α),
     FlockDeploy.cutLens (bs.map List.length) (bs.flatten ++ rest) = bs
   | [], _ => rfl
@@ -129,7 +106,6 @@ theorem cutLens_blocks {α : Type} : ∀ (bs : List (List α)) (rest : List α),
     simp only [List.map_cons, List.flatten_cons, FlockDeploy.cutLens, List.append_assoc, List.take_left',
       List.drop_left', cutLens_blocks bs rest]
 
-/-- **Two reps' rounds cut at their counts**: rep `k`'s are the `k`-th `R`. -/
 theorem cutLens_reps {α : Type} (f : ℕ → α) (R : ℕ) {k : ℕ} (hk : k < 2) :
     (FlockDeploy.cutLens [R, R] ((List.range (2 * R)).map f)).getD k [] = (List.range R).map fun i => f (k * R + i) := by
   have e : 2 * R = R + R := by omega
@@ -144,7 +120,6 @@ theorem caps_get! {α : Type} [Inhabited α] {L : List (List α)} {g : ℕ} {b :
   rw [getElem!_pos _ g (by simpa using hg)]
   simp
 
-/-- The tops before round `i` are its earlier rounds' top counts. -/
 theorem topsBefore_sum (rs : Array RecVStar.SchedRound) {i : ℕ} (hi : i ≤ rs.size) :
     topsBefore rs i = ((List.range i).map fun k => ((rs.getD k default).2.1).size).sum := by
   unfold topsBefore
@@ -157,9 +132,6 @@ theorem topSizes_sum (rs : Array RecVStar.SchedRound) :
   unfold topsBefore RecVStar.topSizes
   rw [List.take_of_length_le (by simp)]
 
-/-! ## Cutting the openings back -/
-
-/-- Openings that are rows, each followed by a salt of `saltBytes` bytes. -/
 def SaltSegs : List (Msg × List HmNets.Lin) → Prop
   | [] => True
   | [_] => False
@@ -168,7 +140,6 @@ def SaltSegs : List (Msg × List HmNets.Lin) → Prop
 theorem saltSegs_cons (a b : Msg × List HmNets.Lin) (t : List (Msg × List HmNets.Lin)) :
     SaltSegs (a :: b :: t) ↔ pieceLen [b] = Hm96.sha512.saltBytes ∧ SaltSegs t := Iff.rfl
 
-/-- The rows of such openings, read off `w`. -/
 def segRows (w : Claims.Flock.Wit) : List (Msg × List HmNets.Lin) → List Msg
   | a :: _ :: t => readSegs w [a] :: segRows w t
   | _ => []
@@ -176,8 +147,6 @@ def segRows (w : Claims.Flock.Wit) : List (Msg × List HmNets.Lin) → List Msg
 theorem segRows_cons (w : Claims.Flock.Wit) (a b : Msg × List HmNets.Lin) (t : List (Msg × List HmNets.Lin)) :
     segRows w (a :: b :: t) = readSegs w [a] :: segRows w t := rfl
 
-/-- **`cutRound` reads openings back**: at their row lengths, the bytes read off `w` are the rows, each then its salt,
-and the cut goes on into what follows. -/
 theorem cutRound_segs (w : Claims.Flock.Wit) : ∀ (segs : List (Msg × List HmNets.Lin)), SaltSegs segs →
     ∀ {L : List ℕ} {more : Msg} {qs : List (Msg × Salt)} {rest : Msg},
       DeployedR.cutRound L more = some (qs, rest) →
@@ -221,11 +190,9 @@ theorem segRows_openSegs (w : Claims.Flock.Wit) (c : Circuit) (nm : String) (q :
     rw [e, segRows_cons, segRows_openSegs w c nm q ns, List.map_cons]
     simp [readSegs]
 
-/-- The rows a piece's openings read off its part's witness (none where the part has none). -/
 def pieceRows (ws : List Claims.Flock.Wit) (p : ℕ × List (Msg × List HmNets.Lin)) : List Msg :=
   (ws[p.1]?.map fun w => segRows w p.2).getD []
 
-/-- **`cutRound` reads pieces back**: pieces of parts, each rows and salts, read off the witnesses. -/
 theorem cutRound_pieces (ws : List Claims.Flock.Wit) : ∀ (ps : List (ℕ × List (Msg × List HmNets.Lin))),
     (∀ p ∈ ps, p.1 < ws.length ∧ SaltSegs p.2) →
     ∀ {L : List ℕ} {more : Msg} {qs : List (Msg × Salt)} {rest : Msg},
@@ -250,7 +217,6 @@ theorem cutRound_pieces (ws : List Claims.Flock.Wit) : ∀ (ps : List (ℕ × Li
     · rw [List.map_append, ho', ho, List.flatMap_cons]
       simp only [pieceRows, hw, Option.map_some, Option.getD_some]
 
-/-- **`cutRounds` reads rounds of pieces back**, round by round, and leaves what follows. -/
 theorem cutRounds_pieces (ws : List Claims.Flock.Wit) (f : ℕ → List (ℕ × List (Msg × List HmNets.Lin))) :
     ∀ (js : List ℕ), (∀ j ∈ js, ∀ p ∈ f j, p.1 < ws.length ∧ SaltSegs p.2) → ∀ (more : Msg),
       ∃ os, DeployedR.cutRounds (js.map fun j => (f j).flatMap fun p => DeployedR.rowLens p.2)
@@ -271,11 +237,6 @@ theorem cutRounds_pieces (ws : List Claims.Flock.Wit) (f : ℕ → List (ℕ × 
       simp only [DeployedR.cutRounds, hp, Option.bind_some, hc, Option.map_some]
     · rw [List.map_cons, hpr, ho, List.map_cons]
 
-/-! ## The opened messages' rows -/
-
-/-- **The stream rounds' opened rows**: at a dense compiled statement and witnesses one a part, wherever `finalR`
-reads the deployed last message, its first round is round 0's and each later round `j < 2R` is the rows stream round
-`j`'s openings read off the witnesses (`roundOpen`, `pieceRows`). -/
 theorem opened_rows (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))) {x : Msg}
     (hx : DenseX x) {ws : List Claims.Flock.Wit} (hl : ws.length = nS x) {os : List (List (Msg × Salt))} {last : Msg}
     (hf : DeployedR.finalR (RestRead.lastAt (DeployedR.restR elem) x ws) = some (os, last)) :
@@ -334,10 +295,6 @@ theorem opened_rows (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg
     Prod.mk.injEq] at hf
   exact ⟨r, rs, s0, spec, st, hr, hrs, hset, hm, hsc, ps, os', hf.1.symm, ho'⟩
 
-/-! ## A stream round's tops -/
-
-/-- **A top's openings read back its cap part's rows**: the `e`-th top of round `j = k R + i` is rep `k`'s `n` rows
-`k n + t` of `top` at the later cap's part, read off its witness. -/
 theorem capOpenAt_rows (r : XR) (rs : Array RecVStar.SchedRound) (ws : List Claims.Flock.Wit) {j e i k : ℕ}
     (hjm : j % rs.size = i) (hjd : j / rs.size = k) {w : Claims.Flock.Wit}
     (hw : ws[capsFrom r rs + topsBefore rs i + e]? = some w) :
@@ -351,8 +308,6 @@ theorem capOpenAt_rows (r : XR) (rs : Array RecVStar.SchedRound) (ws : List Clai
   simp only [hw, Option.map_some, Option.getD_some, segRows_openSegs, List.map_map]
   all_goals rfl
 
-/-- **Round `j`'s rows cut at its tops' node counts are its tops' blocks**: round `j`'s openings are its tops' then
-its row's, each top's `n` rows at its cap part (`capOpenAt`), so the cut at the tops' sizes stops at the row. -/
 theorem round_cut {x : Msg} {r : XR} (hr : readX x = some r) {rs : Array RecVStar.SchedRound}
     (hrs : repSched r.shape = some rs) {ws : List Claims.Flock.Wit} (hl : ws.length = r.w.parts.length) {j i : ℕ}
     (hi : i < rs.size) (hji : j % rs.size = i) :
@@ -388,11 +343,9 @@ theorem round_cut {x : Msg} {r : XR} (hr : readX x = some r) {rs : Array RecVSta
     all_goals rfl
   rw [hsplit, ← hL, cutLens_blocks]
 
-/-- The nodes of the `e`-th top of stream round `k R + i`, as `ligR` reads them off the opened rows. -/
 def topNodes (r : XR) (rs : Array RecVStar.SchedRound) (ws : List Claims.Flock.Wit) (k i e : ℕ) : List ByteArray :=
   ((pieceRows ws (capOpenAt r rs (k * rs.size + i) e)).map fun m => (⟨m.toArray⟩ : ByteArray)).map nodeOf
 
-/-- **Rep `k`'s groups are its rounds' tops**, round by round, each top's nodes (`topNodes`). -/
 theorem topGroups_rep {x : Msg} {r : XR} (hr : readX x = some r) {rs : Array RecVStar.SchedRound}
     (hrs : repSched r.shape = some rs) {ws : List Claims.Flock.Wit} (hl : ws.length = r.w.parts.length) (k : ℕ) :
     FlockDeploy.topGroups rs.toList ((List.range rs.size).map fun i =>
@@ -409,10 +362,6 @@ theorem topGroups_rep {x : Msg} {r : XR} (hr : readX x = some r) {rs : Array Rec
     (by rw [Nat.add_comm, Nat.add_mul_mod_self_right, Nat.mod_eq_of_lt hi']), List.map_map]
   all_goals rfl
 
-/-! ## The later caps' sizes -/
-
-/-- **The schedule's `g`-th top has `2^cap` nodes at level `g + 1`** of `fast100`'s schedule at the inner `m`: V\*'s
-`g`-th later cap holds `2 · 2^cap` instances (`levelCapStatements`), and both reps' `n` nodes (`checkTopsListed`). -/
 theorem topSize_cap {x : Msg} {r : XR} (hr : readX x = some r) {rs : Array RecVStar.SchedRound}
     (hrs : repSched r.shape = some rs) {g n : ℕ} (hn : (RecVStar.topSizes rs)[g]? = some n) :
     ∃ s : _root_.Flock.Schedule, _root_.Flock.fast100 r.shape.m = some s ∧ n = 2 ^ (s.levels[g + 1]!).cap := by
@@ -433,8 +382,6 @@ theorem topSize_cap {x : Msg} {r : XR} (hr : readX x = some r) {rs : Array RecVS
     simp only [VStar.Stmt.instances] at hi
     omega
 
-/-! ## The reader's caps above level 0 -/
-
 theorem decR_rd_last {rd : Msg → Option FinalP} {x : Msg} {as : List Msg} {cs : List Coin} {d : FlockDeploy.DecR}
     (h : FlockDeploy.decR rd x as cs = some d) : ∃ fl, as.getLast?.bind rd = some fl := by
   simp only [FlockDeploy.decR, Option.bind_eq_bind, Option.pure_def] at h
@@ -445,7 +392,6 @@ theorem decR_rd_last {rd : Msg → Option FinalP} {x : Msg} {as : List Msg} {cs 
   obtain ⟨fl, hfl, -⟩ := Option.bind_eq_some_iff.1 h
   exact ⟨fl, by rw [ha, Option.bind_some]; exact (Option.filter_eq_some_iff.1 hfl).1⟩
 
-/-- **Where the last step reads the opened messages, `rd` reads the last one.** -/
 theorem readOk_last {rd : Msg → Option FinalP} {x : Msg} {ms : List Msg} {cs : List Coin}
     (h : FlockDeploy.ReadOkR rd x ms cs) : ∃ fl, ms.getLast?.bind rd = some fl := by
   unfold FlockDeploy.ReadOkR at h
@@ -466,12 +412,6 @@ theorem mapM_rowsOf_joinR : ∀ os : List (List (Msg × Salt)),
     rw [List.mapM_cons, FlockDeploy.rowsOf_joinR', mapM_rowsOf_joinR os]
     all_goals rfl
 
-/-- **The side's cap entry above level 0 is a later cap's `top` row's node**, at every reading of the deployed last
-message where `rd` reads its last message: at a level-`ℓ ≥ 1` piece of rep `k < 2` of table 0, the side's
-`recursiveCaps[ℓ - 1]` is rep `k`'s `(ℓ - 1)`-th group (`topGroups_rep`), round `i`'s top `e` with
-`ℓ - 1 = topsBefore rs i + e`, the rows `k n + t` of `top` at part `capsFrom + ℓ - 1`, V\*'s `.cap ℓ (2n)`
-(`capStmt_at`), with `n = 2^cap` at level `ℓ` (`topSize_cap`), so its entry at the opened node `t < n` is row
-`capIdx = k n + t`'s node. Each part has a circuit (`hcirc`, which the parts' acceptance gives: `staged_circuit`). -/
 theorem capEntry_up (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin)))
     (rd : Msg → Option FinalP) (posAt : Msg → List Coin → OpenPiece → ℕ) {x : Msg} (hx : DenseX x)
     {ws : List Claims.Flock.Wit} (hl : ws.length = nS x) {cs : List Coin} {HH : ℕ} {q : OpenPiece}
@@ -490,7 +430,6 @@ theorem capEntry_up (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg
   obtain ⟨vs, hvs, -⟩ := readX_statements hr
   obtain ⟨n, hgn, hlt⟩ := hpos r rs hr hrs
   have hl1 : q.level - 1 + 1 = q.level := by omega
-  -- the side's groups are rep `q.rep`'s rounds' tops
   have hrow0 : FlockDeploy.rowsOf
       (((o0 :: os').map (fun o => FlockDeploy.joinR (o.map Prod.fst)) ++ [last]).headD []) =
         some ((o0.map Prod.fst).map fun m => (⟨m.toArray⟩ : ByteArray)) :=
@@ -538,7 +477,6 @@ theorem capEntry_up (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg
       unfold ligR
       rw [hset, hlastb, hrow0, hrss] <;> rfl
     rw [h1, hk, hsched, hlens, hrssE, cutLens_reps _ _ hrep, topGroups_rep hr hrs hwl q.rep]
-  -- the group at `ℓ - 1` is round `i`'s top `e`
   have hlenG : ((List.range rs.size).flatMap fun i =>
       (List.range ((rs.getD i default).2.1).size).map (topNodes r rs ws q.rep i)).length =
         (RecVStar.topSizes rs).length := by
@@ -562,7 +500,6 @@ theorem capEntry_up (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg
   have hnT : ((rs.getD i default).2.1).getD e 0 = n := by
     rw [Array.getD_eq_getD_getElem?, Array.getElem?_eq_getElem he', Option.getD_some]
     exact (Option.some.inj hT).symm
-  -- its part, statement, circuit and witness
   have hS : capsFrom r rs + topsBefore rs i + e = capsFrom r rs + (q.level - 1) := by omega
   have hSlt : capsFrom r rs + (q.level - 1) < ws.length := by
     have := topsBefore_lt hi he'
@@ -585,7 +522,6 @@ theorem capEntry_up (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg
       (by rw [Nat.add_comm, Nat.add_mul_mod_self_right, Nat.mod_eq_of_lt hi])
       (by rw [Nat.add_comm, Nat.add_mul_div_right _ _ (by omega), Nat.div_eq_of_lt hi, Nat.zero_add])
       (by rw [hS]; exact hw'), hS, hc', Option.getD_some, hnT]
-  -- `capFirst` at the schedule's level `ℓ`
   obtain ⟨sc, hsc', hpow⟩ := topSize_cap hr hrs hgn
   rw [hl1] at hpow
   have hschAt : OpenLower.schAt (xIOf x) 0 = sc := by
@@ -610,7 +546,6 @@ theorem capEntry_up (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg
       List.getElem?_toArray, List.getElem?_map, List.getElem?_map, List.getElem?_range hlt, Option.map_some,
       Option.map_some, Option.getD_some]
 
-/-- The layout of record records every call `layAt` does. -/
 theorem allCalls_layAt_layR (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))) (x : Msg)
     (ws : List Claims.Flock.Wit) {e : Msg × Msg}
     (h : e ∈ (RestRead.layAt (DeployedR.restR elem)).allCalls x ws) : e ∈ (DeployedR.layR elem).allCalls x ws := by
@@ -628,19 +563,12 @@ variable (D : Claims.Recursion.Deploy Coin) (shape : Claims.Recursion.Form → P
   (untr : TrReader) (b : Brings) (cmt : Msg → ℕ → Msg → Msg) (L : LayoutB)
   (Bd : Claims.Recursion.Bound Coin (List FlockLevel3.GF128) Claims.Flock.PlainTrace) (rd : Msg → Option FinalP)
 
-/-- **The opened position above level 0 is one of its top's nodes**: at a piece of a level `ℓ ≥ 1`, one of its
-table's two reps, the opening's node (`posAt`, below `HH` siblings) is below the node count `n` of the schedule's
-`(ℓ - 1)`-th top. -/
 def PosCapUp (H : Msg → Msg) (pieces : Msg → List OpenPiece) (posAt : Msg → List Coin → OpenPiece → ℕ) : Prop :=
   AtPieces H D shape untr b cmt L pieces fun x c _ _ HH _ _ _ _ _ q => q.level ≠ 0 →
     q.rep < 2 ∧ ∀ (r : XR) (rs : Array RecVStar.SchedRound), readX x = some r → repSched r.shape = some rs →
       ∃ n, (RecVStar.topSizes rs)[q.level - 1]? = some n ∧
         posAt (Claims.Recursion.xI D x) ((List.range (Bd.DE.V.k (Claims.Recursion.xI D x))).map c) q >>> HH < n
 
-/-- **The reader above level 0 at the deployed layout and last message**: at SHA-512, `layR elem` and the bound
-record at `finalR` with rows joined by `joinR`, a piece of level `ℓ ≥ 1` has its cap entry at a later cap's `top` row
-(`capEntry_up`): the parts' acceptance gives each part a circuit, and `ReadsAt` that the last step reads
-the opened messages, at the calls `layR` records (`allCalls_layAt_layR`). -/
 theorem sideCapUp_of (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin)))
     (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
     (nextE : Msg → List Msg → List Coin → Claims.OC Out) (colsE : Claims.Seen → ℕ → List (ℕ × List FlockLevel3.GF128))
@@ -678,8 +606,6 @@ theorem sideCapUp_of (elem : (r : XR) → List (Fin r.w.parts.length × List (Ms
   obtain ⟨fl, hfl⟩ := readOk_last (hRd x hDx c ws hl hT os last hfin hos)
   exact capEntry_up elem rd posAt hDx hl hl0 htab hrep hpos hcirc hfin ⟨fl, by simpa using hfl⟩
 
-/-- **The reader at the deployed layout and last message** (`SideCapR`), at SHA-512: level 0 from its position range
-(`sideCapR_of`), the levels above from theirs and `ReadsAt` (`sideCapUp_of`). -/
 theorem sideCapR_deployed (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin)))
     (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
     (nextE : Msg → List Msg → List Coin → Claims.OC Out) (colsE : Claims.Seen → ℕ → List (ℕ × List FlockLevel3.GF128))

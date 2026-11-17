@@ -18,16 +18,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 import Proofs.Flock.Soundness.Discharge.DecodeZL.Sizes
 
-/-!
-# What a rep's frames fix of its proof, before Ligerito
-
-Two decoded proofs of one shape whose rep frames (`repFrames`) are the same carry the same values in every field the
-statement binding, the zerocheck, the lincheck and the ring switch absorb, and have the same Ligerito frames
-(`repFrames_fields`). The zerocheck's `finalC` is in no frame. With `rep_frames_bind` (`RepFramesBind`), two proofs that
-`verifyRep` accepts as one rep on one retained stream agree there (`rep_bind_fields`).
-
-Ligerito's fields from equal `ligFrames` are `RepFramesLig`'s; the openings and `initialCap` are in no frame.
--/
+/-! What a rep's frames fix of its proof before Ligerito; `finalC`, the openings and `initialCap` are in no frame. -/
 
 @[expose] public section
 
@@ -35,7 +26,6 @@ namespace FlockSoundness.Discharge.Exec
 
 open Flock Refine
 
-/-- Blocks of one length, one per index, are recovered from their concatenation. -/
 theorem flatMap_range'_inj {α : Type} {F G : ℕ → List α} :
     ∀ (n a : ℕ), (List.range' a n).flatMap F = (List.range' a n).flatMap G → (∀ i, (F i).length = (G i).length) →
       ∀ i, a ≤ i → i < a + n → F i = G i
@@ -70,7 +60,6 @@ theorem flatten_inj_len {α : Type} {s : ℕ} : ∀ {L L' : List (List α)}, L.l
     rw [h0, flatten_inj_len (by simpa using hl) (fun y hy => hs y (List.mem_cons_of_mem _ hy))
       (fun y hy => hs' y (List.mem_cons_of_mem _ hy)) hr]
 
-/-- **A cap of digests of one length is its concatenation.** -/
 theorem cap_inj {a a' : Array ByteArray} {s : ℕ} (hl : a.size = a'.size) (hs : ∀ e ∈ a, e.size = s)
     (hs' : ∀ e ∈ a', e.size = s)
     (h : a.foldl (· ++ ·) ByteArray.empty = a'.foldl (· ++ ·) ByteArray.empty) : a = a' := by
@@ -130,11 +119,8 @@ theorem rsFrames_inj {n : ℕ} {rs rs' : Array (Array F128)} (hs : rs.size = n) 
   simp only [List.cons.injEq, Frame.vec.injEq, true_and, and_true] at this
   simpa using this
 
-/-- A circuit's setup folds at its own `kLog`. -/
 theorem ofCircuit_fold_kLog (s : Stmt) : (Setup.ofCircuit s).fold.kLog = (Setup.ofCircuit s).kLog := rfl
 
-/-- **Two decoded proofs of one shape with one rep's frames agree before Ligerito**: the same cap, zerocheck but for
-`finalC`, lincheck and ring switches, and the same Ligerito frames. -/
 theorem repFrames_fields {st : Setup} {sch : Flock.Schedule} {nExtra : ℕ} {p p' : Proof}
     (hp : DecodeZL.ProofSizes (shapeOf st sch nExtra) p) (hp' : DecodeZL.ProofSizes (shapeOf st sch nExtra) p')
     (hk : st.fold.kLog = st.kLog) {domain : ByteArray} {T T' : F128}
@@ -152,9 +138,6 @@ theorem repFrames_fields {st : Setup} {sch : Flock.Schedule} {nExtra : ℕ} {p p
   refine ⟨hcap, ha, hb, hr, hA, hB, lcFrames_inj (by rw [hk]; exact hp.lcRounds) (by rw [hk]; exact hp'.lcRounds) h2,
     rsFrames_inj hp.rs hp'.rs h3, h4⟩
 
-/-- **Two reps accepted on one stream agree before Ligerito**: two proof files that `verifyRep` accepts as rep `r` of
-table `i` of one session, where the rep's stream retained every round's bytes, decode at one shape to proofs with the
-same cap, zerocheck but for `finalC`, lincheck and ring switches, and the same Ligerito frames. -/
 theorem rep_bind_fields (spec : SessionSpec) (st : Setup) (sch : Flock.Schedule) (sess : RunRecord) (i r : ℕ)
     (bytes bytes' cap cap' : ByteArray) (hm : 14 ≤ st.m) (hdim : DimSeam sch)
     (hlv : ∀ i < sch.levels.size, LevelSeam (sch.levels.getD i default)) (hk : st.fold.kLog = st.kLog)

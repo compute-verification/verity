@@ -41,42 +41,7 @@ import Proofs.Flock.Recursive.VStarCheck
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
 import Proofs.Flock.VBridge.Pinned
 
-/-!
-# The `rec-open` pieces' lowering at the deployed layout (`OpenCopy`, `OpenTie`)
-
-`openPieces_computes` reads a part's `rec-open` pieces off `PartAccepts`, from the layout fact `hcopy` (`OpenCopy`) and
-the registration ties `htie` (`OpenTie`). At the deployed layout neither holds in the form it takes them:
-
-* `hcopy` is handed only `L.RowsRead`, which says nothing at a layout whose messages carry no shared row (every
-  deployed one: `rowIn = none`). The copy's row and siblings are tied to the last message only by the part's pieces of
-  it (`LayoutB.Agrees`' second conjunct), which `hcopy` isn't given.
-* Both are asked at every `ms` agreeing with part `s` alone, but the side a piece opens against is read off the whole
-  last message (`finalR`'s trailer, `rdR`'s framing) and every opened round (`readRep`'s fit), and its top is the
-  RecCap part's. Other parts' bytes are free in such an `ms`. `DecompB` reads the parts' checks only at the parts' own
-  messages `L.msgs x ws`, every part accepting there (`decompB_of_joint`), where every piece is in place.
-
-So this file states the lowering in the form the deployed layout meets:
-
-* `Joint`, `decompB_of_joint`: `DecompB` at `chk'` from `DecompB` at `chk`, wherever every part's `chk'` at the parts'
-  own messages gives every part's `chk` there. `decompB_lastSplitP_sharesJ` is `decompB_lastSplitP_shares` with the
-  pieces' share asked there.
-* `openPieces_computesA`: `openPieces_computes` with one hypothesis `hopen`, given everything `partAccepts_staged`
-  names (the part's whole agreement `LayoutB.Agrees` among it) and naming the piece's copy, at which `OpenCopy` and
-  `OpenTie` hold.
-* The deployed choices: `ownQR` (a piece of table 0 at level `ℓ` to V\*'s statement `.recOpen ℓ …`), `copyAtR` (rep
-  `r`'s opening `j`, instance `r q + j`, at block `n / g`, VU `n % g`, copy 0 of the part's one table), and `sideAtR`
-  (the side `RecDeploy.Rows.sideAt` reads, without `readRep`'s choice: the table's schedule `schAt`, the cap of round
-  0's rows and the last message's proof with the recursive caps the rep's rounds commit, which is what `readRep` keeps
-  wherever it fits).
-* `OpenCopyR`, `OpenTieR`: the two facts at a layout `L`, bound record `Bd` and side `side` (`sideAtR rd`, or
-  `RecDeploy.Rows.sideAt`), at the parts' own messages with every part accepting. `openPieces_deployed` is
-  `PiecesComputes` at them.
-* `OpenCopy`'s level shape is proved (`levelMatch`: the level statement's `LANES`, `H` and `n` are `schAt`'s level's,
-  at a dense statement), so `OpenCopyR` follows from the side's schedule (`SideSchR`, `sideAtR`'s outright), the copy's
-  range (`CopyFitsR`) and its opened row and siblings (`CopyOpensR`) alone (`openCopyR_of`). `CopyFitsR` is the pieces'
-  range (`PiecesInRangeR`) and the staged circuit's capacity (`StagedFitsR`) (`copyFitsR_of`). `OpenTieR` is the
-  position bits (`CopyBitsR`, from check 5's `dirs` tie `CopyDirsR`: `copyBitsR_of`) and the top (`CopyTopR`).
--/
+/-! The `rec-open` pieces' lowering at the parts' own messages, the form the deployed layout meets, since `openPieces_computes`' `OpenCopy` and `OpenTie` don't hold there in the form it takes them. -/
 
 @[expose] public section
 
@@ -91,18 +56,12 @@ open FlockSoundness.Refine (openAt)
 open FlockVBridge.Family (bytesAt outCol plain)
 open RecDeploy.OpenedPlain (QueryOpens queryOpens_of_outs)
 
-/-! ## `DecompB` reads the parts' checks only at their own messages -/
-
-/-- **Every part's `chk` at the parts' own messages**: `nS` witnesses, their recorded calls true and free of
-collisions, and every part's check at the messages the layout reads off them. -/
 def Joint (H : Msg → Msg) (D : Claims.Recursion.Deploy Coin) (L : LayoutB)
     (chk : ℕ → Msg → (ℕ → Coin) → List Msg → Prop) (x : Msg) (c : ℕ → Coin) (ws : List Claims.Flock.Wit) : Prop :=
   ws.length = D.nS x ∧ (∀ e ∈ L.allCalls x ws, H e.1 = e.2) ∧ (Claims.findColl (L.allCalls x ws)).isSome = false ∧
     ∀ s < D.nS x, chk s x c (L.msgs x ws)
 
-/-- **`DecompB` is antitone in the parts' checks at their own messages**: it holds at `chk'` wherever it holds at
-`chk` and every part's `chk'` at the parts' own messages gives every part's `chk` there. A collision among the
-recorded calls is `DecompB`'s own second outcome, so `Joint` may assume none. -/
+/-- A collision among the recorded calls is `DecompB`'s own second outcome, so `Joint` may assume none. -/
 theorem decompB_of_joint {H : Msg → Msg} {D : Claims.Recursion.Deploy Coin} {IV : Claims.Verifier Coin}
     {L : LayoutB} {shape : Claims.Recursion.Form → Prop} {chk chk' : ℕ → Msg → (ℕ → Coin) → List Msg → Prop}
     (hle : ∀ (x : Msg) (st : Claims.Recursion.CompiledStatement), D.parse x = some st → shape st.form →
@@ -125,8 +84,6 @@ variable (H : Msg → Msg) (rd : Msg → Option FinalP) {Q : Type} (pieces : Msg
   (colsE : Claims.Seen → ℕ → List (ℕ × List FlockLevel3.GF128)) (wE : Msg → ℝ)
   (rowIn : Msg → Msg) (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ)
 
-/-- **The composition with the pieces' share at the parts' own messages**: `decompB_lastSplitP_shares` with `hlowP`
-asked only where every part accepts at the parts' own messages (`Joint`), which is all `DecompB` reads. -/
 theorem decompB_lastSplitP_sharesJ (ownB : Msg → VerdictR → Option ℕ) (ownQ : Msg → Q → Option ℕ)
     (rel' : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (b : Brings) (L : LayoutB)
     (IV : Claims.Verifier Coin) (shape : Claims.Recursion.Form → Prop) {Col' T' : Type}
@@ -176,12 +133,6 @@ theorem decompB_lastSplitP_sharesJ (ownB : Msg → VerdictR → Option ℕ) (own
 
 end Compose
 
-/-! ## `openPieces_computes` at everything `PartAccepts` names -/
-
-/-- **The `rec-open` pieces' share at a level part, from everything `PartAccepts` names**: `openPieces_computes` with
-its two hypotheses as one, `hopen`, which is given what `partAccepts_staged` names at the part (the parsed statement,
-its tables and their copies, the agreement `LayoutB.Agrees`, the true and collision-free calls, the shown coins) and
-names, for each piece `ownQ` gives the part, the copy at which the piece's `OpenCopy` and `OpenTie` hold. -/
 theorem openPieces_computesA {H : Msg → Msg} {D : Claims.Recursion.Deploy Coin} {L : LayoutB}
     {shape : Claims.Recursion.Form → Prop} {untr : TrReader} {b : Brings} {cmt : Msg → ℕ → Msg → Msg} {s : ℕ}
     {x : Msg} {c : ℕ → Coin} {ms : List Msg}
@@ -239,16 +190,12 @@ theorem openPieces_computesA {H : Msg → Msg} {D : Claims.Recursion.Deploy Coin
     (_root_.Flock.Readable.copyOf p t ht w o g u) LANES HH
   exact queryOpens_of_outs (openOuts_plain hout) hrow.symm hsib (by rw [hrs, hLA]) (by rw [hsl, hHH]) hbits htop
 
-/-! ## The deployed choices -/
-
-/-- Whether a V\* statement is the circuit table's level `ℓ`. -/
 def isLevel (ℓ : ℕ) : VStar.Stmt → Bool
   | .recOpen l .. => l == ℓ
   | _ => false
 
-/-- **A piece's owner**: a piece of the inner session's one table (`table = 0`) at level `ℓ` goes to V\*'s statement
-`.recOpen ℓ …` (`RecVStar.statements`: the table's levels first, in level order). None at any other table, or where
-the statement reads no V\* list. -/
+/-- A piece of the inner session's table 0 at level `ℓ` goes to V\*'s statement `.recOpen ℓ …`; none at any other
+table, or where the statement reads no V\* list. -/
 def ownQR (x : Msg) (q : OpenPiece) : Option ℕ :=
   if q.table = 0 then
     (readX x).bind fun r => (_root_.Flock.RecVStar.statements r.shape).toOption.bind fun ss =>
@@ -261,26 +208,17 @@ def schAt (x : Msg) (t : ℕ) : Flock.Schedule :=
   | some v => (fast100 (tabsOf v.2.2)[t]!.m).getD default
   | none => default
 
-/-- The queries of level `ℓ` of the inner schedule at the inner statement `xI`: table 0's level `ℓ`'s `q`. -/
 def qAt (xI : Msg) (ℓ : ℕ) : ℕ := ((schAt xI 0).levels[ℓ]!).q
 
-/-- **A piece's copy** at a parsed level statement `p`: rep `r`'s opening `j` is instance `n = r · q + j`
-(`RecCoins.checkOpen`'s order), at block `n / g`, VU `n % g`, copy 0 of the part's one table (`rowHidden`). -/
 def copyAtR (p : _root_.Flock.Readable.Parsed) (xI : Msg) (q : OpenPiece) : ℕ × ℕ × ℕ :=
   let n := q.rep * qAt xI q.level + q.query
   (n / p.sts[0]!.c.g, n % p.sts[0]!.c.g, 0)
 
-/-- **The level-0 cap a piece opens against**: rep `k = 2 table + rep`'s table's level-0 top's nodes, the nodes of
-round 0's rows for the table (`nodeOf`, as `decR` reads its `r₀`; `repCtx`'s `cap0`, which `readRep` holds the proof's
-cap to: `FitsRep.cap`). -/
 def capR (x : Msg) (ms : List Msg) (q : OpenPiece) : Array ByteArray :=
   match setupOf false x, (rowsOf (ms.headD [])).map (List.map FlockDeploy.nodeOf) with
   | some v, some r₀ => ((repCtx v.2.1 v.2.2 default r₀ [] (2 * q.table + q.rep)).cap0).toArray
   | _, _ => default
 
-/-- **The Ligerito proof a piece opens**: rep `k = 2 table + rep`'s proof as the last message `rd` reads it (its
-openings, all `absorbedFrom` keeps of it), with the recursive caps the rep's rounds commit (`topGroups`, which
-`readRep` holds the proof's to: `FitsRep.tops`). -/
 def ligR (rd : Msg → Option FinalP) (x : Msg) (ms : List Msg) (q : OpenPiece) : Flock.LigeritoProof :=
   match setupOf false x, ms.getLast?.bind rd, rowsOf (ms.headD []), ms.tail.dropLast.mapM rowsOf with
   | some v, some fl, some r₀, some rss =>
@@ -289,17 +227,9 @@ def ligR (rd : Msg → Option FinalP) (x : Msg) (ms : List Msg) (q : OpenPiece) 
         ((cutLens (repLens v.2.1 v.2.2) rss).getD (2 * q.table + q.rep) [])).map List.toArray).toArray }
   | _, _, _, _ => default
 
-/-- **The side a `rec-open` piece reads, without `readRep`'s choice**: the table's schedule (`schAt`), the level-0
-cap (`capR`) and the opened proof (`ligR`). Where `readRep` fits, it keeps exactly these: `FitsRep.cap`,
-`FitsRep.tops`, and `absorbedFrom` keeps the last message's openings. -/
 def sideAtR (rd : Msg → Option FinalP) (x : Msg) (ms : List Msg) (q : OpenPiece) : OpenSide :=
   ⟨schAt x q.table, capR x ms q, ligR rd x ms q⟩
 
-/-! ## The level's shape, from the verifier's list -/
-
-/-- **The verifier's list at an inner shape with no RecSparse phase**: V\*'s statements at the inner shape's own
-`m`, `k_log` and claims (`statementsOf`), then the later levels' caps, the link table's part where the inner shape
-names one (`linkStatements`) and level 0's cap; candidate 3 has none (`candidate3_ok`). -/
 theorem statements_dense {i : _root_.Flock.RecVStar.Inner} {ss : Array VStar.Stmt}
     (h : _root_.Flock.RecVStar.statements i = .ok ss) (hsp : i.sparse = none) :
     ∃ A K L n, VStar.statementsOf ⟨i.m, i.kLog, i.claims⟩ i.holo = .ok A ∧
@@ -332,10 +262,6 @@ theorem statements_dense {i : _root_.Flock.RecVStar.Inner} {ss : Array VStar.Stm
   obtain rfl := (FlockC3.VStarList.candidate3_ok hC).1 hsp
   exact ⟨A, K, L, n, hA, hK, hL, by simp⟩
 
-/-- **A level statement of a public dense inner shape is its level's**: where the verifier's list at a public inner
-shape with no RecSparse phase has `.recOpen lv LANES HH n` at index `s`, it is V\*'s level `s` (`statements_eq`, the
-rest being inner parts, caps and the link table's part), at `fast100`'s schedule at the shape's `m`, over its two reps'
-queries. -/
 theorem recOpen_dense {i : _root_.Flock.RecVStar.Inner} {ss : Array VStar.Stmt}
     (h : _root_.Flock.RecVStar.statements i = .ok ss) (hsp : i.sparse = none) (hh : i.holo = false)
     {s lv LANES HH n : ℕ} (hsv : ss[s]? = some (.recOpen lv LANES HH n)) :
@@ -359,9 +285,6 @@ theorem recOpen_dense {i : _root_.Flock.RecVStar.Inner} {ss : Array VStar.Stmt}
     · simp at hm
     · rcases FlockC3.VStarList.tail_cases hK hL n0 _ hm with ⟨_, _, hlN⟩ | ⟨_, _, _, hlN⟩ <;> cases hlN
 
-/-- **The inner table's `m` is the inner shape's**, at a statement the reader reads: Flock's plain verifier sets the
-inner statement up as one table (`innerSetup_files`), whose `m` the setup's checks hold to the shape's
-(`checkShape_files`). -/
 theorem inner_m {x : Msg} {st : Claims.Recursion.CompiledStatement} (hst : parse x = some st) {r : XR} (hr : readX x = some r) :
     ∃ s spec t, setupOf false (xIOf x) = some (s, spec, #[t]) ∧ t.m = r.shape.m := by
   obtain ⟨r', hr', ha, rfl⟩ := parse_read hst
@@ -379,9 +302,6 @@ theorem inner_m {x : Msg} {st : Claims.Recursion.CompiledStatement} (hst : parse
   have hx : xIOf x = r.w.inner := by unfold xIOf; rw [hst]; rfl
   exact ⟨s, spec, t, by rw [hx]; exact hset, by rw [hm, ← e1]⟩
 
-/-- **`OpenCopy`'s level shape at a dense statement**: where the reader reads `x` at the dense form and its V\* list
-has `.recOpen lv LANES HH n` at `s`, the statement is level `s`'s, `LANES`, `HH` are table 0's schedule's (`schAt`)
-level `s`'s lanes and depth, and `n` is its two reps' queries (`recOpen_dense`, `inner_m`). -/
 theorem levelMatch {x : Msg} {st : Claims.Recursion.CompiledStatement} (hst : parse x = some st)
     (hd : Claims.Recursion.Form.Dense st.form) {r : XR} (hr : readX x = some r) {ss : Array VStar.Stmt}
     (hss : _root_.Flock.RecVStar.statements r.shape = .ok ss) {s lv LANES HH n : ℕ}
@@ -413,8 +333,6 @@ theorem levelMatch {x : Msg} {st : Claims.Recursion.CompiledStatement} (hst : pa
   rw [e]
   exact ⟨rfl, hL, hH, hn⟩
 
-/-- **`ownQR`'s owner of a piece is its level's statement**: where `ownQR` gives piece `q` part `s`, the piece is of
-table 0 and part `s`'s statement is a `.recOpen` at the piece's level. -/
 theorem ownQR_some {x : Msg} {q : OpenPiece} {s : ℕ} (ho : ownQR x q = some s) :
     q.table = 0 ∧ ∃ r ss, readX x = some r ∧ _root_.Flock.RecVStar.statements r.shape = .ok ss ∧
       ∃ LANES HH n, ss[s]? = some (.recOpen q.level LANES HH n) := by
@@ -439,8 +357,6 @@ theorem ownQR_some {x : Msg} {q : OpenPiece} {s : ℕ} (ho : ownQR x q = some s)
     | _ => intro h; simp [isLevel] at h
   · cases ho
 
-/-! ## The two facts at the deployed layout -/
-
 section Deployed
 
 variable (H : Msg → Msg) (D : Claims.Recursion.Deploy Coin) (shape : Claims.Recursion.Form → Prop)
@@ -448,8 +364,6 @@ variable (H : Msg → Msg) (D : Claims.Recursion.Deploy Coin) (shape : Claims.Re
   (Bd : Claims.Recursion.Bound Coin (List FlockLevel3.GF128) Claims.Flock.PlainTrace)
   (side : Msg → List Msg → OpenPiece → OpenSide)
 
-/-- **Part `s` accepts at its staged statement `xO` and witness `w`**, at messages `ms`: what `partAccepts_staged`
-names at a level part `sv`, with the outer check and the staging, that `openPieces_computesA`'s `hopen` is given. -/
 def StagedAt (s : ℕ) (x : Msg) (c : ℕ → Coin) (ms : List Msg) (sv : VStar.Stmt) (xO : Msg) (w : Claims.Flock.Wit)
     (p : _root_.Flock.Readable.Parsed) : Prop :=
   _root_.Flock.Readable.parseBytes readOfO xO = some p ∧ 0 < p.sts.size ∧ _root_.Flock.Readable.StmtCopies sv p w ∧
@@ -457,9 +371,6 @@ def StagedAt (s : ℕ) (x : Msg) (c : ℕ → Coin) (ms : List Msg) (sv : VStar.
     (Claims.findColl (L.calls x s w ++ vcallsAt H D xO)).isSome = false ∧ showsTr untr s x xO c ∧
     Claims.Flock.check (deployZkRec _root_.Flock.Readable.relation).parse xO w = true ∧ StagedPart b.st s x xO
 
-/-- **The context of a piece's facts at the deployed layout**: at a statement the record reads at the shape, at the
-parts' own messages with every part accepting (`Joint`), a level part `s` (`.recOpen lv LANES HH n`), its staged
-statement and witness, and a piece `ownQR` gives it. `Fact` is asked there, at the piece's copy `copyAtR`. -/
 abbrev AtPieces (pieces : Msg → List OpenPiece)
     (Fact : Msg → (ℕ → Coin) → List Claims.Flock.Wit → ℕ → ℕ → ℕ → (xO : Msg) → Claims.Flock.Wit →
       (p : _root_.Flock.Readable.Parsed) → 0 < p.sts.size → OpenPiece → Prop) : Prop :=
@@ -473,25 +384,20 @@ abbrev AtPieces (pieces : Msg → List OpenPiece)
     ∀ q ∈ pieces (Claims.Recursion.xI D x), ownQR x q = some s → ∀ ht : 0 < p.sts.size,
       Fact x c ws LANES HH s xO w p ht q
 
-/-- The copy `copyAtR` of piece `q` at the parsed statement `p`, at the witness `w`. -/
 abbrev copyR (xI : Msg) (w : Claims.Flock.Wit) (p : _root_.Flock.Readable.Parsed) (ht : 0 < p.sts.size)
     (q : OpenPiece) : ℕ → Bool :=
   _root_.Flock.Readable.copyOf p 0 ht w (copyAtR p xI q).1 (copyAtR p xI q).2.1 (copyAtR p xI q).2.2
 
-/-- What a piece's fact reads at every reading of the last message: the opened messages, at `Bd`. -/
 abbrev AtOpened (x : Msg) (ms : List Msg) (G : List Msg → Prop) : Prop :=
   ∀ os last, Bd.final (ms.getD (Bd.DE.V.k (Claims.Recursion.xI D x) - 1) []) = some (os, last) →
     os.length + 1 = Bd.DE.V.k (Claims.Recursion.xI D x) → G (Bd.opened os last)
 
-/-- **The copy is one of the statement's** (`CopyFitsR`): its block, VU and copy are in range. -/
 def CopyFitsR (pieces : Msg → List OpenPiece) : Prop :=
   AtPieces H D shape untr b cmt L pieces fun x _ _ _ _ _ _ _ p ht q =>
     (copyAtR p (Claims.Recursion.xI D x) q).1 < 2 ^ (p.sts[0].m - p.sts[0].c.kLog) ∧
       (copyAtR p (Claims.Recursion.xI D x) q).2.1 < p.sts[0].c.g ∧
       (copyAtR p (Claims.Recursion.xI D x) q).2.2 < p.sts[0].c.upv
 
-/-- **The copy reads the piece's opened row and siblings** (`CopyOpensR`, `OpenCopy`'s last two conjuncts), at
-`side` of every reading of the last message. -/
 def CopyOpensR (pieces : Msg → List OpenPiece) : Prop :=
   AtPieces H D shape untr b cmt L pieces fun x _ ws LANES HH _ _ w p ht q =>
     AtOpened D Bd x (L.msgs x ws) fun ms' =>
@@ -504,7 +410,6 @@ def CopyOpensR (pieces : Msg → List OpenPiece) : Prop :=
               ((side (Claims.Recursion.xI D x) ms' q).sch.levels[q.level]!).cap) q.query =
           _root_.Flock.Readable.openSibs (copyR (Claims.Recursion.xI D x) w p ht q) LANES HH
 
-/-- **The copy's position bits are the coins'** (`CopyBitsR`, `OpenTie`'s first conjunct). -/
 def CopyBitsR (pieces : Msg → List OpenPiece) (posAt : Msg → List Coin → OpenPiece → ℕ) : Prop :=
   AtPieces H D shape untr b cmt L pieces fun x c ws LANES HH _ _ w p ht q =>
     AtOpened D Bd x (L.msgs x ws) fun ms' =>
@@ -513,7 +418,6 @@ def CopyBitsR (pieces : Msg → List OpenPiece) (posAt : Msg → List Coin → O
         (_root_.Flock.Readable.openIdx (copyR (Claims.Recursion.xI D x) w p ht q) LANES HH).testBit h =
           (posAt (Claims.Recursion.xI D x) ((List.range (Bd.DE.V.k (Claims.Recursion.xI D x))).map c) q).testBit h
 
-/-- **The copy's top is the cap's entry at the position** (`CopyTopR`, `OpenTie`'s second conjunct). -/
 def CopyTopR (pieces : Msg → List OpenPiece) (posAt : Msg → List Coin → OpenPiece → ℕ) : Prop :=
   AtPieces H D shape untr b cmt L pieces fun x c ws LANES HH _ _ w p ht q =>
     AtOpened D Bd x (L.msgs x ws) fun ms' =>
@@ -524,9 +428,6 @@ def CopyTopR (pieces : Msg → List OpenPiece) (posAt : Msg → List Coin → Op
             (((side (Claims.Recursion.xI D x) ms' q).sch.levels[q.level]!).d -
               ((side (Claims.Recursion.xI D x) ms' q).sch.levels[q.level]!).cap)) ByteArray.empty
 
-/-- **The layout fact at the deployed layout** (U13's first half): the copy `copyAtR` is in range, and at every
-reading of the last message it is the level's (`LANES`, `HH`) and reads the piece's opened row and siblings at
-`side` (`OpenCopy`). -/
 def OpenCopyR (pieces : Msg → List OpenPiece) : Prop :=
   AtPieces H D shape untr b cmt L pieces fun x c ws LANES HH _ _ w p ht q =>
     (copyAtR p (Claims.Recursion.xI D x) q).1 < 2 ^ (p.sts[0].m - p.sts[0].c.kLog) ∧
@@ -535,8 +436,6 @@ def OpenCopyR (pieces : Msg → List OpenPiece) : Prop :=
       AtOpened D Bd x (L.msgs x ws) fun ms' =>
         OpenCopy (side (Claims.Recursion.xI D x) ms' q) q LANES HH (copyR (Claims.Recursion.xI D x) w p ht q)
 
-/-- **The registration ties at the deployed layout** (U13's second half): at the copy `copyAtR`, the position bits it
-reads are `posAt`'s and its climb's top is the cap's entry there, at `side` (`OpenTie`). -/
 def OpenTieR (pieces : Msg → List OpenPiece) (posAt : Msg → List Coin → OpenPiece → ℕ) : Prop :=
   AtPieces H D shape untr b cmt L pieces fun x c ws LANES HH _ _ w p ht q =>
     AtOpened D Bd x (L.msgs x ws) fun ms' =>
@@ -544,8 +443,6 @@ def OpenTieR (pieces : Msg → List OpenPiece) (posAt : Msg → List Coin → Op
         (posAt (Claims.Recursion.xI D x) ((List.range (Bd.DE.V.k (Claims.Recursion.xI D x))).map c) q)
         (copyR (Claims.Recursion.xI D x) w p ht q)
 
-/-- **The side reads the table's schedule** (`SideSchR`) at every reading of the last message: `sideAtR`'s always
-(`sideSchR_sideAtR`), `RecDeploy.Rows.sideAt`'s wherever its rep's proof fits. -/
 def SideSchR (pieces : Msg → List OpenPiece) : Prop :=
   AtPieces H D shape untr b cmt L pieces fun x _ ws _ _ _ _ _ _ _ q =>
     AtOpened D Bd x (L.msgs x ws) fun ms' =>
@@ -558,7 +455,6 @@ theorem sideSchR_sideAtR (rd : Msg → Option FinalP) (pieces : Msg → List Ope
   intros
   exact rfl
 
-/-- **`OpenTieR` is its two halves.** -/
 theorem openTieR_of (pieces : Msg → List OpenPiece) (posAt : Msg → List Coin → OpenPiece → ℕ)
     (hB : CopyBitsR H D shape untr b cmt L Bd side pieces posAt) (hT : CopyTopR H D shape untr b cmt L Bd side pieces posAt) :
     OpenTieR H D shape untr b cmt L Bd side pieces posAt :=
@@ -566,9 +462,6 @@ theorem openTieR_of (pieces : Msg → List OpenPiece) (posAt : Msg → List Coin
     And.intro (hB x st hx hf c ws hJ r ss s lv LANES HH n hr hss hsv xO w p hst q hq ho ht os last hfin hl)
       (hT x st hx hf c ws hJ r ss s lv LANES HH n hr hss hsv xO w p hst q hq ho ht os last hfin hl)
 
-/-- **The level a piece's side reads is its statement's**: at a dense statement the deployed reader reads, where
-`ownQR` gives piece `q` the level part `s` (`.recOpen lv LANES HH n`), the side's schedule's level `q.level` has
-`LANES` lanes and `HH` siblings below its cap (`levelMatch`), wherever the side reads the table's schedule. -/
 theorem sideLevel (hP : ∀ x, D.parse x = parse x) (hS : ∀ f, shape f → Claims.Recursion.Form.Dense f)
     {x : Msg} {st : Claims.Recursion.CompiledStatement} (hx : D.parse x = some st) (hf : shape st.form) {r : XR}
     {ss : Array VStar.Stmt} {s lv LANES HH n : ℕ} (hr : readX x = some r)
@@ -593,8 +486,6 @@ theorem sideLevel (hP : ∀ x, D.parse x = parse x) (hS : ∀ f, shape f → Cla
   rw [hsch, hxI, h0, hls]
   exact ⟨hL, hH⟩
 
-/-- **`OpenCopyR` from the copy's range and its opened row and siblings**, at the deployed reader's statements at
-the dense form: the level's shape is the statement's (`sideLevel`). -/
 theorem openCopyR_of (pieces : Msg → List OpenPiece) (hP : ∀ x, D.parse x = parse x)
     (hS : ∀ f, shape f → Claims.Recursion.Form.Dense f)
     (hSch : SideSchR H D shape untr b cmt L Bd side pieces) (hF : CopyFitsR H D shape untr b cmt L pieces)
@@ -609,8 +500,6 @@ theorem openCopyR_of (pieces : Msg → List OpenPiece) (hP : ∀ x, D.parse x = 
   unfold OpenCopy
   exact ⟨hL, hH, hrow, hsib⟩
 
-/-- **The pieces are in range** (`PiecesInRangeR`): each is of rep 0 or 1 and of one of its level's queries, at its
-table's schedule. `RecDeploy.Rows.rowDPieces`'s are (`mem_rowDPiecesOf`, where `Rows.schAt v.2.2` is `schAt`). -/
 def PiecesInRangeR (pieces : Msg → List OpenPiece) : Prop :=
   ∀ xI, ∀ q ∈ pieces xI, q.rep < 2 ∧ q.query < ((schAt xI q.table).levels[q.level]!).q
 
@@ -626,8 +515,6 @@ theorem piecesInRangeR_rowDPieces (key : ℕ → ℕ → ℕ → ℕ → ℕ × 
     obtain ⟨-, hr, -, hj, -⟩ := RecDeploy.Rows.mem_rowDPiecesOf.1 hq
     exact ⟨hr, hj⟩
 
-/-- **The staged level circuit holds its statement's instances** (`StagedFitsR`): at a level part `.recOpen lv LANES
-HH n` and its staged statement, the parsed table has a VU and a copy, and its blocks' VUs hold all `n` instances. -/
 def StagedFitsR : Prop :=
   ∀ (x : Msg) (st : Claims.Recursion.CompiledStatement), D.parse x = some st → shape st.form →
     ∀ (c : ℕ → Coin) (ms : List Msg) (r : XR) (ss : Array VStar.Stmt) (s lv LANES HH n : ℕ), readX x = some r →
@@ -636,10 +523,6 @@ def StagedFitsR : Prop :=
       StagedAt H D untr b cmt L s x c ms (.recOpen lv LANES HH n) xO w p → ∀ ht : 0 < p.sts.size,
       0 < p.sts[0].c.g ∧ 0 < p.sts[0].c.upv ∧ n ≤ p.sts[0].c.g * 2 ^ (p.sts[0].m - p.sts[0].c.kLog)
 
-/-- **A staged level circuit holds its statement's instances**: the setup's check makes the table's population the
-statement's `n` (`staged_scope`) and its instances at least that (`oneFull_staged`); V\*'s parse puts one unit in a VU
-(`checkParsed_ok`); and the setup has a VU and `2 ^ nbl` blocks of `g` VUs for its instances (`table_rows`), at
-`m = k_log + nbl` (`Layout.m`). -/
 theorem stagedFitsR : StagedFitsR H D shape untr b cmt L := by
   intro x st hx hf c ms r ss s lv LANES HH n hr hss hsv xO w p hst ht
   obtain ⟨hxO, -, -, -, -, -, -, hck, hS⟩ := hst
@@ -692,8 +575,6 @@ theorem stagedFitsR : StagedFitsR H D shape untr b cmt L := by
       omega
   omega
 
-/-- **`CopyFitsR` from the pieces' range and the staged circuit's capacity**: instance `rep · q + query` of a level
-part is below its statement's `n = 2 q` (`levelMatch`), which the staged table holds. -/
 theorem copyFitsR_of (pieces : Msg → List OpenPiece) (hP : ∀ x, D.parse x = parse x)
     (hS : ∀ f, shape f → Claims.Recursion.Form.Dense f) (hR : PiecesInRangeR pieces)
     (hC : StagedFitsR H D shape untr b cmt L) : CopyFitsR H D shape untr b cmt L pieces := by
@@ -723,38 +604,29 @@ theorem copyFitsR_of (pieces : Msg → List OpenPiece) (hP : ∀ x, D.parse x = 
   rw [Nat.div_lt_iff_lt_mul hg]
   exact lt_of_lt_of_eq hidx (Nat.mul_comm _ _)
 
-/-- **`CopyFitsR` at row D's pieces**, outright: `copyFitsR_of` at `piecesInRangeR_rowDPieces` and `stagedFitsR`. -/
 theorem copyFitsR_rowD (key : ℕ → ℕ → ℕ → ℕ → ℕ × ℕ × ℕ × ℕ) (hP : ∀ x, D.parse x = parse x)
     (hS : ∀ f, shape f → Claims.Recursion.Form.Dense f) :
     CopyFitsR H D shape untr b cmt L (RecDeploy.Rows.rowDPieces key) :=
   copyFitsR_of H D shape untr b cmt L _ hP hS (piecesInRangeR_rowDPieces key) (stagedFitsR H D shape untr b cmt L)
 
-/-- The column of a rec-open copy's position bit `h`, where `openIdx` reads it. -/
 def idxCol (LANES HH h : ℕ) : ℕ := 128 * LANES + 1024 * max 1 ((HH + 1) / 2) + 1024 + 256 * LANES + h
 
 theorem openIdx_testBit {v : ℕ → Bool} {LANES HH h : ℕ} (hh : h < HH) :
     (_root_.Flock.Readable.openIdx v LANES HH).testBit h = v (idxCol LANES HH h) := by
   simp [_root_.Flock.Readable.openIdx, idxCol, FlockVBridge.Family.testBit_natOfBits, hh]
 
-/-- **Check 5's `dirs` tie at a copy**: the copy's position columns hold `pos`'s `dirs` row (`RecCoins.dirsRow`, which
-`RecCoins.checkOpen` registers at each opening), 16 bits a word. -/
 def DirsTie (v : ℕ → Bool) (LANES HH pos : ℕ) : Prop :=
   ∀ h < HH, v (idxCol LANES HH h) = ((_root_.Flock.RecCoins.dirsRow pos HH)[h / 16]!).testBit (h % 16)
 
-/-- **The `dirs` tie gives the position's bits** (`bits_of_dirsRow`), at `HH ≤ 32`. -/
 theorem bits_of_dirsTie {v : ℕ → Bool} {LANES HH pos : ℕ} (hH : HH ≤ 32) (ht : DirsTie v LANES HH pos) :
     ∀ h < HH, (_root_.Flock.Readable.openIdx v LANES HH).testBit h = pos.testBit h :=
   bits_of_dirsRow hH fun k hk => (openIdx_testBit hk).trans (ht k hk)
 
-/-- **Check 5's `dirs` tie at the deployed layout** (`CopyDirsR`): the level's `HH` is at most 32 and the piece's copy
-holds the `dirs` row of the position `posAt` reads off the coins. -/
 def CopyDirsR (pieces : Msg → List OpenPiece) (posAt : Msg → List Coin → OpenPiece → ℕ) : Prop :=
   AtPieces H D shape untr b cmt L pieces fun x c _ LANES HH _ _ w p ht q =>
     HH ≤ 32 ∧ DirsTie (copyR (Claims.Recursion.xI D x) w p ht q) LANES HH
       (posAt (Claims.Recursion.xI D x) ((List.range (Bd.DE.V.k (Claims.Recursion.xI D x))).map c) q)
 
-/-- **A level part's `HH` is at most 32**: its staged table's unit is `rec-open/l<LANES>-h<HH>` (`stagedTables`),
-which the parser's unit check (`ParseFacts.recNet`) accepts only at a valid `LANES` and `HH` (`RecOpen.check_ok`). -/
 theorem hh_le_staged {st : Stage} {x : Msg} {r : XR} {ss : Array VStar.Stmt} {s lv LANES HH n : ℕ}
     (hr : readX x = some r) (hss : _root_.Flock.RecVStar.statements r.shape = .ok ss)
     (hsv : ss[s]? = some (.recOpen lv LANES HH n)) {xO : Msg} {p : _root_.Flock.Readable.Parsed}
@@ -776,8 +648,6 @@ theorem hh_le_staged {st : Stage} {x : Msg} {r : XR} {ss : Array VStar.Stmt} {s 
   simp only [_root_.Flock.RecOpen.valid, Bool.and_eq_true, decide_eq_true_eq] at hv
   exact hv.2
 
-/-- **Check 5's `dirs` tie at the copies** (`CopyDirsTieR`): `CopyDirsR` without `HH ≤ 32`, which the staged
-table's unit check gives (`hh_le_staged`). -/
 def CopyDirsTieR (pieces : Msg → List OpenPiece) (posAt : Msg → List Coin → OpenPiece → ℕ) : Prop :=
   AtPieces H D shape untr b cmt L pieces fun x c _ LANES HH _ _ w p ht q =>
     DirsTie (copyR (Claims.Recursion.xI D x) w p ht q) LANES HH
@@ -789,8 +659,6 @@ theorem copyDirsR_of (pieces : Msg → List OpenPiece) (posAt : Msg → List Coi
   exact ⟨hh_le_staged hr hss hsv hst.1 hst.2.2.2.2.2.2.2.2 ht,
     hD x st hx hf c ws hJ r ss s lv LANES HH n hr hss hsv xO w p hst q hq ho ht⟩
 
-/-- **`CopyBitsR` from check 5's `dirs` tie**, at the deployed reader's statements at the dense form: the side's
-`d − cap` is the statement's `HH` (`sideLevel`), and the tie spells the position's low `HH` bits (`bits_of_dirsTie`). -/
 theorem copyBitsR_of (pieces : Msg → List OpenPiece) (posAt : Msg → List Coin → OpenPiece → ℕ)
     (hP : ∀ x, D.parse x = parse x) (hS : ∀ f, shape f → Claims.Recursion.Form.Dense f)
     (hSch : SideSchR H D shape untr b cmt L Bd side pieces) (hD : CopyDirsR H D shape untr b cmt L Bd pieces posAt) :
@@ -802,9 +670,6 @@ theorem copyBitsR_of (pieces : Msg → List OpenPiece) (posAt : Msg → List Coi
   intro h hh
   exact bits_of_dirsTie hH32 htie h (by rw [hH]; exact hh)
 
-/-- **The `rec-open` pieces' share at the deployed layout**: at the parts' own messages, every part accepting, each
-piece `ownQR` gives part `s` holds (`openHolds` at `side` and `posAt`), from `OpenCopyR` and `OpenTieR`. A
-part that is no level part is given no piece. -/
 theorem openPieces_deployed (pieces : Msg → List OpenPiece) (posAt : Msg → List Coin → OpenPiece → ℕ)
     (hC : OpenCopyR H D shape untr b cmt L Bd side pieces) (hT : OpenTieR H D shape untr b cmt L Bd side pieces posAt)
     {x : Msg} {st : Claims.Recursion.CompiledStatement} (hx : D.parse x = some st) (hf : shape st.form) {c : ℕ → Coin}

@@ -3,30 +3,7 @@ module
 public import Proofs.Core.Rec
 public import Proofs.Flock.Claims.Recursion.SeqDeployStop
 
-/-!
-# The deployed recursion as a `Rec.system`, and its release
-
-The deployed recursion at SHA-512 with the inner prover that commits (`zkStop_deployRecMStop_commit_sha512`'s record)
-is `Verity.Rec.system 𝔒 𝔊 go` at the continuation test `go = fun _ _ => Claims.Recursion.goesOn`, so its `ZKStop` is
-`Verity.SecurityProofs.RecZK`'s conclusion read at the record.
-
-* `recOuter`: the outer system `O`, Flock's `--zk` session at the recursive setup on its own coins (`G.prover`,
-  `(G.withSim Mc).simulatorE`), of `VO.k + 1` rounds.
-* `recCompiled`: the compiled recursion `G`, the deployed first part (`preP` at `preTape`, `preOf`; the stage message
-  `stgOf`; the stop `sR`) and the V\* sessions (`xsOf`, `wit`, `nums`).
-* `RecZK`'s four premises at the deployed objects: `O`'s zero knowledge (`recOuter_zk`, Flock's at the session's
-  tables), the first part's commit strings (`recCompiled_commits`), each session's public shape (`recCompiled_byShape`,
-  from the leaf counts `hzl` and the coin bijections `hCB`), and the live witness (`recCompiled_witnessIn`, `LiveWit`).
-  `recSystem_zk` is `RecZK` at them.
-* `zkStop_of_recZK`: `ZKStop` at the record, `zkStop_deployRecMStop_commit_sha512`'s statement, from `recSystem_zk`:
-  the record's prover is `Rec.prover`'s (`prover_rec_next`), `SimStop` is `Rec.sim`'s on the coins of `simPreCoins`
-  (`zkAt_rec_sim`), and the bounds agree.
-* `haltP`, `cutsOf_haltP`: the released prover, which sends the empty message from the round its halt test fires,
-  whatever the test reads (the witness, the tape, its own coins and the history), cuts the prover's run where the test
-  fires (`Claims.ZKMal.interact_censor`), at one of the positions `pos` the test can fire at.
-  `recRelease_leak`: at the deployed record, the release leaks at most `log₂ (VM.k x + 1)` bits beyond `ZKStop`'s bound
-  (`Verity.zkStop_leak`).
--/
+/-! The deployed recursion as a `Rec.system`, whose release leaks at most `log₂ (VM.k x + 1)` bits beyond `ZKStop`'s bound. -/
 
 @[expose] public section
 
@@ -46,7 +23,6 @@ theorem zkAt_of_sim_eq {W N Ω : Type} [Fintype N] [Nonempty N] [Fintype Ω] [No
   subst hS
   exact h
 
-/-- `prefixRun` at zero digests, at a number of inner rounds equal to another. -/
 theorem prefixRun_cast {Sa Gp Cm : Type} [AddCommGroup Gp] (Hl : Gp × Cm → Msg) (My : Sa → Gp) (c : Sa → Cm)
     (ask : List Msg → Out) {a a' : ℕ} (h : a = a') (nC : ℕ) (stg : ℕ → List (Msg × Msg) → (Fin nC → Msg) → Msg)
     (yI : Fin a → Sa) (yS : Fin nC → Sa) :
@@ -55,8 +31,6 @@ theorem prefixRun_cast {Sa Gp Cm : Type} [AddCommGroup Gp] (Hl : Gp × Cm → Ms
   subst h
   rfl
 
-/-- **Where a stop fires is a position it can fire at**: within `k` rounds, at a history of a length in `pos`, or at
-`k` itself. -/
 theorem stopIdx_mem {s : List (Msg × Msg) → Bool} {k : ℕ} (τ : List (Msg × Out)) {pos : Finset ℕ}
     (hpos : ∀ h : List (Msg × Msg), h.length ≤ k → s h = true → h.length ∈ pos) (hk : k ∈ pos) :
     stopIdx s k k τ ∈ pos := by
@@ -86,15 +60,12 @@ namespace Verity
 open Claims Claims.ZKMal
 open scoped NNReal
 
-/-- The relabelling of a session's coins `Rec.slotP` reads, when the slot's coins are `O`'s. -/
 noncomputable def relab (N Ω : Type) : (N ≃ N) × (Ω ≃ Ω) :=
   (⟨(Equiv.refl N, Equiv.refl Ω)⟩ : Nonempty ((N ≃ N) × (Ω ≃ Ω))).some
 
-/-- **A prover on the slot's coins**: `P` with `relab`'s relabelling undone, so `Rec.slotP` of it is `P`. -/
 noncomputable def relabP {W N Ω : Type} (P : W → Prover (N × Ω)) (w : W) : Prover (N × Ω) :=
   ⟨fun xs h ω => (P w).next xs h ((relab N Ω).1.symm ω.1, (relab N Ω).2.symm ω.2)⟩
 
-/-- **On coins of one type at every statement, a session is `O`'s prover**, where `O`'s prover is `relabP P`. -/
 theorem slotP_relab {WS N Ω : Type} (O : ZkSystem WS (fun _ => N) (fun _ => Ω)) (P : WS → Prover (N × Ω))
     (hP : ∀ w xs, O.P w xs = relabP P w) (w : WS) (xs : Msg) (h : List (Msg × Msg)) (ω : N × Ω) :
     (Rec.slotP O N Ω w).next xs h ω = (P w).next xs h ω := by
@@ -103,15 +74,11 @@ theorem slotP_relab {WS N Ω : Type} (O : ZkSystem WS (fun _ => N) (fun _ => Ω)
   show (P w).next xs h ((relab N Ω).1.symm ((relab N Ω).1 ω.1), (relab N Ω).2.symm ((relab N Ω).2 ω.2)) = _
   rw [Equiv.symm_apply_apply, Equiv.symm_apply_apply]
 
-/-- **The released prover**: `P`, except that it sends the empty message from the first round its halt test
-`halt` fires within `k x` rounds; the test reads the witness, the tape, the prover's own coins `K x` and the history. -/
 def haltP {W : Type} {N Ω K : Msg → Type} (k : Msg → ℕ) (P : W → (x : Msg) → Prover (N x × Ω x))
     (halt : W → (x : Msg) → N x × Ω x → K x → List (Msg × Msg) → Bool) :
     W → (x : Msg) → Prover ((N x × Ω x) × K x) :=
   fun w x => ⟨fun x' h ωκ => if fired (halt w x ωκ.1 ωκ.2) (k x) h then .ret [] else (P w x).next x' h ωκ.1⟩
 
-/-- **The released prover cuts `P`'s run where its halt test fires** (`interact_censor`), at one of the positions
-`pos x` the test can fire at within `k x` rounds, or at `k x`. -/
 theorem cutsOf_haltP {W : Type} {N Ω K : Msg → Type} (H : Msg → Msg) (k : Msg → ℕ)
     (P : W → (x : Msg) → Prover (N x × Ω x))
     (halt : W → (x : Msg) → N x × Ω x → K x → List (Msg × Msg) → Bool) (pos : Msg → Finset ℕ)
@@ -133,8 +100,6 @@ theorem cutsOf_haltP {W : Type} {N Ω K : Msg → Type} (H : Msg → Msg) (k : M
   exact (congrArg (fun pm => interact (fun as => ((Vs.next x as θ).eval H).1) pm (k x) []) e).trans
     (interact_censor _ _ _ _ _)
 
-/-- **The deployed recursion's release leaks at most `log₂ (k + 1)` bits**: from `ZKStop`, the released prover
-(`haltP`, at any halt test) is `ZKmalRLeak` at the leaky `SimStop` over the `k x + 1` positions `0, …, k x`. -/
 theorem zkStop_leak_haltP {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col]
     {K : Msg → Type} [∀ x, Fintype (K x)] [∀ x, Nonempty (K x)] {H : Msg → Msg}
     {D : Claims.Recursion.StopDeploy Coin} {I : Claims.Recursion.Inner Coin Claims.Flock.Wit}
@@ -160,8 +125,6 @@ open Claims.ZKMal (Layout SeqTape Proto ZKmalAt iterSimG prefixRun XorBytes)
 open FlockSoundness.Discharge
 open scoped NNReal
 
-/-- `Sim`'s first-part coins, the inner salts at the inner verifier's rounds and one staging round's salts, as
-`Rec.Compiled.S₀`'s at as many inner rounds. -/
 def simPreCoins {a a' : ℕ} (h : a = a') (n : ℕ) :
     (Fin a → Salt) × (Fin 1 → Fin n → Salt) ≃ (Fin a' → Salt) × (Fin n → Salt) where
   toFun c := (fun i => c.1 (Fin.cast h.symm i), c.2 ⟨0, Nat.zero_lt_one⟩)
@@ -177,7 +140,6 @@ section Swap
 
 variable (IV : Claims.Verifier Coin) (b : Brings)
 
-/-- `simMStop`'s coins: its first part's and one per session. -/
 noncomputable def stopCoins (T₀ : SeqTape) (NB ΩB : Type) [Fintype NB] [Nonempty NB] [Fintype ΩB] [Nonempty ΩB]
     (S₀ : Claims.Simulator) (SO : Claims.Msg → ℕ → Claims.Recursion.OSim)
     (s : Claims.Msg → List (Claims.Msg × Claims.Msg) → Bool) (x : Claims.Msg) :
@@ -187,7 +149,6 @@ noncomputable def stopCoins (T₀ : SeqTape) (NB ΩB : Type) [Fintype NB] [Nonem
     (Claims.ZKMal.stopProgB s (kPre IV) (fun x j => (nums b.st x j).rounds + 1)
       fun j x u c => (SO x j).prog (xsOf IV b x j u) c) (fun _ _ => Claims.Recursion.goesOn) x (nS x)
 
-/-- **`simMStop`'s transcript**: its first part's, cut where the stop fires, then one `stepS` per session. -/
 theorem simMStop_eval (H : Claims.Msg → Claims.Msg) (ask : List Claims.Msg → Claims.Out) (T₀ : SeqTape)
     (NB ΩB : Type) [Fintype NB] [Nonempty NB] [Fintype ΩB] [Nonempty ΩB] (S₀ : Claims.Simulator)
     (SO : Claims.Msg → ℕ → Claims.Recursion.OSim) (s : Claims.Msg → List (Claims.Msg × Claims.Msg) → Bool)
@@ -205,8 +166,6 @@ theorem simMStop_eval (H : Claims.Msg → Claims.Msg) (ask : List Claims.Msg →
     (Claims.ZKMal.stopProgB s (kPre IV) (fun x j => (nums b.st x j).rounds + 1)
       fun j x u c => (SO x j).prog (xsOf IV b x j u) c) (nS x) c
 
-/-- **`ZKmalAt` at `simMStop` carries over to another first-part simulator** whose transcripts are the first's on
-coins in bijection. -/
 theorem zkAt_simMStop_swap (H : Claims.Msg → Claims.Msg) (T₀ : SeqTape) (NB ΩB : Type) [Fintype NB] [Nonempty NB]
     [Fintype ΩB] [Nonempty ΩB] (S₀ S₀' : Claims.Simulator) (SO : Claims.Msg → ℕ → Claims.Recursion.OSim)
     (s : Claims.Msg → List (Claims.Msg × Claims.Msg) → Bool) (x : Claims.Msg) (e₀ : S₀'.C x ≃ S₀.C x)
@@ -228,10 +187,6 @@ theorem zkAt_simMStop_swap (H : Claims.Msg → Claims.Msg) (T₀ : SeqTape) (NB 
 
 end Swap
 
-/-- **The deployed recursion's prefix and sessions as a `Rec.Compiled`**: the first part (`preP` at `preTape`, read
-by `preOf`), its stage message `stgOf` and the deployed stop `sR`; session `j` of `(nums x j).rounds + 1` rounds at the
-V\* statement `xsOf` stages, with the witness `wit` gives, on `G`'s coins; its simulator's coins `CB t`, and its
-bound's terms the record's per-session error and `4t·3^t`. -/
 noncomputable def recCompiled (IV : Claims.Verifier Coin) (ivScope : Claims.Msg → Bool) (b : Brings)
     (I : Claims.Recursion.Inner Coin Claims.Flock.Wit) (R : Type) [Fintype R] [Nonempty R]
     (dI : Claims.Flock.Wit → R → List (Claims.Msg × Claims.Msg) → Fin 64 → UInt8)
@@ -269,9 +224,6 @@ noncomputable def recCompiled (IV : Claims.Verifier Coin) (ivScope : Claims.Msg 
   εS δ₁ x j := ((deployRec IV ivScope (b.commit R dI dg wo)).nums x j).εzk t δ₁
   γS _ := 4 * t * 3 ^ t
 
-/-- **The recursion's outer system**: Flock's `--zk` session at the recursive setup, `VO.k + 1` rounds with its
-`Hello`, the session prover `G.prover` (through `relabP`), the outer record's relation, the models' simulator at the
-attempt budget `t`, and its proved error and collision weight. -/
 noncomputable def recOuter (relO : Readable.Parsed → Readable.Relation) (G : Proto Claims.Flock.Wit)
     [Fintype G.Coin] (Mc : ∀ x, G.Nonce → (Fin (G.K x) → G.Coin) → G.TCoinModel x) (nL nB : Claims.Msg → ℕ)
     (t : ℕ) : Verity.ZkSystem Claims.Flock.Wit (fun _ => G.Nonce) (fun _ => G.Rand) where
@@ -313,7 +265,6 @@ theorem recStart_eq (T : Type) (x : Claims.Msg) : ∀ j, (𝔊).start x j = (par
     rw [recStart_eq T x j]
     all_goals rfl
 
-/-- **`Rec.Compiled.lay`'s prover at the deployed objects is the masked run's** (`lay`), session by session. -/
 theorem layProver_rec (w : Claims.Flock.Wit) (x : Claims.Msg) :
     ∀ (m : ℕ) (hist : List (Claims.Msg × Claims.Msg))
       (ω : ((preTape IV b R x).N × (preTape IV b R x).Ω) × (ℕ → G.Nonce × G.Rand)),
@@ -330,7 +281,6 @@ theorem layProver_rec (w : Claims.Flock.Wit) (x : Claims.Msg) :
       Verity.slotP_relab 𝔒 G.prover (fun _ _ => rfl)]
     all_goals rfl
 
-/-- **The deployed record's prover is `Rec.prover`'s**: the masked reference prover with the stop, read flat. -/
 theorem prover_rec_next (w : Claims.Flock.Wit) (x : Claims.Msg) (hist : List (Claims.Msg × Claims.Msg))
     (ω : (preTape IV b R x).at 0 G.Nonce G.Rand (nS x)) :
     (Verity.Rec.prover 𝔒 𝔊 w x).next x hist ω =
@@ -348,8 +298,6 @@ theorem zkAt_rec_prover (H : Claims.Msg → Claims.Msg) (x : Claims.Msg) {k : �
   h.of_equiv _ (Equiv.refl _) (Equiv.refl _) fun w hist ω =>
     (prover_rec_next IV b ivScope I relO R dI dg wo wit G Mp Mc nL nB CB t w x hist ω).symm
 
-/-- **`Rec.sim` at the deployed objects is `simMStop` at the claim's first-part simulator**: the same sessions after
-the same stop, the first part `Rec.Compiled.S₀`'s zero messages, which are `simPre`'s on the coins of `simPreCoins`. -/
 theorem zkAt_rec_sim (H : Claims.Msg → Claims.Msg) (x : Claims.Msg) (hI : I.V.k (xIOf x) = IV.k (xIOf x))
     {N Ω WP : Type} [Fintype N] [Nonempty N] [Fintype Ω] [Nonempty Ω] {k : ℕ} {P : WP → Claims.Prover (N × Ω)}
     {RA : WP → Prop} {ε γ : ℝ}
@@ -375,8 +323,6 @@ theorem zkAt_rec_sim (H : Claims.Msg → Claims.Msg) (x : Claims.Msg) (hI : I.V.
   exact zkAt_simMStop_swap IV 𝔟 H (preTape IV b R x) G.Nonce G.Rand (𝔊).S₀ (simPre (deployRec IV ivScope 𝔟) I)
     (soOf ((G.withSim Mc).simulatorE t (t * 3 ^ t)) (CB t)) (sR IV ivScope 𝔟) x (simPreCoins hI (b.nC x)) he₀ h1
 
-/-- **Z1, `O` is zero knowledge**: Flock's at the outer record from the session's tables at the recursive setup
-(`Flock.zkAt_deployZkRec_of_tables_bind`), at each statement on `G`'s coins. -/
 theorem recOuter_zk (ht : 0 < t) (hK : ∀ x, G.K x = VO.k x - 1) (hnL : ∀ x ν, (Mp x ν).size ≤ nL x)
     (hnB : ∀ x ν c, (Mc x ν c).size ≤ nB x)
     (hL : G.TMsgLink FlockDeploy.sha512 (Claims.Flock.R (deployZkRec relO).parse) Mp Mc) (hOK : G.TablesOK Mp Mc)
@@ -389,8 +335,6 @@ theorem recOuter_zk (ht : 0 < t) (hK : ∀ x, G.K x = VO.k x - 1) (hnL : ∀ x �
     ((Claims.ZKMal.zkmalR_iff_at _ _ _ _ _ _ _).1 h x).of_equiv _ (Verity.relab G.Nonce G.Rand).1.symm
       (Verity.relab G.Nonce G.Rand).2.symm fun _ _ _ => rfl
 
-/-- **Z2, the first part's strings are hm96 commitments**: each inner round's of the digest `dI` reads, and the stage
-round's of the staged values' digests `dg` reads, neither reading the salts it commits under. -/
 theorem recCompiled_commits (H : Claims.Msg → Claims.Msg) : (𝔊).Commits H := by
   intro x w _
   refine ⟨fun ρ h => asX (dI w ρ h),
@@ -427,7 +371,6 @@ theorem recCompiled_commits (H : Claims.Msg → Claims.Msg) : (𝔊).Commits H :
       simp only [List.getElem_map, List.getElem_range, hs]
       exact (List.getElem_ofFn h2).symm
 
-/-- **Z3, each session's witness is in `O`'s relation unless the stop fired**: the live witness (`LiveWit`). -/
 theorem recCompiled_witnessIn
     (hW : LiveWit FlockDeploy.sha512 IV ivScope 𝔟 I (preTape IV b R) (preOf IV b R) wit
       (Claims.Flock.R (deployZkRec relO).parse)) :
@@ -436,8 +379,6 @@ theorem recCompiled_witnessIn
   exact hW x w hw j hj t₀ u (hu.trans (recStart_eq IV b ivScope I relO R dI dg wo wit G Mp Mc nL nB CB t
     ((preTape IV b R x).N × (preTape IV b R x).Ω) x j)) hp hf
 
-/-- **Z4, each session's shape is public**: `VO`'s rounds at each staged statement, the leaf counts within the
-record's (`hzl`), the coin bijections (`hCB`), and the session's coins `G`'s at every statement. -/
 theorem recCompiled_byShape (ht : 0 < t)
     (hzl : ∀ x, ∀ j < nS x, ∀ u : List (Claims.Msg × Claims.Msg),
       u.length = (parts IV b ((preTape IV b R x).N × (preTape IV b R x).Ω)).start x j →
@@ -466,8 +407,6 @@ theorem recCompiled_byShape (ht : 0 < t)
       exact_mod_cast h2
     gcongr
 
-/-- **`RecZK` at the deployed recursion**: `Rec.system 𝔒 𝔊` at `Recursion.goesOn` is zero knowledge, from its four
-premises at the deployed objects. -/
 theorem recSystem_zk (ht : 0 < t) (hK : ∀ x, G.K x = VO.k x - 1) (hnL : ∀ x ν, (Mp x ν).size ≤ nL x)
     (hnB : ∀ x ν c, (Mc x ν c).size ≤ nB x)
     (hL : G.TMsgLink FlockDeploy.sha512 (Claims.Flock.R (deployZkRec relO).parse) Mp Mc) (hOK : G.TablesOK Mp Mc)
@@ -493,10 +432,6 @@ theorem recSystem_zk (ht : 0 < t) (hK : ∀ x, G.K x = VO.k x - 1) (hnL : ∀ x 
 
 end Recursion
 
-/-- **The recursion's `ZKStop` at the masked record with the deployed stop, from `RecZK`**: the statement of
-`zkStop_deployRecMStop_commit_sha512`, on its premises, as `Verity.SecurityProofs.RecZK` at the deployed recursion
-(`recSystem_zk`): the record's prover is `Rec.prover`'s (`zkAt_rec_prover`), `SimStop` is `Rec.sim`'s on bijective
-coins (`zkAt_rec_sim`, `zkAt_simStop`), and `εzkStop` and `γzk` are `Rec.system`'s bound's terms. -/
 theorem zkStop_of_recZK (IV : Claims.Verifier Coin) (b : Brings) (ivScope : Claims.Msg → Bool)
     (I : Claims.Recursion.Inner Coin Claims.Flock.Wit) (relO : Readable.Parsed → Readable.Relation)
     (VM : Claims.Verifier Coin)
@@ -557,10 +492,6 @@ theorem zkStop_of_recZK (IV : Claims.Verifier Coin) (b : Brings) (ivScope : Clai
     ring
   · rfl
 
-/-- **The deployed recursion's release leaks at most `log₂ (VM.k x + 1)` bits beyond `ZKStop`'s bound**: at the
-masked record with the deployed stop, the released prover (`Verity.haltP`, at any halt test reading the witness, the
-tape, the prover's coins `K x` and the history) is `ZKmalRLeak` at the leaky `SimStop`, from `zkStop_of_recZK`
-(`Verity.zkStop_leak_haltP`). -/
 theorem recRelease_leak (IV : Claims.Verifier Coin) (b : Brings) (ivScope : Claims.Msg → Bool)
     (I : Claims.Recursion.Inner Coin Claims.Flock.Wit) (relO : Readable.Parsed → Readable.Relation)
     (VM : Claims.Verifier Coin)

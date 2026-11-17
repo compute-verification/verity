@@ -42,28 +42,7 @@ import Proofs.Flock.Soundness.Refine.Seam
 import Proofs.Flock.VBridge.Algebra.RingSwitch
 import Proofs.Flock.VBridge.Runs.ZcLc
 
-/-!
-# Row D's `hlev`: the verifier's query positions, and the honest proof's Merkle checks
-
-`DecAt.levels_of_merkleOk` gives row D's `hlev` from FlockComplete's `Lg.MerkleOk` at some query coins `cf` from a
-round `k`, and the tie `htie` that every run of the verifier rows queries level `ℓ` at the positions those coins sample at
-round `k + qOff sch ℓ`.
-
-* **The tie, outright** (`rows_pos`, `DecAt.htie`): any run of `verifierRows` on rounds with no empty round queries
-  level `ℓ` at the positions of the rounds' own coins at `lgStart + qOff sch ℓ`, where `lgStart` is Ligerito's first
-  round (after the zerocheck's, the lincheck's and ring switching's), step by step as `ligeritoRun` samples them
-  (`levelsLoop_pos`, `ligeritoRun_pos`). So `htie` holds at `cf = cfOf rounds`, `k = lgStart`.
-* **`hlev` from `MerkleOk` at any coins that agree there** (`merkleOk_congr`, `DecAt.hlev_of_merkleOk`): `MerkleOk`
-  reads its coins only at the queried rounds.
-* **The honest prover's `MerkleOk`** (`FlockComplete.Replay.merkleOk_of_repP`): a returning honest rep `repP` on a
-  `commitP` of its table passes every level's Merkle check at its replies' coins from Ligerito's first round
-  (`repP_opens`, `merkleOk_of_opens`), at any hashes whose digests have the scheme's width. `DecAt.hlev_of_repP`: row
-  D's `hlev` at a rep whose decided proof is such a run's output, and whose replies' coins at the queried rounds are its
-  recorded rounds'.
-* **At the deployed hashes** (`DecAt.hlev_deployed`): `Hashes.ofSha512 Sha512.hash` makes the plain scheme its own
-  closures (`plain_ops_std`) with 64-byte digests (`plain_widths_std`), so only the honest rep's `hrun`, `h0` and
-  `hcoin` remain.
--/
+/-! Row D's `hlev` from the verifier's query positions and the honest proof's Merkle checks. -/
 
 @[expose] public section
 
@@ -73,11 +52,8 @@ open Flock FlockSoundness.Refine
 open Flock.RecAlgebra (Messages LSt RoundCoins)
 open FlockComplete.Replay.Lg (qOff)
 
-/-- Ligerito's first round at a shape with `2 + n` claims: after the zerocheck's `3 + (m − 6)` rounds, the lincheck's
-`3 + (k_log − 6)` and ring switching's `2 + n + 1`. -/
 def lgStart (sh : Shape) (n : ℕ) : ℕ := 3 + (sh.m - 6) + 3 + (sh.kLog - 6) + (2 + n) + 1
 
-/-- The recorded rounds as coins: round `j`'s `t`-th coin, `0` past its end. -/
 def cfOf (w : Array (Array F128)) : ℕ → ℕ → F128 := fun j t => (w[j]!).getD t 0
 
 theorem range_cfOf {w : Array (Array F128)} {j q : ℕ} (h : (w[j]!).size = q) :
@@ -93,14 +69,10 @@ theorem range_map_cons {α : Type} (f : ℕ → α) {n : ℕ} (hn : 0 < n) :
   rw [List.range_eq_range', List.range'_succ]
   simp
 
-/-! ## The positions Ligerito queries -/
-
 section Pos
 
 variable {w : Array (Array F128)} [Fact (Flock.RecAlgebra.NoEmpty w)] {M : Messages F128}
 
-/-- V*'s level loop queries level `l` at the positions of round `k₀ + qOff sch l`'s coins, `q` of them, from Ligerito's
-first round `k₀`. -/
 theorem levelsLoop_pos {sch : Flock.Schedule} {k₀ : ℕ}
     (hq : ∀ i ≤ sch.levels.size - 1, (sch.levels.getD i default).q ≠ 0) :
     ∀ (fuel i split : ℕ) (levels : Array (Array F256)) (e : ℕ) (st : LSt F128) (k : ℕ)
@@ -169,8 +141,6 @@ theorem levelsLoop_pos {sch : Flock.Schedule} {k₀ : ℕ}
       · obtain rfl : l = i + 1 := by omega
         exact hz
 
-/-- **V*'s Ligerito up to its final check queries level `l` at the positions of round `k₀ + qOff sch l`'s coins**, `q`
-of them, from its first round `k₀`, recording level `l`'s context `l`-th. -/
 theorem ligeritoRun_pos {sch : Flock.Schedule} {st₀ : LSt F128} {k₀ k' : ℕ}
     {out : Array F256 × Array (Array F256) × ℕ} {stV : LSt F128} (h0 : st₀.conss = #[]) (hdim : DimSeam sch)
     (hlv : ∀ i < sch.levels.size, LevelSeam (sch.levels.getD i default))
@@ -222,7 +192,6 @@ theorem ligeritoRun_pos {sch : Flock.Schedule} {st₀ : LSt F128} {k₀ k' : ℕ
 
 end Pos
 
-/-- `ligerito` returns the contexts of its `ligeritoRun`, run from a state with none. -/
 theorem ligerito_run_conss {sch : Flock.Schedule} {M : Messages F128} {tIn : F128} {sws : Array Switched}
     {k k' : ℕ} {src : Flock.RecAlgebra.RoundCoins} {r : Array F128 × Flock.RecAlgebra.LgPts}
     (h : Flock.RecAlgebra.ligerito sch M tIn sws k src = .ok (r, k')) :
@@ -259,9 +228,6 @@ theorem ligerito_run_conss {sch : Flock.Schedule} {M : Messages F128} {tIn : F12
   cases Flock.RecAlgebra.cm_pure h
   refine ⟨_, _, _, _, ?_, h1, ?_⟩ <;> rfl
 
-/-- **The verifier rows query level `ℓ` at the positions of the rounds' own coins at `lgStart + qOff sch ℓ`**: at any
-run of `verifierRows` on rounds with no empty round, at `m ≥ 14` and a schedule of the seams, context `ℓ`'s positions
-are those of `q` coins of that round. -/
 theorem rows_pos {sh : Shape} {rounds : Array (Array F128)} {extras : Array Claim} {comb v : Array F128}
     {info : Flock.RecAlgebra.Info Flock.RecAlgebra.Lin} {kappa : Array (Array (Array F128))}
     (hne : Flock.RecAlgebra.NoEmpty rounds) (hm : 14 ≤ sh.m) (hdim : DimSeam sh.sched)
@@ -304,8 +270,6 @@ namespace FlockComplete.Replay
 
 open Flock Transcript
 
-/-- **`MerkleOk` reads its coins only at the queried rounds**: coins that agree with `cf`'s there, from another start
-round, pass the same checks. -/
 theorem Lg.merkleOk_congr {hs : Hashes V} {ms : MerkleScheme} {sch : Schedule} {cap : Array ByteArray}
     {p : LigeritoProof} {cf cf' : ℕ → ℕ → F128} {k k' : ℕ} (h : Lg.MerkleOk hs ms sch cap p cf k)
     (hcf : ∀ j < sch.levels.size, ∀ t < (sch.levels.getD j default).q, cf (k + Lg.qOff sch j) t = cf' (k' + Lg.qOff sch j) t) :
@@ -320,9 +284,6 @@ theorem Lg.merkleOk_congr {hs : Hashes V} {ms : MerkleScheme} {sch : Schedule} {
   rw [e]
   exact h j hj
 
-/-- **A returning honest rep passes every level's Merkle check** at its replies' coins from Ligerito's first round:
-the honest rep `repP` on a `commitP` of its table, run from a transcript at round `0` with `l` bodies sent, at hashes
-whose digests have the scheme's width (`repP_opens`, `merkleOk_of_opens`; `Run.lgMerkle_of` without the run). -/
 theorem merkleOk_of_repP (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (st : Setup) (sch : Schedule)
     (tr : Trace) (tbl : Array F128) (cm0 : Commit) (extras : Array Claim) (salt : ℕ → ℕ → ByteArray)
     (nonce : ℕ → ℕ → UInt64) {m : ℕ} (hfast : fast100 m = some sch) (hm : 14 ≤ st.m)
@@ -360,10 +321,8 @@ open FlockSoundness.Discharge.Recursion (HClass)
 open FlockComplete.Replay.Lg (qOff)
 open FlockComplete (repP asksS commitP Commit Trace)
 
-/-- **At the deployed hashes the plain scheme is its own closures** (`levels_of_merkleOk`'s `hops`). -/
 theorem plain_ops_std : plain.opsWith (Hashes.ofSha512 Sha512.hash : Hashes Flock.V) = MerkleOps.ofScheme plain := rfl
 
-/-- **The plain scheme's digests are 64 bytes at the deployed hashes**, at its nodes and leaves. -/
 theorem plain_widths_std :
     (∀ a b v, (plain.opsWith (Hashes.ofSha512 Sha512.hash : Hashes Flock.V)).node a b = .ok v →
       v.size = plain.digestLen) ∧
@@ -383,8 +342,6 @@ namespace DecAt
 variable {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {ms : List Claims.Msg} {cs : List Coin}
   (D : DecAt rd x ms cs) (cls : HClass) (acc : ℕ → Array F128)
 
-/-- **Row D's coin tie** (`levels_of_merkleOk`'s `htie`): at row G, any run of rep `r`'s verifier rows queries level
-`ℓ` at the positions of the rep's recorded coins at round `lgStart + qOff sch ℓ` (`rows_pos`). -/
 theorem htie {i : ℕ} (hG : D.RowG cls acc i) (hti : i < D.spec.tables.size) (r : Fin 2) :
     ∀ v info kappa,
       verifierRows (D.sh cls i) (D.rep cls acc i r).rounds (D.rep cls acc i r).extras (D.rep cls acc i r).comb =
@@ -402,8 +359,6 @@ theorem htie {i : ℕ} (hG : D.RowG cls acc i) (hti : i < D.spec.tables.size) (r
       (by unfold Array.getD; rw [dite_eq_left hj]; exact Array.getElem_mem hj)
   exact FlockVBridge.Family.rows_pos (D.noEmpty cls acc hti r) (by show 14 ≤ (D.files cls i).st.m; omega) hdim hlv hv
 
-/-- **Row D's `hlev` from `MerkleOk` at coins that agree with the rep's recorded rounds** at the queried rounds:
-`levels_of_merkleOk` at `htie`, through `merkleOk_congr`. -/
 theorem hlev_of_merkleOk {i : ℕ} (hG : D.RowG cls acc i) (hti : i < D.spec.tables.size) (r : Fin 2)
     {hs : Hashes Flock.V} (hops : plain.opsWith hs = MerkleOps.ofScheme plain) {cf : ℕ → ℕ → F128} {k : ℕ}
     (h : FlockComplete.Replay.Lg.MerkleOk hs plain (D.files cls i).sch ((D.files cls i).proof r).cap
@@ -419,9 +374,6 @@ theorem hlev_of_merkleOk {i : ℕ} (hG : D.RowG cls acc i) (hti : i < D.spec.tab
           (info.lg.conss[ℓ]!).pos = .ok () :=
   D.levels_of_merkleOk cls acc r hops hG.fast (FlockComplete.Replay.Lg.merkleOk_congr h hcf) (D.htie cls acc hG hti r)
 
-/-- **Row D's `hlev` at an honest rep**: where rep `r`'s decided proof is a returning honest rep's (`repP` on a
-`commitP` of a table, at table `i`'s setup, schedule and extra claims, at hashes whose digests have the scheme's
-width), and the replies' coins at the queried rounds are the rep's recorded ones (`merkleOk_of_repP`). -/
 theorem hlev_of_repP {i : ℕ} (hG : D.RowG cls acc i) (hti : i < D.spec.tables.size) (r : Fin 2)
     (h : ByteArray → ByteArray) (hops : plain.opsWith (Hashes.ofSha512 h : Hashes Flock.V) = MerkleOps.ofScheme plain)
     (resp : ℕ → Claims.Msg) (tr : Trace) (tbl : Array F128) (cm0 : Commit) (salt : ℕ → ℕ → ByteArray)
@@ -458,10 +410,7 @@ theorem hlev_of_repP {i : ℕ} (hG : D.RowG cls acc i) (hti : i < D.spec.tables.
   rw [hN, hG.merkle] at hM
   exact D.hlev_of_merkleOk cls acc hG hti r hops hM hcoin
 
-/-- **Row D's `hlev` at the deployed hashes**: `hlev_of_repP` at `Hashes.ofSha512 Sha512.hash`, where the plain
-scheme is its own closures (`plain_ops_std`) and its digests are 64 bytes (`plain_widths_std`). What is left are the
-honest rep's equations: its decided proof is `repP`'s output (`hrun`) on a `commitP` of its table (`h0`), and its
-replies' coins at the queried rounds are its recorded ones (`hcoin`). -/
+/-- Row D's `hlev` at the deployed hashes; what is left are the honest rep's equations `hrun`, `h0` and `hcoin`. -/
 theorem hlev_deployed {i : ℕ} (hG : D.RowG cls acc i) (hti : i < D.spec.tables.size) (r : Fin 2)
     (resp : ℕ → Claims.Msg) (tr : Trace) (tbl : Array F128) (cm0 : Commit) (salt : ℕ → ℕ → ByteArray)
     (nonce : ℕ → ℕ → UInt64) {s0 : ℕ → ByteArray}

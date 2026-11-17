@@ -38,23 +38,7 @@ import Proofs.Flock.Claims.Recursion.VerdictLoop
 import Proofs.Flock.Claims.Recursion.VerdictRowG
 import Proofs.Flock.Soundness.Refine.Arith
 
-/-!
-# P3's halves that read no other part: a part's end reads, and two chains with one step
-
-`AccPorts` (P3) asks that a piece's copy read the accumulators `elemReadC (Top.accRC rd key)` reads, up to one offset
-per component. The copy's `acc0` and `acc1` are rows of the outer witness's own `rec-acc` chain; `accRC` reads
-`Top.chainC`'s. Two facts need only the part's own checks or the chain's steps:
-
-* **Where the copy reads** (`ends_of_checkAccReads`, `endReads_inner`): at a statement that is no level,
-  `checkAccReads` holds its `acc0` and `acc1` to `endReads`' rows (`RecVStar.checkEndReads`); at a part of the table's
-  algebra, `acc0` reads rows `0` and `n` and `acc1` rows `n` and `2 · n` (`n` openings a rep): rep `r`'s ends.
-* **Two chains with one step** (`chainHolds_off`): two chains that carry row D's running sums (`Top.ChainHolds`) differ
-  along each rep's run of table `t`'s chain by one constant per component, since each step (`consTerm`) adds one term
-  to both (`off_of_steps`), and the rep's pieces step every position of its run (`pos_split`).
-* **P3 from a chain at the ends** (`accPorts_of_chain`): at a dense decision, a copy whose accumulator ports read a
-  chain that carries row D's sums at its rep's ends reads `elemReadC (Top.accRC rd key)` plus one offset per component.
-  What's left for `AccPorts` is that chain: the outer witness's `rec-acc` rows, which the copy reads at its ends.
--/
+/-! P3's halves that read no other part, which leave `AccPorts` only the outer witness's `rec-acc` rows the copy reads at its ends. -/
 
 @[expose] public section
 
@@ -65,9 +49,6 @@ open Claims (Msg)
 open FlockDeploy (Coin FinalP setupOf)
 open FlockSoundness.Refine (fOf fOf_add fOf_injective)
 
-/-! ## Where a part's copy reads the chain -/
-
-/-- **`endReads` at a part of the table's algebra**: `acc0` reads rows `0` and `n`, `acc1` rows `n` and `2 · n`. -/
 theorem endReads_inner {i : RecVStar.Inner} {sch : Schedule} (hsch : fast100 i.m = some sch) (j : ℕ) (nm : String)
     (pt : VStar.Part) : RecVStar.endReads i (.inner j nm pt) =
       .ok (some (#[some 0, some (RecVStar.opensBelow sch sch.levels.size)],
@@ -75,12 +56,9 @@ theorem endReads_inner {i : RecVStar.Inner} {sch : Schedule} (hsch : fast100 i.m
   simp only [RecVStar.endReads, hsch]
   rfl
 
-/-- A part of the table's algebra is no level: `accReads` has no rows for it. -/
 theorem accReads_inner (i : RecVStar.Inner) (j : ℕ) (nm : String) (pt : VStar.Part) :
     RecVStar.accReads i (.inner j nm pt) = .ok none := rfl
 
-/-- **`checkAccReads` at a statement that is no level**: each of its `accPorts` is `own`'s first entry of its name, and
-reads `endReads`' rows of the name (`endWant`). -/
 theorem ends_of_checkAccReads {i : RecVStar.Inner} {s : VStar.Stmt} {own : Array Registered.Port}
     (h : RecVStar.checkAccReads i s own = .ok ()) (hn : RecVStar.accReads i s = .ok none)
     {w : Array (Option ℕ) × Array (Option ℕ)} (hw : RecVStar.endReads i s = .ok (some w)) :
@@ -115,18 +93,12 @@ theorem ends_of_checkAccReads {i : RecVStar.Inner} {s : VStar.Stmt} {own : Array
     · obtain ⟨_, h2, -⟩ := FlockSoundness.Refine.ebind_ok hr
       cases h2
 
-/-! ## Two chains with one step -/
-
-/-- **A step adds one term**: `consTerm`'s component `k` is the running sum's plus the opening's terms. -/
 theorem fOf_consTerm (LANES : ℕ) (r a c : Array F128) (k : ℕ) :
     fOf (FlockVBridge.consTerm LANES r a c k) =
       fOf a[k]! + ∑ l ∈ Finset.range LANES, fOf (getElem! c (k * LANES + l) * getElem! r l) := by
   simp only [FlockVBridge.consTerm]
   exact FlockVBridge.fOf_foldl_add (fun l => getElem! c (k * LANES + l) * getElem! r l) LANES a[k]!
 
-/-- **Two chains stepped alike from `base` differ by one constant**: wherever both take each of the `N` steps after
-`base` by one `consTerm` (one row, one `coef`), each of their first `N + 1` rows' component `k` is the other's plus
-their difference at `base`. -/
 theorem off_of_steps {A B : ℕ → Array F128} {k base N : ℕ}
     (hstep : ∀ j < N, ∃ (LANES : ℕ) (r c : Array F128),
       (A (base + j + 1))[k]! = FlockVBridge.consTerm LANES r (A (base + j)) c k ∧
@@ -147,7 +119,6 @@ theorem off_of_steps {A B : ℕ → Array F128} {k base N : ℕ}
     simp only [fOf_add]
     ring
 
-/-- **A position of blocks `f 0, f 1, …` laid end to end** is one block's and one offset in it. -/
 theorem pos_split (f : ℕ → ℕ) : ∀ (L p : ℕ), p < ((List.range L).map f).sum →
     ∃ ℓ < L, ∃ j < f ℓ, ((List.range ℓ).map f).sum + j = p
   | 0, p, h => by simp at h
@@ -159,10 +130,6 @@ theorem pos_split (f : ℕ → ℕ) : ∀ (L p : ℕ), p < ((List.range L).map f
       exact ⟨ℓ, by omega, j, hj, he⟩
     · exact ⟨L, by omega, p - ((List.range L).map f).sum, by omega, by omega⟩
 
-/-- **Two chains that carry row D's running sums differ by one constant along a rep's run**: at a setup, along rep
-`r`'s run of table `t`'s chain (rows `r · N` to `r · N + N`, `N` the rep's openings at the table's schedule), each
-row's component `k` of `A` is `B`'s plus their difference at the run's start. Each position of the run is a piece's
-(`pos_split`, `mem_rowDPiecesOf`), whose `accHolds` steps both chains by one row and one `coef`. -/
 theorem chainHolds_off {rd : Msg → Option FinalP} {key : ℕ → ℕ → ℕ → ℕ → ℕ × ℕ × ℕ × ℕ} {x : Msg}
     {ms : List Msg} {cs : List Coin} {A B : ℕ → ℕ → Array F128} (hA : Top.ChainHolds rd key x ms cs A)
     (hB : Top.ChainHolds rd key x ms cs B) {v} (hv : setupOf false x = some v)
@@ -191,8 +158,6 @@ theorem chainHolds_off {rd : Msg → Option FinalP} {key : ℕ → ℕ → ℕ �
   rw [hs, hpos] at hA' hB'
   exact ⟨_, _, _, hA', hB'⟩
 
-/-! ## The copy's accumulators against `accRC`'s -/
-
 open Flock.RecAlgebra (el rounds) in
 theorem el_append_right {a b : Array F128} {j : ℕ} (h : a.size ≤ j) : el (a ++ b) j = el b (j - a.size) := by
   unfold el
@@ -205,10 +170,6 @@ theorem el_four (a b c d : F128) :
 
 open Flock.RecAlgebra (el rounds) in
 open FlockDeploy (tabsOf) in
-/-- **P3 from a chain at the copy's ends**: at a dense decision, a copy whose accumulator ports read a chain `W` that
-carries row D's running sums at its rep's ends (`D.accE` at `W`: `acc0` the run's first row, `acc1` its last) reads
-`elemReadC (Top.accRC rd key)` there plus one offset per component, `W`'s minus `chainC`'s at the run's start
-(`chainHolds_off`). The accumulator ports are `w`'s last four (`hjb`). -/
 theorem accPorts_of_chain {rd : Msg → Option FinalP} {key : ℕ → ℕ → ℕ → ℕ → ℕ × ℕ × ℕ × ℕ} {xi : Msg}
     {ms : List Msg} {cs : List Coin} (D : Rows.DecAt rd xi ms cs) (cls : FlockSoundness.Discharge.Recursion.HClass)
     {xo : Msg} {sto : Claims.Recursion.CompiledStatement} (hst : parse xo = some sto) (hf : Claims.Recursion.Form.Dense sto.form)

@@ -36,23 +36,7 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Recursion.VerdictRowEDeployed
 import Proofs.Flock.Soundness.Refine.Arith
 
-/-!
-# The residuals don't see a shift of the running sums
-
-At a plain shape, the verifier's algebra (`RecAlgebra.structureOf`) reads w's running sums (`acc0`, `acc1`, past the
-rounds' `A` elements) only as `acc1 c + acc0 c` in a residual's added terms, and its operands read only the rounds'
-elements. So a part's residuals (`RecResiduals.partS`) vanish at elements that a shift `δ c` of both of rep's running sums
-`c` moves, wherever they vanish at the unshifted ones: in characteristic 2 the shift cancels.
-
-* `structureOf_accLow`: `structureOf`'s S at a plain shape. `run` makes no element, so the symbolic residuals hold no
-  running sum and only the claims' transposes (`residualLins_bumpA`, the renaming argument of `structureOf_bitsOk`);
-  `build` makes its operands from those (`atomTerm`: w's elements below `A`, `wi_low`; a transpose's 128 elements,
-  `wi_rs`) and adds a residual's running sums as `w[A + 2 + c]`, `w[A + c]` (`wi_acc1`, `wi_acc0`).
-* `offOf A wI δ e`: the shift at the part's element `e`: `δ ((j - A) % 2)` where the part's w index `wI` places `e` at
-  w's element `j ≥ A`, else 0.
-* `resZero_off`: a part's residuals vanish at `E` wherever they vanish at elements equal to `E` plus `offOf` on the
-  part's w.
--/
+/-! The residuals don't see a shift of the running sums: in characteristic 2 the shift cancels (`resZero_off`). -/
 
 @[expose] public section
 
@@ -60,16 +44,12 @@ namespace Flock.RecAlgebra
 
 open Flock FlockSoundness.Refine
 
-/-! ## `run` makes no running sum and no transpose of a claim the shape lacks -/
-
-/-- An element the symbolic messages hold: no running sum, and a transpose only of one of the `n` claims. -/
 def Key.Sym (n : Nat) : Key → Prop
   | .acc0 _ => False
   | .acc1 _ => False
   | .rsT k _ => k < n
   | _ => True
 
-/-- Moves the running sums and the transposes of claims past `n`, fixing exactly the elements `Key.Sym n` admits. -/
 def bumpA (n : Nat) : Key → Key
   | .acc0 r => .acc0 (r + 1)
   | .acc1 r => .acc1 (r + 1)
@@ -114,7 +94,6 @@ theorem ren_varsG {g : Key → Key} {n : Nat} {K : Nat → Key} (hK : ∀ i < n,
   show Lin.ren g (Lin.var (K i)) = Lin.var (K i)
   rw [ren_var, hK i hi]
 
-/-- `symbolic`'s elements are fixed by `bumpA` at its claims (RecAlgebra.lean:621–641). -/
 theorem symbolic_bumpA (sh : Shape) : (symbolic sh).map (Lin.ren (bumpA sh.claims)) = symbolic sh := by
   simp only [symbolic, Messages.map, Messages.mk.injEq]
   and_intros
@@ -151,7 +130,6 @@ theorem residualLins_bumpA {sh : Shape} {coins : RoundCoins} {extras : Array Cla
     simp only [Except.ok.injEq, Prod.mk.injEq] at hs
     exact hs.1.1.symm
 
-/-- A symbolic value of elements the symbolic messages hold. -/
 def Lin.Sym (n : Nat) (f : Lin) : Prop := (∀ kx ∈ f.t, kx.1.Sym n) ∧ ∀ abx ∈ f.q, abx.1.1.Sym n ∧ abx.1.2.Sym n
 
 theorem sym_of_ren {n : Nat} {f : Lin} (h : Lin.ren (bumpA n) f = f) : f.Sym n := by
@@ -162,25 +140,17 @@ theorem sym_of_ren {n : Nat} {f : Lin} (h : Lin.ren (bumpA n) f = f) : f.Sym n :
   · exact congrArg (fun p => p.1.1) (fixed_of_map hq abx hab)
   · exact congrArg (fun p => p.1.2) (fixed_of_map hq abx hab)
 
-/-! ## Where `build`'s terms read w -/
-
-/-- The number of the rounds' elements: w's running sums start here. -/
 abbrev nR (sh : Shape) : Nat := (rounds sh).flatten.size
 
-/-- A term reading only the rounds' elements of w (below `A`), or v. -/
 def Term.Low (A : Nat) : Term → Prop
   | .w i => i < A
   | .v _ => True
   | .wt i _ => i + 128 ≤ A
 
-/-- A residual's added terms: a rep's running sums after and before its openings, `w[A + 2 + c] + w[A + c]`, or none,
-then terms reading below `A`. -/
 def AddLow (A : Nat) (add : Array Term) : Prop :=
   ∃ acc cp : Array Term, add = acc ++ cp ∧ (acc = #[] ∨ ∃ c < 2, acc = #[.w (A + (2 + c)), .w (A + c)]) ∧
     ∀ t ∈ cp, t.Low A
 
-/-- **S reads the running sums only as their pairs**: every operand reads below `A`, every residual's added terms are
-`AddLow`. -/
 def GfS.AccLow (A : Nat) (S : GfS) : Prop := (∀ o ∈ S.ops, ∀ t ∈ o, t.Low A) ∧ ∀ r ∈ S.res, AddLow A r.add
 
 theorem getElem?_of_idxOf?_key {xs : Array Key} {a : Key} {i : Nat} (h : xs.idxOf? a = some i) : xs[i]? = some a := by
@@ -233,7 +203,6 @@ theorem atomOp_low (hh : sh.holo = false) {k : Key} {op : Array Term} (ha : atom
   subst hx
   exact atom_low ht hk
 
-/-- Every operand reads below `A`. -/
 def OpsLow (A : Nat) (ops : Array (Array Term)) : Prop := ∀ o ∈ ops, ∀ t ∈ o, t.Low A
 
 theorem OpsLow.push {A : Nat} {ops : Array (Array Term)} {op : Array Term} (h : OpsLow A ops)
@@ -404,8 +373,6 @@ theorem build_accLow {sh : Shape} (hh : sh.holo = false) {lins : Array Lin} {b :
       have hB' : buildAll sh (2 + sh.claims) comb0 lins.toList 0 { kappa := K } = .ok (res, st) := hB
       exact buildAll_low hh lins.toList 0 _ _ _ hB' (fun _ h => by simp at h) hl
 
-/-- **The verifier's S reads the running sums only as their pairs** (`structureOf`, RecAlgebra.lean:835–837), at a
-plain shape. -/
 theorem structureOf_accLow {sh : Shape} (hh : sh.holo = false) {S : GfS} (h : structureOf sh = .ok S) :
     S.AccLow (nR sh) := by
   unfold structureOf at h
@@ -433,8 +400,6 @@ open Flock
 open Flock.RecResiduals (positions pos partS starts)
 open FlockSoundness.Refine (fOf fOf_add fOf_zero fOf_injective)
 
-/-- **The running sums' shift at the part's element `e`**: `δ` of the rep's running sum `(j - A) % 2` where the part's
-w index `wI` places `e` at w's element `j ≥ A`, else 0. -/
 def offOf (A : ℕ) (wI : Array ℕ) (δ : ℕ → F128) (e : ℕ) : F128 :=
   match wI[e]? with
   | some j => if A ≤ j then δ ((j - A) % 2) else 0
@@ -460,7 +425,6 @@ section Shift
 
 variable {S : RecAlgebra.GfS} {wI V : Array ℕ} {A : ℕ} {δ : ℕ → F128} {E E' vv : ℕ → F128}
 
-/-- **A looked-up term reading below `A` reads `E'` as `E`**, where `E'` is `E` shifted by `offOf` on the part's w. -/
 theorem termE_low (hE : ∀ e < wI.size, E' e = E e + offOf A wI δ e) {t : RecAlgebra.Term} {b : RecOpen.Term}
     (ht : t.Low A) (h : termE S wI V t = .ok b) : termVal E' vv (termOf b) = termVal E vv (termOf b) := by
   cases t with
@@ -531,8 +495,6 @@ theorem foldl_cons2 (g : RecOpen.Term → F128) (a b : RecOpen.Term) (l : List R
   congr 1
   (apply fOf_injective; simp only [fOf_add, fOf_zero]; ring)
 
-/-- **An added part's sum doesn't see the shift**: the terms of `AddLow` looked up, the running sums' pair
-`w[A + 2 + c] + w[A + c]` gaining `δ c` twice. -/
 theorem addSum_off (hE : ∀ e < wI.size, E' e = E e + offOf A wI δ e) {add : Array RecAlgebra.Term}
     (ha : RecAlgebra.AddLow A add) {bs : List RecOpen.Term}
     (h : add.toList.mapM (termE S wI V) = .ok bs) :
@@ -563,8 +525,6 @@ theorem addSum_off (hE : ∀ e < wI.size, E' e = E e + offOf A wI δ e) {add : A
 
 end Shift
 
-/-- **A part's residuals vanish where they vanish at the shifted elements**: at the verifier's part `S'` of an S that
-reads the running sums only as their pairs (`AccLow`), elements `E'` equal to `E` plus `offOf` on the part's w. -/
 theorem resZero_off {S : RecAlgebra.GfS} {sizes R P V : Array ℕ} {S' : RecOpen.GfS}
     (h : partS S sizes R P V = .ok S') {A : ℕ} (hS : S.AccLow A) {δ : ℕ → F128} {E E' vv : ℕ → F128}
     (hE : ∀ e < (wIdx sizes P).size, E' e = E e + offOf A (wIdx sizes P) δ e)
@@ -578,7 +538,6 @@ theorem resZero_off {S : RecAlgebra.GfS} {sizes R P V : Array ℕ} {S' : RecOpen
   have hrs' : R.toList.mapM (resE S (wIdx sizes P) V used) = .ok rs := hrs
   have ho := mapM_forall₂ hops'
   have hr := mapM_forall₂ hrs'
-  -- every operand reads `E'` as `E`
   have hop : ∀ o ∈ ops, (o.map termOf).map (termVal E' vv) = (o.map termOf).map (termVal E vv) := by
     intro o hoM
     obtain ⟨k, hk⟩ := exists_of_forall₂ ho.flip o hoM

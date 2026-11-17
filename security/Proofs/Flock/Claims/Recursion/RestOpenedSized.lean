@@ -22,24 +22,7 @@ import all Init.Data.String.Slice
 import all Init.Data.String.Pattern.String
 import all Init.Data.String.Pattern.Basic
 
-/-!
-# `OpenedSized` at the deployed last message `elemR`
-
-`readsAt_elemR'` takes `OpenedSized elemR`: every rep's block of the opened rounds after the link has the byte sizes
-of an honest rep's rows. This file proves it, so the last step reads at the deployed readers with no hypothesis
-(`readsAt_elemR_closed`), at every witness and every decision `rdR` admits.
-
-* **An honest rep's row sizes** (`FlockDeploy.Cnt`): the honest proof `openP` (`sizedProof` at the rep's shape, with
-  the context's cap) is an `HonestRep`, and round `t` of its rows is its tops' 128-byte node rows, then, where the
-  round absorbs, one padded row of the values the round's chunk of `repFrames` absorbs. That count is
-  `schedV`'s `t`-th entry (`cntPat_repFrames`), a row of `2 · portWordsOf` of it bytes (`open_sized`).
-* **V\*'s rounds** (`VStarSizes`): the inner statement's `m{i}` ports carry `rounds`' sizes, which are `schedV`'s
-  nonzero entries in order (`rounds_sizes`, `schedV_filter`), and round `t`'s is its `commitRounds` index's
-  (`Cnt.rounds_at`).
-* **The opened rows** (`OpenSlots`): `elemR` opens, at each round, its committed tops' cap rows (128 bytes each,
-  `capSlot_len`) and, where the round absorbs, the row its `m{i}` port reads (`rowSlot_len`), so its sizes are an
-  honest rep's (`roundSlots_sizes`, `openedSized_of`). Nothing reads a witness's values, only `elemR`'s layout.
--/
+/-! `OpenedSized` at the deployed last message `elemR`, so the last step reads at the deployed readers with no hypothesis (`readsAt_elemR_closed`). -/
 
 @[expose] public section
 
@@ -87,14 +70,12 @@ theorem forIn_sizes (body : Nat → Array (Array Name) × Nat × Nat → Id (For
     simp only [pure_bind]
     rw [forIn_sizes body g hb l s', h2, List.flatMap_cons, List.append_assoc]
 
-/-- The sizes of `rounds`' rounds. -/
 def sizesV (sh : Shape) (s : Flock.Schedule) : List Nat :=
   [128] ++ List.replicate (sh.m - 6) 2 ++ [2] ++ List.replicate (sh.kLog - 6) 2 ++ [64] ++
     List.replicate sh.claims 128 ++ [1, 1] ++ List.replicate (s.k0 + 1) 4 ++ [5, 5, 4] ++
     (List.range' 0 (s.levels.size - 1)).flatMap fun i =>
       if i + 1 < s.levels.size - 1 then [4, 4, 4, 4, 5, 5, 4] else [4, 4, 4, 4 + (2 <<< s.ext)]
 
-/-- **`rounds`' sizes are `sizesV`'s.** -/
 theorem rounds_sizes (sh : Shape) (s : Flock.Schedule) : (rounds sh s).toList.map Array.size = sizesV sh s := by
   unfold rounds
   simp only [Id.run, Std.Legacy.Range.forIn_eq_forIn_range', Std.Legacy.Range.size, List.forIn_pure_yield_eq_foldl,
@@ -125,7 +106,6 @@ theorem foldl_push_map {α β : Type} (f : β → α) : ∀ (l : List β) (init 
     rw [← Array.toList_inj]
     simp
 
-/-- **The algebra's ports**: `m{i}` of round `i`'s size, then the two accumulators. -/
 theorem spec_ports {sh : VStar.Algebra.Shape} {sp : VStar.RepS} (h : VStar.Algebra.spec sh = .ok sp) :
     ∃ s, sh.sched = .ok s ∧ sp.ports = (List.range (VStar.Algebra.rounds sh s).size).map
       (fun i => (s!"m{i}", (VStar.Algebra.rounds sh s)[i]!.size)) ++ [("acc0", 2), ("acc1", 2)] := by
@@ -170,7 +150,6 @@ theorem forIn_pushes_all {ε α β : Type} (P : β → Prop) (f : α → Array �
     · exact hi z hz
     · exact hx
 
-/-- **Each part's ports are its whole S's** (or the default, past its ports). -/
 theorem parts_ports {S : VStar.RepS} {ps : Array VStar.Part} (h : VStar.parts S = .ok ps) :
     ∀ p ∈ ps, ∀ x ∈ p.S.ports, x = default ∨ x ∈ S.ports := by
   unfold VStar.parts at h
@@ -194,7 +173,6 @@ theorem parts_ports {S : VStar.RepS} {ps : Array VStar.Part} (h : VStar.parts S 
     · exact .inl h
     · exact .inr (by simpa using h)
 
-/-- **An inner unit's input ports**: one per port of its S, of the port's words, then the folded value's. -/
 theorem innerUnit_inPorts {S : VStar.RepS} {name : String} {u : VStar.UnitC} (h : VStar.innerUnit S name = .ok u) :
     u.inPorts = S.ports.map (fun p => VStar.portWordsOf p.2) ++ [VStar.portWordsOf S.gf.nv] := by
   unfold VStar.innerUnit at h
@@ -213,8 +191,6 @@ open FlockSoundness.Refine (Frame colBytes)
 open FlockSoundness.Discharge.DecodeZL (ProofSizes)
 open FlockSoundness.Discharge.Exec (chunks closes glue chunks_append repFrames zcFrames lcFrames rsFrames ligFrames
   levelFr introFr queryFr chFr kFr capFr)
-
-/-! ## Which round holds which value count -/
 
 theorem filter_idx : ∀ (L : List ℕ) (k t : ℕ),
     ((List.range L.length).filter (fun i => L.getD i 0 != 0))[k]? = some t →
@@ -245,9 +221,6 @@ theorem filter_idx : ∀ (L : List ℕ) (k t : ℕ),
       rw [filter_idx L k t' ht']
       simp
 
-/-! ## Value counts -/
-
-/-- A frame's value count. -/
 def cv : Frame → ℕ
   | .one _ => 1
   | .vec vs => vs.length
@@ -256,7 +229,6 @@ def cv : Frame → ℕ
   | .bytes _ => 0
   | .sq _ _ => 0
 
-/-- Frames' value count. -/
 def nV (fs : List Frame) : ℕ := (vals fs).length
 
 theorem nV_cons (f : Frame) (fs : List Frame) : nV (f :: fs) = cv f + nV fs := by
@@ -265,16 +237,13 @@ theorem nV_cons (f : Frame) (fs : List Frame) : nV (f :: fs) = cv f + nV fs := b
 theorem nV_append (a b : List Frame) : nV (a ++ b) = nV a + nV b := by
   simp [nV, vals_append]
 
-/-- Rounds' value counts, and the pending frames'. -/
 def cntOf (x : List (List Frame) × List Frame) : List ℕ × ℕ := (x.1.map nV, nV x.2)
 
-/-- `glue` at value counts. -/
 def glueN (a b : List ℕ × ℕ) : List ℕ × ℕ :=
   match b.1 with
   | [] => (a.1, a.2 + b.2)
   | c :: cs => (a.1 ++ (a.2 + c) :: cs, b.2)
 
-/-- **Frames' rounds' value counts**, and the pending frames'. -/
 def cntPat (F : List Frame) : List ℕ × ℕ := cntOf (chunks F)
 
 theorem cntOf_glue (a b : List (List Frame) × List Frame) : cntOf (glue a b) = glueN (cntOf a) (cntOf b) := by
@@ -414,13 +383,10 @@ theorem cntPat_rs {n : ℕ} (hn : n ≠ 0) (rs : Array (Array F128)) (hrs : ∀ 
   unfold rsFrames
   simp only [cntPat_label, cntPat_append, hB, cntPat_sq _ hn, cntPat_nil, glueN_closed]
 
-/-- Level `i`'s seven rounds' value counts. -/
 def lvV : List ℕ := [4, 5, 0, 5, 0, 0, 4]
 
-/-- Pass `i` of the levels' loop's value counts, of `r` passes, at `yr` final values. -/
 def passV (r yr i : ℕ) : List ℕ := [0, 4, 4, 4] ++ if i + 1 < r then lvV else [4 + yr, 0, 0]
 
-/-- **A rep's rounds' value counts.** -/
 def schedV (sch : Flock.Schedule) (m kLog n yr : ℕ) : List ℕ :=
   [0, 0, 128] ++ List.replicate (m - 6) 2 ++ [2, 0] ++ List.replicate (kLog - 6) 2 ++ [64] ++
     List.replicate n 128 ++ [0, 1, 1] ++ List.replicate sch.k0 4 ++ lvV ++
@@ -458,7 +424,6 @@ theorem cntPat_lig {sch : Flock.Schedule} (T : F128) (cap : Array ByteArray) (p 
     cntPat_queryFr p (hq 0 (by omega)), cntPat_nil, glueN_cons, glueN_nil, glueN_closed, Nat.add_zero,
     Nat.zero_add, List.nil_append, List.cons_append, List.append_nil, List.append_assoc, List.replicate_succ, lvV]
 
-/-- **A rep's frames' rounds' value counts are `schedV`'s**, with nothing pending. -/
 theorem cntPat_repFrames {st : Flock.Setup} {sch : Flock.Schedule} (d : ByteArray) (e : ℕ) (p : Flock.Proof)
     (T : F128) (hm : 14 ≤ st.m) (hk : 0 < sch.k0) (hq : ∀ i < sch.levels.size, (sch.levels.getD i default).q ≠ 0)
     (hn : sch.n ≠ 0) (hL : 1 ≤ sch.levels.size) (hab : p.zerocheck.round1ab.size = 64)
@@ -470,8 +435,6 @@ theorem cntPat_repFrames {st : Flock.Setup} {sch : Flock.Schedule} (d : ByteArra
   simp only [cntPat_dom, cntPat_append, cntPat_zc hm, cntPat_lc, cntPat_rs (by omega) _ hrs,
     cntPat_lig T p.cap p.ligerito hk hq hn hL, hab, hc, hz, glueN_cons, glueN_closed, glueN_nil, Nat.add_zero,
     List.nil_append, List.cons_append, List.append_assoc]
-
-/-! ## Flags and V\*'s round sizes -/
 
 theorem schedPat_flags (sch : Flock.Schedule) {m : ℕ} (hm : 6 ≤ m) (kLog n yr : ℕ) :
     (schedPat sch m kLog n).map Prod.fst = (schedV sch m kLog n yr).map (· != 0) := by
@@ -486,7 +449,6 @@ theorem schedPat_flags (sch : Flock.Schedule) {m : ℕ} (hm : 6 ≤ m) (kLog n y
   simp only [List.map_append, List.map_replicate, List.map_flatMap, hl, h5, List.replicate_succ']
   simp [lvT, lvV, List.append_assoc]
 
-/-- **`schedV`'s nonzero entries are V\*'s rounds' sizes.** -/
 theorem schedV_filter (sch : Flock.Schedule) (m kLog n : ℕ) :
     (schedV sch m kLog n (2 <<< sch.ext)).filter (· != 0) = VStarSizes.sizesV ⟨m, kLog, n⟩ sch := by
   have hl : ((List.range' 0 (sch.levels.size - 1)).flatMap (passV (sch.levels.size - 1) (2 <<< sch.ext))).filter
@@ -518,8 +480,6 @@ theorem commitRounds_eq {rs : Array RecVStar.SchedRound} {L : List ℕ}
   rw [Array.getD_eq_getD_getElem?, Array.getElem?_eq_getElem hr, Option.getD_some, this,
     List.getD_eq_getElem?_getD, List.getElem?_eq_getElem hi', Option.getD_some]
 
-/-- **The `kk`-th committing round's V\* size is its value count**: round `t`, the `kk`-th of `commitRounds`, has
-`schedV`'s `t`-th entry as `rounds`' `kk`-th size. -/
 theorem rounds_at {m kLog claims kk t : ℕ} {sch : Flock.Schedule} {rs : Array RecVStar.SchedRound}
     (hs : fast100 m = some sch) (h : RecVStar.repRounds m kLog claims = some rs)
     (ht : (RecVStar.commitRounds rs)[kk]? = some t) :
@@ -536,8 +496,6 @@ theorem rounds_at {m kLog claims kk t : ℕ} {sch : Flock.Schedule} {rs : Array 
   rw [getElem!_pos _ kk hlt]
   exact hae
 
-/-! ## An honest rep's rows' sizes -/
-
 theorem vals_length_chunk {F : List Frame} {V : List ℕ} (h : cntPat F = (V, 0)) (t : ℕ) :
     (vals ((chunks F).1.getD t [])).length = V.getD t 0 := by
   have hV : (chunks F).1.map nV = V := congrArg Prod.fst h
@@ -549,7 +507,6 @@ theorem padRow_len (vs : List F128) : (padRow (colBytes vs)).length = 2 * _root_
     _root_.VStar.portWordsOf]
   omega
 
-/-- **An honest round's rows' sizes**: its tops' node rows, 128 bytes each at 64-byte nodes, then its value row. -/
 theorem honestRows_getD : ∀ (sched : List RecVStar.SchedRound) (chs : List (List Frame))
     (caps : List (Array ByteArray)), (∀ a ∈ caps, ∀ b ∈ a, b.size = 64) → ∀ t, t < sched.length → t < chs.length →
     ∃ n, ((honestRows sched chs caps).getD t []).map ByteArray.size =
@@ -575,7 +532,6 @@ theorem honestRows_getD : ∀ (sched : List RecVStar.SchedRound) (chs : List (Li
       (fun a ha => hcap a (List.mem_of_mem_drop ha)) t (by simpa using ht) (by simpa using hc)
     exact ⟨n, by simpa only [honestRows, List.getD_cons_succ] using hn⟩
 
-/-- **The honest proof at a rep**: `sizedProof` at the rep's shape, with the context's cap. -/
 def openP (c : RepCtx) (e : ℕ) : Flock.Proof :=
   { sizedProof c.st c.sch c.z (FlockSoundness.Refine.shapeOf c.st c.sch e) with
     cap := c.cap0.toArray
@@ -599,9 +555,6 @@ theorem openP_rep (c : RepCtx) {e : ℕ} (hn : c.n = 2 + e) (hL : 2 ≤ c.sch.le
   ⟨⟨e, hn, openP_sizes c e hcap hcapE⟩, hL,
     sizedProof_nonces c.st c.sch c.z (FlockSoundness.Refine.shapeOf c.st c.sch e), rfl, rfl, rfl⟩
 
-/-- **An honest rep's rows' byte sizes**: at a rep whose schedule is its frames' and whose cap has its level-0 top's
-64-byte nodes, `openP` is honest at the cap, and round `t` of its rows is its tops' 128-byte rows, then, where it
-absorbs, a row of `2 · portWordsOf` of `schedV`'s `t`-th entry bytes. -/
 theorem open_sized {c : RepCtx} {e : ℕ} (hsc : SchedOf c) (hn : c.n = 2 + e)
     (hcap : c.cap0.length = 2 ^ (c.sch.levels.getD 0 default).cap) (hcapE : ∀ b ∈ c.cap0, b.size = 64)
     (hdig : c.st.merkle.digestLen = 64) (T : F128) :
@@ -675,9 +628,6 @@ open Flock
 open Claims (Msg)
 open Claims.Recursion.VStarB
 
-/-- **`schedBridge` with its setup's coins and the shape's counts**: the table's `m`, `k_log` and claim count are the
-shape's, its rep schedule is `repRounds` there, and the inner statement is set up at `RecCoins.innerTags` with no
-public inputs, at a dense shape. -/
 theorem schedBridge' {x : Msg} (hx : DenseX x) :
     ∃ r rs s spec st, readX x = some r ∧ repSched r.shape = some rs ∧
       FlockDeploy.setupOf false (xIOf x) = some (s, spec, #[st]) ∧ st.m = r.shape.m ∧
@@ -730,7 +680,6 @@ namespace RecDeploy.RestElem
 open Flock
 open Claims (Msg)
 
-/-- **A dense inner statement's one table has its regions' bytes**: `setupHidden` checks them. -/
 theorem dense_regionBytes {x : Msg} {s : FlockDeploy.Ins} {spec : SessionSpec} {st : Stmt}
     (hset : FlockDeploy.setupOf false x = some (s, spec, #[st])) (htags : s.read.tags = RecCoins.innerTags)
     (hpi : s.read.publicInputs = none) : FlockVBridge.Family.RegionBytes st := by
@@ -756,8 +705,6 @@ open Claims (Msg)
 open Claims.Recursion.VStarB
 open RecDeploy.DeployedR
 open RecDeploy.RestRead
-
-/-! ## Names and lists -/
 
 theorem mIndex_v : RecVStar.mIndex "v" = none := by
   unfold Flock.RecVStar.mIndex; exact ite_eq_right_iff.2 fun h => absurd h (by decide +kernel)
@@ -828,9 +775,6 @@ theorem nodeOf_size {b : ByteArray} (h : b.size = 128) : (FlockDeploy.nodeOf b).
   rw [List.size_toArray, List.length_take, Array.length_toList, h']
   all_goals omega
 
-/-! ## The slots' rows' byte lengths -/
-
-/-- **A slot's port is one of V\*'s input rows**, of some `w` words, and its row has `16 · w` bits. -/
 theorem slot_row {σ : Slot} {sub : _root_.VStar.Sub} {u : _root_.VStar.UnitC}
     (hl : σ.c.leavesIn.getD 0 #[] = (Array.range u.inWords).map Int.ofNat)
     (hrows : σ.c.ports.toList.map (fun p => (p.name, p.words, p.bits)) = RecVStar.vstarRows sub u)
@@ -864,7 +808,6 @@ theorem slot_row {σ : Slot} {sub : _root_.VStar.Sub} {u : _root_.VStar.UnitC}
     obtain ⟨rfl, -, -⟩ := he
     exact absurd (List.of_mem_zip hab).1 hnm
 
-/-- **A cap's slot opens a 128-byte row**: port `top`, `CAP_TOP_WORDS = 64` words. -/
 theorem capSlot_len {x : Msg} {r : XR} (hr : readX x = some r) {s lv N : ℕ}
     (hst : (RecVStar.statements r.shape).toOption.bind (·[s]?) = some (_root_.VStar.Stmt.cap lv N))
     {ns : List ℕ} {σ : Slot} (hσ : σ ∈ capSlots r s ns) : (σ.row.length + 7) / 8 = 128 := by
@@ -885,8 +828,6 @@ theorem capSlot_len {x : Msg} {r : XR} (hr : readX x = some r) {s lv N : ℕ}
   rw [hrow, hw'']
   all_goals first | decide | simp [_root_.VStar.CAP_TOP_WORDS]
 
-/-- **A statement whose own ports hold a row is an inner part's**, at a dense shape: one of `parts` of the algebra's
-`spec`. -/
 theorem inner_of_ownPorts {sh : RecVStar.Inner} {vs : Array _root_.VStar.Stmt}
     (hvs : RecVStar.statements sh = .ok vs) (hsp : sh.sparse = none) (hh : sh.holo = false)
     {sv : _root_.VStar.Stmt} (hsv : sv ∈ vs) {q : String × String × Array (Option ℕ)}
@@ -911,8 +852,6 @@ theorem inner_of_ownPorts {sh : RecVStar.Inner} {vs : Array _root_.VStar.Stmt}
   · rcases FlockC3.VStarList.tail_cases hK hLk n sv hsv with ⟨l, N, rfl⟩ | ⟨UB, PB, N, rfl⟩ <;>
       simp [RecVStar.ownPorts] at hq
 
-/-- **A held row's slot opens `2 · portWordsOf` of its round's V\* size bytes**: its port is `m{kk}`, the `kk`-th
-committing round's, of `rounds`' `kk`-th size. -/
 theorem rowSlot_len {x : Msg} {r : XR} (hr : readX x = some r) (hh : r.shape.holo = false)
     (hsp : r.shape.sparse = none) {rs : Array RecVStar.SchedRound} (hrs : repSched r.shape = some rs) {j : ℕ}
     {σ : Slot} (h : rowSlot r j = some σ) :
@@ -1022,8 +961,6 @@ theorem rowSlot_len {x : Msg} {r : XR} (hr : readX x = some r) (hh : r.shape.hol
   rw [hrowl, hwk]
   omega
 
-/-- **Stream round `j`'s slots' byte lengths**: its tops' 128-byte rows, then, where it absorbs, one row of
-`2 · portWordsOf` of `schedV`'s `j % R`-th entry. -/
 theorem roundSlots_sizes {x : Msg} {r : XR} (hr : readX x = some r) (hh : r.shape.holo = false)
     (hsp : r.shape.sparse = none) {rs : Array RecVStar.SchedRound} (hrs : repSched r.shape = some rs)
     {sch : _root_.Flock.Schedule} (hsch : fast100 r.shape.m = some sch)
@@ -1077,9 +1014,6 @@ theorem roundSlots_sizes {x : Msg} {r : XR} (hr : readX x = some r) (hh : r.shap
       simp only [if_pos hA, Option.toList_some, List.map_cons, List.map_nil, hlen,
         FlockDeploy.Cnt.rounds_at hsch hrr hkk]
 
-/-! ## The opened rows' sizes -/
-
-/-- **The opened rows' byte sizes are the slots' rows'**, round by round, at every witness `finalR` reads. -/
 theorem rows_os (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))) {x : Msg}
     (hx : DenseX x) {ws : List Claims.Flock.Wit} (hl : ws.length = nS x) {os last}
     (hf : finalR (lastAt (restR elem) x ws) = some (os, last)) :
@@ -1125,8 +1059,6 @@ theorem rows_os (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × 
   | exact (List.size_toArray _).trans (readForms_length _ _)
   | simp [Slot.opening, readForms_length, ByteArray.size]
 
-/-- **An honest rep at the opened rows' sizes**: where `B` has, round by round, the sizes `open_sized` gives an honest
-rep's rows, `openP` is an honest rep at the context's cap whose rows have `B`'s sizes. -/
 theorem rep_sized {C : FlockDeploy.RepCtx} {e : ℕ} (hsc : FlockDeploy.SchedOf C) (hn : C.n = 2 + e)
     (hcap : C.cap0.length = 2 ^ (C.sch.levels.getD 0 default).cap) (hcapE : ∀ b ∈ C.cap0, b.size = 64)
     (hdig : C.st.merkle.digestLen = 64) (B : List (List ℕ)) (hlen : B.length = C.sched.length)
@@ -1141,9 +1073,6 @@ theorem rep_sized {C : FlockDeploy.RepCtx} {e : ℕ} (hsc : FlockDeploy.SchedOf 
   rw [hlen] at ht
   rw [getD_sizes, hsz t ht, hB t ht]
 
-/-- **`OpenedSized` at every `elem`**: the opened rows are `elem`'s slots' (`rows_os`), whose sizes at each rep's
-block are an honest rep's (`roundSlots_sizes`, `open_sized`), at the rep's context, whose schedule is its frames'
-(`schedOf_repCtx`) and whose cap is round 0's link nodes, 64 bytes each (`capSlot_len`). -/
 theorem openedSized_of (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))) :
     RestElem.OpenedSized elem := by
   intro x hx c ws hl _ os last hf hos v hv k hk
@@ -1303,10 +1232,8 @@ namespace RecDeploy.RestElem
 open RecDeploy.DeployedR
 open RecDeploy.OpenRows
 
-/-- **`OpenedSized` at the deployed last message `elemR`.** -/
 theorem openedSized_elemR : OpenedSized elemR := OpenSlots.openedSized_of elemR
 
-/-- **The last step reads at the deployed readers at `elemR`**, with no hypothesis. -/
 theorem readsAt_elemR_closed : RestRead.ReadsAt rdR finalR (restR elemR) := readsAt_elemR' openedSized_elemR
 
 end RecDeploy.RestElem
