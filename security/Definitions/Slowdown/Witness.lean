@@ -18,9 +18,7 @@ that nothing a proof block reads is fresh and the policy holds at read cap `0`.
 * `idC`: a circuit contained in itself, and `M1` and `Mθ`, the toy in `Toy.D` and in `Dθ` through it;
 * `T1`: the toy's threading, one counted multiplication (gate `2`) of the weight by the token, the token the one
   thread's value; `T0`, the threading of no counted multiplication; `σ1` and `σ0`, their one parameter slot;
-  `layered0` and `layered1`, `T0` and `T1` keyed with no roots and no lookups;
-* `OneWindow`: one PoUW window of capacity `2` over the outcomes `Bool`, its certificate `right` or `incorrect` at every
-  outcome, and no incorrect proof block (`bad`).
+  `layered0` and `layered1`, `T0` and `T1` keyed with no roots and no lookups.
 -/
 
 @[expose] public section
@@ -140,29 +138,5 @@ def layered1 (d b : ℕ) : Layered T1 d 1 0 b where
   col_input _ h := absurd h (notMem_empty _)
   col_bits _ h := absurd h (notMem_empty _)
   col_disjoint _ h := absurd h (notMem_empty _)
-
-/-! One PoUW window of capacity `2` over the outcomes `Bool`, and no incorrect proof block. -/
-
-namespace OneWindow
-
-/-- The window's capacity. -/
-abbrev cap : Fin 1 → ℝ := fun _ => 2
-
-/-- No certificate is incorrect. -/
-abbrev right : Bool → Fin 1 → Prop := fun _ _ => False
-
-/-- Every certificate is incorrect. -/
-abbrev incorrect : Bool → Fin 1 → Prop := fun _ _ => True
-
-/-- No incorrect proof block. -/
-abbrev bad : Bool → Finset Empty := fun _ => ∅
-
-/-- An incorrect proof block's identity, of none. -/
-abbrev ident : Empty → Unit := fun b => b.elim
-
-/-- An incorrect proof block's time and the declared work it skips, of none. -/
-abbrev time : Empty → ℝ := fun b => b.elim
-
-end OneWindow
 
 end Slowdown.Witness

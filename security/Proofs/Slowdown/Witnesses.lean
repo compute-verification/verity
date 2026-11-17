@@ -6,7 +6,6 @@ public import Proofs.Core
 public import Proofs.InferenceOnly.Lemmas
 public import Proofs.Slowdown.LoomisWhitneyBase
 public import Definitions.InferenceOnly.Reads
-public import Proofs.Slowdown.RemoteMonitoringPeriod
 public import Proofs.Slowdown.Capability.Witnesses
 public import Proofs.Core.Circuit
 public import Mathlib.Analysis.SpecialFunctions.Pow.Real
@@ -123,7 +122,7 @@ end Slowdown.Witness
 
 namespace Slowdown.SecurityProofs
 
-open Verity Finset Slowdown.Capability.Toy Slowdown.Witness Slowdown.Slowdown
+open Verity Finset Slowdown.Capability.Toy Slowdown.Witness
 
 theorem ThreadedTraining_honest : Guarantees.ThreadedTraining_honest :=
   ⟨compliesRate_D, theta_id D, T1_threaded, T1_weights, coverage_T1⟩
@@ -190,83 +189,5 @@ theorem LayeredTraining_nontrivial : Guarantees.LayeredTraining_nontrivial := by
     by norm_num [Assumptions.CapBelowColumns], T0_weights _ _ _ _ _, not_coverage_T0, ?_⟩
   rw [bound_T0, size_D]
   norm_num
-
-theorem executionPhasesHold_T1 : Assumptions.ExecutionPhasesHold T1 0 1 (1 / 2) 2 1 1 1 (1 / 2) (1 / 2) 1 0 := by
-  unfold Assumptions.ExecutionPhasesHold
-  rw [bound_T1 _ (by norm_num), card_T1]
-  norm_num
-
-theorem not_executionPhasesHold_T0 : ¬ Assumptions.ExecutionPhasesHold (T0 D) 1 1 (1 / 2) 0 1 1 0 (1 / 2) (1 / 2) 1 0 := by
-  unfold Assumptions.ExecutionPhasesHold
-  rw [bound_T0, show (T0 D).M.card = 0 from rfl]
-  norm_num
-
-theorem slowdown_T0_fails :
-    ¬ (efficiency 1 1 2 0 ≤
-        unregisteredShare 2 0 +
-            min (residualShare 0 2) (memoryCap (T0 D).reuse 1 0 ((1 : ℕ) / (2 : ℕ) : ℝ) 1 (1 / 2) (1 / 2) * (1 + 1 / 1)) +
-          declaredShare 1 (rhoT ((1 : ℕ) / (2 : ℕ) : ℝ) (1 / 2) ((T0 D).bound 1 (1 / 2) 1 0)) 2 0 + 0) := by
-  rw [bound_T0, show (T0 D).reuse = 0 from rfl]
-  norm_num [efficiency, unregisteredShare, residualShare, memoryCap, declaredShare, rhoT]
-
-theorem SlowdownThreaded_honest : Guarantees.SlowdownThreaded_honest := by
-  refine ⟨compliesRate_D, theta_id D, T1_threaded, T1_weights, by rw [size_D]; norm_num, by decide,
-    by norm_num [Assumptions.ExecutionPhaseLength], ?_, executionPhasesHold_T1⟩
-  rw [show T1.reuse = 1 from rfl]
-  norm_num
-
-theorem SlowdownThreaded_nontrivial : Guarantees.SlowdownThreaded_nontrivial := by
-  refine ⟨by norm_num, by norm_num, by norm_num, by norm_num, by norm_num, by norm_num, by norm_num, by norm_num,
-    by norm_num, by norm_num, compliesRate_D, theta_id D, T0_threaded _ _ _ _ _, T0_weights _ _ _ _ _,
-    by rw [size_D]; norm_num, by decide, by norm_num, by norm_num, by norm_num, by norm_num,
-    by norm_num [Assumptions.ExecutionPhaseLength], by norm_num, not_executionPhasesHold_T0, slowdown_T0_fails⟩
-
-theorem SlowdownThreadedSlots_honest : Guarantees.SlowdownThreadedSlots_honest := by
-  refine ⟨compliesRate_D, theta_id D, T1_threaded, T1_weightsSlots, by rw [size_D]; norm_num, by decide,
-    by norm_num [Assumptions.ExecutionPhaseLength], ?_, executionPhasesHold_T1⟩
-  rw [show T1.reuse = 1 from rfl]
-  norm_num
-
-theorem SlowdownThreadedSlots_nontrivial : Guarantees.SlowdownThreadedSlots_nontrivial := by
-  refine ⟨by norm_num, by norm_num, by norm_num, by norm_num, by norm_num, by norm_num, by norm_num, by norm_num,
-    by norm_num, by norm_num, compliesRate_D, theta_id D, T0_threaded _ _ _ _ _, T0_weightsSlots _ _ _ _ _,
-    by rw [size_D]; norm_num, by decide, by norm_num, by norm_num, by norm_num, by norm_num,
-    by norm_num [Assumptions.ExecutionPhaseLength], by norm_num, not_executionPhasesHold_T0, slowdown_T0_fails⟩
-
-theorem oneExecutionPhase_withinCompute : Assumptions.WithinCompute OneWindow.cap 2 := by
-  norm_num [Assumptions.WithinCompute]
-
-theorem oneExecutionPhase_pouwSound : Assumptions.PouwSound (PMF.uniformOfFintype Bool) OneWindow.right 0 :=
-  fun _ => (prob_of_forall_not _ fun _ h => h).le
-
-theorem oneExecutionPhase_not_pouwSound : ¬ Assumptions.PouwSound (PMF.uniformOfFintype Bool) OneWindow.incorrect 0 := by
-  intro h
-  have h1 := h 0
-  have h2 := prob_add_not (PMF.uniformOfFintype Bool) (fun ω => OneWindow.incorrect ω 0)
-  rw [prob_of_forall_not (PMF.uniformOfFintype Bool) (E := fun ω => ¬ OneWindow.incorrect ω 0) fun _ h => h trivial]
-    at h2
-  linarith
-
-theorem SlowdownRemote_honest : Guarantees.SlowdownRemote_honest :=
-  ⟨oneExecutionPhase_withinCompute, oneExecutionPhase_pouwSound, fun _ b => b.elim, fun b => b.elim, Cut.SecurityProofs.toy_complies,
-    Cut.SecurityProofs.toy_values, Cut.SecurityProofs.toy_noSharedPair, Cut.SecurityProofs.toy_hardness 2,
-    Cut.SecurityProofs.toy_exports 2, by show 2 ≤ 0 + 0 + Cut.Toy.W.N + 0; rw [Cut.SecurityProofs.toy_N],
-    fun _ => by norm_num [Assumptions.ResidualAtMost, incorrectCapacity]⟩
-
-theorem SlowdownRemote_nontrivial : Guarantees.SlowdownRemote_nontrivial := by
-  refine ⟨by norm_num, by norm_num, fun _ => by norm_num, by simp [Assumptions.WithinCompute], oneExecutionPhase_not_pouwSound,
-    by norm_num, by norm_num, by norm_num, fun _ b => b.elim, fun _ b => b.elim,
-    fun _ _ _ => by simp, by norm_num, fun b => b.elim, by norm_num, by norm_num, by norm_num,
-    fun _ b => b.elim, fun b => b.elim, by norm_num, by norm_num, by norm_num, by norm_num, by norm_num, by norm_num,
-    by norm_num, by norm_num, Cut.SecurityProofs.toy_complies, Cut.SecurityProofs.toy_values,
-    Cut.SecurityProofs.toy_noSharedPair, Cut.SecurityProofs.toy_hardness 2, Cut.SecurityProofs.toy_exports 2,
-    by norm_num, by show 100 ≤ 0 + 100 + Cut.Toy.W.N + 0; omega, by norm_num,
-    fun _ => by norm_num [Assumptions.ResidualAtMost, incorrectCapacity], by norm_num, ?_⟩
-  intro h
-  rw [prob_of_forall_not] at h
-  · norm_num at h
-  · rintro - ⟨h1, -⟩
-    rw [Cut.SecurityProofs.toy_workHE] at h1
-    norm_num [efficiency, unregisteredShare, residualShare, lagShare] at h1
 
 end Slowdown.SecurityProofs

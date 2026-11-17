@@ -465,10 +465,9 @@ None of these is assumed silently; each would restate the conclusion:
 | The inference-only policy | `InferenceOnlyCheck.Properties.SecurityProofs.DescWitnesses`, `InferenceOnly.CompliesRate`, `InferenceOnly.Complies` | Proved at its rate, with each block within (c, k) on the unrolled check's verdict (the lemma `InferenceOnlyCheck.Properties.SecurityProofs.refines`); the step to a (c, k)-partition of the registered circuit itself is open, and k_F (what incorrect proof blocks inject) and k_a (the advice's share) are unbounded |
 | Onsite's k_S | `Pous.Guarantees.StreamedWipe`, `NetTiming.Guarantees.MonitoringPeriodLeakAccepted` | Proved per wipe and per monitoring period, in that order; nothing composes them into k_S |
 | Accounting | the assignment of a run's counted multiplications not yet in Lean | Open |
-| Rate ceiling ζ̄ | the inline hypotheses of `Slowdown.Guarantees.SlowdownRemote`; a named Prop not yet in Lean | Open |
+| Rate ceiling ζ̄ | not yet in Lean | Open |
 | The floor | `Slowdown.Guarantees.CapabilityFloor` | Proved, under coverage |
 | Slowdown | `ResourceAccounting.Slowdown.slowdown`, `ResourceAccounting.Slowdown.threshold`, `ResourceAccounting.Slowdown.cost` | Defined, with cost in fleet-time; no theorem reads it |
-| The bounds | `Slowdown.Guarantees.SlowdownRemote`, `Slowdown.Guarantees.SlowdownThreaded` | Proved as arithmetic over inline hypotheses, not over the definition above |
 
 ## Three trees
 

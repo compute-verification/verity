@@ -37,10 +37,8 @@ the check of record, `InferenceOnlyCheck.Theta.evaluate`: the policy check at th
   that it is Boolean or of positive fan-in; and the record SPOT's case commits to names, by its SHA-512, the program
   one-stage v2's verifier verifies the sessions against (`StageHeld`; SPOT refuses the recursive form by name). With one
   digest for the two records, the registered circuit the policy checked and the program SPOT verifies have one SHA-512.
-* `AcceptComplies`: its corollary in the form `Slowdown.Guarantees.SlowdownThreaded` reads, `InferenceOnly.CompliesRate Γ α d` from
-  acceptance, on a declaration acceptance exhibits and on every other. `Slowdown.Guarantees.SlowdownRemote` reads the count
-  verdict instead, `InferenceOnly.CompliesAtMost c k n d`, which a published `complies` of the count gives
-  (`InferenceOnlyCheck.Properties.DescCountsCK`).
+* `AcceptComplies`: its corollary `InferenceOnly.CompliesRate Γ α d` from acceptance, on a declaration acceptance exhibits
+  and on every other.
 
 A check that accepts every input accepts `ev = []`, where neither conclusion holds (`InferenceOnlyHeld` and
 `CompliesHeld` take three cases): the proofs show both fail there.
@@ -167,7 +165,7 @@ def AcceptInferenceOnly : Prop :=
   ∀ (blobs : Array ByteArray) (ps : List Named) (c : ByteArray) (ev : List Case) (pub prof : Keyed),
     (Core.Remote.protocol.on blobs).check ps c ev = .accept pub prof → InferenceOnlyHeld ev
 
-/-- What remote's acceptance establishes in the form `Slowdown.Guarantees.SlowdownThreaded` reads, about its cases `ev`: they
+/-- What remote's acceptance establishes about its cases `ev`: they
 are the three subprotocols' cases in order, the policy's case decodes to the parameters `p`, the run's record `cr` and
 the evidence `e`, the record names the registered circuit `P` by its SHA-512, the instance the policy checked, expanded
 gate by gate, has a parse carrying the policy's parameters and a declaration `P` lays out with its θ, which complies at
@@ -187,7 +185,7 @@ def CompliesHeld (ev : List Case) : Prop :=
       Expands (instanceOf p e) j' → Parses j' i → LaysOut P d.D → Names i.theta d.θ →
         VerifierOwn p i ∧ InferenceOnly.CompliesRate i.gamma ((i.num : ℝ) / i.den) d
 
-/-- **Remote's acceptance gives `InferenceOnly.CompliesRate`**, the hypothesis `Slowdown.Guarantees.SlowdownThreaded` takes: on every input
+/-- **Remote's acceptance gives `InferenceOnly.CompliesRate`**: on every input
 remote's check accepts, on any blobs, its cases are `CompliesHeld`. -/
 def AcceptComplies : Prop :=
   ∀ (blobs : Array ByteArray) (ps : List Named) (c : ByteArray) (ev : List Case) (pub prof : Keyed),
