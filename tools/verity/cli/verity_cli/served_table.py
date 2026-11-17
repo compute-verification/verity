@@ -505,10 +505,13 @@ def _stop_challenger(cfg: Mapping[str, Any], state: Path) -> None:
 
 
 #: the challenger, whose coins SPOT's sample and Pearl+'s salt and sample read; its Lean coins' verifier is built when
-#: missing and SPOT's key is made at the deployed parameters, so it waits long
+#: missing and SPOT's key is made at the deployed parameters, so it waits long. The auditor's own gate (`run.sh
+#: bindings`) gives only Pearl+'s gate, peer and key, and SPOT its gate in the loopback's place
 STARTS[CHALLENGER] = Start(writes={"sampled-proofs": ("loopback", "main-file"),
                                    "pearl-plus": ("gate", "peer", "lane", "key-sha512", "main-file")},
-                           serve=_serve_challenger, stop=_stop_challenger, within=1800)
+                           serve=_serve_challenger, stop=_stop_challenger, within=1800,
+                           optional=frozenset({("sampled-proofs", "loopback"), ("sampled-proofs", "main-file"),
+                                               ("pearl-plus", "lane"), ("pearl-plus", "main-file")}))
 
 
 #: the scripts' one flag for a development run's attester: on the workload's machine, under a key made for the run
