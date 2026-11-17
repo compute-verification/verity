@@ -24,6 +24,17 @@ import pytest
 from verity.protocols.resource_accounting.compute.pouw.prover.circuit import SCHEMES
 from verity.protocols.resource_accounting.compute.pouw.prover.circuit.ncp2 import Shape
 from verity.protocols.resource_accounting.compute.pouw.prover.schemes.pearl_c_device import DEVICES
+from verity.protocols.resource_accounting.compute.pouw.prover.serving import circuit as PC
+from verity.protocols.resource_accounting.compute.pouw.prover.serving import device as PD
+from verity.protocols.resource_accounting.compute.pouw.prover.serving import native as PN
+from verity.protocols.resource_accounting.compute.pouw.prover.serving import pearl_c as PPD
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.lead import feed as PF
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.operands import quantize
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import kernel as PK
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c.lanes import (
+    schedule_of,
+    whole_options,
+)
 from verity.protocols.resource_accounting.compute.pouw.verifier import core_check as CC
 from verity.protocols.resource_accounting.compute.pouw.verifier import salt as PS
 from verity.protocols.resource_accounting.compute.pouw.verifier import window as Wd
@@ -41,18 +52,10 @@ from verity.protocols.resource_accounting.compute.pouw.verifier.serving import (
     SchemeId,
 )
 from verity.protocols.proofs.spot.verifier.challenger import challenger as LC
+from verity_torch.pouw.pearl_c import grouped as PG
 
 from verity_vllm.protocols import pouw as P
 from verity_vllm.protocols.interface import Context
-from verity.protocols.resource_accounting.compute.pouw.prover.serving import circuit as PC
-from verity.protocols.resource_accounting.compute.pouw.prover.serving import device as PD
-from verity.protocols.resource_accounting.compute.pouw.prover.serving import native as PN
-from verity.protocols.resource_accounting.compute.pouw.prover.serving import pearl_c as PPD
-from verity.protocols.resource_accounting.compute.pouw.prover.serving.lead import feed as PF
-from verity.protocols.resource_accounting.compute.pouw.prover.serving.operands import quantize
-from verity_torch.pouw.pearl_c import grouped as PG
-from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import kernel as PK
-from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c.lanes import schedule_of, whole_options
 
 HOST = ("ncp-v1", "ncp-v1-shift24", "ncp-v2")
 #: the least (n, k) of a linear the host schemes' domain takes
@@ -118,8 +121,8 @@ def test_a_schedule_pearl_cs_path_cannot_run_is_refused_under_the_schemes_name(m
 def test_a_pearl_c_scheme_is_built_only_for_a_name_this_path_runs_and_only_under_that_name():
     """A test instance takes `PearlC`'s keywords; one of another device's prices names itself with them, and is refused."""
     with pytest.raises(KeyError) as e:
-        PPD.scheme_of("pearl-c-sm120-v1")
-    assert e.value.args == (f"'pearl-c-sm120-v1': this device path runs {', '.join(PPD.SCHEMES)}",)
+        PPD.scheme_of("pearl-c-nvfp4-v0")
+    assert e.value.args == (f"'pearl-c-nvfp4-v0': this device path runs {', '.join(PPD.SCHEMES)}",)
     for name in PPD.SCHEMES:
         own = DEVICES[SchemeId.parse(name).device].prices
         assert PPD.scheme_of(name).name == name

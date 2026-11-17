@@ -74,13 +74,10 @@ loaded build's own flags (`workspace_bytes`). The other front ends and the scrip
   wrap correction to H1V3 on the CPU before `sbench.sh` asks for a GPU.
 - The references the gates hold kernels to, beside the Definition: `h1v3_ref.py` (H1V3 itself, from the tree on
   `PYTHONPATH`).
-- `job.sh`: `h1u.cu`'s libraries built on a CPU node, then `benchmarks/pouw`'s partials tests on each build on a leased
-  H200 or B200.
 - `dmmsweep.py`: dither-a's GEMM configs at the decode shapes, each gated before it is timed.
 
 ## Tools
 
-- `pin.sh`: the int8 Llama-3.1-8B pin in a node's HF cache.
 - `benchmarks/kernels/numabind/numabind.py` runs each timed command here on the leased GPU's NUMA node.
 - `kernels.py`, `stepprof.py`: from an nsys capture's SQLite export, an arm's kernels and a decode step by part.
 - `picks.py`: each Inductor kernel's autotune choice in an engine's process, or a fixed one, so two processes compiling the

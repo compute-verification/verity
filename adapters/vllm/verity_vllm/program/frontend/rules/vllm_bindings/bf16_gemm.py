@@ -8,8 +8,6 @@ unsupported rather than being interpreted as a non-split launch.  Every route an
 """
 from __future__ import annotations
 
-__models__ = ("zai-org/GLM-5.3",)
-
 import torch
 from verity.circuits.refs import Coll
 from verity_vllm.definitions.registry import bf16_gemm_check

@@ -208,7 +208,10 @@ class Draft(_Model):
         the draft's hidden rows, normed by `shared_head.norm`."""
         from verity_vllm.definitions.registry import mtp_draft as MD
         NL, H, V = self.net.NL, self.H, int(self.C["V"])
-        w = lambda f: self.w[(NL, f)]  # noqa: E731
+
+        def w(f: str) -> Coll:
+            return self.w[(NL, f)]
+
         emb = self.k("embedding_shard", VS=V, H=H, START=self.net.rank * V)
         e = self.all_reduce([self.call(emb, t, self.w["embed"].refs).refs for t in rows])
         cut = MD.eh_cut(bind(MD.MtpEhNorm, H=H, BLOCK=1 << (H - 1).bit_length(), WARPS=4, EPS=self.EPS))

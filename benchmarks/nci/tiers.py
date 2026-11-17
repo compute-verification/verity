@@ -1,7 +1,7 @@
 """The counted share of frontier pretraining from scratch under the verification stack: the FLOP an unconstrained run
 needs, divided by the FLOP the developer spends, registered plus unregistered. The developer must still compute the counted
 multiplications M (an updated weight times an activation or activation gradient). Terms and symbols follow
-ARCHITECTURE.md's Glossary.
+GLOSSARY.md.
 
 counted share <= s + min(r, memory cap) + 1/rho_NCI + chi, each term an upper bound under the model; ``STATUS`` says which
 steps are proved.
@@ -71,9 +71,9 @@ REFERENCE_THREADED = (10.0, 37248.0)
 
 #: the card file, the one hardware source for the GPUs here: the RTX PRO 6000 Server Edition at its firmware's maximum
 #: (188 SMs, 1024 tensor units an SM clock, a FP8 E4M3 MAC one unit, the tensor clock's ceiling 2430 MHz), pinned from
-#: hardware/cards/rtx-pro-6000-server.toml; tests/test_tiers.py holds the pin to the file
+#: calibration/hardware/cards/rtx-pro-6000-server.toml; tests/test_tiers.py holds the pin to the file
 CARD = {"sms": 188, "tensor": 1024, "clock_hz": 2430e6}
-#: the clock PoUW credits on sm_120, the card file's clock.sm (hardware/cards/rtx-pro-6000-server.toml: 2430 MHz);
+#: the clock PoUW credits on sm_120, the card file's clock.sm (calibration/hardware/cards/rtx-pro-6000-server.toml: 2430 MHz);
 #: tests/test_tiers.py holds the literal to it
 CREDITED_CLOCK_HZ = 2430e6
 #: a server's GPUs at the table's FP8 dense peak, 2 FLOP a MAC
