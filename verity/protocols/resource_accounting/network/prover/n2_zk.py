@@ -16,13 +16,13 @@ the witness lines go to ``n2.log`` beside ``--witness``, and without ``--witness
       [--jobs 1] [--gpu] [--debug-clear] [--dry] [--draw K] [--witness FILE]
 
 * **The run** (``--warden-run``): an active network attester's run (`network_attester_serve.py`'s, or the gate's
-  ``warden-rehearse``'s), read by `network_attester_chain`: its own certified records under its key and session, on the network
+  ``warden-rehearse``'s), read by `network_attester_chain`: its own attested records under its key and session, on the network
   attester link (`service.NetworkAttesterProfile`: both heads at the network attester's grid and parameters digest, no sync
   declared or charged), a network attester rehearsal's run refused by name. Which execution phases its signer refused follows
   what the node sent, so the public summary of a run whose signer refused any holds each member's
   ``attester_refused`` and ``ok`` alone, nothing per window, and the members whole go to ``--witness``.
 * **Members.** One stream each, over all of the run's execution phases: ``honest``; ``tampered``, the honest records
-  with window 0's egress head one count off (`one_count`), committed by the prover under its own root, the certificates
+  with window 0's egress head one count off (`one_count`), committed by the prover under its own root, the attestations
   still the network attester's, its head failing its signed digest alone. The prover's references
   (`head_check.reference_parts`, and the proof block's output word by the gates' references, `TransferBlocks.outputs`) say
   beforehand which windows each member's proofs refuse (`expected`).
@@ -44,7 +44,7 @@ the witness lines go to ``n2.log`` beside ``--witness``, and without ``--witness
   Lean included). Then the link's network verdict (`TransferBlocks.network_verdict`). The members' rounds run one after
   another: outer proofs go through the ZK server one at a time (`ONE_SESSION`), so ``--jobs`` is 1 and more is refused.
 * **What the verifier receives**, per execution phase, kept under ``<member>/verifier/`` (`RECEIVED`): the registration
-  record (the salted root, nothing of the certificates) and the sample; the two certificates' public fields, from the attester,
+  record (the salted root, nothing of the attestations) and the sample; the two attestations' public fields, from the attester,
   the auditor's device; the declared clock syncs; from the prover, the statement's public file (its header and each row's
   hiding commitment), its session files, and the salts of the ``pub`` and ``o0`` rows with the output word; and the
   outcome record. Its own: the circuit file's SHA-512 (its lowering, which prover and verifier share here), the Program's
@@ -187,7 +187,7 @@ def _without_clear(body: dict) -> dict:
 
 def network_attester_link(run: Path) -> tuple[TransferBlocks, dict, dict, list]:
     """A network attester run's link (`network_attester_chain.link`: the active network attester's own records, its key and
-    session, no sync), the plan it stands for (its windows, no syncs), its certified records by (direction, window) and
+    session, no sync), the plan it stands for (its windows, no syncs), its attested records by (direction, window) and
     the signer's refusals. A network attester rehearsal's run is refused by name (`network_attester_chain.PROXY`)."""
     WC = proof_drivers.drivers().network_attester_chain
     lw, dep, _ = WC.link(run)
@@ -197,12 +197,12 @@ def network_attester_link(run: Path) -> tuple[TransferBlocks, dict, dict, list]:
 
 
 def phases(run: Path, edit=None) -> SimpleNamespace:
-    """Every execution phase of the active network attester's run (`network_attester_link`) with both certified records, as the
+    """Every execution phase of the active network attester's run (`network_attester_link`) with both attested records, as the
     prover holds it before it registers: its opening (fresh salts), the root it commits (`TransferBlocks.root`), the proof
     block's arguments under that root (None where the proof block takes no instance), each end's head check's failed
     parts (`head_check.reference_parts`) and the proof block's output word by the gates' references
-    (`TransferBlocks.outputs`); and the network attester's certificates, which the verifier receives from it, no sync
-    declared. ``edit(lw, w, pair)``: the records the prover commits in place of the certified ones. ``expect``: the
+    (`TransferBlocks.outputs`); and the network attester's attestations, which the verifier receives from it, no sync
+    declared. ``edit(lw, w, pair)``: the records the prover commits in place of the attested ones. ``expect``: the
     verdict the verifier should reach on an honest proof of the opening."""
     lw, plan, certified, refused = network_attester_link(run)
     syncs = [ClockSync(d, Fraction(r)) for d, r in plan["syncs"]]
@@ -231,7 +231,7 @@ def phases(run: Path, edit=None) -> SimpleNamespace:
 
 def one_count(lw: TransferBlocks, w: int, pair: tuple[CertifiedRecord, CertifiedRecord]):
     """Window 0's egress head with one frame more in its first bucket that has frames and room (else its first with
-    room), the attester's salt and certificate unchanged: what a prover that changed one count commits."""
+    room), the attester's salt and attestation unchanged: what a prover that changed one count commits."""
     if w != 0:
         return pair
     egress, ingress = pair

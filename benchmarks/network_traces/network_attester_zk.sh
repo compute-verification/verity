@@ -10,7 +10,7 @@
 #      WZ_UNITS (network_attester_zk.py's --units, 16)  WZ_CACHE (the build cache, kept across runs where
 #      writable; hidden_zk's by default)  WZ_DRY=1
 #      (the statements and the host's read of them only)
-# Kept in $OUT/run: the rehearsal's public files (deployment, certified records, registrations, check; never its records
+# Kept in $OUT/run: the rehearsal's public files (deployment, attested records, registrations, check; never its records
 # or salts); $OUT/wzk: network_attester_zk's summary and logs and everything the verifier received; never a prover's file (inst-*)
 # nor a circuit (its pin is kept), nor a session's archive.
 set -uo pipefail
