@@ -151,7 +151,7 @@ def test_the_links_origin_is_read_on_the_clock_its_ticks_read_and_a_host_without
     time and every tick's are one clock's readings: a link asked for no bucket is made with the origin that clock read
     and keeps its own default. On a host that gives no such clock the runner refuses before it reads the session's
     record, and nothing listens."""
-    certifiers, made = L.raw_clock, []
+    attesters, made = L.raw_clock, []
 
     class Made(L.CoinLink):
         def __init__(self, *args, **given) -> None:
@@ -164,7 +164,7 @@ def test_the_links_origin_is_read_on_the_clock_its_ticks_read_and_a_host_without
     args = L.parse(["--out", str(tmp_path), "--port", "1", "--minutes", "0", *FAST])
     summary = asyncio.run(L.serve(args, L.CoinLinkParams(), coins, None))
     (link_, given), = made
-    assert given["origin"] == 41.5 and "clock" not in given and link_.clock is certifiers
+    assert given["origin"] == 41.5 and "clock" not in given and link_.clock is attesters
     assert (summary["buckets"], summary["windows"], summary["peer"]) == (0, [], None)
 
     def none() -> float:

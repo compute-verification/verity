@@ -49,10 +49,10 @@ UNBOUND = sorted(k for k in (f"{p}.{c}.{k}" for p, cs in BINDINGS.items() for c,
                  if k not in WRITTEN)
 #: the served window's runner's variables under `BINDINGS`, and the bindings the pieces read, in the pieces' order
 VARIABLES = {
-    "CERTIFIER_CHAIN_CMD": '.venv/bin/python benchmarks/network_traces/certifier_piece.py chain "$@"',
-    "CERTIFIER_PERIOD_CMD": '.venv/bin/python benchmarks/network_traces/certifier_piece.py period "$@"',
+    "CERTIFIER_CHAIN_CMD": '.venv/bin/python benchmarks/network_traces/attester_piece.py chain "$@"',
+    "CERTIFIER_PERIOD_CMD": '.venv/bin/python benchmarks/network_traces/attester_piece.py period "$@"',
     "CLASSES": "4,32,4 8,32,4,4,16", "V3C_CLASS": "8,32,4,4,16",
-    "CERTIFIER_FRONT": '.venv/bin/python benchmarks/network_traces/certifier_piece.py front "$1" "$2" "$3" '
+    "CERTIFIER_FRONT": '.venv/bin/python benchmarks/network_traces/attester_piece.py front "$1" "$2" "$3" '
                        "--gate user@gate-1 --peer peer-1",
     "DEVELOPMENT": "1", "H1_GATE": "gate-command", "H1_KEY_SHA512": KEY, "H1_PEER": "peer-1", "LOAD": "varied",
     "PRECISION": "verity_int8", "REPO": "verity-int8/Llama-3.2-1B-INT8",
@@ -202,11 +202,11 @@ def test_the_parties_are_the_manifests_names_and_onsite_is_the_product():
     assert sorted(T.PROTOCOLS) == sorted(K.COMPOSITES[T.ONSITE])
 
 
-def test_the_certifier_and_the_policy_are_declared_from_their_manifests_whole():
-    certifier, policy = REG.components["certifier"], REG.components["inference-only"]
-    assert (certifier.id, certifier.parties, certifier.channels) == (NC.ID, NC.MANIFEST.parties, NC.MANIFEST.channels)
+def test_the_attester_and_the_policy_are_declared_from_their_manifests_whole():
+    attester, policy = REG.components["certifier"], REG.components["inference-only"]
+    assert (attester.id, attester.parties, attester.channels) == (NC.ID, NC.MANIFEST.parties, NC.MANIFEST.channels)
     assert (policy.id, policy.parties, policy.channels) == (IO.ID, IO.MANIFEST.parties, IO.MANIFEST.channels)
-    assert list(REG.parties["certifier"]) == [NC.WORKERS, NC.NETWORK_CERTIFIER, NC.VERIFIER]
+    assert list(REG.parties["certifier"]) == [NC.WORKERS, NC.NETWORK_ATTESTER, NC.VERIFIER]
     assert list(REG.parties["inference-only"]) == [IO.VERIFIER]
     cfg = R.load(CONFIG, REG)
     sent = {(c["from"], c["to"]): c["messages"] for c in cfg["channel"]}
@@ -306,11 +306,11 @@ def test_the_runners_variables_and_the_bindings_keys_are_these():
     assert all(unbound[k] == VARIABLES[k] for k in ("CERTIFIER_CHAIN_CMD", "CERTIFIER_PERIOD_CMD"))
 
 
-def test_the_certifiers_script_is_its_developer_sides_and_no_gate_piece_names_one(tmp_path, capsys):
+def test_the_attesters_script_is_its_developer_sides_and_no_gate_piece_names_one(tmp_path, capsys):
     cfg = R.load(CONFIG, REG)
-    side, device = REG.parties["certifier"][NC.WORKERS], REG.parties["certifier"][NC.NETWORK_CERTIFIER]
+    side, device = REG.parties["certifier"][NC.WORKERS], REG.parties["certifier"][NC.NETWORK_ATTESTER]
     assert (side.runs, side.scripts, side.reaches, side.binds, side.optional) == (
-        T.SERVED_WINDOW, (T.CERTIFIER_PIECE,), NC.NETWORK_CERTIFIER, ("gate", "peer"), ())
+        T.SERVED_WINDOW, (T.ATTESTER_PIECE,), NC.NETWORK_ATTESTER, ("gate", "peer"), ())
     assert set(side.variables(cfg, BINDINGS)) == {"SERVE_ARGS", "CERTIFIER_FRONT", "CERTIFIER_CHAIN_CMD",
                                                     "CERTIFIER_PERIOD_CMD", "V3C_CLASS", "CLASSES"}
     assert device.runs == T.GATE
@@ -323,15 +323,15 @@ def test_the_certifiers_script_is_its_developer_sides_and_no_gate_piece_names_on
                if e.runs == T.SERVED_WINDOW)
     rc, got, _ = dry(capsys, "--bindings", bindings(tmp_path))
     plan = {x["party"]: {e["component"]: e for e in x["entries"]} for x in got["plan"]}
-    mine, its = plan[NC.WORKERS]["certifier"], plan[NC.NETWORK_CERTIFIER]["certifier"]
-    assert rc == 0 and (mine["runs"], mine["reaches"], mine["scripts"]) == (T.SERVED_WINDOW, NC.NETWORK_CERTIFIER,
-                                                                            [T.CERTIFIER_PIECE])
-    assert (its["runs"], its["reaches"], its["scripts"], its["hooks"], its["unbound"]) == (T.GATE, NC.NETWORK_CERTIFIER,
+    mine, its = plan[NC.WORKERS]["certifier"], plan[NC.NETWORK_ATTESTER]["certifier"]
+    assert rc == 0 and (mine["runs"], mine["reaches"], mine["scripts"]) == (T.SERVED_WINDOW, NC.NETWORK_ATTESTER,
+                                                                            [T.ATTESTER_PIECE])
+    assert (its["runs"], its["reaches"], its["scripts"], its["hooks"], its["unbound"]) == (T.GATE, NC.NETWORK_ATTESTER,
                                                                                          [], {}, [])
 
 
 #: `BINDINGS` without the network attester's
-NO_NETWORK_ATTESTER = {p: cs for p, cs in BINDINGS.items() if p != NC.NETWORK_CERTIFIER}
+NO_NETWORK_ATTESTER = {p: cs for p, cs in BINDINGS.items() if p != NC.NETWORK_ATTESTER}
 #: the network attester's piece's variables, bound
 BOUND_FRONT = {k: VARIABLES[k] for k in ("SERVE_ARGS", "CERTIFIER_FRONT", "CERTIFIER_CHAIN_CMD", "CERTIFIER_PERIOD_CMD",
                                          "V3C_CLASS", "CLASSES")}
@@ -341,36 +341,36 @@ def test_the_network_attester_starts_first_as_the_local_gate_on_the_workloads_ma
     """With none of its bindings given, `verity run` starts the network attester's party first: it writes the front's
     local gate and the workload's machine as the configuration names it as its peer, which the front then runs with,
     and the dry run counts both bound. Bound, the front reaches that gate and peer, and the party isn't started."""
-    cfg, side, start = R.load(CONFIG, REG), REG.parties["certifier"][NC.WORKERS], REG.starts[NC.NETWORK_CERTIFIER]
+    cfg, side, start = R.load(CONFIG, REG), REG.parties["certifier"][NC.WORKERS], REG.starts[NC.NETWORK_ATTESTER]
     assert side.variables(cfg, BINDINGS) == BOUND_FRONT
-    assert R.starting(REG, [NC.NETWORK_CERTIFIER], NO_NETWORK_ATTESTER) == [NC.NETWORK_CERTIFIER]
-    assert R.starting(REG, [NC.NETWORK_CERTIFIER], BINDINGS) == []
+    assert R.starting(REG, [NC.NETWORK_ATTESTER], NO_NETWORK_ATTESTER) == [NC.NETWORK_ATTESTER]
+    assert R.starting(REG, [NC.NETWORK_ATTESTER], BINDINGS) == []
     start.serve(cfg, tmp_path)
-    written = R.wait_bindings(tmp_path, NC.NETWORK_CERTIFIER, start, lambda: True, clock=lambda: 0.0,
+    written = R.wait_bindings(tmp_path, NC.NETWORK_ATTESTER, start, lambda: True, clock=lambda: 0.0,
                               pause=lambda s: None)
     assert written == {"certifier": {"gate": "local", "peer": T.PROVER_NODE}}
-    R.bind(tmp_path, NC.NETWORK_CERTIFIER, written)
+    R.bind(tmp_path, NC.NETWORK_ATTESTER, written)
     assert side.variables(cfg, T.bindings_of(tmp_path)) == {
-        **BOUND_FRONT, "CERTIFIER_FRONT": '.venv/bin/python benchmarks/network_traces/certifier_piece.py front "$1" "$2" '
+        **BOUND_FRONT, "CERTIFIER_FRONT": '.venv/bin/python benchmarks/network_traces/attester_piece.py front "$1" "$2" '
                                           f'"$3" --gate local --peer {T.PROVER_NODE}'}
     rc, got, err = dry(capsys, "--bindings", bindings(tmp_path, NO_NETWORK_ATTESTER))
     assert rc == 0 and got["dry"][0]["unbound"] == [], err
-    assert {x["party"]: x.get("writes") for x in got["plan"]}[NC.NETWORK_CERTIFIER] == {"certifier": ["gate", "peer"]}
+    assert {x["party"]: x.get("writes") for x in got["plan"]}[NC.NETWORK_ATTESTER] == {"certifier": ["gate", "peer"]}
 
 
 def test_a_network_attester_without_its_peer_is_refused_by_name_with_the_fix(tmp_path, capsys):
     """A gate given without its peer is refused before anything starts, and so is a started party that writes no peer:
     each refusal names the network attester's bindings and says what to give."""
-    tables = {**NO_NETWORK_ATTESTER, NC.NETWORK_CERTIFIER: {"certifier": {"gate": "user@gate-1"}}}
+    tables = {**NO_NETWORK_ATTESTER, NC.NETWORK_ATTESTER: {"certifier": {"gate": "user@gate-1"}}}
     rc, _, err = dry(capsys, "--bindings", bindings(tmp_path, tables))
     assert rc == 2 and ("refused binding: --bindings gives network-certifier.certifier.gate of what network-certifier "
                         "writes, not all of it: give every one (network-certifier runs where they say) or none "
                         "(network-certifier starts here)") in err
-    f = tmp_path / "public" / NC.NETWORK_CERTIFIER / "bindings.json"
+    f = tmp_path / "public" / NC.NETWORK_ATTESTER / "bindings.json"
     f.parent.mkdir(parents=True)
     f.write_text(json.dumps({"certifier": {"gate": "local"}}))
     with pytest.raises(Refused) as e:
-        R.wait_bindings(tmp_path, NC.NETWORK_CERTIFIER, REG.starts[NC.NETWORK_CERTIFIER], lambda: True,
+        R.wait_bindings(tmp_path, NC.NETWORK_ATTESTER, REG.starts[NC.NETWORK_ATTESTER], lambda: True,
                         clock=lambda: 0.0, pause=lambda s: None)
     assert e.value.name == "bindings" and 'keyed {"certifier": ["gate", "peer"]}' in e.value.detail
 
