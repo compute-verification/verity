@@ -2,7 +2,7 @@ module
 
 public import Properties.InferenceOnly
 public import Properties.InferenceOnly.Theta
-public import InferenceOnlyCheck.DefinitionDigest
+public import InferenceOnlyVerifier.DefinitionDigest
 public import Spot.RecordText
 public import Flock.TemplateQuery
 public import Spot.Wires
@@ -91,15 +91,15 @@ registers was public (`InferenceOnly.Assumptions.ThetaRegistered`).
 
 @[expose] public section
 
-namespace InferenceOnlyCheck.Properties.Record
+namespace InferenceOnlyVerifier.Properties.Record
 
 open Lean (Json)
 open Flock.Program (Prog Scope Ref Ty Defn Node fieldsOf)
 open Flock.TemplateQuery (TRange)
-open InferenceOnlyCheck.Theta (getD strAt digest lastWith)
+open InferenceOnlyVerifier.Theta (getD strAt digest lastWith)
 open Spot.RecordText (Row Held outerOf)
 open Spot.Bits (bitsOf)
-open InferenceOnlyCheck.DefinitionDigest (canonicalEntry definitionDigest closureDigest)
+open InferenceOnlyVerifier.DefinitionDigest (canonicalEntry definitionDigest closureDigest)
 
 /-! ## The interface -/
 
@@ -485,11 +485,11 @@ def PinnedOpens (F : Form) : Prop :=
       (∀ k d, P.index[key]? = some k → P.defs[k]? = some d → Opens P k ∧ F.layout d = F.layout d₀) ∨
         Collides j₀ pj key
 
-end InferenceOnlyCheck.Properties.Record
+end InferenceOnlyVerifier.Properties.Record
 
-namespace InferenceOnlyCheck.Guarantees
+namespace InferenceOnlyVerifier.Guarantees
 
-open InferenceOnlyCheck.Properties.Record
+open InferenceOnlyVerifier.Properties.Record
 
 /-- **Accepting a served record gives the rate rule on its circuit**, of any check that meets the four statements
 about it: a record it reads carries its instance's fields (`Owns`) and lays out a circuit (`LaidOut`), its summary
@@ -499,4 +499,4 @@ instance's `Γ` and `α` (`Complies`). The four are premises here, each a statem
 def ServedComplies : Prop :=
   ∀ F : Form, Owns F → LaidOut F → Counts F → Rates F → Complies F
 
-end InferenceOnlyCheck.Guarantees
+end InferenceOnlyVerifier.Guarantees

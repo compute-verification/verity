@@ -194,12 +194,12 @@ PUBLIC = {
                                               "the compiler reads and benchmarks/network_e2e measures",
     "verity_vllm.pipeline.advice_code.schedule": "I1: the scheduler replay's engine config, certified tick, steps and request "
                                                  "states",
-    "verity_vllm.pipeline.advice_code.pool": "I1: the replay of vLLM's KV block pool, which the certifier's cache vectors are "
+    "verity_vllm.pipeline.advice_code.pool": "I1: the replay of vLLM's KV block pool, which the network attester's cache vectors are "
                                              "held to",
-    "verity_vllm.pipeline.advice_code.replay": "I1: the replay of vLLM's scheduler, which the certifier's replay vectors and "
+    "verity_vllm.pipeline.advice_code.replay": "I1: the replay of vLLM's scheduler, which the network attester's replay vectors and "
                                                "the traces' admission are held to",
     "verity_vllm.pipeline.advice_code.derived": "I1: advice v1's derived rules (the walk, the prefixes, the tie), which the "
-                                                "certifier's derived vectors are held to",
+                                                "network attester's derived vectors are held to",
     "verity_vllm.pipeline.advice_code.window_code": "I1: advice v1's window code and its codebook",
     "verity_vllm.compiler.replay_step": "I1: one scheduler step of the compiler's replay (its statics, inputs, state, "
                                         "outputs and reference), which benchmarks/network_e2e's replay vectors are held to",

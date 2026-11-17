@@ -1,4 +1,4 @@
-"""Network certificates committed by hash, with padding elided: injective on left-packed grids, and the audit on committed
+"""Network attestations committed by hash, with padding elided: injective on left-packed grids, and the audit on committed
 records gives the same verdicts as on raw ones."""
 
 import itertools
