@@ -83,21 +83,28 @@ def document(results: Sequence[Result]) -> dict[str, Any]:
 
 def measured(results: Sequence[Result], metrics: Mapping[str, str]) -> list[dict[str, Any]]:
     """The writer's measurements: under each of `metrics`' ids (each naming one of `FIGURES`), one a layer of `MEMBERS`,
-    in its order. A layer's value is its figure a proof block, only where its Lean verdict is an accept; else the value is
-    None, with why. Recursion's benchmark result is no member: its seconds are a whole recursive run's."""
+    in its order, its member the model and card the outputs state and its layer's words; none where no output states
+    them, and outputs that state two are refused. A layer's value is its figure a proof block, only where its Lean
+    verdict is an accept; else the value is None, with why. Recursion's benchmark result is no member: its seconds are a
+    whole recursive run's."""
 
     if bad := sorted(set(metrics.values()) - set(FIGURES)):
         raise ValueError(f"metric ids name {bad}, not one of {sorted(FIGURES)}")
+    serves = sorted({r.serves for r in results if r.serves})
+    if len(serves) > 1:
+        raise ValueError(f"the layers' outputs state {' and '.join(serves)}: give the outputs of one served row on one card")
+    if not serves:
+        return []
     by_layer = {r.layer: r for r in results}
     out = []
     for name, figure in metrics.items():
-        for layer, member in MEMBERS.items():
+        for layer, words in MEMBERS.items():
             r = by_layer[layer]
             value = getattr(r, figure) if r.accepted and r.per_block else None
             why = None if value is not None else r.why or (
                 f"{r.workload.split(':')[0]}: its figures are a statement's, not a proof block's" if r.statements else
                 f"its output gives no {figure} a proof block" if r.per_block else "its output gives no figure a proof block")
-            out.append({"name": name, "value": value, "unit": FIGURES[figure], "member": member, "why": why,
+            out.append({"name": name, "value": value, "unit": FIGURES[figure], "member": serves[0] + words, "why": why,
                         "inputs": [r.given] if r.given else [],
                         "extra": {"layer": LAYERS[layer], "status": r.status, "format": r.format, "workload": r.workload,
                                   "lean": r.lean, "ran_with": r.ran_with, "detail": r.detail, "proof": r.proof}})

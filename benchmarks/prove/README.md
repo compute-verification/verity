@@ -380,12 +380,16 @@ Run as `benchmarks/prove/run.py layers` (`LAYER_METRICS`), as `benchmarks/one_st
 | `benchmarks/proof-layer-lean-seconds` | Lean's verify seconds, the mean over the sampled proof blocks |
 | `benchmarks/proof-layer-proof-bytes` | one proof's bytes over its sampled proof blocks: an a5, `layers.sh` or prove_path result's one rep's (its reps are timed repeats of one proof, and differing reps give none). prove_path's own `per_unit` sums the reps, so its benchmark result reads them from the arm's rank or window `summary.json`, and prints `every rep's` only where no such file states them |
 
-Under each id it writes three measurements, in this order:
+Under each id it writes three measurements, in this order, each member the model and card (`benchmarks/README.md`'s
+`member`) an a5 output's machine.txt states, the model of its row dir's row and the `nvidia-smi -L` name of the card it
+took, then the layer's words:
 
-1. the Flock layer, member `flock`;
-2. the zero-knowledge layer, member `flock-zero-knowledge`;
-3. the sampling layer last, member `sampling`: Flock with zero knowledge at the sampling plan, the system as served,
-   and the one the metric's title, unit and axis are for.
+1. the Flock layer, member `llama-3.2-1b-h200-flock`;
+2. the zero-knowledge layer, member `llama-3.2-1b-h200-flock-zero-knowledge`;
+3. the sampling layer last, member `llama-3.2-1b-h200`: Flock with zero knowledge at the sampling plan, the system as
+   served, and the one the metric's title, unit and axis are for.
+
+Where no output states a model and card it writes none, and outputs that state two are refused.
 
 prove_path and a5 both give these figures by dividing a member's session timing by its proof blocks sampled
 (`draw_counts`), as prove_path's own `per_unit` does. A member whose timing has no count of sampled proof blocks (one
