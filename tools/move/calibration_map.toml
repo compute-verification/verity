@@ -1,0 +1,169 @@
+# Calibration's own root: what chooses a parameter or tests an assumption leaves `hardware/` and `benchmarks/`
+# for `calibration/`, each directory whole with its tests (`tests/X/` to `tests/calibration/...`). Written by
+# the calibration regenerator from its list; `tools/move/layout.py --map tools/move/calibration_map.toml` moves
+# and rewrites. Lean files and Lean locks are never rewritten.
+
+[roots]
+old = { circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", exact_kit = "benchmarks/pouw/exact_kit/exact_kit", research = "tools/research/src/research", verity = "verity", verity_bench = "benchmarks/harness/verity_bench", verity_cli = "tools/verity/cli/verity_cli", verity_config = "tools/config/verity_config", verity_difftest = "tools/difftest/python/verity_difftest", verity_flock = "verity/protocols/proofs/flock/prover/python/verity_flock", verity_graph = "tools/verity/graph/verity_graph", verity_landq = "tools/verity/landq/verity_landq", verity_machine_model = "benchmarks/machine_model/verity_machine_model", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_ops = "infra/ops/verity_ops", verity_proof_throughput = "benchmarks/proof_throughput/verity_proof_throughput", verity_torch = "adapters/torch/verity_torch", verity_vllm = "adapters/vllm/verity_vllm" }
+new = { circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", exact_kit = "benchmarks/pouw/exact_kit/exact_kit", research = "tools/research/src/research", verity = "verity", verity_bench = "benchmarks/harness/verity_bench", verity_cli = "tools/verity/cli/verity_cli", verity_config = "tools/config/verity_config", verity_difftest = "tools/difftest/python/verity_difftest", verity_flock = "verity/protocols/proofs/flock/prover/python/verity_flock", verity_graph = "tools/verity/graph/verity_graph", verity_landq = "tools/verity/landq/verity_landq", verity_machine_model = "benchmarks/machine_model/verity_machine_model", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_ops = "infra/ops/verity_ops", verity_proof_throughput = "benchmarks/proof_throughput/verity_proof_throughput", verity_torch = "adapters/torch/verity_torch", verity_vllm = "adapters/vllm/verity_vllm" }
+
+[paths]
+"hardware/" = "calibration/hardware/"
+"benchmarks/tc_probe/" = "calibration/tc_probe/"
+"tests/benchmarks/tc_probe/" = "tests/calibration/tc_probe/"
+"benchmarks/tc_probe_fp4/" = "calibration/tc_probe_fp4/"
+"tests/benchmarks/tc_probe_fp4/" = "tests/calibration/tc_probe_fp4/"
+"benchmarks/native_peak/" = "calibration/native_peak/"
+"tests/benchmarks/native_peak/" = "tests/calibration/native_peak/"
+"benchmarks/f32_exhaustive/" = "calibration/f32_exhaustive/"
+"benchmarks/training_slowdown/" = "calibration/training/"
+"tests/benchmarks/training_slowdown/" = "tests/calibration/training/"
+"benchmarks/circuit_properties/" = "calibration/circuit_properties/"
+"tests/benchmarks/circuit_properties/" = "tests/calibration/circuit_properties/"
+"benchmarks/tensor_duty/" = "calibration/tensor_duty/"
+"tests/benchmarks/tensor_duty/" = "tests/calibration/tensor_duty/"
+"benchmarks/pouw/dc/" = "calibration/pouw/dc/"
+"benchmarks/pouw/opcode_probe/" = "calibration/pouw/opcode_probe/"
+"benchmarks/pouw/tensor_kinds/" = "calibration/pouw/tensor_kinds/"
+"benchmarks/pouw/sass_census/" = "calibration/pouw/sass_census/"
+"benchmarks/pouw/facet_break/" = "calibration/pouw/facet_break/"
+"benchmarks/pouw/theory/" = "calibration/pouw/theory/"
+"benchmarks/bandwidth/" = "calibration/bandwidth/"
+"tests/benchmarks/bandwidth/" = "tests/calibration/bandwidth/"
+"benchmarks/rate_squaring/" = "calibration/rate_squaring/"
+"tests/benchmarks/rate_squaring/" = "tests/calibration/rate_squaring/"
+"benchmarks/certifier_timing/" = "calibration/certifier_timing/"
+"tests/benchmarks/certifier_timing/" = "tests/calibration/certifier_timing/"
+"benchmarks/sampling_plan/" = "calibration/sampling_plan/"
+"tests/benchmarks/sampling_plan/" = "tests/calibration/sampling_plan/"
+
+[retired]
+# the paths this map empties
+paths = [
+    "hardware/",
+    "benchmarks/tc_probe/",
+    "tests/benchmarks/tc_probe/",
+    "benchmarks/tc_probe_fp4/",
+    "tests/benchmarks/tc_probe_fp4/",
+    "benchmarks/native_peak/",
+    "tests/benchmarks/native_peak/",
+    "benchmarks/f32_exhaustive/",
+    "benchmarks/training_slowdown/",
+    "tests/benchmarks/training_slowdown/",
+    "benchmarks/circuit_properties/",
+    "tests/benchmarks/circuit_properties/",
+    "benchmarks/tensor_duty/",
+    "tests/benchmarks/tensor_duty/",
+    "benchmarks/pouw/dc/",
+    "benchmarks/pouw/opcode_probe/",
+    "benchmarks/pouw/tensor_kinds/",
+    "benchmarks/pouw/sass_census/",
+    "benchmarks/pouw/facet_break/",
+    "benchmarks/pouw/theory/",
+    "benchmarks/bandwidth/",
+    "tests/benchmarks/bandwidth/",
+    "benchmarks/rate_squaring/",
+    "tests/benchmarks/rate_squaring/",
+    "benchmarks/certifier_timing/",
+    "tests/benchmarks/certifier_timing/",
+    "benchmarks/sampling_plan/",
+    "tests/benchmarks/sampling_plan/",
+]
+
+[drop]
+paths = []
+
+[rewrite]
+# Never rewritten: records of what was, files whose bytes a digest pins, every Lean input and lock.
+exclude = [
+    "fixtures/**",
+    "**/fixtures/**",
+    "**/*vectors*.json",
+    "**/*vectors*.txt.gz",
+    "**/CHANGELOG.md",
+    "*.patch",
+    "**/TRUSTED.sha256",
+    "**/lake-manifest.json.lock",
+    "tools/move/**",
+    "archive/**",
+    "**/numerical/tests/bench/data/**",
+    "**/price_twins.json",
+    "verity/circuits/silicon/captures/**",
+    "verity/circuits/silicon/hawkeye/**",
+    "tools/research/src/research/store/moves.json",
+    "**/network_e2e/tests/data/**",
+    "adapters/vllm/manifests/**",
+    "adapters/vllm/workloads/**",
+    "adapters/vllm/data/**",
+    "adapters/vllm/verity_vllm/pins/**",
+    "adapters/vllm/tools/migrate/superseded_quarantine.py",
+    "**/migrate/test_superseded_quarantine.py",
+    "**/*.lean",
+    "**/lakefile.toml",
+    "tests/tree.toml",
+    "**/*.cu",
+    "**/*.cuh",
+    "**/*.cpp",
+    "**/*.h",
+    "**/*.c",
+    "benchmarks/pouw/pearl_c_sm90/**",
+    "**/lean-audit.json",
+    "benchmarks/pouw/sass_census/README.md",
+    "calibration/pouw/sass_census/README.md",
+    "benchmarks/pouw/theory/README.md",
+    "calibration/pouw/theory/README.md",
+    "benchmarks/numerical/bench-instances/v1/manifest.json",
+    "benchmarks/numerical/bench-instances/v1/tu-k16.index.json",
+    "benchmarks/numerical/bench-instances/v1/vu-k1536-neg.index.json",
+    "benchmarks/numerical/bench-instances/v1/vu-k1536.index.json",
+    "tests/adapters/vllm/tests/query/fixtures/pouw_row_binding.json.gz",
+    "tests/adapters/vllm/verity_vllm/definitions/fixtures/fa2_train_bwd_sm120.npz",
+    "tests/verity/circuits/ops/fixtures/golden/ada_bf16_m16n8k16.json",
+    "tests/verity/circuits/ops/fixtures/gpu-nan-2026-09-28/fp32_ops.json",
+    "tests/verity/circuits/ops/fixtures/tc-sm120-k32-e2m1-2026-09-30/records.json",
+    "verity/circuits/silicon/discrepancy_log.json",
+    "verity/circuits/silicon/hawkeye/PIN.json",
+]
+include = [
+    "**/fixtures/README.md",
+    "**/fixtures/**/README.md",
+    "tools/move/pyproject.toml",
+]
+# a toy's relative paths: a piece directory's sibling, not the bandwidth suite
+keep_relative = ["tests/benchmarks/one_stage/test_served_bandwidth.py"]
+
+[rewrite.keep_in]
+"*.json" = ["hardware"]
+"tests/tools/research/test_landing.py" = ["hardware/cards.toml"]
+# the rule refusing a path to hardware/ or calibration/ under verity/: its message and its toy name both
+"tests/test_boundaries.py" = ["hardware*"]
+
+[modules]
+"benchmarks.bandwidth" = "calibration.bandwidth"
+"benchmarks.certifier_timing" = "calibration.certifier_timing"
+"benchmarks.circuit_properties" = "calibration.circuit_properties"
+"benchmarks.f32_exhaustive" = "calibration.f32_exhaustive"
+"benchmarks.native_peak" = "calibration.native_peak"
+"benchmarks.pouw.dc" = "calibration.pouw.dc"
+"benchmarks.pouw.facet_break" = "calibration.pouw.facet_break"
+"benchmarks.pouw.opcode_probe" = "calibration.pouw.opcode_probe"
+"benchmarks.pouw.sass_census" = "calibration.pouw.sass_census"
+"benchmarks.pouw.tensor_kinds" = "calibration.pouw.tensor_kinds"
+"benchmarks.pouw.theory" = "calibration.pouw.theory"
+"benchmarks.rate_squaring" = "calibration.rate_squaring"
+"benchmarks.sampling_plan" = "calibration.sampling_plan"
+"benchmarks.tc_probe" = "calibration.tc_probe"
+"benchmarks.tc_probe_fp4" = "calibration.tc_probe_fp4"
+"benchmarks.tensor_duty" = "calibration.tensor_duty"
+"benchmarks.training_slowdown" = "calibration.training"
+"hardware" = "calibration.hardware"
+"tests.benchmarks.bandwidth" = "tests.calibration.bandwidth"
+"tests.benchmarks.certifier_timing" = "tests.calibration.certifier_timing"
+"tests.benchmarks.circuit_properties" = "tests.calibration.circuit_properties"
+"tests.benchmarks.native_peak" = "tests.calibration.native_peak"
+"tests.benchmarks.rate_squaring" = "tests.calibration.rate_squaring"
+"tests.benchmarks.sampling_plan" = "tests.calibration.sampling_plan"
+"tests.benchmarks.tc_probe" = "tests.calibration.tc_probe"
+"tests.benchmarks.tc_probe_fp4" = "tests.calibration.tc_probe_fp4"
+"tests.benchmarks.tensor_duty" = "tests.calibration.tensor_duty"
+"tests.benchmarks.training_slowdown" = "tests.calibration.training"
