@@ -681,6 +681,37 @@ def test_a_window_past_the_slots_or_named_and_refused_is_refused(tmp_path):
         S.pick(d, slots=4, want=9)
 
 
+def test_a_tied_window_is_the_one_holding_the_fixed_loads_requests_and_never_the_fullest(tmp_path):
+    """Under the tie the window of record is the fixed load's, whose requests it holds and no other's: the fullest window
+    is not it, a window holding only some of them or others beside them fits nothing, and the run refuses."""
+    d = _serve_dir(tmp_path)
+    assert S.pick(d, slots=4, users=["a"])["window"] == 0
+    for users in (["b", "c"], ["a", "b", "c", "d"], ["f"]):
+        with pytest.raises(ValueError, match="0 sealed windows hold the fixed load's requests"):
+            S.pick(d, slots=4, users=users)
+    load = tmp_path / "load.jsonl"
+    _write(tmp_path, "load.jsonl", [{"user": "a", "ok": True}])
+    out = io.StringIO()
+    with contextlib.redirect_stdout(out):
+        assert S.main(["window", str(d), "--slots", "4", "--of-load", str(load)]) == 0
+    assert json.loads(out.getvalue())["window"] == 0
+    load.write_text("")
+    assert S.main(["window", str(d), "--slots", "4", "--of-load", str(load)]) == 1
+
+
+def test_the_front_window_is_the_one_whose_requests_are_all_the_network_attesters(tmp_path):
+    d = _serve_dir(tmp_path)
+    reqs = [("a", [0]), ("user-0", [1]), ("user-1", [1]), ("d", [1]), ("user-2", [2])]
+    by = {k: [u for u, ws in reqs if k in ws] for k in range(3)}
+    _write(d, "seals.jsonl", [{"window": k, "requests": by[k]} for k in range(3)])
+    _write(d, "requests.jsonl", [{"user": u, "engine_id": u, "windows": ws, "check": {"passed": True}} for u, ws in reqs])
+    assert S.pick(d, slots=4, attested=True)["window"] == 2
+    _write(d, "requests.jsonl", [{"user": u.replace("d", "user-3"), "engine_id": u, "windows": ws,
+                                  "check": {"passed": True}} for u, ws in reqs])
+    with pytest.raises(ValueError, match=r"2 sealed windows hold the network attester's requests alone \(\[1, 2\]\)"):
+        S.pick(d, slots=4, attested=True)
+
+
 def test_a_failed_seal_or_commit_or_check_is_refused(tmp_path):
     d = _serve_dir(tmp_path)
     _write(d, "seals.jsonl", [{"window": 0, "requests": ["a"], "error": "boom"},
@@ -1325,6 +1356,23 @@ def test_the_records_verdict_is_the_compiled_lean_composites_and_its_exit_0_only
                                              "commitment": bound[x]}
     else:
         assert composed == "pending"
+
+
+def test_a_network_row_over_the_fronts_group_says_so_and_reaches_no_block_record(tmp_path):
+    (d := tmp_path / "certifier").mkdir()
+    (d / "answer.json").write_text(json.dumps({"verdict": "accept", "reason": None, "commitment": "ef" * 64,
+                                               **ACCEPTS["certifier"]}))
+    (d / S.RAN).write_text(json.dumps({"server": "vy-dc-h200", "rc": 0, "limit": "60m"}))
+    servers = {k: S.piece_server(k, tmp_path) for k in [*S.PIECES, "wipe"]}
+    _, _, line = S.record(_rows(_accepted(), tmp_path), window=1, steps=(5, 11), node="vy-dc-h200", run="r1",
+                          servers=servers)
+    assert "certifier" not in line["record_missing"] and "not_covered" not in line
+    report, _, line = S.record(_rows(_accepted(), tmp_path), window=1, steps=(5, 11), node="vy-dc-h200", run="r1",
+                               servers=servers, front_group=True)
+    assert report["protocols"]["communication"]["requests"] == S.FRONT_GROUP
+    name = S.NAMES["communication"]
+    assert line["not_covered"] == {name: S.FRONT_GROUP} and line["verdicts"][name] == "accept"
+    assert "certifier" in line["record_missing"]
 
 
 @pytest.mark.parametrize(("said", "why", "verdict"), [
@@ -4804,16 +4852,16 @@ def test_the_preflight_refuses_a_step_3_partition_it_cant_read_where_the_compile
     ({"SERVE_ARGS": "--prefix-caching"}, "PREFLIGHT: under PEARLPLUS_TIE each request's prefill computes every row of its "
      "prompt, at which the cut circuit reads Pearl+'s tables, and SERVE_ARGS turns vLLM's prefix cache on "
      "(--prefix-caching): drop it"),
-    ({"CERTIFIER_FRONT": "true"}, "PREFLIGHT: under PEARLPLUS_TIE the window is V3C_CLASS's fixed load, and "
-     "CERTIFIER_FRONT's group closes into a window of its own, which the run's pick takes on a tie in requests: unset "
-     "CERTIFIER_FRONT"),
+    ({"WINDOW": "1"}, "PREFLIGHT: under PEARLPLUS_TIE the window of record is the fixed load's, named by its requests, "
+     "and WINDOW names one by number: unset it"),
 ])
-def test_the_preflight_refuses_pearlplus_tie_off_the_bf16_row_its_class_uncounted_with_the_prefix_cache_or_a_front(
+def test_the_preflight_refuses_pearlplus_tie_off_the_bf16_row_its_class_uncounted_with_the_prefix_cache_or_a_window(
         tmp_path, extra, line):
     """PEARLPLUS_TIE serves the BF16 checkpoint, whose linears Pearl+'s FP8 product reads, and V3c's commit is held to
     V3C_CLASS's window circuit; the cut circuit reads Pearl+'s tables at every row of the class's fixed load. So another
     PRECISION or row, a V3C_CLASS CLASSES doesn't count, vLLM's prefix cache (a hit leaves a prompt's rows uncomputed) and
-    a network attester front's window of its own are each refused before anything runs."""
+    a window named by number (the window of record is the fixed load's, named by its requests) are each refused before
+    anything runs."""
     rc, lines, order, _limits = _v3c(tmp_path, (), **{**PEARL_TIED, **extra})
     assert (rc, lines, order) == (3, [line], [])
 
