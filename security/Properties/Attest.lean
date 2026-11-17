@@ -4,7 +4,7 @@ public import Attest.Period
 public import Definitions.Compose.Assumptions.Parties
 public import Definitions.Claims
 public import Mathlib
-public import Properties.Pous.MemoryChallenger
+public import Properties.Pous.MemoryAttester
 
 /-!
 # A party's signed period roots and liveness records: what a period's proof establishes, and what the auditor sees
@@ -45,7 +45,7 @@ records read, their paths)`: their zero knowledge is Flock's (`Claims.ZKmalR` at
 
 @[expose] public section
 
-namespace MemoryChallenger.Attest.Properties
+namespace MemoryAttester.Attest.Properties
 
 open Flock
 open ResourceAccounting.Assumptions
@@ -332,7 +332,7 @@ def ProverSeesMessages : Prop :=
 
 /-! ## The honest period and the empty run
 
-The instances `PeriodSigned`'s and `PeriodSound`'s lemmas read (`Proofs.Properties.Pous.MemoryChallenger.Attest`).
+The instances `PeriodSigned`'s and `PeriodSound`'s lemmas read (`Proofs.Properties.Pous.MemoryAttester.Attest`).
 Their honest lemmas: the verifier accepts the honest one-record period at the deployed LMS parameters, and it is the
 device's. Their nontrivial lemmas: the empty run, which no device signed, carries no break, so `PeriodSigned`'s
 conclusion fails there; and a verifier that accepts everything (`acceptAll`) puts probability 1 on `PeriodSound`'s
@@ -387,4 +387,4 @@ def emptyRun : Unit → PeriodRun := fun _ => ⟨emptyDevice, .empty, .empty, ""
 def acceptAll : ByteArray → ByteArray → String → Attest.PartyKey → Attest.SignedRoot → Array Attest.Read → Lms.E Bool :=
   fun _ _ _ _ _ _ => .ok true
 
-end MemoryChallenger.Attest.Properties
+end MemoryAttester.Attest.Properties

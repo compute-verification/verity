@@ -1,7 +1,7 @@
 module
 
 public import PousCheck.RunProtocol
-public import MemoryChallenger.WipeProtocol
+public import MemoryAttester.WipeProtocol
 public import Properties.Pous.EndToEndAt
 import Mathlib.Basic.ENNReal.Real
 
@@ -27,7 +27,7 @@ Each statement below is one step of it, about one function of the code, in the s
   runs' trees and blocks hold a SHA-512 collision (`forkStrings`): the fork form of the commit-then-coin step, which
   makes `AuditsOf`'s `commitment`, `store` and `digests` functions of the coins before PoUS's.
 
-The wipe (`MemoryChallenger.WipeProtocol.protocol`, `verity/wipe/v0`) is onsite's component too
+The wipe (`MemoryAttester.WipeProtocol.protocol`, `verity/wipe/v0`) is onsite's component too
 (`Core.Onsite.components`); its statements are the same steps.
 
 * `WipeChecked`: the signed session passes every check of the wipe judge of record (`StreamedWipe.verdict`), as
@@ -36,7 +36,7 @@ The wipe (`MemoryChallenger.WipeProtocol.protocol`, `verity/wipe/v0`) is onsite'
 * `WipeAccepts`: what the compiled check accepts is of the period's server and session and carries a signed session
   that is `WipeChecked`, and it publishes `certify` of the commitment's parameters at `EGRESS_MAX_UNITS`, which
   certifies nothing, whatever egress count the evidence names (`WipeProtocol.Evidence.egress`; no session and no
-  network attester signs one). It is the accepted session that `MemoryChallenger.Properties.WipeSurvivorBound` reads.
+  network attester signs one). It is the accepted session that `MemoryAttester.Properties.WipeSurvivorBound` reads.
 * `WipeDigest`: the wipe's `RunDigest`.
 
 Each is proved in `Proofs.Properties.Pous.Component` (`Pous.Component.SecurityProofs`) and listed in the lock.
@@ -49,7 +49,7 @@ equations about the code's digest, and no check takes part in them.
 
 @[expose] public section
 
-open MemoryChallenger MemoryChallenger.Properties
+open MemoryAttester MemoryAttester.Properties
 open PousCheck PousCheck.Properties
 open Pous.EndToEnd
 

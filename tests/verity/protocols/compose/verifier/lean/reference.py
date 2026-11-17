@@ -392,7 +392,7 @@ def pearl_plus_answer(commitment: bytes, verified: dict) -> dict:
 
 
 BANDWIDTH = Recorded("verity/remote-bandwidth/p2/v0")
-#: The wipe, `MemoryChallenger.WipeProtocol.protocol`.
+#: The wipe, `MemoryAttester.WipeProtocol.protocol`.
 WIPE = Ported("verity/wipe/v0", WIPE_CASES.answer)
 
 
