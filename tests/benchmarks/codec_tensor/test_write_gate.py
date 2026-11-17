@@ -7,7 +7,7 @@ import json
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str((Path(__file__).resolve().parents[3] / "benchmarks" / "codec_tensor")))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "benchmarks" / "codec_tensor"))
 
 import write_gate as WG
 

@@ -230,7 +230,7 @@ def floor_occ(lib: B.Lib, torch, store, n_words: int, k: int, sms: int, reps: in
     for c in OCC_CTAS:
         got, best = ctypes.c_int(0), None
         for mult in (1, 2, 4):
-            def run():
+            def run(c=c, mult=mult, got=got):
                 lib.call("kv_decode_occ", B.ptr(store), n_words, 0, k, sms * c * mult, B.ptr(xr), c, ctypes.byref(got),
                          st)
             xr.zero_()
@@ -269,8 +269,8 @@ def exhaust_cell(lib: B.Lib, torch, m: dict, b: int, ctx: int, ks, reps: int, sm
             continue
         best = None
         for mult in (4, 8, 16):
-            ts = B.timed(torch, lambda: lib.call("kv_decode", B.ptr(store), 0, n_words, 0, k, sms * mult, B.ptr(xr), st),
-                         reps)
+            ts = B.timed(torch, lambda k=k, mult=mult: lib.call("kv_decode", B.ptr(store), 0, n_words, 0, k, sms * mult,
+                                                                B.ptr(xr), st), reps)
             if best is None or statistics.median(ts) < best[1]:
                 best = (mult, statistics.median(ts), ts)
         occ = floor_occ(lib, torch, store, n_words, k, sms, reps, r, st)
@@ -294,9 +294,9 @@ def exhaust_cell(lib: B.Lib, torch, m: dict, b: int, ctx: int, ks, reps: int, sm
             ctas = (lambda s: b * K.KV_HEADS * s) if fm >= 3 else (lambda s: b * s)
             sweep = PERS_SPLITS if fm in PERSISTENT else [s for s in SPLITS if ctas(s) >= sms] or [max(SPLITS)]
             for sp in sweep:
-                def run_pass():
-                    for l in range(layers):
-                        attn_call(lib, st, store, fm, q, o, part, b, ctx, layers, l, sp, k)
+                def run_pass(fm=fm, sp=sp, k=k):
+                    for layer in range(layers):
+                        attn_call(lib, st, store, fm, q, o, part, b, ctx, layers, layer, sp, k)
                 run_pass()
                 ts = [B.queued(lib, torch, run_pass, SPIN) / layers for _ in range(reps)]
                 per[sp] = {"s": statistics.median(ts), "times_s": ts}
@@ -357,12 +357,12 @@ def write_side(lib: B.Lib, torch, m: dict, batches, ks, reps: int, sms: int, enc
         y = torch.empty_like(words)
         n = tw * b
 
-        def gemm():
-            for l in range(m["layers"]):
+        def gemm(xs=xs):
+            for layer in range(m["layers"]):
                 for name in m["shapes"]:
-                    torch._scaled_mm(xs[name], ws[name][l], one, one, out_dtype=torch.bfloat16)
+                    torch._scaled_mm(xs[name], ws[name][layer], one, one, out_dtype=torch.bfloat16)
 
-        def both(do_gemm: bool, enc_grid: int | None, k: int) -> float:
+        def both(do_gemm: bool, enc_grid: int | None, k: int, words=words, y=y, n=n) -> float:
             a, e = torch.cuda.Event(enable_timing=True), torch.cuda.Event(enable_timing=True)
             lib.call("kv_spin", SPIN, main.cuda_stream)
             a.record(main)
@@ -487,7 +487,7 @@ def write_result(res: dict, libs, out_dir: Path) -> None:
     files = sorted({os.path.relpath(p, run_dir) for p in (Path(run_dir) / "out").rglob("*") if p.name in names}
                    | {os.path.relpath(out_dir / n, run_dir) for n in names})
     doc = {"schema": "research/result/v0.1", "run_id": run_id,
-           "workload_fingerprint": {"libs": {l.name: hashlib.sha256(Path(l.path).read_bytes()).hexdigest() for l in libs},
+           "workload_fingerprint": {"libs": {lib.name: hashlib.sha256(Path(lib.path).read_bytes()).hexdigest() for lib in libs},
                                     "seed": B.SEED.hex()},
            "validation": {"status": "passed" if res["ok"] else "failed", "checker": "kv codec and attention gates",
                           "detail": "device encode and decode = kv.py; each encoded attention form = its plain form bit "
@@ -549,7 +549,7 @@ def main() -> int:
     res = {"device": props.name, "sms": sms, "total_memory": props.total_memory, "model": a.model, "ks": ks,
            "libs": {}, "ok": True}
     log(f"{props.name}: {sms} SMs, {props.total_memory / 1e9:.1f} GB; model {a.model}; libs "
-        + ", ".join(f"{l.name} {shape(l)}" for l in libs))
+        + ", ".join(f"{lib.name} {shape(lib)}" for lib in libs))
     if a.sanitize:
         for lib in libs:
             g = attn_gate(lib, torch, m, [(2, 100), (24, 100)], ks[:1], log, layers_override=2)

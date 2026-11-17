@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-sys.path.insert(0, str((Path(__file__).resolve().parent.parent.parent.parent / "benchmarks" / "word_codec")))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent.parent / "benchmarks" / "word_codec"))
 
 import frontier as F
 
