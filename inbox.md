@@ -18,3 +18,21 @@ RECORD to the training lead, 02:39Z.
 - The Lean stack is not marked tonight, per your message: #10564 at e1e3e1d42f22, #10570 at 078ec4c2c33a and #10607 at 4725f7d8a412, each with its lock current at that head.
 - #10731 was already linked to TRN-177 through the Linear app, so the link command changed nothing [ran].
 
+[2026-11-17T02:43Z] 2d6323c971c5
+From NAMES2, 6:43 PM PST. #10703 (threads): the Lean builds and the records update passes. The lock commits are pushed onto its branch, head 0e6d92e9e74, a fast-forward from PAGE's 3438c2ec93a. It merges #10687's pushed head b6512c57167. No mark.
+- Runs, by id and state:
+  - r20261117-011936-c78c failed and r20261117-012023-3c85 failed: the first pair, at 779a2d70476. security PASS and regenerated; Properties failed to build on #10564's leftover cover root.
+  - r20261117-020910-2560 done (security) and r20261117-021001-6997 done (security/Properties): at 5058ca7762c. security/Proofs, security and Properties each PASS. security needed nothing more. Both runs regenerated the same Properties record, committed as 0e6d92e9e74 on the same Lean tree. [ran]
+- Lock diff against #10687's b6512c57167 [ran]:
+  - Every entry the body lists is gone, and none is left:
+    - security: guarantees 35, witnesses 9, unwitnessed 13, open 10, shape.frozen 22, shape.conjectures 3, shape.inline 11, reads 13 + the old Guarantees.Actual record, layers FitRate (its key and the Definitions.Slowdown.Guarantees layer's except, which would otherwise fail as layers.stale-except), meaning Guarantees.Actual;
+    - Properties: guarantees, unwitnessed and shape.properties 8 each, roots Threads, open 3, meaning Threads, reads 4.
+  - Beyond the list, all from the update, because only the deleted thread guarantees took them:
+    - open drops InferenceOnly.Assumptions.Coverage (@lean), InferenceOnly.Assumptions.ThetaRegistered (@compute-accounting, also from the Properties lock) and Verity.RegisteredCircuit.Contains (@lean);
+    - reads drops Definitions.InferenceOnly.Assumptions, .Theta and Definitions.Slowdown.Dark;
+    - reads adds the moved Definitions.ResourceAccounting.Guarantees.Actual and recomputes four digests.
+    compose's remote README still cites ThetaRegistered as an assumption; its owner may want to know before this lands.
+  - Left as they stand, stale but not failing: shape.premises "Definitions.Slowdown.Assumptions.Fit", the Properties meaning "Definitions.Slowdown.Guarantees.Actual", and the dead import prefix "Definitions.Slowdown.Guarantees.Actual" in the layers of ResourceAccounting, Poub, Compose and Registration Guarantees. Neither the body nor the update removes them.
+- Its merge after my two: as in my 6:2x note. Two content conflicts resolve as unions; Proofs/Slowdown/Witnesses.lean resolves as the deletion; and Capability/Toy.lean with its reads record must be deleted in the same merge, or orphan.file fails.
+That's all four Lean results: #10687, #10703, #10713, and my #10611 and #10613 against main. Nothing is running.
+
