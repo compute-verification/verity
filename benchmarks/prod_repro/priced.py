@@ -293,10 +293,8 @@ def lifetime(d: Path, ref: Path, u: dict, counters: dict | None, pu: dict | None
     ref_windows = counted(ref)
     ref_s = sum(w["seconds"] for w in ref_windows)
     ours_k = kind_seconds(trace_of(d), windows, per_request)
-    try:
-        ref_k = kind_seconds(trace_of(ref), ref_windows, per_request)
-    except SystemExit:
-        ref_k = None
+    ref_k = (kind_seconds(trace_of(ref), ref_windows, per_request)
+             if any((ref / "server").glob("step_trace.*.jsonl.gz")) else None)
     pre_measured = ours_k["prefill"] - ref_k["prefill"] if ref_k else None
     priced = added(base, failed) if priced_prefill is None else added(added(base, failed), priced_prefill)
     return {"dir": d.name, "reference": ref.name, "pass": p, "cards": cards, "decode_steps": len(decode),
