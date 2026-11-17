@@ -65,10 +65,15 @@ def test_each_point_carries_the_schedule_and_its_scheduled_delays(ran) -> None:
                 "load_per_s"} <= set(m)
 
 
-def test_the_model_arm_writes_ids_of_its_own_under_its_model_and_card(ran, tmp_path) -> None:
-    doc, _out, _code = ran
-    model = {**doc["arms"][0], "arm": "model", "member": "llama-3.2-1b-h200"}
-    assert R.write({**doc, "arms": [doc["arms"][0], model]}, tmp_path) == 2
+def _arm(kind: str, member: str) -> dict:
+    return {"arm": kind, "member": member, "egress": "id", "guard": {"failed": []}, "added_first_ms": 1.0,
+            "added_first_ci95": None, "added_last_ms": 2.0, "added_last_ci95": None, "tick_lateness_ms": {"p99": 0.5},
+            "repetitions": []}
+
+
+def test_the_model_arm_writes_ids_of_its_own_under_its_model_and_card(tmp_path) -> None:
+    doc = {"class": "w63k4", "arms": [_arm("stub", R.STUB), _arm("model", "llama-3.2-1b-h200")]}
+    assert R.write(doc, tmp_path) == 2
     got = json.loads((tmp_path / "result.json").read_text())["measurements"]
     assert sorted((m["name"], m["member"]) for m in got) == sorted(
         [(i, "stand-in-cpu") for i in (R.FIRST, R.LAST, R.TICK)]

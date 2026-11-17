@@ -10,7 +10,7 @@ owner = "network-accounting"
 unit = "ms"
 axis = "The mean extra time to a response's first byte through the network attester over straight to a stand-in endpoint on a CPU, at four fifths of its stated capacity under the application's schedule: the schedule delays every response by its delay on purpose, so the number is what a request waits in all beyond the endpoint's own time."
 better = "lower"
-command = "research run --on auto --project verity --source . --cwd clone -- bash -lc 'uv sync -q --all-packages --extra torch-cpu && uv run --extra torch-cpu python benchmarks/attester_load/run.py'"
+command = "research run --on auto --project verity --source . --cwd clone -- bash -lc 'uv sync -q --all-packages --extra torch-cpu && uv run --extra torch-cpu python benchmarks/attester_load/run.py --class w63k4'"
 every = "7d"
 
 [[metric]]
@@ -20,7 +20,7 @@ owner = "network-accounting"
 unit = "ms"
 axis = "The mean extra time to a response's last byte through the network attester over straight to a stand-in endpoint on a CPU, at four fifths of its stated capacity under the application's schedule: the schedule releases a response's cells at set buckets on purpose, so the number is what a request waits in all beyond the endpoint's own time."
 better = "lower"
-command = "research run --on auto --project verity --source . --cwd clone -- bash -lc 'uv sync -q --all-packages --extra torch-cpu && uv run --extra torch-cpu python benchmarks/attester_load/run.py'"
+command = "research run --on auto --project verity --source . --cwd clone -- bash -lc 'uv sync -q --all-packages --extra torch-cpu && uv run --extra torch-cpu python benchmarks/attester_load/run.py --class w63k4'"
 every = "7d"
 
 [[metric]]
@@ -30,7 +30,7 @@ owner = "network-accounting"
 unit = "ms"
 axis = "The 99th percentile of how late the network attester's ticks run at the full capacity its schedule states in front of a stand-in endpoint on a CPU, the device's own cost of carrying that load: past its slack a tick faults and the stated capacity is not carried."
 better = "lower"
-command = "research run --on auto --project verity --source . --cwd clone -- bash -lc 'uv sync -q --all-packages --extra torch-cpu && uv run --extra torch-cpu python benchmarks/attester_load/run.py'"
+command = "research run --on auto --project verity --source . --cwd clone -- bash -lc 'uv sync -q --all-packages --extra torch-cpu && uv run --extra torch-cpu python benchmarks/attester_load/run.py --class w63k4'"
 every = "7d"
 
 [[metric]]
