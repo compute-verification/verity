@@ -13,8 +13,8 @@
 #include <cstdlib>
 #include <vector>
 
-// TK_SM: the target, 120 (RTX PRO 6000, the default) or 89 (L40S, RTX 4090: its own form list and an alone4 point a
-// form). TK_GROUP: build one group of the target's forms (-1: all), so run.sh compiles the groups in parallel.
+// TK_SM: the target, 120 (RTX PRO 6000, the default), 90 (H200, H100), 100 (B200) or 89 (L40S, RTX 4090); each but
+// 120 has its own form list and an alone4 point a form. TK_GROUP: build one group of the target's forms (-1: all), so run.sh compiles the groups in parallel.
 #ifndef TK_SM
 #define TK_SM 120
 #endif
@@ -106,8 +106,8 @@ Timing run_timed(F launch, int nblocks, BlockClk* d_rec, int reps = 5) {
   return best;
 }
 
-// Dynamic shared memory that keeps a second block off an SM (sm_120 and sm_89: 100 KB a SM; sm_100: 228 KB).
-#if TK_SM == 100
+// Dynamic shared memory that keeps a second block off an SM (sm_120 and sm_89: 100 KB a SM; sm_100 and sm_90: 228 KB).
+#if TK_SM == 100 || TK_SM == 90
 constexpr int ONE_BLOCK_SMEM = 120 * 1024;
 #else
 constexpr int ONE_BLOCK_SMEM = 60 * 1024;
@@ -910,6 +910,34 @@ int main() {
   form<QmmaE4m3k32>();
   form<QmmaE4m3k16F32>();
   form<QmmaSpE4m3k64Ada>();
+  form<ImmaS8k32>();
+#endif
+#elif TK_SM == 90
+  // H200, H100: the int8 and f16/bf16 mma.sync forms ptxas lowers to one IMMA or HMMA each on sm_90a. Its FP8 forms
+  // unpack to f16 for HMMA, and s4 and b1 xor run as two s8 IMMAs and two BMMA ANDs: none is a form of its own.
+  // Group 0 is int8, the reference first and last; group 1 f16/bf16, the reference last.
+#if TK_IN(0)
+  opalone<LANE_IADD3>("iadd3");
+  opalone<LANE_FFMA>("ffma");
+  opalone<LANE_MIX>("iadd3_ffma");
+  form<ImmaS8k32>();
+  form<ImmaU8S8k32>();
+  form<ImmaS8k32Sat>();
+  form<ImmaS8k16>();
+  form<ImmaS8m8k16>();
+  form<ImmaSpS8k32>();
+  form<ImmaSpS8k64>();
+  form<ImmaS8k32>();
+#endif
+#if TK_IN(1)
+  form<HmmaF16k16F32>();
+  form<HmmaF16k16F16>();
+  form<HmmaBf16k16F32>();
+  form<HmmaF16k8F32>();
+  form<HmmaF16k8F16>();
+  form<HmmaBf16k8F32>();
+  form<HmmaSpF16k16>();
+  form<HmmaSpF16k32>();
   form<ImmaS8k32>();
 #endif
 #else
