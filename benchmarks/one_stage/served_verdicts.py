@@ -25,7 +25,9 @@ SPOT, and the one record of every verdict (the block record).
     served_verdicts.py rebase SERVE_DIR SERVED_DIR < PATHS
     served_verdicts.py composed ANSWER DIR [--gate-exit RC]
     served_verdicts.py public-registration REGISTRATION
-    served_verdicts.py sampled-line LOG [--partition FILE]
+    served_verdicts.py sampled-line LOG [--partition FILE] [--challenger C --summary FILE]
+    served_verdicts.py coin-trees --challenger C --summary FILE
+    served_verdicts.py coins --challenger C --summary FILE
     served_verdicts.py front-line SESSION
     served_verdicts.py public-lines [--private FILE]
     served_verdicts.py publish OUT --private DIR
@@ -41,8 +43,11 @@ its place. The class's padded counts, the period's declared T and S, the bench B
 verifier's coins and samples are public. ``public-registration`` prints what the run publishes of a window's advice
 docket (`public_registration`: the advice's length padded to its compiler's cap), ``sampled-line`` the
 SAMPLED-PROOFS line from the records audit's log
-(`sampled_line`: the partition the sample was over, the members it drew, and no length of the advice or count of the
-scope's members), and ``front-line`` the CERTIFIER-FRONT line from the front's session (`front_line`: `FRONT_PUBLIC`).
+(`sampled_line`: the partition the sample was over, the members it drew, whose challenger's coins they were and where
+its sessions' coin trees came from, and no length of the advice or count of the scope's members), ``coin-trees`` why an
+audit on the gate's coins took its sessions' coin trees from elsewhere (`coin_trees_refusal`, exit 1), ``coins`` the
+V3C-AUDIT line's account of whose coins its audit's were and its coin trees (`coins_said`), and
+``front-line`` the CERTIFIER-FRONT line from the front's session (`front_line`: `FRONT_PUBLIC`).
 
 ``window``: the sealed window to audit, from a serve-openai run's ``seals.jsonl``, ``windows.jsonl`` and ``requests.jsonl``
 (`pick`): sealed without error, its Commit passed, each of its requests checked and in no other window (V3b's window
@@ -116,7 +121,7 @@ is its sample session's (`pearlplus_draw`: that session fetched the same way, he
 run whose coins are an in-process challenger's claims no verdict where nothing
 failed (`UNCLAIMED`, `PEARLPLUS_WHY_IN_PROCESS`), and one served under the gate whose coins are not live rejects. Its
 document carries the passes, that verdict's line and credit at the scheme's named assumption, where its coins came from
-(`PEARLPLUS_COINS`) and its shares (`served_shares.pearlplus_shares`), and says why it credits nothing (`PEARLPLUS_WHY`:
+(`pearlplus_coins_from`) and its shares (`served_shares.pearlplus_shares`), and says why it credits nothing (`pearlplus_why`:
 its passes are not the window SPOT audited; under PEARLPLUS_TIE, ``--tie W``, the window's own epoch, the
 Pearl-C period its live salt session joined, `pearlplus_why_tied`). ``record`` composes an accepted one as PoUW's verdict of record
 only where `pearlplus_of_record` holds it to live coins under ``--key-sha512``, the lane ``--lane``'s own reserve and
@@ -280,42 +285,69 @@ _PEARLPLUS_TIED = ("development piece, which the record takes as PoUW's verdict 
                    "is chained right after (served_passes.py verify --tie W)")
 _IN_PROCESS_WHY = ("its epoch's coins are an in-process challenger's, which the serving process holds, so it claims no "
                    "verdict: the reference replay's (verify_run.py) ACCEPT under coins the prover holds shows nothing")
-#: why the Pearl+ piece's verdict (`pearlplus`) credits nothing, its epoch's salt coin a live session's
-PEARLPLUS_WHY = (f"{_PEARLPLUS_UNTIED}; its epoch's salt coin is a live session's on vy-challenger-1; and an ACCEPT is the "
-                 "reference replay's (verify_run.py), not PouwCheck's ZK proof")
-#: the same where its epoch's coins are an in-process challenger's: the piece then claims no verdict (`UNCLAIMED`)
+#: the challenger a live session's coins are named from where its open answer carries no ``host`` (`challenger_of`)
+UNNAMED_CHALLENGER = "the gate's challenger, which the session's open answer doesn't name"
+#: `pearlplus_why` where its epoch's coins are an in-process challenger's: the piece then claims no verdict (`UNCLAIMED`)
 PEARLPLUS_WHY_IN_PROCESS = f"{_PEARLPLUS_UNTIED}; {_IN_PROCESS_WHY}"
 #: the same under PEARLPLUS_TIE (a live session's: `pearlplus_why_tied`)
 PEARLPLUS_WHY_TIED_IN_PROCESS = f"{_PEARLPLUS_TIED}; {_IN_PROCESS_WHY}"
 #: the Pearl+ piece's verdict where its epoch's coins are an in-process challenger's and nothing failed
 UNCLAIMED = "unclaimed"
-#: where Pearl+'s epoch coins and the replay's samples come from (`pearlplus`), its epoch's salt coin a live session's
-PEARLPLUS_COINS = {"epoch": "a salt-only session on vy-challenger-1, reserved through the lane's gate before the engine "
-                            "started and opened by the install on its salt epoch's root; each pass's salt is held to it by "
-                            "core_check.live_salt through the auditor's signed ledger, the host's pins log and main's "
-                            "first-parent line (`pearlplus_coins`)",
-                   "draws": "a draw session of its own on vy-challenger-1 (verify_run.py's \"The run's draw\"), reserved "
-                            "withheld through the lane's gate once its Pearl-C period closed and opened on the run's "
-                            "commitment once every pass's roots are read, its draw coin the run's one source, recorded in "
-                            "the passes' coin.json before any replay and held to the session through the auditor's signed "
-                            "ledger (`pearlplus_draw`); the piece puts that record in the evidence store the moment it is "
-                            "drawn and holds the verdict to it (`coin`, `pearlplus_coin`)"}
 #: the replay's samples where verify ran without the gate (`verify_run.node_draw`)
 PEARLPLUS_NODE_SAMPLES = ("the Lean verifier's IO.getRandomBytes in verify_run.py on the serving node, one source for the "
                         "run, taken once every pass's roots are read and recorded in the passes' coin.json before any "
                         "replay; the piece puts that record in the evidence store the moment it is drawn and holds the "
                         "verdict to it (`coin`, `pearlplus_coin`)")
-#: the same where its epoch's coins are an in-process challenger's
+#: `pearlplus_coins_from` where its epoch's coins are an in-process challenger's
 PEARLPLUS_COINS_IN_PROCESS = {"draws": PEARLPLUS_NODE_SAMPLES,
                               "epoch": "an in-process challenger of epoch 0 (verity_bench's protocols_config, "
                                        "pouw.challenged), held by the serving process"}
-#: where the epoch's salt coin comes from under PEARLPLUS_TIE (``epoch``; ``draws`` as above)
-PEARLPLUS_EPOCH_TIED = ("a salt-only session on vy-challenger-1 for the window, reserved through the lane's gate as the "
-                        "window opened (serve_pearl.live) and opened by the window's install on its salt epoch's root; each "
-                        "pass's salt is held to it by core_check.live_salt through the auditor's signed ledger, the host's "
-                        "pins log and main's first-parent line (`pearlplus_coins`)")
+#: `pearlplus_epoch_tied` where its epoch's coins are an in-process challenger's
 PEARLPLUS_EPOCH_TIED_IN_PROCESS = ("an in-process challenger of the window's epoch over the Lean verifier of record's "
                                    "entropy (serve_pearl.in_process), held by the serving process")
+
+
+def challenger_of(served: Mapping[str, Any] | None) -> str:
+    """The challenger whose session the served run's coins are from: the host its gate's open answer names
+    (``coins.session.host``, ``<host>.<session>``, the string the challenger's own record signs), the deployed auditor's
+    or a local gate's scratch host alike; `UNNAMED_CHALLENGER` where the answer carries none."""
+    session = ((served or {}).get("coins") or {}).get("session") or {}
+    host = session.get("host") if isinstance(session, Mapping) else None
+    name = host.partition(".")[0] if isinstance(host, str) else ""
+    return name or UNNAMED_CHALLENGER
+
+
+def pearlplus_why(challenger: str) -> str:
+    """Why the Pearl+ piece's verdict (`pearlplus`) credits nothing, its epoch's salt coin a live session's on
+    `challenger` (`challenger_of`)."""
+    return (f"{_PEARLPLUS_UNTIED}; its epoch's salt coin is a live session's on {challenger}; and an ACCEPT is the "
+            "reference replay's (verify_run.py), not PouwCheck's ZK proof")
+
+
+def pearlplus_coins_from(challenger: str) -> dict[str, str]:
+    """Where Pearl+'s epoch coins and the replay's samples come from (`pearlplus`), its epoch's salt coin a live
+    session's on `challenger` (`challenger_of`)."""
+    return {"epoch": f"a salt-only session on {challenger}, reserved through the lane's gate before the engine "
+                     "started and opened by the install on its salt epoch's root; each pass's salt is held to it by "
+                     "core_check.live_salt through the auditor's signed ledger, the host's pins log and main's "
+                     "first-parent line (`pearlplus_coins`)",
+            "draws": f"a draw session of its own on {challenger} (verify_run.py's \"The run's draw\"), reserved "
+                     "withheld through the lane's gate once its Pearl-C period closed and opened on the run's "
+                     "commitment once every pass's roots are read, its draw coin the run's one source, recorded in "
+                     "the passes' coin.json before any replay and held to the session through the auditor's signed "
+                     "ledger (`pearlplus_draw`); the piece puts that record in the evidence store the moment it is "
+                     "drawn and holds the verdict to it (`coin`, `pearlplus_coin`)"}
+
+
+def pearlplus_epoch_tied(challenger: str) -> str:
+    """Where the epoch's salt coin comes from under PEARLPLUS_TIE (``epoch``; ``draws`` as `pearlplus_coins_from`'s), a
+    live session's on `challenger` (`challenger_of`)."""
+    return (f"a salt-only session on {challenger} for the window, reserved through the lane's gate as the "
+            "window opened (serve_pearl.live) and opened by the window's install on its salt epoch's root; each "
+            "pass's salt is held to it by core_check.live_salt through the auditor's signed ledger, the host's "
+            "pins log and main's first-parent line (`pearlplus_coins`)")
+
+
 #: `served_step.coins_of`'s ``source`` for a live session's coins
 LIVE_SOURCE = "challenger"
 #: the evidence store's kind for the verifier's coin record as `coin` publishes it: the record's own schema
@@ -704,20 +736,57 @@ def public_registration(reg: Mapping[str, Any]) -> dict[str, Any]:
     return public_json({**out, "padded": list(PADDED)})
 
 
-def sampled_line(records: Mapping[str, Any], partition: Mapping[str, Any] | None) -> str:
+def challenger_coins(challenger: str) -> str:
+    """Whose coins a records audit's ``--challenger`` (run.sh's PP_CHALLENGER) are, as the SAMPLED-PROOFS line says
+    them: the auditor device's gate, or a development session (local or loopback), which no record of the auditor's takes.
+    No address: the gate is named by its kind alone."""
+    if challenger.startswith("gate:"):
+        return "the gate's, the auditor's challenger"
+    return f"a development challenger's ({challenger.split(':', 1)[0]}), not the auditor's"
+
+
+def coins_said(challenger: str, summary: Mapping[str, Any] | None) -> str:
+    """The V3C-AUDIT line's account of its audit's coins: whose they were (`challenger_coins`) and its ``summary``'s
+    ``coin_trees`` (none where the audit wrote no summary or reached no session)."""
+    return f"coins {challenger_coins(challenger)}, coin_trees {(summary or {}).get('coin_trees') or 'none'}"
+
+
+def coin_trees_refusal(challenger: str, summary: Mapping[str, Any] | None) -> str | None:
+    """Why a records audit on the gate's coins (``challenger`` ``gate:USER@HOST``) can't be accepted for its sessions'
+    coin trees, from its ``summary.json`` (``summary``), or None. The auditor's Lean verifier takes a `--zk` session's
+    coins only from the release log of the session that sampled the sampled proof blocks (`OneStageZk.treesHeld`), so
+    the summary must say the sessions took their trees from it (``coin_trees`` ``window``, `a5.window_trees`). A
+    development session's coins, a plain audit (whose one session runs on a tree of its own by design) and an audit that
+    reached no session (no summary, or one naming no ``coin_trees``, which its own verdict refuses) are None, as before."""
+    s = summary or {}
+    if not challenger.startswith("gate:") or s.get("plain") or "coin_trees" not in s or s["coin_trees"] == "window":
+        return None
+    return (f"the audit's summary says coin_trees={s['coin_trees']!r}: the sampled proof blocks' sessions took their coin "
+            "trees from somewhere other than the gate's session that sampled them, which the auditor's Lean verifier "
+            "refuses (OneStageZk.treesHeld); serve from a tree whose a5.window_trees takes them from that session, "
+            "with FLOCK_CHALLENGER unset")
+
+
+def sampled_line(records: Mapping[str, Any], partition: Mapping[str, Any] | None, challenger: str | None = None,
+                 summary: Mapping[str, Any] | None = None) -> str:
     """The SAMPLED-PROOFS line's account of the records audit's ``RECORDS`` row: what the sample was over (the partition's
     templates, its scope's op path and sampling design), which members it drew, and the row with no length of the advice
     (``leak.advice_bits``) and no ``population``, the scope's unpadded member count, which counts the window's tokens. The
-    scope's ``steps``, the window's engine steps, stay on the node too."""
+    scope's ``steps``, the window's engine steps, stay on the node too. With the audit's ``challenger``, whose coins they
+    were (`challenger_coins`), and the row its ``summary``'s ``coin_trees``, so no reader takes a development session's
+    run for the auditor's."""
     row = {k: v for k, v in records.items() if k != "population"}
     if isinstance(row.get("leak"), Mapping):
         row["leak"] = {k: v for k, v in row["leak"].items() if k != "advice_bits"}
+    if summary is not None:
+        row["coin_trees"] = summary.get("coin_trees")
     part = partition or {}
     scope = part.get("scope") or {}
     over = (f"over {', '.join(part.get('templates') or ['?'])} at {scope.get('op_path_prefix', '?')} "
             f"(law {part.get('law', '?')})")
     drawn = f"drawn members {row.get('draw')}" if row.get("draw") is not None else "no draw"
-    return f"{over}, {drawn}: RECORDS {json.dumps(row, sort_keys=True)}"
+    coins = f", coins {challenger_coins(challenger)}" if challenger is not None else ""
+    return f"{over}, {drawn}{coins}: RECORDS {json.dumps(row, sort_keys=True)}"
 
 
 #: The certifier front's session fields the CERTIFIER-FRONT line says. The rest (its prompts, request, kept fetch, gate
@@ -1473,14 +1542,14 @@ def give_up(volunteered: Mapping[str, Any]) -> dict[str, Any]:
             "finished": len(volunteered.get("passes") or ())}
 
 
-def pearlplus_why_tied(reserved: Mapping[str, Any] | None) -> str:
-    """Why Pearl+'s piece under PEARLPLUS_TIE credits nothing by itself, its epoch's salt coin a live session's: the
-    Pearl-C period that session joined, as the gate's reserve answer ``reserved`` (the window's ``coins.reserved``)
-    names it, or that it joined none."""
+def pearlplus_why_tied(reserved: Mapping[str, Any] | None, challenger: str = UNNAMED_CHALLENGER) -> str:
+    """Why Pearl+'s piece under PEARLPLUS_TIE credits nothing by itself, its epoch's salt coin a live session's on
+    `challenger` (`challenger_of`): the Pearl-C period that session joined, as the gate's reserve answer ``reserved``
+    (the window's ``coins.reserved``) names it, or that it joined none."""
     r = reserved or {}
     joined = (f"reserved under lane {r.get('by')}'s key into its Pearl-C period {r['period']}" if r.get("period") else
               "in no period, its reserve having joined none, so the record can't take it")
-    return f"{_PEARLPLUS_TIED}; its epoch's salt coin is a live session's on vy-challenger-1, {joined}"
+    return f"{_PEARLPLUS_TIED}; its epoch's salt coin is a live session's on {challenger}, {joined}"
 
 
 #: whose clock `execution_phase` reads, and where
@@ -1562,12 +1631,12 @@ def pearlplus(out: Path, served: Mapping[str, Any] | None, verified: Mapping[str
     verdict over every pass it retained (``verified``, its ``verify``'s; None where either wrote none). Its verdict is
     accept when the run served within its caps across at least two pass boundaries, Pearl+'s verdict accepts, and its
     epoch's salt coin is its live session's (`pearlplus_coins` through the gate `gate`, the key pin `key` and main's line
-    `main`; `PEARLPLUS_COINS`); with an in-process challenger's coins (`PEARLPLUS_COINS_IN_PROCESS`) a run where nothing
+    `main`; `pearlplus_coins_from`, naming the challenger as `challenger_of`); with an in-process challenger's coins (`PEARLPLUS_COINS_IN_PROCESS`) a run where nothing
     failed is `UNCLAIMED`, and a run served under the gate whose coins are not live rejects. It carries that verdict's
     line, credit at the scheme's named assumption (``credit``, the answer's ``public.work``) and the rounds the prover dropped from
     its retention before the coin (``dropped``, which credit nothing and stay declared), its shares are
     `served_shares.pearlplus_shares`'s wherever the run served within its caps, whatever the verdict (a rejected or
-    missing one credits 0), and it credits nothing (`PEARLPLUS_WHY`, or `PEARLPLUS_WHY_IN_PROCESS`). ``unretained``, the
+    missing one credits 0), and it credits nothing (`pearlplus_why`, or `PEARLPLUS_WHY_IN_PROCESS`). ``unretained``, the
     same load served with no pass retained (``serve --no-retain``), adds the shares' ``unretained``
     (`served_shares.pearlplus_unretained`), or why there are none; it is a measurement and never decides the verdict.
     ``volunteered``, the prover's give-up before the coin (``served_passes.py volunteer``'s document), is ``give_up``
@@ -1581,7 +1650,7 @@ def pearlplus(out: Path, served: Mapping[str, Any] | None, verified: Mapping[str
     rejects (a node's says so in ``coins.draws``, `PEARLPLUS_NODE_SAMPLES`). The piece names its load (``load``: the requests, their prompt and output tokens, and the tokens a step).
     ``tie``, under PEARLPLUS_TIE, is the window record W the window's passes are held to (``served_passes.py retain
     --window-record``): ``served`` is then serve-openai's Pearl+ arm's document for the window (``pearl/w<k>/served.json``,
-    its ``error`` why it isn't ok), its epoch's coins are `PEARLPLUS_EPOCH_TIED`'s (or `PEARLPLUS_EPOCH_TIED_IN_PROCESS`'s),
+    its ``error`` why it isn't ok), its epoch's coins are `pearlplus_epoch_tied`'s (or `PEARLPLUS_EPOCH_TIED_IN_PROCESS`'s),
     its ``load`` is the window's steps, ``tie`` names W's `registration.digest` as ``record`` (None, and ``why``, where W
     can't be read; the record holds the verdict to W, `pearlplus_of_record`), and why it credits nothing by itself names
     the Pearl-C period the epoch's live salt session joined (`pearlplus_why_tied`, or `PEARLPLUS_WHY_TIED_IN_PROCESS`).
@@ -1611,9 +1680,10 @@ def pearlplus(out: Path, served: Mapping[str, Any] | None, verified: Mapping[str
         reasons.append("no verdict: served_passes.py verify wrote no document")
     elif answer.get("verdict") != "accept":
         reasons.append(f"Pearl+'s verdict rejects the run: {answer.get('reason')}"[:800])
-    coins: dict[str, Any] = dict(PEARLPLUS_COINS if live else PEARLPLUS_COINS_IN_PROCESS)
+    challenger = challenger_of(served)
+    coins: dict[str, Any] = dict(pearlplus_coins_from(challenger) if live else PEARLPLUS_COINS_IN_PROCESS)
     if tie is not None:
-        coins["epoch"] = PEARLPLUS_EPOCH_TIED if live else PEARLPLUS_EPOCH_TIED_IN_PROCESS
+        coins["epoch"] = pearlplus_epoch_tied(challenger) if live else PEARLPLUS_EPOCH_TIED_IN_PROCESS
     if served is not None and live:
         coins["check"] = pearlplus_coins(served, out, gate, key, main)
         if coins["check"]["reason"] is not None:
@@ -1627,9 +1697,10 @@ def pearlplus(out: Path, served: Mapping[str, Any] | None, verified: Mapping[str
         elif coins["draw"]["reason"] is not None:
             reasons.append(f"draw: {coins['draw']['reason']}")
     if tie is None:
-        why = PEARLPLUS_WHY if live else PEARLPLUS_WHY_IN_PROCESS
+        why = pearlplus_why(challenger) if live else PEARLPLUS_WHY_IN_PROCESS
     else:
-        why = pearlplus_why_tied(((served or {}).get("coins") or {}).get("reserved")) if live else PEARLPLUS_WHY_TIED_IN_PROCESS
+        why = (pearlplus_why_tied(((served or {}).get("coins") or {}).get("reserved"), challenger) if live
+               else PEARLPLUS_WHY_TIED_IN_PROCESS)
     doc: dict[str, Any] = {"piece": "pearlplus", "credited": False, "why": why, "coin_source": source, "coins": coins,
                            "scheme": None, "arm": None, "passes": None, "load": None, "dropped": None, "line": None,
                            "credit": None, "coin": None, "give_up": None, "shares": None, "tie": None,
@@ -1768,6 +1839,15 @@ def lean_sampled_row(audit_dir: Path, scratch: Path, exe: str | os.PathLike | No
 def _json(path: Path) -> Any:
     """``path``'s JSON, None where there's no such file; one that isn't JSON raises ValueError."""
     return json.loads(path.read_text()) if path.exists() else None
+
+
+def _summary(path: Path) -> dict[str, Any] | None:
+    """A records audit's summary.json at ``path`` for the lines that say its coin trees: None where there's none, and one
+    that isn't JSON as a summary whose ``coin_trees`` says so."""
+    try:
+        return _json(path)
+    except ValueError:
+        return {"coin_trees": f"unread: {path.name} is not JSON"}
 
 
 def _ledger_period(lines: Sequence[str], session: str) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
@@ -2461,6 +2541,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     sl = sub.add_parser("sampled-line")
     sl.add_argument("log", type=Path)
     sl.add_argument("--partition", type=Path)
+    sl.add_argument("--challenger")
+    sl.add_argument("--summary", type=Path)
+    for name in ("coin-trees", "coins"):
+        ct = sub.add_parser(name)
+        ct.add_argument("--challenger", required=True)
+        ct.add_argument("--summary", type=Path, required=True)
     fl = sub.add_parser("front-line")
     fl.add_argument("session", type=Path)
     p = sub.add_parser("pieces")
@@ -2539,8 +2625,20 @@ def main(argv: Sequence[str] | None = None) -> int:
         if not rows:
             print("no RECORDS line")
             return 1
-        print(sampled_line(json.loads(rows[0]), json.loads(a.partition.read_text()) if a.partition else None))
+        print(sampled_line(json.loads(rows[0]), json.loads(a.partition.read_text()) if a.partition else None,
+                           a.challenger, _summary(a.summary) if a.summary else None))
         return 0
+    if a.cmd == "coins":
+        print(coins_said(a.challenger, _summary(a.summary)))
+        return 0
+    if a.cmd == "coin-trees":
+        try:
+            why = coin_trees_refusal(a.challenger, _json(a.summary) if a.challenger.startswith("gate:") else None)
+        except ValueError:
+            why = f"the audit's {a.summary} is not JSON, so nothing says where its sessions' coin trees came from"
+        if why:
+            print(why)
+        return 1 if why else 0
     if a.cmd == "front-line":
         try:
             print(front_line(json.loads(a.session.read_text())))

@@ -59,38 +59,38 @@ goal = "benchmarks/proof-system-performance"
 
 # `run.py layers`'s three: under each, the Flock layer (member "flock"), the zero-knowledge layer (member "zero
 # knowledge") and last the sampling layer with no member, the metric's own reading (benchmarks/prove/README.md's "The
-# proof benchmark by layer"). The runs named are each layer's run of record: served runs of layer 0's 880 RoPE heads of
-# Llama 3.2 1B int8, from commits not on main, until runs from a clone of main replace them.
+# proof benchmark by layer"). Each run its command takes is a layer's run of record (a served run of layer 0's 880 RoPE
+# heads of Llama 3.2 1B int8), which its owner fills in: the numbers are those runs', so the loop doesn't rerun them.
 [[metric]]
 id = "benchmarks/proof-layer-prover-seconds"
-title = "Prover time a sampled block"
+title = "Prover time a sampled proof block"
 owner = "benchmarks"
 unit = "s a proof block"
 axis = "Seconds Flock's prover spends on each sampled proof block of Llama 3.2 1B's served blocks, with zero knowledge at the sampling plan as served, with the Flock and zero-knowledge layers listed beside it as members."
 better = "lower"
-command = "research run --on auto --project verity --source . --cwd source --store-read -- uv run --extra torch-cpu python benchmarks/prove/run.py layers --flock r20261115-230754-7a96 --zk r20261115-222836-b5bc --sampling r20261115-232508-db1d"
+command = "research run --on auto --project verity --source . --cwd source --store-read -- uv run --extra torch-cpu python benchmarks/prove/run.py layers --flock FLOCK_RUN --zk ZK_RUN --sampling SAMPLING_RUN"
 every = "7d"
 goal = "proofs/layers-in-one-table"
 
 [[metric]]
 id = "benchmarks/proof-layer-lean-seconds"
-title = "Verifier time a sampled block"
+title = "Verifier time a sampled proof block"
 owner = "benchmarks"
 unit = "s a proof block"
 axis = "Seconds the Lean verifier spends on each sampled proof block of Llama 3.2 1B's served blocks, with zero knowledge at the sampling plan as served, with the Flock and zero-knowledge layers listed beside it as members."
 better = "lower"
-command = "research run --on auto --project verity --source . --cwd source --store-read -- uv run --extra torch-cpu python benchmarks/prove/run.py layers --flock r20261115-230754-7a96 --zk r20261115-222836-b5bc --sampling r20261115-232508-db1d"
+command = "research run --on auto --project verity --source . --cwd source --store-read -- uv run --extra torch-cpu python benchmarks/prove/run.py layers --flock FLOCK_RUN --zk ZK_RUN --sampling SAMPLING_RUN"
 every = "7d"
 goal = "proofs/layers-in-one-table"
 
 [[metric]]
 id = "benchmarks/proof-layer-proof-bytes"
-title = "Proof size a sampled block"
+title = "Proof size a sampled proof block"
 owner = "benchmarks"
 unit = "bytes a proof block"
 axis = "Bytes of proof for each sampled proof block of Llama 3.2 1B's served blocks, with zero knowledge at the sampling plan as served, with the Flock and zero-knowledge layers listed beside it as members."
 better = "lower"
-command = "research run --on auto --project verity --source . --cwd source --store-read -- uv run --extra torch-cpu python benchmarks/prove/run.py layers --flock r20261115-230754-7a96 --zk r20261115-222836-b5bc --sampling r20261115-232508-db1d"
+command = "research run --on auto --project verity --source . --cwd source --store-read -- uv run --extra torch-cpu python benchmarks/prove/run.py layers --flock FLOCK_RUN --zk ZK_RUN --sampling SAMPLING_RUN"
 every = "7d"
 goal = "proofs/layers-in-one-table"
 

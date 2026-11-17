@@ -11,9 +11,9 @@ import torch.nn.functional as F
 from torch import nn
 
 from verity_vllm.program.frontend import vllm_meta as vm
-from verity_vllm.program.frontend.vllm_derive import derive_report
 from verity_vllm.program.frontend.export_ops import CollectiveBus, ensure_ops
 from verity_vllm.program.frontend.rules.vllm_bindings import vllm_ruleset
+from verity_vllm.program.frontend.vllm_derive import derive_report
 
 BF = torch.bfloat16
 V, H, FF, TOKENS = 32, 8, 16, 3

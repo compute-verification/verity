@@ -50,11 +50,11 @@ def test_the_network_attesters_part_is_beside_it_at_the_requests_its_calculator_
     assert not [i["input"] for i in doc["inputs"] if i["value"] == "given" or "--world-requests" in i["source"]]
 
     theirs = lb.document(lb.inputs(response_ids=E.RESPONSE_IDS, scan_delta=delta(lb)), only=("world",), periods=("year",))
-    assert doc["certifier"]["rows"] == theirs["rows"] and [r["row"] for r in theirs["rows"]][-2:] == [E.OUTPUT_COUNT, "design"]
-    assert (doc["certifier"]["schema"], doc["certifier"]["request_count"], doc["certifier"]["response_ids"]) == (
+    assert doc["attester"]["rows"] == theirs["rows"] and [r["row"] for r in theirs["rows"]][-2:] == [E.OUTPUT_COUNT, "design"]
+    assert (doc["attester"]["schema"], doc["attester"]["request_count"], doc["attester"]["response_ids"]) == (
         E.TERM_SCHEMA, "plan", 1024)
-    assert (doc["certifier"]["of_record"], doc["certifier"]["set_time"]) == ("2", "1")
-    scan = doc["certifier"]["rows"][0]
+    assert (doc["attester"]["of_record"], doc["attester"]["set_time"]) == ("2", "1")
+    scan = doc["attester"]["rows"][0]
     assert scan["row"] == "scan" and scan["term"]["1"]["bits"] == pytest.approx(22 * year["requests"])
 
     audit, together = year["compute_audit"], year["together"]
@@ -64,9 +64,9 @@ def test_the_network_attesters_part_is_beside_it_at_the_requests_its_calculator_
     rows = {r["row"]: r for r in theirs["rows"]}
     for name, t in together.items():
         card = t["with_set_time_card"]
-        assert (t["certifier_GB"], card["certifier_GB"]) == (rows[name]["term"]["2"]["GB"], rows[name]["term"]["1"]["GB"])
-        assert t["GB"] == pytest.approx(t["certifier_GB"] + audit["GB"])
-        assert card["GB"] == pytest.approx(card["certifier_GB"] + audit["GB"])
+        assert (t["attester_GB"], card["attester_GB"]) == (rows[name]["term"]["2"]["GB"], rows[name]["term"]["1"]["GB"])
+        assert t["GB"] == pytest.approx(t["attester_GB"] + audit["GB"])
+        assert card["GB"] == pytest.approx(card["attester_GB"] + audit["GB"])
     # the entries stand in for the compute audit's part where the scan charges them and they are fewer
     assert scan["entries"]["bits"] > audit["bits"]
     dc = doc["periods"][2]
@@ -74,7 +74,7 @@ def test_the_network_attesters_part_is_beside_it_at_the_requests_its_calculator_
     assert dc["requests"] == pytest.approx(year["requests"] * dc["gpu_seconds"] / year["gpu_seconds"], rel=1e-12)
     # a scope no run of record holds has the network attester's part alone
     week = doc["periods"][0]
-    assert week["compute_audit"] is None and week["together"]["design"]["GB"] is None and week["together"]["design"]["certifier_GB"] > 0
+    assert week["compute_audit"] is None and week["together"]["design"]["GB"] is None and week["together"]["design"]["attester_GB"] > 0
     assert week["together"]["design"]["with_set_time_card"]["GB"] is None
 
     # the count read is the calculator's: were its plan another, the rows of record would be priced over other requests
@@ -117,9 +117,9 @@ def test_the_network_attesters_figures_of_record_are_at_two_release_schedules(tm
 
     wide = E.build(store=recorded(tmp_path / "wide").fresh(), root=REPO, response_ids=lb.RESPONSE_IDS)
     sums = wide["periods"][-1]["together"]
-    assert (sums["scan"]["certifier_GB"], sums["design"]["certifier_GB"]) == (theirs["value"], design["term"]["2"]["GB"])
-    assert sums["scan"]["with_set_time_card"]["certifier_GB"] == theirs["with_set_time_card"]["value"]
-    assert wide["certifier"]["default_class"] == {"response_ids": 4096, "eps": 2 ** -20, "value": theirs["value"], "unit": "GB"}
+    assert (sums["scan"]["attester_GB"], sums["design"]["attester_GB"]) == (theirs["value"], design["term"]["2"]["GB"])
+    assert sums["scan"]["with_set_time_card"]["attester_GB"] == theirs["with_set_time_card"]["value"]
+    assert wide["attester"]["default_class"] == {"response_ids": 4096, "eps": 2 ** -20, "value": theirs["value"], "unit": "GB"}
     text = E.render(wide)
     assert ("- **the network attester's part: 59,645,644 GB** (modeled, on an assumed class of at most 4,096 ids a response) "
             "as the scan's check charges it today, 26.83 bits a request, and 30,838,408 GB by the design no run has behind it, ") in text
@@ -131,11 +131,11 @@ def test_the_network_attesters_figures_of_record_are_at_two_release_schedules(tm
     doc = E.build(store=recorded(tmp_path).fresh(), root=REPO)
     narrow = lb.document(lb.inputs(response_ids=E.RESPONSE_IDS))
     sums = doc["periods"][-1]["together"]
-    assert E.RESPONSE_IDS == 1024 and sums["scan"]["certifier_GB"] == narrow["value"] == pytest.approx(50_753_639, abs=0.5)
-    assert sums["design"]["certifier_GB"] == of_year(narrow, "design")["term"]["2"]["GB"] == pytest.approx(26_392_406, abs=0.5)
-    assert sums["design"]["certifier_GB"] == sums[E.OUTPUT_COUNT]["certifier_GB"]
+    assert E.RESPONSE_IDS == 1024 and sums["scan"]["attester_GB"] == narrow["value"] == pytest.approx(50_753_639, abs=0.5)
+    assert sums["design"]["attester_GB"] == of_year(narrow, "design")["term"]["2"]["GB"] == pytest.approx(26_392_406, abs=0.5)
+    assert sums["design"]["attester_GB"] == sums[E.OUTPUT_COUNT]["attester_GB"]
     assert sums["scan"]["GB"] == pytest.approx(narrow["value"] + YEAR_GB) and sums["design"]["GB"] == pytest.approx(26_406_646, abs=0.5)
-    assert doc["certifier"]["default_class"] == wide["certifier"]["default_class"]
+    assert doc["attester"]["default_class"] == wide["attester"]["default_class"]
     text = E.render(doc)
     assert ("- **the network attester's part: 50,753,639 GB** (modeled, on an assumed class of at most 1,024 ids a response) "
             "as the scan's check charges it today, 22.83 bits a request, and "
@@ -156,7 +156,7 @@ def test_the_network_attesters_figures_of_record_are_at_two_release_schedules(tm
     document = lb.document
     monkeypatch.setattr(lb, "document", lambda *a, **kw: document(*a, **kw) | {"schema": "certifier-term/v1"})
     with pytest.raises(ValueError, match="the network attester's document is `certifier-term/v1` and this command reads "
-                                         "`certifier-term/v2`"):
+                                         f"`{E.TERM_SCHEMA}`"):
         E.build(store=recorded(tmp_path / "older").fresh(), root=REPO)
 
 
@@ -175,7 +175,7 @@ def test_what_rests_on_the_set_time_card_is_printed_only_under_the_calculators_l
         for name, t in p["together"].items():
             assert t["label"] == theirs[p["compute"], p["period"], name]["with_set_time_card"]
             assert t["label"] == (label if name == "all three" else None) and t["with_set_time_card"]["label"] == label
-    assert {r["row"] for r in doc["certifier"]["rows"] if r["with_set_time_card"] == label} == {"timing", "all three"}
+    assert {r["row"] for r in doc["attester"]["rows"] if r["with_set_time_card"] == label} == {"timing", "all three"}
 
     text = E.render(doc)
     shown = printed(text)
@@ -231,12 +231,12 @@ def test_the_output_count_is_beside_the_sums_that_take_it_at_zero(tmp_path, list
         assert (count["GB"], count["bits"]) == (row["schedules"]["GB"], row["schedules"]["bits"])
         assert count["bits_a_request"] == pytest.approx(11) and count["bits"] == pytest.approx(11 * p["requests"])
         sums = p["together"]
-        assert sums[E.OUTPUT_COUNT]["certifier_GB"] == sums["design"]["certifier_GB"]
+        assert sums[E.OUTPUT_COUNT]["attester_GB"] == sums["design"]["attester_GB"]
         assert all(theirs[p["compute"], p["period"], name]["schedules"]["bits"] == count["bits"] for name in ("all three", "design"))
     year = doc["periods"][-1]
     assert year["output_count"]["GB"] == pytest.approx(24_453_012, abs=0.5)
     assert year["together"][E.OUTPUT_COUNT]["GB"] == year["together"]["design"]["GB"]
-    assert doc["certifier"]["stop"] == {"rows": ["lengths", "all three", "design"], "held_phases": 0, "below": False,
+    assert doc["attester"]["stop"] == {"rows": ["lengths", "all three", "design"], "held_phases": 0, "below": False,
                                         "why": list(lb.NO_RECORDS.why), "verdicts": [], "runs": [], "superseded": []}
     assert [i for i in doc["inputs"] if i["input"] == "output_count"] == []
     text = E.render(doc)
@@ -264,7 +264,7 @@ def test_the_output_count_is_beside_the_sums_that_take_it_at_zero(tmp_path, list
     # so its answer holds no execution phase: no row is named, and no sum takes the count at 0
     store = with_verdicts(tmp_path / "held", [], held=held_phase(listed)).store
     held = E.build(store=store, root=REPO)
-    answer = held["certifier"]["stop"]
+    answer = held["attester"]["stop"]
     assert (answer["rows"], answer["held_phases"], answer["below"], answer["runs"], answer["superseded"]) == (
         ["lengths", "all three", "design"], 0, False, [HOLDER], [])
     assert len(answer["verdicts"]) == 4 and {v["mark"] for v in answer["verdicts"]} == {E.RUN_NOT_PROVED}
@@ -300,8 +300,8 @@ def test_the_output_count_is_beside_the_sums_that_take_it_at_zero(tmp_path, list
     # the same files with no format listed in the reader hold nothing either, each verdict missing: as with no record
     reader().FORMATS.clear()
     unlisted = E.build(store=with_verdicts(tmp_path / "unlisted", [], held=held_phase(listed)).store, root=REPO)
-    assert (unlisted["certifier"]["stop"]["held_phases"], unlisted["certifier"]["stop"]["runs"]) == (0, [HOLDER])
-    assert unlisted["certifier"]["stop"]["verdicts"] == [] and unlisted["certifier"]["stop"]["why"][2].endswith(
+    assert (unlisted["attester"]["stop"]["held_phases"], unlisted["attester"]["stop"]["runs"]) == (0, [HOLDER])
+    assert unlisted["attester"]["stop"]["verdicts"] == [] and unlisted["attester"]["stop"]["why"][2].endswith(
         "the compute audit is missing; the schedule was not handed")
     assert unlisted["periods"] == held["periods"] and unlisted["inputs"] == held["inputs"]
 
@@ -318,14 +318,14 @@ def test_every_figure_carries_its_error_at_the_scans_delta_the_term_states(tmp_p
     given = delta(lb)
     assert Fraction(1, 2 ** 20) == E.PERIOD_ERROR and given == Fraction(1, 12108532285440000000) != lb.SCAN_DELTA
     theirs = lb.document(lb.inputs(response_ids=E.RESPONSE_IDS, scan_delta=given), only=E.SCOPES)
-    said, by = doc["certifier"]["scan_delta"], {i["input"]: i for i in doc["inputs"]}
+    said, by = doc["attester"]["scan_delta"], {i["input"]: i for i in doc["inputs"]}
     assert (said["value"], said["mark"]) == (theirs["inputs"]["scan_delta"]["value"], "assumed") and said["value"] == float(given)
     assert said["source"] == (
         "each execution phase's scan's δ, this command's, in place of the calculator's default: 9.537e-07 (2^-20), the error "
         "a monitoring period's figure is to carry at most, over the 1.155e+13 execution phases of the world's year, the row "
-        "printed that sums the most, so that every row printed carries that error or less. The network certifier's result "
+        "printed that sums the most, so that every row printed carries that error or less. The network attester's result "
         "of record takes its δ so (benchmarks/certifier_term/README.md), and no term depends on it")
-    assert by["scan_delta"] == {"part": "network certifier", "input": "scan_delta", **said}
+    assert by["scan_delta"] == {"part": "network attester", "input": "scan_delta", **said}
 
     rows = {(r["scope"], r["period"]): r for r in theirs["rows"]}
     for p in doc["periods"]:
@@ -342,7 +342,7 @@ def test_every_figure_carries_its_error_at_the_scans_delta_the_term_states(tmp_p
     for p in doc["periods"]:
         for name, t in p["together"].items():
             r = default[p["compute"], p["period"], name]
-            assert r["eps"] <= 2 ** -20 and t["certifier_GB"] == r["term"]["2"]["GB"]
+            assert r["eps"] <= 2 ** -20 and t["attester_GB"] == r["term"]["2"]["GB"]
     assert default["world", "year", "scan"]["eps"] == 2 ** -20
 
     text = E.render(doc)
@@ -402,7 +402,7 @@ def test_a_figure_whose_error_is_one_or_more_prints_no_bound_and_no_amount(tmp_p
     doc = E.build(store=recorded(tmp_path).fresh(), root=REPO)
     week, _, dc, none, _, year = doc["periods"]
     assert [(p["eps"], p["error"]) for p in (week, dc, none, year)] == [(0.25, None), (0.995, 1.005), (1.0, None), (3.5, 3.51)]
-    assert doc["certifier"]["scan_delta"]["value"] == 0.125 != float(delta(lb))
+    assert doc["attester"]["scan_delta"]["value"] == 0.125 != float(delta(lb))
     assert doc["value"] == pytest.approx(YEAR_GB) and year["compute_audit"]["GB"] == doc["value"]
 
     def amounts(p: dict) -> list:
@@ -410,7 +410,7 @@ def test_a_figure_whose_error_is_one_or_more_prints_no_bound_and_no_amount(tmp_p
 
         both = [t for s in p["together"].values() for t in (s, s["with_set_time_card"])]
         count = p["output_count"]
-        return [[t["certifier_GB"] for t in both] + [count["GB"], count["bits"], count["bits_a_request"]], [t["GB"] for t in both]]
+        return [[t["attester_GB"] for t in both] + [count["GB"], count["bits"], count["bits_a_request"]], [t["GB"] for t in both]]
 
     # under 1: the network attester's amounts, the calculator's; with no rows of record there is nothing to sum
     for p in (week, dc):
@@ -421,9 +421,9 @@ def test_a_figure_whose_error_is_one_or_more_prints_no_bound_and_no_amount(tmp_p
     for p in (none, year):
         assert set(amounts(p)[0]) == set(amounts(p)[1]) == {None}
         assert p["output_count"]["at_zero_in"] == [] and p["gpu_seconds"] and p["requests"]
-    assert [sorted(r.keys() & set(E.AMOUNTS)) for r in doc["certifier"]["rows"]] == [[]] * 7
-    assert {r["eps"] for r in doc["certifier"]["rows"]} == {3.5} and doc["certifier"]["rows"][0]["row"] == "scan"
-    assert doc["certifier"]["default_class"] == {"response_ids": 4096, "eps": 3.5, "value": None, "unit": "GB"}
+    assert [sorted(r.keys() & set(E.AMOUNTS)) for r in doc["attester"]["rows"]] == [[]] * 7
+    assert {r["eps"] for r in doc["attester"]["rows"]} == {3.5} and doc["attester"]["rows"][0]["row"] == "scan"
+    assert doc["attester"]["default_class"] == {"response_ids": 4096, "eps": 3.5, "value": None, "unit": "GB"}
 
     text = E.render(doc)
     assert "- **the compute audit's part: 14,240 GB** (modeled), 37.81 copies of the weights" in text
