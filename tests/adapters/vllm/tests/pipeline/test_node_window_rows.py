@@ -62,6 +62,7 @@ class Values:
     def __init__(self, r: int):
         rng = np.random.default_rng(r)
         self.w = np.stack([_bf16(rng.standard_normal((16, 16)) / 4).reshape(256) for _ in range(LAYERS)])
+        y: dict
         x, y = {(0, 0, q): _bf16(rng.standard_normal(16)) for q in range(REQUESTS)}, {}
         for s in range(STEPS):
             for layer in range(LAYERS):

@@ -124,8 +124,8 @@ of the corpus's. `verity bench serve_tax` is `run.sh`, here with the flags of it
 research run --on NODE --source . --cwd source -- bash benchmarks/serve_tax/run.sh --model glm53
 ~~~
 
-On Llama 3.2 1B and one H200, whose number is a point of `vllm/serving-cost-glm53` like GLM-5.3's (each point names
-its `model` and `hardware`; the id's name is older than its other models):
+On Llama 3.2 1B and one H200, whose number is a point of `vllm/serving-cost-glm53` like GLM-5.3's (each point's
+`member` names its model, card and arm over its reference; the id's name is older than its other models):
 
 ~~~text
 research run --on NODE --source . --cwd source -- bash benchmarks/serve_tax/run.sh --model llama32-1b --arms 'compiled compiled-again record'

@@ -1,7 +1,7 @@
 """A run: a placed Program executing on a datacenter, and what the trusted devices record of it.
 
 `run` sits outside both layers: it is the world. It binds the run's inputs and the registered ones, evaluates the
-Program, commits every value, sends each crossing's frames through the certifier ports on its path, and has every
+Program, commits every value, sends each crossing's frames through the attester ports on its path, and has every
 certifier record each window of each port: the frames in each bucket (the occupancy, the only thing timing can carry
 once content is fixed) and a digest of their content. The challenger records each answer: to a challenge, to a read
 window, to a wipe's spot checks. A `Deviation` plays the adversary.
@@ -50,7 +50,7 @@ class Deviation:
     """How a dishonest run departs from the honest one:
     - `extra[(port, bucket)]`: covert frames added at a port;
     - `hold[(port, bucket)] = bucket'`: a bucket's frames sent later;
-    - `down`: (port, window)s with no record (the certifier down, or its record withheld);
+    - `down`: (port, window)s with no record (the attester down, or its record withheld);
     - `moved[store] = device`: a store kept somewhere other than where it is registered;
     - `failed_wipes`: devices whose wipe spot checks come back wrong (state hidden through the wipe);
     - `swapped[parameter]`: other bytes run in place of a registered input's (a container image swapped, say)."""
