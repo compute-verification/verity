@@ -52,6 +52,13 @@ infra.  A records commit still held `pending_s` after it was first drops its sta
 The tick that stages a batch builds the PRs with no Lean change beside it, and the tick that puts one on the chain builds on
 it there (`Build.after`).
 
+Where the land verdicts gate and no records run starts (`Snapshot.apart`), a batch needing the whole check, a Lean one too,
+never sits below plain candidates: it is built apart (`Build.apart`), on `main` off main's chain, and its whole check runs
+there while plain candidates go on building and landing on the chain; it takes a place under `depth`.  Once it passed it goes
+onto the chain's top (`Commit`): on its own base as it is, else its members merged again onto that top, where the quick tier
+gates the merge as it gates a plain candidate, and `main`'s whole check after the landing reverts a culprit.  A member that
+doesn't merge, or isn't marked at the head it was checked at, sends its members back to building.
+
 `decide` is the whole policy: a pure function from a `Snapshot` (what the refs, the labels and graph2's results say now) to
 the `Action`s that bring the world closer to it.  The loop builds the snapshot, applies the actions and keeps nothing between
 ticks but what the next snapshot reads (the refs, the labels, graph2's results, and the outcomes it recorded), so a restart
@@ -433,6 +440,13 @@ def decide(s: Snapshot) -> list[Action]:
     PR changing a Lean input (`Ready.lean_input`), so its records carry onto the top it goes onto, nor a lone PR set aside
     (`_aside`), which goes behind it as behind any PR waiting.
 
+    With `Snapshot.apart` and no records run, a batch of PRs not plain (`Snapshot.plain`), a Lean one too, is built apart
+    (`Build.apart`) on `main`, each taking a place under `depth`, and the Lean batch opens on no condition of the chain.  A
+    candidate built apart (`Candidate.apart`) is read as the lowest is (`_settle`; its reds are rung only while its base is
+    `main`), and nothing on the chain is dropped for it.  Once it passed it goes onto the chain's top as a staged batch does,
+    after the staged ones; one whose member isn't marked at the head it was checked at is dropped, its members back in the
+    pool.
+
     A red or a member set aside drops its candidate and every one above it, a refused records run drops its staged batch, and
     a member others took from the queue drops its own candidate and every one above it, or its staged batch (`_chain`); in
     the same tick each is built again (`_restack`), in order on what is left of the chain, without the suspects, the ejected,
@@ -516,8 +530,9 @@ def _decide(s: Snapshot, leaves: list[Leave] | None) -> list[Action]:
             acts.append(Commit(c.sha, base, s.depth - len(chain)))
             chain, after = [*chain, c], c.sha
         else:
-            cause = (f"#{lost} isn't taken at the head it was staged at ({why})" if (why := _untaken(c, lost, s))
-                     else f"#{lost} isn't marked at the head it was staged at")
+            at = "checked apart" if c.apart else "staged"
+            cause = (f"#{lost} isn't taken at the head it was {at} at ({why})" if (why := _untaken(c, lost, s))
+                     else f"#{lost} isn't marked at the head it was {at} at")
             acts.append(Drop(c.sha, f"{cause}, so it isn't merged again onto {base[:12]}, main's chain's top now: its "
                                     "other members are built again"))
             kept += [] if c.apart else _restack(s, ready, chain, [c], landed | ejected | out, main, acts, kept, hold)
@@ -1057,7 +1072,7 @@ def _settle(s: Snapshot, c: Candidate, ready: dict[int, Ready], built: dict[int,
     elif reading == FAIL and (rerun := _rerun(c, built)) is not None:
         acts.append(rerun)
     elif reading == FAIL or (reading == INFRA and s.tree_ejects and _tree(c.verdict)):
-        return _failed(c, ready, _outcomes(s, acts), acts, built=built)
+        return _failed(c, ready, _outcomes(s, acts), acts, red=c.base == s.main, built=built)
     elif reading == INFRA and (s.tree_ejects or c.tries < min(s.rings, 2)
                                or (_unlaunched(c.verdict) and (len(c.members) > 1 or c.tries < s.launch_tries))):
         acts.append(Retry(c.sha))
@@ -1065,7 +1080,7 @@ def _settle(s: Snapshot, c: Candidate, ready: dict[int, Ready], built: dict[int,
             acts.append(Ring(c.sha, _ring_why(c)))
     elif reading == INFRA and len(c.members) > 1:
         acts.append(Ring(c.sha, _ring_why(c)))
-        return _failed(c, ready, _outcomes(s, acts), acts, tree=False, built=built)
+        return _failed(c, ready, _outcomes(s, acts), acts, tree=False, red=c.base == s.main, built=built)
     elif reading == INFRA:
         outcomes, m = _outcomes(s, acts), c.members[0]
         gone = m not in ready or ready[m].head != c.heads[0]

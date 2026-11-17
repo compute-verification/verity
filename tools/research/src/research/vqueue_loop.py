@@ -102,7 +102,9 @@ and no batch holding one holds a PR that isn't (`vqueue.Snapshot.plain`).  `main
 (`Loop._below`), and a red of it (`Loop._main_red`) reverts the one PR landed since `main`'s last passed check whose change
 meets what the failure read (`World.revert`), holding the ready PRs that meet it too until `main`'s check passes again; with
 no such PR it reverts none, and every candidate takes the whole check until `main`'s passes.  Every other candidate takes the
-whole check before it lands, as under `check`.  A Lean
+whole check before it lands, as under `check`; with no records run, unless `--no-apart`, it takes it apart (`Loop.apart`,
+`vqueue.Build.apart`): built on `main` off the chain while plain candidates go on landing, and once it passed, its members
+merged again onto the chain's top, which the quick tier gates (`Loop._together`, `Loop._quick`).  A Lean
 candidate's records run comes first under either gate: neither its graph2 check nor its check starts until that run passed,
 and both start on its records commit, or on it as built when the run regenerated nothing (`Loop._enqueue`).  A candidate built
 on another in flight, no member of it changing a Lean input against its merge base with `main` (`vqueue_slim.lean_inputs`),

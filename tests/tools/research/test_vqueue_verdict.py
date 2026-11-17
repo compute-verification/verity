@@ -160,6 +160,82 @@ def test_under_gate_verdict_one_tick_builds_the_plain_prs_apart_from_one_taking_
     assert [started[b["sha"]] for b in built] == [vqueue_slim.QUICK, "check"] and len(quick.launches) == 1
 
 
+def test_under_gate_verdict_apart_a_candidate_needing_the_whole_check_is_checked_off_the_chain_and_lands_merged_again(
+        env, monkeypatch):
+    """With `apart`, the PR needing the whole check is built on `main` off the chain while the plain two land on the quick
+    tier.  Once its whole check passed, its member is merged again onto the `main` they landed on, in its place (`repairs`),
+    the quick tier gates that merge (`checked`), and it lands; the candidate checked apart is dropped for it, and `main`'s
+    whole check follows the landing."""
+    main = env.main()
+    env.put(1, {"a.txt": "1\n"})
+    env.put(2, {"verity/core/v.py": "x = 1\n"})
+    env.put(3, {"c.txt": "3\n"})
+    loop, runs, quick = _verdict(env, monkeypatch, depth=3, fill=3, apart=True)
+    logged = loop.tick()
+    plain, apart = [r for r in logged if r["action"] == "build"]
+    started = {r["sha"]: r["record"]["gate"] for r in logged if r["action"] == "slim"}
+    assert [(b["members"], b["base"], b.get("apart")) for b in (plain, apart)] == [([1, 3], main, None), ([2], main, True)]
+    assert (started[plain["sha"]], started[apart["sha"]]) == (vqueue_slim.QUICK, "check")
+    runs.end(main)
+    quick.end(plain["sha"])
+    assert "advance" in _acts(loop.tick()) and env.main() == plain["sha"]
+    runs.end(apart["sha"])
+    logged = loop.tick()
+    merged = next(r for r in logged if r["action"] == "build")
+    assert (merged["base"], merged["members"], merged["repairs"], merged["checked"]) == (
+        plain["sha"], [2], apart["sha"], apart["sha"])
+    assert merged["why"] == f"its whole check passed apart: its members merged again onto {plain['sha'][:12]}, main's chain's top"
+    tier = next(r for r in logged if r["action"] == "slim" and r["sha"] == merged["sha"])
+    assert tier["record"]["gate"] == vqueue_slim.QUICK and quick.launches[-1][:2] == (merged["sha"], plain["sha"])
+    quick.end(merged["sha"])
+    logged = loop.tick()
+    assert "advance" in _acts(logged) and env.main() == merged["sha"]
+    assert next(r for r in logged if r["action"] == "drop" and r["sha"] == apart["sha"])["why"] == (
+        f"its members are merged again in {merged['sha'][:12]}, on {plain['sha'][:12]}, which lands in its place")
+    after = loop.tick()
+    assert _acts(after) == ["slim"] and (after[0]["sha"], after[0]["base"], after[0]["record"]["gate"]) == (
+        merged["sha"], merged["sha"], "check")
+
+
+def test_under_gate_verdict_apart_a_candidate_checked_apart_on_main_as_it_still_is_lands_as_built(env, monkeypatch):
+    """With nothing landed since it was built, a candidate whose whole check passed apart goes onto main's chain as built,
+    with a `commit` line and no build, and lands on that check the next tick."""
+    main = env.main()
+    env.put(2, {"verity/core/v.py": "x = 1\n"})
+    loop, runs, quick = _verdict(env, monkeypatch, apart=True)
+    (apart,) = [r for r in loop.tick() if r["action"] == "build"]
+    assert apart.get("apart") and apart["base"] == main
+    runs.end(main)
+    runs.end(apart["sha"])
+    logged = loop.tick()
+    assert [(r["action"], r["why"]) for r in logged if r["action"] in ("commit", "build")] == [
+        ("commit", "its whole check passed apart: on main's chain as built")]
+    assert "advance" in _acts(loop.tick()) and env.main() == apart["sha"] and quick.launches == []
+
+
+def test_under_gate_verdict_apart_a_candidate_checked_apart_whose_member_no_longer_merges_goes_back_to_building(
+        env, monkeypatch):
+    """A plain PR lands while the PR needing the whole check, changing the same file, is checked apart; once that check
+    passed, its member doesn't merge onto the new `main`: the candidate is dropped, nothing lands for it, and its owner is
+    told it is left out until it merges."""
+    main = env.main()
+    env.put(1, {"x.txt": "1\n"})
+    env.put(2, {"x.txt": "2\n", "verity/core/v.py": "x = 1\n"})
+    loop, runs, quick = _verdict(env, monkeypatch, depth=2, fill=2, apart=True)
+    plain, apart = [r for r in loop.tick() if r["action"] == "build"]
+    assert (plain["members"], apart["members"], apart.get("apart")) == ([1], [2], True)
+    runs.end(main)
+    quick.end(plain["sha"])
+    assert "advance" in _acts(loop.tick()) and env.main() == plain["sha"]
+    runs.end(apart["sha"])
+    logged = loop.tick()
+    drop = next(r for r in logged if r["action"] == "drop" and r["sha"] == apart["sha"])
+    assert drop["why"] == (f"its whole check passed apart, but not every member merges onto {plain['sha'][:12]}, main's "
+                           "chain's top, at the head it was checked at: its members are built again")
+    assert [r["number"] for r in logged if r["action"] == "skip"] == [2] and env.main() == plain["sha"]
+    assert not [r for r in logged if r["action"] == "build" and r.get("checked")]
+
+
 def _tree_drive(**lists: list[str] | None) -> str:
     """drive.toml on `main` with the low-risk lane on and this tree's own `lowrisk_excludes`, `verdict_excludes` and
     `verdict_plain`, but each ``lists`` names: that list in its place, or, as None, left out."""
