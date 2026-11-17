@@ -43,7 +43,7 @@ states either, and the code refuses the plain sibling's list (`Core.Composites.o
 | SPOT | `.sampled` | `VStar.Recursive.Sampled.protocol` (`verity/sampled-proofs/v1`: one-stage v2's audit; one-stage v1 and the recursive audit refused) | yes | yes | yes |
 | PoUW | `.pouw` | `PouwCheck.Period.protocol` (`verity/pouw/period/v1`, its period credit) | yes | | |
 | | | `PouwCheck.PearlPlus.Protocol.protocol` (`verity/pouw/pearl-plus/v1`: Pearl+'s run verdict, its credit at Pearl's assumption) | | yes | yes |
-| the inference-only policy | | `InferenceOnlyVerifier.Protocol.protocol` (`verity/inference-only/v0`) | yes | yes | |
+| the inference-only policy | | `InferenceOnlyCheck.Protocol.protocol` (`verity/inference-only/v0`) | yes | yes | |
 | | | `rowsCheck` (`verity/inference-only/rows/v1`, the rows check, not yet compiled) | | | yes |
 | PoUS | `.pous` | `PousCheck.RunProtocol.protocol` (`verity/pous/p2/v4/run`) | yes | | |
 | PoUB-P2 | `.poub` | `Poub.P2Protocol.protocol` (`verity/remote-bandwidth/p2/v0`) | yes | | |
@@ -291,9 +291,9 @@ def CaseAccepts (k : Verity.Registration.Composite) (P : BlobProtocol) (s : Sent
       Properties.Composition.DecodedAccepted x.1 x.2.1.params.toUTF8 x.2.2.commitment x.2.2.evidence
 
 /-- **The inference-only policy's case in what the prover sent composite `k`**, decoded: the three byte strings decode
-under the composition's formats, one of the subprotocols' cases is the policy's (`InferenceOnlyVerifier.Protocol.protocol`, which
+under the composition's formats, one of the subprotocols' cases is the policy's (`InferenceOnlyCheck.Protocol.protocol`, which
 reads no blobs, as one of `k`'s subprotocols), and under the parameters `k` names for it that case decodes to the
-policy's parameters `p`, its record `c` and its evidence `e`. It is `CaseAccepts k InferenceOnlyVerifier.Protocol.protocol s`
+policy's parameters `p`, its record `c` and its evidence `e`. It is `CaseAccepts k InferenceOnlyCheck.Protocol.protocol s`
 without the check's acceptance. -/
 def PolicyCase (k : Verity.Registration.Composite) (s : Sent) (p : InferenceOnlyVerifier.Protocol.Params)
     (c : InferenceOnlyVerifier.Protocol.Commitment) (e : InferenceOnlyVerifier.Protocol.Evidence) : Prop :=

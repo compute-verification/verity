@@ -10,7 +10,7 @@ public import Proofs.Properties.InferenceOnly.ReadsExact
 # The walk lemma
 
 **The walk lemma** (`MemberReads`): in a Program Flock decodes, topological (`Flock.Program.Prog.orderViolation`) and
-laid out (`InferenceOnlyVerifier.Desc.bodiesLaidOut`), a gate in the activation of member `m` of a root node `k` calling a composite
+laid out (`InferenceOnlyCheck.Desc.bodiesLaidOut`), a gate in the activation of member `m` of a root node `k` calling a composite
 (by a batch or a call: a scan's iteration reads the one before) reads only gates of that activation, or a gate one of
 node `k`'s argument references resolves to from the root, what its arguments bind. It is where Flock's walk
 (`Flock.Program.Prog.gate`, `Flock.Program.resolve`) takes a gate's operands, and the scan's causality
