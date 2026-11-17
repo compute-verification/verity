@@ -43,10 +43,10 @@ BINDINGS = {
     "bandwidth-verifier": {"bandwidth": {"address": "192.0.2.2:7002"}},
     "network-certifier": {"certifier": {"gate": "user@gate-1", "peer": "peer-1"}},
 }
-#: the bindings a piece reads only where given: unbound, the network attester is the run's on the workload's machine
-OPTIONAL = {"network-certifier.certifier.gate", "network-certifier.certifier.peer"}
+#: the bindings the network attester's party writes where `verity run` starts it (`served_table.STARTS`)
+WRITTEN = {"network-certifier.certifier.gate", "network-certifier.certifier.peer"}
 UNBOUND = sorted(k for k in (f"{p}.{c}.{k}" for p, cs in BINDINGS.items() for c, ks in cs.items() for k in ks)
-                 if k not in OPTIONAL)
+                 if k not in WRITTEN)
 #: the served window's runner's variables under `BINDINGS`, and the bindings the pieces read, in the pieces' order
 VARIABLES = {
     "CERTIFIER_CHAIN_CMD": '.venv/bin/python benchmarks/network_traces/certifier_piece.py chain "$@"',
@@ -60,7 +60,8 @@ VARIABLES = {
     "V3C_LAW": "rate:1/3481648", "WINDOW_STEPS": "16",
 }
 KEYS = ["challenger.pouw.gate", "challenger.pouw.peer", "challenger.pouw.key-sha512", "memory-challenger.pous.address",
-        "bandwidth-verifier.bandwidth.address", "memory-challenger.wipe.address"]
+        "bandwidth-verifier.bandwidth.address", "network-certifier.certifier.gate", "network-certifier.certifier.peer",
+        "memory-challenger.wipe.address"]
 #: each runtime party: its protocol (None while a half isn't in the tree), its role there, its machine and its clock
 RUNTIME = {
     ("memory-challenger", "wipe"): ("verity/pous/streamed-wipe", "memory-challenger", "auditor-host",
@@ -297,10 +298,11 @@ def test_the_runners_variables_and_the_bindings_keys_are_these():
     cfg = R.load(CONFIG, REG)
     deployed = {"VERITY_CONFIGURATION": K.digest(cfg), "VERITY_PINS": json.dumps(cfg["pin"], sort_keys=True)}
     assert T.variables(cfg, BINDINGS) == VARIABLES | deployed
-    assert T.unbound(cfg, {}) == KEYS and T.unbound(cfg, BINDINGS) == [] and sorted(KEYS) == UNBOUND
+    assert T.unbound(cfg, {}) == KEYS and T.unbound(cfg, BINDINGS) == [] and sorted(set(KEYS) - WRITTEN) == UNBOUND
     unbound = T.variables(cfg, {})
     assert set(unbound) == set(VARIABLES) | set(deployed)
-    assert unbound["CERTIFIER_FRONT"].endswith('--gate local --peer "$(hostname)"') and unbound["DEVELOPMENT"] == "1"
+    assert unbound["CERTIFIER_FRONT"].endswith("--gate '<network-certifier.certifier.gate>' "
+                                               "--peer '<network-certifier.certifier.peer>'")
     assert all(unbound[k] == VARIABLES[k] for k in ("CERTIFIER_CHAIN_CMD", "CERTIFIER_PERIOD_CMD"))
 
 
@@ -308,7 +310,7 @@ def test_the_certifiers_script_is_its_developer_sides_and_no_gate_piece_names_on
     cfg = R.load(CONFIG, REG)
     side, device = REG.parties["certifier"][NC.WORKERS], REG.parties["certifier"][NC.NETWORK_CERTIFIER]
     assert (side.runs, side.scripts, side.reaches, side.binds, side.optional) == (
-        T.SERVED_WINDOW, (T.CERTIFIER_PIECE,), NC.NETWORK_CERTIFIER, (), ("gate", "peer"))
+        T.SERVED_WINDOW, (T.CERTIFIER_PIECE,), NC.NETWORK_CERTIFIER, ("gate", "peer"), ())
     assert set(side.variables(cfg, BINDINGS)) == {"SERVE_ARGS", "CERTIFIER_FRONT", "CERTIFIER_CHAIN_CMD",
                                                     "CERTIFIER_PERIOD_CMD", "V3C_CLASS", "CLASSES"}
     assert device.runs == T.GATE
@@ -335,32 +337,60 @@ BOUND_FRONT = {k: VARIABLES[k] for k in ("SERVE_ARGS", "CERTIFIER_FRONT", "CERTI
                                          "V3C_CLASS", "CLASSES")}
 
 
-def test_unbound_the_network_attester_is_the_local_gate_on_the_workloads_machine_and_bound_is_its_gate(tmp_path,
-                                                                                                    capsys):
-    """With no gate and peer bound, the front runs the network attester on the workload's machine (``--gate local``,
-    the peer that machine's own name) in a development run; with both bound, the front reaches that gate and peer,
-    and the dry run starts with every other binding given and none of the network attester's."""
-    cfg, side = R.load(CONFIG, REG), REG.parties["certifier"][NC.WORKERS]
+def test_the_network_attester_starts_first_as_the_local_gate_on_the_workloads_machine(tmp_path, capsys):
+    """With none of its bindings given, `verity run` starts the network attester's party first: it writes the front's
+    local gate and the workload's machine as the configuration names it as its peer, which the front then runs with,
+    and the dry run counts both bound. Bound, the front reaches that gate and peer, and the party isn't started."""
+    cfg, side, start = R.load(CONFIG, REG), REG.parties["certifier"][NC.WORKERS], REG.starts[NC.NETWORK_CERTIFIER]
     assert side.variables(cfg, BINDINGS) == BOUND_FRONT
-    assert side.variables(cfg, NO_NETWORK_ATTESTER) == {
+    assert R.starting(REG, [NC.NETWORK_CERTIFIER], NO_NETWORK_ATTESTER) == [NC.NETWORK_CERTIFIER]
+    assert R.starting(REG, [NC.NETWORK_CERTIFIER], BINDINGS) == []
+    start.serve(cfg, tmp_path)
+    written = R.wait_bindings(tmp_path, NC.NETWORK_CERTIFIER, start, lambda: True, clock=lambda: 0.0,
+                              pause=lambda s: None)
+    assert written == {"certifier": {"gate": "local", "peer": T.PROVER_NODE}}
+    R.bind(tmp_path, NC.NETWORK_CERTIFIER, written)
+    assert side.variables(cfg, T.bindings_of(tmp_path)) == {
         **BOUND_FRONT, "CERTIFIER_FRONT": '.venv/bin/python benchmarks/network_traces/certifier_piece.py front "$1" "$2" '
-                                          '"$3" --gate local --peer "$(hostname)"', "DEVELOPMENT": "1"}
+                                          f'"$3" --gate local --peer {T.PROVER_NODE}'}
     rc, got, err = dry(capsys, "--bindings", bindings(tmp_path, NO_NETWORK_ATTESTER))
     assert rc == 0 and got["dry"][0]["unbound"] == [], err
-    hooks = {(x["party"], e["component"]): e["hooks"] for x in got["plan"] for e in x["entries"]}
-    assert hooks[NC.WORKERS, "certifier"]["CERTIFIER_FRONT"].endswith('--gate local --peer "$(hostname)"')
+    assert {x["party"]: x.get("writes") for x in got["plan"]}[NC.NETWORK_CERTIFIER] == {"certifier": ["gate", "peer"]}
 
 
-@pytest.mark.parametrize("given, alone", [("gate", "peer"), ("peer", "gate")])
-def test_the_network_attester_bound_in_part_is_refused_by_name_with_the_fix(tmp_path, capsys, given, alone):
-    """Unbound, the front's other binding would be dropped: a gate without its peer, or a peer without its gate, is
-    refused before anything starts."""
-    tables = {**NO_NETWORK_ATTESTER, NC.NETWORK_CERTIFIER: {"certifier": {given: BINDINGS[NC.NETWORK_CERTIFIER][
-        "certifier"][given]}}}
+def test_a_network_attester_without_its_peer_is_refused_by_name_with_the_fix(tmp_path, capsys):
+    """A gate given without its peer is refused before anything starts, and so is a started party that writes no peer:
+    each refusal names the network attester's bindings and says what to give."""
+    tables = {**NO_NETWORK_ATTESTER, NC.NETWORK_CERTIFIER: {"certifier": {"gate": "user@gate-1"}}}
     rc, _, err = dry(capsys, "--bindings", bindings(tmp_path, tables))
-    assert rc == 2 and "refused unbound" in err
-    assert (f"bind network-certifier.certifier.{given} but not network-certifier.certifier.{alone}: bind both, or "
-            "neither") in err
+    assert rc == 2 and ("refused binding: --bindings gives network-certifier.certifier.gate of what network-certifier "
+                        "writes, not all of it: give every one (network-certifier runs where they say) or none "
+                        "(network-certifier starts here)") in err
+    f = tmp_path / "public" / NC.NETWORK_CERTIFIER / "bindings.json"
+    f.parent.mkdir(parents=True)
+    f.write_text(json.dumps({"certifier": {"gate": "local"}}))
+    with pytest.raises(Refused) as e:
+        R.wait_bindings(tmp_path, NC.NETWORK_CERTIFIER, REG.starts[NC.NETWORK_CERTIFIER], lambda: True,
+                        clock=lambda: 0.0, pause=lambda s: None)
+    assert e.value.name == "bindings" and 'keyed {"certifier": ["gate", "peer"]}' in e.value.detail
+
+
+def test_the_onsite_lines_trusted_device_takes_the_network_attesters_placement(tmp_path, monkeypatch):
+    """The verifier's line carries the network attester's `trusted-device` premise as its piece's answer places it,
+    beside the memory attesters'; a piece that answered with no placement adds none."""
+    cfg = R.load(CONFIG, REG)
+    premise = "unmet: the network attester ran on the workload's machine prover-node under a key made for the run"
+    answer = tmp_path / "out" / "pieces" / "certifier" / "answer.json"
+    answer.parent.mkdir(parents=True)
+    answer.write_text(json.dumps({"profile": {"placement": {"kind": "prover-node", mc.PREMISE: premise,
+                                                            "key_pin": "run", "coins_on": T.PROVER_NODE}}}))
+    monkeypatch.setattr(T, "onsite_check", lambda cfg, state: {"verdict": "undecided"})
+    (tmp_path / T.BINDINGS).write_text(json.dumps(BINDINGS))
+    line, = T.live(cfg, tmp_path, [T.VERIFIER]).outcomes[T.VERIFIER]["outcome"]["verdicts"]
+    assert line[mc.PREMISE] == {"certifier": premise}
+    answer.write_text(json.dumps({"profile": {}}))
+    line, = T.live(cfg, tmp_path, [T.VERIFIER]).outcomes[T.VERIFIER]["outcome"]["verdicts"]
+    assert line[mc.PREMISE] == {}
 
 
 def test_the_live_challenger_is_bound_only_when_given(tmp_path, capsys):
@@ -766,7 +796,7 @@ def test_pouws_piece_hands_the_runner_the_main_file_its_challenger_writes():
 
 def test_a_dry_run_counts_what_a_challenger_started_first_writes_as_bound(capsys):
     start = R.Start({"pouw": ("gate", "peer", "key-sha512", "main-file")}, lambda c, s: None, lambda c, s: None)
-    rc, got, err = dry(capsys, reg=dataclasses.replace(REG, starts={T.CHALLENGER: start}))
+    rc, got, err = dry(capsys, reg=dataclasses.replace(REG, starts={**REG.starts, T.CHALLENGER: start}))
     assert rc == 0, err
     assert {x["party"]: x.get("writes") for x in got["plan"]}[T.CHALLENGER] == {
         "pouw": ["gate", "peer", "key-sha512", "main-file"]}

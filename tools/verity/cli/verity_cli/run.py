@@ -71,7 +71,8 @@ as a line and written to ``STATE/record/verdicts.jsonl``:
 sender's, or the workload's when this host stands for both.
 
 onsite's line also has ``trusted-device``: each memory attester's premise that its device ran on a machine the
-developer doesn't control (`memory_attester.trusted_device`), by component, from the outcome of its run here.
+developer doesn't control (`memory_attester.trusted_device`), by component, from the outcome of its run here, and the
+network attester's, from its piece's placement (where it ran, its key and its ``coins_on``).
 
 ``coins`` is ``simulated`` when the challenger's host is one a prover's party is on (its machine, or two machines this
 host stands for), else ``development`` (the keys are made for the run). ``simulated`` names each premise the placement

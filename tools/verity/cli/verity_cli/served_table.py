@@ -64,6 +64,7 @@ from verity.protocols.proofs.spot.verifier.one_stage.draw import parse_rate, par
 from verity.channel import Refused
 from verity.runtime import runner
 from verity.runtime.sources import MONOTONIC, RealClock
+from verity_cli.run import Start
 
 ROOT = Path(__file__).resolve().parents[4]
 SERVED_WINDOW, GATE, RUNTIME, CHECK = "served-window", "gate", "runtime", "check"
@@ -425,20 +426,28 @@ SCAN_CLASS = "8,32,4,4,16"
 
 
 def _certifier_piece(cfg, params, bound):
-    """Unbound, the network attester is the local gate on the workload's machine under a key made for the run, its
-    peer that machine's own name, in a development run."""
     py = ".venv/bin/python"
-    if ("gate" in bound) != ("peer" in bound):
-        given, alone = ("gate", "peer") if "gate" in bound else ("peer", "gate")
-        raise Refused("unbound", f"the deploy bindings bind {NETWORK_CERTIFIER}.certifier.{given} but not "
-                                 f"{NETWORK_CERTIFIER}.certifier.{alone}: bind both, or neither for a development run "
-                                 "whose network attester runs on the workload's machine under a key made for the run")
-    gate = (f'--gate {shlex.quote(bound["gate"])} --peer {shlex.quote(bound["peer"])}' if "gate" in bound
-            else '--gate local --peer "$(hostname)"')
+    gate = f'--gate {shlex.quote(bound["gate"])} --peer {shlex.quote(bound["peer"])}'
     return {"SERVE_ARGS": ID_FORM, "CERTIFIER_FRONT": f'{py} {CERTIFIER_PIECE} front "$1" "$2" "$3" {gate}',
             "CERTIFIER_CHAIN_CMD": f'{py} {CERTIFIER_PIECE} chain "$@"',
             "CERTIFIER_PERIOD_CMD": f'{py} {CERTIFIER_PIECE} period "$@"',
-            "V3C_CLASS": SCAN_CLASS, "CLASSES": f"4,32,4 {SCAN_CLASS}", **({} if "gate" in bound else {"DEVELOPMENT": "1"})}
+            "V3C_CLASS": SCAN_CLASS, "CLASSES": f"4,32,4 {SCAN_CLASS}"}
+
+
+def _local_gate(cfg: Mapping[str, Any], state: Path) -> None:
+    """The network attester's bindings where `verity run` starts it: the front's local gate, this tree's gate on the
+    workload's machine under a key made for the run, its peer that machine as the configuration names it."""
+    machine = {p["name"]: p["machine"] for p in cfg["party"]}[WORKERS]
+    f = state / "public" / NETWORK_CERTIFIER / BINDINGS
+    f.parent.mkdir(parents=True, exist_ok=True)
+    part = f.with_name(f".{BINDINGS}")
+    part.write_text(json.dumps({"certifier": {"gate": "local", "peer": machine}}, sort_keys=True))
+    part.replace(f)
+
+
+#: the parties `verity run` starts first where ``--bindings`` gives none of what they write
+STARTS = {NETWORK_CERTIFIER: Start(writes={"certifier": ("gate", "peer")}, serve=_local_gate,
+                                   stop=lambda cfg, state: None, within=60)}
 
 
 SERVE = Piece(SERVED_WINDOW, WORKERS, SERVED_WINDOW, "Execution: serve-openai on the prover node under its GPU lease, the "
@@ -493,9 +502,8 @@ PARTIES: dict[str, dict[str, Piece]] = {
         WORKERS: Piece("certifier", WORKERS, SERVED_WINDOW, "the certifier's developer side: its front before the "
                        "requests (CERTIFIER_FRONT, which the served window runs), and its piece split around V3c: the "
                        "chain on V3c's committed window (CERTIFIER_CHAIN_CMD), then the period check on V3c's "
-                       "period.json (CERTIFIER_PERIOD_CMD); unbound, the network attester on the workload's machine "
-                       "under a key made for the run, in a development run", scripts=(CERTIFIER_PIECE,),
-                       reaches=NETWORK_CERTIFIER, optional=("gate", "peer"), hooks=_certifier_piece),
+                       "period.json (CERTIFIER_PERIOD_CMD)", scripts=(CERTIFIER_PIECE,),
+                       reaches=NETWORK_CERTIFIER, binds=("gate", "peer"), hooks=_certifier_piece),
         NETWORK_CERTIFIER: Piece("certifier", NETWORK_CERTIFIER, GATE, "the network certifier behind the gate, "
                                  "in front of serve-openai before the requests"),
         VERIFIER: Piece("certifier", VERIFIER, CHECK, "the network certifier's row"),
@@ -619,6 +627,14 @@ def placement(cfg: Mapping[str, Any], piece: Piece, outcome: Mapping[str, Any] |
                                           committed=mc.committed())}
 
 
+def attested(state: Path) -> str | None:
+    """`trusted-device`'s premise for the network attester, as its piece's answer places it (``out/pieces/certifier``,
+    the profile's ``placement``); ``None`` where the piece answered without one."""
+    f = state / "out" / "pieces" / "certifier" / "answer.json"
+    where = (json.loads(f.read_text()).get("profile") or {}).get("placement") if f.is_file() else None
+    return mc.premise(where) if where else None
+
+
 def composite(env: Mapping[str, str]) -> dict[str, str]:
     """The runner's ``COMPOSITE``, set empty: it composes off the served node unless told otherwise, where onsite's
     composite, which reads PoUS's and the wipe's cases that only the node's card writes, can't be made, and it refuses
@@ -716,7 +732,8 @@ def live(cfg: Mapping[str, Any], state: Path, here: Sequence[str]) -> Result:
     """The pieces of the parties ``here`` (module docstring): each runtime party's run, the wipe's before the served
     window and the others' beside it; the served window when the workload's party is here; a gate's side as started by
     the gate; and the onsite check when the verifier is here, its line with each memory attester's `trusted-device`
-    premise as `placement` read it from the challenger's outcome here (``trusted-device``: component -> premise). Refused by name (``unbound``) while a listed piece's
+    premise as `placement` read it from the challenger's outcome here, and the network attester's as `attested` reads
+    it (``trusted-device``: component -> premise). Refused by name (``unbound``) while a listed piece's
     binding is missing, and raised while a runtime party's `held` does, before anything starts."""
     bindings = bindings_of(state)
     runtime = [x for p in here for x in pieces(cfg, p) if x.runs == RUNTIME]
@@ -759,6 +776,8 @@ def live(cfg: Mapping[str, Any], state: Path, here: Sequence[str]) -> Result:
                       "refused": None}
     if VERIFIER in here:
         devices = {c: where[mc.PREMISE] for x in out.values() for c, where in x.get("placement", {}).items()}
+        if "certifier" in cfg["protocols"] and (premise := attested(state)) is not None:
+            devices["certifier"] = premise
         try:
             out[VERIFIER] = {"outcome": {"verdicts": [{**onsite_check(cfg, state), mc.PREMISE: devices}]},
                              "refused": None}
@@ -768,5 +787,6 @@ def live(cfg: Mapping[str, Any], state: Path, here: Sequence[str]) -> Result:
 
 
 __all__ = ["DEMOS", "HEADERS", "MANIFESTS", "NOT_YET", "ORDER", "PARTIES", "PROTOCOLS", "REGISTRATION_GOAL", "SERVED",
-           "WORKLOADS", "Held", "Piece", "Result", "Session", "held", "live", "onsite_check", "pieces", "placement",
+           "STARTS", "WORKLOADS", "Held", "Piece", "Result", "Session", "attested", "held", "live", "onsite_check",
+           "pieces", "placement",
            "prepare", "registration", "request_bound", "served_window", "unbound", "variables"]
