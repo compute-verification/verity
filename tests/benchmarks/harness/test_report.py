@@ -73,7 +73,9 @@ def inference_only(tmp_path: Path, monkeypatch, *argv: str) -> int:
 
 COMMANDS = {"compute": compute, "memory": memory, "inference_only": inference_only}
 #: the mark each command's measurements carry: inference_only's number is priced from a stated policy
-MARK = {"compute": "measured", "memory": "measured", "inference_only": "modeled"}
+MARK = {"memory": "measured", "inference_only": "modeled"}
+#: the commands that read a made-up record of another run here, so write their document and no measurement
+DOCUMENT_ONLY = {"compute"}
 #: the commands whose JSON's run is the research run around them, not a recorded run they read
 OWN_RUN = {"inference_only"}
 
@@ -112,9 +114,9 @@ def test_each_command_prints_one_line_of_json_and_writes_it_and_its_result_only_
     monkeypatch.setenv("OUT", str(place / "out"))
     assert run(tmp_path / "out", monkeypatch) == 0
     assert printed(capsys)[:2] == (text, doc)
-    assert held(place) == sorted(["out/result.json", f"out/{name}.json"])
+    written = [] if name in DOCUMENT_ONLY else ["result.json"]
+    assert held(place) == sorted([f"out/{r}" for r in written] + [f"out/{name}.json"])
     assert json.loads((place / "out" / f"{name}.json").read_text()) == doc
-    outside = json.loads((place / "out" / "result.json").read_text())
 
     monkeypatch.setenv("RESEARCH_RUN_DIR", str(place / "run"))
     monkeypatch.setenv("OUT", str(place / "run" / "out"))
@@ -122,17 +124,18 @@ def test_each_command_prints_one_line_of_json_and_writes_it_and_its_result_only_
     assert run(tmp_path / "run", monkeypatch) == 0
     got, under, line = printed(capsys)
     assert (got, under) == (text, doc | ({"run": BENCH} if name in OWN_RUN else {}))
-    assert held(place / "run") == [f"out/{name}.json", "result.json"]
+    assert held(place / "run") == [f"out/{name}.json", *written]
     assert (place / "run" / "out" / f"{name}.json").read_text() == line + "\n"
+    assert held(tmp_path / "cwd") == []
+    if name in DOCUMENT_ONLY:
+        return
+    outside = json.loads((place / "out" / "result.json").read_text())
     result = json.loads((place / "run" / "result.json").read_text())
     assert result["run_id"] == BENCH
     measured = result["measurements"]
     assert [m["name"] for m in measured] == [m["name"] for m in outside["measurements"]] and measured
-    # a made-up record's measurements (compute's fixture) are figures no run measured, whatever the command's mark
-    mark = kit.kit_report.MADE_UP_MARK if doc.get("made_up") else MARK[name]
-    assert all((m["run"], m["mark"]) == (BENCH, mark) for m in measured)
+    assert all((m["run"], m["mark"]) == (BENCH, MARK[name]) for m in measured)
     assert all(m["host"] == STAMP for m in measured) or name == "inference_only"
-    assert held(tmp_path / "cwd") == []
 
 
 def test_an_empty_out_names_no_place_for_inference_only_either(place, tmp_path, monkeypatch, capsys):
