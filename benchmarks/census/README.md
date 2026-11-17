@@ -11,7 +11,7 @@ parameter.
 ~~~sh
 uv run python -c "
 from verity_numerical.bench import census
-for h in census.raw('hardware'):
+for h in census.raw('calibration/hardware'):
     print(h['id'], f\"{h['flop_per_second']:.3g}\")
 "
 ~~~

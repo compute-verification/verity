@@ -17,7 +17,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-CARD_FILES = ROOT / "hardware/cards"
+CARD_FILES = ROOT / "calibration/hardware/cards"
 
 
 def _session_set():

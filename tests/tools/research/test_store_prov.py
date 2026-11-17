@@ -291,7 +291,7 @@ def test_generic_argv_parse():
 
 def test_registry_loads_repo_declarations_and_file_fallback(tmp_path):
     tc = tools_registry.load("tc_probe", REPO)
-    assert tc.name == "tc_probe" and tc.spec == "benchmarks.tc_probe.tool:TC_PROBE" and "hw.family" in tc.key_conditions
+    assert tc.name == "tc_probe" and tc.spec == "calibration.tc_probe.tool:TC_PROBE" and "hw.family" in tc.key_conditions
     with pytest.raises(LookupError):
         tools_registry.load("nope", REPO)
     src = tmp_path / "src"
@@ -408,7 +408,7 @@ def test_a_tree_from_before_a_move_still_declares_its_tools(tmp_path, monkeypatc
 
 def test_tc_probe_declaration_parses_real_flags_and_optional_instruction():
     tc = tools_registry.load("tc_probe", REPO)
-    argv = ["python", "benchmarks/tc_probe/tc_probe.py", "--arch", "sm_89", "--out", "/run/dir", "--sweep", "--n-random", "1000", "--families", "random,subnormal"]
+    argv = ["python", "calibration/tc_probe/tc_probe.py", "--arch", "sm_89", "--out", "/run/dir", "--sweep", "--n-random", "1000", "--families", "random,subnormal"]
     params, key = tc.resolve_params(argv, REPO)
     assert params["arch"] == "sm_89" and params["out"] == "/run/dir" and "out" not in key and "procs" not in key
     assert key["n_random"] == 1000 and key["sweep"] is True and key["families"] == "random,subnormal" and "instruction" not in key
@@ -711,11 +711,11 @@ def test_machine_side_runner_loads_tool_from_shipped_source(tmp_path):
 
     src_dir = tmp_path / "src"
     src_dir.mkdir()
-    tar = subprocess.run(["git", "archive", "--format=tar", "HEAD", "benchmarks/tc_probe", "verity/circuits/silicon",
+    tar = subprocess.run(["git", "archive", "--format=tar", "HEAD", "calibration/tc_probe", "verity/circuits/silicon",
                           "verity/circuits/targets/target.py", ".gitignore", "uv.lock", "pyproject.toml"],
                          cwd=REPO, capture_output=True, check=True).stdout
     subprocess.run(["tar", "-xf", "-", "-C", str(src_dir)], input=tar, check=True)
-    assert (src_dir / "benchmarks/tc_probe/tool.py").exists() and not (src_dir / ".git").exists()
+    assert (src_dir / "calibration/tc_probe/tool.py").exists() and not (src_dir / ".git").exists()
     hint = {"commit": "c" * 40, "tree": "t" * 40, "dirty": False}
     root = tmp_path / "root"
     (root / "requests" / "r1").mkdir(parents=True)
@@ -731,8 +731,8 @@ def test_machine_side_runner_loads_tool_from_shipped_source(tmp_path):
     assert s["state"] == "done" and s["rc"] == 0, (root / "runs/r1/launcher.log").read_text()
     store = json.loads((root / "runs/r1/job.json").read_text())["store"]
     assert "error" not in store, store.get("error")
-    assert store["tool"] == {"name": "tc_probe", "version": "1", "spec": "benchmarks.tc_probe.tool:TC_PROBE"}
-    assert "benchmarks/tc_probe/tc_probe.py" in store["closure"] and "verity/circuits/silicon/models.py" in store["closure"]
+    assert store["tool"] == {"name": "tc_probe", "version": "1", "spec": "calibration.tc_probe.tool:TC_PROBE"}
+    assert "calibration/tc_probe/tc_probe.py" in store["closure"] and "verity/circuits/silicon/models.py" in store["closure"]
     assert store["key_params_resolved"]["arch"] == "sm_89" and store["key_params_resolved"]["instruction"] == "mma.x" and "out" not in store["key_params_resolved"]
     c = store["conditions"]
     assert (c["source.commit"], c["source.tree"], c["source.dirty"]) == ("c" * 40, "t" * 40, False), "the control side's hint fills what git cannot say in an archive"
