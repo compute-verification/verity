@@ -5,7 +5,7 @@ its scans' δ. It is the one calculator of K, and it scales K in two ways:
 * by requests (`table`, which `verity bench certifier_term` prints): the network attester's own terms at the load
   of a node, the census's reference datacenter and the world, all a scope serves counted by each check's own rule
   (At a scope's load, below);
-* by links (`per_link`, `datacenter`, `at_link_rate`): one link at the rate a run certified, and as many of them
+* by links (`per_link`, `datacenter`, `at_link_rate`): one link at the rate a run attested, and as many of them
   summed, whatever the scope they stand for serves. `chain_record.py leak` reads it on a network attester run, and
   the slowdown is derived from both bounds.
 
@@ -42,7 +42,7 @@ is behind one network attester. Over a monitoring period a scope serves GPU-seco
 `benchmarks/spot_figures/figure1.py`'s `scopes` plans with, each on one connection. Which request that is is one of
 `COUNTS`, and every row names its one: by default the sampling plan's (`plan`), so that the rows count the requests
 the compute audit's plan prices; the census's where a caller asks; or none, where a caller gives the world's requests
-a year. No run has certified a class for that model, so the class is assumed (`Assumed`): the most ids a response
+a year. No run has attested a class for that model, so the class is assumed (`Assumed`): the most ids a response
 holds, an id's bits, and an execution phase's buckets. `table` counts each of the seven `ROWS` by its check's own
 rule, and never by requests what a check counts by capacity:
 
@@ -297,7 +297,7 @@ class Bound(NamedTuple):
 
 @dataclass(frozen=True)
 class LinkLoad:
-    """What one network attester on one uplink certifies: its scan class, its certified requests a second, its
+    """What one network attester on one uplink certifies: its scan class, its attested requests a second, its
     sampling block's T buckets each way of ``tau`` seconds, its egress cells a connection and its scan's δ."""
     scan: IS.Class
     rate: float | Fraction
@@ -492,7 +492,7 @@ def at_link_rate(one: LinkLoad, links: int, period: str | float | Fraction, read
                  delta: float | Fraction | None = None, *, weights: Weights = WEIGHTS) -> Bound:
     """The scaling by links: K over a monitoring period summed over ``links`` links (`datacenter_links`,
     `world_links`), each ``one``, which is `datacenter` over that many of it. Every link certifies ``one``'s rate
-    whatever the scope the links stand for serves, and the scope's requests past that rate are uncertified, so K
+    whatever the scope the links stand for serves, and the scope's requests past that rate are unattested, so K
     counts none of them: it is a run's rate held on every link, and not the scope's K, which `table` counts over
     every request the scope serves."""
     return datacenter({one: links}, period, reading, delta, weights=weights)
@@ -630,7 +630,7 @@ ROWS = {
 
 @dataclass(frozen=True)
 class Assumed:
-    """What `rowsTerms` reads of a scan class, for a model no run has certified one for: at most KO output ids a
+    """What `rowsTerms` reads of a scan class, for a model no run has attested one for: at most KO output ids a
     response, of IDB bits each (`ingress_scan.Class`'s names, so that `ingress_scan.entry_bits` lays its slot entry
     out), in execution phases of T buckets of ``tau`` seconds."""
     KO: int
@@ -706,7 +706,7 @@ def inputs(*, response_ids: int = RESPONSE_IDS, id_bits: int = ID_BITS, buckets:
     workload card). The world's requests a year follow from them and a request's tokens and served MACs a token:
     the sampling plan's (``requests`` = ``plan``, read from the planner by `plan`) or the census's tokens at the
     workload card's MACs (``census``); or they are ``world_requests`` where a caller gives them, whatever
-    ``requests`` is. ``request_count`` names which of `COUNTS` it is. The class is assumed, no run having certified
+    ``requests`` is. ``request_count`` names which of `COUNTS` it is. The class is assumed, no run having attested
     one for the served model: ``response_ids``, the most ids a response holds, ``id_bits``, an execution phase's
     ``buckets`` of ``bucket_s`` seconds (by default the network attester's), one connection a request and one link a
     machine, and ``lanes``, the connections a link holds at once, which the entries and the count read: with None the

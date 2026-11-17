@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# The network attester's id form in front of a vLLM server that answers stock HTTP (vLLM's own server under the certified
+# The network attester's id form in front of a vLLM server that answers stock HTTP (vLLM's own server under the attested
 # tick: corpus.py's --admit tick, serve_tax's tick arm), from the tree's root:
 #   UPSTREAM=HOST:PORT [LISTEN=127.0.0.1:18746] [CELL_BYTES=4096] [LOG=FILE] [PY=python] \
 #     bash benchmarks/network_e2e/traces/ids.sh [CMD ARG...]

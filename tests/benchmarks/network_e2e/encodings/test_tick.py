@@ -1,7 +1,7 @@
-"""The certified tick (``--admit tick``) in the replay and in advice v1. The serving side's gate
+"""The attested tick (``--admit tick``) in the replay and in advice v1. The serving side's gate
 (`verity_vllm.pipeline.serve_admit.TickGate`, through its `install`) in front of the replay's vLLM scheduler, served in
 simulated physical time with wall-clock jitter, schedules exactly the batches `replay.replay(tick=...)` computes from the
-certified release buckets alone, under sync and async scheduling, and the same jitter without the gate changes them. v1
+attested release buckets alone, under sync and async scheduling, and the same jitter without the gate changes them. v1
 registered with the tick sends no decision, no order entry and no hit, which the replay's block pool gives, so every
 window's segment costs 0 bits and the string holds the length terms alone (it is empty where the registration sends no
 lengths), and it round trips; a hit other than the pool's, and an abort, are refused. The same trace registered
@@ -55,7 +55,7 @@ def engine(asy: bool):
 
 
 def plan(seed: int = 7) -> tuple[list, list[float]]:
-    """A fixed release sequence, the certified data: N requests released in bursts with idle gaps between (seconds from
+    """A fixed release sequence, the attested data: N requests released in bursts with idle gaps between (seconds from
     the attester run's origin), each prompt a 32-token prefix shared with every third request then its own tail, and
     each output ending on EOS or running to max_tokens."""
     rng = random.Random(seed)
@@ -130,7 +130,7 @@ class Served:
 
 def serve(e, ios, times, seed: int, *, gated: bool = True, lost: Sequence[int] = (), arrive: Sequence[int] = ()) -> Served:
     """Serve the plan in simulated physical time through the replay's engine loop (`replay.drive`). Release i is
-    certified at times[i], its record reaches the gate up to 20 ms later and the request the engine up to 250 ms later,
+    attested at times[i], its record reaches the gate up to 20 ms later and the request the engine up to 250 ms later,
     watermark line t comes up to 60 ms after bucket t closes, and each step takes 15 to 45 ms, all sampled from `seed`.
     With `gated`, the gate stands in front of the scheduler and the loop waits while it isn't ready; without, each
     request is added when it reaches the engine. Each bucket's line names its releases in `lost`, as the network
@@ -203,7 +203,7 @@ def serve(e, ios, times, seed: int, *, gated: bool = True, lost: Sequence[int] =
 
 def trace_of(e, ios, times, run: Served):
     """The workload as a tick-admitted run's trace: its requests in release order, each output's time, and the
-    certified releases, counted from the origin."""
+    attested releases, counted from the origin."""
     return R.Trace(engine=e, ids=[f"r{i}" for i in range(N)], requests=list(ios), before_step=run.admitted,
                    steps=run.steps, emits=run.emits, ingress_t=list(times), release_t=run.release_t, output_t=run.output_t,
                    releases=R.Releases(R.Tick(*TICK), 0.0, tuple(range(N)), tuple(buckets(times))))

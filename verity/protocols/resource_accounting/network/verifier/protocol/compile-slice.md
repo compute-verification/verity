@@ -61,7 +61,7 @@ and its carry are witness until the slice binds them):
 - *`bit` is the committed decisions:* ``adv``'s row, which the verifier holds to the advice registration's leaf.
 - *The carry is the session's:* ``cout`` must be the charge's carry' from ``cin`` (``code``). The verifier holds ``cin``
   and ``cout`` by their b‖c to the session's carry chain (`charge_chain.check_chain`), beside the advice, served-row and
-  certified-record bindings. The proof block accepts a restarted carry-in (the priors, or counts fitted to the execution phase),
+  attested-record bindings. The proof block accepts a restarted carry-in (the priors, or counts fitted to the execution phase),
   and the chain refuses it: ``CH-first`` on a session's first execution phase, ``CH-carry`` after it.
 - The slice-level cases are `tests/adapters/vllm/tests/compiler/test_network_attester_compile_slice_phase14.py`.
 

@@ -1,10 +1,10 @@
 """network-certifier-serve without the wall clock: its varied traffic, its HTTP bytes against the fake endpoint over loopback, and
-the offline check of a run whose network attester is driven tick by tick on a `VirtualClock`, its records certified by
+the offline check of a run whose network attester is driven tick by tick on a `VirtualClock`, its records attested by
 an LMS key: the check accepts the run, whose server got each request with its release order and bucket under the run
-id `deployment.json` names, and refuses a deployment whose start isn't the one certified, a record that isn't what
-was certified, a cell that reached its client in another bucket, and a response that isn't the record's; a window in
+id `deployment.json` names, and refuses a deployment whose start isn't the one attested, a record that isn't what
+was attested, a cell that reached its client in another bucket, and a response that isn't the record's; a window in
 which the network attester refused a connection is
-certified and signed nowhere; and a window's slow commit, which faults the next window when it runs in the network
+attested and signed nowhere; and a window's slow commit, which faults the next window when it runs in the network
 attester's process, moves no tick in `serve`'s publisher process. The registrations' file a check of a run with
 connection rows writes, as the stop verdicts' reader (`stop_verdicts`) reads it: each head it holds under the key
 and the session the check was handed, none of a run under another key, and every class at its whole schedule when
@@ -383,9 +383,9 @@ def test_the_client_connects_where_the_endpoints_file_says_and_names_its_upstrea
 @pytest.mark.parametrize("process", [False, True])
 def test_a_window_with_a_refused_connection_is_certified_nowhere(tmp_path, process):
     """Five connections at once on two lanes and a queue of four: the fifth is refused, traffic past the window's
-    Program slots, so window 0's three records are kept and its two rows committed but none is certified or signed,
+    Program slots, so window 0's three records are kept and its two rows committed but none is attested or signed,
     each line naming the execution phase under `refused`, withheld, inline and in `serve`'s publisher process; window 1
-    is certified whole, and the check refuses the run on window 0 alone."""
+    is attested whole, and the check refuses the run on window 0 alone."""
     out = tmp_path / "run"
     out.mkdir()
     requests = [ws.http_request({"prompt": "x" * n}, "h:1") for n in (10, 20, 30, 40, 50)]
@@ -407,10 +407,10 @@ def test_a_window_with_a_refused_connection_is_certified_nowhere(tmp_path, proce
 
 def test_a_phase_with_no_certificate_or_no_registration_is_a_problem_and_one_fewer_in_its_count(tmp_path):
     """The gate's end holds three of the check's counts only when it is accepted, on the ground that each is then
-    the schedule's (`auditor.ACCEPTED_COUNTS`, `auditor.ACCEPTED_CELL_ROWS`): how many records were certified, by
-    how many certificates, and how many of the cells' registrations the check accepted. That stands on the check
-    refusing a run with one missing. A run whose every execution phase is certified and registered is accepted,
-    each count the schedule's. The same run less one record's certificate, for each record and execution phase, or
+    the schedule's (`auditor.ACCEPTED_COUNTS`, `auditor.ACCEPTED_CELL_ROWS`): how many records were attested, by
+    how many attestations, and how many of the cells' registrations the check accepted. That stands on the check
+    refusing a run with one missing. A run whose every execution phase is attested and registered is accepted,
+    each count the schedule's. The same run less one record's attestation, for each record and execution phase, or
     less one cells' registration, is refused on that execution phase by name, with its own count one fewer and the
     others as they were."""
     out, windows = tmp_path / "run", 2
@@ -480,7 +480,7 @@ def test_a_session_serves_its_length_to_clients_not_its_own_and_its_check_accept
     execution phases and no other process, so no traffic and no client of its own. In `serve`'s place here, the
     relay on a virtual clock takes a load from another party's clients, eight connections arriving across the
     session's three execution phases, the last at the last bucket that still ends inside the run, and their log
-    stays with them. The run's own check, on the records alone, accepts: every execution phase certified and
+    stays with them. The run's own check, on the records alone, accepts: every execution phase attested and
     registered and the audit, counting no connection. The clients' check is theirs, from their own log against the
     run's records: every connection ended, its request and its answer the audited connection's, each cell of the
     egress schedule."""
@@ -624,7 +624,7 @@ def test_serve_through_its_command_line_serves_on_the_socket_its_descriptor_name
     public, got = ws.registered_key(key), []
 
     class Publisher:
-        """`PublisherProcess` with no process: the registered key, no start's certificate, and nothing published."""
+        """`PublisherProcess` with no process: the registered key, no start's attestation, and nothing published."""
 
         usage = feeder = start = None
         process = types.SimpleNamespace(pid=None)
@@ -689,7 +689,7 @@ def test_a_connection_still_open_when_a_session_ends_is_cut_and_the_records_say_
     """A session stops at its last execution phase's end and cuts what is open, and the records say what each was. One
     admitted at bucket s with s + D inside the run and no room to end (the first bucket past windows · T − span − 1)
     has data and no `END` in the record: the audit refuses it in its admission's execution phase, and the check the
-    run, every execution phase still certified. Ones admitted later are cut before s + D: their requests are whole in
+    run, every execution phase still attested. Ones admitted later are cut before s + D: their requests are whole in
     the ingress record, their egress is padding, the audit takes them and the check accepts, counting them as not
     ended. One still in the queue then (it arrived behind four that hold the lanes) got no cell and is in no
     record. The clients' own logs say `cut` for each."""
@@ -735,7 +735,7 @@ def test_a_connection_still_open_when_a_session_ends_is_cut_and_the_records_say_
 
 def test_one_connection_failed_closed_refuses_a_sessions_whole_run_whichever_client_it_was(tmp_path):
     """The verifier's verdict is the whole session's. Of four connections, three end and one's answer is out of the id
-    form, which the relay fails closed: every execution phase is still certified, the audit refuses the one the
+    form, which the relay fails closed: every execution phase is still attested, the audit refuses the one the
     failure is in and accepts the other, and the check refuses the run, whoever's the three that ended were."""
     args, p, load = _session(tmp_path, 2)
     requests, responses = load(4)
@@ -823,7 +823,7 @@ def test_a_windows_commit_and_signatures_move_no_tick_past_its_slack_in_the_publ
     as the inline `Publisher` runs it, puts the ticks after the window's end past their slack: the next window faults
     (`monitor-unavailable`), the issuer certifies none of its records, and the check refuses it. In `serve`'s
     `PublisherProcess` the same commit runs in the spawned process, which signs and commits from the rows released to
-    it: every tick is on time, and the check accepts every execution phase, certified and registered. A commit that fails
+    it: every tick is on time, and the check accepts every execution phase, attested and registered. A commit that fails
     there fails `close`, and the network attester's process doesn't wait on it."""
     requests = [ws.http_request({"prompt": "x" * n}, "h:1") for n in (10, 200, 30)]
     responses = [_response([" a", " b"]), _response([" word"] * 40), _response([])]
@@ -984,7 +984,7 @@ def test_the_check_writes_what_it_was_checked_under_then_each_registration_as_th
 
 def test_a_run_under_another_key_gets_no_file_under_the_keys_hash_and_one_under_its_own(tmp_path, monkeypatch):
     """A run directory whose deployment record names another key than the network attester's, a rehearsal's own:
-    its certificates and its registrations are signed under that key and verify under it. Handed the hash of the
+    its attestations and its registrations are signed under that key and verify under it. Handed the hash of the
     network attester's key, the check names the problem, the key and not the session, as its only one, and leaves
     no file; so does its command, which exits 1, with a file asked or not. Handed the hash of the run's own key, the
     same directory is accepted and its file is written, naming that hash: the reader holds all three execution

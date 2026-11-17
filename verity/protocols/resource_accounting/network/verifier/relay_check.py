@@ -1,4 +1,4 @@
-"""The check of a relay's run: its records, its certified records, its cells and its load, read from the run's
+"""The check of a relay's run: its records, its attested records, its cells and its load, read from the run's
 directory and refused by name where they don't hold."""
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ from verity.protocols.resource_accounting.network.verifier.network_attester impo
 PROOF_DEADLINE_S = 600.0
 
 INGRESS, EGRESS, FAILS, LINK = "requests", "responses", "fails", "warden"
-#: each record's certified link name and direction: the wire's two under `LINK`, the reasons under their own name
+#: each record's attested link name and direction: the wire's two under `LINK`, the reasons under their own name
 CERTIFIED = {INGRESS: (LINK, Direction.INGRESS), EGRESS: (LINK, Direction.EGRESS),
              FAILS: (f"{LINK}-{FAILS}", Direction.EGRESS)}
 KIND_CHARS = {PAD: "p", DATA: "d", END: "e", FAIL: "f", REFUSED: "r"}
@@ -49,7 +49,7 @@ def read_records(run: Path, params: NetworkAttesterParams) -> dict[str, list[Blo
 
 
 def read_certified(path: Path) -> tuple[dict[tuple[str, Direction, int], CertifiedRecord], list]:
-    """`certified.jsonl`: the certified records by (link, direction, window), and the execution phases the signer
+    """`certified.jsonl`: the attested records by (link, direction, window), and the execution phases the signer
     refused (not those the network attester withheld, `Publisher.withhold`)."""
     got, refused = {}, []
     for line in path.read_text().splitlines() if path.exists() else []:
@@ -136,9 +136,9 @@ def start_from_json(doc: dict) -> CertifiedStart:
 
 
 def check_start(dep: dict, key: LmsKey, session: bytes, params: NetworkAttesterParams) -> tuple[dict, list[str]]:
-    """The deployment's start's certificate read as a verifier reads it: under the deployment's key and session, for
+    """The deployment's start's attestation read as a verifier reads it: under the deployment's key and session, for
     its link and its schedule's parameters digest (`CertifiedStart.refusal`). A deployment without one, or with one
-    that doesn't hold, has no certified start."""
+    that doesn't hold, has no attested start."""
     try:
         start = start_from_json(dep["start"])
     except (KeyError, TypeError, ValueError):

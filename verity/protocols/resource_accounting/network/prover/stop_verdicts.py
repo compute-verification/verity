@@ -105,7 +105,7 @@ killed writes nothing, and a second run then fills its verdict unseen: only a re
 the command does not write itself, closes that, and the reader is handed none.
 
 **A head** (`head_of`) is the registration's own: its link, execution phase, parameters digest and tables as listed,
-held to the digest its certificate names. No signature is checked here: the certificate verifies under the network
+held to the digest its attestation names. No signature is checked here: the attestation verifies under the network
 attester's key and session, which a calculator doesn't hold. The signature is checked where `REGISTRATIONS_FILE` is
 written, by the offline check of the network attester's run (`network_attester_serve.py check --registrations`,
 `connection_rows_check.check`). The auditor hands that check the SHA-512 of the network attester's public key and
@@ -205,7 +205,7 @@ population: what holds a block to its row is the response tie's read of that row
 it. The response tie's population is not held to the count here. A failure is final for what its verdict speaks
 for, which at `EVERY_BLOCK` is one execution phase's class; a rate below `EVERY_BLOCK` widens the failure to the
 whole registered population, for when the reader takes one. A verdict's ``complete`` says that every session ran to a
-verdict and holds no class to a rate. The certified read is over no sampled population, and the rate of the
+verdict and holds no class to a rate. The attested read is over no sampled population, and the rate of the
 compute audit's second stage is not held here: a rate on either's record is not read. A registration record that
 doesn't read holds no execution phase at all, in a run that is not superseded."""
 from __future__ import annotations
@@ -333,7 +333,7 @@ def launched_after(a: object, b: object) -> bool:
 
 
 def head_of(doc: Mapping[str, Any]) -> C.Head:
-    """The head a registration of an execution phase's connection rows lists, held to the digest its certificate
+    """The head a registration of an execution phase's connection rows lists, held to the digest its attestation
     names, or ValueError naming what doesn't read. Its signature is not checked here, but where the registrations'
     file is written (the module docstring's "A head")."""
     try:

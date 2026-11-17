@@ -1,9 +1,9 @@
 """kind_scan: what the network attester's piece releases holds only fields of the four public kinds and the network
-attester's certificates. A piece's DIR as it is released (the answer with the piece's placement, and the execution
-phase's certificates as `attester_piece.certificates` cuts them from a rows-form period's evidence, `period_case`'s
+attester's attestations. A piece's DIR as it is released (the answer with the piece's placement, and the execution
+phase's attestations as `attester_piece.certificates` cuts them from a rows-form period's evidence, `period_case`'s
 accept) scans clean. The case, the period check's three input files and the scan's answers are witness: each is a finding where
 it lies in DIR, as any file DIR doesn't declare is, a log among them. A field no declaration names is a finding too: a
-count of requests in an answer, a registration's head beside a certificate. The chain's endpoint step (CR_ENDPOINT's
+count of requests in an answer, a registration's head beside an attestation. The chain's endpoint step (CR_ENDPOINT's
 rebuild), or any step the network attester path doesn't run, is a finding naming the check.
 
 What a verifier on another machine receives of a workload's OUT (``--received``: the attester's piece, V3c's audit,
@@ -70,7 +70,7 @@ def _case(period, v3c: dict = V3C_WINDOW) -> tuple[dict, dict]:
 
 
 def _dir(d: Path, case: dict, answer: dict) -> Path:
-    """DIR as the piece releases it: the answer and the certificates of the case's evidence
+    """DIR as the piece releases it: the answer and the attestations of the case's evidence
     (`attester_piece.write_case`'s), the case itself nowhere in it."""
     d.mkdir(parents=True)
     (d / "answer.json").write_text(json.dumps(answer))
@@ -83,7 +83,7 @@ def _paths(found: list[KS.Finding]) -> list[tuple[str, str]]:
 
 
 def test_the_pieces_answer_and_certificates_are_of_the_public_kinds(tmp_path, period):
-    """The answer's fields are structure, the protocol's outputs and a hiding commitment, and the certificates' the
+    """The answer's fields are structure, the protocol's outputs and a hiding commitment, and the attestations' the
     network attester's; the piece releases none of the verifier's coins or samples."""
     d = _dir(tmp_path / "d", *_case(period))
     signed = json.loads((d / CP.CERTIFICATES).read_text())
@@ -112,8 +112,8 @@ def test_the_case_its_three_files_and_the_scans_answers_are_findings_in_dir(tmp_
 
 
 def test_a_field_no_declaration_names_is_a_finding_wherever_it_lies(tmp_path, period):
-    """A count of requests in the period's answer, and beside a certificate anything else of the evidence: a
-    registration's head with a row registration's certificate, a count with a record's."""
+    """A count of requests in the period's answer, and beside an attestation anything else of the evidence: a
+    registration's head with a row registration's attestation, a count with a record's."""
     case, answer = _case(period)
     d = _dir(tmp_path / "d", case, answer | {"public": answer["public"] | {"requests": 7}})
     signed = json.loads((d / CP.CERTIFICATES).read_text())

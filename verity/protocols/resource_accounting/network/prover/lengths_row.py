@@ -4,7 +4,7 @@ Nothing here is in a Spec.
 
 **One proof block a link, execution phase and slot stride** (`LengthsRow`). It reads two rows and no cell:
 ``requests``, the compute side's committed row of the stride's K request slots, and ``fails``, row j of the network
-attester's fails table, a registered read (a certified input). Its outputs are ``o0``, a u16 whose bit 0 is 1
+attester's fails table, a registered read (an attested input). Its outputs are ``o0``, a u16 whose bit 0 is 1
 (`ACCEPT`) exactly when the fails row is of its form against the request row and whose other 15 bits are 0, ``o1``, a
 u16, the row's failures F, and ``o2``, the lengths row. The row is gates of the circuit, never an input: the proof
 block's statement commits o2 under the salt of the network attester's lengths row j and registers it as a read of that

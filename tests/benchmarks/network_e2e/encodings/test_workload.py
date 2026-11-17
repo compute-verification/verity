@@ -120,7 +120,7 @@ def test_the_length_charging_slice_charges_code_v1s_segment_and_its_length_tails
     max_tokens and output_len) charges exactly that on each of windows 0 … 212, and CompileSlice_v7 on w212 at its own
     statics (`compile_slice_w212.json`), from the chain's carry into it, accepts that charge, carries out the chain's
     carry and refuses one bit less. The workloads name it (`serve_commit.SERVED_SLICE`, ``CompileSlice_v7``),
-    except those the certified tick admits, which name none. code_v1's term
+    except those the attested tick admits, which name none. code_v1's term
 width, width(m + 1) + 1, is the slot's bitlen(m) + 1 (`window_charge.length_bits`) for every max_tokens up to 4,096 and
 at each power of two to 2^32 − 1."""
     from types import SimpleNamespace

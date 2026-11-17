@@ -1,8 +1,8 @@
 """`lean_audit.Audit`, `audit.Audit` with every verdict the Lean check's (`network-records verdicts`), against `audit.Audit`
 itself: the same verdicts, clock, `accepted` and `violations` on `test_network_records_protocol`'s generated units, raw,
-committed, certified and mixed, with each egress link checked over a prefix of the windows of its own, so the unit's clock
-comes from several links; on certified records without a grid; and a refusal, never a Python verdict, outside the Lean's
-domain. The client's certificate refusals (`certificate_refusals`) are their reference's
+committed, attested and mixed, with each egress link checked over a prefix of the windows of its own, so the unit's clock
+comes from several links; on attested records without a grid; and a refusal, never a Python verdict, outside the Lean's
+domain. The client's attestation refusals (`certificate_refusals`) are their reference's
 (`audit.certificate_refusals`) on crafted and generated inputs, a disagreement refusing, and outside the Lean's domain they raise."""
 
 from __future__ import annotations
@@ -35,7 +35,7 @@ from verity.protocols.resource_accounting.network.verifier.schedule import Clock
 
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 
-#: the changes of a certified record that leave its window without a verdict (`V2.EXPECT`)
+#: the changes of an attested record that leave its window without a verdict (`V2.EXPECT`)
 UNDECIDED = tuple(m for m, v in V2.EXPECT.items() if v == "no-verdict")
 
 
@@ -79,10 +79,10 @@ def _same(lean, u, recs, e, prefixes, keyless=False, grid=True):
 @pytest.mark.slow
 def test_the_adapter_gives_the_audits_verdicts_on_generated_units(lean):
     """On generated units of every kind and change: identical verdict lists, with each egress link checked over a window
-    prefix of its own and, when no record is certified, with no key and no ingress parameters; and a `ValueError` where
+    prefix of its own and, when no record is attested, with no key and no ingress parameters; and a `ValueError` where
     the Lean check refuses the evidence (a frame of other than B bytes). With `grid` False, the same on units whose
-    egress records are all certified, with no egress `mismatch` (an ingress one stays), and a `ValueError` from both
-    where a raw or committed record names an egress link. Then 20 certified units under the changes that leave a window
+    egress records are all attested, with no egress `mismatch` (an ingress one stays), and a `ValueError` from both
+    where a raw or committed record names an egress link. Then 20 attested units under the changes that leave a window
     undecided, checked over every window (about a minute more): the only cases that give a grid-free `no-verdict`
     whatever else the suite imports, which no cheaper test of the adapter compares."""
     kinds, no_grid = {}, {}
@@ -119,7 +119,7 @@ def test_the_adapter_gives_the_audits_verdicts_on_generated_units(lean):
     same()
 
     # Hypothesis mixes the literals of every imported local module into what it samples, so the 600 cases above move with
-    # unrelated code; a grid-free no-verdict is among them only a few times, and certified units under the changes that
+    # unrelated code; a grid-free no-verdict is among them only a few times, and attested units under the changes that
     # leave a window undecided, checked over every window, carry it whatever else is imported.
     @settings(derandomize=True, database=None, deadline=None, max_examples=20)
     @given(R.record_cases(("certified",), UNDECIDED))
@@ -167,7 +167,7 @@ SESSION = bytes(range(lms.SESSION_BYTES))
 
 
 def _certified(tmp_path, W, record=lambda w, r: r):
-    """Link "responses"'s egress records under the shaper, each passed through `record(w, r)` and certified: the
+    """Link "responses"'s egress records under the shaper, each passed through `record(w, r)` and attested: the
     records, the declared syncs, the grid, Σ_sync and the attester's key."""
     g, ss = GridParams(3, 2, 2), SyncSet((0, 1), (Fraction(1),))
     syncs = [ClockSync(w % 2, Fraction(1)) for w in range(W)]
@@ -181,7 +181,7 @@ def _certified(tmp_path, W, record=lambda w, r: r):
 def test_the_adapters_check_without_a_grid_is_the_leans_verdicts_no_grid(lean, tmp_path):
     """The adapter's `check_link(grid=False)` is the Lean's `verdicts-no-grid`: it accepts a window whose frames differ
     from the Program's in content alone, at its counts, where `verdicts` gives `mismatch`, with the Program's frames or
-    with none, and refuses a record that isn't certified, whose grid no head check holds."""
+    with none, and refuses a record that isn't attested, whose grid no head check holds."""
     def content(w, r):
         if w != 1:
             return r
@@ -238,7 +238,7 @@ def test_a_disagreement_with_the_reference_rejects(lean, tmp_path, monkeypatch):
 
 
 def test_outside_the_domain_it_refuses(lean, tmp_path):
-    """A certified record under a key the Lean can't verify, a certified record with no key or no session, a session id
+    """An attested record under a key the Lean can't verify, an attested record with no key or no session, a session id
     not 32 bytes, a raw grid that isn't tuples, a frame of other than B bytes, a missing executable and no `lake` to build one each raise; none gets a verdict computed
     in Python, and the audit keeps no verdict or sync of a call that raised."""
     g = GridParams(1, 1, 1)
@@ -337,10 +337,10 @@ def _digest(i: int) -> bytes:
 
 @functools.lru_cache(maxsize=None)
 def _served():
-    """A toy key's certificates as a reveal endpoint serves window 1 of link "n2" in `SESSION`, each named by the
-    refusal it gets as the first certificate of its kind: kept (``egress``, ``ingress``, the clock certificate
-    ``clock``), another key's, another link's and another window's, an ingress clock certificate, a forged signature,
-    one that doesn't decode, an altered digest, and a clock certificate signing ``seen``'s digest."""
+    """A toy key's attestations as a reveal endpoint serves window 1 of link "n2" in `SESSION`, each named by the
+    refusal it gets as the first attestation of its kind: kept (``egress``, ``ingress``, the clock attestation
+    ``clock``), another key's, another link's and another window's, an ingress clock attestation, a forged signature,
+    one that doesn't decode, an altered digest, and a clock attestation signing ``seen``'s digest."""
     key, other = V2._key(4), V2._key(4, seed=1)
     i, o = Issuer(V2._Signer(key), SESSION), Issuer(V2._Signer(other), SESSION)
     egress = i.sign("n2", Direction.EGRESS, 1, _digest(0))
@@ -366,9 +366,9 @@ def _refusals(lean, certificates, clocks, seen=(), session=SESSION):
 
 def test_the_clients_certificate_refusals_are_the_references(lean):
     """`lean_audit.certificate_refusals` (`network-records verdicts`' ``certificates``, `NetworkCheck.TransferBlocks`) gives
-    `audit.certificate_refusals`'s refusal of each certificate and clock certificate of a workload: another key's,
+    `audit.certificate_refusals`'s refusal of each attestation and clock attestation of a workload: another key's,
     another link's or window's, a forged signature, one that doesn't decode and an altered digest, a second of a
-    direction, an ingress clock certificate and one signing a digest that `seen` holds, and in another session every
+    direction, an ingress clock attestation and one signing a digest that `seen` holds, and in another session every
     signature; the honest ones are kept."""
     _, c = _served()
     certs = [c[k] for k in ("key", "link", "window", "forged", "undecoded", "altered", "egress", "clock", "ingress")]
@@ -385,7 +385,7 @@ def test_the_clients_certificate_refusals_are_the_references(lean):
 
 
 def test_on_generated_answers_the_lean_is_the_reference(lean):
-    """On answers sampled from the served certificates in any order and number, with any of their digests seen: the Lean's
+    """On answers sampled from the served attestations in any order and number, with any of their digests seen: the Lean's
     refusals are the reference's, every refusal among them."""
     _, c = _served()
     pool = sorted(c.values(), key=lambda x: (x.link, x.direction.code, x.window, x.digest, x.signature))
@@ -403,7 +403,7 @@ def test_on_generated_answers_the_lean_is_the_reference(lean):
 
 
 def test_a_certificate_disagreement_refuses_the_window(lean, monkeypatch):
-    """With the reference made to keep everything, every certificate and clock certificate of the window is a
+    """With the reference made to keep everything, every attestation and clock attestation of the window is a
     `disagreement`, those the Lean keeps among them; a reference that raises where the Lean answers raises."""
     key, c = _served()
     monkeypatch.setattr(audit, "certificate_refusals",
@@ -421,7 +421,7 @@ def test_a_certificate_disagreement_refuses_the_window(lean, monkeypatch):
 
 
 def test_certificates_outside_the_domain_are_refused(lean):
-    """A key other than an `LmsKey`, a certificate of ill-typed fields (a negative window, a link that isn't a string)
+    """A key other than an `LmsKey`, an attestation of ill-typed fields (a negative window, a link that isn't a string)
     and an LMS key of another length each raise `ValueError`, with no refusal computed in Python."""
     key, c = _served()
 
