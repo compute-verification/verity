@@ -6,8 +6,6 @@ the map gives them (`commit.capture_map.committer_names`), and the committer's i
 fails without it; a layer that recorded no attention rows, or indexers that disagree, fail the step."""
 from __future__ import annotations
 
-__models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
-
 import re
 import types
 from typing import Any

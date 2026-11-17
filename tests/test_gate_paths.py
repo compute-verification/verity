@@ -38,8 +38,15 @@ EXEMPT = {
         "tooling drops this entry",
     ("tools/check/post_train.py", "tools/verity/check/check.py"):
         "the check's path in the store's records of shards from before the move, by which post_train still finds them",
+    ("tools/research/src/research/pods/nebius/slot_only.py", "tools/verity/check/"):
+        "the directory a machine's own slot.py stays in and a tree from before the move runs the check from, both of which a "
+        "run's command still names",
+    ("tools/research/src/research/pods/nebius/node_ops.py", "tools/verity/check/"):
+        "slot_only's copy, installed alone: a check's command under the machine's own slot.py or a tree from before the move",
+    ("tools/research/src/research/run_records.py", "tools/verity/check/"):
+        "slot_only's copy, sent alone: the commands of runs from before the move and of the machine's own slot.py",
 }
-#: the gate tooling whose module-level path constants are checked: what `check`, `research merge`, the queue and the audit read
+#: the gate tooling whose module-level path constants are checked: what `check`, `research.merge`, the queue and the audit read
 TOOLING = ("tools/check/", "tools/verity/lean/", "tools/research/src/research/", "tools/verity/circuit_check/src/")
 
 

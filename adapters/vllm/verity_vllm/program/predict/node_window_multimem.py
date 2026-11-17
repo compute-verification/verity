@@ -1,6 +1,5 @@
 """torch's symmetric-memory all-reduce (`tp_allreduce.AllReduceMultimem_v1`, the prefill's all-reduce past FlashInfer's 42
-tokens) lowered into a rank's node window (`node_window`) as the TP window lowers its site (`pipeline.tp.grain.lower`, read
-here, not copied), so the combine units a reader of both windows meets are the same units:
+tokens) lowered into a rank's node window (`node_window`) by `pipeline.tp.grain.lower`, read here, not copied:
 
 - At coordinate grain (the rank's partial is a row whose unit is one output word: a block-FP8 linear's GEMM coordinate, the
   embedding shard's column), `grain.lower`'s units for the site: the rank's words gathered into chunks of K words
@@ -51,8 +50,7 @@ _READS: weakref.WeakKeyDictionary[NodeWindow, dict[int, list[tuple[int, int]]]] 
 
 
 def reads(w: NodeWindow, j: int) -> list[tuple[int, int]]:
-    """The leaves ``[lo, hi)`` of node ``j``'s output each reader reads, a batch reader's member by member (what
-    `pipeline.tp.wires` hands `grain.lower` as a site's reads)."""
+    """The leaves ``[lo, hi)`` of node ``j``'s output each reader reads, a batch reader's member by member."""
     got = _READS.get(w)
     if got is None:
         got = _READS[w] = {}

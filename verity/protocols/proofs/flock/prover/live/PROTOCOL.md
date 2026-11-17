@@ -1,7 +1,7 @@
 # verity/flock-circuit: Flock ZK, its masking and its coin tree
 
 What `flock-circuit --zk` sends, where every mask comes from, and what the verifier checks. This is the layout the Lean
-reference prover must reproduce byte for byte (soundness DESIGN.md §6: a deterministic function of statement, witness,
+reference prover must reproduce byte for byte (a deterministic function of statement, witness,
 prover seed and verifier coins), and the statement its zero-knowledge theorem is about.
 
 Code:
@@ -26,7 +26,7 @@ Code:
 
 **Claim.** Every message a session sends is masked, committed or public, and the audit (`zkaudit`) attributes every
 byte. The target notion is VEIL's special honest-verifier zero knowledge for the whole session (both repetitions),
-meaning one simulator for every fixed coin sequence (DESIGN.md §11), statistical in the common-reference-string model
+meaning one simulator for every fixed coin sequence, statistical in the common-reference-string model
 under the assumptions of §7. Malicious-verifier zero knowledge is the coin tree's, from its coin commitment and single rewind (§9).
 The prover refuses the degenerate coins (`β = 0`, a mask slot of deficient rank, dependent `ρ`, a zerocheck outer coin
 `r_j = 1`) as they open, before it sends anything that depends on them. Each rep has its own pair of level 0's extra
@@ -404,8 +404,8 @@ serialized), never from a proof.
 
 ## 9. The coin tree: the verifier's coin commitment and the single-rewind simulator
 
-The design for malicious-verifier zero knowledge for one batched session, in the model of ASSUMPTIONS.md §2 and §6 and
-DESIGN.md §11.1: the verifier commits to every coin before the prover's first message, then opens them round
+The design for malicious-verifier zero knowledge for one batched session, in the model of ASSUMPTIONS.md §2 and §6: the
+verifier commits to every coin before the prover's first message, then opens them round
 by round, and a Goldreich–Kahan simulator rewinds once, to just after that commitment. The prover refuses the
 degenerate coins as they open (the Claim above).
 

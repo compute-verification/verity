@@ -236,7 +236,7 @@ def component_case(draw, C, kind: str | None) -> dict:
         case = C.cases[kind][0]
     elif C is R.POUW_PERIOD:
         case = draw(st.sampled_from(pouw_periods()[kind]))
-    elif C is R.CERTIFIER:
+    elif C is R.ATTESTER:
         case = NP.build(draw(st.sampled_from(PERIOD_CASES[kind])), draw(st.integers(0, 1 << 16)), small=True)
     elif C is R.INFERENCE_ONLY:
         case = draw(R.INFERENCE.sampled(draw(st.sampled_from(INFERENCE_CASES[kind]))))
@@ -486,7 +486,7 @@ product_onsite_server = D.server_fixture(PRODUCT[R.ONSITE.id])
 
 @pytest.fixture(scope="module")
 def recorded(tmp_path_factory):
-    """Space's and bandwidth's cases, made once (their memory challenger's session logs under the suite's basetemp), and
+    """Space's and bandwidth's cases, made once (their memory attester's session logs under the suite's basetemp), and
     the wipe's test signer's files under it too while the module's tests sample wipes."""
     if not R.POUS.cases:
         periods.build(tmp_path_factory.mktemp("periods"))

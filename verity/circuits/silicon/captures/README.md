@@ -2,7 +2,7 @@
 
 These files are byte-faithful replicas (with a `provenance` block: source repo, path, sha256, import time) of evidence
 that was measured on real silicon in other repositories, so that `verity.circuits.silicon.instructions` points at
-something checked in. `autoproof-probe-vectors.json` is a replicated fixture (`fixtures/artifacts.json`): the tree holds its
+something checked in. `autoproof-probe-vectors.json` is a replicated fixture (`artifacts.json`): the tree holds its
 pointer and the store its bytes.
 
 | file | source | pins |
@@ -14,7 +14,7 @@ pointer and the store its bytes.
 `vectors/` holds `fp8-hopper-wgmma-k{32,1536}.json` (`verity/tc-reference-vector/v0`), model replays of `GemmAccumulator<K>`
 on `HOPPER_E4M3_K32` from a recorded seed and recipe -- not hardware captures. PoUW's FP8 atom vectors
 (`verity/protocols/resource_accounting/compute/pouw/verifier/lean/scripts/fp8atom_vectors.py`) and
-`adapters/vllm/tests/program/test_fp8_moe.py` replay them.
+`tests/adapters/vllm/tests/program/test_fp8_moe.py` replay them.
 
 Nothing here is a hardware capture taken by this repo: the raw words of the H100 run (143 MB of `.npz`) are not
 replicated, and autoproof's 1.57M dots exist only as the per-suite counts in its result files. `verity/circuits/silicon/discrepancy_log.json`

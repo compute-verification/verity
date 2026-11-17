@@ -1,4 +1,4 @@
-"""The onsite demo's record (``verity/onsite-network-record/v1``) restated per monitoring period: a table for a week, a
+"""The onsite application's record (``verity/onsite-network-record/v1``) restated per monitoring period: a table for a week, a
 month and a year, columns the node, a datacenter and the world, each cell its leak bound K over the period, its share of
 the weights, δ_net and K over one execution phase beside it, marked **proved** or **scaled** with its rule and sources.
 It reads the record as JSON and nothing else (the lock aside), imports no module of its writer, and computes nothing the
@@ -154,7 +154,7 @@ def markdown(rec: Mapping[str, Any]) -> str:
     L = [f"# The onsite record of `{rec['run']}` per monitoring period", "",
          f"The run is {'of record' if o['holds'] else 'not of record'} (every verdict accepts: {o['holds']}; missing "
          f"{o['missing']}, not accepting {o['not_accepting']}, not established {o.get('not_established', [])}). The "
-         f"network certifier: {said}. m = {b['phases']} execution phases of {p['phase_s']} s, the run's period "
+         f"network attester: {said}. m = {b['phases']} execution phases of {p['phase_s']} s, the run's period "
          f"{b['period_s']} s. K of record {fig['K']:,} bits; the tight K {b['K']:,} (`{b['statement']}`) is no "
          f"figure while anything is open; open: {fig['open'] or 'nothing'}.", "",
          f"The advice: ℓ_a = {[bits(x) for x in a['cap']['ell_a']]} bits, the registered cap, is the charge's upper "

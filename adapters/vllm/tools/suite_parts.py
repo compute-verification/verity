@@ -39,7 +39,7 @@ DEFAULT_S = 2.6
 #: each test module's seconds of test time, the modules over 20 s, from a run in 8 parts (each part's 4 workers on 4 CPUs);
 #: `--seconds REPORT...` prints the table from the suites.py reports of a full run or of every part of one (each part's
 #: `out/logs/adapters_vllm.json`). One module over 20 s is left out and takes `DEFAULT_S`: the PoUB tests'
-#: `test_remote_session.py`, whose directory's name is a term the glossary retires, so this file does not spell its path
+#: `test_poub_session.py`, whose directory's name is a term the glossary retires, so this file does not spell its path
 SECONDS: dict[str, float] = {
     "protocols/test_pouw_h1_handoff.py": 481,
     "program/test_sparse_mla_split.py": 455,
@@ -80,7 +80,6 @@ SECONDS: dict[str, float] = {
     "program/test_boolean_tanh.py": 72,
     "program/test_tp_allreduce.py": 72,
     "program/test_kernel_self_check.py": 71,
-    "program/test_lifted_mixed.py": 71,
     "program/test_dsv4_derive.py": 68,
     "check/test_sampled_replay.py": 68,
     "program/test_sparse_mla.py": 67,
@@ -110,7 +109,6 @@ SECONDS: dict[str, float] = {
     "program/test_fa2_softcap.py": 36,
     "program/test_lifted_tiny.py": 34,
     "lint/test_p13_duplicate_bodies.py": 34,
-    "program/test_lifted_workload_padrev.py": 34,
     "program/test_codec.py": 34,
     "lint/test_p01_core_abstractions.py": 33,
     "program/test_topp_splits_operand.py": 33,
