@@ -33,7 +33,7 @@ synchronous or async scheduling, FCFS, one full-attention KV group, as `replay._
   frees its blocks. A request reaching O sets `fin` and keeps its slot. A `fin` victim frees its blocks at preemption
   and isn't requeued, but the step still preempted, so its waiting loop doesn't run. The certified O forces every lag
   row, so async costs no decision.
-- *Walk entries* (EW ≥ 1, `CacheStep_v1`'s entry width; network certification's PROTOCOL.md, "The rows"): each running slot's
+- *Walk entries* (EW ≥ 1, `CacheStep_v1`'s entry width; network attestation's PROTOCOL.md, "The rows"): each running slot's
   `pfx` moves with its request through the compaction and placement. A slot with a row takes that row's entry after
   its `CacheStep_v1` calls (a running row's one, an admitted row's second), a kept slot without one keeps its own, and
   a preempted or stopped request drops its own, since it resumes as an admitting row from the root. The step also
@@ -83,7 +83,7 @@ and KV connectors. `statics` refuses an engine whose keys show one (a policy oth
 does not read.
 
 **Composition** (the compile slice's proof block, all inside one ZK proof under the advice's hiding root; the
-certifier's PROTOCOL.md, "Advice v1"):
+network attester's PROTOCOL.md, "Advice v1"):
 1. the committed advice is the decision bits themselves, one per open-step ask in the scan's order, read directly;
 2. a scan of this step over the session's steps, from the empty engine, the arrivals' cursor moving by `taken` and
    the decisions' by `used`; the certified request records (P, O) are the arrivals, in the network attester's release
@@ -116,16 +116,26 @@ and adds none.
 """
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
-from functools import lru_cache
+from functools import cache
 from types import SimpleNamespace
-from typing import Sequence
 
 from verity.circuits.boolean import BIT
-from verity.circuits.boolean.forms import ONE, ZERO, Circuit, add, and_reduce, const_bits, mux, or_reduce, sub
+from verity.circuits.boolean.forms import (
+    ONE,
+    ZERO,
+    Circuit,
+    add,
+    and_reduce,
+    const_bits,
+    mux,
+    or_reduce,
+    sub,
+)
 from verity.circuits.boolean.trace import part as _part
-from verity.circuits.evaluation.bits import evaluate_bits
 from verity.circuits.defs import SpecializedDefinition, StaticValue, bind
+from verity.circuits.evaluation.bits import evaluate_bits
 from verity.circuits.types import Array, Tuple
 
 STATICS = ("R", "W", "A", "M", "T", "L", "B", "H", "CH", "WM", "FULL", "PC", "NB", "IW", "AS", "EW")
@@ -270,10 +280,10 @@ def reference(S: SimpleNamespace, st: State, inp: Inputs) -> Out:
 
     shift = 0
     if not run and not wait and arr:
-        a = arr[0]
-        if not arrival_ok(a):
+        first = arr[0]
+        if not arrival_ok(first):
             return Out(False)
-        wait, shift, taken = [as_req(a)], 1, 1
+        wait, shift, taken = [as_req(first)], 1, 1
     sched: dict[int, int] = {}
     victims: list[dict] = []
     preempted = False
@@ -312,7 +322,7 @@ def reference(S: SimpleNamespace, st: State, inp: Inputs) -> Out:
     k = 0
     looked = [0] * (S.W + S.A)
     if not preempted:
-        def admit(r: dict, c: int, ask: bool) -> int:
+        def admit(r: dict, c: int, ask: int | None) -> int:
             """0: the loop ends here; 1: r is admitted; 2: refused (ok = 0). Reads bit `ask`'s index when asked."""
             nonlocal free, budget, used
             if budget <= 0 or len(run) >= S.M:
@@ -543,7 +553,7 @@ def _build(C, S, *elements, tap: dict | None = None, derive=None):
     NW = max(LW, TW) + 1
     R, W, A = S.R, S.W, S.A
     AS, EW = S.AS, S.EW
-    I = _split(_in_fields(S), elements)
+    ins = _split(_in_fields(S), elements)
     bad = []
     phase = getattr(C, "phase", None) is not None
 
@@ -552,11 +562,11 @@ def _build(C, S, *elements, tap: dict | None = None, derive=None):
             C.phase = name
 
     def rec(kind, p):
-        return {"valid": I[f"{kind}_valid"][p][0], "id": I[f"{kind}_id"][p], "P": I[f"{kind}_P"][p], "O": I[f"{kind}_O"][p],
-                "out": I[f"{kind}_out"][p] if kind != "arr" else [ZERO] * LW,
-                "comp": I[f"{kind}_comp"][p] if kind == "run" else [ZERO] * LW,
-                "cap": I[f"{kind}_cap"][p][0] if AS else ZERO,
-                "fin": I["run_fin"][p][0] if AS and kind == "run" else ZERO}
+        return {"valid": ins[f"{kind}_valid"][p][0], "id": ins[f"{kind}_id"][p], "P": ins[f"{kind}_P"][p], "O": ins[f"{kind}_O"][p],
+                "out": ins[f"{kind}_out"][p] if kind != "arr" else [ZERO] * LW,
+                "comp": ins[f"{kind}_comp"][p] if kind == "run" else [ZERO] * LW,
+                "cap": ins[f"{kind}_cap"][p][0] if AS else ZERO,
+                "fin": ins["run_fin"][p][0] if AS and kind == "run" else ZERO}
 
     def arrival_bad(r):
         po = _add(C, r["P"], r["O"], LW + 1)
@@ -576,13 +586,13 @@ def _build(C, S, *elements, tap: dict | None = None, derive=None):
     zero = {k: (ZERO if k in one_bit else [ZERO] * len(arr[0][k])) for k in keys}
     arr = [{k: (mux(C, forced, [nxt[k]], [cur[k]])[0] if k in one_bit else mux(C, forced, nxt[k], cur[k])) for k in keys}
            for cur, nxt in zip(arr, arr[1:] + [zero])]
-    free = I["free"][0]
+    free = ins["free"][0]
     tap.update(run=run, wait=wait, arr=arr, forced=forced, free=free)
 
     def ret_of(p, held):
         if not S.PC:
             return _pad(held, HW)
-        return I["ret"][p]
+        return ins["ret"][p]
 
     # the running loop. The victims are a suffix and no need or return is negative, so the slots kept are those i with
     # free + (the returns of the slots after i) ≥ (the needs of slots 0..i), each slot's n taken from the budget the
@@ -638,6 +648,7 @@ def _build(C, S, *elements, tap: dict | None = None, derive=None):
     used = [ZERO] * AC
     taken = [ZERO] * AC
     taken[0] = forced
+    cands: list
     adm, looked, cands = [], [], []
     tap.update(run_n=run_n, cnt0=cnt0, cands=cands)
     if derive is not None:
@@ -653,7 +664,7 @@ def _build(C, S, *elements, tap: dict | None = None, derive=None):
         if derive is not None:
             h, ev = derive.hit(c, r, ntok, tap)
         else:
-            h, ev = (I["hit"][c], I["evict"][c]) if S.PC else ([ZERO] * HW, [ZERO] * HW)
+            h, ev = (ins["hit"][c], ins["evict"][c]) if S.PC else ([ZERO] * HW, [ZERO] * HW)
         hb = _pad([ZERO] * LB + list(h), LW + 1)
         if S.PC:
             bad.append(C.AND(reach, OR2(C, _lt(C, h, ev), _lt(C, hb, ntok).inv())))
@@ -672,7 +683,7 @@ def _build(C, S, *elements, tap: dict | None = None, derive=None):
         if is_arr:
             a = c - W
             used = _add(C, used, [go], AC)
-            admit = C.AND(go, I["bits"][a][0])
+            admit = C.AND(go, ins["bits"][a][0])
             bad.append(C.AND(admit, arrival_bad(r)))
             going = admit
             taken = _add(C, taken, [admit], AC)
@@ -720,17 +731,18 @@ def _build(C, S, *elements, tap: dict | None = None, derive=None):
 
     # close and update
     stage("update")
-    O = {k: [] for k in ("row_valid", "row_id", "row_kind", "row_start", "row_n")}
+    outs: dict[str, list] = {k: [] for k in ("row_valid", "row_id", "row_kind", "row_start", "row_n")}
+    upd: list
     keep, nxt, upd = [], [], []
     tap.update(slots=slots, update=upd)
     for p, s in enumerate(slots):
         n = s["n"]
         on = C.AND(s["valid"][0], or_reduce(C, n))
-        O["row_valid"].append([on])
-        O["row_id"].append(_sel(C, on, s["id"]))
-        O["row_kind"].append([and_reduce(C, [on, _eq(C, n, const_bits(1, TW)), _lt(C, s["comp"], s["P"]).inv()])])
-        O["row_start"].append(_sel(C, on, s["comp"]))
-        O["row_n"].append(_sel(C, on, n))
+        outs["row_valid"].append([on])
+        outs["row_id"].append(_sel(C, on, s["id"]))
+        outs["row_kind"].append([and_reduce(C, [on, _eq(C, n, const_bits(1, TW)), _lt(C, s["comp"], s["P"]).inv()])])
+        outs["row_start"].append(_sel(C, on, s["comp"]))
+        outs["row_n"].append(_sel(C, on, n))
         comp = _add(C, s["comp"], n, LW)
         sample = C.AND(on, _lt(C, comp, _add(C, s["P"], s["out"], LW)).inv())
         upd.append({"on": on, "comp": comp, "sampled": sample})
@@ -754,7 +766,7 @@ def _build(C, S, *elements, tap: dict | None = None, derive=None):
         upd[p].update(leave=leave, held=held, keep=keep[p])
         pfx = []
         if EW:
-            pfx = mux(C, on, I["row_pfx"][p], _sel(C, kept[p], I["run_pfx"][p]))
+            pfx = mux(C, on, ins["row_pfx"][p], _sel(C, kept[p], ins["run_pfx"][p]))
         nxt.append(s["valid"] + s["id"] + s["P"] + s["O"] + out + comp + (s["cap"] + [stop] if AS else []) + pfx)
 
     stage("compact")
@@ -784,7 +796,7 @@ def _build(C, S, *elements, tap: dict | None = None, derive=None):
     wait_next = [[x ^ y for x, y in zip(rest[q], front[q])] if q < R else rest[q] for q in range(W)]
 
     stage("out")
-    res = {"ok": [[or_reduce(C, bad).inv()]], "taken": [taken], "used": [used], "looked": looked, **O}
+    res = {"ok": [[or_reduce(C, bad).inv()]], "taken": [taken], "used": [used], "looked": looked, **outs}
     at = 0
     for k, w in (("run_valid", 1), ("run_id", S.IW), ("run_P", LW), ("run_O", LW), ("run_out", LW), ("run_comp", LW),
                  ("run_cap", AS), ("run_fin", AS), ("run_pfx", EW)):
@@ -988,7 +1000,7 @@ def from_json(st_: dict, v: list) -> tuple[State, Inputs, Out]:
 # --- cost ------------------------------------------------------------------------------------------------------------------
 
 
-@lru_cache(maxsize=None)
+@cache
 def _staged(key: tuple) -> dict[str, int]:
     st_ = dict(zip(STATICS, key))
     S = SimpleNamespace(**st_)

@@ -4,7 +4,7 @@ of onsite and remote, over the harness's framing of the core interface (`verity_
 (`verity/pouw/period/v1`, the work of remote's development composite, with `credit.commit_of` reading the record each
 window of a period names), Pearl+'s run verdict (`verity/pouw/pearl-plus/v1`, the work of onsite and of remote's
 composite of record, `PEARL_PLUS`), the network
-attester's period check's difftest's `reference` (`verity/certifier/v0`, its Python mirror over the certifier's
+attester's period check's difftest's `reference` (`verity/certifier/v0`, its Python mirror over the network attester's
 certificates and one-stage's answers, `tests/verity/protocols/resource_accounting/network/verifier/network/test_network_period_protocol.py`), the
 inference-only policy's difftest's `reference` (`verity/inference-only/v0`, the policy's Python check,
 `inference_only_reference.check_theta`, behind the protocol's decoders,

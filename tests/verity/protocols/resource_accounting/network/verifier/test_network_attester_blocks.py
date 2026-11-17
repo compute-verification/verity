@@ -154,7 +154,7 @@ def test_refuses_a_certificate_for_another_phase_or_direction(tiny, tmp_path, ot
     _c, doc, lays = tiny
     cert = Certifier(tmp_path)
     regs = cert.register(doc, at={"w": {other: to}})
-    with pytest.raises(ValueError, match="'w' .*doesn't verify under the network certifier's key"):
+    with pytest.raises(ValueError, match="'w' .*doesn't verify under the network attester's key"):
         BK.pins(doc, lays, regs, UPLINK, cert.key())
     with pytest.raises(ValueError, match="load 'bias' .*registration's link is 's0/uplink', and the verifier's 's1/uplink'"):
         BK.pins(doc, lays, cert.register(doc), "s1/uplink", cert.key())

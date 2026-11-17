@@ -16,7 +16,7 @@ its change to the arm it names as its parent (`serve_tax.ARMS`):
 | `bi-compiled` | `VLLM_BATCH_INVARIANT=1`: vLLM's batch-invariant kernels | `compiled` |
 | `bi-eager` | `VLLM_BATCH_INVARIANT=1`, eager: the committing path's execution (`TargetProfile`'s `bi-eager`), nothing committed | `eager` |
 | `record` | the scheduler's step trace (`verity_vllm.engine.step_trace.StepTrace`), written by a thread of its own | `compiled` |
-| `release-order` | requests added in the certifier's release order (`serve_admit.ReleaseOrder`, in the engine core) | `record` |
+| `release-order` | requests added in the network attester's release order (`serve_admit.ReleaseOrder`, in the engine core) | `record` |
 | `tick` | admission on the certified tick (`verity_vllm.pipeline.tick_plugin`), τ calibrated on `record` | `record` |
 | `tokens` | each window's tokens, 4 bytes each, committed in `rows-sha512` rows off the engine loop | `tick` |
 | `kv` | the whole paged KV pool hashed in place on a side stream at each window edge | `tokens` |
@@ -273,10 +273,10 @@ research run --on NODE --source . --cwd source -- bash benchmarks/serve_tax/run.
 - **What it leaves out.** `serve_tax.NO_ARM` lists what a served engine of ours changes that no arm turns on; the output
   prints it under the number, which counts none of it. The arms that need the corpus's client (the tick's fed by the
   stand-in certifier, and the restore arms' seeded sampling) aren't served by vLLM's.
-- **The arm behind the network attester,** `tick-certifier`, is the tick arm with the certifier itself in front
+- **The arm behind the network attester,** `tick-certifier`, is the tick arm with the network attester itself in front
   (`serve_tax.CERTIFIER`), which vLLM's client drives through a shim (`cell_shim`). Two commands serve it, since the
-  certifier never runs on the node it certifies: `--side server` there, `--side client` on the certifier's host.
-  The certifier's schedule (`serve_tax.CELLS`) paces every answer, so its verdict is `not comparable`;
+  network attester never runs on the node it certifies: `--side server` there, `--side client` on the network attester's host.
+  The network attester's schedule (`serve_tax.CELLS`) paces every answer, so its verdict is `not comparable`;
   `serve_tax.py`'s docstring has the rest.
 
 It writes `serving_cost.txt`, whose first line is the number with its label, interval, target and verdict and whose
@@ -324,8 +324,8 @@ Under `SAMPLED=1` the client sends `prod-record`, as it sends every arm that kee
 the request (`serve_tax.user_seed`, `sends_seed`): its replay samples the request again under that seed. `prod` is
 sent none, so vLLM samples its requests as it samples any without a seed, and what a seed changes in vLLM's sampling
 is in `prod-record`'s cost over `prod`, a change of ours like the record and the top-k; `prod-seeded` is `prod` sent
-the seeds, the one arm sent them that keeps no record (`Arm.seeds`), which reads that change apart. The seed is the
-client's; a served request need not send one. It is made from the user's name and, under `LIFETIMES`, the lifetime's number: a
+the seeds, the one arm sent them that keeps no record (`Arm.seeds`), which reads that change apart: never stock,
+which a cost is over. The seed is the client's; a served request need not send one. It is made from the user's name and, under `LIFETIMES`, the lifetime's number: a
 pass's users have the same names in every lifetime, and a server samples much the same tokens again under one seed,
 so with the name alone every lifetime of `prod-record` would serve one sample of text where `prod`'s serve a new one
 each. The share of its drafts' tokens a text accepts sets how many steps it takes to serve, so that one sample's
@@ -416,7 +416,7 @@ research run --on NODE --source . --cwd source --send C4.json.gz \
 edge in each worker process, which the plugin's model runner hook gives where vLLM loads general plugins in its workers.
 The `tick`, `tokens` and `kv` arms need `verity_vllm.pipeline.tick_plugin` and the corpus client's stand-in certifier,
 and refuse a tree without them. `tick-certifier` is two jobs: the node's (`SIDE=server`, in `run.sh`'s header),
-then the certifier's host's (`serve_tax.py run --side client`), which needs no GPU. A saturated load keeps a connection open for every request queued in the server, so the
+then the network attester's host's (`serve_tax.py run --side client`), which needs no GPU. A saturated load keeps a connection open for every request queued in the server, so the
 client raises its open-file limit to the hard limit first.
 
 On one GPU, `MODEL_ID` is `moonlight` (the default), `llama8b` or `qwen3-30b`, the last two read from their pinned

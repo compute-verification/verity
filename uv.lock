@@ -24,7 +24,7 @@ members = [
     "cluster",
     "cluster-tests",
     "core-identity",
-    "memory-challenger-lean",
+    "memory-attester-lean",
     "pous-check",
     "research",
     "research-tests",
@@ -1057,7 +1057,7 @@ wheels = [
 ]
 
 [[package]]
-name = "memory-challenger-lean"
+name = "memory-attester-lean"
 version = "0.0.0"
 source = { virtual = "tests/verity/protocols/resource_accounting/memory/pous/attester/lean" }
 dependencies = [

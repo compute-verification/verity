@@ -11,7 +11,7 @@ subprotocols' packages:
   ss ties components`, `same` whose subprotocols of each tie must name one value (`Tie.lean`); all over blobs
   (`Blobs.lean`); the stub subprotocols (`Stubs.lean`); and the `#guard`s that pin the rules (`Guards.lean`).
 - `core_onsite` (`verity/protocols/compose/verifier/onsite`, `Core.Onsite.protocol`, `verity/onsite/v1`): SPOT, the inference-only policy,
-  Pearl+'s run verdict, PoUS, PoUB-P2 (on PoUS's store), network certification and the memory attester's
+  Pearl+'s run verdict, PoUS, PoUB-P2 (on PoUS's store), network attestation and the memory attester's
   wipe, the policy and SPOT on one registration record, Pearl+'s run on it and its W the one it is chained after, as at
   remote v1, and PoUS and PoUB-P2 on one store (a `tiedSameB`).
 - `core_remote` (`..`): the composite of record `Core.Remote.V1.protocol` (`verity/remote/v1`): SPOT,
@@ -70,7 +70,7 @@ subprotocol accepts its own case, and the commitment is `bind` of the subprotoco
 
 | subprotocol | onsite | remote | `Core.Protocol` | id |
 | --- | --- | --- | --- | --- |
-| network certification (over the period: its execution phases of transfer blocks certified and proved, and the bound `K` on what left the site) | yes | | `NetworkCheck.Period.protocol` (`network_check`, `../../../resource_accounting/network/verifier/lean`) | `verity/certifier/v0` |
+| network attestation (over the period: its execution phases of transfer blocks certified and proved, and the bound `K` on what left the site) | yes | | `NetworkCheck.Period.protocol` (`network_check`, `../../../resource_accounting/network/verifier/lean`) | `verity/certifier/v0` |
 | PoUW (Pearl+'s run verdict: a served run's retained passes sampled at δ, its credit at Pearl's assumption) | yes | yes | `PouwCheck.PearlPlus.Protocol.protocol` (`pouw_pearlplus`, `../../../resource_accounting/compute/pouw/verifier/lean/pearlplus`) | `verity/pouw/pearl-plus/v1` |
 | PoUW's period credit (the period's windows credited all or nothing), remote's development composite's work | | | `PouwCheck.Period.protocol` (`pouw_check`, `../../../resource_accounting/compute/pouw/verifier/lean/check`) | `verity/pouw/period/v1` |
 | SPOT (the audit on the proofs themselves, one-stage v2's, which it reads as blobs; one-stage v1 and the recursive audit, which its soundness doesn't cover, refused, and the two-stage audit read, checked and refused last while its switch is off) | yes | yes | `VStar.Recursive.Sampled.protocol` (`core_vstar_recursive`, `../../../proofs/spot_flock/verifier/lean`) | `verity/sampled-proofs/v1` |
@@ -156,7 +156,7 @@ Lean to:
   them v1's params or evidence, refused by name) and v1's audits with one or two changes under the form `one-stage`
   (refused as v1's), the recursive form's params refused by name, whether or not they name its files, and the
   two-stage form's params through its own difftest's twin (`sampled_two.py`) and its evidence up to its keys;
-- network certification: its period difftest's `reference`, the Python mirror over the certifier's certificates and
+- network attestation: its period difftest's `reference`, the Python mirror over the network attester's certificates and
   one-stage's answers, on small signed periods from its `build`;
 - the inference-only policy: its protocol difftest's `reference`, the policy's Python check (`check_theta`) behind
   the protocol's decoders, on θ's provenance difftest's declarations with at most one change, from its `drawn`, or on
