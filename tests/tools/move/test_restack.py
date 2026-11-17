@@ -1491,6 +1491,42 @@ def test_a_hand_change_to_a_line_the_branch_changed_is_conflicted_at_hand(repo, 
     assert (r["status"], r["step"], r["files"]) == ("conflicted", "hand", ["README.md"])
 
 
+DOCS = "f1 is in app.util\n\none\ntwo\nthree\n\nf2 is in app.util\n"
+
+
+@pytest.fixture
+def restored(repo, lines):
+    """A move whose hand change puts back the old name the script rewrote in both of the docs' lines, as a pass that
+    restores comments does, and a branch `pr-docs` that changed the first of them."""
+    git(repo, "checkout", "-q", "-b", "docs", "base")
+    commit(repo, "docs", {"docs.md": DOCS})
+    git(repo, "branch", "pr-docs")
+    subprocess.run(["python3", "tools/move/layout.py"], cwd=repo, check=True)
+    move = commit(repo, "layout, and the docs' old names put back" + LINE, {"docs.md": DOCS})
+    git(repo, "checkout", "-q", "main")
+    correct(lines, {move: {"hand": ["docs.md"], "reason": "The docs' names put back."}})
+    on(repo, "pr-docs", ("docs", {"docs.md": edit(DOCS, "f1 is", "f1, the branch's, is")}))
+    return move
+
+
+def test_a_restored_line_the_branch_changed_is_conflicted_at_hand_without_hand_ours(repo, restored):
+    r = RS.restack("pr-docs", restored, cwd=str(repo), pins=False)
+    assert (r["status"], r["step"], r["files"]) == ("conflicted", "hand", ["docs.md"]) and "hand_ours" not in r
+
+
+def test_hand_ours_keeps_the_branch_s_line_in_the_script_s_names_and_every_other_restored_line_and_names_the_file(
+        repo, restored, monkeypatch, capsys):
+    monkeypatch.setattr(RS, "HAND_OURS", True)
+    r = RS.restack("pr-docs", restored, cwd=str(repo), pins=False)
+    assert (r["status"], r["hand_ours"]) == ("clean", ["docs.md"]), r
+    assert show(repo, r["result"], "docs.md") == edit(DOCS, "f1 is in app.util", "f1, the branch's, is in app.core.util")
+    monkeypatch.chdir(repo)
+    assert RS.main(["pr-docs", "--move-commit", restored, "--main", restored, "--hand-ours", "--no-pins", "--json"]) == 0
+    assert json.loads(capsys.readouterr().out)[0]["hand_ours"] == ["docs.md"]
+    assert RS.main(["pr-docs", "--move-commit", restored, "--main", restored, "--hand-ours", "--no-pins"]) == 0
+    assert "--hand-ours kept the branch's side where a move's hand change met its own line, in: docs.md" in capsys.readouterr().out
+
+
 def own_map_move(repo: Path, keep_map: bool) -> str:
     """A move commit on a base that has the script but not its map, made by running the script with the map committed beside
     it; ``keep_map``: the move commit holds the map (it adds it), else the map is in neither commit."""
