@@ -68,7 +68,7 @@ def test_the_command_launches_each_step_as_a_research_run_on_one_gpu_and_ships_t
         main(["overhead", "run", "--scheme", "pearl-plus", "--cubin", tree, "--local-only"])
     assert "isn't one file" in capsys.readouterr().err
     for argv in (points, run):
-        assert argv[:4] == ["research", "run", "--on", "vy-dc-h200"] and "--require-result" in argv
+        assert argv[:4] == ["research", "run", "--on", "vy-spot-glm53"] and "--require-result" in argv
         assert argv[argv.index("--cwd") + 1] == "source" and "--gpus" not in argv
     assert job(points, "150") == ["points", "--card", "h200", "--model", O.KERNEL_MODEL, "--precision", "fp8"]
     assert job(run, "60") == ["run", "--card", "h200", "--scheme", "stock", "--points", "points.json",
@@ -182,7 +182,7 @@ def test_the_1b_points_launch_on_one_named_gpu_and_cpus_and_their_gamma_is_each_
     monkeypatch.delenv("VERITY_BENCH_VENV", raising=False)
     launched = []
     monkeypatch.setattr(R, "_execute", lambda argv, root: launched.append(list(argv)) or 0)
-    on = ["--on", "vy-dc-h200", "--gpu", "6", "--cores", "72-95", "--model", SMALL, "--local-only"]
+    on = ["--on", "vy-spot-glm53", "--gpu", "6", "--cores", "72-95", "--model", SMALL, "--local-only"]
     assert main(["overhead", "points", *on]) == 0
     assert main(["overhead", "run", "--scheme", "pearl-plus", "--cubin", s.cubin, *on]) == 0
     with pytest.raises(SystemExit):

@@ -3,10 +3,14 @@ small circuit), the file `lanes.py` takes a tree's leaf module from, and the gua
 from __future__ import annotations
 
 import hashlib
+import json
+import tomllib
+from pathlib import Path
 
 import lanes
 import pytest
 import run
+from verity_bench import kit
 from verity_flock import ir_lower as IL
 from verity_flock.gf2 import ONE, Circuit
 
@@ -66,3 +70,24 @@ def test_the_guard_passes_at_the_smallest_shape(tmp_path):
     (shape,) = g["shapes"]
     assert g["guard"] == "pass", f"sha512 {shape['sha512']}, reference {shape['reference']}, k_log {shape['k_log']}"
     assert shape["ands"] == 2_384_742 and not (tmp_path / "tile-k64-4x8-flat" / "k64.circuit.txt").exists()
+
+
+def test_only_the_readmes_lane_run_writes_its_peak_under_the_metrics_id(tmp_path, monkeypatch, capsys):
+    for name in ("OUT", "RESEARCH_RUN_ID", "RESEARCH_RUN_DIR"):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setattr(kit, "host_stamp", lambda: {"commit": None})
+    (row,) = tomllib.loads((Path(run.__file__).parent / "metrics.toml").read_text())["metric"]
+
+    def measure(k, r, c, scratch, form, tree, staging, keep, unit):
+        return {"unit": unit, "k": k, "tile": [r, c], "form": form, "peak_gib": 9.5, "wall_min": 3.0, "ands": 1,
+                "bytes": 2, "k_log": 26, "sha512": "0" * 128}
+
+    monkeypatch.setattr(run, "measure", measure)
+    for i, (unit, tile) in enumerate((("lane", "16,16"), ("combine", "16,16"), ("lane", "32,32"))):
+        out = tmp_path / str(i)
+        assert run.main(["--unit", unit, "--k", "2048", "--tile", tile, "--scratch", str(tmp_path), "--out", str(out)]) == 0
+        assert json.loads((out / "unit_lowering.json").read_text())["peak_gib"] == 9.5
+        assert (out / "result.json").exists() == (i == 0)
+    capsys.readouterr()
+    (m,) = json.loads((tmp_path / "0" / "result.json").read_text())["measurements"]
+    assert (m["name"], m["value"], m["unit"], m["mark"]) == (row["id"], 9.5, row["unit"], "measured")

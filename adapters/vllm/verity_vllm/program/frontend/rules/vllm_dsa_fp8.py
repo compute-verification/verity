@@ -21,8 +21,6 @@ is refused: its cache rows are the ones the top-k selects, which no Definition r
 
 from __future__ import annotations
 
-__models__ = ("zai-org/GLM-5.3",)
-
 from verity.circuits.refs import Coll, array_of, concat
 from verity.circuits.types import Array, Value
 from verity_vllm.definitions.numerics import flashmla_twin
