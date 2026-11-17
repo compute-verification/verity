@@ -4,8 +4,8 @@ policy's parties and channels are their manifests'; `verity run --dry-run` resol
 no GPU, and refuses by name a piece that is missing, a channel to an undeclared party and a binding the configuration
 has no place for; the runner's variables and the bindings' keys are pinned, and no gate piece names a script, a hook or
 a binding; the served window runs once with every piece's hooks, and the onsite check
-reads the record's composed verdict, undecided while the record has no row for a listed subprotocol. The runner and the
-record are stand-ins written by each test."""
+reads the published record's composed verdict, undecided while the record has no row for a listed subprotocol. The
+runner is a stand-in and the published record is written by each test."""
 from __future__ import annotations
 
 import dataclasses
@@ -598,42 +598,57 @@ def test_the_served_window_with_a_binding_missing_never_starts(tmp_path, capsys,
     assert not (state / "out.started").exists()
 
 
-RECORD = """import json, sys
-from pathlib import Path
-a = sys.argv[1:]
-if a[0] == "window":
-    print(json.dumps({"window": 2, "steps": [16, 32]}))
-    sys.exit(0)
-out = Path(a[a.index("--out") + 1])
-out.mkdir(parents=True)
-rows = {"integrity": "accept", "work": "accept", "space": "accept", "communication": "accept", "wipe": "accept"}
-rows.update(json.loads(%r))
-composed = "pending" if "bandwidth" not in rows else "accept"
-(out / "verdicts.json").write_text(json.dumps({"protocols": {k: {"verdict": v} for k, v in rows.items()}}))
-print("RECORD " + json.dumps({"composed": composed, "missing": [] if "bandwidth" in rows else ["bandwidth"],
-                              "node": a[a.index("--node") + 1]}))
-"""
+#: the execution phase's seal digest the served window publishes
+SEAL = "5" * 128
 
 
-@pytest.mark.parametrize("rows, verdict, rc, reason", [
-    ({}, "undecided", 2, "missing ['bandwidth']"),
-    ({"bandwidth": "accept"}, "undecided", 2, "no row for ['inference-only']"),
-    ({"bandwidth": "accept", "inference-only": "accept"}, "accept", 0, None),
+def published(state: Path, rows: dict, composed: str = "accept", reason: str = "") -> None:
+    """All the served window publishes that the onsite check reads: the execution phase by its seal's digest and the
+    record, every row but ``rows``' accepting."""
+    every = {"integrity": "accept", "work": "accept", "space": "accept", "communication": "accept", "wipe": "accept",
+             **rows}
+    for d in ("serve", "record"):
+        (state / "out" / d).mkdir(parents=True, exist_ok=True)
+    (state / "out" / "serve" / T.PHASE).write_text(json.dumps({"seal_sha512": SEAL}))
+    (state / "out" / "record" / "verdicts.json").write_text(json.dumps(
+        {"protocols": {k: {"verdict": v} for k, v in every.items()}, "composed": {"verdict": composed, "reason": reason}}))
+
+
+@pytest.mark.parametrize("rows, composed, verdict, rc, reason", [
+    ({"bandwidth": "missing"}, "pending", "undecided", 2, "missing ['bandwidth']"),
+    ({"bandwidth": "accept"}, "accept", "undecided", 2, "no row for ['inference-only']"),
+    ({"bandwidth": "accept", "inference-only": "accept"}, "accept", "accept", 0, None),
+    ({"bandwidth": "accept", "inference-only": "accept", "communication": "error"}, "reject", "reject", 1,
+     "the network certifier: error"),
 ])
-def test_the_onsite_check_is_the_records_composed_verdict(tmp_path, capsys, monkeypatch, rows, verdict, rc, reason):
-    monkeypatch.setattr(T, "VERDICTS_SCRIPT", stand_in(tmp_path, "record.py", RECORD % json.dumps(rows)))
+def test_the_onsite_check_is_the_published_records_composed_verdict(tmp_path, capsys, rows, composed, verdict, rc,
+                                                                    reason):
+    """The served window publishes its window's number, steps and requests to no one, so the check reads only the
+    published record and the execution phase's seal digest: a check that picked the window again had nothing to pick."""
     state = tmp_path / "state"
-    (state / "out").mkdir(parents=True)
-    (state / "out" / "machine.txt").write_text("research\nprover-1\n")
+    published(state, rows, composed, "the network certifier: error")
+    assert sorted(p.relative_to(state).as_posix() for p in state.rglob("*") if p.is_file()) == [
+        "out/record/verdicts.json", f"out/serve/{T.PHASE}"]
     assert R.run_main([str(CONFIG), "--on", T.AUDITOR_HOST, "--party", "verifier", "--state", str(state)], REG) == rc
     out = capsys.readouterr().out
     assert {x["party"]: x["refused"] for x in said(out, "PARTY")} == {"verifier": None}
     (line,) = said(out, "VERDICT")
-    assert line["verdict"] == verdict and line["block"] == 2 and line["product"] == T.ONSITE
+    assert line["verdict"] == verdict and line["block"] == SEAL and line["product"] == T.ONSITE
     assert line["components"] == {**{c: "accept" for c in T.PROTOCOLS},
-                                  **{c: rows.get(c, "absent") for c in ("bandwidth", "inference-only")}}
+                                  **{T.RECORD_NAMES[k]: rows.get(k, "absent") for k in ("bandwidth", "inference-only")},
+                                  "certifier": rows.get("communication", "accept")}
     assert line["coins"] == "simulated" and line["reason"] == reason and "combined_by" not in line
     assert line["coins_on"] == {c: T.PROVER_NODE for c in ("pous", "bandwidth", "wipe")}
+
+
+@pytest.mark.parametrize("left", [T.PHASE, "verdicts.json"])
+def test_the_onsite_check_without_the_published_phase_or_record_is_refused_by_name(tmp_path, capsys, left):
+    state = tmp_path / "state"
+    published(state, {})
+    next(state.rglob(left)).unlink()
+    assert R.run_main([str(CONFIG), "--on", T.AUDITOR_HOST, "--party", "verifier", "--state", str(state)], REG) == 2
+    refused = {x["party"]: x["refused"] for x in said(capsys.readouterr().out, "PARTY")}["verifier"]
+    assert refused == ("window" if left == T.PHASE else "record")
 
 
 NETWORK = ROOT / "demos" / "onsite_network.toml"
@@ -861,10 +876,8 @@ def test_the_run_attesters_take_the_gates_words_and_the_runs_key(tmp_path):
                                                (BINDINGS, T.AUDITOR_HOST, "development")])
 def test_the_onsite_line_names_the_machine_each_memory_attesters_key_and_coins_were_made_on(tmp_path, monkeypatch,
                                                                                          tables, on, coins):
-    monkeypatch.setattr(T, "VERDICTS_SCRIPT", stand_in(tmp_path, "record.py", RECORD % json.dumps({})))
     state = tmp_path / "state"
-    (state / "out").mkdir(parents=True)
-    (state / "out" / "machine.txt").write_text("research\nprover-1\n")
+    published(state, {})
     (state / T.BINDINGS).write_text(json.dumps(tables))
     line = T.onsite_check(R.load(CONFIG, REG), state)
     assert line["coins_on"] == {"pous": on, "bandwidth": on, "wipe": on} and line["coins"] == coins
@@ -924,10 +937,8 @@ def test_the_wipes_run_keys_beside_a_pin_or_an_attester_is_refused_before_the_ca
 ])
 def test_a_set_no_lean_verifier_takes_is_its_rows_combined_in_python_and_says_so(tmp_path, monkeypatch, rows,
                                                                                 verdict, reason):
-    monkeypatch.setattr(T, "VERDICTS_SCRIPT", stand_in(tmp_path, "record.py", RECORD % json.dumps(rows)))
     state = tmp_path / "state"
-    (state / "out").mkdir(parents=True)
-    (state / "out" / "machine.txt").write_text("research\nprover-1\n")
+    published(state, rows)
     line = T.onsite_check(R.load(NETWORK, REG), state)
     assert (line["verdict"], line["reason"], line["product"]) == (verdict, reason, "verity/onsite-network/v0")
     assert line["combined_by"].startswith("python: no Lean verifier takes verity/onsite-network/v0")

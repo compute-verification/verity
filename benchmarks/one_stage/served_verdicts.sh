@@ -2185,6 +2185,8 @@ PICK=$("$PY" benchmarks/one_stage/served_verdicts.py window "$D" --slots "$SLOTS
 [ -n "$PICK" ] || { say "WINDOW refused: no sealed window qualifies (why, by window, in the serve dir's private/window.err)"; stop window 12; }
 (umask 077; echo "$PICK" > "$D/private/window.json")
 K=$(echo "$PICK" | "$PY" -c 'import json, sys; print(json.load(sys.stdin)["window"])')
+# the execution phase the record is of, for the auditor's step: its seal's SHA-512 alone (the line holds its run root)
+"$PY" -c 'import hashlib, json, sys; s = next(x.rstrip("\n") for x in open(sys.argv[1]) if x.strip() and json.loads(x)["window"] == int(sys.argv[2])); print(json.dumps({"seal_sha512": hashlib.sha512(s.encode()).hexdigest()}))' "$D/seals.jsonl" "$K" > "$OUT/serve/phase.json"
 say "WINDOW: $([ -n "${WINDOW:-}" ] && echo "the one WINDOW names" || echo "the sealed one with the most requests"), none carried across windows, at the class's $SLOTS slots (the pick in the serve dir's private/window.json)"
 say "CLASSES: the window circuit's ${CLASSES}; the certifier's scan ${CERTIFIER_SCAN:-W63}, the one class the gate serves"
 CERT=

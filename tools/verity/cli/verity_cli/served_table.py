@@ -40,7 +40,6 @@ import os
 import re
 import shlex
 import subprocess
-import sys
 import time
 import tomllib
 from collections.abc import Callable, Mapping, Sequence
@@ -503,9 +502,9 @@ PARTIES: dict[str, dict[str, Piece]] = {
                        "and sealed, its registration before the sample, and the sampled proof blocks proved in Flock --zk; "
                        "the sample on the live challenger when its gate is bound, else on a local development session's "
                        "coins in a development run", reaches=CHALLENGER, optional=tuple(_PP), hooks=_spot_challenger),
-        VERIFIER: Piece("sampled-proofs", VERIFIER, CHECK, "the onsite check: served_verdicts.py record over the "
-                        "window's rows (the records audit's verdict the integrity row), the composed verdict and the "
-                        "block record", scripts=(VERDICTS_SCRIPT,)),
+        VERIFIER: Piece("sampled-proofs", VERIFIER, CHECK, "the onsite check: the record the served window "
+                        "published, of the execution phase its seal's digest names (serve/phase.json): its rows (the "
+                        "records audit's verdict the integrity row) and its composed verdict"),
     },
     "pouw": {
         CHALLENGER: Piece("pouw", CHALLENGER, GATE, "the gate: each window's H1 coins from a session of its own"),
@@ -699,34 +698,33 @@ def served_window(cfg: Mapping[str, Any], state: Path, bindings: Mapping[str, An
 VERDICTS = {"accept": "accept", "reject": "reject", "pending": "undecided"}
 
 
+#: what the served window publishes of the execution phase its record is of, under ``out/serve``: its seal's SHA-512
+#: (``seal_sha512``), never its number or steps, which `served_verdicts.py publish` keeps on the node
+PHASE = "phase.json"
+
+
 def onsite_check(cfg: Mapping[str, Any], state: Path) -> dict[str, Any]:
-    """The verifier's onsite check: `served_verdicts.py record` over the served window's public record in ``state``
-    (``out/``, all a verifier on another machine needs of it, the prover node named by its ``machine.txt``); the
-    period's line in `verity_cli.run`'s verdict form, undecided while the record has no row for a listed subprotocol."""
-    py, out = sys.executable, state / "out"
-    serve, machine = out / "serve", out / "machine.txt"
-    slots = str(cfg["workload"]["params"]["slots"])
-    pick = subprocess.run([py, str(ROOT / VERDICTS_SCRIPT), "window", str(serve), "--slots", slots], cwd=ROOT,
-                          capture_output=True, text=True, check=False)
-    if pick.returncode:
-        raise Refused("window", pick.stderr.strip()[-800:] or "served_verdicts.py window picked no window")
-    k = json.loads(pick.stdout)["window"]
-    lines = machine.read_text().splitlines() if machine.is_file() else []
-    node = ["--node", lines[1]] if len(lines) > 1 and lines[1].strip() else []
-    p = subprocess.run([py, str(ROOT / VERDICTS_SCRIPT), "record", "--serve-run", str(serve), "--window", str(k),
-                        "--sampled-proofs", str(out / "sampled-proofs" / "served"), "--pieces", str(out / "pieces"),
-                        *node, "--out", str(state / "record" / "onsite")], cwd=ROOT, capture_output=True, text=True,
-                       check=False)
-    line = next((json.loads(x.split(" ", 1)[1]) for x in p.stdout.splitlines() if x.startswith("RECORD ")), None)
-    if line is None:
-        raise Refused("record", (p.stderr or p.stdout).strip()[-800:] or "served_verdicts.py record wrote no RECORD")
+    """The verifier's onsite check over what the served window published in ``state``'s ``out/`` and nothing else: the
+    record (``record/verdicts.json``) of the execution phase ``serve/phase.json`` names, the line's ``block`` its seal's
+    SHA-512; the period's line in `verity_cli.run`'s verdict form, undecided while the record has no row for a listed
+    subprotocol. Refused (``window``, ``record``) when either file isn't there."""
+    out = state / "out"
+    phase, report = out / "serve" / PHASE, out / "record" / "verdicts.json"
+    if not phase.is_file():
+        raise Refused("window", f"the served window published no execution phase ({phase})")
+    if not report.is_file():
+        raise Refused("record", f"the served window published no record ({report})")
+    seal = json.loads(phase.read_text())["seal_sha512"]
+    doc = json.loads(report.read_text())
     names = {v: k for k, v in RECORD_NAMES.items()}
-    rows = json.loads((state / "record" / "onsite" / "verdicts.json").read_text())["protocols"]
+    rows = doc["protocols"]
     components = {c: rows.get(names[c], {}).get("verdict", "absent") for c in cfg["protocols"]}
     absent = sorted(c for c, v in components.items() if v == "absent")
-    verdict, product = VERDICTS.get(line["composed"], "undecided"), K.composite(cfg["protocols"], MANIFESTS)
-    reason = line.get("why") or (f"missing {sorted(line['missing'])}" if line.get("missing") else None) \
-        or (f"no row for {absent}" if absent else None)
+    missing = sorted(c for c, v in components.items() if v == "missing")
+    composed = (doc.get("composed") or {}).get("verdict")
+    verdict, product = VERDICTS.get(composed, "undecided"), K.composite(cfg["protocols"], MANIFESTS)
+    reason = (f"missing {missing}" if missing else None) or (f"no row for {absent}" if absent else None) \
+        or ((doc.get("composed") or {}).get("reason") if verdict != "accept" else None)
     python = {}
     if product in K.UNACCEPTED:
         seen = set(components.values())
@@ -736,7 +734,7 @@ def onsite_check(cfg: Mapping[str, Any], state: Path) -> dict[str, Any]:
                                  "combined in Python (each accepts: accept; one rejects or errs: reject), not a Lean "
                                  "verifier's"}
     on, developer = coins_on(cfg, bindings_of(state)), {p["machine"] for p in cfg["party"] if p["principal"] == "developer"}
-    return {"block": k, "components": components, "product": product, "reason": reason, "registration": None,
+    return {"block": seal, "components": components, "product": product, "reason": reason, "registration": None,
             "coins": "simulated" if developer & set(on.values()) else coins_of(cfg), "coins_on": on,
             "verdict": "undecided" if verdict == "accept" and absent else verdict, **python}
 
