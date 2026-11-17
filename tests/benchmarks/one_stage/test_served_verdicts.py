@@ -437,7 +437,8 @@ def test_a_published_line_holds_a_loads_tokens_and_span_and_leaves_the_inference
                    f"{i['work']['theta_macs']} θ-MACs⌉ = {i['raw']}, on the grid); session {POLICY['session']['definition'][:16]}…, "
                    f"policy {IO.digest(POLICY)[:16]}…")
     pub = {"verdict": "accept", "reason": None, "classes": [["cd" * 32, 1_000, 4_000]], "registered_session": True,
-           "c": POLICY["c"], "k": POLICY["k"], "n": POLICY["n"], "policy": {"sha512": IO.digest(POLICY)}}
+           "c": POLICY["c"], "k": POLICY["k"], "n": POLICY["n"], "policy": {"sha512": IO.digest(POLICY)},
+           "record_count": {"held": 0, "wired": 0, "openings": 0, "fresh": 4_000, "by": IO.RECORD_COUNT}}
     for line in (policy_line, f"INFERENCE-ONLY {IO.line(pub)}", f"INFERENCE-ONLY {json.dumps(pub)}"):
         assert S.public_line(line) == line and S.public_line(line + "\n") == line + "\n"
 
@@ -1327,6 +1328,46 @@ def test_the_records_verdict_is_the_compiled_lean_composites_and_its_exit_0_only
         assert composed == "pending"
 
 
+@pytest.mark.parametrize(("said", "why", "verdict"), [
+    ("accept", None, "accept"), ("refuse", "the Lean verifier counts a block of 9 fresh bits, more than k = 2", "reject"),
+    ("refuse", S.UNDECIDED + "the Lean verifier gave no verdict: inference-only-check not started", "error"),
+    (None, "why", "error")], ids=["accept", "lean-refuses", "undecided", "no-verdict"])
+def test_the_record_carries_the_inference_only_verifiers_verdict_as_a_row_the_combined_verdict_does_not_read(
+        tmp_path, said, why, verdict):
+    io = {"format": "verity-bench/inference-only-verdict/v5", "verdict": said, "reason": why,
+          "c": 1, "k": 2, "n": 3, "sealed": 4, "theta": {"inputs": ["0.w"], "by": "chosen"}}
+    bare, bare_rec, bare_line = S.record(_rows(_accepted(), tmp_path), window=1, steps=(5, 11), node="vy-dc-h200", run="r1")
+    report, rec, line = S.record(_rows(_accepted(), tmp_path), window=1, steps=(5, 11), node="vy-dc-h200", run="r1",
+                                 inference_only=io)
+    assert report["protocols"].pop("inference-only") == {
+        "verdict": verdict, "protocol": io["format"], "reason": io["reason"], "answer": {"c": 1, "k": 2, "n": 3, "theta": io["theta"]},
+        "answer_from": f"{S.AS_WRITTEN} ({S.INFERENCE_ONLY})", "combined": S.INFERENCE_ONLY_UNREAD}
+    assert line.pop("not_combined") == {"the inference-only verifier": verdict}
+    assert (report, rec["composed"], line) == (bare, bare_rec["composed"], bare_line)
+
+
+def test_record_reads_the_inference_only_verdict_beside_it_into_its_row(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("RESEARCH_RUN_ID", "r1")
+    monkeypatch.setattr(S, "spot_row", lambda _audit_dir, _run=None: _accepted())
+    (tmp_path / "pieces").mkdir()
+    (tmp_path / "serve").mkdir()
+    (tmp_path / "record").mkdir()
+    (tmp_path / "record" / S.INFERENCE_ONLY).write_text(json.dumps({"verdict": "refuse", "reason": "why"}))
+    argv = ["record", "--serve-run", str(_serve_dir(tmp_path / "serve")), "--window", "1", "--sampled-proofs",
+            str(_window_case(tmp_path / "audit")), "--pieces", str(tmp_path / "pieces"), "--out", str(tmp_path / "record"),
+            "--node", "vy-dc-h200", "--product", "remote"]
+    rc, line, rows = _recorded(tmp_path, argv, capsys)
+    assert rows["inference-only"]["verdict"] == "reject" and line["not_combined"] == {"the inference-only verifier": "reject"}
+    assert rc == S.RECORD_EXIT[line["composed"]] == 2
+    (tmp_path / "record" / S.INFERENCE_ONLY).write_text(json.dumps({"verdict": "refuse", "reason": S.UNDECIDED + "why"}))
+    _, line, rows = _recorded(tmp_path, argv, capsys)
+    assert rows["inference-only"]["verdict"] == "error" and line["not_combined"] == {"the inference-only verifier": "error"}
+    (tmp_path / "record" / S.INFERENCE_ONLY).write_text("[")
+    _, _, rows = _recorded(tmp_path, argv, capsys)
+    assert rows["inference-only"]["verdict"] == "error" and rows["inference-only"]["reason"].startswith(
+        f"{S.INFERENCE_ONLY} doesn't parse: ")
+
+
 def test_the_served_nodes_run_exits_nonzero_since_its_record_reads_no_composite():
     """On the served node no composite is of record (under COMPOSE_OFF_NODE=0 a development one), so the main run's record
     reads none and is pending, and the run's exit is that record's (2), or 1 where a step failed: never 0. The main run
@@ -1504,6 +1545,7 @@ def test_a_spot_check_that_was_not_started_leaves_the_audits_own_row_naming_the_
     if why == "no-scope":
         monkeypatch.delenv("CHECK_SCOPE")
         monkeypatch.setattr(SC, "scope_here", lambda: False)
+        monkeypatch.setattr(SC, "address_space_here", lambda: False)
         said = SC.NO_SCOPE_HERE
     if why == "per-member":
         case = json.loads((w / "case-v2.json").read_text())
@@ -3699,6 +3741,27 @@ def test_v3c_links_each_members_circuit_into_its_archive_only_where_the_run_says
     rc, lines, order, _limits = _v3c(tmp_path, **extra)
     assert rc == 0 and "audit" in order, (lines, order)
     assert ("--archive-link" in json.loads((tmp_path / "order.audit").read_text())) is linked
+
+
+@pytest.mark.parametrize("cards", [None, "3"])
+def test_v3c_audits_on_the_cards_v3c_gpus_names_with_a_cuda_prover_of_its_own_else_on_the_cpu(tmp_path, cards):
+    pod = tmp_path / "tree" / "verity" / "protocols" / "proofs" / "flock" / "prover" / "pod"
+    pod.mkdir(parents=True)
+    (pod / "cuda-13.3.sh").write_text("export CUDA_TK=/tk\n")
+    _script(tmp_path / "bin" / "flock",
+            f'echo "$FLOCK_WORK GPU=$GPU CUDA_TK=${{CUDA_TK:-}}" >> {tmp_path}/builds\nshift\nexec "$@"')
+    rc, lines, order, _limits = _v3c(tmp_path, V3C_GPUS=cards)
+    assert rc == 0 and "audit" in order, (lines, order)
+    fw = tmp_path / "fw"
+    builds = (tmp_path / "builds").read_text().splitlines()
+    assert builds == [f"{fw} GPU=0 CUDA_TK="] + ([f"{fw / 'gpu'} GPU=1 CUDA_TK=/tk"] if cards else [])
+    prover = (fw / "gpu" if cards else fw) / "flock-gpu-link" / "flock" / "target" / "release" / "flock-circuit"
+    assert _audited(tmp_path, ("--gpus", "--bin")) == {"--gpus": cards, "--bin": str(prover)}
+
+
+def test_the_preflight_refuses_v3c_gpus_that_names_no_cards(tmp_path):
+    rc, lines, order, _limits = _v3c(tmp_path, V3C_GPUS="cuda:0")
+    assert (rc, order) == (3, []) and lines[-1].startswith("PREFLIGHT: V3C_GPUS is the cards"), lines
 
 
 @pytest.mark.parametrize("tied, extra, limit", [
@@ -6207,6 +6270,9 @@ def test_copy_never_sends_a_deferrals_witness_to_compose_node_nor_a_hand_off_to_
 ONSITE_PIECES = HERE.parents[2] / "benchmarks" / "pous" / "onsite_pieces.sh"
 
 
+PRLIMIT = 'echo "$1" >> {seen}; shift 2; exec "$@"'
+
+
 def _script(path: Path, body: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(f"#!/bin/sh\n{body}\n")
@@ -6576,6 +6642,7 @@ def test_the_composite_step_publishes_only_each_cases_verdict_and_each_products_
     out.mkdir()
     _script(bin_ / "lake", f'mkdir -p .lake/build/bin && touch ".lake/build/bin/$2" && echo "$2" >> {tmp_path}/built')
     _script(bin_ / "systemd-run", "exit 1")
+    _script(bin_ / "prlimit", PRLIMIT.format(seen=tmp_path / "prlimit.seen"))
     _script(bin_ / "gpu-lease", f'echo "$@" >> {tmp_path}/card')
     for w, protocol in (("pous/w0", "verity/pous/p2/v4/run"), ("other", "verity/certifier/v9")):
         (d / "private" / w).mkdir(parents=True)
@@ -6662,6 +6729,14 @@ sys.exit(1)
         "COMPOSITE remote: NOT_ESTABLISHED missing verity/wipe/v0", "COMPOSITE remote: VERDICT verity/remote/v0 reject components",
         on]
     assert sorted(x.name for x in (out / "composite").iterdir()) == ["remote"] and not (p / "onsite").exists()
+    assert (tmp_path / "prlimit.seen").read_text().splitlines()[-2:] == [f"--as={1 << 30}", f"--as={170 << 30}"]
+    _script(bin_ / "prlimit", "exit 1")
+    (out / "verdicts.txt").unlink()
+    assert run().returncode == 1
+    assert (out / "verdicts.txt").read_text().splitlines() == [dev, (
+        "COMPOSITE: not run, this host makes no systemd user scope and runs no prlimit: composite.py runs only under a "
+        "memory limit of its own")]
+    _script(bin_ / "prlimit", PRLIMIT.format(seen=tmp_path / "prlimit.seen"))
     assert json.loads((tmp_path / "served_cases.argv").read_text()) == ["--serve-dir", str(d)]
     (d / "sampled-proofs-served" / "window").mkdir(parents=True)
     (d / "sampled-proofs-served" / "window" / "case.json").write_text("{}")
@@ -6771,6 +6846,7 @@ def test_the_composite_leaves_out_a_pous_or_wipe_case_that_is_not_its_pieces_and
     (tmp_path / "lean").chmod(0o755)
     _script(bin_ / "lake", f'mkdir -p .lake/build/bin && cp {tmp_path}/lean ".lake/build/bin/$2"')
     _script(bin_ / "systemd-run", "exit 1")
+    _script(bin_ / "prlimit", PRLIMIT.format(seen=tmp_path / "prlimit.seen"))
     for pkg in ("verity/protocols/compose/verifier/remote", "verity/protocols/compose/verifier/onsite"):
         (tree / pkg).mkdir(parents=True)
     (tree / REMOTE_V1_MAIN).touch()
@@ -6836,6 +6912,7 @@ def test_the_composite_takes_no_case_from_the_certifier_pieces_private_directory
     (tmp_path / "lean").chmod(0o755)
     _script(bin_ / "lake", f'mkdir -p .lake/build/bin && cp {tmp_path}/lean ".lake/build/bin/$2"')
     _script(bin_ / "systemd-run", "exit 1")
+    _script(bin_ / "prlimit", PRLIMIT.format(seen=tmp_path / "prlimit.seen"))
     for pkg in ("protocols/compose/verifier/remote", "protocols/compose/verifier/onsite"):
         (tree / "verity" / pkg).mkdir(parents=True)
     (tree / REMOTE_V1_MAIN).touch()

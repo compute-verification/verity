@@ -1,0 +1,9 @@
+[[metric]]
+id = "proofs/dsa-topk-added-device-us"
+title = "Canonical DSA top-k added device time"
+owner = "proofs"
+unit = "device microseconds a call"
+axis = "Device microseconds the canonical top-k pass adds to the pinned kernel's prefill call of 8,192 query rows over 32,768 keys at GLM-5.3's shapes, its fastest variant, one line per shapes and card as its member names them, glm-5.3-h200 here; every timed case's added time is kept beside it in the point, and the point has no value unless the canonical rows were identical across four processes and the reference's."
+better = "lower"
+command = "research run --on vy-spot-glm53 --project verity --source . --cwd source --timeout 60m -- env GPU_LEASE_WHO=proofs gpu-lease 1 --wait --cores 16-31 --max-min 55 -- bash benchmarks/dsa_topk/run.sh"
+every = "7d"

@@ -66,7 +66,7 @@ PUBLIC = {
     "verity_vllm.engine.served_seed": "I1: the seed a served request is sampled under (its own, the public default for a greedy "
                                       "one, or derived from its window's seed coin and its id) and the windows' seed coins",
     "verity_vllm.engine.moe_align": "I1: the served Marlin MoE path's moe_align_block_size, each expert's pairs in pair-index "
-                                    "order: its reference, kernels and install, which benchmarks/kernels/moe_align checks and times",
+                                    "order: its reference, kernels and install",
     "verity_vllm.engine.step_trace": "I2: the scheduler's step trace of an in-process engine core (StepTrace) and its "
                                      "reader, which serve-openai records and benchmarks/serve_tax times and replays",
     "verity_vllm.engine.sampler_capture": "I2: chosen requests' logits rows and ids at a replaying engine's sampler, held "
@@ -81,7 +81,7 @@ PUBLIC = {
     "verity_vllm.engine.env": "I1: the engine's environment, written before torch and vLLM are imported: vLLM's pinned and served "
                               "variables (ENGINE, pin, served_defaults, apply_engine), a target's (apply_target), a fresh "
                               "compile and its directories (apply_compile_fresh, compile_dirs, own_compile_dirs, own_inductor_dir, "
-                              "INDUCTOR_DIR_MARK), which the harness's engine and benchmarks/replay_determinism write",
+                              "INDUCTOR_DIR_MARK), which the harness's engine writes",
     "verity_vllm.engine.arrivals": "I1: an engine driven over a step-indexed arrival schedule (run_requests_arrivals), its "
                                    "forwards counted (ForwardCounter) and the steps each request arrived at "
                                    "(realized_arrive_steps), which the harness's engine serves under",
@@ -334,7 +334,6 @@ KNOWN = frozenset({
     "verity_vllm.definitions.numerics.glm53_rows",
     "verity_vllm.definitions.numerics.int8_rows",
     "verity_vllm.definitions.numerics.kernel_registry",
-    "verity_vllm.definitions.numerics.marlin_moe_rows",
     "verity_vllm.definitions.numerics.rms_relation",
     "verity_vllm.definitions.numerics.rows",
     "verity_vllm.definitions.numerics.serve3_reference",

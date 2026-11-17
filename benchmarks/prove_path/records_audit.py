@@ -1193,6 +1193,8 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--bin", required=True)
     p.add_argument("--lean", required=True)
     p.add_argument("--zk-server", required=True)
+    p.add_argument("--gpus", type=A5.cards, help="as a5's --gpus: the proof server's cards, their indices comma-separated "
+                   "(0,1), as nvidia-smi numbers them; default the CPU")
     p.add_argument("--out", required=True)
     p.add_argument("--delta", type=float, default=0.5)
     p.add_argument("--port", type=int, default=None, help="the sessions' base port (default a base whose --ports ports are "
