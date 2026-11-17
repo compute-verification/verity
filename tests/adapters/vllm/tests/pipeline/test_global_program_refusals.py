@@ -12,10 +12,10 @@ import json
 from pathlib import Path
 
 import pytest
-from verity_vllm.definitions.registry.topp_geometry import registered_splits
 
 from tests.pipeline.test_global_program_regress import REQUESTS, _derived_dir, _manifest
 from verity_vllm.config import VLLM
+from verity_vllm.definitions.registry.topp_geometry import registered_splits
 from verity_vllm.pipeline import cli
 from verity_vllm.pipeline import global_program as GP
 

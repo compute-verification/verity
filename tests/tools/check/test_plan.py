@@ -1,5 +1,5 @@
-"""`check.py --plan` (`plan.py`): each part's key at a commit and the recorded passes under it, found by the tree's own key code,
-and `research merge --verdicts`'s judgment of that plan (`plan_refusal`)."""
+"""`check.py --plan` (`plan.py`): each part's key at a commit and the recorded passes under it, found by the tree's own key
+code."""
 from __future__ import annotations
 
 import importlib.util
@@ -13,8 +13,6 @@ import pytest
 
 HERE = (Path(__file__).resolve().parents[3] / "tools" / "check")
 REPO = HERE.parents[1]
-#: the command the fake store's attempts ran, held to itself (`research.merge.invocation`)
-COMMAND = ("uv", "run", "python", "tools/check/check.py")
 
 
 @pytest.fixture
@@ -88,37 +86,15 @@ def _plan(P, root: Path, tmp_path: Path, packs: dict[str, Path]) -> dict:
     return P.document(parts, _git(root, "rev-parse", "HEAD"), _git(root, "rev-parse", "HEAD^{tree}"), None, sources, [])
 
 
-class _Store:
-    """The evidence store as `plan_refusal` reads it: each attempt a `check` that ended, ran `COMMAND`, and published ``packs``'s
-    pack."""
-
-    def __init__(self, packs: dict[str, Path]):
-        import hashlib
-
-        self.sha = {rid: hashlib.sha256(p.read_bytes()).hexdigest() for rid, p in packs.items()}
-
-    def get_attempt(self, rid):
-        return {"tool": {"name": "check"}, "status": {"state": "done"}, "argv": list(COMMAND), "outputs": {"run_files": f"art:{rid}"}}
-
-    def listing(self, art):
-        return [{"path": "verdicts.tar.gz", "sha256": self.sha[art.removeprefix("art:")]}]
-
-
-def _judged(doc: dict, packs: dict[str, Path]) -> tuple[list[str], str | None]:
-    from research.merge import plan_refusal
-
-    return plan_refusal(doc, _Store(packs), doc["commit"], doc["tree"], "check", COMMAND, {})
-
-
 @pytest.mark.slow
 def test_a_change_no_key_reads_plans_as_the_checked_commit_and_one_a_suite_reads_must_run_until_its_pass_is_recorded(P, tmp_path):
-    """The trust property of `research merge --verdicts`: the passes a check of A recorded (its verdict pack) count for B, which
+    """The trust property of the plan: the passes a check of A recorded (its verdict pack) count for B, which
     differs from A only in a Markdown file no suite's key reads, part for part at A's keys; and for C, which changes a file of
-    suite `one`, they count for every suite but `one`, which must run at its new key, so the gate refuses C until a check
+    suite `one`, they count for every suite but `one`, which must run at its new key, until a check
     records a pass under it.  The repository's own suite, whose key reads every file, has a new key too, and passes as `check`
     would reuse it: by its traced pass (`PerTest.whole`), every file its run read being as it was.  What no plan passes is the parts without a key
     (flock-rust-tests here without its toolchain, and so flock-circuit-build, which only its pass implies) and the Lean group
-    this tree has no verifier for (`lean`, skipped, in place of lean-build and every Lean part): the gate refuses on those
+    this tree has no verifier for (`lean`, skipped, in place of lean-build and every Lean part): those stay unpassed
     alone, whatever passes exist.  The other build steps (`IMPLIED`) are implied by the suites, so they must run with one.  Runs the suites twice for real (about 5 s)."""
     root = tmp_path / "tree"
     a = _tree(root)
@@ -140,8 +116,6 @@ def test_a_change_no_key_reads_plans_as_the_checked_commit_and_one_a_suite_reads
     assert by_a["lean"]["state"] == "skipped" and by_a["flock-rust-tests"]["state"] == "unkeyed"
     assert not plan_a["fully_passed"] and P.text(plan_a)[-1].startswith(
         "plan: not fully passed: 6 of 9 required parts passed (2 implied by those that read what they build)")
-    cited, why = _judged(plan_a, packs)
-    assert cited == [] and why.startswith(f"{len(unpassed)} of ") and "suite:" not in why and "lean skipped" in why
 
     (root / "one" / "NOTES.md").write_text("prose no suite reads\n")
     _commit(root, "b")
@@ -150,7 +124,6 @@ def test_a_change_no_key_reads_plans_as_the_checked_commit_and_one_a_suite_reads
     assert ([(p["part"], p.get("key") if p["part"] != "preflight-lints" else None, p["state"]) for p in plan_b["parts"]]
             == [(p["part"], p.get("key") if p["part"] != "preflight-lints" else None, p["state"]) for p in plan_a["parts"]])
     assert plan_b["parts"][1]["key"] != lints["key"], "the lints read every file, Markdown too"
-    assert _judged(plan_b, packs)[1] == why
 
     (root / "one" / "tests" / "test_it.py").write_text("def test_one():\n    assert True\n")
     _commit(root, "c")
@@ -161,33 +134,28 @@ def test_a_change_no_key_reads_plans_as_the_checked_commit_and_one_a_suite_reads
     assert ws["key"] != by_a["suite:repository"]["key"] and ws["state"] == "passed" and ws["found"][0]["traced"]
     whole, reads = ws["found"][0]["paths"]
     assert whole.startswith("tests/per-test/repository/(suite)--") and reads.startswith("tests/per-test/repository/traced/")
-    _, why_c = _judged(_plan(P, root, tmp_path, packs), packs)
-    assert "suite:one must-run" in why_c and "suite:two" not in why_c and "suite:repository" not in why_c
-    assert "preflight-lock must-run (it makes the current uv.lock every suite's key resolves: suite:one not passed)" in why_c
+    assert by_c["preflight-lock"]["state"] == "must-run"
 
     packs["r-c"] = _checked(P, root, tmp_path, "r-c")
     plan_c = _plan(P, root, tmp_path, packs)
     by_c = {p["part"]: p for p in plan_c["parts"]}
     assert [f["attempt"] for f in by_c["suite:one"]["found"]] == ["r-c"]
     assert by_c["suite:two"]["found"][0]["attempt"] == "r-a"
-    _, why_c = _judged(plan_c, packs)
-    assert "suite:" not in why_c and why_c.startswith(f"{len(unpassed)} of ")
+    assert {n for n, p in by_c.items() if p.get("required", True) and p["state"] not in P.OK} == unpassed
 
 
 def test_a_job_off_the_merge_gate_is_planned_and_required_of_no_check(P, tmp_path):
-    """circuit-check and ratchet-gate are off the merge gate (policy.toml's `off_gate`): their parts are listed, none required, so
-    `research merge --verdicts` admits a commit whose targets no check passed."""
+    """circuit-check, ratchet-gate and added-lines are off the merge gate (policy.toml's `off_gate`): their parts are listed, none
+    required, so a commit whose targets no check passed is planned as one only its gated parts hold back."""
     root = tmp_path / "tree"
     _tree(root)
     parts = P.plan_tree(root, [], False, circuit=lambda C, s: [P.Part("circuit-check:t", "circuit-check", "v1/k", "must-run")])
     doc = P.document(parts, _git(root, "rev-parse", "HEAD"), _git(root, "rev-parse", "HEAD^{tree}"), None, [], [])
     by = {p["part"]: p for p in doc["parts"]}
     assert by["circuit-check:t"]["state"] == "must-run" and by["circuit-check:t"]["required"] is False
-    assert by["ratchet-gate"]["required"] is False
-    off = ("circuit-check:t", "ratchet-gate", "lean-agreement")
+    assert by["ratchet-gate"]["required"] is False and by["added-lines"]["required"] is False
+    off = ("circuit-check:t", "ratchet-gate", "added-lines", "lean-agreement")
     assert all(p.get("required", True) for n, p in by.items() if n not in off)
-    _cited, why = _judged(doc, {})
-    assert why and "circuit-check" not in why and "ratchet-gate" not in why
 
 
 def test_lean_agreement_is_required_for_a_change_its_merge_requires_covers_in_the_commits_own_ci_toml(P, tmp_path):

@@ -7,7 +7,7 @@ row it reads and the response row it returns (`content_rows`' "The tables"); no 
 class, whose rows have a stop word, and `ResponseTieNoStop` in a no-stop class, whose rows have none. Each takes
 every connection its kind of class holds, however the connection ended. It reads ``egress``, the compute side's
 committed row of the connection's O ids, O its class's size; in a stop class ``stop``, the compute
-side's committed stop word of the same connection; and ``end``, the network attester's end row of it, a certified
+side's committed stop word of the same connection; and ``end``, the network attester's end row of it, an attested
 input. Its outputs are ``o0``, a u16 whose bit 0 is 1 (`ACCEPT`) exactly when every check
 of its form holds and whose other 15 bits are 0, and ``o1``, the response row. The row is gates of the circuit, never
 an input: a statement that commits o1 under the salt of the network attester's response row and registers it as a
@@ -124,7 +124,7 @@ STATICS = ("O",)
 #: an id's and a count's bits, and an end row's
 ID_BITS, END_BITS = 8 * CT.U32_BYTES, 8 * CT.END_BYTES
 #: the stop word: n in its low `COUNT_BITS` bits and the finish in the `FINISH_BITS` above. `COUNT_BITS` is the stop
-#: rule's `N_BITS`, which this unit may not import: the certifier's suite holds the two equal
+#: rule's `N_BITS`, which this unit may not import: network attestation's suite holds the two equal
 STOP_BITS, COUNT_BITS = 16, 13
 FINISH_BITS = STOP_BITS - COUNT_BITS
 #: an end row's `at`: the count a no-stop class's form reads, and a stop class's of a connection that failed
@@ -372,7 +372,7 @@ def _build(stop: bool):
 
 ResponseTieStop = part(
     "ResponseTieStop", STATICS, _sig(True), _build(True),
-    "one response row of the network certifier's content rows computed from a stop class's egress row of O u32 ids, "
+    "one response row of the network attester's content rows computed from a stop class's egress row of O u32 ids, "
     "its stop word (u16 n + finish * 8192) and the end row (u16 class, u16 at): the second output is u32 m then O "
     "u32 ids, id p of the egress row for p below the count and 0 from there, the count at where the class has its "
     "low bit and n otherwise; the first has 1 in bit 0 exactly when the finish is not 0, n <= O, the class is 0 or "
@@ -381,7 +381,7 @@ ResponseTieStop = part(
 
 ResponseTieNoStop = part(
     "ResponseTieNoStop", STATICS, _sig(False), _build(False),
-    "one response row of the network certifier's content rows computed from a no-stop class's egress row of O u32 "
+    "one response row of the network attester's content rows computed from a no-stop class's egress row of O u32 "
     "ids and the end row (u16 class, u16 at): the second output is u32 m then O u32 ids, id p of the egress row for "
     "p below at and 0 from there; the first has 1 in bit 0 exactly when the end row's class is 0 or 1 and at <= O; "
     "m is at where that bit is 1 and 0xFFFFFFFF where it is 0. Every field little-endian, the row's bit 8b + i bit "

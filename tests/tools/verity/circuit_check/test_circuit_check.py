@@ -1569,8 +1569,8 @@ def test_a_pin_without_a_type_is_named_as_untyped_and_update_pins_types_it(monke
 
 
 def test_a_gated_definitions_circuit_digest_is_held_to_its_pin():
-    """A Definition a Program holds as one gate naming its circuit digest (``gated``: the certifier's ingress scan bucket
-    here) has that digest, core's `program_digest` of its Program, checked against its ``digests`` pin, which a verifier
+    """A Definition a Program holds as one gate naming its circuit digest (``gated``: network accounting's ingress scan
+    bucket here) has that digest, core's `program_digest` of its Program, checked against its ``digests`` pin, which a verifier
     reads in its place: its own digest passes, another fails by name, and none warns."""
     from verity.circuits.codec import program_digest
     from verity.circuits.defs import bind
@@ -1982,7 +1982,7 @@ def test_the_cache_key_is_the_same_in_every_check_slot(monkeypatch):
 
 
 def test_the_cache_key_is_the_same_on_every_node(monkeypatch, tmp_path):
-    """A report one node stored counts on every other node of the image (`check.py --plan`, `research merge --verdicts`): the key
+    """A report one node stored counts on every other node of the image (`check.py --plan`, the verified queue): the key
     names no host, kernel, working directory, home, PATH or check slot (each slot sets its own `VERITY_TEST_CACHE`,
     `tools/check/slot.py`), while the CPU, a variable that can change what a check computes and the request still key it."""
     import platform

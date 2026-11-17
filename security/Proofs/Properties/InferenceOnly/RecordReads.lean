@@ -27,7 +27,7 @@ block. A leaf of a row, by the row:
 
 @[expose] public section
 
-namespace InferenceOnlyCheck.Properties.Record.SecurityProofs
+namespace InferenceOnlyVerifier.Properties.Record.SecurityProofs
 
 open Flock.Program (Prog Scope)
 open Flock.TemplateQuery (TRange)
@@ -176,4 +176,4 @@ theorem reads_land (hO : OwnRows P rs W) (hL : LaysOut P rs W S D at_) (hU : Uni
     exact hnot (hmem a (hblock tid un sc hu u.val hs a (by omega) (by omega)))
   · exact key _ r l o lo hi rfl hrl (by rw [ht, hun]; exact hs) hla
 
-end InferenceOnlyCheck.Properties.Record.SecurityProofs
+end InferenceOnlyVerifier.Properties.Record.SecurityProofs

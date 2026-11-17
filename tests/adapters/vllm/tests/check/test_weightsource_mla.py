@@ -8,7 +8,6 @@ from typing import Any
 import numpy as np
 import pytest
 from verity.circuits.types import Array, RecordType, Tuple, Type
-from verity_vllm.definitions.registry.prims import BF16, F32
 
 from verity_vllm.check.checkpoint_words import mla_field_words, mla_moe_sources
 from verity_vllm.check.fold_compare import (
@@ -16,6 +15,7 @@ from verity_vllm.check.fold_compare import (
     WeightSource,
     _layernorm_family_fields,
 )
+from verity_vllm.definitions.registry.prims import BF16, F32
 from verity_vllm.program.frontend.rules.family import _field_intervals
 
 H, V, NL, FD, NH, QL, L, DN, DR, DV, INTER, ID, E, MAX_POS = 4, 8, 3, 1, 2, 2, 2, 1, 2, 1, 2, 3, 2, 4

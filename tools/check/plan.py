@@ -30,8 +30,10 @@ Each part of the check, with its key at COMMIT and the recorded passes under tha
                           skips its Lean group there): a skip passes nothing
     ratchet-gate          no verdict, never required: it judges the merges above the check's base, not COMMIT's tree, and
                           is off the merge gate
+    added-lines           no verdict, never required: it judges the change from the check's base, not COMMIT's tree, and
+                          is off the merge gate
 
-A job off the merge gate (drive's policy, policy.toml's `off_gate`: circuit-check, ratchet-gate) is listed, and none of its parts is
+A job off the merge gate (drive's policy, policy.toml's `off_gate`: circuit-check, ratchet-gate, added-lines) is listed, and none of its parts is
 required.
 
 The steps that build or fetch what other steps read (`IMPLIED`) keep no verdict of their own.  Each is
@@ -39,7 +41,7 @@ The steps that build or fetch what other steps read (`IMPLIED`) keep no verdict 
 answer for each:
 
     preflight-lock        `uv lock --check`: uv.lock is what the workspace's pyproject files resolve to.  A plan of a commit
-                          runs in that commit's tree under `uv run --locked` (`DECLARED`, and `research merge`'s `PLAN`), which
+                          runs in that commit's tree under `uv run --locked` (`DECLARED`), which
                           refuses a lock that isn't current, so a plan exists only where it would pass; and every suite's key
                           holds the lock's resolution of what the suite imports.  Implied by every suite.
     preflight-fixtures    fetches each fixture `artifacts.json` lists that git doesn't hold.  A suite's key holds the
@@ -64,8 +66,8 @@ cache; not with --packs-only), in the recorded checks' verdict packs a recorded 
 with --no-gather), in both packs of each recorded check of COMMIT and of its after-landing runs (`--deferred`, which drive runs on
 the `main` it landed: none with --no-gather) and of each RUN given with --from (the
 passes it stored, `verdicts.tar.gz`, and those it reused, `verdicts-reused.tar.xz`: `check.Reused`), and in each PACK given
-(which no gate cites).  A pass found in a recorded check's pack names that attempt, the pack's sha256, which `research merge
---verdicts` cites, the run that earned it, and the files it is (`paths`).
+(which no gate cites).  A pass found in a recorded check's pack names that attempt, the pack's sha256, which a verdict
+cites, the run that earned it, and the files it is (`paths`).
 
 A part is `passed` (a pass is found), `implied` (above), `must-run` (none under its key), `unkeyed` (its key can't be computed
 without running a step first: it must run), `skipped` or `no-verdict`.  lean-agreement is required when the job's
@@ -398,7 +400,7 @@ def circuit_parts(C, sources: list[Source]) -> list[Part]:
 
 def required_agreement(commit: str, base: str | None, repo: Path = ROOT) -> bool:
     """Whether lean-agreement's `merge_requires` (in COMMIT's ci.toml) covers a file the change from ``base`` changes, as
-    `research merge`'s `required_steps` reads it."""
+    `research.merge.required_steps` reads it."""
     from research.merge import rule_touches
 
     r = subprocess.run(["git", "show", f"{commit}:tools/check/ci.toml"], cwd=repo, capture_output=True, text=True)
@@ -457,6 +459,9 @@ def plan_tree(tree: Path, sources: list[Source], agreement: bool, local: bool = 
         elif j == "ratchet-gate":
             parts.append(Part(j, j, None, "no-verdict", why="it judges the merges above the check's base, not the tree: "
                               "the train's check runs it", required=False))
+        elif j == "added-lines":
+            parts.append(Part(j, j, None, "no-verdict", why="it judges the change from the check's base, not the tree: the "
+                              "train's check and the mark's preflight run it", required=False))
         elif j in IMPLIED:
             parts.append(Part(j, j, None, "implied"))
         elif j != "pytest":

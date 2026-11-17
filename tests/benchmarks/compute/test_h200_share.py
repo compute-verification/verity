@@ -1,8 +1,8 @@
 """`h200_share.py`: the number of `accounting/h200-97-percent` is the honest arm A rate over the H200 card's e4m3
 ceiling at each reading of its tensor clock, times `compute-accounting/verified-compute-share`, held here to the same
 arithmetic in fractions on made-up duty points and `test_compute`'s fixture record (`CREDITED` of `TOTAL`). Only arm A on uniform operands at the default clocks is read; a record whose answer isn't an accept
-prints no number, and a duty run with no such point can't be read. Under a research run the metric is written once a
-reading, marked modeled, the default reading last."""
+prints no number, and a duty run with no such point can't be read. It reads recorded runs, so it writes no
+measurement."""
 from __future__ import annotations
 
 import json
@@ -85,19 +85,30 @@ def test_a_duty_run_with_no_honest_point_or_no_points_cannot_be_read(store, tmp_
     assert f"{DUTY} holds no {H.BESIDE}" in capsys.readouterr().err
 
 
-def test_under_a_research_run_the_metric_is_written_once_a_reading_modeled_the_default_last(
+def test_under_a_research_run_it_writes_its_document_and_no_measurement_as_a_reprint(
         store, tmp_path, capsys, monkeypatch, stamped):
     out = tmp_path / "out"
     monkeypatch.setenv("OUT", str(out))
+    monkeypatch.setenv("RESEARCH_RUN_ID", BENCH)
     both(store, tmp_path)
     assert bench(store, "--from", RUN, "--duty", DUTY) == 0
-    doc = json.loads(capsys.readouterr().out.splitlines()[-1])
-    assert json.loads((out / "h200_share.json").read_text()) == doc
-    got = json.loads((out / "result.json").read_text())["measurements"]
-    assert [(m["name"], m.get("member"), m["mark"]) for m in got] == [
-        (H.METRIC, "clock.tensor", "modeled"), (H.METRIC, "clock.sm", "modeled"),
-        ("honest rate", None, "measured"), ("verified compute share", None, "measured")]
-    assert H.METRIC == "compute-accounting/h200-capacity-credited-share"
-    assert [m["value"] for m in got] == [doc["readings"]["clock.tensor"]["value"], doc["value"], float(RATE), CREDITED / TOTAL]
-    assert [m["inputs"] for m in got] == [["modeled", DUTY, RUN]] * 2 + [["measured", DUTY], ["measured", RUN]]
-    assert all((m["run"], m["commit"], m["host"]) == (BENCH, STAMP["commit"], STAMP) for m in got)
+    got = capsys.readouterr()
+    assert json.loads((out / "h200_share.json").read_text()) == json.loads(got.out.splitlines()[-1])
+    assert H.kit.kit_report.REPRINT.format(name="h200_share", run=RUN) in got.err
+    assert not (out / "result.json").exists()
+
+
+def test_it_writes_its_number_through_the_kit_alone(store, tmp_path, capsys, monkeypatch):
+    """`kit.report` is the one place that decides whether a command writes a measurement (a reprint of another run's
+    record writes none), so the number goes through it and never through the kit's writer directly."""
+    calls = []
+    monkeypatch.setattr(H.kit, "report", lambda *a, **k: calls.append((a, k)) or 0)
+    monkeypatch.setattr(H.kit, "writer", lambda *a, **k: pytest.fail("h200_share.py wrote past kit.report"))
+    both(store, tmp_path)
+    assert bench(store, "--from", RUN, "--duty", DUTY) == 0
+    [((name, text, doc, measured), said)] = calls
+    assert (name, text, measured, said) == ("h200_share", H.text(doc), H.measured(doc), {"from_run": RUN})
+    assert [(m["name"], m.get("member"), m["mark"], m["inputs"]) for m in measured] == [
+        (H.METRIC, "clock.tensor", "modeled", [DUTY, RUN]), (H.METRIC, "clock.sm", "modeled", [DUTY, RUN]),
+        ("honest rate", None, "measured", [DUTY]), ("verified compute share", None, "measured", [RUN])]
+    assert capsys.readouterr().out == ""

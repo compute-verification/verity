@@ -398,8 +398,8 @@ def _own_terms(t) -> KP.Terms:
 @pytest.mark.parametrize("name", DRAFT_CASES)
 @pytest.mark.parametrize("contexts", R.CONTEXTS)
 def test_residual_decodes_to_the_trace_with_a_draft(name, contexts):
-    """Where the arrivals are not certified, the residual advice is still each request's admission alone, and the
-    drafts each row kept are advice beside it: the certified record carries none of them, and the residual decodes
+    """Where the arrivals are not attested, the residual advice is still each request's admission alone, and the
+    drafts each row kept are advice beside it: the attested record carries none of them, and the residual decodes
     back to the trace's steps with each count asked once, by the row that emits it, in the trace's order, so no fork
     is given one. A decoder handed the counts as lists (`RequestIO.kept`) is refused by name, and so is one handed
     no counts."""
@@ -447,7 +447,7 @@ def test_kept_count_is_charged_at_advice_v1s_code_or_derived(name):
     code, ideal = R.kept_code(K, own)
     assert b["charged"] == code.nbits == code.lens[0] and b["ideal"] == ideal and ideal <= code.nbits <= ideal + 2
     assert R.kept_read(t, code) == own
-    # from the two strings and the certified record alone: the arrivals' advice decodes on the counts read off the kept string
+    # from the two strings and the attested record alone: the arrivals' advice decodes on the counts read off the kept string
     assert all(R.kept_read(t, code, R.encode(t, contexts=c)) == own for c in R.CONTEXTS)
     d = R.draft_table(t, contexts=R.CONTEXTS)
     assert d["kept_count"] == b and not d["tick"] and (d["requests"], d["steps"]) == (len(t.requests), len(t.steps))
@@ -469,10 +469,24 @@ def test_kept_read_takes_only_the_traces_own_string():
             R.kept_read(t, bad)
 
 
+@pytest.mark.parametrize("name", CASES)
+def test_with_no_draft_the_kept_count_costs_nothing(name):
+    """With no draft no row keeps one: the kept count is 0 bits however it is read, and the table's advice is the
+    arrivals' alone. A trace the replay doesn't reproduce is still refused."""
+    t = trace(name)
+    b = R.kept_bits(t)
+    assert b == {"K": 0, "rows": 0, "counts": [0], "entropy": 0.0, "max": 0.0, "alone": 0.0, "charged": 0, "ideal": 0,
+                 "derived": 0}
+    d = R.draft_table(t, contexts=R.CONTEXTS)
+    assert d["kept_count"] == b and (d["requests"], d["steps"]) == (len(t.requests), len(t.steps))
+    assert d["arrivals"] == {c: sum(len(x) for x in R.encode(t, contexts=c).bits.values()) for c in R.CONTEXTS}
+    other = dataclasses.replace(t, steps=[dataclasses.replace(t.steps[0], rows=t.steps[0].rows[:-1]), *t.steps[1:]])
+    with pytest.raises(ValueError, match="the replay diverges from the trace at step 0"):
+        R.kept_bits(other)
+
+
 def test_kept_count_refuses_a_trace_it_cannot_read_it_from():
     t = trace(DRAFT_CASES[0], DRAFT)
-    with pytest.raises(ValueError, match="no draft"):
-        R.kept_bits(trace(CASES[0]))
     with pytest.raises(ValueError, match="emitted"):
         R.kept_bits(dataclasses.replace(t, emitted=None))
     other = dataclasses.replace(t, steps=[dataclasses.replace(t.steps[0], rows=t.steps[0].rows[:-1]), *t.steps[1:]])
@@ -640,8 +654,8 @@ def test_refuses_the_drafts_it_does_not_model():
 
 
 def test_an_engine_without_a_draft_is_the_engine_class_it_was():
-    """The certifier's engine class is `Engine`'s fields: a draft's settings are `DraftEngine`'s, so they join none of
-    them."""
+    """Network attestation's engine class is `Engine`'s fields: a draft's settings are `DraftEngine`'s, so they join
+    none of them."""
     e = R.Engine(max_num_seqs=4, max_num_batched_tokens=64, max_model_len=256, num_gpu_blocks=64)
     assert sorted(dataclasses.asdict(e)) == sorted([
         "async_scheduling", "block_size", "enable_chunked_prefill", "enable_prefix_caching", "long_prefill_token_threshold",

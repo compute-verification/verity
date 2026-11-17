@@ -5,7 +5,6 @@ requires, and a request whose rows and batches don't tile each other binds nothi
 from __future__ import annotations
 
 from verity_vllm.definitions.registry.dsa_topk import waksman_switches
-
 from verity_vllm.pipeline.match_fold import run_input_bindings
 from verity_vllm.program.predict import dsa as D
 from verity_vllm.query.manifest.format import RUN_FAMILY, canonical_identity

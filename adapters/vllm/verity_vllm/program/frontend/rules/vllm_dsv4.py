@@ -50,8 +50,6 @@ from verity_vllm.program.frontend.rules.vllm_dsa import (
 )
 from verity_vllm.program.frontend.rules.vllm_iface import iface, targets_for
 
-__models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
-
 BF16, F32, E4M3, U8 = torch.bfloat16, torch.float32, torch.float8_e4m3fn, torch.uint8
 M32 = 0xFFFFFFFF
 

@@ -4,7 +4,8 @@ end `AttnHeadEnd_v1` at FA3's dot and reciprocal, and past one key block (TINY's
 `AttnBlock_v4{FIRST=False, CHECK=False}`. A block reads its keys and values as rows of the RoPE'd keys and the value
 projection's slices, a key a row, so past 126 keys a block holds more than a unit's 256 rows and is refused by name. An
 attention version with no cut (`Attention_v2`, which `fa3_construction = "guard-every-block"` binds) is a unit a head of its
-own head Definition, reading the same rows, refused by name past the grain's rows. With ``VERITY_VLLM_FA3_LLAMA_1B=1``,
+own head Definition, reading the same rows, refused by name past the grain's rows. BF16 Llama-3.2-1B at 4,27,2 lowers wired,
+untied and cut at Pearl+'s linears. With ``VERITY_VLLM_FA3_LLAMA_1B=1``,
 int8 Llama-3.2-1B on sm_90 at 4,32,4 lowers with every reader wired and every unit a proof block Flock's composer takes.
 Pinned on `test_window_circuit`'s TINY class, windows and grain.
 """
@@ -38,6 +39,7 @@ from verity_vllm.program.model import INT8_EXACT_QUANT
 from verity_vllm.program.predict.build import Unexpressible
 from verity_vllm.program.predict.window_circuit import (
     Grain,
+    PearlTables,
     WindowClass,
     class_circuit,
     window_circuit,
@@ -142,13 +144,39 @@ def test_a_head_with_no_cut_past_the_grains_rows_is_refused_by_name():
         class_circuit(_registered(GUARDED), CLASS, None, Grain(gemm_words=1024, rows=10, select=128))
 
 
+#: Pearl+'s scheme a tied window's circuit is cut at (`served_verdicts.sh`'s PEARLPLUS_ARM)
+PEARL = "pearl-c-h100-v1-h3"
+ADD = "RMSNormFusedCudaAdd_v2{{N=2048,C=256,AT={},R={}}}"
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("tied", [False, True], ids=["untied", "tied"])
+def test_bf16_llama_3_2_1b_on_sm_90_lowers_wired_at_4_27_2(tied):
+    """BF16 Llama-3.2-1B's class circuit on the H200 at 4,27,2, from its configuration alone, lowers wired with every unit a
+    proof block. Untied, o_proj's `Gemm_v2{K=2048, N=8}` slices write the norm after the attention's x as 256 rows and
+    down_proj's `Gemm_v2{K=8192, N=4}` the next norm's as 512, so both are cut at their residual add, their parts reading 32
+    and 64 rows, a template each. Cut at Pearl+'s linears, every norm's x is `LinearOut_v3` rows and no norm is cut."""
+    reg = _registered(config=json.loads(LLAMA_1B.read_text()))
+    circuit = class_circuit(reg, WindowClass(4, 27, 2), tables=PearlTables(PEARL) if tied else None)
+    n = {_label(fn): k for fn, k in circuit.templates}
+    norms = {lab: k for lab, k in n.items() if lab.startswith("RMSNormFused")}
+    if tied:
+        assert (len(n), norms) == (48, {"RMSNormFusedCuda_v2{N=2048}": 3584})
+        return
+    assert {lab for lab in n if lab.startswith("Gemm_v2")} >= {"Gemm_v2{K=2048,N=8}", "Gemm_v2{K=8192,N=4}"}
+    assert (len(n), norms) == (60, {"RMSNormFusedCudaTail_v1{N=2048}": 3584,
+                                    **{ADD.format(at, r): 1792 for at in range(8) for r in (32, 64)}})
+    ids = {_label(fn): IF.descriptor_id(fn) for fn, _ in circuit.templates}
+    assert all(circuit.cuts[ids[ADD.format(at, r)]] == {"x": r} for at in range(8) for r in (32, 64))
+
+
 @pytest.mark.skipif(not os.environ.get("VERITY_VLLM_FA3_LLAMA_1B"),
                     reason="int8 Llama-3.2-1B on sm_90 at 4,32,4, minutes on a pod; set VERITY_VLLM_FA3_LLAMA_1B=1")
 def test_int8_llama_3_2_1b_on_sm_90_lowers_every_unit_to_a_proof_block():
     """int8 Llama-3.2-1B's window circuit on the H200 (exact-int8 linears, FA3's heads at D 64 and kBlockN 192) at the default
     grain and 4,32,4 lowers with every unit within 256 rows: each first block reads its values a slice a row of the value
-    projection (`AttnBlockFirst_v2{VS=32}`), and the norm after down_proj, whose x down_proj's slices write as 512 rows where
-    o_proj's write 128, is cut at its residual add (8 parts of 256 and the tail). Every unit is a proof block Flock's
+    projection (`AttnBlockFirst_v2{VS=32}`), and the norm after down_proj, whose x down_proj's slices write as 256 rows where
+    o_proj's write 64, is cut at its residual add (8 parts of 256, each 32 rows, and the tail). Every unit is a proof block Flock's
     composer takes (`interface.check_proof_block`, which the lowering runs): at 4 outputs a collector's rows and an entry's
     are under 112 bytes, so each is its position's combine's (`SelectCollect_v1`, the last's `SelectEntry_v1`), which reads
     its group units' bests and indices as rows of 334 and 668 bytes. Its heads are `Attention_v20`'s Calls (no whole `AttentionHead_v4`, no guarded full
@@ -174,4 +202,4 @@ def test_int8_llama_3_2_1b_on_sm_90_lowers_every_unit_to_a_proof_block():
     assert not {lab.split("{")[0] for lab in n} & {"TokenSelectCombine_v2", "OutCollect_v1", "SlotEntry_v1"}
     assert set(heads) <= {"AttnBlockFirst_v2", "AttnBlock_v4{CHECK=false}", "AttnHeadEnd_v1"}
     tail = n["RMSNormFusedCudaTail_v1{N=2048}"]
-    assert tail and [n[f"RMSNormFusedCudaAdd_v1{{N=2048,C=256,AT={at}}}"] for at in range(8)] == [tail] * 8
+    assert tail and [n[f"RMSNormFusedCudaAdd_v2{{N=2048,C=256,AT={at},R=32}}"] for at in range(8)] == [tail] * 8
