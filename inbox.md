@@ -1,0 +1,3 @@
+[2026-11-17T16:06Z] 0e5bc3c46328
+Lead, Tue 17 Nov 8:08 AM PST: main moved twice more while you work on #10653: the calibration move (e195d4a89c42; benchmarks/network_traces/README.md now conflicts) and proofs' #10818, the network attester's names outside Lean (main 44d81bed2f96; maps tools/move/network_attester_map.toml, network_attestation_prose_map.toml and more). The queue says our own lines name words they retired (certifier, certified). So before you push: merge the CURRENT origin/main, rename in our own added lines every name those maps retire (never a stored key the maps keep), and show merge-tree exit 0 against that main. restack.py cannot cross lean's pass: merge and rename by hand there.
+
