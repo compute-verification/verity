@@ -1,0 +1,127 @@
+module
+
+public import Proofs.Properties.Verity.SampledTwo.FormSetup
+public import Proofs.Properties.Verity.SampledTwo.FormStmts
+public import Proofs.Properties.Verity.SampledTwo.FormPrint
+public import Proofs.Properties.Verity.SampledTwo.PortsOfParams
+public import Proofs.Flock.Claims.CanonLine
+public import Proofs.Flock.Claims.CanonWf
+
+/-!
+# The sample each record prints, from the stage coins
+
+`SampleAtFixed` (`FormStmts.lean`) says two accepted plays with one parameters and one log before the statements'
+round hold, template by template, session records that print one sample. The model's check of the statements' round
+holds each statement's sample to the verifier's own at the stage coins, by its canonical text
+(`SpotFlock.sample_canon_of_stmtOk`). Here are the pieces of `SampleAtFixed` where the two plays' statements pass that
+check at one pair of stage coins (`StageCoinsOne`), which they do where one pair of stage coins carries the bytes
+both plays' samples read (`PlayCoinsOne`).
+
+* **The printed sample reads back with the record's sample's canonical text** (`canon_of_printed`): the parser
+  reads a printable value's text back alike it (`Flock.PartCong.printed_readsBack`), and alike values have one
+  canonical text.
+* **A record's sample is fixed by its canonical text** (`recordSample_of_canon`): it is `norm` of the record's
+  `unit_draw` (`Verity.Sampled.recordSample_raw`), a well-formed value `norm` fixes, and two such values with one
+  canonical text are equivalent (`Properties.Challenger.CanonLine.canon_inj`), so equal
+  (`FlockDeploy.eq_of_jsonEquiv_norm`).
+* **Each registration lists each port once** (`portsDistinctAt`), with no hypothesis: the parameters are read from
+  the tree `Core.canonicalJson` returns, which is well formed.
+
+**Not established here**: that template `t`'s statement decodes to its member's statement at the record's printed
+sample: the form sets each session up at the pinned tables its member's circuit looks up (`Spot.OneStageZk.ownTables`),
+and the statement reads every pinned table the blobs hold (`Spot.OneStageZk.tablesOf`). `StageCoinsOne` and
+`PlayCoinsOne` are hypotheses. The check reads each stage's bytes off the play's log (`FirstShown`, `SecondShown`); that
+the bytes the samples of two plays with one log before the statements' round read start one round-0 coin and one second
+stage's coins is not shown.
+-/
+
+@[expose] public section
+
+namespace Verity.SampledTwo
+
+open Claims
+open Lean (Json)
+
+/-- **A record's sample is fixed by its canonical text**: two records' samples with one canonical text are one
+value. -/
+theorem recordSample_of_canon {record record' : String} {dj dj' : Json} {s : String}
+    (h : Flock.Witness.recordDraw record = some dj) (h' : Flock.Witness.recordDraw record' = some dj')
+    (hs : Flock.canon dj = .ok s) (hs' : Flock.canon dj' = .ok s) : dj = dj' := by
+  obtain ⟨_, d, -, -, -, rfl⟩ := Verity.Sampled.recordSample_raw h
+  obtain ⟨_, d', -, -, -, rfl⟩ := Verity.Sampled.recordSample_raw h'
+  exact FlockDeploy.eq_of_jsonEquiv_norm (FlockDeploy.norm_norm d) (FlockDeploy.norm_norm d')
+    (Properties.Challenger.CanonLine.canon_inj
+      (Properties.Challenger.CanonRead.sortedKeys_of_wf _ (FlockDeploy.wf_norm d))
+      (Properties.Challenger.CanonRead.sortedKeys_of_wf _ (FlockDeploy.wf_norm d')) hs hs')
+
+/-- **A record's printed sample, read back, has the record's sample's canonical text**: where the record's sample is
+printable and a statement's sample `b` is the bytes it prints to, the value Flock's parser reads `b` as has the
+canonical text of the record's sample. -/
+theorem canon_of_printed {record : String}
+    (hg : ∀ dj, Flock.Witness.recordDraw record = some dj → Claims.Json.Good dj) {b : ByteArray} {d : Json}
+    {s : String} (hb : SessionMsgs.sampleBytes record = some b) (hj : FlockDeploy.jsonOf "draw" b = .ok d)
+    (hs : Flock.canon d = .ok s) : ∃ dj, Flock.Witness.recordDraw record = some dj ∧ Flock.canon dj = .ok s := by
+  unfold SessionMsgs.sampleBytes at hb
+  cases hrd : Flock.Witness.recordDraw record with
+  | none =>
+    rw [hrd] at hb
+    simp at hb
+  | some dj =>
+    rw [hrd, Option.map_some] at hb
+    obtain ⟨P, hP, hsame⟩ := Flock.PartCong.printed_readsBack "draw" (hg dj hrd)
+    rw [Option.some.inj hb, Option.mapM_some, hj] at hP
+    have hPd : P = some d := (Except.ok.inj hP).symm
+    refine ⟨dj, rfl, ?_⟩
+    rcases hsame with he | ⟨a, c, ha, hc, hac⟩
+    · rw [← Option.some.inj (hPd.symm.trans he)]
+      exact hs
+    · rw [Option.some.inj hc, ← FlockComplete.JsonRT.canon_same a c hac, ← Option.some.inj (hPd.symm.trans ha)]
+      exact hs
+
+/-- **The two plays' stage coins are one**: at two plays the check accepts whose logs are the device's, with one
+parameters and one log before round `stage + 1`, the statements' messages the reading reads pass the model's check
+of the statements' round (`SpotFlock.stmtOk`) at one round-0 coin and one second stage's coins, each at some run's
+statement and round 1's message. -/
+def StageCoinsOne (A : Live₂) (C : CaseOf) (S : SessionReading) (Good : Verity.Exchange → Prop)
+    (L : CoinMap.Locate) : Prop :=
+  ∀ o o' k k' p e e' m₂ m₂', FormAccepts C o → Good o → FormAccepts C o' → Good o' → C o = some k → C o' = some k' →
+    Messages.logBefore L o (A.h.stage + 1) = Messages.logBefore L o' (A.h.stage + 1) →
+    SessionMsgs.formOf k = some (p, e) → SessionMsgs.formOf k' = some (p, e') →
+    S.stmts o = some m₂ → S.stmts o' = some m₂' →
+      ∃ (x x' m₁ m₁' : Msg) (c₀ : FlockDeploy.Coin) (c₁ : SpotFlock.Stage A.h),
+        SpotFlock.stmtOk A.h x m₁ m₂ c₀ c₁ = true ∧ SpotFlock.stmtOk A.h x' m₁' m₂' c₀ c₁ = true
+
+/-! ## The statements' check at the play's coins -/
+
+/-- **`PortsDistinctAt` holds**: `Core.canonicalJson` returns printable trees
+(`Verity.CanonicalJson.canonicalJson_good`), which are well formed. -/
+theorem portsDistinctAt (C : CaseOf) : PortsDistinctAt C :=
+  portsDistinctAt_of (fun _ _ h => FormPrint.wf_of_good (Verity.CanonicalJson.canonicalJson_good h)) C
+
+/-- **An accepted play's run of record and its records' messages**: the play has a run of record's input with an
+interior, and the boundary's record and the interior's each have canonical bytes. -/
+theorem records_of_accepts {C : CaseOf} {o : Verity.Exchange} (hA : FormAccepts C o) :
+    ∃ i it x m₁, inputOn C o = some i ∧ i.interior = some it ∧ recordMsg i.record = some x ∧
+      recordMsg it.record = some m₁ := by
+  obtain ⟨k, hk, hon⟩ := hA
+  obtain ⟨cm, i, -, hin, hrb, it, m₁, hit, hm₁⟩ := input_of_accepts hon
+  obtain ⟨s, -, -, hs⟩ := VStar.Recursive.SampledTwo.readBack_ok hrb
+  refine ⟨i, it, s.toUTF8.data.toList, m₁, ?_, hit, ?_, hm₁⟩
+  · show (C o).bind inputOfCase = some i
+    rw [hk]
+    exact hin
+  · simp only [recordMsg, hs]
+    rfl
+
+/-- **One pair of stage coins carries what both plays' samples read**: at two plays the check accepts whose logs are
+the device's, with one parameters and one log before round `stage + 1`, some round-0 coin and second stage's coins
+carry the bytes each play's run's samples read (`SpotFlock.RunsAs.PlayCoins`). -/
+def PlayCoinsOne (A : Live₂) (C : CaseOf) (Good : Verity.Exchange → Prop) (L : CoinMap.Locate) : Prop :=
+  ∀ o o' k k' p e e' i i' it it', FormAccepts C o → Good o → FormAccepts C o' → Good o' → C o = some k →
+    C o' = some k' → Messages.logBefore L o (A.h.stage + 1) = Messages.logBefore L o' (A.h.stage + 1) →
+    SessionMsgs.formOf k = some (p, e) → SessionMsgs.formOf k' = some (p, e') → inputOn C o = some i →
+    i.interior = some it → inputOn C o' = some i' → i'.interior = some it' →
+      ∃ (c₀ : FlockDeploy.Coin) (c₁ : SpotFlock.Stage A.h),
+        SpotFlock.RunsAs.PlayCoins A.h i it c₀ c₁ ∧ SpotFlock.RunsAs.PlayCoins A.h i' it' c₀ c₁
+
+end Verity.SampledTwo

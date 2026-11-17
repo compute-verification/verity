@@ -1,35 +1,38 @@
-# Lean modules out of the tree: import-closed, behind SampledTwo/RecordNames.lean, FormSetup.lean and FormDraw.lean,
-# which do not build at this tip. They come back on main with their mends; the branch keeps them.
+# Lean declarations out of the tree, each file whole on the commit below.
+# `record`: each rests on `SpotFlock.RecordNames.recordOk_of_check`, that a registration check with no code leaves a
+# record naming `HeldOf.namesOf v`, which is false at a verifier holding a certified entry (R7 holds the record's
+# `registered` to the verifier's own entries and its certified ones).
+# `tables`: each states or rests on the blobs holding exactly the pinned tables a member's circuit looks up
+# (`HoldsRegisteredTables`, `Spot.OneStageZk.tablesOf`), while the per-member form hands each member its own tables
+# (`Spot.OneStageZk.ownTables`).
 branch = "cursor/proofs-placer-memberchecks-5cc2"
+commit = "9b7c5a1b4d076e014a947dfe43c32f9e7988f4b4"
 files = [
-  "security/Proofs/Flock/SpotFlock/RunsAs/OwnReadsHeld.lean",
-  "security/Proofs/Properties/Verity/SampledTwo/AcceptsTop.lean",
-  "security/Proofs/Properties/Verity/SampledTwo/BlobFinder.lean",
-  "security/Proofs/Properties/Verity/SampledTwo/CopyOfOne.lean",
-  "security/Proofs/Properties/Verity/SampledTwo/CouplesWired.lean",
-  "security/Proofs/Properties/Verity/SampledTwo/FirstEarly.lean",
-  "security/Proofs/Properties/Verity/SampledTwo/FormAgreed.lean",
-  "security/Proofs/Properties/Verity/SampledTwo/FormBytes.lean",
   "security/Proofs/Properties/Verity/SampledTwo/FormCircuit.lean",
-  "security/Proofs/Properties/Verity/SampledTwo/FormCount.lean",
-  "security/Proofs/Properties/Verity/SampledTwo/FormDraw.lean",
-  "security/Proofs/Properties/Verity/SampledTwo/FormMember.lean",
-  "security/Proofs/Properties/Verity/SampledTwo/FormPrint.lean",
-  "security/Proofs/Properties/Verity/SampledTwo/FormSetup.lean",
-  "security/Proofs/Properties/Verity/SampledTwo/FormStmts.lean",
-  "security/Proofs/Properties/Verity/SampledTwo/GoodCaseHeld.lean",
-  "security/Proofs/Properties/Verity/SampledTwo/HeldOfAtDesc.lean",
-  "security/Proofs/Properties/Verity/SampledTwo/JoinedCoupling.lean",
   "security/Proofs/Properties/Verity/SampledTwo/JoinedForm.lean",
-  "security/Proofs/Properties/Verity/SampledTwo/JoinsAt.lean",
-  "security/Proofs/Properties/Verity/SampledTwo/LastSlot.lean",
-  "security/Proofs/Properties/Verity/SampledTwo/PortsOfParams.lean",
-  "security/Proofs/Properties/Verity/SampledTwo/PremisesAt.lean",
-  "security/Proofs/Properties/Verity/SampledTwo/RecordNames.lean",
-  "security/Proofs/Properties/Verity/SampledTwo/RefsOfSent.lean",
-  "security/Proofs/Properties/Verity/SampledTwo/SessionSent.lean",
-  "security/Proofs/Properties/Verity/SampledTwo/Undecodable.lean",
-  "security/Proofs/Properties/Verity/SampledTwo/WiredParse.lean",
-  "security/Proofs/Properties/Verity/SampledTwo/WiredScope.lean",
-  "security/Proofs/Properties/Verity/SampledTwo/WiredUnits.lean",
 ]
+
+[record]
+"security/Proofs/Properties/Verity/SampledTwo/RecordNames.lean" = [
+  "CheckFacts", "checkFacts_of_check", "recordOk_of_facts", "recordOk_of_check",
+]
+"security/Proofs/Properties/Verity/SampledTwo/AcceptsTop.lean" = [
+  "recordsHeldAt_of", "playAccepts_form", "acceptsRun_form", "reachedAccepts_form", "acceptsRun_form_at",
+  "reachedAccepts_form_at",
+]
+"security/Proofs/Properties/Verity/SampledTwo/FormDraw.lean" = ["stmtOk_form", "stageCoinsOne_of_play"]
+"security/Proofs/Properties/Verity/SampledTwo/FormCircuit.lean" = ["agreed_circuit"]
+"security/Proofs/Properties/Verity/SampledTwo/JoinsAt.lean" = ["joinedOfDistribution"]
+"security/Proofs/Properties/Verity/SampledTwo/JoinedCoupling.lean" = ["joinedCouplingAt", "joinedCouplingOfDistribution"]
+"security/Proofs/Properties/Verity/SampledTwo/Undecodable.lean" = ["joinedCouplingOfDistribution_decoded"]
+"security/Proofs/Properties/Verity/SampledTwo/JoinedForm.lean" = ["joinedForm", "joinedCoupling"]
+
+[tables]
+"security/Proofs/Properties/Verity/SampledTwo/RefsOfSent.lean" = [
+  "memberStatement_tables", "accepted_tables", "tablesHeldAt_of_accept", "refsAtOr_of_files", "heldOfAtOr_of_files",
+]
+"security/Proofs/Properties/Verity/SampledTwo/FormStmts.lean" = ["stmtAtFixed_of"]
+"security/Proofs/Properties/Verity/SampledTwo/FormDraw.lean" = ["stmtAt_raw", "stmtAt_record", "sampleAtFixed_of_coins"]
+"security/Proofs/Properties/Verity/SampledTwo/FormSetup.lean" = ["verdictsAt_of", "msgsOfRecords_form"]
+"security/Proofs/Properties/Verity/SampledTwo/FormMember.lean" = ["memberAtFixed_of_coins"]
+"security/Proofs/Properties/Verity/SampledTwo/FormCircuit.lean" = ["sessionMsgs_form"]

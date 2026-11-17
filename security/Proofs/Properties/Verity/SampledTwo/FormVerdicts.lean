@@ -27,8 +27,8 @@ verified that session at that member: the first part of `SessionCoins.VerdictsAt
 
 **Not established here**: that the session the form set up is the one the statement sets up
 (`FlockDeploy.setupOf`), which needs the statement's printed files read back (`MemberChecks.ReadsBack`); that the
-session has messages; and the template's count of rounds. `FormSetup.lean` takes these up and proves
-`SessionCoins.VerdictsAt` from them (`SessionCoins.verdictsAt_of`).
+session has messages; and the template's count of rounds. `FormSetup.lean` takes these up toward
+`SessionCoins.VerdictsAt`.
 -/
 
 @[expose] public section
