@@ -30,13 +30,12 @@ from typing import Any
 
 import numpy as np
 from verity.protocols.resource_accounting.compute.pouw.prover.circuit import h1tile as HT
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import registered as NR
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import served as SV
 from verity.protocols.resource_accounting.compute.pouw.verifier import core_check as CC
 from verity.protocols.resource_accounting.compute.pouw.verifier import credit as CR
 from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
-
-from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import registered as NR
-from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import served as SV
 
 #: the prover-side tamperings `negatives` applies, each to be refused
 NEGATIVES = ("receipt-word", "receipt-word-after-round", "pub-other-root", "ok-zero")

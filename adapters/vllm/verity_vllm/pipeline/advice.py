@@ -53,8 +53,13 @@ The windows are read in order, each opening with the state the last one left (`L
 row continues, its kept outputs and the KV it computed), so a request that runs on into the next window is held there to the
 position it reached, and its record (lengths and finish) is the Commit record's.
 
+A run whose server declared a day (``serve-openai --day``, `serve_day`) registers its compiler before any advice is bound: B's
+item (`builder_item`: the digest each window's binding names the compiler by, ℓ, and the advice's format) in the registration log
+its ``declaration.json`` names (`serve_day.register_compiler`; ``--day-log`` a copy of that log, ``--day-params`` its
+parameters).  A log that registers another compiler refuses this one by core's name, and no advice is written.
+
     verity-vllm advice RUN [--trace FILE] [--io FILE] [--out DIR] [--window K] [--T 600] [--tau 0.1] [--compiler-name N --compiler-digest D] [--cap BITS]
-        [--weights-of-record FILE]
+        [--weights-of-record FILE] [--day-log LOG] [--day-params FILE]
 """
 from __future__ import annotations
 
@@ -73,6 +78,7 @@ from verity_vllm.config import UsageError, option
 from verity_vllm.engine import step_trace as ST
 
 from . import advice_windows as AW
+from . import serve_day as SD
 from . import window_advice as WA
 
 SCHEMA = "verity-vllm/advice-report/v3"
@@ -109,10 +115,14 @@ def registered_compiler(name: str = COMPILER, digest: str | None = None, cap_bit
 
 
 def builder_item(compiler: AW.Capped) -> dict[str, Any]:
-    """B's item in the deployment's registration log
-    (`verity.protocols.registration.verifier.registration`, kind ``builder``): the inner compiler's digest,
-    the format of the advice it reads (`certifier.advice.SCHEMA`) and ℓ, as the log decodes it."""
-    return REG.item_of({"kind": "builder", "digest": compiler.inner.digest, "advice": I1.SCHEMA, "cap": compiler.cap_bits})
+    """B's item in the deployment's registration log (`verity.protocols.registration.verifier.registration`, kind
+    ``builder``), as the log decodes it: the digest each binding names the compiler by (`advice_windows.binding`:
+    ``compiler``'s own, which covers ℓ), ℓ, and the format of the advice it reads, `window_advice`'s (the encoding a run
+    binds, `_written`: I1 v0's bytes only for a window that carries nothing in or out and aborts nothing).  The digest and
+    ℓ are both ``compiler``'s, so an item never states an ℓ its digest doesn't cover; ℓ bounds the advice of one binding, a
+    Commit window's, one execution phase's (`commit`).  The format is not checked: no check reads it and the digest
+    doesn't cover it."""
+    return REG.item_of({"kind": "builder", "digest": compiler.digest, "advice": WA.SCHEMA, "cap": compiler.cap_bits})
 
 
 def finish_of(rid: str, rec: dict[str, Any] | None) -> str:
@@ -145,9 +155,7 @@ def io_record(path: str | Path) -> dict[str, dict[str, Any]]:
     with ``requests``, each with ``engine_id``, ``user`` or ``http_id``, ``prompt_ids`` and ``output_ids`` or ``streamed_ids``);
     ``finish`` is None where the record has none."""
     out: dict[str, dict[str, Any]] = {}
-    for line in Path(path).read_text().splitlines():
-        if not line.strip():
-            continue
+    for line in M.lines(Path(path), "Run" if Path(path).name == "windows.jsonl" else "Request"):
         doc = json.loads(line)
         for r in doc.get("requests") if isinstance(doc.get("requests"), list) else [doc]:
             rid = str(r.get("request") or r.get("engine_id"))
@@ -481,23 +489,30 @@ def served(recs: list[dict[str, Any]]) -> bool:
 
 def write(run: str | Path, out: str | Path | None = None, *, trace: str | Path | None = None, io: str | Path | None = None,
           T: int = 600, tau: float = 0.1, compiler: Any = None, window: int | None = None,
-          registered_roots: dict[str, str] | None = None) -> dict[str, Any]:
+          registered_roots: dict[str, str] | None = None, day_log: str | Path | None = None,
+          day_params: str | Path | None = None) -> dict[str, Any]:
     """The run's advice, committed (`write_one`); a `verity-vllm serve-openai` run's, one advice a closed Commit window
-    (`write_served`); each registration with ``registered_roots``, the root of each parameter its window circuit registers."""
+    (`write_served`); each registration with ``registered_roots``, the root of each parameter its window circuit registers.
+    A run that declared a day first registers ``compiler``'s item (`builder_item`) in its registration log
+    (`serve_day.register_compiler`, with ``day_log`` and ``day_params``), the result's ``builder``: a log that refuses it
+    is a ValueError before any advice is written."""
     run = Path(run)
     if trace is None:
         trace = next((p for p in (run / ST.SERVED, run / "step_trace.jsonl") if p.exists()), run / "step_trace.jsonl")
     trace = Path(trace)
     if io is None:
         io = next((p for p in (run / "requests.jsonl", run / "windows.jsonl") if p.exists()), None)
-    recs = ST.load(trace)
+    recs = ST.parse(M.lines(trace, "Advice"), trace)
     compiler = compiler if compiler is not None else registered_compiler()
     out = Path(out) if out else run / "advice"
+    registered = SD.register_compiler(run, builder_item(compiler), day_log, day_params)
     if served(recs):
-        return write_served(run, out, recs, trace, io, T=T, tau=tau, compiler=compiler, window=window,
-                            registered_roots=registered_roots)
-    return write_one(run, out, recs, trace, io, io_record(io) if io else None, T=T, tau=tau, compiler=compiler,
-                     registered_roots=registered_roots)
+        rep = write_served(run, out, recs, trace, io, T=T, tau=tau, compiler=compiler, window=window,
+                           registered_roots=registered_roots)
+    else:
+        rep = write_one(run, out, recs, trace, io, io_record(io) if io else None, T=T, tau=tau, compiler=compiler,
+                        registered_roots=registered_roots)
+    return rep if registered is None else {**rep, "builder": registered.describe()}
 
 
 def write_served(run: Path, out: Path, recs: list[dict[str, Any]], trace: Path, io: str | Path | None, *, T: int, tau: float,
@@ -641,6 +656,13 @@ class Options:
                                            help="the committer's weights registration (window_weights.weights_registration), "
                                                 "whose hiding root for each weight parameter each window's registration "
                                                 "records (default: none recorded)")
+    day_log: str | None = option("--day-log", default=None, metavar="LOG",
+                                 help="a run that declared a day (serve-openai --day): the registration log the compiler's "
+                                      "item is registered in before any advice is bound (default: the log the run's "
+                                      "declaration.json names)")
+    day_params: str | None = option("--day-params", default=None, metavar="FILE",
+                                    help="that log's parameters, {\"auditor\", \"composite\"} (registration.params_of), which "
+                                         "a log with site entries needs (default: the log's own composite and no auditor)")
 
 
 def _say(rep: dict[str, Any], where: str = "") -> bool:
@@ -661,9 +683,13 @@ def main(a: Options) -> int:
             roots = registered_weights(json.loads(M.read(Path(a.weights_of_record), "RegisteredWeights")),
                                        json.loads(M.read(serve, "ServingConfiguration")) if serve.exists() else None)
         rep = write(a.run, a.out, trace=a.trace, io=a.io, T=a.T, tau=a.tau, window=a.window,
-                    compiler=registered_compiler(a.compiler_name, a.compiler_digest, a.cap), registered_roots=roots)
+                    compiler=registered_compiler(a.compiler_name, a.compiler_digest, a.cap), registered_roots=roots,
+                    day_log=a.day_log, day_params=a.day_params)
     except ValueError as e:
         raise UsageError(f"{a.run}: {e}") from e
+    if (b := rep.get("builder")) is not None:
+        print(f"[advice] the registration log {b['log']} registers the compiler ({b['registered']}), head {b['head'][:16]}…: "
+              f"{json.dumps(b['item'], sort_keys=True)}", flush=True)
     if rep.get("schema") != SERVED:
         return 0 if _say(rep) else 1
     ok = [_say(r, f" commit window {w}:") for w, r in rep["reports"].items()]

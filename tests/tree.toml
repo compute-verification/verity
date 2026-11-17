@@ -75,11 +75,11 @@ means = "the rules in force, and the map"
 
 [[tree]]
 path = "ARCHITECTURE.md"
-means = "the architecture and the Glossary"
+means = "the architecture"
 
 [[tree]]
 path = "GLOSSARY.md"
-means = "the rest of the Glossary: notation, older names and narrower senses"
+means = "the Glossary: terms, notation, narrower senses and older names"
 
 [[tree]]
 path = "pyproject.toml"
@@ -239,7 +239,7 @@ protocol = true
 
 [[tree]]
 path = "verity/protocols/resource_accounting/network/"
-means = "network certification: the network attester and its guarantee"
+means = "network attestation: the network attester and its guarantee"
 protocol = true
 
 [[tree]]

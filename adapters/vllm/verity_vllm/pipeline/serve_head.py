@@ -29,6 +29,6 @@ def header_fields(fields: Sequence[bytes]) -> dict[str, str]:
     """A request's header fields by name, the last of a name. A name is the field's bytes before its colon, lower-cased,
     less the ASCII whitespace around it: what the network attester names a field when it drops a client's own release
     headers (`verity.protocols.resource_accounting.network.verifier.release.with_release`). Named more loosely (`str.strip` takes ``\\xa0``
-    too, for one), a field the certifier kept would be read here as its release, after its own."""
+    too, for one), a field the network attester kept would be read here as its release, after its own."""
     return {k.strip().lower().decode("latin-1"): v.strip().decode("latin-1")
             for k, _, v in (f.partition(b":") for f in fields if f)}

@@ -33,9 +33,8 @@ NORM_TAP_SO = "/workspace/research/vllm-composed-h200int8/norm_tap/build/verity_
 # itself); the prover and the Lean verifier run on the serving node after the lease ends. The endpoint serves PoUW's H1 with
 # each sampling block's coins from a session of its own on vy-challenger-1's gate (H1_GATE, the gate key of the node's
 # research user, at the challenger host's address, VY_CHALLENGER_1_HOST; H1_PEER the node); `--env MAIN_SHA=SHA` also holds the gate's pins to main's first-parent line from SHA.
-# SPOT's coins, V3c's audit's of record among them, are a local development session's, which a run takes
-# as a development run (DEVELOPMENT), unless PP_CHALLENGER names the live challenger (`--env PP_CHALLENGER=gate:USER@HOST`
-# with PP_PEER, PP_CHALLENGER_KEY and PP_GATE_KEY). ONSITE_PIECES gives the onsite product its private pieces (the
+# SPOT's coins, V3c's audit's of record among them, are the coins table's: the gate's unless the launch chooses
+# development coins (`run.sh window --development`). ONSITE_PIECES gives the onsite product its private pieces (the
 # wipe's, PoUS's and the bandwidth audit's) and cases; KEEP_CMD keeps the serve dirs on the node for a week.
 # A run samples two of H1's proof blocks (H1_DRAW_K, the period's committed sample size): it shows the code works, and
 # what the theorems give is reported apart, at stated operating points. A run without it gets `pouw_h1_challenger.draw_k`'s
@@ -47,9 +46,21 @@ research = ["--cwd", "clone", "--timeout", "6h"]
 H1_GATE = "ssh -i ~/.ssh/vllm_gate_ed25519 -o BatchMode=yes research@${VY_CHALLENGER_1_HOST}"
 H1_PEER = "vy-dc-h200"
 H1_DRAW_K = "2"
-DEVELOPMENT = "1"
 ONSITE_PIECES = "benchmarks/pous/onsite_pieces.sh"
 KEEP_CMD = '''why="served_verdicts.sh's serve dirs (sealed row dirs, advice, window circuits) and Flock's build"; "$PY" -m research keep "$1" --owner @vllm --expires 7d --priority high --why "$why" || research keep "$1" --owner @vllm --expires 7d --priority high --why "$why"'''
+
+[run.window.coins.gate]
+# the default: SPOT's coins from a session of their own on vy-challenger-1's gate, as the auditor's challenger, its peer
+# the node, under the gate key H1_GATE uses and the deployment's challenger-key/v1 record (labelled `challenger-key
+# current`), which the launch sends from the tree's root and the run reads from its own inputs
+send = ["challenger-key.json"]
+wrap = ["bash", "-c", 'PP_CHALLENGER_KEY=$RESEARCH_RUN_DIR/inputs/challenger-key.json exec "$@"', "gate"]
+env = { PP_CHALLENGER = "gate:research@${VY_CHALLENGER_1_HOST}", PP_PEER = "vy-dc-h200", PP_GATE_KEY = "~/.ssh/vllm_gate_ed25519" }
+
+[run.window.coins.development]
+# `run.sh window --development`: a local development challenger session on the node, no auditor's coins; the run is a
+# development run, DEVELOPMENT=1 in its environment and in served_verdicts.sh's record
+env = { PP_CHALLENGER = "local", DEVELOPMENT = "1" }
 
 [run.commit]
 # once per workload: its Build, Match and Commit with the sealed replay bundle (a GPU leased only for the Match capture and the

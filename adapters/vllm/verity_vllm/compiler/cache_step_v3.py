@@ -91,20 +91,35 @@ call's logic over every kind's positions, the memo's 169 ANDs at GLM-5.3's width
 """
 from __future__ import annotations
 
-from functools import lru_cache
+from collections.abc import Callable, Sequence
+from functools import cache
 from types import SimpleNamespace
-from typing import Callable, NamedTuple, Sequence
+from typing import NamedTuple
 
 from verity.circuits import boolean as BL
 from verity.circuits.boolean import memcheck as MC
 from verity.circuits.boolean import trace as TR
-from verity.circuits.boolean.forms import ONE, OR, ZERO, add, and_reduce, const_bits, mux, or_reduce, sub
+from verity.circuits.boolean.forms import (
+    ONE,
+    OR,
+    ZERO,
+    add,
+    and_reduce,
+    const_bits,
+    mux,
+    or_reduce,
+    sub,
+)
 from verity.circuits.boolean.gf128 import mul, mul_forms
 from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.evaluation.bits import evaluate_bits
 from verity.circuits.types import Array, Tuple
 from verity.commitments.gates.frame_v3 import _refs
-from verity.protocols.resource_accounting.network.verifier.head_check import _coll, _Consts, ands
+from verity.protocols.resource_accounting.network.verifier.head_check import (
+    _coll,
+    _Consts,
+    ands,
+)
 
 __all__ = ["CacheStep", "Call", "KINDS", "Out", "PARTS", "PoolEnd", "PoolEntry", "PoolSlot", "Refused", "SLOT_STATICS",
            "STATICS", "Slot", "Stream", "TAGS", "arguments", "bput", "bsplit", "bus", "empty_pool", "evaluate", "rk",
@@ -287,6 +302,7 @@ class Stream:
             if got != self.walk(c.r, c.a):
                 raise AssertionError(f"{c}: the memo's {got}, the pool's {self.walk(c.r, c.a)}")
             fields, self._fields = self._fields, None
+            assert fields is not None
             self.slots.append(Slot(1, *fields, 0, 0, 0, 0, 0, len(self.slots) + 1, use=0))
             self.memos += 1
             return got
@@ -367,8 +383,12 @@ class Stream:
             if key:
                 NW = self.Z.NW
                 mask = (1 << NW) - 1
-                self._acc(TAGS["M"], key, lambda v: (cn if v & mask == b else v & mask)
-                          | (cp if (v >> NW) & mask == b else (v >> NW) & mask) << NW | v >> 2 * NW << 2 * NW)
+
+                def unlinked(v: int, b: int = b, cn: int = cn, cp: int = cp, mask: int = mask, NW: int = NW) -> int:
+                    return ((cn if v & mask == b else v & mask)
+                            | (cp if (v >> NW) & mask == b else (v >> NW) & mask) << NW | v >> 2 * NW << 2 * NW)
+
+                self._acc(TAGS["M"], key, unlinked)
                 if cp:
                     self._b(cp, cnext=cn)
                 if cn:
@@ -386,8 +406,15 @@ class Stream:
             key = self._acc(TAGS["RK"], rk(S, c.r, k))
             if self.value(TAGS["K"], b):
                 self._refuse(f"cache of block {b}: it has a key")
-            self._acc(TAGS["K"], b, lambda v: key)
-            m = self._acc(TAGS["M"], key, lambda v: (v & mask or b) | b << Z.NW | v >> 2 * Z.NW << 2 * Z.NW)
+
+            def keyed(v: int, key: int = key) -> int:
+                return key
+
+            def linked(v: int, b: int = b) -> int:
+                return (v & mask or b) | b << Z.NW | v >> 2 * Z.NW << 2 * Z.NW
+
+            self._acc(TAGS["K"], b, keyed)
+            m = self._acc(TAGS["M"], key, linked)
             last = (m >> Z.NW) & mask
             if last:
                 self._b(last, cnext=b)
@@ -895,7 +922,7 @@ def arguments(S, alpha: int, gamma: int, head: int, tail: int, slots: Sequence[S
     Z = widths(S)
     if len(slots) > S.NS or len(entries) > S.NE:
         raise ValueError(f"{len(slots)} slots or {len(entries)} entries past the class's {S.NS} and {S.NE}")
-    sl = list(slots) + [Slot(*[0] * 11, use=0)] * (S.NS - len(slots))
+    sl = list(slots) + [Slot(*(0,) * 11, use=0)] * (S.NS - len(slots))
     en = [(1, *e) for e in entries] + [(0, 0, 0, 0, 0, 0)] * (S.NE - len(entries))
     return [_bits(alpha, 128), _bits(gamma, 128), _bits(head, Z.NW), _bits(tail, Z.NW),
             [x.start for x in sl], [q for x in sl for q in _bits(x.kind, 3)], [q for x in sl for q in _bits(x.r, S.RW)],
@@ -938,7 +965,7 @@ def evaluate(st_: dict, cases: Sequence[list[list[int]]]) -> list[Out]:
 # --- cost ------------------------------------------------------------------------------------------------------------------
 
 
-@lru_cache(maxsize=None)
+@cache
 def part_ands(key: tuple) -> dict[str, int]:
     st_ = dict(zip(SLOT_STATICS, key))
     return {d.name: ands(bind(d, **st_)) for d in PARTS}
