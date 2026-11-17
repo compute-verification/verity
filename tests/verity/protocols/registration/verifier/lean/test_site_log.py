@@ -77,7 +77,7 @@ FIRST = {
                              Link("chal0-link", ("chal0", "node0"), 100_000, 1_000_000))),
     "remote": replace(NODE, links=(Link("uplink0", ("node0", OUTSIDE), 100_000, 100_000),)),
 }
-"""Each composite's first entry: onsite, the uplink split by the network certifier and the memory attester's link to
+"""Each composite's first entry: onsite, the uplink split by the network attester and the memory attester's link to
 the node; remote, a bare uplink."""
 LATER = Entry("", locs=(Loc("gpu2", "device", "node0", sheet=B), Loc("hbm2", "memory", "gpu2", tier="hbm", bytes=128 << 30),
                         leaf("nvme1", "disk")))
