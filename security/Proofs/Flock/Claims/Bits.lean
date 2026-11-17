@@ -38,24 +38,12 @@ import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Prob
 
-/-!
-# Bits from KS, and soundness from KS
-
-`B`'s two runs make at most `2t` SHA-512 calls when each run makes at most `t` (both parties'), so the strict birthday
-bound gives `Pr[B] ≤ (2t)²/2^513`, and KS gives
-`Pr[acc ∧ ¬R] ≤ κ + t·√γ·2^{−255.5} ≤ t · 2 · max(κ, √γ·2^{−255.5}) ≤ t · 2^{−λ}` at
-`λ = min(log₂(1/κ), 255.5 − ½ log₂ γ) − 1` (`Bits_of_KS`). Flock's `Bits` follows from Flock's `KS`
-(`Flock.Bits_of_KS`), and at bounds `κ ≤ 2^{−a}`, `γ ≤ 2^b` Flock has `min(a, 255.5 − b/2) − 1` bits (`lamOf_ge`,
-`Flock.Bits_ge`): the deployed parameters' numbers enter only there. Soundness is a corollary of KS under
-`R(x, ⊥) := False` (`sound_of_KS`).
--/
+/-! Flock's `Bits` from its `KS`, by the strict birthday bound on `B`'s two runs. -/
 
 @[expose] public section
 
 namespace Claims
 
-/-- **KS and the birthday bound give the bits.** If `p ≤ κ + √(γ · q²/2^513)` with `q = 2t`, then
-`p ≤ t · 2 · max(κ, √γ · 2^{−255.5})`. -/
 theorem bits_of_ks {p κ γ t : ℝ} (hκ : 0 ≤ κ) (hγ : 0 ≤ γ) (ht : 1 ≤ t)
     (h : p ≤ κ + Real.sqrt (γ * ((2 * t) ^ 2 / 2 ^ (513 : ℝ)))) :
     p ≤ t * (2 * max κ (Real.sqrt γ * 2 ^ (-(255.5 : ℝ)))) := by
@@ -76,7 +64,6 @@ theorem bits_of_ks {p κ γ t : ℝ} (hκ : 0 ≤ κ) (hγ : 0 ≤ γ) (ht : 1 �
   have ht0 : 0 ≤ t := by linarith
   nlinarith [mul_le_mul_of_nonneg_left hm1 ht0, mul_le_mul_of_nonneg_left hm2 ht0]
 
-/-- `2 · max(κ, √γ·2^{−255.5}) = 2^{−λ}` at `λ = lamOf κ γ`, for `κ, γ > 0`. -/
 theorem two_max_eq {κ γ : ℝ} (hκ : 0 < κ) (hγ : 0 < γ) :
     2 * max κ (Real.sqrt γ * 2 ^ (-(255.5 : ℝ))) = 2 ^ (-lamOf κ γ) := by
   unfold lamOf
@@ -96,7 +83,6 @@ theorem two_max_eq {κ γ : ℝ} (hκ : 0 < κ) (hγ : 0 < γ) :
   nth_rewrite 1 [hk]
   rw [hmax, show -(min a b - 1) = 1 + -(min a b) by ring, Real.rpow_add (by norm_num), Real.rpow_one]
 
-/-- `2 · max(κ, √γ·2^{−255.5}) ≤ 2^{−λ}` at `λ = lamOf κ γ`, for `κ > 0` and `γ ≥ 0` (`γ = 0` reads `log₂ 0` as `0`). -/
 theorem two_max_le {κ γ : ℝ} (hκ : 0 < κ) (hγ : 0 ≤ γ) :
     2 * max κ (Real.sqrt γ * 2 ^ (-(255.5 : ℝ))) ≤ 2 ^ (-lamOf κ γ) := by
   rcases hγ.lt_or_eq with hγ | rfl
@@ -111,7 +97,6 @@ theorem two_max_le {κ γ : ℝ} (hκ : 0 < κ) (hγ : 0 ≤ γ) :
     nth_rewrite 1 [hk]
     exact Real.rpow_le_rpow_of_exponent_le (by norm_num) (neg_le_neg (min_le_left _ _))
 
-/-- **The bits at bounds**: `κ ≤ 2^{−a}` and `γ ≤ 2^b` give `λ ≥ min(a, 255.5 − b/2) − 1`. -/
 theorem lamOf_ge {κ γ a b : ℝ} (hκ0 : 0 < κ) (hκ : κ ≤ 2 ^ (-a)) (hγ0 : 0 < γ) (hγ : γ ≤ 2 ^ b) :
     min a (255.5 - b / 2) - 1 ≤ lamOf κ γ := by
   unfold lamOf
@@ -126,14 +111,12 @@ section KS
 
 variable {Coin W : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
 
-/-- `Bits` weakens to fewer bits. -/
 theorem Bits_mono {H : Msg → Msg} {V : Verifier Coin} {R : Rel W} {E : Extractor Coin W V} {lam lam' : Msg → ℝ}
     (h : Bits H V R E lam) (hle : ∀ x, lam' x ≤ lam x) : Bits H V R E lam' := by
   intro x Ω _ _ P t ht hrun hSB
   exact (h x Ω P t ht hrun hSB).trans (mul_le_mul_of_nonneg_left
     (Real.rpow_le_rpow_of_exponent_le (by norm_num) (neg_le_neg (hle x))) (Nat.cast_nonneg t))
 
-/-- **Bits from KS**: KS with `κ > 0` and `γ ≥ 0`, and the strict birthday bound for `B`, give `λ = lamOf κ γ` bits. -/
 theorem Bits_of_KS {H : Msg → Msg} {V : Verifier Coin} {R : Rel W} {E : Extractor Coin W V} {κ γ : Msg → ℝ}
     (h : KS H V R E κ γ) (hκ : ∀ x, 0 < κ x) (hγ : ∀ x, 0 ≤ γ x) :
     Bits H V R E fun x => lamOf (κ x) (γ x) := by
@@ -152,7 +135,6 @@ theorem Bits_of_KS {H : Msg → Msg} {V : Verifier Coin} {R : Rel W} {E : Extrac
   refine (bits_of_ks (hκ x).le (hγ x) ht1 hks').trans ?_
   exact mul_le_mul_of_nonneg_left (two_max_le (hκ x) (hγ x)) (by linarith)
 
-/-- **Soundness is a corollary of KS** (`R(x, ⊥) := False`): at `x ∉ L_R`, `Pr[acc] ≤ κ(x) + √(γ(x)·Pr[B])`. -/
 theorem sound_of_KS {H : Msg → Msg} {V : Verifier Coin} {R : Rel W} {E : Extractor Coin W V} {κ γ : Msg → ℝ}
     (h : KS H V R E κ γ) (x : Msg) (hx : ¬ R.L x) (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Prover Ω) :
     Pr (fun s : Ω × (Fin (V.k x) → Coin) => (run H P V x s.1 s.2).out = .acc) ≤
@@ -182,13 +164,10 @@ theorem κ_pos {Coin Col T : Type} (D : Deploy Coin Col T) (x : Msg) (hε : 0 �
 theorem γ_nonneg {Coin Col T : Type} (D : Deploy Coin Col T) (x : Msg) : 0 ≤ γ D x := by
   unfold γ; positivity
 
-/-- **Flock: bits from KS**: Flock's KS, with the table error nonnegative, gives Flock's bits. -/
 theorem Bits_of_KS {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col]
     {H : Msg → Msg} {D : Deploy Coin Col T} (h : KS H D) (hε : ∀ x, 0 ≤ D.εtable x) : Bits H D :=
   fun decode hdec => Claims.Bits_of_KS (h decode hdec) (fun x => κ_pos D x (hε x)) (γ_nonneg D)
 
-/-- **Flock: bits at bounds**: Flock's KS, with `κ ≤ 2^{−a}` and `0 < γ ≤ 2^b`, gives `min(a, 255.5 − b/2) − 1` bits at
-every decoder that meets the spec. -/
 theorem Bits_ge {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col]
     {H : Msg → Msg} {D : Deploy Coin Col T} (h : KS H D) (hε : ∀ x, 0 ≤ D.εtable x) {a b : Msg → ℝ}
     (hκ : ∀ x, κ D x ≤ 2 ^ (-a x)) (hγ0 : ∀ x, 0 < γ D x) (hγ : ∀ x, γ D x ≤ 2 ^ b x) (decode : List (ℕ × Col) → List T)

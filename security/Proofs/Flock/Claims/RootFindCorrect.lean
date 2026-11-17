@@ -4,19 +4,7 @@ public import Proofs.Flock.Claims.RootFindAlg
 public import Mathlib.Algebra.Polynomial.Roots
 import Mathlib.FieldTheory.Finite.Basic
 
-/-!
-# The root finder is correct
-
-* The loops compute modulo `g`: `sqLoop` is `u^(2^j)` (`sqLoop_dvd`) and `traceLoop` is `acc + Σ_{i<j} u^(2^i)`
-  (`traceLoop_dvd`), each up to a multiple of `g`.
-* `X^q − X` for `q = |F|` has every element of `F` as a root, once, so a monic divisor `g` has distinct roots, as many as
-  its degree (`roots_nodup_of_dvd`, `card_roots_of_dvd`). `rootProduct` is such a divisor with `f`'s roots
-  (`rootProduct_spec`).
-* At a root `c` of `g`, `Tr(β·X) mod g` is `Tr(β·c)`, which is 0 or 1 (`trace_sq`), so `gcd(g, Tr(β·X) mod g)` has the
-  roots `c` of `g` with `Tr(β·c) = 0`. A split `trySplit` returns is a factorization `g = h·k` into monic pieces of
-  smaller degree (`trySplit_some`), and `β` splits `g` when `g` has roots on both sides (`trySplit_isSome`).
-* `split` lists `g`'s roots, each once (`split_spec`), and so `roots` lists `f`'s (`roots_spec`).
--/
+/-! The root finder is correct. -/
 
 @[expose] public section
 
@@ -41,7 +29,6 @@ theorem dvd_rem_sub [DecidableEq F] {p g : List F} (hg : Norm g) (hne : g ≠ []
 theorem sq_pow_two_pow (u : F[X]) (i : ℕ) : (u * u) ^ 2 ^ i = u ^ 2 ^ (i + 1) := by
   rw [← sq, ← pow_mul, ← pow_succ']
 
-/-- `sqLoop` squares modulo `g`. -/
 theorem sqLoop_dvd [DecidableEq F] {g : List F} (hg : Norm g) (hne : g ≠ []) :
     ∀ (j : ℕ) (u : List F), toPoly g ∣ toPoly (sqLoop g j u).val - toPoly u ^ 2 ^ j
   | 0, u => by simp [sqLoop]
@@ -55,7 +42,6 @@ theorem sqLoop_dvd [DecidableEq F] {g : List F} (hg : Norm g) (hne : g ≠ []) :
     have := dvd_add ih h2
     rwa [sub_add_sub_cancel] at this
 
-/-- `traceLoop` sums the squares modulo `g`. -/
 theorem traceLoop_dvd [DecidableEq F] {g : List F} (hg : Norm g) (hne : g ≠ []) :
     ∀ (j : ℕ) (acc u : List F), toPoly g ∣
       toPoly (traceLoop g j acc u).val - (toPoly acc + ∑ i ∈ Finset.range j, toPoly u ^ 2 ^ i)
@@ -89,8 +75,6 @@ theorem ne_zero_of_dvd_iff {h p q : F[X]} (hd : ∀ d, d ∣ h ↔ d ∣ p ∧ d
 theorem ne_nil_of_toPoly_ne_zero {l : List F} (h : toPoly l ≠ 0) : l ≠ [] := by
   rintro rfl; exact h rfl
 
-/-- A split `trySplit` returns: `g = h·k`, both monic and normalized, `h` of degree at least 1, both shorter than
-`g`. -/
 theorem trySplit_some [DecidableEq F] {n : ℕ} {g : List F} (hg : Norm g) (hgm : (toPoly g).Monic) {β : F}
     {hk : List F × List F} (h : (trySplit n g β).val = some hk) :
     Norm hk.1 ∧ Norm hk.2 ∧ (toPoly hk.1).Monic ∧ (toPoly hk.2).Monic ∧ toPoly g = toPoly hk.1 * toPoly hk.2 ∧
@@ -132,7 +116,6 @@ theorem trySplit_some [DecidableEq F] {n : ℕ} {g : List F} (hg : Norm g) (hgm 
     have lK := Kn.length_eq Km.ne_zero
     exact ⟨Hn, Kn, Hm, Km, egk, by omega, by omega, by omega, by omega⟩
 
-/-- `β` splits `g` when `g` has a root `a` with `Tr(β·a) = 0` and a root `b` with `Tr(β·b) ≠ 0`. -/
 theorem trySplit_isSome [DecidableEq F] {n : ℕ} {g : List F} (hg : Norm g) (hgm : (toPoly g).Monic) {β a b : F}
     (ha : (toPoly g).IsRoot a) (hb : (toPoly g).IsRoot b) (hta : trace n (β * a) = 0)
     (htb : trace n (β * b) ≠ 0) : (trySplit n g β).val.isSome := by
@@ -218,13 +201,11 @@ variable {F : Type} [Field F]
 theorem frob_ne_zero [Fintype F] : (X ^ Fintype.card F - X : F[X]) ≠ 0 :=
   FiniteField.X_pow_card_sub_X_ne_zero F Fintype.one_lt_card
 
-/-- A divisor of `X^q − X` has distinct roots. -/
 theorem roots_nodup_of_dvd [Fintype F] {g : F[X]} (h : g ∣ X ^ Fintype.card F - X) : g.roots.Nodup := by
   refine Multiset.nodup_of_le (roots.le_of_dvd frob_ne_zero h) ?_
   rw [FiniteField.roots_X_pow_card_sub_X]
   exact Finset.univ.nodup
 
-/-- A monic divisor of `X^q − X` has as many roots as its degree. -/
 theorem card_roots_of_dvd [Fintype F] {g : F[X]} (hg : g.Monic) (h : g ∣ X ^ Fintype.card F - X) :
     g.roots.card = g.natDegree := by
   obtain ⟨k, hk⟩ := h
@@ -242,7 +223,6 @@ theorem trace_add [CharP F 2] (n : ℕ) (a b : F) : trace n (a + b) = trace n a 
   simp only [trace, ← Finset.sum_add_distrib]
   exact Finset.sum_congr rfl fun i _ => add_pow_char_pow a b 2 i
 
-/-- `Tr(a)² = Tr(a)`. -/
 theorem trace_sq [Fintype F] [CharP F 2] {n : ℕ} (hcard : Fintype.card F = 2 ^ n) (a : F) : trace n a ^ 2 = trace n a := by
   have hfrob : a ^ 2 ^ n = a := hcard ▸ FiniteField.pow_card a
   rw [trace, sum_pow_char 2]
@@ -260,7 +240,6 @@ theorem trace_eq_zero_or_one [Fintype F] [CharP F 2] {n : ℕ} (hcard : Fintype.
   · exact Or.inl h0
   · exact Or.inr (sub_eq_zero.1 h1)
 
-/-- **The root product**: normalized, monic, a divisor of `X^q − X`, with `f`'s roots. -/
 theorem rootProduct_spec [Fintype F] [DecidableEq F] {n : ℕ} (hcard : Fintype.card F = 2 ^ n) {f : List F} (hf : toPoly f ≠ 0) :
     Norm (rootProduct n f).val ∧ (toPoly (rootProduct n f).val).Monic ∧
       toPoly (rootProduct n f).val ∣ X ^ Fintype.card F - X ∧
@@ -295,7 +274,6 @@ theorem rootProduct_spec [Fintype F] [DecidableEq F] {n : ℕ} (hcard : Fintype.
     rw [IsRoot.def, eval_eq_of_dvd_sub hw (he ▸ ha)]
     simp [FiniteField.pow_card]
 
-/-- **`split` lists the roots of a monic divisor of `X^q − X`, each once**, given `fuel` at least its length. -/
 theorem split_spec [Fintype F] [DecidableEq F] [CharP F 2] {n : ℕ} (hcard : Fintype.card F = 2 ^ n) {basis : List F}
     (hsep : Separates n basis) : ∀ (fuel : ℕ) (g : List F), Norm g → (toPoly g).Monic →
       toPoly g ∣ X ^ Fintype.card F - X → g.length ≤ fuel →
@@ -361,8 +339,6 @@ theorem split_spec [Fintype F] [DecidableEq F] [CharP F 2] {n : ℕ} (hcard : Fi
             ((mem_roots Km.ne_zero).2 ((B2 x).1 hy))
         · rw [List.mem_append, A2, B2, egk, IsRoot.def, IsRoot.def, IsRoot.def, eval_mul, mul_eq_zero]
 
-/-- **The root finder is correct**: over `F` of characteristic 2 with `2^n` elements and a separating `basis`, for
-`f ≠ 0` it lists `f`'s roots, each once. -/
 theorem roots_spec [Fintype F] [DecidableEq F] [CharP F 2] {n : ℕ} (hcard : Fintype.card F = 2 ^ n) {basis : List F}
     (hsep : Separates n basis) {f : List F} (hf : toPoly f ≠ 0) :
     (roots n basis f).Nodup ∧ ∀ a, a ∈ roots n basis f ↔ (toPoly f).IsRoot a := by

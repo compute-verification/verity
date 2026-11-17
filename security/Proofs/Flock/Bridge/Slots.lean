@@ -3,22 +3,7 @@ module
 public import Proofs.Flock.Bridge.Lowers
 public import Proofs.Flock.Claims.Sampling.InputSlot
 
-/-!
-# The population's slots, then the input class, partition the lowered program
-
-`partitions_slots`: the population in strata of sizes `ns` that hold its `n` units, slot `u` unit `u`'s lowered gates
-(`unitGates`), then the input class of `progOf C κ` (`InputSlot.withInputs`), each input gate a slot of its own,
-partition `progOf C κ` (`Partition.Partitions`), where every unit has a lowered gate and commits at most `sizeClassMax`
-values.
-
-* No gate is in two slots: two wires' lowered gates don't meet (`block_inj`), so neither do two units'
-  (`disjoint_unitGates`), and a computed wire lowers to no input gate (`progOf_ne_input_of_unit`), so no unit's gate is
-  an input slot's.
-* Every gate but a constant is in a slot: an input gate is its own, and every other is a computed wire's lowered gate,
-  so its unit's (`exists_unitGates`).
-* Every slot's commitment fits a size class (`sizeClass_of_le_max`): a unit's by hypothesis, and an input slot's, one gate,
-  is at most `1`.
--/
+/-! The population's slots, then the input class, partition the lowered program (`partitions_slots`). -/
 
 @[expose] public section
 
@@ -28,7 +13,6 @@ open FlockSoundness.Audit Claims.Sampling
 
 variable {C : Verity.Boolean.Circuit} {κ : Fin C.N → Option Bool}
 
-/-- **A commitment of at most `sizeClassMax` values has a size class**, which holds it. -/
 theorem sizeClass_of_le_max {Cp : Prog} {u : List ℕ} (h : committed Cp u ≤ sizeClassMax) :
     ∃ w, sizeClass Cp u = some w ∧ committed Cp u ≤ w := by
   have hlog : Nat.log2 (sizeClassMax / 16) = 14 := by
@@ -46,7 +30,6 @@ theorem lower_ne_input {g : Fin C.N} (hni : (C.op g).isInput = false) : ∀ x �
   unfold lower
   cases h : C.op g <;> simp_all [Verity.Boolean.Op.isInput]
 
-/-- A unit's lowered gates are not inputs: only an input gate lowers to one, and no unit holds an input. -/
 theorem progOf_ne_input_of_unit {n : ℕ} {P : Partition C n} {u : Fin n} {p : ℕ} (hp : p ∈ unitGates P u) :
     (progOf C κ).gates[p]? ≠ some .input := by
   obtain ⟨g, hu, j, hj, rfl⟩ := mem_unitGates.1 hp
@@ -86,7 +69,6 @@ theorem disjoint_unitGates {n : ℕ} (P : Partition C n) {u v : Fin n} (huv : u 
   obtain ⟨rfl, -⟩ := block_inj hj hk he
   exact huv (Option.some.inj (hg.symm.trans hh))
 
-/-- **Every gate of the lowered program but a constant or an input is some unit's.** -/
 theorem exists_unitGates {n : ℕ} (P : Partition C n) {i : ℕ} (hi : i < (progOf C κ).gates.length)
     (hc : ∀ b, (progOf C κ).gates[i]? ≠ some (.const b)) (hin : (progOf C κ).gates[i]? ≠ some .input) :
     ∃ u, i ∈ unitGates P u := by
@@ -111,8 +93,6 @@ theorem blocks_slots {n : ℕ} (P : Partition C n) (κ : Fin C.N → Option Bool
   rw [InputSlot.blocks_withInputs]
   simp [Partition.blocks, List.flatten_splitLengths ((List.finRange n).map (unitGates P)) ns (by simpa using hns)]
 
-/-- **The population's slots, then the input class, partition the lowered program**, where every unit has a lowered
-gate and commits at most `sizeClassMax` values. -/
 theorem partitions_slots {n : ℕ} (P : Partition C n) (κ : Fin C.N → Option Bool) {ns : List ℕ} (hns : n ≤ ns.sum)
     (hne : ∀ u, unitGates P u ≠ []) (hw : ∀ u, committed (progOf C κ) (unitGates P u) ≤ sizeClassMax) :
     (InputSlot.withInputs ⟨[ns.splitLengths ((List.finRange n).map (unitGates P))]⟩ (progOf C κ)).Partitions

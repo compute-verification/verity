@@ -12,19 +12,7 @@ import all Init.Data.Int.Repr
 import all Init.Data.Ord.String
 import all Lean.Data.Json.Basic
 
-/-!
-# Canonical JSON reads back
-
-`Flock.canonUtf8` prints a value so that it reads back. Each value's text starts with a character no comma or closing
-bracket is (`canon_starts`), and ends where it ends when a comma or a closing bracket follows (`canon_read`): a numeral
-at its first non-digit, a string at its first unescaped quote (`Canon.canonStr_split`), a list or an object at its
-closing bracket, item by item (`inter_read`). So two values whose objects hold their keys in order
-(`Spot.sortedKeys`, as every parse's do) and print the same text are equivalent (`canon_inj`): `canonUtf8`
-sorts an object's fields by key, which leaves a sorted object's where they are (`qsort_keys`).
-
-A field read of a sorted object is a lookup of the field in its fields' list (`get?_lookup`, `sorted_toList`), and
-objects of one form hold one form at each key (`lookup_forms`).
--/
+/-! `Flock.canonUtf8`'s canonical JSON reads back. -/
 
 @[expose] public section
 
@@ -35,8 +23,6 @@ open Spot (sortedKeys increasing getD field?)
 open FlockDeploy (JsonEquiv jsonForm jsonForms jsonForms_eq jsonForm_obj FieldForms JsonForm JsonForms)
 open Properties.Pouw.LiveSalt.Canon (canon_arr canon_obj canonStr_split canonStr_toList nat_split)
 open Std.DTreeMap.Internal (Impl)
-
-/-! ## Sorted values -/
 
 theorem sortedKeys_arr {a : Array Json} : sortedKeys (.arr a) = true ↔ ∀ x ∈ a, sortedKeys x = true := by
   rw [sortedKeys, Array.all_eq_true']
@@ -62,12 +48,8 @@ theorem increasing_iff : ∀ {l : List String}, increasing l = true ↔ l.Pairwi
     · intro h
       exact ⟨List.rel_of_pairwise_cons h (List.mem_cons_self), h.of_cons⟩
 
-/-! ## Lists of items -/
-
-/-- What may follow a value's text in canonical JSON: a comma or a closing bracket. -/
 def Stop (r : List Char) : Prop := ∃ c rest, r = c :: rest ∧ (c = ',' ∨ c = ']' ∨ c = '}')
 
-/-- A text that starts with a character no comma or closing bracket is. -/
 def Starts (s : List Char) : Prop := ∃ c rest, s = c :: rest ∧ c ≠ ',' ∧ c ≠ ']' ∧ c ≠ '}'
 
 theorem stop_cons {c : Char} {r : List Char} (h : c = ',' ∨ c = ']' ∨ c = '}') : Stop (c :: r) := ⟨c, r, rfl, h⟩
@@ -78,8 +60,6 @@ theorem inter_cons (x : List Char) (t : List (List Char)) (r : List Char) :
   | nil => simp
   | cons y t => simp [List.intercalate_cons_cons]
 
-/-- **Items separated by commas, then a closing bracket, read back**, each item's text ending where it ends when a comma
-or a closing bracket follows it (`hR`) and starting with neither. -/
 theorem inter_read {c : Char} (hc : c = ']' ∨ c = '}') :
     ∀ {xs ys : List (List Char)} {r r' : List Char}, (∀ x ∈ xs, Starts x) → (∀ y ∈ ys, Starts y) →
       (∀ x ∈ xs, ∀ y ∈ ys, ∀ r r', Stop r → Stop r' → x ++ r = y ++ r' → x = y) →
@@ -134,8 +114,6 @@ theorem inter_read {c : Char} (hc : c = ']' ∨ c = '}') :
             (fun a ha b hb => hR a (List.mem_cons_of_mem _ ha) b (List.mem_cons_of_mem _ hb)) (List.cons.inj h).2
           exact ⟨by rw [he], hr⟩
 
-/-! ## `List.mapM` and `List.Forall₂` -/
-
 theorem mapM_forall₂ {α β : Type} {f : α → Flock.V β} :
     ∀ {l : List α} {ys : List β}, l.mapM f = .ok ys → List.Forall₂ (fun x y => f x = .ok y) l ys
   | [], ys, h => by
@@ -180,8 +158,6 @@ theorem forall₂_imp {α β : Type} {R S : α → β → Prop} (hRS : ∀ x y, 
   | _, _, .nil => .nil
   | _, _, .cons h hs => .cons (hRS _ _ h) (forall₂_imp hRS hs)
 
-/-! ## The texts `canonUtf8` prints -/
-
 theorem text_null {s : String} (h : Flock.canonUtf8 .null = .ok s) : s.toList = ['n', 'u', 'l', 'l'] := by
   rw [Flock.canonUtf8] at h
   cases h
@@ -219,10 +195,8 @@ theorem text_arr {a : Array Json} {s : String} (h : Flock.canonUtf8 (.arr a) = .
     · rw [← Array.toList_mapM, hm]; rfl
     · simp [String.toList_append, String.toList_intercalate]
 
-/-- An object's item as `canonUtf8` prints it: its key, a colon and its value's text. -/
 def item (kv : String × String) : List Char := (Flock.canonStrUtf8 kv.1).toList ++ ':' :: kv.2.toList
 
-/-- `canonUtf8`'s order on an object's printed fields: by key. -/
 def keyLt (a b : String × String) : Bool := a.1 < b.1
 
 theorem text_obj {kvs : Std.TreeMap.Raw String Json} {s : String} (h : Flock.canonUtf8 (.obj kvs) = .ok s) :
@@ -254,8 +228,6 @@ theorem pair_ok {p : String × Json} {kv : String × String}
     subst h
     exact ⟨rfl, rfl⟩
 
-/-! ## Where a text starts -/
-
 theorem digits_ne {c : Char} (h : c.isDigit = true) : c ≠ ',' ∧ c ≠ ']' ∧ c ≠ '}' ∧ c ≠ '-' ∧ c ≠ 'n' ∧ c ≠ 't' ∧
     c ≠ 'f' ∧ c ≠ '"' ∧ c ≠ '[' ∧ c ≠ '{' := by
   refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩ <;> (rintro rfl; simp at h)
@@ -277,12 +249,10 @@ theorem int_text (m : Int) : (∃ n : Nat, m = n ∧ (toString m).toList = (toSt
   | ofNat n => exact .inl ⟨n, rfl, rfl⟩
   | negSucc n => exact .inr ⟨n, rfl, by simp [toString, Int.repr]⟩
 
-/-- The class of value a text's first character starts. -/
 def cls (c : Char) : Nat :=
   if c = 'n' then 0 else if c = 't' ∨ c = 'f' then 1 else if c = '"' then 3 else if c = '[' then 4
   else if c = '{' then 5 else 2
 
-/-- A value's class. -/
 def kind : Json → Nat
   | .null => 0
   | .bool _ => 1
@@ -294,7 +264,6 @@ def kind : Json → Nat
 theorem canonStr_head (x : String) : ∃ rest, (Flock.canonStrUtf8 x).toList = '"' :: rest :=
   ⟨_, by rw [canonStr_toList]; rfl⟩
 
-/-- **A value's text starts with a character of its class**, which no comma or closing bracket is. -/
 theorem canon_head {a : Json} {s : String} (h : Flock.canonUtf8 a = .ok s) :
     ∃ c rest, s.toList = c :: rest ∧ cls c = kind a ∧ c ≠ ',' ∧ c ≠ ']' ∧ c ≠ '}' := by
   cases a with
@@ -326,8 +295,6 @@ theorem canon_starts {a : Json} {s : String} (h : Flock.canonUtf8 a = .ok s) : S
   obtain ⟨c, rest, hs, -, h1, h2, h3⟩ := canon_head h
   exact ⟨c, rest, hs, h1, h2, h3⟩
 
-/-! ## Numerals -/
-
 theorem stop_digit {r : List Char} (h : Stop r) : ∃ c rest, r = c :: rest ∧ c.isDigit = false := by
   obtain ⟨c, rest, rfl, hc⟩ := h
   refine ⟨c, rest, rfl, ?_⟩
@@ -349,9 +316,6 @@ theorem int_split {m m' : Int} {r r' : List Char} (hr : Stop r) (hr' : Stop r')
   · have := (nat_split hc hc' (List.cons.inj h).2).1
     rw [Nat.add_right_cancel this]
 
-/-! ## Unique readability -/
-
-/-- What `canon_read` concludes of two texts: they are one text, and of sorted values, of equivalent ones. -/
 def Reads (a b : Json) (s t : String) : Prop := s = t ∧ (sortedKeys a = true → sortedKeys b = true → JsonEquiv a b)
 
 theorem jsonForm_arr (a : Array Json) : jsonForm (.arr a) = .arr (.ofList (a.toList.map jsonForm)) := by
@@ -378,7 +342,6 @@ theorem item_starts (kv : String × String) : Starts (item kv) := by
   obtain ⟨rest, hr⟩ := canonStr_head kv.1
   exact ⟨'"', rest ++ ':' :: kv.2.toList, by simp [item, hr], by decide, by decide, by decide⟩
 
-/-- `qsort` by key leaves an array whose keys strictly increase where it is. -/
 theorem qsort_keys {as : Array (String × String)} (hp : (as.toList.map (·.1)).Pairwise (· < ·)) :
     as.qsort keyLt = as := by
   rw [List.pairwise_map, List.pairwise_iff_getElem] at hp
@@ -394,7 +357,6 @@ theorem qsort_keys {as : Array (String × String)} (hp : (as.toList.map (·.1)).
     simp only [Array.getElem_toList] at this
     simp [String.lt_asymm this, Nat.lt_asymm hij]
 
-/-- The induction step for lists: items that read back, read back as a list. -/
 theorem arr_read {a b : Array Json} {s t : String}
     (ih : ∀ x ∈ a.toList, ∀ (y : Json) (s t : String) (r r' : List Char), Flock.canonUtf8 x = .ok s →
       Flock.canonUtf8 y = .ok t → Stop r → Stop r' → s.toList ++ r = t.toList ++ r' → Reads x y s t)
@@ -429,7 +391,6 @@ theorem arr_read {a b : Array Json} {s t : String}
   show jsonForm (.arr a) = jsonForm (.arr b)
   rw [jsonForm_arr, jsonForm_arr, forall₂_map_eq F]
 
-/-- The induction step for objects: values that read back, read back as an object. -/
 theorem obj_read {m n : Std.TreeMap.Raw String Json} {s t : String}
     (ih : ∀ p ∈ m.toArray.toList, ∀ (y : Json) (s t : String) (r r' : List Char), Flock.canonUtf8 p.2 = .ok s →
       Flock.canonUtf8 y = .ok t → Stop r → Stop r' → s.toList ++ r = t.toList ++ r' → Reads p.2 y s t)
@@ -490,8 +451,6 @@ theorem obj_read {m n : Std.TreeMap.Raw String Json} {s t : String}
   rw [jsonForm_obj, jsonForm_obj, ← Std.TreeMap.Raw.toList_toArray, ← Std.TreeMap.Raw.toList_toArray (t := n),
     forall₂_map_eq F]
 
-/-- **Canonical JSON reads back**: two values' texts, each followed by a comma or a closing bracket, agree only if the
-texts are one text, and two sorted values print one text only if they are equivalent. -/
 theorem canon_read : ∀ (N : Nat) (a b : Json) (s t : String) (r r' : List Char), sizeOf a < N →
     Flock.canonUtf8 a = .ok s → Flock.canonUtf8 b = .ok t → Stop r → Stop r' → s.toList ++ r = t.toList ++ r' →
     Reads a b s t := by
@@ -531,13 +490,10 @@ theorem canon_read : ∀ (N : Nat) (a b : Json) (s t : String) (r r' : List Char
     · rename_i m n
       exact obj_read (fun p hp y s t r r' => ihN p.2 y s t r r' (by have := obj_lt m hp; omega)) hs ht h
 
-/-- **Two sorted values with one canonical text are equivalent.** -/
 theorem canon_inj {a b : Json} {s : String} (ha : sortedKeys a = true) (hb : sortedKeys b = true)
     (hs : Flock.canonUtf8 a = .ok s) (ht : Flock.canonUtf8 b = .ok s) : JsonEquiv a b :=
   (canon_read _ a b s s ['}'] ['}'] (Nat.lt_succ_self _) hs ht (stop_cons (.inr (.inr rfl)))
     (stop_cons (.inr (.inr rfl))) rfl).2 ha hb
-
-/-! ## Field reads -/
 
 theorem form_obj {a : Json} {fs : FieldForms} (h : jsonForm a = .obj fs) : ∃ m, a = .obj m := by
   cases a with
@@ -579,8 +535,8 @@ theorem lookup_forms {l l' : List (String × Json)}
       · simp only [List.lookup, beq_eq_false_iff_ne.2 hk]
         exact ih ht
 
-/-- **A field read of an object whose keys increase is a lookup** in its fields' list. `Json.parse` builds objects
-whose trees nothing here proves well-formed; increasing keys in the tree's order are all the search needs. -/
+/-- `Json.parse` builds objects whose trees nothing here proves well-formed; increasing keys in the tree's order are all
+the search needs. -/
 theorem get?_lookup {m : Std.TreeMap.Raw String Json} (h : (m.toList.map (·.1)).Pairwise (· < ·)) (k : String) :
     m.get? k = m.toList.lookup k := by
   obtain ⟨⟨t⟩⟩ := m

@@ -3,12 +3,7 @@ module
 public import Batteries.Tactic.OpenPrivate
 public import Proofs.Flock.Claims.CanonText
 
-/-!
-# `Flock.canonStr`'s strings, read back
-
-`canonStr` writes each character as itself, a short escape, or a `\u` escape (two, a UTF-16 surrogate pair, above
-`0xFFFF`): `unesc` reads one back (`unesc_esc`).
--/
+/-! `Flock.canonStr`'s strings read back (`unesc_esc`). -/
 
 @[expose] public section
 
@@ -20,7 +15,6 @@ namespace Esc
 
 open Properties.Pouw.LiveSalt.Canon (unhexL nib)
 
-/-- What `Flock.canonStr` writes for one character. -/
 def esc (c : Char) : List Char :=
   match c with
   | '"' => ['\\', '"']
@@ -51,7 +45,6 @@ theorem canonStr_toList (s : String) : (Flock.canonStr s).toList = '"' :: s.toLi
       | (simp; done)
       | ((repeat' split) <;> simp_all)
 
-/-- `hex4`'s digit of `x`. -/
 def dg (x : Nat) : Char := if x < 10 then Char.ofNat (48 + x) else Char.ofNat (87 + x)
 
 theorem nib_dg : ∀ x, x < 16 → nib (dg x) = x := by decide
@@ -60,7 +53,6 @@ theorem hex4_toList (n : Nat) :
     (hex4 n).toList = [dg ((n >>> 12) % 16), dg ((n >>> 8) % 16), dg ((n >>> 4) % 16), dg ((n >>> 0) % 16)] := by
   simp only [hex4, String.toList_ofList, dg] <;> rfl
 
-/-- `hex4` of a number below `0x10000` is four hex digits that read back to it. -/
 theorem hex4_ok (n : Nat) (hn : n < 0x10000) : (hex4 n).toList.length = 4 ∧ unhexL (hex4 n).toList = n := by
   rw [hex4_toList]
   refine ⟨rfl, ?_⟩
@@ -71,18 +63,14 @@ theorem hex4_ok (n : Nat) (hn : n < 0x10000) : (hex4 n).toList.length = 4 ∧ un
   simp only [unhexL, List.foldl_cons, List.foldl_nil, nib_dg _ (Nat.mod_lt _ (by decide : 16 > 0)), e12, e8, e4, e0]
   omega
 
-/-- Whether a `\u` escape's number is a high surrogate, the first of a pair. -/
 def high (n : Nat) : Bool := 0xD800 ≤ n && n < 0xDC00
 
-/-- The character a surrogate pair `h`, `l` stands for. -/
 def pair (h l : Nat) : Nat := 0x10000 + (h - 0xD800) * 0x400 + (l - 0xDC00)
 
-/-- Reads a surrogate pair's second `\u` escape. -/
 def unescLow : List Char → Option (Nat × List Char)
   | '\\' :: 'u' :: a :: b :: c :: d :: r => some (unhexL [a, b, c, d], r)
   | _ => none
 
-/-- Reads one escape's character after its backslash. -/
 def unesc2 : List Char → Option (Char × List Char)
   | '"' :: r => some ('"', r)
   | '\\' :: r => some ('\\', r)
@@ -96,7 +84,6 @@ def unesc2 : List Char → Option (Char × List Char)
     else some (Char.ofNat (unhexL [a, b, c, d]), r)
   | _ => none
 
-/-- Reads one character of an escaped string. -/
 def unesc : List Char → Option (Char × List Char)
   | [] => none
   | c :: r => if c = '\\' then unesc2 r else some (c, r)

@@ -1,8 +1,3 @@
-/-
-Level 3: the lincheck's `Stmt.folded` (`Flock.Piop`). `folded_eq`: when `Stmt.folded` succeeds, its vector is
-`Stmt.fold`'s with `β` at the pin, halved at `ts` in turn, whether it read the block's structure (`foldedPartial`, a
-templated unit's range from its template: `partialRangesT_eq`) or folded flat. The lemmas it reads are `FoldedBase`.
--/
 module
 
 public import Proofs.Flock.Level3.FoldedBase
@@ -75,7 +70,6 @@ theorem foldedPartial_eq (st : Stmt) (alpha beta : F128) (lw rho ts w : Array F1
           exact hXsz (fun i => alpha * (lw[i % 64]! * (eqTable rho)[i / 64]!)) (fun i => lw[i % 64]! * (eqTable rho)[i / 64]!)
         · exact hXsz (fun i => alpha * (lw[i % 64]! * (eqTable rho)[i / 64]!)) (fun i => lw[i % 64]! * (eqTable rho)[i / 64]!)
       rw [hRsz] at hs
-      -- the halved side: each column's ranges, Δ entries and pin, weighted by `eq(ts reversed, ·)`
       rw [partial_eq_halve_fold ts.toList _ hv' s hs, hrev, Array.length_toList]
       have hterm : ∀ u ∈ Finset.range (2 ^ ts.size),
           of (eqTable ts.reverse)[u]! * of (v.modify st.pin (· + beta))[s + 64 * u]! =
@@ -113,7 +107,6 @@ theorem foldedPartial_eq (st : Stmt) (alpha beta : F128) (lw rho ts w : Array F1
         rw [sum_spot _ _ _ hs, hN]
         split_ifs <;> ring
       rw [hshare, hspot (fun ic => of alpha * of (eIn lw rho ic.1)), hspot (fun ic => of (eIn lw rho ic.1))]
-      -- the 64 entries `foldedPartial` computed
       have hpinL : ∀ X : Array F128, X.size = 64 →
           of (if st.pin < 2 ^ st.c.kLog then X.modify (st.pin % 64) (fun x => x + beta * (eqTable ts.reverse)[st.pin / 64]!)
             else X)[s]! =
@@ -139,8 +132,6 @@ theorem foldedPartial_eq (st : Stmt) (alpha beta : F128) (lw rho ts w : Array F1
       simp only [eIn, of_mul]
       rw [← hN, mul_comm (of (eqTable ts.reverse)[st.pin / 64]!) (of beta)]
 
-/-- **The folded comb.** When `Stmt.folded` succeeds, its 64 entries are `Stmt.fold`'s vector with `β` added at the pin,
-halved at `ts` in turn: whether it read the block's structure (`foldedPartial`) or folded flat. -/
 theorem folded_eq (st : Stmt) (alpha beta : F128) (lw rho ts w : Array F128)
     (h : st.folded alpha beta lw rho ts = .ok w) :
     ∃ v, st.fold alpha lw rho = .ok v ∧ w = ts.foldl (fun c t => halve t c) (v.modify st.pin (· + beta)) := by

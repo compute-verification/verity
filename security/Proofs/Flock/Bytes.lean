@@ -4,19 +4,7 @@ public import Flock.Bytes
 public import Flock.Hash
 public import Mathlib.Data.Set.Card
 
-/-!
-# Byte strings as lists of bytes, and the hex they are written in
-
-A byte string is read as its list of bytes (`bs`), and an encoding is split field by field, each of a width it fixes
-(`split_bytes`); `be64`, `be32` and SHA-512 have fixed widths (`be64_size`, `be32_size`, `hash_size`), and `be64`
-determines the number it writes (`be64_inj`, `be64_size_inj`). A byte array's
-fold is its list's (`foldl_eq`); `hexOf` writes each byte as two characters, one byte per pair, so two byte arrays with
-one hex string are one (`hexOf_inj`); lists cut into pieces of one length `k > 0` are one when their concatenations are
-(`flatten_inj`).
-
-The network attester's and the network records' byte lemmas (`Proofs.Properties.Certifier.Check.Bytes`,
-`Proofs.Properties.Certifier.Records.Bytes`) build on these, under the same names.
--/
+/-! Byte strings as lists of bytes, split field by field, and the hex they are written in. -/
 
 @[expose] public section
 
@@ -39,7 +27,6 @@ theorem bs_inj {a b : ByteArray} (h : bs a = bs b) : a = b := by
   apply ByteArray.ext
   simpa [bs] using h
 
-/-- Two lists that agree after a prefix of one length agree on the prefix and on the rest. -/
 theorem split {a a' r r' : List UInt8} (h : a ++ r = a' ++ r') (hl : a.length = a'.length) : a = a' ∧ r = r' :=
   List.append_inj h hl
 
@@ -84,7 +71,6 @@ theorem be64_inj {x y : UInt64} (h : be64 x = be64 y) : x = y := by
   simp only [Nat.reducePow] at a0 a1 a2 a3 a4 a5 a6 a7 hx hy ⊢
   omega
 
-/-- A length prefix of a string under `2^64` bytes determines its length. -/
 theorem be64_size_inj {n m : Nat} (hn : n < 2 ^ 64) (hm : m < 2 ^ 64) (h : be64 n.toUInt64 = be64 m.toUInt64) :
     n = m := by
   have := congrArg UInt64.toNat (be64_inj h)
@@ -159,7 +145,6 @@ theorem hexOf_length (x : UInt8) : (Flock.hexOf ⟨#[x]⟩).toList.length = 2 :=
 /-- A hex digit's value, of `0-9` and `a-f`. -/
 def nib (c : Char) : Nat := if c.toNat < 87 then c.toNat - 48 else c.toNat - 87
 
-/-- A two-digit hex string's value. -/
 def dec : List Char → Nat
   | [a, b] => nib a * 16 + nib b
   | _ => 0
@@ -169,7 +154,6 @@ theorem dec_hex_nat : ∀ n < 256, dec (Flock.hexOf ⟨#[n.toUInt8]⟩).toList =
 theorem dec_hex (x : UInt8) : dec (Flock.hexOf ⟨#[x]⟩).toList = x.toNat := by
   simpa using dec_hex_nat x.toNat x.toNat_lt
 
-/-- Lists cut into pieces of one length `k > 0` are one when their concatenations are. -/
 theorem flatten_inj {α : Type} {k : Nat} (hk : 0 < k) :
     ∀ {L L' : List (List α)}, (∀ x ∈ L, x.length = k) → (∀ x ∈ L', x.length = k) → L.flatten = L'.flatten →
       L = L'
@@ -191,7 +175,6 @@ theorem flatten_inj {α : Type} {k : Nat} (hk : 0 < k) :
     obtain ⟨rfl, e'⟩ := List.append_inj e (hx.trans hy.symm)
     rw [flatten_inj hk (fun z hz => h z (List.mem_cons_of_mem _ hz)) (fun z hz => h' z (List.mem_cons_of_mem _ hz)) e']
 
-/-- Two byte arrays with one hex string are one. -/
 theorem hexOf_inj {a b : ByteArray} (h : Flock.hexOf a = Flock.hexOf b) : a = b := by
   have e := congrArg String.toList h
   rw [hexOf_toList, hexOf_toList, List.flatMap_def, List.flatMap_def] at e

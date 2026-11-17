@@ -18,20 +18,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 import Proofs.Flock.Soundness.Game
 
-/-!
-# Proof of the integrity audit per server-time block, and pooled over a monitoring period's blocks
-
-* `Flock.SecurityProofs.integrity_on`: `IntegrityPooled` on a set `I` of the period's sampling blocks. The probability
-  that every sampling block of `I` is accepted and `I`'s incorrect proof blocks total at least `M` is at most
-  `(1 − q)^M + Σ_{t ∈ I} (ε_ks,t + ε_bind,t)`. It is `IntegrityPooled`'s proof with every sampling block outside `I`
-  weighing nothing: `monitoringPeriod_union` over the sampling blocks of `I` accepted with a sampled proof block incorrect, and
-  `monitoringPeriod_horizon` with weight `|W_t|` at a sampling block of `I` and `0` elsewhere, where the sampling block's miss
-  probability `≤ 1 = (1 − q)^0`.
-* `IntegrityBlock`: `integrity_on` at block `b`'s sessions, with `M = ⌈ln(1/δ)/q⌉`.
-* `IntegrityBlocks`: the union bound over the blocks (`value_exists_finset_le`), each block's by `IntegrityBlock`.
-* `IntegrityPooledBlocks`: `IntegrityPooled` over the monitoring period's `start B` sessions, whose terms regroup by
-  block (`sum_range_start`).
--/
+/-! Proof of the integrity audit per server-time block, and pooled over a monitoring period's blocks. -/
 
 @[expose] public section
 
@@ -40,7 +27,6 @@ namespace Flock.SecurityProofs
 open FlockSoundness FlockSoundness.Game Flock.Guarantees
 open scoped ENNReal
 
-/-- The incorrect proof blocks of the sampling blocks of `I`, as a sum over every sampling block weighing `0` outside `I`. -/
 theorem sum_filter_incorrect (I : Finset ℕ) (l : List SamplingBlockRec) :
     ((l.filter fun r => r.idx ∈ I).map SamplingBlockRec.incorrect).sum =
       (l.map fun r => if r.idx ∈ I then r.incorrect else 0).sum := by
@@ -51,7 +37,6 @@ theorem sum_filter_incorrect (I : Finset ℕ) (l : List SamplingBlockRec) :
       · simp [h, ih]
       · simp [h, ih]
 
-/-- **`IntegrityPooled` on a set `I` of the period's sampling blocks**, at `M` incorrect proof blocks. -/
 theorem integrity_on (W : ℕ → SamplingBlock) (T : ℕ) (I : Finset ℕ) {q : ℝ} (hq : 0 < q)
     (hqt : ∀ t ∈ I, q ≤ ((W t).kd : ℝ) / (W t).n)
     (hA3 : ∀ t ∈ I, Assumptions.UniformRandomBytes (W t).Lb (W t).src)
@@ -61,7 +46,6 @@ theorem integrity_on (W : ℕ → SamplingBlock) (T : ℕ) (I : Finset ℕ) {q :
       ENNReal.ofReal (1 - q) ^ M + ∑ t ∈ I, ((W t).ks + (W t).link) := by
   set x : ℝ≥0∞ := ENNReal.ofReal (1 - q)
   have hx : x ≤ 1 := ENNReal.ofReal_le_one.2 (by linarith)
-  -- some sampling block of `I` accepted with a sampled proof block incorrect
   have hA := monitoringPeriod_union (fun t => (W t).game) (fun t => (W t).record t)
     (fun r => r.idx ∈ I ∧ r.accepted ∧ r.sampledWrong) (fun t τ => (W t).CR τ)
     (fun t => if t ∈ I then (W t).ks + (W t).link else 0)
@@ -71,7 +55,6 @@ theorem integrity_on (W : ℕ → SamplingBlock) (T : ℕ) (I : Finset ℕ) {q :
         exact (prob_mono (fun o ho => ho.2) _ _).trans ((W t).accepted_drawnIncorrect_le τ hτ)
       · rw [ite_eq_right_of_eq_false _ _ (eq_false ht)]
         exact (prob_mono (q := fun _ => False) (fun o ho => ht ho.1) _ _).trans_eq (prob_false _ _)) T 0 s hs
-  -- every sample of `I` misses, with at least `M` incorrect proof blocks in `I`
   have hB := monitoringPeriod_horizon (fun t => (W t).game) (fun t => (W t).record t)
     (fun r => r.idx ∈ I → ¬ r.sampledWrong) (fun r => if r.idx ∈ I then r.incorrect else 0)
     (fun t τ => (W t).CR τ) x hx
@@ -105,7 +88,6 @@ theorem integrity_on (W : ℕ → SamplingBlock) (T : ℕ) (I : Finset ℕ) {q :
         rw [add_comm, ← Finset.sum_filter]
         exact add_le_add le_rfl (Finset.sum_le_sum_of_subset fun t ht => (Finset.mem_filter.1 ht).2)
 
-/-- The monitoring period's sessions, regrouped by block. -/
 theorem sum_range_start (S : ServerBlocks) (f : ℕ → ℝ≥0∞) :
     ∀ B, ∑ t ∈ Finset.range (S.start B), f t = ∑ b ∈ Finset.range B, ∑ t ∈ S.sessions b, f t
   | 0 => by simp [S.start_zero]

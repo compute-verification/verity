@@ -35,30 +35,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Bridge.KSLive
 
-/-!
-# `SampledKSLiveV2` with a public error
-
-`SampledKSLiveV2` bounds `Pr[verity-verify-proof accepts ∧ ¬ RelS]` by three terms, two of which read the prover's run:
-`ksAvgStrictZ (planZHJ dj y₀) L k q_F q_S (reg σ)`, at the prover's registration, and
-`Q_s = Σ_c |Ω_c|/|Ω|` (`ΩcZ`), at its binding. Neither depends on the prover in value, and each is at most a number read
-off the public parameters:
-
-* `ε_ks ≤ ksClosedM1 k qF qS / (1 − ρ)`: every table of `planZHJ` is at Flock ZK's parameters (`planZHJ_M1W`, from
-  what `verify --zk` checks at setup, at every registration: `planZHJ` reads none), so `ksAvgStrictZ_planZHJ_le_closed`
-  applies, and its rate `2^23/(ek)` is at most `ρ`;
-* `Q_s ≤ W`, `W = Σ_u |io u|` (`Bridge.ioSum`) the committed wires each unit of the circuit's partition computes or
-  reads: a sample reads a commit string only through such a wire of a sampled proof block (`qs_le_io`). It is `Σ_u`, not
-  `k_d · max_u`, because the live subset sample on finite bytes samples every unit when it runs out (`SamplingDesign.execOS`).
-
-So `SampledKSLivePub` is `SampledKSLiveV2` with its error `Bridge.deltaPub`:
-$$\binom{n-K_0}{k_d}\Big/\binom{n}{k_d} + \frac{\mathrm{ksClosedM1}(k,q_F,q_S)}{1-\rho}
-  + \frac{W\,\big(2(t'+v)(1+k)/2^{256} + 1/(eM) + k/(eR_w)\big)}{1-\rho},$$
-at the knowledge finders' budgets `q_F = 2(t' + v)` and `q_S = t' + v` and the link finders' per-run cost `t' + v`
-(`SampledKSLiveV2`'s: the prover's per-run time `t'` and one opening's verification `v`), a function of `n`, `k_d`,
-`K₀`, the analysis' `k`, `R_w`, `M`, `t'`, `v`, `ρ` and the circuit's partition. Its rate hypothesis reads only `k`
-(`rateM1 k ≤ ρ`) where `SampledKSLiveV2`'s reads the plan, and every other hypothesis, named assumption included, is
-`SampledKSLiveV2`'s.
--/
+/-! `SampledKSLivePub`: `SampledKSLiveV2` with its error `deltaPub` read off the public parameters. -/
 
 @[expose] public section
 
@@ -98,7 +75,6 @@ def SampledKSLivePub : Prop :=
     (hscope : Discharge.Layout.scopeOkH D.unroll = true)
     (_hrows : Bridge.RowsOk D.unroll)
     (_hdup : Flock.PortRoots.dupId D.unroll pub = false) (_hroots : Bridge.PortRoots.rootsColl D.unroll pub n = none)
-    -- the statement's descriptor, and the registration's query, whose population is the game's n units in order
     (desc : Claims.Msg) (qr : Lean.Json) (_hpop : Bridge.PopMatches desc qr n)
     (kd : ℕ) (_hkd : kd ≤ n) (hdiv : kd % nTab I = 0)
     (dj : Finset (Fin n) → Lean.Json) (S₀ : Finset (Fin n)) (d₀ : Lean.Json)
@@ -131,15 +107,12 @@ def SampledKSLivePub : Prop :=
           fun _ => sampleOkZKHJ_of_file I ht (Flock.Desc.parse_flat hD) kd n hdiv dj hCust.2 _)) τ
     let Xr := XplurZC execArith hs512 P (planZHJ dj y₀) (tabZHJ dj y₀) vb (reg σ) (cont σ) k Rw
     let δ : ℝ := ((n - K₀).choose kd : ℝ) / (n.choose kd : ℝ)
-    -- the deployed commitment's layout: the game's rows, read off the circuit file
     let Cc := (keyProg D.unroll hU n).circuit (Discharge.Layout.outsOf D.unroll hU n)
     let rows : Fin Cc.N → Option Bridge.RowAt := fun g =>
       (FlockSoundness.Discharge.HiddenExec.rowOfH D.unroll hU n (Discharge.Layout.outsOf D.unroll hU n) g).map fun r =>
         ⟨r.2.1.val, r.1.val, Discharge.Layout.portRowW D.unroll r.2.1, r.2.2.val⟩
-    -- the registration's frame-v3 roots, over the public file's rows
     let roots := Bridge.rootsOf D.unroll pub n
     let Cd := Bridge.commitDep Cc rows D.unroll pub n roots
-    -- the circuit's constants, public
     let κ : Fin Cc.N → Option Bool := fun g => Bridge.constsOf D.unroll hU n g
     -- cr/sha-512 for the knowledge finders of each table the prover's session runs, at their cost: two runs of the
     -- prover and two verifications for a rewinding finder, one of each for the self-clash finder
@@ -154,8 +127,6 @@ def SampledKSLivePub : Prop :=
         (auditLive L Reg (liveOfZJ dg (planZHJ dj y₀) N wr)) τ ≤
       ENNReal.ofReal (Bridge.deltaPub n kd K₀ k (2 * (t' + v)) (t' + v) (t' + v) M Rw (Bridge.ioSum P) ρ)
 
-/-- **`SampledKSLiveV2`'s error is at most `deltaPub`**: its sample term is `deltaPub`'s first, its knowledge term at most
-the second (`ksAvgStrictZ_planZHJ_le_closed`), and its binding error at most the third (`qs_le_io`). -/
 theorem sampledKSLivePub_of (h : SampledKSLiveV2) : SampledKSLivePub := by
   intro n Reg I ht D hD hU pub hpub hpt hscope hrows hdup hroots desc qr hpop kd hkd hdiv dj S₀ d₀ y₀ wr dg N Ω _ _ Lb src
     hA3 hTags hCust k Rw M hk hRw hM ρ hρ hρk t' ht' K₀ hK₀ τ v hv q L P vb σ Xr δ Cc rows roots Cd κ hCR hLink

@@ -1,13 +1,5 @@
-/-
-Level 3, L3-F: the GHASH polynomial `G` is irreducible, so `F128` is the field GF(2^128) (`GF128`, the field structure
-on the executable's representation, whose `+`, `*` and inverse are the executable's `add`, `mul` and `inv`). The certificate is Rabin's test,
-checked by the kernel on the executable's own multiplication:
-- `x^(2^128) = x` (`decide +kernel` on 64 squarings of `x`, giving `x64`, and 64 squarings of `x64`), so every
-  irreducible factor of `G` has degree dividing 128;
-- `x^(2^64) + x` has an inverse `w` (`w · (x64 + x) = 1`, one multiplication), so no irreducible factor of degree
-  dividing 64 divides `G`.
-The only divisor of 128 that does not divide 64 is 128 itself.
--/
+/- `G` is irreducible by Rabin's test, checked by the kernel on the executable's own multiplication, so `F128` is the
+field GF(2^128). -/
 module
 
 public import Proofs.Flock.Level3.GF128Ring
@@ -20,7 +12,6 @@ open Polynomial Flock
 
 namespace FlockLevel3
 
-/-- `a^(2^k)` by `k` squarings, with the executable's multiplication. -/
 def sqIter : ℕ → F128 → F128
   | 0, a => a
   | k + 1, a => sqIter k (a * a)
@@ -90,7 +81,6 @@ theorem G_bezout : G ∣ F128.poly bezoutW * (X ^ (2 ^ (2 ^ 6)) - X) - 1 := bezo
 
 theorem G_natDegree : G.natDegree = 2 ^ (6 + 1) := by rw [natDegree_eq_of_degree_eq_some G_degree]; norm_num
 
-/-- An irreducible factor of `X^(2^m) - X` over GF(2) has degree dividing `m`, and conversely. -/
 theorem deg_dvd_of_dvd_frob (h : P) (hh : Irreducible h) (m : ℕ) (hm : h ∣ X ^ (2 ^ m) - X) : h.natDegree ∣ m :=
   hh.natDegree_dvd_of_dvd_X_pow_card_pow_sub_X (n := m) (by rw [Nat.card_zmod]; exact hm)
 
@@ -98,8 +88,6 @@ theorem dvd_frob_of_deg_dvd (h : P) (hh : Irreducible h) (m : ℕ) (hm : h.natDe
   have := (hh.natDegree_dvd_iff_dvd_X_pow_card_pow_sub_X (n := m)).mp hm
   rwa [Nat.card_zmod] at this
 
-/-- Rabin's test for a polynomial of degree `2^(k+1)`: it divides `X^(2^(2^(k+1))) - X`, and a Bezout witness makes
-`X^(2^(2^k)) - X` invertible modulo it. -/
 theorem irreducible_of_rabin (F w : P) (k : ℕ) (hF : F.natDegree = 2 ^ (k + 1)) (hF0 : F ≠ 0)
     (h1 : F ∣ X ^ (2 ^ (2 ^ (k + 1))) - X) (h2 : F ∣ w * (X ^ (2 ^ (2 ^ k)) - X) - 1) : Irreducible F := by
   have hFu : ¬ IsUnit F := fun hu => by
@@ -126,7 +114,6 @@ theorem irreducible_of_rabin (F w : P) (k : ℕ) (hF : F.natDegree = 2 ^ (k + 1)
       simpa using dvd_sub ha hb
     exact absurd (isUnit_of_dvd_one hone) hh.not_isUnit
 
-/-- **The GHASH polynomial is irreducible over GF(2).** -/
 theorem G_irreducible : Irreducible G :=
   irreducible_of_rabin G (F128.poly bezoutW) 6 G_natDegree G_monic.ne_zero G_dvd_frob G_bezout
 
@@ -142,7 +129,6 @@ theorem pow_two_pow_eq_expand (f : P) (m : ℕ) : f ^ (2 ^ m) = expand (ZMod 2) 
   | zero => simp
   | succ m ih => rw [pow_succ, pow_mul, ih, sq_eq_expand, expand_expand, mul_comm]
 
-/-- The Frobenius identity for every residue class, from the one for the root. -/
 theorem frob_all (m : ℕ) (h : AdjoinRoot.root G ^ (2 ^ m) = AdjoinRoot.root G) (y : AdjoinRoot G) :
     y ^ (2 ^ m) = y := by
   obtain ⟨q, rfl⟩ := AdjoinRoot.mk_surjective y
@@ -218,7 +204,6 @@ theorem one_eq : (1 : GF128) = of 1 := by
   apply equivAdj.injective
   simp only [Equiv.apply_symm_apply, equivAdj_apply, toAdj_one]
 
-/-- `x · x⁻¹ = 1`: the executable's `F256.xinv` is the inverse of the generator `x` (checked by the kernel). -/
 theorem xinv_mul_x : of F256.xinv * of (F128.monomial 1) = 1 := by
   rw [mul_eq, one_eq]
   exact congrArg of (by decide)

@@ -6,13 +6,7 @@ import Std.Data.TreeMap.Raw.Lemmas
 import all Lean.Data.Json.Basic
 import all Init.Data.Ord.String
 
-/-!
-# A well-formed value is sorted
-
-A well-formed value (`Claims.Json.Wf`: every object a well-formed tree) holds each object's keys in increasing order
-(`sortedKeys_of_wf`), so what `CanonRead` and `CanonLine` prove of sorted values holds of every value a parser returns.
-The file reads the canonical text's lemmas and the values' induction, and nothing of a session, a record or a device.
--/
+/-! A well-formed JSON value holds each object's keys in increasing order (`sortedKeys_of_wf`). -/
 
 @[expose] public section
 
@@ -20,7 +14,6 @@ namespace Properties.Challenger.CanonRead
 
 open Lean (Json)
 
-/-- **A well-formed value's objects hold their keys in order.** -/
 theorem sortedKeys_of_wf : ∀ j : Json, Claims.Json.Wf j → _root_.Spot.sortedKeys j = true := by
   refine FlockDeploy.json_ind (fun _ => by simp [_root_.Spot.sortedKeys])
     (fun _ _ => by simp [_root_.Spot.sortedKeys]) (fun _ _ => by simp [_root_.Spot.sortedKeys])

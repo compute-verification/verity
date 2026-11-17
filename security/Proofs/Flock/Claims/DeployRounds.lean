@@ -3,13 +3,7 @@ module
 public import Proofs.Flock.Soundness.Refine.Final
 public import Flock.With.Verify
 
-/-!
-# The rounds the shipped verifier reads
-
-`verifyWith h` replays each rep's recorded rounds through its transcript, and refuses a rep whose rounds it did not all
-consume (S15). Its squeezes are the oracle's (`squeezeWith`), but which round each one reads does not depend on the
-hash: a squeeze of `n ≠ 0` coins reads round `t.k` and moves to `t.k + 1`, whatever `hs` is.
--/
+/-! Which round each squeeze of the shipped verifier reads does not depend on the hash. -/
 
 @[expose] public section
 
@@ -18,8 +12,6 @@ namespace FlockDeploy
 open Flock Transcript FlockSoundness.Refine
 
 variable {α β : Type}
-
-/-! ## The oracle's squeezes, at `V` -/
 
 theorem liftTM_V (x : TM α) : liftTM (M := V) x = x := rfl
 
@@ -54,7 +46,6 @@ theorem squeezeWith_ok (hs : Hashes V) {kind : UInt8} {n : ℕ} (hn : n ≠ 0) {
           simp only [not_not] at hrn
           exact ⟨hlt, hget ▸ hrn, hget ▸ rfl, rfl, rfl⟩
 
-/-- `sampleVecWith n` then `f`: round `t.k` issued `n` coins, and `f` continues with them from round `t.k + 1`. -/
 theorem sampleVecWith_bind (hs : Hashes V) {n : ℕ} (hn : n ≠ 0) {f : Array F128 → TM β} {t t' : Transcript}
     {b : β} (h : (sampleVecWith hs n >>= f) t = .ok (b, t')) :
     t.k < t.rounds.size ∧ (t.rounds[t.k]!).n = n ∧
@@ -69,7 +60,6 @@ theorem sampleVecWith_ok (hs : Hashes V) {n : ℕ} (hn : n ≠ 0) {t t₁ : Tran
   obtain ⟨-, hn', hcs, hr, hk⟩ := squeezeWith_ok hs hn h
   exact ⟨hn', hcs, hr, hk⟩
 
-/-- `sampleWith` then `f`: round `t.k` issued one coin. -/
 theorem sampleWith_bind (hs : Hashes V) {f : F128 → TM β} {t t' : Transcript} {b : β}
     (h : (sampleWith hs >>= f) t = .ok (b, t')) :
     t.k < t.rounds.size ∧ (t.rounds[t.k]!).n = 1 ∧
@@ -94,9 +84,6 @@ theorem sampleKWith_ok (hs : Hashes V) {t t₁ : Transcript} {c : F256} (h : sam
   obtain ⟨rfl, rfl⟩ := pure_ok h₄
   exact ⟨hn', hr, hk⟩
 
-/-! ## Loops -/
-
-/-- A loop over `a, …, a + n − 1` whose every step yields after moving `d` rounds moves `n · d` rounds. -/
 theorem forIn_moves {σ : Type} (body : ℕ → σ → TM (ForInStep σ)) (d : ℕ)
     (hbody : ∀ i s t b t', body i s t = .ok (b, t') →
       t'.rounds = t.rounds ∧ t'.k = t.k + d ∧ ∃ s', b = .yield s') :
@@ -117,7 +104,6 @@ theorem forIn_moves {σ : Type} (body : ℕ → σ → TM (ForInStep σ)) (d : �
     obtain ⟨hr, hk⟩ := ih (a + 1) s' t₁ t' out h₂
     exact ⟨hr.trans hr₁, by rw [hk, hk₁, Nat.succ_mul]; omega⟩
 
-/-- A loop whose every step keeps the rounds and the counter keeps them. -/
 theorem forIn_keeps {γ σ : Type} (body : γ → σ → TM (ForInStep σ))
     (hbody : ∀ x s t b t', body x s t = .ok (b, t') → t'.rounds = t.rounds ∧ t'.k = t.k) :
     ∀ (l : List γ) (s : σ) (t t' : Transcript) (out : σ), forIn l s body t = .ok (out, t') →
@@ -140,9 +126,6 @@ theorem forIn_keeps {γ σ : Type} (body : γ → σ → TM (ForInStep σ))
       obtain ⟨hr, hk⟩ := ih s' t₁ t' out h₂
       exact ⟨hr.trans hr₁, hk.trans hk₁⟩
 
-/-! ## Zerocheck, lincheck and the ring switch -/
-
-/-- **Zerocheck reads `3 + (m − 6)` rounds**: the skip and outer points, the first coin, one per residual round. -/
 theorem zerocheckWith_rounds (hs : Hashes V) {m : ℕ} (hm : 14 ≤ m) {digest cap : ByteArray} {p : ZerocheckProof}
     {t t' : Transcript} {zc : ZcOut} (h : bindAndZerocheckWith hs m digest cap p t = .ok (zc, t')) :
     t'.rounds = t.rounds ∧ t'.k = t.k + 3 + (m - 6) := by
@@ -177,7 +160,6 @@ theorem zerocheckWith_rounds (hs : Hashes V) {m : ℕ} (hm : 14 ≤ m) {digest c
   rw [k₁₂.1, k₁₁.1, hk₁₀, kk₉, k₈.1, k₇.1, kk₆, kk₅, k₄.1, k₃.1, k₂.1, k₁.1]
   omega
 
-/-- **Lincheck reads `3 + (kLog − 6)` rounds**: `α`, `β`, one per sumcheck round, and `r'`. -/
 theorem lincheckWith_rounds (hs : Hashes V) {c : CircuitFold} {zc : ZcOut} {p : LincheckProof} {t t' : Transcript}
     {lc : LcOut} (h : lincheckWith hs c zc p t = .ok (lc, t')) :
     t'.rounds = t.rounds ∧ t'.k = t.k + 3 + (c.kLog - 6) := by
@@ -212,7 +194,6 @@ theorem lincheckWith_rounds (hs : Hashes V) {c : CircuitFold} {zc : ZcOut} {p : 
   rw [kk₇, k₆.1, hk₄, kk₃, kk₂, k₁.1]
   omega
 
-/-- **The ring switch reads `claims + 1` rounds**: one per claim, then the batching coins. -/
 theorem ringSwitchWith_rounds (hs : Hashes V) {m : ℕ} {claims : Array Claim} {rs : Array (Array F128)}
     (hc : claims.size ≠ 0) {t t' : Transcript} {out : F128 × Array Switched}
     (h : ringSwitchWith hs m claims rs t = .ok (out, t')) :
@@ -235,8 +216,6 @@ theorem ringSwitchWith_rounds (hs : Hashes V) {m : ℕ} {claims : Array Claim} {
   refine ⟨by rw [r₃, hr₂, k₁.2], ?_⟩
   rw [kk₃, hk₂, k₁.1]
   omega
-
-/-! ## Ligerito's steps -/
 
 theorem liftW_V (x : TM α) : liftW (M := V) x = lift x := rfl
 
@@ -265,7 +244,6 @@ theorem lsampleKWith_bind (hs : Hashes V) {f : F256 → LM β} {st st' : LState}
   obtain ⟨hn', hr, hk⟩ := sampleKWith_ok hs h₁
   exact ⟨hn', c, t₁, hr, hk, h₂⟩
 
-/-- `challengeWith`: one `K` coin. -/
 theorem challengeWith_bind (hs : Hashes V) {p : LigeritoProof} {f : F256 → LM β} {st st' : LState}
     {t t' : Transcript} {b : β} (h : (challengeWith hs p >>= f) st t = .ok ((b, st'), t')) :
     ∃ c st₁ t₁, t₁.rounds = t.rounds ∧ t₁.k = t.k + 1 ∧ f c st₁ t₁ = .ok ((b, st'), t') := by
@@ -279,7 +257,6 @@ theorem challengeWith_bind (hs : Hashes V) {p : LigeritoProof} {f : F256 → LM 
   obtain ⟨rfl, rfl, rfl⟩ := lpure_ok h₁
   exact ⟨_, _, _, k₄.2.trans hr₃, k₄.1.trans hk₃, h₂⟩
 
-/-- `oodIntroWith`: an out-of-domain point and its batching coin, two rounds. -/
 theorem oodIntroWith_bind (hs : Hashes V) {p : LigeritoProof} {dim split : ℕ} (hdim : dim ≠ 0) {f : PUnit → LM β}
     {st st' : LState} {t t' : Transcript} {b : β} (h : (oodIntroWith hs p dim split >>= f) st t = .ok ((b, st'), t')) :
     ∃ st₁ t₁, t₁.rounds = t.rounds ∧ t₁.k = t.k + 2 ∧ f () st₁ t₁ = .ok ((b, st'), t') := by
@@ -296,8 +273,6 @@ theorem oodIntroWith_bind (hs : Hashes V) {p : LigeritoProof} {dim split : ℕ} 
   obtain ⟨rfl, rfl⟩ := lmodify_ok h₁
   exact ⟨_, _, by rw [hr₇, k₆.2, k₅.2, k₄.2, hr₃], by rw [hk₇, k₆.1, k₅.1, k₄.1, hk₃], h₂⟩
 
-/-- `queryLevelWith`: the query coins are round `t.k`'s, `q` of them, and the Merkle check passes at their positions;
-the consistency coins are round `t.k + 1`'s. -/
 theorem queryLevelWith_bind (hs : Hashes V) {ms : MerkleScheme} {p : LigeritoProof} {lv : Flock.Level}
     {cap : Array ByteArray} {rows : Array (Array F128)} {sibs salts : Array ByteArray} {fold : Array F256}
     (hq : lv.q ≠ 0) {f : Array ℕ × Array F128 × F256 → LM β} {st st' : LState} {t t' : Transcript} {b : β}
@@ -332,7 +307,6 @@ theorem queryLevelWith_bind (hs : Hashes V) {ms : MerkleScheme} {p : LigeritoPro
     · rw [hr₆, k₅.2, hr₄, k₃.2]
     · rw [hk₆, k₅.1, hk₄, k₃.1]
 
-/-- An LM loop over `a, …, a + n − 1` whose every step yields after moving `d` rounds moves `n · d` rounds. -/
 theorem lforIn_moves {σ : Type} (body : ℕ → σ → LM (ForInStep σ)) (d : ℕ)
     (hbody : ∀ i s st t b st' t', body i s st t = .ok ((b, st'), t') →
       t'.rounds = t.rounds ∧ t'.k = t.k + d ∧ ∃ s', b = .yield s') :
@@ -353,7 +327,6 @@ theorem lforIn_moves {σ : Type} (body : ℕ → σ → LM (ForInStep σ)) (d : 
     obtain ⟨hr, hk⟩ := ih (a + 1) s' st₁ t₁ out st' t' h₂
     exact ⟨hr.trans hr₁, by rw [hk, hk₁, Nat.succ_mul]; omega⟩
 
-/-- Ligerito's level loop: each of the first `R − 1` iterations moves `11` rounds, the last `7`. -/
 theorem lforIn_levels {σ : Type} (body : ℕ → σ → LM (ForInStep σ)) (R : ℕ)
     (hstep : ∀ i s st t b st' t', i + 1 < R → body i s st t = .ok ((b, st'), t') →
       t'.rounds = t.rounds ∧ t'.k = t.k + 11 ∧ ∃ s', b = .yield s')
@@ -378,10 +351,6 @@ theorem lforIn_levels {σ : Type} (body : ℕ → σ → LM (ForInStep σ)) (R :
         (by omega) h₂
       exact ⟨hr.trans hr₁, by rw [hk, hk₁]; omega⟩
 
-/-- **Ligerito reads `k0 + 5 + 11 (R)` rounds** on `R + 1 ≥ 2` levels: level 0's out-of-domain point and coin, the `k0`
-lane challenges, level 1's two out-of-domain intros, level 0's query and consistency coins and its batching coin, then
-`11` rounds per inner level and `7` for the last. Level 0's query coins are round `t.k + k0 + 6`, and the Merkle check
-of level 0's opened rows passes at their positions. -/
 theorem ligeritoWith_rounds (hs : Hashes V) (ms : MerkleScheme) (sch : Schedule) (T : F128) (cap : Array ByteArray)
     (p : LigeritoProof) (basisAt : Array F256 → ℕ → Array F256) (hn : sch.n ≠ 0) (h2 : 2 ≤ sch.levels.size)
     (hq : ∀ i < sch.levels.size, (sch.levels.getD i default).q ≠ 0) {t t' : Transcript} {u : Unit}

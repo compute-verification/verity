@@ -3,17 +3,7 @@ module
 public import Definitions.Claims.Recursion
 public import Mathlib.Analysis.Complex.ExponentialBounds
 
-/-!
-# `k = ⌈4·N₀/e⌉` in arithmetic on `ℚ`
-
-`Claims.Recursion.kOf` computes `E^rep`'s accepted reruns per wait from `e`'s Taylor sums (`eSum`) alone, and is
-`⌈4·N₀/e⌉` at every rational `N₀` (`kOf_eq`), so an outer session's `k` (`Nums.k`) is the ceiling it was
-(`Nums.k_eq`). The two steps:
-
-* where the ceilings at `e`'s two Taylor bounds agree, they are `⌈4·N₀/e⌉` (`ceil_eSum_step`);
-* at `j + 1` terms with `j ≥ ⌈2·N₀⌉·den(N₀)`, the lower bound's ceiling is `⌈4·N₀/e⌉` (`ceil_eSum_exact`): `j!·eSum (j+1)`
-  is an integer and `j!·(e − eSum (j+1)) < 1/j`, so no integer lies between `k·den·j!·eSum (j+1)` and `k·den·j!·e`.
--/
+/-! `Claims.Recursion.kOf` computes `⌈4·N₀/e⌉` in arithmetic on `ℚ` (`kOf_eq`). -/
 
 @[expose] public section
 
@@ -56,7 +46,6 @@ theorem factorial_mul_eSum (j : ℕ) :
   rw [Nat.cast_div (Nat.factorial_dvd_factorial (Nat.lt_succ_iff.1 (mem_range.1 hi))) (by positivity),
     div_eq_mul_inv]
 
-/-- **`j + 1` terms are enough** at `j ≥ ⌈2·q⌉·den(q)`: `⌈4·q/eSum (j+1)⌉ = ⌈4·q/e⌉`. -/
 theorem ceil_eSum_exact {q : ℚ} {j : ℕ} (hj : ⌈2 * q⌉₊ * q.den ≤ j) :
     ⌈4 * q / eSum (j + 1)⌉₊ = ⌈4 * (q : ℝ) / Real.exp 1⌉₊ := by
   have hL0 := eSum_pos (m := j + 1) (by omega)
@@ -127,7 +116,6 @@ theorem ceil_eSum_exact {q : ℚ} {j : ℕ} (hj : ⌈2 * q⌉₊ * q.den ≤ j) 
     h1.trans (mul_le_mul_of_nonneg_right hnd hX0)
   nlinarith
 
-/-- **Where the ceilings at `e`'s two Taylor bounds agree, they are `⌈4·q/e⌉`.** -/
 theorem ceil_eSum_step {q : ℚ} {m : ℕ} (hm : 1 ≤ m)
     (h : ⌈4 * q / (eSum m + (m + 1) / (m.factorial * m))⌉₊ = ⌈4 * q / eSum m⌉₊) :
     ⌈4 * q / eSum m⌉₊ = ⌈4 * (q : ℝ) / Real.exp 1⌉₊ := by
@@ -153,10 +141,8 @@ theorem kOf_go (q : ℚ) : ∀ f m : ℕ, 1 ≤ m → kOf.go q f m = ⌈4 * (q :
     · exact ceil_eSum_step hm h
     · exact kOf_go q f (2 * m) (by omega)
 
-/-- **`kOf` is `⌈4·N₀/e⌉`** at every rational `N₀`. -/
 theorem kOf_eq (q : ℚ) : kOf q = ⌈4 * (q : ℝ) / Real.exp 1⌉₊ := kOf_go q 6 8 (by norm_num)
 
-/-- **An outer session's `k` is `⌈4·N₀/e⌉`**, as it was before `Nums.k` computed. -/
 theorem Nums.k_eq (n : Nums) : n.k = ⌈4 * (n.N₀ : ℝ) / Real.exp 1⌉₊ := kOf_eq n.N₀
 
 end Claims.Recursion

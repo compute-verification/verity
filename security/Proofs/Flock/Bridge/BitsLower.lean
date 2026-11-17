@@ -3,23 +3,8 @@ module
 public import Proofs.Flock.Bridge.Defs
 public import Properties.Spot.Bits
 
-/-!
-# The bridge's lowering is Bits' (`Spot.Bits.prog`, `posOf`, `blockOf`)
-
-`LaysOut kp C`: the Bits key program `kp` lays out the circuit `C`. It has `C`'s gates, gate by gate an input where `kp`
-has no row and a row reading the same gates where it has one, and `C`'s outputs, ascending. At such a pair Bits'
-lowering is the bridge's, gate for gate, under `bitsGate`:
-
-* `gateSize_eq`, `off_eq`, `posOf_eq`: each gate lowers to as many gates, after as many, at the same position.
-* `lower_eq`, `progOf_eq`: at constants that agree, each gate lowers to the same gates, so `progOf C κ'` is
-  `bitsProg kp κ`.
-
-`UnitsOut kp P`: the units agree too, `kp`'s `units` being `P`'s and each gate in the same unit. Then each unit's
-lowered gates (`unitGates_eq`), each gate's owner (`owner_eq`), each unit's owned inputs (`insOf_eq`) and its proof
-block (`blockOf_eq`) are Bits'.
-
-Nothing here reads how `kp` or `C` is built: the key program's `LaysOut` and `UnitsOut` are proved where it is.
--/
+/-! Where a Bits key program lays out a circuit, the bridge's lowering, positions and proof blocks are Bits'
+(`Spot.Bits.prog`, `posOf`, `blockOf`). -/
 
 @[expose] public section
 
@@ -28,8 +13,6 @@ namespace Flock.Bridge
 open FlockSoundness.Audit
 open Properties.Spot (bitsGate bitsProg)
 
-/-- **The Bits key program `kp` lays out the circuit `C`**: as many gates; an input where `kp` has no row, and a row
-reading the same gates where it has one; and `C`'s outputs, in gate order. -/
 structure LaysOut (kp : Spot.Bits.KeyProg) (C : Verity.Boolean.Circuit) : Prop where
   size : kp.size = C.N
   input : ∀ g : Fin C.N, kp.row? g.val = none → C.op g = .input
@@ -64,7 +47,6 @@ theorem LaysOut.posOf_eq (h : LaysOut kp C) (g : Fin C.N) : posOf C g = Spot.Bit
 theorem LaysOut.posOf_comp (h : LaysOut kp C) : (Spot.Bits.posOf kp ∘ Fin.val : Fin C.N → ℕ) = posOf C :=
   funext fun x => (h.posOf_eq x).symm
 
-/-- **Gate `g` lowers to the same gates**, at constants that agree. -/
 theorem LaysOut.lower_eq (h : LaysOut kp C) {κ' : Fin C.N → Option Bool} {κ : ℕ → Option Bool}
     (hκ : ∀ g, κ' g = κ g.val) (g : Fin C.N) :
     lower C κ' g = (Spot.Bits.lower kp κ g.val).map bitsGate := by
@@ -76,7 +58,6 @@ theorem LaysOut.lower_eq (h : LaysOut kp C) {κ' : Fin C.N → Option Bool} {κ 
     rw [hop]
     simp only [List.map_cons, List.map_nil, bitsGate, List.map_map, h.posOf_comp, h.off_eq]
 
-/-- **The bridge's program is Bits'**, at constants that agree. -/
 theorem LaysOut.progOf_eq (h : LaysOut kp C) {κ' : Fin C.N → Option Bool} {κ : ℕ → Option Bool}
     (hκ : ∀ g, κ' g = κ g.val) : progOf C κ' = bitsProg kp κ := by
   unfold progOf bitsProg Spot.Bits.prog
@@ -85,9 +66,6 @@ theorem LaysOut.progOf_eq (h : LaysOut kp C) {κ' : Fin C.N → Option Bool} {κ
     exact List.flatMap_congr fun g _ => h.lower_eq hκ g
   · rw [h.outs, List.map_map, h.posOf_comp]
 
-/-! ## Units and proof blocks -/
-
-/-- **`kp`'s units are `P`'s**: as many, and each gate in the same unit. -/
 structure UnitsOut (kp : Spot.Bits.KeyProg) {n : ℕ} (P : Partition C n) : Prop where
   units : kp.units = n
   unit : ∀ g : Fin C.N, Spot.Bits.unitOf kp g.val = (P.unit g).map Fin.val
@@ -112,7 +90,6 @@ theorem LaysOut.args_eq (h : LaysOut kp C) (g : Fin C.N) :
   · obtain ⟨A, B, hop, rfl, rfl⟩ := h.row g _ _ hr
     rw [hop, Verity.Boolean.Op.args, List.map_append]
 
-/-- **Unit `u`'s lowered gates are Bits'.** -/
 theorem unitGates_eq (h : LaysOut kp C) (hu : UnitsOut kp P) (u : Fin n) :
     unitGates P u = Spot.Bits.unitGates kp u.val := by
   unfold unitGates Spot.Bits.unitGates
@@ -124,7 +101,6 @@ theorem unitGates_eq (h : LaysOut kp C) (hu : UnitsOut kp P) (u : Fin n) :
   · have : ¬ (P.unit g).map Fin.val = some u.val := fun e => hg (map_val_eq_some.1 e)
     simp [hg, this]
 
-/-- **Gate `g`'s owner is Bits'.** -/
 theorem owner_eq (h : LaysOut kp C) (hu : UnitsOut kp P) (g : Fin C.N) :
     Spot.Bits.owner kp g.val = (owner P g).map Fin.val := by
   unfold Spot.Bits.owner owner
@@ -154,7 +130,6 @@ theorem LaysOut.row_isNone (h : LaysOut kp C) (g : Fin C.N) : (kp.row? g.val).is
     rw [hop]
     rfl
 
-/-- **Unit `u`'s owned inputs are Bits'**, at constants that agree. -/
 theorem insOf_eq (h : LaysOut kp C) (hu : UnitsOut kp P) {κ' : Fin C.N → Option Bool} {κ : ℕ → Option Bool}
     (hκ : ∀ g, κ' g = κ g.val) (u : Fin n) :
     (insOf P κ' u).map Fin.val = Spot.Bits.insOf kp κ u.val := by
@@ -164,7 +139,6 @@ theorem insOf_eq (h : LaysOut kp C) (hu : UnitsOut kp P) {κ' : Fin C.N → Opti
   refine List.filter_congr fun g _ => ?_
   simp only [Function.comp, h.row_isNone, hκ, owner_eq h hu, decide_eq_map_beq]
 
-/-- **Unit `u`'s proof block is Bits'**, at constants that agree. -/
 theorem blockOf_eq (h : LaysOut kp C) (hu : UnitsOut kp P) {κ' : Fin C.N → Option Bool} {κ : ℕ → Option Bool}
     (hκ : ∀ g, κ' g = κ g.val) (u : Fin n) :
     blockOf P κ' u = Spot.Bits.blockOf kp κ u.val := by

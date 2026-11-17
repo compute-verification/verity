@@ -46,24 +46,7 @@ import Std.Tactic.BVDecide.Normalize.BitVec
 
 set_option Elab.async false
 
-/-!
-# A shaped registered opening opens the deployed commitment at a leaf map
-
-`Transports.lean` at a leaf map (`LeafMap.lean`): `opens_commitDepL` opens `commitDepL` under `rootsOfL` at a row's
-position, with data `dataOfL`: the salt, the row's frame-v3 path in its port's own tree (`sibsV` over `leavesL`), zero
-bytes up to `L.d` levels, and the value's bits. At the session's binding with or without shared rows (`vbS`, at
-`ZkReg.rsZHJS`), `transports_shapedS` reads a registered opening through it, and `transportsLiveCR` is
-`Bridge.TransportsLiveCR`.
-
-What the verifier checks, at every public file it accepts (`ref_lt_cnt`): a unit's ref is below its port's count
-(`HmRow.loadPublic`'s refs check, and its refusal of an empty table, `sharedRows_spec`, for a unit past the file's
-instances). At the public file's leaf map each port's domain is its published one (`LeafMap.ofPublic_dom`); at
-`dupId = false` those differ, and `RootFixesDomainL` makes their roots differ (`rootsDistinctL_of_fixes`): the verifier
-opens a row at its own port, of its own leaf count.
-
-`transportsLiveC_of_R`: at `pub.tables = none` the leaf map is `LeafMap.ident` and `TransportsLiveCR` is
-`TransportsLiveC`.
--/
+/-! A shaped registered opening opens the deployed commitment at a leaf map (`commitDepL` under `rootsOfL`). -/
 
 namespace Flock.Bridge
 
@@ -72,10 +55,6 @@ open FlockSoundness.Refine FlockSoundness.Binding
 open FlockSoundness.Discharge.Layout (BitVal RowShaped)
 open Properties.Certifier.Bytes (bs)
 
-/-! ## The data at a leaf map -/
-
-/-- **The data of a transported opening at a leaf map**: its salt, its frame-v3 path's siblings, `k` zero levels and its
-row's bits. -/
 def dataOfL (y : Msg) (s : List ByteArray) (k : ℕ) (b : List Bool) : Msg :=
   y ++ SamplingDeploy.pathMsg s ++ List.replicate (64 * k) 0 ++ bitMsg b
 
@@ -111,8 +90,6 @@ theorem bitsOf_dataOfL (hy : y.length = saltLen) (hs : ∀ z ∈ s, z.size = 64)
 
 end Data
 
-/-! ## The ports at a leaf map -/
-
 section Layout
 
 variable {C : Verity.Boolean.Circuit} {rows : Fin C.N → Option RowAt}
@@ -133,7 +110,6 @@ theorem rootsOfL_getD (c : Flock.Circuit) (L : LeafMap) {q : ℕ} (hq : q < c.po
     (rootsOfL c L).getD q [] = bs (Flock.FV3.root (L.dom q) (leavesL c L q) Flock.Sha512.hash) := by
   simp [rootsOfL, List.getD_eq_getElem?_getD, hq]
 
-/-- Port `q` as the verifier registers it at a leaf map (`portsOfL`'s `q`-th). -/
 def portAtL (c : Flock.Circuit) (L : LeafMap) (roots : List Msg) (q : ℕ) : Flock.Registered.Port :=
   { name := (c.ports[q]?.map (·.name)).getD "", value := "", root := bytes (roots.getD q []), leaves := L.cnt q,
     words := none, wordBits := 0, domain := L.dom q, readsRel := #[], schema := schemaOf c q }
@@ -141,7 +117,6 @@ def portAtL (c : Flock.Circuit) (L : LeafMap) (roots : List Msg) (q : ℕ) : Flo
 theorem portsOfL_eq (c : Flock.Circuit) (L : LeafMap) (roots : List Msg) :
     portsOfL c L roots = (Array.range c.ports.size).map (portAtL c L roots) := rfl
 
-/-- **The port the verifier opens a row of port `q` at**: `q`'s own, when no earlier port has its root. -/
 theorem find?_portsOfL (c : Flock.Circuit) (L : LeafMap) (roots : List Msg) {q : ℕ} (hq : q < c.ports.size)
     (hfirst : ∀ q' < q, roots.getD q' [] ≠ roots.getD q []) :
     (portsOfL c L roots).find? (fun p => decide (bs p.root = roots.getD q [])) = some (portAtL c L roots q) := by
@@ -153,8 +128,6 @@ theorem find?_portsOfL (c : Flock.Circuit) (L : LeafMap) (roots : List Msg) {q :
 theorem portIdxOf_eq {i : ℕ} {r : RowAt} (hr : rowOfPos C rows i = some r) : portIdxOf C rows i = r.port := by
   simp [portIdxOf, hr]
 
-/-- **Distinct roots at a leaf map**: under the published domains (`domOf`), which `dupId = false` makes pairwise
-distinct, and `RootFixesDomainL`, which gives equal roots one domain. -/
 theorem rootsDistinctL_of_fixes {c : Flock.Circuit} {pub : Flock.Public} {L : LeafMap} (hL : L.dom = domOf c pub)
     (hn : Flock.PortRoots.dupId c pub = false) (hf : RootFixesDomainL c L) :
     ∀ q q' : ℕ, q' < q → q < c.ports.size → (rootsOfL c L).getD q' [] ≠ (rootsOfL c L).getD q [] := by
@@ -165,11 +138,6 @@ theorem rootsDistinctL_of_fixes {c : Flock.Circuit} {pub : Flock.Public} {L : Le
 
 end Layout
 
-/-- **A shaped registered opening opens the deployed commitment at a leaf map.** `opens_commitDep` at `L`: at a claims
-position `i` whose registered row `r` sits at port `r.port`, of the port's bits (`16 w` of them), at leaf
-`r.leaf < L.cnt r.port`, under roots no earlier port shares, a value `v` `RowShaped` of the row's width under a salt of
-`saltLen` bytes, whose hm96 leaf at its port's bytes (`encPortH`, the port's own format) is the registered leaf of
-`L.dig r.port r.leaf`, opens `commitDepL` under `rootsOfL` at `i` to its bit `r.place`. -/
 theorem opens_commitDepL (C : Verity.Boolean.Circuit) (rows : Fin C.N → Option RowAt) (c : Flock.Circuit)
     (L : LeafMap) {i : ℕ} {r : RowAt} (hr : rowOfPos C rows i = some r)
     (hq : r.port < c.ports.size) (hu : r.leaf < L.cnt r.port) (hd : Flock.log2ceil (L.cnt r.port) ≤ L.d)
@@ -250,9 +218,6 @@ theorem opens_commitDepL (C : Verity.Boolean.Circuit) (rows : Fin C.N → Option
     rw [getElem!_pos _ _ (by rw [leavesL_size]; exact hu)]
     simp [leavesL]
 
-/-! ## The verifier's leaf map -/
-
-/-- **`sharedRows` reads a table per port, none empty.** -/
 theorem sharedRows_spec {tags : Flock.Tags} {c : Flock.Circuit} {header : Lean.Json} {counts : Array ℕ}
     (h : Flock.HmRow.sharedRows tags c header = .ok (some counts)) :
     counts.size = c.ports.size ∧ ∀ x ∈ counts, 0 < x := by
@@ -270,7 +235,6 @@ theorem sharedRows_spec {tags : Flock.Tags} {c : Flock.Circuit} {header : Lean.J
 
 -- `walk_step` down `Flock.HmRow.loadPublic`'s unfolded do-block, a goal per branch
 set_option maxHeartbeats 2000000 in
-/-- **A shared-row file's tables are one per port, none empty** (`HmRow.loadPublic`, `sharedRows_spec`). -/
 theorem loadPublic_counts {tags : Flock.Tags} {c : Flock.Circuit} {file : ByteArray} {pop : Flock.Public}
     (h : Flock.HmRow.loadPublic tags c file = .ok pop) :
     ∀ t, pop.tables = some t → t.counts.size = c.ports.size ∧ ∀ x ∈ t.counts, 0 < x := by
@@ -295,8 +259,6 @@ theorem getD_zero_eq_getElem! (a : Array ℕ) (k : ℕ) : a.getD k 0 = a[k]! := 
   · rw [Array.getElem?_eq_none (by omega), Option.getD_none, getElem!_neg a k h]
     try rfl
 
-/-- **The verifier's leaf map holds every unit's row**: at a public file `HmOut.loadPublic` accepts, unit `u`'s ref at
-port `q` is below `q`'s leaf count, with or without shared rows. -/
 theorem ref_lt_cnt {tags : Flock.Tags} {c : Flock.Circuit} {file : ByteArray} {pub : Flock.Public}
     (h : Flock.HmOut.loadPublic tags c file = .ok pub) {nl u q : ℕ} (hu : u < nl) (hq : q < c.ports.size) :
     (LeafMap.ofPublic c pub nl).ref q u < (LeafMap.ofPublic c pub nl).cnt q := by
@@ -321,7 +283,6 @@ theorem ref_lt_cnt {tags : Flock.Tags} {c : Flock.Circuit} {file : ByteArray} {p
       rw [getElem!_pos t.counts q hqc]
       exact hpos _ (Array.getElem_mem hqc)
 
-/-- **The deepest port bounds every port's levels** at the public file's leaf map. -/
 theorem LeafMap.le_d (c : Flock.Circuit) (pub : Flock.Public) (nl : ℕ) {q : ℕ} (hq : q < c.ports.size) :
     Flock.log2ceil ((LeafMap.ofPublic c pub nl).cnt q) ≤ (LeafMap.ofPublic c pub nl).d := by
   unfold LeafMap.ofPublic
@@ -329,8 +290,6 @@ theorem LeafMap.le_d (c : Flock.Circuit) (pub : Flock.Public) (nl : ℕ) {q : �
   | none => exact le_rfl
   | some t =>
     exact SamplingDeploy.le_foldr_max (fun q => Flock.log2ceil (t.counts.getD q 0)) (List.mem_range.mpr hq)
-
-/-! ## The game's openings, with or without shared rows -/
 
 section Game
 
@@ -344,7 +303,6 @@ variable {n mPts : ℕ} {Reg : Type} {I : Inputs} (dj : Finset (Fin n) → Lean.
   (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c) (hscope : Discharge.Layout.scopeOkH c = true)
   (hU : Built c.unit) {pub : Flock.Public} (hpub : HmOut.loadPublic (zkTags I) c I.publicFile = .ok pub)
 
-/-- **The game's value binding at a Flock session, with or without shared rows** (`TransportsLiveCR`'s `vb`). -/
 noncomputable abbrev vbS := (rsZHJS (Reg := Reg) dj y₀ ht hc hscope hU hpub).bindingZ
   (rsZHJS_computes dj y₀ ht hc hscope hU hpub)
 
@@ -403,7 +361,6 @@ theorem vbS_cs_row (h : HiddenExec.rowOfH c hU n (Discharge.Layout.outsOf c hU n
   rw [vbS_pos_row h]
   exact vbS_cs_inl R u q
 
-/-- **A registered opening of a row's commit string is a leaf equation**, with or without shared rows. -/
 theorem vbS_leaf_row (h : HiddenExec.rowOfH c hU n (Discharge.Layout.outsOf c hU n) g = some (u, ⟨q, k⟩)) (R : Reg)
     (p : PosH c hU n) (v : ValH c) (y : List UInt8)
     (he : (vbS dj y₀ ht hc hscope hU hpub (Reg := Reg)).com (p, v, y) =
@@ -420,16 +377,11 @@ theorem vbS_leaf_row (h : HiddenExec.rowOfH c hU n (Discharge.Layout.outsOf c hU
     rw [vbS_com_fst] at h1
     cases h1
 
-/-- **The deployed layout's rows at a leaf map**: `TransportsLiveCR`'s `rows`, the game's row map with each row at its
-unit's leaf `L.ref`. -/
 noncomputable def rowsOfL (c : Flock.Circuit) (hU : Built c.unit) (n : ℕ) (L : LeafMap) :
     Fin ((keyProg c hU n).circuit (Discharge.Layout.outsOf c hU n)).N → Option RowAt := fun g =>
   (HiddenExec.rowOfH c hU n (Discharge.Layout.outsOf c hU n) g).map fun r =>
     ⟨r.2.1.val, L.ref r.2.1.val r.1.val, Discharge.Layout.portRowW c r.2.1, r.2.2.val⟩
 
-/-- **A shaped registered opening opens the deployed commitment at the public file's leaf map** (`transports_shaped`
-with or without shared rows): at a file whose ports are rows the verifier reads (`RowsOk`), each row in its
-port's format, at roots no two ports share and refs below their ports' counts. -/
 theorem transports_shapedS (R : Reg) (hrows : RowsOk c)
     (hfirst : ∀ q q' : ℕ, q' < q → q < c.ports.size →
       (rootsOfL c (LeafMap.ofPublic c pub n)).getD q' [] ≠ (rootsOfL c (LeafMap.ofPublic c pub n)).getD q [])
@@ -469,8 +421,6 @@ open FlockSoundness FlockSoundness.Game FlockSoundness.Audit FlockSoundness.Disc
 open FlockSoundness.Discharge.Tables (LiveOutJ)
 open scoped ENNReal
 
-/-- **`Bridge.TransportsLiveCR` holds** (`transports_shapedS`): `dupId` and `RootFixesDomainL` give distinct roots,
-and the verifier's public-file check every unit's ref below its port's count (`ref_lt_cnt`). -/
 theorem transportsLiveCR : Bridge.TransportsLiveCR := by
   intro n Reg I ht D hD hU pub hpub hscope hrows hdup hroots kd _ hdiv dj S₀ d₀ y₀ wr dg N Ω _ _ Lb src hTags hCust τ
     P vb σ Cc L rows κ roots Cd u g _ _ o he hcan
@@ -481,9 +431,6 @@ theorem transportsLiveCR : Bridge.TransportsLiveCR := by
     (Bridge.rootsDistinctL_of_fixes (Bridge.LeafMap.ofPublic_dom _ _ _) hdup hroots)
     (fun u q => Bridge.ref_lt_cnt hpub u.isLt q.isLt) hr p v y hv hvw hy he
 
-/-- **`TransportsLiveCR` is `TransportsLiveC` at one leaf per unit**: at `pub.tables = none` the public file's leaf map
-is `LeafMap.ident`, at which `rootsOfL`, `commitDepL` and `RootFixesDomainL` are `rootsOf`, `commitDep` and
-`RootFixesDomain`, and `ZkReg.rsZHJS` is `rsZHJ`. -/
 theorem transportsLiveC_of_R (h : Bridge.TransportsLiveCR) : Bridge.TransportsLiveC := by
   intro n Reg I ht D hD hU pub hpub hpt hscope hrows hdup hroots kd hkd hdiv dj S₀ d₀ y₀ wr dg N Ω _ _ Lb src hTags
     hCust τ

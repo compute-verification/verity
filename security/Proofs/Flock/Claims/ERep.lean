@@ -36,30 +36,12 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# `E^rep`: its reruns and its amplification
-
-`E^rep` replays the judged run and, if it accepted, makes `m` waits, each over `K` fresh coin samples and stopping at `k`
-accepted reruns; it returns the first assembled candidate that `check` accepts.
-
-* **Worst case** (`ERep_runs_le`): at most `1 + m·K` reruns, on every prover, tape and coin (the first half of
-  `ERepCost`; the expected half, and `ERepCost` itself, are in `ERepCost`).
-* **The bad event factors** (`ERep_bad_le`): when `check` is sound for `R`, `E^rep` fails on an accepted run only if
-  every wait fails, and the waits are independent given the tape, so
-  `Pr[acc ∧ ¬R(x, E^rep)] ≤ 𝔼_ω[ε_ω · f_ω^m]`, with `ε_ω` the acceptance probability at tape `ω` and `f_ω` one wait's
-  failure probability there.
-* **Amplification** (`amplify`, `ERep_amplify`): if each tape has `ε_ω · f_ω ≤ a_ω + rate · ε_ω` (one wait's
-  knowledge bound), then `Pr[acc ∧ ¬R(x, E^rep)] ≤ 𝔼[a]/rate + (2·rate)^m`: a tape with `a_ω ≤ rate·ε_ω` has
-  `f_ω ≤ 2·rate`, and any other has `ε_ω < a_ω/rate`.
--/
+/-! `E^rep`'s worst-case reruns and its amplification. -/
 
 @[expose] public section
 
 namespace Claims
 
-/-! ## Rerun programs -/
-
-/-- Running a bound program: its result is the continuation's on the first part's result, and its reruns add. -/
 theorem RP.eval_bind {R α β : Type} (H : Msg → Msg) (run : R → Transcript) (p : RP R α) (f : α → RP R β) :
     ((p.bind f).eval H run).1 = ((f (p.eval H run).1).eval H run).1 ∧
       ((p.bind f).eval H run).2.2 = (p.eval H run).2.2 + ((f (p.eval H run).1).eval H run).2.2 := by
@@ -73,7 +55,6 @@ theorem RP.eval_bind {R α β : Type} (H : Msg → Msg) (run : R → Transcript)
     refine ⟨(ih _).1, ?_⟩
     rw [(ih _).2]; ring
 
-/-- A wait reruns the prover at most once per coin sample it holds. -/
 theorem waitAcc_runs_le {R : Type} (H : Msg → Msg) (run : R → Transcript) (k : ℕ) :
     ∀ (rs : List R) (acc : List Seen), ((waitAcc k rs acc).eval H run).2.2 ≤ rs.length := by
   intro rs
@@ -87,7 +68,6 @@ theorem waitAcc_runs_le {R : Type} (H : Msg → Msg) (run : R → Transcript) (k
     · simp only [RP.eval, List.length_cons]
       exact Nat.add_le_add_right (ih _) 1
 
-/-- The waits rerun the prover at most once per coin sample they hold. -/
 theorem firstWait_runs_le {R W Op : Type} (H : Msg → Msg) (run : R → Transcript) (k : ℕ) (opens : Seen → List Op)
     (assemble : List Op → Option W) (check : W → Bool) :
     ∀ rss : List (List R), ((firstWait k opens assemble check rss).eval H run).2.2 ≤ (rss.map List.length).sum := by
@@ -104,12 +84,10 @@ theorem firstWait_runs_le {R W Op : Type} (H : Msg → Msg) (run : R → Transcr
       · exact ih
     · exact ih
 
-/-- What one wait over the coin samples `rs` yields: some candidate that `check` accepts. -/
 def WaitOk {R W Op : Type} (H : Msg → Msg) (run : R → Transcript) (k : ℕ) (opens : Seen → List Op)
     (assemble : List Op → Option W) (check : W → Bool) (rs : List R) : Prop :=
   ∃ w, assemble (((waitAcc k rs []).eval H run).1.flatMap opens) = some w ∧ check w = true
 
-/-- The waits return only candidates `check` accepts. -/
 theorem firstWait_some {R W Op : Type} (H : Msg → Msg) (run : R → Transcript) (k : ℕ) (opens : Seen → List Op)
     (assemble : List Op → Option W) (check : W → Bool) :
     ∀ (rss : List (List R)) (w : W), ((firstWait k opens assemble check rss).eval H run).1 = some w →
@@ -128,7 +106,6 @@ theorem firstWait_some {R W Op : Type} (H : Msg → Msg) (run : R → Transcript
       · exact ih w h
     · exact ih w h
 
-/-- The waits return nothing only if every wait failed. -/
 theorem firstWait_none {R W Op : Type} (H : Msg → Msg) (run : R → Transcript) (k : ℕ) (opens : Seen → List Op)
     (assemble : List Op → Option W) (check : W → Bool) :
     ∀ rss : List (List R), ((firstWait k opens assemble check rss).eval H run).1 = none →
@@ -150,13 +127,10 @@ theorem firstWait_none {R W Op : Type} (H : Msg → Msg) (run : R → Transcript
         · exact ih h rs' hrs' hok
       · exact ih h rs' hrs' hok
 
-/-! ## `E^rep`'s worst case -/
-
 section ERep
 
 variable {Coin W Op : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
 
-/-- **`E^rep` reruns the prover at most `1 + m·K` times**, on every prover, tape and coin. -/
 theorem ERep_runs_le (H : Msg → Msg) (V : Verifier Coin) (m k K : Msg → ℕ) (opens : Seen → List Op)
     (assemble : Msg → List Op → Option W) (check : Msg → W → Bool) :
     ExtractRunsLe H (ERep V m k K opens assemble check) (fun x => 1 + m x * K x) := by
@@ -169,17 +143,14 @@ theorem ERep_runs_le (H : Msg → Msg) (V : Verifier Coin) (m k K : Msg → ℕ)
     simp [List.map_map, Function.comp_def, List.sum_replicate]
   · simp [RP.eval]
 
-/-- `ε_ω`: the probability that a run at tape `ω` is accepted. -/
 noncomputable def accPr (H : Msg → Msg) (V : Verifier Coin) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω) : ℝ :=
   Claims.Pr fun r : Fin (V.k x) → Coin => (run H P V x ω r).out = .acc
 
-/-- `f_ω`: the probability that one of `E^rep`'s waits at tape `ω`, over `K` fresh coin samples, fails. -/
 noncomputable def waitFail (H : Msg → Msg) (V : Verifier Coin) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω)
     (k K : ℕ) (opens : Seen → List Op) (assemble : List Op → Option W) (check : W → Bool) : ℝ :=
   Claims.Pr fun ρ : Fin K → Fin (V.k x) → Coin =>
     ¬ WaitOk H (run H P V x ω) k opens assemble check ((List.finRange K).map ρ)
 
-/-- **The bad event factors**: when `check` is sound for `R`, `Pr[acc ∧ ¬R(x, E^rep)] ≤ 𝔼_ω[ε_ω · f_ω^m]`. -/
 theorem ERep_bad_le (H : Msg → Msg) (V : Verifier Coin) (R : Rel W) (m k K : Msg → ℕ) (opens : Seen → List Op)
     (assemble : Msg → List Op → Option W) (check : Msg → W → Bool) (hcheck : ∀ x w, check x w = true → R x w)
     (x : Msg) {Ω : Type} [Fintype Ω] (P : Prover Ω) :
@@ -200,10 +171,6 @@ theorem ERep_bad_le (H : Msg → Msg) (V : Verifier Coin) (R : Rel W) (m k K : M
 
 end ERep
 
-/-! ## Amplification -/
-
-/-- **One tape's amplification**: from one wait's bound `ε·f ≤ a + rate·ε`, `m` independent waits give
-`ε·f^m ≤ a/rate + (2·rate)^m`. -/
 theorem amplify {ε f a rate : ℝ} (m : ℕ) (hε : 0 ≤ ε) (hε1 : ε ≤ 1) (hf : 0 ≤ f) (hf1 : f ≤ 1) (ha : 0 ≤ a)
     (hrate : 0 < rate) (h : ε * f ≤ a + rate * ε) : ε * f ^ m ≤ a / rate + (2 * rate) ^ m := by
   have hdiv : 0 ≤ a / rate := div_nonneg ha hrate.le
@@ -229,8 +196,6 @@ section ERep
 
 variable {Coin W Op : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
 
-/-- **`E^rep`'s amplification**: when `check` is sound for `R` and each tape has one wait's knowledge bound
-`ε_ω · f_ω ≤ a_ω + rate · ε_ω`, `Pr[acc ∧ ¬R(x, E^rep)] ≤ 𝔼[a]/rate + (2·rate)^m`. -/
 theorem ERep_amplify (H : Msg → Msg) (V : Verifier Coin) (R : Rel W) (m k K : Msg → ℕ) (opens : Seen → List Op)
     (assemble : Msg → List Op → Option W) (check : Msg → W → Bool) (hcheck : ∀ x w, check x w = true → R x w)
     (x : Msg) {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Prover Ω) (a : Ω → ℝ) (ha : ∀ ω, 0 ≤ a ω) {rate : ℝ}

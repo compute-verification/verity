@@ -1,8 +1,3 @@
-/-
-The `Model.Arith.Correct` facts, each in the shape of its field,
-for the executable's functions: `F = GF128`, `K = GF256`, and the concrete `pack`, `unpack`, `pinned`, `omega` and `lo`
-below. The instance itself lives in the soundness package.
--/
 module
 
 public import Proofs.Flock.Level3.Seam
@@ -53,9 +48,6 @@ instance instCharPGF256OfNatNat : CharP GF256 2 := (CharP.charP_iff_prime_eq_zer
 
 theorem charTwoK : CharP GF256 2 := inferInstance
 
-/-! ### Packing: bit `v` is the coefficient of `x^v` (`Flock.Opening`) -/
-
-/-- A GF128 element as its residue class. -/
 noncomputable def toA (a : GF128) : AdjoinRoot G := toAdj a.val
 
 theorem toA_injective : Function.Injective toA := fun _ _ h => toAdj_injective h
@@ -110,14 +102,10 @@ theorem unpack_add (a a' : GF128) : unpack (a + a') = unpack a + unpack a' := by
   funext v
   rw [unpack, val_add, F128.poly_add, coeff_add]; rfl
 
-/-! ### `K = F ⊕ F·u`: a K coin is two F limbs (`Flock.Ligerito`) -/
-
 theorem ofLimbs_bijective : Function.Bijective fun w : GF128 × GF128 => embed w.1 + embed w.2 * u := by
   have h : (fun w : GF128 × GF128 => embed w.1 + embed w.2 * u) = fun w => f256Equiv.symm w :=
     funext fun w => (ofLimbs w.1.val w.2.val).symm
   rw [h]; exact f256Equiv.symm.bijective
-
-/-! ### Query positions: the low bits of `lo` are balanced (`Flock.Ligerito`) -/
 
 /-- The low 64-bit word. -/
 def lo (w : GF128) : ℕ := (GF128.val w).lo.toNat
@@ -165,8 +153,6 @@ theorem lo_balanced : ∀ b ≤ 64, ∀ t < 2 ^ b,
   apply Nat.div_eq_of_eq_mul_left (Nat.two_pow_pos b)
   rw [← pow_add, ← pow_add, show 64 - b + 64 + b = 128 by omega]
 
-/-! ### The Reed–Solomon domain points (`Flock.Ligerito`) -/
-
 /-- `ω_q`: the element whose low word is `q`. -/
 def omega (q : ℕ) : GF128 := GF128.of ⟨q.toUInt64, 0⟩
 
@@ -179,13 +165,11 @@ theorem omega_injective : ∀ d ≤ 64, Set.InjOn omega {q | q < 2 ^ d} := by
   norm_num at hq64 hq64' this
   omega
 
-/-! ### The pinned zerocheck coordinates (`Flock.Piop`) -/
-
 /-- The seven pinned coordinates (the executable's `Flock.pinned`). -/
 def pinnedF (i : Fin 7) : GF128 := GF128.of (Flock.pinned[i.val]!)
 
-/-- `Flock.pinned`'s value, computed once by the executable. Entries 3–6 are `y · (y + 1)⁻¹`, each checked by one
-multiplication (`frac_eq`), so the kernel never evaluates the four inverses. -/
+/-- Computed once by the executable; entries 3–6 are each checked by one multiplication (`frac_eq`), so the kernel never
+evaluates the four inverses. -/
 def pinnedLit : Array F128 := #[
   ⟨0xd8a5ae31928b4da1, 0x1cf7a0fe8922c83f⟩,
   ⟨0xa0415e708193f42a, 0xffdb65d9987f058c⟩,
@@ -202,7 +186,6 @@ theorem frac_eq {y w : F128} (hy : y + 1 ≠ 0) (hw : w * (y + 1) = y) : y * (y 
   rw [← GF128.mul_eq, ← GF128.inv_eq, ← div_eq_mul_inv]
   exact div_eq_of_eq_mul h1 h2
 
-/-- `x^(2^j)` as `Flock.pinned` writes it. -/
 def xPow : ℕ → F128
   | 0 => F128.monomial 1
   | 1 => F128.monomial 1 * F128.monomial 1

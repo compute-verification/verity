@@ -17,17 +17,7 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 
-/-!
-# Flock's one-stage audit, end to end, at the sampled proof blocks (trusted)
-
-`EndToEndSampled` is `EndToEnd`'s statement with its event at the sampled proof blocks: verity-verify-proof accepts and some sampled proof block is
-wrong, in place of "at least `K₀` units are wrong". Its proof is
-`Flock.SecurityProofs.EndToEndSampled : Flock.Guarantees.EndToEndSampled`.
-
-Flock's definitions are still in its proofs package, so this module imports
-`Proofs.Flock.Soundness.Discharge.Composed.SampledJ`, and `Definitions.lean`, which the `security` package builds without
-`security_proofs`, does not import it: `Proofs.Flock.EndToEndSampled` does.
--/
+/-! Flock's one-stage audit, end to end, at the sampled proof blocks (trusted). -/
 
 @[expose] public section
 
@@ -62,28 +52,22 @@ conditions, and `EndToEnd`'s reference setup `y₀`: table 0's, at the session's
 every sample verity-verify-proof accepts gives (`Flock.SecurityProofs.EndToEnd_refSetup`), at any number of tables. -/
 def EndToEndSampled : Prop :=
   ∀ (n : ℕ) (Reg : Type)
-    -- the session's statement: its circuit, which the verifier parses, and its public file
     (I : Inputs) (ht : I.tags.typed = false)
     (c : Flock.Circuit) (hc : HmRow.parse (zkTags I) I.circuitFile I.tables = .ok c) (hU : Built c.unit)
     (pub : Public) (hpub : HmRow.loadPublic (zkTags I) c I.publicFile = .ok pub) (hpt : pub.tables = none)
     (hscope : Discharge.Layout.scopeOk c = true)
-    -- the sampling design: a `kd`-subset of the `n` units, split evenly over the session's tables
     (kd : ℕ) (hdiv : kd % nTab I = 0)
-    -- the record: the sample file at each sample, and the session at each sample and registration
     (dj : Finset (Fin n) → Lean.Json) (S₀ : Finset (Fin n)) (d₀ : Lean.Json)
     (y₀ : SampleSetupZJ (inputsJ I 0) (mPtsOf c.g (kd / nTab I)) S₀ d₀)
     (wr : (S : Finset (Fin n)) → (R : Reg) →
       LiveOutJ (planZJ (Reg := Reg) dj y₀ S R).length (mPtsOf c.g (kd / nTab I)) → Discharge.Exec.Transcript)
     (dg : ByteArray → ByteArray) (N : ℕ)
-    -- the verifier's operating-system bytes
     (Ω : Type) [Fintype Ω] [Nonempty Ω] (Lb : Fin 1 → ℕ) (src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256)
     -- the verify command's tags, and live-verifier
     (hTags : TagsOkZJ I)
     (hCust : Assumptions.Zk.RecordCustodyZKJ I dj (fun S R => (planZJ (Reg := Reg) dj y₀ S R).length) wr kd)
-    -- the bound's parameters
     (k Rw M : ℕ) (_hk : 1 ≤ k) (_hRw : 1 ≤ Rw) (_hM : 1 ≤ M) (ρ : ℝ) (_hρ : ρ < 1)
     (_hr : ∀ S R j, rateZ (planZJ (Reg := Reg) dj y₀ S R) j k ≤ ρ) (t' : ℝ) (_ht' : 0 ≤ t')
-    -- the live prover
     (τ : Strategy (auditLive (SamplingDesign.execOS (n := n) src (.subset kd) n) Reg (liveOfZJ dg (planZJ dj y₀) N wr)))
     (qF qS : ℝ),
     let L := SamplingDesign.execOS (n := n) src (.subset kd) n

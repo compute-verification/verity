@@ -4,17 +4,7 @@ public import Lean.Data.Json.Basic
 public import Std.Data.TreeMap.Raw.AdditionalOperations
 import Std.Data.TreeMap.Raw.Lemmas
 
-/-!
-# `Json` equivalence Lean can reason through
-
-Lean's `==` on `Json` is a `partial def` (opaque to proofs), so a check by it establishes nothing. `JsonEquiv` compares
-objects as the service's sample equality does (Python's dict equality: the same keys with equivalent values, whatever
-their order) and arrays elementwise in order (`jsonEquiv_obj_iff`, on objects whose trees are well formed, as
-`Flock.JsonParse.parse` builds them; `jsonEquiv_arr_iff`), recursively; scalars are equal as values (a number as its mantissa and
-exponent, as `canon` reads the integers it accepts). It is equality of forms (`jsonForm`: an object as its fields in
-the order of its tree, key order in a well-formed one), so `sampleEq`, `JsonEquiv` on optional values, decides it
-(`sampleEq_iff`).
--/
+/-! `JsonEquiv`, a `Json` equivalence Lean can reason through, since `==` on `Json` is a `partial def`. -/
 
 @[expose] public section
 
@@ -71,8 +61,6 @@ theorem FieldForms.ofList_inj {a b : List (String × JsonForm)} : ofList a = ofL
     | cons q bs => obtain ⟨k, v⟩ := p; obtain ⟨k', v'⟩ := q; simp [ofList, ih, and_assoc]
 
 mutual
-/-- **A value's form**: an object's fields in the order of its tree (`jsonForm_obj`: `toList`'s, key order in a
-well-formed tree). -/
 def jsonForm : Json → JsonForm
   | .null => .null
   | .bool b => .bool b
@@ -81,18 +69,15 @@ def jsonForm : Json → JsonForm
   | .arr ⟨a⟩ => .arr (.ofList (jsonForms a))
   | .obj ⟨⟨t⟩⟩ => .obj (.ofList (fieldForms t))
 
-/-- `jsonForm` elementwise. -/
 def jsonForms : List Json → List JsonForm
   | [] => []
   | a :: as => jsonForm a :: jsonForms as
 
-/-- An object's fields with their values' forms, in the order of its tree. -/
 def fieldForms : Impl String (fun _ => Json) → List (String × JsonForm)
   | .leaf => []
   | .inner _ k v l r => fieldForms l ++ (k, jsonForm v) :: fieldForms r
 end
 
-/-- **Equivalent values**: equal forms. -/
 def JsonEquiv (a b : Json) : Prop := jsonForm a = jsonForm b
 
 instance instDecidableRelJsonEquiv : DecidableRel JsonEquiv := fun a b =>
@@ -116,14 +101,12 @@ theorem fieldForms_eq (t : Impl String (fun _ => Json)) :
   | leaf => rfl
   | inner _ k v l r ihl ihr => simp [fieldForms, ihl, ihr]
 
-/-- An object's form is its fields' (`toList`'s) with their values' forms. -/
 theorem jsonForm_obj (m : Std.TreeMap.Raw String Json compare) :
     jsonForm (.obj m) = .obj (.ofList (m.toList.map fun p => (p.1, jsonForm p.2))) := by
   obtain ⟨⟨t⟩⟩ := m
   simp only [jsonForm, fieldForms_eq]
   rfl
 
-/-- **Arrays are equivalent elementwise, in order.** -/
 theorem jsonEquiv_arr_iff (a b : Array Json) :
     JsonEquiv (.arr a) (.arr b) ↔
       a.size = b.size ∧ ∀ i (h₁ : i < a.size) (h₂ : i < b.size), JsonEquiv a[i] b[i] := by
@@ -153,7 +136,6 @@ theorem option_map_eq_iff {α β : Type} (f : α → β) (a b : Option α) :
     a.map f = b.map f ↔ a.isSome = b.isSome ∧ ∀ x y, a = some x → b = some y → f x = f y := by
   cases a <;> cases b <;> simp
 
-/-- **Well-formed objects are equivalent as finite maps**: the same keys, and equivalent values at each. -/
 theorem jsonEquiv_obj_iff {m n : Std.TreeMap.Raw String Json compare} (hm : m.WF) (hn : n.WF) :
     JsonEquiv (.obj m) (.obj n) ↔ (∀ k, (m.get? k).isSome = (n.get? k).isSome) ∧
       ∀ k a b, m.get? k = some a → n.get? k = some b → JsonEquiv a b := by
@@ -173,13 +155,11 @@ theorem jsonEquiv_obj_iff {m n : Std.TreeMap.Raw String Json compare} (hm : m.WF
   simp only [option_map_eq_iff, JsonEquiv]
   exact ⟨fun h => ⟨fun k => (h k).1, fun k a b => (h k).2 a b⟩, fun h k => ⟨h.1 k, h.2 k⟩⟩
 
-/-- `JsonEquiv` on optional values: both absent, or both present and equivalent. -/
 def sampleEq : Option Json → Option Json → Bool
   | none, none => true
   | some a, some b => decide (JsonEquiv a b)
   | _, _ => false
 
-/-- **`sampleEq` passes exactly on equivalent values.** -/
 theorem sampleEq_iff (a b : Option Json) : sampleEq a b = true ↔ Option.Rel JsonEquiv a b := by
   rcases a with _ | a <;> rcases b with _ | b
   · exact ⟨fun _ => .none, fun _ => rfl⟩

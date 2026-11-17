@@ -2,28 +2,8 @@ module
 
 public import Proofs.Flock.Claims.ZkCols
 
-/-!
-The masked reader `zkRunCols` (`Proofs.Flock.Claims.ZkCols`) on a recorded `flock-circuit --zk` session, held to the
-openings the verifier checks: the run-time counterpart of `zkQueryRound_verifyWithM`. A probe run by hand, not a proof
-(`exempt` in `lean-audit.json`). For each table and rep, the reader's positions (`zkRepColsOf`, round `zkQueryRound` of
-the rep's stream) must pass level 0's Merkle check, the verifier's `merkleCheck` on the proof's opened rows, siblings and
-salts, against the table's committed `root_B`, which must be the proof's cap. A Merkle opening fixes its position (the
-climb's left and right turns and its cap entry), so passing it is opening exactly where the verifier opened: the
-positions of every other round of the stream with at least `q₀` coins must fail it, and so must the reader's with one
-position's low bit flipped. The table's `zkRunCols` must be both reps' positions below `2^d`, once each, in any order,
-each with its row's first `2^k0` symbols, the witness lanes. Prints one `ZKCOLS` JSON line per table; exits 1 if a
-check fails.
-
-    cd security/Proofs && lake env lean --run Flock/Claims/ZkColsSession.lean SESSION_DIR M K_LOG CLAIMS TABLE...
-
-`SESSION_DIR` holds `session.json` and each table's `<TABLE>.rep<r>.bin`; `M`, `K_LOG` and `CLAIMS` (`2 +` points
-times regions) are each table's setup, under the `hm96-sha512/v1` leaf scheme, at today's statement version
-(`ZkRun.wideLeaf` at its default). On `test_lean_zk.py`'s `--zk` RoPE d64
-sessions (the `zk-sessions` fixture `fixtures/artifacts.json` declares, at
-`verity/protocols/proofs/flock/prover/tests/fixtures/zk-sessions`; k_log 22, 8 claims): `sessions/drawn/*` at m 25
-with table `circuit`, `sessions/j2/*` at m 25 with tables `circuit-00 circuit-01`, `sessions/m26/*` at m 26 with table
-`circuit`.
--/
+/-! A probe run by hand, not a proof: the masked reader `zkRunCols` held to the openings the verifier checks on a
+recorded `flock-circuit --zk` session. -/
 
 @[expose] public section
 

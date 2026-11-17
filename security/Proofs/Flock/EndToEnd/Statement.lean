@@ -2,16 +2,7 @@ module
 
 public import Proofs.Flock.Soundness.Discharge.Composed.PublicJ
 
-/-!
-# Flock's one-stage audit, end to end (trusted)
-
-`EndToEnd` is a `def G : Prop` in the form of `Pouw.Guarantees.EndToEnd`: stated over Flock's definitions, with the
-named assumptions it rests on as hypotheses. Its proof is `Flock.SecurityProofs.EndToEnd : Flock.Guarantees.EndToEnd`.
-
-Flock's definitions are still in its proofs package, so this module imports
-`Proofs.Flock.Soundness.Discharge.Composed.PublicJ`, and `Definitions.lean`, which the `security` package builds without
-`security_proofs`, does not import it: `Proofs.Flock.EndToEnd` does.
--/
+/-! Flock's one-stage audit, end to end (trusted): `EndToEnd`, with the named assumptions it rests on as hypotheses. -/
 
 @[expose] public section
 
@@ -63,14 +54,11 @@ session's plan puts in place of a table that a sample doesn't set up. Every samp
 (`Flock.SecurityProofs.EndToEnd_refSetup`), at any number of tables. -/
 def EndToEnd : Prop :=
   ∀ (n : ℕ) (Reg : Type)
-    -- the session's statement: its circuit, which the verifier parses, and its public file
     (I : Inputs) (ht : I.tags.typed = false)
     (c : Flock.Circuit) (hc : HmRow.parse (zkTags I) I.circuitFile I.tables = .ok c) (hU : Built c.unit)
     (pub : Public) (hpub : HmRow.loadPublic (zkTags I) c I.publicFile = .ok pub) (hpt : pub.tables = none)
     (hscope : Discharge.Layout.scopeOk c = true)
-    -- the sampling design: a uniform `kd`-subset of the `n` units, split evenly over the session's tables
     (kd : ℕ) (_hkd : kd ≤ n) (hdiv : kd % nTab I = 0)
-    -- the record: the sample file at each sample, and the session at each sample and registration
     (dj : Finset (Fin n) → Lean.Json) (S₀ : Finset (Fin n)) (d₀ : Lean.Json)
     (y₀ : SampleSetupZJ (inputsJ I 0) (mPtsOf c.g (kd / nTab I)) S₀ d₀)
     (wr : (S : Finset (Fin n)) → (R : Reg) →
@@ -82,10 +70,8 @@ def EndToEnd : Prop :=
     -- the verify command's tags, and live-verifier
     (hTags : TagsOkZJ I)
     (hCust : Assumptions.Zk.RecordCustodyZKJ I dj (fun S R => (planZJ (Reg := Reg) dj y₀ S R).length) wr kd)
-    -- the count curve's parameters
     (k Rw M : ℕ) (_hk : 1 ≤ k) (_hRw : 1 ≤ Rw) (_hM : 1 ≤ M) (ρ : ℝ) (_hρ : ρ < 1)
     (_hr : ∀ S R j, rateZ (planZJ (Reg := Reg) dj y₀ S R) j k ≤ ρ) (t' : ℝ) (_ht' : 0 ≤ t') (K₀ : ℕ) (_hK₀ : K₀ ≤ n)
-    -- the live prover
     (τ : Strategy (auditLive (SamplingDesign.execOS (n := n) src (.subset kd) n) Reg (liveOfZJ dg (planZJ dj y₀) N wr)))
     (qF qS : ℝ),
     let L := SamplingDesign.execOS (n := n) src (.subset kd) n
@@ -111,19 +97,15 @@ def EndToEnd : Prop :=
           (2 * (t' * (1 + k)) / 2 ^ (256 : ℝ) + 1 / (Real.exp 1 * M) + k / (Real.exp 1 * Rw)) / (1 - ρ))
 
 open Classical in
-/-- **`EndToEnd` at A3 per test**: `EndToEnd` with the verifier's bytes passing the sample's escape test
-(`SamplingDesign.missProbTest`: the live sample runs and misses every unit of `B`) at every `B` up to `η`
-(`Assumptions.UniformRandomBytesTest`), in place of every event exactly, and `η` added to the miss term. -/
+/-- `EndToEnd` at A3 per test: the verifier's bytes pass the sample's escape test at every `B` up to `η`, and `η` is
+added to the miss term. -/
 def EndToEndPerTest : Prop :=
   ∀ (n : ℕ) (Reg : Type)
-    -- the session's statement: its circuit, which the verifier parses, and its public file
     (I : Inputs) (ht : I.tags.typed = false)
     (c : Flock.Circuit) (hc : HmRow.parse (zkTags I) I.circuitFile I.tables = .ok c) (hU : Built c.unit)
     (pub : Public) (hpub : HmRow.loadPublic (zkTags I) c I.publicFile = .ok pub) (hpt : pub.tables = none)
     (hscope : Discharge.Layout.scopeOk c = true)
-    -- the sampling design: a uniform `kd`-subset of the `n` units, split evenly over the session's tables
     (kd : ℕ) (_hkd : kd ≤ n) (hdiv : kd % nTab I = 0)
-    -- the record: the sample file at each sample, and the session at each sample and registration
     (dj : Finset (Fin n) → Lean.Json) (S₀ : Finset (Fin n)) (d₀ : Lean.Json)
     (y₀ : SampleSetupZJ (inputsJ I 0) (mPtsOf c.g (kd / nTab I)) S₀ d₀)
     (wr : (S : Finset (Fin n)) → (R : Reg) →
@@ -136,10 +118,8 @@ def EndToEndPerTest : Prop :=
     -- the verify command's tags, and live-verifier
     (hTags : TagsOkZJ I)
     (hCust : Assumptions.Zk.RecordCustodyZKJ I dj (fun S R => (planZJ (Reg := Reg) dj y₀ S R).length) wr kd)
-    -- the count curve's parameters
     (k Rw M : ℕ) (_hk : 1 ≤ k) (_hRw : 1 ≤ Rw) (_hM : 1 ≤ M) (ρ : ℝ) (_hρ : ρ < 1)
     (_hr : ∀ S R j, rateZ (planZJ (Reg := Reg) dj y₀ S R) j k ≤ ρ) (t' : ℝ) (_ht' : 0 ≤ t') (K₀ : ℕ) (_hK₀ : K₀ ≤ n)
-    -- the live prover
     (τ : Strategy (auditLive (SamplingDesign.execOS (n := n) src (.subset kd) n) Reg (liveOfZJ dg (planZJ dj y₀) N wr)))
     (qF qS : ℝ),
     let L := SamplingDesign.execOS (n := n) src (.subset kd) n

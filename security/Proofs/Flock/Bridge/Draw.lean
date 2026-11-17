@@ -6,35 +6,8 @@ public import Proofs.Flock.Soundness.Discharge.ZkLink.SampleOk
 public import Proofs.Flock.Soundness.Discharge.Composed.CustodyJ
 public import Proofs.Flock.Soundness.ExecStrataOf
 
-/-!
-# The deployed sample at the registration's strata
-
-`SampledKSLiveV5` samples with the deployed sample (`Spot.Draw.sampleUnits`, `Flock.Draw.drawWith` on the
-challenger's coins read in order as one stream) under a Flock sampling design over the registration's strata, and its `δ` is that
-sampling design's own `P_a`. This file holds what the statement reads and how the sample meets it:
-
-* `StrataOn St ns`: the strata `St`'s ranges, in order, are the slots `0, …, Σ ns − 1`, at sizes `ns`, so each stratum
-  is one run of consecutive slots;
-* `SamplingDesignOn samplingDesign ns kd`: `samplingDesign` is `subset kd`, or `stratified K` or `work K` over strata at `ns`, each stratum's `k` the
-  rule's (`stratumK`, `workK`) and `kd` their sum. A Bernoulli sampling design is none (`NotBernoulli`);
-* `pa_stratified`, `pa_work`: such a sampling design's claims design (`oneStageOf`) misses `B` with `strataPa` of its strata's sizes
-  and samples; `pa_empty_of_samplingDesignOn`: it misses nothing with probability `1`;
-* `wellFormed_of_samplingDesignOn`: such a sampling design, where it is the one the verifier's agreed sampling design gives (`deriveSamplingDesign`, else
-  `flockSamplingDesign` of `derive`'s sampling design object), is well formed over `ns` (`OneStage.WellFormed`), by the code's own refusals;
-* `sampleUnits_miss_le`: the deployed sample misses a set `U` of slots with probability at most `P_a(U)` (`one_bound`,
-  `strata_bound`);
-* `execSel src samplingDesign pop`: the deployed sample as a sampling design on the verifier's bytes `src`, a sample that runs out of them sampling
-  every unit; `execSel_escape_le`: under A3 it escapes `W` with probability at most `P_a` of `W`'s slots;
-* `samplingDesignSized_size`: a sample file that decodes to the verifier's sample under a sampling design that is `subset kd`, or whose strata
-  hold each slot once and sample `kd` units in all (`SamplingDesignSized`, as a sampling design on strata is, `samplingDesignSized_of_samplingDesignOn`), has `kd`
-  units, at any population (`ofJson_shape`, and `UnitSample.ofJson`'s per-stratum count, `ofJson_count`,
-  `ofJson_count_work`, in strata whose ranges it checks tile the population, `strataProblem_none`,
-  `workProblem_chain`); `samplingDesignOn_size` at a sampling design on strata;
-* `sampleUnits_size`: the deployed sample under such a sampling design that ends holds `kd` units, at any population (`subset_size`,
-  `stratifiedWith_size`);
-* `All`: the rule's sampling design is `subset n` over the `n` units (`Select.Rule.samplingDesignOver`), on the strata at `kd = n`
-  (`samplingDesignOn_all`), and under it the deployed sample holds every unit whatever its bytes (`sampleUnits_all`, `execSel_all`).
--/
+/-! The deployed sample at the registration's strata, which `SampledKSLiveV5` samples with, and how it meets the
+statement. -/
 
 @[expose] public section
 
@@ -43,8 +16,6 @@ namespace FlockSoundness.Discharge.ZkLink
 open Flock Exec ZkExec Finset FlockSoundness.Refine
 
 set_option maxHeartbeats 2000000 in
-/-- **`UnitSample.ofJson`'s per-stratum count, at a work sampling design** (`ofJson_count`): a sample it decodes under a work sampling design holds
-exactly `k_s` of its units in each stratum `s`'s ranges. -/
 theorem ofJson_count_work {j : Lean.Json} {D : Draw.UnitSample} (h : Draw.UnitSample.ofJson j = .ok D) {K : ℕ}
     {strata : Array Draw.WorkStratum} (hl : D.samplingDesign = .work K strata) (s : Draw.WorkStratum) (hs : s ∈ strata) :
     D.units.foldl (fun acc u => if (s.units.any fun x => decide (x.1 ≤ u) && decide (u < x.2)) = true then acc + 1
@@ -91,12 +62,8 @@ def SamplingDesignOn (samplingDesign : Flock.Draw.SamplingDesign) (ns : List ℕ
       (∀ s ∈ ws.toList, s.k = Flock.Draw.workK K s.work s.size (Flock.Draw.totalWork ws) s.floor) ∧
       (ws.toList.map (·.k)).sum = kd
 
-/-- **No Bernoulli sampling design**: `samplingDesign` samples a count its strata or its `k` fix, not one the coins set, as `SamplingDesignOn` and
-`SamplingDesignSized` require. -/
 def NotBernoulli (samplingDesign : Flock.Draw.SamplingDesign) : Prop := ∀ a b, samplingDesign ≠ .bernoulli a b
 
-/-- A stratified sampling design's design misses `B` with `strataPa` of its strata's sizes and samples, when its strata have sizes `ns`
-and each stratum's `k` is the rule's. -/
 theorem pa_stratified {K : ℕ} {St : Array Flock.Draw.Stratum} {ns : List ℕ} (hsz : St.toList.map (·.size) = ns)
     (hk : ∀ s ∈ St.toList, s.k = Flock.Draw.stratumK K s.size ns.sum) (B : Finset ℕ) :
     (Properties.Spot.oneStageOf (.stratified K St)).Pa ns B =
@@ -108,8 +75,6 @@ theorem pa_stratified {K : ℕ} {St : Array Flock.Draw.Stratum} {ns : List ℕ} 
   rw [Function.comp_apply, hk s hs]
   rfl
 
-/-- A work sampling design's design misses `B` with `strataPa` of its strata's sizes and samples, when its strata have sizes `ns` and
-each stratum's `k` is the work rule's. -/
 theorem pa_work {K : ℕ} {ws : Array Flock.Draw.WorkStratum} {ns : List ℕ}
     (hsz : (ws.toList.map (·.toStratum)).map (·.size) = ns)
     (hk : ∀ s ∈ ws.toList, s.k = Flock.Draw.workK K s.work s.size (Flock.Draw.totalWork ws) s.floor) (B : Finset ℕ) :
@@ -133,7 +98,6 @@ theorem stratumK_le {K n N : ℕ} (hK : K ≤ N) (hn : 1 ≤ n) (hnN : n ≤ N) 
   have : K * n ≤ N * n := Nat.mul_le_mul_right n hK
   nlinarith
 
-/-- **Such a sampling design misses nothing with probability `1`**: each stratum samples at most its size. -/
 theorem pa_empty_of_samplingDesignOn {samplingDesign : Flock.Draw.SamplingDesign} {ns : List ℕ} {kd : ℕ} (h : SamplingDesignOn samplingDesign ns kd) :
     (Properties.Spot.oneStageOf samplingDesign).Pa ns ∅ = 1 := by
   cases samplingDesign with
@@ -161,7 +125,6 @@ theorem pa_empty_of_samplingDesignOn {samplingDesign : Flock.Draw.SamplingDesign
     rw [hk w hw]
     exact min_le_left _ _
 
-/-- `UnitSample.ofJson`'s range test is membership in the ranges' slots. -/
 theorem any_iff_mem_expand (rs : Array (ℕ × ℕ)) (u : ℕ) :
     (rs.any fun x => decide (x.1 ≤ u) && decide (u < x.2)) = true ↔
       u ∈ Properties.Spot.SecurityProofs.expand rs.toList := by
@@ -171,7 +134,6 @@ theorem any_iff_mem_expand (rs : Array (ℕ × ℕ)) (u : ℕ) :
   · rintro ⟨x, hx, h1, h2⟩; exact ⟨x, hx, h1, by omega⟩
   · rintro ⟨x, hx, h1, h2⟩; exact ⟨x, hx, h1, by omega⟩
 
-/-- Units in strata whose slots hold each unit once, counted stratum by stratum, are all the units. -/
 theorem sum_count_strata {α : Type} (E : α → List ℕ) :
     ∀ (St : List α) (l : List ℕ), (St.flatMap E).Nodup → (∀ u ∈ l, u ∈ St.flatMap E) →
       (St.map fun s => (l.filter fun u => decide (u ∈ E s)).length).sum = l.length
@@ -200,7 +162,6 @@ theorem sum_count_strata {α : Type} (E : α → List ℕ) :
       · simp [h] at hus
       · exact h
 
-/-- `strata_bound` at strata whose ranges are the slots `0, …, n − 1` in order: the sample misses the slots `U` themselves. -/
 theorem strata_bound_on (samplingDesign : Flock.Draw.SamplingDesign) (St : Array Flock.Draw.Stratum)
     (hSt : (∃ k, samplingDesign = .stratified k St) ∨ ∃ k ws, samplingDesign = .work k ws ∧ St = ws.map (·.toStratum)) (n : ℕ)
     (hon : St.toList.flatMap (fun s => Properties.Spot.SecurityProofs.expand s.units.toList) = List.range n)
@@ -215,7 +176,6 @@ theorem strata_bound_on (samplingDesign : Flock.Draw.SamplingDesign) (St : Array
   rw [hon, List.getD_eq_getElem _ _ hv', List.getElem_range]
   exact hm v hv
 
-/-- **The deployed sample misses `U`** with probability at most its sampling design's `P_a(U)` on the strata `ns` it is on. -/
 theorem sampleUnits_miss_le {samplingDesign : Flock.Draw.SamplingDesign} {ns : List ℕ} {kd n : ℕ} (hlaw : SamplingDesignOn samplingDesign ns kd) (hns : ns.sum = n)
     (U : Finset ℕ) (hU : U ⊆ Finset.range n) (L : ℕ) :
     Claims.Pr (fun src : Fin L → Fin 256 => ∃ units read,
@@ -248,8 +208,6 @@ def execSel {n : ℕ} {Ω : Type} [Fintype Ω] [Nonempty Ω] {L : Fin 1 → ℕ}
     | .ok r => univ.filter fun u => u.val ∈ r.1
     | .error _ => univ
 
-/-- **The deployed sample escapes `W`** with probability at most its sampling design's `P_a` of `W`'s slots, on a uniform byte source
-(A3), at a sampling design on strata `ns` of the `n` units. -/
 theorem execSel_escape_le {n : ℕ} {Ω : Type} [Fintype Ω] [Nonempty Ω] {L : Fin 1 → ℕ}
     (t : Ω → (i : Fin 1) → Fin (L i) → Fin 256) (ht : Assumptions.UniformRandomBytes L t) {samplingDesign : Flock.Draw.SamplingDesign}
     {ns : List ℕ} {kd : ℕ} (hlaw : SamplingDesignOn samplingDesign ns kd) (hns : ns.sum = n) (W : Finset (Fin n)) :
@@ -285,11 +243,8 @@ theorem execSel_escape_le {n : ℕ} {Ω : Type} [Fintype Ω] [Nonempty Ω] {L : 
     _ = ENNReal.ofReal (Claims.Pr (E 0)) := by rw [Claims.Sampling.Pr_eq_toReal_prCoin, ENNReal.ofReal_toReal hfin]
     _ ≤ _ := ENNReal.ofReal_le_ofReal (sampleUnits_miss_le hlaw hns _ hU (L 0))
 
-/-- **`All`'s sampling design is on the strata**: `subset n` over the `n` units, sampling all of them. -/
 theorem samplingDesignOn_all (ns : List ℕ) : SamplingDesignOn (.subset ns.sum) ns ns.sum := ⟨rfl, le_rfl⟩
 
-/-- **Under `All` the deployed sample holds every unit**: a sample of `subset n` over `[0, n)` that ends is the image of
-`[0, n)` under a permutation that keeps it (`subset_spec`), so all of `[0, n)`, whatever the bytes. -/
 theorem sampleUnits_all (n : ℕ) (src : ByteArray) (r : Array ℕ × ℕ)
     (h : Spot.Draw.sampleUnits (.subset n) n src = .ok r) (u : ℕ) (hu : u < n) : u ∈ r.1 := by
   have hs : Properties.Spot.SecurityProofs.SeqMiss
@@ -308,7 +263,6 @@ theorem sampleUnits_all (n : ℕ) (src : ByteArray) (r : Array ℕ × ℕ)
   obtain ⟨i, hi, hiu⟩ := Finset.mem_image.1 hu'
   exact hm u ((hmem u).2 ⟨i, Finset.mem_range.1 hi, hiu⟩)
 
-/-- **Under `All` the verifier samples every unit, for any coins**: `execSel` at `subset n` over the `n` units. -/
 theorem execSel_all {n : ℕ} {Ω : Type} [Fintype Ω] [Nonempty Ω] {L : Fin 1 → ℕ}
     (t : Ω → (i : Fin 1) → Fin (L i) → Fin 256) (ω : Ω) : (execSel (n := n) t (.subset n) n).draw ω = univ := by
   change (match Spot.Draw.sampleUnits (.subset n) n (Properties.Spot.bytesOf (t ω 0)) with
@@ -319,14 +273,11 @@ theorem execSel_all {n : ℕ} {Ω : Type} [Fintype Ω] [Nonempty Ω] {L : Fin 1 
     exact Finset.filter_true_of_mem fun u _ => sampleUnits_all n _ r hr u.val u.isLt
   · rfl
 
-/-- A unit in one of a stratum's ranges is in its slots. -/
 theorem mem_expand_of_mem {rs : List (ℕ × ℕ)} {r : ℕ × ℕ} (hr : r ∈ rs) {u : ℕ} (h1 : r.1 ≤ u) (h2 : u < r.2) :
     u ∈ Properties.Spot.SecurityProofs.expand rs := by
   simp only [Properties.Spot.SecurityProofs.expand, List.mem_flatMap, List.mem_range'_1]
   exact ⟨r, hr, h1, by omega⟩
 
-/-- **A sampling design whose sample files hold `kd` units** (`samplingDesignSized_size`): `subset kd`, or a stratified or work sampling design whose
-strata's slots hold each unit once and whose strata's `k`s sum to `kd`. A Bernoulli sampling design is none. -/
 def SamplingDesignSized (samplingDesign : Flock.Draw.SamplingDesign) (kd : ℕ) : Prop :=
   match samplingDesign with
   | .subset k => k = kd
@@ -339,7 +290,6 @@ def SamplingDesignSized (samplingDesign : Flock.Draw.SamplingDesign) (kd : ℕ) 
         Properties.Spot.SecurityProofs.expand s.units.toList).Nodup ∧
       (ws.toList.map (·.k)).sum = kd
 
-/-- A sampling design on strata at `ns` is sized: its strata's slots are `0, …, Σ ns − 1`, each once. -/
 theorem samplingDesignSized_of_samplingDesignOn {samplingDesign : Flock.Draw.SamplingDesign} {ns : List ℕ} {kd : ℕ} (h : SamplingDesignOn samplingDesign ns kd) : SamplingDesignSized samplingDesign kd := by
   cases samplingDesign with
   | subset k => exact h.1
@@ -351,10 +301,6 @@ theorem samplingDesignSized_of_samplingDesignOn {samplingDesign : Flock.Draw.Sam
     obtain ⟨⟨hon, -⟩, -, hsum⟩ := h
     exact ⟨by rw [hon]; exact List.nodup_range, hsum⟩
 
-/-- **A sample file of the verifier's sample under a sized sampling design decodes only to `kd` units**, at any population: a subset
-sample has its `k` (`ofJson_shape`), and a stratified or work sample `k_s` units in each stratum (`ofJson_count`,
-`ofJson_count_work`), whose slots hold each unit once and whose ranges hold each of its units, since `UnitSample.ofJson`
-checks that they tile the sample's population (`strataProblem_none`, `workProblem_chain`). -/
 theorem samplingDesignSized_size {n : ℕ} {samplingDesign : Flock.Draw.SamplingDesign} {kd : ℕ} (hlaw : SamplingDesignSized samplingDesign kd)
     {dj : Finset (Fin n) → Lean.Json} (hdj : Discharge.ZkLink.SampleFileZK dj samplingDesign n) (S : Finset (Fin n))
     (D : Flock.Draw.UnitSample) (hD : Flock.Draw.UnitSample.ofJson (dj S) = .ok D) : D.units.size = kd := by
@@ -436,11 +382,6 @@ theorem samplingDesignSized_size {n : ℕ} {samplingDesign : Flock.Draw.Sampling
       _ = kd := hsum
 
 open Properties.Spot.SecurityProofs in
-/-- **The sampling design the verifier agrees is well formed over its strata**: where `deriveSamplingDesign` expands the named sampling design, or
-`flockSamplingDesign` reads `derive`'s sampling design object, and the sampling design is one at `ns` (`SamplingDesignOn`), its claims design is well formed over
-`ns`, by the code's own refusals. A subset samples at least one unit (`flockSamplingDesign`); a stratified `K` is in
-`[1, population]` (`Flock.Draw.derive`); a work sampling design's strata are nonempty (`strataOf` of a covered partition), its
-floors at least one (`workTableOfJson`) and its work nonzero (`deriveWork`). -/
 theorem wellFormed_of_samplingDesignOn {p : Spot.Program} {query samplingDesign samplingDesignJ : Lean.Json} {table : Option Lean.Json}
     {n : ℕ} {derived : Option Flock.Draw.SamplingDesign} {parsed : Flock.Draw.SamplingDesign} {ns : List ℕ} {kd : ℕ}
     (hJ : Spot.Draw.derive p query samplingDesign table = .ok samplingDesignJ)
@@ -496,13 +437,11 @@ theorem wellFormed_of_samplingDesignOn {p : Spot.Program} {query samplingDesign 
       · obtain ⟨w, hw, rfl⟩ := List.mem_map.1 hx
         exact hpos w hw
 
-/-- **A sample file of the verifier's sample under a sampling design on strata decodes only to `kd` units** (`samplingDesignSized_size`). -/
 theorem samplingDesignOn_size {n : ℕ} {samplingDesign : Flock.Draw.SamplingDesign} {ns : List ℕ} {kd : ℕ} (hlaw : SamplingDesignOn samplingDesign ns kd)
     {dj : Finset (Fin n) → Lean.Json} (hdj : Discharge.ZkLink.SampleFileZK dj samplingDesign n) (S : Finset (Fin n))
     (D : Flock.Draw.UnitSample) (hD : Flock.Draw.UnitSample.ofJson (dj S) = .ok D) : D.units.size = kd :=
   samplingDesignSized_size (samplingDesignSized_of_samplingDesignOn hlaw) hdj S D hD
 
-/-- A `subset k n` sample that ends holds `k` units. -/
 theorem subset_size {k n : ℕ} {src : ByteArray} {D : Array ℕ} (h : Flock.Draw.subset k n src = some D) :
     D.size = k := by
   rw [Audit.SampleExec.subset_eq] at h
@@ -511,8 +450,6 @@ theorem subset_size {k n : ℕ} {src : ByteArray} {D : Array ℕ} (h : Flock.Dra
     Array.size_range]
 
 open Properties.Spot.SecurityProofs (bind_ok bind_error onWith_take) in
-/-- **`stratifiedWith` on the verifier's bytes samples each stratum's `k`**: a run that returns a sample holds `∑ k_s` units,
-each stratum's `subset` returning its `k` (`subset_size`). -/
 theorem stratifiedWith_size (src : ByteArray) (strata : Array Flock.Draw.Stratum) (p p' : ℕ) (D : Array ℕ)
     (h : (Flock.Draw.stratifiedWith (fun _ need => Spot.Draw.take src need) strata).run p =
       .ok (some D, p')) :
@@ -578,8 +515,6 @@ theorem stratifiedWith_size (src : ByteArray) (strata : Array Flock.Draw.Stratum
     simp [getElem!_pos strata i hi]
 
 open Properties.Spot.SecurityProofs (bind_ok bind_error onWith_take) in
-/-- **The deployed sample under such a sampling design samples `kd` units**: a sample from `src` that ends holds `kd` units, `subset k`'s
-`k` (`subset_size`), and a stratified or work sampling design's `k_s` in each stratum (`stratifiedWith_size`), at any population. -/
 theorem sampleUnits_size {samplingDesign : Flock.Draw.SamplingDesign} {ns : List ℕ} {kd n : ℕ} (hlaw : SamplingDesignOn samplingDesign ns kd) {src : ByteArray}
     {units : Array ℕ} {read : ℕ} (h : Spot.Draw.sampleUnits samplingDesign n src = .ok (units, read)) :
     units.size = kd := by
