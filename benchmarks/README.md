@@ -19,7 +19,7 @@ and `uv run verity bench NAME [ARGS]` runs one. These are the directories that h
 | `verity bench bandwidth` | the device ceilings PoUB's timing cites, one probe a run: `chip` (what a card holds on chip) and `write_gpu` on one GPU, `write_host` on the host's CPUs |
 | `verity bench bool_build_cost` | a workload's Boolean Build against its word Build: the descriptor's size and each Definition's proof-block rule, timed |
 | `verity bench certifier_term` | the network attester's term for GLM-5.3 at a scope's load, in bits and GB |
-| `verity bench certifier_timing` | the bits an interval a server moves through when the network attester releases its bytes: `run`, `guard`, `serve`, `observe`, `score`, `table` and `target` |
+| `verity bench attester_timing` | the bits an interval a server moves through when the network attester releases its bytes: `run`, `guard`, `serve`, `observe`, `score`, `table` and `target` |
 | `verity bench circuit_properties` | its circuits' fan-out, fan-in and s_×, counted exactly, beside the slowdown calculator's shape-derived ones; `--models llama32-1b --out DIR`, Llama 3.2 1B's layer alone and its point, on a CPU |
 | `verity bench compile_cost` | wall time and peak memory, by phase, of compiling a class-G window's Programs |
 | `verity bench compute` | the compute audit's number: the share of a served model's MACs that Pearl+ credits over the tokens a served run served, from the verifier's side of a recorded run's record |
@@ -321,8 +321,7 @@ GPU code held bit for bit to its reference or Definition before it is timed.
 
 | Directory | What it measures | Status |
 | --- | --- | --- |
-| `one_stage/` | the one-stage audit end to end: committed values, registration, the sample, Flock's circuit prover and the Lean verifier, to the audit record and its integrity profile, with its negatives; and a served window's two-stage audit (`two_stage.py`: each class's first stage, and a class's second stage through that audit, round 2 and the stream's outcome; `two_stage_small.sh` runs both at small statics) | maintained |
-| `two_stage/` | the two-stage audit end to end on a toy replay block: the boundary registered, a first-stage sample of replay blocks, their interiors replayed and registered, a second-stage sample per (replay block, template) cell, one Flock `--zk` session per template with link ports read at the boundary record, the Lean verifier, and the stream's outcome, with its negatives | maintained |
+| `one_stage/` | the one-stage audit end to end: committed values, registration, the sample, Flock's circuit prover and the Lean verifier, to the audit record and its integrity profile, with its negatives; and a served window's two-stage audit (`two_stage.py`: each class's first stage, and a class's second stage through that audit, round 2 and the stream's outcome; `two_stage_small.sh` runs both at small statics); and the two-stage audit end to end on a toy replay block (`toy.py`, `audit.py`): the boundary registered, a first-stage sample of replay blocks, their interiors replayed and registered, a second-stage sample per (replay block, template) cell, one Flock `--zk` session per template with link ports read at the boundary record, the Lean verifier, and the stream's outcome, with its negatives | maintained |
 | `prove_path/` | a served run's proof blocks proved after the fact: the compiler's Programs, a sample on live coins, Flock `--zk` behind the Lean ZK server, and the Lean verifier | maintained |
 | `served_units/` | a served model's proof blocks proved one type at a time from synthetic values, the Lean verifier accepting the honest run and refusing forgeries | maintained |
 | `unit_walk/` | the device witness's host walk of a served proof-block type's unit: CPU and wall seconds a statement at each width (lane groups a pass), distance asked ahead and pool size, with and without its row vectors kept, every walk's packed words held to the first's | maintained |
@@ -361,7 +360,7 @@ GPU code held bit for bit to its reference or Definition before it is timed.
 | --- | --- | --- |
 | `compute/` | `verity bench compute`, the front door for the compute audit's number: the share of a served model's MACs (its linears', attention's and LM head's) that Pearl+ credits over the tokens a served run served, from the verifier's side of a recorded run's record; and `h200_share.py`, the share of an H200's capacity an honest Pearl+ prover is credited, modeled from that share and a recorded tensor-rate run | maintained |
 | `served_errors/` | error terms of the quoted guarantees that had no value, evaluated at the served sizes: PoUW's δ_ks, δ_bind and p, the Sm120 headlines' n_π·δ_ZK, Pearl+'s ε_a and δ_a, Dither's κ_S, the integrity subprotocol's ks_t and the remote product's joint error, each with its formula and premises (a model, not a measurement) | maintained |
-| `machine_model/` | the ACCEL model of each measured card: its rows, census, attack families and designs as data, and a design's ε from them (`machine-model`) | maintained |
+| `../calibration/machine_model/` | the ACCEL model of each measured card: its rows, census, attack families and designs as data, and a design's ε from them (`machine-model`) | maintained |
 
 ### Network
 
@@ -371,7 +370,7 @@ GPU code held bit for bit to its reference or Definition before it is timed.
 | `network_e2e/` | the network chain's steps after N2 (`chain.py`) held on fakes and recorded endpoint runs, the advice encodings (`encodings/`) and vLLM's scheduler traces (`traces/`) | maintained |
 | `certifier_term/` | the network attester's term for GLM-5.3 at the load of a node, a datacenter and the world, in bits and GB, each row by its check's own counting rule: the scan as the monitoring-period check charges it, the scan under each change to its check, and the design with no run behind it, without its stop block and with it (`network_traces/leak_bounds.py`'s runner) | maintained |
 | `network_sim/` | the workload's Programs (`workload/`): a Boolean MLP and vLLM's serving Program, which `verifier_cost` measures a verifier on | maintained |
-| `../calibration/certifier_timing/` | the bits an interval a server moves through when the network attester releases its bytes: one number from a server that times its writes by a bit, with a guard, a target and the candidate fixes as flags | maintained |
+| `../calibration/attester_timing/` | the bits an interval a server moves through when the network attester releases its bytes: one number from a server that times its writes by a bit, with a guard, a target and the candidate fixes as flags | maintained |
 | `scan_cost/` | what the network attester's scan costs for each second of execution phase it covers: proving seconds (the round's sessions and their staging) and the Lean verifier's CPU seconds on one core, at a fixed identity, each with its stages, a guard on the round's answer, a baseline and two targets | maintained |
 | `attester_load/` | what the network attester costs the requests it carries, at the application's schedule: the added time to a response's first and last byte through it against straight to the endpoint, the ticks' lateness at the capacity its schedule states, on a stub endpoint on a CPU and on a model on a card. The model arm's network attester runs in the bytes form, relaying vLLM's own framing, where the application's runs in the id form: the schedule and its cells' buckets are the same, and only what a cell may carry differs | maintained |
 | `mempool/` | the network attester's prefix-cache pool as memory-checked RAM (`pool_ram`, held to vLLM's pool on the encodings' traces; `stream.py` holds `CacheStep_v3`'s stream to it after every call): a window's cost at its busiest stretch, and `MemCheck_v1`'s and `CacheStep_v3`'s vectors | maintained |
@@ -421,7 +420,7 @@ How fast the team's leads answer each other: measured on Linear's comments, not 
 
 | Directory | What it measures | Status |
 | --- | --- | --- |
-| `census/` | the fixed quantities benchmarks are computed against: hardware, datatypes, networks, deployments, subcircuits and workloads | data |
+| `../calibration/census/` | the fixed quantities benchmarks are computed against: hardware, datatypes, networks, deployments, subcircuits and workloads | data |
 
 ### The repository
 

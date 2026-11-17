@@ -98,9 +98,9 @@ def test_the_scans_terms_are_the_rows_forms_on_a_hand_worked_execution_phase():
         assert jitter == clog2(dj ** 32)
         got = LB.terms(4, 1, cells=65, steps=32, dj=dj, entries=9_088)
         assert got == LB.Terms(schedules=28, cells=28, jitter=jitter, entries=9_088)
-        assert got.certifier == 56 + jitter
+        assert got.attester == 56 + jitter
     assert LB.terms(0, 0, cells=65, steps=32, dj=2) == LB.Terms(0, 0, 0, 0)
-    assert LB.terms(Fraction(7, 2), Fraction(1, 4), cells=1_001, steps=32, dj=2).certifier == 35 + 35 + 8
+    assert LB.terms(Fraction(7, 2), Fraction(1, 4), cells=1_001, steps=32, dj=2).attester == 35 + 35 + 8
 
 
 def test_the_failed_connections_pooled_charge_bounds_the_count_it_states():
@@ -151,12 +151,12 @@ def test_the_table_on_a_hand_worked_world():
             assert r.eps == Fraction(phases, 739_125) / 2 ** 20
             for dj, jitter in ((1, 0), (2, 32 * phases)):
                 assert r.terms[dj] == LB.Terms(10 * requests, 10 * requests, jitter, 18_048 * requests)
-                assert r.terms[dj].certifier == 20 * requests + jitter
+                assert r.terms[dj].attester == 20 * requests + jitter
     week, year = got["node", "week", "scan"], got["world", "year", "scan"]
-    assert week.terms[2] == LB.Terms(472_500, 472_500, 151_200, 852_768_000) and week.terms[2].certifier == 1_096_200
+    assert week.terms[2] == LB.Terms(472_500, 472_500, 151_200, 852_768_000) and week.terms[2].attester == 1_096_200
     assert year.requests == 7_391_250 and year.phases == 739_125
-    assert (year.terms[1].certifier, year.terms[2].certifier) == (147_825_000, 171_477_000)
-    assert year.terms[2].certifier == 3 * got["node", "year", "scan"].terms[2].certifier
+    assert (year.terms[1].attester, year.terms[2].attester) == (147_825_000, 171_477_000)
+    assert year.terms[2].attester == 3 * got["node", "year", "scan"].terms[2].attester
 
 
 def test_each_change_zeroes_what_it_should_and_leaves_the_rest():
@@ -172,13 +172,13 @@ def test_each_change_zeroes_what_it_should_and_leaves_the_rest():
                 assert lengths[dj] == scan[dj]._replace(schedules=0, cells=0)
                 assert timing[dj] == scan[dj]._replace(jitter=0)
                 assert entries[dj] == scan[dj]._replace(entries=None)
-                assert entries[dj].certifier == scan[dj].certifier
-                assert all_three[dj] == LB.Terms(0, 0, 0, None) and all_three[dj].certifier == 0
+                assert entries[dj].attester == scan[dj].attester
+                assert all_three[dj] == LB.Terms(0, 0, 0, None) and all_three[dj].attester == 0
                 assert design[dj] == lengths[dj]._replace(entries=None, count=count)
                 assert design[dj] == LB.Terms(0, 0, scan[dj].jitter, None, count)
-            assert scan[1].jitter == 0 < scan[2].jitter == lengths[2].certifier
-            assert design[2].certifier == lengths[2].certifier + count
-            assert timing[1] == timing[2] == scan[1] and design[1].certifier == count > 0
+            assert scan[1].jitter == 0 < scan[2].jitter == lengths[2].attester
+            assert design[2].attester == lengths[2].attester + count
+            assert timing[1] == timing[2] == scan[1] and design[1].attester == count > 0
 
 
 def test_the_failed_connections_are_charged_pooled_only_where_the_lengths_are_held():
@@ -196,8 +196,8 @@ def test_the_failed_connections_are_charged_pooled_only_where_the_lengths_are_he
                 assert f.terms[dj] == r.terms[dj]
     design, each = failing["world", "year", "design"].terms, math.log2(1_000 * math.e) + math.log2(1_002)
     count = design[1].count
-    assert 21.37 < each < 21.38 and design[1].certifier - count == pytest.approx(7_391.25 * each)
-    assert design[2].certifier - count == pytest.approx(23_652_000 + 7_391.25 * each)
+    assert 21.37 < each < 21.38 and design[1].attester - count == pytest.approx(7_391.25 * each)
+    assert design[2].attester - count == pytest.approx(23_652_000 + 7_391.25 * each)
 
 
 def test_the_design_with_no_stop_block_is_charged_the_scans_schedules_and_is_the_designs_otherwise():
@@ -226,8 +226,8 @@ def test_the_design_with_no_stop_block_is_charged_the_scans_schedules_and_is_the
                     assert t.schedules == scan.terms[dj].schedules > 0 == whole.terms[dj].schedules
                     assert (t.cells, t.jitter, t.entries) == (whole.terms[dj].cells, whole.terms[dj].jitter, None)
                     assert t == whole.terms[dj]._replace(schedules=scan.terms[dj].schedules)
-                    more = float(whole.terms[dj].certifier + scan.terms[dj].schedules)
-                    assert float(t.certifier) == pytest.approx(more, rel=1e-12)
+                    more = float(whole.terms[dj].attester + scan.terms[dj].schedules)
+                    assert float(t.attester) == pytest.approx(more, rel=1e-12)
                     assert (t.cells > 0) == bool(inp["failure_rate"].value)
 
 
@@ -529,7 +529,7 @@ def test_the_count_is_charged_by_link_on_the_designs_rows_and_on_no_other():
     lanes leave it as it is; with no lanes given it moves only as the least lanes do."""
     assert [name for name, kind in LB.ROWS.items() if kind.count] == [NO_STOP, "design"]
     assert not LB.Kind("on main", (), "a row").count and LB.Terms(1, 2, 3, 4).count == 0
-    assert LB.Terms(1, 2, 3, None, 5).certifier == 11
+    assert LB.Terms(1, 2, 3, None, 5).attester == 11
     rate = Fraction(1, 1_000)
     for inp in (small(), small(failure_rate=rate, lanes=5), LB.inputs(),
                 LB.inputs(requests="census", failure_rate=rate), LB.inputs(world_requests=1e16, lanes=512, classes=3)):
@@ -538,12 +538,12 @@ def test_the_count_is_charged_by_link_on_the_designs_rows_and_on_no_other():
             for dj in LB.JITTERS:
                 t = r.terms[dj]
                 assert t.count == (float(r.phases) * a_phase if name in (NO_STOP, "design") else 0)
-                assert float(t.certifier) == pytest.approx(float(t.schedules + t.cells + t.jitter) + t.count, rel=1e-12)
+                assert float(t.attester) == pytest.approx(float(t.schedules + t.cells + t.jitter) + t.count, rel=1e-12)
             assert r.terms[1].count == r.terms[2].count
     once, twice = (rows(LB.inputs(world_requests=n * 10 ** 16, lanes=512), HELD) for n in (1, 2))
     assert all(twice[key].terms[dj].count == r.terms[dj].count for key, r in once.items() for dj in LB.JITTERS)
     world = once["world", "year", "design"]
-    assert world.terms[1].count == float(world.phases) * (6 * math.log2(512 * 43 + 1)) == world.terms[1].certifier
+    assert world.terms[1].count == float(world.phases) * (6 * math.log2(512 * 43 + 1)) == world.terms[1].attester
     least = [LB.counted(LB.inputs(world_requests=n * 10 ** 16)) for n in (1, 2)]
     assert [c.lanes for c in least] == [21, 41] and [c.releases for c in least] == [903, 1_763]
 
@@ -709,7 +709,7 @@ def test_a_scope_serves_the_worlds_requests_in_proportion_to_its_gpu_seconds():
     assert world.requests == 10 ** 16 and world.phases == 46_870_000 * PHASES["year"]
     assert got["node", "year", "scan"].requests == Fraction(10 ** 16, 46_870_000)
     assert got["datacenter", "week", "scan"].requests == Fraction(10 ** 16 * 12_500 * 7, 46_870_000 * 365)
-    assert world.terms[1].certifier == 2 * 13 * 10 ** 16 and world.terms[2].jitter == 1_280 * world.phases
+    assert world.terms[1].attester == 2 * 13 * 10 ** 16 and world.terms[2].jitter == 1_280 * world.phases
     assert world.terms[1].entries == 73_776 * 10 ** 16
 
 

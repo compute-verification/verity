@@ -28,16 +28,16 @@
 #     closed stops the endpoint at once, with no window to seal; one that failed after (its leak guard holding a file,
 #     say) leaves its exit to the network attester's verdict, and the run goes on with the window it sealed.
 #     With LOAD=session the load is the caller's own, through a relay session of the network attester's, and the run
-#     sends nothing itself: CERTIFIER_FRONT, passing `--session` to `certifier_piece.py front`, opens the session and
+#     sends nothing itself: CERTIFIER_FRONT, passing `--session` to `attester_piece.py front`, opens the session and
 #     returns once its relay listens; LOAD_CMD, the caller's command, run as `bash -c LOAD_CMD _ RELAY D` in TREE within
 #     LOAD_TIMEOUT (default 170m, the gate's longest session), sends the load to the client address RELAY names (the
 #     session's relay.json, in the serve dir's private/), its output the serve dir's load.log; and CERTIFIER_CLOSE
-#     (`certifier_piece.py close "$1" "$2"`, given D and the front's directory), within CERTIFIER_CLOSE_TIMEOUT
+#     (`attester_piece.py close "$1" "$2"`, given D and the front's directory), within CERTIFIER_CLOSE_TIMEOUT
 #     (default 180m), waits for the session's end and keeps and publishes its fetch as a rehearsal's front does. The
 #     CERTIFIER-FRONT line is then the close's, and the step's exit the load's; a front that opened no session runs no
 #     load, and the close says why. LOAD=session without all three, and LOAD_CMD, CERTIFIER_CLOSE or a front passing
 #     `--session` under any other LOAD, are refused before the lease.
-#     CERTIFIER_FRONT runs within CERTIFIER_FRONT_TIMEOUT (default 20m), and a flag it passes to `certifier_piece.py front`
+#     CERTIFIER_FRONT runs within CERTIFIER_FRONT_TIMEOUT (default 20m), and a flag it passes to `attester_piece.py front`
 #     that this tree's front doesn't take, or a front whose endpoint isn't on the network attester's id form (SERVE_ARGS without
 #     `--protocol ids`), is refused before the lease. The
 #     lease ends once every closed window is sealed. What names a window's requests (the serve dir's windows.jsonl,
@@ -77,7 +77,7 @@
 #     is proved beside the sampled rest, which only a work rate (work-rate:NUM/DEN) samples, so the preflight refuses a partition of another sampling design
 #     or without them; PP_SETS names their input sets.
 #  4. PoUW (H1 credit, or with POUW=pearlplus Pearl+'s own served run, below), PoUS, the bandwidth audit and the network
-#     certifier: `served_verdicts.py pieces` runs each one's piece
+#     attester: `served_verdicts.py pieces` runs each one's piece
 #     where POUW_CMD, POUS_CMD, BANDWIDTH_CMD or CERTIFIER_CMD names it, one at a time (the network attester's alone, the longest,
 #     from the moment the window is picked, beside step 3, its lines said after the others'; split in two, the answer step
 #     6's period check wrote, V3c having run before this step), each within <COMPONENT>_TIMEOUT
@@ -105,7 +105,7 @@
 #     follow-on composes on a prover node, so its composite is a development check), and names the window's
 #     docket R that the record's SPOT audit sampled against: one of another window, or bound to
 #     no record, is refused, exit 1; any other server's answer is carried as elsewhere. Network attestation's chain files
-#     that list or count the window's requests (CERTIFIER_PRIVATE) then move to the serve dir's private/pieces/certifier. Then, unless COMPOSITE is set empty, remote's and onsite's Lean
+#     that list or count the window's requests (CERTIFIER_PRIVATE) then move to the serve dir's private/pieces/attester. Then, unless COMPOSITE is set empty, remote's and onsite's Lean
 #     verdicts on the run's cases (`served_composite.sh`'s docstring): a composite that didn't run (a tree without
 #     composite.py) or whose Lean didn't answer fails the run. On the served node no composite is of record (under
 #     COMPOSE_OFF_NODE=0 it is a development check), so this record is `pending`; under COMPOSE_OFF_NODE=1, the default,
@@ -175,7 +175,7 @@
 #     CERTIFIER_PERIOD_TIMEOUT (default 60m), each as `bash -c CMD _ D K DIR V3C` in TREE with DIR $OUT/pieces/certifier
 #     and V3C V3c's $D/v3c-w<K>-<class>. V3c then takes the window commit, the longer of the chain and V3c's audit,
 #     and the period check, which the run's --timeout holds beside the other steps. The period check writes the
-#     network attester's answer.json in DIR, which step 4's certifier piece reads; `served_verdicts.sh v3c`, which writes no
+#     network attester's answer.json in DIR, which step 4's attester piece reads; `served_verdicts.sh v3c`, which writes no
 #     record, moves the steps' logs (CERTIFIER_PRIVATE) to the serve dir's private/pieces/certifier before it exits.
 # Composed off the served node: with COMPOSE_OFF_NODE=1 (the default; 0 composes both on the served node, the composite
 # then a development check that claims no record, `served_composite.sh`, which refuses one there under 1) the run's
@@ -952,7 +952,7 @@ v3c_period() {  # V3c's audit as one compute audit of the network certifier's pe
   say "V3C-PERIOD (records_audit.py period exit $rc): $(tail -1 "$OUT/v3c-audit/period.log" | cut -c1-800)"
   return $rc
 }
-certifier_step() {  # $1 chain|period: the split network certifier's step on V3c's window (step 6), if its command is set
+attester_step() {  # $1 chain|period: network attestation's split step on V3c's window (step 6), if its command is set
   local cmd lim dir=$OUT/pieces/certifier rc
   if [ "$1" = chain ]; then cmd=${CERTIFIER_CHAIN_CMD:-} lim=${CERTIFIER_TIMEOUT:-4h}
   else cmd=${CERTIFIER_PERIOD_CMD:-} lim=${CERTIFIER_PERIOD_TIMEOUT:-60m}; fi
@@ -963,13 +963,13 @@ certifier_step() {  # $1 chain|period: the split network certifier's step on V3c
   say "CERTIFIER-${1^^} (exit $rc): $(tail -1 "$dir/$1.log" | cut -c1-600)"
   return $rc
 }
-v3c_proved() {  # V3c's window committed, the build done: the certifier's chain beside V3c's audit, then its period check
+v3c_proved() {  # V3c's window committed, the build done: network attestation's chain beside V3c's audit, then its period check
   local rc prc chain
-  certifier_step chain & chain=$!
+  attester_step chain & chain=$!
   v3c_audit; rc=$?
   v3c_period; prc=$?
   wait "$chain"
-  if [ "$prc" = 0 ]; then certifier_step period
+  if [ "$prc" = 0 ]; then attester_step period
   elif [ -n "${CERTIFIER_PERIOD_CMD:-}" ]; then say "CERTIFIER-PERIOD: not run: V3c wrote no period.json"; fi
   return $((rc ? rc : prc))
 }
@@ -1151,7 +1151,7 @@ serve() {  # under the lease: the endpoint, the requests, every closed window se
       >> "$D/private/certifier-front.log" 2>&1
     closed=$?
     say "CERTIFIER-FRONT (exit $closed): $("$PY" "$TREE/benchmarks/one_stage/served_verdicts.py" front-line "$D/private/certifier-front/session.json" 2>&1 | cut -c1-600)"
-    rc=$sent_rc  # the step's exit is the load's, as under the run's own loads: the close's is the certifier's verdict
+    rc=$sent_rc  # the step's exit is the load's, as under the run's own loads: the close's is the network attester's verdict
   elif [ "$LOAD" != front ]; then
     release=$("$PY" -c 'import uuid; print(uuid.uuid4().hex)')
     local load=(--varied "$REQUESTS" --rate "$RATE" --max-tokens "$MAX_TOKENS")
@@ -1184,7 +1184,7 @@ serve() {  # under the lease: the endpoint, the requests, every closed window se
   else say "SERVE stopped (exit $stopped): not every closed window sealed (the serve dir's private/verdicts.txt)"; fi
   [ "$period" = 1 ] && say "$("$PY" "$TREE/benchmarks/one_stage/served_verdicts.py" period close "$D" --gate "$H1_GATE" 2>&1 | tail -1)"
   pearl_period close
-  # a front's exit is the certifier's verdict (CERTIFIER-FRONT, and its piece reads the session), not the load's
+  # a front's exit is the network attester's verdict (CERTIFIER-FRONT, and its piece reads the session), not the load's
   { [ "$LOAD" = front ] || [ "$rc" = 0 ]; } && [ "$c" -gt 0 ] && [ "$s" -ge "$c" ]
 }
 
@@ -1372,7 +1372,7 @@ front_ok() {  # preflight: LOAD=front has a front, LOAD=session its three comman
   if [ "$LOAD" = session ]; then
     for v in CERTIFIER_FRONT LOAD_CMD CERTIFIER_CLOSE; do
       [ -n "${!v:-}" ] \
-        || { say "PREFLIGHT: LOAD=session is the caller's load through a relay session, which CERTIFIER_FRONT opens (certifier_piece.py front with --session), LOAD_CMD sends to and CERTIFIER_CLOSE closes (certifier_piece.py close), and $v is unset"; return 3; }
+        || { say "PREFLIGHT: LOAD=session is the caller's load through a relay session, which CERTIFIER_FRONT opens (attester_piece.py front with --session), LOAD_CMD sends to and CERTIFIER_CLOSE closes (attester_piece.py close), and $v is unset"; return 3; }
     done
     [ -n "$session" ] \
       || { say "PREFLIGHT: LOAD=session sends the caller's load through a relay session, and CERTIFIER_FRONT passes no --session, so its front would send a group of its own"; return 3; }
@@ -1383,20 +1383,20 @@ front_ok() {  # preflight: LOAD=front has a front, LOAD=session its three comman
     [ -z "$session" ] \
       || { say "PREFLIGHT: CERTIFIER_FRONT passes --session, which opens a relay session for a caller's load, and LOAD is $LOAD, which sends none through it: LOAD=session, or a front without --session"; return 3; }
   fi
-  case ${CERTIFIER_FRONT:-} in *"certifier_piece.py front"*) ;; *) return 0 ;; esac
+  case ${CERTIFIER_FRONT:-} in *"attester_piece.py front"*) ;; *) return 0 ;; esac
   case " ${SERVE_ARGS:-} " in *" --protocol ids "*) ;; *)
-    say "PREFLIGHT: the certifier front sends id-form requests, which serve-openai answers only under" \
+    say "PREFLIGHT: the network attester front sends id-form requests, which serve-openai answers only under" \
         "SERVE_ARGS='--protocol ids --id-payload 503'"; return 3 ;; esac
   local help f script
-  script=$(grep -oE "[^[:space:]\"']*certifier_piece\.py front" <<< "$CERTIFIER_FRONT" | head -1)
+  script=$(grep -oE "[^[:space:]\"']*attester_piece\.py front" <<< "$CERTIFIER_FRONT" | head -1)
   help=$(cd "$TREE" && "$PY" "${script% front}" front --help 2>&1) \
-    || { say "PREFLIGHT: this tree's certifier front doesn't start: $(echo "$help" | tail -1 | cut -c1-300)"; return 3; }
+    || { say "PREFLIGHT: this tree's attester front doesn't start: $(echo "$help" | tail -1 | cut -c1-300)"; return 3; }
   for f in $(grep -oE -- '--[a-z][a-z0-9-]*' <<< "$CERTIFIER_FRONT" | sort -u); do
     grep -qE "(^|[^a-z0-9-])$f([^a-z0-9-]|$)" <<< "$help" \
-      || { say "PREFLIGHT: CERTIFIER_FRONT passes $f, which this tree's certifier front doesn't take"; return 3; }
+      || { say "PREFLIGHT: CERTIFIER_FRONT passes $f, which this tree's attester front doesn't take"; return 3; }
   done
 }
-# the certifier's chain files list and count the window's requests (its certs, its tie's prompt lengths, its N2 network certifier's
+# network attestation's chain files list and count the window's requests (its certs, its tie's prompt lengths, its N2 network attester's
 # counts, its report and the piece's log, or the split's two logs); once the record has read them, or
 # `served_verdicts.sh v3c` is done, they move to the serve dir's private/
 CERTIFIER_PRIVATE="chain/certs.json chain/report chain/tie/summary.json chain/n2/summary.json piece.log chain.log period.log"
@@ -1885,7 +1885,7 @@ if [ -n "$PEARLPLUS_TIE" ] && [ -n "${CERTIFIER_FRONT:-}" ]; then  # the network
   (umask 077; echo "$KN" > "$D/private/front-window")
   say "NETWORK-WINDOW: the network attester's row is over its front's group, the one sealed window of its requests alone, not the tied load's: it stands as its own verdict, its case left out of the composite"
 fi
-say "CLASSES: the window circuit's ${CLASSES}; the certifier's scan ${CERTIFIER_SCAN:-W63}, the one class the gate serves"
+say "CLASSES: the window circuit's ${CLASSES}; network attestation's scan ${CERTIFIER_SCAN:-W63}, the one class the gate serves"
 }
 advice() {
 cd "$TREE/adapters/vllm" || exit 9
@@ -2029,9 +2029,9 @@ fi
 front_ok || exit 3
 [ -n "$FOLLOW$COMPOSE" ] || [ "${1:-}" = v3c ] || pous_pins_ok || exit 3  # the serve's run, which starts PoUS's piece
 SPLIT= DEFER=
-if [ -n "${CERTIFIER_CHAIN_CMD:-}${CERTIFIER_PERIOD_CMD:-}" ]; then  # the split certifier: its period check writes its answer
+if [ -n "${CERTIFIER_CHAIN_CMD:-}${CERTIFIER_PERIOD_CMD:-}" ]; then  # the split attester: its period check writes its answer
   [ -z "${CERTIFIER_CMD:-}" ] || { say "PREFLIGHT: CERTIFIER_CMD or the split's CERTIFIER_CHAIN_CMD and CERTIFIER_PERIOD_CMD, not both"; exit 3; }
-  [ -n "$V3C" ] || { say "PREFLIGHT: the split certifier's period check reads V3c's period.json, and V3C_CLASS is empty"; exit 3; }
+  [ -n "$V3C" ] || { say "PREFLIGHT: the split attestation period check reads V3c's period.json, and V3C_CLASS is empty"; exit 3; }
   SPLIT=1
 fi
 case ${V3C_COMPOSE_CACHE:-/} in  # a kept compose cache: outside TREE, where the warm and the audit would put a relative path
@@ -2080,7 +2080,7 @@ if [ -n "$PEARLPLUS_TIE" ] && [ -z "$COMPOSE" ]; then  # the window served under
   [ "$POUW" = pearlplus ] || { say "PREFLIGHT: PEARLPLUS_TIE ties the window to Pearl+'s W, which POUW=pearlplus's piece writes: POUW is $POUW"; exit 3; }
   [ -z "${H1_TIE:-}" ] || { say "PREFLIGHT: PEARLPLUS_TIE or H1_TIE, not both: the window is tied to one W"; exit 3; }
   [ -n "$V3C" ] || { say "PREFLIGHT: PEARLPLUS_TIE commits the window at V3C_CLASS, and it is empty"; exit 3; }
-  [ -z "$SPLIT" ] || { say "PREFLIGHT: under PEARLPLUS_TIE V3c runs once Pearl+'s piece wrote W, after step 4, and the split certifier's period check needs it before: set CERTIFIER_CMD instead"; exit 3; }
+  [ -z "$SPLIT" ] || { say "PREFLIGHT: under PEARLPLUS_TIE V3c runs once Pearl+'s piece wrote W, after step 4, and the split attestation period check needs it before: set CERTIFIER_CMD instead"; exit 3; }
   if [ -z "$FOLLOW" ] && [ "${1:-}" != v3c ]; then  # the serve's run, whose piece commits the window tied to W
     outs=$(cut -d, -f3 <<< "$V3C")
     [ "$LOAD" = fixed ] && [ "$WINDOW_STEPS" = "$outs" ] \
@@ -2285,12 +2285,12 @@ seal
 # 3. SPOT: the window, its advice and Programs, V3b's window circuit, then Flock --zk and the Lean verifier
 window
 CERT=
-if [ -n "${CERTIFIER_CMD:-}" ]; then  # the certifier's chain is the longest piece, so it starts once the window is picked
+if [ -n "${CERTIFIER_CMD:-}" ]; then  # network attestation's chain is the longest piece, so it starts once the window is picked
   # kept off CPUs 0 and 1 (CERT_CPUS), which PoUS's answers need idle: the chain's load stretches a round past Δ + RTT
   CERT_TASKSET=(); NCPU=$(nproc)
   command -v taskset > /dev/null && [ "$NCPU" -gt 2 ] && CERT_TASKSET=(taskset -c "${CERT_CPUS:-2-$((NCPU - 1))}")
   ${CERT_TASKSET[@]+"${CERT_TASKSET[@]}"} "$PY" benchmarks/one_stage/served_verdicts.py pieces --serve-run "$D" --window "$KN" --out "$OUT/pieces" \
-    --product "$PRODUCT" --only certifier > "$OUT/pieces-certifier.txt" 2>&1 &
+    --product "$PRODUCT" --only attester > "$OUT/pieces-certifier.txt" 2>&1 &
   CERT=$!
 fi
 advice
@@ -2322,7 +2322,7 @@ say "SAMPLED-PROOFS (run.sh exit $rc): $("$PY" "$TREE/benchmarks/one_stage/serve
   grep -q '^RECORDS' "$D/sampled-proofs.log" || echo " (run.sh's log in the serve dir, on the node)")"
 sampled_coins || stop sampled-proofs 20
 
-# 6. here with the split certifier, whose period check reads V3c's period.json: its piece then reads the answer it wrote
+# 6. here with the split attester, whose period check reads V3c's period.json: its piece then reads the answer it wrote
 if [ -n "$SPLIT" ]; then
   if ! v3c_commit; then why="V3c's window commit at class $V3C did not finish within V3C_TIMEOUT ($V3C_TIMEOUT) or failed (its WINDOW-COMMIT line), so the split network attester's chain and period check, which read it, did not run"
   elif ! v3c_proved; then why="V3c's audit of its committed window wrote no period.json, which the split network attester's period check reads (v3c-audit/ in the run's out)"
@@ -2334,7 +2334,7 @@ if [ -n "$SPLIT" ]; then
 fi
 
 # 4. the other subprotocols, each its piece's verdict or MISSING with the command it lacks
-pieces ${CERT:+--skip certifier}
+pieces ${CERT:+--skip attester}
 [ -z "$CERT" ] || { wait "$CERT"; publish_lines < "$OUT/pieces-certifier.txt"; }
 # under PEARLPLUS_TIE, once Pearl+'s piece wrote W: the served compare, whose line the record names
 SC=() sc=0
