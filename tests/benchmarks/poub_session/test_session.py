@@ -61,7 +61,8 @@ def test_an_accepted_sessions_gamma_is_the_leans(monkeypatch):
     monkeypatch.setattr(prover, "OPENINGS_PART", 4)
     (r,), _ = run("honest")
     lg = r["ledger"]
-    assert r["accepted"] and all(lg[n]["gamma"] > 0 and "refused" not in lg[n] for n in ("spec", "measured"))
+    assert r["accepted"] and all(lg[n]["gamma"] > 0 and "refused" not in lg[n] and lg[n]["gamma_decided_by"] == "lean"
+                                 for n in ("spec", "measured"))
     assert "gamma" in lg["declared"]
     call = verifier.lv.Lean.call
 

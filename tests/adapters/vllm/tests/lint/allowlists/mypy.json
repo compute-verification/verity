@@ -269,7 +269,6 @@
     {"file": "verity_vllm/program/frontend/vllm_meta.py", "kind": "override", "symbol": "SeedRuleWithPeers.forward", "detail": ""},
     {"file": "verity_vllm/program/frontend/vllm_meta.py", "kind": "override", "symbol": "SeededWithPeers.forward", "detail": ""},
     {"file": "verity_vllm/program/frontend/vllm_meta.py", "kind": "union-attr", "symbol": "attention_impls", "detail": ""},
-    {"file": "verity_vllm/program/predict/template_counts.py", "kind": "override", "symbol": "TemplateCounts._attention", "detail": "", "count": 3},
     {"file": "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/prover.py", "kind": "index", "symbol": "Writer.keep", "detail": ""},
     {"file": "tests/pipeline/test_boundary_rows.py", "kind": "var-annotated", "symbol": "test_the_hook_commits_the_return_of_a_serve_whose_check_returns_verdicts", "detail": ""},
     {"file": "tests/pipeline/test_serve_offloop.py", "kind": "union-attr", "symbol": "test_off_the_loop_the_committer_is_installed_once_and_stays_on_between_windows", "detail": "", "count": 3},
