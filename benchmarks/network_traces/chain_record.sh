@@ -140,14 +140,14 @@ for g in ${CR_GATES:?CR_GATES: the gate tarballs, art: ids or directories}; do
   log "chain: gate $k $g: $(find "$G/g$k" -name end.json | sed "s|$G/g$k/||" | tr '\n' ' ')"
 done
 CR_PATH=${CR_PATH:-warden}
-[ "$CR_PATH" = warden ] || { log "chain: CR_PATH=$CR_PATH: the network certifier path is the only one"; exit 3; }
+[ "$CR_PATH" = warden ] || { log "chain: CR_PATH=$CR_PATH: the network attester path is the only one"; exit 3; }
 PROXY=$(find "$G" \( -name plan.json -o -name calibration.json -o -name proxy.json.gz \) -print -quit)
-[ -z "$PROXY" ] || { log "chain: the network certifier path reads no certifier rehearsal's run (its records through" \
+[ -z "$PROXY" ] || { log "chain: the network attester path reads no certifier rehearsal's run (its records through" \
   "the older certifier's proxy), and ${PROXY#$G/} is one's"; exit 3; }
 if [ -n "${CR_WARDEN_RUN:-}" ]; then NETWORK_CERTIFIER=$(find "$G" -path "*$CR_WARDEN_RUN" -print -quit)
 else NETWORK_CERTIFIER=$(find "$G" -name certified.jsonl -printf '%h\n' -quit); NETWORK_CERTIFIER=${NETWORK_CERTIFIER%/witness}; fi
-[ -n "$NETWORK_CERTIFIER" ] || { log "chain: the network certifier path: no network certifier run (a certified.jsonl) in $CR_GATES"; exit 3; }
-log "chain: the network certifier path, network certifier run ${NETWORK_CERTIFIER#$G/}"
+[ -n "$NETWORK_CERTIFIER" ] || { log "chain: the network attester path: no network attester run (a certified.jsonl) in $CR_GATES"; exit 3; }
+log "chain: the network attester path, network attester run ${NETWORK_CERTIFIER#$G/}"
 mkdir -p "$OUT/gates"
 (cd "$G" && find . -type f \( -name '*.json' -o -name '*.jsonl' -o -name '*.log' \) -size -64M ! -path '*/witness/*' \
   ! -name plan.json ! -name probe.json ! -name io.json ! -name out-witness.jsonl -print0 | xargs -0 -r -I{} cp --parents {} "$OUT/gates/")
@@ -169,7 +169,7 @@ if [ -n "${CR_ENDPOINT:-}" ]; then
     log "chain: endpoint report ${REP#$W/endpoint/} ($CR_ENDPOINT), the served node's (served_session.py endpoint)"
     cp "$REP" "$OUT/endpoint/report.json"
   else
-    [ -n "${CR_EOS_IDS:-}" ] || { log "chain: the network certifier path's endpoint step needs CR_EOS_IDS, the model's EOS" \
+    [ -n "${CR_EOS_IDS:-}" ] || { log "chain: the network attester path's endpoint step needs CR_EOS_IDS, the model's EOS" \
       "token ids (128001 for Llama-3.2-1B)"; exit 3; }
     log "chain: endpoint ${EP:-none} ($CR_ENDPOINT): its advice bound to the certified I/O off ${NETWORK_CERTIFIER#$G/}'s cells"
     "$PY" "$CR" endpoint --warden-run "$NETWORK_CERTIFIER" --endpoint "${EP:-$W/endpoint}" --eos "$CR_EOS_IDS" \
@@ -214,7 +214,7 @@ scan() {
   local wr=
   if "$PY" benchmarks/network_traces/zk_drivers.py scan_zk prove --help 2>/dev/null | grep -q -- --warden-run; then wr="--warden-run $NETWORK_CERTIFIER"
   else log "chain: scan_zk takes no --warden-run in this tree, so the scan proves its own run"; fi
-  log "chain: scan ${CR_SCAN_CMD:+(CR_SCAN_CMD) }${wr:-on the synthetic network certifier run of scan_zk}"
+  log "chain: scan ${CR_SCAN_CMD:+(CR_SCAN_CMD) }${wr:-on the synthetic network attester run of scan_zk}"
   if [ -n "${CR_SCAN_CMD:-}" ]; then bash -c "$CR_SCAN_CMD"
   else "$PY" benchmarks/network_traces/zk_drivers.py scan_zk prove --bin "$BIN" --lean "$LEAN" --out "$SCANOUT" $wr \
     ${CR_SCAN_ARGS:-}; fi > "$OUT/scan.log" 2>&1

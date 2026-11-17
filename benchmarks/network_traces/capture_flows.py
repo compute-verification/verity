@@ -1,10 +1,10 @@
 """capture-flows: a packet capture summed by flow and direction, and held against the network attester's record of the
 same run.
 
-A run through the network attester (`network_attester_serve.py serve`) leaves the network attester's own count of what it sent the
+A run through the network attester (`network_attester_serve.py serve`) leaves the attester's own count of what it sent the
 server and what the server sent it. A capture taken beside the run, by a machine that is neither the server nor the
-network attester, counts the same bytes a second time. This reads the capture, sums it, says for the flows between the
-server and the network attester whether the two counts agree in each direction, and lists every other flow that has an
+attester, counts the same bytes a second time. This reads the capture, sums it, says for the flows between the
+server and the attester whether the two counts agree in each direction, and lists every other flow that has an
 address it was given on one side with its bytes. It is a measurement: it says "agrees" or the difference in bytes, and
 gives no protocol's verdict.
 
@@ -36,11 +36,11 @@ no capture length changes; a Linux cooked frame whose type says IP where no IP h
 hold a frame under two VLAN tags, the second left before the IP header with no type naming it; a file that ends
 inside a packet.
 
-**Which bytes are compared.** The network attester opens one connection to the server for each client connection it admits,
+**Which bytes are compared.** The attester opens one connection to the server for each client connection it admits,
 and one more for the watermark stream. Of each, the record gives two counts, both of the byte stream (what a `read`
 returns and a `write` is handed), so the capture's matching sum is `stream_bytes`:
 - server to certifier: the bytes of the connection's `DATA` and `END` cells in the signed egress record. The
-  network attester cuts the server's stream into cells in order and cuts an `END` only after the server's end of stream, so
+  attester cuts the server's stream into cells in order and cuts an `END` only after the server's end of stream, so
   on a connection that ended in `END` this is every byte the server sent;
 - certifier to server: the length of the request as the server gets it at its release, `release.with_release` of the
   signed ingress record's request under its place in the release order, the run's id (`deployment.json`) and its
@@ -58,11 +58,11 @@ and FIN and no hole, the two counts are equal in each direction.
 - the capture's count is a floor in a direction where a flow has a hole or lacks its SYN or FIN: with holes alone
   the bytes on the wire are at most the holes more, else unbounded above;
 - the record's count is a bound for a connection that ended in `FAIL` or was cut, or whose release was lost: the
-  network attester stopped reading, so the server sent at least the record's bytes, and the server was sent at most the
+  attester stopped reading, so the server sent at least the record's bytes, and the server was sent at most the
   record's; likewise the watermark stream once it stopped.
 A direction says "agrees" only where both counts are exact and equal, "differs by N bytes" where both are exact, and
 otherwise the range the difference (the capture's less the record's) lies in. What the server answers on the
-watermark's connection is in no record (the network attester never reads it). Where that connection pairs with a flow, the
+watermark's connection is in no record (the attester never reads it). Where that connection pairs with a flow, the
 answer is given and is in no sum. Where it pairs with none, the answer can't be told from the server's other bytes, so
 it stays in the sum from the server, and that direction is a bound: its difference may be lower by as many bytes as
 the capture counts from the server on the largest flow in no pair.
@@ -76,10 +76,10 @@ says which flow is which connection.
 
 **Whose flows it reads.** Only those with an address it was given on one side: `--server` and `--certifier`, each
 `ADDR` or `ADDR:PORT` (`[ADDR]:PORT` for IPv6), as often as the machine has addresses. A port tells the server from
-the network attester where they share an address. A capture on a shared link holds other users' traffic, so it is filtered
+the attester where they share an address. A capture on a shared link holds other users' traffic, so it is filtered
 to our own addresses when it is taken, and a file that still holds a flow between two addresses that weren't given,
 or a frame that isn't IP, is refused, unless `--skip-foreign`, which counts what it skipped and reads nothing else of
-it. No address is printed or written: the table and the result name the server, the network attester and `other-1`,
+it. No address is printed or written: the table and the result name the server, the attester and `other-1`,
 `other-2`, … in the order the capture first shows them.
 
     python capture_flows.py --capture FILE [--capture FILE ...] --server ADDR[:PORT] [--certifier ADDR[:PORT]]
@@ -357,9 +357,9 @@ def _has(side: tuple[bytes, int | None], given: list[tuple[bytes, int | None]]) 
 def read_flows(paths: list[Path], servers: list[tuple[bytes, int | None]],
                certifiers: list[tuple[bytes, int | None]] = (), skip_foreign: bool = False) -> dict:
     """The capture in `paths` summed by flow and direction (the module docstring): what the files are, what was
-    skipped, the flows between the server and the network attester (`compared`), and every other flow with a given address
+    skipped, the flows between the server and the attester (`compared`), and every other flow with a given address
     on one side (`others`). `Refused` for what the module docstring's "What it refuses" lists, a flow whose two sides
-    are each the server's and the network attester's, and, unless `skip_foreign`, a file holding a foreign flow or a frame
+    are each the server's and the attester's, and, unless `skip_foreign`, a file holding a foreign flow or a frame
     that isn't IP."""
     files, flows = [], {}
     foreign: dict[tuple, list[int]] = defaultdict(lambda: [0, 0])
@@ -407,10 +407,10 @@ def read_flows(paths: list[Path], servers: list[tuple[bytes, int | None]],
 
     for (protocol, a, b), (ab, ba) in flows.items():
         sides = (a, b)
-        # the side that is the server's where the other is the network attester's
+        # the side that is the server's where the other is the attester's
         ways = [w for w in (0, 1) if _at(sides[w], servers) and _at(sides[1 - w], certifiers)]
         if len(ways) == 2:
-            raise Refused("a flow's two sides are each the server's and the certifier's, so its directions can't be "
+            raise Refused("a flow's two sides are each the server's and the attester's, so its directions can't be "
                           "told apart: give the server's port (--server ADDR:PORT)")
         tcp = protocol == TCP
         roles = ["server" if _at(x, servers) else "certifier" if _at(x, certifiers) else "server" if _has(x, servers)
@@ -527,7 +527,7 @@ def says(low: int | None, high: int | None) -> str:
 
 
 def compare(flows: list[dict], record: dict) -> dict:
-    """The capture's flows between the server and the network attester held against the record's connections
+    """The capture's flows between the server and the attester held against the record's connections
     (`record_counts`), as the module docstring's "Where only a bound holds" and "Pairing" have it: each direction's
     sums, the range its difference lies in (`difference`: its least and its most, None where it has none) and what it
     `says`; the pairs, and what stays unpaired on each side. The server's answer on the watermark's connection is in
@@ -606,7 +606,7 @@ def _head(names: list[str], widths: list[int]) -> str:
 
 
 def table(result: dict) -> str:
-    """The result as text: what was read and skipped; each direction between the server and the network attester, its sums
+    """The result as text: what was read and skipped; each direction between the server and the attester, its sums
     and, with a run, the record's bytes and what the direction says; the pairing; then every other flow, a line each:
     what its given side sent (out) and received (in)."""
     files, skipped = result["capture"]["files"], result["capture"]["skipped"]
@@ -675,9 +675,9 @@ def parser() -> argparse.ArgumentParser:
     ap.add_argument("--capture", action="append", required=True, type=Path, metavar="FILE",
                     help="a capture file as tcpdump writes one; several are one capture, read in this order")
     ap.add_argument("--server", action="append", required=True, type=endpoint, metavar="ADDR[:PORT]",
-                    help="an address of the server's, with its port where the certifier shares the address")
+                    help="an address of the server's, with its port where the attester shares the address")
     ap.add_argument("--certifier", action="append", default=[], type=endpoint, metavar="ADDR[:PORT]",
-                    help="an address of the network certifier's")
+                    help="an address of the network attester's")
     ap.add_argument("--run", type=Path, metavar="DIR", help="the run's directory, as `network_attester_serve.py serve` wrote it")
     ap.add_argument("--skip-foreign", action="store_true",
                     help="count and skip flows between addresses that weren't given, and frames that aren't IP")
@@ -688,7 +688,7 @@ def parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     args = parser().parse_args(argv)
     if args.run is not None and not args.certifier:
-        parser().error("--run compares the flows between the server and the certifier: give --certifier")
+        parser().error("--run compares the flows between the server and the attester: give --certifier")
     try:
         result = read(args.capture, args.server, args.certifier, args.run, args.skip_foreign)
     except Refused as e:

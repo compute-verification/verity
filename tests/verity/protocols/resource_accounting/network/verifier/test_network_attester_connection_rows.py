@@ -1,5 +1,5 @@
 """The network attester's connection rows (`connection_rows`): an execution phase's lengths and fails tables are the
-schedule's size whatever the load and read back as the releases the network attester handed, each row opens its table's root
+schedule's size whatever the load and read back as the releases the attester handed, each row opens its table's root
 at its position and nowhere else, one head lists both tables and is signed once, the registration reads back under the
 network attester's key and session and the schedule and refuses any field, table, key, session or certificate but its
 own, and a schedule without lengths rows has none of it."""

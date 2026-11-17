@@ -1,4 +1,4 @@
-"""The network attester's LMS signer for tests: the deployed scheme (N = 64, W = 1) on a tree of 2^6 leaves, so a key takes a
+"""The attester's LMS signer for tests: the deployed scheme (N = 64, W = 1) on a tree of 2^6 leaves, so a key takes a
 fraction of a second rather than the deployed H = 20's minutes."""
 
 from __future__ import annotations
@@ -11,7 +11,7 @@ from verity.commitments.crypto import lms
 from verity.protocols.resource_accounting.network.verifier.certificate import LmsSigner
 
 SMALL = lms.Params(64, 1, 6)
-#: the network attester session the tests' issuers sign in, and another
+#: the attester session the tests' issuers sign in, and another
 SESSION, OTHER_SESSION = bytes(range(32)), bytes(range(1, 33))
 
 

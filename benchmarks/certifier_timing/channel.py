@@ -169,7 +169,7 @@ def pool(measures: list[dict]) -> dict:
 
 
 def target(interval_s: float) -> dict:
-    """The budget at a release interval of `interval_s` seconds: the bits an interval the network attester's whole timing
+    """The budget at a release interval of `interval_s` seconds: the bits an interval the attester's whole timing
     channel may carry, at the budget's two ends (`SECONDS_A_BIT`)."""
     return {"interval_s": interval_s, "seconds_a_bit": list(SECONDS_A_BIT),
             "bits": [interval_s / s for s in SECONDS_A_BIT]}

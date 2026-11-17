@@ -1634,6 +1634,20 @@ def live(monkeypatch, tmp_path):
     return calls, {"gate": GATE, "key": "ff" * 64, "main": tmp_path / "main.txt"}
 
 
+@pytest.mark.parametrize("host", ["local-challenger", "vy-challenger-1"])
+def test_a_pearlplus_piece_names_the_challenger_its_session_was_opened_on(tmp_path, live, host):
+    """The piece's coins and why it credits nothing name the challenger whose gate opened the served run's salt session,
+    as that open answer's ``host`` (``<host>.<session>``) names it: a local gate's scratch host where serve.sh's local
+    challenger made the coins, the deployed auditor's where it did, never one for the other."""
+    served, verified = _pearlplus_run()
+    served["coins"]["session"] = {"session": SID, "host": f"{host}.{SID}"}
+    doc = S.pearlplus(tmp_path / "pieces" / "pouw", served, verified, **live[1])
+    assert S.challenger_of(served) == host and doc["why"] == S.pearlplus_why(host)
+    assert S.pearlplus_coins_from(host).items() <= doc["coins"].items()
+    other = ({"local-challenger", "vy-challenger-1"} - {host}).pop()
+    assert f"on {host}" in doc["why"] and other not in json.dumps({k: doc[k] for k in ("why", "coins")})
+
+
 def test_a_pearlplus_piece_replays_its_own_served_run_and_credits_nothing(tmp_path, capsys, live):
     """``pearlplus``: Pearl+'s own served run, accepted by Pearl+'s verdict over its passes and its epoch's salt its live
     session's, is accepted with that verdict's line and credit and its shares (the timed passes' MACs and their credit at
@@ -1643,9 +1657,10 @@ def test_a_pearlplus_piece_replays_its_own_served_run_and_credits_nothing(tmp_pa
     calls, args = live
     served, verified = _pearlplus_run()
     doc = S.pearlplus(tmp_path / "pieces" / "pouw", served, verified, **args)
-    assert (doc["verdict"], doc["reasons"], doc["credited"], doc["why"]) == ("accept", [], False, S.PEARLPLUS_WHY)
+    assert (doc["verdict"], doc["reasons"], doc["credited"], doc["why"]) == ("accept", [], False,
+                                                                             S.pearlplus_why(S.UNNAMED_CHALLENGER))
     assert calls == [(GATE, "ff" * 64, tmp_path / "main.txt")] and doc["coin_source"] == S.LIVE_SOURCE
-    assert doc["coins"] == {**S.PEARLPLUS_COINS, "check": {"session": SID, "closed": served["coins"]["closed"],
+    assert doc["coins"] == {**S.pearlplus_coins_from(S.UNNAMED_CHALLENGER), "check": {"session": SID, "closed": served["coins"]["closed"],
                                                            "passes": 4, "reason": None}}
     assert (doc["scheme"], doc["passes"], doc["line"]) == ("pearl-c-h100-v1-h3", 4, verified["line"])
     assert doc["credit"] == verified["answer"]["public"]["work"]
@@ -2078,7 +2093,7 @@ def test_a_pearlplus_piece_rejects_a_run_pearlpluss_verdict_rejects_and_one_that
     credit of 0; a run that served nothing has none."""
     s, v = _pearlplus_run(verified is not False)
     doc = S.pearlplus(tmp_path / "pieces" / "pouw", s if served else None, None if verified is None else v, **live[1])
-    assert (doc["verdict"], doc["reasons"][0], doc["why"]) == ("reject", reason, S.PEARLPLUS_WHY)
+    assert (doc["verdict"], doc["reasons"][0], doc["why"]) == ("reject", reason, S.pearlplus_why(S.UNNAMED_CHALLENGER))
     if served:
         rho = 4096 * 132 * 1830e6
         assert doc["shares"]["macs"] == {"declared_linears": 6000, "credited": 0}
@@ -2295,13 +2310,17 @@ def test_publish_holds_window_steps_under_a_load_and_publishes_the_callers_servi
 ])
 def test_a_tied_pearlplus_piece_on_a_live_salt_session_names_the_period_it_joined(tmp_path, live, reserved, joined):
     """Under PEARLPLUS_TIE the window's salt coin is a live session's reserved as the window opened
-    (`PEARLPLUS_EPOCH_TIED`), and why the piece credits nothing by itself names the Pearl-C period that session joined,
-    as the gate's reserve answer in the window's served.json names it, or says it joined none."""
+    (`pearlplus_epoch_tied`), and why the piece credits nothing by itself names the Pearl-C period that session joined,
+    as the gate's reserve answer in the window's served.json names it, or says it joined none; both name the challenger
+    the session's open answer names."""
     _calls, args = live
     window, verified, w = _tied_epoch(tmp_path, S.LIVE_SOURCE, reserved)
+    window["coins"]["session"] = {"session": SID, "host": f"local-challenger.{SID}"}
     doc = S.pearlplus(tmp_path / "a", window, verified, tie=w, **args)
-    assert (doc["verdict"], doc["reasons"], doc["coins"]["epoch"]) == ("accept", [], S.PEARLPLUS_EPOCH_TIED)
-    assert doc["why"] == S.pearlplus_why_tied(reserved) and doc["why"].endswith(f"on vy-challenger-1, {joined}")
+    assert (doc["verdict"], doc["reasons"], doc["coins"]["epoch"]) == ("accept", [],
+                                                                      S.pearlplus_epoch_tied("local-challenger"))
+    assert doc["why"] == S.pearlplus_why_tied(reserved, "local-challenger")
+    assert doc["why"].endswith(f"on local-challenger, {joined}")
     assert doc["why"].startswith("development piece, which the record takes as PoUW's verdict of record, the prover "
                                  "side's, only where")
 
@@ -2604,7 +2623,7 @@ def test_the_pearlplus_piece_holds_the_verifiers_sample_to_its_sample_session(tm
                       coin=out / S.COIN_PUT)
     assert doc["verdict"] == "reject" and doc["reasons"] == [f"draw: {doc['coins']['draw']['reason']}"]
     assert doc["coins"]["draw"]["reason"].startswith("CoinError: the challenger key at ")
-    assert doc["coins"]["draws"] == S.PEARLPLUS_COINS["draws"]
+    assert doc["coins"]["draws"] == S.pearlplus_coins_from(S.UNNAMED_CHALLENGER)["draws"]
 
 
 def test_the_pearlplus_period_opens_around_the_retained_serve_and_closes_before_the_sample(tmp_path, monkeypatch, capsys):

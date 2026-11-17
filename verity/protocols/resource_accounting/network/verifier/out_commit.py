@@ -1,19 +1,19 @@
-"""The network attester's output value: the output it relayed, committed by the network attester as a registered value
+"""The network attester's output value: the output it relayed, committed by the attester as a registered value
 (`one_stage.registered`) and its head signed with its key, never by the prover. The verifier pins the value's root from
 that certificate alone (`check_out`), so every output proof block's row is a registered read of it, opened against
-the network attester's signed root by the Lean verifier's registered reads (`verity-verify-proof --registered`), not compared in the
+the attester's signed root by the Lean verifier's registered reads (`verity-verify-proof --registered`), not compared in the
 clear.
 
 **The commitment** is the reading program's registered value `value` (``out`` by default), as the prover would commit
-it, under the network attester's salts: `rows` rows of `words` leaves of `word_bits` bits in the row format `schema` (by
+it, under the attester's salts: `rows` rows of `words` leaves of `word_bits` bits in the row format `schema` (by
 default `hm96-sha512/row/v2`, a proof block's bit-row port), committed as `Registered.commit` commits them, under
 
     D = registered.domain(program, value, words, rows, word_bits)
 
 the domain `registered_entries` derives for a value the verifier pins: `registration.check` holds its pinned values
 across windows, so D leaves the window's open root out. `program` is the reading program's digest
-(`partition.program_digest`), public. salt_r is 192 bytes the network attester samples from the operating system for row r and
-no other row. The salts are witness, which the network attester hands to the prover alone (`CertifiedOut.salts`, `witness`);
+(`partition.program_digest`), public. salt_r is 192 bytes the attester samples from the operating system for row r and
+no other row. The salts are witness, which the attester hands to the prover alone (`CertifiedOut.salts`, `witness`);
 the rows are what the server sent, which the prover holds.
 
 **The signed head** (`OutHead`) is public, as a hiding root is:
@@ -22,7 +22,7 @@ the rows are what the server sent, which the prover holds.
       ‖ u16be len(schema) ‖ schema ‖ domain (64 bytes) ‖ root (64 bytes)
     out digest = tagged_sha512(OUT_TAG, H)
 
-Its certificate is `Issuer.sign`'s of the out digest for the egress execution phase, in the network attester's session
+Its certificate is `Issuer.sign`'s of the out digest for the egress execution phase, in the attester's session
 (`certificate.certificate_message`). D is the same in every window, so the certificate is what keeps one window's root
 out of another's: `check_out` takes the window it expects. A record's, a clock's and the network attester cells'
 digests are under other tags, so none verifies as another.
@@ -38,7 +38,7 @@ check that fails (`REFUSALS`).
 
 **The shape** (`OutShape`) is what both sides take from the reading program's registration, never from a flag: the
 value's program, name, `words` leaves a row (the row width of the port every read of the value names), `rows`, the
-leaves' `word_bits` and the row `schema`. The network attester commits at it (`commit_out`), and the verifier holds a record
+leaves' `word_bits` and the row `schema`. The attester commits at it (`commit_out`), and the verifier holds a record
 to it (`check_out`): another width, word size or row schema is `out-width`, another row count `out-rows`.
 """
 
@@ -143,7 +143,7 @@ class OutShape:
 
 @dataclass(frozen=True, slots=True)
 class OutHead:
-    """What the network attester signs for the output value: public, since its root is hiding."""
+    """What the attester signs for the output value: public, since its root is hiding."""
 
     value: str
     program: bytes
@@ -168,7 +168,7 @@ class OutHead:
 
 @dataclass(frozen=True)
 class CertifiedOut:
-    """The network attester's output value: the public part (`head`, `certificate` and `session`, read together as `public`,
+    """The attester's output value: the public part (`head`, `certificate` and `session`, read together as `public`,
     with `root` and `domain` its hex), and the witness (`committed`: the rows and their salts, `salts`), which goes to
     the prover alone."""
 
@@ -201,7 +201,7 @@ class CertifiedOut:
 
     @property
     def witness(self) -> bytes:
-        """What the network attester hands the prover beside the rows: their salts, in order (`read_witness`)."""
+        """What the attester hands the prover beside the rows: their salts, in order (`read_witness`)."""
         return b"".join(self.salts)
 
     def statement(self, positions: Sequence[int]) -> tuple[list[tuple[int, ...]], list[bytes], dict[str, Any]]:
@@ -219,12 +219,12 @@ def read_witness(blob: bytes) -> list[bytes]:
 
 def commit_out(rows: Sequence[Sequence[int]], *, shape: OutShape, key: Signer | Issuer, session: bytes, window: int,
                link: str = LINK, salts: Sequence[bytes] | None = None) -> CertifiedOut:
-    """The output value the network attester relayed, committed at the registration's `shape` under the domain the verifier
+    """The output value the attester relayed, committed at the registration's `shape` under the domain the verifier
     derives for the reading program's pinned value, and its head signed for the egress execution phase `(link, window)`
     in certifier session `session`.
 
     `rows`: the value's rows, exactly `shape.rows` of `shape.words` leaves of `shape.word_bits` bits. `key`: the
-    network attester's signer (which starts `session` at its first signature and refuses any other session), or its running
+    attester's signer (which starts `session` at its first signature and refuses any other session), or its running
     `Issuer` in `session`. `salts`: one a row (default: fresh from the operating system; a test injects its own). Raises
     ValueError on rows of another width or count and `SignerRefused` when the signer refuses, so the window has no out
     certificate."""
@@ -239,7 +239,7 @@ def commit_out(rows: Sequence[Sequence[int]], *, shape: OutShape, key: Signer | 
                    committed.schema, committed.domain.domain_id, committed.root)
     certificate = issuer.sign(link, DIRECTION, window, head.digest())
     if certificate is None:
-        raise SignerRefused(f"the certifier's signer refused the out certificate of {link} window {window}")
+        raise SignerRefused(f"the attester's signer refused the out certificate of {link} window {window}")
     return CertifiedOut(head, certificate, session, committed)
 
 
@@ -291,7 +291,7 @@ def check_out(certificate: Any, key: PublicKey, session: bytes, shape: OutShape,
     want = shape.domain.domain_id.hex()
     head, cert, named = _read(certificate)
     if cert.key_id != key.key_id:
-        raise OutRefused("out-key", f"the certificate is key {cert.key_id.hex()[:16]}…'s, not the certifier's "
+        raise OutRefused("out-key", f"the certificate is key {cert.key_id.hex()[:16]}…'s, not the attester's "
                                     f"{key.key_id.hex()[:16]}…")
     if named != session:
         raise OutRefused("out-session", f"the record is of session {named.hex()[:16]}…, not {session.hex()[:16]}…")
@@ -322,7 +322,7 @@ def check_out(certificate: Any, key: PublicKey, session: bytes, shape: OutShape,
     if cert.digest != head.digest():
         raise OutRefused("out-digest", "the certificate's digest isn't the record's head's")
     if not cert.verify(key, session):
-        raise OutRefused("out-signature", f"the signature doesn't verify under the certifier's key in the session for "
+        raise OutRefused("out-signature", f"the signature doesn't verify under the attester's key in the session for "
                                           f"{link!r} window {window}")
     return head.root.hex()
 

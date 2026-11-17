@@ -390,7 +390,7 @@ def test_a_session_already_started_is_refused_and_its_windows_fail_closed(tmp_pa
 
 
 def test_a_certificate_from_another_session_is_a_signature_violation(tmp_path):
-    """The cross-session replay: certificates the key signed in another session of the network attester, honest ones of the
+    """The cross-session replay: certificates the key signed in another session of the attester, honest ones of the
     same execution phases, are a `signature` violation in this session, every window; in their own they are accepted."""
     honest = run_shaper(FRAMES, honest_ready(), SYNCS, Certifier("responses", P))
     signer = signers.signer(tmp_path)
@@ -405,7 +405,7 @@ def test_a_certificate_from_another_session_is_a_signature_violation(tmp_path):
 
 
 def test_the_certificate_signs_the_record_digest_salted_by_the_certifier(tmp_path):
-    """The signed digest is SHA-512("verity/net-cert/v1" ‖ salt_c ‖ R) under 64 bytes of the network attester's own coins,
+    """The signed digest is SHA-512("verity/net-cert/v1" ‖ salt_c ‖ R) under 64 bytes of the attester's own coins,
     fresh per record: one record certified twice is signed under two digests, neither of them R. The host's check
     reads the certificate alone; a record handed with another salt, or a salt of another length, is refused."""
     signer = signers.signer(tmp_path)
@@ -460,7 +460,7 @@ def fresh_coins():
 
 def test_a_mark_is_signed_salted_under_its_own_tag_on_the_marks_link_name(tmp_path):
     """A mark certificate signs SHA-512("verity-network-certifier/mark/v1" ‖ salt_c ‖ mark) under 64 bytes of the
-    network attester's own coins, as an egress certificate on `<link>-marks` at the execution phase its caller gave, over the
+    attester's own coins, as an egress certificate on `<link>-marks` at the execution phase its caller gave, over the
     message every certificate signs, with one leaf. Its opening holds, and its execution phase is the certificate's.
     The issuer keeps the mark, and asked for it again it raises `MarkRefused` and signs no second certificate."""
     signer = signers.signer(tmp_path)

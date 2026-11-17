@@ -1,5 +1,5 @@
 """The network attester's device as a party of the deployment layer (`verity.runtime`): `NetworkAttester`, the role
-`parties.NETWORK_CERTIFIER` of the network attester's manifest (`parties.MANIFEST`), and `PROTOCOL`, that manifest with it.
+`parties.NETWORK_CERTIFIER` of the attester's manifest (`parties.MANIFEST`), and `PROTOCOL`, that manifest with it.
 
 Its needs are the manifest's: its clock and coins are the runtime's sources, and its signing key the capability
 `signing-key` (`certificate.Signer`). Its parameters are the schedule's (`network_attester.NetworkAttesterParams`, under ``params``), the

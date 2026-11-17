@@ -199,7 +199,7 @@ def _closed_heads(closed) -> dict:
 
 
 def _unsalted(out: Path) -> list[dict]:
-    """`certified.jsonl` line by line without what the network attester's fresh `salt_c` decides (the salt, the salted digest
+    """`certified.jsonl` line by line without what the attester's fresh `salt_c` decides (the salt, the salted digest
     and the signature over it), with the signature's LMS leaf q kept, and an execution phase the issuer refused as it is."""
     out_ = []
     for line in (out / "certified.jsonl").read_text().splitlines():
@@ -222,7 +222,7 @@ def _cells_without_cost(out: Path) -> list[dict]:
 def test_the_process_writes_byte_for_byte_what_the_thread_publisher_wrote(tmp_path, late):
     """On one run and one key, the process's records, row salts and signed registrations are the thread
     publisher's byte for byte (the cost lines aside, which are timings), and its certificates are too but for what the
-    network attester's fresh `salt_c` decides, each on the same LMS leaf and verifying on the head of the record the network attester
+    attester's fresh `salt_c` decides, each on the same LMS leaf and verifying on the head of the record the network attester
     closed (no two runs share a `salt_c`, thread or process). With tick 20 late, window 0 of every link is
     `monitor-unavailable` on both sides: the status crosses the process boundary in the close marker, and the issuer
     certifies none of window 0's records."""
@@ -379,7 +379,7 @@ def test_a_row_lost_doubled_or_changed_between_the_processes_is_refused(tmp_path
     run = _drive(tmp_path / "run", key, process=True, transport=_egress_rows(edit()))
     first = run["failed"] or run["close_error"]
     assert type(first) is RuntimeError
-    assert f"{RC.EGRESS} window 0: the rows rebuilt aren't the grid the network certifier closed" in str(first)
+    assert f"{RC.EGRESS} window 0: the rows rebuilt aren't the grid the network attester closed" in str(first)
     assert type(run["close_error"]) is RuntimeError
     heads = _heads(tmp_path / "run")
     assert (RC.LINK, "egress", 0) not in heads and (RC.LINK, "ingress", 0) in heads

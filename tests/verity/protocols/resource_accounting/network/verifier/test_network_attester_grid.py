@@ -1,6 +1,6 @@
-"""Proposition 2's lemmas on grids and the network attester's semantics. By name, the tests mirror lemmas of
+"""Proposition 2's lemmas on grids and the attester's semantics. By name, the tests mirror lemmas of
 `NetTiming.SecurityProofs.Occupancy`, among them the three without a record, `occ_fill`, `leftPacked_occ_fill` and
-`leftPacked_fifoGrid`. The network attester tests check the behaviour `NetTiming.Assumptions` takes as hypotheses (W4 packing,
+`leftPacked_fifoGrid`. The attester tests check the behaviour `NetTiming.Assumptions` takes as hypotheses (W4 packing,
 W5's untimed status, W6 fail-closed)."""
 
 import itertools

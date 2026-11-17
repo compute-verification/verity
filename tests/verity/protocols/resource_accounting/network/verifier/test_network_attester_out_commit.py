@@ -1,5 +1,5 @@
 """The network attester's output value (`out_commit`): committed at the registration's shape (`OutShape`) as the
-reading program's pinned registered value under the network attester's salts, its head signed for the egress execution phase,
+reading program's pinned registered value under the attester's salts, its head signed for the egress execution phase,
 and the verifier's read of the record refusing a wrong key, session, link, window, width, row count or domain, and any
 flipped byte, by name; at the wired toy's 128 words a row as at one."""
 
@@ -99,7 +99,7 @@ def test_round_trip(signed):
 
 def test_root_is_the_registered_commit(signed, fresh):
     """The root is the one `Registered.commit` gives the reading program's `out` under the same salts, in the domain the
-    verifier derives for it, so the Lean verifier's registered reads open the network attester's root as the prover's."""
+    verifier derives for it, so the Lean verifier's registered reads open the attester's root as the prover's."""
     out, _ = signed
     reg = G.Registered.commit(P.program_digest(PROG), "out", VALUES, out.salts, 16, G.SCHEMA_V2)
     assert out.root == reg.root.hex() and out.domain == reg.domain.domain_id.hex() == _domain()

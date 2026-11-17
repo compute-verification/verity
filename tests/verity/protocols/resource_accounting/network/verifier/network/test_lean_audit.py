@@ -168,7 +168,7 @@ SESSION = bytes(range(lms.SESSION_BYTES))
 
 def _certified(tmp_path, W, record=lambda w, r: r):
     """Link "responses"'s egress records under the shaper, each passed through `record(w, r)` and certified: the
-    records, the declared syncs, the grid, Σ_sync and the network attester's key."""
+    records, the declared syncs, the grid, Σ_sync and the attester's key."""
     g, ss = GridParams(3, 2, 2), SyncSet((0, 1), (Fraction(1),))
     syncs = [ClockSync(w % 2, Fraction(1)) for w in range(W)]
     signer = LmsSigner.create(lms.keygen(lms.Params(8, 8, 4, toy=True), bytes(range(8))), tmp_path / "signer-state.json")

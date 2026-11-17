@@ -19,8 +19,8 @@ the honest round on the challenger's coins (``--challenger``), a `service.Stream
   egress at `CLASS.egress` (16 cells in lanes of 4, 4 request slots of 64 17-bit ids), the network attester at
   `PARAMS`, 32-bucket execution phases; ``w63k4`` (`W63K4`), w63's class at KO 4 and KI 32, a window circuit's of 8
   slots, 32 prompt ids and 4 outputs a request (egress 4 request slots of 4 ids), its certifier w63's at egress_cells 5
-  (KO + 1); ``test`` (`TEST`), the network attester tests' class (B 512, r 2, 2 lanes, C 4, EVERY 2, WITHIN 3, D 5, KO 8, KI
-  100) and 16-bucket execution phases, whose units a CPU proves in minutes; and ``test2`` (`TEST2`), test's over two
+  (KO + 1); ``test`` (`TEST`), network attestation's tests' class (B 512, r 2, 2 lanes, C 4, EVERY 2, WITHIN 3, D 5,
+  KO 8, KI 100) and 16-bucket execution phases, whose units a CPU proves in minutes; and ``test2`` (`TEST2`), test's over two
   execution phases, with a fourth request admitted in the first and anchored at the second's first boundary.
 * **The run** (`scan_traffic.serve`: the network attester's own `_ingress` and `_egress`, ticked as `NetworkAttester._tick`
   ticks them) carries the setup's network-certifier-form id requests and their responses: w63's five (3, 40, 64, 8 and 5 ids; the
@@ -671,7 +671,7 @@ def synthetic(out: Path, setup: Setup, windows: list[int]) -> SimpleNamespace:
     served = traffic.serve(setup.params, reqs, setup.arrivals, [1 << 20] * len(reqs), setup.responses,
                            max(setup.windows, windows[-1] + 1))
     if served.fails:
-        raise SystemExit(f"the network certifier failed {len(served.fails)} connections")
+        raise SystemExit(f"the network attester failed {len(served.fails)} connections")
     out.mkdir(parents=True, exist_ok=True)
     height = max(6, (2 * len(windows) + 1).bit_length())
     signer = LmsSigner.create(lms.keygen(lms.Params(64, 1, height), hashlib.sha512(b"scan-zk").digest()),
@@ -688,7 +688,7 @@ def synthetic(out: Path, setup: Setup, windows: list[int]) -> SimpleNamespace:
             head, dom = WR.check_registration(registration, signer.public_key(), SESSION, setup.params,
                                               records[w].link, direction, w)
             if list(cells.rows) != WR.window_rows(records[w], setup.params):
-                raise SystemExit(f"{side}: the network certifier's committed rows of execution phase {w} aren't its record's")
+                raise SystemExit(f"{side}: the network attester's committed rows of execution phase {w} aren't its record's")
             sides[side].append(SimpleNamespace(cells=cells, registration=registration, head=head, dom=dom))
     return SimpleNamespace(source="the synthetic run (scan_traffic.serve), signed with the driver's own key",
                            params=setup.params, session=SESSION, sides=sides, outputs=served.outputs, run_id=None,
@@ -746,7 +746,7 @@ def network_certifier_run(run: Path, setup: Setup, windows: list[int], out: Path
             cells = WR.Cells.of(RC.LINK, direction, record, params, session, row_salts, wiring_salt)
             if cells.head != head:
                 raise SystemExit(f"--warden-run {run}: {side} execution phase {w}'s record under cells.salts isn't the rows "
-                                 "whose root the network certifier signed")
+                                 "whose root the network attester signed")
             sides[side].append(SimpleNamespace(cells=cells, registration=registration, head=head, dom=dom))
     fails = [((r.window - windows[0]) * params.window + t, sum(f is not None for f in row))
              for r in records[RC.FAILS] if r.window in windows for t, row in enumerate(r.grid)]
@@ -828,8 +828,8 @@ def _v3c_refused(window: Path, why: str) -> SystemExit:
 
 
 def v3c_state(window: Path, rec: dict, states: list[list[int]]) -> Held:
-    """V3c's `SCAN_STATE` (the network attester's `blocks.SCAN_STATE`): its entry in its registration's window activations
-    (the ``window`` provenance window-commit writes: ``activations.values``), its rows and salts the prover's
+    """V3c's `SCAN_STATE` (network attestation's `blocks.SCAN_STATE`): its entry in its registration's window
+    activations (the ``window`` provenance window-commit writes: ``activations.values``), its rows and salts the prover's
     `SCAN_STATE_FILE`, under the domain that provenance gives (the window circuit's program and the window's run root,
     `registered.domain`), held to the entry's root and domain and to the scan's ``states``."""
     prov = rec.get("window") or {}
@@ -853,7 +853,7 @@ def v3c_state(window: Path, rec: dict, states: list[list[int]]) -> Held:
                                    f"{SCAN_STATE}'s root and domain")
     if bad := [t for t in range(n) if words[t] != _words(states[t])]:
         raise _v3c_refused(window, f"its {SCAN_STATE} rows {bad[:4]} aren't the scan's (row t S_(t-1) from the "
-                                   "empty state of execution phase 0): it scanned another network certifier run or execution phase")
+                                   "empty state of execution phase 0): it scanned another network attester run or execution phase")
     return held
 
 
@@ -944,14 +944,14 @@ def link(out: Path, run: Path | None = None, setup: Setup = W63, group: int = 1,
     bad = [t for t in range(group * T) if EG.outputs(cls.egress, ch.view(t)) != (EG.ACCEPT, ch.egress[t])]
     void = [t for t, row in enumerate(ch.egress) if any(row[s * cls.B] == W.FAIL for s in range(cls.egress.R))]
     if bad != void:
-        raise SystemExit(f"egress buckets {bad} don't compute the network certifier's rows from the views their ingress buckets "
-                         f"wrote, and the network certifier failed a connection in buckets {void}")
+        raise SystemExit(f"egress buckets {bad} don't compute the network attester's rows from the views their ingress buckets "
+                         f"wrote, and the network attester failed a connection in buckets {void}")
     if void != got.fail_buckets:
-        raise SystemExit(f"egress buckets {void} hold a FAIL and the network certifier's fails record has a reason in buckets "
+        raise SystemExit(f"egress buckets {void} hold a FAIL and the network attester's fails record has a reason in buckets "
                          f"{got.fail_buckets}, not the same: a failed connection's reason is in its FAIL's bucket"
                          + (f" ({'; '.join(got.failed_why)})" if got.failed_why else ""))
     if early := sorted({windows[t // T] for t in void if t // T != group - 1}):
-        raise SystemExit(f"the network certifier failed a connection in execution phases {early}, which the scan refuses, and the "
+        raise SystemExit(f"the network attester failed a connection in execution phases {early}, which the scan refuses, and the "
                          "execution phase after a refused one has no start the verifier holds: prove the group up to "
                          f"the first of them (--group {early[0] - start + 1})")
     if not 0 <= setup.A < group * T or setup.A % T + 2 >= T:
@@ -1059,7 +1059,7 @@ def member(at: SimpleNamespace, name: str, mb: SimpleNamespace) -> SimpleNamespa
         if p not in reads and p not in network_attester:
             if any(x is None for x in own[p]):
                 raise SystemExit(f"{name}/{mb.name}: a unit's {p} row is none the reference gives, and a port no tree "
-                                 "or network certifier row holds is registered as the member's own rows before any "
+                                 "or network attester row holds is registered as the member's own rows before any "
                                  "coin")
             public = p == scan_ok.PORT and tp not in ROWS_O0
             reads[p] = ("frame", frame(set_name, p, own[p], n_bits, ROW_SCHEMAS.get((tp, p), BitRowLeaf.hiding_schema),
@@ -2153,7 +2153,7 @@ def prove(a) -> int:
             f"{summary['void']['refused']})" if whole.void else "")
     log(f"run: {whole.source}; {setup.name}'s class, execution phases {whole.windows} of {T} buckets, each a "
         f"registration, admitted {whole.admitted}, responses {summary['responses']}, anchors {summary['anchors']}, "
-        f"cells {summary['cells']}; every egress bucket computes the network certifier's row from its ingress bucket's "
+        f"cells {summary['cells']}; every egress bucket computes the network attester's row from its ingress bucket's "
         f"view{void}; host reads as expected ({whole.run_s} s); sample {summary['draw']}")
     (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
     if a.dry:
@@ -2262,8 +2262,9 @@ def main(argv=None) -> int:
     p.add_argument("--delta", type=float, default=2.0 ** -20)
     p.add_argument("--dry", action="store_true", help="the run and the host's read of every round: nothing proved")
     p.add_argument("--class", dest="setup", choices=sorted(SETUPS), default=W63.name,
-                   help="the class and the network certifier's schedule (default w63's, PARAMS; w63k4: w63's at KO 4 "
-                        "and KI 32, its certifier's at egress cells 5; test: the certifier tests', a CPU window; "
+                   help="the class and the network attester's schedule (default w63's, PARAMS; w63k4: w63's at KO 4 "
+                        "and KI 32, its certifier's at egress cells 5; test: network attestation's tests', a CPU "
+                        "window; "
                         "test2: test's over two execution phases, a request anchored at the second's first boundary)")
     p.add_argument("--group", type=int, default=1,
                    help="G: execution phases 0 .. G - 1, each a registration of its own, its scan started from the "
@@ -2289,7 +2290,7 @@ def main(argv=None) -> int:
                    help="V3c's window directory (prove_path.py window-commit's): the scan reads its SCAN_STATE and "
                         "its SelectEntry_v1 chunks' o0 as its state and prog<j> trees, and proves no block round")
     s = sub.add_parser("schedule", help="a setup's schedule (w63's, PARAMS, by default) as network_attester_serve.py's schedule "
-                                        "flags (serve, rehearse): the network certifier runs --warden-run reads, in "
+                                        "flags (serve, rehearse): the network attester runs --warden-run reads, in "
                                         "the id egress form, serve's and rehearse --ids's")
     s.add_argument("--class", dest="setup", choices=sorted(SETUPS), default=W63.name)
     a = ap.parse_args(argv)

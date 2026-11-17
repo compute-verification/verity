@@ -1,4 +1,4 @@
-"""demo_endpoint, the OpenAI endpoint in front of a decoder that isn't vLLM: it answers the network attester rehearsal's calls
+"""demo_endpoint, the OpenAI endpoint in front of a decoder that isn't vLLM: it answers the attester rehearsal's calls
 (GET /v1/models, POST /tokenize, streamed POST /v1/completions with each chunk's token_ids and the first chunk's prompt
 ids) and refuses a request its greedy engine can't serve; each request streams the engine's own greedy continuation to
 its EOS or max_tokens; its scheduler is vLLM V1's synchronous FCFS (running requests first, then arrivals within the

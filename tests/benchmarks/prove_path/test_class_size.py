@@ -119,7 +119,7 @@ def test_size_prices_the_measured_units_and_refuses_the_unmeasured(monkeypatch):
 
 
 def test_window_circuit_and_class_size_default_to_the_class_of_record():
-    """Without ``--class``, ``window-circuit`` and ``class-size`` take the class of record, the network attester run of record's
+    """Without ``--class``, ``window-circuit`` and ``class-size`` take the class of record, the attester run of record's
     envelope at the fixed slots (8 slots, 4 at each of buckets 0 and 16, EVERY 16; 1,024 prompt ids, 64 outputs); a
     given class is read as SLOTS,PROMPT,OUTPUTS[,LANES,EVERY], every slot at one boundary without LANES."""
     import prove_path as PP

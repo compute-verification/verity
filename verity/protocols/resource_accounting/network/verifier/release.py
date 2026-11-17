@@ -1,8 +1,8 @@
 """The release order on the server's side. Each request a network attester releases reaches the server with three headers:
-`x-verity-release: N`, N its 0-based index in the network attester run's release order (dense: each released request once, a
+`x-verity-release: N`, N its 0-based index in the attester run's release order (dense: each released request once, a
 request a fault drops before its release unnumbered); `x-verity-release-run: ID`, the run's id in hex; and, from the
 network attester, `x-verity-release-bucket: A`, the bucket of the release, counted from 0 at the run's origin. So
-`serve-openai --admit release-order` adds requests to its engine in the order the network attester released them, whatever
+`serve-openai --admit release-order` adds requests to its engine in the order the attester released them, whatever
 order it reads their bodies in, and the advice needn't carry the permutation between the two.
 
 **The watermark** is a stream on which the server learns that a bucket has closed. The network attester opens one
@@ -17,7 +17,7 @@ may read after line t, so a server that admits at bucket t waits for each of the
 bytes still arrive (`read_watermark` gives t, n and the lost). The network attester never reads the server's side of
 that connection and never waits on it.
 
-The headers and the watermark are the network attester's, sent to the server only. The link's frames, the network attester's
+The headers and the watermark are the attester's, sent to the server only. The link's frames, the network attester's
 cells and every record hold the client's bytes, so what is certified and tied (cell counts, prompt lengths, the I/O
 tie's request frames) is the same with them or without. A lost release is the server connection's state, which the
 server sees itself. N, A and n are read back from the signed ingress records: the network attester's `END` cells in

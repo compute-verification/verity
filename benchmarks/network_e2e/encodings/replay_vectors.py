@@ -13,7 +13,7 @@ circuit's state rests on, that a running request holds ⌈computed / B⌉ blocks
 checks `replay_step.reference` on every step that fits the size class (the rest are counted, out of class), and with
 `--circuit` the Definition on them too; with `--EW` each step's `looked` against the lookups the scheduler made (the
 candidates whose `BlockPool.hit` it called), each of whose hits past the pool bound is the pool's; `--fixture N` writes each trace's N consecutive fitting steps with the most
-preemptions, cache hits, admissions and stops (`window`) as the vectors the network attester's test reads
+preemptions, cache hits, admissions and stops (`window`) as the vectors network attestation's test reads
 (`tests/verity/protocols/resource_accounting/network/verifier/fixtures/replay_step_vectors.json`).
 
 **A served window as the compile slice's input.** `served_window` cuts one window out of a served run's step trace (the

@@ -1,13 +1,13 @@
 """The network attester's transfer rows: a host's load, each value of the weights it loads once a session, committed
 by the network attester on the host's uplink as it crosses, never by the prover, and signed with its key. The verifier
 pins each load's root from that certificate alone (`blocks.pins`), so every unit's row of a load is a registered read
-opened against the network attester's signed root by the Lean verifier's registered reads (`verity-verify-proof --registered`,
+opened against the attester's signed root by the Lean verifier's registered reads (`verity-verify-proof --registered`,
 `Flock.Registered.checkPort`), which don't change. Every other row into the host is the scan's state
 (`ingress_scan.SCAN_STATE`), which the scan places inside the zero-knowledge proof, and its egress the scan's egress
 side's (`egress`): no request, response or value one host sends another has a head of its own.
 
 **The commitment** is a registered value's (`one_stage.registered`), as the prover would commit it, under the
-network attester's own salts. The value is `rows` rows of `words` leaves of `word_bits` bits (16, or 32: the reading
+attester's own salts. The value is `rows` rows of `words` leaves of `word_bits` bits (16, or 32: the reading
 parameter's width, `registered.width`), row r its leaves in the order the proof blocks read them, each row the bit row a
 proof block's port carries in its `schema` (`SCHEMAS`: ``hm96-sha512/row/v2``, or ``hm96-sha512/row-seg/v1`` for a row a
 port reads in segments, as `EmbeddingRead_v1` reads a token's embedding):
@@ -19,8 +19,8 @@ port reads in segments, as `EmbeddingRead_v1` reads a token's embedding):
 D leaves the window out, as a value the verifier holds across windows does, so the root is the one `registration.check`
 holds a pinned value's entry to (`pinned`) and the one the verifier's `--registered` port opens; the head and its
 certificate bind the link and the execution phase. `program` is the circuit's program digest (``circuit.json``'s
-``program``), public. salt_r is 192 bytes the network attester samples from the operating system for row r and no other row.
-The salts are witness, which the network attester hands to the prover alone (`Transfer.witness`); the rows are what the host
+``program``), public. salt_r is 192 bytes the attester samples from the operating system for row r and no other row.
+The salts are witness, which the attester hands to the prover alone (`Transfer.witness`); the rows are what the host
 received, which the prover holds.
 
 **The signed head** (`TransferHead`):
@@ -30,7 +30,7 @@ received, which the prover holds.
       ‖ root (64 bytes)
     transfer digest = tagged_sha512(TRANSFER_TAG, H)
 
-and its certificate is `Issuer.sign`'s of the transfer digest: the network attester's message for the link and execution phase
+and its certificate is `Issuer.sign`'s of the transfer digest: the attester's message for the link and execution phase
 in its session (`certificate.certificate_message`), so it verifies for that link, direction and execution phase alone.
 The network attester's cells digest and its record digest of an execution phase's transfer blocks are under other tags,
 so none verifies as another.
@@ -45,7 +45,7 @@ side (of a load's registrations the auditor's gate publishes nothing):
      "row_schema", "domain", "root", "certificate": {"key", "digest", "signature"}}
 
 `check_registration` is the verifier's read of it for the transfer it expects: every field the verifier's own, the
-domain the one it derives, and the certificate over the head's digest verifying under the network attester's key in its session
+domain the one it derives, and the certificate over the head's digest verifying under the attester's key in its session
 for the link and execution phase it expects. `port` is the verifier's own `--registered` port of the value at the head's
 root.
 """
@@ -113,7 +113,7 @@ def bc(words: Sequence[int], salt: bytes, word_bits: int = WORD_BITS, schema: st
 
 @dataclass(frozen=True, slots=True)
 class TransferHead:
-    """What the network attester signs for a transfer value. A run keeps it on its private side, in the registration."""
+    """What the attester signs for a transfer value. A run keeps it on its private side, in the registration."""
 
     link: str
     direction: Direction
@@ -146,7 +146,7 @@ class TransferHead:
 
 @dataclass(frozen=True)
 class Transfer:
-    """The network attester's opening of one transfer value, witness: the rows and their salts (`committed`), and the link,
+    """The attester's opening of one transfer value, witness: the rows and their salts (`committed`), and the link,
     execution phase and kind it crossed in."""
 
     link: str
@@ -186,7 +186,7 @@ class Transfer:
 
     @property
     def witness(self) -> bytes:
-        """What the network attester hands the prover beside the rows: their salts, in order (`read_witness`)."""
+        """What the attester hands the prover beside the rows: their salts, in order (`read_witness`)."""
         return b"".join(self.salts)
 
     def statement(self, positions: Sequence[int]) -> tuple[list[tuple[int, ...]], list[bytes], dict[str, Any]]:
@@ -256,14 +256,14 @@ def check_registration(doc: Any, key: PublicKey, session: bytes, *, link: str, d
     if cert.digest != head.digest():
         raise ValueError("the transfer registration's certificate doesn't sign its head")
     if not cert.verify(key, session):
-        raise ValueError(f"the transfer registration's certificate doesn't verify under the network certifier's key in its "
+        raise ValueError(f"the transfer registration's certificate doesn't verify under the network attester's key in its "
                          f"session for {link} {direction.value} window {window}")
     return head, dom
 
 
 def port(head: TransferHead, reads: Sequence[int | None], reads_from: int = 0) -> dict[str, Any]:
     """The verifier's own `--registered` port (`verity/registered-reads/v1`) of a proof block population that reads the
-    head's value: proof block `reads_from + i` opens row `reads[i]` (None: it reads none) at the network attester's signed
+    head's value: proof block `reads_from + i` opens row `reads[i]` (None: it reads none) at the attester's signed
     root."""
     if any(r is not None and not (type(r) is int and 0 <= r < head.rows) for r in reads):
         raise ValueError(f"a read is a row of the value's {head.rows}, or None")

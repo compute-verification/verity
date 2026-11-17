@@ -184,7 +184,7 @@ class Endpoint:
         n = re.search(rb"(?im)^content-length:\s*(\d+)", head)
         raw = await reader.readexactly(int(n.group(1))) if n else b""
         fields = network_attester_request(head + raw, self.shape.payload) if head.startswith(b"POST /v1/completions ") else None
-        why = (f"a network certifier's id request (id_form.id_request in {self.shape.payload + 9}-byte cells from their first "
+        why = (f"a network attester's id request (id_form.id_request in {self.shape.payload + 9}-byte cells from their first "
                "byte) to POST /v1/completions") if fields is None else refusal(fields, self.shape)
         if why is not None:
             self.refused += 1

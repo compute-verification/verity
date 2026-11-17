@@ -65,7 +65,7 @@ def _forge(rng: random.Random, record: BlockGrid, payloads: list[bytes], allocat
     kind = rng.randrange(4)
     if kind == 0:  # another frame's content in a slot
         grid[b][s] = rng.choice(payloads) if payloads else b"\x00"
-    elif kind == 1:  # one frame more than the network attester released: the first padding slot filled, or a full row's slot
+    elif kind == 1:  # one frame more than the attester released: the first padding slot filled, or a full row's slot
         free = [i for i, x in enumerate(grid[b]) if x is None]
         grid[b][free[0] if free else s] = rng.choice(payloads) if payloads else b"\x00"
     elif kind == 2:  # a frame withheld

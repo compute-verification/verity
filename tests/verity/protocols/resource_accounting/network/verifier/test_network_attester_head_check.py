@@ -116,7 +116,7 @@ def test_the_head_check_is_its_reference(cases, bare):
     """The whole Definition on every case, with and without a profile, against its reference, and its ANDs by part at the
     deployed T = 600. What the parts' tests can't reach is the opening's wiring: the head's bytes into its row digest,
     its salt into hm96's leaf, and the leaf's position (direction, 1) in N2's tree; and the signed digest's: the head's
-    bytes into its record digest, and that digest and the network attester's salt into the digest the certificate signs.
+    bytes into its record digest, and that digest and the attester's salt into the digest the certificate signs.
     Building and compiling the commitment gadgets' Boolean bodies takes about 75 s, once."""
     insts = [i for i, _ in cases.values()]
     assert HC.evaluate(*insts) == [int(HC.reference(i)) for i in insts]

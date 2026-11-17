@@ -192,7 +192,7 @@ def check(doc: Mapping[str, Any], layouts: Mapping[str, Any]) -> tuple[Load, ...
             if t["param"] == value:
                 if t["offset"] != 0 or t["words"] * t["rows"] != leaves:
                     raise ValueError(f"{what}: table {t['name']} is a part of the value; a table over a load is the whole "
-                                     "value, under the network certifier's root")
+                                     "value, under the network attester's root")
                 widths.add(t["words"])
         for o in [*roots, *openings]:
             if over.get(o["table"]) == value:
@@ -256,7 +256,7 @@ def certified(doc: Mapping[str, Any], layouts: Mapping[str, Any], registrations:
     for x in loads:
         what = f"load {x.value!r} (on {link})"
         if x.value not in regs:
-            raise ValueError(f"{what}: no certificate; a load's root is pinned from its network certifier's certificate alone")
+            raise ValueError(f"{what}: no certificate; a load's root is pinned from its network attester's certificate alone")
         bits, schema = formats.get(x.value, (TR.WORD_BITS, TR.SCHEMA))
         try:
             if bits not in TR.WIDTHS or 16 * x.words % bits:

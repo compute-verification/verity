@@ -131,7 +131,7 @@ def case(egress: Sequence[tuple[str, Sequence[LogicalFrame], Sequence[ClockSync]
          grid: GridParams, ingress_grid: GridParams, sync_set: SyncSet, key: LmsKey, session: bytes,
          records: Sequence[Published]) -> dict:
     """A `serve` case of `verity/network-records/v3`: the unit's egress links with their frames and syncs, its ingress
-    links, the network attester's key and session, and the records."""
+    links, the attester's key and session, and the records."""
     p = key.params
     params = {"egress": {"grid": _grid_json(grid), "links": [l for l, _, _ in egress]},
               "ingress": {"grid": _grid_json(ingress_grid), "links": list(ingress)},
@@ -230,7 +230,7 @@ atexit.register(SERVER.close)
 
 def _need_key(records: Sequence[Published], key: PublicKey | None, session: bytes | None) -> None:
     if (key is None or session is None) and any(isinstance(r, CertifiedRecord) for r in records):
-        raise ValueError("certified records are checked against the network certifier's public key in its session: "
+        raise ValueError("certified records are checked against the network attester's public key in its session: "
                          "pass key and session")
 
 

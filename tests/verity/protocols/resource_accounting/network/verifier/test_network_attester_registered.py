@@ -1,8 +1,8 @@
 """The network attester's link and key read from the registered hardware (`registered.py`): the accepting case, each
 refusal by its message, a site that is no site, and the Python held to the Lean (`NetworkCheck.Registered`) on the same
-vectors: the cases below and seeded sites around them, each answered by `tests/lean/RegisteredVectors.lean` in the
-network attester check's Lake package and by the Python, which agree on the registered link, on each refusal's message and on
-which sites are malformed."""
+vectors: the cases below and seeded sites around them, each answered by `tests/lean/RegisteredVectors.lean` in network
+attestation's check's Lake package and by the Python, which agree on the registered link, on each refusal's message
+and on which sites are malformed."""
 
 from __future__ import annotations
 
@@ -96,7 +96,7 @@ def test_a_link_that_is_no_link_of_the_site_is_refused():
     ("ah0", "auditor-host aud0 and host node0"),
 ])
 def test_a_link_that_joins_no_certifier_and_host_is_refused(name, joins):
-    """The network attester's half to the outside, a host's bare uplink, a link between two hosts, the memory attester's,
+    """The attester's half to the outside, a host's bare uplink, a link between two hosts, the memory attester's,
     an auditor's device's."""
     assert refusal(view_site(), name, KEY0) == (f"link {name}: it joins {joins}, not a network certifier and a host; "
                                                  f"{LINKS}")
@@ -111,7 +111,7 @@ def no_capacity(why: str | None) -> dict:
 
 @pytest.mark.parametrize("why", [None, "no line rate"])
 def test_a_certifiers_link_that_states_no_capacity_is_refused(why):
-    """After a key that is not the certifier's, and whatever the link says of why no certifier splits it."""
+    """After a key that is not the attester's, and whatever the link says of why no certifier splits it."""
     assert refusal(no_capacity(why), "up0", KEY0) == ("link up0: it states no capacity; a network certifier's link "
                                                       "states its line rate")
     assert refusal(no_capacity(why), "up0", KEY1).startswith(f"link up0: the key {KEY1} is not network certifier cert0's")

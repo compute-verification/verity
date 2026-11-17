@@ -25,7 +25,7 @@ whether a cut moves any request's output ids, and each edge's record (``raw/cut.
 and its cost.
 
 `NETWORK_CERTIFIER`'s traces serve a trace's server and load through the active network attester: `network_attester_serve.py serve` in front of the
-server, a process beside it on its host (``network certifier beside the server, not on the auditor device``), and the client
+server, a process beside it on its host (``network attester beside the server, not on the auditor device``), and the client
 (`drive_network_attester`) speaking cells through the relay's shim. The relay, the client and the server each run on cores of
 their own (`cpu_plan`), the relay under `network_attester_probe.py` (its every tick, publish and collection) and the host's load
 sampled every 100 ms (`host_sample.py`), so that a late tick can be told apart from a stalled client. DIR/<trace>/warden/
@@ -727,7 +727,7 @@ def start_network_attester(d: Path, port: int, delay: int, span_s: float, key: P
                                 stdout=subprocess.PIPE, stderr=log, text=True, env=env)
     if "listening" not in json.loads(proc.stdout.readline() or "{}"):
         proc.wait()
-        raise RuntimeError(f"the network certifier exited with {proc.returncode} before it listened (warden/serve.log)")
+        raise RuntimeError(f"the network attester exited with {proc.returncode} before it listened (warden/serve.log)")
     return proc, json.loads((w / "deployment.json").read_text())
 
 
@@ -781,7 +781,7 @@ def tick_for(traces: list[str], trace: str | None, given_ms: str | None) -> dict
         raise SystemExit(f"--admit tick doesn't serve the hostile schedulers' traces {bad}")
     tick = tick_args(trace, given_ms)
     if (ws := [n for n in traces if n in NETWORK_CERTIFIER]) and NETWORK_CERTIFIER_SCHEDULE["bucket_ms"] * 1000 != tick["bucket_us"]:
-        raise SystemExit(f"--admit tick: the network certifier's bucket, {NETWORK_CERTIFIER_SCHEDULE['bucket_ms']} ms "
+        raise SystemExit(f"--admit tick: the network attester's bucket, {NETWORK_CERTIFIER_SCHEDULE['bucket_ms']} ms "
                          f"(NETWORK_CERTIFIER_SCHEDULE), isn't τ_b, {tick['bucket_us']} µs, so {ws} would number releases in buckets "
                          "the tick doesn't count")
     return tick
@@ -860,7 +860,7 @@ def run_trace(name: str, out: Path, model: Model, checkpoint: Path, requests: li
                                         str(d / "warden" / "host.jsonl"), ",".join(map(str, sorted(os.sched_getaffinity(0)))),
                                         f"warden:{network_attester.pid}", f"client:{os.getpid()}", f"server={server.pid}",
                                         *([f"publisher:{pid.read_text()}"] if pid.exists() else [])])
-            print(f"[corpus] {name}: network certifier ({NETWORK_CERTIFIER_WHERE}) on {ends['listen']}, D {delay} from the "
+            print(f"[corpus] {name}: network attester ({NETWORK_CERTIFIER_WHERE}) on {ends['listen']}, D {delay} from the "
                   f"{meta['warden']['egress_base'].split(':')[0]}, {dep['windows']} windows; cores {meta['cpus']}", flush=True)
             meta |= asyncio.run(drive_network_attester(dep, ends, model.served, requests, arr, ids, d / "client.jsonl", args.drain_s,
                                              sampling, cpus and cpus["client"]))
@@ -1001,7 +1001,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.cmd == "summarize":
         for w in sorted(Path(args.dir).glob("*/warden/deployment.json")):
             if not (w.parent / "check.json").exists():
-                print(f"[corpus] {w.parent.parent.name}: network certifier check rc {check_network_attester(w.parent.parent)}", flush=True)
+                print(f"[corpus] {w.parent.parent.name}: network attester check rc {check_network_attester(w.parent.parent)}", flush=True)
         summary.summarize(Path(args.dir))
         return 0
     out = summary.compare_corpora([summary.corpus_spec(x) for x in args.corpora], Path(args.out))

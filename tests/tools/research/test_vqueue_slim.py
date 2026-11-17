@@ -1061,8 +1061,9 @@ def test_the_loops_rebuild_after_a_drop_waits_for_the_cancelled_shards_records_t
                                         ("flock-rust-tests", FAIL), ("preflight-lock", FAIL)])
 def test_the_check_that_gates_is_judged_on_the_steps_main_waits_for_at_its_base(world, monkeypatch, tmp_path, red, state):
     """Every step `main` waits for at the base gates, the preflights among them: not one policy.toml takes off the gate there
-    (circuit-check) or drive.toml's warn step (ratchet-gate).  The candidate's
-    own policy.toml takes flock-rust-tests off the gate, and it fails on it all the same."""
+    (circuit-check) or drive.toml's warn step (ratchet-gate), and lean-agreement, which its launch skipped by name and its
+    run ran and passed.  The candidate's own policy.toml takes flock-rust-tests off the gate, and it fails on it
+    all the same."""
     h, base, sha, _ = _harness(world, monkeypatch, off_gate=("circuit-check",), change={
         "tools/check/policy.toml": _policy(off_gate=("circuit-check", "flock-rust-tests"))})
     h.d.warn_steps = ("ratchet-gate",)
@@ -1070,7 +1071,8 @@ def test_the_check_that_gates_is_judged_on_the_steps_main_waits_for_at_its_base(
     _slim(h, tmp_path, **{red.replace("-", "_"): "error: it failed\n"})
     got = judge(h.d, rec)
     assert got.state == state and [f.task for f in got.failed] == [f"step {red}"] * (state == FAIL)
-    gates = [s for s in (*PREFLIGHTS, *AFTER_LANDING) if s not in ("lean-agreement", "circuit-check", "ratchet-gate")]
+    assert rec["skip"] == ["lean-agreement"]
+    gates = [s for s in (*PREFLIGHTS, *AFTER_LANDING) if s not in ("circuit-check", "ratchet-gate")]
     if red not in PREFLIGHTS:
         assert sorted(rec["verdict"]["passed"]) == sorted(s for s in gates if s != red or state == PASS)
 
@@ -1299,6 +1301,98 @@ def test_a_step_the_check_judges_failed_while_a_shard_runs_circuit_check_fails_i
         (f,) = got.failed
         assert (got.state, f.task, f.tests) == (FAIL, "step pytest", {f"pkg::{TEST}"})
         assert "verdict" not in rec and "still_running" not in rec and rec["early"]["state"] == FAIL
+
+
+def _agreement(h: Beside, shard: int, status: str | None) -> None:
+    """Shard ``shard`` of the newest check that gates (`_shards_now`) holding lean-agreement as check.py records it: ``status``
+    (failed with a log naming no path, its run's exit 1 then if it ended; passed; skipped by name, as without the upstream
+    build; stopped), or no record of it (None)."""
+    from research.landing import LIVE as LIVE_FILE
+
+    if status is None:
+        return
+    d = h.evidence[shard - 1]
+    row = {"step": "lean-agreement", "status": status}
+    if status == "failed":
+        row |= {"rc": 1, "log": "lean-agreement.log"}
+        (d / "lean-agreement.log").write_text("lean-agreement: the verifiers disagree on 3 of 40 vectors\n")
+        if h.run_state[d.name][0] == "done":
+            h.run_state[d.name] = ("done", 1, None)
+    with (d / "steps.jsonl").open("a") as f:
+        f.write(json.dumps(row) + "\n")
+    live = json.loads((d / LIVE_FILE).read_text())
+    live["steps"].append({"step": "lean-agreement", "state": status})
+    (d / LIVE_FILE).write_text(json.dumps(live))
+
+
+@pytest.mark.parametrize("when", ["early", "ended"])
+def test_a_lean_agreement_a_shard_ran_and_failed_fails_the_check_though_its_launch_skipped_it_by_name(
+        world, monkeypatch, tmp_path, when):
+    """check.py runs lean-agreement wherever the candidate's own tree says what it checks changed, whatever its launch asked:
+    a launch that skipped it by name (``skip``) still waits for it while a shard runs it, and fails on a shard's red there,
+    while another shard runs circuit-check and once every shard ended."""
+    h, base, sha, _ = _harness(world, monkeypatch)
+    rec = start(h.d, sha, base, shards=3)
+    assert rec["skip"] == ["lean-agreement"] and "lean-agreement" not in rec["steps"]
+    if when == "early":
+        _shards_now(h, tmp_path, running=((1, "lean-agreement"), (3, "circuit-check")))
+        assert judge(h.d, rec) == Verdict(PENDING) and "verdict" not in rec and "still_running" not in rec
+    _shards_now(h, tmp_path, running=((3, "circuit-check"),) if when == "early" else ())
+    _agreement(h, 1, "failed")
+    got = judge(h.d, rec)
+    assert (got.state, [f.task for f in got.failed], got.ended) == (FAIL, ["step lean-agreement"], when == "ended")
+    assert (rec["early"] if when == "early" else rec["verdict"])["state"] == FAIL
+
+
+@pytest.mark.parametrize("held", [("skipped", "passed", None), ("skipped", None, None), ("stopped", "skipped", None),
+                                  (None, None, None)])
+def test_a_lean_agreement_its_launch_skipped_by_name_counts_only_where_a_shard_ran_it(world, monkeypatch, tmp_path, held):
+    """A shard that skipped lean-agreement (check.py without the upstream build), stopped it or holds no record of it ran
+    nothing there, and holds nothing: the check passes, the step among those it passed only where another shard ran and
+    passed it."""
+    h, base, sha, _ = _harness(world, monkeypatch)
+    rec = start(h.d, sha, base, shards=3)
+    _shards_now(h, tmp_path)
+    for k, status in enumerate(held, 1):
+        _agreement(h, k, status)
+    assert judge(h.d, rec) == Verdict(PASS)
+    assert ("lean-agreement" in rec["verdict"]["passed"]) == ("passed" in held)
+
+
+@pytest.mark.parametrize("at", ["base", "candidate"])
+def test_an_allowance_at_the_base_still_covers_the_red_it_names_beside_a_lean_agreement_its_launch_skipped_by_name(
+        world, monkeypatch, tmp_path, at):
+    """A shard ran lean-agreement, skipped by name at the launch, and passed it, and another failed a suite: an unexpired
+    allowance at the base naming that suite's test covers it, and the check passes with both steps; the candidate's own
+    allowance covers nothing, and the check fails on the suite alone."""
+    allowing = {"tools/check/policy.toml": _policy((f"suite pkg::{TEST}", "ci", LIVE), off_gate=OFF)}
+    h, base, sha, _ = _harness(world, monkeypatch, tree=allowing if at == "base" else None,
+                               change=None if at == "base" else allowing)
+    rec = start(h.d, sha, base, shards=3)
+    _shards_now(h, tmp_path, failed=((2, "pytest"),))
+    (h.evidence[1] / "suites.json").write_text(json.dumps([PKG]))
+    _agreement(h, 1, "passed")
+    got = judge(h.d, rec)
+    if at == "base":
+        assert got == Verdict(PASS) and {"pytest", "lean-agreement"} <= {*rec["verdict"]["passed"]}
+    else:
+        (f,) = got.failed
+        assert (got.state, f.task, f.tests) == (FAIL, "step pytest", {f"pkg::{TEST}"})
+        assert "lean-agreement" in rec["verdict"]["passed"]
+
+
+def test_the_run_beside_a_check_judges_a_lean_agreement_it_ran_though_its_launch_skipped_it_by_name(world, monkeypatch, tmp_path):
+    """The run beside a candidate's check, whose launch left lean-agreement out, fails on a red of it that its records hold all
+    the same, as the check that gates does."""
+    h, base, sha, _ = _harness(world, monkeypatch)
+    rec = start(h.d, sha, base)
+    d = _slim(h, tmp_path)
+    assert "lean-agreement" in rec["skip"] and "lean-agreement" not in {st["step"] for st in step_records(d)}
+    with (d / "steps.jsonl").open("a") as f:
+        f.write(json.dumps({"step": "lean-agreement", "status": "failed", "rc": 1, "log": "lean-agreement.log"}) + "\n")
+    (d / "lean-agreement.log").write_text("lean-agreement: the verifiers disagree on 3 of 40 vectors\n")
+    h.run_state[d.name] = ("done", 1, None)
+    assert judge(h.d, rec) == Verdict(FAIL, (_failed(h, base, sha, "lean-agreement"),), ended=True)
 
 
 @pytest.mark.parametrize("case", ["pending", "early pass", "early fail", "pass", "fail"])

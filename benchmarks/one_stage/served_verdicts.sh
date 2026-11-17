@@ -962,12 +962,14 @@ compiler_args() {  # the prove path's registered compiler, as verity-vllm advice
     | "$PY" -c "import json, sys; c = json.load(sys.stdin)['inner']; print('--compiler-name', c['name'], '--compiler-digest', c['digest'])"
 }
 advice_of() {  # window $1's advice under the compiler $2 in $D/advice/w$1, unless it is there already (the tie wrote it):
-  # verity-vllm advice's exit, 3 while the window waits on a Commit record the running server hasn't written
+  # verity-vllm advice's exit, 3 while the window waits on a Commit record the running server hasn't written. Under DAY
+  # the call registers the compiler in the day's log, which a log with site entries checks under DAY_PARAMS' auditor
   [ -f "$D/advice/w$1/registration.json" ] && return 0
-  local wa=() rc
+  local wa=() dp=() rc
   [ -f "$WREG" ] && wa=(--weights-of-record "$WREG")
+  [ -n "${DAY:-}" ] && [ -n "${DAY_PARAMS:-}" ] && dp=(--day-params "$DAY_PARAMS")
   # shellcheck disable=SC2086
-  (cd "$TREE/adapters/vllm" && vv advice "$D" --window "$1" --cap "$CAP" $2 "${wa[@]}" --out "$D/advice/.w$1") \
+  (cd "$TREE/adapters/vllm" && vv advice "$D" --window "$1" --cap "$CAP" $2 "${wa[@]}" "${dp[@]}" --out "$D/advice/.w$1") \
     >> "$D/advice.log" 2>&1
   rc=$?
   [ -d "$D/advice/.w$1/w$1" ] && mv "$D/advice/.w$1/w$1" "$D/advice/w$1"

@@ -336,7 +336,7 @@ def test_a_ports_reads_written_compactly_are_no_piece_of_a_records_counts(tmp_pa
 
 
 def test_a_list_of_consecutive_integers_is_no_piece_of_the_certifiers_usage_record(tmp_path):
-    """The network attester's run record, a witness file written indented, holds its processes' CPUs. Written as a list of
+    """The attester's run record, a witness file written indented, holds its processes' CPUs. Written as a list of
     integers they are the same bytes as any indented list of consecutive integers at their depth, so a verifier
     outcome's proved units were a find though nothing of the witness is in them. The usage record holds them as one
     string of ranges (`runner_parts._usage`), and under the declared data as shipped the outcome is no find and nothing

@@ -3,7 +3,7 @@ are the seeded weights' (`verity.protocols.resource_accounting.memory.pous.prove
 entries, and at H200 its stream's length, head and every tensor's first and last rows); the relayed roots are interface
 1's fixture roots under its salts, for its reader named by digest, whose domains are the verifier's (``tok`` (H, V) in
 row/v2, every tensor 16-bit leaves, an f32 scale two, at H200 a linear's row the 8,192 codes of a FAMILIES ``wrow``
-part), over one process and several, whatever the reads' sizes, and `Registered.commit`'s under the network attester's own
+part), over one process and several, whatever the reads' sizes, and `Registered.commit`'s under the attester's own
 salts (the witness it writes) and the verifier's domain, pads, many chunks a value and both row formats included; a P2
 link (interface 2's layout over a small field, so that the test encodes its own store) decodes to the same roots, and a
 block that isn't a codeword, a nonzero byte past a store tensor's end and a short link are refused; at H200 the store's

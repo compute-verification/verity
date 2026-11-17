@@ -3,9 +3,9 @@
 #
 #   netns.sh OUT [serve's flags]
 #
-# A user namespace holds two network namespaces joined by a veth pair: the server and the network attester in one, the observer
+# A user namespace holds two network namespaces joined by a veth pair: the server and the attester in one, the observer
 # in the other, as `pair.sh`'s two sides on two hosts would be (its cases, and its INTERVALS, ATTACKS and OBSERVERS),
-# but on one clock and one host's cores. The network attester's bytes leave by a device of their own, `cert0`, which a launch
+# but on one clock and one host's cores. The attester's bytes leave by a device of their own, `cert0`, which a launch
 # gate can sit on (`--launch cert0,AFTER,OPEN[,MODE]`); loopback takes none. It leaves the cases in OUT/out, their
 # observers' files in OUT/seen and the score in OUT/result.json, and nothing outside its namespaces.
 set -euo pipefail

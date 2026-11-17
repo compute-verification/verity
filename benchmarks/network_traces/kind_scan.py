@@ -28,8 +28,8 @@ and so is a text file (`TEXT`, a
 refusal). Any other file is a finding, a log included: the steps' logs stay on the node (`served_verdicts.sh`'s
 CERTIFIER_PRIVATE).
 
-``--received OUT`` scans what a verifier on another machine reads of a served run's OUT (`RECEIVED`): network
-attestation's piece (``pieces/certifier``, `DOCS`) and V3c's audit (``v3c-audit``, `V3C_DOCS`, what `served_integrity.answer`
+``--received OUT`` scans what a verifier on another machine reads of a served run's OUT (`RECEIVED`): the
+attester's piece (``pieces/certifier``, `DOCS`) and V3c's audit (``v3c-audit``, `V3C_DOCS`, what `served_integrity.answer`
 reads of it and the period's compute audit), each whole, so a file in either that no declaration covers is a finding;
 and the window circuit's inputs and count, each the verifier's: the registered compiler (`COMPILER`), the advice
 registration (`ADVICE_REGISTRATION`, its length held to `cap_bits`: `padded`), the weights registration (`WEIGHTS`) and each
@@ -68,7 +68,7 @@ OPENING = Development("an advice binding, which an audit opens (records_audit.py
                       "no audit of record reads an advice or its length (V3c's class window's circuit is the class's), "
                       "and nothing opens one")
 ENDPOINT = Development("the chain's endpoint rebuild (CR_ENDPOINT: the endpoint's records and advice, in the clear), a "
-                       "development check the network certifier path refuses")
+                       "development check the network attester path refuses")
 #: the chain's steps on the network attester path (`chain_record.report`)
 STEPS = ("custody", "certificates", "n2", "scan", "lean")
 

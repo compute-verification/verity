@@ -1,5 +1,5 @@
 """The I/O tie's prototype (`io_tie`) on the network attester's own egress: variable-length responses on a link served
-through the network attester's schedule (`network_attester.NetworkAttester._egress` cuts every cell, the network attester's grid lays them out a
+through the network attester's schedule (`network_attester.NetworkAttester._egress` cuts every cell, the attester's grid lays them out a
 row a bucket, as `network_attester_rows` registers them); advice-v0-shaped outputs, from which the verifier computes each window's
 map (through advice v1's order permutation where the engine's numbering isn't the arrival order, as on the corpus's
 heavy trace); and the Commit's sampled ids, one hiding row a step, which each bucket's proof block reads at its outputs'
@@ -219,7 +219,7 @@ def test_the_map_is_the_network_certifiers_slots():
         IT.MapEntry(*m) for m in ((1, P), (1, P), (2, P), (2, P), (1, E), (1, P), (2, 0), (2, 4)))
     refused = {
         "permutation": dict(order=[0, 0, 2]),
-        "not the network certifier's": dict(release=[1, 1, 3, 3]),
+        "not the network attester's": dict(release=[1, 1, 3, 3]),
         "arrival order": dict(admitted=[2, 0, 2]),
         "more than R / r": dict(admitted=[0, 0, 0], release=[1, 1, 2, 1]),
         "more than S": dict(shape=IT.Shape(256, 3, 4, P=4, S=1, DS=3)),

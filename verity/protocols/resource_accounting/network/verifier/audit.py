@@ -23,10 +23,10 @@ its own and earlier windows (`schedule.expected_grids`), so such a sync never ch
 A record may come raw or committed (`commitment`: its digest, with padding elided). A committed record's grid check
 compares its digest with the digest of the Program's grid, which is exact up to a SHA-512 collision.
 
-A record may also come certified (`certificate`): the record head, the network attester's salt for it and the network
+A record may also come certified (`certificate`): the record head, the attester's salt for it and the network
 certificate, which signs the head's digest under that salt; the head and the salt are witness. The audit checks that
 the certificate names the head's execution phase and signs the head's salted digest (`certificate_digest`), and its
-signature against the network attester's public key (`key`) over its message in the network attester session (`session`,
+signature against the network attester's public key (`key`) over its message in the attester session (`session`,
 the id the challenger sampled for it); a certificate that fails, one from another session included, is a `signature`
 violation. A head settled after the verdict deadline is a `no-verdict`. The status is the head's, which the signed
 digest binds. On egress the grid check compares the head's record digest with the digest of the Program's grid's head,
@@ -99,7 +99,7 @@ class Audit:
     ) -> list[Verdict]:
         """Check one egress link's records for windows 0 … len(syncs) − 1 against the Program's grids under the
         declared syncs. A window whose declared sync differs from the unit's for it, set by an earlier link, is an
-        `advice` violation. Certified records are checked against the network attester's `key` in its `session`. With `grid`
+        `advice` violation. Certified records are checked against the attester's `key` in its `session`. With `grid`
         False no grid is compared: each certified head's check in N2's proof block (`head_check`) holds its status, grid
         and counts instead, and nothing holds its frames, so a raw or committed record, which has neither, raises
         `ValueError`. N2 checks with `grid` False."""
@@ -125,7 +125,7 @@ class Audit:
     def check_ingress_link(self, link: str, records: Sequence[Published], windows: int, key: PublicKey | None = None,
                            params: GridParams | None = None, session: bytes | None = None) -> list[Verdict]:
         """Check one ingress link's records for windows 0 … windows − 1: one record each, with a complete status. No
-        grid is compared. Certified records are checked against the network attester's `key` in its `session`, and their heads
+        grid is compared. Certified records are checked against the attester's `key` in its `session`, and their heads
         against `params`."""
         by_window = _by_window(link, records, Direction.INGRESS, key, session)
         if params is None and any(isinstance(r, CertifiedRecord) for rs in by_window.values() for r in rs):
@@ -161,7 +161,7 @@ def _by_window(link: str, records: Sequence[Published], direction: Direction, ke
     for r in records:
         if isinstance(r, CertifiedRecord):
             if key is None or session is None:
-                raise ValueError("certified records are checked against the network certifier's public key in its "
+                raise ValueError("certified records are checked against the network attester's public key in its "
                                  "session: pass key and session")
             if r.direction is not direction:
                 continue

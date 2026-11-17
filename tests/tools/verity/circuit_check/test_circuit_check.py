@@ -1569,8 +1569,8 @@ def test_a_pin_without_a_type_is_named_as_untyped_and_update_pins_types_it(monke
 
 
 def test_a_gated_definitions_circuit_digest_is_held_to_its_pin():
-    """A Definition a Program holds as one gate naming its circuit digest (``gated``: the network attester's ingress scan bucket
-    here) has that digest, core's `program_digest` of its Program, checked against its ``digests`` pin, which a verifier
+    """A Definition a Program holds as one gate naming its circuit digest (``gated``: network accounting's ingress scan
+    bucket here) has that digest, core's `program_digest` of its Program, checked against its ``digests`` pin, which a verifier
     reads in its place: its own digest passes, another fails by name, and none warns."""
     from verity.circuits.codec import program_digest
     from verity.circuits.defs import bind
