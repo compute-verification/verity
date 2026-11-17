@@ -35,4 +35,3 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/protocols",
           "verity/channel.py",
           "verity"]
 parallel = true
-worker_gb = 2
