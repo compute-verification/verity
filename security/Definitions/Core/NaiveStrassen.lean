@@ -9,7 +9,7 @@ free.
 **Atoms.** An exact path for one sub-product is an MMA format (`Atom`): the tensor units a MAC uses, in eighths of an
 s8 MAC (`weight8`), the most consecutive integers it holds per operand entry (`cap`), and, for a float format, the
 instruction's `k` and the width `w` within which its dot of `k` products is exact (`k · ⌊d_A/2⌋ · ⌊d_B/2⌋ ≤ 2^w`).
-These are the card files' numbers (`hardware/cards/<sku>.toml`): each card's `weight`, the formats' integer runs,
+These are the card files' numbers (`calibration/hardware/cards/<sku>.toml`): each card's `weight`, the formats' integer runs,
 and the widths within which a dot is exact (24 where FP32 bounds the dot, 14 for the H200's FP8). Taking every float
 dot as exact as FP32 allows and accumulation across MMAs as exact only adds atoms. `b1` is at the H200's weight 1/8;
 costs are monotone in the weights, so a lower bound here holds at every weight at least these.

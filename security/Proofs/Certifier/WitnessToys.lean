@@ -24,7 +24,7 @@ accepting verifiers at the negation `notStmt` (`leakL`, `certL`), which these ex
   (`accSeqsAt_acceptAll_not_le`).
 * `fxLeakI`, a sender whose secret is its every step's frame length: `fxLeakDec` reads it back from the last step of
   the wire or the record, so at `acceptAll` every secret is decoded (`fxLeak_not_le`, `fxLeakObs_not_le`).
-* `inI`, a certifier recording one frame a bucket: every status is complete, and it meets W2, W4 at one frame a bucket
+* `inI`, a network attester recording one frame a bucket: every status is complete, and it meets W2, W4 at one frame a bucket
   and J (`statusComplete_inI`, `oneRow_packed`, `oneRow_count`).
 * `sampProg`, sampled Bernoulli at rate `1/2` (`sampDesign`), its first input the ingress (`notLay`). At `δ = 1/4`
   both `∅` and `{0}` are possible incorrect sets (`single_mem_sampFaulty`), each committing at most its three gates'

@@ -7,7 +7,7 @@ set -uo pipefail
 if [ "${1:-}" = --cover ]; then
   cover=${2:?--cover names a cover record: a cover.json or an art: id}
   shift 2
-  [ $# -gt 0 ] || set -- --card benchmarks/sampling_plan/glm53_blocks.json
+  [ $# -gt 0 ] || set -- --card calibration/sampling_plan/glm53_blocks.json
   exec python3 benchmarks/served_units/cover_count.py "$cover" --record "$@"
 fi
 export RESEARCH_RUN_DIR=${RESEARCH_RUN_DIR:-$PWD} SU_UNITS=${*:-${SU_UNITS:-fp8-coord:K=6144}} SU_N=${SU_N:-1}

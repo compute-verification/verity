@@ -117,13 +117,13 @@ SampledLeak.lean  the leak bound under an accepted sampled audit: its relation (
 Tap.lean        what the network attester recorded is what its relay sent: under trusted-device, on a schedule its
     record format holds, its cells read back from the record its same run writes
     (certifier_cells_read), and each data cell its lane sends before the fail cell is
-    in it (certifier_data_read)
+    in it (attester_data_read)
 RecordRows.lean  the rows format reads back the code's cells on every schedule that fits it (read_record), so it
     is a record format (recordFormat); #guards hold it to the Python network
     attester's egress records
 TapRows.lean    at the network attester's rows: the trace filled in with its values carries its records
     (carries_fillTrace), and a disagreement between the two is a collision
-    (certifierColl_of_disagree, Pr_certifierColl_le_Btap)
+    (attesterColl_of_disagree, Pr_attesterColl_le_Btap)
 MonitoringPeriodChecked.lean  the period's leak with the checked inputs left out (monitoringPeriodLeakChecked): each window's
     bound at the network attester's rows with a valid run
     (monitoringPeriodChecked_first), and the records counted by Carried's count at the
@@ -206,7 +206,7 @@ CountWitnesses.lean  the six ingress counts' pairs: the honest run has every sta
     false at the verifier that accepts everything (`acceptAll`)
 MonitoringPeriodWitnesses.lean  two more instances of PooledLeakAccepted: its schedule premises at `fxQueue`'s, and its bound
     false at one incorrect proof block
-Code.lean       the certifier program (`certifier_program`, `NetworkAttester`), which the difftests run, equal to the
+Code.lean       network attestation's program (`certifier_program`, `NetworkAttester`), which the difftests run, equal to the
     definitions above: five theorems, not guarantees (below)
 
 ../../lean-audit.json          the guarantee records (`security`'s lock) for tools/verity/lean/check.py
@@ -216,7 +216,7 @@ Code.lean       the certifier program (`certifier_program`, `NetworkAttester`), 
 lake exe cache get                         # in security/: Mathlib's prebuilt oleans; never build Mathlib from source
 lake build                                 # in security/, then security/Properties/ and security/Proofs/ (this area's proofs)
 python3 tools/verity/lean/check.py security/   # from the repository root: Verity's Lean check
-# the difftest is the certifier program's: see its package, ../../../verity/protocols/resource_accounting/network/attester/program/lean/
+# the difftest is network attestation's program's: see its package, ../../../verity/protocols/resource_accounting/network/attester/program/lean/
 ~~~
 
 **Trusted without proof:** the statements in `../../Definitions/Certifier/`, the guarantees' modules among them;

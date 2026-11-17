@@ -32,11 +32,11 @@ registered under its one schedule and read by the scan (the rows form), beside i
 what left the site, held to its Python mirror by `tests/test_network_period_protocol.py`. `NetworkCheck.ScanOk` is the
 rows form's constants: each scan member's ok bits' root, computed from the schedule's T, which the period check holds
 every scan's registration to. `NetworkCheck.RowsAudit` audits a run of the active network attester over the records it
-signed (`verity/network-rows/v1`, the `network-rows` executable): each record held to its certified head, then the
-certifier program's rows audit (`NetworkAttester.Rows.audit`), which refuses cells cut, clocked or ordered otherwise
+signed (`verity/network-rows/v1`, the `network-rows` executable): each record held to its certified head, then network
+attestation's program's rows audit (`NetworkAttester.Rows.audit`), which refuses cells cut, clocked or ordered otherwise
 than the schedule. Code: it imports only Lean, Flock's verifier (`Flock.Hash`, `Flock.Bytes`, `Flock.Canon`,
-`Flock.Public`'s frame-v3 hash and `Flock.RegKnown`'s leaves at known content), the core protocol interface, the
-certifier program and the LMS port.
+`Flock.Public`'s frame-v3 hash and `Flock.RegKnown`'s leaves at known content), the core protocol interface, network
+attestation's program and the LMS port.
 -/
 
 @[expose] public section

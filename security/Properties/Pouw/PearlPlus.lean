@@ -48,7 +48,7 @@ that record the premise reads is the H200's, so the properties are stated at it 
   serves the one scheme, `pearl-c-h100-v1-h3`;
 * the prices (`Prices.h100`: an FP32 add 32, a BF16 MAC 2, `Costs.adopted`) and W1's (`W1Prices.h100`: an E4M3 or S8 MAC 1,
   a BF16 MAC 2, FP32 32, a conversion 64, INT32 64), per tensor-core clock: the H200 is the same GH100 at sm_90a, the same
-  4,096 E4M3 MACs per SM a clock and half that in BF16 (`hardware/cards/h200-sxm-141gb.toml`), and its data sheet's
+  4,096 E4M3 MACs per SM a clock and half that in BF16 (`calibration/hardware/cards/h200-sxm-141gb.toml`), and its data sheet's
   FP8 and BF16 rates are the H100 SXM's;
 * the steps (`hopperE4m3K32` at G = 4, the BF16 k16 peel, `PeelExact`, `Skip.unitFlags`, `SaltDead`) and W1's fragments
   (`h100Frags`: wgmma E4M3 m64nNk32 and BF16 m64nNk16, N = 64 to 256, each priced whole): the same wgmma on the same die,

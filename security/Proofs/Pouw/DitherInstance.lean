@@ -10,7 +10,7 @@ public import Proofs.Core.Accel.Model
 
 * `workSoundAtX_of_workSound`: `WorkSound` gives `WorkSoundAtX c pb hr x` on every card table at every open parameter:
   an instance of its quantifiers at the counted and timed verdict, which accepts no more than the service's verdict,
-  with the exchange bound from the certifier's counts and `pub_mm`, `pub_sha` the card's public bests at `μ`. The
+  with the exchange bound from the network attester's counts and `pub_mm`, `pub_sha` the card's public bests at `μ`. The
   sampling blocks' commit phases and work fit the period from the clocks: block `b`'s commit phase ends by its operand
   root's arrival, before its coins at `t b` (`CommitAfterWork`, `Timed`), and its work ends by its root's arrival, at
   most `Δ` after them (`RootAfterCoin`), so the two run in a window from `t b − wall(commit b)` to `t b + wall(work b)`.

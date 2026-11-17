@@ -5,7 +5,7 @@ public import NetworkAttester.Schedule
 public import Lean.Data.Json
 
 /-!
-# The difftest: the certifier program against the Python audit, on random instances
+# The difftest: network attestation's program against the Python audit, on random instances
 
 `scripts/difftest_vectors.py` generates instances and runs the Python audit on them (`schedule.expected_grids`,
 `Audit.check_link`, `Audit.check_ingress_link`). `NetworkAttester/DifftestMain.lean` reads both files and fails unless `evaluate`,

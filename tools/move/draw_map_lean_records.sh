@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 set -uo pipefail
-M=tools/move/draw_map_lean_moves.json
 P=verity/protocols/resource_accounting/compute/pouw/verifier/lean
-git update-ref refs/heads/main 476b6a67d5587f5aac6492e415c95c7e51fc8c53 || exit 2
+M=$(mktemp --suffix=.json)
+python3 -c 'import json, sys; a = json.load(open(sys.argv[1])); a.update(json.load(open(sys.argv[2]))); json.dump(a, open(sys.argv[3], "w"))' \
+  tools/move/draw_map_lean_moves.json tools/move/draw_map_lean_pass_moves.json "$M" || exit 2
+git update-ref refs/heads/main 70da3f978c8bf9d8dd26bf7e9424cf013efe4147 || exit 2
 git merge-base HEAD main || exit 2
 rc=0
 for pkg in security $P/check $P/commit $P/pearlplus $P/window; do
