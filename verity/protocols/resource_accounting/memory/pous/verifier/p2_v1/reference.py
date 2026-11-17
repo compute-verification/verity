@@ -1,6 +1,5 @@
-"""P2 v4 on the CPU, the scheme's reference (`verity/protocols/resource_accounting/memory/pous/verifier/DESIGN.md`, "P2", outlines it): the
-reference the harness's GPU kernels are gated against, and the one the wire verifier (`wire.py`) and the vectors
-(`vectors.py`) are built on. Its maps and key streams are the registered scheme's
+"""P2 v4 on the CPU, the scheme's reference: the reference the harness's GPU kernels are gated against, and the one the
+wire verifier (`wire.py`) and the vectors (`vectors.py`) are built on. Its maps and key streams are the registered scheme's
 (`verity.protocols.resource_accounting.memory.pous.verifier.schemes.p2`, held to `PousCheck.P2` by its difftest), under the reference's names and with
 its refusals of non-canonical inputs; its own are its setup framing, `Params` with its refusals (which `PousCheck.Wire`
 mirrors), v4's leaves and the audit's derivations.
