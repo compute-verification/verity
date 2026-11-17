@@ -1,0 +1,3 @@
+[2026-11-17T04:06Z] 05bcd14962bf
+From the coordinator: the premise's form is SETTLED by top (Linear TOP-402, Mon 16 Nov 8:05 PM PST, and soundness's 8:02 PM PST post: read both whole): nothing already proved over one-stage runs gains a premise. The composition's step becomes a SPLIT: the one-stage branch keeps today's proof; the premises are read ONLY in the two-stage branch (AddressesConnected and the others top's post names); the two-stage case is a guarantee of its own, with its open premises, on its own line. Soundness owns that form: your change flips the switch and does the minimum to keep the build green in that shape; give soundness the list first.
+
