@@ -148,7 +148,7 @@ def params(j: Any) -> Params:
     the link, its name held to what the period's check holds it to, and the schedule. With the registered hardware
     (`site`, the site of a registration log's view, and `head`, the head of the log it was read at, which come
     together), the link and the key are read off the site (`registered.registered`): the link joins a network
-    attester and a host, and the key is the one that certifier registered. A refusal there refuses the parameters."""
+    attester and a host, and the key is the one that attester registered. A refusal there refuses the parameters."""
     if not isinstance(j, dict):
         raise Refused("the object: not an object")
     site = sorted(j) == REGISTERED_KEYS
