@@ -780,7 +780,8 @@ def test_a_same_machine_gate_never_reads_as_live_coins_from_an_auditor_s_challen
     """Sampled proofs' coins are live only when the audit's case names the challenger key this machine pins
     (``--key-sha512``): a gate on the prover's machine signs with its own key, so its row says ``coins`` simulated and the
     machine, gives ε at δ only as what the same sample would establish under an auditor's challenger, and so do the
-    ``RECORD`` line and the block record's leg; a record told nothing of the coins says the same."""
+    ``RECORD`` line and the block record's leg (`with_coins`, which the ``record`` command always applies); told nothing
+    of the coins, it says the same."""
     public = bytes(range(80))
     audit = tmp_path / "audit"
     (audit / "window").mkdir(parents=True)
@@ -793,7 +794,8 @@ def test_a_same_machine_gate_never_reads_as_live_coins_from_an_auditor_s_challen
     on = {S.SAMPLED_NAME: "vy-dc-h200"}
     for coins in ((S.sampled_coins(audit, "0" * 128), "vy-dc-h200"), None):
         report, rec, line = S.record(_rows(_accepted(), tmp_path / "pieces"), window=1, steps=(5, 11), node="vy-dc-h200",
-                                     run="r1", **({"coins": coins} if coins else {}))
+                                     run="r1")
+        S.with_coins(report, rec, line, *([coins] if coins else []))
         row, leg = report["protocols"]["integrity"], rec["legs"]["integrity"]
         assert (row["coins"], line["coins"], leg["coins"]) == ("simulated",) * 3
         if coins:
@@ -803,7 +805,8 @@ def test_a_same_machine_gate_never_reads_as_live_coins_from_an_auditor_s_challen
         jsonschema.Draft202012Validator(SCHEMA).validate(rec)
         assert BR.check(rec) == {}
     report, rec, line = S.record(_rows(_accepted(), tmp_path / "pieces"), window=1, steps=(5, 11), node="vy-dc-h200",
-                                 run="r1", coins=("live", "vy-challenger-1"))
+                                 run="r1")
+    S.with_coins(report, rec, line, ("live", "vy-challenger-1"))
     row = report["protocols"]["integrity"]
     assert (row["coins"], row["epsilon"], row["delta"]) == ("live", "1/2", "1/100") and S.UNDER_AUDITOR not in row
     assert "at_is" not in rec["legs"]["integrity"]

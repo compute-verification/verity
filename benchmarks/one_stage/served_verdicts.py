@@ -742,6 +742,20 @@ def sampled_coins(audit: Path, key_sha512: str | None) -> str:
     return "live" if key_sha512 and named == key_sha512.lower() else "simulated"
 
 
+def with_coins(report: dict[str, Any], rec: dict[str, Any] | None, line: dict[str, Any],
+               coins: tuple[str, str] = ("simulated", "unnamed")) -> None:
+    """`record`'s ``report``, block record ``rec`` and line ``line`` with the sampled proofs' ``coins`` (`sampled_coins`) and
+    the machine they were flipped on: its row as `on_coins` gives it, and its leg's ``at`` on coins other than live
+    said to be `UNDER_AUDITOR`'s."""
+    if "integrity" not in report["protocols"]:
+        return
+    report["protocols"]["integrity"] = on_coins(report["protocols"]["integrity"], *coins)
+    line |= {"coins": coins[0], "coins_on": {SAMPLED_NAME: coins[1]}}
+    if rec is not None and (leg := rec["legs"].get("integrity")) is not None:
+        leg |= {"coins": coins[0], "coins_on": {SAMPLED_NAME: coins[1]},
+                **({"at_is": UNDER_AUDITOR} if coins[0] != "live" else {})}
+
+
 def on_coins(row: Mapping[str, Any], coins: str, on: str) -> dict[str, Any]:
     """The sampled-proofs row ``row`` with its ``coins`` and ``coins_on``; on simulated coins its ε and δ only as
     `UNDER_AUDITOR` says them."""
@@ -2390,8 +2404,7 @@ def record(rows: Mapping[str, Mapping[str, Any]], *, window: int, steps: tuple[i
            run: str | None, servers: Mapping[str, tuple[str | None, str]] | None = None, product: str = "onsite",
            deferred: str | None = None, off_node: bool = False, tree: Mapping[str, str] | None = None,
            served_compare: str | None = None, answer: Mapping[str, Any] | None = None,
-           lean: str = "no composite was read", development: bool = False,
-           coins: tuple[str, str] = ("simulated", "unnamed")) -> tuple[dict[str, Any], dict[str, Any] | None, dict[str, Any]]:
+           lean: str = "no composite was read", development: bool = False) -> tuple[dict[str, Any], dict[str, Any] | None, dict[str, Any]]:
     """The window report over ``rows`` (by runner name), its block record (None when a subprotocol about this node
     rejected, erred or was undecided), and the ``RECORD`` line's summary, composed for ``product``: each subprotocol it
     drops is its `dropped_row`, about no server. ``servers``: each piece's `piece_server`, by runner name; SPOT's
@@ -2401,14 +2414,8 @@ def record(rows: Mapping[str, Mapping[str, Any]], *, window: int, steps: tuple[i
     hand-off (`HANDED_FROM`); ValueError on ``node`` itself. ``tree``: the composing tree's ``tree`` (its commit) and
     ``tree_on`` (the branch its host pinned it from), which ``composed_on`` carries. ``answer``: the product's compiled
     Lean check's answer (`composite_answer`), the block record's verdict, and ``lean`` where it was read or why there is
-    none, which the report and the line carry; a rejection by it rejects whatever the rows say. ``coins``: the sampled
-    proofs' coins (`sampled_coins`) and the machine they were flipped on, which its row (`on_coins`) and the line carry."""
+    none, which the report and the line carry; a rejection by it rejects whatever the rows say."""
     from verity_e2e_demo import block_record as BR
-
-    def said_coins(report: dict[str, Any], line: dict[str, Any]) -> None:
-        if "integrity" in report["protocols"]:
-            report["protocols"]["integrity"] = on_coins(report["protocols"]["integrity"], *coins)
-            line |= {"coins": coins[0], "coins_on": {SAMPLED_NAME: coins[1]}}
 
     host = socket.gethostname()
     if off_node and host == node:
@@ -2464,7 +2471,6 @@ def record(rows: Mapping[str, Mapping[str, Any]], *, window: int, steps: tuple[i
                               "lean": lean}
         line = {"composed": composed, "by": bad, **named, "block_record": None, "reason": report["composed"]["reason"],
                 "why": "block_record carries an accepted subprotocol's certificate only"}
-        said_coins(report, line)
         return report, None, line
     extra = {subprotocols[k]: {"row": r, "server": at[k][0], "runs": r.get("runs") or [run], "source": at[k][1]}
              for k, r in rows.items() if k != "integrity" and r.get("verdict") == "accept" and at[k][0] is not None}
@@ -2477,10 +2483,6 @@ def record(rows: Mapping[str, Mapping[str, Any]], *, window: int, steps: tuple[i
             "record_missing": rec["composed"]["missing"],
             "check": BR.check(rec), "steps": list(steps), "node": node,
             "deployment": rec["monitoring_period"]["deployment"]["id"]}
-    said_coins(report, line)
-    if (leg := rec["legs"].get("integrity")) is not None:
-        leg |= {"coins": coins[0], "coins_on": {SAMPLED_NAME: coins[1]},
-                **({"at_is": UNDER_AUDITOR} if coins[0] != "live" else {})}
     return report, rec, line
 
 
@@ -2832,9 +2834,9 @@ def main(argv: Sequence[str] | None = None) -> int:
                                off_node=a.off_node, tree={"tree": a.tree, **({"tree_on": a.tree_on} if a.tree_on else {})}
                                if a.tree else None,
                                served_compare=None if a.served_compare is None else served_compare_line(a.served_compare),
-                               answer=answer, lean=lean, development=a.development,
-                               coins=(sampled_coins(audit, a.key_sha512), a.coins_on))
+                               answer=answer, lean=lean, development=a.development)
     a.out.mkdir(parents=True, exist_ok=True)
+    with_coins(report, rec, line, (sampled_coins(audit, a.key_sha512), a.coins_on))
     (a.out / "verdicts.json").write_text(json.dumps(report, indent=1, sort_keys=True, default=str) + "\n")
     if rec is not None:
         (a.out / "block-record.json").write_text(json.dumps(rec, separators=(",", ":"), sort_keys=True) + "\n")
