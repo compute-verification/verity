@@ -92,7 +92,7 @@ parts = 7
 # `benchmarks/spot_proved/stage.py`: its allreduce and cuBLAS GEMM staging on fake captures,
 # and the match gate's a11, which imports a6's `benchmarks/served_units/stage.py` and its circuit-check targets.
 # network_e2e's endpoint advice: `verity-vllm advice`'s output, which advice_charge's tests read.
-# `benchmarks/census/adversary.json`: onsite_record's world cells (`leak_bounds.world_links`).
+# `calibration/census/adversary.json`: onsite_record's world cells (`leak_bounds.world_links`).
 # `benchmarks/slowdown/data/reference.toml`: the world fleet `leak_bounds.world_links` counts; the GLM-5.3 workload card
 # (`benchmarks/spot_figures/cards/workload.glm-5.3.json`): the weights `leak_bounds` reads as it loads (`WEIGHTS`).
 # `security/lean-audit.json` and `security/Properties/lean-audit.json`: onsite_record's guarantees the tight K rests on
@@ -117,8 +117,8 @@ inputs = ["tools/config/verity_config", "verity/protocols/resource_accounting/co
           "tests/benchmarks/one_stage/interfaces/fixtures/drawn-unit-bundle.json",
           "tests/benchmarks/one_stage/interfaces/fixtures/drawn-unit-bundle.bin",
           "tests/benchmarks/one_stage/interfaces/fixtures/drawn-unit-registration.json",
-          "benchmarks/census/deployments.json",
-          "benchmarks/census/adversary.json", "benchmarks/slowdown/data/reference.toml",
+          "calibration/census/deployments.json",
+          "calibration/census/adversary.json", "benchmarks/slowdown/data/reference.toml",
           "benchmarks/spot_figures/cards/workload.glm-5.3.json",
           "security/lean-audit.json", "security/Properties/lean-audit.json",
           "tests/benchmarks/network_e2e/data/endpoint/advice",

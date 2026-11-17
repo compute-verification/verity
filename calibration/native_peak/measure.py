@@ -79,7 +79,7 @@ SPEC_PEAKS: list[tuple[str, dict[str, float | None], str]] = [
      "(the NVIDIA H200 data sheet's H200 SXM dense figures, sparse halved), FP32 accumulate; Hopper has no FP4"),
     (r"L40S", {"bf16": 362.05e12, "e4m3": 733.0e12, "nvfp4": None},
      "NVIDIA L40S GPU datasheet, dense (BF16 733 / FP8 1,466 TFLOPS with sparsity, halved); Ada has no FP4"),
-    # benchmarks/census/hardware.json rtx-pro-6000-server/{bf16,e4m3,e2m1}.  The Workstation Edition's peaks differ (a 2617 MHz boost clock), hence "Server".
+    # calibration/census/hardware.json rtx-pro-6000-server/{bf16,e4m3,e2m1}.  The Workstation Edition's peaks differ (a 2617 MHz boost clock), hence "Server".
     (r"RTX\s*PRO\s*6000.*Server", {"bf16": 500.0e12, "e4m3": 1000.0e12, "nvfp4": 2000.0e12},
      "NVIDIA RTX PRO 6000 Blackwell Server Edition product page, dense (FP16 | BF16 1 / FP8 2 / FP4 4 PFLOPS with sparsity, halved); "
      "FP32 accumulate at the FP16-accumulate rate (RTX PRO Blackwell whitepaper v1.1, Table 4)"),

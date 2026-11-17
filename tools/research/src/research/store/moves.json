@@ -5218,6 +5218,13 @@
         "benchmarks/sampling_plan/": "calibration/sampling_plan/",
         "tests/benchmarks/sampling_plan/": "tests/calibration/sampling_plan/"
       }
+    },
+    {
+      "paths": {
+        "benchmarks/census/": "calibration/census/",
+        "benchmarks/machine_model/": "calibration/machine_model/",
+        "tests/benchmarks/machine_model/": "tests/calibration/machine_model/"
+      }
     }
   ]
 }

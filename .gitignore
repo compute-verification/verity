@@ -63,9 +63,9 @@ tests/verity/protocols/proofs/flock/prover/fixtures/honest-session
 tests/verity/protocols/proofs/flock/prover/fixtures/honest-plain
 tests/verity/protocols/proofs/flock/prover/fixtures/plain-tree
 tests/verity/protocols/compose/verifier/lean/fixtures/sampled-two-case
-benchmarks/machine_model/data/cover/corpus.json
-benchmarks/machine_model/data/cover/bu_12_9.json
-benchmarks/machine_model/data/cover/sass_isa_tables.json
+calibration/machine_model/data/cover/corpus.json
+calibration/machine_model/data/cover/bu_12_9.json
+calibration/machine_model/data/cover/sass_isa_tables.json
 calibration/training/data/v3-selection.json
 tests/verity/protocols/proofs/flock/prover/fixtures/public-inputs
 tests/verity/protocols/proofs/flock/prover/fixtures/public-inputs-blocks
