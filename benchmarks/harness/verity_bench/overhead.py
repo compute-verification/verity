@@ -36,10 +36,11 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from fractions import Fraction
 from functools import cached_property
-from pathlib import Path
 from typing import Any
 
-CARD_FILES = Path(__file__).resolve().parents[3] / "calibration/hardware/cards"
+from verity_bench import kit
+
+CARD_FILES = kit.cards_directory()
 
 POINTS_SCHEMA = "verity-bench/overhead-points/v1"
 RUN_SCHEMA = "verity-bench/overhead/v1"

@@ -368,7 +368,7 @@ def test_a_point_refuses_a_card_that_is_not_its_specs_before_anything_is_timed(t
     monkeypatch.setattr("verity_bench.cli.run_benchmark", lambda *args, **kwargs: sys.exit("timed"))
     with pytest.raises(SystemExit) as stop:
         main(["_vllm-point", "--spec", str(path), "--point", item.point.id, "--identity", item.identity])
-    if card == GPUS["h200"].nvidia_smi_name:
+    if card == "NVIDIA H200":
         assert stop.value.code == "timed"
     else:
         assert stop.value.code == 2 and (

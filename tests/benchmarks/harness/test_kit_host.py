@@ -11,7 +11,10 @@ import pytest
 from kit_standins import CARD, GPU0, GPU1, HEADER, SHA, _host, _row
 from kit_standins import no_gpu as no_gpu
 from verity_bench import kit
-from verity_bench.overhead import CARD_FILES
+from verity.device import load_card, skus
+from verity_config import gpus as registry
+
+CARD_FILES = kit.cards_directory()
 
 # ---- the lease ---------------------------------------------------------------------------------------------------------------
 
@@ -79,12 +82,33 @@ def test_the_host_stamp_is_of_the_leases_gpus(monkeypatch):
 
 
 def test_a_card_short_is_refused_by_name_unless_one_records_driver_holds_it_exactly(tmp_path):
-    assert kit.card_short("NVIDIA H200", directory=CARD_FILES) == "h200"
+    assert kit.card_short("NVIDIA H200") == "h200"
     for name in ("NVIDIA A100-SXM4-80GB", "NVIDIA H100", "nvidia h200", ""):
         with pytest.raises(SystemExit, match=f"^0 card records under {re.escape(str(CARD_FILES))} have {re.escape(repr(name))}"):
-            kit.card_short(name, directory=CARD_FILES)
+            kit.card_short(name)
     h200 = (CARD_FILES / "h200-sxm-141gb.toml").read_text()
     (tmp_path / "h200-sxm-141gb.toml").write_text(h200)
     (tmp_path / "h200-twin.toml").write_text(h200.replace('sku = "h200-sxm-141gb"', 'sku = "h200-twin"'))
     with pytest.raises(SystemExit, match="^2 card records .* add { value = \"NVIDIA H200\", source = ... }"):
         kit.card_short("NVIDIA H200", directory=tmp_path)
+    assert kit.wrong_card("spec", "h200", "NVIDIA H200", directory=tmp_path) is not None
+
+
+@pytest.mark.parametrize("card, short", [("NVIDIA H200", "h200"), ("NVIDIA H200, NVIDIA H200", "h200"),
+                                         ("NVIDIA H100 80GB HBM3", "h100"), ("NVIDIA RTX PRO 6000 Blackwell Server Edition",
+                                                                             "rtx-pro-6000"), ("NVIDIA B200", "b200")])
+def test_a_card_is_the_workloads_when_card_short_resolves_each_name_to_its_short(card, short):
+    assert kit.wrong_card("spec", short, card) is None
+
+
+@pytest.mark.parametrize("card", ["NVIDIA H100 NVL", "NVIDIA H100 PCIe", "NVIDIA H200, NVIDIA B200", "none", ""])
+def test_any_other_card_is_refused_naming_the_workloads(card):
+    assert kit.wrong_card("steady", "h200", card) == (
+        f"the card is a {card}, not the h200 of spec 'steady' (NVIDIA H200): run it on a node whose card is a NVIDIA H200, "
+        "or use the spec for this card")
+
+
+def test_each_gpu_a_spec_may_name_is_one_card_records_short():
+    shorts = [kit.card_short(d["value"]) for sku in skus("gpu", directory=CARD_FILES)
+              for d in load_card(sku, directory=CARD_FILES).get("driver", ())]
+    assert set(registry()) <= set(shorts), sorted(set(registry()) - set(shorts))
