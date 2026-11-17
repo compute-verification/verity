@@ -34,23 +34,27 @@ def test_its_runs_and_partitions_are_the_readmes():
     assert "A5_COINS=challenger $1A5_PARTITION=" in TEXT and "bash benchmarks/one_stage/a5_llama1b_h200.sh" in TEXT
     assert "pod_bootstrap.sh --cases LLAMA32_1B_INT8" in TEXT
     assert "verity bench prove layers --flock" in TEXT and "--recursion" not in TEXT
+    assert '--sampling $(q "$WORK/out-sampling")${A5_STEPS:+ --batch $A5_STEPS} |' in TEXT
 
 
-@pytest.mark.parametrize("steps", ["", "1-16"])
+@pytest.mark.parametrize("steps", ["", "1-8", "1-16"])
 def test_its_partition_files_are_the_trees_with_the_layers_sampling_design_and_a5_steps_scope(steps, tmp_path):
-    """Unset, A5_STEPS leaves the tree's partition file as it is but for its sampling design; set, it gives each file its
-    scope's steps, and the zero-knowledge layer every proof block by rate."""
+    """Unset, or the file's own steps, A5_STEPS leaves the tree's partition file as it is but for its sampling design;
+    set to other steps, it gives each file its scope's steps, and the zero-knowledge layer every proof block by rate."""
 
     lines = TEXT.splitlines()
     start = lines.index(next(x for x in lines if x.startswith("part() {")))
-    defs = "\n".join([x for x in lines if x.startswith(("q() {", "PART=", "ZK_DESIGN="))] + lines[start:lines.index("}", start) + 1])
+    own = ("q() {", "PART=", "OWN=", '[ "$A5_STEPS" != "$OWN" ]', "ZK_DESIGN=")
+    defs = "\n".join([x for x in lines if x.startswith(own)] + lines[start:lines.index("}", start) + 1])
     tree = json.loads((ROOT / "benchmarks" / "one_stage" / "llama32_1b_rope_d64_l0.json").read_text())
-    want = {"flock": "stratified-rate:880/880", "zk": "rate:1/1" if steps else "subset:880"}
+    assert tree["scope"]["steps"] == [1, 8]
+    batch = steps not in ("", "1-8")
+    want = {"flock": "stratified-rate:880/880", "zk": "rate:1/1" if batch else "subset:880"}
     for name, design in (("flock", want["flock"]), ("zk", "$ZK_DESIGN")):
         script = f'WORK={tmp_path}; A5_STEPS={steps}\n{defs}\neval "$(part {design} {name})"'
         subprocess.run(["bash", "-c", script], cwd=ROOT, check=True)
         made = json.loads((tmp_path / f"partition-{name}.json").read_text())
-        assert made.pop("scope") == ({**tree["scope"], "steps": [1, 16]} if steps else tree["scope"])
+        assert made.pop("scope") == ({**tree["scope"], "steps": [1, 16]} if batch else tree["scope"])
         assert list(made) == [k for k in tree if k != "scope"] and want[name] in made.values()
         assert all(made[k] == tree[k] for k in made if made[k] != want[name])
 

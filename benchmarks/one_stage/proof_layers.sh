@@ -16,8 +16,9 @@
 #   GPU_LEASE_WHO  who every lease is recorded for, where gpu-lease is installed
 #   A5_STEPS       optional, the prover's batch: the request steps [LO, HI) whose proof blocks the window holds (the
 #                  partition file's scope.steps; unset, the file's own), so the proof blocks each layer's Flock statement
-#                  holds; set, the zero-knowledge layer proves every proof block by rate:1/1 in place of subset:880, and
-#                  the sampling layer still samples 256 of them
+#                  holds; set to other steps than the file's own, the zero-knowledge layer proves every proof block by
+#                  rate:1/1 in place of subset:880, the sampling layer still samples 256 of them, and every member the
+#                  printer writes ends in the batch (`prove layers --batch`); the file's own steps are the batch unset
 #   A5_KEEP        optional, a new directory outside WORK: the sampling run's served window (its serving-rows, the
 #                  prover's files included) copied there before WORK is removed, for `benchmarks/recursion_e2e/stage.sh
 #                  WINDOW=`; it stays on the machine
@@ -98,6 +99,8 @@ if [ -n "$LEASE" ]; then ON="gpu-lease 1 --wait --on $A5_CARD --cores $(q "$A5_C
 part() {  # DESIGN NAME: the tree's partition file with its sampling design set to DESIGN, and its scope's steps to A5_STEPS's
   echo "python3 -c 'import json, sys; p = json.load(open(sys.argv[1])); p[\"law\"] = sys.argv[2]; s = sys.argv[4:] and sys.argv[4].split(\"-\"); s and p[\"scope\"].update(steps=[int(s[0]), int(s[1])]); json.dump(p, open(sys.argv[3], \"w\"))' $PART $1 $(q "$WORK/partition-$2.json")${A5_STEPS:+ $A5_STEPS}"
 }
+OWN=$(python3 -c 'import json, sys; print("-".join(map(str, json.load(open(sys.argv[1]))["scope"]["steps"])))' $PART) || refuse "$PART: no scope.steps"
+[ "$A5_STEPS" != "$OWN" ] || A5_STEPS=
 ZK_DESIGN=subset:880 BATCH="of the partition file's scope"; [ -z "$A5_STEPS" ] || ZK_DESIGN=rate:1/1 BATCH=$A5_STEPS
 run() {  # SETTINGS NAME: one run of a5_llama1b_h200.sh on NAME's partition file, its record in WORK/out-NAME
   echo "A5_COINS=challenger $1A5_PARTITION=$(q "$WORK/partition-$2.json") OUT=$(q "$WORK/out-$2") taskset -c $(q "$A5_CORES") bash benchmarks/one_stage/a5_llama1b_h200.sh"
@@ -111,7 +114,7 @@ declare -A CMD=(
   [flock]=$(run "A5_PLAIN=1 " flock)
   [zk]=$(run "" zk)
   [sampling]=$(run "${A5_KEEP:+A5_KEEP=1 }" sampling)
-  [layers]="PATH=\$HOME/.local/bin:\$PATH uv run verity bench prove layers --flock $(q "$WORK/out-flock") --zk $(q "$WORK/out-zk") --sampling $(q "$WORK/out-sampling") | tee $(q "$RESULTS/proof-layers.txt")"
+  [layers]="PATH=\$HOME/.local/bin:\$PATH uv run verity bench prove layers --flock $(q "$WORK/out-flock") --zk $(q "$WORK/out-zk") --sampling $(q "$WORK/out-sampling")${A5_STEPS:+ --batch $A5_STEPS} | tee $(q "$RESULTS/proof-layers.txt")"
 )
 HOW="card $A5_CARD taken directly (no gpu-lease)"; [ -z "$LEASE" ] || HOW="leases recorded for $GPU_LEASE_WHO"
 echo "proof_layers.sh: card $A5_CARD ($card), $mem_gb GB of host memory available, CPUs $A5_CORES, $free_gb GB free under $d, $HOW; prover's batch: request steps $BATCH; WORK=$WORK, results in $RESULTS$([ "$DRY" = 1 ] && echo '; a dry run, which runs nothing')"
