@@ -30,7 +30,7 @@ to end. Each driver's docstring says what it runs, what it publishes and what it
   is handed the SHA-512 of the network attester's public key and its session (`check --key-sha512 HEX --session HEX`),
   holds the run's deployment record to them and, with `--registrations FILE` and no problem found, writes what it was
   checked under and then each registration it held, and `cost`, which measures a close); `network_attester_chain.py` is
-  the chain's reads of a relay run, and network certification's `prover/network_attester_zk.py` reads the relay's bucket rows
+  the chain's reads of a relay run, and network attestation's `prover/network_attester_zk.py` reads the relay's bucket rows
   in the proof system.
 - **Proofs in zero knowledge.** Each driver, in network attestation's `prover/`, proves its
   proof blocks with Flock `prove --zk` behind the Lean ZK server and holds them by the Lean
@@ -205,7 +205,7 @@ guard's cost is linear in the bytes it reads, and past its budget (`--budget-s`)
 the guard), a guard past its budget, or one that can't run releases nothing and withholds `out/`, `inputs/` and the logs
 whole; a SIGKILL leaves the hold where it is, out of the record.
 
-**The keys a record releases** (network certification's `prover/released_keys.py` and `released_keys.json`). The guard's pieces
+**The keys a record releases** (network attestation's `prover/released_keys.py` and `released_keys.json`). The guard's pieces
 find a private value copied into the record; they can't find a value the witness never held as bytes (a count, a length,
 a time). So the guard reads each JSON file bound for `out/` by key as well (`--keys`, which `chain_record.sh` passes): a
 file holds only keys its list in `released_keys.json` declares public by name, each with its kind, which is one of the

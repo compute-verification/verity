@@ -64,8 +64,6 @@ from typing import Any
 
 import numpy as np
 from verity.commitments.randomness import Key
-from verity_vllm.definitions.numerics import prims_twins
-from verity_vllm.definitions.numerics.rows import EVALUATOR_PROVENANCE, EVALUATORS
 
 from verity_vllm import settings
 from verity_vllm.check.replay import cached_prefix as CP
@@ -101,6 +99,8 @@ from verity_vllm.check.replay.population import (
 )
 from verity_vllm.check.replay.sample import _catch_probability, challenge_seed, sample
 from verity_vllm.commit.opened import opened_in_children
+from verity_vllm.definitions.numerics import prims_twins
+from verity_vllm.definitions.numerics.rows import EVALUATOR_PROVENANCE, EVALUATORS
 from verity_vllm.program.compact import p_item_weight_span
 from verity_vllm.query import norm_scales
 from verity_vllm.query.required import QUERIES
