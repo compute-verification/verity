@@ -1,0 +1,9 @@
+[[metric]]
+id = "proofs/verifier-seconds-served-description"
+title = "Verifier time on circuit description"
+owner = "proofs"
+unit = "s"
+axis = "Wall seconds of the Lean inference-only verifier on a CPU node reading Serve_v1's thirty-layer B0 description lifted to bits, best of three, a verifier that reads the description and never its unrolled gates; one line per configuration, its member naming the workload, the configuration, the lifting and the machine class, serve-v1-b0-boolean-cpu here."
+better = "lower"
+command = "research run --on auto --project verity --source . --cwd clone -- bash benchmarks/verifier_cost/job.sh measure --config b0 --ir boolean"
+every = "7d"

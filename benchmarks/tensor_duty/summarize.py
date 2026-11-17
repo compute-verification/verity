@@ -41,6 +41,8 @@ from pathlib import Path
 from verity.device import READINGS, load_card, number, rate
 from verity.device import readings as card_readings
 
+CARD_FILES = Path(__file__).resolve().parents[2] / "hardware/cards"
+
 SKU = "h200-sxm-141gb"
 #: the resolution of duty.cu's host stamps, which it prints to the millisecond
 STAMP_S = 1e-3
@@ -50,7 +52,7 @@ LOOP_ADDS, LOOP_INSNS, SATURATED = 64, 67, 0.95
 
 def readings(sku: str = SKU) -> tuple[float, float, float]:
     """The card's tensor rate at clock.tensor (the bound), at clock.sm (the second reading), and a MHz of clock's."""
-    card = load_card(sku)
+    card = load_card(sku, directory=CARD_FILES)
     return float(rate(card)), float(rate(card, mhz=card["clock"]["sm"]["value"])), float(rate(card, mhz=1))
 
 
@@ -232,7 +234,7 @@ def price_readings(sku: str = SKU) -> list[dict]:
     """The card's clock readings of an FP32 add's price in tensor units (`price.fp32.<reading>`, by `READINGS`), its
     `clock.default` first, each with its pipes' ceilings: the tensor's e4m3 MACs a second under the reading
     (`verity.device.readings`), and the FP32 pipe's adds a second, 32 x rate.issue at clock.sm."""
-    card = load_card(sku)
+    card = load_card(sku, directory=CARD_FILES)
     clock, default = card["clock"], card["clock"]["default"]
     sm = clock["sm"]["value"]
     adds = 32 * float(rate(card, "issue"))
@@ -255,7 +257,7 @@ def over(r: dict, rd: dict, pad: float) -> bool:
 
 def ideal_adds(sku: str = SKU) -> float:
     """The FP32 loop's adds a SM-clock at the card's issue rate: 32 lanes x rate.issue x LOOP_ADDS / LOOP_INSNS."""
-    return 32 * float(load_card(sku)["rate"]["issue"]["value"]) * LOOP_ADDS / LOOP_INSNS
+    return 32 * float(load_card(sku, directory=CARD_FILES)["rate"]["issue"]["value"]) * LOOP_ADDS / LOOP_INSNS
 
 
 def setting(clock: str) -> str:

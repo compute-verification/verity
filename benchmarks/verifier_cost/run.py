@@ -36,6 +36,13 @@ ROOT = HERE.parents[1]
 INFERENCE_ONLY_PACKAGE = ROOT / "verity/protocols/workload_classification/training_detection/inference_only/verifier/lean"
 EXE = INFERENCE_ONLY_PACKAGE / ".lake/build/bin/inference-only-check"
 SCHEMA = "verity/verifier-cost/v1"
+METRIC = "proofs/verifier-seconds-served-description"
+
+
+def built(exe: Path) -> Path:
+    if not exe.exists():
+        subprocess.run(["lake", "build", exe.name], cwd=exe.parents[3], check=True)
+    return exe
 
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(ROOT / "benchmarks/network_sim"))
@@ -146,6 +153,7 @@ def _digest(v) -> str:
 
 def measure(args) -> int:
     ref = _reference()
+    args.exe = built(args.exe)
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
     rows = []
@@ -186,10 +194,28 @@ def measure(args) -> int:
     (out / "results.json").write_text(json.dumps(result, indent=1) + "\n")
     bad = [r["config"] + "/" + r["ir"] for r in rows
            if r["desc"]["rc"] != 0 or r["unrolled"].get("agrees") is False]
+    record(out, rows, bad)
     if bad:
         print("disagreements or failures:", ", ".join(bad), file=sys.stderr)
         return 1
     return 0
+
+
+def record(out: Path, rows: list[dict], bad: list[str]) -> None:
+    from verity_bench import kit
+
+    res = kit.writer(out)
+    res.validation("failed" if bad else "passed",
+                   "inference-only-check --policy exits 0 on every row and agrees with --unrolled wherever both ran",
+                   ", ".join(bad) or "ok")
+
+    for r in rows:
+        ok = r["desc"]["rc"] == 0 and r["unrolled"].get("agrees") is not False
+        res.measurement(METRIC, r["desc"]["seconds"] if ok else None, "s", mark="measured",
+                        member=f"serve-v1-{r['config']}-{r['ir']}-cpu",
+                        why=None if ok else "the verifier refused or disagreed with --unrolled",
+                        extra={"workload": "Serve_v1", "max_rss_kb": r["desc"].get("max_rss_kb"),
+                               **{k: r[k] for k in ("config", "ir", "description_bytes", "unrolled_gates")}})
 
 
 PIECES = ROOT / "verity/protocols/proofs/spot/verifier/lean/.lake/build/bin/spot-difftest"
@@ -227,6 +253,7 @@ def partition(args) -> int:
     from verity.protocols.proofs.spot.verifier.one_stage import partition as P
     from verity.circuits import partition_object as PO
 
+    args.exe = built(args.exe)
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
     rows = []

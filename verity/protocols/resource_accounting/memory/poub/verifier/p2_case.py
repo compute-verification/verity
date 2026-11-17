@@ -116,6 +116,20 @@ def case_of(registration: Mapping[str, Any], request: Mapping[str, Any], not_bef
             "store_root": registration["root"]}
 
 
+def close_key(case: Mapping[str, Any]) -> bytes | None:
+    """None when the evidence holds no close; raises when it doesn't decode."""
+    close = json.loads(bytes.fromhex(case["evidence"])).get("close")
+    return None if close is None else bytes.fromhex(close["public_key"])
+
+
+def trusting(case: Mapping[str, Any], key_sha512: str | None) -> dict[str, Any]:
+    """`case` trusting the close's key only when its SHA-512 is `key_sha512`, else no key. The case's own list is
+    never trusted: whoever kept the case wrote it."""
+    key = close_key(case)
+    trusted = [key.hex()] if key is not None and hashlib.sha512(key).hexdigest() == key_sha512 else []
+    return dict(case) | {"params": dict(case["params"]) | {"trusted": trusted}}
+
+
 def digest(case: Mapping[str, Any]) -> bytes:
     """`P2Protocol.Commitment.digest`: SHA-512 of `DIGEST_DOMAIN` and the case's commitment bytes."""
     return hashlib.sha512(DIGEST_DOMAIN + bytes.fromhex(case["commitment"])).digest()
@@ -228,5 +242,5 @@ def write(private: Path, case: Mapping[str, Any], answer_: Mapping[str, Any]) ->
 
 
 __all__ = ["ANSWER", "CASE", "CLOSE_TAG", "COIN_BYTES", "DIGEST_DOMAIN", "EPS_TERMS", "EXE", "NO_EXE", "NO_JUDGE",
-           "PROTOCOL", "STORE_ROOT", "answer", "case_of", "chain", "close_of", "close_record", "digest", "head",
-           "head_of", "judged", "same_store", "serve", "store_root", "unjudged", "write"]
+           "PROTOCOL", "STORE_ROOT", "answer", "case_of", "chain", "close_key", "close_of", "close_record", "digest",
+           "head", "head_of", "judged", "same_store", "serve", "store_root", "trusting", "unjudged", "write"]
