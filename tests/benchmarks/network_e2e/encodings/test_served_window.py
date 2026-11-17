@@ -2,7 +2,7 @@
 the replay is the served scheduler on every step, every window opens on a drained engine, ReplayStep_v1 is the
 scheduler on windows 212 and 1 under the served async engine, `replay_vectors --slice` builds the compile slice's w212
 fixtures (at the engine class's AsyncScheduler, and at the sync class) and its async w1 fixtures from the run's own
-records, and the certifier's charge chain is `code_v1`'s charge of the decisions alone on every window."""
+records, and network attestation's charge chain is `code_v1`'s charge of the decisions alone on every window."""
 from __future__ import annotations
 
 import dataclasses
@@ -87,11 +87,11 @@ def test_every_window_opens_drained(recs):
 @pytest.mark.slow
 def test_the_charge_chain_is_code_v1s_through_forced_admissions(recs):
     """Each window opens on a drained engine, so its first arrival is admitted unasked (`Replay.forced`), which is no
-    decision. The certifier's charge chain (`charge_chain.session` at the engine class's D = 32, under the async-light
-    book) over the 339 windows' decisions is `code_v1`'s charge of them alone (`Advice(arrived=…)`, every other count
-    0) on every window, 5,500 bits: its context ``run`` counts
-    decisions only, so a forced admission doesn't reset it as it resets the replay's ``pc``. Charged as a decision (a 1,
-    which resets ``run``), each forced admission would change 330 windows' charges."""
+    decision. Network attestation's charge chain (`charge_chain.session` at the engine class's D = 32, under the
+    async-light book) over the 339 windows' decisions is `code_v1`'s charge of them alone (`Advice(arrived=…)`, every
+    other count 0) on every window, 5,500 bits: its context ``run`` counts decisions only, so a forced admission doesn't
+    reset it as it resets the replay's ``pc``. Charged as a decision (a 1, which resets ``run``), each forced admission
+    would change 330 windows' charges."""
     from verity.protocols.resource_accounting.network.verifier import charge_chain as CC
 
     book = next(s for s in json.loads(ARITH.read_text())["streams"]
@@ -115,12 +115,12 @@ def test_the_charge_chain_is_code_v1s_through_forced_admissions(recs):
 @pytest.mark.slow
 def test_the_length_charging_slice_charges_code_v1s_segment_and_its_length_tails(recs):
     """With the length terms sent (`lengths.widths`: each request's output_len in width(max_tokens + 1) bits, then its
-    finish in 1), code_v1's window costs its decisions' segment plus its requests' tails. The certifier's window chain
-    (`window_charge.session` at D = 32, a length slot for each of the window's requests with the trace's max_tokens and
-    output_len) charges exactly that on each of windows 0 … 212, and CompileSlice_v7 on w212 at its own statics
-    (`compile_slice_w212.json`), from the chain's carry into it, accepts that charge, carries out the chain's carry and
-    refuses one bit less. The served windows name it (`serve_commit.SERVED_SLICE`, ``CompileSlice_v7``), except those the
-    certified tick admits, which name none. code_v1's term
+    finish in 1), code_v1's window costs its decisions' segment plus its requests' tails. Network attestation's window
+    chain (`window_charge.session` at D = 32, a length slot for each of the window's requests with the trace's
+    max_tokens and output_len) charges exactly that on each of windows 0 … 212, and CompileSlice_v7 on w212 at its own
+    statics (`compile_slice_w212.json`), from the chain's carry into it, accepts that charge, carries out the chain's
+    carry and refuses one bit less. The served windows name it (`serve_commit.SERVED_SLICE`, ``CompileSlice_v7``),
+    except those the certified tick admits, which name none. code_v1's term
 width, width(m + 1) + 1, is the slot's bitlen(m) + 1 (`window_charge.length_bits`) for every max_tokens up to 4,096 and
 at each power of two to 2^32 − 1."""
     from types import SimpleNamespace
@@ -186,9 +186,9 @@ def test_replay_step_is_w212s_scheduler(recs):
 
 
 def test_the_slice_fixture_is_w212s(recs, tmp_path):
-    """`replay_vectors --slice 212 --AS 0` writes the certifier's sync-class `compile_slice_w212.json` from the run's
-    records: requests 308 to 310 of the session, their 14 decisions (each a 0 until the request is admitted), the 20
-    steps' rows, and the seal's served rows for the window with the runner's ids."""
+    """`replay_vectors --slice 212 --AS 0` writes network attestation's sync-class `compile_slice_w212.json` from the
+    run's records: requests 308 to 310 of the session, their 14 decisions (each a 0 until the request is admitted), the
+    20 steps' rows, and the seal's served rows for the window with the runner's ids."""
     out = tmp_path / "w212.json"
     RV.main([str(RUN / "advice_trace.jsonl.gz"), "--slice", "212", "--served",
              str(RUN / "seal-w212.jsonl"), "--R", "2", "--W", "1", "--A", "2", "--AS", "0", "--out", str(out)])

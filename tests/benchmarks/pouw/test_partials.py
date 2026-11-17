@@ -5,7 +5,7 @@ it under the step's live rows (a dead row block's partials and receipt zero), th
 their order across steps, calls and K, and the partials move with a byte of the leaf's A or B row blocks, the step's
 coin and its position, not with a byte of another row block.  The gpu backend's seed records (`kh_seeds_at`'s data) hash
 to `seeds.seed` and `receipt_seed`; the backend itself (h1u.cu's kh_seeds_at and kh_lanes) is held to the cpu's byte for
-byte where PARTIALS_LIB names an h1u build and CUDA is up (job.sh's partials bench, on every h1u build it ships)."""
+byte where PARTIALS_LIB names an h1u build and CUDA is up."""
 from __future__ import annotations
 
 import hashlib

@@ -159,13 +159,12 @@ each check of a served execution phase through the Lean and its Python reference
 A scheme turns one registered matrix product's committed operand rows into each tile's checked values, its leaf and its
 useful output; everything else (commitments, salt, sample, openings) is the protocol's and the same for every scheme.
 
-- **Pearl-C** (`pearl-c-h100-v0`, `pearl-c-h100-v1`, `pearl-c-sm120-v1`, and their `-h3` forms,
+- **Pearl-C** (`pearl-c-h100-v1-h3`, `pearl-c-sm120-v1-h3`,
   `verity/protocols/resource_accounting/compute/pouw/prover/schemes/pearl_c.py`): Pearl's FP8 (E4M3) proof of useful work, the GEMM-based scheme Pearl
   publishes (`pearl-fp8-v4`, `verity/protocols/resource_accounting/compute/pouw/prover/schemes/pearl_kw.py`), adopted as a PoUW scheme, with its noisy
   clean-up pinned bit for bit so that the useful output is a checked value. It runs on the H100 and on the RTX PRO 6000
-  Blackwell (sm_120). The `-h3` forms hash with SHA-512 throughout, and h3 is the default wherever a hashing format or
-  tree hash goes unnamed. The others (h0, taken by name) keep Pearl's keyed-BLAKE3 seeds, lines and tickets, with
-  TurboSHAKE128 leaves and SHA-256 trees.
+  Blackwell (sm_120). Both hash with SHA-512 throughout (h3), the default wherever a hashing format or tree hash goes
+  unnamed.
 - **Pearl-C4** (`pearl-c-nvfp4-v0`, `verity/protocols/experimental/pearl_c4/prover/pearl_c4.py`): Pearl-C with the FP8 product
   replaced by sm_120's FP4 with scale groups, NVFP4 only. It is experimental: its kernel, scheme, tile check
   (`prover/pc4.py`) and vectors are `verity/protocols/experimental/pearl_c4/`'s, which registers the scheme when
