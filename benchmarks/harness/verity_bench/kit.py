@@ -3,6 +3,8 @@
 - `lease(gpus, minutes, on=None, cores=None)`: the `gpu-lease` argv a job's command follows, with its bound.
 - `host_stamp()`: where a number was measured, as one dict: the card, each GPU's UUID and clocks, the driver, CUDA, the node
   and the commit. With no GPU it says so: `card` is ``"none"``, beside `why`.
+- `card_short(name, directory=...)`: the card's name in a measurement's member, from the one card record whose `driver`
+  holds the stamp's `card` exactly.
 - `paired(arm, stock, confidence=0.95)`: an arm's ratio over stock from matched repetitions, its interval and `n`.
 - `writer(out).measurement(name, value, unit, ..., mark=..., period=None, over=None, member=None)`: appends one measurement to the run's result: under a research run
   (`RESEARCH_RUN_DIR` set) `$RESEARCH_RUN_DIR/result.json`, where `research` reads it, and outside one `out/result.json`.
@@ -187,6 +189,22 @@ def host_stamp() -> dict:
     if why:
         stamp["why"] = why
     return stamp
+
+
+def card_short(name: str, *, directory: Path) -> str:
+    """The ``short`` of the card record in ``directory`` (``verity.device.load_card``) whose ``driver`` has ``name``, the
+    name nvidia-smi gives the card (a stamp's `card`), exactly; refused, naming what to add, unless exactly one record
+    holds it and has a ``short``, the card's name in a measurement's member."""
+    from verity.device import load_card, skus
+
+    cards = [load_card(sku, directory=directory) for sku in skus("gpu", directory=directory)]
+    found = [c for c in cards if name and name in {d["value"] for d in c.get("driver", ())}]
+    if len(found) != 1 or not found[0].get("short"):
+        raise SystemExit(
+            f"{len(found)} card records under {directory} have {name!r}, the card nvidia-smi names here, in `driver`: add "
+            f"{{ value = {json.dumps(name)}, source = ... }} to its one record's `driver` and give it a `short`, the "
+            "card's name in a measurement's member, adding its <sku>.toml there if it has none")
+    return found[0]["short"]
 
 
 # ---- the paired ratio --------------------------------------------------------------------------------------------------------

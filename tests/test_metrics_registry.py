@@ -256,3 +256,51 @@ def test_a_row_in_a_file_another_handle_owns_is_refused() -> None:
         f"its file is no handle's by {HANDLES}'s longest `owns` entry covering it: "
         "add 'benchmarks/tree/metrics.toml' to @vllm's `owns` there"]
     assert _unowned(f, {"owner": "nobody"}, reg) == []
+
+
+#: our machines are all named vy-*; the register `research run --on` resolves them by is not in the tree, and
+#: verity_bench.jobs.DIRECT_NODES lists only the GPU nodes
+_MACHINE = re.compile(r"(?<![\w/.-])vy-[a-z0-9]+(?:-[a-z0-9]+)*")
+_LEASE = re.compile(r"(?<![\w-])gpu-lease\b(.*?)(?=\s--\s|$)", re.S)
+_CARD = re.compile(r"--on [A-Z][A-Z0-9_]*\b")
+PINNED_FIX = ("take the node, the card and the cores as parameters (`research run --on NODE`, the runner's `--on CARD "
+              "--cores CORES`) and take the lease through the runner, so the command is typed for any node and card")
+#: {metrics.toml: its commands that name a machine or take a bare gpu-lease}; an entry only falls
+ALLOWED = {
+    "benchmarks/attester_load/metrics.toml": 3,  # network-accounting
+    "benchmarks/dsa_topk/metrics.toml": 1,  # proofs
+    "benchmarks/flock_s8_block/metrics.toml": 1,  # proofs
+    "benchmarks/proof_throughput/metrics.toml": 1,  # proofs
+    "benchmarks/replay_ladder/metrics.toml": 1,  # proofs
+    "infra/dashboard/metrics.toml": 1,  # console
+}
+
+
+def _pinned(command: str) -> list[str]:
+    out = [f"names the machine {m}" for m in dict.fromkeys(_MACHINE.findall(command))]
+    return out + ["takes gpu-lease with no card parameter" for a in _LEASE.findall(command) if not _CARD.search(a)]
+
+
+def _pinned_rows() -> dict[str, list[str]]:
+    found: dict[str, list[str]] = {}
+    for f, m in _metrics(_files())[0]:
+        if why := _pinned(str(m.get("command", ""))):
+            found.setdefault(f, []).append(f"{m.get('id')}: {', '.join(why)}")
+    return found
+
+
+def test_no_command_names_a_machine_or_a_bare_lease() -> None:
+    assert _pinned("research run --on vy-spot-glm53 -- env GPU_LEASE_WHO=proofs gpu-lease 1 --wait --cores 16-31 -- "
+                   "bash x.sh") == ["names the machine vy-spot-glm53", "takes gpu-lease with no card parameter"]
+    assert _pinned("research run --on NODE -- env GPU_LEASE_WHO=kernels gpu-lease 1 --wait --on CARD --cores CORES "
+                   "-- bash x.sh") == []
+    assert _pinned("research run --on NODE -- bash benchmarks/kernels/wide_leaf/run.sh --on CARD --cores CORES") == []
+    over = [f"  {f} ({len(rows)}, {ALLOWED.get(f, 0)} allowed):\n" + "\n".join(f"    {r}" for r in rows)
+            for f, rows in sorted(_pinned_rows().items()) if len(rows) > ALLOWED.get(f, 0)]
+    assert not over, f"registered commands that name a machine of ours or a bare gpu-lease: {PINNED_FIX}:\n" + "\n".join(over)
+
+
+def test_the_pinned_command_allowance_only_falls() -> None:
+    found = {f: len(rows) for f, rows in _pinned_rows().items()}
+    stale = [f"  {f}: {n} allowed, {found.get(f, 0)} found" for f, n in ALLOWED.items() if found.get(f, 0) < n]
+    assert not stale, "lower these ALLOWED entries in tests/test_metrics_registry.py, deleting one at 0:\n" + "\n".join(stale)
