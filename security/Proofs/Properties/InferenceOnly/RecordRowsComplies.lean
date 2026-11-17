@@ -213,30 +213,6 @@ theorem rowsAt_summary {j tr : Json} {r : InferenceOnlyVerifier.Record.Case}
 
 /-! ## The guarantee -/
 
-end InferenceOnlyVerifier.Properties.Record.SecurityProofs
-
-namespace InferenceOnlyVerifier.Properties.Record
-
-open Lean (Json)
-
-/-- **Accepting a record in rows gives the rate rule in rows on its circuit**: every case
-`InferenceOnly.RowsProtocol.checkBlobs` accepts is `Properties.Remote.RowsHeld`. -/
-def RowsComplies : Prop :=
-  ∀ (p : InferenceOnly.RowsProtocol.Params) (c : InferenceOnlyVerifier.Protocol.Commitment)
-    (e : InferenceOnly.RowsProtocol.Evidence) (bs : Core.Blobs) (pub : Unit) (prof : Json),
-    InferenceOnly.RowsProtocol.checkBlobs p c e bs = .accept pub prof → _root_.Properties.Remote.RowsHeld p c e bs
-
-end InferenceOnlyVerifier.Properties.Record
-
-namespace InferenceOnlyVerifier.Properties.Record.SecurityProofs
-
-open Lean (Json)
-open Flock.Program (Prog)
-open Spot.RecordText (Tmpl templatesOf gridsOf slotIn)
-open InferenceOnlyVerifier.Record.SecurityProofs (form form_owns form_laidOut form_rates read_front finish_text
-  front_text front_inst ranges_spec tmplOf_spec)
-open InferenceOnlyVerifier.Record.SecurityProofs.Json (mapM_ok)
-
 /-- **Accepting a record in rows gives the rate rule in rows on its circuit.** -/
 theorem RowsComplies : Properties.Record.RowsComplies := by
   intro p c e bs pub prof h
