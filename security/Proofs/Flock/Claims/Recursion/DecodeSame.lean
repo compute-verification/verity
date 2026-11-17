@@ -46,19 +46,7 @@ import Std.Data.TreeMap.Raw.WF
 import Std.Tactic.BVDecide.Normalize.Bool
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# The honest record's checks at a value alike it
-
-`decode_recordObj` reads the printed honest record back through `FlockComplete.JsonRT.parse_print`, which hands it a parsed
-value alike the record (`Same`), and every check after that reads the parsed value only through `Same`. So the same
-checks pass at any value alike the honest record (`decodeJ_same`): S1–S14 at `Record.decodeJWith`, no parse. It takes
-no JSON premise: S3 reads `require_link` by a match, and U1's `canon` is total (`canon_ok`,
-`canon_same`).
-
-* **Alike objects by lookup** (`same_mkObj`): a well-formed object (`WfObj`) is alike an object of distinct keys when
-  each of that object's keys looks up a value alike its own and no other key looks up anything.
-* **A printable value is alike itself** (`same_of_good`).
--/
+/-! The honest record's checks S1–S14 pass at any parsed value alike it, with no JSON premise (`decodeJ_same`). -/
 
 @[expose] public section
 
@@ -67,9 +55,6 @@ namespace FlockComplete.JsonRT
 open Flock Transcript FlockComplete
 open Lean (Json JsonNumber)
 
-/-! ## Alike objects by lookup -/
-
-/-- A JSON object whose tree is well-formed. -/
 def WfObj (j : Json) : Prop := ∃ n : Std.TreeMap.Raw String Json, j = .obj n ∧ n.WF
 
 theorem wfObj_mkObj (l : List (String × Json)) : WfObj (Json.mkObj l) := ⟨_, rfl, Std.TreeMap.Raw.WF.ofList⟩
@@ -103,7 +88,6 @@ theorem getObjVal?_mkObj_ne {l : List (String × Json)} {k : String} (hk : (l.ma
   rw [Json.mkObj, getObjVal?_obj, get?_mkObj_none hk] at h
   cases h
 
-/-- A key no entry of `l` has is none of `l`'s keys. -/
 theorem ne_of_contains_false {l : List (String × Json)} {k : String} (hk : (l.map Prod.fst).contains k = false)
     {k' : String} {v : Json} (hm : (k', v) ∈ l) : k ≠ k' := by
   rintro rfl
@@ -111,8 +95,6 @@ theorem ne_of_contains_false {l : List (String × Json)} {k : String} (hk : (l.m
   rw [hk] at this
   cases this
 
-/-- **Alike objects by lookup**: a well-formed object is alike an object of distinct keys `l` when each entry of `l`
-looks up a value alike the entry's and no other key looks up anything. -/
 theorem same_mkObj {l : List (String × Json)} (hd : Distinct l) {j : Json} (hw : WfObj j)
     (hv : ∀ k v, (k, v) ∈ l → ∃ v', j.getObjVal? k = .ok v' ∧ Same v v')
     (hn : ∀ k v, (l.map Prod.fst).contains k = false → j.getObjVal? k ≠ .ok v) : Same (Json.mkObj l) j := by
@@ -137,15 +119,10 @@ theorem same_mkObj {l : List (String × Json)} (hd : Distinct l) {j : Json} (hw 
     cases hb
     exact hs
 
-/-- An entry of `l` whose value is printable, looked up in `Json.mkObj l`. -/
 theorem keep_mkObj {l : List (String × Json)} (hd : Distinct l) {k : String} {v : Json} (hm : (k, v) ∈ l)
     (hg : Good v) : ∃ v', (Json.mkObj l).getObjVal? k = .ok v' ∧ Same v v' :=
   ⟨v, getObjVal?_mkObj hd hm, same_of_good hg⟩
 
-/-! ## The honest record's checks at a value alike it -/
-
-/-- **The honest record's checks pass at a value alike it** (S1–S14): what `decode_recordObj` proves after parsing,
-at any `j` alike the honest record. -/
 theorem decodeJ_same {h : ByteArray → ByteArray}
     (h64 : ∀ b, (h b).size = 64) {spec : SessionSpec} {t : String} (ht : spec.tables = #[t])
     (hct : spec.coinTree = none)
@@ -201,7 +178,6 @@ theorem decodeJ_same {h : ByteArray → ByteArray}
       rfl
   rw [hdc _ (fun e => by subst e; rfl) (fun hn => by cases dv <;> first | rfl | exact absurd rfl hn)]
   simp only [ok_bind]
-  -- S5
   obtain ⟨ob, hob, hobs⟩ := fld_same hls (gL (k := "root_b") (v := Json.mkObj (rootBList spec id #[rb]))
     (by simp [linkList]))
   obtain ⟨od, hod, hods⟩ := fld_same hls (gL (k := s!"root_b_{spec.dk}")
@@ -218,13 +194,11 @@ theorem decodeJ_same {h : ByteArray → ByteArray}
       decide_eq_true hrb, check_true, beq_self_eq_true]
     rfl]
   simp only [ok_bind]
-  -- S6
   have hrf : Record.str l "root_f" = .ok (hexOf spec.sigma) := str_same hls (gL (v := hexJ spec.sigma) (by simp [linkList]))
   have hrfd : Record.str l s!"root_f_{spec.dk}" = .ok (hexOf (dgOf spec h spec.sigma)) :=
     str_same hls (gL (v := hexJ (dgOf spec h spec.sigma)) (by simp [linkList]))
   simp only [hrf, hrfd, ok_bind, unhex_hexOf, dgWith_ofSha512, decide_eq_true hsig, check_true, beq_self_eq_true,
     bytes_beq_self]
-  -- S7
   obtain ⟨op, hop, hops⟩ := fld_same hls (gL (k := "publics") (v := Json.mkObj []) (by simp [linkList]))
   obtain ⟨oq, hoq, hoqs⟩ := fld_same hls (gL (k := s!"publics_{spec.dk}") (v := Json.mkObj []) (by simp [linkList]))
   simp only [hop, hoq, ok_bind]
@@ -233,7 +207,6 @@ theorem decodeJ_same {h : ByteArray → ByteArray}
       Bool.and_self, Bool.not_true, Bool.false_eq_true, ite_true, ite_false]
     rfl]
   simp only [ok_bind]
-  -- S9, S10
   have hpt : Record.arr l "points" = .ok (points.map fun p => Json.arr (p.map f128J)) :=
     arr_plain hls (gL (by simp [linkList])) (.arr fun x hx => by
       obtain ⟨p, -, rfl⟩ := Array.mem_map.1 hx
@@ -249,7 +222,6 @@ theorem decodeJ_same {h : ByteArray → ByteArray}
   simp only [hpts] at hall
   simp only [yOf, Array.size_replicate] at hyz
   simp only [ok_bind, hpts, hall, beq_self_eq_true, Bool.and_self, check_true, hyz, yOf, Array.size_replicate]
-  -- S12
   obtain ⟨sj, hsj, hsjs, hsje⟩ := arr_same hs (gR (k := "streams")
     (v := Json.arr ((spec.repStreams.zip streams).map (streamObj spec h #[rb]))) (by simp [recordList]))
   simp only [hsj, ok_bind]
@@ -306,7 +278,6 @@ theorem decodeJ_same {h : ByteArray → ByteArray}
     simp only [ok_bind, hroot, hpar, hlab, hat]
     rfl]
   simp only [ok_bind]
-  -- S11, S13
   have hrs1 : spec.repStreams = #[(0, 0, s!"{t}/rep{(0 : Nat)}"), (0, 1, s!"{t}/rep{(1 : Nat)}")] := by
     unfold SessionSpec.repStreams
     rw [ht]
@@ -333,12 +304,10 @@ theorem decodeJ_same {h : ByteArray → ByteArray}
     List.any_cons, List.all_nil, List.any_nil, streamRec, beq_self_eq_true, hne, hne', Bool.or_false, Bool.false_or,
     check_true, ok_bind, List.forIn_toArray, List.forIn_cons, List.forIn_nil, List.find?_toArray,
     List.find?_cons, Array.size_map, decide_eq_true h0, decide_eq_true h1, Bool.and_self]
-  -- S14
   have hlk : Record.str j s!"link_{spec.dk}" = .ok (hexOf (dgOf spec h (lbOf spec #[rb] points))) :=
     str_same hs (gR (v := hexJ (dgOf spec h (lbOf spec #[rb] points))) (by simp [recordList]))
   simp only [lbOf, yOf] at hlk
   simp only [Array.forIn_pure_yield_eq_foldl, pure_bind, hlk, ok_bind, beq_self_eq_true, check_true]
-  -- the proof digests
   obtain ⟨pj, hpj, hpjs, hpje⟩ := arr_same hs (gR (k := s!"proof_{spec.dk}")
     (v := Json.arr ((spec.repStreams.zip proofs).map (proofObj spec h))) (by simp [recordList]))
   simp only [hpj, ok_bind]

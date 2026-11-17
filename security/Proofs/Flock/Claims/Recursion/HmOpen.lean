@@ -35,18 +35,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Soundness.Discharge.Hm.Mask
 
-/-!
-# An hm96 slot's two calls open its commit string (`IVStar`'s salt and row checks)
-
-`hmCalls_true` gives a slot's two recorded calls from its commit string. This file goes the other way, to the form
-`IVStar` checks a commit string `b ‖ c` against its opening `(row, salt)` at the deployed bound record
-(`IVCheck.Holds`' `.salt` and `.row`, at `bdDeployed`'s `saltPrefix`, `rowInDeployed` and `mask`):
-
-* the salt's call, `SHA-512(salt_prefix ‖ y) = c`, is the salt check at the salt read whole (`saltOf`): `saltCheck_of`;
-* the row's call, `SHA-512(row_prefix ‖ row) = b ⊕ Φy`, is the row check `SHA-512(rowIn row) = b ⊕ M·y`, where the
-  port's prefix is the one `rowInDeployed` reads off the row's length (`rowCheck_of`): `Φy` is `M·y` (`maskV_filter`,
-  `bitL_mask`).
--/
+/-! An hm96 slot's two true calls open its commit string in `IVStar`'s salt and row checks (`checks_of_calls`). -/
 
 @[expose] public section
 
@@ -56,8 +45,6 @@ open Flock
 open Claims (Msg)
 open Claims.Recursion.VStarB (readForms formBit)
 open FlockSoundness.Discharge.Hm (bitL)
-
-/-! ## Bytes -/
 
 theorem bitL_drop64 (l : List UInt8) (t : ℕ) : bitL (l.drop 64) t = bitL l (512 + t) := by
   unfold bitL
@@ -92,7 +79,6 @@ theorem length_salt (w : Claims.Flock.Wit) (c : Circuit) (q n : ℕ) :
     (readForms w (hmSalt c q n)).length = 192 := by
   rw [length_readForms, hmSalt, List.length_map, List.length_range]
 
-/-- **A salt read whole is its bytes.** -/
 theorem ofFn_saltOf {m : Msg} (h : m.length = 192) : List.ofFn (DeployedR.saltOf m) = m := by
   refine List.ext_getElem (by rw [List.length_ofFn, h]; rfl) fun i h1 h2 => ?_
   rw [List.getElem_ofFn]
@@ -102,7 +88,6 @@ theorem ofFn_saltOf_array {m : Msg} (h : m.length = 192) : Array.ofFn (DeployedR
   apply Array.toList_inj.mp
   rw [Array.toList_ofFn, ofFn_saltOf h, List.toList_toArray]
 
-/-- `bdDeployed`'s mask, at a salt read whole, as bytes: `M·y` at the salt's bytes. -/
 theorem ofFn_mask {m : Msg} (h : m.length = 192) :
     List.ofFn (fun i : Fin 64 => (Hm96.Default512.mask ⟨Array.ofFn (DeployedR.saltOf m)⟩).get! i.val) =
       (Hm96.Default512.mask ⟨m.toArray⟩).data.toList := by
@@ -113,11 +98,6 @@ theorem ofFn_mask {m : Msg} (h : m.length = 192) :
   rw [List.getElem_ofFn, FlockSoundness.Discharge.Hm.get!_eq_getD, List.getD_eq_getElem?_getD,
     List.getElem?_eq_getElem h2, Option.getD_some]
 
-/-! ## The two checks -/
-
-/-- **The salt's call is the salt check**: where `SHA-512(salt_prefix ‖ y)` is the commit string's second half (the
-call's output form, `hmCommit`'s last 512 bits), the salt read whole hashes under `bdDeployed`'s prefix to the commit
-string's last 64 bytes. -/
 theorem saltCheck_of {w : Claims.Flock.Wit} {c : Circuit} {q n : ℕ}
     (hS : FlockDeploy.sha512 (Hm96.Default512.saltPrefix.data.toList ++ readForms w (hmSalt c q n)) =
       readForms w ((hmCommit c q n).drop 512)) :
@@ -130,9 +110,6 @@ theorem saltCheck_of {w : Claims.Flock.Wit} {c : Circuit} {q n : ℕ}
   · have ht' : t < 512 := by simpa [hmCommit_len] using ht
     rw [bitL_drop64, List.getElem_drop, bitL_readForms (by rw [hmCommit_len]; omega)]
 
-/-- **The row's call is the row check**: where `SHA-512(row_prefix ‖ row)` is the digest form `b ⊕ Φy` (`hmDigest`)
-and the port's prefix is the one `rowInDeployed` reads off the row's length, the row's digest input hashes to the
-commit string's first half under `bdDeployed`'s mask of the salt read whole, `b ⊕ M·y`. -/
 theorem rowCheck_of {w : Claims.Flock.Wit} {c : Circuit} {nm : String} {q n : ℕ}
     (hpfx : rowPfx c q = (HmRow.rowPrefix
       ((readForms w (((rowHidden c nm n).getD []).map HmNets.Lin.var)).length / 2)).data.toList)
@@ -166,8 +143,6 @@ theorem rowCheck_of {w : Claims.Flock.Wit} {c : Circuit} {nm : String} {q n : �
     simp only [hmDigest, hmCommit, List.getElem_map, List.getElem_range, formBit, List.foldr_cons, List.foldr_nil,
       List.foldr_map, HmNets.Lin.var, Bool.xor_false]
 
-/-- **A slot's two true calls open its commit string**: the salt check and the row check at the slot's opening, where
-the port's prefix is the one `rowInDeployed` reads off the row's length. -/
 theorem checks_of_calls {w : Claims.Flock.Wit} {c : Circuit} {nm : String} {q n : ℕ}
     (hT : ∀ p ∈ hmCalls c nm q n, FlockDeploy.sha512 (p.1 ++ readForms w p.2.1) = readForms w p.2.2)
     (hpfx : rowPfx c q = (HmRow.rowPrefix

@@ -36,29 +36,8 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# (P2) and (P4) at the intended choice
-
-`KSBoundRouteCols` takes (P2, `Bound.Binds`) and (P4, `Bound.LastBindsEC` with `Bound.LastCoinFree`) at the deployed
-bound record, at every choice the code side makes. Here (P2) and (P4) as first stated are read at the intended choice.
-
-**(P2) holds** where the rows' digest input is the deployed one (`rowInDeployed`): `hm96-sha512/row/v1`'s
-`sha512_row_prefix(1, 16, n_words) ‖ row`, its first block `Flock.HmRow.rowPrefix` of a fixed 128 bytes, so the row is
-the rest (`binds_deployed`).
-
-**(P4) as first stated** (a collision wherever `final` reads two accepted last messages apart, retired for
-`LastBindsEC`) **failed before S0** where the element-level verifier's steps are the deployed plain verifier's (`FlockDeploy.V
-false`) and `final` keeps `DE`'s last message as it is. That last message is `Final.encode` of the statement, the
-record's text and the proof files, and the verifier read the record's text only through `Json.parse`
-(`Record.decodeWith`, `liveOf`, `recordDraw`: `LastGap.decodeWith_congr`, `liveOf_congr`, `recordSample_congr`). The
-text with one trailing space parses alike (`JsonTrailingSpace`, Lean's parser ends every value with `ws` before
-`eof`), so it was another last message that `final` reads differently and `IVStar` decided alike, with the same calls.
-S0 closes that: the checks end with `RecordText.check`, which accepts a record only as `printT` of what it parses to,
-so the checks accept one text per record (`LastGap.checks_record_eq`) and refuse the trailing-space one
-(`LastGap.check_space`).
-
-`JsonTrailingSpace` is a hypothesis, not a lemma: `Json.parse`'s `anyCore` is `partial`, so the kernel doesn't see its
-body. The rest is proved. -/
+/-! (P2) and (P4) of `KSBoundRouteCols` at the intended choice; `JsonTrailingSpace` is a hypothesis because
+`Json.parse`'s `anyCore` is `partial`. -/
 
 @[expose] public section
 
@@ -67,13 +46,10 @@ namespace RecDeploy
 open Claims (Msg Out OC)
 open Lean (Json)
 
-/-! ## (P2) -/
-
 /-- **The deployed rows' digest input** (`hm96-sha512/row/v1`): the first block for the row's u16 words
 (`Flock.HmRow.rowPrefix`), then the row. -/
 def rowInDeployed (row : Msg) : Msg := (_root_.Flock.HmRow.rowPrefix (row.length / 2)).data.toList ++ row
 
-/-- The first block is 128 bytes at every word count, so the row is what follows it. -/
 theorem rowInDeployed_injective : Function.Injective rowInDeployed := by
   intro r r' h
   unfold rowInDeployed at h
@@ -82,8 +58,6 @@ theorem rowInDeployed_injective : Function.Injective rowInDeployed := by
     rw [FlockSoundness.Discharge.Hm.length_rowPrefix, FlockSoundness.Discharge.Hm.length_rowPrefix]
   exact (List.append_inj h hl).2
 
-/-- **(P2) at the deployed rows' digest input**, whatever the element-level verifier, the columns, the weights, the
-join and `final`. -/
 theorem binds_deployed (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
     (nextE : Msg → List Msg → List FlockDeploy.Coin → Claims.OC Out)
     (colsE : Claims.Seen → ℕ → List (ℕ × List FlockLevel3.GF128)) (wE : Msg → ℝ) (join : List Msg → Msg)
@@ -91,10 +65,8 @@ theorem binds_deployed (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Read
     (bdDeployed rel nextE colsE wE join rowInDeployed final w).Binds :=
   rowInDeployed_injective
 
-/-! ## (P4): the hypotheses -/
-
-/-- **Lean's JSON parser accepts trailing whitespace**: `Json.parse` is `ws; anyCore; eof`, and every branch of
-`anyCore` ends with `ws`. A hypothesis because `anyCore` is `partial`. -/
+/-- Lean's JSON parser accepts trailing whitespace. A hypothesis because `anyCore` is `partial`, so the kernel doesn't
+see its body. -/
 def JsonTrailingSpace : Prop :=
   ∀ (r : String) (j : Json), Flock.JsonParse.parse r = .ok j → Flock.JsonParse.parse (r ++ " ") = .ok j
 
@@ -103,8 +75,6 @@ end RecDeploy
 namespace Claims.Recursion.LastGap
 
 open Claims
-
-/-! ## `IVStar`'s decision -/
 
 theorem eval_bind (H : Msg → Msg) {α β : Type} (p : OC α) (f : α → OC β) :
     (bindOC p f).eval H = (((f (p.eval H).1).eval H).1, (p.eval H).2 ++ ((f (p.eval H).1).eval H).2) := by
@@ -118,7 +88,6 @@ theorem eval_allOC_cons (H : Msg → Msg) (p : OC Bool) (ps : List (OC Bool)) (h
   rw [eval_bind, hp]
   rfl
 
-/-- Where `allOC` returns `true`, so does each of its programs, and each one's calls are among its calls. -/
 theorem allOC_true (H : Msg → Msg) : ∀ ps : List (OC Bool), ((allOC ps).eval H).1 = true →
     ∀ p ∈ ps, (p.eval H).1 = true ∧ ∀ e ∈ (p.eval H).2, e ∈ ((allOC ps).eval H).2
   | [], _, _, hp => absurd hp List.not_mem_nil
@@ -140,8 +109,6 @@ theorem allOC_true (H : Msg → Msg) : ∀ ps : List (OC Bool), ((allOC ps).eval
 
 variable {Coin Col T : Type} [Inhabited Coin]
 
-/-- **An accepted decision at the last round** reads the last message (`final`), opens one round per earlier message,
-and the element-level verifier accepts the opened messages. -/
 theorem ivstar_acc (Bd : Bound Coin Col T) (H : Msg → Msg) {x : Msg} {as : List Msg} {cs : List Coin}
     (hk : as.length = Bd.DE.V.k x) (h : ((Bd.IVStar.next x as cs).eval H).1 = .acc) :
     ∃ os last, Bd.final (as.getLastD []) = some (os, last) ∧ os.length + 1 = as.length ∧
@@ -166,7 +133,6 @@ theorem ivstar_acc (Bd : Bound Coin Col T) (H : Msg → Msg) {x : Msg} {as : Lis
         · exact ⟨os, last, hfin, hc.1, hacc⟩
     · simp [OC.eval] at h
 
-/-- Where the opened messages agree, the element-level verifier accepts them at the last round. -/
 theorem agrees_last (Bd : Bound Coin Col T) (H : Msg → Msg) {x : Msg} {ms₀ : List Msg} {l : Msg}
     {cs : List Coin} (h : ((Bd.agrees x (ms₀ ++ [l]) cs).eval H).1 = true) :
     ((Bd.DE.V.next x (ms₀ ++ [l]) (cs.take (ms₀.length + 1))).eval H).1 = .acc := by
@@ -177,7 +143,6 @@ theorem agrees_last (Bd : Bound Coin Col T) (H : Msg → Msg) {x : Msg} {ms₀ :
   rw [e] at hm
   simpa [OC.eval] using hm
 
-/-- `agrees` reads the last opened message only through the element-level verifier's last step. -/
 theorem agrees_snoc (Bd : Bound Coin Col T) {x : Msg} {ms₀ : List Msg} {l l' : Msg} {cs : List Coin}
     (h : Bd.DE.V.next x (ms₀ ++ [l']) (cs.take (ms₀.length + 1)) =
       Bd.DE.V.next x (ms₀ ++ [l]) (cs.take (ms₀.length + 1))) :
@@ -198,8 +163,6 @@ theorem agrees_snoc (Bd : Bound Coin Col T) {x : Msg} {ms₀ : List Msg} {l l' :
     have e2 : (ms₀ ++ [l]).take (ms₀.length + 1) = ms₀ ++ [l] := List.take_of_length_le (by simp)
     rw [e1, e2, h]
 
-/-- Two last messages `final` reads with the same openings, at whose last opened messages `agrees` is one program, give
-one decision, with the same calls. -/
 theorem ivstar_congr_snoc (Bd : Bound Coin Col T) {x : Msg} {as as' : List Msg} {cs : List Coin}
     {os : List (List (Msg × (Fin Bd.saltLen → UInt8)))} {last last' : Msg}
     (hlen : as'.length = as.length) (hdrop : as'.dropLast = as.dropLast)
@@ -214,8 +177,6 @@ namespace RecDeploy.LastGap
 
 open Claims (Msg Out OC)
 open Lean (Json)
-
-/-! ## The deployed plain verifier reads the record only through `Json.parse` -/
 
 theorem recordSample_congr {r r' : String} (h : Flock.JsonParse.parse r' = Flock.JsonParse.parse r) :
     FlockSoundness.Discharge.Exec.recordDraw r' = FlockSoundness.Discharge.Exec.recordDraw r := by
@@ -248,10 +209,6 @@ theorem append_space_ne (r : String) : r ++ " " ≠ r := by
   have h1 : (" " : String).length = 1 := by decide
   omega
 
-/-! ## S0 refuses a second text of one record -/
-
-/-- **The checks accept one text per record**: two records that parse alike, both accepted with the rest of the last
-message the same, are one text (S0, `Flock.RecordText.check_inj`). -/
 theorem checks_record_eq {zk : Bool} {s : FlockDeploy.Ins} {spec : _root_.Flock.SessionSpec} {x : Msg}
     {link : List ByteArray × List ByteArray} {c₁ : FlockDeploy.Coin} {mids : List (Msg × FlockDeploy.Coin)}
     {st : Msg} {ps : Array ByteArray} {r r' : String} (h : Flock.JsonParse.parse r' = Flock.JsonParse.parse r)
@@ -260,10 +217,6 @@ theorem checks_record_eq {zk : Bool} {s : FlockDeploy.Ins} {spec : _root_.Flock.
   _root_.Flock.RecordText.check_inj (Claims.Bridge.Custody.checks_canonical hc')
     (Claims.Bridge.Custody.checks_canonical hc) h
 
-/-- **S0 refuses the trailing-space record**: where the record's text is accepted, the same text with one trailing
-space, which `Json.parse` reads alike (`JsonTrailingSpace`), is refused. Before S0 the deployed verifier decided the two
-alike, which refuted (P4) as first stated (a collision wherever `final` reads two accepted last messages apart) at the
-deployed bound record. -/
 theorem check_space (hws : JsonTrailingSpace) {r : String} (hc : _root_.Flock.RecordText.check r = .ok ()) :
     _root_.Flock.RecordText.check (r ++ " ") ≠ .ok () := by
   intro h'

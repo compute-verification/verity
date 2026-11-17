@@ -47,29 +47,8 @@ import Proofs.Flock.Claims.Recursion.OpensReads
 import Proofs.Flock.Claims.Recursion.RestLens
 import Proofs.Flock.Claims.Recursion.SchedDense
 
-/-!
-# Check 5's inner session at a staged part is the inner statement at the coins
-
-At a V\* statement `xO` part `s` stages at a dense compiled statement `x` and shows the coins `c` at, wherever check 5
-loads the inner session from its source (`Source.atC3`, `Source.load`), `InnerAt` says what it loads, as row D's
-readers take it off `x` and the coins alone:
-
-* its `m` and `k_log` are the inner statement's table 0's (`Files.stmt` at the files `x` carries, which the deployed
-  plain verifier sets up at the same numbers, `innerSetup_files`);
-* each rep `r`'s rounds, where its stream has any, are `canonRounds` of the coins after the link, up to rounds of no
-  coins (`RoundCoins.ofRounds` drops them, so `verifierRows` reads only the rest: `verifierRows_filter`).
-
-`staged_innerAt` proves it from the verifier's checks. The rounds are the challenger's live-coin part's record's (`coinTie_sized`, the
-coin tie with `repCoins`' round counts); `checkReads` holds that record to the schedule of the verifier's inner shape,
-which at the dense form is the table's two reps at `repRounds` (`scheduleOf_dense`, `two_reps`), so the record's
-round of rep `r`'s stream at round `j` is its round `1 + r R + j` after the link, sampled by that coin (`showsTr`); the
-record's rounds are the transcript's, but for the one round of no coins `repCoins` lets it skip
-(`filter_of_places`).
-
-`InnerCoinsR` (check 5's inner session at the coins, which `posTieR_of` reads) is `InnerAt` with `ExtrasR`, the extra
-claims at the first coin's link points (`innerCoinsR_of`), and `rep_canon` gives a rep's verifier rows at
-`canonRounds`, the coin side of `VVTie`.
--/
+/-! Check 5's inner session at a staged part is the inner statement at the coins (`staged_innerAt`,
+`innerCoinsR_of`). -/
 
 @[expose] public section
 
@@ -81,15 +60,11 @@ open FlockDeploy (Coin setupOf tabsOf pointsOf)
 open RecDeploy.CoinTie
 open RecDeploy.Rows (canonRounds)
 
-/-! ## Lists -/
-
 theorem Pairs.countP_eq {α β : Type} {R : α → β → Prop} {p : α → Bool} {q : β → Bool}
     (h : ∀ a b, R a b → p a = q b) : ∀ {l l'}, Pairs R l l' → l.countP p = l'.countP q
   | _, _, .nil => rfl
   | _, _, .cons hab hl => by simp only [List.countP_cons, h _ _ hab, Pairs.countP_eq h hl]
 
-/-- **Two reps' rounds, one after the other**: a list whose rounds are the schedule `rs` at stream `b0`, then at
-`b1`, each its stream's round `k` with the schedule's round `k`. -/
 theorem two_reps {β δ : Type} [Inhabited δ] {L : List β} {F : β → List UInt8 × ℕ × ℕ × (ℕ × δ)}
     {b0 b1 : List UInt8} {rs : Array (ℕ × δ)}
     (h : L.map F = rs.toList.mapIdx (fun k w => (b0, k, w.1, w)) ++ rs.toList.mapIdx (fun k w => (b1, k, w.1, w))) :
@@ -117,7 +92,6 @@ theorem two_reps {β δ : Type} [Inhabited δ] {L : List β} {F : β → List UI
     rw [e, hm, Array.getD_eq_getD_getElem?, Array.getElem?_eq_getElem hlt', Option.getD_some]
     simp [hlt]
 
-/-- **Rep `r`'s stream's count**: in a list of two reps of `n` rounds each, the rounds of rep `r`'s stream are `n`. -/
 theorem countP_two {β : Type} {L : List β} {p : β → Bool} {n r : ℕ} (hl : L.length = 2 * n) (hr : r < 2)
     (hp : ∀ g (hg : g < L.length), (p L[g] = true ↔ (g < n ↔ r = 0))) : L.countP p = n := by
   rw [← List.take_append_drop n L, List.countP_append]
@@ -160,8 +134,6 @@ theorem filter_eraseIdx {α : Type} (p : α → Bool) {l : List α} {j : ℕ} (h
   rw [List.eraseIdx_eq_take_drop_succ, e, List.filter_append, List.filter_append, List.filter_cons, hp]
   rfl
 
-/-- **Rounds placed at a schedule's, the one round they skip failing `p`, filter to its rounds**: `a`'s round `m` is
-`b`'s round `sp m`, where `sp` is the identity at `a` of `b`'s size or skips `b`'s round `j`. -/
 theorem filter_of_places {α : Type} {p : α → Bool} {a b : Array α} {sp : ℕ → ℕ}
     (hcase : (sp = id ∧ a.size = b.size) ∨
       ∃ j, sp = (fun m => if m < j then m else m + 1) ∧ a.size + 1 = b.size ∧ ∃ hj : j < b.size, p b[j] = false)
@@ -197,10 +169,6 @@ theorem getD_mid {α : Type} [Inhabited α] (c : ℕ → α) {B i : ℕ} (hi : i
     List.getElem?_tail, List.getElem?_map, List.getElem?_range (by omega)]
   rfl
 
-/-! ## Rep streams' names -/
-
-/-- **A rep stream's name fixes its rep**: `t/rep k` and `T/rep x` (`k, x < 2`) are one name only at `k = x`, their
-last bytes being the digits. -/
 theorem rep_digit {t T : String} {k x : ℕ} (hk : k < 2) (hx : x < 2)
     (h : (s!"{t}/rep{k}").toUTF8.toList = (s!"{T}/rep{x}").toUTF8.toList) : k = x := by
   have e := congrArg List.getLast? h
@@ -212,12 +180,8 @@ theorem rep_digit {t T : String} {k x : ℕ} (hk : k < 2) (hx : x < 2)
   all_goals first | rfl | (simp only [String.toUTF8, String.toByteArray_append, ByteArray.data_append,
     Array.toList_append, List.getLast?_append, h0, h1, Option.some_or] at e; cases e)
 
-/-! ## The coin tie, with `repCoins`' counts -/
-
 -- `repCoins` matches on array literals, which get no equation lemmas, so the proof unfolds its matcher.
 set_option linter.auxLemma false in
-/-- **`repCoins_places`, with its counts**: with no round of no coins the record has the transcript's rounds; with one,
-at `j`, it has one fewer, skipping `j`. -/
 theorem repCoins_sized {s : String} {rs : Array Json} {srec : Json} {cc : Array (Option (Array String))}
     (h : RecVStar.repCoins s rs srec = .ok cc) :
     rs.toList.map (fun r => (r.getObjValAs? Nat "k").toOption) = (List.range rs.size).map some ∧
@@ -289,8 +253,6 @@ theorem repCoins_sized {s : String} {rs : Array Json} {srec : Json} {cc : Array 
     simp only [bind, Except.bind, pure, Except.pure, throw, throwThe, MonadExceptOf.throw] at h
     try (split at h <;> cases h)
 
-/-- **`coinTie_core`, with the counts**: the decoded stream `name` has as many rounds as the record `R` has of its
-stream, or one fewer, skipping the round `j` of `R`'s stream that has no coins. -/
 theorem coinTie_sized (hq : ∀ (a : Array Json) (lt : Json → Json → Bool) x, x ∈ a.qsort lt → x ∈ a)
     {tr : Json} {record : String} {reg : Option Json} {bound : Option String}
     {shape : Option RecVStar.StackedShape} {cs : RecVStar.InnerCommits} {ish : RecVStar.Inner} {tt : String}
@@ -335,7 +297,6 @@ theorem coinTie_sized (hq : ∀ (a : Array Json) (lt : Json → Json → Bool) x
   have hBoth := jsonRounds_both hrounds hJR
   have hlen := hrb.length_eq
   simp only [Array.length_toList] at hlen
-  -- each transcript round of the stream is a round of `R`
   have hat : ∀ i (hi : i < (transcriptRounds name rounds).size), ∃ g, ∃ hg : g < R.rounds.length,
       R.rounds[g].stream = name.toUTF8.toList ∧ R.rounds[g].k = i ∧
       (RecVStar.coinsOf (transcriptRounds name rounds)[i]).toList.mapM f128OfHex = .ok R.rounds[g].coins := by
@@ -361,7 +322,6 @@ theorem coinTie_sized (hq : ∀ (a : Array Json) (lt : Json → Json → Bool) x
     rw [hgx] at hcoins
     refine ⟨g, by simpa using hgl, h1, h2, ?_⟩
     rw [hcoins, h3]
-  -- the stream's transcript rounds are `R`'s rounds of it
   have hcount : (transcriptRounds name rounds).size = R.rounds.countP (·.stream == name.toUTF8.toList) := by
     have hp : (transcriptRounds name rounds).size =
         (rounds.filter fun r => (r.getObjValAs? String "stream").toOption == some name).size := by
@@ -406,10 +366,6 @@ theorem coinTie_sized (hq : ∀ (a : Array Json) (lt : Json → Json → Bool) x
     rw [← hpair, hhex] at h3
     exact ⟨g, hg, h1, h2, (Except.ok.inj h3).symm⟩
 
-/-! ## The schedule at the dense form -/
-
-/-- **The dense form's schedule**: with no RecSparse phase and no R, at public circuits, the streams are the table's
-two reps at `repRounds`. -/
 theorem scheduleOf_dense {i : RecVStar.Inner} {t : String}
     {want : Array (String × String × ℕ × Array RecVStar.SchedRound)} {rs : Array RecVStar.SchedRound}
     (hh : i.holo = false) (hs : i.sparse = none) (hk : i.stacked = none)
@@ -420,7 +376,6 @@ theorem scheduleOf_dense {i : RecVStar.Inner} {t : String}
   subst h
   rfl
 
-/-- Rep `k`'s rounds as the coins give them: round `j` the first `n_j` values of the coin `1 + k R + j`. -/
 def canonAt (c : ℕ → Coin) (rs : Array RecVStar.SchedRound) (k : ℕ) : Array (Array F128) :=
   (Array.range rs.size).map fun j => (c (1 + k * rs.size + j)).vals (rs.getD j default).1
 
@@ -432,8 +387,6 @@ theorem canonAt_get (c : ℕ → Coin) (rs : Array RecVStar.SchedRound) (k : ℕ
     (canonAt c rs k)[j] = (c (1 + k * rs.size + j)).vals (rs.getD j default).1 := by
   simp [canonAt]
 
-/-- **`canonRounds` at the one table**: rep `k`'s rounds of the coins after the link, at a table whose rep schedule
-is `rs`, among at least `2 + 2R` coins. -/
 theorem canon_eq {spec : SessionSpec} {st : Stmt} {rs : Array RecVStar.SchedRound} {c : ℕ → Coin} {B k : ℕ}
     (hsc : repSchedAt spec st = rs.toList) (hB : 2 + 2 * rs.size ≤ B) (hk : k < 2) :
     canonRounds spec #[st] ((List.range B).map c).tail.dropLast k = canonAt c rs k := by
@@ -467,11 +420,6 @@ theorem canon_eq {spec : SessionSpec} {st : Stmt} {rs : Array RecVStar.SchedRoun
     simp [List.getD_eq_getElem?_getD, Array.getD_eq_getD_getElem?]
   rw [hr, show k * rs.size + j + 1 = 1 + k * rs.size + j by omega]
 
-/-! ## The rounds at a staged part -/
-
-/-- **Check 5's rounds at a staged part are the coins'**: at a V\* statement part `s` stages at `x`, read at a shape of
-public circuits with no RecSparse phase and no R whose rep schedule is `rs`, and which shows the coins `c`, each rep
-`k`'s rounds, as check 5 loads them, where its stream has any, are `canonAt c rs k` up to rounds of no coins. -/
 theorem staged_rounds {b : Brings} {s : ℕ} {x xO : Msg} {c : ℕ → Coin} {r : XR}
     {rs : Array RecVStar.SchedRound} (hr : readX x = some r) (hh : r.shape.holo = false)
     (hsp : r.shape.sparse = none) (hstk : r.shape.stacked = none) (hrs : repSched r.shape = some rs)
@@ -501,7 +449,6 @@ theorem staged_rounds {b : Brings} {s : ℕ} {x xO : Msg} {c : ℕ → Coin} {r 
   obtain ⟨ps, hps, hdrawn⟩ := hc
   rw [hshow] at hps
   cases hps
-  -- each round of `R` flipped its coins from its coin
   have hdr : ∀ g (hg : g < R.rounds.length), Drawn (c (g + 1)) R.rounds[g].coins.toArray := by
     intro g hg
     have hlen : g + 1 < (R.msgs.map fun mc => (mc.1, mc.2.toArray)).length := by
@@ -512,7 +459,6 @@ theorem staged_rounds {b : Brings} {s : ℕ} {x xO : Msg} {c : ℕ → Coin} {r 
       rw [List.getD_eq_getElem _ _ hlen]
       simp [Flock.RecRecord.Record.msgs]
     rwa [hget] at hd
-  -- `R`'s rounds are the two reps' at `rs`
   have hrs' : RecVStar.repRounds r.shape.m r.shape.kLog r.shape.claims = some rs := by
     unfold repSched at hrs
     rw [hh] at hrs
@@ -543,7 +489,6 @@ theorem staged_rounds {b : Brings} {s : ℕ} {x xO : Msg} {c : ℕ → Coin} {r 
   rw [hRead] at hRead'
   cases hRead'
   have hsz : (st'.rounds.map (·.coins)).size = st'.rounds.size := Array.size_map ..
-  -- rep `k`'s stream is `lk.table`'s rep `k`
   have hnb : (s!"{spec'.tables[0]!}/rep{k}").toUTF8.toList = (s!"{lk.table}/rep{k}").toUTF8.toList := by
     obtain ⟨g0, hg0, h1, -, -⟩ := hall 0 (by omega)
     obtain ⟨x0, hx0, -, hs0, -, -⟩ := hG g0 hg0
@@ -592,9 +537,6 @@ theorem staged_rounds {b : Brings} {s : ℕ} {x xO : Msg} {c : ℕ → Coin} {r 
       rw [← h2, ← hcg, h3]; simp
     rw [canonAt_get, Array.getElem_map, hd, hcs, show g + 1 = 1 + k * rs.size + sp m by omega]
 
-/-! ## The source and the statement check 5 loads -/
-
-/-- **A staged statement's source is the files `x` carries**, with the stage's record. -/
 theorem src_staged {st : Stage} {x : Msg} {ms : List (Msg × Out)} {s : ℕ} {i : RecIns}
     (h : insO (staged st x ms s) = some i) :
     ∃ r rec, readX x = some r ∧ ∃ pj, r.partition = some pj ∧
@@ -640,8 +582,6 @@ theorem src_staged {st : Stage} {x : Msg} {ms : List (Msg × Out)} {s : ℕ} {i 
         simp only [pure, Except.pure, Except.ok.injEq] at hsrc
         exact ⟨r, rec, hr, pj, hpj, hsrc.symm⟩
 
-/-- **Check 5's source at candidate 3's streams is the files' statement**: whatever the shape and commits, the files
-`atC3` gives set the statement up as `g` does. -/
 theorem atC3_files {g : RecCoins.Files} {inner : Option RecVStar.Inner} {commits : Option RecVStar.InnerCommits}
     {f : RecCoins.Source} (h : RecCoins.Source.atC3 (some (.files g)) inner commits = some f) :
     ∃ f', f = .files f' ∧ ∀ u, f'.stmt u = g.stmt u := by
@@ -649,7 +589,6 @@ theorem atC3_files {g : RecCoins.Files} {inner : Option RecVStar.Inner} {commits
   rcases inner with _ | i <;> rcases commits with _ | cs <;> dsimp only at h <;> cases h
   all_goals first | exact ⟨g, rfl, fun _ => rfl⟩ | exact ⟨_, rfl, fun u => by split <;> rfl⟩
 
-/-- **The files' statement doesn't read the unit**: it names it only in its errors. -/
 theorem stmt_unit {f : RecCoins.Files} {u u' : String} {p : SessionSpec × Stmt} (h : f.stmt u = .ok p) :
     f.stmt u' = .ok p := by
   unfold RecCoins.Files.stmt at h ⊢
@@ -664,8 +603,6 @@ theorem stmt_unit {f : RecCoins.Files} {u u' : String} {p : SessionSpec × Stmt}
     | none => simp [hs, bind, Except.bind, pure, Except.pure, throw, throwThe, MonadExceptOf.throw] at h
     | some st => simpa [hs, bind, Except.bind, pure, Except.pure] using h
 
-/-- **What `Inner.load` sets up**: the files' statement, whose `m` and `k_log` the session has, and whose circuit fold
-gives its comb. -/
 theorem load_fields {unit : String} {f : RecCoins.Files} {inn : RecCoins.Inner}
     (h : RecCoins.Inner.load unit f = .ok inn) :
     ∃ spec st, f.stmt unit = .ok (spec, st) ∧ inn.m = st.m ∧ inn.kLog = st.c.kLog ∧
@@ -699,10 +636,6 @@ open Claims.Recursion.VStarB
 open RecDeploy.Rows (canonRounds posAt)
 open RecDeploy.InnerAt
 
-/-- **Check 5's inner session at the coins, but its extra claims** (`InnerAt`): at a V\* statement `xO` part `s`
-stages at `x` and shows the coins `c` at, wherever check 5 loads the inner session from its source, its `m` and `k_log`
-are the inner statement's table 0's, and each rep's rounds, where its stream has any, are `canonRounds` of the coins
-after the link, up to rounds of no coins (which `verifierRows` doesn't read, `verifierRows_filter`). -/
 def InnerAt (untr : TrReader) (b : Brings) (Bk : Msg → ℕ) (s : ℕ) (x : Msg) (c : ℕ → Coin) : Prop :=
   ∀ (xO : Msg), showsPart untr b s x xO c → ∀ (i : RecIns), insO xO = some i →
     ∀ (f : RecCoins.Source) (unit : String) (inn : RecCoins.Inner),
@@ -712,8 +645,6 @@ def InnerAt (untr : TrReader) (b : Brings) (Bk : Msg → ℕ) (s : ℕ) (x : Msg
           rounds.filter (·.size ≠ 0) =
             (canonRounds v.2.1 v.2.2 ((List.range (Bk (xIOf x))).map c).tail.dropLast r).filter (·.size ≠ 0)
 
-/-- **Check 5's inner session's extra claims are the table's at the first coin's link points** (`ExtrasR`, the part of
-`InnerCoinsR` `InnerAt` leaves): its extra claims are table 0's `extra` at `pointsOf` the first coin. -/
 def ExtrasR (untr : TrReader) (b : Brings) (Bk : Msg → ℕ) (s : ℕ) (x : Msg) (c : ℕ → Coin) : Prop :=
   ∀ (xO : Msg), showsPart untr b s x xO c → ∀ (i : RecIns) (spec : SessionSpec) (sts : Array Stmt),
     setupO xO = some (i, spec, sts) → ∀ (_ : 0 < sts.size) (f : RecCoins.Source) (inn : RecCoins.Inner),
@@ -721,8 +652,6 @@ def ExtrasR (untr : TrReader) (b : Brings) (Bk : Msg → ℕ) (s : ℕ) (x : Msg
       ∀ v, setupOf false (xIOf x) = some v →
         inn.extras = (tabsOf v.2.2)[0]!.extra (pointsOf v.2.1 (((List.range (Bk (xIOf x))).map c).headD default))
 
-/-- **`InnerAt` at a dense compiled statement**, from the verifier's checks, wherever the coins `c` run to at least the
-deployed plain verifier's inner rounds. -/
 theorem staged_innerAt {b : Brings} {Bk : Msg → ℕ} {s : ℕ} {x : Msg} {c : ℕ → Coin} {st0 : Claims.Recursion.CompiledStatement}
     (hst : parse x = some st0) (hd : Claims.Recursion.Form.Dense st0.form) (hB : RestRead.kI x ≤ Bk (xIOf x)) :
     InnerAt recRead b Bk s x c := by
@@ -747,7 +676,6 @@ theorem staged_innerAt {b : Brings} {Bk : Msg → ℕ} {s : ℕ} {x : Msg} {c : 
     rcases RecScope.candidate3_ok hc3 with ⟨-, h⟩ | ⟨sp, -, hs, -⟩
     · exact h
     · rw [hsp] at hs; cases hs
-  -- the source is the files `x` carries
   obtain ⟨ms, i', _, _, hxO, hsu, -⟩ := hsh.2
   subst hxO
   obtain ⟨hins', -⟩ := setupO_some hsu
@@ -795,7 +723,6 @@ theorem staged_innerAt {b : Brings} {Bk : Msg → ℕ} {s : ℕ} {x : Msg} {c : 
     dsimp only
     rw [canon_eq (B := Bk (xIOf x)) hsched (by omega) hk2]
 
-/-- **`InnerCoinsR` at a dense compiled statement**: `InnerAt` (`staged_innerAt`) and the extra claims (`ExtrasR`). -/
 theorem innerCoinsR_of {b : Brings} {Bk : Msg → ℕ} {s : ℕ} {x : Msg} {c : ℕ → Coin} {st0 : Claims.Recursion.CompiledStatement}
     (hst : parse x = some st0) (hd : Claims.Recursion.Form.Dense st0.form) (hB : RestRead.kI x ≤ Bk (xIOf x))
     (hE : ExtrasR recRead b Bk s x c) : InnerCoinsR recRead b Bk s x c := by
@@ -803,15 +730,12 @@ theorem innerCoinsR_of {b : Brings} {Bk : Msg → ℕ} {s : ℕ} {x : Msg} {c : 
   obtain ⟨v, hv, hm, hk, hrd⟩ := staged_innerAt hst hd hB xO hsh i (setupO_some hsu).1 f _ inn hf hload
   exact ⟨v, hv, hm, hk, hE xO hsh i spec sts hsu hsz f inn hf hload v hv, hrd⟩
 
-/-- **`PosTieR` at row D's position reader**, at a dense compiled statement, from `ExtrasR`. -/
 theorem posTieR_staged {b : Brings} {pieces : Msg → List OpenPiece} {Bk : Msg → ℕ} {s : ℕ} {x : Msg}
     {c : ℕ → Coin} {st0 : Claims.Recursion.CompiledStatement} (hst : parse x = some st0)
     (hd : Claims.Recursion.Form.Dense st0.form) (hR : PiecesInRangeR pieces) (hB : RestRead.kI x ≤ Bk (xIOf x))
     (hE : ExtrasR recRead b Bk s x c) : PosTieR recRead b pieces posAt Bk s x c :=
   posTieR_of hst hd hR (innerCoinsR_of hst hd hB hE)
 
-/-- **A rep's verifier rows are `canonRounds`'** (the coin side of `VVTie`): where check 5 loads the inner session at
-a staged part and builds rep `r`'s values at a shape, they are `verifierRows` at `canonRounds` of the coins. -/
 theorem rep_canon {untr : TrReader} {b : Brings} {Bk : Msg → ℕ} {s : ℕ} {x : Msg} {c : ℕ → Coin}
     (hI : InnerAt untr b Bk s x c) {xO : Msg} (hsh : showsPart untr b s x xO c) {i : RecIns}
     (hins : insO xO = some i) {f : RecCoins.Source} {unit : String} {inn : RecCoins.Inner}

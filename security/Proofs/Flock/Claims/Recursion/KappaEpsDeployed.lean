@@ -38,27 +38,8 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# Route 2C's split bound at the deployment's sizes: `κ ≤ 2^{−167.7}` and `ε ≤ 2^{−174.95}`
-
-`Claims.Recursion.bitsLin2KOn_of_ksLin2On` bounds `Pr[acc ∧ ¬R]` by `κ + t·ε` (`Claims.Recursion.epsLin2`): `κ` once a
-session, `ε` once per SHA-512 call of the prover's run. At the deployment's sizes `κ ≤ 2^{−167.7}` and
-`ε ≤ 2^{−174.95}` (`kappa_eps_deployed`). The sizes are side conditions on the public statement `x` and on the call
-bounds `n` and `v` `BitsLin2KOn` is read at:
-
-* the inner statement is one plain table (`FlockDeploy.PlainIn` at `|sts| = 1`), so the inner verifier's rounds are at
-  most `4402`, `k_I ≤ 12343986` (`k_le_one`) and `κ_I ≤ 2^{−202.98}`;
-* `x` stages at most `16` V\* parts, the verifier's cap (`RecBudget.MAX_STATEMENTS`, which a part's setup refuses past:
-  `nS_le_of_partIn`), each one `--zk` table (`PartIn` at `|sts'| = 1`), so each part's rounds are at most
-  `4402`, `k_O ≤ 12343986`, `κ_O ≤ 2^{−202.98}` and `γ_O ≤ 2^{51}` (`numsOf_γ_le_one`), `c_Be ≤ 82951585924` and the
-  compiled verifier's rounds `k(x) ≤ 74835`;
-* `|S(x_I)|`, `n` and `v` are each at most `2^{32}`, so `c_S = c_Be + |S(x_I)| + 2(n + v) ≤ 104426422404`;
-* the deployed caps have at most `5591040` positions (`CpDep_width_le_tight`).
-
-`κ ≤ (1 + 16·N_I)·2^{−202.98}`, and `1 + 16·N_I ≤ 2^{35.28}`. Each of `ε`'s five terms `2^{−(a − log₂ y)}` is at most
-`u·2^{−255}` at `a ≥ 255` and `y ≤ u` (`two_rpow_neg_sub_le`; `γ`'s at `y ≤ u²`), and the five `u` sum to at most
-`2^{80.05}`. `Fdev`'s, `β₂·c_S`, is all but about `2^{−11}` of the sum: it is the term that sets `ε`.
--/
+/-! Route 2C's split bound at the deployment's sizes, `κ ≤ 2^{−167.7}` and `ε ≤ 2^{−174.95}` (`kappa_eps_deployed`), the
+sizes side conditions on the public statement and the call bounds. -/
 
 @[expose] public section
 
@@ -67,9 +48,6 @@ namespace RecDeploy
 open Claims (Msg Out)
 open FlockDeploy (Coin)
 
-/-! ## The arithmetic -/
-
-/-- `y ≤ 2^{N/q}` wherever `y^q ≤ 2^N`. -/
 theorem le_two_rpow_of_pow_le {y : ℝ} {q N : ℕ} (h0 : 0 ≤ y) (hq : 0 < q) (h : y ^ q ≤ 2 ^ N) :
     y ≤ (2 : ℝ) ^ ((N : ℝ) / q) := by
   rcases h0.eq_or_lt with rfl | hy
@@ -92,13 +70,11 @@ theorem two_rpow_le_mul {e u : ℝ} (hu : 0 < u) (h : e ≤ Real.logb 2 u - 255)
     _ = u * 2 ^ (-(255 : ℝ)) := by
         rw [Real.rpow_add (by norm_num), Real.rpow_logb (by norm_num) (by norm_num) hu]
 
-/-- **A term `2^{−(a − log₂ y)}` at `a ≥ 255` is at most `u·2^{−255}`**, at `0 ≤ y ≤ u` and `1 ≤ u`. -/
 theorem two_rpow_neg_sub_le {a y u : ℝ} (ha : 255 ≤ a) (hy : 0 ≤ y) (hyu : y ≤ u) (hu : 1 ≤ u) :
     (2 : ℝ) ^ (-(a - Real.logb 2 y)) ≤ u * 2 ^ (-(255 : ℝ)) := by
   have := logb_le_logb_of_one_le hy hyu hu
   exact two_rpow_le_mul (by linarith) (by linarith)
 
-/-- **`γ`'s term `2^{−(255.5 − ½·log₂ y)}` is at most `u·2^{−255}`**, at `0 ≤ y ≤ u²` and `1 ≤ u`. -/
 theorem two_rpow_neg_sub_half_le {y u : ℝ} (hy : 0 ≤ y) (hyu : y ≤ u ^ 2) (hu : 1 ≤ u) :
     (2 : ℝ) ^ (-(255.5 - Real.logb 2 y / 2)) ≤ u * 2 ^ (-(255 : ℝ)) := by
   have h := logb_le_logb_of_one_le hy hyu (by nlinarith)
@@ -106,12 +82,10 @@ theorem two_rpow_neg_sub_half_le {y u : ℝ} (hy : 0 ≤ y) (hyu : y ≤ u ^ 2) 
   push_cast at h
   exact two_rpow_le_mul (by linarith) (by linarith)
 
-/-- `a^q ≤ 2^N` on `ℕ` is `a^q ≤ 2^N` on `ℝ`; `a` stays a variable here, so no simproc evaluates the literal power it
-is applied at. -/
+/-- `a` stays a variable so no simproc evaluates the literal power it is applied at. -/
 theorem cast_pow_le_two_pow {a q N : ℕ} (h : a ^ q ≤ 2 ^ N) : (a : ℝ) ^ q ≤ (2 : ℝ) ^ N := by
   exact_mod_cast h
 
-/-- **`⌈4·N₀/e⌉ ≤ 12343986`** at `N₀ ≤ 2^23`, one table's: `4·2^23/e < 12343985.7`. -/
 theorem k_le_one {N : ℝ} (hN : N ≤ 2 ^ 23) : ⌈4 * N / Real.exp 1⌉₊ ≤ 12343986 := by
   have he0 : 0 < Real.exp 1 := Real.exp_pos 1
   have hlo := Real.exp_one_gt_d9
@@ -121,10 +95,6 @@ theorem k_le_one {N : ℝ} (hN : N ≤ 2 ^ 23) : ⌈4 * N / Real.exp 1⌉₊ ≤
   push_cast
   linarith
 
-/-- **`κ ≤ 2^{−167.7}` and `ε ≤ 2^{−174.95}` from their numbers**: `κ` and `epsLin2`'s five terms, over the numbers
-they read as in `lamLin2_core_tight`, at the inner verifier's rounds `VI ≤ 4402`, the inner and each part's `E^rep`
-reruns per wait at most `12343986`, at most `16` parts, the inner caps' positions `W ≤ 5591040`, the compiled
-verifier's rounds `kx ≤ 74835` and `|S(x_I)| + 2(n + v) ≤ 5·2^32`. -/
 theorem kappa_eps_core {nS : ℕ} {VI kI wI W kx NI cBe nSet nU : ℕ} {κI : ℝ} {κs γs : Fin nS → ℝ}
     {ws ks : Fin nS → ℕ} (hNI : NI = 1 + wI * kI) (hcBe : cBe = 4 + 2 * ∑ s, ws s * ks s)
     (hSet : nSet + 2 * nU ≤ 5 * 2 ^ 32) (hVI : VI ≤ 4402) (hkI : kI ≤ 12343986) (hwI : wI = 210)
@@ -212,8 +182,6 @@ theorem kappa_eps_core {nS : ℕ} {VI kI wI W kx NI cBe nSet nU : ℕ} {κI : �
       _ ≤ 2 ^ (((1601 : ℕ) : ℝ) / ((20 : ℕ) : ℝ)) * 2 ^ (-(255 : ℝ)) := mul_le_mul_of_nonneg_right hK hp2
       _ = 2 ^ (-(174.95 : ℝ)) := e
 
-/-- **`κ ≤ 2^{−167.7}` and `ε ≤ 2^{−174.95}` at a compiled record and an inner protocol**, from bounds on the numbers
-they read. -/
 theorem kappa_eps_of {C W' : Type} [Fintype C] [Nonempty C] [Inhabited C] (D : Claims.Recursion.Deploy C)
     (I : Claims.Recursion.Inner C W') (Cp : Claims.Recursion.Caps C) (x : Msg) (n v : ℕ)
     (hVI : I.V.k (Claims.Recursion.xI D x) ≤ 4402) (hkI : I.k (Claims.Recursion.xI D x) ≤ 12343986)
@@ -232,8 +200,6 @@ theorem kappa_eps_of {C W' : Type} [Fintype C] [Nonempty C] [Inhabited C] (D : C
     (γs := fun s => (D.nums x s).γ) (ws := fun s => (D.nums x s).waits) (ks := fun s => (D.nums x s).k) rfl rfl
     (by omega) hVI hkI hwI hW hnS hkx hκI hκs hγs hws hks
 
-/-! ## At the deployment's sizes -/
-
 section Part
 
 variable {xO : Msg} {s : RecIns} {spec : _root_.Flock.SessionSpec} {sts : Array _root_.Flock.Stmt}
@@ -243,7 +209,6 @@ theorem numsOf_rounds_le_one (h : PartIn xO s spec sts) (h1 : sts.size = 1) : (n
   show VO.k xO ≤ 4402
   omega
 
-/-- **A one-table part's `γ_O ≤ 2^51`**: at most `4402` rounds and a weight at most `2^33`. -/
 theorem numsOf_γ_le_one (h : PartIn xO s spec sts) (h1 : sts.size = 1) : (numsOf xO).γ ≤ 2 ^ 51 := by
   have hr : ((numsOf xO).rounds : ℝ) ≤ 4402 := by exact_mod_cast numsOf_rounds_le_one h h1
   have hr0 : (0 : ℝ) ≤ (numsOf xO).rounds := Nat.cast_nonneg _
@@ -262,8 +227,6 @@ theorem numsOf_γ_le_one (h : PartIn xO s spec sts) (h1 : sts.size = 1) : (numsO
 
 end Part
 
-/-- **At most `16` V\* parts wherever each staged part is in scope**: a part's setup refuses a V\* list of more than
-`RecBudget.MAX_STATEMENTS = 16` statements (`nS_le_of_partIn`). -/
 theorem nS_le_sixteen {st : Stage} {x : Msg}
     (hO : ∀ j < nS x, ∃ i spec' sts', PartIn (staged st x (pick st x j) j) i spec' sts' ∧ sts'.size = 1) :
     nS x ≤ 16 :=
@@ -271,18 +234,8 @@ theorem nS_le_sixteen {st : Stage} {x : Msg}
     let ⟨i, spec', sts', hp, _⟩ := hO j hj
     ⟨i, spec', sts', hp⟩
 
-/-- **Route 2C's split bound at the deployment's sizes: `κ ≤ 2^{−167.7}` and `ε ≤ 2^{−174.95}`**, at the compiled
-record whose inner view runs the deployed bound record's `IVStar` (`recBoundAt rel b L`, `bdDeployed`), the bound
-record's inner Flock and the deployed caps `CpDep`, at every statement `x` whose inner statement is one plain table
-(`hin`, `h1`), each of whose V\* parts is one `--zk` table (`hO`), whose inner setup has at most `2^32` calls (`hS`),
-and at call bounds `n ≤ 2^32` and `v ≤ 2^32` (`hU`, `hV`). With `bitsLin2KOn_of_ksLin2On` it makes
-`Pr[acc ∧ ¬R] ≤ 2^{−167.7} + t·2^{−174.95}`. The parts are at most `16` with no condition on `x`: a part's setup
-refuses a V\* list of more than `RecBudget.MAX_STATEMENTS = 16` statements (`nS_le_of_partIn`, from `hO`).
-
-The size conditions are on public data and none is a hash premise or says anything about the prover's behaviour:
-`h1`, `hO` and `hS` are read off `x` by the verifier's own setups (`PlainIn`'s and `PartIn`'s `setupO`), and `n`
-and `v` are the call bounds `BitsLin2KOn` quantifies over, which `hU` and `hV` cap (`v` at the deployed brings is at
-most `nS x` times one statement's `deployedSetup` inputs, `setupCalls_deployedB_le`). -/
+/-- Its size conditions are on public data, read off `x` by the verifier's own setups or capping the call bounds
+`BitsLin2KOn` quantifies over; none is a hash premise or a statement about the prover. -/
 theorem kappa_eps_deployed (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (b : Brings)
     (L : Claims.Recursion.VStarB.LayoutB) (nextE : Msg → List Msg → List Coin → Claims.OC Out)
     (colsE : Claims.Seen → ℕ → List (ℕ × List FlockLevel3.GF128)) (wE : Msg → ℝ) (join : List Msg → Msg)
@@ -336,16 +289,11 @@ theorem kappa_eps_deployed (rel : _root_.Flock.Readable.Parsed → _root_.Flock.
     rw [hp1, Nat.cast_one, one_mul] at hhi
     exact (numsOf_k _).le.trans (k_le_one (N := N₀O (staged b.st x (pick b.st x j) j)) hhi)
 
-/-- **The deployment's sizes at a statement `x`**, `kappa_eps_deployed`'s side conditions on `x`: its inner statement
-is one plain table, each V\* part it stages is one `--zk` table, and its inner setup has at most `2^32` calls. The
-parts' count is none: the verifier refuses more than `RecBudget.MAX_STATEMENTS = 16` (`nS_le_of_partIn`). Every
-statement the compiled verifier accepts is at these sizes (`sizesAt_of_run_acc`). -/
 def SizesAt (b : Brings) (x : Msg) : Prop :=
   (∃ s spec sts, FlockDeploy.PlainIn (xIOf x) s spec sts ∧ sts.size = 1) ∧
     (∀ j < nS x, ∃ i spec' sts', PartIn (staged b.st x (pick b.st x j) j) i spec' sts' ∧ sts'.size = 1) ∧
     (innerSetupIns (xIOf x)).length ≤ 2 ^ 32
 
-/-- **At the deployment's sizes `x` stages at most `16` V\* parts** (`nS_le_sixteen`). -/
 theorem SizesAt.nS_le {b : Brings} {x : Msg} (h : SizesAt b x) : nS x ≤ 16 :=
   nS_le_sixteen h.2.1
 

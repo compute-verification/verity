@@ -37,34 +37,8 @@ import Proofs.Flock.Claims.Recursion.BoundAccepts
 import Proofs.Flock.Claims.Recursion.DeployFacts
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# V*'s readers at the bound layout without `ReadersRunPlayed` (option (d))
-
-`KSBoundRouteCols` takes three facts about V*'s readers at the bound layout: `ReadersTrue`, `ReadersLogColl` and
-`ReadersRunPlayed`. A route reads `ReadersRunPlayed` only on accepted runs whose `E_O` gives witnesses, at the rounds
-before the last, and there it follows from the part facts the route already takes, at one fact about the layout
-(`LayoutB.HeldWhole`: a round some part holds whole has no pieces):
-
-* a round the statement fixes is the statement's message (`LayoutB.pick`), the same at every run;
-* a round held whole by some part (`VStarB.HeldB`) is read as the first holder holds it, the commit string its statement
-  shows (`VStarB.PartOpensB`), the run's (`StagedRuns`);
-* a round assembled from pieces is read as the pieces' bytes, each sitting at its offset in the commit string its
-  part's statement shows (`PartOpensB` again), so the readers' message is the run's first bytes the pieces span;
-* or two of one part's recorded calls collide (`RecDeploy.readers_run`).
-
-`ReadersRunPlayed` itself asks more: at every staged message list in the outer relation, run or not, and at fixed rounds
-too, where the readers' message is the statement's and not the run's. So it is not what a route needs: the readers'
-rounds before the last come off V*'s parts (`RecDeploy.readers_run`, `RecDeploy.readersRun_pick`), and V* accepts
-without it (`RecDeploy.vstarAccepts_boundW`, `RecDeploy.vstarAcceptsV_boundW`), which `KSLin2Staged`'s route reads in
-its place.
-
-The staging is read only at accepted runs (`StagedRuns`), not at every staging as `VStarB.VstarShowsB` asks, which with
-`HeldB` leaves the deployed compiled verifier no accepted run at a statement with a part; so `VStar.RunPairs` isn't
-needed either.
-
-`ReadersTrue` and `ReadersLogColl` stay premises: each is a fact about V*'s circuits (the SHA-512 evaluations the parts
-record are true ones, and they are `IVStar`'s calls), which no layout here pins.
--/
+/-! V\*'s readers at the bound layout without `ReadersRunPlayed` (option (d)); `ReadersTrue` and `ReadersLogColl` stay
+premises, facts about V\*'s circuits that no layout here pins. -/
 
 @[expose] public section
 
@@ -72,24 +46,18 @@ namespace Claims.Recursion.VStarB
 
 open Claims
 
-/-- **Only the last round is assembled from pieces**: every round before the last has none (a fact about the layout,
-by construction where the layout gives pieces only at the last round). -/
 def LayoutB.WholeBeforeLast (L : LayoutB) : Prop :=
   ∀ x i, i + 1 < L.rounds x → L.pieceAt x i = []
 
-/-- **A round some part holds whole has no pieces**, before the last (a fact about the layout). -/
 def LayoutB.HeldWhole (L : LayoutB) : Prop :=
   ∀ x s i, i + 1 < L.rounds x → (L.msgAt x s i).isSome → L.pieceAt x i = []
 
 theorem LayoutB.WholeBeforeLast.heldWhole {L : LayoutB} (h : L.WholeBeforeLast) : L.HeldWhole :=
   fun x _ i hi _ => h x i hi
 
-/-- **The readers' message at a round, given the run's**: the statement's where it fixes the round; where the round is
-assembled from pieces, the run's first bytes the pieces span; else the run's. -/
 def LayoutB.pick (L : LayoutB) (x : Msg) (i : ℕ) (m : Msg) : Msg :=
   (L.fixedAt x i).getD (if (L.pieceAt x i).isEmpty then m else m.take (L.piecesLen x i))
 
-/-- `CmtAgrees` where the readers' message at each round it asks about is `pick` of the commit string. -/
 theorem LayoutB.cmtAgrees_of_pick {L : LayoutB} {cmt : Msg → ℕ → Msg → Msg} {x xO : Msg} {ms : List Msg}
     (h : ∀ i, i + 1 < L.rounds x → L.fixedAt x i = none → ms.getD i [] = L.pick x i (cmt x i xO)) :
     L.CmtAgrees cmt x xO ms := by
@@ -117,8 +85,6 @@ theorem flatMap_take_of_slices {α β : Type} (len : α → ℕ) (g : α → Lis
     simp only [List.map_nil, List.sum_nil, Nat.add_zero] at h0
     rw [List.flatMap_cons, List.map_cons, List.sum_cons, List.take_add, ih, h0, List.drop_drop]
 
-/-- **A round assembled from pieces that each sit in `M` at their offsets is `M`'s first bytes they span**, where every
-piece's part has a witness. -/
 theorem LayoutB.assembled_eq_take {L : LayoutB} {x : Msg} {ws : List Flock.Wit} {i : ℕ} {M : Msg}
     (hp : ∀ p ∈ L.pieceAt x i, p.1 < ws.length)
     (hM : ∀ pre p post, L.pieceAt x i = pre ++ p :: post → ∀ hs : p.1 < ws.length,
@@ -135,8 +101,6 @@ theorem LayoutB.assembled_eq_take {L : LayoutB} {x : Msg} {ws : List Flock.Wit} 
     rw [Nat.zero_add, hM pre q post hl hs, List.getElem?_eq_getElem hs]
     rfl
 
-/-- **A round held whole is read as its holders hold it**: at a round the statement doesn't fix, with no pieces and some
-holder, where every holder holds `M`, the readers' message is `M`. -/
 theorem LayoutB.msg_held {L : LayoutB} {x : Msg} {ws : List Flock.Wit} {i : ℕ} {M : Msg}
     (hf : L.fixedAt x i = none) (hp : L.pieceAt x i = [])
     (hex : ∃ s < ws.length, (L.msgAt x s i).isSome)
@@ -162,9 +126,6 @@ open Claims (Msg Out Prover run coinSeq replay findColl Collision)
 open FlockDeploy (Coin)
 open Claims.Recursion (Bound Inner)
 
-/-- **The staged V\* statements show the accepted run**: on an accepted run of a compiled statement of the shape, each
-V* statement shows the run's coins (`shows`) and, as the commit string of each inner round before the last (`cmt`), the
-run's message at that round. -/
 def StagedRuns {W : Type} (H : Msg → Msg) (D : Claims.Recursion.Deploy Coin) (I : Claims.Recursion.Inner Coin W)
     (L : Claims.Recursion.VStarB.LayoutB) (shape : Claims.Recursion.Form → Prop)
     (shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop) (cmt : Msg → ℕ → Msg → Msg) : Prop :=
@@ -175,12 +136,6 @@ def StagedRuns {W : Type} (H : Msg → Msg) (D : Claims.Recursion.Deploy Coin) (
           cmt x i ((Claims.Recursion.runVstar H D I P x ω r).getD s []) =
             ((run H P D.V x ω r).msgs.map Prod.fst).getD i []
 
-/-- **The readers' rounds before the last are the run's, read through `pick`**, at one shape: at a statement of the
-shape whose V* statements show the run (`hsh`, from `StagedRuns` at an accepted run), at outer witnesses in the outer
-relation there whose recorded calls are true evaluations, each round before the last is the statement's where it fixes
-it, the run's message's first bytes its pieces span where it has pieces, else the run's message; or two of one part's
-recorded calls collide. From the layout's rounds (`HeldB`, `HeldWhole`) and the parts' holdings and pieces
-(`PartOpensB`). -/
 theorem readers_run {W Col T : Type} (H : Msg → Msg) (I : Claims.Recursion.Inner Coin W)
     (ivScope : Msg → Bool) (b : Brings) (L : Claims.Recursion.VStarB.LayoutB) (DO : Claims.Flock.Deploy Coin Col T)
     (shape : Claims.Recursion.Form → Prop)
@@ -258,10 +213,6 @@ theorem readers_run {W Col T : Type} (H : Msg → Msg) (I : Claims.Recursion.Inn
       exact (hopen p.1 hs _ hshs.1 j hj1).2 pre p post hl rfl
   · simp [Claims.Recursion.VStarB.LayoutB.pick, Claims.Recursion.VStarB.LayoutB.msg, hfx]
 
-/-- **`VStarAccepts` at V\*'s bound layout, without `ReadersRunPlayed`**: `vstarAccepts_bound` with the staging read at
-the accepted run (`StagedRuns`) and the readers' rounds before the last off the parts (`readers_run`), at a layout whose
-held rounds have no pieces (`HeldWhole`). A round a part holds whole is one the statement doesn't fix and that has no
-pieces, so there the readers' message is the run's. -/
 theorem vstarAccepts_boundW {W Col T : Type} (H : Msg → Msg) (I : Claims.Recursion.Inner Coin W)
     (ivScope : Msg → Bool) (b : Brings) (L : Claims.Recursion.VStarB.LayoutB) (DO : Claims.Flock.Deploy Coin Col T)
     (shape : Claims.Recursion.Form → Prop)
@@ -340,9 +291,6 @@ theorem vstarAccepts_boundW {W Col T : Type} (H : Msg → Msg) (I : Claims.Recur
   · exact Or.inl hd
   · exact Or.inr (Claims.Recursion.VStar.coll_of_sub htrue (fun _ h => h) hd)
 
-/-- **`VStarAcceptsV` at V\*'s bound layout, without `ReadersRunPlayed`**: `vstarAccepts_boundW` with each part's
-check holding off a collision among its recorded calls and the compiled verifier's own at its V\* statement
-(`PartChecksBV`), which are among the run's evaluations (`vcallsAt_sub`). -/
 theorem vstarAcceptsV_boundW {W Col T : Type} (H : Msg → Msg) (I : Claims.Recursion.Inner Coin W)
     (ivScope : Msg → Bool) (b : Brings) (L : Claims.Recursion.VStarB.LayoutB) (DO : Claims.Flock.Deploy Coin Col T)
     (shape : Claims.Recursion.Form → Prop)
@@ -435,10 +383,6 @@ theorem vstarAcceptsV_boundW {W Col T : Type} (H : Msg → Msg) (I : Claims.Recu
   · exact Or.inr (Claims.Recursion.VStar.coll_of_sub (fun e he => (List.mem_append.1 he).elim (htrue e) (hS e))
       (fun _ h => List.mem_append_left _ h) hd)
 
-/-- **The readers' rounds before the last are the run's, read through `pick`, off a collision**, where `E_O` gives
-witnesses on an accepted run: the run's statement parses (`refuses`), its form is dense, holo or sparse, `E_O`'s
-witnesses are in the outer relation (`eoGives_outerHolds`) with true recorded calls (`callsTrue`), and `readers_run`
-at that shape. -/
 theorem readersRun_pick {W Col T : Type} (H : Msg → Msg) (I : Claims.Recursion.Inner Coin W) (ivScope : Msg → Bool)
     (b : Brings) (L : Claims.Recursion.VStarB.LayoutB) (DO : Claims.Flock.Deploy Coin Col T)
     (hHW : L.HeldWhole)

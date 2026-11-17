@@ -49,22 +49,7 @@ import Proofs.Flock.Claims.Scope.Fit
 import Proofs.Flock.Claims.Scope.Setup
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
 
-/-!
-# The chain's commit ties at a joint acceptance
-
-Row E's commit ties (`accCommit_eq`, `innerAccCommit_eq`, `innerInnerCommit_eq`) take, at each of the two parts, its
-staged statement and check, its setup's table labelled in order, its reads file, its unit below the table's instance
-count, and, across both, a record listing the registered reads (`RegListed`) and no collision among the true calls and
-the setups' evaluations at a list `xs` holding both staged statements. Each part's premises come from its `AccV` at
-`xs.getD s []` (`tiePremises_of_accV`): its staged statement and decision (`showsDec`) label the table (`idx_of_dec`);
-V\* gives its unit count, at most the table's (`instances_le`); and a level or algebra part's unit is one
-`RecCoins.check` refuses without the reads file (`registered_recOpen`, `registered_inner`). The statement sets up, so it
-is in `xs` (`getD_mem_of_setup`), and the collision clause is `hcol`, which `PortsAtV` carries beside `JointP`. At the
-dense form a part holds rows only as a level (`acc`) or an algebra part (`acc0`, `acc1`) (`slotAt_of_holding`; R's
-levels are absent, `stacked_none`), at the positions `accRead` names, so any two slots of one row tie
-(`slotCommit_eq`): `AccCommitW` and `InnerAccTie` with `xs`, `hxs` and `hcol` after `JointP`
-(`accCommitV`, `innerAccTieV`), wherever the brings list the registered reads (`RegSetup`, which `deployedB` gives).
--/
+/-! The chain's commit ties (`AccCommitV`, `InnerAccTieV`) at a joint acceptance of the parts' staged statements. -/
 
 @[expose] public section
 
@@ -77,10 +62,6 @@ open Claims.Recursion.VStarB
 
 noncomputable section
 
-/-! ## The shape's schedule -/
-
-/-- **A dense statement names no R**: candidate 3's statements leave `stacked` empty without a sparse part
-(`RecScope.candidate3_ok`). -/
 theorem stacked_none {x : Msg} {st : Claims.Recursion.CompiledStatement} (hst : parse x = some st)
     (hd : Claims.Recursion.Form.Dense st.form) {r : XR} (hr : readX x = some r) : r.shape.stacked = none := by
   obtain ⟨r', hr', ha, rfl⟩ := parse_read hst
@@ -101,14 +82,12 @@ theorem stacked_none {x : Msg} {st : Claims.Recursion.CompiledStatement} (hst : 
   · rw [hsp] at hs
     cases hs
 
-/-- **A read statement's shape has a schedule** (`listed_of_statements`). -/
 theorem fast100_of_read {x : Msg} {r : XR} (hr : readX x = some r) : ∃ sch, fast100 r.shape.m = some sch := by
   obtain ⟨vs, hvs, -, -⟩ := readX_partVStar hr
   obtain ⟨_, _, _, sch, -, -, -, hf, -⟩ := DecompBR.listed_of_statements hvs
   exact ⟨sch, hf⟩
 
-/-- **The inner schedule is V\*'s** at a dense statement with a level part (`levelMatch`'s); ResStepsW's
-`schAt_fast100`, here so that this file needs no chain module. -/
+/-- ResStepsW's `schAt_fast100`, restated so that this file needs no chain module. -/
 private theorem schAt_fast100A {x : Msg} {st : Claims.Recursion.CompiledStatement} (hst : parse x = some st)
     (hd : Claims.Recursion.Form.Dense st.form) {r : XR} (hr : readX x = some r) {ss : Array VStar.Stmt}
     (hss : _root_.Flock.RecVStar.statements r.shape = .ok ss) {s lv LANES HH n : ℕ}
@@ -138,8 +117,6 @@ private theorem schAt_fast100A {x : Msg} {st : Claims.Recursion.CompiledStatemen
   rw [e]
   exact hsch
 
-/-- **A level's instances are its schedule level's two reps' queries** (`levelMatch`, at `schAt_fast100A`'s
-schedule). -/
 theorem recOpen_n {x : Msg} {st : Claims.Recursion.CompiledStatement} (hx : parse x = some st)
     (hf : Claims.Recursion.Form.Dense st.form) {r : XR} (hr : readX x = some r) {sch : Schedule}
     (hsch : fast100 r.shape.m = some sch) {s l LANES HH m : ℕ}
@@ -157,11 +134,6 @@ theorem recOpen_n {x : Msg} {st : Claims.Recursion.CompiledStatement} (hx : pars
     rw [he, ← hl] at hm
     exact hm
 
-/-! ## Where a part holds a row -/
-
-/-- **Part `s` reads row `P` at port `nm`, unit `u`**: a level's `acc` (`d = 0`) or `acc_out` (`d = 1`) at unit
-`u < 2q`, row `u / q · N + opensBelow l + u % q + d` (`RecVStar.accReads`); or an algebra part's `acc0` (`d = 0`) or
-`acc1` (`d = 1`) at rep `u < 2`, row `(u + d) · N`. -/
 def SlotAt (r : XR) (sch : Schedule) (s : ℕ) (nm : String) (u P : ℕ) : Prop :=
   (∃ l LANES HH m d, (RecVStar.statements r.shape).toOption.bind (·[s]?) = some (.recOpen l LANES HH m) ∧
     (nm, d) ∈ [("acc", 0), ("acc_out", 1)] ∧ u < 2 * (sch.levels[l]!).q ∧
@@ -171,8 +143,6 @@ def SlotAt (r : XR) (sch : Schedule) (s : ℕ) (nm : String) (u P : ℕ) : Prop 
     nm ∈ RecVStar.accPorts (.inner k name pt) ∧ (nm, d) ∈ [("acc0", 0), ("acc1", 1)] ∧ u < 2 ∧
     P = (u + d) * RecVStar.opensBelow sch sch.levels.size)
 
-/-- **A holding is a level's or an algebra part's slot** (`accRead`): R's levels are absent at a shape without R, and
-the other statements read no row. -/
 theorem slotAt_of_holding {r : XR} (hstk : r.shape.stacked = none) {sch : Schedule}
     (hsch : fast100 r.shape.m = some sch) {s P : ℕ} {h : String × ℕ} (hh : h ∈ accHoldings r s P) :
     SlotAt r sch s h.1 h.2 P := by
@@ -270,7 +240,6 @@ theorem slotAt_of_holding {r : XR} (hstk : r.shape.stacked = none) {sch : Schedu
       unfold accRead at hR
       simp [hA, Except.toOption] at hR
 
-/-- **A level unit's `acc_out` is its next row's slot**: where it holds row `p` at `acc`, its `acc_out` reads `p + 1`. -/
 theorem slotAt_out {r : XR} (hstk : r.shape.stacked = none) {sch : Schedule} (hsch : fast100 r.shape.m = some sch)
     {s p u : ℕ} (hh : ("acc", u) ∈ accHoldings r s p) : SlotAt r sch s "acc_out" u (p + 1) := by
   rcases slotAt_of_holding hstk hsch hh with ⟨l, LANES, HH, m, d, hsv, hnd, hu, hP⟩ | ⟨k, name, pt, d, -, -, hd, -⟩
@@ -286,14 +255,9 @@ theorem slotAt_out {r : XR} (hstk : r.shape.stacked = none) {sch : Schedule} (hs
     simp only [List.mem_cons, Prod.mk.injEq, List.mem_nil_iff, or_false] at hd
     rcases hd with ⟨h, -⟩ | ⟨h, -⟩ <;> exact absurd h (by decide)
 
-/-! ## Each part's premises -/
-
-/-- A statement that reads the chain as a level or an algebra part. -/
 def ReadsAcc (sv : VStar.Stmt) : Prop :=
   (∃ l LANES HH m, sv = .recOpen l LANES HH m) ∨ ∃ k name pt, sv = .inner k name pt
 
-/-- **A staged part's statement has at most its table's instances**: V\*'s count is the table's population
-(`staged_scope`), at most its instances (`oneFull_staged`), its public file's (`setupOne_n`). -/
 theorem instances_le {st : Stage} {s : ℕ} {x xO : Msg} (hS : StagedPart st s x xO) {i : RecIns} {spec : SessionSpec}
     {sts : Array Stmt} (hsu : setupO xO = some (i, spec, sts)) (h0 : 0 < sts.size) {r : XR} (hr : readX x = some r)
     {sv : VStar.Stmt} (hsv : (RecVStar.statements r.shape).toOption.bind (·[s]?) = some sv) :
@@ -317,9 +281,6 @@ theorem instances_le {st : Stage} {s : ℕ} {x xO : Msg} (hS : StagedPart st s x
   rw [e0] at hpop hnn
   omega
 
-/-- **A staged algebra part's setup holds the verifier's reads file**: its unit is the verifier's
-`rec-residuals/m<m>-k<k>-c<c>-p<j>` (`checkPart`'s name, `RecResiduals.check` in the parse), and `RecCoins.check`
-refuses such a unit without `--registered`. -/
 theorem registered_inner {st : Stage} {s : ℕ} {x xO : Msg} (hS : StagedPart st s x xO) {r : XR}
     (hr : readX x = some r) {k : ℕ} {name : String} {pt : VStar.Part}
     (hsv : (RecVStar.statements r.shape).toOption.bind (·[s]?) = some (.inner k name pt))
@@ -348,11 +309,6 @@ theorem registered_inner {st : Stage} {s : ℕ} {x xO : Msg} (hS : StagedPart st
     unfold RecCoins.check at hcoin
     simp [hpar] at hcoin
 
-/-- **The commit ties' premises at part `s`, from its acceptance at its staged statement `xO` with its decision**
-(`AccV`, `PortsAtV`'s `hxs`): `xO` is staged (`showsDec`) and its witness checks against it; its setup has at least
-one table, labelled in order (`idx_of_dec`, at the decision `showsDec` carries); and at every V\* statement it has, at
-most the table's instances (`instances_le`), with the reads file wherever it is a level or an algebra part
-(`registered_recOpen`, `registered_inner`). -/
 theorem tiePremises_of_accV {rd : Msg → Option FinalP} {wE : Msg → ℝ}
     {final : Msg → Option (List (List (Msg × Salt)) × Msg)} {w : Msg → ℝ} {b : Brings}
     {elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))}
@@ -377,12 +333,6 @@ theorem tiePremises_of_accV {rd : Msg → Option FinalP} {wE : Msg → ℝ}
   · exact registered_recOpen hS hr hsv hsu
   · exact registered_inner hS hr hsv hsu
 
-/-! ## Two slots of one row carry one commit string -/
-
-/-- **Two slots of one row carry one commit string**, at a dense statement whose brings list the registered reads,
-where every part accepts at its staged statement in `xs` (`hxs`) and the true calls `hl` and the setups' evaluations at
-`xs` have no collision (`hcol`): each slot is a level's or an algebra part's (`SlotAt`), so `accCommit_eq`,
-`innerAccCommit_eq` (both ways) or `innerInnerCommit_eq`, at each part's premises (`tiePremises_of_accV`). -/
 theorem slotCommit_eq {rd : Msg → Option FinalP} {wE : Msg → ℝ}
     {final : Msg → Option (List (List (Msg × Salt)) × Msg)} {w : Msg → ℝ} {b : Brings}
     {elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))}
@@ -450,12 +400,6 @@ theorem slotCommit_eq {rd : Msg → Option FinalP} {wE : Msg → ℝ}
     exact innerInnerCommit_eq hS hS' hxO hxO' hck hck' hr hpc hpc' hsv hsv' hsch hsu hsu' h0 h0' hidx hidx' hown hown' hnm hd
       hnm' hd' hq hq' (by omega) (by omega) (hP.symm.trans hP') hD hl hcol hxs1 hxs1'
 
-/-! ## The accumulator ties `AccCommitW` and `InnerAccTie`, with every part's acceptance in `xs` and `hcol` -/
-
-/-- **`AccCommitW` with the parts' staged statements**: at `JointP`, and wherever every part accepts at its statement
-in `xs` with its decision (`hxs`, `PortsAtV`'s) and the true calls and the setups' evaluations at `xs` have no
-collision (`hcol`): where part `s`'s unit `u` holds `acc` at row `p`, its `nm` port (`acc`, or `acc_out` for row
-`p + 1`) and any holding `h'` of row `p + d` at part `s'` read one commit string at the parts' own witnesses. -/
 def AccCommitV (rd : Msg → Option FinalP) (wE : Msg → ℝ) (final : Msg → Option (List (List (Msg × Salt)) × Msg))
     (w : Msg → ℝ) (b : Brings) (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin)))
     (shape : Claims.Recursion.Form → Prop) (untr : TrReader) (cmt : Msg → ℕ → Msg → Msg) : Prop :=
@@ -476,9 +420,6 @@ def AccCommitV (rd : Msg → Option FinalP) (wE : Msg → ℝ) (final : Msg → 
       cc'.ports.findIdx? (·.name == h'.1) = some q' →
       readForms wt (hmCommit cc qn u) = readForms wt' (hmCommit cc' q' h'.2)
 
-/-- **`AccCommitV` at the dense form**, wherever the brings list the registered reads: the unit's `acc` (`acc_out`) is
-row `p`'s (`p + 1`'s) slot (`slotAt_of_holding`, `slotAt_out`), as is `h'` (`slotAt_of_holding`), so they tie
-(`slotCommit_eq`). -/
 theorem accCommitV (rd : Msg → Option FinalP) (wE : Msg → ℝ) (final : Msg → Option (List (List (Msg × Salt)) × Msg))
     (w : Msg → ℝ) (b : Brings) (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin)))
     (untr : TrReader) (cmt : Msg → ℕ → Msg → Msg) (hRS : RegSetup b) :
@@ -494,10 +435,7 @@ theorem accCommitV (rd : Msg → Option FinalP) (wE : Msg → ℝ) (final : Msg 
     · exact slotAt_out hstk hsch hh
   exact slotCommit_eq hRS hx hf hJ.2.1 hxs hcol hms hr hpc hpc' hw hw' hsch h1 (slotAt_of_holding hstk hsch hh') hq hq'
 
-/-- **`InnerAccTie` with the parts' staged statements** (`hxs`, `hcol` as in `AccCommitV`): wherever part `s` (an
-algebra part) holds row `p` at `h` (port `q`) and `accCanon` names the row's owner `(o, co, ho)`, the owner's port
-`ho.1` is a port `q'` of its circuit and the two slots carry one commit string. (`InnerAccTie`'s `rowPfx` conjunct is
-not needed: `held_rows_eq` takes prefixes of one length, `rowPfx_length`.) -/
+/-- Omits `InnerAccTie`'s `rowPfx` conjunct, which `held_rows_eq` doesn't need (`rowPfx_length`). -/
 def InnerAccTieV (rd : Msg → Option FinalP) (wE : Msg → ℝ) (final : Msg → Option (List (List (Msg × Salt)) × Msg))
     (w : Msg → ℝ) (b : Brings) (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin)))
     (shape : Claims.Recursion.Form → Prop) (untr : TrReader) (cmt : Msg → ℕ → Msg → Msg) : Prop :=
@@ -520,9 +458,6 @@ def InnerAccTieV (rd : Msg → Option FinalP) (wE : Msg → ℝ) (final : Msg �
     ∃ q', co.ports.findIdx? (·.name == ho.1) = some q' ∧
       readForms wt (hmCommit cS q h.2) = readForms wo (hmCommit co q' ho.2)
 
-/-- **`InnerAccTieV` at the dense form**, wherever the brings list the registered reads: the owner holds the row
-(`accCanon_spec`) at a port of its circuit (`accPort_deployed`), and both holdings are the row's slots
-(`slotAt_of_holding`), so they tie (`slotCommit_eq`). -/
 theorem innerAccTieV (rd : Msg → Option FinalP) (wE : Msg → ℝ)
     (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ) (b : Brings)
     (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))) (untr : TrReader)

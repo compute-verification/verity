@@ -44,30 +44,8 @@ import Proofs.Flock.Claims.Recursion.SlotsCheck
 import Proofs.Flock.Claims.Recursion.TopsOpens
 import Proofs.Flock.Claims.Recursion.TopsStaged
 
-/-!
-# `KSLin2` and `BitsLin2` at the layout of record (`DeployedR.layR`)
-
-`DeployedR.layR elem` is `layoutBTops (finOpen (restR elem))` with every part's other hm96 calls recorded too
-(`DeployedR.moreCalls`: the output rows', check 5's and the `rec-acc` chain's). Its rounds, held messages, pieces and
-readers' messages are `layoutBTops`', so of the route's premises only the two that read the recorded calls move:
-
-* `ReadersTrue` (`readersTrue_layR`): `layoutBTops`' calls are true off `HmSlotsCommit` (`readersTrue_layoutBTops`),
-  and the extra ones off `MoreSlotsTrue`, the same fact at `moreCalls`' slots: at a part's staged statement, a witness
-  in the outer relation evaluates each of them truly.
-* `PartOpensB` (`partOpensB_layR`): a part's calls true at `layR` are true at `layoutBTops`, and a collision among
-  `layoutBTops`' calls is one among `layR`'s.
-
-`ksLin2_deployedR_layR` and `bitsLin2_deployedR_layR` are `ksLin2_deployedR_partAccepts` and
-`bitsLin2_deployedR_partAccepts` at `layR`, reopened on `PlainRdInR`, `MoreSlotsTrue` and `DecompB` at `PartAccepts`
-there. `ksLin2_deployedR_layRP` asks the pinned form instead, `DecompBP` at `PartAcceptsP` (each part's check at its
-own witness `ws[s]`), through `ksLin2_route_stagedP`; `DecompB` at `PartAccepts` gives it (`decompBP_of_decompB`).
-
-**`λ₂` does not read the layout's calls.** `lamLin2`'s `c_S = c_Be + |S(x_I)| + 2(n + v)` reads the parts' numbers,
-the inner setup, the inner verifier's calls `n` and the compiled verifier's own `v`; the recorded calls are found, not
-evaluated, by the finders. `lamLin2_layR_ge` charges the extra calls anyway, `e` more per sample beside `v`: `λ₂ ≥ 100`
-holds at `layR` for every `v, e ≤ 2^54` (`lamLin2_deployed_ge_dep`, whose six terms are each at least `103` up to
-`c_S ≤ 2^59`).
--/
+/-! `KSLin2` and `BitsLin2` at the layout of record (`ksLin2_deployedR_layR`, `bitsLin2_deployedR_layR`); `λ₂` does not
+read the layout's calls. -/
 
 @[expose] public section
 
@@ -77,11 +55,6 @@ open Flock
 open Claims (Msg Out)
 open FlockDeploy (Coin FinalP nextR)
 
-/-! ## The extra calls' slots -/
-
-/-- **The extra calls are true at a witness in the outer relation** (`HmSlotsCommit` at `DeployedR.moreCalls`): at a
-part's staged statement, a witness `Flock.check` passes evaluates each of the part's output rows', check 5's and
-`rec-acc` chain's hm96 calls truly. -/
 def MoreSlotsTrue {Col T : Type} (DO : Claims.Flock.Deploy Coin Col T) (st : Stage) : Prop :=
   ∀ (x : Msg) (ms : List (Msg × Out)) (s : ℕ) (w : Claims.Flock.Wit) (r : XR),
     StagedPart st s x (staged st x ms s) → Claims.Flock.check DO.parse (staged st x ms s) w = true → readX x = some r →
@@ -89,8 +62,6 @@ def MoreSlotsTrue {Col T : Type} (DO : Claims.Flock.Deploy Coin Col T) (st : Sta
         FlockDeploy.sha512 (p.1 ++ Claims.Recursion.VStarB.readForms w p.2.1) =
           Claims.Recursion.VStarB.readForms w p.2.2
 
-/-- **`ReadersTrue` at the layout of record**: `layoutBTops`' calls off `HmSlotsCommit` (`readersTrue_layoutBTops`),
-the extra ones off `MoreSlotsTrue`. -/
 theorem readersTrue_layR {Col T : Type} (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin)))
     (IV : Claims.Verifier Coin) (b : Brings) (DO : Claims.Flock.Deploy Coin Col T) (h : HmSlotsCommit DO b.st)
     (hM : MoreSlotsTrue DO b.st) :
@@ -118,8 +89,6 @@ theorem readersTrue_layR {Col T : Type} (elem : (r : XR) → List (Fin r.w.parts
       obtain ⟨p, hp, rfl⟩ := List.mem_map.1 he
       exact hM x _ s ws[s] r hsg hck hr p hp
 
-/-! ## The route's premises at `layR` -/
-
 section Transfer
 
 variable (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin)))
@@ -133,8 +102,6 @@ theorem heldB_layR {W : Type} {D : Claims.Recursion.Deploy Coin} {I : Claims.Rec
     Claims.Recursion.VStarB.HeldB D I (DeployedR.layR elem) shape :=
   h
 
-/-- **`PartOpensB` at `layR` from `layoutBTops`'**: a part's calls true at `layR` are true at `layoutBTops`
-(`layoutBTops_sub_layR`), and a collision among `layoutBTops`' is one among `layR`'s. -/
 theorem partOpensB_layR {Col T : Type} {H : Msg → Msg} {D : Claims.Recursion.Deploy Coin}
     {DO : Claims.Flock.Deploy Coin Col T} {shape : Claims.Recursion.Form → Prop}
     {shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop} {cmt : Msg → ℕ → Msg → Msg} {s : ℕ}
@@ -149,7 +116,6 @@ theorem partOpensB_layR {Col T : Type} {H : Msg → Msg} {D : Claims.Recursion.D
 theorem readsRows_layR : (DeployedR.layR elem).ReadsRows FlockDeploy.sha512 :=
   Claims.Recursion.VStarB.LayoutB.readsRows_of_rowIn fun _ _ => rfl
 
-/-- **`HeldB` at `layR`, at the dense form and the deployed inner verifier.** -/
 theorem heldB_dense_layR (nextE : Msg → List Msg → List Coin → Claims.OC Out)
     (colsE : Claims.Seen → ℕ → List (ℕ × List FlockLevel3.GF128)) (bR : Brings) (wE : Msg → ℝ)
     (join : List Msg → Msg) (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ)
@@ -163,7 +129,6 @@ theorem heldB_dense_layR (nextE : Msg → List Msg → List Coin → Claims.OC O
   heldB_layR elem (heldB_layoutBTops _ _ _ _ (fun _ => rfl) (finOpen (DeployedR.restR elem)) _ schedMatches_dense
     (capPorts _) (rowsCover _) (finPieces_finOpen (DeployedR.restR elem) _))
 
-/-- **`PartOpensB` at `layR`, at the dense form and the challenger's live-coin part's reader.** -/
 theorem partOpensB_dense_layR (bR : Brings) (IV : Claims.Verifier Coin) (s : ℕ) :
     Claims.Recursion.VStarB.PartOpensB FlockDeploy.sha512
       (recBound _root_.Flock.Readable.relation bR (DeployedR.layR elem) IV)
@@ -173,13 +138,7 @@ theorem partOpensB_dense_layR (bR : Brings) (IV : Claims.Verifier Coin) (s : ℕ
 
 end Transfer
 
-/-! ## `KSLin2` at any layout meeting the route's layout premises -/
-
-/-- **`KSLin2` at the deployment's dense statements, the challenger's live-coin part's record and any steps and columns meeting
-`StepsBaseC`, at any layout `L` whose rows, holdings, part openings and readers meet the route's premises, from
-`DecompB` at `PartAccepts`**: `ksLin2_route_staged`, with `StagedB` from `stagedB_deployRec_part` at `recRead`
-(`readsBack_recTr`) and the inner check from `exists_chk_iff`. The layout stays a variable here, so no step unfolds
-it. -/
+/-- The layout stays a variable so no step unfolds it. -/
 theorem ksLin2_stepsC_at (nextE : Msg → List Msg → List Coin → Claims.OC Out)
     (colsE : Claims.Seen → ℕ → List (ℕ × List FlockLevel3.GF128)) (b : Brings)
     (aux : Msg → ℕ → Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ)
@@ -217,7 +176,6 @@ theorem ksLin2_stepsC_at (nextE : Msg → List Msg → List Coin → Claims.OC O
       (fun x st hst _ => hrb x st hst trivial) (hHe decI),
     hPC, hPO, hDc⟩
 
-/-- **`ksLin2_stepsC_at` from `DecompBP` at `PartAcceptsP`**, through `ksLin2_route_stagedP`. -/
 theorem ksLin2_stepsC_atP (nextE : Msg → List Msg → List Coin → Claims.OC Out)
     (colsE : Claims.Seen → ℕ → List (ℕ × List FlockLevel3.GF128)) (b : Brings)
     (aux : Msg → ℕ → Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ)
@@ -254,12 +212,6 @@ theorem ksLin2_stepsC_atP (nextE : Msg → List Msg → List Coin → Claims.OC 
       (fun x st hst _ => hrb x st hst trivial) (hHe decI),
     hPO, hD _ hsh⟩
 
-/-! ## `KSLin2` and `BitsLin2` at `layR` -/
-
-/-- **`KSLin2` at the deployment's dense statements, at the layout of record `DeployedR.layR elem`, the challenger's live-coin part's
-record (`recTr`), and any steps and columns meeting `StepsBaseC`, from `DecompB`**: `ksLin2_stepsC_at` at
-`layR`, with `ReadersTrue` from `readersTrue_layR` (`HmSlotsCommit` and `MoreSlotsTrue`) and `PartOpensB` from
-`partOpensB_layR`. -/
 theorem ksLin2_stepsC_layR (nextE : Msg → List Msg → List Coin → Claims.OC Out)
     (colsE : Claims.Seen → ℕ → List (ℕ × List FlockLevel3.GF128)) (b : Brings)
     (aux : Msg → ℕ → Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ)
@@ -283,7 +235,6 @@ theorem ksLin2_stepsC_layR (nextE : Msg → List Msg → List Coin → Claims.OC
     (heldWhole_layR elem) wE join final w hB (readersTrue_layR elem _ _ _ hmSlotsCommit_of_full hM)
     (heldB_dense_layR elem nextE colsE _ wE join final w) (partOpensB_dense_layR elem _ _) hD
 
-/-- **`BitsLin2` at the same choice**: `ksLin2_stepsC_layR` through `bitsLin2On_of_ksLin2On` (`sessionAccepts`). -/
 theorem bitsLin2_stepsC_layR (nextE : Msg → List Msg → List Coin → Claims.OC Out)
     (colsE : Claims.Seen → ℕ → List (ℕ × List FlockLevel3.GF128)) (b : Brings)
     (aux : Msg → ℕ → Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ)
@@ -309,10 +260,7 @@ theorem bitsLin2_stepsC_layR (nextE : Msg → List Msg → List Coin → Claims.
       { bR with rd := L.readers })
     (ksLin2_stepsC_layR nextE colsE b aux nOf hd recRest elem wE join final w hB hM hD)
 
-/-- **`KSLin2` at the deployment's dense statements, at the layout of record, the challenger's live-coin part's record and the
-deployed reader's steps and trimmed columns**: `ksLin2_stepsC_layR` at `stepsBase_R`. Its premises are `DecompB` at
-`PartAccepts`, `PlainRdInR` and `MoreSlotsTrue`; `Flock.SecurityProofs.RecursiveKS` proves `KSLin2` at the deployed
-reader with none. -/
+/-- `Flock.SecurityProofs.RecursiveKS` proves `KSLin2` at the deployed reader with none of its premises. -/
 theorem ksLin2_deployedR_layR (rd : Msg → Option FinalP) (b : Brings)
     (aux : Msg → ℕ → Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ)
     (hd : Msg → Flock.RecRecord.Record) (recRest : Msg → List (Msg × Out) → List UInt8)
@@ -334,9 +282,8 @@ theorem ksLin2_deployedR_layR (rd : Msg → Option FinalP) (b : Brings)
       (deployZkRec _root_.Flock.Readable.relation) FlockDeploy.KS.CpDep DenseAt :=
   ksLin2_stepsC_layR _ _ b aux nOf hd recRest elem wE join final w (stepsBase_R rd wE join final w hIn) hM
 
-/-- **`BitsLin2` at the same choice**: `bitsLin2_stepsC_layR` at `stepsBase_R`. It reads `StrictBirthday` and
-`ExpectedCR`, the named SHA-512 collision assumptions, and `ksLin2_deployedR_layR`'s open premises: a bound on a
-number under named premises, not a proved security level. -/
+/-- A bound on a number under `StrictBirthday`, `ExpectedCR` and `ksLin2_deployedR_layR`'s open premises, not a proved
+security level. -/
 theorem bitsLin2_deployedR_layR (rd : Msg → Option FinalP) (b : Brings)
     (aux : Msg → ℕ → Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ)
     (hd : Msg → Flock.RecRecord.Record) (recRest : Msg → List (Msg × Out) → List UInt8)
@@ -358,9 +305,6 @@ theorem bitsLin2_deployedR_layR (rd : Msg → Option FinalP) (b : Brings)
       (deployZkRec _root_.Flock.Readable.relation) FlockDeploy.KS.CpDep DenseAt :=
   bitsLin2_stepsC_layR _ _ b aux nOf hd recRest elem wE join final w (stepsBase_R rd wE join final w hIn) hM
 
-/-! ## The pinned form: each part's check at its own witness -/
-
-/-- **`ksLin2_stepsC_layR` from `DecompBP` at `PartAcceptsP`**: `ksLin2_stepsC_atP` at `layR`. -/
 theorem ksLin2_stepsC_layRP (nextE : Msg → List Msg → List Coin → Claims.OC Out)
     (colsE : Claims.Seen → ℕ → List (ℕ × List FlockLevel3.GF128)) (b : Brings)
     (aux : Msg → ℕ → Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ)
@@ -384,9 +328,7 @@ theorem ksLin2_stepsC_layRP (nextE : Msg → List Msg → List Coin → Claims.O
     (heldWhole_layR elem) wE join final w hB (readersTrue_layR elem _ _ _ hmSlotsCommit_of_full hM)
     (heldB_dense_layR elem nextE colsE _ wE join final w) (partOpensB_dense_layR elem _ _) hD
 
-/-- **`KSLin2` at the deployed reader's steps, at the layout of record, from the pinned form**:
-`ksLin2_stepsC_layRP` at `stepsBase_R`. Its premises are `DecompBP` at `PartAcceptsP`, `PlainRdInR` and
-`MoreSlotsTrue`; `Flock.SecurityProofs.RecursiveKS` proves `KSLin2` at the deployed reader with none. -/
+/-- `Flock.SecurityProofs.RecursiveKS` proves `KSLin2` at the deployed reader with none of its premises. -/
 theorem ksLin2_deployedR_layRP (rd : Msg → Option FinalP) (b : Brings)
     (aux : Msg → ℕ → Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ)
     (hd : Msg → Flock.RecRecord.Record) (recRest : Msg → List (Msg × Out) → List UInt8)
@@ -408,10 +350,6 @@ theorem ksLin2_deployedR_layRP (rd : Msg → Option FinalP) (b : Brings)
       (deployZkRec _root_.Flock.Readable.relation) FlockDeploy.KS.CpDep DenseAt :=
   ksLin2_stepsC_layRP _ _ b aux nOf hd recRest elem wE join final w (stepsBase_R rd wE join final w hIn) hM
 
-/-! ## `λ₂` at `layR`, charged the extra calls -/
-
-/-- **`λ₂ ≥ 100` at the layout of record, with `c_S` charged `e` extra calls per sample** beside the compiled verifier's
-own `v` (`c_S = c_Be + |S(x_I)| + 2(n + v + e)`): `lamLin2_deployed_ge_dep` at `layR` and `v + e ≤ 2^55`. -/
 theorem lamLin2_layR_ge (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (b : Brings)
     (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin)))
     (nextE : Msg → List Msg → List Coin → Claims.OC Out)

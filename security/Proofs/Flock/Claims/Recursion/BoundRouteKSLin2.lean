@@ -45,17 +45,8 @@ import Proofs.Flock.Claims.Recursion.DeploySessions
 import Proofs.Flock.Claims.Recursion.FlockKSRecord
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# `KSLin2` at the deployment (route 2C)
-
-`RecDeploy.ksBoundRouteLin_merged` reaches `KSBoundLin` from (P1) at `DE` and pays the inner root `√(γ_BI·Pr[B_I])`.
-`RecDeploy.ksLin2_route` reaches `KSLin2` from `KSFlockLin` at `DE` instead, on the same facts at `deployRecC` and with
-no weight premise: `Bound.ksLin2_of_flockLin_binds` there, carried to the deployed record. It is stated at the dense
-statements (`KSLin2On … DenseAt`), from V*'s facts at the dense shape only: the bound at one statement reads
-`InnerAcceptsColl` and `ForksBind` only there (`InnerAcceptsCollAt`, `ForksBindAt`). `E*`'s output is the same
-(`E_eval_C`), and of the bound's terms only the composite finders read an inner view, through `accAtI`, which decides
-alike at the two records (`accAtI_C`, from `innerView_C`).
--/
+/-! Route 2C: `KSLin2` at the deployed records' dense statements from `KSFlockLin` at `DE`, with no weight premise
+(`RecDeploy.ksLin2_route`). -/
 
 @[expose] public section
 
@@ -69,7 +60,6 @@ section Cols
 
 variable {Col T : Type}
 
-/-- `dec` decides at `deployRecC` as at the deployed record (`innerView_C`). -/
 theorem dec_out_C [DecidableEq Col] (H : Msg → Msg) (Bd : Bound Coin Col T) (ivScope : Msg → Bool) (b : Brings)
     (hCF : Bd.LastCoinFree H) (x : Msg) (r : Fin ((deployRec Bd.IVStar ivScope b).V.k x) → Coin)
     (o : Option (List Claims.Flock.Wit)) :
@@ -79,8 +69,6 @@ theorem dec_out_C [DecidableEq Col] (H : Msg → Msg) (Bd : Bound Coin Col T) (i
   | none => rfl
   | some ws => exact (innerView_C H Bd ivScope b hCF x r ws).1
 
-/-- A sample's inner view accepts at `deployRecC` where it does at the deployed record: `E_O` reads no inner view, and
-`dec` decides alike (`dec_out_C`). -/
 theorem accAtI_C {Col' T' : Type} [DecidableEq Col] [DecidableEq Col'] (H : Msg → Msg) (Bd : Bound Coin Col T)
     (decI : List (ℕ × Col) → List T) (ivScope : Msg → Bool) (b : Brings) (DO : Claims.Flock.Deploy Coin Col' T')
     (decO : List (ℕ × Col') → List T') (hCF : Bd.LastCoinFree H) {Ω : Type} (P : Prover Ω) (x : Msg) :
@@ -91,7 +79,6 @@ theorem accAtI_C {Col' T' : Type} [DecidableEq Col] [DecidableEq Col'] (H : Msg 
   rw [dec_out_C H Bd ivScope b hCF x d.1]
   try rfl
 
-/-- `FCI` at `deployRecC` is `FCI` at the deployed record: it reads the inner view only through `accAtI`. -/
 theorem PrFCI_C {Col' T' : Type} [DecidableEq Col] [DecidableEq Col'] (H : Msg → Msg) (Bd : Bound Coin Col T)
     (decI : List (ℕ × Col) → List T) (ivScope : Msg → Bool) (b : Brings) (DO : Claims.Flock.Deploy Coin Col' T')
     (decO : List (ℕ × Col') → List T') (hCF : Bd.LastCoinFree H) (Cp : Claims.Recursion.Caps Coin) {Ω : Type}
@@ -103,7 +90,6 @@ theorem PrFCI_C {Col' T' : Type} [DecidableEq Col] [DecidableEq Col'] (H : Msg �
   rw [h]
   try rfl
 
-/-- `F0I` at `deployRecC` is `F0I` at the deployed record: it reads the inner view only through `accAtI`. -/
 theorem PrF0I_C {Col' T' : Type} [DecidableEq Col] [DecidableEq Col'] (H : Msg → Msg) (Bd : Bound Coin Col T)
     (decI : List (ℕ × Col) → List T) (ivScope : Msg → Bool) (b : Brings) (DO : Claims.Flock.Deploy Coin Col' T')
     (decO : List (ℕ × Col') → List T') (hCF : Bd.LastCoinFree H) {Ω : Type} [Fintype Ω] [Nonempty Ω]
@@ -115,8 +101,6 @@ theorem PrF0I_C {Col' T' : Type} [DecidableEq Col] [DecidableEq Col'] (H : Msg �
   rw [h]
   try rfl
 
-/-- **`KSLin2`'s bound at `deployRecC` is its bound at the deployed record**: `E*`'s output is the same
-(`E_eval_C`), and of the bound's terms only `PrFCI` and `PrF0I` read an inner view (`PrFCI_C`, `PrF0I_C`). -/
 theorem ksLin2_of_C {Col' T' : Type} [DecidableEq Col] [DecidableEq Col'] [Zero Col'] (H : Msg → Msg)
     (Bd : Bound Coin Col T) (decI : List (ℕ × Col) → List T) (ivScope : Msg → Bool) (b : Brings)
     (DO : Claims.Flock.Deploy Coin Col' T') (decO : List (ℕ × Col') → List T') (hCF : Bd.LastCoinFree H)
@@ -168,8 +152,6 @@ theorem ksLin2_of_C {Col' T' : Type} [DecidableEq Col] [DecidableEq Col'] [Zero 
       try exact Iff.rfl
   exact hE.trans_le h
 
-/-- **`ksLin2_of_C` at the V finders**: the finders read the calls at each sample's coins (`Deploy.callsAt`), which are
-the same at both records, and the inner view only through `accAtI` (`PrFCI_C`, `PrF0I_C`). -/
 theorem ksLin2_of_C_setup {Col' T' : Type} [DecidableEq Col] [DecidableEq Col'] [Zero Col'] (H : Msg → Msg)
     (Bd : Bound Coin Col T) (decI : List (ℕ × Col) → List T) (ivScope : Msg → Bool) (b : Brings)
     (DO : Claims.Flock.Deploy Coin Col' T') (decO : List (ℕ × Col') → List T') (hCF : Bd.LastCoinFree H)
@@ -227,9 +209,6 @@ theorem ksLin2_of_C_setup {Col' T' : Type} [DecidableEq Col] [DecidableEq Col'] 
 
 end Cols
 
-/-- **`VStarAcceptsV` at V\*'s bound layout**: `vstarAccepts_bound` with each part's check holding off a collision
-among its recorded calls and the compiled verifier's own at its V\* statement (`PartChecksBV`), which are among the
-run's evaluations (`vcallsAt_sub`). -/
 theorem vstarAcceptsV_bound {W Col T : Type} (H : Msg → Msg) (I : Claims.Recursion.Inner Coin W)
     (ivScope : Msg → Bool) (b : Brings) (L : Claims.Recursion.VStarB.LayoutB) (DO : Claims.Flock.Deploy Coin Col T)
     (shape : Claims.Recursion.Form → Prop) (decC : Msg → Msg → Coin)
@@ -354,11 +333,6 @@ theorem vstarAcceptsV_bound {W Col T : Type} (H : Msg → Msg) (I : Claims.Recur
 `KSLin2` corollaries are stated at. -/
 def DenseAt (x : Msg) : Prop := ∀ s, parse x = some s → s.form.Dense
 
-/-- **`KSLin2` at the deployed records' dense statements from `KSFlockLin` at `DE`**: `KSBoundRouteLinMerged`'s
-premises with `KSFlockLin` for (P1), no weight premise, and V*'s facts at the dense shape only give `KSLin2` at the
-dense statements (`DenseAt`) of the record whose inner view runs `IVStar`: `InnerAcceptsColl` at a dense statement
-(`innerAcceptsCollAtV_of_dense`), `ksBoundRouteLin_merged`'s facts at `deployRecC` there,
-`Bound.ksLin2_of_flockLin_binds` there, carried back by `ksLin2_of_C`. -/
 theorem ksLin2_route (rel relO : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (b : Brings)
     (L : Claims.Recursion.VStarB.LayoutB) (hRows : L.ReadsRows FlockDeploy.sha512) (Cp : Claims.Recursion.Caps Coin) :
     ∀ (nextE : Msg → List Msg → List Coin → Claims.OC Out)

@@ -45,31 +45,7 @@ public import Proofs.Flock.Claims.Recursion.Gap
 public import Proofs.Flock.Claims.Recursion.KSLin
 public import Proofs.Flock.Claims.Recursion
 
-/-!
-# The compiled verifier's structural code facts
-
-The code facts the recursion's analysis reads of a deployment that follow from `deployRec`'s definition alone, each
-the analysis' own Prop (`Refuses`, `InnerRounds`, `SessionNums`, `SessionRounds`, `TableErrNonneg`,
-`SessionAccepts`, `InnerViewRun`, `CallsNil`), at `deployRec I.V ivScope b` and the outer record `deployZkRec rel`:
-
-* `refuses`: a run accepts only at a step where the compiled verifier's does (`stepWith_acc`), which is the last
-  session's decision, so the statement parses (`DeployScope.acc_parse`) and `parse` reads no circuit commitment;
-  `run_acc_inScope`: and what it reads is in `InScope`.
-* `innerRounds`, `sessionRounds`: `k(x)` is the inner rounds, the staging round and every session's rounds at `x`'s
-  numbers, and every V* statement `vstar` gives has those numbers (`vstar_map_k`).
-* `sessionNums`, `tableErrNonneg`: `vstar`'s statements have `nums`' numbers (`numsOf_vstarAt`), which are
-  `deployZkRec`'s.
-* `sessionAccepts`: `session` reads an accepted run's sessions as accepted.
-* `innerViewRun`: the inner view is `I.V`'s run of the readers' messages at the claim's oracle, and a run of replayed
-  messages is the run of the messages it shows (`stepWith_replay`), so with no hypothesis on the witnesses.
-* `callsNil`: the record's calls are each session's witness's, so no witnesses record none.
-
-`nextO_acc_length` and `next_acc_length`: the outer verifier (at an oracle where its setup has its SHA-512 rounds,
-`nextO_acc_length_sha512`) and the compiled verifier accept only at their last rounds, as `FlockDeploy.next_acc_length`
-has it for Flock's. `coinOf_bytes`: a coin's bytes determine it, so `coinOf`
-reads an inner round's answer back as its coin. `zeroCommit_sha512`: the record's commit string to the zero digest
-(`Deploy.zeroCommit` at its salt prefix and mask) is the deployed one at SHA-512.
--/
+/-! The compiled verifier's structural code facts that follow from `deployRec`'s definition alone. -/
 
 @[expose] public section
 
@@ -77,9 +53,6 @@ namespace RecDeploy
 
 open FlockDeploy (Coin)
 
-/-! ## Runs -/
-
-/-- **A run accepts only where its verifier's step does.** -/
 theorem stepWith_acc {Ω : Type} (H : Claims.Msg → Claims.Msg) (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω)
     (vnext : List Claims.Msg → Claims.OC Claims.Out) :
     ∀ (n : ℕ) (hist : List (Claims.Msg × Claims.Msg)) (as : List Claims.Msg) (t : Claims.Transcript),
@@ -92,9 +65,6 @@ theorem stepWith_acc {Ω : Type} (H : Claims.Msg → Claims.Msg) (P : Claims.Pro
     · exact ⟨_, by assumption⟩
     · simp at h
 
-/-- **A replayed run plays the replayed messages in order, and only those it plays decide it**: from history `hist`,
-the run's `m` new messages are the replayed ones from `hist.length` on, and any replay that agrees on those has the same
-run. -/
 theorem stepWith_replay (H : Claims.Msg → Claims.Msg) (x : Claims.Msg) (vnext : List Claims.Msg → Claims.OC Claims.Out)
     (ms : List Claims.Msg) :
     ∀ (n : ℕ) (hist : List (Claims.Msg × Claims.Msg)) (as : List Claims.Msg) (t : Claims.Transcript),
@@ -137,7 +107,6 @@ theorem stepWith_replay (H : Claims.Msg → Claims.Msg) (x : Claims.Msg) (vnext 
       · have h0 : ms'.getD hist.length [] = ms.getD hist.length [] := by simpa using hms 0 (by omega)
         simp only [Claims.stepWith, Claims.replay, Claims.OC.eval, h0, hvb]
 
-/-- **A replayed run is the run of the messages it shows.** -/
 theorem run_replay_seen {Coin' : Type} [Inhabited Coin'] (H : Claims.Msg → Claims.Msg) (V' : Claims.Verifier Coin')
     (x : Claims.Msg) (ms : List Claims.Msg) (c : Fin (V'.k x) → Coin') :
     Claims.run H (Claims.replay ((Claims.run H (Claims.replay ms) V' x () c).seen.msgs.map Prod.fst)) V' x () c =
@@ -150,8 +119,6 @@ theorem run_replay_seen {Coin' : Type} [Inhabited Coin'] (H : Claims.Msg → Cla
   rw [hm]
   simp [List.getD_eq_getElem?_getD, hi]
 
-/-! ## The code facts -/
-
 variable {W : Type}
 
 theorem ract_readX {IV : Claims.Verifier Coin} {st : Stage} {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin}
@@ -162,9 +129,6 @@ theorem ract_readX {IV : Claims.Verifier Coin} {st : Stage} {x : Claims.Msg} {as
   · cases h
   · exact ⟨_, by assumption⟩
 
-/-- **The compiled verifier refuses an accepted run out of scope**: every accepted run is of a statement that `parse`
-reads, and what it reads is in `InScope` (`acc_parse`: the last session's decision refuses an inner shape the setup
-doesn't accept, and a record that doesn't sample every unit). -/
 theorem run_acc_inScope (IV : Claims.Verifier Coin) (ivScope : Claims.Msg → Bool) (b : Brings)
     (H : Claims.Msg → Claims.Msg) {x : Claims.Msg} {Ω : Type} {P : Claims.Prover Ω} {ω : Ω}
     {r : Fin ((deployRec IV ivScope b).V.k x) → Coin}
@@ -174,8 +138,6 @@ theorem run_acc_inScope (IV : Claims.Verifier Coin) (ivScope : Claims.Msg → Bo
   obtain ⟨_, -, hp, hin⟩ := acc_parse (IV := IV) (st := b.st) H ha
   exact ⟨_, hp, hin⟩
 
-/-- **`Refuses`**: every accepted run is of a statement that parses, with no circuit commitment (`RecScope.toStmt`
-reads none). -/
 theorem refuses (IV : Claims.Verifier Coin) (ivScope : Claims.Msg → Bool) (b : Brings) (H : Claims.Msg → Claims.Msg) :
     Claims.Recursion.Refuses H (deployRec IV ivScope b) := by
   intro x Ω P ω r h
@@ -183,14 +145,11 @@ theorem refuses (IV : Claims.Verifier Coin) (ivScope : Claims.Msg → Bool) (b :
   obtain ⟨_, -, hp, -⟩ := acc_parse (IV := IV) (st := b.st) H ha
   exact ⟨_, hp, rfl⟩
 
-/-- **`InnerRounds`**: the compiled verifier takes at least the inner verifier's rounds. -/
 theorem innerRounds (I : Claims.Recursion.Inner Coin W) (ivScope : Claims.Msg → Bool) (b : Brings) :
     Claims.Recursion.InnerRounds (deployRec I.V ivScope b) I := fun _ => by
   show I.V.k (xIOf _) ≤ I.V.k (xIOf _) + kS _ + _
   omega
 
-/-- **`SessionNums`**: whatever the inner and staging rounds, part `s`'s V* statement has `nums`' rounds, waits,
-truncation, `N₀`, table error and weight under the outer record. -/
 theorem sessionNums (IV : Claims.Verifier Coin) (ivScope : Claims.Msg → Bool) (b : Brings)
     (rel : Flock.Readable.Parsed → Flock.Readable.Relation) :
     Claims.Recursion.SessionNums (deployRec IV ivScope b) (deployZkRec rel) := by
@@ -208,8 +167,6 @@ theorem sum_range_le (f : ℕ → ℕ) {a b : ℕ} (h : a ≤ b) :
     rw [List.range_succ, List.map_append, List.sum_append]
     omega
 
-/-- **`SessionRounds`**: session `s`'s rounds, after the inner and staging rounds and the earlier sessions', end by
-`k(x)`. -/
 theorem sessionRounds (I : Claims.Recursion.Inner Coin W) (ivScope : Claims.Msg → Bool) (b : Brings)
     (rel : Flock.Readable.Parsed → Flock.Readable.Relation) :
     Claims.Recursion.SessionRounds (deployRec I.V ivScope b) I (deployZkRec rel) := by
@@ -227,19 +184,15 @@ theorem sessionRounds (I : Claims.Recursion.Inner Coin W) (ivScope : Claims.Msg 
   simp only [List.map_cons, List.map_nil, List.sum_cons, List.sum_nil, Nat.add_zero] at this
   omega
 
-/-- **`TableErrNonneg`**: every session's table error is nonnegative. -/
 theorem tableErrNonneg (IV : Claims.Verifier Coin) (ivScope : Claims.Msg → Bool) (b : Brings) :
     Claims.Recursion.TableErrNonneg (deployRec IV ivScope b) :=
   fun _ _ => εtableO_nonneg _
 
-/-- **`SessionAccepts`**: an accepted run shows each V* session accepting. -/
 theorem sessionAccepts (IV : Claims.Verifier Coin) (ivScope : Claims.Msg → Bool) (b : Brings) :
     Claims.Recursion.SessionAccepts (deployRec IV ivScope b) := by
   intro x s v _ hv
   simp [deployRec, session, hv]
 
-/-- **`InnerViewRun`, at every oracle and with no hypothesis on the witnesses**: the inner view is `I.V`'s run, at the
-compiled verifier's first `k_I` coins, of the messages it shows. -/
 theorem innerViewRun {Col T : Type} (H : Claims.Msg → Claims.Msg) (I : Claims.Recursion.Inner Coin W)
     (ivScope : Claims.Msg → Bool) (b : Brings) (DO : Claims.Flock.Deploy Coin Col T) :
     Claims.Recursion.InnerViewRun H (deployRec I.V ivScope b) I DO := by
@@ -250,12 +203,9 @@ theorem innerViewRun {Col T : Type} (H : Claims.Msg → Claims.Msg) (I : Claims.
   unfold innerView
   rw [run_replay_seen]
 
-/-- **`CallsNil`, at every oracle**: no witnesses record no calls. -/
 theorem callsNil (IV : Claims.Verifier Coin) (ivScope : Claims.Msg → Bool) (b : Brings) (H : Claims.Msg → Claims.Msg) :
     Claims.Recursion.CallsNil H (deployRec IV ivScope b) := by
   simp [Claims.Recursion.CallsNil, deployRec]
-
-/-! ## The outer verifier decides at its last round -/
 
 theorem actO_decide_length {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin} {s : FlockDeploy.Ins}
     {spec : Flock.SessionSpec} {sts : Array Flock.Stmt} {link : List ByteArray × List ByteArray} {c₁ : Coin}
@@ -278,9 +228,6 @@ theorem actO_decide_length {x : Claims.Msg} {as : List Claims.Msg} {cs : List Co
     simp only [List.length_cons, List.length_zip, List.length_map, List.length_dropLast]
     omega
 
-/-- **The outer verifier accepts only at its last round** (`FlockDeploy.next_acc_length` at the recursive setup):
-wherever it accepts, against an oracle `H` at which Flock's setup of the statement has the rounds of its recursive setup
-(`hr`), and with one coin per message, the prover sent `VO.k x` messages. -/
 theorem nextO_acc_length (H : Claims.Msg → Claims.Msg) {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin}
     (hcs : cs.length = as.length)
     (hr : ∀ (i : RecIns) (spec : Flock.SessionSpec) (sts : Array Flock.Stmt) (spec' : Flock.SessionSpec)
@@ -308,15 +255,12 @@ theorem nextO_acc_length (H : Claims.Msg → Claims.Msg) {x : Claims.Msg} {as : 
     simp only [List.getElem_map, List.getElem_range, Array.getElem_toList, Array.length_toList]
     exact hk k _
 
-/-- **At the SHA-512 oracle the outer verifier accepts only at its last round.** -/
 theorem nextO_acc_length_sha512 {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin}
     (hcs : cs.length = as.length) (h : ((nextO x as cs).eval FlockDeploy.sha512).1 = .acc) : as.length = VO.k x :=
   nextO_acc_length FlockDeploy.sha512 hcs (fun i spec sts spec' sts' hi hsu => by
     rw [FlockDeploy.hOf_sha512, FlockDeploy.setupWith_sha512, RecIns.setup_read (setupO_some hi).2] at hsu
     cases hsu
     rfl) h
-
-/-! ## The compiled verifier decides at its last round -/
 
 theorem locate_sum : ∀ {ks : List ℕ} {i s j : ℕ}, locate ks i = some (s, j) → i = (ks.take s).sum + j
   | [], _, _, _, h => by simp [locate] at h
@@ -351,8 +295,6 @@ theorem ract_sess_locate {IV : Claims.Verifier Coin} {st : Stage} {x : Claims.Ms
   obtain ⟨rfl, rfl, rfl, -, -⟩ := RAct.sess.inj h
   exact ⟨by omega, hl, rfl⟩
 
-/-- **The compiled verifier accepts only at its last round**: wherever it accepts, against any oracle, the prover sent
-`k(x)` messages, the inner rounds, the staging round and every V* session's rounds. -/
 theorem next_acc_length (H : Claims.Msg → Claims.Msg) {IV : Claims.Verifier Coin} {st : Stage} {x : Claims.Msg}
     {as : List Claims.Msg} {cs : List Coin} (h : ((next IV st x as cs).eval H).1 = .acc) :
     as.length = (V IV st).k x := by
@@ -370,8 +312,6 @@ theorem next_acc_length (H : Claims.Msg → Claims.Msg) {IV : Claims.Verifier Co
   simp only [List.map_cons, List.map_nil, List.sum_cons, List.sum_nil, Nat.add_zero]
   omega
 
-/-! ## Coins off their bytes -/
-
 theorem flatten_inj_of_length {n : ℕ} :
     ∀ {L₁ L₂ : List (List UInt8)}, L₁.length = L₂.length → (∀ l ∈ L₁, l.length = n) → (∀ l ∈ L₂, l.length = n) →
       L₁.flatten = L₂.flatten → L₁ = L₂
@@ -384,7 +324,6 @@ theorem flatten_inj_of_length {n : ℕ} :
     rw [flatten_inj_of_length (by simpa using hl) (fun l hl' => h₁ l (by simp [hl']))
       (fun l hl' => h₂ l (by simp [hl'])) h']
 
-/-- **A coin's bytes determine it.** -/
 theorem coin_bytes_injective : Function.Injective FlockDeploy.Coin.bytes := by
   intro c d h
   simp only [FlockDeploy.Coin.bytes, List.flatMap] at h
@@ -400,8 +339,6 @@ open Classical in
 noncomputable def coinOf (m : Claims.Msg) : Coin :=
   if h : ∃ c : Coin, c.bytes = m then Classical.choose h else default
 
-/-- **`coinOf` inverts a coin's bytes**: the compiled verifier's inner-round answers (`.msg c.bytes`) show their
-coins. -/
 theorem coinOf_bytes (c : Coin) : coinOf c.bytes = c := by
   unfold coinOf
   split
@@ -410,16 +347,12 @@ theorem coinOf_bytes (c : Coin) : coinOf c.bytes = c := by
   · rename_i h
     exact absurd ⟨c, rfl⟩ h
 
-/-! ## The inner rounds' commit strings -/
-
 theorem toMsg_append (a b : ByteArray) : Claims.toMsg (a ++ b) = Claims.toMsg a ++ Claims.toMsg b := by
   simp [Claims.toMsg, ByteArray.data_append]
 
 theorem toMsg_ofMsg (a : Claims.Msg) : Claims.toMsg (Claims.ofMsg a) = a := by
   simp [Claims.toMsg, Claims.ofMsg]
 
-/-- **The record's commit string to the zero digest at SHA-512 is the deployed one**: hm96-sha512's `b ‖ c` at the
-pinned key (`Hm96.Default512.commitString`) under the salt. -/
 theorem zeroCommit_sha512 (IV : Claims.Verifier Coin) (ivScope : Claims.Msg → Bool) (b : Brings)
     (y : Fin Flock.Hm96.sha512.saltBytes → UInt8) :
     (((deployRec IV ivScope b).zeroCommit y).eval FlockDeploy.sha512).1 =

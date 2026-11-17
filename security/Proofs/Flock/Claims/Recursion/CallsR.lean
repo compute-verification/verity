@@ -36,14 +36,8 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.KS.ConflictRun
 import Proofs.Flock.Claims.Recursion.AcceptedScope
 
-/-!
-# `c_V` at the decisions the deployed reader makes
-
-`nextR_calls_le` reads `hV` only at a decision `actR` makes, run at the session its setup returns against `H`, so `hV`
-need hold only there (`nextR_calls_le'`, `innerCalls_R_le_acc'`, `lamLin2_R_ge_acc'`). Over every `f`, no `c_V` bounds
-`decisionAtS`: it digests one file per proof. The session against `H` need not be the decision's own (`setupOf` is at
-SHA-512), so `hV` takes it apart from the decision's.
--/
+/-! `c_V` need bound a verdict only at the decisions the deployed reader makes: over every `f` no `c_V` bounds
+`decisionAtS`, which digests one file per proof. -/
 
 @[expose] public section
 
@@ -53,8 +47,6 @@ open Flock
 open Claims (Msg Out Prover run coinSeq)
 open FlockDeploy (Coin Ins)
 
-/-- **A step of `nextR`'s calls**, with `c_V` bounding a verdict only at a decision `actR` makes and the session its
-setup returns. -/
 theorem nextR_calls_le' (rd : Msg → Option FlockDeploy.FinalP) (H : Msg → Msg) (x : Msg) (cB cV : ℕ)
     (hB : ∀ v, FlockDeploy.setupOf false x = some v → FlockDeploy.setupCallsOf (Claims.hOf H) v.1.read ≤ cB)
     (hV : ∀ as cs s spec sts link c₁ mids f spec' sts',
@@ -90,7 +82,6 @@ theorem nextR_calls_le' (rd : Msg → Option FlockDeploy.FinalP) (H : Msg → Ms
       omega
     · first | omega | (simp only [List.length_nil, Nat.add_zero]; omega) | (simp; omega)
 
-/-- `innerCalls_R_le_acc` with `hV` at `nextR`'s decisions (`nextR_calls_le'`). -/
 theorem innerCalls_R_le_acc' (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
     (b : Brings) (L : Claims.Recursion.VStarB.LayoutB) (rd : Msg → Option FlockDeploy.FinalP)
     (colsE : Claims.Seen → ℕ → List (ℕ × List FlockLevel3.GF128)) (wE : Msg → ℝ) (join : List Msg → Msg)
@@ -110,8 +101,6 @@ theorem innerCalls_R_le_acc' (rel : _root_.Flock.Readable.Parsed → _root_.Floc
     (fun as cs => nextR_calls_le' rd H (xIOf x) cB cV hB hV as cs)
     (fun as cs m hm => nextR_msg rd H (xIOf x) as cs m hm)
 
-/-- **`lamLin2_R_ge_acc` with `hV` at `nextR`'s decisions**: `c_V` need bound a verdict only at a decision `actR` makes
-and the session its setup returns. -/
 theorem lamLin2_R_ge_acc' (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (b : Brings)
     (L : Claims.Recursion.VStarB.LayoutB) (rd : Msg → Option FlockDeploy.FinalP)
     (colsE : Claims.Seen → ℕ → List (ℕ × List FlockLevel3.GF128)) (wE : Msg → ℝ) (join : List Msg → Msg)

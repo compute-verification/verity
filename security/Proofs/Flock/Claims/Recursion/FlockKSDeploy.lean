@@ -35,16 +35,8 @@ import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.DeployK
 
-/-!
-# The deployed verifier's code facts for the abort-law table bound
-
-Flock's deployed verifier (`FlockDeploy.V`, plain or masked) meets three of the code facts
-`tableBoundθAbort_of_onAcc` reads: it never accepts the empty message (`refusable_V`), its decision reads the link
-message's coin and the round messages' coins but not the last message's (`decideFree_V`), and at SHA-512 it accepts
-only at its last round (`accLast_V_sha512`, from `next_acc_length_sha512`). So at SHA-512 the recursion's KS over an
-inner deployment whose verifier is `V zk` rests on `TableBoundθOnAcc` in place of `Inner.KSAbort`, beside
-`KSFlock_of_flockKS`'s other hypotheses (`KSFlock_of_flockKS_V`).
--/
+/-! Flock's deployed verifier meets `AccLast`, `DecideFree` and `Refusable`, so the recursion's KS over it rests on
+`TableBoundθOnAcc` (`KSFlock_of_flockKS_V`). -/
 
 @[expose] public section
 
@@ -52,7 +44,6 @@ namespace FlockDeploy
 
 open Claims.Recursion
 
-/-- **The empty message is never accepted**: it is neither a coin request nor a last message. -/
 theorem act_snoc_nil (zk : Bool) (x : Claims.Msg) (as : List Claims.Msg) (cs : List Coin) :
     act zk x (as ++ [[]]) cs = .rej := by
   unfold act
@@ -67,8 +58,6 @@ theorem refusable_V (H : Claims.Msg → Claims.Msg) (zk : Bool) : Refusable H (V
     rw [next_rej H (act_snoc_nil zk x as cs)]
     exact fun h => Claims.Out.noConfusion h⟩
 
-/-- **A decision reads no last coin**: past a first coin, where the last message asks for no coin, the step is the
-same at any last coin. -/
 theorem act_cons_snoc (zk : Bool) (x : Claims.Msg) (as : List Claims.Msg) (c₀ : Coin) (cs : List Coin) (c c' : Coin)
     (ha : ∀ t, as.getLast? ≠ some (0 :: t)) :
     act zk x as (c₀ :: cs ++ [c']) = act zk x as (c₀ :: cs ++ [c]) := by
@@ -102,7 +91,6 @@ theorem act_cons_snoc (zk : Bool) (x : Claims.Msg) (as : List Claims.Msg) (c₀ 
       · rename_i heq
         cases heq
 
-/-- **A coin request is not a decision.** -/
 theorem act_snoc_zero {zk : Bool} {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin} {c : Coin}
     {t : Claims.Msg} (ha : as.getLast? = some (0 :: t)) :
     act zk x as (cs ++ [c]) = .rej ∨ act zk x as (cs ++ [c]) = .coin c := by
@@ -140,9 +128,6 @@ theorem decideFree_V (H : Claims.Msg → Claims.Msg) (zk : Bool) : DecideFree H 
 theorem accLast_V_sha512 (zk : Bool) : AccLast sha512 (V zk) := fun _ _ _ hcs h =>
   next_acc_length_sha512 zk hcs h
 
-/-- **KS of the recursion over Flock's deployed verifier as the inner protocol**, at SHA-512: `KSFlock_of_flockKS` at an
-inner deployment whose verifier is `V zk`, with its code facts `AccLast`, `DecideFree` and `Refusable` met by the
-deployed verifier. -/
 theorem KSFlock_of_flockKS_V {Col T : Type} [DecidableEq Col] [Zero Col] (zk : Bool) (D : Deploy Coin)
     (DI DO : Claims.Flock.Deploy Coin Col T) (hVI : DI.V = V zk) (opening : Opening)
     (decC : Claims.Msg → Claims.Msg → Coin) (hF : Claims.Flock.KS sha512 DO) (NI : Claims.Msg → ℕ)

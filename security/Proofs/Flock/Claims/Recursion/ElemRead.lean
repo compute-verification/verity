@@ -43,30 +43,8 @@ import Proofs.Flock.Claims.Recursion.VerdictRowDSide
 import Proofs.Flock.Claims.Recursion.VerdictRowG
 import Proofs.Flock.Claims.Recursion.VerdictRowRDeployed
 
-/-!
-# Row R's `elemAt`: the rep's `w` read off the messages
-
-`ElemCover`'s elements half asks, at every decision `At` admits, for a piece keyed `(p, o, g, u)` with `o + g = r`:
-`elemAt x ms (p, o, g, u) k = el (D.rep cls acc i r).w (wIdx (portSizes (D.sh cls i)) gs[p].2.1)[k]`. Rep `r`'s `w`
-is its frames' values at `T` (`DecAt.w`), then its four accumulators `acc`.
-
-* `framesRead x ms k`: rep `k`'s frame values off the statement and the messages alone. A proof and `T` that fit the
-  rep's opened rounds (`FitsRep`) at a context that takes no coin; each element of the rounds at table 0's shape
-  (`shapeNoCoin`, no coin either) read at them (`keyVal`). `FitsRep` reads no coin (`fitsRep_of`, `repCtx_n`), and any
-  two proofs that fit one rep's rows agree in every field `keyVal` reads, and in `T` (`FlockDeploy.fitUnique`).
-* `DecAt.framesRead_eq`, `DecAt.w_eq`: at a dense decision, `framesRead` is the decided proof's values at the decided
-  `T`, and rep `r`'s `w` is `framesRead x ms r` then `acc r`. Every decision, adversarial included: no honest fact.
-* `elemRead`: the coin-free `elemAt`, `el (framesRead x ms (o + g))` at group `p`'s row port `k`. `DecAt.elemRead_eq`
-  is `ElemCover`'s elements half at every row port that is a frame value (below `(rounds sh).flatten.size`).
-* `elemReadC acc`: the same with the coins, reading the accumulator ports at `acc x ms cs`. `DecAt.elemReadC_eq` is
-  `ElemCover`'s elements half at every row port, at any accumulators, among them `Top.accRC rd key`.
-
-No coin-free `elemAt` meets the half at the accumulator ports `acc0`, `acc1` (`portSizes`' last two), which Ligerito's
-final-check residuals read (`accTerms`). There `w` holds `Top.accRC rd key x ms cs`, `chainC`'s rows: a choice over
-`ChainHolds`, which leaves the chain's first row free and steps each row by the coins' `coefAt`. The messages carry
-no coin (`jAt` refills the record's), so two coin lists admitted at one `(x, ms)` give different accumulators for
-one `elemAt`. `elemReadC` is the reader once `elemAt` takes the coins (`resHolds` already has them).
--/
+/-! Row R's `elemAt` read off the messages (`elemRead`, `elemReadC`); no coin-free reader meets `ElemCover` at the
+accumulator ports, which read the coins. -/
 
 @[expose] public section
 
@@ -84,16 +62,10 @@ open FlockDecodeTies (keyVal)
 
 noncomputable section
 
-/-! ## Reading the frames with no coin -/
-
-/-- Table 0's shape, its extra claims counted at the default link coin (`repCtx_n`: the count reads no coin). -/
 def shapeNoCoin (spec : SessionSpec) (sts : Array Stmt) : Shape :=
   shapeOf (tabsOf sts)[0]! ((fast100 (tabsOf sts)[0]!.m).getD default) ((repCtx spec sts default [] [] 0).n - 2)
 
 open Classical in
-/-- **Rep `k`'s frame values off the statement and the messages**: at a statement that sets up, with round 0's and
-the later rounds' rows read back, a proof and `T` that fit rep `k`'s opened rounds at the default link coin and no
-coin after, read at each element of table 0's rounds; `[]` where none fits. -/
 def framesRead (x : Claims.Msg) (ms : List Claims.Msg) (k : ℕ) : List F128 :=
   match setupOf false x, (rowsOf (ms.headD [])).map (List.map nodeOf), ms.tail.dropLast.mapM rowsOf with
   | some v, some r₀, some rss =>
@@ -104,7 +76,6 @@ def framesRead (x : Claims.Msg) (ms : List Claims.Msg) (k : ℕ) : List F128 :=
     else []
   | _, _, _ => []
 
-/-- `keyVal` reads only the fields a fitting proof's frames absorb. -/
 theorem keyVal_absorbedFrom (c : FlockDeploy.RepCtx) (a q : Flock.Proof) (T : F128) (y : Key) :
     keyVal (absorbedFrom c a q) T y = keyVal a T y := by
   cases y <;> rfl
@@ -113,9 +84,6 @@ theorem el_append_left {a b : Array F128} {j : ℕ} (h : j < a.size) : el (a ++ 
   unfold el
   rw [Array.getD_eq_getD_getElem?, Array.getD_eq_getD_getElem?, Array.getElem?_append_left h]
 
-/-! ## The row ports -/
-
-/-- Row port `k` of group `p` at a shape: the `w` index S's groups give it, where they run. -/
 def portAt (sh : Shape) (p k : ℕ) : Option ℕ :=
   match structureOf sh with
   | .ok S =>
@@ -133,8 +101,6 @@ theorem portAt_eq {sh : Shape} {S : RecAlgebra.GfS} {gs : Array (Array ℕ × Ar
   unfold portAt
   simp [hS, hg, hp, hk]
 
-/-- **The coin-free `elemAt`**: at key `(jj, o, g, u)`, rep `o + g`'s frame values (`framesRead`) at group `jj`'s row
-port `k`; `0` at a statement that doesn't set up or a port S doesn't have. -/
 def elemRead (x : Claims.Msg) (ms : List Claims.Msg) (key : ℕ × ℕ × ℕ × ℕ) (k : ℕ) : F128 :=
   match setupOf false x with
   | some v =>
@@ -143,7 +109,6 @@ def elemRead (x : Claims.Msg) (ms : List Claims.Msg) (key : ℕ × ℕ × ℕ ×
     | none => 0
   | none => 0
 
-/-- **`elemAt` with the coins**: as `elemRead`, but `w`'s accumulator ports read `acc x ms cs` at the rep. -/
 def elemReadC (acc : Claims.Msg → List Claims.Msg → List Coin → ℕ → Array F128) (x : Claims.Msg)
     (ms : List Claims.Msg) (cs : List Coin) (key : ℕ × ℕ × ℕ × ℕ) (k : ℕ) : F128 :=
   match setupOf false x with
@@ -158,7 +123,6 @@ namespace DecAt
 variable {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {ms : List Claims.Msg} {cs : List Coin}
   (D : DecAt rd x ms cs) (cls : HClass)
 
-/-- **Table 0's shape reads no coin**: where the setup row holds, the decision's shape is `shapeNoCoin`. -/
 theorem sh_eq (acc : ℕ → Array F128) (hG : D.RowG cls acc 0) (h0 : 0 < D.sts.size) :
     D.sh cls 0 = shapeNoCoin D.spec D.sts := by
   have hext : (tabsOf D.sts)[0]!.extra (pointsOf D.spec D.d.c₁) = .ok (D.files cls 0).extras := by
@@ -171,8 +135,6 @@ theorem sh_eq (acc : ℕ → Array F128) (hG : D.RowG cls acc 0) (h0 : 0 < D.sts
   rw [hn, Nat.add_sub_cancel_left]
   rfl
 
-/-- **The frames read off the messages are the decision's**: at a dense decision, rep `r` of table `i`'s
-`framesRead` is the decided proof's values at the decided `T`, element by element of the rounds. -/
 theorem framesRead_eq {xo : Claims.Msg} {sto : Claims.Recursion.CompiledStatement} (hst : parse xo = some sto)
     (hf : Claims.Recursion.Form.Dense sto.form) (hx : x = xIOf xo) {i : ℕ} (hi : i < D.sts.size) (r : Fin 2) :
     framesRead x ms (2 * i + r) =
@@ -230,7 +192,6 @@ theorem framesRead_eq {xo : Claims.Msg} {sto : Claims.Recursion.CompiledStatemen
   dsimp only
   rw [dif_pos hex, hkv, hsh]
 
-/-- **Rep `r`'s `w` is `framesRead`, then its accumulators**, at every dense decision. -/
 theorem w_eq (acc : ℕ → Array F128) {xo : Claims.Msg} {sto : Claims.Recursion.CompiledStatement} (hst : parse xo = some sto)
     (hf : Claims.Recursion.Form.Dense sto.form) (hx : x = xIOf xo) {i : ℕ} (hi : i < D.sts.size) (r : Fin 2) :
     (D.rep cls acc i r).w = (framesRead x ms (2 * i + r)).toArray ++ acc (2 * i + r) := by
@@ -260,15 +221,11 @@ theorem w_eq (acc : ℕ → Array F128) {xo : Claims.Msg} {sto : Claims.Recursio
   show (D.w (2 * i + r) (acc (2 * i + r))).toList = ((framesRead x ms (2 * i + r)).toArray ++ acc (2 * i + r)).toList
   rw [Array.toList_append, List.toList_toArray, D.w_toList, hvals, D.framesRead_eq cls hst hf hx hi r]
 
-/-- `framesRead` has one value per element of the rounds, at a dense decision. -/
 theorem framesRead_length {xo : Claims.Msg} {sto : Claims.Recursion.CompiledStatement} (hst : parse xo = some sto)
     (hf : Claims.Recursion.Form.Dense sto.form) (hx : x = xIOf xo) {i : ℕ} (hi : i < D.sts.size) (r : Fin 2) :
     (framesRead x ms (2 * i + r)).length = (rounds (D.sh cls i)).flatten.size := by
   rw [D.framesRead_eq cls hst hf hx hi r, List.length_map, Array.length_toList]
 
-/-- **`ElemCover`'s elements half with the coins**: at a dense decision, a table `i < sts.size`, S and its groups, a
-group `p` and a key `(p, o, g, u)` with `o + g = r`, `elemReadC acc` at row port `k` is rep `r`'s `w` there, at the
-accumulators `acc x ms cs`. -/
 theorem elemReadC_eq (acc : Claims.Msg → List Claims.Msg → List Coin → ℕ → Array F128) {xo : Claims.Msg}
     {sto : Claims.Recursion.CompiledStatement} (hst : parse xo = some sto) (hf : Claims.Recursion.Form.Dense sto.form)
     (hx : x = xIOf xo) {i : ℕ} (hi : i < D.sts.size) {S : RecAlgebra.GfS}
@@ -297,8 +254,6 @@ theorem elemReadC_eq (acc : Claims.Msg → List Claims.Msg → List Coin → ℕ
   dsimp only
   rw [hpa, hog]
 
-/-- **`ElemCover`'s elements half with no coin, at the frame ports**: as `elemReadC_eq`, for the coin-free `elemRead`,
-at every row port whose `w` index is a frame value, at any accumulators. -/
 theorem elemRead_eq (acc : ℕ → Array F128) {xo : Claims.Msg} {sto : Claims.Recursion.CompiledStatement}
     (hst : parse xo = some sto) (hf : Claims.Recursion.Form.Dense sto.form) (hx : x = xIOf xo) {i : ℕ}
     (hi : i < D.sts.size) {S : RecAlgebra.GfS} {gs : Array (Array ℕ × Array ℕ × Array ℕ)}

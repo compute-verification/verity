@@ -2,14 +2,7 @@ module
 
 public import Proofs.Flock.Claims.Recursion.DeployHonest
 
-/-!
-# The honest compiled run's inner rounds are the inner prover's messages (`run_msg_inner`)
-
-On the compiled verifier's run of the reference prover `refP` at a statement that reads, each inner round's message
-is the inner prover's (`b.ref.PI w`) at the inner statement, after the run's earlier inner rounds, on the inner
-prover's tape `ω.1`: `refP` hands the inner rounds to the inner prover, and the compiled verifier answers each with its
-coin, so the run gets past them (`run_length_ge`).
--/
+/-! The honest compiled run's inner rounds are the inner prover's messages (`run_msg_inner`). -/
 
 @[expose] public section
 
@@ -19,14 +12,11 @@ open Claims (Msg Out Prover run)
 open Flock
 open FlockDeploy (Coin)
 
-/-- **Before the staging round, the reference prover is the inner prover** at the inner statement, on its tape. -/
 theorem refP_inner (IV : Claims.Verifier Coin) (b : Brings) (w : Claims.Flock.Wit) (x : Msg)
     (hist : List (Msg × Msg)) (ω : Tape b) (h : hist.length < IV.k (xIOf x)) :
     (refP IV b w).next x hist ω = (b.ref.PI w).next (xIOf x) hist ω.1 := by
   simp only [refP, h, ↓reduceIte]
 
-/-- **The run lemma**: on the compiled verifier's run of `refP` at a statement that reads, inner round `i`'s message
-is the inner prover's at the inner statement, after the run's first `i` inner rounds (`hist`), on tape `ω.1`. -/
 theorem run_msg_inner (H : Msg → Msg) (IV : Claims.Verifier Coin) (b : Brings) (w : Claims.Flock.Wit) {x : Msg}
     {xr : XR} (hx : readX x = some xr) (ω : Tape b) (r : Fin ((V IV b.st).k x) → Coin) :
     ∀ i < IV.k (xIOf x), ((run H (refP IV b w) (V IV b.st) x ω r).msgs.map Prod.fst).getD i [] =

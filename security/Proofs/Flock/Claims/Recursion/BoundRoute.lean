@@ -39,28 +39,14 @@ import Proofs.Flock.Claims.Prob
 import Proofs.Flock.Claims.Recursion.Cost
 import Proofs.Flock.Claims.Recursion.DeployFacts
 
-/-!
-# The normalized record and the readers' played rounds (option (d))
-
-Pieces of `KSBoundDeployed`'s route from the bridge (`RecDeploy.ksBoundRoute_of_bridge_cols`, `BoundRouteCols`):
-
-* A record whose readers read the last message as its representative under `final` (`Bound.rep`,
-  `RecDeploy.nfBrings`). `IVStar` and the opened view read the last message only through `final`, so the two records'
-  inner views give `E*` the same decisions, calls and openings (`Bound.run_nf`). `E*` reads an inner view only through
-  its decision and its openings (`served_eval_congr`), so `E*`'s output and `KSA` are the same at both
-  (`RecDeploy.ksA_of_nf`), and so are `CallsLogColl` and `InnerAcceptsColl` (`RecDeploy.callsLogColl_nf`,
-  `RecDeploy.innerAcceptsColl_nf`).
-* The readers' rounds before the last are the run's, off a collision (`RecDeploy.readersRun_played`, from
-  `ReadersRunPlayed`).
--/
+/-! The normalized record, whose readers read the last message as its representative under `final`, and the readers'
+played rounds (option (d)). -/
 
 @[expose] public section
 
 namespace Claims.Recursion
 
 open Claims
-
-/-! ## `E*` reads an inner view only through its decision and its openings -/
 
 theorem rp_eval_bind_fst {R α β : Type} (H : Msg → Msg) (run : R → Transcript) (p : RP R α) (f : α → RP R β) :
     ((p.bind f).eval H run).1 = ((f (p.eval H run).1).eval H run).1 :=
@@ -114,8 +100,6 @@ theorem erep_rel {D W Op : Type} (H : Msg → Msg) (run₁ run₂ : D → Transc
   · exact firstWait_rel H run₁ run₂ opens k assemble check h _
   · rfl
 
-/-- **`E^rep` served by `E₂` reads what the inner stage sees only through its decision and its openings**: two readings
-`dec`, `dec'` of `E₂`'s output that agree there give one output. -/
 theorem served_eval_congr {Coin W W₂ Op : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {Ω : Type}
     (H : Msg → Msg) (P : Prover Ω) (V : Verifier Coin) (E₂ : Extractor Coin W₂ V)
     (dec dec' : (x : Msg) → (Fin (V.k x) → Coin) → Option W₂ → Seen) (m k K : Msg → ℕ) (opens : Seen → List Op)
@@ -137,14 +121,10 @@ theorem coinSeq_congr {Coin : Type} [Inhabited Coin] {k : ℕ} {r r' : Fin k →
   · exact h hi
   · rfl
 
-/-! ## The last message, read as its representative -/
-
 section Bound
 
 variable {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col]
 
-/-- **Messages with the last read as its representative** (`Bound.rep`): `IVStar`'s rounds, each the message `ms` holds
-there, the last one's representative. -/
 noncomputable def Bound.nfMsgs (Bd : Bound Coin Col T) (x : Msg) (ms : List Msg) : List Msg :=
   (List.range (Bd.DE.V.k x)).map fun i => if i + 1 = Bd.DE.V.k x then Bd.rep (ms.getD i []) else ms.getD i []
 
@@ -162,7 +142,6 @@ theorem Bound.nfMsgs_getD_last (Bd : Bound Coin Col T) (x : Msg) (ms : List Msg)
   have h2 : Bd.DE.V.k x - 1 + 1 = Bd.DE.V.k x := by omega
   simp [Bound.nfMsgs, List.getD_eq_getElem?_getD, h1, h2]
 
-/-- **`IVStar` decides alike on the representative**: one decision and one log. -/
 theorem Bound.decAt_nf (Bd : Bound Coin Col T) (H : Msg → Msg) (x : Msg) (ms : List Msg)
     (r : Fin (Bd.IVStar.k x) → Coin) : Bd.decAt H x (Bd.nfMsgs x ms) r = Bd.decAt H x ms r := by
   rcases Nat.eq_zero_or_pos (Bd.DE.V.k x) with hk | hk
@@ -171,7 +150,6 @@ theorem Bound.decAt_nf (Bd : Bound Coin Col T) (H : Msg → Msg) (x : Msg) (ms :
   · exact Bd.run_ivstar_congr H x _ _ r (fun i hi => Bd.nfMsgs_getD_lt x ms hi)
       (by rw [Bd.nfMsgs_getD_last x ms hk, Bd.final_rep])
 
-/-- **`IVStar`'s run on the representative**: the same decision, the same calls, and the same opened view. -/
 theorem Bound.run_nf (Bd : Bound Coin Col T) (H : Msg → Msg) (x : Msg) (ms : List Msg)
     (r : Fin (Bd.IVStar.k x) → Coin) :
     (run H (replay (Bd.nfMsgs x ms)) Bd.IVStar x () r).out = (run H (replay ms) Bd.IVStar x () r).out ∧
@@ -208,7 +186,6 @@ section Normal
 
 variable {Col T : Type} [DecidableEq Col]
 
-/-- **The deployment's brings, its readers reading the last inner message as its representative** (`Bound.nfMsgs`). -/
 noncomputable def nfBrings (Bd : Bound Coin Col T) (b : Brings) : Brings :=
   { b with rd := ⟨fun x ws => Bd.nfMsgs (xIOf x) (b.rd.msgs x ws), b.rd.calls⟩ }
 
@@ -220,7 +197,6 @@ theorem innerView_nf (H : Msg → Msg) (Bd : Bound Coin Col T) (b : Brings) (x :
   ⟨h.1, h.2.2⟩
 
 omit [DecidableEq Col] in
-/-- The inner view's run, at `IVStar`, is `IVStar`'s run of the readers' messages. -/
 theorem innerRun_bound (H : Msg → Msg) (Bd : Bound Coin Col T) (decI : List (ℕ × Col) → List T)
     (ivScope : Msg → Bool) (b : Brings) (x : Msg) (r : Fin ((deployRec Bd.IVStar ivScope b).V.k x) → Coin)
     (ws : List Claims.Flock.Wit) :
@@ -234,7 +210,6 @@ theorem innerRun_bound (H : Msg → Msg) (Bd : Bound Coin Col T) (decI : List (�
 variable {Col' T' : Type} [DecidableEq Col']
 
 omit [DecidableEq Col'] in
-/-- **`E*` gives one output at the deployed record and the normalized one.** -/
 theorem E_eval_nf (H : Msg → Msg) (Bd : Bound Coin Col T) (decI : List (ℕ × Col) → List T) (ivScope : Msg → Bool)
     (b : Brings) (DO : Claims.Flock.Deploy Coin Col' T') (decO : List (ℕ × Col') → List T') (x : Msg) {Ω : Type}
     (P : Prover Ω) (ω : Ω) (r : Fin ((deployRec Bd.IVStar ivScope b).V.k x) → Coin)
@@ -251,8 +226,6 @@ theorem E_eval_nf (H : Msg → Msg) (Bd : Bound Coin Col T) (decI : List (ℕ ×
     obtain ⟨h1, h2⟩ := innerView_nf H Bd b x r ws
     exact ⟨h1.symm, congrArg (fun v => [Bd.DE.cols v]) h2.symm⟩
 
-/-- **`KSA` at the normalized record is `KSA` at the deployed one**: `E*`'s output is the same (`E_eval_nf`), and the
-bound reads no inner view. -/
 theorem ksA_of_nf [Zero Col'] (H : Msg → Msg) (Bd : Bound Coin Col T) (decI : List (ℕ × Col) → List T)
     (ivScope : Msg → Bool) (b : Brings) (DO : Claims.Flock.Deploy Coin Col' T')
     (h : Claims.Recursion.KSA H (deployRec Bd.IVStar ivScope (nfBrings Bd b)) (Inner.ofFlock Bd.deploy decI) DO) :
@@ -305,9 +278,6 @@ theorem callsLogColl_nf (H : Msg → Msg) (Bd : Bound Coin Col T) (decI : List (
 
 end Normal
 
-/-- **The readers' rounds before the last are the run's, off a collision**, where `E_O` gives witnesses on an accepted
-run (`ReadersRunPlayed` through the staging, as `vstarAccepts_bound` reads it), at an inner verifier that plays all its
-rounds on replayed messages. -/
 theorem readersRun_played {W Col T : Type} (H : Msg → Msg) (I : Claims.Recursion.Inner Coin W) (ivScope : Msg → Bool)
     (b : Brings)
     (DO : Claims.Flock.Deploy Coin Col T)
@@ -340,8 +310,6 @@ theorem readersRun_played {W Col T : Type} (H : Msg → Msg) (I : Claims.Recursi
     simp only [runAs, List.getD_eq_getElem?_getD, List.map_take,
       List.getElem?_take_of_lt (show j < I.V.k (xIOf x) + kS x by omega)]
   · exact Or.inr hcoll
-
-/-! ## The bound record's answers -/
 
 theorem bdDeployed_ans (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
     (nextE : Msg → List Msg → List Coin → Claims.OC Out)

@@ -9,34 +9,8 @@ import Proofs.Flock.Claims.Recursion.VStarCapL
 import Proofs.Flock.Claims.Recursion.VStarFitHeld
 import Proofs.Flock.Claims.Recursion.VStarPorts
 
-/-!
-# The deployed reference inner prover (`IrDep`) and its openings' shape (`irShaped_dep`)
-
-`IrShaped Ir x w ρ hist` is what the stager reads of an inner prover's `rest`. `IrDep x` is the deployed one, the inner
-recursive prover `rec_live` runs with Flock's prover behind it, as V\*'s stager reads it:
-
-* **Its tape** (`DepTape`): Flock's proofs at the coins so far (`prove`: each rep's proof and its batched value `T`), the
-  running sums' salts (`rec_vstage.acc_salts`) and the fresh salts of the openings' private rows.
-* **Its rows** (`rows`): round 0's, each table's level-0 cap nodes (`capRows`, `nodeRow`, `rec_live.top_rows`), then each
-  rep's rounds' rows along its schedule (`repRows`), at the proofs at the coins so far. The proofs' frames are causal, so
-  round `i`'s rows read only what the coins before round `i` fix.
-* **Its rest** (`depRest`, `rec_vstar.queries`, `rec_vstage`, `verifier_rows`): each rep's openings at each level of table
-  0's schedule (`schAt`), in rep, level and query order, with the position the verifier's rows sample (`Rows.posAt`),
-  the opened row (`openAt`) and its siblings (`sibsOf`), each fitted to its level's `2^lanes` elements and `d - cap`
-  siblings as an honest proof has them; each rep's κ, eq(α) at each level's queries and v at its coins
-  (`verifierRows`, v with the comb at the lincheck's fold points).
-
-`IrDepSession` evaluates `IrDep` at a deployed inner session, with the statement's setup read once (`setupB`, `rowsV`,
-`depRestV`: `setupB_eq`, `irDep_rows`, `irDep_rest`), and `test_irdep_difftest.py` holds it to the deployed builder's
-rows, openings, κ, eq(α), v and running sums' salts there.
-
-`irShaped_dep` proves `IrShaped (IrDep x)` at every dense statement, every tape and every history holding both reps'
-stream rounds, where the reps' tops differ at each later level (the tape exception, as `hok_honest` takes it):
-both reps open level 0's queries (`q_ne_zero`), level `l`'s openings are its `2q` (`levelMatch`,
-`depOpenings_level`), and each opening's top node is among the level's tops: its position is below `2^d`
-(`posAt_lt`), so past its `d - cap` siblings below `2^cap`, the level's nodes a rep, and the level's tops are both
-reps' one tree at level 0 (`topsAt0_fit`) and rep 0's nodes then rep 1's above (`topsAtL_fit`).
--/
+/-! The deployed reference inner prover `IrDep` and its openings' shape (`irShaped_dep`), at the tape exception that the
+reps' tops differ at each later level; `test_irdep_difftest.py` holds `IrDepSession` to the deployed builder. -/
 
 @[expose] public section
 
@@ -45,8 +19,6 @@ namespace RecDeploy.VStarBuild
 open _root_.Flock
 open Claims (Msg)
 open FlockDeploy (Coin setupOf tabsOf pointsOf repCtx capRows repRows nodeRow)
-
-/-! ## The prover -/
 
 /-- An inner round's coin, from the answer the verifier sent (`Coin.bytes`, decoded as `FlockComplete.coinOf`). -/
 def coinAt (a : Msg) : Coin := fun i => FlockComplete.coinOf a i.val
@@ -141,8 +113,6 @@ def IrDep (x : Msg) : InnerRec where
     | none => []
   rest _ τ h := depRest (xIOf x) τ (innerCoins h)
 
-/-! ## The openings -/
-
 theorem mem_depOpen {xI : Msg} {cs : List Coin} {ps : Array (_root_.Flock.Proof × F128)} {rep l j : ℕ}
     (hrep : rep < 2) (hl : l < (OpenLower.schAt xI 0).levels.size) (hj : j < ((OpenLower.schAt xI 0).levels[l]!).q) :
     depOpen xI cs ps rep l j ∈ depOpenings xI cs ps := by
@@ -150,8 +120,6 @@ theorem mem_depOpen {xI : Msg} {cs : List Coin} {ps : Array (_root_.Flock.Proof 
   exact List.mem_flatMap.2 ⟨rep, List.mem_range.2 hrep,
     List.mem_flatMap.2 ⟨l, List.mem_range.2 hl, List.mem_map.2 ⟨j, List.mem_range.2 hj, rfl⟩⟩⟩
 
-/-- **An opening of `depOpenings`** is one of the two reps', at one of the schedule's levels, at the position the
-verifier's rows sample, of the level's lanes and siblings below its cap. -/
 theorem mem_depOpenings {xI : Msg} {cs : List Coin} {ps : Array (_root_.Flock.Proof × F128)}
     {o : _root_.VStar.In.Query} (h : o ∈ depOpenings xI cs ps) :
     o.rep < 2 ∧ o.level < (OpenLower.schAt xI 0).levels.size ∧
@@ -183,7 +151,6 @@ theorem sum_range_ite (f : ℕ → ℕ) (l0 : ℕ) :
         simp
       · simp [h, h', show ¬ l0 < n + 1 by omega]
 
-/-- **Level `l`'s openings are its two reps' queries.** -/
 theorem depOpenings_level (xI : Msg) (cs : List Coin) (ps : Array (_root_.Flock.Proof × F128)) (l : ℕ) :
     ((depOpenings xI cs ps).filter (·.level == l)).size = 2 * ((OpenLower.schAt xI 0).levels[l]!).q := by
   have hrow : ∀ rep, (((List.range (OpenLower.schAt xI 0).levels.size).flatMap fun l' =>
@@ -213,9 +180,6 @@ theorem depOpenings_level (xI : Msg) (cs : List Coin) (ps : Array (_root_.Flock.
   · rw [if_neg hl, getElem!_neg _ l hl]
     rfl
 
-/-! ## The levels' tops at the fitted records -/
-
-/-- **A cap's `capIn` holds its level's rows to its `N`.** -/
 theorem capIn_rows {src : _root_.VStar.In.Src} {l N : ℕ} {pin : _root_.VStar.In.PartIn} {T : _root_.VStar.In.Tops}
     (h : _root_.VStar.In.capIn src l N = .ok pin) (hT : _root_.VStar.In.topsAt src l = .ok T) : T.rows.size = N := by
   unfold _root_.VStar.In.capIn at h
@@ -223,8 +187,6 @@ theorem capIn_rows {src : _root_.VStar.In.Src} {l N : ℕ} {pin : _root_.VStar.I
   by_contra hne
   simp [bind, Except.bind, hne] at h
 
-/-- **Level 0's tops at the fitted records**: both reps' are round 0's `N` nodes, one run (`topsAt_same`), so each
-rep's first row is `0`, and RecCap holds the level's rows to its `N`. -/
 theorem topsAt0_fit {I : InnerRec} {x : Msg} {w : Claims.Flock.Wit} {ρ : (I.fit x).Tape} {hist : List (Msg × Msg)}
     {r : XR} (hr : readX x = some r) {rs : Array RecVStar.SchedRound} (hrs : repSched r.shape = some rs) {N : ℕ}
     (hcap : capAt r = some (nS x - 1, N)) {src : _root_.VStar.In.Src} (hs : srcOf (I.fit x) x w ρ hist = some src)
@@ -268,9 +230,6 @@ theorem topsAt0_fit {I : InnerRec} {x : Msg} {w : Claims.Flock.Wit} {ρ : (I.fit
     ht2 ht0 ht1 ha
   exact congrArg _root_.VStar.In.Tops.first (Except.ok.inj (hT.symm.trans h))
 
-/-- **Level `g + 1`'s tops at the fitted records**, where the history holds both reps' stream rounds and the reps'
-tops there differ: rep 0's `n` nodes, then rep 1's (`topsAt_two`), so rep 1's first row is `n`, and the level's cap
-holds the level's rows to its `2n`. -/
 theorem topsAtL_fit {I : InnerRec} {x : Msg} {w : Claims.Flock.Wit} {ρ : (I.fit x).Tape} {hist : List (Msg × Msg)}
     {r : XR} (hr : readX x = some r) {rs : Array RecVStar.SchedRound} (hrs : repSched r.shape = some rs)
     (hH : 2 * rs.size ≤ hist.length) {src : _root_.VStar.In.Src} (hs : srcOf (I.fit x) x w ρ hist = some src)
@@ -329,13 +288,10 @@ theorem topsAtL_fit {I : InnerRec} {x : Msg} {w : Claims.Flock.Wit} {ρ : (I.fit
   have he' : e < (rs[k]?.getD default).2.1.size := by simpa using he
   simp [Array.getElem?_eq_getElem he']
 
-/-! ## `IrShaped` at the deployed prover -/
-
 theorem pair_getElem!_zero (a b : ℕ) : (#[a, b] : Array ℕ)[0]! = a := rfl
 
 theorem pair_getElem!_one (a b : ℕ) : (#[a, b] : Array ℕ)[1]! = b := rfl
 
-/-- **A dense statement's inner `m` has a `fast100` schedule**, table 0's at the inner statement (`schAt`). -/
 theorem fast100_dense {x : Msg} {st : Claims.Recursion.CompiledStatement} (hx : parse x = some st)
     (hf : Claims.Recursion.Form.Dense st.form) {r : XR} (hr : readX x = some r) :
     ∃ sch, fast100 r.shape.m = some sch ∧ OpenLower.schAt (xIOf x) 0 = sch := by
@@ -365,8 +321,6 @@ theorem fast100_dense {x : Msg} {st : Claims.Recursion.CompiledStatement} (hx : 
   rw [h0, htm, hfs]
   rfl
 
-/-- **The deployed inner prover's openings fit V\*'s levels** (`IrShaped`) at every dense statement, tape and history
-holding both reps' stream rounds, where the reps' tops differ at each later level (`hTops`, the tape exception). -/
 theorem irShaped_dep {x : Msg} {st : Claims.Recursion.CompiledStatement} (hx : parse x = some st)
     (hf : Claims.Recursion.Form.Dense st.form) {w : Claims.Flock.Wit} {ρ : ((IrDep x).fit x).Tape}
     {hist : List (Msg × Msg)}
@@ -449,14 +403,6 @@ theorem irShaped_dep {x : Msg} {st : Claims.Recursion.CompiledStatement} (hx : p
       · rw [h, pair_getElem!_one]
         omega
 
-/-! ## At the inner statement's setup
-
-What a session reader evaluates (`IrDepSession`, the difftest against the deployed builder): `depRest`'s pieces with the
-inner statement's setup `v` read once rather than at every opening, each `depRest`'s own wherever the statement sets up
-at `v` (`depRest_eq`). -/
-
-/-- **Rep `k`'s verifier rows at the setup `v`**, table `t`'s shape and extra claims at the link coin `c₁`, rep `k`'s
-`canonRounds` at the rep rounds' coins `cs`, and the comb `comb`. -/
 def rowsV (v : FlockDeploy.Ins × _root_.Flock.SessionSpec × Array _root_.Flock.Stmt) (c₁ : Coin) (cs : List Coin)
     (t k : ℕ) (comb : Array F128) :
     Except String (Array F128 × RecAlgebra.Info RecAlgebra.Lin × Array (Array (Array F128))) :=
@@ -465,18 +411,15 @@ def rowsV (v : FlockDeploy.Ins × _root_.Flock.SessionSpec × Array _root_.Flock
       (((tabsOf v.2.2)[t]!.extra (pointsOf v.2.1 c₁)).toOption.getD #[]).size)
     (Rows.canonRounds v.2.1 v.2.2 cs k) (((tabsOf v.2.2)[t]!.extra (pointsOf v.2.1 c₁)).toOption.getD #[]) comb
 
-/-- The position verifier rows `r` sample for query `j` of level `l`. -/
 def posOf (r : Except String (Array F128 × RecAlgebra.Info RecAlgebra.Lin × Array (Array (Array F128)))) (l j : ℕ) :
     ℕ :=
   match r with
   | .ok (_, info, _) => (info.lg.conss[l]!).pos[j]!
   | .error _ => 0
 
-/-- Table `t`'s schedule at the setup `v`. -/
 def schV (v : FlockDeploy.Ins × _root_.Flock.SessionSpec × Array _root_.Flock.Stmt) (t : ℕ) : _root_.Flock.Schedule :=
   (fast100 (tabsOf v.2.2)[t]!.m).getD default
 
-/-- Rep `k`'s comb at the setup `v`. -/
 def combV (v : FlockDeploy.Ins × _root_.Flock.SessionSpec × Array _root_.Flock.Stmt) (cs : List Coin) (k : ℕ) :
     Array F128 :=
   (match (rowsV v (cs.headD default) cs.tail (k / 2) k RecCoins.ZERO_COMB).toOption with
@@ -485,7 +428,6 @@ def combV (v : FlockDeploy.Ins × _root_.Flock.SessionSpec × Array _root_.Flock
         info.lc.fold.ts).toOption
     | none => none).getD RecCoins.ZERO_COMB
 
-/-- `depOpen` at the schedule `sch` and rep `rep`'s verifier rows `r`, computed once for all its queries. -/
 def depOpenV (sch : _root_.Flock.Schedule)
     (r : Except String (Array F128 × RecAlgebra.Info RecAlgebra.Lin × Array (Array (Array F128))))
     (ps : Array (_root_.Flock.Proof × F128)) (rep l j : ℕ) : _root_.VStar.In.Query :=
@@ -495,7 +437,6 @@ def depOpenV (sch : _root_.Flock.Schedule)
     row := fitArr (2 ^ lv.lanes) 0 (o.1.getD j #[]),
     sibs := fitArr (lv.d - lv.cap) ByteArray.empty (_root_.Flock.sibsOf o.2.1 (lv.d - lv.cap) j).toArray }
 
-/-- `depOpenings` at the setup `v`. -/
 def depOpeningsV (v : FlockDeploy.Ins × _root_.Flock.SessionSpec × Array _root_.Flock.Stmt) (cs : List Coin)
     (ps : Array (_root_.Flock.Proof × F128)) : Array _root_.VStar.In.Query :=
   let sch := schV v 0
@@ -503,7 +444,6 @@ def depOpeningsV (v : FlockDeploy.Ins × _root_.Flock.SessionSpec × Array _root
     let r := rowsV v (cs.headD default) cs.tail 0 rep #[]
     (List.range sch.levels.size).flatMap fun l => (List.range (sch.levels[l]!).q).map (depOpenV sch r ps rep l)).toArray
 
-/-- `depRest` at the setup `v`. -/
 def depRestV (v : FlockDeploy.Ins × _root_.Flock.SessionSpec × Array _root_.Flock.Stmt) (τ : DepTape)
     (cs : List Coin) : _root_.VStar.In.Src where
   msgs := #[]
@@ -561,12 +501,10 @@ theorem depOpenings_eq (h : setupOf false xI = some v) (cs : List Coin) (ps : Ar
     depOpenings xI cs ps = depOpeningsV v cs ps := by
   simp only [depOpenings, depOpeningsV, schAt_eq h, depOpen_eq h]
 
-/-- **The session reader's rest is the deployed prover's** wherever the inner statement sets up at `v`. -/
 theorem depRest_eq (h : setupOf false xI = some v) (τ : DepTape) (cs : List Coin) :
     depRest xI τ cs = depRestV v τ cs := by
   simp only [depRest, depRestV, verRowsAt_eq h, combAt_eq h, depOpenings_eq h]
 
-/-- **`IrDep x`'s rows** where its inner statement sets up at `v`: round `h.length`'s of `depRows` at the coins of `h`. -/
 theorem irDep_rows {x : Msg} (h : setupOf false (xIOf x) = some v) (w : Claims.Flock.Wit) (τ : DepTape)
     (hs : List (Msg × Msg)) :
     (IrDep x).rows w τ hs =
@@ -578,7 +516,6 @@ theorem irDep_rows {x : Msg} (h : setupOf false (xIOf x) = some v) (w : Claims.F
     | none => []) = _
   simp only [h]
 
-/-- **`IrDep x`'s rest** where its inner statement sets up at `v`: `depRestV v` at the coins of `h`. -/
 theorem irDep_rest {x : Msg} (h : setupOf false (xIOf x) = some v) (w : Claims.Flock.Wit) (τ : DepTape)
     (hs : List (Msg × Msg)) : (IrDep x).rest w τ hs = depRestV v τ (innerCoins hs) :=
   depRest_eq h τ (innerCoins hs)
@@ -591,13 +528,11 @@ def decodeB (x : Msg) : Option FlockDeploy.Raw :=
   | some (w, []) => if w.encode == x then some w else none
   | _ => none
 
-/-- `FlockDeploy.insOf` at `decodeB`. -/
 def insB (zk : Bool) (x : Msg) : Option FlockDeploy.Ins := do
   let w ← decodeB x
   if w.zk ≠ zk then none
   w.ins.toOption
 
-/-- `FlockDeploy.setupOf` at `decodeB`. -/
 def setupB (zk : Bool) (x : Msg) : Option (FlockDeploy.Ins × _root_.Flock.SessionSpec × Array _root_.Flock.Stmt) := do
   let s ← insB zk x
   let (spec, sts) ← s.setup.toOption
@@ -613,7 +548,6 @@ theorem decodeB_eq (x : Msg) : decodeB x = FlockDeploy.decode x := by
     | nil => simp [beq_iff_eq]
     | cons _ _ => rfl
 
-/-- **The session reader's setup is the statement's.** -/
 theorem setupB_eq (zk : Bool) (x : Msg) : setupB zk x = setupOf zk x := by
   unfold setupB insB
   rw [decodeB_eq]

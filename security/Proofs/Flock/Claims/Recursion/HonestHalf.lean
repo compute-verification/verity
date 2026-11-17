@@ -48,21 +48,8 @@ import Proofs.Flock.Claims.Recursion.VStarPortNames
 import Proofs.Flock.Claims.Recursion.VStarTopsOk
 import Proofs.Flock.Claims.Recursion.VStarTraceAt
 
-/-!
-# The honest half's run and its named premises
-
-`RecursiveKS` reads, at the brings `deployedB b` for every `b`, the premise `DecompB` at `PartAccepts`: wherever every V\*
-part's circuit accepts at a dense compiled statement, `IVStar` accepts or two recorded calls collide. It is non-vacuous
-where some run has every part accepting. `honest_half_tops` gives that run: the compiled verifier's run of the reference
-prover at `deployedB` of the deployed brings at `x` (`bringsAt`: the deployed assigner `A0`, the deployed inner prover
-`IrDep` and the fitted records), and every part `s < nS x` accepts on it.
-
-This file has the run's records (`bLAt`, `IAt`, `DAt`) and the premises witnessed outside Lean, all on one run
-(`HonestFixture`): the run accepting (`HonestRunAccepted`), and no collision among a part's recorded calls (`NoCollAt`,
-SHA-512's collision event on that run). Each part's staging setting up follows from the run
-accepting (`stagedSetsUp_accepted`).
-`bringsAt_deployedB`: the brings here are `RecursiveKS`'s `deployedB` at `bringsAt mask Ir b0 x`.
--/
+/-! The honest half's run and its premises witnessed outside Lean (`HonestFixture`): the run accepting and no collision
+among a part's recorded calls. -/
 
 @[expose] public section
 
@@ -75,11 +62,9 @@ open Claims.Recursion.VStarB (readForms)
 open RecDeploy.VStarBuild
 open RecDeploy.VStarHonest
 
-/-- **The brings `honest_half_tops` runs at are `RecursiveKS`'s**: `deployedB` of the deployed brings at `x`. -/
 theorem bringsAt_deployedB (mask : ℕ → ℕ → Bool) (Ir : InnerRec) (b0 : Brings) (x : Msg) :
     bringsAt mask Ir (deployedB b0) x = deployedB (bringsAt mask Ir b0 x) := rfl
 
-/-- A part with a statement and a circuit is one of `x`'s parts. -/
 theorem lt_nS_of_partAt {x : Msg} {s : ℕ} {sv : _root_.VStar.Stmt} {c : Circuit}
     (h : partAt x s = some (sv, c)) : s < nS x := by
   cases hr : readX x with
@@ -89,8 +74,6 @@ theorem lt_nS_of_partAt {x : Msg} {s : ℕ} {sv : _root_.VStar.Stmt} {c : Circui
     by_contra hs
     have hn : r.w.parts[s]? = none := by simp; omega
     simp [partAt, hr, hn] at h
-
-/-! ## The run and its named premises -/
 
 section Premises
 
@@ -150,9 +133,6 @@ def NoCollAt (w : Claims.Flock.Wit) (ω : Tape (bLAt mask Ir b0 x aux nOf hd rec
       ((Claims.Recursion.runVstar FlockDeploy.sha512 (DAt mask Ir b0 x aux nOf hd recRest) (IAt decI)
         (refP (IAt decI).V (bLAt mask Ir b0 x aux nOf hd recRest) w) x ω r).getD s []))).isSome = false
 
-/-- **The honest run's staging sets up** (`StagedSetsUp` at the honest run's statement `x`), from
-`HonestRunAccepted`: the compiled verifier accepting the reference prover's run means each part's recursive setup passed
-(`stagedSetsUp_run`). -/
 theorem stagedSetsUp_accepted {w : Claims.Flock.Wit} {st : Claims.Recursion.CompiledStatement}
     {ω : Tape (bLAt mask Ir b0 x aux nOf hd recRest)} {r : Fin ((DAt mask Ir b0 x aux nOf hd recRest).V.k x) → Coin}
     (h : HonestRunAccepted mask Ir b0 x aux nOf hd recRest decI w st ω r) :

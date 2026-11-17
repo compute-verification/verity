@@ -33,16 +33,8 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# Route 2C's split bound at the audit's call caps: `κ ≤ 2^{−167.7}` and `ε ≤ 2^{−174.95}`
-
-`kappa_eps_deployed` evaluates `κ + t·ε` where the inner setup `|S(x_I)|` and the call bounds `n` and `v` are each at
-most `2^32`. The audit reads it at the bounds every accepted statement meets: the inner setup's calls at most
-`innerB ≤ 2^32` (`innerSetupIns_le_acc`), the inner verifier's `2^28 + (innerB + 2^24) ≤ 2^32` (`nR_le`), and V\*'s
-setup calls `nS x · 138543104` (`setupCalls_deployedB_le_cap`), at most `16 · 138543104 ≤ 2^32` at the verifier's cap
-of `16` parts (`RecBudget.MAX_STATEMENTS`, `nS_le_sixteen`). So at the deployment's tables (`OneTableAt`: `SizesAt` but
-for its inner-setup bound), `κ ≤ 2^{−167.7}` and `ε ≤ 2^{−174.95}` (`kappa_eps_oneTable_cap`).
--/
+/-! Route 2C's split bound at the audit's call caps, `κ ≤ 2^{−167.7}` and `ε ≤ 2^{−174.95}`, at the bounds every
+accepted statement meets (`kappa_eps_oneTable_cap`). -/
 
 @[expose] public section
 
@@ -61,12 +53,6 @@ def OneTableAt (b : Brings) (x : Msg) : Prop :=
 theorem SizesAt.oneTableAt {b : Brings} {x : Msg} (h : SizesAt b x) : OneTableAt b x :=
   ⟨h.1, h.2.1⟩
 
-/-- **Route 2C's split bound at the audit's call caps: `κ ≤ 2^{−167.7}` and `ε ≤ 2^{−174.95}`**, at a statement at the
-deployment's tables (`OneTableAt b x`), an inner setup of at most `2^32` calls (`hS`) and call bounds `n ≤ 2^32` and
-`v ≤ nS x · 138543104` (`hU`, `hV`): what `innerSetupIns_le_acc` proves of the inner setup and `nR_le` of the inner
-verifier's calls at every accepted statement, and what `setupCalls_deployedB_le_cap` proves of V\*'s setup calls. The
-parts are at most `16` (`nS_le_sixteen`), so `v ≤ 16 · 138543104 ≤ 2^32`, and the bound is `kappa_eps_deployed`'s.
-With `bitsLin2KOn_of_ksLin2On` it makes `Pr[acc ∧ ¬R] ≤ 2^{−167.7} + t·2^{−174.95}`. -/
 theorem kappa_eps_oneTable_cap (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (b : Brings)
     (L : Claims.Recursion.VStarB.LayoutB) (nextE : Msg → List Msg → List Coin → Claims.OC Out)
     (colsE : Claims.Seen → ℕ → List (ℕ × List FlockLevel3.GF128)) (wE : Msg → ℝ) (join : List Msg → Msg)

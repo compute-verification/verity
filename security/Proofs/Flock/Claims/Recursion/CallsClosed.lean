@@ -43,18 +43,8 @@ import Proofs.Flock.Claims.Recursion.NextRRows
 import Proofs.Flock.Claims.Recursion.VerdictFramedJson
 import Proofs.Flock.Soundness.Refine.Walk
 
-/-!
-# `c_V = 2^24` at a plain session in scope
-
-At a decision `actR` makes, the record the verdict decodes is the reader's (`recJ`) through the substitutions, whose
-streams are the reps' (`jAt_recJ_streams`): `2·n` of them at `n ≤ 64` tables (`setup_tables`), each of at most its
-rep's rounds, `2200` at a session in scope (`repLens_le_in`); and `readPs` reads `2·n` proofs. The verdict runs at the
-session the setup returns against `H`, which has at most `64` tables at any hash too (`setupWith_tables`). So a
-decision calls SHA-512 at most `2^24` times on every run (`decisionAtS_calls_in`). With the inner setup's
-`c_B = SetupCount.innerB ≤ 2^32` at any hash (`innerSetupCalls_le_acc`), its inputs (`innerSetupIns_le_acc`) and the
-scope (`plainIn_of_run_acc`), all read from an accepted run, `λ₂ ≥ 100` holds at KS's deployed record with no count
-premise (`lamLin2_R_ge_in`).
--/
+/-! `c_V = 2^24` at a plain session in scope, so `λ₂ ≥ 100` holds at KS's deployed record with no count premise
+(`lamLin2_R_ge_in`). -/
 
 @[expose] public section
 
@@ -68,9 +58,7 @@ section Walk
 
 open FlockSoundness.Refine FlockSoundness.Discharge.Exec
 
--- `walk_step` down `Stmt.setupTablesWith`'s unfolded do-block, a goal per branch
 set_option maxHeartbeats 4000000 in
-/-- **`setupTables_le` at any hash**: at most `Tags.MAX_TABLES` tables, and the spec names one per statement. -/
 theorem setupTablesWith_le {h₀ : ByteArray → ByteArray} {tags : Tags} {cf pf : ByteArray} {coins : Coins} {count : ℕ}
     {tables : List (String × ByteArray)} {draw partition : Option Lean.Json} {program : Option ByteArray}
     {work : Option (ℕ × Array (String × ℕ × ℕ))} {stratified : Option ℕ}
@@ -112,7 +100,6 @@ theorem setupTablesWith_le {h₀ : ByteArray → ByteArray} {tags : Tags} {cf pf
 
 end Walk
 
-/-- **A setup at any hash has at most 64 tables, and its spec names one per statement.** -/
 theorem setupWith_tables {h₀ : ByteArray → ByteArray} {r : Readable.Read} {spec : SessionSpec} {sts : Array Stmt}
     (hr : setupWith h₀ r = .ok (spec, sts)) : sts.size ≤ 64 ∧ spec.tables.size = sts.size := by
   unfold setupWith setupM at hr
@@ -143,7 +130,6 @@ private theorem forall₂_mem_r {α β : Type} {R : α → β → Prop} :
     · obtain ⟨a, ha, hr⟩ := forall₂_mem_r h b hb
       exact ⟨a, by simp [ha], hr⟩
 
-/-- **A reader's stream has at most its rep's rounds.** -/
 theorem recStreams_size_le {spec : SessionSpec} {sts : Array Stmt} {ms : List Claims.Msg} {cs : List Coin} {R : ℕ}
     (hR : ∀ y ∈ repLens spec sts, y ≤ R) : ∀ a ∈ recStreams spec sts ms cs, a.size ≤ R := by
   intro a ha
@@ -153,7 +139,6 @@ theorem recStreams_size_le {spec : SessionSpec} {sts : Array Stmt} {ms : List Cl
   rw [List.size_toArray, List.length_mapIdx]
   exact (cutLens_getD_length_le _ _ k).trans (getD_le_of_forall hR k)
 
-/-- **A rep has at most `2200` rounds at a plain session in scope.** -/
 theorem repLens_le_in {x : Claims.Msg} {s : Ins} {spec : SessionSpec} {sts : Array Stmt} (hin : PlainIn x s spec sts) :
     ∀ y ∈ repLens spec sts, y ≤ 2200 := by
   intro y hy
@@ -166,7 +151,6 @@ theorem repLens_le_in {x : Claims.Msg} {s : Ins} {spec : SessionSpec} {sts : Arr
   have hp : spec.points * sts[k / 2].regions.size ≤ 2 * 1026 := Nat.mul_le_mul hin.points hr'.2.1
   exact RecDeploy.repSchedAt_length_le spec _ hr'.1 (by omega)
 
-/-- **The substitutions keep a record's streams readable.** -/
 theorem arr_streams_jAt_ok {H : Claims.Msg → Claims.Msg} {spec : SessionSpec} {sts : Array Stmt} {c₁ : Coin}
     {mids : List (Claims.Msg × Coin)} {f : FinalP} {recs₀ : Array Json} (hf : Record.arr f.j "streams" = .ok recs₀) :
     ∃ recs, Record.arr (jAt H spec sts c₁ mids f) "streams" = .ok recs := by
@@ -176,8 +160,6 @@ theorem arr_streams_jAt_ok {H : Claims.Msg → Claims.Msg} {spec : SessionSpec} 
     arr_mapKey_ne _ _ (proofKey_ne_streams spec).symm, hf]
   exact ⟨_, rfl⟩
 
-/-- **The decided record's streams at the reader's record**: at most one a rep stream, each of at most `R` rounds where
-every rep has at most `R`. -/
 theorem jAt_recJ_streams {H : Claims.Msg → Claims.Msg} {spec spec' : SessionSpec} {sts sts' : Array Stmt}
     {link : List ByteArray × List ByteArray} {c₁ : Coin} {ms : List Claims.Msg} {cs : List Coin}
     {ps : Array Flock.Proof} {mids : List (Claims.Msg × Coin)} {x : Claims.Msg} {R : ℕ}
@@ -212,8 +194,6 @@ namespace FlockDeploy.KS
 
 open Flock
 
-/-- **A decision's SHA-512 calls at a plain session in scope, on every run: at most `2^24`**, at the session the setup
-returns against `H`: at most `128` files, `128` streams of at most `2200` rounds, and `64` tables of two reps. -/
 theorem decisionAtS_calls_in {rd : Claims.Msg → Option FinalP} (H : Claims.Msg → Claims.Msg) {x : Claims.Msg}
     {s₀ : Ins} {spec₀ : SessionSpec} {sts₀ : Array Stmt} (hin : PlainIn x s₀ spec₀ sts₀)
     {as : List Claims.Msg} {cs : List Coin} {s : Ins} {spec spec' : SessionSpec} {sts sts' : Array Stmt}
@@ -251,9 +231,6 @@ open Flock
 open Claims (Msg Out Prover run coinSeq)
 open FlockDeploy (Coin Ins)
 
-/-- **`λ₂ ≥ 100` at KS's deployed record, at an accepted statement**: the inner verifier's calls are at most
-`2^28 + (c_B + c_V)` on every run, with `c_B = SetupCount.innerB` the inner setup's at any hash and `c_V = 2^24` a
-decision's, and route 2C's `λ₂` at that count is at least `100`. Every premise is read from the accepted run `hacc`. -/
 theorem lamLin2_R_ge_in (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (b : Brings)
     (L : Claims.Recursion.VStarB.LayoutB) (rd : Msg → Option FlockDeploy.FinalP)
     (colsE : Claims.Seen → ℕ → List (ℕ × List FlockLevel3.GF128)) (wE : Msg → ℝ) (join : List Msg → Msg)

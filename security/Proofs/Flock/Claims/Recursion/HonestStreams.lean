@@ -46,24 +46,7 @@ import Proofs.Flock.Claims.Recursion.NextRCoins
 import Proofs.Flock.Claims.Recursion.NextRRows
 import Proofs.Flock.Soundness.Refine.Seam
 
-/-!
-# The reader's streams at the honest run are the honest record's
-
-The reader's record `recJ` rebuilds each rep stream from the round messages: rep `k` takes its block of the framed
-proof bytes (`recFrames`), each round counting its schedule's coins (`RecDeploy.repSchedAt`) and holding the first
-`n` values of its coin. At an honest single-table run whose goals hold at SHA-512, these are the recorded streams'
-rounds as `liveOf` reads them (`recStreams_eq`), and the link the reader takes from round 0 is the record's `root_B`
-(`recLink_eq`):
-
-* **Counts** (`schedN_eq_repNs`): `RecVStar.repRounds`' coin counts (`schedN`) are the counts a verified rep's rounds
-  issued (`repNs`, `verifyRepWith_readsN`), at every `fast100` schedule.
-* **Bytes** (`frames_emitted`): the goals' zerocheck, lincheck, ring switch and Ligerito runs, at SHA-512 the plain
-  ones, emit the rep's frames at the ring switch's batched value, one chunk per recorded round, each retained.
-* **Coins** (`hs_coins`): the sends after the link are the recorded rounds (`Recs`), so the deployed verifier's coin
-  at a round's offset opens to the round's coins.
-* **Per rep** (`rep_facts`) and **the streams** (`recStreams_eq`): the three, at each rep's stream as the record
-  decodes it.
--/
+/-! The reader's streams and link at the honest run are the honest record's (`recStreams_eq`, `recLink_eq`). -/
 
 @[expose] public section
 
@@ -73,8 +56,6 @@ open Flock FlockComplete
 open FlockSoundness.Refine (Frame encs Retains AllRetained init_enc DimSeam LevelSeam)
 open FlockSoundness.Discharge.Exec (Emitted chunks repFrames zcFrames lcFrames rsFrames ligFrames emitted_absorb
   zerocheck_emitted lincheck_emitted ringSwitch_emitted ligerito_frames)
-
-/-! ## The schedule's counts are a verified rep's -/
 
 theorem loop_passN (sch : Flock.Schedule)
     (hcs : ∀ i < sch.levels.size - 1, (sch.levels.getD (i + 1) default).cols + 3 = (sch.levels.getD i default).cols)
@@ -101,7 +82,6 @@ theorem loop_passN (sch : Flock.Schedule)
       rw [levelNs, if_neg hi, passN, if_neg hi, qNs, bitLength_pred hq1]
       rfl
 
-/-- **`RecVStar.repRounds`' counts are a verified rep's**, at a `fast100` schedule. -/
 theorem schedN_eq_repNs {m kLog claims : ℕ} {sch : Flock.Schedule} (hs : fast100 m = some sch) :
     schedN sch m kLog claims = repNs m kLog claims sch := by
   obtain ⟨⟨hn7, h2, hl0, hc0, hl4, hcs, hext⟩, hsm⟩ := FlockSoundness.Refine.fast100_dims _ _ hs
@@ -115,12 +95,9 @@ theorem schedN_eq_repNs {m kLog claims : ℕ} {sch : Flock.Schedule} (hs : fast1
   rw [h5, hloop]
   simp only [lvN, qNs, bitLength_pred hq0, List.append_assoc, List.cons_append, List.nil_append]
 
-/-! ## Names and schemes -/
-
 theorem named_self {ms : MerkleScheme} (h : MerkleScheme.find? ms.id = some ms) : ms.Named :=
   Flock.With.named_of_find? h
 
-/-- **Every registered scheme is named.** -/
 theorem named_of_all {ms : MerkleScheme} (h : ms ∈ MerkleScheme.all) : ms.Named := by
   simp only [MerkleScheme.all, List.mem_cons, List.not_mem_nil, or_false] at h
   rcases h with rfl | rfl | rfl | rfl <;> exact named_self rfl
@@ -133,7 +110,6 @@ theorem nodup_names {spec : SessionSpec} (h : NamesDistinct spec) : (spec.repStr
   have := h i j (by simpa using hi) (by simpa using hj) heq
   omega
 
-/-- At one table, rep stream `k` is table `k / 2`'s rep `k % 2`, by the name the verifier finds it under. -/
 theorem repName_one {spec : SessionSpec} {t : String} (ht : spec.tables = #[t]) {k : ℕ}
     (hk : k < spec.repStreams.size) :
     spec.repStreams[k].2.2 = toString spec.tables[k / 2]! ++ toString "/rep" ++ toString (k % 2) := by
@@ -141,7 +117,6 @@ theorem repName_one {spec : SessionSpec} {t : String} (ht : spec.tables = #[t]) 
   have hk2 : k < 2 := by have h := hk; rw [hR] at h; simpa using h
   interval_cases k <;> simp [hR, ht]
 
-/-- **The decoded record finds each rep stream under its name**, at distinct names. -/
 theorem stream_find {spec : SessionSpec} {h : ByteArray → ByteArray} {rb : Array ByteArray}
     {HS : Array (Array Flock.Round)} (hss : HS.size = spec.repStreams.size)
     (hnd : (spec.repStreams.toList.map (·.2.2)).Nodup) {k : ℕ} (hk : k < spec.repStreams.size) :
@@ -167,8 +142,6 @@ theorem stream_find {spec : SessionSpec} {h : ByteArray → ByteArray} {rb : Arr
   rw [hname, hA k (by omega)] at hf
   exact hf
 
-/-! ## The record's rounds, as `liveOf` reads them -/
-
 theorem streamObj_live (spec : SessionSpec) (h : ByteArray → ByteArray) (rb : Array ByteArray)
     (q : ℕ × ℕ × String) (rs : Array Flock.Round) :
     JsonRT.streamObj spec h rb (q, rs.map JsonRT.liveRound) = JsonRT.streamObj spec h rb (q, rs) := by
@@ -185,7 +158,6 @@ theorem streamObj_live (spec : SessionSpec) (h : ByteArray → ByteArray) (rb : 
   dsimp only
   rw [e]
 
-/-- **The honest record is unchanged by reading its rounds live.** -/
 theorem recordObj_liveRound (spec : SessionSpec) (h : ByteArray → ByteArray) (rb : Array ByteArray)
     (pts : Array (Array F128)) (S : Array (Array Flock.Round)) (proofs : Array ByteArray) :
     JsonRT.recordObj spec h rb pts (S.map (·.map JsonRT.liveRound)) proofs = JsonRT.recordObj spec h rb pts S proofs := by
@@ -197,8 +169,6 @@ theorem recordObj_liveRound (spec : SessionSpec) (h : ByteArray → ByteArray) (
     exact streamObj_live spec h rb _ _
   unfold JsonRT.recordObj JsonRT.recordList
   rw [e]
-
-/-! ## The honest run's reps -/
 
 section
 
@@ -213,7 +183,6 @@ theorem run_tabs_size {H : Claims.Msg → Claims.Msg} (o : Run H rel) : o.tabs.s
   unfold Run.tabs tabsOf
   rw [Array.size_map]
 
-/-- **Rep `k`'s decoded proof is the session's file's**, where the record's points are the first coin's. -/
 theorem run_proof_rec {H : Claims.Msg → Claims.Msg} (h64 : Claims.Out64 H) (o : Run H rel) {k : ℕ}
     (hex : (tabsOf o.sts)[k / 2]!.extra (pointsOf o.spec o.recC₁) = .ok (o.extras (k / 2)))
     (hk : k < 2 * o.sts.size) : o.proof (k / 2) (k % 2) = o.recPs[k]! := by
@@ -231,8 +200,6 @@ theorem run_proof_rec {H : Claims.Msg → Claims.Msg} (h64 : Claims.Out64 H) (o 
   rw [hsh, hdec]
   rfl
 
-/-- **A rep's recorded rounds retain its frames** at the ring switch's batched value: the goals' runs, at SHA-512 the
-plain ones, emit `repFrames`, one chunk per round. -/
 theorem frames_emitted (g : Goals sha512 rel) (o : Run sha512 rel) {i r : ℕ} (hi : i < o.tabs.size) (hr : r < 2)
     (hN : o.tabs[i]!.merkle.Named) (hf : fast100 o.tabs[i]!.m = some (o.sch i))
     (hret : AllRetained (o.stream i r).rounds) :
@@ -291,8 +258,6 @@ theorem frames_emitted (g : Goals sha512 rel) (o : Run sha512 rel) {i r : ℕ} (
   have := hR j hj'
   simpa using this
 
-/-! ## Offsets and coins -/
-
 theorem arrays_offset {α : Type} : ∀ (L : List (Array α)) (i : ℕ) (hi : i < L.length) (k : ℕ) (hk : k < L[i].size),
     (L.flatMap Array.toList)[((L.take i).map Array.size).sum + k]? = some L[i][k]
   | [], _, hi, _, _ => absurd hi (by simp)
@@ -309,8 +274,6 @@ theorem arrays_offset {α : Type} : ∀ (L : List (Array α)) (i : ℕ) (hi : i 
       ((L.take i).map Array.size).sum + k by simp only [Array.length_toList]; omega]
     exact this
 
-/-- **The deployed verifier's coin at a recorded round's offset opens to the round's coins**: the sends after the link
-are the recorded rounds, each answered by the run's coin. -/
 theorem hs_coins {H : Claims.Msg → Claims.Msg} (o : Run H rel) {cs : List Coin} (hcs : o.CoinsAt cs)
     {HS : Array (Array Flock.Round)} {bs : List Claims.Msg} (hrl : repLens o.spec o.sts = HS.toList.map Array.size)
     (hrecs : JsonRT.Recs o.resp 1 (HS.toList.flatMap Array.toList) bs) {q : ℕ} (hq : q < HS.size) {j : ℕ}
@@ -339,10 +302,6 @@ theorem hs_coins {H : Claims.Msg → Claims.Msg} (o : Run H rel) {cs : List Coin
 
 end
 
-/-! ## Each rep of the honest single-table run -/
-
-/-- **Rep `k` of the honest run**: its schedule has a round per recorded round, each counting the recorded round's
-coins, and its framed proof bytes are a message per recorded round, each the bytes that round retained. -/
 theorem rep_facts (h64 : Claims.Out64 sha512) (g : Goals sha512 Readable.relation) (o : Run sha512 Readable.relation)
     (cs : List Coin) {st : Stmt} {rb : ByteArray} {HS : Array (Array Flock.Round)}
     (hsts : o.sts = #[st]) (htab : o.spec.tables = #[st.tags.table]) (hss : HS.size = o.spec.repStreams.size)
@@ -455,10 +414,6 @@ theorem rep_facts (h64 : Claims.Out64 sha512) (g : Goals sha512 Readable.relatio
     apply Array.toList_inj.1
     rw [hRj]
 
-/-! ## The reader's streams and link -/
-
-/-- **The reader's streams at the honest run are the record's, read live**: rep `k` of `recStreams` at the honest
-proofs' framed bytes and the deployed verifier's coins is the recorded stream `k` as `liveOf` reads it. -/
 theorem recStreams_eq (h64 : Claims.Out64 sha512) (g : Goals sha512 Readable.relation)
     (o : Run sha512 Readable.relation) {cs : List Coin} (hcs : o.CoinsAt cs) {st : Stmt} {rb : ByteArray}
     {HS : Array (Array Flock.Round)} {bs : List Claims.Msg}
@@ -517,7 +472,6 @@ theorem recStreams_eq (h64 : Claims.Out64 sha512) (g : Goals sha512 Readable.rel
         Flock.Round)
       rw [hb, ← hc, hn j hj]
 
-/-- **The link the reader takes from the honest round 0 is the record's `root_B`.** -/
 theorem recLink_eq (h64 : Claims.Out64 sha512) (g : Goals sha512 Readable.relation)
     (o : Run sha512 Readable.relation) {st : Stmt} {rb : ByteArray} {HS : Array (Array Flock.Round)}
     (hsts : o.sts = #[st])

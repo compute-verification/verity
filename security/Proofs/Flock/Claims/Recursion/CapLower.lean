@@ -38,26 +38,8 @@ import Proofs.Flock.Claims.Recursion.Transport
 import Proofs.Flock.Soundness.Discharge.Hm.Commit
 import Proofs.Flock.Soundness.Discharge.Hm.Mask
 
-/-!
-# The cap's lowering at the deployed layout (U14b)
-
-A `rec-open` piece's registration tie (`OpenTie`) has two halves: the position bits the copy reads
-(`CopyBitsR`), and its climb's top, the first 64 bytes of its `out` row, which must be the side's cap entry at the
-opened position (`CopyTopR`). This file reduces the second half to two facts.
-
-* **The binding** (`OutBindR`): a level part's `out` slot at an opening and a RecCap part's `top` slot at the matching
-  instance commit to one registered row of `rec-top-L<l>` (`RecCoins.checkOpenTops`, `RecVStar.checkTopRows`;
-  `capRow_bytes`). Both ports are 64 words, so their rows' hm96 inputs share a prefix, and the two slots' calls force
-  the rows equal unless some two calls collide (`rows_eq_of_calls`; true calls are the slot's commit string,
-  `commit_of_true`). The calls are two parts', so the collision escape this needs is over every part's calls
-  (`LayoutB.allCalls`), which `Joint` excludes, and `layR` records both slots' (`out_top_rows`).
-* **The reader** (`SideCapR`): the side's cap entry is the node RecCap's opened row carries. A RecCap's opened row is
-  its whole hidden `top` row, 1024 bits (`rowHidden`, eight bits a byte), the node then 64 bytes of padding, while
-  a climb's top and `FitsRep.sizes`' cap entries are 64 bytes (`DecodeZL.ProofSizes.capEach`, `rcapsEach`). So the
-  reader takes each cap row's node (`FlockDeploy.nodeOf`), as `topGroups` and `capR` do.
-
-`capTop_of` gives `CopyTopR` at `sideAtR rd` from the two, and `openTieR_deployed` its `OpenTieR`.
--/
+/-! The cap's lowering at the deployed layout (U14b): `CopyTopR` from the binding `OutBindR` and the reader `SideCapR`
+(`openTieR_deployed`). -/
 
 @[expose] public section
 
@@ -70,26 +52,16 @@ open Claims.Recursion.VStarB
 open FlockVBridge.Family (bytesAt outCol)
 open RecDeploy.OpenLower (AtPieces AtOpened copyR schAt sideAtR sideLevel CopyBitsR CopyTopR OpenTieR openTieR_of)
 
-/-! ## What a cap row carries -/
-
-/-- RecCap's `top` row at instance `n`, off part witness `w'` in its circuit `c'` (`rowHidden`, eight bits a byte):
-the node then 64 bytes of padding (`FlockDeploy.nodeRow`), whose node is its `nodeOf`. -/
+/-- The node then 64 bytes of padding (`FlockDeploy.nodeRow`), eight bits a byte (`rowHidden`). -/
 def capRow (c' : Circuit) (w' : Claims.Flock.Wit) (n : ℕ) : ByteArray :=
   ⟨(readForms w' (((rowHidden c' "top" n).getD []).map HmNets.Lin.var)).toArray⟩
 
-/-- **Where a piece's rep's nodes start among `rec-top-L<l>`'s rows** (`RecVStar.topRow`, `checkLevelTopReads`' `first`):
-level 0's `root_B` is both reps' one top, and above it rep 1's rows follow rep 0's `2^cap` nodes. -/
+/-- Level 0's `root_B` is both reps' one top; above it rep 1's rows follow rep 0's `2^cap` nodes. -/
 def capFirst (xI : Msg) (q : OpenPiece) : ℕ :=
   if q.level = 0 then 0 else q.rep * 2 ^ ((schAt xI 0).levels[q.level]!).cap
 
-/-- The `rec-top-L<l>` row a piece's opening at position `pos` climbs to, below `HH` siblings. -/
 def capIdx (xI : Msg) (q : OpenPiece) (pos HH : ℕ) : ℕ := capFirst xI q + (pos >>> HH)
 
-/-! ## A commit string fixes its row, up to a collision among recorded calls -/
-
-/-- **Equal commit strings have equal rows**, up to a collision among true SHA-512 evaluations `l` that hold both
-rows' and both salts' hashes: equal `c` halves give equal salts, so equal masks, so equal row digests
-(`hm96Pair_spec`'s argument, at recorded calls). -/
 theorem commit_bind {l : List (Msg × Msg)} (hT : ∀ e ∈ l, FlockDeploy.sha512 e.1 = e.2)
     (hnc : (Claims.findColl l).isSome = false) {r y r' y' : Msg}
     (hr : r ∈ l.map Prod.fst) (hr' : r' ∈ l.map Prod.fst)
@@ -112,9 +84,6 @@ theorem commit_bind {l : List (Msg × Msg)} (hT : ∀ e ∈ l, FlockDeploy.sha51
     (by rw [FlockSoundness.Refine.hL512, FlockSoundness.Refine.K512.mask_len])
     (by rw [FlockSoundness.Refine.hL512, FlockSoundness.Refine.K512.mask_len]) hb
 
-/-- **A slot whose two recorded calls are true outputs its commit string** (`hmCalls_true`'s converse, at any row
-forms): the salt's call makes `c` the salt's hash, and the row's makes `b ⊕ Φy` the row's, where `Φy` is the mask
-`M·y` (`maskV_filter`), so `b = SHA-512(row) ⊕ M·y`. -/
 theorem commit_of_true {c : Circuit} {q n : ℕ} {w : Claims.Flock.Wit} {R : Msg}
     (hs : FlockDeploy.sha512 (Hm96.Default512.saltPrefix.data.toList ++ readForms w (hmSalt c q n)) =
       readForms w ((hmCommit c q n).drop 512))
@@ -152,10 +121,8 @@ theorem commit_of_true {c : Circuit} {q n : ℕ} {w : Claims.Flock.Wit} {R : Msg
     rw [FlockSoundness.Binding.commitString, FlockSoundness.Discharge.Hm.bitL_append_hi (length_xorMask _ _)]
     exact e.symm
 
-/-- **Two hm96 slots with one commit string hold one row**, wherever both slots' salt and row calls are among true
-evaluations `l` with no collision and their rows are hashed under one prefix (`rowPfx`: ports of one word count).
-The calls being true is the slot's commit string (`commit_of_true`), so no code fact about the slots' circuits is
-read: the rows may be at any forms (an input row's `rowHidden`, an output row's `outRowForms`). -/
+/-- The calls being true is the slot's commit string (`commit_of_true`), so no code fact about the slots' circuits is
+read: the rows may be at any forms. -/
 theorem rows_eq_of_calls {l : List (Msg × Msg)} (hT : ∀ e ∈ l, FlockDeploy.sha512 e.1 = e.2)
     (hnc : (Claims.findColl l).isSome = false) {c c' : Circuit} {q q' n n' : ℕ} {w w' : Claims.Flock.Wit}
     {row row' : List HmNets.Lin}
@@ -198,8 +165,6 @@ theorem rows_eq_of_calls {l : List (Msg × Msg)} (hT : ∀ e ∈ l, FlockDeploy.
   rw [hpfx] at hb
   exact List.append_cancel_left hb
 
-/-! ## A level's `out` row is its cap's `top` row, at the joint witnesses -/
-
 theorem mem_allCalls {L : LayoutB} {x : Msg} {ws : List Claims.Flock.Wit} {s : ℕ} {w : Claims.Flock.Wit}
     (hw : ws[s]? = some w) {e : Msg × Msg} (he : e ∈ L.calls x s w) : e ∈ L.allCalls x ws := by
   obtain ⟨hs, rfl⟩ := List.getElem?_eq_some_iff.1 hw
@@ -224,10 +189,6 @@ theorem mem_outsCalls_recOpen {r : XR} {s lv LANES HH n : ℕ} {c : Circuit} {q 
   simp only [DeployedR.outsCalls, hsv, hc, DeployedR.outPortCalls, hq, List.mem_flatMap, List.mem_range]
   exact ⟨i, hi, hp⟩
 
-/-- **A level's climbed top is RecCap's node row, at `layR` and the joint witnesses**: where every part's recorded
-calls off the witnesses `ws` are true and free of collisions (`Joint`), a level part `s`'s `out` slot at an opening
-`i` and a RecCap part `s'`'s `top` slot at a node `m` with one commit string, their ports of one word count, hold one
-row: `layR` records both slots' calls (`outsCalls`, `capsCalls`), so `rows_eq_of_calls` applies. -/
 theorem out_top_rows (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))) {x : Msg}
     {ws : List Claims.Flock.Wit}
     (hT : ∀ e ∈ (DeployedR.layR elem).allCalls x ws, FlockDeploy.sha512 e.1 = e.2)
@@ -283,14 +244,10 @@ theorem out_top_rows (elem : (r : XR) → List (Fin r.w.parts.length × List (Ms
     exact h
   exact rows_eq_of_calls hT hnc h1 h2 h3 h4 hpfx hcm
 
-/-! ## `OpenTie`'s two halves -/
-
-/-- `OpenTie`'s first half: the copy's position bits are `pos`'s low `d − c`. -/
 def BitsTie (sd : OpenSide) (q : OpenPiece) (LANES H pos : ℕ) (v : ℕ → Bool) : Prop :=
   ∀ h < (sd.sch.levels[q.level]!).d - (sd.sch.levels[q.level]!).cap,
     (_root_.Flock.Readable.openIdx v LANES H).testBit h = pos.testBit h
 
-/-- `OpenTie`'s second half: the copy's climb's top is the cap's entry `pos >>> (d − c)`. -/
 def TopTie (sd : OpenSide) (q : OpenPiece) (LANES H pos : ℕ) (v : ℕ → Bool) : Prop :=
   bytesAt v (outCol LANES H) 64 =
     (FlockSoundness.Refine.capAt sd.cap sd.lig q.level).getD
@@ -300,16 +257,12 @@ theorem openTie_iff {sd : OpenSide} {q : OpenPiece} {LANES H pos : ℕ} {v : ℕ
     OpenTie sd q LANES H pos v ↔ BitsTie sd q LANES H pos v ∧ TopTie sd q LANES H pos v :=
   Iff.rfl
 
-/-! ## The cap tie at the deployed layout -/
-
 section Deployed
 
 variable (H : Msg → Msg) (D : Claims.Recursion.Deploy Coin) (shape : Claims.Recursion.Form → Prop)
   (untr : TrReader) (b : Brings) (cmt : Msg → ℕ → Msg → Msg) (L : LayoutB)
   (Bd : Claims.Recursion.Bound Coin (List FlockLevel3.GF128) Claims.Flock.PlainTrace) (rd : Msg → Option FinalP)
 
-/-- **The binding** (U14b's own fact): at a level part's piece, at every RecCap part of the piece's level holding the
-row the opening climbs to (`capIdx`), the copy's climb's top is the node RecCap's `top` row carries there. -/
 def OutBindR (pieces : Msg → List OpenPiece) (posAt : Msg → List Coin → OpenPiece → ℕ) : Prop :=
   AtPieces H D shape untr b cmt L pieces fun x c ws LANES HH _ _ w p ht q =>
     ∀ (r : XR) (ss : Array VStar.Stmt), readX x = some r →
@@ -322,9 +275,6 @@ def OutBindR (pieces : Msg → List OpenPiece) (posAt : Msg → List Coin → Op
         nodeOf (capRow c' w' (capIdx (Claims.Recursion.xI D x) q
           (posAt (Claims.Recursion.xI D x) ((List.range (Bd.DE.V.k (Claims.Recursion.xI D x))).map c) q) HH))
 
-/-- **A piece's cap entry at the opened messages `ms'`**, at compiled statement `x`, inner statement `xI` and coins
-`cs`: some RecCap part of the piece's level holds the row the opening climbs to (`capIdx`), and the side's cap entry
-at the opening's node is the node that row carries. -/
 abbrev CapEntryR (posAt : Msg → List Coin → OpenPiece → ℕ) (x xI : Msg) (cs : List Coin)
     (ws : List Claims.Flock.Wit) (HH : ℕ) (q : OpenPiece) (ms' : List Msg) : Prop :=
   ∃ (r : XR) (ss : Array VStar.Stmt), readX x = some r ∧ _root_.Flock.RecVStar.statements r.shape = .ok ss ∧
@@ -333,15 +283,11 @@ abbrev CapEntryR (posAt : Msg → List Coin → OpenPiece → ℕ) (x xI : Msg) 
     (FlockSoundness.Refine.capAt (sideAtR rd xI ms' q).cap (sideAtR rd xI ms' q).lig q.level).getD
       (posAt xI cs q >>> HH) ByteArray.empty = nodeOf (capRow c' w' (capIdx xI q (posAt xI cs q) HH))
 
-/-- **The reader** at `sideAtR rd`: at every reading of the last message, some RecCap part of the piece's level holds
-the row the opening climbs to, and the side's cap entry at the opening's node is the node that row carries. -/
 def SideCapR (pieces : Msg → List OpenPiece) (posAt : Msg → List Coin → OpenPiece → ℕ) : Prop :=
   AtPieces H D shape untr b cmt L pieces fun x c ws _ HH _ _ _ _ _ q =>
     AtOpened D Bd x (L.msgs x ws) (CapEntryR rd posAt x (Claims.Recursion.xI D x)
       ((List.range (Bd.DE.V.k (Claims.Recursion.xI D x))).map c) ws HH q)
 
-/-- **The cap tie from the binding and the reader**, at the deployed reader's statements at the dense form: the level
-part's siblings below the cap, `HH`, are the side's level's `d − c` (`sideLevel`). -/
 theorem capTop_of (pieces : Msg → List OpenPiece) (posAt : Msg → List Coin → OpenPiece → ℕ)
     (hP : ∀ x, D.parse x = parse x) (hD : ∀ f, shape f → Claims.Recursion.Form.Dense f)
     (hO : OutBindR H D shape untr b cmt L Bd pieces posAt) (hS : SideCapR H D shape untr b cmt L Bd rd pieces posAt) :
@@ -354,8 +300,6 @@ theorem capTop_of (pieces : Msg → List OpenPiece) (posAt : Msg → List Coin �
   exact (hO x st hx hf c ws hJ r ss s lv LANES HH n hr hss hsv xO w p hst q hq ho ht r' ss' hr' hss' s' N' c' w'
     hs' hc' hw' hlt).trans hcap.symm
 
-/-- **The registration ties at the deployed layout at `sideAtR rd`**: `OpenTieR`, its cap half
-(`CopyTopR`) from the binding and the reader (`capTop_of`). -/
 theorem openTieR_deployed (pieces : Msg → List OpenPiece) (posAt : Msg → List Coin → OpenPiece → ℕ)
     (hP : ∀ x, D.parse x = parse x) (hD : ∀ f, shape f → Claims.Recursion.Form.Dense f)
     (hB : CopyBitsR H D shape untr b cmt L Bd (sideAtR rd) pieces posAt)

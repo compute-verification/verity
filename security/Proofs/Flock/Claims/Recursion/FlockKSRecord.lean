@@ -43,28 +43,8 @@ import Proofs.Flock.Claims.Recursion.FlockKSDeploy
 import Proofs.Flock.Claims.Recursion.InnerAbort
 import Proofs.Flock.Claims.Recursion.KSStated
 
-/-!
-# Flock meets `Inner.KSAbort` at the deployed records
-
-`KSAbort_of_tableBoundOnAcc` at the records Flock's claims read, `FlockDeploy.deployPlainTrim rel` and
-`FlockDeploy.deployZkTrim rel` (the deployed instances with their columns trimmed of trailing zeros), at SHA-512, with
-all but the table bound (and, masked, the statement's shape) discharged:
-
-* the four code facts at the deployed verifier: it shows each round's coin, read back by `decCoin` (`coinsShown_V`, from
-  `answersCoin_deploy` and `coin_bytes_injective`), and `accLast_V_sha512`, `decideFree_V`, `refusable_V`;
-* `ColsOk` and `ConflictTied` at the trimmed full-width columns (`FlockDeploy.KS.trimWide`), carried over from the
-  untrimmed instance (`Flock.colsOk_mapCols`, `Flock.conflictTied_mapCols` at `plain_colsOk`, `plain_conflictTied` and
-  their masked forms);
-* the numbers: `wordLen_le_N₀`, `εtable_nonneg`, `V_k_pos`, `cap_pos`, and `k ≥ 8` with the relation splitting where
-  the statement has one table (`k_range_plain`, `splits_of_one`);
-* plain, one table wherever the verifier accepts some run (`plain_hone`).
-
-The table bound with escapes on accepted runs is taken over full-width tables at the untrimmed instance and carried to
-the trimmed record by padding back, with the same escapes (`tableBoundθOnAcc_mapCols`, as `Flock.tableBoundθ_mapCols`).
-So the recursion's KS over an inner deployed record (`plain_KSFlock`, `zk_KSFlock`) rests on that bound (masked, and
-the one-table shape), Flock's KS at the outer deployment, and the recursion's own hypotheses, with `PublicCoin` met at
-`decCoin`.
--/
+/-! Flock meets `Inner.KSAbort` at the deployed trimmed records with all but the table bound discharged
+(`plain_KSFlock`, `zk_KSFlock`). -/
 
 @[expose] public section
 
@@ -72,9 +52,6 @@ namespace Claims.Recursion
 
 open Claims Claims.Flock
 
-/-- **`TableBoundθOnAcc` through `f`, by padding back**: at a table of columns through `f` of ones `Ok` admits, from
-the bound at the table they came from, with the same escapes, when `f` keeps `0`, accepted runs open only columns `Ok`
-admits, and `f` is one to one on them (`Flock.tableBoundθ_mapCols`). -/
 theorem tableBoundθOnAcc_mapCols {Coin Col T : Type} [Fintype Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col]
     (H : Msg → Msg) (D : Flock.Deploy Coin Col T) (N : Msg → ℕ) (f : Col → Col) (hf : f 0 = 0)
     (Ok : Msg → Col → Prop) (hok : ColsOk H D N Ok) (hinj : ∀ x u v, Ok x u → Ok x v → f u = f v → u = v)
@@ -99,11 +76,8 @@ namespace FlockDeploy
 
 open Claims.Recursion
 
-/-- **The coin a message shows**: the coin whose bytes it is. -/
 noncomputable def decCoin (_ : Claims.Msg) : Claims.Msg → Coin := Function.invFun Coin.bytes
 
-/-- **The deployed verifier shows each round's coin**: it answers with the coin's bytes (`answersCoin_deploy`), which
-determine the coin (`coin_bytes_injective`). -/
 theorem coinsShown_V (H : Claims.Msg → Claims.Msg) (zk : Bool) : CoinsShown H (V zk) decCoin :=
   fun x as cs c m _ h => by
     rw [Claims.Bridge.answersCoin_deploy zk H x as cs c m h]
@@ -116,8 +90,6 @@ namespace FlockDeploy.KS
 open Flock
 open Claims.Recursion
 
-/-- **The plain record's `k` range, with the relation split**, where the statement has one table wherever the
-verifier accepts some run. -/
 theorem plain_kSplits (rel : Readable.Parsed → Readable.Relation)
     (hone : ∀ x, (∃ s, (deployPlain rel).parse x = some s ∧ s.tables = 1) ∨
       Claims.Flock.NoAcc sha512 (deployPlain rel).V x) (x : Claims.Msg) :
@@ -127,8 +99,6 @@ theorem plain_kSplits (rel : Readable.Parsed → Readable.Relation)
     (fun hk => ((hone x).imp_left fun ⟨_, hs, h1⟩ => splits_of_one (deployPlainTrim rel) rfl rfl hs h1).imp
       (fun h => ⟨hk, h⟩) id) .inr
 
-/-- **The masked record's `k` range, with the relation split**, where the statement has one table wherever the
-verifier accepts some run. -/
 theorem zk_kSplits (rel : Readable.Parsed → Readable.Relation)
     (hone : ∀ x, (∃ s, (deployZk rel).parse x = some s ∧ s.tables = 1) ∨
       Claims.Flock.NoAcc sha512 (deployZk rel).V x) (x : Claims.Msg) :
@@ -138,9 +108,6 @@ theorem zk_kSplits (rel : Readable.Parsed → Readable.Relation)
     (fun hk => ((hone x).imp_left fun ⟨_, hs, h1⟩ => splits_of_one (deployZkTrim rel) rfl rfl hs h1).imp
       (fun h => ⟨hk, h⟩) id) .inr
 
-/-- **The plain record the claims read meets `Inner.KSAbort`**, at SHA-512, at every decoder within the radius: from
-the table bound with escapes on accepted runs over full-width tables at the untrimmed instance (one table wherever the
-verifier accepts some run is `plain_hone`). -/
 theorem plain_KSAbort (rel : Readable.Parsed → Readable.Relation)
     (htab : TableBoundθOnAcc sha512 (deployPlain rel) (wordLen false) (wide false))
     (decode : List (ℕ × List FlockLevel3.GF128) → List Claims.Flock.PlainTrace)
@@ -156,9 +123,6 @@ theorem plain_KSAbort (rel : Readable.Parsed → Readable.Relation)
     (coinsShown_V sha512 false) (accLast_V_sha512 false) (decideFree_V sha512 false) (refusable_V sha512 false)
     decode hdec
 
-/-- **The masked (`--zk`) record the claims read meets `Inner.KSAbort`**, at SHA-512, at every decoder within the
-radius: from the table bound with escapes on accepted runs over full-width tables at the untrimmed instance, and one
-table wherever the verifier accepts some run. -/
 theorem zk_KSAbort (rel : Readable.Parsed → Readable.Relation)
     (hone : ∀ x, (∃ s, (deployZk rel).parse x = some s ∧ s.tables = 1) ∨
       Claims.Flock.NoAcc sha512 (deployZk rel).V x)
@@ -175,9 +139,6 @@ theorem zk_KSAbort (rel : Readable.Parsed → Readable.Relation)
     (coinsShown_V sha512 true) (accLast_V_sha512 true) (decideFree_V sha512 true) (refusable_V sha512 true)
     decode hdec
 
-/-- **KS of the recursion over the plain record the claims read as the inner protocol**, at SHA-512: `KS_of_flockKS`
-at each inner decoder within the radius, with `Inner.KSAbort` from `plain_KSAbort` and `PublicCoin` at `decCoin`
-(`coinsShown_V`). -/
 theorem plain_KSFlock (rel : Readable.Parsed → Readable.Relation) (D : Deploy Coin)
     (DO : Claims.Flock.Deploy Coin (List FlockLevel3.GF128) Claims.Flock.PlainTrace)
     (opening : Claims.Recursion.Opening) (hF : Claims.Flock.KS sha512 DO)
@@ -195,9 +156,6 @@ theorem plain_KSFlock (rel : Readable.Parsed → Readable.Relation) (D : Deploy 
     (plain_KSAbort rel htab decI h) hRef hRounds hN hε (hRd decI) hS (hR decI) (hV decI) (hT decI) (hL decI)
     (hO decI) (hAcc decI) (coinsShown_V sha512 false) hN0
 
-/-- **KS of the recursion over the masked (`--zk`) record the claims read as the inner protocol**, at SHA-512:
-`KS_of_flockKS` at each inner decoder within the radius, with `Inner.KSAbort` from `zk_KSAbort` and `PublicCoin` at
-`decCoin` (`coinsShown_V`). -/
 theorem zk_KSFlock (rel : Readable.Parsed → Readable.Relation) (D : Deploy Coin)
     (DO : Claims.Flock.Deploy Coin (List FlockLevel3.GF128) Claims.Flock.ZkTrace)
     (opening : Claims.Recursion.Opening) (hF : Claims.Flock.KS sha512 DO)
