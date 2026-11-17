@@ -201,7 +201,7 @@ class Auditor:
         try:
             source = CP.give_salt(self.salts, {"audit": audit.hex(), "commitment": commitment.hex()}, self.draw)
         except CP.Refusal as e:
-            raise RuntimeError(f"the memory attester on {party.host} drew no salt: {e}") from None
+            raise RuntimeError(f"the memory attester on {party.host} sampled no salt: {e}") from None
         self.sources.append(source)
         return source
 
@@ -265,7 +265,7 @@ def _run(s: Served, tmp_path, monkeypatch, auditor: Auditor | None = None, host:
 
 
 def _gone(*args, **kw):
-    raise AssertionError("the answers reach neither the challenger nor the store")
+    raise AssertionError("the answers reach neither the memory attester nor the store")
 
 
 def _parts(s: Served, tmp_path, monkeypatch, auditor: Auditor | None = None, between=lambda: None, **kw):
@@ -349,7 +349,7 @@ def test_an_honest_store_is_accepted_in_the_answer_the_composed_run_reads(served
     party, request = calls[0]
     assert party.host == AUDITOR and request["node"] == NODE and request["blocks"] == 48
     assert request["k"] == SP.ROUNDS == 320 and prof["k"] == 320
-    assert prof["placement"]["salt"].startswith(f"drawn by the memory challenger on {AUDITOR} from its OS")
+    assert prof["placement"]["salt"].startswith(f"drawn by the memory attester on {AUDITOR} from its OS")
 
     doc = json.loads((served.out / "pous.json").read_text())
     assert doc["key_pinned"] and doc["key_pin"] == "configuration" and doc["setup"] == CS.SETUP
@@ -377,15 +377,6 @@ def test_a_run_that_pins_its_own_key_is_accepted_and_its_record_is_a_rehearsals(
     assert SP.line(answer).endswith(f"; {CS.PREMISE} {where[CS.PREMISE]}; setup checked by the developer, not the auditor")
 
 
-def test_the_line_reads_a_placement_recorded_before_the_rename():
-    """An answer recorded before the assumption's id was renamed names its premise under `mc.PREMISE_BEFORE`: its line
-    says the same premise as the answer under `trusted-device`."""
-    premise = f"holds: the session is signed under the key configuration {CONF} pins; the memory attester ran on x"
-    answer = {"verdict": "accept", "public": {}, "profile": {"weights": {}, "placement": {CS.PREMISE: premise}}}
-    before = answer | {"profile": {"weights": {}, "placement": {mc.PREMISE_BEFORE: premise}}}
-    assert SP.line(before) == SP.line(answer) and f"; {CS.PREMISE} {premise}; " in SP.line(answer)
-
-
 def test_a_plain_bf16_checkpoint_is_held_as_its_linears_at_twice_the_bytes(served_bf16, tmp_path, monkeypatch):
     """The BF16 pin's form: each linear bf16 [N, K] with no scale beside it, so ``W`` is the same linears at two bytes an
     element, nothing outside it is a scale, and the session, the tie and the check run as over the int8 store."""
@@ -407,7 +398,7 @@ def test_a_plain_bf16_checkpoint_is_held_as_its_linears_at_twice_the_bytes(serve
 
 
 def test_the_challenger_samples_the_salt_and_the_verdict_derives_the_session_id(served, tmp_path, monkeypatch):
-    """Setup's salt is the one the memory attester drew after the commitment and logged under the window's binding, and
+    """Setup's salt is the one the memory attester sampled after the commitment and logged under the window's binding, and
     the session runs under the id derived from that binding, the commitment and the salt, which the verdict computes
     itself: the request names the binding and setup's published outputs, and the private record carries the id."""
     auditor = Auditor(tmp_path)
@@ -435,7 +426,7 @@ def test_a_second_session_under_the_windows_binding_is_refused(served, tmp_path,
     assert first["verdict"] == "accept", first["reason"]
     again, calls = _run(served, tmp_path, monkeypatch, auditor)
     assert again["verdict"] == "undecided" and len(calls) == 1
-    assert again["reason"].startswith(f"the memory attester on {AUDITOR} drew no salt for the setup: ")
+    assert again["reason"].startswith(f"the memory attester on {AUDITOR} sampled no salt for the setup: ")
     assert "draws one salt an audit, and a retry never redraws it" in again["reason"]
     monkeypatch.setattr(auditor, "salt", lambda party, audit, commitment: auditor.sources[0])
     replay, calls = _run(served, tmp_path, monkeypatch, auditor)
@@ -663,12 +654,12 @@ def test_a_session_signed_under_another_key_is_rejected(served, tmp_path, monkey
 
 
 def test_a_challenger_whose_side_does_not_start_leaves_the_period_undecided(served, tmp_path):
-    """No retry and no exception: the answer says the challenger drew no salt for the setup, and why."""
+    """No retry and no exception: the answer says the challenger sampled no salt for the setup, and why."""
     answer = SP.run(served.serve, 3, served.out, hf_home=served.hf, device="cpu", node=NODE, private=served.private,
                     party=Side(AUDITOR, (sys.executable, "-c", "import sys; sys.exit(3)"), ("127.0.0.1", 9)),
                     pins=[served.pins], schemes=ts.SCHEMES, protocol=TEST_PROTOCOL)
     assert answer["verdict"] == "undecided" and answer["reason"].startswith(
-        f"the memory attester on {AUDITOR} drew no salt for the setup: ")
+        f"the memory attester on {AUDITOR} sampled no salt for the setup: ")
     assert SV.piece_row("space", served.out.parent)["verdict"] == "undecided"
     assert not (served.private / "case.json").exists()
 
@@ -848,7 +839,7 @@ def _bandwidth_judge(monkeypatch) -> str:
 def _bandwidth(tmp_path, record=lambda request: request, **kw):
     """`served_piece.run`'s bandwidth session: the party in the gate's shape (`p2_parties --listen` from the tree with no
     site packages, its close signed by `p2_party_at_leaf`'s key on a session log in ``parties/p2-challenger``), its
-    registration the challenger's record in ``parties/pous``, which the in-process challenger keeps as ``record`` has
+    registration the memory attester's record in ``parties/pous``, which the in-process challenger keeps as ``record`` has
     it, and a short session, which a toy party's flags hold it to."""
     challenger = tmp_path / "parties" / "p2-challenger"
     challenger.mkdir(parents=True, exist_ok=True)
@@ -880,7 +871,7 @@ def test_the_bandwidth_session_is_over_the_store_pous_held_its_case_private_and_
                                                                                          monkeypatch, case_exe):
     """PoUS's session and then PoUB-P2's on the one ``C*`` the piece encoded and holds, of the int8 checkpoint or of
     the BF16 one, the bandwidth party's
-    registration the challenger's own record of the PoUS session: both accepted. The P2 case, written privately, is of
+    registration the memory attester's own record of the PoUS session: both accepted. The P2 case, written privately, is of
     PoUS's store (`p2_case.same_store` against the run's case), and answered as the session did (`p2_case.answer`, by
     the stand-in `BW_JUDGE`), which with no Lean is undecided (`p2_case.unjudged`); `poub-p2-protocol` refuses
     it, a toy party's session, naming each value off the auditor's (`p2_parties.SESSION`). The public answer, which the composed run reads as the bandwidth
@@ -957,7 +948,7 @@ def test_the_bandwidth_session_is_over_the_store_pous_held_its_case_private_and_
 
 @pytest.mark.slow
 def test_a_challenger_record_of_another_store_is_refused_and_no_case_is_made(registered, tmp_path, monkeypatch):
-    """The challenger's record names a store other than the one the piece holds: the prover refuses its registration
+    """The memory attester's record names a store other than the one the piece holds: the prover refuses its registration
     before any pass, the bandwidth answer is undecided naming that, and no case is written, while PoUS's stands."""
     other = hashlib.sha512(b"another store").hexdigest()
 
@@ -974,7 +965,7 @@ def test_a_challenger_record_of_another_store_is_refused_and_no_case_is_made(reg
 
 
 def test_no_pous_session_leaves_the_bandwidth_piece_undecided_naming_why(served, tmp_path):
-    """The challenger's side doesn't start: no store was bound, so no bandwidth session runs, and its answer says so."""
+    """The memory attester's side doesn't start: no store was bound, so no bandwidth session runs, and its answer says so."""
     SP.run(served.serve, 3, served.out, hf_home=served.hf, device="cpu", node=NODE, private=served.private,
            party=Side(AUDITOR, (sys.executable, "-c", "import sys; sys.exit(3)"), ("127.0.0.1", 9)),
            pins=[served.pins], schemes=ts.SCHEMES, protocol=TEST_PROTOCOL, bw_party="false")

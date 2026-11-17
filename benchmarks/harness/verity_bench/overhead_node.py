@@ -18,7 +18,8 @@ the SASS gate must pass): the timed pass untraced, then at each shape a traced p
 entries that nsys captures alone (SMs Active at 10 kHz, each item an NVTX range; `--traced`). It then runs the arm's
 reference verifier on every row (`verify.py --every-row`), reads each traced item's busy SM-time from the reports
 (`nsys.report`, the reports kept in `--scratch`, outside `$OUT`; a report that collected past its traced pass, or a traced
-item no report holds, refuses the run), and writes `overhead.json`: per point, the layer's γ over
+item no report holds, refuses the run; with `--keep-reports`, a profiling pass, they and their exports are kept in
+`$OUT/nsys/` and the run is not of record), and writes `overhead.json`: per point, the layer's γ over
 the fastest stock arm by wall time, beside it over the least-SM-time arm, with the weight side as a bound, the A/A control,
 the cross-check, ε from the scheme's function at the same point and card, and why each point's γ isn't of record. A kernel
 point runs no model, so it has no perplexity; nor does it serve requests, so it has no load counts to keep on the node.
@@ -55,6 +56,8 @@ POINTS_BENCH = ("--methods", "graph", "--decode-method", "independent")
 #: a timed run's: the graph method gives each stock kernel's wall time, the burst method the host's enqueue, and the traced
 #: pass beside them each item's busy SM-time
 RUN_BENCH = ("--methods", "graph", "burst", "--decode-method", "independent", "--traced", "--twins")
+#: why a run that kept its Nsight reports (`run --keep-reports`) isn't of record
+KEEP_REPORTS_WHY = "it kept its Nsight reports in $OUT/nsys (`--keep-reports`): a profiling pass is never of record"
 #: a timed run's measurement of each point's γ, by the point's name (``C``, ``L``): the metric's id, OWNER/NAME
 GAMMA = "benchmarks/overhead.gamma-{}"
 #: the cubin the run was sent (`run --cubin ART`), which the scheme's arm loads and lists in its build record's `binaries`
@@ -247,6 +250,11 @@ def run_scheme(a: argparse.Namespace, run: Runner = _run) -> int:
         write_result(a.run_dir, a.run_id, out, "overhead.json", False, whys[0], fingerprint)
         print(f"run: {whys[0]}")
         return 1
+    if a.keep_reports:
+        fingerprint["keep_reports"] = True
+        whys.append(KEEP_REPORTS_WHY)
+        scratch = out / "nsys"
+        scratch.mkdir(parents=True, exist_ok=True)
     model = pts["model"]
     at = {p: pts[p.lower()] for p in (O.POINTS if a.point == "all" else (a.point,))}
     arm_args = ["--arm", sch.arm, "--arm-path", sch.arm_path] if sch.arm and sch.arm_path else []
@@ -366,6 +374,8 @@ def parse(argv: Sequence[str] | None) -> argparse.Namespace:
             s.add_argument("--commit", help="the run's source commit (the arm's verifier runs it)")
             s.add_argument("--scratch", type=Path, required=True, help="where the nsys report goes, outside --out")
             s.add_argument("--nsys", default="nsys")
+            s.add_argument("--keep-reports", action="store_true",
+                           help="keep the Nsight reports in --out's nsys/ instead of --scratch: a profiling pass, never of record")
     return p.parse_args(argv)
 
 

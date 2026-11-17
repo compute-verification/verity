@@ -137,7 +137,7 @@ def test_except_names_the_labels_and_the_coins_prf_advantage_not_priced_and_not_
     assert WM.EXCEPT.startswith(f"each wipe's labels' PRF advantage and its coins' PRF advantage {CLOSING}, δ_net (")
     assert "named assumption" not in WM.EXCEPT and "assum" not in WM.EXCEPT.replace(CLOSING, "")
     assert WM.EXCEPT.endswith(
-        ", δ_net (the network certifier's error in the egress count) and the egress count's premises (every link leaving "
+        ", δ_net (the network attester's error in the egress count) and the egress count's premises (every link leaving "
         "the node counted, its window the wipe's session), with the guarantee's own (every tier declared, no side "
         "channel), over the period's wipes")
     said = " ".join(WM.__doc__.split())

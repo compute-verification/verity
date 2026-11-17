@@ -2,7 +2,7 @@
 the prover's over a socket pair, each verdict of `verity/wipe/v0` (the Lean's is `MemoryChallenger.WipeProtocol`,
 difftested in `tests/verity/protocols/resource_accounting/memory/pous/attester/lean/test_wipe_protocol.py`): an honest segment accepted
 and not certified (`uncounted`) whatever egress its evidence gives, since no network attester signs that count, with
-the count named as the evidence writer's (`certify` computes `StreamedWipeMeetsReads`' threshold at the challenger's
+the count named as the evidence writer's (`certify` computes `StreamedWipeMeetsReads`' threshold at the memory attester's
 `k`, 11,709,069 + E bits at `k = 2152`, `r = 24`, for the check that composes the wipe with the network attester),
 an egress out of range rejected, a prover
 keeping one label past it and a late read rejected, a session the prover left undecided; the challenger chooses `k`
@@ -154,7 +154,7 @@ def test_the_certificate_at_the_challengers_reads() -> None:
 
 
 def test_a_wipe_of_no_reads_bounds_nothing() -> None:
-    """`WipeParams` refuses `k = 0`, so neither a commitment nor the challenger's side (`--reads 0`) holds it; past that
+    """`WipeParams` refuses `k = 0`, so neither a commitment nor the memory attester's side (`--reads 0`) holds it; past that
     refusal `gaps` names it and the certificate is vacuous, as `MemoryChallenger.WipeProtocol.gaps`' guard has it."""
     with pytest.raises(ValueError, match="1 <= batch <= k"):
         WP.params_of(WP.request_of("n0", W.params_for()), 0)
@@ -166,12 +166,12 @@ def test_a_wipe_of_no_reads_bounds_nothing() -> None:
 
 
 def test_the_challenger_chooses_the_reads(tmp_path) -> None:
-    """The request carries the fill, the deadline and the tiers; `k` is the challenger's (`--reads`), and a request
+    """The request carries the fill, the deadline and the tiers; `k` is the memory attester's (`--reads`), and a request
     naming it is refused."""
     request = WP.request_of("n0", W.params_for(k=5231))
     assert set(request) == WP.REQUEST_KEYS and WP.params_of(request).k == W.READS
     assert WP.params_of(request, 5231) == W.params_for(k=5231)
-    with pytest.raises(ValueError, match="the challenger chooses the reads"):
+    with pytest.raises(ValueError, match="the memory attester chooses the reads"):
         WP.params_of(request | {"k": 9})
     assert wipe_run.config({"wipe": {"reads": 5231}})["reads"] == 5231
     for bad in (0, "5231", 1 << 32):
@@ -300,16 +300,6 @@ def test_the_auditor_host_under_its_pinned_key_holds() -> None:
     assert where[WP.PREMISE] == (f"holds: the session is signed under the key configuration {CONF} pins for "
                                  "memory-challenger's wipe sessions; the memory attester ran on vy-auditor-2, not the "
                                  "developer's vy-dc-h200")
-
-
-@pytest.mark.parametrize("key", [PINNED, OTHER])
-def test_a_placement_recorded_before_the_rename_reads_the_same_premise(key) -> None:
-    """A placement recorded before the assumption's id was renamed names its premise under `mc.PREMISE_BEFORE`: it holds,
-    and leaves the key custody out, exactly as the same placement under `trusted-device` does."""
-    where = WP.placement("vy-dc-h200", AUDITOR, key, **UNDER)
-    before = {(mc.PREMISE_BEFORE if k == WP.PREMISE else k): v for k, v in where.items()}
-    assert WP.PREMISE not in before and mc.premise(before) == where[WP.PREMISE]
-    assert (WP.holds(before), W.uncertified(before, None)) == (WP.holds(where), W.uncertified(where, None))
 
 
 def test_the_auditor_hosts_name_under_another_key_is_a_rehearsal() -> None:
@@ -453,12 +443,12 @@ UNCOUNTED = ("egress: uncounted, the check was given no network attester's count
 
 
 def writers(egress_mib: int) -> str:
-    return (f"egress: {egress_mib} MiB, the evidence writer's count, which no network certifier signed, so the check "
+    return (f"egress: {egress_mib} MiB, the evidence writer's count, which no network attester signed, so the check "
             "certifies no wipe on it until the check that composes the wipe with the network certifier")
 
 
 def test_a_pinned_session_with_a_zero_count_is_not_certified(tmp_path, monkeypatch) -> None:
-    """A session signed under the challenger host's pinned key, with period.json's `wipe.egress_bits = 0`: the premise
+    """A session signed under the memory attester's host's pinned key, with period.json's `wipe.egress_bits = 0`: the premise
     holds and the count is 0, which no network attester signed, so the wipe is accepted and not certified, and the
     record names the egress as the evidence writer's count."""
     period, side_of = _side(tmp_path, {"egress_bits": 0}, side_pin())

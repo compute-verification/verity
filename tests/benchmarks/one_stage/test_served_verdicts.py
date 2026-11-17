@@ -892,12 +892,10 @@ def test_a_bandwidth_accept_says_its_error_with_the_term_it_leaves_out_beside_it
     assert "; the bandwidth audit: error: " in line["reason"]
 
 
-@pytest.mark.parametrize("key", ["trusted-device", "trusted-host"])
-def test_an_accepted_attester_answer_says_what_its_trusted_device_premise_rests_on(tmp_path, key):
+def test_an_accepted_attester_answer_says_what_its_trusted_device_premise_rests_on(tmp_path):
     """The network attester's answer as its piece writes it when it ran on the gate's machine and the piece's steps on
     the served node: its accept's clause says the piece establishes no trusted-device and gives no bound, and which
-    machine ran what, so the ``RECORD`` line's accept isn't read as the auditor's devices having placed it. A record
-    made before the premise's rename holds it under its old key, and reads the same."""
+    machine ran what, so the ``RECORD`` line's accept isn't read as the auditor's devices having placed it."""
     premise = ("unmet: this piece establishes no trusted-device and gives no bound on that ground; the network certifier "
                "ran on 192.0.2.84, not the developer's vy-dc-h200; the chain's checks and samples ran on vy-dc-h200, and "
                "the period check and its proofs' challenges on vy-dc-h200")
@@ -905,7 +903,7 @@ def test_an_accepted_attester_answer_says_what_its_trusted_device_premise_rests_
     (d / "answer.json").write_text(json.dumps({
         "protocol": "verity/certifier/v0", "verdict": "accept", "reason": None, "commitment": "cd" * 64,
         "public": {"K": 15764, "eps": "1/100", "windows": 1},
-        "profile": {"placement": {"kind": "not-placed", key: premise}}}))
+        "profile": {"placement": {"kind": "not-placed", "trusted-device": premise}}}))
     (d / S.RAN).write_text(json.dumps({"server": "vy-dc-h200", "rc": 0, "limit": "60m"}))
     _report, _rec, line = S.record(_rows(_accepted(), tmp_path), window=1, steps=(5, 11), node="vy-dc-h200", run="r1",
                                    servers={k: S.piece_server(k, tmp_path) for k in [*S.PIECES, "wipe"]})
@@ -7794,3 +7792,27 @@ def test_the_serve_steps_python_path_names_the_import_root_of_every_workspace_pa
     reached = _workspace_reach("verity_vllm.pipeline.cli", "verity_vllm.pipeline.serve_openai")
     assert {"verity", "verity_vllm", "verity_config"} <= set(reached), reached
     assert sorted(f"{top} ({where})" for top, where in reached.items() if where not in named) == []
+
+
+@pytest.mark.parametrize("sealed", [True, False])
+def test_the_window_verb_publishes_the_execution_phase_in_a_fresh_out_or_stops(tmp_path, sealed):
+    """`served_verdicts.sh window` in an $OUT with no serve/ writes serve/phase.json, the picked window's seal's SHA-512;
+    with no seal of that window it writes none and stops at 21."""
+    tree, d, venv = tmp_path / "tree", tmp_path / "serve", tmp_path / "venv" / "bin"
+    (tree / "benchmarks").mkdir(parents=True)
+    (tree / "benchmarks" / "one_stage").symlink_to(HERE.parents[2] / "benchmarks" / "one_stage", target_is_directory=True)
+    _script(venv / "python", '[ "$1" = benchmarks/one_stage/served_verdicts.py ] && [ "$2" = window ] && '
+                             f'{{ echo \'{{"window": 7}}\'; exit 0; }}\nexec {sys.executable} "$@"')
+    (d / "private").mkdir(parents=True)
+    seal = json.dumps({"window": 7, "run_root": "ab" * 64})
+    (d / "seals.jsonl").write_text(json.dumps({"window": 3}) + "\n" + (seal + "\n" if sealed else ""))
+    env = {"PATH": os.defpath, "HOME": str(tmp_path), "VENV": str(venv.parent), "D": str(d), "OUT": str(tmp_path / "out")}
+    run = subprocess.run(["bash", "benchmarks/one_stage/served_verdicts.sh", "window"], cwd=tree, env=env, check=False,
+                         capture_output=True, text=True)
+    phase = tmp_path / "out" / "serve" / "phase.json"
+    if sealed:
+        assert run.returncode == 0, (run.stdout, run.stderr)
+        assert json.loads(phase.read_text()) == {"seal_sha512": hashlib.sha512(seal.encode()).hexdigest()}
+    else:
+        assert run.returncode == 21 and not phase.exists(), (run.stdout, run.stderr)
+        assert "STOP at window (exit 21)" in run.stdout.splitlines()

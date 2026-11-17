@@ -8,7 +8,7 @@ memory-challenger -> prover   Fill {first, count} + labels (private) ... FillDon
 prover -> memory-challenger   FillAck once it holds the fill; per batch Answer, 64 bytes an index (private)
 ~~~
 
-The run's parameters are `wipe_party.request_of`'s request, which names no reads: the challenger chooses them, never the
+The run's parameters are `wipe_party.request_of`'s request, which names no reads: the memory attester chooses them, never the
 prover. A deployment starts both parties from its configuration (`verity.protocol.ProtocolDef.starts`), where the wipe is
 `COMPONENT`, each with that request (`deployed_request`): its fill and tiers are the node's card memory and its deadline
 the card's calibration, which no configuration states, so until those are read it raises

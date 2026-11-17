@@ -31,7 +31,7 @@ scheme, ``lms-sha512/n64-w1-h20/v0`` (`lms.DEPLOYED`), it is ``PousSessionSig_v1
 `memory_attester.Round.value`'s 92 bytes, ``u32 j ‖ u64 index ‖ u64 send_ns ‖ u64 receipt_ns ‖ H(block)``, integers
 big-endian, ``H(block)`` the answer's ``sha512/row/v2`` digest.  `PousRound_v1{N, SLOT}` reads the store's N-byte row
 ``row``, the records row ``records`` holding record j at slot SLOT = j mod 2, and the public j and i (the round and the
-index the memory attester drew for it, a u32 and a u64), and is 1 iff record j's j is ``j``, its index is ``i`` and its
+index the memory attester sampled for it, a u32 and a u64), and is 1 iff record j's j is ``j``, its index is ``i`` and its
 ``H(block)`` is ``row``'s ``sha512/row/v2`` digest (``PousRowDigest_v1{N}``): one ``PousEqual_v1{608}`` over the digest,
 j and i against the record's fields.  These are the per-round checks of `memory_attester.verdict` but the time: the
 record names round j, its index is round j's coin, and its digest is that of the block at the index.  R_even and R_odd

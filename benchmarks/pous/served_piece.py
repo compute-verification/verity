@@ -209,11 +209,11 @@ def _linear_types() -> tuple[type, ...]:
 
 
 class NoSalt(Exception):
-    """The memory attester drew no salt for the window's setup."""
+    """The memory attester sampled no salt for the window's setup."""
 
 
 def _salt_source(party: Side, audit: bytes):
-    """The salt's source: sampled by the memory challenger on ``party`` once the commitment exists, and logged there under
+    """The salt's source: sampled by the memory attester on ``party`` once the commitment exists, and logged there under
     the window's binding ``audit`` (`challenger_session.salt`)."""
 
     def source(commitment: bytes) -> bytes:
@@ -463,7 +463,7 @@ def sessions(serve_dir: Path, window: int, out: Path, *, hf_home: Path, device: 
         try:
             comp = PO.install(model, ctx)
         except NoSalt as e:
-            why = f"the memory attester on {party.host} drew no salt for the setup: {e}"[:1000]
+            why = f"the memory attester on {party.host} sampled no salt for the setup: {e}"[:1000]
             if bw_party is not None:
                 HB.missing(bw_out, window, f"no PoUS session bound a store: {why}")
             return done(_no("undecided", why, None, protocol))
@@ -619,7 +619,7 @@ def answers(serve_dir: Path, window: int, out: Path, *, trusted_sha512: str | No
                            "rows": 1, "n_bits": 8 * len(row), "binding": bind.hex(),
                            "of": "the run protocol's commitment, the SHA-512 of setup's published outputs"},
             "placement": CS.placement(node, host, key_sha, **deployed) | {
-                "salt": f"drawn by the memory challenger on {host} from its OS after the commitment, "
+                "salt": f"drawn by the memory attester on {host} from its OS after the commitment, "
                         "logged under the window's binding, with the session's id derived from both"},
             "weights": summary["weights"] | {"held": "loaded from the served snapshot on the card the window served "
                                                      "on, after its serve ended"},
@@ -663,7 +663,7 @@ def _address(text: str) -> tuple[str, int]:
 
 
 def _premise(where: Mapping[str, Any]) -> str | None:
-    return mc.premise(where) if mc.PREMISE in where or mc.PREMISE_BEFORE in where else None
+    return mc.premise(where) if mc.PREMISE in where else None
 
 
 def line(answer: Mapping[str, Any]) -> str:

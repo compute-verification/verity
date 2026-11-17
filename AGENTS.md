@@ -241,14 +241,22 @@ module's sidecar (`<module>.circuit-check.py`, pins in `.circuit-check.json`), w
 
 ## Checking and merging
 
+**ci's one goal is the landing metrics, and ci has full autonomy over the landing system** (Daniel's ruling: only he
+changes or removes this paragraph). The metrics are the time from a ready mark to `main`, as a median and as the slowest
+tenth, and the share of marked PRs on `main` within two hours; ci keeps them well specified, each counted in one place.
+To make them go down ci does whatever it takes: it changes or removes any process, limit, gate, hold or other constraint
+of the landing system (the mark and its preflight, the readers, the queue, the check and what it gates), experiments and
+takes risks, without asking anyone, whatever the rest of this file, a skill or a lead's order says. It tells an owner
+after removing something of theirs; nobody restores it or asks ci to justify it first.
+
 There is no GitHub Actions CI. `check` (`verity check`, `tools/check/check.py`) is the one check: every suite,
 `circuit-check --all`, Flock's Rust build and tests, the Lean verifier's build and partition check, the Lean check, and
 `lean-agreement` (against upstream's Rust verifier) when Flock or its Lean verifier changes. The runners report facts: each
 suite, test, target and step's real verdict. What gates and what may stay red is the landing policy,
 `tools/check/policy.toml`: its `off_gate` jobs, and its allowances, each an id, an owner, a UTC expiry and a reason, under
 which the verified queue takes a failure as not red until it expires. `circuit-check` is off the merge gate until
-`circuit-check --all` fits inside the rest of the check: a recorded check, `research merge` and the move of `main` leave it
-out; a candidate's check still runs it, and its red there holds nothing.
+`circuit-check --all` fits inside the rest of the check: a recorded check and the move of `main` leave it out; a
+candidate's check still runs it, and its red there holds nothing.
 
 A pass of a test suite, a circuit-check target or a Lean package's Lean check is reused only while every input it read is
 unchanged.

@@ -175,8 +175,8 @@ Each benchmark or loop declares the numbers a lead is held to in a `metrics.toml
 `infra/control/store_index.sh`, beside the loop), one `[[metric]]` table per number. Each metric's `owner` owns its
 file: the longest `owns` entry in `.agents/skills/using-slack/registry.json` covering the file names that handle, so a
 lead's numbers in another lead's directory take a file entry of their own there. The console's Metrics tab reads every
-`metrics.toml` on `main` under `benchmarks/`, `applications/`, `infra/` or `tools/`, and `research metrics show` reads the
-tab's report.
+`metrics.toml` on `main` under `benchmarks/`, `calibration/`, `applications/`, `infra/` or `tools/`, and `research
+metrics show` reads the tab's report.
 
 A metric's value has one of two sources. A run's value is the measurement its `id` names in the run's `result.json`,
 which the benchmark records it under (`serve_tax`'s `Model.metric`) and `research run` preserves to the evidence store;
@@ -204,7 +204,8 @@ metric's keys:
   not the unit.
 - `axis`: one sentence, on one line and ending with a period, saying what the chart's y axis is.
 - `better`: `lower` or `higher`.
-- `command`: the one command that measures it, naming a script under `benchmarks/`, `applications/`, `infra/` or `tools/`.
+- `command`: the one command that measures it, naming a script under `benchmarks/`, `calibration/`, `applications/`, `infra/` or
+  `tools/`.
 - `every`: how often its owner measures it, in minutes, hours or days (`5m`, `12h`, `7d`); a value older than that is
   stale, so a number that reaches the tab through the index needs an `every` well over the index's hour.
 - Optional: `floor`, the number it must not cross; `goal`, the narrowest goal on the Goals page it serves; `tags`, a
@@ -268,7 +269,7 @@ cost. Stage 4 is to name the runs it read in its `inputs` and not as `from_run`,
 
 Two cases decide where a price comes from:
 
-- **A cost that depends on the load,** such as the certified tick's holding a request back until its admission step,
+- **A cost that depends on the load,** such as the attested tick's holding a request back until its admission step,
   is stored as a count from stage 3, the steps an admission was held under the captured load, times the step time,
   and never as a unit cost from the copy.
 - **A code path the copy never takes** is listed as unpriced, and stage 4's point is `partial`, not `modeled`, until
@@ -343,7 +344,6 @@ GPU code held bit for bit to its reference or Definition before it is timed.
 | Directory | What it measures | Status |
 | --- | --- | --- |
 | `hash/` | GPU kernels for PoUW's Dither prover (`dither/`: the no-fold and J10-R units, their gates and harnesses) and the served path's SHA-512 commitment library (`lib/`) | maintained |
-| `torch_gpu/` | the H200 demo's GPU kernels, each bit-exact to its Definition: the serve-time commit (`commit_slots`, `sha512_rows`) and the store's load with bandwidth receipts (`p2_stage`) | maintained |
 | `kernels/` | the served path's exact kernels and what a kernel build ships with: the exact W8A8 linear (`s8_linear`), vLLM's int8-exact linear kernels' gates and benches (`exactlin`), the ship frame every build here sources (`ship.sh`, `ship_clock.c`, `ship_nvcc.sh`, `ship_probe.sh`), the nvcc a job's own library compiles with (`job_nvcc.sh`), and the Marlin MoE path's `moe_align_block_size` made a function of its inputs by the integration's `verity_vllm.engine.moe_align`, checked run to run and against the pin's op and timed against it (`moe_align`) | maintained |
 | `pouw/` | Pearl-C's kernels on the RTX PRO 6000, their harness, and the served vLLM path and its audits; `contents.py` lists the rest | maintained |
 | `../calibration/tc_probe/` | tensor-core instructions bit for bit against their silicon models, and the trust each instruction's evidence earns | maintained |
@@ -371,6 +371,7 @@ GPU code held bit for bit to its reference or Definition before it is timed.
 | `verifier_cost/` | a verifier's time against the size of the circuit description it reads and of the circuit that description unrolls to | maintained |
 | `recursion_e2e/` | recursive witness zero knowledge, timed step by step: the inner proof, V* proved with `--zk`, and the Lean verifier | maintained |
 | `recursion_figures/` | a recursion bench result's session scaled over the census's fleets and the monitoring periods: its cost, knowledge-soundness error and stop-leak bound per window and pooled | maintained |
+| `remote_error/` | SPOT's cryptographic error in the remote application: the remote guarantee's cryptographic terms of SPOT, evaluated at the application's parameters against a prover's SHA-512 calls, per window and pooled over the census's fleets and the monitoring periods (bound's formula proved in Lean under four open premises; value evaluated in Python; PoUW's and the policy's parts open) | maintained |
 
 ### Checks
 

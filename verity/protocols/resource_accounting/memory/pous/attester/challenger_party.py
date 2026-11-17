@@ -37,7 +37,7 @@ loop (`challenger_session.run`) on the clock and coins it is given: it reads its
 and once after each block it takes, those readings alone, so on the same coins and readings it signs the same bytes
 wherever it runs. `start` is how a deployment starts it on the auditor's device (`challenger_session`'s docstring).
 
-`python -m verity.protocols.resource_accounting.memory.pous.attester.challenger_party --device DIR [--listen HOST:PORT]` is the challenger's
+`python -m verity.protocols.resource_accounting.memory.pous.attester.challenger_party --device DIR [--listen HOST:PORT]` is the memory attester's
 side (`main`): it reads one JSON line on stdin, a salt request or the session's `{"binding", "block_bytes", "blocks",
 "k", "limit_ns", "node"}` (with `audit` and `published` when it names its audit, and P2's parameters, which
 `challenger_session.setup_of` checks against them), and answers the salt request with its source, or prints
@@ -143,7 +143,7 @@ def designate(request: Mapping[str, Any], salts: mc.SaltLog, sessions: mc.Sessio
                       "bytes in hex") from None
     logged = salts.get(audit)
     if logged is None:
-        raise Refusal("the memory attester drew no salt for the request's `audit`: a session runs on a setup salted by "
+        raise Refusal("the memory attester sampled no salt for the request's `audit`: a session runs on a setup salted by "
                       "it")
     if (published.commitment, published.salt) != logged:
         raise Refusal("setup's published outputs (`published`) do not carry the commitment and salt the memory attester "
@@ -154,7 +154,7 @@ def designate(request: Mapping[str, Any], salts: mc.SaltLog, sessions: mc.Sessio
     sid = session_id(audit, *logged)
     if sid in sessions:
         raise Refusal("a session has run for the request's `audit`: the memory attester runs one an audit, and a retry "
-                      "is refused, never redrawn")
+                      "is refused, never resampled")
     return sid
 
 
