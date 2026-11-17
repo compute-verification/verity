@@ -53,8 +53,7 @@ it serves (`--scheme rows-sha512`), and every closed execution phase is sealed. 
 
 The placed window (`[run.window.plain]`) is remote with no accounting piece: it serves no H1
 (`H1_GATE` empty), so PoUW's piece is `MISSING`, and it runs no V3c (`V3C_CLASS` empty, so step 3's audit is the SPOT
-audit of record) and no composite (`COMPOSITE` empty). Its record is composed on the node, or under
-`VERITY_HOLD_PLACEMENT=1` off it by `run.sh compose`. The
+audit of record) and no composite (`COMPOSITE` empty). Its record is composed off the node by `run.sh compose`. The
 tied window (`run.sh window --tie`, `[run.window.tie]`) serves the BF16 row (`tied_row`) under Pearl+
 (`PEARLPLUS_TIE`, `POUW=pearlplus`), its linears committed at V3c's class `4,32,4` (4 slots, prompts 32:32), leaves
 `COMPOSITE` at its default, so its hand-off carries `POUW` and the compose off the node composes remote's composite of
@@ -63,12 +62,11 @@ defers V3c's audit off the node (`V3C_AUDIT_MEM_GB` above node A's memory) to `r
 `run.sh audit`. Its sampling design is a setting of the launch's environment (`[run.window.tie]`), by default the benchmark's
 `stratified-rate:1/2097152`.
 
-`served_verdicts.sh`'s exit is its record's verdict: 0 when the compiled Lean composite accepted; 2 pending; 1 a
-rejection, a refused composite or a failed step. `run.sh` sets `COMPOSE_OFF_NODE=0` for the window and for `settings`,
-so the record is composed on the served node, which it says; `VERITY_HOLD_PLACEMENT=1` at launch sets
-`COMPOSE_OFF_NODE=1` and passes itself to the node, where a window can then only end pending, so `window.sh` exits 0
-when it does, its last line `pending: composed off this node` (or, under a deferral, audited and composed off it).
-With `PREFLIGHT_ONLY=1` it exits 0 when the preflight passed.
+`served_verdicts.sh`'s exit is its record's verdict: 0 when the compiled Lean composite of record accepted, which only
+a composite computed off the served node, on an auditor device, is; 2 pending; 1 a rejection, a refused composite or a
+failed step. A window on the served node can only end pending, so `window.sh` exits 0 when it does, its last line
+`pending: composed off this node` (or, under a deferral, audited and composed off it), and with `PREFLIGHT_ONLY=1`
+exits 0 when the preflight passed.
 
 Each step's verdict line is in `$OUT/verdicts.txt`. What attaches Verity to vLLM is `adapters/vllm/`; this
 directory holds the served run's own: its placement and its commands.
@@ -105,7 +103,7 @@ read, may run on the endpoint's node too. Being placed needs each of them on a m
 - The load, `serve_load.py`: `served_verdicts.sh`'s one execution phase of varied requests (`--varied`, or with
   `LOAD=fixed` one full execution phase of fixed length).
 - `placement.toml`: where each run goes and what its node holds. The window serves on node A (`vy-spot-glm53`, eight
-  H200s shared by card) and, under `VERITY_HOLD_PLACEMENT=1`, its record is composed on `vy-nebius-cpu-14`. A node's table holds its venv, CUDA, HF
+  H200s shared by card) and its record is composed on `vy-nebius-cpu-14`. A node's table holds its venv, CUDA, HF
   cache, taps, traced Builds and Flock's build, which `run.sh setup` leaves under the served run's directory, and a
   run's table the flags the run recorder starts it with. `run.sh` hands a run's script these as its environment, so no
   script names a node. No file or command line holds a machine's address: `window.sh` reads the gate's
@@ -131,8 +129,7 @@ run starts. FLAGs go to the recorder (`--timeout 200m` to end with the row); `--
    traced Build to the live taps, so after the taps change rerun setup whole for each row (its Build step always runs)
    and name the new runs in `builds`.
 2. `CARD=N CORES=A-B END=UTC run.sh [--tie]` (`window`, the default): `window.sh`, which runs `served_verdicts.sh` on
-   that card under its own lease and, under `VERITY_HOLD_PLACEMENT=1`, packs the compose hand-off into the run's
-   `out/handoff/`; 75 with nothing run when
+   that card under its own lease and packs the compose hand-off into the run's `out/handoff/`; 75 with nothing run when
    the card is in use or `END` leaves under an hour (or under `LEASE_MIN`, a short window's length in minutes, which
    also bounds its lease). The gate gives coins only to a commit on `main`'s first-parent line, so from a branch not yet
    landed `run.sh` refuses: land it first, or take development coins with `--development`. It refuses a commit that
@@ -151,7 +148,8 @@ run starts. FLAGs go to the recorder (`--timeout 200m` to end with the row); `--
    base) as `NAME=value` lines, which name no address; with `-- CMD`, CMD run under them wherever its environment sets
    none, after the node's env files (`env_files`, each mode 600) are read and each `${NAME}` they or the environment
    set is filled in, the INT8 pin linked and the venv's CUDA headers found. The window run's `served_verdicts.sh` runs
-   so. An application's command takes no bindings: every party runs on node A, the challenger with coins of its own. For a run
+   so. The settings name no `COMPOSE_OFF_NODE`, so where an application's record is composed is `served_verdicts.sh`'s
+   default, by its product and `VERITY_HOLD_PLACEMENT`. An application's command takes no bindings: every party runs on node A, the challenger with coins of its own. For a run
    on the auditor's coins, `uv run bash run.sh bindings applications/X.toml` prints `verity run --bindings` for that application:
    node A's `bindings` values, each to every party whose piece reads its key, the addresses such `${NAME}`s.
 
