@@ -143,8 +143,9 @@ run starts. FLAGs go to the recorder (`--timeout 200m` to end with the row); `--
    base) as `NAME=value` lines, which name no address; with `-- CMD`, CMD run under them wherever its environment sets
    none, after the node's env files (`env_files`, each mode 600) are read and each `${NAME}` they or the environment
    set is filled in, the INT8 pin linked and the venv's CUDA headers found. The window run's `served_verdicts.sh` runs
-   so. `uv run bash run.sh bindings demos/X.toml` prints `verity run --bindings` for that demo: node A's `bindings`
-   values, each to every party whose piece reads its key, the addresses such `${NAME}`s.
+   so. A demo's command takes no bindings: every party runs on node A, the challenger with coins of its own. For a run
+   on the auditor's coins, `uv run bash run.sh bindings demos/X.toml` prints `verity run --bindings` for that demo:
+   node A's `bindings` values, each to every party whose piece reads its key, the addresses such `${NAME}`s.
 
 The scripts reach the integration by `PYTHONPATH`, which holds the tree and `adapters/vllm`, and run
 `verity_vllm.pipeline.cli` and the integration's tools from `adapters/vllm/`.
