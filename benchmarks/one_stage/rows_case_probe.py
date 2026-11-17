@@ -38,6 +38,8 @@ from verity_vllm import TargetProfile  # noqa: E402
 serve["target"] = TargetProfile.default().with_overrides(**{k: v for k, v in IO.H200.items() if k != "int8_exact"}).to_json()
 circuit = class_circuit(PP.registered_of_serve(serve, None, None, PP.CAP_BITS), IO.window_class("4,27,2"),
                         tables=PearlTables("pearl-c-h100-v1-h3"))
+(out / "templates.txt").write_text("".join(f"{t}\t{n}\n" for t, (_, n) in zip(circuit.ids, circuit.templates)))
+say("serve", json.dumps(serve))
 say("circuit", circuit.name, "templates", len(circuit.templates), "wires", len(circuit.wires))
 doc = IF.descriptor_record(circuit, 64)
 prog = circuit.program()
@@ -64,7 +66,14 @@ for p in params:
     by_prefix[p.split("/", 1)[0]][1] += 16 * params[p]
     by_prefix[p.split("/", 1)[0]][2] += p in formats
 say("params by prefix [count, bits, with a format]", by_prefix, "held", len(held))
-tr = vectors.trusted(rng, digest, record, held, roots)
+ran = {}
+if "--ran" in sys.argv:
+    for p in params:
+        if p in formats:
+            b = ref.width_of(doc, p)
+            ran[p] = (roots[p], 1, 16 * params[p] // b, *([b] if b != 16 else []))
+tr = vectors.trusted(rng, digest, record, held, roots, ran=ran)
+say("the run's record registers", len(ran))
 table, priced, missing = IO.table_of([f for f, _ in circuit.templates])
 say("table", len(table), "priced", sorted(priced), "missing", missing)
 limits = {"gamma": 10**16, "alpha": [338_992_160, 11_044_318_495_127]}
