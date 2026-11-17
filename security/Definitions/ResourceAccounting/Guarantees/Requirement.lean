@@ -2,34 +2,7 @@ module
 
 public import Definitions.ResourceAccounting.Requirement
 
-/-!
-# A registered circuit's requirement, from what the audit credits (trusted)
-
-PoUB credits blocks of its store: the registered store and the memory map beside it (I3), and
-the blocks each pass's receipts cover. The program's theorem is about a registered circuit `W`'s requirement instead:
-the bits `W`'s execution keeps live and the bits it reads (`Definitions/ResourceAccounting/Requirement.lean`). These guarantees
-turn one into the other, at each engine step, once the store and the plan hold `W`'s credited blocks (`StoreMatches`,
-`PlanMatches`). Other blocks may be resident or planned too (filler, dead or another workload's): they earn `W`
-nothing. The audit credits the live values in complete blocks (`credited`): a KV block later steps fill, or one whose
-append's coin is still out (deferred residency, `Store.Placement.encoded`), is in no record yet. The first four bound
-what it credits, and the last two bound what it leaves out. Their proofs are in
-`security/Proofs/ResourceAccounting/Requirement.lean`.
-
-* `RequirementHeld`: a device holding resident blocks `H` holds all of `W`'s credited live bits but at most a block's
-  `b` bits for each resident block outside `H`.
-* `RequirementHeldLive`: the same, a missing resident block costing the credited bits it holds rather than `b`: `W`'s
-  credited live bits are those in `H` plus those of the resident blocks outside `H`.
-* `RequirementDense`: when each resident block holds at least `D` of `W`'s credited bits, the resident blocks number at
-  most `creditedBits / D`, so missing a fraction `ε` of them misses at most a fraction `ε·b/D` of `W`'s credited live
-  bits.
-* `RequirementMoved`: a pass that moved the planned blocks `M` moved all of the bits `W` reads from complete blocks at
-  that step but at most a block's `b` bits for each planned block outside `M`.
-* `RequirementUncredited`: when the live values in incomplete blocks lie in one block per group (a sequence, layer,
-  plane and page parity), `W`'s live bits exceed the credited ones by at most `b` per group.
-* `RequirementUnplanned`: the same for the bits a step reads from incomplete blocks.
-
-Frozen (no-function): counting bounds over a wiring, its execution and a store, about no function of the code.
--/
+/-! Guarantees that turn what PoUB credits of its store into a registered circuit's requirement, at each engine step, once the store and the plan hold `W`'s credited blocks. -/
 
 @[expose] public section
 

@@ -5,15 +5,7 @@ public import Proofs.Pouw.TS.Sampled
 public import Proofs.ResourceAccounting.Lemmas.Compose
 public import Proofs.ResourceAccounting.Lemmas.TS
 
-/-!
-# A prover's `δ_bind` through `ecr/sha-512`: proof
-
-`ResourceAccounting.Guarantees.Compose.BindingOfECR`. With `M = Pr[MovedIn w]` and `Φ` the fork form at `L`'s cuts,
-`SampledBindingOfFork` gives `M² ≤ |L|²·Φ`, and the premise `Φ ≤ Pr[F finds] + κ`. AM–GM (`(M − 2δ')² ≥ 0`) gives
-`M ≤ δ' + M²/(4δ')` (`le_add_sq_div`). If `F` meets `ecr/sha-512`, `Pr[F finds] ≤ E[cost F]/2^256` is the claim itself,
-and the real bound passes to `ENNReal` (`ofReal_add_le`, `ofReal_mul`). If it doesn't, the bound is `⊤` unless `L` is
-empty, and then `M² ≤ 0`.
--/
+/-! A prover's `δ_bind` through `ecr/sha-512`: proof. -/
 
 @[expose] public section
 

@@ -5,12 +5,7 @@ public import Definitions.Slowdown.CoverageToy
 import Mathlib.Algebra.Order.Module.Field
 import Mathlib.Basic.ENNReal.Real
 
-/-!
-# The floor under coverage
-
-Coverage of efficient methods turns a floor on covered computations (from a local bound on inference blocks and the
-counting theorem) into a bound on success below the floor.
--/
+/-! The floor under coverage: coverage of efficient methods turns a floor on covered computations into a bound on success below it. -/
 
 @[expose] public section
 

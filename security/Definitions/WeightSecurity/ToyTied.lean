@@ -3,15 +3,7 @@ module
 public import Definitions.WeightSecurity.Tied
 public import Definitions.WeightSecurity.ToyServed
 
-/-!
-# Weight security with the releases tied to their traces: the toy instance
-
-The instance `WeightSecurity.Guarantees.TheftServedTied`'s witnesses are stated at: the toy deployment
-(`Definitions.WeightSecurity.ToyServed`) as a population with one unit, which has no input slot, reads nothing and
-writes the one egress slot, the one position of the one charge unit, with the function that writes `0`. Its served
-function reads nothing of the weights. The honest run's windows carry the honest assignment as their traces. The
-leaking run's run `i` carries the weights' `i`-th value in the slot, and releases it.
--/
+/-! The toy instance `TheftServedTied`'s witnesses are stated at: the toy deployment as a population of one unit that writes `0`. -/
 
 @[expose] public section
 

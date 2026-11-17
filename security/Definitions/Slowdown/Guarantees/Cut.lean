@@ -4,23 +4,7 @@ public import Definitions.Assumptions
 public import Definitions.InferenceOnly
 public import Definitions.Slowdown.Cut.Toy
 
-/-!
-# The min-cut bound and its slowdown
-
-The training bound of record, over the vocabulary of `Definitions.Slowdown.Cut`. `Bound` holds for every circuit, every
-charged work and every partition into blocks that each read at most `k` gates outside `θ`; `Slowdown` is its form for
-`ρ = m c / |C|`. `HE` and `HEShared` put (H) and (E) (`Definitions.Assumptions`) into both, with two arrays
-`W` and `X` whose matmuls share no pair of values, and with shared arrays. No statement reads a fan-in bound, a width
-or a padding: `W` and `X` may share values, outputs may repeat, and each slowdown holds for every `c`, as it must for a
-partition into blocks of at most `c` gates, each priced at `c`. `CountHE` is `HE` on a count verdict: its only premise
-on the circuit is the verdict itself, `CompliesAtMost c k n`, at most `n` proof blocks of a `(c, k)`-partition, and
-both bounds are at `n`. `HECharged` is `HE`'s count over a set of the blocks, each of them within the budget and the
-rest charged whole, with what all the blocks read as a total and what the set's blocks read squared and summed.
-
-The witnesses that each says something are at the toy (`Slowdown.Cut.Toy`): `Cut_honest`, `CountHE_honest` and
-`HECharged_honest`, their premises holding together, and each statement's `_nontrivial`, the toy beating its bound
-once the block cap `ReadsAtMost`, the verdict, or `ReadsOn` is dropped.
--/
+/-! The min-cut bound and its slowdown, with (H) and (E) put into both, and their witnesses at the toy. -/
 
 @[expose] public section
 
@@ -118,8 +102,6 @@ def HECharged : Prop :=
       (W.N : ℝ) ≤ ((∑ u ∈ Gᶜ, (W.inside (P.gates u)).card : ℕ) : ℝ) + workHEOn T S (βw * βx) b W.O ∧
       ((∀ s, γ ≤ (W.mac s).card) → (∀ u ∈ Gᶜ, (P.gates u).card ≤ c) →
         (γ : ℝ) * W.N ≤ (Gᶜ.card : ℝ) * c + γ * workHEOn T S (βw * βx) b W.O)
-
-/-! ### Witnesses at the toy -/
 
 /-- **The premises hold together** at the toy: two blocks of one MAC each, reading two gates each; each word its own
 value; the arrays `W` and `X` on the edge of the complete graph on two vertices (`ω = 2`), a value of each costing one

@@ -4,14 +4,7 @@ public import Definitions.Slowdown.Tasks
 import Mathlib.Algebra.Order.Module.Field
 import Mathlib.Basic.ENNReal.Real
 
-/-!
-# Coverage of efficient methods
-
-Why the local bounds on inference blocks (`Definitions.Slowdown.Assumptions.Capability`) constrain learning at all: every
-sufficiently cheap way to reach the target contains enough computation that some local bound covers. It is the
-task-level hypothesis, separate from every local premise, and stated over the tasks and runs of
-`Definitions.Slowdown.Tasks`.
--/
+/-! Coverage of efficient methods, the task-level hypothesis apart from every local premise. -/
 
 @[expose] public section
 

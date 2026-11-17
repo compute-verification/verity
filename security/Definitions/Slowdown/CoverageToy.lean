@@ -4,15 +4,7 @@ public import Definitions.Slowdown.Tasks
 import Mathlib.Algebra.Order.Module.Field
 import Mathlib.Basic.ENNReal.Real
 
-/-!
-# The floor's toy instance
-
-The task and computations at which `Slowdown.Guarantees.CapabilityFloor`'s witnesses
-(`Definitions.Slowdown.Guarantees.Coverage`) are stated. A hidden coin `ω` sets the target: the outputs whose one
-position holds `[ω]` are acceptable, and the input says nothing. The covered structure is at least two gates, the cost
-a run's gate count. A guess, the one-gate run writing a fixed bit at the output position, lacks the structure and
-reaches the target on half the coins; no computation does better, since a position holds one gate.
--/
+/-! The task and computations at which `CapabilityFloor`'s witnesses are stated: a guess reaches a hidden coin's target on half the coins, and nothing does better. -/
 
 @[expose] public section
 

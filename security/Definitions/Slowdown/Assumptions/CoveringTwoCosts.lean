@@ -2,25 +2,7 @@ module
 
 public import Definitions.Slowdown.Assumptions.Covering
 
-/-!
-# The covering bound's two assumptions at two costs: `c_w` a weight, `c_a` an activation
-
-`ParameterHard` and `ActivationChained` (`Definitions.Slowdown.Assumptions.Covering`) charge an updated weight and an activation the
-one cost `c = r · b`. Here each has its own: parameter-hardness at a weight cost `c_w` (`ParameterHardAt`) and
-activation-chaining at an activation cost `c_a` (`ActivationChainedAt`), over the same vocabulary (`Slowdown.Covering`). At
-`c_w = c_a = r · b` they are `ParameterHard` and `ActivationChained`.
-
-**Why two costs.** One shared `c` is at most both what an
-updated weight costs to rebuild and an activation's width, `c_a ≤ 16` at bf16, 8 at FP8, 4 at FP4. An updated weight
-compresses far below that, so one `c` charges every activation the weights' entropy. At fine-tuning's measured costs the
-slowdown bound is `ρ` about 45 with two costs against 1.1 with one.
-
-**What an updated weight is.** The weight index is abstract, so each reading is an instance; it only decides which `c_w`
-holds. Read as a parameter *slot*, counting the products from a step `t0` after the commitment on, a block pays once per
-slot and `c_w = H(θ'_{t0} | θ)`, what training added since the commitment, which grows with `t0`. Read as one gate per
-training step's version, `c_w` is at most one step's increment entropy: on an exact Pythia resume about 1.1-1.7 bits a
-weight at bf16, 0.2-0.3 at FP8, 0.03-0.05 at FP4.
--/
+/-! The covering bound's two assumptions at two costs, `c_w` a weight and `c_a` an activation, which at `c_w = c_a = r · b` are `ParameterHard` and `ActivationChained`. -/
 
 @[expose] public section
 

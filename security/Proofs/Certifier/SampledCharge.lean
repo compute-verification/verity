@@ -39,17 +39,7 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Certifier.Counting
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# The sampled audit's charge (`Guarantees.SampledCharge`)
-
-A gate's value under held gates reads only the gates it depends on (`valOver_congr_inp`). The layout fits the program
-(`BoundaryGates.Fits`), so step `t`'s egress gates depend on no later step's ingress, and holding every committed gate
-of the incorrect proof blocks at the value it takes over the whole horizon leaves each step's egress rows as they were
-(`valOver_hold`, `rows_holdAll`). So an accepted sequence is accepted with advice that holds each of those gates at one
-bit, and the count is Theorem 3's with that advice (`encard_acceptedFaulty_le`): the inputs besides the ingress, one bit
-per committed gate of the incorrect proof blocks, and the jitter code, summed over the possible incorrect sets
-(`encard_accSeqsSampled_le`). At `δ ≥ miss(1)` the only possible incorrect set is empty (`eq_empty_of_mem_incorrectSets`).
--/
+/-! The sampled audit's charge: an accepted sequence is accepted with advice that holds each incorrect proof block's committed gate at one bit. -/
 
 @[expose] public section
 
@@ -58,8 +48,6 @@ namespace NetTiming
 open Finset Claims.Sampling
 
 variable {L K S : ℕ}
-
-/-! ### A gate's value reads only what it depends on -/
 
 theorem mapM_congr_option {ws : List ℕ} {rd rd' : ℕ → Option Bool} (h : ∀ i ∈ ws, rd i = rd' i) :
     ws.mapM rd = ws.mapM rd' := by
@@ -115,8 +103,6 @@ theorem valOver_congr_inp (C : Prog) {inp inp' : ℕ → Bool} (free : ℕ → O
         · rw [ih i hig fun j hj => h j (hj.trans (depends_of_read hx hi))]
         · rfl
     · rw [valOver_of_some C inp hf, valOver_of_some C inp' hf]
-
-/-! ### Causality: a step's egress reads no later ingress -/
 
 theorem findSome?_range_eq {β : Type} (f : ℕ → Option β) (k : ℕ) :
     ∀ m, k ≤ m → (∀ j, k ≤ j → j < m → f j = none) →
@@ -223,8 +209,6 @@ theorem rows_holdAll (C : Prog) (lay : BoundaryGates L S) (n : ℕ) (hfits : lay
     (by rw [length_ingressUpTo]; omega) (by rw [length_ingressUpTo]; omega) _ p.1 hi
   intro j hj
   rw [ingressUpTo_getD op o [] hj, ingressUpTo_getD op o [] (by omega)]
-
-/-! ### The count -/
 
 /-- The committed gates of the proof blocks at the slots `F`. -/
 def faultyGateSet (C : Prog) (P : Partition) (F : Finset ℕ) : Finset ℕ :=

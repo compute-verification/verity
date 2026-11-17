@@ -5,26 +5,7 @@ public import Definitions.Registration.Physical
 import Mathlib.Algebra.Order.Module.Field
 import Mathlib.Basic.ENNReal.Real
 
-/-!
-# Tasks, classes, thresholds and slowdown (trusted)
-
-The symbol table's task and slowdown rows, and the classes they are read in:
-
-* a **task** `𝒢` (`Task`): one uniform coin, flipped up front, giving the input `x` and the set `𝒴` of its acceptable
-  outputs. Tasks are static;
-* **success** (`Succeeds`): the output a run holds at output positions fixed before `x` lies in `𝒴`;
-* **cost** is fleet-time (`fleetTime`), not size: the elapsed time, from tick `0` to one past the run's last computed
-  gate, multiplied by the whole fleet, every server, registered and unregistered. A computation's cost is its
-  fleet-time on its worst input (`cost`). The run's own server-time would not do: a run can sit on unregistered
-  servers alone, so its server-time under every protocol is about its server-time without one;
-* a **class** `𝒜` (`Class`): the pairs of a computation (a run on each input) and an input that are allowed. The
-  physical model's class is `𝒜_phys` (`physClass`), a subprotocol application's envelope `𝒜_a` (`envelope`), and
-  `𝒜′ = 𝒜_phys ∩ ⋂_a 𝒜_a` (`restricted`) the class every accepted run lies in except with probability `Σ_a δ_a` and
-  the cryptographic terms;
-* the **threshold** `T_𝒢(η; 𝒜)` (`threshold`): the least cost of a computation whose probability of succeeding inside
-  the class `𝒜` exceeds `η`, and the **slowdown** (`slowdown`) the ratio of two thresholds,
-  `T_𝒢(η; 𝒜′) / T_𝒢(η; 𝒜_phys)`.
--/
+/-! Tasks, classes, thresholds and the slowdown, all costed in fleet-time. -/
 
 @[expose] public section
 
@@ -36,11 +17,9 @@ open scoped ENNReal
 /-- **A static task** `𝒢` over inputs `In` and outputs `Y`: one uniform coin, flipped up front, and the input `x` and the
 set `𝒴` of its acceptable outputs that it gives (`draw ω = (x, 𝒴)`). -/
 structure Task (In Y : Type) where
-  /-- the coin -/
   Ω : Type
   [fintype : Fintype Ω]
   [nonempty : Nonempty Ω]
-  /-- the input and its acceptable outputs, at each value of the coin -/
   draw : Ω → In × Set Y
 
 attribute [instance] Task.fintype Task.nonempty
@@ -67,7 +46,8 @@ when none does. -/
 noncomputable def elapsed {L : Type} (A : Placed L) : ℕ :=
   A.computed.sup fun g => A.t g + 1
 
-/-- **Fleet-time**: the elapsed time multiplied by the whole fleet, the servers `Srv`, registered and unregistered. -/
+/-- The elapsed time multiplied by the whole fleet, registered and unregistered: a run's own server-time would not do,
+because a run can sit on unregistered servers alone. -/
 noncomputable def fleetTime {L : Type} (Srv : Type) [Fintype Srv] (A : Placed L) : ℕ :=
   Fintype.card Srv * elapsed A
 
@@ -97,9 +77,8 @@ noncomputable def slowdown {In L : Type} {m : ℕ} (G : Task In (Fin m → List 
     (Srv : Type) [Fintype Srv] (η : ℝ≥0∞) : ℝ≥0∞ :=
   threshold G 𝒜 Srv η / threshold G 𝒜phys Srv η
 
-/-- **The physical model's class** `𝒜_phys` on the hardware `H`: the computations whose runs are feasible under the
-physical model on every input (`Feasible`, each run read with a usage of its own). The fleet's fixed-machine
-dynamics and its chosen-state budget (`FixedMachine`, `InitialBudget`) join it when stated. -/
+/-- The computations whose runs are feasible under the physical model on every input, each run read with a usage of its
+own. -/
 def physClass {In L E : Type} (H : Hardware L E) : Class In L :=
   {p | ∀ x, ∃ usage, Feasible H (p.1 x).A usage}
 

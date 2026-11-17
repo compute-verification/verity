@@ -5,25 +5,7 @@ public import Proofs.Compose.Compose.CircuitWork
 public import Definitions.Compose.ComposeMonitoringPeriod
 public import Proofs.ResourceAccounting.Lemmas.Compose
 
-/-!
-# The period layer's covers: `ServiceCovers` with a window index
-
-`MonitoringPeriodCoversStmt` is the one piece of `CircuitWorkMonitoringPeriod`'s proof (`Proofs.Compose.ComposeMonitoringPeriod`) stated here,
-and proved here as `monitoringPeriodCovers`. The assembly reads it as a hypothesis (`ComposeMonitoringPeriod.circuitWorkMonitoringPeriod_of_covers`).
-
-It is `CoversProof.serviceCovers`' argument with a window index. Every position, cut and writer of window `w` of the
-period layer (`Declared.monitoringPeriodLayer`) is window `w`'s, so a late edge (`SampledLayer.Late`) stays in its window and
-lies in the IR's late cone (`Declared.Reaches`) under `Declared.Wf` and `LayerCommitted`, as `reaches_of_late` shows
-for one window. A credited window's live tiles have its own run's modes under `monitoringPeriodMode`, and its dead tiles are
-skipped whole. So a live tile of words that isn't good is reached by a tile its window's run didn't pay for: either a
-live one, whose `liveCone` the window's round charges and which holds the tile's live words, or a dead one, which
-`DeadConeDead` says reaches no live words.
-
-The proof reads the one-window layer (`Declared.layer`) at any run-dependent half (`CoversProof.anyRun`): window `w`'s
-positions, cuts, coins and writers are that layer's tagged by `w`, so a late edge of the period layer is one of that
-layer's inside its window (`CoversProof.late_one`), and `Compose.CoversProof.reaches_of_rtg` and
-`Compose.WorkProof.writerReads`, which read only the static half, give the cone and the writers.
--/
+/-! The period layer's covers: `ServiceCovers` with a window index, proved as `monitoringPeriodCovers`. -/
 
 @[expose] public section
 
@@ -32,11 +14,9 @@ namespace ResourceAccounting.SecurityProofs.ComposeMonitoringPeriod
 open ResourceAccounting.TS ResourceAccounting.Compose Pouw.RelativeSecurity
 
 open Classical in
-/-- **The period layer's covers on a credited window's live tiles** (proved as `monitoringPeriodCovers`): the period layer's
-writers read their positions (`SampledLayer.WriterReads`), and on every path `x`, in every credited window `w` whose dead
-tiles' cones hold no live words (`DeadConeDead`), the live words of the tiles that aren't good under the period's modes
-(`monitoringPeriodMode`) are at most `N_w` times the `liveCone` of the tiles window `w`'s run didn't pay for, at its rounds'
-coins. The right side is window `w`'s round's deficiency in `monitoringPeriodGame` at weights `liveCone` and costs `1, 1`. -/
+/-- The period layer's writers read their positions, and in every credited window whose dead tiles' cones hold no live
+words (`DeadConeDead`), the live words of the tiles that aren't good are at most `N_w` times the `liveCone` of the
+tiles the window's run didn't pay for. -/
 def MonitoringPeriodCoversStmt : Prop :=
   ∀ {ι K C Ξ V : Type} (Sc : Scheme K) (Cd : Declared ι) {n Np Kd : ℕ} (hr : 0 < Cd.rounds) (hK : Kd ≤ Np)
     (Wp : ExecutionPhasePlay C (Paths C Cd.rounds × (Equiv.Perm (Fin Np) × Ξ)) (Fin Np) Cd.rounds n)
@@ -180,10 +160,6 @@ theorem sum_not_good_le {ι K : Type} (Sc : Scheme K) (Cd : Declared ι) (Np : �
 end CoversProof
 
 open Classical in
-/-- `MonitoringPeriodCoversStmt`: the writers from the one-window layer's (`Compose.WorkProof.writerReads`), and the covers by
-`CoversProof.sum_not_good_le`. A tile that isn't good has a tile of its period cone that isn't paid; that cone lies in
-its window and in the IR's (`CoversProof.monitoringPeriodLayer_cone`), and in a credited window a tile that isn't paid is dead,
-so reaches no live words (`DeadConeDead`), or live and not paid in the window's run. -/
 theorem monitoringPeriodCovers : MonitoringPeriodCoversStmt := by
   intro ι K C Ξ V Sc Cd n Np Kd hr hK Wp pr hw hc
   refine ⟨CoversProof.monitoringPeriodLayer_writerReads Cd hr hK pr, fun x w hx hdead => ?_⟩

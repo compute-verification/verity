@@ -5,23 +5,7 @@ public import Definitions.Certifier.Tap
 public import Mathlib.Data.Fin.VecNotation
 meta import Definitions.Certifier.RecordRows
 
-/-!
-# The network attester's rows read back its lanes
-
-`Definitions.Certifier.RecordRows`. On a schedule that fits the rows format, the lanes read back from the record
-of the cells the network attester's code sends are those cells (`RowsFormat.read_record`), so the rows format is a
-`RecordFormat` (`RowsFormat.recordFormat`). A lane of `k` cells has cell `j` in bucket `t j` (`certifierLane_fst`); among the
-cells before `j`, those in `j`'s bucket number `j mod r` (`countP_range_div`), so `j` is the `(j mod r)`-th of its
-bucket's (`getElem?_filter_countP_take`); a row's frames are its connections' in turn, so a connection's are its own
-(`filterMap_bucketFrames`), and the record's slots hold a row's frames in order when the row fits (`frames_record`).
-
-The `#guard`s hold the rows format to the Python network attester's egress records (the test harness of
-`verity/protocols/accounting/certifier/verifier/tests/test_network_certifier.py`, `params`: B = 64, r = 2, D = 3, two lanes,
-T = 24): three connections on two lanes, the third admitted when the second's END frees its lane (`fxQueue`, the
-traffic of `test_network_certifier_rows.py`); a byte late at its cell (`fxLate`); and a server past
-`egress_cells` (`fxLimit`). Each frame is its ordinal, kind and payload in hex; a lane's arrivals are its DATA cells'
-and its END's payloads (`true` for the END), every cell in time except a failed lane's next one.
--/
+/-! The network attester's rows read back its lanes, and the `#guard`s hold the rows format to the Python network attester's egress records. -/
 
 @[expose] public section
 
@@ -204,8 +188,6 @@ def recordFormat [DecidableEq κ] (F : RowsFormat κ Cell L K) (hF : F.Wf) (S n 
   read_record s hs a := F.read_record hF S n s hs a
 
 end RowsFormat
-
-/-! ### The Python network attester's egress records -/
 
 section Fixtures
 

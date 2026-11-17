@@ -2,22 +2,7 @@ module
 
 public import Definitions.InferenceOnly
 
-/-!
-# Partial containment: a reference training algorithm computed partly off the books
-
-`RegisteredCircuit.Contains` asks the declared circuit `d` to compute every gate of the reference training algorithm `c`. A prover can
-instead compute some of `c`'s gates outside `d`, off the books, and feed their values into `d` as inputs. A partial
-containment (`PartialContainment c d`) says what `d` still computes: a set `S` of `c`'s computed gates, each with its own
-gate of `d` reading the images of the gates it reads. The rest of `c`'s computed gates are its dark gates (`dark`): `d`
-holds none of them, and a dark value `S` reads enters `d` as an input gate. `d` need not compute any gate the way `c`
-does, only from the same wires, so a total containment is the special case `S = computed`
-(`PartialContainment.ofContainment`).
-
-A partial containment says nothing about `d`'s θ: a dark value may enter `d` as an input in θ, read for free.
-That it doesn't is a premise about the protocol, which decides what `θ` may hold, and not about the circuit:
-`InferenceOnly.Assumptions.ThetaRegistered` (`Definitions/InferenceOnly/Assumptions/Theta.lean`), which every guarantee through a
-containment, total or partial, takes as a hypothesis.
--/
+/-! Partial containment, a reference training algorithm computed partly off the books; whether a dark value enters `d` in θ is the premise `InferenceOnly.Assumptions.ThetaRegistered`, not the containment's. -/
 
 @[expose] public section
 
@@ -35,7 +20,6 @@ the books, and the rest of `c`'s computed gates are dark. Through `emb`:
 
 Whether such an input is in `d`'s θ is not part of the containment (`InferenceOnly.Assumptions.ThetaRegistered`). -/
 structure PartialContainment (c d : RegisteredCircuit) where
-  /-- The gates of `c` that `d` computes. -/
   S : Finset (Fin c.D.N)
   /-- The gate of `d` each gate of `S` and of `in(S)` goes to. -/
   emb : Fin c.D.N → Fin d.D.N

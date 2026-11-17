@@ -7,32 +7,13 @@ public import Proofs.ResourceAccounting.Lemmas.TS.Receipt
 public import Proofs.ResourceAccounting.Lemmas.Compose
 public import Proofs.ResourceAccounting.Lemmas.TS
 
-/-!
-# `CircuitWork`: the circuit's work under live coins
-
-* **The luck per stage** (`luckAt_of_perTile`): each credited tile's `tileGame … .folded` is `Pinned` (its check is
-  `same`), so (H-μ) through Lemma B at fibre 1 (`operandLuck_of_pointMass`) and B′ through `LuckOfReceipt` give
-  `Pr[folded ∧ same] ≤ (μ + (1 − μ)·r_B)·Pr[folded]` (`r_B ≤ 1` by `Scheme.LuckProved`), and `GuessLuckAt` gives the
-  whole tile's at its guess bound; a tile of no credited kind is held to `1`.
-* **Two events**: `ServiceBudget` at `shareCone` and `budget_tail` at `t = ln(1/δ_s)` bound the accepted runs with
-  `a·S_F + b·S_0 ≥ Λ·ln(1/δ_s)` by `δ_s` (`S_F`, `S_0` the folded and whole shares at `shareCone`), and
-  `SampledRightOff` gives one event of probability `δ_bind + δ_ks` off which every accepted sampled tile is right, so `Of`
-  gives the play's ideal game's pass, which is the share game's.
-* **The words** (`work_of_bounds`): off both, `UnitFixed` and `ServiceCovers` give the good tiles' words at least
-  `(1 − (c_F + c₀))·N_w`, `c_F`, `c₀` the folded and whole shares at `tileCone`, and the words not skipped whole at
-  least `(1 − S_0)·N_w`, since a tile's words are at most `N_w` times its `shareCone`; `Σ_t tileWords ≥ N_w`
-  (`wordsOf_le_sum`: each credited word is in its unit's tile, under `Declared.Wf` and `units ≤ N_p`). `c_F + c₀` is
-  `S_F + S_0` plus the cones `Z_F + Z_0 ≤ D₀` of tiles of no words, which `WorkAt` takes in the cheaper share
-  (`workAt_of`).
--/
+/-! `CircuitWork`: the circuit's work under live coins. -/
 
 @[expose] public section
 
 namespace ResourceAccounting.SecurityProofs.Compose.WorkProof
 
 open ResourceAccounting.TS ResourceAccounting.Compose ResourceAccounting.Assumptions.TS ResourceAccounting.Assumptions.Compose Pouw.RelativeSecurity
-
-/-! ## The luck per stage -/
 
 theorem pos_ite_iff (P : Prop) [Decidable P] : (0 : ℝ) < (if P then 1 else 0) ↔ P := by
   by_cases h : P
@@ -93,8 +74,6 @@ theorem luckAt_of_perTile {ι K C : Type} [Fintype C] (Sc : Scheme K) (Cd : Decl
           (h2 t ht k hk hc) (hLP k).2.2.1
         exact ⟨tileLuck_of mode right same .folded t (Sc.foldLuck k) hL,
           tileLuck_of mode right same .whole t (Sc.guess k) (h3 t ht k hk hc)⟩
-
-/-! ## The tiles' words and cones -/
 
 /-- **The tiles' words count every credited word**: a list's elements each in one of `N` tiles (`f i < N`) are at
 most the tiles' counts. -/
@@ -213,8 +192,6 @@ theorem zero_shares_le (md : Fin Np → Mode) :
 
 end Cones
 
-/-! ## The work -/
-
 theorem sum_ite_split {N : ℕ} (c : Fin N → Prop) [DecidablePred c] (f : Fin N → ℝ) :
     (∑ j, if c j then f j else 0) + (∑ j, if c j then 0 else f j) = ∑ j, f j := by
   rw [← Finset.sum_add_distrib]
@@ -285,8 +262,6 @@ theorem work_of_bounds {ι K : Type} (Sc : Scheme K) (Cd : Declared ι) {Np : �
     (zero_share_nonneg Sc Cd Np md .folded) (zero_share_nonneg Sc Cd Np md .whole) (zero_shares_le Sc Cd Np md)
     (by linear_combination hD + hFs + hWs) hfixB hfoldB (by linarith)
 
-/-! ## The window's proofs' layer -/
-
 section Layer
 
 variable {ι C Ξ V : Type} (Cd : Declared ι) {Np Kd : ℕ} (hr : 0 < Cd.rounds) (hK : Kd ≤ Np)
@@ -312,7 +287,7 @@ theorem writerReads : (Cd.layer hr hK pr).WriterReads := by
 
 end Layer
 
-/-- `CircuitWork`: off `SampledRightOff`'s event and the budget's tail, `work_of_bounds`. -/
+/-- `Scope`'s `Declared.Live` is read by no step: it is the protocol fact under which the stages' coins are the service's. -/
 theorem circuitWork : ResourceAccounting.Guarantees.Compose.CircuitWork := by
   intro ι K T L U C Ξ V _ _ _ _ _ _ _ Sc Cd Np Kd hN hr hK W Pl pr folded ρ p p0 a b wmax Λ δs δbind δks hS hρ
     hρN hwmax hlk ha hb hΛ hSR hG hOf hMoved hJS hPins hMu hRB hGs hUF

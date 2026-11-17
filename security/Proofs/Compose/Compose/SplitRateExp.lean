@@ -3,21 +3,7 @@ module
 public import Definitions.Compose.Guarantees.Compose
 public import Proofs.ResourceAccounting.Lemmas.Compose
 
-/-!
-# The sharp rate: proof
-
-`ResourceAccounting.Guarantees.Compose.SplitRateExp`. Write `x = W_F − L_F` and `y = W_0 − L_0` for the unlucky work and
-`c = Kρw_max`. As `(1 − t)^K ≤ e^{−Kt}` (`one_sub_pow_le`), the left side is at most the exponential of
-`(a/Λ − Kρ)·x + (a/Λ)·L_F + (b/Λ − Kρ)·y + (b/Λ)·L_0`, a linear form on the simplex
-`x, L_F, y, L_0 ≥ 0`, `x + L_F + y + L_0 ≤ w_max`. Jensen for `exp` at the simplex's vertices (`exp_four_le`) bounds it by
-the right side's affine interpolation of the vertex values:
-
-* at `x = w_max`, `e^{a·w_max/Λ − c} − 1 ≤ −ν·p·w_max` is `e^{a·w_max/Λ}·(p + (1 − p)e^{−c}) ≤ 1`, which is
-  `Λ ≥ a·w_max/−ln(p + (1 − p)e^{−c})` (`exp_mul_le_one`);
-* at `L_F = w_max`, `e^{a·w_max/Λ} − 1 = ν·(1 − p)·w_max` is `ν`'s definition;
-
-and the same for `y`, `L_0` with `b`, `p0`, `ν₀`.
--/
+/-! The sharp rate: proof, by `(1 − t)^K ≤ e^{−Kt}` and Jensen for `exp` at the simplex's vertices. -/
 
 @[expose] public section
 

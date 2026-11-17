@@ -16,19 +16,7 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 
-/-!
-# The integrity audit of a period is Flock's integrity audit over a monitoring period's sampling blocks (trusted)
-
-A period's SPOT audit (`Audit.sampled`) is Flock's integrity audit over the period's sampling blocks
-(`Flock.Guarantees.IntegrityPooled`): `T` sampling blocks `W t`, each a `--zk` session under hidden outputs with a
-fresh live subset sample, against one adaptive prover. `RealizesIntegrityOfIntegrityMonitoringPeriod` ties a `PeriodRun` to it: the
-sampled audit's own coins drive the period's game at the prover's strategy, its verdict is verity-verify-proof's on every
-sampling block, and the claim's units and incorrect proof blocks are the sampling blocks'. `IntegrityOfIntegrityMonitoringPeriod` is
-then `PeriodRun.Sound` for the sampled audit at error `δ + Σ_t (ε_ks,t + ε_bind,t)`, the monitoring period's.
-
-Flock's definitions are still in its proofs package, so, like `Flock.Guarantees.IntegrityPooled`, this module imports
-them.
--/
+/-! The integrity audit of a period is Flock's integrity audit over the period's sampling blocks; this module imports Flock's definitions from its proofs package, where they still are. -/
 
 @[expose] public section
 
@@ -65,13 +53,10 @@ structure RealizesIntegrityOfIntegrityMonitoringPeriod {ι : Type} {d : Device �
   samplingDesign : ∀ (ξ : (i : I) → Ω i) (E : List Flock.Guarantees.SamplingBlockRec → Prop),
     ENNReal.ofReal (Pouw.pr fun x : Ω (r.own .sampled) => E (record (Function.update ξ (r.own .sampled) x))) =
       FlockSoundness.Game.value E (Flock.Guarantees.Period.run W T (strat ξ))
-  /-- the sampled audit accepts exactly when verity-verify-proof accepts every sampling block -/
   accepts_iff : ∀ ξ, r.accepts .sampled ξ ↔ ∀ w ∈ record ξ, w.accepted
   /-- the run's incorrect proof blocks are the sampling blocks' (M1, the program-from-circuit correspondence) -/
   wrong_eq : ∀ ξ, (r.parts.incorrect (r.trace ξ)).card = ((record ξ).map Flock.Guarantees.SamplingBlockRec.incorrect).sum
-  /-- the partition's units are the sampling blocks' units -/
   units_eq : r.units = ∑ t ∈ Finset.range T, (W t).n
-  /-- every unit of the partition has at least one gate -/
   gates_nonempty : ∀ u, (r.parts.gates u).Nonempty
 
 namespace Guarantees.Bridge

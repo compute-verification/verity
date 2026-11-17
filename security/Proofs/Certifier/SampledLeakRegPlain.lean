@@ -43,18 +43,7 @@ import Proofs.Flock.SamplingGeneric
 import Proofs.Certifier.SampledAuditAccepted
 import Proofs.Certifier.SampledLeakReg
 
-/-!
-# The leak bound at the registration's values, at the deployed plain record
-
-`sampledLeak_registered` is stated at any compiled sampled verifier. At the deployed sampling record over any Flock
-record `F` (`SamplingDeploy.deployOf F c`) its trace commitment is `F`-free (`SamplingDeploy.deployOf_commit`), hm96
-leaves under the verifier's own registered path check, and binds at every `H` with no hypothesis (`binds_deployOf`, from
-`SamplingDeploy.commit_binds`). So the masked and plain records share one commitment (`deployPlain_commit`), and at the
-plain record as a compiled verifier (`SamplingDeploy.compiled` at `deployPlainTrim`) the bound takes only its
-`Compiled.KS` (`sampledLeak_registered_plain`), which the compiler at Flock gives at SHA-512 at the deployed relation
-from Flock's plain KS (`SamplingDeploy.ks_compiled`, `FlockDeploy.KS.plain_KS`) and the code's facts
-(`sampledLeak_registered_plain_sha512`). `SampledAuditAccepted` is discharged by its proof.
--/
+/-! The leak bound at the registration's values at the deployed plain record, whose commitment binds at every `H` with no hypothesis. -/
 
 @[expose] public section
 
@@ -80,9 +69,6 @@ variable (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
 local notation "Lp" => SamplingDeploy.compiled (FlockDeploy.deployPlainTrim rel) c iroots
 
 set_option synthInstance.maxSize 1024 in
-/-- **The leak bound at the registration's values, at the deployed plain record**: `sampledLeak_registered` at
-`SamplingDeploy.deployPlain rel c` as a compiled verifier, its binding `binds_deployOf` and `SampledAuditAccepted` its
-proof, given its `Compiled.KS`. -/
 theorem sampledLeak_registered_plain (H : Msg → Msg) (hks : (Lp).KS H) (L K S : ℕ)
     (lay : AuditStatement → BoundaryGates L S) (k : AuditStatement → ℕ) (δ : ℝ) (hδ : 0 ≤ δ)
     (reg : AuditStatement → Finset ℕ) (ops : AuditStatement → List (Opening Bool)) (Dj : ℕ) (x : Msg)
@@ -109,9 +95,6 @@ local notation "Dp" => SamplingDeploy.deployPlain relD c
 local notation "Lp" => SamplingDeploy.compiled (FlockDeploy.deployPlainTrim relD) c iroots
 
 set_option synthInstance.maxSize 1024 in
-/-- **The same at SHA-512 at the deployed relation**: the plain record's `Compiled.KS` from the compiler at Flock
-(`SamplingDeploy.ks_compiled`), at Flock's plain KS (`FlockDeploy.KS.plain_KS`), its decoder within the radius
-(`listWithin_deployPlainTrim`), the commitment's binding and the code's facts. -/
 theorem sampledLeak_registered_plain_sha512
     (hfixed : SampleFixed Dp) (hsessions : SessionRuns shaD Dp) (hnum : SamplingDeploy.SessionsInPlain c)
     (hslots : DrawSlots Dp) (hopens : SessionOpens shaD Dp iroots)

@@ -7,14 +7,7 @@ import Mathlib.Data.Sym.Sym2.Init
 import Proofs.Certifier.Advice
 import Proofs.Certifier.Counting
 
-/-!
-# Theorem 3 for the reference schedule: the constant-rate Program
-
-`docs/network-transparency/timing-channel.md` §2.4, for `constantRate` (`Definitions.Certifier.Schedule`). Its
-advice is one value per execution block, so `encard_accSeqs_le_advice` applies as it stands. Causality
-(`constantRate_rows_causal`: a step's rows read only its block's advice) sharpens it to the blocks the counted steps
-reach. `oneFrame` is a schedule of one frame of one execution block.
--/
+/-! Theorem 3 for the reference schedule, the constant-rate Program, sharpened by causality to the blocks the counted steps reach. -/
 
 @[expose] public section
 
@@ -31,8 +24,6 @@ theorem encard_accSeqs_le_constantRate {Adv : Type} [Fintype Adv] (T g E : ℕ)
   have := encard_accSeqs_le_advice (constantRate (S := S) T g E frames) op n D
   rwa [Fintype.card_fun, Fintype.card_fin] at this
 
-/-! ### Causality: a step's rows read only its execution block's advice -/
-
 theorem constantRate_rows_causal {Adv : Type} (T g E : ℕ)
     (frames : List In → Fin E → Adv → Fin L → List LogicalFrame) (t : ℕ) (ins : List In) (a a' : Fin E → Adv)
     (ha : ∀ e : Fin E, (e : ℕ) = t / (g * T) → a e = a' e) :
@@ -42,8 +33,6 @@ theorem constantRate_rows_causal {Adv : Type} (T g E : ℕ)
   split_ifs with h
   · rw [ha ⟨t / (g * T), h⟩ rfl]
   · rfl
-
-/-! ### `|a|` bits per execution block opened -/
 
 theorem encard_accSeqs_le_constantRate_executionPhases {Adv : Type} [Fintype Adv] (T g E : ℕ)
     (frames : List In → Fin E → Adv → Fin L → List LogicalFrame) (op : ℕ → List (Obs L K S) → In) (n D m : ℕ)

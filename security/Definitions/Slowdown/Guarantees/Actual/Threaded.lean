@@ -4,34 +4,7 @@ public import Definitions.Slowdown.Guarantees.Actual
 public import Definitions.Slowdown.Assumptions.Threads
 public import Definitions.Slowdown.Dark
 
-/-!
-# The memory cap over threads (trusted)
-
-Tier 3's bound on the monitored servers (`benchmarks/nci/tiers.py`, "Memory cap on the residual"): a server's window
-reads its starting state plus what enters during it, `K = R + r ω`, and holds at most `K Λ(K) / b_a` counted
-multiplications of a threaded reference training algorithm `c`, where `Λ = Threading.bound` is the inference-only policy's Theorem 1 over threads
-(`Slowdown.Guarantees.ThreadedReads`). Every gate placed on the servers counts, declared or not: the windows divide the
-actual circuit's region, and `c` need only be contained in it.
-
-The windows are `ServerBlocks`' `A[X i, [kω, (k + 1)ω) ∩ [0, t)]`, with its memory constraint replaced by a bound `R` on the
-state at each window's start, so that what a wipe or exhaustion leaves plugs in; `r` bounds each location's link
-capacity `β_X`, and `Γ ≥ Φ_X ω` its gates a window.
-
-* `ThreadedRuntime`: `b_a |M| ≤ n ⌈t/ω⌉ K Λ(K)`, so `t ≥ ω (b_a |M| / (n K Λ(K)) − 1)`.
-* `ThreadedRate`: at the window `ω = R/r` in the quadratic regime, with a wipe period dividing the window, at most
-  `reuse · n R r / (d b_w b_a)` counted multiplications a tick.
-* `ThreadedRuntimeDark`: `ThreadedRuntime` through a partial containment (`Slowdown.PartialContainment`): the counted
-  multiplications the declaration computes obey the cap, and every other one is a dark gate,
-  `|M| ≤ |dark| + n ⌈t/ω⌉ K Λ(K) / b_a`.
-
-The `Slots` forms (`ThreadedRuntimeSlots`, `ThreadedRateSlots`, `ThreadedRuntimeDarkSlots`) take the reference training algorithm's
-weights incompressible per parameter slot (`Slowdown.Assumptions.WeightsIncompressibleSlots`), so that a window spanning
-several optimizer steps on a parameter is charged for it once, with the same bounds.
-
-All count reads by width: `Placed.state` and `freshInput` are widths of the gates read. A wipe bounds information, what
-the state can determine, not the width of the gates a window reads from before its start, so composing these with a wipe
-needs the read bound in its determination form.
--/
+/-! The memory cap over threads on the monitored servers, which counts every gate placed on them, declared or not. -/
 
 @[expose] public section
 

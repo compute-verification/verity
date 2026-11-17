@@ -3,18 +3,7 @@ module
 public import Definitions.Compose.Guarantees.Compose
 public import Proofs.ResourceAccounting.Lemmas.Compose
 
-/-!
-# A whole-tile luck per query from its tiles' entropy: proof
-
-`ResourceAccounting.Guarantees.Compose.WholeLuckOfEntropy`. Per round take `WholeEntropyAt`'s `Wh`, `Lk` and `Break`, and
-`g q a = Σ_{v ∈ Wh q a} w_v·((1 + κ₀)·[v ∈ Lk q a] − κ₀)`. Off `Break` at `sq a r = some q` the round's whole tiles
-are `Wh q a` and `same` lands in `Lk q a`, so `roundGain ≤ g q a` (`w ≥ 0`, `1 + κ₀ ≥ 0`). `Wh q` doesn't read `q`'s
-answer, so on `resample a r q b` the sum is over one set `W`, and with `x_v = θ_r·w_v` (`moment_le`)
-`exp(θ_r·g) = Π_{v ∈ W} ([v ∈ Lk]·c_v + e^{−κ₀x_v})`, `c_v = e^{x_v} − e^{−κ₀x_v} ≥ 0`, which `Finset.prod_add`
-expands to `Σ_{S ⊆ W} [S ⊆ Lk]·Π_{v ∈ S} c_v·Π_{v ∈ W \ S} e^{−κ₀x_v}`. Summing over `b`, the entropy conjunct bounds
-each `Σ_b [S ⊆ Lk]` by `|B|·e^{−Σ_S h}`, and the sum folds back to `|B|·Π_v (c_v·e^{−h_v} + e^{−κ₀x_v})`, each factor
-`e^{−h_v}·e^{x_v} + (1 − e^{−h_v})·e^{−κ₀x_v}`, in `[0, 1]`.
--/
+/-! A whole-tile luck per query from its tiles' entropy: proof. -/
 
 @[expose] public section
 

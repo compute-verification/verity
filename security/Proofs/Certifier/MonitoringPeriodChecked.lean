@@ -47,37 +47,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# The leak through the network attester over a monitoring period, with the checked inputs left out
-
-`monitoringPeriodLeakChecked` is `Guarantees.MonitoringPeriodLeakChecked`, in two steps, each over the checked form of what it reads.
-
-**Each window's bound.** On the audit's scope, the sampling relation at a trace that agrees with the network attester
-wherever both open a gate gives the leak relation at the network attester's rows with a valid run, where the run at
-those rows (`certifierRun`) is `valid` (`rLeakCertifierChecked_of`). The trace filled in with the network attester's
-values carries its records (`TapProof.carries_fillTrace`), so `accepted_of` gives `Accepted` with the incorrect proof
-blocks' committed gates held at the filled values, the advice the count charges. A held gate's input value is never
-read, any other input in a proof block is opened, and no egress gate depends on an input in none (an unread input,
-`Prog.Unread`), so the inputs move back to the trace's own values (`valOver_congr_held`), pinned at the free inputs:
-the run the relation accepts at is the run at the network attester's rows. An accepted audit escapes the relation
-only where `Compiled.KS` fails, the trace disagrees with a passing opening of the network attester, which is a
-collision (`certifierColl_of_disagree`, `Pr_certifierColl_le_Btap`), or one of the two checks misses on that run,
-which `CheckedWitness` at `certifierRun` bounds (`monitoringPeriodChecked_first`).
-
-**The count.** A window that meets `ExecutionPhaseGoodChecked`, whose observations the network attester registers, has them
-among the sequences `AccSeqsChecked` counts at its registration (`mem_accSeqsChecked_of_executionPhaseGoodChecked`). A period's
-records whose every window is such a sequence, each window's operator reading the windows before it, are, at the
-incorrect sets they are accepted with, runs over the empty pool that restart at no window, which `encard_carried_le`
-counts with the checked inputs left out; over the windows' possible incorrect sets they number at most `executionPhasesCount`
-at `reg ∪ chk` (`encard_monitoringPeriodChecked_le`). The client's view reads back from the records under a registered parameter
-(`RecordFormat.ReadsBy`), so the views, and the secrets they decode to, number at most `#Θ` times that
-(`monitoringPeriodChecked_second`).
-
-`rLeakCertifier_of_rLeakCertifierChecked` and `rLeakCertifierChecked_of_rLeakCertifier` move between the leak relation
-at the network attester's rows and its checked form, the second at a check every run passes;
-`RecordFormat.readsBy_read` reads every record format back under its own schedule as the parameter. They carry
-`MonitoringPeriodLeakAccepted` to its instance of this statement.
--/
+/-! The leak through the network attester over a monitoring period with the checked inputs left out, in two steps: each window's bound and the count. -/
 
 @[expose] public section
 
@@ -125,13 +95,6 @@ theorem RecordFormat.readsBy_read {κ Cell Ob : Type} (f : RecordFormat κ Cell 
   rintro θ s rfl hfit a
   exact f.read_record _ hfit a
 
-/-- **The count of a period's records, with the checked inputs left out.** The records whose every window is a
-sequence its registered Program accepts with a valid run (`AccSeqsChecked`), window `i`'s operator reading the windows
-before it, number at most `executionPhasesCount` at `reg ∪ chk`. At the incorrect sets `F i` its windows are accepted with,
-such a record is a run over the empty pool that restarts at no window (`leakAtCarried_of_leakAtChecked`), and
-`encard_carried_le` counts those at each family `F`; the families are the product of the windows' possible incorrect
-sets, and the sum over them of the per-family products is the product of the per-window sums
-(`Finset.prod_univ_sum`), each at most `#incorrectSets_i · 2^β_i` times the window's other factors. -/
 theorem encard_monitoringPeriodChecked_le {L K S n : ℕ} (lay : AuditStatement → BoundaryGates L S) (k : AuditStatement → ℕ)
     (δ : ℝ) (reg chk : AuditStatement → Finset ℕ) (valid : AuditStatement → (ℕ → Bool) → Prop) (Dj : ℕ)
     (sw : Fin n → AuditStatement) (Pw : Fin n → Partition) (β : Fin n → ℕ)
@@ -204,9 +167,6 @@ open Claims.SamplingGeneric (Arg Compiled)
 variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg Coin}
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
-/-- **A window that meets its good event holds an accepted sequence**: where the network attester registers the
-window's observations at the operator `op`, the layout fits the window's registration and the observations are among
-the sequences `AccSeqsChecked` counts there, at the registration's values. -/
 theorem mem_accSeqsChecked_of_executionPhaseGoodChecked {H : Msg → Msg} {D : Compiled Coin A} {L K S : ℕ}
     {lay : AuditStatement → BoundaryGates L S} {k : AuditStatement → ℕ} {δ : ℝ} {reg : AuditStatement → Finset ℕ}
     {valid : AuditStatement → (ℕ → Bool) → Prop} {Dj : ℕ} {s₀ : AuditStatement} {P₀ : Partition}
@@ -231,10 +191,6 @@ theorem mem_accSeqsChecked_of_executionPhaseGoodChecked {H : Msg → Msg} {D : C
   exact ⟨hfits, hmem⟩
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
-/-- **The held and counted parts of `Guarantees.MonitoringPeriodLeakChecked`**, at one check `valid`: a good secret's view is read
-from the windows' records under a registered parameter, each record a sequence its registered Program accepts with a
-valid run (`mem_accSeqsChecked_of_executionPhaseGoodChecked`), so the good secrets are decoded from the views `rd` reads off
-`Θ` and the records `encard_monitoringPeriodChecked_le` counts. -/
 theorem monitoringPeriodChecked_second (H : Msg → Msg) (D : Compiled Coin A) (L K S : ℕ)
     (lay : AuditStatement → BoundaryGates L S) (k : AuditStatement → ℕ) (δ : ℝ)
     (reg chk : AuditStatement → Finset ℕ) (valid : AuditStatement → (ℕ → Bool) → Prop) (Dj : ℕ)
@@ -322,10 +278,6 @@ open Claims.SamplingGeneric (Arg Compiled)
 variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg Coin}
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
-/-- **At the network attester's rows, with a valid run**: on the audit's scope at `δ ≥ 0`, the sampling relation at a
-trace that agrees with the network attester wherever both open a gate gives the leak relation at the network
-attester's rows with a valid run, where every run at those rows (`certifierRun`) is `valid`. The run the relation
-accepts at, on the inputs pinned to the trace's, is that run. -/
 theorem rLeakCertifierChecked_of (H : Msg → Msg) (D : Compiled Coin A) {L K S : ℕ}
     (lay : AuditStatement → BoundaryGates L S) (k : AuditStatement → ℕ) {δ : ℝ} (hδ : 0 ≤ δ)
     (reg : AuditStatement → Finset ℕ) (valid : AuditStatement → (ℕ → Bool) → Prop) (Dj : ℕ)
@@ -392,11 +344,8 @@ theorem rLeakCertifierChecked_of (H : Msg → Msg) (D : Compiled Coin A) {L K S 
     funext ℓ
     exact rowOf_congr fun σ g hg => (hv1 g (not_unread_of_out (hfit.1 t ht ℓ σ g hg).1)).trans (hv2 g)
 
-/-- **Each window's bound**: the first part of `Guarantees.MonitoringPeriodLeakChecked`. An accepted run whose extracted witness
-is not in the leak relation at the network attester's rows with a valid run is outside the sampling relation, which
-`Compiled.KS` bounds, or disagrees with a passing opening of the network attester, a collision
-(`certifierColl_of_disagree`, `Pr_certifierColl_le_Btap`), or has a run at those rows that one of the two checks
-refuses, which `CheckedWitness` at `certifierRun` bounds (`rLeakCertifierChecked_of`). -/
+/-- An accepted run escapes the relation only where `Compiled.KS` fails, the trace disagrees with a passing opening of
+the network attester (a collision), or one of the two checks misses on that run. -/
 theorem monitoringPeriodChecked_first (H : Msg → Msg) (D : Compiled Coin A) (hks : D.KS H) (hb : D.commit.Binds H) (L K S : ℕ)
     (lay : AuditStatement → BoundaryGates L S) (k : AuditStatement → ℕ) (δ : ℝ) (hδ : 0 ≤ δ)
     (reg : AuditStatement → Finset ℕ) (valid₁ valid₂ : AuditStatement → (ℕ → Bool) → Prop) (ε₁ ε₂ : Msg → ℝ)
@@ -448,10 +397,6 @@ namespace NetTiming
 
 open Claims Claims.Sampling
 
-/-- **The leak through the network attester over a monitoring period, with the checked inputs left out**:
-`Guarantees.MonitoringPeriodLeakChecked`, from each window's bound at the network attester's rows with a valid run
-(`TapProof.monitoringPeriodChecked_first`) and the held and counted parts at the two checks together
-(`monitoringPeriodChecked_second`). -/
 theorem monitoringPeriodLeakChecked : Guarantees.MonitoringPeriodLeakChecked := by
   intro Coin _ _ _ A H D hks L K S lay k δ hδ reg chk valid₁ valid₂ ε₁ ε₂ Dj n sw Pw β hplaced hchk ρ op
     Conn Cell Srv Dev Zt Par arr f tap run htrust rd allows hread Θ Zs schedOf srvOf dec hch x wit tops hb
