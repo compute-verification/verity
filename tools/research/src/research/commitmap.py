@@ -38,7 +38,7 @@ from .gates import git_env
 KIND = "commit-map/v1"
 LABEL = "commit_map"
 ACCEPTED, RETRACTED = "accepted", "retracted"
-#: Who may make a map apply: the rewrite's approver.  A map changes what the merge gate accepts, so no lane accepts its own.
+#: Who may make a map apply: the rewrite's approver.  A map changes which checks a commit passes (`merge.passing`), so no lane accepts its own.
 ACCEPTORS = ("daniel",)
 _SHA = re.compile(r"[0-9a-f]{40}")
 

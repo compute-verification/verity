@@ -68,8 +68,8 @@ the units, their feeds and weight reads, and wires them). Every unit reads its w
   fewest that leaves a unit within ``grain.rows`` rows; `RMSNormTriton_v5` is one unit.
 - `RMSNormFusedCuda_v2{N, EPS}` is one unit, or where an earlier node reads its template's ``x`` at another row count or one
   unit would pass ``grain.rows`` rows (down_proj's norm at Llama's grain), it is cut at its residual add: N / C units
-  `RMSNormFusedCudaAdd_v1{N, C, AT}`, C = ``grain.norm``, part AT reading x's elements [AT·C, (AT+1)·C) as their writers'
-  rows and ``res`` whole, then `RMSNormFusedCudaTail_v1{N, EPS}` reading their sums ``r`` in order of AT (its row j part
+  `RMSNormFusedCudaAdd_v2{N, C, AT, R}`, C = ``grain.norm``, part AT reading x's elements [AT·C, (AT+1)·C) as their writers'
+  R rows (so two norms whose x are written in other row counts cut into templates of their own) and ``res`` whole, then `RMSNormFusedCudaTail_v1{N, EPS}` reading their sums ``r`` in order of AT (its row j part
   AT = j's, which the wiring check holds and the tail's equality to v2 rests on) and ``w``. The tail's second output is r,
   so v2's readers read it as they read v2's.
 

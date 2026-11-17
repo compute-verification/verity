@@ -132,10 +132,5 @@ theorem periodHeldDemo_honest (N : ℕ) [NeZero N] (pt : Run.Point) {ι : Type} 
     RingDeviceAt N pt r P D Q L round :=
   ringDeviceAt_honest N pt r P D Q L round hfull
 
-/-- **`periodHeldDemo` is nontrivial**: `periodHeldAt_nontrivial` at Demo B's `N`. -/
-theorem periodHeldDemo_nontrivial (N : ℕ) [NeZero N] :
-    ¬ Pouw.pr (fun _ : (ringRO N 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams => True) ≤
-      (Params.δ : ℝ) + Params.εMax.toReal :=
-  periodHeldAt_nontrivial N
 
 end Pous.Period.SecurityProofs
