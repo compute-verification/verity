@@ -1,4 +1,4 @@
-"""`verity_vllm.observe.capture`'s `make_header`: the run header is the profile manifest and its id as
+"""`verity_vllm.observe.capture_types`'s `make_header`: the run header is the profile manifest and its id as
 `run_facts.profile_manifest` gives them for the workload's sampling, the model's checkpoint and configuration, the workload's
 requests, and the notes: the manifest's, the observer's own, then the caller's.  A request with `n` over one is listed with
 the children vLLM makes of it.  The manifest, the configuration, the re-entered implementations' names and the clock are
@@ -12,7 +12,7 @@ import pytest
 
 pytest.importorskip("torch")
 
-from verity_vllm.observe import capture as C
+from verity_vllm.observe import capture_types as C
 from verity_vllm.observe import events as E
 
 OPS = ("vllm.unified_attention_with_output", "vllm.unified_kv_cache_update")

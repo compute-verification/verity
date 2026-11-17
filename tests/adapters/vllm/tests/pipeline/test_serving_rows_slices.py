@@ -18,12 +18,12 @@ from verity.circuits.evaluation import evaluate_batch
 from verity.circuits.ops import gemm as G
 from verity.circuits.ops.prims import HopperBF16WgmmaDot16
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
+from verity_flock.class_statement import UnitStager
+
 from verity_vllm.definitions.registry import b1_tp2 as T2
 from verity_vllm.definitions.registry import cublas_bf16 as CB
 from verity_vllm.definitions.registry import dsa as DSA
 from verity_vllm.definitions.registry import ll_bf16 as LL
-from verity_flock.class_statement import UnitStager
-
 from verity_vllm.pipeline import chunk_rows as CR
 from verity_vllm.pipeline import serving_rows as SRW
 from verity_vllm.pipeline import slice_rows as SL

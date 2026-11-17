@@ -100,7 +100,7 @@ def verdict_runs(store: Any) -> dict[str, list[str]]:
 
 def stop_charge(root: Path, store: Any, labelled: Mapping[str, Sequence[str]]) -> Any:
     """How the stop class is charged by the records the runs of ``labelled`` (`verdict_runs`) hold: the stop
-    verdicts' reader's answer (`READER`'s `of_runs`), which `certifier` hands the calculator. The reader is handed
+    verdicts' reader's answer (`READER`'s `of_runs`), which `attester` hands the calculator. The reader is handed
     every run of ``labelled`` and, as superseded, those another run replaces; this reads none of their files itself."""
 
     return _reader().of_runs(store, list(labelled), [run for run, by in labelled.items() if by])

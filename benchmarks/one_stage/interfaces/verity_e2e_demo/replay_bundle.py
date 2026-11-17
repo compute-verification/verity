@@ -1027,10 +1027,10 @@ def check(doc: Mapping[str, Any], payload: bytes, *, docket: Mapping[str, Any] |
     if docket is not None:
         sampling_design = docket["law"]
         if d.get("law") != sampling_design or (sampling_design.get("law") == "subset" and len(d["units"]) != sampling_design.get("k")):
-            bad["draw:law"] = f"the draw is not one under the registered law {sampling_design}"
+            bad["draw:law"] = f"the draw is not one under the registered sampling design {sampling_design}"
         if "record" in d and not (D.check_draw(d["record"], docket, sampling_design).ok
                                   and d["record"].get("units") == sorted(d["units"])):
-            bad["draw:record"] = "the draw's record is not a draw of its units under the registered law and population"
+            bad["draw:record"] = "the draw's record is not a draw of its units under the registered sampling design and population"
         reg_roots = {r["port"]: r for r in docket["roots"]}
         for port, r in win["roots"].items():
             if (reg_roots.get(port) or {}).get("root") != r["root"]:

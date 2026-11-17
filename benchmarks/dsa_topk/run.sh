@@ -29,3 +29,27 @@ PYTHONPATH="$site" VERITY_DSA_TOPK=canonical "$PY" "$HERE/stress.py" plugin --ou
   > "$OUT/plugin.log" 2>&1
 rm -rf "$site"
 [ "${DSA_TOPK_SKIP_TIME:-0}" = 1 ] || "$PY" "$HERE/stress.py" time --out "$OUT" > "$OUT/time.log" 2>&1
+python3 - "$OUT" "$HERE/../harness" <<'EOF'
+import json, sys
+from pathlib import Path
+out = Path(sys.argv[1])
+sys.path.insert(0, sys.argv[2])
+from verity_bench import kit
+res = kit.writer(out)
+v = json.loads((out / "summary.json").read_text())["verdict"]
+plugin = json.loads((out / "plugin.json").read_text())
+ok = v["canonical_identical"] and v["canonical_is_reference"] and v["short_rows_unchanged"] and plugin["ok"]
+res.validation("passed" if ok else "failed", "stress.py compare and plugin: canonical rows identical across processes, "
+               "the reference's, short rows unchanged, and the plugin as vLLM loads it", json.dumps(v))
+t = out / "time.json"
+rows = {r["case"]: r for r in json.loads(t.read_text())["rows"]} if t.exists() else {}
+row = rows.get("prefill-8192x32768")
+card = res.stamp["card"]
+card = "cpu" if card == "none" else card.split(", ")[0].removeprefix("NVIDIA ").lower().replace(" ", "-")
+res.measurement("proofs/dsa-topk-added-device-us", row and row["added_us"] if ok else None, "device microseconds a call",
+                mark="measured", member=f"glm-5.3-{card}",
+                why=None if ok and row else "no timing" if ok else "the canonical rows failed the stress",
+                extra={"case": "prefill-8192x32768", "shapes": "GLM-5.3",
+                       "unpatched_us": row and row["unpatched_us"], "best": row and row["best"],
+                       "cases": {c: r["added_us"] for c, r in rows.items()}})
+EOF
