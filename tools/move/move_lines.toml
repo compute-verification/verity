@@ -1022,3 +1022,15 @@ reason = "The part also ran tools/move/lean_names_pass.py --apply comments --bas
 ["b07bbd7822569edb46b9490dddb70d19ef1238b3"]
 hand = ["uv.lock"]
 reason = "The commit holds uv.lock as its branch locked it, not as rename.py writes it on its base."
+
+["d0bee0dba374e720a1f2a13c5b2113229f3f111a"]
+move = false
+reason = "A draft of the period move on a side branch, committed Mon 9 Nov, that reached main's history only through a later merge's second parent (d9938bfcfcc); main applied period_map.toml itself as 9fa40840bc5, which every branch since holds."
+
+["6cc7dc6e85411babeab355c9914c7140b2b768fb"]
+move = false
+reason = "A draft of the period move's second map on the same side branch (Mon 9 Nov), in main's history only through d9938bfcfcc's second parent; main applied period_map_2.toml itself as 083f7bd0e6dc."
+
+["fd568726a1bf08be4ac543fd10df2491a49ed5ab"]
+move = false
+reason = "A draft of the period move for the network on the same side branch (Mon 9 Nov), in main's history only through d9938bfcfcc's second parent; main applied period_net_map.toml itself as ea6f8343814."

@@ -13,7 +13,9 @@ import re
 import numpy as np
 import pytest
 from verity.circuits.codec import descriptor_id
+from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate_batch
+from verity.circuits.population import BitsWord, WordBits
 from verity.circuits.types import Array, Value
 from verity.commitments.periods import interface as IF
 from verity.protocols.resource_accounting.compute.pouw.prover.schemes import SCHEMES
@@ -32,7 +34,10 @@ from tests.program.predict.test_window_circuit import (
     _label,
     _source,
     held,
+    root_kinds,
     state_row,
+    wired,
+    wired_matches_by_hand,
 )
 from tests.program.predict.test_window_circuit_int8 import GRAIN as INT8_GRAIN
 from tests.program.predict.test_window_circuit_int8 import _registered as _int8
@@ -152,9 +157,9 @@ def test_each_cut_linear_reads_its_row_of_its_calls_a_rows_and_y(low):
     linear, round s's call c, holds its A row (``o0``, x widened) to row i of the call's A rows and reads its ``y`` as row
     i of the call's y, i its position's row, and its readers read y as its unit's N / 16 output rows in order. Every real
     row of every value is read by exactly one unit, the A rows' filler rows by none, and the circuit's program takes them
-    as its values, round by round and call by call the A rows then the y, ahead of its units' parameters. Each is FP32
-    words in ``row-seg/v1`` rows as Pearl+'s trees commit them (`ROW_FORMAT`): its program parameter 32-bit leaves, and
-    the ``o0`` and ``y`` ports reading it ``row-seg/v1`` rows in their templates' statements."""
+    as its values, round by round and call by call the A rows then the y, then the scan state, ahead of its units'
+    parameters. Each is FP32 words in ``row-seg/v1`` rows as Pearl+'s trees commit them (`ROW_FORMAT`): its program
+    parameter 32-bit leaves, and the ``o0`` and ``y`` ports reading it ``row-seg/v1`` rows in their templates' statements."""
     c, want = low.circuit, {}
     for k, j, p, ci in _calls(low):
         P, (K, N) = low.programs[k], CALLS[ci]
@@ -172,11 +177,11 @@ def test_each_cut_linear_reads_its_row_of_its_calls_a_rows_and_y(low):
         for ci, (K, N) in enumerate(CALLS):
             assert sorted(rows[PEARL.a(s, ci)]) == sorted(rows[PEARL.y(s, ci)]) == list(range(m))
             assert (c.registered.params[PEARL.a(s, ci)], c.registered.params[PEARL.y(s, ci)]) == (16 * 2 * K, m * 2 * N)
-    assert c.registered.values == tuple(v for s in M for ci in range(len(CALLS)) for v in (PEARL.a(s, ci), PEARL.y(s, ci)))
-    assert [n for n, _ in c.program()[0].fn.signature()[0][:32]] == list(c.registered.values)
-    assert c.registered.formats == {v: WK.ROW_FORMAT for v in c.registered.values} == {v: {"row_schema": IF.SEG,
-                                                                                            "word_bits": 32}
-                                                                                        for v in c.registered.values}
+    pearl = tuple(v for s in M for ci in range(len(CALLS)) for v in (PEARL.a(s, ci), PEARL.y(s, ci)))
+    assert c.registered.values == (*pearl, SS.SCAN_STATE)
+    assert [n for n, _ in c.program()[0].fn.signature()[0][:33]] == list(c.registered.values)
+    assert c.registered.formats == {v: WK.ROW_FORMAT for v in pearl} == {v: {"row_schema": IF.SEG, "word_bits": 32}
+                                                                         for v in pearl}
     sig = dict(c.program()[0].fn.signature()[0][:32])
     for s, m in M.items():
         for ci, (K, N) in enumerate(CALLS):
@@ -198,7 +203,7 @@ def test_each_tables_readers_are_members_whose_registered_read_names_it(low):
     for tid, _port, u in got:
         read.setdefault(tid, set()).add(u)
     assert read == {t: set(range(n)) for t, n in lin.items()}
-    assert {v for v, _row in got.values()} == set(c.registered.values)
+    assert {v for v, _row in got.values()} == set(c.registered.values) - {SS.SCAN_STATE}
 
 
 def test_the_census_counts_each_cut_linear_by_shape_and_ties_none(low):
@@ -329,7 +334,7 @@ def test_pearls_values_are_the_rows_the_cut_linears_make(low, filled):
     width."""
     _w, _v, slots, rows = filled
     want = _pearl_values(low, slots)
-    assert sorted(want) == sorted(low.circuit.registered.values)
+    assert sorted(want) == sorted(set(low.circuit.registered.values) - {SS.SCAN_STATE})
     for name, v in want.items():
         assert np.array_equal(rows.value(name, len(v), np.zeros(v.shape[1], np.uint16)), v), name
         made = (rows.value(name, len(v), np.full(v.shape[1], 0xFFFF, np.uint16)) != 0xFFFF).any(axis=1)
@@ -423,3 +428,28 @@ def test_a_windows_cut_units_are_their_definitions_on_the_inputs_it_commits(low,
                 bad[tid] = u.tolist()
     assert bad == {}
     assert win.close(salt_key=bytes(32)) is not None
+
+
+@pytest.fixture(scope="module")
+def pearl_wired():
+    circuit = WC.class_circuit(_registered(), CLASS, None, GRAIN, provable=False, tables=PEARL)
+    return circuit, *wired(circuit)
+
+
+@pytest.mark.slow
+def test_the_tiny_pearl_class_circuit_is_one_wired_program_of_registered_rows(pearl_wired):
+    """As `test_window_circuit`'s tiny class, with Pearl+'s table reads among its registered reads. Slow (about a minute to
+    build): only the whole cut class holds Pearl+'s reads beside every wire kind."""
+    circuit, prog, query = pearl_wired
+    assert prog.annotations["free"] == []
+    assert root_kinds(circuit, prog) == {"read": 41, "table read": 2, "opening": 3}
+    assert prog.fn.gates == 110_433_824
+    assert query["params"]["templates"][len(circuit.ids):] == [
+        descriptor_id(t) for t in (*(bind(BitsWord, W=w) for w in (16, 32)), *(bind(WordBits, W=w) for w in (16, 32)))]
+
+
+@pytest.mark.slow
+def test_the_tiny_pearl_class_wired_program_is_its_members_fed_by_hand(pearl_wired):
+    """As `test_window_circuit`'s, on the cut class. Slow (about a minute): only the whole cut class holds every wire kind."""
+    circuit, prog, _ = pearl_wired
+    wired_matches_by_hand(circuit, prog)

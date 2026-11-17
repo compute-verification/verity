@@ -662,6 +662,22 @@ def diff(a: dict[str, Any], b: dict[str, Any], limit: int = 200) -> dict[str, An
 
 # ------------------------------------------------------------------------------------------------------ the KV pool
 
+def fingerprints(rows: list[Any]) -> Any:
+    """Each block's fingerprint in each layer of ``rows`` (int8, blocks x row bytes, a layer's width its own): int64,
+    blocks x layers, one fixed random linear form of a row's int64 words, cut to each layer's width."""
+    import torch
+
+    gen = torch.Generator().manual_seed(0)
+    coef = torch.randint(-(1 << 62), 1 << 62, (max(r.shape[1] for r in rows) // 8,), generator=gen, dtype=torch.int64)
+    coef = coef.to(rows[0].device)
+    fp = torch.empty(rows[0].shape[0], len(rows), dtype=torch.int64, device=rows[0].device)
+    for i, r in enumerate(rows):
+        w = r.view(torch.int64)
+        for lo in range(0, w.shape[0], 8192):
+            fp[lo:lo + 8192, i] = (w[lo:lo + 8192] * coef[: w.shape[1]]).sum(1)
+    return fp
+
+
 class KvPool:
     """The model runner's KV cache as it lies: its distinct storages (``storages``, flat uint8, in the order the layers
     first reach them), each layer's view of its storage (``views``), and, where every layer lays its blocks out first and
@@ -736,15 +752,7 @@ class KvPool:
                     host[off:off + f.numel()].copy_(f, non_blocking=True)
                     off += f.numel()
                 marks[1].record(side)
-        fp = None
-        if self.rows and fingerprint:
-            gen = torch.Generator().manual_seed(0)
-            coef = torch.randint(-(1 << 62), 1 << 62, (self.rows[0].shape[1] // 8,), generator=gen, dtype=torch.int64).to(dev)
-            fp = torch.empty(self.num_blocks, len(self.rows), dtype=torch.int64, device=dev)
-            for i, r in enumerate(self.rows):
-                w = r.view(torch.int64)
-                for lo in range(0, self.num_blocks, 8192):
-                    fp[lo:lo + 8192, i] = (w[lo:lo + 8192] * coef).sum(1)
+        fp = fingerprints(self.rows) if self.rows and fingerprint else None
         torch.cuda.synchronize(dev)
         if host is not None:
             copy_ms = marks[0].elapsed_time(marks[1])

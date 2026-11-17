@@ -48,3 +48,5 @@ research run --on NODE --project verity --source . --cwd source -- bash benchmar
 `stress.py definition --out DIR` holds each of the plugin's modes (`canonical`, and `canonical-bisect`, which bisects
 every row whose candidate fails) to the registry's own `topk_set` on `cooperative_topk` at served decode shapes, and
 writes `definition.json`.
+`stress.py units --shapes decode|prefill --out DIR` times both modes a call over the pin's kernel and writes
+`units.jsonl` in the form `benchmarks/prod_repro/priced.py` reads, as a result of kind `dsa-topk-units/v1`.

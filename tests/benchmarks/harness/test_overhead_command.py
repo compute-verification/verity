@@ -13,6 +13,7 @@ from overhead_standins import scheme as scheme
 from overhead_standins import stamped as stamped
 from verity_bench import kit
 from verity_bench import overhead as O
+from verity_bench import overhead_node
 from verity_bench import overhead_records as R
 from verity_bench.cli import main
 
@@ -154,7 +155,7 @@ def test_under_a_research_run_the_table_records_its_metrics_and_prints_the_same(
         g = rows[point]["gamma"]
         assert (m["value"], m["ci95"], m["unit"], m["mark"]) == (g["gamma"], g["ci95"], R.GAMMA_UNIT, "measured")
         assert m["verdict"] == "within target" and m["inputs"] == ["measured", run, art] and "why" not in m
-        assert m["note"] == O.WITHOUT_Y and m["covers"] == O.covers()
+        assert m["note"] == O.WITHOUT_Y and m["covers"] == O.covers() and m["commits_y"] is False
     assert got["validation"] == {"status": "passed", "checker": "verity_bench.overhead_records.of_record",
                                  "detail": "2 of 2 metrics have a γ of record (the source check, `of_record`)",
                                  "evidence": [R.TABLE]}
@@ -209,3 +210,21 @@ def test_the_1b_points_launch_on_one_named_gpu_and_cpus_and_their_gamma_is_each_
         (None, rows["llama3.1-70b", "C"]["gamma"]["gamma"], [seventy, big]),
         (MEMBER, rows[SMALL, "C"]["gamma"]["gamma"], [one, small])]
     assert written[1]["extra"]["covers"] == O.covers(SMALL) and written[0]["extra"]["covers"] == table["covers"]
+
+
+def test_a_run_that_keeps_its_reports_goes_through_the_door_and_is_never_of_record(tmp_path, monkeypatch, scheme):
+    s = Store(tmp_path)
+    art = stored_points(tmp_path, s, "r20261104-020000-0001")
+    monkeypatch.setenv("RESEARCH_STORE", str(tmp_path / "producer"))
+    monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(s.config))
+    monkeypatch.delenv("VERITY_BENCH_VENV", raising=False)
+    launched = []
+    monkeypatch.setattr(R, "_execute", lambda argv, root: launched.append(list(argv)) or 0)
+    assert main(["overhead", "run", "--scheme", "pearl-plus", "--cubin", s.cubin, "--keep-reports", "--local-only"]) == 0
+    (run,) = launched
+    assert job(run, "60")[-1] == "--keep-reports"
+    assert R.door_why({"argv": run[run.index("--") + 1:]}, "r", "run") is None
+    kept = timed(tmp_path, s, art, "pearl-plus", "r20261104-030000-0002", extra=["--keep-reports"])
+    assert overhead_node.KEEP_REPORTS_WHY in R.of_record(s.store, kept)[1]
+    with pytest.raises(ValueError, match="a profiling pass is never of record"):
+        R.record_run(s.store, kept)
