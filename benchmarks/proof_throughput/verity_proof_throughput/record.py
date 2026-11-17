@@ -10,6 +10,7 @@ from typing import Callable, Sequence
 METRIC = "proofs/proof-throughput-blocks-per-second"
 UNIT = "proof blocks a second"
 MODEL = {"bf16-k6144": "glm-5.3"}
+PORT = 7710
 
 
 def card_slug(card: str) -> str:
@@ -60,7 +61,8 @@ def run(root: Path, out: Path, workload: str, B: int, provers: Sequence[int], co
         for i in range(n):
             d = out / f"provers-{n}" / f"prover-{i}"
             env = {"WORKLOAD": workload, "B": str(B), "OUT": str(d), "RESULT": str(d / "result.json"),
-                   "PT_PROVER_NODE": node, "SESSIONS_LOCK": str(d / "sessions.lock"), "LEASE_CORES": cores[i]}
+                   "PT_PROVER_NODE": node, "SESSIONS_LOCK": str(d / "sessions.lock"), "LEASE_CORES": cores[i],
+                   "PORT": str(PORT + i)}
             group.append({"dir": str(d.relative_to(out)), "path": d, "proc": start(root, "job.sh", env, d / "job.out")})
         for p in group:
             p["prover_rc"] = p.pop("proc").wait()
