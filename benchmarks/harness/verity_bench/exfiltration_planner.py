@@ -31,6 +31,10 @@ from verity_bench.exfiltration_common import (
 from verity_bench.served_table import RUN_OF_RECORD, SUPERSEDED_BY, record_runs, records
 
 
+ON_A_CLONE = ("with only a clone, run `uv run verity bench exfiltration --from benchmarks/exfiltration/made_up`, a "
+              "made-up record, printed as made up")
+
+
 def _label(key: str = RUN_OF_RECORD, value: str = RECORD) -> str:
     return f"`research data label RUN {key} {value} --by LANE`"
 
@@ -124,7 +128,7 @@ def rows_of_record(store: Any, *, row: str = ROW, step: str = STEP, world: str =
         labelled = record_runs(store, records(store).get(RECORD, []))
         if not labelled:
             raise ValueError(f"no planner rows of record: nothing in the store carries `{RUN_OF_RECORD}={RECORD}` "
-                             f"(label each run that holds them: {_label()})")
+                             f"(label each run that holds them: {_label()}); {ON_A_CLONE}")
         targets = sorted({run for run, _ in labelled}, reverse=True)
     else:
         targets = [record_run(record)]

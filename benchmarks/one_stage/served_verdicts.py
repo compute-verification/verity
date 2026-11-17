@@ -126,7 +126,7 @@ its passes are not the window SPOT audited; under PEARLPLUS_TIE, ``--tie W``, th
 Pearl-C period its live salt session joined, `pearlplus_why_tied`). ``record`` composes an accepted one as PoUW's verdict of record
 only where `pearlplus_of_record` holds it to live coins under ``--key-sha512``, the lane ``--lane``'s own reserve and
 Pearl-C period, a sample session the lane reserved first after that period closed and opened on the run's commitment, the
-window's docket chained after Pearl+'s window record, that period's circuit the window-circuit record V3c held the
+window's docket chained after Pearl+'s window record and its records audit tied to it accepted, that period's circuit the window-circuit record V3c held the
 window's circuit to, and the Lean `PouwCheck.PearlPlus` verdict on the same run; else its row stays missing, naming the
 first condition it fails.
 
@@ -250,7 +250,7 @@ PIECES: dict[str, tuple[str, str, str, str]] = {
              ("H1's credit on the served window, its coins from vy-challenger-1's gate (H1_GATE), or with POUW=pearlplus "
               "the reference replay of Pearl+'s own served run (served_pearlplus.sh)")),
     "space": ("PoUS", "pous", "memory-accounting",
-              ("PoUS over the served model's int8 weights on the serving card, against the memory challenger on "
+              ("PoUS over the served model's int8 weights on the serving card, against the memory attester on "
                "vy-auditor-2; served_verdicts.sh sets it where the tree has benchmarks/pous/served_piece.sh and this node "
                "the challenger's key")),
     "bandwidth": ("the bandwidth audit", "bandwidth", "memory-accounting",
@@ -262,6 +262,12 @@ PIECES: dict[str, tuple[str, str, str, str]] = {
 #: the record's subprotocol outside this chain: serve() runs its piece (WIPE_CMD) on the card before its engine loads
 WIPE = ("the wipe", "wipe", "memory-accounting", "the wipe of the serving card before its engine loads")
 NAMES = {"integrity": "sampled proofs", **{k: v[0] for k, v in PIECES.items()}, "wipe": WIPE[0]}
+INFERENCE_ONLY = "inference-only.json"
+INFERENCE_ONLY_ROW = "inference-only"
+#: how the inference-only verdict's reason begins where its verifier gave no verdict
+UNDECIDED = "undecided: "
+INFERENCE_ONLY_UNREAD = ("not read by the combined verdict: the composite combines verity/inference-only/v0's own "
+                         "case, not this (c, k, n) verdict")
 #: a piece's limit unless ``<COMPONENT>_TIMEOUT`` or ``PIECE_TIMEOUT`` sets one, as `timeout` reads it
 PIECE_TIMEOUT = "60m"
 #: what `pieces` leaves beside a piece it ran: the node it ran on, its exit and its limit
@@ -303,7 +309,7 @@ PEARLPLUS_COINS_IN_PROCESS = {"draws": PEARLPLUS_NODE_SAMPLES,
                               "epoch": "an in-process challenger of epoch 0 (verity_bench's protocols_config, "
                                        "pouw.challenged), held by the serving process"}
 #: `pearlplus_epoch_tied` where its epoch's coins are an in-process challenger's
-PEARLPLUS_EPOCH_TIED_IN_PROCESS = ("an in-process challenger of the window's epoch over the Lean verifier of record's "
+PEARLPLUS_EPOCH_TIED_IN_PROCESS = ("an in-process challenger of the window's epoch over the Lean verifier's "
                                    "entropy (serve_pearl.in_process), held by the serving process")
 
 
@@ -384,12 +390,19 @@ AS_WRITTEN = "as the served node wrote it"
 #: ... SPOT's under ``record --sampled-lean`` (`lean_sampled_row`)
 LEAN_HERE = ("recomputed on this host by the Lean verifier (vstar-recursive sampled check) from the proofs and public "
              "files of the window's sampled proofs case, not the served node's answer")
+MEMBERS_COVER = ("each sampled proof block proved in its own kind's statement against the one registration's roots on live "
+                 "coins; members with no sampled proof block were not proved, and no theorem yet covers a sample that "
+                 "misses members; the wires between members are not held; the circuit files' digests are fixed before "
+                 "the coins in the parameters but not signed in the docket")
 #: ... PoUW's where Pearl+'s piece is its verdict of record (`pearlplus_of_record`)
 PEARLPLUS_FROM = (f"{AS_WRITTEN} (its piece files in pouw/): Pearl+'s Lean verdict of record (PouwCheck.PearlPlus), "
                   "the prover side's, run on the served node over the retained passes; no auditor device re-checks it, since "
                   "its case (the passes' manifests with their salt key, and the opened tiles' rows) is witness")
 #: what the composed verdict's reason (`said`) says of that row's accept
 PEARLPLUS_SAID = "Pearl+'s Lean verdict of record, the prover side's, which no auditor device re-checks"
+WEAKER_TIE = ("a weaker tie, not the tied guarantee: the window's records audit tied to W sampled {design}, not a stratified "
+              "rate, so its accept shows only that the tables its sampled proof blocks read hold the served model's own "
+              "values at W's roots, not that every table W registers does")
 #: ... the files the served node wrote that a row's answer is otherwise read from, by runner name (a piece's: its dir)
 WRITTEN = {"integrity": "the records audit's summary.json and window/audit.json"}
 #: A served run's witness, by a path's part (`witness`): what a compose hand-off never carries, each with why
@@ -789,7 +802,7 @@ def sampled_line(records: Mapping[str, Any], partition: Mapping[str, Any] | None
     return f"{over}, {drawn}{coins}: RECORDS {json.dumps(row, sort_keys=True)}"
 
 
-#: The certifier front's session fields the CERTIFIER-FRONT line says. The rest (its prompts, request, kept fetch, gate
+#: The network attester front's session fields the CERTIFIER-FRONT line says. The rest (its prompts, request, kept fetch, gate
 #: and verdict's cells) count or name the group's requests, and stay in the serve dir.
 FRONT_PUBLIC = ("rc", "run", "ended", "session_s", "pinned", "leaked_removed")
 
@@ -819,7 +832,7 @@ def pieces(serve_dir: Path, window: int, out: Path, env: Mapping[str, str] | Non
            product: str = "onsite") -> dict[str, dict[str, Any]]:
     """Each piece of `PIECES` run where ``<COMPONENT>_CMD`` names it, under `timeout` at its limit, else named missing;
     one line each on stdout, its verdict the one `piece` gives the record. ``only`` and ``skip`` name components: those
-    alone, or all but those, so one piece can run beside the others (`served_verdicts.sh` starts the certifier's early).
+    alone, or all but those, so one piece can run beside the others (`served_verdicts.sh` starts the network attester's early).
     A piece ``product`` drops isn't run, whatever its command (`dropped_row`)."""
     from verity_e2e_demo import block_record as BR
 
@@ -1238,7 +1251,7 @@ Check = Callable[[Path, Path, Path, Path, "Path | None", str, Path, Mapping[str,
 #: the premises the pouw piece's verdict says whether the window meets (`premises`)
 PREMISES = ("AcceptedLive", "SaltIsLiveCoin")
 #: why a window meets ``AcceptedLive`` (`ResourceAccounting.TS.Session`'s, ``accounting-ts-accepted-live``)
-LIVE_MET = ("credit accepted the window, and it credits a drawn unit or a live round only where the verifier of record "
+LIVE_MET = ("credit accepted the window, and it credits a drawn unit or a live round only where the verifier "
             "accepted its session (verity-verify-proof verify --zk with the --registered file credit builds)")
 #: why a window meets ``SaltIsLiveCoin`` (`Properties.Pouw.MonitoringPeriod`'s)
 SALT_MET = ("core_check.salt_of_record accepted the window's salt as its live salt coin, opened after the window's open root and read "
@@ -1806,6 +1819,20 @@ def spot_row(audit_dir: Path, run: str | None = None) -> dict[str, Any]:
         return {"verdict": "error", "owner": INTEGRITY_OWNER, "reason": f"{type(e).__name__}: {e}"[:2000]}
 
 
+def members_reached(members: Mapping[str, Any], answer: Mapping[str, Any]) -> dict[str, Any]:
+    from verity_e2e_demo import block_record as BR
+
+    drawn, delta = answer["public"].get("drawn") or [], Fraction(answer["profile"]["delta"])
+    by_member = []
+    for name, m in sorted(members.items()):
+        n = sum(hi - lo for lo, hi in m["units"])
+        k = sum(lo <= u < hi for u in drawn for lo, hi in m["units"])
+        if k:
+            by_member.append({"member": name, "of": n, "drawn": k})
+    return {"members": {"sampled": len(by_member), "registered": len(members)},
+            "bounds": BR.member_bounds(by_member, delta), "by_member": by_member}
+
+
 def lean_sampled_row(audit_dir: Path, scratch: Path, exe: str | os.PathLike | None = None,
                      run: str | None = None) -> dict[str, Any]:
     """SPOT's row from this host's own run of remote's SPOT Lean (`served_cases.sampled_case`: the
@@ -1813,9 +1840,11 @@ def lean_sampled_row(audit_dir: Path, scratch: Path, exe: str | os.PathLike | No
     on files in a 0700 directory under ``scratch``, its answer tied to the window's docket (`LEAN_HERE`),
     whatever the audit's summary and record say. An audit that wrote no v2 case (a plain run's, or one a5 refused) leaves
     no proofs to recompute from: its row is `spot_row`'s, its ``answer_from`` saying so. So does a case whose check
-    was not started (`served_cases.NotStarted`: its blob files sum past the limit, the host makes no memory scope, or
-    its proofs are in the per-member form): the row is `spot_row`'s, ``answer_from`` and ``not_started`` naming why,
-    the sum and the limit. A case the Lean doesn't make or answer, or an answer about another record, is the row's error."""
+    was not started (`served_cases.NotStarted`: its blob files sum past the limit, or the host makes no memory scope):
+    the row is `spot_row`'s, ``answer_from`` and ``not_started`` naming why, the sum and the limit. A case the Lean
+    doesn't make or answer, or an answer about another record, is the row's error. An accept of a case in the
+    per-member form carries ``covers`` (`MEMBERS_COVER`), ``members`` (sampled of registered) and each sampled
+    member's bound over its own proof blocks (``bounds``), and no ε over the workload."""
     import served_cases as SC
 
     if not (audit_dir / "window" / "case-v2.json").is_file():
@@ -1826,7 +1855,11 @@ def lean_sampled_row(audit_dir: Path, scratch: Path, exe: str | os.PathLike | No
         case = SC.sampled_case(audit_dir)
         answer, _line = SC.lean_answer(exe or SC.build(*SC.SAMPLED_LEAN), case, scratch, SC.SAMPLED_CMD)
         SC.tie(answer, SC.SAMPLED, SC.record_of(case)[1])
-        return {**row_of(INTEGRITY_OWNER, answer, audit_dir, run), "answer_from": LEAN_HERE}
+        row = {**row_of(INTEGRITY_OWNER, answer, audit_dir, run), "answer_from": LEAN_HERE}
+        proofs = case["params"].get("proofs")
+        if isinstance(proofs, dict) and "members" in proofs and row["verdict"] == "accept":
+            return {**row, "covers": MEMBERS_COVER, "epsilon": None, **members_reached(proofs["members"], answer)}
+        return row
     except SC.NotStarted as e:
         return {**spot_row(audit_dir, run), "not_started": {"reason": str(e), **e.line},
                 "answer_from": f"{AS_WRITTEN} ({WRITTEN['integrity']}): this host's Lean check of the audit's v2 case was "
@@ -1948,7 +1981,7 @@ def pearlplus_of_record(doc: Mapping[str, Any], piece_dir: Path, spot: Path | No
        and the verdict is over the coin published at its sample (`pearlplus_coin`).
        Pearl+'s verdict (`PEARLPLUS_ANSWER`) held its passes to a window record W (``verify --tie W``), the
        window's docket R under `spot` is chained right after W, and its records audit is tied to W
-       (``records_audit --tie W``), so the window SPOT audited reads the roots Pearl+ credits. The period's
+       (``records_audit --tie W``) and accepted (its summary's ``audit.accepted``), so the window SPOT audited reads the roots Pearl+ credits. The period's
        open (in the signed ledger) committed the SHA-512 of the window-circuit record V3c held R's circuit to
        (`CIRCUIT_RECORD` beside R), so the period holds the salt session to the circuit of the window served.
     4. **Lean.** The Lean `PouwCheck.PearlPlus` verdict (`PEARLPLUS_LEAN`) accepts the same run commitment on the same
@@ -2024,6 +2057,9 @@ def pearlplus_of_record(doc: Mapping[str, Any], piece_dir: Path, spot: Path | No
                       f"Pearl+'s window record W {w[:16]}...")
     if ((summary.get("tie") or {}).get("record")) != w:
         return None, f"the window's records audit is not tied to Pearl+'s window record W {w[:16]}... (records_audit --tie W)"
+    if (accepted := (summary.get("audit") or {}).get("accepted")) is not True:
+        return None, (f"the window's records audit tied to W didn't accept ({AUDIT_SUMMARY}'s audit.accepted is "
+                      f"{accepted!r}), so nothing shows the window SPOT audited reads the roots Pearl+ credits")
     try:
         held = hashlib.sha512((spot / CIRCUIT_RECORD).read_bytes()).hexdigest()
     except OSError as e:
@@ -2054,12 +2090,15 @@ def pearlplus_of_record(doc: Mapping[str, Any], piece_dir: Path, spot: Path | No
     eps = _rational(work.get("epsilon"))
     if eps is None or eps != _rational(ref.get("epsilon")):
         return None, f"the Lean verdict's ε {work.get('epsilon')!r} is not the reference's {ref.get('epsilon')!r}"
+    design = summary.get("sampling_design")
+    weaker = {} if str(design).startswith("stratified-rate:") else {"weaker_tie": WEAKER_TIE.format(design=design)}
     return {**answer, "public": {**answer["public"], "work": {k: work.get(k) for k in
                                                               ("credited", "credited_tiles", "macs", "rho", "epsilon")}
                                  | ({"give_up": work["give_up"]} if "give_up" in work else {})},
             "profile": {**answer["profile"], "lane": lane, "key_sha512": key, "period": name, "session": session,
                         "draw_session": drew.get("session"), "reference_work": ref,
-                        "lean": {k: lean.get(k) for k in ("verdict", "commitment", "source", "drawn", "work", "tie")}}}, None
+                        "lean": {k: lean.get(k) for k in ("verdict", "commitment", "source", "drawn", "work", "tie")},
+                        **weaker}}, None
 
 
 def piece(key: str, pieces_dir: Path, run: str | None = None, **of_record: Any
@@ -2177,6 +2216,8 @@ def error_said(entry: Mapping[str, Any]) -> list[str]:
     named = entry.get("named_terms")
     error = BR.error_form(_ratio(Fraction(entry["error"]), BR.DELTAS), named)
     no = [d for d, x in entry["at"].items() if not x["holds"]]
+    if no and "members" in entry["quantity"]:
+        return [f"at δ = {d}: {entry['at'][d]['why']}" for d in no]
     if no:
         return [f"its quantity is not established at δ = {' or '.join(no)}: the run established it except with {error}"]
     return [f"its error reads {error}"] if named else []
@@ -2200,6 +2241,8 @@ def said(rows: Mapping[str, Mapping[str, Any]], at: Mapping[str, tuple[str | Non
             s = ("accept" if server is not None else "accept, naming no server: not carried") + (f" ({'; '.join(t)})" if t else "")
             if r.get("answer_from") == PEARLPLUS_FROM:
                 s += f", {PEARLPLUS_SAID}"
+                if weaker := ((r.get("answer") or {}).get("profile") or {}).get("weaker_tie"):
+                    s += f", {weaker}"
         else:
             s = f"{v}: {r.get('reason')}"
         out.append(f"{NAMES[k]}: {s}")
@@ -2352,7 +2395,7 @@ def composite_answer(public: Path, product: str, window: str | None = None,
     docket has digest ``window`` (`composite_tie`)."""
     from verity_e2e_demo import block_record as BR
 
-    found = []
+    found, development = [], []
     for d in sorted(p for p in public.iterdir() if (p / "composite.json").is_file()) if public.is_dir() else []:
         try:
             doc = json.loads((d / "composite.json").read_text())
@@ -2360,6 +2403,11 @@ def composite_answer(public: Path, product: str, window: str | None = None,
             return None, f"{d.name}/composite.json doesn't parse, so no composite's answer is taken: {e}"
         if isinstance(doc, dict) and doc.get("product") in BR.CHECKS[product]:
             found.append((d, doc))
+        elif isinstance(doc, dict) and str(doc.get("product")).startswith(f"verity/{product}/"):
+            development.append(f"{d.name}/composite.json ({doc['product']})")
+    if not found and development:
+        return None, (f"not of record: development composite: {development[0]}, not the {product} check of record "
+                      f"({', '.join(BR.CHECKS[product])})")
     if len(found) != 1:
         return None, (f"{len(found)} composites of the {product} check ({', '.join(BR.CHECKS[product])}) in {public}, "
                       "not one")
@@ -2376,11 +2424,20 @@ def composite_answer(public: Path, product: str, window: str | None = None,
             f"{doc['product']}'s Lean check, compiled, in {where}")
 
 
+def inference_only_row(v: Mapping[str, Any]) -> dict[str, Any]:
+    undecided = str(v.get("reason") or "").startswith(UNDECIDED)
+    return {"verdict": {"accept": "accept", "refuse": "error" if undecided else "reject"}.get(v.get("verdict"), "error"),
+            "protocol": v.get("format"), "reason": v.get("reason"),
+            "answer": {k: v[k] for k in ("classes", "c", "k", "n", "lean", "record_count", "theta", "failure") if k in v},
+            "answer_from": f"{AS_WRITTEN} ({INFERENCE_ONLY})", "combined": INFERENCE_ONLY_UNREAD}
+
+
 def record(rows: Mapping[str, Mapping[str, Any]], *, window: int, steps: tuple[int, int], node: str,
            run: str | None, servers: Mapping[str, tuple[str | None, str]] | None = None, product: str = "onsite",
            deferred: str | None = None, off_node: bool = False, tree: Mapping[str, str] | None = None,
            served_compare: str | None = None, answer: Mapping[str, Any] | None = None,
-           lean: str = "no composite was read") -> tuple[dict[str, Any], dict[str, Any] | None, dict[str, Any]]:
+           lean: str = "no composite was read", inference_only: Mapping[str, Any] | None = None,
+           ) -> tuple[dict[str, Any], dict[str, Any] | None, dict[str, Any]]:
     """The window report over ``rows`` (by runner name), its block record (None when a subprotocol about this node
     rejected, erred or was undecided), and the ``RECORD`` line's summary, composed for ``product``: each subprotocol it
     drops is its `dropped_row`, about no server. ``servers``: each piece's `piece_server`, by runner name; SPOT's
@@ -2390,7 +2447,10 @@ def record(rows: Mapping[str, Mapping[str, Any]], *, window: int, steps: tuple[i
     hand-off (`HANDED_FROM`); ValueError on ``node`` itself. ``tree``: the composing tree's ``tree`` (its commit) and
     ``tree_on`` (the branch its host pinned it from), which ``composed_on`` carries. ``answer``: the product's compiled
     Lean check's answer (`composite_answer`), the block record's verdict, and ``lean`` where it was read or why there is
-    none, which the report and the line carry; a rejection by it rejects whatever the rows say."""
+    none, which the report and the line carry; a rejection by it rejects whatever the rows say. ``inference_only``: the
+    inference-only verifier's verdict, which the report carries as its ``inference-only`` row and the line under
+    ``not_combined``, and which neither the combined verdict nor the block record reads: ``reject`` only where the Lean
+    verifier gave a verdict, ``error`` where it gave none (`UNDECIDED`)."""
     from verity_e2e_demo import block_record as BR
 
     host = socket.gethostname()
@@ -2431,6 +2491,9 @@ def record(rows: Mapping[str, Mapping[str, Any]], *, window: int, steps: tuple[i
              "answers": answers, "lean": lean, **left,
              **({"dropped": {NAMES[k]: rows[k]["why"] for k in drops}} if drops else {}),
              **({"unserved": unserved} if unserved else {}), **dev}
+    io = {} if inference_only is None else {INFERENCE_ONLY_ROW: inference_only_row(inference_only)}
+    if io:
+        named["not_combined"] = {"the inference-only verifier": io[INFERENCE_ONLY_ROW]["verdict"]}
     bad = sorted(NAMES[k] for k, r in rows.items()
                  if r.get("verdict") not in ("accept", "missing", "dropped") and NAMES[k] not in elsewhere)
     if bad:
@@ -2440,6 +2503,7 @@ def record(rows: Mapping[str, Mapping[str, Any]], *, window: int, steps: tuple[i
                               "lean": lean}
         line = {"composed": composed, "by": bad, **named, "block_record": None, "reason": report["composed"]["reason"],
                 "why": "block_record carries an accepted subprotocol's certificate only"}
+        report["protocols"] = {**rows, **io}
         return report, None, line
     extra = {subprotocols[k]: {"row": r, "server": at[k][0], "runs": r.get("runs") or [run], "source": at[k][1]}
              for k, r in rows.items() if k != "integrity" and r.get("verdict") == "accept" and at[k][0] is not None}
@@ -2452,6 +2516,7 @@ def record(rows: Mapping[str, Mapping[str, Any]], *, window: int, steps: tuple[i
             "record_missing": rec["composed"]["missing"],
             "check": BR.check(rec), "steps": list(steps), "node": node,
             "deployment": rec["monitoring_period"]["deployment"]["id"]}
+    report["protocols"] = {**rows, **io}
     return report, rec, line
 
 
@@ -2795,12 +2860,18 @@ def main(argv: Sequence[str] | None = None) -> int:
                         else (None, "no composite was read"))
     except CompositeRefused as e:
         answer, lean, refused = None, str(e), True
+    try:
+        io = json.loads((a.out / INFERENCE_ONLY).read_text()) if (a.out / INFERENCE_ONLY).is_file() else None
+    except ValueError as e:
+        io = {"verdict": "error", "reason": f"{INFERENCE_ONLY} doesn't parse: {e}"}
+    if io is not None and not isinstance(io, dict):
+        io = {"verdict": "error", "reason": f"{INFERENCE_ONLY} is not an object"}
     report, rec, line = record(rows, window=a.window, steps=(steps[0], steps[1]), node=a.node, run=run,
                                servers={k: at for k, (_, at) in got.items()}, product=a.product, deferred=a.deferred,
                                off_node=a.off_node, tree={"tree": a.tree, **({"tree_on": a.tree_on} if a.tree_on else {})}
                                if a.tree else None,
                                served_compare=None if a.served_compare is None else served_compare_line(a.served_compare),
-                               answer=answer, lean=lean)
+                               answer=answer, lean=lean, inference_only=io)
     a.out.mkdir(parents=True, exist_ok=True)
     (a.out / "verdicts.json").write_text(json.dumps(report, indent=1, sort_keys=True, default=str) + "\n")
     if rec is not None:
