@@ -7,7 +7,7 @@ import Std.Data.HashMap
 import Std.Data.HashSet
 import Std.Data.TreeMap.Raw.Lemmas
 
-/-! `memory-challenger`: the core protocol command line (`Core.Protocol.main`) of `MemoryAttester.protocol`, the
+/-! `memory-challenger`: the core protocol command line (`Core.Protocol.main`) of `MemoryChallenger.protocol`, the
 verdict on a signed session of PoUS's timed rounds under the accepted schemes (S1's LMS). `id` prints the protocol id;
 `check PARAMS COMMITMENT EVIDENCE` reads three files and prints the outcome's canonical JSON line; `serve` reads one
 case a line on standard input, `{"commitment": hex, "evidence": hex, "params": JSON}`, and prints one outcome line for

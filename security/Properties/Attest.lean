@@ -332,7 +332,7 @@ def ProverSeesMessages : Prop :=
 
 /-! ## The honest period and the empty run
 
-The instances `PeriodSigned`'s and `PeriodSound`'s lemmas read (`Proofs.Properties.Pous.MemoryAttester.Attest`).
+The instances `PeriodSigned`'s and `PeriodSound`'s lemmas read (`Proofs.Properties.Pous.MemoryChallenger.Attest`).
 Their honest lemmas: the verifier accepts the honest one-record period at the deployed LMS parameters, and it is the
 device's. Their nontrivial lemmas: the empty run, which no device signed, carries no break, so `PeriodSigned`'s
 conclusion fails there; and a verifier that accepts everything (`acceptAll`) puts probability 1 on `PeriodSound`'s

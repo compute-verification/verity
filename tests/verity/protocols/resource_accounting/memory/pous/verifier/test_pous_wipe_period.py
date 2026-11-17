@@ -1,5 +1,5 @@
 """`wipe_period` and `wipe_party`: one wipe in one process, on an injected clock, and the memory attester's side and
-the prover's over a socket pair, each verdict of `verity/wipe/v0` (the Lean's is `MemoryAttester.WipeProtocol`,
+the prover's over a socket pair, each verdict of `verity/wipe/v0` (the Lean's is `MemoryChallenger.WipeProtocol`,
 difftested in `tests/verity/protocols/resource_accounting/memory/pous/attester/lean/test_wipe_protocol.py`): an honest segment accepted
 and not certified (`uncounted`) whatever egress its evidence gives, since no network attester signs that count, with
 the count named as the evidence writer's (`certify` computes `StreamedWipeMeetsReads`' threshold at the challenger's
@@ -155,7 +155,7 @@ def test_the_certificate_at_the_challengers_reads() -> None:
 
 def test_a_wipe_of_no_reads_bounds_nothing() -> None:
     """`WipeParams` refuses `k = 0`, so neither a commitment nor the challenger's side (`--reads 0`) holds it; past that
-    refusal `gaps` names it and the certificate is vacuous, as `MemoryAttester.WipeProtocol.gaps`' guard has it."""
+    refusal `gaps` names it and the certificate is vacuous, as `MemoryChallenger.WipeProtocol.gaps`' guard has it."""
     with pytest.raises(ValueError, match="1 <= batch <= k"):
         WP.params_of(WP.request_of("n0", W.params_for()), 0)
     zero = W.params_for()

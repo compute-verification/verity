@@ -1,5 +1,5 @@
 # PoUS's memory challenger's verdicts as executable Lean: its record formats and crypto, `verdict` on a record as its
-# caller holds it (`memory-attester-verdict`) and as a core protocol (`memory-challenger`), and the streamed-label wipe's
+# caller holds it (`memory-challenger-verdict`) and as a core protocol (`memory-challenger`), and the streamed-label wipe's
 # `verdict` on a record (`streamed-wipe-verdict`) and as a core protocol (`wipe-protocol`). Code: Lean core and the
 # packages below, no Mathlib and nothing of Security.
 name = "core_memory_attester"
@@ -70,7 +70,7 @@ root = "MemoryAttester.WipeProtocolMain"
 name = "wipe-protocol-test"
 root = "MemoryAttester.WipeProtocolTestMain"
 
-# The wipe's component with its count held (`MemoryAttester.WipeProtocol.countedTest`), under the test signers'
+# The wipe's component with its count held (`MemoryChallenger.WipeProtocol.countedTest`), under the test signers'
 # schemes alone, for the difftest. No executable serves it under the accepted schemes.
 [[lean_exe]]
 name = "wipe-count-test"

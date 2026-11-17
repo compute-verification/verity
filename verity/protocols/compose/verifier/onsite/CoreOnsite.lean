@@ -12,7 +12,7 @@ by PoUB's P2 session on PoUS's store (`Poub.P2Protocol.protocol`,
 `verity/remote-bandwidth/p2/v0`), communication by the network attester over the period
 (`NetworkCheck.Period.protocol`, `verity/certifier/v0`: the period's link-execution phases certified and proved, and the bound
 `K` on what left the site), and the wipe by the memory challenger's streamed-label wipe of the period
-(`MemoryAttester.WipeProtocol.protocol`, `verity/wipe/v0`). `Core.Composition.tiedSameB` composes them on the caller's
+(`MemoryChallenger.WipeProtocol.protocol`, `verity/wipe/v0`). `Core.Composition.tiedSameB` composes them on the caller's
 blobs: every subprotocol accepts or onsite doesn't, and any subprotocol's rejection rejects onsite whatever the others
 answer. The policy's commitment and SPOT's are the run's registration record (in either form, the one-stage
 one), and both must commit to the same one; every window of the period must name that record as its Commit record,
@@ -20,7 +20,7 @@ remote's tie (`Core.Remote.executionPhases`). Two records reject onsite whatever
 must also be on one store (`store`): two stores reject onsite unless it rejects already.
 
 `counted` (`verity/onsite/counted/v0`) is onsite with the wipe's count held to the network attester's: the wipe's
-subprotocol is `countedWipe` (`MemoryAttester.WipeProtocol.mkCounted`, `verity/wipe/counted/v0`), which certifies at
+subprotocol is `countedWipe` (`MemoryChallenger.WipeProtocol.mkCounted`, `verity/wipe/counted/v0`), which certifies at
 the count its evidence gives, and beside it stands the count over the span between the wipe's two marks (`hostSpan`,
 `NetworkCheck.Span.protocol` on the registered hardware, `verity/certifier/span/v0`). Its ties hold the two to one
 another: the wipe is of the host the count's link is on, and that link is the host's one link besides the memory
@@ -206,7 +206,7 @@ private def answered : List (Outcome Keyed Keyed) := [.accept [] [], .undecided 
 
 /-! ## The wipe's count, held to the network attester's -/
 
-/-- The wipe whose count the composition holds (`MemoryAttester.WipeProtocol.mkCounted`, `verity/wipe/counted/v0`),
+/-- The wipe whose count the composition holds (`MemoryChallenger.WipeProtocol.mkCounted`, `verity/wipe/counted/v0`),
 under the accepted schemes. -/
 def countedWipe : Protocol :=
   MemoryAttester.WipeProtocol.mkCounted MemoryAttester.WipeProtocol.COUNTED_ID MemoryAttester.SCHEMES
@@ -243,7 +243,7 @@ def spanParams (j : Lean.Json) : Flock.V NetworkCheck.Span.Params := do
 (`verity/certifier/span/v0`) on `spanParams`, the same check on parameters that hold the registered hardware. -/
 def hostSpan : Protocol := { NetworkCheck.Span.protocol with params := spanParams }
 
-/-- What the wipe's case names of its span (`MemoryAttester.WipeProtocol.named`); `none` unless its commitment and
+/-- What the wipe's case names of its span (`MemoryChallenger.WipeProtocol.named`); `none` unless its commitment and
 its evidence decode and name it. -/
 def wipeNamed (k : Case) : Option MemoryAttester.WipeProtocol.Named :=
   match MemoryAttester.WipeProtocol.decodeCommitment k.commitment,
@@ -271,7 +271,7 @@ def wipeNode : Tie :=
 subprotocols name to the first: the start mark the wipe's signed message names is the SHA-512 of the count's start
 certificate; the count's start mark opens to the wipe's start message and its end mark to the wipe's end message; and
 the count the wipe's evidence gives is the bits that can have left over the span and its tail, in whole MiB
-(`MemoryAttester.StreamedWipe.egressUnits`: rounded up, saturating). -/
+(`MemoryChallenger.StreamedWipe.egressUnits`: rounded up, saturating). -/
 def wipeCount : List Tie :=
   [⟨"start mark",
       [(countedWipe.id, fun k => (wipeNamed k).map ([·.startMark])),

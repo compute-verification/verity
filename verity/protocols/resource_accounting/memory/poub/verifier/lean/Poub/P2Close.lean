@@ -6,12 +6,12 @@ public import MemoryAttester.StreamedWipe
 # P2's close: the bytes the memory challenger signs over a P2 session's log
 
 The memory challenger signs P2's close with the key it signs PoUS's sessions and the wipe's with, as its role's message
-(`MemoryAttester.memoryAttesterMessage`): `SHA-512(rolePreimage I session record)`, the pre-image
+(`MemoryChallenger.memoryChallengerMessage`): `SHA-512(rolePreimage I session record)`, the pre-image
 `[verity/memory-challenger-record/v1] ‖ I ‖ [[session]] ‖ [record]`, each `[·]` a u64 big-endian length then the bytes
-(`MemoryAttester.field`). P2's record (`closeRecord`) is raw bytes, never a digest: `CLOSE_TAG` (NUL-ended), the log's
+(`MemoryChallenger.field`). P2's record (`closeRecord`) is raw bytes, never a digest: `CLOSE_TAG` (NUL-ended), the log's
 line count as a u64 big-endian, and the case's 64-byte chain (`chainOf` over the case's head, then the log's entries:
 `P2Protocol.headOf`), so it is `CLOSE_TAG.size + 72` bytes long.
-PoUS's session record (`MemoryAttester.message`) and the wipe's (`MemoryAttester.StreamedWipe.message`) are SHA-512
+PoUS's session record (`MemoryChallenger.message`) and the wipe's (`MemoryChallenger.StreamedWipe.message`) are SHA-512
 digests, 64 bytes long, so no close record is either (`closeRecord_ne_pous`, `closeRecord_ne_wipe`), and the role's
 pre-image determines its key identifier, session and record (`rolePreimage_inj`): a close's pre-image is never a PoUS
 session's or a wipe's (`closePreimage_ne_pous`, `closePreimage_ne_wipe`), on the bytes hashed, with no assumption on the
@@ -42,7 +42,7 @@ def closeRecord (lines : Nat) (chain : ByteArray) : ByteArray := CLOSE_TAG ++ be
 def closeMessage (ident session : ByteArray) (lines : Nat) (chain : ByteArray) : Except String ByteArray :=
   MemoryAttester.memoryAttesterMessage ident session (closeRecord lines chain)
 
-/-- The bytes the role's message hashes (`memoryAttesterMessage_eq`). -/
+/-- The bytes the role's message hashes (`memoryChallengerMessage_eq`). -/
 def rolePreimage (I session record : ByteArray) : ByteArray :=
   MemoryAttester.field MemoryAttester.MEMORY_CHALLENGER_TAG.toUTF8 ++ I ++
     MemoryAttester.field (MemoryAttester.field session) ++ MemoryAttester.field record
