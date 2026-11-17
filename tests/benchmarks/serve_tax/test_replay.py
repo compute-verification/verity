@@ -579,7 +579,7 @@ def test_result_is_the_replays_verdict_passed_only_where_it_is_bit_exact(tmp_pat
     assert doc["kind"] == R.KIND and doc["measurement_files"] == ["out/replay.json"]
     assert doc["validation"]["status"] == ("passed" if same else "failed")
     assert "not a proof the Lean verifier accepted" in doc["validation"]["checker"]
-    assert doc["workload_fingerprint"]["replayed"] == "r-served"
+    assert doc["workload_fingerprint"]["minify"] == "r-served"
 
 
 @pytest.mark.parametrize("run_id,given,refusal", [(None, None, "names no run_id"), ("r-served", "r-other", "says run r-served")])
@@ -589,7 +589,7 @@ def test_result_refuses_a_replay_whose_served_run_is_unnamed_or_another(tmp_path
     monkeypatch.setattr(R, "sys", NS(flags=NS(hash_randomization=0), path=sys.path))
     with pytest.raises(SystemExit, match=refusal):
         R.main(["--arm-dir", str(tmp_path), "--load", "sat", "--out", str(tmp_path / "run" / "out"), "--result",
-                str(tmp_path / "run"), *(["--replayed", given] if given else [])])
+                str(tmp_path / "run"), *(["--minify", given] if given else [])])
 
 
 def test_result_refuses_an_out_outside_it(tmp_path: Path):

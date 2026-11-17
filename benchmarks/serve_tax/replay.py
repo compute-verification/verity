@@ -1,7 +1,7 @@
 """Replay one served window of a ``record`` arm (`serve_tax`) under its recorded schedule, and say how close it came.
 
     replay.py --arm-dir OUT/record --load NAME [--rep 1] [--checkpoint DIR] [--eager] [--against EARLIER_OUT] [--tp N]
-              [--capture ID,... [--capture-template T]] [--private DIR] --out DIR [--result RUN_DIR [--replayed RUN]]
+              [--capture ID,... [--capture-template T]] [--private DIR] --out DIR [--result RUN_DIR [--minify RUN]]
 
 The window is the load's requests: its step trace's steps from the first one's arrival to the last one's finish, all of them
 the load's own (each load starts from an empty prefix cache and ends drained). A request's prompt ids are the plan's and
@@ -30,8 +30,8 @@ later replay's with, to tell a replay that differs from serving from one that di
 named requests' logits rows and ids at every rank's sampler (`verity_vllm.engine.sampler_capture`) into OUT/capture, a
 token-select span each, and replay.json says whether each one's ids are the ones served.
 ``--result RUN_DIR`` writes the run's result.json (`KIND`), passed only where the replay is bit-exact, its fingerprint
-naming the run that served the arm (``replayed``: the arm's meta.json's ``run_id``, else ``--replayed``; refused where
-neither names it, or the two differ).
+naming under ``minify`` the minify run whose copy served the arm (the arm's meta.json's ``run_id``, else ``--minify``;
+refused where neither names it, or the two differ).
 """
 from __future__ import annotations
 
@@ -368,7 +368,7 @@ def result(a: argparse.Namespace, out: dict) -> None:
     from verity_bench import kit
 
     w = kit.writer(a.result, KIND)
-    w.fingerprint(replayed=a.replayed, arm_dir=str(a.arm_dir), load=a.load, rep=a.rep, tp=a.tp, mode=out["mode"])
+    w.fingerprint(minify=a.minify, arm_dir=str(a.arm_dir), load=a.load, rep=a.rep, tp=a.tp, mode=out["mode"])
     rel = (a.out / "replay.json").resolve().relative_to(a.result.resolve()).as_posix()
     w.measurement_file(rel)
     w.validation("passed" if out["bit_exact"] else "failed", "replay.py: the Python replay of the window on vLLM's engine "
@@ -397,8 +397,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--result", type=Path, help=f"a directory holding --out: write its result.json, of kind {KIND}, "
                     "passed only where the replay was bit-exact")
-    ap.add_argument("--replayed", help="the run that served the arm, where its meta.json names none (its run_id); the "
-                                       "result's fingerprint names it as `replayed`")
+    ap.add_argument("--minify", help="the minify run whose copy served the arm, where the arm's meta.json names none "
+                                     "(its run_id); the result's fingerprint names it under `minify`")
     a = ap.parse_args(argv)
     if a.result and not a.out.resolve().is_relative_to(a.result.resolve()):
         raise SystemExit(f"--out {a.out} is outside --result {a.result}: the result names replay.json by a path inside it")
@@ -409,12 +409,12 @@ def main(argv: list[str] | None = None) -> int:
     if sys.flags.hash_randomization:
         raise SystemExit("run with PYTHONHASHSEED=0, as the served engine did: the scheduler iterates sets of request ids")
     meta = json.loads((a.arm_dir / "meta.json").read_text())
-    if a.replayed and meta.get("run_id") and a.replayed != meta["run_id"]:
-        raise SystemExit(f"--replayed {a.replayed}, but {a.arm_dir / 'meta.json'} says run {meta['run_id']} served it")
-    a.replayed = a.replayed or meta.get("run_id")
-    if a.result and not a.replayed:
-        raise SystemExit(f"{a.arm_dir / 'meta.json'} names no run_id: --replayed RUN, the run that served the arm, so "
-                         "the result names the copy it replayed")
+    if a.minify and meta.get("run_id") and a.minify != meta["run_id"]:
+        raise SystemExit(f"--minify {a.minify}, but {a.arm_dir / 'meta.json'} says run {meta['run_id']} served it")
+    a.minify = a.minify or meta.get("run_id")
+    if a.result and not a.minify:
+        raise SystemExit(f"{a.arm_dir / 'meta.json'} names no run_id: --minify RUN, the minify run whose copy served the "
+                         "arm, so the result names the copy it replayed")
     under = served_under(meta.get("arm"), a.out / ".site", a.private)
     served = S.ARMS.get(meta.get("arm") or "")
     served = served if served is not None and served.general else None
