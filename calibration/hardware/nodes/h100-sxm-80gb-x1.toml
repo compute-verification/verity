@@ -10,10 +10,11 @@ name = "An H100 node: one card in a VM of a two-socket Xeon Platinum 8468 server
 
 [device]
 sku = "h100-sxm-80gb"
-count = { value = 1, unit = "card", mark = "measurement", source = "the run record of a VM of this kind, its hardware as the launcher reads it with nvidia-smi: hw.count 1, hw.sku 'NVIDIA H100 80GB HBM3' (art:2385ce3688ff, job.json)" }
+count = { value = 1, unit = "card", mark = "measurement", source = "the run record of a VM of this kind, its hardware as the launcher reads it with nvidia-smi: hw.count 1, hw.sku 'NVIDIA H100 80GB HBM3' (art:2385ce3688ff, job.json; its stdout.log holds the lscpu read of the host this file names)" }
 
 # The host is the H200 node's: lscpu on a VM of this kind reads 'Model name: Intel(R) Xeon(R) Platinum 8468', 1 socket
-# x 8 cores x 2 threads, 105 MiB of L3, and the amx_int8 flag (art:2385ce3688ff), as on the H200 node's VM.
+# x 8 cores x 2 threads, 105 MiB of L3, and the amx_int8 flag, as on the H200 node's VM; the read is the run record
+# device.count cites.
 [host]
 sku = "xeon-platinum-8468-2s"
 
