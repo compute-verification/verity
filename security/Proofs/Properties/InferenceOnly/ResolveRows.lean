@@ -3,17 +3,8 @@ module
 public import Proofs.Properties.InferenceOnly.ResolvePassed
 public import Proofs.Properties.InferenceOnly.RecordOwn
 
-/-!
-# A unit's row is input gates of its own
-
-A unit is a member of a root node that is no input node, a call or a batch. Where `Record.ownRows` holds, a leaf of
-one of its parameters resolves in two steps: up to the root, at a reference of the node's argument (`rs_unit`), and
-there to a gate of an input node, since the reference lies in a part that is a run of an input node's leaves
-(`arg_leaf`). So the leaf is gate `j` of input node `n` (`unit_leaf`), and no two leaves of units are one gate
-(`unit_leaf_inj`): a gate of the root names its node and the leaf (`node_of_gate`), a leaf of an input node lies in
-one run at one place (`leafAt_inj`, from `Record.SecurityProofs.runs_apart`), and a batch's members read an argument
-at references of their own (`memberIdx_inj`).
--/
+/-! Where `Record.ownRows` holds, a leaf of a unit's parameter resolves to a gate of an input node of the root, and no
+two such leaves are one gate. -/
 
 @[expose] public section
 
@@ -23,7 +14,6 @@ open Flock.Program
 open InferenceOnlyCheck.Record.SecurityProofs (runOf unitsOf partsIn Apart runs_apart part_run batch_dims runOf_some
   axisDims_of_removeAxis)
 
-/-- A walk whose first step moves on and whose second ends has the second's result. -/
 theorem run_two {α β : Type} {what : String} {step : α → Flock.V (β ⊕ α)} {a a' : α} {b b' : β}
     (h1 : step a = .ok (.inr a')) (h2 : step a' = .ok (.inl b')) :
     ∀ n, Flock.Steps.run what step n a = .ok b → b = b'
@@ -38,7 +28,6 @@ theorem run_two {α β : Type} {what : String} {step : α → Flock.V (β ⊕ α
       simp only [h2, bind, Except.bind, pure, Except.pure, Except.ok.injEq] at h
       exact h.symm
 
-/-- `a · L + r` with `r < L` names `a` and `r`. -/
 theorem mul_add_inj {a b r s L : ℕ} (hr : r < L) (hs : s < L) (h : a * L + r = b * L + s) : a = b ∧ r = s := by
   have hL : 0 < L := by omega
   have h1 : (a * L + r) / L = a := by
@@ -49,8 +38,6 @@ theorem mul_add_inj {a b r s L : ℕ} (hr : r < L) (hs : s < L) (h : a * L + r =
   subst hab
   exact ⟨rfl, by omega⟩
 
-/-- **Two members of a batch read an argument it maps at references of their own**: a reference names the member
-and the leaf. -/
 theorem memberIdx_inj (a : Arg) {d L : ℕ} (hd : a.dims = some (d, L)) (hL : 0 < L) {m m' t t' : ℕ} (hm : m < d)
     (hm' : m' < d) (h : memberIdx a m t = memberIdx a m' t') : m = m' ∧ t = t' := by
   unfold memberIdx at h
@@ -60,7 +47,6 @@ theorem memberIdx_inj (a : Arg) {d L : ℕ} (hd : a.dims = some (d, L)) (hL : 0 
   refine ⟨h4, ?_⟩
   rw [← Nat.div_add_mod t L, ← Nat.div_add_mod t' L, h3, h2]
 
-/-- The reference of argument `i` of node `nd` that leaf `t` of member `m`'s parameter `i` is. -/
 def argIdx (nd : Node) (i m t : ℕ) : ℕ := match nd.form with
   | .batch => memberIdx (nd.args[i]!) m t
   | _ => t
@@ -72,7 +58,6 @@ theorem argIdx_batch {nd : Node} (h : nd.form = .batch) (i m t : ℕ) :
 theorem argIdx_call {nd : Node} (h : nd.form = .call) (i m t : ℕ) : argIdx nd i m t = t := by
   unfold argIdx; rw [h]
 
-/-- **A unit's parameter leaf, one step up**: the root, at a reference of the node's argument. -/
 theorem rs_unit (P : Prog) (d off k m i t : ℕ)
     (hf : ((P.defs[P.root]!).body.nodes[k]!).form = .call ∨ ((P.defs[P.root]!).body.nodes[k]!).form = .batch) :
     resolveStep P (.child P.rootScope d off k m, ⟨true, i, t⟩) =
@@ -84,13 +69,11 @@ theorem rs_unit (P : Prog) (d off k m i t : ℕ)
   · rw [argIdx_batch hf, ← memberRef_eq]
     exact rs_up_batch P P.rootScope d off k m i t hf
 
-/-- A leaf of a root node that is a primitive is the node's gate. -/
 theorem rs_root_prim (P : Prog) (n j : ℕ) (h : ((P.defs[P.root]!).body.nodes[n]!).form = .prim) :
     resolveStep P (P.rootScope, ⟨false, n, j⟩) = .ok (.inl ((P.defs[P.root]!).body.offsets[n]!)) :=
   (rs_prim P P.rootScope n j h).trans
     (congrArg (fun v => (Except.ok (Sum.inl v) : Flock.V (ℕ ⊕ Scope × Ref))) (Nat.zero_add _))
 
-/-- Leaf `j` of a root node that is a batch of a primitive of one output leaf is the node's gate `j`. -/
 theorem rs_root_batch (P : Prog) (n j : ℕ) (h : ((P.defs[P.root]!).body.nodes[n]!).form = .batch)
     (hp : (P.defs[((P.defs[P.root]!).body.nodes[n]!).fn]!).prim = true)
     (hol : (P.defs[((P.defs[P.root]!).body.nodes[n]!).fn]!).outLeaves = 1) :
@@ -105,7 +88,6 @@ theorem rs_root_batch (P : Prog) (n j : ℕ) (h : ((P.defs[P.root]!).body.nodes[
     rfl
   rw [h2, hol, Nat.div_one, Nat.zero_add]
 
-/-- **An input node of the root, a primitive or a batch, has one gate a leaf of its output.** -/
 theorem input_node (c : Defn) (nd : Node) (hc : BodiesOk.CalleeOk c) (hn : BodiesOk.NodeOk c nd)
     (hp : c.prim = true) (hf : nd.form = .prim ∨ nd.form = .batch) :
     nd.out.leaves = nd.members ∧ c.gates = 1 ∧ c.outLeaves = 1 := by
@@ -118,7 +100,6 @@ theorem input_node (c : Defn) (nd : Node) (hc : BodiesOk.CalleeOk c) (hn : Bodie
   · rw [hf] at hsh
     rw [bs_members nd (Or.inl hf), hsh.1, BodiesOk.leaves_array, hw, BodiesOk.leaves_value, Nat.mul_one]
 
-/-- What the decoder establishes of each node of the root and of the Definition it calls. -/
 theorem decoded_root (bytes : ByteArray) (P : Prog) (hdec : Flock.Program.decode bytes = .ok P) :
     ∀ k < (P.defs[P.root]!).body.nodes.size,
       ((P.defs[P.root]!).body.nodes[k]!).fn < P.defs.size ∧
@@ -133,8 +114,6 @@ theorem decoded_root (bytes : ByteArray) (P : Prog) (hdec : Flock.Program.decode
   have hlt : ((P.defs[P.root]!).body.nodes[k]!).fn < P.defs.size := Nat.lt_trans hfn hr
   exact ⟨hlt, (hok _ hlt).1, hnk⟩
 
-/-- Reference `x` of argument `i` of root node `k` is leaf `j` of the root's node `n`: it lies in a part of the
-argument that is a run of `n`'s leaves, `j` as far into the run as `x` into the part. -/
 def LeafAt (P : Prog) (k i x n j : ℕ) : Prop :=
   ∃ q base count, q < ((((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq.parts).size ∧
     runOf P ((((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq.parts[q]!) = some (n, base, count) ∧
@@ -142,7 +121,6 @@ def LeafAt (P : Prog) (k i x n j : ℕ) : Prop :=
     x < ((((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq).starts[q]! + count ∧
     j = base + (x - ((((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq).starts[q]!)
 
-/-- **A leaf of an input node is a reference of one argument, at one place.** -/
 theorem leafAt_inj {P : Prog} (hown : Record.ownRows P = true) {k i x k' i' x' n j : ℕ}
     (hk : k < (P.defs[P.root]!).body.nodes.size)
     (hu : Desc.isInputNode P ((P.defs[P.root]!).body.nodes[k]!) = false)
@@ -166,7 +144,6 @@ theorem leafAt_inj {P : Prog} (hown : Record.ownRows P = true) {k i x k' i' x' n
     have hap' : n ≠ n ∨ base + count ≤ base' ∨ base' + count' ≤ base := hap
     omega
 
-/-- **A gate of the root names its node and the leaf**, where each node's gates are its output's leaves. -/
 theorem node_of_gate (P : Prog) (hl : Walk.LaidOut P P.root) (hp : (P.defs[P.root]!).prim = false) {n n' j j' : ℕ}
     (hn : n < (P.defs[P.root]!).body.nodes.size) (hn' : n' < (P.defs[P.root]!).body.nodes.size)
     (hj : j < ((P.defs[P.root]!).body.nodes[n]!).out.leaves)
@@ -185,9 +162,6 @@ theorem node_of_gate (P : Prog) (hl : Walk.LaidOut P P.root) (hp : (P.defs[P.roo
   · have := hmono (n' + 1) n (by omega) (by omega)
     omega
 
-/-- **The reference a member reads a leaf of its parameter at is a reference of the node's argument**: member `m`
-of root node `k`, a call or a batch that is no input node, reads leaf `t` of its parameter `i` at a reference within
-the node's argument `i`. -/
 theorem argIdx_lt (bytes : ByteArray) (P : Prog) (hdec : Flock.Program.decode bytes = .ok P)
     (hown : Record.ownRows P = true) {k : ℕ} (hk : k < (P.defs[P.root]!).body.nodes.size)
     (hu : Desc.isInputNode P ((P.defs[P.root]!).body.nodes[k]!) = false)
@@ -222,8 +196,6 @@ variable (bytes : ByteArray) (P : Prog) (hdec : Flock.Program.decode bytes = .ok
   (hov : P.orderViolation = none) (hlay : Desc.bodiesLaidOut P = true) (hown : Record.ownRows P = true)
 include hdec hov hlay hown
 
-/-- **A reference of an argument of a root node that is no input node is a leaf of an input node, and resolves
-from the root to that node's gate of the leaf.** -/
 theorem arg_leaf {k : ℕ} (hk : k < (P.defs[P.root]!).body.nodes.size)
     (hu : Desc.isInputNode P ((P.defs[P.root]!).body.nodes[k]!) = false) {i : ℕ}
     (hi : i < ((P.defs[P.root]!).body.nodes[k]!).args.size) {x : ℕ}
@@ -287,9 +259,6 @@ theorem arg_leaf {k : ℕ} (hk : k < (P.defs[P.root]!).body.nodes.size)
     exact rs_root_prim P n 0 hf
   · exact rs_root_batch P n _ hf hprim hol
 
-/-- **A leaf of a unit's parameter is a leaf of an input node, and resolves to that node's gate of the leaf.** The
-unit is member `m` of root node `k`, a call or a batch that is no input node; the leaf is leaf `t` of its parameter
-`i`. -/
 theorem unit_leaf {k : ℕ} (hk : k < (P.defs[P.root]!).body.nodes.size)
     (hu : Desc.isInputNode P ((P.defs[P.root]!).body.nodes[k]!) = false)
     (hf : ((P.defs[P.root]!).body.nodes[k]!).form = .call ∨ ((P.defs[P.root]!).body.nodes[k]!).form = .batch)
@@ -306,7 +275,6 @@ theorem unit_leaf {k : ℕ} (hk : k < (P.defs[P.root]!).body.nodes.size)
   obtain ⟨n, j, hleaf, hn, hj, ho, hstep⟩ := arg_leaf bytes P hdec hov hlay hown hk hu hi hx
   exact ⟨n, j, hleaf, hn, hj, ho, fun g hg => run_two (rs_unit P d off k m i t hf) hstep _ hg⟩
 
-/-- **No two leaves of units' parameters are one gate.** -/
 theorem unit_leaf_inj {k k' : ℕ} (hk : k < (P.defs[P.root]!).body.nodes.size)
     (hk' : k' < (P.defs[P.root]!).body.nodes.size)
     (hu : Desc.isInputNode P ((P.defs[P.root]!).body.nodes[k]!) = false)

@@ -7,15 +7,8 @@ public import Proofs.Properties.Spot.Pinned
 public import Proofs.Core.QSort
 import all Init.Data.Array.QSort.Basic
 
-/-! # Proofs of SPOT's one-stage property (`Properties.Spot`)
-
-Each check of `OneStage.check` is a pipeline of failure codes (`addCode`, `push`) written with `let mut` and `if`, which
-`do` elaborates into join points. A proof lifts the join points out (`extract_lets`), moves each `if` into the argument of
-the join point it calls (`jp_ite`, `jp_ite'`), unfolds the join points one at a time, and reads the codes' emptiness off
-the pipeline one check at a time (`ite_addCode_nil`, `ite_push_nil`). `acceptMeans_iff` says what the check accepts,
-`AcceptMeans`'s conclusion, and that it accepts all of it; `acceptMeans` is its first half and `acceptMeans_complete`
-the converse.
--/
+/-! SPOT's one-stage property, proved by lifting `OneStage.check`'s join points out and reading its failure codes'
+emptiness off the pipeline. -/
 
 @[expose] public section
 
@@ -91,7 +84,6 @@ theorem checkProved_nil (draw : Json) (us : Array Nat) (n : Nat) :
   rw [show (Array.map (fun (x : Nat) => some (x : Int)) us) = (us.map fun (x : Nat) => (x : Int)).map some by
     simp [Array.map_map, Function.comp_def], map_some_inj]
 
-/-- A check of `Record.checks` that fails, other than the sample's. -/
 def Fails (x : String × Check) : Bool := x.1 != "draw" && !x.2.codes.isEmpty
 
 theorem none_fail_ite_push (b : Bool) (xs : Array (String × Check)) (y : String × Check) :
@@ -123,8 +115,6 @@ theorem none_fail_ite_nil (b : Bool) (y : String × Check) :
       (b = false → Fails y = false) := by
   cases b <;> simp
 
-/-- Each value `certified` names has a read among `opened`, a `{value: root}`: an entry of `opened` is of that value. A
-read reported under another value's name is no read of it. -/
 def CertifiedRead (certified : Array String) (opened : Array (String × Json)) : Prop :=
   ∀ v ∈ certified, ∃ y ∈ opened, y.1 = v
 
@@ -134,7 +124,6 @@ def UnitsRead (p : Params) (c : Commitment) (e : Evidence) : Prop :=
   UnitsProved p.windowValues c e ∧
     CertifiedRead (p.verifier.certified.map (·.1.value)) ((openedRoots p.windowValues c.record e.verdicts).getD #[])
 
-/-- The check `certified` holds exactly when each certified value has a reported read. -/
 theorem certifiedCheck_ok (certified : Array String) (opened : Option (Array (String × Json))) :
     (∀ x ∈ Record.certifiedCheck certified opened, Fails x = false) ↔ CertifiedRead certified (opened.getD #[]) := by
   unfold Record.certifiedCheck
@@ -265,7 +254,6 @@ theorem verdictOf_accept (vs : Array (String × Json)) :
           revert this
           cases getD x.2 "accepted" <;> simp
 
-/-- A loop step's codes, and whether it continues. -/
 def codesOf (x : Id (ForInStep (Array String))) : Array String :=
   match x.run with
   | .yield c => c
@@ -544,7 +532,6 @@ theorem checkRegistered_nil_supplied (c : Array String) (got : Json) (mine : Flo
         exact hc
     exact key _ _ _ rfl (addCode_ne_nil _ _) hValues
 
-/-- `checkRegistered` with nothing supplied: every value held to `held`, and `rootOf` never read. -/
 theorem checkRegistered_nil (c : Array String) (got : Json) (mine : Flock.V (Array Registered.Entry))
     (held : Array (String × String)) (rootOf : String → Supplied.Rows → Registered.Entry → Flock.V String) :
     Docket.checkRegistered c got mine held #[] rootOf = #[] ↔ c = #[] ∧ ∃ mine' es, mine = .ok mine' ∧
@@ -558,8 +545,6 @@ theorem checkRegistered_nil (c : Array String) (got : Json) (mine : Flock.V (Arr
   have hs : ∀ es mine', SuppliedIs es mine' #[] rootOf := fun _ _ x hx => absurd hx (Array.not_mem_empty x)
   simp only [checkRegistered_nil_supplied, hh, hs, and_true]
 
-/-- R7-supplied: `checkRegistered` holds each value it fills to the root `rootOf` recomputes, and to no root `held`
-names: an entry with any other root, or a supplied value whose root doesn't compute, is refused. -/
 theorem checkRegistered_supplied (c : Array String) (got : Json) (mine : Flock.V (Array Registered.Entry))
     (held : Array (String × String)) (supplied : Array (String × Supplied.Rows))
     (rootOf : String → Supplied.Rows → Registered.Entry → Flock.V String)
@@ -607,10 +592,8 @@ theorem earlierRoot_some (log : Array Json) (want : Registered.Entry) (d : Strin
   | port p => exact outputRoot_some log want.leaves d p
   | value u => exact valueRoot_some log want.leaves want.words want.wordBits d u
 
-/-- An entry's shape: its leaf count, words and word bits, all an output value's earlier entry is held to. -/
 abbrev shape (e : Registered.Entry) : Nat × Nat × Nat := (e.leaves, e.words, e.wordBits)
 
-/-- Rewriting the domain of `v`'s entries keeps every value's entry and its shape. -/
 theorem find_map_domain (mine : Array Registered.Entry) (v dom u : String) :
     ((mine.map fun e => if e.value == v then { e with domain := dom } else e).find? (·.value == u)).map shape =
       (mine.find? (·.value == u)).map shape := by
@@ -669,7 +652,6 @@ theorem applyOutput_step (log : Array Json) (c : Array String) (mine : Array Reg
       cases hw
       exact (earlierRoot_some log want d p).1 ⟨_, ho⟩
 
-/-- `applyOutputs` adds no code exactly when each output value with an entry has its earlier port or value. -/
 theorem applyOutputs_nil (log : Array Json) (outputs : Array (String × String × Docket.Earlier))
     (c : Array String) (mine : Array Registered.Entry) (held : Array (String × String)) :
     (Docket.applyOutputs c mine held outputs log).1 = #[] ↔ c = #[] ∧
@@ -697,8 +679,6 @@ theorem applyOutputs_nil (log : Array Json) (outputs : Array (String × String �
     exact and_congr Iff.rfl (and_congr Iff.rfl (forall_congr' fun o => forall_congr' fun _ =>
       find_leaves_congr (h2 o.1) (fun n w b => EarlierIs log n w b o.2.1 o.2.2)))
 
-/-- R7 with output values (`checkOutputs`): every output value with an entry has its earlier port or value, and the rest of R7
-holds against the entries `applyOutputs` leaves, then the certified ones, and the held roots it leaves. -/
 theorem checkOutputs_nil (c : Array String) (got : Json) (mine : Flock.V (Array Registered.Entry))
     (held : Array (String × String)) (supplied : Array (String × Supplied.Rows))
     (rootOf : String → Supplied.Rows → Registered.Entry → Flock.V String)
@@ -811,7 +791,6 @@ theorem kept_nil (b : Bool) (c : Array String) (x : String) :
     Docket.kept b c x = #[] ↔ c = #[] ∧ b = true := by
   cases b <;> simp [Docket.kept, addCode_ne_nil]
 
-/-- R8's codes (`Docket.r8Codes`) add none exactly when R8 holds. -/
 theorem r8Codes_nil (v : Docket.Verifier) (c : Array String) :
     Docket.r8Codes v c = #[] ↔ c = #[] ∧ R8 v := by
   unfold Docket.r8Codes R8
@@ -841,7 +820,6 @@ theorem r2loop (g : String → Json) (a : Json) (oq : Flock.V String) (od : Opti
 
 theorem id_bind {α β : Type} (x : Id α) (f : α → Id β) : x >>= f = f x := rfl
 
-/-- R7's certified roots (`Docket.certifiedHeld`) hold exactly when `CertifiedHeld` does. -/
 theorem certifiedHeld_iff (rec : Json) (v : Docket.Verifier) :
     Docket.certifiedHeld rec v = true ↔ CertifiedHeld rec v := by
   unfold Docket.certifiedHeld CertifiedHeld
@@ -849,7 +827,6 @@ theorem certifiedHeld_iff (rec : Json) (v : Docket.Verifier) :
   refine forall_congr' fun x => imp_congr_right fun _ => ?_
   rcases he : Docket.entryOf rec x.1.value with _ | e <;> simp [he]
 
-/-- The verdict log names the record `d` refused (`Docket.refusedIn`) exactly when it holds `(d, false)`. -/
 theorem refusedIn_iff (verdicts : Array (String × Bool)) (d : String) :
     Docket.refusedIn verdicts d = true ↔ (d, false) ∈ verdicts := by
   unfold Docket.refusedIn
@@ -861,7 +838,6 @@ theorem refusedIn_iff (verdicts : Array (String × Bool)) (d : String) :
     exact hm
   · exact fun hm => ⟨(d, false), hm, by simp⟩
 
-/-- The caller's verdicts (`Docket.portsAccepted`) hold exactly when `OutputPortsAccepted` does. -/
 theorem portsAccepted_iff (v : Docket.Verifier) :
     Docket.portsAccepted v = true ↔ OutputPortsAccepted v := by
   unfold Docket.portsAccepted OutputPortsAccepted
@@ -891,8 +867,6 @@ theorem linkRefused_false_iff (v : Docket.Verifier) : Docket.linkRefused v = fal
           fun ⟨_, _, h1, h⟩ => by cases h1; rw [hr] at h; exact Except.ok.inj h⟩
   · simp
 
-/-- The registration check finds nothing exactly where the registration keeps R1–R8 (`Registered`). The caller's facts
-(`CallerHeld`) are the caller's check's (`VStar.Recursive.Caller.check`), not this one's. -/
 theorem docket_nil (rec : Json) (v : Docket.Verifier) :
     Docket.check rec v = #[] ↔ ∃ samplingDesign, Registered v rec samplingDesign := by
   rw [Docket.check_eq_checkRef]
@@ -1283,8 +1257,6 @@ theorem checkSample_nil (draw pop samplingDesign : Json) : Draw.checkDraw draw p
 theorem registered_samplingDesign {v : Docket.Verifier} {rec samplingDesign : Json} (h : Registered v rec samplingDesign) :
     Draw.derive v.program v.query v.samplingDesign v.workTable = .ok samplingDesign := h.1.2.2.2.1
 
-/-- The check accepts exactly what `AcceptMeans` says of an accept and a reported read of each certified value
-(`UnitsRead`). -/
 theorem acceptMeans_iff (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Core.Integrity) :
     OneStage.check p c e = .accept pub prof ↔
       ∃ samplingDesign d n, Registered p.verifier c.record samplingDesign ∧ Drawn e.draw (getD c.record "population") samplingDesign ∧
@@ -1361,9 +1333,6 @@ theorem acceptMeans : AcceptMeans := fun p c e pub prof h => by
   obtain ⟨l, d, n, hr, hd, ⟨hu, -⟩, rest⟩ := (acceptMeans_iff p c e pub prof).1 h
   exact ⟨l, d, n, hr, hd, hu, rest⟩
 
-/-- Completeness of `AcceptMeans`: a commitment whose registration keeps R1–R8, with a sample of
-the agreed sampling design over the registered population, its units proved and served as sampled with each certified value read
-(`UnitsRead`), and verdicts that accept, is accepted, publishing `publicOf` and the profile `profileOf`. -/
 theorem acceptMeans_complete (p : Params) (c : Commitment) (e : Evidence) (samplingDesign : Json) (d : Core.SamplingDesign) (n : Nat)
     (hr : Registered p.verifier c.record samplingDesign)
     (hd : Drawn e.draw (getD c.record "population") samplingDesign)
@@ -1372,14 +1341,11 @@ theorem acceptMeans_complete (p : Params) (c : Commitment) (e : Evidence) (sampl
     OneStage.check p c e = .accept (publicOf p e samplingDesign d n) (profileOf p c e d n) :=
   (acceptMeans_iff p c e _ _).2 ⟨samplingDesign, d, n, hr, hd, hu, hv, hp, hn, rfl, rfl⟩
 
-/-- Naming no window value, the opened roots are the record's own reads less its ports' at their own roots. -/
 theorem openedRoots_nil (rec : Json) (vs : Array (String × Json)) :
     openedRoots #[] rec vs = Record.lessOwnReads rec (Record.ownRegistered rec (Record.sessionRegistered vs)) := by
   unfold openedRoots
   exact Record.heldReads_nil rec _
 
-/-- Naming no window value, `UnitsProved` is the units' statement before window values: its last conjunct reads the
-record's own reads less its ports' at their own roots. -/
 theorem unitsProved_nil (c : Commitment) (e : Evidence) :
     UnitsProved #[] c e ↔
       (e.instances = (Draw.proved e.draw).size ∧ e.provedUnits.map (fun n : Nat => (n : Int)) = Draw.proved e.draw ∧
@@ -1394,8 +1360,6 @@ theorem unitsProved_nil (c : Commitment) (e : Evidence) :
           (Record.registeredRoots c.record)) := by
   rw [UnitsProved, openedRoots_nil]
 
-/-- `acceptMeans` for a verifier that names no window value, its units' statement the one before window values
-(`unitsProved_nil`). -/
 theorem acceptMeans_unnamed (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Core.Integrity)
     (hw : p.windowValues = #[]) (h : OneStage.check p c e = .accept pub prof) :
     ∃ samplingDesign d n, Registered p.verifier c.record samplingDesign ∧
@@ -1417,15 +1381,15 @@ theorem acceptMeans_unnamed (p : Params) (c : Commitment) (e : Evidence) (pub : 
   rw [hw] at hu
   exact ⟨samplingDesign, d, n, hr, hd, (unitsProved_nil c e).1 hu, rest⟩
 
-/-- `acceptMeans`'s honest witness, not yet proved: a one-stage run naming no window value that the check accepts. Its
+/-- `acceptMeans`'s honest witness, not proved: a one-stage run naming no window value that the check accepts. Its
 theorem names the run: a registration that keeps R1–R8, an honest sample of its sampling design, the record and the
 verdicts. -/
 def acceptMeans_honest : Prop :=
   ∃ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Core.Integrity),
     p.windowValues = #[] ∧ OneStage.check p c e = .accept pub prof
 
-/-- `acceptMeans`'s nontrivial witness, not yet proved: what `AcceptMeans` concludes fails at some inputs, so a check
-that accepted every input would break it. -/
+/-- `acceptMeans`'s nontrivial witness, not proved: what `AcceptMeans` concludes fails at some inputs, so a check that
+accepted every input would break it. -/
 def acceptMeans_nontrivial : Prop :=
   ∃ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Core.Integrity),
     ¬ ∃ samplingDesign d n, Registered p.verifier c.record samplingDesign ∧
@@ -1457,12 +1421,6 @@ theorem bernoulliBounds : BernoulliBounds := by
   subst hd
   rfl
 
-/-! ## A window's history
-
-An output value the parameters give only a port is that port of the previous record (`Docket.lastDigest`,
-`OneStage.paramsParsed`). `history_of_R7` reads R7 back for it: the record's entry for the value has the root, the domain
-and the leaf count of that port, so the history a window reads is what the previous window output. -/
-
 theorem list_mapM_ok_map {α β γ ε : Type} {f : α → Except ε β} {g : β → γ} {k : α → γ}
     (hf : ∀ a b, f a = .ok b → g b = k a) : ∀ {l : List α} {bs : List β}, l.mapM f = .ok bs → bs.map g = l.map k
   | [], bs, h => by simp only [List.mapM_nil, pure, Except.pure, Except.ok.injEq] at h; subst h; rfl
@@ -1490,7 +1448,6 @@ theorem array_mapM_ok_map {α β γ ε : Type} {f : α → Except ε β} {g : β
     subst h
     exact list_mapM_ok_map hf hl
 
-/-- The verifier's own entries are its registered values', in order. -/
 theorem entries_values {d : Flock.TemplateQuery.Desc} {ps : Array Registered.Param} {values : Array (String × Nat)}
     {schemas : Array (String × String)} {window : Option String} {fixed : Array String} {mine : Array Registered.Entry}
     (h : Registered.entries d ps values schemas window fixed = .ok mine) :
@@ -1530,8 +1487,6 @@ theorem applyOutputs_shape (log : Array Json) (c : Array String) (mine : Array R
     obtain ⟨c', mine', held'⟩ := s
     exact (ih c' mine' held').trans this
 
-/-- What an output value's step leaves it: each of `u`'s entries has domain `dom`, and `u`'s first held root is
-`root`. -/
 def HeldAs (u dom root : String) (s : Array String × Array Registered.Entry × Array (String × String)) : Prop :=
   (∀ e ∈ s.2.1, e.value = u → e.domain = dom) ∧ s.2.2.find? (·.1 == u) = some (u, root)
 
@@ -1575,8 +1530,6 @@ theorem applyOutput_self (log : Array Json) (u dom root : String)
       exact absurd hu hv
   · simp [Array.find?_append]
 
-/-- Folding the output steps: a value whose every output entry is `t`, and whose earlier root at its entry's shape is
-`(dom, root)`, is held as that once `t` is among the steps. -/
 theorem foldl_heldAs (log : Array Json) (u dom root : String) (t : String × String × Docket.Earlier)
     (ht : t.1 = u) (sh : Nat × Nat × Nat)
     (hr : ∀ want : Registered.Entry, shape want = sh → Docket.earlierRoot log want t.2.1 t.2.2 = some (dom, root)) :
@@ -1630,10 +1583,6 @@ theorem outputRoot_of {log : Array Json} {n : Nat} {d p : String} {r : Json}
     Docket.outputRoot log n d p = some (dom, root) := by
   simp [Docket.outputRoot, hr, hl, hd, hro]
 
-/-- **A window's history is the previous record's port.** Where R7 holds and the verifier gives a registered value `u`
-it doesn't fill only the port `p` of the previous record (`(u, Docket.lastDigest v.log, .port p)`, its one output
-entry for `u`), the previous record has that port, and the record's entry for `u` (the last naming it) has its root, its
-domain and its leaf count. -/
 theorem history_of_R7 (rec : Json) (v : Docket.Verifier) (h : R7 rec v) (u p : String)
     (hreg : v.registered.any (·.1 == u) = true)
     (hu : (u, Docket.lastDigest v.log, Docket.Earlier.port p) ∈ v.outputs)
@@ -1673,7 +1622,6 @@ theorem history_of_R7 (rec : Json) (v : Docket.Verifier) (h : R7 rec v) (u p : S
   · rw [hdom, ← hdomain want' hmem hval]; exact hed
   · rw [hel, hleaves, show want'.leaves = want0.leaves from congrArg Prod.fst hsh']
 
-/-- `history_of_R7` at what the check accepts (`acceptMeans`). -/
 theorem history_of_accept (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Core.Integrity)
     (h : OneStage.check p c e = .accept pub prof) (hv : ExpectsV2 p.verifier) (u q : String)
     (hreg : p.verifier.registered.any (·.1 == u) = true)
@@ -1689,9 +1637,6 @@ theorem history_of_accept (p : Params) (c : Commitment) (e : Evidence) (pub : Pu
   obtain ⟨samplingDesign, -, -, hr, -⟩ := acceptMeans p c e pub prof h
   exact history_of_R7 c.record p.verifier (hr.2.2.2.2.2.2.1 hv).1 u q hreg hu honly hs
 
-/-- `PinnedHeld` at what the check accepts (`acceptMeans`): the record's entry for each value the verifier pinned and
-takes from no earlier run, the window's arrivals at the root the network attester signed among them, has its pinned
-root. -/
 theorem pinnedHeld_of_accept (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Core.Integrity)
     (h : OneStage.check p c e = .accept pub prof) (hv : ExpectsV2 p.verifier) : PinnedHeld c.record p.verifier := by
   obtain ⟨samplingDesign, -, -, hr, -⟩ := acceptMeans p c e pub prof h

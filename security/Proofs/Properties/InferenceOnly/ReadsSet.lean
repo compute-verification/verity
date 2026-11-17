@@ -27,53 +27,7 @@ import Proofs.Properties.InferenceOnly.OperandsResolve
 import Proofs.Properties.Poub.Remote.Sort
 import Std.Data.HashSet.Lemmas
 
-/-!
-# `ReadsExact.RootSet` from the decoder's facts: gates located with their operands, and the statements it is proved through
-
-`Prog.gate` locates a gate from the root, activation by activation, and reads its operands in the activation of the
-primitive node holding it; `LocR` is that walk from any activation (`run_locR`), with one list of operands
-(`locR_unique`), `circuitOf`'s at the root (`locR_root`), a member's gate located from its caller's activation as from
-the member's (`locR_child`), and a primitive node's gate with its member's operands (`locR_prim`).
-
-`RootSet` is `NodeSet` at the root's activation (`rootRead_eq`): node `k`'s positions (`nodePos`) name outside it
-exactly the gates its gates read outside it. `NodeSet` of a body holds wherever its callees' `UsedExact` does: a
-member's gates read outside it the leaves of its parameters its callee's `used` names, which one step up
-(`den_up`, `den_up_batch`, `den_up_scan`, `den_up_scan0`) are the positions `argPos` and `carryPos` read, `down`
-keeping their gates (`specs_decoded`). `UsedExact` of a Definition holds wherever `NodeSet` holds of its body's nodes:
-`summarize`'s `used` is the parameter pieces its nodes' reads of one copy name (`ivsOf_spec`, `norm_mem`), and a gate
-position of the body is one of the activation's (`locW_lt`). Callees first, as `memoOf_retOk`.
-
-At a root node calling a primitive, `RootSet` holds outright (`rootSet_prim`): its node read reads each argument whole
-(`nodeReads_prim_ok`), `down` keeping each reference's gate (`readPos_agree`), each reference is read by a member's gate
-(`operands_ok`, a mapped argument's by the member its index falls in, `tile`), and each operand is one of those
-references, resolving before the node.
-
-At a composite node, what its gates read outside it is what its members' parameter leaves that the callee's `used` names
-resolve to (`compReads`), each member's activation located as its caller's is (`located_child`). One argument's node
-read reads, outside the node, what the members' reads of its parameter leaves resolve to, when its positions are those
-leaves' `upIdx` (`readSet`, through `branch_iff`). Its read succeeding (`nodeReads_comp_ok`, `ArgReadOk`), an argument's
-read names exactly its members' reads of the parameter (`argSet`, `ArgB`) wherever its members' leaves tile it, and the
-node's positions what its gates read outside it wherever its carries' read names the later iterations' (`compSet_of`).
-All members at once, `Desc.memberRows` reads per used run the rows `rowsAt` names (`memberRows_rows`), whose indices are
-the members' leaves there (`rowsAt_idx`), each through `throughPS` keeping its references' gates (`throughPS_agree`):
-the same set (`rowsSet`, `argSet_of`).
-
-A scan's carries, `Desc.carriesRead` reads outside the node exactly what its iterations past the first read at the
-carry leaves `used` names (`carrySet`, `CarryRead`). A run the step returns in place is the initial carry's in every
-iteration (`back_init`). Any other leaf, followed back through the step's return (`chain_step`), is the initial carry's
-leaf the chain reaches within the iterations before it leaves (every such leaf kept, the sort only permuting:
-`insertLoop_has`, `qsort_toList_perm`), or what the step returns where the chain leaves, in iteration `m - 1 - e`
-(`back_exit`, `ret_den`): a gate of the node, which the read drops (`ret_gate_in`), an `xs` row per iteration
-(`throughPS_agree`, else `CalleeSpec` iteration by iteration), or a shared parameter, one read for every iteration
-(`up_idx`).
-
-From the decoder's facts (`RootFacts`, `WidthFacts`) and a composite node's shape (`CompShape`), `NodeSet` holds at
-every node calling a composite (`nodeSet_comp_of`): every parameter position resolves, `Desc.walkable` keeping
-resolution within `Flock.Steps.FUEL` (`param_ok`, from `OperandsResolve.resolve_ok`), a callee's `used` names its
-parameter leaves in range (`used_lt`) and its return its gates (`locW_lt`). So `UsedExact` holds of every reached
-composite but the root (`usedExact_reached`), and `RootSet` wherever every reference of a node calling a primitive is
-read by a member and every node calling a composite is shaped as `CompShape` says (`rootSet_of`).
--/
+/-! `ReadsExact.RootSet` from the decoder's facts: each gate located with its operands as `Prog.gate` locates it. -/
 
 @[expose] public section
 
@@ -82,12 +36,10 @@ open InferenceOnlyCheck.Desc (Piece Seg PS Tgt)
 open Flock.Program (Prog GateTable)
 open DescAgree (nodeCount rootOffs)
 
-/-- The member of node `k` of Definition `d`'s body that holds the body's gate `x`, as `gateStep` takes it. -/
 def memberAt (P : Prog) (d k x : Nat) : Nat :=
   if (((P.defs[d]!).body.nodes[k]!).form == .prim || ((P.defs[d]!).body.nodes[k]!).form == .call) = true then 0
   else (x - (P.defs[d]!).body.offsets[k]!) / (P.defs[((P.defs[d]!).body.nodes[k]!).fn]!).gates
 
-/-- Node `k` is the one `gateStep`'s search finds holding gate `x` of Definition `d`'s body. -/
 def FindsAt (P : Prog) (d x k : Nat) : Prop :=
   (Array.range (P.defs[d]!).body.nodes.size).find? (fun k =>
     (P.defs[d]!).body.offsets[k]! ≤ x && x < (P.defs[d]!).body.offsets[k + 1]!) = some k
@@ -97,8 +49,6 @@ theorem findsAt_unique {P : Prog} {d x k k' : Nat} (h : FindsAt P d x k) (h' : F
   rw [h] at h'
   exact Option.some.inj h'
 
-/-- Gate `g` located from activation `sc` as `Prog.gate` locates it, with its operands `ops`: the node holding it calls
-a primitive, and `ops` are its member's operands in `sc`, or a composite, whose member's activation locates it. -/
 inductive LocR (P : Prog) : Flock.Program.Scope → Nat → Array Nat → Prop
   | prim {sc : Flock.Program.Scope} {g k : Nat} {ops : Array Nat} :
       FindsAt P sc.d (g - sc.off) k → (P.defs[((P.defs[sc.d]!).body.nodes[k]!).fn]!).prim = true →
@@ -108,8 +58,6 @@ inductive LocR (P : Prog) : Flock.Program.Scope → Nat → Array Nat → Prop
       FindsAt P sc.d (g - sc.off) k → (P.defs[((P.defs[sc.d]!).body.nodes[k]!).fn]!).prim = false →
       LocR P (P.child sc k (memberAt P sc.d k (g - sc.off))) g ops → LocR P sc g ops
 
-/-- `gateStep` from activation `sc`: the node holding `g`, and its member's operands when it calls a primitive, else
-its member's activation. -/
 theorem gateStep_of (P : Prog) (g : Nat) (sc : Flock.Program.Scope) {x}
     (h : Flock.Program.gateStep P g sc = .ok x) :
     ∃ k, FindsAt P sc.d (g - sc.off) k ∧
@@ -139,7 +87,6 @@ theorem gateStep_of (P : Prog) (g : Nat) (sc : Flock.Program.Scope) {x}
     simp only [hp', Bool.false_eq_true, ite_false, pure, Except.pure, Except.ok.injEq] at h
     exact Or.inr ⟨hp', h.symm⟩
 
-/-- **`Prog.gate`'s walk locates a gate with the operands it ends at.** -/
 theorem run_locR (P : Prog) (g : Nat) : ∀ (n : Nat) (sc : Flock.Program.Scope) {p : Nat} {ops : Array Nat}
     {sc' : Flock.Program.Scope}, Flock.Steps.run "gate location" (Flock.Program.gateStep P g) n sc = .ok (p, ops, sc') →
     LocR P sc g ops
@@ -155,7 +102,6 @@ theorem run_locR (P : Prog) (g : Nat) : ∀ (n : Nat) (sc : Flock.Program.Scope)
     · simp only [hs, bind, Except.bind] at h
       exact LocR.comp hk hp (run_locR P g n _ h)
 
-/-- A gate has one list of operands. -/
 theorem locR_unique {P : Prog} {sc : Flock.Program.Scope} {g : Nat} {ops ops' : Array Nat}
     (h : LocR P sc g ops) (h' : LocR P sc g ops') : ops = ops' := by
   induction h generalizing ops' with
@@ -179,7 +125,6 @@ theorem locR_unique {P : Prog} {sc : Flock.Program.Scope} {g : Nat} {ops ops' : 
       obtain rfl := findsAt_unique hf hf'
       exact ih h''
 
-/-- **A gate's operands in `circuitOf`'s circuit are the ones it is located with from the root.** -/
 theorem locR_root {P : Prog} {c : GateTable} (hc : circuitOf P = .ok c) {g : Nat} (hg : g < gates P) :
     LocR P P.rootScope g c.reads[g]! := by
   obtain ⟨p, sc, hp, -⟩ := circuitOf_gate hc hg
@@ -189,8 +134,6 @@ theorem locR_root {P : Prog} {c : GateTable} (hc : circuitOf P = .ok c) {g : Nat
   simp only [hge, ite_false, bind, Except.bind] at hp
   exact run_locR P g _ _ hp
 
-/-- Gate `x` of a laid-out body of Definition `d`, in member `m` of node `k` (`x - offsets[k] = m * gates + j`, `j`
-within the callee's gates): the node `gateStep` finds and the member it takes. -/
 theorem findsAt_member (P : Prog) {d k m j : Nat} (hL : Laid P d) (hk : k < (P.defs[d]!).body.nodes.size)
     (hm : m < ((P.defs[d]!).body.nodes[k]!).members) (hj : j < (P.defs[((P.defs[d]!).body.nodes[k]!).fn]!).gates) :
     FindsAt P d ((P.defs[d]!).body.offsets[k]! + m * (P.defs[((P.defs[d]!).body.nodes[k]!).fn]!).gates + j) k ∧
@@ -220,8 +163,6 @@ theorem findsAt_member (P : Prog) {d k m j : Nat} (hL : Laid P d) (hk : k < (P.d
         (P.defs[d]!).body.offsets[k]! = j + m * (P.defs[((P.defs[d]!).body.nodes[k]!).fn]!).gates by omega,
       Nat.add_mul_div_right _ _ hG, Nat.div_eq_of_lt hj, Nat.zero_add]
 
-/-- **A member's gate is located from its caller's activation as from the member's**: in a laid-out body, gate
-`j` of member `m` of composite node `k`. -/
 theorem locR_child (P : Prog) {sc : Flock.Program.Scope} {k m j : Nat} (hL : Laid P sc.d)
     (hk : k < (P.defs[sc.d]!).body.nodes.size) (hp : (P.defs[((P.defs[sc.d]!).body.nodes[k]!).fn]!).prim = false)
     (hm : m < ((P.defs[sc.d]!).body.nodes[k]!).members)
@@ -249,8 +190,6 @@ theorem locR_child (P : Prog) {sc : Flock.Program.Scope} {k m j : Nat} (hL : Lai
     refine LocR.comp (k := k) (by rw [e]; exact hf) hp ?_
     rwa [e, hma]
 
-/-- **A primitive node's gate is located with its member's operands**: in a laid-out body, member `m` of node `k`
-calling a primitive of one gate. -/
 theorem locR_prim (P : Prog) {sc : Flock.Program.Scope} {k m : Nat} (hL : Laid P sc.d)
     (hk : k < (P.defs[sc.d]!).body.nodes.size) (hp : (P.defs[((P.defs[sc.d]!).body.nodes[k]!).fn]!).prim = true)
     (hG : (P.defs[((P.defs[sc.d]!).body.nodes[k]!).fn]!).gates = 1)
@@ -275,22 +214,15 @@ theorem locR_prim (P : Prog) {sc : Flock.Program.Scope} {k m : Nat} (hL : Laid P
   · intro h
     exact LocR.prim (k := k) (by rw [e]; exact hf) hp (by rw [e, hma]; exact h)
 
-/-! ## The statements `RootSet` is proved through -/
-
-/-- Gate `a` is one of node `k`'s of activation `sc`. -/
 def InNodeAt (P : Prog) (sc : Flock.Program.Scope) (k a : Nat) : Prop :=
   sc.off + (P.defs[sc.d]!).body.offsets[k]! ≤ a ∧ a < sc.off + (P.defs[sc.d]!).body.offsets[k + 1]!
 
-/-- A gate of node `k` of activation `sc`, located from `sc`, reads gate `a`. -/
 def NodeReadsAt (P : Prog) (sc : Flock.Program.Scope) (k a : Nat) : Prop :=
   ∃ g, InNodeAt P sc k g ∧ ∃ ops, LocR P sc g ops ∧ a ∈ ops
 
-/-- Every gate of activation `sc` is located from it (as every gate is from the root, `circuitOf` passing). -/
 def Located (P : Prog) (sc : Flock.Program.Scope) : Prop :=
   ∀ g, sc.off ≤ g → g < sc.off + (P.defs[sc.d]!).gates → ∃ ops, LocR P sc g ops
 
-/-- The positions node `k` of body `c` reads (`nodeReads_prim`, `nodeReads_comp`), a composite's before `keep`:
-`rootRead`, at any body. -/
 def nodePos (c : Desc.Ctx) (node : Flock.Program.Node) (k : Nat) : List (Tgt × Int) :=
   if (c.P.defs[node.fn]!).prim = true then
     (if (node.form == .batch && node.n == 0) = true then [] else
@@ -301,8 +233,6 @@ def nodePos (c : Desc.Ctx) (node : Flock.Program.Node) (k : Nat) : List (Tgt × 
 theorem rootRead_eq (P : Prog) (memo : Array Desc.Summary) (node : Flock.Program.Node) (k : Nat) :
     rootRead P memo node k = nodePos (rootCtx P memo) node k := rfl
 
-/-- **Node `k` of Definition `f`'s body reads outside itself exactly the gates its positions name there**, in every
-activation of `f` whose gates are located: `RootSet` at the root's. -/
 def NodeSet (P : Prog) (memo : Array Desc.Summary) (f k : Nat) : Prop :=
   ∀ sc : Flock.Program.Scope, sc.d = f → Resolve.Good P sc → Located P sc → ∀ node,
     (ctxOf P memo f).node k = .ok node →
@@ -310,9 +240,6 @@ def NodeSet (P : Prog) (memo : Array Desc.Summary) (f k : Nat) : Prop :=
       (NodeReadsAt P sc k a ∧ ¬ InNodeAt P sc k a)) ∧
     ∀ i (p : Int), (Tgt.ref true i, p) ∈ nodePos (ctxOf P memo f) node k → ∃ a, den P sc (.ref true i, p) = .ok a
 
-/-- **Definition `f`'s summarized parameter reads (`used`) are what its activations read outside themselves**: in an
-activation `sc` whose gates are located, a gate reading a gate outside `sc` reads parameter `i`'s leaf `j` there, `j`
-in `used[i]`, and each such leaf is read so by a gate of `sc`. -/
 def UsedExact (P : Prog) (memo : Array Desc.Summary) (f : Nat) : Prop :=
   ∀ sc : Flock.Program.Scope, sc.d = f → Resolve.Good P sc → Located P sc →
     (∀ g ops a, sc.off ≤ g → g < sc.off + (P.defs[f]!).gates → LocR P sc g ops → a ∈ ops →
@@ -323,8 +250,6 @@ def UsedExact (P : Prog) (memo : Array Desc.Summary) (f : Nat) : Prop :=
       ∃ g, sc.off ≤ g ∧ g < sc.off + (P.defs[f]!).gates ∧ ∃ ops, LocR P sc g ops ∧
         ∃ a ∈ ops, Flock.Program.resolve P sc ⟨true, i, j⟩ = .ok a
 
-/-! ## An argument's reads, and a node's operands -/
-
 theorem forall2_mem_left {α β : Type} {R : α → β → Prop} : ∀ {l : List α} {m : List β}, List.Forall₂ R l m →
     ∀ a ∈ l, ∃ b ∈ m, R a b
   | _, _, .nil, _, ha => absurd ha (by simp)
@@ -334,19 +259,16 @@ theorem forall2_mem_left {α β : Type} {R : α → β → Prop} : ∀ {l : List
     · obtain ⟨b', hb', h'⟩ := forall2_mem_left hrest a ha
       exact ⟨b', List.mem_cons_of_mem _ hb', h'⟩
 
-/-- A position of an agreeing list names the gate what it agrees with resolves to, wherever that resolves. -/
 theorem agree_src {P : Prog} {sc : Flock.Program.Scope} {xs : List (Tgt × Int)} {vs : List (Except String Nat)}
     (h : Agree P sc xs vs) {x : Tgt × Int} (hx : x ∈ xs) : ∃ v ∈ vs, ∀ a, v = .ok a → den P sc x = .ok a :=
   forall2_mem_left h x hx
 
-/-- What resolves in a list an agreeing one agrees with, a position of it names. -/
 theorem agree_tgt {P : Prog} {sc : Flock.Program.Scope} {xs : List (Tgt × Int)} {vs : List (Except String Nat)}
     (h : Agree P sc xs vs) {v : Except String Nat} (hv : v ∈ vs) {a : Nat} (ha : v = .ok a) :
     ∃ x ∈ xs, den P sc x = .ok a := by
   obtain ⟨x, hx, hxv⟩ := forall2_mem h v hv
   exact ⟨x, hx, hxv a ha⟩
 
-/-- Node `k`'s argument `i` as the context holds it counts its references. -/
 theorem argCount_eq {c : Desc.Ctx} {k i : Nat} (hA : ArgOk c k i) :
     (c.arg k i).count = ((c.body.nodes[k]!).args[i]!).seq.count := by
   have h1 := hA.1.2.2.2
@@ -356,7 +278,6 @@ theorem argCount_eq {c : Desc.Ctx} {k i : Nat} (hA : ArgOk c k i) :
   rw [hl, List.length_map, List.length_range] at h2
   rw [h1, h2]
 
-/-- `throughArg`'s read of an argument's span, `oneOf`, names what `down` gives each of its pieces. -/
 theorem oneOf_pos (c : Desc.Ctx) (k i lo hi : Nat) {out : Array Seg}
     (h : oneOf c Flock.Steps.FUEL k i lo hi = .ok out) :
     segsPos out = ((c.arg k i).pieces lo hi).toList.flatMap (downPos c) := by
@@ -370,12 +291,9 @@ theorem oneOf_pos (c : Desc.Ctx) (k i lo hi : Nat) {out : Array Seg}
     (ok_bind_pure h)
   rw [h1, segsPos_empty, List.nil_append]
 
-/-- `nodeReads`' reads of node `k`'s argument `i` over `spans` succeed. -/
 def ReadsOk (c : Desc.Ctx) (k i : Nat) (spans : Array (Nat × Nat)) : Prop :=
   ∀ x ∈ spans.toList, ∃ out, oneOf c Flock.Steps.FUEL k i x.1 x.2 = .ok out
 
-/-- **An argument's spans, read through `down`, keep the gates their references resolve to** wherever the reads
-succeed. -/
 theorem readPos_agree (c : Desc.Ctx) (sc : Flock.Program.Scope) (hD : DownSpec c sc Flock.Steps.FUEL) {k i : Nat}
     (hA : ArgOk c k i)
     (hR : ∀ t < ((c.body.nodes[k]!).args[i]!).seq.count,
@@ -424,7 +342,6 @@ theorem forIn_nest_ok {α β γ ε : Type} (L : β → List γ) (f : β → γ �
     · exact forIn_push_ok (f i) (L i) acc r' hx
     · exact forIn_nest_ok L f l r' out h i hi
 
-/-- **Each of a gate's operands resolves**: every reference of its node's arguments its member reads. -/
 theorem operands_ok (P : Prog) (sc : Flock.Program.Scope) (node : Flock.Program.Node) (m : Nat) {ops : Array Nat}
     (h : Flock.Program.operands P sc node m = .ok ops) :
     ∀ i < node.args.size, ∀ t < (if (node.form == .batch && (node.args[i]!).dims.isSome) = true then
@@ -438,8 +355,6 @@ theorem operands_ok (P : Prog) (sc : Flock.Program.Scope) (node : Flock.Program.
   exact forIn_nest_ok _ _ _ _ _ h' i (by simp [List.mem_range'_1, Std.Legacy.Range.size]; omega) t
     (by simpa [List.mem_range'_1, Std.Legacy.Range.size] using ht)
 
-/-- **A batch's members tile a mapped argument**: each of its `n · M` references is some member's `memberIdx` of one of
-its `M` leaves, `L` dividing `M`. -/
 theorem tile {n L M idx : Nat} (hM : L ∣ M) (h : idx < n * M) :
     ∃ m < n, ∃ t < M, (t / L * n + m) * L + t % L = idx := by
   obtain ⟨s, rfl⟩ := hM
@@ -465,9 +380,6 @@ theorem tile {n L M idx : Nat} (hM : L ∣ M) (h : idx < n * M) :
       rw [Nat.add_comm, Nat.add_mul_mod_self_right, Nat.mod_mod]
     rw [e1, e2, Nat.div_add_mod' (idx / L) n, Nat.div_add_mod' idx L]
 
-/-! ## A primitive root node -/
-
-/-- A loop that succeeds took a step at each element, each step's element one `Q` holds of. -/
 theorem forIn_each {β σ ε : Type} (f : β → σ → Except ε (ForInStep σ)) (Q : β → Prop)
     (hf : ∀ x r y, f x r = .ok y → Q x ∧ ∃ r', y = .yield r') :
     ∀ (l : List β) (acc out : σ), forIn l acc f = .ok out → ∀ x ∈ l, Q x
@@ -481,7 +393,6 @@ theorem forIn_each {β σ ε : Type} (f : β → σ → Except ε (ForInStep σ)
     · exact hq
     · exact forIn_each f Q hf l r' out h x hx
 
-/-- A loop each of whose steps goes on succeeds. -/
 theorem forIn_ok_of {β σ ε : Type} (f : β → σ → Except ε (ForInStep σ)) :
     ∀ (l : List β) (acc : σ), (∀ x ∈ l, ∀ r, ∃ r', f x r = .ok (.yield r')) → ∃ out, forIn l acc f = .ok out
   | [], acc, _ => ⟨acc, rfl⟩
@@ -495,7 +406,6 @@ theorem bind_pure_ok_of {α : Type} {x : Except String α} (h : ∃ y, x = .ok y
   obtain ⟨y, rfl⟩ := h
   exact ⟨y, rfl⟩
 
-/-- `oneOf` succeeds where `down` does on each piece of the span. -/
 theorem oneOf_ok (c : Desc.Ctx) (k i lo hi : Nat)
     (h : ∀ q ∈ ((c.arg k i).pieces lo hi).toList, ∃ segs, Desc.down c Flock.Steps.FUEL q = .ok segs) :
     ∃ out, oneOf c Flock.Steps.FUEL k i lo hi = .ok out := by
@@ -508,7 +418,6 @@ theorem oneOf_ok (c : Desc.Ctx) (k i lo hi : Nat)
   obtain ⟨segs, hs⟩ := h q hq
   exact ⟨r ++ segs, by simp only [hs, bind, Except.bind, pure, Except.pure]⟩
 
-/-- `nodeReads`' read of argument `i` over `spans`, succeeding, succeeds span by span. -/
 theorem readLoop_ok (c : Desc.Ctx) (k i : Nat) (spans : Array (Nat × Nat)) (acc out : Array Seg)
     (h : forIn spans acc (fun (x : Nat × Nat) __s => do
         let __s ← forIn ((c.arg k i).pieces x.1 x.2) __s fun q __s => do
@@ -530,7 +439,6 @@ theorem readLoop_ok (c : Desc.Ctx) (k i : Nat) (spans : Array (Nat × Nat)) (acc
     simp only [pure, Except.pure, Except.ok.injEq] at hy
     exact ⟨⟨segs, hs⟩, _, hy.symm⟩) _ _ _ hr' q hq
 
-/-- **A primitive's node read succeeding reads each argument whole**, unless it is a batch of no members. -/
 theorem nodeReads_prim_ok (c : Desc.Ctx) (k : Nat) (node : Flock.Program.Node) (hn : c.node k = .ok node)
     (hp : (c.P.defs[node.fn]!).prim = true) {rs : Array Seg} (h : Desc.nodeReads c k = .ok rs)
     (hb : ¬ (node.form == .batch && node.n == 0) = true) :
@@ -552,7 +460,6 @@ theorem nodeReads_prim_ok (c : Desc.Ctx) (k : Nat) (node : Flock.Program.Node) (
       exact ⟨readLoop_ok c k i _ #[] lift (ok_bind_pure hl), _, hy.symm⟩) _ _ _ hout i
       (by simp [List.mem_range'_1]; omega)
 
-/-- A gate position names, at the root, the gate it is at. -/
 theorem den_root_gate (P : Prog) {w : Nat} {p : Int} {a : Nat} (h : den P P.rootScope (.gate w, p) = .ok a) :
     p = (a : Int) := by
   simp only [den] at h
@@ -564,15 +471,11 @@ theorem den_root_gate (P : Prog) {w : Nat} {p : Int} {a : Nat} (h : den P P.root
     rw [ho, Nat.zero_add] at h
     rw [← h, Int.toNat_of_nonneg (by omega)]
 
-/-- A primitive node's reference of argument `i`, member `m`'s `t`-th, is its sequence's at the index `operands` reads. -/
 theorem ref_get (node : Flock.Program.Node) (i m t : Nat) :
     (if (node.form == .batch) = true then (node.args[i]!).memberRef m t else (node.args[i]!).seq.get t) =
       (node.args[i]!).seq.get (if (node.form == .batch) = true then Resolve.memberIdx (node.args[i]!) m t else t) := by
   split <;> simp only [Resolve.memberRef_eq]
 
-/-- **`RootSet` at a root node calling a primitive**: its positions name exactly the gates its gates read, none of
-them its own, given the node's references in range and resolving below it (`hLow`), its operands' indices in range
-(`hOp`), and every reference read by some member unless it is a batch of none (`hCov`). -/
 theorem rootSet_prim (P : Prog) (memo : Array Desc.Summary) (c : GateTable) (hc : circuitOf P = .ok c)
     (hl : Desc.rootLaidOut P = true) (hL : Laid P P.root) {k : Nat} (hk : k < nodeCount P)
     {node : Flock.Program.Node} {rs : Array Seg} (hn : (rootCtx P memo).node k = .ok node)
@@ -697,10 +600,6 @@ theorem rootSet_prim (P : Prog) (memo : Array Desc.Summary) (c : GateTable) (hc 
     subst this
     exact ⟨w, hxr⟩
 
-/-! ## A composite node's reads, member by member -/
-
-/-- **A member's activation has its gates located** where its caller's has: a member's gate is located from its
-caller's activation as from its own (`locR_child`). -/
 theorem located_child (P : Prog) {sc : Flock.Program.Scope} {k m : Nat} (hL : Laid P sc.d)
     (hk : k < (P.defs[sc.d]!).body.nodes.size) (hp : (P.defs[((P.defs[sc.d]!).body.nodes[k]!).fn]!).prim = false)
     (hm : m < ((P.defs[sc.d]!).body.nodes[k]!).members)
@@ -720,8 +619,6 @@ theorem located_child (P : Prog) {sc : Flock.Program.Scope} {k m : Nat} (hL : La
   rw [e] at h ⊢
   exact ⟨ops, (locR_child P hL hk hp hm (by omega)).1 h⟩
 
-/-- **A composite node reads outside itself exactly what its members' summarized parameter reads resolve to there**:
-member `m`'s gates read outside the member the leaves of its parameters its callee's `used` names (`UsedExact`). -/
 theorem compReads (P : Prog) (memo : Array Desc.Summary) {sc : Flock.Program.Scope} {k : Nat} (hL : Laid P sc.d)
     (hk : k < (P.defs[sc.d]!).body.nodes.size) (hp : (P.defs[((P.defs[sc.d]!).body.nodes[k]!).fn]!).prim = false)
     (hend : (P.defs[sc.d]!).body.offsets[k + 1]! ≤ (P.defs[sc.d]!).gates) (hloc : Located P sc)
@@ -787,8 +684,6 @@ theorem compReads (P : Prog) (memo : Array Desc.Summary) {sc : Flock.Program.Sco
     rw [← e] at hc
     exact ⟨g, ⟨by omega, by omega⟩, ops, hc, ha'⟩
 
-/-! ## An argument's positions against its members' reads -/
-
 theorem mem_spansPos (xs : Array (Nat × Nat)) (t : Nat) : t ∈ spansPos xs ↔ Width.inIvs xs.toList t := by
   unfold spansPos Width.inIvs
   simp only [List.mem_flatMap, List.mem_range'_1]
@@ -796,9 +691,6 @@ theorem mem_spansPos (xs : Array (Nat × Nat)) (t : Nat) : t ∈ spansPos xs ↔
   · rintro ⟨p, hp, h1, h2⟩; exact ⟨p, hp, h1, by omega⟩
   · rintro ⟨p, hp, h1, h2⟩; exact ⟨p, hp, h1, by omega⟩
 
-/-- **Positions agreeing with references `L` name exactly what the members' reads `B` resolve to**, when `L` holds
-exactly the references those reads go up to (`idx`), each read going up to its reference's gate (`hup`) and each
-succeeding (`hsucc`). -/
 theorem branch_iff {P : Prog} {sc : Flock.Program.Scope} {xs : List (Tgt × Int)} {L : List Nat}
     (R : Nat → Except String Nat) (S : Nat → Nat → Except String Nat) (B : Nat → Nat → Prop) (idx : Nat → Nat → Nat)
     (hag : Agree P sc xs (L.map R)) (hcov : ∀ t, t ∈ L ↔ ∃ m j, B m j ∧ t = idx m j)
@@ -818,16 +710,12 @@ theorem branch_iff {P : Prog} {sc : Flock.Program.Scope} {xs : List (Tgt × Int)
   · rintro ⟨m, j, hB, hS⟩
     exact agree_tgt hag (List.mem_map.2 ⟨idx m j, (hcov _).2 ⟨m, j, hB, rfl⟩, rfl⟩) (hup m j a hB hS)
 
-/-- The index into argument `i` of node `node` that member `m`'s parameter leaf `j` reads (a scan's carry past the
-first iteration aside): a batch member's `memberIdx`, a scan iteration's `xs` slice, else `j`. -/
 def upIdx (node : Flock.Program.Node) (i m j : Nat) : Nat :=
   match node.form with
   | .batch => Resolve.memberIdx (node.args[i]!) m j
   | .scan => if i ≠ 0 ∧ i ≤ node.nxs then m * ((node.args[i]!).dims.map (·.2)).getD 0 + j else j
   | _ => j
 
-/-- **Up through a member's parameter leaf**: what it resolves to, its node's reference `upIdx` resolves to in the
-parent (a scan's carry past the first iteration aside). -/
 theorem up_idx (P : Prog) (sc : Flock.Program.Scope) {k m i j a : Nat} {node : Flock.Program.Node}
     (hnode : (P.defs[sc.d]!).body.nodes[k]! = node) (hnc : node.form = .scan → i = 0 → m = 0)
     (h : Flock.Program.resolve P (P.child sc k m) ⟨true, i, j⟩ = .ok a) :
@@ -854,8 +742,6 @@ theorem up_idx (P : Prog) (sc : Flock.Program.Scope) {k m i j a : Nat} {node : F
       · simp only [hx, ↓reduceIte] at this
         simpa [hi, hx] using this
 
-/-- **A read of argument `i` over `spans` names exactly what the members' reads `B` resolve to**, where the spans'
-indices are exactly the references those reads go up to (`upIdx`). -/
 theorem readSet (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = c.d) (hD : DownSpec c sc Flock.Steps.FUEL)
     {k i : Nat} {node : Flock.Program.Node} (hn : c.node k = .ok node) (hA : ArgOk c k i)
     (hR : ∀ t < (node.args[i]!).seq.count, Resolve.RefOk c.P c.d k ((node.args[i]!).seq.get t))
@@ -873,9 +759,6 @@ theorem readSet (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = c.d) (hD 
   exact branch_iff _ _ B (upIdx node i) hag hcov
     (fun m j a hb h => up_idx c.P sc hnode (hB m j hb) h) hsucc a
 
-/-! ## A composite node's arguments, read as its members read their parameters -/
-
-/-- Argument `i` of `node` is read member by member (`nodeReads`): a batch's mapped argument or a scan's `xs`. -/
 def perMember (node : Flock.Program.Node) (i : Nat) : Bool :=
   match node.form with
   | .batch => node.args[i]!.dims.isSome
@@ -896,7 +779,6 @@ theorem argPos_eq (c : Desc.Ctx) (k : Nat) (node : Flock.Program.Node) (i : Nat)
   unfold argPos perMember
   cases node.form <;> rfl
 
-/-- `nodeReads`' read of argument `i` of a composite's node `k` succeeds, branch by branch as `argPos` reads it. -/
 def ArgReadOk (c : Desc.Ctx) (k : Nat) (node : Flock.Program.Node) (i : Nat) : Prop :=
   if (node.form == .scan && i == 0) = true then ReadsOk c k 0 ((c.memo[node.fn]!).used[i]?.getD #[])
   else if (!perMember node i) = true then ReadsOk c k i ((c.memo[node.fn]!).used[i]?.getD #[])
@@ -909,7 +791,6 @@ def ArgReadOk (c : Desc.Ctx) (k : Nat) (node : Flock.Program.Node) (i : Nat) : P
       ReadsOk c k i (Desc.argSpans node i m ((c.memo[node.fn]!).used[i]?.getD #[]))
     | .error _ => False
 
-/-- **A composite's node read succeeding reads each argument as `argPos` does** (`ArgReadOk`), and a scan's carries. -/
 theorem nodeReads_comp_ok (c : Desc.Ctx) (k : Nat) (node : Flock.Program.Node) (hn : c.node k = .ok node)
     (hp : (c.P.defs[node.fn]!).prim = false) {rs : Array Seg} (h : Desc.nodeReads c k = .ok rs)
     (hm : node.members ≠ 0) :
@@ -979,13 +860,9 @@ theorem nodeReads_comp_ok (c : Desc.Ctx) (k : Nat) (node : Flock.Program.Node) (
     obtain ⟨cr, hcr, -⟩ := Walk.except_bind_ok h
     exact ⟨cr, hcr⟩
 
-/-- Member `m`'s leaf `j` of parameter `i`, among those `u` names, as an argument's read reads it (`argPos`): a scan's
-iterations after the first read their carry through `carriesRead`. -/
 def ArgB (node : Flock.Program.Node) (u : Desc.Ivs) (i m j : Nat) : Prop :=
   m < node.members ∧ (node.form = .scan → i = 0 → m = 0) ∧ Width.inIvs u.toList j
 
-/-- **A composite node's positions name outside it exactly what its gates read there**, where each argument's read
-names its members' reads of the parameter (`ArgB`) and the carries' read the later iterations' reads of their carry. -/
 theorem compSet_of (P : Prog) (memo : Array Desc.Summary) {sc : Flock.Program.Scope} {k : Nat} (hL : Laid P sc.d)
     (hk : k < (P.defs[sc.d]!).body.nodes.size) {node : Flock.Program.Node}
     (hg : (P.defs[sc.d]!).body.nodes[k]! = node) (hp : (P.defs[node.fn]!).prim = false)
@@ -1030,15 +907,12 @@ theorem compSet_of (P : Prog) (memo : Array Desc.Summary) {sc : Flock.Program.Sc
         ⟨m, j, ⟨hm, fun hs hi0 => Nat.eq_zero_of_not_pos fun h => hc ⟨hs, hi0, h⟩, hj⟩, hr⟩
       exact ⟨x, List.mem_append_left _ (List.mem_flatMap.2 ⟨i, List.mem_range.2 hi, hx⟩), hxa⟩
 
-/-- Spans whose indices are below `n` end at or before it. -/
 theorem spans_le {spans : Array (Nat × Nat)} {n : Nat} (h : ∀ t ∈ spansPos spans, t < n) :
     ∀ x ∈ spans.toList, x.1 < x.2 → x.2 ≤ n := by
   intro x hx hlt
   have := h (x.2 - 1) ((mem_spansPos spans _).2 ⟨x, hx, by omega, by omega⟩)
   omega
 
-/-- Where an argument is read as the parameter (a scan's initial carry, or an argument not mapped over the members),
-member `m`'s leaf `j` reads its reference `j`. -/
 theorem upIdx_shared (node : Flock.Program.Node) (i m j : Nat)
     (h : (node.form == .scan && i == 0) = true ∨ (!perMember node i) = true) :
     upIdx node i m j = j := by
@@ -1061,7 +935,6 @@ theorem upIdx_shared (node : Flock.Program.Node) (i m j : Nat)
       rcases h with h | h <;> simp at h <;> omega
     · rfl
 
-/-- Member `m`'s spans of a mapped argument (`Desc.argSpans`) are its used leaves' indices `upIdx`. -/
 theorem spansPos_argSpans (node : Flock.Program.Node) (i m : Nat) (u : Desc.Ivs) {lv : Nat}
     (hpm : perMember node i = true)
     (hu : ∀ j, Width.inIvs u.toList j → j < lv)
@@ -1084,9 +957,6 @@ theorem spansPos_argSpans (node : Flock.Program.Node) (i m : Nat) (u : Desc.Ivs)
     unfold upIdx; rw [hf]
     simp [show i ≠ 0 by omega, hpm.2]
 
-/-- **One argument's read names exactly what its members' reads of the parameter resolve to** (`ArgB`), where its
-members' leaves tile it (`upIdx`, in range wherever used), its reads succeed (`ArgReadOk`), and so do its members'
-reads (`hsucc`); all members at once (`Desc.memberRows`) as `hrows` says. -/
 theorem argSet (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = c.d) (hD : DownSpec c sc Flock.Steps.FUEL)
     {k i : Nat} {node : Flock.Program.Node} (hn : c.node k = .ok node) (hA : ArgOk c k i)
     (hR : ∀ t < (node.args[i]!).seq.count, Resolve.RefOk c.P c.d k ((node.args[i]!).seq.get t))
@@ -1112,7 +982,6 @@ theorem argSet (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = c.d) (hD :
   set u := (c.memo[node.fn]!).used[i]?.getD #[] with hudef
   have hm0' : 0 < node.members := Nat.pos_of_ne_zero hm0
   have hB : ∀ m j, ArgB node u i m j → node.form = .scan → i = 0 → m = 0 := fun m j h => h.2.1
-  -- a read of `u` as the parameter itself
   have shared : (node.form == .scan && i == 0) = true ∨ (!perMember node i) = true → ReadsOk c k i u →
       ((∃ x ∈ readPos c k i u, den c.P sc x = .ok a) ↔
         ∃ m j, ArgB node u i m j ∧ Flock.Program.resolve c.P (c.P.child sc k m) ⟨true, i, j⟩ = .ok a) := by
@@ -1195,10 +1064,6 @@ theorem argSet (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = c.d) (hD :
       exact ⟨x, ⟨m, hB'.1, hx⟩, hxa⟩
   · exact absurd hok id
 
-/-! ## All members' reads of a mapped argument at once (`Desc.memberRows`) -/
-
-/-- The pieces of rows `Desc.memberRows` reads argument `i` through for the used run `[lo, hi)`: per row of a batch's
-mapped axis (a scan's `xs` one), one piece of gate-0 positions, a member a row. -/
 def rowsAt (node : Flock.Program.Node) (i lo hi : Nat) : Array Piece :=
   match node.form, (node.args[i]!).dims with
   | .scan, _ =>
@@ -1213,7 +1078,6 @@ def rowsAt (node : Flock.Program.Node) (i lo hi : Nat) : Array Piece :=
                            len := e - s, rows := node.members, rowStride := (L : Int) } else none
   | _, _ => #[]
 
-/-- The argument indices a piece of gate-0 positions names. -/
 def idxOf (q : Piece) : List Nat := (pos q).map (·.2.toNat)
 
 theorem mem_idxOf_row {b : Nat} {len rows L : Nat} (t : Nat) :
@@ -1255,8 +1119,6 @@ theorem rowsAt_nonneg (node : Flock.Program.Node) (i lo hi : Nat) :
       · cases hq
   · simp at hq
 
-/-- **The rows `Desc.memberRows` reads for the used run `[lo, hi)` name exactly its members' leaves there**, as
-indices `upIdx` into a mapped argument. -/
 theorem rowsAt_idx (node : Flock.Program.Node) (i lo hi : Nat) (hpm : perMember node i = true)
     (hL0 : ∀ d L, (node.args[i]!).dims = some (d, L) → L = 0 → hi ≤ lo) (t : Nat) :
     t ∈ (rowsAt node i lo hi).toList.flatMap idxOf ↔
@@ -1356,8 +1218,6 @@ theorem rowsAt_idx (node : Flock.Program.Node) (i lo hi : Nat) (hpm : perMember 
       zify [hs, h3, Nat.div_mul_le_self j L]
       ring
 
-/-- **What `down` keeps of the piece `throughPS` gives of an argument**: the gates the argument's references at the
-piece's indices resolve to, position by position. -/
 theorem throughPS_agree (c : Desc.Ctx) (sc : Flock.Program.Scope) (hD : DownSpec c sc Flock.Steps.FUEL) {k i : Nat}
     (hA : ArgOk c k i)
     (hR : ∀ t < ((c.body.nodes[k]!).args[i]!).seq.count,
@@ -1427,8 +1287,6 @@ theorem throughPS_agree (c : Desc.Ctx) (sc : Flock.Program.Scope) (hD : DownSpec
   simp only [Function.comp]
   rw [(hJ y hy).1, den_refPos]
 
-/-- A loop each of whose steps on an element of `l` goes on keeping `I`, growing its state (`Le`) and doing what
-`R` says of the element, or stops with `D`: ending without `D`, it kept `I`, grew its state, and did `R` of each. -/
 theorem forIn_cover {α σ : Type} (f : α → σ → Except String (ForInStep σ)) (D I : σ → Prop) (Le : σ → σ → Prop)
     (R : α → σ → Prop) (hrefl : ∀ s, Le s s) (htrans : ∀ s1 s2 s3, Le s1 s2 → Le s2 s3 → Le s1 s3)
     (hRm : ∀ x s1 s2, R x s1 → Le s1 s2 → R x s2) :
@@ -1455,8 +1313,6 @@ theorem forIn_cover {α σ : Type} (f : α → σ → Except String (ForInStep �
       subst h
       exact absurd hq hD
 
-/-- **What `Desc.memberRows` gives**: for each used run, the pieces `throughPS` gives of its rows (`rowsAt`), and
-nothing else. -/
 theorem memberRows_rows (c : Desc.Ctx) (node : Flock.Program.Node) (k i : Nat) (u : Desc.Ivs) {ps : Array Piece}
     (h : Desc.memberRows c node k i u = .ok (some ps)) :
     (∀ bp ∈ ps.toList, ∃ p ∈ u.toList, ∃ q ∈ (rowsAt node i p.1 p.2).toList,
@@ -1576,8 +1432,6 @@ theorem memberRows_rows (c : Desc.Ctx) (node : Flock.Program.Node) (k i : Nat) (
     rw [this]
     exact hf
 
-/-- **All members' reads of a mapped argument at once** (`Desc.memberRows`) name exactly what the members' reads of
-the parameter's used leaves resolve to (`ArgB`). -/
 theorem rowsSet (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = c.d) (hD : DownSpec c sc Flock.Steps.FUEL)
     {k i : Nat} {node : Flock.Program.Node} (hn : c.node k = .ok node) (hA : ArgOk c k i)
     (hR : ∀ t < (node.args[i]!).seq.count, Resolve.RefOk c.P c.d k ((node.args[i]!).seq.get t))
@@ -1614,7 +1468,6 @@ theorem rowsSet (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = c.d) (hD 
   have hhg : ∀ t < ((c.body.nodes[k]!).args[i]!).seq.count,
       Resolve.RefOk c.P c.d k (((c.body.nodes[k]!).args[i]!).seq.get t) := by
     rw [hg]; exact hR
-  -- one piece's read
   have one : ∀ p ∈ u.toList, ∀ q ∈ (rowsAt node i p.1 p.2).toList, ∀ bp,
       Desc.throughPS (c.arg k i) q = some bp → (∃ segs, Desc.down c Flock.Steps.FUEL bp = .ok segs) →
       ((∃ x ∈ downPos c bp, den c.P sc x = .ok a) ↔
@@ -1648,8 +1501,6 @@ theorem rowsSet (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = c.d) (hD 
     obtain ⟨x, hx, hxa⟩ := (one p hp q hq bp hq' (hok bp hbp)).2 ⟨m, j, ⟨hB, htq⟩, hr⟩
     exact ⟨x, List.mem_flatMap.2 ⟨bp, hbp, hx⟩, hxa⟩
 
-/-- **One argument's read names exactly its members' reads of the parameter** (`argSet`, all members at once by
-`rowsSet`). -/
 theorem argSet_of (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = c.d) (hD : DownSpec c sc Flock.Steps.FUEL)
     {k i : Nat} {node : Flock.Program.Node} (hn : c.node k = .ok node) (hA : ArgOk c k i)
     (hR : ∀ t < (node.args[i]!).seq.count, Resolve.RefOk c.P c.d k ((node.args[i]!).seq.get t))
@@ -1668,9 +1519,6 @@ theorem argSet_of (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = c.d) (h
   argSet c sc hd hD hn hA hR hm0 hok hlv hu hL0 hlo htile hsucc
     (fun hpm _ hps hok' a => rowsSet c sc hd hD hn hA hR hpm hu hL0 hlo hsucc hps hok' a) a
 
-/-! ## A scan's carries, read as its later iterations read their carry -/
-
-/-- A loop inserting `g t` for each `t` of `l` keeps what it started with and inserts each. -/
 theorem insertLoop_has {α : Type} (g : α → Nat) :
     ∀ (l : List α) (s0 s : Std.HashSet Nat),
       forIn (m := Except String) l s0 (fun t s => pure (ForInStep.yield (s.insert (g t)))) = .ok s →
@@ -1686,8 +1534,6 @@ theorem insertLoop_has {α : Type} (g : α → Nat) :
     · exact h1 _ (Std.HashSet.mem_insert.2 (.inl (beq_self_eq_true _)))
     · exact h2 t' ht'
 
-/-- **Back to the initial carry**: iteration `m ≥ 1`'s carry leaf `f 0`, the step's summary naming each return
-position `f s` carry leaf `f (s + 1)` for `s < m`, is the first iteration's carry leaf `f m`. -/
 theorem back_init (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = c.d) {k : Nat} {node : Flock.Program.Node}
     (hn : c.node k = .ok node) (hform : node.form = .scan) (hRet : RetOk c.P c.memo node.fn) (f : Nat → Nat)
     {m a : Nat} (hm : 1 ≤ m)
@@ -1698,8 +1544,6 @@ theorem back_init (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = c.d) {k
   have := carry_init c sc hd hn hform hRet f (m := m - 1) (fun s hs' => hs s (by omega)) h1
   rwa [show m - 1 + 1 = m by omega] at this
 
-/-- **Back to where the carry leaves**: iteration `m`'s carry leaf `f 0`, the step's summary naming each return
-position `f s` carry leaf `f (s + 1)` for `s < e < m`, is iteration `m - 1 - e`'s return position `f e`. -/
 theorem back_exit (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = c.d) {k : Nat} {node : Flock.Program.Node}
     (hn : c.node k = .ok node) (hform : node.form = .scan) (hRet : RetOk c.P c.memo node.fn) (f : Nat → Nat)
     {e m a : Nat} (he : e < m)
@@ -1709,7 +1553,6 @@ theorem back_exit (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = c.d) {k
   have h1 := carry_back c sc hd hn hform (by omega : m ≠ 0) hv
   exact carry_chain c sc hd hn hform hRet f (m := m - 1) e (by omega) hs h1
 
-/-- A step's return position, read in an iteration, names in that iteration's activation what it resolves to. -/
 theorem ret_den (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = c.d) {k : Nat} {node : Flock.Program.Node}
     (hn : c.node k = .ok node) (hRet : RetOk c.P c.memo node.fn) {it h a : Nat} {x : Tgt × Int}
     (hx : (psPos (c.memo[node.fn]!).ret)[h]? = some x)
@@ -1723,7 +1566,6 @@ theorem ret_den (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = c.d) {k :
     rw [hA.length_eq] at this; simpa using this
   exact agree_get hA hx (by rw [List.getElem?_map, List.getElem?_range hlt]; rfl) a hv
 
-/-- The chain's step: each position before its last (any, around a cycle) returns the carry leaf the next one is. -/
 theorem chain_step {P : Prog} {memo : Array Desc.Summary} {f : Nat} (hR : RetOk P memo f) {j : Nat}
     {ch : Desc.Chain} (hok : ChainOk (memo[f]!).ret j ch) {s : Nat} (hs : ch.exit = none ∨ s + 1 < ch.hist.size) :
     (psPos (memo[f]!).ret)[ch.at s]? = some (.ref true 0, (ch.at (s + 1) : Int)) := by
@@ -1734,7 +1576,6 @@ theorem chain_step {P : Prog} {memo : Array Desc.Summary} {f : Nat} (hR : RetOk 
     rw [chainAt_lt ch (by omega : s < ch.hist.size), chainAt_lt ch hs]
     exact carryPos_of_retAt hR hq ht hb
 
-/-- A gate a step's return names, read in an iteration, is one of the scan node's. -/
 theorem ret_gate_in (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = c.d) {k : Nat}
     {node : Flock.Program.Node} (hn : c.node k = .ok node)
     (hlaid : (c.P.defs[sc.d]!).body.offsets[k + 1]! =
@@ -1755,23 +1596,19 @@ theorem ret_gate_in (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = c.d) 
     rw [hlaid]
     omega
 
-/-- Gate `a` is what an iteration of scan node `k` past the first reads at a leaf of its carry `u` names. -/
 def CarryRead (P : Prog) (sc : Flock.Program.Scope) (k : Nat) (node : Flock.Program.Node) (u : Desc.Ivs)
     (a : Nat) : Prop :=
   ∃ m, 1 ≤ m ∧ m < node.members ∧ ∃ j, Width.inIvs u.toList j ∧
     Flock.Program.resolve P (P.child sc k m) ⟨true, 0, j⟩ = .ok a
 
-/-- Every gate outside node `k` that a position of `out` names is a carry read (`CarryRead`). -/
 def CarrySnd (P : Prog) (sc : Flock.Program.Scope) (k : Nat) (node : Flock.Program.Node) (u : Desc.Ivs)
     (out : Array Seg) : Prop :=
   ∀ x ∈ segsPos out, ∀ v, den P sc x = .ok v → ¬ InNodeAt P sc k v → CarryRead P sc k node u v
 
-/-- Every gate outside node `k` that iterations `1 .. T` read at carry leaf `j` a position of `out` names. -/
 def CarryCov (P : Prog) (sc : Flock.Program.Scope) (k T j : Nat) (out : Array Seg) : Prop :=
   ∀ m, 1 ≤ m → m ≤ T → ∀ v, Flock.Program.resolve P (P.child sc k m) ⟨true, 0, j⟩ = .ok v → ¬ InNodeAt P sc k v →
     ∃ x ∈ segsPos out, den P sc x = .ok v
 
-/-- `out'` holds every position of `out`. -/
 def SegsLe (out out' : Array Seg) : Prop := ∀ x ∈ segsPos out, x ∈ segsPos out'
 
 theorem segsLe_app (out e : Array Seg) : SegsLe out (out ++ e) := by
@@ -1796,8 +1633,6 @@ theorem carrySnd_app {P : Prog} {sc : Flock.Program.Scope} {k : Nat} {node : Flo
   · exact h x hx
   · exact he x hx
 
-/-- **What `Desc.carriesRead` reads of a scan's carries, outside the node, is exactly what its iterations past the
-first read at the leaves of their carry `used` names** (`CarryRead`). -/
 theorem carrySet (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = c.d)
     (hD : DownSpec c sc Flock.Steps.FUEL) (hC : CalleeSpec c sc Flock.Steps.FUEL) (hT : ThroughSpec c sc Flock.Steps.FUEL)
     {k : Nat} {node : Flock.Program.Node} (hn : c.node k = .ok node) (hform : node.form = .scan) (hn2 : 2 ≤ node.n)
@@ -2272,11 +2107,6 @@ theorem carrySet (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = c.d)
         · exact hk2 t (List.mem_range'_1.2 ⟨by omega, by omega⟩)
   · exact hjp s1 y hG1 (fun t h1 h2 => hC1 t h1 (by omega)) hy
 
-/-! ## A composite node's reads, its arguments' and its carries' together -/
-
-/-- **A composite node's positions name outside it exactly what its gates read there** (`compSet_of`), its arguments'
-reads by `argSet_of` and its carries' by `carrySet`, its members' reads succeeding as its callee's `UsedExact` says,
-wherever its read succeeds and its arguments are shaped as the decoder holds them. -/
 theorem compNodeSet (P : Prog) (memo : Array Desc.Summary) {sc : Flock.Program.Scope} {k : Nat} (hL : Laid P sc.d)
     (hk : k < (P.defs[sc.d]!).body.nodes.size) {node : Flock.Program.Node}
     (hn : (ctxOf P memo sc.d).node k = .ok node) (hp : (P.defs[node.fn]!).prim = false)
@@ -2362,9 +2192,6 @@ theorem compNodeSet (P : Prog) (memo : Array Desc.Summary) {sc : Flock.Program.S
       have := members_scan hf
       exact hs ⟨hf, by omega⟩
 
-/-! ## `summarize`'s parameter reads -/
-
-/-- One piece of `summarize`'s parameter reads: a piece naming parameter `i`'s leaves joins `i`'s. -/
 def pushRef (q : Piece) (acc : Array (Array Piece)) : Array (Array Piece) :=
   match q.tgt with
   | .ref true i => acc.modify i (·.push q)
@@ -2422,7 +2249,6 @@ theorem pushRef_fold : ∀ (l : List Piece) (acc : Array (Array Piece)),
       · exact .inl (.inr ⟨g1, rfl, g3⟩)
       · exact .inr ⟨g1, g2, g3⟩
 
-/-- One segment of `summarize`'s: a segment of more than one copy is passed over. -/
 def segRefs (acc : Array (Array Piece)) (s : Seg) : Array (Array Piece) :=
   if s.reps > 1 then acc else s.ps.toList.foldl (fun a q => pushRef q a) acc
 
@@ -2472,8 +2298,6 @@ theorem forIn_pure_eq {α σ : Type} (g : α → σ → σ) (f : α → σ → E
     rw [List.forIn_cons, hf]
     exact forIn_pure_eq g f hf l _
 
-/-- **`summarize`'s parameter reads**: per parameter, the pieces naming its leaves of the body's node reads of one
-copy. -/
 theorem summarize_acc (P : Prog) (memo : Array Desc.Summary) (d : Nat) (s : Desc.Summary)
     (h : Desc.summarize P memo d = .ok s) (hp : (P.defs[d]!).prim = false) :
     ∃ acc : Array (Array Piece), s.used = acc.map (fun qs => Desc.Ivs.norm (Desc.ivsOf qs)) ∧
@@ -2533,8 +2357,6 @@ theorem summarize_acc (P : Prog) (memo : Array Desc.Summary) (d : Nat) (s : Desc
       change q ∈ (#[] : Array Piece).toList at hq
       simp at hq
 
-/-- **`summarize`'s `used`, leaf by leaf**: parameter `i`'s leaf `j` is in it exactly when a piece of a node's read of
-one copy names it. -/
 theorem summarize_used (P : Prog) (memo : Array Desc.Summary) (d : Nat) (s : Desc.Summary)
     (h : Desc.summarize P memo d = .ok s) (hp : (P.defs[d]!).prim = false) (i j : Nat) :
     Width.inIvs ((s.used[i]?.getD #[]).toList) j ↔
@@ -2557,9 +2379,6 @@ theorem summarize_used (P : Prog) (memo : Array Desc.Summary) (d : Nat) (s : Des
     simp only [Width.inIvs, List.not_mem_nil, false_and, exists_false, false_iff, not_and]
     intro h1; omega
 
-/-! ## A node's parameter reads, in `used` -/
-
-/-- `summarize` reads every node of the body. -/
 theorem summarize_reads (P : Prog) (memo : Array Desc.Summary) (d : Nat) (s : Desc.Summary)
     (h : Desc.summarize P memo d = .ok s) (hp : (P.defs[d]!).prim = false) :
     ∀ k < (P.defs[d]!).body.nodes.size, ∃ rs, Desc.nodeReads (ctxOf P memo d) k = .ok rs := by
@@ -2583,8 +2402,6 @@ theorem summarize_reads (P : Prog) (memo : Array Desc.Summary) (d : Nat) (s : De
     · exact hI k hk
     · exact ⟨rs, hrs⟩
 
-/-- **A parameter position a node reads is a leaf `summarize`'s `used` names**, the segments the node's read splits
-naming positions at or past 0, of a copy at least, and of more than one only of gates or of copies all alike. -/
 theorem paramPos_used (P : Prog) (memo : Array Desc.Summary) (d : Nat) (s : Desc.Summary)
     (h : Desc.summarize P memo d = .ok s) (hp : (P.defs[d]!).prim = false) {k : Nat}
     (hk : k < (P.defs[d]!).body.nodes.size) {node : Flock.Program.Node} (hn : (ctxOf P memo d).node k = .ok node)
@@ -2694,8 +2511,6 @@ theorem paramPos_used (P : Prog) (memo : Array Desc.Summary) (d : Nat) (s : Desc
     hin _ hgo q (by simp [Seg.one]) (fun w hw => by rw [hw] at htgt; cases htgt), by simp [Seg.one], q,
     by simp [Seg.one], htgt, (Width.pis_spec q hnn' p.toNat).2 ⟨r, by omega, t, ht, by omega⟩⟩
 
-/-! ## `UsedExact` from the body's nodes -/
-
 theorem locR_finds {P : Prog} {sc : Flock.Program.Scope} {g : Nat} {ops : Array Nat} (h : LocR P sc g ops) :
     ∃ k, FindsAt P sc.d (g - sc.off) k := by
   cases h with
@@ -2723,10 +2538,6 @@ theorem laid_le {P : Prog} {d : Nat} (hL : Laid P d) {a b : Nat} (hab : a ≤ b)
     rw [hL b (by omega)]
     exact Nat.le_trans (ih (by omega)) (Nat.le_add_right _ _)
 
-/-- **What an activation's gates read outside it is a leaf `used` names** (`UsedExact`'s first part), wherever each
-node reads outside itself what its positions name there, and the segments its read splits name positions at or past 0,
-no node's output, parameters in range and the body's gates, of a copy at least and of more than one only of gates or
-of copies all alike. -/
 theorem usedExact_a (P : Prog) (memo : Array Desc.Summary) (s : Desc.Summary) (sc : Flock.Program.Scope)
     (h : Desc.summarize P memo sc.d = .ok s) (hp : (P.defs[sc.d]!).prim = false) (hL : Laid P sc.d)
     (hlast : (P.defs[sc.d]!).body.offsets[(P.defs[sc.d]!).body.nodes.size]! = (P.defs[sc.d]!).gates)
@@ -2774,8 +2585,6 @@ theorem usedExact_a (P : Prog) (memo : Array Desc.Summary) (s : Desc.Summary) (s
       · rename_i hp0
         exact ⟨i, p.toNat, paramPos_used P memo sc.d s h hp hk hn (hout k hk _ hn) hx (hpi i rfl), hden⟩
 
-/-- The segments a node's read splits: every read is one of them, each whose first piece names no gate is a read, and
-they name the node's positions. -/
 theorem nodeReads_out (c : Desc.Ctx) (k : Nat) (node : Flock.Program.Node) (hn : c.node k = .ok node) {rs : Array Seg}
     (hrs : Desc.nodeReads c k = .ok rs) :
     ∃ out : Array Seg, (∀ g ∈ rs.toList, g ∈ (out.flatMap Seg.split).toList) ∧
@@ -2814,7 +2623,6 @@ theorem nodeReads_out (c : Desc.Ctx) (k : Nat) (node : Flock.Program.Node) (hn :
         unfold nodePos
         rw [if_neg hpr, if_neg hm]
 
-/-- A read of one copy that `Seg.split` makes is one piece of the segment. -/
 theorem split_one {s g : Seg} (hr : s.reps ≠ 0) (hg : g ∈ (Seg.split s).toList) (h1 : g.reps ≤ 1) :
     ∃ q ∈ s.ps.toList, g = Seg.one q := by
   revert hg
@@ -2846,8 +2654,6 @@ theorem split_one {s g : Seg} (hr : s.reps ≠ 0) (hg : g ∈ (Seg.split s).toLi
     simp only [beq_iff_eq] at hne
     omega
 
-/-- **A leaf `used` names is a parameter position a node reads**, the segments its read splits naming positions at or
-past 0, of pieces of positive count, of a copy at least. -/
 theorem used_nodePos (P : Prog) (memo : Array Desc.Summary) (d : Nat) (s : Desc.Summary)
     (h : Desc.summarize P memo d = .ok s) (hp : (P.defs[d]!).prim = false)
     (hout : ∀ k < (P.defs[d]!).body.nodes.size, ∀ node, (ctxOf P memo d).node k = .ok node → ∀ g,
@@ -2891,10 +2697,6 @@ theorem used_nodePos (P : Prog) (memo : Array Desc.Summary) (d : Nat) (s : Desc.
   simp only [List.mem_flatMap, List.mem_range, List.mem_map]
   exact ⟨r, by omega, t, ht, by rw [htgt, hje]⟩
 
-/-- **Each leaf `used` names is read by a gate of the activation** (`UsedExact`'s second part), wherever each node
-reads outside itself what its positions name there, its parameter positions resolve and are in range, a parameter's
-leaf resolves before the activation, and the segments its read splits name positions at or past 0, of pieces of positive count, of a copy at
-least. -/
 theorem usedExact_b (P : Prog) (memo : Array Desc.Summary) (s : Desc.Summary) (sc : Flock.Program.Scope)
     (h : Desc.summarize P memo sc.d = .ok s) (hp : (P.defs[sc.d]!).prim = false) (hL : Laid P sc.d)
     (hlast : (P.defs[sc.d]!).body.offsets[(P.defs[sc.d]!).body.nodes.size]! = (P.defs[sc.d]!).gates)
@@ -2929,8 +2731,6 @@ theorem usedExact_b (P : Prog) (memo : Array Desc.Summary) (s : Desc.Summary) (s
     exact laid_le hL (by omega) (le_refl _)
   exact ⟨g, by omega, by omega, ops, hgl, a, hag, hr⟩
 
-/-! ## `UsedExact` of every reached Definition, callees first -/
-
 theorem usedExact_congr {P : Prog} {m m' : Array Desc.Summary} {f : Nat} (e : m[f]! = m'[f]!)
     (h : UsedExact P m f) : UsedExact P m' f := by
   unfold UsedExact at h ⊢
@@ -2943,7 +2743,6 @@ theorem retOk_congr {P : Prog} {m m' : Array Desc.Summary} {f : Nat} (e : m[f]! 
   rw [← e]
   exact h
 
-/-- **`memoOf` summarizes each reached Definition but the root over the summaries before it.** -/
 theorem memoOf_prefix (P : Prog) (memo : Array Desc.Summary) (h : memoOf P = .ok memo) :
     ∀ f < P.defs.size, (Desc.reached P)[f]! = true → f ≠ P.root →
       ∃ r : Array Desc.Summary, r.size = f ∧ (∀ f' < f, r[f']! = memo[f']!) ∧
@@ -2982,8 +2781,6 @@ theorem memoOf_prefix (P : Prog) (memo : Array Desc.Summary) (h : memoOf P = .ok
     rw [getElem!_pos (r.push v) r.size (by simp), Array.getElem_push_eq]
     exact hv ⟨hrf, hfr⟩
 
-/-- **`UsedExact` of every reached composite Definition but the root**, callees first: wherever it holds of each one
-summarized over the summaries before it (`memoOf_prefix`) once it holds there of its composite callees. -/
 theorem memoOf_usedExact (P : Prog) (memo : Array Desc.Summary) (h : memoOf P = .ok memo)
     (hcf : ∀ d < P.defs.size, ∀ k < (P.defs[d]!).body.nodes.size, ((P.defs[d]!).body.nodes[k]!).fn < d)
     (hnr : ∀ d < P.defs.size, (Desc.reached P)[d]! = true →
@@ -3006,7 +2803,6 @@ theorem memoOf_usedExact (P : Prog) (memo : Array Desc.Summary) (h : memoOf P = 
     exact usedExact_congr (hpre _ hlt).symm (ih _ hlt (by omega) (reached_closed P hcf f hrf hp k hk)
       (hnr f hf hrf k hk) hpk)
 
-/-- A segment a node's read splits is one `down` (or `Desc.memberRows`, or `Desc.carriesRead`) gives. -/
 theorem nodePos_seg (P : Prog) (r : Array Desc.Summary) (d : Nat) (s : Desc.Summary)
     (h : Desc.summarize P r d = .ok s) (hp : (P.defs[d]!).prim = false) {k : Nat}
     (hk : k < (P.defs[d]!).body.nodes.size) {node : Flock.Program.Node} (hn : (ctxOf P r d).node k = .ok node)
@@ -3019,9 +2815,6 @@ theorem nodePos_seg (P : Prog) (r : Array Desc.Summary) (d : Nat) (s : Desc.Summ
   obtain ⟨g, hg, hxg⟩ := List.mem_flatMap.1 hx
   exact ⟨g, hfrom g (Array.mem_toList_iff.1 hg), hxg⟩
 
-/-- **`UsedExact` of a composite Definition from its body's nodes**: summarized over `r`, wherever `NodeSet` holds of
-each node over `r`, the segments their reads split are as `down` gives them (`ShapeOk`, `RepsOk`), the gate positions
-they name are the body's, and a parameter resolves before every activation resolution reaches. -/
 theorem usedExact_of (P : Prog) (r memo : Array Desc.Summary) (f : Nat)
     (h : Desc.summarize P r f = .ok memo[f]!) (hp : (P.defs[f]!).prim = false) (hL : Laid P f)
     (hlast : (P.defs[f]!).body.offsets[(P.defs[f]!).body.nodes.size]! = (P.defs[f]!).gates)
@@ -3059,10 +2852,6 @@ theorem usedExact_of (P : Prog) (r memo : Array Desc.Summary) (f : Nat)
   subst hw
   exact hgw k hk node hn w p hx
 
-/-! ## `RootSet` at a root node calling a composite -/
-
-/-- At the root every position a node reads names a gate: `down`'s segments name no node's output and the root has no
-parameters (`rootShape`). -/
 theorem rootRead_gate (P : Prog) (memo : Array Desc.Summary) (hm : memoOf P = .ok memo) (hF : RootFacts P)
     {k : Nat} {node : Flock.Program.Node} (hn : (rootCtx P memo).node k = .ok node) {rs : Array Seg}
     (hrs : Desc.nodeReads (rootCtx P memo) k = .ok rs) :
@@ -3084,8 +2873,6 @@ theorem rootRead_gate (P : Prog) (memo : Array Desc.Summary) (hm : memoOf P = .o
       rw [hF.2.2.1] at this
       omega
 
-/-- **`RootSet` at a root node calling a composite, from `NodeSet` at the root's activation**: the root's activation
-is one resolution reaches, its gates located (`locR_root`), each with `circuitOf`'s operands. -/
 theorem rootSet_comp (P : Prog) (memo : Array Desc.Summary) (hm : memoOf P = .ok memo) (hF : RootFacts P)
     (c : GateTable) (hc : circuitOf P = .ok c) (hl : Desc.rootLaidOut P = true) {k : Nat} (hk : k < nodeCount P)
     {node : Flock.Program.Node} {rs : Array Seg} (hn : (rootCtx P memo).node k = .ok node)
@@ -3140,9 +2927,6 @@ theorem rootSet_comp (P : Prog) (memo : Array Desc.Summary) (hm : memoOf P = .ok
     subst this
     exact ⟨⟨w, hx⟩, hout⟩
 
-/-! ## `RootSet` at a root node calling a primitive -/
-
-/-- **An activation resolution reaches is of a reached composite** (`reached_root`, `reached_closed`). -/
 theorem good_reached (P : Prog) (hF : RootFacts P) : ∀ sc, Resolve.Good P sc →
     sc.d < P.defs.size ∧ (Desc.reached P)[sc.d]! = true ∧ (P.defs[sc.d]!).prim = false
   | .top d off st, h => by
@@ -3211,12 +2995,6 @@ theorem rootSet_prim_of (P : Prog) (memo : Array Desc.Summary) (hm : memoOf P = 
     omega
   exact rootSet_prim P memo c hc hl hL hk hn hp hG hrs hgt hD hA hR hLow hOp hCov
 
-/-! ## `NodeSet` at a node calling a primitive -/
-
-/-- **`NodeSet` at a node calling a primitive**, in any activation: its positions name outside it exactly what its
-gates read there, given its arguments' references in range, its operands' indices in range (`hOp`) and every reference
-read by a member unless it is a batch of none (`hCov`), and each position it reads resolves, the member's gate being
-located (`Located`). -/
 theorem nodeSet_prim (P : Prog) (memo : Array Desc.Summary) {d k : Nat} (hL : Laid P d)
     (hkb : k < (P.defs[d]!).body.nodes.size) (hend : (P.defs[d]!).body.offsets[k + 1]! ≤ (P.defs[d]!).gates)
     {node : Flock.Program.Node} {rs : Array Seg} (hn : (ctxOf P memo d).node k = .ok node)
@@ -3326,10 +3104,6 @@ theorem nodeSet_prim (P : Prog) (memo : Array Desc.Summary) {d k : Nat} (hL : La
     obtain ⟨-, -, -, -, -, a', ha', -⟩ := hmem i' hi' t (List.mem_range.1 ht)
     exact ⟨a', hxv a' ha'⟩
 
-/-! ## `NodeSet` at a primitive node from the decoder's facts, over the summaries before a Definition -/
-
-/-- **`NodeSet` at a node calling a primitive, from the decoder's facts** (`RootFacts`, `WidthFacts`): in a reached
-composite, over summaries whose callees' hold `RetOk`, wherever every reference of the node is read by a member. -/
 theorem nodeSet_prim_of (P : Prog) (r : Array Desc.Summary) (hF : RootFacts P) (hWF : WidthFacts P) {d : Nat}
     (hd : d < P.defs.size) (hrd : (Desc.reached P)[d]! = true) (hpd : (P.defs[d]!).prim = false)
     (hR0 : ∀ k node, (ctxOf P r d).node k = .ok node → RetOk P r node.fn) {k : Nat}
@@ -3359,7 +3133,6 @@ theorem nodeSet_prim_of (P : Prog) (r : Array Desc.Summary) (hF : RootFacts P) (
   · have := (hBd.1 k hkb).2.2.2.2 (by rw [hg]; exact hp)
     rwa [hg] at this
 
-/-- **A reached composite's callees hold `RetOk` over the summaries before it** (`memoOf_retOk`, `retOk_congr`). -/
 theorem prefix_retOk (P : Prog) (memo : Array Desc.Summary) (hm : memoOf P = .ok memo) (hF : RootFacts P) {f : Nat}
     (hf : f < P.defs.size) (hrf : (Desc.reached P)[f]! = true) (hpf : (P.defs[f]!).prim = false)
     {r : Array Desc.Summary} (hpre : ∀ f' < f, r[f']! = memo[f']!) :
@@ -3373,8 +3146,6 @@ theorem prefix_retOk (P : Prog) (memo : Array Desc.Summary) (hm : memoOf P = .ok
   exact retOk_congr (hpre _ hlt).symm (memoOf_retOk P memo hm hRP hDec hcf hnr hB hSO _ (by omega)
     (reached_closed P hcf f hrf hpf k hk) (hnr f hf hrf k hk))
 
-/-! ## A parameter's leaf resolves before the activation -/
-
 theorem good_bodyOk (P : Prog) (hF : RootFacts P) : ∀ sc, Resolve.Good P sc → Resolve.BodyOk P sc.d := fun sc hsc => by
   obtain ⟨hd, hrd, -⟩ := good_reached P hF sc hsc
   exact hF.2.2.2.2.2.2.2.2 sc.d hd hrd
@@ -3384,7 +3155,6 @@ theorem laidOut_of (P : Prog) (hwk : Desc.walkable P = true) : ∀ d < P.defs.si
   simp only [Bool.and_eq_true] at hwk
   exact (Walk.bodiesLaidOut_spec P hwk.1.2).2.1
 
-/-- **A parameter's leaf resolves before the activation**, in any activation resolution reaches (`Resolve.resolve_lt`). -/
 theorem param_lt (P : Prog) (hF : RootFacts P) (hwk : Desc.walkable P = true) (sc : Flock.Program.Scope)
     (hg : Resolve.Good P sc) {i j a : Nat} (hi : i < (P.defs[sc.d]!).body.params.size)
     (hj : j < ((P.defs[sc.d]!).body.params[i]!).2.leaves)
@@ -3392,11 +3162,6 @@ theorem param_lt (P : Prog) (hF : RootFacts P) (hwk : Desc.walkable P = true) (s
   Resolve.resolve_lt P ⟨hF.1, hF.2.1⟩ (good_bodyOk P hF) (laidOut_of P hwk) sc.off sc ⟨true, i, j⟩
     ⟨hg, ⟨fun _ => ⟨hi, hj⟩, fun h => by cases h⟩, fun _ => le_refl _, fun h => by cases h⟩ h
 
-/-! ## Segments, widths and `UsedExact` of every reached Definition from the decoder's facts -/
-
-/-- **Every segment a body node's read splits is as `down` gives it** (`ShapeOk`, `RepsOk`), in a decoded Definition
-whose callees' summaries hold `RetOk`: `rootShape` in any body (`piece_shape`, `throughPS_shape`,
-`carriesRead_shape`), with `reps_fuel` through `carriesRead_of`. -/
 theorem bodySegs (P : Prog) (r : Array Desc.Summary) {d : Nat} (hd : d < P.defs.size) (hDec : Decoded P)
     (hBd : Resolve.BodyOk P d) (hR : ∀ k node, (ctxOf P r d).node k = .ok node → RetOk P r node.fn)
     (hSO : ScanOut (ctxOf P r d)) {k : Nat} {node : Flock.Program.Node} (hn : (ctxOf P r d).node k = .ok node)
@@ -3437,8 +3202,6 @@ theorem retW_congr {P : Prog} {m m' : Array Desc.Summary} {f : Nat} (e : m[f]! =
   rw [← e]
   exact h
 
-/-- **A reached composite's callees name their gates with their widths over the summaries before it**
-(`memoOf_retW`, `retW_congr`). -/
 theorem prefix_retW (P : Prog) (memo : Array Desc.Summary) (hm : memoOf P = .ok memo) (hF : RootFacts P)
     (hWF : WidthFacts P) {f : Nat} (hf : f < P.defs.size) (hrf : (Desc.reached P)[f]! = true)
     (hpf : (P.defs[f]!).prim = false) {r : Array Desc.Summary} (hpre : ∀ f' < f, r[f']! = memo[f']!) :
@@ -3452,8 +3215,6 @@ theorem prefix_retW (P : Prog) (memo : Array Desc.Summary) (hm : memoOf P = .ok 
   exact retW_congr (hpre _ hlt).symm (memoOf_retW P memo hm hRP hDec hWF hcf hnr hB hSO _ (by omega)
     (reached_closed P hcf f hrf hpf k hk) (hnr f hf hrf k hk)).2
 
-/-- **Every segment a body node's read splits names the body's gates with their widths** (`GateW`): `rootW` in any
-decoded composite whose callees' summaries hold `RetOk` and name theirs. -/
 theorem bodyW (P : Prog) (r : Array Desc.Summary) {d : Nat} (hd : d < P.defs.size) (hpd : (P.defs[d]!).prim = false)
     (hDec : Decoded P) (hWF : WidthFacts P) (hBd : Resolve.BodyOk P d)
     (hR : ∀ k node, (ctxOf P r d).node k = .ok node → RetOk P r node.fn)
@@ -3490,7 +3251,6 @@ theorem bodyW (P : Prog) (r : Array Desc.Summary) {d : Nat} (hd : d < P.defs.siz
     · intro k' node' hn' hm0 lo hi' segs' hlv h'
       exact init_w _ hn' hW.2.2.1 hm0 hlv h'
 
-/-- **A gate position a body node reads is one of the body's gates** (`bodyW`, `locW_lt`). -/
 theorem bodyGate_lt (P : Prog) (r : Array Desc.Summary) {d : Nat} (s : Desc.Summary) (h : Desc.summarize P r d = .ok s)
     (hd : d < P.defs.size) (hpd : (P.defs[d]!).prim = false) (hDec : Decoded P) (hWF : WidthFacts P)
     (hBd : Resolve.BodyOk P d) (hR : ∀ k node, (ctxOf P r d).node k = .ok node → RetOk P r node.fn)
@@ -3504,11 +3264,6 @@ theorem bodyGate_lt (P : Prog) (r : Array Desc.Summary) {d : Nat} (s : Desc.Summ
   have h0 := ((bodySegs P r hd hDec hBd hR hSO hn hg).1.2.1 _ hxg).1
   omega
 
-/-- **`UsedExact` of every reached composite Definition but the root**, with the decoder's facts (`RootFacts`,
-`WidthFacts`, `Desc.walkable`), wherever every reference of a primitive node of a reached composite is read by a
-member unless it is a batch of none (`hCov`) and, over the summaries before a Definition, `NodeSet` holds of each of its nodes calling a composite
-once its composite callees' `UsedExact` does there (`hComp`): `memoOf_usedExact`, each step `usedExact_of` with
-`nodeSet_prim_of`, `bodySegs`, `bodyGate_lt` and `param_lt`. -/
 theorem usedExact_all (P : Prog) (memo : Array Desc.Summary) (hm : memoOf P = .ok memo) (hF : RootFacts P)
     (hWF : WidthFacts P) (hwk : Desc.walkable P = true)
     (hCov : ∀ d < P.defs.size, (Desc.reached P)[d]! = true → (P.defs[d]!).prim = false →
@@ -3546,10 +3301,6 @@ theorem usedExact_all (P : Prog) (memo : Array Desc.Summary) (hm : memoOf P = .o
   · exact nodeSet_prim_of P r hF hWF hf hrf hp hR hn hpc hrs (hCov f hf hrf hp k hk _ rfl hpc)
 
 
-/-! ## `NodeSet` at a composite node from the decoder's facts, and `RootSet` -/
-
-/-- **Every parameter leaf in range resolves**, in any activation resolution reaches: `Desc.walkable` keeps resolution
-within `Flock.Steps.FUEL` (`OperandsResolve.resolve_ok`). -/
 theorem param_ok (P : Prog) (hF : RootFacts P) (hwk : Desc.walkable P = true) (sc : Flock.Program.Scope)
     (hg : Resolve.Good P sc) {i j : Nat} (hi : i < (P.defs[sc.d]!).body.params.size)
     (hj : j < ((P.defs[sc.d]!).body.params[i]!).2.leaves) :
@@ -3567,8 +3318,6 @@ theorem param_ok (P : Prog) (hF : RootFacts P) (hwk : Desc.walkable P = true) (s
   exact OperandsResolve.resolve_ok P ⟨hF.1, hF.2.1⟩ (good_bodyOk P hF) (laidOut_of P hwk) hc hF.2.2.1 hz hfuel
     sc.off sc ⟨true, i, j⟩ ⟨hg, ⟨fun _ => ⟨hi, hj⟩, fun h => by cases h⟩, fun _ => le_refl _, fun h => by cases h⟩
 
-/-- **Every parameter position a body node reads resolves**, in any activation of the body resolution reaches: the
-segments its read splits name parameter leaves in range (`bodySegs`), and each resolves (`param_ok`). -/
 theorem nodePos_ok (P : Prog) (r : Array Desc.Summary) (hF : RootFacts P) (hwk : Desc.walkable P = true) {d : Nat}
     (hd : d < P.defs.size) (hrd : (Desc.reached P)[d]! = true)
     (hR : ∀ k node, (ctxOf P r d).node k = .ok node → RetOk P r node.fn) {k : Nat} {node : Flock.Program.Node}
@@ -3591,8 +3340,6 @@ theorem nodePos_ok (P : Prog) (r : Array Desc.Summary) (hF : RootFacts P) (hwk :
   rw [if_neg (by omega)]
   exact ha
 
-/-- **A leaf `used` names is a parameter leaf in range**, of every reached composite but the root: a position a node
-reads (`used_nodePos`), as `down` gives it (`bodySegs`). -/
 theorem used_lt (P : Prog) (memo : Array Desc.Summary) (hm : memoOf P = .ok memo) (hF : RootFacts P) {f : Nat}
     (hf : f < P.defs.size) (hrf : (Desc.reached P)[f]! = true) (hfr : f ≠ P.root)
     (hpf : (P.defs[f]!).prim = false) :
@@ -3611,10 +3358,6 @@ theorem used_lt (P : Prog) (memo : Array Desc.Summary) (hm : memoOf P = .ok memo
   obtain ⟨hi, hj⟩ := ((hsh k node hn g hg).1.2.1 _ hxg).2.2 i rfl
   exact ⟨hi, by omega⟩
 
-/-- What the decoder establishes of a node calling a composite, as `compNodeSet` reads it: the callee's parameters
-are its body's, one per argument, a dimension of no leaves goes to a parameter of none, each member's parameter leaf
-is a reference of the argument, at a node with members every reference is one, and a scan's carry is within its
-callee's return. -/
 def CompShape (P : Prog) (node : Flock.Program.Node) : Prop :=
   (P.defs[node.fn]!).params = (P.defs[node.fn]!).body.params ∧
   (P.defs[node.fn]!).body.params.size = node.args.size ∧
@@ -3626,10 +3369,6 @@ def CompShape (P : Prog) (node : Flock.Program.Node) : Prop :=
     ∃ j < ((P.defs[node.fn]!).body.params[i]!).2.leaves, upIdx node i m j = t) ∧
   (node.form = .scan → ((P.defs[node.fn]!).body.params[0]!).2.leaves ≤ (P.defs[node.fn]!).body.ret.count)
 
-/-- **`NodeSet` at a node calling a composite, from the decoder's facts** (`RootFacts`, `WidthFacts`, `CompShape`): in
-a reached composite, over summaries whose callees' hold `RetOk` and `RetW`, wherever the callee's `UsedExact` holds and
-its `used` names its parameter leaves in range: `compNodeSet`, with the gates its return names in range (`locW_lt`)
-and every parameter position resolving (`nodePos_ok`). -/
 theorem nodeSet_comp_of (P : Prog) (r : Array Desc.Summary) (hF : RootFacts P) (hWF : WidthFacts P)
     (hwk : Desc.walkable P = true) {d : Nat} (hd : d < P.defs.size) (hrd : (Desc.reached P)[d]! = true)
     (hpd : (P.defs[d]!).prim = false)
@@ -3667,11 +3406,6 @@ theorem nodeSet_comp_of (P : Prog) (r : Array Desc.Summary) (hF : RootFacts P) (
     hprm hpa hused hL0 hlo htile (fun w p hx => locW_lt (hRW k node hn w p hx) hLf hlastf)
     (fun hs j hj => by have := (hused 0 j hj).2; have := hsc0 hs; omega) a, hok⟩
 
-/-- **`UsedExact` of every reached composite Definition but the root, from the decoder's facts** (`RootFacts`,
-`WidthFacts`, `Desc.walkable`), wherever every reference of a primitive node is read by a member unless it is a batch
-of none (`hCov`) and every node calling a composite is shaped as `CompShape` says: `usedExact_all`, each composite
-node's `NodeSet` by `nodeSet_comp_of` over the summaries before its Definition (`prefix_retOk`, `prefix_retW`,
-`used_lt`). -/
 theorem usedExact_reached (P : Prog) (memo : Array Desc.Summary) (hm : memoOf P = .ok memo) (hF : RootFacts P)
     (hWF : WidthFacts P) (hwk : Desc.walkable P = true)
     (hCov : ∀ d < P.defs.size, (Desc.reached P)[d]! = true → (P.defs[d]!).prim = false →
@@ -3695,8 +3429,6 @@ theorem usedExact_reached (P : Prog) (memo : Array Desc.Summary) (hm : memoOf P 
   rw [hpre _ hlt]
   exact used_lt P memo hm hF (by omega) (reached_closed P hcf f hrf hp k hk) (hnr f hf hrf k hk) hpc
 
-/-- **`NodeSet` at a root node calling a composite, from the decoder's facts**: `nodeSet_comp_of` at the root, its
-callee's `UsedExact` by `usedExact_reached`. -/
 theorem rootNodeSet (P : Prog) (memo : Array Desc.Summary) (hm : memoOf P = .ok memo) (hF : RootFacts P)
     (hWF : WidthFacts P) (hwk : Desc.walkable P = true)
     (hU : ∀ f < P.defs.size, (Desc.reached P)[f]! = true → f ≠ P.root → (P.defs[f]!).prim = false →
@@ -3718,10 +3450,6 @@ theorem rootNodeSet (P : Prog) (memo : Array Desc.Summary) (hm : memoOf P = .ok 
     (prefix_retW P memo hm hF hWF hr hrr hpr fun _ _ => rfl) hn hp hrs (hU node.fn hfn hrf hfr hp)
     (used_lt P memo hm hF hfn hrf hfr hp) (hShape P.root hr k hkb node hg hp)
 
-/-- **`RootSet`, from the decoder's facts** (`RootFacts`, `WidthFacts`): every reference of a node calling a
-primitive is read by a member unless it is a batch of none (`hCov`), and every node calling a composite is shaped as
-`CompShape` says: at a root node calling a primitive `rootSet_prim_of`, at one calling a composite `rootSet_comp`
-with `rootNodeSet`. -/
 theorem rootSet_of
     (hF : ∀ bytes P, Flock.Program.decode bytes = .ok P → P.orderViolation = none → RootFacts P)
     (hWF : ∀ bytes P, Flock.Program.decode bytes = .ok P → Desc.walkable P = true → WidthFacts P)

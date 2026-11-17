@@ -9,17 +9,7 @@ import all Init.Data.Array.Basic
 import all Init.Data.String.Search
 import all Init.Data.String.Slice
 
-/-!
-# `parseDesign` reads a design's text back
-
-* **A number's digits** (`not_mem_repr`, `digits_repr`, `toNat!_repr`): `Nat.repr K` holds only digits, `Select`'s
-  `digits` accepts it, and `String.toNat!` reads `K` back.
-* **`Select`'s `split1`** (`split1_colon`, `split1_slash`): `a ++ ":" ++ b` splits into `a` and `b` where neither holds
-  a colon, and likewise at a slash.
-* **`parseDesign` at a text** (`parseDesign_count`, `parseDesign_bernoulli`): `kind:K` at `K ≥ 1`, for a `subset`,
-  `stratified` or `work` design, is `{samplingDesign: kind, k: K}`, and `bernoulli:NUM/DEN` at `0 < DEN` and `NUM ≤ DEN` is
-  `{samplingDesign: bernoulli, p: "NUM/DEN"}`, each number in `Nat.repr`'s digits.
--/
+/-! `parseDesign` reads a design's text back. -/
 
 @[expose] public section
 set_option backward.privateInPublic true
@@ -38,8 +28,6 @@ theorem not_mem_repr {c : Char} (hc : c.isDigit = false) (K : ℕ) : c ∉ (Nat.
   rw [isDigit_of_mem_repr h] at hc
   exact absurd hc (by decide)
 
-/-- `Select`'s `split1` at the separator `sep` of one character `c`, where `String.splitOn sep` is `List.splitOn c` on
-the characters: `a ++ sep ++ b` is `a` and `b` where neither holds `c`. -/
 theorem split1_sep (sep : String) (c : Char) (hsp : sep.toList = [c])
     (hsplit : ∀ s : String, s.splitOn sep = (s.toList.splitOn c).map String.ofList)
     (a b : String) (ha : c ∉ a.toList) (hb : c ∉ b.toList) : split1 (a ++ sep ++ b) sep = (a, b) := by
@@ -74,8 +62,6 @@ theorem toNat!_repr (K : ℕ) : (Nat.repr K).toNat! = K := by
     exact Option.some.inj h
   · exact absurd h (by simp)
 
-/-- **`parseDesign` reads `kind:K` back**: a `subset`, `stratified` or `work` design of `K ≥ 1`, its count in
-`Nat.repr`'s digits, is `{samplingDesign: kind, k: K}`. -/
 theorem parseDesign_count (kind : String) (hk : kind = "subset" ∨ kind = "stratified" ∨ kind = "work") (K : ℕ)
     (h1 : 1 ≤ K) :
     _root_.Spot.Select.parseDesign (kind ++ ":" ++ Nat.repr K) =
@@ -86,8 +72,6 @@ theorem parseDesign_count (kind : String) (hk : kind = "subset" ∨ kind = "stra
   simp only [digits_repr, toNat!_repr, Bool.and_true, decide_eq_true h1]
   rcases hk with rfl | rfl | rfl <;> rfl
 
-/-- **`parseDesign` reads `bernoulli:NUM/DEN` back**: at `0 < DEN` and `NUM ≤ DEN`, each in `Nat.repr`'s digits, it is
-`{samplingDesign: bernoulli, p: "NUM/DEN"}`. -/
 theorem parseDesign_bernoulli (a b : ℕ) (hb : 0 < b) (hab : a ≤ b) :
     _root_.Spot.Select.parseDesign ("bernoulli:" ++ (Nat.repr a ++ "/" ++ Nat.repr b)) =
       .ok (Json.mkObj [("law", "bernoulli"), ("p", Json.str s!"{a}/{b}")]) := by

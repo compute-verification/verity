@@ -2,17 +2,7 @@ module
 
 public import Properties.Hash.Identity
 
-/-!
-# Proofs that core's identity hash is Flock's SHA-512 (`Properties.Hash.Identity`)
-
-A state `Rep`resents the message it absorbed: its length, its pending bytes (the message's tail after its whole blocks)
-and its chaining value (`chain`, the compressions over those blocks). `init` represents the empty message and `update`
-keeps the invariant (`rep_update`): the compression reads only the 128 bytes of its block (`compress_congr`), so the
-blocks the state compresses out of its buffer and the new data are the message's own. Finalizing a state that represents
-`m` compresses `m`'s padding (`L_padding`, `L_padData`) after the same blocks, which is `Flock.Sha512.hash m`
-(`Rep.finalize`). The kernel never unfolds a compression: the proofs rewrite with `compress_congr` and `chain`'s
-equations instead of comparing compressions by evaluation.
--/
+/-! Core's identity hash is Flock's SHA-512: a state represents the message it absorbed, and `update` keeps that. -/
 
 @[expose] public section
 
@@ -20,7 +10,6 @@ namespace Properties.Identity
 
 open Flock Identity.Sha512
 
-/-- A byte string's bytes. -/
 abbrev L (b : ByteArray) : List UInt8 := b.data.toList
 
 theorem L_length (b : ByteArray) : (L b).length = b.size := by simp [L]
@@ -31,8 +20,6 @@ theorem get!_eq (b : ByteArray) (k : Nat) : b.get! k = ((L b)[k]?).getD 0 := by
   obtain ⟨bs⟩ := b
   simp only [L, Array.getElem?_toList, ByteArray.get!, getElem!_def]
   cases bs[k]? <;> rfl
-
-/-! ## The compression reads only its block -/
 
 theorem word_congr {d d' : ByteArray} {o o' : Nat} (h : ∀ i < 8, (L d)[o + i]? = (L d')[o' + i]?) :
     Sha512.word d o = Sha512.word d' o' := by
@@ -49,11 +36,8 @@ theorem compress_congr (h : Array UInt64) {d d' : ByteArray} {off off' : Nat}
     hw 6 (by decide), hw 7 (by decide), hw 8 (by decide), hw 9 (by decide), hw 10 (by decide), hw 11 (by decide),
     hw 12 (by decide), hw 13 (by decide), hw 14 (by decide), hw 15 (by decide)]
 
-/-! ## Chains of compressions -/
-
 attribute [local irreducible] Sha512.compress
 
-/-- The chaining value after `n` blocks of `d` from offset `off`, starting at `h`. -/
 def chain (h : Array UInt64) (d : ByteArray) (off n : Nat) : Array UInt64 :=
   (List.range' 0 n).foldl (fun h b => Sha512.compress h d (off + 128 * b)) h
 
@@ -78,10 +62,6 @@ theorem chain_add (h : Array UInt64) (d : ByteArray) (off n k : Nat) :
   | zero => simp only [chain, List.range'_zero, List.foldl_nil, Nat.add_zero]
   | succ k ih => rw [← Nat.add_assoc, chain_succ, chain_succ, ih, Nat.mul_add, Nat.add_assoc]
 
-/-! ## A state as the message it absorbed -/
-
-/-- `s` is the state after absorbing `m`: its length, its pending bytes the tail of `m` after its whole blocks, and its
-chaining value the chain over those blocks. -/
 structure Rep (s : State) (m : ByteArray) : Prop where
   len : s.len = m.size
   buf : L s.buf = (L m).drop (128 * (m.size / 128))
@@ -178,10 +158,8 @@ theorem rep_update {s : State} {m : ByteArray} (r : Rep s m) (d : ByteArray) : R
 /-- The 16 bytes of a message length `len` (in bytes): SHA-512's 128-bit big-endian bit count. -/
 def lenBytes (len : Nat) : List UInt8 := (List.range' 0 16).map fun a => ((len * 8) >>> (8 * (15 - a)) % 256).toUInt8
 
-/-- The number of zero bytes SHA-512's padding puts after a `k`-byte message and `0x80`. -/
 def zeroPad (k : Nat) : Nat := (112 + 128 - (k + 1) % 128) % 128
 
-/-- `Flock.Sha512.hash`'s padded message: `m ‖ 0x80 ‖ 0…0 ‖ len`. -/
 def padData (m : ByteArray) : ByteArray :=
   (List.range' 0 16).foldl (fun b a => b.push ((m.size * 8) >>> (8 * (15 - a)) % 256).toUInt8)
     ((List.range' 0 ((112 + 128 - (m.push 128).size % 128) % 128)).foldl (fun b _ => b.push 0) (m.push 128))
@@ -304,7 +282,6 @@ theorem streamIsFlock : StreamIsFlock := fun ms => (rep_foldl ms rep_init).final
 
 theorem taggedIsFlock : TaggedIsFlock := taggedSha512_eq
 
-/-- What a tagged digest is, when there is one. -/
 theorem taggedSha512_ok {tag : String} {payload dg : ByteArray} :
     Identity.taggedSha512 tag payload = .ok dg ↔ ∃ x, taggedInput tag payload = .ok x ∧ dg = Flock.Sha512.hash x := by
   rw [taggedSha512_eq]
@@ -313,7 +290,6 @@ theorem taggedSha512_ok {tag : String} {payload dg : ByteArray} :
   | ok x => simp only [Functor.map, Except.map, Except.ok.injEq]; exact ⟨fun h => ⟨x, rfl, h.symm⟩, fun ⟨_, h, e⟩ => by
       cases h; exact e.symm⟩
 
-/-- A tag and payload that fit the header's fields have a tagged digest: SHA-512 of their tagged input. -/
 theorem taggedSha512_of {tag : String} {payload : ByteArray} (h0 : 0 < tag.toUTF8.size) (h1 : tag.toUTF8.size < 2 ^ 32)
     (h2 : payload.size < 2 ^ 64) :
     ∃ x, taggedInput tag payload = .ok x ∧ Identity.taggedSha512 tag payload = .ok (Flock.Sha512.hash x) := by

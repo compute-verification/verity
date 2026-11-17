@@ -24,25 +24,8 @@ import all Std.Data.DTreeMap.Internal.Operations
 import all Std.Data.DTreeMap.Internal.Balancing
 import all Std.Data.DTreeMap.Internal.Def
 
-/-! # Proofs of v2's holding the blobs' lookup tables to the registered circuit's (`Properties.Spot.Tables`)
-
-`tablesHeld` reads the circuit file, its lookups and the blobs' tables, and throws where the two lists of names differ,
-so its acceptance is their equality (`tablesHeld_ok`). `run` binds it first (`run_tables`), and on parameters that
-name no members `checkBlobsAt` accepts only where its chain of refusals ends in `run`'s acceptance
-(`checkBlobsAt_run`). On parameters that name members it accepts only where the per-member run returned, which holds
-every member's statement (`Spot.OneStageZk.membersRun_files`), and a member's statement binds its own tables first,
-the blobs' pinned tables among the names its circuit looks up (`ownTables_ok`), and holds them to its circuit's lookups
-by name (`tablesMatch_ok`, `statementOf_tables`), so its inputs hold those tables and no other (`statement_tables`,
-`checkBlobsAt_members_tables`).
-
-`tablesRegistered_honest` is its honest lemma: blobs holding a circuit file that looks up `rcp` and `rcp`'s table, as
-the served path hands v2 (`honestBlobs`), pass the refusal. `tablesRegistered_nontrivial` is its nontrivial lemma: blobs
-holding a circuit file that looks up no table and `rcp`'s table (`tableBlobs`) hold a table the circuit doesn't look
-up, so a check that accepts every input, as one without the refusal does there, does not have `TablesRegistered`'s
-conclusion. The kernel evaluates both on the witnesses (`decide +kernel`), reading the toolchain's string, byte array
-and JSON definitions through `import all`, all but `String.trimAsciiEnd`, whose recursion is well-founded: `metaOf_of`
-takes the META line's trim as a hypothesis, unfolded once on each witness's line.
--/
+/-! v2 holds the blobs' lookup tables to the registered circuit's: `tablesHeld` accepts only where the two lists of
+names are equal. -/
 
 @[expose] public section
 
@@ -95,7 +78,6 @@ theorem checkBlobsAt_run {p : OneStageZk.Params} {c : OneStage.Commitment} {ξ :
     obtain ⟨-, -, h7⟩ := bind_ok h6
     exact ⟨r, h7⟩
 
-/-- What `tablesMatch` accepts: the tables handed are, by name and in order, the ones wanted. -/
 theorem tablesMatch_ok {tables : List (String × ByteArray)} {want : List String}
     (h : OneStageZk.tablesMatch tables want = .ok ()) : tables.map (·.1) = want := by
   unfold OneStageZk.tablesMatch at h
@@ -106,8 +88,6 @@ theorem tablesMatch_ok {tables : List (String × ByteArray)} {want : List String
     simp only [bne_iff_ne, ne_eq, Decidable.not_not] at hne
     exact hne
 
-/-- What `ownTables` returns: the circuit file is among the blobs, and the tables are the blobs' pinned tables among
-the names it looks up. -/
 theorem ownTables_ok {p : OneStageZk.Own} {bs : Core.Blobs} {tables : List (String × ByteArray)}
     (h : OneStageZk.ownTables p bs = .ok tables) :
     ∃ circuitB names, bs.get p.circuit "circuit" = .ok circuitB ∧ OneStageZk.lookupsOf circuitB = .ok names ∧
@@ -118,9 +98,6 @@ theorem ownTables_ok {p : OneStageZk.Own} {bs : Core.Blobs} {tables : List (Stri
   have ht : OneStageZk.tablesAmong names bs = tables := Except.ok.inj h
   exact ⟨circuitB, names, hc, hl, ht.symm⟩
 
-/-- **What a statement holds of the tables it is handed**: where `statementOf` returns a statement, the circuit file
-is among the blobs, the tables handed are, by name, exactly the ones it looks up, and the statement's inputs hold
-those tables and no other. -/
 theorem statementOf_tables {p : OneStageZk.Own} {population : ByteArray → Flock.V Unit}
     {tables : List (String × ByteArray)} {bs : Core.Blobs} {a : OneStageZk.StepAt}
     (h : OneStageZk.statementOf p population tables bs = .ok a) :
@@ -133,10 +110,6 @@ theorem statementOf_tables {p : OneStageZk.Own} {population : ByteArray → Floc
   obtain ⟨names, hl, hm⟩ := bind_ok hm
   exact ⟨circuitB, names, hc, hl, tablesMatch_ok hm, rfl⟩
 
-/-- **A member's statement holds its own circuit's lookup tables, and only those**: where a member's statement reads,
-its circuit file is among the blobs, and the lookup tables its inputs hold are the blobs' pinned tables among the
-names its circuit looks up (`Spot.OneStageZk.tablesAmong`), every one of those names, whatever other pinned table the
-blobs hold. -/
 theorem statement_tables {m : OneStageZk.Member} {slice : Lean.Json} {bs : Core.Blobs} {a : OneStageZk.StepAt}
     (h : m.statement slice bs = .ok a) : HandedOwnTables m.own bs a.I.tables := by
   unfold OneStageZk.Member.statement at h
@@ -153,9 +126,6 @@ theorem statement_tables {m : OneStageZk.Member} {slice : Lean.Json} {bs : Core.
   subst hnn
   exact ⟨circuitB', names', hc, hl, hI.trans hta, (congrArg (List.map (·.1)) hI).trans hn⟩
 
-/-- **On parameters that name members, an accept holds each table each member's circuit looks up**, sampled or not:
-the per-member run returned (`Spot.OneStageZk.checkMembersAt_accept`), so every member's statement was read
-(`Spot.OneStageZk.membersRun_files`) at its own tables (`statement_tables`). -/
 theorem checkBlobsAt_members_tables {p : OneStageZk.Params} {c : OneStage.Commitment} {ξ : ByteArray}
     {e : OneStageZk.Evidence} {bs : Core.Blobs} {pub : OneStage.Public} {prof : Core.Integrity}
     {ms : Array OneStageZk.Member} (hm : p.members = some ms)
@@ -185,7 +155,6 @@ private theorem ok_of_toOption {ε α : Type} {x : Except ε α} {a : α} (h : x
 
 private theorem ok_bind {ε α β : Type} {a : α} {f : α → Except ε β} : (Except.ok a >>= f) = f a := rfl
 
-/-- `tablesHeld` accepts where the circuit file is among the blobs and its lookups are the blobs' tables. -/
 private theorem tablesHeld_of {p : OneStageZk.Own} {bs : Core.Blobs} {c : ByteArray}
     (hc : bs.get p.circuit "circuit" = .ok c)
     (hl : OneStageZk.lookupsOf c = .ok ((OneStageZk.tablesOf bs).map (·.1))) : OneStageZk.tablesHeld p bs = .ok () := by
@@ -194,7 +163,6 @@ private theorem tablesHeld_of {p : OneStageZk.Own} {bs : Core.Blobs} {c : ByteAr
   simp
   rfl
 
-/-- `Flock.HmOut.metaOf` at a circuit file whose second line is `line`, with no trailing whitespace. -/
 private theorem metaOf_of {bytes : ByteArray} {n1 : Nat} {line : String} (h1 : Flock.findByte bytes 10 = some n1)
     (h2 : String.fromUTF8? (bytes.extract (n1 + 1) ((Flock.findByte bytes 10 (n1 + 1)).getD bytes.size)) = some line)
     (h3 : line.trimAsciiEnd.toString = line) (h4 : line.startsWith "META " = true) :

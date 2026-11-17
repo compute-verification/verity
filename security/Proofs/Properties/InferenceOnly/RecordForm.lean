@@ -5,21 +5,7 @@ public import Proofs.Properties.InferenceOnly.RecordRead
 public import Proofs.Properties.InferenceOnly.Lemmas
 public import Properties.InferenceOnly.RecordForm
 
-/-!
-# What the record check's own form carries and rates
-
-`form` (`Properties.InferenceOnly.RecordForm`) is the record check as a `Properties.Record.Form`. `form_rate`: on a record's
-summary the form's rate rule is `rate`, the one `evaluate` decides by.
-
-Two of the four statements `Properties.Record.Complies` follows from, of this form:
-
-* `form_owns` (`Properties.Record.Owns`): a record `read` accepts carries its instance's own fields. `read` keeps the
-  instance `parse` gave (`front_parse`, `finish_text`), and `parse` gives a field only as the JSON holds it
-  (`parse_fields`): the two texts as strings, `gamma` a natural, `alpha` a pair of naturals with a positive second,
-  and `pins` a list of strings, each the pin it keeps (`pins_array`).
-* `form_rates` (`Properties.Record.Rates`): where the rate rule gives no failure on a summary, its gates are at most
-  `Γ` and its fresh bits times `den` at most `num` times its gates. `failure` on one pair is its one test.
--/
+/-! `form`, the record check as a `Properties.Record.Form`, with its rate rule `rate` and its `Owns` and `Rates`. -/
 
 @[expose] public section
 
@@ -28,11 +14,9 @@ namespace InferenceOnlyCheck.Record.SecurityProofs
 open Spot.RecordText
 open Lean (Json)
 
-/-- On a record's summary, the form's rate rule is the check's. -/
 theorem form_rate (Γ num den : Nat) (c : Record.Case) :
     form.rate Γ num den (form.summarize c) = Record.rate Γ num den (Record.summarize c) := rfl
 
-/-- A field `field` gives is the JSON's. -/
 theorem field_ok {j : Json} {k : String} {v : Json} (h : field j k = .ok v) : j.getObjVal? k = .ok v := by
   unfold field at h
   simp only [pure, Except.pure, throw, throwThe, MonadExceptOf.throw] at h
@@ -40,7 +24,6 @@ theorem field_ok {j : Json} {k : String} {v : Json} (h : field j k = .ok v) : j.
   · cases h; assumption
   · cases h
 
-/-- A list read entry by entry, each entry a string kept as it is, is the list of the strings read. -/
 private theorem pins_list (g : Json → Except String String) (hg : ∀ x s, g x = .ok s → x = .str s) :
     ∀ (l : List Json) (ps : List String), l.mapM g = .ok ps → l = ps.map Json.str
   | [], ps, h => by
@@ -57,8 +40,6 @@ private theorem pins_list (g : Json → Except String String) (hg : ∀ x s, g x
     subst h
     simp only [hg a c hga, pins_list g hg l cs hl, List.map_cons]
 
-/-- **The pins read are the pins listed**: an array read entry by entry, each entry a string kept as it is, is the
-array of the strings read. -/
 theorem pins_array (g : Json → Except String String) (hg : ∀ x s, g x = .ok s → x = .str s) (xs : Array Json)
     (ps : Array String) (h : xs.mapM g = .ok ps) : xs = (ps.toList.map Json.str).toArray := by
   rw [Array.mapM_eq_mapM_toList] at h
@@ -70,7 +51,6 @@ theorem pins_array (g : Json → Except String String) (hg : ∀ x s, g x = .ok 
   apply Array.ext'
   simpa using hxs
 
-/-- **What `parse` accepts**: each field of the instance it gives is the JSON's own. -/
 theorem parse_fields {j : Json} {i : Instance} (h : parse j = .ok i) :
     j.getObjVal? "program" = .ok (.str i.program) ∧ j.getObjVal? "record" = .ok (.str i.record) ∧
       (∃ v, j.getObjVal? "gamma" = .ok v ∧ natOf? v = some i.gamma) ∧
@@ -98,14 +78,12 @@ theorem parse_fields {j : Json} {i : Instance} (h : parse j = .ok i) :
     · cases hx
   · cases hx
 
-/-- `front` keeps the instance `parse` gave. -/
 theorem front_parse {j tr : Json} {f : Front} (h : front j tr = .ok f) : parse j = .ok f.i := by
   unfold front at h
   simp only [bind, Except.bind, pure, Except.pure, throw, throwThe, MonadExceptOf.throw] at h
   repeat (split at h <;> try cases h)
   assumption
 
-/-- **A record the check reads carries its instance's fields.** -/
 theorem form_owns : Properties.Record.Owns form := by
   intro j tr c h
   have h' : read j tr = .ok c := h
@@ -113,8 +91,6 @@ theorem form_owns : Properties.Record.Owns form := by
   obtain ⟨rfl, -⟩ := finish_text hc
   exact parse_fields (front_parse hf)
 
-/-- **The rate rule on a summary**: where it gives no failure, the summary's gates are at most `Γ` and its fresh bits
-times `den` at most `num` times its gates. -/
 theorem form_rates : Properties.Record.Rates form := by
   intro Γ num den s h
   have h1 : failure Γ num den #[(s.gates, s.fresh)] = none := by

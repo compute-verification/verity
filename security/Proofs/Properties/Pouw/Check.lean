@@ -5,16 +5,7 @@ public import Properties.Pouw.Check
 import all Lean.Data.Json.Basic
 import Proofs.Properties.Pouw.Grid
 
-/-!
-# Proofs of PoUW's check properties (`Properties.Pouw.Check`)
-
-By unfolding the check: `registered_ok` and `outcome_accept` say what each of its two rules accepts, and `acceptMeans`
-composes them; the rest follow. `outcome_accept_subset` reads off `outcome_accept` that an accepted profile is of one
-level sampled `subset:K′`, so none holds a work design. `acceptedInRange_of_grid` proves `AcceptedInRange` from the
-window's grid properties `PointEnumerates` and `floorPoint_greatest`, which `Proofs.Properties.Pouw.Grid` proves. `acceptMeans_complete` is the
-converse of `AcceptMeans`, and `serviceReject_rejects` what `AcceptedIsTheService's` and `UndecidedOnlyFromService`
-leave: the service's reject is the check's.
--/
+/-! PoUW's check properties, by unfolding the check's two rules. -/
 
 @[expose] public section
 
@@ -188,17 +179,14 @@ theorem outcome_accept (p : Params) (c : ExecutionPhaseCommitmentRecord) (f : Fi
   · rintro ⟨d, ⟨_, _, ⟨rfl, rfl⟩, _⟩, _, rfl⟩
     exact ⟨rfl, rfl⟩
 
-/-- A profile `outcome` accepts with is of one level sampled `subset:K′`: it refuses every other, among them one whose
-level records a work design. So PoUW's check reads no work design's `k_s`, and what it accepts rests on no rule that
-sizes them. -/
+/-- A profile `outcome` accepts with is of one level sampled `subset:K′`, so PoUW's check reads no work design's `k_s`,
+and what it accepts rests on no rule that sizes them. -/
 theorem outcome_accept_subset {p : Params} {c : ExecutionPhaseCommitmentRecord} {f : Fixed} {e : Evidence} {pub : Public}
     {prof : Core.Integrity} (h : outcome p c f e = .accept pub prof) :
     ∃ l, prof.levels = #[l] ∧ l.draw = some (.subset f.sampling.k) := by
   obtain ⟨_, ⟨-, -, -, -, hl, -⟩, -⟩ := (outcome_accept p c f e pub prof).mp h
   exact ⟨_, hl, rfl⟩
 
-/-- The check accepts exactly when the registration keeps PoUW's rule and the service accepted it as the rule fixes, with
-the window's salt. -/
 theorem acceptMeans_iff (p : Params) (c : ExecutionPhaseCommitmentRecord) (e : Evidence) (pub : Public)
     (prof : Core.Integrity) :
     protocol.check p c e = .accept pub prof ↔
@@ -219,8 +207,6 @@ theorem acceptMeans_iff (p : Params) (c : ExecutionPhaseCommitmentRecord) (e : E
 
 theorem acceptMeans : AcceptMeans := fun p c e pub prof => (acceptMeans_iff p c e pub prof).1
 
-/-- Completeness of `AcceptMeans`: a registration that keeps PoUW's rule, which the service accepted as the rule fixes
-with the window's salt, is accepted, publishing the rule's items and the service's sample. -/
 theorem acceptMeans_complete (p : Params) (c : ExecutionPhaseCommitmentRecord) (e : Evidence) (f : Fixed)
     (prof : Core.Integrity)
     (draw : Flock.Draw.UnitSample) (hk : RecordKeeps p c f) (hs : ServiceAccepted p c f e prof draw)
@@ -279,8 +265,6 @@ theorem undecidedOnlyFromService : UndecidedOnlyFromService := by
   | reject r₀ => simp only [hs] at h; cases h
   | undecided r₀ => simp only [hs] at h; cases h; exact ⟨r₀, rfl, rfl⟩
 
-/-- `AcceptedInRange` from the window's grid: the credited tiles are at least `lo` by the level's rule, and the padded
-count `point (level + 1)` is at most the floor point of `hi`, since `point` increases and inverts `level` on the grid. -/
 theorem acceptedInRange_of_grid (hp : Window.PointEnumerates) : AcceptedInRange := by
   intro p c e pub prof h
   obtain ⟨f, draw, ⟨-, -, -, -, h3, h4, hw, -⟩, -, -, rfl⟩ := acceptMeans p c e pub prof h

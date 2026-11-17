@@ -5,25 +5,13 @@ import all Lean.Data.Json.Basic
 import all Init.Data.Ord.String
 import all Init.Data.Array.Basic
 
-/-!
-# Proofs of `Properties.Challenger`
-
-`liveAnswer`: `Live.factors` turns `answer`'s check into `checkAt` at the coins the evidence reads, and `answerAt` runs
-the same decoders. `coinsFromLog`: the coins' target from `liveAnswer` and the reader's property `SampledByDevice`.
-`sampledByDevice_nontrivial`: a reader that accepts every record fails `SampledByDevice`'s statement.
-`FamilyOneCommitment.drawn`: `FamilyOneCommitment` says more of the same run. `familyOneCommitment_nontrivial`,
-`familyOneCommitmentRead_nontrivial`: each one's conclusion fails at the device that ran nothing and the record `null`,
-which a reader that accepts every record reads.
-`oneStage_check_of_accept`: one-stage's live check accepts only what its coin-free `check` accepts, so the properties
-proved about `check` (`acceptMeans_iff`) hold of what it accepts. `oneStageZk_source`: v2's coins read only under a
-challenger and a window its parameters name, so `oneStageZk_sampled`, `coinsFromLog` for v2, is never vacuous.
--/
+/-! `answer` and the live checks accept only at coins a challenger device drew, and `SampledByDevice` and
+`FamilyOneCommitment` are not vacuous. -/
 
 @[expose] public section
 
 namespace Properties.Challenger
 
-/-- `answer` accepts exactly when its three byte strings decode and the check accepts what they decode to. -/
 theorem answer_accept_iff (Q : Core.Protocol) {a b e : ByteArray} {p : Q.Params} {c : Q.Commitment} {ev : Q.Evidence}
     (hp : (Core.canonicalJson a >>= Q.params) = .ok p) (hc : Q.commitment b = .ok c) (hev : Q.evidence e = .ok ev) :
     (Q.answer a b e).verdict = .accept ↔ ∃ pub prof, Q.check p c ev = .accept pub prof := by
@@ -74,7 +62,7 @@ theorem coinsFromLog (hd : SampledByDevice) : CoinsFromLog := by
   · exact .inl ⟨s, hs, hopen, by rw [← hrel]; exact hdec⟩
   · exact .inr hb
 
-/-- `SampledByDevice`'s statement is not trivially true: a reader that accepts every record fails it, since the empty
+/-- `SampledByDevice`'s statement is not trivially true: a reader that accepts every record fails it, because the empty
 device released nothing and the finder finds no break in an empty run. -/
 theorem sampledByDevice_nontrivial : ¬ SampledByDeviceAt (fun _ _ _ _ _ => .ok ByteArray.empty) := by
   intro h
@@ -85,7 +73,6 @@ theorem sampledByDevice_nontrivial : ¬ SampledByDeviceAt (fun _ _ _ _ _ => .ok 
   · rw [hnone] at hw
     cases hw
 
-/-- `FamilyOneCommitment` gives `SampledByDevice`: the family's roots are a further conclusion about the same run. -/
 theorem FamilyOneCommitment.drawn (h : FamilyOneCommitment) : SampledByDevice :=
   fun dev key w label after coins ξ hr =>
     (h dev key w label after coins ξ hr).imp (fun ⟨s, hs, ho, e, _⟩ => ⟨s, hs, ho, e⟩) id
@@ -119,7 +106,6 @@ theorem familyOneCommitmentRead_nontrivial :
   · rw [hnone] at hw
     cases hw
 
-/-- What one-stage's protocol accepts, its coin-free `check` accepts: `checkAt` only adds the coins' refusals. -/
 theorem oneStage_check_of_accept {p : Spot.OneStage.Params} {c : Spot.OneStage.Commitment}
     {e : Spot.OneStage.Evidence} {pub : Spot.OneStage.Public} {prof : Core.Integrity}
     (h : Spot.OneStage.protocol.check p c e = .accept pub prof) :
@@ -135,7 +121,6 @@ theorem oneStage_check_of_accept {p : Spot.OneStage.Params} {c : Spot.OneStage.C
     | some why => rw [hw] at h; simp at h
     | none => rw [hw] at h; exact h
 
-/-- v2's coins read only under the challenger and the window its parameters name (`oneStageZkSource`). -/
 theorem oneStageZk_source {p : Spot.OneStageZk.Params} {c : Spot.OneStage.Commitment}
     {e : Spot.OneStageZk.Evidence} {ξ : ByteArray} (hξ : Spot.OneStageZk.coinsOf p c e = .ok ξ) :
     ∃ d, oneStageZkSource p c = some d := by
@@ -169,11 +154,6 @@ theorem oneStageZk_source {p : Spot.OneStageZk.Params} {c : Spot.OneStage.Commit
         | none => exact absurd h1 (hthrow _)
         | some w => exact ⟨_, rfl⟩
 
-/-- **What v2 accepts on the blobs `bs`, it accepts at coins its challenger device drew, or the run carries a break**
-(`CoinsFromLog` for v2): its answer's byte strings decode, and it accepts at the coins `ξ` its evidence's record shows,
-read under the challenger and window its parameters name (`d`); `ξ` is what a run of the device under that key released
-of the family after the registration's digest, a run the device's own ledger opens on the window, or the fixed finder
-outputs a break from the record and the device. -/
 theorem oneStageZk_sampled (hd : SampledByDevice) (bs : Array ByteArray) (dev : History) (a b e : ByteArray)
     (h : ((Spot.OneStageZk.protocol.on bs).answer a b e).verdict = .accept) :
     ∃ (p : Spot.OneStageZk.Params) (c : Spot.OneStage.Commitment)

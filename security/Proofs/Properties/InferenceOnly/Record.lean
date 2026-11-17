@@ -3,24 +3,7 @@ module
 public import Properties.InferenceOnly.Record
 import Mathlib.Algebra.Order.Field.Basic
 
-/-!
-# The circuit record's properties, from their parts
-
-`complies_of`: the rate rule on a record's circuit (`Complies`) from four statements about the check, that a record it
-reads carries its instance's fields (`Owns`) and lays out a circuit (`LaidOut`), that its summary counts every block
-(`Counts`), and that its rate rule is the policy's on a summary (`Rates`). `InferenceOnlyCheck.SecurityProofs.ServedComplies` is
-that theorem as the guarantee `InferenceOnlyCheck.Guarantees.ServedComplies` states it.
-
-`pinnedOpens_of`: what a pinned reader opens (`PinnedOpens`) from the closure digest's pin (`DigestPins`), the
-check's provenance (`Provenance`) and a layout that reads a Definition's signature alone (`LayoutReads`).
-
-`pin_listed`: the pin an opened row is held under is one the instance lists, from `Owns` and `Provenance`.
-
-`unitAt_iff`: the two numberings of a template's units agree. Where the record's text gives its templates
-(`Spot.RecordText.templatesOf`), no two of the root's ranges have one template (`range_unique`), so unit `u` of a
-template (`UnitAt`) is member `u` of its one range, and the range's count is the units the text's template has. The
-root's ranges are the same whatever templates the template query is asked for (`evaluate_ranges`).
--/
+/-! `complies_of`: the rate rule on a record's circuit from `Owns`, `LaidOut`, `Counts` and `Rates`. -/
 
 @[expose] public section
 
@@ -58,7 +41,6 @@ theorem complies_of {F : Form} (hown : Owns F) (hlaid : LaidOut F) (hcount : Cou
       simp [InferenceOnly.freshInput, Verity.Circuit.size, Verity.Circuit.into, Verity.Circuit.width]
   exact ⟨hmeets, by unfold InferenceOnly.CompliesRate; exact ⟨d.n, d.𝓘, hmeets⟩⟩
 
-/-- One Definition has one signature. -/
 theorem Same.signature {P P' : Prog} {k k' : ℕ} (h : Same P P' k k') :
     ∃ d d', P.defs[k]? = some d ∧ P'.defs[k']? = some d' ∧ d.params = d'.params ∧ d.ret = d'.ret :=
   match h with
@@ -86,7 +68,6 @@ theorem pinnedOpens_of {F : Form} (hpins : DigestPins) (hprov : Provenance F) (h
     · exact Or.inr hcol
   · exact Or.inl fun k d hk' _ => absurd ⟨k, hk'⟩ hex
 
-/-- The pin an opened row is held under is one the instance lists. -/
 theorem pin_listed {F : Form} (hown : Owns F) (hprov : Provenance F) {j tr : Json} {c : F.Case} {P : Prog}
     {pj : Json} {r : Row} {name p pin : String} (hread : F.read j tr = .ok c)
     (hdec : Flock.Program.decode (F.inst c).program.toUTF8 = .ok P)
@@ -98,19 +79,12 @@ theorem pin_listed {F : Form} (hown : Owns F) (hprov : Provenance F) {j tr : Jso
   obtain ⟨-, -, -, -, -, hpins⟩ := hown j tr c hread
   exact ⟨_, hpins, List.mem_toArray.mpr (List.mem_map.mpr ⟨pin, hmem, rfl⟩)⟩
 
-/-! ## The two numberings of a template's units
-
-`UnitAt` numbers a template's units over the root's ranges: member `m` of a range, after the units of the template's
-earlier ranges. The record's text numbers them from 0 to the template's `units` (`templatesOf`). The text's readers
-accept only where no two ranges have one template, and there the two numberings are one. -/
-
 private theorem bind_ok {ε α β : Type} {x : Except ε α} {f : α → Except ε β} {b : β} (h : x >>= f = .ok b) :
     ∃ a, x = .ok a ∧ f a = .ok b := by
   cases x with
   | error => cases h
   | ok a => exact ⟨a, rfl, h⟩
 
-/-- `eraseDups` keeps a list's length only where the list has no duplicates. -/
 private theorem eraseDups_nodup {α : Type} [BEq α] [LawfulBEq α] : ∀ (n : ℕ) (l : List α), l.length ≤ n →
     l.eraseDups.length ≤ l.length ∧ (l.eraseDups.length = l.length → l.Nodup)
   | _, [], _ => by simp
@@ -128,8 +102,6 @@ private theorem eraseDups_nodup {α : Type} [BEq α] [LawfulBEq α] : ∀ (n : �
     have := hall a hm
     simp at this
 
-/-- Two loops over one list from one state end in one state where both accept, if their bodies give one step
-wherever both accept. -/
 private theorem forIn_agree {σ : Type} {f g : ℕ → σ → Except String (ForInStep σ)}
     (hfg : ∀ k s x y, f k s = .ok x → g k s = .ok y → x = y) :
     ∀ (l : List ℕ) (s x y : σ), forIn l s f = .ok x → forIn l s g = .ok y → x = y
@@ -152,8 +124,6 @@ private theorem forIn_agree {σ : Type} {f g : ℕ → σ → Except String (For
       rfl
     | yield s' => exact forIn_agree hfg l s' x y hx hy
 
-/-- **The root's ranges do not depend on the templates asked for**: where the template query accepts two lists of
-templates, it gives the same ranges. -/
 theorem evaluate_ranges {d : Flock.TemplateQuery.Desc} {a b : Array String} {rs rs' : Array TRange}
     (h : Flock.TemplateQuery.evaluate d a = .ok rs) (h' : Flock.TemplateQuery.evaluate d b = .ok rs') :
     rs = rs' := by
@@ -188,7 +158,6 @@ theorem evaluate_ranges {d : Flock.TemplateQuery.Desc} {a b : Array String} {rs 
       | split at h
       | split at h')
 
-/-- A template the text's reader gives of a range has the range's template and its count for units. -/
 private theorem tmplOf_ok {P : Prog} {r : TRange} {t : Tmpl} (h : tmplOf P r = .ok t) :
     t.tid = r.template ∧ t.units = r.count := by
   unfold tmplOf at h
@@ -210,10 +179,6 @@ private theorem mapM_tmplOf {P : Prog} : ∀ (l : List TRange) (ts : List Tmpl),
     obtain ⟨h1, h2⟩ := tmplOf_ok ht
     simp only [List.map_cons, h1, h2, mapM_tmplOf l ts' hts']
 
-/-- What the text's reader has checked where it gives the templates: the text's template ids are distinct, the
-template query accepts them, its ranges are the text's templates with their units, in order, and the templates are
-the ranges', one each. The reader's `match` on a template's text has no equations for `simp` to rewrite by, so the
-binds are opened without them. -/
 private theorem templatesOf_ok {P : Prog} {doc : Json} {ts : List Tmpl} (h : templatesOf P doc = .ok ts) :
     ∃ (tsp : Array (String × ℕ)) (rs : Array TRange),
       (tsp.map (·.1)).toList.eraseDups.length = (tsp.map (·.1)).size ∧
@@ -228,9 +193,6 @@ private theorem templatesOf_ok {P : Prog} {doc : Json} {ts : List Tmpl} (h : tem
   exact ⟨tsp, rs, Classical.not_not.1 fun hc => hdup (bne_iff_ne.2 hc), by rw [← hrs']; exact hev,
     Classical.not_not.1 fun hc => hne (bne_iff_ne.2 hc), h⟩
 
-/-- **The text's templates are the root's ranges.** Where the text's reader gives the templates `ts` and the template
-query gives the ranges `rs`, whatever templates it is asked for: no two ranges have one template, and `ts` are the
-ranges in order, each with its range's template and its count for units. -/
 theorem templatesOf_ranges {P : Prog} {doc : Json} {ts : List Tmpl} {tids : Array String} {rs : Array TRange}
     (hts : templatesOf P doc = .ok ts)
     (hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) tids = .ok rs) :
@@ -244,7 +206,6 @@ theorem templatesOf_ranges {P : Prog} {doc : Json} {ts : List Tmpl} {tids : Arra
   subst hmap
   simpa [Function.comp_def] using hnd
 
-/-- **One range has a template**, where the text's reader gives its templates. -/
 theorem range_unique {P : Prog} {doc : Json} {ts : List Tmpl} {tids : Array String} {rs : Array TRange}
     (hts : templatesOf P doc = .ok ts)
     (hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) tids = .ok rs) {i j : ℕ}
@@ -256,7 +217,6 @@ theorem range_unique {P : Prog} {doc : Json} {ts : List Tmpl} {tids : Array Stri
   rw [getElem!_pos rs i hi, getElem!_pos rs j hj] at h
   simpa using h
 
-/-- The text's template at a range's place has the range's template and its count for units. -/
 private theorem tmpl_at {ts : List Tmpl} {rs : Array TRange}
     (hmap : ts.map (fun t => (t.tid, t.units)) = rs.toList.map (fun r => (r.template, r.count))) {i : ℕ}
     (hi : i < rs.size) : ∃ t, ts[i]? = some t ∧ t.tid = rs[i]!.template ∧ t.units = rs[i]!.count := by
@@ -268,10 +228,6 @@ private theorem tmpl_at {ts : List Tmpl} {rs : Array TRange}
   rw [getElem!_pos rs i hi]
   simpa [hi, hi'] using h
 
-/-- **The two numberings of a template's units agree.** Where the text's reader gives the templates `ts` and the
-template query gives the ranges `rs`, whatever templates it is asked for: `sc` is unit `u` of the template `tid`
-(`UnitAt`) exactly when a range of `rs`, the one of that template (`range_unique`), has `u` below its count, which is
-the units of the text's template at its place, and `sc` is member `u` of the range's root node. -/
 theorem unitAt_iff {P : Prog} {doc : Json} {ts : List Tmpl} {tids : Array String} {rs : Array TRange}
     (hts : templatesOf P doc = .ok ts)
     (hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) tids = .ok rs) (tid : String) (u : ℕ)

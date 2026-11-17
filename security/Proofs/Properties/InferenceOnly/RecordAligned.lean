@@ -12,31 +12,8 @@ public import Proofs.Properties.InferenceOnly.RecordWhole
 public import Proofs.Properties.InferenceOnly.RecordWide
 public import Mathlib.Tactic
 
-/-!
-# Wires land whole
-
-A wire fills a reader row with an output row of its writer. `Record.unwhole` refuses a record with a wire whose two
-rows do not line up, and this module states what a record it accepts has, in the terms of the record's circuit:
-
-* `aligned` (`Aligned`): a leaf of the writer's row lies inside one leaf of the reader's row, or the reader's unit
-  returns no leaf of the row.
-* `filled` (`Filled`): every bit of a leaf of a wired row is a bit of a leaf of the writer's row.
-
-Both read `wired_row`, what the check has tested of a row with a writer: the row and the writer's output row have
-the same bits, and either the reader's parameter has leaves of one bit and is none of what its Definition passes on,
-or each row's leaves are of one width and the writer's divides the reader's.
-
-* Where the widths divide, the rows are leaves of one width each over the same bits (`bitAt_const`), so leaf `l'` of
-  the writer lies inside leaf `l' / c` of the reader, `c` the quotient of the widths (`leaf_inside`, `leaf_count`).
-* Where the parameter is not passed on, no leaf of it is a leaf the unit returns (`closed_not_returned`). A leaf a
-  unit of a composite returns is a gate of the unit or a leaf of a parameter its Definition passes on
-  (`Resolve.ret_passed_on`); a leaf of a unit's parameter is a gate of an input node, so none of the unit's
-  (`unit_param_out`), and one leaf of one parameter only (`Resolve.unit_leaf_inj`). A unit of a primitive returns
-  its own gate.
-* A bit of a row lies in one of its leaves (`leaf_of_bit`), and a leaf of a unit's output row resolves
-  (`unit_ret_ok`), as a leaf of its reader row does (`unit_param_ok`): so the leaves the two statements name are
-  leaves of the record's circuit (`outLeaf_intro`, `rowLeaf_intro`).
--/
+/-! Each wire of a record `Record.unwhole` accepts lands whole (`Aligned`) and fills its reader row with its writer's
+bits (`Filled`). -/
 
 @[expose] public section
 
@@ -52,15 +29,11 @@ open InferenceOnlyCheck.Properties.SecurityProofs
 open Spot.Bits (bitsOf)
 open Lean (Json)
 
-/-! ## Rows of one width -/
-
-/-- Leaf 0 of a row starts at bit 0. -/
 theorem bitAt_zero (ws : Array ℕ) : bitAt ws 0 = 0 := by
   unfold bitAt
   rw [Array.extract_eq_empty_of_le (Nat.zero_le _)]
   rfl
 
-/-- In a row whose leaves are all `w` bits, leaf `l` starts at bit `l * w`. -/
 theorem bitAt_const (ws : Array ℕ) (w : ℕ) (h : ∀ l, l < ws.size → ws[l]! = w) :
     ∀ l, l ≤ ws.size → bitAt ws l = l * w := by
   intro l
@@ -72,7 +45,6 @@ theorem bitAt_const (ws : Array ℕ) (w : ℕ) (h : ∀ l, l < ws.size → ws[l]
     intro hl
     rw [bitAt_succ ws l hl, ih (Nat.le_of_lt hl), h l hl, Nat.succ_mul]
 
-/-- A bit of a row lies in one of its leaves. -/
 theorem leaf_of_bit (ws : Array ℕ) : ∀ n, n ≤ ws.size → ∀ b, b < bitAt ws n →
     ∃ l, l < n ∧ bitAt ws l ≤ b ∧ b < bitAt ws l + ws[l]! := by
   intro n
@@ -89,7 +61,6 @@ theorem leaf_of_bit (ws : Array ℕ) : ∀ n, n ≤ ws.size → ∀ b, b < bitAt
       exact ⟨l, Nat.lt_succ_of_lt hl, h1, h2⟩
     · exact ⟨n, Nat.lt_succ_self n, h, hb⟩
 
-/-- Leaf `l` of a row of a parameter is a leaf of the parameter, with its width there. -/
 theorem inRow_get (d : Defn) (i k row l : ℕ) (hrow : row < k) (hl : l < d.params[i]!.2.leaves / k) :
     (inRow d i k row).1 + l < d.params[i]!.2.leaves ∧
       (inRow d i k row).2[l]! = d.params[i]!.2.widths[(inRow d i k row).1 + l]! := by
@@ -97,13 +68,11 @@ theorem inRow_get (d : Defn) (i k row l : ℕ) (hrow : row < k) (hl : l < d.para
   exact ⟨inRow_lt d i k row l hrow (Nat.lt_of_lt_of_eq hl hsz.symm),
     extract_get _ _ _ l (Nat.lt_of_lt_of_eq hl hsz.symm)⟩
 
-/-- A type of one width has it at every entry of its widths. -/
 theorem homo_widths (t : Ty) (w : ℕ) (h : Flock.Program.Widths.homo t = some w) (j : ℕ) (hj : j < t.leaves) :
     t.widths[j]! = w := by
   rw [← LeafWidths.wAt_widths t j hj]
   exact LeafWidths.homo_wAt t w h j hj
 
-/-- A row of a parameter of one width has leaves of that width. -/
 theorem inRow_const (d : Defn) (i k row a : ℕ) (hrow : row < k)
     (h : Flock.Program.Widths.homo d.params[i]!.2 = some a) :
     ∀ l, l < (inRow d i k row).2.size → (inRow d i k row).2[l]! = a := by
@@ -113,7 +82,6 @@ theorem inRow_const (d : Defn) (i k row a : ℕ) (hrow : row < k)
   rw [h2]
   exact homo_widths _ a h _ h1
 
-/-- An output row of a field of one width has leaves of that width. -/
 theorem outRow_const (d : Defn) (f o : ℕ) (h : Flock.Program.Widths.homo (fieldsOf d.ret)[f]! = some o) :
     ∀ l, l < (outRow d f).2.size → (outRow d f).2[l]! = o := by
   intro l hl
@@ -122,7 +90,6 @@ theorem outRow_const (d : Defn) (f o : ℕ) (h : Flock.Program.Widths.homo (fiel
     exact hl
   exact homo_widths _ o h l hl'
 
-/-- Leaf `l'` of a row of leaves of `o` bits lies inside leaf `l' / c` of a row of leaves of `o * c` bits. -/
 theorem leaf_inside (o c l' : ℕ) (hc : 0 < c) :
     l' / c * (o * c) ≤ l' * o ∧ l' * o + o ≤ l' / c * (o * c) + o * c := by
   have h1 : l' / c * c ≤ l' := Nat.div_mul_le_self l' c
@@ -137,8 +104,6 @@ theorem leaf_inside (o c l' : ℕ) (hc : 0 < c) :
   rw [e2, e3]
   exact Nat.mul_le_mul_right o h2
 
-/-- Of two rows, `nW` leaves of `o` bits no more than `nR` leaves of `o * c` bits: a leaf `l'` of the first has a
-leaf `l' / c` of the second. -/
 theorem leaf_count (o c nR nW l' : ℕ) (ho : o ≠ 0) (h : nW * o ≤ nR * (o * c)) (hl : l' < nW) :
     0 < c ∧ l' / c < nR := by
   have h1 : o * nW ≤ o * (c * nR) := by
@@ -152,9 +117,6 @@ theorem leaf_count (o c nR nW l' : ℕ) (ho : o ≠ 0) (h : nW * o ≤ nR * (o *
     exact absurd h3 (Nat.not_lt_zero l')
   · exact h0
 
-/-! ## A unit's place -/
-
-/-- A unit of a composite is an activation resolution reaches. -/
 theorem unit_good {P : Prog} {ts : Array String} {rs : Array TRange} (hP : ReadProg P)
     (hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) ts = .ok rs) {tid : String} {u : ℕ}
     {sc : Scope} (hu : UnitAt P rs tid u sc) (hp : (P.defs[sc.d]!).prim = false) : Resolve.Good P sc := by
@@ -164,7 +126,6 @@ theorem unit_good {P : Prog} {ts : Array String} {rs : Array TRange} (hP : ReadP
   exact Resolve.good_child P (parent := P.rootScope)
     (by show Resolve.Good P (.top P.root 0 none); unfold Resolve.Good; exact ⟨rfl, rfl, rfl⟩) hk rfl hp' hm rfl
 
-/-- A unit's Definition is as the decoder leaves a Definition a node calls. -/
 theorem unit_callee {P : Prog} {ts : Array String} {rs : Array TRange} (hP : ReadProg P)
     (hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) ts = .ok rs) {tid : String} {u : ℕ}
     {sc : Scope} (hu : UnitAt P rs tid u sc) : BodiesOk.CalleeOk (P.defs[sc.d]!) := by
@@ -173,8 +134,6 @@ theorem unit_callee {P : Prog} {ts : Array String} {rs : Array TRange} (hP : Rea
   obtain ⟨⟨bytes, hdec⟩, -⟩ := hP
   exact (Resolve.decoded_root bytes P hdec k hk).2.1
 
-/-- **A leaf of a unit's parameter is no gate of the unit**: it is a gate of an input node of the root, and the
-unit's gates are inside a root node that is no input node. -/
 theorem unit_param_out {P : Prog} {ts : Array String} {rs : Array TRange} (hP : ReadProg P)
     (hO : InferenceOnlyCheck.Record.ownRows P = true)
     (hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) ts = .ok rs) {tid : String} {u : ℕ}
@@ -204,10 +163,6 @@ theorem unit_param_out {P : Prog} {ts : Array String} {rs : Array TRange} (hP : 
   · have h3 := hmono (k + 1) n hgt (Nat.le_of_lt hn)
     exact Or.inr (by omega)
 
-/-! ## A unit's leaves resolve -/
-
-/-- **A leaf a unit returns resolves.** A unit of a primitive returns its own gate; a unit of a composite is an
-activation resolution reaches, and a reference of its return resolves from there. -/
 theorem unit_ret_ok {P : Prog} {ts : Array String} {rs : Array TRange} (hP : ReadProg P)
     (hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) ts = .ok rs) {tid : String} {u : ℕ}
     {sc : Scope} (hu : UnitAt P rs tid u sc) {t : ℕ} (ht : t < (P.defs[sc.d]!).ret.leaves) :
@@ -234,7 +189,6 @@ theorem unit_ret_ok {P : Prog} {ts : Array String} {rs : Array TRange} (hP : Rea
 
 variable {P : Prog} {rs : Array TRange} {W : Spot.Wires.Wiring} {S : Spot.Wires.Summary}
 
-/-- A leaf of a unit's output row is a leaf of the record's circuit, at its bits in the row. -/
 theorem outLeaf_intro {ts : Array String} (hP : ReadProg P)
     (hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) ts = .ok rs) {tid : String} {u : ℕ}
     {sc : Scope} (hu : UnitAt P rs tid u sc) {f l : ℕ} (hf : f < (fieldsOf (P.defs[sc.d]!).ret).length)
@@ -244,7 +198,6 @@ theorem outLeaf_intro {ts : Array String} (hP : ReadProg P)
   obtain ⟨g, hg⟩ := unit_ret_ok hP hrs hu (outRow_lt _ f l hf hl)
   exact ⟨g, f, rfl, hf, hl, hg, rfl, rfl⟩
 
-/-- A leaf of a unit's reader row is a leaf of the record's circuit, at its bits in the row. -/
 theorem rowLeaf_intro {ts : Array String} (hP : ReadProg P) (hO : InferenceOnlyCheck.Record.ownRows P = true)
     (hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) ts = .ok rs) {r : Row} {sc : Scope}
     (hu : UnitAt P rs r.tid r.unit sc) {i : ℕ} (hi : i < (P.defs[sc.d]!).params.size)
@@ -258,12 +211,6 @@ theorem rowLeaf_intro {ts : Array String} (hP : ReadProg P) (hO : InferenceOnlyC
   obtain ⟨g, hg⟩ := unit_param_ok hP hO hrs hu hi (inRow_get _ i _ _ l hrow hl').1
   exact ⟨g, sc, hu, i, hi, hp, hrow, hl, hg, rfl, rfl⟩
 
-/-! ## A parameter that is not passed on -/
-
-/-- **A leaf of a parameter the check holds closed is no leaf its unit returns.** The parameter is none of what the
-unit's Definition passes on. A leaf a unit of a composite returns is a gate of the unit, which no leaf of a
-parameter is, or a leaf of a parameter the Definition passes on, and a gate is one leaf of one parameter of the
-unit at most. A unit of a primitive returns its own gate. -/
 theorem closed_not_returned {ts : Array String} (hP : ReadProg P) (hO : InferenceOnlyCheck.Record.ownRows P = true)
     (hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) ts = .ok rs) {tid : String} {u : ℕ}
     {sc : Scope} (hu : UnitAt P rs tid u sc) {i t g : ℕ} (hi : i < (P.defs[sc.d]!).params.size)
@@ -300,14 +247,6 @@ theorem closed_not_returned {ts : Array String} (hP : ReadProg P) (hO : Inferenc
       rw [passedOn_get P hd, Option.getD_some] at hmem ⊢
       exact hmem
 
-/-! ## The two rows of a wire -/
-
-/-- **What the record check has tested of a row with a writer.** The row is a row of a parameter of its unit, and
-its writer's row an output row of the writer's unit; the two rows have the same bits; and either the parameter has
-leaves of one bit and is none of what the unit's Definition passes on, or each row's leaves are of one width and
-the writer's divides the reader's. The check tests a wire on the text's templates `ts`, whose ids are apart
-(`tmpls_named`), each the text's reading of its Definition (`templatesOf_tmplOf`), and a unit's Definition is its
-template's (`unit_tmpl`). -/
 theorem wired_row {tids : Array String} (hP : ReadProg P)
     (hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) tids = .ok rs)
     (hT : Templates P rs W) (hS : Spot.Wires.check W = .ok S) {doc : Json} {ts : List Tmpl}
@@ -370,9 +309,6 @@ theorem wired_row {tids : Array String} (hP : ReadProg P)
     rw [hB, Nat.mul_left_comm]
   rw [hA, hD, Nat.mul_div_cancel_left _ hk0, hC]
 
-/-! ## Aligned and Filled -/
-
-/-- **Every wire lands whole** (`Aligned`), of a record whose wires pass the check's `unwhole`. -/
 theorem aligned (hP : ReadProg P) (hO : InferenceOnlyCheck.Record.ownRows P = true)
     (hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) (W.templates.map (·.1)).toArray = .ok rs)
     (hT : Templates P rs W) (hS : Spot.Wires.check W = .ok S) {doc : Json} {ts : List Tmpl}
@@ -387,7 +323,7 @@ theorem aligned (hP : ReadProg P) (hO : InferenceOnlyCheck.Record.ownRows P = tr
     exact hout₁
   obtain ⟨hl', -, rfl, rfl⟩ := outLeaf_data hout
   rcases hwhole with ⟨-, hnot⟩ | ⟨a, o, ha, ho, ho0, hdiv⟩
-  · -- the parameter is not passed on: the unit returns no leaf of the row
+  ·
     refine Or.inr fun l g lo up hrl _ _ hpass => ?_
     obtain ⟨sc₂, out₂, l₂, lo₂, up₂, hsc₂, hout₂⟩ := hpass
     have hret : OutLeaf P sc out₂ l₂ g lo₂ up₂ := by
@@ -396,7 +332,7 @@ theorem aligned (hP : ReadProg P) (hO : InferenceOnlyCheck.Record.ownRows P = tr
     obtain ⟨hl, hres, -, -⟩ := rowLeaf_data (portsNamed hrs hT) hsc hi hp hrl
     rw [inRow_size _ _ _ _ hrow] at hl
     exact closed_not_returned hP hO hrs hsc hi (inRow_get _ i _ _ l hrow hl).1 hres hnot hret
-  · -- each row's leaves are of one width, and the writer's divides the reader's
+  ·
     obtain ⟨c, rfl⟩ := Nat.dvd_of_mod_eq_zero hdiv
     have hR := inRow_const (P.defs[sc.d]!) i (W.cutsOf r.tid r.port) r.row (o * c) hrow ha
     have hWr := outRow_const (P.defs[sc'.d]!) f o ho
@@ -418,7 +354,6 @@ theorem aligned (hP : ReadProg P) (hO : InferenceOnlyCheck.Record.ownRows P = tr
         hWr _ hl']
       exact hin2
 
-/-- **A wired row is its writer's bits** (`Filled`), of a record whose wires pass the check's `unwhole`. -/
 theorem filled (hP : ReadProg P)
     (hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) (W.templates.map (·.1)).toArray = .ok rs)
     (hT : Templates P rs W) (hS : Spot.Wires.check W = .ok S) {doc : Json} {ts : List Tmpl}

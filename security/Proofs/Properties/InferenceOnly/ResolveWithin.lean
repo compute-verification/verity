@@ -2,25 +2,7 @@ module
 
 public import Proofs.Properties.InferenceOnly.BodiesOk
 
-/-!
-# Resolution from inside an activation stays inside it, or leaves through one of its parameters
-
-`Resolve.Inv` bounds the gate a reference resolves to from above (`Resolve.resolve_lt`). This module bounds it from
-below, by the activation it started in. `Under U sc`: the activation `sc` is `U` or lies inside it. One step of
-resolution from an activation ends at one of its gates, moves down into a member of one of its nodes, or moves up
-through a parameter, to its parent or to the member before it (`step_where`). So a walk that starts under `U` stays
-under `U` until it reads a parameter of `U` itself, and the gate it ends at is one of `U`'s own or the gate a leaf of
-one of `U`'s parameters resolves to (`run_within`).
-
-Of a body's return that is `ret_within`, and of a primitive node's operands `operands_within`: every leaf an
-activation returns, and every operand of a gate inside it, is a gate of the activation or a leaf of one of its
-parameters, a leaf the parameter has. `ret_within_of` states the first on what a decoded Program with no order
-violation and bodies laid out gives, with no hypothesis on its bodies.
-
-`Prog.gate`'s walk for a gate inside a member of a root node goes from the root into that member (`gateStep_member`,
-a case of `gateStep_callee`, the step at a gate of a member of a node; `gateStep_at_prim` is its other case)
-and stays under it (`walk_within`), so the operands it ends with are `operands_within`'s: `gate_within`.
--/
+/-! Resolution from inside an activation stays inside it or leaves through one of its parameters. -/
 
 @[expose] public section
 
@@ -28,7 +10,6 @@ namespace InferenceOnlyCheck.Properties.SecurityProofs.Resolve
 
 open Flock.Program
 
-/-- The activation `sc` is `U`, or lies inside it. -/
 def Under (U : Scope) : Scope → Prop
   | .top d off st => U = .top d off st
   | .child parent d off k m => U = .child parent d off k m ∨ Under U parent
@@ -37,7 +18,6 @@ theorem under_refl : ∀ U : Scope, Under U U
   | .top _ _ _ => rfl
   | .child _ _ _ _ _ => Or.inl rfl
 
-/-- An activation inside `U` starts no earlier than `U`. -/
 theorem under_off (P : Prog) (U : Scope) : ∀ sc, Good P sc → Under U sc → U.off ≤ sc.off
   | .top d off st, _, hu => by
     have hu' : U = .top d off st := hu
@@ -51,7 +31,6 @@ theorem under_off (P : Prog) (U : Scope) : ∀ sc, Good P sc → Under U sc → 
       show U.off ≤ off
       omega
 
-/-- A walk of resolution that ends within its fuel is the resolution. -/
 theorem resolve_of_run (P : Prog) {n : ℕ} (hn : n ≤ Flock.Steps.FUEL) {sc : Scope} {r : Ref} {b : ℕ}
     (h : Flock.Steps.run "scope resolution" (resolveStep P) n (sc, r) = .ok b) : resolve P sc r = .ok b :=
   Flock.Steps.run_mono hn h
@@ -62,10 +41,6 @@ variable (P : Prog) (hroot : P.root < P.defs.size ∧ (P.defs[P.root]!).prim = f
 include hroot hB hL
 
 omit hroot hL in
-/-- **Where one step of resolution goes.** From a state that resolves below a bound, a step ends at a gate of its
-activation, no earlier than the activation starts, and only from a node's reference; or it moves down from a node's
-reference into a member of a node of the activation; or it moves up from a parameter's reference, to the activation's
-parent or to another member of the node the activation is a member of. -/
 theorem step_where (B : ℕ) (s : Scope × Ref) (x) (hs : Inv P B s) (h : resolveStep P s = .ok x) :
     (∀ a, x = .inl a → s.2.p = false ∧ s.1.off ≤ a) ∧
     (∀ s', x = .inr s' →
@@ -140,9 +115,6 @@ theorem step_where (B : ℕ) (s : Scope × Ref) (x) (hs : Inv P B s) (h : resolv
           exact ⟨fun a ha => (by cases ha),
             fun s' hs' => by cases hs'; exact Or.inr ⟨rfl, _, _, _, _, _, rfl, Or.inl rfl⟩⟩
 
-/-- **A walk of resolution that starts under `U` ends in `U` or leaves through a parameter of `U`.** From a state under
-`U` that resolves below `B`, the gate the walk ends at is no earlier than `U` starts and before `B`, or it is the gate a
-leaf of one of `U`'s parameters resolves to. -/
 theorem run_within (U : Scope) (B : ℕ) :
     ∀ (n : ℕ), n ≤ Flock.Steps.FUEL → ∀ (s : Scope × Ref) (b : ℕ), Inv P B s → Under U s.1 →
       Flock.Steps.run "scope resolution" (resolveStep P) n s = .ok b →
@@ -188,7 +160,6 @@ theorem run_within (U : Scope) (B : ℕ) :
             rw [hc]
             exact Or.inr hup
 
-/-- **A leaf an activation returns is one of its gates or a leaf of one of its parameters.** -/
 theorem ret_within (U : Scope) (hU : Good P U) (t : ℕ) (ht : t < (P.defs[U.d]!).body.ret.count) {b : ℕ}
     (h : resolve P U ((P.defs[U.d]!).body.ret.get t) = .ok b) :
     (U.off ≤ b ∧ b < U.off + (P.defs[U.d]!).gates) ∨ ∃ i j, i < (P.defs[U.d]!).body.params.size ∧
@@ -196,9 +167,6 @@ theorem ret_within (U : Scope) (hU : Good P U) (t : ℕ) (ht : t < (P.defs[U.d]!
   run_within P hroot hB hL U _ Flock.Steps.FUEL (Nat.le_refl _) _ b
     (down_ok P hroot hB hL _ U hU (Nat.le_refl _) t ht) (under_refl U) h
 
-/-- **An operand of a gate inside an activation is an earlier gate of the activation or a leaf of one of its
-parameters.** Node `k` of an activation `sc` under `U`, calling a primitive: every operand `operands` gives its member
-`m` is no earlier than `U` starts and before the node, or the gate a leaf of one of `U`'s parameters resolves to. -/
 theorem operands_within (U : Scope) (sc : Scope) (hg : Good P sc) (hu : Under U sc) (k : ℕ)
     (hk : k < (P.defs[sc.d]!).body.nodes.size)
     (hcp : (P.defs[((P.defs[sc.d]!).body.nodes[k]!).fn]!).prim = true) (m : ℕ)
@@ -223,9 +191,6 @@ theorem operands_within (U : Scope) (sc : Scope) (hg : Good P sc) (hu : Under U 
   exact run_within P hroot hB hL U _ Flock.Steps.FUEL (Nat.le_refl _) _ a
     (start_ok P hroot hB hL sc hg k hk _ (hargs i _ hidx)) hu hres
 
-/-- **An operand of a gate the walk locates from inside `U` is an earlier gate of `U` or a leaf of one of its
-parameters.** `Prog.gate`'s walk for `g`, from an activation under `U` that holds `g`: it stays under `U`, and the
-operands it ends with are those of a primitive node of an activation under `U` (`operands_within`). -/
 theorem walk_within (U : Scope) {g : ℕ} (n : ℕ) (sc : Scope) (x : ℕ × Array ℕ × Scope) (hq : WalkQ P g sc)
     (hu : Under U sc) (h : Flock.Steps.run "gate location" (gateStep P g) n sc = .ok x) :
     ∀ a ∈ x.2.1, (U.off ≤ a ∧ a < g) ∨ ∃ i j, i < (P.defs[U.d]!).body.params.size ∧
@@ -291,9 +256,6 @@ theorem walk_within (U : Scope) {g : ℕ} (n : ℕ) (sc : Scope) (x : ℕ × Arr
     · simp [throw, throwThe, MonadExceptOf.throw] at hb
 
 omit hroot hB in
-/-- **The step of `Prog.gate`'s walk at a gate of a member**: for a gate of member `m` of node `k` of an activation,
-the step from the activation is the node's callee's. Of a primitive, it ends at the node, with the member's operands;
-of a composite, it goes to the member's activation. -/
 theorem gateStep_callee (sc : Scope) (hd : sc.d < P.defs.size) (hp : (P.defs[sc.d]!).prim = false) {k m g : ℕ}
     (hk : k < (P.defs[sc.d]!).body.nodes.size) (hm : m < ((P.defs[sc.d]!).body.nodes[k]!).members)
     (hlo : sc.off + (P.defs[sc.d]!).body.offsets[k]! +
@@ -350,8 +312,6 @@ theorem gateStep_callee (sc : Scope) (hd : sc.d < P.defs.size) (hp : (P.defs[sc.
   · simp [throw, throwThe, MonadExceptOf.throw] at h
 
 omit hroot hB in
-/-- **The step of `Prog.gate`'s walk into a member**: for a gate of member `m` of node `k` of an activation, the
-node calling a composite, the step from the activation goes to that member's. -/
 theorem gateStep_member (sc : Scope) (hd : sc.d < P.defs.size) (hp : (P.defs[sc.d]!).prim = false) {k m g : ℕ}
     (hk : k < (P.defs[sc.d]!).body.nodes.size) (hm : m < ((P.defs[sc.d]!).body.nodes[k]!).members)
     (hc : (P.defs[((P.defs[sc.d]!).body.nodes[k]!).fn]!).prim = false)
@@ -367,8 +327,6 @@ theorem gateStep_member (sc : Scope) (hd : sc.d < P.defs.size) (hp : (P.defs[sc.
   · exact hx
 
 omit hroot hB in
-/-- **The step of `Prog.gate`'s walk at a member of a primitive's node**: for the gate of member `m` of node `k` of
-an activation, the node calling a primitive, the step from the activation ends there, with the member's operands. -/
 theorem gateStep_at_prim (sc : Scope) (hd : sc.d < P.defs.size) (hp : (P.defs[sc.d]!).prim = false) {k m g : ℕ}
     (hk : k < (P.defs[sc.d]!).body.nodes.size) (hm : m < ((P.defs[sc.d]!).body.nodes[k]!).members)
     (hc : (P.defs[((P.defs[sc.d]!).body.nodes[k]!).fn]!).prim = true)
@@ -385,9 +343,6 @@ theorem gateStep_at_prim (sc : Scope) (hd : sc.d < P.defs.size) (hp : (P.defs[sc
   · rw [hc] at hc'
     cases hc'
 
-/-- **An operand of a gate inside a member of a root node is an earlier gate of the member or a leaf of one of its
-parameters.** The walk's first step, from the root, goes into the member (`gateStep_member`), and from there it
-stays under it (`walk_within`). -/
 theorem gate_within {k m : ℕ} (hk : k < (P.defs[P.root]!).body.nodes.size)
     (hm : m < ((P.defs[P.root]!).body.nodes[k]!).members)
     (hc : (P.defs[((P.defs[P.root]!).body.nodes[k]!).fn]!).prim = false) {g p : ℕ} {ops : Array ℕ} {sc' : Scope}
@@ -418,8 +373,6 @@ theorem gate_within {k m : ℕ} (hk : k < (P.defs[P.root]!).body.nodes.size)
 
 end
 
-/-- **`ret_within`, on a Program read**: one that decodes, with no order violation and its bodies laid out
-(`Desc.bodiesLaidOut`, which `Desc.walkable` holds). -/
 theorem ret_within_of (bytes : ByteArray) (P : Prog) (hdec : Flock.Program.decode bytes = .ok P)
     (hov : P.orderViolation = none) (hlay : Desc.bodiesLaidOut P = true) (U : Scope) (hU : Good P U) (t : ℕ)
     (ht : t < (P.defs[U.d]!).body.ret.count) {b : ℕ}

@@ -3,12 +3,7 @@ module
 public import Properties.InferenceOnly
 public import Mathlib.Tactic
 
-/-!
-# Lemmas about `InferenceOnlyCheck`'s functions
-
-Each step of the check, characterized: the folds over a range in `Except`, `gateOf` and `circuitOf`, `thetaStep`,
-`ownerOf` and `divisionOf`, `tally` and `ius`, `failure`, `parse` and `evaluate`.
--/
+/-! Each step of `InferenceOnlyCheck` characterized, from the folds over a range to `parse` and `evaluate`. -/
 
 @[expose] public section
 
@@ -19,8 +14,6 @@ namespace InferenceOnlyCheck.Properties.SecurityProofs
 
 open Lean (Json)
 open Flock.Program (Prog GateTable)
-
-/-! ## Folds over a range in `Except` -/
 
 theorem foldlM_range_succ {β ε : Type} (f : β → ℕ → Except ε β) (b : β) (n : ℕ) :
     (List.range (n + 1)).foldlM f b = ((List.range n).foldlM f b >>= fun c => f c n) := by
@@ -72,12 +65,9 @@ theorem foldlM_range_ok {β ε : Type} (f : β → ℕ → Except ε β) (b : β
     · rw [hn] at h
       exact hs n c' c (foldlM_range_ok f b Q h0 hs n c' hn) h
 
-/-- A fold over a range succeeds exactly when no step fails. -/
 theorem foldlM_range_isOk {β ε : Type} (f : β → ℕ → Except ε β) (b : β) (n : ℕ) :
     (∃ c, (List.range n).foldlM f b = .ok c) ↔ ¬ ∃ k, (List.range n).foldlM f b = .error k := by
   rcases (List.range n).foldlM f b with e | c <;> simp
-
-/-! ## A gate -/
 
 @[simp] theorem error_eq_error_iff {α : Type} (s k : String) : (Except.error s : Except String α) = .error k ↔ k = s :=
   ⟨fun h => by cases h; rfl, fun h => h ▸ rfl⟩
@@ -171,8 +161,6 @@ theorem gateOf_error (P : Prog) (g : ℕ) (k : String) : gateOf P g = .error k �
           simp_all
     all_goals simp [throw, throwThe, MonadExceptOf.throw, hr]; exact ⟨Eq.symm, Eq.symm⟩
 
-/-! ## The circuit -/
-
 theorem getElem!_push_lt {α : Type} [Inhabited α] (xs : Array α) (x : α) {i : ℕ} (h : i < xs.size) :
     (xs.push x)[i]! = xs[i]! := by
   rw [getElem!_pos (xs.push x) i (by simp; omega), getElem!_pos xs i h, Array.getElem_push_lt]
@@ -209,8 +197,6 @@ theorem circuitOf_ok (P : Prog) (c : GateTable) (h : circuitOf P = .ok c) :
       rw [e1, e2, e3, e4]
       exact hx
 
-/-- A fold over a range succeeds exactly when every step does, each step's success read off the state through an
-invariant `Q`. -/
 theorem foldlM_range_isOk_inv {β ε : Type} (f : β → ℕ → Except ε β) (b : β) (Q : ℕ → β → Prop) (h0 : Q 0 b)
     (hs : ∀ n c c', Q n c → f c n = .ok c' → Q (n + 1) c') (ok : ℕ → Prop)
     (hf : ∀ c i, Q i c → ((∃ c', f c i = .ok c') ↔ ok i)) :
@@ -234,7 +220,6 @@ theorem foldlM_range_isOk_inv {β ε : Type} (f : β → ℕ → Except ε β) (
       · intro hall
         exact hall n (by omega)
 
-/-- A fold over a range fails with `k` exactly at its first failing step, through an invariant `Q`. -/
 theorem foldlM_range_error_inv {β : Type} (f : β → ℕ → Except String β) (b : β) (Q : ℕ → β → Prop) (h0 : Q 0 b)
     (hs : ∀ n c c', Q n c → f c n = .ok c' → Q (n + 1) c') (ok : ℕ → Prop) (fault : ℕ → String → Prop)
     (hf : ∀ c i, Q i c → ((∃ c', f c i = .ok c') ↔ ok i))
@@ -277,7 +262,6 @@ theorem circuitOf_error (P : Prog) (k : String) :
 theorem circuitOf_isOk (P : Prog) : (∃ c, circuitOf P = .ok c) ↔ ∀ g < gates P, GateOk P g :=
   foldlM_range_isOk_indep _ _ _ (push_map_ok P) _
 
-/-- What `circuitOf` read of gate `g`, from the decoder. -/
 theorem circuitOf_gate {P : Prog} {c : GateTable} (h : circuitOf P = .ok c) {g : ℕ} (hg : g < gates P) :
     ∃ p sc, P.gate g = .ok (p, c.reads[g]!, sc) ∧ (P.defs[p]!).ret = .value c.w[g]! ∧
       c.isInput[g]! = Flock.Program.isInputId (P.defs[p]!).key ∧
@@ -318,8 +302,6 @@ theorem circuitOf_registered {P : Prog} {c : GateTable} (h : circuitOf P = .ok c
     obtain ⟨rfl, -, -⟩ := hs'
     exact h'
 
-/-! ## θ -/
-
 theorem natOf?_str (s : String) : natOf? (.str s) = none := rfl
 
 theorem thetaStep_ok (c : GateTable) (s s' : Std.HashSet ℕ) (t : Json) :
@@ -354,7 +336,6 @@ theorem thetaStep_error (c : GateTable) (s : Std.HashSet ℕ) (t : Json) (k : St
       simp [h1, h1', h2, h3, h4, Std.HashSet.contains_iff_mem, throw, throwThe, MonadExceptOf.throw] <;>
       exact ⟨Eq.symm, Eq.symm⟩
 
-/-- The set after entry `n`: the gates the entries up to `n` name. -/
 theorem thetaStep_mem (c : GateTable) (theta : Array Json) (n : ℕ) (s s' : Std.HashSet ℕ)
     (hQ : ∀ g, g ∈ s ↔ ∃ t < n, natOf? theta[t]! = some g) (hs : thetaStep c s theta[n]! = .ok s') :
     ∀ g, g ∈ s' ↔ ∃ t < n + 1, natOf? theta[t]! = some g := by
@@ -372,7 +353,6 @@ theorem thetaStep_mem (c : GateTable) (theta : Array Json) (n : ℕ) (s s' : Std
     · rw [hg0] at h
       exact Or.inl (Option.some.inj h)
 
-/-- The entries before `n` that name a gate, as a set. -/
 theorem thetaFold_mem (c : GateTable) (theta : Array Json) : ∀ n s,
     (List.range n).foldlM (fun s t => thetaStep c s theta[t]!) {} = .ok s →
       ∀ g, g ∈ s ↔ ∃ t < n, natOf? theta[t]! = some g :=
@@ -429,8 +409,6 @@ theorem thetaFold_error {P : Prog} {c : GateTable} (hc : circuitOf P = .ok c) (t
     (thetaStep_mem c theta) _ _ (fun s t hQ => thetaStep_isOk hc theta t s hQ)
     (fun s t k hQ => thetaStep_error' hc theta t s hQ k) _ k
 
-/-! ## The owners -/
-
 theorem isInputTag_iff (j : Json) : isInputTag j = true ↔ j = .str "input" := by
   cases j <;> simp [isInputTag]
 
@@ -476,7 +454,6 @@ theorem FirstFault_congr {ok ok' : ℕ → Prop} {fault fault' : ℕ → String 
   · rintro ⟨i, hi, ho, hk⟩
     exact ⟨i, hi, fun i' hi' => (hok i' (by omega)).2 (ho i' hi'), (hf i hi).2 hk⟩
 
-/-- An owner step, as the gate's own condition read off the circuit. -/
 def OwnerOkC (c : GateTable) (owner : Array Json) (g : ℕ) : Prop :=
   (owner[g]! = .str "input" ∧ c.isInput[g]! = true) ∨ ((∃ u, natOf? owner[g]! = some u) ∧ c.isInput[g]! = false)
 
@@ -517,7 +494,6 @@ theorem push_ownerOf_error (c : GateTable) (owner : Array Json) (own : Array (Op
   rw [OwnerFaultC, ← ownerOf_error]
   rcases ownerOf c g owner[g]! with e | o <;> simp [Functor.map, Except.map]
 
-/-- The owner fold: one entry per gate so far, gate `g`'s the inference block its owner names. -/
 theorem ownerFold_ok (c : GateTable) (owner : Array Json) : ∀ n own,
     (List.range n).foldlM (fun own g => own.push <$> ownerOf c g owner[g]!) #[] = .ok own →
       own.size = n ∧ ∀ g < n, own[g]! = natOf? owner[g]! := by
@@ -549,12 +525,9 @@ theorem ownerFold_error {P : Prog} {c : GateTable} (hc : circuitOf P = .ok c) (o
     (circuitOf_ok P c hc).1]
   exact FirstFault_congr (fun g hg => ownerOkC_iff hc owner hg) (fun g hg => ownerFaultC_iff hc owner hg k)
 
-/-! ## The inference blocks -/
-
 theorem getElem!_fin {α : Type} [Inhabited α] (xs : Array α) (i : Fin xs.size) : xs[i] = xs[i.val]! :=
   (getElem!_pos xs i.val i.isLt).symm
 
-/-- `iuCount` bounds every inference block an owner names, and is `0` or one more than an inference block an owner names. -/
 theorem iuCount_spec (own : Array (Option ℕ)) :
     (∀ g < own.size, ∀ u, own[g]! = some u → u < iuCount own) ∧
       (iuCount own = 0 ∨ ∃ g < own.size, own[g]! = some (iuCount own - 1)) := by
@@ -610,8 +583,6 @@ theorem usedOf_mem (own : Array (Option ℕ)) (u : ℕ) : u ∈ usedOf own ↔ �
       · exact Or.inr ⟨g, hg, h⟩
       · rw [ho] at h; exact Or.inl (Option.some.inj h)
 
-/-- The inference blocks are `0 … iuCount - 1`, each named by an owner and no more of them than gates, exactly when no inference block below one
-an owner names is empty. -/
 theorem iuCheck_iff (owner : Array Json) (own : Array (Option ℕ)) (hs : own.size = owner.size)
     (ho : ∀ g < owner.size, own[g]! = natOf? owner[g]!) :
     (iuCount own ≤ owner.size ∧ ∀ u < iuCount own, u ∈ usedOf own) ↔ ¬ EmptyIU owner := by
@@ -650,13 +621,9 @@ theorem iuCheck_iff (owner : Array Json) (own : Array (Option ℕ)) (hs : own.si
       exact Fin.ext (Option.some.inj h1).symm
     simpa using Fintype.card_le_of_injective f hf
 
-/-! ## The division -/
-
-/-- θ's fold. -/
 abbrev thetaFold (c : GateTable) (theta : Array Json) : Except String (Std.HashSet ℕ) :=
   (List.range theta.size).foldlM (fun s t => thetaStep c s theta[t]!) {}
 
-/-- The owners' fold. -/
 abbrev ownerFold (c : GateTable) (owner : Array Json) : Except String (Array (Option ℕ)) :=
   (List.range c.N).foldlM (fun own g => own.push <$> ownerOf c g owner[g]!) #[]
 
@@ -679,7 +646,6 @@ theorem divisionOf_eq (c : GateTable) (theta owner : Array Json) :
           simp [h2, h3, hA, hB, bind, Except.bind, pure, Except.pure, throw, throwThe, MonadExceptOf.throw]
     · simp [h2, bind, Except.bind, throw, throwThe, MonadExceptOf.throw]
 
-/-- What a checked division holds: θ as the set its entries name, and per gate the inference block its owner names. -/
 theorem divisionOf_ok {P : Prog} {c : GateTable} (hc : circuitOf P = .ok c) {theta owner : Array Json} {d : Division}
     (h : divisionOf c theta owner = .ok d) :
     (∀ t < theta.size, ThetaOk P theta t) ∧ (∀ g, g ∈ d.theta ↔ ∃ t < theta.size, natOf? theta[t]! = some g) ∧
@@ -759,13 +725,10 @@ theorem divisionOf_error {P : Prog} {c : GateTable} (hc : circuitOf P = .ok c) (
   · rw [ite_eq_left h2]
     simp [h2, eq_comm]
 
-/-! ## The tally -/
-
 theorem getElem!_modify {α : Type} [Inhabited α] (xs : Array α) (j : ℕ) (f : α → α) {i : ℕ} (hi : i < xs.size) :
     (xs.modify j f)[i]! = if j = i then f xs[i]! else xs[i]! := by
   rw [getElem!_pos _ i (by simpa using hi), Array.getElem_modify, getElem!_pos xs i hi]
 
-/-- The reads of one gate, added to an inference block's set: those outside the inference block. -/
 theorem readsFold_mem (reads : Array ℕ) (own : Array (Option ℕ)) (u : ℕ) (into : Std.HashSet ℕ) (x : ℕ) :
     x ∈ reads.foldl (fun into a => if own[a]! = some u then into else into.insert a) into ↔
       x ∈ into ∨ (x ∈ reads ∧ own[x]! ≠ some u) := by
@@ -802,7 +765,6 @@ theorem readsFold_mem (reads : Array ℕ) (own : Array (Option ℕ)) (u : ℕ) (
       obtain ⟨j, hj, rfl⟩ := Array.mem_iff_getElem.1 hx
       exact ⟨j, hj, by rw [getElem!_pos reads j hj], hne⟩
 
-/-- One step of `tally`. -/
 def tallyStep (c : GateTable) (d : Division) (acc : Array (ℕ × Std.HashSet ℕ)) (g : ℕ) : Array (ℕ × Std.HashSet ℕ) :=
   match d.owner[g]! with
   | some u => acc.modify u fun (s, into) =>
@@ -812,7 +774,6 @@ def tallyStep (c : GateTable) (d : Division) (acc : Array (ℕ × Std.HashSet �
 theorem tally_eq (c : GateTable) (d : Division) :
     tally c d = (List.range c.N).foldl (tallyStep c d) (Array.replicate d.n (0, {})) := rfl
 
-/-- `tally`'s first `m` steps: per inference block, its gates so far and the gates outside it they read. -/
 theorem tally_inv (c : GateTable) (d : Division) : ∀ m,
     let T := (List.range m).foldl (tallyStep c d) (Array.replicate d.n (0, {}))
     T.size = d.n ∧ ∀ u < d.n, T[u]!.1 = ((Finset.range m).filter fun g => d.owner[g]! = some u).card ∧
@@ -880,8 +841,6 @@ theorem tally_spec (c : GateTable) (d : Division) :
   rw [tally_eq]
   exact tally_inv c d c.N
 
-/-! ## Sums over a hash set -/
-
 theorem foldl_ite_add (p : ℕ → Prop) [DecidablePred p] (f : ℕ → ℕ) : ∀ (l : List ℕ) (init : ℕ),
     l.foldl (fun x a => if p a then x else x + f a) init = init + (l.map fun a => if p a then 0 else f a).sum
   | [], init => by simp
@@ -889,7 +848,6 @@ theorem foldl_ite_add (p : ℕ → Prop) [DecidablePred p] (f : ℕ → ℕ) : �
     rw [List.foldl_cons, foldl_ite_add p f l, List.map_cons, List.sum_cons]
     split_ifs <;> omega
 
-/-- A sum over a hash set of naturals, as a sum over the gates it holds. -/
 theorem hashSet_fold_sum {N : ℕ} (S : Std.HashSet ℕ) (F : Finset (Fin N)) (hS : ∀ x, x ∈ S ↔ ∃ a ∈ F, a.val = x)
     (p : ℕ → Prop) [DecidablePred p] (f : ℕ → ℕ) :
     S.fold (fun x a => if p a then x else x + f a) 0 = ∑ a ∈ F, if p a.val then 0 else f a.val := by
@@ -902,9 +860,6 @@ theorem hashSet_fold_sum {N : ℕ} (S : Std.HashSet ℕ) (F : Finset (Fin N)) (h
   rw [this, Finset.sum_map]
   rfl
 
-/-! ## The check's arrays are the definition's circuit, baseline and partition -/
-
-/-- What `LaysOut` and `circuitOf` together say of gate `g`: the same width, input flag and reads. -/
 theorem laysOut_gate {P : Prog} {c : GateTable} (hc : circuitOf P = .ok c) {D : Verity.Circuit} (hL : LaysOut P D)
     (g : Fin D.N) : D.w g = c.w[g.val]! ∧ D.isInput g = c.isInput[g.val]! ∧
       ∀ a : Fin D.N, a ∈ D.reads g ↔ a.val ∈ c.reads[g.val]! := by
@@ -946,8 +901,6 @@ theorem card_filter_fin (N : ℕ) (p : ℕ → Prop) [DecidablePred p] :
   · rintro ⟨g, hg, rfl⟩; exact ⟨g.isLt, hg⟩
   · rintro ⟨hx, h⟩; exact ⟨⟨x, hx⟩, h, rfl⟩
 
-/-- The setting of a verdict: the Program's circuit `c`, the checked division `dv`, a declaration `d` the Program lays
-out with the baseline θ names, and a partition `U` that the owners are. -/
 structure Setting (P : Prog) (theta owner : Array Json) (c : GateTable) (dv : Division) (d : Verity.RegisteredCircuit)
     (n : ℕ) (U : Verity.Partition d.D n) : Prop where
   hc : circuitOf P = .ok c
@@ -1035,7 +988,6 @@ theorem fresh_eq (u : Fin n) : InferenceOnly.freshInput d (U.gates u) =
   · have : ¬ dv.theta.contains a.val = true := fun h => ha (h1.2 (Std.HashSet.contains_iff_mem.1 h))
     simp [ha, this, h2]
 
-/-- Entry `u` of `ius`: the size and fresh input bits of inference block `u`. -/
 theorem ius_get (u : Fin n) : (ius c dv)[u.val]! = (d.D.size (U.gates u), InferenceOnly.freshInput d (U.gates u)) := by
   have hu : u.val < (tally c dv).size := by rw [(tally_spec c dv).1, ← S.n_eq]; exact u.isLt
   rw [S.size_eq u, S.fresh_eq u, ius, getElem!_pos _ u.val (by simpa using hu), Array.getElem_map,
@@ -1045,8 +997,6 @@ theorem ius_size : (ius c dv).size = n := by
   rw [ius, Array.size_map, (tally_spec c dv).1, S.n_eq]
 
 end Setting
-
-/-! ## The instance -/
 
 theorem pairOf?_eq (v : Json) (a b : Json) : pairOf? v = some (a, b) ↔ v = .arr #[a, b] := by
   cases v with
@@ -1066,7 +1016,6 @@ theorem pairOf?_eq (v : Json) (a b : Json) : pairOf? v = some (a, b) ↔ v = .ar
       simp
   | _ => simp [pairOf?]
 
-/-- An instance missing a field, or with one of the wrong JSON kind, is refused with `instance`. -/
 theorem parse_not_shaped (j : Json) (h : ¬ Shaped j) : parse j = .error "instance" := by
   unfold Shaped at h
   unfold parse field
@@ -1096,7 +1045,6 @@ theorem parse_not_shaped (j : Json) (h : ¬ Shaped j) : parse j = .error "instan
   · rcases h1 : j.getObjVal? "program" with e | (_ | _ | _ | s | _ | _) <;> try rfl
     exact absurd ⟨s, h1⟩ hA
 
-/-- A well-shaped instance: its fields parse, or it is refused with `params`. -/
 theorem parse_shaped (j : Json) {s : String} {t o : Array Json} {v w : Json}
     (h1 : j.getObjVal? "program" = .ok (.str s)) (h2 : j.getObjVal? "theta" = .ok (.arr t))
     (h3 : j.getObjVal? "owner" = .ok (.arr o)) (h4 : j.getObjVal? "gamma" = .ok v)
@@ -1194,10 +1142,6 @@ theorem parse_error (j : Json) (k : String) : parse j = .error k ↔
   · rw [parse_not_shaped j h]
     simp [h, eq_comm]
 
-/-! ## The definition's objects, built from the check's -/
-
-/-- The circuit the Program lays out, built from `circuitOf`'s arrays: no outputs and every operation `0`, which
-`LaysOut` leaves free. -/
 def circuitFrom {P : Prog} {c : GateTable} (hc : circuitOf P = .ok c) : Verity.Circuit where
   N := c.N
   w g := c.w[g.val]!
@@ -1223,7 +1167,6 @@ theorem laysOut_circuitFrom {P : Prog} {c : GateTable} (hc : circuitOf P = .ok c
   exact ⟨p, c.reads[g.val]!, sc, hs, hr, hi, fun a =>
     ⟨fun h => (Finset.mem_filter.1 h).2, fun h => Finset.mem_filter.2 ⟨Finset.mem_univ _, h⟩⟩⟩
 
-/-- θ as the entries name it is a set of input gates of every circuit the Program lays out. -/
 theorem theta_inputs {P : Prog} {c : GateTable} (hc : circuitOf P = .ok c) {theta owner : Array Json}
     {dv : Division} (hd : divisionOf c theta owner = .ok dv) {D : Verity.Circuit} (hL : LaysOut P D) :
     ∀ g : Fin D.N, (∃ t ∈ theta, natOf? t = some g.val) → D.isInput g = true := by
@@ -1235,7 +1178,6 @@ theorem theta_inputs {P : Prog} {c : GateTable} (hc : circuitOf P = .ok c) {thet
   rw [(laysOut_gate hc hL g).2.1]
   exact (circuitOf_isInput hc (hL.1 ▸ g.isLt)).2 hin
 
-/-- The partition the owners are, of every circuit the Program lays out. -/
 theorem exists_partition {P : Prog} {c : GateTable} (hc : circuitOf P = .ok c) {theta owner : Array Json}
     {dv : Division} (hd : divisionOf c theta owner = .ok dv) {D : Verity.Circuit} (hL : LaysOut P D) :
     ∃ U : Verity.Partition D dv.n, Divides owner U := by
@@ -1289,8 +1231,6 @@ theorem exists_partition {P : Prog} {c : GateTable} (hc : circuitOf P = .ok c) {
     rw [hos, ← hL.1] at hg
     exact ⟨⟨g, hg⟩, Finset.mem_filter.2 ⟨Finset.mem_univ _, (hunit ⟨g, hg⟩ u).2 h⟩⟩
 
-/-! ## The first failing inference block -/
-
 theorem findSome_range_none {β : Type} (f : ℕ → Option β) (n : ℕ) :
     (List.range n).findSome? f = none ↔ ∀ i < n, f i = none := by
   simp [List.findSome?_eq_none_iff]
@@ -1323,7 +1263,6 @@ theorem findSome_range_some {β : Type} (f : ℕ → Option β) (b : β) : ∀ n
         · rw [hfi] at hfi'; exact Option.some.inj hfi'
         · rw [hj i' hgt] at hfi'; cases hfi'
 
-/-- `novel ≤ (num / den) · size` in ℝ is `novel · den ≤ num · size` in ℕ. -/
 theorem le_ratio_iff (num den size novel : ℕ) (hden : 0 < den) :
     (novel : ℝ) ≤ (num : ℝ) / den * size ↔ novel * den ≤ num * size := by
   rw [div_mul_eq_mul_div, le_div_iff₀ (by exact_mod_cast hden)]
@@ -1334,14 +1273,11 @@ theorem ratio_lt_iff (num den size novel : ℕ) (hden : 0 < den) :
   rw [div_mul_eq_mul_div, div_lt_iff₀ (by exact_mod_cast hden)]
   exact_mod_cast Iff.rfl
 
-/-! ## `evaluate` -/
-
 theorem decodeProgram_ok (s : String) (P : Prog) :
     decodeProgram s = .ok P ↔ Flock.Program.decode s.toUTF8 = .ok P := by
   unfold decodeProgram
   rcases h : Flock.Program.decode s.toUTF8 with e | P' <;> simp
 
-/-- `decodeProgram`'s refusal or what follows on its Program, as the decoder reads it. -/
 theorem decodeProgram_cases (s k : String) (X Y : Prog → Prop) (hXY : ∀ P, X P ↔ Y P) :
     (decodeProgram s = .error k ∨ ∃ P, decodeProgram s = .ok P ∧ X P) ↔
       ((∃ e, Flock.Program.decode s.toUTF8 = .error e) ∧ k = "program") ∨

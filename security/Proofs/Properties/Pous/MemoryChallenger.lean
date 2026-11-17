@@ -6,17 +6,8 @@ import Mathlib.Algebra.Order.Ring.Nat
 import Mathlib.Data.Finset.Attr
 import Mathlib.Tactic.SetLike
 
-/-!
-# Proofs of the memory challenger's verdict's properties (`Properties.Pous.MemoryChallenger`)
-
-`verdict` is its checks before the rounds (`pre`, the reasons they give) followed by the rounds and the counts (`tail`),
-by case analysis (`verdict_eq`). The rounds' loop only adds: the reasons, the late and the wrong count never shrink,
-and a round that adds none passes (`forIn'_measure`). An accepted verdict has no reason, so the checks before the
-rounds gave none and every round passed.
-
-`VerdictSigned` follows: an accepted verdict's signature verifies over the session's message and its session ended
-`complete`, which is all `Device.signedByDevice_of` reads.
--/
+/-! `verdict` is its checks before the rounds followed by the rounds and the counts, and a session meeting every check
+is accepted. -/
 
 @[expose] public section
 
@@ -24,12 +15,10 @@ namespace MemoryChallenger.Properties.SecurityProofs
 
 open MemoryChallenger
 
-/-- `ByteArray`'s `==` is its arrays', which is lawful. -/
 local instance instLawfulBEqByteArray_properties : LawfulBEq ByteArray where
   eq_of_beq h := ByteArray.ext (beq_iff_eq.1 h)
   rfl {a} := show (a.data == a.data) = true from beq_iff_eq.2 rfl
 
-/-- `verdict`'s reasons before the rounds. -/
 private def pre (schemes : Schemes) (trusted : List ByteArray) (s : SignedChallengePhase) (c : ChallengePhaseCommitment) :
     Array String := Id.run do
   let mut reasons : Array String := #[]
@@ -48,7 +37,6 @@ private def pre (schemes : Schemes) (trusted : List ByteArray) (s : SignedChalle
     reasons := reasons.push s!"the session ended {s.ended} after {s.rounds.size} of {c.k} rounds"
   return reasons
 
-/-- `verdict` from the rounds on, after the reasons `r0`. -/
 private def tail (expected : Nat → Option ByteArray) (s : SignedChallengePhase)
     (c : ChallengePhaseCommitment) (openings : Array CoinOpening) (r0 : Array String) : Verdict := Id.run do
   let mut reasons := r0
@@ -111,7 +99,6 @@ theorem forIn'_measure_eq {α σ : Type} {l : List α} {f : (a : α) → a ∈ l
     (hf : ∀ a h b, ∃ b', f a h b = pure (.yield b') ∧ μ b ≤ μ b' ∧ (μ b' = μ b → Good a)) :
     μ init ≤ μ L.run ∧ (μ L.run = μ init → ∀ a ∈ l, Good a) := hL ▸ forIn'_measure l f μ Good hf init
 
-/-- Round `j` passes: its index is its committed coin, its digest the expected one, and it is on time. -/
 private def Good (expected : Nat → Option ByteArray) (s : SignedChallengePhase) (c : ChallengePhaseCommitment)
     (openings : Array CoinOpening) (j : Nat) : Prop :=
   ∀ hj : j < s.rounds.size,
@@ -233,8 +220,6 @@ theorem judgeSigned : JudgeSigned := by
   obtain ⟨schemes, hs, ⟨p, hp, ht, m, hm, hv⟩, -, he, -⟩ := judgeAccepts r hj
   exact ⟨schemes, hs, Device.signedByDevice_of dev hp ht hm hv he⟩
 
-/-! ## The converse: a session that meets every check is accepted -/
-
 private theorem forIn'_fix {α σ : Type} (l : List α) (f : (a : α) → a ∈ l → σ → Id (ForInStep σ)) (b : σ)
     (hf : ∀ a h, f a h b = pure (.yield b)) : forIn' l b f = pure b := by
   induction l with
@@ -272,10 +257,6 @@ private theorem tail_accepted_of {expected : Nat → Option ByteArray} {s : Sign
     have ho' : openings.reverse.find? (fun x => x.j == a) = some o := by simpa using ho
     simp [ho', hrj, hoi, hv, hb, hd, h0, hl]
 
-/-- **A session that meets every check `verdict` makes is accepted**, the converse of `verdictAccepts`: a scheme it
-names, a trusted key whose signature over the session's message verifies, the commitment, a complete session of `k`
-rounds, and each round's index its committed coin (the last opening for its `j`), its digest the expected one, on
-time. -/
 theorem verdict_accepted_of {schemes : Schemes} {trusted : List ByteArray} {expected : Nat → Option ByteArray}
     {s : SignedChallengePhase} {c : ChallengePhaseCommitment} {openings : Array CoinOpening} {p : Lms.Params} {m : ByteArray}
     (hp : schemes.lookup s.scheme = some p) (ht : trusted.contains s.publicKey = true) (hm : s.message = .ok m)

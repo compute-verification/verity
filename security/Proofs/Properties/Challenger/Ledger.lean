@@ -6,20 +6,7 @@ import all Lean.Data.Json.Basic
 import all Init.Data.Repr
 import all Init.Data.Int.Repr
 
-/-!
-# A ledger's entry as text: plain, and no longer than a line
-
-`Entry.ledgerEntry_of_record` reads a record entry back from its text where the entry is plain and its text is no
-longer than a ledger line. These say so of the entries an auditor writes for a window withheld:
-
-* a value plain at one depth is plain at every greater one (`plainAt_mono`), and an object built from a list whose
-  keys are plain and increase is plain where its values are (`plainAt_built`);
-* the first entry's `prev`, 128 zeros, is the hex of 64 zero bytes (`zero_hex`), plain and of 128 characters;
-* the files an end seals (`filesOf`), the open's body and the end's body are plain, each with its text and a bound on
-  the text's length (`canon_files`, `canon_openBody`, `canon_endBody`);
-* a record entry is plain where its body is and its strings are (`plainAt_record`), and its text is no longer than
-  its parts' (`canon_record`).
--/
+/-! The entries an auditor writes for a window withheld are plain and no longer than a ledger line. -/
 
 @[expose] public section
 set_option backward.privateInPublic true
@@ -34,7 +21,6 @@ open Plain (PlainStr PlainAt)
 open Built (plain_hexOf hexOf_len canon_mkObj_le canon_str_le canon_num)
 open Bodies (openBody endBody)
 
-/-- A value plain at one depth is plain at every greater one. -/
 theorem plainAt_mono {d : Nat} {j : Json} (h : PlainAt d j) : ∀ {e : Nat}, d ≤ e → PlainAt e j := by
   induction h with
   | null d => intro e he; cases e with | zero => omega | succ e => exact .null e
@@ -48,18 +34,14 @@ theorem plainAt_mono {d : Nat} {j : Json} (h : PlainAt d j) : ∀ {e : Nat}, d �
     | zero => omega
     | succ e => exact .obj e hm hk fun p hp => ih p hp (by omega)
 
-/-- An object built from a list whose keys are plain and increase is plain where its values are. -/
 theorem plainAt_built {d : Nat} {l : List (String × Json)} {ks : List String} (hks : l.map (·.1) = ks)
     (hs : ks.Pairwise (· < ·)) (hk : ∀ k ∈ ks, PlainStr k) (hv : ∀ p ∈ l, PlainAt d p.2) :
     PlainAt (d + 1) (Json.mkObj l) :=
   Entry.plainAt_mkObj (distinct_of_keys (hks ▸ hs)) (fun _ hp => hk _ (hks ▸ List.mem_map_of_mem hp)) hv
 
-/-! ## The first entry's `prev` -/
-
 theorem zero_toList : ZERO.toList = List.replicate 128 '0' := String.toList_ofList
 
 set_option maxRecDepth 8192 in
-/-- The first entry's `prev`, 128 zeros, is the hex of 64 zero bytes. -/
 theorem zero_hex : Flock.hexOf ⟨Array.replicate 64 0⟩ = ZERO := by
   apply String.toList_injective
   rw [Properties.NetworkRecords.Bytes.hexOf_toList, zero_toList]
@@ -76,7 +58,6 @@ theorem canon_true : Flock.canon (.bool true) = .ok "true" := by
   rw [Flock.canon]
   rfl
 
-/-- The files an end seals: the digests of the close, the refused hellos, the record and the release log. -/
 def filesOf (close hellos record log : ByteArray) : Json :=
   Json.mkObj [("challenger.json", .str (Flock.hexOf close)), ("hellos.jsonl", .str (Flock.hexOf hellos)),
     ("record.json", .str (Flock.hexOf record)), ("releases.jsonl", .str (Flock.hexOf log))]
@@ -193,7 +174,6 @@ theorem canon_endBody {files : Json} {F : Nat} (commitment : ByteArray) {recordL
   simp only [List.sum_cons, List.sum_nil] at hlen
   exact ⟨t, ht, by omega⟩
 
-/-- **A record entry is plain** where its body is, its kind, prev, schema and session are plain strings. -/
 theorem plainAt_record {r : Core.Record} {s : String} (hb : PlainAt 3 r.body) (hk : PlainStr r.kind)
     (hp : PlainStr r.prev) (hsch : PlainStr r.schema) (hse : r.session = some s) (hs : PlainStr s) :
     PlainAt PyJson.DEPTH r.toJson := by
@@ -213,7 +193,6 @@ theorem plainAt_record {r : Core.Record} {s : String} (hb : PlainAt 3 r.body) (h
       · exact .str 2 hs
       · exact .str 2 (plain_hexOf _))
 
-/-- **A record entry's text and its length.** -/
 theorem canon_record {r : Core.Record} {s : String} {B : Nat} (hb : ∃ t, Flock.canon r.body = .ok t ∧ t.length ≤ B)
     (hk : PlainStr r.kind) (hp : PlainStr r.prev) (hsch : PlainStr r.schema)
     (hq : ∃ t, Flock.canon (Lean.toJson r.seq) = .ok t ∧ t.length ≤ 1) (hse : r.session = some s) (hs : PlainStr s) :

@@ -6,14 +6,7 @@ public import Proofs.Flock.Bytes
 import all Lean.Data.Json.Basic
 import all Init.Data.Ord.String
 
-/-!
-# A coin commitment's identity bytes name it
-
-`LiveCommitment.toJson`'s identity bytes (`Flock.canonUtf8`) are `{"epoch":E,"families":F,"root":"HEX","scheme":S}`
-(`canon_commitment`): its four keys are already in order, which `qsort` leaves as they are (`commitment_sort`). That
-string parses back uniquely (`commStr_inj`), by `Canon`'s splits and the root's hex (`hexOf_inj`), so two commitments
-with one form are one (`canon_inj`).
--/
+/-! Two coin commitments with one identity form (`LiveCommitment.toJson`'s canonical bytes) are one. -/
 
 @[expose] public section
 
@@ -24,7 +17,6 @@ open Spot.Challenger (LiveCommitment familiesJson)
 open Properties.Pouw.LiveSalt.Canon (canon_obj canon_nat canon_families canon_str famStr canonStr_split nat_split
   fam_split)
 
-/-- A commitment's identity bytes. -/
 def commStr (c : LiveCommitment) : String :=
   "{" ++ ",".intercalate [Flock.canonStrUtf8 "epoch" ++ ":" ++ toString c.epoch,
     Flock.canonStrUtf8 "families" ++ ":" ++ famStr c.families,
@@ -52,7 +44,6 @@ theorem canon_commitment (c : LiveCommitment) : Flock.canonUtf8 c.toJson = .ok (
   rw [commitment_sort]
   rfl
 
-/-- A commitment's identity bytes name its epoch, its families, its root and its scheme. -/
 theorem commStr_inj {c c' : LiveCommitment} (h : commStr c = commStr c') : c = c' := by
   obtain ⟨s, e, fs, r⟩ := c
   obtain ⟨s', e', fs', r'⟩ := c'
@@ -72,7 +63,6 @@ theorem commStr_inj {c c' : LiveCommitment} (h : commStr c = commStr c') : c = c
   obtain rfl := Properties.NetworkRecords.Bytes.hexOf_inj hr
   rfl
 
-/-- Two commitments with one identity form are one. -/
 theorem canon_inj (c c' : LiveCommitment) (s : String) (h : Flock.canonUtf8 c.toJson = .ok s)
     (h' : Flock.canonUtf8 c'.toJson = .ok s) : c = c' :=
   commStr_inj (Except.ok.inj ((canon_commitment c).symm.trans (h.trans (h'.symm.trans (canon_commitment c')))))

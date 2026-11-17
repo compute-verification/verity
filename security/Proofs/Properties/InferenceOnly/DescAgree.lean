@@ -23,25 +23,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Std.Data.HashSet.Lemmas
 
-/-!
-# `InferenceOnlyCheck.Desc.evaluate` agrees with `InferenceOnlyCheck.evaluate`
-
-`descAgrees_of` proves `Properties.DescAgrees` from two statements about the decoder and the description-sized analysis,
-each a named `Prop` here, both proved: the first by `Walk.gatesLocated_of`, from `Resolve.bodiesOk`, and the second by
-`Fresh.freshExact_of`, from `Fresh.readsExact`:
-
-* `GatesLocated`: on a Program the decoder returns and `Desc.evaluate` reads (topological by `Prog.orderViolation`, its
-  root laid out, its input nodes the root's, `Desc.walkable`, and `Desc.analyze` resolving its references), every gate of
-  the canonical layout is located and reads only earlier gates (`GateOk`), so `InferenceOnlyCheck.circuitOf` lays it out.
-* `FreshExact`: on such a Program, for a division whose inference blocks are unions of root nodes, the fresh input bits `Desc.freshWidth`
-  counts per inference block, from what `Desc.analyze` resolves each root node to read, are `InferenceOnlyCheck.ius`'s, gate by gate.
-
-The rest is proved: `Desc.evaluate`'s refusals and folds (`descEvaluate_ok`, `nodeThetaFold_ok`, `nodeOwnerFold_ok`),
-the root's layout (`rootLaidOut_spec`, `node_unique`, `node_exists`), that a root node's gates are input gates exactly
-when it is an input node (`gate_input`, through `Prog.gate`'s walk and `inputsAtRoot`), that every verdict has an
-expansion, and that on each the unrolled check accepts θ and the owners, counts the same inference blocks, and the same sizes
-(`sizes_eq_tally`).
--/
+/-! `Desc.evaluate` agrees with `evaluate` given `GatesLocated` and `FreshExact` (`descAgrees_of`). -/
 
 @[expose] public section
 
@@ -51,19 +33,15 @@ open Lean (Json toJson)
 open Flock.Program (Prog)
 
 
-/-- The root's body, its number of nodes, its offsets, and which of its nodes are input nodes, as `Desc.evaluate` reads
-them. -/
 def rootBody (P : Prog) : Flock.Program.Body := (P.defs[P.root]!).body
 def nodeCount (P : Prog) : ℕ := (rootBody P).nodes.size
 def rootOffs (P : Prog) : Array ℕ := (rootBody P).offsets
 def inputs (P : Prog) : Array Bool := (rootBody P).nodes.map (Desc.isInputNode P)
 def registered (P : Prog) : Array Bool := (rootBody P).nodes.map fun n => isRegisteredId (P.defs[n.fn]!).key
 
-/-- `Desc.evaluate`'s fold over θ by root node. -/
 def nodeThetaFold (P : Prog) (theta : Array Json) : Except String (Array Bool) :=
   (List.range theta.size).foldlM (fun m t => Desc.thetaStep (inputs P) (registered P) m theta[t]!) (Array.replicate (nodeCount P) false)
 
-/-- `Desc.evaluate`'s fold over the owners by root node. -/
 def nodeOwnerFold (P : Prog) (owner : Array Json) : Except String (Array (Option ℕ)) :=
   (List.range (nodeCount P)).foldlM (fun own k => own.push <$>
     Desc.ownerStep (inputs P)[k]! ((rootOffs P)[k + 1]! - (rootOffs P)[k]! > 0) owner[k]!) #[]
@@ -148,7 +126,6 @@ theorem getElem!_set!' {α : Type} [Inhabited α] (xs : Array α) (k : ℕ) (x :
     · omega
     · simp [h]
 
-/-- What θ's fold by node holds: each entry an input node no earlier entry names, and the mask the nodes named. -/
 theorem nodeThetaFold_ok (P : Prog) (theta : Array Json) (mask : Array Bool) (h : nodeThetaFold P theta = .ok mask) :
     mask.size = nodeCount P ∧
       (∀ t < theta.size, ∃ k, natOf? theta[t]! = some k ∧ k < nodeCount P ∧ (inputs P)[k]! = true ∧
@@ -199,8 +176,6 @@ theorem descOwnerStep_ok (inp held : Bool) (e : Json) (o : Option ℕ) (h : Desc
       simp [ht, hn, he, pure, Except.pure, bind, Except.bind, throw, throwThe, MonadExceptOf.throw] at h ⊢ <;>
       exact h.symm
 
-/-- What the owners' fold by node holds: per root node with gates, its inference block or `none` for `"input"`, as its kind demands,
-and `none` for a node without gates. -/
 theorem nodeOwnerFold_ok (P : Prog) (owner : Array Json) (own : Array (Option ℕ)) (h : nodeOwnerFold P owner = .ok own) :
     own.size = nodeCount P ∧ ∀ k < nodeCount P,
       own[k]! = (if (rootOffs P)[k + 1]! - (rootOffs P)[k]! > 0 then natOf? owner[k]! else none) ∧
@@ -232,7 +207,6 @@ theorem nodeOwnerFold_ok (P : Prog) (owner : Array Json) (own : Array (Option �
     by_cases hg : (rootOffs P)[own.size + 1]! - (rootOffs P)[own.size]! > 0 <;> simp [hg]
 
 
-/-- What `rootLaidOut` checks. -/
 theorem rootLaidOut_spec (P : Prog) (h : Desc.rootLaidOut P = true) :
     (rootOffs P).size = nodeCount P + 1 ∧ (rootOffs P)[0]! = 0 ∧ (rootOffs P)[nodeCount P]! = gates P ∧
       ∀ k < nodeCount P, (rootOffs P)[k]! ≤ (rootOffs P)[k + 1]! := by
@@ -250,7 +224,6 @@ theorem offs_mono (offs : Array ℕ) (K : ℕ) (hmono : ∀ k < K, offs[k]! ≤ 
     · exact Nat.le_trans (ih (by omega) (by omega)) (hmono b (by omega))
     · subst h; exact Nat.le_refl _
 
-/-- Each gate is in one root node. -/
 theorem node_unique (offs : Array ℕ) (K : ℕ) (hmono : ∀ k < K, offs[k]! ≤ offs[k + 1]!) {g k k' : ℕ}
     (hk : k < K) (hk' : k' < K) (h1 : offs[k]! ≤ g ∧ g < offs[k + 1]!) (h2 : offs[k']! ≤ g ∧ g < offs[k' + 1]!) :
     k = k' := by
@@ -332,8 +305,6 @@ theorem inputs_get (P : Prog) {k : ℕ} (hk : k < nodeCount P) :
   simp only [inputs, Array.getElem_map]
   rfl
 
-/-- **A root node's gates are input gates exactly when it is an input node.** The gate's primitive is the node's callee
-when that is a primitive, and else a primitive some body below the root calls, which `inputsAtRoot` makes no input. -/
 theorem gate_input (P : Prog) (hl : Desc.rootLaidOut P = true) (hi : Desc.inputsAtRoot P = true) {g p : ℕ}
     {ops : Array ℕ} {sc : Flock.Program.Scope} (h : P.gate g = .ok (p, ops, sc)) {k : ℕ} (hk : k < nodeCount P)
     (hg : (rootOffs P)[k]! ≤ g ∧ g < (rootOffs P)[k + 1]!) :
@@ -387,7 +358,6 @@ theorem gate_input (P : Prog) (hl : Desc.rootLaidOut P = true) (hi : Desc.inputs
     · rw [hsc']
       exact (inputsAtRoot_nodes P hi P.root k0 hk0K).1
 
-/-- An input node's gates are its callee's: `Prog.gate` stops at a primitive callee. -/
 theorem gate_input_fn (P : Prog) (hl : Desc.rootLaidOut P = true) {g p : ℕ}
     {ops : Array ℕ} {sc : Flock.Program.Scope} (h : P.gate g = .ok (p, ops, sc)) {k : ℕ} (hk : k < nodeCount P)
     (hg : (rootOffs P)[k]! ≤ g ∧ g < (rootOffs P)[k + 1]!) (hin : (inputs P)[k]! = true) :
@@ -424,7 +394,6 @@ theorem registered_get (P : Prog) {k : ℕ} (hk : k < nodeCount P) :
   simp only [registered, Array.getElem_map]
   rfl
 
-/-- θ's gates: each entry's node's, in order. -/
 def thetaGates (P : Prog) (theta : Array Json) : List ℕ :=
   theta.toList.flatMap fun t => ((natOf? t).map (nodeGates P)).getD []
 
@@ -433,10 +402,8 @@ theorem mem_nodeGates (P : Prog) (k g : ℕ) :
   simp only [nodeGates, List.mem_range'_1, rootOffs, rootBody]
   omega
 
-/-- **The case `Desc.isInputNode` once got wrong.** A root node that calls a composite holds no input gate, whatever the
-composite's key. `Input16_v1` is a well-formed key of a static-free composite, which the decoder admits, and
-`Desc.isInputNode` read an input node off the key alone, so it admitted such a node's computed gates to θ and to no inference block,
-where `evaluate` refuses them (`theta-not-input`, `gate-in-no-iu`). The difftest's last six vectors are such programs. -/
+/-- A root node that calls a composite holds no input gate, whatever the composite's key, so an input node is not read
+off the key alone. -/
 theorem call_gates_computed (P : Prog) (hl : Desc.rootLaidOut P = true) (hi : Desc.inputsAtRoot P = true) {k : ℕ}
     (hk : k < nodeCount P) (hprim : (P.defs[((rootBody P).nodes[k]!).fn]!).prim = false) {g : ℕ}
     (hg : g ∈ nodeGates P k) : ¬ IsInput P g := by
@@ -483,7 +450,6 @@ theorem thetaGates_nodup (P : Prog) (theta : Array Json)
     obtain rfl := node_unique (rootOffs P) (nodeCount P) hmono hkiK hkjK hx' hy'
     exact hfresh i hij (by rw [getElem!_pos theta i hi]; exact hki)
 
-/-- An expansion's entries are θ's gates. -/
 theorem expands_get {theta' : Array Json} {M : List ℕ} (h : theta'.toList.map natOf? = M.map some) :
     theta'.size = M.length ∧ ∀ t (ht : t < theta'.size), natOf? theta'[t]! = some (M[t]'(by
       have := congrArg List.length h; simp at this; omega)) := by
@@ -523,8 +489,6 @@ theorem rep_get {α : Type} (offs : Array ℕ) (x : ℕ → α) (h0 : offs[0]! =
       simp only [show g - offs[k]! < offs[k + 1]! - offs[k]! by omega, ite_true]
 
 
-/-! ## The expansion -/
-
 theorem getElem!_of_getElem? {α : Type} [Inhabited α] {xs : Array α} {g : ℕ} {v : α} (h : xs[g]? = some v) :
     xs[g]! = v := by
   have hg : g < xs.size := by
@@ -538,10 +502,8 @@ theorem getElem!_of_getElem? {α : Type} [Inhabited α] {xs : Array α} {g : ℕ
 theorem natOf?_toJson (n : ℕ) : natOf? (toJson n) = some n := by
   simp [natOf?, toJson, Lean.JsonNumber.fromNat]
 
-/-- θ expanded: θ's gates as JSON. -/
 def thetaOf (P : Prog) (theta : Array Json) : Array Json := ((thetaGates P theta).map fun g => toJson g).toArray
 
-/-- The owners expanded: each root node's owner once per gate of it. -/
 def ownerOf' (P : Prog) (owner : Array Json) : Array Json :=
   ((List.range (nodeCount P)).flatMap fun k =>
     List.replicate ((rootOffs P)[k + 1]! - (rootOffs P)[k]!) owner[k]!).toArray
@@ -552,21 +514,11 @@ open DescAgree
 open Lean (Json toJson)
 open Flock.Program (Prog GateTable)
 
-/-! ## The statements `descAgrees_of` takes -/
-
-/-- **The layout is located.** On a Program the decoder returns that `Desc.evaluate` reads (topological, its root
-laid out, its input nodes the root's, `Desc.walkable`, and its references resolved by `Desc.analyze`), every gate of the
-canonical layout is located and reads only earlier gates. Without `Desc.walkable` it is false: `Prog.gate` walks at most
-`Flock.Steps.FUEL` steps to an operand, and a nested scan of `2^32 × 2^32` identity steps needs `2^64`. -/
 def GatesLocated : Prop :=
   ∀ (bytes : ByteArray) (P : Prog), Flock.Program.decode bytes = .ok P → P.orderViolation = none →
     Desc.rootLaidOut P = true → Desc.inputsAtRoot P = true → Desc.walkable P = true →
     (∃ reads, Desc.analyze P = .ok reads) → ∀ g < gates P, GateOk P g
 
-/-- **The fresh input bits by node are the gates'.** On such a Program, and a division `dv` of its layout whose inference blocks are
-unions of root nodes (root node `k`'s gates all in `own[k]`, θ every gate of the nodes `mask` marks, input nodes, in no
-inference block), `Desc.freshWidth` of what `Desc.intoOf` collects per inference block from `Desc.analyze`'s reads is `InferenceOnlyCheck.ius`'s fresh
-input bits. -/
 def FreshExact : Prop :=
   ∀ (bytes : ByteArray) (P : Prog) (reads : Array (Array Desc.Seg)) (mask : Array Bool) (own : Array (Option ℕ))
     (c : GateTable) (dv : Division),
@@ -602,7 +554,6 @@ theorem ius_fst (c : GateTable) (dv : Division) {u : ℕ} (hu : u < dv.n) : (ius
   rw [getElem!_pos (ius c dv) u (by simp [ius, hs, hu]), getElem!_pos (tally c dv) u (by rw [hs]; exact hu)]
   simp [ius]
 
-/-- **`Desc.evaluate` agrees with `evaluate`, given `GatesLocated` and `FreshExact`.** -/
 theorem descAgrees_of (hG : GatesLocated) (hN : FreshExact) : Properties.DescAgrees := by
   intro j out hev
   obtain ⟨i, P, reads, mask, own, hpar, hdp, hov, hlo, hin, hwk, han, hθ, hos, hof, hn, hused, rfl⟩ :=
@@ -615,7 +566,6 @@ theorem descAgrees_of (hG : GatesLocated) (hN : FreshExact) : Properties.DescAgr
   obtain ⟨hms, hθt, hθm⟩ := nodeThetaFold_ok P i.theta mask hθ
   obtain ⟨hown_s, hown⟩ := nodeOwnerFold_ok P i.owner own hof
   have hng : ∀ k g, g ∈ nodeGates P k ↔ (rootOffs P)[k]! ≤ g ∧ g < (rootOffs P)[k + 1]! := mem_nodeGates P
-  -- a root node's gates: in the circuit, and input gates exactly when it is an input node
   have hcls : ∀ k < nodeCount P, ∀ g ∈ nodeGates P k, g < gates P ∧ (IsInput P g ↔ (inputs P)[k]! = true) := by
     intro k hk g hg
     have hg' := (hng k g).1 hg
@@ -635,7 +585,6 @@ theorem descAgrees_of (hG : GatesLocated) (hN : FreshExact) : Properties.DescAgr
   have hownk : ∀ k < nodeCount P, ∀ g ∈ nodeGates P k, own[k]! = natOf? i.owner[k]! := by
     intro k hk g hg
     rw [(hown k hk).1, if_pos (hheld k g hg)]
-  -- the nodes θ names, and θ's gates without repeats
   have hθ' : ∀ t < i.theta.size, ∃ k, natOf? i.theta[t]! = some k ∧ k < nodeCount P ∧
       ∀ t' < t, natOf? i.theta[t']! ≠ some k := fun t ht => by
     obtain ⟨k, h1, h2, -, -, h4⟩ := hθt t ht
@@ -653,7 +602,6 @@ theorem descAgrees_of (hG : GatesLocated) (hN : FreshExact) : Properties.DescAgr
       exact ⟨t, ht, hk'⟩
     · rintro ⟨t, ht, hk'⟩
       exact ⟨t, ht, k, hk', hg⟩
-  -- on every expansion, `evaluate` gives the verdict
   have hagree : ∀ j', Expands j j' → evaluate j' = .ok (verdict (P.defs[P.root]!).gates
         ((Array.range (iuCount own)).map fun u => ((Desc.sizes (rootOffs P) own (iuCount own))[u]!,
           Desc.freshWidth (Desc.intoOf (rootOffs P) own mask reads (iuCount own))[u]!))
@@ -781,7 +729,6 @@ theorem descAgrees_of (hG : GatesLocated) (hN : FreshExact) : Properties.DescAgr
     rw [hr, (circuitOf_ok P c hc).1]
     rfl
   refine ⟨?_, hagree⟩
-  -- an expansion exists
   obtain ⟨-, -, -, ⟨gv, hgv, hgn⟩, ⟨a, b, hab, ha, hb⟩, hden⟩ := id hi
   refine ⟨Json.mkObj [("program", .str i.program), ("theta", .arr (thetaOf P i.theta)),
       ("owner", .arr (ownerOf' P i.owner)), ("gamma", gv), ("alpha", .arr #[a, b])], i, P, hi, hdec,

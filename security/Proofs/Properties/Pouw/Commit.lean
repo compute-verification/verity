@@ -3,14 +3,7 @@ module
 public import Properties.Pouw.Commit
 import all Init.Data.String.Defs
 
-/-!
-# Proofs of PoUW's commitment properties (`Properties.Pouw.Commit`)
-
-The sizes and numbers by unfolding and evaluation in the kernel, the refusals and the accepted coins by unfolding the
-port's definitions case by case, and the samples' shape from `Flock.Draw.uniform`'s range and the tickets' running sums.
-The binding statements from the frame's injectivity (its lengths are big-endian, so a frame parses back to its tag and
-parts) and, down an accepted coin's path, one step per hash: each pair of hashed messages is equal, or it is the collision.
--/
+/-! PoUW's commitment properties: sizes and refusals by unfolding, and binding from frame-v3's injectivity. -/
 
 @[expose] public section
 
@@ -18,7 +11,6 @@ namespace Properties.Pouw.Commit
 
 open Flock PouwCommit
 
-/-- `ByteArray`'s `==` is its arrays', which is lawful. -/
 instance lawfulBEqByteArray : LawfulBEq ByteArray where
   eq_of_beq h := ByteArray.ext (beq_iff_eq.1 h)
   rfl {a} := show (a.data == a.data) = true from beq_iff_eq.2 rfl
@@ -73,7 +65,6 @@ theorem ok_of_isOk {ε α : Type} {x : Except ε α} (h : x.isOk = true) : ∃ a
   | error e => simp [Except.isOk, Except.toBool] at h
   | ok a => exact ⟨a, rfl⟩
 
-/-- `CommitmentDomain` refuses exactly a binding of neither 32 nor 64 bytes and an owner below -2. -/
 theorem domain_isOk (h : Hash) (binding : ByteArray) (owner : Int) (count : Nat) :
     (Domain.mk? h binding owner count).isOk = decide ((binding.size = 32 ∨ binding.size = 64) ∧ -2 ≤ owner) := by
   have e : (-2 ≤ owner) ↔ ¬ owner < -2 := by omega
@@ -84,8 +75,6 @@ theorem domain_isOk (h : Hash) (binding : ByteArray) (owner : Int) (count : Nat)
 theorem domainRefusals : DomainRefusals := fun h binding owner count _ hd =>
   of_decide_eq_true ((domain_isOk h binding owner count).symm.trans (isOk_of_ok hd))
 
-/-- `Hm96Domain.leaf` refuses exactly a value shorter than its salt, and in a tile tree one other than a digest and its
-salt. -/
 theorem leaf_isOk (d : RowsDomain) (rank : Nat) (schema : String) (v : ByteArray) :
     (d.leaf rank schema v).isOk = decide (d.hm96 = true → 192 ≤ v.size ∧ (d.digests = true → v.size = 256)) := by
   have e : 192 ≤ v.size ↔ ¬ v.size < 192 := by omega
@@ -123,7 +112,6 @@ theorem idx_none (label : String) : List.idxOf? label ["salt", "draw"] = none �
       have hd' : ¬"draw" = label := fun h => hd h.symm
       simp [List.idxOf?, List.findIdx?, List.findIdx?.go, hs, hd, hs', hd']
 
-/-- `coin_reason` accepts exactly the openings `CoinOpens` describes. -/
 theorem coinAccepts_iff (c : CoinCommitment) (o : CoinOpening) (label : String) (after : ByteArray) :
     coinReason c o label after = .ok none ↔ CoinOpens c o label after := by
   have hc : ∀ e, (coinDomain e).count = 2 := fun _ => rfl
@@ -171,8 +159,6 @@ theorem coinAccepts_iff (c : CoinCommitment) (o : CoinOpening) (label : String) 
 
 theorem coinAccepts : CoinAccepts := fun c o label after => (coinAccepts_iff c o label after).1
 
-/-- `coin_reason` raises exactly on a label outside `LABELS`, or, once the epoch, the label and the sizes match, on a path
-holding an item of neither 32 nor 64 bytes. -/
 theorem coinRaises_iff (c : CoinCommitment) (o : CoinOpening) (label : String) (after : ByteArray) :
     (coinReason c o label after).isOk = false ↔
       label ∉ LABELS ∨
@@ -220,8 +206,6 @@ theorem coinRaises : CoinRaises := by
   rw [List.any_eq_true]
   exact ⟨p, hp, by simp [hs.1, hs.2]⟩
 
-/-! ## Salts, keys and samples -/
-
 open FlockSoundness.Randomness in
 theorem derive_size (source : ByteArray) (domain : String) (context : List (String × Part)) :
     (derive source domain context).size = 32 := by
@@ -229,7 +213,6 @@ theorem derive_size (source : ByteArray) (domain : String) (context : List (Stri
   rw [ByteArray.size_extract, sha512_size]
   rfl
 
-/-- A key is refused exactly when its source is empty. -/
 theorem key_isOk (source : ByteArray) (domain : String) (context : List (String × Part)) :
     (key? source domain context).isOk = decide (source.size ≠ 0) := by
   unfold key?
@@ -258,7 +241,6 @@ theorem blocks_size (key : ByteArray) (index : List Part) (l : List Nat) (acc : 
     omega
 
 open FlockSoundness.Randomness in
-/-- A read of `n` bytes of a stream gives `n` bytes. -/
 theorem stream_size (key : ByteArray) (index : List Part) (n : Nat) : (stream key index n).size = n := by
   simp only [stream, ByteArray.size_extract, blocks_size, List.length_range, ByteArray.size_empty]
   omega
@@ -276,7 +258,6 @@ theorem saltSize : SaltSize := by
     · cases h
     · rw [← Except.ok.inj h]; exact stream_size ..
 
-/-- `salt_of` refuses exactly an empty coin, and `Epoch.unverified` exactly an empty seed. -/
 theorem salt_isOk :
     (∀ (c : CoinCommitment) (coin wr : ByteArray), (saltOf c coin wr).isOk = decide (coin.size ≠ 0)) ∧
       ∀ seed wr : ByteArray, (unverifiedSalt seed wr).isOk = decide (seed.size ≠ 0) := by
@@ -294,8 +275,6 @@ theorem saltRefusals : SaltRefusals :=
   ⟨fun c coin wr _ hs => of_decide_eq_true ((salt_isOk.1 c coin wr).symm.trans (isOk_of_ok hs)),
     fun seed wr _ hs => of_decide_eq_true ((salt_isOk.2 seed wr).symm.trans (isOk_of_ok hs))⟩
 
-/-- `Epoch.start` gives a salt exactly when the opening is the epoch's salt coin opened after the weights' root, and that
-salt is `salt_of` of the opened coin. -/
 theorem epochSalt_iff (c : CoinCommitment) (o : CoinOpening) (wr s : ByteArray) :
     epochSalt c o wr = .ok (.ok s) ↔ CoinOpens c o "salt" wr ∧ saltOf c o.coin wr = .ok s := by
   rw [← coinAccepts_iff c o "salt" wr]
@@ -310,8 +289,6 @@ theorem epochSalt_iff (c : CoinCommitment) (o : CoinOpening) (wr s : ByteArray) 
 
 theorem epochSaltAccepts : EpochSaltAccepts := fun c o wr s => (epochSalt_iff c o wr s).1
 
-/-- `draw_coin` gives a coin exactly when the opening is the epoch's sampling coin opened after what the verifier recorded,
-and the coin is the opened one; an epoch without a coin commitment gives none. -/
 theorem drawCoin_iff :
     (∀ c o after coin, drawCoin (some c) o after = .ok (.ok coin) ↔ CoinOpens c o "draw" after ∧ coin = o.coin) ∧
       ∀ o after coin, drawCoin none o after ≠ .ok (.ok coin) := by
@@ -428,8 +405,6 @@ theorem drawShape : DrawShape := by
       simpa [hsize] using this
     · cases hj
 
-/-! ## Binding -/
-
 theorem be8_data (x : Nat) : (be8 x).data.toList =
     [(x >>> 56).toUInt8, (x >>> 48).toUInt8, (x >>> 40).toUInt8, (x >>> 32).toUInt8,
      (x >>> 24).toUInt8, (x >>> 16).toUInt8, (x >>> 8).toUInt8, (x >>> 0).toUInt8] := by
@@ -457,7 +432,6 @@ theorem be32_inj (x y : Nat) (hx : x < 2 ^ 32) (hy : y < 2 ^ 32)
   simp [Nat.shiftRight_eq_div_pow] at h0 h1 h2 h3
   omega
 
-/-- The framed parts, as bytes. -/
 def framed (parts : List ByteArray) : List UInt8 :=
   parts.flatMap fun p => (be8 p.size).data.toList ++ p.data.toList
 
@@ -475,7 +449,6 @@ theorem byte_eq (n s : Nat) (hs : s ≤ 56) : (UInt64.ofNat n >>> UInt64.ofNat s
     Nat.shiftRight_eq_div_pow]
   rw [show s % 2 ^ 64 % 64 = s by omega, h64, Nat.mod_mul_right_div_self, Nat.mod_mul_left_mod]
 
-/-- frame-v3's length field (`Flock.be64` of the length as a `UInt64`) is `be8` of the length. -/
 theorem be64_eq_be8 (n : Nat) : be64 n.toUInt64 = be8 n := by
   simp [be64, be8, List.range', ByteArray.push, ByteArray.emptyWithCapacity]
   apply Array.ext (by simp; rfl)
@@ -512,7 +485,6 @@ theorem framed_inj : ∀ (ps ps' : List ByteArray), (∀ p ∈ ps, p.size < 2 ^ 
     have hp : p = p' := ByteArray.ext (Array.toList_inj.1 hp)
     rw [hp, framed_inj ps ps' (fun q hq => hb q (by simp [hq])) (fun q hq => hb' q (by simp [hq])) h]
 
-/-- A frame-v3 message determines its tag and parts. -/
 theorem frameBytes_inj (tag tag' : String) (parts parts' : List ByteArray) (ht : tag.toUTF8.size < 2 ^ 32)
     (ht' : tag'.toUTF8.size < 2 ^ 32) (hb : ∀ p ∈ parts, p.size < 2 ^ 64) (hb' : ∀ p ∈ parts', p.size < 2 ^ 64)
     (h : frameBytes tag parts = frameBytes tag' parts') : tag = tag' ∧ parts = parts' := by
@@ -525,7 +497,6 @@ theorem frameBytes_inj (tag tag' : String) (parts parts' : List ByteArray) (ht :
   have htag : tag = tag' := String.toByteArray_inj.1 (ByteArray.ext (Array.toList_inj.1 htag))
   exact ⟨htag, framed_inj parts parts' hb hb' h⟩
 
-/-- A frame `frameHash?` accepts has its tag's and parts' lengths in their fields, and its digest is `frameHash`'s. -/
 theorem frameHash?_ok {h : PouwCommit.Hash} {tag : String} {parts : List ByteArray} {d : ByteArray}
     (hok : frameHash? h tag parts = .ok d) :
     tag.toUTF8.size < 2 ^ 32 ∧ (∀ p ∈ parts, p.size < 2 ^ 64) ∧ frameHash h tag parts = d := by
@@ -547,7 +518,6 @@ theorem frameInjective : FrameInjective := by
   · exact .inl (frameBytes_inj tag tag' parts parts' ht ht' hb hb' he)
   · exact .inr ⟨he, hf.trans hf'.symm⟩
 
-/-- Two lists of messages hash two different messages, one from each, to one SHA-512 digest. -/
 def Break (L L' : List ByteArray) : Prop := ∃ x ∈ L, ∃ y ∈ L', x ≠ y ∧ Sha512.hash x = Sha512.hash y
 
 theorem step {L L' : List ByteArray} {x y : ByteArray} (hx : x ∈ L) (hy : y ∈ L')
@@ -568,7 +538,6 @@ theorem framed_sizes : ∀ (ps ps' : List ByteArray), ps.map ByteArray.size = ps
     obtain ⟨hp, h⟩ := List.append_inj h (by simp [hs.1])
     rw [ByteArray.ext (Array.toList_inj.1 hp), framed_sizes ps ps' hs.2 h]
 
-/-- One tag, and parts of one size each: the frame determines the parts, with no bound on the sizes. -/
 theorem frameBytes_sizes (tag : String) (parts parts' : List ByteArray)
     (hs : parts.map ByteArray.size = parts'.map ByteArray.size) (h : frameBytes tag parts = frameBytes tag parts') :
     parts = parts' := by
@@ -584,7 +553,6 @@ theorem xor_cancel (a b m : UInt8) (h : a ^^^ m = b ^^^ m) : a = b := by
   have := congrArg (· ^^^ m) h
   simpa [UInt8.xor_assoc] using this
 
-/-- Two 64-byte strings that agree under one mask agree. -/
 theorem masked_inj (x x' m : ByteArray) (hx : x.size = 64) (hx' : x'.size = 64)
     (h : ByteArray.mk ((Array.range 64).map fun i => x.get! i ^^^ m.get! i) =
       ByteArray.mk ((Array.range 64).map fun i => x'.get! i ^^^ m.get! i)) : x = x' := by
@@ -601,8 +569,6 @@ theorem masked_inj (x x' m : ByteArray) (hx : x.size = 64) (hx' : x'.size = 64)
   have e := xor_cancel _ _ _ e
   simpa [ByteArray.get!, getElem!_pos, hi, hi'] using e
 
-/-- An hm96 leaf binds its coin: equal leaf values give the same coin, or a collision among the coin-tag, salt-digest and
-leaf inputs. -/
 theorem leafValue_binding (L L' : List ByteArray) (coin salt coin' salt' : ByteArray)
     (h1 : COIN_TAG ++ coin ∈ L) (h1' : COIN_TAG ++ coin' ∈ L')
     (h2 : Hm96.Default512.saltPrefix ++ salt ∈ L) (h2' : Hm96.Default512.saltPrefix ++ salt' ∈ L')
@@ -688,10 +654,7 @@ theorem coinBinding : CoinBinding := by
     simp only [List.cons.injEq, and_true, true_and] at e
     exact leaves e.2
 
-/-! ## Completeness
-
-The other half of each property above: an honest input is accepted. Each comes with one accepted input, so the property it
-pairs with is about inputs the port does accept. -/
+/-! An honest input is accepted, each property with one accepted input. -/
 
 def zeroBytes (n : Nat) : ByteArray := ⟨Array.replicate n 0⟩
 
@@ -727,8 +690,6 @@ theorem salt_instance : (∃ s, saltOf ⟨0, ByteArray.empty⟩ (zeroBytes 32) B
     ∃ s, unverifiedSalt (zeroBytes 32) ByteArray.empty = .ok s :=
   ⟨salt_complete.1 _ _ _ (by rw [zeroBytes_size]; decide), salt_complete.2 _ _ (by rw [zeroBytes_size]; decide)⟩
 
-/-- The commitment to epoch `epoch`'s coins whose `label` coin (at `rank`) is zero bytes, with a zero salt and sibling, and
-that coin's opening after `after`. -/
 def zeroCoins (epoch rank : Nat) : CoinCommitment := ⟨epoch, coinRoot epoch rank (zeroBytes 32) (zeroBytes 192) (zeroBytes 64)⟩
 
 def zeroOpening (epoch : Nat) (label : String) (after : ByteArray) : CoinOpening :=

@@ -9,46 +9,8 @@ public import Proofs.Properties.Verity.SampledLog
 public import Proofs.Properties.Verity.Sampled.Trees
 public import Std.Tactic.Do
 
-/-!
-# The device's log as v2's check reads it, and the sample it shows
-
-Where the sampled check's read of the device's log (`coinsRead`) returns a log from what the prover sent, in an accepted
-composition whose v2 case accepts, the log shows the sample (`shows_logRead`): the read takes the challenger session's
-release log in v2's evidence line by line as v2's check does (`readLog`), with the sample's coins `ξ`
-(`Spot.OneStageZk.coinsOf`) placed in order on the releases of the sample's family after the registration's
-digest, one coin of `COIN_BYTES` bytes each. So the read meets the sample's ask (`SampleRead`) with no premise
-(`sampleRead_logRead`, `sampleRead_coinsRead`).
-
-* **v2's challenger** (`drawCoins_ok`, `trustedChallengePhaseOf_ok`, `challengePhaseNamed_ok`, `challengePhaseOf_ok`, `releasedRootsOf_ok`,
-  `challengerStream_ok`): where v2 reads `ξ`, the session's log is a list of lines, the roots of the sample's family are
-  those its pairs' root lines show (`sel`), and `ξ` is `COIN_BYTES` bytes for each of them equal to the digest.
-* **What the read shows** (`fresh_readLog`, `countFresh_eq`, and `chunks_flatten` in `SampledLog`): the read's coins of
-  the sample's family after the digest are `ξ`'s coins, one for each such root, so their bits are `ξ`'s.
-* **The read in order** (`treeStep_some`, `specOf_streams`, `sampleLinkFirst_snoc`, `sampleLinkFirst_readTail`,
-  `sampleLinkFirst_readLog`, `sampleLinkFirst_congr`): where the release log's lines after its head pass
-  `sampleLinkFirst`, the releases the read shows pass `SampleLinkFirst`: the sample, then the link, then the other
-  rounds; and so do releases of the same frames answering the same bytes, as a log the read is of. The head's line
-  releases at most a `Hello`, since an opening there is of no tree read before it.
-* **The read with v2's own tests** (`logRead`, `logRead_isSome`, `shows_logRead`, `sampleRead_logRead`): `coinsRead`,
-  `logRead` by its own name (`coinsRead_eq_logRead`), tells a tree's line apart, finds its tree and its stream with v2's
-  own Bool tests (`treeStep`), takes the trees over the whole log, its head included, and reads each session's record
-  as v2's `treesHeld` does (`recordsOn`). v2's loops then show it a log wherever v2 accepts (`coinTreesOf_fold`,
-  `releasedRootsOf_pairsOk`, `treesHeld_records`), so it meets the sample's ask with no premise.
-* **v2's case** (`caseOf_of`): in an accepted composition the case `caseOf` finds under v2's id is the one v2 accepted,
-  since the composite's components have distinct ids (`components_nodup`).
-* **The session's sampling design** (`samplingDesign_of_setsUp`, `coupled_sample_setsUp`, `coupled_sample_coins_setsUp`): v2's parameters in the
-  parameters sent are those its case accepted (`paramsAt_case`), so at the session v2 sets up on them (`SetsUp`) the
-  sample's sampling design is the session's wherever its population is (`samplingDesignAt_of_samplingDesignOf`), and the sample's piece of `CouplingTarget`
-  needs only the population.
-* **The session's population** (`popHeld_of_checkBlobsAt`, `popOk_of_popHeld`, `n_of_popOk`, `n_of_popTied`,
-  `coupled_sample_tied`, `coupled_sample_coins_tied`): v2 refuses a record whose population isn't its program's proof
-  blocks in order (`popHeld`), and the session's population (`Live.hpop`) reads the same layout. So at a session whose
-  descriptor and query are v2's verifier's (`PopTied`, which `SetsUp`'s `params` implies) the sample's population is the
-  session's, and the sample's piece asks nothing of the session but its coins.
-
-Each fact about one of the challenger's monadic functions is a Hoare triple proved by `mvcgen`, read back at an `.ok`
-result (`of_triple`, in `SampledLog`).
--/
+/-! Where the sampled check's read of the device's log returns a log, in an accepted composition whose v2 case accepts,
+the log shows the sample (`shows_logRead`). -/
 
 @[expose] public section
 
@@ -62,10 +24,6 @@ open Lean (Json)
 open Std.Do
 open Spot.Challenger
 open Properties.Challenger (bitsOf Draws)
-
-/-! ## v2's challenger -/
-
-/-! ### The session's files and the sample's coins -/
 
 theorem recordReason_spec (key : ChallengerKey) (record : Json) :
     ⦃⌜True⌝⦄ recordReason key record ⦃⇓? _ => ⌜True⌝⦄ := except_spec _
@@ -128,7 +86,6 @@ theorem challengerStream_spec (c : LiveCommitment) (segment : Json) (after : Byt
     ⦃⌜True⌝⦄ challengerStream c segment after roots ⦃⇓? r => ⌜challengerStream c segment after roots = .ok r⌝⦄ :=
   ok_spec _
 
-/-- The roots of family `label` in the roots `roots`, as `sampleCoins` reads them. -/
 def look (roots : Roots) (label : String) : List ByteArray := ((roots.find? (·.1 == label)).map (·.2)).getD []
 
 theorem drawCoins_ok {key : ChallengerKey} {w label : String} {after : ByteArray} {coins : Json} {ξ : ByteArray}
@@ -183,8 +140,6 @@ theorem stream_size {r : ByteArray} {rs : List ByteArray} {after : ByteArray} {s
   rw [← zipIdx_filter_length, eq_of_beq h1, List.length_range', h2, hm]
 
 set_option maxHeartbeats 1000000 in
-/-- **The coins the stream opens**: 64 bytes each, as many as the roots of the family the log shows released after
-`after`. -/
 theorem challengerStream_ok {c : LiveCommitment} {segment : Json} {after : ByteArray} {rs : List ByteArray}
     {ξ : ByteArray} (h : challengerStream c segment after (some rs) = .ok ξ) :
     ξ.size = COIN_BYTES * (rs.filter (· == after)).length := by
@@ -196,15 +151,11 @@ theorem challengerStream_ok {c : LiveCommitment} {segment : Json} {after : ByteA
     | (rw [List.length_append, List.length_singleton]; exact step_size ‹_› ‹_› ‹_›)
     | exact stream_size ‹_› ‹_› (by simp)
 
-/-! ### The roots the release log shows -/
-
-/-- The roots of family `label` the root lines of the pairs `ps` show, in order. -/
 def sel (label : String) (ps : List (String × String)) : List ByteArray :=
   ps.filterMap fun x => match rootOf x.1 with
     | some (l, r) => if l = label then some r else none
     | none => none
 
-/-- The roots of family `label` in `releasedRootsOf`'s state. -/
 def lookA (roots : Array (String × Array ByteArray)) (label : String) : List ByteArray :=
   ((roots.find? (·.1 == label)).map (·.2.toList)).getD []
 
@@ -286,8 +237,6 @@ theorem roots_post {r : Array (String × Array ByteArray)} {ps : List (String ×
 theorem event_spec (l : String) : ⦃⌜True⌝⦄ event l ⦃⇓? r => ⌜event l = .ok r⌝⦄ := ok_spec _
 
 set_option maxHeartbeats 2000000 in
-/-- **The roots the release log shows, by family**: those of the root lines of its pairs, its head and its coin trees'
-lines aside. -/
 theorem releasedRootsOf_ok {c : LiveCommitment} {log : List String} {roots : Roots}
     (h : releasedRootsOf c log = .ok roots) :
     ∀ ℓ, look roots ℓ = sel ℓ (pairs (log.tail.filter fun l => !treeLine l)) := by
@@ -299,8 +248,6 @@ theorem releasedRootsOf_ok {c : LiveCommitment} {log : List String} {roots : Roo
     | exact roots_step (fun _ => rfl) ‹_› ‹_› ‹_› ‹_› ‹_› ‹_›
     | exact fun ℓ => lookA_init _ ℓ
     | exact roots_post ‹_›
-
-/-! ## What the read shows -/
 
 theorem countFresh_eq (label : String) (after : ByteArray) :
     ∀ rest : List String, countFresh label after rest = ((sel label (pairs rest)).filter (· == after)).length
@@ -325,12 +272,6 @@ theorem countFresh_eq (label : String) (after : ByteArray) :
   | [_] => rfl
   | [] => rfl
 
-/-! ## The read in order -/
-
-/-- **A coin tree's line releases its `Hello` or a round's opening**, as `treeStep` reads it: a `Hello`, on a line whose
-`event` is `TREE_EVENT`, adds its tree's line spec to the trees read, which parses to the `Hello`'s spec (`specOf`);
-an opening, on a line whose `event` isn't `TREE_EVENT`, is of a round of a tree read before it, of a stream of that
-tree's line spec (`specStreams`) the line names. -/
 theorem treeStep_some {records : List Json} {ts ts' : List (String × Json)} {j : Json} {r : Verity.Release}
     (h : treeStep records ts j = some (r, ts')) :
     (∃ root sj spec, r.frame = .hello spec ∧ ts' = ts ++ [(root, sj)] ∧ specOf sj = some spec ∧
@@ -381,7 +322,6 @@ theorem treeStep_some {records : List Json} {ts ts' : List (String × Json)} {j 
       · simp at h
     · simp at h
 
-/-- `mapM` into `Option` keeps each place: where it maps `l` to `l'`, the element of `l'` at a place is `f` of `l`'s. -/
 theorem mapM_getElem? {α β : Type} {f : α → Option β} :
     ∀ {l : List α} {l' : List β}, l.mapM f = some l' → ∀ s : ℕ, l'[s]? = l[s]?.bind f
   | [], l', h, s => by
@@ -397,7 +337,6 @@ theorem mapM_getElem? {α β : Type} {f : α → Option β} :
     | zero => simp [hb]
     | succ s => simpa using mapM_getElem? ht s
 
-/-- `mapM_getElem?` on arrays. -/
 theorem mapM_getElem?_arr {α β : Type} {f : α → Option β} {xs : Array α} {ys : Array β} (h : xs.mapM f = some ys)
     (s : ℕ) : ys[s]? = xs[s]?.bind f := by
   rw [Array.mapM_eq_mapM_toList] at h
@@ -407,8 +346,6 @@ theorem mapM_getElem?_arr {α β : Type} {f : α → Option β} {xs : Array α} 
     | some l' => exact ⟨l', rfl, by simpa [hm] using h⟩
   rw [List.getElem?_toArray, mapM_getElem? hl', Array.getElem?_toList]
 
-/-- **A stream a coin tree's line spec names is its parsed spec's**: where the line's spec parses (`specOf`), a stream
-at a place of the list it names (`specStreams`) is the parsed spec's stream at that place. -/
 theorem specOf_streams {j : Json} {sp : Flock.CoinTree.Spec} (h : specOf j = some sp) {s : ℕ} {x : String}
     (hx : (specStreams j)[s]? = some (.str x)) : sp.streams[s]? = some x := by
   unfold specOf at h
@@ -444,8 +381,6 @@ theorem forall₂_snoc {α β : Type} {R : α → β → Prop} {a : α} {b : β}
 theorem helloSpecs_append (a b : List Verity.Release) : helloSpecs (a ++ b) = helloSpecs a ++ helloSpecs b :=
   List.filterMap_append
 
-/-- **A release after a log in order keeps it in order**: where it releases no coin of the sample after an opening,
-and, as the first opening, opens the stream `TREE_SESSION`. -/
 theorem sampleLinkFirst_snoc {label : String} {after : ByteArray} {pre : List Verity.Release} {r : Verity.Release}
     (hP : SampleLinkFirst label after pre)
     (hf : (∃ q ∈ pre, ∃ i s n, q.frame = .opening i s n) → ¬ (r.frame = .fresh label ∧ r.answers = after))
@@ -472,7 +407,6 @@ theorem sampleLinkFirst_snoc {label : String} {after : ByteArray} {pre : List Ve
     · rw [List.mem_singleton.1 hq]
       exact hf ⟨r₀, by rw [hpre]; simp, i, s, n, hr₀⟩
 
-/-- A family's release after a log in order keeps it in order, where it isn't the sample's or no round is opened. -/
 theorem sampleLinkFirst_snoc_fresh {label : String} {after : ByteArray} {pre : List Verity.Release}
     {r : Verity.Release} {opened : Bool} {lab : String} {root : ByteArray} (hP : SampleLinkFirst label after pre)
     (hO : opened = true ↔ ∃ q ∈ pre, ∃ i s n, q.frame = .opening i s n) (hr : r.frame = .fresh lab)
@@ -496,9 +430,6 @@ theorem sampleLinkFirst_snoc_fresh {label : String} {after : ByteArray} {pre : L
       · rw [List.mem_singleton.1 hq, hr] at h
         cases h
 
-/-- **v2's read of a log in order is in order**: where the release log's lines after its head pass `sampleLinkFirst`'s
-scan, the releases `readTail` reads from them, after the releases `pre` read before them, show the sample, then the
-link, then the other rounds. -/
 theorem sampleLinkFirst_readTail {label : String} {after : ByteArray} {records : List Json} :
     ∀ (lines : List String) (ts : List (String × Json)) (pending : Option String) (ξ : ByteArray)
       (opened : Bool) (pre : List Verity.Release) {log : List Verity.Release},
@@ -626,9 +557,6 @@ theorem sampleLinkFirst_readTail {label : String} {after : ByteArray} {records :
           have h := sampleLinkFirst_readTail ls ts none _ opened _ hB hrest (by rw [hS']; exact hS) hO' hP'
           rwa [List.append_assoc, List.singleton_append] at h
 
-/-- **v2's read of a log in order is in order**: where the release log's lines after its head pass `sampleLinkFirst`,
-the releases `readLog` reads from the whole log show the sample, then the link, then the other rounds. The head's line
-releases at most its tree's `Hello`: an opening there is of no tree read before it, and the read refuses it. -/
 theorem sampleLinkFirst_readLog {label : String} {after : ByteArray} {records : List Json} {ξ : ByteArray}
     {lines : List String} {log : List Verity.Release} (hB : sampleLinkFirst label after lines.tail = true)
     (hR : readLog label after records ξ lines = some log) : SampleLinkFirst label after log := by
@@ -677,8 +605,6 @@ theorem helloSpecs_congr :
     simp only [helloSpecs, List.filterMap_cons, h.1] at e ⊢
     rw [e]
 
-/-- **Releases of the same frames, answering the same bytes, are in order together**: `SampleLinkFirst` reads only
-each release's frame and the bytes it answered. -/
 theorem sampleLinkFirst_congr {label : String} {after : ByteArray} {l l' : List Verity.Release}
     (hl : List.Forall₂ (fun x y => x.frame = y.frame ∧ x.answers = y.answers) l l')
     (hP : SampleLinkFirst label after l) : SampleLinkFirst label after l' := by
@@ -694,11 +620,8 @@ theorem sampleLinkFirst_congr {label : String} {after : ByteArray} {l l' : List 
     obtain ⟨q', hq', hqq⟩ := Claims.Bridge.Custody.forall₂_mem_left hpre q hq
     exact hnone q' hq' i' s' n' (hqq.1.symm.trans hqo)
 
-/-! ## v2's case in what the prover sent -/
-
 theorem ok_bind {ε α β : Type} (a : α) (f : α → Except ε β) : (Except.ok a >>= f) = f a := rfl
 
-/-- **The case `caseOf` finds is the one v2 accepted**, in a composition composite `k` accepted. -/
 theorem caseOf_of {k : Verity.Registration.Composite} {s : Verity.Sent} {a b e : ByteArray}
     {p : _root_.Spot.OneStageZk.Params} {c : _root_.Spot.OneStage.Commitment}
     {ev : _root_.Spot.OneStageZk.Evidence} (hS : Verity.SameAccepts k s) (hcase : V2Case k s a b e)
@@ -723,8 +646,6 @@ theorem caseOf_of {k : Verity.Registration.Composite} {s : Verity.Sent} {a b e :
   simp only [caseOf, hps, ok_bind, h1, hevs, h2, hp, hc, hev]
   try rfl
 
-/-- Where v2's parameters and commitment name the challenger `dr`, they name its key and family, and its digest is the
-registration's. -/
 theorem source_of {p : _root_.Spot.OneStageZk.Params} {c : _root_.Spot.OneStage.Commitment}
     {dr : Draws} (h : Properties.Challenger.oneStageZkSource p c = some dr) :
     ∃ key, p.base.challenger = some (key, dr.label) ∧ dr.after = c.digest := by
@@ -742,7 +663,6 @@ theorem linesOf_of {e : _root_.Spot.OneStageZk.Evidence} {ls : Array Json} {line
   rw [hls]
   exact mapM_str_ok (fun _ => rfl) lines
 
-/-- v2's case names v2's parameters in the parameters sent. -/
 theorem caseOf_params {s : Verity.Sent} {p : _root_.Spot.OneStageZk.Params} {c : _root_.Spot.OneStage.Commitment}
     {e : _root_.Spot.OneStageZk.Evidence} (h : caseOf s = .ok (p, c, e)) : ParamsAt s.params p := by
   unfold caseOf at h
@@ -784,8 +704,6 @@ theorem caseOf_params {s : Verity.Sent} {p : _root_.Spot.OneStageZk.Params} {c :
                   · cases h
             · cases h
 
-/-- **An accept on parameters that name no members is the one statement's**: where the parameters sent name no
-members (`OneStatement`), the parameters v2's case accepted in them name none. -/
 theorem single_of_case {k : Verity.Registration.Composite} {s : Verity.Sent} {a b e : ByteArray}
     {p : _root_.Spot.OneStageZk.Params} {c : _root_.Spot.OneStage.Commitment}
     {ev : _root_.Spot.OneStageZk.Evidence} {ξ : ByteArray} {dr : Draws} (hS : Verity.SameAccepts k s)
@@ -793,10 +711,6 @@ theorem single_of_case {k : Verity.Registration.Composite} {s : Verity.Sent} {a 
     (hone : OneStatement s.params) : p.members = none :=
   hone p (caseOf_params (caseOf_of hS hcase hacc.1 hacc.2.1 hacc.2.2.1))
 
-/-! ## The session's sampling design -/
-
-/-- **v2's parameters in the parameters sent are the ones its case accepted**, in a composition composite `k`
-accepted. -/
 theorem paramsAt_case {k : Verity.Registration.Composite} {s : Verity.Sent} {a b e : ByteArray}
     {p : _root_.Spot.OneStageZk.Params} {c : _root_.Spot.OneStage.Commitment}
     {ev : _root_.Spot.OneStageZk.Evidence} {ξ : ByteArray} {dr : Draws} (hS : Verity.SameAccepts k s)
@@ -804,7 +718,6 @@ theorem paramsAt_case {k : Verity.Registration.Composite} {s : Verity.Sent} {a b
     {p' : _root_.Spot.OneStageZk.Params} (h : ParamsAt s.params p') : p' = p :=
   (Sum.inl.inj (params_of_case hS hcase hacc.1 h)).symm
 
-/-- The sampling design `samplingDesignAt` reads at the population `SamplingDesignOf` names is the sampling design `SamplingDesignOf` names. -/
 theorem samplingDesignAt_of_samplingDesignOf {p : _root_.Spot.OneStageZk.Params} {c : _root_.Spot.OneStage.Commitment}
     {L : Flock.Draw.SamplingDesign} {n : ℕ} (h : SamplingDesignOf p c L n) : samplingDesignAt p.base.verifier n = .ok L := by
   obtain ⟨samplingDesign, derived, fl, hd, -, hder, hfl, rfl⟩ := h
@@ -813,9 +726,6 @@ theorem samplingDesignAt_of_samplingDesignOf {p : _root_.Spot.OneStageZk.Params}
 
 variable {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α]
 
-/-- **The session's sampling design is the sample's** where the session's population is: at the session `A` v2 sets up on the
-parameters `θ` (`SetsUp`), a sample v2 made in a composition composite `k` accepted, on those parameters, over `A.n`
-units, ran under `A.design`. -/
 theorem samplingDesign_of_setsUp {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {A : Live} (hA : SetsUp V θ F A)
     {k : Verity.Registration.Composite} {s : Verity.Sent} {dr : Draws} {L : Flock.Draw.SamplingDesign} {n : ℕ} {ξ : ByteArray}
     {units : Array ℕ} (hS : Verity.SameAccepts k s) (hθ : s.params = θ) (hd : Drew k s dr L n ξ units)
@@ -826,8 +736,6 @@ theorem samplingDesign_of_setsUp {V : Vocab d α} {θ : ByteArray} {F : Array By
   rw [paramsAt_case hS hcase hacc hp', hn, samplingDesignAt_of_samplingDesignOf hL] at hlaw
   exact (Except.ok.inj hlaw).symm
 
-/-- **The sample's piece of `CouplingTarget` at the session v2 sets up**: `coupled_sample`, with the session's sampling design read
-off `SetsUp` on the play's parameters. -/
 theorem coupled_sample_setsUp {V : Vocab d α} {k : Verity.Registration.Composite} (K : Constructions V) (A : Live)
     (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (σ : Verity.Game.Strategy (V.game θ F c))
     (hA : SetsUp V θ F A) (hR : SampleRead k (V.coinsRead .sampled)) {o : Verity.Exchange}
@@ -842,7 +750,6 @@ theorem coupled_sample_setsUp {V : Vocab d α} {k : Verity.Registration.Composit
     coupled_sample K A θ F c σ hR (by rw [hθ]; exact hp₀) (by rw [hθ]; exact hA.single) hv hl
   exact ⟨dr, L, n, ξ, units, hd, fun ω hn hp => h ω (samplingDesign_of_setsUp hA hv.2.1 hθ hd hn) hn hp⟩
 
-/-- `coupled_sample_coins` at the session v2 sets up. -/
 theorem coupled_sample_coins_setsUp {V : Vocab d α} {k : Verity.Registration.Composite} (K : Constructions V)
     (A : Live) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (σ : Verity.Game.Strategy (V.game θ F c))
     (hA : SetsUp V θ F A) (hR : SampleRead k (V.coinsRead .sampled)) {o : Verity.Exchange}
@@ -859,9 +766,6 @@ theorem coupled_sample_coins_setsUp {V : Vocab d α} {k : Verity.Registration.Co
     coupled_sample_coins K A θ F c σ hR (by rw [hθ]; exact hp₀) (by rw [hθ]; exact hA.single) hv hl κ hsrc
   exact ⟨dr, L, n, ξ, units, hd, fun ω hn hp => h ω (samplingDesign_of_setsUp hA hv.2.1 hθ hd hn) hn hp⟩
 
-/-! ## The session's population -/
-
-/-- **v2's check at the coins `ξ` accepts only where the record's population is its program's** (`popHeld`). -/
 theorem popHeld_of_checkBlobsAt {p : _root_.Spot.OneStageZk.Params}
     {c : _root_.Spot.OneStage.Commitment} {ξ : ByteArray} {e : _root_.Spot.OneStageZk.Evidence}
     {bs : Core.Blobs} {pub : _root_.Spot.OneStage.Public} {prof : Core.Integrity}
@@ -882,8 +786,6 @@ theorem popHeld_of_checkBlobsAt {p : _root_.Spot.OneStageZk.Params}
       exfalso
       simp only [hp, bind_ok, reduceCtorEq, false_and, and_false, exists_false] at hr
 
-/-- **The population `popHeld` passes is one the program holds**: under the verifier's query, the program's proof
-blocks are the record's population units in order (`Slots.popOk`). -/
 theorem popOk_of_popHeld {v : _root_.Spot.Docket.Verifier} {record : Json} {n : ℕ}
     (h : _root_.Spot.OneStageZk.popHeld v record = .ok ())
     (hn : _root_.Spot.nat? (_root_.Spot.getD record "population") = some n) :
@@ -895,8 +797,6 @@ theorem popOk_of_popHeld {v : _root_.Spot.Docket.Verifier} {record : Json} {n : 
   · rw [ite_eq_right hp] at h
     cases h
 
-/-- **The session's population is the one the program holds** where the session's descriptor parses to v2's program
-and its query is v2's: `Live.hpop` and `Slots.popOk` read one layout's population. -/
 theorem n_of_popOk {A : Live} {v : _root_.Spot.Docket.Verifier} {n : ℕ}
     (hd : _root_.Spot.Program.parse ⟨A.desc.toArray⟩ = .ok v.program) (hq : A.qr = v.query)
     (h : _root_.Spot.Slots.popOk v.program v.query n = true) : A.n = n := by
@@ -909,15 +809,10 @@ theorem n_of_popOk {A : Live} {v : _root_.Spot.Docket.Verifier} {n : ℕ}
     have := congrArg List.length (h1.symm.trans h2)
     simpa only [List.length_map, List.length_range] using this
 
-/-- **The session's descriptor and query are v2's verifier's** on the parameters `θ`: the tie under which the
-session's population is the sample's (`n_of_popTied`). `SetsUp`'s `params` implies it. -/
 def PopTied (θ : ByteArray) (A : Live) : Prop :=
   ∃ p, ParamsAt θ p ∧ _root_.Spot.Program.parse ⟨A.desc.toArray⟩ = .ok p.base.verifier.program ∧
     A.qr = p.base.verifier.query
 
-/-- **The session's population is the sample's**: a sample v2 made in a composition composite `k` accepted, on the
-parameters `θ`, ran over the population of a session tied to v2's verifier there, since v2 refuses a record whose
-population isn't its program's proof blocks in order (`popHeld`). -/
 theorem n_of_popTied {θ : ByteArray} {A : Live} (ht : PopTied θ A) {k : Verity.Registration.Composite}
     {s : Verity.Sent} {dr : Draws} {L : Flock.Draw.SamplingDesign} {n : ℕ} {ξ : ByteArray} {units : Array ℕ}
     (hS : Verity.SameAccepts k s) (hθ : s.params = θ) (hd : Drew k s dr L n ξ units) : A.n = n := by
@@ -929,8 +824,6 @@ theorem n_of_popTied {θ : ByteArray} {A : Live} (ht : PopTied θ A) {k : Verity
   obtain ⟨-, -, -, -, -, pub, prof, hck⟩ := hacc
   exact n_of_popOk hdesc hq (popOk_of_popHeld (popHeld_of_checkBlobsAt hck) hn)
 
-/-- **The sample's piece of `CouplingTarget` at a session tied to v2's verifier**: `coupled_sample_setsUp`, with the
-session's population read off `PopTied`, so the piece asks nothing of the session but its coins. -/
 theorem coupled_sample_tied {V : Vocab d α} {k : Verity.Registration.Composite} (K : Constructions V) (A : Live)
     (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (σ : Verity.Game.Strategy (V.game θ F c))
     (hA : SetsUp V θ F A) (ht : PopTied θ A) (hR : SampleRead k (V.coinsRead .sampled)) {o : Verity.Exchange}
@@ -943,7 +836,6 @@ theorem coupled_sample_tied {V : Vocab d α} {k : Verity.Registration.Composite}
   obtain ⟨dr, L, n, ξ, units, hd, h⟩ := coupled_sample_setsUp K A θ F c σ hA hR hθ hv hl
   exact ⟨dr, L, n, ξ, units, hd, fun ω hp => h ω (n_of_popTied ht hv.2.1 hθ hd) hp⟩
 
-/-- `coupled_sample_coins_setsUp` at a session tied to v2's verifier. -/
 theorem coupled_sample_coins_tied {V : Vocab d α} {k : Verity.Registration.Composite} (K : Constructions V)
     (A : Live) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (σ : Verity.Game.Strategy (V.game θ F c))
     (hA : SetsUp V θ F A) (ht : PopTied θ A) (hR : SampleRead k (V.coinsRead .sampled)) {o : Verity.Exchange}
@@ -958,13 +850,8 @@ theorem coupled_sample_coins_tied {V : Vocab d α} {k : Verity.Registration.Comp
   obtain ⟨dr, L, n, ξ, units, hd, h⟩ := coupled_sample_coins_setsUp K A θ F c σ hA hR hθ hv hl κ hsrc
   exact ⟨dr, L, n, ξ, units, hd, fun ω hp => h ω (n_of_popTied ht hv.2.1 hθ hd) hp⟩
 
-/-! ## The read with v2's own tests -/
-
 open private isHexN strOf isStream from Spot.ChallengerTrees
 
-/-! ### The trees -/
-
-/-- The trees the coin tree lines of `ls` read (`treeStep`) after the trees `ts`; `none` where one doesn't read. -/
 def treeFold (records : List Json) : List (String × Json) → List String → Option (List (String × Json))
   | ts, [] => some ts
   | ts, l :: ls =>
@@ -984,7 +871,6 @@ theorem treeFold_append (records : List Json) :
     · rw [ite_eq_right h, ite_eq_right h]
       exact treeFold_append records ts l₁ l₂
 
-/-- The trees `coinTreesOf` holds as `treeStep` reads them: each its root and its spec. -/
 def heldTrees (trees : Array LoggedTree) : List (String × Json) := trees.toList.map fun t => (t.root, t.spec)
 
 theorem map_modify_eq {α β : Type} (g : α → β) (f : α → α) (hf : ∀ x, g (f x) = g x) :
@@ -1123,8 +1009,6 @@ theorem fold_open {records : List Json} {pre : List String} {l : String} {trees 
 theorem coinTreesOf_spec (l : List String) : ⦃⌜True⌝⦄ coinTreesOf l ⦃⇓? r => ⌜coinTreesOf l = .ok r⌝⦄ := ok_spec _
 
 set_option maxHeartbeats 4000000 in
-/-- **The trees v2's check reads, the read reads**: wherever `coinTreesOf` accepts the release log, each of its coin
-tree's lines reads (`treeStep`), at the trees `coinTreesOf` holds. -/
 theorem coinTreesOf_fold (records : List Json) {lines : List String} {trees : Array LoggedTree}
     (h : coinTreesOf lines = .ok trees) : treeFold records [] lines = some (heldTrees trees) := by
   refine of_triple (Q := fun trees => treeFold records [] lines = some (heldTrees trees)) ?_ h
@@ -1138,10 +1022,6 @@ theorem coinTreesOf_fold (records : List Json) {lines : List String} {trees : Ar
     | exact fold_open ‹_› ‹_› ‹_› ‹_› ‹_› ‹_› ‹_› ‹_› (Prod.mk.inj ‹_›).1 (Prod.mk.inj ‹_›).2 ‹_›
         fun _ => ⟨rfl, rfl⟩
 
-/-! ### The pairs -/
-
-/-- The pairs `releasedRootsOf` reads off the lines `ls`, after the root's line `pending` still to pair: each root's
-line reads with its family and root (`rootOf`), and none is left without its release. -/
 def PairsOk : Option String → List String → Prop
   | none, [] => True
   | some _, [] => False
@@ -1175,9 +1055,6 @@ theorem parity {n : ℕ} (h : ¬(n % 2 == 1) = true) : n % 2 = 0 := by
   omega
 
 set_option maxHeartbeats 2000000 in
-/-- **The pairs v2's check reads, the read reads**: wherever `releasedRootsOf` accepts the release log, each root's
-line after its head, its coin trees' lines aside, reads with its family and root, and none is left without its
-release. -/
 theorem releasedRootsOf_pairsOk {c : LiveCommitment} {log : List String} {roots : Roots}
     (h : releasedRootsOf c log = .ok roots) : PairsOk none (log.tail.filter fun l => !treeLine l) := by
   refine of_triple (Q := fun _ => PairsOk none (log.tail.filter fun l => !treeLine l)) ?_ h
@@ -1188,8 +1065,6 @@ theorem releasedRootsOf_pairsOk {c : LiveCommitment} {log : List String} {roots 
     | exact pairs_step ‹_› ‹_› ‹_› ‹_› ‹_›
     | exact fun _ hy => nomatch hy
     | exact pairsOk_of _ ‹_› (parity ‹_›)
-
-/-! ### The records -/
 
 theorem blobsGet_spec (bs : _root_.Core.Blobs) (h w : String) :
     ⦃⌜True⌝⦄ bs.get h w ⦃⇓? r => ⌜bs.get h w = .ok r⌝⦄ := ok_spec _
@@ -1203,8 +1078,6 @@ theorem records_step {bs : _root_.Core.Blobs} {pre : List _root_.Spot.OneStageZk
   simp [recordOn, hg, hu, Except.toOption]
 
 set_option maxHeartbeats 1000000 in
-/-- **The records v2's check reads, the read reads**: wherever `treesHeld` accepts, a blob holds each session's
-record, as UTF-8. -/
 theorem treesHeld_records {p : _root_.Spot.OneStageZk.Own} {ts : Array LoggedTree}
     {e : _root_.Spot.OneStageZk.Evidence} {bs : _root_.Core.Blobs}
     (h : _root_.Spot.OneStageZk.treesHeld p ts e bs = .ok ()) :
@@ -1214,8 +1087,6 @@ theorem treesHeld_records {p : _root_.Spot.OneStageZk.Own} {ts : Array LoggedTre
   mvcgen [_root_.Spot.OneStageZk.treesHeld, -Spec.throw_Except, throw_spec, blobsGet_spec] invariants
   · ⇓? ⟨cur, _⟩ => ⌜(cur.prefix.mapM (recordOn bs)).isSome⌝
   all_goals exact records_step ‹_› ‹_› ‹_›
-
-/-! ### The check's trees -/
 
 set_option maxHeartbeats 1000000 in
 theorem trustedTreesOf_ok {key : ChallengerKey} {w : String} {coins : Json} {ts : Array LoggedTree}
@@ -1240,8 +1111,6 @@ theorem treesOf_ok {p : _root_.Spot.OneStageZk.Params} {e : _root_.Spot.OneStage
   | error err => intro h; cases h
   | ok t => intro h; cases h; rfl
 
-/-- **v2's check at the coins `ξ` accepts, on parameters that name no members, only where the challenger's trees
-hold**: `treesOf` reads them and `treesHeld` holds the evidence's sessions to them. -/
 theorem trees_of_checkBlobsAt {p : _root_.Spot.OneStageZk.Params}
     {c : _root_.Spot.OneStage.Commitment} {ξ : ByteArray} {e : _root_.Spot.OneStageZk.Evidence}
     {bs : _root_.Core.Blobs} {pub : _root_.Spot.OneStage.Public} {prof : _root_.Core.Integrity}
@@ -1257,8 +1126,6 @@ theorem trees_of_checkBlobsAt {p : _root_.Spot.OneStageZk.Params}
     simp only [bind_ok] at hr
     obtain ⟨_, -, ts, hts, _, -, _, hth, -⟩ := hr
     exact ⟨ts, hts, hth⟩
-
-/-! ### The read -/
 
 theorem logRead_eq {s : Verity.Sent} {p : _root_.Spot.OneStageZk.Params}
     {c : _root_.Spot.OneStage.Commitment} {e : _root_.Spot.OneStageZk.Evidence}
@@ -1325,8 +1192,6 @@ theorem readLog_isSome (label : String) (after : ByteArray) (records : List Json
       simp only [treeFold, ite_eq_right ht] at hT
       exact readTail_isSome label after records ls [] none ξ hT hP
 
-/-- **The one statement's acceptance reads the device's log, with v2's own tests**: wherever composite `k` accepted
-what the prover sent and v2's case in it accepts on parameters that name no members, `logRead` returns a log. -/
 theorem logRead_isSome {k : Verity.Registration.Composite} {s : Verity.Sent} {a b e : ByteArray}
     {p : _root_.Spot.OneStageZk.Params} {c : _root_.Spot.OneStage.Commitment}
     {ev : _root_.Spot.OneStageZk.Evidence} {ξ : ByteArray} {dr : Draws} (hS : Verity.SameAccepts k s)
@@ -1435,9 +1300,6 @@ theorem fresh_readLog (label : String) (after : ByteArray) (records : List Json)
     · rw [ite_eq_right ht] at h
       exact fresh_readTail label after records ls [] none ξ h
 
-/-- **Where the read returns a log, it shows the sample**: wherever composite `k` accepted what the prover sent and v2's
-case in it accepts at the coins `ξ` it read under the challenger `dr`, a log `logRead` returns has exactly `ξ`'s bits
-as its coins of `dr`'s family released after `dr`'s digest. -/
 theorem shows_logRead {k : Verity.Registration.Composite} {s : Verity.Sent} {a b e : ByteArray}
     {p : _root_.Spot.OneStageZk.Params} {c : _root_.Spot.OneStage.Commitment}
     {ev : _root_.Spot.OneStageZk.Evidence} {ξ : ByteArray} {dr : Draws} (hS : Verity.SameAccepts k s)
@@ -1461,15 +1323,12 @@ theorem shows_logRead {k : Verity.Registration.Composite} {s : Verity.Sent} {a b
   rw [hafter]
   exact hf ▸ List.prefix_refl _
 
-/-- **The read with v2's own tests shows the sample**, with no premise: `logRead` meets the sample's ask (`SampleRead`). -/
 theorem sampleRead_logRead (k : Verity.Registration.Composite) : SampleRead k logRead := by
   intro s a b e p c ev ξ dr hS hcase hacc hone
   obtain ⟨log, hlog⟩ :=
     Option.isSome_iff_exists.1 (logRead_isSome hS hcase hacc (single_of_case hS hcase hacc hone))
   exact ⟨log, hlog, shows_logRead hS hcase hacc hlog⟩
 
-/-- **v2's read shows the sample**, with no premise: `coinsRead` is `logRead` (`coinsRead_eq_logRead`), so it meets the
-sample's ask (`SampleRead`). -/
 theorem sampleRead_coinsRead (k : Verity.Registration.Composite) : SampleRead k coinsRead := by
   rw [coinsRead_eq_logRead]
   exact sampleRead_logRead k
