@@ -3,7 +3,7 @@
 
 # Each is a row of the served table (`served_overhead.py`, `verity-bench served-table`): a protocol's arm over stock FP8
 # as served (compiled), in time per output token, paired by rep, on Llama-3.1-8B at batch 32 with 512-token mixed
-# prompts, read from the store's runs.
+# prompts, read from the store's runs; a member is another model on another card.
 [[metric]]
 id = "benchmarks/served-overhead-commit"
 title = "Served overhead of committing values"
@@ -20,7 +20,7 @@ id = "benchmarks/served-overhead-pous-bandwidth-audit"
 title = "Served overhead of the bandwidth audit"
 owner = "benchmarks"
 unit = "percent"
-axis = "Percent that PoUS's bandwidth audit adds to vLLM's time per output token serving Llama 3.1 8B, over stock FP8 on the RTX PRO 6000 at batch 32."
+axis = "Percent that PoUS's bandwidth audit adds to vLLM's time per output token serving Llama 3.1 8B, over stock FP8 on the RTX PRO 6000 at batch 32, and member llama-3.2-1b-h200 the same for Llama 3.2 1B on one H200."
 better = "lower"
 command = "research run --on auto --project verity --source . --cwd source --store-read -- uv run python benchmarks/harness/served_overhead.py"
 every = "7d"

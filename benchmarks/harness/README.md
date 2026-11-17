@@ -25,7 +25,8 @@ without one, for any free GPU.
 verity-bench plan SPEC       # expand a spec; each point's identity and its passing run, if any
 verity-bench run SPEC        # one recorded run per point without a passing run, queued for any free GPU
                              # (--direct NODE: on NODE itself, through its GPU slots, instead; --again POINT: that
-                             # point too, though a passing run stands for it; plan takes --again to show it first)
+                             # point too, though a passing run stands for it; plan takes --again to show it first;
+                             # --card INDEX --cores CPUS: a booked card and its slot's cores, with --direct)
 verity-bench check SPEC      # exit 0 only when every point has a passing run, here or on the store's remote
 verity-bench compare A B     # accept two results only when their identities agree (--allow PATH to permit one)
 verity-bench table R1 R2...  # one table from one spec's per-point results, only when their identities agree

@@ -1,4 +1,4 @@
-"""One table of every protocol's served overhead on Llama-3.1-8B, rendered from the evidence store.
+"""One table of every protocol's served overhead, rendered from the evidence store.
 
 A record is named in the store, never in code: a run labelled `run_of_record=NAME` is one of record NAME's runs, and an
 art so labelled names its runs in its `runs` meta, in the order they were labelled (a target's latest label wins).
@@ -66,6 +66,7 @@ class Protocol:
     eager_stock: str | None
     own_arm: str | None = None
     record: str = ""
+    members: tuple[tuple[str, str], ...] = ()
 
 
 @dataclass(frozen=True)
@@ -87,7 +88,8 @@ PROTOCOLS = (
              "pouw:pearl-c-sm120-v1-h3", "stock-fp8", record="pearl-c-served"),
     Protocol("Pearl-C whole-step (cross-check)", (), "pouw-pearl-c-whole", "stock-fp8", record="pearl-c-whole-step"),
     # The bandwidth specs run every arm but the compiled one on decode-only CUDA graphs: no eager stock.
-    Protocol("PoUS bandwidth audit", (), "bandwidth-audit", None, record="pous-bandwidth-audit"),
+    Protocol("PoUS bandwidth audit", (), "bandwidth-audit", None, record="pous-bandwidth-audit",
+             members=(("llama-3.2-1b-h200", "llama32-1b-fp8-1gpu-bandwidth-served-h200"),)),
     Protocol("Commit", (), "commit@compiled", None, record="commit"),
     Protocol("H1 served, GPU commit path (cost only, in-process coins)", (), "pouw:eps1-sm120-h1fx1", "stock-int8",
              record="h1-served"),
@@ -426,17 +428,24 @@ def collect(store: Any, *, protocols: Sequence[Protocol] | None = None, factors:
             live_rows.append(row)
     rows = []
     for protocol in protocols:
+        own = protocol.own_arm or protocol.arm
+        members = {spec: member for member, spec in protocol.members}
+        head = {"protocol": protocol.name, "arm": protocol.arm, "served_stock": SERVED,
+                "own_arm": own if protocol.eager_stock else None, "eager_stock": protocol.eager_stock}
+        seen = set()
         for spec, point, found, record in _points(protocol, named.get(protocol.record, ()), store, skipped):
-            own = protocol.own_arm or protocol.arm
-            row = {"protocol": protocol.name, "arm": protocol.arm, "served_stock": SERVED,
-                   "own_arm": own if protocol.eager_stock else None, "eager_stock": protocol.eager_stock,
-                   **_source(spec, point, found, record), "over_served": None, "over_eager": None}
+            seen.add(spec)
+            row = {**head, **_source(spec, point, found, record), "member": members.get(spec), "over_served": None,
+                   "over_eager": None}
             if found is not None:
                 row["over_served"] = {metric: _over(found.point, protocol.arm, SERVED, metric)
                                       for metric in (PER_OUTPUT, PER_DECODE)}
                 if protocol.eager_stock:
                     row["over_eager"] = {PER_OUTPUT: _over(found.point, own, protocol.eager_stock, PER_OUTPUT)}
             rows.append(row)
+        rows += [{**head, **_source(spec, "—", None, None), "member": member, "over_served": None, "over_eager": None,
+                  "why": f"no run of record: label its runs `{RUN_OF_RECORD}={protocol.record}`"}
+                 for spec, member in members.items() if spec not in seen]
     factor_rows = []
     for spec, point, found, record in _points(factors, named.get(factors.record, ()), store, skipped):
         row = {"arm": SERVED, "eager_stock": factors.eager_stock, **_source(spec, point, found, record), "factor": None}

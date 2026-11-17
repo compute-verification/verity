@@ -46,6 +46,8 @@ inputs = [
     "benchmarks/pouw/pearl_c_vllm/served_passes.py",
     "benchmarks/pouw/settings.py",
     "benchmarks/harness/README.md",
+    # the served table's metrics are its runner's, which a test runs
+    "benchmarks/harness/served_overhead.py",
     "benchmarks/served_commit/arm.py",
     "benchmarks/served_commit/prof_arm.py",
     "benchmarks/served_commit/tp_decode.py",
