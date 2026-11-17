@@ -40,6 +40,8 @@ TIME = "kernels/wide-leaf-gpu-seconds-over-today"
 #: the proof's bytes with the wide leaf over the same with today's leaf
 SIZE = "kernels/wide-leaf-proof-bytes-over-today"
 HERE = Path(__file__).resolve().parent
+#: the CPUs the steps are timed on, a GPU slot's: with fewer or more a ratio is another point's
+CORES = 10
 NOT_SAID = ("the prover's CPU witness sets the pace, so the ratio is of this card with this slot's cores; it doesn't say "
             "what share of a monitoring period's proving these statements carry; each step's acceptance is under the "
             "provisional unit cover (the statement staged unbound)")
@@ -53,9 +55,13 @@ def statement() -> dict[str, Any]:
 def lease(a: argparse.Namespace) -> int:
     from verity_bench import kit, steady_cards, steady_node
     cpus = sorted(os.sched_getaffinity(0))
+    if len(cpus) != CORES:
+        print(f"wleaf: the run has {len(cpus)} CPUs ({steady_node._spans(cpus)}), and the steps are timed on {CORES}, "
+              "a GPU slot's: launch it through a slot of the node whose line gives that many", file=sys.stderr)
+        return 2
     near = steady_cards.cards_near(cpus, steady_node._ask)
     on = ",".join(map(str, near["cards"])) if near.get("cards") else None
-    *argv, dashdash = kit.lease(1, a.max_min, on=on, cores=",".join(map(str, cpus)))
+    *argv, dashdash = kit.lease(1, a.max_min, on=on, cores=steady_node._spans(cpus))
     print(f"wleaf: one card {'of ' + on if on else '(the node says no card near the run CPUs: ' + str(near.get('why')) + ')'}"
           f", pinned to {len(cpus)} CPUs", flush=True)
     return subprocess.run([*argv, "--preemptible", dashdash, *a.command], check=False).returncode
