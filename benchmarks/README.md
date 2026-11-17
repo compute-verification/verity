@@ -16,7 +16,7 @@ and `uv run verity bench NAME [ARGS]` runs one. These are the directories that h
 | Command | What it runs |
 | --- | --- |
 | `verity bench attester_load` | what the network attester costs the requests it carries: the added time to a response's first and last byte against the endpoint straight, the ticks' lateness at its schedule's capacity, and that capacity stated |
-| `verity bench bandwidth` | the device ceilings PoUB's timing cites, one probe a run: `chip` (what a card holds on chip) and `write_gpu` on one GPU, `write_host` on the host's CPUs |
+| `verity calibrate bandwidth` | the device ceilings PoUB's timing cites, one probe a run: `chip` (what a card holds on chip) and `write_gpu` on one GPU, `write_host` on the host's CPUs |
 | `verity bench bool_build_cost` | a workload's Boolean Build against its word Build: the descriptor's size and each Definition's proof-block rule, timed |
 | `verity bench certifier_term` | the network attester's term for GLM-5.3 at a scope's load, in bits and GB |
 | `verity bench attester_timing` | the bits an interval a server moves through when the network attester releases its bytes: `run`, `guard`, `serve`, `observe`, `score`, `table` and `target` |
