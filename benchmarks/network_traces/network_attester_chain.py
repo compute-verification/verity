@@ -79,7 +79,7 @@ RECORD = "certifier-key/v1"
 #: run's end publishes (`auditor.NETWORK_CERTIFIER_COUNTS`), key for key, with `cell_rows` cut as the gate cuts it
 #: (`auditor.CELL_ROWS`). The summary's other keys count the traffic (the requests and how each ended, the cells, their
 #: bits and their lateness, the execution phases the signer refused) or are made from the witness (a connection's
-#: bytes before padding, the requests' tokens and finish reasons, the certifier's clocks and stalls) and stay there.
+#: bytes before padding, the requests' tokens and finish reasons, the attester's clocks and stalls) and stay there.
 #: A key is added here only after the gate's list has it
 COUNTS = ("failed", "windows", "certified_windows", "certificates", "cell_rows", "load")
 CELL_ROWS = ("registered", "of")
@@ -117,7 +117,7 @@ def deployment(run: Path) -> tuple[dict, W.NetworkAttesterParams]:
             raise SystemExit(f"{run}: {PROXY} ({hit} is there)")
     dep = json.loads(found(run, "deployment.json").read_text())
     if "certifier_key" in dep or "links" in dep or "params" not in dep or dep.get("link") != RC.LINK:
-        raise SystemExit(f"{run}: {PROXY} (its deployment.json isn't a network certifier's)")
+        raise SystemExit(f"{run}: {PROXY} (its deployment.json isn't a network attester's)")
     params = W.NetworkAttesterParams(**dep["params"])
     if params.digest.hex() != dep.get("digest"):
         raise SystemExit(f"{run}: deployment.json's digest isn't its parameters'")

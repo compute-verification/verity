@@ -17,13 +17,13 @@ from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.program import Program
 from verity.circuits.refs import tuple_of
 from verity.circuits.types import Array, Tuple, Value
-from verity_vllm.definitions.registry import b1, sampling
-from verity_vllm.definitions.registry import prims as P
-from verity_vllm.definitions.registry.prims import BF16, F32, I32
 
 from tests.regression import lift_expected as LE
 from tests.regression import resolver
 from tests.regression.checks import step_segmentation as SS
+from verity_vllm.definitions.registry import b1, sampling
+from verity_vllm.definitions.registry import prims as P
+from verity_vllm.definitions.registry.prims import BF16, F32, I32
 
 CAP = 4
 N = 40
