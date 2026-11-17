@@ -65,10 +65,11 @@ B=${BUILD_DIR:-}
 FLAGS=(-O3 -gencode "arch=compute_$ARCH,code=sm_$ARCH" -std=c++17 -Xcompiler -fPIC -shared -Xptxas -v)
 BASE_REV=${BASE_REV:-$(git -C "$TREE" merge-base HEAD origin/main 2> /dev/null)}
 # The base's session.cu sits where BASE_REV has it, the prover's directory or (before the provers' move) $RS, and its
-# includes resolve to this tree's codec_tensor and circuits from either place.
+# includes resolve to this tree's codec_tensor, circuits and commitments from either place.
 P=verity/protocols/resource_accounting/memory/poub/prover
 mkdir -p "$B/base/$RS" "$B/base/$P/remote_session"
 ln -s "$TREE/verity/circuits" "$B/base/verity/circuits"
+ln -s "$TREE/verity/commitments" "$B/base/verity/commitments"
 ln -s "$TREE/$P/codec_tensor" "$B/base/$P/codec_tensor"
 ln -s "$TREE/$P/codec_tensor" "$B/base/benchmarks/codec_tensor"
 BASE=
