@@ -14,6 +14,7 @@ says. These are the directories that have one:
 
 | Command | What it runs |
 | --- | --- |
+| `verity bench attester_load` | what the network attester costs the requests it carries: the added time to a response's first and last byte against the endpoint straight, the ticks' lateness at its schedule's capacity, and that capacity stated |
 | `verity bench bandwidth` | the device ceilings PoUB's timing cites, one probe a run: `chip` (what a card holds on chip) and `write_gpu` on one GPU, `write_host` on the host's CPUs |
 | `verity bench bool_build_cost` | a workload's Boolean Build against its word Build: the descriptor's size and each Definition's proof-block rule, timed |
 | `verity bench certifier_term` | the network attester's term for GLM-5.3 at a scope's load, in bits and GB |
@@ -347,6 +348,7 @@ GPU code held bit for bit to its reference or Definition before it is timed.
 | `network_sim/` | the workload's Programs (`workload/`): a Boolean MLP and vLLM's serving Program, which `verifier_cost` measures a verifier on | maintained |
 | `certifier_timing/` | the bits an interval a server moves through when the network attester releases its bytes: one number from a server that times its writes by a bit, with a guard, a target and the candidate fixes as flags | maintained |
 | `scan_cost/` | what the network attester's scan costs for each second of execution phase it covers: proving seconds (the round's sessions and their staging) and the Lean verifier's CPU seconds on one core, at a fixed identity, each with its stages, a guard on the round's answer, a baseline and two targets | maintained |
+| `attester_load/` | what the network attester costs the requests it carries, at the application's schedule: the added time to a response's first and last byte through it against straight to the endpoint, the ticks' lateness at the capacity its schedule states, on a stub endpoint on a CPU and on a model on a card. The model arm's network attester runs in the bytes form, relaying vLLM's own framing, where the application's runs in the id form: the schedule and its cells' buckets are the same, and only what a cell may carry differs | maintained |
 | `mempool/` | the network attester's prefix-cache pool as memory-checked RAM (`pool_ram`, held to vLLM's pool on the encodings' traces; `stream.py` holds `CacheStep_v3`'s stream to it after every call): a window's cost at its busiest stretch, and `MemCheck_v1`'s and `CacheStep_v3`'s vectors | maintained |
 | `datacenter/` | a datacenter as Verity accounts for it, in a small Python API: the Program, hardware, binding, plan, run, claims and account | maintained |
 
