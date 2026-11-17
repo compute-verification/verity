@@ -49,9 +49,9 @@
 #                         file. MAIN_FILE and PP_CHALLENGER_KEY default to the run's sent main.txt and
 #                         challenger-key.json, V3C_AUDIT_TIMEOUT to 60h (its sessions run one at a time), and
 #                         V3C_ARCHIVE_LINK to 1: each member's circuit file is linked into its archive, not copied
-#                         (`a0.lean_verify`). The harness's own V3C_WARM_JOBS=N composes the window's templates N at a
-#                         time before the audit; without it the audit composes them itself, one at a time, inside its
-#                         limit. PREFLIGHT_ONLY=1 stops after the harness's preflight.
+#                         (`a0.lean_verify`). The harness's own V3C_WARM_JOBS=N (default the cores given, at most 8)
+#                         composes the window's templates N at a time before the audit; set empty, the audit composes
+#                         them itself, one at a time, inside its limit. PREFLIGHT_ONLY=1 stops after the harness's preflight.
 #   rehearsal.sh compose  a node that holds the compose hand-off alone, D its copy: `served_verdicts.sh compose` inside
 #                         one memory scope of its own (COMPOSE_MEM_GB, default 64, no swap). Each Lean check it starts
 #                         runs in a scope of its own and is not started past its blob limit (`served_cases.py`:
