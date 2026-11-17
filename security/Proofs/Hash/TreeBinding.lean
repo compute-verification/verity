@@ -36,15 +36,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# `Hash.SecurityProofs.TreeBinding : Hash.Guarantees.TreeBinding`
-
-Two climbs of one length from one index that reach one digest start from one digest, or two of the node messages they
-hashed collide (`climb_bind`), by induction up the path. At each level both climbs hash a node message at the same level
-and index, with the climbing digest on the same side. The next digests are equal, by induction, or the levels above
-collided. Equal next digests come from one node message, whose children are then equal (`nodeMsg_inj`), or from two
-different node messages, which collide.
--/
+/-! The proof of `Hash.Guarantees.TreeBinding`, by induction up the climb's path. -/
 
 @[expose] public section
 
@@ -52,7 +44,6 @@ namespace Hash.BindingProofs
 
 open Hash.Tree
 
-/-- **Climbs bind their start.** -/
 theorem climb_bind (H : Msg → Digest) (D : Domain) :
     ∀ (s₁ s₂ : List Digest) (lv cur : ℕ) (x₁ x₂ : Digest), s₁.length = s₂.length →
       (climb H D lv cur x₁ s₁).2 = (climb H D lv cur x₂ s₂).2 →

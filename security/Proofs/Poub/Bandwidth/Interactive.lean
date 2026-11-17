@@ -35,20 +35,8 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# The bandwidth audit v0 with interactive side sources: the proof
-
-An interactive device is a relay device. Its chip, translated (`IChip.toChip`), drops its sends, and where it would
-read side address `a` having sent `v`, it reads the one address `addr v a`. The relay device's side source answers there
-what the interactive source answers to `v` at `a` (`InteractiveDevice.relaySide`). In every world the translation
-keeps the run, the ingress, the side bits, the regenerations and the queries (`IChip.toChip_run` and the four after
-it), so the device's tags, ingress and bounds are the relay device's. The bound is then `AuditRelay`'s
-(`AuditInteractive`), and `AuditRO`'s when the answers ignore the oracle (`AuditInteractiveRO`), through the relay
-device at any one oracle (`RelayDevice.atOracle`).
-
-What the sends carry never enters the bound, because the compression behind both bounds encodes the bits the chip
-read, not what its sources hold: a source addressed by everything sent may be as large as it likes.
--/
+/-! The proof of the bandwidth audit v0 with interactive side sources, by translating an interactive device to a
+relay device. -/
 
 @[expose] public section
 
@@ -61,10 +49,8 @@ namespace IChip
 
 variable {N b h : ℕ} {α : Type}
 
-/-- A side read at address `a` after sending `v`, as one address. -/
 def addr (v : List Bool) (a : ℕ) : ℕ := Encodable.encode (v, a)
 
-/-- The interactive chip as a chip: a side read at `a` after sending `v` reads `addr v a`, and sends are dropped. -/
 def toChip : List Bool → IChip N b h α → Chip N b h α
   | _, done a => Chip.done a
   | v, tag x k => Chip.tag x fun y => (k y).toChip v
@@ -73,8 +59,6 @@ def toChip : List Bool → IChip N b h α → Chip N b h α
   | v, regen j k => Chip.regen j fun x => (k x).toChip v
   | v, send β p => p.toChip (β :: v)
 
-/-- The interactive world a chip's world is: a side read at `a` after sending `v` returns the side source at
-`addr v a`. -/
 def lift (w : World N b h) : IWorld N b h := ⟨w.oracle, w.mem, fun v a => w.side (addr v a), w.block⟩
 
 theorem toChip_run (w : World N b h) (p : IChip N b h α) (v : List Bool) :
@@ -133,15 +117,11 @@ namespace InteractiveDevice
 
 variable {N b h S c G q : ℕ}
 
-/-- The relay device's side source: at `addr v a`, the answer to `v` at `a`; nothing at an address that is no such
-pair. -/
 def relaySide (A : InteractiveDevice N b h S c G q) (E : Store N b) (O : Oracle N b h) (n : ℕ) : Bool :=
   match (Encodable.decode n : Option (List Bool × ℕ)) with
   | some p => A.side E O p.1 p.2
   | none => false
 
-/-- **An interactive device as a relay device**: the same state and device memory, the side source `relaySide`, and
-the chip translated. Its bounds are the interactive device's, in the interactive world each chip world is. -/
 def toRelay (A : InteractiveDevice N b h S c G q) : RelayDevice N b h S c G q where
   state := A.state
   mem := A.mem
@@ -173,8 +153,6 @@ theorem toRelay_accepts {s : ℕ} (A : InteractiveDevice N b h S c G q) (E : Sto
     (I : Fin s → Fin N) : A.toRelay.Accepts E O I ↔ A.Accepts E O I := by
   simp only [RelayDevice.Accepts, Accepts, toRelay_tags]
 
-/-- When the answers ignore the oracle, the relay device at any one oracle runs, at every oracle, as the relay device
-does. -/
 theorem atOracle_world (A : InteractiveDevice N b h S c G q) (hA : ∀ E O O', A.side E O = A.side E O')
     (O₀ : Oracle N b h) (E : Store N b) (O : Oracle N b h) :
     (A.toRelay.atOracle O₀).world E O = A.toRelay.world E O := by
@@ -200,19 +178,10 @@ theorem atOracle_ingress (A : InteractiveDevice N b h S c G q) (hA : ∀ E O O',
 
 end InteractiveDevice
 
-/-! ## Bounded only where it runs
-
-A device built from an actual circuit is bounded only in the worlds it runs in, where physics bounds what it reads,
-while `InteractiveDevice.bounded` asks for every world. `IChip.cap` ends a program at the step that would exceed a
-budget, which bounds it in every world and changes nothing in a world where it was within budget. So a program
-bounded on its runs is an interactive device (`InteractiveDevice.ofRuns`) with the same tags and ingress on them. -/
-
 namespace IChip
 
 variable {N b h : ℕ} {α : Type}
 
-/-- `p` with budgets of `c` side reads, `G` regenerations and `q` queries: a step past its budget ends the program
-with `d`. -/
 def cap (d : α) : ℕ → ℕ → ℕ → IChip N b h α → IChip N b h α
   | _, _, _, done a => done a
   | c, G, q + 1, tag x k => tag x fun y => cap d c G q (k y)
@@ -285,9 +254,6 @@ namespace InteractiveDevice
 
 variable {N b h S c G q : ℕ}
 
-/-- **A program bounded on its runs as an interactive device**: state, device memory, side sources and a chip program
-whose run, in the world of every store and oracle, reads at most `c` side bits, regenerates at most `G` blocks and
-makes at most `q` queries. The device runs the program capped at those budgets. -/
 def ofRuns (state : Store N b → Bits S) (mem : Store N b → ℕ → Bool)
     (side : Store N b → Oracle N b h → List Bool → ℕ → Bool) (chip : Bits S → IChip N b h (Fin N → Bits h)) :
     InteractiveDevice N b h S c G q where

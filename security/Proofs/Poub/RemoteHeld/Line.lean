@@ -46,33 +46,7 @@ import Proofs.Poub.RemoteHeld
 import Proofs.Pouw.Prob
 public import Proofs.Properties.Poub.Remote.Run
 
-/-!
-# The memory line of record, proved (`Properties.Poub.Line`: `LineHeld`), and memory held from it
-
-At each outcome where the Lean verifier accepts the record's session (so the trace of record accepts, `ofRecord`) and
-the certifiers observed nothing but the verifier's messages entering the node, the receipts' sketch holds and the
-trace's wrong receipts are at most the session's pooled bound at the line's `δ` (`holdsAnd` of the sketch bound, from
-`SketchBoundAt`, `Covered` and `IngressCounted` by `sketchBound_of_covered`, and `Sample.pooledSample` at the records read
-through the coin commitment, `recordCommitted`, so at most the W the line reads: `LineCoversRun` at the record's
-samples, whose receipts on an accepted record are `recordSample`'s sizes, `receipts_of_line`, and the line's check of their
-samples, `incorrect_le_line`), and the line read off the record credits no more bits read than its groups' passes read
-(`readAt_of`): each pass reads every registered block but its wrong receipts (`read_card`), and the groups are one for
-each of the session's windows with the node's registered blocks (`record_summary`: `Shared.run` at any windows a sample
-keeps the parameters and registration, `frame_run`, and an accepted state has its parameters' windows,
-`windows_of_accepted`), their passes among the credited ones.
-
-Memory held follows from bits read under the device model (`heldAt_of_read`, over the outcomes `pr_held_le_read`): the
-blocks the passes read are the correct receipts of the trace of those passes alone, whose wrong receipts `ReadAt` holds
-to the line's W, and on it every stretch of the line credits what the trace held (`heldAt_of`):
-
-* the arithmetic link (`stretchBound`, `Proofs.Properties.Poub.Remote.Line`) bounds the stretch's credit by the left-hand
-  side of `HeldOverTimeLinks` at its paced session `stretchPace`, over its span from `spanStart`;
-* `heldOverWindow_of` bounds that by what the trace held over the span: the stretch's paced session is the record's
-  (`recordPace`, `Paced`) from group `m·per` on, `spanStart` is its first group's end or coin, and the form's charge is
-  the model's rates in its units (`charge_units`);
-* the weights' credit follows from the held credit (`weights_le`): a set of `w` registered blocks misses at most
-  `N − w` of those in node memory at a tick (`card_le_inter`).
--/
+/-! The proof of the memory line of record (`LineHeld`), and memory held from it under the device model. -/
 
 @[expose] public section
 
@@ -81,8 +55,6 @@ namespace Properties.Poub.Line.SecurityProofs
 open Finset ResourceAccounting.Remote.Held ResourceAccounting.Remote.Held.Assumptions ResourceAccounting.Remote.Sample
   ResourceAccounting.Remote.Sample.Assumptions _root_.Poub.Line ResourceAccounting.SecurityProofs.Remote Properties.Poub.Line
 
-/-- What `ofSummary` reads of a record it accepts: one group a window, and each window's receipts and samples, its
-samples `min(s, U_t)`. -/
 theorem ofSummary_ok {sm : Poub.Session.Summary} {samples : ℕ} {seen : Array Seen} {gs : Array Group}
     {ws : Array (ℕ × ℕ)} (h : ofSummary sm samples seen = .ok (gs, ws)) :
     gs.size = sm.windows.size ∧ ws = sm.windows.map fun w => (receipts w, min samples (receipts w)) := by
@@ -98,9 +70,6 @@ theorem ofSummary_ok {sm : Poub.Session.Summary} {samples : ℕ} {seen : Array S
       simp only [bne_eq_false_iff_eq] at hd
       simp only [hd]
 
-/-- What `ofSummaryAt` reads of a record it accepts: one group a window, and each sample's receipts and samples
-(`sampleReceipts`, a window's at one window a coin), its samples `min(s, U_c)`, and above one window a coin each
-sample's receipts below `RECEIPT_LIMIT`. -/
 theorem ofSummaryAt_ok {g : ℕ} {sm : Poub.Session.Summary} {samples : ℕ} {seen : Array Seen}
     {gs : Array Group} {ws : Array (ℕ × ℕ)} (h : ofSummaryAt g sm samples seen = .ok (gs, ws)) :
     gs.size = sm.windows.size ∧ ws = (sampleReceipts g sm.windows).map (fun u => (u, min samples u)) ∧
@@ -136,7 +105,6 @@ theorem ofSummaryAt_ok {g : ℕ} {sm : Poub.Session.Summary} {samples : ℕ} {se
             have hd := Array.findIdx?_eq_none_iff.1 hl (u', d) hp
             simpa using hd
 
-/-- A line `lineOfRecordAt` computes is `line` at the record's groups, samples and registered blocks. -/
 theorem lineOfRecordAt_ok {g : ℕ} {sm : Poub.Session.Summary} {samples : ℕ} {seen : Array Seen}
     {per blockBytes chipBytes nodeBytes : ℕ} {δ : ℚ} {rates : Rates} {l : Line}
     (h : lineOfRecordAt g sm samples seen per blockBytes chipBytes nodeBytes δ rates = .ok l) :
@@ -148,8 +116,6 @@ theorem lineOfRecordAt_ok {g : ℕ} {sm : Poub.Session.Summary} {samples : ℕ} 
     exact ⟨gs, ws, hs, h⟩
   · cases h
 
-/-- A line the record gives is `line` at the groups and samples `ofSummaryAt` reads off the Lean verifier's record of
-the session, its registered blocks the record's, and those groups are the record's (`Record.groups`). -/
 theorem lineOf_ok {node : Node} {r : Record} {l : Line} (h : lineOf node r = .ok l) :
     ∃ sm gs ws, r.summary node = some sm ∧
       ofSummaryAt node.groupsPerCoin sm node.params.samples r.seen = .ok (gs, ws) ∧ r.groups node = gs ∧
@@ -161,7 +127,6 @@ theorem lineOf_ok {node : Node} {r : Record} {l : Line} (h : lineOf node r = .ok
     exact ⟨sm, gs, ws, hsm, hs, by simp only [Record.groups, hsm, hs], hl⟩
   · cases h
 
-/-- A state's summary has its windows and its registration's blocks. -/
 theorem summary_of {s : Poub.Session.State} {sm : Poub.Session.Summary} (h : s.summary = some sm) :
     sm.windows.size = s.windows.size ∧ sm.blocks = s.reg.blocks := by
   unfold Poub.Session.State.summary at h
@@ -171,8 +136,6 @@ theorem summary_of {s : Poub.Session.State} {sm : Poub.Session.Summary} (h : s.s
     subst h
     exact ⟨by simp, rfl⟩
 
-/-- A session `Shared.run g` runs from `State.init` keeps the parameters and registration it started with:
-`Session.run`'s at g ≤ 1, and above it every `Shared.step` keeps them (`Properties.Poub.Shared.sstep`). -/
 theorem frame_run {g : ℕ} {params : Poub.Session.Params} {reg : Poub.Registration}
     {coins appendCoins : Array ByteArray} {notBeforeNs : ℕ} {events : Array Poub.Session.Event}
     {rs : Array Poub.Session.Result} {s : Poub.Session.State}
@@ -191,7 +154,6 @@ theorem frame_run {g : ℕ} {params : Poub.Session.Params} {reg : Poub.Registrat
       _ _ _ _ ⟨Properties.Poub.inv_init .., rfl, rfl⟩ h
     exact this.2
 
-/-- An accepted state has its parameters' windows (`State.outcome`). -/
 theorem windows_of_accepted {s : Poub.Session.State} (hout : s.outcome = some "accepted") :
     s.windows.size = s.params.windows := by
   unfold Poub.Session.State.outcome at hout
@@ -205,7 +167,6 @@ theorem windows_of_accepted {s : Poub.Session.State} (hout : s.outcome = some "a
       exact hc.1
     · cases hout
 
-/-- An accepted run, at any windows a sample, ends with the node's `windows` windows. -/
 theorem windows_of_verified {node : Node} {r : Record} {rs : Array Poub.Session.Result}
     {s : Poub.Session.State} (hrun : r.run node = .ok (rs, s)) (hout : s.outcome = some "accepted") :
     s.windows.size = node.windows ∧ s.reg = node.reg := by
@@ -214,8 +175,6 @@ theorem windows_of_verified {node : Node} {r : Record} {rs : Array Poub.Session.
     from hrun)
   exact ⟨(windows_of_accepted hout).trans (congrArg Poub.Session.Params.windows hp), hr⟩
 
-/-- **One group a window**: the Lean verifier's record of a session it accepts, at any windows a sample, has the node's
-`windows` windows, and the node's registered blocks. -/
 theorem record_summary {node : Node} {r : Record} {sm : Poub.Session.Summary} (hv : Verified node r)
     (hsm : r.summary node = some sm) : sm.windows.size = node.windows ∧ sm.blocks = node.blocks := by
   obtain ⟨rs, s, hrun, hout⟩ := hv
@@ -227,14 +186,11 @@ theorem record_summary {node : Node} {r : Record} {sm : Poub.Session.Summary} (h
   obtain ⟨hW, hr⟩ := windows_of_verified hrun hout
   exact ⟨h1.trans hW, h2.trans (congrArg Poub.Registration.blocks hr)⟩
 
-/-- `firstPass` grows with the groups it counts. -/
 theorem firstPass_mono {gs : Array Group} {a b : ℕ} (h : a ≤ b) : firstPass gs a ≤ firstPass gs b := by
   induction b, h using Nat.le_induction with
   | base => exact le_rfl
   | succ b _ ih => rw [firstPass_succ]; omega
 
-/-- The registered blocks of a set `R` in node memory at a tick are at least the blocks in node memory there less
-those outside `R`. -/
 theorem card_le_inter {N : ℕ} (M R : Finset (Fin N)) : (M.card : ℝ) ≤ (M ∩ R).card + (N - R.card) := by
   have h1 : (M \ R).card + (M ∩ R).card = M.card := Finset.card_sdiff_add_card_inter M R
   have h2 : (M \ R).card ≤ (univ \ R).card := Finset.card_le_card (Finset.sdiff_subset_sdiff (subset_univ M) le_rfl)
@@ -245,7 +201,6 @@ theorem card_le_inter {N : ℕ} (M R : Finset (Fin N)) : (M.card : ℝ) ≤ (M �
   have h1' : ((M \ R).card : ℝ) + (M ∩ R).card = M.card := by exact_mod_cast h1
   linarith
 
-/-- Each form's charge in the model's units: `X = s/E + β (+ β_l)` and `B = B_r + B_d (+ B_l)`. -/
 theorem charge_units (node : Node) :
     ((charges node.rates node.blockBytes).1.rate : ℝ) = node.squarings / node.encode + node.disk + 0 ∧
     ((charges node.rates node.blockBytes).1.burst : ℝ) = node.rebuildBurst + node.diskBurst + 0 ∧
@@ -256,8 +211,6 @@ theorem charge_units (node : Node) :
   push_cast
   refine ⟨by ring, by ring, by ring, by ring⟩
 
-/-- The weights' credit from the held credit: a set `R` of at least `w` registered blocks has, summed over a span, at
-least `span · (w − lost)` blocks in node memory when all of node memory has at least `span · (N − lost)`. -/
 theorem weights_le {Ω : Type} {T : Trace Ω} {ω : Ω} {u v : ℕ} {x : Stretch} {b : ℕ}
     (hwts : x.time.weights = max 0 (x.weights - x.time.lost) * (b : ℚ)) {R : Finset (Fin T.blocks)}
     (hR : (x.weights : ℝ) ≤ R.card) (hheld : (x.spanNs : ℝ) * ((T.blocks : ℝ) - x.time.lost) ≤ T.heldOver ω u v)
@@ -285,8 +238,6 @@ theorem weights_le {Ω : Type} {T : Trace Ω} {ω : Ω} {u v : ℕ} {x : Stretch
         = b * ((x.spanNs : ℝ) * ((x.weights : ℝ) - x.time.lost)) := by ring
       _ ≤ b * ∑ t ∈ Ico u v, ((T.mem ω t ∩ R).card : ℝ) := mul_le_mul_of_nonneg_left h1 hb0
 
-/-- On an accepting outcome where the receipts' sketch holds and the trace's wrong receipts are at most the W the
-record's line reads, every stretch of form `i` credits what the trace held over its span. -/
 theorem heldAt_of {Ω : Type} [Fintype Ω] {T : Trace Ω} {node : Node} {rec : Ω → Record} (i : ℕ) (hi : i < 2)
     {βl Bl : ℝ} (hβl : 0 ≤ node.rates.linkBytesPerS → 0 ≤ βl) (hl : Links T βl Bl)
     (hcr : (((if i = 0 then (charges node.rates node.blockBytes).1 else (charges node.rates node.blockBytes).2).rate
@@ -365,7 +316,6 @@ theorem heldAt_of {Ω : Type} [Fintype Ω] {T : Trace Ω} {node : Node} {rec : �
     linarith
   exact ⟨hspan, hheld, fun R hR => weights_le hwts hR hheld hspan⟩
 
-/-- A run at `g` windows a sample that runs every event reaches its last state one event at a time. -/
 theorem reach_of_fold (g : ℕ) (l : List Poub.Session.Event) :
     ∀ (acc : Array Poub.Session.Result × Poub.Session.State) out,
       List.foldlM (fun (acc : Array Poub.Session.Result × Poub.Session.State) e => do
@@ -387,7 +337,6 @@ theorem reach_of_fold (g : ℕ) (l : List Poub.Session.Event) :
       rw [hr]
       exact ih (acc.1.push r, s'') out h
 
-/-- Where the record's session runs every event, the state it reaches is its run's last. -/
 theorem reached_of_run {node : Node} {r : Record} {rs : Array Poub.Session.Result}
     {s : Poub.Session.State} (h : r.run node = .ok (rs, s)) : r.reached node = s := by
   unfold Record.run _root_.Poub.Shared.run at h
@@ -398,7 +347,6 @@ theorem reached_of_run {node : Node} {r : Record} {rs : Array Poub.Session.Resul
   unfold Record.reached
   rw [← Array.foldlM_toList, hk]
 
-/-- Each window's receipts in a state's summary are its window's. -/
 theorem summary_receipts {s : Poub.Session.State} {sm : Poub.Session.Summary}
     (h : s.summary = some sm) :
     sm.windows.map receipts = (Array.range s.windows.size).map fun t => s.windows[t]!.receipts := by
@@ -413,7 +361,6 @@ theorem summary_receipts {s : Poub.Session.State} {sm : Poub.Session.Summary}
       simp only [Array.getElem_map, Array.getElem_range]
       rfl
 
-/-- Each window's receipts in a state's summary are its window's, as arrays. -/
 theorem summary_windows {s : Poub.Session.State} {sm : Poub.Session.Summary}
     (h : s.summary = some sm) : sm.windows.map receipts = s.windows.map Poub.Session.Win.receipts := by
   rw [summary_receipts h]
@@ -424,17 +371,12 @@ theorem summary_windows {s : Poub.Session.State} {sm : Poub.Session.Summary}
     simp only [Array.getElem_map, Array.getElem_range]
     rw [getElem!_pos s.windows i hi]
 
-/-- Two arrays whose maps agree sum alike over any of their slices. -/
 theorem foldl_extract_congr {α β : Type} (f : α → ℕ) (g : β → ℕ) {as : Array α} {bs : Array β}
     (h : as.map f = bs.map g) (a b : ℕ) :
     (as.extract a b).foldl (fun x w => x + f w) 0 = (bs.extract a b).foldl (fun x w => x + g w) 0 := by
   rw [← Array.foldl_map (f := f) (g := fun x y => x + y), ← Array.foldl_map (f := g) (g := fun x y => x + y),
     Array.map_extract, Array.map_extract, h]
 
-/-- **The record's samples are the sample's**: on an accepted record whose samples the line reads, each sample's
-receipts in the Lean verifier's record are those its windows have in the state the record's session reaches, and below
-`RECEIPT_LIMIT`, so `recordSample`'s sizes: at one window a coin each window's is below it (`ReceiptsBelowLimit`), and
-above it the line refuses a sample that isn't (`ofSummaryAt_ok`). -/
 theorem receipts_of_line {node : Node} {r : Record} {sm : Poub.Session.Summary} (hv : Verified node r)
     (hsm : r.summary node = some sm)
     (hlim : 1 < node.groupsPerCoin → ∀ u ∈ sampleReceipts node.groupsPerCoin sm.windows,
@@ -489,15 +431,10 @@ theorem receipts_of_line {node : Node} {r : Record} {sm : Poub.Session.Summary} 
       rw [← hat]
       exact (min_eq_left hle).symm
 
-/-- `m < 2^64`: the first SHA-512 block of each sample's stream holds at least four of its sampler words. -/
 theorem receiptMax_lt : receiptMax < 2 ^ 64 := by
   unfold receiptMax Poub.Session.RECEIPT_LIMIT
   exact Nat.sub_lt (Nat.two_pow_pos 64) Nat.one_pos
 
-/-- On an accepted record, the trace's wrong receipts below the record's sample's pooled bound at the line's `δ` are
-below the W every line of the record reads (`LineCoversRun`): the line reads each sample's receipts and samples off
-the record and refuses any samples but `min(s, U_c)`, the sample's at the session's `samples`, and the receipts are the
-sample's sizes (`receipts_of_line`). -/
 theorem incorrect_le_line {node : Node} {κ : ℕ} {X : Type} {T : Trace (SampleCoins node.samples κ X)}
     {rec : SampleCoins node.samples κ X → Record} {correct : Fin node.samples → SampleCoins node.samples κ X → Finset ℕ}
     {ω : SampleCoins node.samples κ X} (hv : Verified node (rec ω))
@@ -519,11 +456,8 @@ theorem incorrect_le_line {node : Node} {κ : ℕ} {X : Type} {T : Trace (Sample
   rw [Rat.cast_nnratCast] at hc
   exact hw.trans hc
 
-/-- The node's `δ` is nonnegative, in the reals. -/
 theorem delta_nonneg (node : Node) : (0 : ℝ) ≤ (node.delta : ℝ) := NNRat.cast_nonneg _
 
-/-- On an accepting outcome of a trace whose passes plan every registered block, a credited pass's blocks read and its
-wrong receipts make up the registered blocks, where its correct receipts' blocks were on the node at a tick of it. -/
 theorem read_card {Ω : Type} {T : Trace Ω} (hcov : Covers T) {ω : Ω} (ha : T.accepts ω) {p : ℕ} (hp : p < T.passes)
     (hk : ∀ j ∈ T.correct ω p, ∃ t, T.tick ω p ≤ t ∧ t < T.tick ω (p + 1) ∧ j ∈ T.present ω t) :
     (T.read ω p).card + (T.plan ω p \ T.correct ω p).card = T.blocks := by
@@ -534,9 +468,6 @@ theorem read_card {Ω : Type} {T : Trace Ω} (hcov : Covers T) {ω : Ω} (ha : T
     exact Finset.mem_biUnion.2 ⟨t, Finset.mem_Ico.2 ⟨h1, h2⟩, ht⟩
   rw [hr, add_comm, Finset.card_sdiff_add_card_inter, hcov ω ha p hp, Finset.card_univ, Fintype.card_fin]
 
-/-- On an accepting outcome where the receipts' sketch holds and the trace's wrong receipts are at most the W the
-record's line reads, the line credits no more bits read than its groups' passes read: each of the `P` passes reads
-every registered block but its wrong receipts (`read_card`), and the passes are among the credited ones (`Paced`). -/
 theorem readAt_of {Ω : Type} {T : Trace Ω} {node : Node} {rec : Ω → Record} (hp : Paced T (recordPace node rec))
     (hcov : Covers T) (hN : T.blocks = node.blocks) {ω : Ω} (ha : T.accepts ω) (hv : Verified node (rec ω))
     (hk : ∀ p < T.passes, ∀ j ∈ T.correct ω p, ∃ t, T.tick ω p ≤ t ∧ t < T.tick ω (p + 1) ∧ j ∈ T.present ω t)
@@ -580,12 +511,6 @@ theorem lineHeld : LineHeld := by
   refine le_trans (Pouw.pr_mono fun ω hω => ⟨hω.1, fun h => hω.2 fun hq => ?_⟩) hH
   exact readAt_of hp hcov hN hω.1 hω.1 (h.1 hq) (incorrect_le_line (correct := fun t ω => correct (com ω) t ω) hω.1 h.2)
 
-/-- **Memory held from bits read, under the device model**: on an accepting outcome where the record's line credits no
-more bits read than its groups' passes read (`ReadAt`), every stretch of form `i` credits what the trace held over its
-span, at the links' ceiling `Links` (`Identity` at `0`) and the rest of the device model. The blocks the passes read
-are the correct receipts of the trace of those passes alone, every block planned (`T'`), whose sketch holds by
-`Trace.read`'s definition and whose wrong receipts are at most the line's W by `ReadAt`, so `heldAt_of` applies to it;
-what a stretch credits reads only the trace's memory, which `T'` shares. -/
 theorem heldAt_of_read {Ω : Type} [Fintype Ω] {T : Trace Ω} {node : Node} {rec : Ω → Record} (i : ℕ) (hi : i < 2)
     {βl Bl : ℝ} (hβl : 0 ≤ node.rates.linkBytesPerS → 0 ≤ βl) (hl : Links T βl Bl)
     (hcr : (((if i = 0 then (charges node.rates node.blockBytes).1 else (charges node.rates node.blockBytes).2).rate
@@ -642,10 +567,6 @@ theorem heldAt_of_read {Ω : Type} [Fintype Ω] {T : Trace Ω} {node : Node} {re
     linarith
   exact heldAt_of (T := T') i hi hβl hl hcr hcb hsq hd hS hr hp' hcov' hN rfl hv hk' hw' l hline f hf x hx
 
-/-- **Memory held from bits read, over the outcomes**: on the trace of record under the device model, the outcomes
-where the Lean verifier accepts, `Q` holds and a stretch of form `i` credits more than the trace held are among those
-where it accepts, `Q` holds and the line credits more bits read than the passes read (`heldAt_of_read`), so
-`LineHeld`'s bound, at `Q` the certifiers' observation, bounds them. -/
 theorem pr_held_le_read {Ω : Type} [Fintype Ω] {T : Trace Ω} {node : Node} {rec : Ω → Record} (i : ℕ) (hi : i < 2)
     {βl Bl : ℝ} (hβl : 0 ≤ node.rates.linkBytesPerS → 0 ≤ βl) (hl : Links (ofRecord T node rec) βl Bl)
     (hcr : (((if i = 0 then (charges node.rates node.blockBytes).1 else (charges node.rates node.blockBytes).2).rate

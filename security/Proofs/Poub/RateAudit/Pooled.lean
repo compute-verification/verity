@@ -42,22 +42,7 @@ import Proofs.Poub.RateAudit.Windows
 import Std.Tactic.BVDecide.Normalize.Prop
 import Proofs.Pous.Prob
 
-/-!
-# The causal bound over the monitoring period: the proof
-
-Rounds `0, …, n − 1` each sample a sample of `s_i` items, uniform over `M`, after a set of good items `G_i` is fixed.
-`G_i` may be any function of the earlier rounds' coins, their samples among them, and of round `i`'s own other coins,
-but not of round `i`'s sample (`Rate.Causal`). Then every sample lands in its round's good set while the good sets,
-weighted by the sample counts, hold at most `K` items in all, with probability at most `(K / (M·∑ s_i))^(∑ s_i)`
-(`Pooled.pr_causal_le`). The proof peels round 0: its good set is fixed by its own coins, so its sample lands in it
-with probability `(g₀/M)^s₀` (`pr_sample`); given round 0's coins, the later rounds are a causal family with `K − s₀·g₀`
-left (`pr_and_le_mul`), and weighted AM–GM joins the two (`step_le`).
-
-A chain's passes (`Rate.Chain`) are such rounds, with `M = N`: pass `j` is accepted exactly when its sample lands in its
-correct receipts, which the store, the earlier passes' coins and its own stream and oracle family fix
-(`Chain.pr_pooled_le`). With `RateChainPaidRO`'s conservation at every count, the window's reads pay for the correct
-receipts the sample certifies (`RateChainSampledRO`).
--/
+/-! The proof of the causal bound over the monitoring period on the samples, and its route `Sampled` for a window. -/
 
 @[expose] public section
 
@@ -68,9 +53,6 @@ open scoped ENNReal NNReal
 
 namespace Pooled
 
-/-! ## Weighted AM–GM -/
-
-/-- Weighted AM–GM at natural weights: `u^a·v^c ≤ m^(a + c)` when `a·u + c·v ≤ (a + c)·m`. -/
 theorem pow_mul_pow_le (a c : ℕ) (u v m : ℝ≥0) (h : (a : ℝ≥0) * u + c * v ≤ (a + c) * m) :
     u ^ a * v ^ c ≤ m ^ (a + c) := by
   rcases Nat.eq_zero_or_pos (a + c) with h0 | hpos
@@ -99,8 +81,6 @@ theorem pow_mul_pow_le (a c : ℕ) (u v m : ℝ≥0) (h : (a : ℝ≥0) * u + c 
   have e₂ : (v ^ (w₂ : ℝ)) ^ (a + c) = v ^ c := hr v w₂ c (by rw [hw₂, div_mul_cancel₀ _ hn])
   rwa [mul_pow, e₁, e₂] at key
 
-/-- The induction step's arithmetic: a round's `(g/M)^a` and the rest's `(K'/(M·c))^c` multiply to at most the whole's
-`((a·g + K')/(M·(a + c)))^(a + c)`. -/
 theorem step_le (M g K' a c : ℕ) (hM : 0 < M) :
     ((g : ℝ≥0∞) / M) ^ a * ((K' : ℝ≥0∞) / (M * c)) ^ c ≤
       (((a * g + K' : ℕ) : ℝ≥0∞) / (M * (a + c : ℕ))) ^ (a + c) := by
@@ -138,8 +118,6 @@ theorem step_le (M g K' a c : ℕ) (hM : 0 < M) :
   push_cast
   field_simp
 
-/-! ## Probability -/
-
 theorem pr_le_one {Ω : Type} [Fintype Ω] (P : Ω → Prop) : pr P ≤ 1 := by
   classical
   simp only [Pous.pr_eq_card]
@@ -149,7 +127,6 @@ theorem pr_false {Ω : Type} [Fintype Ω] : pr (fun _ : Ω => False) = 0 := by
   classical
   simp [Pous.pr_eq_card]
 
-/-- `s` uniform items all land in a set of `g` of the `M`: `(g/M)^s`. -/
 theorem pr_sample {M : ℕ} (G : Finset (Fin M)) (s : ℕ) :
     pr (fun I : Fin s → Fin M => ∀ t, I t ∈ G) = ((G.card : ℝ≥0∞) / M) ^ s := by
   classical
@@ -157,8 +134,6 @@ theorem pr_sample {M : ℕ} (G : Finset (Fin M)) (s : ℕ) :
   rw [Finset.filter_congr_decidable, Bandwidth.AuditRO.card_sample G s]
   simp [div_eq_mul_inv, mul_pow, ENNReal.inv_pow]
 
-/-- A first event of the first coordinate, then a second one bounded by `ε` at every first coordinate where the first
-holds: at most the first's probability times `ε`. -/
 theorem pr_and_le_mul {X Y : Type} [Fintype X] [Fintype Y] (A : X → Prop) (B : X × Y → Prop) (ε : ℝ≥0∞)
     (h : ∀ x, A x → pr (fun y => B (x, y)) ≤ ε) : pr (fun p : X × Y => A p.1 ∧ B p) ≤ pr A * ε := by
   classical
@@ -193,12 +168,8 @@ theorem pr_and_le_mul {X Y : Type} [Fintype X] [Fintype Y] (A : X → Prop) (B :
     _ = ((Finset.univ.filter A).card : ℝ≥0∞) / Fintype.card X * ε := by
         rw [div_eq_mul_inv, div_eq_mul_inv, mul_right_comm]
 
-/-! ## The bound -/
-
 variable {M : ℕ}
 
-/-- Every round's sample lands in its good set while the good sets, weighted by the sample counts, hold at most `K`
-items: at most `(K/(M·∑ s_i))^(∑ s_i)`, for `M > 0`. -/
 theorem pr_causal_le (hM : 0 < M) : ∀ (n : ℕ) (X : Fin n → Type) [∀ i, Fintype (X i)] (s : Fin n → ℕ)
     (G : (i : Fin n) → ((j : Fin n) → X j × (Fin (s j) → Fin M)) → Finset (Fin M)), Causal G → ∀ K : ℕ,
     pr (fun ω : (j : Fin n) → X j × (Fin (s j) → Fin M) =>
@@ -260,7 +231,6 @@ theorem pr_causal_le (hM : 0 < M) : ∀ (n : ℕ) (X : Fin n → Type) [∀ i, F
     rw [pr_sample, hsum]
     exact step_le M G₀.card K' (s 0) _ hM
 
-/-- `pr_causal_le` at any `M`: with no items, a positive sample count leaves no coins at all. -/
 theorem pr_causal_le' (n M K : ℕ) (X : Fin n → Type) [∀ i, Fintype (X i)] (s : Fin n → ℕ)
     (G : (i : Fin n) → ((j : Fin n) → X j × (Fin (s j) → Fin M)) → Finset (Fin M)) (hG : Causal G) :
     pr (fun ω : (j : Fin n) → X j × (Fin (s j) → Fin M) =>
@@ -283,8 +253,6 @@ namespace Chain
 
 variable {P N b h ρ S L q r s : ℕ}
 
-/-- A chain's passes are sampled as a whole: every pass accepted with at most `K` correct receipts in all is at most
-`(K/(P·N))^(s·P)`. -/
 theorem pr_pooled_le (A : Chain P N b h ρ S L q r s) (K : ℕ) :
     pr (fun x : Store N b × (Fin P → PassCoins N b h ρ r s) =>
         (∀ j, (A.dev j x.2).Accepts x.1 (x.2 j).1 (A.oracle j x.1 x.2) (x.2 j).2.2) ∧

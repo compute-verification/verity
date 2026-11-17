@@ -35,12 +35,7 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Pouw.Prob
 public import Proofs.Pouw.Break
 
-/-!
-# A tile's output is unpredictable below its work: from PoUW's named assumptions
-
-A checked unit whose credit is above `T/(1 − γ₀)` puts the checked units' total credit above it, when every credit is
-nonnegative; `TT` and `TT_NCP_U` bound the probability of the second.
--/
+/-! A tile's output is unpredictable below its work, from PoUW's named assumptions. -/
 
 @[expose] public section
 
@@ -48,7 +43,6 @@ namespace ResourceAccounting.SecurityProofs
 
 open ResourceAccounting.Guarantees
 
-/-- `TileUnpredictable` from a bound on the checked units' total credit, for nonnegative credits. -/
 theorem tileUnpredictable_of_total {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
     (CM : Pouw.CostModel Q R S) (P : Pouw.Protocol Q R S) (credit : Pouw.Shape → ℝ) (hc : ∀ sh, 0 ≤ credit sh)
     (D : Pouw.Layout → Prop) (γ₀ : ℝ) (ε : ℕ → ℕ → ℝ)

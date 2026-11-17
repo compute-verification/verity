@@ -7,46 +7,22 @@ import Mathlib.Analysis.SpecialFunctions.Pow.Real
 import Mathlib.Combinatorics.SimpleGraph.Init
 import Mathlib.Data.Sym.Sym2.Init
 
-/-!
-# B2: Fisch's stacking lemma, proved
-
-Source: B. Fisch, ePrint 2018/702, Appendix B, Claim 12. The definitions and the statement of `b2_stacking` are
-copies of the trusted ones (`security/Definitions/Pous/Model/Pebbling.lean`, `Pous.Guarantees.B2Stacking`).
-
-The combinatorial core is kept in general lemmas, so it survives a restatement:
-
-* paths as lists (`IsPathTo`, joining, suffixes, simple paths from a DAG rank);
-* `exists_path_avoiding`: pairwise vertex-disjoint paths cannot all be blocked by fewer vertices than there are
-  paths;
-* `card_reach_ge`: one connector step. If more than `|K|` nodes of `V_{i+1}` are good, all but `|K|` nodes of `V_i`
-  reach one by an unpebbled green path, where `K` holds the pebbles of the level `V_i ∪ G_i`.
-
-The proof of `b2_stacking` follows Fisch's. Let `G_i` be the nodes of `V_i` with an unpebbled green path to the last
-layer `V_t`. Downward induction gives `|G_i| ≥ n − ρ_i − δn`, where `ρ_i` counts the black pebbles of level `i`. If
-every `|G_i| < αn`, the `ρ_i` sum past `ℓ(1 − α − δ)n ≥ n`. So some `|G_i| ≥ αn`, and depth robustness gives a path
-of `βn` nodes in `G_i`, which the green path from its end extends to `V_t`.
--/
+/-! B2, Fisch's stacking lemma (ePrint 2018/702, Appendix B, Claim 12), proved. -/
 
 @[expose] public section
 
 namespace PousB2
 
-/-- Fisch §2.6: a DAG on `n` nodes is `(n, α, β)`-depth-robust if every subgraph on (at least) `αn` nodes contains a
-path of at least `βn` nodes. -/
 def DepthRobust (n : ℕ) (E : Fin n → Fin n → Prop) (α β : ℝ) : Prop :=
   ∀ S : Finset (Fin n), α * n ≤ S.card →
     ∃ p : List (Fin n), p.IsChain E ∧ p.Nodup ∧ (∀ v ∈ p, v ∈ S) ∧ β * n ≤ p.length
 
 variable {ℓ n : ℕ} {V : Type}
 
-/-- The edges of the stacked graph: the white (DRG) edges inside each layer and the green (connector) edges. -/
 def StackedEdge (node : Fin ℓ → Fin n → V) (drg : Fin ℓ → Fin n → Fin n → Prop) (green : V → V → Prop)
     (u v : V) : Prop :=
   green u v ∨ ∃ i a b, drg i a b ∧ u = node i a ∧ v = node i b
 
-/-- The connector from layer `i` to layer `j`, as the disjoint-path property of an `n`-superconcentrator with
-sources `V_i` and sinks `V_j`: any `k` nodes `A` of `V_i` and `k` nodes `B` of `V_j` are joined by `k` pairwise
-vertex-disjoint green paths, the one from `a ∈ A` running inside the level `V_i ∪ G_i` until it ends in `B`. -/
 def DisjointPaths (node : Fin ℓ → Fin n → V) (level : V → Fin ℓ) (green : V → V → Prop) (i j : Fin ℓ) : Prop :=
   ∀ A B : Finset (Fin n), A.card = B.card →
     ∃ path : Fin n → List V, ∀ a ∈ A,
@@ -56,23 +32,15 @@ def DisjointPaths (node : Fin ℓ → Fin n → V) (level : V → Fin ℓ) (gree
       (∀ v ∈ (path a).dropLast, level v = i) ∧
       ∀ a' ∈ A, a' ≠ a → ∀ v ∈ path a, v ∉ path a'
 
-/-- A vertex carries no pebble. -/
 def Unpebbled (black red : Finset V) (v : V) : Prop := v ∉ black ∧ v ∉ red
-
-/-! ### Paths as lists
-
-A path is a list whose consecutive vertices are joined by edges (`List.IsChain`). The lemmas below are about lists
-and relations only, so they do not depend on the shape of the graph. -/
 
 section Paths
 
 variable {α : Type} {R : α → α → Prop}
 
-/-- A path from `x` to `z` all of whose vertices satisfy `Q`. -/
 def IsPathTo (R : α → α → Prop) (Q : α → Prop) (x z : α) (g : List α) : Prop :=
   g.head? = some x ∧ g.IsChain R ∧ (∀ w ∈ g, Q w) ∧ g.getLast? = some z
 
-/-- A vertex of a list ending at `z` lies before the end or is `z`. -/
 theorem mem_dropLast_or_eq {l : List α} {z w : α} (hz : l.getLast? = some z) (hw : w ∈ l) :
     w ∈ l.dropLast ∨ w = z := by
   rw [← List.dropLast_append_getLast? z hz] at hw
@@ -83,7 +51,6 @@ theorem eq_cons_of_head? {l : List α} {x : α} (h : l.head? = some x) : l = x :
   | nil => simp at h
   | cons y t => simp only [List.head?_cons, Option.some.injEq] at h; rw [h]; rfl
 
-/-- Joining a path ending at `x` to a path starting at `x`. -/
 theorem isChain_append_tail {l₁ l₂ : List α} {x : α} (h₁ : l₁.IsChain R) (h₂ : l₂.IsChain R)
     (hx₁ : l₁.getLast? = some x) (hx₂ : l₂.head? = some x) : (l₁ ++ l₂.tail).IsChain R := by
   rw [eq_cons_of_head? hx₂] at h₂
@@ -112,14 +79,12 @@ theorem head?_append_tail {l₁ l₂ : List α} {x : α} (hx₁ : l₁.getLast? 
   | nil => simp at hx₁
   | cons y t => rfl
 
-/-- Paths compose. -/
 theorem IsPathTo.trans {Q : α → Prop} {x y z : α} {g₁ g₂ : List α} (h₁ : IsPathTo R Q x y g₁)
     (h₂ : IsPathTo R Q y z g₂) : IsPathTo R Q x z (g₁ ++ g₂.tail) :=
   ⟨(head?_append_tail h₁.2.2.2).trans h₁.1, isChain_append_tail h₁.2.1 h₂.2.1 h₁.2.2.2 h₂.1,
     fun w hw => (List.mem_append.1 hw).elim (h₁.2.2.1 w) fun hw => h₂.2.2.1 w (List.mem_of_mem_tail hw),
     (getLast?_append_tail h₁.2.2.2 h₂.1).trans h₂.2.2.2⟩
 
-/-- The part of a path from any of its vertices on. -/
 theorem IsPathTo.suffix {Q : α → Prop} {x z v : α} {g : List α} (h : IsPathTo R Q x z g) (hv : v ∈ g) :
     ∃ g', IsPathTo R Q v z g' := by
   obtain ⟨s, t, rfl⟩ := List.mem_iff_append.1 hv
@@ -128,16 +93,12 @@ theorem IsPathTo.suffix {Q : α → Prop} {x z v : α} {g : List α} (h : IsPath
   rw [List.getLast?_append] at this
   simpa [List.getLast?_cons] using this
 
-/-- A path along which a rank strictly increases is simple. -/
 theorem nodup_of_rank {l : List α} (r : α → ℕ) (hr : ∀ u v, R u v → r u < r v) (h : l.IsChain R) : l.Nodup := by
   have hmap : (l.map r).IsChain (· < ·) := (List.isChain_map r).2 (h.imp fun u v huv => hr u v huv)
   exact List.Nodup.of_map r (hmap.pairwise.imp fun hlt => ne_of_lt hlt)
 
 end Paths
 
-/-! ### Disjoint-path counting -/
-
-/-- Pairwise vertex-disjoint paths indexed by `W` cannot all be blocked by fewer than `|W|` vertices. -/
 theorem exists_path_avoiding {ι W' : Type} [DecidableEq W'] (W : Finset ι) (path : ι → List W') (K : Finset W')
     (hdisj : ∀ a ∈ W, ∀ a' ∈ W, a' ≠ a → ∀ v ∈ path a, v ∉ path a') (hK : K.card < W.card) :
     ∃ a ∈ W, ∀ v ∈ path a, v ∉ K := by
@@ -156,12 +117,7 @@ theorem exists_path_avoiding {ι W' : Type} [DecidableEq W'] (W : Finset ι) (pa
     exact Finset.card_le_card (Finset.biUnion_subset.2 fun a _ => Finset.filter_subset _ _)
   omega
 
-/-! ### Pebbling-path extension across one connector -/
-
 open Classical in
-/-- One connector step (the first paragraph of Fisch's proof). `Good` is a set of more than `|K|` nodes of `V_j`,
-all satisfying `Q`, and `K` contains every vertex of the level `V_i ∪ G_i` failing `Q`. Then all but at most `|K|`
-nodes `a` of `V_i` have a green `Q`-path from `node i a` to `node j b` for some `b ∈ Good`. -/
 theorem card_reach_ge [DecidableEq V] (node : Fin ℓ → Fin n → V) (level : V → Fin ℓ) (green : V → V → Prop)
     {i j : Fin ℓ} (hsc : DisjointPaths node level green i j) (Q : V → Prop) (K : Finset V)
     (hK : ∀ v, level v = i → ¬ Q v → v ∈ K) (Good : Finset (Fin n)) (hGood : ∀ b ∈ Good, Q (node j b))
@@ -191,10 +147,6 @@ theorem card_reach_ge [DecidableEq V] (node : Fin ℓ → Fin n → V) (level : 
     · exact hGood b (hBG hbB)
   exact Finset.mem_compl.1 (hWX haW) haU
 
-/-- **B2** (Fisch 2018/702, Claim 12). In `ℓ ≥ 1/(1 − α − δ)` stacked `(n, α, β)`-depth-robust layers joined by
-superconcentrators, any `(1 − ε)n` black pebbles plus at most `δn` red pebbles per level, with `δ < ε/2`, leave an
-unpebbled path of at least `βn` nodes ending in the last layer `V_t`, each of whose nodes has an unpebbled green path
-to a node of `V_t`. -/
 theorem b2_stacking [Fintype V] [DecidableEq V] (α β ε δ : ℝ)
     (node : Fin ℓ → Fin n → V) (level : V → Fin ℓ) (drg : Fin ℓ → Fin n → Fin n → Prop) (green : V → V → Prop)
     (hnode : ∀ i, Function.Injective (node i)) (hlevel : ∀ i a, level (node i a) = i)
@@ -218,10 +170,8 @@ theorem b2_stacking [Fintype V] [DecidableEq V] (α β ε δ : ℝ)
   have hδε : 2 * (δ * n) < ε * n := by
     have := mul_lt_mul_of_pos_right (show 2 * δ < ε by linarith) hnpos
     linarith
-  -- `G i`: the nodes of `V_i` with an unpebbled green path to `V_t`
   let G : Fin ℓ → Finset (Fin n) := fun i => Finset.univ.filter fun a =>
     ∃ b, ∃ g : List V, IsPathTo green (Unpebbled black red) (node i a) (node t b) g
-  -- `K i`: the pebbled vertices of the level `V_i ∪ G_i`; `ρ i`: its black pebbles
   let K : Fin ℓ → Finset V := fun i => (black ∪ red).filter fun v => level v = i
   let ρ : Fin ℓ → ℕ := fun i => (black.filter fun v => level v = i).card
   have hG : ∀ i a, a ∈ G i ↔ ∃ b, ∃ g : List V, IsPathTo green (Unpebbled black red) (node i a) (node t b) g := by
@@ -259,7 +209,6 @@ theorem b2_stacking [Fintype V] [DecidableEq V] (α β ε δ : ℝ)
     have : ρ i ≤ black.card := Finset.card_le_card (Finset.filter_subset _ _)
     have : (ρ i : ℝ) ≤ black.card := by exact_mod_cast this
     linarith
-  -- the last layer: every unpebbled node is good
   have htop : n ≤ (G t).card + (K t).card := by
     have hsub : (Finset.univ : Finset (Fin n)) ⊆ G t ∪ Finset.univ.filter (fun b => node t b ∈ K t) := by
       intro b _
@@ -273,7 +222,6 @@ theorem b2_stacking [Fintype V] [DecidableEq V] (α β ε δ : ℝ)
       Finset.card_le_card_of_injOn (node t) (fun b hb => (Finset.mem_filter.1 hb).2) (hnode t).injOn
     rw [Finset.card_univ, Fintype.card_fin] at h1
     omega
-  -- one level down: more good nodes above than pebbles here leaves all but the pebbles here good
   have hstep : ∀ i j : Fin ℓ, (j : ℕ) = i + 1 → (K i).card < (G j).card → n ≤ (G i).card + (K i).card := by
     intro i j hij hlt
     refine (card_reach_ge node level green (hsc i j hij) (Unpebbled black red) (K i) (hKmem i) (G j)
@@ -281,7 +229,6 @@ theorem b2_stacking [Fintype V] [DecidableEq V] (α β ε δ : ℝ)
     obtain ⟨b, hb, g₁, hg₁⟩ := (Finset.mem_filter.1 ha).2
     obtain ⟨c, g₂, hg₂⟩ := (hG j b).1 hb
     exact (hG i a).2 ⟨c, _, hg₁.trans hg₂⟩
-  -- downward induction: `|G i| ≥ n − ρ_i − δn` on every layer
   have hbound : ∀ k (i : Fin ℓ), (i : ℕ) + k = t → (n : ℝ) ≤ (G i).card + ρ i + δ * n := by
     intro k
     induction k with
@@ -303,7 +250,6 @@ theorem b2_stacking [Fintype V] [DecidableEq V] (α β ε δ : ℝ)
         exact_mod_cast this
       have h1 : (n : ℝ) ≤ (G i).card + (K i).card := by exact_mod_cast hstep i j rfl hlt
       linarith [hKρ i]
-  -- some layer has at least `αn` good nodes, else the black pebbles exceed `(1 − ε)n`
   have hex : ∃ i, α * n ≤ (G i).card := by
     by_contra hno
     push Not at hno
@@ -322,7 +268,6 @@ theorem b2_stacking [Fintype V] [DecidableEq V] (α β ε δ : ℝ)
       linarith
     have hεn : 0 < ε * n := mul_pos hε hnpos
     linarith
-  -- `V_t` has a good node
   have hGt : (G t).Nonempty := by
     rw [Finset.nonempty_iff_ne_empty]
     intro hempty
@@ -336,7 +281,6 @@ theorem b2_stacking [Fintype V] [DecidableEq V] (α β ε δ : ℝ)
     (List.isChain_map (node i)).2 (hpc.imp fun a b hab => Or.inr ⟨i, a, b, hab, rfl, rfl⟩)
   cases hlast : p.getLast? with
   | none =>
-    -- `βn ≤ 0`: a single good node of `V_t` will do
     rw [List.getLast?_eq_none_iff] at hlast
     subst hlast
     obtain ⟨c, hc⟩ := hGt
@@ -350,7 +294,6 @@ theorem b2_stacking [Fintype V] [DecidableEq V] (α β ε δ : ℝ)
       subst hv
       exact ⟨[node t c], rfl, List.isChain_singleton _, by simpa using hGunp t c hc, c, rfl⟩
   | some a =>
-    -- the depth-robust path in `V_i`, then the green path from its end to `V_t`
     obtain ⟨b, g, hg⟩ := (hG i a).1 (hpG a (List.mem_of_getLast? hlast))
     have hmlast : (p.map (node i)).getLast? = some (node i a) := by rw [List.getLast?_map, hlast]; rfl
     have hPc : (p.map (node i) ++ g.tail).IsChain (StackedEdge node drg green) :=

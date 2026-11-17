@@ -3,20 +3,8 @@ module
 public import Proofs.Poub.BoundReceipt.Interactive
 public import Proofs.Poub.RateAudit.Witnesses
 
-/-!
-# The bound-receipt link relay's guarantees: each one's honest and nontrivial lemmas
-
-For `BoundReceiptLink` and `BoundReceiptLinkInteractive`, at one block of one bit, one-bit tile outputs, no link,
-no tile work, no slack (`λ = 0`), one sampled block and `m = 0`, where the hypothesis on `m` holds (`0 < 1`):
-
-* **The honest lemma** (`<guarantee>_honest`): some node, the one whose GPU is the rate audit's honest device
-  (`Rate.Completeness.honest`, which tags every block under the tile outputs it holds) and whose rest does nothing
-  (`BoundReceipt.idleNode`), is accepted, within one mix query's compute and no tile work, with its footprint at the
-  floor, with probability 1; as an interactive node (`InteractiveNode.ofNode`) it also has `QueryDetermined`.
-* **The nontrivial lemma** (`<guarantee>_nontrivial`): with the check replaced by `True`, some node, one that reads
-  nothing (`BoundReceipt.blankNode`), is short of the floor with probability 1, above the error `2^-1` at two-bit
-  receipts.
--/
+/-! The honest and nontrivial lemmas of `BoundReceiptLink` and `BoundReceiptLinkInteractive`, at one block of one
+bit. -/
 
 @[expose] public section
 
@@ -25,20 +13,16 @@ namespace ResourceAccounting.BoundReceipt
 open ResourceAccounting.Rate
 open Pous (Bits)
 
-/-- The rest that does nothing: no memory, nothing sent, and a chip that commits to all-`false` receipts at once. -/
 def idleRest (N a h Lz qz : ℕ) : Rest N a h Lz qz where
   mem _ := false
   side _ _ := false
   chip := .done fun _ _ => false
   bounded _ := ⟨Nat.zero_le _, Nat.zero_le _⟩
 
-/-- The honest node at one block of one bit and one-bit tile outputs: the GPU is the rate audit's honest device, the
-rest does nothing. -/
 def idleNode : Node 1 1 1 1 0 0 1 0 0 where
   gpu _ := Completeness.honest 1 1 1 0
   rest _ := idleRest 1 1 1 0 0
 
-/-- The node that reads nothing, with two-bit receipts. -/
 def blankNode : Node 1 1 1 2 0 0 0 0 0 where
   gpu _ := blank 1 1 2 0 0 0 0
   rest _ := idleRest 1 1 2 0 0
@@ -76,7 +60,6 @@ open ResourceAccounting.Rate ResourceAccounting.BoundReceipt
 open Pous (Bits pr)
 open scoped ENNReal
 
-/-- The error of `BoundReceiptLink` at `N = 1`, `k = 1`, `s = 1`, `h = 2`, `q = q_z = 0`, `m = 0`, `λ = 0` is `2^-1`. -/
 theorem link_error_lt :
     (((1 - 1 : ℕ) : ℝ≥0∞) / ((1 : ℕ) : ℝ≥0∞)) ^ 1 + 2 * ((1 : ℕ) : ℝ≥0∞) / 2 ^ 2 +
         ((Nat.choose 0 (1 - 0) : ℕ) : ℝ≥0∞) / 2 ^ 0 + ((Nat.choose 0 (0 + 1) : ℕ) : ℝ≥0∞) / 2 ^ 0 < 1 := by

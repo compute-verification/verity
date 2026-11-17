@@ -3,15 +3,7 @@ module
 public import Proofs.Poub.Tag.Basic
 public import Definitions.Poub.Guarantees.Sketch
 
-/-!
-# ±1 rows: non-collision
-
-For a nonzero integer vector `d`, flipping the sign of one row entry where `d` is nonzero moves the row's inner product
-with `d` by `±2 d_j ≠ 0`. The flip is an involution, so it maps the rows of any one inner product into the rest: at most
-half the rows have a given inner product (`card_level_le`), and `k` independent rows all hit given values with probability
-at most `2^-k` (`card_rows_le`). `nonCollision` is `ResourceAccounting.Guarantees.Sketch.NonCollision`; `commitThenProject`
-(`ResourceAccounting.Guarantees.Sketch.CommitThenProject`) applies the same bound to a column where `C` and `A·B` differ.
--/
+/-! ±1 rows do not collide: at most half the rows have a given inner product with a nonzero integer vector. -/
 
 @[expose] public section
 
@@ -22,7 +14,6 @@ namespace ResourceAccounting.TagProofs
 open ResourceAccounting.Tag Finset
 open scoped ENNReal
 
-/-- An event holding on at most a `2^-k` share of a finite type has uniform probability at most `2^-k`. -/
 theorem prob_uniform_le_inv_pow {α : Type} [Fintype α] [Nonempty α] (E : α → Prop) [DecidablePred E] (k : ℕ)
     (h : 2 ^ k * (univ.filter E).card ≤ Fintype.card α) :
     prob (PMF.uniformOfFintype α) E ≤ (2 ^ k : ℝ≥0∞)⁻¹ := by
@@ -32,8 +23,6 @@ theorem prob_uniform_le_inv_pow {α : Type} [Fintype α] [Nonempty α] (E : α �
         rw [← mul_assoc, ENNReal.inv_mul_cancel (by simp) (by simp), one_mul]
     _ ≤ (2 ^ k)⁻¹ * Fintype.card α := by gcongr; exact_mod_cast h
 
-/-- A map `f` that is an involution and moves `inner` everywhere sends the points where `inner = t` to points where it
-isn't, one to one: at most half the points have `inner = t`. -/
 theorem card_level_le {R : Type} [Fintype R] (inner : R → ℤ) (f : R → R) (hf : Function.Involutive f)
     (hne : ∀ r, inner (f r) ≠ inner r) (t : ℤ) :
     2 * (univ.filter fun r => inner r = t).card ≤ Fintype.card R := by
@@ -49,7 +38,6 @@ theorem card_level_le {R : Type} [Fintype R] (inner : R → ℤ) (f : R → R) (
   calc 2 * A.card = (A ∪ A.image f).card := by rw [card_union_of_disjoint hdisj, hcard]; ring
     _ ≤ Fintype.card R := card_le_univ _
 
-/-- `k` independent rows, each hitting its value on at most half of the rows: at most a `2^-k` share. -/
 theorem card_rows_le {R : Type} [Fintype R] {k : ℕ} (inner : R → ℤ) (f : R → R) (hf : Function.Involutive f)
     (hne : ∀ r, inner (f r) ≠ inner r) (t : Fin k → ℤ) :
     2 ^ k * (univ.filter fun S : Fin k → R => ∀ i, inner (S i) = t i).card ≤ Fintype.card (Fin k → R) := by
@@ -69,7 +57,6 @@ theorem card_rows_le {R : Type} [Fintype R] {k : ℕ} (inner : R → ℤ) (f : R
 theorem sgn_not_sub (b : Bool) : sgn (!b) - sgn b = if b then 2 else -2 := by
   cases b <;> simp [sgn]
 
-/-- Flipping entry `j` of a sign row moves its inner product with `d` by `±2 d j`. -/
 theorem inner_flip {ι : Type} [Fintype ι] [DecidableEq ι] (d : ι → ℤ) (r : ι → Bool) (j : ι) :
     ∑ i, sgn (Function.update r j (!r j) i) * d i - ∑ i, sgn (r i) * d i = (sgn (!r j) - sgn (r j)) * d j := by
   rw [← Finset.sum_sub_distrib, Finset.sum_eq_single j]
@@ -78,7 +65,6 @@ theorem inner_flip {ι : Type} [Fintype ι] [DecidableEq ι] (d : ι → ℤ) (r
     rw [Function.update_of_ne hi, sub_self]
   · simp
 
-/-- A sign row's flip at a coordinate where `d` is nonzero: an involution that moves the inner product with `d`. -/
 theorem flip_moves {ι : Type} [Fintype ι] [DecidableEq ι] (d : ι → ℤ) (j : ι) (hj : d j ≠ 0) :
     Function.Involutive (fun r : ι → Bool => Function.update r j (!r j)) ∧
       ∀ r : ι → Bool, ∑ i, sgn (Function.update r j (!r j) i) * d i ≠ ∑ i, sgn (r i) * d i := by

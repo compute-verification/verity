@@ -5,14 +5,8 @@ public import Definitions.Poub.Guarantees.RateAuditDeployed
 public import Proofs.Poub.RateAudit.Deployed
 public import Proofs.Poub.RateAudit.SketchRank
 
-/-!
-# The deployed verbatim-sketch session
-
-For fixed full-rank signs, one pass's correct receipts are paid for except when it guessed an unqueried tag or made a
-correct digest query without obtaining a sector. `card_guess_le` prices the former by `N/2^h`;
-`card_bad_le` and `SketchRankFiber` price the latter by `q/2^(8r)`. A union over a pass's ground candidates and passes,
-then the existing causal pooled-sample argument over windows, gives `RemoteRunConservationSketch`.
--/
+/-! The deployed verbatim-sketch session, priced per pass by its guessed tags and its correct digest queries without
+a sector. -/
 
 @[expose] public section
 
@@ -26,8 +20,6 @@ namespace Prover
 
 variable {N m ρ h S L q ks : ℕ}
 
-/-- Outside the low-rank event, a verbatim pass's correct receipts are paid for by its held sectors, memory reads,
-side-link sectors and rebuilt sectors. -/
 theorem pr_unpaid_rank_le
     (A : Prover N m ρ h S L q 256 Sector (SketchSigns ks m) (Fin ks → ZMod (2 ^ 32)))
     (σ : SketchSigns ks m) (r X : ℕ)
@@ -151,7 +143,6 @@ namespace SketchDeployedWindow
 
 variable {P N m ρ h S L q ks G : ℕ}
 
-/-- Correct receipts counted pass by pass. -/
 theorem card_correctAll (A : SketchDeployedWindow P N m ρ h S L q ks G) (E : SketchStore N m)
     (σ : SketchSigns ks m) (ω : Fin P → SketchPassCoins N ρ h ks G) :
     (A.correctAll E σ ω).card = ∑ j,
@@ -164,7 +155,6 @@ theorem card_correctAll (A : SketchDeployedWindow P N m ρ h S L q ks G) (E : Sk
   rw [Finset.sum_boole]
   simp
 
-/-- Candidate `c` of pass `j` is unpaid. -/
 def UnpaidAt (A : SketchDeployedWindow P N m ρ h S L q ks G) (σ : SketchSigns ks m) (slack : ℕ)
     (j : Fin P) (c : Fin G) (x : SketchStore N m × (Fin P → SketchPassCoins N ρ h ks G)) : Prop :=
   let η : {i : Fin P // i < j} → SketchPassCoins N ρ h ks G := fun i => x.2 i.1
@@ -172,15 +162,12 @@ def UnpaidAt (A : SketchDeployedWindow P N m ρ h S L q ks G) (σ : SketchSigns 
   let D := Data.ofParts x.1 (x.2 j).1
   B.footprint σ ((x.2 j).2 c) D + slack < (B.correct sketch σ ((x.2 j).2 c) D).card * (m * 256)
 
-/-- The pass candidate actually kept is unpaid. -/
 def Unpaid (A : SketchDeployedWindow P N m ρ h S L q ks G) (σ : SketchSigns ks m) (slack : ℕ)
     (j : Fin P) (x : SketchStore N m × (Fin P → SketchPassCoins N ρ h ks G)) : Prop :=
   let D := Data.ofParts x.1 (x.2 j).1
   (A.dev j x.1 σ x.2).footprint σ (A.oracle j x.1 σ x.2) D + slack <
     ((A.dev j x.1 σ x.2).correct sketch σ (A.oracle j x.1 σ x.2) D).card * (m * 256)
 
-/-- If a window's total reads plus one slack per pass do not pay for its correct receipts, some kept candidate is
-unpaid. -/
 theorem exists_unpaid (A : SketchDeployedWindow P N m ρ h S L q ks G) (σ : SketchSigns ks m) (slack : ℕ)
     (x : SketchStore N m × (Fin P → SketchPassCoins N ρ h ks G))
     (hx : A.reads x.1 σ x.2 + P * slack < (A.correctAll x.1 σ x.2).card * (m * 256)) :
@@ -196,7 +183,6 @@ theorem exists_unpaid (A : SketchDeployedWindow P N m ρ h S L q ks G) (σ : Ske
   rw [card_correctAll, Finset.sum_mul] at hx
   exact (not_lt_of_ge (by simpa [reads] using hle)) hx
 
-/-- Sequencing: candidate `c` of pass `j` has the one-pass bound for every device selected by earlier pass coins. -/
 theorem pr_unpaidAt_le (A : SketchDeployedWindow P N m ρ h S L q ks G) (σ : SketchSigns ks m) (slack : ℕ)
     (ε : ℝ≥0∞) (j : Fin P) (c : Fin G)
     (hε : ∀ η, pr (fun x : Data N m ρ Sector × Oracle N ρ h Sector (Fin ks → ZMod (2 ^ 32)) =>
@@ -242,8 +228,6 @@ theorem pr_unpaidAt_le (A : SketchDeployedWindow P N m ρ h S L q ks G) (σ : Sk
   set_option maxRecDepth 2000 in
     simpa [ePass, UnpaidAt, hpass, hη, hηsplit, hdata, horacle] using hy
 
-/-- At fixed signs whose sector blocks have rank at least `r`, grinding contributes one union over the `P·G`
-candidate passes. -/
 theorem pr_unpaid_good_le (A : SketchDeployedWindow P N m ρ h S L q ks G) (σ : SketchSigns ks m)
     (r X : ℕ) (hr32 : r ≤ 32)
     (hr : ∀ u, r ≤ ((ResourceAccounting.Tag.signMatrix (σ.block u)).map (Int.cast : ℤ → ℚ)).rank)
@@ -267,7 +251,6 @@ theorem pr_unpaid_good_le (A : SketchDeployedWindow P N m ρ h S L q ks G) (σ :
     _ = (P : ℝ≥0∞) * (G * ε) := by
       simp [Finset.sum_const, Finset.card_univ, nsmul_eq_mul]
 
-/-- One window's unpaid receipts: one rank-tail event, plus the candidate-pass query terms. -/
 theorem pr_unpaid_le {d : ℕ} (A : SketchDeployedWindow P N m ρ h S L q ks G) (r X : ℕ) (εrank : ℝ≥0∞)
     (hr32 : r ≤ 32) (hRank : ResourceAccounting.Assumptions.SketchRank ks m r εrank)
     (hX : ∀ j η c σ O D, ((A.device j η c).prog σ D).rebuilds O D * 256 ≤ X) :
@@ -323,7 +306,6 @@ namespace SketchDeployedRun
 
 variable {n P N m ρ h S L q ks G d : ℕ}
 
-/-- Sequencing over windows. -/
 theorem pr_window_le (A : SketchDeployedRun n P N m ρ h S L q ks G d) (w : Fin n)
     (Q : SketchDeployedWindow P N m ρ h S L q ks G →
       SketchStore N m × SketchWindowCoins P N m ρ h ks G d → Prop) (ε : ℝ≥0∞)
@@ -350,8 +332,6 @@ theorem pr_window_le (A : SketchDeployedRun n P N m ρ h S L q ks G d) (w : Fin 
     rw [hη]
   simpa [e, hω, hc] using hy
 
-/-- A session's pooled samples as a causal family over the monitoring period, on any store `store ω` sampled before the
-session's coins. -/
 theorem pr_samples_map_of_causal {Ω : Type} [Fintype Ω] (store : Ω → SketchStore N m)
     (A : SketchDeployedRun n P N m ρ h S L q ks G d)
     (Ev : SketchStore N m → (Fin n → SketchWindowCoins P N m ρ h ks G d) → Prop) (B : ℝ≥0∞)
@@ -400,7 +380,6 @@ theorem pr_samples_map_of_causal {Ω : Type} [Fintype Ω] (store : Ω → Sketch
     fun ω w => Finset.card_map _
   exact hB X Gs hG e.symm E hmem hcard
 
-/-- A session's pooled samples as a causal family over the monitoring period. -/
 theorem pr_samples_of_causal (A : SketchDeployedRun n P N m ρ h S L q ks G d)
     (Ev : SketchStore N m → (Fin n → SketchWindowCoins P N m ρ h ks G d) → Prop) (B : ℝ≥0∞)
     (hB : ∀ (X : Fin n → Type) [∀ w, Fintype (X w)]
@@ -416,7 +395,6 @@ theorem pr_samples_of_causal (A : SketchDeployedRun n P N m ρ h S L q ks G d)
     pr (fun x : SketchStore N m × (Fin n → SketchWindowCoins P N m ρ h ks G d) => Ev x.1 x.2) ≤ B :=
   pr_samples_map_of_causal id A Ev B hB
 
-/-- The pooled sample over the whole monitoring period, on any store sampled before the session's coins. -/
 theorem pr_samples_pooled_le_map {Ω : Type} [Fintype Ω] (store : Ω → SketchStore N m)
     (A : SketchDeployedRun n P N m ρ h S L q ks G d) (K : ℕ) :
     pr (fun x : Ω × (Fin n → SketchWindowCoins P N m ρ h ks G d) =>
@@ -445,7 +423,6 @@ theorem pr_samples_pooled_le_map {Ω : Type} [Fintype Ω] (store : Ω → Sketch
     rw [show (P : ℝ≥0∞) * N * (d * n) = d * (n * P * N) by ring]
     exact ENNReal.mul_div_mul_left _ _ hd' (ENNReal.natCast_ne_top d)
 
-/-- The pooled sample over the whole monitoring period. -/
 theorem pr_samples_pooled_le (A : SketchDeployedRun n P N m ρ h S L q ks G d) (K : ℕ) :
     pr (fun x : SketchStore N m × (Fin n → SketchWindowCoins P N m ρ h ks G d) =>
       (∀ w t, (x.2 w).2.2 t ∈ (A.win w x.2).correctAll x.1 (x.2 w).1 (x.2 w).2.1) ∧
@@ -453,7 +430,6 @@ theorem pr_samples_pooled_le (A : SketchDeployedRun n P N m ρ h S L q ks G d) (
       ≤ ((K : ℝ≥0∞) / (n * P * N)) ^ (d * n) :=
   pr_samples_pooled_le_map id A K
 
-/-- The pooled sample in every window, on any store sampled before the session's coins. -/
 theorem pr_samples_window_le_map {Ω : Type} [Fintype Ω] (store : Ω → SketchStore N m)
     (A : SketchDeployedRun n P N m ρ h S L q ks G d) (Kw : ℕ) :
     pr (fun x : Ω × (Fin n → SketchWindowCoins P N m ρ h ks G d) =>
@@ -470,7 +446,6 @@ theorem pr_samples_window_le_map {Ω : Type} [Fintype Ω] (store : Ω → Sketch
     exact ⟨fun w t => hmem ω w t (hall w t), w, (hcard ω w).trans_le hw⟩
   · simp only [Nat.cast_mul, mul_assoc]
 
-/-- The pooled sample in every window. -/
 theorem pr_samples_window_le (A : SketchDeployedRun n P N m ρ h S L q ks G d) (Kw : ℕ) :
     pr (fun x : SketchStore N m × (Fin n → SketchWindowCoins P N m ρ h ks G d) =>
       (∀ w t, (x.2 w).2.2 t ∈ (A.win w x.2).correctAll x.1 (x.2 w).1 (x.2 w).2.1) ∧
@@ -478,7 +453,6 @@ theorem pr_samples_window_le (A : SketchDeployedRun n P N m ρ h S L q ks G d) (
       ≤ ((((n - 1) * (P * N) + Kw : ℕ) : ℝ≥0∞) / (n * P * N)) ^ (d * n) :=
   pr_samples_window_le_map id A Kw
 
-/-- Both pooled-sample readings, on any store sampled before the session's coins. -/
 theorem pr_samples_le_map {Ω : Type} [Fintype Ω] (store : Ω → SketchStore N m)
     (A : SketchDeployedRun n P N m ρ h S L q ks G d) (K Kw : ℕ) :
     pr (fun x : Ω × (Fin n → SketchWindowCoins P N m ρ h ks G d) =>
@@ -491,7 +465,6 @@ theorem pr_samples_le_map {Ω : Type} [Fintype Ω] (store : Ω → SketchStore N
     ((pr_or_le _ _).trans (add_le_add (pr_samples_pooled_le_map store A K)
       (pr_samples_window_le_map store A Kw)))
 
-/-- Both pooled-sample readings. -/
 theorem pr_samples_le (A : SketchDeployedRun n P N m ρ h S L q ks G d) (K Kw : ℕ) :
     pr (fun x : SketchStore N m × (Fin n → SketchWindowCoins P N m ρ h ks G d) =>
       (∀ w t, (x.2 w).2.2 t ∈ (A.win w x.2).correctAll x.1 (x.2 w).1 (x.2 w).2.1) ∧
@@ -501,7 +474,6 @@ theorem pr_samples_le (A : SketchDeployedRun n P N m ρ h S L q ks G d) (K Kw : 
         ((((n - 1) * (P * N) + Kw : ℕ) : ℝ≥0∞) / (n * P * N)) ^ (d * n) :=
   pr_samples_le_map id A K Kw
 
-/-- A session's unpaid windows from a per-window bound. -/
 theorem pr_unpaid_le (A : SketchDeployedRun n P N m ρ h S L q ks G d) (slack : ℕ) (ε : ℝ≥0∞)
     (hε : ∀ w η, pr (fun y : SketchStore N m × SketchWindowCoins P N m ρ h ks G d =>
       (A.window w η).reads y.1 y.2.1 y.2.2.1 + P * slack <
@@ -520,8 +492,6 @@ theorem pr_unpaid_le (A : SketchDeployedRun n P N m ρ h S L q ks G d) (slack : 
     _ = (n : ℝ≥0∞) * ε := by
       simp [Finset.sum_const, Finset.card_univ, nsmul_eq_mul]
 
-/-- Session conservation in counts, from the pooled samples and an unpaid bound `ε_u` on some window's unpaid words, on
-any store `store ω` sampled before the session's coins. -/
 theorem pr_paid_of_unpaid_map {Ω : Type} [Fintype Ω] (store : Ω → SketchStore N m)
     (A : SketchDeployedRun n P N m ρ h S L q ks G d) (slack K Kw : ℕ) (εu : ℝ≥0∞)
     (hu : pr (fun x : Ω × (Fin n → SketchWindowCoins P N m ρ h ks G d) =>
@@ -558,7 +528,6 @@ theorem pr_paid_of_unpaid_map {Ω : Type} [Fintype Ω] (store : Ω → SketchSto
     push Not at hD
     exact Or.inr ⟨w, hw.trans_le (Nat.mul_le_mul_right _ (hD.2 w))⟩
 
-/-- Session conservation in counts, from the pooled samples and one per-window unpaid bound. -/
 theorem pr_paid_of_window (A : SketchDeployedRun n P N m ρ h S L q ks G d) (slack K Kw : ℕ)
     (ε : ℝ≥0∞)
     (hε : ∀ w η, pr (fun y : SketchStore N m × SketchWindowCoins P N m ρ h ks G d =>
@@ -577,7 +546,6 @@ theorem pr_paid_of_window (A : SketchDeployedRun n P N m ρ h S L q ks G d) (sla
 
 end SketchDeployedRun
 
-/-- The named non-sampling terms of a sketch pass sum to its slack in bits. -/
 theorem gammaSketch_mul (N m ρ S L X : ℕ) (hN : 0 < N) (hm : 0 < m) :
     gammaSketch N m ρ S L X * (N * m * 256) = ((S + (L - ρ * 256) + X : ℕ) : ℝ) := by
   have hNm : (N : ℝ) * m * 256 ≠ 0 := by positivity
@@ -653,8 +621,8 @@ theorem RemoteRunConservationSketch : ResourceAccounting.Guarantees.RemoteRunCon
           (n : ℝ≥0∞) * ε + (n * P * G : ℝ≥0∞) * term := by
         ring
 
-/-- At the conservative deployed caps, the rank-query term is already `2^14` before multiplying by windows or
-passes. This is why the 16-row worst-cap bound is vacuous. -/
+/-- At the conservative deployed caps the rank-query term is `2^14` before windows or passes, so the 16-row
+worst-cap product bound is vacuous. -/
 theorem sketchQueryTermCaps :
     (2 ^ 55 : ℝ≥0∞) * ((2 ^ 55 : ℝ≥0∞) / 2 ^ 96) = 2 ^ 14 := by
   rw [← mul_div_assoc]
@@ -663,12 +631,8 @@ theorem sketchQueryTermCaps :
   simpa using (ENNReal.mul_div_mul_left (c := (2 : ℝ≥0∞) ^ 96) (2 ^ 14) 1
     (pow_ne_zero _ (by norm_num)) (ENNReal.pow_ne_top ENNReal.ofNat_ne_top))
 
-/-- **The verbatim sketch session at the deployed receipt parameters, product form.** The multiplicative bound
-`2·2^-40 + n·ε + n·P·G·(N/2^512 + q/2^96)`: each grinding candidate at its own query cap `q`, which is the special
-case `qtot = G·q` of the deployed guarantee's shared budget (`Prover.budget_of_bounded`). At the conservative caps
-`q = G = 2^55` its query term alone is `2^14` before `n·P` (`sketchQueryTermCaps`), which is why the deployed
-guarantee (`ResourceAccounting.Guarantees.RemoteRunConservationSketchDeployed`, proved in `DeployedSketchSum.lean`)
-states the sum form instead. -/
+/-- The product form, each grinding candidate at its own query cap `q`; its query term is vacuous at the
+conservative caps, which is why the deployed guarantee states the sum form. -/
 theorem RemoteRunConservationSketchDeployedProduct :
     ∀ (n P N ρ S L q G X : ℕ) (ε : ℝ≥0∞)
       (A : RateSketch.SketchDeployedRun n P N 128 ρ 512 S L q 16 G 2773),

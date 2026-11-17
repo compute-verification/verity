@@ -3,14 +3,7 @@ module
 public import Definitions.Pous.Model.FreeBlocks
 public import Proofs.Pous.TrackA.A3Prime
 
-/-!
-# A3′ with free blocks
-
-`PousTrackA.a3_prime` for `seqAcceptsFree`: a round passes when its index is free or its answer is right. Lemma A's
-event `E` is unchanged (it counts right answers only), and off `E` a round's passing indices are the at most `g − 1`
-right ones and the at most `F` free ones, so the chain rule gives `((g − 1 + F)/B)^k`. The free set needs no advice:
-the responder is not told it, and the bound holds for every free set the setup determines.
--/
+/-! A3′ with free blocks, which needs no advice: the bound holds for every free set the setup determines. -/
 
 @[expose] public section
 
@@ -21,7 +14,6 @@ open scoped ENNReal
 
 variable {M : IdealModel}
 
-/-- Every round of a sequential run from round `j` in state `σ` satisfies `P` at its index and answer. -/
 def seqAll {ℓ S B : ℕ} (f : M.Qry → M.Ans) (step : ℕ → Bits S → Fin B → OracleAlgorithm M (Bits ℓ × Bits S))
     (P : Fin B → Bits ℓ → Prop) : ℕ → List (Fin B) → Bits S → Prop
   | _, [], _ => True
@@ -38,7 +30,6 @@ theorem seqAll_of_getElem? {ℓ S B : ℕ} (f : M.Qry → M.Ans) (step : ℕ →
       have := h (n + 1) (by simp only [List.length_cons]; omega) a (by simpa [seqAnswers] using ha)
       simpa using this
 
-/-- **Chain rule for a per-round predicate.** `PousThm1.pr_seq_le` with "the answer is right" replaced by `P`. -/
 theorem pr_seqAll_le {ℓ S B : ℕ} [NeZero B] (f : M.Qry → M.Ans)
     (step : ℕ → Bits S → Fin B → OracleAlgorithm M (Bits ℓ × Bits S)) (P : Fin B → Bits ℓ → Prop) (c : ℝ≥0∞) :
     ∀ (k j : ℕ) (σ : Bits S),
@@ -59,7 +50,6 @@ theorem pr_seqAll_le {ℓ S B : ℕ} [NeZero B] (f : M.Qry → M.Ans)
         have := hyp (i₀ :: h) (by simp only [List.length_cons]; omega)
         simpa [seqState, Nat.add_assoc, Nat.add_comm 1] using this
 
-/-- **A3′ with `F` free blocks.** `Pr[pass] ≤ ((g − 1 + F)/B)^k + |Hist|·Γ + Pr[not G]`. -/
 theorem a3_prime_free (sch : Scheme M) (S D Q k g F : ℕ) (Γ : ℝ≥0∞)
     (G : Bits sch.n → M.Ω × sch.Coins → Prop) (hA : LemmaA sch S D Q g Γ G)
     (W : Bits sch.n) (A₁ : Preprocessor sch S) (Fr : FreeSet sch F) (A₂ : SeqResponder sch S D Q) :
@@ -102,7 +92,7 @@ theorem a3_prime_free (sch : Scheme M) (S D Q k g F : ℕ) (Γ : ℝ≥0∞)
   have : Nonempty (Fin sch.B) := ⟨⟨0, sch.B_pos⟩⟩
   refine hre.trans ((pr_prod_le (α := M.Ω × sch.Coins) (β := Fin k → Fin sch.B) pass E
     ((((g - 1 + F : ℕ) : ℝ≥0∞) / sch.B) ^ k) fun a ha => ?_).trans ?_)
-  · -- off `E`, a round passes on at most `g − 1` right indices and `F` free ones
+  ·
     refine pr_seqAll_le _ _ _ _ k 0 _ fun h hh => ?_
     have hG : G W a := by by_contra hG; exact ha (Or.inl hG)
     have hlt : (Finset.univ.filter fun i => good h a i).card ≤ g - 1 := by
@@ -125,7 +115,7 @@ theorem a3_prime_free (sch : Scheme M) (S D Q k g F : ℕ) (Γ : ℝ≥0∞)
       rw [pr_def, Fintype.card_fin]
       exact ENNReal.div_le_div_right (by exact_mod_cast hcard) _
     simpa only [good, pred, st, run_progMap, Nat.zero_add] using hpr
-  · -- a union over the histories, Lemma A for each
+  ·
     have hE : pr E ≤ pr (fun a => ¬ G W a) + (∑ j ∈ Finset.range k, (sch.B : ℝ≥0∞) ^ j) * Γ := by
       refine (pr_or_le _ _).trans (add_le_add le_rfl ?_)
       calc pr (fun a => ∃ j ∈ Finset.range k, ∃ v ∈ (Finset.univ : Finset (Fin j → Fin sch.B)),
@@ -146,8 +136,6 @@ theorem a3_prime_free (sch : Scheme M) (S D Q k g F : ℕ) (Γ : ℝ≥0∞)
           (((g - 1 + F : ℕ) : ℝ≥0∞) / sch.B) ^ k := add_le_add hE le_rfl
       _ = _ := by ring
 
-/-- `a3_prime_free` in the review's form: if `|Hist|·Γ ≤ 2^-λ'`, then
-`Pr[pass] ≤ ((g − 1 + F)/B)^k + 2^-λ' + Pr[not G]`. -/
 theorem a3_prime_free_lam (sch : Scheme M) (S D Q k g F lam : ℕ) (Γ : ℝ≥0∞)
     (G : Bits sch.n → M.Ω × sch.Coins → Prop) (hA : LemmaA sch S D Q g Γ G)
     (hΓ : (∑ j ∈ Finset.range k, (sch.B : ℝ≥0∞) ^ j) * Γ ≤ (2⁻¹ : ℝ≥0∞) ^ lam)

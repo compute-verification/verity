@@ -8,52 +8,12 @@ public import Proofs.ResourceAccounting.Requirement
 public import Proofs.ResourceAccounting.Gates
 import Proofs.Pous.Prob
 
-/-!
-# Stacking: the carrier lemma and the stacked session
-
-`ResourceAccounting.SecurityProofs.CarrierBits` counts a circuit's values: a step of `x` bits splits the stores into at most
-`2^x` classes, in each of which the rest of the provenance has `x` bits fewer, so the values take at most `2^n`
-contents when every run has at most `n` input and encoded bits (`Provenance.card_image_le`). A carrier's values are its
-sectors at every store, which take every value, so its sectors are at most `n` bits (`Carrier.card_le`). Under
-`SquaringFloor` and `ChainSum` (the encode bound at `E ≤ k · S · e`, `SecurityProofs.Gates.encodeBound_of`) an encode
-of `x` bits costs at least `x/(8·bytes)` words' `E` nonlinear units (`encodeBitsCost_ge`, with `⊤` where the gate model
-has no circuit), so a gate budget bounds the encoded bits (`Provenance.encoded_mul_le`).
-
-`KeyBinding` makes a pass's store uniform but for `δ` at each prefix of the session's coins (`UniformBut`): at the
-prefix the writers' choices and the layout are fixed, so the blocks are `KeyBinding`'s, and the tiles' sectors are a
-uniform store's when the blocks are uniform (`KeyBinding.uniformBut_coinStore`; the general class's one store,
-`KeyBinding.uniformBut_blocks`). A store uniform but for `δ` at an index read from the coins moves an event of the
-store and the coins to a uniform store at a cost of `δ` (`UniformBut.pr_le_of`), fiber by fiber over the coins.
-
-`ResourceAccounting.SecurityProofs.StackedRunConservationSketchDeployed` charges each carrier's sectors in the pass's
-rebuilds, so every pass rebuilds at most `X + C` bits, and bounds the session with a store per pass. A window that
-doesn't pay for its correct receipts has a sign matrix of low rank, paid once a window, or a pass whose kept candidate
-is unpaid on its own store (`SketchDeployedWindow.exists_unpaidOn`). That store is the append-coin rule's at the
-prefix before the pass, which `KeyBinding` moves to a uniform store independent of the session's coins, where the
-deployed guarantee's one-pass family bound holds (`SketchDeployedRun.pr_pass_le`). So the unpaid windows cost
-`n·ε + n·P·(G·N/2^h + qtot/2^(8r) + δ)` (`SketchDeployedRun.pr_unpaidOn_le`). The passes' correct receipts are a
-causal family of the windows' samples, whatever stores they are on (`pr_samples_causal_le`), so the samples' terms are the
-deployed guarantee's (`pr_deployed_of_unpaid_causal`).
-
-`ResourceAccounting.SecurityProofs.StackedRunConservationRelay` simulates each pass device by one that reruns its carrier's
-circuit first, reading every step's bits over the side link at odd addresses (`PIChip.walk`, within `C` bits), and then
-runs the device with its carrier reads answered from the circuit's values (`PIChip.answer`). The simulating device
-(`PIDevice.stack`) has the device's state, memory, receipts, tier reads and compute, and side link `L + C`, so
-`RemoteRunConservationRelay` bounds its session, which is the stacked session's event.
-
-`ResourceAccounting.SecurityProofs.StackedRequirementSketchDeployed` and `ResourceAccounting.SecurityProofs.StackedRequirementRelay`
-bound a registered circuit's held and read bits over at most `k` steps by the store's `k·N·B` when the store and the
-plans are its own (`Requirement.cap_of_matches`, from `RequirementHeld` and `RequirementMoved` with no block held), so a
-shortfall against the requirement is one against the store.
--/
+/-! Stacking: the carrier lemma and the stacked session's conservation and requirement bounds. -/
 
 @[expose] public section
 
 namespace ResourceAccounting
 
-/-- **Under the encode bound at `E`, `x` bits of a block's encoding cost `x/(8·bytes)` words' `E` capped
-units**: the encode cost of the `⌈x/(8·bytes)⌉` words those bits fill is at least that many words' `E`
-(`SecurityProofs.Gates.encodeCost_ge`), and `⊤` where the gate model has no circuit. -/
 theorem encodeBitsCost_ge {F : Gates.Field} {k B E εnum εden : ℕ}
     (hE : Gates.EncodeBound F k B E εnum εden) (hbytes : 0 < F.bytes) (x : ℕ) :
     ((x * E : ℕ) : ℕ∞) ≤ (8 * F.bytes : ℕ) * encodeBitsCost F k B εnum εden x := by
@@ -83,8 +43,6 @@ namespace Provenance
 
 variable {N m : ℕ} {α : Type}
 
-/-- One step of `x` bits: the stores split by the step's answer `g`, and the values in each class are at most
-`2^(n − x)`, so at most `2^n` in all. -/
 theorem card_image_step [DecidableEq α] {x n : ℕ} (T : Finset (SketchStore N m)) (g : SketchStore N m → Bits x)
     (F : Bits x → SketchStore N m → α) (hx : x ≤ n)
     (hF : ∀ v, ((T.filter fun E => g E = v).image (F v)).card ≤ 2 ^ (n - x)) :
@@ -103,8 +61,6 @@ theorem card_image_step [DecidableEq α] {x n : ℕ} (T : Finset (SketchStore N 
         simp only [Fintype.card_fun, Fintype.card_bool, Fintype.card_fin]
         rw [← pow_add, Nat.add_sub_cancel' hx]
 
-/-- **The circuit's values take at most `2^n` contents** over a set of stores at each of which it has at most `n`
-input and encoded bits. -/
 theorem card_image_le [DecidableEq α] (c : Provenance N m α) :
     ∀ (T : Finset (SketchStore N m)) (n : ℕ), (∀ E ∈ T, c.inputs E + c.encoded E ≤ n) →
       (T.image fun E => c.run E).card ≤ 2 ^ n := by
@@ -147,8 +103,6 @@ theorem card_image_le [DecidableEq α] (c : Provenance N m α) :
         simp only [inputs, encoded] at this
         omega
 
-/-- **A gate budget bounds the encoded bits**: under the encode bound at `E` nonlinear units a word of `8·bytes` bits,
-the encoded bits times `E` are at most `8·bytes` times the encodes' nonlinear units. -/
 theorem encoded_mul_le {F : Gates.Field} {kr B E εnum εden : ℕ}
     (hE : Gates.EncodeBound F kr B E εnum εden) (hbytes : 0 < F.bytes) (c : Provenance N m α)
     (Es : SketchStore N m) :
@@ -167,8 +121,6 @@ namespace Carrier
 
 variable {N m : ℕ}
 
-/-- **A carrier's sectors are at most its input and encoded bits.** Its values are its sectors at every store, and
-those take every value, `2^(256·|carried|)` of them. -/
 theorem card_le (K : Carrier N m) {n : ℕ} (hK : ∀ E, K.provenance.inputs E + K.provenance.encoded E ≤ n) :
     K.carried.card * 256 ≤ n := by
   classical
@@ -184,8 +136,6 @@ theorem card_le (K : Carrier N m) {n : ℕ} (hK : ∀ E, K.provenance.inputs E +
   rw [hs, ← pow_mul, mul_comm] at h
   exact (Nat.pow_le_pow_iff_right (by norm_num)).mp h
 
-/-- A carrier whose circuit takes in at most `I` bits and spends at most `R` nonlinear units on its encodes carries at
-most `I + 8·bytes·R/E` bits, under the encode bound at `E` nonlinear units a word of `8·bytes` bits. -/
 theorem card_le_of_budget (K : Carrier N m) {F : Gates.Field} {kr B E εnum εden I R : ℕ}
     (hE : Gates.EncodeBound F kr B E εnum εden) (hbytes : 0 < F.bytes) (hE0 : 0 < E)
     (hK : ∀ Es, K.provenance.inputs Es ≤ I ∧
@@ -208,7 +158,6 @@ namespace ResourceAccounting.Assumptions
 open Pous (pr)
 open scoped ENNReal
 
-/-- A probability over a pair is the average over the second coordinate of its fibers' probabilities. -/
 theorem pr_prod_eq_sum_div {X Y : Type} [Fintype X] [Fintype Y] (Q : X × Y → Prop) :
     pr Q = (∑ y, pr fun x => Q (x, y)) / Fintype.card Y := by
   classical
@@ -228,13 +177,9 @@ namespace ResourceAccounting
 open Pous (pr)
 open scoped ENNReal
 
-/-- A family of stores, one at each index `α`, each a uniform store but for `δ` on every event. -/
 def UniformBut {St Ω I : Type} [Fintype St] [Fintype Ω] (δ : ℝ≥0∞) (view : I → Ω → St) : Prop :=
   ∀ (α : I) (ev : Set St), pr (fun ω => view α ω ∈ ev) ≤ pr (fun E : St => E ∈ ev) + δ
 
-/-- **A store uniform but for `δ` at each index moves an event to a uniform store, at a cost of `δ`, at an index read
-from the coins**: an event of the store at index `f c` and of coins `c` independent of `ω` is at most as likely as on
-a uniform store independent of them, plus `δ`. -/
 theorem UniformBut.pr_le_of {St Ω I C : Type} [Fintype St] [Fintype Ω] [Fintype C] {δ : ℝ≥0∞}
     {view : I → Ω → St} (h : UniformBut δ view) (f : C → I) (P : St → C → Prop) :
     pr (fun x : Ω × C => P (view (f x.2) x.1) x.2) ≤ pr (fun y : St × C => P y.1 y.2) + δ := by
@@ -248,24 +193,17 @@ theorem UniformBut.pr_le_of {St Ω I C : Type} [Fintype St] [Fintype Ω] [Fintyp
     _ ≤ (∑ c, pr fun E => P E c) / Fintype.card C + δ :=
         add_le_add le_rfl (ENNReal.div_le_of_le_mul (le_of_eq (mul_comm _ _)))
 
-/-- **A store uniform but for `δ` moves an event to a uniform store, at a cost of `δ`**: at each index `α`, an event
-of the store and of independent coins `C` is at most as likely as on a uniform store, plus `δ`. -/
 theorem UniformBut.pr_le {St Ω I C : Type} [Fintype St] [Fintype Ω] [Fintype C] {δ : ℝ≥0∞} {view : I → Ω → St}
     (h : UniformBut δ view) (α : I) (P : St → C → Prop) :
     pr (fun x : Ω × C => P (view α x.1) x.2) ≤ pr (fun y : St × C => P y.1 y.2) + δ :=
   h.pr_le_of (fun _ => α) P
 
-/-- **Under key binding the general class's store is uniform but for `δ`**: the blocks at the layout `slot`, the
-writers choosing each append before its coin. -/
 theorem Assumptions.KeyBinding.uniformBut_blocks {Ω Ca Ch B : Type} [Fintype Ω] [Fintype Ca] [Fintype B] {T M N : ℕ}
     {δ : ℝ≥0∞} {enc : Ω → Fin T → Ch → (Fin T → Ca) → Fin M → B} (h : Assumptions.KeyBinding T M δ enc)
     (choose : Ω → (a : Fin T) → ({b : Fin T // b < a} → Ca) → Ch) (slot : Fin N ↪ Fin T × Fin M) :
     UniformBut δ (fun (_ : Unit) (y : Ω × (Fin T → Ca)) => appendCoinBlocks enc choose slot y) :=
   fun _ ev => h choose N slot ev
 
-/-- **Under key binding a pass's store is uniform but for `δ` at each prefix**: at the prefix `c`, the writers'
-choices `choose c` and the layout `slot c` are fixed, and the tiles' sectors are a uniform store's when the blocks
-are uniform. -/
 theorem Assumptions.KeyBinding.uniformBut_coinStore {n P N m ρ h ks G d T M : ℕ} {Ω Ca Ch : Type} [Fintype Ω]
     [Fintype Ca] {δ : ℝ≥0∞} {enc : Ω → Fin T → Ch → (Fin T → Ca) → Fin M → (Fin m → RateSketch.Sector)}
     (hKB : Assumptions.KeyBinding T M δ enc)
@@ -296,15 +234,11 @@ namespace PassProvenance
 
 variable {N b h ρ : ℕ} {α : Type}
 
-/-- The provenance's step answers at store `E`, stream `R` and oracle `O`, one after another: bit `i` of the run's
-bits, and `false` past them. -/
 def trace (E : Store N b) (R : Bits ρ) (O : Oracle N b h ρ) : PassProvenance N b h ρ α → ℕ → Bool
   | done _, _ => false
   | input x f k, i => if hi : i < x then f E R O ⟨i, hi⟩ else (k (f E R O)).trace E R O (i - x)
   | encode j x _ f k, i => if hi : i < x then f (E j) ⟨i, hi⟩ else (k (f (E j))).trace E R O (i - x)
 
-/-- **A gate budget bounds the encoded bits**: under the encode bound at `E` nonlinear units a word of `8·bytes` bits,
-the encoded bits times `E` are at most `8·bytes` times the encodes' nonlinear units. -/
 theorem encoded_mul_le {F : Gates.Field} {kr B E εnum εden : ℕ}
     (hE : Gates.EncodeBound F kr B E εnum εden) (hbytes : 0 < F.bytes)
     (c : PassProvenance N b h ρ α) (Es : Store N b) (R : Bits ρ) (O : Oracle N b h ρ) :
@@ -324,7 +258,6 @@ namespace PIChip
 
 variable {N b h ρ : ℕ} {α β : Type}
 
-/-- Read `n` bits from the side sources at the odd addresses `2·(o + i) + 1`, then continue with them. -/
 def readOdd : (n : ℕ) → ℕ → (Bits n → PIChip N b h ρ α) → PIChip N b h ρ α
   | 0, _, k => k Fin.elim0
   | n + 1, o, k => side (2 * o + 1) (fun γ => readOdd n (o + 1) (fun z => k (Fin.cons γ z)))
@@ -384,16 +317,12 @@ theorem readOdd_work (cost : ℕ → ℕ) (w : IWorld N b h ρ) (v : List Bool) 
     simp only [readOdd, work]
     rw [readOdd_work cost w v n, cons_side]
 
-/-- Rerun a provenance over the side link and continue with `k` at its values: each step's bits are read at the next
-odd addresses from `2·o + 1`, within a budget of `B` bits, past which the program stops at `dflt`. -/
 def walk (dflt : α) (k : β → PIChip N b h ρ α) : ℕ → ℕ → PassProvenance N b h ρ β → PIChip N b h ρ α
   | _, _, .done a => k a
   | B, o, .input x _ k' => if x ≤ B then readOdd x o (fun z => walk dflt k (B - x) (o + x) (k' z)) else done dflt
   | B, o, .encode _ x _ _ k' =>
     if x ≤ B then readOdd x o (fun z => walk dflt k (B - x) (o + x) (k' z)) else done dflt
 
-/-- Where the side sources answer the provenance's trace from `2·o + 1` on, within its budget, the rerun program
-returns and reads what `k` does at the provenance's values. -/
 theorem walk_eq {τ : ℕ} (dflt : α) (k : β → PIChip N b h ρ α) (tier : ℕ → Fin τ) (t : Fin τ) (w : IWorld N b h ρ)
     (v : List Bool) (E : Store N b) (R : Bits ρ) (O : Oracle N b h ρ) :
     ∀ (c : PassProvenance N b h ρ β) (B o : ℕ), (∀ i, w.side v (2 * (o + i) + 1) = c.trace E R O i) →
@@ -434,8 +363,6 @@ theorem walk_eq {τ : ℕ} (dflt : α) (k : β → PIChip N b h ρ α) (tier : �
     simp only [walk, hx, ↓reduceIte, readOdd_run, readOdd_tierBits, hz, PassProvenance.run]
     exact ⟨h₁, h₂⟩
 
-/-- In every world the rerun program takes in at most its budget `B` over the side link beyond what `k` does, and
-queries what `k` does. -/
 theorem walk_bounded (dflt : α) (k : β → PIChip N b h ρ α) (w : IWorld N b h ρ) (v : List Bool) {L q : ℕ}
     (hk : ∀ γ, (k γ).linkBits w v ≤ L ∧ ((k γ).queries w v).length ≤ q) :
     ∀ (c : PassProvenance N b h ρ β) (B o : ℕ),
@@ -462,7 +389,6 @@ theorem walk_bounded (dflt : α) (k : β → PIChip N b h ρ α) (w : IWorld N b
       omega
     · simp [walk, hx, linkBits, queries]
 
-/-- In every world the rerun program's compute is at most what `k`'s is at most. -/
 theorem walk_work_le (dflt : α) (k : β → PIChip N b h ρ α) (cost : ℕ → ℕ) (w : IWorld N b h ρ) (v : List Bool)
     {F : ℕ} (hk : ∀ γ, (k γ).work cost w v ≤ F) :
     ∀ (c : PassProvenance N b h ρ β) (B o : ℕ), (walk dflt k B o c).work cost w v ≤ F := by
@@ -482,7 +408,6 @@ theorem walk_work_le (dflt : α) (k : β → PIChip N b h ρ α) (cost : ℕ →
       exact ih _ _ _
     · simp [walk, hx, work]
 
-/-- The program with its side reads at odd addresses answered on chip from `κ`, at `κ (a / 2)` for address `a`. -/
 def answer (κ : ℕ → Bool) : PIChip N b h ρ α → PIChip N b h ρ α
   | done a => done a
   | tag x k => tag x fun r => answer κ (k r)
@@ -492,7 +417,6 @@ def answer (κ : ℕ → Bool) : PIChip N b h ρ α → PIChip N b h ρ α
   | complete j x hx g k => complete j x hx g fun z => answer κ (k z)
   | send γ p => send γ (answer κ p)
 
-/-- The world whose side sources answer odd addresses from `κ`, at `κ (a / 2)` for address `a`. -/
 def withOdd (κ : ℕ → Bool) (w : IWorld N b h ρ) : IWorld N b h ρ :=
   { w with side := fun v a => if a % 2 = 0 then w.side v a else κ (a / 2) }
 
@@ -590,9 +514,6 @@ namespace PIDevice
 
 variable {N b h ρ S L' q : ℕ}
 
-/-- The device that reruns its carrier's circuit `K` over the side link and answers the carrier's reads, `B`'s side
-reads at odd addresses, from the circuit's values on chip: its side sources are `B`'s at even addresses and `K`'s
-trace at odd ones, of which it reads at most `C` bits. -/
 def stack (B : PIDevice N b h ρ S L' q) (L C : ℕ) (K : PassProvenance N b h ρ (ℕ → Bool))
     (hL : ∀ st w, (B.chip st).linkBitsEven w [] ≤ L) : PIDevice N b h ρ S (L + C) q where
   state := B.state
@@ -608,7 +529,6 @@ theorem stack_side_odd (B : PIDevice N b h ρ S L' q) (L C : ℕ) (K : PassProve
     (B.stack L C K hL).side E R O v (2 * (0 + i) + 1) = K.trace E R O i := by
   simp only [stack, show (2 * (0 + i) + 1) % 2 ≠ 0 by omega, ↓reduceIte, show (2 * (0 + i) + 1) / 2 = i by omega]
 
-/-- Where `B`'s odd side reads answer `K`'s values, the stacked device's world with them answered on chip is `B`'s. -/
 theorem stack_withOdd (B : PIDevice N b h ρ S L' q) (L C : ℕ) (K : PassProvenance N b h ρ (ℕ → Bool)) (hL)
     (hside : ∀ E R O v i, B.side E R O v (2 * i + 1) = K.run E R O i) (E : Store N b) (R : Bits ρ)
     (O : Oracle N b h ρ) :
@@ -623,8 +543,6 @@ theorem stack_withOdd (B : PIDevice N b h ρ S L' q) (L C : ℕ) (K : PassProven
   simp only [PIChip.withOdd, world, hs]
   rfl
 
-/-- **The stacked device commits `B`'s receipts and reads what `B` reads**, where `B`'s odd side reads answer `K`'s
-values and `K` is within the budget `C`. -/
 theorem stack_eq {τ : ℕ} (B : PIDevice N b h ρ S L' q) (L C : ℕ) (K : PassProvenance N b h ρ (ℕ → Bool)) (hL)
     (hside : ∀ E R O v i, B.side E R O v (2 * i + 1) = K.run E R O i) (tier : ℕ → Fin τ) (t : Fin τ)
     (E : Store N b) (R : Bits ρ) (O : Oracle N b h ρ) (hbud : K.inputs E R O + K.encoded E R O ≤ C) :
@@ -652,7 +570,6 @@ theorem stack_correct (B : PIDevice N b h ρ S L' q) (L C : ℕ) (K : PassProven
   have h := (stack_eq B L C K hL hside (fun _ => (0 : Fin 1)) 0 E R O hbud).1
   simp only [correct, h]
 
-/-- The stacked device is within `B`'s squaring ceiling. -/
 theorem stack_ceiling (B : PIDevice N b h ρ S L' q) (L C : ℕ) (K : PassProvenance N b h ρ (ℕ → Bool)) (hL)
     {cost : ℕ → ℕ} {F : ℕ} (hF : Assumptions.SquaringCeiling cost F B) :
     Assumptions.SquaringCeiling cost F (B.stack L C K hL) := fun st w =>
@@ -664,8 +581,6 @@ namespace DeployedRun
 
 variable {n P N b h ρ S L' q r s d G : ℕ}
 
-/-- The session with every pass device stacked on its carrier (`PIDevice.stack`), with the same candidates and
-picks. -/
 def stack (A : DeployedRun n P N b h ρ S L' q r s d G) (L C : ℕ)
     (K : ∀ (w : Fin n) (_ : {v : Fin n // v < w} → WindowCoins P N b h ρ r s d) (j : Fin P)
       (_ : {i : Fin P // i < j} → PassCoins N b h ρ r s) (_ : Fin G), PassProvenance N b h ρ (ℕ → Bool))
@@ -676,8 +591,6 @@ def stack (A : DeployedRun n P N b h ρ S L' q r s d G) (L C : ℕ)
       cand := (A.window w η).cand
       pick := (A.window w η).pick }
 
-/-- **The stacked session's windows pass and read what the session's do**, where every device's odd side reads answer
-its carrier's values and every carrier is within the budget `C`. -/
 theorem stack_win {τ : ℕ} (A : DeployedRun n P N b h ρ S L' q r s d G) (L C : ℕ)
     (K : ∀ (w : Fin n) (_ : {v : Fin n // v < w} → WindowCoins P N b h ρ r s d) (j : Fin P)
       (_ : {i : Fin P // i < j} → PassCoins N b h ρ r s) (_ : Fin G), PassProvenance N b h ρ (ℕ → Bool))
@@ -704,13 +617,11 @@ open Pous (pr)
 open scoped ENNReal
 open Bandwidth (pr_exists_le pr_mono pr_or_le)
 
-/-- The oracle family of a pass's `G` grinding candidates is finite. -/
 local instance instFintypeOracleFamStack (N ρ h ks G : ℕ) :
     Fintype (Fin G → Oracle N ρ h Sector (Fin ks → ZMod (2 ^ 32))) := by
   letI : Fintype (Oracle N ρ h Sector (Fin ks → ZMod (2 ^ 32))) := inferInstance
   exact inferInstance
 
-/-- Signs whose sector blocks all have rank at least `r`. -/
 def RankGood {ks m : ℕ} (r : ℕ) (σ : SketchSigns ks m) : Prop :=
   ∀ u, r ≤ ((ResourceAccounting.Tag.signMatrix (σ.block u)).map (Int.cast : ℤ → ℚ)).rank
 
@@ -718,7 +629,6 @@ namespace SketchDeployedWindow
 
 variable {P N m ρ h S L q ks G : ℕ}
 
-/-- Correct receipts counted pass by pass, each pass on its own store. -/
 theorem card_correctOn (A : SketchDeployedWindow P N m ρ h S L q ks G) (E : Fin P → SketchStore N m)
     (σ : SketchSigns ks m) (ω : Fin P → SketchPassCoins N ρ h ks G) :
     (A.correctOn E σ ω).card = ∑ j,
@@ -731,8 +641,6 @@ theorem card_correctOn (A : SketchDeployedWindow P N m ρ h S L q ks G) (E : Fin
   rw [Finset.sum_boole]
   simp
 
-/-- If a window's reads, each pass on its own store, plus one slack per pass do not pay for its correct receipts, some
-pass's kept candidate is unpaid on its own store. -/
 theorem exists_unpaidOn (A : SketchDeployedWindow P N m ρ h S L q ks G) (E : Fin P → SketchStore N m)
     (σ : SketchSigns ks m) (slack : ℕ) (ω : Fin P → SketchPassCoins N ρ h ks G)
     (hx : A.readsOn E σ ω + P * slack < (A.correctOn E σ ω).card * (m * 256)) :
@@ -748,8 +656,6 @@ theorem exists_unpaidOn (A : SketchDeployedWindow P N m ρ h S L q ks G) (E : Fi
   rw [card_correctOn, Finset.sum_mul] at hx
   exact (not_lt_of_ge (by simpa [readsOn] using hle)) hx
 
-/-- **One pass on a uniform store**: at signs of rank at least `r`, pass `j` has an unpaid candidate with at most the
-one-pass family bound, the store uniform and independent of the window's coins. -/
 theorem pr_pass_le {d : ℕ} (A : SketchDeployedWindow P N m ρ h S L q ks G) (r X qtot : ℕ) (hr32 : r ≤ 32)
     (hX : ∀ j η c σ O D, ((A.device j η c).prog σ D).rebuilds O D * 256 ≤ X)
     (hq : ∀ j η σ (Os : Fin G → Oracle N ρ h Sector (Fin ks → ZMod (2 ^ 32))) (D : Data N m ρ Sector),
@@ -782,8 +688,6 @@ namespace SketchDeployedRun
 
 variable {n P N m ρ h S L q ks G d : ℕ}
 
-/-- **One pass of a session on a uniform store**: at window `w`'s signs of rank at least `r`, pass `j` has an unpaid
-candidate with at most the one-pass family bound, the store uniform and independent of the session's coins. -/
 theorem pr_pass_le (A : SketchDeployedRun n P N m ρ h S L q ks G d) (r X qtot : ℕ) (hr32 : r ≤ 32)
     (hX : ∀ w η j ι c E σ R O,
       let B := (A.window w η).device j ι c
@@ -808,7 +712,6 @@ theorem pr_pass_le (A : SketchDeployedRun n P N m ρ h S L q ks G d) (r X qtot :
     fun η => SketchDeployedWindow.pr_pass_le (A.window w η) r X qtot hr32 (hX' η)
       (fun j ι σ Os D => hq w η j ι σ Os D) j
 
-/-- The rank tail of window `w`'s signs, on any `ω` sampled before the session. -/
 theorem pr_rank_le {Ω : Type} [Fintype Ω] (r : ℕ) (ε : ℝ≥0∞) (hRank : ResourceAccounting.Assumptions.SketchRank ks m r ε)
     (w : Fin n) :
     pr (fun x : Ω × (Fin n → SketchWindowCoins P N m ρ h ks G d) => ¬ RankGood r (x.2 w).1) ≤ ε := by
@@ -825,9 +728,6 @@ theorem pr_rank_le {Ω : Type} [Fintype Ω] (r : ℕ) (ε : ℝ≥0∞) (hRank :
   push Not at hσ
   exact hσ
 
-/-- **A session's unpaid windows with a store per pass**: when every pass's store is `view` at the prefix before the
-pass, a uniform store but for `δ` at each prefix, some window fails to pay for its correct receipts with probability at
-most `n·ε + n·P·(G·N/2^h + qtot/2^(8r) + δ)`: the rank tail once a window, and each pass's family bound and `δ`. -/
 theorem pr_unpaidOn_le {Ω : Type} [Fintype Ω] (A : SketchDeployedRun n P N m ρ h S L q ks G d)
     (view : SketchPrefix n P N m ρ h ks G d → Ω → SketchStore N m) (δ : ℝ≥0∞)
     (hKB : ResourceAccounting.UniformBut δ view) (r X qtot : ℕ) (ε : ℝ≥0∞) (hr32 : r ≤ 32)
@@ -877,9 +777,6 @@ theorem pr_unpaidOn_le {Ω : Type} [Fintype Ω] (A : SketchDeployedRun n P N m �
           simp only [Finset.sum_const, Finset.card_univ, Fintype.card_fin, nsmul_eq_mul]
           ring
 
-/-- **The samples are causal in any correct sets that read each window's earlier windows, signs and passes**, on any `ω`
-sampled before the session: both pooled-sample readings of `pr_samples_le_map`, for correct sets `cor` in place of one
-store's. -/
 theorem pr_samples_causal_le {Ω : Type} [Fintype Ω]
     (cor : Ω → (Fin n → SketchWindowCoins P N m ρ h ks G d) → Fin n → Finset (Fin P × Fin N))
     (hcor : ∀ o x x' w, (∀ v, v < w → x v = x' v) → (x w).1 = (x' w).1 → (x w).2.1 = (x' w).2.1 →
@@ -934,8 +831,6 @@ theorem pr_samples_causal_le {Ω : Type} [Fintype Ω]
     exact ENNReal.mul_div_mul_left _ _ hd' (ENNReal.natCast_ne_top d)
   · simp only [Nat.cast_mul, mul_assoc]
 
-/-- Session conservation in counts from the pooled samples and an unpaid bound `ε_u`, for causal correct sets `cor`
-and reads `rd`: `pr_paid_of_unpaid_map` with them in place of one store's. -/
 theorem pr_paid_of_unpaid_causal {Ω : Type} [Fintype Ω]
     (cor : Ω → (Fin n → SketchWindowCoins P N m ρ h ks G d) → Fin n → Finset (Fin P × Fin N))
     (rd : Ω → (Fin n → SketchWindowCoins P N m ρ h ks G d) → Fin n → ℕ)
@@ -969,7 +864,6 @@ theorem pr_paid_of_unpaid_causal {Ω : Type} [Fintype Ω]
     push Not at hD
     exact Or.inr ⟨w, hw.trans_le (Nat.mul_le_mul_right _ (hD.2 w))⟩
 
-/-- `pr_conservation_of_unpaid` for causal correct sets `cor` and reads `rd`. -/
 theorem pr_conservation_of_unpaid_causal {Ω : Type} [Fintype Ω]
     (cor : Ω → (Fin n → SketchWindowCoins P N m ρ h ks G d) → Fin n → Finset (Fin P × Fin N))
     (rd : Ω → (Fin n → SketchWindowCoins P N m ρ h ks G d) → Fin n → ℕ)
@@ -1016,7 +910,6 @@ theorem pr_conservation_of_unpaid_causal {Ω : Type} [Fintype Ω]
     · rw [show ((n : ℝ≥0∞) * P * N) = (n : ℝ≥0∞) * ((P * N : ℕ) : ℝ≥0∞) by push_cast; ring]
       exact Rate.Deployed.window_le dw n (P * N) (d * n) hn (by positivity) hdw
 
-/-- `pr_deployed_of_unpaid` for causal correct sets `cor` and reads `rd`: the samples' terms are at most `2·2^-40`. -/
 theorem pr_deployed_of_unpaid_causal {Ω : Type} [Fintype Ω]
     (cor : Ω → (Fin n → SketchWindowCoins P N 128 ρ 512 16 G 2773) → Fin n → Finset (Fin P × Fin N))
     (rd : Ω → (Fin n → SketchWindowCoins P N 128 ρ 512 16 G 2773) → Fin n → ℕ)
@@ -1047,9 +940,6 @@ namespace ResourceAccounting.Requirement
 
 variable {V : Type} [DecidableEq V] (W : Wiring V) (e : Execution V) (ℓ : Store.Placement V)
 
-/-- Over a window of at most `k` steps at each of which the store holds `W`'s credited blocks with at most `N` resident
-blocks and the plan covers `W`'s reads in at most `N` blocks, the live bits the audit credits and the bits read from
-complete blocks total at most `k·N·B` each. -/
 theorem cap_of_matches (s : Store) (plan : ℕ → Finset ℕ) (B N k : ℕ) (win : Window) (hwin : win.len ≤ k)
     (hm : ∀ t ∈ win.steps, StoreMatches W e ℓ s B t ∧ (s.resident t).card ≤ N ∧
       PlanMatches W e ℓ (plan t) B t ∧ (plan t).card ≤ N) :
@@ -1067,7 +957,6 @@ theorem cap_of_matches (s : Store) (plan : ℕ → Finset ℕ) (B N k : ℕ) (wi
       zero_add] at h1
     exact h1.trans (Nat.mul_le_mul_right B (hm t ht).2.2.2)
 
-/-- A count short of `c` times a requirement's held or read bits, each at most `Y`, is short of `c·Y`. -/
 theorem lt_of_cap {a H R Y : ℕ} {c : ℝ} (hH : H ≤ Y) (hR : R ≤ Y) (h : (a : ℝ) < c * H ∨ (a : ℝ) < c * R) :
     (a : ℝ) < c * Y := by
   have key : ∀ {X : ℕ}, X ≤ Y → (a : ℝ) < c * X → (a : ℝ) < c * Y := by

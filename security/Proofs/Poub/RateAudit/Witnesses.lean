@@ -5,21 +5,7 @@ public import Proofs.Poub.RateAudit.Interactive
 public import Proofs.Poub.RateAudit.Partial
 public import Proofs.Pous.Prob
 
-/-!
-# The rate audit's guarantees: each one's honest and nontrivial lemmas
-
-For `RateAudit`, `RateAuditWindows`, `RateAuditInteractiveRO`, `RateAuditInteractive` and `RateAuditPartial`, each at
-a store of one word of one bit (`N = b = 1`, two at `RateAuditInteractive`'s), a one-bit tag, no certified stream and
-one sampled word:
-
-* **The honest lemma** (`<guarantee>_honest`): the honest device (`Rate.Completeness.honest`; as an interactive device,
-  `Prover.toInteractive`; as a partial one, `Prover.toPartial`) is accepted by the audit's own check, within the compute
-  budget, with its footprint at the floor, with probability 1: the guarantee's event is not one no device passes.
-* **The nontrivial lemma** (`<guarantee>_nontrivial`): with the check replaced by `True`, a device that reads nothing
-  (`Rate.blank`) has its footprint short of the floor with probability 1, above the guarantee's error.
-
-Each lemma states that some device has its property and proves it of the named one.
--/
+/-! The honest and nontrivial lemmas of the rate audit's guarantees, at a store of one word of one bit. -/
 
 @[expose] public section
 
@@ -30,8 +16,6 @@ open scoped ENNReal
 
 variable {N b h ρ S L q : ℕ}
 
-/-- The device that reads nothing: no state, nothing in device memory or the side sources, and a chip that commits to
-all-`false` tags at once. -/
 def blank (N b h ρ S L q : ℕ) : Prover N b h ρ S L q where
   state _ := fun _ => false
   mem _ _ := false
@@ -51,15 +35,12 @@ theorem Prover.toInteractive_footprint (A : Prover N b h ρ S L q) (E : Store N 
     A.toInteractive.footprint E R O = A.footprint E R O :=
   congrArg Finset.card (Chip.toIChip_addrs _ _ _)
 
-/-- The honest device at one word of one bit, a one-bit tag and no stream: accepted, the store as its footprint, one
-tag as its compute. -/
 theorem honest_one (E : Store 1 1) (R : Bits 0) (O : Oracle 1 1 1 0) (I : Fin 1 → Fin 1) :
     (Completeness.honest 1 1 1 0).Accepts E R O I ∧ (Completeness.honest 1 1 1 0).footprint E R O = 1 * 1 ∧
       (Completeness.honest 1 1 1 0).compute 1 1 E R O = 1 * 1 := by
   obtain ⟨a, f, -, c⟩ := Completeness.honest_accepts (h := 1) 1 1 E R O I
   exact ⟨a, f, c⟩
 
-/-- `honest_one` as a partial device, at every price of a completion. -/
 theorem honest_one_partial (cost : ℕ → ℕ) (E : Store 1 1) (R : Bits 0) (O : Oracle 1 1 1 0) (I : Fin 1 → Fin 1) :
     (Completeness.honest 1 1 1 0).toPartial.Accepts E R O I ∧
       (Completeness.honest 1 1 1 0).toPartial.footprint E R O = 1 * 1 ∧
@@ -88,8 +69,6 @@ theorem pr_one {α : Type} [Fintype α] [Nonempty α] {P : α → Prop} (h : ∀
   rw [Finset.filter_true_of_mem fun x _ => h x, Finset.card_univ]
   exact ENNReal.div_self (by exact_mod_cast Fintype.card_ne_zero) (ENNReal.natCast_ne_top _)
 
-/-- The error of `RateAudit` (and of `RateAuditPartial`) at `N = 1`, `k = 1`, `s = 1`, `h = 1`, `q = 0`, `λ = 0` is
-`2^-1`. -/
 theorem error_one_lt :
     (((1 - 1 : ℕ) : ℝ≥0∞) / ((1 : ℕ) : ℝ≥0∞)) ^ 1 + ((1 : ℕ) : ℝ≥0∞) / 2 ^ 1 +
       ((Nat.choose 0 1 : ℕ) : ℝ≥0∞) / 2 ^ 0 < 1 := by
@@ -141,10 +120,8 @@ theorem RateAudit_nontrivial :
   rw [pr_one hev, not_le]
   exact error_one_lt
 
-/-- `RateAudit_honest`'s device as the device of one window. -/
 def honestDevices : Devices 1 1 1 1 0 0 0 1 1 := fun _ _ => Completeness.honest 1 1 1 0
 
-/-- `RateAudit_nontrivial`'s device as the device of one window. -/
 def blankDevices : Devices 1 1 1 1 0 0 0 0 1 := fun _ _ => blank 1 1 1 0 0 0 0
 
 /-- **`RateAuditWindows`'s honest lemma**: one window of `RateAudit_honest`'s device, at `m = 1`. -/

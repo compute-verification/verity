@@ -6,18 +6,7 @@ import Mathlib.Algebra.BigOperators.Ring.Finset
 import Mathlib.Tactic.Positivity.Finset
 import Proofs.Pouw.Prob
 
-/-!
-# The snapshot a PoUB session shows held
-
-`ResourceAccounting.Guarantees.Remote.Held` from its premises: at each outcome where the sketch bound and the live coins' bound
-hold (a union bound, `holdsAnd`), each credited pass's registered blocks are its wrong receipts, the blocks in node
-memory at its start, those on a chip then (at most `S`) and those that came in during the pass (`pass_le`). The passes
-are consecutive (`sum_passes`), so what came in during them came in over `[t_0, t_P) ⊆ [s₀, e]`, one interval: at most
-`s/E + β` a tick and one burst of each, `Br + Bd`, by rebuilds and disk reads, none over the links.
-
-`heldOverTime_of_links` reduces `HeldOverTime` to `HeldOverTimeLinks`, at links of rate 0, which is all Identity says.
-Both time-held forms are proved in `Proofs.Poub.RemoteHeld.OverTime`.
--/
+/-! The proof of `ResourceAccounting.Guarantees.Remote.Held`, the snapshot a PoUB session shows held. -/
 
 @[expose] public section
 
@@ -35,7 +24,6 @@ theorem holdsMono {δ : ℝ} {P Q : Ω → Prop} (h : ∀ ω, T.accepts ω → P
     T.Holds δ Q :=
   (pr_mono fun ω ⟨ha, hq⟩ => ⟨ha, fun hp => hq (h ω ha hp)⟩).trans hp
 
-/-- The union bound: two bounds hold together except with their errors summed. -/
 theorem holdsAnd {δ₁ δ₂ : ℝ} {P Q : Ω → Prop} (h₁ : T.Holds δ₁ P) (h₂ : T.Holds δ₂ Q) :
     T.Holds (δ₁ + δ₂) fun ω => P ω ∧ Q ω := by
   refine (pr_mono (P' := fun ω => (T.accepts ω ∧ ¬ P ω) ∨ (T.accepts ω ∧ ¬ Q ω)) ?_).trans
@@ -47,7 +35,6 @@ theorem holdsAnd {δ₁ δ₂ : ℝ} {P Q : Ω → Prop} (h₁ : T.Holds δ₁ P
 
 end Holds
 
-/-- A block present at `t ≥ u` was present at `u` or came in at some tick of `[u, t)`. -/
 theorem present_subset (ω : Ω) {u t : ℕ} (h : u ≤ t) :
     T.present ω t ⊆ T.present ω u ∪ (Ico u t).biUnion fun τ => T.present ω (τ + 1) \ T.present ω τ := by
   induction t, h using Nat.le_induction with
@@ -62,8 +49,6 @@ theorem present_subset (ω : Ω) {u t : ℕ} (h : u ≤ t) :
         exact mem_biUnion.2 ⟨τ, by simp only [mem_Ico] at hτ ⊢; omega, hj'⟩
     · exact mem_union_right _ (mem_biUnion.2 ⟨t, by simp only [mem_Ico]; omega, mem_sdiff.2 ⟨hj, hp⟩⟩)
 
-/-- One pass: its registered blocks are its wrong receipts, the blocks in node memory at its start, those on a chip
-then, and those that came in during it. -/
 theorem pass_le (ω : Ω) {S : ℕ} (hS : ∀ t, (T.chip ω t).card ≤ S) (p : ℕ)
     (hk : ∀ j ∈ T.correct ω p, ∃ t, T.tick ω p ≤ t ∧ t < T.tick ω (p + 1) ∧ j ∈ T.present ω t) :
     (T.plan ω p).card ≤ (T.plan ω p \ T.correct ω p).card + (T.mem ω (T.tick ω p)).card + S +
@@ -85,15 +70,12 @@ theorem pass_le (ω : Ω) {S : ℕ} (hS : ∀ t, (T.chip ω t).card ≤ S) (p : 
       (Nat.add_le_add_left (hS _) _)
   omega
 
-/-- Consecutive passes: the ticks of each, summed over the passes, are the ticks from the first's start to the last's
-end. -/
 theorem sum_passes (f : ℕ → ℕ) (t : ℕ → ℕ) (ht : Monotone t) (P : ℕ) :
     ∑ p ∈ range P, ∑ τ ∈ Ico (t p) (t (p + 1)), f τ = ∑ τ ∈ Ico (t 0) (t P), f τ := by
   induction P with
   | zero => simp
   | succ n ih => rw [sum_range_succ, ih, sum_Ico_consecutive _ (ht (Nat.zero_le n)) (ht (Nat.le_succ n))]
 
-/-- `Held` at one outcome. -/
 theorem held_of (ω : Ω) {S s₀ e : ℕ} {s E β Br Bd W : ℝ} (hE : 0 < E) (hs : 0 ≤ s) (hβ : 0 ≤ β)
     (hI : Identity T) (hsq : SquaringCeiling T s E Br) (hd : Disks T β Bd) (hS : ChipCeiling T S) (hr : Routed T)
     (hm : Monotone (T.tick ω)) (h0 : s₀ ≤ T.tick ω 0) (hP : T.tick ω T.passes ≤ e)
@@ -143,13 +125,10 @@ theorem Held : ResourceAccounting.Guarantees.Remote.Held := by
   obtain ⟨hm, h0, hP⟩ := hc ω ha
   exact held_of ω hE hs hβ hI hsq hd hS hr hm h0 hP h.1 h.2
 
-/-- Identity is the links' ceiling at rate 0 and burst 0. -/
 theorem links_of_identity (hI : Identity T) : Links T 0 0 := fun ω u v _ => by
   have h0 : over T.link ω u v = 0 := Finset.sum_eq_zero fun t _ => hI ω t
   rw [h0, Nat.cast_zero, zero_mul, add_zero]
 
-/-- **The time-held line under Identity is the link-charged one at links of rate 0 and burst 0**: `HeldOverTime`
-follows from `HeldOverTimeLinks`. -/
 theorem heldOverTime_of_links (h : ResourceAccounting.Guarantees.Remote.HeldOverTimeLinks) :
     ResourceAccounting.Guarantees.Remote.HeldOverTime := by
   intro Ω _ T K S s E β Br Bd W δs δc hE hs hβ hW hI hsq hd hS hr hp hcov hk hw

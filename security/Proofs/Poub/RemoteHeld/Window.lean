@@ -5,15 +5,7 @@ public import Proofs.Poub.RemoteHeld.OverTime
 import Mathlib.Algebra.BigOperators.Ring.Finset
 import Mathlib.Tactic.Positivity.Finset
 
-/-!
-# Held over time from any start in the first group's window
-
-`heldOverLinks_of` (`Proofs.Poub.RemoteHeld.OverTime`) bounds what a paced session held over its credited span
-`[e_0, s_C)`. Its argument bounds the absent ticks over `[s_0, s_C)`, so it bounds what was held over `[u, s_C)` for any
-`u` in `[s_0, e_0]`: `heldOverWindow_of`, the same argument with `u` for `e_0`, at one outcome and with the paced
-session's facts given there rather than through `Paced` and `Covers`. The memory line's stretches after the first start
-at their first group's coin `s_lo`, before their paced session's `e_lo` (`Properties.Poub.Line.LineHeld`).
--/
+/-! What a paced session held over time, from any start in the first group's window. -/
 
 @[expose] public section
 
@@ -23,8 +15,6 @@ open Finset ResourceAccounting.Remote.Held ResourceAccounting.Remote.Held.Assump
 
 variable {Ω : Type} {T : Trace Ω}
 
-/-- **Held over time from `u ∈ [s_0, e_0]`**: `heldOverLinks_of`'s bound over `[u, s_C)` at one outcome, from the
-paced session's facts there (`Paced`'s, but the ticks' order, and `Covers`'). -/
 theorem heldOverWindow_of [Fintype Ω] (K : Pace Ω) (ω : Ω) {S : ℕ} {s E β βl Br Bd Bl W : ℝ} (hE : 0 < E)
     (hs : 0 ≤ s) (hβ : 0 ≤ β) (hβl : 0 ≤ βl) (hl : Links T βl Bl) (hsq : SquaringCeiling T s E Br)
     (hd : Disks T β Bd) (hS : ChipCeiling T S) (hr : Routed T)
@@ -56,11 +46,9 @@ theorem heldOverWindow_of [Fintype Ω] (K : Pace Ω) (ω : Ω) {S : ℕ} {s E β
   have hse : ∀ g < C, rel (g + 1) ≤ en g := fun g hg => hre g hg.le
   have h01 : rel 0 ≤ en 0 := (hrel (Nat.zero_le 1)).trans (hre 0 (Nat.zero_le C))
   have h0C : rel 0 ≤ rel C := hrel (Nat.zero_le C)
-  -- each block's absence
   have hsum := sum_le_sum fun j (_ : j ∈ (univ : Finset (Fin N))) =>
     absent_le (fun t => j ∈ T.present ω t) C L rel en hrel hse hL
   rw [sum_add_distrib, sum_add_distrib, ← mul_sum] at hsum
-  -- the entries, summed over the blocks
   have hent : ∑ j : Fin N, (entries (fun t => j ∈ T.present ω t) (rel 0) (rel C + L)).card =
       ∑ τ ∈ Ico (rel 0) (rel C + L), T.entered ω τ := by
     simp only [entries, card_filter]
@@ -77,7 +65,6 @@ theorem heldOverWindow_of [Fintype Ω] (K : Pace Ω) (ω : Ω) {S : ℕ} {s E β
     have h := sum_le_sum fun τ (_ : τ ∈ Ico (rel 0) (rel C + L)) => hr ω τ
     simp only [sum_add_distrib] at h
     exact h
-  -- the groups whose windows a block is absent from throughout
   set nw : ℕ → ℕ := fun g =>
     (univ.filter fun j : Fin N => ¬ ∃ w ∈ Ico (rel g) (en g), j ∈ T.present ω w).card with hnw
   have hcost1 : ∑ j : Fin N, ∑ g ∈ range C,
@@ -89,7 +76,6 @@ theorem heldOverWindow_of [Fintype Ω] (K : Pace Ω) (ω : Ω) {S : ℕ} {s E β
   have hcost2 : ∑ j : Fin N, (if ∃ w ∈ Ico (rel C) (en C), j ∈ T.present ω w then 0 else L) = nw C * L := by
     rw [sum_ite, sum_const_zero, zero_add, sum_const, smul_eq_mul]
   rw [hcost1, hcost2, hent] at hsum
-  -- their wrong receipts
   have hnw_le : ∀ g ≤ C, ∀ p, K.first ω g ≤ p → p < K.first ω (g + 1) →
       nw g ≤ (T.plan ω p \ T.correct ω p).card := by
     intro g hg p hp1 hp2
@@ -112,7 +98,6 @@ theorem heldOverWindow_of [Fintype Ω] (K : Pace Ω) (ω : Ω) {S : ℕ} {s E β
       _ = ∑ p ∈ Ico (K.first ω 0) (K.first ω (C + 1)), (T.plan ω p \ T.correct ω p).card :=
           sum_groups _ _ fun g hg => (hfg g (by omega)).le
       _ ≤ T.incorrect ω := sum_le_sum_of_subset fun p hp => mem_range.2 ((mem_Ico.1 hp).2.trans_le hfP)
-  -- the knapsack's point
   have hrate : ∀ g, 0 ≤ K.rate ω g := fun g => by
     unfold Pace.rate
     split_ifs <;> positivity
@@ -138,7 +123,6 @@ theorem heldOverWindow_of [Fintype Ω] (K : Pace Ω) (ω : Ω) {S : ℕ} {s E β
         exact div_mul_cancel_mid (hsize g hgC.le)
       · rw [Pace.rate, ite_eq_right (lt_irrefl C)]
         exact div_mul_cancel_mid (hsize C le_rfl)
-  -- each tick: its blocks in node memory, on a chip and absent
   have hpt : ∀ t, N ≤ (T.mem ω t).card + S + (univ \ T.present ω t).card := by
     intro t
     have h1 : (univ : Finset (Fin N)).card ≤ (univ \ T.present ω t).card + (T.present ω t).card :=
@@ -159,7 +143,6 @@ theorem heldOverWindow_of [Fintype Ω] (K : Pace Ω) (ω : Ω) {S : ℕ} {s E β
     rw [sum_comm]
     refine sum_congr rfl fun t _ => ?_
     rw [show univ \ T.present ω t = univ.filter fun j => ¬ j ∈ T.present ω t by ext j; simp, card_filter]
-  -- the window the entries are counted over
   have hlen : ((rel C + L - rel 0 : ℕ) : ℝ) ≤ ((rel C - u : ℕ) : ℝ) + 2 * L := by
     have := hL 0 (Nat.zero_le C)
     have h : rel C + L - rel 0 ≤ (rel C - u) + 2 * L := by omega
@@ -168,7 +151,6 @@ theorem heldOverWindow_of [Fintype Ω] (K : Pace Ω) (ω : Ω) {S : ℕ} {s E β
   have hreb := hsq ω (rel 0) (rel C + L) h0L
   have hdisk := hd ω (rel 0) (rel C + L) h0L
   have hlink := hl ω (rel 0) (rel C + L) h0L
-  -- in the reals
   have hheldR : ((rel C - u : ℕ) : ℝ) * N ≤ T.heldOver ω u (rel C) + ((rel C - u : ℕ) : ℝ) * S +
       ((∑ t ∈ Ico u (rel C), (univ \ T.present ω t).card : ℕ) : ℝ) := by
     exact_mod_cast hheld

@@ -37,19 +37,7 @@ import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# The bandwidth audit v0 with relayed tags: the proof
-
-An accepted run with low ingress falls in one of three events, by `correct`, the blocks whose committed tag is right,
-and `relayed`, those among them whose contents the chip never queried:
-
-- fewer than `k` correct, and every sampled block among them: `((k − 1)/N)^s` (`AuditRO.card_sample`);
-- at least `m` relayed: `C(N, m)·2^c/2^(h·m)` (`card_relay_le`). For a fixed store, an oracle with `m` relayed blocks is
-  determined by those blocks, the side bits the chip read and the oracle off the `m` points, because replaying the
-  chip from its side bits recomputes the tags (`Chip.runSide_sideTrace`) without querying those points;
-- otherwise at least `k − m` queried: `AuditRO`'s compression at `k − m` blocks, for the device with its side sources
-  fixed at the oracle (`RelayDevice.atOracle`).
--/
+/-! The proof of the bandwidth audit v0 with relayed tags, over three events by correct and relayed blocks. -/
 
 @[expose] public section
 
@@ -62,7 +50,6 @@ variable {N b h S c G q : ℕ}
 
 namespace RelayDevice
 
-/-- The device at one oracle: a `Device` whose side sources hold what the relay device's hold for `O`. -/
 def atOracle (A : RelayDevice N b h S c G q) (O : Oracle N b h) : Device N b h S c G q where
   state := A.state
   mem := A.mem
@@ -70,11 +57,9 @@ def atOracle (A : RelayDevice N b h S c G q) (O : Oracle N b h) : Device N b h S
   chip := A.chip
   bounded := A.bounded
 
-/-- The blocks whose committed tag is the oracle's. -/
 def correct (A : RelayDevice N b h S c G q) (E : Store N b) (O : Oracle N b h) : Finset (Fin N) :=
   Finset.univ.filter (fun j => A.tags E O j = O (j, E j))
 
-/-- The blocks with a correct tag whose contents the chip never queried the oracle at. -/
 def relayed (A : RelayDevice N b h S c G q) (E : Store N b) (O : Oracle N b h) : Finset (Fin N) :=
   A.correct E O \ queried (A.atOracle O) E O
 
@@ -204,7 +189,7 @@ theorem AuditRelay : Bandwidth.Guarantees.AuditRelay := by
     exact bot_le
   refine (pr_mono hsplit).trans ?_
   refine (pr_or_le _ _).trans (add_le_add ((pr_or_le _ _).trans (add_le_add ?_ ?_)) ?_)
-  · -- the sample misses the blocks without a correct tag
+  ·
     have hc := pr_le_of_card (fun x : Store N b × Oracle N b h × (Fin s → Fin N) =>
         (A.correct x.1 x.2.1).card < k ∧ ∀ i, x.2.2 i ∈ A.correct x.1 x.2.1) (N ^ s) ((k - 1) ^ s) hN (by
       rw [hΩ]
@@ -218,7 +203,7 @@ theorem AuditRelay : Bandwidth.Guarantees.AuditRelay := by
       · simp [hk])
     refine hc.trans (le_of_eq ?_)
     rw [Nat.cast_pow, Nat.cast_pow, div_eq_mul_inv, div_eq_mul_inv, mul_pow, ENNReal.inv_pow]
-  · -- relayed tags
+  ·
     have hc := pr_le_of_card (fun x : Store N b × Oracle N b h × (Fin s → Fin N) =>
         m ≤ (A.relayed x.1 x.2.1).card) (2 ^ (h * m)) (N.choose m * 2 ^ c) (by positivity) (by
       rw [hΩ]
@@ -230,7 +215,7 @@ theorem AuditRelay : Bandwidth.Guarantees.AuditRelay := by
     refine hc.trans (le_of_eq ?_)
     push_cast
     rfl
-  · -- compression at `k − m` blocks
+  ·
     refine (pr_le_of_card _ (2 ^ lam) (q.choose (k - m)) (by positivity) (by
       rw [hΩ]
       refine (card_filter_prod_le' _ _ (q.choose (k - m) * Fintype.card (Store N b)) (fun y => ?_)).trans

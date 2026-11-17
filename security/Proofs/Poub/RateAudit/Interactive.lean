@@ -4,26 +4,8 @@ public import Mathlib
 public import Proofs.Registration.Device
 public import Proofs.Poub.RateAudit.Relay
 
-/-!
-# The rate audit with interactive side sources: the proof
-
-An interactive device is a relay device (`InteractiveProver.toRelay`), as in the bandwidth audit
-(`Proofs/Poub/Bandwidth/Interactive.lean`). Its chip, translated (`IChip.toChip`), drops its sends, and where it
-would read side address `a` having sent `v`, it reads the one address `addr v a`; the relay device's side source answers
-there what the interactive source answers to `v` at `a` (`InteractiveProver.relaySide`), for the store, the stream and
-the oracle. In every world the translation keeps the run, the ingress, the footprint, the link bits, the rebuilds and
-the queries (`IChip.toChip_run` and the five after it), so the device's tags, footprint, compute and bounds are the
-relay device's. The bounds are then `RelayDevice.audit`'s, `RateAudit`'s, when the answers ignore the oracle
-(`RateAuditInteractiveRO`), and `RelayDevice.auditRelay`'s otherwise (`RateAuditInteractive`).
-
-What the sends carry never enters the bounds, because the compression behind both encodes the bits the chip read, not
-what its sources hold: a source addressed by everything sent may be as large as it likes.
-
-The class is not vacuous: a `Prover` is an interactive prover that never sends (`Prover.toInteractive`), with the same
-tags, ingress, footprint and compute, so every run that realizes `RateAudit`'s game realizes this one
-(`RealizesRate.toInteractive`), with side sources that ignore the oracle; `Proofs/ResourceAccounting/Sanity.lean` applies it to
-its honest rate run.
--/
+/-! The proof of the rate audit with interactive side sources, by translating an interactive device to a relay
+device. -/
 
 @[expose] public section
 
@@ -36,10 +18,8 @@ namespace IChip
 
 variable {N b h ρ : ℕ} {α : Type}
 
-/-- A side read at address `a` after sending `v`, as one address. -/
 def addr (v : List Bool) (a : ℕ) : ℕ := Encodable.encode (v, a)
 
-/-- The interactive chip as a chip: a side read at `a` after sending `v` reads `addr v a`, and sends are dropped. -/
 def toChip : List Bool → IChip N b h ρ α → Chip N b h ρ α
   | _, done a => Chip.done a
   | v, tag x k => Chip.tag x fun y => (k y).toChip v
@@ -49,8 +29,6 @@ def toChip : List Bool → IChip N b h ρ α → Chip N b h ρ α
   | v, rebuild j k => Chip.rebuild j fun x => (k x).toChip v
   | v, send β p => p.toChip (β :: v)
 
-/-- The interactive world a chip's world is: a side read at `a` after sending `v` returns the side source at
-`addr v a`. -/
 def lift (w : World N b h ρ) : IWorld N b h ρ := ⟨w.oracle, w.mem, fun v a => w.side (addr v a), w.stream, w.store⟩
 
 theorem toChip_run (w : World N b h ρ) (p : IChip N b h ρ α) (v : List Bool) :
@@ -125,15 +103,11 @@ namespace InteractiveProver
 
 variable {N b h ρ S L q : ℕ}
 
-/-- The relay device's side source: at `addr v a`, the answer to `v` at `a`; nothing at an address that is no such
-pair. -/
 def relaySide (A : InteractiveProver N b h ρ S L q) (E : Store N b) (R : Bits ρ) (O : Oracle N b h ρ) (n : ℕ) : Bool :=
   match (Encodable.decode n : Option (List Bool × ℕ)) with
   | some p => A.side E R O p.1 p.2
   | none => false
 
-/-- **An interactive device as a relay device**: the same state and device memory, the side source `relaySide`, and
-the chip translated. Its bounds are the interactive device's, in the interactive world each chip world is. -/
 def toRelay (A : InteractiveProver N b h ρ S L q) : RelayDevice N b h ρ S L q where
   state := A.state
   mem := A.mem
@@ -172,7 +146,6 @@ theorem toRelay_accepts {s : ℕ} (A : InteractiveProver N b h ρ S L q) (E : St
     (O : Oracle N b h ρ) (I : Fin s → Fin N) : A.toRelay.Accepts E R O I ↔ A.Accepts E R O I := by
   simp only [RelayDevice.Accepts, Accepts, toRelay_tags]
 
-/-- The footprint is at most the ingress: each address is read at least once. -/
 theorem footprint_le_ingress (A : InteractiveProver N b h ρ S L q) (E : Store N b) (R : Bits ρ)
     (O : Oracle N b h ρ) : A.footprint E R O ≤ A.ingress E R O := by
   rw [← toRelay_footprint]
@@ -180,7 +153,6 @@ theorem footprint_le_ingress (A : InteractiveProver N b h ρ S L q) (E : Store N
   rw [IChip.toChip_ingressBits, lift_world] at h
   exact h
 
-/-- When the answers ignore the oracle, so does the relay device's side source. -/
 theorem toRelay_side (A : InteractiveProver N b h ρ S L q) (hA : ∀ E R O O', A.side E R O = A.side E R O') :
     ∀ E R O O', A.toRelay.side E R O = A.toRelay.side E R O' := by
   intro E R O O'
@@ -189,9 +161,6 @@ theorem toRelay_side (A : InteractiveProver N b h ρ S L q) (hA : ∀ E R O O', 
 
 end InteractiveProver
 
-/-! ## A device as an interactive device -/
-
-/-- The chip world an interactive world is after the chip has sent `v`. -/
 def IWorld.atSent {N b h ρ : ℕ} (w : IWorld N b h ρ) (v : List Bool) : World N b h ρ :=
   ⟨w.oracle, w.mem, w.side v, w.stream, w.store⟩
 
@@ -199,7 +168,6 @@ namespace Chip
 
 variable {N b h ρ : ℕ} {α : Type}
 
-/-- A chip as an interactive chip that never sends. -/
 def toIChip : Chip N b h ρ α → IChip N b h ρ α
   | done a => IChip.done a
   | tag x k => IChip.tag x fun y => (k y).toIChip
@@ -274,7 +242,6 @@ namespace Prover
 
 variable {N b h ρ S L q : ℕ}
 
-/-- A device as an interactive device that never sends: its side sources answer every read as the device's do. -/
 def toInteractive (A : Prover N b h ρ S L q) : InteractiveProver N b h ρ S L q where
   state := A.state
   mem := A.mem
@@ -309,8 +276,6 @@ namespace ResourceAccounting
 
 open ResourceAccounting.Rate
 
-/-- A run that realizes `RateAudit`'s game realizes the game with interactive side sources, by devices that never send
-and whose side sources ignore the oracle. -/
 def RealizesRate.toInteractive {p : Price} {cTag cEnc N b h ρ s : ℕ} {ι : Type} [Fintype ι] {d : Device ι}
     {α ΩW ΩS : Type} [Fintype α] [DecidableEq α] {r : Run d α ΩW (RateCoins N b h ρ s) ΩS}
     (real : RealizesRate p cTag cEnc r) : RealizesRateInteractive p cTag cEnc r where
