@@ -6,9 +6,9 @@ public import Properties.InferenceOnly.Threads
 /-!
 # What a verdict of the description-sized check carries
 
-`InferenceOnlyCheck.Desc.evaluate` is the policy check `inference-only-check` runs (`InferenceOnlyCheck.Desc.check` writes its refusals, and the check
-of record, `InferenceOnlyCheck.Theta.evaluate`, returns its verdict once θ's provenance is checked). `DescAgrees`
-(`Properties.InferenceOnly.Desc`) makes its verdict the one `InferenceOnlyCheck.evaluate` gives on every expansion of the instance gate by gate
+`InferenceOnlyVerifier.Desc.evaluate` is the policy check `inference-only-verifier` runs (`InferenceOnlyVerifier.Desc.check` writes its refusals, and the check
+of record, `InferenceOnlyVerifier.Theta.evaluate`, returns its verdict once θ's provenance is checked). `DescAgrees`
+(`Properties.InferenceOnly.Desc`) makes its verdict the one `InferenceOnlyVerifier.evaluate` gives on every expansion of the instance gate by gate
 (`Expands`), of which there is one. The statements here restate the verdict's properties (`Properties.InferenceOnly`,
 `Properties.InferenceOnly.Threads`) of `Desc.evaluate`: on every instance with a verdict, the instance has an expansion, and on each
 the verdict has the property (`OnExpansions`).
@@ -27,7 +27,7 @@ Each is proved from `DescAgrees` (`SecurityProofs.DescAgrees`, `Proofs.Propertie
 
 @[expose] public section
 
-namespace InferenceOnlyCheck.Properties
+namespace InferenceOnlyVerifier.Properties
 
 open Lean (Json)
 
@@ -36,19 +36,19 @@ def OnExpansions (Q : Json → Json → Prop) (j out : Json) : Prop :=
   (∃ j', Expands j j') ∧ ∀ j', Expands j j' → Q j' out
 
 /-- **The description-sized check's verdict is the definition's.** On every instance with a verdict of
-`InferenceOnlyCheck.Desc.evaluate`, the verdict is `Reported` on every expansion. -/
+`InferenceOnlyVerifier.Desc.evaluate`, the verdict is `Reported` on every expansion. -/
 def DescReports : Prop :=
   ∀ (j out : Json), Desc.evaluate j = .ok out → OnExpansions Reported j out
 
 /-- **A verdict of compliance of the description-sized check witnesses the policy.** On every instance with a verdict of
-`InferenceOnlyCheck.Desc.evaluate`, the verdict is `Witnessed` on every expansion: the registered circuit complies, and when the
+`InferenceOnlyVerifier.Desc.evaluate`, the verdict is `Witnessed` on every expansion: the registered circuit complies, and when the
 owners are its inference blocks `d.𝓘`, the registered compiler's, each meets both bounds. -/
 def DescWitnesses : Prop :=
   ∀ (j out : Json), Desc.evaluate j = .ok out → OnExpansions Witnessed j out
 
 /-- **A verdict of compliance of the description-sized check throttles every threaded reference training circuit the
 declaration contains, if its weights are incompressible and its θ registered** (`WeightsIncompressible`,
-`ThetaRegistered`). On every instance with a verdict of `InferenceOnlyCheck.Desc.evaluate`, the verdict is `Throttled` on every
+`ThetaRegistered`). On every instance with a verdict of `InferenceOnlyVerifier.Desc.evaluate`, the verdict is `Throttled` on every
 expansion. -/
 def DescThrottles : Prop :=
   ∀ (j out : Json), Desc.evaluate j = .ok out → OnExpansions Throttled j out
@@ -56,18 +56,18 @@ def DescThrottles : Prop :=
 /-- **A verdict of compliance of the description-sized check puts counted multiplications off the books in dark
 gates**, for every threaded reference training circuit the declaration contains partly, if its weights are
 incompressible and its θ registered (`WeightsIncompressible`, `ThetaRegistered`). On every instance with a verdict of
-`InferenceOnlyCheck.Desc.evaluate`, the verdict is `ThrottledDark` on every expansion. -/
+`InferenceOnlyVerifier.Desc.evaluate`, the verdict is `ThrottledDark` on every expansion. -/
 def DescThrottlesDark : Prop :=
   ∀ (j out : Json), Desc.evaluate j = .ok out → OnExpansions ThrottledDark j out
 
 /-- **`DescThrottles` per parameter slot** (`WeightsIncompressibleSlots`, `ThetaRegistered`): on every instance with
-a verdict of `InferenceOnlyCheck.Desc.evaluate`, the verdict is `ThrottledSlots` on every expansion. -/
+a verdict of `InferenceOnlyVerifier.Desc.evaluate`, the verdict is `ThrottledSlots` on every expansion. -/
 def DescThrottlesSlots : Prop :=
   ∀ (j out : Json), Desc.evaluate j = .ok out → OnExpansions ThrottledSlots j out
 
 /-- **`DescThrottlesDark` per parameter slot** (`WeightsIncompressibleSlots`, `ThetaRegistered`): on every instance
-with a verdict of `InferenceOnlyCheck.Desc.evaluate`, the verdict is `ThrottledDarkSlots` on every expansion. -/
+with a verdict of `InferenceOnlyVerifier.Desc.evaluate`, the verdict is `ThrottledDarkSlots` on every expansion. -/
 def DescThrottlesDarkSlots : Prop :=
   ∀ (j out : Json), Desc.evaluate j = .ok out → OnExpansions ThrottledDarkSlots j out
 
-end InferenceOnlyCheck.Properties
+end InferenceOnlyVerifier.Properties

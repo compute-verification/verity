@@ -1,6 +1,6 @@
 module
 
-public import InferenceOnlyCheck.Theta
+public import InferenceOnlyVerifier.Theta
 public import Properties.InferenceOnly.Opening
 public import Properties.InferenceOnly.RecordForm
 public import Properties.Flock.Circuit.UnitInst
@@ -15,17 +15,17 @@ public import Flock.ReadNet.Template
 `PinnedReadAt`, a pinned read as a check holds it and its circuit file lays it out, at a verdict bit; `PinnedRead`, at
 the verdict bit 1; `ReturnsRow`, that the unit returns its table's row, the fill row, or a SHA-512 collision;
 `PinnedReadBinds`, that a pinned read returns its row; `PinnedReadNontrivial`, that at the verdict bit 0 some pinned
-read does not; `PinnedReadHonest`, that the check's own form (`InferenceOnlyCheck.Record.SecurityProofs.form`) has a pinned
+read does not; `PinnedReadHonest`, that the check's own form (`InferenceOnlyVerifier.Record.SecurityProofs.form`) has a pinned
 read; and `OpenedRowReturned`, that an opening's declared row is the row its reader returns. The proofs are
 `Proofs.Properties.InferenceOnly.Lemmas.Opening`'s.
 
 A pinned read is a read by a pinned reader: the pin is the closure digest of the reader's Definition
-(`InferenceOnlyCheck.Record.pinOf`), and pins no table and no root.
+(`InferenceOnlyVerifier.Record.pinOf`), and pins no table and no root.
 -/
 
 @[expose] public section
 
-namespace InferenceOnlyCheck.Properties.Record
+namespace InferenceOnlyVerifier.Properties.Record
 
 open Lean (Json)
 open Flock.Program (Prog Defn)
@@ -144,7 +144,7 @@ def PinnedReadNontrivial : Prop :=
         Hash.EmbeddingRead.h q.count q.words (q.tokOf ((Flock.Bridge.partsOf (.tmpl ct) hB n).localEval Yc u))
           (table (q.tokOf ((Flock.Bridge.partsOf (.tmpl ct) hB n).localEval Yc u)))
 
-/-- **An honest pinned read**: of the check's own form (`InferenceOnlyCheck.Record.SecurityProofs.form`), some instance, record,
+/-- **An honest pinned read**: of the check's own form (`InferenceOnlyVerifier.Record.SecurityProofs.form`), some instance, record,
 circuit file and transcript meet `PinnedRead`, so `PinnedReadBinds` is not vacuous of it. So that it does not hold
 emptily, by a table of one constant row: the check accepts the record (`Accepts`); the table has two different rows
 within its count; and the transcript chooses the index, which no index gate's registered constant fixes and which
@@ -152,16 +152,16 @@ lies within the table's count. Not proved: that the record reads with its openin
 check's form, and that the read's check accepts the template and the file parses are runs of code on a file, which
 the kernel does not evaluate. -/
 def PinnedReadHonest : Prop :=
-  ∃ (c : InferenceOnlyCheck.Record.SecurityProofs.form.Case) (j tr : Json) (P : Prog) (r : Row) (name p pin : String) (k : ℕ)
+  ∃ (c : InferenceOnlyVerifier.Record.SecurityProofs.form.Case) (j tr : Json) (P : Prog) (r : Row) (name p pin : String) (k : ℕ)
     (dfn : Defn) (ro : Roles) (out : String) (tags : Flock.Tags) (bytes : ByteArray)
     (tables : List (String × ByteArray)) (ct : Flock.Circuit) (tu : Flock.TmplUnit)
     (hB : FlockSoundness.Built (Flock.Desc.tmpl ct).unroll.unit) (n : ℕ)
     (consts : Fin (Flock.Bridge.circuitOf (.tmpl ct) hB n).N → Option Bool) (u : Fin n)
     (q : ReadUnit.Ports (Flock.Bridge.circuitOf (.tmpl ct) hB n))
     (Yc : (Flock.Bridge.circuitOf (.tmpl ct) hB n).Trace) (table : ℕ → Hash.RowLeaf.Opening),
-    PinnedRead InferenceOnlyCheck.Record.SecurityProofs.form c j tr P r name p pin k dfn ro out tags bytes tables ct tu hB n
+    PinnedRead InferenceOnlyVerifier.Record.SecurityProofs.form c j tr P r name p pin k dfn ro out tags bytes tables ct tu hB n
       consts u q Yc table ∧
-    Accepts InferenceOnlyCheck.Record.SecurityProofs.form j tr c ∧
+    Accepts InferenceOnlyVerifier.Record.SecurityProofs.form j tr c ∧
     (∃ i i', i < q.count ∧ i' < q.count ∧ (table i).row ≠ (table i').row) ∧
     (∀ b, consts (q.tok b) = none) ∧
     q.tokOf ((Flock.Bridge.partsOf (.tmpl ct) hB n).localEval Yc u) < q.count
@@ -173,14 +173,14 @@ The check refuses a declared row unless its reader's template has six input rows
 then the verdict (`RecordText.inputsOf`), and `readRows` names the first of exactly two outputs. Not proved: it reads
 the check's `read` through to that refusal. -/
 def OpenedRowReturned : Prop :=
-  ∀ (j tr : Json) (c : InferenceOnlyCheck.Record.SecurityProofs.form.Case) (P : Prog) (r : Row) (name p pin : String) (k : ℕ)
+  ∀ (j tr : Json) (c : InferenceOnlyVerifier.Record.SecurityProofs.form.Case) (P : Prog) (r : Row) (name p pin : String) (k : ℕ)
     (dfn : Defn) (ro : Roles) (o out : String) (count words : ℕ),
-    Accepts InferenceOnlyCheck.Record.SecurityProofs.form j tr c →
-    Flock.Program.decode (InferenceOnlyCheck.Record.SecurityProofs.form.inst c).program.toUTF8 = .ok P →
-    InferenceOnlyCheck.Record.SecurityProofs.form.held c r = some (.opened name p pin) →
+    Accepts InferenceOnlyVerifier.Record.SecurityProofs.form j tr c →
+    Flock.Program.decode (InferenceOnlyVerifier.Record.SecurityProofs.form.inst c).program.toUTF8 = .ok P →
+    InferenceOnlyVerifier.Record.SecurityProofs.form.held c r = some (.opened name p pin) →
     P.index[r.tid]? = some k → P.defs[k]? = some dfn →
-    InferenceOnlyCheck.Record.SecurityProofs.form.layout dfn = some ro →
+    InferenceOnlyVerifier.Record.SecurityProofs.form.layout dfn = some ro →
     readRows dfn ro out count words = true →
-    InferenceOnlyCheck.Record.SecurityProofs.form.openedRow c r = some o → o = out
+    InferenceOnlyVerifier.Record.SecurityProofs.form.openedRow c r = some o → o = out
 
-end InferenceOnlyCheck.Properties.Record
+end InferenceOnlyVerifier.Properties.Record
