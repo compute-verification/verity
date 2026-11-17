@@ -3,7 +3,7 @@
 
 [[metric]]
 id = "benchmarks/prover-gpus-per-serving-gpu"
-title = "Prover GPUs per serving GPU"
+title = "Modeled GLM provers per serving GPU"
 owner = "benchmarks"
 unit = "prover GPUs a serving GPU"
 axis = "GPUs proving for each GPU serving GLM-5.3, under SPOT at its chosen sampling plan."
@@ -14,7 +14,7 @@ goal = "benchmarks/proof-system-performance"
 
 [[metric]]
 id = "benchmarks/prover-gpus-per-serving-gpu-at-record"
-title = "Prover GPUs per serving GPU, modeled"
+title = "Modeled GLM provers at exfiltration's design"
 owner = "benchmarks"
 unit = "prover GPUs a serving GPU"
 axis = "GPUs proving for each GPU serving GLM-5.3, modeled at the design the exfiltration capacity assumes."

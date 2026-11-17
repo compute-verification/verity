@@ -194,7 +194,9 @@ the `command` of a metric whose newest value is older than its `every` as a `res
 docstring lists, and a metric whose command's script is under `infra/control/` is a loop's, which the loop sends. A
 metric's keys:
 
-- `id`: `OWNER/NAME`, under its owner's prefix.
+- `id`: `OWNER/NAME`, under its owner's prefix. A metric's line holds one quantity: when its meaning changes (a
+  denominator, a ceiling), it keeps its `id`, and the runs of the old quantity are labelled `superseded_by` the first
+  run from `main` that writes the new one.
 - `title`: the number's headline on the tab, three to six plain words with no digit or backtick.
 - `owner`: a handle in the registry.
 - `unit`: the unit its value is in, at most three words (`hours`, `GB`), a rate's two sides, either side of " a ",
