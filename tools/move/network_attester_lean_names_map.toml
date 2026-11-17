@@ -1,0 +1,154 @@
+# The certifier map's Lean names: each compound name a `.lean` file declares or reads that the non-Lean maps keep,
+# renamed in Lean and in every other file that spells it, so both sides move in one commit. A domain tag's value
+# (`.../vN`) stays. lean_names.tsv lists every name, and `named` there what this map leaves to lean.
+
+[words]
+"transferBlocksAcceptMeans_honest_certifier" = "transferBlocksAcceptMeans_honest_attester"
+"CERTIFIER_INGRESS_TIE_STATEMENT" = "ATTESTER_INGRESS_TIE_STATEMENT"
+"CERTIFIER_TRANSFER_REGISTRATION" = "ATTESTER_TRANSFER_REGISTRATION"
+"CERTIFIER_INGRESS_TIE_VERDICT" = "ATTESTER_INGRESS_TIE_VERDICT"
+"CERTIFIER_INGRESS_TIE_SPEC" = "ATTESTER_INGRESS_TIE_SPEC"
+"CERTIFIER_NETWORK_VERDICT" = "ATTESTER_NETWORK_VERDICT"
+"CERTIFIER_PERIOD_SAMPLING" = "ATTESTER_PERIOD_SAMPLING"
+"certifierColl_of_disagree" = "attesterColl_of_disagree"
+"CERTIFIER_ADVISED_ADVICE" = "ATTESTER_ADVISED_ADVICE"
+"Pr_certifierColl_le_Btap" = "Pr_attesterColl_le_Btap"
+"CERTIFIER_PARAMETERS_V1" = "ATTESTER_PARAMETERS_V1"
+"CERTIFIER_PARAMETERS_V3" = "ATTESTER_PARAMETERS_V3"
+"CERTIFIER_RECORD_SHA512" = "ATTESTER_RECORD_SHA512"
+"CERTIFIER_SPAN_PROTOCOL" = "ATTESTER_SPAN_PROTOCOL"
+"CERTIFIER_CELLS_DOMAIN" = "ATTESTER_CELLS_DOMAIN"
+"CERTIFIER_CERTIFICATES" = "ATTESTER_CERTIFICATES"
+"CERTIFIER_REGISTRATION" = "ATTESTER_REGISTRATION"
+"CERTIFIER_SERVICE_SPEC" = "ATTESTER_SERVICE_SPEC"
+"CERTIFIER_SERVED_ROWS" = "ATTESTER_SERVED_ROWS"
+"CERTIFIER_OUT_RECORD" = "ATTESTER_OUT_RECORD"
+"CERTIFIER_ROW_SHA512" = "ATTESTER_ROW_SHA512"
+"CERTIFIER_SCAN_STATE" = "ATTESTER_SCAN_STATE"
+"CERTIFIER_RECORD_V2" = "ATTESTER_RECORD_V2"
+"CERTIFIER_STATEMENT" = "ATTESTER_STATEMENT"
+"certifier_data_read" = "attester_data_read"
+"CERTIFIER_PAIR_ENC" = "ATTESTER_PAIR_ENC"
+"CERTIFIER_PAIR_MAC" = "ATTESTER_PAIR_MAC"
+"CERTIFIER_PROTOCOL" = "ATTESTER_PROTOCOL"
+"CERTIFIER_TRANSFER" = "ATTESTER_TRANSFER"
+"CERTIFIER_RECORDS" = "ATTESTER_RECORDS"
+"CERTIFIER_SESSION" = "ATTESTER_SESSION"
+"CERTIFIER_VERDICT" = "ATTESTER_VERDICT"
+"CERTIFIER_BLOCKS" = "ATTESTER_BLOCKS"
+"CERTIFIER_PERIOD" = "ATTESTER_PERIOD"
+"CERTIFIER_WIRING" = "ATTESTER_WIRING"
+"certifierEntries" = "attesterEntries"
+"CERTIFIER_CELLS" = "ATTESTER_CELLS"
+"CERTIFIER_CLOCK" = "ATTESTER_CLOCK"
+"CERTIFIER_EMPTY" = "ATTESTER_EMPTY"
+"CERTIFIER_FRAME" = "ATTESTER_FRAME"
+"CERTIFIER_START" = "ATTESTER_START"
+"certifier_cells" = "attester_cells"
+"CERTIFIER_MARK" = "ATTESTER_MARK"
+"CERTIFIER_NODE" = "ATTESTER_NODE"
+"CERTIFIER_SPAN" = "ATTESTER_SPAN"
+"certifierLinks" = "attesterLinks"
+"CERTIFIER_OUT" = "ATTESTER_OUT"
+"certifierLink" = "attesterLink"
+"certifiersOf" = "attestersOf"
+
+[keep]
+patterns = [
+    "[\\w.-]+(?:/[\\w.-]+)*/v\\d+(?:\\.\\d+)*\\b",
+    "(?<!\\w)(?:rLeakCertifierChecked_of_rLeakCertifier|rLeakCertifier_of_rLeakCertifierChecked|test_network_certifier_registered|witnessCertifier_jitter_varies|witnessCertifier_assumptions|test_network_certifier_rows|CERTIFIER_SCAN_OK_ROW_SALT|rLeakCertifierChecked_of|freeL_certifierRun_miss|network_certifier_serve|network_certifier_rows|test_network_certifier|ImportWithinCertifier|RLeakCertifierChecked|CertifierSeesImports|certifierCode_length|certifierLane_length|certifier_cells_read|HelpWithinCertifier|CertifierRegisters|certifierEntriesOf|certifierLog_valid|CertifierSchedule|certifierCode_fst|certifierLane_fst|certifier_program|network_certifier|certifierCode_eq|certifierLane_eq|certifierVal_mem|witnessCertifier|CertifierDevice|CertifierSigned|RLeakCertifier|CertifierColl|certifierCode|certifierLane|certifierLog|certifierRun|certifierVal|aCertifier|iCertifier|rCertifier|Certifier)(?!\\w)",
+]
+
+[rewrite]
+exclude = [
+    "**/*.c",
+    "**/*.cc",
+    "**/*.cpp",
+    "**/*.cu",
+    "**/*.cuh",
+    "**/*.h",
+    "**/*.hpp",
+    "**/*.lock",
+    "**/*vectors*.json",
+    "**/*vectors*.txt.gz",
+    "**/CHANGELOG.md",
+    "**/TRUSTED.sha256",
+    "**/a5_network_attester.py",
+    "**/a8.py",
+    "**/fixtures/**",
+    "**/kernels/**",
+    "**/lake-manifest.json",
+    "**/lakefile.lean",
+    "**/lakefile.toml",
+    "**/lean-audit.json",
+    "**/prove_bundle.py",
+    "**/replay.py",
+    "*.patch",
+    "GLOSSARY.md",
+    "adapters/torch/verity_torch/pouw/**",
+    "adapters/vllm/verity_vllm/acquire/*_src/**",
+    "adapters/vllm/verity_vllm/definitions/registry/**",
+    "applications/**",
+    "archive/**",
+    "benchmarks/exfiltration/**",
+    "benchmarks/harness/verity_bench/exfiltration*.py",
+    "benchmarks/poub_session/auditor_line.py",
+    "benchmarks/property_redteam/squaring.py",
+    "benchmarks/slowdown/README.md",
+    "benchmarks/slowdown/data/envelopes.toml",
+    "benchmarks/slowdown/data/exclusion.toml",
+    "benchmarks/slowdown/data/families.toml",
+    "benchmarks/slowdown/data/hardware.toml",
+    "benchmarks/slowdown/data/premises.toml",
+    "benchmarks/slowdown/data/reference.toml",
+    "benchmarks/slowdown/periods.py",
+    "benchmarks/slowdown/run.py",
+    "benchmarks/slowdown/slowdown/analysis.py",
+    "benchmarks/slowdown/slowdown/classes.py",
+    "benchmarks/slowdown/slowdown/envelopes.py",
+    "benchmarks/slowdown/slowdown/hardware.py",
+    "benchmarks/slowdown/slowdown/operating.py",
+    "benchmarks/slowdown/slowdown/profile.py",
+    "benchmarks/slowdown/slowdown/scenario.py",
+    "benchmarks/slowdown/slowdown/theorem.py",
+    "benchmarks/spot_figures/cards/**",
+    "demos/**",
+    "fixtures/**",
+    "security/Definitions/Slowdown/Assumptions/Remote.lean",
+    "security/Definitions/Slowdown/Assumptions/Slowdown.lean",
+    "security/Definitions/Slowdown/Capability/Consumers.lean",
+    "security/Definitions/Slowdown/Capability/README.md",
+    "security/Definitions/Slowdown/Cover.lean",
+    "security/Definitions/Slowdown/Guarantees/Capability/Dependency.lean",
+    "security/Definitions/Slowdown/Guarantees/CoverTraining.lean",
+    "security/Definitions/Slowdown/Guarantees/Remote.lean",
+    "security/Definitions/Slowdown/Guarantees/RemoteMonitoringPeriod.lean",
+    "security/Definitions/Slowdown/Guarantees/ServingBlocks.lean",
+    "security/Definitions/Slowdown/Guarantees/ServingBlocks/Witnesses.lean",
+    "security/Definitions/Slowdown/Guarantees/Slowdown.lean",
+    "security/Definitions/Slowdown/Guarantees/Witnesses.lean",
+    "security/Definitions/Slowdown/Remote.lean",
+    "security/Definitions/Slowdown/ServingBlocks.lean",
+    "security/Definitions/Slowdown/ServingBlocks/Instances.lean",
+    "security/Definitions/Slowdown/Slowdown.lean",
+    "security/Definitions/Slowdown/Witness.lean",
+    "security/Proofs/Slowdown/Cover/Area.lean",
+    "security/Proofs/Slowdown/Cover/Charge.lean",
+    "security/Proofs/Slowdown/Remote.lean",
+    "security/Proofs/Slowdown/RemoteMonitoringPeriod.lean",
+    "security/Proofs/Slowdown/ServingBlocks.lean",
+    "security/Proofs/Slowdown/ServingBlocks/Witnesses.lean",
+    "security/Properties/InferenceOnly/Desc/Cover.lean",
+    "tests/benchmarks/exfiltration/**",
+    "tests/benchmarks/harness/test_exfiltration*.py",
+    "tests/tools/move/**",
+    "tests/tools/research/test_slack.py",
+    "tools/move/**",
+    "tools/research/src/research/store/moves.json",
+    "uv.lock",
+    "verity/circuits/kernels/**",
+    "verity/commitments/cuda/**",
+    "verity/protocols/proofs/flock/prover/python/verity_flock/rec_live.py",
+    "verity/protocols/proofs/flock/prover/python/verity_flock/zk_server.py",
+    "verity/protocols/resource_accounting/memory/poub/verifier/lean/replay.py",
+]
