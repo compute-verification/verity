@@ -83,6 +83,12 @@ PROMPT_LENS = [7937, 7949]
 PRIVATE = {REQUESTS, STEPS, OUTPUTS, COMMITTED, V0, DERIVED, *PROMPT_LENS}
 
 
+@pytest.fixture(autouse=True)
+def node_named(monkeypatch):
+    """This machine named as a served run names it (`served_verdicts.NODE_NAME`), which `pieces` and `record` read."""
+    monkeypatch.setenv(S.NODE_NAME, socket.gethostname())
+
+
 @pytest.fixture(scope="module")
 def period():
     spec = importlib.util.spec_from_file_location("period_case", PERIOD_CASE)
