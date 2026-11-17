@@ -54,7 +54,9 @@
 # The cases under the serve dir's private/compose and private/deferred (a hand-off's or a deferral's copies) are no
 # product's. Each composite.py gets VERITY_CONFIGURATION, the hash of the configuration `verity run` read, as its
 # --configuration: the memory cases' keys must be that committed configuration's pins, and with none set or committed
-# its composite is a development check (key_pin: run). No hand-off carries it.
+# its composite is a development check (key_pin: run). No hand-off carries it. Only a compose from a hand-off
+# (COMPOSE_HANDOFF, on the auditor's compose gate) takes the pins: on the served node and on a deferral's prover node
+# composite.py gets --prover-host, and its composite is key_pin: run whatever the configuration.
 set -uo pipefail
 D=${1:?usage: served_composite.sh SERVE_DIR OUT}
 OUT=${2:?usage: served_composite.sh SERVE_DIR OUT}
@@ -130,6 +132,16 @@ for line in sys.stdin:
   say "COMPOSITE CASES: served_cases.py exit $rc$([ "$rc" = 0 ] || echo ', its log on the node')"
 fi
 
+if [ "${SERVED_NODE:-$(hostname)}" = "$(hostname)" ]; then
+  composed="composed on $(hostname -s), which holds the serve dir, from the cases the served node wrote there, not from the parties that produced them"
+  prover=(--prover-host "composed on $(hostname -s), the workload's node, which the developer controls, so nothing computed there vouches for a pin")
+elif [ -n "${COMPOSE_HANDOFF:-}" ]; then
+  composed="composed on $(hostname -s), not the served node $SERVED_NODE: from its compose hand-off (verifier-side files, no witness) and the cases written and checked here from it, not from the parties that produced them"
+  prover=()
+else
+  composed="composed on $(hostname -s), not the served node $SERVED_NODE: from a prover-side copy of its serve dir's audit inputs and the cases written here from it, not from the parties that produced them"
+  prover=(--prover-host "composed on $(hostname -s) from a prover-side copy of the workload's serve dir, a machine the developer controls, so nothing computed there vouches for a pin")
+fi
 bad=0
 for x in "${products[@]}"; do
   e=$(exe "$x" "$(package "$x")") || { bad=1; continue; }
@@ -156,9 +168,9 @@ EOF
 )
   "${scope[@]}" timeout -k 1m "${COMPOSITE_TIMEOUT:-60m}" "$TPY" benchmarks/one_stage/composite.py "$x" "${cases[@]}" \
     --private-out "$P/$x/private" --public-out "$OUT/composite/$x" --exe "$e" \
-    ${VERITY_CONFIGURATION:+--configuration "$VERITY_CONFIGURATION"} > "$P/$x.log" 2>&1
+    ${VERITY_CONFIGURATION:+--configuration "$VERITY_CONFIGURATION"} ${prover[@]+"${prover[@]}"} > "$P/$x.log" 2>&1
   r=$?
-  grep -E '^(DEVELOPMENT|REFUSED|NOT_ESTABLISHED|VERDICT) ' "$P/$x.log" | sed "s/^/COMPOSITE $x: /" | tee -a "$OUT/verdicts.txt"
+  grep -E '^(DEVELOPMENT|KEY_PIN|REFUSED|NOT_ESTABLISHED|VERDICT) ' "$P/$x.log" | sed "s/^/COMPOSITE $x: /" | tee -a "$OUT/verdicts.txt"
   case $r in
     0 | 1 | 2) ;;
     65) say "COMPOSITE $x: composite.py wrote no public line (exit 65: they share bytes with a case's evidence)"; bad=1 ;;
@@ -166,11 +178,5 @@ EOF
     *) say "COMPOSITE $x: composite.py exit $r, its log on the node"; bad=1 ;;
   esac
 done
-if [ "${SERVED_NODE:-$(hostname)}" = "$(hostname)" ]; then
-  say "COMPOSITE: composed on $(hostname -s), which holds the serve dir, from the cases the served node wrote there, not from the parties that produced them"
-elif [ -n "${COMPOSE_HANDOFF:-}" ]; then
-  say "COMPOSITE: composed on $(hostname -s), not the served node $SERVED_NODE: from its compose hand-off (verifier-side files, no witness) and the cases written and checked here from it, not from the parties that produced them"
-else
-  say "COMPOSITE: composed on $(hostname -s), not the served node $SERVED_NODE: from a prover-side copy of its serve dir's audit inputs and the cases written here from it, not from the parties that produced them"
-fi
+say "COMPOSITE: $composed"
 exit "$bad"

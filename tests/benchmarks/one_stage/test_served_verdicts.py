@@ -5601,6 +5601,7 @@ def _read_env(f: Path, names: str) -> dict[str, str]:
     ("K=`touch {ran}`", OTHER_CHARACTERS),
     ("K=7; touch {ran}", OTHER_CHARACTERS),
     ("ONSITE_PIECES={evil}", "sets ONSITE_PIECES, which is no setting of a hand-off"),
+    ("VERITY_CONFIGURATION=" + "ab" * 64, "sets VERITY_CONFIGURATION, which is no setting of a hand-off"),
     ("touch {ran}", "is not NAME=VALUE"),
 ])
 def test_a_compose_follow_on_reads_the_hand_offs_settings_as_data_and_runs_no_line_of_them(tmp_path, bad, why):
@@ -6599,34 +6600,56 @@ sys.exit(int(os.environ["EXIT"]))
 '''
 
 
+def _composed(tmp_path: Path, env: dict[str, str]) -> tuple[int, list[str], list[str]]:
+    """served_composite.sh under PRODUCT=remote with `ARGV_COMPOSITE` for composite.py and `env` added: its exit, the
+    composite.py arguments it gave and OUT/verdicts.txt."""
+    tree, bin_, d, out = tmp_path / "tree", tmp_path / "bin", tmp_path / "serve", tmp_path / "out"
+    out.mkdir()
+    (d / "private").mkdir(parents=True)
+    _script(bin_ / "lake", 'mkdir -p .lake/build/bin && touch ".lake/build/bin/$2"')
+    _script(bin_ / "systemd-run", "exit 1")
+    _script(bin_ / "prlimit", PRLIMIT.format(seen=tmp_path / "prlimit.seen"))
+    (tree / "verity" / "protocols" / "compose" / "verifier" / "remote").mkdir(parents=True)
+    (tree / "benchmarks" / "one_stage").mkdir(parents=True)
+    (tree / "benchmarks" / "one_stage" / "composite.py").write_text(ARGV_COMPOSITE)
+    r = subprocess.run(["bash", str(HERE.parents[2] / "benchmarks" / "one_stage" / "served_composite.sh"), str(d), str(out)],
+                       cwd=tree, env={"PATH": f"{bin_}:{os.defpath}", "HOME": str(tmp_path), "PY": sys.executable,
+                                      "TPY": sys.executable, "PRODUCT": "remote", "ARGV_TO": str(tmp_path / "argv"), **env},
+                       check=False, capture_output=True, text=True)
+    return r.returncode, (tmp_path / "argv").read_text().splitlines(), (out / "verdicts.txt").read_text().splitlines()
+
+
+def _flag(argv: list[str], flag: str) -> str | None:
+    return argv[argv.index(flag) + 1] if flag in argv else None
+
+
 @pytest.mark.parametrize("configuration, exit, said", [
     (None, "0", "COMPOSITE remote: DEVELOPMENT key_pin: run"),
     ("ab" * 64, "67", "COMPOSITE remote: REFUSED verity/wipe/v0: its case trusts 1 key(s)"),
 ])
 def test_each_composite_gets_the_configuration_verity_run_read_and_says_what_it_refused(tmp_path, configuration, exit,
                                                                                         said):
-    tree, bin_, d, out = tmp_path / "tree", tmp_path / "bin", tmp_path / "serve", tmp_path / "out"
-    out.mkdir()
-    (d / "private").mkdir(parents=True)
-    _script(bin_ / "lake", 'mkdir -p .lake/build/bin && touch ".lake/build/bin/$2"')
-    _script(bin_ / "systemd-run", "exit 1")
-    (tree / "verity" / "protocols" / "compose" / "verifier" / "remote").mkdir(parents=True)
-    (tree / "benchmarks" / "one_stage").mkdir(parents=True)
-    (tree / "benchmarks" / "one_stage" / "composite.py").write_text(ARGV_COMPOSITE)
-    env = {"PATH": f"{bin_}:{os.defpath}", "HOME": str(tmp_path), "PY": sys.executable, "TPY": sys.executable,
-           "PRODUCT": "remote", "SERVED_NODE": "vy-elsewhere", "COMPOSE_HANDOFF": "1", "ARGV_TO": str(tmp_path / "argv"),
-           "EXIT": exit, **({"VERITY_CONFIGURATION": configuration} if configuration else {})}
-    r = subprocess.run(["bash", str(HERE.parents[2] / "benchmarks" / "one_stage" / "served_composite.sh"), str(d), str(out)],
-                       cwd=tree, env=env, check=False, capture_output=True, text=True)
-    argv = (tmp_path / "argv").read_text().splitlines()
-    given = argv[argv.index("--configuration") + 1] if "--configuration" in argv else None
-    assert given == configuration
-    lines = (out / "verdicts.txt").read_text().splitlines()
-    assert lines[0] == said
-    assert r.returncode == (0 if exit == "0" else 1)
+    rc, argv, lines = _composed(tmp_path, {"SERVED_NODE": "vy-elsewhere", "COMPOSE_HANDOFF": "1", "EXIT": exit,
+                                           **({"VERITY_CONFIGURATION": configuration} if configuration else {})})
+    assert (_flag(argv, "--configuration"), lines[0], rc) == (configuration, said, 0 if exit == "0" else 1)
     if exit == "67":
         assert lines[1] == ("COMPOSITE remote: composite.py ran no check (exit 67: a memory case trusts a key the "
                             "configuration doesn't pin)")
+
+
+@pytest.mark.parametrize("where, env, prover", [
+    ("the workload's node", {}, "the workload's node, which the developer controls"),
+    ("a deferral's prover node", {"SERVED_NODE": "vy-elsewhere"}, "a prover-side copy of the workload's serve dir"),
+    ("the auditor's compose gate", {"SERVED_NODE": "vy-elsewhere", "COMPOSE_HANDOFF": "1"}, None),
+])
+def test_only_a_compose_from_a_hand_off_takes_the_configuration_s_pins(tmp_path, where, env, prover):
+    """Off the auditor's compose gate the machine composing is the developer's, so composite.py is told so
+    (``--prover-host``) and its composite is key_pin: run whatever configuration it is handed."""
+    rc, argv, lines = _composed(tmp_path, {**env, "EXIT": "0", "VERITY_CONFIGURATION": "ab" * 64})
+    assert (rc, _flag(argv, "--configuration")) == (0, "ab" * 64)
+    said = _flag(argv, "--prover-host")
+    assert (said is None) if prover is None else (prover in said and said.endswith("nothing computed there vouches for a pin")), said
+    assert lines[-1].startswith(f"COMPOSITE: composed on {socket.gethostname().split('.')[0]}")
 
 
 def test_the_composite_step_publishes_only_each_cases_verdict_and_each_products_lean_verdict(tmp_path):

@@ -2,7 +2,7 @@
 `remote-v1 check`).
 
     composite.py onsite|remote|remote-v1 --cases DIR ... --private-out DIR --public-out DIR [--exe PATH]
-                 [--development WHY] [--configuration HASH]
+                 [--development WHY] [--configuration HASH] [--prover-host WHY]
 
 ``remote-v1`` is remote's composite of record (`Core.Remote.V1`, ``verity/remote/v1``), whose work subprotocol is
 Pearl+'s run verdict (`verity/pouw/pearl-plus/v1`) in the period's place; ``remote`` is v0, H1's development one.
@@ -48,10 +48,13 @@ line of its ``verdicts.txt`` and of what it prints after its ``COMPOSITE`` line.
 A memory case (`TRUSTING`) lists in its params the keys its Lean trusts, and the developer's node wrote that list. Each
 key it lists must be one whose SHA-512 the configuration of hash ``--configuration`` pins for the case's party and
 protocol, that configuration read from ``--tree`` and committed there (`COMMITTED`); a case listing any other key is
-refused by name (exit 67, ``REFUSED``), before the check runs and with nothing written. With no such configuration (no
-``--configuration``, or a hash the tree doesn't commit) the keys are the run's own: ``composite.json``'s ``key_pin`` is
-``run`` and the composite is a development check (`RUN_KEYS`), as ``--development`` makes it; under one it is
-``configuration``. A product with no memory case listing a key has no ``key_pin``.
+refused by name (exit 67, ``REFUSED``), before the check runs and with nothing written. This script holds the pin, not
+the Lean verifier, which accepts any key a case lists: ``composite.json``'s ``key_pin`` is then ``configuration`` and
+``key_pin_why`` says so, naming the configuration's path and hash, as the ``KEY_PIN`` line does. With no such
+configuration (no ``--configuration``, or a hash the tree doesn't commit), or with ``--prover-host WHY`` (a composite on
+a machine the developer controls, whose tree and environment vouch for no pin, whatever ``--configuration`` says), the
+keys are the run's own: ``key_pin`` is ``run``, ``key_pin_why`` says why, and the composite is a development check, as
+``--development`` makes it. A product with no memory case listing a key has no ``key_pin``.
 """
 from __future__ import annotations
 
@@ -104,8 +107,14 @@ TRUSTING = {"verity/pous/p2/v4/run": ("memory-challenger", "pous"),
             "verity/wipe/v0": ("memory-challenger", "wipe")}
 #: The committed configurations' hashes by path, in the tree.
 COMMITTED = "tools/verity/cli/verity_cli/configurations.toml"
-RUN_KEYS = ("key_pin: run: the memory cases trust keys made for the run, which no committed configuration pins, so "
-            "this composite claims no record")
+RUN_KEYS = "the memory cases trust keys made for the run, which no committed configuration pins"
+HELD = ("held by the composing script (composite.py), not by the Lean verifier: each key a memory case lists is one "
+        "{path} (hash {hash}) pins for that case's party and protocol, and the Lean composite accepts any key a case lists")
+
+
+def run_keys(why: str) -> str:
+    """The development reason of a composite whose memory cases' keys are the run's own, for `why`."""
+    return f"key_pin: run: {why}, so this composite claims no record"
 #: Public bytes sharing a run of twice this with a case's evidence are refused: the evidence's windows at this stride,
 #: looked up among every window of the public bytes, find any such run.
 WINDOW = 32
@@ -293,12 +302,13 @@ def unestablished(p: dict[str, Any]) -> str | None:
 
 def public_record(product: str, commitment: bytes, cases: Sequence[dict[str, Any]], gone: Sequence[str],
                   verdict: dict[str, str] | None, development: str | None = None,
-                  ran: dict[str, Any] | None = None, key_pin: str | None = None) -> dict[str, Any]:
+                  ran: dict[str, Any] | None = None, key_pin: tuple[str, str] | None = None) -> dict[str, Any]:
     """What ``--public-out`` may hold: no evidence, no params bodies, no answer bodies and no case's commitment, only the
-    digest its answer names; with ``ran``, what ran the check (`provenance`)."""
+    digest its answer names; with ``ran``, what ran the check (`provenance`); with ``key_pin``, whose pin the memory
+    cases' keys are and why."""
     return {"product": PRODUCTS[product], "commitment": commitment.hex(), "missing": list(gone), "verdict": verdict,
             "exceptions": exceptions(product), **({"development": development} if development else {}),
-            **({"key_pin": key_pin} if key_pin else {}),
+            **({"key_pin": key_pin[0], "key_pin_why": key_pin[1]} if key_pin else {}),
             **({"ran": ran} if ran is not None else {}),
             "cases": [{"params_sha512": hashlib.sha512(canonical(p["params"])).hexdigest(),
                        "commitment": p["named"]} | outcome(p["id"], p["answer"]) for p in cases]}
@@ -341,14 +351,16 @@ def run(a: argparse.Namespace) -> int:
     found = [piece(d) for d in case_dirs(a.cases)]
     key_pin, development = None, a.development
     if any(listed(p) for p in found):
-        if (got := committed_pins(a.tree, a.configuration)) is None:
-            key_pin, development = "run", "; ".join(filter(None, (development, RUN_KEYS)))
+        got = None if a.prover_host else committed_pins(a.tree, a.configuration)
+        if got is None:
+            key_pin = ("run", a.prover_host or RUN_KEYS)
+            development = "; ".join(filter(None, (development, run_keys(key_pin[1]))))
         elif refused := unpinned(found, *got):
             for ln in refused:
                 print(ln, flush=True)
             return UNPINNED
         else:
-            key_pin = "configuration"
+            key_pin = ("configuration", HELD.format(path=got[0], hash=a.configuration))
     params, commitment, evidence, blobs = compose(a.product, found)
     files = {"params.json": canonical(params), "commitment.bin": commitment, "evidence.json": evidence,
              "blobs.txt": "".join(f"{b}\n" for b in blobs).encode()}
@@ -357,6 +369,7 @@ def run(a: argparse.Namespace) -> int:
     cases = sorted(found, key=lambda p: p["id"])
     gone = missing(a.product, found)
     lines = [f"DEVELOPMENT {development}"] if development else []
+    lines += [f"KEY_PIN {key_pin[0]}: {key_pin[1]}"] if key_pin else []
     lines += [line("PIECE", outcome(p["id"], p["answer"])) for p in cases]
     lines += [f"NOT_ESTABLISHED missing {', '.join(gone)}"] if gone else []
     cmd = [a.exe or a.product, "check", *(str(priv / n) for n in ("params.json", "commitment.bin", "evidence.json")),
@@ -406,6 +419,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--development", help="why this composite claims no record: its outputs lead with it")
     ap.add_argument("--configuration", metavar="HASH",
                     help="the hash of the committed configuration whose pins give the memory cases their keys")
+    ap.add_argument("--prover-host", metavar="WHY",
+                    help="why the machine composing is one the developer controls: the memory cases' keys are then "
+                         "key_pin: run whatever --configuration says")
     ap.add_argument("--tree", type=Path, default=Path(__file__).resolve().parents[2],
                     help="the checkout the executable was built from (default: this file's)")
     return run(ap.parse_args(argv))

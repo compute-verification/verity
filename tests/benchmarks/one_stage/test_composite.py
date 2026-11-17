@@ -125,9 +125,9 @@ COMMITTED_HASH = "c0" * 64
 def pinned_tree(d: Path, pins: list[tuple[str, str, bytes]]) -> Path:
     """A tree committing one configuration, of hash `COMMITTED_HASH`, whose pins give each (party, protocol) its key."""
     (d / C.COMMITTED).parent.mkdir(parents=True)
-    (d / C.COMMITTED).write_text(f'"demos/c.toml" = "{COMMITTED_HASH}"\n')
-    (d / "demos").mkdir()
-    (d / "demos" / "c.toml").write_text("".join(
+    (d / C.COMMITTED).write_text(f'"configurations/c.toml" = "{COMMITTED_HASH}"\n')
+    (d / "configurations").mkdir()
+    (d / "configurations" / "c.toml").write_text("".join(
         f'[[pin]]\nparty = "{party}"\nprotocol = "{protocol}"\nkey-sha512 = "{hashlib.sha512(k).hexdigest()}"\n'
         for party, protocol, k in pins))
     return d
@@ -152,8 +152,8 @@ def test_the_product_trusts_only_the_keys_the_configuration_pins(tmp_path, capsy
     party, protocol = C.TRUSTING[id]
     assert rc == C.UNPINNED
     assert capsys.readouterr().out.splitlines() == [
-        f"REFUSED {id}: its case trusts 1 key(s) demos/c.toml pins for no {party} {protocol} session, and only a pinned "
-        f"key's sessions count: sign them under the key demos/c.toml pins for {party}'s {protocol} sessions, or "
+        f"REFUSED {id}: its case trusts 1 key(s) configurations/c.toml pins for no {party} {protocol} session, and only a pinned "
+        f"key's sessions count: sign them under the key configurations/c.toml pins for {party}'s {protocol} sessions, or "
         "compose with no --configuration, a development check (key_pin: run)"]
     assert not record.exists() and not (tmp_path / "private").exists()
 
@@ -163,6 +163,9 @@ def test_a_key_the_configuration_pins_is_trusted(tmp_path, id):
     rc, record = keyed(tmp_path, id, b"\x05" * 64, ["--configuration", COMMITTED_HASH])
     doc = json.loads(record.read_text())
     assert (rc, doc["verdict"]["verdict"], doc["key_pin"], "development" in doc) == (0, "accept", "configuration", False)
+    held = C.HELD.format(path="configurations/c.toml", hash=COMMITTED_HASH)
+    assert doc["key_pin_why"] == held and "held by the composing script (composite.py), not by the Lean verifier" in held
+    assert f"KEY_PIN configuration: {held}" in (tmp_path / "public" / "verdicts.txt").read_text().splitlines()
     trusted, = (c["params"]["trusted"] for c in json.loads((tmp_path / "private" / "params.json").read_text())["components"])
     assert trusted == [(b"\x05" * 64).hex()]
 
@@ -173,8 +176,19 @@ def test_keys_no_committed_configuration_pins_are_the_run_s_and_claim_no_record(
     a development check, which `served_verdicts.composite_answer` takes as no record."""
     rc, record = keyed(tmp_path, "verity/pous/p2/v4/run", b"\x07" * 64, configuration)
     doc = json.loads(record.read_text())
-    assert (rc, doc["key_pin"], doc["development"]) == (0, "run", C.RUN_KEYS)
-    assert (tmp_path / "public" / "verdicts.txt").read_text().splitlines()[0] == f"DEVELOPMENT {C.RUN_KEYS}"
+    assert (rc, doc["key_pin"], doc["key_pin_why"], doc["development"]) == (0, "run", C.RUN_KEYS, C.run_keys(C.RUN_KEYS))
+    assert (tmp_path / "public" / "verdicts.txt").read_text().splitlines()[:2] == [
+        f"DEVELOPMENT {C.run_keys(C.RUN_KEYS)}", f"KEY_PIN run: {C.RUN_KEYS}"]
+
+
+@pytest.mark.parametrize("key", [b"\x05" * 64, b"\x07" * 64], ids=["pinned", "unpinned"])
+def test_a_composite_on_a_machine_the_developer_controls_takes_no_pin(tmp_path, key):
+    """There the tree, its commits and the environment are the developer's, so a configuration's pins read there vouch
+    for nothing: whatever the key and the configuration, the keys are the run's and the composite claims no record."""
+    why = "composed on n0, the workload's node, which the developer controls, so nothing computed there vouches for a pin"
+    rc, record = keyed(tmp_path, "verity/wipe/v0", key, ["--configuration", COMMITTED_HASH, "--prover-host", why])
+    doc = json.loads(record.read_text())
+    assert (rc, doc["key_pin"], doc["key_pin_why"], doc["development"]) == (0, "run", why, C.run_keys(why))
 
 
 def test_memory_cases_listing_no_key_need_no_pin(tmp_path):
