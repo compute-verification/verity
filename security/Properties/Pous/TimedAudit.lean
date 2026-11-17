@@ -1,13 +1,13 @@
 module
 
-public import PousCheck.TimedAudit
+public import PousVerifier.TimedAudit
 public import Properties.Pous
 
 /-! The timed audit's property (`TimedAuditAccepts`), stated against the Lean code in the binding form. -/
 
 @[expose] public section
 
-namespace PousCheck.Properties
+namespace PousVerifier.Properties
 
 open Lean (Json)
 open Flock
@@ -84,4 +84,4 @@ def TimedAuditAccepts : Prop :=
     TimedAuditAnswers ready leafBytes doc C ∨
       ∃ x ∈ runStrings ready leafBytes C, ∃ y ∈ runStrings ready leafBytes C, x ≠ y ∧ Sha512.hash x = Sha512.hash y
 
-end PousCheck.Properties
+end PousVerifier.Properties

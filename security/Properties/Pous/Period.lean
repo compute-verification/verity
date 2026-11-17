@@ -12,7 +12,7 @@ every prover strategy under the device model and the instantiation. -/
 
 namespace Pous.Period
 
-open Pous.EndToEnd PousCheck PousCheck.Properties
+open Pous.EndToEnd PousVerifier PousVerifier.Properties
 
 open scoped ENNReal
 

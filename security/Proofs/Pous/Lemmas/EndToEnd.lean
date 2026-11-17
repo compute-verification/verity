@@ -8,7 +8,7 @@ witness, and no record pins them. -/
 @[expose] public section
 
 open MemoryAttester MemoryAttester.Properties
-open PousCheck PousCheck.Properties
+open PousVerifier PousVerifier.Properties
 
 namespace Pous.EndToEnd
 

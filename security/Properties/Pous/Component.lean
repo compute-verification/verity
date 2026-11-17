@@ -1,6 +1,6 @@
 module
 
-public import PousCheck.RunProtocol
+public import PousVerifier.RunProtocol
 public import MemoryAttester.WipeProtocol
 public import Properties.Pous.EndToEndAt
 import Mathlib.Basic.ENNReal.Real
@@ -10,7 +10,7 @@ import Mathlib.Basic.ENNReal.Real
 @[expose] public section
 
 open MemoryAttester MemoryAttester.Properties
-open PousCheck PousCheck.Properties
+open PousVerifier PousVerifier.Properties
 open Pous.EndToEnd
 
 namespace Pous.Component

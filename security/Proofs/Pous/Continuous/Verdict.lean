@@ -141,7 +141,7 @@ def verdictProg (K M LIMIT : ℕ) : Claims.Sampling.Prog :=
     [(chain (inputs K + 1) (countGates K M LIMIT).1 (constWires (inputs K) (inputs K + 1) (counterWidth K M) M)
       (countGates K M LIMIT).2 (inputs K + 1)).2.2.getLastD 0]⟩
 
-/-- Holds of the unit's code, `PousCheck.Verdict.prog` (`PousVerdict.Code.verdictIs_prog`); that the Definition's
+/-- Holds of the unit's code, `PousVerifier.Verdict.prog` (`PousVerdict.Code.verdictIs_prog`); that the Definition's
 compiled circuit is that code is the difftest's, not Lean's. -/
 def VerdictIs (P : Claims.Sampling.Prog) (K M LIMIT : ℕ) : Prop :=
   ∀ y : List Bool, y.length = inputs K → P.eval y = (verdictProg K M LIMIT).eval y

@@ -1,5 +1,5 @@
 """A stand-in for `pous-timed-audit READY LEAVES AUDIT` in the CPU tests, which build no Lean: the Python reference's
-verdict (`timed_audit.verdict`, which `pous_check`'s difftest holds the Lean's to), printed as the Lean prints it.
+verdict (`timed_audit.verdict`, which `pous_verifier`'s difftest holds the Lean's to), printed as the Lean prints it.
 `exe(directory)` makes an executable running it, as `timed_audit.py --lean-exe` and `bench.py --pous-timed-audit` take
 one; `exe(directory, reject=True)` one whose verdict rejects every record."""
 from __future__ import annotations

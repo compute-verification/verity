@@ -268,7 +268,7 @@ def judging(scheme) -> bool:
 
 def judge_audits(scheme, vk, record: dict[str, Any] | None, exe: str | None) -> dict[str, Any]:
     """The verdict on in-process audits before any profile: for a scheme a Lean judges, their `record`
-    (`Reference._audits`'s) under `timed_audit.judge` (`pous-timed-audit` at `exe`, else `pous_check`'s), accepted when
+    (`Reference._audits`'s) under `timed_audit.judge` (`pous-timed-audit` at `exe`, else `pous_verifier`'s), accepted when
     the Lean accepted every audit; for any other (no `record`), unjudged (`timed_audit.NO_LEAN`) and never accepted."""
     from verity.protocols.resource_accounting.memory.pous.attester import timed_audit
 
@@ -458,7 +458,7 @@ def main(argv: list[str] | None = None, **kw: Any) -> int:
                          "matches (a timed run of a large W then skips the encode an untimed run measured)")
     ap.add_argument("--pous-timed-audit", default=None,
                     help="reference, p2-v3-gpu: a built pous-timed-audit, the audit's verdict of record (default: "
-                         "pous_check's; p2-v3-gpu builds it there once a run, a no-op after pod.sh's PREPARE=1)")
+                         "pous_verifier's; p2-v3-gpu builds it there once a run, a no-op after pod.sh's PREPARE=1)")
     ap.add_argument("--mc-lms-key", default="",
                     help="p2-v3-mc-gpu: sign the memory attester's sessions with S1's LMS key in this directory (made "
                          "there when absent); without one they are test-signed and the verdict rejects them all")

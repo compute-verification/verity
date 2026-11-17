@@ -15,7 +15,7 @@ on every capacity coin. -/
 
 namespace Pous.Period.SecurityProofs
 
-open Pous.EndToEnd PousCheck PousCheck.Properties FlockSoundness.Audit FlockSoundness.Game
+open Pous.EndToEnd PousVerifier PousVerifier.Properties FlockSoundness.Audit FlockSoundness.Game
 open scoped ENNReal
 
 set_option exponentiation.threshold 20000

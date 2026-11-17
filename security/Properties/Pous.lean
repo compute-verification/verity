@@ -1,13 +1,13 @@
 module
 
-public import PousCheck.SetupProtocol
+public import PousVerifier.SetupProtocol
 
 /-! The PoUS setup check's properties, stated against its `check`: no statement takes a premise, and the converse of
 `AcceptsDecodes` and `DecodeIsModel` are open in `Proofs.Properties.Pous`. -/
 
 @[expose] public section
 
-namespace PousCheck.Properties
+namespace PousVerifier.Properties
 
 /-- Block `j` of segment `s` decodes canonically to the payload `m`: the keys of `(s, j)` under `salt` exist, the block
 is `blockBytes` bytes, its value `c` is below `p`, `D(c)` fits in the payload's bits, and `m` is `D(c)` as `payloadBytes`
@@ -59,4 +59,4 @@ def Deployed : Prop :=
   q.validate = .ok q ∧ q.p = 2 ^ 16448 - 21065 ∧ q.p = P ∧ q.blockBytes = 2056 ∧ q.blockBytes = W_BYTES ∧
     q.payloadBytes = 2054 ∧ q.blocksPerSegment = 2 ^ 16 ∧ q.segments = 8 ∧ q.blocks = 2 ^ 19
 
-end PousCheck.Properties
+end PousVerifier.Properties

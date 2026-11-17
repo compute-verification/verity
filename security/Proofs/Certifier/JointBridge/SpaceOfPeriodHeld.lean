@@ -14,7 +14,7 @@ import Proofs.Pouw.Prob
 
 namespace ResourceAccounting.SecurityProofs.Bridge
 
-open Pous Pous.EndToEnd PousCheck PousCheck.Properties Pous.Period
+open Pous Pous.EndToEnd PousVerifier PousVerifier.Properties Pous.Period
 open scoped ENNReal
 
 set_option exponentiation.threshold 20000
@@ -41,7 +41,7 @@ theorem SpaceOfPeriodHeld_honest {ι : Type} [Fintype ι] {d : ResourceAccountin
     (hfull : ∀ ω, ∃ t ∈ (run.win .capacity).ticks, FULL ≤ (run.schedule ω t).mem (run.acct .capacity)) :
     AcceptsDecodes ∧ PublishesRoot ∧ DeviceModel run P (Pous.Period.SecurityProofs.lookup ΩW ΩQ) D Q L round ∧
       Instantiates P (Pous.Period.SecurityProofs.lookup ΩW ΩQ) :=
-  ⟨PousCheck.Properties.SecurityProofs.acceptsDecodes, PousCheck.Properties.SecurityProofs.publishesRoot,
+  ⟨PousVerifier.Properties.SecurityProofs.acceptsDecodes, PousVerifier.Properties.SecurityProofs.publishesRoot,
     Pous.Period.SecurityProofs.periodHeld_honest run P D Q L round hs hfull⟩
 
 theorem SpaceOfPeriodHeld_nontrivial {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α]

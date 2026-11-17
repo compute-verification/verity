@@ -11,7 +11,7 @@ public import Proofs.Pous.P2.RingTrunc
 
 namespace Pous.Period.SecurityProofs
 
-open Pous.EndToEnd PousCheck PousCheck.Properties Pous.P2.Assumptions
+open Pous.EndToEnd PousVerifier PousVerifier.Properties Pous.P2.Assumptions
 open scoped ENNReal
 
 set_option exponentiation.threshold 20000

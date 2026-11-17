@@ -309,7 +309,7 @@ the server; (3) `W` is fixed before setup, and `Π₂` is independent of `W` and
 the binding of `C*` are idealized. Proof: `PousPub.band_pub_meets_64_final`; here
 `Pous.SecurityProofs.BandPubMeets64`.
 
-Frozen (no-function, hash): `PubMeets` with the model's `exactCheck`, not the setup check `PousCheck` runs. -/
+Frozen (no-function, hash): `PubMeets` with the model's `exactCheck`, not the setup check `PousVerifier` runs. -/
 def BandPubMeets64 : Prop :=
   ∀ d : ℕ, 5 ≤ d → ∀ salt : Bits 256,
     PubMeets (Pous.BandChain.chainBand (2 ^ 9) d 524288 512 (Pous.Sponge.dom salt)) (exactCheck _) .sequential 5
@@ -319,7 +319,7 @@ def BandPubMeets64 : Prop :=
 `band_pub_iff_14`), under the same four deployment conditions (§48). Proof: `PousPub.band_pub_meets_14_final`; here
 `Pous.SecurityProofs.BandPubMeets14`.
 
-Frozen (no-function, hash): `PubMeets` with the model's `exactCheck`, not the setup check `PousCheck` runs. -/
+Frozen (no-function, hash): `PubMeets` with the model's `exactCheck`, not the setup check `PousVerifier` runs. -/
 def BandPubMeets14 : Prop :=
   ∀ d : ℕ, 5 ≤ d → ∀ salt : Bits 192,
     PubMeets (Pous.BandMulti.chainBandSeg 448 (2 ^ 9) d 524288 512 (Pous.BandMulti.segDom salt (2 ^ 9)))
@@ -329,7 +329,7 @@ def BandPubMeets14 : Prop :=
 `band_pub_iff_14_global`), under the same four deployment conditions (§48). Proof:
 `PousPub.band_pub_meets_14_global_final`; here `Pous.SecurityProofs.BandPubMeets14Global`.
 
-Frozen (no-function, hash): `PubMeets` with the model's `exactCheck`, not the setup check `PousCheck` runs. -/
+Frozen (no-function, hash): `PubMeets` with the model's `exactCheck`, not the setup check `PousVerifier` runs. -/
 def BandPubMeets14Global : Prop :=
   ∀ d : ℕ, 5 ≤ d → ∀ salt : Bits 256,
     PubMeets (Pous.BandMulti.chainBandSeg 448 (2 ^ 9) d 524288 512 (Pous.Sponge.dom salt)) (exactCheck _) .sequential
@@ -345,7 +345,7 @@ def BandPubMeets14Global : Prop :=
 `PousPub.band_pub_meets_family_final` (`Security/Proofs/Pous/Chain/PubFamily.lean`); here
 `Pous.SecurityProofs.BandPubMeetsFamily`.
 
-Frozen (no-function, hash): `PubMeets` with the model's `exactCheck`, not the setup check `PousCheck` runs. -/
+Frozen (no-function, hash): `PubMeets` with the model's `exactCheck`, not the setup check `PousVerifier` runs. -/
 def BandPubMeetsFamily : Prop :=
   ∀ (N : ℕ) [NeZero N], N ≤ 2 ^ 64 → ∀ d : ℕ, 5 ≤ d →
     (∀ salt : Bits 192,
@@ -362,7 +362,7 @@ the same four deployment conditions (§48). Proof:
 `PousPub.band_pub_meets_family_d2` (`Security/Proofs/Pous/Chain/PubRounds.lean`); here
 `Pous.SecurityProofs.BandPubMeetsFamilyD2`.
 
-Frozen (no-function, hash): `PubMeets` with the model's `exactCheck`, not the setup check `PousCheck` runs. -/
+Frozen (no-function, hash): `PubMeets` with the model's `exactCheck`, not the setup check `PousVerifier` runs. -/
 def BandPubMeetsFamilyD2 : Prop :=
   ∀ (N : ℕ) [NeZero N], N ≤ 2 ^ 64 → ∀ d : ℕ, 2 ≤ d →
     (∀ salt : Bits 192,
@@ -378,7 +378,7 @@ encoder and the exact check, both domain layouts, under the same four deployment
 `PousPub.band_pub_meets_family_d1`; here
 `Pous.SecurityProofs.BandPubMeetsFamilyD1`.
 
-Frozen (no-function, hash): `PubMeets` with the model's `exactCheck`, not the setup check `PousCheck` runs. -/
+Frozen (no-function, hash): `PubMeets` with the model's `exactCheck`, not the setup check `PousVerifier` runs. -/
 def BandPubMeetsFamilyD1 : Prop :=
   ∀ (N : ℕ) [NeZero N], N ≤ 2 ^ 64 → ∀ d : ℕ, 1 ≤ d →
     (∀ salt : Bits 192,

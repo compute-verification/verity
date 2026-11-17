@@ -6,7 +6,7 @@ audited one of two ways:
 - `V3` (`p2-16448/v4`, `p2-v3-gpu`): `verity`'s registered scheme, whose commitment, 24-byte salt, key prefix and leaves are
   the protocol's (`schemes.p2`, `setup`, `verifier`), audited by `protocol.TimedAudit` through `verity/protocols/resource_accounting/memory/pous/attester/timed_audit.py --strict`, which
   refuses any `k` or `Δ + RTT` the certificate does not cover, and judged by `pous-timed-audit` (`--pous-timed-audit`,
-  else `pous_check`'s, built once a run: `timed_audit_exe`), whose verdict is the record's: where it can't run, every
+  else `pous_verifier`'s, built once a run: `timed_audit_exe`), whose verdict is the record's: where it can't run, every
   audit is undecided.  Its extra gate (`codec`) decodes segment 0 of the device's `C` with the scheme's own codec back
   to `W`'s, when that segment is wholly encoded.
 - `MC` (`p2-v3-mc-gpu`): `V3`'s blocks audited by the memory challenger (`memory_attester/live.py`) at `Δ` plus the RTT
@@ -163,7 +163,7 @@ TIMED_AUDIT_CHECK = H.ROOT / "verity" / "protocols" / "resource_accounting" / "m
 
 
 def timed_audit_exe(out: Path) -> Path:
-    """`pous_check`'s `pous-timed-audit`, the verdict of record on `V3`'s audits, built once a run with `lake` as `pod.sh
+    """`pous_verifier`'s `pous-timed-audit`, the verdict of record on `V3`'s audits, built once a run with `lake` as `pod.sh
     PREPARE=1` builds it (a no-op after that), its log in `lake-build.log`.  Where it doesn't build, the path of an
     executable that isn't there, so every audit is undecided."""
     with (out / "lake-build.log").open("w") as log:

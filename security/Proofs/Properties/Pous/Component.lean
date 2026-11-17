@@ -24,9 +24,9 @@ lemmas. -/
 
 namespace Pous.Component.SecurityProofs
 
-open Flock MemoryAttester MemoryAttester.Properties PousCheck PousCheck.Properties Pous.EndToEnd
+open Flock MemoryAttester MemoryAttester.Properties PousVerifier PousVerifier.Properties Pous.EndToEnd
 open Pous.EndToEnd.SecurityProofs
-open PousCheck.Properties.SecurityProofs (append_cancel mth_binds leaves_entry root_mth)
+open PousVerifier.Properties.SecurityProofs (append_cancel mth_binds leaves_entry root_mth)
 open MemoryAttester.Properties.SecurityProofs (forIn'_measure_eq)
 open Lean (Json)
 open Verity.CanonUtf8 (canonUtf8_flat eq_ok_of)
@@ -253,12 +253,12 @@ theorem runBinds : RunBinds := by
   by_cases hX : ∃ x ∈ forkStrings p.point.params pub e e', ∃ y ∈ forkStrings p.point.params pub e e',
       x ≠ y ∧ Sha512.hash x = Sha512.hash y
   · exact .inr hX
-  have hP := PousCheck.Properties.SecurityProofs.publishesRoot _ _ _ pub () hs
-  have hP' := PousCheck.Properties.SecurityProofs.publishesRoot _ _ _ pub () hs'
+  have hP := PousVerifier.Properties.SecurityProofs.publishesRoot _ _ _ pub () hs
+  have hP' := PousVerifier.Properties.SecurityProofs.publishesRoot _ _ _ pub () hs'
   refine .inl ⟨setupCommitment_ext (hP.2.1.symm.trans hP'.2.1) (hP.2.2.1.symm.trans hP'.2.2.1), ?_, ?_⟩
-  · have hS := shaped_ofAt (PousCheck.Properties.SecurityProofs.acceptsDecodes p.point.params e.setup.commitment
+  · have hS := shaped_ofAt (PousVerifier.Properties.SecurityProofs.acceptsDecodes p.point.params e.setup.commitment
       e.setup.store ⟨pub, (), hs⟩)
-    have hS' := shaped_ofAt (PousCheck.Properties.SecurityProofs.acceptsDecodes p.point.params e'.setup.commitment
+    have hS' := shaped_ofAt (PousVerifier.Properties.SecurityProofs.acceptsDecodes p.point.params e'.setup.commitment
       e'.setup.store ⟨pub, (), hs'⟩)
     have hr : Merkle.root (leaves pub.salt e.setup.store) = some pub.root := by rw [hP.2.2.1]; exact hP.1
     have hr' : Merkle.root (leaves pub.salt e'.setup.store) = some pub.root := by rw [hP'.2.2.1]; exact hP'.1
@@ -498,7 +498,7 @@ theorem runAccepts_fails : ∀ check, AcceptsAll check → ¬ RunAcceptsBy check
   obtain ⟨out, prof, hc⟩ := hall ⟨Run.DEPLOYED, .empty, #[]⟩ ⟨0, .empty, .empty, ⟨#[0]⟩⟩
     ⟨.empty, ⟨default, default, #[]⟩, ⟨⟨.empty, .empty⟩, #[]⟩⟩
   have hs := (h _ _ _ _ _ hc).1.1
-  have hsalt := congrArg ByteArray.size (PousCheck.Properties.SecurityProofs.publishesRoot _ _ _ _ () hs).2.2.1
+  have hsalt := congrArg ByteArray.size (PousVerifier.Properties.SecurityProofs.publishesRoot _ _ _ _ () hs).2.2.1
   exact absurd hsalt (by decide)
 
 private theorem nodeInputs_zero (L : Array ByteArray) (lo : Nat) : nodeInputs L lo 0 = [] := by
@@ -553,7 +553,7 @@ theorem wipeAccepts_nontrivial :
 /-- **The compiled check accepts every run `AcceptedAt` accepts** (the honest lemma of `RunAccepts` and of `RunBinds`),
 publishing `certify` of the point: `RunAccepts`' hypothesis holds exactly where the decision of record does, and two
 runs it accepts are two accepted runs. That every honest run is `AcceptedAt` is setup's completeness
-(`PousCheck.Properties.AcceptsComplete`, open) and the composed check's on an honest session; `runAccepts_meets` is
+(`PousVerifier.Properties.AcceptsComplete`, open) and the composed check's on an honest session; `runAccepts_meets` is
 one that is. -/
 theorem runAccepts_complete : ∀ (p : RunProtocol.Params) (pub : SetupProtocol.Public) (e : RunProtocol.Evidence),
     AcceptedAt p.point p.trusted.toList e.setup.commitment e.setup.store pub e.digests e.session p.sessionId →
