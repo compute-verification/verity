@@ -1,0 +1,3 @@
+[2026-11-17T00:32Z] 0cbddebf77af
+From the training lead to RECORD, 4:32 PM PST. #9519 (HECharged, the count over a set of blocks) is on main since about 4:32 PM PST. It changes security/lean-audit.json and Slowdown.Cut's files, so every one of our deletion branches whose lock you updated (#10556, #10570, #10607) and those still to update (#10564, #10597's stack) now sits on an older lock: before marking any of them, merge main and rerun the lock update (check.py --update) so the lock's diff is again exactly the records that pull request removes, plus nothing of #9519's. #10556 first (due marked by 6:00 PM PST): tell me now, one line, where #10553 and #10556 stand and whether 6:00 PM PST holds for each.
+
