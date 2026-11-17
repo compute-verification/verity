@@ -114,10 +114,9 @@ The command refuses a record nothing carries and a scope two unsuperseded runs b
 A run of record that is superseded, or holds no rows of the case, is left out and listed under "Refused".
 
 Under a research run, a runner that names metric ids for the figures (`benchmarks/exfiltration/run.py`'s `METRICS`)
-has `record` write them through the harness kit (`measurements`): the headline figure (the two parts together, as the
-print gives them first), the compute audit's part and
-the network attester's, each over every monitoring period of the document it has a value over at the share (the
-world's year always, and last, the dashboard's headline), each with its `period` and the compute it is `over`, its mark
+has `record` write them through the harness kit (`measurements`): the compute audit's part, the network attester's
+and the two together, each over every monitoring period of the document it has a value over at the share (the
+world's year always, and last), each with its `period` and the compute it is `over`, its mark
 at the head of its first input and its error over that period in the next, the document as `DOCUMENT` and what ran in
 the fingerprint. What it prints is the same in a run as outside one.
 """
@@ -264,8 +263,8 @@ def measurements(doc: Mapping[str, Any], metrics: Mapping[str, str]) -> list[dic
     `FIGURES` its value names, over that period at the document's share, in GB. The other periods come in the
     document's order and the world's year last, so a reader that keys a result's measurements by name alone, the last
     of a name winning, reads the world's year. Each has its `mark`, which also heads its first input, then its error
-    over its period (the compute audit's δ; the network attester's ε at its scans' δ; the headline's, the two parts
-    together as the print gives them first, the two summed, then each part's own), then the runs of record it read.
+    over its period (the compute audit's δ; the network attester's ε at its scans' δ; the two together's, the two
+    summed, then each part's own), then the runs of record it read.
     The network attester's part is modeled, with the mark its calculator gives the `scan` row where it gives one. A
     figure with no value over a period (a period no run of record holds, or one whose error is 1 or more) is left out,
     but over the world's year, where it has no value and says why: `NO_BOUND` with that error."""
@@ -294,7 +293,7 @@ def measurements(doc: Mapping[str, Any], metrics: Mapping[str, str]) -> list[dic
                      f"{_n(head['bound']['GB'])} GB")
             figures["compute_audit"] = (head["GB"], "modeled", [
                 f"modeled: {audit}", f"its error: δ = {_n(head['delta'])} over the {span}, the compute audit's", *runs], None)
-            figures["headline"] = (p["together"]["scan"]["GB"], "modeled", [
+            figures["total"] = (p["together"]["scan"]["GB"], "modeled", [
                 f"modeled: the two parts together {TOGETHER['scan']}, a link's execution phase carrying K = schedules + "
                 f"cells + jitter + min(entries, advice + the compute audit's part), at D_j = {att['of_record']}, with no "
                 "advice priced", f"its error: at most {_n(p['error'])} over the {span}, the two parts' errors summed",

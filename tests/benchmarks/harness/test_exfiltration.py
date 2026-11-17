@@ -103,7 +103,7 @@ def test_verity_bench_exfiltration_is_the_commands_runner(tmp_path, monkeypatch,
 
 def test_under_a_research_run_the_runner_records_its_three_figures_and_prints_the_same(tmp_path, monkeypatch, capsys):
     """Under a research run, `verity bench exfiltration` writes run.py's metrics into the run's result through the kit:
-    the headline figure (the two parts together), the compute audit's part and the network attester's, each over every
+    the compute audit's part, the network attester's and the two together, each over every
     monitoring period of the document it has a value over at the share in GB, with its `period` and `over`, the world's year last and as it was
     (so a reader keyed by name alone reads it), its mark heading its first input and its error over its period in the
     next, then the runs of record it read; the document as its evidence and what ran in the fingerprint. What it prints
@@ -148,19 +148,19 @@ def test_under_a_research_run_the_runner_records_its_three_figures_and_prints_th
     assert got["validation"]["status"] == "passed" and got["validation"]["evidence"] == [E.DOCUMENT]
     # only what the document has a value over, the world's year last: the fixtures' rows of record hold the compute
     # audit's part over the datacenter's year and the world's alone
-    headline, audit_gb, net_gb = metrics
+    audit_gb, net_gb, total_gb = metrics
     assert [(m["name"], m["period"], m["over"]) for m in got["measurements"]] == [
         (net_gb, "week", "datacenter"), (net_gb, "month", "datacenter"),
-        (headline, "year", "datacenter"), (audit_gb, "year", "datacenter"), (net_gb, "year", "datacenter"),
+        (audit_gb, "year", "datacenter"), (net_gb, "year", "datacenter"), (total_gb, "year", "datacenter"),
         (net_gb, "week", "world"), (net_gb, "month", "world"),
-        (headline, "year", "world"), (audit_gb, "year", "world"), (net_gb, "year", "world")]
+        (audit_gb, "year", "world"), (net_gb, "year", "world"), (total_gb, "year", "world")]
     assert all(m["value"] is not None and "why" not in m for m in got["measurements"])
     # a reader that keys them by name alone, the last of a name winning, reads the world's year
     by = {m["name"]: m for m in got["measurements"]}
-    assert list(metrics) == ["benchmarks/exfiltration-total-gb", "benchmarks/exfiltration-compute-audit-gb",
-                             "benchmarks/exfiltration-network-attester-gb"]
+    assert list(metrics) == ["benchmarks/exfiltration-compute-audit-gb", "benchmarks/exfiltration-network-attester-gb",
+                             "benchmarks/exfiltration-total-gb"]
     assert [by[name] for name in metrics] == got["measurements"][-3:]
-    head, audit, net = (by[name] for name in metrics)
+    audit, net, total = (by[name] for name in metrics)
     year = doc["periods"][-1]
     assert {(m["period"], m["over"]) for m in by.values()} == {("year", "world")}
     assert {m["unit"] for m in by.values()} == {"GB a world year at 10% of compute"}
@@ -168,15 +168,15 @@ def test_under_a_research_run_the_runner_records_its_three_figures_and_prints_th
     assert [m["mark"] for m in by.values()] == ["modeled"] * 3
     assert audit["value"] == doc["value"] == pytest.approx(YEAR_GB)
     assert net["value"] == year["together"]["scan"]["attester_GB"] == pytest.approx(50_753_639, abs=0.5)
-    assert head["value"] == year["together"]["scan"]["GB"] == pytest.approx(50_753_639 + YEAR_GB, abs=0.5)
-    assert head["inputs"][0] == (
+    assert total["value"] == year["together"]["scan"]["GB"] == pytest.approx(50_753_639 + YEAR_GB, abs=0.5)
+    assert total["inputs"][0] == (
         "modeled: the two parts together as the scan's check charges it today, a link's execution phase carrying K = "
         "schedules + cells + jitter + min(entries, advice + the compute audit's part), at D_j = 2, with no advice priced")
     assert audit["inputs"][0].startswith("modeled: the compute audit's part, the planner's row `(ii) honest`, ")
     assert audit["inputs"][1:] == ["its error: δ = 0.01 over the world's year, the compute audit's", *doc["runs"]]
-    assert head["inputs"][1:] == ["its error: at most 0.01 over the world's year, the two parts' errors summed",
-                                  audit["inputs"][0].removeprefix("modeled: "),
-                                  net["inputs"][0].removeprefix("modeled (run, not proved): "), *doc["runs"]]
+    assert total["inputs"][1:] == ["its error: at most 0.01 over the world's year, the two parts' errors summed",
+                                   audit["inputs"][0].removeprefix("modeled: "),
+                                   net["inputs"][0].removeprefix("modeled (run, not proved): "), *doc["runs"]]
     assert net["inputs"] == [
         ("modeled (run, not proved): the network attester's term of record, its `scan` row as the scan's check charges "
         "it today at D_j = 2, on an assumed class of at most 1,024 ids a response"),
@@ -193,29 +193,29 @@ def test_under_a_research_run_the_runner_records_its_three_figures_and_prints_th
         assert net["inputs"][1] == (f"its error: ε = {E._p(p['eps'])} over the {span}, at a scan's δ of "
                                     f"{E._p(doc['attester']['scan_delta']['value'])} (assumed)")
         if p["compute_audit"] is None:
-            assert (headline, p["period"], p["compute"]) not in at and (audit_gb, p["period"], p["compute"]) not in at
+            assert (total_gb, p["period"], p["compute"]) not in at and (audit_gb, p["period"], p["compute"]) not in at
             continue
-        head, audit = at[headline, p["period"], p["compute"]], at[audit_gb, p["period"], p["compute"]]
-        assert {(m["unit"], m["mark"]) for m in (head, audit)} == {(f"GB a {scope} at 10% of compute", "modeled")}
-        assert (head["value"], audit["value"]) == (p["together"]["scan"]["GB"], p["compute_audit"]["GB"])
+        total, audit = at[total_gb, p["period"], p["compute"]], at[audit_gb, p["period"], p["compute"]]
+        assert {(m["unit"], m["mark"]) for m in (total, audit)} == {(f"GB a {scope} at 10% of compute", "modeled")}
+        assert (total["value"], audit["value"]) == (p["together"]["scan"]["GB"], p["compute_audit"]["GB"])
         assert audit["inputs"][1:] == [
             f"its error: δ = {E._n(p['compute_audit']['delta'])} over the {span}, the compute audit's", *doc["runs"]]
-        assert head["inputs"][1] == f"its error: at most {E._n(p['error'])} over the {span}, the two parts' errors summed"
+        assert total["inputs"][1] == f"its error: at most {E._n(p['error'])} over the {span}, the two parts' errors summed"
 
     # where every ε is 1 or more, the network attester's part is written over the world's year alone, with no value
     second = tmp_path / "run-2"
     run("--scan-delta", "1/1048576", within=second)
     written = json.loads((second / "result.json").read_text())["measurements"]
     nets = [m for m in written if m["name"] == net_gb]
-    assert [(m["period"], m["over"]) for m in nets] == [("year", "world")] and written[-1] == nets[0]
+    assert [(m["period"], m["over"]) for m in nets] == [("year", "world")] and written[-2] == nets[0]
     assert nets[0]["value"] is None and nets[0]["why"] == f"{E.NO_BOUND}: ε = 11,012,646 over the world's year"
     assert [(m["name"], m["period"], m["over"]) for m in written if m["value"] is not None] == [
         (audit_gb, "year", "datacenter"), (audit_gb, "year", "world")]
-    heads = [m for m in written if m["name"] == headline]
-    assert [(m["period"], m["over"], m["value"]) for m in heads] == [("year", "world", None)]
-    assert heads[0]["why"] == f"{E.NO_BOUND}: the two parts' errors summed are 11,012,646 over the world's year"
-    with pytest.raises(ValueError, match="^no figure of the document is named total: a metric records one of headline, "):
-        E.measurements(doc, {"benchmarks/x": "total"})
+    totals = [m for m in written if m["name"] == total_gb]
+    assert [(m["period"], m["over"], m["value"]) for m in totals] == [("year", "world", None)] and written[-1] == totals[0]
+    assert totals[0]["why"] == f"{E.NO_BOUND}: the two parts' errors summed are 11,012,646 over the world's year"
+    with pytest.raises(ValueError, match="^no figure of the document is named sum: a metric records one of compute_audit, "):
+        E.measurements(doc, {"benchmarks/x": "sum"})
 
 
 def test_the_legend_line_shows_a_rows_mark_as_its_calculator_gives_it(tmp_path, monkeypatch):

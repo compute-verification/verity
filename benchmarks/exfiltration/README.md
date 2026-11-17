@@ -62,7 +62,7 @@ uv run verity bench exfiltration --from benchmarks/exfiltration/made_up
     on each row that carries it, and holds no copy.
   - **Its class is the one the plan of record serves**: at most 1,024 ids a response (`--response-ids`), assumed, as
     every class is while no run has certified one. `verity bench certifier_term` assumes a wider class by default,
-    so the headline gives that command's own term of record beside this one's.
+    so the print gives that command's own term of record beside this one's.
 
 A link's execution phase carries K = schedules + cells + jitter + min(entries, advice + the wrong blocks' output bits
 at δ). The first three terms are the network attester's part and the last term's second branch is the compute
@@ -101,7 +101,7 @@ handed with the superseded ones. The print gives the reader's lines as they are,
 
 With no run carrying the record the reader is not asked, and the calculator's rows are as with no record read: each
 connection charged its whole schedule, `design` equal to `design, no stop block`, and the network attester's
-figure in the headline the `scan` row's.
+part the `scan` row's.
 
 ### The output count's mark
 
@@ -416,12 +416,13 @@ the network attester's ε is 1 or more) is left out, but the world's year, the f
 is always written and written last, so a reader that keys a result's measurements by name alone, the last of a name
 winning, reads it:
 
-- `benchmarks/exfiltration-total-gb`: the headline figure, the two parts together as the print gives them first: as
-  the scan's check charges it today, at D_j = 2, its error the two parts' summed; over each period the compute audit's
-  part has a value over.
 - `benchmarks/exfiltration-compute-audit-gb`: the compute audit's part over each period.
 - `benchmarks/exfiltration-network-attester-gb`: the network attester's part of record, the `scan` row at D_j = 2;
   over the world's year with no value and "no bound at this period" with its ε as its why where that ε is 1 or more.
+- `benchmarks/exfiltration-total-gb`: the two parts together, the `scan` row at D_j = 2 with the compute audit's
+  part, its error the two parts' summed; over each period the compute audit's part has a value over.
+
+The three are of equal rank: each part is its own metric, and the total is their sum.
 
 Each measurement's first input opens
 with its mark (`modeled`, and the network attester's with the mark its calculator gives the `scan` row beside it), its
