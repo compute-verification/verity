@@ -6,9 +6,13 @@
 
 kind = "gpu"
 sku = "b200-sxm-180gb"
+short = "b200"
 name = "NVIDIA B200 SXM 180 GB (HGX B200, 1000 W)"
 die = "GB100 x 2"
 arch = "sm_100a"
+driver = [
+  { value = "NVIDIA B200", source = "art:986044d82e9b (stdout.log: nvidia-smi --query-gpu=name,uuid,...); art:a597e0beaf00 (out/nvsmi-before.txt, nvidia-smi -q: Product Name)" },
+]
 board = "692-2G525-0220-000"
 vbios = "97.00.D9.00.35"
 nodes = "a B200 node: one card a VM (art:a597e0beaf00: nvidia-smi -q and the clock trials; art:986044d82e9b)"
