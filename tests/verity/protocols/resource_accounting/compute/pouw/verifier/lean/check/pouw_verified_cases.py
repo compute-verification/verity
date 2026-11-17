@@ -1,4 +1,4 @@
-"""The statements difftest's cases: the arguments of `credit._verified` (the Lean `PouwVerifier.Verified`), a served execution phase's
+"""The statements difftest's cases: the arguments of `credit._verified` (the Lean `PouwCheck.Verified`), a served execution phase's
 statements, its credit period's committed circuit files and the verifier's answers.
 
 A `verified` case is a served execution phase (`pouw_credit_cases.layout`, its descriptor under a prefix or none, its calls over

@@ -94,7 +94,7 @@ each under its own subprotocol's decoder (SPOT's is the one-stage registration r
 the run's record's;
 every Commit record the
 period's windows name, when they decode, has digest `r` (a period whose windows don't decode is the period's own
-refusal, `PouwVerifier.Period.check`, which this doesn't read); the policy's case is `CaseHeld`: the record names the
+refusal, `PouwCheck.Period.check`, which this doesn't read); the policy's case is `CaseHeld`: the record names the
 registered circuit by its SHA-512, θ holds what the log's first record registers, the instance checked has a parse, a
 declaration the registered circuit lays out and a division, every parse carries the policy's `program`, `Γ` and `α`,
 and every declaration the registered circuit lays out, with the declared division, meets the policy; and SPOT's case is `StageHeld`: it is in the one-stage form, its record names, by its SHA-512, the program of one-stage

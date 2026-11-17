@@ -182,9 +182,9 @@ def CheckedCreditMonitoringPeriod : Prop :=
       creditPrefix Sc Cd Np (ws.prefixLen prm x) (checkedLive Sc Cd Wp prm ws x) a b Λ δs) ≤ δs + n * (δbind + δks)
 
 /-- **Each window's salt is its live coin** (H1's instance). On every path, window `w`'s salt (`salt x w`: the 64-byte
-salt the verifier holds for the window, which every tile's noise reads through its public row, `PouwVerifier.publicBc`, and
+salt the verifier holds for the window, which every tile's noise reads through its public row, `PouwCheck.publicBc`, and
 every sampled proof block's proof is held to) is `enc` of the window's round-0 coin, the model's coin, released after the
-round's values are committed. The check holds a live window to it: `PouwVerifier.executionPhaseSaltReason` accepts a live
+round's values are committed. The check holds a live window to it: `PouwCheck.executionPhaseSaltReason` accepts a live
 window's salt only as its salt session's live coin (`Properties.Pouw.Check.SaltKept`), opened after the window's
 committed activations (`anchoredEpochRoot W X k`). The served windows don't meet it yet: no path that serves H1 windows
 takes its salt from such a session, and the proved tiles' salt port is a value the prover records. A named assumption

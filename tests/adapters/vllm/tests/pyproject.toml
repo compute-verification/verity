@@ -77,7 +77,7 @@ untraced = [
 # reference decode it imports) and imports the store's load (load.py, with the library's wrapper gpu.py); tests/tools/test_ratchet_gate.py commits the repository's lints (tests/lint/test_repo_env_reads.py,
 # test_repo_ruff.py, test_repo_silent_excepts.py, test_repo_lane_text.py and test_repo_retired_terms.py) into the repositories it gates.
 # The tests build and run the Lake packages whose lakefiles they list: tests/pipeline/test_row_tables_stream.py
-# `spot-verifier`, tests/protocol_options/test_pouw_h1.py `pouw-verifier-difftest` and test_poub_session.py
+# `spot-verifier`, tests/protocol_options/test_pouw_h1.py `pouw-check-difftest` and test_poub_session.py
 # `poub-verifier`.
 # The root ruff.toml is what ruff.toml extends, and tests/lint/test_ruff_vllm.py reads its selection.
 # verity_vllm/definitions is a suite of its own, which this suite's directory leaves out; the package imports it throughout.

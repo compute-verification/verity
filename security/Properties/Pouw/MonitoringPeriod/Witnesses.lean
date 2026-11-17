@@ -201,7 +201,7 @@ noncomputable def play (n : ℕ) : Play Ω1 n Unit Unit Unit Unit where
 /-- The uniform measure's instance on `64` windows' coins: instance search unfolds `Paths` 64 levels deep and fails. -/
 instance (priority := high) fintypePaths64 : Fintype (Paths Ω1 64) := Paths.instFintype Ω1 64
 
-/-- **The deployed check accepts the period**: `PouwVerifier.protocol.check` accepts every window on the coins `x`. -/
+/-- **The deployed check accepts the period**: `PouwCheck.protocol.check` accepts every window on the coins `x`. -/
 def checkedAccepts (n : ℕ) (x : Paths Ω1 n) : Prop :=
   ∀ w, Accepts prm ((executionPhases n).reg x w) ((executionPhases n).ev x w)
 

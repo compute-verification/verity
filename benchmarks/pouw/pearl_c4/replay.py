@@ -1,6 +1,6 @@
 """Pearl-C4's reference replay of a device run's own transcript under the work sampling design (`clear_work.audit`), with
 Pearl-C4's domain and inert work (`verity.protocols.experimental.pearl_c4.prover.pearl_c4`).  It opens rows and words and recomputes them in the clear, so its
-ACCEPT is replay-verified (development shortcut; the protocol's check is a ZK proof, PouwVerifier), never the protocol's
+ACCEPT is replay-verified (development shortcut; the protocol's check is a ZK proof, PouwCheck), never the protocol's
 verdict.
 
 **The dump** (`write_dump`) is what a timed call emits, as the device holds it after the call: A's rows (BF16, row-major,

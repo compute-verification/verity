@@ -386,7 +386,7 @@ def window_448():
 def test_the_real_32_by_32_window_at_k_448_reads_in_v1_what_it_read_in_v0_and_credit_builds_the_same_files(window_448):
     """On the real tile at K = 448, 32 × 32, over two steps of two calls of K each: each call's v1 file reads what its
     v0 file did at every unit and port (`_v1_files`), and is the one `credit.registered_file` builds from the
-    descriptor alone, which the Lean `Credit.registeredFile` is held to (the pouw-verifier difftest). Building the real
+    descriptor alone, which the Lean `Credit.registeredFile` is held to (the pouw-check difftest). Building the real
     tile's Program takes about 40 s, which no stand-in tile can show: its receipt width and row words are K = 448's."""
     prog, tp = window_448
     window, salt = "ab" * 64, "cd" * 64

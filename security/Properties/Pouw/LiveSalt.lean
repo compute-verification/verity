@@ -33,7 +33,7 @@ def WeightsRoot (m : Json) (w : ByteArray) : Prop :=
 def EPOCH_OPEN_TAG : ByteArray := "verity/pouw-epoch-open/v1".toUTF8
 
 /-- What `epochOpenRoot w k` hashes: `EPOCH_OPEN_TAG` ‖ `w` ‖ u64be(`k`), concatenated with no separator, as
-`PouwVerifier.executionPhaseOpenRoot` concatenates its parts. With `w` 64 bytes and `k` below 2^64 it is 97 bytes, every part at a
+`PouwCheck.executionPhaseOpenRoot` concatenates its parts. With `w` 64 bytes and `k` below 2^64 it is 97 bytes, every part at a
 fixed offset. -/
 def epochMessage (w : ByteArray) (k : Nat) : ByteArray := EPOCH_OPEN_TAG ++ w ++ PouwCommit.be8 k
 

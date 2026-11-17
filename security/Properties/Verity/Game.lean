@@ -191,7 +191,7 @@ def ComponentAccepts (k : Verity.Registration.Composite) (a : Subprotocol) (s : 
 
 /-- **The credit Pearl+'s check publishes in what the prover sent composite `k`**: the three byte strings decode,
 Pearl+'s case decodes under the parameters `k` names for it, and Pearl+'s check on the blobs sent accepts it with the
-credit `w` (`PouwVerifier.PearlPlus.Protocol.checkBlobs`), whose `macs`, `rho` and `epsilon` its answer publishes. -/
+credit `w` (`PouwCheck.PearlPlus.Protocol.checkBlobs`), whose `macs`, `rho` and `epsilon` its answer publishes. -/
 def PearlPlusCredits (k : Verity.Registration.Composite) (s : Sent) (w : PouwVerifier.PearlPlus.Credit) : Prop :=
   ∃ ps c ev, Decoded s ps c ev ∧ ∃ x ∈ Properties.Composition.triples (s.components k) ps ev,
     x.2.2.id = PouwVerifier.PearlPlus.Protocol.protocolId ∧ ∃ p cm e prof,

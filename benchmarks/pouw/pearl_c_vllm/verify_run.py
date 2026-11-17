@@ -7,7 +7,7 @@
   against the execution phase's coin commitment as the challenger published it (``--coins``, not the pass's copy; a live session's
   when its scheme is `window.LIVE_SCHEME`, `epoch_coins`), as the salt coin, opened after the fixed operands' root (a live
   session's after its salt execution phase's root), and the salt must be the manifest's.  A pass recorded before the execution
-  phase's coins (a v1 manifest, which carries a beacon instead) is refused, as the Lean `PouwVerifier.PearlPlus` refuses it.
+  phase's coins (a v1 manifest, which carries a beacon instead) is refused, as the Lean `PouwCheck.PearlPlus` refuses it.
 - **The call indices** are each below 2^32 and none twice (`credit.passes_distinct`: ``call-range``, ``repeated-call``);
   `served_passes.py` holds a run's passes of one salt to distinct indices too.
 - **The records** (each matmul's real rows, width, excluded and voluntary rows; each fixed operand's excluded and voluntary rows)
@@ -76,7 +76,7 @@ nothing the verdict accepts.
 - ``node`` (`node_draw`, the default): 32 bytes of the Lean verifier's coins on this node (``uniform/io-getrandombytes``),
   a development sample no verdict of record takes.
 
-**The coin record** (``record``, `COIN_SCHEMA`) is what every reader of the sample reads, the Lean `PouwVerifier.PearlPlus`
+**The coin record** (``record``, `COIN_SCHEMA`) is what every reader of the sample reads, the Lean `PouwCheck.PearlPlus`
 among them; it is written before any replay, and once asked for a sample is never asked again (`ASKED`):
 
     {"schema": "verity-pouw/pearl-plus-coin/v2",
@@ -102,7 +102,7 @@ session holds a sample no reader takes.
 Prints one line, ``ACCEPT …`` or ``REJECT …``, naming the pass's run and the manifest (`transcript`, as the panel's
 ``--transcript`` takes it), writes ``verify.json`` beside the manifest, and exits 0 only on acceptance, or with
 ``--expect-reject`` (a negative control's pass) only on rejection.  An ACCEPT is replay-verified (development shortcut; the
-protocol's check is a ZK proof, PouwVerifier).
+protocol's check is a ZK proof, PouwCheck).
 """
 from __future__ import annotations
 

@@ -28,7 +28,7 @@ process of its own (this file's ``serve`` verb, `auditor.run` with no coin link,
 
 Stand-ins, named in OUT/e2e.json: the serve (one toy pass, `served.json` written here), SPOT's window
 docket and records audit (two files tied to W), and, unless ``--lean`` names a ``pouw-pearlplus``, the Lean
-``PouwVerifier.PearlPlus`` verdict (``pearlplus-lean.json``, copied from Pearl+'s answer); with it, `served_pearlplus.sh`'s
+``PouwCheck.PearlPlus`` verdict (``pearlplus-lean.json``, copied from Pearl+'s answer); with it, `served_pearlplus.sh`'s
 Lean step writes that file (``served_passes.py lean``, both verdicts in OUT/e2e.json's ``lean``). Then, as a control, a
 second sample on the same commitment: the gate refuses its open (one session a root, ever), so no second coin exists, and
 the piece written after it composes the same row."""

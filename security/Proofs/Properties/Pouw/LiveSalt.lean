@@ -240,7 +240,7 @@ theorem accepted_of {key ledger pins main session : Json} {kv : Std.TreeMap.Raw 
     hopen, hlive, by unfold liveSalt; rw [hseed]; rfl, jsonStrIs_eq hsalt⟩
 
 set_option maxHeartbeats 4000000 in
-/-- `PouwVerifier.liveSaltCheck` accepts only what `Accepted` describes. -/
+/-- `PouwCheck.liveSaltCheck` accepts only what `Accepted` describes. -/
 theorem acceptMeans : AcceptMeans PouwVerifier.liveSaltCheck := by
   intro key ledger pins main session m salt h
   refine of_triple (Q := fun salt => ∃ w k a c o, Accepted key ledger pins main session m w k a c o salt) ?_ h

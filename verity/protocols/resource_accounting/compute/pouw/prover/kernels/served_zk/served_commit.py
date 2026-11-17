@@ -66,7 +66,7 @@ verity imports; run from this file, the commands that reach either refuse (NotIm
   Python's.
 - **The coins** are the execution phase's (`pouw.coins`): the challenger process that holds the Streams holds the execution phase's coin
   challenger.  When the process starts, before it reads a request, that challenger samples the execution phase's salt and sampling coins
-  and their hm96 salts from the Lean verifier (`pouw.verifier.coins`: `pouw-verifier-difftest`'s ``coins``,
+  and their hm96 salts from the Lean verifier (`pouw.verifier.coins`: `pouw-check-difftest`'s ``coins``,
   `IO.getRandomBytes`, A3) and commits to them, and the process publishes the commitment (``LOG/coins.json``) before
   any request; with ``--state`` the entropy is instead the file the serving controller wrote from the same Lean coins
   before it served the pass (`state_entropy`), so the pass's salt coin is one it opens.  No coin is read from
@@ -1214,7 +1214,7 @@ class Challenger:
     def outcome(self, name: str, units: list[dict]) -> tuple[S.Outcome, dict, dict]:
         """The final outcome from each sampled proof block's ``{"unit", "statement", "verdicts"}``, ascending, and PoUW's public
         items of it (exactly `pouw.window.PUBLIC`) and the stream's record of it.  PoUW's check over the stream's answer
-        is of record: the stream's outcome is final once given, so a refusal here (``pouw-verifier``, or a disagreement)
+        is of record: the stream's outcome is final once given, so a refusal here (``pouw-check``, or a disagreement)
         leaves the execution phase with no published outcome."""
         st, reg = self._held(name)
         d = self._drawn(name)
