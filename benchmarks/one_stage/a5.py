@@ -210,6 +210,7 @@ import multiprocessing
 import multiprocessing.connection
 import os
 import re
+import resource
 import shutil
 import signal
 import subprocess
@@ -771,25 +772,91 @@ def _warm_one(t: str) -> dict:
     w, t0 = _WARM, time.time()
     compose, defn = w["sets"][t]
     made, kept = own_composed(w["a"], compose, defn, t, None, w["pd"], w["program"])
-    return {"template": t, "seconds": round(time.time() - t0, 1), "kept": kept, "pin": made["pin"], "k_log": made.get("k_log")}
+    return {"template": t, "seconds": round(time.time() - t0, 1), "kept": kept, "pin": made["pin"], "k_log": made.get("k_log"),
+            "peak_gib": round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 2**20, 1)}
 
 
-def warm(a: argparse.Namespace, sets: dict, mine: CS.Window, jobs: int = 1) -> list[dict]:
-    """Every template of window ``mine`` that a caller's composer in ``sets`` makes, and says what it makes it from
-    (`compose_key`), composed into ``a.compose_cache`` bound to the window's partition and program, ``jobs`` at a time, each in
-    a process forked for it: a window's templates and binding are public, so this runs before its timed audit, whose staging
-    then links each kept circuit and reads none (`own_composed`). A 4,32,4 window's Int8RowQuant_v3 holds its text, past 100 GB,
-    while it composes, so ``jobs`` is what the machine's memory takes. -> each template's seconds, pin and whether the cache
-    held it already."""
+def _warm_child(t: str, conn: multiprocessing.connection.Connection) -> None:
+    try:
+        conn.send(("row", _warm_one(t)))
+    except BaseException as e:  # noqa: BLE001 - the parent names it
+        conn.send(("error", f"{type(e).__name__}: {e}"))
+    finally:
+        conn.close()
+
+
+#: what a compose's earlier warm measured, by template, kept in the compose cache: the next warm's order and memory bound
+WARM_SECONDS = "warm-seconds.json"
+#: the memory a compose with no earlier measurement is taken to need, in GiB: a 4,27,2 window's composing peaked at 27.5
+WARM_UNKNOWN_GIB = 32.0
+
+
+def warm_todo(sets: dict, mine: CS.Window) -> list[str]:
+    """The templates of window ``mine`` that `warm` composes: those whose composer in ``sets`` says what it composes from."""
+    return [t for t in dict.fromkeys(m.template for m in mine.members)
+            if callable(sets.get(t, (None,))[0]) and getattr(sets[t][0], "inputs", None) is not None]
+
+
+def warm(a: argparse.Namespace, sets: dict, mine: CS.Window, jobs: int = 1, mem_gib: float | None = None,
+         done: Callable[[dict], None] | None = None) -> list[dict]:
+    """Every template of `warm_todo`, composed into ``a.compose_cache`` bound to the window's partition and program, up to
+    ``jobs`` at a time, each in a process forked for it alone: a window's templates and binding are public, so this runs
+    before its timed audit, whose staging then links each kept circuit and reads none (`own_composed`). The longest an
+    earlier warm measured start first (`WARM_SECONDS` in the cache; an unmeasured one before them), and one starts only
+    while the peaks measured for those running (`WARM_UNKNOWN_GIB` unmeasured) and its own stay within ``mem_gib``, else
+    alone. ``done`` gets each template's row as it finishes, with ``n`` of ``of``. -> each template's seconds, pin, peak
+    resident GiB (its process's, the forked parent's pages included; at ``jobs`` 1 the caller's peak so far) and whether the cache held it already."""
     if not getattr(a, "compose_cache", None):
         raise ValueError("warm makes a5's compose cache: give --compose-cache")
-    todo = [t for t in dict.fromkeys(m.template for m in mine.members)
-            if callable(sets.get(t, (None,))[0]) and getattr(sets[t][0], "inputs", None) is not None]
+    cache = Path(a.compose_cache)
+    cache.mkdir(parents=True, exist_ok=True)
+    try:
+        before = json.loads((cache / WARM_SECONDS).read_text())
+    except (OSError, ValueError):
+        before = {}
+    todo = sorted(warm_todo(sets, mine), key=lambda t: -(before.get(t) or {}).get("seconds", float("inf")))
+    need = {t: (before.get(t) or {}).get("peak_gib") or WARM_UNKNOWN_GIB for t in todo}
     _WARM.update(a=a, sets=sets, pd=mine.partition_digest, program=mine.partition["program"])
-    if jobs <= 1:
-        return [_warm_one(t) for t in todo]
-    with ProcessPoolExecutor(jobs, mp_context=multiprocessing.get_context("fork")) as ex:
-        return [f.result() for f in [ex.submit(_warm_one, t) for t in todo]]
+    got: list[dict] = []
+
+    def finished(row: dict) -> None:
+        got.append(row := {**row, "n": len(got) + 1, "of": len(todo)})
+        before[row["template"]] = {"seconds": row["seconds"], "peak_gib": row["peak_gib"]}
+        if done:
+            done(row)
+
+    try:
+        if jobs <= 1:
+            for t in todo:
+                finished(_warm_one(t))
+            return got
+        ctx, running = multiprocessing.get_context("fork"), {}
+        try:
+            while todo or running:
+                held_gib = sum(need[t] for _p, t in running.values())
+                while todo and len(running) < jobs and (not running or mem_gib is None or held_gib + need[todo[0]] <= mem_gib):
+                    held_gib += need[t := todo.pop(0)]
+                    r, w = ctx.Pipe(duplex=False)
+                    (proc := ctx.Process(target=_warm_child, args=(t, w))).start()
+                    w.close()
+                    running[r] = (proc, t)
+                r = multiprocessing.connection.wait(list(running))[0]
+                proc, t = running.pop(r)
+                try:
+                    kind, row = r.recv()
+                except EOFError:
+                    kind, row = "error", f"its process ended with no row (exit {proc.join() or proc.exitcode})"
+                proc.join()
+                if kind != "row":
+                    raise RuntimeError(f"warm: {t}'s compose failed: {row}")
+                finished(row)
+        finally:
+            for proc, _t in running.values():
+                proc.kill()
+                proc.join()
+        return got
+    finally:
+        (cache / WARM_SECONDS).write_text(json.dumps(before, sort_keys=True, indent=1) + "\n")
 
 
 def stage(served: Path, mm: dict, files: tuple[dict, dict]) -> None:

@@ -1656,26 +1656,33 @@ def test_the_audit_counts_a_listed_record_with_window_ingress_and_prints_its_win
 
 def test_warm_fills_the_compose_cache_the_audit_then_takes(written, tmp_path, monkeypatch, capsys):
     """``warm`` hands `a5.warm` the verifier's window and its composers, each saying what it composes from (the record's
-    statement under the stager's label, which a5's cache keys), with ``--compose-cache`` and ``--jobs``; the audit hands a5
-    that cache, and none without ``--compose-cache``. It hands a5 ``--archive-link`` and ``--gpus`` (its proof server's
-    cards, `a5.devices`) too, each only where it is given."""
+    statement under the stager's label, which a5's cache keys), with ``--compose-cache``, ``--jobs`` and ``--mem-gb``, and
+    prints each template's row as it finishes. The audit warms first, ``--jobs`` at a time within ``--audit-mem-gb``, into
+    its ``--compose-cache``, or with none into its own, saying so at once, and keeps each row in its ``composed.jsonl``;
+    it hands a5 that cache. It hands a5 ``--archive-link`` and ``--gpus`` (its proof server's cards, `a5.devices`) too,
+    each only where it is given."""
     import a5 as A5
     from verity.protocols.proofs.spot.verifier.challenger import challenger_session as AC
 
     seen = {}
 
-    def warm(a, sets, mine, jobs=1):
-        seen.update(cache=a.compose_cache, jobs=jobs, members=[m.template for m in mine.members],
+    def warm(a, sets, mine, jobs=1, mem_gib=None, done=None):
+        seen.update(cache=a.compose_cache, jobs=jobs, mem=mem_gib, members=[m.template for m in mine.members],
                     inputs={t: c.inputs for t, (c, _fn) in sets.items()})
-        return [{"template": TID, "seconds": 1.0, "kept": False, "pin": "ab", "k_log": 3}]
+        row = {"template": TID, "seconds": 1.0, "kept": False, "pin": "ab", "k_log": 3, "peak_gib": 2.5, "n": 1, "of": 1}
+        done(row)
+        return [row]
 
     monkeypatch.setattr(A5, "warm", warm)
     cache = str(tmp_path / "cache")
-    assert RA.main(["warm", "--window", str(written.dir), "--sampling-design", _rate(written.dir), "--compose-cache", cache, "--jobs", "2"]) == 0
-    assert seen == {"cache": cache, "jobs": 2, "members": [TID, TID],
+    assert RA.main(["warm", "--window", str(written.dir), "--sampling-design", _rate(written.dir), "--compose-cache", cache,
+                    "--jobs", "2", "--mem-gb", "40"]) == 0
+    assert seen == {"cache": cache, "jobs": 2, "mem": 40.0, "members": [TID, TID],
                     "inputs": {TID: ["unit/window", written.doc["statements"][TID]]}}
     lines = capsys.readouterr().out.splitlines()
-    assert json.loads(lines[0])["template"] == TID and json.loads(lines[-1].removeprefix("WARM "))["templates"] == 1
+    assert lines[0] == "WARMING 1 templates, 2 at a time"
+    assert json.loads(lines[1].removeprefix("COMPOSED "))["template"] == TID
+    assert json.loads(lines[-1].removeprefix("WARM "))["templates"] == 1
 
     class Opened(Exception):
         pass
@@ -1692,11 +1699,21 @@ def test_warm_fills_the_compose_cache_the_audit_then_takes(written, tmp_path, mo
     args = ["audit", "--window", str(written.dir), "--sampling-design", _rate(written.dir), "--circuit", written.rec["window"]["circuit"], "--run", RUN,
             "--m0-pythonpath", "", "--bin", "b", "--lean", "l", "--zk-server", "f", "--out", str(tmp_path / "out"),
             "--skip-negatives", "--challenger", "local", "--main", "m.txt"]
-    for extra, want in ((["--compose-cache", cache], (cache, False, None)), ([], (None, False, None)),
-                        (["--archive-link"], (None, True, None)), (["--gpus", "0,2"], (None, False, [0, 2]))):
+    own = str(tmp_path / "out" / "compose-cache")
+    for extra, want in ((["--compose-cache", cache], (cache, False, None)), ([], (own, False, None)),
+                        (["--archive-link"], (own, True, None)), (["--gpus", "0,2"], (own, False, [0, 2]))):
+        capsys.readouterr()
         with pytest.raises(Opened):
             RA.main([*args, *extra])
-        assert seen["audit"] == want
+        assert seen["audit"] == want and seen["jobs"] == 1
+        said = [x for x in capsys.readouterr().out.splitlines() if x.startswith("COMPOSE")]
+        told = [] if extra[:1] == ["--compose-cache"] else [
+            "COMPOSE composing 1 templates one at a time: no compose cache was given; run the warm first, or pass --jobs"]
+        assert said[:-1] == told and said[-1].startswith("COMPOSED "), said
+        assert [json.loads(x)["template"] for x in (tmp_path / "out" / RA.COMPOSED).read_text().splitlines()] == [TID]
+    with pytest.raises(Opened):
+        RA.main([*args, "--jobs", "4", "--audit-mem-gb", "100"])
+    assert (seen["jobs"], seen["mem"]) == (4, 100.0)
     with pytest.raises(SystemExit):
         RA.main([*args, "--gpus", "0,0"])
 

@@ -3515,7 +3515,10 @@ if a[0] == "warm":
     if os.environ.get("FAIL_WARM"):
         print("records_audit.py warm: a template's compose was killed", file=sys.stderr)
         sys.exit(1)
-    print(json.dumps({"template": "a@0", "seconds": 1.5, "kept": False, "pin": "ab"}))
+    print("WARMING 3 templates, " + a[a.index("--jobs") + 1] + " at a time", flush=True)
+    print("COMPOSED " + json.dumps({"template": "a@0", "seconds": 1.5, "kept": False, "pin": "ab", "n": 1, "of": 3}), flush=True)
+    if os.environ.get("WARM_STOPPED"):
+        sys.exit(124)
     print("WARM " + json.dumps({"templates": 3, "kept": 0, "seconds": 2.0}, sort_keys=True))
     sys.exit(0)
 out = Path(a[a.index("--out") + 1])
@@ -3584,7 +3587,7 @@ def _v3c(tmp_path: Path, args: tuple[str, ...] = ("v3c",), *, prove_path: str = 
            "ORDER": str(tmp_path / "order"), "H1_GATE": "", "V3C_CLASS": W63K4, "CLASSES": W63K4,
            "CERTIFIER_CHAIN_CMD": CHAIN, "CERTIFIER_PERIOD_CMD": PERIOD, "NODE_MEM_GB": "512",
            "MAIN_FILE": str(tmp_path / "main.txt"), "DEVELOPMENT": "1", "COMPOSITE": "", "PEARLPLUS_INODES": "0",
-           "VY_CHALLENGER_1_HOST": CHALLENGER_HOST, "VERITY_HOLD_PLACEMENT": "1"}
+           "VY_CHALLENGER_1_HOST": CHALLENGER_HOST, "VERITY_HOLD_PLACEMENT": "1", "V3C_WARM_JOBS": ""}
     env = {k: v for k, v in {**env, **extra}.items() if v is not None}
     rc = subprocess.run(["bash", str(HERE.parents[2] / "benchmarks" / "one_stage" / "served_verdicts.sh"), *args], cwd=tree, env=env, check=False,
                         capture_output=True).returncode
@@ -3933,14 +3936,19 @@ def test_the_preflight_refuses_v3c_gpus_on_a_node_without_gpu_lease(tmp_path):
     assert (rc, order) == (3, []) and lines[-1].startswith("PREFLIGHT: V3C_GPUS's cards are held under gpu-lease"), lines
 
 
+#: served_verdicts.sh's V3C_WARM_JOBS when unset: the cores the run is given, at most 8
+WARM_DEFAULT = str(min(8, len(os.sched_getaffinity(0))))
+
+
 @pytest.mark.parametrize("tied, extra, limit", [
-    (False, {}, None), (False, {"V3C_WARM_JOBS": "2"}, "180m"),
+    (False, {}, None), (False, {"V3C_WARM_JOBS": "2"}, "90m"), (False, {"V3C_WARM_JOBS": None}, "90m"),
     (True, {"V3C_WARM_JOBS": "3", "V3C_WARM_TIMEOUT": "5h"}, "5h"),
 ])
 def test_v3c_warm_composes_the_windows_templates_before_its_audit_which_then_takes_their_cache(tmp_path, tied, extra, limit):
-    """With V3C_WARM_JOBS, records_audit's warm composes every template of the committed window into its compose cache,
-    that many at a time, at the audit's sampling design, within V3C_WARM_TIMEOUT (default V3C_AUDIT_TIMEOUT), before the
-    audit, which takes the cache and so composes none; without it, no warm and no cache."""
+    """With V3C_WARM_JOBS (unset, the cores given, at most 8), records_audit's warm composes every template of the committed
+    window into its compose cache, that many at a time within V3C_AUDIT_MEM_GB, at the audit's sampling design, within
+    V3C_WARM_TIMEOUT (default 90m), before the audit, which takes the cache and so composes none; set empty, no warm and
+    no cache."""
     if tied:
         _tied_commit(tmp_path, "same")
     rc, lines, order, limits = _v3c(tmp_path, **({"H1_TIE": "1"} if tied else {}), **extra)
@@ -3950,15 +3958,25 @@ def test_v3c_warm_composes_the_windows_templates_before_its_audit_which_then_tak
         assert "warm" not in order and "--compose-cache" not in audit and not (tmp_path / "order.warm").exists()
         assert not any(line.startswith("V3C-WARM") for line in lines)
         return
-    vw, jobs = tmp_path / "serve" / f"v3c-w7-{W63K4.replace(',', '-')}", extra["V3C_WARM_JOBS"]
+    vw, jobs = tmp_path / "serve" / f"v3c-w7-{W63K4.replace(',', '-')}", extra["V3C_WARM_JOBS"] or WARM_DEFAULT
     assert order.count("warm") == 1 and order.index("warm") < order.index("audit"), order
     assert json.loads((tmp_path / "order.warm").read_text()) == [
         "warm", "--window", str(vw / "window"), "--sampling-design", TIED_RULE if tied else RULE,
-        "--compose-cache", str(vw / "compose-cache"), "--jobs", jobs]
+        "--compose-cache", str(vw / "compose-cache"), "--jobs", jobs, "--mem-gb", "290"]
     assert audit[audit.index("--compose-cache") + 1] == str(vw / "compose-cache")
-    assert limits.count(limit) == 1 + (limit == "180m"), limits
+    assert limits.count(limit) == 1, limits
     assert f'V3C-WARM class {W63K4} (records_audit.py warm exit 0, {jobs} at a time): WARM ' \
            '{"kept": 0, "seconds": 2.0, "templates": 3}' in lines
+
+
+def test_a_warm_out_of_time_says_how_many_templates_it_composed(tmp_path):
+    """A warm `timeout` stops (the stand-in exits 124 after its first template's line) says how far it got, read off the
+    lines it printed as each template finished."""
+    rc, lines, order, _limits = _v3c(tmp_path, V3C_WARM_JOBS="2", WARM_STOPPED="1")
+    assert rc == 0 and order.index("warm") < order.index("audit"), (lines, order)
+    assert f"V3C-WARM class {W63K4} (records_audit.py warm exit 124, 2 at a time): timed out after V3C_WARM_TIMEOUT=90m " \
+           "with 1 of 3 templates composed (each one's seconds in warm.log); the audit composes the templates it didn't keep" \
+           in lines
 
 
 def test_a_warm_that_fails_says_why_and_the_audit_composes_what_it_did_not_keep(tmp_path):

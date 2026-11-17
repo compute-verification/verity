@@ -657,7 +657,8 @@ PEARLPLUS_CIRCUIT=$D/pearlplus/circuit-record.json
 if [ "${1:-}" = v3c ]; then V3C_TIMEOUT=${V3C_TIMEOUT:-120m} V3C_AUDIT_TIMEOUT=${V3C_AUDIT_TIMEOUT:-180m}
 elif [ -n "${H1_TIE:-}$PEARLPLUS_TIE" ]; then V3C_TIMEOUT=${V3C_TIMEOUT:-60m} V3C_AUDIT_TIMEOUT=${V3C_AUDIT_TIMEOUT:-30m}
 else V3C_TIMEOUT=${V3C_TIMEOUT:-15m} V3C_AUDIT_TIMEOUT=${V3C_AUDIT_TIMEOUT:-30m}; fi
-V3C_WARM_TIMEOUT=${V3C_WARM_TIMEOUT:-$V3C_AUDIT_TIMEOUT}
+V3C_WARM_TIMEOUT=${V3C_WARM_TIMEOUT:-90m}
+V3C_WARM_GIVEN=${V3C_WARM_JOBS+1} V3C_WARM_JOBS=${V3C_WARM_JOBS-$(($(nproc) < 8 ? $(nproc) : 8))}
 V3C_AUDIT_MEM_GIVEN=${V3C_AUDIT_MEM_GB:+1} V3C_AUDIT_MEM_GB=${V3C_AUDIT_MEM_GB:-290}
 NODE_MEM_GB=${NODE_MEM_GB:-$(awk '/^MemTotal:/ {print int($2 / 1048576)}' /proc/meminfo)}
 short_of_memory() {  # 0 iff this node has less memory than V3c's audit needs, saying both
@@ -856,8 +857,10 @@ EOF
 # samples a stratum of each reader template, so a table W registers has a sampled reader where its readers are templates of its own
 # (Record.checks), and V3C_PORTS defaults to the size of R's sample, its strata's k summed: at most a session for each
 # sampled proof block. The preflight refuses H1_TIE on a tree whose records_audit.py takes no --tie, or at another rule.
-# With V3C_WARM_JOBS=N, `records_audit.py warm` first composes every template of the committed window into
-# $VW/compose-cache, N at a time, each in a process of its own, within V3C_WARM_TIMEOUT (default V3C_AUDIT_TIMEOUT): the
+# With V3C_WARM_JOBS=N (default the cores this run is given, at most 8; set empty, no warm, and the audit composes each
+# template itself, one at a time), `records_audit.py warm` first composes every template of the committed window into
+# $VW/compose-cache, N at a time, each in a process of its own, within V3C_WARM_TIMEOUT (default 90m), printing each
+# template's line as it finishes into warm.log and starting none past V3C_AUDIT_MEM_GB by earlier peaks: the
 # templates and their binding are public, so this precedes the audit's coins, and the audit, taking the cache, composes
 # none, its limit then its sessions'. A compose holds up to what the audit needs (V3C_AUDIT_MEM_GB, a 4,32,4 window's
 # Int8RowQuant at K 8,192), so N is what the run's memory takes. A warm that fails says so, and the audit composes what it
@@ -876,11 +879,11 @@ EOF
 v3c_warm() {  # every template of the committed window composed into $VW/compose-cache, V3C_WARM_JOBS at a time
   (cd "$TREE" && env -u PYTHONPATH RAYON_NUM_THREADS="$(nproc)" RUST_MIN_STACK=$((64 << 20)) timeout -k 1m "$V3C_WARM_TIMEOUT" \
     "$TREE/.venv/bin/python" benchmarks/prove_path/records_audit.py warm --window "$VW/window" --sampling-design "$V3C_LAW" \
-    --compose-cache "${V3C_COMPOSE_CACHE:-$VW/compose-cache}" --jobs "$V3C_WARM_JOBS") > "$OUT/v3c-audit/warm.log" 2> "$OUT/v3c-audit/warm.err"
+    --compose-cache "${V3C_COMPOSE_CACHE:-$VW/compose-cache}" --jobs "$V3C_WARM_JOBS" --mem-gb "$V3C_AUDIT_MEM_GB") > "$OUT/v3c-audit/warm.log" 2> "$OUT/v3c-audit/warm.err"
   local rc=$? why
-  if [ "$rc" = 0 ]; then why=$(grep -m1 '^WARM' "$OUT/v3c-audit/warm.log" | cut -c1-600)
+  if [ "$rc" = 0 ]; then why=$(grep -m1 '^WARM {' "$OUT/v3c-audit/warm.log" | cut -c1-600)
   else
-    if [ "$rc" = 124 ] || [ "$rc" = 137 ]; then why="timed out after V3C_WARM_TIMEOUT=$V3C_WARM_TIMEOUT"
+    if [ "$rc" = 124 ] || [ "$rc" = 137 ]; then why="timed out after V3C_WARM_TIMEOUT=$V3C_WARM_TIMEOUT with $(grep -c '^COMPOSED ' "$OUT/v3c-audit/warm.log") of $(grep -m1 '^WARMING' "$OUT/v3c-audit/warm.log" | cut -d' ' -f2) templates composed (each one's seconds in warm.log)"
     else why=$(tail -3 "$OUT/v3c-audit/warm.err" | tr '\n' ' ' | cut -c1-800); why=${why% }; fi
     why+="; the audit composes the templates it didn't keep"
   fi
@@ -2057,7 +2060,8 @@ esac
 if [ -n "${V3C_WARM_JOBS:-}" ]; then  # V3c's composes made before its audit
   [[ $V3C_WARM_JOBS =~ ^[1-9][0-9]*$ ]] \
     || { say "PREFLIGHT: V3C_WARM_JOBS is how many of the window's templates warm composes at once, a positive integer, not $V3C_WARM_JOBS"; exit 3; }
-  grep -q -- '"warm"' "$TREE/benchmarks/prove_path/records_audit.py" \
+  grep -q -- '"warm"' "$TREE/benchmarks/prove_path/records_audit.py" || [ -n "$V3C_WARM_GIVEN" ] || V3C_WARM_JOBS=
+  [ -z "$V3C_WARM_JOBS" ] || grep -q -- '"warm"' "$TREE/benchmarks/prove_path/records_audit.py" \
     || { say "PREFLIGHT: V3C_WARM_JOBS composes the window's templates before its audit with records_audit.py warm, which this tree's records_audit.py doesn't have"; exit 3; }
 fi
 if [ -n "${V3C_NEGATIVE_WORKERS:-}" ]; then  # V3c's audit's negatives side by side

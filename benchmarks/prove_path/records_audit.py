@@ -97,16 +97,18 @@ forked from the audit (`a5.NegativeWorkers`); the summary's ``negative_workers``
 
 ``warm``: a window's templates and binding are public, so every template its composers make is composed into a5's compose
 cache before the timed audit (`warm`, `a5.warm`), under the tree and ``FLOCK_*`` environment the audit then runs in, since
-the cache's key covers both; the audit with ``--compose-cache`` then composes none. An audit's time quoted with the cache
+the cache's key covers both; the audit with ``--compose-cache`` then composes none. An audit given no cache says so at
+once and runs the warm itself into its ``--out``'s ``compose-cache``, ``--jobs`` at a time (`compose_first`); either way
+each template's line is printed as it finishes and kept in ``--out``'s ``composed.jsonl``. An audit's time quoted with the cache
 quotes the warm's beside it.
 
     records_audit.py audit --window DIR --sampling-design L (--opening FILE --compilers FILE [--repo DIR] | --circuit SHA512) --run HEX \\
         [--template-sets DIR] [--outputs FILE] --m0-pythonpath PATH --bin flock-circuit --lean verity-verify-proof --zk-server flock-zk-server \\
         --out DIR [--delta D] [--port P] [--ports N] [--forged | --forged-read] [--challenger local|loopback:HOST:PORT|gate:USER@HOST --main FILE] \\
         [--peer NAME --challenger-key RECORD [--gate-key KEY]] [--registered FILE] [--tie W [--tie-prefix P]] [--skip-negatives] \\
-        [--compose-cache DIR] [--day N --day-log LOG [--day-params FILE] | --day-ledger LEDGER] \\
+        [--compose-cache DIR] [--jobs N] [--day N --day-log LOG [--day-params FILE] | --day-ledger LEDGER] \\
         [--lean-workers N] [--audit-mem-gb G] [--negative-workers N]
-    records_audit.py warm --window DIR --sampling-design L [--template-sets DIR] --compose-cache DIR [--jobs N]
+    records_audit.py warm --window DIR --sampling-design L [--template-sets DIR] --compose-cache DIR [--jobs N] [--mem-gb G]
     records_audit.py count --circuit FILE --bits N [--catalog MODULE ...] [--pin NAME=ROOT ...] [--pins FILE ...] [--registration FILE]
     records_audit.py period --window DIR --audit DIR --out FILE [--pin NAME=ROOT ...] [--pins FILE ...]
 
@@ -1102,6 +1104,7 @@ def audit(a: argparse.Namespace) -> int:
                     advice=(bound or {}).get("advice") or w.get("advice"), compilers=compilers, opening=opening, repo=repo,
                     output=json.loads(output.read_text()) if compiled["ok"] else None)
     window_s = round(time.time() - t0, 2)
+    compose_first(a, sets, mine, out)
     more = {} if a.skip_negatives else negatives(w, held, doc, out / "negatives")
     a.ports = a.ports if a.ports is not None else max(1, len(mine.members))
     a.port = a.port if a.port is not None else free_ports(a.ports)
@@ -1188,21 +1191,50 @@ def audit(a: argparse.Namespace) -> int:
     return 0 if row["ok"] else 1
 
 
+COMPOSED = "composed.jsonl"
+
+
+def compose_rows(log: Path | None) -> Callable[[dict], None]:
+    """Each template's warm row as it finishes: a ``COMPOSED`` line on stdout, flushed, and with ``log`` a line of it."""
+    def done(row: dict) -> None:
+        if log is not None:
+            with open(log, "a") as f:
+                f.write(json.dumps(row, sort_keys=True) + "\n")
+        print("COMPOSED " + json.dumps(row, sort_keys=True), flush=True)
+    return done
+
+
 def warm(a: argparse.Namespace) -> int:
     """Every template of the verifier's window that its composers make, composed into ``a.compose_cache`` bound to the window's
-    partition and program (`a5.warm`), ``a.jobs`` at a time, before the timed audit: an audit with that cache then composes
-    none. One JSON line a template (its seconds, pin and whether the cache held it), then a ``WARM`` line."""
+    partition and program (`a5.warm`), ``a.jobs`` at a time within ``a.mem_gb``, before the timed audit: an audit with that
+    cache then composes none. A ``COMPOSED`` line a template as it finishes (its seconds, peak, pin and whether the cache held
+    it), then a ``WARM`` line."""
     import a5 as A5
 
     t0 = time.time()
     mine, _doc, sets = verifier_window(Path(a.window), a.sampling_design, Path(a.template_sets) if a.template_sets else None)
     window_s = round(time.time() - t0, 1)
-    got = A5.warm(a, sets, mine, a.jobs)
-    for g in got:
-        print(json.dumps(g, sort_keys=True))
+    print(f"WARMING {len(A5.warm_todo(sets, mine))} templates, {a.jobs} at a time", flush=True)
+    got = A5.warm(a, sets, mine, a.jobs, a.mem_gb, compose_rows(None))
     print("WARM " + json.dumps({"templates": len(got), "kept": sum(bool(g["kept"]) for g in got), "verifier_window_s": window_s,
-                                "seconds": round(time.time() - t0, 1)}, sort_keys=True))
+                                "seconds": round(time.time() - t0, 1)}, sort_keys=True), flush=True)
     return 0
+
+
+def compose_first(a: argparse.Namespace, sets: dict, mine: Any, out: Path) -> None:
+    """Before the audit's coins, every template `a5.warm` composes, into ``a.compose_cache`` or, with none given, ``out``'s own
+    ``compose-cache``, ``a.jobs`` at a time within ``a.audit_mem_gb``: each one's row printed as it finishes and kept in
+    ``out``'s `COMPOSED`, so a limit never ends the composing silent."""
+    import a5 as A5
+
+    n = len(A5.warm_todo(sets, mine))
+    if not a.compose_cache:
+        a.compose_cache = str(out / "compose-cache")
+        how = "one at a time" if a.jobs <= 1 else f"{a.jobs} at a time into {a.compose_cache}"
+        print(f"COMPOSE composing {n} templates {how}: no compose cache was given; run the warm first, or pass --jobs",
+              flush=True)
+    (out / COMPOSED).unlink(missing_ok=True)
+    A5.warm(a, sets, mine, a.jobs, a.audit_mem_gb, compose_rows(out / COMPOSED))
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -1280,7 +1312,10 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--skip-negatives", action="store_true", help="no negatives in this audit (module docstring): a run of "
                    "several audits runs them in its first")
     p.add_argument("--compose-cache", help="a5's compose cache, which `warm` filled under this tree and FLOCK_* environment: "
-                   "staging links each kept circuit and composes none (default none: every template composed here)")
+                   "staging links each kept circuit and composes none (default none: every template composed here, "
+                   "into the audit's own compose-cache)")
+    p.add_argument("--jobs", type=int, default=1, help="templates composed at once before the coins, each in a forked "
+                   "process, within --audit-mem-gb (a5.warm)")
     p = sub.add_parser("warm", help="every template of a window composed into a5's compose cache, before its timed audit")
     p.add_argument("--window", required=True, help="the window's directory, as its audit takes it")
     p.add_argument("--sampling-design", required=True, help="the window's rule, as its audit takes it")
@@ -1288,6 +1323,8 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--compose-cache", required=True, help="the cache the audit's --compose-cache names")
     p.add_argument("--jobs", type=int, default=1, help="templates composed at once, each in a forked process: what the "
                    "machine's memory takes (a5.warm)")
+    p.add_argument("--mem-gb", type=float, default=None, help="GiB the composes running at once may hold, by the peaks an "
+                   "earlier warm measured (a5.warm; default no bound)")
     p = sub.add_parser("count", help="a circuit record's leak count (declared_count): a stated record's from its description "
                        "alone, a listed one's from its members and the registered reads and window ingress it declares; the "
                        "run figure, and beside it, where the record declares window ingress, the window figure with its premise")
