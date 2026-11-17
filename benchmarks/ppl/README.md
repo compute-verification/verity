@@ -60,9 +60,10 @@ it to.
 `ppl.json`, and in the run's `result.json` `compute-accounting/perplexity-shipped` (the bf16 reference),
 `compute-accounting/perplexity-pearl-c` (the mean over its seeds) and `compute-accounting/perplexity-cost-pearl-c`
 (their difference in percent of bf16's), each with the model, its revision, the card, the set and the context as
-fields, and as its `member` the model and the card the eval ran on (`llama-3.2-1b-h200`), which the Metrics tab shows
-beside the point. A run whose gates failed reports none, and a results file of another run is a reprint, which writes
-none.
+fields, and as its `member` the model and the card the eval ran on (`llama-3.2-1b-h200`), the card's `short` from the
+one card record whose `driver` holds the name the driver reports (`kit.card_short`), which the Metrics tab shows beside
+the point. A run whose gates failed reports none, nor does one on a card no card record holds, and a results file of
+another run is a reprint, which writes none.
 
 This file holds no table: `run.py tables` (`tables.py`) prints each one from the code and data it describes, the
 registered steps, the arms in `specs/`, the window lists, the models and the locked baseline, so a new step, arm,
