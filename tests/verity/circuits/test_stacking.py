@@ -16,10 +16,12 @@ import pytest
 
 from verity.circuits import stacking as P
 from verity.circuits.census import census
-from verity.circuits.codec import canonical_json
-from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, _Widths
+from verity.circuits.codec import canonical_json, descriptor_id
+from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, _Widths, bind
+from verity.circuits.evaluation.reference import evaluate
 from verity.circuits.ops import fp32, prims, scalar
 from verity.circuits.ops.s8 import S32LowByte
+from verity.circuits.population import wired_population_program
 from verity.circuits.ports import In, Leaves, Out, Ports
 from verity.circuits.program import Program
 from verity.circuits.refs import Coll, Strided, array_of, concat, tuple_of
@@ -572,6 +574,36 @@ def test_a_field_extraction_is_a_rounding_at_any_position():
     fn = comp("TestBitAt5", (("word", S32),), BIT, lambda B, _S, word: B.call(BITAT, word, B.call(prims.const(32, 5))))
     program = Program(fn)
     assert P.analyze(program, census(program, [len(program.root.body.nodes)])).steps[0]["units"] == {**FREE, "roundings": 1}
+
+
+def test_a_wired_programs_conversions_between_words_and_bits_are_roundings():
+    def words(name, ports):
+        return bind(comp(name, tuple((p, Array(2, S16)) for p in ports), Array(2, S16),
+                         lambda B, _S, a, b: B.batch(fp32.Bf16Add, a, b, axes=(0, 0))))
+
+    TA, TB = words("TestWiredA", "xk"), words("TestWiredB", "yw")
+    TD = bind(comp("TestWiredD", (("b", Array(32, BIT)), ("s", Array(32, BIT))), Array(32, BIT),
+                   lambda B, _S, b, s: B.batch(scalar.BitAnd, b, s, axes=(0, 0))))
+    ia, idd, ib = map(descriptor_id, (TA, TD, TB))
+
+    def wire(reader, port, writer):
+        return {"reader": reader, "port": port, "writer": writer, "out": "o0", "at": 0, "radix": [1], "base": 0, "step": [0]}
+
+    record = {"templates": [[ia, 1], [idd, 1], [ib, 1]], "wires": [wire(idd, "b", ia), wire(ib, "y", idd)],
+              "external": [f"{ia}/x", f"{ia}/k", f"{idd}/s", f"{ib}/w"]}
+    program, _ = wired_population_program([(TA, 1), (TD, 1), (TB, 1)], record)
+    a = P.analyze(program, census(program, [len(program.root.body.nodes)]))
+    assert {f: (g["class"], g["instances"]) for f, g in a.gates.items() if f.startswith(("BitOf", "WordOf"))} == {
+        **{f"BitOf16x{i}_v1": ("roundings", 2) for i in range(16)}, "WordOf16_v1": ("roundings", 2)}
+    assert a.steps[0]["units"] == {**FREE, "roundings": 2 + 32 + 2 + 2, "compare_select": 32} and a.refused == {}
+
+    x, k, s, w = [0x3F80, 0x4000], [0x3F80, 0xBF80], [0xFFFF, 0x0F0F], [0x4040, 0x3F80]
+    xa = evaluate(TA, x, k)
+    xd = evaluate(TD, [(v >> i) & 1 for v in xa for i in range(16)], [(v >> i) & 1 for v in s for i in range(16)])
+    xb = evaluate(TB, [sum(b << i for i, b in enumerate(xd[h:h + 16])) for h in (0, 16)], w)
+    names = [n for n, _ in program.fn.signature()[0]]
+    feed = {"0.x": x, "0.k": k, "1.s": [(v >> i) & 1 for v in s for i in range(16)], "2.w": w}
+    assert evaluate(program.fn, *(feed[n] for n in names)) == (*xa, *xd, *xb)
 
 
 def test_the_bf16_widening_is_a_free_affine_map():
