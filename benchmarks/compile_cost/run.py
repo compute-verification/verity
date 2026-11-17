@@ -345,7 +345,8 @@ def machine(card: str) -> str:
 def record(out: Path, model: str, window: str, execution: str, rec: dict) -> None:
     from verity_bench import kit
     w = kit.writer(out)
-    fields = {"model": MODELS[model], "window": window, "execution": execution, "machine": machine(w.stamp["card"])}
+    fields = {"model": MODELS[model], "window": window, "execution": execution,
+              "machine": machine(w.stamp["card"])}
     member = f"glm-5.3-{window}-{execution}-{fields['machine']}" if model == "glm-5.3" else f"{model}-h200"
     for name, value, unit in ((MINUTES, rec["wall_min"], "minutes"), (PEAK, rec["peak_gib"], "GiB")):
         m = w.measurement(name, value, unit, mark="measured", member=member, extra=fields)
