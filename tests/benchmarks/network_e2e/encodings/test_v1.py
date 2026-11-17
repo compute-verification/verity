@@ -1,12 +1,12 @@
 """Advice v1: `decode(encode(a)) == a` on the replay's step traces and a trace-corpus trace, under the uniform codebook
-and a fitted one; the engine's arrival order is sent as its deviations from the network attester's release order and recovered
-from the advice's rows; every hit is the replay's block pool's, past the pool bound too, and none is sent; the KV pool is
-the registration's, never the string's; each value is charged to A5's window, and the certifier's state chain carries
-the decisions charged before their step's window; the strings are prefix-free (so the charge meets the sampled leak
-bound's `hAs`); and `decode` is total, refusing by name everything but a canonical string. REDTEAM's phase 7 probes of v1
-(prefix-freeness on long strings, totality on adversarial frames, the pool field, what the book changes, a sent
-shortfall) are among them. A trace vLLM's scheduler served with a draft goes to and from its schedule, each row's kept
-count in the string and charged to its step's window."""
+and a fitted one; the engine's arrival order is sent as its deviations from the network attester's release order and
+recovered from the advice's rows; every hit is the replay's block pool's, past the pool bound too, and none is sent; the
+KV pool is the registration's, never the string's; each value is charged to A5's window, and network attestation's
+state chain carries the decisions charged before their step's window; the strings are prefix-free (so the charge meets
+the sampled leak bound's `hAs`); and `decode` is total, refusing by name everything but a canonical string. REDTEAM's
+phase 7 probes of v1 (prefix-freeness on long strings, totality on adversarial frames, the pool field, what the book
+changes, a sent shortfall) are among them. A trace vLLM's scheduler served with a draft goes to and from its schedule,
+each row's kept count in the string and charged to its step's window."""
 
 from __future__ import annotations
 
@@ -341,9 +341,9 @@ def test_each_value_goes_to_a5s_window(name):
 @pytest.mark.parametrize("name, n, early", [("sync-kv-pressure", 15, 5), ("async-kv-pressure", 17, 5)])
 def test_the_replay_chain_carries_what_a5_charges_early(name, n, early):
     """At T = 20, A5 charges `early` of the trace's n decisions to a window before their step's (window 0, read in
-    windows 1 and 2). The certifier's state chain (`replay_chain`) loads each window's charged decisions after the ones
-    the last window left unread, each step reads its own at the window row's head, and `ReplayClose` accepts the
-    session's end; each part's circuit accepts what its specification does. A window ends with every decision it
+    windows 1 and 2). Network attestation's state chain (`replay_chain`) loads each window's charged decisions after
+    the ones the last window left unread, each step reads its own at the window row's head, and `ReplayClose` accepts
+    the session's end; each part's circuit accepts what its specification does. A window ends with every decision it
     holds that a later window's step reads still unread, which the load before the carry refused."""
     t, rec, reg, adv = case(name, T=20)
     wins = V.residual(adv, rec, reg)

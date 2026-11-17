@@ -52,6 +52,9 @@ def main() -> None:
     w.validation("passed", "benchmarks/proof_status/run.py",
                  f"read {len(doc['locks'])} Lean locks at {doc['commit']}: {totals['deployed']} deployed guarantees, "
                  f"{len(totals['by_owner'])} leads")
+    print(f"proof_status: {totals['gap_zero']} of {totals['deployed']} deployed guarantees at a trust gap of zero; "
+          f"{totals['gap_premises']} premises in their gaps, {totals['open']} open premises, "
+          f"{totals['no_honest_witness']} guarantees with no honest witness ({doc['commit']})")
 
 
 if __name__ == "__main__":

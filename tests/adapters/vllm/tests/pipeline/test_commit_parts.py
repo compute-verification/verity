@@ -195,7 +195,11 @@ def test_the_hooks_only_ablation_counts_the_device_tensors_its_hooks_see_and_com
     com = commit.make_committer("hooks_only", None, cast(Any, SimpleNamespace(hash_threads=1, chunk=3072)), "r0")
 
     def tensor(device: str, n: int) -> SimpleNamespace:
-        return SimpleNamespace(device=SimpleNamespace(type=device), numel=lambda: (clock.take(0.25), n)[1])
+        def numel() -> int:
+            clock.take(0.25)
+            return n
+
+        return SimpleNamespace(device=SimpleNamespace(type=device), numel=numel)
 
     waited: list[float] = []
     job = SimpleNamespace(step=3, metas=[], event=SimpleNamespace(synchronize=lambda: waited.append(clock.now)), t_step_end=99.0,
@@ -239,8 +243,8 @@ def test_an_empty_committer_is_a_usage_error_naming_the_committers(capsys: pytes
     with pytest.raises(SystemExit) as e:
         cli.parse("commit", ["--out", "o", "--committer", ""], {})
     assert e.value.code == 2
-    assert "--committer is empty: name the treatment arm's committer (native_collect_v2b, the default; hooks_only; or " \
-           "plugin:MODULE:FACTORY), or run the control alone with --only-arm control" in capsys.readouterr().err
+    assert ("--committer is empty: name the treatment arm's committer (native_collect_v2b, the default; hooks_only; or "
+            "plugin:MODULE:FACTORY), or run the control alone with --only-arm control") in capsys.readouterr().err
     assert cli.parse("commit", ["--out", "o"], {}).committer == "native_collect_v2b"
     assert cli.parse("commit", ["--out", "o", "--committer", "hooks_only"], {}).committer == "hooks_only"
 

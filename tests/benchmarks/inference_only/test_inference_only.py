@@ -8,6 +8,7 @@ import importlib.util
 import json
 
 import built as B
+import inference_only as IO
 import policy as P
 import pytest
 import report
@@ -20,6 +21,7 @@ from verity_vllm.program.predict import block_counts as BC
 from verity.commitments.periods import interface as IF
 
 ROPE, SILU = "RoPEHead_v1{D=16}", "SiluMul_v2{I=8}"
+GEMM = 'Gemm_v2{K=64,N=8,DOT={"fn":"HopperBF16WgmmaDot16_v1"}}'
 NORM = 'RMSNormTriton_v5{N=8,EPS={"f64":"0x1.4f8b588e368f1p-17"}}'
 #: the small record's class: 2 slots of 2 + 2 - 1 = 3 positions
 CLASS = (2, 2, 2)
@@ -141,15 +143,47 @@ def test_the_divisions_count_a_block_gates_and_each_row_it_reads_once(counted) -
 
 
 def test_the_count_refuses_the_session_program_on_k(counted) -> None:
-    """The count is given the session Definition with no θ and no wires, so it counts every input row of every unit,
-    the weights too, and refuses the record's k."""
+    """The Lean verifier is given the session Definition with its wholly held weights in θ and no wires: θ removes
+    exactly the rows of the parameters every unit reads held, while a row held for some units only (the norm's, wired
+    for the rest) and the wired rows still count as fresh, and it refuses the record's k."""
     _, pol, _ = counted
     check = B.judged(reference(B.instance(pol, pol["c"], pol["k"], 5)), pol["c"], pol["k"], 5)
     assert (check["verdict"], check["complies"], check["failed"]) == ("refused", False, "k")
     assert check["counted"]["c"] == pol["c"] and check["counted"]["k"] > pol["k"] and check["counted"]["n"] == 2
+    bare = B.judged(reference(B.instance({**pol, "held": ()}, pol["c"], pol["k"], 5)), pol["c"], pol["k"], 5)
+    assert pol["held"] == ("0.x", "0.cs") and pol["record_count"]["held"] == 3 * 32 * 16 + 8 * 16
+    assert bare["counted"]["k"] - check["counted"]["k"] == 3 * 32 * 16
     assert B.judged(reference(B.instance(pol, pol["c"], check["counted"]["k"], 5)), pol["c"], 0, 5)["verdict"] == "accepted"
     few = B.judged(reference(B.instance(pol, pol["c"], check["counted"]["k"], 1)), pol["c"], 0, 1)
     assert (few["verdict"], few["failed"]) == ("refused", "n")
+
+
+def made(wired: bool) -> dict:
+    g, r = BC.resolve(GEMM), BC.resolve(ROPE)
+    gid, rid = IF.descriptor_id(g), IF.descriptor_id(r)
+    entries = (IF.InferenceEntry(GEMM, 0, (2, 2), ("slot", "-"), 0), IF.InferenceEntry(ROPE, 0, (3, 2), ("step", "slot"), 0))
+    wires = (IF.Wire(rid, "x", gid, "o0", 0, (2,), 0, (2,), (0, 2)),) if wired else ()
+    return IF.descriptor_record(IF.Circuit("test/made", ((g, 4), (r, 6)), wires=wires, cuts={rid: {"x": 2}} if wired else {},
+                                           blocks=IF.Blocks(slots=2, steps=3, inference=entries)), 1)
+
+
+def _counts(doc: dict, k: int) -> tuple[dict, dict, dict]:
+    row = IO.session_row(doc, None, None)
+    lean = reference(IO.count_instance(doc, row["table"], row["gates"], k, row["slots"]))["verdict"]
+    return row, IO.record_count(doc, row["slots"], None, None), lean
+
+
+def test_with_no_wire_and_no_table_the_lean_verifier_and_the_records_count_agree_at_the_real_k() -> None:
+    row, counted, lean = _counts(made(wired=False), 19_968)
+    assert lean["blocks"][0][2] == row["fresh"] == counted["fresh"] == 19_968 and lean["complies"]
+    _, _, under = _counts(made(wired=False), 19_967)
+    assert (under["complies"], under["failure"]) == (False, [0, "fresh"])
+
+
+def test_on_a_made_circuit_the_records_count_subtracts_a_wired_row_and_the_lean_verifiers_count_on_the_session_program_does_not() -> None:
+    row, counted, lean = _counts(made(wired=True), 19_840)
+    assert (row["fresh"], counted["fresh"], counted["wired"]) == (19_840, 19_840, 8 * 16)
+    assert lean["blocks"][0][2] == 19_968 and (lean["complies"], lean["failure"]) == (False, [0, "fresh"])
 
 
 @pytest.mark.parametrize(("value", "word"), [(1000, "within target"), (999.999, "misses"), (1, "misses")])
@@ -161,7 +195,7 @@ def test_the_metrics_verdict_holds_its_value_to_the_goals_target(value, word) ->
 def test_the_report_puts_the_served_number_first_and_labels_a_refused_policy(capsys, tmp_path) -> None:
     """The command on the served file and a small built record: the served number is first and is the JSON's value, the
     built class is labelled as not served, its refusal prints the verdict and what failed, and its number is the
-    bound's and is labelled as resting on the Python count. With no record read it is outside the benchmarks'
+    bound's and is labelled as resting on the record's count. With no record read it is outside the benchmarks'
     interface: the kit is called as before it, so the JSON holds no ran_with, audit or no_number, and the exit is 0."""
     code, doc = report.run(["--class", ",".join(map(str, CLASS)), "--out", str(tmp_path)], check=reference,
                            circuit=small(), commit=lambda: "0" * 40)
@@ -178,17 +212,21 @@ def test_the_report_puts_the_served_number_first_and_labels_a_refused_policy(cap
     assert "Not checked here" in lines[7]
     assert out.index("AS SERVED: 1") < out.index("The class this tree builds: NOT SERVED")
     assert B.EXECUTABLE[1:] == ("--count", "--detail") and B.RULE.endswith(".Count: CompliesAtMost c k n")
-    assert f"{' '.join(B.EXECUTABLE)} ({B.RULE}): complies: false, k failed" in out
-    assert "the registered Program has no θ and no dataflow" in out
-    assert "the Lean counts c's Boolean gates a block exactly, and " in out
+    assert f"verdict   the Lean verifier's, {' '.join(B.EXECUTABLE)} ({B.RULE}): reject, k failed" in out
+    assert "because the session Program it is given carries no wires" in out
+    assert "the Lean verifier counts c's Boolean gates a block exactly, and " in out
     served, built = doc["policies"]
     assert served["units"] == built["units"] == P.UNITS and f"{served['c']:,} Boolean gates a block" in out
     assert (doc["value"], doc["check"], doc["rests_on"]) == (served["value"], served["check"], served["rests_on"])
     assert doc["value"] == 1 and doc["check"]["verdict"] == "not run" and doc["run"] is None and doc["commit"] == "0" * 40
     assert "nothing on this tree builds or checks" in doc["rests_on"]
     assert (built["label"], built["check"]["verdict"], built["check"]["failed"]) == ("built", "refused", "k")
-    assert built["rests_on"].startswith("the Python count of what a block reads") and "does not establish" in built["rests_on"]
-    assert built["rests_on"] in out
+    assert built["rests_on"].startswith("the record's count of what a block reads")
+    assert "which the Lean verifier does not confirm" in built["rests_on"] and built["rests_on"] in out
+    assert f"  k         {built['k']:,} fresh input bits a block, {report.UNCONFIRMED}, made of" in lines
+    r = built["check"]["record_count"]
+    assert (f"            the record's count, which decides nothing: {r['fresh']:,} fresh input bits a block "
+            f"({r['held']:,} held, {r['wired']:,} wired, {r['openings']:,} openings)") in lines
     sh = P.shape(B.MODEL)
     N = B.block_work(CLASS, B.MODEL)[P.TOTAL]
     want = min_cut.bound(built["c"], built["k"], built["n"], N=N, O=N * sh.outputs * 16 / sh.macs, size=built["c"])
