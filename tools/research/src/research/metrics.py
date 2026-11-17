@@ -42,7 +42,7 @@ from .slack import RouteError, SlackError, _code, _Identity, http_json, http_ope
 
 METRICS = f"{DEFAULT_URL}/api/metrics"   # the route, and its OIDC token's audience
 SITE_HOST = urlsplit(DEFAULT_URL).netloc   # the one host the panels key goes to
-REGISTRY_ROOTS = ("benchmarks", "demos", "infra", "tools")
+REGISTRY_ROOTS = ("benchmarks", "applications", "infra", "tools")
 KEY_PREFIX = "vsk_"   # the site reads a bearer with it as a site key, and any other as a Cursor identity
 MARKS = ("measured", "modeled", "partial")   # kit.MARKS
 #: every key the door takes (the site's lib/console/metrics/readings.ts, KEYS): it refuses a reading with any other

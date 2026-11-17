@@ -1,4 +1,4 @@
-"""The served window's onsite configuration (`demos/onsite_full.toml`) and its table (`served_table.py`):
+"""The served window's onsite configuration (`applications/onsite_full.toml`) and its table (`served_table.py`):
 the file is the table's configuration byte for byte and names no host; the network attester's and the inference-only
 policy's parties and channels are their manifests'; `verity run --dry-run` resolves every party, channel and piece with
 no GPU, and refuses by name a piece that is missing, a channel to an undeclared party and a binding the configuration
@@ -33,7 +33,7 @@ from verity.protocols.proofs.spot.verifier.service import SamplingDesign
 from verity_cli import run as R
 
 ROOT = Path(R.ROOT)
-CONFIG = ROOT / "demos" / "onsite_full.toml"
+CONFIG = ROOT / "applications" / "onsite_full.toml"
 REG = R.registry()
 T = sys.modules["served_table"]
 KEY = "0" * 128
@@ -128,7 +128,7 @@ def test_the_configuration_is_the_tables_byte_for_byte():
 def test_each_smaller_demo_is_the_tables_byte_for_byte_and_its_own_composite(demo):
     """Each other demo file is the table's configuration of its subprotocols, at onsite_full's commit, whose composite
     (or onsite's smaller set) is its own id; only the subprotocols it lists have parameters and pins."""
-    path = ROOT / "demos" / f"{demo}.toml"
+    path = ROOT / "applications" / f"{demo}.toml"
     cfg = T.configuration(K.parse(CONFIG.read_text())["program"]["commit"], demo)
     assert K.render(cfg, T.HEADERS[demo]) == path.read_text()
     assert K.composite(cfg["protocols"], REG.components) in {**K.COMPOSITES, **K.UNACCEPTED}
@@ -297,7 +297,7 @@ def test_a_dry_run_without_bindings_names_every_one_it_lacks(capsys):
 
 @pytest.mark.parametrize("demo", ["onsite_network", "onsite_compute"])
 def test_a_dry_run_of_a_smaller_onsite_demo_resolves_every_party_and_channel(capsys, demo):
-    path = ROOT / "demos" / f"{demo}.toml"
+    path = ROOT / "applications" / f"{demo}.toml"
     rc, got, err = dry(capsys, config=path)
     cfg = R.load(path, REG)
     assert rc == 0, err
@@ -372,7 +372,7 @@ def test_a_runtime_party_raises_before_anything_starts_while_its_machine_hands_i
 
 def test_the_memory_attesters_key_is_refused_unless_this_configuration_pins_it_before_anything_else(tmp_path,
                                                                                                     capsys, runtime):
-    """On the auditor's device each memory attester's start checks its key against `demos/onsite_full.toml`'s pin
+    """On the auditor's device each memory attester's start checks its key against `applications/onsite_full.toml`'s pin
     first: a state with no key is refused ``key``, and one whose key the configuration doesn't pin ``pin``, before any
     request is read or any party or the served window starts."""
     state = tmp_path / T.AUDITOR_HOST
@@ -732,7 +732,7 @@ def test_the_onsite_check_without_the_published_phase_or_record_is_refused_by_na
     assert refused == ("window" if left == T.PHASE else "record")
 
 
-NETWORK = ROOT / "demos" / "onsite_network.toml"
+NETWORK = ROOT / "applications" / "onsite_network.toml"
 NETWORK_PIN = next(p["key-sha512"] for p in tomllib.loads(NETWORK.read_text())["pin"] if p["protocol"] == "wipe")
 NETWORK_BINDINGS = {"memory-challenger": {"wipe": {"address": "192.0.2.1:7001", "host": "auditor-1",
                                                    "command": "ssh auditor-1"}},
