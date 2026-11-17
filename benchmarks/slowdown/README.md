@@ -74,14 +74,14 @@ uv run python benchmarks/slowdown/periods.py --bounds min-cut --scenario referen
   `verity` takes them as parameters, so the registry reads no census. `data/` states the reference datacenter's
   machines (the count of each reference fleet of 8-GPU servers), the world's active parameters and the session
   policy's `Γ` at the world's model, each naming the census entry it is, and the tests hold each equal to
-  `benchmarks/census`. `data/scenarios*.toml` and
+  `calibration/census`. `data/scenarios*.toml` and
   `data/reference.toml` name the scenarios; `data/premises.toml` says where each assumption stands and up to what
   block size, and holds (H)'s `β` for an activation by block size (`premise.training-cut-hardness.beta`);
   `data/circuits.toml` holds training steps measured as Boolean circuits (the census's gates, ANDs and
   counted products, and `circuit_properties`' `s_×`, `a_out` and `a_in`).
 - The Lean locks (`security/lean-audit.json`, `security/Properties/lean-audit.json`), which `lean.py` reads for each
   citation's status.
-- `benchmarks/census` (devices, the reference datacenter and the world) and `benchmarks/nci` (the remote regime's
+- `calibration/census` (devices, the reference datacenter and the world) and `benchmarks/nci` (the remote regime's
   terms in `tiers.py`, its algorithms and their traits), which the tests hold the data to;
   `security/Definitions/Slowdown/Remote.lean`, whose
   `remoteSlowdown` `tests/test_envelopes.py` holds `theorem.multiple_bound` to; and the Lean files that define the
@@ -212,7 +212,7 @@ implementation, or different numbers in `data/`, never an edit to the modules ar
 | `attacks.py` | the same `Argument`, side `attack`, on a server block's layout; `held_layers`, the forward products of a block that holds whole layers, against E1's Proposition 3 |
 | `profile.py` | `Profile`: every field a class reads, named as in Lean |
 | `families.py` | `Family.profile(Model, Run) → Profile`, for each algorithm family and any `benchmarks/nci` algorithm by its traits |
-| `instances.py` | `Model`, `Run` (a target and its kind); `models`, every model's shape, which `benchmarks/nci/kappa.py` and `benchmarks/circuit_properties` read |
+| `instances.py` | `Model`, `Run` (a target and its kind); `models`, every model's shape, which `benchmarks/nci/kappa.py` and `calibration/circuit_properties` read |
 | `circuits.py` | `Circuit` (a measured training step), `compare → Comparison` with the FLOP model, `in_place` |
 | `hardware.py` | `Units`, `Location`, `Fleet`, `MonitoringPeriod` |
 | `envelopes.py` | `Pouw`, `Detection`, `Wipe`, `Certifier`; `Regime.partition`, `Regime.delta`; `Policy` |
@@ -239,7 +239,7 @@ git grep -n benchmarks/slowdown -- '*pyproject.toml'
 ~~~
 
 Among them, `benchmarks/nci` calls `theorem.multiple_bound` for its slowdown `D`, and
-`benchmarks/circuit_properties` reads a model's shapes (`instances`, `params`). In the other direction, `families.py`
+`calibration/circuit_properties` reads a model's shapes (`instances`, `params`). In the other direction, `families.py`
 reads `benchmarks/nci/algorithms.json` when a family names an algorithm of that library (a family
 of kind `nci`), and `params.py` reads `benchmarks/nci/calibrations.json` for the calibrated
 policy's `Γ` and `K` and the range of `K`.

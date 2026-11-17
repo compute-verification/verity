@@ -61,7 +61,7 @@ uv run verity bench exfiltration --from benchmarks/exfiltration/made_up
     column or a row's name that carries the label. The command reads the label from the document, at its top and
     on each row that carries it, and holds no copy.
   - **Its class is the one the plan of record serves**: at most 1,024 ids a response (`--response-ids`), assumed, as
-    every class is while no run has certified one. `verity bench certifier_term` assumes a wider class by default,
+    every class is while no run has attested one. `verity bench certifier_term` assumes a wider class by default,
     so the print gives that command's own term of record beside this one's.
 
 A link's execution phase carries K = schedules + cells + jitter + min(entries, advice + the wrong blocks' output bits

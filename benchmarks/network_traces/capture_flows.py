@@ -438,7 +438,7 @@ def record_counts(run: Path) -> dict:
     `release` (its place in the release order, None if it was never released), `to_server` and `from_server`, whether
     they are `exact`, and `why` not (then the first is a ceiling and the second a floor); the watermark stream's where
     `warden.json` has one, its `release` and `from_server` None; and how many of the records it read, each execution
-    phase's ingress, egress and reasons, are certified under the deployment's key."""
+    phase's ingress, egress and reasons, are attested under the deployment's key."""
     from verity.protocols.resource_accounting.network.verifier import record_files as RF, relay_check as RC
     from verity.protocols.resource_accounting.network.verifier.link_frame import DATA
     from verity.protocols.resource_accounting.network.verifier.certificate import record_head

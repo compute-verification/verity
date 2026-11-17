@@ -108,7 +108,7 @@ between the steps. That works for 8eb1's execution phases: at its engine class a
 async heavy execution phase is 651 step proof blocks of 739,906 ANDs, 4.8 × 10^8 in all, so it splits into the proof blocks
 `verity_vllm.compiler.replay_chain` already defines, linked by its rows:
 - **Proof block 0, the load:** `ReplayLoad`, 815,362 ANDs. It reads state rows 0 and 1 and execution-phase rows 0 and 1 (`window_fields`), and the
-  execution phase's K certified arrivals and D decisions at public positions.
+  execution phase's K attested arrivals and D decisions at public positions.
 - **Proof block u = 1 … P, one step:** `ReplayStep_v1` and `ReplayAdvance`, 739,906 ANDs (647,330 and 92,576). It reads
   state rows u and u + 1 and execution-phase row 1. A step past the execution phase's executed count is idle and costs the same.
 - **The links:** an execution phase commits P + 2 state rows of 20,320 bits and two execution-phase rows of 37,024 bits, and makes

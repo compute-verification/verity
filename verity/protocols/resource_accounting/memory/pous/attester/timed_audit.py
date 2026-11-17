@@ -564,7 +564,7 @@ def main(argv: list[str] | None = None) -> int:
                          "it as a research audit; the refusal is recorded and the exit is 1")
     ap.add_argument("--seed", default=None, help="derive each audit's challenge source from this hex seed (--clock logical only)")
     ap.add_argument("--lean-exe", default=None,
-                    help="a built pous-timed-audit, the verdict of record (default: pous_check's, built with lake, where "
+                    help="a built pous-timed-audit, the verdict of record (default: pous_verifier's, built with lake, where "
                          "lake and verity_difftest are here; where neither is, the audit is undecided and the exit is 1)")
     a = ap.parse_args(argv)
     if a.seed is not None and a.clock != "logical":
