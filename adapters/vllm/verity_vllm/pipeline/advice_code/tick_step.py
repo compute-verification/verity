@@ -69,13 +69,29 @@ from types import SimpleNamespace
 from verity_vllm.compiler import replay_step as RS
 from verity_vllm.pipeline.advice_code.schedule import Tick
 
-__all__ = ["Inputs", "Out", "State", "empty", "reference"]
+__all__ = ["Inputs", "Out", "Rule", "State", "empty", "reference"]
+
+
+@dataclass(frozen=True)
+class Rule:
+    """The tick's constants in the clock's unit, a `Tick`'s being microseconds with ``token`` 0 and ``quiet``. A step with
+    rows also advances T by ``token`` for each token it schedules. With ``quiet`` T jumps to the next arrival's bucket close
+    only when nothing runs or waits, else whenever nothing waits."""
+
+    bucket: int
+    sat: int
+    free: int
+    token: int = 0
+    quiet: bool = True
+
+    def close(self, a: int) -> int:
+        return (a + 1) * self.bucket
 
 
 @dataclass(frozen=True)
 class State:
     step: RS.State                          # `ReplayStep_v1`'s state
-    clock: int = 0                          # the tick's T, in microseconds
+    clock: int = 0                          # the tick's T, in the rule's unit
 
 
 @dataclass(frozen=True)
@@ -120,9 +136,10 @@ def _preempts(S: SimpleNamespace, st: RS.State) -> bool:
     return False
 
 
-def reference(S: SimpleNamespace, tick: Tick, st: State, inp: Inputs) -> Out:
+def reference(S: SimpleNamespace, tick: Tick | Rule, st: State, inp: Inputs) -> Out:
     """One step of the certified tick on the size class `S` (`replay_step.statics`' binding); `Out(False)` refuses
     what `replay_step.reference` refuses."""
+    rule = tick if isinstance(tick, Rule) else Rule(tick.bucket_us, tick.sat_us, tick.free_us)
     most = min(S.M, S.R)
     if most >= S.A:
         raise ValueError(f"A = {S.A} arrivals in view with up to {most} taken a step: the tick step needs "
@@ -130,10 +147,10 @@ def reference(S: SimpleNamespace, tick: Tick, st: State, inp: Inputs) -> Out:
     if len(inp.released) != len(inp.arrivals):
         raise ValueError(f"{len(inp.released)} release buckets for {len(inp.arrivals)} arrivals")
     clock = st.clock
-    if not st.step.running and not st.step.waiting and inp.arrivals:
-        clock = max(clock, tick.close(inp.released[0]))
+    if not st.step.waiting and not (rule.quiet and st.step.running) and inp.arrivals:
+        clock = max(clock, rule.close(inp.released[0]))
     given = 0
-    while given < len(inp.arrivals) and tick.close(inp.released[given]) <= clock:
+    while given < len(inp.arrivals) and rule.close(inp.released[given]) <= clock:
         given += 1
     asked = RS.Inputs(inp.arrivals[:given], (1,) * S.A, inp.hit, inp.evict, inp.ret, inp.row_pfx)
     out = RS.reference(S, st.step, asked)
@@ -141,5 +158,5 @@ def reference(S: SimpleNamespace, tick: Tick, st: State, inp: Inputs) -> Out:
         return Out(False)
     if out.rows:
         saturated = _preempts(S, st.step) or bool(out.state.waiting) or out.taken < given
-        clock += tick.sat_us if saturated else tick.free_us
+        clock += (rule.sat if saturated else rule.free) + rule.token * sum(n for *_, n in out.rows)
     return Out(True, out.rows, State(out.state, clock), out.taken, out.looked)

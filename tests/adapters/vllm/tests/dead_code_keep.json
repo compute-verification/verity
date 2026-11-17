@@ -28,6 +28,7 @@
   "verity_vllm.compiler.compile_slice_v6": "CompileSlice_v6, the pool row's slice (verity.commitments.pool_row), held by tests/compiler/test_network_attester_compile_slice_v6.py; benchmarks/mempool and benchmarks/network_e2e/encodings import it",
   "verity_vllm.compiler.compile_slice_v7": "CompileSlice_v7, the slice charging the length terms, held by tests/compiler/test_network_attester_compile_slice_v7.py; benchmarks/network_traces/compile_slice_zk.py proves it",
   "verity_vllm.compiler.served_statics": "the served statics' Definition, held by tests/compiler/test_network_attester_served_statics.py; benchmarks/prove_path/served_statics_zk.py and served_tie_window.py prove it",
-  "verity_vllm.compiler.served_tie": "the served tie's Definition, held by tests/compiler/test_network_attester_served_tie.py; benchmarks/prove_path/served_tie_zk.py and served_tie_window.py prove it"
+  "verity_vllm.compiler.served_tie": "the served tie's Definition, held by tests/compiler/test_network_attester_served_tie.py; benchmarks/prove_path/served_tie_zk.py and served_tie_window.py prove it",
+  "verity_vllm.compiler.tick_step": "TickStep_v1, the certified tick's step Definition, read by its circuit-check sidecar and tests/compiler/test_network_attester_tick_step.py"
  }
 }
