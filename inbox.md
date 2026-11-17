@@ -1,0 +1,3 @@
+[2026-11-17T14:45Z] 9b24639a7bae
+MODEL: Claude Opus 5.5. DRAWMAP (1): vllm 8992 at e9fe failed 1 test, caused by the map: test_pouw_h1_refusals::test_a_sample_session_or_a_period_without_what_it_goes_with_is_refused. Its quote of the h1_settings.py:165 refusal ('draw_session' is the draw session of H1's window) went through a map entry spanning the held key 'draw_session', so the quote was held while the message was renamed. Narrowed the entry; both sides now read 'draw_session' is the sample session. Regenerated on main fe30d18de17c (lean's pass): new head dd868082f48, 151 files, 1546 left standing, second application 0. Short rerun of the file: r20261117-144455-6ce2. Backup edcc cancelled.
+
