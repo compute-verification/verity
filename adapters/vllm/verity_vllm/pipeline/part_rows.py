@@ -16,17 +16,26 @@ from dataclasses import replace
 from typing import Any, NamedTuple
 
 import numpy as np
-
 from verity.commitments.periods import rows as CS
+
 from verity_vllm.pipeline import slice_rows as SL
-from verity_vllm.pipeline.serving_templates import COORDS, PART_STATICS, PARTS, coord_width, part, template
+from verity_vllm.pipeline.serving_templates import (
+    COORDS,
+    PART_STATICS,
+    PARTS,
+    coord_width,
+    part,
+    template,
+)
 
 _LAYER = re.compile(r"\.layers\.(\d+)\.")
 Row = tuple[str, Any, dict, dict]
 
 
 def _flashinfer_quant(x: np.ndarray) -> dict[str, np.ndarray]:
-    from verity_vllm.definitions.numerics.deepgemm_twins import flashinfer_quant_1x128_row
+    from verity_vllm.definitions.numerics.deepgemm_twins import (
+        flashinfer_quant_1x128_row,
+    )
 
     q, s = flashinfer_quant_1x128_row(x)
     return {"q": np.asarray(q, dtype=np.uint8), "s": np.asarray(s, dtype=np.uint32)}
@@ -46,7 +55,9 @@ def _vector8_scale(S: dict, x: np.ndarray, w: np.ndarray) -> tuple[dict, dict]:
 
 
 def _fused_vector8_scale(S: dict, x: np.ndarray, res: np.ndarray, w: np.ndarray) -> tuple[dict, dict]:
-    from verity_vllm.definitions.numerics.cuda_rmsnorm_rows import fused_add_rms_norm_rows
+    from verity_vllm.definitions.numerics.cuda_rmsnorm_rows import (
+        fused_add_rms_norm_rows,
+    )
 
     got = fused_add_rms_norm_rows(x[None], res[None], w, float(S["EPS"]), int(S["BLOCK"]))
     return {"scale": got["scale"]}, {0: got["out"][0], 1: got["residual"][0]}
@@ -182,8 +193,10 @@ def read_coord(m: CS.Member, rows: Sequence[Row], store: Any, weights: Callable,
             raise LookupError(f"row {r['i']} output {member}: {why}")
         y = packed([np.asarray(y)], bits[-1], f"row {r['i']} output {member}").reshape(U, -1)
         if mid:
-            got = MIDS[spec_base(r["spec"])].y(mid, W[0], WS[0], G)
-            if not np.array_equal(np.asarray(got, dtype=np.uint16).reshape(-1), y.reshape(-1)):
+            twin = MIDS[spec_base(r["spec"])].y
+            assert twin is not None
+            twin_out = twin(mid, W[0], WS[0], G)
+            if not np.array_equal(np.asarray(twin_out, dtype=np.uint16).reshape(-1), y.reshape(-1)):
                 raise ValueError(f"row {r['i']} ({d['op_path']}): the twin's output on its intermediates {sorted(mid)} is not "
                                  f"the row's served {member} words")
         wcol = np.ascontiguousarray(W.reshape(E, U, c, K).transpose(1, 0, 2, 3)).reshape(U, -1).view("<u2")
@@ -280,6 +293,7 @@ def read_cols(m: CS.Member, rows: Sequence[Row], store: Any, weights: Callable, 
         nh = W // w
         mid = mids(pi, r, d, store, weights, rid, arrive, slices, packed) if any(src == "mid" for src, _g in p[1]) else {}
         ports = [*((src, g) for src, g in p[1]), *(("out", j) for j in p[2])]
+        assert tp.packed is not None
         if len(ports) != len(tp.packed):
             raise ValueError(f"row {r['i']} ({d['op_path']}): {len(ports)} operands and outputs, not template {tp.id}'s "
                              f"{len(tp.packed)} ports")

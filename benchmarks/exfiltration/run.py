@@ -23,11 +23,11 @@ from verity_bench.exfiltration import main, measurements
 
 HEADLINE = "benchmarks/exfiltration-gb-world-year"
 COMPUTE_AUDIT = "benchmarks/exfiltration-compute-audit-gb"
-NETWORK = "benchmarks/exfiltration-network-certifier-gb"
+NETWORK = "benchmarks/exfiltration-network-attester-gb"
 #: the metrics `benchmarks/exfiltration/metrics.toml` holds this benchmark to, by id: each a figure of the document
 #: at the share (`verity_bench.exfiltration.FIGURES`), recorded over each of its monitoring periods, the world's year
 #: the one each title names
-METRICS = {HEADLINE: "headline", COMPUTE_AUDIT: "compute_audit", NETWORK: "network_certifier"}
+METRICS = {HEADLINE: "headline", COMPUTE_AUDIT: "compute_audit", NETWORK: "network_attester"}
 
 
 def _of(doc: Mapping[str, Any], metric: str, figure: str) -> list[dict]:
@@ -40,7 +40,7 @@ def measured(doc: Mapping[str, Any]) -> list[dict]:
     """The three figures' measurements, each over every monitoring period, under each metric's id."""
     return [*({**m, "name": HEADLINE, "value": m["value"]} for m in _of(doc, HEADLINE, "headline")),
             *({**m, "name": COMPUTE_AUDIT, "value": m["value"]} for m in _of(doc, COMPUTE_AUDIT, "compute_audit")),
-            *({**m, "name": NETWORK, "value": m["value"]} for m in _of(doc, NETWORK, "network_certifier"))]
+            *({**m, "name": NETWORK, "value": m["value"]} for m in _of(doc, NETWORK, "network_attester"))]
 
 
 def report(doc: Mapping[str, Any], text: str, *, made_up: bool, withdrawn: Sequence[str]) -> int:

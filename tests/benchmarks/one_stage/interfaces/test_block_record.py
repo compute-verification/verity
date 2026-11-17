@@ -235,7 +235,7 @@ def test_remote_composes_spot_and_pouw_alone_its_other_subprotocols_dropped() ->
     assert (c["verdict"], c["answer"], c["product"], c["missing"], c["dropped"]) == (
         "undecided", None, "remote", [], ["bandwidth", "certifier", "pous", "wipe"])
     assert c["legs"] == {"integrity": "accept", "pouw": "accept"} and sorted(c["joint_horizon"]["terms"]) == ["integrity", "pouw"]
-    remote = {**ONSITE, "protocol": "verity/remote/v0"}
+    remote = {**ONSITE, "protocol": "verity/remote/v1"}
     decided = R.from_period(report, steps=(4, 6), deployment=R.REFERENCE, answer=remote, product="remote")
     jsonschema.Draft202012Validator(SCHEMA).validate(decided)
     assert R.check(decided) == {} and decided["composed"]["verdict"] == "accept"
@@ -246,6 +246,9 @@ def test_remote_composes_spot_and_pouw_alone_its_other_subprotocols_dropped() ->
         "reject", "verity/remote/v1")
     with pytest.raises(ValueError, match="not an answer of the remote check"):
         R.from_period(report, steps=(4, 6), deployment=R.REFERENCE, answer=ONSITE, product="remote")
+    with pytest.raises(ValueError, match="not an answer of the remote check"):
+        R.from_period(report, steps=(4, 6), deployment=R.REFERENCE, answer={**ONSITE, "protocol": "verity/remote/v0"},
+                      product="remote")
     with pytest.raises(ValueError, match="not an answer of the onsite check"):
         R.from_period(report, steps=(4, 6), deployment=R.REFERENCE, answer=remote)
     with pytest.raises(ValueError, match="not an answer of the onsite check"):
@@ -273,7 +276,7 @@ def test_remote_composes_spot_and_pouw_alone_its_other_subprotocols_dropped() ->
 
 
 def test_a_subprotocol_carries_its_answers_placement_and_no_other_profile() -> None:
-    """The certifier's answer names which host ran each party (``profile.placement``): its subprotocol carries that and the
+    """The network attester's answer names which host ran each party (``profile.placement``): its subprotocol carries that and the
     record still fits its schema and checks clean; a subprotocol whose profile names no placement carries no profile."""
     report, wipe = _accepting_report()
     placement = {"kind": "not-placed", "parties": {"network_certifier": "gate", "prover": "n0", "verifier": "n0"}}

@@ -7,7 +7,7 @@ Every address is a documentation address, every hardware address is zero and a p
 the file is the same wherever it is written. It keeps at most each packet's first `KEPT` bytes, as a capture taken
 for the reader does: every header and, where the headers are shorter, the first bytes of its content. It holds, their
 packets interleaved:
-- two connections from the certifier to the server: on the first the request's second segment is sent twice and the
+- two connections from the attester to the server: on the first the request's second segment is sent twice and the
   response's last two segments arrive out of order; on the second the request's first segment is sent again together
   with the bytes after it;
 - the server's flows beside those, with a third machine: a TCP connection, a UDP exchange and an ICMP echo;
@@ -137,7 +137,7 @@ def interleaved(*flows: list[bytes]) -> list[bytes]:
 
 
 def first() -> list[bytes]:
-    """The certifier's first connection: a request of 300 bytes whose second segment is sent twice, and a response of
+    """The attester's first connection: a request of 300 bytes whose second segment is sent twice, and a response of
     700 whose last two segments arrive out of order."""
     c = Connection((CERTIFIER, 40001), SERVER).open()
     c.send(0, data(200))
@@ -151,7 +151,7 @@ def first() -> list[bytes]:
 
 
 def second() -> list[bytes]:
-    """The certifier's second connection: a request of 120 bytes whose first 50 are sent again together with the 70
+    """The attester's second connection: a request of 120 bytes whose first 50 are sent again together with the 70
     after them, and a response of 64."""
     c = Connection((CERTIFIER, 40002), SERVER, (77000, 88000)).open()
     start = c.next[0]
@@ -172,7 +172,7 @@ def beside() -> list[list[bytes]]:
 
 
 def foreign() -> list[bytes]:
-    """A connection between two machines that are neither the server nor the certifier: four packets, 10 bytes sent."""
+    """A connection between two machines that are neither the server nor the attester: four packets, 10 bytes sent."""
     c = Connection((FOREIGN[0], 1234), (FOREIGN[1], 80)).open()
     c.send(0, data(10), acked=False)
     return c.packets

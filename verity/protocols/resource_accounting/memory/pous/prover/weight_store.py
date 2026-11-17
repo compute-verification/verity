@@ -10,14 +10,14 @@ attaches the decode to its layers (vLLM's: `verity_vllm.protocols.pous`).
 * **Encode** (`encode`): ``C*`` encoded a segment at a time under the salt (`p2_store.store.GpuEncoder`,
   ``libp2v1.so`` on the weights' GPU, which checks its own decode of the whole segment; `CpuEncoder` on the CPU), two
   blocks of each segment held to ``W`` by the reference decode, and ``C*`` held as one [blocks, block_bytes] uint8
-  tensor on the weights' device; the memory challenger's table of it and the root over that table
+  tensor on the weights' device; the memory attester's table of it and the root over that table
   (`VerifierKey.from_row_digests`). The salt is ``setup.sample_salt(source, commitment)``, ``source`` the auditor's coin
   flipped after the commitment (`salt_from`).
 * **Decode** (`decoder`): a tensor's bytes from ``C*`` into a fresh buffer, by the store's load
   `p2_store.load.EncodedRows.decode_into` on the GPU, refusing what the reference refuses, or the scheme's codec on the
   CPU (`Store.decode_cpu`).
 * **The period** (`answer`, `audit`, `subprotocol`): `period_prover.audit` of what setup published, the prover answering each index
-  from ``C*`` where it is held, the memory challenger at ``period.json``'s ``challenger_host``, and the Lean answering
+  from ``C*`` where it is held, the memory attester at ``period.json``'s ``challenger_host``, and the Lean answering
   where the period's tools name it.
 
 It imports no torch and nothing of a serving system: what touches a tensor is its P2 store's (`p2_store.tensors`).
@@ -135,7 +135,7 @@ def salt_from(entry: str, setting: Any, commitment: bytes, params: Any) -> tuple
 @dataclass(eq=False)
 class Store:
     """``C*`` on the weights' device (``rows``, block ``i`` its row ``i``), the point, the layout, what setup published
-    and the memory challenger's table of ``C*``."""
+    and the memory attester's table of ``C*``."""
 
     point: Any
     layout: Any
@@ -211,7 +211,7 @@ class Blocks:
 def encode(layout: Any, tensors: Mapping[str, Any], commitment: bytes, salt: bytes, salt_source: str,
             lib: str | None) -> Store:
     """``C*`` of ``W`` under ``salt`` on the weights' device, each segment's encode checked (module docstring)."""
-    from verity.protocols.resource_accounting.memory.pous.attester import memory_challenger as mc
+    from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
     from verity.protocols.resource_accounting.memory.pous.verifier import period
     from verity.protocols.resource_accounting.memory.pous.verifier import run as R
     from verity.protocols.resource_accounting.memory.pous.verifier.schemes.p2 import expand_prefix
@@ -294,7 +294,7 @@ def audit(store: Store, node: str, coins: bytes, **kw: Any) -> Any:
 def subprotocol(store: Store | None, period_dir: str | Path, node: str, out: str | Path, *, audit: Callable[..., Any],
         side_of: Callable[..., Any], fresh: bool, answered: Callable[[], int],
         schemes: Mapping[str, Any] | None = None, protocol: str | None = None) -> dict[str, Any]:
-    """One period's PoUS of ``store``, as `period_prover.subprotocol` runs it for a node's records: the memory challenger at
+    """One period's PoUS of ``store``, as `period_prover.subprotocol` runs it for a node's records: the memory attester at
     ``period.json``'s ``challenger_host`` (``side_of``, the runtime's ``Side.of``, its side's key and session log in
     ``pous-challenger`` beside the periods when it is this node), fresh coins handed to ``audit`` (the holder's
     `audit`), and the Lean's answer where the period's tools name ``pous-run-protocol`` (and, at the first period,
@@ -306,7 +306,7 @@ def subprotocol(store: Store | None, period_dir: str | Path, node: str, out: str
     ``schemes`` and ``protocol`` are the signatures the verifier accepts and the id it answers under (a test signer's
     in tests)."""
     from verity.protocols.resource_accounting.memory.pous.attester import challenger_session as CS
-    from verity.protocols.resource_accounting.memory.pous.attester import memory_challenger as mc
+    from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
     from verity.protocols.resource_accounting.memory.pous.prover import challenger_prover as CR
     from verity.protocols.resource_accounting.memory.pous.verifier import period
 

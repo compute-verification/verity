@@ -49,23 +49,6 @@ them, so Vercel installs them alone; `uv lock` in `service/` after a pin moves).
 It runs against fakes: Slack through `Slack`'s transport, the cache, the queue, the notes repository's contents API and
 the clock. No test calls Slack, Vercel, GitHub or a model.
 
-## Where to look
-
-| Concern | Where |
-|---|---|
-| Who a post rings | `research msg deliver` in `slack.py`; the service adds only the routing line (`consumer.route`, `consumer.pick`) |
-| A person's usual lane | `research msg chat open\|expect --lane`; `consumer.pick` (`usual_lane`), `crons.watchdog` |
-| Retries, redelivery, dead letters | `consumer.consume`, `consumer.dead_letter`; Slack is the record, below |
-| Reminders, escalation, the daily list | `crons.watchdog`, `crons.daily` |
-| A stalled queue | `crons.stall`, `crons.canary`; Health, below |
-| Posts that were never routed | `crons.reconcile`, `crons.unrung` (an external poster's) |
-| A new Linear issue in a lane's team | `crons.new_issues`; the sweep's audit (`unheard`) is the backstop |
-| Slack calling us no more | `crons.silence`; Health, below |
-| Routing by model | `router.py` |
-| Newcomers | `consumer.newcomer`; Newcomers, below |
-| Signatures, bearers | `app.signed`, `app.bearer` |
-| Building and deploying | `build.py`, `ignore.py`, `vercel.json`; Deploy, below |
-
 Logs are JSON lines of ids, decisions and errors. They never carry a post's text.
 
 ## Slack is the record

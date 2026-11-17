@@ -54,10 +54,11 @@ def git_tree(d: Path, guarantees: list[str], dirty: bool = False) -> Path:
     return d
 
 
-def no_tree(exe: str) -> list[str]:
+def no_tree(exe: str, product: str = "remote") -> list[str]:
     """What an accept's check prints after its verdict when ``--tree`` is no git checkout."""
-    return [f"RAN None clean=False sha512={C.file_sha512(Path(exe))} cites={C.CITES['remote']}",
-            "NOT_ESTABLISHED the tree is no git checkout"]
+    cites = C.CITES.get(product)
+    return [f"RAN None clean=False sha512={C.file_sha512(Path(exe))} cites={cites}",
+            f"NOT_ESTABLISHED {'the tree is no git checkout' if cites else 'the product cites no listed guarantee'}"]
 
 
 def onsite_cases(tmp_path: Path, without: str | None = None) -> list[str]:
@@ -292,21 +293,21 @@ def test_the_check_runs_the_products_executable_on_the_private_files_and_blobs(t
 
 def remote_accepted(tmp_path: Path, tree: Path, verdict: str = "accept", rc: int = 0) -> tuple[int, dict, list[str]]:
     v1 = put(tmp_path / "v1", SAMPLED, {}, b"\x01", b"{}", b"\xaa" * 64, verdict="accept")
-    pw = put(tmp_path / "pouw", POUW, {}, b"\x02", b"{}", b"\xbb" * 64, verdict="accept")
-    exe = lean(tmp_path, {"protocol": "verity/remote/v0", "verdict": verdict}, rc)
-    got = C.main(["remote", "--cases", str(v1), "--cases", str(pw), "--cases", str(policy(tmp_path)),
+    pp = put(tmp_path / "pearlplus", PEARL_PLUS, {}, b"\x02", b"{}", b"\xbb" * 64, verdict="accept")
+    exe = lean(tmp_path, {"protocol": "verity/remote/v1", "verdict": verdict}, rc)
+    got = C.main(["remote-v1", "--cases", str(v1), "--cases", str(pp), "--cases", str(policy(tmp_path)),
                   *outs(tmp_path, tree=tree), "--exe", exe])
     record = json.loads((tmp_path / "public" / "composite.json").read_bytes())
     return got, record, (tmp_path / "public" / "verdicts.txt").read_text().splitlines()
 
 
 def test_an_accept_records_its_commit_its_executable_and_the_listed_guarantee_it_cites(tmp_path):
-    tree = git_tree(tmp_path / "tree", [C.CITES["remote"]])
+    tree = git_tree(tmp_path / "tree", [C.CITES["remote-v1"]])
     rc, record, lines = remote_accepted(tmp_path, tree)
     commit = subprocess.run(["git", "-C", str(tree), "rev-parse", "HEAD"], capture_output=True, text=True).stdout.strip()
     assert rc == 0
     assert record["ran"] == {"commit": commit, "clean": True, "verifier_sha512": C.file_sha512(tmp_path / "lean-check"),
-                             "cites": C.CITES["remote"], "lock": {"listed": True, "deployed": False, "open": ["P.Open"]}}
+                             "cites": C.CITES["remote-v1"], "lock": {"listed": True, "deployed": False, "open": ["P.Open"]}}
     assert not any(ln.startswith(("NOT_ESTABLISHED", "UNCITED")) for ln in lines)
 
 
@@ -314,7 +315,7 @@ def test_an_accept_whose_commit_s_lock_lists_no_cited_guarantee_exits_uncited(tm
     rc, record, lines = remote_accepted(tmp_path, git_tree(tmp_path / "tree", ["Other.Guarantee"]))
     assert rc == C.UNCITED
     assert record["ran"]["lock"]["listed"] is False
-    assert lines[-2] == f"UNCITED {C.LOCK} at {record['ran']['commit']} lists no {C.CITES['remote']}"
+    assert lines[-2] == f"UNCITED {C.LOCK} at {record['ran']['commit']} lists no {C.CITES['remote-v1']}"
 
 
 def test_a_reject_keeps_lean_s_code_whatever_the_lock_lists(tmp_path):
@@ -323,13 +324,13 @@ def test_a_reject_keeps_lean_s_code_whatever_the_lock_lists(tmp_path):
 
 
 def test_an_accept_on_a_tree_that_isn_t_its_commit_is_not_established(tmp_path):
-    rc, record, lines = remote_accepted(tmp_path, git_tree(tmp_path / "tree", [C.CITES["remote"]], dirty=True))
+    rc, record, lines = remote_accepted(tmp_path, git_tree(tmp_path / "tree", [C.CITES["remote-v1"]], dirty=True))
     assert rc == 0 and record["ran"]["clean"] is False
     assert f"NOT_ESTABLISHED the tree's tracked files differ from {record['ran']['commit']}" in lines
 
 
 def test_onsite_cites_no_listed_guarantee(tmp_path):
-    tree = git_tree(tmp_path / "tree", [C.CITES["remote"]])
+    tree = git_tree(tmp_path / "tree", [C.CITES["remote-v1"]])
     assert C.main(["onsite", *onsite_cases(tmp_path), *outs(tmp_path, tree=tree),
                    "--exe", lean(tmp_path, {"verdict": "accept"}, 0)]) == 0
     record = json.loads((tmp_path / "public" / "composite.json").read_bytes())

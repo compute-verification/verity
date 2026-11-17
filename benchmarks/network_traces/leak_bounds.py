@@ -21,7 +21,7 @@ of the scan's statement:
   outputs, NR·T / EVERY slot entries of NE bits (`ingress_scan.entry_bits`), so they are that audit's free inputs,
   which the rows form charges to the sampling block (`tiedAudits`). If ``prog`` is an input only at its anchored
   entries, they are an entry's 33 + KO·IDB bits a request (`ingress_scan.entry_layout`);
-* no faulty proof block, every one being drawn;
+* no incorrect proof block, every one being drawn;
 * the jitter term at D_j = `JITTER_BOUND`, ⌈log2 D_j^T⌉ = T bits a sampling block, one a bucket (`JITTER`).
 
 A link runs m = s / (T·τ) sampling blocks and certifies rate·s requests over a monitoring period of s seconds

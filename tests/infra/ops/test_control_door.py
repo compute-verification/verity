@@ -170,10 +170,7 @@ def test_the_two_requests_an_older_checkout_sends_are_taken_as_their_verbs(gate,
 
 
 def test_drive_is_cis_key_only_and_only_its_listed_forms(gate, capsys):
-    forms = ["status", "start", "stop", "once --dry-run", f"deploy {SHA}", "deploy main", "queue promote",
-             f"queue baseline {SHA} --by ci", f"queue baseline {SHA[:12]} --by ci --steps suites,lean-check",
-             f"queue accept-checked {SHA} --by ci", f"queue drive-shard-add {SHA} 3 20261019T1830Z-check-k3",
-             "queue eject 6861 --by ci --reason 'red on checked: suites (tools/research)'"]
+    forms = ["status", f"deploy {SHA}", "deploy main", "queue eject 6861 --by ci --reason 'red on checked: suites (tools/research)'"]
     for form in forms:
         assert serve(gate, f"drive {form}", "ci") == 0, form
     assert [a for a, _ in gate.pod.ran][-1] == [gate.DRIVE_SH, "queue", "eject", "6861", "--by", "ci", "--reason",
@@ -183,9 +180,9 @@ def test_drive_is_cis_key_only_and_only_its_listed_forms(gate, capsys):
     for lane in ("-", "infra"):
         assert serve(gate, "drive status", lane) == 2 and "`drive` is for the key of ci" in capsys.readouterr().err
     for bad in ["", "merge --push", "merge 6861", "queue sync", "queue drive", "once", "once --first 12", "deploy HEAD", "deploy main; id",
-                f"queue baseline {SHA} --by infra", f"queue baseline {SHA}", "queue baseline main --by ci",
-                f"queue baseline {SHA} --by ci --steps 'a b'", "queue eject 12 --by ci --reason '$(id)'",
-                "queue eject 12 --by ci --reason --land", "queue eject 0 --by ci --reason x", f"queue accept-checked {SHA} --by ci --force"]:
+                "start", "stop", "once --dry-run", "queue promote", f"queue baseline {SHA} --by ci", f"queue accept-checked {SHA} --by ci",
+                f"queue drive-shard-add {SHA} 3 20261019T1830Z-check-k3", "queue eject 12 --by ci --reason '$(id)'",
+                "queue eject 12 --by ci --reason --land", "queue eject 0 --by ci --reason x"]:
         assert serve(gate, f"drive {bad}", "ci") == 2, bad
     assert gate.pod.ran == []
 

@@ -311,7 +311,7 @@ NO_SCHEDULE = "this reader is handed no schedule and asks the rule without one"
 PLACE = (CC.LINK, CC.WINDOW, CC.CLASS, CC.HEAD)
 DIFFER = (((CC.CLASS,), "the class (`class`)"),
           ((CC.LINK, CC.WINDOW), "the execution phase (`link`, `window`)"),
-          ((CC.HEAD,), "the signed head (`head`) of the network certifier's rows"))
+          ((CC.HEAD,), "the signed head (`head`) of the network attester's rows"))
 ONE = {CC.SERVE: "the serve (`serve`)", CC.REGISTRATION: "the registration (`registration`)"}
 #: what holds back an execution phase that has the verdicts of each class that holds a row, as the answer's first
 #: line counts it

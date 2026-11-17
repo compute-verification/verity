@@ -21,7 +21,7 @@ from verity.channel import Message
 from verity.party import Finish, Identity, Received, Send
 from verity.protocols.resource_accounting.memory.poub.prover import p2_party_prover, p2_prover
 from verity.protocols.resource_accounting.memory.poub.verifier import coins, p2, p2_parties, receipts
-from verity.protocols.resource_accounting.memory.pous.attester import memory_challenger as mc
+from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
 from verity.protocols.resource_accounting.memory.pous.verifier import setup
 from verity.protocols.resource_accounting.memory.pous.verifier.schemes.p2 import P2Params
 from verity.protocols.resource_accounting.compute.pouw.verifier import core_check

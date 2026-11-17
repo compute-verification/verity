@@ -33,6 +33,7 @@ import hashlib
 import json
 import re
 import shutil
+import socket
 import stat
 import sys
 from fractions import Fraction
@@ -59,6 +60,7 @@ sys.path.insert(0, str(HERE.parents[2] / "benchmarks" / "one_stage"))
 import served_cases as SC  # noqa: E402
 from v1_case import RP, v1_case  # noqa: E402
 
+ADDRESS_SPACE_HERE = SC.address_space_here
 LAKE = shutil.which("lake") is not None
 lean = pytest.mark.skipif(not LAKE, reason="no Lean toolchain")
 
@@ -182,10 +184,20 @@ def scope(tmp_path, monkeypatch) -> Path:
                    f"open({str(seen)!r}, 'a').write(' '.join(a[:i]) + '\\n')\nos.execv(a[i + 1], a[i + 1:])\n")
     exe.chmod(0o755)
     monkeypatch.setattr(SC, "SCOPE", (str(exe),))
+    monkeypatch.setattr(SC, "ADDRESS_SPACE", (str(exe),))
     monkeypatch.setattr(SC, "scope_here", lambda: True)
+    monkeypatch.setattr(SC, "address_space_here", lambda: False)
     for k in ("CHECK_SCOPE", "CHECK_MEM_GB", "CHECK_BLOBS_GB"):
         monkeypatch.delenv(k, raising=False)
     return seen
+
+
+SCOPED = f"its own scope, MemoryMax {SC.CHECK_MEM_GB}G, no swap"
+AS_LIMITED = f"its own address space, RLIMIT_AS {SC.CHECK_MEM_GB}G (prlimit; this host makes no systemd user scope)"
+
+
+def ran(memory: str = SCOPED) -> dict:
+    return {"host": socket.gethostname(), "memory": memory}
 
 
 def not_started(out: str) -> list[dict]:
@@ -325,10 +337,10 @@ def test_each_case_goes_private_beside_an_answer_naming_the_records_digest(tmp_p
                                   *stand_ins(tmp_path, v1), "--v2", "--v2-exe",
                                   stand_in(tmp_path, "v2", answer(SC.V2, d)))
     assert (rc, refused) == (0, []), out
-    assert cases == [{"dir": str(private / "sampled-proofs-v1"), "protocol": V1, "verdict": "accept"},
-                     {"dir": str(private / "sampled-proofs"), "protocol": SAMPLED, "verdict": "accept"},
-                     {"dir": str(private / "inference-only"), "protocol": INF, "verdict": "accept"},
-                     {"dir": str(private / "sampled-proofs-v2"), "protocol": SC.V2, "verdict": "accept"}]
+    assert cases == [{"dir": str(private / "sampled-proofs-v1"), "protocol": V1, "verdict": "accept"} | ran(),
+                     {"dir": str(private / "sampled-proofs"), "protocol": SAMPLED, "verdict": "accept"} | ran(),
+                     {"dir": str(private / "inference-only"), "protocol": INF, "verdict": "accept"} | ran(),
+                     {"dir": str(private / "sampled-proofs-v2"), "protocol": SC.V2, "verdict": "accept"} | ran()]
     v2_case = json.loads((audit / "window" / "case-v2.json").read_text())
     for c in cases:
         cd = Path(c["dir"])
@@ -367,15 +379,15 @@ def test_each_case_goes_private_beside_an_answer_naming_the_records_digest(tmp_p
 
 def test_each_check_is_one_process_in_a_scope_of_its_own_under_the_memory_limit(tmp_path, capsys, scope, monkeypatch):
     """Every check `lean_answer` starts runs behind the host's scope command with its memory limit and no swap, one
-    scope a check: `CHECK_MEM_GB` by default, ``CHECK_MEM_GB``'s in the environment, and its CASE line says nothing of
-    memory. A check that answers no line says the limit it ran under."""
+    scope a check: `CHECK_MEM_GB` by default, ``CHECK_MEM_GB``'s in the environment, and its CASE line says so and names
+    the host. A check that answers no line says the limit it ran under."""
     program, query = toy()
     v1 = v1_case(program, query)
     argv = ["--audit", audit_dir(tmp_path, v1), "--private", tmp_path / "private", "--alpha", "1", "--gamma", 1]
     v2 = ["--v2", "--v2-exe", stand_in(tmp_path, "v2", answer(SC.V2, digest_of(v1)))]
     rc, cases, refused, out = run(capsys, *argv, *stand_ins(tmp_path, v1), *v2)
     assert (rc, refused) == (0, []) and [c["protocol"] for c in cases] == [V1, SAMPLED, INF, SC.V2], out
-    assert not any("memory" in c for c in cases)
+    assert [{k: c[k] for k in ("host", "memory")} for c in cases] == [ran()] * 4
     assert scope.read_text().splitlines() == [f"-p MemoryMax={SC.CHECK_MEM_GB}G -p MemorySwapMax=0"] * 4
     scope.unlink()
     monkeypatch.setenv("CHECK_MEM_GB", "8")
@@ -425,8 +437,8 @@ def test_a_check_whose_blob_files_sum_past_the_limit_is_not_started_and_its_line
 
 
 def test_a_host_that_makes_no_scope_starts_no_check_unless_it_says_so(tmp_path, capsys, scope, monkeypatch):
-    """No check runs outside a memory limit of its own: on a host that makes no scope none is started, each line
-    saying so, and nothing is written. ``CHECK_SCOPE=none`` runs them under no limit, a development host's choice, and
+    """No check runs outside a memory limit of its own: on a host that makes no scope and runs no prlimit none is
+    started, each line saying so, and nothing is written. ``CHECK_SCOPE=none`` runs them under no limit, a development host's choice, and
     each CASE line then says it."""
     program, query = toy()
     v1 = v1_case(program, query)
@@ -442,6 +454,67 @@ def test_a_host_that_makes_no_scope_starts_no_check_unless_it_says_so(tmp_path, 
     rc, cases, refused, out = run(capsys, *argv)
     assert rc == 0 and not_started(out) == [] and [c["memory"] for c in cases] == [SC.UNLIMITED] * 3, out
     assert all((tmp_path / f"{n}.seen").exists() for n in ("v1", "sampled", "reg")) and not scope.exists()
+
+
+def test_a_host_that_makes_no_scope_runs_each_check_behind_prlimit_at_the_same_size_and_its_blob_cap(
+        tmp_path, capsys, scope, monkeypatch):
+    program, query = toy()
+    v1 = v1_case(program, query)
+    audit = audit_dir(tmp_path, v1)
+    argv = ["--audit", audit, "--private", tmp_path / "private", "--alpha", "1", "--gamma", 1]
+    monkeypatch.setattr(SC, "scope_here", lambda: False)
+    monkeypatch.setattr(SC, "address_space_here", lambda: True)
+    rc, cases, refused, out = run(capsys, *argv, *stand_ins(tmp_path, v1))
+    assert (rc, refused, not_started(out)) == (0, [], []), out
+    assert [(c["protocol"], {k: c[k] for k in ("host", "memory")}) for c in cases] == [
+        (id, ran(AS_LIMITED)) for id in (V1, SAMPLED, INF)]
+    assert scope.read_text().splitlines() == [f"--as={SC.CHECK_MEM_GB << 30}"] * 3
+    scope.unlink()
+    monkeypatch.setenv("CHECK_MEM_GB", "8")
+    rc, _cases, refused, out = run(capsys, *argv, *stand_ins(tmp_path, v1, sampled=None))
+    assert scope.read_text().splitlines() == [f"--as={8 << 30}"] * 3
+    assert refused[0]["reason"].endswith("answered no line (exit 0) under its own address space, RLIMIT_AS 8G "
+                                         "(prlimit; this host makes no systemd user scope)"), out
+    scope.unlink()
+    blobs = json.loads((audit / "window" / "case-v2.json").read_text())["blobs"]
+    with open(blobs[0], "r+b") as fh:
+        fh.truncate(2 * 10**9)                                  # sparse: its size alone is read
+    monkeypatch.setenv("CHECK_BLOBS_GB", "2")
+    rc, cases, refused, out = run(capsys, *argv, *stand_ins(tmp_path, v1))
+    assert rc == 1 and [c["protocol"] for c in cases] == [V1, INF], out
+    assert [(x["protocol"], x["limit_bytes"]) for x in not_started(out)] == [(SAMPLED, 2 * 10**9)], out
+    assert len(scope.read_text().splitlines()) == 2
+
+
+def test_address_space_here_is_whether_prlimit_runs_a_command_under_a_limit(tmp_path, monkeypatch):
+    seen = tmp_path / "seen"
+    for name, body, says in (("ok", f'echo "$@" > {seen}', True), ("refuses", "exit 1", False)):
+        exe = tmp_path / name
+        exe.write_text(f"#!/bin/sh\n{body}\n")
+        exe.chmod(0o755)
+        monkeypatch.setattr(SC, "ADDRESS_SPACE", (str(exe),))
+        assert ADDRESS_SPACE_HERE() is says
+    assert seen.read_text().split() == [f"--as={1 << 30}", "--", "true"]
+    monkeypatch.setattr(SC, "ADDRESS_SPACE", (str(tmp_path / "absent"),))
+    assert ADDRESS_SPACE_HERE() is False
+
+
+@lean
+def test_the_lean_answers_behind_prlimit_at_the_default_limit_as_under_none(tmp_path, monkeypatch, v1_exe,
+                                                                             sampled_exe):
+    monkeypatch.setattr(SC, "ADDRESS_SPACE", ("prlimit",))
+    monkeypatch.setattr(SC, "scope_here", lambda: False)
+    monkeypatch.setattr(SC, "address_space_here", ADDRESS_SPACE_HERE)
+    within = SC.limits()
+    assert within.address_space and within.scope == ("prlimit", f"--as={SC.CHECK_MEM_GB << 30}", "--")
+    audited, subset = audited_v1_case(*toy(), accepted=True), v1_case(*toy(), design=SUBSET)
+    none = SC.Limits(within.blob_bytes, within.mem_gb, ())
+    for exe, v1, case, cmd, verdict in (
+            (v1_exe, audited, audited, (), "accept"),
+            (sampled_exe, subset, SC.sampled_case(audit_dir(tmp_path, subset)), SC.SAMPLED_CMD, "reject")):
+        got, line = SC.lean_answer(exe, case, tmp_path / "scratch", cmd, within)
+        assert (got["verdict"], got["commitment"]) == (verdict, digest_of(v1)), got
+        assert line == SC.lean_answer(exe, case, tmp_path / "scratch", cmd, none)[1]
 
 
 def test_a_v2_case_in_the_per_member_form_is_not_asked(tmp_path, capsys, scope):
@@ -676,7 +749,7 @@ def test_from_division_reads_alpha_and_gamma_off_the_checks_profile(tmp_path, ca
                                                                 | {"profile": profile}))
     if reason is None:
         assert rc == 0 and refused == [], out
-        assert [sorted(c) for c in cases] == [["dir", "protocol", "verdict"]] * 3
+        assert [sorted(c) for c in cases] == [["dir", "host", "memory", "protocol", "verdict"]] * 3
         assert SC.FROM_DIVISION not in out
         d = tmp_path / "private" / "inference-only"
         params = json.loads((d / "case.json").read_text())["params"]
@@ -699,8 +772,8 @@ def test_from_division_is_accepted_at_the_divisions_own_budgets(tmp_path, capsys
                                   "--sampled-exe", stand_in(tmp_path, "sampled", answer(SAMPLED, digest_of(toy_v1))))
     assert rc == 0 and refused == [], out
     f = Fraction(bits, gates)
-    assert [(sorted(c), c["verdict"]) for c in cases if c["protocol"] == INF] == [(["dir", "protocol", "verdict"],
-                                                                                    "accept")]
+    assert [(sorted(c), c["verdict"]) for c in cases if c["protocol"] == INF] == [
+        (["dir", "host", "memory", "protocol", "verdict"], "accept")]
     d = tmp_path / "private" / "inference-only"
     params = json.loads((d / "case.json").read_text())["params"]
     assert (params["alpha"], params["gamma"]) == ([f.numerator, f.denominator], gates)
@@ -839,8 +912,9 @@ def test_under_h1s_tie_every_case_commits_to_the_record_h1_named(tmp_path, capsy
     rc, cases, refused, out = run(capsys, "--serve-dir", serve, "--private", private, "--alpha", "1", "--gamma", 1,
                                   *stand_ins(tmp_path, v1))
     assert (rc, refused) == (0, []), out
-    assert cases == [{"dir": str(private / d_), "protocol": id, "verdict": "accept"} for id, d_ in (
-        (V1, "sampled-proofs-v1"), (SAMPLED, "sampled-proofs"), (INF, "inference-only"), (SC.PERIOD, "pouw-period"))]
+    assert cases == [{"dir": str(private / d_), "protocol": id, "verdict": "accept"} | there for id, d_, there in (
+        (V1, "sampled-proofs-v1", ran()), (SAMPLED, "sampled-proofs", ran()), (INF, "inference-only", ran()),
+        (SC.PERIOD, "pouw-period", {}))]
     piece, got = serve / SC.PERIOD_PIECE, private / "pouw-period"
     assert stat.S_IMODE(got.stat().st_mode) == 0o700
     assert {f.name: stat.S_IMODE(f.stat().st_mode) for f in got.iterdir()} == {"case.json": 0o600, "answer.json": 0o600}

@@ -331,9 +331,10 @@ that reads the store; a withdrawal of part of a stored record is honored (a with
 a withdrawn optional one is read as absent). `verity bench compute --from RUN` reads a run id that names no directory.
 
 `metrics.toml` holds the metrics the console's Metrics tab reads: `compute-accounting/verified-compute-share`
-(the number) and the others `run.py` writes, each with the run it reads; `h200_share.py` writes
-`compute-accounting/h200-capacity-credited-share` for the goal `accounting/h200-97-percent`: an honest H200's e4m3 rate
-(a `benchmarks/tensor_duty --arms fp32-beside` run's arm A on uniform operands) over the card's ceiling at each reading
-of its tensor clock, times `run.py`'s share of a served run. Both need the store:
+(the number) and the others `run.py` writes, each written by the served run that measured them, at `serve.sh`'s last
+step, as a `--from` of another run writes none; `h200_share.py` prints `compute-accounting/h200-capacity-credited-share`
+for the goal `accounting/h200-97-percent`: an honest H200's e4m3 rate (a `benchmarks/tensor_duty --arms fp32-beside`
+run's arm A on uniform operands) over the card's ceiling at each reading of its tensor clock, times `run.py`'s share of
+a served run. Both need the store:
 `uv run python benchmarks/compute/h200_share.py --from RUN --duty RUN`. Its docstring states the model and what it leaves
 out, which makes its number an upper bound on the served share.

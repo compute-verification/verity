@@ -60,13 +60,13 @@ failure, and the last line counts the lines that are measured.
 
 Under research run, where OUT is the run's own out/, the run's result.json names what the report rests on among its
 artifacts (`declare`: the report's two files and the replay's record), and holds, each under the model's metric id
-where it stands as a measurement (`measurements`): the cost of ours over stock at vLLM's published settings
+where it stands as a measurement (`measurements`): the cost of ours over stock, of the model's default arms
 (`METRICS`), and of ours there the share of the replayed window's served tokens the replay gave back before a
 request's first difference (`MATCH`) and the advice in bits a request (`ADVICE`).
 
 ``arms`` prints the three arms a job serves by default (`default_arms`): the arms at vLLM's published serving settings
 (`PROD`) for a model whose recipe the benchmark holds, else stock compiled vLLM, stock again and the step record
-(`TODAY`); with ``--out``, the three an earlier job's out/ is read as, which ``report`` reads it as too where none is
+(`TODAY`), whose step record keeps each request's ids for a model with ids (`KEPT`); with ``--out``, the three an earlier job's out/ is read as, which ``report`` reads it as too where none is
 named; with ``--among``, the arms a job lists (the runner's ``--arms``), the set whose arm of ours is among them.
 
 ``limit`` prints the context limit a job serves the model at where it names none (`LIMITS`), or nothing.
@@ -93,19 +93,23 @@ from verity_config.settings import SHARED  # noqa: E402 (the tree's tools/config
 
 SCHEMA = "verity-bench/prod-repro/v0"
 #: the arms a job serves by default, stock, stock again and ours: the arms at vLLM's published serving settings
-#: (`default_arms`), else `TODAY`
+#: (`default_arms`), else `TODAY`, or `KEPT` for a model with ids (`METRICS`) and no recipe: ours keeps each request's
+#: ids, which a replay of vLLM's client's pass reads
 PROD = ("prod", "prod-again", "prod-record")
 TODAY = ("compiled", "compiled-again", "record")
+KEPT = ("compiled", "compiled-again", "record-ids")
 #: the most serving with our changes may cost over stock, in percent of stock's serving time
 TARGET = 1.0
-#: by model, as the benchmark names it: the id its cost at vLLM's published settings (`PROD`'s ours over its stock) is
+#: by model, as the benchmark names it: the id its cost (its default arms' ours over their stock, `default_arms`) is
 #: recorded under in a run's result.json (`measurement`; benchmarks/prod_repro/metrics.toml), and that measurement's
 #: unit
-METRICS = {"glm53": "vllm/prod-serving-cost-glm53"}
+METRICS = {"glm53": "vllm/prod-serving-cost-glm53", "llama32-1b": "vllm/prod-serving-cost-glm53"}
 UNIT = "percent of stock's serving time"
-#: by model: the ids the replay's match and the advice of the pass it re-ran are recorded under, of ours at vLLM's
-#: published settings (`PROD`'s ours), and their units (`measurements`; benchmarks/prod_repro/metrics.toml)
-MATCH = {"glm53": "vllm/prod-replay-match-glm53"}
+#: the kind of a cost's interval over lifetimes, as its measurement names it (`serve_tax.session_cost`)
+INTERVAL = "Student's t 95% over the lifetime pairs, t at the pairs less one, every pair counted"
+#: by model: the ids the replay's match and the advice of the pass it re-ran are recorded under, of its default arms'
+#: ours, and their units (`measurements`; benchmarks/prod_repro/metrics.toml)
+MATCH = {"glm53": "vllm/prod-replay-match-glm53", "llama32-1b": "vllm/prod-replay-match-glm53"}
 ADVICE = {"glm53": "vllm/prod-advice-bits-glm53"}
 MATCH_UNIT, ADVICE_UNIT = "percent of served tokens", "bits a request"
 #: the replay's match it is held to: every served token given back
@@ -175,17 +179,19 @@ NOT_COUNTED = "  past an end-of-text token: not counted, no arm's passes hold a 
 
 def default_arms(model_id: str | None = None, out: Path | None = None, among: Sequence[str] = ()) -> tuple[str, str, str]:
     """The arms of a job that names none: `PROD` where the benchmark has them and holds vLLM's recipe for the model (it
-    refuses an arm at the published settings for a model with none), else `TODAY`. An earlier job's ``out`` is read as
-    `PROD` where it holds that set's arm of ours. A job that lists the arms it serves (the runner's --arms,
+    refuses an arm at the published settings for a model with none), else `KEPT` for a model with ids (`METRICS`) and
+    no recipe, else `TODAY`. An earlier job's ``out`` is read as `PROD` or `KEPT` where it holds that set's arm of ours. A job that lists the arms it serves (the runner's --arms,
     ``among``) is of the set whose arm of ours the list names, whatever its out/ holds: one that ended before ours
     was served is still read as the arms it was to serve."""
-    for names in (PROD, TODAY):
+    for names in (PROD, KEPT, TODAY):
         if names[2] in among:
             return names
     if out is not None:
-        return PROD if arm_dirs(out, PROD[2])[0].is_dir() else TODAY
+        return next((n for n in (PROD, KEPT) if arm_dirs(out, n[2])[0].is_dir()), TODAY)
     model = S.MODELS.get(model_id)
-    return PROD if all(a in S.ARMS for a in PROD) and model is not None and getattr(model, "published", ()) else TODAY
+    if model is not None and getattr(model, "published", ()):
+        return PROD if all(a in S.ARMS for a in PROD) else TODAY
+    return KEPT if model_id in METRICS else TODAY
 
 
 def arm_dirs(out: Path, arm: str) -> list[Path]:
@@ -719,7 +725,7 @@ def cost(out: Path, by: dict[str, dict], stock: str, ours: str, again: str | Non
     whether the floor's own interval leaves out 0: stock then differs from stock. ``stands`` says whether the cost
     stands as a measurement, as the benchmark says it of its own (`serve_tax.result_of`): on a sessions load alone,
     whose cost is the benchmark's own; on another the figure is none of the benchmark's measurements. ``metric`` is
-    the id it is recorded under (`METRICS`), for ours and stock at vLLM's published settings; None for other arms.
+    the id it is recorded under (`METRICS`), for ours and stock of the model's default arms; None for other arms.
     Not measured where an arm did not serve the load, where an arm left requests unserved (the arms then served
     different tokens), where the benchmark's own cost refuses the arms, or where the corpus client's arrivals did not
     saturate stock."""
@@ -788,7 +794,15 @@ def cost(out: Path, by: dict[str, dict], stock: str, ours: str, again: str | Non
             "how": how, **({} if value is not None else {"why": "an arm served no token in some rep"}),
             "lifetimes": lives, "noise_floor": noise or None, "target": target, "same_work": same,
             "verdict": NOT_SHOWN if same is False else verdict, "stands": stands,
-            "metric": METRICS.get(mine.get("model_id")) if (stock, ours) == (PROD[0], PROD[2]) else None}
+            "metric": METRICS.get(m) if (stock, ours) == default_arms(m := mine.get("model_id"))[::2] else None}
+
+
+def scope(c: dict) -> str:
+    """What a measured cost line's figure is of: serving time at one operating point on one node, never compute."""
+    h = c["how"]
+    at = f"{h['rate']:g} requests a second" if h["client"] != S.BENCH else \
+        f"{h['rung']} {'users' if h.get('sessions') else 'in flight'}, {'' if h['saturated'] else 'un'}saturated"
+    return f"serving time, one node, one load at {at}"
 
 
 # --------------------------------------------------------------------------------------------------------- the advice
@@ -924,7 +938,7 @@ def report(out: Path, stock: str | None, ours: str, again: str | None, load: str
         not_measured(f"{ours} was not served")
     for figure, ids in ((toks, MATCH), (plan, ADVICE)):
         if figure["measured"]:
-            figure["metric"] = ids.get(meta.get("model_id")) if ours == PROD[2] else None
+            figure["metric"] = ids.get(meta.get("model_id")) if ours == default_arms(meta.get("model_id"))[2] else None
     return {"schema": SCHEMA, "model": meta.get("model"), "checkpoint": meta.get("checkpoint"),
             "run": meta.get("run_id"), "commit": meta.get("commit"), "limits": limits(meta.get("model_id")),
             "load": load, "arms": {"stock": stock, "again": again, "ours": ours, "served": sorted(by),
@@ -952,18 +966,31 @@ def measurement(r: dict) -> dict | None:
     """The cost line as a measurement under its metric id (``metric``: `METRICS`), every figure in `UNIT`, where the
     cost stands (``stands``) and ours and stock were served at the same settings: else the figure is not our changes'
     cost (`UNLIKE`). None otherwise. Its mark, ``measured``, is its ``mark`` and the head of its first input, before
-    what was timed."""
+    what was timed. It names how it was measured: its lifetime pairs, its counted passes an arm, each lifetime's
+    passes left out (``left_out``), its interval's kind (`INTERVAL`, where it has one) and stock against stock, its
+    noise floor."""
     c = r["cost"]
     if not (c.get("measured") and c.get("stands") and c.get("metric")) or c.get("settings_differ"):
         return None
-    life = c["lifetimes"]
+    life, n = c["lifetimes"], c.get("noise_floor")
     return {"name": c["metric"], "value": S._pct(c["value"]), "unit": UNIT, "mark": "measured", "better": "lower",
             "target": c["target"],
             "ci95": life["ci95"] and [S._pct(x) for x in life["ci95"]], "verdict": c["verdict"], "load": r["load"],
-            "stock": r["arms"]["stock"], "ours": r["arms"]["ours"], "lifetimes": life["pairs"], "commit": r["commit"],
-            "run": r["run"],
+            "stock": r["arms"]["stock"], "ours": r["arms"]["ours"], "lifetimes": life["pairs"],
+            "counted_passes": c["how"]["reps"], "left_out": life.get("left_out"), "interval": life["ci95"] and INTERVAL,
+            "noise_floor": n and {"arm": n["arm"], "over": n["over"], "value": S._pct(n["value"]),
+                                  "ci95": n["ci95"] and [S._pct(x) for x in n["ci95"]], "pairs": n.get("pairs")},
+            "commit": r["commit"],
+            "run": r["run"], "model": r.get("model"), "hardware": r.get("hardware"), **member(r, "cost"),
             "inputs": [f"measured: {r['arms']['ours']}'s serving time over {r['arms']['stock']}'s on the {r['load']} load, "
-                       f"the mean over {life['pairs']} server lifetime{'s' * (life['pairs'] != 1)} an arm"]}
+                       f"the mean over {life['pairs']} server lifetime{'s' * (life['pairs'] != 1)} an arm ({scope(c)})"]}
+
+
+def member(r: dict, line: str) -> dict:
+    """A line's point's ``member`` where `declare` named one (``members``: the cost's, ours over stock; the arm's, ours
+    alone, for the replay's match and the advice, which no other arm is the reference of), else nothing."""
+    m = (r.get("members") or {}).get(line)
+    return {"member": m} if m else {}
 
 
 def measurements(r: dict) -> list[dict]:
@@ -972,11 +999,13 @@ def measurements(r: dict) -> list[dict]:
     (`given_back`), in `MATCH_UNIT`, where the tokens line is measured and the replay's record agrees with the tokens
     and steps it kept; and the advice of the pass it re-ran,
     the bits charged a request (`ADVICE_UNIT`), where the advice line is measured. A line's id (``metric``) is None
-    but for ours at vLLM's published settings on a model `MATCH` and `ADVICE` name. Each is read from the run's own
+    but for the default arms' ours on a model `MATCH` and `ADVICE` name. Each is read from the run's own
     record, so each has the mark ``measured``, as its ``mark`` and at the head of its first input, where the Metrics tab
-    reads it (benchmarks/README.md, "Metrics")."""
+    reads it (benchmarks/README.md, "Metrics"), and names the ``model`` and the ``hardware`` it was measured on and,
+    where given, its ``member`` (`member`): a metric's points are of every model, card and arm."""
     t, a, ours, load = r["tokens"], r.get("advice") or {}, r["arms"]["ours"], r["load"]
-    on = {"load": load, "ours": ours, "commit": r["commit"], "run": r["run"]}
+    on = {"load": load, "ours": ours, "commit": r["commit"], "run": r["run"], "model": r.get("model"),
+          "hardware": r.get("hardware"), **member(r, "arm")}
     out = [m] if (m := measurement(r)) else []
     if t.get("measured") and t.get("metric") and not t["record_disagrees"]:
         given, rep = t["tokens_before_first_difference"], t["window"]["rep"]
@@ -993,6 +1022,16 @@ def measurements(r: dict) -> list[dict]:
                     "inputs": [f"measured: the advice {ours}'s record of the {load} load's burst rep {rep} charges, "
                                f"over its {a['requests']} requests"]})
     return out
+
+
+def against_target(validation: dict, c: dict) -> dict:
+    """``validation`` with the cost line's verdict against its target as a field (``target``) and in its ``detail``.
+    Its ``status`` stays the run's own gates': a cost over its target is a result, not a run that broke."""
+    t = {"value": S._pct(c["value"]) if c["measured"] else None, "target": c.get("target") or TARGET,
+         "verdict": c["verdict"] if c["measured"] else NOT_SHOWN}
+    told = (f"MISSES its target: {t['value']:+.2f}% of stock's serving time, against under {t['target']:g}%"
+            if t["verdict"] == OVER else f"the cost against its target of under {t['target']:g}%: {t['verdict']}")
+    return {**validation, "detail": "; ".join(filter(None, (validation.get("detail"), told))), "target": t}
 
 
 def declare(out: Path, r: dict, replay_dir: Path) -> Path | None:
@@ -1015,7 +1054,13 @@ def declare(out: Path, r: dict, replay_dir: Path) -> Path | None:
         "measurements": [], "measurement_files": [], "artifacts": []}
     doc["artifacts"] = sorted({*(doc.get("artifacts") or ()), *outputs(out, replay_dir)})
     ids = {*METRICS.values(), *MATCH.values(), *ADVICE.values()}
+    model = next((m for m in S.MODELS.values() if f"{m.repo}@{m.revision}" == r.get("model")), None)
+    ours, stock = r["arms"]["ours"], r["arms"]["stock"]
+    r = r | {"hardware": model and S.hardware(model),
+             "members": model and {"cost": S.member(model, ours, stock), "arm": S.member(model, ours)}}
     doc["measurements"] = [*(x for x in doc.get("measurements") or () if x.get("name") not in ids), *measurements(r)]
+    if isinstance(doc.get("validation"), dict):
+        doc["validation"] = against_target(doc["validation"], r["cost"])
     tmp = f.with_name(f"{f.name}.tmp.{os.getpid()}")
     tmp.write_text(json.dumps(doc, indent=1) + "\n")
     os.replace(tmp, f)
@@ -1462,6 +1507,7 @@ def text(r: dict) -> str:
             lines.append(f"  STOCK DIFFERS FROM STOCK: the noise floor's interval leaves out 0, so two servers of {stock} "
                          + ("differ by more than their passes do" if noise["over"] == "passes" else
                             "did not serve at the same rate"))
+        lines.append(f"  what it is: {scope(c)}")
     if c.get("settings_differ"):
         lines.append(f"  NOT at the same settings: {ours} and {stock} differ in {', '.join(c['settings_differ'])}, so the "
                      "figure is not our changes' cost")

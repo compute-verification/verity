@@ -1,7 +1,7 @@
 # The committed configurations' hashes: each demo, a configuration (`demos/NAME.toml`, the file `verity demo NAME`
 # runs), by its path, and its hash as `verity config hash` prints it, which covers the keys the configuration pins.
 # `tests/test_configurations.py` holds this file to those files, so a change to a configuration changes its line here.
-# A device's `trusted-device` holds only under a hash listed here (`memory_challenger.trusted_device`): any other file is
+# A device's `trusted-device` holds only under a hash listed here (`memory_attester.trusted_device`): any other file is
 # a rehearsal, no bound. A second lane's demo puts its line in this same file, and no change touches another demo's line.
 "demos/onsite_full.toml" = "f8fd02322844310fd45ec865cbc9694b5d94035fecdbaa5666654f29b88e0902b949ad70f5fa71b54080fd7465cbc8599edf8153269c0fe2dcb7c67135263612"
 "demos/onsite_compute.toml" = "f5ca90b1a0f6c0b201537a257c2c7070050a8f94629b4356ca437cca08d9b627e3fbb2da763263e35fccb143ae171e908f3f7de57f120d206a17dda2c1554322"

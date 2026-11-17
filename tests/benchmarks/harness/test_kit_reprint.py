@@ -11,7 +11,7 @@ import pytest
 from kit_standins import no_gpu as no_gpu
 from verity_bench import kit
 
-THIS, OTHER = "r20261116-200000-aaaa", "r20261106-165116-614b"
+THIS, OTHER = "r00000000-000000-aaaa", "r00000000-000000-bbbb"
 #: a job.json's command as research writes it: its slot wrapper, then the run's own words, already redacted
 COMMAND = ["env", "CHECK_SLOTS=/slots", "python3", "slot.py", "--", "nice", "-n", "19", "uv", "run", "python",
            "benchmarks/compute/run.py", "--from", OTHER]

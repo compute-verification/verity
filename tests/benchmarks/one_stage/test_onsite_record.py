@@ -102,7 +102,7 @@ MEASURED = {"format": "verity/advice-charge/v2", "label": "measured on test run 
             "phase_bits": {"count": 1, "min": 2870, "median": 2870, "mean": 2870.0, "max": 2870, "total": 2870},
             "prompt_len": {"count": 5}, "output_len": {"count": 5}, "finishes": {"eos": 3, "length": 2, "abort": 0}}
 TREE = "ab12" * 10
-#: the certifier's published verdict line, after an earlier attempt's
+#: the network attester's published verdict line, after an earlier attempt's
 LINE = 'THE NETWORK CERTIFIER {"rc": 0, "verdict": "accept"}'
 #: SCHEDULE's egress capacity a phase: its 4 · 8 cells a bucket over 63 buckets exceed its caps' 252 · 4 = 1008 cells
 CAPACITY = 1008 * 512 * 8
@@ -1909,7 +1909,7 @@ def test_an_accepted_network_verdict_is_established_only_where_each_listed_circu
 def test_a_period_listing_no_circuit_files_holds_auditor_listing_and_one_with_no_case_doesnt(tmp_path, text, unread):
     """A period whose audits list no circuit files holds auditor-listing, listing none, with no published period read;
     with no certifier case, or one that can't be read or isn't an object, the run can't say what the period lists, so
-    it doesn't hold, saying why, the certifier's verdict is not established, both auditor-record and auditor-listing
+    it doesn't hold, saying why, the network attester's verdict is not established, both auditor-record and auditor-listing
     open, and there is no bound."""
     out = accepted(tmp_path)
     files_held = {"holds": True, "read_by": [OR.ONSITE], "compared": ["statement"]}

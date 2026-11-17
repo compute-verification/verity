@@ -1,6 +1,6 @@
 """No key a committed configuration pins is a literal in code: each `[[pin]]` of each configuration
 `tools/verity/cli/verity_cli/configurations.toml` commits is stated in that configuration alone, and the code that reads `trusted-device`
-(`memory_challenger.trusted_device`) takes it from there. A literal split across lines (each 64-digit half) counts."""
+(`memory_attester.trusted_device`) takes it from there. A literal split across lines (each 64-digit half) counts."""
 
 from __future__ import annotations
 

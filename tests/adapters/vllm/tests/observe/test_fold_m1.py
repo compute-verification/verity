@@ -11,6 +11,7 @@ from pathlib import Path
 
 import pytest
 from verity.circuits.types import Array
+
 from verity_vllm.definitions.registry.prims import I32
 
 REPO = (Path(__file__).resolve().parents[5] / "adapters" / "vllm")

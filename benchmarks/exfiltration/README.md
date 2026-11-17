@@ -95,7 +95,7 @@ The command hands the list to the stop verdicts' reader, `verity/protocols/resou
 the reader's answer to the network attester's calculator, which charges the stop class of its rows by it and by
 nothing else. What the reader reads in a run's files, and what holds an execution phase, are its own
 (`benchmarks/certifier_term/README.md`, "The stop class's verdicts"); the command reads none of those files itself.
-The document carries the answer (`certifier.stop`): the rows it charges, the execution phases held, whether the stop
+The document carries the answer (`attester.stop`): the rows it charges, the execution phases held, whether the stop
 class is charged below on every execution phase, the reader's own lines, the verdicts it read, and the runs it was
 handed with the superseded ones. The print gives the reader's lines as they are, under a line that names the runs.
 
@@ -420,7 +420,7 @@ winning, reads it:
   the compute audit's part, λ times the bound where row `(ii) honest`'s total is 10% of compute), and that part over
   each other period.
 - `benchmarks/exfiltration-compute-audit-gb`: the compute audit's part over each period.
-- `benchmarks/exfiltration-network-certifier-gb`: the network attester's part of record, the `scan` row at D_j = 2;
+- `benchmarks/exfiltration-network-attester-gb`: the network attester's part of record, the `scan` row at D_j = 2;
   over the world's year with no value and "no bound at this period" with its ε as its why where that ε is 1 or more.
 
 Each measurement's first input opens

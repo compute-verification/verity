@@ -130,7 +130,7 @@
   (`R7-pool-chain`),
   beside the R7 codes the reuse or the fill gives it. The pool's root is all the chain carries. What a window takes up
   that the one before left open at its edge is part of its certified input, which the verifier pins at the root the
-  network attester signed for the window, so a root the certifier didn't sign is `R7-held`, whether the window
+  network attester signed for the window, so a root the network attester didn't sign is `R7-held`, whether the window
   carries the pool or restarts it.
 * **Verdicts** (`verdicts`, the pool's form): a verifier may give its verdict log, and the caller's check
   (`caller.check`) then refuses a record with an output value that reads a port of an earlier record the log names

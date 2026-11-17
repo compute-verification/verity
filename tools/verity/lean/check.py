@@ -4540,8 +4540,13 @@ def source_graph(pkg: Path, roots: list[str]) -> tuple[dict[str, list[str]], lis
 
 
 def provers(pkg: Path, policy: dict) -> list[tuple[str, Path]]:
-    """The packages the policy's `proved_in` names, each as written (a path relative to ``pkg``) and resolved."""
-    return [(p, (pkg / p).resolve()) for p in policy.get("proved_in", []) if isinstance(p, str)]
+    """The packages the policy's `proved_in` names, each as written (a path relative to ``pkg``) and resolved, each inside
+    ``pkg``'s `home`: they are audited beside it, their `.lake` written, so one outside is refused (`OutsideTree`)."""
+    got = [(p, (pkg / p).resolve()) for p in policy.get("proved_in", []) if isinstance(p, str)]
+    if out := [(p, q) for p, q in got if not q.is_relative_to(root := home(pkg))]:
+        raise OutsideTree(f"{pkg / POLICY}: proved_in {out[0][0]!r} resolves to {out[0][1]}, outside {root}, so its audit "
+                          f"would write its .lake there: a package named under proved_in must lie in the tree")
+    return got
 
 
 def assign(names, sources: list[tuple[str, dict, dict]]) -> tuple[dict, list[str], dict[str, list[str]]]:
@@ -5066,7 +5071,8 @@ _SANDBOX: bool | None = None
 
 def sandboxed() -> bool:
     """Whether builds run in `sandbox.sh` here: it needs `unshare` and unprivileged user namespaces, and it must leave this
-    tool's own directory read-only (checked, not assumed). The audit says when it had to build without one; the
+    tool's own directory read-only (checked, not assumed); where a mount's read-only remount fails, the sandbox refuses
+    to run anything, so there is none here. The audit says when it had to build without one; the
     `compile-time` check then stands in for the sandbox."""
     global _SANDBOX
     if _SANDBOX is None:
@@ -5083,15 +5089,54 @@ def sandboxed() -> bool:
     return _SANDBOX
 
 
-def path_deps(pkg: Path) -> list[Path]:
-    """The packages ``pkg`` requires by path (its manifest lists the inherited ones too)."""
+class OutsideTree(Exception):
+    """A directory the tree's own content chose for a build to write (a package, a path dependency, a `proved_in` package)
+    that lies outside the tree: a build of the tree writes only in it, so it is refused. No `ValueError`, which callers
+    take as a policy's error and go on without."""
+
+
+def home(pkg: Path, staged: Path | None = None) -> Path:
+    """Where the packages a build of ``pkg`` writes must lie, resolved: ``staged``, the copy of a tree a caller made and
+    built ``pkg`` in (`lean_audit`'s scratch tree, `lean_changed`'s slot), or else `TREE` when ``pkg`` is in it, named by
+    its path there or its resolved one; and then ``pkg`` itself must resolve inside it (`OutsideTree`: a directory the tree
+    holds as a link out of it). Else the directory holding ``pkg`` (a control's fixture, a test's package), which no tree
+    chose."""
+    if staged is not None:
+        tree = staged.resolve()
+        if not pkg.resolve().is_relative_to(tree):
+            raise OutsideTree(f"{pkg} resolves to {pkg.resolve()}, outside the tree {tree} it was built in, so its build "
+                              f"would write there: a package of the tree must be a directory in it")
+        return tree
+    tree, p = TREE.resolve(), Path(os.path.abspath(pkg))
+    if p.is_relative_to(os.path.abspath(TREE)) or p.is_relative_to(tree):
+        if not pkg.resolve().is_relative_to(tree):
+            raise OutsideTree(f"{pkg} resolves to {pkg.resolve()}, outside the tree {tree}, so its build would write "
+                              f"there: a package of the tree must be a directory in it")
+        return tree
+    return pkg.resolve().parent
+
+
+def path_deps(pkg: Path, staged: Path | None = None) -> list[Path]:
+    """The packages ``pkg`` requires by path (its manifest lists the inherited ones too), each inside ``pkg``'s `home`
+    (``staged``: the tree a caller copied and built it in): its build writes their `.lake`, so a manifest entry that
+    resolves outside is refused (`OutsideTree`)."""
     manifest = pkg / "lake-manifest.json"
-    return [(pkg / d["dir"]).resolve() for d in json.loads(manifest.read_text()).get("packages", [])
-            if d.get("type") == "path"] if manifest.exists() else []
+    if not manifest.exists():
+        return []
+    root, deps = home(pkg, staged), []
+    for d in json.loads(manifest.read_text()).get("packages", []):
+        if d.get("type") == "path":
+            if not (dep := (pkg / d["dir"]).resolve()).is_relative_to(root):
+                raise OutsideTree(f"{manifest}: the path dependency {d.get('name')!r} (\"dir\": {d['dir']!r}) resolves to "
+                                  f"{dep}, outside {root}, so a build of {pkg} would write its .lake there: a path "
+                                  f"dependency must lie in the tree")
+            deps.append(dep)
+    return deps
 
 
 def writable(pkg: Path) -> list[Path]:
-    """The `.lake` directories a build of ``pkg`` writes: its own and each path dependency's."""
+    """The `.lake` directories a build of ``pkg`` writes: its own and each path dependency's, all inside its `home`."""
+    home(pkg)
     return [d / ".lake" for d in [pkg.resolve(), *path_deps(pkg)]]
 
 
@@ -5244,7 +5289,10 @@ def sampled_recompile(pkg: Path, roots: list[str], work: Path, built: set[str], 
     `TREE`, differs there. A
     failure names the module and its file, the report's `mismatched` lists each module failed so ({module: its package's
     directory}, the package's own and never its seal's), which a records run has Lake compile before it audits again
-    (`lean_changed.mismatched`), and the recompile's outputs stay under ``work``/`sampled`; a pass removes them.
+    (`lean_changed.mismatched`), and the recompile's outputs stay under ``work``/`sampled`; a pass removes them. Each such
+    module's entry in the node's artifact cache (`ARTIFACTS`) goes then, with its artifacts (`forget_mismatched`, the
+    report's `dropped`): `put` stores nothing of a build whose sample failed, so no clean compile would replace it, and
+    every later run here would restore it again, caught only when its sample drew it.
 
     Without the sandbox ``sealed`` is None, and the audit calls this before its seal: nothing is recompiled and the
     report's `unsampled` says so. A module of the population (there: those with a trace in their package's build) that
@@ -5347,17 +5395,48 @@ def sampled_recompile(pkg: Path, roots: list[str], work: Path, built: set[str], 
     rep["by_graph"] = graphs
     if fails:
         rep["mismatched"] = {f.entry: str(keyed[f.entry].package.dir.resolve()) for f in fails}
+        if ARTIFACTS:
+            rep["dropped"] = forget_mismatched(mk, ARTIFACTS, keyed, sorted(rep["mismatched"]), sealed)
+            for m, gone in rep["dropped"].items():
+                log(f"sampled: {pkg}: {m}: " + (f"its entry in the artifact cache is removed, with its {len(gone) - 1} "
+                                               f"artifacts, so no later run here restores it" if isinstance(gone, list)
+                                               else gone))
     else:
         shutil.rmtree(top, ignore_errors=True)
     return fails, rep
 
 
+def forget_mismatched(mk, store: Path, keyed: dict, mods: Iterable[str], sealed: "Sealed") -> dict[str, list[str] | str]:
+    """Remove from the node's artifact cache (``store``) the entry each module of ``mods`` (the sample's `mismatched`) was
+    restored under, with its artifacts (``mk``: `module_keys`, `forget`): {module: the store's names of what went, or why
+    nothing did}. The key is the one a build's `stage` computes, from the outputs of what the module loads, read here from
+    the seal (``sealed``), which holds the bytes the build read; ``keyed`` is the build's `module_keys.keys`."""
+    got: dict[str, list[str] | str] = {}
+    for m in mods:
+        loaded = mk.loads(m, keyed)
+        digests = {(g, o): mk.digest(f) for g, level in loaded.items() for o in mk.read(level, keyed[g].module)
+                   if (f := sealed.mapped(mk.file_of(keyed[g].package.build().resolve(), g, o))).is_file()}
+        if (k := mk.key(m, keyed, digests, loaded)) is None:
+            got[m] = "it has no key here (the seal lacks an output of a module it loads), so no entry was restored for it"
+        else:
+            got[m] = mk.forget(store, k, m, keyed[m].package.name) or "the artifact cache holds no entry of it under its key"
+    return got
+
+
 def bound(lakes: Iterable[Path], tree: Path | None = None) -> list[str]:
     """`sandbox.sh`'s `--at` for a build that writes the `.lake` directories ``lakes``: ``tree`` (default `TREE`) at
     `FIXED`, when each of them is in it. A package outside it (a control's fixture, one given by a path of its own) gets
-    none and compiles at its own path: its place under `FIXED` would be no function of the tree."""
-    tree = (tree or TREE).resolve()
-    return ["--at", str(FIXED), str(tree)] if all(d.resolve().is_relative_to(tree) for d in lakes) else []
+    none and compiles at its own path: its place under `FIXED` would be no function of the tree. Some in it and others
+    out is refused (`OutsideTree`), unless each one out is a fetched dependency's (under a `.lake`, whose `packages` may
+    be a link out of the tree): a build of the tree writes only in it."""
+    lakes, tree = list(lakes), (tree or TREE).resolve()
+    out = [d for d in lakes if not d.resolve().is_relative_to(tree)]
+    if not out:
+        return ["--at", str(FIXED), str(tree)]
+    if len(out) < len(lakes) and not all(".lake" in d.parts[:-1] for d in out):
+        raise OutsideTree(f"a build of the tree would write {', '.join(str(d.resolve()) for d in out)}, outside the tree "
+                          f"{tree}: a build of the tree writes only in it")
+    return []
 
 
 def fixed(path: Path, tree: Path | None = None) -> Path:
@@ -6454,17 +6533,19 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
           replay_cache: Path | None = None, closure: bool = False, kept_facts: str = "all",
           bookkeeping: str | None = None, facts_out: Path | None = None, seals: "Seals | None" = None,
           store: bool | None = None, facts_cache: Path | None = None, facts_reuse: bool = False,
-          matched=lambda ok: None, prover_matched=lambda q: None, base: list[dict] | None = None,
+          matched=lambda ok: None, sample_matched=lambda q: None, base: list[dict] | None = None,
           defer: bool = False) -> dict:
     """Audit one package; returns its report (`failures` empty when it passes). With ``build``, a random sample of the
     modules the build didn't compile is compiled again from their sources against the seal and compared with the seal's
     copies (`sampled_recompile`; the report's `sampled`), in `background` beside the replay, and the verdict waits for it
     as it does for the replay: a failure there fails the package, and its facts document is then neither written nor
     stored. With no replay it holds the package's `writable` directories (`writing`) from before ``built`` until it
-    ends, so no dependent's build runs beside it. ``matched`` hears once whether the sample matched (True where nothing was sampled); ``prover_matched`` (a
-    package whose facts `proved` read) returns once that package's sample has, False when it didn't match, and the
-    package then fails (`proved_in.sampled`). Without the sandbox nothing is recompiled, and the sample's check runs
-    before the seal. ``built`` is called once its build has passed, before anything reads it; ``ready`` (a package its `proved_in` names) returns once that package's build has
+    ends, so no dependent's build runs beside it. ``matched`` hears once whether the sample matched (True where nothing
+    was sampled); ``sample_matched`` (a package whose facts `proved` read, or one this package requires by path) returns
+    once that package's sample has ended, False when it didn't match or its audit ended before saying, and None for a
+    package this run doesn't audit. The package then fails: `proved_in.sampled` for a prover, and `requires.sampled` for
+    a path dependency, whose modules this build read and its own sample draws only a share of. Without the sandbox
+    nothing is recompiled, and the sample's check runs before the seal. ``built`` is called once its build has passed, before anything reads it; ``ready`` (a package its `proved_in` names) returns once that package's build has
     ended, False when it did not pass (`proved`), and None for a package this run doesn't audit, whose build, where the
     package is required by path, is settled with this one's (`stage_build`); the report's `seconds` holds that wait as `proved-in-wait`, apart from
     `audit`, and within `audit` the package's facts (`facts`) and the provers' (`proved-in`). ``runs`` runs the package's
@@ -6798,12 +6879,18 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
             peaked(rep, "replay", pkg, rep["replay"]["peak_gib"], log)
     unsampled, w = sampled(), time.monotonic()
     for q in read:
-        if prover_matched(q) is False:
+        if sample_matched(q) is False:
             entry = os.path.relpath(q, pkg.resolve())
             unsampled.append(Failure("proved_in.sampled", entry, f"proved_in: {entry}'s sampled recompile failed (its "
                                      f"report says which module), so the facts read from its seal may not be of its sources"))
     if read:
         rep["seconds"]["proved-in-sample-wait"] = round(time.monotonic() - w, 1)
+    for q in (d for d in path_deps(pkg) if d != pkg.resolve() and d not in read):
+        if sample_matched(q) is False:
+            entry = os.path.relpath(q, pkg.resolve())
+            unsampled.append(Failure("requires.sampled", entry, f"requires: {entry}, which this package requires by path, "
+                                     f"did not match its sampled recompile or ended before it did (its report says why), "
+                                     f"so this build read modules of it that may not be of its sources"))
     if unsampled:
         fails += unsampled
         if facts_cache is not None or facts_out is not None:
@@ -7419,7 +7506,7 @@ def main(argv: list[str]) -> int:
                             if (a.facts_only or a.facts_cache) and mine else None,
                             facts_reuse=a.facts_cache is not None,
                             matched=lambda ok: (ok and matching.add(pkg), sample_done[pkg].set()),
-                            prover_matched=lambda q: (sample_done[q].wait(), q in matching)[1] if q in sample_done else None,
+                            sample_matched=lambda q: (sample_done[q].wait(), q in matching)[1] if q in sample_done else None,
                             base=bases.get(pkg), defer=bool(moved))
         finally:
             if a.facts_from is None and not built[pkg].is_set():

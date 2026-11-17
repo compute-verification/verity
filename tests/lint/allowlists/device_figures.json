@@ -33,7 +33,7 @@
     {"file": "benchmarks/pouw/filler/capacity_of.py", "count": 2, "lane": "compute-accounting"},
     {"file": "benchmarks/pouw/filler/share.py", "count": 1, "lane": "compute-accounting"},
     {"file": "benchmarks/pouw/opcode_probe/clock_calib_lease.sh", "count": 1, "lane": "compute-research"},
-    {"file": "benchmarks/remote_session/auditor_line.py", "count": 1, "lane": "memory-accounting"},
+    {"file": "benchmarks/poub_session/auditor_line.py", "count": 1, "lane": "memory-accounting"},
     {"file": "benchmarks/spot_figures/cards/proof_overhead.glm-5.3.json", "count": 1, "lane": "proofs"},
     {"file": "benchmarks/tensor_duty/duty.cu", "count": 1, "lane": "compute-research"},
     {"file": "benchmarks/tensor_duty/run.sh", "count": 1, "lane": "compute-research"},

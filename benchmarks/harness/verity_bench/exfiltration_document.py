@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from verity_bench import jobs
-from verity_bench.exfiltration_certifier import certifier
+from verity_bench.exfiltration_attester import attester
 from verity_bench.exfiltration_common import (
     AMOUNTS,
     ASSUMED_LABEL,
@@ -206,7 +206,7 @@ def build(*, share: float = SHARE, network_check: float = NETWORK_CHECK_SHARE, r
     """The two parts from the store's rows of record and the tree: the inputs with their marks, the compute audit's
     part at ``share`` of total compute for each scope of record, the network attester's rows at the world's year
     for a class of at most ``response_ids`` ids a response with each execution phase's scan at ``scan_delta`` (None:
-    the δ `certifier` takes from `PERIOD_ERROR`), and the two side by side for each scope and monitoring period,
+    the δ `attester` takes from `PERIOD_ERROR`), and the two side by side for each scope and monitoring period,
     summed under each of `TOGETHER`. It refuses rows of record priced over other requests than the network
     attester's part counts.
 
@@ -225,12 +225,12 @@ def build(*, share: float = SHARE, network_check: float = NETWORK_CHECK_SHARE, r
     the rows whose sums take it at 0 (`at_zero_in`). Those are named from the stop verdicts' reader's answer and
     never from a schedule that reads 0: the rows of `TOGETHER` among the term document's `stop`'s `rows`, where the
     answer holds an execution phase, and none where it holds none. They take it at 0 on the execution phases the
-    answer holds alone, which the document's `certifier`'s `stop` counts (`held_phases`; every one where `below`).
+    answer holds alone, which the document's `attester`'s `stop` counts (`held_phases`; every one where `below`).
 
     The answer is `stop_charge`'s on the runs that carry the stop class's record (`verdict_runs`), the ones this
-    reads or leaves out, and it is handed to the calculator (`certifier`). With no run carrying the record the
+    reads or leaves out, and it is handed to the calculator (`attester`). With no run carrying the record the
     reader is not asked and the calculator is handed none, so its rows are as with no record read. The document's
-    `certifier`'s `stop` is the term document's own account of it (its `rows`, `held_phases`, `below`, `why` and
+    `attester`'s `stop` is the term document's own account of it (its `rows`, `held_phases`, `below`, `why` and
     `verdicts`), with the runs handed (`runs`) and those of them handed as superseded (`superseded`).
 
     Beside a ``row`` other than `ASSUMED_ROW`, `at_assumed_prices` holds that row's world year at ``share``
@@ -283,7 +283,7 @@ def build(*, share: float = SHARE, network_check: float = NETWORK_CHECK_SHARE, r
         except ValueError as e:
             measured["no_GB"] = str(e)
 
-    term = certifier(root, response_ids, scan_delta, answer)
+    term = attester(root, response_ids, scan_delta, answer)
     charged = {k: term["stop"][k] for k in ("rows", "held_phases", "below", "why", "verdicts")} | {
         "runs": list(labelled), "superseded": [run for run, by in labelled.items() if by]}
     if unnamed := [name for name in charged["rows"] if name in TOGETHER and name not in WHOLE]:
@@ -326,7 +326,7 @@ def build(*, share: float = SHARE, network_check: float = NETWORK_CHECK_SHARE, r
 
             def summed(dj: str, r: Mapping = r, mine: float | None = mine, eps: float = eps,
                        error: float | None = error) -> dict:
-                return {"certifier_GB": r["term"][dj]["GB"] if eps < 1 else None,
+                return {"attester_GB": r["term"][dj]["GB"] if eps < 1 else None,
                         "GB": (r["term"][dj]["bits"] + mine) / GB if mine is not None and error is not None and error < 1 else None}
 
             together[name] = {**summed(of), "label": r["with_set_time_card"],
@@ -351,7 +351,7 @@ def build(*, share: float = SHARE, network_check: float = NETWORK_CHECK_SHARE, r
             "compute_share": measured, **({} if stop is None else {"stop_class": stop}),
             "compute_audit": sorted(points.values(), key=lambda p: (p["scope"] not in order, order.get(p["scope"], 0))),
             "network_check": {"share": network_check, "beta": less["beta"], "inside": less["inside"], "GB": less["GB"]},
-            "certifier": {"schema": term["schema"], "request_count": term["request_count"],
+            "attester": {"schema": term["schema"], "request_count": term["request_count"],
                           "response_ids": term["inputs"]["response_ids"]["value"],
                           "scan_delta": term["inputs"]["scan_delta"], "of_record": of, "set_time": set_time,
                           "with_set_time_card": {"label": card}, "default_class": term["default_class"],
