@@ -1,31 +1,31 @@
 module
 
-public import NetworkCheck.Check
-public import NetworkCheck.Clocks
-public import NetworkCheck.ScanOk
+public import NetworkVerifier.Check
+public import NetworkVerifier.Clocks
+public import NetworkVerifier.ScanOk
 public import CoreProtocol.Profile
 public import Flock.Program
 public import Flock.Public
 public import Flock.WindowRecord
 public import InferenceOnlyVerifier.Desc
 public import InferenceOnlyVerifier.DefinitionDigest
-public import NetworkCheck.Period.ConnectionRows
-public import NetworkCheck.Period.Start
+public import NetworkVerifier.Period.ConnectionRows
+public import NetworkVerifier.Period.Start
 public import Spot.Record
-meta import NetworkCheck.Check
-meta import NetworkCheck.Clocks
-meta import NetworkCheck.ScanOk
+meta import NetworkVerifier.Check
+meta import NetworkVerifier.Clocks
+meta import NetworkVerifier.ScanOk
 meta import CoreProtocol.Profile
 meta import Flock.Program
 meta import Flock.Public
 meta import Flock.WindowRecord
 meta import InferenceOnlyVerifier.Desc
 meta import InferenceOnlyVerifier.DefinitionDigest
-meta import NetworkCheck.Period.ConnectionRows
-meta import NetworkCheck.Period.Start
+meta import NetworkVerifier.Period.ConnectionRows
+meta import NetworkVerifier.Period.Start
 meta import Spot.Record
-public import NetworkCheck.Period.Decode
-meta import NetworkCheck.Period.Decode
+public import NetworkVerifier.Period.Decode
+meta import NetworkVerifier.Period.Decode
 
 /-!
 # The network attester over a period, a core protocol: `verity/certifier/v0`
@@ -365,10 +365,10 @@ in this namespace.
 set_option backward.privateInPublic true
 set_option backward.privateInPublic.warn false
 
-namespace NetworkCheck.Period
+namespace NetworkVerifier.Period
 open Lean (Json toJson)
 open Flock (V)
-open NetworkCheck.Check (Certificate)
+open NetworkVerifier.Check (Certificate)
 open InferenceOnlyVerifier.DefinitionDigest (closureDigest)
 
 /-! ## The check -/
@@ -1505,4 +1505,4 @@ private def statedSample (size : Nat) (d : Core.SamplingDesign) : Json :=
     !held (some "c") #[audit "d" "r0"] scan && !held none #[audit "c" "r0"] scan &&
     !held (some "c") #[audit "c" "r0", audit "d" "r0"] scan && held (some "c") #[] scan
 
-end NetworkCheck.Period
+end NetworkVerifier.Period

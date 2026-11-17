@@ -1,7 +1,7 @@
 module
 
-public import NetworkCheck.Period
-public import NetworkCheck.Records
+public import NetworkVerifier.Period
+public import NetworkVerifier.Records
 public import NetworkAttester.Rows
 
 /-!
@@ -58,11 +58,11 @@ its head and read once by the audit.
 set_option backward.privateInPublic true
 set_option backward.privateInPublic.warn false
 
-namespace NetworkCheck.RowsAudit
+namespace NetworkVerifier.RowsAudit
 
 open Lean (Json toJson)
 open Flock (V)
-open NetworkCheck.Records (Published Commitment)
+open NetworkVerifier.Records (Published Commitment)
 
 def protocolId : String := "verity/network-rows/v1"
 def commitmentTag : String := "verity-network-certifier/rows-records/v1"
@@ -189,4 +189,4 @@ def protocol : Core.Protocol where
   publicJson _ := Json.mkObj []
   profileJson := profileJson
 
-end NetworkCheck.RowsAudit
+end NetworkVerifier.RowsAudit

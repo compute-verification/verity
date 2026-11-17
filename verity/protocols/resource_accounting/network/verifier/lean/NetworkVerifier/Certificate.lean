@@ -20,7 +20,7 @@ Python on generated inputs.
 
 @[expose] public section
 
-namespace NetworkCheck
+namespace NetworkVerifier
 
 open Flock
 
@@ -296,4 +296,4 @@ def certificateMessage (keyId session : ByteArray) (link : String) (direction : 
     (digest : ByteArray) : E ByteArray :=
   Sha512.hash <$> messageInput keyId session link direction window digest
 
-end NetworkCheck
+end NetworkVerifier

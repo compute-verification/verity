@@ -1,6 +1,6 @@
 module
 
-public import NetworkCheck.Check
+public import NetworkVerifier.Check
 public import Difftest
 
 /-!
@@ -48,10 +48,10 @@ nothing else holds. Its refusals are otherwise `evaluate`'s, and its ingress ver
 set_option backward.privateInPublic true
 set_option backward.privateInPublic.warn false
 
-namespace NetworkCheck.Records
+namespace NetworkVerifier.Records
 
 open Lean (Json toJson)
-open NetworkCheck.Check (Grid Certified LinkOpening Evidence TransferBlocks Profile)
+open NetworkVerifier.Check (Grid Certified LinkOpening Evidence TransferBlocks Profile)
 open NetworkAttester (ClockSync)
 
 def protocolId : String := "verity/network-records/v3"
@@ -467,4 +467,4 @@ def verdictsNoGridFn (j : Json) : Except String Json := do
   let vs ← evaluateNoGrid p c e
   pure (Json.mkObj [("link_windows", .arr (vs.map transferBlocksJson))])
 
-end NetworkCheck.Records
+end NetworkVerifier.Records

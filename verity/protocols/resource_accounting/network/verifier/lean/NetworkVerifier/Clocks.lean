@@ -1,6 +1,6 @@
 module
 
-public import NetworkCheck.Check
+public import NetworkVerifier.Check
 
 /-!
 # The period's decoders
@@ -12,11 +12,11 @@ of the inference-only policy's.
 
 @[expose] public section
 
-namespace NetworkCheck.Period
+namespace NetworkVerifier.Period
 
 open Lean (Json)
 open Flock (V)
-open NetworkCheck.Check (Certificate)
+open NetworkVerifier.Check (Certificate)
 
 def keysOf : Json → List String
   | .obj kvs => kvs.keys
@@ -36,4 +36,4 @@ def certificateOf (j : Json) (ctx : String) : V Certificate := do
 
 def hexAt (j : Json) (k ctx : String) : V ByteArray := do Flock.unhex (← Flock.J.str j k ctx)
 
-end NetworkCheck.Period
+end NetworkVerifier.Period

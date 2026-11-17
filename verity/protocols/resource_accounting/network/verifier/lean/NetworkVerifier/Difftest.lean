@@ -1,6 +1,6 @@
 module
 
-public import NetworkCheck.Certificate
+public import NetworkVerifier.Certificate
 public import Lean.Data.Json.Parser
 
 /-!
@@ -27,7 +27,7 @@ to open, `verify_frame` queries, record heads given field by field, signed diges
 
 @[expose] public section
 
-namespace NetworkCheck.Difftest
+namespace NetworkVerifier.Difftest
 
 open Lean Flock
 
@@ -139,7 +139,7 @@ def differences (i : Nat) (inst python : String) : List String :=
 /-- `lake env lean --run NetworkCheck/DifftestMain.lean INSTANCES PYTHON N`: every instance line of `INSTANCES` evaluated,
 each compared with the same line of `PYTHON`. Fails unless both files have `N` lines and none differs. -/
 def main (args : List String) : IO UInt32 := do
-  let [insts, py, n] := args | IO.eprintln "usage: NetworkCheck/DifftestMain.lean INSTANCES PYTHON N"; return 2
+  let [insts, py, n] := args | IO.eprintln "usage: NetworkVerifier/DifftestMain.lean INSTANCES PYTHON N"; return 2
   let lines (p : String) : IO (Array String) := do
     return ((← IO.FS.readFile p).splitOn "\n").filter (! ·.isEmpty) |>.toArray
   let a ← lines insts
@@ -153,4 +153,4 @@ def main (args : List String) : IO UInt32 := do
   IO.println s!"difftest: {a.size} instances compared, {found.length} differences"
   return if found.isEmpty then 0 else 1
 
-end NetworkCheck.Difftest
+end NetworkVerifier.Difftest

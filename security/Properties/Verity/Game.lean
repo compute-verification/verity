@@ -207,7 +207,7 @@ def Subprotocol.protocolAt : Subprotocol → Verity.Registration.Composite → B
   | .inferenceOnly, k => if rowsId ∈ k then rowsCheck else InferenceOnlyVerifier.Protocol.protocol
   | .pous, _ => PousCheck.RunProtocol.protocol
   | .poub, _ => Poub.P2Protocol.protocol
-  | .network, _ => NetworkCheck.Period.protocol
+  | .network, _ => NetworkVerifier.Period.protocol
   | .wipe, _ => MemoryAttester.WipeProtocol.protocol
 
 /-- **Subprotocol `a`'s protocol id in composite `k`**, its compiled check's there, which `k` lists it by. -/

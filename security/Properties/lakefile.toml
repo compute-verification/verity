@@ -51,7 +51,7 @@ name = "core_zk_server"
 path = "../../verity/protocols/proofs/recursion/verifier/zk_server"
 
 [[require]]
-name = "network_check"
+name = "network_verifier"
 path = "../../verity/protocols/resource_accounting/network/verifier/lean"
 
 [[require]]

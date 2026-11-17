@@ -1,27 +1,27 @@
 module
 
-public import NetworkCheck.Check
-public import NetworkCheck.Clocks
-public import NetworkCheck.ScanOk
+public import NetworkVerifier.Check
+public import NetworkVerifier.Clocks
+public import NetworkVerifier.ScanOk
 public import CoreProtocol.Profile
 public import Flock.Program
 public import Flock.Public
 public import Flock.WindowRecord
 public import InferenceOnlyVerifier.Desc
 public import InferenceOnlyVerifier.DefinitionDigest
-public import NetworkCheck.Period.ConnectionRows
-public import NetworkCheck.Period.Start
-meta import NetworkCheck.Check
-meta import NetworkCheck.Clocks
-meta import NetworkCheck.ScanOk
+public import NetworkVerifier.Period.ConnectionRows
+public import NetworkVerifier.Period.Start
+meta import NetworkVerifier.Check
+meta import NetworkVerifier.Clocks
+meta import NetworkVerifier.ScanOk
 meta import CoreProtocol.Profile
 meta import Flock.Program
 meta import Flock.Public
 meta import Flock.WindowRecord
 meta import InferenceOnlyVerifier.Desc
 meta import InferenceOnlyVerifier.DefinitionDigest
-meta import NetworkCheck.Period.ConnectionRows
-meta import NetworkCheck.Period.Start
+meta import NetworkVerifier.Period.ConnectionRows
+meta import NetworkVerifier.Period.Start
 
 /-! The period check's structures and their decoding, which `NetworkCheck.Period` reads: its parameters, commitment,
 evidence, facts and public, and the decoding of each from its JSON. The check and its bound are in
@@ -31,11 +31,11 @@ evidence, facts and public, and the decoding of each from its JSON. The check an
 set_option backward.privateInPublic true
 set_option backward.privateInPublic.warn false
 
-namespace NetworkCheck.Period
+namespace NetworkVerifier.Period
 
 open Lean (Json toJson)
 open Flock (V)
-open NetworkCheck.Check (Certificate)
+open NetworkVerifier.Check (Certificate)
 open InferenceOnlyVerifier.DefinitionDigest (closureDigest)
 
 def protocolId : String := "verity/certifier/v0"
@@ -675,7 +675,7 @@ def scanOf (j : Json) (program : String) (s : Schedule) : V Scan := do
   need (ingressReturn di.ret di.params[1]!.2 de.params[0]!.2 && startReturn ds.ret ds.params[0]!.2 di.params[1]!.2)
     "scan: the ingress template doesn't return a u16, a state of its sin's leaves and a view of an egress bucket's \
       state's leaves, or the start template doesn't take and return a state of those leaves, so a tie of the scan's \
-      state or view would equate rows of two lengths (NetworkCheck.Period.ingressReturn, startReturn)"
+      state or view would equate rows of two lengths (NetworkVerifier.Period.ingressReturn, startReturn)"
   let inputs := root.body.nodes.foldl (fun n x => n + match prog.defs[x.fn]? with
     | some d => ((Flock.Program.inputWidth? d.key).map (· * x.members)).getD 0
     | none => 0) 0
@@ -711,15 +711,15 @@ def scanOf (j : Json) (program : String) (s : Schedule) : V Scan := do
     "scan: bucket 0's prog<j> reads no input node of lane j's own, its slot entries', distinct from every other lane's"
   need (readsEntries xi 2 0 s.every ety.leaves pks)
     s!"scan: bucket t's prog<j> is not row ⌊t / {s.every}⌋ of lane j's slot entries' input node, its slot of the \
-      boundary bucket t reads (NetworkCheck.Period.readsEntries)"
+      boundary bucket t reads (NetworkVerifier.Period.readsEntries)"
   let own := (xs.args.extract 0 1 ++ xi.args.extract 0 2 ++ xe.args).toList
   need (argsApart prog own pks) "scan: two of the templates' row, state and egress arguments read one input node, or \
     one reads a lane's slot entries': an input node would be left that nothing reads, or a slot entry would be a \
-    state gate (NetworkCheck.Period.argsApart)"
+    state gate (NetworkVerifier.Period.argsApart)"
   need (inputsRead prog own pks (nb * ety.leaves) && ety.leaves ≤ bitsOf ety)
     s!"scan: an input node with a leaf nothing reads: a row, state or egress argument that is not all its input \
       node's leaves, a lane's slot entries' node of other leaves than its {nb} entries' (each of at least a bit), \
-      or an input node that is neither's (NetworkCheck.Period.inputsRead)"
+      or an input node that is neither's (NetworkVerifier.Period.inputsRead)"
   need prog.orderViolation.isNone "scan: a body names a later node (Flock.Program.Prog.orderViolation): the Program \
     is not topological, so a gate's operands could be gates after it"
   pure { steps := T, free := 0, ingress := bitsOf di.ret, egress := bitsOf de.ret,
@@ -925,4 +925,4 @@ def evidenceOf (b : ByteArray) : V Evidence := do
   if shown && starts.isEmpty then throw "starts: none: evidence that shows no session's start has no \"starts\""
   pure { audits, windows, starts }
 
-end NetworkCheck.Period
+end NetworkVerifier.Period
