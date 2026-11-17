@@ -28,8 +28,11 @@ _UTC_TIME = re.compile(rf"(?<![\w:.-])(?:(?P<iso>(?P<Y>\d{{4}})-(?P<M>\d{{2}})-(
 DEADLINE_WORDS = {"by", "until", "till", "before", "after", "at", "from", "eta", "since", "to", "due"}
 #: a header's name token: a Slack token (`<!subteam^S1|@ci>`) or a word of letters, digits and `@*_().,'’/-`, never a `:`
 _NAME = r"(?:<[^>\s]+>|[@*_\w().,'\u2019/-]+)"
-#: the header position (`stamp_ahead`): up to 5 name tokens, an optional date, then `2:28 AM PST`, `10:28Z` or `10:28 UTC`
-_HEADER = re.compile(rf"^\W{{0,4}}(?P<names>(?:{_NAME} ){{0,5}}?)(?:{_DATE})?(?P<t>(?P<ph>\d{{1,2}}):(?P<pm>\d{{2}})\s*"
+#: the header position (`stamp_ahead`): an optional heading of up to 5 tokens ended by a dash or a colon, up to 5 name
+#: tokens (after a heading, none or ending in a comma), an optional date, then `2:28 AM PST`, `10:28Z` or `10:28 UTC`
+_HEADER = re.compile(rf"^\W{{0,4}}(?P<lead>(?:{_NAME} ){{0,4}}{_NAME}(?: [-\u2013\u2014]|:\**) )?"
+                     rf"(?P<names>(?(lead)(?:(?:{_NAME} ){{0,4}}?{_NAME}(?<=,) )?|(?:{_NAME} ){{0,5}}?))"
+                     rf"(?:{_DATE})?(?P<t>(?P<ph>\d{{1,2}}):(?P<pm>\d{{2}})\s*"
                      rf"(?P<ap>[AP]M)\s+P[DS]?T|(?P<zh>\d{{1,2}}):(?P<zm>\d{{2}})(?:Z|\s+UTC))(?![\w-])")
 #: what follows a header time with no comma before it (`ci 13:07Z: ...`, `*infra 11:45Z* (quiet)`), as `HEADER_TIME_RE` reads
 _HEADER_END = re.compile(r"\*?(?:[:,)]| \(| [-\u2014])")
@@ -103,12 +106,15 @@ def stamp_ahead(text: str, now: dt.datetime) -> str | None:
     """The refusal of a post whose first line is stamped later than `now`'s minute, else None.
 
     Only a time in the header position is a stamp. The header is the first line's start: at most 4 non-word characters,
-    then at most 5 name tokens, each a Slack token (`<!subteam^S1|@ci>`) or a word of letters, digits and `@*_().,'’/-`
-    (no `:`, so `ci: ...` ends a header), one space after each, then an optional date (`Sun 15 Nov`, `Nov 15, 2026`), then
-    the time, Pacific (`2:28 AM PST`) or UTC (`10:28Z`, `10:28 UTC`). It is a header only when the last name token ends in a
-    comma (`lean (lead), Sun 15 Nov 2:28 AM PST`, `lean's worker AREAS, 11:19 PM PST`) or the time is followed by `:`,
-    `,`, `)`, ` (`, ` -` or ` —` (`ci 10:28Z: ...`), and not when that last token is a deadline word (`by 20:00Z:`). So a time
-    later in the line, as an alert quoting `before the 20:30Z row` or `check starts 20:00Z`, is no stamp.
+    then an optional heading (at most 5 name tokens ended by ` —`, ` –`, ` -` or `:`, as `**FOR THE COORDINATOR** —` or
+    `FOR THE COORDINATOR:`), then at most 5 name tokens (after a heading, none, or ending in a comma: `**FOR THE
+    COORDINATOR** — AREAS, <stamp>`, never `RTCODE: my comment above is stamped <time> (`), each a Slack token (`<!subteam^S1|@ci>`) or a word of letters,
+    digits and `@*_().,'’/-` (no `:`, so a second `:` ends a header), one space after each, then an optional date
+    (`Sun 15 Nov`, `Nov 15, 2026`), then the time, Pacific (`2:28 AM PST`) or UTC (`10:28Z`, `10:28 UTC`). It is a header
+    only when the last name token ends in a comma (`lean (lead), Sun 15 Nov 2:28 AM PST`, `lean's worker AREAS, 11:19 PM
+    PST`) or the time is followed by `:`, `,`, `)`, ` (`, ` -` or ` —` (`ci 10:28Z: ...`), and not when the last word before
+    the time is a deadline word (`by 20:00Z:`, `ETA: 20:00Z,`). So a time later in the line, as an alert quoting `before the
+    20:30Z row` or `check starts 20:00Z`, is no stamp.
 
     The stamp is read on the date written before it, else on the day nearest `now` (so a stamp across midnight is read on
     its own day). A line with no header time, or one it can't read (`10:5x PM PST`, an hour past 12), passes: a doubt
@@ -116,7 +122,8 @@ def stamp_ahead(text: str, now: dt.datetime) -> str | None:
     line = (text or "").lstrip().split("\n", 1)[0]
     m = _HEADER.match(line)
     names = m["names"].split() if m else []
-    if not m or names and names[-1].strip("*_,()").lower() in DEADLINE_WORDS or not (
+    last = (names or (m["lead"] or "").rstrip(" -\u2013\u2014:*").split() or [""])[-1] if m else ""
+    if not m or last.strip("*_,()").lower() in DEADLINE_WORDS or not (
             names and names[-1].endswith(",") or _HEADER_END.match(line, m.end("t"))):
         return None
     g, u0 = m.groupdict(), _utc(now).replace(second=0, microsecond=0)

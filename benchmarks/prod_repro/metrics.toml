@@ -4,10 +4,10 @@
 
 [[metric]]
 id = "vllm/prod-serving-cost-glm53"
-title = "Serving cost, published settings"
+title = "Serving time, published settings"
 owner = "vllm"
 unit = "percent"
-axis = "Extra time to serve GLM-5.3 at vLLM's published settings, as a percent of stock vLLM's."
+axis = "Extra serving time for GLM-5.3 at vLLM's published settings on one node, at one unsaturated load of four agent users, as a percent of stock's: unchanged vLLM, sent no seeds."
 better = "lower"
 command = "research run --on NODE --source . --cwd source -- bash benchmarks/prod_repro/run.sh --client vllm-bench --model glm53 --again none --load agentic=4 --pass-prompts agentic=4 --lifetimes 8 --leave-out 1 --reps 2 --replay agentic@4 --sampled"
 every = "7d"

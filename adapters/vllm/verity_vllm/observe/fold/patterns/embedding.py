@@ -5,8 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from verity.circuits.defs import bind
-from verity_vllm.definitions.registry import b1
 
+from verity_vllm.definitions.registry import b1
 from verity_vllm.observe.events import ViewDesc
 from verity_vllm.observe.fold.patterns.geometry import is_int, is_row_major, sub_rows
 from verity_vllm.observe.fold.patterns.ops import base_op, bound_args
