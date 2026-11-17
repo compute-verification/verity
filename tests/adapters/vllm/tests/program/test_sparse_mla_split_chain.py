@@ -6,8 +6,6 @@ those columns of the split's end; each unit fits the Flock block where the whole
 (`sparse_mla_split_twins.split_chain_rows`) is each block's word; the Boolean column end agrees with its word view."""
 from __future__ import annotations
 
-__models__ = ("zai-org/GLM-5.3",)
-
 import numpy as np
 import pytest
 from verity.circuits import evaluation as E

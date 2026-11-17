@@ -7,8 +7,6 @@ statics a description is a few rows of Calls and the unit fits a Flock block; an
 circuit their gates lower to, a count sum's with the rows more that commit its sum."""
 from __future__ import annotations
 
-__models__ = ("zai-org/GLM-5.3",)
-
 import random
 
 import numpy as np
