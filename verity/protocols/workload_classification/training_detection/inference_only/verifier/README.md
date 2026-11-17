@@ -38,11 +38,11 @@ deployment configuration's table declares the policy's party from, with its test
   check's trusted input. A case and its answer under `verity/inference-only/v0` are one subprotocol's in a
   composite's case, as `benchmarks/one_stage/composite.py` reads them.
 - **Loads from**: the packages at `verity/protocols/proofs/flock/verifier` and `verity/protocols/interface`, and nothing of
-  network certification.
+  network attestation.
 - **Not here**: its tests, `test_inference_only_*.py`, `test_inference_only_protocol.py` and
   `test_inference_only_rows_protocol.py`, which loads `lean/scripts/inference_only_record_reference.py` by path. They are in
   `../../../../../../tests/verity/protocols/resource_accounting/network/verifier/network`, in the suite `verity/protocols/resource_accounting/network/verifier/network`, with the
-  tests of network certification's Lean check. The tests of `verity/protocols/compose/verifier/lean` load the second by
+  tests of network attestation's Lean check. The tests of `verity/protocols/compose/verifier/lean` load the second by
   path.
 
 ## Overview
@@ -71,7 +71,7 @@ divides into inference blocks with a small fresh-input budget (`Slowdown.Guarant
 rollout) reads an enormous amount, say 1 TB of new parameters, so training that runs through inference blocks gets
 only their yields q(c, k): a pricing argument says how much of a block's fresh-input budget each counted object of a
 necessary subcomputation needs. The slowdown lower bound sums those yields with free compute, at the hardware's rate,
-and with the server-block yields that the memory wipe, proof of useful space (PoUS) and network certification bound (`GLOSSARY.md`, "Size, credit and
+and with the server-block yields that the memory wipe, proof of useful space (PoUS) and network attestation bound (`GLOSSARY.md`, "Size, credit and
 the slowdown lower bound"). Its numbers come from [`benchmarks/slowdown`](../../../../../../benchmarks/slowdown/README.md), whose
 scenarios register a policy as if it were a subprotocol.
 

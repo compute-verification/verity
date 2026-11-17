@@ -1,4 +1,4 @@
-"""A certifier's LMS key on disk: the directory `load_key` makes or reads, its signer, and the public key as a
+"""A network attester's LMS key on disk: the directory `load_key` makes or reads, its signer, and the public key as a
 deployment record carries it."""
 
 from __future__ import annotations

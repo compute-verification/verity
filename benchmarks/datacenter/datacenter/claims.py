@@ -8,7 +8,7 @@ trusted clock:
 - `Computed(part, work)`: the values committed for a part of the Program are its evaluation (here by re-execution; in
   Verity, SPOT at ε and δ over the part's proof blocks, `units` of the partition the profile names), `work`
   its ANDs.
-- `Carried(port, bits)`: a certifier port carried exactly the committed crossings in the declared occupancy, so its only
+- `Carried(port, bits)`: a network attester port carried exactly the committed crossings in the declared occupancy, so its only
   freedom was `bits` of timing advice.
 - `Entered(input, bits)`: a run input's bits entered the computation from outside the blocks or from a device in one
   (registered inputs open the registration instead, and a trusted device's are the verifier's coins).
@@ -92,7 +92,7 @@ class Read:
 
 @dataclass(frozen=True)
 class On:
-    """What a refusal is about: a certifier port during a window, a store, a part of the circuit, an input, or the
+    """What a refusal is about: a network attester port during a window, a store, a part of the circuit, an input, or the
     occupancy profile."""
 
     kind: Literal["port", "store", "part", "input", "profile"]
@@ -117,18 +117,18 @@ def _same(a, b) -> bool:
 
 
 def check_records(records: list[PortRecord], declared: dict[tuple[Port, int], PortRecord], cadence: Cadence) -> list[Carried | Refused]:
-    """The certifiers' records against the ones an honest run publishes (`declared`, by port and window): each declared
+    """The attesters' records against the ones an honest run publishes (`declared`, by port and window): each declared
     port-window needs a record, with the declared counts and content digest, and is then carried with log2 of the
     jitter classes' number bits of timing advice. Records of other windows are other epochs' to check. The digest is
-    whatever the certifier signs (here `observe.digest` of the committed crossings; in the mock datacenter, the real
-    certifier's)."""
+    whatever the attester signs (here `observe.digest` of the committed crossings; in the mock datacenter, the real
+    network attester's)."""
     per = cadence.window_ticks
     have = {(r.port, r.window): r for r in records}
     out: list[Carried | Refused] = []
     for (port, w), d in declared.items():
         on = On("port", repr(port), Interval(w * per, (w + 1) * per))
         r = have.get((port, w))
-        problems = (["no record: the certifier was down or its record was withheld"] if r is None else
+        problems = (["no record: the attester was down or its record was withheld"] if r is None else
                     ["occupancy differs from the declared profile"] * (r.counts != d.counts)
                     + ["a frame is not a committed crossing"] * (r.digest != d.digest))
         out += [Refused(on, why) for why in problems] or [Carried(port, math.log2(cadence.jitter_classes), on.during)]
