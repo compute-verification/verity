@@ -25,7 +25,7 @@ def _found(run: Path, name: str) -> Path:
 
 def window_answer(reg: dict, record: dict | None, delta: Fraction, reason: str, rests: Sequence[str] = ()) -> dict:
     """One-stage's answer for the group's registration ``reg`` as a period check reads an execution phase's scan answer
-    (`NetworkCheck.Period`'s rows form, `pouw.core_check.answer_of`): from an accepted audit record (``record``,
+    (`NetworkVerifier.Period`'s rows form, `pouw.core_check.answer_of`): from an accepted audit record (``record``,
     `audit`'s ``audit.json``), one-stage's answer of it at ``delta`` (`audit.answer`: its sample and proved units,
     every unit sampled, the bound 0, and whether every verdict ran), and the tied values
     its registration's R8 let through when there are any (``rests``, the registration verdict's

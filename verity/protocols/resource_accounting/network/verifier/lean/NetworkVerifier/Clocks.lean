@@ -1,22 +1,22 @@
 module
 
-public import NetworkCheck.Check
+public import NetworkVerifier.Check
 
 /-!
 # The period's decoders
 
-The decoders the period's check (`NetworkCheck.Period`) reads, in its namespace: `keysOf`, `exactly`, `hexAt` and
-`certificateOf`. Code: it imports only the certificate check (`NetworkCheck.Check`) and what that imports, and nothing
+The decoders the period's check (`NetworkVerifier.Period`) reads, in its namespace: `keysOf`, `exactly`, `hexAt` and
+`certificateOf`. Code: it imports only the certificate check (`NetworkVerifier.Check`) and what that imports, and nothing
 of the inference-only policy's.
 -/
 
 @[expose] public section
 
-namespace NetworkCheck.Period
+namespace NetworkVerifier.Period
 
 open Lean (Json)
 open Flock (V)
-open NetworkCheck.Check (Certificate)
+open NetworkVerifier.Check (Certificate)
 
 def keysOf : Json → List String
   | .obj kvs => kvs.keys
@@ -36,4 +36,4 @@ def certificateOf (j : Json) (ctx : String) : V Certificate := do
 
 def hexAt (j : Json) (k ctx : String) : V ByteArray := do Flock.unhex (← Flock.J.str j k ctx)
 
-end NetworkCheck.Period
+end NetworkVerifier.Period

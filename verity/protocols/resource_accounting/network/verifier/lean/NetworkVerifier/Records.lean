@@ -1,6 +1,6 @@
 module
 
-public import NetworkCheck.Check
+public import NetworkVerifier.Check
 public import Difftest
 
 /-!
@@ -8,12 +8,12 @@ public import Difftest
 
 `audit.py`'s `Audit` over its whole domain, `Published = Record | CommittedRecord | CertifiedRecord`, mixed lists
 included: `check_link` on every egress link in order, then `check_ingress_link` on every ingress link. A certified record
-is checked exactly as `verity/network-certificate/v4` checks it (`NetworkCheck.Check`'s `egressVerdict`, with the
+is checked exactly as `verity/network-certificate/v4` checks it (`NetworkVerifier.Check`'s `egressVerdict`, with the
 Program's grid from `expectedGrids`, and `ingressVerdict` on that one record); a raw or committed record carries no direction, so it is matched by link and window
 alone (`_by_window`), as one record of the link's egress windows and of its ingress windows alike.
 
 **Params** and **evidence**: `verity/network-certificate/v4`'s, read by its decoders; the evidence keeps each payload as
-its bytes (`ByteEvidence`, which `NetworkCheck.RecordsBytes` proves is v4's reading of the same JSON), since v4's bits
+its bytes (`ByteEvidence`, which `NetworkVerifier.RecordsBytes` proves is v4's reading of the same JSON), since v4's bits
 take a cons cell per bit.
 
 **Commitment**: the unit's published records, each `u8 kind ‖ u64be len(body) ‖ body`, concatenated, decoded exactly:
@@ -48,10 +48,10 @@ nothing else holds. Its refusals are otherwise `evaluate`'s, and its ingress ver
 set_option backward.privateInPublic true
 set_option backward.privateInPublic.warn false
 
-namespace NetworkCheck.Records
+namespace NetworkVerifier.Records
 
 open Lean (Json toJson)
-open NetworkCheck.Check (Grid Certified LinkOpening Evidence TransferBlocks Profile)
+open NetworkVerifier.Check (Grid Certified LinkOpening Evidence TransferBlocks Profile)
 open NetworkAttester (ClockSync)
 
 def protocolId : String := "verity/network-records/v3"
@@ -467,4 +467,4 @@ def verdictsNoGridFn (j : Json) : Except String Json := do
   let vs ← evaluateNoGrid p c e
   pure (Json.mkObj [("link_windows", .arr (vs.map transferBlocksJson))])
 
-end NetworkCheck.Records
+end NetworkVerifier.Records
