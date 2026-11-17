@@ -19,12 +19,11 @@ from verity.commitments.periods import interface as IF
 from verity_vllm.definitions.registry import int8_exact as IX
 from verity_vllm.definitions.registry import io_shell as IO
 from verity_vllm.definitions.registry import rmsnorm_fused_split as NS
+from verity_vllm.definitions.registry.attention_cuts import CUTS, heads
 from verity_vllm.definitions.registry.dead_free import (
-    AttentionV19,
     AttnBlockFirstV2,
     TokenSelectGroupsV1,
 )
-from verity_vllm.definitions.registry.fa3_check_inf import AttentionV20
 
 from verity_vllm.pipeline.tp.grain import GROUP
 
@@ -35,9 +34,6 @@ from .window_class import FixedLoad, PearlTables, Tables, WindowClass
 from .window_cut import Linears, cut_linear
 
 PROMPT = "prompt"
-#: the `Attention` versions cut by key block, each by the version of its function whose heads' steps are Calls: FA2's v18
-#: by v19, FA3's v4 by v20
-CUTS = {18: AttentionV19, 19: AttentionV19, 4: AttentionV20, 20: AttentionV20}
 
 
 def _field(fn: Any, lo: int, hi: int) -> tuple[str, int]:
@@ -370,12 +366,10 @@ class _Program:
         self.outs[j] = pieces
 
     def _heads(self, fn: Any, family: str, count: int) -> Any:
-        nodes = fn.body.nodes
-        head = nodes[0].fn
-        if head.name != family or any(m.form != "batch" or descriptor_id(m.fn) != descriptor_id(head) for m in nodes) \
-                or sum(m.n for m in nodes) != count:
-            raise Unexpressible(f"{fn.id}: its body is not {count} heads of one {family} Definition")
-        return head
+        try:
+            return heads(fn, family, count)
+        except ValueError as e:
+            raise Unexpressible(str(e)) from None
 
     def _each(self, tid: str, port: str, at: int, rowss: Sequence[tuple[Row, ...]], rep: int = 1) -> None:
         """Units ``at + g·rep`` to ``at + (g + 1)·rep - 1`` read ``rowss[g]``: one feed where each group's rows are the first's
