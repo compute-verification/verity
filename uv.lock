@@ -2507,6 +2507,7 @@ dependencies = [
     { name = "numpy" },
     { name = "research" },
     { name = "verity" },
+    { name = "verity-bench" },
     { name = "verity-numerical" },
     { name = "verity-vllm" },
 ]
@@ -2517,6 +2518,7 @@ requires-dist = [
     { name = "numpy" },
     { name = "research", editable = "tools/research" },
     { name = "verity", editable = "." },
+    { name = "verity-bench", editable = "benchmarks/harness" },
     { name = "verity-numerical", editable = "benchmarks/numerical" },
     { name = "verity-vllm", editable = "adapters/vllm" },
 ]
