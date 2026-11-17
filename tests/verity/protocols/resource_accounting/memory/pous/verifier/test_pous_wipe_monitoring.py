@@ -48,7 +48,7 @@ def written():
 
 @pytest.fixture(scope="module")
 def counted(written):
-    """`written` as the check that composes the wipe with the network attester is to publish it at a certifier's
+    """`written` as the check that composes the wipe with the network attester is to publish it at a network attester's
     count of 2 MiB: `certify` at that count, set by hand, since `verity/wipe/v0` certifies no wipe."""
     return written | {"public": W.certify(HBM, 2), "profile": written["profile"] | {"gaps": []}}
 

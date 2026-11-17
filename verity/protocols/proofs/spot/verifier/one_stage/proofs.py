@@ -439,7 +439,7 @@ def verify(proof: Proof, *, circuit_sha512: str, program: bytes, partition: Mapp
     the one-stage audit's, whose public file holds the whole population: a session the verifier accepts on a circuit
     `template_why` passes is rejected with `population_why`'s reason where the public file's units are not that
     population in order, as the v2 audit's own run rejects it, last (`Spot.FilePart.check`). Without it (a
-    statement of some of a population's proof blocks, as the certifier's) the public file's units are the verifier's
+    statement of some of a population's proof blocks, as the network attester's) the public file's units are the verifier's
     own.
 
     The ``registered`` refusal is the verifier's own: without ``--registered``, Lean refuses a statement's registered

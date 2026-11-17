@@ -114,7 +114,7 @@ OTHER_NAMES = (r"(?i:power[- ]laws?|laws? of large numbers|(?:Amdahl|Moore|Littl
                r"|cublasLt\w*Cap\w*|CUBLASLT_\w*CAP\w*"
                r"|(?i:(?<!\w)cap_(?:sys_ptrace|sys_admin|dac_read_search|dac_override|chown|fowner|ipc_lock)(?!\w))")
 #: other senses of "cap" that name none of Pearl's, each by its names: a request's length cap, its ``max_tokens`` (the
-#: certifier's registered response cap); SPOT's served cap S, in prose; a soft
+#: network attester's registered response cap); SPOT's served cap S, in prose; a soft
 #: cap in prose (a logit's, or a resource limit's); a cap counted in bytes, MiB, GiB or words, as its name says (a memory
 #: or buffer cap); a CUDA compute capability as the tests name one (``cap80``, ``cap90_fa2``); the served-commit
 #: profile's cap on the CTAs one launch hashes; FA3's cap on its number of splits
@@ -984,7 +984,7 @@ def test_pearl_s_debit_cap_still_counts_against_the_real_table() -> None:
 
 def test_a_word_of_two_kept_senses_the_lint_tells_apart_still_counts_in_its_retired_one() -> None:
     """A word the narrower senses list is enforced only in the phrases that retire it, but one in ``SENSED`` stays
-    enforced alone: "cap" keeps SPOT's served cap and the certifier's response cap, by their names, and Pearl's counts."""
+    enforced alone: "cap" keeps SPOT's served cap and the network attester's response cap, by their names, and Pearl's counts."""
     two = "\n## Narrower senses\n\n- Two words still carry two senses in the code:\n  - **Cap**: SPOT's, the certifier's.\n"
     assert "cap" in {t.old for t in terms_of(SENSES_EXAMPLE + two)}
     assert "draw" not in {t.old for t in terms_of(SENSES_EXAMPLE + two.replace("Cap", "Draw"))}

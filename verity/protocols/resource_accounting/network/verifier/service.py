@@ -108,7 +108,7 @@ zero-knowledge.
 
 **The link** (`TransferBlocks(network_attester=NetworkAttesterProfile(…))`) is the network attester's (`network_attester.NetworkAttester`) own two records of
 each execution phase: its responses on egress and its requests on ingress, on its one grid, certified under its
-schedule's parameters digest (`network_attester.NetworkAttesterParams.digest`, which its deployment publishes) rather than a certifier's
+schedule's parameters digest (`network_attester.NetworkAttesterParams.digest`, which its deployment publishes) rather than a network attester's
 (`certificate.parameters_digest`). The network attester is the auditor's device, and its code puts every bucket's
 cells, r for each live connection and the rest padding (`network_attester.audit` reads them in the clear, the scan's proof blocks
 in zero knowledge), so its counts are its schedule's: no occupancy profile holds them, the period's schedule terms

@@ -12,7 +12,7 @@ MiB (`streamed_wipe.egress_units`), `EGRESS_MAX_UNITS` when none is given (`egre
 
 An accepted wipe publishes `uncounted`, `certify` at `EGRESS_MAX_UNITS`: `certified` false, whatever count the evidence
 names. No network attester signs that count, so until the check that composes the wipe with the network attester
-holds it to the certifier's, the bound is taken on no count, and the profile names the evidence's count as a gap
+holds it to the network attester's, the bound is taken on no count, and the profile names the evidence's count as a gap
 (`writer_gap`). `certify` is what that check is to publish: `{"certified", "egress_mib", "eps", "foreign_bits", "k",
 "memory_bits", "r"}`, `memory_bits = M` the declared tiers' bits (the fill's `n · 512` and `R` past it, the memory it doesn't reach),
 `k` the session's timed reads, which the memory challenger chose (`wipe_party --reads`), and `r = ratio(k)`, the
@@ -253,7 +253,7 @@ def outcome_counted(server: bytes, session: bytes, trusted: Collection[bytes], c
     refusals, then a rejection where `named` refuses the session, of an evidence that gives no count (`NO_COUNT`) and
     of a session that names no start mark (`NO_MARK`), and on acceptance `certify` at the evidence's count with
     `counted_profile`. It holds the count to nothing, as `outcome` does: only under a composition that ties `named` to
-    the network attester's count over the span between the session's two marks is the count the certifier's."""
+    the network attester's count over the span between the session's two marks is the count the network attester's."""
     out = outcome(server, session, trusted, commitment, signed, schemes, egress_mib=egress_mib)
     if out[0] != "accept":
         return out

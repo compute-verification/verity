@@ -25,7 +25,7 @@ reads the same and its GPU card's, states those figures on the node's locations,
 interface or the storage path, as a boundary link that no certifier splits. `clock_drift` reads an auditor's device's
 time base card (`kind = "timebase"`): by its `drift.max` mark, the host's premise (`ClockPremise`) or the figure the
 host states and `Auditor.drift` holds it to, never both. `auditor_host` is the host's location as that card gives it,
-which `node_entry` registers a certifier in (`certifier_host`); `Auditor.of_files`' `timebases` hold the same, and a
+which `node_entry` registers a network attester in (`certifier_host`); `Auditor.of_files`' `timebases` hold the same, and a
 premise gives the host's `Account.Premised` (`ClockPremise.premised`).
 
 The log (`Registration`) is append-only: each site entry adds sheets, locations and links and names the head of the log
@@ -311,7 +311,7 @@ def _whole(entry: Any, what: str) -> int:
 
 def _way(way: Any, host: str) -> tuple[str, int | None, bool]:
     """A way out of host `host`'s node as `ways_out` gives it: its id under the host, what it
-    carries in whole bits a second, or `None` where its file states no rate, and whether a certifier may split it."""
+    carries in whole bits a second, or `None` where its file states no rate, and whether a network attester may split it."""
     try:
         name, bw, split = way
     except (TypeError, ValueError):
@@ -341,7 +341,7 @@ def _leaf(leaf: Any, host: str) -> tuple[str, str, int, int]:
 class _Node:
     """What a node's files register as one host: its devices' SKU and count, its leaves (each id, tier, bytes and
     bits a second), the rate each tier's leaves share, its ways out (each id, bits a second or None, and whether a
-    certifier may split it) and its host's on-chip state in bits."""
+    network attester may split it) and its host's on-chip state in bits."""
 
     sku: str
     count: int
@@ -905,16 +905,16 @@ class Registration:
         how the node reaches the outside.
 
         `certifier` is the id, the key and the key's scheme of a network attester of the auditor's that stands in
-        front of the node without splitting its interface (a process on another machine, say). It adds the certifier
+        front of the node without splitting its interface (a process on another machine, say). It adds the network attester
         and the two links of a certified way out, host to certifier (`host/ID`) and certifier to outside (`ID/outside`), each at the interfaces' rates summed, beside the ways' own links, which
-        stay. The storage path's rate is not in that sum and no certifier is linked to the path: a certifier's links
-        say nothing of it. A certifier on a node any of whose interfaces has no rate is refused, by its id, since its
-        links' rate would be below what it splits (a missing rate is never read as 0, nor left out of a sum). A certifier splits one host's way out, so each node names its own, and the key and scheme are the
+        stay. The storage path's rate is not in that sum and no certifier is linked to the path: a network attester's links
+        say nothing of it. A network attester on a node any of whose interfaces has no rate is refused, by its id, since its
+        links' rate would be below what it splits (a missing rate is never read as 0, nor left out of a sum). A network attester splits one host's way out, so each node names its own, and the key and scheme are the
         ones the auditor holds for the id or `owner` refuses the entry. None of the auditor's other devices is added.
 
-        `certifier_host` is the auditor's device the certifier runs in (`auditor_host`'s location, which states its
-        time base and its clock's drift): the entry adds it where the log has none, at `site`, and the certifier in
-        it, whose clock is then that host's (`Site.clock`, `Site.drift`). With none the certifier is under the site,
+        `certifier_host` is the auditor's device the network attester runs in (`auditor_host`'s location, which states its
+        time base and its clock's drift): the entry adds it where the log has none, at `site`, and the network attester in
+        it, whose clock is then that host's (`Site.clock`, `Site.drift`). With none the network attester is under the site,
         where it reads no clock and times nothing.
 
         A file that states no `dram` leaf or no `disk` leaf is refused: its entry would pass `check` for `remote` with
@@ -1152,11 +1152,11 @@ class Site:
         return (self.kind(k.ends[0]), self.kind(k.ends[1])) in ((a, b), (b, a))
 
     def is_boundary(self, k: Link) -> bool:
-        """A boundary link of the prover's: a host's link to the outside, or to the certifier that splits its uplink."""
+        """A boundary link of the prover's: a host's link to the outside, or to the network attester that splits its uplink."""
         return self.joins(k, "host", "outside") or self.joins(k, "certifier", "host")
 
     def certified(self, k: Link) -> bool:
-        """A certifier is at one of the link's ends."""
+        """A network attester is at one of the link's ends."""
         return "certifier" in (self.kind(k.ends[0]), self.kind(k.ends[1]))
 
     def far(self, i: str) -> list[str]:

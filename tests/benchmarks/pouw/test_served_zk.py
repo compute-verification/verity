@@ -685,7 +685,7 @@ def test_past_the_salt_rule_a_certified_window_is_recorded_revealed_sampled_unde
     stream is refused (``coin``) and one naming its own registers, though coins that aren't its signed record's
     challenger's are refused at the sample.  A certified challenger opens no salt coin, and is refused parameters with a
     registration deadline, a certifier that names no run (no key id), no deployment, a
-    certifier of another key or run id than the deployment pins, coins it can't read from a signed record under
+    network attester of another key or run id than the deployment pins, coins it can't read from a signed record under
     the deployment's challenger key, a prover id that isn't 64 bytes or a context that names no PoUW execution phase; parameters
     that name one are refused without a certifier.  A deployment is a certifier's public key, a 32-byte run id and a
     challenger key, or it is refused (`DEPLOYMENT_FORM`)."""

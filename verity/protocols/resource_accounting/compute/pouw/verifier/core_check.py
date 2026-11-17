@@ -42,7 +42,7 @@ its manifest re-starts its execution phase under the challenger's own coin commi
 certified execution phase, whose verifier holds the network attester's reveal for it (`salt.revealed`), the pass's salt must be
 `salt.pouw_salt` of that reveal and the PoUW execution phase the context names, and its weights those the certifier recorded
 before it sampled that salt (`salt.committed`).  `recorded_reason` is that last rule alone, which needs no reveal: the
-challenger runs it before it asks the certifier for one, since the certifier reveals an execution phase once.  A live Pearl-C
+challenger runs it before it asks the network attester for one, since the network attester reveals an execution phase once.  A live Pearl-C
 pass (`pouw_pearl_c_host.epoch_of`), whose manifest's coins are a live session's, took its salt coin from a
 salt-only session of the auditor device's challenger opened on its salt execution phase's root (`salt.epoch_open_root` of its
 weights' root and its ``pass_index``): its verifier holds the auditor's ledger and that session's files as `rounds`
@@ -1132,8 +1132,8 @@ def _recorded(us: list[dict], roots: dict[int, bytes], committed: bytes | None, 
 def recorded_reason(raw: bytes | None, committed: bytes | None, stream: bytes | None, prover: bytes | None
                     ) -> str | None:
     """Why a certified execution phase's pass `raw` is not over the weights, `stream` and `prover` that `committed` binds, what PoUW
-    recorded with the certifier before it sampled the execution phase's salt (`salt.committed`); None when it is.  `pass_epoch`'s
-    rule, with the same words, short of the reveal, which a challenger asks for only after this passes: the certifier
+    recorded with the network attester before it sampled the execution phase's salt (`salt.committed`); None when it is.  `pass_epoch`'s
+    rule, with the same words, short of the reveal, which a challenger asks for only after this passes: the network attester
     reveals an execution phase once, so a registration whose stream or prover wasn't recorded gets no reveal."""
     if raw is None:
         return "the window names no pass, whose epoch the challenger re-starts from its manifest"
@@ -1148,7 +1148,7 @@ def _certified_salt(m: dict, reveal: bytes, context: str, committed: bytes | Non
                     prover: bytes | None) -> tuple[bytes, str]:
     """A certified execution phase's pass under the execution phase's `stream` and `prover`: `committed`, what the certifier recorded
     before it sampled the execution phase's salt (`salt.committed`), is `salt.pouw_record` of the pass's weights' root, the stream
-    and the prover, and the pass's salt is `salt.pouw_salt` of `reveal`, the certifier's salt for the PoUW execution phase the
+    and the prover, and the pass's salt is `salt.pouw_salt` of `reveal`, the network attester's salt for the PoUW execution phase the
     execution phase's `context` names, the execution phase, the stream and the prover."""
     us, roots = _certified_workload(m)
     if type(reveal) is not bytes or len(reveal) != PS.SALT_BYTES:
@@ -1266,8 +1266,8 @@ def pass_epoch_twin(coins: Any, raw: bytes | None, context: str, recorded: bool 
     through the verifier's `live` inputs (`LIVE`, ``{key, ledger, main, pins, session}``, the challenger's signatures
     checked with `verify`, by default `lms_verify`; a verifier that holds none refuses it) and passes `live_salt` under
     them (``live coin``, its ``salt`` refusals here ``coin``'s); `coins` plays no part in it.  A certified execution phase's
-    verifier holds `reveal`, the certifier's salt for the PoUW execution phase the context names, as `salt.revealed` read it,
-    `committed`, what PoUW recorded with the certifier before it sampled that salt, as `salt.committed` read it, and the
+    verifier holds `reveal`, the network attester's salt for the PoUW execution phase the context names, as `salt.revealed` read it,
+    `committed`, what PoUW recorded with the network attester before it sampled that salt, as `salt.committed` read it, and the
     execution phase's `stream` and `prover`; its execution phase
     passes only a pass salted by it (`MANIFEST_CERTIFIED`, the salt `salt.pouw_salt(reveal, p, stream, prover)`) over
     weights whose root `salt.pouw_record` binds with the stream and the prover in `committed`, and a certified pass
