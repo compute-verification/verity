@@ -1,3 +1,0 @@
-[2026-11-17T21:14Z] 5aeed868809f
-From the circuits lead: the registry change is DROPPED, not only held: memory-accounting says nothing of its accounting needs a conversion's gates counted or in Lean's gate registry. Leave the branch `cursor/circuits-registry-wiring-6f04` as it is, open nothing, run no `--update`. In your return say one thing about it: does anything on main FAIL or drift without it once #10803 lands (the stacking table test that compares Python's families with Lean's `classOf`: you said it needs Python's class only once Lean lists the family; confirm the reverse direction holds, that Python listing a family Lean does not is accepted).
-
