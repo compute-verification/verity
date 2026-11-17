@@ -27,7 +27,7 @@ def widths(S: SimpleNamespace) -> SimpleNamespace:
                          "TAU, CSAT, CFREE and CARRY positive, C1 at least 0, CU 0 or 1")
     if (most := max(S.CSAT, S.CFREE) + S.C1 * S.T) >= S.CARRY * S.TAU:
         raise ValueError(f"the largest advance max(CSAT, CFREE) + C1·T = {most} reaches CARRY = {S.CARRY} buckets of "
-                         f"TAU = {S.TAU}: the step carries at most CARRY buckets")
+                         f"TAU = {S.TAU}: the advance is under CARRY buckets, so the count grows by at most CARRY")
     if S.A < min(S.M, S.R) + 1:
         raise ValueError(f"A = {S.A} arrivals in view with up to {min(S.M, S.R)} taken a step: the tick step needs "
                          f"A ≥ min(M, R) + 1 = {min(S.M, S.R) + 1}, to see the first arrival it doesn't take")
@@ -110,8 +110,8 @@ TickStep = _part(
     "one step of the certified tick (`ReplayStep_v1`'s step with every given arrival asked): the clock T = q·TAU + r jumps "
     "to the next arrival's bucket close when nothing runs or waits (CU = 0) or nothing waits (CU = 1); the step is given "
     "the leading arrivals whose buckets have closed; after a step with rows T advances by CSAT if it preempted, left a "
-    "request waiting or left a given arrival, else CFREE, plus C1 for each token it schedules, carrying at most CARRY "
-    "buckets; 0 for ok to refuse what "
+    "request waiting or left a given arrival, else CFREE, plus C1 for each token it schedules, an advance "
+    "under CARRY buckets, so the bucket count grows by at most CARRY; 0 for ok to refuse what "
     "`ReplayStep_v1` refuses, a remainder r ≥ TAU or a bucket count past 32 bits "
     "(`pipeline.advice_code.tick_step.reference`). It rests on three things: T starts at 0; r < TAU, which it refuses "
     "otherwise; and the arrivals' buckets are bound only once the slice ties them")
