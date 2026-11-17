@@ -45,6 +45,29 @@ def test_the_cards_we_run() -> None:
     assert skus(directory=CARD_FILES) == sorted(sku for kind in CARD_KINDS for sku in skus(kind, directory=CARD_FILES))
 
 
+def test_each_gpu_has_one_short_name() -> None:
+    """`short`, the name a point's member, a spec's id and a table's row carry for the card: lower case letters, digits
+    and hyphens, and no two GPU cards the same."""
+    short = {sku: load_card(sku, directory=CARD_FILES).get("short") for sku in skus("gpu", directory=CARD_FILES)}
+    bad = sorted(sku for sku, s in short.items() if not isinstance(s, str) or not re.fullmatch(r"[a-z0-9]+(-[a-z0-9]+)*", s))
+    assert not bad, f"{bad}: set `short` to lower case letters, digits and hyphens"
+    assert len(set(short.values())) == len(short), f"two GPU cards share a `short`: {short}"
+    assert short == {"b200-sxm-180gb": "b200", "h200-sxm-141gb": "h200", "rtx-pro-6000-server": "rtx-pro-6000"}
+
+
+@pytest.mark.parametrize("sku", skus("gpu", directory=CARD_FILES))
+def test_the_driver_names_are_each_sourced(sku: str) -> None:
+    """`driver`, the product strings the driver reports for the card (`nvidia-smi --query-gpu=name`): a list, empty
+    where no machine has been read, each entry the string read and a source citing the run's record that read it."""
+    driver = load_card(sku, directory=CARD_FILES).get("driver")
+    assert isinstance(driver, list), "set `driver` to a list of { value, source }, [] where no machine has been read"
+    for entry in driver:
+        assert isinstance(entry, dict) and set(entry) == {"value", "source"}, entry
+        assert all(isinstance(entry[k], str) and entry[k].strip() for k in ("value", "source")), entry
+        assert re.search(r"\bart:[0-9a-f]{12}\b", entry["source"]), f"{entry}: cite the record that read it as art:<12 hex>"
+    assert len({e["value"] for e in driver}) == len(driver), driver
+
+
 #: The fewest entries a card of each kind holds, so a card whose sections didn't parse as entries fails.
 FEWEST = {"gpu": 20, "host": 20, "server": 4, "timebase": 2}
 
