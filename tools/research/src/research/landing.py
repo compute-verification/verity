@@ -78,7 +78,7 @@ AFTER_LANDING_OPTIONAL = ("lean-agreement",)
 #: the steps whose tasks run test suites, so a `suite NAME` failure may be either's (`vqueue_slim.failing`)
 SUITE_STEPS = ("lean-suites", "pytest")
 #: the steps train.sh still checks beside the executor's check of a candidate: a run of them alone (`vqueue_slim.start`), whose
-#: steps on the merge gate count as the executor's tasks on it do: lean-agreement unless that run skips it by name, not
+#: steps on the merge gate count as the executor's tasks on it do: lean-agreement wherever it ran, skipped by name or not, not
 #: ratchet-gate (policy.toml's `off_gate`); the executor's tasks of them count for nothing
 SLIM_STEPS = ("lean-agreement", RATCHET_STEP)
 #: what the run of `SLIM_STEPS` judges of its records (`vqueue_slim.judge`): those steps, and the preflights no graph/v2 task
@@ -1092,7 +1092,7 @@ class Landing:
                 f" (log {launch['dir']}/log)"
         rec.update(ids=ids, at=self.now())
         shutil.rmtree(launch["dir"], ignore_errors=True)
-        self.q.log(f"research queue drive: {what}: {' '.join(ids)}")
+        self.q.log(f"research queue: {what}: {' '.join(ids)}")
         return None
 
     @staticmethod
@@ -1188,7 +1188,7 @@ class Landing:
         if commit not in cache:
             got = policy.at(self.repo, commit)
             if isinstance(got, str):
-                self.q.log(f"research queue drive: {got}: no failure is allowed at {commit[:12]}")
+                self.q.log(f"research queue: {got}: no failure is allowed at {commit[:12]}")
                 got = policy.Policy()
             cache[commit] = got
         return cache[commit]
@@ -1334,13 +1334,13 @@ class Landing:
             return
         to = tuple(dict.fromkeys((f"@{handle}" if handle else CI, *(f"@{h}" for h in also if h))))
         if self.q.shadow or self.dry_run:
-            self.q.log(f"research queue drive: would tell {' '.join(to)}: {text} [{'shadow' if self.q.shadow else 'dry run'}]")
+            self.q.log(f"research queue: would tell {' '.join(to)}: {text} [{'shadow' if self.q.shadow else 'dry run'}]")
             return
         if self.post(f"{' '.join(to)} queue: {text}", to):
             state["told"].extend(k for k in keys if k not in state["told"])
-            self.q.log(f"research queue drive: told {' '.join(to)}: {text}")
+            self.q.log(f"research queue: told {' '.join(to)}: {text}")
         else:
-            self.q.log(f"research queue drive: could not post to the merge thread (the next tick retries): {' '.join(to)}: {text}")
+            self.q.log(f"research queue: could not post to the merge thread (the next tick retries): {' '.join(to)}: {text}")
 
     def _stacked(self, state: dict, members: list[Member], tip: str) -> None:
         """After a landing at ``tip``, tell the owner of each open PR based on `main` or on a landed member's branch whose head
@@ -1357,7 +1357,7 @@ class Landing:
             rest = {n: p for n, p in opened.items() if n not in landed}
             refs = pull_refs(q, rest.values())
         except QueueError as e:
-            q.log(f"research queue drive: PRs stacked on {', '.join(f'#{n}' for n in sorted(landed))} not found: {e}")
+            q.log(f"research queue: PRs stacked on {', '.join(f'#{n}' for n in sorted(landed))} not found: {e}")
             return
         bases: dict[int, list[int]] = {}
         for x in members:
@@ -1372,7 +1372,7 @@ class Landing:
                 if q.ready(n, rest[n].head):
                     continue
             except QueueError as e:
-                q.log(f"research queue drive: #{n}'s ready mark can't be read, so it isn't told its base landed now: {e}")
+                q.log(f"research queue: #{n}'s ready mark can't be read, so it isn't told its base landed now: {e}")
                 continue
             names = ", ".join(f"#{b}" for b in below)
             self.tell(state, [f"stacked:{n}<{b}" for b in below],

@@ -22,14 +22,13 @@ import shutil
 
 import numpy as np
 import pytest
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import registered as NR
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import requests as RQ
 from verity.protocols.resource_accounting.compute.pouw.verifier import core_check as CC
 from verity.protocols.resource_accounting.compute.pouw.verifier.audit import HM96, hm96_salt, rows_domain
 from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import tagged
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
-
-from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import registered as NR
 from verity_torch.pouw.h1 import registered_device as D
-from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import requests as RQ
 from verity_torch.pouw.h1 import tables_device as TD
 
 PROGRAM, WINDOW = "ab" * 64, "cd" * 64

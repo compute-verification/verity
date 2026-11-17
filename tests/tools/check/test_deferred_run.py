@@ -1,4 +1,4 @@
-"""`check.py --deferred STEP,...`, the after-landing run `research queue drive` launches on `main` (`train.sh --deferred`): only
+"""`check.py --deferred STEP,...`, the after-landing run the verified queue launches beside a candidate (`train.sh --deferred`): only
 those ci.toml jobs and what they need, inside a recorded run that is no check, so no gate reads it."""
 from __future__ import annotations
 
@@ -49,14 +49,14 @@ def test_a_deferred_run_runs_only_its_steps_and_what_they_need_inside_a_recorded
 
 
 def test_a_recorded_check_runs_every_job_on_the_gate_and_passes_without_circuit_check(monkeypatch, tmp_path):
-    """circuit-check and ratchet-gate are off the gate (policy.toml's `off_gate`): a recorded check (`--record`, the declared
+    """circuit-check, ratchet-gate and added-lines are off the gate (policy.toml's `off_gate`): a recorded check (`--record`, the declared
     command in a run) leaves them out, and its `check/v1` passes on the jobs on the gate alone."""
     monkeypatch.setenv("CHECK_CACHE", str(tmp_path / "cache" / "check"))
     monkeypatch.setenv("VERITY_TEST_CACHE", str(tmp_path / "cache" / "tests"))
     run_dir = tmp_path / "run"
     run_dir.mkdir()
     rc, only = _main(monkeypatch, run_dir, ["--keep-going"])
-    off = {"circuit-check", "ratchet-gate"}
+    off = {"circuit-check", "ratchet-gate", "added-lines"}
     assert rc == 0 and only == [p for p in CHECK.shard_parts() if p.partition(":")[0] not in off] == CHECK.gated_parts()
     assert {p.partition(":")[0] for p in only} == {j.name for j in CHECK.JOBS} - off
     doc = json.loads((run_dir / "result.json").read_text())
@@ -141,7 +141,7 @@ def test_the_shards_of_a_deferred_run_together_run_every_part_ratchet_gate_in_th
 
 
 def test_record_of_a_deferred_run_launches_it_without_the_check_tool_and_without_lean(monkeypatch):
-    """An after-landing run recorded as `--tool check` would be a check of `main`'s tip that `research merge` reads.  It carries
+    """An after-landing run recorded as `--tool check` would be a check of `main`'s tip that `research.merge` reads.  It carries
     its base's commit, above which ratchet-gate judges every merge."""
     real, launched, sent = subprocess.run, [], {}
 

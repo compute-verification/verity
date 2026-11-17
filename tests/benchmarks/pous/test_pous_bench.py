@@ -30,7 +30,7 @@ def test_weight_sets_are_the_frozen_benchmarks():
     for ws in sets.values():
         assert ws["bytes"] == sum(o * k * 2 for _, o, k in ws["tensors"])
         assert all(len(s) == 64 for s in ws["checkpoint"]["safetensors_sha256"].values())
-    hardware = {h["id"] for h in json.loads((ROOT / "benchmarks" / "census" / "hardware.json").read_text())}
+    hardware = {h["id"] for h in json.loads((ROOT / "calibration" / "census" / "hardware.json").read_text())}
     assert set(doc["hardware"]) <= hardware
 
 

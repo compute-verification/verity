@@ -33,7 +33,7 @@ ROOT = Path(__file__).resolve().parents[1]
 NEVER_PLAIN = re.compile(r"(.*/)?(.*\.lean|lean-audit\.json|unread-caps\.json|lakefile\..*|lean-toolchain|lake-manifest\.json"
                          r"|TRUSTED\.sha256)|tools/research/.*|tools/move/.*|tools/verity/check/.*|tools/check/.*"
                          r"|tools/verity/lean/.*"
-                         r"|benchmarks/one_stage/.*|benchmarks/network_traces/.*|benchmarks/remote_session/auditor_line\.py")
+                         r"|benchmarks/one_stage/.*|benchmarks/network_traces/.*|benchmarks/poub_session/auditor_line\.py")
 #: the directories whose every file, present or added later, is the auditor's devices' or a verifier's code
 TRUSTED_DIRS = ("device", "verifier", "attester")
 #: a file name no name glob of the list matches, standing for a file added later to a directory
@@ -147,13 +147,13 @@ def test_each_check_catches_its_failure():
     assert never_plain(["a/device/x.py", "b/verifier/__init__.py", "x/Y.lean", "p/lean-audit.json", "p/lakefile.toml",
                         "tools/research/x.py", "tools/verity/check/merge_map.py", "tools/verity/lean/check.py",
                         "v/circuits/program.py", "v/channel.py", "tools/move/restack.py", "benchmarks/one_stage/a5.py",
-                        "benchmarks/network_traces/x.py", "benchmarks/remote_session/auditor_line.py",
-                        "v/circuits/ops/add.py", "v/defs/__init__.py", "benchmarks/remote_session/x.py", "pyproject.toml"],
+                        "benchmarks/network_traces/x.py", "benchmarks/poub_session/auditor_line.py",
+                        "v/circuits/ops/add.py", "v/defs/__init__.py", "benchmarks/poub_session/x.py", "pyproject.toml"],
                        paths) == [
         "a/device/x.py", "b/verifier/__init__.py", "x/Y.lean", "p/lean-audit.json", "p/lakefile.toml", "tools/research/x.py",
         "tools/verity/check/merge_map.py", "tools/verity/lean/check.py", "v/circuits/program.py", "v/channel.py",
         "tools/move/restack.py", "benchmarks/one_stage/a5.py", "benchmarks/network_traces/x.py",
-        "benchmarks/remote_session/auditor_line.py"]
+        "benchmarks/poub_session/auditor_line.py"]
     assert never_plain(["tests/b/verifier/t.py", "tests/tools/research/test_x.py", "tests/v/channel.py",
                         "tests/v/defs/test_d.py", "tests/test_repo.py", "tests/lint/test_y.py", "tests/v/circuits/ops/test_a.py"],
                        paths) == ["tests/b/verifier/t.py", "tests/tools/research/test_x.py", "tests/v/channel.py"]

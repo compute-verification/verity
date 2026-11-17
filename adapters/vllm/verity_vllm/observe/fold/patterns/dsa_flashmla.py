@@ -4,8 +4,6 @@ query concat and FlashMLA's sparse fp8 decode, over the cache `dsa.DsaNormRope` 
 
 from __future__ import annotations
 
-__models__ = ("zai-org/GLM-5.3",)
-
 from dataclasses import dataclass
 
 from verity_vllm.observe.events import ViewDesc

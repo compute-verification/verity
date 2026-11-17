@@ -34,7 +34,7 @@ horizon k. An integration writes the field with `Boundary.record`, and the verif
 
 Every bucket's gates are the same whatever the load, so no arrival step, prompt length or occupancy is public: a
 request's token ids are values the window's proof blocks parse from the cells, like every other value (arrival steps and
-prompt lengths stay private: the certifiers' observations are witness). The I/O tie reads row t of
+prompt lengths stay private: the attesters' observations are witness). The I/O tie reads row t of
 link ℓ at proof block `Boundary.unit` (``reads_from`` of a member's `network_attester_rows.bucket_port` is its proof block of
 bucket t, less t).
 

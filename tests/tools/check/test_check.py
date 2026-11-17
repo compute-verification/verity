@@ -175,7 +175,7 @@ def test_the_lean_steps_once_the_verifier_is_on_the_tree(tmp_path, monkeypatch):
 
 def test_the_agreement_fails_while_the_verifier_requires_a_package_from_outside_the_tree(tmp_path, monkeypatch):
     """The agreement's pass is kept under the verifier's package and the packages of the tree it requires by path
-    (`agreement_closure`), and `research merge` asks for it for changes there, so a requirement from outside the tree, a
+    (`agreement_closure`), and `research.merge` asks for it for changes there, so a requirement from outside the tree, a
     fetched package or a path that leaves the repository, by the manifest or the lakefile, fails the step whether or not
     the upstream build was sent; one inside the tree doesn't, and this tree's verifier has none from outside."""
     import json
@@ -467,7 +467,7 @@ def _repo(root: Path):
 
 
 def test_a_commit_lands_as_is_only_when_merging_it_into_main_leaves_its_own_tree(tmp_path, monkeypatch):
-    """A check of a PR's own head counts for nothing unless it is the tree that lands, since `research merge` takes a check only
+    """A check of a PR's own head counts for nothing unless it is the tree that lands, since `research.merge` takes a check only
     of that tree; `--record` warns before spending a slot on one."""
     monkeypatch.setattr(CHECK, "ROOT", tmp_path)
     git, commit = _repo(tmp_path)
@@ -502,7 +502,7 @@ def test_record_warns_when_the_commit_cannot_land_as_is_and_checks_it_anyway(mon
         monkeypatch.setattr(CHECK, "landable", lambda base, can=can: can)
         assert CHECK.record(["--base", "HEAD"]) == 0 and len(launched) == 1
         out = capsys.readouterr().out
-        assert ("check: this commit can't land as is; the train's check is the merge check" in out) is said
+        assert ("check: this commit can't land as is; the queue's check is the merge check" in out) is said
         launched.clear()
 
 
@@ -1000,7 +1000,7 @@ def test_the_groups_split_the_cores_and_run_at_once(tmp_path, monkeypatch):
     monkeypatch.delenv(CHECK.SLOT.SLOT_MEM_ENV, raising=False)
     assert "--mem-gb" not in CHECK.groups(tmp_path, 16)[1][2][1]
     monkeypatch.setenv(CHECK.SLOT.SLOT_MEM_ENV, "560")
-    (pt,), (build, rust, cc), (lean,), (gate,) = CHECK.groups(tmp_path, 16)
+    (pt,), (build, rust, cc), (lean,), (gate,), (added,) = CHECK.groups(tmp_path, 16)
     assert cc[1][cc[1].index("--mem-gb") + 1] == "210", "a slot's mem=, less what pytest and Lean hold beside it, bounds circuit-check"
     assert build[0] == "flock-circuit-build" and build[1][-1].endswith("verity/protocols/proofs/flock/prover/check_build.sh")
     assert rust[0] == "flock-rust-tests" and rust[1][-2:] == [build[1][-1], "test"] and "CARGO_BUILD_JOBS=8" in rust[1]
@@ -1008,7 +1008,7 @@ def test_the_groups_split_the_cores_and_run_at_once(tmp_path, monkeypatch):
     assert cc[1][cc[1].index("--jobs") + 1] == "8" and "--cache" in cc[1]
     cold = CHECK.groups(tmp_path, 16, cache=False)
     assert lean[0] == "lean" and "--cache" not in cold[1][0][1] and "--fresh" in " ".join(cold[0][0][1])
-    assert gate[0] == "ratchet-gate" and cold[-1][0][0] == "ratchet-gate"
+    assert gate[0] == "ratchet-gate" and cold[-2][0][0] == "ratchet-gate" and added[0] == cold[-1][0][0] == "added-lines"
     assert not any(s in pt[1] for s in CHECK.AFTER_LEAN), "without the Lean steps the suites that use Lean run with the rest"
 
 
@@ -1646,11 +1646,11 @@ def test_a_check_s_passes_are_the_packages_its_audit_passed_on_the_commit_s_own_
 def test_the_audit_is_a_group_of_its_own_and_a_tree_without_the_verifier_has_no_lean_group_but_a_skip(tmp_path, monkeypatch):
     out, _ = _pinned(tmp_path, monkeypatch)
     gs = CHECK.groups(out, 8)
-    assert len(gs) == 6 and [n for n, _, _ in gs[3]] == ["lean-audit"]
+    assert len(gs) == 7 and [n for n, _, _ in gs[3]] == ["lean-audit"]
     assert not any(str(a).endswith("lean_changed.py") for g in gs for _, argv, _ in g if not isinstance(argv, str) for a in argv), \
         "no step runs the fast path's file: without a mode it runs nothing"
     monkeypatch.setattr(CHECK, "FLOCK_LEAN", tmp_path / "no-verifier")
-    assert len(CHECK.groups(out, 8)) == 4
+    assert len(CHECK.groups(out, 8)) == 5
 
 
 def test_circuit_cache_keeps_circuit_checks_reuse_alone_under_no_cache(tmp_path, monkeypatch):
@@ -1876,7 +1876,7 @@ def test_preflight_alone_only_reports_a_step_that_judges_the_node_the_check_runs
 
 
 def test_preflight_alone_runs_every_step_and_fails_if_any_does(tmp_path, monkeypatch, capsys):
-    """`check.py --preflight`, what `research merge --train --prepare` runs on a train before pushing it."""
+    """`check.py --preflight`, the preflight alone, to prepare a machine."""
     marker = tmp_path / "ran"
     touch = _py("open(__import__('sys').argv[1], 'w')", marker)
     monkeypatch.setattr(CHECK, "preflight", lambda: [("preflight-lock", "failed: no `uv` here", tmp_path), ("preflight-lints", touch, tmp_path)])
