@@ -624,8 +624,11 @@ __global__ void __launch_bounds__(256) pg_reduce_kernel(const float *__restrict_
     a.x += v.x; a.y += v.y; a.z += v.z; a.w += v.w;
   }
   const float sc = xs[xs_rows ? i / n : 0] * ws[0];
-  *reinterpret_cast<__nv_bfloat162 *>(out + i) = __floats2bfloat162_rn(a.x * sc, a.y * sc);
-  *reinterpret_cast<__nv_bfloat162 *>(out + i + 2) = __floats2bfloat162_rn(a.z * sc, a.w * sc);
+  // One 8-byte store: a sector's two 4-byte halves reach L2 as one write or two as timing falls, and two break the
+  // write rule.
+  const __nv_bfloat162 lo = __floats2bfloat162_rn(a.x * sc, a.y * sc), hi = __floats2bfloat162_rn(a.z * sc, a.w * sc);
+  *reinterpret_cast<uint2 *>(out + i) = make_uint2(*reinterpret_cast<const unsigned *>(&lo),
+                                                   *reinterpret_cast<const unsigned *>(&hi));
 }
 
 // A timing span's mark (step_spans.py, whose `account` is its reference): acc is [the stream's last mark (ns, 0:
@@ -880,7 +883,7 @@ int pg_receipts_sparse(const int *sk, uint32_t *tags, const int *used, const int
 
 int pg_reduce(const float *part, int nch, int M, int N, const float *xs, int xs_rows, const float *ws, void *out,
               cudaStream_t s) {
-  if (M < 1 || N % 4 || nch < 1) return -1;
+  if (M < 1 || N % 4 || nch < 1 || reinterpret_cast<uintptr_t>(out) % 8) return -1;
   const int mn = M * N;
   kv::pg_reduce_kernel<<<(mn / 4 + 255) / 256, 256, 0, s>>>(part, nch, N, mn, xs, xs_rows, ws,
                                                              static_cast<__nv_bfloat16 *>(out));
