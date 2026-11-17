@@ -4,7 +4,7 @@ machine, address or provider. Every memory leaf states the most its bytes are re
 gives a node's ways out: its interfaces, each with its line rate or with none where it reads none, and its storage
 path, at the rate that bounds its disks together. A node whose file states its host's DRAM and disks and an interface
 gives a log accepted for `remote` against the auditor the card files give; a file without them gives no entry. Every
-entry holds a link for each way out, none of which a certifier splits. The storage path's link and that of an interface
+entry holds a link for each way out, none of which a network attester splits. The storage path's link and that of an interface
 that reads no line rate say why (`Link.unmediated`), so neither node's site is mediated; an interface with a rate says
 nothing, so `onsite` refuses the eight-card node by `uncertified`, with a network attester standing in front of the
 node or without one, and takes the H200 node once a challenger reaches its host. An auditor's device's time base card
@@ -219,7 +219,7 @@ def test_onsite_refuses_a_nodes_own_ways_out(kind: str, certifier: tuple[str, st
 @pytest.mark.parametrize("kind", WIRED)
 def test_a_certifier_links_to_one_host_and_the_outside(kind: str) -> None:
     """The stand-in's two links are the Site's shape of a certified way out, at the interfaces' rates summed: the
-    storage path's rate is not in the sum, and no certifier is at an end of its link. A certifier with its link to
+    storage path's rate is not in the sum, and no certifier is at an end of its link. A network attester with its link to
     the outside missing, or linked to a second host, is refused by `kind`."""
     log = log_of(kind, "remote", CERTIFIER)
     cert, entry = CERTIFIER[0], log.entries[0]
@@ -238,9 +238,9 @@ def test_a_certifier_links_to_one_host_and_the_outside(kind: str) -> None:
 @pytest.mark.parametrize("kind", WIRED)
 def test_only_onsites_uncertified_refuses_a_host_with_a_bare_link_beside_its_certifier(kind: str) -> None:
     """No rule of the Site refuses a host that has a bare link out beside a certified one: `remote` accepts the entry
-    with both. `onsite` refuses it by `uncertified`. With a certifier named and the interface's bare link taken out,
+    with both. `onsite` refuses it by `uncertified`. With a network attester named and the interface's bare link taken out,
     takes the eight-card node's entry, storage path and all, since that link says why no certifier splits it: a
-    certifier on the interface does not mediate the disks, so the site is not mediated. Without the path's link too,
+    network attester on the interface does not mediate the disks, so the site is not mediated. Without the path's link too,
     it is. Either log is refused at its end by `inventory`: the auditor's figures list the ways the entry left out."""
     keys = {CHALLENGER: "dummy-key", **{CERTIFIER[0]: CERTIFIER[1]}}
     ports = [f"{HOST}/{name}" for name in S.load_node(kind)["interface"]]
@@ -317,7 +317,7 @@ def test_the_quoted_host_figures() -> None:
 
 def test_the_quoted_ways_out() -> None:
     """Each node's ways out as `ways_out` gives them, so a changed table is a changed line here: the interface,
-    which a certifier may split, with its line rate in whole bits a second or with none, then the storage path, which
+    which a network attester may split, with its line rate in whole bits a second or with none, then the storage path, which
     none may, at the one rate for the node's disks together that `leaves` returns."""
     assert S.ways_out(S.load_node("rtx-pro-6000-server-x8"), HOST) == (
         S.Way(f"{HOST}/eth0", 400_000_000_000, True), S.Way(f"{HOST}/storage", 5_584_738_461_544, False))
@@ -771,7 +771,7 @@ def _clocked(kind: str, card: dict) -> tuple[Registration, Auditor]:
 
 @pytest.mark.parametrize("kind", WIRED)
 def test_a_certifier_reads_its_hosts_clock_and_a_premise_is_no_figure(kind: str) -> None:
-    """A certifier registered in an auditor's device reads that host's clock. Where the time base's drift is a premise
+    """A network attester registered in an auditor's device reads that host's clock. Where the time base's drift is a premise
     the host states its time base and no drift, the auditor takes none for it, the log is accepted, the network attester
     reads no drift from the Site, and the premise is the host's `Account.Premised`. Marked a ceiling, the same number
     is the host's drift and the auditor's, the network attester's as the Site reads it, and the log is accepted only by
@@ -801,7 +801,7 @@ def test_a_certifier_reads_its_hosts_clock_and_a_premise_is_no_figure(kind: str)
 
 
 def test_a_certifier_at_the_site_reads_no_clock() -> None:
-    """A certifier registered with no host of the auditor's is under the site, where it reads no clock and no drift.
+    """A network attester registered with no host of the auditor's is under the site, where it reads no clock and no drift.
     A host given with no certifier, and one that is no auditor's device at the entry's site, are refused; a host the log
     already holds is not registered twice."""
     kind = WIRED[0]

@@ -13,7 +13,7 @@ directory composite.py takes as ``--piece``.
   ``DIR/pous.json``, with the commitment's binding; and the private directory (``--private``, by default the one
   ``pous.json`` names): ``run.json`` (setup's published outputs, the signed session with its coin openings, the session
   id, the trusted challenger key and the run protocol's own answer), ``opening.json`` (the hiding commitment's opening)
-  and ``digests.bin`` (the memory challenger's table of ``C*``). The case's evidence holds setup's own inputs too: the
+  and ``digests.bin`` (the memory attester's table of ``C*``). The case's evidence holds setup's own inputs too: the
   commitment to ``W``, the salt and ``C*``. ``C*`` is encoded again from the served snapshot at the kept salt
   (`reencode`), on ``--device`` as the piece encoded it (the vLLM adapter; ``libp2v1.so`` from ``--p2-lib`` on a GPU),
   and is refused unless it gives the kept commitment, root and table.
@@ -50,7 +50,7 @@ from pathlib import Path
 from typing import Any
 
 from verity.protocols.resource_accounting.memory.pous.prover import weight_store as ws
-from verity.protocols.resource_accounting.memory.pous.attester import memory_challenger as mc
+from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
 from verity.protocols.resource_accounting.memory.pous.verifier import period
 from verity.protocols.resource_accounting.memory.pous.verifier import run as R
 from verity.protocols.resource_accounting.memory.pous.verifier import wipe_party, wipe_period
@@ -233,7 +233,7 @@ def reencode(repo: str, rev: str, published: R.Setup, point: R.Point, digests: b
             _need((store.point.params, store.point.limit_ns) == (point.params, point.limit_ns),
                   f"C* is at {store.point}, not at the run's point {point} (the challenge count aside)")
             _need(store.root == published.root, "C* encoded at the kept salt has another root than setup published")
-            _need(store.digests == digests, "C* encoded at the kept salt is not the memory challenger's table")
+            _need(store.digests == digests, "C* encoded at the kept salt is not the memory attester's table")
             return commitment, published.salt, store.segments()
         finally:
             store.free()
