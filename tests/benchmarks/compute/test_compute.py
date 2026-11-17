@@ -502,17 +502,19 @@ def test_nothing_the_developers_node_reports_of_what_it_served_is_read(store, tm
     assert doc["credited_macs"] == CREDITED
 
 
-#: the bench run's own id and host stamp, which the kit's writer stamps each measurement with
+#: another run's id, which reads `RUN`'s record as a reprint, and the host stamp the kit's writer stamps each
+#: measurement with
 BENCH = "r20000101-000001-bbbb"
 STAMP = {"card": "none", "gpus": [], "driver": None, "cuda": None, "node": "test", "commit": "d" * 40}
 
 
 @pytest.fixture
 def stamped(monkeypatch):
-    """The kit's writer under a `research run` of its own, stamping with `STAMP` rather than asking the host, and with
-    no run directory, so it writes `$OUT/result.json` and never the result of a run the suite itself runs under."""
+    """The kit's writer under `RUN`, the run whose record is read, as `serve.sh`'s last step reads its own, stamping
+    with `STAMP` rather than asking the host, and with no run directory, so it writes `$OUT/result.json` and never the
+    result of a run the suite itself runs under."""
     monkeypatch.delenv("RESEARCH_RUN_DIR", raising=False)
-    monkeypatch.setenv("RESEARCH_RUN_ID", BENCH)
+    monkeypatch.setenv("RESEARCH_RUN_ID", RUN)
     monkeypatch.setattr(C.kit, "host_stamp", lambda: dict(STAMP))
 
 
@@ -551,7 +553,7 @@ def test_the_shared_result_is_the_metric_by_its_id_verified_and_error_with_capac
     store.add(RUN, a_record(tmp_path, **REAL))
     assert bench(store, "--from", RUN) == 0
     result = json.loads((out / "result.json").read_text())
-    assert (result["schema"], result["run_id"]) == ("research/result/v0.1", BENCH)
+    assert (result["schema"], result["run_id"]) == ("research/result/v0.1", RUN)
     got = {m["name"]: m for m in result["measurements"]}
     assert list(got) == [C.METRIC, C.CREDITABLE, C.OF_CREDITABLE, "verified", "capacity", "free", "epsilon_s", "error"]
     assert C.METRIC == "compute-accounting/verified-compute-share"
@@ -572,7 +574,7 @@ def test_the_shared_result_is_the_metric_by_its_id_verified_and_error_with_capac
     marks = {"error": C.DELTA_S_MARK}
     assert C.DELTA_S_MARK == "modeled"
     for m in got.values():
-        assert (m["run"], m["commit"], m["host"]) == (BENCH, STAMP["commit"], STAMP)
+        assert (m["run"], m["commit"], m["host"]) == (RUN, STAMP["commit"], STAMP)
         mark = marks.get(m["name"], "measured")
         named = {"error": ["delta_s"], "epsilon_s": ["epsilon_s"]}.get(m["name"], [])
         assert m["mark"] == mark and m["inputs"] == [mark, RUN, *named]
@@ -1040,10 +1042,11 @@ def test_a_record_directory_writes_the_same_outputs_as_the_store(store, tmp_path
 
 
 @pytest.mark.parametrize("edits, rc", [({}, 0), ({"ANSWER": to("verdict", value="reject")}, 1)])
-def test_a_made_up_record_is_written_as_made_up_never_measured(tmp_path, capsys, monkeypatch, stamped, edits, rc):
+def test_a_made_up_record_is_written_as_made_up_and_writes_no_measurement(tmp_path, capsys, monkeypatch, stamped,
+                                                                          edits, rc):
     """A made-up record goes through the kit as made up (`kit.report`'s ``made_up``), with a number or without: its
-    lines under the number, ``made_up`` true in compute.json beside what it says of itself, and each entry of
-    result.json marked modeled and made up, never measured and never an audit's."""
+    lines under the number and ``made_up`` true in compute.json beside what it says of itself, and no entry of
+    result.json, even under the run whose record it is."""
     out = tmp_path / "out"
     monkeypatch.setenv("OUT", str(out))
     assert C.main(["--from", str(a_record(tmp_path, **edits))]) == rc
@@ -1051,8 +1054,21 @@ def test_a_made_up_record_is_written_as_made_up_never_measured(tmp_path, capsys,
     assert text[3:5] == MADE_UP and text[2] == "a measurement, not an audit"
     assert (doc["made_up"], doc["made_up_says"], doc["audit"]) == (True, SAYS, False)
     assert json.loads((out / "compute.json").read_text()) == doc
-    got = json.loads((out / "result.json").read_text())["measurements"]
-    assert got and all((m["mark"], m["made_up"], m["audit"]) == ("modeled", True, False) for m in got)
+    assert not (out / "result.json").exists()
+
+
+@pytest.mark.parametrize("edits, rc", [({}, 0), ({"ANSWER": to("verdict", value="reject")}, 1)])
+def test_a_reprint_of_another_runs_record_writes_no_measurement(store, tmp_path, capsys, monkeypatch, stamped, edits,
+                                                                 rc):
+    out = tmp_path / "out"
+    monkeypatch.setenv("OUT", str(out))
+    monkeypatch.setenv("RESEARCH_RUN_ID", BENCH)
+    record = a_record(tmp_path, **REAL, **edits)
+    store.add(RUN, record)
+    for argv in (["--from", RUN], ["--from", str(record)]):
+        assert bench(store, *argv) == rc
+        assert C.kit.kit_report.REPRINT.format(name="compute", run=RUN) in capsys.readouterr().err
+        assert (out / "compute.json").is_file() and not (out / "result.json").exists()
 
 
 def of_record(argv: list[str]) -> list[str]:

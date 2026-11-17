@@ -40,11 +40,12 @@ record from there through no store (`kit.record_dir`): nothing of research's is 
 and nothing goes over the network. DIR must hold the answer and the policy below (exit 2 naming the file it lacks). The
 run printed is the `run.id` its `job.json` states and the commit its `store.conditions` state (`source.commit`,
 `-dirty` when `source.dirty`), as the store's attempt states them; without them, the directory's name and no commit.
-Nothing is withdrawn from a directory. Given a run id (`kit_report.RUN_ID`) that names no directory, it reads that
-run's record from the evidence store, through research's client. Anything else is refused (exit 2). A record whose
-`job.json` says it is made up (``made_up``, as the tests' fixture does) is reported as made up through the kit
-(`kit.report`'s ``made_up``): its line under the number, ``made_up: true``, what the record says of itself
-(``made_up_says``), and `result.json`'s entries marked modeled and made up, never measured.
+Nothing is withdrawn from a directory. Given a run id (`kit_report.RUN_ID`) that names
+no directory, it reads that run's record from the evidence store, through research's client. Anything else is refused
+(exit 2). `result.json`'s entries are written only by the run whose record it reads (`kit.report`'s ``from_run``): a
+reprint of another run writes none. A record whose `job.json` says it is made up (``made_up``, as the tests' fixture
+does) is reported as made up through the kit (`kit.report`'s ``made_up``): its line under the number, ``made_up:
+true``, and what the record says of itself (``made_up_says``), and it writes no entry of `result.json`.
 
 Either way it reads the verifier's side of the record, and nothing the developer's node reports of what it served:
 
@@ -757,13 +758,16 @@ def from_dir(record: Path, per_call: bool = False, given: Path | None = None, to
             raise Unreadable(f"the record directory {record} holds no {path} ({what})"
                              + (": it is a run's out/ directory; name the directory holding it" if moved else ""))
     try:
-        job = _held(record, JOB) or {}
-        run = (job.get("run") or {}).get("id") or record.resolve().name
+        job, run = _held(record, JOB) or {}, record_run(record)
         conds = (job.get("store") or {}).get("conditions") or {}
         commit = commit_of({"source": {"commit": conds.get("source.commit"), "dirty": conds.get("source.dirty")}})
     except (OSError, ValueError, AttributeError) as e:
         raise Unreadable(f"the record's {JOB} doesn't read as the run's ({type(e).__name__}: {e})") from e
-    return _with_split(document(record, commit, str(run), [], given), record, per_call, given, top)
+    return _with_split(document(record, commit, run, [], given), record, per_call, given, top)
+
+
+def record_run(record: Path) -> str:
+    return str(((_held(record, JOB) or {}).get("run") or {}).get("id") or record.resolve().name)
 
 
 def _with_split(doc: dict, tree: Path, per_call: bool, given: Path | None, top: int) -> dict:
@@ -886,13 +890,14 @@ def main(argv: list[str] | None = None, *, store_of: Callable[[], EvidenceStore]
         said, line = stated(getattr(e, "tree", None) or tree)
         return kit.report("compute", "\n".join(x for x in (made_up_text(up) if up else "", line) if x),
                           none | {"made_up_says": up},
-                          not_an_audit([{"name": METRIC, "unit": UNIT, "target": float(TARGET)}]), ran_with=said,
-                          accepted=False, why=str(e), made_up=bool(up))
+                          [] if up else not_an_audit([{"name": METRIC, "unit": UNIT, "target": float(TARGET)}]),
+                          ran_with=said, accepted=False, why=str(e), made_up=bool(up),
+                          from_run=record_run(tree) if tree else a.source)
     except Unreadable as e:
         print(f"compute: {e}", file=sys.stderr)
         return 2
-    return kit.report("compute", text(doc), doc, not_an_audit(measured), ran_with=said, accepted=True,
-                      made_up=bool(doc["made_up_says"]))
+    return kit.report("compute", text(doc), doc, [] if doc["made_up_says"] else not_an_audit(measured), ran_with=said,
+                      accepted=True, made_up=bool(doc["made_up_says"]), from_run=doc["run"])
 
 
 def not_an_audit(measured: list[dict]) -> list[dict]:
