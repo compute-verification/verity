@@ -42,7 +42,7 @@ for f in ${KV_FIELDS:-512 768}; do
 done
 sha256sum "$B"/*.so > "$O/libs.sha256"
 if "$PY" -c 'import pytest' 2> /dev/null; then
-  "$PY" -m pytest -q -p no:cacheprovider $WC/tests > "$O/tests.log" 2>&1 || { tail -30 "$O/tests.log"; exit 5; }
+  "$PY" -m pytest -q -p no:cacheprovider tests/$WC > "$O/tests.log" 2>&1 || { tail -30 "$O/tests.log"; exit 5; }
 fi
 KV_SCRIPT=${KV_SCRIPT:-kv_bench.py}
 # kv_bench.py is with PoUB's prover; any other KV_SCRIPT is a file of this directory
