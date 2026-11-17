@@ -6,12 +6,12 @@ public import Mathlib.Tactic
 /-!
 # The description-sized inference-only check against the unrolled one
 
-`InferenceOnlyVerifier.Desc.evaluate` (`verity/protocols/policy/inference_only/verifier/lean/InferenceOnlyVerifier/Desc.lean`) computes per inference block its size and
-its fresh input bits from one summary per Definition, where `InferenceOnlyVerifier.evaluate` walks the circuit gate by gate. What is
+`InferenceOnlyCheck.Desc.evaluate` (`verity/protocols/policy/inference_only/verifier/lean/InferenceOnlyCheck/Desc.lean`) computes per inference block its size and
+its fresh input bits from one summary per Definition, where `InferenceOnlyCheck.evaluate` walks the circuit gate by gate. What is
 proved here is the summaries' arithmetic, each step stated against the function that computes it:
 
 * `sizes_eq_count`: an inference block's size as `Desc.sizes` sums it, root node by root node, is the number of gates the expanded
-  division puts in it (each gate in its root node's inference block), which is what `InferenceOnlyVerifier.tally` counts gate by gate
+  division puts in it (each gate in its root node's inference block), which is what `InferenceOnlyCheck.tally` counts gate by gate
   (`sizes_eq_tally` in `Proofs.Properties.InferenceOnly`).
 * `affine_resolves`: the batch fast path's gate for leaf `e` of a batch output (`Piece.affine`) is the gate §7's
   resolution reaches member by member (`Flock.Program.resolveStep`: member `e / L`, its return leaf `e % L`).
@@ -21,7 +21,7 @@ proved here is the summaries' arithmetic, each step stated against the function 
 Not proved here: that `analyze`'s reads per root node are the unrolled operands outside it (what `Prog.gate` returns,
 through §7's resolution), `Fresh.ReadsExact`, proved in `Proofs.Properties.InferenceOnly.Agrees` (`Fresh.readsExact`). That
 `freshWidth` is the width of the union of the gates it is given is proved in `Width` (`freshWidthExact`). The difftest
-holds the description-sized check against the unrolled one too (`runs` `InferenceOnlyVerifier.DescDifftestMain` in the package's
+holds the description-sized check against the unrolled one too (`runs` `InferenceOnlyCheck.DescDifftestMain` in the package's
 `lean-audit.json`: 4,009 declarations).
 -/
 

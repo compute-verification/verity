@@ -4,7 +4,7 @@ public import Properties.InferenceOnly
 public import Mathlib.Tactic
 
 /-!
-# Lemmas about `InferenceOnlyVerifier`'s functions
+# Lemmas about `InferenceOnlyCheck`'s functions
 
 Each step of the check, characterized: the folds over a range in `Except`, `gateOf` and `circuitOf`, `thetaStep`,
 `ownerOf` and `divisionOf`, `tally` and `ius`, `failure`, `parse` and `evaluate`.

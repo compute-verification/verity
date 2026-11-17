@@ -19,7 +19,7 @@ also refuses the recursive inner's two: the comb (`.folded`) in a file that sets
 file (`Stmt.setupTables innerTags …`), which `partialRangesT` folds row by row since a flat file carries no template, and
 V*'s circuit text emitted outside V*'s namespace (`VStar.emitCircuitOf`), the whole unit laid out again. The fix is in the
 scan's failure message: summarize once per specialized Definition and multiply through batch members and scan
-iterations, as `InferenceOnlyVerifier.Desc` does (its docstring), so a Definition's summary serves every activation of it.
+iterations, as `InferenceOnlyCheck.Desc` does (its docstring), so a Definition's summary serves every activation of it.
 
 What may stay is listed in ``ALLOWED``, one line of reason each: the gate-by-gate references a description-sized
 verifier is difftested against, and the walks still open. An entry that no longer matches anything fails too.
