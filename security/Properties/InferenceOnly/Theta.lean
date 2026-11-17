@@ -57,7 +57,7 @@ def ProvenanceHeld (j tr : Json) : Prop :=
       strAt run "program" = some (Flock.hexOf P.sha512) ∧ ∀ t < i.theta.size, HeldAtStart j i P log run ps t
 
 /-- **θ holds what the deployment's first record registers.** On every instance `j` and trusted input `tr` that
-`InferenceOnlyVerifier.Theta.evaluate` accepts, `ProvenanceHeld j tr`. -/
+`InferenceOnlyCheck.Theta.evaluate` accepts, `ProvenanceHeld j tr`. -/
 def ThetaProvenance : Prop :=
   ∀ (j tr out : Json), Theta.evaluate j tr = .ok out → ProvenanceHeld j tr
 

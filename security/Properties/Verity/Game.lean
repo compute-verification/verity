@@ -167,9 +167,9 @@ def CaseAccepts (k : Verity.Registration.Composite) (P : BlobProtocol) (s : Sent
       Properties.Composition.DecodedAccepted x.1 x.2.1.params.toUTF8 x.2.2.commitment x.2.2.evidence
 
 /-- **The inference-only policy's case in what the prover sent composite `k`**, decoded: the three byte strings decode
-under the composition's formats, one of the subprotocols' cases is the policy's (`InferenceOnlyVerifier.Protocol.protocol`, which
+under the composition's formats, one of the subprotocols' cases is the policy's (`InferenceOnlyCheck.Protocol.protocol`, which
 reads no blobs, as one of `k`'s subprotocols), and under the parameters `k` names for it that case decodes to the
-policy's parameters `p`, its record `c` and its evidence `e`. It is `CaseAccepts k InferenceOnlyVerifier.Protocol.protocol s`
+policy's parameters `p`, its record `c` and its evidence `e`. It is `CaseAccepts k InferenceOnlyCheck.Protocol.protocol s`
 without the check's acceptance. -/
 def PolicyCase (k : Verity.Registration.Composite) (s : Sent) (p : InferenceOnlyVerifier.Protocol.Params)
     (c : InferenceOnlyVerifier.Protocol.Commitment) (e : InferenceOnlyVerifier.Protocol.Evidence) : Prop :=

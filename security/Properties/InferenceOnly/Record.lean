@@ -172,7 +172,7 @@ inductive Lands (P : Prog) (rs : Array TRange) (W : Spot.Wires.Wiring) (S : Spot
   | wire (o g a : ℕ) : Feeds P rs W S g o → Lands P rs W S g a → Lands P rs W S o a
 
 /-- `D` is the wired circuit: its gates are the Program's gates no wire covers, gate `x` the Program's `at_ x`, with
-that gate's width and kind, reading where its operands land. As in `InferenceOnlyVerifier.Properties.LaysOut`, operations and
+that gate's width and kind, reading where its operands land. As in `InferenceOnlyCheck.Properties.LaysOut`, operations and
 outputs are free. -/
 def LaysOut (P : Prog) (rs : Array TRange) (W : Spot.Wires.Wiring) (S : Spot.Wires.Summary) (D : Verity.Circuit)
     (at_ : Fin D.N → ℕ) : Prop :=

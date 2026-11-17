@@ -118,7 +118,7 @@ What it does not say:
   computes its template is not in it.
 * **That the wiring is well formed.** It reads the wires of the record's text as they stand, without
   `Spot.Wires.check`, whose templates the text does not hold.
-* **Anything of a composite whose policy check is another one.** The case is the one `InferenceOnlyVerifier.Protocol.protocol`
+* **Anything of a composite whose policy check is another one.** The case is the one `InferenceOnlyCheck.Protocol.protocol`
   decodes (`PolicyCase`); at a composite whose list has another policy check in its place no case decodes, and the
   claim holds of every play.
 * **Anything of a record that names no wiring.** Where the record's `window.circuit` is the SHA-512 of no text

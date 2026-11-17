@@ -11,8 +11,8 @@ namespace InferenceOnlyVerifier.Properties
 open Lean (Json)
 open InferenceOnlyVerifier.Protocol (Params Commitment Evidence instanceOf trustedOf reportOf)
 
-/-- **The inference-only policy's protocol accepts only a complying verdict of the check of record.** On every case `InferenceOnlyVerifier.Protocol.check`
-accepts, `InferenceOnlyVerifier.Theta.evaluate` accepts the instance and trusted input the case gives with a verdict `out` that
+/-- **The inference-only policy's protocol accepts only a complying verdict of the check of record.** On every case `InferenceOnlyCheck.Protocol.check`
+accepts, `InferenceOnlyCheck.Theta.evaluate` accepts the instance and trusted input the case gives with a verdict `out` that
 the policy check gives on the instance too, whose `complies` is `true` and whose report is the profile. -/
 def ProtocolAccepts : Prop :=
   ∀ (p : Params) (c : Commitment) (e : Evidence) (pub : Unit) (prof : Json),

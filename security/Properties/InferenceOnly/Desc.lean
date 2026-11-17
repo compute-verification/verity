@@ -28,7 +28,7 @@ def ExpandsOwner (P : Prog) (owner owner' : Array Json) : Prop :=
   owner'.size = gates P ∧ ∀ k < owner.size, ∀ g ∈ nodeGates P k,
     (owner'[g]! = .str "input" ↔ owner[k]! = .str "input") ∧ natOf? owner'[g]! = natOf? owner[k]!
 
-/-- `j'` is the instance `j` of `InferenceOnlyVerifier.Desc.evaluate` expanded: the same program, `Γ` and `α`, with θ and the owners
+/-- `j'` is the instance `j` of `InferenceOnlyCheck.Desc.evaluate` expanded: the same program, `Γ` and `α`, with θ and the owners
 by root node expanded gate by gate. -/
 def Expands (j j' : Json) : Prop :=
   ∃ i P, Parses j i ∧ Flock.Program.decode i.program.toUTF8 = .ok P ∧ ∃ theta' owner',
@@ -40,7 +40,7 @@ def DescAgreed (j out : Json) : Prop :=
   (∃ j', Expands j j') ∧ ∀ j', Expands j j' → evaluate j' = .ok out
 
 /-- **The check at the size of the description agrees with the check gate by gate.** On every instance with a verdict of
-`InferenceOnlyVerifier.Desc.evaluate`, the verdict is `DescAgreed`. -/
+`InferenceOnlyCheck.Desc.evaluate`, the verdict is `DescAgreed`. -/
 def DescAgrees : Prop :=
   ∀ (j out : Json), Desc.evaluate j = .ok out → DescAgreed j out
 
