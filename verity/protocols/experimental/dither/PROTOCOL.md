@@ -361,7 +361,7 @@ cap, it multiplies δ_coin by up to the harmonic number H_G, ×16.8 at H200 V4.
 ### Coins
 
 The challenger issues every live coin, in each replica's one sequence of runs; under the MVP it runs on the replica's
-certifier device (see "The boundary"). Before the monitoring period it flips a random coin c for each sample and commits
+attester device (see "The boundary"). Before the monitoring period it flips a random coin c for each sample and commits
 to them in one root (see "The coin commitment"). Once the receipt a sample follows is in, it opens that sample's c against
 the root and derives the sample's coins from c and the receipt, inside the challenger,
 as `derive(c, "verity/pouw/dither/<kind>/v1", ctx)` (`verity.commitments.randomness`: SHA-512 over the domain tag, the coin and
@@ -393,10 +393,10 @@ committed, so no soundness statement takes a hiding premise on it.
 - A sample's c opens against the root, to the network attesters, only after the receipt the sample follows, and the sample's coins
   are derived from c and that receipt (see above). So the challenger can't choose a block's seeds after seeing its roots, and the prover
   can't know them before it sends the roots.
-- A multi-server replica has one sample, from the challenger on its lowest-numbered server. Each server's certifier exempts
+- A multi-server replica has one sample, from the challenger on its lowest-numbered server. Each server's attester exempts
   from k_infil only the coin frames derived from a c that opened against that root, with the receipt they name, and
   counts everything else as ingress. Each
-  certifier re-clocks the forwarded coins on its own ingress grid, with the network attesters' clocks synced under the
+  attester re-clocks the forwarded coins on its own ingress grid, with the network attesters' clocks synced under the
   one-clock rule (see "The boundary").
 
 **Seeds.** Every credited coin comes from streamed 512-bit seeds, each covering at most 512·N_max MACs, that is, at
@@ -424,10 +424,10 @@ k_exfil. Dither needs these of the challenger and the network attester:
   - **The MVP: the network attester's device is the challenger.** The device that runs the
     replica's network attester produces its live coins, so each coin is made at the boundary it enters: no path carries
     one in from outside and no key is needed for it. A multi-node replica's challenger is the network attester device of its
-    lowest-numbered server, and its coins reach the other servers' certifiers only over the auditor's private links.
+    lowest-numbered server, and its coins reach the other servers' attesters only over the auditor's private links.
   - After the MVP, a challenger on a device of its own may reach the network attester only over a private link. A keyed path
     across hosts the developer controls is open (see "Open"). A SHA-512 keystream with HMAC-SHA-512, at
-    the measured 0.86 GB/s a core, would take about 27 certifier cores for an H200 V4 replica's 11.6 GB/s and 56 for an
+    the measured 0.86 GB/s a core, would take about 27 attester cores for an H200 V4 replica's 11.6 GB/s and 56 for an
     RTX PRO 6000 V4 replica's 24.0 GB/s.
   - The challenger's side is two premises, named as in `verity/protocols/proofs/spot/verifier/README.md`:
     - `CoinsConfidential`: the named Prop `Pouw.Assumptions.CoinsConfidential` above, listed in the lock, which
@@ -439,7 +439,7 @@ k_exfil. Dither needs these of the challenger and the network attester:
     share. The replica imports only its roots: at H200 V4, E leaves 27.1 MB a check against 0.46 MB for a V4 decode
     call's activations.
 - **The exclusion is exact** (what makes `CertifierSeesImports` true). Under the MVP the sampling server's coins are made
-  on its network attester's device and are never imports there. Every other server's certifier, and any certifier whose
+  on its network attester's device and are never imports there. Every other server's attester, and any attester whose
   challenger has a device of its own, excludes them only so:
   - k_infil leaves out only a coin frame derived from a c that opened against the sampling challenger's committed root,
     with the receipt it names, and carrying its expected (period, replica, execution phase, kind, sequence number) once,
@@ -448,17 +448,17 @@ k_exfil. Dither needs these of the challenger and the network attester:
     stream's reverse traffic (acknowledgements, flow control) into k_exfil.
   - The network attester holds the committed root, the challenger's LMS public key from the configuration, and the schedule
     of expected frames and lengths. It needs each opened c only to check the frames derived from it.
-- **Each certifier re-clocks the stream.** It terminates the forwarded stream and sends it into its boundary on
+- **Each attester re-clocks the stream.** It terminates the forwarded stream and sends it into its boundary on
   its own ingress grid: fixed sizes, fixed order, no flow control from inside, and a drop is a visible failure.
   Otherwise the packets' delays and order carry uncounted bits, and V4's ε_net grows ×1.04 to ×7.3.
 - **One clock.** The network attester stamps the coins' entry into the boundary (t_b, tc_b) and every receipt and arrival
   (the operand roots, arrive_b, ansAt_b) on its own clock, which under the MVP is the challenger's too. A challenger of
-  its own would have to keep its clock within 1.03 s of the network attester's, and so does every other certifier of a
+  its own would have to keep its clock within 1.03 s of the network attester's, and so does every other attester of a
   multi-server replica against the sampling server's.
 - **Receipts are authenticated.** The challenger learns that roots are in only from the network attester's signed receipts,
   whose digests are in the coins' contexts and messages. A forged receipt would flip a check coin before the roots.
-- **A multi-node replica has one boundary**, carried by certifier-to-certifier traffic on auditor-private links under
-  `WitnessPathPrivate`, never through the developer's network, with the replica's certifiers keeping one count, each
+- **A multi-node replica has one boundary**, carried by attester-to-attester traffic on auditor-private links under
+  `WitnessPathPrivate`, never through the developer's network, with the replica's attesters keeping one count, each
   stamping its own server's ingress on its synced clock. Everything else crossing between its nodes counts.
   V4's replica is 12 H200s (1.5 nodes) or 17 RTX PRO 6000s (2.1 nodes). Counting its inter-node expert and KV traffic
   would fail honest replicas, and excluding that traffic by address would let an outside machine join as a node.
