@@ -2408,13 +2408,24 @@ PEARL_LEAN_WORK = {"credited": 5400, "credited_tiles": 40, "macs": 5600, "rho": 
 #: the window-circuit record V3c held R's circuit to, kept beside R (`S.CIRCUIT_RECORD`), which Pearl+'s period opens on
 PEARL_RECORD = b'{"name":"toy window circuit cut at its linears"}\n'
 
+#: the window's proof blocks, one stratum
+PEARL_BLOCKS = 40
 
-def _pearlplus_piece(tmp_path: Path, monkeypatch, live, case: str = "of record") -> tuple[Path, Path, str, str]:
+
+def _committed(rule: str) -> dict:
+    from verity.protocols.proofs.spot.verifier import service as SV
+
+    return SV.selection_sampling_design(SV.SamplingDesign(rule), PEARL_BLOCKS, (PEARL_BLOCKS,))
+
+
+def _pearlplus_piece(tmp_path: Path, monkeypatch, live, case: str = "of record",
+                     rule: str = "stratified-rate:1/977") -> tuple[Path, Path, str, str]:
     """Pearl+'s accepted piece as `served_pearlplus.sh` leaves it, every condition of record met unless ``case`` breaks
     one: its live session checked (`live`), the session's tree and the auditor's ledger as the gate gave them (the lane's
     own reserve in its open Pearl-C period, whose circuit is the SHA-512 of the window-circuit record beside R), its coin
-    published, Pearl+'s verdict tied to W, the window's docket R chained after W and its audit tied to W, and the
-    Lean verdict on the same run. Returns the pieces dir, SPOT dir, the compose's key pin and lane."""
+    published, Pearl+'s verdict tied to W, the window's docket R chained after W and committed under ``rule``, its audit
+    tied to W at that rule, and the Lean verdict on the same run. Returns the pieces dir, SPOT dir, the compose's key pin
+    and lane."""
     from verity.protocols.proofs.spot.verifier.challenger import remote
 
     served, verified = _pearlplus_run()
@@ -2473,9 +2484,11 @@ def _pearlplus_piece(tmp_path: Path, monkeypatch, live, case: str = "of record")
         (piece / S.PEARLPLUS_LEAN).write_text(json.dumps(lean))
     audit = tmp_path / "audit"
     (audit / S.WINDOW_REGISTRATION).parent.mkdir(parents=True)
+    committed = _committed("rate:1/1000000000" if case == "rule not R's" else rule)
     (audit / S.WINDOW_REGISTRATION).write_text(json.dumps(
-        {"format": REG.FORMAT_V2, "previous": "ab" * 64 if case == "R not after W" else PEARL_W, "registered": []}))
-    summary = {"tie": {"record": PEARL_W},
+        {"format": REG.FORMAT_V2, "previous": "ab" * 64 if case == "R not after W" else PEARL_W, "registered": [],
+         "population": PEARL_BLOCKS, "law": committed}))
+    summary = {"tie": {"record": PEARL_W}, "sampling_design": rule,
                "audit": {"rejected": {"accepted": False}, "unsaid": {}}.get(case, {"accepted": True})}
     (audit / S.AUDIT_SUMMARY).write_text(json.dumps({} if case == "audit untied" else summary))
     if case != "no circuit record":
@@ -2520,26 +2533,25 @@ def test_pearlpluss_accepted_piece_under_every_condition_of_record_is_pouws_verd
     assert rec["legs"]["pouw"]["quantity"] == {"symbol": "W_cert", "value": 5400, "unit": "work", "tiles": 40}
 
 
-@pytest.mark.parametrize("design", ["stratified-rate:1/977", "rate:1/1000000000", None])
+@pytest.mark.parametrize("design", ["stratified-rate:1/977", "rate:1/1000000000", "work-rate:1/977"])
 def test_pearlpluss_verdict_of_record_says_a_weaker_tie_where_the_tied_audit_sampled_no_stratified_rate(
         tmp_path, monkeypatch, live, design):
-    """The tied audit's rule (its summary's ``sampling_design``) decides what PoUW's accept of record covers: at a
-    stratified rate every table W registers has a sampled reader, and the row says nothing more; at any other rule, or none
-    stated, the row's profile and the record's reason say the weaker tie with the rule, so nothing reads it as the tied
+    """The tied audit's rule, its summary's ``sampling_design`` held to the sampling design R commits, decides what PoUW's
+    accept of record covers: at a stratified rate, a stratum of each reader template, which the launch's preflight admits
+    under the tie only where each table's readers are templates of their own, the row says nothing more; at any other rule
+    the row's profile and the record's reason say the weaker tie with the rule, so nothing reads it as the tied
     guarantee."""
     monkeypatch.setenv("RESEARCH_RUN_ID", "r1")
     monkeypatch.setattr(S.socket, "gethostname", lambda: "vy-dc-h200")
     monkeypatch.setattr(S, "spot_row", lambda _audit_dir, _run=None: _accepted())
-    pieces, audit, pin, lane = _pearlplus_piece(tmp_path, monkeypatch, live)
-    summary = {"tie": {"record": PEARL_W}, "audit": {"accepted": True}, **({"sampling_design": design} if design else {})}
-    (audit / S.AUDIT_SUMMARY).write_text(json.dumps(summary))
+    pieces, audit, pin, lane = _pearlplus_piece(tmp_path, monkeypatch, live, rule=design)
     row = S.piece_row("work", pieces, spot=audit, key_sha512=pin, lane=lane)
-    weaker = None if design and design.startswith("stratified-rate:") else S.WEAKER_TIE.format(design=design)
+    weaker = None if design.startswith("stratified-rate:") else S.WEAKER_TIE.format(design=design)
     assert row["verdict"] == "accept" and row["answer"]["profile"].get("weaker_tie") == weaker, row
     reason = S.said({"work": row}, {"work": ("vy-dc-h200", "real")}, "vy-dc-h200")
     said = f"{S.PEARLPLUS_SAID}, {weaker}" if weaker else S.PEARLPLUS_SAID
     assert reason.startswith("PoUW: accept") and reason.endswith(said), reason
-    assert weaker is None or f"sampled {design}, not a stratified rate" in weaker
+    assert weaker is None or f"sampled {design}, not a stratified rate over a cut whose tables' readers" in weaker
 
 
 def test_pearlpluss_verdict_of_record_keeps_a_class_held_runs_give_up_and_not_its_exact_credit(tmp_path, monkeypatch, live):
@@ -2611,6 +2623,9 @@ def test_the_record_reads_pearlpluss_tie_from_the_window_tied_to_w_under_window_
                  "nothing shows the window SPOT audited reads the roots Pearl+ credits"),
     ("unsaid", f"the window's records audit tied to W didn't accept ({S.AUDIT_SUMMARY}'s audit.accepted is None), so "
                "nothing shows the window SPOT audited reads the roots Pearl+ credits"),
+    ("rule not R's", f"the window's records audit states the rule 'stratified-rate:1/977', not the one its registration R "
+                     f"commits ({_committed('rate:1/1000000000')!r} over {PEARL_BLOCKS} proof blocks): what Pearl+'s tie "
+                     "covers is read from R's rule"),
     ("no circuit record", f"no window-circuit record V3c held R's circuit to ({S.CIRCUIT_RECORD} beside R: "
                           "FileNotFoundError), so nothing holds period p-pc's circuit to the window served"),
     ("period on another circuit", f"period p-pc committed circuit {hashlib.sha512(b'another circuit').hexdigest()[:16]}"
@@ -3376,6 +3391,9 @@ def test_block_counts_publishes_the_judgment_against_the_policy_and_keeps_the_co
 
 
 W63K4 = "8,32,4,4,16"
+#: the toy tree's linear_cut.py, as far as the tie's preflight reads it: a template a call, else a template a shape
+CUT_BY_CALL = '@composite("LinearARow", 1, ["K", "R", "ROUND", "CALL"],\n'
+CUT_BY_SHAPE = '@composite("LinearARow", 3, ["K", "R"],\n'
 #: V3c's default rules (`served_verdicts.sh`'s V3C_LAW), which its window-commit and its audit both take: a rate, and
 #: under H1_TIE a stratified rate
 RULE, TIED_RULE = "rate:1/3481648", "stratified-rate:1/3481648"
@@ -3490,6 +3508,10 @@ def _v3c(tmp_path: Path, args: tuple[str, ...] = ("v3c",), *, prove_path: str = 
     (tree / "benchmarks" / "prove_path" / "prove_path.py").write_text(prove_path)
     (tree / "benchmarks" / "prove_path" / "records_audit.py").write_text(records_audit)
     _one_stage(tree, linked=False)
+    cut = tree / "adapters" / "vllm" / "verity_vllm" / "definitions" / "registry" / "linear_cut.py"
+    cut.parent.mkdir(parents=True, exist_ok=True)
+    if not cut.exists():
+        cut.write_text(CUT_BY_CALL)
     (tree / "verity" / "protocols" / "proofs" / "flock" / "prover" / "pod" / "60-circuit.sh").write_text("exit 0\n")
     for f in (d / "advice" / "w7" / "private" / "advice.bin", tmp_path / "row" / "manifest.json",
               tmp_path / "row" / "build_summary.json", tmp_path / "h.so", tmp_path / "n.so"):
@@ -3745,8 +3767,8 @@ def _audited(tmp_path: Path, flags: tuple[str, ...] = ("--sampling-design", "--t
 def test_under_h1_tie_v3cs_audit_is_tied_to_h1s_w_at_a_stratum_of_each_tables_readers_on_a_port_a_sampled_block(
         tmp_path, tied, extra, ports):
     """Under H1_TIE the tables the window circuit reads are H1's W's, so V3c's audit is tied to W (records_audit's --tie,
-    with H1's names' prefix h1/) at a stratified rate, a stratum of each table's readers, so every table has a sampled
-    reader, on as many ports as R's sample has proof blocks (its strata's k summed) unless V3C_PORTS says; an untied
+    with H1's names' prefix h1/) at a stratified rate, a stratum of each reader template, so a table whose readers are
+    templates of its own has a sampled reader, on as many ports as R's sample has proof blocks (its strata's k summed) unless V3C_PORTS says; an untied
     window's audit is at the default rate on 16 ports, the rule its window-commit committed the window under."""
     if tied:
         _tied_commit(tmp_path, "same")
@@ -4597,15 +4619,52 @@ def test_the_preflight_refuses_pearlplus_tie_without_a_rule_or_at_a_rule_other_t
     assert (rc, lines, order) == (3, [_no_reader(RULE).replace("H1_TIE", "PEARLPLUS_TIE").replace("H1's", "Pearl+'s")], [])
 
 
-@pytest.mark.parametrize("stated, uniform", [("stratified-rate:1/977", None), ("rate:1/1000000000", "1")])
-def test_under_pearlplus_tie_v3c_goes_on_at_the_stratified_rate_its_launch_states(tmp_path, stated, uniform):
-    """A launch under PEARLPLUS_TIE that states a stratified rate goes on, and V3c's audit states that rate to its stream;
-    so does a uniform rate under PEARLPLUS_TIE_UNIFORM=1, on the default ports."""
+@pytest.mark.parametrize("stated, uniform, cut", [("stratified-rate:1/977", None, CUT_BY_CALL),
+                                                  ("stratified-rate:1/977", "1", CUT_BY_CALL),
+                                                  ("rate:1/1000000000", "1", CUT_BY_CALL),
+                                                  ("rate:1/1000000000", "1", CUT_BY_SHAPE)])
+def test_under_pearlplus_tie_v3c_goes_on_at_the_stratified_rate_its_launch_states(tmp_path, stated, uniform, cut):
+    """A launch under PEARLPLUS_TIE that states a stratified rate goes on, and V3c's audit states that rate to its stream
+    on as many ports as R's strata sample, the opt-in set or not; so does a uniform rate under PEARLPLUS_TIE_UNIFORM=1, on
+    the default ports, whether the cut reads a linear's calls with a template a call or a template a shape."""
     _pearl_tied_commit(tmp_path)
+    _toy_cut(tmp_path, cut)
     rc, lines, order, _limits = _v3c(tmp_path, **{**PEARL_TIED, "V3C_LAW": stated, "PEARLPLUS_TIE_UNIFORM": uniform})
     assert rc == 0 and "audit" in order and not any(x.startswith("PREFLIGHT") for x in lines), (lines, order)
-    assert _audited(tmp_path, ("--sampling-design",)) == {"--sampling-design": stated}
-    assert not uniform or _audited(tmp_path, ("--ports",)) == {"--ports": "16"}
+    assert _audited(tmp_path, ("--sampling-design", "--ports")) == {
+        "--sampling-design": stated, "--ports": "16" if stated.startswith("rate:") else "3"}
+
+
+def _toy_cut(tmp_path: Path, text: str) -> None:
+    cut = tmp_path / "tree" / "adapters" / "vllm" / "verity_vllm" / "definitions" / "registry" / "linear_cut.py"
+    cut.parent.mkdir(parents=True, exist_ok=True)
+    cut.write_text(text)
+
+
+BY_SHAPE = ("PREFLIGHT: under PEARLPLUS_TIE this tree's cut reads every call of a linear shape with one template (its "
+            "LinearARow takes no ROUND and CALL), so a stratified rate's stratum is a shape and its sample can leave a "
+            "table Pearl+'s W registers with no sampled reader, and no rule that samples a stratum of each table's readers "
+            "is written yet: set PEARLPLUS_TIE_UNIFORM=1 with a uniform rate (rate:NUM/DEN), whose record states its "
+            "weaker tie")
+
+
+@pytest.mark.parametrize("args", [(), ("v3c",)])
+@pytest.mark.parametrize("uniform", [None, "1"])
+def test_the_preflight_refuses_pearlplus_tie_at_a_stratified_rate_where_the_cut_reads_a_template_a_shape(
+        tmp_path, args, uniform):
+    """Where the tree's cut reads every call of a linear shape with one template, a stratified rate's stratum is a shape,
+    so under PEARLPLUS_TIE it is refused before anything runs, the opt-in or not, naming the uniform opt-in and the
+    missing rule that samples by table."""
+    _toy_cut(tmp_path, CUT_BY_SHAPE)
+    rc, lines, order, _limits = _v3c(tmp_path, args, **{**PEARL_TIED, "PEARLPLUS_TIE_UNIFORM": uniform})
+    assert (rc, lines, order) == (3, [BY_SHAPE], [])
+
+
+def test_an_untied_launch_goes_on_where_the_cut_reads_a_template_a_shape(tmp_path):
+    """The cut's templates matter to the tie alone: an untied launch at its default rule goes on as before."""
+    _toy_cut(tmp_path, CUT_BY_SHAPE)
+    rc, lines, order, _limits = _v3c(tmp_path)
+    assert rc == 0 and "audit" in order and not any(x.startswith("PREFLIGHT") for x in lines), (lines, order)
 
 
 @pytest.mark.parametrize("uniform", [None, "1"])
@@ -4877,8 +4936,10 @@ NO_TIE = ("PREFLIGHT: under H1_TIE V3c's audit is tied to H1's W, whose tables t
 
 
 def _no_reader(sampling_design: str) -> str:
-    return ("PREFLIGHT: under H1_TIE every table H1's W registers needs a sampled reader, which only a stratified rate "
-            f"(stratified-rate:NUM/DEN), a stratum of each table's readers, gives: V3C_LAW is {_published(sampling_design)}")
+    return ("PREFLIGHT: under H1_TIE every table H1's W registers needs a sampled reader, and a stratified rate "
+            "(stratified-rate:NUM/DEN), the one rule the tie takes without PEARLPLUS_TIE_UNIFORM, samples a stratum of each "
+            "reader template, which reaches every table only where each table's readers are templates of their own: "
+            f"V3C_LAW is {_published(sampling_design)}")
 
 
 @pytest.mark.parametrize("args, extra, records_audit, line", [
