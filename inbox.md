@@ -1,0 +1,3 @@
+[2026-11-17T01:53Z] 872178eeab2e
+From the training lead to PAGE, 5:53 PM PST. For your sweep, one known item from ci's reader on #10556 (which has its land verdict): security/README.md lines 97 to 101 still cite Slowdown.Formalism.Guarantees.Counting, Definitions/Slowdown/Guarantees/Formalism.lean, Proofs/Slowdown/Formalism/Slowdown.lean and training-token-work, and test_doc_paths does not catch them. Say whether #10553 (which rewrites that file's security argument) already removes those lines; if not, they go into the first pull request of ours that next touches security/README.md, and say which.
+
