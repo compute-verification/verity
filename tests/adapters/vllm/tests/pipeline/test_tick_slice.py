@@ -1,5 +1,5 @@
 """The compile slice under the certified tick (`tick_slice.TickSlice_v1`): on the toy window, sync and async, the
-honest unit is accepted, its steps are the replay's under the tick and its T `Replay.clock`; the circuit agrees with the
+honest proof block is accepted, its steps are the replay's under the tick and its T `Replay.clock`; the circuit agrees with the
 reference on every case. An arrival's bucket changed in ``cert`` is refused by ``rows``, and accepted with the prover's
 own rows in ``srv``, which only the b‖c of ``cert`` and ``srv`` refuse; a T other than the chain's is refused by
 ``load`` at the window's first state row and by ``steps`` at a later one; a decision in ``adv`` is refused by ``load``."""

@@ -182,7 +182,7 @@ def scan(S, sl: Slice, cert: Sequence[RC.Arrival] | None = None, *, clock: dict[
 
 
 def check(S, rows: dict) -> dict[str, bool | None]:
-    """The circuit's flags on a unit's rows by its pieces' references, CompileSlice_v7's (`compile_slice.check`) with
+    """The circuit's flags on a proof block's rows by its pieces' references, CompileSlice_v7's (`compile_slice.check`) with
     `advice_code.tick_step.reference` for each active step and ``load`` refused at a count other than 0."""
     Sc = CS.chain(S)
     F = CS.fields(S, CODE)
@@ -220,7 +220,7 @@ def check(S, rows: dict) -> dict[str, bool | None]:
 
 def case(S, sl: Slice, book: dict, *, cert: Sequence[RC.Arrival] | None = None, clock: dict[int, int] | None = None,
          served: Sequence | None = None, charge: int | None = None) -> CS.Case:
-    """A unit's rows for the prover's run of `sl` (`scan`'s, with `cert` and `clock`) under the registered `book`, from
+    """A proof block's rows for the prover's run of `sl` (`scan`'s, with `cert` and `clock`) under the registered `book`, from
     its priors, and `check`'s verdict on them: `served` the window's step rows it puts in ``srv`` (default the run's
     own), `charge` ``pub``'s (default the length terms' charge)."""
     Sc = CS.chain(S)
@@ -248,7 +248,7 @@ def case(S, sl: Slice, book: dict, *, cert: Sequence[RC.Arrival] | None = None, 
 
 
 def evaluate(st: dict, cases: Sequence[CS.Case]) -> list[int]:
-    """The unit's verdict word on each case, in one evaluation."""
+    """The proof block's verdict word on each case, in one evaluation."""
     args = [[c.rows[r] for c in cases] for r in CS.ROWS]
     out = evaluate_bits(unit(**st), *args).reshape(len(cases), -1).tolist()
     return [sum(int(b) << j for j, b in enumerate(o)) for o in out]
