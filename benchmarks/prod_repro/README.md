@@ -49,10 +49,12 @@ research run --on NODE --source . --cwd source -- bash benchmarks/prod_repro/run
   --again none --load agentic=4 --pass-prompts agentic=4 --lifetimes 4 --leave-out 1 --reps 2 --replay agentic@4
 ~~~
 
+The cost of `prod-all-on` over `prod` (`--ours prod-all-on`: the serving cost benchmark's README, "Everything on at the
+recipe's line") is a point of the cost's id too, and its `parts` say in words what it has on and what it leaves off.
 Each point names its `model` (the checkpoint, `repo@revision`), its `hardware` (the cards it was served on) and its
-`member`, the model, the card and the arm (the cost's over its stock), which tells its line from the id's other
-models' and arms'. A serve with no draft, such as the 1B's, keeps no draft, so its kept count is 0 bits and its
-advice is the arrivals'.
+`member`, the model, the card and the arm (the cost's over its stock), which tells its line from the id's other models'
+and arms'. A serve with no draft, such as the 1B's, keeps no draft, so its kept count is 0 bits and its advice is the
+arrivals'.
 
 **The method a serving cost is measured by.** Four arms, `prod`, `prod-again`, `prod-seeded` and `prod-record`, each
 served in nine server lifetimes in that alternating order, each lifetime opening with a 20-second warm-up pass that
@@ -84,10 +86,12 @@ one card (`TOPK_CUT.jsonl`, the timing of `benchmarks/dsa_topk`'s passes at the 
 - **What it gives:** the layer's cost in percent of the reference's counted serving time, beside the job's own measured
   layer (`prod_repro.json`'s `layers`) and the difference in points. Beside the measured layer is the same layer with
   each pass's seconds adjusted for its engine steps (each pass paired with the reference's of the same lifetime and
-  rep, at the slope of ln seconds on ln steps within each arm), marked modelled. The point under
-  `vllm/prod-serving-cost-glm53` (member `…-priced`, `mark` `modeled`, `--result` under a run) is that layer, plus the
-  measured prefill term where prefill was not priced, plus the job's measured `prod-trace` over `prod`. It names the
-  job's run as the run that tests it, and each measured term in its inputs.
+  rep, at the slope of ln seconds on ln steps within each arm), marked modelled. The point (`price`, which the serving
+  cost's door calls too) is that layer, plus the measured prefill term where prefill was not priced, plus the job's
+  measured `prod-trace` over `prod`, under `benchmarks/serving-cost-priced` with the member model, card, then arm
+  (`glm-5.3-h200-prod-record`), `mark` `modeled`. It names the job's run as the run that tests it, and each measured term in its
+  inputs. The reader writes it to `priced.json` alone; `verity bench serving_cost price` stores it, and nothing puts a
+  priced point on the measured line `vllm/prod-serving-cost-glm53`.
 - **When it writes no point:** where the counters hold no failed rows, or where the job measured no layer below.
 - **What it doesn't price:** the host's time, and a failed row's own keys (each failed call is priced at its step's
   longest row).

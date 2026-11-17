@@ -69,7 +69,20 @@ def test_busy_cycle_counts_only_cycles_with_a_request_in_the_engine():
             {"kind": "step", "t": 6.0, "finished": {}}, {"kind": "step", "t": 6.4, "finished": {"b": {}}}]
     c = S.busy_cycle(recs)
     assert c["cycles"] == 2 and c["idle"] == 1
-    assert c["mean_us"] == pytest.approx(0.3e6)
+    assert c["mean_us"] == pytest.approx(0.3e6) and c["per_token"] is None
+
+
+def test_busy_cycle_fits_a_fixed_amount_and_one_for_each_non_draft_token_a_row_past_its_prompt_being_one():
+    rows = [[["a", 0, 4]], [["a", 4, 6]], [["a", 5, 6], ["b", 0, 4]], [["a", 6, 6], ["b", 4, 6]], [["a", 7, 6], ["b", 0, 9]]]
+    recs = [{"kind": "header", "config": {"speculative": {"num_speculative_tokens": 5}}},
+            {"kind": "arrive", "request": "a", "prompt_len": 4}, {"kind": "arrive", "request": "b", "prompt_len": 4}]
+    t = 0.0
+    for r in rows:
+        t += 0.006 + 20e-6 * sum(1 if s >= 4 else n for _, s, n in r)
+        recs.append({"kind": "step", "t": t, "rows": r, "finished": {}})
+    assert S.busy_cycle(recs)["per_token"] == {"base_us": 6000, "token_ns": 20000}
+    recs[0] = {"kind": "header", "config": {}}
+    assert S.busy_cycle(recs)["per_token"] != {"base_us": 6000, "token_ns": 20000}
 
 
 def test_window_trace_keeps_the_header_and_the_load():
@@ -304,6 +317,51 @@ def test_the_two_stage_tick_arm_is_the_launch_line_with_the_tick_on(tmp_path: Pa
         ("the step record", []), ("the boundary commitment", []), ("the history tables", [])]
     with pytest.raises(SystemExit, match="two-stage-tick needs the corpus client"):
         S.main(["passes", "--loads", "chat", "--arms", "two-stage-tick", "--model-id", "glm53"])
+
+
+def test_prod_all_on_is_prod_record_with_the_tick_and_the_edge_snapshot_and_says_what_it_leaves_off():
+    """The arm is ``prod-record`` with the tick and the edge snapshot on, so of GLM-5.3's target it leaves off the parts
+    of the commitment of values alone; its words name what it leaves off and how its edge period errs from the cost
+    model's. vLLM's client sends it, and no tick arm whose engine keeps its prefix cache across passes."""
+    glm = S.MODELS["glm53"]
+    assert S.stock_of("prod-all-on") == "prod" and S.ARMS["prod-all-on"].parent == "prod-record"
+    assert S.changes_of("prod-all-on") == [*S.changes_of("prod-record"), "admission on the certified tick",
+                                           "the edge snapshot"]
+    assert [(x["name"], x["off"]) for x in S.target_parts(glm, "prod-all-on")] == [
+        ("the certified tick", []), ("the canonical top-k", []), ("the snapshot bundle", []), ("the step record", []),
+        ("the boundary commitment", ["the two-stage boundary commitment"]), ("the history tables", ["the history tables"])]
+    assert S.not_in_target(glm, "prod-all-on") == ["the served ids"]
+    assert S.parts_of("prod-all-on")[3:] == [
+        "admission on the certified tick: on", "the edge snapshot: on", "the network attester's egress pacing: off",
+        "useful-work kernels: off", "commitment of values: off"]
+    assert S.parts_of("prod-all-on", {"every_s": 1200.0})[4] == (
+        "the edge snapshot: on, every 1200 s against the cost model's 600 s, so its cost errs low by 2×")
+    assert S.parts_of("prod-record") == ["the step record: on", "the served ids: on", "the canonical top-k: on"]
+    assert S.corpus_only(S.ARMS["prod-all-on"]) is None
+    for m in (glm, S.MODELS["glm53-standin"]):
+        line = [S.server_argv(S.ARMS[a], m, Path("/ck"), 8000, max_model_len=m.published_context)
+                for a in ("prod-record", "prod-all-on")]
+        assert line[1] == [*line[0], "--middleware", "verity_vllm.pipeline.tick_plugin.TickFeed"]
+    with pytest.raises(SystemExit, match="--arms: tick needs the corpus client, not vLLM's: .*plugin idle_reset"):
+        S.main(["passes", "--loads", "chat", "--arms", "tick", "--model-id", "glm53"])
+
+
+def test_prod_tick_is_prod_all_ons_tick_alone_and_takes_a_rule_other_than_the_registered_one(tmp_path):
+    """``prod-tick`` serves the tick of ``prod-all-on`` on ``prod``, recording nothing; a rule named apart from τ reaches
+    the gate through VERITY_TICK, and none leaves the registered rule's keys out of it."""
+    glm = S.MODELS["glm53"]
+    assert S.changes_of("prod-tick") == ["admission on the certified tick"] and S.corpus_only(S.ARMS["prod-tick"]) is None
+    assert S.sends_seed(S.ARMS["prod-tick"])
+    assert "refuses a sampled request without a seed" in S.corpus_only(replace(S.ARMS["prod-tick"], seeds=False))
+    line = [S.server_argv(S.ARMS[a], glm, Path("/ck"), 8000, max_model_len=glm.published_context)
+            for a in ("prod", "prod-tick")]
+    assert line[1] == [*line[0], "--middleware", "verity_vllm.pipeline.tick_plugin.TickFeed"]
+    tick = {"bucket_us": 100_000, "sat_us": 7_761, "free_us": 9_485}
+    plain = json.loads(S.server_env(S.ARMS["prod-tick"], tmp_path, tmp_path, tick, 1.0, 1.0)["VERITY_TICK"])
+    assert "token_ns" not in plain and "catch_up" not in plain
+    ruled = S.server_env(S.ARMS["prod-tick"], tmp_path, tmp_path, tick | {"rule": {"token_ns": 18_500, "catch_up": "marks"}},
+                         1.0, 1.0)
+    assert json.loads(ruled["VERITY_TICK"]) == plain | {"token_ns": 18_500, "catch_up": "marks"}
 
 
 def test_the_boundary_rows_arm_keeps_the_prefix_cache_on_and_hands_the_plugin_its_object(tmp_path: Path):
@@ -613,7 +671,7 @@ def test_the_published_arm_starts_the_server_as_the_models_recipe_does(tmp_path,
     for name, m in S.MODELS.items():
         assert bool(m.published) == (m.published_context is not None) == (set(m.published_tokenizer) == set(S.FRONT_ENDS)), name
     assert [n for n, a in S.ARMS.items() if a.published] == ["published", "prod", "prod-again", "prod-record", "prod-seeded",
-                                                             "prod-trace", "prod-record-bisect"]
+                                                             "prod-trace", "prod-tick", "prod-all-on", "prod-record-bisect"]
     assert S.ARMS["published"].parent == "compiled" and S.changes_of("published") == []
 
 
