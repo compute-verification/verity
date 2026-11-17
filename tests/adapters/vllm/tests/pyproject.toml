@@ -126,11 +126,11 @@ parallel = true
 # verity/protocols/resource_accounting/compute/pouw/prover/kernels/edited_gemm/fattn_ref.py is the int8 attention tests' oracle (tests/engine), beside benchmarks/ppl's linears;
 # tests/engine/int8_attention_sass.py reads the int8 attention kernels' SASS with the PoUW SASS gate's nvdisasm parser
 # (verity/protocols/resource_accounting/compute/pouw/prover/sass_gate.py)
-# a worker's peak grows with its share of the suite, since what its tests leave held isn't returned: 6.2 GB on 14 workers, 12 GB on
-# 8 (test_codec's alias test takes 6.3 GB over the 5.6 GB held before it), 15.5 GB on 5. `--mem-gb`, or a job's memory cgroup,
-# divides by this, so a 16 GB job runs the suite on at most two workers. tools/suite_parts.py runs it as 8 parts at once, each on
-# its job's CPUs (a sixth on 4 workers: 8.5, 6.2, 6.0 and 3.5 GB)
-worker_gb = 8
+# a worker's peak is that of the heaviest tests it runs (the GLM-5.3 fold's among them), on however many workers, while most
+# workers stay near typical_worker_gb: `--mem-gb`, or a job's memory cgroup, books one worker at worker_gb and each other at
+# typical_worker_gb (suites.py's `workers_gb`)
+worker_gb = 13
+typical_worker_gb = 7
 # the full suite takes about 10,000 s on 5 workers, past suites.py's SUITE_TIMEOUT_S; `--quick` leaves out the tests over 5 s
 # (their `slow` marks). On fewer workers the bound stretches in proportion (suites.py's `bound`): a whole check on an 11-core
 # slot runs it on 2 or 3
