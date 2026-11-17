@@ -470,9 +470,10 @@ def cmd_record(a) -> int:
     cores = a.cores.split(",")
     if len(cores) < max(provers):
         raise SystemExit(f"--cores names {len(cores)} core range(s) and --provers needs {max(provers)}, one a prover")
-    out = Path(os.environ.get("RESEARCH_RUN_DIR") or "pt-record") / "out"
-    points = REC.run(P.repository_root(), out, a.workload, a.B, provers, cores, kit.host_stamp().get("node") or "local")
-    return REC.write(out, a.workload, a.B, points)
+    w = kit.writer("pt-record")
+    out = Path(w.out) / "out"
+    points = REC.run(P.repository_root(), out, a.workload, a.B, provers, cores, w.stamp.get("node") or "local", w.run)
+    return REC.write(w, out, a.workload, a.B, points)
 
 
 def main(argv: list[str] | None = None) -> int:

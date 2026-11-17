@@ -1,6 +1,8 @@
 import json
 from pathlib import Path
 
+from verity_bench import kit
+
 from verity_proof_throughput import record as REC
 
 
@@ -57,17 +59,17 @@ def stand_in(seen, rates):
 def test_record_runs_one_prover_then_two_at_once_each_verified_and_writes_a_reading_a_prover_count(tmp_path):
     seen = []
     out = tmp_path / "out"
-    points = REC.run(tmp_path, out, "bf16-k6144", 64, [2, 1], ["32-47", "80-95"], "node-a", start=stand_in(seen, [4.0, 3.0, 5.0]))
+    points = REC.run(tmp_path, out, "bf16-k6144", 64, [2, 1], ["32-47", "80-95"], "node-a", "r1", start=stand_in(seen, [4.0, 3.0, 5.0]))
     assert [s for s, _ in seen] == ["job.sh", "verify.sh", "job.sh", "job.sh", "verify.sh", "verify.sh"]
     jobs = [e for s, e in seen if s == "job.sh"]
     assert [e["LEASE_CORES"] for e in jobs] == ["32-47", "32-47", "80-95"]
     assert len({e["SESSIONS_LOCK"] for e in jobs[1:]}) == 2 and all(e["B"] == "64" for e in jobs)
-    assert all(e["BUNDLE"].startswith("art:") for s, e in seen if s == "verify.sh")
-    assert REC.write(out, "bf16-k6144", 64, points) == 0
-    doc = json.loads((out / "result.json").read_text())
+    assert all(e["BUNDLE"].startswith("art:") and e["PROVE_RUN"] == "r1" for s, e in seen if s == "verify.sh")
+    assert REC.write(kit.writer(tmp_path), out, "bf16-k6144", 64, points) == 0
+    doc = json.loads((tmp_path / "result.json").read_text())
     got = {m["member"].rsplit("-", 2)[-2]: m["value"] for m in doc["measurements"] if m["name"] == REC.METRIC}
     assert got == {"1": 4.0, "2": 8.0} and doc["validation"]["status"] == "passed"
-    assert all(f"{p['dir']}/verifier/result.json" in doc["validation"]["evidence"] for g in points.values() for p in g)
+    assert all(f"out/{p['dir']}/verifier/result.json" in doc["validation"]["evidence"] for g in points.values() for p in g)
 
 
 def test_a_prover_that_fails_leaves_its_count_without_a_value_and_the_run_failed(tmp_path):
@@ -75,7 +77,7 @@ def test_a_prover_that_fails_leaves_its_count_without_a_value_and_the_run_failed
         Path(env["OUT"]).mkdir(parents=True, exist_ok=True)
         return Done(1)
     out = tmp_path / "out"
-    points = REC.run(tmp_path, out, "bf16-k6144", 64, [1], ["32-47"], "node-a", start=start)
-    assert REC.write(out, "bf16-k6144", 64, points) == 1
-    doc = json.loads((out / "result.json").read_text())
+    points = REC.run(tmp_path, out, "bf16-k6144", 64, [1], ["32-47"], "node-a", "r1", start=start)
+    assert REC.write(kit.writer(tmp_path), out, "bf16-k6144", 64, points) == 1
+    doc = json.loads((tmp_path / "result.json").read_text())
     assert doc["measurements"][0]["value"] is None and doc["validation"]["status"] == "failed"

@@ -52,7 +52,7 @@ def _sh(root: Path, script: str, env: dict[str, str], log: Path) -> subprocess.P
                             stdout=log.open("w"), stderr=subprocess.STDOUT)
 
 
-def run(root: Path, out: Path, workload: str, B: int, provers: Sequence[int], cores: Sequence[str], node: str,
+def run(root: Path, out: Path, workload: str, B: int, provers: Sequence[int], cores: Sequence[str], node: str, prove_run: str,
         start: Callable[[Path, str, dict[str, str], Path], subprocess.Popen] = _sh) -> dict[int, list[dict]]:
     points: dict[int, list[dict]] = {}
     for n in sorted(provers):
@@ -70,7 +70,7 @@ def run(root: Path, out: Path, workload: str, B: int, provers: Sequence[int], co
             if p["prover_rc"] == 0 and bundle:
                 v = d / "verifier"
                 env = {"BUNDLE": bundle if bundle.startswith("art:") else f"art:{bundle}", "OUT": str(v),
-                       "RESULT": str(v / "result.json"), "PROVE_RUN": os.environ.get("RESEARCH_RUN_ID", "local")}
+                       "RESULT": str(v / "result.json"), "PROVE_RUN": prove_run}
                 p["verifier_rc"] = start(root, "verify.sh", env, v / "verify.out").wait()
                 if (v / "result.json").exists():
                     p["result"] = json.loads((v / "result.json").read_text())
@@ -79,11 +79,7 @@ def run(root: Path, out: Path, workload: str, B: int, provers: Sequence[int], co
     return points
 
 
-def write(out: Path, workload: str, B: int, points: dict[int, list[dict]]) -> int:
-    from verity_bench import kit
-
-    w = kit.writer(out)
-
+def write(w, out: Path, workload: str, B: int, points: dict[int, list[dict]]) -> int:
     def rel(p: dict) -> str:
         return str((out / p["dir"] / "verifier" / "result.json").resolve().relative_to(Path(w.out).resolve()))
 
