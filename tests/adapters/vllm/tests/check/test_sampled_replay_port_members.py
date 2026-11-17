@@ -7,11 +7,11 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-from verity_vllm.definitions.numerics.deepgemm_rows import deepgemm_linear
-from verity_vllm.definitions.numerics.glm53_rows import fp8_group_quant_ue8m0
 
 from verity_vllm.check.replay import evaluate as EV
 from verity_vllm.check.replay import opening as OP
+from verity_vllm.definitions.numerics.deepgemm_rows import deepgemm_linear
+from verity_vllm.definitions.numerics.glm53_rows import fp8_group_quant_ue8m0
 
 K, N, ROW, ROWS = 256, 128, 1, 3
 OP_PATH = "model.layers.0.mlp.down_proj"

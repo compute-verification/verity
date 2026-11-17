@@ -355,7 +355,7 @@ def test_a_hand_whose_request_has_no_words_is_refused_and_a_words_table_is_commi
     for max_tokens, ids in ((most + 1, 2), (2, 3), (0, 1), (0, 0)):
         with pytest.raises(ValueError, match=f"release 0, filed in class 0, has a max_tokens of {max_tokens} and {ids} "
                                              f"ids where the schedule's max_tokens_cap is {most}: the network "
-                                             "certifier releases no request whose max_tokens is 0 or past it"):
+                                             "attester releases no request whose max_tokens is 0 or past it"):
             CR.tables(WORDED, hand(max_tokens, ids))
         assert len(CR.tables(BOUNDED, hand(max_tokens, ids))["request.0"]) == 1
     for max_tokens, ids in ((most, 4), (2, 2), (1, 0), (1, 1)):
