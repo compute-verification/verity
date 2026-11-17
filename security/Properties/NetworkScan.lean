@@ -36,7 +36,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
 /-!
-# The rows form's scan fits its layout: what `NetworkVerifier.Period.scanOf`'s acceptance gives the sampled audit's scope
+# The rows form's scan fits its layout: what `NetworkCheck.Period.scanOf`'s acceptance gives the sampled audit's scope
 
 The sampled audit's scope at an execution phase's statement (`NetTiming.ScopeAcc`) has two halves: the sampling scope
 (`Claims.SamplingGeneric.Compiled.Scope`, the compiled sampled verifier's own), and the statement's layout fitting its
@@ -47,7 +47,7 @@ program over its horizon (`NetTiming.BoundaryGates.Fits`). The network check rea
 `T` buckets, over one egress link: at step `t`, slot `σ`'s presence gate is bit 0 of egress member `t`'s verdict (its
 return's leaf 0), and its frame's bits are the return's leaves `16 + 8σB … 16 + 8(σ + 1)B − 1` (the row after the u16,
 row bit `8k + i` bit `i` of byte `k`); step `t`'s ingress is bucket `t`'s `row` parameter, in bit order: member `t` of
-the ingress template, the second of the root's nodes that call a composite (`NetworkVerifier.Period.templateNodes`, as
+the ingress template, the second of the root's nodes that call a composite (`NetworkCheck.Period.templateNodes`, as
 `scanOf` reads them), after the start unit's. Gates are `Flock.Program.resolve`'s (§6), the
 canonical layout's. A statement's layout is its descriptor's (`layOf`), at horizon `T`.
 

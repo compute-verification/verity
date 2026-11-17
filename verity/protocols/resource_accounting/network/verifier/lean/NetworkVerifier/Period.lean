@@ -255,7 +255,7 @@ schedule it runs under, and the certificate the key signed for both once, before
   (`Properties.NetworkPeriod.RowsCircuitHeld`), and, since the audit check holds the registered Program to the
   descriptor its term is read off (`auditCheck`), that descriptor is the class circuit's.
 * in the rows form, each execution phase's scan's ok bits are the schedule's constants (`okChecks`,
-  `NetworkVerifier.ScanOk`): a scan proof block's public word `o0` is its ok bit, and a member's `o0` rows are committed
+  `NetworkCheck.ScanOk`): a scan proof block's public word `o0` is its ok bit, and a member's `o0` rows are committed
   under public salts, so the root of a member whose every proof block is ok is a function of the schedule's T alone.
   The check computes those roots once a period (`ScanOk.consts`, `ScanOk.calls` SHA-512 calls whatever `m`) and holds
   every registration to them by comparison (`ScanOk.held`, no hash an execution phase): its `roots` name each member's
@@ -357,7 +357,7 @@ listed entry, which is the auditor's pin, the signed message naming the key's li
 session of the key the list leaves out; and a device state restored from an earlier copy, which rests on the
 network attester's host (`trusted-device`).
 
-The decoders the period's check reads (`exactly`, `keysOf`, `hexAt`, `certificateOf`) are in `NetworkVerifier.Clocks`,
+The decoders the period's check reads (`exactly`, `keysOf`, `hexAt`, `certificateOf`) are in `NetworkCheck.Clocks`,
 in this namespace.
 -/
 
