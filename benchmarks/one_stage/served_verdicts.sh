@@ -676,6 +676,30 @@ v3c_gated() { [[ $V3C_CHALLENGER == gate:* || $V3C_CHALLENGER == command:* ]]; }
 # Step 3's: PP_CHALLENGER's, but local while V3c's audit is on a gate, since both open on the window's run root, which
 # the gate opens once, ever, and V3c's is the SPOT audit of record
 SP_CHALLENGER=${PP_CHALLENGER:-local}
+# A gate's address given as ${NAME} (placement.toml's form, which keeps it out of the launch's recorded params) is filled
+# from this run's environment (`research run --env-host`, or run.sh settings' from the node's env file); a NAME the
+# environment doesn't set stays as given, for the preflight's refusal (`unfilled`); NAME_GIVEN keeps the form given, which
+# is what a kept file (the deferral's settings) holds
+fill_host() {
+  local re='^([^$]*)\$\{([A-Za-z_][A-Za-z0-9_]*)\}(.*)$' v=${!1} out= n
+  printf -v "$1_GIVEN" %s "$v"
+  while [[ $v =~ $re ]]; do
+    out+=${BASH_REMATCH[1]} n=${BASH_REMATCH[2]} v=${BASH_REMATCH[3]}
+    if [ -n "${!n:-}" ]; then out+=${!n}; else out+="\${$n}"; fi
+  done
+  printf -v "$1" %s "$out$v"
+}
+unfilled() {  # WHAT VALUE: the preflight's refusal of a gate whose ${NAME} this run's environment doesn't set
+  [[ $2 =~ \$\{([A-Za-z_][A-Za-z0-9_]*)\} ]] || return 0
+  local n=${BASH_REMATCH[1]} m
+  m=${n%_HOST} && m=${m,,}
+  say "PREFLIGHT: $1 gives its gate's address as \${$n}, which this run's environment doesn't set: launch the run with $(
+    [ "${n%_HOST}" != "$n" ] && echo "research run --env-host ${m//_/-}" || echo "--env $n=ADDRESS"), or start it with \
+adapters/vllm/tools/served_run/run.sh window, whose settings fill it from the node's env file"
+  return 3
+}
+fill_host V3C_CHALLENGER
+fill_host SP_CHALLENGER
 [ -n "$V3C" ] && v3c_gated && SP_CHALLENGER=local
 coins_on() {  # the machine SPOT's challenger flips its coins on, which the record names
   local c=$SP_CHALLENGER
@@ -946,6 +970,7 @@ v3c_audit() {  # the committed window audited from its records alone: its circui
     "${ch[@]}" --main "$main" --m0-pythonpath "$m0" --bin "$bin" --lean "$leanb/verity-verify-proof" \
     --zk-server "$leanb/flock-zk-server" --ports "$ports" "${link[@]}" --out "$VW/audit") > "$OUT/v3c-audit/audit.log" 2> "$OUT/v3c-audit/audit.err"
   rc=$?
+  "$PY" "$SV" unhost "$OUT/v3c-audit/audit.log" "$OUT/v3c-audit/audit.err" "$VW/audit"
   cp "$VW/audit/summary.json" "$OUT/v3c-audit/" 2>/dev/null
   [ -z "$PEARLPLUS_TIE" ] || say "V3C-TIE: $(grep -m1 '^TIE ' "$OUT/v3c-audit/audit.log" | "$PY" -c 'import json, sys
 line = sys.stdin.read()
@@ -1473,7 +1498,7 @@ defer() {  # step 6 on a node short of V3c's audit's memory ($1, why), left to a
     [ -z "${DAY_PARAMS:-}" ] || cp "$DAY_PARAMS" "$DEFER_DIR/day-params.json" || return 1
   fi
   fixed_limits || return 1
-  printf '%s=%q\n' K "$K" PRODUCT "$PRODUCT" V3C_CLASS "$V3C" V3C_LAW "$V3C_LAW" V3C_CHALLENGER "$V3C_CHALLENGER" \
+  printf '%s=%q\n' K "$K" PRODUCT "$PRODUCT" V3C_CLASS "$V3C" V3C_LAW "$V3C_LAW" V3C_CHALLENGER "$V3C_CHALLENGER_GIVEN" \
     DEVELOPMENT "$DEVELOPMENT" H1_TIE "${H1_TIE:-}" PEARLPLUS_TIE "$PEARLPLUS_TIE" COMPOSITE "${COMPOSITE-1}" ALPHA "${ALPHA:-}" GAMMA "${GAMMA:-}" \
     SERVED_NODE "$PP_PEER" SERVED_PEER "$V3C_PEER" DEFERRED_TREE "$(tree_sha)" COMPOSE_OFF_NODE "$COMPOSE_OFF_NODE" \
     COMPOSE_NODE "$COMPOSE_NODE" DAY "${DAY:-}" PEARLPLUS_TIE_UNIFORM "${PEARLPLUS_TIE_UNIFORM:-}" > "$DEFER_DIR/deferred.env" || return 1
@@ -1753,6 +1778,7 @@ gate_compose() {  # `served_verdicts.sh gate-compose PIECES [VERDICT [HOST]]`: t
   (cd "$D" && tar --create --dereference --no-recursion --file=- --files-from="$COMPOSE_DIR/inputs.txt") \
     | $COMPOSE_GATE compose > "$answer" 2> "$D/private/gate-compose.err"
   rc=${PIPESTATUS[1]}
+  "$SAY_PY" "$SV" unhost "$D/private/gate-compose.err"
   "$SAY_PY" "$SV" composed "$answer" "$OUT/compose" --gate-exit "$rc" --err "$D/private/gate-compose.err" \
     | publish_lines
   return "${PIPESTATUS[0]}"
@@ -2075,6 +2101,10 @@ if [ -n "${V3C_NEGATIVE_WORKERS:-}" ]; then  # V3c's audit's negatives side by s
     || { say "PREFLIGHT: V3C_NEGATIVE_WORKERS is how many of the audit's negatives run at once, a positive integer, not $V3C_NEGATIVE_WORKERS"; exit 3; }
 fi
 case $DEVELOPMENT in '' | 1) ;; *) say "PREFLIGHT: DEVELOPMENT is 1, a development run, or unset, not $DEVELOPMENT"; exit 3 ;; esac
+if [ -z "$COMPOSE" ]; then
+  if [ -n "$V3C" ]; then unfilled "V3C_CHALLENGER (default PP_CHALLENGER)" "$V3C_CHALLENGER" || exit 3; fi
+  unfilled PP_CHALLENGER "$SP_CHALLENGER" || exit 3
+fi
 if [ -n "$V3C" ] && [ -z "$COMPOSE" ]; then  # V3c's audit's coins: the live challenger's, or a development run's
   case $V3C_CHALLENGER in
     local | loopback:*)
@@ -2333,10 +2363,12 @@ inference_only &  # beside SPOT, which it doesn't read; the record waits for it
 IOV=$!
 [ "$rc" = 0 ] || { tail -30 "$OUT/build.log"; wait "$IOV"; stop build "$rc"; }
 export PP_PARTITION PP_SETS=${PP_SETS:-}
+STEP3_OUT=$OUT/sampled-proofs STEP3_LOG=$D/sampled-proofs.log
 env -u PYTHONPATH PP_SERVE_RUN="$D" PP_WINDOW="$K" PP_SERVE_ROWS="$D/windows/w$K" PP_RECORDS=1 PP_ONLY="${PP_ONLY:-honest}" \
   PP_CHALLENGER="$SP_CHALLENGER" PP_MAIN="${PP_MAIN:-${MAIN_FILE:-}}" PP_VLLM_PYTHON="$PY" PP_FLOCK_WORK="$FW" \
-  OUT="$OUT/sampled-proofs" bash benchmarks/prove_path/run.sh > "$D/sampled-proofs.log" 2>&1
+  OUT="$STEP3_OUT" bash benchmarks/prove_path/run.sh > "$STEP3_LOG" 2>&1
 rc=$?
+"$SAY_PY" "$SV" unhost "$STEP3_LOG" "$STEP3_OUT"
 SP=$D/sampled-proofs-served
 rm -rf "$SP"; [ ! -d "$OUT/sampled-proofs/served" ] || { mv "$OUT/sampled-proofs/served" "$SP" \
   && (cd "$SP" && find . -name '*.json' | sed 's|^\./||') | "$SAY_PY" "$SV" rebase "$SP" "$OUT/sampled-proofs/served"; }

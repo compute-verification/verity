@@ -4279,6 +4279,134 @@ def test_without_v3c_the_preflight_refuses_step_3s_development_session_outside_a
         "PP_CHALLENGER=gate:USER@HOST with PP_PEER, PP_CHALLENGER_KEY and PP_GATE_KEY, or DEVELOPMENT=1"], [])
 
 
+#: the gate as placement.toml gives it, which no launch's recorded params resolve
+BY_HOST = "gate:research@${VY_CHALLENGER_1_HOST}"
+
+
+@pytest.mark.parametrize("v3c", [True, False], ids=["v3c", "step-3"])
+def test_the_preflight_refuses_a_gate_whose_address_the_runs_environment_does_not_set(tmp_path, v3c):
+    """A gate given as research@${VY_CHALLENGER_1_HOST} takes its address from the run's environment; with that unset
+    the ${...} would reach ssh as it stands, so the run is refused before anything runs, naming the launch that sets it."""
+    extra = {**_live(tmp_path, []), "PP_CHALLENGER": BY_HOST, "VY_CHALLENGER_1_HOST": None}
+    if not v3c:
+        extra |= {**NO_V3C, "HOST": "vy-dc-h200", "PATH": f"{_hosts(tmp_path)}:{extra['PATH']}"}
+    rc, lines, order, _limits = _v3c(tmp_path, ("v3c",) if v3c else (), **extra)
+    what = "V3C_CHALLENGER (default PP_CHALLENGER)" if v3c else "PP_CHALLENGER"
+    assert (rc, lines, order) == (3, [
+        f"PREFLIGHT: {what} gives its gate's address as ${{VY_CHALLENGER_1_HOST}}, which this run's environment doesn't "
+        "set: launch the run with research run --env-host vy-challenger-1, or start it with "
+        "adapters/vllm/tools/served_run/run.sh window, whose settings fill it from the node's env file"], [])
+
+
+def test_a_gate_given_by_its_host_variable_reaches_the_audit_filled_and_no_published_line_or_output_holds_the_address(tmp_path):
+    """The address comes from the run's environment (`--env-host`, redacted in the run's params as a _HOST key) and is
+    filled in on the node: the audit and the gate's ssh reach it, while the verdict lines and the run's outputs name the
+    gate by its kind alone."""
+    rc, lines, order, _limits = _v3c(tmp_path, **{**_live(tmp_path, [LEDGER_LINE]), "PP_CHALLENGER": BY_HOST})
+    assert rc == 0 and "audit" in order and lines[0] == f"COINS V3c's audit: {V3C_LIVE}", (lines, order)
+    audit = json.loads((tmp_path / "order.audit").read_text())
+    assert audit[audit.index("--challenger") + 1] == f"gate:research@{CHALLENGER_HOST}", audit
+    assert f"research@{CHALLENGER_HOST}" in (tmp_path / "order.ssh").read_text()
+    out = [p for p in (tmp_path / "out").rglob("*") if p.is_file()]
+    assert out and not [p for p in out if CHALLENGER_HOST in p.read_text(errors="replace")], out
+    assert not [x for x in lines if CHALLENGER_HOST in x], lines
+
+
+#: a documentation address, the gate's, which ssh's own refusal names
+DOC_HOST = "192.0.2.7"
+SSH_REFUSED = f"ssh: connect to host {DOC_HOST} port 22: Connection refused"
+NAMED_REFUSED = "ssh: connect to host vy-challenger-1 port 22: Connection refused"
+
+
+def _holding(tmp_path: Path, *dirs: str) -> list[Path]:
+    """The files under ``dirs`` (of ``tmp_path``) that hold DOC_HOST."""
+    return [p for d in dirs for p in (tmp_path / d).rglob("*") if p.is_file() and DOC_HOST in p.read_text(errors="replace")]
+
+
+@pytest.mark.parametrize("refuses", ["gate", "audit"])
+def test_a_gate_whose_ssh_refuses_is_named_by_its_machine_and_no_line_or_kept_file_holds_its_address(tmp_path, refuses):
+    """ssh's own refusal names the host it reached: where the gate's check (`served_verdicts.py gate`) or V3c's audit
+    quotes it (in its stderr, and in the summaries its coins session's error reaches), the gate's address
+    (VY_CHALLENGER_1_HOST's) is its machine's name, in the published line and in every file under $OUT and the serve dir,
+    whose audit files a hand-off carries off the node."""
+    env = {**_live(tmp_path, [LEDGER_LINE]), "PP_CHALLENGER": BY_HOST, "VY_CHALLENGER_1_HOST": DOC_HOST}
+    audit = FAKE_RECORDS_AUDIT
+    if refuses == "gate":
+        _script(tmp_path / "gate" / "ssh", f'echo "{SSH_REFUSED}" >&2\nexit 255')
+    else:
+        audit = audit.replace('if a[0] == "audit":\n', 'if a[0] == "audit":\n    (out / "window").mkdir(parents=True)\n'
+                              '    for f in ("summary.json", "window/summary.json"):\n'
+                              f'        (out / f).write_text(json.dumps({{"coins_session": {{"error": "{SSH_REFUSED}"}}}}))\n'
+                              f'    sys.exit("{SSH_REFUSED}")\n', 1)
+    rc, lines, _order, _limits = _v3c(tmp_path, records_audit=audit, **env)
+    said = [x for x in lines if NAMED_REFUSED in x]
+    assert rc != 0 and said and said[0].startswith("V3C-GATE refused: " if refuses == "gate" else "V3C-AUDIT: no RECORDS"), lines
+    assert not [x for x in lines if DOC_HOST in x], lines
+    assert not _holding(tmp_path, "out", "serve")
+    if refuses == "audit":
+        kept = json.loads((tmp_path / "out" / "v3c-audit" / "summary.json").read_text())
+        assert kept == {"coins_session": {"error": NAMED_REFUSED}}, kept
+
+
+def test_unhost_names_each_host_variables_machine_in_a_directorys_text_files_and_leaves_the_rest_as_they_are(tmp_path):
+    """`unhost DIR` rewrites the text files an audit writes where one holds a NAME_HOST variable's address, and leaves a
+    file without one, and every binary, byte for byte."""
+    d = tmp_path / "audit"
+    (d / "window").mkdir(parents=True)
+    (d / "summary.json").write_text(json.dumps({"error": SSH_REFUSED}))
+    (d / "window" / "run.log").write_text(f"{SSH_REFUSED}\n")
+    (d / "case.json").write_text('{"commitment": "ab"}')
+    (d / "proof.bin").write_bytes(b"\xff\xfe" + DOC_HOST.encode())
+    env = {**{k: v for k, v in os.environ.items() if not k.endswith("_HOST")}, "VY_CHALLENGER_1_HOST": DOC_HOST}
+    subprocess.run([sys.executable, str(HERE.parents[2] / "benchmarks" / "one_stage" / "served_verdicts.py"), "unhost", str(d)],
+                   env=env, check=True)
+    assert json.loads((d / "summary.json").read_text()) == {"error": NAMED_REFUSED}
+    assert (d / "window" / "run.log").read_text() == f"{NAMED_REFUSED}\n"
+    assert (d / "case.json").read_text() == '{"commitment": "ab"}'
+    assert (d / "proof.bin").read_bytes() == b"\xff\xfe" + DOC_HOST.encode()
+
+
+def test_step_3s_log_and_outputs_name_the_gate_by_its_machine_before_anything_reads_them():
+    """Step 3 on the gate's coins (no V3c on a gate) keeps run.sh's whole output, ssh's refusal included, in the serve
+    dir's log, and its audit's summaries under $OUT: both are unhosted before the served copy or step 3's line reads them."""
+    text = (HERE.parents[2] / "benchmarks" / "one_stage" / "served_verdicts.sh").read_text()
+    run = text.index('OUT="$STEP3_OUT" bash benchmarks/prove_path/run.sh > "$STEP3_LOG" 2>&1\nrc=$?\n')
+    unhost = text.index('"$SAY_PY" "$SV" unhost "$STEP3_LOG" "$STEP3_OUT"\n', run)
+    assert unhost < text.index('"$SV" rebase', run) < text.index("sampled_coins || stop", run)
+
+
+def test_a_compose_gate_whose_ssh_refuses_is_named_by_its_machine_in_its_line_and_its_kept_stderr(tmp_path):
+    """The compose gate's ssh refusal reaches GATE-COMPOSE's line and the serve dir's private/gate-compose.err with the
+    gate's address (VY_AUDITOR_2_HOST's) as its machine's name."""
+    gate = tmp_path / "compose-gate"
+    _script(gate, f'cat > /dev/null\necho "{SSH_REFUSED}" >&2\nexit 255')
+    out = tmp_path / "served-out"
+    run = _handed(tmp_path, cmd=("gate-compose", str(out / "pieces"), str(out / "record" / "inference-only.json")),
+                  COMPOSITE="", COMPOSE_GATE=str(gate), VY_AUDITOR_2_HOST=DOC_HOST)
+    lines = (out / "verdicts.txt").read_text().splitlines()
+    assert run.returncode == 1 and lines[-1] == (
+        "GATE-COMPOSE failed (ssh exit 255): no answer from the compose gate (IndexError): ssh: connect to host "
+        "vy-auditor-2 port 22: Connection refused"), (run.stderr, lines)
+    assert "vy-auditor-2" in (tmp_path / "serve" / "private" / "gate-compose.err").read_text()
+    assert not _holding(tmp_path, "served-out", "serve/private")
+
+
+def test_a_deferral_keeps_the_gate_as_given_and_its_follow_on_fills_the_address_from_its_own_environment(tmp_path):
+    """The deferral's settings (private/deferred/deferred.env, kept and copied to the follow-on) hold V3C_CHALLENGER as
+    given, its ${VY_CHALLENGER_1_HOST} unfilled, and its follow-on fills it from its own environment."""
+    assert _deferred(tmp_path, DEVELOPMENT=None, PP_CHALLENGER=BY_HOST, PP_PEER="vy-dc-h200",
+                     VY_CHALLENGER_1_HOST=DOC_HOST).returncode == 0
+    assert _deferral_settings(tmp_path)["V3C_CHALLENGER"] == BY_HOST
+    assert not _holding(tmp_path, "serve/private", "served-out")
+    env = {**_live(tmp_path, [LEDGER_LINE], hosts=True), "PP_CHALLENGER": None, "PP_PEER": "cpu-6", "V3C_PEER": "cpu-6",
+           "VY_CHALLENGER_1_HOST": DOC_HOST}
+    rc, lines, order, _limits = _follow(tmp_path, **env)
+    assert rc == 2 and "audit" in order, (lines, order)
+    assert _audited(tmp_path, ("--challenger",)) == {"--challenger": f"gate:research@{DOC_HOST}"}
+    assert not [x for x in lines if DOC_HOST in x], lines
+    assert not _holding(tmp_path, "out", "serve/private")
+
+
 @pytest.mark.parametrize("extra, other", [
     ({"H1_GATE": GATE, "H1_PEER": "vy-dc-h200-3"}, "H1_PEER"),
     ({"POUW": "pearlplus", "H1_PEER": "vy-dc-h200-3"}, "PEARLC_CHALLENGER_PEER"),
