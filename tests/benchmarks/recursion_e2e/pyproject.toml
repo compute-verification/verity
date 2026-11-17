@@ -10,7 +10,7 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
 # test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
-untraced = ["test_settings.py"]
+untraced = ["test_job_needs.py", "test_settings.py"]
 # settings.py declares the job's variables in a verity_config `Registry` and checks them with its `check` (stdlib only);
 # record.py writes the run's numbers through the harness kit (stdlib only with verity_config).
 inputs = ["benchmarks/harness/verity_bench/__init__.py", "benchmarks/harness/verity_bench/settings.py",
@@ -21,5 +21,5 @@ inputs = ["benchmarks/harness/verity_bench/__init__.py", "benchmarks/harness/ver
 # what a program it starts reads): the graph's test-file tasks are keyed on it.
 
 [[tool.verity.tests.reads]]
-tests = ["test_settings.py"]
+tests = ["test_job_needs.py", "test_settings.py"]
 paths = ["benchmarks/recursion_e2e"]

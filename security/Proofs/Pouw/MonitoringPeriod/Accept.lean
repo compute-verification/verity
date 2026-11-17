@@ -31,7 +31,7 @@ and sample size `SampleIsCoin` reads at H1's instance. The numbers themselves (`
 
 namespace Properties.Pouw.MonitoringPeriod.SecurityProofs.Accept
 
-open PouwCheck
+open PouwVerifier
 open Lean (Json)
 open PouwWindow (Work Sampling)
 open Properties.Pouw.MonitoringPeriod.SecurityProofs.Sort

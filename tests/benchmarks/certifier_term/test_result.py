@@ -107,7 +107,7 @@ def absent(m: dict) -> list[str]:
 def log(tmp_path: Path, beta: int = BETA, *more: registration.Entry, composite: str = "onsite",
         links: tuple[Link, ...] | None = None, name: str = "registration") -> Path:
     """A committed registration log, in the file ``name``, of one host behind a network attester that splits its
-    uplink, the host's side at ``beta`` bits a second, with a memory challenger's link, which is no boundary link, and
+    uplink, the host's side at ``beta`` bits a second, with a memory attester's link, which is no boundary link, and
     a day's declaration, which is no site entry; or of ``links`` in place of those three."""
     links = links or (Link("uplink0", ("node0", "cert0"), beta, 100_000), Link("uplink0-out", ("cert0", OUTSIDE), BEYOND, 0),
                       Link("chal0-link", ("chal0", "node0"), 7, 1_000_000))
@@ -187,7 +187,7 @@ def test_free_is_the_documents_term_and_the_error_its_phases_deltas_summed(tmp_p
         for (scope, period), r in rows.items():
             name, row = f"certifier_term/modeled/{scope}/{period}", exact[scope, period]
             # the term at two release schedules, and the union of the scans' δ, as the table has them
-            assert got[f"{name}/free"]["value"] == r["term"]["2"]["bits"] == float(row.terms[2].certifier)
+            assert got[f"{name}/free"]["value"] == r["term"]["2"]["bits"] == float(row.terms[2].attester)
             error = got[f"{name}/error"]
             assert error["value"] == r["eps"] == float(row.eps) == float(row.phases * DELTA) <= float(AT_MOST)
             assert (r["scan_delta"], r["eps_target"]) == (float(DELTA), None if delta else float(AT_MOST))
@@ -202,7 +202,7 @@ def test_free_is_the_documents_term_and_the_error_its_phases_deltas_summed(tmp_p
         # the term of record: the world's year's, in GB
         metric, year = got[METRIC], got["certifier_term/modeled/world/year/free"]
         assert (metric["value"], metric["unit"]) == (doc["value"], "GB")
-        assert metric["value"] == float(exact["world", "year"].terms[2].certifier / LB.GB)
+        assert metric["value"] == float(exact["world", "year"].terms[2].attester / LB.GB)
         assert metric["inputs"][0] == f"modeled: {doc['name']}" and metric["inputs"][1:] == year["inputs"][1:]
 
 
@@ -274,7 +274,7 @@ def test_capacity_is_read_from_the_registered_uplink_and_verified_is_capacity_le
         for period, seconds in LB.PERIODS.items():
             name = f"certifier_term/modeled/{scope.name}/{period}"
             capacity, free, verified = (got[f"{name}/{amount}"] for amount in ("capacity", "free", "verified"))
-            # each machine's one certified boundary link, the host's side of its uplink, over the period's seconds
+            # each machine's one attested boundary link, the host's side of its uplink, over the period's seconds
             assert capacity["value"] == scope.machines * BETA * seconds and type(capacity["value"]) is int
             assert verified["value"] == capacity["value"] - free["value"]
             assert verified["inputs"] == ["modeled", f"{name}/capacity", f"{name}/free", *basis]

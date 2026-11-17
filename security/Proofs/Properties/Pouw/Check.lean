@@ -20,7 +20,7 @@ leave: the service's reject is the check's.
 
 namespace Properties.Pouw.Check
 
-open PouwCheck
+open PouwVerifier
 
 theorem publishesPublic : PublishesPublic := by
   intro pub; rfl
@@ -30,13 +30,13 @@ theorem neverNull : NeverNull := fun _ _ => ⟨nofun, nofun⟩
 theorem digestIsOneStage's : DigestIsOneStage's := fun _ => rfl
 
 theorem check_eq (p : Params) (c : ExecutionPhaseCommitmentRecord) (e : Evidence) :
-    protocol.check p c e = PouwCheck.check p c e := rfl
+    protocol.check p c e = PouwVerifier.check p c e := rfl
 
 theorem serviceReject_rejects (p : Params) (c : ExecutionPhaseCommitmentRecord) (e : Evidence) (r : String)
     (h : e.said = .reject r) :
     ∃ r', protocol.check p c e = .reject r' := by
   rw [check_eq]
-  unfold PouwCheck.check
+  unfold PouwVerifier.check
   split
   · exact ⟨_, rfl⟩
   · unfold outcome
@@ -205,7 +205,7 @@ theorem acceptMeans_iff (p : Params) (c : ExecutionPhaseCommitmentRecord) (e : E
       ∃ f draw, RecordKeeps p c f ∧ ServiceAccepted p c f e prof draw ∧ SaltKept p c e ∧
         pub = ⟨p.check, f.work, f.sampling, p.maxTokens, f.rootW, draw.units⟩ := by
   rw [check_eq]
-  unfold PouwCheck.check
+  unfold PouwVerifier.check
   constructor
   · intro h
     split at h
@@ -258,7 +258,7 @@ theorem ite_reject_eq_undecided {c : Prop} [Decidable c] {a r : String}
 theorem undecidedOnlyFromService : UndecidedOnlyFromService := by
   intro p c e r h
   rw [check_eq] at h
-  unfold PouwCheck.check at h
+  unfold PouwVerifier.check at h
   split at h
   · cases h
   rename_i f hf

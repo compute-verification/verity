@@ -5023,7 +5023,6 @@
         "benchmarks/harness/specs/pyproject.toml": "tests/benchmarks/harness/specs/pyproject.toml",
         "benchmarks/hash/dither/pyproject.toml": "tests/benchmarks/hash/dither/pyproject.toml",
         "benchmarks/inference_only/pyproject.toml": "tests/benchmarks/inference_only/pyproject.toml",
-        "benchmarks/int8_class_rate/pyproject.toml": "tests/benchmarks/int8_class_rate/pyproject.toml",
         "benchmarks/kernels/exactlin/pyproject.toml": "tests/benchmarks/kernels/exactlin/pyproject.toml",
         "benchmarks/kernels/numabind/pyproject.toml": "tests/benchmarks/kernels/numabind/pyproject.toml",
         "benchmarks/kernels/s8_linear/pyproject.toml": "tests/benchmarks/kernels/s8_linear/pyproject.toml",
@@ -5052,7 +5051,6 @@
         "benchmarks/recursion_e2e/pyproject.toml": "tests/benchmarks/recursion_e2e/pyproject.toml",
         "benchmarks/recursion_figures/pyproject.toml": "tests/benchmarks/recursion_figures/pyproject.toml",
         "benchmarks/remote_session/pyproject.toml": "tests/benchmarks/remote_session/pyproject.toml",
-        "benchmarks/replay_determinism/pyproject.toml": "tests/benchmarks/replay_determinism/pyproject.toml",
         "benchmarks/replay_ladder/pyproject.toml": "tests/benchmarks/replay_ladder/pyproject.toml",
         "benchmarks/route_capture/pyproject.toml": "tests/benchmarks/route_capture/pyproject.toml",
         "benchmarks/sampling_plan/pyproject.toml": "tests/benchmarks/sampling_plan/pyproject.toml",
@@ -5129,6 +5127,123 @@
         "verity/protocols/resource_accounting/network/verifier/network/pyproject.toml": "tests/verity/protocols/resource_accounting/network/verifier/network/pyproject.toml",
         "verity/protocols/workload_classification/training_detection/inference_only/verifier/pyproject.toml": "tests/verity/protocols/workload_classification/training_detection/inference_only/verifier/pyproject.toml",
         "verity/runtime/pyproject.toml": "tests/verity/runtime/pyproject.toml"
+      }
+    },
+    {
+      "paths": {
+        "benchmarks/pous/memory_challenger/": "benchmarks/pous/memory_attester/",
+        "tests/verity/protocols/resource_accounting/memory/pous/verifier/test_pous_memory_challenger.py": "tests/verity/protocols/resource_accounting/memory/pous/verifier/test_pous_memory_attester.py",
+        "verity/protocols/resource_accounting/memory/pous/attester/memory_challenger.py": "verity/protocols/resource_accounting/memory/pous/attester/memory_attester.py"
+      }
+    },
+    {
+      "paths": {
+        "adapters/vllm/verity_vllm/pipeline/remote_session.py": "adapters/vllm/verity_vllm/pipeline/poub_session.py",
+        "adapters/vllm/verity_vllm/pipeline/serve_remote.py": "adapters/vllm/verity_vllm/pipeline/serve_poub.py",
+        "benchmarks/remote_session/": "benchmarks/poub_session/",
+        "tests/adapters/vllm/tests/pipeline/test_serve_remote.py": "tests/adapters/vllm/tests/pipeline/test_serve_poub.py",
+        "tests/adapters/vllm/tests/pipeline/test_serve_remote_built.py": "tests/adapters/vllm/tests/pipeline/test_serve_poub_built.py",
+        "tests/benchmarks/remote_session/": "tests/benchmarks/poub_session/",
+        "tests/verity/protocols/resource_accounting/memory/poub/test_remote_session.py": "tests/verity/protocols/resource_accounting/memory/poub/test_poub_session.py",
+        "tests/verity/protocols/resource_accounting/memory/poub/verifier/test_remote_coins.py": "tests/verity/protocols/resource_accounting/memory/poub/verifier/test_poub_coins.py",
+        "verity/protocols/resource_accounting/memory/poub/prover/remote_session/": "verity/protocols/resource_accounting/memory/poub/prover/poub_session/",
+        "verity/protocols/resource_accounting/memory/poub/verifier/remote_session/": "verity/protocols/resource_accounting/memory/poub/verifier/poub_session/"
+      }
+    },
+    {
+      "paths": {
+        "demos/": "applications/"
+      }
+    },
+    {
+      "paths": {
+        "security/Proofs/Properties/Pous/MemoryChallenger.lean": "security/Proofs/Properties/Pous/MemoryAttester.lean",
+        "security/Proofs/Properties/Pous/MemoryChallenger/": "security/Proofs/Properties/Pous/MemoryAttester/",
+        "security/Properties/Pous/MemoryChallenger.lean": "security/Properties/Pous/MemoryAttester.lean",
+        "security/Properties/Pous/MemoryChallenger/": "security/Properties/Pous/MemoryAttester/",
+        "verity/protocols/resource_accounting/memory/pous/attester/lean/MemoryChallenger.lean": "verity/protocols/resource_accounting/memory/pous/attester/lean/MemoryAttester.lean",
+        "verity/protocols/resource_accounting/memory/pous/attester/lean/MemoryChallenger/": "verity/protocols/resource_accounting/memory/pous/attester/lean/MemoryAttester/"
+      }
+    },
+    {
+      "paths": {
+        "verity/protocols/resource_accounting/compute/pouw/verifier/lean/check/PouwCheck.lean": "verity/protocols/resource_accounting/compute/pouw/verifier/lean/check/PouwVerifier.lean",
+        "verity/protocols/resource_accounting/compute/pouw/verifier/lean/check/PouwCheck/": "verity/protocols/resource_accounting/compute/pouw/verifier/lean/check/PouwVerifier/"
+      }
+    },
+    {
+      "paths": {
+        "verity/protocols/workload_classification/training_detection/inference_only/verifier/lean/InferenceOnlyCheck.lean": "verity/protocols/workload_classification/training_detection/inference_only/verifier/lean/InferenceOnlyVerifier.lean",
+        "verity/protocols/workload_classification/training_detection/inference_only/verifier/lean/InferenceOnlyCheck/": "verity/protocols/workload_classification/training_detection/inference_only/verifier/lean/InferenceOnlyVerifier/"
+      }
+    },
+    {
+      "paths": {
+        "verity/protocols/resource_accounting/network/verifier/lean/NetworkCheck.lean": "verity/protocols/resource_accounting/network/verifier/lean/NetworkVerifier.lean",
+        "verity/protocols/resource_accounting/network/verifier/lean/NetworkCheck/": "verity/protocols/resource_accounting/network/verifier/lean/NetworkVerifier/"
+      }
+    },
+    {
+      "paths": {
+        "verity/protocols/resource_accounting/memory/pous/verifier/check/PousCheck.lean": "verity/protocols/resource_accounting/memory/pous/verifier/check/PousVerifier.lean",
+        "verity/protocols/resource_accounting/memory/pous/verifier/check/PousCheck/": "verity/protocols/resource_accounting/memory/pous/verifier/check/PousVerifier/"
+      }
+    },
+    {
+      "paths": {
+        "hardware/": "calibration/hardware/",
+        "benchmarks/tc_probe/": "calibration/tc_probe/",
+        "tests/benchmarks/tc_probe/": "tests/calibration/tc_probe/",
+        "benchmarks/tc_probe_fp4/": "calibration/tc_probe_fp4/",
+        "tests/benchmarks/tc_probe_fp4/": "tests/calibration/tc_probe_fp4/",
+        "benchmarks/native_peak/": "calibration/native_peak/",
+        "tests/benchmarks/native_peak/": "tests/calibration/native_peak/",
+        "benchmarks/f32_exhaustive/": "calibration/f32_exhaustive/",
+        "benchmarks/training_slowdown/": "calibration/training/",
+        "tests/benchmarks/training_slowdown/": "tests/calibration/training/",
+        "benchmarks/circuit_properties/": "calibration/circuit_properties/",
+        "tests/benchmarks/circuit_properties/": "tests/calibration/circuit_properties/",
+        "benchmarks/tensor_duty/": "calibration/tensor_duty/",
+        "tests/benchmarks/tensor_duty/": "tests/calibration/tensor_duty/",
+        "benchmarks/pouw/dc/": "calibration/pouw/dc/",
+        "benchmarks/pouw/opcode_probe/": "calibration/pouw/opcode_probe/",
+        "benchmarks/pouw/tensor_kinds/": "calibration/pouw/tensor_kinds/",
+        "benchmarks/pouw/sass_census/": "calibration/pouw/sass_census/",
+        "benchmarks/pouw/facet_break/": "calibration/pouw/facet_break/",
+        "benchmarks/pouw/theory/": "calibration/pouw/theory/",
+        "benchmarks/bandwidth/": "calibration/bandwidth/",
+        "tests/benchmarks/bandwidth/": "tests/calibration/bandwidth/",
+        "benchmarks/rate_squaring/": "calibration/rate_squaring/",
+        "tests/benchmarks/rate_squaring/": "tests/calibration/rate_squaring/",
+        "benchmarks/certifier_timing/": "calibration/certifier_timing/",
+        "tests/benchmarks/certifier_timing/": "tests/calibration/certifier_timing/",
+        "benchmarks/sampling_plan/": "calibration/sampling_plan/",
+        "tests/benchmarks/sampling_plan/": "tests/calibration/sampling_plan/"
+      }
+    },
+    {
+      "paths": {
+        "benchmarks/census/": "calibration/census/",
+        "benchmarks/machine_model/": "calibration/machine_model/",
+        "tests/benchmarks/machine_model/": "tests/calibration/machine_model/"
+      }
+    },
+    {
+      "paths": {
+        "benchmarks/network_traces/certifier_piece.py": "benchmarks/network_traces/attester_piece.py",
+        "calibration/certifier_timing/": "calibration/attester_timing/",
+        "tests/benchmarks/network_traces/test_block_certifier.py": "tests/benchmarks/network_traces/test_block_attester.py",
+        "tests/benchmarks/network_traces/test_certifier_piece.py": "tests/benchmarks/network_traces/test_attester_piece.py",
+        "tests/benchmarks/network_traces/test_certifier_term.py": "tests/benchmarks/network_traces/test_attester_term.py",
+        "tests/calibration/certifier_timing/": "tests/calibration/attester_timing/",
+        "tests/calibration/certifier_timing/test_certifier_timing.py": "tests/calibration/attester_timing/test_attester_timing.py",
+        "verity/protocols/resource_accounting/network/attester/certifier_key.py": "verity/protocols/resource_accounting/network/attester/attester_key.py",
+        "verity/protocols/resource_accounting/network/prover/block_certifier.py": "verity/protocols/resource_accounting/network/prover/block_attester.py"
+      }
+    },
+    {
+      "paths": {
+        "tests/verity/protocols/resource_accounting/network/verifier/test_network_attester_certificate.py": "tests/verity/protocols/resource_accounting/network/verifier/test_network_attester_attestation.py"
       }
     }
   ]

@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import subprocess
 from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace as NS
@@ -161,6 +162,47 @@ def test_a_jobs_environment_cannot_drop_an_arms_plugin(tmp_path: Path, monkeypat
     monkeypatch.setenv("VLLM_PLUGINS", "something_else")
     env = S.server_env(S.ARMS["record"], tmp_path, tmp_path, None, 600.0, 600.0)
     assert "VLLM_PLUGINS" not in env and "VLLM_PLUGINS" not in S.server_env(S.ARMS["compiled"], tmp_path, tmp_path, None, 1.0, 1.0)
+
+
+def test_a_pass_has_the_canonical_top_ks_counts_by_card_joined_to_its_steps(tmp_path: Path):
+    """An arm on the canonical top-k keeps its counters at each step's end beside its step traces; a pass's counts are
+    its steps' on each card, a step joined to the trace's by its index where its ranks counted the trace's tokens."""
+    env = {a: S.server_env(S.ARMS[a], tmp_path, tmp_path, None, 600.0, 600.0, check="t", private=tmp_path / "p")
+           for a in ("canonical-topk", "two-stage", "record")}
+    assert env["canonical-topk"]["VERITY_DSA_TOPK_STEPS"] == env["two-stage"]["VERITY_DSA_TOPK_STEPS"] == str(tmp_path)
+    assert "VERITY_DSA_TOPK_STEPS" not in env["record"]
+    server = tmp_path / "server"
+    server.mkdir()
+    names = ["rows_long", "rows_tied", "rows_bisected"]
+
+    def line(step: int, tokens: int, device: str, counts: list[int]) -> dict:
+        return {"step": step, "tokens": tokens, "device": device, **dict(zip(names, counts))}
+
+    ranks = {11: [line(0, 5, "cuda:0", [1, 0, 0]), line(1, 8, "cuda:0", [3, 1, 0]), line(3, 2, "cuda:0", [6, 0, 1]),
+                  line(4, 9, "cuda:0", [5, 1, 0])],
+             12: [line(0, 5, "cuda:1", [1, 0, 0]), line(1, 8, "cuda:1", [2, 0, 1]), line(4, 9, "cuda:1", [0, 0, 0])]}
+    for pid, lines in ranks.items():
+        (server / f"dsa_topk_steps.{pid}.jsonl").write_text(
+            "".join(json.dumps(x) + "\n" for x in [{"pid": pid, "stats": names}, *lines]))
+    counts = S.topk_steps(tmp_path)
+    assert counts[1] == {"tokens": {8}, "cards": {"cuda:0": {"rows_long": 3, "rows_tied": 1, "rows_bisected": 0},
+                                                 "cuda:1": {"rows_long": 2, "rows_tied": 0, "rows_bisected": 1}}}
+    assert counts[3] == {"tokens": {2}, "cards": {"cuda:0": {"rows_long": 6, "rows_tied": 0, "rows_bisected": 1}}}
+
+    def step(i: int, t: int, rid: str) -> dict:
+        return {"kind": "step", "step": i, "T": t, "rows": [[rid, 0, t]]}
+
+    trace = server / "step_trace.1.jsonl"
+    trace.write_text("".join(json.dumps(r) + "\n" for r in [
+        {"kind": "header"}, step(0, 5, "warm-0"), step(1, 8, "chat@8-r1-0"), step(2, 3, "chat@8-r1-1"),
+        step(3, 6, "chat@8-r1-0"), step(4, 9, "chat@8-r2-0")]))
+    got = S.topk_counts([trace], counts, ["chat@8-r1", "chat@8-r2"])
+    # step 2 no rank counted, and step 3's ranks counted other tokens than the trace's: neither joins
+    assert got["chat@8-r1"] == {"steps": 1, "unjoined": 2, "cards": {
+        "cuda:0": {"rows_long": 3, "rows_tied": 1, "rows_bisected": 0},
+        "cuda:1": {"rows_long": 2, "rows_tied": 0, "rows_bisected": 1}}}
+    assert got["chat@8-r2"]["steps"] == 1 and got["chat@8-r2"]["cards"]["cuda:0"] == {
+        "rows_long": 5, "rows_tied": 1, "rows_bisected": 0}
 
 
 def test_no_server_writes_a_requests_or_a_responses_text_to_its_log(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
@@ -334,6 +376,23 @@ def test_only_the_batch_invariant_arms_run_vllms_batch_invariant_kernels(tmp_pat
                                             600.0, 600.0, boundary_rows={"check": "t"}, private=tmp_path)["VLLM_BATCH_INVARIANT"] == "1"}
     assert on == {"bi-compiled", "bi-eager"}
     assert (S.ARMS["bi-compiled"].parent, S.ARMS["bi-eager"].parent) == ("compiled", "eager")
+
+
+def test_on_a_node_without_gpu_lease_run_sh_waits_only_for_the_cards_the_job_may_use(tmp_path: Path):
+    """Under a scheduler that sets CUDA_VISIBLE_DEVICES, another job's full card does not hold this job's start; with it
+    unset, every card counts."""
+    used_line = next(x.strip() for x in (S.HERE / "run.sh").read_text().splitlines() if "--query-gpu=memory.used " in x)
+    smi = tmp_path / "nvidia-smi"
+    smi.write_text('#!/usr/bin/env bash\nused=(70000 10 20 30)\nids=0,1,2,3\n'
+                   '[ "$1" = -i ] && ids=$2\nfor i in ${ids//,/ }; do echo "${used[$i]}"; done\n')
+    smi.chmod(0o755)
+
+    def used(visible: str | None) -> str:
+        env = {"PATH": f"{tmp_path}:/usr/bin:/bin", **({"CUDA_VISIBLE_DEVICES": visible} if visible is not None else {})}
+        return subprocess.run(["bash", "-c", f'{used_line}; echo "$used"'], env=env, capture_output=True, text=True,
+                              check=True).stdout.strip()
+
+    assert (used("1,3"), used("2"), used(None), used("0,1")) == ("30", "20", "70000", "70000")
 
 
 def test_run_shs_replay_runs_at_the_models_width_and_captures_what_it_is_told():
@@ -2179,3 +2238,30 @@ def test_run_sh_takes_the_serving_costs_flags_and_refuses_before_it_holds_anythi
     assert 'passes --loads "$LOADS" "${ds[@]}" --fetch --arms "$ARMS" --model-id "$MODEL_ID"' in sh
     # a given pass size reaches that check and every arm alike: the check prints the passes the arms then serve
     assert sh.count('${PASS_PROMPTS:+--pass-prompts "$PASS_PROMPTS"}') == 2
+
+
+def test_llama32_1bs_number_is_its_chat_and_long_loads_alone_as_a_point_of_glm53s_metric(monkeypatch: pytest.MonkeyPatch):
+    """The prefix load fills the 1B's whole context, an engine of another limit than chat's and long's, so the 1B's
+    number is written from those two loads alone, under the one id every model's points share, naming its model and
+    hardware, and as its member the model, the card and the arm over its reference, which tells its line from
+    GLM-5.3's. GLM-5.3's number still waits for the row on a repeated prefix."""
+    arms = [both(n, chat, long) | {"model_id": "llama32-1b"} for n, chat, long in (
+        ("compiled", [2.0, 2.0, 2.0], [1.0, 1.0, 1.0]), ("compiled-again", [1.98, 2.0, 2.02], [1.0, 1.0, 1.0]),
+        ("record", [1.98, 1.99, 2.0], [0.99, 0.985, 0.98]))]
+    r = S.cost_report(arms, arm="record")
+    ok, _, _, ms = S.result_of(r | {"hardware": "1 × NVIDIA H200"})
+    assert ok and [m["name"] for m in ms] == ["chat", "long", "vllm/serving-cost-glm53"]
+    assert (ms[-1]["model"], ms[-1]["hardware"]) == ("unsloth/Llama-3.2-1B@9535bd9b1d1dea6acafbdc4813b728796aeb28da",
+                                                    "1 × NVIDIA H200")
+    assert ms[-1]["value"] == r["value"] is not None and ms[-1]["target"] is None
+    glm = S.cost_report([a | {"model_id": "glm53"} for a in arms], arm="record")
+    assert [m["name"] for m in S.result_of(glm)[3]] == ["chat", "long"]
+    S.kit()
+    from verity_bench import kit
+    monkeypatch.setattr(kit, "host_stamp", lambda: {"card": "NVIDIA H200"})
+    assert (S.hardware(S.MODELS["llama32-1b"]), S.hardware(S.MODELS["glm53"])) == ("1 × NVIDIA H200", "8 × NVIDIA H200")
+    assert (r["arm"], r["reference"]) == ("record", "compiled") and "member" not in ms[-1]
+    one = S.member(S.MODELS["llama32-1b"], r["arm"], r["reference"])
+    assert (one, S.member(S.MODELS["glm53"], "two-stage", "compiled")) == (
+        "llama-3.2-1b-h200-record-over-compiled", "glm-5.3-h200-two-stage-over-compiled")
+    assert S.result_of(r | {"hardware": "1 × NVIDIA H200", "member": one})[3][-1]["member"] == one
