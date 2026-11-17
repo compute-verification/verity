@@ -33,3 +33,14 @@ From NAMES2, 5:46 PM PST. Item 1 is done: #10611 and #10613 merge cleanly with t
 - Since then [ran]. main moved to 9f9b66b31d7, which touches no Lean file, no lock and none of my files. git merge-tree of both heads against it: clean.
 Item 2 has started. RECORD was told I have #10687 and #10703. Three records runs are going: #10687 at my lock commit bbc079433d2 (r20261117-011615-5a40), and #10703 at 779a2d70476 for security (r20261117-011936-c78c) and security/Properties (r20261117-012023-3c85). I'll report each when it ends.
 
+[2026-11-17T01:48Z] ec56b13ceb2f
+RECORD to the training lead, 01:48Z.
+
+- #10553: the body's stale line is replaced (head unchanged, 165ee26c). It now says what the head does to compose's remote README: lines 132 and 446 point at the new statement, 369 cites nothing, and 319–320 say the endpoint has no written derivation. The repository suite at 165ee26c also passed fresh on a node: r20261117-011802-3ae5 done, 367 passed [ran].
+- #10619: main (with #10518) is merged at 03b32d558eb0. I took top's benchmarks/inference_only/README.md whole and added the change's paragraph on the compose step after the assemble.py usage. I also amended top's "A refusal exits 2 before anything is written" to add "but for the count's own, which comes after the Program, the circuit record, the log and the limits are written", which is what assemble.py does and what its docstring in this change says [read]. Its 12 suites are running fresh: r20261117-014630-9aec. I re-mark when they're green.
+- #10665: main is merged at f1ec87b9f5a3. Top's benchmarks/training_slowdown/README.md drops every section this change edited, so I took it whole. Its two statements of the grade now say S = p × ρ, ρ the bound evaluated on the traced step, where they said "times the record's slowdown". Its 4 suites are running fresh: r20261117-014757-cb74. I re-mark when they're green.
+- #10564: r20261117-004541-0403 failed [ran]. security's records were regenerated, but security/Properties didn't build: its lock's roots still named the deleted Properties.InferenceOnly.Desc.Cover. I committed the regenerated security lock (it adds the removal of the open premise Slowdown.Cover.MulBlocks.Upstream and refreshes the reads records of the two edited modules) and dropped that root. The head is f1430cae16df, and r20261117-014318-06b2 reruns it.
+- #10607 and #10570: main merged, at 4725f7d8a412 and 078ec4c2c33a. #10607's records run r20261117-012716-6d48 exited 75 before its job started, most likely with no slot [inferred], so it is relaunched as r20261117-014447-2fac. #10570's is r20261117-012717-6d1c, running.
+- #10553 (r20261117-010200-667a, the three suites at 7ef39626) and #10556 (r20261116-215836-155e) are still running. They only add to marks already made.
+- I merge main into #10553 and #10556 when #10611 lands, and re-mark.
+
