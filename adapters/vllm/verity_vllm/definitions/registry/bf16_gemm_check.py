@@ -156,11 +156,12 @@ def pinned_routes(device: str | None = None) -> dict[str, dict[str, Any]]:
 def default_cublas_route(phase: str, M: int, K: int, N: int, device: str | None = None) -> tuple[str, dict[str, int]] | None:
     """The captured default cuBLAS route, else (a linear) the device pin's (`pinned_routes`), distinguishing a known non-split launch
     from a shape/M with no record.  The captured routes are the scan's device's (`ROUTE_CONDITIONS`): another named device reads its
-    own pin only."""
+    own pin only, and one with no pin is refused (KeyError naming the file), whatever the phase."""
+    pinned = pinned_routes(device)
     run = _route_run(phase, M, K, N) if device in (None, ROUTE_CONDITIONS["device"]) else None
     if run is not None:
         return ("splitk", {"SPLIT_K": run[2]}) if run[2] is not None else ("non_split", {})
-    if phase == "linear" and (r := pinned_routes(device).get(f"{M},{K},{N}")) is not None:
+    if phase == "linear" and (r := pinned.get(f"{M},{K},{N}")) is not None:
         return ("splitk", {"SPLIT_K": r["SPLIT_K"]}) if r["kernel"] == "splitk" else ("non_split", {})
     return None
 

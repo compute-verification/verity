@@ -51,17 +51,56 @@ def h100_pin(tmp_path, monkeypatch):
     BC.capability_pin.cache_clear()
 
 
-def test_the_scan_device_and_an_unnamed_device_read_the_routes_of_today(h100_pin):
+def _todays_route(pin: dict, phase: str, M: int, K: int, N: int) -> tuple[str, dict[str, int]] | None:
+    """`default_cublas_route` as it reads before a Build names its device: the capture's route, else the cc 9.0 pin's."""
+    run = BC._route_run(phase, M, K, N)
+    if run is not None:
+        return ("splitk", {"SPLIT_K": run[2]}) if run[2] is not None else ("non_split", {})
+    if phase == "linear" and (r := pin.get(f"{M},{K},{N}")) is not None:
+        return ("splitk", {"SPLIT_K": r["SPLIT_K"]}) if r["kernel"] == "splitk" else ("non_split", {})
+    return None
+
+
+def _every_recorded_launch(pin: dict):
+    for phase, K, N in BC._ROUTES:
+        for M in range(1, BC.CUBLAS_ROUTES["m_max"] + 1):
+            yield phase, M, K, N
+    for key in pin:
+        M, K, N = map(int, key.split(","))
+        for phase in ("linear", "router", "f32out"):
+            yield phase, M, K, N
+
+
+def _assert_todays(pin: dict) -> int:
+    n = 0
+    for launch in _every_recorded_launch(pin):
+        want = _todays_route(pin, *launch)
+        assert BC.default_cublas_route(*launch) == want == BC.default_cublas_route(*launch, BC.ROUTE_CONDITIONS["device"]), launch
+        n += want is not None
+    assert BC.pinned_routes() == BC.pinned_routes(BC.ROUTE_CONDITIONS["device"]) == pin
     for device in (None, BC.ROUTE_CONDITIONS["device"]):
-        assert BC.default_cublas_route("linear", 1, 4096, 2048, device) == ("splitk", {"SPLIT_K": 3})
-        assert BC.default_cublas_route("linear", 1, 6144, 160, device) == ("splitk", {"SPLIT_K": 4})
+        assert BC.route_pin_of(device) == (BC.CUBLAS_ROUTES["run_record"], BC.ROUTE_CONDITIONS)
+    return n
+
+
+def test_the_h200_and_a_build_naming_no_device_read_todays_route_at_every_recorded_launch():
+    """Every M up to the scan's m_max at every captured shape, and every pinned shape: the route an H200 or a device-less
+    Build binds, and the route conditions its process is held to, are those of the one cc 9.0 pin and the scan."""
+    pin = BC.capability_pin((9, 0))["cublas"]
+    assert BC.capability_pin((9, 0))["device"] == BC.ROUTE_CONDITIONS["device"]
+    assert _assert_todays(pin) > len(pin)
+
+
+def test_another_cc_9_0_pin_moves_neither(h100_pin):
+    _assert_todays(BC.device_pin(BC.ROUTE_CONDITIONS["device"])["cublas"])
 
 
 def test_a_named_device_reads_its_own_pin_and_never_the_scan(h100_pin):
     assert BC.default_cublas_route("linear", 1, 4096, 2048, H100) == ("non_split", {})
     assert BC.default_cublas_route("linear", 1, 6144, 160, H100) is None
-    with pytest.raises(KeyError, match="no device pin NVIDIA_B300"):
-        BC.default_cublas_route("linear", 1, 4096, 2048, "NVIDIA B300")
+    for phase, M, K, N in (("linear", 1, 4096, 2048), ("router", 17, 6144, 256), ("f32out", 1, 7168, 1024)):
+        with pytest.raises(KeyError, match="no device pin NVIDIA_B300"):
+            BC.default_cublas_route(phase, M, K, N, "NVIDIA B300")
 
 
 def _engine(**cublas):
