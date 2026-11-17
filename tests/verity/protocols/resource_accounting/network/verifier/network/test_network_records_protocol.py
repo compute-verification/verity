@@ -2,7 +2,7 @@
 with the grid compared and without it) against `audit.py`, through the difftest harness.
 
 The cases are `test_network_check_protocol`'s generated spatial units, their records published as one kind
-(`KINDS`): all raw (`grid.BlockGrid`), all committed (`commitment.commit`), all certified, or mixed, each record's kind
+(`KINDS`): all raw (`grid.BlockGrid`), all committed (`commitment.commit`), all attested, or mixed, each record's kind
 sampled
 and the changed record's the kind its change needs. Each kind gets the changes that apply to it (`EXPECT`), and the
 record-kind negative controls: a raw grid slot changed, a raw record relabelled to another link, a committed digest
@@ -163,7 +163,7 @@ def _as(kind: str, r: CertifiedRecord, d: V2.Sampled):
 
 def _bad_records(c: bytes, n: int) -> list[bytes]:
     """Commitments `records` refuses: truncated, extended, a record of an unknown kind, a body cut short or with a byte
-    left over, a slot tag, a status code or a link out of range, a certified body of no record."""
+    left over, a slot tag, a status code or a link out of range, an attested body of no record."""
     def framed(kind, body):
         return bytes([kind]) + len(body).to_bytes(8, "big") + body
 
@@ -257,7 +257,7 @@ def _table() -> Counter:
 @pytest.mark.slow
 def test_the_records_check_agrees_with_the_audit(server):
     """Lean and the audit agree on every case, and each kind reaches every path that applies to it: each change gives its
-    own verdict at least once on raw, committed, certified and mixed records."""
+    own verdict at least once on raw, committed, attested and mixed records."""
     SEEN.clear()
     for kind in KINDS:
         for m in EXPECT[kind]:

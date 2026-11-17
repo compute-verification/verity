@@ -1,6 +1,6 @@
 """``proof-throughput/v2``: the frozen populations, one per workload, pinned by ``instances/<workload>.json``.
 
-A class-statement workload's population is ``n_max`` independent instances of its VU Definition (``Workload.population``,
+A class-statement workload's population is ``n_max`` independent instances of its proof block's Definition (``Workload.population``,
 core's ``population_program``), each instance one unit of ``Q_template_instance`` v0 (``PARTITION``), so the population is
 one stratum. Its lanes are the ones ``verity_flock.class_statement.class_lanes`` gives that one size class: uniform words sampled
 from ``partition_units.derive(SOURCE, DOMAIN, {program digest, seed 0})``, each instance its own x and weight row. The point

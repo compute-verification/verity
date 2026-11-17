@@ -11,17 +11,22 @@ what they find next time); both stamp last_success_at in the cache.
 - `reconcile` (every 10 minutes): each chat and ask channel's last hour, and the front door's.  A person's post (not in the
   front door, where the sender delivers) that should ring someone and has neither a routing line nor a doorbell in any
   inbox, and a post under an `external_posters` name with a name it rings whose inbox has no doorbell for it, are
-  enqueued again, keyed on the channel and ts as Slack's event is (`message_key`), so the event and a second pass add
-  nothing.  The oldest such post is what health reports as `oldest_unprocessed_age_s`.  And `silence`: a message it read
+  enqueued again under reconciliation's own key, `reconcile:{channel}:{ts}`, so a second pass adds nothing while the
+  queue keeps the key (24 h), and a post whose event was queued and then lost is still enqueued once.  When Slack's
+  event and this one are both consumed, `deliver` rings only the inboxes still without the post's doorbell, and a
+  routing line already in the thread is reused.  The oldest such post is what health reports as `oldest_unprocessed_age_s`.  And `silence`: a message it read
   more than SILENT_S newer than Slack's last signed request rings STALL_TO (at most hourly), since Slack switches event
-  delivery off without a word and then nothing is enqueued for `stall` to judge."""
+  delivery off without a word and then nothing is enqueued for `stall` to judge.  And `new_issues`: an issue filed in a
+  lane's Linear team, by any means, rings that lane once (Linear is read only with LINEAR_API_KEY)."""
 from __future__ import annotations
 
+import re
 from datetime import datetime, timezone
 
 from .consumer import ASK_CHANNELS, PERSON_SUBTYPES, is_line_for, line_names
 from .deps import (
     CANARY_SENT,
+    COMMENTS_RUNG,
     DEAD,
     LAST_DONE,
     LAST_ENQUEUED,
@@ -33,7 +38,6 @@ from .deps import (
     TOPIC,
     Deps,
     error,
-    message_key,
 )
 
 REMIND_S, ESCALATE_S = 15 * 60, 60 * 60
@@ -53,6 +57,15 @@ STALL_HEAD = "from slack-events, the queue stalled:"
 CANARY_EVERY_S = 60 * 60                                         # the synthetic event's period, so a quiet day still proves the drain
 SILENT_S = 30 * 60                                               # Slack sends a message's event in seconds and retries a failed one by 5 min
 SILENT_HEAD = "from slack-events, Slack stopped calling:"
+LINEAR_S = 6 * 3600                                              # an issue filed this recently, not taken up, rings its lane
+LINEAR_PAGE = 50
+LINEAR_Q = ("query($f: IssueFilter!, $after: String) { issues(filter: $f, first: " + str(LINEAR_PAGE) + ", after: $after) { "
+            "pageInfo { hasNextPage endCursor } nodes { identifier title url team { key } labels { nodes { name } } "
+            "creator { name } botActor { userDisplayName } comments(first: 1) { nodes { id } } } } }")
+LINEAR_C = ("query($f: CommentFilter!, $after: String) { comments(filter: $f, first: " + str(LINEAR_PAGE) + ", after: $after) { "
+            "pageInfo { hasNextPage endCursor } nodes { id body botActor { userDisplayName } issue { identifier url } } } }")
+SIGNED = re.compile(r"([a-z][a-z0-9-]*)(?:/[\w.-]+)?(?:\s*\([^()\n]{1,30}\))?,\s")
+OPENING = 80
 
 
 def chats(deps: Deps) -> tuple[dict, list[str]]:
@@ -327,7 +340,7 @@ def reconcile(deps: Deps) -> dict:
                 oldest = p["ts"] if oldest is None or float(p["ts"]) < float(oldest) else oldest
                 if float(p["ts"]) > now - SETTLE_S:
                     continue                                       # in flight: the consumer may not have reached it
-                eid = message_key(ch, p["ts"])
+                eid = f"reconcile:{ch}:{p['ts']}"
                 ev = {**{k: p[k] for k in ("ts", "thread_ts", "text", "user", "bot_id", "username", "subtype", "reactions")
                          if k in p}, "type": "message", "channel": ch}
                 deps.queue.send(TOPIC, {"kind": "event", "event_id": eid, "event": ev, "source": "reconcile"},
@@ -339,9 +352,118 @@ def reconcile(deps: Deps) -> dict:
     if deps.read(DEAD) is None:
         deps.write(DEAD, {"count": 0, "since": now})                # counted from here: an evicted count reads as unknown till now
     silent = silence(deps, now, newest)
+    linear = {}
+    for k, scan in (("issues", new_issues), ("comments", new_comments)):
+        try:
+            linear[k] = scan(deps, reg, routes, now)
+        except Exception as e:  # noqa: BLE001 - Linear or an inbox unread leaves Slack's reconciliation done; the next run tries again
+            deps.log(f"new-{k}-failed", error=error(e))
+            linear[k] = None
     deps.write(LAST_SUCCESS, now)
-    deps.log("reconcile", queued=queued, channels=len(ids), unreadable=len(unreadable), silent=silent)
-    return {"queued": queued, "channels": len(ids), "unreadable": unreadable, "silent": silent}
+    deps.log("reconcile", queued=queued, channels=len(ids), unreadable=len(unreadable), silent=silent, **linear)
+    return {"queued": queued, "channels": len(ids), "unreadable": unreadable, "silent": silent, **linear}
+
+
+def new_issues(deps: Deps, reg: dict, routes, now: float) -> int | None:
+    """Ring the lane of each issue filed in a lane's Linear team in the last LINEAR_S, by any means (Linear's app, the MCP
+    connector, Linear's agent, `research msg linear create` from another handle), that nobody has taken up (not started, no
+    comment), unless the lane filed it (its `from:` label) or its inbox already has a doorbell naming it (an ask's own, or
+    this cron's from an earlier run), so each rings once.  The lane is the issue's `lane:` label's handle, else its team's.
+    The number rung; None, reading nothing, without a Linear reader."""
+    if deps.linear is None:
+        return None
+    rs, rang, inboxes = deps.rs, 0, {}
+    handles = {h["handle"] for h in reg["handles"]}
+    owners = {h["linear"]: h["handle"] for h in reg["handles"] if h.get("linear") and not h.get("linear_label")}
+    created, team = window(reg, now)
+    f = {"createdAt": created, "state": {"type": {"in": ["triage", "backlog", "unstarted"]}}, "team": team}
+    for i in linear_nodes(deps, LINEAR_Q, f, "issues"):
+        labels = [x["name"] for x in i["labels"]["nodes"]]
+        lane = next((x[5:] for x in labels if x.startswith("lane:") and x[5:] in handles), None) or owners.get(i["team"]["key"])
+        filer = next((x[5:] for x in labels if x.startswith("from:")), None)
+        if not lane or filer == lane or i["comments"]["nodes"]:
+            continue
+        to, r = routes.resolve(lane)
+        if why := rs.unreachable(lane, to, r):
+            deps.log("new-issue-unrung", issue=i["identifier"], to=lane, why=why)
+            continue
+        inbox = inbox_of(deps, reg, r, now, inboxes)
+        if any(re.search(rf"\b{re.escape(i['identifier'])}\b", t) for t in inboxes[inbox]):
+            continue
+        who = filer or (i.get("botActor") or {}).get("userDisplayName") or (i.get("creator") or {}).get("name") or "someone"
+        ring(deps, inbox, inboxes, rs.linear_doorbell(filer or "linear", i,
+                                                      f"a new issue in {i['team']['key']}, filed by {who}: {i['title']}"))
+        rang += 1
+        deps.log("new-issue-rung", issue=i["identifier"], to=to)
+    return rang
+
+
+def new_comments(deps: Deps, reg: dict, routes, now: float) -> int | None:
+    if deps.linear is None:
+        return None
+    rs, rang, inboxes = deps.rs, 0, {}
+    handles = {h["handle"] for h in reg["handles"]}
+    created, team = window(reg, now)
+    rung = {k: t for k, t in (deps.read(COMMENTS_RUNG) or {}).items() if t > now - LINEAR_S}
+    for c in linear_nodes(deps, LINEAR_C, {"createdAt": created, "issue": {"team": team}}, "comments"):
+        body, i = c.get("body") or "", c.get("issue")
+        names = [n for n in rs.lead_names(body, reg) if n in handles]
+        if c.get("botActor") or not i or not names:
+            continue
+        rest = body[(rs.LEAD_RE.match(body) or rs.BARE_LEAD_RE.match(body)).end():]
+        sender = m[1] if (m := SIGNED.match(rest)) and m[1] in handles else None
+        opening = " ".join(rs.plain(rest).split())[:OPENING]
+        said = rs.plain(body)
+        if len(said) > rs.DOORBELL_MAX:
+            said = said[:rs.DOORBELL_MAX].rstrip() + "\u2026"
+        for n in names:
+            to, r = routes.resolve(n)
+            if sender and sender in (n, to) or f"{c['id']}:{n}" in rung:
+                continue
+            if why := rs.unreachable(n, to, r):
+                deps.log("new-comment-unrung", issue=i["identifier"], to=n, why=why)
+                continue
+            inbox = inbox_of(deps, reg, r, now, inboxes)
+            if any(re.search(rf"\b{re.escape(i['identifier'])}\b", t) and opening in " ".join(rs.plain(t).split())
+                   for t in inboxes[inbox]):
+                continue
+            ring(deps, inbox, inboxes, rs.linear_doorbell(sender or "linear", i, said))
+            rung[f"{c['id']}:{n}"] = now
+            deps.write(COMMENTS_RUNG, rung, LINEAR_S)
+            rang += 1
+            deps.log("new-comment-rung", issue=i["identifier"], to=to)
+    return rang
+
+
+def window(reg: dict, now: float) -> tuple[dict, dict]:
+    since = datetime.fromtimestamp(now - LINEAR_S, timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    return {"gt": since}, {"key": {"in": sorted({h["linear"] for h in reg["handles"] if h.get("linear")})}}
+
+
+def linear_nodes(deps: Deps, query: str, f: dict, key: str) -> list[dict]:
+    found, after = [], None
+    while True:
+        page = deps.linear(query, {"f": f, "after": after})[key]
+        found += page["nodes"]
+        if not page["pageInfo"]["hasNextPage"]:
+            return found
+        after = page["pageInfo"]["endCursor"]
+
+
+def inbox_of(deps: Deps, reg: dict, r: dict, now: float, inboxes: dict) -> tuple[str, str]:
+    rs = deps.rs
+    inbox = (r.get("channel") or rs.channel_id_for(reg, rs.FRONT_DOOR), r["inbox_ts"])
+    if inbox not in inboxes:
+        inboxes[inbox] = [m.get("text") or "" for m in deps.slack.paged(
+            "conversations.replies", "messages", channel=inbox[0], ts=inbox[1], oldest=f"{now - LINEAR_S:.6f}")
+            if m.get("ts") != inbox[1] and rs.is_doorbell(m, reg)]
+    return inbox
+
+
+def ring(deps: Deps, inbox: tuple[str, str], inboxes: dict, text: str) -> None:
+    deps.slack.call("chat.postMessage", channel=inbox[0], thread_ts=inbox[1], username="router", unfurl_links="false",
+                    unfurl_media="false", text=text)
+    inboxes[inbox].append(text)
 
 
 class _Log:

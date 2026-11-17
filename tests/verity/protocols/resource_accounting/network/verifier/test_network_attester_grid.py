@@ -1,6 +1,6 @@
-"""Proposition 2's lemmas on grids and the certifier's semantics. By name, the tests mirror lemmas of
+"""Proposition 2's lemmas on grids and the attester's semantics. By name, the tests mirror lemmas of
 `NetTiming.SecurityProofs.Occupancy`, among them the three without a record, `occ_fill`, `leftPacked_occ_fill` and
-`leftPacked_fifoGrid`. The certifier tests check the behaviour `NetTiming.Assumptions` takes as hypotheses (W4 packing,
+`leftPacked_fifoGrid`. The attester tests check the behaviour `NetTiming.Assumptions` takes as hypotheses (W4 packing,
 W5's untimed status, W6 fail-closed)."""
 
 import itertools
@@ -73,14 +73,14 @@ def test_sum_released_le_and_conservation():
 
 @pytest.mark.parametrize("T,r", SMALL)
 def test_encard_fifoGrids(T, r):
-    """Tightness: over all enqueue schedules, the FIFO certifier releases exactly (r + 1)^T grids."""
+    """Tightness: over all enqueue schedules, the FIFO attester releases exactly (r + 1)^T grids."""
     grids = {fill(frames(T * (r + 1)), released(r, enq), r)
              for enq in itertools.product(range(r + 2), repeat=T)}
     assert all(left_packed(g) for g in grids)  # leftPacked_fifoGrid
     assert len(grids) == (r + 1) ** T
 
 
-def test_certifier_constant_rate_left_packed_fifo():
+def test_attester_constant_rate_left_packed_fifo():
     rng = random.Random(4)
     p = GridParams(buckets=5, allocation=3, frame_bytes=2)
     w = Certifier("responses", p)
@@ -99,7 +99,7 @@ def test_certifier_constant_rate_left_packed_fifo():
     assert out and out == sent[: len(out)]  # queue order, across windows
 
 
-def test_certifier_fail_closed_untimed_status():
+def test_attester_fail_closed_untimed_status():
     p = GridParams(buckets=4, allocation=2, frame_bytes=1, queue_capacity=3)
     statuses = set()
     for fault_at in range(p.buckets):
@@ -122,7 +122,7 @@ def test_certifier_fail_closed_untimed_status():
     assert statuses == {Status(Reason.OVERFLOW)}  # one untimed symbol, whatever the fault's bucket
 
 
-def test_certifier_malformed_frame_is_a_fault():
+def test_attester_malformed_frame_is_a_fault():
     w = Certifier("responses", GridParams(buckets=2, allocation=1, frame_bytes=4))
     w.enqueue(b"abc")
     w.tick()

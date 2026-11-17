@@ -18,22 +18,22 @@ import re
 
 import numpy as np
 import pytest
+from verity.circuits.codec import descriptor_id
+from verity.circuits.defs import bind
+from verity.circuits.evaluation import evaluate
+from verity.commitments.periods import interface as IF
+from verity.commitments.periods import wiring as WI
+from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
 from verity_flock import ir_lower as IL
 from verity_flock.class_statement import UnitStager
 from verity_flock.gf2 import Circuit
-from verity.commitments.periods import interface as IF
-from verity.commitments.periods import wiring as WI
+
+from verity_vllm.definitions.registry import b1
+from verity_vllm.definitions.registry import greedy_stages as G
 from verity_vllm.pipeline import chunk_rows as CR
 from verity_vllm.pipeline import serving_rows as SRW
 from verity_vllm.pipeline import stage_rows as ST
 from verity_vllm.query.program_view import spec_statics
-
-from verity.circuits.codec import descriptor_id
-from verity.circuits.defs import bind
-from verity.circuits.evaluation import evaluate
-from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
-from verity_vllm.definitions.registry import b1
-from verity_vllm.definitions.registry import greedy_stages as G
 
 V = 200
 SERVED_V = 154880

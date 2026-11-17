@@ -122,7 +122,7 @@ no server can compute: which releases a class holds is the network attester's to
 no end, and such a release has its rows.
 
 **A schedule that can be tied** (`can_be_tied`; `untied` says what keeps one from it). A class is tied where a
-response tie's proof block returns each of its response rows (`certifier.prover.response_tie`). Three things of
+response tie's proof block returns each of its response rows (`attester.prover.response_tie`). Three things of
 the schedule are needed for that, whatever a run holds:
 
 - each P is listed once, so a release's class is told by its request's length alone;
@@ -308,7 +308,7 @@ def request_words(request: bytes, B: int) -> tuple[int, int]:
         if not isinstance(got, io_request.Frame):
             raise ValueError(f"cell {k // B} of the request's {len(cut) // B} is not that cell of a canonical id "
                              f"request ({'its first' if not k else f'{left} bytes of it left'}): the network "
-                             f"certifier fails such a connection as malformed and releases nothing of it")
+                             f"attester fails such a connection as malformed and releases nothing of it")
         left, prompt = (left or got.length) - got.used, prompt + got.fields
     max_tokens = id_request_max_tokens(bytes(request[:lay.room]))
     if max_tokens is None:  # no first cell that reads is without it
@@ -550,7 +550,7 @@ def _laid(params: NetworkAttesterParams, released: Sequence[Released],
             if not asked or asked > most or r.outputs > asked:
                 raise ValueError(f"release {r.order}, filed in class {i}, has a max_tokens of {asked} and "
                                  f"{r.outputs} ids where the schedule's max_tokens_cap is {most}: the network "
-                                 f"certifier releases no request whose max_tokens is 0 or past it and no id past "
+                                 f"attester releases no request whose max_tokens is 0 or past it and no id past "
                                  f"a request's max_tokens")
     return filed, words
 
