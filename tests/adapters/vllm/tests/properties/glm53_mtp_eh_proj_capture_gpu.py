@@ -41,8 +41,6 @@ A GO record's routes enter `bf16_gemm_check`'s route table under the run's recor
 """
 from __future__ import annotations
 
-__models__ = ("zai-org/GLM-5.3",)
-
 import argparse
 import contextlib
 import json

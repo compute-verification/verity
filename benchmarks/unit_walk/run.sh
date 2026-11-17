@@ -50,5 +50,26 @@ for i in "${staged[@]}"; do
   if grep -q '"same":false' "$O/walk-$i.out"; then log "walk ${UNITS[$i]}: a walk's packed words are not the first run's"; rc=9; fi
   rm -rf "$W/u$i"
 done
+"$PY" - "$O" "$rc" "${UNITS[@]}" <<'EOF' || rc=10
+import json, re, sys
+from pathlib import Path
+from verity_bench import kit
+out, rc, units = Path(sys.argv[1]), int(sys.argv[2]), sys.argv[3:]
+res = kit.writer(out)
+res.validation("passed" if rc == 0 else "failed", "every type staged and walked, each walk's packed words the first run's",
+               f"rc {rc}")
+for i, unit in enumerate(units):
+    f = out / f"walk-{i}.out"
+    walks = [json.loads(x.split("\t", 1)[1]) for x in f.read_text().splitlines() if x.startswith("WALK\t")] if f.exists() else []
+    good = [w for w in walks if w["ok"] and w["same"]]
+    us = lambda w: w["cpu_s"] / w["slots"] * 1e6
+    best = min(good, key=us) if good else None
+    base = [us(w) for w in good if w["wide"] == 1 and w["ahead"] == 0 and w["keep"] == 0]
+    res.measurement("proofs/unit-walk-cpu-per-slot", best and us(best), "CPU microseconds a slot", mark="measured",
+                    member=re.sub(r"[^a-z0-9]+", "-", unit.lower()).strip("-") + "-cpu",
+                    why=None if best else "no walk of this type was ok and its first run's",
+                    extra={"block_type": unit, "baseline_us": min(base) if base else None,
+                           **({k: best[k] for k in ("wide", "ahead", "keep", "threads", "slots", "rows")} if best else {})})
+EOF
 log "unit-walk: done, rc $rc"
 exit $rc
