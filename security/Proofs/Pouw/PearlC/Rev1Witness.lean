@@ -10,17 +10,8 @@ import Proofs.Pouw.Prob
 public import Proofs.Pouw.PearlC.DeviceRev1Gap
 public import Proofs.Pouw.PearlC.Records
 
-/-!
-# rev1's H100 rows are satisfiable
-
-Staged; nothing pinned. The pins proposed are `ttOutPearlCH100Rev1Witness`, `ttOutTilePearlCH100Rev1Witness` and
-`pearlCTilesDevRev1_total` (rev1's tiles cover each unit's words once, so `GGapSampled`'s W is the layout's rev1 `W_ref`).
-
-Each shows the named row (`TTOutPearlCH100Rev1`, `TTOutTilePearlCH100Rev1`) holding beside an honest reference whose cost
-fits rev1's `W_ref` (unit by unit, or tile by tile), on an in-domain workload (`wideWorkload`, one `1 × 1024 × 128` unit)
-whose unit, or first tile, is within the cap and has positive rev1 credit. The cost models are `witnessCM` and `witnessTileCM` at rev1's protocol and tiles; they show
-satisfiability only.
--/
+/-! rev1's H100 rows are satisfiable, staged: each holds beside an honest reference on `wideWorkload`, at the cost
+models `witnessCM` and `witnessTileCM`, which show satisfiability only. -/
 
 @[expose] public section
 
@@ -28,8 +19,6 @@ namespace Pouw.PearlC
 
 open Finset Assumptions Pouw.Fp8Atom
 
-/-- rev1's credit at the H100 record is non-negative at every shape: the peel alone credits `128·m·n`, more than the
-first add's `32·m·n`. -/
 theorem creditDevRev1_h100_nonneg (s : Shape) : 0 ≤ creditDevRev1 devH100 s := by
   rw [creditDevRev1_h100]
   simp only [creditOfRev1, firstAddOf, creditOf, Params.pi, Costs.adopted]
@@ -47,7 +36,6 @@ theorem creditDevRev1_le_wref_h100 (s : Shape) : creditDevRev1 devH100 s ≤ wre
   have : (0 : ℚ) ≤ (devH100.prices.costs.qa : ℚ) * s.m * s.k := by positivity
   linarith
 
-/-- On a layout of nonempty units, rev1's audit tiles' `W_ref` adds up to the layout's `∑_u wrefDevRev1`. -/
 theorem pearlCTilesDevRev1_total {Q R S : Type} (d : PearlCDevice) (sem : PearlCSem Q R S) (ρ : ℚ) (L : Layout)
     (hpos : ∀ u < L.N, 0 < (L.shape u).m ∧ 0 < (L.shape u).n) :
     tileWrefTotal (pearlCTilesDevRev1 d sem ρ) L = ∑ u ∈ range L.N, (wrefDevRev1 d (L.shape u) : ℝ) := by
@@ -70,7 +58,6 @@ theorem pearlCTilesDevRev1_total {Q R S : Type} (d : PearlCDevice) (sem : PearlC
   rw [Rat.cast_sum]
   rfl
 
-/-- A word of at most one promotion group has no later promotion into a +0 total. -/
 theorem laterZeroPromos_eq_zero_of_le (d : PearlCDevice) {m n k : ℕ} (A : Matrix (Fin m) (Fin k) Code)
     (B : Matrix (Fin n) (Fin k) Code) (i : Fin m) (j : Fin n) (hk : k / (32 * d.G) ≤ 1) :
     laterZeroPromos d A B i j = 0 := by
@@ -82,11 +69,8 @@ theorem laterZeroPromos_eq_zero_of_le (d : PearlCDevice) {m n k : ℕ} (A : Matr
     rw [Finset.mem_Ico] at hg
     omega
 
-/-! ## A workload in the device domain
-
-`witnessWorkload`'s one column is outside `pearlCDomainDev`, which needs `64 ≤ n` and `64 ∣ n`; the rows below are
-witnessed on one unit of shape `1 × 1024 × 128`, every word `1.0`. Its flags, debit and rules are `witnessWorkload`'s,
-column by column. -/
+/-! `witnessWorkload`'s one column is outside `pearlCDomainDev`, which needs `64 ≤ n` and `64 ∣ n`, so the rows below
+are witnessed on one unit of shape `1 × 1024 × 128`. -/
 
 /-- One unit of shape `1 × 1024 × 128` in the device domain, every word `1.0`. -/
 def wideWorkload : Workload := ⟨⟨1, fun _ => ⟨1, 1024, 128⟩, fun _ => 0⟩, fun _ _ _ => 1065353216⟩
@@ -142,7 +126,6 @@ theorem wide_inert_work_zero (H : Unit → Unit) (s : Unit) :
     exact ⟨⟨0, by simp [wideWorkload]⟩, wide_unitFlags H s e.1 _ _ hl⟩
 
 open Classical in
-/-- The wide workload's first tile (row 0, columns `[0, 64)`) has zero debit. -/
 theorem wide_tileInertWork_zero (H : Unit → Unit) (s : Unit) :
     witnessSem.tileInertWork Costs.adopted H s wideWorkload 0 (Ico 0 1) (Ico 0 64) (witnessAct 0) = 0 := by
   unfold PearlCSem.tileInertWork
@@ -179,25 +162,20 @@ theorem wide_tileInertWork_zero (H : Unit → Unit) (s : Unit) :
   rw [ha, he]
   simp [inertWorkOf]
 
-/-- The support's plus end at the witness's element `1.0` and unit scales is the code of `448`. -/
 theorem witness_endPlus : (FormingP.atomMixP hopperE4m3K32).elem 1 1 1 (SaltDead.flatLine fun _ => false)
     (SaltDead.flatLineF fun _ => false) = ⟨0x7E, by decide⟩ := by
   decide +kernel
 
-/-- The support's minus end at the witness's element `1.0` and unit scales is the code of `−448`. -/
 theorem witness_endMinus : (FormingP.atomMixP hopperE4m3K32).elem 1 1 1 (SaltDead.flatLine fun _ => false)
     (SaltDead.flatLineF fun _ => true) = ⟨0xFE, by decide⟩ := by
   decide +kernel
 
-/-- On a word of 128 codes of `±448` (both rows alike), no product of the H100's chain is cut. -/
 theorem witness_noCuts (c : Code) (hc : c = ⟨0x7E, by decide⟩ ∨ c = ⟨0xFE, by decide⟩) :
     Mend.chainCuts hopperE4m3K32 4 (rowAtoms (fun _ : Fin 128 => c) (fun _ : Fin 128 => c)) =
       List.replicate 128 false := by
   rcases hc with rfl | rfl <;> decide +kernel
 
 open Classical in
-/-- A word of two rows of `1.0` at the witness's unit scales has no product that no salt makes count: no element is
-salt-dead, and both ends' codes are `±448`, at which no product is cut. -/
 theorem witness_wordMend_zero (k : ℕ) (hk : k = 128) (x w : Fin k → ℚ) (hx : ∀ l, x l = 1) (hw : ∀ l, w l = 1) :
     wordMend devH100 witnessSem.alpha witnessSem.beta x w = 0 := by
   subst hk

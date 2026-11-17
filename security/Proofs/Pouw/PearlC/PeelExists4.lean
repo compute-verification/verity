@@ -7,29 +7,7 @@ import Mathlib.Tactic.Positivity.Finset
 import Proofs.Pouw.PearlC.PeelExists
 import Proofs.Pouw.PearlC.RowStats
 
-/-!
-# The FP4 peel's rows exist (proofs)
-
-`Pc4EntryOK` asks that the FP4 peel form `C̃_ij`'s word and the rows `P_A,i`, `P_B,j` (`PeelFp4Proofs.peelRows4` on
-`sm120Nvf4`): that both rows form (`formRow`), and that no chain, FMA or BF16 narrowing leaves the finite range. At
-`64 ∣ k ≤ 2^16` that holds on every pair of rows that `Row4OK` admits, under `Pc4OpsAgree`, by magnitudes:
-
-* **A firing** (`step4_fin`): from a finite accumulator of magnitude `x`, a firing whose group terms exist writes a
-  finite word at most `x` plus the groups' scaled dots, below `2^128`, as `truncRZ` truncates toward zero
-  (`truncRZ_abs_le`, `toF32RZ_le`). A group's scaled dot is at most `16·36·S_a·S_b` at scale bytes of values at most
-  `S_a` and `S_b` (`groupTerm_le`, `groupTerms_le`).
-* **A chain** (`chainN_fin`, `cTilde_fin`): `K/64` firings from `+0` stay at most `K/64·2304·S_a·S_b`. Every scale byte
-  a chain reads is valid: a formed row's are `e4m3` casts or `0x01`, never NaN (`scaleLe_448`, at most `448`), and the
-  bases' are `1.0` (`scaleLe_one`), so every chain is finite and at most `2^64` (`ch4_fin`).
-* **A formed row** (`formRow_some`): a noise atom's accumulator is `f32(α·x)`, finite since `α·|x| ≤ 2689`
-  (`RowStats`' `alpha4_mul_le`), and its firing adds at most `2304·448/16` (`noiseElem_fin`), so the row forms, with
-  `K` codes and `K/16` scale bytes, none NaN.
-* **The rows** (`peelRows4_isSome`): `P_A,i` and `P_B,j` exist (`PeelExists.paRow_fin`, `pbRow_fin`), with the weight
-  row's `Ẽ` finite BF16 words at most `448` at a scale byte that is not NaN (`eTilde_le`, by `decide`).
-
-`pc4EntryOK_of_rows` is `Pc4EntryOK` from the two rows' `Row4OK`, so `TileCheckWords`' `tileCheck4_computesWords`
-names no hypothesis at an entry.
--/
+/-! The FP4 peel's rows exist at `64 ∣ k ≤ 2^16` on every pair of rows that `Row4OK` admits, under `Pc4OpsAgree`. -/
 
 @[expose] public section
 
@@ -38,9 +16,6 @@ namespace Pouw.PearlC.PeelExists
 open Pouw.Fp8Atom Pouw.PearlC Pouw.PearlC.Fp4 Pouw.PearlC.Fp4Freeze Pouw.PearlC.PeelExact Pouw.PearlC.Fp4Dev
   Pouw.PearlC.RowCircuit
 
-/-! ## A firing -/
-
-/-- `truncRZ` truncates toward zero: its multiple of `2^lsb` is at most `m·2^e` in magnitude. -/
 theorem truncRZ_abs_le (m e lsb : ℤ) : |(truncRZ m e lsb : ℚ)| * 2 ^ lsb ≤ |(m : ℚ)| * 2 ^ e := by
   have two : (2 : ℚ) ≠ 0 := two_ne_zero
   unfold truncRZ
@@ -63,7 +38,6 @@ theorem truncRZ_abs_le (m e lsb : ℤ) : |(truncRZ m e lsb : ℚ)| * 2 ^ lsb ≤
     rw [habs, ← natAbs_cast, show lsb = (s : ℤ) + e by omega, zpow_add₀ two, zpow_natCast, ← mul_assoc]
     exact mul_le_mul_of_nonneg_right hq (zpow_pos (by norm_num) e).le
 
-/-- `bitLength` of a nonzero number below `2^a` is at most `a`. -/
 theorem bitLength_le {q a : ℕ} (hq : q < 2 ^ a) : bitLength q ≤ a := by
   unfold bitLength
   split_ifs with h0
@@ -71,8 +45,6 @@ theorem bitLength_le {q a : ℕ} (hq : q < 2 ^ a) : bitLength q ≤ a := by
   · have := (Nat.log2_lt h0).2 hq
     omega
 
-/-- **`toF32RZ` truncates toward zero**: below `2^128` in magnitude, `N·2^lsb` is written as a finite word of value at
-most `N·2^lsb` in magnitude. -/
 theorem toF32RZ_le {N lsb : ℤ} (hN : |(N : ℚ)| * 2 ^ lsb < 2 ^ 128) :
     ∃ w, toF32RZ N lsb = some w ∧ ∃ y, wordQ w = some y ∧ |y| ≤ |(N : ℚ)| * 2 ^ lsb := by
   have two : (2 : ℚ) ≠ 0 := two_ne_zero
@@ -183,7 +155,6 @@ theorem toF32RZ_le {N lsb : ℤ} (hN : |(N : ℚ)| * 2 ^ lsb < 2 ^ 128) :
   rw [abs_mul, abs_of_pos (hpos g), hNsQ, ← hMabs]
   exact hQb.1
 
-/-- The step's sum of truncations is at most the groups' scaled dots in magnitude. -/
 theorem sum_truncRZ_abs_le (lsb : ℤ) : ∀ ts : List GroupTerm,
     |(((ts.map fun t => truncRZ t.mant t.unit lsb).sum : ℤ) : ℚ)| * 2 ^ lsb ≤
       (ts.map fun t => |(t.mant : ℚ)| * 2 ^ t.unit).sum
@@ -200,8 +171,6 @@ theorem sum_truncRZ_abs_le (lsb : ℤ) : ∀ ts : List GroupTerm,
           mul_le_mul_of_nonneg_right (abs_add_le _ _) hp
       _ ≤ _ := by rw [add_mul]; exact add_le_add h1 h2
 
-/-- **A firing from a finite accumulator is finite**: on operands whose group terms exist, from an accumulator of value
-`x`, the word written is finite and at most `|x|` plus the groups' scaled dots in magnitude, below `2^128`. -/
 theorem step4_fin (p : Fp4Atom) {acc : ℕ} {x : ℚ} (hx : wordQ acc = some x) {a b : List Nib}
     {sa sb : List (Fin 256)} {ts : List GroupTerm} (hts : p.groupTerms a b sa sb = some ts) {T : ℚ}
     (hT : (ts.map fun t => |(t.mant : ℚ)| * 2 ^ t.unit).sum ≤ T) (hB : |x| + T < 2 ^ 128) :
@@ -238,8 +207,6 @@ theorem step4_fin (p : Fp4Atom) {acc : ℕ} {x : ℚ} (hx : wordQ acc = some x) 
       obtain ⟨w, hw, y, hy, hyb⟩ := toF32RZ_le (lt_of_le_of_lt hbound hB)
       exact ⟨w, hw, y, hy, hyb.trans hbound⟩
 
-/-! ## A firing's group terms -/
-
 theorem numerator_natAbs_le : ∀ c : Nib, (numerator c).natAbs ≤ 12 := by decide +kernel
 
 theorem sum_abs_le_mul (B : ℤ) : ∀ l : List ℤ, (∀ x ∈ l, |x| ≤ B) → |l.sum| ≤ l.length * B
@@ -256,8 +223,6 @@ theorem sum_abs_le_mul (B : ℤ) : ∀ l : List ℤ, (∀ x ∈ l, |x| ≤ B) �
 /-- A scale byte of `f` with a value at most `S`. -/
 def ScaleLe (f : ScaleFmt) (S : ℚ) (s : Fin 256) : Prop := ∃ d, scaleDyadic f s = some d ∧ (d.1 : ℚ) * 2 ^ d.2 ≤ S
 
-/-- **A group's scaled dot is at most `group·36·S_a·S_b`**: at most `group` products of numerators (quarters, each at
-most `12·12`), times the two scales. -/
 theorem groupTerm_le (p : Fp4Atom) (a b : List Nib) {sa sb : List (Fin 256)} (j : ℕ) {Sa Sb : ℚ}
     {s1 s2 : Fin 256} (h1 : sa[j * p.group / p.block]? = some s1) (h2 : sb[j * p.group / p.block]? = some s2)
     (hs1 : ScaleLe p.fmt Sa s1) (hs2 : ScaleLe p.fmt Sb s2) :
@@ -314,8 +279,6 @@ theorem mapM_le {f : ℕ → Option GroupTerm} {B : ℚ} :
     push_cast
     linarith
 
-/-- **An NVFP4 firing's group terms exist and are at most `2304·S_a·S_b`** on 64 code pairs and 4 scale bytes per
-operand, every byte of `sa` valid and at most `S_a`, of `sb` at most `S_b`. -/
 theorem groupTerms_le {a b : List Nib} {sa sb : List (Fin 256)} {Sa Sb : ℚ} (ha : a.length = 64)
     (hb : b.length = 64) (hsa : sa.length = 4) (hsb : sb.length = 4) (hSa : ∀ s ∈ sa, ScaleLe .ue4m3 Sa s)
     (hSb : ∀ s ∈ sb, ScaleLe .ue4m3 Sb s) :
@@ -340,10 +303,6 @@ theorem groupTerms_le {a b : List Nib} {sa sb : List (Fin 256)} {Sa Sb : ℚ} (h
   norm_num
   ring
 
-/-! ## The chain -/
-
-/-- **NVFP4's chain is finite**: `n` firings from a finite accumulator of magnitude `x`, every scale byte of `sa` valid
-and at most `S_a` and of `sb` at most `S_b`, write a finite word at most `x + n·2304·S_a·S_b`, below `2^128`. -/
 theorem chainN_fin {Sa Sb : ℚ} (hSa0 : 0 ≤ Sa) (hSb0 : 0 ≤ Sb) :
     ∀ (n c : ℕ) (a b : List Nib) (sa sb : List (Fin 256)) (x : ℚ), wordQ c = some x → a.length = n * 64 →
       b.length = n * 64 → sa.length = n * 4 → sb.length = n * 4 → (∀ s ∈ sa, ScaleLe .ue4m3 Sa s) →
@@ -375,8 +334,6 @@ theorem chainN_fin {Sa Sb : ℚ} (hSa0 : 0 ≤ Sa) (hSb0 : 0 ≤ Sb) :
     · push_cast
       nlinarith
 
-/-- **NVFP4's `C̃` is finite** over `K` code pairs (`64 ∣ K`) and `K/16` scale bytes per operand, each valid and at most
-`S_a`, `S_b`: at most `K/64·2304·S_a·S_b`, where that is below `2^128`. -/
 theorem cTilde_fin {Sa Sb : ℚ} (hSa0 : 0 ≤ Sa) (hSb0 : 0 ≤ Sb) {K : ℕ} (hK : 64 ∣ K) {a b : List Nib}
     {sa sb : List (Fin 256)} (ha : a.length = K) (hb : b.length = K) (hsa : sa.length = K / 16)
     (hsb : sb.length = K / 16) (hSa : ∀ s ∈ sa, ScaleLe .ue4m3 Sa s) (hSb : ∀ s ∈ sb, ScaleLe .ue4m3 Sb s)
@@ -407,8 +364,6 @@ theorem scaleDyadic_le : ∀ s : Fin 256, s.val % 128 ≠ 127 →
 theorem scaleDyadic_one : scaleDyadic .ue4m3 0x38 = some (8, -3) := by decide +kernel
 theorem scaleDyadic_f : scaleDyadic .ue4m3 0x18 = some (8, -7) := by decide +kernel
 
-/-! ## The scale bytes and `Ẽ` -/
-
 theorem scaleLe_448 {s : Fin 256} (hs : s.val % 128 ≠ 127) : ScaleLe .ue4m3 448 s := by
   have h := scaleDyadic_le s hs
   rcases hd : scaleDyadic .ue4m3 s with _ | d
@@ -420,7 +375,6 @@ theorem scaleLe_one : ScaleLe .ue4m3 1 0x38 := ⟨(8, -3), scaleDyadic_one, by n
 
 theorem scaleLe_f : ScaleLe .ue4m3 (1 / 16) 0x18 := ⟨(8, -7), scaleDyadic_f, by norm_num⟩
 
-/-- `Ẽ`'s words at a scale byte that is not NaN are finite BF16 words of magnitude at most `448`. -/
 theorem eTilde_le (e : Fin 32 → Nib) {aE : Fin 256} (h : aE.val % 128 ≠ 127) (q : Fin 32) :
     ∃ a, wordQ (eTilde e aE q <<< 16) = some a ∧ |a| ≤ 448 := by
   have hq : ((wordQ (eTilde e aE q <<< 16)).map fun v => decide (|v| ≤ 448)) = some true := eTilde_elem_le (e q) aE h
@@ -429,16 +383,12 @@ theorem eTilde_le (e : Fin 32 → Nib) {aE : Fin 256} (h : aE.val % 128 ≠ 127)
   · rw [hw] at hq
     exact ⟨a, rfl, of_decide_eq_true (Option.some.inj hq)⟩
 
-/-! ## A formed row -/
-
 theorem rnWord_false (v : ℚ) : rnWord v false = f32Word v := by
   unfold rnWord
   by_cases h : v = 0
   · rw [ite_eq_left h, h]; simp [f32Word]
   · rw [ite_eq_right h]
 
-/-- **NVFP4's noise element is finite** from an accumulator `f32(α·x)` with `|α·x| ≤ 2689`: `E′`'s blocks at
-`e4m3(β)` (at most `448`, never NaN) and `F`'s at `2⁻⁴` add at most `2304·448/16` to it. -/
 theorem noiseElem_fin {α x β : ℚ} (h : |α * x| ≤ 2689) (e f : Fin 32 → Nib) :
     ∃ w, nvf4NoiseElem α x β e f = some w := by
   obtain ⟨y, hy⟩ := RowCircuit.rnWord_finite (v := α * x) false (by linarith)
@@ -463,7 +413,6 @@ theorem noiseElem_fin {α x β : ℚ} (h : |α * x| ≤ 2689) (e f : Fin 32 → 
   obtain ⟨w, hw, -⟩ := step4_fin sm120Nvf4 hy hts hT (by linarith)
   exact ⟨w, hw⟩
 
-/-- **A row whose `α·x` is at most `2689` everywhere forms**, to `K` codes and `K/16` scale bytes, none NaN. -/
 theorem formRow_some {K : ℕ} (h16 : 16 ∣ K) {α β : ℚ} {X : Fin K → ℚ} (hα : ∀ t, |α * X t| ≤ 2689)
     (e : Fin 32 → Nib) (F : Fin K → Fin 32 → Nib) :
     ∃ r, formRow α β X e F = some r ∧ r.1.length = K ∧ r.2.length = K / 16 ∧ ∀ s ∈ r.2, s.val % 128 ≠ 127 := by
@@ -483,9 +432,6 @@ theorem formRow_some {K : ℕ} (h16 : 16 ∣ K) {α β : ℚ} {X : Fin K → ℚ
   · rw [max_eq_right h]; decide
   · rw [max_eq_left h]; exact RowCircuit.e4m3_notNaN _
 
-/-! ## The peel's rows -/
-
-/-- A finite chain word of NVFP4, at most `2^64`, where `K/64·2304·S_a·S_b` is. -/
 theorem ch4_fin {Sa Sb : ℚ} (hSa0 : 0 ≤ Sa) (hSb0 : 0 ≤ Sb) {K : ℕ} (hK : 64 ∣ K) {a b : List Nib}
     {sa sb : List (Fin 256)} (ha : a.length = K) (hb : b.length = K) (hsa : sa.length = K / 16)
     (hsb : sb.length = K / 16) (hSa : ∀ s ∈ sa, ScaleLe .ue4m3 Sa s) (hSb : ∀ s ∈ sb, ScaleLe .ue4m3 Sb s)
@@ -495,9 +441,6 @@ theorem ch4_fin {Sa Sb : ℚ} (hSa0 : 0 ≤ Sa) (hSb0 : 0 ≤ Sb) {K : ℕ} (hK 
     (lt_of_le_of_lt hB (by norm_num))
   exact ⟨w, by rw [PeelFp4Proofs.ch4, hw, Option.bind_some, RowCircuit.finite?_of_wordQ hy], y, hy, hyb.trans hB⟩
 
-/-- **The FP4 peel's rows exist** at `64 ∣ k ≤ 2^16`, on formed rows `a`, `b` of `k` codes and `k/16` scale bytes,
-none NaN, with row `j`'s scaled noise `beB j` finite BF16 words of magnitude at most `448`: every chain is finite and
-at most `2^64`, so `P_A,i` and `P_B,j` exist (`paRow_fin`, `pbRow_fin`). -/
 theorem peelRows4_isSome {m n k : ℕ} (hk : 64 ∣ k) (hk' : k ≤ 2 ^ 16) {A : Op4 m} {B : Op4 n}
     (FA FB : Matrix (Fin k) (Fin 32) Nib) (beA : Matrix (Fin m) (Fin 32) ℕ) (beB : Matrix (Fin n) (Fin 32) ℕ)
     (i : Fin m) (j : Fin n) {a b : Row4} (hA : A i = some a) (hB : B j = some b)
@@ -541,9 +484,6 @@ theorem peelRows4_isSome {m n k : ℕ} (hk : 64 ∣ k) (hk' : k ≤ 2 ^ 16) {A :
   simp only [hA, hB, hc, hafL, hbfL, hgL, hpa, hpb, Option.bind_eq_bind, Option.bind_some, Option.pure_def,
     Option.isSome_some]
 
-/-- **`Pc4EntryOK` from the two rows' `Row4OK`**, at `64 ∣ k ≤ 2^16`, under `Pc4OpsAgree`:
-each row's `α·x` is at most `2689` (`alpha4_mul_le`), so both rows form (`formRow_some`), and the weight row's `Ẽ`
-is at `e4m3(β)`, never NaN (`eTilde_le`). -/
 theorem pc4EntryOK_of_rows {ops : RowOps} (hops : Pc4OpsAgree ops) {m n k : ℕ} (hk : 64 ∣ k) (hk' : k ≤ 2 ^ 16)
     (z : Lines4 m n k) (act wt : Codes) (i : Fin m) (j : Fin n)
     (hRa : Row4OK ops k (wordsVal m k act i)) (hRb : Row4OK ops k (wordsVal n k wt j)) :

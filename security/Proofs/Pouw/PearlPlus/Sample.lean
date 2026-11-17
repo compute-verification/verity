@@ -6,43 +6,13 @@ public import Proofs.Properties.Pouw.PearlPlus.Verdict
 public import Definitions.Pouw.PearlC.TileSample
 public import Proofs.Pouw.PearlC.Records
 
-/-!
-# Pearl+'s bridge, the sample: the run's tickets and acceptance as the game's sample reads them
-
-`Definitions/Pouw/PearlC/TileSample.lean` states γ for the sample the run makes: each tile's tickets from the declarations
-its unit's record makes before the coin (`drawTickets`), and an audit that accepts a sampled tile that is good and whose
-declaration is consistent with it (`goodDeclTiles`). This file reads the code's sample and acceptance in those terms.
-
-* (c) A passed tile's declaration is consistent: a tile that `checkTile` passes, or finds only over its inert-work
-  bound, has `declOK` under its record's declaration (`declOf`). Its kept width is within `k` (a loaded pass's records
-  keep `UnitRecord`'s rule, `load_facts`), and each credited A row it declares passes `RowOK`: `rowsFailure` holds the row to `row_passes`, on the words its opening parses to and their `s5_stats`, which
-  `RowsAreTheRules` reads as `RowOK` at the committed activations.
-* (d) The code's tickets are `drawTickets` (`ticketsAreTheDraw`): on a run laid out as the game's workload, an
-  injective map from `tickets`' entries to the game's tiles, onto every tile with a ticket, takes each entry to its
-  `TileOf` tile, its tickets that tile's `drawTickets` of `pearlCDrawRev1 devH100` under the records' declarations
-  (`decOf`). Its parts: `wref 1 k n` is `wrefRowRev1 devH100 k n`, `ticketWeight` is the weight's numerator and
-  denominator, and the run's lcm fold is `Finset.lcm` over the tiles.
-* (d) Acceptance is the tolerant audit's (`acceptGivesTheAudit`): when the check accepts, every sample of the game on
-  tiles the verdict opened is in `goodDeclTiles ∪ blankTiles` or over the inert-work bound (`overInertBoundTiles`), or SHA-512
-  collides on an opened tile. A sampled tile's check gives its words (`TilePassGivesTheWords`) and its declaration
-  (`TilePassGivesTheDecl`), so it is good within the game's inert-work bound (`inertBoundOK`) and over the bound otherwise.
-  The tile's fixed-operand rows passing the rules is a hypothesis (`DrawnOn.weights`), as in `TilePassGivesTheWords`: the
-  check holds only credited B rows to the rules (an excluded row must fail them and a voluntary one is unread), where
-  `TileGood` reads every column.
-
-The run's layout (`RunLayout`) is what the game reads of the run: each pass tiles 64 × 64 (a manifest's `instance` may
-set another tile), each record is a unit of the workload that the transcript commits, with the record's shape and
-fixed operand, and no two records share a call index. `passesDistinct` keys call indices per salt, so a run whose passes of
-different salts share an index is not one game's run.
--/
+/-! Pearl+'s bridge, the sample: the run's tickets and acceptance as the game's sample reads them. -/
 
 @[expose] public section
 
 namespace Pouw.PearlPlus.Sample
 
 open PouwCheck.PearlPlus
-
-/-! ## Lists -/
 
 theorem getElem?_flatMap_const {α β : Type} (f : α → List β) (c : ℕ) (hc : ∀ a, (f a).length = c) :
     ∀ (L : List α) (x : ℕ), (L.flatMap f)[x]? =
@@ -147,8 +117,6 @@ theorem nodup_map_zipIdx {α β : Type} (key : β → ℕ) (f : α × ℕ → β
       · have := h2 b hb
         omega
 
-/-! ## A pass's tiles -/
-
 def tileLoop (s : Scheme) (tid : ℕ) (L : List (UnitRecord × ℕ)) (base : ℕ) : Option (ℕ × List ℕ × List ℕ) :=
   Id.run do
   let mut base := base
@@ -250,7 +218,6 @@ theorem offsets_get (p : Pass) {pos : ℕ} (hp : pos < p.records.length) :
     exact this
   rw [e, getElem!_pos _ pos (by simpa using hp), List.getElem_map, List.getElem_range, Nat.zero_add]
 
-/-- Tile `x` of record `pos` is the tile whose id is the record's offset plus `x`. -/
 theorem tile?_offsets (p : Pass) {pos x : ℕ} (hp : pos < p.records.length)
     (hx : x < (grid p.scheme p.records[pos]).length) :
     p.tile? (p.offsets[pos]! + x) = some (pos, (grid p.scheme p.records[pos])[x]!) := by
@@ -258,7 +225,6 @@ theorem tile?_offsets (p : Pass) {pos x : ℕ} (hp : pos < p.records.length)
   rw [Nat.zero_add, Nat.zero_add] at h
   rw [tile?_eq, offsets_get p hp, h]
 
-/-- A tile the pass numbers is tile `x` of a record `pos`, its id the record's offset plus `x`. -/
 theorem tile?_some {p : Pass} {tid pos : ℕ} {rows cols : List ℕ} (h : p.tile? tid = some (pos, rows, cols)) :
     ∃ hp : pos < p.records.length, ∃ x < (grid p.scheme p.records[pos]).length, tid = p.offsets[pos]! + x ∧
       (grid p.scheme p.records[pos])[x]! = (rows, cols) := by
@@ -293,8 +259,6 @@ theorem tiles_getElem? (s : Scheme) (m n x : ℕ) :
     simp only [Option.map_some, Option.bind_some, List.getElem?_map, h2]
     rfl
   · rw [ite_eq_right (by simpa [nblocks] using hx), ite_eq_right hx]
-
-/-! ## The run's tiles -/
 
 /-- A tile of the run as `tickets` enumerates it: tile `x` (rows `rows`, columns `cols`) of record `pos` (`r`) of pass
 `i` (`p`). -/
@@ -383,8 +347,6 @@ theorem lcmOf_dvd {ws : List ((ℕ × ℕ) × ℕ × ℕ)} {M : ℕ} (h : ∀ e 
   foldl_lcm_le ws 1 M (Nat.one_dvd M) h
 
 
-/-! ## A passed tile's rows -/
-
 theorem forIn_none {α : Type} : ∀ (L : List α)
     (f : α → Option (Option String) × Unit → Id (ForInStep (Option (Option String) × Unit))),
     (∀ a, f a (none, ()) = .yield (none, ()) ∨ ∃ m, f a (none, ()) = .done (some (some m), ())) →
@@ -462,8 +424,6 @@ theorem rowsFailure_credited {r : UnitRecord} {rows cols : List ℕ} {ops : Word
       · rename_i hrp
         simpa using hrp
 
-/-- A `for` loop that went through every element of `L` from index `n` keeps an invariant each step keeps, a step
-reading its element by its index. -/
 theorem forIn_inv_idx {α σ ε : Type} (I : ℕ → σ → Prop) (body : α → σ → Except ε (ForInStep σ)) :
     ∀ (L : List α) (n : ℕ) (s out : σ), I n s →
       (∀ j a s r, L[j]? = some a → I (n + j) s → body a s = .ok r → ∃ t, r = .yield t ∧ I (n + j + 1) t) →
@@ -488,7 +448,6 @@ theorem push_get!_lt {β : Type} [Inhabited β] (a : Array β) (v : β) {j : ℕ
 theorem push_get!_eq {β : Type} [Inhabited β] (a : Array β) (v : β) : (a.push v)[a.size]! = v := by
   rw [getElem!_pos (a.push v) a.size (by simp), Array.getElem_push_eq]
 
-/-- Each row `formV1` forms keeps its words, and its ρ and α are `s5_stats`' of them. -/
 theorem formV1_rows {rows eRows f : Array (Array ℕ)} {out : Words.Formed} (h : Words.formV1 rows eRows f = .ok out) :
     ∀ j < (rows.zip eRows).size, out.x[j]! = (rows.zip eRows)[j]!.1 ∧
       ∃ s β, Words.s5Stats out.x[j]! = .ok (s, out.rho[j]!, out.alpha[j]!, β) := by
@@ -531,7 +490,6 @@ theorem formV1_rows {rows eRows f : Array (Array ℕ)} {out : Words.Formed} (h :
       rfl
 
 
-/-- The A rows `encode` forms are the parsed openings, and their ρ and α are `s5_stats`' of them. -/
 theorem encode_rowA {salt rootB : ByteArray} {wn : Words.FixedNoise} {index k : ℕ} {rows : List ℕ}
     {aRows : List ByteArray} {cols : List ℕ} {bRows : List ByteArray} {ops : Words.Ops}
     (ha : aRows.length = rows.length) (h : Words.encode salt rootB wn index k rows aRows cols bRows = .ok ops) :
@@ -629,9 +587,6 @@ theorem parseRow_wordBytes {w : ℕ → ℕ} {k : ℕ} {x : Array ℕ} (h : Word
 
 open Pouw.PearlC Finset
 
-/-! ## A record -/
-
-/-- A record that loads keeps its real rows within `m` and its kept width within `k`, neither empty. -/
 theorem reason_none {r : UnitRecord} (h : r.reason = none) :
     0 < r.realRows ∧ r.realRows ≤ r.matmul.m ∧ 0 < r.kKept ∧ r.kKept ≤ r.matmul.k := by
   unfold UnitRecord.reason at h
@@ -642,10 +597,7 @@ theorem reason_none {r : UnitRecord} (h : r.reason = none) :
     simp only [Bool.not_eq_true', Bool.not_eq_false, Bool.and_eq_true, decide_eq_true_eq] at hc
     omega
 
-/-- A row's opening bytes are the row's words, four little-endian bytes each. -/
 theorem rowBytesOf_eq (W : Codes) (k i : ℕ) : Bridge.rowBytesOf W k i = wordBytes (W i) k := rfl
-
-/-! ## A tile's weight -/
 
 theorem cast_sub_max (a b : ℕ) : ((a - b : ℕ) : ℚ) = max ((a : ℚ) - b) 0 := by
   rcases le_total b a with h | h
@@ -672,8 +624,6 @@ theorem wrefRowRev1_h100 (k n : ℕ) : wrefRowRev1 devH100 k n =
   unfold wrefRowRev1
   rw [ite_eq_right (by rw [hG]; decide), hadd, hbf, hfs, hqa, hr, hG]
 
-/-- The code's `wref(1, k, n)` is the sample's `wrefRowRev1 devH100 k n`, the natural subtraction's cut at zero
-included. -/
 theorem wref_one_eq (k n : ℕ) : (wref 1 k n : ℚ) = wrefRowRev1 devH100 k n := by
   rw [wref_one_cast, wrefRowRev1_h100]
 
@@ -699,7 +649,6 @@ def tileWeight (r : UnitRecord) (rows cols : List ℕ) : ℚ :=
   ((wref 1 r.kKept r.matmul.n * (r.credited rows cols).1.length * (r.credited rows cols).2.length : ℕ) : ℚ) /
     r.matmul.n
 
-/-- `ticketWeight` is `tileWeight` in lowest terms. -/
 theorem ticketWeight_eq (r : UnitRecord) (rows cols : List ℕ) (hn : 0 < r.matmul.n) :
     ticketWeight r rows cols = ((tileWeight r rows cols).num.toNat, (tileWeight r rows cols).den) := by
   obtain ⟨h1, h2⟩ := num_den_div
@@ -718,8 +667,6 @@ theorem card_inter_filter {L : List ℕ} (hL : L.Nodup) (M : ℕ) (P : ℕ → B
     exact ⟨h, hp⟩
   · rintro ⟨h, hp⟩
     exact ⟨h, hM i h hp, hp⟩
-
-/-! ## The game's tiles -/
 
 theorem block_nodup (len w b : ℕ) : (block len w b).Nodup := List.nodup_range' 1 Nat.one_pos
 
@@ -792,7 +739,6 @@ theorem gridTiles_inv {L : Pouw.PearlC.Layout} {g : ℕ} {b : ℕ × ℕ × ℕ}
   rw [unitGrid_getElem?, ite_eq_left hx, Option.some.injEq] at hb
   exact ⟨u, hu, x, hx, rfl, hb.symm⟩
 
-/-- The audit's tile `x` of unit `u`: its index is below `NT`, and its unit, rows and columns are the code's. -/
 theorem audit_at {L : Pouw.PearlC.Layout} {u x : ℕ} (hu : u < L.N)
     (hx : x < nblocks (L.shape u).m 64 * nblocks (L.shape u).n 64) :
     gstart L u + x < (auditTiling 64 64 L).NT ∧ (auditTiling 64 64 L).unit (gstart L u + x) = u ∧
@@ -831,7 +777,6 @@ def declOf (r : UnitRecord) : Decl where
   cols := (Finset.range r.matmul.n).filter fun j =>
     (!(r.excludedB ++ r.voluntaryB).any (· / UnitRecord.BAND == j / UnitRecord.BAND)) = true
 
-/-- A row the band rule credits is neither excluded nor voluntary, so the check holds it to the per-row rules. -/
 theorem banded_row {r : UnitRecord} {i : ℕ}
     (h : (decide (i < r.realRows) && !r.excludedA.contains i &&
       !r.voluntaryA.any (· / UnitRecord.BAND == i / UnitRecord.BAND)) = true) :
@@ -862,8 +807,6 @@ def TilePassGivesTheDecl : Prop :=
       ∃ why, checkTile p (Properties.Pouw.PearlPlus.noiseOf p tid) tid o = .overInertBound why) →
       declOK (tilesH3 saltOf rootOf ρ : TileRules Q R S) U τ dec g
 
-/-- **(c)** from what a passed tile establishes (`TileAcceptMeans`), what a loaded pass's records keep (`load_facts`)
-and the per-row rules (`RowsAreTheRules`). -/
 theorem tilePassGivesTheDecl (hT : Properties.Pouw.PearlPlus.TileAcceptMeans) (hR : RowsAreTheRules) :
     TilePassGivesTheDecl := by
   intro Q R S saltOf rootOf ρ coins man p tid o U g τ c dec hload hof hτ hdec hopen hpass
@@ -995,7 +938,6 @@ theorem cell_n_pos (hL : RunLayout passes U τ) {c : Cell} (hc : c ∈ cells pas
   rw [h] at hx
   simp [nblocks] at hx
 
-/-- A run's tile is its game tile's: the audit's tile `gOf` has the record's unit, shape, fixed operand, rows and columns. -/
 theorem cell_audit (hL : RunLayout passes U τ) {c : Cell} (hc : c ∈ cells passes) :
     gOf U.layout c < (auditTiling 64 64 U.layout).NT ∧
       (auditTiling 64 64 U.layout).unit (gOf U.layout c) = c.r.matmul.index ∧
@@ -1176,8 +1118,6 @@ theorem ticketsAreTheDraw : TicketsAreTheDraw := by
     obtain ⟨c, hc, rfl⟩ := hsurj g hNT hv
     obtain ⟨j, hj, rfl⟩ := List.getElem_of_mem hc
     exact ⟨j, by rw [hlen]; exact hj, by dsimp only; rw [dite_eq_left hj]⟩
-
-/-! ## Acceptance -/
 
 /-- What the game reads of the plan's tile `(pi, tid)` on audit tile `g`: the verdict opens it, it is `g` (`TileOf`),
 its pass's salt is the game's, its fixed operand's root is the semantics', each fixed-operand row of its columns passes `P`'s rules,

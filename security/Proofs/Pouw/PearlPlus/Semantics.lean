@@ -2,21 +2,7 @@ module
 
 public import Proofs.Pouw.PearlPlus.Factors
 
-/-!
-# Pearl+'s bridge, part (b): a tile's words are the semantics' (the proof)
-
-`WordsAreTheSemantics` (`Words.lean`), read through the check forward, one step at a time:
-
-* `fixedNoise_ok`: the fixed operand's noise holds `F_A` and `F_B` as `k` rows of 32 codes, their 32 columns, and the Gram
-  words as the chains of `F_B`'s and `F_A`'s columns.
-* `formV1_ok`: `formV1` forms each row by `s5_stats` and its two maps, which `formRow_quant8` reads.
-* A row's facts: `s5_stats` refuse an empty row (`s5Stats_pos`, its ρ is a root of a quotient by `0`, never finite), a
-  chain's rows are whole atoms (`chain_size`), and a chain's word is finite (`chainWordP?_wordQ`).
-* `tileWords`: over a noise whose lines are the check's, a tile entry's `C̃` and `U` are `chainWordP?` and `peelExactP`
-  at the H100 on `pc8Sem`'s operands, given the peel factor rows (`PeelARow`, `PeelBRow`).
-* `wordsAreTheSemantics_of`: at -h3's noise (`Noise.lean`) those are the protocol's ticket and useful words.
-* `wordsAreTheSemantics`: with the peel factor rows proved (`peelARow`, `peelBRow`, `Factors.lean`).
--/
+/-! Pearl+'s bridge, part (b): a tile's words are the semantics'. -/
 
 @[expose] public section
 
@@ -27,8 +13,6 @@ open Pouw.PearlC Pouw.Fp8Atom PouwCheck.PearlPlus
 namespace SemSim
 
 open Pouw.PearlC.RowCircuit Pouw.PearlC.PeelExact Pouw.PearlC.PeelExactP WordsSim
-
-/-! ## Lists, arrays and folds -/
 
 section Lists
 
@@ -93,9 +77,6 @@ theorem amap_get! [Inhabited α] [Inhabited β] {a : Array α} {g : α → β} {
 
 end Lists
 
-/-! ## A row's facts -/
-
-/-- A quotient by `0` is the NaN or an infinity, whose root is never finite. -/
 theorem rho_empty (a : ℕ) {n : ℕ} (hn : n = 0) :
     wordQ (Evaluate.Fp32.sqrtRn (Evaluate.Fp32.f32DivV2 a (Words.ofInt n))) = none := by
   subst hn
@@ -114,8 +95,6 @@ theorem rho_empty (a : ℕ) {n : ℕ} (hn : n = 0) :
       rw [ite_eq_left rfl, ite_eq_right hm]
       cases s <;> decide +kernel
 
-/-- **`s5_stats` refuse an empty row**: its ρ is `√(part₀ / 0)`, which is not finite, and the stats are a value only where
-ρ is (`statsRhoIsFinite`). -/
 theorem s5Stats_pos {x : Array ℕ} {s ρw αw βw : ℕ} (h : Words.s5Stats x = .ok (s, ρw, αw, βw)) : 0 < x.size := by
   have hρ := statsRhoIsFinite x s ρw αw βw h
   by_contra hx0
@@ -134,7 +113,6 @@ theorem s5Stats_pos {x : Array ℕ} {s ρw αw βw : ℕ} (h : Words.s5Stats x =
   rw [rho_empty _ (n := (x.size + 7) / 8) (by omega)]
   decide
 
-/-- A chain that returns `.ok` multiplies rows of one length in whole atoms. -/
 theorem chain_size {a b : Array ℕ} {c : ℕ} (h : Words.chain a b = .ok c) : a.size = b.size ∧ a.size % 32 = 0 := by
   unfold Words.chain at h
   dsimp only at h
@@ -145,7 +123,6 @@ theorem chain_size {a b : Array ℕ} {c : ℕ} (h : Words.chain a b = .ok c) : a
   simp only [Bool.or_eq_true, bne_iff_ne, ne_eq, not_or, not_not] at hg
   exact hg
 
-/-- A chain's word is finite: each promotion's word is `addWord?`'s, which is finite, or `+0`. -/
 theorem chainWordP?_wordQ {p : Pipeline} {G : ℕ} {atoms : List AtomIn} {c : ℕ} (h : chainWordP? p G atoms = some c) :
     (wordQ c).isSome := by
   unfold chainWordP? at h
@@ -162,8 +139,6 @@ theorem chainWordP?_wordQ {p : Pipeline} {G : ℕ} {atoms : List AtomIn} {c : �
       obtain rfl := (PeelExactProofs.finite?_eq_some hs').1
       simp only [hv, Option.isSome_some]
     · cases hs'
-
-/-! ## The fixed operand's noise -/
 
 theorem basis_ok {sb : ByteArray} {side k : ℕ} {f : Array (Array ℕ)} (h : Words.basis sb side k = .ok f)
     (hs : side < 256) : f.size = k ∧ ∀ l < k, (f[l]!).size = 32 := by
@@ -188,8 +163,6 @@ theorem cols_get (b : Array (Array ℕ)) {q : ℕ} (hq : q < 32) :
   have hqS : q < (Array.range R).size := by rw [Array.size_range]; exact hqR
   rw [amap_get! hqS, range_get! hqR]
 
-/-- **The fixed operand's noise**: where `fixedNoise` is a value, `F_A` and `F_B` have `k` rows of 32 codes, 32 columns
-of `k` codes each, and the Gram word `(p, q)` is the chain of `F_B`'s column `p` and `F_A`'s column `q`. -/
 theorem fixedNoise_ok {salt rootB : ByteArray} {k : ℕ} {wn : Words.FixedNoise}
     (h : Words.fixedNoise salt rootB k = .ok wn) :
     (∀ l < k, (wn.fa[l]!).size = 32 ∧ (wn.fb[l]!).size = 32) ∧ wn.faCols.size = 32 ∧ wn.fbCols.size = 32 ∧
@@ -214,8 +187,6 @@ theorem fixedNoise_ok {salt rootB : ByteArray} {k : ℕ} {wn : Words.FixedNoise}
     obtain ⟨-, h2⟩ := mapM_ok h1
     exact h2 q (by rw [hR fa]; exact hq)
 
-/-! ## A side's forming -/
-
 /-- After `j` rows, `formV1`'s output holds each row's codes and `E′` as `s5_stats` and the forming's two maps give them. -/
 def FormRow (rows eRows f : Array (Array ℕ)) (j : ℕ) (o : Words.Formed) : Prop :=
   o.codes.size = j ∧ o.ep.size = j ∧ ∀ y < j, ∃ s ρw αw βw : ℕ, Words.s5Stats rows[y]! = .ok (s, ρw, αw, βw) ∧
@@ -224,8 +195,6 @@ def FormRow (rows eRows f : Array (Array ℕ)) (j : ℕ) (o : Words.Formed) : Pr
       Words.toFp8 (← Words.finite (Words.atom (Evaluate.Fp32.f32MulV2 αw (rows[y]!)[t]!) (o.ep[y]!).toList
         (f[t]!).toList))) = .ok o.codes[y]!
 
-/-- **A side's forming**: where `formV1` is a value on rows and noise lines of one count, its codes and `E′` have a row
-per row, each formed by `s5_stats` and the forming's two maps. -/
 theorem formV1_ok {rows eRows f : Array (Array ℕ)} {out : Words.Formed} (h : Words.formV1 rows eRows f = .ok out)
     (hre : rows.size = eRows.size) : FormRow rows eRows f rows.size out := by
   unfold Words.formV1 at h
@@ -267,11 +236,7 @@ theorem formV1_ok {rows eRows f : Array (Array ℕ)} {out : Words.Formed} (h : W
           exact hcodes) hfor
   simpa only [Nat.zero_add, Array.length_toList, Array.size_zip, hre, Nat.min_self] using this
 
-/-! ## A tile entry -/
-
 open Matrix in
-/-- **U from its parts**: where `C̃`, the chains of `A′·F_B`, `B̃·F_A` and `G`, the factor rows and the peel are values,
-`peelExactP` is the peel's word. -/
 theorem peelExactP_of {p : Pipeline} {G m n k : ℕ} {Aq : Matrix (Fin m) (Fin k) Code} {Bq : Matrix (Fin n) (Fin k) Code}
     {FA FB : Matrix (Fin k) (Fin 32) Code} {beA : Matrix (Fin m) (Fin 32) ℕ} {beB : Matrix (Fin n) (Fin 32) ℕ}
     {i : Fin m} {j : Fin n} {c u : ℕ} {af bf : Fin 32 → ℕ} {g : Fin 32 → Fin 32 → ℕ} {pa pb : List ℕ}
@@ -288,10 +253,6 @@ theorem peelExactP_of {p : Pipeline} {G m n k : ℕ} {Aq : Matrix (Fin m) (Fin k
   simp only [peelExactP, hc, h1, h2, h3, hpa, hpb, hu, Option.bind_eq_bind, Option.bind_some]
 
 open Matrix in
-/-- **A tile entry's words**: over a noise `z` whose lines and bases are the check's (`hEA`, `hEB`, `hFA`, `hFB`), at a
-tile whose rows' words are below `2^32`, where the check's fixed noise, operands and checked words are values, entry
-`(x, y)` on rows that are `Row8OK` has `C̃` the H100 chain of `pc8Sem`'s operands and `U` their `peelExactP` at the H100,
-given the peel factor rows. -/
 theorem tileWords (hA : PeelARow) (hB : PeelBRow) {m n k u : ℕ} {act wt : Codes} {z : Noise m n k Params.pi.r}
     {salt rootB : ByteArray} {wn : Words.FixedNoise} {rows cols : List ℕ} {ops : Words.Ops} {ch : Words.Checked}
     (hkK : k ≤ 2 ^ 16) (hact : ∀ i ∈ rows, ∀ l < k, act i l < 2 ^ 32) (hwt : ∀ j ∈ cols, ∀ l < k, wt j l < 2 ^ 32)
@@ -333,7 +294,6 @@ theorem tileWords (hA : PeelARow) (hB : PeelBRow) {m n k u : ℕ} {act wt : Code
   obtain ⟨uu, hu, hch⟩ := bind_ok hch
   obtain rfl := pure_ok hch
   try dsimp only
-  -- the operands' rows, noise lines and forming
   obtain ⟨hvaS, hvaA⟩ := mapM_ok hva
   obtain ⟨heaS, heaA⟩ := mapM_ok hea
   obtain ⟨hvbS, hvbA⟩ := mapM_ok hvb
@@ -356,7 +316,6 @@ theorem tileWords (hA : PeelARow) (hB : PeelBRow) {m n k u : ℕ} {act wt : Code
   have hey := hebA y (by simpa using hy)
   rw [List.getElem!_toArray] at hey
   obtain ⟨heS', heA'⟩ := hEB cols[y]! hj eb[y]! hey
-  -- the depth: the chain multiplies whole atoms, and `s5_stats` refuse an empty row
   obtain ⟨hcS, hcA⟩ := mapM_ok hc
   obtain ⟨-, hcxA⟩ := mapM_ok (hcA x (by omega))
   have hcxy := hcxA y (by omega)
@@ -371,7 +330,6 @@ theorem tileWords (hA : PeelARow) (hB : PeelBRow) {m n k u : ℕ} {act wt : Code
   obtain ⟨hepS', hepA', -, hcodB⟩ := formRow_quant8 (E := z.EB ⟨cols[y]!, hj⟩) (F := z.FB) hk0 hk8 hk27 hvyS hvyW
     (hwt _ (get!_mem hy)) hRB heS' heA' (fun t => (hfR t.val t.isLt).2) (fun t q => hFB t.val t.isLt q) hs' hep'
     hcodes'
-  -- the chains
   have hC : chainWordP? hopperE4m3K32 4 (rowAtoms (WholeCircuit.quant8A coreOps hopperE4m3K32 z act ⟨rows[x]!, hi⟩)
       (WholeCircuit.quant8B coreOps hopperE4m3K32 z wt ⟨cols[y]!, hj⟩)) = some ((c[x]!)[y]!) :=
     chain_ok hadd hkx hky (fun t ht => hcodA ⟨t, ht⟩) (fun t ht => hcodB ⟨t, ht⟩) hcxy
@@ -381,7 +339,6 @@ theorem tileWords (hA : PeelARow) (hB : PeelBRow) {m n k u : ℕ} {act wt : Code
     obtain ⟨hq1, -, hq3⟩ := hcolF q.val q.isLt
     exact chain_ok hadd hp2 hq1 (fun t ht => (hp3 t ht).2.trans (hFB t ht p))
       (fun t ht => (hq3 t ht).1.trans (hFA t ht q)) (hgram p.val p.isLt q.val q.isLt)
-  -- the peel factor rows
   obtain ⟨-, hpaxS, af, hafC, hpaR⟩ := hA wn a pas x
     (lineCodes (WholeCircuit.betaQ8 coreOps k (act rows[x]!)) (z.EA ⟨rows[x]!, hi⟩)) hpas (haC.trans haE.symm)
     (by omega) hfbC hepS hepA (WholeCircuit.lineCodes_notNaN _ _)
@@ -397,7 +354,6 @@ theorem tileWords (hA : PeelARow) (hB : PeelBRow) {m n k u : ℕ} {act wt : Code
       ⟨cols[y]!, hj⟩) ((WholeCircuit.basis8 z.FA)ᵀ q)) = some (bf q) := fun q => by
     obtain ⟨hq1, -, hq3⟩ := hcolF q.val q.isLt
     exact chain_ok hadd hky hq1 (fun t ht => hcodB ⟨t, ht⟩) (fun t ht => (hq3 t ht).1.trans (hFA t ht q)) (hbfC q)
-  -- the peel
   obtain ⟨-, huA⟩ := mapM_ok hu
   have hux := huA x (by rw [Array.size_range]; omega)
   rw [range_get! (show x < c.size by omega)] at hux
@@ -410,9 +366,6 @@ theorem tileWords (hA : PeelARow) (hB : PeelBRow) {m n k u : ℕ} {act wt : Code
 end SemSim
 
 open SemSim WordsSim in
-/-- **(b) A tile's words are the semantics'**, given the peel factor rows: `tileWords` at -h3's noise, whose lines and
-bases are the check's (`seedsAreTheSpec`, `lineIsTheSpec`, `fixedNoiseIsTheSpec`), on rows that pass the rules
-(`row8OK_of_floor`), read through the H100 record's ticket and useful words. -/
 theorem wordsAreTheSemantics_of (hA : PeelARow) (hB : PeelBRow) : WordsAreTheSemantics := by
   intro Q R S saltOf rootOf ρ H s U u act salt rootB wn rows cols ops ch hsalt hroot hk hrows hcols hact hwt hW hwn
     henc hch x hx hR y hy
@@ -456,7 +409,6 @@ theorem wordsAreTheSemantics_of (hA : PeelARow) (hB : PeelBRow) : WordsAreTheSem
     simp only [Option.bind_some] at hv
     exact hv.symm
 
-/-- **(b) A tile's words are the semantics'.** -/
 theorem wordsAreTheSemantics : WordsAreTheSemantics := wordsAreTheSemantics_of peelARow peelBRow
 
 end Pouw.PearlPlus.Bridge

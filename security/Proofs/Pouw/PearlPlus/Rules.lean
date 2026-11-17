@@ -5,25 +5,7 @@ public import Proofs.Pouw.PearlC.CoreOps
 public import Proofs.Pouw.PearlPlus.Words
 public import Proofs.Pouw.PearlC.Records
 
-/-!
-# Pearl+'s bridge, part (c): the check's per-row rules and inert-work replay are the game's
-
-`Rule.rowsFailure` decides each opened row by `row_passes` (the floor on the exact product ρ·α, and `live_row` on the
-exact statistic), and `Rule.inertBoundCheck` the inert-work bound by `word_inert_work`, a word's flagged atoms and its later
-promotions into a +0 total. The game reads `PearlCSem.RowOK` (the FMA floor `ρ·α − 1 ≥ 0` and `LiveRow` at δ = 1 under
-`Stat.every8`) and the tile's inert work `tileInertWorkRev1`, on `Skip.unitFlags` and `laterZeroPromos`.
-
-`rowsAreTheRules` proves the rules from the row statistics (`StatsAreTheRow`) and ρ's finiteness (`StatsRhoIsFinite`);
-`rowPasses_iff` is the rules on one row given both. The floor agrees because ρ and α are finite FP32 words with
-`0 ≤ ρ·α ≤ 113` (`RowCircuit.rho_alpha_le`): `ρ·α − 1`, when nonzero, is at least 2⁻⁴⁸ in magnitude, a
-product of two 24-bit significands (`ra_gap`), far above FP32's least subnormal, so the FMA's rounding keeps its sign
-(`floor_nonneg_iff`). Liveness agrees because `sq300` is a word's square times 2³⁰⁰ exactly (`sq300_val`) and the check
-sums every 8th position as `Stat.every8` does (`liveRow_iff`).
-
-The tile's cap is not stated here: the check's cap leaves out the game's forming term and reads its credited rows and
-columns, where `TileGood` reads every column and `passRows`, so the cap's statement waits on the restated credit set and
-acceptance event.
--/
+/-! Pearl+'s bridge, part (c): the check's per-row rules and inert-work replay are the game's. -/
 
 @[expose] public section
 
@@ -31,9 +13,6 @@ namespace Pouw.PearlPlus.Bridge
 
 open Pouw.PearlC Pouw.Fp8Atom PouwCheck.PearlPlus
 
-/-- **(c) The per-row rules are `RowOK`**: on a row of `k` finite FP32 words, `k` a multiple of 8 and at most `2^27`
-(`StatsAreTheRow`'s domain), whose `s5_stats` are a value, `row_passes` on its ρ and α holds exactly when the semantics'
-`RowOK` does. -/
 def RowsAreTheRules : Prop :=
   ∀ {Q R S : Type} (saltOf : S → List ℕ) (rootOf : ℕ → List ℕ) (p k : ℕ) (W : Codes) (i : ℕ) (x : Array ℕ)
     (s ρw αw βw : ℕ), i < p → 0 < k → 8 ∣ k → k ≤ 2 ^ 27 → x.size = k →
@@ -41,13 +20,9 @@ def RowsAreTheRules : Prop :=
     Words.s5Stats x = .ok (s, ρw, αw, βw) →
       (Rule.rowPasses ρw αw x = true ↔ (semH3 saltOf rootOf : PearlCSem Q R S).RowOK p k W i)
 
-/-- **(c) `s5_stats`' ρ is a finite word** where the stats are a value: they refuse a non-finite partial sum or
-`t = s + 4ρ`, and a NaN or infinite ρ makes `t` one. -/
 def StatsRhoIsFinite : Prop :=
   ∀ (x : Array ℕ) (s ρw αw βw : ℕ), Words.s5Stats x = .ok (s, ρw, αw, βw) → (wordQ ρw).isSome
 
-/-- **(c) A word's replayed debit is the game's**: where `word_inert_work` is a value on a word's two rows of codes, its flagged
-atoms are `Skip.unitFlags`' and its later promotions into a +0 total are `laterZeroPromos`' at the H100 record. -/
 def InertWorkIsTheReplay : Prop :=
   ∀ {m n k : ℕ} (A : Matrix (Fin m) (Fin k) Pouw.Fp8Atom.Code) (B : Matrix (Fin n) (Fin k) Pouw.Fp8Atom.Code)
     (i : Fin m) (j : Fin n) (f z : ℕ),
@@ -55,10 +30,8 @@ def InertWorkIsTheReplay : Prop :=
       f = ((Finset.range (k / 32)).filter fun t => Pouw.PearlC.Skip.unitFlags A B i j t = true).card ∧
         z = Pouw.PearlC.laterZeroPromos Pouw.PearlC.devH100 A B i j
 
-/-- **(c) The replay reads the semantics' codes**: under `WordsAreTheSemantics`' hypotheses, `word_inert_work` on the check's
-A′ and B̃ codes of a word whose row passes the rules is `word_inert_work` on the semantics' noisy codes of that word
-(`unitChain`). The check's code for a zero may be `0x80` where the semantics' is `0x00`, so this is stated on
-`word_inert_work`'s result, not on the codes. -/
+/-- The check's code for a zero may be `0x80` where the semantics' is `0x00`, so this is stated on `word_inert_work`'s
+result, not on the codes. -/
 def ReplayReadsTheCodes : Prop :=
   ∀ {Q R S : Type} (saltOf : S → List ℕ) (rootOf : ℕ → List ℕ) (H : Q → R) (s : S) (U : Pouw.PearlC.Workload) (u : ℕ)
     (act : Codes) (salt rootB : ByteArray) (wn : Words.FixedNoise) (rows cols : List ℕ) (ops : Words.Ops),
@@ -76,8 +49,6 @@ def ReplayReadsTheCodes : Prop :=
       Rule.wordInertWork ops.a.codes[x]! ops.b.codes[z]! =
         Rule.wordInertWork (Array.ofFn fun l => (((semH3 saltOf rootOf : PearlCSem Q R S).unitChain H s U u act).1 i l).val)
           (Array.ofFn fun l => (((semH3 saltOf rootOf : PearlCSem Q R S).unitChain H s U u act).2 j l).val)
-
-/-! ## A word's fields, as `parts` reads them -/
 
 theorem word_and_ff (w : ℕ) : w &&& 0xFF = w % 256 := by
   have h : (0xFF : ℕ) = 2 ^ 8 - 1 := by decide
@@ -105,7 +76,6 @@ theorem parts_sign_iff {w : ℕ} (h32 : w < 2 ^ 32) : (w >>> 31 == 1) = true ↔
   have h31 : w >>> 31 < 2 := by rw [Nat.shiftRight_eq_div_pow]; omega
   rw [beq_iff_eq, Nat.mod_eq_of_lt h31]
 
-/-- A finite word's value from `parts`: `±m·2^e`, a 24-bit significand at an exponent at least −149. -/
 theorem parts_val {w : ℕ} {v : ℚ} (h32 : w < 2 ^ 32) (h : wordQ w = some v) :
     v = (if (Rule.parts w).1 = true then -1 else 1) * (((Rule.parts w).2.1 : ℕ) : ℚ) * 2 ^ (Rule.parts w).2.2 ∧
       (Rule.parts w).2.1 < 2 ^ 24 ∧ -149 ≤ (Rule.parts w).2.2 := by
@@ -130,7 +100,6 @@ theorem parts_val {w : ℕ} {v : ℚ} (h32 : w < 2 ^ 32) (h : wordQ w = some v) 
     push_cast
     ring
 
-/-- A nonnegative `±m·2^e` is `m·2^e`. -/
 theorem val_of_nonneg {s : Bool} {m : ℕ} {e : ℤ} {v : ℚ} (hv : v = (if s = true then -1 else 1) * (m : ℚ) * 2 ^ e)
     (hv0 : 0 ≤ v) : v = (m : ℚ) * 2 ^ e := by
   have h0 : 0 ≤ (m : ℚ) * 2 ^ e := mul_nonneg (Nat.cast_nonneg m) (zpow_pos (by norm_num) e).le
@@ -140,7 +109,6 @@ theorem val_of_nonneg {s : Bool} {m : ℕ} {e : ℤ} {v : ℚ} (hv : v = (if s =
     have hv' : v = -((m : ℚ) * 2 ^ e) := by rw [hv]; ring
     linarith
 
-/-- A nonnegative `±m·2^e` with `m ≠ 0` has the sign bit clear. -/
 theorem sign_of_nonneg {s : Bool} {m : ℕ} {e : ℤ} {v : ℚ} (hv : v = (if s = true then -1 else 1) * (m : ℚ) * 2 ^ e)
     (hv0 : 0 ≤ v) (hm : m ≠ 0) : s = false := by
   cases s
@@ -152,8 +120,6 @@ theorem sign_of_nonneg {s : Bool} {m : ℕ} {e : ℤ} {v : ℚ} (hv : v = (if s 
     have hv' : v = -((m : ℚ) * 2 ^ e) := by rw [hv]; ring
     linarith
 
-/-! ## The floor -/
-
 theorem floorOK_fin {rho alpha : ℕ} (hr : (rho >>> 23) % 256 ≠ 255) (ha : (alpha >>> 23) % 256 ≠ 255) :
     Rule.floorOK rho alpha =
       (if (Rule.parts rho).1 != (Rule.parts alpha).1 || (Rule.parts rho).2.1 * (Rule.parts alpha).2.1 == 0 then false
@@ -164,7 +130,6 @@ theorem floorOK_fin {rho alpha : ℕ} (hr : (rho >>> 23) % 256 ≠ 255) (ha : (a
   rw [isNan_eq_false hr, isNan_eq_false ha, isInf_eq_false hr, isInf_eq_false ha]
   rfl
 
-/-- **`floor_ok` is `ρ·α ≥ 1`** on two finite, nonnegative words. -/
 theorem floorOK_iff {ρw αw : ℕ} {r a : ℚ} (hρ32 : ρw < 2 ^ 32) (hα32 : αw < 2 ^ 32) (hr : wordQ ρw = some r)
     (ha : wordQ αw = some a) (hr0 : 0 ≤ r) (ha0 : 0 ≤ a) : Rule.floorOK ρw αw = true ↔ 1 ≤ r * a := by
   rw [floorOK_fin (RowCircuit.wordQ_exp hr) (RowCircuit.wordQ_exp ha)]
@@ -206,7 +171,6 @@ theorem floorOK_iff {ρw αw : ℕ} {r a : ℚ} (hρ32 : ρw < 2 ^ 32) (hα32 : 
     rw [ht, neg_neg, Int.toNat_natCast, zpow_neg, zpow_natCast, ← div_eq_mul_inv, one_le_div h2t, ge_iff_le]
     constructor <;> intro h <;> exact_mod_cast h
 
-/-- A natural below 2⁴⁸ times a power of two, when below 1, is at most `1 − 2⁻⁴⁸`. -/
 theorem gap_of_parts {P : ℕ} {s : ℤ} (hP : (P : ℚ) < 2 ^ 48) (h : (P : ℚ) * 2 ^ s < 1) :
     (P : ℚ) * 2 ^ s ≤ 1 - 2 ^ (-48 : ℤ) := by
   have hG : (2 : ℚ) ^ (-48 : ℤ) = (2 ^ 48)⁻¹ := by norm_num
@@ -241,7 +205,6 @@ theorem gap_of_parts {P : ℕ} {s : ℤ} (hP : (P : ℚ) < 2 ^ 48) (h : (P : ℚ
     calc (P : ℚ) * (2 ^ t)⁻¹ ≤ 2 ^ 48 * (2 ^ 49)⁻¹ := mul_le_mul hP.le hinv (by positivity) (by positivity)
       _ ≤ 1 - 2 ^ (-48 : ℤ) := by rw [hG]; norm_num
 
-/-- **The gap**: a product of two finite, nonnegative words below 1 is at most `1 − 2⁻⁴⁸`. -/
 theorem ra_gap {ρw αw : ℕ} {r a : ℚ} (hρ32 : ρw < 2 ^ 32) (hα32 : αw < 2 ^ 32) (hr : wordQ ρw = some r)
     (ha : wordQ αw = some a) (hr0 : 0 ≤ r) (ha0 : 0 ≤ a) (hlt : r * a < 1) : r * a ≤ 1 - 2 ^ (-48 : ℤ) := by
   obtain ⟨hvr, hmr, -⟩ := parts_val hρ32 hr
@@ -258,8 +221,6 @@ theorem ra_gap {ρw αw : ℕ} {r a : ℚ} (hρ32 : ρw < 2 ^ 32) (hα32 : αw <
   rw [hra] at hlt ⊢
   exact gap_of_parts hP hlt
 
-/-- **The FMA keeps the floor's sign**: with `0 ≤ ρ·α ≤ 113` and the gap below 1, `F32Fma(ρ, α, −1) ≥ 0` exactly when
-`ρ·α ≥ 1`. -/
 theorem floor_nonneg_iff {ρw αw : ℕ} {r a : ℚ} (hρ32 : ρw < 2 ^ 32) (hα32 : αw < 2 ^ 32) (hr : wordQ ρw = some r)
     (ha : wordQ αw = some a) (hra0 : 0 ≤ r * a) (hbd : r * a ≤ 113)
     (hgap : r * a < 1 → r * a ≤ 1 - 2 ^ (-48 : ℤ)) :
@@ -301,12 +262,9 @@ theorem floor_nonneg_iff {ρw αw : ℕ} {r a : ℚ} (hρ32 : ρw < 2 ^ 32) (hα
       linarith
     exact mul_nonneg hm0 (zpow_pos (by norm_num) _).le
 
-/-! ## Liveness -/
-
 theorem sq300_eq (w : ℕ) : Rule.sq300 w = (Rule.parts w).2.1 * (Rule.parts w).2.1 *
     2 ^ (2 * (Rule.parts w).2.2 + 300).toNat := rfl
 
-/-- **`sq300` is the square times 2³⁰⁰** on a finite word. -/
 theorem sq300_val {w : ℕ} {v : ℚ} (h32 : w < 2 ^ 32) (h : wordQ w = some v) :
     (Rule.sq300 w : ℚ) = v ^ 2 * 2 ^ 300 := by
   obtain ⟨hv, -, hE⟩ := parts_val h32 h
@@ -347,7 +305,6 @@ theorem liveRow_eq (x : Array ℕ) : Rule.liveRow x = decide (64 * (∑ l ∈ Fi
   unfold Rule.liveRow
   simp only [foldl_range_add, Nat.zero_add, foldl_count]
 
-/-- **`live_row` is `LiveRow`** at δ = 1 under `Stat.every8`, on a row of finite words. -/
 theorem liveRow_iff {x : Array ℕ} (hk : 0 < x.size) (hx : ∀ l < x.size, x[l]! < 2 ^ 32 ∧ (wordQ x[l]!).isSome) :
     Rule.liveRow x = true ↔ LiveRow Params.pi.σ (rowVals x.size x) Stat.every8 := by
   have hsq : ∀ l < x.size, (Rule.sq300 x[l]! : ℚ) = (wordQ x[l]!).getD 0 ^ 2 * 2 ^ 300 := by
@@ -418,8 +375,6 @@ theorem liveRow_iff {x : Array ℕ} (hk : 0 < x.size) (hx : ∀ l < x.size, x[l]
     · rw [ite_eq_right h, ite_eq_right fun h' => h ((key l.val l.isLt).1 h')]
   rw [liveRow_eq, decide_eq_true_iff, LiveRow, hcount]
 
-/-! ## The rules -/
-
 theorem alpha8_finite (x : ℕ → ℕ) (k : ℕ) : ∃ a, wordQ (RowCircuit.alpha8 RowCircuit.coreOps x k) = some a := by
   obtain ⟨-, a, ha, -⟩ := RowCircuit.alpha_spec Pouw.PearlC.CoreOps.pc8OpsAgree_coreOps
     (t := RowCircuit.Prim.eval RowCircuit.coreOps .add [RowCircuit.rowMax RowCircuit.coreOps .fabs x (k - 1),
@@ -432,7 +387,6 @@ theorem semH3_floor {Q R S : Type} (saltOf : S → List ℕ) (rootOf : ℕ → L
       if (wordQ (RowCircuit.rowRho RowCircuit.coreOps .id (RowCircuit.encRow k X) k)).isSome then
         Pouw.PearlC.wordVal (RowCircuit.floor8 RowCircuit.coreOps (RowCircuit.encRow k X) k) + 1 else 0 := rfl
 
-/-- **The rules on a row** whose ρ is a finite word and whose ρ and α are `pc8`'s. -/
 theorem rowPasses_iff {Q R S : Type} (saltOf : S → List ℕ) (rootOf : ℕ → List ℕ) {p k : ℕ} {W : Codes} {i : ℕ}
     {x : Array ℕ} {ρw αw : ℕ} (hi : i < p) (hk : 0 < k) (hxk : x.size = k)
     (hx : ∀ l < k, x[l]! = W i l ∧ W i l < 2 ^ 32 ∧ (wordQ (W i l)).isSome) (hρS : (wordQ ρw).isSome)
@@ -486,7 +440,6 @@ theorem rowPasses_iff {Q R S : Type} (saltOf : S → List ℕ) (rootOf : ℕ →
     rw [hfloor hi] at h2
     exact ⟨hF.2 h2, hL.2 h1⟩
 
-/-- **(c) The per-row rules, proved** from the row statistics and ρ's finiteness. -/
 theorem rowsAreTheRules (hS : StatsAreTheRow) (hF : StatsRhoIsFinite) : RowsAreTheRules := by
   intro Q R S saltOf rootOf p k W i x s ρw αw βw hi hk _hk8 _hk27 hxk hx hst
   have _hxw : ∀ l < k, x[l]! < 2 ^ 32 ∧ (wordQ x[l]!).isSome := fun l hl => by

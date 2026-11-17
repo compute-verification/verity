@@ -6,18 +6,7 @@ import Mathlib.Algebra.Order.Floor.Semifield
 import Mathlib.Tactic.Positivity.Finset
 import Proofs.Core.Circuit
 
-/-!
-# A unit of a composed table is its template (proofs)
-
-`WholeCircuit.Whole` composes unit templates by their ports. Here a unit of it is cut out as its template's own
-transcript (`cut`): the template evaluated on the values the composed transcript gives its ports. The cut is correct in
-the template's one-unit partition whatever the transcript (`cut_correct`, an evaluation is correct for every unit:
-`localEval_eval`), and it agrees with the composed transcript's local evaluation of the unit at every gate
-(`cut_val`), so at the unit's inputs (`cut_input`) and, where the unit is correct, at every committed gate it computes
-(`cut_committed`). The unit lemmas proved of a template's own table (`TileCircuit.tile_correct`,
-`RowCircuit.row8A_code`, …) therefore hold of each unit of the composed table unchanged. A port that a unit's gate
-reads is committed (`port_committed`), being an input or another unit's gate.
--/
+/-! A unit of a composed table is its template. -/
 
 @[expose] public section
 
@@ -25,7 +14,6 @@ namespace Pouw.PearlC.WholeCircuit
 
 open Pouw.PearlC.TileCircuit
 
-/-- **An evaluation is correct for every unit**: recomputing a unit from the evaluation gives the evaluation back. -/
 theorem localEval_eval {C : Verity.Circuit} {n : ℕ} (P : Verity.Partition C n) (a : C.Trace) (u : Fin n) :
     P.localEval (C.eval a) u = C.eval a := by
   funext g
@@ -43,8 +31,6 @@ theorem localEval_eval {C : Verity.Circuit} {n : ℕ} (P : Verity.Partition C n)
 
 theorem correct_eval {C : Verity.Circuit} {n : ℕ} (P : Verity.Partition C n) (a : C.Trace) (u : Fin n) :
     P.Correct (C.eval a) u := fun g _ _ => by rw [localEval_eval]
-
-/-! ## Laying out blocks -/
 
 theorem blocksLen_append : ∀ (L1 L2 : List BlockKind), blocksLen (L1 ++ L2) = blocksLen L1 + blocksLen L2
   | [], _ => by simp [blocksLen]
@@ -98,8 +84,6 @@ theorem blocksOK_mid (B : BlockKind) (L2 : List BlockKind) : ∀ (L1 : List Bloc
     have := blocksOK_mid B L2 L1 _ h.2 q hq a ha
     simp only [blocksLen]
     omega
-
-/-! ## One instance of a block -/
 
 namespace Whole
 
@@ -175,9 +159,6 @@ omit hW hq in
 theorem cut_correct (X : W.spec.toCircuit.Trace) (B : BlockKind) (q : ℕ) : B.S.part.Correct (W.cut X B q) 0 :=
   correct_eval _ _ _
 
-/-- **The cut is the composed table's unit, gate by gate**: where the template's inputs are its first `nIn` gates and
-each port's value fits its input's width, every template gate's value in the cut is the unit's local evaluation at its
-copy. -/
 theorem cut_val (X : W.spec.toCircuit.Trace) (hin : ∀ a < B.S.N, (B.S.gate a).input = true ↔ a < B.nIn)
     (hfit : ∀ a < B.nIn, val X (B.port q a) < 2 ^ (B.S.gate a).w) :
     ∀ a < B.S.N, val (W.cut X B q) a =
@@ -208,7 +189,6 @@ theorem cut_val (X : W.spec.toCircuit.Trace) (hin : ∀ a < B.S.N, (B.S.gate a).
       have := B.S.rd_lt a ha a' ha'
       exact ih a' this (by omega)
 
-/-- The cut's inputs are the ports' values. -/
 theorem cut_input (X : W.spec.toCircuit.Trace) (hin : ∀ a < B.S.N, (B.S.gate a).input = true ↔ a < B.nIn)
     (hfit : ∀ a < B.nIn, val X (B.port q a) < 2 ^ (B.S.gate a).w) (hnN : B.nIn ≤ B.S.N) {a : ℕ} (ha : a < B.nIn) :
     val (W.cut X B q) a = val X (B.port q a) := by
@@ -216,7 +196,6 @@ theorem cut_input (X : W.spec.toCircuit.Trace) (hin : ∀ a < B.S.N, (B.S.gate a
   rw [W.cut_val hW hq X hin hfit a (by omega), BlockKind.reloc, ite_eq_left ha, val_of_lt _ hpN, val_of_lt _ hpN,
     W.part.localEval_of_not_mem X (W.unit_ne hW hq (g := ⟨_, hpN⟩) (W.port_lt hW hq ha))]
 
-/-- **A correct unit's committed gates are the cut's.** -/
 theorem cut_committed (X : W.spec.toCircuit.Trace) (hin : ∀ a < B.S.N, (B.S.gate a).input = true ↔ a < B.nIn)
     (hfit : ∀ a < B.nIn, val X (B.port q a) < 2 ^ (B.S.gate a).w) (hX : W.part.Correct X ⟨_, W.unit_lt hW hq⟩)
     {a : ℕ} (ha1 : B.nIn ≤ a) (ha2 : a < B.S.N)
@@ -225,7 +204,6 @@ theorem cut_committed (X : W.spec.toCircuit.Trace) (hin : ∀ a < B.S.N, (B.S.ga
   rw [W.cut_val hW hq X hin hfit a ha2, BlockKind.reloc, ite_eq_right (by omega), val_of_lt _ (W.inst_lt hW hq ha1 ha2),
     val_of_lt _ (W.inst_lt hW hq ha1 ha2), hX _ hcom (W.unit_inst hW hq ha1 ha2)]
 
-/-- A unit's gate reads the ports of the template inputs it reads. -/
 theorem port_reads {a a' : ℕ} (ha1 : B.nIn ≤ a) (ha2 : a < B.S.N) (ha' : a' < B.nIn) (h : a' ∈ (B.S.gate a).rd) :
     (⟨B.port q a', W.port_lt_N hW hq ha'⟩ : Fin W.spec.toCircuit.N) ∈
       W.spec.toCircuit.reads ⟨_, W.inst_lt hW hq ha1 ha2⟩ := by
@@ -235,7 +213,6 @@ theorem port_reads {a a' : ℕ} (ha1 : B.nIn ≤ a) (ha2 : a < B.S.N) (ha' : a' 
   simp only [BlockKind.gateAt, List.mem_map]
   exact ⟨a', h, by simp [BlockKind.reloc, ha']⟩
 
-/-- **A port a unit's gate reads is committed**: an input, or a gate of an earlier unit. -/
 theorem port_committed {a a' : ℕ} (ha1 : B.nIn ≤ a) (ha2 : a < B.S.N) (ha' : a' < B.nIn)
     (h : a' ∈ (B.S.gate a).rd) :
     (⟨B.port q a', W.port_lt_N hW hq ha'⟩ : Fin W.spec.toCircuit.N) ∈ W.part.committed :=

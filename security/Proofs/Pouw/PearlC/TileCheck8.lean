@@ -6,22 +6,7 @@ import Mathlib.Tactic.Positivity.Finset
 import Proofs.Core.Circuit
 import Proofs.Pouw.PearlC.TileCircuit
 
-/-!
-# `pc8`'s tile check: its units are its templates (proofs)
-
-`WholeCircuit.whole8` is `Pc8Check`'s table, its units the instances of `Pc8RowB_v1`, `Pc8RowA_v1` and `Pc8Tile_v1`.
-Here each unit an entry's words depend on is cut out as its template's transcript (`Whole.cut`), and the cuts are
-chained along the ports, so the unit lemmas proved of each template's own table apply to the composed table unchanged:
-
-* every port reads a gate of its input's width (`hfit8B`, `hfit8A`, `hfit8T`), so a cut holds on its inputs the
-  transcript's values at its ports (`cutB8_input`, `cutA8_input`, `cutT8_input`) and, where its unit is correct, the
-  transcript holds on the unit's committed gates the cut's values (`cutB8_at`, `cutA8_at`, `cutT8_at`);
-* entry `(i, j)`'s tile unit is in the cone of its `C̃` (`cone8T`), and RowA `i` and RowB `j` in the cone of its `U`,
-  whose last K16 step reads their `P_A` and `P_B` words (`cone8A`, `cone8B`);
-* where the three units are correct, the entry's `C̃` and `U` hold the tile cut's (`chain8_C`, `chain8_U`), and the tile
-  cut's `A′` and `B̃` rows and `P_A` and `P_B` rows are the row cuts' codes and words (`chain8_A`, `chain8_B`,
-  `chain8_PA`, `chain8_PB`), each gate a tile reads being committed (`Whole.port_committed`).
--/
+/-! `pc8`'s tile check: its units are its templates. -/
 
 @[expose] public section
 
@@ -30,8 +15,6 @@ namespace Pouw.PearlC.WholeCircuit
 open Pouw.Fp8Atom Pouw.PearlC Pouw.PearlC.TileCircuit Pouw.PearlC.RowCircuit
 
 variable (ops : RowOps)
-
-/-! ## The row tables' gates -/
 
 theorem runsAt_mid (R : Run) (L2 : List Run) : ∀ (L1 : List Run) (o g : ℕ), o + runsLen L1 ≤ g →
     g < o + runsLen L1 + R.n → runsAt (L1 ++ R :: L2) o g = some (R.gate (g - (o + runsLen L1)))
@@ -65,7 +48,6 @@ theorem Rows.gate_in (T : Rows) {g : ℕ} (hg : g < T.nIn) : (T.spec ops).gate g
   unfold Rows.gate
   rw [ite_eq_left hg]
 
-/-- A row table's gates are inputs exactly below `nIn`. -/
 theorem Rows.input_iff (T : Rows) : ∀ a < (T.spec ops).N, ((T.spec ops).gate a).input = true ↔ a < T.nIn := by
   intro a ha
   by_cases h : a < T.nIn
@@ -90,7 +72,6 @@ theorem code8At_len (K b : ℕ) :
     ok8At, dead8At, th8At, sq8At, al8At]
   omega
 
-/-- A `pc8` row's code gates are E4M3 casts, 8 bits wide. -/
 theorem rows8_code_w (T : Rows) (p : Pipeline) {K : ℕ} {rest : List Run} (hT : T.runs = pre8Runs p K T.nIn ++ rest)
     {t : ℕ} (ht : t < K) : ((T.spec ops).gate (code8 K T.nIn t)).w = 8 := by
   have hl := code8At_len K T.nIn
@@ -111,7 +92,6 @@ theorem row8B_code_w (p : Pipeline) {K t : ℕ} (ht : t < K) :
     (((row8B p K).spec ops).gate (code8 K (rowIn K true) t)).w = 8 :=
   rows8_code_w ops (row8B p K) p rfl ht
 
-/-- RowA's `P_A` words are BF16 words: `f2fpBf16` casts, 16 bits wide. -/
 theorem row8A_pa_w (p : Pipeline) {K w : ℕ} (hw : w < 64) :
     (((row8A p K).spec ops).gate (paOut8 K w)).w = 16 := by
   have hl := pre8Runs_len p K (rowIn K false)
@@ -142,7 +122,6 @@ theorem row8A_pa_w (p : Pipeline) {K w : ℕ} (hw : w < 64) :
     rw [e1]
     simp only [af8Run, Run.rep, e2, e3, lt_irrefl, ↓reduceIte, RGate.toGate, Prim.w]
 
-/-- RowB's `P_B` words are BF16 words: an `f2fpBf16` cast or a `bf16Neg`, 16 bits wide. -/
 theorem row8B_pb_w (p : Pipeline) {K w : ℕ} (hw : w < 64) :
     (((row8B p K).spec ops).gate (pbOut8 K w)).w = 16 := by
   have hl := pre8Runs_len p K (rowIn K true)
@@ -181,8 +160,6 @@ theorem row8B_pb_w (p : Pipeline) {K w : ℕ} (hw : w < 64) :
     simp only [nb8Run, show (2 * (w - 32) + 1) % 2 = 1 by omega, show (1 : ℕ) ≠ 0 by omega, ↓reduceIte,
       RGate.toGate, Prim.w]
 
-/-! ## Composed tables -/
-
 theorem fin_mem {n : ℕ} {s : Finset (Fin n)} {x y : ℕ} {hx : x < n} {hy : y < n} (h : x = y)
     (hm : (⟨x, hx⟩ : Fin n) ∈ s) : (⟨y, hy⟩ : Fin n) ∈ s := by
   subst h; exact hm
@@ -207,19 +184,14 @@ theorem Whole.inst_w (W : Whole) {L1 L2 : List BlockKind} {B : BlockKind} (hW : 
   rw [W.gate_inst hW hq ha1 ha2]
   rfl
 
-/-! ## `whole8`'s blocks -/
-
 section Whole8
 
 variable (p : Pipeline) (M K N TM TN : ℕ)
 
-/-- `whole8`'s RowB block. -/
 def blockB8 : BlockKind := ⟨(row8B p K).spec ops, rowIn K true, N, portB8 M N K⟩
 
-/-- `whole8`'s RowA block. -/
 def blockA8 : BlockKind := ⟨(row8A p K).spec ops, rowIn K false, M, portA8 M N K⟩
 
-/-- `whole8`'s tile block. -/
 def blockT8 : BlockKind := ⟨tileSpec p K TM TN, tileIn K TM TN, M / TM * (N / TN), portT8 p M N K TM TN⟩
 
 theorem whole8_B : (whole8 ops p M K N TM TN).blocks =
@@ -250,8 +222,6 @@ theorem whole8_N : (whole8 ops p M K N TM TN).spec.toCircuit.N = in8 M N K + N *
   show in8 M N K + blocksLen _ = _
   simp only [blocksLen, BlockKind.len, whole8, add_zero, Nat.add_assoc]
   rfl
-
-/-! ### Inputs -/
 
 theorem inW8_portA8 {i a : ℕ} (hi : i < M) (ha : a < rowIn K false) :
     inW8 M N K (portA8 M N K i a) = (row8A p K).inW a := by
@@ -313,8 +283,6 @@ theorem hnA8 : (blockA8 ops p M K N).nIn ≤ (blockA8 ops p M K N).S.N := by
 theorem hnT8 : (blockT8 p M K N TM TN).nIn ≤ (blockT8 p M K N TM TN).S.N := by
   show tileIn K TM TN ≤ tileN K TM TN
   unfold tileN; omega
-
-/-! ### Every port reads a gate of its input's width -/
 
 theorem hfit8B (X : (whole8 ops p M K N TM TN).spec.toCircuit.Trace) {j : ℕ} (hj : j < N) :
     ∀ a < (blockB8 ops p M K N).nIn,
@@ -388,13 +356,10 @@ theorem hfit8T (X : (whole8 ops p M K N TM TN).spec.toCircuit.Trace) {e : ℕ} (
 
 end Whole8
 
-/-! ## What a tile's entry reads -/
-
 section Reads8
 
 variable (p : Pipeline) (K TM TN : ℕ)
 
-/-- Entry `(i, j)`'s atom `5·(l / 128) + (l mod 128) / 32` reads code `l` of `A′_i` and of `B̃_j`. -/
 theorem tile_reads_code {i j l : ℕ} (hj : j < TN) (hl : l < 128 * (K / 128)) :
     i * K + l ∈ (tileGate p K TM TN (entryBase K TM TN i j + (5 * (l / 128) + l % 128 / 32))).rd ∧
       TM * K + j * K + l ∈ (tileGate p K TM TN (entryBase K TM TN i j + (5 * (l / 128) + l % 128 / 32))).rd := by
@@ -405,7 +370,6 @@ theorem tile_reads_code {i j l : ℕ} (hj : j < TN) (hl : l < 128 * (K / 128)) :
       (List.mem_map.2 ⟨l % 32, List.mem_range.2 (by omega), by omega⟩)),
     List.mem_append_right _ (List.mem_map.2 ⟨l % 32, List.mem_range.2 (by omega), by omega⟩)⟩
 
-/-- Entry `(i, j)`'s K16 step `q / 16` reads word `q` of `P_A,i` and of `P_B,j`. -/
 theorem tile_reads_P {i j q : ℕ} (hj : j < TN) (hq : q < 64) :
     (TM + TN) * K + 64 * i + q ∈ (tileGate p K TM TN (entryBase K TM TN i j + (5 * (K / 128) + q / 16))).rd ∧
       (TM + TN) * K + 64 * TM + 64 * j + q ∈
@@ -426,7 +390,6 @@ theorem entry_bounds {i j r : ℕ} (hi : i < TM) (hj : j < TN) (hr : r < blockLe
 
 end Reads8
 
-/-- Entry `(i, j)` lies in tile `i / TM · (N / TN) + j / TN` at `(i mod TM, j mod TN)`. -/
 theorem tile_index {M N TM TN i j : ℕ} (hTM : TM ∣ M) (hTN : TN ∣ N) (hi : i < M) (hj : j < N) :
     i / TM * (N / TN) + j / TN < M / TM * (N / TN) ∧
       (i / TM * (N / TN) + j / TN) / (N / TN) * TM + i % TM = i ∧
@@ -486,34 +449,28 @@ theorem portT8_PB {tj q : ℕ} (_htj : tj < TN) (hq : q < 64) :
 
 end Ports8
 
-/-! ## The units' cuts -/
-
 section Cuts8
 
 variable (p : Pipeline) (M K N TM TN : ℕ)
 
-/-- RowB `j`'s cut holds on its inputs the transcript's values at its ports. -/
 theorem cutB8_input (X : (whole8 ops p M K N TM TN).spec.toCircuit.Trace) {j : ℕ} (hj : j < N) {a : ℕ}
     (ha : a < rowIn K true) :
     val ((whole8 ops p M K N TM TN).cut X (blockB8 ops p M K N) j) a = val X (portB8 M N K j a) :=
   (whole8 ops p M K N TM TN).cut_input (whole8_B ops p M K N TM TN) hj X (hinB8 ops p M K N)
     (hfit8B ops p M K N TM TN X hj) (hnB8 ops p M K N) ha
 
-/-- RowA `i`'s cut holds on its inputs the transcript's values at its ports. -/
 theorem cutA8_input (X : (whole8 ops p M K N TM TN).spec.toCircuit.Trace) {i : ℕ} (hi : i < M) {a : ℕ}
     (ha : a < rowIn K false) :
     val ((whole8 ops p M K N TM TN).cut X (blockA8 ops p M K N) i) a = val X (portA8 M N K i a) :=
   (whole8 ops p M K N TM TN).cut_input (whole8_A ops p M K N TM TN) hi X (hinA8 ops p M K N)
     (hfit8A ops p M K N TM TN X hi) (hnA8 ops p M K N) ha
 
-/-- Tile `e`'s cut holds on its inputs the transcript's values at its ports. -/
 theorem cutT8_input (X : (whole8 ops p M K N TM TN).spec.toCircuit.Trace) {e : ℕ} (he : e < M / TM * (N / TN))
     {a : ℕ} (ha : a < tileIn K TM TN) :
     val ((whole8 ops p M K N TM TN).cut X (blockT8 p M K N TM TN) e) a = val X (portT8 p M N K TM TN e a) :=
   (whole8 ops p M K N TM TN).cut_input (whole8_T ops p M K N TM TN) he X (hinT8 p M K N TM TN)
     (hfit8T ops p M K N TM TN X he) (hnT8 p M K N TM TN) ha
 
-/-- Where RowB `j` is correct, its committed gates hold its cut's values. -/
 theorem cutB8_at (X : (whole8 ops p M K N TM TN).spec.toCircuit.Trace) {j : ℕ} (hj : j < N)
     (hX : (whole8 ops p M K N TM TN).part.Correct X
       ⟨_, (whole8 ops p M K N TM TN).unit_lt (whole8_B ops p M K N TM TN) hj⟩)
@@ -525,7 +482,6 @@ theorem cutB8_at (X : (whole8 ops p M K N TM TN).spec.toCircuit.Trace) {j : ℕ}
   exact (whole8 ops p M K N TM TN).cut_committed (whole8_B ops p M K N TM TN) hj X (hinB8 ops p M K N)
     (hfit8B ops p M K N TM TN X hj) hX ha1 ha2 (fin_mem (rowB8_eq ops p M K N TM TN j a) hcom)
 
-/-- Where RowA `i` is correct, its committed gates hold its cut's values. -/
 theorem cutA8_at (X : (whole8 ops p M K N TM TN).spec.toCircuit.Trace) {i : ℕ} (hi : i < M)
     (hX : (whole8 ops p M K N TM TN).part.Correct X
       ⟨_, (whole8 ops p M K N TM TN).unit_lt (whole8_A ops p M K N TM TN) hi⟩)
@@ -537,7 +493,6 @@ theorem cutA8_at (X : (whole8 ops p M K N TM TN).spec.toCircuit.Trace) {i : ℕ}
   exact (whole8 ops p M K N TM TN).cut_committed (whole8_A ops p M K N TM TN) hi X (hinA8 ops p M K N)
     (hfit8A ops p M K N TM TN X hi) hX ha1 ha2 (fin_mem (rowA8_eq ops p M K N TM TN i a) hcom)
 
-/-- Where tile `e` is correct, its committed gates hold its cut's values. -/
 theorem cutT8_at (X : (whole8 ops p M K N TM TN).spec.toCircuit.Trace) {e : ℕ} (he : e < M / TM * (N / TN))
     (hX : (whole8 ops p M K N TM TN).part.Correct X
       ⟨_, (whole8 ops p M K N TM TN).unit_lt (whole8_T ops p M K N TM TN) he⟩)
@@ -550,8 +505,6 @@ theorem cutT8_at (X : (whole8 ops p M K N TM TN).spec.toCircuit.Trace) {e : ℕ}
     (hfit8T ops p M K N TM TN X he) hX ha1 ha2 (fin_mem (tile8_eq ops p M K N TM TN e a) hcom)
 
 end Cuts8
-
-/-! ## An entry's cone -/
 
 section Cone8
 
@@ -572,13 +525,11 @@ theorem tile8_ltN {e a : ℕ} (he : e < M / TM * (N / TN)) (ha1 : tileIn K TM TN
   rw [tile8_eq ops p M K N TM TN]
   exact (whole8 ops p M K N TM TN).inst_lt (whole8_T ops p M K N TM TN) he ha1 ha2
 
-/-- Entry `(i, j)`'s `U` is its tile's copy of the block's gate `5·(K / 128) + 3`. -/
 theorem uGlob8_eq (i j : ℕ) : uGlob8 p M N K TM TN i j = (whole8 ops p M K N TM TN).nIn +
     blocksLen [blockB8 ops p M K N, blockA8 ops p M K N] + (i / TM * (N / TN) + j / TN) * (blockT8 p M K N TM TN).len +
       (entryBase K TM TN (i % TM) (j % TN) + (5 * (K / 128) + 48 / 16) - (blockT8 p M K N TM TN).nIn) := by
   unfold uGlob8; rw [uGate_eq]; exact tile8_eq ops p M K N TM TN _ _
 
-/-- Entry `(i, j)`'s tile unit is in the cone of its `C̃`. -/
 theorem cone8T {T : Finset (Fin (whole8 ops p M K N TM TN).spec.toCircuit.N)} {i j : ℕ} (hTM : TM ∣ M)
     (hTN : TN ∣ N) (hi : i < M) (hj : j < N) (hK : 0 < K / 128)
     (hc : ∀ g : Fin (whole8 ops p M K N TM TN).spec.toCircuit.N, g.val = cGlob8 p M N K TM TN i j → g ∈ T) :
@@ -593,7 +544,6 @@ theorem cone8T {T : Finset (Fin (whole8 ops p M K N TM TN).spec.toCircuit.N)} {i
   exact (whole8 ops p M K N TM TN).part.mem_cone (hc _ (tile8_eq ops p M K N TM TN _ _).symm) (.refl _)
     ((whole8 ops p M K N TM TN).unit_inst (whole8_T ops p M K N TM TN) (tile_index hTM hTN hi hj).1 hb.1 hb.2)
 
-/-- Entry `(i, j)`'s RowA unit is in the cone of its `U`, whose last K16 step reads `P_A,i`'s word 48. -/
 theorem cone8A {T : Finset (Fin (whole8 ops p M K N TM TN).spec.toCircuit.N)} {i j : ℕ} (hTM : TM ∣ M)
     (hTN : TN ∣ N) (hi : i < M) (hj : j < N)
     (hu : ∀ g : Fin (whole8 ops p M K N TM TN).spec.toCircuit.N, g.val = uGlob8 p M N K TM TN i j → g ∈ T) :
@@ -615,7 +565,6 @@ theorem cone8A {T : Finset (Fin (whole8 ops p M K N TM TN).spec.toCircuit.N)} {i
   show portT8 p M N K TM TN _ _ = _
   rw [portT8_PA p _ hti (by norm_num), hie, rowA8_eq ops p M K N TM TN]
 
-/-- Entry `(i, j)`'s RowB unit is in the cone of its `U`, whose last K16 step reads `P_B,j`'s word 48. -/
 theorem cone8B {T : Finset (Fin (whole8 ops p M K N TM TN).spec.toCircuit.N)} {i j : ℕ} (hTM : TM ∣ M)
     (hTN : TN ∣ N) (hi : i < M) (hj : j < N)
     (hu : ∀ g : Fin (whole8 ops p M K N TM TN).spec.toCircuit.N, g.val = uGlob8 p M N K TM TN i j → g ∈ T) :
@@ -649,8 +598,6 @@ theorem outs8_U {i j : ℕ} (hi : i < M) (hj : j < N) : uGlob8 p M N K TM TN i j
 
 end Cone8
 
-/-! ## A tile's cut reads its rows' cuts -/
-
 section Chain8
 
 variable (p : Pipeline) (M K N TM TN : ℕ) (X : (whole8 ops p M K N TM TN).spec.toCircuit.Trace) {i j : ℕ}
@@ -658,7 +605,6 @@ variable (p : Pipeline) (M K N TM TN : ℕ) (X : (whole8 ops p M K N TM TN).spec
 
 include hTM hTN hi hj
 
-/-- Where its tile unit is correct, entry `(i, j)`'s `C̃` holds the tile cut's. -/
 theorem chain8_C (hK : 0 < K / 128)
     (hXT : (whole8 ops p M K N TM TN).part.Correct X
       ⟨_, (whole8 ops p M K N TM TN).unit_lt (whole8_T ops p M K N TM TN) (tile_index hTM hTN hi hj).1⟩) :
@@ -676,7 +622,6 @@ theorem chain8_C (hK : 0 < K / 128)
       simp only [Spec.toCircuit, Finset.mem_filter, Finset.mem_univ, true_and]
       exact outs8_C p M K N TM TN hi hj))
 
-/-- Where its tile unit is correct, entry `(i, j)`'s `U` holds the tile cut's. -/
 theorem chain8_U
     (hXT : (whole8 ops p M K N TM TN).part.Correct X
       ⟨_, (whole8 ops p M K N TM TN).unit_lt (whole8_T ops p M K N TM TN) (tile_index hTM hTN hi hj).1⟩) :
@@ -692,7 +637,6 @@ theorem chain8_U
       simp only [Spec.toCircuit, Finset.mem_filter, Finset.mem_univ, true_and]
       exact outs8_U p M K N TM TN hi hj))
 
-/-- Where RowA `i` is correct, the tile cut's row `i mod TM` of `A′` is RowA `i`'s cut's codes. -/
 theorem chain8_A (hk : 128 ∣ K)
     (hXA : (whole8 ops p M K N TM TN).part.Correct X
       ⟨_, (whole8 ops p M K N TM TN).unit_lt (whole8_A ops p M K N TM TN) hi⟩) {l : ℕ} (hl : l < K) :
@@ -717,7 +661,6 @@ theorem chain8_A (hk : 128 ∣ K)
     (h := rowA8_ltN ops p M K N TM TN hi (lt_trans hc.2 hNA))
     (fin_mem (by show portT8 p M N K TM TN _ _ = _; rw [portT8_A p _ hti hl, hie]) hcom)
 
-/-- Where RowB `j` is correct, the tile cut's row `j mod TN` of `B̃` is RowB `j`'s cut's codes. -/
 theorem chain8_B (hk : 128 ∣ K)
     (hXB : (whole8 ops p M K N TM TN).part.Correct X
       ⟨_, (whole8 ops p M K N TM TN).unit_lt (whole8_B ops p M K N TM TN) hj⟩) {l : ℕ} (hl : l < K) :
@@ -743,7 +686,6 @@ theorem chain8_B (hk : 128 ∣ K)
     (h := rowB8_ltN ops p M K N TM TN hj (lt_trans hc.2 hNB))
     (fin_mem (by show portT8 p M N K TM TN _ _ = _; rw [portT8_B p _ htj hl, hje]) hcom)
 
-/-- Where RowA `i` is correct, the tile cut's `P_A` row `i mod TM` is RowA `i`'s cut's `P_A` words. -/
 theorem chain8_PA
     (hXA : (whole8 ops p M K N TM TN).part.Correct X
       ⟨_, (whole8 ops p M K N TM TN).unit_lt (whole8_A ops p M K N TM TN) hi⟩) {q : ℕ} (hq : q < 64) :
@@ -764,7 +706,6 @@ theorem chain8_PA
   exact cutA8_at ops p M K N TM TN X hi hXA hc.1 hc.2 (h := rowA8_ltN ops p M K N TM TN hi hc.2)
     (fin_mem (by show portT8 p M N K TM TN _ _ = _; rw [portT8_PA p _ hti hq, hie]) hcom)
 
-/-- Where RowB `j` is correct, the tile cut's `P_B` row `j mod TN` is RowB `j`'s cut's `P_B` words. -/
 theorem chain8_PB
     (hXB : (whole8 ops p M K N TM TN).part.Correct X
       ⟨_, (whole8 ops p M K N TM TN).unit_lt (whole8_B ops p M K N TM TN) hj⟩) {q : ℕ} (hq : q < 64) :

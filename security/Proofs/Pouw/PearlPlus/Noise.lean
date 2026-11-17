@@ -19,14 +19,7 @@ public import Proofs.Pouw.PearlC.PeelExactProofs
 public import Proofs.Properties.Core.Evaluate
 import all Init.Data.String.Defs
 
-/-!
-# Pearl+'s bridge, part (b), the noise: the check's -h3 noise is `NoiseSha512`'s
-
-The check hashes with the compiled SHA-512 every tree reads (`Flock.Sha512.hash`) and keys a row's seed by its
-`sha512/row-seg/v1` digest (`Flock.HmRow.segDigest`). The deployed semantics (`sha512Sem`) samples the same lines through the
-spec's SHA-512 (`Pouw.PearlC.Sha512.digest`) and row digest (`NoiseSha512.rowDigest`). Each statement here says the
-check's value is the spec's on the same bytes, and where the check returns a value, the spec's line or seed is it.
--/
+/-! Pearl+'s bridge, part (b), the noise: the check's -h3 noise is `NoiseSha512`'s. -/
 
 @[expose] public section
 
@@ -34,21 +27,16 @@ namespace Pouw.PearlPlus.Bridge
 
 open PouwCheck.PearlPlus
 
-/-- A byte array's bytes, as the spec's lists of naturals. -/
 def bytesNat (b : ByteArray) : List ℕ := b.data.toList.map UInt8.toNat
 
-/-- **The compiled SHA-512 is the spec's.** -/
 def HashIsTheSpec : Prop :=
   ∀ m : ByteArray, bytesNat (Flock.Sha512.hash m) = Pouw.PearlC.Sha512.digest (bytesNat m)
 
-/-- **`sha512/row-seg/v1` on whole bytes is the spec's row digest.** -/
 def SegDigestIsRowDigest : Prop :=
   ∀ r : ByteArray, bytesNat (Flock.HmRow.segDigest (8 * r.size) r) = Pouw.PearlC.NoiseSha512.rowDigest (bytesNat r)
 
-/-- The roles -h3 hashes under. -/
 def roles : List String := ["seed-A", "seed-B", "noise-line", "line"]
 
-/-- **-h3's labelled hash and its seeds are the spec's.** -/
 def SeedsAreTheSpec : Prop :=
   (∀ role ∈ roles, ∀ m : ByteArray,
     bytesNat (Words.s512 role m) = Pouw.PearlC.NoiseSha512.s512 role (bytesNat m)) ∧
@@ -57,8 +45,6 @@ def SeedsAreTheSpec : Prop :=
   ∀ (salt rootB row : ByteArray) (u i : ℕ), bytesNat (Words.rowSeed salt rootB u i row) =
     Pouw.PearlC.NoiseSha512.rowSeed (bytesNat salt) (bytesNat row) (bytesNat rootB) u i
 
-/-- **A noise line is the spec's**, at E's norm 256 and F's line norm 16: where the check's line is a value, its 32 codes
-are `NoiseSha512.sampleLine`'s. -/
 def LineIsTheSpec : Prop :=
   ∀ (seed : ByteArray) (side factor line norm32 : ℕ) (norm : ℚ) (codes : Array ℕ), side < 256 → factor < 256 →
     (norm32 = Words.NORM_E ∧ norm = 256 ∨ norm32 = Words.NORM_F ∧ norm = 16) →
@@ -66,8 +52,6 @@ def LineIsTheSpec : Prop :=
       codes.size = 32 ∧ ∀ t : Fin Pouw.PearlC.Params.pi.r,
         codes[t.val]! = (Pouw.PearlC.NoiseSha512.sampleLine (bytesNat seed) side factor line norm t).val
 
-/-- **The fixed operand's noise is `unitNoise`'s**: where `fixedNoise` is a value, its seed is the spec's `seed_B` and its
-k rows of `F_A` and `F_B` are the spec's basis lines. -/
 def FixedNoiseIsTheSpec : Prop :=
   ∀ (salt rootB : ByteArray) (k : ℕ) (wn : Words.FixedNoise), Words.fixedNoise salt rootB k = .ok wn →
     bytesNat wn.seedB = Pouw.PearlC.NoiseSha512.seedB (bytesNat salt) (bytesNat rootB) ∧
@@ -78,8 +62,6 @@ def FixedNoiseIsTheSpec : Prop :=
 namespace NoiseProofs
 
 open FlockSoundness.Discharge
-
-/-! ## The compression on 64-bit vectors is the spec's on naturals -/
 
 theorem rotr_toNat (x : BitVec 64) (n : ℕ) (hn : n < 64) :
     (x.rotateRight n).toNat = Pouw.PearlC.Sha512.rotr x.toNat n := by
@@ -134,7 +116,6 @@ theorem scheduleV_toNat : ∀ (n : ℕ) (w : List (BitVec 64)),
       congr 2
       omega
 
-/-- The spec's registers of a vector state. -/
 def regsNat (r : Flock.HmNets.Regs (BitVec 64)) : Pouw.PearlC.Sha512.Regs :=
   ⟨r.a.toNat, r.b.toNat, r.c.toNat, r.d.toNat, r.e.toNat, r.f.toNat, r.g.toNat, r.h.toNat⟩
 
@@ -222,8 +203,6 @@ theorem compressV_toNat (c0 c1 c2 c3 c4 c5 c6 c7 : BitVec 64) (msg : List (BitVe
   rw [spec_compress8 _ _ _ _ _ _ _ _ _ (regsNat (Hm.roundsV (Hm.scheduleV 64 msg) 80 0 ⟨c0, c1, c2, c3, c4, c5, c6, c7⟩))
     hh (by rw [hw]; exact rounds_spec c0 c1 c2 c3 c4 c5 c6 c7 msg hm), Hm.compressV, ofList8, feed_toNat]
 
-/-! ## The digest's bytes -/
-
 theorem flatMap_range_map {α : Type} (k : ℕ) (hk : 0 < k) (F : ℕ → ℕ → α) :
     ∀ n, ((List.range n).flatMap fun a => (List.range k).map (F a)) =
       (List.range (n * k)).map fun i => F (i / k) (i % k)
@@ -238,7 +217,6 @@ theorem flatMap_range_map {α : Type} (k : ℕ) (hk : 0 < k) (F : ℕ → ℕ �
       rw [Nat.add_comm, Nat.add_mul_div_right _ _ hk, Nat.div_eq_of_lt hj, Nat.zero_add, Nat.add_mul_mod_self_right,
         Nat.mod_eq_of_lt hj]
 
-/-- The spec's words of a chaining value. -/
 def phi (h : Array UInt64) : List ℕ := (List.range 8).map fun i => h[i]!.toNat
 
 theorem bytesNat_digestOf (h : Array UInt64) :
@@ -256,8 +234,6 @@ theorem bytesNat_digestOf (h : Array UInt64) :
     rw [UInt64.toNat_toUInt8, UInt64.toNat_shiftRight, e3, Nat.shiftRight_eq_div_pow, pow_mul,
       show 8 - 1 - i % 8 = 7 - i % 8 by omega]
     norm_num
-
-/-! ## The padded message and its blocks -/
 
 theorem lenBytes_toNat (len : ℕ) : (Hm.lenBytes len).map UInt8.toNat = Pouw.PearlC.Sha512.beBytes 16 (8 * len) := by
   rw [Hm.lenBytes, Pouw.PearlC.Sha512.beBytes, List.map_map, List.range_eq_range']
@@ -301,8 +277,6 @@ theorem blockWords_eq (L : List ℕ) (b : ℕ) :
   refine List.map_congr_left fun j hj => ?_
   rw [List.mem_range] at hj
   rw [List.getD_eq_getElem _ _ (by simp; omega), List.getElem_map, List.getElem_range, Nat.add_assoc]
-
-/-! ## The compiled compression, chain and digest -/
 
 theorem phi_compress (h : Array UInt64) (data : ByteArray) (off : ℕ) :
     phi (Flock.Sha512.compress h data off) =
@@ -402,8 +376,6 @@ theorem hashIsTheSpec : HashIsTheSpec := by
 
 namespace NoiseProofs
 
-/-! ## Byte strings -/
-
 theorem bytesNat_append (a b : ByteArray) : bytesNat (a ++ b) = bytesNat a ++ bytesNat b := by
   rw [bytesNat, bytesNat, bytesNat, ByteArray.toList_data_append, List.map_append]
 
@@ -456,8 +428,6 @@ theorem bytesNat_foldl_append (H : ℕ → ByteArray) : ∀ (L : List ℕ) (init
 theorem flatMap_congr {α β : Type} {l : List α} {f g : α → List β} (h : ∀ a ∈ l, f a = g a) :
     l.flatMap f = l.flatMap g := by
   rw [List.flatMap_def, List.flatMap_def, List.map_congr_left h]
-
-/-! ## The row's segments -/
 
 theorem rowSegs_length (n : ℕ) : (Pouw.PearlC.NoiseSha512.rowSegs n).length = (8 * n + 8192 - 1) / 8192 := by
   rw [Pouw.PearlC.NoiseSha512.rowSegs, List.length_append, List.length_replicate]
@@ -553,8 +523,6 @@ namespace NoiseProofs
 
 open Pouw.Fp8Atom Pouw.PearlC Pouw.PearlC.PeelExact Pouw.PearlC.PeelExactProofs
 
-/-! ## The check's FP32 and BF16 words on values -/
-
 theorem floor_div_65536 (n : ℕ) : ⌊(n : ℚ) / 65536⌋ = ((n / 65536 : ℕ) : ℤ) := by
   rw [Int.floor_eq_iff]
   constructor
@@ -563,7 +531,6 @@ theorem floor_div_65536 (n : ℕ) : ⌊(n : ℚ) / 65536⌋ = ((n / 65536 : ℕ)
   · rw [div_lt_iff₀ (by norm_num)]
     exact_mod_cast (show n < (n / 65536 + 1) * 65536 by omega)
 
-/-- BF16's nearest-even rounding of `n` units of `2^-16`, as the check's carry `(n + 0x7FFF + lsb) >>> 16`. -/
 theorem roundEven_div_65536 (n : ℕ) :
     roundEven ((n : ℚ) / 65536) = (((n + 32767 + n / 65536 % 2) / 65536 : ℕ) : ℤ) := by
   have hfrac : (n : ℚ) / 65536 - ((n / 65536 : ℕ) : ℤ) = ((n % 65536 : ℕ) : ℚ) / 65536 := by
@@ -592,8 +559,6 @@ theorem sgn_abs (b : Prop) [Decidable b] (y : ℚ) : |(if b then (-1 : ℚ) else
 theorem sgn_neg (b : Prop) [Decidable b] {y : ℚ} (hy : 0 < y) : (if b then (-1 : ℚ) else 1) * y < 0 ↔ b := by
   split <;> simp_all [hy.le]
 
-/-- A finite FP32 word's value, `±M·2^(e − 150)` with `M = 2^23 + mantissa`, is `bf16Rn`'s `±roundEven(M / 2^16)` at
-`2^(e − 134)`. -/
 theorem bf16Rn_fields (s : Prop) [Decidable s] (M e : ℕ) (h1 : 2 ^ 23 ≤ M) (h2 : M < 2 ^ 24) :
     bf16Rn ((if s then (-1 : ℚ) else 1) * ((M : ℚ) * 2 ^ ((e : ℤ) - 150))) =
       (if s then (-1 : ℚ) else 1) * (roundEven ((M : ℚ) / 65536) : ℚ) * 2 ^ ((e : ℤ) - 134) := by
@@ -652,8 +617,6 @@ theorem bf16_fields {sb e k : ℕ} (hsb : sb < 2) (he : e < 255) (hk : k ≤ 128
   have h : e * 128 + k < 32640 := by omega
   refine ⟨by omega, by omega, by omega, by omega⟩
 
-/-- **The check's BF16 rounding is `bf16Rn`** on a finite word of magnitude at least `2^−126`: its carry
-`(w + 0x7FFF + lsb) >>> 16` is `roundEven` of the low 16 bits, and a carry out of the mantissa is the next binade. -/
 theorem toBf16_spec {w h : ℕ} {x : ℚ} (hx : wordQ w = some x) (he0 : (w >>> 23) % 256 ≠ 0)
     (hh : Words.toBf16 w = .ok h) : h < 65536 ∧ bf16Exp h ≠ 255 ∧ bf16Value h = bf16Rn x := by
   have hf : (w >>> 23) % 256 ≠ 255 := by
@@ -714,7 +677,6 @@ theorem wordQ_word {sb e mm : ℕ} (hsb : sb < 2) (he : e < 255) (he0 : e ≠ 0)
   obtain ⟨f1, f2, f3⟩ := word_fields (e := e) hsb (by omega) hm
   rw [wordQ_fields (by rw [f1]; omega), f1, f2, f3, ite_eq_right he0, show max e 1 = e by omega]
 
-/-- **`ofInt` is exact** below `2^24`: the word of `z` has exponent field `⌊log₂|z|⌋ + 127` and value `z`. -/
 theorem ofInt_spec {z : ℤ} (h1 : z ≠ 0) (h2 : z.natAbs < 2 ^ 24) :
     wordQ (Words.ofInt z) = some (z : ℚ) ∧ (Words.ofInt z >>> 23) % 256 ≠ 0 := by
   have ha : z.natAbs ≠ 0 := Int.natAbs_ne_zero.2 h1
@@ -760,8 +722,6 @@ theorem ofInt_spec {z : ℤ} (h1 : z ≠ 0) (h2 : z.natAbs < 2 ^ 24) :
   · rw [ite_eq_right (fun h => absurd (hs.2.1 h) (not_lt.2 hz)), abs_of_nonneg (by exact_mod_cast hz)]
     ring
 
-/-- **A finite normal `f32Word` is `rn`**: from `2^−126` up, `f32Word` rounds to 24 bits in the value's binade as `rn`
-does, and its exponent field is the binade's. -/
 theorem f32Word_normal {y : ℚ} (hn : (2 : ℚ) ^ (-126 : ℤ) ≤ |y|) (hf : (f32Word y >>> 23) % 256 ≠ 255) :
     wordQ (f32Word y) = some (rn y) ∧ (f32Word y >>> 23) % 256 ≠ 0 := by
   have ha : 0 < |y| := lt_of_lt_of_le (zpow_pos (by norm_num) _) hn
@@ -825,8 +785,6 @@ theorem f32Word_normal {y : ℚ} (hn : (2 : ℚ) ^ (-126 : ℤ) ≤ |y|) (hf : (
     refine ⟨?_, by omega⟩
     refine congrArg some ?_
     rw [show 2 ^ 23 + (N - 2 ^ 23) = N by omega, show (((b + 127).toNat : ℕ) : ℤ) - 150 = b - 23 by omega]
-
-/-! ## The check's BF16 steps on values -/
 
 theorem bind_eq_ok {ε α β : Type} {x : Except ε α} {f : α → Except ε β} {b : β} (h : (x >>= f) = .ok b) :
     ∃ a, x = .ok a ∧ f a = .ok b := by
@@ -969,8 +927,6 @@ theorem toFp8_spec {h c : ℕ} {v : ℚ} (hh : Bf16Of h v) (h0 : v ≠ 0) (hc : 
   rw [Properties.Evaluator.Casts.f32ToE4m3Sat,
     CoreOps.cast_e4m3Word (by rw [Nat.shiftLeft_eq]; omega), e4m3_bf16 he h0]
 
-/-! ## The norms' BF16 words -/
-
 theorem bf16Rn_pow (e : ℕ) : bf16Rn ((2 : ℚ) ^ e) = 2 ^ e := by
   have h := bf16Rn_fields False (2 ^ 23) (e + 127) (le_refl _) (by norm_num)
   rw [ite_eq_right id, one_mul, one_mul] at h
@@ -993,8 +949,6 @@ theorem norm_F : Bf16Of Words.NORM_F 512 ∧ bf16Rn ((16 : ℚ) * 32) = 512 := b
   · unfold Words.NORM_F bf16Value bf16Sign bf16Sig bf16ExpOr1 bf16Exp bf16Man; norm_num [Nat.shiftRight_eq_div_pow]
   · have := bf16Rn_pow 9; norm_num at this ⊢; exact this
 
-/-! ## Magnitudes: each rounding keeps a value within a factor of two -/
-
 theorem bf16Rn_half (z : ℚ) : |z| / 2 ≤ |bf16Rn z| ∧ |bf16Rn z| ≤ 2 * |z| := by
   have h1 := Peel.bf16Rn_sub_le z
   have h2 := abs_sub_abs_le_abs_sub z (bf16Rn z)
@@ -1016,8 +970,6 @@ theorem rn_half (z : ℚ) : |z| / 2 ≤ |rn z| ∧ |rn z| ≤ 2 * |z| := by
 theorem min_le : (2 : ℚ) ^ (-126 : ℤ) ≤ 1 / 2 ^ 20 := by
   rw [zpow_neg]; norm_num
 
-/-- The scale's quotient and the scale: from `512 ≤ |a|` and `0 < |b| ≤ 2^25`, the quotient is at least `2^−126` and its
-rounded scale at least `2^−18`. -/
 theorem scale_bound {a b : ℚ} (ha : 512 ≤ |a|) (hb1 : 0 < |b|) (hb2 : |b| ≤ 2 ^ 25) :
     (2 : ℚ) ^ (-126 : ℤ) ≤ |a / b| ∧ 1 / 2 ^ 18 ≤ |bf16Rn (rn (a / b))| := by
   have hq : 1 / 2 ^ 16 ≤ |a / b| := by
@@ -1041,8 +993,6 @@ theorem elem_bound {p s : ℚ} (hp : 1 / 2 ≤ |p|) (hs : 1 / 2 ^ 18 ≤ |s|) :
   have h2 := (bf16Rn_half (rn (p * s))).1
   rw [h0, abs_zero] at h2
   linarith
-
-/-! ## `isqrt` is `Nat.sqrt` -/
 
 theorem newton_ge {n s x : ℕ} (hs : s * s ≤ n) (hx : 0 < x) : s ≤ (x + n / x) / 2 := by
   have h := Nat.div_add_mod n x
@@ -1099,8 +1049,6 @@ theorem isqrt_eq (n : ℕ) : Evaluate.Fp32.isqrt n = Nat.sqrt n := by
         rw [← Nat.pow_add]; exact Nat.pow_le_pow_right (by norm_num) (by omega)
   have hx1 : 2 ^ (L / 2 + 1) ≤ 2 ^ (L + 4) := Nat.pow_le_pow_right (by norm_num) (by omega)
   exact go_eq hs hlt hs1 _ _ hx0.le (by omega)
-
-/-! ## Lists and byte arrays -/
 
 theorem toList_loop (bs : ByteArray) : ∀ (k i : ℕ) (r : List UInt8), bs.size - i = k → i ≤ bs.size →
     ByteArray.toList.loop bs i r = r.reverse ++ bs.data.toList.drop i := by
@@ -1168,8 +1116,6 @@ theorem array_mapM_ok {α β ε : Type} (f : α → Except ε β) (xs : Array α
     have := h2 i (by simpa using hi1) (by simpa [h1] using hi1)
     simpa using this
 
-/-! ## The digest's length -/
-
 theorem compress_length (h w : List ℕ) : (Pouw.PearlC.Sha512.compress h w).length = 8 := by
   unfold Pouw.PearlC.Sha512.compress; rfl
 
@@ -1188,8 +1134,6 @@ theorem digest_length (m : List ℕ) : (Pouw.PearlC.Sha512.digest m).length = 64
 theorem s512_length (role : String) (m : List ℕ) : (Pouw.PearlC.NoiseSha512.s512 role m).length = 32 := by
   rw [Pouw.PearlC.NoiseSha512.s512, List.length_take, digest_length]
   rfl
-
-/-! ## The line: its bytes, integers and scale -/
 
 theorem ofInt_bf16 {z : ℤ} {h : ℕ} (h1 : z ≠ 0) (h2 : z.natAbs < 2 ^ 24) (hh : Words.toBf16 (Words.ofInt z) = .ok h) :
     Bf16Of h (bf16Rn z) := by
@@ -1282,13 +1226,11 @@ theorem lineIsTheSpec : LineIsTheSpec := by
   obtain ⟨d, hd, h⟩ := bind_eq_ok h
   obtain ⟨sc, hsc, h⟩ := bind_eq_ok h
   obtain ⟨hsize, hcodes⟩ := array_mapM_ok _ _ _ h
-  -- the line's integers
   set I := NoiseSha512.lineInts (bytesNat raw) with hI
   have hIl : I.length = 32 := by
     rw [hI, NoiseSha512.lineInts, List.length_map, hL, s512_length]
   have hxsize : xs.size = 32 := by rw [← Array.length_toList, hxl, hIl]
   have hImem : ∀ x ∈ I, 1 ≤ x.natAbs ∧ x.natAbs ≤ 128 := fun x hx => lineInts_natAbs hx
-  -- the scale
   obtain ⟨hS1, hS2⟩ := sq_bounds hIl hImem
   set S := (I.map fun x => x.natAbs ^ 2).sum with hS
   have hr1 : 0 < Nat.sqrt (S * 1024) := Nat.sqrt_pos.2 (by omega)
@@ -1309,7 +1251,6 @@ theorem lineIsTheSpec : LineIsTheSpec := by
   have hscale : bf16Rn (rn (bf16Rn (norm * 32) / bf16Rn (Nat.sqrt (S * 1024) : ℚ))) = NoiseSha512.lineScale norm I := by
     rw [NoiseSha512.lineScale]
   rw [hscale] at hSc hsc0
-  -- each code
   refine ⟨by rw [hsize, hxsize], fun t => ?_⟩
   have ht : t.val < 32 := t.isLt
   have hF := hcodes t.val (by rw [hxsize]; exact ht) (by rw [hsize, hxsize]; exact ht)

@@ -4,158 +4,8 @@ public import Mathlib
 public import Definitions.Pouw.RelativeSecurity
 public import Proofs.Pouw.SteinerRigidity
 
-/-!
-# Relative security for matmul PoUW: the definition, the masking algebra, the reduction's shape
-
-Neekon Vafa's definition as RS-DEF froze it
-(v1), in an abstract machine model, so that the construction and
-proof workers' results land here as theorems or as named hypotheses. The definitions the guarantees
-(`Definitions.Pouw.Guarantees.RelativeSecurity`) read are in `Definitions.Pouw.RelativeSecurity`, under the same names.
-
-* The machine model (`Machine`, `MatMachine`): algorithms from inputs to outputs, their semantics with the coins as
-  part of the input, a per-run `cost` and its worst case `time`, with axioms: nonnegativity, monotonicity (running `f`
-  first, or beside another algorithm, costs at least `f`), subadditivity of sequential and side-by-side composition,
-  free routing, and the cost of a linear map (an `a × b` by `b × c` product costs at most `κ a b c`). `costed` shows
-  the axioms are satisfiable with nontrivial prices.
-* The definition (`Protocol`, with a commitment before the live coins, `CommitsFirst`; `Complete`; `Secure`, Neekon's
-  `∃ M'` form; `SecureInf`, RS-DEF's frozen form against `Tuse`; `Core`, the per-run proof target; `Efficient`;
-  `RelativelySecure`) with `ε`, `δ`, `γ`, `η`, `α`, `κ`; usefulness, completeness and the floors quantify over the
-  protocol's `promise` (RS-DEF v2 §1.4, `A, B ∈ G_use`). Probabilities are uniform counts over the finite σ and coins
-  (`prob`, `expect`). Core, the floors and Lemma R charge a run the program's size and its cost,
-  `max(|M|, cost)` (`Machine.charge`, RS-DEF v2 after RS-RT's V1). `secureInf_of_core` (Core ⇒ Security for `δ > κ`),
-  `rate_of_core` (RS-DEF's rate form) and `core_of_floor` (RS-DEF's Lemma R) are proved.
-* The masking algebra, proved over any ring (`mask_peel`, `lowRank_peel`), exact over `ZMod (2^32)` and over any
-  field, and recovering the integer product from its s32 residue when the entries are below `2^31`
-  (`int8_product_exact`); a saturating int8 accumulator breaks the peel (`sat8_breaks_peel`).
-* The reduction's shape (`reduction`, `M' = M ++ Q`): run the extractor (M's run and its committed blocks), keep the
-  prover messages, peel and correct; `time_reduction_le` is `time M' ≤ time E + time peel + time correction`.
-  `secure_of_extraction_floor` gives security from two named hypotheses, `Extraction` (RS-EXT's) and `Floor` (the floor
-  agenda's), and `secure_fullRank` and `secure_lowRank` instantiate it with the explicit peels of `MatMachine`. With
-  products typed by grid (`WideGridMatMachine`: grid products at `κG`, wide-by-grid products at `κW`), the full-rank
-  peel costs `2κG n³` and the low-rank peel `(2κG + 2κW) n² r` (`secure_fullRank_grid`, `secure_lowRank_grid`,
-  `secure_lowRank_advTime_grid`; RS-MODEL §5's `10 n² r` u at 1 u and 4 u).
-* Route (c), edited instances (by ruling): correctness reads σ, an `Edit` adds σ-indexed
-  noise to both operands, unpeeled; `edited` is the protocol (promised on the instances `use`, served by a
-  product algorithm `m`), `edited_complete` its completeness, `honestEdit` costs `time m + 2κadd n²` beyond the proof
-  layer and the noise expansion, and `relativelySecure_of_editFloor` gives relative security from the named hypothesis
-  `EditFloor` (RS-D1E's floor), with `m` the worst-case product (`_wide`) or a grid product (`GridMatMachine`, `_grid`). The bit-pair projection's algebra
-  (`bitPair_coefficient`) and the abstract core of RS-D1E's homogenization (`bitProj_rank_le`, `products_ge_half_rank`;
-  `editedEntry_products_ge`: an edited prefix-sum entry with `r` live terms needs at least `r / 2` plain products,
-  whatever the committed instance; `editedEntries_products_ge`: entries at distinct rows and columns, sharing their
-  products, add up, and with merges free they still add up when entries share only rows or only columns, `_cols`,
-  `_rows`) are proved.
-* Theorem B's accounting over a field, for entries that share rows and columns (A3): in Theorem B's one-parent model
-  (`Forest`, `AccumProg`), `m` plain products and `H` heads hosting a target give
-  `2m + b·H ≥ Σ_e r_e` (`editedEntries_products_ge_shared`), the forest re-rooted at 0 being a Steiner tree
-  (`Forest.exists_steinerTree`) that Theorem 1 (`SteinerRigidity.blockRigidity`) bounds.
-* Theorem S and S_G: a
-  finite game of rounds with fresh coins, one check a round, accepted iff every check passes (`RoundGame`); with the
-  per-round pass bound `1 − (1−p)·d` named (`PassBound`, or `PathBound` along guard paths),
-  `Pr[accept ∧ deficiency ≥ D] ≤ e^{−(1−p)D} + R(δ_bind + δ_ZK)` (`theoremS`, `theoremS_G`), by the supermartingale
-  `Π 1[pass]·e^{(1−p)d}` as a product over rounds and Markov. The window's corollary (`executionPhase_le`; it reads only the
-  exponential form `E[1[pass_w] e^{(1−p) d_w}] ≤ 1`, `executionPhase_le_exp`) is a service floor (`RoundsHyp`, over
-  `ExpBound`, `serviceFloor_of_rounds`), and the B_θ certified fraction rests on it in place of Theorem M
-  (`certifiedFraction120θ_rounds`, at `2^{−40}` `_rounds_40`).
-* The Model B bridge (RS-MODEL): typed circuits of priced gates with free routing; `ModelB.machine` is a `Machine`
-  whose time is `timeB`, `ModelB.matMachine` a `MatMachine` from priced circuits (`MatGates`, realized by a GEMM gate
-  family), `matMachine120` the sm_120 instance at `price120` with the worst-case `κ = 16` u (circuits named `Gemm120`),
-  and `gridMatMachine120` its width-typed refinement, the int8 tile GEMM at `κ = 1` u on `G_op = int8` (circuits named
-  `Int8Gemm120`). `relativelySecure_edited120` is route (c) on the int8 grid at 1 u, `relativelySecure_edited120_wide`
-  on unrestricted operands at 16 u. Machines take any additive `Price`. The service range-checks the committed instance
-  into `G_use = [−(127 − s), 127 − s]` (`GridService`, RS-RT's V6), and with noise bounded by `s` the edits are int8
-  (`edit_int8`; on the entries σ opens, `accepted_edit_int8`).
-* B_θ (RS-MODEL §6.2, θ = 1/5): `price120θ` over instructions with their shared-memory words; B's circuits lift at
-  `4/5` and every B_θ adversary has a B shadow, so B's floor carries at `4/5` (`serviceFloor_θ`). Route (c) there at
-  `N = 0.8 n³` u takes any B floor `F_B ≤ n³` (`relativelySecure_edited120θ_of_floor`, `ε = U / (0.8 F_B) − 1`):
-  Conjecture A's `n³` (`ε = γ`), Theorem E's form `(c / m_max)(φ n³ − sl)` over ℚ (`_rat`) and its proved case
-  `c = ½`, `m_max = 2` (`_half`). The certified fraction (`certifiedFraction120θ`, `_half`): accepted runs are charged at
-  least `(c φ / m_max) N` less the slack, except with probability `κ`. Model A (RS-MODEL §3) is ported over
-  ℚ, and `timeθ_le_timeA` is `B_θ ≤ A` as the combination `(4/5)·ys + (1/5)·R6` of A's rows.
-* Theorem K (the full-floor draft r5, §3.6), over any ring with a map to F₂ (Z/2³² for s32 wrap):
-  a straight-line program of products of bit-affine operands and linear steps (`Slp`, closed form `Slp.val_eq`),
-  projected onto bit pairs mod 2 (`projF2`, zero diagonal), has F₂ rank at most twice its products (`theoremK`,
-  `Slp.rank_projF2_le`). On the re-encoded design X = ⌊x/s⌋ + b (full-floor r6; `dP`,
-  `dX`, `dIncr`) a cell-block's target has F₂ rank 2L (`rank_projF2_dIncr`), so a certified cell-block needs L
-  products (`Slp.dIncr_products_ge`) and cell-blocks whose pieces are disjoint add up (`Slp.card_mul_le`).
-  `projF2` reads every bit pair, the same-side ("junk") pairs included: a cross-pairs-only projection would pass
-  Winograd without its corrections (`winograd_cross_only`).
-* The chain lemma (RS-E-REF r4 IV.2, and r5 V.1): with stacked
-  identities every k-block reads the same U bits, so the per-block count needs the chain. A product of a function of
-  U's bits and a function of the coins, of any form (`OneSided`), has a cross block of rank 1
-  (`OneSided.crossRankLe`), and `T` committed prefix words of one row at distinct (column, block) pairs have a stacked
-  cross block of rank `T L` (`rank_cross_dRow`; one cell, `rank_cross_dPrefix`), so they need `T L` one-sided
-  products (`chain_products_ge`, `chainBound_oneSided`). Products whose operands are any function of U's bits plus
-  affine in the bits (`GProd`, every affine product included) need `T L` too, over characteristic 2: Lemma G
-  (`lemmaG`, Winograd's substitution one product at a time on the coins' side, `altForm_subst`) bounds the cross
-  block of words with no coin–coin terms by the products' count (`chainBound_gProd`). The cross block alone gives
-  `T L / 2` (`chainBound_two`). A round's run is a straight-line program with products of any form (`SlpG`),
-  row-pure across rows only (`SlpG.cells_card_le`). `RoundsHypK` puts that in `RoundsHyp`'s cost line,
-  F₀ = κ L n n' B / c with no slack (`roundsHyp_of_K`, `_one`), and the certified fraction follows
-  (`certifiedFraction120θ_K`, `_K_40`; at w = (1, 2, 4, 8, 16, 32, 65) with no chain hypothesis, for one-sided
-  products `certifiedFraction120θ_reEncoded_40`, and for mixed ones `_reEncodedMixed_40`). Route (c) then needs no
-  `EditFloor` on this design: the window's floor is B's service floor, and the edited protocol is relatively secure
-  from it (`relativelySecure_edited120θ_K`). The one-sided chain lemma holds over any field the ring maps to, so it
-  covers exact arithmetic too (over ℚ, merges free, `certifiedFraction120θ_reEncodedExactK_40`). Lemma G needs
-  characteristic 2 (s32 wrap, or exact integer sums read mod 2): over ℚ one mixed product commits a word of two
-  bit products (`winograd_rat_word`), so the bound fails there (`not_chainBound_affProd_rat`).
-* The luck lemma (RS-E-REF r4 IV.4): a nonzero error of degree at most 2 on the cube (`CubeQuad`) is nonzero on a
-  quarter of it, in any ring (`luck_quad`), so spot checks with degree-2 errors satisfy `PathBound (3/4)`
-  (`RoundGame.Spot`, `RoundGame.pathBound_spot`). Runs with affine operands have such errors on the design's bits,
-  U's 7 uniform planes (`SlpG.cubeQuad_err`). With the window's game built from the prover's play (`SpotPlay`,
-  `RoundsHypKS`), `RoundsHypK` follows at `p = ¾` with `PathBound` and the certified count derived
-  (`roundsHypK_of_spot`), and for one-sided affine products the floor has neither a luck nor a chain hypothesis
-  (`certifiedFraction120θ_reEncodedSpot_40`; mixed, `_reEncodedSpotMixed_40`). The ¾ is tight
-  (`luck_quad_tight`) and fails in this deficiency for one-sided operands of any form (`luck_oneSided_point`; the
-  parity luck below covers them). On the integer alphabet a
-  dropped term is right with probability ½ + 1/(2|α|) (`luck_coins`, `luck_dropped`); U's 128 letters are distinct
-  and never 0 (`uRe_injective`, `uRe_ne_zero`), so 0.5039 (`luck_dropped_reEncoded`), and ½ for a term dropped
-  outright (`_zero`). The window-level ½ is false at `|S| ≥ 4` (RS-E-REF r5 V.2), so ¾ is the window's bound
-  (decision 39 states the luck given the sampled pair indices at `p = ¾`).
-* Stages inside a round (decision 36, the stage-coins draft §2, as RS-E-REF r5 V.3 repaired
-  it): a round of `St` stages, each committing its operands, then sampling both noise blocks of its products (keyed by
-  the sample), then committing its outputs, with one check at the round's end. Per stage, a cheat step fixed before its
-  sample and the wrong share the sample adds (`StageGame`): `(1 − U) e^{(1−p) D}` is a supermartingale over the stages
-  (`StageGame.expect_le`, RS-E-REF r3 III.1's extension), so staged rounds meet the exponential bound that `RoundsHyp`
-  reads (`RoundGame.Staged`, `RoundGame.expBound_of_staged`). The staged spot check (`StagePlay`, `StagedPlay`) is
-  valid at `p = ¾` for degree-2 errors (`StagePlay.valid_sgame`, `StagedPlay.game_staged`), and `RoundsHypKSt` gives
-  `RoundsHyp` with the stage floors summed, `F₀ = St κ L n n' B` (`roundsHyp_of_staged`), so for affine products the
-  floor has neither a luck nor a chain hypothesis (`certifiedFraction120θ_staged_40`). Decode's deferred edit, every
-  operand committed before one sample, is `St = 1` (`certifiedFraction120θ_decode_40`).
-* Overlapping stages (chunks in flight, no node barrier) and stages of different shapes (Theorem K∥,
-  the stage-coins draft r2 §2.2 and §2.5): the round's run is one straight-line program
-  over every sample's bits, fixed before its first sample, whose operands are affine in each sample's bits at every bit
-  point of the others' (`AffMulAt`; `RoundsHypKOv`). K's count is local to one row of one sample, the other samples' bits
-  at theirs (`mergeAt`), and row purity adds the rows' bounds over every sample at any depth (`SlpG.cells_card_le_ov`).
-  The luck is per sample, the other samples' bits given: swapping a sample's bits for fresh ones is an involution, so each
-  cell's pass probability is the spot check's on its own sample (`prob_cell_eq`, `prob_ov_le`, `OvPlay.passBound_game`).
-  So `F₀ = κ L Σ_t n_t n'_t B_t`, every stage's cell-blocks once (`roundsHyp_of_overlap`,
-  `certifiedFraction120θ_overlap_40`), with no joint projection. `RoundsHypKSt` allows what `RoundsHypKOv` doesn't,
-  a stage's program branching on earlier samples; overlap with that (RS-E-REF r3 III.1's adaptive model) is open
-  (r2 §2.5).
-* The parity luck for one-sided operands of any form (RS-E-REF r6 VI.2):
-  mod 2 at a cell-block's frame (`dFrame`), a one-sided run's error is `⟨F x, G y⟩ + a x + b y` with a term per
-  product its word reads with an odd coefficient that is two-sided there (`charged`, `SlpG.parityForm_err`), and
-  such an error with fewer than `L` terms
-  vanishes with probability at most `½ + ½ √½ < 0.854` (`parity_prob_sq`, `parity_luck_short`; ¾ two short,
-  `parity_luck_two`), over `Z` or `Z/2³²`. In the product deficit (`parDef`, `ovDefP`) the staged and overlapped
-  games meet Theorem S's bounds at `0.854` whatever the errors (`StagedPlay.game_stagedP`, `OvPlay.passBound_gameP`),
-  and with charging purity in place of row purity (`SlpG.ChargePure`, `SlpG.ChargePureAt`) `RoundsHypKStP` and
-  `RoundsHypKOvP` give `RoundsHyp` at `p = 0.854` with K's `F₀` (`roundsHyp_of_stagedP`, `roundsHyp_of_overlapP`;
-  `certifiedFraction120θ_stagedP_40`, `_overlapP_40` at `D₀ = 274 ln 2`). The affine route is their sibling, proved
-  on its own scope at ¾. These two are K's proved scopes (one-sided of any form and charge-pure at 0.854; affine and
-  row-pure at ¾). Outside them `c = 1` is false even within the ledger's K1 (RS-E-REF r8 VIII): a factor
-  `∏(1 − z_u)` in one operand leaves a word wrong only at `U = 0`, so it is uncertified and passes almost always, and
-  K's count binds certified words only.
-* Theorem H (round 6 §6, merges priced) is not needed for the re-encoded design: the chain lemma covers it in every
-  arithmetic (RS-E-REF r4 IV.3). It stays proved as the alternative with merges priced, including `_H` of route (c).
-  In the quad model, with merges at `h ≥ 2K/3` slots, each useful cell costs
-  `K` slots (`theoremH`, from Theorem J and the rank bounds). Those premises hold on quad runs in exact arithmetic
-  over a field (`QuadRun`; `QuadRun.theoremJ`, `full_ge`, `merged_ge`, from free-diagonal rank floors `PairRankGe`).
-  On the re-encoded design, every quad run pays `L` slots a useful cell-block (`QuadRun.cost_ge_reEncoded`; at VF2's
-  `h = 32`, for `L ≤ 48`, `_32`). `RoundsHypH` puts that in the cost line in exact arithmetic, with the same
-  `F₀ = κ L n n' B` (`roundsHyp_of_H`, `certifiedFraction120θ_H`; over ℚ at `h = 32`,
-  `certifiedFraction120θ_reEncodedExact_40`).
--/
+/-! Relative security for matmul PoUW in an abstract machine model: the definition, the masking algebra and the
+reduction's shape, each result a theorem or a named hypothesis. -/
 
 @[expose] public section
 
@@ -200,7 +50,6 @@ theorem prob_or_le {Ω : Type*} [Fintype Ω] (p q : Ω → Prop) : prob (fun ω 
   exact key _ _ _ fun ω hω => ((mem_filter_univ_iff _ ω).mp hω).imp ((mem_filter_univ_iff _ ω).mpr)
     ((mem_filter_univ_iff _ ω).mpr)
 
-/-- Markov's inequality for a nonnegative function. -/
 theorem markov {Ω : Type} [Fintype Ω] {f : Ω → ℝ} (hf : ∀ ω, 0 ≤ f ω) (X : ℝ) :
     X * prob (fun ω => X ≤ f ω) ≤ expect f := by
   classical
@@ -235,7 +84,6 @@ theorem expect_le_of_le {Ω : Type} [Fintype Ω] {f : Ω → ℝ} {k : ℝ} (hk 
     calc ∑ ω, f ω ≤ ∑ _ω : Ω, k := sum_le_sum fun ω _ => h ω
       _ = k * (Fintype.card Ω : ℝ) := by rw [sum_const, card_univ, nsmul_eq_mul, mul_comm]
 
-/-- The expectation over a product is the iterated expectation (fresh coins). -/
 theorem expect_prod {α β : Type} [Fintype α] [Fintype β] (f : α × β → ℝ) :
     expect f = expect fun a => expect fun b => f (a, b) := by
   unfold expect
@@ -246,7 +94,6 @@ theorem expect_prod_swap {α β : Type} [Fintype α] [Fintype β] (f : α × β 
   unfold expect
   rw [Fintype.sum_prod_type, Finset.sum_comm, Fintype.card_prod, Nat.cast_mul, ← sum_div, div_div]
 
-/-- A probability is the expectation of the event's indicator. -/
 theorem prob_eq_expect {Ω : Type} [Fintype Ω] (p : Ω → Prop) [DecidablePred p] :
     prob p = expect fun ω => if p ω then 1 else 0 := by
   classical
@@ -256,22 +103,18 @@ theorem prob_eq_expect {Ω : Type} [Fintype Ω] (p : Ω → Prop) [DecidablePred
   refine Finset.sum_congr rfl fun ω _ => ?_
   by_cases h : p ω <;> simp [h]
 
-/-- An event whose every slice at the second coordinate has probability at most `κ ≥ 0` has probability at most
-`κ`. -/
 theorem prob_le_of_slices {α β : Type} [Fintype α] [Fintype β] (E : α × β → Prop) {κ : ℝ} (hκ : 0 ≤ κ)
     (h : ∀ b, prob (fun a => E (a, b)) ≤ κ) : prob E ≤ κ := by
   classical
   rw [prob_eq_expect, expect_prod_swap]
   exact expect_le_of_le hκ fun b => by rw [← prob_eq_expect (fun a => E (a, b))]; exact h b
 
-/-- A probability over a product is the mean of its slices at the second coordinate. -/
 theorem prob_prod_eq_sum {α β : Type} [Fintype α] [Fintype β] (E : α × β → Prop) :
     prob E = ∑ b, (Fintype.card β : ℝ)⁻¹ * prob (fun a => E (a, b)) := by
   classical
   rw [prob_eq_expect, expect_prod_swap, expect, div_eq_inv_mul, Finset.mul_sum]
   exact Finset.sum_congr rfl fun b _ => by rw [prob_eq_expect (fun a => E (a, b))]
 
-/-- Probabilities are invariant under a relabelling of the sample space. -/
 theorem prob_equiv {α β : Type*} [Fintype α] [Fintype β] (e : α ≃ β) (p : α → Prop) :
     prob p = prob fun b => p (e.symm b) := by
   classical
@@ -280,7 +123,6 @@ theorem prob_equiv {α β : Type*} [Fintype α] [Fintype β] (e : α ≃ β) (p 
   congr 2
   exact Finset.card_equiv e fun a => by simp
 
-/-- The union bound over a finite family of events. -/
 theorem prob_exists_le {Ω ι : Type*} [Fintype Ω] (s : Finset ι) (B : ι → Ω → Prop) :
     prob (fun ω => ∃ w ∈ s, B w ω) ≤ ∑ w ∈ s, prob (B w) := by
   classical
@@ -330,8 +172,6 @@ theorem expect_const_add_mul {Ω : Type} [Fintype Ω] [Nonempty Ω] (A k : ℝ) 
   rw [Finset.sum_add_distrib, ← Finset.mul_sum, Finset.sum_const, Finset.card_univ, nsmul_eq_mul, add_div,
     mul_div_cancel_left₀ _ hC.ne', mul_div_assoc]
 
-/-- The stage step of the supermartingale `(1 − U) e^{(1−p) D}`: a cheat step of size `c ≥ 0` that raises the wrong
-share by `c` in expectation keeps it from growing (RS-E-REF r3 III.1). -/
 theorem exp_mul_one_sub_le {U c : ℝ} (hU : 0 ≤ U) (hc : 0 ≤ c) : Real.exp c * (1 - U - c) ≤ 1 - U := by
   have h1 := one_sub_mul_exp_le c
   have h2 : 1 ≤ Real.exp c := Real.one_le_exp hc
@@ -396,7 +236,6 @@ theorem weight_of_accepts (c : ℝ) : ∀ {n : ℕ} (G : RoundGame Ω n) (x : Pa
     obtain ⟨h1, h2⟩ := h
     simp only [weight, deficiency, h1, ↓reduceIte, weight_of_accepts c (next x.1) x.2 h2, mul_add, Real.exp_add]
 
-/-- **The supermartingale bound**, as a finite product over rounds: `E[Π_w 1[pass_w] e^{c d_w}] ≤ 1`. -/
 theorem expect_weight_le [Fintype Ω] (c : ℝ) : ∀ {n : ℕ} (G : RoundGame Ω n), G.ExpBound c →
     expect (G.weight c) ≤ 1
   | _, .done, _ => by simp [expect, weight]
@@ -415,7 +254,6 @@ theorem expect_weight_le [Fintype Ω] (c : ℝ) : ∀ {n : ℕ} (G : RoundGame �
             (expect_weight_le c (next a) (h2 a))
       _ ≤ 1 := h1
 
-/-- The per-round pass bound gives the exponential form at `c = 1 − p`. -/
 theorem expBound_of_passBound [Fintype Ω] {p : ℝ} : ∀ {n : ℕ} (G : RoundGame Ω n), G.PassBound p →
     G.ExpBound (1 - p)
   | _, .done, _ => trivial
@@ -433,7 +271,6 @@ theorem expBound_of_passBound [Fintype Ω] {p : ℝ} : ∀ {n : ℕ} (G : RoundG
           mul_le_mul_of_nonneg_left hpass (Real.exp_pos _).le
       _ ≤ 1 := by rw [mul_comm]; exact one_sub_mul_exp_le _
 
-/-- The per-path pass bound gives the exponential form at `c = 1 − p` (round 5 §1(a)). -/
 theorem expBound_of_pathBound [Fintype Ω] {p : ℝ} : ∀ {n : ℕ} (G : RoundGame Ω n), G.PathBound p →
     G.ExpBound (1 - p)
   | _, .done, _ => trivial
@@ -467,8 +304,6 @@ theorem expBound_of_pathBound [Fintype Ω] {p : ℝ} : ∀ {n : ℕ} (G : RoundG
           exact Finset.sum_congr rfl fun l _ => prob_eq_expect _
       _ ≤ 1 := expect_le_of_le zero_le_one fun _ => le_rfl
 
-/-- **Theorem S from the exponential form**: for `c ≥ 0`, `Pr[accept ∧ Σ_w d_w ≥ D] ≤ e^{−c D}` (Markov on the
-supermartingale's last value, which is `e^{c Σ d}` on acceptance). -/
 theorem prob_accepts_le [Fintype Ω] {c : ℝ} (hc : 0 ≤ c) {n : ℕ} (G : RoundGame Ω n) (hG : G.ExpBound c) (D : ℝ) :
     prob (fun x => G.accepts x ∧ D ≤ G.deficiency x) ≤ Real.exp (-(c * D)) := by
   have hm := markov (G.weight_nonneg c) (Real.exp (c * D))
@@ -486,8 +321,6 @@ theorem prob_accepts_le [Fintype Ω] {c : ℝ} (hc : 0 ≤ c) {n : ℕ} (G : Rou
         mul_le_mul_of_nonneg_left (hm.trans (G.expect_weight_le c hG)) (inv_nonneg.mpr hpos.le)
     _ = Real.exp (-(c * D)) := by rw [mul_one, Real.exp_neg]
 
-/-- Theorem S with binding and zero knowledge: if every accepted run is accepted by the game or breaks binding or
-zero knowledge in some round, the union bound adds `R (δb + δz)`. -/
 theorem prob_accept_le [Fintype Ω] {c : ℝ} (hc : 0 ≤ c) {R : ℕ} (G : RoundGame Ω R) (hG : G.ExpBound c)
     (acc : Paths Ω R → Prop) (Bind ZK : Fin R → Paths Ω R → Prop) {δb δz : ℝ}
     (hBind : ∀ w, prob (Bind w) ≤ δb) (hZK : ∀ w, prob (ZK w) ≤ δz)
@@ -503,10 +336,6 @@ theorem prob_accept_le [Fintype Ω] {c : ℝ} (hc : 0 ≤ c) {R : ℕ} (G : Roun
   · exact Or.inl ⟨h, hx.2⟩
   · exact Or.inr ⟨w, mem_univ _, hw⟩
 
-/-- **Theorem S** (luck-loss round 4 §1, refereed in Part III): over `R` rounds with fresh coins, one check a round,
-accepting iff every check passes, given the per-round pass bound `1 − (1 − p) d_w` (`PassBound`, named) and
-binding and zero-knowledge failures of probability at most `δb` and `δz` per round,
-`Pr[accept ∧ Σ_w d_w ≥ D] ≤ e^{−(1−p) D} + R (δb + δz)`. -/
 theorem theoremS [Fintype Ω] {p : ℝ} (hp : p ≤ 1) {R : ℕ} (G : RoundGame Ω R) (hG : G.PassBound p)
     (acc : Paths Ω R → Prop) (Bind ZK : Fin R → Paths Ω R → Prop) {δb δz : ℝ}
     (hBind : ∀ w, prob (Bind w) ≤ δb) (hZK : ∀ w, prob (ZK w) ≤ δz)
@@ -514,8 +343,6 @@ theorem theoremS [Fintype Ω] {p : ℝ} (hp : p ≤ 1) {R : ℕ} (G : RoundGame 
     prob (fun x => acc x ∧ D ≤ G.deficiency x) ≤ Real.exp (-((1 - p) * D)) + R * (δb + δz) :=
   G.prob_accept_le (by linarith) (G.expBound_of_passBound hG) acc Bind ZK hBind hZK hacc D
 
-/-- **Theorem S_G** (round 5 §1(a)): the same bound with the deficiency read off each round's guard path
-(`PathBound`, named), so `Σ_w d̃_w` is the implied deficiency along the realized paths. -/
 theorem theoremS_G [Fintype Ω] {p : ℝ} (hp : p ≤ 1) {R : ℕ} (G : RoundGame Ω R) (hG : G.PathBound p)
     (acc : Paths Ω R → Prop) (Bind ZK : Fin R → Paths Ω R → Prop) {δb δz : ℝ}
     (hBind : ∀ w, prob (Bind w) ≤ δb) (hZK : ∀ w, prob (ZK w) ≤ δz)
@@ -523,8 +350,6 @@ theorem theoremS_G [Fintype Ω] {p : ℝ} (hp : p ≤ 1) {R : ℕ} (G : RoundGam
     prob (fun x => acc x ∧ D ≤ G.deficiency x) ≤ Real.exp (-((1 - p) * D)) + R * (δb + δz) :=
   G.prob_accept_le (by linarith) (G.expBound_of_pathBound hG) acc Bind ZK hBind hZK hacc D
 
-/-- **The window form from the exponential bound**: the per-round `E[1[pass_w] e^{(1−p) d_w}] ≤ 1` (`ExpBound`) is
-all the window form reads, so rounds with several samples inside (`RoundGame.Staged`) have it too. -/
 theorem executionPhase_le_exp [Fintype Ω] {p : ℝ} (hp : p ≤ 1) {R : ℕ} (G : RoundGame Ω R) (hG : G.ExpBound (1 - p))
     (acc : Paths Ω R → Prop) (Bind ZK : Fin R → Paths Ω R → Prop) {δb δz : ℝ}
     (hBind : ∀ w, prob (Bind w) ≤ δb) (hZK : ∀ w, prob (ZK w) ≤ δz)
@@ -538,10 +363,6 @@ theorem executionPhase_le_exp [Fintype Ω] {p : ℝ} (hp : p ≤ 1) {R : ℕ} (G
   have := (mul_lt_mul_iff_of_pos_right hF₀).mp h'
   linarith
 
-/-- **The window form** (Theorem S's cost line, and S_G's with Lemma RD): if every run's cost is at least
-`(R − Σ_w d_w) F₀ − V − R sl` (Theorem E½'s per-round `x_w F₀ − L(M + K)` summed, with `V` the noise reads priced
-on the realized paths, `0` for straight-line rounds), then accepted runs costing below `(R − D) F₀ − V − R sl` have
-probability at most `e^{−(1−p) D} + R (δb + δz)`. -/
 theorem executionPhase_le [Fintype Ω] {p : ℝ} (hp : p ≤ 1) {R : ℕ} (G : RoundGame Ω R) (hG : G.PathBound p)
     (acc : Paths Ω R → Prop) (Bind ZK : Fin R → Paths Ω R → Prop) {δb δz : ℝ}
     (hBind : ∀ w, prob (Bind w) ≤ δb) (hZK : ∀ w, prob (ZK w) ≤ δz)
@@ -551,7 +372,6 @@ theorem executionPhase_le [Fintype Ω] {p : ℝ} (hp : p ≤ 1) {R : ℕ} (G : R
       Real.exp (-((1 - p) * D)) + R * (δb + δz) :=
   G.executionPhase_le_exp hp (G.expBound_of_pathBound hG) acc Bind ZK hBind hZK hacc cost V hF₀ hcost D
 
-/-- Theorem S's straight-line rounds are guarded rounds with one path. -/
 theorem pathBound_of_passBound [Fintype Ω] {p : ℝ} : ∀ {n : ℕ} (G : RoundGame Ω n), G.PassBound p →
     G.PathBound p
   | _, .done, _ => trivial
@@ -619,8 +439,6 @@ def Valid [Fintype Ω] (p : ℝ) : {m : ℕ} → StageGame Ω m → Prop
   | _, .done => True
   | _, .stage a u next => 0 ≤ a ∧ (∀ ω, 0 ≤ u ω) ∧ (1 - p) * a ≤ expect u ∧ ∀ ω, (next ω).Valid p
 
-/-- **The supermartingale over stages** (RS-E-REF r3 III.1): from wrong share `U₀ ≥ 0`,
-`E[(1 − U₀ − U) e^{(1−p) D}] ≤ 1 − U₀` under any adaptive play. -/
 theorem expect_le [Fintype Ω] [Nonempty Ω] {p : ℝ} (hp : p ≤ 1) : ∀ {m : ℕ} (G : StageGame Ω m), G.Valid p →
     ∀ U₀ : ℝ, 0 ≤ U₀ → expect (fun x => (1 - U₀ - G.wrong x) * Real.exp ((1 - p) * G.defi x)) ≤ 1 - U₀
   | _, .done, _, U₀, _ => by simp [expect, wrong, defi]
@@ -662,8 +480,6 @@ def RoundGame.Staged {Ωs J : Type} [Fintype Ωs] [Fintype J] (p : ℝ) (m : ℕ
     (∃ SG : StageGame Ωs m, SG.Valid p ∧ (∀ x j, d (x, j) = SG.defi x) ∧
       ∀ x, prob (fun j => pass (x, j)) ≤ 1 - SG.wrong x) ∧ ∀ a, (next a).Staged p m
 
-/-- **Staged rounds meet the exponential bound** (RS-E-REF r3 III.1's extension): Theorem S holds verbatim with
-`d_w = Σ_s a_s` the realized round deficiency. -/
 theorem RoundGame.expBound_of_staged {Ωs J : Type} [Fintype Ωs] [Nonempty Ωs] [Fintype J] {p : ℝ} (hp : p ≤ 1)
     {m : ℕ} : ∀ {n : ℕ} (G : RoundGame (Paths Ωs m × J) n), G.Staged p m → G.ExpBound (1 - p)
   | _, .done, _ => trivial
@@ -908,7 +724,6 @@ def Core (P : Protocol Mc Inst Out) (ε κ η α : ℝ) : Prop :=
     prob (fun ω : P.Seed × Ω => P.accepts ω.1 (Mc.eval M ω) = true ∧
       Mc.charge M ω < (Tuse P η - α) / (1 + ε)) ≤ κ
 
-/-- **Core ⇒ Security** for every `δ > κ`: some accepted run costs at least the bound, and `time` bounds every run. -/
 theorem secureInf_of_core (P : Protocol Mc Inst Out) {ε κ δ η α : ℝ} (h : Core P ε κ η α) (hκδ : κ < δ)
     (hε : 0 < 1 + ε) : SecureInf P ε δ η α := by
   intro Ω _ M hc hM
@@ -924,8 +739,6 @@ theorem secureInf_of_core (P : Protocol Mc Inst Out) {ε κ δ η α : ℝ} (h :
   unfold acceptance at hM
   linarith
 
-/-- **The rate form** (RS-DEF v2 §1.6): under Core, an adversary that commits first is charged in expectation at least
-`(p(M) − κ) (T_use(η) − α)/(1 + ε)` per run (Markov on the charge). -/
 theorem rate_of_core (P : Protocol Mc Inst Out) {ε κ η α : ℝ} (h : Core P ε κ η α)
     (hX : 0 ≤ (Tuse P η - α) / (1 + ε)) {Ω : Type} [Fintype Ω] (M : Mc.Alg (P.Seed × Ω) P.Proof)
     (hc : CommitsFirst P (Mc.eval M)) :
@@ -953,8 +766,6 @@ def AdvFloor (P : Protocol Mc Inst Out) (F κ : ℝ) : Prop :=
   ∀ (Ω : Type) [Fintype Ω] (M : Mc.Alg (P.Seed × Ω) P.Proof), CommitsFirst P (Mc.eval M) →
     prob (fun ω : P.Seed × Ω => P.accepts ω.1 (Mc.eval M ω) = true ∧ Mc.charge M ω < F) ≤ κ
 
-/-- **Lemma R** (RS-DEF §1.6: a floor plus an honest upper bound give the core): under the adversary floor `F`, if some
-useful prover costs at most `U`, then Core holds with `1 + ε = U / F` and `α = 0`. -/
 theorem core_of_floor (P : Protocol Mc Inst Out) {κ η F U : ℝ} (hF : 0 < F) (hFU : F ≤ U)
     (hfloor : AdvFloor P F κ) {Ω₀ : Type} [Fintype Ω₀] {M₀ : Mc.Alg (P.Seed × Inst × Ω₀) (P.Proof × Out)}
     (hM₀ : Useful P M₀ η) (hU : Mc.time M₀ ≤ U) : Core P (U / F - 1) κ η 0 := by
@@ -976,10 +787,6 @@ def Efficient (P : Protocol Mc Inst Out) (γ N α : ℝ) : Prop :=
 def RelativelySecure (P : Protocol Mc Inst Out) (ε δ γ η α N : ℝ) : Prop :=
   Complete P η ∧ SecureInf P ε δ η α ∧ Efficient P γ N α
 
-/-- **Relative security from the adversary floor** (RS-DEF's route (a), end to end in the frozen definition): if Solve
-is complete, costs at least the floor `F > 0` and is efficient, and every adversary's accepted runs below `F` have
-probability at most `κ < δ`, the protocol is relatively secure with `ε = time(Solve) / F − 1` and `α = 0`.
-Superseded by `relativelySecurePerProver_of_advFloor`. -/
 theorem relativelySecure_of_advFloor (P : Protocol Mc Inst Out) {κ δ γ η F N : ℝ} (hc : Complete P η) (hF : 0 < F)
     (hFS : F ≤ Mc.time P.solve) (hfloor : AdvFloor P F κ) (hκδ : κ < δ) (heff : Efficient P γ N 0) :
     RelativelySecure P (Mc.time P.solve / F - 1) δ γ η 0 N := by
@@ -1023,10 +830,6 @@ def RelativelySecurePerProver (P : Protocol Mc Inst Out) (ε : ℝ)
     (δ : ∀ (Ω : Type) [Fintype Ω], Mc.Alg (P.Seed × Ω) P.Proof → ENNReal) (γ η α N : ℝ) : Prop :=
   Complete P η ∧ SecureInfPerProver P ε δ η α ∧ Efficient P γ N α
 
-/-- **Security per adversary from the floor per adversary** (Lemma R and `secureInf_of_core`, adversary by
-adversary): under the floor `F > 0` per adversary, with a useful prover at most `U ≥ F`, security holds at
-`1 + ε = U / F`, `α = 0`, and each adversary's threshold `κ(M) + δ'` for one `δ' > 0`: an adversary accepted that
-often has a run charged at least `F`, so its time is at least `F ≥ T_use · F / U`. -/
 theorem secureInfPerProver_of_floor (P : Protocol Mc Inst Out) {η F U δ' : ℝ}
     {κ : ∀ (Ω : Type) [Fintype Ω], Mc.Alg (P.Seed × Ω) P.Proof → ENNReal} (hF : 0 < F) (hFU : F ≤ U)
     (hfloor : AdvFloorPerProver P F κ) {Ω₀ : Type} [Fintype Ω₀] {M₀ : Mc.Alg (P.Seed × Inst × Ω₀) (P.Proof × Out)}
@@ -1051,10 +854,6 @@ theorem secureInfPerProver_of_floor (P : Protocol Mc Inst Out) {η F U δ' : ℝ
   have hκ : κ Ω M ≠ ⊤ := ne_top_of_le_ne_top ENNReal.ofReal_ne_top (le_self_add.trans hM)
   exact (ENNReal.lt_add_right hκ (ENNReal.ofReal_pos.mpr hδ').ne').not_ge (hM.trans hacc)
 
-/-- **Relative security per adversary from the floor per adversary** (route (a) per adversary, as
-`relativelySecure_of_advFloor`): if Solve is complete, costs at least the floor `F > 0` and is efficient, and every
-adversary's accepted runs below `F` have probability at most its own `κ`, the protocol is relatively secure per
-adversary with `ε = time(Solve) / F − 1`, `α = 0` and thresholds `κ(M) + δ'`. -/
 theorem relativelySecurePerProver_of_advFloor (P : Protocol Mc Inst Out) {γ η F N δ' : ℝ}
     {κ : ∀ (Ω : Type) [Fintype Ω], Mc.Alg (P.Seed × Ω) P.Proof → ENNReal} (hc : Complete P η) (hF : 0 < F)
     (hFS : F ≤ Mc.time P.solve) (hfloor : AdvFloorPerProver P F κ) (hδ' : 0 < δ') (heff : Efficient P γ N 0) :
@@ -1072,7 +871,6 @@ def IsMatmul {R : Type} [Ring R] {n : ℕ} {Mc : Machine} (P : Protocol Mc (Mat 
     Prop :=
   IsMatmulOn P id
 
-/-- Under completeness, `T_use(η)` is at most Solve's time. -/
 theorem tuse_le_solve (P : Protocol Mc Inst Out) {η : ℝ} (h : Complete P η) : Tuse P η ≤ Mc.time P.solve :=
   tuse_le P h
 
@@ -1093,28 +891,21 @@ section Masking
 
 variable {α : Type*} [Ring α] {m k p r r' : Type*} [Fintype k] [Fintype r] [Fintype r']
 
-/-- **The full-rank peel**: `A · B = (A + R)(B + S) − R (B + S) − A · S`, over any ring (in particular any commutative
-ring, `ZMod (2^32)` and any field). -/
 theorem mask_peel (A R : Matrix m k α) (B S : Matrix k p α) :
     A * B = (A + R) * (B + S) - R * (B + S) - A * S := by
   rw [Matrix.add_mul, Matrix.mul_add]
   abel
 
-/-- **The low-rank peel**: with masks `U Vᵀ` (rank `r`) and `W Zᵀ` (rank `r'`), the masked product minus the two
-corrections, each a product through an inner dimension `r` or `r'`, is `A · B`:
-`(A + U Vᵀ)(B + W Zᵀ) − U (Vᵀ (B + W Zᵀ)) − (A W) Zᵀ = A · B`. -/
 theorem lowRank_peel (A : Matrix m k α) (B : Matrix k p α) (U : Matrix m r α) (Vt : Matrix r k α)
     (W : Matrix k r' α) (Zt : Matrix r' p α) :
     (A + U * Vt) * (B + W * Zt) - U * (Vt * (B + W * Zt)) - (A * W) * Zt = A * B := by
   rw [Matrix.add_mul, Matrix.mul_add A, Matrix.mul_assoc U, Matrix.mul_assoc A]
   abel
 
-/-- The full-rank peel in s32 arithmetic (`ZMod (2^32)`), where it is exact. -/
 theorem mask_peel_zmod32 (A R : Matrix m k (ZMod (2 ^ 32))) (B S : Matrix k p (ZMod (2 ^ 32))) :
     A * B = (A + R) * (B + S) - R * (B + S) - A * S :=
   mask_peel A R B S
 
-/-- The full-rank peel over a field, where it is also exact. -/
 theorem mask_peel_field {F : Type*} [Field F] (A R : Matrix m k F) (B S : Matrix k p F) :
     A * B = (A + R) * (B + S) - R * (B + S) - A * S :=
   mask_peel A R B S
@@ -1123,7 +914,6 @@ end Masking
 
 section Exactness
 
-/-- An integer is its s32 residue's signed representative when `-2^31 < z ≤ 2^31`. -/
 theorem valMinAbs_intCast_of_bounds {z : ℤ} (hlo : -2 ^ 31 < z) (hhi : z ≤ 2 ^ 31) :
     ((z : ZMod (2 ^ 32))).valMinAbs = z := by
   rw [ZMod.valMinAbs_spec]
@@ -1139,8 +929,6 @@ def peel32 (A : Matrix m k ℤ) (B : Matrix k p ℤ) (R : Matrix m k (ZMod (2 ^ 
   let B' := B.map (Int.castRingHom (ZMod (2 ^ 32)))
   (A' + R) * (B' + S) - R * (B' + S) - A' * S
 
-/-- **s32 recovers the integer product**: for integer matrices whose product has entries in `(-2^31, 2^31]`, the
-peel computed in s32, with any masks, has the integer product as its signed representative. -/
 theorem s32_peel_recovers (A : Matrix m k ℤ) (B : Matrix k p ℤ) (R : Matrix m k (ZMod (2 ^ 32)))
     (S : Matrix k p (ZMod (2 ^ 32)))
     (hb : ∀ i j, -2 ^ 31 < (A * B) i j ∧ (A * B) i j ≤ 2 ^ 31) (i : m) (j : p) :
@@ -1151,7 +939,6 @@ theorem s32_peel_recovers (A : Matrix m k ℤ) (B : Matrix k p ℤ) (R : Matrix 
   rw [h, Matrix.map_apply]
   exact valMinAbs_intCast_of_bounds (hb i j).1 (hb i j).2
 
-/-- int8 by int8 products of inner dimension at most `2^17` lie in `(-2^31, 2^31]`, so s32 accumulation is exact. -/
 theorem int8_product_bounds (A : Matrix m k ℤ) (B : Matrix k p ℤ) (hk : Fintype.card k ≤ 2 ^ 17)
     (hA : ∀ i l, -128 ≤ A i l ∧ A i l ≤ 127) (hB : ∀ l j, -128 ≤ B l j ∧ B l j ≤ 127) (i : m) (j : p) :
     -2 ^ 31 < (A * B) i j ∧ (A * B) i j ≤ 2 ^ 31 := by
@@ -1170,15 +957,12 @@ theorem int8_product_bounds (A : Matrix m k ℤ) (B : Matrix k p ℤ) (hk : Fint
     simp only [Finset.sum_const, Finset.card_univ, nsmul_eq_mul] at this
     linarith
 
-/-- **int8 with s32 accumulation is exact** for inner dimension at most `2^17`: the s32 peel of int8 matrices, with
-any masks, recovers the integer product. -/
 theorem int8_product_exact (A : Matrix m k ℤ) (B : Matrix k p ℤ) (hk : Fintype.card k ≤ 2 ^ 17)
     (hA : ∀ i l, -128 ≤ A i l ∧ A i l ≤ 127) (hB : ∀ l j, -128 ≤ B l j ∧ B l j ≤ 127)
     (R : Matrix m k (ZMod (2 ^ 32))) (S : Matrix k p (ZMod (2 ^ 32))) (i : m) (j : p) :
     (peel32 A B R S i j).valMinAbs = (A * B) i j :=
   s32_peel_recovers A B R S (int8_product_bounds A B hk hA hB) i j
 
-/-- A product of integer matrices with entries at most `M` in absolute value has entries at most `|k| M²`. -/
 theorem grid_product_bound (A : Matrix m k ℤ) (B : Matrix k p ℤ) {M : ℤ} (hA : ∀ i l, |A i l| ≤ M)
     (hB : ∀ l j, |B l j| ≤ M) (i : m) (j : p) : |(A * B) i j| ≤ Fintype.card k * M ^ 2 := by
   rw [Matrix.mul_apply]
@@ -1188,10 +972,6 @@ theorem grid_product_bound (A : Matrix m k ℤ) (B : Matrix k p ℤ) {M : ℤ} (
         exact mul_le_mul (hA i l) (hB l j) (abs_nonneg _) ((abs_nonneg _).trans (hA i l))
     _ = Fintype.card k * M ^ 2 := by simp [Finset.sum_const, Finset.card_univ]
 
-/-- **RS-DEF's exactness condition (E)** on the integer grid: if the useful operands, the noise and the masked operands
-all have entries at most `M_op` and `n M_op² ≤ B_acc`, every product the peel computes, `(A + R)(B + S)`, `R (B + S)`
-and `A S`, has entries at most `B_acc`, so an accumulator exact up to `B_acc` (`2^24` for E4M3 integers with FP32
-accumulation, `2^31 − 1` for int8 with s32) computes each exactly, and the peel over `ℤ` is `A B` (`mask_peel`). -/
 theorem grid_peel_in_range (A R : Matrix m k ℤ) (B S : Matrix k p ℤ) {Mop Bacc : ℤ}
     (hA : ∀ i l, |A i l| ≤ Mop) (hR : ∀ i l, |R i l| ≤ Mop) (hS : ∀ l j, |S l j| ≤ Mop)
     (hAR : ∀ i l, |(A + R) i l| ≤ Mop) (hBS : ∀ l j, |(B + S) l j| ≤ Mop)
@@ -1200,9 +980,6 @@ theorem grid_peel_in_range (A R : Matrix m k ℤ) (B S : Matrix k p ℤ) {Mop Ba
   ⟨(grid_product_bound _ _ hAR hBS i j).trans hE, (grid_product_bound _ _ hR hBS i j).trans hE,
     (grid_product_bound _ _ hA hS i j).trans hE⟩
 
-/-- RS-DEF §1.1's instances meet (E): int8 operands in `[-126, 126]` (useful and noise in `[-63, 63]`) with s32
-accumulation for `n ≤ 135,266`, the largest such `n`; E4M3 integers in `[-16, 16]` with FP32 accumulation for
-`n ≤ 65,536`. -/
 theorem grid_instances :
     (135266 : ℤ) * 126 ^ 2 ≤ 2 ^ 31 - 1 ∧ ¬ (135267 : ℤ) * 126 ^ 2 ≤ 2 ^ 31 - 1 ∧ (65536 : ℤ) * 16 ^ 2 ≤ 2 ^ 24 := by
   norm_num
@@ -1224,19 +1001,14 @@ selector `diag(1_{k ≤ jL})` for the `j`-th prefix sum `P_j = A' D B'`). -/
 
 variable {α : Type*} [Ring α] {m k p r r' : Type*} [Fintype k] [Fintype r] [Fintype r']
 
-/-- **Z(a), σ before the instance**: an instance chosen after the noise as `A_M = −E`, `B_M = −F` makes every
-masked prefix sum zero, for free. -/
 theorem sigma_first_cancels (E : Matrix m k α) (F : Matrix k p α) (D : Matrix k k α) :
     (-E + E) * D * (-F + F) = 0 := by
   simp
 
-/-- **Z(c)**: with `A_M = B_M = 0` the masked prefix sums are `P_j = E (D F)`, one product with the noise `E`. -/
 theorem zero_instance_prefix (E : Matrix m k α) (F : Matrix k p α) (D : Matrix k k α) :
     (0 + E) * D * (0 + F) = E * (D * F) := by
   simp [Matrix.mul_assoc]
 
-/-- **Z(d)**: with rank-`r` noise `E = E_L E_R` and `F = F_L F_R` and `A_M = B_M = 0`, the masked prefix sums are
-`P_j = E_L Q_j F_R` with `Q_j = E_R D F_L` an `r × r'` matrix: products through the inner dimensions `r`, `r'`. -/
 theorem zero_instance_lowRank_prefix (EL : Matrix m r α) (ER : Matrix r k α) (FL : Matrix k r' α)
     (FR : Matrix r' p α) (D : Matrix k k α) :
     (0 + EL * ER) * D * (0 + FL * FR) = EL * (ER * D * FL) * FR := by
@@ -1261,7 +1033,6 @@ theorem eval_reduction {I Pf Bl Mid O : Type} (E : Mc.Alg I (Pf × Bl)) (peel : 
     Mc.eval (Mc.reduction E peel corr) x = ((Mc.eval E x).1, Mc.eval corr (Mc.eval peel (Mc.eval E x).2)) := by
   simp only [reduction, Mc.eval_seq, Mc.eval_pair, Mc.eval_fst, Mc.eval_snd]
 
-/-- The reduction costs at most the extractor, the peel and the correction. -/
 theorem time_reduction_le {I Pf Bl Mid O : Type} (E : Mc.Alg I (Pf × Bl)) (peel : Mc.Alg Bl Mid)
     (corr : Mc.Alg Mid O) : Mc.time (Mc.reduction E peel corr) ≤ Mc.time E + Mc.time peel + Mc.time corr := by
   have h1 := Mc.time_seq_le E (Mc.pair Mc.fst (Mc.seq Mc.snd (Mc.seq peel corr)))
@@ -1273,8 +1044,6 @@ theorem time_reduction_le {I Pf Bl Mid O : Type} (E : Mc.Alg I (Pf × Bl)) (peel
   unfold reduction
   linarith
 
-/-- **The cost inequality**: with an extractor that costs at most `M`,
-`time M' ≤ time M + time peel + time correction`. -/
 theorem time_reduction_le_of_le {I Pf Bl Mid O J : Type} {E : Mc.Alg I (Pf × Bl)} {M : Mc.Alg J Pf}
     (hE : Mc.time E ≤ Mc.time M) (peel : Mc.Alg Bl Mid) (corr : Mc.Alg Mid O) :
     Mc.time (Mc.reduction E peel corr) ≤ Mc.time M + Mc.time peel + Mc.time corr := by
@@ -1303,9 +1072,6 @@ def Floor (Mc : Machine) {Inst Out : Type} (promise : Inst → Prop) (correct : 
   ∀ (Ω : Type) [Fintype Ω] (N : Mc.Alg (Inst × Ω) Out),
     (∀ x, promise x → 1 - η ≤ prob fun ω : Ω => correct x (Mc.eval N (x, ω))) → T ≤ Mc.time N
 
-/-- An algorithm that solves every instance (with a proof) is above the floor of any problem its answers solve
-(`hcorr`; for an unedited protocol, its own): drop σ into its coins and forget the proof, which routing does for
-free. -/
 theorem Floor.le_time (P : Protocol Mc Inst Out) {correct : Inst → Out → Prop} {T η : ℝ}
     (h : Floor Mc P.promise correct T η)
     (hcorr : ∀ σ x C, P.correct σ x C → correct x C) {Ω : Type} [Fintype Ω]
@@ -1334,8 +1100,6 @@ theorem Floor.le_tuse (P : Protocol Mc Inst Out) {correct : Inst → Out → Pro
   obtain ⟨Ω', _, M', hu⟩ := hne
   exact le_csInf ⟨_, Ω', inferInstance, M', hu, rfl⟩ fun _ ⟨_, _, _, hu', ht⟩ => ht ▸ h.le_time P hcorr hu'.2
 
-/-- With extraction, the reduction is useful and costs at most `(1 + εext) time M + time peel + time corr`, when the
-peel and the correction answer `x` from blocks valid for `x`. -/
 theorem exists_reduction (P : Protocol Mc Inst Out) {Bl Mid : Type} {valid : Inst → Bl → Prop}
     (peel : Mc.Alg Bl Mid) (corr : Mc.Alg Mid Out)
     (hpeel : ∀ σ x b, valid x b → P.correct σ x (Mc.eval corr (Mc.eval peel b))) {εext η : ℝ} {Ω : Type} [Fintype Ω]
@@ -1350,8 +1114,6 @@ theorem exists_reduction (P : Protocol Mc Inst Out) {Bl Mid : Type} {valid : Ins
   · rw [Mc.eval_reduction]
     exact ⟨hpeel _ x _ hω.1, hω.2⟩
 
-/-- **Security from extraction**, given that the peel and the correction cost at most `ε time M` for every adversary
-`M` accepted with probability at least `δ` (extraction overhead `εext`). -/
 theorem secure_of_extraction (P : Protocol Mc Inst Out) {Bl Mid : Type} {valid : Inst → Bl → Prop}
     (peel : Mc.Alg Bl Mid) (corr : Mc.Alg Mid Out)
     (hpeel : ∀ σ x b, valid x b → P.correct σ x (Mc.eval corr (Mc.eval peel b))) {εext ε δ η : ℝ}
@@ -1364,9 +1126,6 @@ theorem secure_of_extraction (P : Protocol Mc Inst Out) {Bl Mid : Type} {valid :
   obtain ⟨Ω', _, M', ht, hu⟩ := exists_reduction P peel corr hpeel (hext Ω M hc hM)
   exact ⟨Ω', inferInstance, M', by linarith [hcost Ω M hc hM], hu⟩
 
-/-- **Security from extraction and the floor**: if the peel and the correction cost at most `q < T`, where `T` is the
-floor, then `ε = εext + (1 + εext) q / (T − q)`; with `εext = 0` this is RS-MODEL's `q / (T − q)`, eq. (2).
-(`M'` is useful, so `T ≤ time M' ≤ (1 + εext) time M + q`.) -/
 theorem secure_of_extraction_floor (P : Protocol Mc Inst Out) {Bl Mid : Type} {valid : Inst → Bl → Prop}
     (peel : Mc.Alg Bl Mid) (corr : Mc.Alg Mid Out)
     (hpeel : ∀ σ x b, valid x b → P.correct σ x (Mc.eval corr (Mc.eval peel b))) {εext δ η T q : ℝ}
@@ -1403,9 +1162,6 @@ theorem secure_of_extraction_advTime (P : Protocol Mc Inst Out) {Bl Mid : Type} 
   calc q = q / F * F := (div_mul_cancel₀ q hF.ne').symm
     _ ≤ q / F * Mc.time M := mul_le_mul_of_nonneg_left (hM Ω M hc hδ) (div_nonneg hq0 hF.le)
 
-/-- **Security is a relative floor** (RS-DEF §1.5), one direction: if some useful `M₀` costs at most
-`(1 + ε) time M + α` for every adversary `M` accepted with probability at least `δ`, the protocol is secure. No
-reduction from `M` is needed. -/
 theorem secure_of_solver (P : Protocol Mc Inst Out) {ε δ η α : ℝ} {Ω₀ : Type} [Fintype Ω₀]
     {M₀ : Mc.Alg (P.Seed × Inst × Ω₀) (P.Proof × Out)} (hM₀ : Useful P M₀ η)
     (hcost : ∀ (Ω : Type) [Fintype Ω] (M : Mc.Alg (P.Seed × Ω) P.Proof), CommitsFirst P (Mc.eval M) →
@@ -1413,8 +1169,6 @@ theorem secure_of_solver (P : Protocol Mc Inst Out) {ε δ η α : ℝ} {Ω₀ :
     Secure P ε δ η α :=
   fun Ω _ M hc hM => ⟨Ω₀, inferInstance, M₀, hcost Ω M hc hM, hM₀⟩
 
-/-- **Security is a relative floor**, the other direction: under security, every adversary accepted with probability
-at least `δ` has `T ≤ (1 + ε) time M + α`, for `T` the floor. -/
 theorem floor_le_of_secure (P : Protocol Mc Inst Out) {ε δ η α T : ℝ} (h : Secure P ε δ η α)
     {correct : Inst → Out → Prop} (hfloor : Floor Mc P.promise correct T η) (hcorr : ∀ σ x C, P.correct σ x C → correct x C)
     {Ω : Type} [Fintype Ω] (M : Mc.Alg (P.Seed × Ω) P.Proof)
@@ -1475,7 +1229,6 @@ theorem eval_corr (n : ℕ) (b : Mat R n n × Mat R n n × Mat R n n) :
     Mc.eval (Mc.corr n) b = b.1 - b.2.1 - b.2.2 := by
   simp only [corr, eval_sub₂, Mc.eval_seq, Mc.eval_fst, Mc.eval_snd]
 
-/-- The correction costs two subtractions. -/
 theorem time_corr_le (n : ℕ) : Mc.time (Mc.corr n) ≤ 2 * Mc.κadd * (n : ℝ) ^ 2 := by
   apply le_trans
   · unfold corr
@@ -1501,7 +1254,6 @@ theorem eval_peelFull (n : ℕ) (b : FullBlocks R n) :
     Mc.eval (Mc.peelFull n) b = (b.1, b.2.2.2.1 * b.2.2.1, b.2.1 * b.2.2.2.2) := by
   simp only [peelFull, eval_mul₂, Mc.eval_pair, Mc.eval_seq, Mc.eval_fst, Mc.eval_snd]
 
-/-- The full-rank peel and correction answer the instance from valid blocks: `C' − R Y − A S = A B`. -/
 theorem peelFull_correct {n : ℕ} (x : Mat R n n × Mat R n n) (b : FullBlocks R n) (hb : ValidFull x b) :
     x.1 * x.2 = Mc.eval (Mc.corr n) (Mc.eval (Mc.peelFull n) b) := by
   obtain ⟨C', A, Y, Rm, S⟩ := b
@@ -1511,7 +1263,6 @@ theorem peelFull_correct {n : ℕ} (x : Mat R n n × Mat R n n) (b : FullBlocks 
   rw [eval_peelFull, eval_corr]
   exact mask_peel x.1 Rm x.2 S
 
-/-- The full-rank peel costs two `n × n × n` products. -/
 theorem time_peelFull_le (n : ℕ) : Mc.time (Mc.peelFull n) ≤ 2 * Mc.κ * (n : ℝ) ^ 3 := by
   apply le_trans
   · unfold peelFull
@@ -1546,8 +1297,6 @@ theorem eval_peelLow (n r : ℕ) (b : LowBlocks R n r) :
       (b.1, b.2.2.2.1 * (b.2.2.2.2.1 * b.2.2.1), (b.2.1 * b.2.2.2.2.2.1) * b.2.2.2.2.2.2) := by
   simp only [peelLow, eval_mul₂, Mc.eval_pair, Mc.eval_seq, Mc.eval_fst, Mc.eval_snd]
 
-/-- The low-rank peel and correction answer the instance from valid blocks:
-`C' − U (Vᵀ Y) − (A W) Zᵀ = A B`. -/
 theorem peelLow_correct {n r : ℕ} (x : Mat R n n × Mat R n n) (b : LowBlocks R n r) (hb : ValidLow x b) :
     x.1 * x.2 = Mc.eval (Mc.corr n) (Mc.eval (Mc.peelLow n r) b) := by
   obtain ⟨C', A, Y, U, Vt, W, Zt⟩ := b
@@ -1557,7 +1306,6 @@ theorem peelLow_correct {n r : ℕ} (x : Mat R n n × Mat R n n) (b : LowBlocks 
   rw [eval_peelLow, eval_corr]
   exact (lowRank_peel x.1 x.2 U Vt W Zt).symm
 
-/-- The low-rank peel costs four products through the inner dimension `r`: `4 κ n² r`. -/
 theorem time_peelLow_le (n r : ℕ) : Mc.time (Mc.peelLow n r) ≤ 4 * Mc.κ * (n : ℝ) ^ 2 * r := by
   apply le_trans
   · unfold peelLow
@@ -1581,8 +1329,6 @@ theorem eval_honestFull (n : ℕ) (x : Mat R n n × Mat R n n × Mat R n n × Ma
   simp only [honestFull, eval_sub₂, eval_mul₂, eval_add₂, Mc.eval_seq, Mc.eval_fst, Mc.eval_snd]
   exact (mask_peel x.1 x.2.2.1 x.2.1 x.2.2.2).symm
 
-/-- The full-rank honest computation costs three `n × n × n` products: `γ ≤ 2 + 5 κadd / (κ n)` against the
-reference `κ n³` (RS-DEF's Proposition Z(e): full-rank noise buys nothing). -/
 theorem time_honestFull_le (n : ℕ) :
     Mc.time (Mc.honestFull n) ≤ 3 * Mc.κ * (n : ℝ) ^ 3 + 5 * Mc.κadd * (n : ℝ) ^ 2 := by
   apply le_trans
@@ -1616,8 +1362,6 @@ theorem eval_honestLow (n r : ℕ) (x : Mat R n n × Mat R n n × Mat R n r × M
   simp only [honestLow, eval_sub₂, eval_mul₂, eval_add₂, Mc.eval_seq, Mc.eval_fst, Mc.eval_snd]
   exact lowRank_peel x.1 x.2.1 x.2.2.1 x.2.2.2.1 x.2.2.2.2.1 x.2.2.2.2.2
 
-/-- The rank-`r` honest computation costs one `n × n × n` product and seven products through the inner dimension `r`
-(the mask `W Zᵀ` is formed twice): `γ ≤ 7 r / n + 5 κadd / (κ n)` against the reference `κ n³`. -/
 theorem time_honestLow_le (n r : ℕ) :
     Mc.time (Mc.honestLow n r) ≤ Mc.κ * (n : ℝ) ^ 3 + 7 * Mc.κ * (n : ℝ) ^ 2 * r + 5 * Mc.κadd * (n : ℝ) ^ 2 := by
   apply le_trans
@@ -1628,9 +1372,6 @@ theorem time_honestLow_le (n r : ℕ) :
 
 variable {n : ℕ} {Inst : Type} {P : Protocol Mc.toMachine Inst (Mat R n n)} {emb : Inst → Mat R n n × Mat R n n}
 
-/-- **Relative security of matmul PoUW with full-rank masks**, from extraction (named hypothesis `Extraction`, overhead
-`εext`) and the floor (named hypothesis `Floor`) above the peel's and the correction's cost
-`q = 2κ n³ + 2κadd n²`: `ε = εext + (1 + εext) q / (T − q)`. -/
 theorem secure_fullRank (hmat : IsMatmulOn P emb) {εext δ η T : ℝ}
     (hext : ∀ (Ω : Type) [Fintype Ω] (M : Mc.Alg (P.Seed × Ω) P.Proof), CommitsFirst P (Mc.eval M) →
       δ ≤ acceptance P M → Extraction P (fun x => ValidFull (emb x)) εext M η)
@@ -1658,8 +1399,6 @@ theorem secure_lowRank (hmat : IsMatmulOn P emb) (r : ℕ) {εext δ η T : ℝ}
     (fun σ x C h => (hmat σ x C).1 h)
     (by linarith [Mc.time_peelLow_le n r, Mc.time_corr_le n]) hT
 
-/-- **Full-rank masks by route 2**: with every accepted adversary costing at least `F`,
-`ε = εext + (2κ n³ + 2κadd n²) / F`, about `2/c` for `F = c n³` (RS-MODEL §5: says nothing useful). -/
 theorem secure_fullRank_advTime (hmat : IsMatmulOn P emb) {εext δ η F : ℝ}
     (hext : ∀ (Ω : Type) [Fintype Ω] (M : Mc.Alg (P.Seed × Ω) P.Proof), CommitsFirst P (Mc.eval M) →
       δ ≤ acceptance P M → Extraction P (fun x => ValidFull (emb x)) εext M η)
@@ -1670,9 +1409,6 @@ theorem secure_fullRank_advTime (hmat : IsMatmulOn P emb) {εext δ η F : ℝ}
     (fun σ x b hb => (hmat σ x _).2 (Mc.peelFull_correct (emb x) b hb)) hext hM hF
     (by linarith [Mc.time_peelFull_le n, Mc.time_corr_le n])
 
-/-- **Rank-`r` masks by route 2**: with every accepted adversary costing at least `F`,
-`ε = εext + (4κ n² r + 2κadd n²) / F`, i.e. `(4κ r + 2κadd) / (c n)` for `F = c n³` (RS-MODEL §5's table, operands on
-the grid). -/
 theorem secure_lowRank_advTime (hmat : IsMatmulOn P emb) (r : ℕ) {εext δ η F : ℝ}
     (hext : ∀ (Ω : Type) [Fintype Ω] (M : Mc.Alg (P.Seed × Ω) P.Proof), CommitsFirst P (Mc.eval M) →
       δ ≤ acceptance P M → Extraction P (fun x => ValidLow (r := r) (emb x)) εext M η)
@@ -1696,16 +1432,11 @@ and the edited product is what is served. Dynamic × dynamic only: both operands
 both are edited fresh per instance. With no peel there are no correction products, so γ is the proof layer's cost
 (commitments, proving), the noise expansion and two additions. The floor is RS-D1E's (named `EditFloor`). -/
 
-/-- The bit-pair projection's algebra (RS-D1E): the mixed second difference of `(A + S) D (B + T)` in the two edits
-is `S D T`. The committed parts project to 0: `A D B`, `A D T` and `S D B` each lack one of the two edits. -/
 theorem edit_mixed_difference {R : Type} [Ring R] {a b c : ℕ} (A S : Mat R a b) (D : Mat R b b) (B T : Mat R b c) :
     (A + S) * D * (B + T) - (A + S) * D * B - A * D * (B + T) + A * D * B = S * D * T := by
   simp only [Matrix.add_mul, Matrix.mul_add]
   abel
 
-/-- **The bit-pair coefficient** (RS-D1E): editing `A` at `(i, k)` by `d β` and `B` at `(k, l)` by `d' β'`, the
-`β β'` coefficient of the prefix-sum target `A' diag(p) B'` (with `p` the prefix's indicator) is `d p_k d'` at
-`(i, l)` and 0 elsewhere, whatever the committed `A` and `B`. -/
 theorem bitPair_coefficient {R : Type} [CommRing R] {a b c : ℕ} (A : Mat R a b) (B : Mat R b c) (p : Fin b → R)
     (i : Fin a) (k : Fin b) (l : Fin c) (d d' : R) :
     (A + Matrix.single i k d) * Matrix.diagonal p * (B + Matrix.single k l d') -
@@ -1746,8 +1477,6 @@ theorem Aff.eval_bitPt {X Y K : Type} [Fintype X] [Fintype Y] [DecidableEq X] [D
     (u : Aff X Y K) (x : X) (y : Y) (s t : K) : u.eval (bitPt x y s t) = u.c + u.α x * s + u.γ y * t := by
   simp [Aff.eval, bitPt, Pi.single_apply]
 
-/-- **RS-D1E's Lemma 3** over a commutative ring: a product of two plain operands projects to `α_u γ_vᵀ + α_v γ_uᵀ`,
-and its constants (the instance, the pair offsets, anything computed before the coins) cancel. -/
 theorem bitProj_mul {X Y K : Type} [Fintype X] [Fintype Y] [DecidableEq X] [DecidableEq Y] [CommRing K]
     (u v : Aff X Y K) :
     bitProj (fun z => u.eval z * v.eval z) = Matrix.vecMulVec u.α v.γ + Matrix.vecMulVec v.α u.γ := by
@@ -1755,14 +1484,12 @@ theorem bitProj_mul {X Y K : Type} [Fintype X] [Fintype Y] [DecidableEq X] [Deci
   simp only [bitProj, Aff.eval_bitPt, Matrix.add_apply, Matrix.vecMulVec_apply]
   ring
 
-/-- Plain words project to 0. -/
 theorem bitProj_aff {X Y K : Type} [Fintype X] [Fintype Y] [DecidableEq X] [DecidableEq Y] [CommRing K]
     (u : Aff X Y K) : bitProj (fun z => u.eval z) = 0 := by
   ext x y
   simp only [bitProj, Aff.eval_bitPt, Matrix.zero_apply]
   ring
 
-/-- The projection is additive. -/
 theorem bitProj_add {X Y K : Type} [DecidableEq X] [DecidableEq Y] [CommRing K] (f g : (X ⊕ Y → K) → K) :
     bitProj (fun z => f z + g z) = bitProj f + bitProj g := by
   ext x y
@@ -1774,7 +1501,6 @@ theorem bitProj_sum {X Y K : Type} [DecidableEq X] [DecidableEq Y] [CommRing K] 
   ext x y
   simp only [bitProj, Matrix.sum_apply, Finset.sum_sub_distrib, Finset.sum_add_distrib]
 
-/-- A sum of `m` pairs of rank-one terms has rank at most `2m`: it factors through `Fin m ⊕ Fin m`. -/
 theorem rank_sum_vecMulVec_le {X Y K : Type} [Fintype X] [Fintype Y] [CommRing K] [StrongRankCondition K] {m : ℕ}
     (a c : Fin m → X → K) (b d : Fin m → Y → K) :
     (∑ j, (Matrix.vecMulVec (a j) (b j) + Matrix.vecMulVec (c j) (d j))).rank ≤ 2 * m := by
@@ -1789,8 +1515,6 @@ theorem rank_sum_vecMulVec_le {X Y K : Type} [Fintype X] [Fintype Y] [CommRing K
   refine (Matrix.rank_mul_le_left U V).trans ((Matrix.rank_le_card_width U).trans ?_)
   simp [two_mul]
 
-/-- **The core of RS-D1E's homogenization, for one word**: a word computed with `m` products of plain operands and
-linear steps (`Σ_j u_j v_j + r`, scalars absorbed into the operands) projects to rank at most `2m`. -/
 theorem bitProj_rank_le {X Y K : Type} [Fintype X] [Fintype Y] [DecidableEq X] [DecidableEq Y] [CommRing K]
     [StrongRankCondition K] {m : ℕ} (u v : Fin m → Aff X Y K) (r : Aff X Y K) :
     (bitProj fun z => ∑ j, (u j).eval z * (v j).eval z + r.eval z).rank ≤ 2 * m := by
@@ -1799,8 +1523,6 @@ theorem bitProj_rank_le {X Y K : Type} [Fintype X] [Fintype Y] [DecidableEq X] [
   simp only [bitProj_mul]
   exact rank_sum_vecMulVec_le _ _ _ _
 
-/-- **Products needed ≥ half the rank of the degree-(1, 1) part**: if a word computed with `m` plain products agrees
-with a target `T` at the four points of every bit pair, then `rank P(T) ≤ 2m`. -/
 theorem products_ge_half_rank {X Y K : Type} [Fintype X] [Fintype Y] [DecidableEq X] [DecidableEq Y] [CommRing K]
     [StrongRankCondition K] {m : ℕ} (u v : Fin m → Aff X Y K) (r : Aff X Y K) (T : (X ⊕ Y → K) → K)
     (hT : ∀ x y s t, (s = 0 ∨ s = 1) → (t = 0 ∨ t = 1) →
@@ -1820,8 +1542,6 @@ def editedEntry {K : Type} [CommRing K] {a b c : ℕ} (C D : Mat K a b) (C' D' :
     (i : Fin a) (l : Fin c) (z : (Fin a × Fin b) ⊕ (Fin b × Fin c) → K) : K :=
   ∑ k, (C i k + D i k * z (.inl (i, k))) * p k * (C' k l + D' k l * z (.inr (k, l)))
 
-/-- The bit-pair projection of an edited prefix-sum entry: `Σ_k e_(i,k) e_(k,l)ᵀ · d_ik p_k d′_kl`, the committed
-constants gone. -/
 theorem bitProj_editedEntry {K : Type} [CommRing K] {a b c : ℕ} (C D : Mat K a b) (C' D' : Mat K b c) (p : Fin b → K)
     (i : Fin a) (l : Fin c) :
     bitProj (editedEntry C D C' D' p i l) =
@@ -1839,8 +1559,6 @@ theorem bitProj_editedEntry {K : Type} [CommRing K] {a b c : ℕ} (C D : Mat K a
     bitProj_sum (fun k z => (U k).eval z * (V k).eval z)]
   simp only [bitProj_mul, U, V, Matrix.zero_vecMulVec, add_zero]
 
-/-- An edited prefix-sum entry's projection has rank at least its live terms `#{k : d_ik p_k d′_kl ≠ 0}` (its
-submatrix on the rows `(i, k)` and columns `(k, l)` is their diagonal). -/
 theorem card_live_le_rank {K : Type} [Field K] [DecidableEq K] {a b c : ℕ} (C D : Mat K a b) (C' D' : Mat K b c)
     (p : Fin b → K) (i : Fin a) (l : Fin c) :
     Fintype.card {k // D i k * p k * D' k l ≠ 0} ≤ (bitProj (editedEntry C D C' D' p i l)).rank := by
@@ -1859,7 +1577,6 @@ theorem card_live_le_rank {K : Type} [Field K] [DecidableEq K] {a b c : ℕ} (C 
       = (Matrix.diagonal fun k => D i k * p k * D' k l).rank := (Matrix.rank_diagonal _).symm
     _ ≤ (bitProj (editedEntry C D C' D' p i l)).rank := hdiag ▸ Matrix.rank_submatrix_le _ _ _
 
-/-- ... and at most `b`: it factors through the inner index `k`. -/
 theorem rank_bitProj_editedEntry_le {K : Type} [Field K] {a b c : ℕ} (C D : Mat K a b) (C' D' : Mat K b c)
     (p : Fin b → K) (i : Fin a) (l : Fin c) : (bitProj (editedEntry C D C' D' p i l)).rank ≤ b := by
   rw [bitProj_editedEntry]
@@ -1872,7 +1589,6 @@ theorem rank_bitProj_editedEntry_le {K : Type} [Field K] {a b c : ℕ} (C D : Ma
   rw [hUV]
   exact (Matrix.rank_mul_le_left U V).trans ((Matrix.rank_le_card_width U).trans (by simp))
 
-/-- Its columns live on the x-bits of row `i`. -/
 theorem colSpace_bitProj_editedEntry_le {K : Type} [Field K] {a b c : ℕ} (C D : Mat K a b) (C' D' : Mat K b c)
     (p : Fin b → K) (i : Fin a) (l : Fin c) :
     SteinerRigidity.colSpace (bitProj (editedEntry C D C' D' p i l)) ≤
@@ -1881,7 +1597,6 @@ theorem colSpace_bitProj_editedEntry_le {K : Type} [Field K] {a b c : ℕ} (C D 
   rintro _ ⟨y, rfl⟩ x hx
   simp [Matrix.mulVec, dotProduct, Matrix.vecMulVec_apply, Pi.single_apply, Prod.ext_iff, hx]
 
-/-- Its rows live on the y-bits of column `l`. -/
 theorem rowSpace_bitProj_editedEntry_le {K : Type} [Field K] {a b c : ℕ} (C D : Mat K a b) (C' D' : Mat K b c)
     (p : Fin b → K) (i : Fin a) (l : Fin c) :
     SteinerRigidity.rowSpace (bitProj (editedEntry C D C' D' p i l)) ≤
@@ -1891,9 +1606,6 @@ theorem rowSpace_bitProj_editedEntry_le {K : Type} [Field K] {a b c : ℕ} (C D 
   simp only at hy
   simp [Matrix.vecMul, dotProduct, Matrix.vecMulVec_apply, Pi.single_apply, Prod.ext_iff, hy]
 
-/-- **RS-D1E's Lemma 2, counted** (over a field): a word computed with `m` plain products that agrees with an
-edited prefix-sum entry at every bit pair's four points has `m ≥ #{k : d_ik p_k d′_kl ≠ 0} / 2`, whatever the
-committed constants. (One entry; entries with disjoint live terms add up, `editedEntries_products_ge`.) -/
 theorem editedEntry_products_ge {K : Type} [Field K] [DecidableEq K] {a b c m : ℕ} (C D : Mat K a b)
     (C' D' : Mat K b c) (p : Fin b → K) (i : Fin a) (l : Fin c)
     (u v : Fin m → Aff (Fin a × Fin b) (Fin b × Fin c) K) (r : Aff (Fin a × Fin b) (Fin b × Fin c) K)
@@ -1920,10 +1632,6 @@ theorem Aff.eval_sum {X Y K : Type} [Fintype X] [Fintype Y] [CommRing K] {q : �
   simp only [Aff.sum, Aff.eval, Finset.sum_add_distrib, Finset.sum_mul]
   rw [Finset.sum_comm (s := (Finset.univ : Finset X)), Finset.sum_comm (s := (Finset.univ : Finset Y))]
 
-/-- **Entries with disjoint live terms add up** (RS-D1E's Theorem B accounting without merges, over a field): if `m`
-plain products, shared, compute `q` edited prefix-sum entries `(i_e, l_e)` at distinct rows and distinct columns (each
-entry's word a linear combination of the products plus a plain word, agreeing at every bit pair's four points), then
-`2m ≥ Σ_e #{k : d_(i_e k) p_k d′_(k l_e) ≠ 0}`, whatever the committed constants. -/
 theorem editedEntries_products_ge {K : Type} [Field K] [DecidableEq K] {a b c m q : ℕ} (C D : Mat K a b)
     (C' D' : Mat K b c) (p : Fin b → K) (ent : Fin q → Fin a × Fin c)
     (hrow : Function.Injective fun e => (ent e).1) (hcol : Function.Injective fun e => (ent e).2)
@@ -1977,14 +1685,12 @@ theorem editedEntries_products_ge {K : Type} [Field K] [DecidableEq K] {a b c m 
     _ ≤ (bitProj W).rank := hdiag ▸ Matrix.rank_submatrix_le _ _ _
     _ ≤ 2 * m := hW
 
-/-- The projection is homogeneous. -/
 theorem bitProj_smul {X Y K : Type} [DecidableEq X] [DecidableEq Y] [CommRing K] (k : K) (f : (X ⊕ Y → K) → K) :
     bitProj (fun z => k * f z) = k • bitProj f := by
   ext x y
   simp only [bitProj, Matrix.smul_apply, smul_eq_mul]
   ring
 
-/-- Each entry's projection, read off the products it combines: `Σ_j λ_ej (α_uj γ_vjᵀ + α_vj γ_ujᵀ)`. -/
 theorem bitProj_editedEntry_of_products {K : Type} [CommRing K] {a b c m : ℕ} (C D : Mat K a b) (C' D' : Mat K b c)
     (p : Fin b → K) (i : Fin a) (l : Fin c) (lam : Fin m → K) (u v : Fin m → Aff (Fin a × Fin b) (Fin b × Fin c) K)
     (r : Aff (Fin a × Fin b) (Fin b × Fin c) K)
@@ -2004,10 +1710,6 @@ theorem bitProj_editedEntry_of_products {K : Type} [CommRing K] {a b c m : ℕ} 
   refine Finset.sum_congr rfl fun j _ => ?_
   rw [bitProj_smul (lam j) (fun z => (u j).eval z * (v j).eval z), bitProj_mul]
 
-/-- **Entries at distinct columns, rows shared, merges free** (the flattening with the entries on the row side): if
-`m` plain products, shared, compute `q` edited prefix-sum entries at distinct columns `l_e`, each entry's word any
-linear combination of the products plus a plain word, then `2m ≥ Σ_e r_e`, whatever the committed constants.
-Sharing rows and columns both needs Theorem B's charge (`editedEntries_products_ge_shared`). -/
 theorem editedEntries_products_ge_cols {K : Type} [Field K] [DecidableEq K] {a b c m q : ℕ} (C D : Mat K a b)
     (C' D' : Mat K b c) (p : Fin b → K) (ent : Fin q → Fin a × Fin c)
     (hcol : Function.Injective fun e => (ent e).2)
@@ -2056,8 +1758,6 @@ theorem editedEntries_products_ge_cols {K : Type} [Field K] [DecidableEq K] {a b
     _ ≤ Φ.rank := hdiag ▸ Matrix.rank_submatrix_le _ _ _
     _ ≤ 2 * m := hΦ
 
-/-- **Entries at distinct rows, columns shared, merges free** (the flattening with the entries on the column
-side). -/
 theorem editedEntries_products_ge_rows {K : Type} [Field K] [DecidableEq K] {a b c m q : ℕ} (C D : Mat K a b)
     (C' D' : Mat K b c) (p : Fin b → K) (ent : Fin q → Fin a × Fin c)
     (hrow : Function.Injective fun e => (ent e).1)
@@ -2174,12 +1874,6 @@ theorem root_isHead : ∀ (n : ℕ) (j : Fin N), j.val = n → ∀ {h}, P.root j
 /-- Some target's word hangs from the head `h`. -/
 def Hosts {q : ℕ} (t : Fin q → Fin N) (h : Fin N) : Prop := ∃ e, P.root (t e) = some h
 
-/-- **The forest is a Steiner tree** (Theorem B's tree decomposition, re-rooted at 0): label the words by
-matrices, each step's label at rank distance at most 2 from its parent's (the zero word's label is 0), and the
-targets of rank at most `b`. Some Steiner tree reaches 0 and every target's label, with length at most `2m + b H`:
-`m` the steps, `H` the heads whose tree holds a target. Each such tree joins 0 through one of its targets (length at
-most `b`); a head's tree with no target is shifted by its head's label, which keeps its edge lengths and puts the
-head at 0. -/
 theorem exists_steinerTree {F : Type} [Field F] {m n : Type} [Fintype m] [Fintype n] {q : ℕ}
     (lab : Fin N → Matrix m n F) (hstep : ∀ j, P.isHead j = false → (lab j - (P.parent j).elim 0 lab).rank ≤ 2)
     (t : Fin q → Fin N) {b : ℕ} (hb : ∀ e, (lab (t e)).rank ≤ b) :
@@ -2323,12 +2017,6 @@ structure AccumProg (N : ℕ) (X Y K : Type) [Fintype X] [Fintype Y] [CommRing K
   v : Fin N → Aff X Y K
   step : ∀ j, isHead j = false → ∀ z, val j z = (parent j).elim 0 (fun k => val k z) + (u j).eval z * (v j).eval z
 
-/-- **Theorem B's accounting over a field, entries sharing rows and columns** (A3's Theorem B at one bit pair, for
-RS-D1E's edited prefix-sum entries): if a computation in Theorem B's model commits, for `q` edited prefix-sum
-entries at distinct cells `(i_e, l_e)`, rows and columns shared freely, words that agree with the entries at every
-bit pair's four points, then `Σ_e #{k : d_(i_e k) p_k d′_(k l_e) ≠ 0} ≤ 2m + b H`, with `m` its products and `H` the
-heads whose merge-free tree holds a committed entry, whatever the committed constants. With accumulators only
-(`H = 0`) that is `2m ≥ Σ_e r_e`; each hosting head costs at most `b` (Theorem B's `L` per head). -/
 theorem editedEntries_products_ge_shared {K : Type} [Field K] [DecidableEq K] {a b c N q : ℕ} (C D : Mat K a b)
     (C' D' : Mat K b c) (p : Fin b → K) (P : AccumProg N (Fin a × Fin b) (Fin b × Fin c) K)
     (ent : Fin q → Fin a × Fin c) (hent : Function.Injective ent) (t : Fin q → Fin N)
@@ -2399,9 +2087,6 @@ def RoundsHyp (Mc : Machine) (S : Service) (Ω : Type) [Fintype Ω] (R : ℕ) (p
       (∀ x, V x ≤ Vmax) ∧
       ∀ x, (R - G.deficiency x) * F₀ - V x - R * sl ≤ Mc.charge M (e.symm x, r)
 
-/-- **The window's service floor from Theorem S** (in place of Theorem M): under the window's rounds, every adversary
-that commits first has its accepted runs charged below `(R − D) F₀ − Vmax − R sl` with probability at most
-`e^{−(1−p) D} + R (δb + δz)`. -/
 theorem serviceFloor_of_rounds {Mc : Machine} {S : Service} {Ω : Type} [Fintype Ω] {R : ℕ}
     {p F₀ sl Vmax δb δz : ℝ} (h : RoundsHyp Mc S Ω R p F₀ sl Vmax δb δz) (hp : p ≤ 1) (hF₀ : 0 < F₀)
     (hδb : 0 ≤ δb) (hδz : 0 ≤ δz) (D : ℝ) :
@@ -2425,8 +2110,6 @@ def RoundsSlice {Ω : Type} [Fintype Ω] {R : ℕ} (p F₀ sl Vmax : ℝ) (acc :
     (∀ x, acc x → G.accepts x ∨ ∃ w, Bind w x ∨ ZK w x) ∧ (∀ x, V x ≤ Vmax) ∧
     ∀ x, (R - G.deficiency x) * F₀ - V x - R * sl ≤ cost x
 
-/-- **Theorem S on one slice**: its accepted runs charged below `(R − D) F₀ − Vmax − R sl` have probability at most
-`e^{−(1−p) D}` plus the slice's breaks, summed over the rounds. -/
 theorem RoundsSlice.prob_le {Ω : Type} [Fintype Ω] {R : ℕ} {p F₀ sl Vmax : ℝ} {acc : Paths Ω R → Prop}
     {cost : Paths Ω R → ℝ} {Bind ZK : Fin R → Paths Ω R → Prop} (h : RoundsSlice p F₀ sl Vmax acc cost Bind ZK)
     (hp : p ≤ 1) (hF₀ : 0 < F₀) (D : ℝ) :
@@ -2445,8 +2128,6 @@ theorem RoundsSlice.prob_le {Ω : Type} [Fintype Ω] {R : ℕ} {p F₀ sl Vmax :
   · exact Or.inl ⟨h, by linarith⟩
   · exact Or.inr ⟨w, mem_univ _, hw⟩
 
-/-- A finder's collision probability is at most its `ecr/sha-512` bound at any budget: the bound is `⊤` unless the
-finder meets the assumption within the budget. -/
 theorem ofReal_finderPr_le_ecrBound (H : Claims.Msg → Claims.Msg) (F : Claims.Finder) (q : ℝ) :
     ENNReal.ofReal (F.Pr H) ≤ Claims.ecrBound H F q := by
   unfold Claims.ecrBound
@@ -2455,12 +2136,6 @@ theorem ofReal_finderPr_le_ecrBound (H : Claims.Msg → Claims.Msg) (F : Claims.
     exact ENNReal.ofReal_le_ofReal (h1.trans (div_le_div_of_nonneg_right h.2 (by positivity)))
   · exact le_top
 
-/-- **The service floor per prover from the window's slices**: if every adversary that commits first has, at each
-value `r` of its coins, a slice of the window's rounds whose round-`w` breaks are at most `δb + βb · Pr[fb … w]` and
-`δz + βz · Pr[fz … w]`, then its accepted runs charged below `(R − D) F₀ − Vmax − R sl` have probability at most its
-`breakBound` at `ε ≥ e^{−(1−p) D}`, at any budget constants: each slice's bound is at most 1 and at most
-`ε + R (δb + δz)` plus its finder terms (`Claims.ecrBound` bounds each finder at every budget), and the slices
-average. -/
 theorem serviceFloorPerProver_of_slices {Mc : Machine} {S : Service} {Ω : Type} [Fintype Ω] {R : ℕ}
     {p F₀ sl Vmax δb βb δz βz : ℝ} (e : S.Seed ≃ Paths Ω R) (sha : Claims.Msg → Claims.Msg) (fb fz : Finders Mc S R)
     (h : ∀ (Ω' : Type) [Fintype Ω'] (M : Mc.Alg (S.Seed × Ω') (S.Com × S.Ans)),
@@ -2525,7 +2200,6 @@ structure GridService (n : ℕ) (g : ℤ) extends Service where
   range_check : ∀ c σ a, verify c σ a = true → ∀ i j, opened σ i j →
     |(committed c).1 i j| ≤ g ∧ |(committed c).2 i j| ≤ g
 
-/-- With every entry opened, an accepted transcript's committed instance is in `G_use`. -/
 theorem GridService.inGrid_of_accepts {n : ℕ} {g : ℤ} (S : GridService n g) (hall : ∀ σ i j, S.opened σ i j)
     {c : S.Com} {σ : S.Seed} {a : S.Ans} (h : S.verify c σ a = true) : InGrid g (S.committed c) :=
   fun i j => S.range_check c σ a h i j (hall σ i j)
@@ -2595,8 +2269,6 @@ theorem eval_honestEdit {Seed Coins Pf : Type} {n : ℕ} (E : Mc.Edit Seed n)
       (Mc.eval prove (y, Mc.eval m (E.edit y.1 y.2.1)), Mc.eval m (E.edit y.1 y.2.1)) := by
   simp only [honestEdit, Mc.eval_seq, Mc.eval_pair, Mc.eval_fst, Mc.eval_snd, eval_editMul, Prod.mk.eta]
 
-/-- `honestEdit` costs one run of `m` and two additions beyond the proof layer and the noise expansion:
-`time ≤ time m + 2 κadd n² + time gen + time prove`, with no peel. -/
 theorem time_honestEdit_le {Seed Coins Pf : Type} {n : ℕ} (E : Mc.Edit Seed n)
     (m : Mc.Alg (Mat R n n × Mat R n n) (Mat R n n))
     (prove : Mc.Alg ((Seed × (Mat R n n × Mat R n n) × Coins) × Mat R n n) Pf) :
@@ -2626,10 +2298,6 @@ def edited (S : Service) {n : ℕ} (E : Mc.Edit S.Seed n) (m : Mc.Alg (Mat R n n
   solve := Mc.honestEdit E m prove
   verify := S.verify
 
-/-- **Completeness of the edited protocol**: if `m` computes the edited product on every promised instance (`hm`), the
-proof layer's commitment reads neither σ nor the product (`hcom`, commit-first) and the verifier accepts its proof of
-the served product with probability at least `1 − η` on every promised instance (`hacc`), the edited protocol is
-complete. -/
 theorem edited_complete (S : Service) {n : ℕ} (E : Mc.Edit S.Seed n)
     (m : Mc.Alg (Mat R n n × Mat R n n) (Mat R n n))
     (prove : Mc.Alg ((S.Seed × (Mat R n n × Mat R n n) × S.Coins) × Mat R n n) (S.Com × S.Ans))
@@ -2659,7 +2327,6 @@ def EditFloor (S : Service) {n : ℕ} (E : Mc.Edit S.Seed n) (m : Mc.Alg (Mat R 
     (use : Mat R n n × Mat R n n → Prop) (F κ : ℝ) : Prop :=
   AdvFloor (Mc.edited S E m prove use) F κ
 
-/-- The edit floor reads only the service: it is the service's floor in the machine. -/
 theorem editFloor_iff (S : Service) {n : ℕ} (E : Mc.Edit S.Seed n) (m : Mc.Alg (Mat R n n × Mat R n n) (Mat R n n))
     (prove : Mc.Alg ((S.Seed × (Mat R n n × Mat R n n) × S.Coins) × Mat R n n) (S.Com × S.Ans))
     (use : Mat R n n × Mat R n n → Prop) (F κ : ℝ) :
@@ -2699,10 +2366,6 @@ theorem relativelySecure_of_editFloor (S : Service) {n : ℕ} (E : Mc.Edit S.See
     rw [add_mul, one_mul, div_mul_cancel₀ _ hN.ne', add_zero]
     linarith
 
-/-- **Relative security of edited instances per adversary** (route (c) per adversary, as
-`relativelySecure_of_editFloor`, which it supersedes): the service's floor per adversary (`ServiceFloorPerProver`, the
-edit floor read adversary by adversary) gives relative security per adversary at thresholds `κf(M) + δ'`, with
-`relativelySecure_of_editFloor`'s `ε`, `γ` and `N`. -/
 theorem relativelySecurePerProver_of_editFloor (S : Service) {n : ℕ} (E : Mc.Edit S.Seed n)
     (m : Mc.Alg (Mat R n n × Mat R n n) (Mat R n n))
     (prove : Mc.Alg ((S.Seed × (Mat R n n × Mat R n n) × S.Coins) × Mat R n n) (S.Com × S.Ans))
@@ -2731,13 +2394,10 @@ theorem relativelySecurePerProver_of_editFloor (S : Service) {n : ℕ} (E : Mc.E
   rw [add_mul, one_mul, div_mul_cancel₀ _ hN.ne', add_zero]
   linarith
 
-/-- The worst-case product computes the edited product on every instance. -/
 theorem eval_mul_edit {Seed : Type} {n : ℕ} (E : Mc.Edit Seed n) (σ : Seed) (x : Mat R n n × Mat R n n) :
     Mc.eval (Mc.mul n n n) (E.edit σ x) = E.product σ x :=
   Mc.eval_mul n n n _
 
-/-- **Route (c) on unrestricted operands** (`relativelySecure_of_editFloor` with the worst-case product `mul n n n`
-at `κ`, and every instance promised): reference `N = κ n³`. -/
 theorem relativelySecure_of_editFloor_wide (S : Service) {n : ℕ} (E : Mc.Edit S.Seed n)
     (prove : Mc.Alg ((S.Seed × (Mat R n n × Mat R n n) × S.Coins) × Mat R n n) (S.Com × S.Ans)) {κf δ η F : ℝ}
     (hcom : ∀ (σ σ' : S.Seed) (y : (Mat R n n × Mat R n n) × S.Coins) (C C' : Mat R n n),
@@ -2777,9 +2437,6 @@ variable {R : Type} [Ring R] (Mc : GridMatMachine R)
 /-- Both operands lie on the grid. -/
 def OnGrid {n : ℕ} (x : Mat R n n × Mat R n n) : Prop := (∀ i k, Mc.G (x.1 i k)) ∧ ∀ k j, Mc.G (x.2 k j)
 
-/-- **Route (c) on the grid**: when every promised instance's edits stay on the grid (`hgrid`) and the shape is one
-the grid product takes, the edited protocol with `mulG` is relatively secure against the grid reference
-`N = κG n³`, with `U = κG n³ + 2κadd n² + time gen + time prove`. -/
 theorem relativelySecure_of_editFloor_grid (S : Service) {n : ℕ} (E : Mc.Edit S.Seed n)
     (prove : Mc.Alg ((S.Seed × (Mat R n n × Mat R n n) × S.Coins) × Mat R n n) (S.Com × S.Ans))
     (use : Mat R n n × Mat R n n → Prop) {κf δ η F : ℝ} (hshape : Mc.shape n n n)
@@ -2800,8 +2457,6 @@ theorem relativelySecure_of_editFloor_grid (S : Service) {n : ℕ} (E : Mc.Edit 
     (fun σ x hx => Mc.eval_mulG n n n _ hshape (hgrid σ x hx).1 (hgrid σ x hx).2)
     ((Mc.time_mulG_le n n n hshape).trans_eq (by ring)) hcom hacc hfloor hκδ hF hFU hN
 
-/-- **Route (c) on the grid per adversary** (as `relativelySecure_of_editFloor_grid`, which it supersedes): the
-service's floor per adversary gives relative security per adversary at thresholds `κf(M) + δ'`. -/
 theorem relativelySecurePerProver_of_editFloor_grid (S : Service) {n : ℕ} (E : Mc.Edit S.Seed n)
     (prove : Mc.Alg ((S.Seed × (Mat R n n × Mat R n n) × S.Coins) × Mat R n n) (S.Com × S.Ans))
     (use : Mat R n n × Mat R n n → Prop) {δ' η F : ℝ}
@@ -2882,7 +2537,6 @@ theorem peelFullG_correct {n : ℕ} (hs : Mc.shape n n n) (x : Mat R n n × Mat 
   rw [Mc.eval_peelFullG hs b hg, ← Mc.eval_peelFull n b]
   exact Mc.peelFull_correct x b hb
 
-/-- The full-rank peel on the grid costs two grid products: `2 κG n³`. -/
 theorem time_peelFullG_le {n : ℕ} (hs : Mc.shape n n n) : Mc.time (Mc.peelFullG n) ≤ 2 * Mc.κG * (n : ℝ) ^ 3 := by
   apply le_trans
   · unfold peelFullG
@@ -2925,8 +2579,6 @@ theorem peelLowG_correct {n r : ℕ} (hs : Mc.LowShapes n r) (x : Mat R n n × M
   rw [Mc.eval_peelLowG hs b hg, ← Mc.eval_peelLow n r b]
   exact Mc.peelLow_correct x b hb
 
-/-- The low-rank peel on the grid costs two grid and two wide-by-grid products through `r`:
-`2 κG n² r + 2 κW n² r` (RS-MODEL §5's `10 n² r` u at `κG = 1`, `κW = 4`). -/
 theorem time_peelLowG_le {n r : ℕ} (hs : Mc.LowShapes n r) :
     Mc.time (Mc.peelLowG n r) ≤ 2 * Mc.κG * (n : ℝ) ^ 2 * r + 2 * Mc.κW * (n : ℝ) ^ 2 * r := by
   obtain ⟨h1, h2, h3⟩ := hs
@@ -2938,8 +2590,6 @@ theorem time_peelLowG_le {n r : ℕ} (hs : Mc.LowShapes n r) :
 
 variable {n : ℕ} {Inst : Type} {P : Protocol Mc.toMachine Inst (Mat R n n)} {emb : Inst → Mat R n n × Mat R n n}
 
-/-- **Full-rank masks, products typed by grid**: from extraction of on-grid valid blocks and the floor above
-`q = 2κG n³ + 2κadd n²`, `ε = εext + (1 + εext) q / (T − q)`. -/
 theorem secure_fullRank_grid (hmat : IsMatmulOn P emb) (hs : Mc.shape n n n) {εext δ η T : ℝ}
     (hext : ∀ (Ω : Type) [Fintype Ω] (M : Mc.Alg (P.Seed × Ω) P.Proof), CommitsFirst P (Mc.eval M) →
       δ ≤ acceptance P M → Extraction P (fun x b => MatMachine.ValidFull (emb x) b ∧ Mc.GridFull b) εext M η)
@@ -2952,8 +2602,6 @@ theorem secure_fullRank_grid (hmat : IsMatmulOn P emb) (hs : Mc.shape n n n) {ε
     (fun σ x C h => (hmat σ x C).1 h)
     (by linarith [Mc.time_peelFullG_le hs, Mc.time_corr_le n]) hT
 
-/-- **Rank-`r` masks, products typed by grid**: from extraction of on-grid valid blocks and the floor above
-`q = (2κG + 2κW) n² r + 2κadd n²`, `ε = εext + (1 + εext) q / (T − q)`. -/
 theorem secure_lowRank_grid (hmat : IsMatmulOn P emb) (r : ℕ) (hs : Mc.LowShapes n r) {εext δ η T : ℝ}
     (hext : ∀ (Ω : Type) [Fintype Ω] (M : Mc.Alg (P.Seed × Ω) P.Proof), CommitsFirst P (Mc.eval M) →
       δ ≤ acceptance P M → Extraction P (fun x b => MatMachine.ValidLow (r := r) (emb x) b ∧ Mc.GridLow b) εext M η)
@@ -2967,8 +2615,6 @@ theorem secure_lowRank_grid (hmat : IsMatmulOn P emb) (r : ℕ) (hs : Mc.LowShap
     (fun σ x C h => (hmat σ x C).1 h)
     (by linarith [Mc.time_peelLowG_le hs, Mc.time_corr_le n]) hT
 
-/-- **Rank-`r` masks by route 2, products typed by grid** (RS-MODEL §5): with every accepted adversary costing at
-least `F`, `ε = εext + ((2κG + 2κW) n² r + 2κadd n²) / F`, `(10 r + 2)/(c n)` on sm_120 for `F = c n³`. -/
 theorem secure_lowRank_advTime_grid (hmat : IsMatmulOn P emb) (r : ℕ) (hs : Mc.LowShapes n r) {εext δ η F : ℝ}
     (hext : ∀ (Ω : Type) [Fintype Ω] (M : Mc.Alg (P.Seed × Ω) P.Proof), CommitsFirst P (Mc.eval M) →
       δ ≤ acceptance P M → Extraction P (fun x b => MatMachine.ValidLow (r := r) (emb x) b ∧ Mc.GridLow b) εext M η)
@@ -3031,13 +2677,11 @@ theorem pairDiff_mul_left (k : R) (f : (V → R) → R) (u v : V) :
   simp only [pairDiff]
   ring
 
-/-- A product of two bit-affine operands: `α_u β_v + α_v β_u`; its constants cancel. -/
 theorem pairDiff_mul (A B : BitAff V R) {u v : V} (huv : u ≠ v) :
     pairDiff (fun z => A.eval z * B.eval z) u v = A.α u * B.α v + A.α v * B.α u := by
   simp only [pairDiff, BitAff.eval_bitInd, Finset.sum_pair huv, Finset.sum_singleton, Finset.sum_empty]
   ring
 
-/-- Bit-affine words project to 0. -/
 theorem pairDiff_aff (A : BitAff V R) {u v : V} (huv : u ≠ v) : pairDiff (fun z => A.eval z) u v = 0 := by
   simp only [pairDiff, BitAff.eval_bitInd, Finset.sum_pair huv, Finset.sum_singleton, Finset.sum_empty]
   ring
@@ -3045,8 +2689,6 @@ theorem pairDiff_aff (A : BitAff V R) {u v : V} (huv : u ≠ v) : pairDiff (fun 
 theorem two_eq_zero_F2 (x : ZMod 2) : x + x = 0 := by
   fin_cases x <;> decide
 
-/-- A word computed from products of bit-affine operands, projected mod 2: each product contributes the
-alternating form `a bᵀ + b aᵀ`, whose diagonal `2 a_u b_u` vanishes mod 2. -/
 theorem projF2_word (φ : R →+* ZMod 2) {ι : Type} (S : Finset ι) (lam : ι → R) (A B : ι → BitAff V R)
     (r : BitAff V R) :
     projF2 φ (fun z => ∑ j ∈ S, lam j * ((A j).eval z * (B j).eval z) + r.eval z) =
@@ -3069,7 +2711,6 @@ theorem projF2_word (φ : R →+* ZMod 2) {ι : Type} (S : Finset ι) (lam : ι 
     simp only [map_mul, map_add]
     ring
 
-/-- A sum of pairs of rank-one terms, indexed by any finite type, has rank at most twice its size. -/
 theorem rank_sum_vecMulVec_le_card {X Y ι K : Type} [Fintype X] [Fintype Y] [Fintype ι] [CommRing K]
     [StrongRankCondition K] (a c : ι → X → K) (b d : ι → Y → K) :
     (∑ j, (Matrix.vecMulVec (a j) (b j) + Matrix.vecMulVec (c j) (d j))).rank ≤ 2 * Fintype.card ι := by
@@ -3084,10 +2725,6 @@ theorem rank_sum_vecMulVec_le_card {X Y ι K : Type} [Fintype X] [Fintype Y] [Fi
   refine (Matrix.rank_mul_le_left U W).trans ((Matrix.rank_le_card_width U).trans ?_)
   simp [two_mul]
 
-/-- **Theorem K** (P2-FF round 5 §3.6), abstract: over any ring `R` with a map to `F₂` (`Z/2³²` in s32 wrap, `ℤ`
-exactly), a word that agrees with a target `T` at every bit point with at most two ones, and is a combination of
-the products of the bit-affine operands in `S` plus a bit-affine word, has `rank_F₂ P₂(T) ≤ 2 |S|`. The
-coefficients are any ring elements: integer operands and unscaled reads are what makes the word such a combination. -/
 theorem theoremK (φ : R →+* ZMod 2) {ι : Type} (S : Finset ι) (lam : ι → R) (A B : ι → BitAff V R)
     (r : BitAff V R) (T : (V → R) → R)
     (hT : ∀ U : Finset V, U.card ≤ 2 →
@@ -3146,7 +2783,6 @@ theorem aff_eval (P : Slp V R N) (z : V → R) (j : Fin N) :
     rw [Finset.sum_comm (s := (Finset.univ : Finset V)) (t := (Finset.univ : Finset (Fin j.val)))]
     ring
 
-/-- **The closed form**: every slot is a combination of the program's products plus a bit-affine word. -/
 theorem val_eq (P : Slp V R N) (z : V → R) (j : Fin N) :
     P.val z j = ∑ i, P.coef j i * ((P.opA i).eval z * (P.opB i).eval z) + (P.aff j).eval z := by
   obtain ⟨n, hn⟩ := j
@@ -3166,7 +2802,6 @@ theorem val_eq (P : Slp V R N) (z : V → R) (j : Fin N) :
       ring
 
 omit [Fintype V] in
-/-- Only products carry coefficients. -/
 theorem isProd_of_coef_ne_zero (P : Slp V R N) (j i : Fin N) (h : P.coef j i ≠ 0) : P.isProd i = true := by
   obtain ⟨n, hn⟩ := j
   induction n using Nat.strong_induction_on with
@@ -3200,7 +2835,6 @@ theorem pieces_isProd (P : Slp V R N) (c : Fin N) (c' : Option (Fin N)) {i : Fin
       exact P.isProd_of_coef_ne_zero k i hi
   · exact P.isProd_of_coef_ne_zero c i h
 
-/-- The cell-block's increment `val c − val c'` is a combination of its pieces plus a bit-affine word. -/
 theorem incr_eq (P : Slp V R N) (c : Fin N) (c' : Option (Fin N)) :
     ∃ r : BitAff V R, ∀ z, P.val z c - c'.elim 0 (fun k => P.val z k) =
       ∑ i ∈ P.pieces c c', (P.coef c i - c'.elim 0 (fun k => P.coef k i)) *
@@ -3216,8 +2850,6 @@ theorem incr_eq (P : Slp V R N) (c : Fin N) (c' : Option (Fin N)) :
     simp only [Option.elim_some, val_eq, BitAff.eval, sub_mul, Finset.sum_sub_distrib]
     ring
 
-/-- **Theorem K for a program's cell-block**: if the increment agrees with a target at every bit point with at most
-two ones, the target's `F₂` rank is at most twice the cell-block's pieces. -/
 theorem rank_projF2_le (φ : R →+* ZMod 2) [DecidableEq V] (P : Slp V R N) (c : Fin N) (c' : Option (Fin N))
     (T : (V → R) → R)
     (hT : ∀ U : Finset V, U.card ≤ 2 → P.val (bitInd U) c - c'.elim 0 (fun k => P.val (bitInd U) k) = T (bitInd U)) :
@@ -3226,8 +2858,6 @@ theorem rank_projF2_le (φ : R →+* ZMod 2) [DecidableEq V] (P : Slp V R N) (c 
   exact theoremK φ _ _ _ _ r T fun U hU => (hT U hU).symm.trans (hr _)
 
 omit [Fintype V] in
-/-- **Cell-pure runs add up**: if each certified cell-block needs `L` pieces and distinct ones share no product,
-the program has at least `L` products per certified cell-block. -/
 theorem card_mul_le {E : Type} (P : Slp V R N) (Cor : Finset E) (cur : E → Fin N) (prev : E → Option (Fin N))
     (L : ℕ) (hL : ∀ e ∈ Cor, L ≤ (P.pieces (cur e) (prev e)).card)
     (hpure : (Cor : Set E).PairwiseDisjoint fun e => P.pieces (cur e) (prev e)) :
@@ -3241,8 +2871,6 @@ theorem card_mul_le {E : Type} (P : Slp V R N) (Cor : Finset E) (cur : E → Fin
       exact Finset.mem_filter.mpr ⟨Finset.mem_univ _, P.pieces_isProd _ _ he⟩
 
 end Slp
-
-/-! ### The re-encoded design (P2-FF round 6 §2): `X = ⌊x/s⌋ + b` -/
 
 section Design
 
@@ -3258,7 +2886,6 @@ theorem dPrefix_zero (pc : Fin n → Fin B → Fin L → R) (vq : Fin B → Fin 
     simp only [Nat.le_zero, this, ↓reduceIte]
   · simp
 
-/-- The committed words' increments are the cell-blocks' targets. -/
 theorem dPrefix_succ (pc : Fin n → Fin B → Fin L → R) (vq : Fin B → Fin L → Fin n' → R) (w : Fin np → R)
     (i : Fin n) (l : Fin n') {t : ℕ} (h : t + 1 < B) (z : DBits n L np B n' → R) :
     dPrefix pc vq w i l (t + 1) z - dPrefix pc vq w i l t z = dIncr pc vq w i l ⟨t + 1, h⟩ z := by
@@ -3290,9 +2917,6 @@ theorem dX_α_inr [CommRing R] (vq : Fin B → Fin L → Fin n' → R) (t : Fin 
     (a : Fin B × Fin L × Fin n') :
     (dX (n := n) (np := np) vq t j l).α (.inr a) = if a = (t, j, l) then 1 else 0 := rfl
 
-/-- **The design's rank** (P2-FF round 6 §2): with a plane of odd weight (`w_0 = 1`), a cell-block's target has
-`F₂` rank `2L`: its projection has the identity on the rows `β_p₀(i, j)`, `b(t, j, l)` against the columns
-`b(t, j, l)`, `β_p₀(i, j)`. -/
 theorem rank_projF2_dIncr (φ : R →+* ZMod 2) (pc : Fin n → Fin B → Fin L → R) (vq : Fin B → Fin L → Fin n' → R)
     (w : Fin np → R) {p₀ : Fin np} (hw : φ (w p₀) = 1) (i : Fin n) (l : Fin n') (t : Fin B) :
     2 * L ≤ (projF2 φ (dIncr pc vq w i l t)).rank := by
@@ -3334,9 +2958,6 @@ theorem rank_projF2_dIncr (φ : R →+* ZMod 2) (pc : Fin n → Fin B → Fin L 
         rw [← hsub]
         exact Matrix.rank_submatrix_le M f g
 
-/-- **Theorem K on the re-encoded design**: a straight-line program over `R` (`Z/2³²`: s32 wrap) whose increment
-from the cell's previous committed word agrees with cell-block `(i, l, t)`'s target at every bit point with at most
-two ones has at least `L` pieces, whatever the committed `P`, `⌊x/s⌋`, the partners and the merges. -/
 theorem Slp.dIncr_products_ge (φ : R →+* ZMod 2) (pc : Fin n → Fin B → Fin L → R)
     (vq : Fin B → Fin L → Fin n' → R) (w : Fin np → R) {p₀ : Fin np} (hw : φ (w p₀) = 1) {N : ℕ}
     (P : Slp (DBits n L np B n') R N) (c : Fin N) (c' : Option (Fin N)) (i : Fin n) (l : Fin n') (t : Fin B)
@@ -3346,14 +2967,12 @@ theorem Slp.dIncr_products_ge (φ : R →+* ZMod 2) (pc : Fin n → Fin B → Fi
   have := (rank_projF2_dIncr φ pc vq w hw i l t).trans (P.rank_projF2_le φ c c' _ hT)
   omega
 
-/-- A cell's first committed word, correct at a bit point, certifies its first cell-block there. -/
 theorem Slp.incr_of_prefix_zero (pc : Fin n → Fin B → Fin L → R) (vq : Fin B → Fin L → Fin n' → R)
     (w : Fin np → R) {N : ℕ} (P : Slp (DBits n L np B n') R N) (c : Fin N) (i : Fin n) (l : Fin n') (h : 0 < B)
     (z : DBits n L np B n' → R) (hc : P.val z c = dPrefix pc vq w i l 0 z) :
     P.val z c - (none : Option (Fin N)).elim 0 (fun k => P.val z k) = dIncr pc vq w i l ⟨0, h⟩ z := by
   rw [Option.elim_none, sub_zero, hc, dPrefix_zero]
 
-/-- Two consecutive committed words of a cell, correct at a bit point, certify the cell-block between them there. -/
 theorem Slp.incr_of_prefix_succ (pc : Fin n → Fin B → Fin L → R) (vq : Fin B → Fin L → Fin n' → R)
     (w : Fin np → R) {N : ℕ} (P : Slp (DBits n L np B n') R N) (c c' : Fin N) (i : Fin n) (l : Fin n') {t : ℕ}
     (h : t + 1 < B) (z : DBits n L np B n' → R) (hc : P.val z c = dPrefix pc vq w i l (t + 1) z)
@@ -3405,12 +3024,6 @@ theorem QLane.ite_isPiece {M : Type} [Fintype M] [DecidableEq M] (x : QLane M) (
   | piece m₀ => simp [QLane.IsPiece]
   | junk => simp [QLane.IsPiece]
 
-/-- **Theorem H** (P2-FF round 6 §6, merges priced), the allocation. Quads `q` run `s q` slices, at `s q` slots a
-lane (`4 s q` a quad); each merged cell costs `h` slots. The premises are named:
-- Theorem J (round 5 §3): a quad with two full lanes has `s ≥ K`;
-- the rank bound: a quad with one full lane has `s ≥ K / 2`, and a merged cell's pieces carry `≥ K / 2` slices.
-
-With `h ≥ 2K/3`, the cost is at least `K` slots a useful cell (full lanes and merged cells). -/
 theorem theoremH {Q M : Type} [Fintype Q] [Fintype M] [DecidableEq M] (lane : Q → Fin 4 → QLane M) (s : Q → ℝ)
     (K h : ℝ) (hs : ∀ q, 0 ≤ s q) (hK : 0 ≤ K) (hh : 2 * K / 3 ≤ h)
     (hJ : ∀ q, 2 ≤ (univ.filter fun ℓ => lane q ℓ = .full).card → K ≤ s q)
@@ -3562,9 +3175,6 @@ which correctness on bits does not fix (`z_u² = z_u`), so this is what a correc
 def PairRankGe (T : (V → F) → F) (k : ℕ) : Prop :=
   ∀ M : Matrix V V F, (∀ u v, u ≠ v → M u v = pairDiff T u v) → k ≤ M.rank
 
-/-- **The rank bound in exact arithmetic**: a word that agrees with `T` at every bit point with at most two ones, and
-is a combination of the products of the bit-affine operands in `S` plus a word that projects to 0, has `2 |S|` at least
-`T`'s free-diagonal rank floor. -/
 theorem products_ge_of_pairRankGe {ι : Type} (S : Finset ι) (lam : ι → F) (A B : ι → BitAff V F)
     (r : (V → F) → F) (hr : ∀ u v, u ≠ v → pairDiff r u v = 0) (T : (V → F) → F) {k : ℕ}
     (hk : PairRankGe T k)
@@ -3590,7 +3200,6 @@ theorem products_ge_of_pairRankGe {ι : Type} (S : Finset ι) (lam : ι → F) (
   rw [hM, ← Finset.sum_coe_sort S]
   exact (rank_sum_vecMulVec_le_card _ _ _ _).trans (by simp)
 
-/-- A free-diagonal rank floor from an identity block off the diagonal. -/
 theorem pairRankGe_of_one {ι : Type} [Fintype ι] [DecidableEq ι] (T : (V → F) → F) (ρ γ : ι → V)
     (hne : ∀ a b, ρ a ≠ γ b) (hT : ∀ a b, pairDiff T (ρ a) (γ b) = if a = b then 1 else 0) :
     PairRankGe T (Fintype.card ι) := by
@@ -3601,9 +3210,6 @@ theorem pairRankGe_of_one {ι : Type} [Fintype ι] [DecidableEq ι] (T : (V → 
   calc Fintype.card ι = (1 : Matrix ι ι F).rank := Matrix.rank_one.symm
     _ ≤ M.rank := by rw [← hsub]; exact Matrix.rank_submatrix_le M ρ γ
 
-/-- **Two cells' free-diagonal rank floor** (Theorem J's step 3): identity blocks on rows `ρ₁` against columns `γ₁`
-and on `ρ₂` against `γ₂`, with a zero block on `ρ₁` against `γ₂`, give rank `2k` whatever the rest, the diagonal
-included: that submatrix is block-triangular with determinant 1. -/
 theorem pairRankGe_of_blocks {ι : Type} [Fintype ι] [DecidableEq ι] (T : (V → F) → F) (ρ₁ ρ₂ γ₁ γ₂ : ι → V)
     (h11 : ∀ a b, ρ₁ a ≠ γ₁ b) (h12 : ∀ a b, ρ₁ a ≠ γ₂ b) (h22 : ∀ a b, ρ₂ a ≠ γ₂ b)
     (hT11 : ∀ a b, pairDiff T (ρ₁ a) (γ₁ b) = if a = b then 1 else 0)
@@ -3641,7 +3247,6 @@ theorem pairDiff_dIncr {R : Type} [CommRing R] (pc : Fin n → Fin B → Fin L �
   rw [pairDiff_sum univ (fun j z => (dP pc w i t j).eval z * (dX vq t j l).eval z)]
   exact Finset.sum_congr rfl fun j _ => pairDiff_mul _ _ huv
 
-/-- A cell-block's target pairs `β_p(i, j)` with `b(t, j, l)` at weight `w_p`, and nothing else. -/
 theorem pairDiff_dIncr_inl_inr {R : Type} [CommRing R] (pc : Fin n → Fin B → Fin L → R)
     (vq : Fin B → Fin L → Fin n' → R) (w : Fin np → R) (i : Fin n) (l : Fin n') (t : Fin B)
     (a : Fin n × Fin L × Fin np) (b : Fin B × Fin L × Fin n') :
@@ -3668,7 +3273,6 @@ theorem pairDiff_dIncr_inr_inr {R : Type} [CommRing R] (pc : Fin n → Fin B →
   rw [pairDiff_dIncr pc vq w i l t (fun h' => h (Sum.inr_injective h'))]
   simp [dP_α_inr]
 
-/-- **A cell-block's free-diagonal rank floor** in exact arithmetic: `L`, from plane `p₀`'s weight 1. -/
 theorem pairRankGe_dIncr (pc : Fin n → Fin B → Fin L → F) (vq : Fin B → Fin L → Fin n' → F) (w : Fin np → F)
     {p₀ : Fin np} (hw : w p₀ = 1) (i : Fin n) (l : Fin n') (t : Fin B) :
     PairRankGe (dIncr pc vq w i l t) L := by
@@ -3680,9 +3284,6 @@ theorem pairRankGe_dIncr (pc : Fin n → Fin B → Fin L → F) (vq : Fin B → 
       · simp [hab, Ne.symm hab])
   simpa using this
 
-/-- **Two cell-blocks' free-diagonal rank floor** (Theorem J's step 3 on the design): `2L` for distinct cell-blocks.
-Sharing a row `i` makes each `j` a path centred at `β_p₀(i, j)`, sharing `(t, l)` one centred at `b(t, j, l)`, and
-otherwise the two edges are disjoint. -/
 theorem pairRankGe_dIncr_two (pc : Fin n → Fin B → Fin L → F) (vq : Fin B → Fin L → Fin n' → F) (w : Fin np → F)
     {p₀ : Fin np} (hw : w p₀ = 1) (c c' : DCells n n' B) (hne : c ≠ c') :
     PairRankGe (fun z => dIncr pc vq w c.1 c.2.1 c.2.2 z + dIncr pc vq w c'.1 c'.2.1 c'.2.2 z) (2 * L) := by
@@ -3788,7 +3389,6 @@ structure Computes (P : QuadRun Q M V F) (cell : Q → Fin 4 → C) (tgt : C →
 variable {P : QuadRun Q M V F} {cell : Q → Fin 4 → C} {tgt : C → (V → F) → F} {tgtM : M → (V → F) → F}
 
 omit [Fintype M] in
-/-- **The rank bound on one full lane**: a quad holding a cell with free-diagonal floor `K` has `2 s ≥ K`. -/
 theorem full_ge (hC : P.Computes cell tgt tgtM) {K : ℕ} (hone : ∀ c, PairRankGe (tgt c) K) (q : Q) (ℓ : Fin 4)
     (hℓ : P.lane q ℓ = .full) : K ≤ 2 * P.s q := by
   have := products_ge_of_pairRankGe univ (fun _ => (1 : F)) (P.A q) (fun j => P.B q j ℓ)
@@ -3797,9 +3397,6 @@ theorem full_ge (hC : P.Computes cell tgt tgtM) {K : ℕ} (hone : ∀ c, PairRan
   simpa using this
 
 omit [Fintype M] in
-/-- **Theorem J** (P2-FF round 5 §3) on a quad run: a quad with two full lanes, holding distinct cells whose summed
-targets have free-diagonal floor `2K`, has `s ≥ K`. The two lanes' words share each slice's `A`, so their sum is
-`Σ_j A_j (B_jℓ + B_jℓ')` plus a bit-affine word: `s` products. -/
 theorem theoremJ (hC : P.Computes cell tgt tgtM) {K : ℕ}
     (hpair : ∀ c c', c ≠ c' → PairRankGe (fun z => tgt c z + tgt c' z) (2 * K)) (q : Q)
     (h2 : 2 ≤ (univ.filter fun ℓ => P.lane q ℓ = .full).card) : K ≤ P.s q := by
@@ -3819,7 +3416,6 @@ theorem theoremJ (hC : P.Computes cell tgt tgtM) {K : ℕ}
   omega
 
 omit [Fintype M] in
-/-- **The rank bound on a merged cell**: its pieces carry `2 Σ s ≥ K` slices, for a target of floor `K`. -/
 theorem merged_ge (hC : P.Computes cell tgt tgtM) {K : ℕ} (hM : ∀ m, PairRankGe (tgtM m) K) (m : M) :
     K ≤ 2 * ∑ q, ∑ ℓ, if P.lane q ℓ = .piece m then P.s q else 0 := by
   classical
@@ -3855,9 +3451,6 @@ theorem merged_ge (hC : P.Computes cell tgt tgtM) {K : ℕ} (hM : ∀ m, PairRan
     simp only [h, Finset.sum_add_distrib]
     ring
 
-/-- **Theorem H on a quad run** (round 5 §3 and round 6 §6, in exact arithmetic): with merges at `h ≥ 2K/3` slots, a
-run whose cells have free-diagonal floor `K`, and pairs of distinct cells `2K`, pays at least `K` slots a useful cell
-(a full lane or a merged cell). Theorem J and the rank bounds are `theoremJ`, `full_ge` and `merged_ge`. -/
 theorem cost_ge (hC : P.Computes cell tgt tgtM) {K : ℕ} (hone : ∀ c, PairRankGe (tgt c) K)
     (hpair : ∀ c c', c ≠ c' → PairRankGe (fun z => tgt c z + tgt c' z) (2 * K))
     (hM : ∀ m, PairRankGe (tgtM m) K) (h : ℝ) (hh : 2 * (K : ℝ) / 3 ≤ h) :
@@ -3876,10 +3469,6 @@ theorem cost_ge (hC : P.Computes cell tgt tgtM) {K : ℕ} (hone : ∀ c, PairRan
 
 end QuadRun
 
-/-- **Theorem H on the re-encoded design**, in exact arithmetic over a field (FP8 operands and scaled reads
-included): a quad run whose full lanes and merged cells hold cell-blocks pays `L` slots a useful cell-block once a
-merged cell costs `h ≥ 2L/3` slots. Theorem J and the rank bounds come from the design's free-diagonal floors
-(`pairRankGe_dIncr`, `pairRankGe_dIncr_two`). -/
 theorem QuadRun.cost_ge_reEncoded {Q M : Type} [Fintype Q] [Fintype M] [DecidableEq M] {n L np B n' : ℕ}
     {P : QuadRun Q M (DBits n L np B n') F} (pc : Fin n → Fin B → Fin L → F) (vq : Fin B → Fin L → Fin n' → F)
     (w : Fin np → F) {p₀ : Fin np} (hw : w p₀ = 1) (cell : Q → Fin 4 → DCells n n' B) (cellM : M → DCells n n' B)
@@ -3891,8 +3480,6 @@ theorem QuadRun.cost_ge_reEncoded {Q M : Type} [Fintype Q] [Fintype M] [Decidabl
   QuadRun.cost_ge hC (fun _ => pairRankGe_dIncr pc vq w hw _ _ _) (fun c c' hne => pairRankGe_dIncr_two pc vq w hw c c' hne)
     (fun _ => pairRankGe_dIncr pc vq w hw _ _ _) h hh
 
-/-- At VF2's merge price, 32 MAC-units a merged word on int8-rate kinds (round 6 §6), every `L ≤ 48` qualifies:
-`c = 1` at the adopted `L = 32`. -/
 theorem QuadRun.cost_ge_reEncoded_32 {Q M : Type} [Fintype Q] [Fintype M] [DecidableEq M] {n L np B n' : ℕ}
     {P : QuadRun Q M (DBits n L np B n') F} (pc : Fin n → Fin B → Fin L → F) (vq : Fin B → Fin L → Fin n' → F)
     (w : Fin np → F) {p₀ : Fin np} (hw : w p₀ = 1) (cell : Q → Fin 4 → DCells n n' B) (cellM : M → DCells n n' B)
@@ -3937,7 +3524,6 @@ def CrossRankLe (π : (Vl ⊕ Vr → R) → R) (m : ℕ) : Prop :=
   ∃ (a : Fin m → Vl → R) (b : Fin m → Vr → R), ∀ u v, pairDiff π (.inl u) (.inr v) = ∑ s, a s u * b s v
 
 omit [Fintype Vl] [Fintype Vr] in
-/-- A one-sided product's cross block is the outer product of its factors' first differences: rank 1. -/
 theorem OneSided.crossRankLe {π : (Vl ⊕ Vr → R) → R} (hπ : OneSided π) : CrossRankLe π 1 := by
   obtain ⟨g, h, hg, hh, hgh⟩ := hπ
   refine ⟨fun _ u => g (bitInd {.inl u}) - g (bitInd ∅), fun _ v => h (bitInd {.inr v}) - h (bitInd ∅),
@@ -3949,7 +3535,6 @@ theorem OneSided.crossRankLe {π : (Vl ⊕ Vr → R) → R} (hπ : OneSided π) 
   simp only [pairDiff, hgh, e1, e2, e3, e4, Fin.sum_univ_one]
   ring
 
-/-- An affine product's cross block has rank at most 2. -/
 theorem AffProd.crossRankLe {π : (Vl ⊕ Vr → R) → R} (hπ : AffProd π) : CrossRankLe π 2 := by
   obtain ⟨A, B, hAB⟩ := hπ
   refine ⟨![fun u => A.α (.inl u), fun u => B.α (.inl u)], ![fun v => B.α (.inr v), fun v => A.α (.inr v)],
@@ -3979,8 +3564,6 @@ theorem AffProd.gProd {π : (Vl ⊕ Vr → R) → R} (hπ : AffProd π) : GProd 
 def fdiff (o : (Vl ⊕ Vr → R) → R) (u : Vl ⊕ Vr) : R := o (bitInd {u}) - o (bitInd ∅)
 
 omit [Fintype Vl] [Fintype Vr] in
-/-- A product of two operands with zero second difference on the pair `(u, v)` has second difference
-`δo(u) δo′(v) + δo′(u) δo(v)` there. -/
 theorem pairDiff_mul_flat {o o' : (Vl ⊕ Vr → R) → R} {u v : Vl ⊕ Vr} (ho : pairDiff o u v = 0)
     (ho' : pairDiff o' u v = 0) :
     pairDiff (fun z => o z * o' z) u v = fdiff o u * fdiff o' v + fdiff o' u * fdiff o v := by
@@ -4011,9 +3594,6 @@ theorem UAffB.flat_inr_inr {o : (Vl ⊕ Vr → R) → R} (ho : UAffB o) {y y' : 
   simp only [pairDiff, e1, e2, e3]
   ring
 
-/-- **The flattened cross block of a stack of words**: words `T_t`, each a combination of the products in `S` plus a
-bit-affine word at every bit point with at most two ones, have a stacked cross block (rows `(t, U bit)`, columns
-coins) of rank at most the products' summed cross ranks, over any field the ring maps to. -/
 theorem rank_cross_le {F : Type} [Field F] (φ : R →+* F) {ι τ : Type} [Fintype τ] (S : Finset ι)
     (π : ι → (Vl ⊕ Vr → R) → R) (m : ι → ℕ) (hπ : ∀ k ∈ S, CrossRankLe (π k) (m k)) (c : τ → ι → R)
     (r : τ → BitAff (Vl ⊕ Vr) R) (T : τ → (Vl ⊕ Vr → R) → R)
@@ -4069,9 +3649,6 @@ theorem altForm_swap (S : Finset ι) (a b : ι → X ⊕ Y → F) (c : τ → ι
   Finset.sum_congr rfl fun r _ => by ring
 
 omit [Fintype X] [Fintype Y] [Fintype τ] [DecidableEq Y] in
-/-- **Winograd's substitution, one product** (RS-E-REF r5 V.1): on the hyperplane where product `r₀`'s first
-operand vanishes, solved for its coin `y₀` (`s = a_r₀(y₀) ≠ 0`), `r₀` drops out and every operand `ℓ` becomes
-`ℓ − ℓ(y₀)/s · a_r₀`; over characteristic 2 the forms change by `a_r₀ ∧ (column y₀)` only. -/
 theorem altForm_subst [DecidableEq ι] (h2 : (2 : F) = 0) (S : Finset ι) (a b : ι → X ⊕ Y → F) (c : τ → ι → F)
     {r₀ : ι} (y₀ : Y) (hs : a r₀ (.inr y₀) ≠ 0) (t : τ) (u v : X ⊕ Y) :
     altForm (S.erase r₀) (fun r w => a r w - a r (.inr y₀) / a r₀ (.inr y₀) * a r₀ w)
@@ -4087,10 +3664,6 @@ theorem altForm_subst [DecidableEq ι] (h2 : (2 : F) = 0) (S : Finset ι) (a b :
   field_simp
   linear_combination (c t r * a r (.inr y₀) * b r (.inr y₀) * a r₀ u * a r₀ v) * h2
 
-/-- **Lemma G** (RS-E-REF r5 V.1, over characteristic 2): products whose operands have first differences `a_r`,
-`b_r`, combined into words whose coin–coin block vanishes, give a stacked cross block (rows `(word, U bit)`, columns
-coins) of rank at most the number of products. U–U junk is free. By induction, removing one product with a coin in
-its support (`altForm_subst`): the coin–coin blocks stay zero and the cross block changes by a rank-one term. -/
 theorem lemmaG (h2 : (2 : F) = 0) (S : Finset ι) (a b : ι → X ⊕ Y → F) (c : τ → ι → F)
     (hYY : ∀ t y y', y ≠ y' → altForm S a b c t (.inr y) (.inr y') = 0) :
     (Matrix.of fun (x : τ × X) (y : Y) => altForm S a b c x.1 (.inl x.2) (.inr y)).rank ≤ S.card := by
@@ -4145,7 +3718,6 @@ section ChainDesign
 
 variable {R : Type} [CommRing R] {n L np B n' : ℕ}
 
-/-- A committed prefix word pairs `β_p(i, j)` with every `b(t′, j, l)`, `t′ ≤ t`, at weight `w_p`. -/
 theorem pairDiff_dPrefix_inl_inr (pc : Fin n → Fin B → Fin L → R) (vq : Fin B → Fin L → Fin n' → R)
     (w : Fin np → R) (i : Fin n) (l : Fin n') (t : ℕ) (a : Fin n × Fin L × Fin np) (b : Fin B × Fin L × Fin n') :
     pairDiff (dPrefix pc vq w i l t) (.inl a) (.inr b) =
@@ -4166,7 +3738,6 @@ theorem pairDiff_dPrefix_inl_inr (pc : Fin n → Fin B → Fin L → R) (vq : Fi
     simp [this]
   · simp
 
-/-- A committed prefix word has no coin–coin terms. -/
 theorem pairDiff_dPrefix_inr_inr (pc : Fin n → Fin B → Fin L → R) (vq : Fin B → Fin L → Fin n' → R)
     (w : Fin np → R) (i : Fin n) (l : Fin n') (t : ℕ) {b b' : Fin B × Fin L × Fin n'} (h : b ≠ b') :
     pairDiff (dPrefix pc vq w i l t) (.inr b) (.inr b' : DBits n L np B n') = 0 := by
@@ -4177,7 +3748,6 @@ theorem pairDiff_dPrefix_inr_inr (pc : Fin n → Fin B → Fin L → R) (vq : Fi
   refine Finset.sum_eq_zero fun t' _ => ?_
   rw [pairDiff_mul_left, pairDiff_dIncr_inr_inr pc vq w i l t' h, mul_zero]
 
-/-- Differencing consecutive coin blocks undoes the prefix sum. -/
 theorem sum_prefix_diff {F : Type} [CommRing F] (T S : Fin B) :
     ∑ t' : Fin B, (if t'.val ≤ T.val then (1 : F) else 0) *
       ((if t' = S then 1 else 0) - (if t'.val = S.val + 1 then 1 else 0)) = if S = T then 1 else 0 := by
@@ -4210,10 +3780,6 @@ theorem sum_prefix_diff {F : Type} [CommRing F] (T S : Fin B) :
     · have h1' : ¬S.val + 1 ≤ T.val := by omega
       simp [h1, h1', hST]
 
-/-- **A row's prefix words' stacked cross block** (RS-E-REF r4 IV.2, r5 V.1's row scope): with a plane whose weight
-maps to 1, prefix words of row `i` at distinct (column, block) pairs `cl` have a flattened cross block of rank at
-least `L` a word. On the rows `β_p₀(i, j)` it is `[j = j′][l = l′][t′ ≤ t]`, and differencing consecutive coin blocks
-per column (`Q`) turns it into the identity. -/
 theorem rank_cross_dRow {F : Type} [Field F] (φ : R →+* F) (pc : Fin n → Fin B → Fin L → R)
     (vq : Fin B → Fin L → Fin n' → R) (w : Fin np → R) {p₀ : Fin np} (hw : φ (w p₀) = 1) (i : Fin n) {τ : Type}
     [Fintype τ] [DecidableEq τ] (cl : τ → Fin n' × Fin B) (hcl : Function.Injective cl) :
@@ -4265,8 +3831,6 @@ theorem rank_cross_dRow {F : Type} [Field F] (φ : R →+* F) (pc : Fin n → Fi
     _ ≤ (M.submatrix ρ id).rank := Matrix.rank_mul_le_left _ _
     _ ≤ M.rank := Matrix.rank_submatrix_le M ρ id
 
-/-- **The prefix words' stacked cross block** (RS-E-REF r4 IV.2), one cell: `T` prefix words of cell `(i, l)` at
-distinct blocks `tt` have a flattened cross block of rank at least `T L` (`rank_cross_dRow` in one column). -/
 theorem rank_cross_dPrefix {F : Type} [Field F] (φ : R →+* F) (pc : Fin n → Fin B → Fin L → R)
     (vq : Fin B → Fin L → Fin n' → R) (w : Fin np → R) {p₀ : Fin np} (hw : φ (w p₀) = 1) (i : Fin n) (l : Fin n') {τ : Type} [Fintype τ]
     [DecidableEq τ] (tt : τ → Fin B) (htt : Function.Injective tt) :
@@ -4274,9 +3838,6 @@ theorem rank_cross_dPrefix {F : Type} [Field F] (φ : R →+* F) (pc : Fin n →
       φ (pairDiff (dPrefix pc vq w i l (tt x.1).val) (.inl x.2) (.inr v))).rank :=
   rank_cross_dRow φ pc vq w hw i (fun t => (l, tt t)) fun _ _ h => htt (congrArg Prod.snd h)
 
-/-- **The chain lemma** (RS-E-REF r4 IV.2, r5 V.1's row scope): `T` committed prefix words of one row at distinct
-(column, block) pairs, each a combination of the products in `S` plus a bit-affine word and right at every bit point
-with at most two ones, have `T L` at most the products' summed cross ranks. -/
 theorem chain_products_ge {F : Type} [Field F] (φ : R →+* F) (pc : Fin n → Fin B → Fin L → R)
     (vq : Fin B → Fin L → Fin n' → R) (w : Fin np → R) {p₀ : Fin np} (hw : φ (w p₀) = 1) (i : Fin n) {ι τ : Type}
     [Fintype τ] [DecidableEq τ] (cl : τ → Fin n' × Fin B) (hcl : Function.Injective cl) (S : Finset ι)
@@ -4303,16 +3864,12 @@ def ChainBound (R : Type) [CommRing R] (n L np B n' : ℕ) (w : Fin np → R)
         dPrefix pc vq w i (cl t).1 (cl t).2.val (bitInd U)) →
     L * Fintype.card τ ≤ c * S.card
 
-/-- **The chain lemma for one-sided products** (RS-E-REF r4 IV.2): with a plane whose weight maps to 1, `T`
-committed prefix words of a row need `T L` one-sided products of any form, in any arithmetic with a map to a field:
-`F₂` for s32 wrap (`toF2`) or exact integer sums, the field itself for exact arithmetic over a field. -/
 theorem chainBound_oneSided {F : Type} [Field F] (φ : R →+* F) {w : Fin np → R} {p₀ : Fin np}
     (hw : φ (w p₀) = 1) : ChainBound R n L np B n' w OneSided 1 := by
   intro ι τ _ _ S π hπ pc vq i cl hcl coef r hT
   have := chain_products_ge φ pc vq w hw i cl hcl S π (fun _ => 1) (fun k hk => (hπ k hk).crossRankLe) coef r hT
   simpa using this
 
-/-- With affine mixed products allowed, the cross block alone gives factor 2: each counts twice. -/
 theorem chainBound_two {F : Type} [Field F] (φ : R →+* F) {w : Fin np → R} {p₀ : Fin np}
     (hw : φ (w p₀) = 1) : ChainBound R n L np B n' w (fun π => OneSided π ∨ AffProd π) 2 := by
   classical
@@ -4327,8 +3884,6 @@ theorem chainBound_two {F : Type} [Field F] (φ : R →+* F) {w : Fin np → R} 
         Finset.sum_le_sum fun k _ => by split_ifs <;> omega
     _ = 2 * S.card := by rw [Finset.sum_const, smul_eq_mul, mul_comm]
 
-/-- A combination of products plus a bit-affine word has, on a pair of distinct bits, the products' combined
-second differences. -/
 theorem pairDiff_comb {ι : Type} (S : Finset ι) (π : ι → (DBits n L np B n' → R) → R) (c : ι → R)
     (A : BitAff (DBits n L np B n') R) (T : (DBits n L np B n' → R) → R)
     (hT : ∀ U : Finset (DBits n L np B n'), U.card ≤ 2 → ∑ k ∈ S, c k * π k (bitInd U) + A.eval (bitInd U) = T (bitInd U))
@@ -4341,12 +3896,6 @@ theorem pairDiff_comb {ι : Type} (S : Finset ι) (π : ι → (DBits n L np B n
     pairDiff_sum S (fun k z => c k * π k z)]
   exact Finset.sum_congr rfl fun k _ => pairDiff_mul_left _ _ _ _
 
-/-- **The chain lemma for mixed products** (RS-E-REF r5 V.1, Lemma G), over any field of characteristic 2 the ring
-maps to (`F₂` for s32 wrap, `toF2`): `T` committed prefix words of a row need `T L` products whose operands are any
-function of U's bits plus an affine function of the bits (`GProd`), mixed bytes included. The words' cross blocks are
-the products' alternating forms (`pairDiff_mul_flat`), whose coin–coin blocks vanish with the targets'
-(`pairDiff_dPrefix_inr_inr`), so Lemma G bounds their rank by the products' count, and `rank_cross_dRow` gives
-`T L`. Over `ℚ` the factor fails (`not_chainBound_affProd_rat`). -/
 theorem chainBound_gProd {F : Type} [Field F] (φ : R →+* F) (h2 : (2 : F) = 0) {w : Fin np → R} {p₀ : Fin np}
     (hw : φ (w p₀) = 1) : ChainBound R n L np B n' w GProd 1 := by
   classical
@@ -4398,8 +3947,6 @@ def winogradB : BitAff (DBits 1 2 1 1 1) ℚ :=
 def winogradR : BitAff (DBits 1 2 1 1 1) ℚ :=
   ⟨0, Sum.elim (fun a => ![1 / 4, -1 / 4] a.2.1) fun b => ![1, -1] b.2.1⟩
 
-/-- Over `ℚ`, one mixed affine product plus an affine word is the prefix word `x₀ y₀ + x₁ y₁` of `L = 2` at every
-bit point. -/
 theorem winograd_rat_word (z : DBits 1 2 1 1 1 → ℚ) (hz : ∀ v, z v * z v = z v) :
     winogradA.eval z * winogradB.eval z + winogradR.eval z = dPrefix 0 0 (fun _ => 1) 0 0 0 z := by
   have hx0 := hz (.inl (0, 0, 0))
@@ -4412,8 +3959,8 @@ theorem winograd_rat_word (z : DBits 1 2 1 1 1 → ℚ) (hz : ∀ v, z v * z v =
   simp
   linear_combination (1 / 4 : ℚ) * hx1 - (1 / 4 : ℚ) * hx0 + hy1 - hy0
 
-/-- **Lemma G needs characteristic 2**: over `ℚ` the chain bound fails at factor 1 for affine products, since one
-mixed product commits a word of `L = 2` (`winograd_rat_word`). -/
+/-- **Lemma G needs characteristic 2**: over `ℚ` the chain bound fails at factor 1 for affine products, because
+one mixed product commits a word of `L = 2` (`winograd_rat_word`). -/
 theorem not_chainBound_affProd_rat : ¬ChainBound ℚ 1 2 1 1 1 (fun _ => 1) AffProd 1 := by
   intro h
   have := h Unit Unit {()} (fun _ z => winogradA.eval z * winogradB.eval z)
@@ -4430,7 +3977,6 @@ variable {V R : Type} [Fintype V] [CommRing R] {N : ℕ}
 /-- Each slot's bit-affine part. -/
 def aff (P : SlpG V R N) : Fin N → BitAff V R := P.toSlp.aff
 
-/-- **The closed form**: every slot is a combination of the program's products plus a bit-affine word. -/
 theorem val_eq (P : SlpG V R N) (z : V → R) (j : Fin N) :
     P.val z j = ∑ i, P.coef j i * P.prod i z + (P.aff j).eval z := by
   obtain ⟨n, hn⟩ := j
@@ -4454,7 +4000,6 @@ theorem val_eq (P : SlpG V R N) (z : V → R) (j : Fin N) :
       ring
 
 omit [Fintype V] in
-/-- Only products carry coefficients. -/
 theorem isProd_of_coef_ne_zero (P : SlpG V R N) (j i : Fin N) (h : P.coef j i ≠ 0) : P.isProd i = true :=
   P.toSlp.isProd_of_coef_ne_zero j i h
 
@@ -4465,10 +4010,6 @@ section ChainRound
 variable {R : Type} [CommRing R] {n L np B n' : ℕ}
 
 open Classical in
-/-- **Row-pure runs add up** (the chain lemma, per round; RS-E-REF r5 V.1's row scope): if certified prefix words
-of distinct rows share no product, and the products are in a class with chain factor `c`, the program has at least
-`L / c` products per certified cell-block. Sharing among a row's cells, along their prefix chains included, is
-free. -/
 theorem SlpG.cells_card_le {w : Fin np → R} {Ok : ((DBits n L np B n' → R) → R) → Prop} {c : ℕ}
     (hc : ChainBound R n L np B n' w Ok c) {N : ℕ} (P : SlpG (DBits n L np B n') R N)
     (hOk : ∀ j, P.isProd j = true → Ok (P.prod j)) (pc : Fin n → Fin B → Fin L → R)
@@ -4619,8 +4160,6 @@ theorem cubeQuad_mul (A B : BitAff V R) : CubeQuad fun z => A.eval z * B.eval z 
   ring
 
 omit [Fintype V] in
-/-- A degree-2 function's first difference along `u` at `S` is its first difference at `0` plus `u`'s pair
-differences with `S`. -/
 theorem CubeQuad.firstDiff {f : (V → R) → R} (hf : CubeQuad f) (u : V) (S : Finset V) (hu : u ∉ S) :
     f (bitInd (insert u S)) - f (bitInd S) = f (bitInd {u}) - f (bitInd ∅) + ∑ v ∈ S, pairDiff f u v := by
   induction S using Finset.induction_on with
@@ -4633,8 +4172,6 @@ theorem CubeQuad.firstDiff {f : (V → R) → R} (hf : CubeQuad f) (u : V) (S : 
     linear_combination h + ih huS
 
 open Classical in
-/-- **The luck lemma for degree 2**, in any ring: a function of degree at most 2 on the cube that is not zero is
-nonzero on at least a quarter of the cube. -/
 theorem luck_quad {f : (V → R) → R} (hf : CubeQuad f) (hne : ∃ S : Finset V, f (bitInd S) ≠ 0) :
     Fintype.card (Finset V) ≤ 4 * (univ.filter fun S : Finset V => f (bitInd S) ≠ 0).card := by
   set Nz := univ.filter fun S : Finset V => f (bitInd S) ≠ 0 with hNz
@@ -4711,7 +4248,6 @@ theorem luck_quad {f : (V → R) → R} (hf : CubeQuad f) (hne : ∃ S : Finset 
       rw [hall, Finset.card_univ, Fintype.card_finset]
       omega
 
-/-- ... as a probability: a nonzero degree-2 error vanishes at uniform bits with probability at most `¾`. -/
 theorem prob_zero_le_of_cubeQuad {f : (V → R) → R} (hf : CubeQuad f) (hne : ∃ S : Finset V, f (bitInd S) ≠ 0) :
     prob (fun S : Finset V => f (bitInd S) = 0) ≤ 3 / 4 := by
   classical
@@ -4747,8 +4283,6 @@ section Spot
 
 variable {C V R : Type} [Fintype C] [Fintype V] [DecidableEq V] [CommRing R]
 
-/-- **The spot check's pass bound**: with degree-2 errors, a uniform cell and uniform bits find a zero with
-probability at most `1 − ¼ d`, `d` the share of uncertified cells. -/
 theorem prob_spot_le (e : C → (V → R) → R) (he : ∀ c, CubeQuad (e c)) :
     prob (fun a : C × Finset V => e a.1 (bitInd a.2) = 0) ≤ 1 - (1 - 3 / 4) * spotDef e := by
   classical
@@ -4777,7 +4311,6 @@ def RoundGame.Spot (R : Type) [CommRing R] {C V : Type} [Fintype C] [Fintype V] 
     (∃ e : C → (V → R) → R, (∀ c, CubeQuad (e c)) ∧ (∀ a, d a = spotDef e) ∧
       ∀ a, pass a → e a.1 (bitInd a.2) = 0) ∧ ∀ a, (next a).Spot R
 
-/-- **Spot checks with degree-2 errors satisfy Theorem S's pass bound at `p = ¾`.** -/
 theorem RoundGame.passBound_spot : ∀ {n : ℕ} (G : RoundGame (C × Finset V) n), G.Spot R → G.PassBound (3 / 4)
   | _, .done, _ => trivial
   | _, .round d pass next, h => by
@@ -4785,8 +4318,6 @@ theorem RoundGame.passBound_spot : ∀ {n : ℕ} (G : RoundGame (C × Finset V) 
     exact ⟨⟨spotDef e, hd, (prob_mono hpass).trans (prob_spot_le e he)⟩,
       fun a => RoundGame.passBound_spot (next a) (h2 a)⟩
 
-/-- **`PathBound` at `p = ¾` for spot checks with degree-2 errors** (RS-E-REF r4 IV.4: the ¾ needs affine
-operands). -/
 theorem RoundGame.pathBound_spot {n : ℕ} (G : RoundGame (C × Finset V) n) (h : G.Spot R) : G.PathBound (3 / 4) :=
   G.pathBound_of_passBound (G.passBound_spot h)
 
@@ -4801,7 +4332,6 @@ theorem cubeQuad_dIncr (pc : Fin n → Fin B → Fin L → R) (vq : Fin B → Fi
   unfold dIncr
   exact CubeQuad.sum univ fun j _ => cubeQuad_mul _ _
 
-/-- The design's targets, the committed prefix words, are of degree 2 on the round's bits. -/
 theorem cubeQuad_dPrefix (pc : Fin n → Fin B → Fin L → R) (vq : Fin B → Fin L → Fin n' → R) (w : Fin np → R)
     (i : Fin n) (l : Fin n') (t : ℕ) : CubeQuad (dPrefix pc vq w i l t) := by
   unfold dPrefix
@@ -4812,7 +4342,6 @@ theorem cubeQuad_dPrefix (pc : Fin n → Fin B → Fin L → R) (vq : Fin B → 
   · simp only [h, ↓reduceIte]
     exact cubeQuad_zero
 
-/-- A program whose products have affine operands computes words of degree 2. -/
 theorem SlpG.cubeQuad_val {Vl Vr : Type} [Fintype Vl] [Fintype Vr] [DecidableEq Vl] [DecidableEq Vr] {N : ℕ}
     (P : SlpG (Vl ⊕ Vr) R N) (hOk : ∀ j, P.isProd j = true → AffProd (P.prod j)) (j : Fin N) :
     CubeQuad fun z => P.val z j := by
@@ -4823,9 +4352,6 @@ theorem SlpG.cubeQuad_val {Vl Vr : Type} [Fintype Vl] [Fintype Vr] [DecidableEq 
   · obtain ⟨A, B, hAB⟩ := hOk i (P.isProd_of_coef_ne_zero j i hc)
     exact ((cubeQuad_mul A B).congr fun z => (hAB z).symm).mul_left _
 
-/-- **The re-encoded design's errors are of degree 2** when the products have affine operands (one-sided or
-mixed): a word minus its committed prefix target. With `RoundGame.pathBound_spot`, a window of spot checks of such
-runs satisfies `PathBound (3/4)` on the design's alphabet, U's 7 uniform planes. -/
 theorem SlpG.cubeQuad_err {N : ℕ} (P : SlpG (DBits n L np B n') R N)
     (hOk : ∀ j, P.isProd j = true → AffProd (P.prod j)) (j : Fin N) (pc : Fin n → Fin B → Fin L → R)
     (vq : Fin B → Fin L → Fin n' → R) (w : Fin np → R) (i : Fin n) (l : Fin n') (t : ℕ) :
@@ -4871,9 +4397,6 @@ theorem luck_oneSided_point {Vl Vr : Type} [Fintype Vl] [Fintype Vr] [DecidableE
     have : ¬∀ b', (bitInd S : Vl ⊕ Vr → ℤ) (.inr b') = 0 := fun h => by simpa [bitInd, hx] using h b
     simp only [this, ↓reduceIte, mul_zero]
 
-/-- **The luck of a coin-affine error** (RS-E-REF r4 IV.4, the integer alphabet): if, given the U bits `a`, the
-error is affine in the coins, `f₀ a + Σ_{v ∈ S} f v a`, it vanishes at uniform `(a, S)` with probability at most
-`½ + ½ Pr_a[f v a = 0 for every coin v]`. -/
 theorem luck_coins {α V : Type} [Fintype α] [Fintype V] [DecidableEq V] (f₀ : α → R) (f : V → α → R) :
     prob (fun x : α × Finset V => f₀ x.1 + ∑ v ∈ x.2, f v x.1 = 0) ≤
       1 / 2 + 1 / 2 * prob fun a => ∀ v, f v a = 0 := by
@@ -4920,8 +4443,6 @@ theorem luck_coins {α V : Type} [Fintype α] [Fintype V] [DecidableEq V] (f₀ 
         1 / 2 * (Fintype.card (Finset V) : ℝ)) using 2
   exact (expect_mono hpt).trans (expect_affine_le (by norm_num) _ _)
 
-/-- A dropped term's coin coefficient `c + c' U(a)`, with `c'` a unit and the alphabet's `U` injective, vanishes for
-at most one letter: probability at most `1 / |α|`. -/
 theorem prob_dropped_le {α : Type} [Fintype α] (U : α → R) (hU : Function.Injective U) (c c' : R)
     (hc' : IsUnit c') : prob (fun a => c + c' * U a = 0) ≤ 1 / Fintype.card α := by
   classical
@@ -4932,10 +4453,6 @@ theorem prob_dropped_le {α : Type} [Fintype α] (U : α → R) (hU : Function.I
       exact hU (hc'.mul_left_cancel (by linear_combination ha - hb))
   exact div_le_div_of_nonneg_right (by exact_mod_cast h1) (by positivity)
 
-/-- **The luck on the re-encoded alphabet** (RS-E-REF r4 IV.4): a coin-affine error one of whose coin
-coefficients is a dropped term `c + c' U(a)` (`c'` a unit, `U` injective on the alphabet `α`) vanishes with
-probability at most `½ + 1 / (2 |α|)`. On U's 128 letters `±1, …, ±64` that is `½ + 2⁻⁸ = 0.5039`, RS-E-REF r4's
-best found (`luck_dropped_reEncoded`). -/
 theorem luck_dropped {α V : Type} [Fintype α] [Fintype V] [DecidableEq V] (f₀ : α → R) (f : V → α → R)
     (U : α → R) (hU : Function.Injective U) (v₀ : V) (c c' : R) (hc' : IsUnit c') (hv₀ : ∀ a, f v₀ a = c + c' * U a) :
     prob (fun x : α × Finset V => f₀ x.1 + ∑ v ∈ x.2, f v x.1 = 0) ≤ 1 / 2 + 1 / (2 * Fintype.card α) := by
@@ -4974,7 +4491,6 @@ theorem uRe_eq (a : Finset (Fin 7)) : uRe a = -64 + (uReN a : ZMod (2 ^ 32)) := 
   refine Finset.sum_congr rfl fun p _ => ?_
   fin_cases p <;> rfl
 
-/-- The 128 plane patterns give 128 distinct letters. -/
 theorem uRe_injective : Function.Injective uRe := by
   intro a b h
   rw [uRe_eq, uRe_eq, add_right_inj] at h
@@ -4984,7 +4500,6 @@ theorem uRe_injective : Function.Injective uRe := by
       Nat.mod_eq_of_lt ((uReN_le b).trans_lt (by norm_num))] at this
   rw [← uReDec_uReN a, ← uReDec_uReN b, hN]
 
-/-- `U` is never 0 (`uReN a ≠ 64`). -/
 theorem uRe_ne_zero (a : Finset (Fin 7)) : uRe a ≠ 0 := by
   have h64 : uReN a ≠ 64 := by
     have : ∀ a : Finset (Fin 7), uReN a ≠ 64 := by decide +kernel
@@ -4999,9 +4514,6 @@ theorem uRe_ne_zero (a : Finset (Fin 7)) : uRe a ≠ 0 := by
     Nat.mod_eq_of_lt (by norm_num)] at this
   exact h64 this
 
-/-- **The luck of a dropped term on the re-encoded alphabet** (RS-E-REF r4 IV.4): an error affine in the coins, given
-the dropped entry's planes `a` and the other bits `b`, one of whose coin coefficients is `c b + c′ U(a)` with `c′` a
-unit (a whole term `U x` dropped, partly compensated by `c b`), vanishes with probability at most `½ + 2⁻⁸`. -/
 theorem luck_dropped_reEncoded {β V : Type} [Fintype β] [Fintype V] [DecidableEq V]
     (f₀ : Finset (Fin 7) × β → ZMod (2 ^ 32)) (f : V → Finset (Fin 7) × β → ZMod (2 ^ 32)) (v₀ : V)
     (c : β → ZMod (2 ^ 32)) (c' : ZMod (2 ^ 32)) (hc' : IsUnit c') (hv₀ : ∀ a b, f v₀ (a, b) = c b + c' * uRe a) :
@@ -5015,7 +4527,6 @@ theorem luck_dropped_reEncoded {β V : Type} [Fintype β] [Fintype V] [Decidable
     rwa [Fintype.card_finset, Fintype.card_fin] at this
   linarith
 
-/-- ... and `½` when the term is dropped outright (`c = 0`): `c′ U` is never 0, since `U` never is. -/
 theorem luck_dropped_reEncoded_zero {β V : Type} [Fintype β] [Fintype V] [DecidableEq V]
     (f₀ : Finset (Fin 7) × β → ZMod (2 ^ 32)) (f : V → Finset (Fin 7) × β → ZMod (2 ^ 32)) (v₀ : V)
     (c' : ZMod (2 ^ 32)) (hc' : IsUnit c') (hv₀ : ∀ a b, f v₀ (a, b) = c' * uRe a) :
@@ -5076,7 +4587,6 @@ theorem dAt_game : ∀ {n : ℕ} (P : SpotPlay C V A n) (x : Paths (C × Finset 
       simp only [game, errAt, RoundGame.dAt, Fin.cases_succ]
       exact dAt_game (next x.1) x.2 w'
 
-/-- Degree-2 errors along every play make the game a spot-check window. -/
 theorem game_spot : ∀ {n : ℕ} (P : SpotPlay C V A n), (∀ x w c, CubeQuad (P.errAt x w c)) → P.game.Spot A
   | _, .done, _ => trivial
   | _, .round e next, h => by
@@ -5091,8 +4601,6 @@ end SpotPlay
 abbrev DSpot (n L np B n' : ℕ) : Type := DCells n n' B × Finset (DBits n L np B n')
 
 open Classical in
-/-- The certified cells, those whose error is zero at every bit point with at most two ones, are at least the
-share `1 − d` of the cells. -/
 theorem card_certified_ge {C V A : Type} [Fintype C] [Fintype V] [DecidableEq V] [CommRing A]
     (e : C → (V → A) → A) :
     (Fintype.card C : ℝ) * (1 - spotDef e) ≤
@@ -5138,7 +4646,6 @@ theorem wrong_sgame (M : ℕ) : ∀ {m : ℕ} (P : StagePlay C V A m) (x : Paths
     rw [wrong_sgame M (next x.1) x.2]
 
 omit [Fintype V] in
-/-- **The round's check passes with probability at most `1 − U`**: the check's stage and cell are uniform. -/
 theorem prob_ok_le {m : ℕ} (P : StagePlay C V A m) (x : Paths (Finset V) m) :
     prob (fun j : Fin m × C => P.ok x j.1 j.2) ≤ 1 - (P.sgame m).wrong x := by
   classical
@@ -5154,7 +4661,6 @@ theorem prob_ok_le {m : ℕ} (P : StagePlay C V A m) (x : Paths (Finset V) m) :
         rw [Fintype.card_fin]
         ring
 
-/-- **The stage game is valid at `p = ¾`** when every stage's errors have degree 2 (`prob_spot_le`, per stage). -/
 theorem valid_sgame (M : ℕ) : ∀ {m : ℕ} (P : StagePlay C V A m), (∀ x s c, CubeQuad (P.errAt x s c)) →
     (P.sgame M).Valid (3 / 4)
   | _, .done, _ => trivial
@@ -5203,7 +4709,6 @@ theorem dAt_game : ∀ {n : ℕ} (P : StagedPlay C V A M n) (x : Paths (Paths (F
       simp only [game, errAt, RoundGame.dAt, Fin.cases_succ]
       exact dAt_game (next x.1) x.2 w'
 
-/-- **Degree-2 errors along every play make the game a staged window at `p = ¾`.** -/
 theorem game_staged : ∀ {n : ℕ} (P : StagedPlay C V A M n), (∀ x w s c, CubeQuad (P.errAt x w s c)) →
     P.game.Staged (3 / 4) M
   | _, .done, _ => trivial
@@ -5259,8 +4764,6 @@ def RoundsHypK (Mc : Machine) (S : Service) (Ω : Type) [Fintype Ω] (R : ℕ) (
         (∀ w, ((n * n' * B : ℕ) : ℝ) * (1 - G.dAt x w) ≤ (cor w).card) ∧
         κ * ∑ w, ((univ.filter fun j => (prog w).isProd j = true).card : ℝ) - V x ≤ Mc.charge M (e.symm x, r)
 
-/-- **The chain lemma gives the window's cost line**: under `RoundsHypK` for a product class with chain factor
-`c`, `RoundsHyp` holds with `F₀ = κ L n n' B / c` and no slack. -/
 theorem roundsHyp_of_K {Mc : Machine} {S : Service} {Ω : Type} [Fintype Ω] {R : ℕ} {p Vmax δb δz κ : ℝ}
     {n L np B n' : ℕ} {Ar : Type} [CommRing Ar] {wt : Fin np → Ar}
     {Ok : ((DBits n L np B n' → Ar) → Ar) → Prop} {c : ℕ}
@@ -5290,8 +4793,6 @@ theorem roundsHyp_of_K {Mc : Machine} {S : Service} {Ω : Type} [Fintype Ω] {R 
       exact (mul_le_mul_of_nonneg_left (hcor w) (by positivity)).trans (hprod w)
     _ ≤ Mc.charge M (e.symm x, r) := hcharge
 
-/-- At chain factor 1 (one-sided products, `chainBound_oneSided`; mixed ones, `chainBound_gProd`): `F₀ = κ L n n' B`,
-the round's `n × LB × n'` GEMM at `κ` a product (`c = 1`). -/
 theorem roundsHyp_of_K_one {Mc : Machine} {S : Service} {Ω : Type} [Fintype Ω] {R : ℕ} {p Vmax δb δz κ : ℝ}
     {n L np B n' : ℕ} {Ar : Type} [CommRing Ar] {wt : Fin np → Ar}
     {Ok : ((DBits n L np B n' → Ar) → Ar) → Prop}
@@ -5327,9 +4828,6 @@ def RoundsHypKS (Mc : Machine) (S : Service) (R : ℕ) (Vmax δb δz κ : ℝ) (
           (prog w).coef (word w c) k ≠ 0 → (prog w).coef (word w c') k = 0) ∧
         κ * ∑ w, ((univ.filter fun j => (prog w).isProd j = true).card : ℝ) - V x ≤ Mc.charge M (e.symm x, r)
 
-/-- **The luck is derived for affine operands**: under `RoundsHypKS` with products of affine operands (one-sided or
-mixed), `RoundsHypK` holds at `p = ¾`, its `PathBound` from the spot check's degree-2 errors
-(`RoundGame.pathBound_spot`, `SlpG.cubeQuad_err`) and its certified count from the game's deficiency. -/
 theorem roundsHypK_of_spot {Mc : Machine} {S : Service} {R : ℕ} {Vmax δb δz κ : ℝ} {n L np B n' : ℕ}
     {Ar : Type} [CommRing Ar] {wt : Fin np → Ar} {Ok : ((DBits n L np B n' → Ar) → Ar) → Prop}
     (h : RoundsHypKS Mc S R Vmax δb δz κ n L np B n' wt Ok) (hOk : ∀ π, Ok π → AffProd π) :
@@ -5408,8 +4906,6 @@ def RoundsHypKSt (Mc : Machine) (S : Service) (R St : ℕ) (Vmax δb δz κ : �
           c.1 ≠ c'.1 → ∀ k, (prog w s).coef (word w s c) k ≠ 0 → (prog w s).coef (word w s c') k = 0) ∧
         κ * ∑ w, ∑ s, ((univ.filter fun j => (prog w s).isProd j = true).card : ℝ) - V x ≤ Mc.charge M (e.symm x, r)
 
-/-- `roundsHyp_of_staged` on one slice (`RoundsSlice`): one adversary at one value of its coins, its acceptance
-`acc`, charge `cost` and breaks named, and `RoundsHypKSt`'s cost line at that slice. -/
 theorem roundsSlice_of_staged {R St : ℕ} {Vmax κ : ℝ} {n L np B n' : ℕ} {Ar : Type} [CommRing Ar]
     {wt : Fin np → Ar} {Ok : ((DBits n L np B n' → Ar) → Ar) → Prop}
     (P : StagedPlay (DCells n n' B) (DBits n L np B n') Ar St R) (acc : Paths (DStage St n L np B n') R → Prop)
@@ -5477,11 +4973,6 @@ theorem roundsSlice_of_staged {R St : ℕ} {Vmax κ : ℝ} {n L np B n' : ℕ} {
         exact (mul_le_mul_of_nonneg_left (hcor w s) (Nat.cast_nonneg L)).trans (hprod w s)
       _ ≤ cost x := hcharge
 
-/-- **Staged rounds give the window's cost line with stage-wise floors summed**: under `RoundsHypKSt` with products
-of affine operands and chain factor 1, `RoundsHyp` holds at `p = ¾` with `F₀ = St κ L n n' B`, the round's `St`
-stage floors summed, and no slack. The round's deficiency is the mean of its stages' (`StagedPlay.dAt_game`), its
-exponential bound comes from the stages' supermartingale (`RoundGame.expBound_of_staged`, `StagedPlay.game_staged`),
-and each stage's certified count from its own errors (`roundsSlice_of_staged`, slice by slice). -/
 theorem roundsHyp_of_staged {Mc : Machine} {S : Service} {R St : ℕ} {Vmax δb δz κ : ℝ} {n L np B n' : ℕ}
     {Ar : Type} [CommRing Ar] {wt : Fin np → Ar} {Ok : ((DBits n L np B n' → Ar) → Ar) → Prop}
     (h : RoundsHypKSt Mc S R St Vmax δb δz κ n L np B n' wt Ok) (hc : ChainBound Ar n L np B n' wt Ok 1)
@@ -5570,8 +5061,6 @@ theorem BitAff.eval_mergeAt (U : ∀ s, Finset (ι s)) (t : Fin St) (A : BitAff 
   rw [add_assoc, ← sum_extZ_mul t z A.α, ← Finset.sum_add_distrib]
   exact congrArg _ (Finset.sum_congr rfl fun b _ => by rw [mergeAt_eq_add U t z b, mul_add])
 
-/-- A program whose products are K∥'s computes, on sample `t`'s bits at any bit point of the other samples', words of
-degree 2. -/
 theorem SlpG.cubeQuad_val_mergeAt {N : ℕ} (P : SlpG (Σ s, ι s) R N) (hOk : ∀ j, P.isProd j = true → AffMulAt (P.prod j))
     (U : ∀ s, Finset (ι s)) (t : Fin St) (j : Fin N) : CubeQuad fun z => P.val (mergeAt U t z) j := by
   refine CubeQuad.congr (fun z => (P.val_eq (mergeAt U t z) j).symm)
@@ -5599,8 +5088,6 @@ theorem prob_fst {α β : Type} [Fintype α] [Fintype β] [Nonempty β] (p : α 
   simpa using expect_const_add_mul (Ω := β) (if p a then (1 : ℝ) else 0) 0 fun _ => 0
 
 omit [∀ t, Fintype (κ t)] in
-/-- One cell's pass probability with overlapping samples equals the spot check's on its own sample with the other
-samples' bits as the cell: swapping sample `t`'s bits for fresh ones is an involution. -/
 theorem prob_cell_eq (e : ((Σ s, ι s) → R) → R) (t : Fin St) :
     prob (fun U : ∀ s, Finset (ι s) => e (drawInd U) = 0) =
       prob fun b : (∀ s, Finset (ι s)) × Finset (ι t) => e (mergeAt b.1 t (bitInd b.2)) = 0 := by
@@ -5618,9 +5105,6 @@ theorem prob_cell_eq (e : ((Σ s, ι s) → R) → R) (t : Fin St) :
   simp only [φ]
   rw [mergeAt_update, ← mergeAt_self b.1 t]
 
-/-- **The spot check's pass bound with overlapping samples** (RS-D1E r2 §2.5): with every cell's error of degree 2 on
-its own sample's bits at every bit point of the other samples', a uniform cell and uniform samples find a zero with
-probability at most `1 − ¼ d`, `d` the share of cells and samples at which the cell is uncertified. -/
 theorem prob_ov_le (e : (Σ t, κ t) → ((Σ s, ι s) → R) → R) (he : ∀ c U, CubeQuad fun z => e c (mergeAt U c.1 z)) :
     prob (fun a : (Σ t, κ t) × (∀ s, Finset (ι s)) => e a.1 (drawInd a.2) = 0) ≤ 1 - (1 - 3 / 4) * ovDef e := by
   classical
@@ -5654,8 +5138,6 @@ theorem dAt_game : ∀ {n : ℕ} (P : OvPlay κ ι A n) (x : Paths ((Σ t, κ t)
       simp only [game, errAt, RoundGame.dAt, Fin.cases_succ]
       exact dAt_game (next x.1) x.2 w'
 
-/-- Errors of degree 2 on each cell's own sample, at every bit point of the other samples', along every play make the
-game meet Theorem S's pass bound at `p = ¾`. -/
 theorem passBound_game : ∀ {n : ℕ} (P : OvPlay κ ι A n),
     (∀ x w c U, CubeQuad fun z => P.errAt x w c (mergeAt U c.1 z)) → P.game.PassBound (3 / 4)
   | _, .done, _ => trivial
@@ -5747,7 +5229,6 @@ theorem zmod2_add_eq_zero (s t : ZMod 2) : s + t = 0 ↔ t = s := by
   revert s t
   decide
 
-/-- Parseval on `F₂^K`. -/
 theorem sum_sq_hat {K : ℕ} (u : (Fin K → ZMod 2) → ℝ) :
     ∑ y : Fin K → ZMod 2, (∑ x, u x * sgn (x ⬝ᵥ y)) ^ 2 = 2 ^ K * ∑ x, u x ^ 2 := by
   classical
@@ -5775,8 +5256,6 @@ theorem sum_sq_hat {K : ℕ} (u : (Fin K → ZMod 2) → ℝ) :
   simp only [hx, mul_ite, mul_zero, sum_ite_eq', mem_univ, ↓reduceIte]
   ring
 
-/-- **The parity correlation** (RS-E-REF r6, Lemma P2): for any `F, G : F₂^K → F₂^R` and any `a, b`, the sum of
-`(−1)^(⟨F x, G y⟩ + a x + b y + ⟨x, y⟩)` over `x, y` has square at most `2^R (2^K)³`. -/
 theorem parity_corr_sq {K R : ℕ} (F G : (Fin K → ZMod 2) → Fin R → ZMod 2) (a b : (Fin K → ZMod 2) → ZMod 2) :
     (∑ x, ∑ y, sgn (F x ⬝ᵥ G y + a x + b y + x ⬝ᵥ y)) ^ 2 ≤ 2 ^ R * (2 ^ K) ^ 3 := by
   classical
@@ -5814,8 +5293,6 @@ theorem parity_corr_sq {K R : ℕ} (F G : (Fin K → ZMod 2) → Fin R → ZMod 
       exact mul_le_mul_of_nonneg_left hT (by positivity)
     _ = 2 ^ R * N ^ 3 := by ring
 
-/-- **The parity lemma** (RS-E-REF r6, Lemma P2) in probability: `x, y` uniform on `F₂^K`, any `F, G : F₂^K → F₂^R`
-and any `a, b`; the agreement `p` of `⟨F x, G y⟩ + a x + b y` with `⟨x, y⟩` has `(2p − 1)² ≤ 2^R / 2^K`. -/
 theorem parity_prob_sq {K R : ℕ} (F G : (Fin K → ZMod 2) → Fin R → ZMod 2) (a b : (Fin K → ZMod 2) → ZMod 2) :
     (2 * prob (fun xy : (Fin K → ZMod 2) × (Fin K → ZMod 2) =>
       F xy.1 ⬝ᵥ G xy.2 + a xy.1 + b xy.2 = xy.1 ⬝ᵥ xy.2) - 1) ^ 2 ≤ 2 ^ R / 2 ^ K := by
@@ -5841,7 +5318,6 @@ theorem parity_prob_sq {K R : ℕ} (F G : (Fin K → ZMod 2) → Fin R → ZMod 
         mul_le_mul_of_nonneg_right (parity_corr_sq F G a b) hN.le
     _ = 2 ^ R * ((2 ^ K) ^ 2) ^ 2 := by ring
 
-/-- **The parity luck, one product short**: with `R < K` the agreement is at most `½ + ½ √½ < 0.854`. -/
 theorem parity_luck_short {K R : ℕ} (hR : R < K) (F G : (Fin K → ZMod 2) → Fin R → ZMod 2)
     (a b : (Fin K → ZMod 2) → ZMod 2) :
     prob (fun xy : (Fin K → ZMod 2) × (Fin K → ZMod 2) => F xy.1 ⬝ᵥ G xy.2 + a xy.1 + b xy.2 = xy.1 ⬝ᵥ xy.2) ≤
@@ -5853,7 +5329,6 @@ theorem parity_luck_short {K R : ℕ} (hR : R < K) (F G : (Fin K → ZMod 2) →
       _ ≤ 2 ^ K := pow_le_pow_right₀ (by norm_num) hR
   nlinarith
 
-/-- **The parity luck, two products short**: with `R + 2 ≤ K` the agreement is at most `¾`. -/
 theorem parity_luck_two {K R : ℕ} (hR : R + 2 ≤ K) (F G : (Fin K → ZMod 2) → Fin R → ZMod 2)
     (a b : (Fin K → ZMod 2) → ZMod 2) :
     prob (fun xy : (Fin K → ZMod 2) × (Fin K → ZMod 2) => F xy.1 ⬝ᵥ G xy.2 + a xy.1 + b xy.2 = xy.1 ⬝ᵥ xy.2) ≤
@@ -5918,7 +5393,6 @@ theorem reframe_reframe {fr : Fin K ⊕ Fin K → V} (hfr : Function.Injective f
   · push Not at hv
     rw [mem_reframe_off _ _ hv, mem_reframe_off _ _ hv]
 
-/-- Two frame replacements that agree off the frame bits in `P` agree at every bit outside `fr '' P`. -/
 theorem mem_reframe_congr {fr : Fin K ⊕ Fin K → V} (hfr : Function.Injective fr) (S : Finset V)
     {z z' : Fin K ⊕ Fin K → ZMod 2} (P : Fin K ⊕ Fin K → Prop) (hz : ∀ s, ¬P s → z s = z' s) {v : V}
     (hv : ∀ s, P s → fr s ≠ v) : v ∈ reframe fr S z ↔ v ∈ reframe fr S z' := by
@@ -5928,8 +5402,6 @@ theorem mem_reframe_congr {fr : Fin K ⊕ Fin K → V} (hfr : Function.Injective
   · push Not at h
     rw [mem_reframe_off _ _ h, mem_reframe_off _ _ h]
 
-/-- Replacing a uniform bit point's frame bits by uniform ones keeps it uniform: `(S, z) ↦ (S with z, S's frame
-bits)` is an involution. -/
 theorem prob_reframe {fr : Fin K ⊕ Fin K → V} (hfr : Function.Injective fr) (P : Finset V → Prop) :
     prob P = prob fun b : Finset V × (Fin K ⊕ Fin K → ZMod 2) => P (reframe fr b.1 b.2) := by
   classical
@@ -5955,8 +5427,6 @@ def ParityForm (fr : Fin K ⊕ Fin K → V) (φ : A →+* ZMod 2) (R : ℕ) (e :
     ∀ S, φ (e (bitInd S)) =
       F S ⬝ᵥ G S + a S + b S + (fun j => frameBits fr S (.inl j)) ⬝ᵥ fun j => frameBits fr S (.inr j)
 
-/-- **The parity lemma at a cell's frame**: an error with a parity form of `R` terms vanishes at a uniform bit point
-with probability at most any bound `q` of the parity lemma on `F₂^K` at `R` terms. -/
 theorem prob_zero_le_of_parityForm {fr : Fin K ⊕ Fin K → V} (hfr : Function.Injective fr) {φ : A →+* ZMod 2}
     {R : ℕ} {e : (V → A) → A} (h : ParityForm fr φ R e) {q : ℝ} (hq : 0 ≤ q)
     (hcore : ∀ (F G : (Fin K → ZMod 2) → Fin R → ZMod 2) (a b : (Fin K → ZMod 2) → ZMod 2),
@@ -6076,7 +5546,6 @@ def SplitProd (fr : Fin K ⊕ Fin K → V) (φ : A →+* ZMod 2) (π : (V → A)
   ∃ g h : Finset V → ZMod 2, YBlind fr g ∧ XBlind fr h ∧ ∀ S, φ (π (bitInd S)) = g S * h S
 
 omit [CommRing A] in
-/-- A bit off the frame's `x` bits. -/
 theorem XBlind.bit {fr : Fin K ⊕ Fin K → V} {v : V} (hv : ∀ j, fr (.inl j) ≠ v) :
     XBlind fr fun S => if v ∈ S then 1 else 0 := fun S S' h => by simp only [h v hv]
 
@@ -6084,14 +5553,12 @@ omit [CommRing A] in
 theorem YBlind.bit {fr : Fin K ⊕ Fin K → V} {v : V} (hv : ∀ j, fr (.inr j) ≠ v) :
     YBlind fr fun S => if v ∈ S then 1 else 0 := fun S S' h => by simp only [h v hv]
 
-/-- A ring map onto `F₂` sends `bitInd` to the bit's indicator. -/
 theorem map_bitInd (φ : A →+* ZMod 2) (S : Finset V) (v : V) :
     φ (bitInd S v) = if v ∈ S then 1 else 0 := by
   unfold bitInd
   split_ifs <;> simp
 
 omit [CommRing A] in
-/-- A bit times a constant is junk at any frame: blind to the `x` bits if it is a `y` bit, else to the `y` bits. -/
 theorem Split.const_mul_bit {fr : Fin K ⊕ Fin K → V} (hfr : Function.Injective fr) (u : ZMod 2) (v : V) :
     Split fr fun S => u * if v ∈ S then 1 else 0 := by
   by_cases hv : ∃ j, fr (.inr j) = v
@@ -6100,7 +5567,6 @@ theorem Split.const_mul_bit {fr : Fin K ⊕ Fin K → V} (hfr : Function.Injecti
   · push Not at hv
     exact Split.of_y ((YBlind.const fr u).mul (YBlind.bit hv))
 
-/-- **A bit-affine word is junk at any frame**, mod 2. -/
 theorem Split.bitAff [Fintype V] {fr : Fin K ⊕ Fin K → V} (hfr : Function.Injective fr) (φ : A →+* ZMod 2)
     (Af : BitAff V A) :
     Split fr fun S => φ (Af.eval (bitInd S)) :=
@@ -6112,8 +5578,6 @@ theorem zmod2_add_self (u : ZMod 2) : u + u = 0 := by
   revert u
   decide
 
-/-- **A parity form from junk**: two-sided factors `F` blind to the `y` bits and `G` blind to the `x` bits, and the
-rest of the error mod 2, past `⟨F, G⟩ + ⟨x, y⟩`, junk at the frame. -/
 theorem parityForm_of_split {fr : Fin K ⊕ Fin K → V} {φ : A →+* ZMod 2} {R : ℕ} {e : (V → A) → A}
     (F G : Finset V → Fin R → ZMod 2) (hF : ∀ k, YBlind fr fun S => F S k) (hG : ∀ k, XBlind fr fun S => G S k)
     (h : Split fr fun S => φ (e (bitInd S)) - F S ⬝ᵥ G S -
@@ -6131,8 +5595,6 @@ noncomputable def charged (fr : Fin K ⊕ Fin K → V) (φ : A →+* ZMod 2) {N 
     (π : Fin N → (V → A) → A) : Finset (Fin N) :=
   univ.filter fun i => φ (coef i) ≠ 0 ∧ TwoSidedAt fr φ (π i)
 
-/-- **A sum of split products plus a bit-affine word, minus a target of the form `⟨x, y⟩` plus junk, has a parity
-form with its charged products as terms**: the uncharged products it reads are blind to one side, so junk. -/
 theorem parityForm_sum [Fintype V] {fr : Fin K ⊕ Fin K → V} (hfr : Function.Injective fr) (φ : A →+* ZMod 2)
     {N : ℕ} (coef : Fin N → A) (π : Fin N → (V → A) → A) (Af : BitAff V A)
     (hπ : ∀ i, coef i ≠ 0 → SplitProd fr φ (π i)) (T : (V → A) → A)
@@ -6187,8 +5649,6 @@ variable {Ar : Type} [CommRing Ar] {n L np B n' : ℕ}
 theorem dFrame_injective (p₀ : Fin np) (c : DCells n n' B) : Function.Injective (dFrame (L := L) p₀ c) := by
   rintro (j | j) (j' | j') h <;> simp_all [dFrame]
 
-/-- A one-sided product of any form is split at every cell-block's frame: its factor on U's bits is blind to the
-coins, and its factor on the coins to U's bits. -/
 theorem OneSided.splitProd (φ : Ar →+* ZMod 2) (p₀ : Fin np) (c : DCells n n' B)
     {π : (DBits n L np B n' → Ar) → Ar} (hπ : OneSided π) : SplitProd (dFrame p₀ c) φ π := by
   obtain ⟨g, h, hg, hh, hgh⟩ := hπ
@@ -6209,9 +5669,6 @@ theorem dP_eval (pc : Fin n → Fin B → Fin L → Ar) (w : Fin np → Ar) (i :
     (z : DBits n L np B n' → Ar) : (dP pc w i t j).eval z = pc i t j + ∑ p, w p * z (.inl (i, j, p)) := by
   simp [BitAff.eval, dP, Fintype.sum_sum_type, Fintype.sum_prod_type, ite_and]
 
-/-- **The design's target is `⟨x, y⟩` plus junk at its cell-block's frame**, mod 2 with `φ (w p₀) = 1`: block
-`t`'s increment is `Σ_j (x_j + Q_j)(c_j + y_j)`, `Q_j` U's other planes and the constants, and the earlier blocks'
-increments read no coin of the frame. -/
 theorem split_dPrefix (φ : Ar →+* ZMod 2) {p₀ : Fin np} {w : Fin np → Ar} (hw : φ (w p₀) = 1)
     (pc : Fin n → Fin B → Fin L → Ar) (vq : Fin B → Fin L → Fin n' → Ar) (c : DCells n n' B) :
     Split (dFrame p₀ c) fun S => φ (dPrefix pc vq w c.1 c.2.1 c.2.2.val (bitInd S)) -
@@ -6274,9 +5731,6 @@ theorem split_dPrefix (φ : Ar →+* ZMod 2) {p₀ : Fin np} {w : Fin np → Ar}
   · exact sum_congr rfl fun j _ => by rw [hP, hX]
   · simp
 
-/-- **A one-sided run's error has a parity form at every cell-block's frame**, its terms the products charged to the
-cell-block's word (`charged`): any straight-line program over a ring with a map `φ` onto `F₂`, its products one-sided
-of any form, and `φ (w p₀) = 1`. -/
 theorem SlpG.parityForm_err (φ : Ar →+* ZMod 2) {p₀ : Fin np} {w : Fin np → Ar} (hw : φ (w p₀) = 1) {N : ℕ}
     (P : SlpG (DBits n L np B n') Ar N) (hOk : ∀ j, P.isProd j = true → OneSided (P.prod j))
     (pc : Fin n → Fin B → Fin L → Ar) (vq : Fin B → Fin L → Fin n' → Ar) (j : Fin N) (c : DCells n n' B) :
@@ -6300,7 +5754,6 @@ variable {V A : Type} [DecidableEq V] [CommRing A] {K : ℕ}
 def ParShort (fr : Fin K ⊕ Fin K → V) (φ : A →+* ZMod 2) (e : (V → A) → A) : Prop :=
   ∃ R < K, ParityForm fr φ R e
 
-/-- **Disjoint charges add up**: at least `L` products charged to each full cell, no product charged twice. -/
 theorem card_full_le {C : Type} [Fintype C] {N L : ℕ} (ch : C → Finset (Fin N)) (prods : Finset (Fin N))
     (hsub : ∀ c, ch c ⊆ prods) (hdisj : ∀ c c', c ≠ c' → Disjoint (ch c) (ch c')) (full : C → Prop)
     [DecidablePred full] (hfull : ∀ c, full c → L ≤ (ch c).card) : L * (univ.filter full).card ≤ prods.card := by
@@ -6318,8 +5771,6 @@ section ParityRound
 variable {Ar : Type} [CommRing Ar] {n L np B n' : ℕ}
 
 open Classical in
-/-- **Charge-pure one-sided runs add up**: the program has at least `L` products per cell-block not short of
-products. -/
 theorem SlpG.card_full_le (φ : Ar →+* ZMod 2) {p₀ : Fin np} {w : Fin np → Ar} (hw : φ (w p₀) = 1) {N : ℕ}
     (P : SlpG (DBits n L np B n') Ar N) (hOk : ∀ j, P.isProd j = true → OneSided (P.prod j))
     (pc : Fin n → Fin B → Fin L → Ar) (vq : Fin B → Fin L → Fin n' → Ar) (word : DCells n n' B → Fin N)
@@ -6348,14 +5799,11 @@ noncomputable def parDef (fr : C → Fin K ⊕ Fin K → V) (φ : A →+* ZMod 2
   prob fun c => ParShort (fr c) φ (e c)
 
 omit [Fintype C] in
-/-- A cell short of products passes with probability at most `0.854`. -/
 theorem prob_parShort_le {fr : Fin K ⊕ Fin K → V} (hfr : Function.Injective fr) {φ : A →+* ZMod 2}
     {e : (V → A) → A} (h : ParShort fr φ e) : prob (fun S : Finset V => e (bitInd S) = 0) ≤ 427 / 500 := by
   obtain ⟨R, hR, hF⟩ := h
   exact prob_zero_le_of_parityForm hfr hF (by norm_num) fun F G a b => parity_luck_short hR F G a b
 
-/-- **The spot check's pass bound for one-sided operands of any form**: a uniform cell and uniform bits find a zero
-with probability at most `1 − (1 − 0.854) d`, `d` the share of cells short of products. -/
 theorem prob_spot_parity_le (fr : C → Fin K ⊕ Fin K → V) (hfr : ∀ c, Function.Injective (fr c))
     (φ : A →+* ZMod 2) (e : C → (V → A) → A) :
     prob (fun a : C × Finset V => e a.1 (bitInd a.2) = 0) ≤ 1 - (1 - 427 / 500) * parDef fr φ e := by
@@ -6400,7 +5848,6 @@ theorem dAt_gameP (fr : C → Fin K ⊕ Fin K → V) (φ : A →+* ZMod 2) :
       simp only [gameP, errAt, RoundGame.dAt, Fin.cases_succ]
       exact dAt_gameP fr φ (next x.1) x.2 w'
 
-/-- **Spot plays meet Theorem S's pass bound at `p = 0.854` in the product deficit**, whatever their errors. -/
 theorem passBound_gameP {fr : C → Fin K ⊕ Fin K → V} (hfr : ∀ c, Function.Injective (fr c)) (φ : A →+* ZMod 2) :
     ∀ {n : ℕ} (P : SpotPlay C V A n), (P.gameP fr φ).PassBound (427 / 500)
   | _, .done => trivial
@@ -6438,7 +5885,6 @@ theorem wrong_sgameP (M : ℕ) (fr : C → Fin K ⊕ Fin K → V) (φ : A →+* 
     simp only [sgameP, sgame, StageGame.wrong]
     rw [wrong_sgameP M fr φ (next x.1) x.2]
 
-/-- **The product-deficit stage game is valid at `p = 0.854`**, whatever the stages' errors. -/
 theorem valid_sgameP (M : ℕ) {fr : C → Fin K ⊕ Fin K → V} (hfr : ∀ c, Function.Injective (fr c))
     (φ : A →+* ZMod 2) : ∀ {m : ℕ} (P : StagePlay C V A m), (P.sgameP M fr φ).Valid (427 / 500)
   | _, .done => trivial
@@ -6502,7 +5948,6 @@ theorem dAt_gameP (fr : C → Fin K ⊕ Fin K → V) (φ : A →+* ZMod 2) :
       simp only [gameP, errAt, RoundGame.dAt, Fin.cases_succ]
       exact dAt_gameP fr φ (next x.1) x.2 w'
 
-/-- **Staged plays make a staged window at `p = 0.854` in the product deficit**, whatever their errors. -/
 theorem game_stagedP {fr : C → Fin K ⊕ Fin K → V} (hfr : ∀ c, Function.Injective (fr c)) (φ : A →+* ZMod 2) :
     ∀ {n : ℕ} (P : StagedPlay C V A M n), (P.gameP fr φ).Staged (427 / 500) M
   | _, .done => trivial
@@ -6527,8 +5972,6 @@ noncomputable def ovDefP (fr : (c : Σ t, κ t) → Fin K ⊕ Fin K → ι c.1) 
     (e : (Σ t, κ t) → ((Σ s, ι s) → A) → A) : ℝ :=
   prob fun a : (Σ t, κ t) × (∀ s, Finset (ι s)) => ParShort (fr a.1) φ fun z => e a.1 (mergeAt a.2 a.1.1 z)
 
-/-- **The overlapped spot check's pass bound for one-sided operands of any form**: per sample, with the other samples'
-bits given, as `prob_ov_le`. -/
 theorem prob_ovP_le (fr : (c : Σ t, κ t) → Fin K ⊕ Fin K → ι c.1) (hfr : ∀ c, Function.Injective (fr c))
     (φ : A →+* ZMod 2) (e : (Σ t, κ t) → ((Σ s, ι s) → A) → A) :
     prob (fun a : (Σ t, κ t) × (∀ s, Finset (ι s)) => e a.1 (drawInd a.2) = 0) ≤
@@ -6574,8 +6017,6 @@ theorem dAt_gameP (fr : (c : Σ t, κ t) → Fin K ⊕ Fin K → ι c.1) (φ : A
       simp only [gameP, errAt, RoundGame.dAt, Fin.cases_succ]
       exact dAt_gameP fr φ (next x.1) x.2 w'
 
-/-- **Overlapped plays meet Theorem S's pass bound at `p = 0.854` in the product deficit**, whatever their
-errors. -/
 theorem passBound_gameP {fr : (c : Σ t, κ t) → Fin K ⊕ Fin K → ι c.1} (hfr : ∀ c, Function.Injective (fr c))
     (φ : A →+* ZMod 2) : ∀ {n : ℕ} (P : OvPlay κ ι A n), (P.gameP fr φ).PassBound (427 / 500)
   | _, .done => trivial
@@ -6591,12 +6032,6 @@ section OverlapRound
 variable {St : ℕ} {R : Type} [CommRing R] {n B n' : Fin St → ℕ} {L np : ℕ}
 
 open Classical in
-/-- **Overlapping samples add up** (Theorem K∥, RS-D1E r2 §2.2): a round's run over every sample's bits, with K∥'s
-products, row-pure across the rows of every sample, has at least `L / c` products per certified cell-block of every
-stage, at any bit point `W` of the samples. Per stage `t` and row: with every other sample's bits at theirs in `W`
-(`mergeAt`), the products are affine products on sample `t`'s bits, their coefficients unchanged, so the chain bound
-counts the products feeding the row's certified words; row purity makes the counts add over every row of every sample,
-whatever intervals the products lie in. -/
 theorem SlpG.cells_card_le_ov {w : Fin np → R} {c : ℕ}
     (hc : ∀ t, ChainBound R (n t) L np (B t) (n' t) w (fun π => AffProd π) c) {N : ℕ}
     (P : SlpG (Σ t, DBits (n t) L np (B t) (n' t)) R N) (hOk : ∀ j, P.isProd j = true → AffMulAt (P.prod j))
@@ -6708,8 +6143,6 @@ theorem card_oCells (St : ℕ) (n n' B : Fin St → ℕ) :
     Fintype.card (OCells St n n' B) = ∑ t, n t * n' t * B t := by
   simp [OCells, Fintype.card_sigma, Fintype.card_prod, mul_assoc]
 
-/-- `roundsHyp_of_overlap` on one slice (`RoundsSlice`): one adversary at one value of its coins, its acceptance
-`acc`, charge `cost` and breaks named, and `RoundsHypKOv`'s cost line at that slice. -/
 theorem roundsSlice_of_overlap {R St : ℕ} {Vmax κ : ℝ} {n B n' : Fin St → ℕ} {L np : ℕ} {Ar : Type} [CommRing Ar]
     {wt : Fin np → Ar}
     (P : OvPlay (fun t => DCells (n t) (n' t) (B t)) (fun t => DBits (n t) L np (B t) (n' t)) Ar R)
@@ -6810,11 +6243,6 @@ theorem roundsSlice_of_overlap {R St : ℕ} {Vmax κ : ℝ} {n B n' : Fin St →
         exact expect_le_of_le (Nat.cast_nonneg _) fun W => hprod w W
       _ ≤ cost x := hcharge
 
-/-- **Overlapping stages give the window's cost line** (Theorem K∥): under `RoundsHypKOv` with chain factor 1 on
-every stage's shape, `RoundsHyp` holds at `p = ¾` with `F₀ = κ L C`, `C` the round's cell-blocks over all its
-stages, and no slack. The luck is per sample, with the other samples' bits given (`OvPlay.passBound_game`), and the
-certified count is `SlpG.cells_card_le_ov`'s at every bit point of the samples, so at least its mean
-(`roundsSlice_of_overlap`, slice by slice). -/
 theorem roundsHyp_of_overlap {Mc : Machine} {S : Service} {R St : ℕ} {Vmax δb δz κ : ℝ} {n B n' : Fin St → ℕ}
     {L np : ℕ} {Ar : Type} [CommRing Ar] {wt : Fin np → Ar} (h : RoundsHypKOv Mc S R St Vmax δb δz κ n L np B n' wt)
     (hc : ∀ t, ChainBound Ar (n t) L np (B t) (n' t) wt (fun π => AffProd π) 1) (hκ : 0 ≤ κ) :
@@ -6831,8 +6259,6 @@ section ParityOverlapRound
 
 variable {St : ℕ} {Ar : Type} [CommRing Ar] {n B n' : Fin St → ℕ} {L np : ℕ}
 
-/-- **An overlapped one-sided run's error has a parity form at every cell-block's frame**, at every bit point `W` of
-the other samples: its terms the products charged to the word there. -/
 theorem SlpG.parityForm_err_ov (φ : Ar →+* ZMod 2) {p₀ : Fin np} {w : Fin np → Ar} (hw : φ (w p₀) = 1) {N : ℕ}
     (P : SlpG (OBits St n L np B n') Ar N) (hOk : ∀ j, P.isProd j = true → OneSidedAt (P.prod j))
     (W : ODraws St n L np B n') (pc : ∀ t, Fin (n t) → Fin (B t) → Fin L → Ar)
@@ -6851,8 +6277,6 @@ theorem SlpG.parityForm_err_ov (φ : Ar →+* ZMod 2) {p₀ : Fin np} {w : Fin n
   exact h
 
 open Classical in
-/-- **Charge-pure one-sided overlapped runs add up**: at every bit point of the samples, the round's run has at least
-`L` products per cell-block, of any stage, not short of products. -/
 theorem SlpG.card_full_le_ov (φ : Ar →+* ZMod 2) {p₀ : Fin np} {w : Fin np → Ar} (hw : φ (w p₀) = 1) {N : ℕ}
     (P : SlpG (OBits St n L np B n') Ar N) (hOk : ∀ j, P.isProd j = true → OneSidedAt (P.prod j))
     (W : ODraws St n L np B n') (pc : ∀ t, Fin (n t) → Fin (B t) → Fin L → Ar)
@@ -6872,7 +6296,6 @@ theorem SlpG.card_full_le_ov (φ : Ar →+* ZMod 2) {p₀ : Fin np} {w : Fin np 
 
 end ParityOverlapRound
 
-/-- A share's complement counts the cells outside it. -/
 theorem card_not_ge {C : Type} [Fintype C] (Q : C → Prop) [DecidablePred Q] :
     (Fintype.card C : ℝ) * (1 - prob Q) ≤ (univ.filter fun c => ¬Q c).card := by
   rw [prob_eq_card]
@@ -6910,8 +6333,6 @@ def RoundsHypKStP (Mc : Machine) (S : Service) (R St : ℕ) (Vmax δb δz κ : �
         (∀ w s, (prog w s).ChargePure φ p₀ (word w s)) ∧
         κ * ∑ w, ∑ s, ((univ.filter fun j => (prog w s).isProd j = true).card : ℝ) - V x ≤ Mc.charge M (e.symm x, r)
 
-/-- `roundsHyp_of_stagedP` on one slice (`RoundsSlice`): one adversary at one value of its coins, its acceptance
-`acc`, charge `cost` and breaks named, and `RoundsHypKStP`'s cost line at that slice. -/
 theorem roundsSlice_of_stagedP {R St : ℕ} {Vmax κ : ℝ} {n L np B n' : ℕ} {Ar : Type} [CommRing Ar]
     {wt : Fin np → Ar} {φ : Ar →+* ZMod 2} {p₀ : Fin np}
     (P : StagedPlay (DCells n n' B) (DBits n L np B n') Ar St R) (acc : Paths (DStage St n L np B n') R → Prop)
@@ -6967,11 +6388,6 @@ theorem roundsSlice_of_stagedP {R St : ℕ} {Vmax κ : ℝ} {n L np B n' : ℕ} 
       exact hprod w s
     _ ≤ cost x := hcharge
 
-/-- **Staged rounds of one-sided operands of any form give the window's cost line** (RS-E-REF r6 VI.2): under
-`RoundsHypKStP` with `φ (wt p₀) = 1`, `RoundsHyp` holds at `p = 0.854` with `F₀ = St κ L n n' B` and no slack. The
-game is the product-deficit game (`StagedPlay.gameP`, accepting as `game` does), whose rounds are staged at `0.854`
-whatever the errors (`StagedPlay.game_stagedP`); each stage's cell-blocks not short of products are counted by
-`SlpG.card_full_le` (`roundsSlice_of_stagedP`, slice by slice). -/
 theorem roundsHyp_of_stagedP {Mc : Machine} {S : Service} {R St : ℕ} {Vmax δb δz κ : ℝ} {n L np B n' : ℕ}
     {Ar : Type} [CommRing Ar] {wt : Fin np → Ar} {φ : Ar →+* ZMod 2} {p₀ : Fin np}
     (h : RoundsHypKStP Mc S R St Vmax δb δz κ n L np B n' wt φ p₀) (hw : φ (wt p₀) = 1) (hSt : 0 < St)
@@ -7008,8 +6424,6 @@ def RoundsHypKOvP (Mc : Machine) (S : Service) (R St : ℕ) (Vmax δb δz κ : �
         (∀ w, (prog w).ChargePureAt φ p₀ (word w)) ∧
         κ * ∑ w, ((univ.filter fun j => (prog w).isProd j = true).card : ℝ) - V x ≤ Mc.charge M (e.symm x, r)
 
-/-- `roundsHyp_of_overlapP` on one slice (`RoundsSlice`): one adversary at one value of its coins, its acceptance
-`acc`, charge `cost` and breaks named, and `RoundsHypKOvP`'s cost line at that slice. -/
 theorem roundsSlice_of_overlapP {R St : ℕ} {Vmax κ : ℝ} {n B n' : Fin St → ℕ} {L np : ℕ} {Ar : Type}
     [CommRing Ar] {wt : Fin np → Ar} {φ : Ar →+* ZMod 2} {p₀ : Fin np}
     (P : OvPlay (fun t => DCells (n t) (n' t) (B t)) (fun t => DBits (n t) L np (B t) (n' t)) Ar R)
@@ -7074,11 +6488,6 @@ theorem roundsSlice_of_overlapP {R St : ℕ} {Vmax κ : ℝ} {n B n' : Fin St �
       exact expect_le_of_le (Nat.cast_nonneg _) fun W => hprod w W
     _ ≤ cost x := hcharge
 
-/-- **Overlapping stages of one-sided operands of any form give the window's cost line** (RS-E-REF r6 VI.2): under
-`RoundsHypKOvP` with `φ (wt p₀) = 1`, `RoundsHyp` holds at `p = 0.854` with `F₀ = κ L C`, `C` the round's
-cell-blocks over all its stages, and no slack. The game is the product-deficit game (`OvPlay.gameP`), whose rounds
-pass at most `1 − 0.146 d` whatever the errors (`OvPlay.passBound_gameP`); the count is `SlpG.card_full_le_ov`'s at
-every bit point of the samples, so at least its mean (`roundsSlice_of_overlapP`, slice by slice). -/
 theorem roundsHyp_of_overlapP {Mc : Machine} {S : Service} {R St : ℕ} {Vmax δb δz κ : ℝ} {n B n' : Fin St → ℕ}
     {L np : ℕ} {Ar : Type} [CommRing Ar] {wt : Fin np → Ar} {φ : Ar →+* ZMod 2} {p₀ : Fin np}
     (h : RoundsHypKOvP Mc S R St Vmax δb δz κ n L np B n' wt φ p₀) (hw : φ (wt p₀) = 1) (hκ : 0 ≤ κ) :
@@ -7120,8 +6529,6 @@ def RoundsHypH (Mc : Machine) (S : Service) (Ω : Type) [Fintype Ω] (R : ℕ) (
           ∑ q, ((univ.filter fun ℓ => (P w).lane q ℓ = .full).card : ℝ) + nm w) ∧
         κ * ∑ w, (∑ q, 4 * ((P w).s q : ℝ) + h * nm w) - V x ≤ Mc.charge M (e.symm x, r)
 
-/-- **Theorem H gives the window's cost line** in exact arithmetic: under `RoundsHypH` with plane `p₀` at weight 1
-and merges at `h ≥ 2L/3` slots, `RoundsHyp` holds with `F₀ = κ L n n' B` and no slack, as from Theorem K. -/
 theorem roundsHyp_of_H {Mc : Machine} {S : Service} {Ω : Type} [Fintype Ω] {R : ℕ} {p Vmax δb δz κ h : ℝ}
     {F : Type} [Field F] {n L np B n' : ℕ} {wt : Fin np → F} {p₀ : Fin np}
     (hH : RoundsHypH Mc S Ω R p Vmax δb δz κ h F n L np B n' wt) (hwt : wt p₀ = 1) (hκ : 0 ≤ κ)
@@ -7192,7 +6599,6 @@ def timeB (price : K → ℕ) (P : StraightLine K) : ℕ := (P.map fun g => pric
 theorem timeB_append (price : K → ℕ) (P Q : StraightLine K) : timeB price (P ++ Q) = timeB price P + timeB price Q := by
   simp [timeB]
 
-/-- RS-MODEL's `timeB_rewire`: rewiring never changes time. -/
 theorem timeB_rewire (price : K → ℕ) (P : StraightLine K) (f : GateApp K → List ℕ) :
     timeB price (P.map fun g => { g with args := f g }) = timeB price P := by
   simp [timeB, Function.comp_def]
@@ -7337,10 +6743,8 @@ def machine (p : Price K) : Machine where
   time_fst := p.t_nil
   time_snd := p.t_nil
 
-/-- A circuit's time in `machine` is the price of its gates. -/
 theorem time_alg (p : Price K) {I O : Type} (c : Circ kd I O) : (machine kd p).time c.alg = p.t c.gates := rfl
 
-/-- At `Price.ofNat`, it is RS-MODEL's `time_B` of its program. -/
 theorem time_alg_ofNat (price : K → ℕ) {I O : Type} (c : Circ kd I O) :
     (machine kd (.ofNat price)).time c.alg = (timeB price c.prog : ℝ) := rfl
 
@@ -7394,8 +6798,6 @@ def gridMatMachine {p : Price K} {κ κadd κG : ℝ} {Gr : ℤ → Prop} {shape
   mulG a b c := (I.mul a b c).alg
   eval_mulG := I.eval_mul
   time_mulG_le := I.time_mul_le
-
-/-! ### The circuits exist: one GEMM kind per shape -/
 
 /-- A pair of matrices on the wires `Fin (a b + c d)`, row-major (routing only). -/
 def flatPair (a b c d : ℕ) : Circ kd (Mat ℤ a b × Mat ℤ c d) (Fin (a * b + c * d) → ℤ) :=
@@ -7482,8 +6884,6 @@ def gemmGates (κ₀ κa : ℕ) : MatGates gemmKind (.ofNat (gemmPrice κ₀ κa
   time_sub_le a b := by
     simp [gemmSub, Price.ofNat, Circ.gates, flatPair, unflat, progOf, timeB, gemmPrice]
 
-/-! ### sm_120 (RS-MODEL §4) -/
-
 /-- RS-MODEL's sm_120 gate kinds, per warp instruction. -/
 inductive K120
   | mma | mmaTf32 | imad | dp4a | hfma2 | ffma | alu | ldst
@@ -7521,15 +6921,11 @@ theorem int8_of_abs_le {a e s : ℤ} (ha : |a| ≤ 127 - s) (he : |e| ≤ s) : I
   have h := abs_le.mp ((abs_add_le a e).trans (by linarith : |a| + |e| ≤ 127))
   exact ⟨by linarith [h.1], h.2⟩
 
-/-- **The edited operands are int8** (RS-RT's V6): an instance in `G_use = [−(127 − s), 127 − s]` edited by noise
-bounded by `s` stays in int8. -/
 theorem edit_int8 {Mc : MatMachine ℤ} {Seed : Type} {n : ℕ} {E : Mc.Edit Seed n} {s : ℤ} (hE : E.Bounded s)
     (σ : Seed) {x : Mat ℤ n n × Mat ℤ n n} (hx : InGrid (127 - s) x) :
     (∀ i k, Int8 ((E.edit σ x).1 i k)) ∧ ∀ k j, Int8 ((E.edit σ x).2 k j) :=
   ⟨fun i k => int8_of_abs_le (hx i k).1 (hE σ i k).1, fun k j => int8_of_abs_le (hx k j).2 (hE σ k j).2⟩
 
-/-- **An accepted transcript's opened edited entries are int8**: the range check puts the committed instance's opened
-entries in `G_use`, so under every σ' their edits are int8 operands, the grid the edit floor prices at 1 u. -/
 theorem accepted_edit_int8 {Mc : MatMachine ℤ} {n : ℕ} {s : ℤ} (S : GridService n (127 - s))
     {E : Mc.Edit S.Seed n} (hE : E.Bounded s) {c : S.Com} {σ : S.Seed} {a : S.Ans} (h : S.verify c σ a = true)
     (σ' : S.Seed) {i j : Fin n} (hij : S.opened σ i j) :
@@ -7537,7 +6933,6 @@ theorem accepted_edit_int8 {Mc : MatMachine ℤ} {n : ℕ} {s : ℤ} (S : GridSe
   ⟨int8_of_abs_le (S.range_check c σ a h i j hij).1 (hE σ' i j).1,
     int8_of_abs_le (S.range_check c σ a h i j hij).2 (hE σ' i j).2⟩
 
-/-- With every entry opened, an accepted transcript's whole edited instance is int8. -/
 theorem accepted_edit_int8_all {Mc : MatMachine ℤ} {n : ℕ} {s : ℤ} (S : GridService n (127 - s))
     (hall : ∀ σ i j, S.opened σ i j) {E : Mc.Edit S.Seed n} (hE : E.Bounded s) {c : S.Com} {σ : S.Seed}
     {a : S.Ans} (h : S.verify c σ a = true) (σ' : S.Seed) :
@@ -7564,10 +6959,6 @@ theorem gridMatMachine120_κG (kd : K120 → Kind) (G : MatGates kd (.ofNat pric
 theorem gridMatMachine120_κadd (kd : K120 → Kind) (G : MatGates kd (.ofNat price120) 16 1) (I : Int8Gates120 kd) :
     (gridMatMachine120 kd G I).κadd = 1 := rfl
 
-/-- **Route (c) on sm_120, on the int8 grid** (`κ = 1` u on `G_op = int8`): on a range-checking service with
-`G_use = [−(127 − s), 127 − s]` (the promise), noise bounded by `s` and `32 ∣ n ≤ 2^17`, the edited protocol served by
-the int8 tile GEMM is relatively secure against `N = n³` u, with `ε = U / F − 1`, `U = n³ + 2 n² + time gen +
-time prove`, and `γ = (2 n² + time gen + time prove) / n³`. The edits stay int8 by `edit_int8`. -/
 theorem relativelySecure_edited120 (kd : K120 → Kind) (G : MatGates kd (.ofNat price120) 16 1) (I : Int8Gates120 kd)
     {n : ℕ} {s : ℤ} (S : GridService n (127 - s)) (hn : 0 < n) (h32 : 32 ∣ n) (h17 : n ≤ 2 ^ 17)
     (E : (gridMatMachine120 kd G I).Edit S.Seed n) (hE : E.Bounded s)
@@ -7598,8 +6989,6 @@ theorem relativelySecure_edited120 (kd : K120 → Kind) (G : MatGates kd (.ofNat
     (by rw [gridMatMachine120_κG, one_mul]; exact pow_pos (Nat.cast_pos.mpr hn) 3)
   rwa [gridMatMachine120_κG, gridMatMachine120_κadd, one_mul, mul_one] at h
 
-/-- **Route (c) on sm_120, unrestricted operands** (the worst case, `κ = 16` u): reference `N = 16 n³` u, `ε = U / F − 1`
-with `U = 16 n³ + 2 n² + time gen + time prove`, and `γ = (2 n² + time gen + time prove) / (16 n³)`. -/
 theorem relativelySecure_edited120_wide (kd : K120 → Kind) (G : MatGates kd (.ofNat price120) 16 1) (S : Service) {n : ℕ}
     (hn : 0 < n) (E : (matMachine120 kd G).Edit S.Seed n)
     (prove : (matMachine120 kd G).Alg ((S.Seed × (Mat ℤ n n × Mat ℤ n n) × S.Coins) × Mat ℤ n n) (S.Com × S.Ans))
@@ -7653,7 +7042,6 @@ def priceθ : Price Instr120 := .ofRat price120θ price120θ_nonneg
 /-- An instruction's semantics is its kind's (the words it moves are routing). -/
 abbrev kdθ (kd : K120 → Kind) : Instr120 → Kind := fun i => kd i.kind
 
-/-- B_θ prices a list at least `4/5` of B's price of its kinds. -/
 theorem timeB_le_priceθ (l : List Instr120) :
     4 / 5 * (timeB price120 (progOf (l.map Instr120.kind)) : ℝ) ≤ priceθ.t l := by
   show _ ≤ (((l.map price120θ).sum : ℚ) : ℝ)
@@ -7665,7 +7053,6 @@ theorem timeB_le_priceθ (l : List Instr120) :
   have : (0 : ℝ) ≤ 1 / 5 * (3751 / 100) * i.words := by positivity
   linarith
 
-/-- A B gate list read in B_θ, each gate moving no words, costs `4/5` of its B time. -/
 theorem priceθ_map_lift (l : List K120) :
     priceθ.t (l.map fun k => (⟨k, 0⟩ : Instr120)) = 4 / 5 * (timeB price120 (progOf l) : ℝ) := by
   show (((l.map fun k => (⟨k, 0⟩ : Instr120)).map price120θ).sum : ℝ) = _
@@ -7733,8 +7120,6 @@ def Alg.projθ {kd : K120 → Kind} {I O : Type} (f : Alg (kdθ kd) I O) : Alg k
     obtain ⟨c, hc, hc'⟩ := f.2
     exact ⟨c.projθ, by rw [Circ.eval_projθ, hc], by rw [Circ.gates_projθ, hc']⟩⟩
 
-/-- **B's floor carries to B_θ at `1 − θ = 4/5` of it**: an adversary's B shadow computes the same messages, and B_θ
-prices it at least `4/5` of its B time (`timeB_le_priceθ`). Superseded by `serviceFloorPerProver_θ`. -/
 theorem serviceFloor_θ (kd : K120 → Kind) (S : Service) {F κ : ℝ}
     (h : ServiceFloor (machine kd (.ofNat price120)) S F κ) : ServiceFloor (machine (kdθ kd) priceθ) S (4 / 5 * F) κ := by
   intro Ω _ M hc
@@ -7949,9 +7334,6 @@ theorem relativelySecure_edited120θ (kd : K120 → Kind) (G : MatGates kd (.ofN
   convert h using 2
   ring
 
-/-- **Route (c) in B_θ at a floor of Theorem E's form** (RS-D1E): B's floor `F_B = (c / m_max) (φ n³ − sl)` u for
-rationals `0 < c ≤ m_max` and `φ ≤ 1` and a slack `0 ≤ sl < φ n³` (`L (M + K)`, and RS-W′'s excess while it stands), so
-`ε = U / (0.8 F_B) − 1`. -/
 theorem relativelySecure_edited120θ_rat (kd : K120 → Kind) (G : MatGates kd (.ofNat price120) 16 1) (I : Int8Gates120 kd)
     {n : ℕ} {s : ℤ} (S : GridService n (127 - s)) (hn : 0 < n) (h32 : 32 ∣ n) (h17 : n ≤ 2 ^ 17)
     (E : (gridMatMachine120θ kd G I).Edit S.Seed n) (hE : E.Bounded s)
@@ -7988,8 +7370,6 @@ theorem relativelySecure_edited120θ_rat (kd : K120 → Kind) (G : MatGates kd (
 /-- Theorem E's `φ = 1 − f − m / N_B` (RS-D1E). -/
 def phiE (f m NB : ℚ) : ℚ := 1 - f - m / NB
 
-/-- **Route (c) in B_θ at Theorem E's proved floor** (`c = ½`, `m_max = 2`, `φ = 1 − f − m / N_B`): B's floor
-`F_B = (φ n³ − sl) / 4` u gives `ε = U / ((φ n³ − sl) / 5) − 1`, about `4 / φ − 1` for large `n`. -/
 theorem relativelySecure_edited120θ_half (kd : K120 → Kind) (G : MatGates kd (.ofNat price120) 16 1) (I : Int8Gates120 kd)
     {n : ℕ} {s : ℤ} (S : GridService n (127 - s)) (hn : 0 < n) (h32 : 32 ∣ n) (h17 : n ≤ 2 ^ 17)
     (E : (gridMatMachine120θ kd G I).Edit S.Seed n) (hE : E.Bounded s)
@@ -8040,8 +7420,6 @@ theorem certifiedFraction120θ (kd : K120 → Kind) (S : Service) (n : ℕ) (c m
   push_cast
   ring
 
-/-- **The certified fraction at Theorem E's proved floor** (`c = ½`, `m_max = 2`): accepted runs are charged at least
-`(φ / 4) N − sl / 5` except with probability `κ`, `N = 0.8 n³` u. -/
 theorem certifiedFraction120θ_half (kd : K120 → Kind) (S : Service) (n : ℕ) (f m NB : ℚ) {sl κf : ℝ}
     (hfloorB : ServiceFloor (machine kd (.ofNat price120)) S (1 / 4 * ((phiE f m NB : ℝ) * (n : ℝ) ^ 3 - sl)) κf) :
     ServiceFloor (machine (kdθ kd) priceθ) S
@@ -8049,11 +7427,6 @@ theorem certifiedFraction120θ_half (kd : K120 → Kind) (S : Service) (n : ℕ)
   convert serviceFloor_θ kd S hfloorB using 1
   ring
 
-/-- **The certified fraction from Theorem S** (in place of Theorem M): under the window's rounds in Model B
-(`RoundsHyp`: per round, Theorem E's floor `F₀` of the round's GEMMs, the slack `sl = L(M + K)`, and the pass bound
-along guard paths), every adversary in B_θ that commits first has its accepted runs charged below
-`0.8 ((R − D) F₀ − Vmax − R sl)` with probability at most `e^{−(1−p) D} + R (δb + δz)`. Of the window's `0.8 R F₀`
-that is the share `1 − D / R − (Vmax + R sl) / (R F₀)`. -/
 theorem certifiedFraction120θ_rounds (kd : K120 → Kind) (S : Service) {Ω : Type} [Fintype Ω] {R : ℕ}
     {p F₀ sl Vmax δb δz : ℝ} (h : RoundsHyp (machine kd (.ofNat price120)) S Ω R p F₀ sl Vmax δb δz) (hp : p ≤ 1)
     (hF₀ : 0 < F₀) (hδb : 0 ≤ δb) (hδz : 0 ≤ δz) (D : ℝ) :
@@ -8061,8 +7434,6 @@ theorem certifiedFraction120θ_rounds (kd : K120 → Kind) (S : Service) {Ω : T
       (Real.exp (-((1 - p) * D)) + R * (δb + δz)) :=
   serviceFloor_θ kd S (serviceFloor_of_rounds h hp hF₀ hδb hδz D)
 
-/-- **The certified fraction at `κ = 2⁻⁴⁰ + R (δb + δz)`**: `D₀ = 40 ln 2 / (1 − p)`, so the luck loss is
-`27.73 / ((1 − p) R)` of the window, detection included. -/
 theorem certifiedFraction120θ_rounds_40 (kd : K120 → Kind) (S : Service) {Ω : Type} [Fintype Ω] {R : ℕ}
     {p F₀ sl Vmax δb δz : ℝ} (h : RoundsHyp (machine kd (.ofNat price120)) S Ω R p F₀ sl Vmax δb δz) (hp : p < 1)
     (hF₀ : 0 < F₀) (hδb : 0 ≤ δb) (hδz : 0 ≤ δz) :
@@ -8076,11 +7447,6 @@ theorem certifiedFraction120θ_rounds_40 (kd : K120 → Kind) (S : Service) {Ω 
   rw [← h40]
   exact certifiedFraction120θ_rounds kd S h hp.le hF₀ hδb hδz _
 
-/-- **The certified fraction from Theorem K** (the re-encoded design, in place of the paper's cost line): under
-`RoundsHypK` in Model B for a product class with chain factor 1, every adversary in B_θ that commits first has its
-accepted runs charged below `0.8 ((R − D) κ L n n' B − Vmax)` with probability at most `e^{−(1−p) D} + R (δb + δz)`.
-That is `c = 1` of the window's `R` GEMMs of `n × LB × n'` at `κ` a product, less `D` rounds of luck and the noise
-reads. -/
 theorem certifiedFraction120θ_K (kd : K120 → Kind) (S : Service) {Ω : Type} [Fintype Ω] {R : ℕ}
     {p Vmax δb δz κ : ℝ} {n L np B n' : ℕ} {Ar : Type} [CommRing Ar] {wt : Fin np → Ar}
     {Ok : ((DBits n L np B n' → Ar) → Ar) → Prop}
@@ -8094,7 +7460,6 @@ theorem certifiedFraction120θ_K (kd : K120 → Kind) (S : Service) {Ω : Type} 
   simpa only [mul_zero, sub_zero] using
     certifiedFraction120θ_rounds kd S (roundsHyp_of_K_one h hc hκ.le) hp hF₀ hδb hδz D
 
-/-- ... at `κ = 2⁻⁴⁰ + R (δb + δz)` (`D₀ = 40 ln 2 / (1 − p)`). -/
 theorem certifiedFraction120θ_K_40 (kd : K120 → Kind) (S : Service) {Ω : Type} [Fintype Ω] {R : ℕ}
     {p Vmax δb δz κ : ℝ} {n L np B n' : ℕ} {Ar : Type} [CommRing Ar] {wt : Fin np → Ar}
     {Ok : ((DBits n L np B n' → Ar) → Ar) → Prop}
@@ -8109,9 +7474,6 @@ theorem certifiedFraction120θ_K_40 (kd : K120 → Kind) (S : Service) {Ω : Typ
   simpa only [mul_zero, sub_zero] using
     certifiedFraction120θ_rounds_40 kd S (roundsHyp_of_K_one h hc hκ.le) hp hF₀ hδb hδz
 
-/-- **The re-encoded design's certified fraction** (`X = ⌊x/s⌋ + b`, U's planes at `w = (1, 2, 4, 8, 16, 32, 65)`),
-at `κ = 2⁻⁴⁰ + R (δb + δz)`, for runs whose products are one-sided, of any form: the chain lemma
-(`chainBound_oneSided`) discharges the chain bound. -/
 theorem certifiedFraction120θ_reEncoded_40 (kd : K120 → Kind) (S : Service) {Ω : Type} [Fintype Ω] {R : ℕ}
     {p Vmax δb δz κ : ℝ} {n L B n' : ℕ}
     (h : RoundsHypK (machine kd (.ofNat price120)) S Ω R p Vmax δb δz κ n L 7 B n' wRe OneSided) (hp : p < 1)
@@ -8121,8 +7483,6 @@ theorem certifiedFraction120θ_reEncoded_40 (kd : K120 → Kind) (S : Service) {
       (((2 : ℝ) ^ 40)⁻¹ + R * (δb + δz)) :=
   certifiedFraction120θ_K_40 kd S h (chainBound_oneSided toF2 toF2_wRe_zero) hp hκ hC hδb hδz
 
-/-- ... for runs with mixed products (`GProd`: operands any function of U's bits plus affine in the bits, mixed
-affine bytes included): Lemma G over `F₂` (`chainBound_gProd`) discharges the chain bound. -/
 theorem certifiedFraction120θ_reEncodedMixed_40 (kd : K120 → Kind) (S : Service) {Ω : Type} [Fintype Ω] {R : ℕ}
     {p Vmax δb δz κ : ℝ} {n L B n' : ℕ}
     (h : RoundsHypK (machine kd (.ofNat price120)) S Ω R p Vmax δb δz κ n L 7 B n' wRe GProd) (hp : p < 1)
@@ -8145,10 +7505,6 @@ theorem certifiedFraction120θ_reEncodedExactK_40 (kd : K120 → Kind) (S : Serv
   certifiedFraction120θ_K_40 kd S h
     (chainBound_oneSided (RingHom.id ℚ) (p₀ := 0) (by rw [RingHom.id_apply]; exact wReQ_zero)) hp hκ hC hδb hδz
 
-/-- **The re-encoded design's certified fraction with the luck derived** (one-sided affine products: `U`'s planes
-times the coins' word, or any product of an operand affine in U's bits and one affine in the coins): under
-`RoundsHypKS`, neither `PathBound` nor a chain bound is a hypothesis; the spot check gives `p = ¾`, so `D₀ = 160 ln 2`
-rounds of luck at `2⁻⁴⁰`. -/
 theorem certifiedFraction120θ_reEncodedSpot_40 (kd : K120 → Kind) (S : Service) {R : ℕ} {Vmax δb δz κ : ℝ}
     {n L B n' : ℕ}
     (h : RoundsHypKS (machine kd (.ofNat price120)) S R Vmax δb δz κ n L 7 B n' wRe
@@ -8164,8 +7520,6 @@ theorem certifiedFraction120θ_reEncodedSpot_40 (kd : K120 → Kind) (S : Servic
     ((chainBound_oneSided toF2 toF2_wRe_zero).mono fun _ hπ => hπ.1) (by norm_num) hκ hC hδb hδz
   rwa [e] at this
 
-/-- ... with mixed affine products allowed too (any product of two affine operands): Lemma G
-(`chainBound_gProd`) discharges the chain bound, so neither the luck nor the chain is a hypothesis. -/
 theorem certifiedFraction120θ_reEncodedSpotMixed_40 (kd : K120 → Kind) (S : Service) {R : ℕ} {Vmax δb δz κ : ℝ}
     {n L B n' : ℕ}
     (h : RoundsHypKS (machine kd (.ofNat price120)) S R Vmax δb δz κ n L 7 B n' wRe fun π => AffProd π)
@@ -8180,10 +7534,6 @@ theorem certifiedFraction120θ_reEncodedSpotMixed_40 (kd : K120 → Kind) (S : S
     ((chainBound_gProd toF2 rfl toF2_wRe_zero).mono fun _ hπ => hπ.gProd) (by norm_num) hκ hC hδb hδz
   rwa [e] at this
 
-/-- **The re-encoded design's certified fraction with per-stage samples** (decision 36, RS-E-REF r5 V.3's repair):
-under `RoundsHypKSt` with products of affine operands (one-sided or mixed), rounds of `St` stages, each sampling its
-products' noise after committing their operands, have the floor with the `St` stage floors summed,
-`F₀ = St κ L n n' B`, at `D₀ = 160 ln 2` rounds of luck at `2⁻⁴⁰`, with neither a luck nor a chain hypothesis. -/
 theorem certifiedFraction120θ_staged_40 (kd : K120 → Kind) (S : Service) {R St : ℕ} {Vmax δb δz κ : ℝ}
     {n L B n' : ℕ}
     (h : RoundsHypKSt (machine kd (.ofNat price120)) S R St Vmax δb δz κ n L 7 B n' wRe fun π => AffProd π)
@@ -8202,8 +7552,6 @@ theorem certifiedFraction120θ_staged_40 (kd : K120 → Kind) (S : Service) {R S
       hSt hκ.le) (by norm_num) hF₀ hδb hδz
   rwa [e, mul_zero, sub_zero] at this
 
-/-- **Decode's deferred edit as an instance** (RS-D1E (b), RS-E-REF r5 V.3: every operand of the round's products
-committed before the round's one sample): rounds of one stage, with the floor `F₀ = κ L n n' B`. -/
 theorem certifiedFraction120θ_decode_40 (kd : K120 → Kind) (S : Service) {R : ℕ} {Vmax δb δz κ : ℝ}
     {n L B n' : ℕ}
     (h : RoundsHypKSt (machine kd (.ofNat price120)) S R 1 Vmax δb δz κ n L 7 B n' wRe fun π => AffProd π)
@@ -8213,10 +7561,6 @@ theorem certifiedFraction120θ_decode_40 (kd : K120 → Kind) (S : Service) {R :
       (((2 : ℝ) ^ 40)⁻¹ + R * (δb + δz)) := by
   simpa only [Nat.cast_one, one_mul] using certifiedFraction120θ_staged_40 kd S h one_pos hκ hC hδb hδz
 
-/-- **The certified fraction with overlapping stages** (Theorem K∥): under `RoundsHypKOv` with K∥'s products,
-rounds of `St` stages of any shapes, their samples overlapping at any depth, have the floor `F₀ = κ L Σ_t n_t n'_t B_t`,
-every stage's cell-blocks counted once, at `D₀ = 160 ln 2` rounds of luck at `2⁻⁴⁰`, with neither a luck nor a chain
-hypothesis. -/
 theorem certifiedFraction120θ_overlap_40 (kd : K120 → Kind) (S : Service) {R St : ℕ} {Vmax δb δz κ : ℝ}
     {n B n' : Fin St → ℕ} {L : ℕ}
     (h : RoundsHypKOv (machine kd (.ofNat price120)) S R St Vmax δb δz κ n L 7 B n' wRe) (hκ : 0 < κ)
@@ -8238,7 +7582,6 @@ theorem certifiedFraction120θ_overlap_40 (kd : K120 → Kind) (S : Service) {R 
 theorem ServiceFloor.mono {Mc : Machine} {S : Service} {F κ κ' : ℝ} (h : ServiceFloor Mc S F κ) (hκ : κ ≤ κ') :
     ServiceFloor Mc S F κ' := fun Ω _ M hc => (h Ω M hc).trans hκ
 
-/-- At the parity luck `0.854`, `D₀ = 274 ln 2` rounds of luck reach `2⁻⁴⁰`: `0.146 · 274 ≥ 40`. -/
 theorem exp_parity_274 : Real.exp (-((1 - 427 / 500) * (274 * Real.log 2))) ≤ ((2 : ℝ) ^ 40)⁻¹ := by
   have h40 : Real.exp (-(((40 : ℕ) : ℝ) * Real.log 2)) = ((2 : ℝ) ^ 40)⁻¹ := by
     rw [Real.exp_neg, Real.exp_nat_mul, Real.exp_log two_pos]
@@ -8248,9 +7591,6 @@ theorem exp_parity_274 : Real.exp (-((1 - 427 / 500) * (274 * Real.log 2))) ≤ 
   push_cast
   nlinarith
 
-/-- **The certified fraction with per-stage samples, one-sided operands of any form** (RS-E-REF r6 VI.2): under
-`RoundsHypKStP` on `Z/2³²` read mod 2 (`toF2`, plane 0 at an odd weight), the staged floor `F₀ = St κ L n n' B` at
-`D₀ = 274 ln 2` rounds of luck at `2⁻⁴⁰` (the parity luck `0.854`), with neither a luck nor a chain hypothesis. -/
 theorem certifiedFraction120θ_stagedP_40 (kd : K120 → Kind) (S : Service) {R St : ℕ} {Vmax δb δz κ : ℝ}
     {n L B n' : ℕ} (h : RoundsHypKStP (machine kd (.ofNat price120)) S R St Vmax δb δz κ n L 7 B n' wRe toF2 0)
     (hSt : 0 < St) (hκ : 0 < κ) (hC : 0 < L * (n * n' * B)) (hδb : 0 ≤ δb) (hδz : 0 ≤ δz) :
@@ -8265,9 +7605,6 @@ theorem certifiedFraction120θ_stagedP_40 (kd : K120 → Kind) (S : Service) {R 
   rw [mul_zero, sub_zero] at this
   exact ServiceFloor.mono this (by linarith [exp_parity_274])
 
-/-- **The certified fraction with overlapping stages, one-sided operands of any form** (RS-E-REF r6 VI.2): under
-`RoundsHypKOvP` on `Z/2³²` read mod 2, the floor `F₀ = κ L Σ_t n_t n'_t B_t` at `D₀ = 274 ln 2` rounds of luck at
-`2⁻⁴⁰`, with neither a luck nor a chain hypothesis. -/
 theorem certifiedFraction120θ_overlapP_40 (kd : K120 → Kind) (S : Service) {R St : ℕ} {Vmax δb δz κ : ℝ}
     {n B n' : Fin St → ℕ} {L : ℕ}
     (h : RoundsHypKOvP (machine kd (.ofNat price120)) S R St Vmax δb δz κ n L 7 B n' wRe toF2 0) (hκ : 0 < κ)
@@ -8283,8 +7620,6 @@ theorem certifiedFraction120θ_overlapP_40 (kd : K120 → Kind) (S : Service) {R
   rw [mul_zero, sub_zero, card_oCells] at this
   exact ServiceFloor.mono this (by linarith [exp_parity_274])
 
-/-- **The certified fraction from Theorem H** (the re-encoded design in exact arithmetic, merges priced at
-`h ≥ 2L/3` slots): under `RoundsHypH` in Model B, the same floor as from Theorem K. -/
 theorem certifiedFraction120θ_H (kd : K120 → Kind) (S : Service) {Ω : Type} [Fintype Ω] {R : ℕ}
     {p Vmax δb δz κ h : ℝ} {F : Type} [Field F] {n L np B n' : ℕ} {wt : Fin np → F} {p₀ : Fin np}
     (hH : RoundsHypH (machine kd (.ofNat price120)) S Ω R p Vmax δb δz κ h F n L np B n' wt) (hwt : wt p₀ = 1)
@@ -8298,8 +7633,6 @@ theorem certifiedFraction120θ_H (kd : K120 → Kind) (S : Service) {Ω : Type} 
   simpa only [mul_zero, sub_zero] using
     certifiedFraction120θ_rounds kd S (roundsHyp_of_H hH hwt hκ.le hh) hp hF₀ hδb hδz D
 
-/-- **The re-encoded design's certified fraction in exact arithmetic** over `ℚ`, at VF2's merge price (32 slots a
-merged word, so any `L ≤ 48`) and `κ = 2⁻⁴⁰ + R (δb + δz)`. -/
 theorem certifiedFraction120θ_reEncodedExact_40 (kd : K120 → Kind) (S : Service) {Ω : Type} [Fintype Ω] {R : ℕ}
     {p Vmax δb δz κ : ℝ} {n L B n' : ℕ}
     (hH : RoundsHypH (machine kd (.ofNat price120)) S Ω R p Vmax δb δz κ 32 ℚ n L 7 B n' wReQ) (hL : L ≤ 48)
@@ -8388,8 +7721,6 @@ theorem relativelySecure_edited120θ_H (kd : K120 → Kind) (G : MatGates kd (.o
   rw [mul_zero, sub_zero, ← hFBdef] at hfl
   exact relativelySecure_edited120θ_of_floor kd G I S hn h32 h17 E hE prove hcom hacc hfl hκδ hFB hFBn
 
-/-! ### Model A (RS-MODEL §3, over ℚ) and `B_θ ≤ A` -/
-
 section ModelA
 
 variable {Res : Type} (rs : List Res) (cost : K → Res → ℚ)
@@ -8421,9 +7752,6 @@ theorem dotA_le_timeA {rows : List (Res → ℚ)} {row : Res → ℚ} (h : row �
     · exact le_max_left _ _
     · exact (ih h).trans (le_max_right _ _)
 
-/-- **RS-MODEL's `timeB_le_timeA`** (B as a dual combination of A's rows), over ℚ and for a price bounded by the
-combination: if `price k ≤ Σ_p y_p (row_p · cost k)` with weights `y_p ≥ 0` on rows of A, then
-`Σ price ≤ (Σ y) · time_A`. -/
 theorem sum_le_timeA (rows : List (Res → ℚ)) (ys : List (ℚ × (Res → ℚ))) (hys : ∀ p ∈ ys, 0 ≤ p.1 ∧ p.2 ∈ rows)
     (price : K → ℚ) (hprice : ∀ k, price k ≤ (ys.map fun p => p.1 * dotA rs p.2 (cost k)).sum) (l : List K) :
     (l.map price).sum ≤ (ys.map Prod.fst).sum * timeA rs cost rows l := by
@@ -8446,10 +7774,6 @@ theorem sum_le_timeA (rows : List (Res → ℚ)) (ys : List (ℚ × (Res → ℚ
 
 end ModelA
 
-/-- **`B_θ ≤ A`** (RS-MODEL §6.2's lemma, as an instance of `timeB_le_timeA`): if B's prices are a dual combination of
-A's rows with total weight at most 1 (`hB`, `hsum`) and R6 is a row of A that prices each word at `W` (`hW`), then
-`B_θ = (4/5)·B + (1/5)·R6` is the combination `(4/5)·ys + (1/5)·R6`, of total weight at most 1, so B_θ's time of
-every gate list is at most A's. -/
 theorem timeθ_le_timeA {Res : Type} (rs : List Res) (cost : Instr120 → Res → ℚ) (rows : List (Res → ℚ))
     (ys : List (ℚ × (Res → ℚ))) (hys : ∀ p ∈ ys, 0 ≤ p.1 ∧ p.2 ∈ rows) (hsum : (ys.map Prod.fst).sum ≤ 1)
     (hB : ∀ i, (price120 i.kind : ℚ) ≤ (ys.map fun p => p.1 * dotA rs p.2 (cost i)).sum)

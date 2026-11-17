@@ -9,27 +9,14 @@ public import Definitions.Pouw.PearlC.Skip
 public import Proofs.Pouw.Fp8Atom.H1TAtomProofs
 public import Proofs.Pouw.Fp8Atom.Fp32Proofs
 
-/-!
-# P1: freezing under promotion every `G` atoms (staging)
-
-An atom `x` is an **identity** on the word `w` when `hopperStep w x.1 x.2 = w`. Skipping is in place: a skipped atom's
-incoming word passes through, a skipped group passes its incoming total through (its promotion is skipped too), and
-the groups stay where they are.
-
-`absorbed` flags exactly the atoms whose skip alone leaves the output unchanged (`skipOne_iff`), and `jointFlags`
-every atom of a set inside one group whose joint skip does (`joint_complete`); joint skips across groups escape both
-(`joint_cross_group`). On a word, atom `t` is group `t / 4`'s atom `t % 4` (`getD_getD_toChunks`), so the word's flags
-`Skip.wordFlags` flag every atom skippable with some set of its group's atoms (`joint_flagsComplete`, `Forming`'s
-`FlagsComplete` for `WordSkippable`).
--/
+/-! P1, staged: freezing under promotion every `G` atoms, a skipped atom or group passing its incoming word or total
+through in place. -/
 
 @[expose] public section
 
 namespace Pouw.PearlC.Freeze
 
 open Pouw.Fp8Atom Pouw.Fp8Atom.Proofs Pouw.Fp8Atom.H1T Pouw.Fp8Atom.H1T.Proofs Pouw.PearlC Pouw.PearlC.Skip
-
-/-! ## Two counterexamples to the task's wording -/
 
 /-- Lanes `0` and `1` hold `x` and `y`, the other 30 hold `z`. -/
 def lanes (x y z : Code) : Fin 32 → Code := fun i => if i.val = 0 then x else if i.val = 1 then y else z
@@ -43,10 +30,6 @@ theorem first_identity_nonzero_sum :
 /-- One lane `x`, the others `+0`. -/
 def lane0 (x : Code) : Fin 32 → Code := lanes x 0 0
 
-/-! ## (b1) The first atom of a group -/
-
-/-- **(b1)** From `+0`, on finite codes, the atom is an identity exactly when the products truncated to the slice's
-grid sum to zero (`preSum`), which `first_identity_nonzero_sum` shows is weaker than an exact product sum of zero. -/
 theorem hopperStep_zero_iff (a b : Fin 32 → Code) (ha : ∀ l, (a l).isNaN = false) (hb : ∀ l, (b l).isNaN = false) :
     hopperStep 0 a b = 0 ↔ preSum a b = 0 := by
   constructor
@@ -74,8 +57,6 @@ theorem hopperStep_zero_iff (a b : Fin 32 → Code) (ha : ∀ l, (a l).isNaN = f
       exact_mod_cast (mul_eq_zero.1 htot).resolve_right (two_zpow_ne _)
     rw [h0]
     simp [normalize, Term.zero, packValue, packTerm]
-
-/-! ## (a) An identity needs domination -/
 
 /-- The step's alignment exponent on the accumulator term `tc`: the largest exponent over `tc` and the nonzero
 products, at least −139. -/
@@ -121,8 +102,6 @@ theorem hopperStep_fin {w : Nat} {tc : Term} (hw : fp32Value w = .fin tc) (a b :
     simp [Value.finite?]
   simp only [h1, h2, h3, Bool.false_eq_true, ite_false, Bool.and_self]
 
-/-- `normalize` on a nonzero sum below `2^21` at an exponent of at least −113: a normal term (it may pass 127), the
-sum truncated toward zero to 14 significant bits. -/
 theorem normalize_spec' {E total : ℤ} (h0 : total ≠ 0) (hE1 : -113 ≤ E) (hT : total.natAbs < 2 ^ 21) :
     2 ^ 23 ≤ (normalize 14 E total).mag ∧ (normalize 14 E total).mag < 2 ^ 24 ∧
       -126 ≤ (normalize 14 E total).exp ∧ E - 13 ≤ (normalize 14 E total).exp ∧
@@ -212,9 +191,6 @@ theorem binade_term {t : Term} (h1 : 2 ^ 23 ≤ t.mag) (h2 : t.mag < 2 ^ 24) : b
 theorem binade_trunc14 {y : ℚ} (hy : y ≠ 0) : binade |trunc14 y| = binade |y| := by
   rw [trunc14_abs, trunc14_pos (abs_pos.2 hy), binade_tpos (abs_pos.2 hy)]
 
-/-- **(a) An identity needs domination.** On finite codes and a normal accumulator `w` of value `c` and exponent at
-least −113, `D = w` only if `c` lies on the step's grid `g = 2^(E − 13)` and the products truncated toward zero to
-`g` sum to zero (`E = stepExp`, the largest exponent over the accumulator and the products). -/
 theorem identity_needs_domination {w : Nat} {tc : Term} (hw : fp32Value w = .fin tc) (hm : 2 ^ 23 ≤ tc.mag)
     (he : -113 ≤ tc.exp) (a b : Fin 32 → Code) (ha : ∀ l, (a l).isNaN = false) (hb : ∀ l, (b l).isNaN = false)
     (hid : hopperStep w a b = w) :
@@ -269,7 +245,6 @@ theorem identity_needs_domination {w : Nat} {tc : Term} (hw : fp32Value w = .fin
     have hq := wordQ_packTerm m1 m2 e1 e2
     simp only [packValue] at hid
     rw [hid, hval, hv, Option.some.injEq] at hq
-    -- hq : tc.value = trunc14 (total * g)
     have hS0 : (total : ℚ) * 2 ^ (E - 13) ≠ 0 := mul_ne_zero (by exact_mod_cast h0) (two_zpow_ne _)
     have hbS : binade |(total : ℚ) * 2 ^ (E - 13)| = tc.exp := by
       rw [← binade_trunc14 hS0, ← hq, binade_term hm hm2]
@@ -301,9 +276,6 @@ theorem abs_sub_truncTo_lt {g : ℚ} (hg : 0 < g) (y : ℚ) : |y - truncTo g y| 
     simp only [one_mul]
     rw [abs_lt]; constructor <;> linarith
 
-/-! ## (c) Promotion -/
-
-/-- `rn` writes a representable value. -/
 theorem rn_representable (y : ℚ) : Representable (rn y) := by
   rcases eq_or_ne y 0 with hy | hy
   · subst hy; exact ⟨0, 0, by norm_num, by simp [rn_eq, rp_zero]⟩
@@ -422,8 +394,6 @@ theorem moves_tie_pos {r i : ℚ} (hr : Representable r) (h0 : 0 < r) (hi : 2 * 
     have : roundEven ((r + i) / ulp r) = n - 1 := by rw [hm, roundEven_half_even (by omega)]
     rw [this]; push_cast; intro e; nlinarith
 
-/-- **(c) Promotion**: adding `x` to a representable total `t ≠ 0` leaves it unchanged only if `2|x| ≤ ulp t`, and at
-equality only if `t`'s significand `|t| / ulp t` is even (ties to even). -/
 theorem rnAdd_identity {t x : ℚ} (hr : Representable t) (h0 : t ≠ 0) (h : rnAdd t x = t) :
     2 * |x| ≤ ulp t ∧ (2 * |x| = ulp t → ∃ m : ℤ, |t| = m * (2 * ulp t)) := by
   unfold rnAdd at h
@@ -439,14 +409,11 @@ theorem rnAdd_identity {t x : ℚ} (hr : Representable t) (h0 : t ≠ 0) (h : rn
     by_contra hc
     exact moves_tie_pos hr hp he (fun ⟨m, hm⟩ => hc ⟨m, by rw [abs_of_pos hp]; exact hm⟩) h
 
-/-- (c) on `promote`: a promotion identity on a nonzero total pins the group word below half an ulp of the total. -/
 theorem promote_identity {t : ℚ} {w : Nat} {x : ℚ} (hr : Representable t) (h0 : t ≠ 0) (hw : wordQ w = some x)
     (h : promote (some t) w = some t) :
     2 * |x| ≤ ulp t ∧ (2 * |x| = ulp t → ∃ m : ℤ, |t| = m * (2 * ulp t)) := by
   simp only [promote, hw, Option.some.injEq] at h
   exact rnAdd_identity hr h0 h
-
-/-! ## Skipping in place -/
 
 section Fold
 
@@ -466,8 +433,6 @@ theorem length_fixFlags [DecidableEq β] (f : β → α → β) (w : β) (xs : L
   | nil => rfl
   | cons x xs ih => simp [fixFlags, ih]
 
-/-- **Skipping fixed points**: passing through any set of steps that are fixed points of the original run leaves the
-fold unchanged. -/
 theorem foldMask_fix [DecidableEq β] (f : β → α → β) (w : β) (xs : List α) (ms : List Bool)
     (h : SubMask ms (fixFlags f w xs)) : foldMask f w xs ms = xs.foldl f w := by
   induction xs generalizing w ms with
@@ -510,10 +475,9 @@ def oneMask : Nat → Nat → List Bool
   | n + 1, 0 => true :: List.replicate n false
   | n + 1, j + 1 => false :: oneMask n j
 
-/-- **Absorbed**, given atom `j`'s group `g`, the total `t` before the group and the later groups' words `ws`: skipping
-the atom alone leaves the group's word unchanged (an identity, or a later atom of the group merges the two running
-words), or the group's promotion (the two words round into one total), or the later promotions (a later promotion
-rounds the two totals into one). One replay of the rest of the group and of the later promotions. -/
+/-- **Absorbed**, given atom `j`'s group `g`, the total `t` before the group and the later groups' words `ws`:
+skipping the atom alone leaves the group's word, the group's promoted total or a later promoted total unchanged, found in
+one replay of the rest of the group and of the later promotions. -/
 def absorbedAt (g : List AtomIn) (t : Option ℚ) (ws : List Nat) (j : Nat) : Bool :=
   decide (wordIn g (oneMask g.length j) = groupWord g) ||
     decide (promote t (wordIn g (oneMask g.length j)) = promote t (groupWord g)) ||
@@ -535,9 +499,6 @@ def totalSkip (gs : List (List AtomIn)) (am : List (List Bool)) (gm : List Bool)
 def chainSkip (G : Nat) (atoms : List AtomIn) (am : List (List Bool)) (gm : List Bool) : Option ℚ :=
   totalSkip (atoms.toChunks G) am gm
 
-/-! ## (b) Confinement: the running words of a group -/
-
-/-- An atom of finite codes. -/
 def FiniteAtom (x : AtomIn) : Prop := (∀ l, (x.1 l).isNaN = false) ∧ ∀ l, (x.2 l).isNaN = false
 
 /-- A running word of a group from `+0` after `j` atoms: `+0`, or normal with exponent in `[−25 − 13j, 16 + 7j]`. -/
@@ -644,10 +605,6 @@ theorem getElem_idFlags (g : List AtomIn) (j : Nat) (h : j < (idFlags g).length)
     (idFlags g)[j] = decide (step (inWord g j) g[j] = inWord g j) :=
   getElem_fixFlags step 0 g j hj h
 
-/-- **(b) Confinement.** In a group of at most 7 atoms from `+0` (Π's `G = 4`) on finite codes, the identity flag of
-atom `j` is a function of the group's first `j + 1` atoms, and an identity at atom `j` is either on the word `+0`,
-where it is exactly `preSum = 0` (always so at `j = 0`), or on a normal word `w_j` that the atom's products do not
-move: (a)'s domination, `truncTo g c = c` and `Σ truncTo g p = 0`, with `c` the value of `w_j`. -/
 theorem identity_confined (g : List AtomIn) (hg : g.length ≤ 7) (hfin : ∀ x ∈ g, FiniteAtom x) (j : Nat)
     (hj : j < g.length) (hid : (idFlags g)[j]'(by rw [idFlags, length_fixFlags]; exact hj) = true) :
     (inWord g j = 0 ∧ preSum g[j].1 g[j].2 = 0) ∨
@@ -663,13 +620,9 @@ theorem identity_confined (g : List AtomIn) (hg : g.length ≤ 7) (hfin : ∀ x 
   · right
     exact ⟨tc, h1, h2, identity_needs_domination h1 h2 (by omega) _ _ ha hb hid⟩
 
-/-! ## The count -/
-
 /-- A group's domination event: some atom after the first is an identity, as `0` or `1`. -/
 def event (g : List AtomIn) : Nat := if (idFlags g).tail.any id then 1 else 0
 
-
-/-! ## Skipping atoms of one group -/
 
 section Masks
 
@@ -769,8 +722,6 @@ theorem skipIn_aux (gs : List (List AtomIn)) (i : Nat) (m : List Bool) (t : Opti
       rw [foldMask_replicate]
       exact ih i _ (by simpa using hi)
 
-/-- **A skip inside one group is confined to it**: the total with atoms of group `i` skipped is the masked word
-(a fold of the group alone from `+0`) promoted into the total before group `i`, then the later words promoted. -/
 theorem skipIn_eq (gs : List (List AtomIn)) (i : Nat) (m : List Bool) (hi : i < gs.length) :
     skipIn gs i m = (laterWords gs i).foldl promote (promote (inTotal gs i) (wordIn gs[i] m)) := by
   rw [laterWords, foldl_promote_words, skipIn, totalSkip, foldMask_nil]
@@ -781,10 +732,6 @@ theorem total_split (gs : List (List AtomIn)) (i : Nat) (hi : i < gs.length) :
   rw [laterWords, foldl_promote_words, total_eq_foldl]
   exact foldl_split _ _ i hi _
 
-/-! ## The absorbed atoms: every atom whose skip alone leaves the output unchanged -/
-
-/-- **Completeness and soundness of `absorbed`**: skipping atom `j` of group `i` alone, in place, leaves the output
-unchanged exactly when the atom is absorbed. -/
 theorem skipOne_iff (gs : List (List AtomIn)) (i j : Nat) (hi : i < gs.length) :
     skipOne gs i j = total gs ↔ absorbed gs i j = true := by
   rw [skipOne, absorbed, absorbedAt, List.getD_eq_getElem _ _ hi, skipIn_eq gs i _ hi, total_split gs i hi]
@@ -801,8 +748,6 @@ theorem foldl_promote_none (ws : List Nat) : ws.foldl promote none = none := by
   | nil => rfl
   | cons w ws ih => exact ih
 
-/-! ## Joint skips -/
-
 theorem length_jointFlags (gs : List (List AtomIn)) (i : Nat) (hi : i < gs.length) :
     (jointFlags gs i).length = gs[i].length := by
   rw [jointFlags, jointAt, List.getD_eq_getElem _ _ hi]; simp
@@ -816,8 +761,6 @@ theorem jointFlags_getElem (gs : List (List AtomIn)) (i : Nat) (hi : i < gs.leng
   rw [List.any_eq_true]
   exact ⟨m, hm ▸ mem_allMasks m, by rw [Bool.and_eq_true]; exact ⟨hmj, hk⟩⟩
 
-/-- **Completeness for one group**: every set of one group's atoms whose joint skip, in place, leaves the output
-unchanged is flagged. -/
 theorem joint_complete (gs : List (List AtomIn)) (i : Nat) (hi : i < gs.length) (m : List Bool)
     (hm : m.length = gs[i].length) (h : skipIn gs i m = total gs) : SubMask m (jointFlags gs i) := by
   apply subMask_of_getElem _ _ (by rw [length_jointFlags gs i hi, hm])
@@ -833,8 +776,6 @@ theorem promote_zero {t : Option ℚ} (ht : ∀ q, t = some q → Representable 
   | some q =>
     simp only [promote, wordQ_zero, rnAdd, add_zero]
     rw [rn_exact (ht q rfl)]
-
-/-! ## Completeness on a word: atom `t` is group `t / 4`'s atom `t % 4` -/
 
 section Chunks
 
@@ -941,7 +882,6 @@ theorem mod_lt_length_getElem_toChunks {G : Nat} (hG : 0 < G) {l : List α} {t :
   have := Nat.mod_lt t hG
   omega
 
-/-- The element at `t` is chunk `t / G`'s element at `t % G`. -/
 theorem getElem_getElem_toChunks {G : Nat} (hG : 0 < G) {l : List α} {t : Nat} (ht : t < l.length) :
     ((l.toChunks G)[t / G]'(lt_length_toChunks hG ht))[t % G]'(mod_lt_length_getElem_toChunks hG ht) = l[t] := by
   simp only [getElem_toChunks hG, List.getElem_take, List.getElem_drop]
@@ -985,7 +925,6 @@ theorem getElem_groupMask (gs : List (List AtomIn)) (i : Nat) (m : List Bool) (i
       | zero => simp [groupMask]
       | succ i' => simp only [groupMask, List.getElem_cons_succ, ih, Nat.add_right_cancel_iff, List.getElem_cons_succ]
 
-/-- Masks that flag nothing outside group `i` are `groupMask`'s. -/
 theorem eq_groupMask (gs : List (List AtomIn)) (i : Nat) (hi : i < gs.length) (L : List (List Bool))
     (hl : L.length = gs.length)
     (hr : ∀ i' (h : i' < L.length), i' ≠ i → L[i'] = List.replicate (gs[i']'(hl ▸ h)).length false) :
@@ -1003,7 +942,6 @@ def WordSkippable (atoms : List AtomIn) (t : Nat) : Prop :=
   ∃ M : List Bool, M.length = atoms.length ∧ M.getD t false = true ∧ (∀ s, M.getD s false = true → s / 4 = t / 4) ∧
     chainSkip 4 atoms (M.toChunks 4) [] = chain 4 atoms
 
-/-- **Completeness of the joint flags on a word**: a skippable atom is flagged. -/
 theorem jointFlags_complete (atoms : List AtomIn) (t : Nat) (h : WordSkippable atoms t) :
     (jointFlags (atoms.toChunks 4) (t / 4)).getD (t % 4) false = true := by
   obtain ⟨M, hM, hMt, hMs, hs⟩ := h
@@ -1041,15 +979,9 @@ theorem wordFlags_complete (k : ℕ) (a b : Fin k → Code) (t : ℕ) (h : WordS
     wordFlags k a b t = true :=
   jointFlags_complete _ t h
 
-/-- **The joint flags are complete** for in-group skips: `Forming.FlagsComplete (fun i j t => WordSkippable
-(rowAtoms (Aq i) (Bq j)) t) (unitFlags Aq Bq)`, unfolded. -/
 theorem joint_flagsComplete {m n k : ℕ} (Aq : Matrix (Fin m) (Fin k) Code) (Bq : Matrix (Fin n) (Fin k) Code) :
     ∀ i j t, WordSkippable (rowAtoms (Aq i) (Bq j)) t → unitFlags Aq Bq i j t = true :=
   fun i j t h => wordFlags_complete k (Aq i) (Bq j) t h
-
-/-! ## The two debits: (B)'s flags are (A)'s -/
-
-/-! ## The linear replay: the later promotions by certificates -/
 
 /-- A certificate for the later promotions after one group: totals in `[lo, hi]` reach the output, and totals `≤ c`
 or `≥ d` do not. -/
@@ -1077,7 +1009,6 @@ def certChain : List Nat → List Cert → Option ℚ → Bool
 theorem rnAdd_mono_left {t t' : ℚ} (v : ℚ) (h : t ≤ t') : rnAdd t v ≤ rnAdd t' v := by
   unfold rnAdd; exact rn_mono (by linarith)
 
-/-- **The local checks give the claim** (monotonicity of `rn`, one group at a time). -/
 theorem certChain_good (ws : List Nat) (z : Cert) (zs : List Cert) (out : Option ℚ)
     (h : certChain ws (z :: zs) out = true) : z.Good ws out := by
   induction ws generalizing z zs with
@@ -1143,7 +1074,6 @@ theorem certChain_getElem (ws : List Nat) (zs : List Cert) (out : Option ℚ) (h
         have := ih zs (certChain_tail w ws z zs out h) j (by simpa using hj)
         simpa using this
 
-/-- A checked certificate list certifies each group's later promotions. -/
 theorem cert_group (gs : List (List AtomIn)) (zs : List Cert) (i : Nat) (hi : i < gs.length)
     (h : certChain ((gs.map groupWord).drop 1) zs (total gs) = true) (hz : i < zs.length) :
     zs[i].Good (laterWords gs i) ((laterWords gs i).foldl promote (promote (inTotal gs i) (groupWord gs[i]))) := by
@@ -1185,7 +1115,6 @@ def jointFlagsFast (gs : List (List AtomIn)) (zs : List Cert) (i : Nat) : List B
     jointAtFast zs[i] (gs.getD i []) (inTotal gs i) (laterWords gs i)
   else jointFlags gs i
 
-/-- **The linear replay computes debit (A)'s flags**, for any certificates. -/
 theorem jointFlagsFast_eq (gs : List (List AtomIn)) (zs : List Cert) (i : Nat) (hi : i < gs.length) :
     jointFlagsFast gs zs i = jointFlags gs i := by
   unfold jointFlagsFast
@@ -1195,8 +1124,6 @@ theorem jointFlagsFast_eq (gs : List (List AtomIn)) (zs : List Cert) (i : Nat) (
     rw [jointFlags, jointAtFast, jointAt, List.getD_eq_getElem _ _ hi]
     congr 1; funext j; congr 1; funext m; rw [keepsFast_eq _ _ _ _ _ hz]
   · rfl
-
-/-! ## Examples: the mechanisms outside the group, and joint skips -/
 
 def plusOne : AtomIn := (lane0 0x38, lane0 0x38)
 def minusOne : AtomIn := (lane0 0xB8, lane0 0x38)

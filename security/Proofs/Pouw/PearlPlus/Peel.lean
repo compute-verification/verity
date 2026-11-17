@@ -2,20 +2,7 @@ module
 
 public import Proofs.Pouw.PearlPlus.Stats
 
-/-!
-# Pearl+'s bridge, part (b), the peel and a row's forming
-
-`Words.peel` takes a cell's checked word `C̃` through four `hopperBf16Dot16` steps against its rows' 16-word slices of
-`P_A` and `P_B`, refusing a step whose word is not finite. `peel_uWord` says it is `PeelExact.uWord?`, the spec's four
-`k16Step`s on the rows as lists.
-
-For one row, `formV1` forms `E′` (each noise code widened, multiplied by `β` and cast back) and the row's codes (the
-cast of one atom from `α·x_t` over `E′` against basis row `t`). `formRow_quant8` says that on a row of finite words
-passing `Row8OK` these are `lineCodes` at the row's `β` and `pc8Sem`'s `quant8` at the H100 atom: the statistics are
-the row's (`statsAreTheRow`), each `E′` code is `eTilde8`'s and so `lineCodes`' (`eTilde8_line`), and each formed word
-is `form8`'s at the row's words, which reads a `−0` word as `+0` (`form8_zeroSign`), and is finite, so its cast is
-`e4m3`'s.
--/
+/-! Pearl+'s bridge, part (b): the check's peel and a row's forming are the spec's. -/
 
 @[expose] public section
 
@@ -59,7 +46,6 @@ theorem toE4m3_lt (u : ℕ) : Verity.Prims.f32ToE4m3Sat u < 2 ^ 8 := by
 theorem eval_toE4m3 (a : ℕ) : Prim.eval coreOps .toE4m3 [a] = Verity.Prims.f32ToE4m3Sat a % 2 ^ 8 := rfl
 theorem eval_e4m3ToF32 (c : ℕ) : Prim.eval coreOps .e4m3ToF32 [c] = Verity.Prims.e4m3ToF32 c % 2 ^ 32 := rfl
 
-/-- A row of 32 codes as the atom reads it: the check's list of the row's words, each read as a code. -/
 theorem map_code_ofFn {a : Array ℕ} {g : ℕ → ℕ} (ha : a.size = 32) (h : ∀ l < 32, a[l]! = g l) :
     a.toList.map TileCircuit.code = List.ofFn fun l : Fin 32 => TileCircuit.code (g l) := by
   apply List.ext_getElem
@@ -72,8 +58,6 @@ theorem map_code_ofFn {a : Array ℕ} {g : ℕ → ℕ} (ha : a.size = 32) (h : 
 end PeelSim
 
 open PeelSim WordsSim in
-/-- **The peel is the spec's**: the check's `peel` of a word `c` below `2^32` against rows `P_A` and `P_B` of at least
-64 words, where it returns `.ok`, is `uWord?` of `c` and the rows as lists. -/
 theorem peel_uWord {c u : ℕ} {pa pb : Array ℕ} (hc : c < 2 ^ 32) (hpa : 64 ≤ pa.size) (hpb : 64 ≤ pb.size)
     (h : Words.peel c pa pb = .ok u) : PeelExact.uWord? c pa.toList pb.toList = some u := by
   unfold Words.peel at h
@@ -107,9 +91,6 @@ theorem peel_uWord {c u : ℕ} {pa pb : Array ℕ} (hc : c < 2 ^ 32) (hpa : 64 �
   exact this.2
 
 open PeelSim WordsSim in
-/-- **A row's forming is `pc8Sem`'s**: on a row `x` of `k` finite words `w` passing `Row8OK` (`8 ∣ k`, `k ≤ 2^27`), its
-noise line's codes `e` and its form basis' rows `f`, where `s5_stats` and the forming's two maps return `.ok`, `E′` is
-`lineCodes` at the row's `β` and the row's codes are `quant8`'s at the H100 atom. -/
 theorem formRow_quant8 {k : ℕ} {w : ℕ → ℕ} {E : Fin Params.pi.r → Code} {F : Matrix (Fin k) (Fin Params.pi.r) Code}
     {x e : Array ℕ} {f : Array (Array ℕ)} {s ρw αw βw : ℕ} {ep codes : Array ℕ}
     (hk0 : 0 < k) (hk8 : 8 ∣ k) (hkK : k ≤ 2 ^ 27)

@@ -10,36 +10,7 @@ import Proofs.Pouw.Fp8Atom.Fp32Proofs
 import Proofs.Pouw.PearlC.PeelExactProofs
 import Proofs.Pouw.PearlC.TileCircuit
 
-/-!
-# The row tables compute a row's statistics, scales and forming (proofs)
-
-For every `ops` (core's primitives as a parameter), a row table's honest values meet its gates run by run
-(`Rows.holds`, `RunsHold`), the inputs being the transcript's (`Rows.val_input`), and a transcript whose one unit is
-correct holds them on every output (`Spec.out_eq`). On the runs `pc8`'s two row units share (`pre8Runs`), those values
-are `RowSem`'s formulas on the row's inputs:
-
-* `s` and `ρ` (`stats_holds`): the running max by induction over the positions (`selRun_holds`), each FMA partial by
-  strong induction over its accumulator (`fmaRun_holds`), the butterfly round by round (`bfly_holds`);
-* `α`, `β` and the floor (`pre8_alpha`, `pre8_beta`, `pre8_floor`), the rescaled noise' codes (`pre8_eTilde`) and each
-  position's code (`pre8_code`), so `row8A_code` and `row8B_code`: a transcript correct on RowA or RowB has on position
-  `t`'s output `code8W` at `alpha8`'s and `beta8`'s words of its row;
-* a row chain (`Chain8Holds`) is the tile check's chain on the codes it reads: each atom's word (`chain8_atom`,
-  `atom8_eval`), each window (`chain8_window`), the running sum (`chain8_add`), so its last word is `chainWordP? p 4`'s
-  (`chain8_word`), and RowA's `P_A` word `q` is that word cast to bf16 (`row8A_pa`);
-* RowB's `P_B` word `q` is the BF16 cast of `Σ_s ẽ_s·g_{s,q}` (`pbAcc`, the FMAs from `+0` of the rescaled noise' FP32
-  words, `pre8_ew`) plus its chain's word negated (`row8B_pb`), and the rescaled noise' BF16 words, `P_A`'s head and
-  `P_B`'s tail negated, are `row8A_be` and `row8B_nbe`;
-* on `pc4`'s shared runs, `α`, `β`, `a_E` (`pre4_alpha`) and the flag (`pre4_flag`, `flag4`), so RowA's `Ẽ` and RowB's
-  `−Ẽ` (`row4A_et`, `row4B_net`) and both flags (`row4A_flag`, `row4B_flag`);
-* `pc8`'s flag: the sum of squares (`pre8_sq`, `sqSum`), `θ` (`pre8_theta`), the dead count (`pre8_dead`,
-  `deadCount`) and the flag (`pre8_flag`, `flag8`), so both rows' flags (`row8A_flag`, `row8B_flag`);
-* words read back as values: a step's word is `f32Word` of its value (`f32Word_wordVal`), and the cast of a word that
-  is neither NaN nor a signed zero is `e4m3` of its value (`e4m3_wordVal`), so a code is `e4m3` of its formed word's
-  value where the cast is `e4m3Word`'s (`code8W_e4m3`), and `pc8Form` at step words' values is `form8` at the words
-  (`pc8Form_value`); with the noise' and basis' codes read off their gates as they are (`gateCodes`), each code on
-  RowA and RowB is `e4m3` of `pc8Form` at its row's values and codes (`codes8_sem`, `row8A_code_sem`, `row8B_code_sem`), and
-  `pc8Sem`'s `α`, `β` and floor at a row of step words are the table's words read as values (`pc8Sem_scales`).
--/
+/-! The row tables compute a row's statistics, scales and forming. -/
 
 @[expose] public section
 
@@ -48,8 +19,6 @@ namespace Pouw.PearlC.RowCircuit
 open Pouw.Fp8Atom Pouw.PearlC Pouw.PearlC.TileCircuit
 
 variable (ops : RowOps)
-
-/-! ## Values that meet a table's gates -/
 
 /-- The values `V` meet the run `R`'s gates from gate `o`. -/
 def RunHolds (V : ℕ → ℕ) (R : Run) (o : ℕ) : Prop :=
@@ -98,7 +67,6 @@ theorem runsHold_of (V : ℕ → ℕ) : ∀ (L : List Run) (o : ℕ),
 theorem Prim.eval_mod (q : Prim) (l : List ℕ) : q.eval ops l % 2 ^ q.w = q.eval ops l := by
   unfold Prim.eval; exact Nat.mod_mod _ _
 
-/-- **A table's honest values meet its gates**: the circuit's evaluation on any inputs. -/
 theorem Rows.holds (T : Rows) (X : (T.spec ops).toCircuit.Trace) :
     RunsHold ops (val ((T.spec ops).toCircuit.eval X)) T.runs T.nIn := by
   apply runsHold_of
@@ -116,7 +84,6 @@ theorem Rows.holds (T : Rows) (X : (T.spec ops).toCircuit.Trace) :
   simp only [RGate.toGate, RGate.reads]
   rw [fill_reads, Prim.eval_mod]
 
-/-- A table's honest values on its inputs are the transcript's. -/
 theorem Rows.val_input (T : Rows) (X : (T.spec ops).toCircuit.Trace) {l : ℕ} (hl : l < T.nIn) :
     val ((T.spec ops).toCircuit.eval X) l = val X l := by
   have hlt : l < (T.spec ops).N := by
@@ -125,8 +92,6 @@ theorem Rows.val_input (T : Rows) (X : (T.spec ops).toCircuit.Trace) {l : ℕ} (
   rw [Spec.val_input _ X hlt (by show (T.gate ops l).input = true; unfold Rows.gate; simp only [hl, ↓reduceIte]),
     val_of_lt _ hlt]
 
-/-- A transcript whose one unit is correct holds the circuit's values on every output (core's
-`Verity.Partition.compose`). -/
 theorem Spec.out_eq (S : Spec) (X : S.toCircuit.Trace) (hX : S.part.Correct X 0) {g : ℕ} (hg : g ∈ S.outs)
     (hlt : g < S.N) : val X g = val (S.toCircuit.eval X) g := by
   have hw : S.part.incorrect X = ∅ := by
@@ -136,8 +101,6 @@ theorem Spec.out_eq (S : Spec) (X : S.toCircuit.Trace) (hX : S.part.Correct X 0)
   have hg' : (⟨g, hlt⟩ : Fin S.toCircuit.N) ∈ S.part.committed :=
     Verity.Partition.mem_committed_of_output _ (Finset.mem_filter.2 ⟨Finset.mem_univ _, hg⟩)
   rw [val_of_lt _ hlt, val_of_lt _ hlt, S.part.compose X X (fun _ _ => rfl) hw _ hg']
-
-/-! ## The statistics -/
 
 section Stats
 
@@ -207,8 +170,6 @@ theorem accLast_lt {n j : ℕ} (hj : j < n) : accLast n j < n := by
   have := Nat.div_mul_le_self (n - 1 - j) 32
   omega
 
-/-- **The statistics**: on values meeting `statsRuns`, the running max's last gate is `rowMax` and `ρ`'s gate is
-`rowRho`, on the values of `x`'s gates. -/
 theorem stats_holds {ab w : Wire} {K b : ℕ} (hK : 8 ≤ K) (h : RunsHold ops V (statsRuns ab w K b) b) :
     V (fmaAt K b - 1) = rowMax ops ab V (K - 1) ∧ V (rhoAt K b + 1) = rowRho ops w V K := by
   obtain ⟨hs, hf, h0, h8, h4, h2, h1, hr, -⟩ := h
@@ -267,8 +228,6 @@ theorem stats_holds {ab w : Wire} {K b : ℕ} (hK : 8 ≤ K) (h : RunsHold ops V
 
 end Stats
 
-/-! ## The formulas read only the row's inputs -/
-
 section Congr
 
 variable {ops}
@@ -317,8 +276,6 @@ theorem floor8_congr {x y : ℕ → ℕ} {K : ℕ} (hK : 8 ≤ K) (h : ∀ l < K
 
 end Congr
 
-/-! ## `pc8`'s shared runs -/
-
 section Pre8
 
 variable {ops} {V : ℕ → ℕ} {p : Pipeline} {K b : ℕ}
@@ -332,7 +289,6 @@ theorem pre8_runs (h : RunsHold ops V (pre8Runs p K b) b) :
   obtain ⟨ha, -, -, -, ho, he, -, hc, -⟩ := hr
   exact ⟨hs, ha, ho, he, hc⟩
 
-/-- **`α` and `β`** on values meeting `pc8`'s shared runs: `alpha8` and `beta8` of the values of `x`'s gates. -/
 theorem pre8_alpha (hK : 8 ≤ K) (h : RunsHold ops V (pre8Runs p K b) b) :
     V (al8At K b + 3) = alpha8 ops V K ∧ V (al8At K b + 5) = beta8 ops V K := by
   obtain ⟨hs, ha, -⟩ := pre8_runs h
@@ -350,7 +306,6 @@ theorem pre8_alpha (hK : 8 ≤ K) (h : RunsHold ops V (pre8Runs p K b) b) :
   refine ⟨hα, ?_⟩
   rw [g5, g4, hα, hrho]; rfl
 
-/-- **The floor**: the flag run's first gate is `floor8`. -/
 theorem pre8_floor (hK : 8 ≤ K) (h : RunsHold ops V (pre8Runs p K b) b) : V (ok8At K b) = floor8 ops V K := by
   obtain ⟨hs, -, ho, -⟩ := pre8_runs h
   obtain ⟨-, hrho⟩ := stats_holds hK hs
@@ -359,7 +314,6 @@ theorem pre8_floor (hK : 8 ≤ K) (h : RunsHold ops V (pre8Runs p K b) b) : V (o
     Nat.add_zero] at g0
   rw [g0, hrho, (pre8_alpha hK h).1]; rfl
 
-/-- **The rescaled noise' codes**: `eTilde8` at `β`'s word of each of `e`'s codes. -/
 theorem pre8_eTilde (hK : 8 ≤ K) (h : RunsHold ops V (pre8Runs p K b) b) :
     ∀ l < 32, V (ep8At K b + 3 * l + 2) = eTilde8 ops (beta8 ops V K) (V (K + l)) := by
   intro l hl
@@ -377,7 +331,6 @@ theorem pre8_eTilde (hK : 8 ≤ K) (h : RunsHold ops V (pre8Runs p K b) b) :
     show ep8At K b + (3 * l + 1) - 1 = ep8At K b + 3 * l by omega, g0, (pre8_alpha hK h).2]
   rfl
 
-/-- **The rescaled noise' words**: each code's FP32 word. -/
 theorem pre8_ew (hK : 8 ≤ K) (h : RunsHold ops V (pre8Runs p K b) b) :
     ∀ l < 32, V (ew8At K b + l) = Prim.eval ops .e4m3ToF32 [eTilde8 ops (beta8 ops V K) (V (K + l))] := by
   intro l hl
@@ -389,7 +342,6 @@ theorem pre8_ew (hK : 8 ≤ K) (h : RunsHold ops V (pre8Runs p K b) b) :
   simp only [ew8Run, List.map_cons, List.map_nil, Arg.eval, Wire.eval_id] at g
   rw [g, pre8_eTilde hK h l hl]
 
-/-- **Position `t`'s code**: `code8W` at `α`'s word, `x_t`, the rescaled noise' codes and the form basis' row `t`. -/
 theorem pre8_code (hK : 8 ≤ K) (h : RunsHold ops V (pre8Runs p K b) b) :
     ∀ t < K, V (code8 K b t) = code8W ops p (alpha8 ops V K) (V t)
       (fun l => eTilde8 ops (beta8 ops V K) (V (K + l))) (fun l => V (K + 32 + 32 * t + l)) := by
@@ -420,8 +372,6 @@ theorem pre8_code (hK : 8 ≤ K) (h : RunsHold ops V (pre8Runs p K b) b) :
 
 end Pre8
 
-/-! ## `pc8`'s row units -/
-
 section Rows8
 
 variable {ops}
@@ -432,9 +382,6 @@ theorem code8W_congr {p : Pipeline} {α x : ℕ} {et et' f f' : ℕ → ℕ} (he
   rw [List.map_congr_left fun l hl => he l (List.mem_range.1 hl),
     List.map_congr_left fun l hl => hf l (List.mem_range.1 hl)]
 
-/-- **A `pc8` row unit computes its codes**: a table whose runs start with `pc8`'s shared runs, in a transcript whose one
-unit is correct, holds on position `t`'s code output `code8W` at `alpha8`'s and `beta8`'s words of the row's inputs `x`,
-`x_t`, `e`'s codes and the form basis' row `t`. -/
 theorem rows8_code (T : Rows) (p : Pipeline) {K : ℕ} (hK : 8 ≤ K) (hb : 65 * K + 32 ≤ T.nIn) {rest : List Run}
     (hr : T.runs = pre8Runs p K T.nIn ++ rest) (X : (T.spec ops).toCircuit.Trace)
     (hX : (T.spec ops).part.Correct X 0) {t : ℕ} (ht : t < K) (hout : code8 K T.nIn t ∈ T.outs) :
@@ -456,7 +403,6 @@ theorem rows8_code (T : Rows) (p : Pipeline) {K : ℕ} (hK : 8 ≤ K) (hb : 65 *
     beta8_congr hK fun l hl => hin l (by omega)]
   exact code8W_congr (fun l hl => by rw [hin _ (by omega)]) fun l hl => hin _ (by omega)
 
-/-- **RowA computes `A′`'s codes** (`rows8_code` at `Pc8RowA_v1{K}`). -/
 theorem row8A_code (p : Pipeline) {K : ℕ} (hK : 8 ≤ K) (X : ((row8A p K).spec ops).toCircuit.Trace)
     (hX : ((row8A p K).spec ops).part.Correct X 0) {t : ℕ} (ht : t < K) :
     val X (code8 K (rowIn K false) t) = code8W ops p (alpha8 ops (val X) K) (val X t)
@@ -465,7 +411,6 @@ theorem row8A_code (p : Pipeline) {K : ℕ} (hK : 8 ≤ K) (X : ((row8A p K).spe
     (List.mem_append_left _ (List.mem_append_left _ (List.mem_append_left _ (List.mem_map.2 ⟨t, List.mem_range.2 ht,
       rfl⟩))))
 
-/-- **RowB computes `B̃`'s codes** (`rows8_code` at `Pc8RowB_v1{K}`). -/
 theorem row8B_code (p : Pipeline) {K : ℕ} (hK : 8 ≤ K) (X : ((row8B p K).spec ops).toCircuit.Trace)
     (hX : ((row8B p K).spec ops).part.Correct X 0) {t : ℕ} (ht : t < K) :
     val X (code8 K (rowIn K true) t) = code8W ops p (alpha8 ops (val X) K) (val X t)
@@ -475,8 +420,6 @@ theorem row8B_code (p : Pipeline) {K : ℕ} (hK : 8 ≤ K) (X : ((row8B p K).spe
       rfl⟩))))
 
 end Rows8
-
-/-! ## The chains -/
 
 section Chain8
 
@@ -536,7 +479,6 @@ theorem chain8_inputs (A B : Fin (128 * n) → Code) (hA : ∀ l : Fin (128 * n)
   · rw [hA ⟨32 * t + l, by omega⟩, code_val]
   · rw [hB ⟨32 * t + l, by omega⟩, code_val]
 
-/-- **A window's word** in a row's chain: its four atoms write the window's word, a step word. -/
 theorem chain8_window (h : Chain8Holds (ops := ops) p V cd cl o n) (A B : Fin (128 * n) → Code)
     (hA : ∀ l : Fin (128 * n), V (cd l) = (A l).val) (hB : ∀ l : Fin (128 * n), V (cl l) = (B l).val) {q : ℕ}
     (hq : q < n) {w : ℕ} (hw : windowWordP? p (((rowAtoms A B).drop (4 * q)).take 4) = some w) :
@@ -568,8 +510,6 @@ theorem chain8_window (h : Chain8Holds (ops := ops) p V cd cl o n) (A B : Fin (1
     rw [chain8_atom p h hq (by omega), ← (ai _ (by omega)).1, ← (ai _ (by omega)).2]; rfl
   refine ⟨by rw [e3, e2, e1, e0], step_lt _ _ _ _, step_ne_negZero _ _ _ _, h4⟩
 
-/-- **A row's chain**: its `n` windows' promotions write the chain's word over its codes `A` and the other side `B`
-(`chainWordP? p 4`, the pinned order), on its last promotion. -/
 theorem chain8_word (hn : 0 < n) (h : Chain8Holds (ops := ops) p V cd cl o n) (A B : Fin (128 * n) → Code)
     (hA : ∀ l : Fin (128 * n), V (cd l) = (A l).val) (hB : ∀ l : Fin (128 * n), V (cl l) = (B l).val) {c : ℕ}
     (hc : chainWordP? p 4 (rowAtoms A B) = some c) : V (o + (5 * (n - 1) + 4)) = c := by
@@ -612,9 +552,6 @@ theorem chain8_word (hn : 0 < n) (h : Chain8Holds (ops := ops) p V cd cl o n) (A
   obtain ⟨-, hv⟩ := key n le_rfl c (hch ▸ hc)
   rwa [ite_eq_right (by omega)] at hv
 
-/-- **RowA computes `P_A`'s words**: at depth `K = 128·nw`, a transcript correct on RowA whose code outputs hold `A′`'s
-codes `A` and whose chain basis' column `q` holds `B` has on `P_A`'s word `q` the BF16 cast of the chain's word over `A`
-and `B` (`chainWordP? p 4`, the pinned order). -/
 theorem row8A_pa {K nw : ℕ} (hnw : 0 < nw) (hK : K = 128 * nw) (X : ((row8A p K).spec ops).toCircuit.Trace)
     (hX : ((row8A p K).spec ops).part.Correct X 0) (A B : Fin (128 * nw) → Code)
     (hA : ∀ t : Fin (128 * nw), val X (code8 K (rowIn K false) t) = (A t).val) {q : ℕ} (hq : q < 32)
@@ -696,8 +633,6 @@ theorem row8A_pa {K nw : ℕ} (hnw : 0 < nw) (hK : K = 128 * nw) (X : ((row8A p 
 
 end Chain8
 
-/-! ## RowB's `P_B` -/
-
 /-- `Σ_s ẽ_s·g_s` as RowB's FMAs accumulate it, `s` ascending from `+0`: the word after term `s`. -/
 def pbAcc (ew g : ℕ → ℕ) : ℕ → ℕ
   | 0 => Prim.eval ops .fma [ew 0, g 0, 0]
@@ -715,10 +650,6 @@ theorem pbAcc_congr {ew ew' g g' : ℕ → ℕ} : ∀ n, (∀ s ≤ n, ew s = ew
   | n + 1, h => by
     simp only [pbAcc, (h (n + 1) le_rfl).1, (h (n + 1) le_rfl).2, pbAcc_congr n fun s hs => h s (by omega)]
 
-/-- **RowB computes `P_B`'s words**: at depth `K = 128·nw`, a transcript correct on RowB whose code outputs hold `B̃`'s
-codes `A` and whose chain basis' column `q` holds `B` has on `P_B`'s word `q` the BF16 cast of `Σ_s ẽ_s·g_{s,q}` (the
-FMAs from `+0` of the rescaled noise' FP32 words against `G`'s column `q`) plus the negated word of the chain over `A`
-and `B` (`chainWordP? p 4`, the pinned order). -/
 theorem row8B_pb {K nw : ℕ} (hnw : 0 < nw) (hK : K = 128 * nw) (X : ((row8B p K).spec ops).toCircuit.Trace)
     (hX : ((row8B p K).spec ops).part.Correct X 0) (A B : Fin (128 * nw) → Code)
     (hA : ∀ t : Fin (128 * nw), val X (code8 K (rowIn K true) t) = (A t).val) {q : ℕ} (hq : q < 32)
@@ -845,8 +776,6 @@ theorem row8B_pb {K nw : ℕ} (hnw : 0 < nw) (hK : K = 128 * nw) (X : ((row8B p 
       beta8_congr h8 fun l hl => hin l (by simp only [rowIn]; omega)]
   rw [hE]
 
-/-- **RowA writes the rescaled noise' BF16 words** (`be_A`, `P_A`'s head in `paRow?`): word `l` is the BF16 cast of
-`ẽ_l`'s FP32 word. -/
 theorem row8A_be {K nw : ℕ} (hnw : 0 < nw) (hK : K = 128 * nw) (X : ((row8A p K).spec ops).toCircuit.Trace)
     (hX : ((row8A p K).spec ops).part.Correct X 0) {l : ℕ} (hl : l < 32) :
     val X (post8At K (rowIn K false) + 32 * (5 * nw + 1) + l) =
@@ -878,8 +807,6 @@ theorem row8A_be {K nw : ℕ} (hnw : 0 < nw) (hK : K = 128 * nw) (X : ((row8A p 
   rw [g, pre8_ew h8 hpre l hl, hin _ (by simp only [rowIn]; omega),
     beta8_congr h8 fun l hl => hin l (by simp only [rowIn]; omega)]
 
-/-- **RowB writes the rescaled noise' BF16 words negated** (`P_B`'s tail in `pbRow?`): word `l` is the BF16 cast of
-`ẽ_l`'s FP32 word, its sign flipped. -/
 theorem row8B_nbe {K nw : ℕ} (hnw : 0 < nw) (hK : K = 128 * nw) (X : ((row8B p K).spec ops).toCircuit.Trace)
     (hX : ((row8B p K).spec ops).part.Correct X 0) {l : ℕ} (hl : l < 32) :
     val X (post8At K (rowIn K true) + 32 * (5 * nw + 35) + 2 * l + 1) = Prim.eval ops .bf16Neg
@@ -920,8 +847,6 @@ theorem row8B_nbe {K nw : ℕ} (hnw : 0 < nw) (hK : K = 128 * nw) (X : ((row8B p
 
 end Mid8
 
-/-! ## `pc8`'s flag -/
-
 /-- `Σ x_{8i}²`, scaled, as the flag's exact accumulators sum it from `0`: the accumulator after position `8i`. -/
 def sqSum (x : ℕ → ℕ) : ℕ → ℕ
   | 0 => Prim.eval ops .sqAcc [0, x 0]
@@ -960,7 +885,6 @@ theorem flag8_congr {x y : ℕ → ℕ} (hK : 8 ≤ K) (h : ∀ l < K, x l = y l
   rw [rowMax_congr (K - 1) fun l hl => h l (by omega), rowRho_congr hK h, floor8_congr hK h,
     sqSum_congr (K / 8 - 1) fun l hl => h l (by omega), deadCount_congr (K - 1) fun l hl => h l (by omega)]
 
-/-- **The sum of squares**: the flag's accumulators are `sqSum`'s. -/
 theorem pre8_sq (h : RunsHold ops V (pre8Runs p K b) b) : ∀ i, i < K / 8 → V (sq8At K b + i) = sqSum ops V i := by
   obtain ⟨-, hr⟩ := runsHold_append ops V h
   rw [statsRuns_len] at hr
@@ -981,7 +905,6 @@ theorem pre8_sq (h : RunsHold ops V (pre8Runs p K b) b) : ∀ i, i < K / 8 → V
     rw [g, show sq8At K b + (i + 1) - 1 = sq8At K b + i by omega, ih (by omega)]
     rfl
 
-/-- **The threshold**: `θ` is the ceiling of `sqSum`'s last accumulator over the `K/8` positions. -/
 theorem pre8_theta (hK : 8 ≤ K) (h : RunsHold ops V (pre8Runs p K b) b) :
     V (th8At K b) = Prim.eval ops .sqCeil [sqSum ops V (K / 8 - 1), K / 8] := by
   obtain ⟨-, hr⟩ := runsHold_append ops V h
@@ -993,7 +916,6 @@ theorem pre8_theta (hK : 8 ≤ K) (h : RunsHold ops V (pre8Runs p K b) b) :
     Nat.add_zero] at g
   rw [g, show th8At K b - 1 = sq8At K b + (K / 8 - 1) by unfold th8At; omega, pre8_sq h _ (by omega)]
 
-/-- **The dead count**: through position `t`, `deadCount` against `θ`. -/
 theorem pre8_dead (h : RunsHold ops V (pre8Runs p K b) b) :
     ∀ t, t < K → V (dead8At K b + 3 * t + 2) = deadCount ops V (V (th8At K b)) t := by
   obtain ⟨-, hr⟩ := runsHold_append ops V h
@@ -1034,7 +956,6 @@ theorem pre8_dead (h : RunsHold ops V (pre8Runs p K b) b) :
       show dead8At K b + (3 * (t + 1) + 2) - 1 = dead8At K b + 3 * (t + 1) + 1 by omega, gate (t + 1) ht]
     rfl
 
-/-- **The flag** on values meeting `pc8`'s shared runs: `flag8` of the values of `x`'s gates. -/
 theorem pre8_flag (hK : 8 ≤ K) (h : RunsHold ops V (pre8Runs p K b) b) : V (ok8At K b + 7) = flag8 ops V K := by
   obtain ⟨hs, -, ho, -⟩ := pre8_runs h
   obtain ⟨hsm, hrho⟩ := stats_holds hK hs
@@ -1058,7 +979,6 @@ section Flags8
 
 variable {ops} (p : Pipeline)
 
-/-- **RowA writes its flag**: the BF16 select of `flag8` to `1` or `0`. -/
 theorem row8A_flag {K : ℕ} (hK : 8 ≤ K) (X : ((row8A p K).spec ops).toCircuit.Trace)
     (hX : ((row8A p K).spec ops).part.Correct X 0) :
     val X (post8At K (rowIn K false) + 32 * (5 * (K / 128) + 1) + 32) =
@@ -1087,7 +1007,6 @@ theorem row8A_flag {K : ℕ} (hK : 8 ≤ K) (X : ((row8A p K).spec ops).toCircui
     Run.rep, bew8Run, Nat.add_zero] at g
   rw [g, pre8_flag hK hpre, flag8_congr hK fun l hl => hin l (by simp only [rowIn]; omega)]
 
-/-- **RowB writes its flag**: the BF16 select of `flag8` to `1` or `0`. -/
 theorem row8B_flag {K : ℕ} (hK : 8 ≤ K) (X : ((row8B p K).spec ops).toCircuit.Trace)
     (hX : ((row8B p K).spec ops).part.Correct X 0) :
     val X (post8At K (rowIn K true) + 32 * (5 * (K / 128) + 35) + 64) =
@@ -1118,8 +1037,6 @@ theorem row8B_flag {K : ℕ} (hK : 8 ≤ K) (X : ((row8B p K).spec ops).toCircui
 
 end Flags8
 
-/-! ## `pc4`'s row units -/
-
 /-- `pc4`'s row flag as its table computes it: `s` finite, and `β` at least `2⁻⁷·15/8` and finite. -/
 def flag4 (x : ℕ → ℕ) (K : ℕ) : ℕ :=
   Prim.eval ops .band [Prim.eval ops .le [rowMax ops .bf16Fabs x (K - 1), 0x7F7FFFFF],
@@ -1144,8 +1061,6 @@ theorem flag4_congr {x y : ℕ → ℕ} {K : ℕ} (hK : 8 ≤ K) (h : ∀ l < K,
   unfold flag4
   rw [rowMax_congr (K - 1) fun l hl => h l (by omega), beta4_congr hK h]
 
-/-- **`α`, `β` and `a_E`** on values meeting `pc4`'s shared runs: `alpha4` and `beta4` of the values of `x`'s gates,
-and `β`'s E4M3 cast. -/
 theorem pre4_alpha {V : ℕ → ℕ} {K b : ℕ} (hK : 8 ≤ K) (h : RunsHold ops V (pre4Runs K b) b) :
     V (a4At K b + 4) = alpha4 ops V K ∧ V (a4At K b + 6) = beta4 ops V K ∧
       V (a4At K b + 7) = Prim.eval ops .toE4m3 [beta4 ops V K] := by
@@ -1168,7 +1083,6 @@ theorem pre4_alpha {V : ℕ → ℕ} {K b : ℕ} (hK : 8 ≤ K) (h : RunsHold op
   have hβ : V (a4At K b + 6) = beta4 ops V K := by rw [g6, g5, hd, hα]; rfl
   exact ⟨hα, hβ, by rw [g7, hβ]⟩
 
-/-- **The flag** on values meeting `pc4`'s shared runs: `flag4` of the values of `x`'s gates. -/
 theorem pre4_flag {V : ℕ → ℕ} {K b : ℕ} (hK : 8 ≤ K) (h : RunsHold ops V (pre4Runs K b) b) :
     V (a4At K b + 12) = flag4 ops V K := by
   obtain ⟨hs, hr⟩ := runsHold_append ops V h
@@ -1185,7 +1099,6 @@ theorem pre4_flag {V : ℕ → ℕ} {K b : ℕ} (hK : 8 ≤ K) (h : RunsHold ops
   rw [g12, g11, g10, g9, g8, (pre4_alpha hK h).2.1, hsm]
   rfl
 
-/-- **RowA writes the noise' `Ẽ`**: word `l` is `PouwETilde_v1` of `e`'s code `l` at `a_E`, `β`'s E4M3 cast. -/
 theorem row4A_et {K : ℕ} (hK : 8 ≤ K) (X : ((row4A K).spec ops).toCircuit.Trace)
     (hX : ((row4A K).spec ops).part.Correct X 0) {l : ℕ} (hl : l < 32) :
     val X (post4At K (rowIn K false) + 32 * (K / 64 + 1) + l) =
@@ -1215,7 +1128,6 @@ theorem row4A_et {K : ℕ} (hK : 8 ≤ K) (X : ((row4A K).spec ops).toCircuit.Tr
   rw [g, (pre4_alpha hK hpre).2.2, hin _ (by simp only [rowIn]; omega),
     beta4_congr hK fun l hl => hin l (by simp only [rowIn]; omega)]
 
-/-- **RowA writes its flag**: the BF16 select of `flag4` to `1` or `0`. -/
 theorem row4A_flag {K : ℕ} (hK : 8 ≤ K) (X : ((row4A K).spec ops).toCircuit.Trace)
     (hX : ((row4A K).spec ops).part.Correct X 0) :
     val X (post4At K (rowIn K false) + 32 * (K / 64 + 1) + 32) =
@@ -1244,7 +1156,6 @@ theorem row4A_flag {K : ℕ} (hK : 8 ≤ K) (X : ((row4A K).spec ops).toCircuit.
     Run.rep, et4Run, Nat.add_zero] at g
   rw [g, pre4_flag hK hpre, flag4_congr hK fun l hl => hin l (by simp only [rowIn]; omega)]
 
-/-- **RowB writes the noise' `−Ẽ`**: word `l` is `PouwBf16Neg_v1` of `PouwETilde_v1` of `e`'s code `l` at `a_E`. -/
 theorem row4B_net {K : ℕ} (hK : 8 ≤ K) (X : ((row4B K).spec ops).toCircuit.Trace)
     (hX : ((row4B K).spec ops).part.Correct X 0) {l : ℕ} (hl : l < 32) :
     val X (post4At K (rowIn K true) + 32 + 32 * (K / 64 + 35) + l) = Prim.eval ops .bf16Neg
@@ -1275,7 +1186,6 @@ theorem row4B_net {K : ℕ} (hK : 8 ≤ K) (X : ((row4B K).spec ops).toCircuit.T
   rw [g1, g0, (pre4_alpha hK hpre).2.2, hin _ (by simp only [rowIn]; omega),
     beta4_congr hK fun l hl => hin l (by simp only [rowIn]; omega)]
 
-/-- **RowB writes its flag**: the BF16 select of `flag4` to `1` or `0`. -/
 theorem row4B_flag {K : ℕ} (hK : 8 ≤ K) (X : ((row4B K).spec ops).toCircuit.Trace)
     (hX : ((row4B K).spec ops).part.Correct X 0) :
     val X (post4At K (rowIn K true) + 32 + 32 * (K / 64 + 35) + 32) =
@@ -1306,8 +1216,6 @@ theorem row4B_flag {K : ℕ} (hK : 8 ≤ K) (X : ((row4B K).spec ops).toCircuit.
 
 end Rows4
 
-/-! ## Words read back as values -/
-
 section RoundTrip
 
 theorem wordQ_exp_ne {w : ℕ} {y : ℚ} (h : wordQ w = some y) : (w >>> 23) % 256 ≠ 255 := by
@@ -1321,7 +1229,6 @@ theorem sign_mul_neg_iff (b : Prop) [Decidable b] {M : ℚ} (hM : 0 < M) :
   · simp only [hb, ↓reduceIte, iff_true]; linarith
   · simp only [hb, ↓reduceIte, iff_false, not_lt]; linarith
 
-/-- A finite nonzero word's value is negative exactly when its sign bit is set. -/
 theorem wordQ_neg_iff {w : ℕ} {y : ℚ} (h : wordQ w = some y) (hy : y ≠ 0) : y < 0 ↔ (w >>> 31) % 2 = 1 := by
   rw [PeelExactProofs.wordQ_fields (wordQ_exp_ne h)] at h
   obtain rfl := Option.some.inj h
@@ -1333,7 +1240,6 @@ theorem wordQ_neg_iff {w : ℕ} {y : ℚ} (h : wordQ w = some y) (hy : y ≠ 0) 
     intro h0; apply hy; rw [h0, mul_zero]
   exact sign_mul_neg_iff _ (lt_of_le_of_ne hpos (Ne.symm hne))
 
-/-- **A step's word is `f32Word` of its value**: below `2^32`, finite and not `−0` (`StepWord`). -/
 theorem f32Word_wordVal {w : ℕ} (hw : AccumProofs.StepWord w) : f32Word (wordVal w) = w := by
   have he := AccumProofs.finite?_exp hw.2.2
   obtain ⟨y, hy⟩ : ∃ y, wordQ w = some y := ⟨_, PeelExactProofs.wordQ_fields he⟩
@@ -1348,7 +1254,6 @@ theorem f32Word_wordVal {w : ℕ} (hw : AccumProofs.StepWord w) : f32Word (wordV
 theorem e4m3Mag_480 : e4m3Mag 480 = 126 := by
   unfold e4m3Mag; norm_num
 
-/-- **The cast of a word is `e4m3` of its value** unless the word is a NaN or a zero with its sign bit set. -/
 theorem e4m3_wordVal {w : ℕ} (hnan : (w >>> 23) % 256 = 255 → w % 2 ^ 23 = 0)
     (hz : wordQ w = some 0 → (w >>> 31) % 2 = 0) : e4m3 (wordVal w) = e4m3Word w := by
   unfold e4m3Word wordVal
@@ -1371,8 +1276,6 @@ theorem e4m3_wordVal {w : ℕ} (hnan : (w >>> 23) % 256 = 255 → w % 2 ^ 23 = 0
       · have : ¬ y < 0 := fun h => hs (this.1 h)
         simp [hs, this]
 
-/-- **A code is `e4m3` of its formed word's value**, where the cast is `e4m3Word`'s and the formed word is neither a
-NaN nor a zero with its sign bit set. -/
 theorem code8W_e4m3 (hcast : ∀ u, ops.f32ToE4m3Sat u = (e4m3Word u).val) (p : Pipeline) (α x : ℕ) (et f : ℕ → ℕ)
     (hnan : (form8 ops p α x et f >>> 23) % 256 = 255 → form8 ops p α x et f % 2 ^ 23 = 0)
     (hz : wordQ (form8 ops p α x et f) = some 0 → (form8 ops p α x et f >>> 31) % 2 = 0) :
@@ -1381,7 +1284,6 @@ theorem code8W_e4m3 (hcast : ∀ u, ops.f32ToE4m3Sat u = (e4m3Word u).val) (p : 
   simp only [code8W, Prim.eval, List.getD_cons_zero, hcast, Prim.w]
   exact Nat.mod_eq_of_lt (e4m3Word _).isLt
 
-/-- **`pc8Form` at the values of step words** is the formed word `form8` at those words, read as a value. -/
 theorem pc8Form_value (p : Pipeline) {a x b : ℕ} (ha : AccumProofs.StepWord a) (hx : AccumProofs.StepWord x)
     (hb : AccumProofs.StepWord b) (e f : Fin Params.pi.r → Code) :
     (pc8Form ops p).value (wordVal a) (wordVal x) (wordVal b) e f =
@@ -1405,8 +1307,6 @@ theorem form8_congr (p : Pipeline) (α x : ℕ) {et et' f f' : ℕ → ℕ} (he 
   rw [List.map_congr_left (fun l hl => he l (List.mem_range.1 hl)),
     List.map_congr_left (fun l hl => hf l (List.mem_range.1 hl))]
 
-/-- **`code8W` is `pc8Sem`'s forming code** on a row's words, where the cast is `e4m3Word`'s, `α`, `x_t` and `β` are
-step words, the noise' and basis' codes are below `256`, and the formed word is a `CastWord`. -/
 theorem codes8_sem (hcast : ∀ u, ops.f32ToE4m3Sat u = (e4m3Word u).val) (p : Pipeline) (V : ℕ → ℕ) (K t : ℕ)
     (ha : AccumProofs.StepWord (alpha8 ops V K)) (hx : AccumProofs.StepWord (V t))
     (hb : AccumProofs.StepWord (beta8 ops V K)) (he : ∀ l < Params.pi.r, V (K + l) < 256)
@@ -1420,8 +1320,6 @@ theorem codes8_sem (hcast : ∀ u, ops.f32ToE4m3Sat u = (e4m3Word u).val) (p : P
   rw [code8W_e4m3 ops hcast p _ _ _ _ hD.1 hD.2, pc8Form_value ops p ha hx hb,
     form8_congr ops p _ _ (fun l hl => by rw [encCodes_gateCodes he hl]) (fun l hl => encCodes_gateCodes hf hl)]
 
-/-- **RowA's codes are `pc8Sem`'s**: `e4m3` of `pc8Form` at `α`, `x_t` and `β` read as values and the noise line's and
-`F_t`'s codes, under `codes8_sem`'s conditions. -/
 theorem row8A_code_sem (hcast : ∀ u, ops.f32ToE4m3Sat u = (e4m3Word u).val) (p : Pipeline) {K : ℕ} (hK : 8 ≤ K)
     (X : ((row8A p K).spec ops).toCircuit.Trace) (hX : ((row8A p K).spec ops).part.Correct X 0) {t : ℕ}
     (ht : t < K) (ha : AccumProofs.StepWord (alpha8 ops (val X) K)) (hx : AccumProofs.StepWord (val X t))
@@ -1435,7 +1333,6 @@ theorem row8A_code_sem (hcast : ∀ u, ops.f32ToE4m3Sat u = (e4m3Word u).val) (p
   rw [row8A_code (ops := ops) p hK X hX ht]
   exact codes8_sem ops hcast p (val X) K t ha hx hb he hf hD
 
-/-- **RowB's codes are `pc8Sem`'s**, as `row8A_code_sem`. -/
 theorem row8B_code_sem (hcast : ∀ u, ops.f32ToE4m3Sat u = (e4m3Word u).val) (p : Pipeline) {K : ℕ} (hK : 8 ≤ K)
     (X : ((row8B p K).spec ops).toCircuit.Trace) (hX : ((row8B p K).spec ops).part.Correct X 0) {t : ℕ}
     (ht : t < K) (ha : AccumProofs.StepWord (alpha8 ops (val X) K)) (hx : AccumProofs.StepWord (val X t))
@@ -1457,8 +1354,6 @@ theorem encRow_rowVals {V : ℕ → ℕ} {K : ℕ} (hV : ∀ l < K, AccumProofs.
   intro l hl
   simp only [encRow, hl, ↓reduceDIte, rowVals, f32Word_wordVal (hV l hl)]
 
-/-- **`pc8Sem`'s `α`, `β` and floor at a row of step words** are the table's `alpha8`, `beta8` and `floor8` words read
-as values (the floor plus one where `rowRho`'s word is finite, else `0`). -/
 theorem pc8Sem_scales {Q R S : Type} (p : Pipeline)
     (noise : (Q → R) → S → (U : Workload) → (u : ℕ) → Codes →
       Noise (U.layout.shape u).m (U.layout.shape u).n (U.layout.shape u).k Params.pi.r)
@@ -1473,8 +1368,6 @@ theorem pc8Sem_scales {Q R S : Type} (p : Pipeline)
 
 end RoundTrip
 
-/-! ## E4M3 and FP32 words are never NaN -/
-
 section NotNaN
 
 open Pouw.Fp8Atom.Proofs
@@ -1486,7 +1379,6 @@ theorem roundEven_le_of_lt {m : ℚ} {n : ℤ} (h : m < n + 1 / 2) : roundEven m
   · unfold roundEven; dsimp only
     rw [he, ite_eq_left (by linarith)]
 
-/-- `e4m3`'s magnitude bits on a non-negative value are at most `126` (`448`). -/
 theorem e4m3Mag_le {t : ℚ} (ht : 0 ≤ t) : e4m3Mag t ≤ 126 := by
   rcases ht.lt_or_eq with ht | rfl
   swap
@@ -1518,7 +1410,6 @@ theorem e4m3Mag_le {t : ℚ} (ht : 0 ≤ t) : e4m3Mag t ≤ 126 := by
     have := roundEven_le_of_lt h14
     omega
 
-/-- `f32Word` never writes a NaN. -/
 theorem f32Word_notNaN (y : ℚ) : (f32Word y >>> 23) % 256 = 255 → f32Word y % 2 ^ 23 = 0 := by
   unfold f32Word
   dsimp only
@@ -1531,7 +1422,6 @@ theorem f32Word_notNaN (y : ℚ) : (f32Word y >>> 23) % 256 = 255 → f32Word y 
   simp only [Nat.shiftRight_eq_div_pow]
   split_ifs <;> omega
 
-/-- `e4m3` of a value is never the E4M3 NaN. -/
 theorem e4m3_notNaN (v : ℚ) : (e4m3 v).val % 128 ≠ 127 := by
   have h := e4m3Mag_le (abs_nonneg v)
   unfold e4m3

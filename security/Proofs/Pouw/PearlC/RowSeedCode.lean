@@ -8,23 +8,7 @@ import Mathlib.Analysis.SpecialFunctions.Pow.Real
 import Mathlib.Tactic.Positivity.Finset
 public import Proofs.Pouw.PearlC.RowSeedGap
 
-/-!
-# The code-form seed (`-h3`): a relabelling of the one-row-unit form (staging, nothing pinned)
-
-The code seeds row `i` of unit `u` at the index `u·2³² + i`, with
-`leaf_i` framed inside unit `u`; C1 (`RowSeedNoise`) seeds it as the one-row unit `rowIdx L u i` of the split workload.
-A fixed permutation of the oracle's inputs, one per layout, carries one to the other (C1-h3, `CodeSeedNoise`).
-
-* **A uniform oracle doesn't see a fixed relabelling:** `pr_comp_equiv`, the probability of an event of `(H ∘ π, s)`
-  is that of `(H, s)`.
-* **Nor does a bounded adversary:** its preprocessing relabels query by query (`relabelTree`, `eval_relabelTree`,
-  `calls_relabelTree`), and C5 (`CostModel.RelabelClosed`) relabels its online program, so it runs against `H` as the
-  original runs against `H ∘ π⁻¹`, within the same budget (`exists_relabel_adversary`).
-* **The bridge:** `ttOutRowSeed_code` and `ttOutTileRowSeed_code` carry the row-seeded TT_OUT from `sem'` to the
-  code's `semC`, at the same error `δPearlC q R`, so `(q + R)/2^128`.
-* **From rev1's TT_OUT:** `ttOutRowSeedCode_of_ttOut` and `ttOutTileRowSeedCode_of_ttOutTile` (C1, C1-h3, C3, C5). The
-  g theorems `pearlCGapDevRev1RowSeedAt` and `pearlCSampledDevRev1RowSeedAt` apply at `semC` unchanged.
--/
+/-! The code-form seed (`-h3`), staged: a relabelling of the one-row-unit form. -/
 
 @[expose] public section
 
@@ -34,9 +18,6 @@ open Finset Pouw.PearlC.Assumptions Pouw.Fp8Atom
 
 variable {Q R S : Type}
 
-/-! ## Relabelling -/
-
-/-- A query tree with every query relabelled by `π`. -/
 def relabelTree {α : Type} (π : Q → Q) : QTree Q R α → QTree Q R α
   | .done a => .done a
   | .query q k => .query (π q) fun r => relabelTree π (k r)
@@ -53,7 +34,6 @@ theorem calls_relabelTree {α : Type} (π : Q → Q) (H : Q → R) (t : QTree Q 
   | done a => rfl
   | query q k ih => exact congrArg (· + 1) (ih (H (π q)))
 
-/-- The noise relabelled: `sem` at `H ∘ π L`. -/
 def PearlCSem.relabel (sem : PearlCSem Q R S) (π : Layout → Q ≃ Q) : PearlCSem Q R S :=
   { sem with noise := fun H s U u act => sem.noise (H ∘ π U.layout) s U u act }
 
@@ -66,7 +46,6 @@ theorem eq_relabel {sem' semC : PearlCSem Q R S} {π : Layout → Q ≃ Q} (h : 
   exact ⟨funext fun H => funext fun s => funext fun U => funext fun u => funext fun act => h5 H s U u act,
     h1, h2, h3, h4⟩
 
-/-- **A uniform oracle's probabilities are unchanged under a fixed permutation of its inputs.** -/
 theorem pr_comp_equiv [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (π : Q ≃ Q)
     (P : (Q → R) × S → Prop) : pr (fun x : (Q → R) × S => P (x.1 ∘ π, x.2)) = pr P := by
   classical
@@ -79,10 +58,6 @@ theorem pr_comp_equiv [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (π : 
   congr 2
   exact Finset.card_equiv e fun x => by simp [e]
 
-/-! ## The bridge -/
-
-/-- The adversary relabelled by `π⁻¹`: its preprocessing's queries relabelled, and its online program replaced by the
-one C5 gives, so that against `H` it commits what the original commits against `H ∘ π⁻¹`. -/
 theorem exists_relabel_adversary {CM : CostModel Q R S} (hCM : CM.RelabelClosed) (π : Q ≃ Q) (A : Adversary CM)
     (U : Workload) {T : ℝ} {q : ℕ} (hA : A.Bounded U T q) :
     ∃ A' : Adversary CM, A'.Bounded U T q ∧
@@ -109,9 +84,6 @@ section Bridge
 
 variable [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
 
-/-- **The code-form seed bridge** (`-h3`, §14): under C1-h3 and C5, the row-seeded TT_OUT at the one-row-unit form
-`sem'` gives it at the code's form `semC`, at the same error `δPearlC q R`. A bounded adversary against `semC` is,
-relabelled by `π⁻¹`, one against `sem'` that wins on `H ∘ π` exactly when it wins on `H`, and `H ∘ π` is uniform. -/
 theorem ttOutRowSeed_code {CM : CostModel Q R S} {d : PearlCDevice} {sem' semC : PearlCSem Q R S}
     {π : Layout → Q ≃ Q} {ρ : ℚ} {D : Layout → Prop} {g₀ : ℝ}
     (h : TTOutRowSeed CM (pearlCProtocolDevRev1RowInertBound d sem' ρ) D g₀) (hC : CodeSeedNoise sem' semC π)
@@ -127,7 +99,6 @@ theorem ttOutRowSeed_code {CM : CostModel Q R S} {d : PearlCDevice} {sem' semC :
   rw [htr, comp_symm_comp]
   rfl
 
-/-- **The code-form seed bridge per audit tile**, as `ttOutRowSeed_code`. -/
 theorem ttOutTileRowSeed_code {CM : CostModel Q R S} {d : PearlCDevice} {sem' semC : PearlCSem Q R S}
     {π : Layout → Q ≃ Q} {ρ : ℚ} {D : Layout → Prop} {g₀ : ℝ}
     (h : TTOutTileRowSeed CM (pearlCProtocolDevRev1RowInertBound d sem' ρ) (pearlCTilesDevRev1RowInertBound d sem' ρ) D g₀)
@@ -144,8 +115,6 @@ theorem ttOutTileRowSeed_code {CM : CostModel Q R S} {d : PearlCDevice} {sem' se
   rw [htr, comp_symm_comp]
   rfl
 
-/-- **The code-form seed from rev1's TT_OUT:** C1, C1-h3, C3 and C5 give the row-seeded TT_OUT at the code's form,
-at the row count's error. -/
 theorem ttOutRowSeedCode_of_ttOut {CM : CostModel Q R S} {d : PearlCDevice} {sem sem' semC : PearlCSem Q R S}
     {π : Layout → Q ≃ Q} {ρ : ℚ} (hTT : TTOutPearlCDevRev1 CM d sem ρ) (hN : RowSeedNoise sem sem')
     (hC : CodeSeedNoise sem' semC π) (hCM : CM.SplitClosed) (hCM' : CM.RelabelClosed) (hd : d.RowLocal) (hρ : ρ ≤ 1)
@@ -153,7 +122,6 @@ theorem ttOutRowSeedCode_of_ttOut {CM : CostModel Q R S} {d : PearlCDevice} {sem
     TTOutRowSeed CM (pearlCProtocolDevRev1RowInertBound d semC ρ) (pearlCDomainDev d) (1 / 400) :=
   ttOutRowSeed_code (ttOutRowSeed_of_ttOut hTT hN hCM hd hρ hadd hbf) hC hCM'
 
-/-- **The code-form seed from rev1's TT_OUT per audit tile**, as `ttOutRowSeedCode_of_ttOut`. -/
 theorem ttOutTileRowSeedCode_of_ttOutTile {CM : CostModel Q R S} {d : PearlCDevice} {sem sem' semC : PearlCSem Q R S}
     {π : Layout → Q ≃ Q} {ρ : ℚ} (hTT : TTOutTilePearlCDevRev1 CM d sem ρ) (hN : RowSeedNoise sem sem')
     (hC : CodeSeedNoise sem' semC π) (hCM : CM.SplitClosed) (hCM' : CM.RelabelClosed) (hd : d.RowLocal) (hρ : ρ ≤ 1)

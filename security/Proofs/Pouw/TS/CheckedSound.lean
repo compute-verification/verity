@@ -39,26 +39,12 @@ import Proofs.Flock.SoundAtBridge
 import Proofs.Flock.Soundness.Discharge.Exec.SamplingDesignSample
 import Proofs.Flock.Soundness.Game
 
-/-!
-# A checked unit's proof layer is sound through its Flock sessions (the proof)
-
-`ResourceAccounting.SecurityProofs.TS.CheckedSessionSound`. `AcceptedLive` holds by the layer's definition. `ServedChecksHold`
-takes the value layer itself as the relation's assignment: `RowsSession.RowsAt` says the circuit's evaluation agrees
-with it on each sampled proof block's wires. `ServedRootsLinked` at `0` is the window's sampling design at an event of probability `0` in
-every session's game: under `kd = n` the sample is every unit (`RowsSession.sample_full`, from `subset_spec`), so at an
-accepted outcome whose units are right `Flock.SecurityProofs.ServedRowsLinked` makes every registered read of the
-value layer the committed row (`RowsSession.servedEv_false`). `SoundAt δ` is then
-`ResourceAccounting.SecurityProofs.TS.SessionSoundAt` at `δs = 0`.
-
-This module imports `Proofs.Flock.SoundAtBridge` (through `Proofs.Pouw.TS.SessionSound`), whose imports make `X`
-a token, so `Proofs/ResourceAccounting.lean` imports it.
--/
+/-! A checked unit's proof layer is sound through its Flock sessions. -/
 
 @[expose] public section
 
 namespace FlockSoundness.Audit.SamplingDesign
 
-/-- **A `subset` live sample that runs is `Flock.Draw.subset` on its stream.** -/
 theorem runOS_subset {L : Fin 1 → ℕ} {f : (i : Fin 1) → Fin (L i) → Fin 256} {k n : ℕ} {d : Flock.Draw.UnitSample}
     (hd : runOS f (.subset k) n = some d) : Flock.Draw.subset k n (streamOf (f 0)) = some d.units := by
   unfold runOS at hd
@@ -107,7 +93,6 @@ open FlockSoundness.Discharge.Tables (LiveOutJ)
 open ResourceAccounting.TS.Checked
 open scoped ENNReal
 
-/-- A permutation of `ℕ` that keeps `[0, n)` maps `[0, n)` onto it. -/
 theorem perm_onto_range (π : Equiv.Perm ℕ) {n : ℕ} (hπ : ∀ t < n, π t < n) : ∀ x < n, ∃ i < n, π i = x := by
   intro x hx
   have hsub : (Finset.range n).image π ⊆ Finset.range n := by
@@ -120,8 +105,6 @@ theorem perm_onto_range (π : Equiv.Perm ℕ) {n : ℕ} (hπ : ∀ t < n, π t <
   obtain ⟨i, hi, he⟩ := Finset.mem_image.1 hx'
   exact ⟨i, Finset.mem_range.1 hi, he⟩
 
-/-- **The live audit's event of probability `0`** (`auditLive`, unfolded): an event whose probability is `0` in the
-live session at every registration `R` and sampling coin `ω` has probability `0` at every strategy. -/
 theorem prob_audit_eq_zero {n : ℕ} (L : SamplingDesign n) (Reg : Type)
     (live : Finset (Fin n) → Reg → Game Discharge.Exec.Transcript)
     (p : Reg × Finset (Fin n) × Discharge.Exec.Transcript → Prop)
@@ -139,8 +122,6 @@ namespace RowsSession
 
 variable (s : RowsSession)
 
-/-- **Under full checking the sample is every unit**: at `kd = n` the subset sample, when it runs, is `n` distinct units
-below `n` (`subset_spec`), and when it doesn't the sampling design samples every unit. -/
 theorem sample_full (hk : s.kd = s.n) (ω : s.L.Ω) : s.L.draw ω = Finset.univ := by
   show (match SamplingDesign.runOS (s.src ω) (.subset s.kd) s.n with
     | some d => Finset.univ.filter fun u : Fin s.n => u.val ∈ d.units
@@ -158,8 +139,6 @@ and the value layer's registered reads aren't the committed rows. -/
 def ServedEv (o : s.Out) : Prop :=
   LiveAcceptsZKR s.I s.own o ∧ (∀ u ∈ o.2.1, ¬ s.IncorrectAt u ∧ s.RowsAt o u) ∧ rowsReg s s.Xv ≠ openedReg s
 
-/-- **No outcome of the audit meets `ServedEv`** under full checking, at every unit's served roots registered: every unit is sampled, so `Flock.SecurityProofs.ServedRowsLinked` puts the
-committed row at each of its registered reads. -/
 theorem servedEv_false (hk : s.kd = s.n)
     (hS : ∀ u, s.ServedRegistered u) (R : s.Reg) (ω : s.L.Ω)
     (o : LiveOutJ (planZHJ (Reg := s.Reg) s.dj s.y₀ (s.L.draw ω) R).length (mPtsOf s.c.g (s.kd / nTab s.I))) :
@@ -175,7 +154,6 @@ theorem servedEv_false (hk : s.kd = s.n)
         (hD _ hu).2 _ h2.1 h2.2)
     | rfl
 
-/-- **`ServedEv` has probability `0` in the session's game** under full checking and registered served roots. -/
 theorem prob_servedEv (hk : s.kd = s.n)
     (hS : ∀ u, s.ServedRegistered u) : prob s.ServedEv s.G s.τ = 0 :=
   prob_audit_eq_zero s.L s.Reg (liveOfZJ s.dg (planZHJ s.dj s.y₀) s.N s.wr) s.ServedEv (fun R ω s' => by
@@ -183,9 +161,6 @@ theorem prob_servedEv (hk : s.kd = s.n)
     exact nonpos_iff_eq_zero.1 ((prob_mono (fun o ho => s.servedEv_false hk hS R ω o ho) _ _).trans
       (prob_false _ _).le)) s.τ
 
-/-- **`ServedEv` at `rowsOn P` has probability `0`** where `P` of the session gives full checking and registered
-served roots: where `P` holds it is `ServedEv` (`prob_servedEv`), and where it fails `rowsOn P` is the
-committed rows. -/
 theorem prob_servedOn (P : RowsSession → Prop)
     (hN : P s → s.kd = s.n ∧ ∀ u, s.ServedRegistered u) :
     prob (fun o => LiveAcceptsZKR s.I s.own o ∧ (∀ u ∈ o.2.1, ¬ s.IncorrectAt u ∧ s.RowsAt o u) ∧
@@ -237,10 +212,6 @@ noncomputable def checkedOnLayer {Ω : Type} {S nπ : ℕ} (sess : Paths Ω S �
   rel x w i v := P (sess x w i) → CheckedRel (sess x w i) (out x w i) ok v
   right _ _ := True
 
-/-- **The checked layer is sound at `δ` where `P` holds**, at `CheckedSessionSound`'s hypotheses with full checking,
-the `ok` port (`PortsOk`) and registered served roots asked only of a session `P` holds of:
-`SessionSoundAt` at `rows := rowsOn P`, which reads the value layer where `P` holds (`CheckedSessionSound`'s argument)
-and the committed rows where it fails, so nothing is asked there (`prob_servedOn`). -/
 theorem checkedOn_soundAt {Ω : Type} [Fintype Ω] {S nπ : ℕ} (sess : Paths Ω S → Fin S → Fin nπ → RowsSession)
     (out : ∀ x w i, (sess x w i).Out) (ok : String) (P : RowsSession → Prop) (δ : ℝ)
     (hCR : ∀ x w i, (sess x w i).CR) (hSamplingDesign : ResourceAccounting.Assumptions.TS.ExecutionPhaseDesign sess out)

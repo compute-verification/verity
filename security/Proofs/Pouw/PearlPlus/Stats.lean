@@ -3,20 +3,7 @@ module
 public import Proofs.Pouw.PearlPlus.Words
 public import Proofs.Pouw.PearlPlus.Rho
 
-/-!
-# Pearl+'s bridge, part (b), the row statistics: `s5_stats` is `pc8`'s
-
-`Words.s5Stats` folds a row's `max(m, w & 0x7FFFFFFF)`, runs the FMA partials of `x²` over every 8th word into 32
-accumulators and their butterfly, and forms `ρ = √(sum / n)`, `α = 448 / max(s + 4ρ, 2⁻³²)` and
-`β = ρ·α·2^(−19/2)`. `statsAreTheRow` says these are `pc8`'s `rowRho`, `alpha8` and `beta8` on core's primitives at
-the row's values re-encoded.
-
-Each step is the row's primitive on the same words: the add where its sum is finite (`fp32AddIsTheSpec`, the check's
-`finite` guarding every sum), the root where ρ is finite (`sqrtIsTheSpec`, `statsRhoIsFinite`), and core's multiply,
-divide and FMA as they are. Every word stays sign-clear (`Pos`), so the check's integer `max` is `F32Fmaxf` and its fold
-is the row's `I32Le`/`SelectI32` max; `ofInt n` is `f32Word n` up to `n = 2^24`. A raw word and its re-encoding differ
-only at `−0`, which none of the formulas tells from `+0` (`WholeCircuit.alpha8_zeroSign`).
--/
+/-! Pearl+'s bridge, part (b): the check's row statistics `s5_stats` are `pc8`'s. -/
 
 @[expose] public section
 
@@ -27,8 +14,6 @@ open Pouw.PearlC Pouw.Fp8Atom PouwCheck.PearlPlus
 namespace StatsSim
 
 open Pouw.PearlC.RowCircuit WordsSim
-
-/-! ### Sign-clear words stay sign-clear -/
 
 /-- A decoded word with its sign bit clear: a NaN, `+inf` or a non-negative finite. -/
 def Pos : Verity.Fp32.Decoded → Prop
@@ -107,8 +92,6 @@ theorem sqrtWord_lt31 {a : ℕ} (ha : a < 2 ^ 31) : sqrtWord a < 2 ^ 31 := by
   rw [Nat.mod_eq_of_lt (show a < 2 ^ 32 by omega)]
   split_ifs <;> first | omega | (apply f32Word_lt31; positivity)
 
-/-! ### `ofInt` of the row's partial count -/
-
 theorem ofInt_lt31 {n : ℕ} (h0 : 0 < n) (h : n ≤ 2 ^ 24) : Words.ofInt n < 2 ^ 31 := by
   have ha : n ≠ 0 := by omega
   have hl1 := Nat.log2_self_le ha
@@ -146,8 +129,6 @@ theorem ofInt_eq {n : ℕ} (h0 : 0 < n) (h : n ≤ 2 ^ 24) : Words.ofInt n = f32
   have hq := ofInt_wordQ h0 h
   rw [← f32Word_wordVal (stepWord_of_lt31 (ofInt_lt31 h0 h) hq), wordVal_of_wordQ hq]
 
-/-! ### The row's primitives on core's words -/
-
 theorem eval_add (a b : ℕ) : Prim.eval coreOps .add [a, b] = TileCircuit.f32Add a b % 2 ^ 32 := rfl
 theorem eval_mul (a b : ℕ) : Prim.eval coreOps .mul [a, b] = Verity.Fp32.f32MulV2 a b % 2 ^ 32 := rfl
 theorem eval_div (a b : ℕ) : Prim.eval coreOps .div [a, b] = Verity.Fp32.f32DivV2 a b % 2 ^ 32 := rfl
@@ -157,7 +138,6 @@ theorem eval_fmaxf (a b : ℕ) : Prim.eval coreOps .fmaxf [a, b] = coreOps.f32Fm
 theorem eval_le (a b : ℕ) : Prim.eval coreOps .le [a, b] = coreOps.i32Le a b % 2 := rfl
 theorem eval_sel (c a b : ℕ) : Prim.eval coreOps .selI32 [c, a, b] = coreOps.selectI32 c a b % 2 ^ 32 := rfl
 
-/-- A finite sum of sign-clear words is the row's `add`, and sign-clear. -/
 theorem add_eval {a b v : ℕ} (ha : a < 2 ^ 31) (hb : b < 2 ^ 31)
     (h : Words.finite (Verity.Fp32.f32AddV2 a b) = .ok v) : v = Prim.eval coreOps .add [a, b] ∧ v < 2 ^ 31 := by
   have hs := fp32AddIsTheSpec a b
@@ -169,8 +149,6 @@ theorem add_eval {a b v : ℕ} (ha : a < 2 ^ 31) (hb : b < 2 ^ 31)
   rw [eval_add, ← he, Nat.mod_eq_of_lt (show Verity.Fp32.f32AddV2 a b < 2 ^ 32 by omega)]
 
 theorem add00 : Verity.Fp32.f32AddV2 0 0 = 0 := by decide +kernel
-
-/-! ### The running max of `|x|` -/
 
 theorem rowMax_succ (V : ℕ → ℕ) (t : ℕ) (ht : rowMax coreOps .fabs V t < 2 ^ 31) :
     rowMax coreOps .fabs V (t + 1) = max (rowMax coreOps .fabs V t) (V (t + 1) % 2 ^ 31) := by
@@ -189,7 +167,6 @@ theorem rowMax_lt31 (V : ℕ → ℕ) : ∀ t, rowMax coreOps .fabs V t < 2 ^ 31
     have : V (t + 1) % 2 ^ 31 < 2 ^ 31 := Nat.mod_lt _ (by norm_num)
     split <;> omega
 
-/-- The check's fold of `max(m, w & 0x7FFFFFFF)` is the row's running max of `|x|`. -/
 theorem max_fold (x : Array ℕ) (hx : 0 < x.size) :
     x.foldl (fun m w => max m (w &&& 0x7FFFFFFF)) 0 = rowMax coreOps .fabs (fun l => x[l]!) (x.size - 1) := by
   have := Array.foldl_induction (as := x)
@@ -211,9 +188,6 @@ theorem max_fold (x : Array ℕ) (hx : 0 < x.size) :
   · omega
   · exact h
 
-/-! ### The check's loops -/
-
-/-- A `for` loop over a list that returns `.ok` keeps an invariant its body keeps. -/
 theorem forIn_inv {α γ : Type} (P : ℕ → γ → Prop) {body : α → γ → Except String (ForInStep γ)}
     (l : List α) : ∀ (i : ℕ) {x y : γ}, P i x →
       (∀ j (hj : j < l.length) z r, P (i + j) z → body l[j] z = .ok r →
@@ -236,8 +210,6 @@ theorem forIn_inv {α γ : Type} (P : ℕ → γ → Prop) {body : α → γ →
       rwa [show i + (j + 1) + 1 = i + 1 + j + 1 by omega] at this) h
     rwa [List.length_cons, show i + (l.length + 1) = i + 1 + l.length by omega]
 
-/-- After the FMA loop's first `j` partials, accumulator `i` holds partial `accLast j i`, or `+0` before its first;
-every accumulator is sign-clear. -/
 def FmaInv (V : ℕ → ℕ) (j : ℕ) (p : Array ℕ) : Prop :=
   p.size = 32 ∧ ∀ i < 32, p[i]! = (if i < j then fmaAcc coreOps .id V (accLast j i) else 0) ∧ p[i]! < 2 ^ 31
 
@@ -297,8 +269,6 @@ def lvl (n : ℕ) (F : ℕ → ℕ) : ℕ → ℕ → ℕ
   | 0 => F
   | j + 1 => bfly coreOps (2 ^ (4 - j)) n (lvl n F j)
 
-/-- After `j` butterfly rounds, the first `2^(5-j)` sums are `lvl`'s (`+0` past the live ones), and every sum is
-sign-clear. -/
 def BflyInv (n : ℕ) (F : ℕ → ℕ) (j : ℕ) (p : Array ℕ) : Prop :=
   p.size = 32 ∧ (∀ i < 32, p[i]! < 2 ^ 31) ∧ ∀ i < 2 ^ (5 - j), p[i]! = if i < n then lvl n F j i else 0
 
@@ -348,8 +318,6 @@ theorem bfly_loop {n : ℕ} {F : ℕ → ℕ} {body : ℕ → Array ℕ → Exce
     have hj5 : j < 5 := hj
     exact bfly_step (o := [16, 8, 4, 2, 1][j]) hj5 (by interval_cases j <;> rfl) hz hm) h
   exact this
-
-/-! ### The statistics on the raw words -/
 
 theorem stats_V {x : Array ℕ} {s ρw αw βw : ℕ} (hk0 : 0 < x.size) (hk8 : 8 ∣ x.size) (hkK : x.size ≤ 2 ^ 27)
     (h : Words.s5Stats x = .ok (s, ρw, αw, βw)) :
@@ -452,8 +420,6 @@ theorem stats_V {x : Array ℕ} {s ρw αw βw : ℕ} (hk0 : 0 < x.size) (hk8 : 
 end StatsSim
 
 open StatsSim RowCircuit in
-/-- **`s5_stats` is the row's statistics**: on a row of `k` finite words, `8 ∣ k`, `k ≤ 2^27`, where the check's
-statistics are a value, its `ρ`, `α` and `β` are `pc8`'s formulas on the row's values re-encoded. -/
 theorem statsAreTheRow : StatsAreTheRow := by
   intro k x s ρw αw βw hk hk0 hk8 hkK hx h
   subst hk

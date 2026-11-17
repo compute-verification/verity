@@ -3,14 +3,7 @@ module
 public import Proofs.Pouw.PearlPlus.Numerics
 public import Proofs.Pouw.PearlPlus.Rules
 
-/-!
-# Pearl+'s bridge, part (c): `s5_stats`' ρ is a finite word
-
-`Words.s5Stats` refuses a non-finite `t = s + 4ρ` (`finite (f32AddV2 s (f32MulV2 S5_FOUR rho))`). Where the stats are a
-value, `t` is finite, so both of its addends are (`fp32AddIsTheSpec`), among them `f32MulV2 S5_FOUR ρ`. Core's product of
-any word with a NaN or an infinity is `F32_NAN_PTX` or an infinity, so ρ decodes finite, and a word that decodes finite
-is `wordQ`-finite.
--/
+/-! Pearl+'s bridge, part (c): `s5_stats`' ρ is a finite word. -/
 
 @[expose] public section
 

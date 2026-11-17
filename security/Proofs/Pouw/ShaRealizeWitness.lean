@@ -38,28 +38,7 @@ import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Pouw.ShaRealize
 
-/-!
-# An honest prover meets `ShaRealize`'s realization (block I)
-
-The realization premise isn't empty on the provers it is for. On a toy accelerator model whose device premises hold
-(`toyG_premises`), the honest prover of a no-fold protocol of `k` sampling blocks, each registrable at one instance `a`
-alone (`honest`), over any digest set `D` (SHA-512's `2^512` values among them), is accepted on every oracle and every
-coin (`honest_accepted`) and has a `Realization` at every selection and cap `Q`, query budget 1, schedule 1, advice of
-0 bits and
-walk-and-log cost 0 (`honest_realization`). So `extract_of_realization` applies to it, at `ξ = 0` and
-`κ_x = (1 + 3k)/|D|` (`honest_extractAdvAt`).
-
-* `toyG`: programs are functions with a cost and size 0, so (G1) holds at memory 0. There is one resource, a run
-  uses its program's cost of it and makes as many oracle calls, each using one unit (G3), and nothing is imported.
-* `toyNF D`: one word (`n = n' = nb = L = s = 1`), no noise, the oracle a table `Word ⊕ (D × D) → D` (leaves and
-  nodes), the root the leaf's hash and the opening its check.
-* `honest a k`: every sampling block's commit phase commits `a` at no cost, its work computes `a`'s word (cost 1) and
-  hashes it (cost 1), and its answer opens it at no cost. Its words program is the walk over its one logged query, so the walk costs nothing beyond its
-  work.
-
-It doesn't show `ShaRealize`, a realization for every prover: `toyG`'s programs read the oracle table as data, so
-`Accel.OracleCalls` fails on it, and `ShaRealize` assumes it.
--/
+/-! An honest prover meets `ShaRealize`'s realization, on a toy accelerator model whose device premises hold. -/
 
 @[expose] public section
 
@@ -67,7 +46,6 @@ namespace Pouw.SecurityProofs.ShaRealize.Witness
 
 open Pouw.RelativeSecurity Pouw.Dither Pouw.Assumptions Pouw.MerkleExtract
 
-/-- Programs are functions with a cost, of size 0. -/
 abbrev toyMc : Machine where
   Alg I O := (I → O) × ℕ
   eval f := f.1
@@ -110,7 +88,6 @@ abbrev toyG : Accel where
   P1 := True
   P2 := True
 
-/-- `toyG` meets the device premises. -/
 theorem toyG_premises : toyG.G1 ∧ toyG.G2 ∧ toyG.G3 ∧ toyG.P1 ∧ toyG.P2 := by
   refine ⟨fun _ _ => ?_, ⟨fun _ => one_pos, fun f _ => ⟨le_rfl, fun _ => ⟨Nat.cast_nonneg _, ?_⟩⟩⟩,
     fun f _ => ⟨Nat.cast_nonneg _, fun _ => ?_⟩, trivial, trivial⟩
@@ -123,10 +100,8 @@ theorem toyG_premises : toyG.G1 ∧ toyG.G2 ∧ toyG.G3 ∧ toyG.P1 ∧ toyG.P2 
 
 variable (D : Type) [Fintype D] [DecidableEq D] [Inhabited D]
 
-/-- The points the oracle answers: leaves and nodes. -/
 abbrev toyX : Type := Word ⊕ (D × D)
 
-/-- The tree encodings: a leaf is `inl`, a node `inr`. -/
 def toyE : Enc (toyX D) D Word where
   leaf := Sum.inl
   node l r := Sum.inr (l, r)
@@ -134,7 +109,6 @@ def toyE : Enc (toyX D) D Word where
   node_inj h := Prod.mk.inj (Sum.inr.inj h)
   disj _ _ _ := Sum.inl_ne_inr
 
-/-- One word, no noise, its leaf's hash the root, and the opening the leaf's check. -/
 abbrev toyNF : NoFold where
   n := 1
   n' := 1
@@ -167,20 +141,17 @@ def honest : Prover toyG (noFoldRound (toyNF D)) k where
   answer _ := (fun _ _ => (word a, ()), 0)
 
 omit [Inhabited D] in
-/-- The honest prover is accepted on every oracle and every coin. -/
 theorem honest_accepted (o : (noFoldRound (toyNF D)).Orc) (x : Fin k → (toyNF D).Draw × (toyNF D).Chk) :
     (honest a k).Accepted (fun _ => {a}) o x :=
   fun _ => ⟨Set.mem_singleton a, fun _ => ⟨rfl, rfl⟩⟩
 
 omit [Inhabited D] in
-/-- The verifier's check is the Merkle path check, along the empty position. -/
 theorem toy_hopens : ∀ o r c v p, (toyNF D).opens o r c v p →
     Opens ((Equiv.refl _ : (toyNF D).Orc ≃ (toyX D → D)) o) (toyE D) (id r) ((fun _ => []) p) v ∧
       ((fun _ : (toyNF D).Path => ([] : List (Bool × D × D))) p).map Prod.fst =
         (fun _ : Fin (toyNF D).n × Fin (toyNF D).n' × Fin (toyNF D).nb => ([] : List Bool)) c :=
   fun _ _ _ _ _ h => ⟨h, rfl⟩
 
-/-- The honest prover's log: its one query, the leaf, before every round's root. -/
 def log : QueryLog (noFoldRound (toyNF D)) k (toyX D) D 1 fun _ => 1 where
   qry _ _ _ := (toyE D).leaf (word a)
   qry_dep _ _ _ _ _ := rfl
@@ -188,7 +159,6 @@ def log : QueryLog (noFoldRound (toyNF D)) k (toyX D) D 1 fun _ => 1 where
   root _ _ u := u 0
   root_dep _ _ _ _ h := h 0 (by decide)
 
-/-- The walk over the honest log finds the honest word. -/
 theorem walk_log (x : Fin k → (toyNF D).Draw × (toyNF D).Chk) (w : Fin k) (u : Fin 1 → D) :
     Pouw.MerkleExtract.ext (((log a k).prover x w).oracle u) (toyE D) (((log a k).prover x w).pre u) (u 0) [] =
       some (word a) := by
@@ -222,8 +192,6 @@ theorem honest_realization (sel : (noFoldRound (toyNF D)).Chk → Prop) (Q : ℝ
   · intro _ x _ u _ _ w _
     exact (congrArg (fun t => Option.getD t 0) (walk_log a k x w u)).symm
 
-/-- **`extract_of_realization` applies to the honest prover** at every selection `sel` and cap `Q`, advice of 0 bits,
-`ξ = 0` and `κ_x = (1 + 3k)/|D|`. -/
 theorem honest_extractAdvAt (sel : (noFoldRound (toyNF D)).Chk → Prop) (Q : ℝ) :
     ExtractAdvAt toyG (noFoldRound (toyNF D)) k (fun _ => {a}) sel Q 0 (fun _ => 0)
       (((1 + 3 * k : ℕ) : ℝ) / Fintype.card D) (honest a k) := by
@@ -234,7 +202,6 @@ theorem honest_extractAdvAt (sel : (noFoldRound (toyNF D)).Chk → Prop) (Q : �
   · simp
   · rw [hκ]
 
-/-- At SHA-512's digests, `κ_x = (1 + 3k)/2^512`. -/
 theorem honest_extractAdvAt_sha512 (a : (noFoldRound (toyNF (Fin (2 ^ 512)))).Inst)
     (sel : (noFoldRound (toyNF (Fin (2 ^ 512)))).Chk → Prop) (Q : ℝ) :
     ExtractAdvAt toyG (noFoldRound (toyNF (Fin (2 ^ 512)))) k (fun _ => {a}) sel Q 0 (fun _ => 0)

@@ -3,37 +3,25 @@ module
 public import Evaluate.TC.Dots
 public import Definitions.Pouw.PearlC.TileCircuit
 
-/-!
-# Pearl+'s bridge, part (a): the check's FP8 atom is the Definitions' step
-
-`PouwCheck.PearlPlus` runs the H100's E4M3 atom as the evaluator computes it (`Evaluate.TC.hopperE4m3Dot32`, on
-`Evaluate.TC.Fp8Atom`'s grouped-sum model), in the chain, the forming and the debit replay. The game reads
-`Pouw.Fp8Atom.Pipeline.step` at `hopperE4m3K32`. Code Lean may not read `security/`, so the two models are one text in
-two packages; the bridge is one commuting map per definition, as `Proofs.Properties.Core.Evaluate` does for the BF16
-tensor-core spec.
--/
+/-! Pearl+'s bridge, part (a): the check's FP8 atom is the Definitions' step; code Lean may not read `security/`, so
+the two models are one text in two packages, joined by one commuting map per definition. -/
 
 @[expose] public section
 
 namespace Pouw.PearlPlus.Bridge
 
-/-- The evaluator's grouped-sum pipeline as the Definitions' (the same three fields). -/
 def pipelineToDef (p : Evaluate.TC.Fp8Atom.Pipeline) : Pouw.Fp8Atom.Pipeline := ⟨p.groups, p.width, p.zeroExp⟩
 
-/-- **(a) The evaluator's FP8 step is the Definitions' step**, on every pipeline, accumulator word and operand codes. -/
 def StepIsTheStep : Prop :=
   ∀ (p : Evaluate.TC.Fp8Atom.Pipeline) (acc : ℕ) (a b : List (Fin 256)),
     Evaluate.TC.Fp8Atom.Pipeline.step p acc a b = Pouw.Fp8Atom.Pipeline.step (pipelineToDef p) acc a b
 
-/-- **(a) The H100 atom the check runs is `hopperE4m3K32`'s step** on its operands' codes (each word mod 256). -/
 def AtomIsTheStep : Prop :=
   ∀ (acc : ℕ) (a b : List ℕ), Evaluate.TC.hopperE4m3Dot32 acc a b =
     Pouw.Fp8Atom.hopperE4m3K32.step acc (a.map Pouw.PearlC.TileCircuit.code) (b.map Pouw.PearlC.TileCircuit.code)
 
-/-- The evaluator's term as the Definitions' (the same three fields). -/
 def termToDef (t : Evaluate.TC.Fp8Atom.Term) : Pouw.Fp8Atom.Term := ⟨t.neg, t.exp, t.mag⟩
 
-/-- The evaluator's value as the Definitions'. -/
 def valueToDef : Evaluate.TC.Fp8Atom.Value → Pouw.Fp8Atom.Value
   | .nan => .nan
   | .inf s => .inf s
@@ -115,14 +103,12 @@ theorem fold_toDef (p : Evaluate.TC.Fp8Atom.Pipeline) (gs : List Nat) (v : Evalu
     intro x _
     exact productTotal_toDef x.1 x.2
 
-/-- **(a)**: the evaluator's FP8 step is the Definitions' step. -/
 theorem stepIsTheStep : StepIsTheStep := by
   intro p acc a b
   simp only [Evaluate.TC.Fp8Atom.Pipeline.step, Pouw.Fp8Atom.Pipeline.step, packValue_toDef, fold_toDef,
     fp32Value_toDef]
   rfl
 
-/-- **(a)**: the H100 atom the check runs is `hopperE4m3K32`'s step. -/
 theorem atomIsTheStep : AtomIsTheStep := fun acc a b =>
   stepIsTheStep Evaluate.TC.Fp8Atom.hopperE4m3K32 acc (a.map Evaluate.TC.Fp8Atom.code)
     (b.map Evaluate.TC.Fp8Atom.code)

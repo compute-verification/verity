@@ -7,14 +7,7 @@ import Mathlib.Data.BitVec
 import Mathlib.Tactic.NormNum.Ineq
 import Mathlib.Tactic.Ring.RingNF
 
-/-!
-# duo runs at one start state: three words are never bound
-
-At a fixed start state a run of `L` words maps `2^(nL)` word sequences to `2^(2n)` states, so for `L > 2` two
-different runs reach one state, whatever the keys and the state (`duoRun_atState_not_injective`). A whole-state
-checkpoint after a block of three or more free words binds them only with a probability over the words, never for
-every choice of them.
--/
+/-! At a fixed start state no duo run of more than two words is injective, so three free words are never bound. -/
 
 @[expose] public section
 

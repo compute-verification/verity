@@ -4,14 +4,7 @@ public import Definitions.Pouw.Guarantees.PouwWork
 public import Definitions.Pouw.Guarantees.Game
 public import Proofs.Pouw.Lemmas.Game
 
-/-!
-# PoUW's work lower bound on an isolated node (proof)
-
-`ResourceAccounting.SecurityProofs.PouwLocalOff`: an accepted coin whose node is short of `Wb · Nmin` credits is short of
-`Nmin` right blocks (A2), right by luck (A2b), in the floor's skip event, or under the floor, which A5 at 0 rules out;
-the union bound sums the first three. `PouwWork.detection_of_sampling` derives A2 from
-`Pouw.Guarantees.WorkWeightedSampling` when the sampled blocks are the coins' last part.
--/
+/-! PoUW's work lower bound on an isolated node. -/
 
 @[expose] public section
 
@@ -44,9 +37,6 @@ theorem pr_or_le {α : Type} [Fintype α] (E F : α → Prop) :
   convert key using 3
   exact Finset.filter_congr_decidable _ _ _
 
-/-- **A2 from work-weighted sampling.** When the coins are a pre-draw part `a` and `t` uniform blocks `c`, the
-pre-deadline inbox and the targets depend on `a` alone, and an accepted coin's sampled blocks are right, Detection holds
-at `(1 − ε_s)^t` for every `Nmin` that leaves more than `ε_s · N` blocks wrong. -/
 theorem detection_of_sampling (hW : Pouw.Guarantees.WorkWeightedSampling) {α : Type} [Fintype α] {L : Type}
     {N t : ℕ} (S : α × (Fin t → Pouw.Ticket (fun _ => 1) N) → Actual.Run L)
     (P : Verdict (α × (Fin t → Pouw.Ticket (fun _ => 1) N)) L) (hN : P.N = N)

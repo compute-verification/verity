@@ -8,32 +8,7 @@ public import Proofs.Pouw.PearlC.Freeze
 public import Definitions.Pouw.PearlC.SkipP
 public import Definitions.Pouw.PearlC.Sm120
 
-/-!
-# P1 over any accumulator model, and on sm_120 (staging)
-
-`Freeze`'s statements with the atom a parameter `p : Pipeline` (`Accum`'s chain and `SkipP`'s twins), instantiated at
-`hopperE4m3K32`, where every twin is today's definition by `rfl`, and at the sm_120 atom `sm120E4m3K32 floor`
-(`⟨[32], 26, floor⟩`, `Sm120`).
-
-* **The floor** (`step_floor`): every nonzero term the step aligns has an exponent of at least −126 (the products at
-  least −12, FP32 values and group outputs at least −126), so two floors at most −126 give the same step, for any
-  width and groups. sm_120's floor, somewhere in `[−145, −126]`, is unobservable (`sm120_floor`); so is Hopper's −139.
-* **(a) An identity needs domination** at width `w ≥ 24` (`identity_needs_dominationW`): on a normal accumulator `c`
-  of exponent `e_c ≥ w − 127`, `D = acc` only if `c` is on the step's grid `g = 2^(E − (w − 1))` and the products
-  truncated to `g` (`P`) leave `c` in place when truncated to `c`'s own ulp `u = 2^(e_c − 23)`: `trunc_u(c + P) = c`.
-  So `|Σ a·b| < 32·g + u` (`identity_cellW`); on sm_120 with no product above `c`, `|Σ a·b| < 9·u`
-  (`sm120_identity_cell`). At Hopper's width `u ≤ g` and the same statement holds with `P = 0`
-  (`identity_needs_domination_hopper`, from `Freeze.identity_needs_domination`).
-* **(b1) From `+0`** (`step_zero_iffW`, `24 ≤ w ≤ 115`): the atom is an identity exactly when the products truncated
-  to the grid of their largest exponent sum to zero (`preSumW`; `preSumW (−139) 14 = preSum`).
-* **(b) Confinement** (`identity_confinedW`): in a group from `+0` of `n` atoms with `(w − 1)·n ≤ 114` the running
-  words stay normal (`tame_inWordW`), so an identity is (b1)'s on `+0` or (a)'s on a normal word; on sm_120 `n ≤ 4`
-  (`sm120_identity_confined`), against Hopper's `n ≤ 7` (`Freeze.identity_confined`).
-* **(c) Promotion** does not read the atom: `Freeze.promote_identity` and `Freeze.rnAdd_identity` apply as they are.
-* **(d) Skipping** (`totalSkip_eqP`, `chainSkip_frozenP`, `skipOne_iffP`, `joint_completeP`, `jointFlags_completeP`,
-  `joint_flagsCompleteP`): `Freeze`'s proofs, which read the atom only through the fold, over any `p` and promotion
-  depth `G > 0`. At `hopperE4m3K32` and `G = 4` they are `Freeze`'s theorems (`joint_flagsComplete_hopper`).
--/
+/-! P1 over any accumulator model, and on sm_120, staged. -/
 
 @[expose] public section
 
@@ -42,13 +17,9 @@ namespace Pouw.PearlC.FreezeP
 open Pouw.Fp8Atom Pouw.Fp8Atom.Proofs Pouw.Fp8Atom.H1T Pouw.Fp8Atom.H1T.Proofs Pouw.PearlC Pouw.PearlC.Skip
   Pouw.PearlC.Freeze Pouw.PearlC.Accum Pouw.PearlC.SkipP
 
-/-! ## The twins at `hopperE4m3K32` are today's definitions (the chain's are `Accum`'s `groupWordP_hopper`, …) -/
-
 theorem stepP_hopper : stepP hopperE4m3K32 = Skip.step := rfl
 theorem jointFlagsP_hopper : jointFlagsP hopperE4m3K32 = jointFlags := rfl
 theorem wordFlagsP_hopper : wordFlagsP hopperE4m3K32 4 = wordFlags := rfl
-
-/-! ## The floor is unobservable at or below −126 -/
 
 /-- A value whose finite term, if nonzero, has an exponent of at least −126. -/
 def Floored (v : Value) : Prop := ∀ t, v = .fin t → t.mag ≠ 0 → -126 ≤ t.exp
@@ -164,8 +135,6 @@ theorem fold_floor (p p' : Pipeline) (hw : p.width = p'.width) (hz : p.zeroExp �
     rw [groupStepTotal_floor p.width hz hz' v _ hv hps, hw]
     exact ih _ _ (groupStepTotal_floored _ _ _ _)
 
-/-- **The floor is unobservable**: two pipelines with the same groups and width and floors at most −126 have the same
-step. -/
 theorem step_floor (p p' : Pipeline) (hg : p.groups = p'.groups) (hw : p.width = p'.width) (hz : p.zeroExp ≤ -126)
     (hz' : p'.zeroExp ≤ -126) : p.step = p'.step := by
   funext acc a b
@@ -173,11 +142,8 @@ theorem step_floor (p p' : Pipeline) (hg : p.groups = p'.groups) (hw : p.width =
   rw [hg]
   exact congrArg packValue (fold_floor p p' hw hz hz' _ _ _ (fp32Value_floored acc))
 
-/-- **sm_120's floor is unobservable** over `[−145, −126]` (and below). -/
 theorem sm120_floor {z z' : ℤ} (hz : z ≤ -126) (hz' : z' ≤ -126) : (sm120E4m3K32 z).step = (sm120E4m3K32 z').step :=
   step_floor _ _ rfl rfl hz hz'
-
-/-! ## (d) Skipping in place, over any atom -/
 
 section Skipping
 
@@ -248,14 +214,11 @@ theorem totalSkip_auxP (t : Option ℚ) (gs : List (List AtomIn)) (am : List (Li
         rw [this]
         exact ih _ _ _ ha hg
 
-/-- **(d) The frozen atoms are jointly skippable**, under any atom. -/
 theorem totalSkip_eqP (gs : List (List AtomIn)) (am : List (List Bool)) (gm : List Bool)
     (ha : List.Forall₂ (fun m g => SubMask m (idFlagsP p g)) am gs) (hg : SubMask gm (promFlagsP p gs)) :
     totalSkipP p gs am gm = totalP p gs := by
   rw [total_eq_foldlP]; exact totalSkip_auxP p _ gs am gm ha hg
 
-/-- **(d) for the chain**, under any atom and promotion depth: skipping every identity atom and every
-promotion-identity group at once leaves the chain's output unchanged. -/
 theorem chainSkip_frozenP (G : Nat) (atoms : List AtomIn) :
     chainSkipP p G atoms ((atoms.toChunks G).map (idFlagsP p)) (promFlagsP p (atoms.toChunks G)) =
       chainP p G atoms := by
@@ -296,7 +259,6 @@ theorem skipIn_auxP (gs : List (List AtomIn)) (i : Nat) (m : List Bool) (t : Opt
       rw [foldMask_replicate]
       exact ih i _ (by simpa using hi)
 
-/-- A skip inside one group is confined to it, under any atom. -/
 theorem skipIn_eqP (gs : List (List AtomIn)) (i : Nat) (m : List Bool) (hi : i < gs.length) :
     skipInP p gs i m = (laterWordsP p gs i).foldl promote (promote (inTotalP p gs i) (wordInP p gs[i] m)) := by
   rw [laterWordsP, foldl_promote_wordsP, skipInP, totalSkipP, foldMask_nil]
@@ -307,8 +269,6 @@ theorem total_splitP (gs : List (List AtomIn)) (i : Nat) (hi : i < gs.length) :
   rw [laterWordsP, foldl_promote_wordsP, total_eq_foldlP]
   exact foldl_split _ _ i hi _
 
-/-- **Completeness and soundness of `absorbedP`**: skipping atom `j` of group `i` alone leaves the output unchanged
-exactly when the atom is absorbed. -/
 theorem skipOne_iffP (gs : List (List AtomIn)) (i j : Nat) (hi : i < gs.length) :
     skipOneP p gs i j = totalP p gs ↔ absorbedP p gs i j = true := by
   rw [skipOneP, absorbedP, absorbedAtP, List.getD_eq_getElem _ _ hi, skipIn_eqP p gs i _ hi, total_splitP p gs i hi]
@@ -333,15 +293,12 @@ theorem jointFlags_getElemP (gs : List (List AtomIn)) (i : Nat) (hi : i < gs.len
   rw [List.any_eq_true]
   exact ⟨m, hm ▸ mem_allMasks m, by rw [Bool.and_eq_true]; exact ⟨hmj, hk⟩⟩
 
-/-- **Completeness for one group**, under any atom: every set of one group's atoms whose joint skip leaves the output
-unchanged is flagged. -/
 theorem joint_completeP (gs : List (List AtomIn)) (i : Nat) (hi : i < gs.length) (m : List Bool)
     (hm : m.length = gs[i].length) (h : skipInP p gs i m = totalP p gs) : SubMask m (jointFlagsP p gs i) := by
   apply subMask_of_getElem _ _ (by rw [length_jointFlagsP p gs i hi, hm])
   intro j h1 h2 hmj
   exact jointFlags_getElemP p gs i hi m hm h j h2 (by rw [List.getD_eq_getElem _ _ h1]; exact hmj)
 
-/-- **Completeness of the joint flags on a word**, under any atom and promotion depth `G > 0`. -/
 theorem jointFlags_completeP {G : Nat} (hG : 0 < G) (atoms : List AtomIn) (t : Nat)
     (h : WordSkippableP p G atoms t) : (jointFlagsP p (atoms.toChunks G) (t / G)).getD (t % G) false = true := by
   obtain ⟨M, hM, hMt, hMs, hs⟩ := h
@@ -381,7 +338,6 @@ theorem wordFlags_completeP {G : Nat} (hG : 0 < G) (k : ℕ) (a b : Fin k → Co
     (h : WordSkippableP p G (rowAtoms a b) t) : wordFlagsP p G k a b t = true :=
   jointFlags_completeP p hG _ t h
 
-/-- **The joint flags are complete** for in-group skips, under any atom and promotion depth `G > 0`. -/
 theorem joint_flagsCompleteP {G : Nat} (hG : 0 < G) {m n k : ℕ} (Aq : Matrix (Fin m) (Fin k) Code)
     (Bq : Matrix (Fin n) (Fin k) Code) :
     ∀ i j t, WordSkippableP p G (rowAtoms (Aq i) (Bq j)) t → unitFlagsP p G Aq Bq i j t = true :=
@@ -389,12 +345,9 @@ theorem joint_flagsCompleteP {G : Nat} (hG : 0 < G) {m n k : ℕ} (Aq : Matrix (
 
 end Skipping
 
-/-- At `hopperE4m3K32` and `G = 4`, `joint_flagsCompleteP` is `Freeze.joint_flagsComplete`'s statement. -/
 theorem joint_flagsComplete_hopper {m n k : ℕ} (Aq : Matrix (Fin m) (Fin k) Code) (Bq : Matrix (Fin n) (Fin k) Code) :
     ∀ i j t, WordSkippable (rowAtoms (Aq i) (Bq j)) t → unitFlags Aq Bq i j t = true :=
   joint_flagsCompleteP hopperE4m3K32 (by decide) Aq Bq
-
-/-! ## (a) An identity needs domination, at width `w ≥ 24` -/
 
 /-- The step's alignment exponent on the accumulator term `tc` under the floor `z`. -/
 def stepExpW (z : ℤ) (tc : Term) (a b : Fin 32 → Code) : ℤ := maxExp z (tc :: List.ofFn fun l => product (a l) (b l))
@@ -430,7 +383,6 @@ theorem step_fin {w : ℕ} {z : ℤ} {acc : Nat} {tc : Term} (hw : fp32Value acc
     simp [Value.finite?]
   simp only [h1, h2, h3, Bool.false_eq_true, ite_false, Bool.and_self]
 
-/-- At width `w ≥ 24` an aligned term, on the grid `2^(E − w + 1)`, is its value truncated toward zero to the grid. -/
 theorem aligned_valueW {w : ℕ} (hw : 24 ≤ w) {E : ℤ} {t : Term} (hE : t.mag ≠ 0 → t.exp ≤ E) :
     (aligned w E t : ℚ) * 2 ^ (E - w + 1) = truncTo (2 ^ (E - w + 1)) t.value := by
   by_cases hm : t.mag = 0
@@ -484,8 +436,6 @@ theorem floor_shiftQ (q n L : ℕ) : (⌊(n : ℚ) * 2 ^ ((q : ℤ) - 1 - L)⌋ 
     have e : (n : ℚ) * 2 ^ (q - (L + 1)) = ((n * 2 ^ (q - (L + 1)) : ℕ) : ℤ) := by push_cast; ring
     rw [e, Int.floor_intCast]; push_cast; ring
 
-/-- `normalize` at width `w ≥ 24` on a nonzero sum whose exponent is at least −126: a normal term at that exponent,
-the sum on the grid `2^(E − w + 1)` truncated toward zero to 24 significant bits. -/
 theorem normalize_specW {w : ℕ} (hw : 24 ≤ w) {E total : ℤ} (h0 : total ≠ 0)
     (he : -126 ≤ E + (bitLength total.natAbs : ℤ) - w) :
     2 ^ 23 ≤ (normalize w E total).mag ∧ (normalize w E total).mag < 2 ^ 24 ∧
@@ -560,10 +510,6 @@ theorem truncTo_pow_mul {G H : ℤ} (h : G ≤ H) (n : ℤ) : truncTo (2 ^ G) ((
     congr 2; ring
   rw [e, truncTo_intMul (two_zpow_pos _)]
 
-/-- **(a) An identity needs domination**, at any width `w ≥ 24` and floor. On finite codes and a normal accumulator
-`acc` of value `c` and exponent `e_c ≥ w − 127`, `D = acc` only if `c` lies on the step's grid `g = 2^(E − w + 1)`
-(`E = stepExpW`) and the products truncated toward zero to `g`, added to `c` and truncated to `c`'s ulp
-`2^(e_c − 23)`, give `c`. -/
 theorem identity_needs_dominationW {w : ℕ} (hw24 : 24 ≤ w) {z : ℤ} {acc : Nat} {tc : Term}
     (hw : fp32Value acc = .fin tc) (hm : 2 ^ 23 ≤ tc.mag) (he : (w : ℤ) - 127 ≤ tc.exp)
     (a b : Fin 32 → Code) (ha : ∀ l, (a l).isNaN = false) (hb : ∀ l, (b l).isNaN = false)
@@ -631,7 +577,6 @@ theorem abs_sum_sub_truncTo_lt {g : ℚ} (hg : 0 < g) (p : Fin 32 → ℚ) :
         Finset.sum_lt_sum_of_nonempty Finset.univ_nonempty fun l _ => abs_sub_truncTo_lt hg _
     _ = 32 * g := by simp
 
-/-- With no product above the accumulator's exponent, the step's alignment exponent is the accumulator's. -/
 theorem stepExpW_eq {z : ℤ} {tc : Term} (a b : Fin 32 → Code) (hm : tc.mag ≠ 0) (he : z ≤ tc.exp)
     (h : ∀ l, (product (a l) (b l)).mag ≠ 0 → (product (a l) (b l)).exp ≤ tc.exp) :
     stepExpW z tc a b = tc.exp := by
@@ -641,9 +586,6 @@ theorem stepExpW_eq {z : ℤ} {tc : Term} (a b : Fin 32 → Code) (hm : tc.mag �
   · obtain ⟨l, rfl⟩ := List.mem_ofFn.1 ht
     exact h l htm
 
-/-- **(a), the cell**, at width `w ≥ 24`: under `identity_needs_dominationW`'s hypotheses the exact product sum is
-below `32·g + u`, `u = 2^(e_c − 23)` the accumulator's ulp, and `g`'s exponent is at least `e_c`'s, with equality when
-no product exponent exceeds `e_c`. -/
 theorem identity_cellW {w : ℕ} (hw24 : 24 ≤ w) {z : ℤ} {acc : Nat} {tc : Term}
     (hw : fp32Value acc = .fin tc) (hm : 2 ^ 23 ≤ tc.mag) (he : (w : ℤ) - 127 ≤ tc.exp)
     (a b : Fin 32 → Code) (ha : ∀ l, (a l).isNaN = false) (hb : ∀ l, (b l).isNaN = false)
@@ -665,8 +607,6 @@ theorem identity_cellW {w : ℕ} (hw24 : 24 ≤ w) {z : ℤ} {acc : Nat} {tc : T
   rw [sub_add_cancel] at this
   linarith
 
-/-- **(a) on sm_120**: at any floor at most −126, an identity on a normal accumulator of exponent `e_c ≥ −101` whose
-products do not exceed `e_c` needs `|Σ a·b| < 9·2^(e_c − 23)`, nine ulps of the accumulator. -/
 theorem sm120_identity_cell {z : ℤ} (hz : z ≤ -126) {acc : Nat} {tc : Term} (hw : fp32Value acc = .fin tc)
     (hm : 2 ^ 23 ≤ tc.mag) (he : -101 ≤ tc.exp) (a b : Fin 32 → Code) (ha : ∀ l, (a l).isNaN = false)
     (hb : ∀ l, (b l).isNaN = false) (hid : (sm120E4m3K32 z).step acc (List.ofFn a) (List.ofFn b) = acc)
@@ -680,8 +620,6 @@ theorem sm120_identity_cell {z : ℤ} (hz : z ≤ -126) {acc : Nat} {tc : Term} 
   norm_num at h1 ⊢
   linarith
 
-/-- **(a) at `hopperE4m3K32`**, in `identity_needs_dominationW`'s form: at width 14 the accumulator's ulp is below the
-grid, and the truncated products sum to zero (`Freeze.identity_needs_domination`). -/
 theorem identity_needs_domination_hopper {acc : Nat} {tc : Term} (hw : fp32Value acc = .fin tc)
     (hm : 2 ^ 23 ≤ tc.mag) (he : ((14 : ℕ) : ℤ) - 127 ≤ tc.exp) (a b : Fin 32 → Code)
     (ha : ∀ l, (a l).isNaN = false) (hb : ∀ l, (b l).isNaN = false)
@@ -698,16 +636,12 @@ theorem identity_needs_domination_hopper {acc : Nat} {tc : Term} (hw : fp32Value
   rw [h2, add_zero, term_value_int tc]
   exact truncTo_pow_mul le_rfl _
 
-/-! ## (b1) From `+0` -/
-
 /-- The products truncated toward zero to the grid `2^(E − w + 1)` of their largest exponent `E` (at least `z`), summed. -/
 def preSumW (z : ℤ) (w : ℕ) (a b : Fin 32 → Code) : ℚ :=
   ∑ l, truncTo (2 ^ (maxExp z (List.ofFn fun l => product (a l) (b l)) - w + 1)) (val (a l) * val (b l))
 
 theorem packValue_inf_ne (s : Bool) : packValue (.inf s) ≠ 0 := by cases s <;> decide
 
-/-- **(b1)** at width `24 ≤ w ≤ 115` and any floor: from `+0`, on finite codes, the atom is an identity exactly when
-`preSumW = 0`. -/
 theorem step_zero_iffW {w : ℕ} (hw24 : 24 ≤ w) (hw : w ≤ 115) (z : ℤ) (a b : Fin 32 → Code)
     (ha : ∀ l, (a l).isNaN = false) (hb : ∀ l, (b l).isNaN = false) :
     (Pipeline.mk [32] w z).step 0 (List.ofFn a) (List.ofFn b) = 0 ↔ preSumW z w a b = 0 := by
@@ -755,13 +689,10 @@ theorem step_zero_iffW {w : ℕ} (hw24 : 24 ≤ w) (hw : w ≤ 115) (z : ℤ) (a
       rw [h] at htot; exact_mod_cast (mul_eq_zero.1 htot).resolve_right (two_zpow_ne _)
     rw [h0]; simp [normalize, Term.zero, packValue, packTerm]
 
-/-- (b1) on sm_120, at any floor. -/
 theorem sm120_step_zero_iff (z : ℤ) (a b : Fin 32 → Code) (ha : ∀ l, (a l).isNaN = false)
     (hb : ∀ l, (b l).isNaN = false) :
     (sm120E4m3K32 z).step 0 (List.ofFn a) (List.ofFn b) = 0 ↔ preSumW z 26 a b = 0 :=
   step_zero_iffW (by norm_num) (by norm_num) z a b ha hb
-
-/-! ## (b) Confinement: the running words of a group -/
 
 theorem aligned_natAbs_ltW {w : ℕ} (hw : 24 ≤ w) (E : ℤ) (t : Term) (hm : t.mag < 2 ^ 25) :
     (aligned w E t).natAbs < 2 ^ (w + 1) := by
@@ -891,9 +822,6 @@ theorem getElem_idFlagsP (p : Pipeline) (g : List AtomIn) (j : Nat) (h : j < (id
     (hj : j < g.length) : (idFlagsP p g)[j] = decide (stepP p (inWordP p g j) g[j] = inWordP p g j) :=
   getElem_fixFlags (stepP p) 0 g j hj h
 
-/-- **(b) Confinement** at width `w ≥ 24`, in a group from `+0` of `n` atoms with `(w − 1)·n ≤ 114` (on sm_120,
-`n ≤ 4`), on finite codes: an identity at atom `j` is either on the word `+0`, where it is exactly `preSumW = 0`, or on
-a normal word `c` that the atom's products do not move, (a)'s domination. -/
 theorem identity_confinedW {w : ℕ} (hw24 : 24 ≤ w) {z : ℤ} (hz : z ≤ 16) (g : List AtomIn)
     (hg : ((w : ℤ) - 1) * g.length ≤ 114) (hfin : ∀ x ∈ g, FiniteAtom x) (j : Nat) (hj : j < g.length)
     (hid : (idFlagsP ⟨[32], w, z⟩ g)[j]'(by rw [idFlagsP, length_fixFlags]; exact hj) = true) :
@@ -916,7 +844,6 @@ theorem identity_confinedW {w : ℕ} (hw24 : 24 ≤ w) {z : ℤ} (hz : z ≤ 16)
   · right
     exact ⟨tc, h1, h2, identity_needs_dominationW hw24 h1 h2 (by nlinarith) _ _ ha hb hid⟩
 
-/-- (b) on sm_120: groups of at most four atoms, at any floor at most 16. -/
 theorem sm120_identity_confined {z : ℤ} (hz : z ≤ 16) (g : List AtomIn) (hg : g.length ≤ 4)
     (hfin : ∀ x ∈ g, FiniteAtom x) (j : Nat) (hj : j < g.length)
     (hid : (idFlagsP (sm120E4m3K32 z) g)[j]'(by rw [idFlagsP, length_fixFlags]; exact hj) = true) :
