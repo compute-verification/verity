@@ -379,7 +379,7 @@ COPIED_FROM = ("a prover-side copy of each piece's answer file as the served nod
 #: What a record says of a verdict it was handed: every check behind it, a piece's whole chain of them, ran where the
 #: verdict was computed, and where the record is composed none of them is run again or held to anything.
 TAKEN_AS_GIVEN = "a verdict computed on the workload's node and handed in is taken as given, for the whole chain"
-DEVELOPMENT_RUN = ("a development run (DEVELOPMENT=1): its sampled proofs may stand on a development challenger "
+DEVELOPMENT_RUN = ("a development run (DEVELOPMENT=1): its SPOT proofs may stand on a development challenger "
                    "session's coins, not the auditor device's, so none of its verdicts is of record")
 #: what `record --off-node` composes from: the served node's compose hand-off (`served_verdicts.sh handoff`), no witness
 HANDED_FROM = ("the served node's compose hand-off, held here to the sums it wrote, never a witness: each row's answer from "
