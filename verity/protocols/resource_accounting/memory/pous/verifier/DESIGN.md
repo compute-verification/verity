@@ -87,9 +87,10 @@ answer after reading its receipt time (`block_digest`, its `sha512/row/v2` diges
 to the setup's root of `C*`. A session's id is the auditor's for one audit, and its `SessionLog` refuses an id it has
 used. `verdict` checks a signed session in the clear and publishes only the verdict. It accepts S1's LMS over SHA-512 at
 `lms.DEPLOYED` (`memory_attester.LMS`) and nothing else: a test-signed or unsigned record is refused.
-A subprotocol's record says `trusted-device` holds only under a committed configuration, for a session signed under a key its
-`[[pin]]` entries give the memory attester (`memory_attester.trusted_device`, read by `challenger_session.placement`,
-with `kind` for what the host names say): the names
+A subprotocol's record never says `trusted-device` holds: under a committed configuration, for a session signed under a
+key its `[[pin]]` entries give the memory attester, it says the key matched the pins this machine was handed, with no
+bound until the auditor's compose gate gives its signal (`memory_attester.trusted_device`, read by
+`challenger_session.placement`, with `kind` for what the host names say): the names
 are the run's own, and a session under any other key, a pin the run passes itself among them, is a rehearsal's, with
 no bound.
 `verity.protocols.resource_accounting.memory.pous.prover.verdict_circuit`'s `PousVerdict_v1{K, M, LIMIT}` is the verdict over the rounds as one proof
@@ -196,10 +197,11 @@ and gated on the memory attester's host by `wipe_stream`); `benchmarks/pous/stre
 past the published figure, which must reject), its `reads` the reads the wipe expects, and its `placement` `simulated` names a memory attester on the developer's node the stand-in for
 one on its own host. Its `trusted_sha512` pins the one memory-attester key the verifier trusts, by the SHA-512 of its
 public key: a session signed under another key is rejected, and a memory attester on its own host with no key pinned is
-refused before its session. That pin decides only what is accepted. The record's `trusted-device` holds only under a
+refused before its session. That pin decides only what is accepted. The record's `trusted-device` never holds: under a
 committed configuration (`tools/verity/cli/verity_cli/configurations.toml`), when the session's key is one its `[[pin]]` entries give the
-memory attester for the wipe (`period.json`'s `deployment`: the configuration's hash and its pins), and otherwise
-reads rehearsal, no bound, whatever the host names say (`memory_attester.trusted_device`, which PoUS's placement
+memory attester for the wipe (`period.json`'s `deployment`: the configuration's hash and its pins), it reads that the
+key matched the pins this machine was handed (`memory_attester.MATCHED`), and otherwise rehearsal, either with no bound,
+whatever the host names say (`memory_attester.trusted_device`, which PoUS's placement
 reads too); the placement's `kind` (`own-host`, `simulated`,
 `prover-node`) is what the names say, a label. The wipe's record names what the bound doesn't cover (`uncertified`): the links leaving the node that
 no network attester counts (the placement's `links`: `wipe.links`, and the memory attester's as the prover connected to it),

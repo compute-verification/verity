@@ -540,9 +540,10 @@ the trusted keys and the accepted schemes' ids as JSON (`to_json`), and which re
 written. `wipe_verdict.VERDICT` is the switch: `lean` (the Lean alone), `both` (the Python's beside it, and a session
 the two differ on in any field rejected as a disagreement) or `python` (no Lean).
 
-**Where it ran.** A wipe's record (`wipe_party.placement`) states `trusted-device` for the memory attester, as `holds`
-only under a committed configuration (`tools/verity/cli/verity_cli/configurations.toml`) when the session was signed under a key its
-`[[pin]]` entries give the memory attester for the wipe (`memory_attester.trusted_device`). Under any other
+**Where it ran.** A wipe's record (`wipe_party.placement`) states `trusted-device` for the memory attester, never as
+`holds`: under a committed configuration (`tools/verity/cli/verity_cli/configurations.toml`), when the session was signed under a key its
+`[[pin]]` entries give the memory attester for the wipe (`memory_attester.trusted_device`), it reads
+`memory_attester.MATCHED`, that the key matched the pins this machine was handed, with no bound. Under any other
 configuration it reads `rehearsal, no bound: the configuration is not a committed one`, and under any other key, a key
 the run pinned for itself included, `rehearsal: key not the auditor's pinned key, no bound`; either way
 the key's custody is among what the bound doesn't cover. The hosts' names give `kind` (`own-host`, `simulated`,
@@ -1106,9 +1107,10 @@ Two gaps stood between these statements and the deployed verifier:
   `trusted-device` (Lean's `Verity.Assumptions.TrustedDevice` states its part about one run): "the auditor's device
   runs its stated code, timing included, on a host the developer doesn't control, with its CPU isolated from other
   tenants and a monotonic clock; the host never restores its earlier state". This log is part of that state, as is the LMS leaf state. A run's record
-  says `trusted-device` holds only under a committed configuration, for a session signed under a key its `[[pin]]`
-  entries give the memory attester (`memory_attester.trusted_device`), never from the host names, which are the
-  run's own: a session under any other key, a pin the run passes itself among them, is a rehearsal's, with no bound.
+  never says `trusted-device` holds, neither from the pins its machine was handed nor from the host names, which are
+  the run's own: a session under a key a committed configuration's `[[pin]]` entries give the memory attester reads
+  that the key matched those pins (`memory_attester.trusted_device`), and one under any other key, a pin the run passes
+  itself among them, a rehearsal's, either with no bound.
   Under one secret a reused id would also replay the coins, which `CoinTree.draw` derives from the secret and the id.
   The composed check accepts a session only under the id the auditor designated (`run.check`'s `session_id`), so an
   audit has at most one session it can accept. On the served piece (`benchmarks/pous/served_piece.py`) the id is
