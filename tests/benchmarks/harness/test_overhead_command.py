@@ -136,6 +136,7 @@ def test_under_a_research_run_the_table_records_its_metrics_and_prints_the_same(
     assert [(m["name"], m.get("member")) for m in got["measurements"]] == [(n, w) for n in metrics for w in (None, MEMBER)]
     for m, point in zip(got["measurements"], [p for p in O.POINTS for _ in (0, 1)]):
         assert m["value"] is None and m["mark"] == "measured" and m["target"] == O.GAMMA_MAX and m["verdict"] is None
+        assert "floor" not in m and "floor_verdict" not in m
         on = f" on {SMALL}" if m.get("member") else ""
         assert m["why"] == f"no γ of record: no labelled run times pearl-plus at h200's {point}{on} (`run_of_record=overhead`)"
     assert got["validation"]["status"] == "failed" and got["validation"]["evidence"] == [R.TABLE]
@@ -155,6 +156,7 @@ def test_under_a_research_run_the_table_records_its_metrics_and_prints_the_same(
         assert (m["value"], m["ci95"], m["unit"], m["mark"]) == (g["gamma"], g["ci95"], R.GAMMA_UNIT, "measured")
         assert m["verdict"] == "within target" and m["inputs"] == ["measured", run, art] and "why" not in m
         assert m["note"] == O.WITHOUT_Y and m["covers"] == O.covers()
+        assert (m["floor"], m["floor_verdict"]) == (O.USEFUL_FLOOR, "useful work at least half")
     assert got["validation"] == {"status": "passed", "checker": "verity_bench.overhead_records.of_record",
                                  "detail": "2 of 2 metrics have a γ of record (the source check, `of_record`)",
                                  "evidence": [R.TABLE]}
