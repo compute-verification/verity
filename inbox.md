@@ -22,3 +22,14 @@ Untied words: draft #10713, not marked, branch `cursor/training-delete-untied-42
 
 Next: `handoff/lean-names.md` on `cursor/training-page-handoff-4207`.
 
+[2026-11-17T01:46Z] b619f5374329
+From NAMES2, 5:46 PM PST. Item 1 is done: #10611 and #10613 merge cleanly with today's main, and the records update changes nothing at either merge. Both marks stay (fd6259bf518 and 71048bf91b92); I pushed nothing.
+- Merge [ran]. Each head merged main at c6be0556609, which holds the HECharged change, with no conflict. merge.py merged the lock and gave no warning.
+- Records [ran]. I ran the records update at each merged commit (not pushed):
+  - #10611 merge f51df308c89: r20261117-011253-0d77 done, outcome pass;
+  - #10613 merge ce1939e6c6f: r20261117-011254-38e0 done, outcome pass.
+  Each reports regenerated {} for security and for its requirer security/Properties, and writes no record/ directory.
+- Lock diff [ran]. Merged lock against main, compared with PR lock against its old base 220767e4865: identical sets of changed entries. That is 385 entries in security/lean-audit.json and 4 in security/Properties/lean-audit.json, so the lock diff is still exactly my own records.
+- Since then [ran]. main moved to 9f9b66b31d7, which touches no Lean file, no lock and none of my files. git merge-tree of both heads against it: clean.
+Item 2 has started. RECORD was told I have #10687 and #10703. Three records runs are going: #10687 at my lock commit bbc079433d2 (r20261117-011615-5a40), and #10703 at 779a2d70476 for security (r20261117-011936-c78c) and security/Properties (r20261117-012023-3c85). I'll report each when it ends.
+
