@@ -2352,7 +2352,7 @@ def composite_answer(public: Path, product: str, window: str | None = None,
     docket has digest ``window`` (`composite_tie`)."""
     from verity_e2e_demo import block_record as BR
 
-    found = []
+    found, development = [], []
     for d in sorted(p for p in public.iterdir() if (p / "composite.json").is_file()) if public.is_dir() else []:
         try:
             doc = json.loads((d / "composite.json").read_text())
@@ -2360,6 +2360,11 @@ def composite_answer(public: Path, product: str, window: str | None = None,
             return None, f"{d.name}/composite.json doesn't parse, so no composite's answer is taken: {e}"
         if isinstance(doc, dict) and doc.get("product") in BR.CHECKS[product]:
             found.append((d, doc))
+        elif isinstance(doc, dict) and str(doc.get("product")).startswith(f"verity/{product}/"):
+            development.append(f"{d.name}/composite.json ({doc['product']})")
+    if not found and development:
+        return None, (f"not of record: development composite: {development[0]}, not the {product} check of record "
+                      f"({', '.join(BR.CHECKS[product])})")
     if len(found) != 1:
         return None, (f"{len(found)} composites of the {product} check ({', '.join(BR.CHECKS[product])}) in {public}, "
                       "not one")
