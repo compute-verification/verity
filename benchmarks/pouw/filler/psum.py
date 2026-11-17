@@ -19,7 +19,7 @@ import pathlib
 
 from verity.device import load_card, number
 
-CARD_FILES = pathlib.Path(__file__).resolve().parents[3] / "hardware/cards"
+CARD_FILES = pathlib.Path(__file__).resolve().parents[3] / "calibration/hardware/cards"
 
 CERT_SERVING, CERT_FILLER = 0.225, 0.99
 CARD = load_card("rtx-pro-6000-server", directory=CARD_FILES)  # the GPU psched.sh's runs are on
