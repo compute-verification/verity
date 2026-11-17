@@ -12,7 +12,7 @@ public import VStarRecursive.Caller
 # Remote's acceptance and the inference-only policy
 
 `Core.Remote.protocol` (`verity/remote/v0`) is `Core.Composition.tiedSameB` over three subprotocols, in the order of
-their ids: the inference-only policy (`InferenceOnlyVerifier.Protocol.protocol`), PoUW's period credit
+their ids: the inference-only policy (`InferenceOnlyCheck.Protocol.protocol`), PoUW's period credit
 (`PouwCheck.Period.protocol`) and SPOT (`VStar.Recursive.Sampled.protocol`, `verity/sampled-proofs/v1`):
 one-stage v2's audit, the recursive audit's form refused (`VStar.Recursive.Sampled.RECURSIVE_REFUSED`). The policy's
 commitment and SPOT's (the one-stage registration record, `Spot.OneStage.commitmentOf`, in both
@@ -20,15 +20,15 @@ forms) are the run's registration record, and the composite rejects unless both 
 (`Core.Composition.strays` over `Core.Remote.tied`);
 the period's commitment is the auditor's ledger, and remote's tie (`Core.Remote.executionPhases`) rejects unless every Commit
 record its windows name (`Core.Remote.executionPhaseRecords`) has that digest too. The policy's check
-(`InferenceOnlyVerifier.Protocol.check`) refuses a record whose `program` is not the
+(`InferenceOnlyCheck.Protocol.check`) refuses a record whose `program` is not the
 registered circuit's SHA-512 (`names`), then runs
-the check of record, `InferenceOnlyVerifier.Theta.evaluate`: the policy check at the size of the description
-(`InferenceOnlyVerifier.Desc.evaluate`), then θ's provenance against the registration log through the run's record.
+the check of record, `InferenceOnlyCheck.Theta.evaluate`: the policy check at the size of the description
+(`InferenceOnlyCheck.Desc.evaluate`), then θ's provenance against the registration log through the run's record.
 
 * `AcceptInferenceOnly`: on every input remote's check accepts, the policy's and SPOT's records have
   one digest, which every Commit record the period's windows name has, the record the policy's case commits to names the registered circuit by its SHA-512, θ holds what the log's first record
-  registers (`InferenceOnlyVerifier.Properties.ProvenanceHeld`), and the instance the policy checked, expanded gate by gate
-  (`InferenceOnlyVerifier.Properties.Expands`), has a parse and a registered circuit the program lays out with θ, whose inference
+  registers (`InferenceOnlyCheck.Properties.ProvenanceHeld`), and the instance the policy checked, expanded gate by gate
+  (`InferenceOnlyCheck.Properties.Expands`), has a parse and a registered circuit the program lays out with θ, whose inference
   blocks `d.𝓘` its owners are; on every such parse, `program`, `Γ` and `α = num / den` are the policy's parameters
   (`VerifierOwn`), and every such registered circuit's inference blocks meet the policy (`PolicyMet`): every one has
   at most `Γ` gates and reads at most `α` fresh input bits per gate, so the registered circuit complies
@@ -40,7 +40,7 @@ the check of record, `InferenceOnlyVerifier.Theta.evaluate`: the policy check at
 * `AcceptComplies`: its corollary in the form `Slowdown.Guarantees.SlowdownThreaded` reads, `InferenceOnly.CompliesRate Γ α d` from
   acceptance, on a declaration acceptance exhibits and on every other. `Slowdown.Guarantees.SlowdownRemote` reads the count
   verdict instead, `InferenceOnly.CompliesAtMost c k n d`, which a published `complies` of the count gives
-  (`InferenceOnlyVerifier.Properties.DescCountsCK`).
+  (`InferenceOnlyCheck.Properties.DescCountsCK`).
 
 A check that accepts every input accepts `ev = []`, where neither conclusion holds (`InferenceOnlyHeld` and
 `CompliesHeld` take three cases): the proofs show both fail there.

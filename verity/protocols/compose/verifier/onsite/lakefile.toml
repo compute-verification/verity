@@ -33,7 +33,7 @@ path = "../../../proofs/spot/verifier/lean"
 name = "pouw_verifier"
 path = "../../../resource_accounting/compute/pouw/verifier/lean/check"
 
-# The inference-only policy: its check as a core protocol (`InferenceOnlyVerifier.Protocol`).
+# The inference-only policy: its check as a core protocol (`InferenceOnlyCheck.Protocol`).
 [[require]]
 name = "inference_only_verifier"
 path = "../../../workload_classification/training_detection/inference_only/verifier/lean"

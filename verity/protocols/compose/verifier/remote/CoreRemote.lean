@@ -30,7 +30,7 @@ weights untied (`PouwCheck.PearlPlus.WEIGHTS_UNTIED`): there the tie is by the r
 committed weights to the weights the record registers, and remote doesn't establish that PoUW's credited work and the
 audited inference read the same weights. The audited circuit, cut at its linears, reads no B row.
 
-v0's subprotocols are the inference-only policy (`InferenceOnlyVerifier.Protocol.protocol`, `verity/inference-only/v0`: the registered
+v0's subprotocols are the inference-only policy (`InferenceOnlyCheck.Protocol.protocol`, `verity/inference-only/v0`: the registered
 circuit divides into inference blocks within their gate and fresh-input budgets, which reads only the registered circuit
 and the registered information and so needs no hardware at the site), work by proof of useful work over the period
 (`PouwCheck.Period.protocol`, `verity/pouw/period/v1`: the period's execution phases credited all or nothing), onsite's work

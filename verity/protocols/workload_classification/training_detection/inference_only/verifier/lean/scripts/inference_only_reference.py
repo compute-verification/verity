@@ -1,37 +1,37 @@
-"""The inference-only policy's check of a declared division, straight from the definitions: the reference `InferenceOnlyVerifier.check` is held to.
+"""The inference-only policy's check of a declared division, straight from the definitions: the reference `InferenceOnlyCheck.check` is held to.
 
     check(instance) -> {"gates", "ius", "complies", "failure"} | {"error": code}
 
 `InferenceOnly.CompliesRate Γ α` (`security/Definitions/InferenceOnly.lean`): the computed gates of `D` divide into inference blocks of at
 most `Γ` gates, each with `freshInput R = width(into(R) \\ θ) ≤ α · size R`, where `into(R)` is the gates outside `R`
 with a wire into `R` (`security/Definitions/Core/Circuit.lean`). The instance and the refusal codes are the ones
-`InferenceOnlyVerifier.Check`'s docstring gives: the declaration's circuit is the canonical layout of a descriptor v1 Program
+`InferenceOnlyCheck.Check`'s docstring gives: the declaration's circuit is the canonical layout of a descriptor v1 Program
 (`verity.circuits`), gate `g` of width `Value<w>` bits, an input gate when its primitive is an input
 (`program.is_input`, with no operands), reading the gates its operands name; θ is a list of ids of input gates bound at
 registration (`program.is_registered`; one bound per run is refused, `theta-not-registered`); the division is one owner
 per gate, `"input"` or an inference block index. A primitive is taken as the descriptor declares it, as Flock's decoder takes it, so
 no registry is needed.
 
-    check_desc(instance) -> the same, for `InferenceOnlyVerifier.Desc`'s instance: θ and the owners per root node
+    check_desc(instance) -> the same, for `InferenceOnlyCheck.Desc`'s instance: θ and the owners per root node
 
-`check_desc` refuses as `InferenceOnlyVerifier.Desc` does, in its order, and otherwise is `check` on the instance expanded gate by gate
+`check_desc` refuses as `InferenceOnlyCheck.Desc` does, in its order, and otherwise is `check` on the instance expanded gate by gate
 (`expand`), so the two checks are held to one reference.
 
     check_count(instance) -> {"complies"} | {"error": code}
     check_count_detail(instance) -> {"blocks", "total", "complies", "failure"} | {"error": code}
 
-`check_count_detail` is `InferenceOnlyVerifier.Count`'s count of `(c, k)`-inference blocks, with its refusals in its order,
-activation by activation where `InferenceOnlyVerifier.Count` reads one summary per Definition: from the root down through the
+`check_count_detail` is `InferenceOnlyCheck.Count`'s count of `(c, k)`-inference blocks, with its refusals in its order,
+activation by activation where `InferenceOnlyCheck.Count` reads one summary per Definition: from the root down through the
 Definitions outside every block, each activation of a block Definition is a block (`walk_blocks`), and a block
 Definition's Boolean gates and fresh bits are read off one activation of it on its own, gate by gate (`block_row`): the
 table's gates of each of its primitive gates, and the widths of the parameter leaves its gates read (each reference
 resolved up to the activation's parameters, `source`) over the parameters that are not θ at every one of its blocks. It
 is the private record's, never published; `check_count` is what the count publishes, the judgment against n alone.
 
-    check_theta(instance, trusted) -> the same, then θ's provenance (`InferenceOnlyVerifier.Theta`)
+    check_theta(instance, trusted) -> the same, then θ's provenance (`InferenceOnlyCheck.Theta`)
 
 `check_theta` is `check_desc` followed by the check of each θ entry's `provenance` against the trusted input (the
-deployment's registration log, the run's own record and the program function's parameters), with `InferenceOnlyVerifier.Theta`'s
+deployment's registration log, the run's own record and the program function's parameters), with `InferenceOnlyCheck.Theta`'s
 codes in its order; `check_theta_unrolled` is `check` followed by the same, on an instance expanded by
 `expand_theta`. The run's own record names the Program checked (its `program` is the descriptor's digest), whatever θ
 is, and is refused `run-program` otherwise. θ holds registered public data only: an entry of any kind but `registered`,
@@ -171,7 +171,7 @@ FUEL = 2 ** 62
 
 
 def walk_bound(program) -> int:
-    """`InferenceOnlyVerifier.Desc.walkBound`: `(A + 1) · (H + 2)` for the root's activations `A` (its own and each composite node
+    """`InferenceOnlyCheck.Desc.walkBound`: `(A + 1) · (H + 2)` for the root's activations `A` (its own and each composite node
     member's, once per Definition and multiplied through batches and scans) and the depth `H` they nest to."""
     from verity.circuits.parts import n_members
     memo: dict[int, tuple[int, int]] = {}
@@ -188,8 +188,8 @@ def walk_bound(program) -> int:
 
 
 def expand(inst) -> dict:
-    """An instance of `InferenceOnlyVerifier.Desc` (θ and the owners per root node) as `check` reads one: θ every gate of its nodes,
-    and each gate the owner of its root node. The instance is well-formed as `InferenceOnlyVerifier.Desc` reads it."""
+    """An instance of `InferenceOnlyCheck.Desc` (θ and the owners per root node) as `check` reads one: θ every gate of its nodes,
+    and each gate the owner of its root node. The instance is well-formed as `InferenceOnlyCheck.Desc` reads it."""
     _, _, spans = root_nodes(inst["program"])
     theta = [g for k in inst["theta"] for g in range(*spans[k])]
     owner = [inst["owner"][k] for k, (lo, hi) in enumerate(spans) for _ in range(lo, hi)]
@@ -197,7 +197,7 @@ def expand(inst) -> dict:
 
 
 def desc_program(text: str):
-    """The Program `InferenceOnlyVerifier.Desc` reads, with its refusals in its order: `program` where it doesn't decode,
+    """The Program `InferenceOnlyCheck.Desc` reads, with its refusals in its order: `program` where it doesn't decode,
     `not-topological`, and `program` past `walkBound`'s limit or for a scan of no iterations with output leaves."""
     try:
         desc = json.loads(text)
@@ -216,7 +216,7 @@ def desc_program(text: str):
 
 
 def theta_nodes(theta: list, inp: list[bool], reg: list[bool]) -> set[int]:
-    """θ as root nodes, entry by entry as `InferenceOnlyVerifier.Desc.thetaStep` reads it."""
+    """θ as root nodes, entry by entry as `InferenceOnlyCheck.Desc.thetaStep` reads it."""
     seen: set[int] = set()
     for t in theta:
         if not (_nat(t) and t < len(inp)):
@@ -232,7 +232,7 @@ def theta_nodes(theta: list, inp: list[bool], reg: list[bool]) -> set[int]:
 
 
 def evaluate_desc(inst) -> dict:
-    """`InferenceOnlyVerifier.Desc.evaluate`: its refusals in its order, then `evaluate` on the expansion."""
+    """`InferenceOnlyCheck.Desc.evaluate`: its refusals in its order, then `evaluate` on the expansion."""
     if not (isinstance(inst, dict) and all(k in inst for k in FIELDS) and isinstance(inst["program"], str)
             and isinstance(inst["theta"], list) and isinstance(inst["owner"], list)):
         raise Malformed("instance")
@@ -267,7 +267,7 @@ def check_desc(inst) -> dict:
         return {"error": e.code}
 
 
-# The count of (c, k)-inference blocks (`InferenceOnlyVerifier.Count`), activation by activation
+# The count of (c, k)-inference blocks (`InferenceOnlyCheck.Count`), activation by activation
 
 COUNT_FIELDS = ("program", "theta", "blocks", "table", "c", "k", "n")
 
@@ -434,7 +434,7 @@ def walk_blocks(program, blocks: set[str], theta: set[int]):
 
 
 def evaluate_count(inst) -> dict:
-    """`InferenceOnlyVerifier.Count.evaluate`: its refusals in its order, then the count activation by activation (`walk_blocks`,
+    """`InferenceOnlyCheck.Count.evaluate`: its refusals in its order, then the count activation by activation (`walk_blocks`,
     `block_row`)."""
     if not (isinstance(inst, dict) and all(k in inst for k in COUNT_FIELDS) and isinstance(inst["program"], str)
             and isinstance(inst["theta"], list) and isinstance(inst["blocks"], list)
@@ -472,7 +472,7 @@ def evaluate_count(inst) -> dict:
 
 
 def check_count_detail(inst) -> dict:
-    """`InferenceOnlyVerifier.Count.checkDetail`: the whole verdict, or the refusal, for the private record only, never published."""
+    """`InferenceOnlyCheck.Count.checkDetail`: the whole verdict, or the refusal, for the private record only, never published."""
     try:
         return evaluate_count(inst)
     except Malformed as e:
@@ -480,12 +480,12 @@ def check_count_detail(inst) -> dict:
 
 
 def check_count(inst) -> dict:
-    """`InferenceOnlyVerifier.Count.check`, what the count publishes: the judgment against n, or the refusal."""
+    """`InferenceOnlyCheck.Count.check`, what the count publishes: the judgment against n, or the refusal."""
     res = check_count_detail(inst)
     return res if "error" in res else {"complies": res["complies"]}
 
 
-# θ's provenance (`InferenceOnlyVerifier.Theta`): after the policy check, each θ entry against the trusted input
+# θ's provenance (`InferenceOnlyCheck.Theta`): after the policy check, each θ entry against the trusted input
 
 TRUSTED_KEYS = {"log", "run", "params"}
 REGISTERED_KEYS = {"kind", "registration", "value", "root"}
@@ -617,13 +617,13 @@ def provenance(inst, tr, node) -> None:
 
 
 def _node_of(offs: list[int], g: int) -> int:
-    """The root node holding gate g (`InferenceOnlyVerifier.Desc.nodeOf`)."""
+    """The root node holding gate g (`InferenceOnlyCheck.Desc.nodeOf`)."""
     import bisect
     return bisect.bisect_right(offs, g) - 1
 
 
 def check_theta(inst, tr) -> dict:
-    """`InferenceOnlyVerifier.Theta.check`: `check_desc`, then θ's provenance; the verdict is the policy check's."""
+    """`InferenceOnlyCheck.Theta.check`: `check_desc`, then θ's provenance; the verdict is the policy check's."""
     out = check_desc(inst)
     if "error" in out:
         return out
@@ -635,7 +635,7 @@ def check_theta(inst, tr) -> dict:
 
 
 def check_theta_unrolled(inst, tr) -> dict:
-    """`InferenceOnlyVerifier.Theta.checkUnrolled`: `check`, then θ's provenance, gate g of θ in the root node holding it."""
+    """`InferenceOnlyCheck.Theta.checkUnrolled`: `check`, then θ's provenance, gate g of θ in the root node holding it."""
     out = check(inst)
     if "error" in out:
         return out

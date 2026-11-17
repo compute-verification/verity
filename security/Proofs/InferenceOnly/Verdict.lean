@@ -8,7 +8,7 @@ public import Proofs.Slowdown.Threads
 # A verdict of compliance carries the thread bound, proved
 
 Each statement of `Properties.InferenceOnly.Threads`, from the verdict's compliance at its rate
-(`InferenceOnlyVerifier.Properties.SecurityProofs.Witnesses`) and the thread bound's proof at a rate
+(`InferenceOnlyCheck.Properties.SecurityProofs.Witnesses`) and the thread bound's proof at a rate
 (`Slowdown.SecurityProofs.ThreadedThrottled_rate`, `ThreadedThrottledDark_rate` and their `Slots` forms, in
 `Proofs.Slowdown.Threads`), at `c = gamma` and `α = num / den`, so `k = α c`.
 -/

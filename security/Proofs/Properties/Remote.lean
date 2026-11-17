@@ -22,8 +22,8 @@ caller's blobs (`remote_check`), so an acceptance is `checkSame`'s with the tie 
 and `checkSame`'s is `Core.Composition.check`'s (`checkSame_accept`), which `Properties.Composition.acceptMeans` reduces
 to each component accepting its own case, with SPOT's record the policy's (`strays_two`) and every
 Commit record the period's windows name the policy's record too (`executionPhases_tied`). The policy's
-acceptance is `InferenceOnlyVerifier.Theta.evaluate`'s with the record naming the circuit (`policy_accept`), which is
-`InferenceOnlyVerifier.Desc.evaluate`'s and θ's provenance (`ThetaSteps.evaluate_ok`), whose verdict `DescReports`,
+acceptance is `InferenceOnlyCheck.Theta.evaluate`'s with the record naming the circuit (`policy_accept`), which is
+`InferenceOnlyCheck.Desc.evaluate`'s and θ's provenance (`ThetaSteps.evaluate_ok`), whose verdict `DescReports`,
 `DescWitnesses` and `ThetaProvenance` read; `InferenceOnly.SecurityProofs.constInputs_isCK` and `constInputs_expand_isCK`
 give the `(c, k)`-partitions, of the declaration with its constants registered, which needs no assumption that it is
 Boolean or of positive fan-in; where it is, they are partitions of the declaration itself (`policyMet_old_clauses`).

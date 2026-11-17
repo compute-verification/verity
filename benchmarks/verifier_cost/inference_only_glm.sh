@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# inference_only_glm.py on a CPU node: build inference-only-verifier, then check GLM-5.3's Programs into $OUT, the instances in a scratch
+# inference_only_glm.py on a CPU node: build inference-only-check, then check GLM-5.3's Programs into $OUT, the instances in a scratch
 # directory. Run from a clone (the build writes .lake), with what the cases read sent beside it (README.md): the Build's
 # eight workload descriptors and its meta, or the registered node's descriptor and its registration (`registered-node`):
 #   research run --project verity --on vy-nebius-cpu-2 --source . --cwd clone --mem-gb 420 --mem-wait 3600 --timeout 6h \
