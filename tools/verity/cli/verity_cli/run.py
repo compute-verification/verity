@@ -43,8 +43,8 @@ as a line and written to ``STATE/record/verdicts.jsonl``:
     VERDICT {"block": I, "coins": C, "components": {NAME: accept|reject|undecided|error|absent}, "product": ID,
              "reason": R, "registration": DIGEST, "run": RUN, "simulated": [...], "verdict": V}
 
-onsite's line also has ``trusted-device``: each memory challenger's premise that its device ran on a machine the
-developer doesn't control (`memory_challenger.trusted_device`), by component, from the outcome of its run here.
+onsite's line also has ``trusted-device``: each memory attester's premise that its device ran on a machine the
+developer doesn't control (`memory_attester.trusted_device`), by component, from the outcome of its run here.
 
 ``coins`` is ``simulated`` when the challenger's host is a machine a prover's party is on, else ``development`` (the
 keys are made for the run). ``simulated`` names each premise the placement leaves unmet (a party that sends coins on a

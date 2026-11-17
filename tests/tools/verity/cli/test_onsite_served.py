@@ -24,7 +24,7 @@ from verity.protocol import Channel, Start
 from verity.channel import Refused
 from verity.protocols.resource_accounting.network.verifier import parties as NC
 from verity.protocols.resource_accounting.memory.pous.attester import onsite
-from verity.protocols.resource_accounting.memory.pous.attester import memory_challenger as mc
+from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
 from verity.protocols.resource_accounting.memory.pous.attester import wipe_challenger as WC
 from verity.protocols.workload_classification.training_detection.inference_only.verifier import parties as IO
 from verity.protocols.proofs.spot.verifier.service import SamplingDesign
@@ -122,7 +122,7 @@ def test_the_configuration_states_no_host_or_address():
     assert all(p["machine"] == T.PROVER_NODE for p in cfg["party"] if p["principal"] == "developer")
 
 
-def test_the_memory_challenger_s_two_keys_are_pinned_and_hashed():
+def test_the_memory_attester_s_two_keys_are_pinned_and_hashed():
     cfg = R.load(CONFIG, REG)
     assert [(p["party"], p["protocol"], p["scheme"]) for p in cfg["pin"]] == [
         ("memory-challenger", "pous", K.SCHEMES[0]), ("memory-challenger", "wipe", K.SCHEMES[0])]
@@ -134,8 +134,8 @@ def test_the_memory_challenger_s_two_keys_are_pinned_and_hashed():
     assert K.digest(K.check(bare, REG.components, REG.workloads)) != K.digest(cfg)
 
 
-def test_a_memory_challengers_placement_reads_the_configurations_pins_under_its_hash(monkeypatch):
-    """The table's placement of a memory challenger's session: `trusted-device` holds only for the key the onsite
+def test_a_memory_attesters_placement_reads_the_configurations_pins_under_its_hash(monkeypatch):
+    """The table's placement of a memory attester's session: `trusted-device` holds only for the key the onsite
     configuration pins for that protocol, under its committed hash; another protocol's pin, no key or a configuration
     nobody committed reads rehearsal. No other party gets a placement."""
     cfg = R.load(CONFIG, REG)
@@ -342,9 +342,9 @@ def test_a_runtime_party_raises_before_anything_starts_while_its_machine_hands_i
     assert e.value.args == (T.NOT_YET,) and not (state / "out.started").exists()
 
 
-def test_the_memory_challengers_key_is_refused_unless_this_configuration_pins_it_before_anything_else(tmp_path,
+def test_the_memory_attesters_key_is_refused_unless_this_configuration_pins_it_before_anything_else(tmp_path,
                                                                                                      capsys):
-    """On the auditor's device each memory challenger's start checks its key against `demos/onsite_full.toml`'s pin
+    """On the auditor's device each memory attester's start checks its key against `demos/onsite_full.toml`'s pin
     first: a state with no key is refused ``key``, and one whose key the configuration doesn't pin ``pin``, before any
     request is read or any party or the served window starts."""
     state = tmp_path / T.AUDITOR_HOST
@@ -352,14 +352,14 @@ def test_the_memory_challengers_key_is_refused_unless_this_configuration_pins_it
     assert R.run_main(run, REG) == 2 and "refused key" in capsys.readouterr().err
     other = b"a key the auditor never pinned"
     for component in ("pous", "wipe"):
-        mine = state / "runs" / component / T.MEMORY_CHALLENGER
+        mine = state / "runs" / component / T.MEMORY_ATTESTER
         mine.mkdir(parents=True)
         (mine / "seed").write_bytes(bytes(lms.DEPLOYED.N))
         lms.LeafState.create(mine / onsite.KEY_STATE, other, lms.DEPLOYED.H)
     assert R.run_main(run, REG) == 2
     err = capsys.readouterr().err
     assert "refused pin" in err and hashlib.sha512(other).hexdigest() in err
-    assert not (state / "runs" / "pous" / T.MEMORY_CHALLENGER / "tree.bin").exists()
+    assert not (state / "runs" / "pous" / T.MEMORY_ATTESTER / "tree.bin").exists()
 
 
 def test_the_wipes_the_rounds_and_poubs_parties_each_have_their_protocols_start():
@@ -372,7 +372,7 @@ def test_a_run_raises_at_its_request_until_the_two_sides_compare_it(tmp_path, mo
     are compared nowhere yet (`request_bound`)."""
     monkeypatch.setitem(WC.PROTOCOL.starts, WC.CHALLENGER, lambda configuration, bound, state: Start({"k": 1}))
     monkeypatch.setattr(T, "held", lambda piece, role: T.Held(None, None))
-    piece, cfg = T.PARTIES["wipe"][T.MEMORY_CHALLENGER], R.load(CONFIG, REG)
+    piece, cfg = T.PARTIES["wipe"][T.MEMORY_ATTESTER], R.load(CONFIG, REG)
     with pytest.raises(NotImplementedError) as e:
         T.prepare(cfg, tmp_path, BINDINGS, piece)
     assert e.value.args == (T.NOT_YET,)
@@ -380,11 +380,11 @@ def test_a_run_raises_at_its_request_until_the_two_sides_compare_it(tmp_path, mo
     assert callable(T.prepare(cfg, tmp_path, BINDINGS, piece))
 
 
-def test_the_onsite_lines_trusted_device_is_each_memory_challengers_placement(tmp_path, monkeypatch):
-    """The verifier's line carries each memory challenger's `trusted-device` premise as `placement` reads it from the
+def test_the_onsite_lines_trusted_device_is_each_memory_attesters_placement(tmp_path, monkeypatch):
+    """The verifier's line carries each memory attester's `trusted-device` premise as `placement` reads it from the
     challenger's outcome here: under a committed configuration, ``holds`` for a session signed under the pinned key, and
     rehearsal for one that reports no key."""
-    key = b"a stand-in memory challenger key"
+    key = b"a stand-in memory attester key"
     cfg = R.load(CONFIG, REG)
     cfg = {**cfg, "pin": [{**p, "key-sha512": hashlib.sha512(key).hexdigest()} if p["protocol"] == "pous" else p
                           for p in cfg["pin"]]}
@@ -395,14 +395,14 @@ def test_the_onsite_lines_trusted_device_is_each_memory_challengers_placement(tm
     monkeypatch.setattr(T, "registration", lambda cfg, state: None)
     monkeypatch.setattr(T, "onsite_check", lambda cfg, state: {"verdict": "undecided"})
     (tmp_path / T.BINDINGS).write_text(json.dumps(BINDINGS))
-    line, = T.live(cfg, tmp_path, [T.MEMORY_CHALLENGER, T.VERIFIER]).outcomes[T.VERIFIER]["outcome"]["verdicts"]
+    line, = T.live(cfg, tmp_path, [T.MEMORY_ATTESTER, T.VERIFIER]).outcomes[T.VERIFIER]["outcome"]["verdicts"]
     assert set(line[mc.PREMISE]) == {"pous", "wipe"} and line["verdict"] == "undecided"
     assert line[mc.PREMISE]["pous"].startswith("holds")
     assert line[mc.PREMISE]["wipe"].startswith(mc.REHEARSAL)
 
 
-def test_the_bandwidth_verifiers_start_reads_the_memory_challengers_run_beside_it(tmp_path, monkeypatch):
-    """PoUB's verifier pins the memory challenger's PoUS key, which is in that party's run on the same host: its start
+def test_the_bandwidth_verifiers_start_reads_the_memory_attesters_run_beside_it(tmp_path, monkeypatch):
+    """PoUB's verifier pins the memory attester's PoUS key, which is in that party's run on the same host: its start
     gets that run's state directory (``challenger``) beside its bindings, and its own state directory."""
     got = {}
 
@@ -414,7 +414,7 @@ def test_the_bandwidth_verifiers_start_reads_the_memory_challengers_run_beside_i
     with pytest.raises(NotImplementedError):
         T.prepare(R.load(CONFIG, REG), tmp_path, BINDINGS, T.PARTIES["bandwidth"][T.BANDWIDTH_VERIFIER])
     assert got["bound"] == {**BINDINGS["bandwidth-verifier"]["bandwidth"],
-                            "challenger": str(tmp_path / "runs" / "pous" / T.MEMORY_CHALLENGER)}
+                            "challenger": str(tmp_path / "runs" / "pous" / T.MEMORY_ATTESTER)}
     assert got["state"] == tmp_path / "runs" / "bandwidth" / T.BANDWIDTH_VERIFIER
 
 
@@ -426,7 +426,7 @@ def test_the_bandwidth_verifiers_start_is_handed_pouss_pin_check(tmp_path):
     with pytest.raises(Refused, match="pins no key"):
         start({}, {"challenger": str(tmp_path)}, None)
     pin = {"party": T.CS.CHALLENGER, "protocol": T.CS.COMPONENT, "key-sha512": "00" * 64}
-    with pytest.raises(Refused, match="holds no memory challenger's key"):
+    with pytest.raises(Refused, match="holds no memory attester's key"):
         start({"pin": [pin]}, {"challenger": str(tmp_path)}, None)
 
 

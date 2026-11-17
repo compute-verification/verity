@@ -131,7 +131,7 @@ def test_simulated_audit(world):
     assert not simulate(vk, Wrong(), PRIMS, key, k=3).accepted
 
 
-def test_memory_challenger(world):
+def test_memory_attester(world):
     _, _, enc, vk = world
     key = challenge_key(b"audit", vk)
     responder = HonestResponder(enc, tree(enc))

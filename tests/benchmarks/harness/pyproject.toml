@@ -135,7 +135,7 @@ inputs = [
     "benchmarks/recursion_figures", "tests/test_vllm_public_api.py",
     # `verity bench compute` and `verity bench memory` print and write through the kit's report, which a test holds
     # each to on its own suite's fixtures and stand-in store, and they read what their own suites declare
-    "benchmarks/compute", "benchmarks/memory", "benchmarks/remote_session/summary.py", "verity/protocol.py",
+    "benchmarks/compute", "benchmarks/memory", "benchmarks/poub_session/summary.py", "verity/protocol.py",
     "verity/channel.py", "verity/device.py", "verity/errors.py", "verity/party.py", "verity/runtime/__init__.py",
     "verity/runtime/handshake.py", "verity/runtime/framing.py", "tools/config/verity_config",
     # and `verity bench inference_only --stated-only`, run as its own process, prices the stated policy with the

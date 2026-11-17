@@ -74,7 +74,7 @@ def channel(cfg, source, to):
     return next(c for c in cfg["channel"] if (c["from"], c["to"]) == (source, to))
 
 
-#: a pin the toy's onsite configuration accepts: the network attester's key for the certifier's sessions
+#: a pin the toy's onsite configuration accepts: the network attester's key for the network attester's sessions
 PIN = {"party": "network-certifier", "protocol": "certifier", "scheme": K.SCHEMES[0], "key-sha512": "5a" * 64}
 
 
