@@ -35,7 +35,7 @@ reading and writing at least its words, at no more units of each resource (the c
 limit, free resources) only let a program do more. That domination is not shown for MATCH, REDUX, VOTE, MMAs with f16
 accumulators, FP6 MMAs, FP8 and FP6 MMAs with scale groups, clock and timer reads, or BAR.RED, so the premise is not
 established for a program that executes one. A table is a SKU's at its firmware's maximum (its card file,
-`hardware/cards/<sku>.toml`), so the premise at `c` says too that the cards are `c`'s SKU and firmware; nothing the
+`calibration/hardware/cards/<sku>.toml`), so the premise at `c` says too that the cards are `c`'s SKU and firmware; nothing the
 protocol checks attests that (open).
 
 **Exclusions**, units no code here uses because they can't compute a committed word or a hash more cheaply than the

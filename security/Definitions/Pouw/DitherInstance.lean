@@ -213,7 +213,7 @@ def shaUnits (a m i : ℚ≥0) : Verity.Accel.Res → ℚ≥0
   | _ => 0
 
 /-- **The public-best menu's named matmul programs on the H200**
-(computed by `benchmarks/pouw/theory/d5_v2.py` at `34866fd9f8`): protocol v3's round at A = B = 0, the frozen qkv shape
+(computed by `calibration/pouw/theory/d5_v2.py` at `34866fd9f8`): protocol v3's round at A = B = 0, the frozen qkv shape
 (K 16384, n 16512) at the served caps (t 2, L' 512), the hull of every route in the menu (the tile route, the
 O-route, the zero-high-digit peel, Strassen's orbit, the integral catalogue, every route beside the MMA) priced at
 the honest period's duals μ° without the hashing. Served (μ° on `alu` and `joint0`): the dense product with O by the
@@ -250,11 +250,11 @@ def pubShaSm120 : List ResUnits :=
   [shaUnits 3415 0 (3415 / 32), shaUnits 2563 1704 (4267 / 32), shaUnits 2441 1461 (3902 / 32)]
 
 /-- The H200's public best methods: the public-best menu's named programs, at the card table `c` that states the
-H200's card file (`hardware/cards/h200-sxm-141gb.toml`). -/
+H200's card file (`calibration/hardware/cards/h200-sxm-141gb.toml`). -/
 def pubBestH200 (c : Verity.Accel.Card) : PubBest c := ⟨pubMmH200, pubShaH200⟩
 
 /-- The RTX PRO 6000's public best methods: the public-best menu's named programs, at the card table `c` that states
-the RTX PRO 6000 Server Edition's card file (`hardware/cards/rtx-pro-6000-server.toml`). -/
+the RTX PRO 6000 Server Edition's card file (`calibration/hardware/cards/rtx-pro-6000-server.toml`). -/
 def pubBestSm120 (c : Verity.Accel.Card) : PubBest c := ⟨pubMmSm120, pubShaSm120⟩
 
 /-- **An oracle call costs a public SHA-512 compression on the card**: `G`'s oracle-call step (G3)
