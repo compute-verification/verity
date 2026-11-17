@@ -4,7 +4,7 @@ public import Aesop.BuiltinRules
 public import Mathlib.Data.Nat.Notation
 public import Mathlib.Tactic.ToAdditive
 public import Mathlib.Tactic.ToDual
-public import NetworkCheck.Period
+public import NetworkVerifier.Period
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -42,7 +42,7 @@ import Proofs.Properties.InferenceOnly.BodiesOk.Basic
 import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
-# What `NetworkCheck.Period.scanOf`'s acceptance gives of the scan's Program
+# What `NetworkVerifier.Period.scanOf`'s acceptance gives of the scan's Program
 
 `scanOf_accepted` reads `scanOf`'s steps one by one (each check a `need`, so each step a bind) and keeps what
 `NetTiming.BoundaryGates.Fits`'s first two parts rest on (`Accepted`): the description's layout and walk checks, the
@@ -57,7 +57,7 @@ namespace Properties.NetworkScan.Fits
 
 open Flock.Program (Prog Node Part Ty Defn)
 open InferenceOnlyVerifier.Properties.SecurityProofs
-open NetworkCheck.Period
+open NetworkVerifier.Period
 
 /-- Root node `k`. -/
 abbrev node (P : Prog) (k : ℕ) : Node := (P.defs[P.root]!).body.nodes[k]!

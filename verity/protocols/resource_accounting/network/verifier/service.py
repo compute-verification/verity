@@ -117,7 +117,7 @@ no sync and the charge is 0. Each head check holds its end's head to the network
 signed digest. N2 takes no frames: the frames, their content and their order, are the scan's, and N2 says nothing of
 them. A `TransferBlocks` without a `NetworkAttesterProfile` raises `ValueError`.
 
-**The verdict of record is the Lean's**: `NetworkCheck.TransferBlocks.verdict`
+**The verdict of record is the Lean's**: `NetworkVerifier.TransferBlocks.verdict`
 (`verity/protocols/resource_accounting/network/verifier/lean`, `network-records verdicts`' ``link-window``, `lean_verdict`), switched by the one
 line `OF_RECORD`. `verify` runs it and this module's `python_verdict` on every proof, records
 whose verdict it is (`by`) and the other's accept bit (`reference`), and rejects an execution phase where they differ or
@@ -178,7 +178,7 @@ from verity.protocols.proofs.spot.verifier.one_stage import audit as OA, partiti
 from verity.protocols.proofs.spot.verifier.one_stage.proofs import Finding
 from verity.protocols.proofs.spot.verifier.one_stage.verdict import Verdict
 
-#: Whose verdict on an execution phase's proof is the record's: the Lean's (``"lean"``, `NetworkCheck.TransferBlocks`) or
+#: Whose verdict on an execution phase's proof is the record's: the Lean's (``"lean"``, `NetworkVerifier.TransferBlocks`) or
 #: this module's (``"python"``). Both run on every proof either way. Setting it to ``"python"`` is the one line that
 #: switches it back.
 OF_RECORD = "lean"
@@ -786,7 +786,7 @@ class TransferBlocks:
     def lean_case(self, sample: S.Draw, certificates: Sequence[Certificate], syncs: Sequence[ClockSync],
                   delivered: Delivered, findings: Sequence[Finding] | None,
                   sessions: Sequence[str]) -> dict[str, Any] | None:
-        """`verify`'s inputs as `NetworkCheck.TransferBlocks.caseOf` reads them: the verifier's own structure (the Program's
+        """`verify`'s inputs as `NetworkVerifier.TransferBlocks.caseOf` reads them: the verifier's own structure (the Program's
         and partition's digests, the gate ids), the registration, the sample, the findings of its own run of Flock's
         Lean verifier (None where `proofs.verify` refused), the delivered public file, salts, output word and session
         SHA-512s, the certificates (each null unless a `Certificate` of well-typed fields) and each one's signed digest
@@ -839,7 +839,7 @@ class TransferBlocks:
     def lean_verdict(self, sample: S.Draw, certificates: Sequence[Certificate], syncs: Sequence[ClockSync],
                      delivered: Delivered, findings: Sequence[Finding] | None, sessions: Sequence[str],
                      server: LA.Server | None = None) -> dict[str, Any] | None:
-        """The Lean's verdict on the execution phase (`NetworkCheck.TransferBlocks.verdict`, `network-records verdicts`'
+        """The Lean's verdict on the execution phase (`NetworkVerifier.TransferBlocks.verdict`, `network-records verdicts`'
         ``link-window``): its accept bit, digest and public outputs; None where `lean_case` has no case or the Lean
         refuses it. The Lean not built or not running raises."""
         case = self.lean_case(sample, certificates, syncs, delivered, findings, sessions)
@@ -867,7 +867,7 @@ class TransferBlocks:
         `opening` (the witness) is for a debug comparison only, off by default: given, the verdict also carries the
         in-the-clear check's accept bit (`clear`), which decides nothing.
 
-        The Lean (`NetworkCheck.TransferBlocks`, `lean_verdict`) decides the same on every call beside this Python, and
+        The Lean (`NetworkVerifier.TransferBlocks`, `lean_verdict`) decides the same on every call beside this Python, and
         `OF_RECORD` names whose verdict is the record's (`by`); the other's accept bit is `reference`'s. Where the two
         differ in the accept bit, the public outputs or the digest, or the Lean refuses the case, the execution phase is
         rejected, with deadline 0."""

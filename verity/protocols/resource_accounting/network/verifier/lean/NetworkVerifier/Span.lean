@@ -1,10 +1,10 @@
 module
 
-public import NetworkCheck.Period
-public import NetworkCheck.Registered
+public import NetworkVerifier.Period
+public import NetworkVerifier.Registered
 public import Identity.Domains
-meta import NetworkCheck.Period
-meta import NetworkCheck.Registered
+meta import NetworkVerifier.Period
+meta import NetworkVerifier.Registered
 meta import Identity.Domains
 
 /-!
@@ -21,7 +21,7 @@ certified under the schedule, and how many bits can have left on the link over t
     signed digest = SHA-512("verity-network-certifier/mark/v1" ‖ salt ‖ mark)     (`markDigest`)
 
 as an egress certificate on the link's marks link name, `<link>-marks` (`marksLink`), under the message every
-certificate signs (`NetworkCheck.certificateMessage`), which binds the key, the certifier session, the link name and
+certificate signs (`NetworkVerifier.certificateMessage`), which binds the key, the certifier session, the link name and
 the execution phase. The mark and its salt are witness; the certificate is a signature over a hiding digest.
 
 **Params**, canonical JSON, all public:
@@ -92,12 +92,12 @@ The check reads the two marks, then makes one pass over the evidence's entries, 
 
 @[expose] public section
 
-namespace NetworkCheck.Span
+namespace NetworkVerifier.Span
 
 open Lean (Json toJson)
 open Flock (V)
-open NetworkCheck.Check (Certificate)
-open NetworkCheck.Period (Schedule Rows scheduleOf rowsOf certificateOf rowsDomain headDigest rowsFormat rowSchema
+open NetworkVerifier.Check (Certificate)
+open NetworkVerifier.Period (Schedule Rows scheduleOf rowsOf certificateOf rowsDomain headDigest rowsFormat rowSchema
   outBits)
 
 def protocolId : String := Domains.CERTIFIER_SPAN_PROTOCOL
@@ -500,4 +500,4 @@ def guardParamsWith (more : List (String × Json)) : V Params := do
   !(Read.certificateOfBytes ((guardMark 5 1).extract 4 112)).isOk &&
   !(Read.certificateOfBytes ((guardMark 5 1).extract 4 110)).isOk
 
-end NetworkCheck.Span
+end NetworkVerifier.Span
