@@ -254,7 +254,9 @@ def test_the_challengers_coins_need_main_and_the_gates_peer_and_key(monkeypatch)
     run = ["--bundle", "b", "--row-dir", "d", "--workload", "f", "--opening", "o", "--windows", "w", "--partition", "p",
            "--template-sets", "s", "--m0-pythonpath", "m", "--bin", "b", "--lean", "l", "--zk-server", "f", "--out", "o"]
     gate = ["--challenger", "gate:research@vy-challenger-1", "--main", "m.txt"]
-    for refused in ([], ["--challenger", "local"], gate, [*gate, "--peer", "vy-nebius-2"], ["--challenger", "remote", "--main", "m.txt"]):
+    command = ["--challenger", "command:python3 -I local_gate.py /gate", "--main", "m.txt"]
+    for refused in ([], ["--challenger", "local"], gate, [*gate, "--peer", "vy-nebius-2"], ["--challenger", "remote", "--main", "m.txt"],
+                    command):
         with pytest.raises(SystemExit):
             PP.main(["audit", *run, *refused])
     got = []
@@ -262,6 +264,8 @@ def test_the_challengers_coins_need_main_and_the_gates_peer_and_key(monkeypatch)
     assert PP.main(["audit", *run, *gate, "--peer", "vy-nebius-2", "--challenger-key", "key.json", "--gate-key", "id"]) == 0
     assert (got[0].challenger, got[0].peer, got[0].challenger_key, got[0].gate_key) == \
         ("gate:research@vy-challenger-1", "vy-nebius-2", "key.json", "id")
+    assert PP.main(["audit", *run, *command, "--peer", "cpu-6"]) == 0
+    assert (got[1].challenger, got[1].peer, got[1].challenger_key) == (command[1], "cpu-6", None)
 
 
 def test_an_audit_listens_on_ports_no_other_audit_holds():
@@ -1250,7 +1254,7 @@ def test_a_declared_runs_phi_reads_the_config_of_record_of_its_workloads_pin():
 
 def test_the_ran_with_line_names_the_coins_and_the_parameters_of_their_key(tmp_path, capsys):
     """A local challenger's key is at its development parameters; a gate's is its key record's, deployed only at
-    `lms.DEPLOYED`'s, and without the record no word is stated."""
+    `lms.DEPLOYED`'s, and without the record no word is stated; a gate command's coins are simulated, whatever record."""
     from verity.protocols.proofs.spot.verifier.challenger import challenger as Ch
 
     assert PP.ran_with("local") == ("ran with: coins local challenger; parameters development (the local challenger's LMS key "
@@ -1264,7 +1268,11 @@ def test_the_ran_with_line_names_the_coins_and_the_parameters_of_their_key(tmp_p
     assert PP.ran_with(gate, record(1, 20)).endswith("parameters deployed (the challenger's LMS key at W=1, H=20, its key record's)")
     assert "parameters development (the challenger's LMS key at W=4, H=10" in PP.ran_with(gate, record(4, 10))
     assert PP.ran_with(gate) == f"ran with: coins the auditor device's challenger ({gate}); parameters not stated (no challenger key record given)"
-    with pytest.raises(ValueError, match="local, or gate:USER@HOST"):
+    command = "command:python3 -I local_gate.py /gate"
+    for rec in (None, record(1, 20)):
+        assert PP.ran_with(command, rec).startswith(f"ran with: coins simulated, a gate command on this machine ({command}), "
+                                                    "not the auditor's challenger; parameters development")
+    with pytest.raises(ValueError, match="local, gate:USER@HOST or command:WORDS"):
         PP.ran_with("remote")
     (f := tmp_path / "key.json").write_text(json.dumps(record(1, 20)))
     assert PP.main(["ran-with", "--challenger", gate, "--challenger-key", str(f)]) == 0

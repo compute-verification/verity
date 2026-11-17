@@ -119,28 +119,37 @@ def test_a_development_composite_says_so_first_and_in_its_public_record(tmp_path
     assert "development" not in json.loads((tmp_path / "public2" / "composite.json").read_text())
 
 
-def test_a_per_member_accept_that_missed_a_member_says_the_cite_does_not_cover_it(tmp_path):
+PUBLIC = "ab" * 80
+PIN = hashlib.sha512(bytes.fromhex(PUBLIC)).hexdigest()
+
+
+@pytest.mark.parametrize("pin", [PIN, None], ids=["live coins", "simulated coins"])
+@pytest.mark.parametrize("sample", [[1], [0, 1]], ids=["a missed member", "every member"])
+def test_a_per_member_accept_that_missed_a_member_says_the_cite_does_not_cover_it(tmp_path, sample, pin):
+    """A missed member and simulated coins each qualify the cite, and both stand together in one ``not_covered``."""
     product = next(iter(C.CITES))
     tree = git_tree(tmp_path / "tree", [C.CITES[product]])
     members = {"m0": {"units": [[0, 1]]}, "m1": {"units": [[1, 2]]}}
-    for sample in ([1], [0, 1]):
-        d, cases = tmp_path / f"sample{len(sample)}", []
-        for n, id in enumerate(C.COMPONENTS[product]):
-            params = {"form": "one-stage", "proofs": {"members": members}} if id == SAMPLED else {}
-            p = put(d / f"p{n}", id, params, bytes([n]), b"{}", bytes([n]) * 64, verdict="accept")
-            if id == SAMPLED:
-                a = json.loads((p / "answer.json").read_text())
-                (p / "answer.json").write_text(json.dumps(a | {"public": {"bound": 1, "drawn": sample}}))
-            cases += ["--cases", str(p)]
-        assert C.main([product, *cases, *outs(d, tree=tree), "--exe", lean(d, {"verdict": "accept"}, 0)]) == 0
-        ran = json.loads((d / "public" / "composite.json").read_bytes())["ran"]
-        lines = (d / "public" / "verdicts.txt").read_text().splitlines()
-        assert ran["cites"] == C.CITES[product]
-        said = f"NOT_COVERED {SAMPLED} 1 of 2 members sampled: {C.CITES[product]} does not cover it"
-        if len(sample) == 1:
-            assert ran["not_covered"] == {"id": SAMPLED, "members": {"sampled": 1, "registered": 2}} and said in lines
-        else:
-            assert "not_covered" not in ran and not any(ln.startswith("NOT_COVERED") for ln in lines)
+    cases = []
+    for n, id in enumerate(C.COMPONENTS[product]):
+        params = {"form": "one-stage", "proofs": {"members": members},
+                  "challenger": {"key": {"H": 5, "W": 4, "public": PUBLIC}}} if id == SAMPLED else {}
+        p = put(tmp_path / f"p{n}", id, params, bytes([n]), b"{}", bytes([n]) * 64, verdict="accept")
+        if id == SAMPLED:
+            a = json.loads((p / "answer.json").read_text())
+            (p / "answer.json").write_text(json.dumps(a | {"public": {"bound": 1, "drawn": sample}}))
+        cases += ["--cases", str(p)]
+    assert C.main([product, *cases, *outs(tmp_path, tree=tree), "--exe", lean(tmp_path, {"verdict": "accept"}, 0),
+                   *(["--key-sha512", pin] if pin else []), "--coins-on", "cpu-6"]) == 0
+    ran = json.loads((tmp_path / "public" / "composite.json").read_bytes())["ran"]
+    lines = (tmp_path / "public" / "verdicts.txt").read_text().splitlines()
+    assert ran["cites"] == C.CITES[product]
+    missed = {"members": {"sampled": 1, "registered": 2}} if len(sample) == 1 else {}
+    simulated = {} if pin else {"coins": "simulated", "coins_on": "cpu-6"}
+    said = ([f"NOT_COVERED {SAMPLED} 1 of 2 members sampled: {C.CITES[product]} does not cover it"] if missed else []) + (
+        [f"NOT_COVERED {SAMPLED} coins: simulated on cpu-6: {C.CITES[product]} does not cover it"] if simulated else [])
+    assert ran.get("not_covered") == ({"id": SAMPLED, **missed, **simulated} if missed or simulated else None)
+    assert [ln for ln in lines if ln.startswith("NOT_COVERED")] == said
 
 
 def test_a_cases_dir_of_case_dirs_reads_each(tmp_path):
@@ -315,12 +324,17 @@ def test_the_check_runs_the_products_executable_on_the_private_files_and_blobs(t
                            str(priv / "evidence.json"), "/blob"]
 
 
-def remote_accepted(tmp_path: Path, tree: Path, verdict: str = "accept", rc: int = 0) -> tuple[int, dict, list[str]]:
-    v1 = put(tmp_path / "v1", SAMPLED, {}, b"\x01", b"{}", b"\xaa" * 64, verdict="accept")
+def remote_accepted(tmp_path: Path, tree: Path, verdict: str = "accept", rc: int = 0, public: str | None = PUBLIC,
+                    pin: str | None = PIN) -> tuple[int, dict, list[str]]:
+    """Remote-v1 composed on cases Lean accepts, SPOT's naming the challenger key ``public`` and this machine
+    pinning ``pin``."""
+    params = {"challenger": {"key": {"H": 5, "W": 4, "public": public}}} if public else {}
+    v1 = put(tmp_path / "v1", SAMPLED, params, b"\x01", b"{}", b"\xaa" * 64, verdict="accept")
     pp = put(tmp_path / "pearlplus", PEARL_PLUS, {}, b"\x02", b"{}", b"\xbb" * 64, verdict="accept")
     exe = lean(tmp_path, {"protocol": "verity/remote/v1", "verdict": verdict}, rc)
     got = C.main(["remote-v1", "--cases", str(v1), "--cases", str(pp), "--cases", str(policy(tmp_path)),
-                  *outs(tmp_path, tree=tree), "--exe", exe])
+                  *outs(tmp_path, tree=tree), "--exe", exe, *(["--key-sha512", pin] if pin else []),
+                  "--coins-on", "vy-dc-h200"])
     record = json.loads((tmp_path / "public" / "composite.json").read_bytes())
     return got, record, (tmp_path / "public" / "verdicts.txt").read_text().splitlines()
 
@@ -332,7 +346,22 @@ def test_an_accept_records_its_commit_its_executable_and_the_listed_guarantee_it
     assert rc == 0
     assert record["ran"] == {"commit": commit, "clean": True, "verifier_sha512": C.file_sha512(tmp_path / "lean-check"),
                              "cites": C.CITES["remote-v1"], "lock": {"listed": True, "deployed": False, "open": ["P.Open"]}}
-    assert not any(ln.startswith(("NOT_ESTABLISHED", "UNCITED")) for ln in lines)
+    assert not any(ln.startswith(("NOT_ESTABLISHED", "UNCITED", "NOT_COVERED")) for ln in lines)
+    assert (record["coins"], record["coins_on"]) == ("live", {SAMPLED: "vy-dc-h200"})
+
+
+@pytest.mark.parametrize("public, pin", [("cd" * 80, PIN), (PUBLIC, None), (None, PIN)],
+                         ids=["a key this machine doesn't pin", "no pin", "a case naming no key"])
+def test_spot_on_any_challenger_but_the_pinned_one_keeps_the_cite_qualified_as_simulated(tmp_path, public, pin):
+    """A challenger on the prover's machine (vllm's one-node gate) signs with a key of its own: the record says the
+    coins are simulated whenever the case's key isn't the one this machine pins, a missing pin or key included, and the
+    accept's cite stays, qualified by a ``NOT_COVERED`` line and ``ran.not_covered`` naming the coins and the machine."""
+    tree = git_tree(tmp_path / "tree", [C.CITES["remote-v1"]])
+    rc, record, lines = remote_accepted(tmp_path, tree, public=public, pin=pin)
+    assert rc == 0 and record["ran"]["cites"] == C.CITES["remote-v1"]
+    assert (record["coins"], record["coins_on"]) == ("simulated", {SAMPLED: "vy-dc-h200"})
+    assert record["ran"]["not_covered"] == {"id": SAMPLED, "coins": "simulated", "coins_on": "vy-dc-h200"}
+    assert f"NOT_COVERED {SAMPLED} coins: simulated on vy-dc-h200: {C.CITES['remote-v1']} does not cover it" in lines
 
 
 def test_an_accept_whose_commit_s_lock_lists_no_cited_guarantee_exits_uncited(tmp_path):

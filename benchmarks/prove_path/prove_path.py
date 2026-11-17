@@ -45,8 +45,8 @@ Two kinds of committed run:
         [--serving-rows-tables REGISTRATION --serving-rows-tables-key KEY] [--checkpoint-dir DIR]
     prove_path.py audit (the same committed run) [--opening FILE] --windows WINDOWS --partition F --template-sets DIR \\
         --m0-pythonpath PATH --bin flock-circuit --lean verity-verify-proof --zk-server flock-zk-server --out DIR [--cap-bits L] \\
-        [--ranks 0,1] [--jobs N] [--forged] [--plain] [--transfer-gate T ...] --challenger local|gate:USER@HOST --main FILE
-        [--peer NAME --challenger-key RECORD [--gate-key KEY]] [--builds DIR]
+        [--ranks 0,1] [--jobs N] [--forged] [--plain] [--transfer-gate T ...] --challenger local|gate:USER@HOST|command:WORDS
+        --main FILE [--peer NAME [--challenger-key RECORD [--gate-key KEY]]] [--builds DIR]
     prove_path.py compiler (--serve-run DIR | --serve FILE) [--hf-config F] [--target F] [--cap-bits L] [--transfer-gate T ...]
     prove_path.py weights-registration --serve-run DIR --checkpoint-dir DIR --key FILE --out FILE [--checkpoints F] \\
         [--tables DIR] [--hf-config F] [--target F] [--deployment-record FILE]
@@ -356,7 +356,7 @@ def ran_with(challenger: str, key_record: Mapping[str, Any] | None = None) -> st
     (DETAIL)``. The parameters are those of the LMS key the sample's coins are signed under, the one parameter set the run
     hands the verifier (Lean's `verify` takes none of its own): a local challenger's key is at
     `challenger_session.LOCAL_PARAMS`, development; a gate's is its key record's, deployed only at `lms.DEPLOYED`'s W and H.
-    A gate without its key record states none."""
+    A gate without its key record states none; a gate command's coins are simulated, its key its own."""
     from verity.commitments.crypto import lms
     from verity.protocols.proofs.spot.verifier.challenger import challenger as Ch
     from verity.protocols.proofs.spot.verifier.challenger import challenger_session as AC
@@ -366,8 +366,11 @@ def ran_with(challenger: str, key_record: Mapping[str, Any] | None = None) -> st
         at = lms.Params(64, *AC.LOCAL_PARAMS)
         return (f"ran with: coins local challenger; parameters development (the local challenger's LMS key at W={at.W}, "
                 f"H={at.H}, not the deployed W={dep.W}, H={dep.H})")
+    if challenger.startswith("command:"):
+        return (f"ran with: coins simulated, a gate command on this machine ({challenger}), not the auditor's challenger; "
+                "parameters development (the command gate's own LMS key)")
     if not challenger.startswith("gate:"):
-        raise ValueError(f"PP_CHALLENGER {challenger!r}: local, or gate:USER@HOST")
+        raise ValueError(f"PP_CHALLENGER {challenger!r}: local, gate:USER@HOST or command:WORDS")
     coins = f"coins the auditor device's challenger ({challenger})"
     if key_record is None:
         return f"ran with: {coins}; parameters not stated (no challenger key record given)"
@@ -1277,8 +1280,10 @@ def rank_audit(a: argparse.Namespace, world: int, r: int) -> dict:
 
 def coins_of(a: argparse.Namespace) -> dict[str, Any]:
     """The summary's account of the coins every window's stream samples on (module docstring)."""
+    whose = ("a gate command's on this machine, simulated, not the auditor's challenger's" if a.challenger.startswith("command:")
+             else "the auditor's challenger's")
     return {"source": "challenger", "challenger": a.challenger,
-            "what": "each window's service.Stream on the auditor's challenger's coins (a5_coins: the run root's one session, "
+            "what": f"each window's service.Stream on {whose} coins (a5_coins: the run root's one session, "
                     f"{a.challenger}), committed to the window's registration before any is read"}
 
 
@@ -1990,8 +1995,9 @@ def main(argv: list[str] | None = None, kept_ingress: KeptIngress | None = None,
                    "stratified (stratified-rate:NUM/DEN), each window one member with no registered reads or shared rows "
                    "(a5.PLAIN_SCOPE)")
     p.add_argument("--challenger", help="draw each window on the auditor's challenger's coins, the run root's one session "
-                   "(a5_coins): local (a development session on this machine), or gate:USER@HOST "
-                   "(the auditor device through its SSH gate, with --peer and --challenger-key)")
+                   "(a5_coins): local (a development session on this machine), gate:USER@HOST "
+                   "(the auditor device through its SSH gate, with --peer and --challenger-key), or command:WORDS "
+                   "(a gate this machine runs, with --peer: simulated coins)")
     p.add_argument("--peer", help="with --challenger gate:USER@HOST: this machine as the gate's /etc/vy/peers names it, whose "
                    "127.0.0.1 the session's challenger listens on")
     p.add_argument("--challenger-key", help="with --challenger gate:USER@HOST: the challenger's key record of its deployment "
@@ -2167,9 +2173,11 @@ def main(argv: list[str] | None = None, kept_ingress: KeptIngress | None = None,
     if a.cmd == "audit":
         if not a.challenger:
             ap.error("audit draws on the auditor's challenger's coins, never the verifier's own: give --challenger local "
-                     "--main FILE, or --challenger gate:USER@HOST")
-        if a.challenger != "local" and not a.challenger.startswith("gate:"):
-            ap.error(f"--challenger is local or gate:USER@HOST, not {a.challenger!r}")
+                     "--main FILE, --challenger gate:USER@HOST or --challenger command:WORDS")
+        if a.challenger != "local" and not a.challenger.startswith(("gate:", "command:")):
+            ap.error(f"--challenger is local, gate:USER@HOST or command:WORDS, not {a.challenger!r}")
+        if a.challenger.startswith("command:") and not a.peer:
+            ap.error("--challenger command:WORDS needs --peer: this machine as the gate command's peers file names it")
         if a.challenger.startswith("gate:") and not (a.peer and a.challenger_key):
             ap.error("--challenger gate:USER@HOST needs --peer and --challenger-key")
         if not a.main:

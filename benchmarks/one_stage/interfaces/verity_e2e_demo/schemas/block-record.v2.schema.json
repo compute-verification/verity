@@ -16,7 +16,10 @@
      "properties": {"holds": {"const": true}, "value": {"$ref": "#/$defs/nat"}, "epsilon": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/frac"}]},
                     "by": {"enum": ["run", "draw"]}}},
     {"type": "object", "required": ["holds", "why"], "additionalProperties": false,
-     "properties": {"holds": {"const": false}, "why": {"type": "string"}}}
+     "properties": {"holds": {"const": false}, "why": {"type": "string"},
+                    "what the same sample would establish under an auditor's challenger": {
+                      "type": "object", "required": ["value", "epsilon", "by"], "additionalProperties": false,
+                      "properties": {"value": {"$ref": "#/$defs/nat"}, "epsilon": {"$ref": "#/$defs/frac"}, "by": {"const": "draw"}}}}}
    ]
   },
   "named_terms": {
