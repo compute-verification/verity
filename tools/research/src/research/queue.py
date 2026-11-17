@@ -4292,14 +4292,17 @@ def move_lines_at(repo: Path, at: str) -> dict[str, dict]:
 
 #: whether a merge's tree is its first parent's (an `-s ours` merge, which took nothing from its other parents), by commit id
 _KEEPS_FIRST: dict[str, bool] = {}
+#: the commits a tip reaches through its trees over its whole history (`reached`), and the bodies of those with a move line,
+#: by the tip, for `_ran`: the last few tips
+_REACHED: dict[str, tuple[frozenset[str], dict[str, str]]] = {}
 
 
 def reached(repo: Path, graph: dict[str, tuple[str, list[str]]]) -> set[str]:
-    """The commits of ``graph`` (each commit of a range `ONTO ^HEAD`: its tree and parents) whose change is in ONTO's tree:
-    those ONTO reaches without stepping from a merge whose tree is its first parent's to one of its other parents. Such a
-    merge (`-s ours`, as a branch's earlier landed work is merged back keeping the tree) changed nothing of ONTO's on that
-    side, so a move found only there is no move a head can lack. A first parent outside the range has its tree read, once
-    for all; a merge whose trees can't be read keeps every parent. The same walk as `tools/move/restack.py`'s `reached`."""
+    """The commits of ``graph`` (each commit of a range `TIP ^HEAD`, or of TIP's whole history: its tree and parents) that TIP
+    reaches without stepping from a merge whose tree is its first parent's to one of its other parents: such a merge (`-s
+    ours`, as a branch's earlier, landed work is merged back keeping the tree) took nothing from that side. A first parent
+    outside ``graph`` has its tree read, once for all; a merge whose trees can't be read keeps every parent. The same walk
+    as `tools/move/restack.py`'s `reached`."""
     parents = {p for _, ps in graph.values() for p in ps}
     outside = sorted({ps[0] for c, (_, ps) in graph.items() if len(ps) > 1 and c not in _KEEPS_FIRST and ps[0] not in graph})
     r = _git(repo, "rev-parse", *(f"{x}^{{tree}}" for x in outside), check=False) if outside else None
@@ -4317,12 +4320,38 @@ def reached(repo: Path, graph: dict[str, tuple[str, list[str]]]) -> set[str]:
     return seen
 
 
+def _ran(repo: Path, tip: str, corrections: dict[str, dict], want: set[str]) -> set[str]:
+    """The move lines of ``want`` that ``tip`` holds at a commit it reaches through its trees (`reached` over its whole
+    history): a commit's own line, or its entry's in ``corrections``, and none whose entry says `move = false`. What the
+    history holds (the commits reached, and the bodies of those with a move line) is read once a tip, by two logs."""
+    if tip not in _REACHED:
+        log = _git(repo, "log", "--format=%H %T %P", tip, check=False).stdout
+        on = reached(repo, {c: (t, ps) for c, t, *ps in (x.split() for x in log.splitlines() if x)})
+        log = _git(repo, "log", "--no-merges", "-E", "--grep=^(Move|Layout-move): tools/move/", "--format=%H%x00%B%x1e", tip,
+                   check=False).stdout
+        bodies = dict(rec.partition("\x00")[::2] for rec in filter(None, (s.strip() for s in log.split("\x1e"))))
+        if len(_REACHED) >= 4:
+            _REACHED.clear()
+        _REACHED[tip] = (frozenset(on), {c: b for c, b in bodies.items() if c in on})
+    on, bodies = _REACHED[tip]
+    held = set()
+    for commit in {*bodies, *corrections}:
+        entry = corrections.get(commit, {})
+        if commit in on and entry.get("move") is not False and (
+                m := MOVE_LINE_RE.search(str(entry.get("line") or bodies.get(commit, "")))) and m[0] in want:
+            held.add(m[0])
+    return held
+
+
 def moves_between(repo: Path, onto: str, head: str) -> list[tuple[str, list[str]]]:
     """(commit, its parents) of each move ``onto`` has and ``head`` lacks, oldest first: each commit that isn't a merge with a
     move line (`MOVE_LINE_RE`), its entry's in ``onto``'s corrections where it has one (`move_lines_at`) and none whose entry
     says `move = false`, as `tools/move/restack.py`'s `moves_on` finds those it carries a branch across, on whichever parent
-    of `main`'s merges it landed, but none ``onto`` holds only through the other parents of a merge that kept its first
-    parent's tree (`reached`)."""
+    of `main`'s merges it landed. A move ``onto`` holds only through the other parents of a merge that kept its first
+    parent's tree (`reached`) is left out where ``onto`` also holds its move line at a commit it reaches through its trees
+    (`_ran`): that merge took none of the copy's change, and ``onto`` ran the same line itself, in the range or in what
+    ``head`` holds. Without such a line it stays in, since its change may have reached ``onto`` by another commit (restack.py's
+    rerun of a move, which carries no move line, on such a merge's first parent)."""
     lines = move_lines_at(repo, onto)
     log = _git(repo, "log", "--topo-order", "--reverse", "--format=%H %T %P%x00%B%x1e", onto, f"^{head}",
                check=False).stdout
@@ -4332,14 +4361,15 @@ def moves_between(repo: Path, onto: str, head: str) -> list[tuple[str, list[str]
         commit, tree, *parents = line.split()
         recs.append((commit, tree, parents, body))
     on = reached(repo, {c: (t, ps) for c, t, ps, _ in recs})
-    found = []
+    moves = []
     for commit, _, parents, body in recs:
-        if len(parents) > 1 or commit not in on:
-            continue
         entry = lines.get(commit, {})
-        if entry.get("move") is not False and MOVE_LINE_RE.search(str(entry.get("line") or body)):
-            found.append((commit, parents))
-    return found
+        if len(parents) < 2 and entry.get("move") is not False and (m := MOVE_LINE_RE.search(str(entry.get("line") or body))):
+            moves.append((commit, parents, m[0]))
+    held = {line for commit, _, line in moves if commit in on}
+    if lost := {line for commit, _, line in moves if commit not in on} - held:
+        held |= _ran(repo, recs[-1][0], lines, lost)
+    return [(commit, parents) for commit, parents, line in moves if commit in on or line not in held]
 
 
 @dataclass(frozen=True)

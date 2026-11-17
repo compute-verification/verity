@@ -766,14 +766,17 @@ def move_line(commit: str, cwd: str | None) -> tuple[str, tuple[str, ...]] | Non
 
 #: whether a merge's tree is its first parent's (an `-s ours` merge, which took nothing from its other parents), by commit id
 KEEPS_FIRST: dict[str, bool] = {}
+#: the commits a tip reaches through its trees over its whole history (`reached`), and the bodies of those with a move line,
+#: by the tip, for `ran`: the last few tips
+REACHED: dict[str, tuple[frozenset[str], dict[str, str]]] = {}
 
 
 def reached(graph: dict[str, tuple[str, list[str]]], cwd: str | None) -> set[str]:
-    """The commits of ``graph`` (each commit of a range `REF ^HEAD`: its tree and parents) whose change is in REF's tree: those
-    REF reaches without stepping from a merge whose tree is its first parent's to one of its other parents. Such a merge
-    (`-s ours`, as a branch's earlier landed work is merged back keeping the tree) changed nothing of REF's on that side, so a
-    move found only there is no move a head can lack. A first parent outside the range has its tree read, once for all; a
-    merge whose trees can't be read keeps every parent. The same walk as research's `queue.reached`."""
+    """The commits of ``graph`` (each commit of a range `TIP ^HEAD`, or of TIP's whole history: its tree and parents) that TIP
+    reaches without stepping from a merge whose tree is its first parent's to one of its other parents: such a merge (`-s
+    ours`, as a branch's earlier, landed work is merged back keeping the tree) took nothing from that side. A first parent
+    outside ``graph`` has its tree read, once for all; a merge whose trees can't be read keeps every parent. The same walk as
+    research's `queue.reached`."""
     parents = {p for _, ps in graph.values() for p in ps}
     outside = sorted({ps[0] for c, (_, ps) in graph.items() if len(ps) > 1 and c not in KEEPS_FIRST and ps[0] not in graph})
     p = git("rev-parse", *(f"{x}^{{tree}}" for x in outside), cwd=cwd, ok=(0, 128)) if outside else None
@@ -791,10 +794,36 @@ def reached(graph: dict[str, tuple[str, list[str]]], cwd: str | None) -> set[str
     return seen
 
 
+def ran(tip: str, lines: dict[str, dict], want: set[str], cwd: str | None) -> set[str]:
+    """The move lines of ``want`` that ``tip`` holds at a commit it reaches through its trees (`reached` over its whole
+    history): a commit's own line, or its entry's in ``lines``, and none whose entry says `move = false`. What the history
+    holds (the commits reached, and the bodies of those with a move line) is read once a tip, by two logs."""
+    if tip not in REACHED:
+        log = out("log", "--format=%H %T %P", tip, cwd=cwd)
+        on = reached({c: (t, ps) for c, t, *ps in (x.split() for x in log.splitlines() if x)}, cwd)
+        log = out("log", "--no-merges", "-E", "--grep=^(Move|Layout-move): tools/move/", "--format=%H%x00%B%x1e", tip, cwd=cwd)
+        bodies = dict(rec.partition("\x00")[::2] for rec in filter(None, (x.strip() for x in log.split("\x1e"))))
+        if len(REACHED) >= 4:
+            REACHED.clear()
+        REACHED[tip] = (frozenset(on), {c: b for c, b in bodies.items() if c in on})
+    on, bodies = REACHED[tip]
+    held = set()
+    for commit in {*bodies, *lines}:
+        entry = lines.get(commit, {})
+        if commit in on and entry.get("move") is not False and (
+                m := MOVE_LINE.search(entry.get("line") or bodies.get(commit, ""))) and m[0] in want:
+            held.add(m[0])
+    return held
+
+
 def moves_on(ref: str, head: str, cwd: str | None) -> list[tuple[str, str, tuple[str, ...]]]:
     """The moves ``ref`` has and ``head`` lacks, oldest first: (commit, script, arguments) of each commit with a move line,
-    its `MOVE_LINES` entry's where it has one; none whose entry says `move = false`, and none ``ref`` holds only through the
-    other parents of a merge that kept its first parent's tree (`reached`)."""
+    its `MOVE_LINES` entry's where it has one, and none whose entry says `move = false`. A move ``ref`` holds only through the
+    other parents of a merge that kept its first parent's tree (`reached`) is left out where ``ref`` also holds its move line
+    at a commit it reaches through its trees (`ran`): that merge took none of the copy's change, and ``ref`` ran the same
+    line itself. Without such a line it stays in, since its change may have reached ``ref`` by another commit (this script's
+    rerun of a move, which carries no move line, on its moved merge's first parent). The same rule as research's
+    `queue.moves_between`."""
     log = out("log", "--topo-order", "--reverse", "--format=%H %T %P%x00%B%x1e", ref, f"^{head}", cwd=cwd)
     recs = []
     for rec in filter(None, (x.strip() for x in log.split("\x1e"))):
@@ -802,13 +831,16 @@ def moves_on(ref: str, head: str, cwd: str | None) -> list[tuple[str, str, tuple
         commit, tree, *parents = line.split()
         recs.append((commit, tree, parents, body))
     on = reached({c: (t, ps) for c, t, ps, _ in recs}, cwd)
-    found, lines = [], corrections()
+    moves, lines = [], corrections()
     for commit, _, parents, body in recs:
-        if len(parents) > 1 or commit not in on or lines.get(commit, {}).get("move") is False:
+        if len(parents) > 1 or lines.get(commit, {}).get("move") is False:
             continue
         if m := MOVE_LINE.search(lines.get(commit, {}).get("line") or body):
-            found.append((commit, LINE_SCRIPT[m[1]], ("--map", m[2], *m[3].split())))
-    return found
+            moves.append((commit, m))
+    held = {m[0] for commit, m in moves if commit in on}
+    if lost := {m[0] for commit, m in moves if commit not in on} - held:
+        held |= ran(recs[-1][0], lines, lost, cwd)
+    return [(commit, LINE_SCRIPT[m[1]], ("--map", m[2], *m[3].split())) for commit, m in moves if commit in on or m[0] not in held]
 
 
 def _glob(path: str, glob: str) -> bool:
