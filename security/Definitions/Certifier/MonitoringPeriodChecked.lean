@@ -34,27 +34,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# A monitoring period of sampled audits with checked inputs: the run the check is held to, and the leak relation there
-
-Definitions only. `Definitions.Certifier.MonitoringPeriod`'s leak relation with each statement's checked inputs left out
-of the count (`Definitions.Certifier.Checked`): the leak relation at the network attester's rows, with a valid
-run. The window's good event with it (`ExecutionPhaseGoodChecked`) is stated with the guarantee
-(`Definitions.Certifier.Guarantees.MonitoringPeriodChecked`), since it reads a named premise.
-
-**The run.** The relation at the network attester's rows accepts the network attester's records on the run that
-reads the trace's inputs, takes its ingress from the operator's moves on those records, and holds an incorrect proof
-block's committed gates at the trace filled in with the network attester's values (`fillTrace`): the trace need open
-no transfer gate inside an incorrect proof block, and the network attester's opening there is what its record shows.
-That run is `certifierRun`, and the check is held to it (`CheckedWitness` at `certifierRun`). It is not the trace's
-run (`traceRun`), which holds those gates at the trace's own values, `false` where the trace opens nothing: a check
-that reads a transfer gate inside an incorrect proof block can hold on one and fail on the other.
-
-* `certifierRun`: the run at the network attester's rows at a witness, where the network attester registers records
-  and the trace agrees with its openings wherever both open a gate. Elsewhere there is none: the relation at the
-  network attester's rows asks nothing where it registers no record, and a disagreement is a collision (`Btap`).
-* `RLeakCertifierChecked`: `RLeakCertifier` with the sequences `AccSeqsChecked` counts.
--/
+/-! A monitoring period of sampled audits with checked inputs: the run the check is held to (`certifierRun`) and the leak relation there. -/
 
 @[expose] public section
 

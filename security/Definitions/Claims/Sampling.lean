@@ -2,71 +2,12 @@ module
 
 public import Definitions.Claims
 
-/-!
-# Claims: the sampling compiler (frozen before any proof work)
-
-The claims block of SPOT (`verity/protocols/proofs/spot/`), one-stage sampling, on the
-shared definitions of `Definitions.Core.Interaction`, in the template's eight items and the README glossary's terms. Parametric in
-the deployed sampled verifier (`Deploy`), as Flock's block is in `Flock.Deploy`: binding it to the compiled verifier is
-the code side's.
-
-1. **Statement** (`AuditStatement`): the program `C` (named by its digest; both parties hold it), as its descriptor and its gates,
-   the partition query `Q` (named, versioned, with its parameters), the sampling design, and the roots the trace is
-   committed under. The partition is public: `P = Q(C)`, which the verifier evaluates itself on the statement it parsed,
-   descriptor and gates (`Deploy.partition`), gives the proof blocks (sets of gates of `C`, every gate but a constant and
-   an unread input in exactly one, the other input gates included; a constant is public and in one or in none, and so is
-   an input that no gate reads and `C` doesn't return), the strata and the classes. `x` is the canonical bytes of what
-   the verifier reads before it samples, and `parse` is its own.
-2. **Witness** (`Wit`): openings of the committed values of `C`'s gates under the roots.
-3. **Relation** (`R δ`): the set of incorrect proof blocks of the committed trace is in the confidence set
-   `M_δ = {B : P_a(B) > δ}`. A unit is faulty when its committed outputs differ from its gates applied to its committed
-   inputs, or a value it reads or writes is unopened: one is faulty unless some interior makes it correct, which on a
-   topologically ordered program is the glossary's form on the boundary trace (`BoundaryFaulty`;
-   `Proofs.Flock.SamplingBoundary` proves `Faulty` is it on every such program).
-4. **Scope** (`Scope`, `InScope`, `ScopeMatches`): a statement that parses, whose query evaluates; a topologically
-   ordered program; a partition of all its gates but constants and unread inputs into proof blocks, each a set of gates
-   whose committed values fit its public size class, `|out(u)| ≤ w_{c(u)}` (`sizeClasses`: powers of two from 16 to
-   262,144); and a well-formed design, one rule per class. The compiled sampled verifier's `KS`, `KSCount` and `Bits`
-   at a deployment (`SamplingGeneric.ofDeploy`) and `Complete` hold on it, and it excludes every design whose `P_a` is
-   not its sample's miss probability: `subset K` with `K > N`, whose `P_a` is `0` at every set, so that `KS` there is
-   vacuous, and a Bernoulli rule with `den = 0` or `num > den`. That the verifier refuses what is out of it is
-   `ScopeMatches`, open.
-5. **Named pieces**: the commitment scheme (`CommitmentScheme`, `CommitmentScheme.Binds`, and its published leaf layer
-   `CommitmentScheme.layer`); the program and its units (`BGate`, `Prog`, `Partition`, `Prog.Correct`); the universal
-   unit (`PrivateCircuit`, `Universal`), a fact about the programs private circuits run as; the acceptance probabilities
-   (`OneStage.Pa`, `Design.Pa`); the extractor's waits (`Deploy.k`, `Deploy.cap`, `slack`) and opening check
-   (`checkRevealed`, `assemble`); the expected-time finder (`Bext`); and the parameters (`Deploy`, with the Flock
-   verifier its sessions run as a `Flock.Deploy`, and the masked deployment `ZkDeploy`: the reference prover's tape as
-   a finite nonce and rest, and the simulator). The extractor itself is the compiled sampled verifier's
-   (`SamplingGeneric.Compiled.E` at `SamplingGeneric.ofDeploy`): `k` accepted runs, in each `k` accepted reruns of the
-   second stage, in each Flock's `E^rep` on every checked unit's session.
-6. **Claims**, on the statements in scope: `Binding`; `Universal`; `Complete`; `ScopeMatches`; `ZK`, of the masked
-   deployment's reference prover and simulator, relative to the trace's published leaf layer; and `Nontrivial`.
-   Knowledge soundness, its count form, bits and efficiency are the compiled sampled verifier's at the deployment
-   (`SamplingGeneric.Compiled.KS`, `KSCount`, `Bits`, `Efficient`): `KS` at every `δ ≥ 0`, with error
-   `δ + ε_ks + ε_bind`, `ε_ks` Flock's at the units' sessions and `ε_bind = Pr[B_ext]`.
-7. **Assumptions used**: `trustedBase`, and the compiled claims' `StrictBirthday` (for `B`) and `ExpectedCR` (for
-   `Bext`). `ZK` gives the simulator the leaf layer the protocol publishes, so it reads no hiding assumption of the
-   leaves.
-8. **Status**: stated; no claim is proved.
-   `Proofs.Flock.SamplingScope` shows the scope is the one `KS` needs: an out-of-scope `subset K` with `K > N` has
-   `P_a = 0` at every set, and an in-scope design has a deployment at which the compiled verifier's `KS` bound is
-   below `1`.
-
-Generic pieces this block adds, which move to `Definitions.Core.Interaction` in a later change: `LogColl`, `ofOC`, `ownLog`,
-`flatMapRP`, `waitAccC`, `forkOn`, `Bext`, `KSLinOn`, `lamLin`, `BitsLin`, `ExtractOwnLe` and `SimLeak`. Zero knowledge
-is the spec's `ZKmalRx` and the decoder spec Flock's radius form, `Flock.ListWithin` at `Flock.Deploy`'s `len` and `θ`;
-nothing here reads Flock's former decoding threshold or count (`agree`, `nMin`).
-
-Frozen by `Flock.Guarantees.SamplingClaimsStated` (`Definitions/Flock/Guarantees/SamplingClaims.lean`), whose statement
-reads every claim here: the lock records each one's text under `reads`, so a changed claim is a changed record.
--/
+/-! Claims: the sampling compiler's, SPOT's, frozen by `Flock.Guarantees.SamplingClaimsStated`; stated, and no claim here
+is proved. -/
 
 @[expose] public section
 
 namespace Claims.Sampling
-
-/-! ## The commitment scheme -/
 
 /-- Two different inputs with one output in a log of `H` calls. -/
 def LogColl (l : List (Msg × Msg)) : Prop := ∃ p ∈ l, ∃ p' ∈ l, p.1 ≠ p'.1 ∧ p.2 = p'.2
@@ -94,8 +35,6 @@ values, make `H` calls that collide. -/
 def CommitmentScheme.Binds {α : Type} (H : Msg → Msg) (Cm : CommitmentScheme α) : Prop :=
   ∀ (roots : List Msg) (o o' : Opening α), o.pos = o'.pos → o.val ≠ o'.val → Cm.Opens H roots o = true →
     Cm.Opens H roots o' = true → LogColl (((Cm.opens roots o).eval H).2 ++ ((Cm.opens roots o').eval H).2)
-
-/-! ## The program and its partition -/
 
 /-- **A gate** of the Boolean profile (`verity/circuits/PROTOCOL.md` §9): an input (`Input1_v1` or
 `RegisteredInput1_v1`, its value committed under the roots), a constant bit (`Const1`), `Not_v1` of a wire, or
@@ -225,8 +164,6 @@ def Partition.Partitions (P : Partition) (C : Prog) : Prop :=
     (∀ g < C.gates.length, (∀ b, C.gates[g]? ≠ some (.const b)) → ¬ C.Unread g → g ∈ P.gates) ∧
     (∀ u ∈ P.blocks, u ≠ []) ∧ ∀ u ∈ P.blocks, ∃ w, sizeClass C u = some w ∧ committed C u ≤ w
 
-/-! ## Proof blocks and the universal unit -/
-
 /-- A size class `(G, N_IN, N_OUT)`: `G` gates over `N_IN` inputs, and `N_OUT` output bits. -/
 structure SizeClass where
   G : ℕ
@@ -266,8 +203,6 @@ def PrivateCircuit.args (c : SizeClass) (n : PrivateCircuit) : List Bool :=
   n.gates.flatMap (fun g => bitsLE 2 g.1.val) ++
     n.gates.flatMap (fun g => bitsLE c.indexBits g.2.1 ++ bitsLE c.indexBits g.2.2) ++
     n.outs.flatMap (bitsLE c.indexBits)
-
-/-! ## Sampling designs -/
 
 /-- **A one-stage sampling design** over a population in strata: every member (`all`); a uniform `K`-subset
 (`subset:K`); each member independently at rate `num/den` (`bernoulli:NUM/DEN`); a uniform `k_s`-subset of each
@@ -323,8 +258,6 @@ def Design.M (d : Design) (P : Partition) (δ : ℝ) : Set (Finset ℕ) := {B | 
 noncomputable def Design.miss (d : Design) (P : Partition) (t : ℕ) : ℝ :=
   ⨆ B : {B : Finset ℕ // B ⊆ Finset.range P.blocks.length ∧ t ≤ B.card}, d.Pa P B.1
 
-/-! ## 1. Statement -/
-
 /-- A partition query, named and versioned (`Q_call` v1 with `X`; `Q_word` v1 with `X` and `W`), with its parameters as
 canonical bytes. -/
 structure Query where
@@ -342,13 +275,9 @@ structure AuditStatement where
   design : Design
   roots : List Msg
 
-/-! ## 2. Witness -/
-
 /-- **The sampling witness**: openings of committed values, at their gates' positions. -/
 structure Wit where
   vals : List (Opening Bool)
-
-/-! ## 3. Relation -/
 
 /-- The committed value `w` opens at gate `g`'s position: its first opening there that passes. -/
 def Wit.val (H : Msg → Msg) (Cm : CommitmentScheme Bool) (s : AuditStatement) (w : Wit) (g : ℕ) : Option Bool :=
@@ -360,8 +289,6 @@ value it reads or writes is unopened. -/
 def Faulty (H : Msg → Msg) (Cm : CommitmentScheme Bool) (s : AuditStatement) (P : Partition) (w : Wit) (v : ℕ) : Prop :=
   ¬ ∃ u, P.blocks[v]? = some u ∧ ∃ ι : ℕ → Bool, s.prog.Correct (s.prog.refIn u (w.val H Cm s) ι) u
 
-/-- **An incorrect proof block, on the boundary trace** (the glossary's form): the proof block's committed boundary outputs differ
-from its gates applied to its committed boundary inputs. -/
 def BoundaryFaulty (H : Msg → Msg) (Cm : CommitmentScheme Bool) (s : AuditStatement) (P : Partition) (w : Wit) (v : ℕ) : Prop :=
   ¬ ∃ u, P.blocks[v]? = some u ∧ s.prog.Correct (w.val H Cm s) u
 
@@ -390,8 +317,6 @@ def Rhon (H : Msg → Msg) (Cm : CommitmentScheme Bool) (parse : Msg → Option 
     (partition : AuditStatement → Option Partition) : Rel Wit :=
   fun x w => ∃ s P, parse x = some s ∧ partition s = some P ∧ faulty H Cm s P w = ∅
 
-/-! ## 4. Scope -/
-
 /-- A one-stage design is well formed over strata of sizes `ns`. -/
 def OneStage.WellFormed (ns : List ℕ) : OneStage → Prop
   | .all => True
@@ -413,8 +338,6 @@ The query: whatever its own width parameter, every unit, input units included, c
 `w_{c(u)}` (`sizeClasses`, up to `sizeClassMax`). A unit that commits more than the widest class is out of scope. -/
 def InScope (P : Partition) (s : AuditStatement) : Prop :=
   s.prog.Topological ∧ P.Partitions s.prog ∧ s.design.WellFormed P
-
-/-! ## 5. Named pieces -/
 
 /-- What the deployed sampled verifier brings, read by the claims: the verifier, its parser and scope check, its own
 evaluation of a statement's partition query on its program, descriptor and gates (`partition`, `P = Q(C)`), the
@@ -466,8 +389,6 @@ instance Deploy.instNonemptyTape {Coin Col T : Type} (D : Deploy Coin Col T) : N
 def Deploy.part {Coin Col T : Type} (D : Deploy Coin Col T) (s : AuditStatement) : Partition :=
   (D.partition s).getD ⟨[]⟩
 
-/-! ### Rerun programs -/
-
 /-- An oracle program as a rerun program: its `H` calls are the extractor's own. -/
 def ofOC {R α : Type} : OC α → RP R α
   | .ret a => .ret a
@@ -495,8 +416,6 @@ def waitAccC {R : Type} (k : ℕ) : List R → List (R × Seen) → RP R (List (
 def forkOn {k : ℕ} {Coin : Type} (I : Finset (Fin k)) (r₀ d : Fin k → Coin) : Fin k → Coin :=
   fun t => if t ∈ I then d t else r₀ t
 
-/-! ### The extractor's waits and opening check -/
-
 section Extract
 
 variable {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col]
@@ -514,10 +433,8 @@ def nPU (D : Deploy Coin Col T) (x : Msg) : ℕ :=
 over, so the union costs at most the slack `c = 2^{2^{−j}}` (`slack`). -/
 def slackExp : ℕ := 10
 
-/-- **The extractor's waits** stop at `k = 2^j·(2·n_PU + 1)` accepted runs (`slackExp`): both waits of the compiled
-sampled verifier at this deployment (`SamplingGeneric.ofDeploy`). A union over the minimal sets of the complement of
-`M_δ`, at most `2^n` for `n` units, spread over `k` accepted runs, costs the factor `2^{n/k}`; this `k` makes it at most
-`2^{2^{−j}}`, while `k` enters the extractor's cost, and so the hash side of `Bits`, only through `log₂ k`. -/
+/-- A union over the minimal sets of `M_δ`'s complement, at most `2^n` for `n` units, spread over `k` accepted runs costs
+`2^{n/k}`; this `k` makes it at most `2^{2^{−j}}`, and `k` enters `Bits` only through `log₂ k`. -/
 def Deploy.k (D : Deploy Coin Col T) (x : Msg) : ℕ := 2 ^ slackExp * (2 * nPU D x + 1)
 
 /-- The waits give up after `K = 2^192·k` reruns, so that `2k/K = 2^{−191}` is below `e^{−k/8}` at `k = 2^j`. -/
@@ -534,8 +451,6 @@ def assemble (s : AuditStatement) (found : List (List Msg × Opening Bool)) : Wi
   vals := found.filterMap fun p => if p.1 = s.roots then some p.2 else none
 
 end Extract
-
-/-! ### The expected-time finder, bits with `β > 0`, and the extractor's own hashing -/
 
 section Finder
 
@@ -628,8 +543,6 @@ def BextAtCostLe (H : Msg → Msg) (V : Verifier Coin) (E : Extractor Coin W V) 
 
 end Finder
 
-/-! ### Zero knowledge given the published leaf layer -/
-
 /-- **A simulator given the leakage**: its coins, and its program, which also receives what the protocol publishes
 beyond `x` (here the trace's leaf layer). -/
 structure SimLeak where
@@ -673,8 +586,6 @@ def ZkDeploy.prover {Coin Col T : Type} (D : ZkDeploy Coin Col T) (w : Wit) (x :
     Prover (D.Nonce x × D.Rest x) :=
   (D.P w).comap (D.tapeOf x)
 
-/-! ## 6. Claims -/
-
 section Claims
 
 variable {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col]
@@ -686,9 +597,8 @@ noncomputable def κF (D : Deploy Coin Col T) (x : Msg) : ℝ :=
 /-- The waits' slack factor, `c = 2^{2^{−j}} < 1 + 2^{−j}` at `j = slackExp`: each wait's (`Deploy.k`). -/
 noncomputable def slack : ℝ := 2 ^ ((2 : ℝ) ^ (-(slackExp : ℝ)))
 
-/-- The design's miss at `t` at `x`, clamped at `0`; `0` on a statement that doesn't parse. In scope the clamp changes
-nothing, since a well-formed design's `P_a` is a probability; it makes the count form the knowledge-soundness bound at a
-`δ ≥ 0` without reading the design (`SamplingGeneric.Compiled.missAt` at this deployment). -/
+/-- Clamped at `0`, and `0` on a statement that doesn't parse; in scope the clamp changes nothing, since a well-formed
+design's `P_a` is a probability. -/
 noncomputable def missAt (D : Deploy Coin Col T) (t : ℕ) (x : Msg) : ℝ :=
   match D.parse x with
   | some s => max 0 (s.design.miss (D.part s) t)

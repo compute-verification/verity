@@ -35,41 +35,8 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# The leak through the network attester over a monitoring period of sampled audits
-
-A monitoring period is `m` windows, each audited on its own live coins (the period's coins are `Fin m → Ω`, window
-`i`'s at `ω i`) at a statement registered as `sw i`. `PooledLeakAccepted` is the count `K_pooled`: what a covert
-sender in the server moves through the network attester over the whole monitoring period, with the incorrect proof blocks paid
-for once over the period rather than at `δ` in every window. At each window the witness computed from the
-registration, before the window's sample, has an incorrect set `W i` (it reads only the earlier windows' coins), and the
-statement takes two inputs per window:
-
-* the conditional escape (`hesc`): given the earlier windows' coins, the window's audit accepts with probability at most
-  `(1 - q)^|W_i| + e_i`, `q` the deployed design's per-window detection probability (a uniform sample of `kd_i` of the
-  window's `n_i` proof blocks meets it at `q = kd_i / n_i`; the statement fixes no sample's form);
-* the leak relation at that same witness (`hleak`): the audit accepts while the window's observations in the network
-  attester's record are not accepted with the incorrect set `W_i` (`LeakAt`) with probability at most `e'_i`.
-
-From them, every audit accepts while the incorrect sets hold `Fmax ≥ ln(1/δ)/q` units or more, or some window's leak
-relation fails, with probability at most `δ + Σ_i e_i + Σ_i e'_i` (the escapes multiply, `PooledIncorrectBlocksLe`'s
-argument with the escape as the input); and the secrets whose every window meets its relation, with the incorrect sets
-under `Fmax` (`PooledGood`), number at most
-`#Ss · ∏_c (cap_c + 1) · (N + 1)^Fmax · 2^(b · Fmax) · ∏_i 2^#(freeInputs_i \ reg_i) · Dj^k_i`, `N = Σ_i n_i` the
-period's proof blocks and `b` each proof block's committed bits: `(ln(1/δ)/q + 1) · (b + log2 (N + 1))` bits for the
-incorrect proof blocks, plus the advice and timing terms and the schedule terms. A proof block's outputs are at most 16
-bits, so `b = 16`.
-
-The network attester is one device on the server's uplink, as in `MonitoringPeriodLeakAccepted`
-(`Definitions.Certifier.Tap`): one run of its code gives the cells the client receives (it functions as an
-active network attester) and its record of them, the observations the audits read, so on every schedule its record
-format holds the client's cells read back from the record. Its one named assumption is `trusted-device`.
-
-The statement is conditional: it holds for any audits that satisfy the two inputs. Over a monitoring period of live
-audits they are `Flock.Guarantees.SampledKSLive` at each window's history (at `K₀ = |W_i|`) and the live
-`SampledLeakAccepted` (P2), neither discharged yet, so nothing here bounds the deployed system over a monitoring period
-until that discharge lands.
--/
+/-! The leak through the network attester over a monitoring period, pooled: conditional on two inputs per window that
+nothing discharges, so it bounds no deployed system. -/
 
 @[expose] public section
 

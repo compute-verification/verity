@@ -2,43 +2,8 @@ module
 
 public import Definitions.Certifier.PooledReg
 
-/-!
-# The leak through the network attester over a monitoring period, at the trace with the registered openings
-
-`PooledLeakAccepted` bounds a monitoring period's good event from two inputs at each execution phase, which it takes
-as hypotheses: the phase's audit accepts with probability at most `(1 - q)^{|W_i|} + e_i`, and it accepts outside its
-leak relation at `W_i` with probability at most `e'_i`. `PooledLeakRegistered` is that bound with both inputs proved,
-at the incorrect sets of one trace: at each execution phase, the trace read at the statement with the registered
-openings (`regValR`), whose incorrect set (`WregR`) the phase's statement, its prover's strategy and its registered
-openings fix before the phase's sample.
-
-* The first input holds there with `e_i` at least the committed form's error at the trace read at the statement
-  (`Compiled.εregX`) plus the registered openings' binding term (`BopsX`'s probability): an accepted run that samples
-  a proof block of the set has a session's extraction fail, or its extractions disagree with themselves, with the
-  trace read at the statement or with a registered opening.
-* The second holds there with no error: where the network attester registers an accepted phase's record among the
-  registered openings (`CertifierRegisters`), the record meets the leak relation at that set, with no probability.
-
-So the probability that every phase is accepted, at a statement registered as the period's (`PhaseRegistered`) and
-with a complete record (`RecordComplete`), outside the period's good event (`PooledGood` at `WregR`) is at most
-`(1 - q)^Fmax + Σ_i e_i`. That an accepted phase is so registered and its record complete is in the event, not among
-the premises: a period in which an accepted phase is not registered as the period's, or has an incomplete record, is
-outside the bound.
-
-What it takes. The sampled proof system's premises (`Arg.KS`, and `CommitmentScheme.Binds` and `Compiled.Sessions`
-at every statement's verifier). The verifier is a function of the statement, `D y` the compiled verifier that judges
-`y`, and one verifier that judges every statement is the constant function;
-the phases' verifiers have at most `kV` rounds at their statements (`PhaseRounds`), and a phase's verifier reads the
-first of its `kV` coins. A rate `q` that every execution phase's sample met (`RateAt`), a hypothesis here: nothing in
-this statement derives it from what the verifier accepts. That each phase reads only the phases before it
-(`PhasesAdaptive`), a property of the period the statement is read at, which it proves of no check. That the registered
-openings pass under each statement's roots and open every registered input (`RegOpens`), that the layouts fit the
-registered statements (`BoundaryGates.Fits`), and that at each accepted phase the network attester registers its
-record among the registered openings (`CertifierRegisters`).
-
-What it does not say. It counts no secrets: `PooledLeakAccepted`'s second conclusion does, at any incorrect sets. It
-fixes no sample's form and states no error's size.
--/
+/-! The pooled leak at the trace with the registered openings: the rate `q` and `PhasesAdaptive` are hypotheses nothing
+here derives, and it counts no secrets. -/
 
 @[expose] public section
 

@@ -33,64 +33,13 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# PoUW's work over a monitoring period of `n` windows (trusted)
-
-The vocabulary of `Definitions.Compose.Guarantees.ComposeMonitoringPeriod`. `CircuitWork`'s one window reaches `ε < 1%` only
-at about 10,552 equal live rounds, and the served H1 window has 18. A period is up to `n` windows of one registered
-circuit, run in order, each with its own live coins and its own sample, the cheater's play in each window any function
-of the earlier windows' coins. Each window is one round of the period's game, so `ServiceBudget`'s per-window budget
-composes over the period (`Guarantees.ComposeMonitoringPeriod.MonitoringPeriodBudget`) and the tail is taken once for the period: the
-logical term is divided by the number of windows credited.
-
-Each window says which of its tiles are live. On a masked tile Definition a dead tile's receipt is the canonical empty
-receipt at every coin, so no guess bound holds of it. A dead tile's words count for nothing: its share weight is `0`
-(`liveCone`), the period's proofs read it as skipped whole (`monitoringPeriodMode`), and the conclusion counts live words only
-(`creditedLive`, `LiveWorkAt`). Weights stay over the registered circuit's words (`wordsOf`), so the static premises on
-`ρ`, the stage share and the lucks are `CircuitWork`'s, and a period of unequal loads is bounded as a share of its
-total words.
-
-A period is credited up to its first window with a refused proof: `n` is the most windows it may hold, and the
-windows from the first failure on count as skipped whole, as dead tiles do. That window is a stopping time of the
-period's coins, which the cheater may steer, and the tail at a stopping time is `budget_tail`'s maximal form
-(`Guarantees.ComposeMonitoringPeriod.MonitoringPeriodTailMax`, over the game's prefixes: `RoundGame.acceptsUpTo`,
-`RoundGame.deficiencyUpTo`).
-
-* `consGame`: a window's one round, then the rest of the period.
-* `ExecutionPhasePlay`, `ExecutionPhasePlay.EveryExecutionPhase`, `ExecutionPhasePlay.executionPhaseAt`, `ExecutionPhasePlay.liveAt`: the cheater's play over `n`
-  windows, each window's live tiles and split stages (`SplitStages`) chosen after every earlier window's coins (its
-  rounds' coins, its sample and its proofs' coins); a claim of every window, whatever the past; the window played, and its
-  live tiles, at window `w` along the period's coins.
-* `liveWords`, `liveCone`, `DeadConeDead`: a tile's words when live; its late cone's live words over the circuit's;
-  a dead tile's cone holds no live words.
-* `monitoringPeriodGame`: the period's ideal game, window `w`'s round its `serviceGame` at weights of its live tiles.
-* `RoundGame.acceptsUpTo`, `RoundGame.deficiencyUpTo`: a game's first `j` rounds pass; their shares' sum.
-* `Outcomes`, `Outcomes.Credited`, `Outcomes.prefixLen`: the outcomes of the period's proofs, their run-dependent
-  half; window `w` and every earlier one had every sampled tile's proof accepted; the number of such windows, the
-  accepted prefix.
-* `monitoringPeriodMode`: the run's modes as the period's proofs read them: a live tile `(w, t)` of a credited window has window
-  `w`'s mode along its rounds' coins (`tileMode` per window), and every other tile is skipped whole.
-* `PerLiveTile`: `PerTile` on the window's live tiles.
-* `Declared.monitoringPeriodLayer`: the period's proofs as one `ResourceAccounting.TS.SampledLayer` over `n` rounds, each window
-  `Declared.layer`'s: positions are `(window, gate)`, so each window's positions are its own, cut at its own coins (a
-  registered input at its window's first coin, which binds no earlier than the service does) and written by its own
-  proof blocks; the sample is each window's; only the run-dependent half (`Outcomes`) is abstract.
-* `PrefixOf`: `SampledLayer.Of`'s game clause on every prefix: right sampled tiles in the first `j` windows pass the
-  game's first `j` rounds.
-* `creditedLive`, `LiveWorkAt`, `rOfPrefix`: the credited windows' live words; `WorkAt` on live words, with the
-  shares over the declared words; the period's logical bound over its accepted prefix of `j` windows,
-  `Λ·ln(1/δ_s) + j·min(a, b)·D₀`.
-* `epsPrefix`, `creditPrefix`: that bound as a share `ε(j)` of the prefix's live words, and the period's credit in
-  live words, `(1 − ε(j))₊` of them.
--/
+/-! PoUW's work over a monitoring period of `n` windows, credited up to its first window with a refused proof. -/
 
 @[expose] public section
 
 namespace ResourceAccounting.Compose
 
 open ResourceAccounting.TS Pouw.RelativeSecurity
-
-/-! ## The period's play and its ideal game -/
 
 /-- **A window's round, then the rest of the period**: the one round of `g`, its share and check, followed by `next`
 on its coins in place of `g`'s end. -/
@@ -108,7 +57,6 @@ def acceptsUpTo : {n : ℕ} → RoundGame Ω n → ℕ → Paths Ω n → Prop
   | _, .round _ _ _, 0, _ => True
   | _, .round _ pass next, j + 1, x => pass x.1 ∧ acceptsUpTo (next x.1) j x.2
 
-/-- **The shares of the game's first `j` rounds** along `x`: `RoundGame.deficiency` cut after round `j`. -/
 def deficiencyUpTo : {n : ℕ} → RoundGame Ω n → ℕ → Paths Ω n → ℝ
   | _, .done, _, _ => 0
   | _, .round _ _ _, 0, _ => 0
@@ -223,8 +171,6 @@ def PerLiveTile {ι K C : Type} {Np M : ℕ} (Sc : Scheme K) (Cd : Declared ι) 
     tileKind Cd Np t = some k → Sc.credited k = true →
       P k (tileGame mode right same .folded t) (tileGame mode right same .whole t)
 
-/-! ## The period's proofs, their static half from the IR -/
-
 /-- **The period's proofs as the IR defines them**: `Declared.layer` in every window, its positions tagged by their
 window. Window `w`'s tile `t` reads `(w, ℓ)` for each of its slots `ℓ`, its noise reads window `w`'s coin of its round,
 position `(w, ℓ)` is cut at window `w`'s coin `Declared.layer` cuts `ℓ` at and written by window `w`'s proof block of
@@ -256,8 +202,6 @@ def PrefixOf {C B : Type} [Fintype C] [Fintype B] {n m s : ℕ} {J Q Pos V : Typ
     (pf : SampledLayer C B n m s J Q Pos V) (g : RoundGame (Paths C m × B) n) : Prop :=
   ∀ x j, (∀ w : Fin n, w.val < j → ∀ i, pf.right x w (pf.drawnAt x w i) (pf.view x w (pf.drawnAt x w i))) →
     RoundGame.acceptsUpTo g j x
-
-/-! ## The period's conclusion -/
 
 open Classical in
 /-- **The credited windows' live words**: the words of the live tiles of every window of the accepted prefix

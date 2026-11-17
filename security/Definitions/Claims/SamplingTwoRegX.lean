@@ -3,23 +3,7 @@ module
 public import Definitions.Claims.SamplingGenericX
 public import Definitions.Claims.SamplingTwoReg
 
-/-!
-# Claims: the two-stage audit's committed form, at a boundary trace read at the statement
-
-`CompiledTwo.KSRegTwo`, `CompiledTwo.HeadlineTwo` and `CompiledTwo.MissTwo` read the boundary at `Compiled.regVal`, the
-committed trace at the prover's tape, so whatever the tape holds reaches the replay blocks wrong at the boundary
-(`incorrectAtBoundaryAt`). This file states the three at the boundary trace read at the statement (`Compiled.regValX`),
-which reads the statement and the prover's strategy and no tape, beside the three, which it leaves as they stand:
-
-1. **The incorrect set** (`FregTwoX`): `FregTwo` at `Compiled.regValX` and each replay block's committed interior
-   (`iregVal`). The boundary is read at the statement; the interior stays at the tape and the first stage's coins,
-   which fix it before the second stage's.
-2. **The error** (`εregTwoX`): `Compiled.εregX` and the interior's binding across runs, `N·√Pr[B_conf,2]`.
-3. **The claims**: `CompiledTwo.KSRegTwoX`, `CompiledTwo.HeadlineTwoX` and `CompiledTwo.MissTwoX`, whose replay blocks
-   wrong at the boundary are one set at every tape; and the compiler's statements.
-
-Statements only: definitions, no proofs.
--/
+/-! Claims: the two-stage audit's committed form at a boundary trace read at the statement, which reads no tape. -/
 
 @[expose] public section
 
@@ -31,8 +15,6 @@ open Claims.Sampling (AuditStatement Partition incorrectInAt footprintAt incorre
 namespace CompiledTwo
 
 variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg Coin}
-
-/-! ## 1. The incorrect set -/
 
 open Classical in
 /-- **The incorrect set at the boundary trace read at the statement**, at the prover's tape `ω` and the run's coins
@@ -51,8 +33,6 @@ noncomputable def FregTwoX (H : Msg → Msg) (L : CompiledTwo Coin A) {Ω : Type
         incorrectInAt s Pt d.part (L.regValX H P x) p.1 p.2 (L.iregVal H P x ω r p.1)
     | _, _ => ∅
 
-/-! ## 2. The error -/
-
 /-- **The committed form's error at two stages, at the boundary trace read at the statement**: `Compiled.εregX`'s four
 terms and the committed interior's binding across runs,
 `ε_reg,2,X = κ_s + √(k(x)·γ_s·Pr[B]) + N·√Pr[B_conf,X] + Pr[B_conf,X] + N·√Pr[B_conf,2]`, `N` the program's gates. The
@@ -61,8 +41,6 @@ interior is read as in `εregTwo`, at the finder whose two runs share a tape and
 noncomputable def εregTwoX (H : Msg → Msg) (L : CompiledTwo Coin A) (x : Msg) {Ω : Type} [Fintype Ω] [Nonempty Ω]
     (P : Prover Ω) : ℝ :=
   L.εregX H x P + L.nG x * Real.sqrt ((BconfTwo H L Ω P x).Pr H)
-
-/-! ## 3. The claims -/
 
 /-- **KS, the committed form at two stages, at the boundary trace read at the statement**, on the statements in scope,
 at every prover: the run accepts with a sampled proof block in that trace's incorrect set (`FregTwoX`) with probability

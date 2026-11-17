@@ -33,18 +33,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# Claims: zero knowledge with a public outcome
-
-The claims core's one zero-knowledge notion for a protocol whose outcome is public (each verdict, and where a session
-stopped): per outcome, the honest transcript's probability of the outcome and an event is at most a simulator's,
-given the outcome, of the event, plus an error of the statement, the witness, the verifier and the outcome.
-
-* `SimOut`: a simulator given the outcome, fixed before the witness and the verifier.
-* `ZKOut`: zero knowledge per outcome (`ZKmalRx`'s one-sided form at each outcome).
-* `ZKOutLeak`: the leak form over finitely many outcomes, its corollary: the number of outcomes times the simulator
-  that samples the outcome uniformly, plus the sum of the outcomes' errors.
--/
+/-! Claims: zero knowledge with a public outcome, the claims core's one notion for it. -/
 
 @[expose] public section
 

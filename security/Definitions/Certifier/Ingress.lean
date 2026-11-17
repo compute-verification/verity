@@ -2,29 +2,7 @@ module
 
 public import Definitions.Certifier.Run
 
-/-!
-# Ingress: the interaction read inward, content, and acceptance
-
-Definitions only. `docs/network-transparency/timing-channel.md` §1.1, §1.3, §2.5 ("Ingress content") and §3.2.
-
-**The mirror image.** The egress statements put the secret inside X and count what the observations carry out of it.
-Ingress is the same interaction with the boundary read inward, so its statement reuses `Interaction`, `Certifier` and
-`Obs` with the two parties exchanged:
-* the secret is the message `m` of the outside (the operator and every colluding endpoint), which it wants to deliver
-  into X. Its party is `snd m`: it chooses when ingress frames reach the certifiers, and their content, order and faults;
-* `op` is X's devices, which don't know `m`;
-* the certifiers' record `obs` is what the ingress links release into X: each of the `L` ingress links' row (`rows`), the
-  step's jitter class, and every boundary link's status;
-* `wire` is everything that enters X: what the certifiers emit inward, which W2 (`Regenerates`, read inward) makes a
-  function of the record.
-
-Both parties see every record. X's moves are a fixed function of the records, so the outside sender can recompute them,
-and X's egress with them: it reacts to feedback, as the operator does in the egress statements.
-
-**Content and timing.** The ingress frames' content and order are the Program's input, which the Program reads and the
-inference-only policy charges as reads. What is left is when they arrive: the occupancy of the ingress grid.
-`linkFrames` erases the timing from a record and keeps each link's frames in the order they were released.
--/
+/-! Ingress: the interaction read inward, the secret the outside's message, and acceptance. -/
 
 @[expose] public section
 

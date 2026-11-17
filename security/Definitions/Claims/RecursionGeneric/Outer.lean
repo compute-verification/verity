@@ -4,29 +4,7 @@ public import Definitions.Claims.RecursionGeneric.Comp
 public import Definitions.Claims.RecursionGeneric.Session
 public import Definitions.Claims.SamplingGeneric
 
-/-!
-# Π_out, abstract, and the compiler over it
-
-Π_out is a proof system for proof blocks as the sampled audit reads it (`Claims.SamplingGeneric.Arg`): a public-coin
-verifier over byte strings, its relation, its errors per statement, and its extractor, `E^rep` at its counted parts
-(`Arg.ext`: replay the judged run, then waits over fresh coins, each rerun's view opened by `opens` and a wait's
-openings assembled by `assemble`, a counted program, and checked). Its coins (`Arg.EC`) are a type the statement's
-public shape (`shape`) fixes. The compiled verifier stages each of Π_out's sessions' statements during its run, so only
-its shape is fixed by the compiled statement: the extractor's coins are the shape's, and the compiled verifier bounds
-each session's errors by numbers the compiled statement fixes (`κb`, `γb`).
-
-`Compiled Coin A` is a compiled verifier that runs, after Π_in's rounds and the staging rounds (`pre`), `nS` sessions of
-`A`'s verifier at the statements its staging rounds fix (`stmts`), session `s` at the public shape `sh x s` with its
-errors within `κb x s`, `γb x s`, in order. A compiler (`Compiler`) makes one from the verifier its sessions prove;
-`compile C Π S` is it at `Open(Π, S)`, Π_in's verifier over the ZK server's commitments.
-
-`Compiled.EO` is the extraction of Π_out's witnesses: replay the judged run and, at each session in order, `A`'s
-extractor at the session's staged statement, its reruns forks of the judged run at the session's first round, each seen
-as the session's view. `Compiled.toComp` is the composition's input (`Comp`), with `κ_O = Σ_s κb_s` and
-`γ_O = (Σ_s √(γb_s·k(x)))²`. `Compiled.Sessions` is what the compiler must give for it.
-
-Statements only: definitions, no proofs.
--/
+/-! Π_out, abstract, and the compiler over it. -/
 
 @[expose] public section
 
@@ -113,8 +91,6 @@ noncomputable def toComp (L : Compiled Coin A) : Comp Coin where
   own := L.own
   κO x := ∑ s : Fin (L.nS x), L.κb x s
   γO x := (∑ s : Fin (L.nS x), Real.sqrt (L.γb x s * L.V.k x)) ^ 2
-
-/-! ## The compiler's contract for `E_O` (code facts) -/
 
 /-- The staged statements read only the rounds before the sessions. -/
 def Stages (L : Compiled Coin A) : Prop := ∀ x ms, L.stmts x ms = L.stmts x (ms.take (L.pre x))

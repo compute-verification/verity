@@ -4,77 +4,14 @@ public import Definitions.Claims
 public import Definitions.Registration.Guarantees.Sheet
 public import Definitions.Compose.Assumptions.Compose
 
-/-!
-# PoUW's credit on an arbitrary registered circuit (trusted)
-
-THEOREM's composed statement. Each `def G : Prop` is proved as `ResourceAccounting.SecurityProofs.Compose.G` in
-`Proofs.Compose.Compose`, whose module doc gives each proof's steps. The circuit is any `Declared` one, a `Gates.IntDag`
-with its call sites, its rounds, their coin modes, the service's commit coins and its proof blocks, its words, kinds,
-cuts and late cones read off the IR.
-Nothing about its form is a hypothesis beyond `Declared.Wf` (call sites, rounds and units in range; one unit's gates in
-one round; each coin input read in its own round; one unit's words of one kind).
-
-The live statements (`CircuitWork`, `CircuitCredit`) need every round that holds a credited tile live and the service
-committing by the IR's cuts, a computed value only its own unit reads (a receipt) by the sample (`Scope`'s
-`Declared.Live` and `LayerCommitted`), and describe the designed protocol.
-PoUW's code today has one salt a window and derives every noise in the scheme, so every window it runs is seeded, and
-its credit is the seeded statements' (`CircuitWorkSeeded`, `CircuitCreditSeeded`), over the same circuit, at the
-grinding premium per seed group. The certificate records which (`CreditCertificate.coins`). Nothing yet builds a
-`Declared` from a compiled Program, and `Properties.Compose.UnitsOfLayout`, which would tie its units, its commit
-coins and its sample to the service's, is unproved: until both exist, these speak of the registered circuit, not of a
-served workload.
-
-The credit splits in two, and `CircuitCredit` is their composition:
-
-* (L) `CircuitWork`, the logical layer: an accepted window's run has all but a share of its committed words fixed
-  right, at costs `a, b` below `Λ·ln(1/δ_s) + min(a, b)·D₀` (`WorkAt`, `rOf`). It rests on four claims: (H-μ)
-  (`OperandHMu`) and B′ (`ReceiptLuckAt`) per tile folded, the whole-unit guess bound (`GuessLuckAt`) per tile whole,
-  at B′'s `½` (`2^-64` isn't granted), and the fixed-words claim, `UnitFixed` with
-  its fold clause at the run's modes (`tileMode`), with the templates' proved luck (`Scheme.LuckProved`), the service's commit order (`LayerCommitted`, in `Scope`), the
-  service's sample and sampled (I8)'s pieces on the window's proofs (`SampledLayer.Of`, binding at
-  `δ_bind`, joint proof soundness, `Pins`). The proofs' layer is the IR's (`Declared.layer`): its slots, writers, cuts, coins and sample are
-  defined from the circuit, so under `LayerCommitted` it is bound at the IR's cuts (a value only its own unit reads,
-  committed later, at its commit coin, which adds no late edge out of its unit), reads each round's coin and has
-  every late edge the IR has (`StageCuts`, `StageCoins`, `StageSlots`, `StageComplete`, proved of it), and only its
-  run-dependent half (`ProofRun`) is a parameter. No machine model. Its crypto half is `SampledRightOff`, one
-  event of probability `δ_bind + δ_ks` off which every sampled tile is right.
-* (P) `CreditOfWork`, the physical layer's step: on the tensor–scalar model of a data sheet, a run with that work takes
-  at least `(1 − ε)·T_cred`. Its premises are exactly the machine model's: the model the circuit's on the sheet
-  (`Fits`, `ModelScope`), the data sheet's A1–A7, FOLD-OPT per word folded at the certificate it prices at
-  (`FoldOptFoldedAt`) and FILL-OPT.
-
-The seeded pair is (L) and its composition with (P) under seeded coins, stated as Fiat–Shamir in the random-oracle model
-(`fiat-shamir`): the window's seeds are uniform answers to the prover's queries naming its operands' roots, and
-`SeedExtractedAt` (`random-oracle`) is where that model is named, at `ε_id` once a window. Its run is a `JointRun` on
-every round's answers at once, with no stage order. Its binding is checked at the sample (`Declared.atSample`: `Of`,
-`MovedIn`, `JointSound`), after every seed, since a seeded round's coin is a hash the cheater can evaluate before it
-commits; its cones are counted at the IR's cuts (`Declared.atIR`: `UnitFixed`, `ServiceCovers`), which read no committed
-value, and its scope needs each seeded round's seed to name what the round reads (`SeedNamed`). GRIND's premise
-(`SeedLuckAt`) at the template's `κ = 4` for folded tiles and the guess bound's `κ₀` for whole ones stands in for the
-live luck claims, and the bound is `rOfSeeded`, the live sample's charge on the unlucky share plus each seed group's
-premiums `π* = ln(T_q/δ_g)/θ` from the IR (`premiumOf`), folded and whole at their own rates (`seedTheta`,
-`wholeTheta`). No ruling grants a whole-tile luck per seed query, so the seeded pair's numbers are each labelled by the
-premise its whole rate reads: B′'s `½` a query (the ruled live value, which leaves its small-batch decode line above 50%),
-`GuessLuckAt` at `2^-64` or `WholeEntropyAt` at `K/8` nats a tile, neither granted.
-
-The other guarantees are (L)'s lemmas:
-
-
-`CircuitCreditFS`, a generic Fiat–Shamir form over an abstract service, and the abstract Fiat–Shamir floor it
-was to meet (proofs' gap (7), `FiatShamirFloor`) are retired: the seeded pair takes GRIND's lemmas directly on the
-circuit's layer.
-
-`Pouw.Guarantees.EndToEnd` is not subsumed and stays: it is the TT cost model with Fiat–Shamir in the random-oracle
-model, concluding `(1 − ε_s)^t + ε(q, N)`, where `CircuitCredit` is the TS model under live coins.
--/
+/-! PoUW's credit on an arbitrary registered circuit: nothing builds a `Declared` from a compiled Program and
+`Properties.Compose.UnitsOfLayout` is unproved, so these speak of the registered circuit, not of a served workload. -/
 
 @[expose] public section
 
 namespace ResourceAccounting.Guarantees.Compose
 
 open ResourceAccounting.TS ResourceAccounting.Compose ResourceAccounting.Assumptions.TS ResourceAccounting.Assumptions.Compose Pouw.RelativeSecurity
-
-/-! ## The logical layer -/
 
 /-- **(L) The circuit's work, live coins** (the logical layer). For every registered circuit `Cd` and scheme `Sc`, run as
 one window: the circuit's rounds in order, each round's noise coin live and released after its operands are committed
@@ -228,8 +165,6 @@ def CircuitWorkSeeded : Prop :=
       ¬ WorkAt (wordsOf Sc Cd : ℝ) a b (rOfSeeded Sc Cd Np Kd Tq a b κ0 ρ δs δg) (Pl.run x).fixed (folded x)) ≤
       δs + (δbind + δks) + εid T J + 2 * (Cd.rounds : ℝ) * (δg + δb)
 
-/-! ## The physical layer's step -/
-
 /-- **(P) Credit of the work, on a data sheet** (the physical layer: the tensor–scalar model and its vendor axioms,
 attribution's unit grade). For a registered circuit `Cd` and scheme `Sc` whose model `Z` is the circuit's on sheet `Sh`
 (`Fits`, `ModelScope`), every run `A` that meets the data sheet's A1–A7, FOLD-OPT per word folded at its `folded` words
@@ -247,8 +182,6 @@ def CreditOfWork : Prop :=
     SheetWords Z A → SheetSemantics Z A → FoldOptFoldedAt Z A folded lam → FillOpt Z A →
     WorkAt (wordsOf Sc Cd : ℝ) (aOf Sc Cd Z lam) (bOf Sc Cd Z lam) r A.fixed folded →
     (1 - epsOf Sc Cd Z lam r) * creditOf Sc Cd Z ≤ A.run.time
-
-/-! ## The composed credit -/
 
 /-- **The credit theorem, live coins**: `CreditOfWork ∘ CircuitWork` at the circuit's costs `a = aOf`, `b = bOf` (both
 `≥ 0` under `ModelScope`). Under `CircuitWork`'s premises at those costs and `CreditOfWork`'s on every run, the window's

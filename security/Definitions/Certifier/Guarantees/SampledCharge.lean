@@ -34,37 +34,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# The sampled audit's charge: the leak bound when step proof blocks are sampled
-
-Theorem 3's count on `constantRate` counts runs that the Program accepts exactly. A sampled
-audit gives that only at `δ ≥ miss(1)`, where no unit may be faulty. At a smaller `δ` it gives `Accepted` by the
-circuit's Program (`circuitProgram`) with advice also held at the incorrect proof blocks' committed gates
-(`SampledAuditAccepted`, `Guarantees/SampledAudit`). `EncardAccSeqsSampledLe` counts those runs: the charge adds the
-incorrect proof blocks' committed bits and `log2` of the number of possible incorrect sets.
-
-**Composed with `SampledAuditAccepted`.** On the statements in its scope, which include that the layout fits the program
-(`BoundaryGates.Fits`), an accepted audit meets `RAcc δ` except with probability `δ + ε_ks + ε_bind` over the selection.
-On `RAcc δ`, the incorrect set is one of `incorrectSets d P δ`. Every observation sequence the trace's transfer gates carry,
-with every status complete, is then `Accepted` with advice held only at that set's committed gates. So, with its inputs
-other than the ingress among `As`, the run's observations are among the sequences this guarantee counts. The leak is
-then at most `c + log2 #incorrectSets + β + n·log2 D` bits, except with that probability. That the transfer gates carry the
-run's observations is the certifier's trust (`trusted-device`), and the statuses are its published record. The theorem is
-`NetTiming.sampledLeak` (`Proofs.Certifier.SampledLeak`), with `SampledAuditAccepted` a hypothesis. `RAcc` pins
-the inputs besides the ingress to the trace's committed values, so it takes that inputs among `As` suffice for the
-trace's (`AdviceIn`); `sampledLeak_reg` proves that for every circuit at the inputs pinned to the trace at the
-registered inputs `reg` and `false` off the free inputs (`AsReg`), with `c` the number of free inputs not in `reg`.
-`SampledLeakAccepted` is that bound as a guarantee, with `SampledAuditAccepted` discharged by its proof.
-`SampledLeakRegistered` is the same bound with the registered inputs at the registration's values (`regVal`), which it
-opens under the statement's roots (`RegOpens`), and binding (`CommitmentScheme.Binds`) in place of the trace's: the values the
-count leaves out are then the registration's, and an extracted trace that disagrees with them is a collision `B_reg`
-finds (`NetTiming.sampledLeak_registered`).
-
-**What `As` and `c` are.** `As` is what the circuit's inputs other than the ingress may be. Its count is a premise of the
-run, not an assumption. Under the decided composition the registered inputs are fixed by the registration, and the
-advice is advice v1. Its charge, the coded length counted by the in-circuit encoder, is at most the declared public `c`,
-and at most `2^c` advice values are charged `c` or less (`hAs`), as for any prefix-free code (Kraft).
--/
+/-! The sampled audit's charge: the leak bound when step proof blocks are sampled. -/
 
 @[expose] public section
 

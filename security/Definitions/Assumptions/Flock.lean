@@ -3,25 +3,7 @@ module
 public import Definitions.Core.Game.Expect
 public import Mathlib.Analysis.SpecialFunctions.Pow.Real
 
-/-!
-# SHA-512's collision resistance and the verifier's randomness
-
-Flock's named assumptions, in a module of their own under `Definitions.Assumptions` that reads only Core's games and
-Mathlib, so the public export, which copies Flock, copies them with it.
-
-What the sampled audits' soundness takes of the world. Each is a predicate on one explicit object, a finder or a byte
-source, never a statement about all of them, and each names the trust it rests on:
-
-* **SHA-512 is collision resistant**, in two forms. `SHA512CRStrict` (`cr/sha-512`) bounds a finder by its worst-case
-  number of evaluations, `SHA512CRExpected` (`ecr/sha-512`) by its expected number, and neither gives the other. The
-  audits take them only at the finders they build from the prover they bound (`FlockSoundness.Assumptions.TableCRZAt`,
-  `FlockSoundness.Assumptions.LinkCRZCAt`), each of which outputs a SHA-512 collision whenever the knowledge or the link
-  step fails, so they ask nothing of the verifier.
-* **The server running the verifier is honest and its randomness unpredictable.** `UniformRandomBytes`
-  (`uniform/io-getrandombytes`) says the bytes the challenger reads from the operating system for the unit sample and the
-  epoch salt are independent uniform bytes, and `UniformRandomBytesTest` says it of one test, up to the CSPRNG's
-  distinguishing advantage `η`.
--/
+/-! Flock's named assumptions: SHA-512's collision resistance and the verifier's randomness. -/
 
 @[expose] public section
 

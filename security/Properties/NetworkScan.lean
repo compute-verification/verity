@@ -35,34 +35,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# The rows form's scan fits its layout: what `NetworkCheck.Period.scanOf`'s acceptance gives the sampled audit's scope
-
-The sampled audit's scope at an execution phase's statement (`NetTiming.ScopeAcc`) has two halves: the sampling scope
-(`Claims.SamplingGeneric.Compiled.Scope`, the compiled sampled verifier's own), and the statement's layout fitting its
-program over its horizon (`NetTiming.BoundaryGates.Fits`). The network check reads the second off the scan's Program
-(`scanOf`, the generator form); the first it doesn't read, so `ScanScopeAcc` speaks of the statements in it.
-
-**The layout** (`scanLayout`) is the generator form's, at the schedule's `S = lanes · slots` slots of `B` bytes and
-`T` buckets, over one egress link: at step `t`, slot `σ`'s presence gate is bit 0 of egress member `t`'s verdict (its
-return's leaf 0), and its frame's bits are the return's leaves `16 + 8σB … 16 + 8(σ + 1)B − 1` (the row after the u16,
-row bit `8k + i` bit `i` of byte `k`); step `t`'s ingress is bucket `t`'s `row` parameter, in bit order: member `t` of
-the ingress template, the second of the root's nodes that call a composite (`NetworkCheck.Period.templateNodes`, as
-`scanOf` reads them), after the start unit's. Gates are `Flock.Program.resolve`'s (§6), the
-canonical layout's. A statement's layout is its descriptor's (`layOf`), at horizon `T`.
-
-**The flattening** (`Flattens`, in `Properties.NetworkScan.Flattens`): the sampling statement's gates
-(`Claims.Sampling.AuditStatement.prog`, "the descriptor flattened") are its descriptor's canonical layout, gate for gate.
-The compiled sampled verifier's premise is a named `Prop` of `Properties.NetworkScan.Assumptions`: `StmtFlattens` says
-it of every statement the verifier parses.
-
-* `ScanFits`: an accepted scan's layout fits every flattening of its Program over `T` steps.
-* `ScanScopeAcc`: given an accepted scan, at every compiled sampled verifier whose statements are their descriptors
-  flattened, a statement in its sampling scope, whose descriptor is the scan's canonical bytes, is in the sampled
-  audit's scope at `layOf` and `T` (`ScopeAcc`).
-
-`Proofs.Properties.NetworkScan` proves both (`scanFits`, and `scanScopeAcc` from it).
--/
+/-! The rows form's scan fits its layout: what `NetworkCheck.Period.scanOf`'s acceptance gives the sampled audit's scope. -/
 
 @[expose] public section
 

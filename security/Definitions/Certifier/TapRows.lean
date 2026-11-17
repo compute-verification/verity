@@ -33,28 +33,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# The network attester's rows: its registration at the transfer gates, and the leak relation at them
-
-Definitions only. The audit's trace holds each step's egress rows at the layout's egress gates and its ingress at the
-ingress gates (`BoundaryGates`). The network attester on the server's uplink, which functions as an active warden,
-registers what it records there: openings `ops` under the statement's roots, one at each transfer gate before the
-horizon, whose values (`certifierVal ops`) are its records' egress rows and the operator's moves on them (`CertifierRegisters`). Its
-registered root is its signed root for the window, a function of what the server did, so these rows vary with the
-server's secret, unlike the values the prover registers at `reg` (`AsReg`).
-
-An extracted trace that opens a transfer gate to a value other than the network attester's makes, with the network
-attester's opening there, two passing openings of one position to different values, so under `CommitmentScheme.Binds` the
-calls that check them collide; `Btap` looks for that collision. Every transfer gate outside the incorrect proof blocks is opened,
-so where the trace agrees with the network attester it carries the network attester's records there; an incorrect proof
-block's committed gates are the advice the count already charges (`2^β` over `incorrectSets`). The leak relation at the
-network attester's rows (`RLeakCertifier`) is `RLeak` with the observations it counts picked out by the network attester's
-registration rather than by the trace's transfer gates.
-
-A constant gate is committed by nobody, and every trace holds the program's constant there, so at an egress gate the
-program holds constant the network attester's record must be that constant (an ingress gate is an input,
-`BoundaryGates.Fits`).
--/
+/-! The network attester's rows: its registration at the transfer gates, and the leak relation at them. -/
 
 @[expose] public section
 

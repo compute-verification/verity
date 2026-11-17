@@ -35,40 +35,8 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# The sampled audit and acceptance: what an accepted audit says about the egress, at `δ`
-
-Definitions only. Network accounting writes the whole computation as one program `C` of the Boolean profile,
-each machine a subcircuit, and audits its committed trace with SPOT (`Claims.Sampling`). The transfer-gate
-units and N2's head checks are classes sampled `all`, and the internal step units are sampled. This module says what an
-accepted audit then establishes about the egress, in the network attester's terms (`EgressPrediction`, `Accepted`), on
-sampling's own vocabulary: its statement, partition, design, incorrect set and `M_δ`.
-
-**The layout** (`BoundaryGates`, public, part of the statement) says which of `C`'s gates hold each step's egress rows
-(per slot, a presence gate and the frame's bit gates) and its ingress (input gates, in bit order). It fits the program
-(`BoundaryGates.Fits`) when, before the horizon, the egress gates are gates `C` returns and not inputs, so their values
-are committed and computed by `C`, the ingress gates are inputs, and `C` is causal. The verifier refuses a statement
-whose layout doesn't fit, as it refuses one outside the sampling scope.
-
-**The circuit's Program** (`circuitProgram`) is `C` run on the ingress up to step `t` and the declared advice, read off
-at step `t`'s egress gates. The advice is the inputs other than the ingress, plus values held at a set of gates
-(`valOver`). An incorrect proof block's committed values need not be what its gates compute, so they enter as advice.
-
-**The relation** (`RAcc`) has three parts:
-
-* the sampling relation: the incorrect set is in `M_δ`;
-* the incorrect set holds no proof block of a class sampled `all` (which `M_δ` implies at `δ ≥ 0`, since such a class's
-  `P_a` factor is `0` on any set that meets it), so the transfer-gate proof blocks and head checks are exact, an error
-  of `0`;
-* some advice, holding values only at the incorrect proof blocks' committed gates, makes `Accepted` by the circuit's
-  Program every observation sequence and operator that the trace's transfer gates carry (`Carries`) with every status
-  complete (`Covered`).
-
-**What this module does not model.** The certifier's signed rows and the operator's moves are tied to the transfer gates
-by the transfer-gate proof blocks and, beyond them, by the certifier's trust (`trusted-device`). That tie is the condition
-`Carries` picks out, inside the conclusion. The statuses are the certifier's published record, which the network check
-reads (`Covered`).
--/
+/-! The sampled audit and acceptance: what an accepted audit says about the egress at `δ`; the certifier's tie to the
+transfer gates rests on `trusted-device`, and `Carries` picks it out. -/
 
 @[expose] public section
 

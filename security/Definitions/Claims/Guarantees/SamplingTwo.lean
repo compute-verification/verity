@@ -2,18 +2,8 @@ module
 
 public import Definitions.Claims.SamplingServed
 
-/-!
-# The two-stage sampled audit's guarantees
-
-`InfluenceTwoPatterns`, **the patterns' form** of what the incorrect proof blocks of a two-stage sampled audit can
-serve: on fixed input values, the served outputs of the boundary traces the two-stage relation takes at `δ` number at
-most `Σ_p 2^{Σ_r bits(p r)}`, `p` over the admissible sets' patterns `r ↦ lightOf |r| T_r` at any split `req` of the
-served outputs into requests.
-
-`CapTwo`, **the per-window cap**: at a first stage that catches each replay block at rate `r₁` and a second stage that
-samples each cell at rate `r₂`, the acceptance probability at a footprint is at most `(1 − r₁·r₂)^m`, `m` the replay
-blocks it marks incorrect. So a footprint in `M̄_δ` marks fewer than every `K` with `(1 − r₁·r₂)^K ≤ δ`.
--/
+/-! The two-stage sampled audit's guarantees: the patterns' form of what its incorrect proof blocks can serve
+(`InfluenceTwoPatterns`) and the per-window cap (`CapTwo`). -/
 
 @[expose] public section
 

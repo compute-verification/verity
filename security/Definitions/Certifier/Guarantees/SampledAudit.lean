@@ -33,18 +33,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# The sampled audit's guarantee: it implies `Accepted`, at `ε` at `δ` over the selection
-
-`SampledAuditAccepted` is the statement, proved in `Proofs.Certifier.SampledAuditAccepted`. Wherever the compiled
-sampled verifier is knowledge sound (`Claims.SamplingGeneric.Compiled.KS`), the sampled audit of a program with a
-public boundary layout implies `Accepted` by the circuit's Program (`KSAccepted`,
-`Definitions.Certifier.SampledAudit`). The free advice is held at the incorrect proof blocks' committed gates
-only, and the incorrect set is in `M_δ` and meets no class sampled `all`. Its one hypothesis is `Compiled.KS` at the
-same verifier, the sampling claim it rests on; every condition on the run is either a verifier refusal (the scope,
-`ScopeAcc`) or a condition, inside the conclusion, that picks out which observations the conclusion is about
-(`Carries`, `Covered`).
--/
+/-! The sampled audit's guarantee: it implies `Accepted` at `ε` at `δ` over the selection, with `Compiled.KS` its one hypothesis. -/
 
 @[expose] public section
 

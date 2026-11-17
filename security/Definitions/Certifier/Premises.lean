@@ -1,13 +1,7 @@
 module
 
-/-!
-# The network attester's premises
-
-What a property of the network attester may take besides its acceptance (the lean-proofs skill, "One shape"): one
-physical premise, `DeviceIntact`. It is the listed `trusted-device` (`Verity.Assumptions.TrustedDevice`) read
-for the certifier device: the device runs its code as built. Nothing is assumed of SHA-512 or LMS: a property that relies
-on the device's hashes or signatures concludes its claim or a break the run itself carries.
--/
+/-! The network attester's one premise, `DeviceIntact` (`trusted-device` read for the certifier device); nothing is
+assumed of SHA-512 or LMS. -/
 
 @[expose] public section
 

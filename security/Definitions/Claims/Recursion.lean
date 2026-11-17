@@ -2,85 +2,8 @@ module
 
 public import Definitions.Claims
 
-/-!
-# Claims: the ZK-recursion compiler (a draft, before it freezes)
-
-The compiler is code plus proof, so it has no claims of its own to read. The claims below are its output's: the
-compiled verifier's, parametric in the inner protocol (`Inner`, a `Deploy`-like record), the outer `--zk` Flock
-(`Flock.Deploy`) and what the compiled verifier brings (`Deploy`). Shared definitions are `Claims`'; the template's
-eight items:
-
-1. **Statement format.** `x` is the canonical bytes of what the compiled verifier reads, parsed by its own parser
-   (`Deploy.parse`) into the inner statement's bytes, the inner statement's dimensions as the verifier sets it up, the
-   commitment to the circuit (the private-circuit variant only), the recursion's form, and each V* session's sample as
-   its record holds it, where the statement carries the records (`CompiledStatement`, `Form`, `DrawRecord`).
-2. **Witness.** The inner protocol's (`W`), in both variants. In the private-circuit one the circuit is in the inner
-   witness, which the universal unit's relation reads, and its commitment is hm96 rows that unit outputs.
-3. **Relation (inherited).** `R(x, w) :⇔ x` parses, has no circuit commitment, and `R_I(x_I, w)` (`R`). The private
-   variant: `x` parses with a circuit commitment, and `R_I(x_I, w)`, whose outputs bind it to the circuit (`RPriv`).
-4. **Scope, readable** (`Scope`, `InScope`): the inner scope, and the inner shapes the compiled verifier accepts: the
-   dense form only (public inner circuits, no RecSparse phase and no R; it refuses the holo and sparse forms, which
-   `RecursiveKS` doesn't cover). A fast100 inner table, `k_log ≥ 6`, two claims and two per region, no circuit
-   commitment. Every V* session samples every unit of its population (`DrawRecord.Full`). There is no recursion-level scope
-   refusal: `ScopeMatches` states that this is the compiled verifier's own scope check, its setup's checks of the inner
-   shape, its refusal of a holo or sparse inner shape, its refusal of a V* session whose sample is not
-   every unit, and its refusal of a session over an inner session whose record holds no sample. Where the V* records are
-   run messages, the statement carries no samples, and the compiled verifier refuses a session whose sample is not every
-   unit when that session decides.
-5. **Named pieces.** A run is the inner session's rounds, the prover's staging rounds (`Deploy.kS`), at which it stages
-   the V* statements, then the V* sessions. `E*` (`E`): the outer extractor `E_O` (`EO`: per V* session, `E^rep` over
-   forks of the judged run at the session's first round, with the outer Flock's assemble and check), then the inner one
-   (`E^rep` at the inner protocol's waits, assemble and check), each inner rerun served by `E_O` at that rerun's coins
-   and read off its output at the claim's oracle (`served`, `dec`). The simulator `Sim`: the inner session's commit
-   strings to zero messages under fresh salts at the pinned hm96 key (`Deploy.zeroCommit`), the staging messages
-   (`Deploy.stage`) at their commit strings to zero messages under fresh salts (the honest prover stages its values'
-   under its own), then the outer simulator on each V* statement (`SO`, the named Flock simulator, a field of the
-   masked record `ZkDeploy`, as `Flock.ZkDeploy.S` is). The extraction-based finder `Be`: `B`'s fork, `E_O` on both
-   runs, a collision among the SHA-512 evaluations their outer witnesses record (`Deploy.calls`), which no party
-   computes in the clear. The registered finder `Br`: `Be`'s fork and extractions, a collision among the SHA-512
-   evaluations the V* setup makes outside the oracle at the two runs' V* statements (`Deploy.setup`: its registered
-   reads and the roots it recomputes from public data), or between one of them and a recorded call.
-6. **Claims.** `KS` with costs (`Efficient`), `Bits`, `Complete` on the scope of the deployed reference prover
-   (`Deploy.P`) at the deployed error (`Deploy.δc`), `ZK` of that same prover on a finite tape (`ZkDeploy.prover`) at
-   the record's simulators (`ZkDeploy.SO`), `ScopeMatches`, `Nontrivial`, and the private variant's `KSPriv`,
-   `ZKPriv`; `At Flock` instantiates the inner protocol with Flock and its decoder. The inner protocol's claim the
-   recursion rests on is `Inner.KSAbort`: its KS against provers that may abort after the inner rounds, on coins the
-   inner verifier doesn't read (with no aborts, `Inner.KS`).
-7. **Assumptions used.** `StrictBirthday` (for `B` and `Br`), `ExpectedCR` (for `Be`), each read once in `Bits`;
-   `Hm96Hiding` (hm96 leaves hide up to `δ₁`) at the deployed key's salt mask and salt hash (`Deploy.mask`,
-   `Deploy.saltHash`), read in `ZK` and `ZKPriv`; and `trustedBase`. The decoders are those within Flock's
-   list-decoding radius (`decOK`, `Flock.ListWithin`).
-8. **Status.** A draft: nothing here is frozen. `γ` and `γe` are the constants the recursion's KS proof gives from
-   `Inner.KSAbort`; `κ` and `cBe` are the draft's, fixed by the proof before freezing. `Br`'s term is at `γe`, and its
-   strict birthday bound leaves `λ` unchanged: at `Br`'s calls `q`, `√(γe · q²/2^513)` is under `Be`'s term wherever
-   `q ≤ 2^128 · t`. `ZK`'s errors are Flock's proved
-   `--zk` simulation error at each V* session (`Nums.εzk`) and `2δ₁` per commit string of the inner session and the
-   staging messages. `ZKStop` restates `ZK`, statement only, and reads `Hm96Hiding` as `ZK` does: of
-   the masked record's own reference prover on the finite tape each statement's nonce and rest sample (`ZkDeploy.prover`,
-   `ZKmalRx`), which stops where the statement and the public transcript before the sessions say the honest proof can
-   be refused (`StopDeploy.stops`), at the simulator that stops there too and commits to the zero digest as many
-   strings at each inner round as the reference prover's round carries (`SimStop`, `StopDeploy.nAt`), within `2δ₁`
-   per string (`εzkStop`). `KSBound` and `KSPrivBound` are `KS` and `KSPriv` at the compiled
-   record whose inner view runs the verifier at the representation V* binds (`Bound.IVStar`: the inner session's
-   commit strings and their openings), and `Bridge` states the inner claim they rest on, from Flock's at that
-   representation. The bridge is proved at every bound record whose answers a decoder inverts
-   (`Bound.bridge_of_dec`), the deployed one among them, so the deployment's ∀-form holds from its premises
-   (`RecDeploy.ksBoundRoute_of_bridge_cols`). `Bound.WeightCovers`' constant is what the bridge's proof pays: `N_I · √(k_I/32)` over
-   `√C_DE`, for a loss of `N_I · k_I · √Pr[B]`. The deployed bound record takes `γ`'s weight at `IVStar` at that floor,
-   `coverW` of the deployed plain record's weight (`RecDeploy.bdCover`, ASK-72), where (P3) holds
-   (`RecDeploy.ksBoundRouteCols_cover`). **The recursion's security level** there (`lam`) is about 65 bits per SHA-512
-   call at the deployed shape (one inner table at `m = 35`; 69.4 at `C_DE`'s weight), below the 100-bit floor and the
-   `2^-128` target under every weight: its KS is stated and proved at that level, not at the floor. `BitsLin2`'s
-   level λ₂ (`lamLin2`) evaluates to at least 100 at the deployed records (`RecDeploy.lamLin2_deployed_ge_dep`, about
-   165.8) as a number, and `KSLin2` at the deployment's dense statements (`KSLin2On` at `RecDeploy.DenseAt`) is proved
-   with no hypothesis at the deployed reader's record, the challenger's live-coin part's (`Flock.Guarantees.RecursiveKS`);
-   `RecDeploy.ksLin2_deployed_open`, at the earlier `finOpen` layout, still takes `PartChecksBV`, `PartOpensB` and
-   `DecompB`. Holo statements have a model of their own (`Model.holoTable`),
-   and `BitsLin2` at the dense statements follows from it (`bitsLin2On_of_ksLin2On`).
-
-Mathlib only, as `Definitions/` is. So every claim is parametric in the deployed verifier, its parser and its readers:
-binding them to the compiled verifier is the code side's, as Flock's is.
--/
+/-! Claims: the ZK-recursion compiler's output, a draft in which nothing is frozen; its KS is stated at the level `lam`,
+below the 100-bit floor at the deployed shape. -/
 
 @[expose] public section
 
@@ -88,8 +11,6 @@ namespace Claims.Recursion
 
 open Claims
 open scoped NNReal
-
-/-! ## Rerun programs served by rerun programs -/
 
 /-- **Serve each rerun of `p` by the program `q r`**, which reruns at `R₂` and returns what `p` sees of its rerun at
 `r`. -/
@@ -143,8 +64,6 @@ def served (V : Verifier Coin) (E₂ : Extractor Coin W₂ V)
 
 end Served
 
-/-! ## Simulator programs -/
-
 def spBind {α β : Type} : SP α → (α → SP β) → SP β
   | .ret a, f => f a
   | .hash q k, f => .hash q fun a => spBind (k a) f
@@ -187,8 +106,6 @@ structure OSim where
 
 attribute [instance] OSim.fin OSim.ne
 
-/-! ## The inner protocol -/
-
 /-- **What the inner protocol brings** (a `Deploy`-like record): its verifier, its relation and readable scope, its
 extractor `E^rep`'s pieces (`opens`, `assemble`, `check`, the waits, the accepted reruns per wait, the truncation) and
 its errors `κ`, `γ`. -/
@@ -217,15 +134,6 @@ def Inner.E (I : Inner Coin W) : Extractor Coin W I.V := ERep I.V I.waits I.k I.
 def Inner.KS (H : Msg → Msg) (I : Inner Coin W) : Prop := Claims.KS H I.V I.R I.E I.κ I.γ
 
 end InnerClaims
-
-/-! ### The inner protocol's KS against provers that may abort
-
-`E*` sees each inner rerun through `E_O` at fresh outer coins, rejected wherever the compiled run rejects there. The
-outer sessions come after the inner rounds, so the compiled prover decides there, on the inner coins and on coins the
-inner verifier never reads, whether `E*` sees an inner rerun accepted. The recursion rests on the inner protocol's KS
-against such provers (`Inner.KSAbort`): after the inner rounds, a prover may abort its run, reading its tape, every coin
-of the run and fresh coins of its own for that run, which the inner verifier doesn't read; an aborted run sends nothing
-and is rejected. -/
 
 /-- An aborted run: nothing sent, rejected. -/
 def abortTranscript : Transcript := ⟨[], [], [], .rej⟩
@@ -307,8 +215,6 @@ def decOK [Zero Col] (D : Flock.Deploy Coin Col T) (decode : List (ℕ × Col) �
 
 end OfFlock
 
-/-! ## The compiled verifier's statement and scope -/
-
 /-- **The recursion's form**, as the compiled verifier reads it (its inner shape, `RecVStar.Inner`): the inner table's
 `m`, `k_log`, regions and claims, whether the inner circuits are private (`holo`), the RecSparse phase's shape
 `(NU, ELL, S_LOG, T_LOG)` and R's shape `(m, claims)` (the sparse phase; neither at a dense or holo inner
@@ -349,7 +255,6 @@ structure CompiledStatement where
   draws : List (Option DrawRecord)
   links : Option (Msg × ℕ) := none
 
-/-- RecSparse's `P_LOG` at `ℓ`: the bit length of `2ℓ + 1`. -/
 def pLog (ell : ℕ) : ℕ := Nat.log 2 (2 * ell + 1) + 1
 
 /-- **The recursion's scope, readable**: the inner shapes the compiled verifier accepts, every V* session sampling every
@@ -362,8 +267,6 @@ def InScope (s : CompiledStatement) : Prop :=
   s.circ = none ∧ 22 ≤ s.form.m ∧ s.form.m ≤ 35 ∧ 6 ≤ s.form.kLog ∧ s.form.claims = 2 + 2 * s.form.regions ∧
     (s.form.holo = false ∧ s.form.sparse = none ∧ s.form.stacked = none) ∧
     ∀ d ∈ s.draws, ∃ e, d = some e ∧ e.Full
-
-/-! ## What the compiled verifier brings -/
 
 /-- **An outer session's numbers**, those Flock's errors read at one V* statement (`Flock.Deploy`'s at it): the
 table's error, `N₀`, the weight `C`, the outer verifier's rounds, `E^rep`'s waits and its truncation; and those its
@@ -545,8 +448,6 @@ form is in `InScope`. -/
 def Scope (D : Deploy Coin) (I : Inner Coin W) (x : Msg) : Prop :=
   ∃ s, D.parse x = some s ∧ I.Scope s.inner ∧ InScope s
 
-/-! ### The extractor -/
-
 /-- **The outer extractor `E_O`**: replay the judged run; if it accepted, for each V* session `s` in order, at its
 statement (read off the judged run's inner and staging rounds), `E^rep` with the outer Flock's assemble and check over
 forks of the judged run at the session's first round, each rerun seen as the session's view; all the sessions'
@@ -580,8 +481,6 @@ noncomputable def E (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO :
   served D.V (EO D I DO decO) (dec H D) (fun x => I.waits (xI D x)) (fun x => I.k (xI D x))
     (fun x => I.cap (xI D x)) I.opens (fun x => I.assemble (xI D x)) (fun x => I.check (xI D x))
 
-/-! ### The extraction-based finder -/
-
 /-- **`Be`** (extraction-based): `B`'s fork (guess `j`, sample `ω, r_1..r_j`, run twice from the shared start with fresh
 continuations), `E_O` on each run with fresh coins, and the first collision among the SHA-512 evaluations the two
 runs' outer witnesses record (`Deploy.calls`: the inner verifier's and the commitments', which no party computes in the
@@ -606,8 +505,6 @@ noncomputable def Be (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO 
 noncomputable def PrBe (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col T)
     (decO : List (ℕ × Col) → List T) {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Prover Ω) (x : Msg) : ℝ :=
   if hk : 0 < D.V.k x then (Be H D I DO decO P x hk).Pr H else 0
-
-/-! ### The registered finder -/
 
 /-- The V* statements a run stages, read off its inner and staging rounds. -/
 def runStmts (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω)
@@ -654,8 +551,6 @@ noncomputable def PrBr (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (D
     (decO : List (ℕ × Col) → List T) {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Prover Ω) (x : Msg) : ℝ :=
   if hk : 0 < D.V.k x then (Br H D I DO decO P x hk).Pr H else 0
 
-/-! ### The errors -/
-
 /-- The inner `E^rep`'s expected reruns, `N_I = 1 + m′_I·k_I`: each is served by `E_O`, so each can meet its failure. -/
 def NI (D : Deploy Coin) (I : Inner Coin W) (x : Msg) : ℕ := 1 + I.waits (xI D x) * I.k (xI D x)
 
@@ -691,8 +586,6 @@ statements follows from it (`bitsLin2On_of_ksLin2On`). -/
 noncomputable def lam (D : Deploy Coin) (I : Inner Coin W) (x : Msg) : ℝ :=
   min (min (Real.logb 2 (1 / κ D I x)) (255.5 - Real.logb 2 (γ D I x) / 2))
     (128 - Real.logb 2 (γe D I x * cBe D x) / 2) - 2
-
-/-! ### The simulator -/
 
 /-- The inner session simulated, its round `j` the commit string to the zero digest under the salt `salts j`. -/
 def simInner (D : Deploy Coin) (n : ℕ) (salts : Fin n → Fin D.saltLen → UInt8) : SP (List (Msg × Out)) :=
@@ -735,8 +628,6 @@ noncomputable def εzk (D : Deploy Coin) (I : Inner Coin W) (t : ℕ) (δ₁ : �
 
 /-- **`ZK`'s collision weight** at the attempt budget `t`: Flock's `4t·3^t` at each of the `n_S(x)` V* sessions. -/
 noncomputable def γzk (D : Deploy Coin) (t : ℕ) (x : Msg) : ℝ := D.nS x * (4 * t * 3 ^ t)
-
-/-! ### The claims -/
 
 /-- **The recursion: KS**, at `E*` and every outer decoder that meets the list-decoding spec: on every prover,
 `Pr[run = acc ∧ ¬R(x, E*(x))] ≤ κ(x) + √(γ(x) · Pr[B]) + √(γ_e(x) · Pr[Be]) + √(γ_e(x) · Pr[Br])`. Its level (`lam`) is
@@ -823,8 +714,6 @@ def ZKPriv (H : Msg → Msg) (D : ZkDeploy Coin) (I : Inner Coin Flock.Wit) (DO 
     ZKmalRx D.Nonce D.Rest H D.V.k D.prover (RPriv D.toDeploy I) (Sim D.toDeploy I (D.SO t))
       (εzk D.toDeploy I t δ₁) (γzk D.toDeploy t)
 
-/-! ### Zero knowledge with the prover's public stop (restated, statement only) -/
-
 /-- **The recursion's simulator with the prover's stop** against `H`: the reference prover's rounds, each commit string
 to the zero digest under a fresh salt, while the prover hasn't stopped (`halted`, read before each inner and staging
 round and after the last); from there the empty message every round left, as the prover sends.
@@ -879,8 +768,6 @@ def ZKStop (H : Msg → Msg) (D : StopDeploy Coin) (I : Inner Coin Flock.Wit) (D
 
 end Recursion
 
-/-! ## At Flock: the inner protocol is Flock -/
-
 section AtFlock
 
 variable {Coin Col T Col' T' : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col]
@@ -911,60 +798,8 @@ def BitsFlock [Zero Col] [Zero Col'] (H : Msg → Msg) (D : Deploy Coin) (DI : F
 
 end AtFlock
 
-/-! ## At the representation V* binds
-
-The deployed V* never reads the inner session's framed transcript. It binds what the ZK server's live-coin part records
-(`rec/inner-transcript/v1`, the run's inner rounds) and what its parts hold:
-
-* round 0: each table's level-0 top as salted commitments, one hm96 `b ‖ c` a cap node (`link.roots`), answered by the
-  link points;
-* each later round: the salted tops of the caps it absorbs, then the commitment `c_k` to its free elements `F_k` as one
-  registered row (none where `F_k` is empty), answered by its coins;
-* never in the run: the rows, the salts and the proof files, hidden values of V*'s parts.
-
-The ZK server drops the rest of a round's framed bytes: the domain and labels (constants), the proof-of-work nonces
-(each `0`, the only one the verifier accepts, R4: with live coins grinding buys nothing) and the statement digest (a function of the statement). So
-the inner verifier `E*`'s views run at is one over that representation (`Bound.IVStar`): an element-level inner Flock
-(`Bound.DE`, at plain SHA-512 leaves), each round message before its last committed as rows under hm96 at the pinned
-key, its last message their openings with the element-level last message. `KSBound` is the recursion's KS there, and
-`Bridge` the inner claim it rests on, from Flock's KS at `DE`.
-
-**Where it is stated.** `KS` reads acceptance off the compiled record's inner view (`Deploy.innerView`, through `dec`)
-and reads the inner record's verifier only for its rounds. So `KSBound` takes the compiled record at each inner
-verifier, its inner view running that verifier (`RecAt`), and applies it at `IVStar`: the record's inner view then runs
-`IVStar`. A compiled record that ignores the inner verifier it is given is no `RecAt`: there `KS` would read an
-accept-all verifier's acceptance. At the deployment it is `deployRec · ivScope b`, with the readers at V*'s bound layout
-and `DE` the deployed plain record at plain leaves with only its verifier's steps, its columns and its weight replaced
-(`RecDeploy.KSBoundDeployed`, in `Proofs/`, as the deployed record is).
-
-**What binds each message of an inner view to the run**, in V*'s setup:
-
-* round 0's commit strings: `checkTopRows` (`pub.bin`'s rows of `rec-top-L0` are the challenger's live-coin part's `b ‖ c`, read off its
-  record by `innerLink`), with the schedule's node count (`checkLinkRounds`);
-* round 0's coins, the link points: `innerLink` (the inner session's record holds the challenger's live-coin part's points) and
-  `checkLink` (a check-5 part is refused without them);
-* a later round's salted tops: `checkOpenTops` and `checkLevelTopReads` (each opening's `out` reads the challenger's live-coin part's top
-  at its rep's coins), at the schedule's rounds and node counts (`checkLinkRounds`);
-* a later round's `c_k`: the registered value V*'s algebra opens that round's row against, which the setup builds from
-  `c_k` (`RecSetup.commits`, `checkInner`);
-* each round's coins: `innerCommits` (the record's coins are the challenger's live-coin part's);
-* the rounds themselves: `checkSchedule` (`RecSetup.commits`, at the verifier's inner shape: each stream's rounds, in
-  the schedule's order, with its coin, top, level-0 and `c_k` counts, in a record that ends `finish`, `checkFinished`);
-* the last message: the rows, salts and proof files are the parts' hidden values, and `IVStar`'s own openings hold
-  them to the earlier rounds' commit strings (`Bound.opens`, binding where `Bound.Binds`).
-
-**Why ZK's hiding route is compatible, and what it costs.** The run's inner messages are exactly the challenger's live-coin part's
-commit strings, each an hm96 `b ‖ c` at the pinned key: hiding commitments, one of the four kinds of public things.
-`IVStar`'s last message is never sent in the run; V*'s parts hold it inside the outer `--zk` proofs. So every message of
-an inner view that the run shows is one `Sim` replaces by a commit string to the zero digest under a fresh salt, and the
-views are `E*`'s alone. Two things stand between that and the deployment:
-
-* the deployed V* reads the inner session's `session.json` (`checkLink`, `filesOnly`), which holds the raw `root_f`,
-  `root_b`, `publics` and every framed round message. V* has to stop reading it, a code change;
-* a round carries the schedule's count of commit strings (`Bound.nAt`), not one: round 0 alone carries a level-0 top
-  of `2^7 = 128` cap nodes (`fast100`'s first level, 218 queries). `Sim`'s inner session, which commits one zero string
-  a round (`simInner`), and `εzk`'s inner term (`2δ₁·k_I`) have to count strings (`n_open`, `2δ₁·n_open`), so `ZK` as
-  stated is false at the bound record until it does. `ZK` is unchanged until that restatement. -/
+/-! ## At the representation V* binds: `ZK` as stated is false at the bound record, whose rounds carry the schedule's
+count of commit strings, not one. -/
 
 section Bound
 

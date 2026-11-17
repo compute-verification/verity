@@ -33,34 +33,13 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# The recursion's KS with its deviation term linear
-
-`KS` charges `E*`'s inner stage two roots of `Be`: the inner protocol's `B`, read as `Pr[B_I] ≤ k(x)·Pr[Be]`, and, at
-each of the inner `E^rep`'s `N_I` expected reruns, a sample whose inner view departs from the inner prover's plurality,
-at most `√(k_I·k(x)·Pr[Be])`. Under `ExpectedCR` each root costs half of SHA-512's 256 bits. Here both go:
-
-* **The deviation, linearly** (`Fdev`): guess an inner round `j`, take a sample forked at `j` (the compiled run and
-  `E_O`), and if `E_O` gives witnesses there, up to `M` more samples forked at `j` until `E_O` gives witnesses again;
-  output the first collision among the two samples' recorded calls, and nothing where the first sample gives no witnesses
-  (`linkOut`). A sample departs from the plurality at most as often as this link succeeds, plus `1/(M+1)`, with no root,
-  and the link costs at most two samples in expectation. Its loop reads only what a sample computes (does `E_O` give
-  witnesses) and runs only where its cost charges it (`linkCost`), so its declared cost is its work.
-* **`B_I` as its own finder** (`Binner`): the inner rounds' forks only, not through `Pr[B_I] ≤ k(x)·Pr[Be]`.
-
-`KSLin`: `Pr[acc ∧ ¬R] ≤ κ + √(γ·Pr[B]) + √(γ_BI·Pr[B_I]) + β·(Pr[Fdev] + 1/(M+1))` at every `M`, with
-`β = N_I·k_I` and `γ_BI = (√γ_I + 1)²` (the `+1` an accepted judged sample that the inner view rejects, at most
-`Pr[B_I]`). `BitsLin` is its bits under `StrictBirthday` at `B` and `ExpectedCR` at `B_I` and `Fdev`, and `KSBoundLin`
-is `KSLin` at the representation V* binds, as `KSBound` is `KS` there.
--/
+/-! The recursion's KS with its deviation term linear. -/
 
 @[expose] public section
 
 namespace Claims.Recursion
 
 open Claims
-
-/-! ## The link -/
 
 section Link
 
@@ -84,8 +63,6 @@ noncomputable def linkCost (g : U → Prop) (c : U → ℕ) (M : ℕ) (p : U × 
   c p.1 + if g p.1 then loopCost g c M p.2 else 0
 
 end Link
-
-/-! ## The finders -/
 
 section Finders
 
@@ -167,8 +144,6 @@ noncomputable def PrBinner (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W
 
 end Finders
 
-/-! ## The errors and the claims -/
-
 section Claims
 
 variable {Coin W Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col]
@@ -223,35 +198,6 @@ def KSBoundLin [Zero Col] [Zero Col'] (H : Msg → Msg) (D : RecAt Coin) (Bd : B
   ∀ decI, decOK Bd.deploy decI → KSLin H (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy decI) DO
 
 end Bound
-
-/-! ## Flock's KS with no root
-
-`Inner.KSAbort` charges the inner Flock `√(γ·Pr[B])`, where `γ = 16·(√(2kC) + k)²` gathers, under one root, every
-fork event of its table bound: each cap's (its positions opened two ways) and level 0's (two accepted runs that open a
-position to two columns). `KSFlockLin` charges each to a finder of its own, with no root:
-
-* **the caps' link** (`FC`): a uniform cap position `q`, a run, and if it accepts and opens `q`, up to `M` more runs
-  forked at `q`'s round until one accepts and opens `q`; the first collision among the two runs' verifier calls. Its
-  weight is the caps' positions (`Caps.width`) and it costs at most two runs in expectation.
-* **level 0's conflict** (`F0`): a run, and if it accepts, `E^rep`'s `k` waits of at most `R` runs each; the first
-  collision among the accepted runs' verifier calls, `k + 1` runs in expectation.
-
-The one-run events stay where they were, linear under `B` (weight `k(x)`, the verifier's rounds). `Caps` is which cap
-positions a run's coins query, which `Deploy.cols` doesn't give (it is level 0's columns only); the claim is at a
-reader, and its loop reads only what a run shows: whether it accepts, and its coins.
-
-`KSLin2` is `KSLin` at the bound record with the inner stage reading `KSFlockLin` at `DE` in `Inner.KSAbort`'s place:
-`√(γ_BI·Pr[B_I])` becomes `(4k_I + 1)·Pr[B_I]`, and the inner Flock's caps and level 0 are the composite's finders over
-`E_O`'s samples at `IVStar` (`FCI`, `F0I`), whose loops read whether a sample's inner view accepts and the sample's inner
-coins. A sample where the inner view departs from the prover's plurality is `Fdev`'s, at `FCI`'s two and `F0I`'s `k + 1`
-samples as well as the inner `E^rep`'s `N_I` (`βdev2`). An accepted inner run's calls are the outer witnesses' recorded
-ones, its setup's at the inner statement and its own on the inner messages at the sample's coins, which no witness need
-record, so `B_I`, `FCI`, `F0I` and `Fdev` search all three at each sample's own coins (`Deploy.callsAt`), each charged
-the setup's `|S(x_I)|` calls once (`Finder.charge`, `setupLen`). A V\* part's check is accepted where its recorded calls
-and the compiled verifier's own evaluations at its V\* statement (check 5's row commitments) don't collide, so `B_I` and
-`Fdev`, which read what V*'s parts accept, search those too (`sampleCalls`: `BinnerV`, `FdevV`), each charged `v` more
-calls per sample. `BitsLin2` is its bits.
--/
 
 section FlockLin
 
@@ -365,8 +311,6 @@ def KSFlockLin [Zero Col] (H : Msg → Msg) (D : Flock.Deploy Coin Col T) (Cp : 
         4 * (PrF0 H D.V P x keep (D.k x) R + ((D.k x : ℝ) + 1) / ((R : ℝ) + 1))
 
 end FlockLin
-
-/-! ## The recursion's KS with the inner Flock's roots linear -/
 
 section Composite
 

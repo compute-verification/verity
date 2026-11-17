@@ -19,9 +19,4 @@ public import Proofs.Poub.RemoteHeld.Line
 public import Proofs.Poub.RemoteHeld.Subprotocol
 public import Proofs.Poub.Stacking
 
-/-!
-# The proofs of PoUB's guarantees
-
-The bandwidth audit's (`Bandwidth`, `BandwidthAudit`, `RateAudit*`), the remote audit's (`Remote`, `RemoteHeld`), the
-bound receipts', the stacking bound's and their lemmas. `Proofs.ResourceAccounting` imports the same modules.
--/
+/-! The proofs of PoUB's guarantees. -/

@@ -2,41 +2,7 @@ module
 
 public import Definitions.Claims.SamplingGeneric
 
-/-!
-# Claims: Flock's extractor at one table of a session
-
-`Flock.E` extracts a session whole: each wait of `E^rep` stops at `k = ⌈4·N₀/e⌉` accepted reruns, with `N₀` the level-0
-codeword lengths of the session's tables summed, and `Flock.assemble` returns a witness of every table or none. So a
-session's expected reruns, `1 + m′·k`, grow with its tables, and so does `Compiled.es` at `Arg.ofFlock`.
-
-This file states the extractor at one table of a session, beside `Flock.E`, `Flock.KS`, `Arg.ofFlock` and
-`FlockArgKS`, which it leaves as they stand:
-
-1. **The extractor** (`Flock.ETable D N decode j`): `E^rep` at the session's verifier, so a rerun is the whole
-   session's, on fresh coins at every round, against the prover at the judged run's tape, and an accepted rerun is one
-   the whole session accepts. Each wait stops at `k_j = ⌈4·N_j/e⌉` accepted reruns (`Flock.kTable`), with `N_j` table
-   `j`'s level-0 codeword length alone. Its assemble step is table `j`'s step of `Flock.assemble`
-   (`Flock.assembleTable`): table `j`'s opened columns of the reruns, decoded by the one decoder, and the first
-   candidate that, read alone, is a witness of table `j`'s own statement. Nothing of the session's other tables is read
-   or held.
-2. **Its relation** (`Flock.RTable`): the record's `table` gives a statement at index `j`, and the witness is in that
-   statement's relation; at a table of the session that is the table's own statement.
-3. **Its knowledge error** (`Flock.κTable`): `Flock.κ` with `k_j` for `k` and an error for each table (`ε x j`) for
-   `ε_table`. At `ε x j = ε_table x` it is `Flock.κ` but for the count; at table `j`'s own error it no longer reads
-   the session's other tables.
-4. **The claim** (`Flock.KSTable`): `Claims.KS` of `Flock.ETable` at every table, at every decoder that meets the
-   list-decoding spec.
-5. **The proof system for proof blocks** (`Arg.ofFlockTable`): Flock at one table of a session, a second `Arg` beside
-   `Arg.ofFlock`. Its statement names a table and a Flock statement (`names`); its verifier is Flock's at the named
-   statement, its extractor `Flock.ETable` at the named table and the deployed decoder (`Arg.ext` at it), and its shape
-   holds the named table's length, so `Arg.k` there is `k_j` (`FlockRerunsTable`). `Compiled.es` reads `Arg.waits` and
-   `Arg.k` at each proof block's shape, with no change to `Compiled`: where those shapes are statements', it is the
-   largest of `1 + m′·k_j` over the tables the statements name.
-6. **Flock's statements at it** (`FlockArgKSTable`, `FlockKSTable`, `FlockKSRegTable`): `FlockArgKS`, `FlockKS` and
-   `FlockKSReg` at `Arg.ofFlockTable`, from `Flock.KSTable`.
-
-Statements only: definitions, no proofs.
--/
+/-! Claims: Flock's extractor at one table of a session, whose waits read only that table's level-0 length. -/
 
 @[expose] public section
 
@@ -103,19 +69,12 @@ section FlockTable
 
 variable {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col]
 
-/-- **Flock's assemble step at table `j`, counted**: `Flock.assembleTable` at the deployed decoder (`D.decode`), with
-its steps: the decoder's on table `j`'s opened columns (`D.dec`'s count) and one check per candidate it lists. -/
 def flockAssembleTable (D : Claims.Flock.Deploy Coin Col T) (j : ℕ) (x : Msg) (os : List (ℕ → List (ℕ × Col))) :
     Option Claims.Flock.Wit × ℕ :=
   (Claims.Flock.assembleTable D.table D.decode D.read j x os,
     (D.dec (os.flatMap fun o => o j)).2 + (D.decode (os.flatMap fun o => o j)).length)
 
-/-- **Flock at one table of a session, as a proof system for proof blocks**: a statement `y` names a table and a Flock
-statement (`names y`). The verifier is Flock's at the named statement, so a session's run is the session's whatever
-table is named; the extractor is `E^rep` at the named table and the deployed decoder (`Flock.ETable D N D.decode`), its
-assemble step counted (`flockAssembleTable`); the shape is the numbers it reads (waits `m′`, truncation `K`, rounds, and
-the named table's level-0 codeword length, which fixes each wait's `k_j = ⌈4·N_j/e⌉`, `Flock.kTable`, and so its
-expected reruns); and its errors are Flock's at the table (`Flock.κTable`) and the session's `γ` (`Flock.γ`). -/
+/-- The verifier is Flock's at the named statement, so a session's run is the whole session's whatever table is named. -/
 noncomputable def Arg.ofFlockTable (D : Claims.Flock.Deploy Coin Col T) (N : Msg → ℕ → ℕ) (ε : Msg → ℕ → ℝ)
     (names : Msg → ℕ × Msg) : Arg Coin where
   Sh := ℕ × ℕ × ℕ × ℕ
@@ -135,35 +94,25 @@ noncomputable def Arg.ofFlockTable (D : Claims.Flock.Deploy Coin Col T) (N : Msg
   κ y := Claims.Flock.κTable D N ε (names y).1 (names y).2
   γ y := Claims.Flock.γ D (names y).2
 
-/-- **The waits at one table are that table's**: at each statement's shape, `Arg.ofFlockTable`'s waits are Flock's and
-each stops at the named table's `k_j` (`Flock.kTable`). It is a statement about the proof system at a statement, not
-about a compiled verifier: `Compiled.es` reads `Arg.waits` and `Arg.k` at its proof blocks' shapes. -/
+/-- A statement about the proof system at a statement, not about a compiled verifier. -/
 def FlockRerunsTable : Prop :=
   ∀ (D : Claims.Flock.Deploy Coin Col T) (N : Msg → ℕ → ℕ) (ε : Msg → ℕ → ℝ) (names : Msg → ℕ × Msg) (y : Msg),
     (Arg.ofFlockTable D N ε names).waits ((Arg.ofFlockTable D N ε names).shape y) = D.waits (names y).2 ∧
       (Arg.ofFlockTable D N ε names).k ((Arg.ofFlockTable D N ε names).shape y) =
         Claims.Flock.kTable N (names y).1 (names y).2
 
-/-- **Flock's KS at each table is `Arg.ofFlockTable`'s**: `Flock.KSTable` at the deployed decoder, which is within
-Flock's radius, at every way a statement names a table and a Flock statement. -/
 def FlockArgKSTable : Prop :=
   ∀ (H : Msg → Msg) (D : Claims.Flock.Deploy Coin Col T) [Zero Col] (N : Msg → ℕ → ℕ) (ε : Msg → ℕ → ℝ)
     (names : Msg → ℕ × Msg),
     Claims.Flock.KSTable H D N ε → Claims.Flock.ListWithin D.len D.enc D.θ D.decode →
       (Arg.ofFlockTable D N ε names).KS H
 
-/-- **The sampled compiler at Flock at one table of a session**: every compiled sampled verifier over
-`Arg.ofFlockTable` at the deployed decoder, within its radius, that meets the contract, with a binding commitment, meets
-`KS`, from `Flock.KSTable` (`CompilerKS` and `FlockArgKSTable`). `Flock.KSTable`, the binding and the contract are its
-hypotheses. -/
 def FlockKSTable : Prop :=
   ∀ (H : Msg → Msg) (D : Claims.Flock.Deploy Coin Col T) [Zero Col] (N : Msg → ℕ → ℕ) (ε : Msg → ℕ → ℝ)
     (names : Msg → ℕ × Msg) (L : Compiled Coin (Arg.ofFlockTable D N ε names)),
     Claims.Flock.KSTable H D N ε → Claims.Flock.ListWithin D.len D.enc D.θ D.decode → L.commit.Binds H →
       L.Sessions H → L.KS H
 
-/-- **The committed form at Flock at one table of a session**: as `FlockKSTable`, `KSReg` (`CompilerKSReg` and
-`FlockArgKSTable`). -/
 def FlockKSRegTable : Prop :=
   ∀ (H : Msg → Msg) (D : Claims.Flock.Deploy Coin Col T) [Zero Col] (N : Msg → ℕ → ℕ) (ε : Msg → ℕ → ℝ)
     (names : Msg → ℕ × Msg) (L : Compiled Coin (Arg.ofFlockTable D N ε names)),

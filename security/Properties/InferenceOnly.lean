@@ -3,54 +3,8 @@ module
 public import Definitions.InferenceOnly
 public import InferenceOnlyCheck.Check
 
-/-!
-# The inference-only check's properties, stated against the Lean function
-
-`InferenceOnlyCheck.evaluate` (`verity/protocols/policy/inference_only/verifier/lean/InferenceOnlyCheck/Check.lean`, package `inference_only_check`) is
-the verifier's check of a declared division against the inference-only policy at its rate,
-`InferenceOnly.CompliesRate c α` (`Definitions/InferenceOnly.lean`), at the gate budget `c = gamma` and the rate
-`α = num / den`, and `InferenceOnlyCheck.check` is `evaluate` with a refusal written `{"error": code}` (with a `message` giving
-the fix for some codes). θ, the registered information, holds only input gates bound at registration (`IsBoundAtRegistration`):
-one bound per run is refused. The difftest holds it to the Python reference on random instances; the statements here say
-what it computes on every instance. Each is a named `Prop`, proved as
-`InferenceOnlyCheck.Properties.SecurityProofs.X : InferenceOnlyCheck.Properties.X` in `Proofs.Properties.InferenceOnly`, and a guarantee of
-this package (`lean-audit.json`).
-
-Each statement has one shape (the lean-proofs skill, "One shape"): for every instance, if the check gives a verdict (or
-doesn't refuse with a code), its named conclusion holds. The converses, that the check refuses exactly the malformed
-and gives a verdict on every well-formed instance, are completeness, in `Proofs.Properties.InferenceOnly`, each with an instance.
-
-**Refusals: a malformed instance is refused with its code.**
-
-* `RejectsExactly`: if `evaluate j` doesn't refuse with code `k`, then not `Malformed j k` (the first condition `j`
-  fails, in the order the check reads them, is `k`'s): so a malformed instance is refused, with that condition's code.
-  The conditions are written over `j`'s JSON and what Flock's decoder returns for the program (`Flock.Program.decode`,
-  then `Prog.gate` per gate), never over the check's own state.
-* `AcceptsExactly`: `evaluate j` gives a verdict only when `WellFormed j`.
-* `CheckRefuses`, `CheckAccepts`: the same of `InferenceOnlyCheck.check`, whose `error` field is the refusal's code and which has
-  none on a verdict.
-
-**A verdict is the definition's.** The decoded Program is the definition's circuit as the check's docstring maps
-descriptor v1 to it (`LaysOut`: gate `g` of the canonical layout is gate `g`, of its primitive's width `Value<w>`, an input
-gate when its primitive is an input node, reading the gates its operands name). `LaysOut` fixes a circuit's gates,
-widths, input gates and reads, which is all `size` and `InferenceOnly.freshInput` read, and leaves its operations and outputs free.
-
-* `Decodes`: on every instance with a verdict, the Program lays out a circuit (`Verity.Circuit`, its gates in
-  topological order and its input gates reading nothing), `theta` names its registered information
-  (`Verity.RegisteredCircuit`), and the owners are a partition of its computed gates into inference blocks
-  `0 … n - 1`, none empty (`Verity.Partition`, `Divides`).
-* `Reports`: for every registered circuit `d` laid out by the Program with the registered information `theta` names,
-  whose inference blocks `d.𝓘` (the registered compiler's) the owners are, the verdict's `gates` is `d`'s number of
-  gates, its `ius` lists per inference block `u` its `size` and `InferenceOnly.freshInput` exactly, its `complies` is `true`
-  exactly when every inference block has at most `c` gates and at most `α` fresh input bits per gate (`Meets`), and its
-  `failure` is the first block that doesn't, with the rule it breaks first.
-* `Witnesses`: a verdict whose `complies` is `true` means the registered circuit complies at the rate,
-  `InferenceOnly.CompliesRate c α d`, with the owners as the witness, and when the owners are its inference blocks `d.𝓘`, each of
-  them meets both bounds.
-
-No statement takes an assumption. What is not proved about the decoder (its `Prog.gate` is `partial`) is not needed:
-the statements read the decoder only through what it returns.
--/
+/-! The inference-only check's properties, stated against `InferenceOnlyCheck.evaluate`: no statement takes an assumption,
+and they read the decoder, whose `Prog.gate` is `partial`, only through what it returns. -/
 
 @[expose] public section
 
@@ -58,8 +12,6 @@ namespace InferenceOnlyCheck.Properties
 
 open Lean (Json toJson)
 open Flock.Program (Prog)
-
-/-! ## The instance -/
 
 /-- `j` has the five fields, `program` a string and `theta` and `owner` arrays. -/
 def Shaped (j : Json) : Prop :=
@@ -74,8 +26,6 @@ def Parses (j : Json) (i : Instance) : Prop :=
   j.getObjVal? "program" = .ok (.str i.program) ∧ j.getObjVal? "theta" = .ok (.arr i.theta) ∧
     j.getObjVal? "owner" = .ok (.arr i.owner) ∧ (∃ v, j.getObjVal? "gamma" = .ok v ∧ natOf? v = some i.gamma) ∧
     (∃ a b, j.getObjVal? "alpha" = .ok (.arr #[a, b]) ∧ natOf? a = some i.num ∧ natOf? b = some i.den) ∧ 0 < i.den
-
-/-! ## The Program's gates, as the decoder returns them -/
 
 /-- The number of gates of `P`'s canonical layout. -/
 def gates (P : Prog) : ℕ := (P.defs[P.root]!).gates
@@ -107,8 +57,6 @@ provenance (`Properties.InferenceOnly.Theta`). -/
 def IsBoundAtRegistration (P : Prog) (g : ℕ) : Prop :=
   ∃ p ops sc, P.gate g = .ok (p, ops, sc) ∧
     (Flock.Program.inputId? (P.defs[p]!).key).map (·.1) = some Flock.Program.REGISTRATION
-
-/-! ## θ and the owners -/
 
 /-- Entry `t` of θ names an input gate bound at registration that no earlier entry names. -/
 def ThetaOk (P : Prog) (theta : Array Json) (t : ℕ) : Prop :=
@@ -144,8 +92,6 @@ def EmptyIU (owner : Array Json) : Prop :=
 /-- The first of steps `0 … n - 1` that is not `ok` fails with `k`. -/
 def FirstFault (ok : ℕ → Prop) (fault : ℕ → String → Prop) (n : ℕ) (k : String) : Prop :=
   ∃ i < n, (∀ i' < i, ok i') ∧ fault i k
-
-/-! ## (1) Refusals -/
 
 /-- `j` is refused with `k`: the first condition it fails, in the order the check reads them, is `k`'s. First the
 fields (`instance`), `Γ` and `α` (`params`) and the program's decoding (`program`), then gate by gate (`GateFault`), then
@@ -193,8 +139,6 @@ def CheckRefuses : Prop :=
 completeness: `check_verdict_of_wellFormed`.) -/
 def CheckAccepts : Prop :=
   ∀ j : Json, (∀ k, (check j).getObjVal? "error" ≠ .ok (.str k)) → WellFormed j
-
-/-! ## (2) Verdicts -/
 
 /-- `D` is the circuit Program `P` lays out: `P`'s gates, gate `g` of width `w` where its primitive returns `Value<w>`,
 an input gate where its primitive is an input node, and reading the gates its operands name. -/

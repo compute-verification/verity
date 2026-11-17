@@ -34,29 +34,8 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# An auditor party's assumptions: `Faithful`, `Secret`, `Confined`, and its witness path's `WitnessPathPrivate`
-
-An auditor party (a network attester, the memory challenger) is a program the auditor runs on its own device: code, a
-state it keeps, coins of its own, and declared channels it sends messages on, each to the auditor in the clear (a public
-message) or to the prover only (witness: what the prover's zero-knowledge proofs read). These are what a protocol that
-reads a party's messages takes of one party `p`, each a named `Prop` about one run of it (`Run`), in place of
-`trusted-device` (`Verity.Assumptions.TrustedDevice`) and no-state-rollback. That the party runs on a machine the auditor
-owns and the prover doesn't control is why we believe them, not an assumption.
-
-* `Faithful` (`faithful`): `p` runs its code on its true inputs, each step's input being what was delivered to it, its
-  own clock's true reading or the coins it flips, and each step starts from the state the last one left: its
-  state persists and is never rolled back to an earlier copy, so an LMS leaf is never used twice.
-* `Secret` (`secret`): the prover never reads or sets `p`'s secret state: its signing keys, its LMS state, and its coins
-  not yet released.
-* `Confined` (`confined`): all `p` emits, on any wire, is its declared channels' messages.
-* `WitnessPathPrivate` (`witness-path-private`): the path between `p` and the prover carries no observer but its two
-  endpoints, so nobody else sees a witness message. Witness messages travel unencrypted for now; an encrypted path
-  would replace this assumption.
-
-`Covered` (`ResourceAccounting.Covered`) stays the site premise. What the auditor and the prover see of a party under these
-(`auditorView`, `proverView`) is stated over its code's messages in `Properties.Attest`.
--/
+/-! An auditor party's assumptions `Faithful`, `Secret`, `Confined` and `WitnessPathPrivate`, the last needed because
+witness messages travel unencrypted. -/
 
 @[expose] public section
 

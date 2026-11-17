@@ -3,22 +3,8 @@ module
 public import Definitions.Certifier
 public import Definitions.Certifier.Run
 
-/-!
-# The trusted layer: the certifier assumptions
-
-Each assumption is a named `Prop`, taken as a hypothesis by the theorems that use it, never an `axiom`. The names follow
-`docs/network-transparency/timing-channel.md` §1.2. `NetTiming.SecurityProofs.Sanity` gives a satisfiability
-witness for each.
-
-**The same `Prop`s serve ingress,** about the certifier read inward (`Definitions.Certifier.Ingress`): there
-`Regenerates` is W2 for what enters X, `Packed` and `Allocated` are W4 for the rows the ingress links release into X,
-and `JitterBounded` is J for their release times.
-
-**W1 (fixed parameters) has no `Prop`,** because it is structural here. The grid shape (`L`, `K`, `S`), the window
-structure (`winEnd`), the frame length `B`, the jitter bound `D` and the emission map `view` are arguments fixed before
-any run. The `Certifier` type has no input for the secret, and `view` reads only the step and the observation. So nothing
-in the model can make them depend on the secret or on traffic. A reviewer checks this by reading `NetTiming.Protocol`.
--/
+/-! The certifier assumptions, each a named `Prop` taken as a hypothesis, never an `axiom`; W1 (fixed parameters) has
+none, since it is structural. -/
 
 @[expose] public section
 
@@ -33,8 +19,7 @@ faults included (part of W6). -/
 def Regenerates (w : Certifier L K S In Act Wire) (view : ℕ → Obs L K S → Wire) : Prop :=
   ∀ k xs as, w.wire k xs as = view k (w.obs k xs as)
 
-/-- **W3, padding.** Every frame the certifiers release is exactly `B` bits. (The accepted-run theorems do not use it;
-it bounds the unbound capacity, which is not formalized here.) -/
+/-- W3. The accepted-run theorems do not use it; it bounds the unbound capacity, which is not formalized here. -/
 def Padded (w : Certifier L K S In Act Wire) (B : ℕ) : Prop :=
   ∀ k xs as ℓ s f, (w.obs k xs as).rows ℓ s = some f → f.length = B
 
@@ -49,18 +34,10 @@ nothing. -/
 def Allocated (w : Certifier L K S In Act Wire) (r : Fin L → ℕ) : Prop :=
   ∀ k xs as ℓ, (rowCount ((w.obs k xs as).rows ℓ) : ℕ) ≤ r ℓ
 
-/-- **W5, one untimed status per execution phase.** Statuses are published only at the last step of each window
-(`winEnd k = k`). At every other step they are the constant `complete`, so a status never shows when within the
-window something happened. -/
 def UntimedStatus (w : Certifier L K S In Act Wire) (winEnd : ℕ → ℕ) : Prop :=
   ∀ k xs as, winEnd k ≠ k → ∀ κ, (w.obs k xs as).status κ = Status.complete
 
-/-- **W6, fail-closed.** Suppose a fault happens at step `i`, whose window ends at `winEnd i`. Then:
-1. every egress row the certifiers release after it, within the window, is empty (all padding);
-2. at the window's end some boundary link's status is not complete.
-
-That emissions stay a function of the observation after a fault is `Regenerates`, which quantifies over every action.
-The histories `xs` and `as` are those of step `k`, with `as[i]` the fault. -/
+/-- The histories `xs` and `as` are those of step `k`, with `as[i]` the fault. -/
 def FailClosed (w : Certifier L K S In Act Wire) (winEnd : ℕ → ℕ) : Prop :=
   ∀ i k xs as (hi : i < as.length), as.length = k + 1 → i ≤ k → k ≤ winEnd i → w.fault as[i] →
     (i < k → ∀ ℓ s, (w.obs k xs as).rows ℓ s = none) ∧

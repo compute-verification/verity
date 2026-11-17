@@ -2,18 +2,7 @@ module
 
 public import Definitions.Certifier.Cells
 
-/-!
-# Marks: a mark's phase and a span's tail
-
-Definitions only. The schedule's buckets (`Definitions.Certifier.Cells`) run in execution phases of `T` buckets
-each. The network attester signs a **mark** over a message it is handed and stamps it with the phase of the bucket it
-handles it in (`markPhase`). A mark's bucket is the number of ticks the device has done when it handles the mark, so
-every connection whose server bytes the device can have read by then was admitted at an earlier bucket; this is exact
-once the device takes marks as an input. A **span** runs from one mark, its start mark, to a later one, its end mark.
-At the end mark the device may still hold egress cells of connections it admitted before it: `spanTail` is how many
-phases past the end mark's the last of them is sent in, on a schedule whose connections each have at most `E` egress
-cells. A count over a span is over the phases from the start mark's to the end mark's plus the tail.
--/
+/-! Marks: a mark's phase and a span's tail. -/
 
 @[expose] public section
 

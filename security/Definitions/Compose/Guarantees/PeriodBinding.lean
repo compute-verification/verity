@@ -2,38 +2,7 @@ module
 
 public import Definitions.Compose.PeriodBinding
 
-/-!
-# A period's binding per prover (trusted)
-
-The binding premise of the period's credit (`SampledLayer.BindingAt` at `Declared.monitoringPeriodLayer`, which J10-R's
-`tileLayer` is) bounded for each prover by its own fork finder, with no premise beyond `ecr/sha-512` at that finder.
-
-A prover's period, at any circuit `Cd` of at least one round and any outcomes of its proofs `pr`, opens its positions by
-frame-v3-sha512 paths (`HashedOpenings`). `L` is every position its tiles read (`Declared.monitoringPeriodPositions`), and `q` is
-the SHA-512 calls of its fork finder at `L` (`HashedOpenings.finder`): its two runs from a position's cut, the
-extractor's and the verifier's checks of their openings. Under `Claims.ExpectedCR` at that finder, binding fails in each
-verification phase with probability at most `|L|·√(q/2^256 + κ)`, where `κ` is stated in full:
-`2·Σ_{ℓ ∈ L} Pr[an accepted opening of ℓ isn't verified] + Pr[some ℓ ∈ L splits]`. The first term counts each accepted
-opening of a position by a path the position's verifier doesn't accept at its root and rank, or whose row doesn't
-decode to the value the proof opens (`HashedOpenings.Unverified`). The second counts a position whose verifier, root or
-rank differs between a run and its continuation from the position's cut (`HashedOpenings.Split`). Neither is bounded
-here: no premise yet ties an accepted proof's opening to a verified path of its position's leaf, or fixes a position's
-leaf by its cut.
-
-Each prover is charged its own finder's `q`, so the bound is per prover, as the floors per prover
-(`Pouw.Guarantees.RelativeSecurity.StagedFloorKOneSidedPerProver`) are: `ecr/sha-512` is applied to that finder alone,
-outside the theorem.
-
-* `MonitoringPeriodBindingPerProver`: the bound.
-* `MonitoringPeriodBindingPerProver_honest`: at `oneMonitoringPeriod`, a period whose proofs are all accepted and open every slot to
-  `false` by a verified path, `κ = 0` and binding never fails.
-* `MonitoringPeriodBindingPerProver_nontrivial`: at `oneMonitoringPeriod` with every proof accepted, opening every slot to the verification
-  phase's coin bit by a verified path, `κ = 0`, and the bound at `q = 0`, which is 0, fails: the opened value moves with
-  a coin sampled after the commitment.
-
-Proved by `Pouw.SecurityProofs.MonitoringPeriodBindingPerProver`, `Pouw.SecurityProofs.MonitoringPeriodBindingPerProver_honest` and
-`Pouw.SecurityProofs.MonitoringPeriodBindingPerProver_nontrivial`.
--/
+/-! A period's binding per prover, at `ecr/sha-512` of its own fork finder; neither term of its `κ` is bounded here. -/
 
 @[expose] public section
 

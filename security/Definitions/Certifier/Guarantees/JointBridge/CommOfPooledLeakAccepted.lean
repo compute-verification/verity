@@ -33,17 +33,8 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# The network attester's per-period guarantee, pooled over a monitoring period of sampled audits (trusted)
-
-`CommOfPooledLeakAccepted` is the network audit's `Sound`, the coins model's per-period guarantee, for a run whose
-communication audit is the network attester's monitoring period of `m` sampled audits
-(`ResourceAccounting.JointBridge.RealizesCommOfPooledLeakAccepted`), in the pooled reading: at the error of
-`NetTiming.Guarantees.PooledLeakAccepted`, `e^(−q·Fmax) + Σ_i e_i + Σ_i e'_i`, whose first term is paid once over the
-monitoring period, where the reading per phase, the guarantee beside this one, pays its `δ` in every execution phase.
-It is conditional on `PooledLeakAccepted`'s two inputs at each execution phase (`hesc`, `hleak`), which no proof
-discharges yet, so it bounds no deployed run until one does.
--/
+/-! The network attester's per-period guarantee pooled over a monitoring period, conditional on `PooledLeakAccepted`'s two
+inputs at each execution phase, which no proof discharges. -/
 
 @[expose] public section
 

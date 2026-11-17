@@ -2,17 +2,8 @@ module
 
 public import Definitions.Core.Transport
 
-/-!
-# The transport's named assumptions
-
-Two premises on a channel between an auditor party and the prover (`verity.commitments.crypto.transport`), named
-assumptions under `Definitions.Assumptions`: `ImprintPathPrivate`, a placement premise that says who can read the bytes
-of a channel's one imprint exchange in transit, which nothing proves; and `ChannelAuthentic`, what the key schedule and
-the record layer give, a theorem target from `euf-cma/lms-sha512-n64` and `prf/sha-512`. The transport's other premises
-(`WitnessPathPrivate`, `ChannelHides` and `WitnessPathPrivateOrChannelHides`) are in `Definitions.Core.Assumptions.Transport`,
-which re-exports this module. Both sit apart from the rest of the named assumptions, which `Definitions.Assumptions`
-re-exports, so that those elaborate without the transport's vocabulary.
--/
+/-! The transport's named assumptions: `ImprintPathPrivate`, a placement premise nothing proves, and `ChannelAuthentic`, a
+theorem target from `euf-cma/lms-sha512-n64` and `prf/sha-512`. -/
 
 @[expose] public section
 

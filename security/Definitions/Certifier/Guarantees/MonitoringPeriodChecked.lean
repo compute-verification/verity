@@ -39,32 +39,8 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# The leak through the network attester over a monitoring period, with the checked inputs left out
-
-`MonitoringPeriodLeakAccepted` with each window's checked inputs `chk` left out of the count
-(`Definitions.Certifier.Checked`), and the client's view read back from the windows' records under a registered
-parameter (`RecordFormat.ReadsBy`) in place of the whole schedule.
-
-**The check.** Each statement has two checks on its run, `valid₁` and `valid₂`, each with its own miss bound; together
-they pin the checked inputs (`CheckedUnique` at their conjunction). The run they are held to is the one the leak
-relation at the network attester's rows accepts at (`certifierRun`): the trace's inputs, the ingress the operator's
-moves on the network attester's records give, and an incorrect proof block's committed gates held at the trace filled
-in with the network attester's openings. `CheckedWitness` at that run is the premise. At the trace's run (`traceRun`)
-it would not carry the bound: the two runs differ at a gate the network attester opens and the trace leaves unopened.
-
-**The count.** With the record read back under a parameter of the registered set `Θ`, a secret whose every window
-meets its good event is recovered from one parameter and the windows' records, each a sequence its window's Program
-accepts with a valid run. So the secrets number at most `#Θ` times the windows' count (`executionPhasesCount`) with the
-registered and the checked inputs pinned; no factor counts the schedules or a connection's cells.
-
-**The registered inputs.** `reg` is as `MonitoringPeriodLeakAccepted` has it. The good event (`ExecutionPhaseGoodChecked`, stated here:
-`ExecutionPhaseGood` with the leak relation at a valid run and the window's check the registration's) reads that the trace
-holds the registration's values there as the named premise `RegisteredInputsHeld`, open: the registration's openings
-discharge it under the commitment's binding. Where no input is registered it holds of every trace.
-
-The union of the windows' failures over the monitoring period's live coins is not stated here.
--/
+/-! The leak through the network attester over a monitoring period with the checked inputs left out, on the open premise
+`RegisteredInputsHeld`; the union of the windows' failures is not stated here. -/
 
 @[expose] public section
 

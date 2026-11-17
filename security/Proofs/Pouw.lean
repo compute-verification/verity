@@ -210,13 +210,6 @@ public import Proofs.Pouw.Lemmas.Game
 public import Proofs.Pouw.Dimension.H100LoopFreeProofs
 public import Proofs.Pouw.PearlC.RowSeedFragment
 
-/-!
-# PoUW's proofs
-
-Every theorem of the package and every lemma behind it, over `Definitions.Pouw`'s definitions and `Definitions.Pouw.Assumptions`'
-named assumptions, with each guarantee's proof `Pouw.SecurityProofs.….G : Pouw.Guarantees.….G` (`Advantage`, `Barrier`,
-`Dimension`, `Game`, `NCP`, `PearlC`, `Receipt`); the kernel checks them, and nobody reviews them for meaning. The topics'
-maps are in `Definitions.Pouw`.
--/
+/-! PoUW's proofs: each guarantee's `Pouw.SecurityProofs.….G : Pouw.Guarantees.….G` and every lemma behind it. -/
 
 @[expose] public section
