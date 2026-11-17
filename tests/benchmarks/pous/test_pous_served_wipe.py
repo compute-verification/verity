@@ -203,7 +203,7 @@ def test_the_wipe_on_the_serves_card_writes_its_core_answer(node, tmp_path) -> N
     headline = json.loads(last.removeprefix("WIPE "))
     assert headline | {"fill_GBps": None, "t0": None, "t1": None} == {
         "verdict": "accept", "reason": None, "protocol": W.PROTOCOL, "decided_by": DECIDED, "k": W.READS, "segments": 1,
-        "fill_GBps": None, "t0": None, "t1": None, "server": "vy-dc-h200", "card": CARD, "exit": 0}
+        "fill_GBps": None, "t0": None, "t1": None, "server": "vy-dc-h200", "card": CARD, "exit": 0, "key_pin": "run"}
     assert all(f"-i {CARD}" in line for line in (tmp_path / "smi.log").read_text().splitlines())
     assert not (tmp_path / "lease.log").exists() and not (d / "refused.txt").exists()
     assert _stamps(d) == ["start", "the wipe exit 0", "exit 0"]
