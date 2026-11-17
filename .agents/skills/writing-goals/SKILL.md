@@ -22,6 +22,12 @@ The plan is one graph of outcomes. Daniel reads it on the console's Goals page; 
 
 The page is how Daniel sees what is being done, so it moves when the work does:
 
+- **What Daniel asks for shows until all of it is true.** The page's first job is that nothing he asks for is started
+  and then dropped. The day he asks, it is a goal: the outcome he wants, interpreted in plain words, never quoted or
+  marked as his, with its key points as bullets (the main renames, not every name). It sits directly under the goal
+  of his it serves, titled as he would look for it, not inside a group or one sentence of a broader goal. Today's
+  sentence says which points are not yet true; it is done when all are, and he confirms nothing. Whoever regroups,
+  parks or folds goals checks that each still shows.
 - **When a goal's state changes**, rewrite the sentence that says what is true today, and its status the moment it
   slips; don't wait for a sync. Progress, plans and steps live in the goal's Linear issues, never in the goal.
 - **Work serves a goal on the page:** its issue carries the goal's label (the `goal` label group, one label per id),
@@ -61,14 +67,11 @@ left out.
   | --- | --- |
   | 3 Repository reorganized: one layout, clean slices, public | Repository reorganized and published |
   | 11 Onsite demo: all four protocols accept | Onsite demo done |
-  | The check reads what the serve registers | Inference-only demo done |
   | The eleven's numbers live on the console | Console shows core system metrics |
   | The certifier's term is zero without a failure | Network attestation adds no exfiltration capacity unless a connection fails |
   | ci's slice reads clean | CI code cleaned up for review |
-  | A candidate's check launch registers in three minutes | Check launches within three minutes |
   | GLM-5.3's long DSA rows in provable units | 128k-context attention fits in proof blocks |
   | Remote theorem rests on no open proof | Remote demo's soundness fully proved |
-  | The Commit's share of the served step, measured | Commitment overhead measured |
 - **One owner** (`--owner`): the lead of the area the goal mostly builds, who keeps it true. Another area's part of
   it is that lead's goal, linked; a check the remote demo runs is the demo lead's goal even when proofs writes it in
   Lean.
@@ -197,14 +200,6 @@ was unsigned. The attester's node is now set not to move those pages.
 The new setting was tried only on a nearly idle node, where the stall is less likely to show than under serving load.
 ~~~
 
-A thing the reader couldn't place, identified in the opening sentence:
-
-~~~markdown
-The test that the vLLM adapter's int8 matrix multiplication is bit-exact records which of its two GPU kernels ran on
-each shape. Today that is inferred from the adapter's rule for choosing between them, so the test can pass without the
-second kernel ever having run.
-~~~
-
 A measurement:
 
 ~~~markdown
@@ -241,7 +236,6 @@ research goals set proofs/zero-knowledge --title "Zero knowledge proved for an h
   --due 2026-11-06T18:00-08:00 --status on-track --tag proofs --wait goal:proofs/firewall-checks-provable \
   --description @zk.md
 research goals set ci/fine-grained-check --status off-track --blockers @why.md
-research goals set vllm/partition-on-main --tier 2   # only when the derived depth is wrong
 research goals confirm ID                        # still true as written
 research goals done ID
 research goals remove ID
