@@ -54,7 +54,12 @@ import hashlib
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 
-from verity.protocols.resource_accounting.network.verifier.advice import RequestAdvice, Row, Source, StepAdvice
+from verity.protocols.resource_accounting.network.verifier.advice import (
+    RequestAdvice,
+    Row,
+    Source,
+    StepAdvice,
+)
 
 __all__ = ["CertifiedRequest", "Config", "Holdings", "pool_bound", "PREFIX_ROOT", "Prefixes", "Residual", "stop_rule",
     "tie_fields", "TOKEN_BYTES", "unit_key", "Walk", "walk_steps"]

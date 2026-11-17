@@ -33,8 +33,8 @@ from verity_vllm.pipeline.boundary_rows import (
     table_roots,
     write,
 )
-from verity_vllm.pipeline.boundary_stop import Stop, filed
 from verity_vllm.pipeline.boundary_span import FINISH, sampling_of
+from verity_vllm.pipeline.boundary_stop import Stop, filed
 
 #: vLLM's RequestStatus names (past ``finished_``) for a `FINISH` name; its FinishReason names are `FINISH`'s own
 _STATUS = {"stopped": "stop", "length_capped": "length", "aborted": "abort"}

@@ -30,7 +30,13 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from verity_vllm.config import CHECKPOINTS, UsageError, checkpoint_entries, option, row_file
+from verity_vllm.config import (
+    CHECKPOINTS,
+    UsageError,
+    checkpoint_entries,
+    option,
+    row_file,
+)
 from verity_vllm.pipeline.cli import write
 from verity_vllm.records.schema_ids import REBASELINE_DIGESTS_SCHEMA
 

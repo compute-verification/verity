@@ -20,10 +20,16 @@ from typing import Any
 
 import pytest
 import torch
+from verity.protocols.resource_accounting.network.verifier import advice as I1
 
 from tests.engine.fake_scheduler import FakeRequest, FakeScheduler, runner_order
-from tests.pipeline.test_serve_openai import Committer, Runner, Tokenizer, records, serve_concurrently
-from verity.protocols.resource_accounting.network.verifier import advice as I1
+from tests.pipeline.test_serve_openai import (
+    Committer,
+    Runner,
+    Tokenizer,
+    records,
+    serve_concurrently,
+)
 from verity_vllm.engine import step_trace as ST
 from verity_vllm.pipeline import advice as ADV
 from verity_vllm.pipeline import advice_windows as AW

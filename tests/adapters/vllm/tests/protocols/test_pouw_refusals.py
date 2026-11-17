@@ -21,16 +21,33 @@ from types import SimpleNamespace
 
 import numpy as np
 import pytest
+from verity.protocols.proofs.spot.verifier.challenger import challenger as LC
 from verity.protocols.resource_accounting.compute.pouw.prover.circuit import SCHEMES
 from verity.protocols.resource_accounting.compute.pouw.prover.circuit.ncp2 import Shape
-from verity.protocols.resource_accounting.compute.pouw.prover.schemes.pearl_c_device import DEVICES
-from verity.protocols.resource_accounting.compute.pouw.prover.serving import circuit as PC
-from verity.protocols.resource_accounting.compute.pouw.prover.serving import device as PD
-from verity.protocols.resource_accounting.compute.pouw.prover.serving import native as PN
-from verity.protocols.resource_accounting.compute.pouw.prover.serving import pearl_c as PPD
-from verity.protocols.resource_accounting.compute.pouw.prover.serving.lead import feed as PF
-from verity.protocols.resource_accounting.compute.pouw.prover.serving.operands import quantize
-from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import kernel as PK
+from verity.protocols.resource_accounting.compute.pouw.prover.schemes.pearl_c_device import (
+    DEVICES,
+)
+from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
+    circuit as PC,
+)
+from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
+    device as PD,
+)
+from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
+    native as PN,
+)
+from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
+    pearl_c as PPD,
+)
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.lead import (
+    feed as PF,
+)
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.operands import (
+    quantize,
+)
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import (
+    kernel as PK,
+)
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c.lanes import (
     schedule_of,
     whole_options,
@@ -44,14 +61,18 @@ from verity.protocols.resource_accounting.compute.pouw.verifier.audit import (
     weights_root,
 )
 from verity.protocols.resource_accounting.compute.pouw.verifier.coins import Challenger
-from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import DomainError, Matmul
-from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import Shape as MatmulShape
+from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import (
+    DomainError,
+    Matmul,
+)
+from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import (
+    Shape as MatmulShape,
+)
 from verity.protocols.resource_accounting.compute.pouw.verifier.serving import (
     SCHEDULES,
     Schedule,
     SchemeId,
 )
-from verity.protocols.proofs.spot.verifier.challenger import challenger as LC
 from verity_torch.pouw.pearl_c import grouped as PG
 
 from verity_vllm.protocols import pouw as P

@@ -455,8 +455,10 @@ def commit_shard(committer: Mapping[str, Any], label: str, H: int, shard: Callab
     nonce is handed back as held (`_SHARDS`) and ``shard`` is called only where one is not, so a window pays for the shard's
     tables only where no earlier window of its process has.  Refused for a table the registration names no nonce for: the
     registration holds the shard's tables at its one width, and a table at any other is none of its."""
-    from verity.protocols.resource_accounting.compute.pouw.prover.serving import registered_commit
     from verity.protocols.proofs.spot.verifier.one_stage import registered as G
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
+        registered_commit,
+    )
 
     nonces, key, W = committer["nonces"], bytes(committer["key"]), shard_block(H)
     out: dict[str, Any] = {}

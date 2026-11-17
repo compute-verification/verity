@@ -99,6 +99,12 @@ import verity_torch.pouw.h1.registered_device as RGD
 import verity_torch.pouw.h1.tables_device as TBD
 from verity.circuits.codec import canonical_json
 from verity.circuits.refs import Affine, Strided
+from verity.protocols.proofs.spot.verifier.challenger import challenger as LC
+from verity.protocols.proofs.spot.verifier.challenger import remote as R
+from verity.protocols.proofs.spot.verifier.challenger.challenger import (
+    CoinError,
+    LiveRecord,
+)
 from verity.protocols.resource_accounting.compute.pouw.prover.serving import h1 as PH
 from verity.protocols.resource_accounting.compute.pouw.verifier import credit as CR
 from verity.protocols.resource_accounting.compute.pouw.verifier import leaf_lanes as LL
@@ -111,9 +117,6 @@ from verity.protocols.resource_accounting.compute.pouw.verifier.audit import (
     weights_root,
 )
 from verity.protocols.resource_accounting.compute.pouw.verifier.coins import Challenger
-from verity.protocols.proofs.spot.verifier.challenger import challenger as LC
-from verity.protocols.proofs.spot.verifier.challenger import remote as R
-from verity.protocols.proofs.spot.verifier.challenger.challenger import CoinError, LiveRecord
 
 import verity_vllm.protocols.pouw.h1_hooks as PHK
 import verity_vllm.protocols.pouw.h1_ranks as PHR

@@ -33,7 +33,15 @@ except ModuleNotFoundError:
     pytest.skip("could not import 'torch'", allow_module_level=True)
 
 from tests.pipeline import predicted
-from tests.pipeline.test_serve_openai import CERTIFIER_BODY, Committer, Engine, Runner, Serving, events, records
+from tests.pipeline.test_serve_openai import (
+    CERTIFIER_BODY,
+    Committer,
+    Engine,
+    Runner,
+    Serving,
+    events,
+    records,
+)
 
 A = {0: [("model.embed_tokens", bytes(range(256)) * 2)], 1: [("runner.sampler", b"\x01\x02\x03\x04")]}
 B = {0: [("model.embed_tokens", bytes(255 - i for i in range(256)) * 2)], 1: [("runner.sampler", b"\x09\x08\x07\x06")]}
@@ -851,7 +859,8 @@ def test_the_records_mirror_copies_whole_lines_and_a_replaced_file_again(tmp_pat
 
 
 def test_a_seal_writes_its_binding_map_in_pieces_to_the_bytes_and_digest_one_dumps_writes(tmp_path, host_blocks, monkeypatch):
-    from verity_vllm.commit import binding as B, json_chunks as JC
+    from verity_vllm.commit import binding as B
+    from verity_vllm.commit import json_chunks as JC
 
     built: list[dict[str, Any]] = []
     real = B.build_binding_map

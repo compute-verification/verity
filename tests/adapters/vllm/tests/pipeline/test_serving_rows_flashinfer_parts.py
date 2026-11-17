@@ -17,19 +17,20 @@ import pytest
 from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate, evaluate_batch
+from verity.commitments.periods import interface as IF
+from verity.commitments.periods import rows as CS
+from verity.commitments.periods import wiring as WI
+from verity_flock.class_statement import UnitStager
+
 from verity_vllm.definitions.numerics import deepgemm_twins as DT
 from verity_vllm.definitions.registry import boolean_deepgemm as BDG
 from verity_vllm.definitions.registry import boolean_fp8 as BF8
 from verity_vllm.definitions.registry import deepgemm as DG
 from verity_vllm.definitions.registry import fp8 as F8
 from verity_vllm.definitions.registry.fp8 import FP8_BLOCK
-from verity.commitments.periods import interface as IF
-from verity.commitments.periods import rows as CS
-from verity.commitments.periods import wiring as WI
 from verity_vllm.pipeline import chunk_rows as CR
 from verity_vllm.pipeline import part_rows as PR
 from verity_vllm.pipeline import serving_rows as SRW
-from verity_flock.class_statement import UnitStager
 
 K, N = 256, 200
 NB, KG = -(-N // FP8_BLOCK), K // FP8_BLOCK

@@ -134,7 +134,12 @@ class SealProcess:
         first time, the execution block's head, a message per committed step, then ``go``."""
         from verity_vllm.commit import store_dump as SD
         from verity_vllm.commit.committer.plan_cache import PlanMetas
-        from verity_vllm.commit.served_record import PORT_NAMES, StepInputPort, committed_raw, served_rows
+        from verity_vllm.commit.served_record import (
+            PORT_NAMES,
+            StepInputPort,
+            committed_raw,
+            served_rows,
+        )
         from verity_vllm.query.manifest.bind import source_ports
 
         manifest, sources = getattr(com, "required_manifest", None), getattr(com, "sources", None) or ()

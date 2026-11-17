@@ -173,9 +173,15 @@ def period_unit(j10r: bool, arch: str | None = None) -> Any:
     on ``arch`` (``--j10r``)."""
     if not j10r:
         return None
-    from verity.protocols.resource_accounting.compute.pouw.prover.circuit import h1tile as HT
-    from verity.protocols.resource_accounting.compute.pouw.prover.circuit import h1window as HW
-    from verity.protocols.resource_accounting.compute.pouw.prover.serving import h1 as PH
+    from verity.protocols.resource_accounting.compute.pouw.prover.circuit import (
+        h1tile as HT,
+    )
+    from verity.protocols.resource_accounting.compute.pouw.prover.circuit import (
+        h1window as HW,
+    )
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
+        h1 as PH,
+    )
     return lambda k: HW.tile_unit(k, PH.TILE, HT.PouwH1Tile5, **({"arch": arch} if arch else {}))
 
 
@@ -187,7 +193,9 @@ def period_program(model: Any, rows: int, steps: int, j10r: bool = False, arch: 
     digest (the period's ``--circuit``) and what declaring them cost, once before any window, as a period declares them.
     The digest is taken in a child process, since at FILL it alone takes minutes and tens of GB, which no window pays, so
     this process's RSS is the windows' own."""
-    from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import served as SV
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import (
+        served as SV,
+    )
 
     from verity_vllm.protocols import pouw
     from verity_vllm.protocols.pouw import h1_hooks as PHK
@@ -498,7 +506,9 @@ def requests_check(h1: Any, requests: int) -> dict[str, Any]:
 
 
 def run(a: argparse.Namespace) -> dict[str, Any]:
-    from verity.protocols.resource_accounting.compute.pouw.prover.serving import h1 as PH
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
+        h1 as PH,
+    )
 
     from verity_vllm.engine.build import build_engine
     from verity_vllm.program.frontend.kernel_readback import int8_exact_of
@@ -659,8 +669,12 @@ def tokens_digest(gen: list[dict[str, Any]]) -> str:
 
 
 def fill(a: argparse.Namespace) -> dict[str, Any]:
-    from verity.protocols.resource_accounting.compute.pouw.prover.serving import h1 as PH
-    from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import served as SV
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
+        h1 as PH,
+    )
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import (
+        served as SV,
+    )
 
     from verity_vllm.engine.build import build_engine
     from verity_vllm.program.frontend.kernel_readback import int8_exact_of
@@ -907,7 +921,9 @@ def fill(a: argparse.Namespace) -> dict[str, Any]:
             from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import (
                 challenger as PHC,
             )
-            from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import served as SV
+            from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import (
+                served as SV,
+            )
             layout = SV.declared_layout(period[2]["shapes"], period[2]["modules"], decl.rows, decl.steps)
             draw_k, files = PHC.draw_k(layout), period_files(Path(a.circuits), period[1], layout, decl)
             doc["period_gate"] = {"name": a.period, "length": fixed_length(decl), "draw_k": draw_k, "circuit_files": files,
@@ -1149,7 +1165,9 @@ def local_weights(model: Any, layers: list[Any], rows: int, steps: int, period: 
     """The served model's ``b/<K>`` registered once under a fresh local key and the Program install declares
     (`pouw._install_h1`'s shapes and names, on the serving card's ``arch``; ``period``'s, from `period_program`, when
     given), for a window with no auditor's registration (no ``--model``)."""
-    from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import served as SV
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import (
+        served as SV,
+    )
 
     from verity_vllm.protocols import pouw
     shapes = [tuple(int(d) for d in m.weight.shape) for m in layers]
@@ -1509,9 +1527,13 @@ def check_challenger(calls_file: str, directory: str, public_sha512: str, out: s
     its tree), from which its sampling coin is read (none refuses it). With `lean_answers` (a memo directory in the
     verifier's scratch) credit's verifier runs are `answers.Answers` on it: a run another step answered is taken by key,
     and its ``lean_answers`` says how many."""
-    from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import answers as A
-    from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import challenger as PHC
     from verity.protocols.proofs.spot.verifier.challenger import remote
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import (
+        answers as A,
+    )
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import (
+        challenger as PHC,
+    )
 
     rec, tree = json.loads(Path(calls_file).read_text()), Path(directory)
     d = tree if window_file is not None else tree / "out"

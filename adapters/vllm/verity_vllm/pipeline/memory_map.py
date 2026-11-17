@@ -13,7 +13,6 @@ from typing import Any
 from verity_vllm.check.replay.cached_prefix import layout_of
 from verity_vllm.commit import memory_map as MM
 
-
 #: beside a request Build's ``descriptor.json.gz``: its Program's census (`MM.census_of`) and KV rows (`MM.rows_doc`), each naming
 #: the Program by digest
 CENSUS, KV_ROWS = "census.json.gz", "kv_rows.json.gz"

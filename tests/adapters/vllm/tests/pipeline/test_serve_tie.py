@@ -18,9 +18,11 @@ from typing import Any
 
 import pytest
 from verity.circuits.codec import canonical_json
-from verity.protocols.resource_accounting.compute.pouw.prover.serving import h1 as PH
-from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import commit as CT
 from verity.protocols.proofs.spot.verifier.one_stage import docket as REG
+from verity.protocols.resource_accounting.compute.pouw.prover.serving import h1 as PH
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import (
+    commit as CT,
+)
 
 from tests.pipeline.test_serve_day import OTHER, _day, _opts
 from tests.pipeline.test_serve_h1 import PROMPTS, Later, _Server

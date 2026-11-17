@@ -16,13 +16,27 @@ import types
 import numpy as np
 import pytest
 from verity.protocols.resource_accounting.compute.pouw.prover import circuit
-from verity.protocols.resource_accounting.compute.pouw.prover.schemes import SCHEMES, get, pearl_c
-from verity.protocols.resource_accounting.compute.pouw.prover.serving import h1 as pouw_h1
-from verity.protocols.resource_accounting.compute.pouw.prover.serving import lead as pouw_lead
+from verity.protocols.resource_accounting.compute.pouw.prover.schemes import (
+    SCHEMES,
+    get,
+    pearl_c,
+)
+from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
+    h1 as pouw_h1,
+)
+from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
+    lead as pouw_lead,
+)
 from verity.protocols.resource_accounting.compute.pouw.prover.serving import ncp as NCP
-from verity.protocols.resource_accounting.compute.pouw.prover.serving import operands as OPS
-from verity.protocols.resource_accounting.compute.pouw.prover.serving import pearl_c as PPD
-from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import kernel as PPK
+from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
+    operands as OPS,
+)
+from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
+    pearl_c as PPD,
+)
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import (
+    kernel as PPK,
+)
 from verity.protocols.resource_accounting.compute.pouw.verifier import registration
 from verity.protocols.resource_accounting.compute.pouw.verifier.audit import (
     HM96,
@@ -40,7 +54,9 @@ from verity.protocols.resource_accounting.compute.pouw.verifier.coins import (
     CoinOpening,
     coin_reason,
 )
-from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import Context as UnitContext
+from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import (
+    Context as UnitContext,
+)
 from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import (
     DomainError,
     Matmul,

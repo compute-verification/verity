@@ -11,17 +11,19 @@ import re
 
 import numpy as np
 import pytest
-from verity_vllm.check.replay.index import ProgramIndex
-from verity_vllm.pipeline import serving_rows as SRW, weight_rows as WT
-from verity_vllm.program.predict import window_weights as WW
-
-from verity.protocols.proofs.spot.verifier.one_stage import registered as REG, docket as R
 from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import bind
 from verity.circuits.ops import gemm as G
 from verity.circuits.ops.prims import HopperBF16WgmmaDot16
 from verity.commitments.periods import interface as IF
 from verity.commitments.periods import rows as CS
+from verity.protocols.proofs.spot.verifier.one_stage import docket as R
+from verity.protocols.proofs.spot.verifier.one_stage import registered as REG
+
+from verity_vllm.check.replay.index import ProgramIndex
+from verity_vllm.pipeline import serving_rows as SRW
+from verity_vllm.pipeline import weight_rows as WT
+from verity_vllm.program.predict import window_weights as WW
 
 ST = {"K": 32, "N": 3, "DOT": HopperBF16WgmmaDot16}
 ROW, UNIT = bind(G.Gemm, **ST), bind(G.Gemm, **{**ST, "N": 1})

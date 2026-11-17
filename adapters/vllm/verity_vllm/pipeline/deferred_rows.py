@@ -24,6 +24,7 @@ from types import SimpleNamespace
 from typing import Any
 
 from verity.commitments.scheme import DIGEST_BYTES
+
 from verity_vllm.check.replay.index import ProgramIndex
 from verity_vllm.config import option
 from verity_vllm.pipeline import c2_replay as C2

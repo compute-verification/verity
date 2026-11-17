@@ -21,9 +21,6 @@ from typing import Any
 
 import numpy as np
 import pytest
-
-from verity.protocols.proofs.spot.verifier import second_stage as SS
-from verity.protocols.proofs.spot.verifier.one_stage import partition as P, docket as R, verifier as V
 from verity.circuits.codec import definitions, descriptor_id
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.evaluation import evaluate
@@ -35,12 +32,17 @@ from verity.circuits.types import Value as Bits
 from verity.commitments import history as HT
 from verity.commitments.gates.embedding import read
 from verity.commitments.periods import rows as CS
+from verity.protocols.proofs.spot.verifier import second_stage as SS
+from verity.protocols.proofs.spot.verifier.one_stage import docket as R
+from verity.protocols.proofs.spot.verifier.one_stage import partition as P
+from verity.protocols.proofs.spot.verifier.one_stage import verifier as V
+
 from verity_vllm.definitions.registry import stop_check, stop_rule
 from verity_vllm.engine.hooks import Hooks
 from verity_vllm.pipeline import boundary_rows as BR
+from verity_vllm.pipeline import boundary_span as WD
 from verity_vllm.pipeline import boundary_stop as BS
 from verity_vllm.pipeline import boundary_windows as BW
-from verity_vllm.pipeline import boundary_span as WD
 from verity_vllm.pipeline import long_row as LR
 
 XOR8 = PrimitiveDefinition("BoundaryRowsTestXor8", 1, (("a", Bits(8)), ("b", Bits(8))), Bits(8), lambda a, b: a ^ b,

@@ -17,11 +17,19 @@ import numpy as np
 import pytest
 from verity.protocols.resource_accounting.compute.pouw.prover.serving import h1 as PH
 from verity.protocols.resource_accounting.compute.pouw.prover.serving import lead as PL
-from verity.protocols.resource_accounting.compute.pouw.prover.serving.lead import feed as F
-from verity.protocols.resource_accounting.compute.pouw.prover.serving.lead import record as R
-from verity.protocols.resource_accounting.compute.pouw.prover.serving.lead import rows as L
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.lead import (
+    feed as F,
+)
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.lead import (
+    record as R,
+)
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.lead import (
+    rows as L,
+)
 from verity.protocols.resource_accounting.compute.pouw.verifier.coins import Challenger
-from verity.protocols.resource_accounting.compute.pouw.verifier.serving import PassCommitment
+from verity.protocols.resource_accounting.compute.pouw.verifier.serving import (
+    PassCommitment,
+)
 from verity_torch.pouw.pearl_c import passes as PP
 
 from tests.protocols._needs_torch import torch

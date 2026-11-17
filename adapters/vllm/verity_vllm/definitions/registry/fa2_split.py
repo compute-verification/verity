@@ -41,10 +41,10 @@ NS = 1 is `AttentionHead_v5` / `Attention_v5` (the caller binds the align kernel
 from __future__ import annotations
 
 import numpy as np
-
 from verity.circuits.defs import bind, composite
 from verity.circuits.refs import Coll, array_of, concat, strided_view, tuple_of
 from verity.circuits.types import Array, Tuple
+
 from verity_vllm.definitions.registry import prims as P
 from verity_vllm.definitions.registry import sparse_mla as M
 from verity_vllm.definitions.registry import sparse_mla_split as SMS
