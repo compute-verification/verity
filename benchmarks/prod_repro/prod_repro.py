@@ -1070,7 +1070,7 @@ def declare(out: Path, r: dict, replay_dir: Path) -> Path | None:
         "measurements": [], "measurement_files": [], "artifacts": []}
     doc["artifacts"] = sorted({*(doc.get("artifacts") or ()), *outputs(out, replay_dir)})
     ids = {*METRICS.values(), *MATCH.values(), *ADVICE.values()}
-    model = next((m for m in S.MODELS.values() if f"{m.repo}@{m.revision}" == r.get("model")), None)
+    model = next((m for m in S.MODELS.values() if m.ref == r.get("model")), None)
     ours, stock = r["arms"]["ours"], r["arms"]["stock"]
     r = r | {"hardware": model and S.hardware(model),
              "members": model and {"cost": S.member(model, ours, stock), "arm": S.member(model, ours)}}
