@@ -306,27 +306,31 @@ def partition(args) -> int:
     return 0
 
 
-#: name -> (its script here, its arguments at a size one CPU slot runs in minutes)
-SCALING: dict[str, tuple[str, tuple[str, ...]]] = {
-    "registration": ("registration.sh", ("1024", "4096")),
-    "population": ("population.sh", ("20", "50", "10000")),
-    "members_parse": ("members_parse.sh", ("1000", "25000")),
-    "ledger_replay": ("ledger_replay/ledger_replay.sh", ("10", "30")),
-    "flock_tmpl": ("flock_tmpl.sh", ("256",)),
-    "whole_run": ("whole_run.sh", ("run", "toy", "146", "1000")),
+#: name -> (its script here, its arguments at a size one CPU slot runs in minutes, the environment it adds)
+SCALING: dict[str, tuple[str, tuple[str, ...], dict[str, str]]] = {
+    "registration": ("registration.sh", ("1024", "4096"), {}),
+    "population": ("population.sh", ("20", "50", "10000"), {}),
+    "members_parse": ("members_parse.sh", ("1000", "25000"), {}),
+    # builds Flock's prover and audits a stand-in window of MEMBERS members before it times anything
+    "members_files": ("members_files.sh", ("1", "16"), {"MEMBERS": "32"}),
+    "ledger_replay": ("ledger_replay/ledger_replay.sh", ("10", "30"), {}),
+    "flock_tmpl": ("flock_tmpl.sh", ("256",), {}),
+    "whole_run": ("whole_run.sh", ("run", "toy", "146", "1000"), {}),
 }
 
 
 def scaling(args) -> int:
     if args.list:
-        for name, (script, sizes) in SCALING.items():
-            print(f"{name}\tbenchmarks/verifier_cost/{script} {' '.join(sizes)}")
+        for name, (script, sizes, env) in SCALING.items():
+            print(f"{name}\tbenchmarks/verifier_cost/{script} {' '.join(sizes)}"
+                  + "".join(f"\t{k}={v}" for k, v in env.items()))
         return 0
     if args.name not in SCALING:
         print(f"no scaling benchmark {args.name!r}: one of {', '.join(SCALING)}", file=sys.stderr)
         return 2
-    script, sizes = SCALING[args.name]
-    return subprocess.run(["bash", str(HERE / script), *(args.args or sizes)], cwd=ROOT).returncode
+    script, sizes, env = SCALING[args.name]
+    return subprocess.run(["bash", str(HERE / script), *(args.args or sizes)], cwd=ROOT,
+                          env=os.environ | {k: os.environ.get(k, v) for k, v in env.items()}).returncode
 
 
 def store(args) -> int:

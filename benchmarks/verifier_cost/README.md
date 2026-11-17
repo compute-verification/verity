@@ -29,6 +29,8 @@ research run --on auto --project verity --source . --cwd clone -- \
   bash benchmarks/verifier_cost/job.sh measure --config llama32-1b --ir boolean   # the dashboard's proofs/verifier-seconds-served-description
 verity bench verifier_cost store RUN                     # its results.json or partition.json to the store; prints the art: id
 verity bench verifier_cost plot ART --to PNG             # from the store
+research run --on auto --project verity --source . --cwd clone [--mem-gb 32] -- \
+  uv run verity bench verifier_cost scaling NAME [ARG ...]   # a script below at its small sizes (scaling --list)
 ~~~
 
 `inference_only_glm.sh` runs `inference-only-check --policy` on GLM-5.3's registered Programs: the eight per-rank workload Programs of the B1
@@ -286,5 +288,5 @@ this benchmark's constructions, and nothing outside this directory reads them.
 The suite (`tests/test_mains.py`, which `check` runs after its Lean steps) holds every `<name>/Main.lean` here to the
 verifier it times: each must still elaborate in the checkout's package, `whole_run.py DIR toy 146 --check` must still
 accept the run it writes, and the ledger replay's generators must still write a ledger the challenger accepts and a
-period PoUW's period check accepts. It builds no executable and runs no benchmark; a main in a new directory is held
-without being listed.
+period PoUW's period check accepts. It builds no executable and runs no benchmark. Each main is also one of `scaling`'s
+(`run.py`'s `SCALING`): a main whose script no registered command runs is deleted.
