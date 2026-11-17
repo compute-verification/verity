@@ -31,22 +31,22 @@ from verity.circuits.defs import (
     PrimitiveDefinition,
     bind,
 )
+from verity.circuits.ops.boolean import versions as BB
 from verity.circuits.refs import Affine, Coll
 from verity.circuits.types import RecordType
-from verity.circuits.ops.boolean import versions as BB
-from verity_vllm.definitions.numerics import derived_rows as DR
-from verity_vllm.definitions.registry.catalog import load
-from verity_vllm.definitions.replay import replayer
+from verity_torch.frontend.boolean import derived
+from verity_torch.frontend.derive import DeriveReport
 
 from tests.program.predict.test_predict import TINY, _phi
 from verity_vllm.check import c2_rules
 from verity_vllm.check.replay import definitions as DF
+from verity_vllm.definitions.numerics import derived_rows as DR
+from verity_vllm.definitions.registry.catalog import load
+from verity_vllm.definitions.replay import replayer
 from verity_vllm.pipeline import c2_replay as C2
 from verity_vllm.pipeline.build import _instance_rows
 from verity_vllm.pipeline.build_instances import write_instances
 from verity_vllm.pipeline.tp import rank_replay as RR
-from verity_torch.frontend.boolean import derived
-from verity_torch.frontend.derive import DeriveReport
 from verity_vllm.program.predict.build import build_program
 from verity_vllm.query.manifest.format import spec_family
 

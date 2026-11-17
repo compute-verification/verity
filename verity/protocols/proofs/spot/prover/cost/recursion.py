@@ -3,7 +3,7 @@ run, V*'s staging, V*'s zk_served releases one at a time, and the Lean step that
 machine-window of a deployment over a week, a month and a year.
 
     python verity/protocols/proofs/spot/prover/cost/recursion.py --result recursion_e2e.json \
-        --census benchmarks/census/deployments.json --fleet benchmarks/slowdown/data/reference.toml \
+        --census calibration/census/deployments.json --fleet benchmarks/slowdown/data/reference.toml \
         [--sessions-per-window 1] [--out DIR]
 
 * **Measured**: each part's wall on the run's CPU node, as `recursion_e2e result` reads it (`headline.pipeline`), and
@@ -11,7 +11,7 @@ machine-window of a deployment over a week, a month and a year.
 * **Scaled**: every machine-window of the deployment holds ``sessions-per-window`` sessions of that shape, each at the
   measured cost. A period's sessions are machines x period / window; its node-hours are sessions x a part's wall; the
   nodes the deployment keeps busy are those node-hours over the period.
-* **Deployments**, which the caller hands in: the census's datacenter (`--census`, `benchmarks/census/deployments.json`'s
+* **Deployments**, which the caller hands in: the census's datacenter (`--census`, `calibration/census/deployments.json`'s
   `dc-12500-machines-600s`) and the world: `--fleet`, `benchmarks/slowdown/data/reference.toml`'s `world-h200` fleet (HGX servers, derived from the census's
   world-inference-2027), audited in the datacenter's windows (assumed: the census has no world cadence).
 """

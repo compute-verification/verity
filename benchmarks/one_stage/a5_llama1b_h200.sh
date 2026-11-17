@@ -23,10 +23,11 @@
 #    session's own), and a --zk challenger audit whose summary says other than window fails the run (rc 20) with no line.
 #    summary.json's ``epsilon`` is the window's sampling design's bound at several deltas (`Stratified.count_bound`).
 #
-#   research run --on MACHINE --project verity --source TREE --cwd clone --mem-gb 448 --timeout 3h \
+#   research run --on MACHINE --project verity --source TREE --cwd clone --mem-gb 32 --timeout 3h \
 #     --env GPU_LEASE_WHO=LANE --env A5_CORES=CPUS -- bash benchmarks/one_stage/a5_llama1b_h200.sh
 #   or, on a machine of your own, from the tree's root: bash benchmarks/one_stage/a5_llama1b_h200.sh   (its record in ./out)
-# Uses: about 400 GB of memory at its peak (399 GB measured at k=256, 377 GB at k=880), about 3 GB of disk under A5_ROOT
+# Memory: it checks none; proof_layers.sh, which runs it three times, asks for 96 GB of host memory available.
+# Uses: about 3 GB of disk under A5_ROOT
 #   while it runs (the row dir and the window, removed at exit) and 0.3 GB for M0's Flock build (A5_FLOCK_WORK, kept), and 13-16 min on one H200 with M0's
 #   build kept (the uv, Lean and M0 builds run behind the GPU stages; a machine's first run builds Flock and Lean cold).
 # Needs, which vllm's one bootstrap makes (refused in one line each before any build, naming it):
@@ -171,7 +172,14 @@ window_off() {  # the Commit's window from KEPT, the stages' run dir, to WD, its
 }
 stop() { window_off; records; echo "STOPPED at $1" | tee -a "$OUT/summary.txt"; exit "$2"; }
 
+jit=$(find "$ROOT/cache" -type f 2>/dev/null | wc -l)
 row build --stages build --config-run 1 --replay-k 460 || stop build 10
+hits=$(grep -rls --include='*.log' '^program cache hit' "$D" | wc -l)
+program="no Program cache"
+[ -n "${PROGRAM_CACHE:-}" ] && program="the Program cache restored $hits derives"
+if [ "$hits" -gt 0 ]; then reused=yes; elif [ "$jit" -gt 0 ]; then reused=unknown; else reused=no; fi
+echo "$(date -u +%H:%M:%SZ) build cache: $reused ($program; the JIT caches under $ROOT/cache held $jit files before it)" \
+  >> "$OUT/steps.txt"
 row match --stages match --config-run 0 || stop match 11
 row commit --stages commit --config-run 1 --replay-k 460 --replay-deferred 1 --serving-rows "$PART" || stop commit 12
 window_off

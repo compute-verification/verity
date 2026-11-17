@@ -1,4 +1,4 @@
-Part of network certification's [PROTOCOL.md](../PROTOCOL.md).
+Part of network attestation's [PROTOCOL.md](../PROTOCOL.md).
 
 ## The served rows held to their Programs (`verity_vllm.compiler.served_statics`)
 
@@ -29,7 +29,7 @@ and 1,021,302 ANDs, as at G = 54 = P.
 
 The verdict has bit 0 ``count`` (every slot's valid and n are the statics') and bit 1 ``pos`` (every start is). ``ACCEPT``
 is 0x3. The request ids and kinds are not the Program's to show. `IoTieRequest` holds each prefill slot's ids to its
-certified request's prompt ids at those positions, and the egress tie holds each decode slot's input to the request's last
+attested request's prompt ids at those positions, and the egress tie holds each decode slot's input to the request's last
 sample.
 
 **Positions.** The tie reads the Programs' positions, which are public, and binds no position leaf of the Commit. On vLLM's

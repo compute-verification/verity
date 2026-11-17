@@ -80,6 +80,19 @@ def test_reference_is_the_registered_relations_set(dist):
         assert set(got) == T.topk_set(words, k) and T.order_ok(words, got, k) == 1
 
 
+@pytest.mark.parametrize("dist", ["randn", "int", "edge"])
+def test_stress_definition_runs_the_registered_relation(dist):
+    pytest.importorskip("torch")
+    import stress
+    T, D = registered(), stress.definition_code()
+    data, lo, n = rows_case(3, 20, 40, 6, dist)
+    for row, a, m in zip(data, lo, n):
+        words = [struct.unpack("<I", struct.pack("<f", v))[0] for v in row[a:a + m]]
+        for k in {k for k in (1, 6, m) if 1 <= k <= m}:
+            assert D["topk_set"](words, k) == T.topk_set(words, k)
+            assert D["canonical_ok"](words, sorted(T.topk_set(words, k)), k) == 1
+
+
 def rows_case(seed: int, rows: int, cols: int, k: int, dist: str):
     rng = random.Random(seed)
     data, lo, n = [], [], []
@@ -249,7 +262,7 @@ def test_wrapped_ops_keep_their_overloads_under_a_dispatch_mode(monkeypatch):
 
 def test_register_is_off_unless_asked(monkeypatch):
     calls = []
-    monkeypatch.setattr(dsa_topk, "install", lambda *a, **k: calls.append(a))
+    monkeypatch.setattr(dsa_topk, "install", lambda canon=None: calls.append(canon))
     for v in (None, "", "0"):
         if v is None:
             monkeypatch.delenv(dsa_topk.ENV, raising=False)
@@ -260,10 +273,11 @@ def test_register_is_off_unless_asked(monkeypatch):
     monkeypatch.setenv(dsa_topk.ENV, "sorted")
     with pytest.raises(ValueError, match="canonical"):
         dsa_topk.register()
-    monkeypatch.setenv(dsa_topk.ENV, "canonical")
     monkeypatch.delenv(dsa_topk.LOG_ENV, raising=False)
-    dsa_topk.register()
-    assert calls == [()]
+    for mode in ("canonical", "canonical-bisect"):
+        monkeypatch.setenv(dsa_topk.ENV, mode)
+        dsa_topk.register()
+    assert [c.refine for c in calls] == [True, False]
 
 
 def logits(rows: int, cols: int):
@@ -352,7 +366,8 @@ class NoKernel:
 def test_a_launching_calls_one_write_holds_its_launch(monkeypatch, tmp_path):
     torch = pytest.importorskip("torch")
     monkeypatch.setattr(dsa_topk, "_capturing", lambda: False)
-    monkeypatch.setattr(dsa_topk, "kernels", lambda: dict.fromkeys(("canon_row", "count_seg", "emit_seg"), NoKernel()))
+    monkeypatch.setattr(dsa_topk, "kernels", lambda: dict.fromkeys(("canon_row", "count_seg", "emit_seg", "fix_find",
+                                                                    "fix_count", "fix_emit"), NoKernel()))
     canon, ns = dsa_topk.Canon(), fake_ns([])
     dsa_topk.install(ns, canon)
     dsa_topk.log_to(canon, str(tmp_path))
@@ -416,6 +431,105 @@ def test_counts_outlive_their_process(tmp_path, end):
                    "rows_at": 0 if end == "killed" else 7}
 
 
+class Copy:
+    """A queued copy of a device's counters (`dsa_topk._queue`'s stand-in): its counts as of the queueing, landed once
+    ``landed`` says so; waiting on it is refused unless ``wait`` is allowed."""
+
+    def __init__(self, counts, landed, wait):
+        self.counts, self.landed, self.wait = list(counts), landed, wait
+
+    def tolist(self):
+        return self.counts
+
+    def query(self):
+        return self.landed[0]
+
+    def synchronize(self):
+        if not self.wait[0]:
+            raise AssertionError("a step waited on its device")
+
+
+def test_each_steps_counts_are_kept_by_card_with_no_device_sync(tmp_path):
+    """At a step's start and end each device's counters are copied on its stream, and the step's line, its end's
+    counts less its start's, is written once the end's copy has landed, at a later step's end, in order; only
+    `Steps.drain`, at the process's exit, waits for one. A step is one that scheduled tokens, outside a capture and a
+    dummy run, numbered as the step trace numbers them; what runs between steps counts in none."""
+    landed, wait, lines = [False], [False], []
+    canon = dsa_topk.Canon()
+
+    def queue(stats):
+        c = Copy(stats, landed, wait)
+        return c, c
+
+    steps = dsa_topk.Steps(canon, lines.append, queue)
+    capturing = [False]
+    work = []
+
+    def execute(self, so, **kw):
+        for device, add in work.pop(0).items():
+            canon._stats[device] = [(a + b + (1 << 31)) % (1 << 32) - (1 << 31)    # as an int32 holds it
+                                    for a, b in zip(canon._stats.get(device, [0, 0, 0]), add)]
+        return "out"
+
+    runner = dsa_topk.step_runner(execute, steps, capturing=lambda: capturing[0])
+    so = lambda t: SimpleNamespace(total_num_scheduled_tokens=t)  # noqa: E731
+    line = lambda step, t, d, c: {"step": step, "tokens": t, "device": d, **dict(zip(dsa_topk.STATS, c))}  # noqa: E731
+    work.append({})
+    assert runner(None, so(5)) == "out"                 # step 0, no device has counted yet: no line
+    assert lines == []
+    work.extend([{"cuda:0": [9, 9, 9]}] * 3)            # between steps: no tokens, a dummy run, a capture
+    runner(None, so(0))
+    runner(None, so(7), dummy_run=True)
+    capturing[0] = True
+    runner(None, so(7))
+    capturing[0] = False
+    work.append({"cuda:0": [3, 1, 0], "cuda:1": [2, 0, 1]})
+    runner(None, so(7))                                 # step 1, queued, not landed
+    assert (steps.step, lines) == (2, [])
+    landed[0] = True
+    canon._stats["cuda:0"][0] = (1 << 31) - 1           # the int32 wraps within step 2
+    work.append({"cuda:0": [2, 0, 1]})
+    runner(None, so(9))                                 # step 2: step 1's copies landed, so both steps' lines
+    assert lines == [line(1, 7, "cuda:0", [3, 1, 0]), line(1, 7, "cuda:1", [2, 0, 1]),
+                     line(2, 9, "cuda:0", [2, 0, 1]), line(2, 9, "cuda:1", [0, 0, 0])]
+    landed[0] = False
+    work.append({"cuda:1": [1, 1, 0]})
+    runner(None, so(3))
+    assert len(lines) == 4
+    wait[0] = True
+    steps.drain()
+    assert lines[4:] == [line(3, 3, "cuda:0", [0, 0, 0]), line(3, 3, "cuda:1", [1, 1, 0])]
+
+
+def test_steps_to_keeps_a_file_a_process_and_wraps_each_runner_once(tmp_path, monkeypatch):
+    class Runner:
+        def execute_model(self, so, **kw):
+            return "out"
+
+    canon = dsa_topk.Canon()
+    steps = dsa_topk.steps_to(canon, str(tmp_path), runners=[Runner])
+    assert Runner.execute_model.dsa_topk_steps is steps
+    dsa_topk.steps_to(canon, str(tmp_path), runners=[Runner])
+    assert Runner.execute_model.dsa_topk_steps is steps
+    assert dsa_topk._importable("json.decoder") and not dsa_topk._importable("json.no.runner")
+    assert not dsa_topk._importable("no_such_package.runner")
+    steps.write({"step": 0, "tokens": 4, "device": "cuda:0", "rows_long": 1})
+    path = tmp_path / f"dsa_topk_steps.{os.getpid()}.jsonl"
+    lines = [json.loads(x) for x in path.read_text().splitlines()]
+    assert lines[0] == {"pid": os.getpid(), "stats": list(dsa_topk.STATS)} and lines[-1]["rows_long"] == 1
+    # the plugin keeps them only where asked
+    calls = []
+    monkeypatch.setattr(dsa_topk, "install", lambda *a, **k: canon)
+    monkeypatch.setattr(dsa_topk, "steps_to", lambda c, d: calls.append((c, d)))
+    monkeypatch.setenv(dsa_topk.ENV, "canonical")
+    monkeypatch.delenv(dsa_topk.LOG_ENV, raising=False)
+    monkeypatch.delenv(dsa_topk.STEPS_ENV, raising=False)
+    dsa_topk.register()
+    monkeypatch.setenv(dsa_topk.STEPS_ENV, str(tmp_path))
+    dsa_topk.register()
+    assert calls == [(canon, str(tmp_path))]
+
+
 def test_site_declares_the_plugin(tmp_path):
     d = dsa_topk.site(tmp_path)
     eps = (d / "verity_dsa_topk-0.0.dist-info" / "entry_points.txt").read_text()
@@ -476,7 +590,123 @@ def test_kernels_canonicalize_in_interpreter(monkeypatch, dist, seg_min_keys):
         stats = dict(zip(dsa_topk.STATS, canon.stats(x.device).tolist()))
         assert stats["rows_long"] == sum(m > k for m in n)
         if how == "atomic" and dist == "randn":
-            assert stats["rows_bisected"] == 0
+            assert stats["rows_bisected"] == stats["rows_refined"] == 0
+
+
+def concentrated_case(seed: int, rows: int, cols: int, k: int, dist: str):
+    """``shift``: 32 plus a normal; ``steps``: 32 plus a multiple of 1/64, so ties at the k-th key."""
+    rng = random.Random(seed)
+    data = [[32.0 + (rng.gauss(0, 1) if dist == "shift" else rng.randrange(12) / 64) for _ in range(cols)]
+            for _ in range(rows)]
+    n = [rng.choice([k - 3, k, cols, cols, rng.randrange(k + 1, cols + 1)]) for _ in range(rows)]
+    return data, [0] * rows, n
+
+
+def missed(torch, x, lo, n, k, rng):
+    """The pin's miss: the true top-k set with its smallest few keys swapped for keys just below the k-th."""
+    out = torch.full((x.shape[0], k), -1, dtype=torch.int32)
+    for r in range(x.shape[0]):
+        m = max(int(n[r]), 0)
+        if m <= k:
+            out[r, :m] = torch.arange(m, dtype=torch.int32)
+            continue
+        key = [dsa_topk.ordered(int(b)) for b in x[r, lo[r]:lo[r] + m].contiguous().view(torch.int32)]
+        order = sorted(range(m), key=lambda i: (-key[i], i))
+        drop = rng.randrange(1, min(4, m - k) + 1)
+        sel = order[:k - drop] + order[k:k + drop]
+        rng.shuffle(sel)
+        out[r] = torch.tensor(sel, dtype=torch.int32)
+    return out
+
+
+def coarse_bins(torch, values):
+    """The pin's cooperative_topk's coarse bin of each float32: the top 10 bits of its fp16 rounding's ordered key."""
+    b = values.to(torch.float16).view(torch.int16).to(torch.int64)
+    return torch.where(b < 0, b ^ 0x7FFF, b) >> 6
+
+
+def overflowed(torch, x, lo, n, k, rng):
+    """The pin's cooperative_topk past its limit on candidates: every key above the k-th key's coarse bin, then keys of
+    that bin in no order of score."""
+    out = torch.full((x.shape[0], k), -1, dtype=torch.int32)
+    for r in range(x.shape[0]):
+        m = max(int(n[r]), 0)
+        if m <= k:
+            out[r, :m] = torch.arange(m, dtype=torch.int32)
+            continue
+        key = [dsa_topk.ordered(int(b)) for b in x[r, lo[r]:lo[r] + m].contiguous().view(torch.int32)]
+        cb = coarse_bins(torch, x[r, lo[r]:lo[r] + m]).tolist()
+        win = cb[sorted(range(m), key=lambda i: (-key[i], i))[k - 1]]
+        above = [i for i in range(m) if cb[i] > win]
+        sel = above + rng.sample([i for i in range(m) if cb[i] == win], k - len(above))
+        rng.shuffle(sel)
+        out[r] = torch.tensor(sel, dtype=torch.int32)
+    return out
+
+
+def paths(torch, x, lo, n, k, first):
+    """(bisected, refined): a failed row is refined where its k-th key's 13-bit prefix is the candidate's or a
+    neighbour's."""
+    bisected = refined = 0
+    for r in range(x.shape[0]):
+        m = int(n[r])
+        if m <= k:
+            continue
+        key = [dsa_topk.ordered(int(b)) for b in x[r, lo[r]:lo[r] + m].contiguous().view(torch.int32)]
+        sel = [int(i) for i in first[r] if 0 <= int(i) < m]
+        tau = min((key[i] for i in sel), default=(1 << 31) - 1)
+        if sum(v > tau for v in key) < k <= sum(v >= tau for v in key):
+            continue
+        kth = sorted(key, reverse=True)[k - 1]
+        near = abs((kth >> 19) - (tau >> 19)) <= 1
+        refined += near
+        bisected += not near
+    return bisected, refined
+
+
+@pytest.mark.parametrize("dist", ["randn", "int", "edge", "shift", "steps"])
+def test_refined_pass_is_the_present_one_bit_for_bit(monkeypatch, dist):
+    torch = interpreted(monkeypatch)
+    rng = random.Random(7)
+    k, rows, cols = 16, 8, 160
+    if dist in ("shift", "steps"):
+        data, lo, n = concentrated_case(9, rows, cols, k, dist)
+    else:
+        data, lo, n = rows_case(9, rows, cols, k, dist)
+    x = torch.tensor(data, dtype=torch.float32)
+    lo_t, n_t = torch.tensor(lo, dtype=torch.int32), torch.tensor(n, dtype=torch.int32)
+    ref = dsa_topk.reference_rows(x, lo, n, k)
+    refined = 0
+    guess = {"missed": missed, "overflow": overflowed}
+    for how in ("atomic", "missed", "overflow", "dup", "wrong", "garbage"):
+        if how in guess:
+            first = guess[how](torch, x, lo, n, k, rng)
+        else:
+            first = fast_selection(torch, x, lo, n, k, how, rng)
+        outs, stats = [], []
+        for canon in (dsa_topk.Canon(seg_min_keys=24, block=32, refine=False),
+                      dsa_topk.Canon(seg_min_keys=24, block=32)):
+            canon._sms[x.device] = 64
+            assert canon.segments(x.device, rows, cols) > 1
+            out = first.clone()
+            canon.run("top_k_per_row_prefill", x, out, k, 0, lo_t, lo_t + n_t, rows=rows, ncols=cols, ls0=cols, ls1=1)
+            outs.append(out)
+            stats.append(dict(zip(dsa_topk.STATS, canon.stats(x.device).tolist())))
+            assert all(int(t.abs().sum()) == 0 for t in canon._fine.values()), how
+        assert torch.equal(outs[1], outs[0]) and torch.equal(outs[0], ref), how
+        present, new = stats
+        bisected, refined_here = paths(torch, x, lo, n, k, first)
+        assert (present["rows_bisected"], present["rows_refined"]) == (bisected + refined_here, 0), how
+        assert (new["rows_bisected"], new["rows_refined"]) == (bisected, refined_here), how
+        assert new["rows_long"] == present["rows_long"] == sum(m > k for m in n)
+        assert new["rows_tied"] == present["rows_tied"], how
+        if how == "missed" and dist in ("randn", "shift"):
+            assert present["rows_bisected"] == sum(m > k for m in n)
+        if how == "overflow" and dist != "edge":
+            assert bisected == 0
+        refined += refined_here
+    if dist in ("shift", "steps"):
+        assert refined > 0
 
 
 @pytest.mark.parametrize("sms", [1, 64])

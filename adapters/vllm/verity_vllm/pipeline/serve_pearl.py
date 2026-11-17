@@ -41,6 +41,7 @@ from pathlib import Path
 from typing import Any
 
 from verity.protocols.resource_accounting.compute.pouw.prover import serving as PS
+
 from verity_vllm import messages as M
 
 #: pearl_c_sm90's scheme, one of `pearl_c.SCHEMES`: v1 forming on the device record of an H100 or H200, -h3 hashing
@@ -68,7 +69,9 @@ def config_of(value: str | None) -> dict[str, Any]:
     from verity_vllm.protocols import pouw as PW
 
     try:
-        doc = load_settings(json.loads(value) if value and value.lstrip().startswith("{") else value)
+        doc = load_settings(None if value is None else json.loads(M.body("PoUWScheme", value.encode())
+                                                                  if value.lstrip().startswith("{")
+                                                                  else M.read(Path(value), "PoUWScheme")))
     except (OSError, ValueError) as e:
         raise UsageError(f"--protocols-config {str(value)[:80]}: {e}") from None
     if stray := sorted(set(doc) - {"pouw"}):

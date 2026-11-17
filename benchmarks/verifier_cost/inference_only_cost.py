@@ -244,7 +244,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--config", action="append", choices=list(run.CONFIGS))
     ap.add_argument("--workload")
     ap.add_argument("--big", type=int, default=2**17, help="inference-only-phases times a body of this many nodes step by step")
-    ap.add_argument("--no-policy", action="store_true", help="inference-only-phases only, its verdict standing for inference-only-check's")
+    ap.add_argument("--no-policy", action="store_true", help="inference-only-phases only, its verdict standing for inference-only-verifier's")
     ap.add_argument("--word-only", action="store_true", help="glm: the word-level descriptor only, no Boolean lift")
     args = ap.parse_args(argv)
     Path(args.out).mkdir(parents=True, exist_ok=True)

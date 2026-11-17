@@ -23,7 +23,7 @@ name = "inference_only_phases"
 defaultTargets = ["inference-only-phases"]
 
 [[require]]
-name = "inference_only_check"
+name = "inference_only_verifier"
 path = "$L"
 
 [[lean_exe]]

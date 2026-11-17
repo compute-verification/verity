@@ -763,7 +763,7 @@ def _n(k: int) -> int:
     """`weights.chunks` (K), or 1 at a K it refuses (`credit._chunks`): a ``tile-k`` case's, which `credit.layout_of`
     refuses before it reads K's template."""
     n = Cr._chunks(k)
-    return 1 if n is None else n
+    return n if type(n) is int else 1
 
 
 def _unit_fn(k: int, r: int, c: int, j10r: bool = False, tile: int | None = None) -> str:

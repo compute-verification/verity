@@ -302,10 +302,10 @@ def check_point_environment(spec: ResolvedSpec | SteadySpec, environ: Mapping[st
 
 
 #: the GPU nodes whose GPUs `--direct` may take: each has its GPU slots in GPU_SLOTS, one per GPU (the nebius nodes and
-#: the eight-card H200 node g0-g7, the single-GPU DC VMs g0). A slot gives a run its CPUs and no GPU: the run takes
+#: the eight-card H200 nodes g0-g7, the single-GPU VMs g0). A slot gives a run its CPUs and no GPU: the run takes
 #: its GPUs from the node's gpu-lease
-DIRECT_NODES = ("vy-nebius-1", "vy-nebius-2", "vy-nebius-3", "vy-dc-h200", "vy-dc-h200-2", "vy-dc-h200-3", "vy-dc-b200",
-                "vy-spot-glm53")
+DIRECT_NODES = ("vy-nebius-1", "vy-nebius-2", "vy-nebius-3", "vy-dc-h200-2", "vy-dc-h200-3", "vy-dc-b200", "vy-spot-glm53",
+                "vy-h200x8-1", "vy-h100-1")
 GPU_SLOTS = "/workspace/research/locks/gpu/slots"
 #: how long a direct point waits for one of those slots where its launch states no end: as long as a pool's run waits for
 #: a slot (`research run --pool`'s --pool-wait, `slot_only.POOL_WAIT_S`)
@@ -419,17 +419,21 @@ def slot_run(spec: ResolvedSpec | SteadySpec, root: Path, node: str, *, campaign
 
 
 def direct_command(plan: Plan, source: str | Path, item: PlannedPoint, root: Path, node: str, *,
-                   end: float | None = None, now: Callable[[], float] = time.time) -> list[str]:
+                   card: int | None = None, cores: str | None = None, end: float | None = None,
+                   now: Callable[[], float] = time.time) -> list[str]:
     """The point as a `research run --on NODE` through one of the node's GPU slots (`slot_run`, by `end` where given),
-    its GPUs from the node's gpu-lease: the queued point's tool, identity and environment."""
+    its GPUs from the node's gpu-lease, of the booked `card` alone and on the booked slot's `cores` where given: the
+    queued point's tool, identity and environment."""
 
     spec = vllm_spec(plan)
     minutes = direct_minutes(spec, node)
     # Without --max-min a lease has no end, which gpu-lease refuses while a booked period lies ahead; a guest's GPU job is
     # preemptible, as the queued point's is.
-    lease = ["gpu-lease", str(spec.preset.gpu_count), "--wait", "--max-min", f"{minutes:g}", "--preemptible", "--"]
+    lease = ["gpu-lease", str(spec.preset.gpu_count), "--wait", *(["--on", str(card)] if card is not None else []),
+             *(["--cores", cores] if cores else []), "--max-min", f"{minutes:g}", "--preemptible", "--"]
     return slot_run(spec, root, node, campaign="vllm-bench", tool="verity_bench.tool:VLLM_BENCH_POINT",
-                    env=_env_flags(spec), job=[*lease, *_point_command(source, item, root)], end=end, now=now)
+                    env=_env_flags(spec), job=[*lease, *_point_command(source, item, root)], cores=cores, end=end,
+                    now=now)
 
 
 def _execute(command: Sequence[str], root: Path) -> int:

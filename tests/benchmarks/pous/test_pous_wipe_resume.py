@@ -2,7 +2,8 @@
 (`pi2_state_attack.py`), at a tiny size: the streamed wipe accepts the honest prover and rejects the naive cheat and the
 resume prover however long it searches, and accepts a prover only when a premise is broken (`K` handed to it, or the
 labels kept in an undeclared tier); the band and dense labels are rebuilt bit for bit from five SHAKE256 states.
-The clock is injected (each reading advances it), the coins fixed, and the verdict is the Python reference's."""
+The clock is injected (each reading advances it), the coins fixed, and no Lean judges (`decide="python"`): what the
+check passed is the Python reference's side, and no session is recorded accepted on its word."""
 from __future__ import annotations
 
 import importlib.util
@@ -26,21 +27,34 @@ def _load(name: str, where: Path = WIPE_RESUME):
 @pytest.fixture(scope="module")
 def streamed(tmp_path_factory):
     resume = _load("resume")
-    from verity.protocols.resource_accounting.memory.pous.verifier import streamed_wipe as sw
-
-    def python(signed, commitment, *, trusted, schemes, decide):
-        v = sw.verdict(signed, commitment, trusted=trusted, schemes=schemes)
-        return v, {"python": {"accepted": v.accepted, "reasons": list(v.reasons)}}
-
     out = resume.run(n=256, k=400, limit_ns=1_000_000, decide="python", scratch=tmp_path_factory.mktemp("wipe-resume"),
-                     clock=_load("pous_fakes", POUS_TESTS).Clock(10 ** 9, 1_000), untimed_tries=1 << 10, sample_sessions=0, judge=python, coin_secret=b"fixed coins")
+                     clock=_load("pous_fakes", POUS_TESTS).Clock(10 ** 9, 1_000), untimed_tries=1 << 10,
+                     sample_sessions=0, coin_secret=b"fixed coins")
     return resume, {s["prover"]: s for s in out["sessions"]}, out
+
+
+def _passed(s) -> bool:
+    return s["verdicts"]["python"]["accepted"]
 
 
 def test_every_prover_ends_as_expected(streamed):
     _, by, out = streamed
-    assert out["as_expected"], {p: (s["accepted"], s["ended"], s["reasons"]) for p, s in by.items()}
-    assert [p for p, s in by.items() if s["accepted"]] == ["honest", "key-leak", "untiered"]
+    assert out["as_expected"], {p: (s["outcome"], s["ended"], s["reasons"]) for p, s in by.items()}
+    assert [p for p, s in by.items() if _passed(s)] == ["honest", "key-leak", "untiered"]
+    assert {s["expected_by"] for s in by.values()} == {"python", "verdict"}
+
+
+def test_with_no_lean_no_session_is_recorded_accepted_on_the_pythons_word(streamed):
+    """Under `decide="python"` no Lean judges: a session the Python accepts is `undecided` (`wipe_verdict.NO_JUDGE`),
+    not accepted, its accept only in the Python's own side; one it rejects stays rejected."""
+    resume, by, _ = streamed
+    wv = resume._wipe_verdict()
+    for p, s in by.items():
+        assert s["accepted"] is False, p
+        if _passed(s):
+            assert (s["outcome"], s["reasons"], s["expected_by"]) == ("undecided", [wv.NO_JUDGE], "python"), p
+        else:
+            assert s["outcome"] == "reject" and s["expected_by"] == "verdict", p
 
 
 def test_the_naive_cheat_keeps_its_prior_content_and_answers_wrong(streamed):
@@ -62,7 +76,7 @@ def test_the_resume_prover_keeps_63_of_64_bytes_and_never_finds_the_key(streamed
 def test_only_a_broken_premise_keeps_the_whole_store(streamed):
     _, by, _ = streamed
     for name in ("key-leak", "untiered"):
-        assert by[name]["accepted"] and by[name]["kept"] and by[name]["prior_share"] == 1.0
+        assert _passed(by[name]) and by[name]["kept"] and by[name]["prior_share"] == 1.0
     assert not by["honest"]["kept"]
 
 

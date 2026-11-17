@@ -8,7 +8,8 @@ one PR, `research.queue._message`) against its first parent, and the other commi
 them (a branch's own commits against its merge base, or against the merge of its merge bases when it has several).  A
 ratchet is a shrink-only allowlist under ``tests/adapters/vllm/tests`` or ``tests/lint`` (``**/allowlists/*.json`` or
 ``**/*allowlist*.json`` holding an ``entries`` list), known by its slug, its file's name less a rule number (``p10_size.json``
-and ``size.json`` are both ``size``), so a moved or renamed allowlist is still compared; one the change adds starts at its own
+and ``size.json`` are both ``size``), so a moved or renamed allowlist is still compared, the change's copy read wherever
+the change moves the base's (``git diff -M``), out of the lint directories too; one the change adds starts at its own
 count and is not compared.  ``tests/lint`` is the repository's: ``test_repo_ruff.py`` holds every tracked file outside the
 integration's ruff lint to ``allowlists/repo_ruff.json`` under the root ``ruff.toml``, which
 ``adapters/vllm/ruff.toml`` extends, a count per (file, rule) whose kind is its ``rule``, and its counted lints (``COUNTED``)
@@ -31,7 +32,10 @@ when:
   at least as much, so a move from one file to another passes.  A repository list
   (``repo_ruff``'s and each counted lint's, ``CATCH_UP``) may also raise a key, in any file, up to what its lint, as the
   change's base has it, finds there in the base's tree: a list that records what its base already holds adds no finding,
-  so a list behind its tree catches up, while growth past the base's own findings is held as before.  A file the change
+  so a list behind its tree catches up, while growth past the base's own findings is held as before.  An integration
+  list (ruff's, ruff_vllm's, mypy's) may record entries for the files of a tests root its lints come to read in the change
+  (``ROOTS``, `new_roots`) and its base's list holds none under, as far as its lint, as it runs a tests root, finds as many
+  of each kind in each file in the base's tree (`from_new_roots`): those findings were there unlinted.  A file the change
   renames (``git diff -M``) is the base's file where the change puts it: its entry in the base's list is compared at
   its new path, where its key may rise to what the base's lint finds in the file where the base holds it, and the path
   it left holds nothing.  So a move and the commit that records its files' entries pass as one change, a site the change
@@ -54,12 +58,14 @@ when:
   beyond what it finds on the base's own tree, with the base's lists: a violation the tree below already holds isn't the
   change's, so it passes, naming the change that added each one's line (``git blame --first-parent`` on the base: ``#N``
   for a queue merge), whose own merge the source checks below fail.  A site (``lint: file:line what``) is the tree
-  below's wherever in its file it stands: it is compared by its file and what it is, with a count, never by its line, so
-  an edit above a site moves it and adds none, a second site of the same kind in its file is the change's, and a file's
+  below's wherever in its file it stands: it is compared by its file and what it is (a retired term less the advice its
+  Glossary row gives), with a count, never by its line, so an edit above a site moves it and adds none, a second site of
+  the same kind in its file is the change's, and a file's
   count that a mended site lowers is no new violation, whether its entry falls with it or stays (`beyond`); a list
   lowered under a tree that its base's list covered is one.  A file the change renames (``git diff -M``) is its old
   path's file, so a move adds none of the sites its base holds there past its list, which are named at the old path
-  (`at_paths`).  In a temporary worktree of the change's top, each
+  (`at_paths`); a counted lint's sites in it are those of the base's text where the change puts it (`moved_sites`), so a
+  lint whose terms or reach depend on the path finds none that the move alone brings in.  In a temporary worktree of the change's top, each
   lint directory to run and both ``ruff.toml`` files are replaced by the base's, each allowlist there holding the top's
   entries for its slug (none for a deleted one), P16's the top's public commands too, and the ``test_no_new*`` tests
   of each lint whose code or allowlist changed (every lint's in a directory whose shared code did) run without pytest, the ruff
@@ -99,7 +105,7 @@ the change doesn't touch is never linted.
 
 Each counted lint's sites are counted the same way, when its base has the lint, loaded from the base and counting as it
 counts: each ``*.py`` file the change adds or modifies outside that lint's ``LEFT_OUT`` fails when its count grows, naming the
-new sites and the lint's fix.  Of a file's rise, the sites the other files it changes lose are no new text and not
+new sites and the lint's fix.  A renamed file's before is the base's text counted at its new path.  Of a file's rise, the sites the other files it changes lose are no new text and not
 growth, where the change's list records the file's sites: each is known by what it is and the stripped line it stands
 on, as many as those files' counts fall by, so a class split out of a file takes its sites with it and pays for no new
 one.  Its direct environment reads (configuration is read in one place), unless the file is a
@@ -146,7 +152,8 @@ on the first Python whose ``-m ruff`` is the base's pin: this one, else one ``uv
 else one ``uv run --with`` fetches the pin for (the network, once per uv cache).  A run judges every change above its BASE,
 and runs overlap (a rerun of one tip, a later tip's run whose BASE lies below changes an earlier run judged), so each
 change's verdict is kept under ``$RATCHET_GATE_CACHE`` (default ``~/.cache/verity/ratchet-gate``; empty: none; the check's
-step keeps it in the check's cache), keyed by this file's bytes and the change's commits, which are all it reads, and BASE
+step keeps it in the check's cache), keyed by this file's bytes, the change's commits and the environment mypy runs in
+here (`mypy_environment`, which decides whether a new root's mypy entries can be checked), which are all it reads, and BASE
 too for a verdict that reads it (a failed change's exemptions run BASE's move_check), under a key of its own with
 ``--every-rule``, where a failure names more: N runs over a change judge it once,
 not N times, and once BASE moves an untouched or passed change is still not judged again.  The source checks' findings
@@ -169,6 +176,7 @@ import contextlib
 import fcntl
 import functools
 import hashlib
+import importlib.metadata
 import importlib.util
 import io
 import json
@@ -196,6 +204,17 @@ SELF = hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
 INTEGRATION = "adapters/vllm"
 TESTS = f"tests/{INTEGRATION}/tests/"
 LINT = f"{TESTS}lint"
+#: the served Definitions' tests, which the integration's lints name as they named them beside the Definitions
+DEFINITION_TESTS = f"tests/{INTEGRATION}/verity_vllm/definitions/"
+DEFINITION_TESTS_KEY = "verity_vllm/definitions/tests/"
+#: the integration's tests roots past ``TESTS``, by the key its lints name each by: a root is in its lints' scope at a
+#: revision whose ``_ratchet.py`` names that key
+ROOTS = {DEFINITION_TESTS_KEY: DEFINITION_TESTS}
+RATCHET_MODULE = f"{LINT}/_ratchet.py"
+#: the integration's mypy lint (``test_mypy.py``, by its slug), which the gate runs only on a root its lints come to read:
+#: its findings need the environment its list records (``environment``: python and these distributions' versions)
+MYPY_LINT = "mypy"
+MYPY_PACKAGES = ("mypy", "pydantic", "torch", "vllm")
 #: the ruff lint (``test_ruff.py``, by its slug), its config, and the pyproject whose ``dev`` group pins its ruff
 RUFF_LINT = "ruff"
 RUFF_CONFIG = f"{INTEGRATION}/ruff.toml"
@@ -204,6 +223,8 @@ PYPROJECT = "pyproject.toml"
 REPO_LINT = "tests/lint"
 REPO_RUFF_LINT = "repo_ruff"
 REPO_RUFF_CONFIG = "ruff.toml"
+#: the retired-terms lint's term source, which it reads from the tree it runs in: the base's lint reads the base's
+TERMS = "GLOSSARY.md"
 #: the repository's ruff lint's module, whose ``LEFT_OUT`` says which files the source lint leaves to others, and its list
 REPO_RUFF_MODULE = f"{REPO_LINT}/test_{REPO_RUFF_LINT}.py"
 REPO_RUFF_LIST = f"{REPO_LINT}/allowlists/{REPO_RUFF_LINT}.json"
@@ -242,17 +263,22 @@ RUFF_FROM = {RUFF_VLLM_LINT: INTEGRATION}
 
 
 def in_integration(path: str) -> bool:
-    """Whether ``path`` is the integration's: under ``INTEGRATION`` or its tests (``TESTS``)."""
-    return path.startswith((f"{INTEGRATION}/", TESTS))
+    """Whether ``path`` is the integration's: under ``INTEGRATION`` or its tests (``TESTS``, ``DEFINITION_TESTS``)."""
+    return path.startswith((f"{INTEGRATION}/", TESTS, DEFINITION_TESTS))
 
 
 def key_of(path: str) -> str:
-    """How the integration's lints name a file of the tree: from ``INTEGRATION``, and its tests as ``tests/...``."""
+    """How the integration's lints name a file of the tree: from ``INTEGRATION``, its tests as ``tests/...`` and the
+    Definitions' tests as ``DEFINITION_TESTS_KEY``."""
+    if path.startswith(DEFINITION_TESTS):
+        return f"{DEFINITION_TESTS_KEY}{path.removeprefix(DEFINITION_TESTS)}"
     return f"tests/{path.removeprefix(TESTS)}" if path.startswith(TESTS) else path.removeprefix(f"{INTEGRATION}/")
 
 
 def path_of(key: str) -> str:
     """The file of the tree an integration lint's key names (`key_of`'s inverse)."""
+    if key.startswith(DEFINITION_TESTS_KEY):
+        return f"{DEFINITION_TESTS}{key.removeprefix(DEFINITION_TESTS_KEY)}"
     return f"{TESTS}{key.removeprefix('tests/')}" if key.startswith("tests/") else f"{INTEGRATION}/{key}"
 MOVE_CHECK = "tools/check/move_check.py"
 #: what move_check imports from its own checkout, as `research.queue`'s `move_scripts` lists it: the move scripts (the
@@ -275,6 +301,8 @@ LINES = re.compile(r"\d+(?:,\d+)*")
 #: the count a violation states against its allowance, whole: ``2 found, 0 allowed``, or the suffix
 #: ``  (2 found, 1 allowed)`` that `_ratchet.new_violations` writes after a key's lines only while the key has an allowance
 COUNT = re.compile(r"\s*\(?\b(\d+) found, \d+ allowed\b\)?")
+#: the advice after a retired term's site (``'X' is retired; say Y (GLOSSARY.md)``), which rewording its Glossary row changes
+ADVICE = re.compile(r"(?<=' is retired); say .*")
 #: a violation of the repository's ruff lint that names its (file, rule) pair: ``repo_ruff: file [RULE]: N found, M allowed``
 RUFF_PAIR = re.compile(r"^[^:]+: ([^\s:]+) \[([^\]]+)\]: ")
 #: the tables that place a module, by lint file: each a dict literal of strings, which a change may edit for the modules it
@@ -397,13 +425,14 @@ def count(entry: object) -> int:
     return n if isinstance(n, int) else 1
 
 
-def ratchets(rev: str) -> tuple[dict[str, list], dict[str, str], list[str]]:
-    """({slug: entries}, {slug: path}, the ratchet-named files that aren't readable allowlists) at ``rev``."""
+def ratchets(rev: str, moved: Iterable[str] = ()) -> tuple[dict[str, list], dict[str, str], list[str]]:
+    """({slug: entries}, {slug: path}, the ratchet-named files that aren't readable allowlists) at ``rev``, with ``moved``,
+    the paths of the base's ratchets a change moves, or that it moves them to, wherever they are."""
     entries: dict[str, list] = {}
     paths: dict[str, str] = {}
     bad: list[str] = []
     listed = git("ls-tree", "-r", "-z", "--name-only", rev, "--", TESTS, f"{REPO_LINT}/").split("\0")
-    for path in sorted(p for p in listed if is_ratchet(p)):
+    for path in sorted({p for p in listed if is_ratchet(p)} | set(moved)):
         try:
             doc = json.loads(git("show", f"{rev}:{path}"))
         except ValueError:
@@ -672,10 +701,13 @@ def noqa_lines(rev: str, path: str) -> list[tuple[int, str]]:
     return [(n, lines[n - 1].strip()) for n in sorted(rows)]
 
 
-def added_rows(lo: str, hi: str, path: str) -> set[int]:
-    """The line numbers of ``path`` at ``hi`` that its diff from ``lo`` adds."""
+def added_rows(lo: str, hi: str, path: str, was_at: str | None = None) -> set[int]:
+    """The line numbers of ``path`` at ``hi`` that its diff from ``lo`` adds, from ``was_at`` there when the change renames
+    it."""
     rows: set[int] = set()
-    for m in HUNK.finditer(git("diff", "--no-renames", "-U0", lo, hi, "--", path)):
+    diff = (git("diff", "-U0", f"{lo}:{was_at}", f"{hi}:{path}") if was_at and was_at != path
+            else git("diff", "--no-renames", "-U0", lo, hi, "--", path))
+    for m in HUNK.finditer(diff):
         rows.update(range(int(m[1]), int(m[1]) + int(m[2] or 1)))
     return rows
 
@@ -727,9 +759,10 @@ def python(path: str) -> bool:
 def changed_sources(lo: str, hi: str, left: tuple[str, ...], holds: Callable[[str], bool] = python
                     ) -> list[tuple[str, str | None, str | None, str]]:
     """(path, its path before, its blob before, its blob after; None before for a new file) of each file ``holds`` takes (a
-    ``*.py`` or ``*.pyi`` file) that ``lo..hi`` adds or modifies outside ``left``.  A renamed file's before is its old path's,
-    so a move keeps its findings."""
+    ``*.py`` or ``*.pyi`` file) that ``lo..hi`` adds or modifies outside ``left``.  A renamed file's before is its old path's
+    (`renames`), so a move keeps its findings."""
     fields = git("diff", "--raw", "-z", "-M", "--no-abbrev", lo, hi).split("\0")
+    came = {new: old for old, new in list_moved(lo, hi).items()}
     out, i = [], 0
     while i + 1 < len(fields):
         old_mode, new_mode, old, new, status = fields[i].lstrip(":").split()
@@ -737,8 +770,36 @@ def changed_sources(lo: str, hi: str, left: tuple[str, ...], holds: Callable[[st
         was, path, i = fields[i + 1], fields[i + n], i + 1 + n
         if new_mode in FILE_MODES and holds(path) and not path.startswith(left):
             kept = old_mode in FILE_MODES and status[0] != "C"
+            if status[0] == "A" and path in came:
+                was, old, kept = came[path], git("rev-parse", f"{lo}:{came[path]}").strip(), True
             out.append((path, was if kept else None, old if kept else None, new))
     return out
+
+
+@functools.cache
+def list_moved(lo: str, hi: str) -> dict[str, str]:
+    """{old path: new path} of each file ``lo..hi`` deletes and adds anew whose entry a counted lint's list moves from the
+    one to the other (``--move OLD NEW``), paired as ``git diff -M`` pairs them at any similarity: a rename that rewrites
+    most of a short file's lines (a module renamed in its own imports) is under git's 50% and still the file it was."""
+    gone, came = set(), set()
+    for slug, *_ in COUNTED:
+        try:
+            was, now = ({e["file"] for e in json.loads(git("show", f"{rev}:{counted_paths(slug)[1]}"))["entries"]}
+                        for rev in (lo, hi))
+        except (GitError, ValueError, KeyError, TypeError):
+            continue
+        gone, came = gone | (was - now), came | (now - was)
+    if not gone or not came:
+        return {}
+    fields = git("diff", "--name-status", "-z", "-M1%", "--diff-filter=R", lo, hi, "--", *sorted(gone | came)).split("\0")
+    return {fields[i + 1]: fields[i + 2] for i in range(0, len(fields) - 2, 3)
+            if fields[i + 1] in gone and fields[i + 2] in came}
+
+
+def renames(lo: str, hi: str) -> dict[str, str]:
+    """{old path: new path} of each file ``lo..hi`` renames: ``git diff -M``'s, and those a counted list moves (`list_moved`)."""
+    fields = git("diff", "--name-status", "-z", "-M", "--diff-filter=R", lo, hi).split("\0")
+    return {**{fields[i + 1]: fields[i + 2] for i in range(0, len(fields) - 2, 3)}, **list_moved(lo, hi)}
 
 
 def carried(before: dict[str, list], moved: dict[str, str]) -> dict[str, list]:
@@ -827,11 +888,11 @@ def source_lint(c: Change, base: str) -> tuple[list[str], list[str], list[str]]:
     counts = Counter((f, rule) for f, rule, *_ in now)
     grown = sorted(k for k in counts if counts[k] > was[k])
     named = []
+    old = {path: was_at for path, was_at, *_ in sources}
     for f, rule in grown:
-        fresh = added_rows(c.lo, c.hi, f)
+        fresh = added_rows(c.lo, c.hi, f, old[f])
         sites = sorted((line not in fresh, line, message) for g, r, line, message in now if (g, r) == (f, rule))
         named += [(f, line, f"{f}:{line} {rule} {message}") for _, line, message in sites[:counts[f, rule] - was[f, rule]]]
-    old = {path: was_at for path, was_at, *_ in sources}
     listed_before, listed = repo_list(c.lo), repo_list(c.hi)
     unmoved = []
     for f, rule in sorted(k for k in counts if counts[k] <= was[k]):
@@ -857,7 +918,7 @@ def counted_paths(slug: str) -> tuple[str, str]:
 @functools.cache
 def counted_lint_at(rev: str, slug: str, sites: str, noun: str) -> types.ModuleType | None:
     """The repository's counted lint ``slug`` as ``rev`` has it, loaded (it imports only the standard library) without
-    running a test, or None when ``rev`` has none."""
+    running a test, or None when ``rev`` has none; one that reads its terms (``glossary_text``) reads ``rev``'s ``TERMS``."""
     module, _ = counted_paths(slug)
     try:
         source = git("show", f"{rev}:{module}")
@@ -876,6 +937,12 @@ def counted_lint_at(rev: str, slug: str, sites: str, noun: str) -> types.ModuleT
                            f"change's {noun}s") from e
     if missing := [n for n in ("LEFT_OUT", "FIX", "parse", sites) if not hasattr(lint, n)]:
         raise GitError(f"{module} at {rev[:12]} has no {', '.join(missing)}, so the gate can't count the change's {noun}s")
+    if hasattr(lint, "glossary_text"):
+        try:
+            terms = git("show", f"{rev}:{TERMS}")
+        except GitError:
+            return lint
+        lint.glossary_text = lambda: terms
     return lint
 
 
@@ -902,7 +969,9 @@ def counted_lint(c: Change, base: str, slug: str, sites: str, noun: str) -> dict
     """The base's counted lint ``slug``'s count of each ``*.py`` file the change adds or modifies that the lint holds, before
     and after, per file as that lint counts (None when the base has no such lint): the files it ``read``; each site the change
     adds, ``file:line what`` (``new``); each file whose count ``grown``, with its counts; and each list entry a rename leaves
-    behind (``unmoved``).  A file the lint exempts (``is_registry``: the environment-read lint's settings registries) is
+    behind (``unmoved``).  A renamed file's before is the base's text counted where the change puts it, so a lint whose
+    terms or reach depend on the path finds no site the move brings in that the base's text didn't hold.  A file the lint
+    exempts (``is_registry``: the environment-read lint's settings registries) is
     exempt as the change's base marks it, so a mark that comes with the sites it would exempt doesn't.  A file's rise is
     growth less the sites the files whose counts fall lose (each by what it is and the stripped line it stands on, as
     many as those files fall by), where the change's list allows the file its sites.  Of a grown file's sites, those on
@@ -931,7 +1000,7 @@ def counted_lint(c: Change, base: str, slug: str, sites: str, noun: str) -> dict
     for f, o, lo, hi in sources:
         if not exempt(f, marked_before):
             before, after = (data[b].decode("utf-8", errors="replace") if b else "" for b in (lo, hi))
-            read.append((f, o, before, after, count(before, o) if lo else [], count(after, f)))
+            read.append((f, o, before, after, count(before, f) if lo else [], count(after, f)))
     lost: Counter = Counter()
     room = 0
     for _, _, before, after, was, now in read:
@@ -953,7 +1022,7 @@ def counted_lint(c: Change, base: str, slug: str, sites: str, noun: str) -> dict
                 else:
                     came, note = Counter(), f"{note}, which {listed_at} doesn't record: it allows {allows} of the file's"
         if over > 0:
-            fresh, lines = added_rows(c.lo, c.hi, f), after.split("\n")
+            fresh, lines = added_rows(c.lo, c.hi, f, o), after.split("\n")
             found = sorted((line not in fresh, came[what, lines[line - 1].strip()] > 0, line, what) for line, what in now)
             new += [(f, line, f"{f}:{line} {what}") for *_, line, what in found[:over]]
             out["grown"].append(f"{f} {len(was)} -> {len(now)}{note}")
@@ -1036,11 +1105,128 @@ def held(c: Change, before: dict[str, list], after: dict[str, list], moved: dict
     return out, widened
 
 
-def public_commands(rev: str) -> dict[str, str]:
-    """The commands P16's list at ``rev`` declares public, each with the file that runs it (none without the list or its
-    table)."""
+def new_roots(c: Change) -> dict[str, str]:
+    """{key: directory} of each tests root (``ROOTS``) the integration's lints come to read in ``c``: its top's
+    ``_ratchet.py`` names the root's key and its base's doesn't."""
+    def named(rev: str) -> set[str]:
+        try:
+            text = git("show", f"{rev}:{RATCHET_MODULE}")
+        except GitError:
+            return set()
+        return {k for k in ROOTS if k.rstrip("/") in text}
+    return {k: ROOTS[k] for k in sorted(named(c.hi) - named(c.lo))}
+
+
+@functools.cache
+def mypy_environment() -> dict[str, str | None]:
+    """This process's environment, as ``test_mypy`` records the one its list was taken in."""
+    def version(name: str) -> str | None:
+        try:
+            return importlib.metadata.version(name)
+        except importlib.metadata.PackageNotFoundError:
+            return None
+    return {"python": f"{sys.version_info.major}.{sys.version_info.minor}", **{p: version(p) for p in MYPY_PACKAGES}}
+
+
+def root_findings(rev: str, root: str, lints: dict[str, object]) -> dict[str, Counter | str]:
+    """{lint: what it finds under ``root`` (a tests root, ``ROOTS``) in ``rev``'s tree, per (file key, kind), or why it can't
+    run here}, each of the integration's ``lints`` run on a checkout of ``rev`` as it runs a tests root: ruff on the root
+    with ``rev``'s config and pin, from where that lint runs it; mypy on the root on its own, at ``--follow-imports skip``
+    under ``rev``'s ``[tool.mypy]``, when this process's environment is the one ``lints`` says its list records."""
+    out: dict[str, Counter | str] = {}
+    runs = {}
+    with tempfile.TemporaryDirectory(prefix="ratchet-gate-root-", ignore_cleanup_errors=True) as d:
+        tree = Path(d) / "tree"
+        with worktree_turn():
+            git("worktree", "add", "-q", "--detach", "--no-checkout", str(tree), rev)
+        try:
+            git("-C", str(tree), "reset", "-q", "--hard", "--no-recurse-submodules")
+            for s, recorded in lints.items():
+                if not (tree / root).is_dir():
+                    out[s] = Counter()
+                    continue
+                if s == MYPY_LINT:
+                    if (now := mypy_environment()) != recorded:
+                        out[s] = f"this environment ({now}) isn't the one its list records ({recorded})"
+                        continue
+                    at = tree / INTEGRATION
+                    cmd = [sys.executable, "-m", "mypy", "--config-file", "pyproject.toml", "--cache-dir", "/dev/null",
+                           "-O", "json", "--follow-imports", "skip", os.path.relpath(tree / root, at)]
+                else:
+                    config = RUFF_LINTS[s][1][0]
+                    if not (tree / config).is_file():
+                        out[s] = f"{rev[:12]} has no {config}"
+                        continue
+                    at = tree / RUFF_FROM.get(s, str(PurePosixPath(config).parent))
+                    cmd = [*python_for(ruff_pin(rev), [s]), "-m", "ruff", "check", "--config", os.path.relpath(tree / config, at),
+                           "--no-cache", "--exit-zero", "--output-format", "json", os.path.relpath(tree / root, at)]
+                runs[s] = (at, subprocess.run(cmd, cwd=at, capture_output=True, text=True, stdin=subprocess.DEVNULL,
+                                              env={**os.environ, "RUFF_CACHE_DIR": str(Path(d) / "ruff-cache")}))
+        finally:
+            drop_worktree(tree)
+    for s, (at, r) in runs.items():
+        if r.returncode not in ((0, 1) if s == MYPY_LINT else (0,)):
+            out[s] = f"{s} exited {r.returncode}: {(r.stderr or r.stdout).strip()[-300:]}"
+            continue
+        try:
+            records = [json.loads(line) for line in r.stdout.splitlines()] if s == MYPY_LINT else json.loads(r.stdout)
+        except ValueError:
+            out[s] = f"{s} wrote {r.stdout.strip()[:200]!r}, not JSON"
+            continue
+        found: Counter = Counter()
+        for e in records:
+            if s == MYPY_LINT and e.get("severity") == "error":
+                found[(key_of(os.path.relpath(os.path.normpath(at / e["file"]), tree)), e.get("code") or "misc")] += 1
+            elif s != MYPY_LINT:
+                found[(key_of(Path(e["filename"]).resolve().relative_to(tree.resolve()).as_posix()),
+                       e["code"] or "syntax-error")] += 1
+        out[s] = found
+    return out
+
+
+def from_new_roots(c: Change, before: dict[str, list], after: dict[str, list]
+                   ) -> tuple[dict[str, list], list[str], list[str]]:
+    """(``after`` without the entries the roots its lints come to read bring; a line for each list they come from; and each
+    list whose such entries can't be checked here, with why).  An integration list's (``INTEGRATION_RUFF``, mypy) entries
+    for a file of a root the change's lints come to read (`new_roots`), whose base list holds none under that root, record
+    what the base's tree already holds there, which adds no finding, as far as the base's tree holds as many findings of
+    that kind in that file (`root_findings`) as they count.  A file and kind the base's tree holds fewer of stays the
+    change's, and so does any list's growth elsewhere."""
+    out, admitted, unchecked = dict(after), [], []
+    for prefix, root in new_roots(c).items():
+        def under(e: object, prefix: str = prefix) -> bool:
+            return isinstance(e, dict) and isinstance(e.get("file"), str) and e["file"].startswith(prefix)
+        lints = {}
+        for s in (*INTEGRATION_RUFF, MYPY_LINT):
+            if not any(under(e) for e in before.get(s, [])) and any(under(e) for e in out.get(s, [])):
+                try:
+                    lints[s] = json.loads(git("show", f"{c.hi}:{LINT}/allowlists/{s}.json")).get("environment")
+                except (GitError, ValueError, AttributeError):
+                    lints[s] = None
+        for s, at_base in (root_findings(c.lo, root, lints) if lints else {}).items():
+            listed: Counter = Counter()
+            for e in out[s]:
+                if under(e):
+                    listed[(e["file"], kind(e))] += count(e)
+            name = f"{LINT}/allowlists/{s}.json"
+            if isinstance(at_base, str):
+                unchecked.append(f"{name}'s {sum(listed.values())} finding(s) under {root}, which the change's lints come "
+                                 f"to read, unchecked against its base: {at_base}")
+                continue
+            held_there = {fk for fk, n in listed.items() if at_base[fk] >= n}
+            out[s] = [e for e in out[s] if not (under(e) and (e["file"], kind(e)) in held_there)]
+            if held_there:
+                admitted.append(f"{name} records {sum(listed[fk] for fk in held_there)} finding(s) in "
+                                f"{len({f for f, _ in held_there})} file(s) under {root}, which the change's lints come to "
+                                f"read and the base's tree already holds")
+    return out, admitted, unchecked
+
+
+def public_commands(rev: str, path: str = CALLERS_LIST) -> dict[str, str]:
+    """The commands P16's list at ``rev``, at ``path`` there, declares public, each with the file that runs it (none without
+    the list or its table)."""
     try:
-        doc = json.loads(git("show", f"{rev}:{CALLERS_LIST}"))
+        doc = json.loads(git("show", f"{rev}:{path}"))
     except (GitError, ValueError):
         return {}
     table = doc.get(PUBLIC) if isinstance(doc, dict) else None
@@ -1073,12 +1259,14 @@ def callers_lint_at(rev: str) -> types.ModuleType:
     return lint
 
 
-def public_callers(c: Change) -> tuple[list[str], list[str]]:
+def public_callers(c: Change, was_at: str = CALLERS_LIST, to: dict[str, str] | None = None) -> tuple[list[str], list[str]]:
     """(each command P16's ``public`` table gains in the change, a new one or one with another caller, whose caller doesn't
     run it in the change's tree, with what is wrong; each whose caller does): as the base's P16 lint finds a call (its
-    ``runs``), so a public command is a declaration the gate checks rather than an exception it holds."""
-    was, now = public_commands(c.lo), public_commands(c.hi)
-    added = {k: v for k, v in now.items() if was.get(k) != v}
+    ``runs``), so a public command is a declaration the gate checks rather than an exception it holds.  The base's table is
+    its list at ``was_at``, where the base holds the list the change moves, and a caller the change renames (``to``: old
+    path to new) is the base's caller where the change puts it."""
+    was, now, to = public_commands(c.lo, was_at), public_commands(c.hi), to or {}
+    added = {k: v for k, v in now.items() if v not in (was.get(k), to.get(was.get(k, "")))}
     if not added:
         return [], []
     runs = callers_lint_at(c.lo).runs
@@ -1135,7 +1323,8 @@ def base_lints(c: Change, selection: dict[str, list[str] | None], after: dict[st
                tables: dict[str, dict[str, dict[str, str]]] | None = None, without: Iterable[str] = ()
                ) -> tuple[list[str], list[dict]]:
     """(the lints run, their failures): each lint directory's base code, its lints ``selection`` names (None: all of them),
-    run on the change's tree against its allowlists, P16's with the change's public commands, with the base's ruff configs;
+    run on the change's tree against its allowlists, P16's with the change's public commands, with the base's ruff configs
+    and ``TERMS``;
     with ``tables`` (`placed`), each lint file's tables hold those rows, and the tree is without the files ``without``."""
     selection = {lint: s for lint, s in selection.items() if git("ls-tree", "--name-only", c.lo, "--", lint).strip()}
     if not selection:
@@ -1156,7 +1345,7 @@ def base_lints(c: Change, selection: dict[str, list[str] | None], after: dict[st
                 git("-C", str(tree), "checkout", "-q", c.lo, "--", lint)
             for f in without:
                 (tree / f).unlink(missing_ok=True)
-            for config in (RUFF_CONFIG, REPO_RUFF_CONFIG):
+            for config in (RUFF_CONFIG, REPO_RUFF_CONFIG, TERMS):
                 if git("ls-tree", "--name-only", c.lo, "--", config).strip():
                     git("-C", str(tree), "checkout", "-q", c.lo, "--", config)
             for lint, slugs in selection.items():
@@ -1328,7 +1517,9 @@ def unplaced(v: str) -> tuple[str, int] | None:
     that names its lines (`SITE` with a line, ``lint: file:line what``, or one key's lines, ``lint: file:12,40 what``: one
     site a line) or a count (`COUNT`, ``lint: file: 2 found, 0 allowed``: that many).  None for a violation that names
     neither.  The allowance is no part of what a violation is: a list that falls with its file's count names the same
-    thing, and so does a key whose entry goes, which then states no count after its lines."""
+    thing, and so does a key whose entry goes, which then states no count after its lines; nor is a retired term's advice
+    (`ADVICE`), so a site whose Glossary row is reworded is the same site."""
+    v = ADVICE.sub("", v)
     m, n = SITE.match(v), COUNT.search(v)
     lines = LINES.match(v, m.start(2)) if m and m[2] else None
     cuts = [x for x in (lines and lines.span(), n and n.span()) if x]
@@ -1372,10 +1563,42 @@ def beyond(found: list[str], had: list[str]) -> tuple[list[str], list[str]]:
     return [old[i] for i in sorted(old)], [v for i, v in enumerate(found) if i not in old]
 
 
+def moved_sites(c: Change, found: list[str], to: dict[str, str], had: list[str]) -> list[str]:
+    """``had``, the base's run on its own tree named where the change puts each file (``to``: old path to new), with each
+    counted lint's sites at a file the change renames, which ``found`` counts, recounted where the base's text holds more
+    than ``had`` names: the base's text of the file, counted by the base's lint where the change puts it, as that lint
+    names it (``lint: file: N found, M allowed``, M what ``had`` allowed, then ``lint: file:line what`` for each site), in
+    place of what ``had`` names there.  A lint whose terms or reach depend on the path (the retired terms a row keeps in
+    one directory, a directory it leaves out) counts a moved file anew, and what it counts is the base's text, which the
+    move didn't write."""
+    back = {n: o for o, n in to.items()}
+    named = {s: (sites, noun) for s, sites, noun in COUNTED}
+
+    def counts(vs: list[str]) -> dict[tuple[str, str], tuple[int, str]]:
+        return {(v.partition(": ")[0], m[1]): (int(n[1]), n[0]) for v in vs
+                if (m := SITE.match(v)) and not m[2] and (n := COUNT.search(v))}
+
+    have, out = counts(had), list(had)
+    for s, f in sorted(counts(found)):
+        if s not in named or f not in back or (lint := counted_lint_at(c.lo, s, *named[s])) is None:
+            continue
+        holds, count = counter(lint, named[s][0])
+        if not holds(f):
+            continue
+        sites = count(git("show", f"{c.lo}:{back[f]}"), f)
+        n, said = have.get((s, f), (0, ""))
+        if len(sites) <= n:
+            continue
+        allowed = re.search(r"(\d+) allowed", said)
+        out = [v for v in out if not (v.partition(": ")[0] == s and (m := SITE.match(v)) and m[1] == f)]
+        out += [f"{s}: {f}: {len(sites)} found, {allowed[1] if allowed else 0} allowed"]
+        out += [f"{s}: {f}:{line} {what}" for line, what in sites]
+    return out
+
+
 def renamed(c: Change) -> dict[str, str]:
-    """{old path: new path} of each file the change renames (``git diff -M``)."""
-    fields = git("diff", "--name-status", "-z", "-M", "--diff-filter=R", c.lo, c.hi).split("\0")
-    return {fields[i + 1]: fields[i + 2] for i in range(0, len(fields) - 2, 3)}
+    """{old path: new path} of each file the change renames (`renames`)."""
+    return renames(c.lo, c.hi)
 
 
 def at_paths(items: list[str], to: dict[str, str], repo_lints: frozenset[str]) -> list[str]:
@@ -1438,14 +1661,17 @@ def judge(c: Change, base: str, every: bool = False) -> None:
         return
     grown, added, bad, found, uncalled, public = [], [], [], [], [], []
     if c.touched:
-        before, was_at, _ = ratchets(c.lo)
-        after, now_at, bad = ratchets(c.hi)
+        to = renamed(c)
+        before, was_at, _ = ratchets(c.lo, (old for old, new in to.items() if is_ratchet(new)))
+        after, now_at, bad = ratchets(c.hi, (to[p] for p in was_at.values() if p in to))
         c.before = sum(len(v) for v in before.values())
         c.after = sum(len(after.get(s, [])) for s in before)
-        moved = {new: old for old, new in renamed(c).items()}
+        moved = {new: old for old, new in to.items()}
         placed_before = carried(before, moved)
-        grown, added, c.pooled = growth(placed_before, after, {**was_at, **now_at}, *held(c, placed_before, after, moved))
-        uncalled, public = public_callers(c)
+        judged, scoped, unchecked = from_new_roots(c, placed_before, after)
+        grown, added, c.pooled = growth(placed_before, judged, {**was_at, **now_at}, *held(c, placed_before, judged, moved))
+        grown, c.pooled = grown + unchecked, c.pooled + scoped
+        uncalled, public = public_callers(c, moved.get(CALLERS_LIST, CALLERS_LIST), to)
     noqa_grows = c.noqa_added > c.noqa_removed
     early = bool(grown or bad or uncalled or noqa_grows)
     inherited: list[str] = []
@@ -1468,7 +1694,8 @@ def judge(c: Change, base: str, every: bool = False) -> None:
                 to = renamed(c)
                 repo = frozenset(PurePosixPath(p).stem.removeprefix("test_")
                                  for p in git("ls-tree", "--name-only", c.lo, f"{REPO_LINT}/").splitlines())
-                at_base = at_paths(violations(base_lints(Change(c.lo, c.lo, []), selection, before)[1]), to, repo)
+                at_base = moved_sites(c, found, to, at_paths(violations(base_lints(Change(c.lo, c.lo, []), selection,
+                                                                                    before)[1]), to, repo))
                 inherited, new = beyond(found, at_base)
                 inherited = at_paths(inherited, {n: o for o, n in to.items()}, repo)
                 had, found = set(at_base) | (set(found) - set(new)), new
@@ -1639,7 +1866,8 @@ def cache_path(c: Change, base: str | None, part: str = "verdict") -> Path | Non
     if root == "":
         return None
     root = Path(root) if root else Path(os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache") / "verity" / "ratchet-gate"
-    return root / (hashlib.sha256(json.dumps([SELF, part, base, c.lo, c.hi, c.commits]).encode()).hexdigest() + ".json")
+    key = [SELF, part, base, c.lo, c.hi, c.commits, mypy_environment()]
+    return root / (hashlib.sha256(json.dumps(key).encode()).hexdigest() + ".json")
 
 
 def recall(c: Change, p: Path | None, fields: tuple[str, ...] = JUDGED, verdicts: tuple[str, ...] = VERDICTS) -> bool:

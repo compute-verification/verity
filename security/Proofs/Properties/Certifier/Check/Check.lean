@@ -25,8 +25,8 @@ violation exactly when it is accepted (`egress_none`, `ingress_none`), and `no-v
 
 @[expose] public section
 
-open NetworkCheck hiding Params
-open NetworkCheck.Check
+open NetworkVerifier hiding Params
+open NetworkVerifier.Check
 open Flock
 open NetworkAttester (ClockSync LogicalFrame expectedRow)
 
@@ -64,7 +64,7 @@ theorem toOption_true {ε : Type} {x : Except ε Bool} : (x.toOption == some tru
 theorem verifies_iff {p : Params} {c : Commitment} {d : Direction} {l : String} {w : Nat} {r : Certified}
     (hr : recordsOf c d l w = [r]) : verifies p r = true ↔ ∃ dg, Signs p c d l w r dg := by
   obtain ⟨hd, hl, hw⟩ := recordsOf_mem (hr ▸ List.mem_singleton_self r)
-  unfold verifies Signs LmsVerifies NetworkCheck.Check.Certificate.signs
+  unfold verifies Signs LmsVerifies NetworkVerifier.Check.Certificate.signs
   simp only [Bool.and_eq_true, beq_iff_eq, ba_beq]
   constructor
   · rintro ⟨⟨⟨⟨hcl, hcd⟩, hcw⟩, hdg⟩, hk, hsig⟩
