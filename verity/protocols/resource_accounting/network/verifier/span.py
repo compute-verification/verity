@@ -61,7 +61,7 @@ REGISTERED_KEYS = ["head", "key", "link", "lms", "schedule", "session", "site"]
 SCHEDULE_KEYS = sorted(INTEGER_FIELDS)
 #: with the bound on a response's length, the one field beside them that `scheduleOf` reads
 BOUNDED_SCHEDULE_KEYS = sorted([*INTEGER_FIELDS, "max_tokens_cap"])
-CERTIFICATE_KEYS = ["digest", "direction", "key_id", "link", "signature", "window"]
+ATTESTATION_KEYS = ["digest", "direction", "key_id", "link", "signature", "window"]
 PHASE_KEYS = ["certificates", "phase", "registration"]
 ROWS_KEYS = ["cell_bytes", "certificate", "direction", "domain", "format", "layout", "link", "parameters", "root",
              "row_schema", "rows", "value", "window", "wiring", "word_bits", "words"]
@@ -224,8 +224,8 @@ def digest(c: Commitment) -> bytes:
     return tagged_sha512(COMMITMENT_TAG, c.bytes)
 
 
-def _json_certificate(j: Any, ctx: str) -> Certificate:
-    _exactly(j, CERTIFICATE_KEYS, ctx)
+def _json_attestation(j: Any, ctx: str) -> Certificate:
+    _exactly(j, ATTESTATION_KEYS, ctx)
     try:
         direction = Direction(_of(j["direction"], str, ctx))
     except ValueError:
@@ -259,7 +259,7 @@ def evidence(j: Any) -> list[Phase]:
     for x in _of(j["phases"], list, "phases"):
         ctx = "an execution phase"
         _exactly(x, PHASE_KEYS, ctx)
-        certificates = tuple(_json_certificate(c, f"{ctx}.certificates")
+        certificates = tuple(_json_attestation(c, f"{ctx}.certificates")
                              for c in _of(x["certificates"], list, f"{ctx}.certificates"))
         out.append(Phase(_nat(x["phase"], f"{ctx}.phase"), certificates,
                          _rows(x["registration"], f"{ctx}.registration")))
@@ -309,15 +309,15 @@ REFUSALS = {
 }
 """Why a mark is refused, by `CertifiedMark.refusal`'s code."""
 
-NONE_CERTIFIED = ("the network certifier certifies no record of an execution phase it faulted or refused a connection "
+NONE_ATTESTED = ("the network certifier certifies no record of an execution phase it faulted or refused a connection "
                   "in, and a span that holds one is rejected")
-MISSING = f"an execution phase of the span or its tail is missing: {NONE_CERTIFIED}"
+MISSING = f"an execution phase of the span or its tail is missing: {NONE_ATTESTED}"
 
 
 def _certified(p: Params, w: int, x: Phase) -> str | None:
     """Why execution phase `w`'s entry doesn't certify it under the schedule, or None when it does."""
     if len(x.certificates) != len(records(p.link)):
-        return f"not two certificates, its egress record's and its fails record's: {NONE_CERTIFIED}"
+        return f"not two certificates, its egress record's and its fails record's: {NONE_ATTESTED}"
     for (what, link), c in zip(records(p.link), x.certificates):
         if c.direction is not Direction.EGRESS:
             return f"the {what} certificate is not an egress certificate"
@@ -327,7 +327,7 @@ def _certified(p: Params, w: int, x: Phase) -> str | None:
             return f"the {what} certificate is at another execution phase"
         if not c.verify(p.key, p.session):
             return (f"the {what} certificate does not verify under the key in the certifier session: "
-                    f"{NONE_CERTIFIED}")
+                    f"{NONE_ATTESTED}")
     doc = x.registration
     if doc["parameters"] != p.schedule.digest.hex():
         return "the egress cells' head names another schedule's digest than the parameters'"
