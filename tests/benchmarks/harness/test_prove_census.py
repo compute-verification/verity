@@ -197,7 +197,7 @@ def glm_reading(tmp_path: Path, monkeypatch, capsys) -> dict:
     monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(s.config))
     monkeypatch.setenv("RESEARCH_RUN_ID", "r20261112-000000-0000")
     monkeypatch.setattr(spot_status, "commit_known", lambda root, commit: False)
-    monkeypatch.setattr(spot_status, "LOCK", Path(__file__).parent / "fixtures" / "spot_status" / "lock.json")
+    monkeypatch.setattr(spot_status, "LOCK", Path("tests/benchmarks/harness/fixtures/spot_status/lock.json"))
     monkeypatch.setattr(kit, "host_stamp", lambda: {"card": "none", "gpus": [], "driver": None, "cuda": None,
                                                     "node": "cpu-node-0", "commit": "c" * 40, "why": "no nvidia-smi"})
     within = tmp_path / "run"
