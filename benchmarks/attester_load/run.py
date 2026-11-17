@@ -2,6 +2,12 @@
 
     verity bench attester_load [--class w63k4] [--reps 5] [--requests 12] [--load 0.8] [--json] [--out DIR]
     verity bench attester_load --vllm-python VENV/bin/python [--model unsloth/Llama-3.2-1B]   the model arm too
+    bash benchmarks/attester_load/run.sh --on CARD --cores CORES   both arms, the model arm on a leased card (run.sh)
+
+The first form alone measures the stand-in arm's member, on a CPU node:
+
+    research run --on auto --project verity --source . --cwd clone -- bash -lc \\
+      'uv sync -q --all-packages --extra torch-cpu && uv run --extra torch-cpu python benchmarks/attester_load/run.py'
 
 Each arm sends the same requests at the same evenly spaced load to one endpoint, through the network attester and
 straight to it, alternating, and measures each request's time to the first and to the last byte of its response. The
@@ -13,11 +19,11 @@ second for responses of k ids. The stub arm runs on a CPU against `network_attes
 model arm runs only where `--vllm-python` names a Python with vLLM, on a card, against vLLM's OpenAI server, in the bytes
 form, since that server answers in its own framing: the schedule and its cells' buckets are the id form's.
 
-Each arm writes three numbers under ids of its own, the stub arm's `network-accounting/attester-added-first-byte`,
-`-added-last-byte` and `-tick-lateness`, the model arm's the same ending in `-model`, each with its member: the stub
-arm's `stand-in-cpu`, the model arm's its model and the leased card (`llama-3.2-1b-h200` on an H200).
-An arm writes them only when its guard holds: a delay planted in the network attester's release (`--plant-ms` on its
-pacer) shows in the added time to the first byte, and the direct arm against itself reads near zero.
+Each arm writes the three numbers, `network-accounting/attester-added-first-byte`, `-added-last-byte` and
+`-tick-lateness`, under its member: the stub arm's `stub-cpu`, the model arm's its model and the leased card
+(`llama-3.2-1b-h200` on an H200). An arm writes them only when its guard holds: a delay planted in the network
+attester's release (`--plant-ms` on its pacer) shows in the added time to the first byte, and the direct arm against
+itself reads near zero.
 """
 
 from __future__ import annotations
@@ -46,15 +52,11 @@ SERVE = ROOT / "verity/protocols/resource_accounting/network/attester/network_at
 SCAN_ZK = ROOT / "verity/protocols/resource_accounting/network/prover/scan_zk.py"
 FIRST, LAST, TICK = ("network-accounting/attester-added-first-byte", "network-accounting/attester-added-last-byte",
                      "network-accounting/attester-tick-lateness")
-FIRST_MODEL, LAST_MODEL, TICK_MODEL = ("network-accounting/attester-added-first-byte-model",
-                                       "network-accounting/attester-added-last-byte-model",
-                                       "network-accounting/attester-tick-lateness-model")
-IDS = {"stub": (FIRST, LAST, TICK), "model": (FIRST_MODEL, LAST_MODEL, TICK_MODEL)}
 #: a cell's header bytes (`link_frame.HEADER`): an id event fills the rest of its cell, and the id form fails any other size
 CELL_HEAD = 9
 #: the most the direct arm may read against itself, and the most a planted delay's reading may miss it by, in ms
 SELF_TOL_MS, PLANT_TOL_MS = 5.0, 10.0
-STUB = "stand-in-cpu"
+STUB = "stub-cpu"
 #: the session's log as `network_attester_serve.py serve` names it: each connection's outcome, the refusals, the ticks'
 #: lateness
 SESSION_LOG = "warden.json"
@@ -321,7 +323,7 @@ def stub(a: argparse.Namespace, s: dict[str, int], work: Path) -> dict:
     try:
         upstream = tuple(json.loads(fake.stdout.readline())["listening"])
         return arm(STUB, upstream, s, a, work, egress="id", model="fake",
-                   fields={"arm": "stub", "card": "none", "endpoint": f"network_attester_serve.py fake, its first id {a.first_ms:g} ms "
+                   fields={"card": "none", "endpoint": f"network_attester_serve.py fake, its first id {a.first_ms:g} ms "
                                                        "after a request, every id at once"})
     finally:
         fake.terminate()
@@ -365,7 +367,7 @@ def model_arm(a: argparse.Namespace, s: dict[str, int], work: Path) -> dict:
                 time.sleep(2)
         name = f"{slug(a.model.rsplit('/', 1)[-1])}-{slug(gpu or 'none')}"
         return arm(name, ("127.0.0.1", port), s, a, work, egress="bytes", model=a.model,
-                   fields={"arm": "model", "card": gpu, "endpoint": f"vLLM's OpenAI server of {a.model}"})
+                   fields={"card": gpu, "endpoint": f"vLLM's OpenAI server of {a.model}"})
     finally:
         server.terminate()
         server.wait()
@@ -402,8 +404,8 @@ def render(doc: dict) -> str:
 
 
 def write(doc: dict, out: Path) -> int:
-    """The arms whose guard holds, each as its three metrics (`IDS`) through the harness kit's writer: under a
-    research run its result, else `out/result.json`."""
+    """The arms whose guard holds, as the three metrics through the harness kit's writer, each arm's under its member:
+    under a research run its result, else `out/result.json`."""
     from verity_bench import kit
 
     w = kit.writer(str(out))
@@ -412,13 +414,13 @@ def write(doc: dict, out: Path) -> int:
         if r["guard"]["failed"]:
             continue
         extra = {k: v for k, v in r.items() if k not in ("repetitions", "member")}
-        member, (first, last, tick) = r["member"], IDS[r["arm"]]
-        w.measurement(first, r["added_first_ms"], "ms", r["added_first_ci95"], mark="measured", member=member, extra=extra)
+        member = r["member"]
+        w.measurement(FIRST, r["added_first_ms"], "ms", r["added_first_ci95"], mark="measured", member=member, extra=extra)
         if r["added_last_ms"] is not None:
-            w.measurement(last, r["added_last_ms"], "ms", r["added_last_ci95"], mark="measured", member=member,
+            w.measurement(LAST, r["added_last_ms"], "ms", r["added_last_ci95"], mark="measured", member=member,
                           extra=extra)
         if r["tick_lateness_ms"].get("p99") is not None:
-            w.measurement(tick, r["tick_lateness_ms"]["p99"], "ms", mark="measured", member=member, extra=extra)
+            w.measurement(TICK, r["tick_lateness_ms"]["p99"], "ms", mark="measured", member=member, extra=extra)
         n += 1
     return n
 

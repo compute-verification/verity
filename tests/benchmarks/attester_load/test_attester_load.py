@@ -88,6 +88,18 @@ def test_each_point_carries_the_schedule_and_its_scheduled_delays(monkeypatch, t
         assert "repetitions" not in m
 
 
+def test_both_arms_write_the_three_ids_each_under_its_member(monkeypatch, tmp_path) -> None:
+    doc = arm_doc([])
+    model = doc["arms"][0] | {"member": "llama-3.2-1b-h200", "egress": "bytes", "model": "unsloth/Llama-3.2-1B",
+                              "card": "NVIDIA H200", "added_first_ms": 230.0}
+    n, got = written(monkeypatch, doc | {"arms": [doc["arms"][0], model]}, tmp_path)
+    assert n == 2
+    assert sorted((m["name"], m["member"], m["value"]) for m in got) == sorted(
+        [(R.FIRST, "stub-cpu", 210.0), (R.LAST, "stub-cpu", 200.0), (R.TICK, "stub-cpu", 1.5),
+         (R.FIRST, "llama-3.2-1b-h200", 230.0), (R.LAST, "llama-3.2-1b-h200", 200.0),
+         (R.TICK, "llama-3.2-1b-h200", 1.5)])
+
+
 def test_an_arm_whose_guard_failed_writes_no_number(monkeypatch, tmp_path) -> None:
     n, got = written(monkeypatch, arm_doc(["planted"]), tmp_path)
     assert n == 0 and got == []
