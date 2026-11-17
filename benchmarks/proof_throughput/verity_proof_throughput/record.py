@@ -15,7 +15,10 @@ PORT = 7710
 
 
 def card_slug(card: str) -> str:
-    return "cpu" if card == "none" else "-".join(card.lower().split()).removeprefix("nvidia-")
+    from verity_bench import kit
+    from verity_bench.overhead import CARD_FILES
+
+    return "cpu" if card == "none" else kit.card_short(card, directory=CARD_FILES)
 
 
 def member(workload: str, card: str, provers: int) -> str:
@@ -90,12 +93,18 @@ def write(w, out: Path, workload: str, B: int, points: dict[int, list[dict]]) ->
 
     failed = []
     for n, group in sorted(points.items()):
+        try:
+            name = member(workload, w.stamp["card"], n)
+        except SystemExit as e:
+            failed.append(f"{n} prover(s): no reading, the card {w.stamp['card']!r} has no member name: {e}")
+            print(failed[-1])
+            continue
         value, why = throughput(group)
         results = [rel(p) for p in group if p.get("result")]
         extra = {"workload": workload, "model": MODEL[workload], "values": VALUES, "B": B, "provers": n, "results": results,
                  "leases": [{"card": p["card"], "cores": p["cores"]} for p in group]}
         m = w.measurement(METRIC, value, UNIT, why=None if value is not None else why, mark="measured",
-                          member=member(workload, w.stamp["card"], n), extra=extra)
+                          member=name, extra=extra)
         print(json.dumps({k: m.get(k) for k in ("name", "value", "unit", "member")} | {"why": why}))
         if value is None:
             failed.append(f"{n} prover(s): {why}")
