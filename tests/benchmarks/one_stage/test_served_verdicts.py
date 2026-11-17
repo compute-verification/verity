@@ -4157,7 +4157,7 @@ def _not_development(challenger: str) -> str:
     ({"DEVELOPMENT": None, "V3C_CHALLENGER": "loopback:127.0.0.1:7000"}, _not_development("loopback:127.0.0.1:7000")),
     ({"DEVELOPMENT": "yes"}, "PREFLIGHT: DEVELOPMENT is 1, a development run, or unset, not yes"),
     ({"VERITY_HOLD_PLACEMENT": "yes"}, "PREFLIGHT: VERITY_HOLD_PLACEMENT is 1, which restores the refusals that rest on "
-                                       "where coins are flipped or composites made, or unset, not yes"),
+                                       "where coins are flipped or composites made, or 0 or unset, not yes"),
     ({"V3C_CHALLENGER": "gate:auditor"}, "PREFLIGHT: V3C_CHALLENGER (default PP_CHALLENGER) is local, loopback:HOST:PORT or "
                                          "gate:USER@HOST, not gate:auditor"),
     ({"PP_CHALLENGER": LIVE}, f"PREFLIGHT: V3c's audit's session on {LIVE_SAID} listens on its peer's 127.0.0.1, and V3C_PEER "
@@ -7842,3 +7842,9 @@ def test_the_serve_steps_python_path_names_the_import_root_of_every_workspace_pa
     reached = _workspace_reach("verity_vllm.pipeline.cli", "verity_vllm.pipeline.serve_openai")
     assert {"verity", "verity_vllm", "verity_config"} <= set(reached), reached
     assert sorted(f"{top} ({where})" for top, where in reached.items() if where not in named) == []
+
+
+@pytest.mark.parametrize("env, held", [({}, False), ({"VERITY_HOLD_PLACEMENT": ""}, False),
+                                       ({"VERITY_HOLD_PLACEMENT": "0"}, False), ({"VERITY_HOLD_PLACEMENT": "1"}, True)])
+def test_hold_placement_holds_only_under_exactly_1(env, held):
+    assert S.hold_placement(env) is held
