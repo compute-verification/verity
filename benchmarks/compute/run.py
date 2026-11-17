@@ -500,7 +500,9 @@ def row(tree: Path) -> dict:
     try:
         held = _held(tree, VERDICTS)
         work = {} if held is None else held["protocols"].get("work") or {}
-        return {"verdict": work.get("verdict"), "why": work.get("why") or work.get("reason")}
+        weaker = ((work.get("answer") or {}).get("profile") or {}).get("weaker_tie")
+        return {"verdict": work.get("verdict"), "why": work.get("why") or work.get("reason")} | (
+            {"weaker_tie": weaker} if weaker else {})
     except (OSError, KeyError, TypeError, ValueError, AttributeError) as e:
         raise Unreadable(f"the run's composed record doesn't read as one ({type(e).__name__}: {e})") from e
 
@@ -832,6 +834,8 @@ def text(doc: dict) -> str:
                  (f"is `{record['verdict']}`, not an accept" if record["verdict"] else "is absent")
                  + ": PoUW credits nothing of this run, and the number above is the Pearl+ verifier's answer alone"
                  + (f" (the record's reason for PoUW's verdict: {record['why']})" if record["why"] else "")))
+    if record.get("weaker_tie"):
+        lines.append(f"  PoUW's accept is {record['weaker_tie']}")
     if doc["withdrawn"]:
         lines.append(f"  part of the run's record was withdrawn, none of it a file read here: {'; '.join(doc['withdrawn'])}")
     lines.append(f"  {doc['model']} at revision {doc['revision']}, {cls['slots']} slots of {cls['prompt']} prompt and "

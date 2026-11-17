@@ -282,6 +282,17 @@ def test_pouws_row_in_the_composed_record_is_printed_whatever_it_says(store, tmp
     assert bench(store, "--from", RUN) == 0
     text, doc, _ = printed(capsys)
     assert text[7] == said and doc["value"] == SHARE
+    assert not text[8].startswith("  PoUW's accept is") and "weaker_tie" not in doc["record"]
+
+
+def test_a_weaker_tie_on_pouws_row_is_printed_under_its_verdict(store, tmp_path, capsys):
+    weaker = "a weaker tie, not the tied guarantee: the window's records audit tied to W sampled rate:1/1000000000"
+    store.add(RUN, a_record(tmp_path, VERDICTS=to("protocols", "work", value={
+        "verdict": "accept", "answer": {"profile": {"weaker_tie": weaker}}})))
+    assert bench(store, "--from", RUN) == 0
+    text, doc, _ = printed(capsys)
+    assert text[7:9] == ["  PoUW's verdict in the run's record of verdicts accepts too", f"  PoUW's accept is {weaker}"]
+    assert doc["record"]["weaker_tie"] == weaker
 
 
 @pytest.mark.parametrize("edits, why", [
