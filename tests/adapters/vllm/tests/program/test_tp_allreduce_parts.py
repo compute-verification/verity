@@ -5,8 +5,6 @@ either FMA, and both agree with `tp_allreduce_check`'s numpy model of the kernel
 call from the buffers the kernel writes (`SERVED`); the σ versions (`registry.boolean_sigma`) are the parts on bits."""
 from __future__ import annotations
 
-__models__ = ("zai-org/GLM-5.3",)
-
 from pathlib import Path
 
 import numpy as np

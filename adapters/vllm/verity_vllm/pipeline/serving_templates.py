@@ -239,11 +239,12 @@ def template(t: str) -> Template:
         return hit
     from verity.circuits import boolean as BL
     from verity.circuits.boolean.trace import word_of
+    from verity.circuits.call_scope import specialization
     from verity.circuits.codec import descriptor_id
     from verity.circuits.defs import CompositeDefinition, bind
     from verity.circuits.ops.boolean import versions as BB
+
     import verity_vllm.definitions  # noqa: F401  (registers the vLLM registry with the Boolean-versions lookup)
-    from verity.circuits.call_scope import specialization
     from verity_vllm.query.program_view import spec_base, spec_statics
 
     # registers EmbeddingRead_v1, a read's and a READ static's Definition, which BB.load does not
@@ -299,6 +300,7 @@ def history_read(word: str) -> bool:
     is its Definition, so another read at that V would be the same template, which `history_rows.Plan` refuses unless its rows
     are ``HISTORY``'s)."""
     from verity.commitments.history import CAPACITY
+
     from verity_vllm.query.program_view import spec_base, spec_statics
 
     return spec_base(word) == READ and int(spec_statics(word).get("V", 0)) == CAPACITY
@@ -374,6 +376,7 @@ def chain_ways(spec: str) -> list[tuple[int | None, tuple[tuple[str, int], ...]]
     key blocks first (None, the cut its module names), then each key block its scores unit and values units of G columns and
     its key rows' writers, at each G of `values_widths`, coarse to fine."""
     from verity.circuits.codec import descriptor_id
+
     from verity_vllm.definitions.registry import sparse_mla, sparse_mla_split
     from verity_vllm.query.program_view import spec_base, spec_statics
 
@@ -416,6 +419,7 @@ def unit_templates(spec: str) -> tuple[tuple[str, int], ...]:
         return hit
     from verity.circuits.codec import descriptor_id
     from verity.circuits.program import is_input
+
     from verity_vllm.query.program_view import spec_base, spec_statics
 
     sp, hit = _bind(spec), ()
@@ -515,8 +519,9 @@ def fused_block(spec: str, n: int) -> Any:
     it does not bind."""
     from verity.circuits.codec import lookup_primitive
     from verity.circuits.defs import REGISTRY
-    from verity.commitments.gates.embedding import read
     from verity.circuits.ops.boolean import versions as BB
+    from verity.commitments.gates.embedding import read
+
     import verity_vllm.definitions  # noqa: F401  (registers the vLLM registry with the Boolean-versions lookup)
     from verity_vllm.query.program_view import spec_base, spec_statics
 
@@ -558,6 +563,7 @@ def _bind(spec: str, family: str | None = None, **over: Any) -> Any:
     when it does not bind.  A caller holds the bound descriptor id to ``spec``."""
     from verity.circuits.codec import lookup_primitive
     from verity.circuits.defs import REGISTRY
+
     from verity_vllm.definitions.registry.catalog import load
     from verity_vllm.query.program_view import spec_base, spec_statics
 
@@ -567,7 +573,9 @@ def _bind(spec: str, family: str | None = None, **over: Any) -> Any:
         except KeyError:
             return v
 
-    reg, _errors = load()
+    loaded = load()
+    assert loaded is not None
+    reg, _errors = loaded
     d = reg.defs.get(family or spec_base(spec))
     if d is None or not hasattr(d, "bind"):
         return None

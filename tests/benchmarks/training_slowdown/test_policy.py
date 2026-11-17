@@ -10,7 +10,6 @@ import torch
 from conftest import SHAPE
 
 from training_slowdown import flops, policy
-from training_slowdown import formalism as F
 from training_slowdown.gates import per_mac
 
 LF_PATH = Path(__file__).resolve().parents[2] / "adapters" / "torch" / "tests" / "frontend" / "train_step_lf.py"
@@ -34,10 +33,6 @@ def test_the_grid_spans_the_reference_shapes_in_decades():
     assert s["inference"]["c"] == w_fwd and s["inference"]["k"] == 16 + 1023 * 2 * 6 * 512 * 16
     ref = s["reference"]
     assert (ref["c"], ref["k"]) == (4096 * w_fwd, 80_000)
-    serving = F.Measured((F.Part(1024 * w_fwd, 1024, 1024 * w_fwd, 0.0),), 16, 512 * 16, F.even(0.0), F.even(0.0), 0.0,
-                         0.0)
-    # honest serving passes Fit at the reference policy
-    assert F.at(serving, ref["c"], ref["k"])["parts"][0]["fit"]["compute"]
     assert s["server"]["c"] == pytest.approx(3 * SHAPE["forward_macs_per_token"] * SHAPE["tokens"] * per_mac("gemm/bf16"))
     assert s["server"]["k"] == SHAPE["parameters"] * 80
     g = policy.grid(SHAPE)

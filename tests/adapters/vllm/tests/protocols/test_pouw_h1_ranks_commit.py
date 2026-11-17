@@ -23,6 +23,10 @@ else:
     torch = pytest.importorskip("torch")
 
 from torch import nn
+from verity.protocols.resource_accounting.compute.pouw.prover.serving import h1 as PH
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import commit as CT
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import requests as RQ
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import served as SV
 from verity.protocols.resource_accounting.compute.pouw.verifier import credit as CR
 from verity.protocols.resource_accounting.compute.pouw.verifier.coins import Challenger
 
@@ -47,12 +51,8 @@ from tests.protocols.test_pouw_h1_served import _unit
 from verity_vllm.acquire import h1_commit as HC
 from verity_vllm.engine import int8_experts as X
 from verity_vllm.protocols import pouw
-from verity.protocols.resource_accounting.compute.pouw.prover.serving import h1 as PH
-from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import commit as CT
 from verity_vllm.protocols.pouw import h1_hooks as PHK
 from verity_vllm.protocols.pouw import h1_ranks as PHR
-from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import requests as RQ
-from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import served as SV
 
 ROWS, STEPS = 32, 3
 KEY = hashlib.sha512(b"key").digest()[:32]

@@ -12,11 +12,13 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-
-from verity_vllm.compiler import compile_slice as CS, served_rows as SR
-from verity_vllm.compiler import served_statics as SS, served_tie as ST
-from verity.protocols.proofs.spot.verifier.one_stage import registered as REG
 from verity.commitments import advice as ADV
+from verity.protocols.proofs.spot.verifier.one_stage import registered as REG
+
+from verity_vllm.compiler import compile_slice as CS
+from verity_vllm.compiler import served_rows as SR
+from verity_vllm.compiler import served_statics as SS
+from verity_vllm.compiler import served_tie as ST
 
 FIXTURE = Path(__file__).parent.parent.parent.parent.parent / "verity" / "protocols" / "resource_accounting" / "network" / "verifier" / "fixtures" / "compile_slice_smallkv.json"
 

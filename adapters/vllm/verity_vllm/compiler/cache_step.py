@@ -61,19 +61,32 @@ full session scales by offline memory checking: it sorts the session's unit oper
 """
 from __future__ import annotations
 
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
-from functools import lru_cache
+from functools import cache
 from types import SimpleNamespace
-from typing import Sequence
 
-from verity.circuits.boolean.forms import ONE, ZERO, and_reduce, const_bits, mux, or_reduce, sub, add
+from verity.circuits.boolean import BIT
+from verity.circuits.boolean.forms import (
+    ONE,
+    ZERO,
+    add,
+    and_reduce,
+    const_bits,
+    mux,
+    or_reduce,
+    sub,
+)
+from verity.circuits.boolean.trace import part as _part
 from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.evaluation.bits import evaluate_bits
 from verity.circuits.types import Array, Tuple
-from verity.circuits.boolean import BIT
-from verity.circuits.boolean.trace import part as _part
 from verity.commitments.gates.frame_v3 import _refs
-from verity.protocols.resource_accounting.network.verifier.head_check import _coll, _Consts, ands
+from verity.protocols.resource_accounting.network.verifier.head_check import (
+    _coll,
+    _Consts,
+    ands,
+)
 
 STATICS = ("N", "U", "TW", "RW", "L")
 
@@ -255,7 +268,7 @@ def _build_unit(C, S, carry, unit, r, flags, K, wh, nins):
     for e in range(N):
         new_id = [x ^ (slot[e] if e >> b & 1 else ZERO) for b, x in enumerate(new_id)]
     upd = C.AND(ins, found)
-    out = {"valid": [], "parent": [], "tok": [], "owner": []}
+    out: dict[str, list] = {"valid": [], "parent": [], "tok": [], "owner": []}
     for e in range(N):
         wr = C.AND(new, slot[e])
         lower = C.AND(C.AND(upd, hits[e]), _lt(C, r, owner[e]))
@@ -400,7 +413,7 @@ def evaluate(st_: dict, cases: Sequence[tuple[Sequence[Entry], Row]]) -> list[Ou
 # --- cost ------------------------------------------------------------------------------------------------------------------
 
 
-@lru_cache(maxsize=None)
+@cache
 def part_ands(key: tuple) -> dict[str, int]:
     st_ = dict(zip(STATICS, key))
     return {d.name: ands(bind(d, **st_)) for d in PARTS}
@@ -499,7 +512,7 @@ def longest(S, table: Sequence[Entry], units: Sequence[Sequence[int]], K: int) -
     return j, pfx
 
 
-def scan_step(X, cache: Cache, st, inp, out, tokens: dict[int, Sequence[int]], *, derive: bool = False):
+def scan_step(X, cache: Cache, st, inp, out, tokens: Mapping[int, Sequence[int]], *, derive: bool = False):
     """The cache through one engine step: ReplayStep_v1's state `st`, inputs `inp` and output `out` (its rows at their
     slots), the requests' certified `tokens`. Slot by slot, an admitted row (at a slot no request ran in) first looks
     its candidate's hit up from ROOT on its first KL units at the table so far, and every row computes the units it
@@ -517,7 +530,9 @@ def scan_step(X, cache: Cache, st, inp, out, tokens: dict[int, Sequence[int]], *
     hits, admitted, after = [0] * (X.W + X.A), set(), {}
 
     def lookup(c: int, units) -> int | None:
-        rid, K = cands[c]
+        cand = cands[c]
+        assert cand is not None
+        rid, K = cand
         h = inp.hit[c] if c < len(inp.hit) else 0
         if derive:
             hits[c] = longest(Y.look, table, units[:Y.KL], K)[0]
@@ -537,9 +552,10 @@ def scan_step(X, cache: Cache, st, inp, out, tokens: dict[int, Sequence[int]], *
         w = pfx[p]
         if p >= len(st.running):
             c = next((c for c, x in enumerate(cands) if x is not None and x[0] == rid), None)
-            w = None if c is None else lookup(c, units)
-            if w is None:
+            looked = None if c is None else lookup(c, units)
+            if looked is None:
                 return None
+            w = looked
             admitted.add(rid)
         u0, end = start >> Y.LB, (start + n) >> Y.LB
         if end > X.CU:
@@ -548,8 +564,8 @@ def scan_step(X, cache: Cache, st, inp, out, tokens: dict[int, Sequence[int]], *
         if not got.ok:
             return None
         table, after[rid] = got.table, got.pfx
-    rest = [c for c, x in enumerate(cands) if x is not None and x[0] not in admitted]
-    if rest and (cands[rest[0]][0] not in tokens or lookup(rest[0], units_of(X, tokens[cands[rest[0]][0]])) is None):
+    rest = next(((c, x[0]) for c, x in enumerate(cands) if x is not None and x[0] not in admitted), None)
+    if rest and (rest[1] not in tokens or lookup(rest[0], units_of(X, tokens[rest[1]])) is None):
         return None
     if any(r.id not in after for r in out.state.running):
         return None

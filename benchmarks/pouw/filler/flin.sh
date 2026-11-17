@@ -14,12 +14,12 @@
 # beside the dfill pump on that many SMs, LT the linears that stay on cuBLASLt (FLIN_LT: 1 qkv, 2 o, 4 gate_up, 8 down), FP the
 # attention filler blocks' PDL (FATT_PDL: 0 none, 1 with, 2 with their filler warps starting early), ANC their warps'
 # chains (FATT_NC, 4 unless set), APS 1 those blocks persistent on the step's SMs (FATT_PERSIST), ALZ their
-# filler warps' lazy done test (FATT_LAZY: 0, 2, 4), LM 1 lm_head through flin (FLIN_LM), ST a pfill build's FLIN_STOP, FL_NCU ("M:FW:NC:THR ...", ncu over flin's first launches; "none" skips), FL_NCU_STEP
+# filler warps' lazy done test (FATT_LAZY: 0, 2, 4), LM 1 lm_head through flin (FLIN_LM), ST FLIN_STOP, FL_NCU ("M:FW:NC:THR ...", ncu over flin's first launches; "none" skips), FL_NCU_STEP
 # ("B:L:FW:NC:THR:AFW[:ANC[:APS[:ALZ]]] ...", ncu's tensor-pipe counters over one step's attention blocks and first linear, each with
 # filler warps; FL_NCU_SECTIONS adds those ncu sections over the attention blocks only and keeps the report with its
 # details, raw and SASS pages), FL_REPS,
-# FL_GATE (0 skips dcap's gate), FL_NVCC (more nvcc flags, -DDFILL_V1 unless set: FILL v1's filler;
-# empty builds pfill.cuh's, -DPFILL_BITS its {0,1} tile)
+# FL_GATE (0 skips dcap's gate), FL_NVCC (more nvcc flags: -DPFILL_BITS builds pfill.cuh's
+# {0,1} tile)
 set -uo pipefail
 export O=${OUT:?}
 export PATH=/usr/local/cuda-13.0/bin:$PATH
@@ -30,12 +30,12 @@ export FL_STEP=${FL_STEP:-"32:2048:8:4:0:0 32:2048:8:4:0:2 32:2048:8:4:0:4 32:81
 export FL_NCU=${FL_NCU:-"32:8:4:0 128:4:4:0"}
 export FL_REPS=${FL_REPS:-15} FL_GATE=${FL_GATE:-1}
 git rev-parse HEAD > "$O/commit.txt" 2>&1
-echo "${FL_NVCC--DDFILL_V1}" > "$O/nvcc-flags.txt"
+echo "${FL_NVCC-}" > "$O/nvcc-flags.txt"
 export DFILL_COINS; DFILL_COINS=$(od -An -N16 -tx1 /dev/urandom | tr -d ' \n')
 echo "$DFILL_COINS" > "$O/coins.txt"
 nvcc --version | tail -2 > "$O/nvcc.txt"
 # shellcheck disable=SC2086
-nvcc -O3 -std=c++17 ${FL_NVCC--DDFILL_V1} -gencode arch=compute_120a,code=sm_120a -Xptxas -v -o "$B/dcap" $K/dcap.cu -lcublasLt -lnvidia-ml -ldl \
+nvcc -O3 -std=c++17 ${FL_NVCC-} -gencode arch=compute_120a,code=sm_120a -Xptxas -v -o "$B/dcap" $K/dcap.cu -lcublasLt -lnvidia-ml -ldl \
   > "$O/build.log" 2>&1 || { grep -E "error" "$O/build.log" | head -40; tail -20 "$O/build.log"; exit 4; }
 cuobjdump -sass "$B/dcap" | awk '/Function : /{p = /flin_k/} p' > "$O/sass-flin.txt" 2>&1
 echo "flin_k SASS: $(grep -c IMMA "$O/sass-flin.txt") IMMA, $(grep -cE 'LDL|STL' "$O/sass-flin.txt") local memory ops"
