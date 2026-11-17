@@ -576,8 +576,8 @@ def test_a_window_closed_off_the_loop_writes_the_records_one_closed_on_it_writes
         out = tmp_path / name
         out.mkdir()
         ids, coins = iter(range(1 << 20)), iter(range(1, 1 << 20))
-        monkeypatch.setattr(so, "new_http_id", lambda: f"cmpl-{next(ids):04x}")
-        monkeypatch.setattr(served_seed, "in_process", lambda: (next(coins).to_bytes(64, "big"), "test"))
+        monkeypatch.setattr(so, "new_http_id", lambda ids=ids: f"cmpl-{next(ids):04x}")
+        monkeypatch.setattr(served_seed, "in_process", lambda coins=coins: (next(coins).to_bytes(64, "big"), "test"))
         sealer = st.Sealer(1 << 40)
         with Sealed(out, sealer=sealer, com=com, window_steps=2) as s:
             for i in range(3):

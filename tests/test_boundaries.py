@@ -110,10 +110,10 @@ NO_DATE_OR_REASON = ("verity/protocols/compose/verifier/live_challenger", "verit
 #: It only shrinks, as a directory becomes part of ``verity``, which is held whole.
 HELD_AS_VERITY = ("verity/protocols/compose/verifier/live_challenger", "verity/protocols/resource_accounting/memory/poub/attester/live_verifier",
                   "verity/protocols/resource_accounting/compute/pouw/prover/clear", "verity/protocols/resource_accounting/compute/pouw/verifier/receipts")
-#: SPOT[Flock] stands on its own, and the network attester is a layer beside it: SPOT reads the certifier's stamp as a
-#: certified input and imports none of the certifier, and the two compose only above both.  SPOT's row of the
-#: listing and the certifier's, the trees each of whose Python files (tests included) is checked, SPOT's Lean packages
-#: and its analysis (Security's Flock and Spot areas and the sampling claims); then the certifier's modules and Lean
+#: SPOT[Flock] stands on its own, and the network attester is a layer beside it: SPOT reads the network attester's stamp as a
+#: certified input and imports none of the network attester, and the two compose only above both.  SPOT's row of the
+#: listing and the network attester's, the trees each of whose Python files (tests included) is checked, SPOT's Lean packages
+#: and its analysis (Security's Flock and Spot areas and the sampling claims); then the network attester's modules and Lean
 #: (its packages and its Security areas).
 SPOT_ROW = "verity/protocols/proofs/spot"
 CERTIFIER_ROW = "verity/protocols/resource_accounting/network"
@@ -353,8 +353,8 @@ def _covered(rel: str, globs: Iterable[str]) -> bool:
 
 
 def _certifier_imports(path: Path, nodes: Iterable[ast.AST] | None = None) -> list[tuple[int, str]]:
-    """``(line, module)`` for each module of the certifier's (``CERTIFIER_MODULES``) that ``path`` (or its parsed
-    ``nodes``) imports.  ``from M import a`` names ``M.a`` as well as ``M``, since ``a`` may be the certifier's package."""
+    """``(line, module)`` for each module of the network attester's (``CERTIFIER_MODULES``) that ``path`` (or its parsed
+    ``nodes``) imports.  ``from M import a`` names ``M.a`` as well as ``M``, since ``a`` may be the network attester's package."""
     def certifier(name: str) -> bool:
         return any(name == m or name.startswith(m + ".") for m in CERTIFIER_MODULES)
 
@@ -366,7 +366,7 @@ def _certifier_imports(path: Path, nodes: Iterable[ast.AST] | None = None) -> li
 
 
 def _spot_python_offenders() -> list[str]:
-    """Each import of a certifier module (``CERTIFIER_MODULES``) in a Python file of ``SPOT_TREES`` (a tree, or one file), its
+    """Each import of a network attester module (``CERTIFIER_MODULES``) in a Python file of ``SPOT_TREES`` (a tree, or one file), its
     tests included."""
     out = []
     for path, _ in _with_tests(SPOT_TREES):
@@ -375,9 +375,9 @@ def _spot_python_offenders() -> list[str]:
 
 
 def test_spot_never_imports_the_network_attester_in_python() -> None:
-    """SPOT[Flock]'s Python imports none of the network attester.  The listing puts the certifier's row
+    """SPOT[Flock]'s Python imports none of the network attester.  The listing puts the network attester's row
     (``CERTIFIER_ROW``) after SPOT's (``SPOT_ROW``) and lists no tie out of the rows up to SPOT's into
-    a later one, so nothing SPOT's Python loads, directly or through another file, is the certifier's; and no
+    a later one, so nothing SPOT's Python loads, directly or through another file, is the network attester's; and no
     file of ``SPOT_TREES``, Flock's and their tests among them, imports one of ``CERTIFIER_MODULES``."""
     listing = _listing()
     spot, certifier = listing.steps[SPOT_ROW], listing.steps[CERTIFIER_ROW]
@@ -452,7 +452,7 @@ def _load_tool(name: str, path: Path) -> Any:
 def test_spot_never_imports_the_network_attester_in_lean() -> None:
     """SPOT[Flock]'s Lean imports none of the network attester's (``CERTIFIER_LEAN``): its packages (``SPOT_LEAN``)
     require no certifier package by path, directly or through another, and no module of those packages or of its analysis
-    (``SPOT_SECURITY``) imports a certifier module, directly or through any other module."""
+    (``SPOT_SECURITY``) imports a network attester module, directly or through any other module."""
     pkgs = sorted(p for p in _lake_closure(SPOT_LEAN) if _covered(p, CERTIFIER_LEAN))
     assert not pkgs, f"{SPOT_NOT_CERTIFIER}: {SPOT_LEAN} require {pkgs}"
     headers = _load_tool("lean_headers", ROOT / "tools/verity/lean/headers.py")
@@ -467,9 +467,9 @@ def test_spot_never_imports_the_network_attester_in_lean() -> None:
 
 
 def test_a_spot_import_of_the_certifier_is_found() -> None:
-    """The check above isn't vacuous: a certifier module that a SPOT root reaches through another module is found with the
+    """The check above isn't vacuous: a network attester module that a SPOT root reaches through another module is found with the
     chain that reaches it, a module no file declares (Mathlib's) is skipped, and a package's ``srcDir`` names its modules.
-    In Python, the certifier's package imported from the package above it is found as its module is."""
+    In Python, the network attester's package imported from the package above it is found as its module is."""
     src = ("from verity.protocols.resource_accounting.network import verifier\nimport verity.protocols.resource_accounting.network.prover.egress as e\n"
            "from verity.protocols.resource_accounting.network.attester import x\nfrom verity.protocols import certifier, spot\n")
     found = _certifier_imports(SRC / "protocols/spot/tests/test_x.py", ast.walk(ast.parse(src)))
@@ -842,7 +842,7 @@ def test_a_benchmarks_import_is_found() -> None:
                        "importlib.import_module('datacenter.graph')\nTOOL = 'benchmarks.commitments.tool:COMMIT_COST'\n"),
         "x/syspath.py": ("import sys\nfrom pathlib import Path\nPPL = Path(__file__).parents[2] / 'benchmarks' / 'ppl'\n"
                          "sys.path.insert(0, str(PPL))\nsys.path[:0] = ['../../benchmarks/census']\n"),
-        "x/config.py": "from pathlib import Path\nSESSION = Path('/r') / 'benchmarks' / 'remote_session'\n",
+        "x/config.py": "from pathlib import Path\nSESSION = Path('/r') / 'benchmarks' / 'poub_session'\n",
         "x/loader.py": ("import importlib.util\nfrom x import config\ndef load(name, directory=config.SESSION):\n"
                         "    def named(n):\n        return n\n"
                         "    return importlib.util.spec_from_file_location(named(name), directory / f'{name}.py')\n"),
@@ -1111,6 +1111,45 @@ def test_core_never_reads_the_census() -> None:
         offenders += [f"{path.relative_to(SRC)}:{n.lineno}" for n in ast.walk(tree)
                       if isinstance(n, ast.Constant) and isinstance(n.value, str) and id(n) not in docs and CENSUS_PATH.search(n.value)]
     assert not offenders, offenders
+
+
+WORLD_DIRS = ("hardware", "calibration")
+WORLD_PATH = re.compile(r"(?<![\w.\-])(hardware|calibration)[/\\]")
+#: The files of ``verity`` that still name a path to ``hardware/`` or ``calibration/``, each with why.  It only shrinks.
+WORLD_PATHS_ALLOWED = {
+    "device.py": "proofs: the card and node readers' built-in directories, `CARDS` and `NODES`, until every caller names "
+                 "its own",
+}
+
+
+def _world_paths(tree: ast.AST) -> list[int]:
+    docs = _docstrings(tree)
+    named = {id(side) for n in ast.walk(tree) if isinstance(n, ast.BinOp) and isinstance(n.op, ast.Div)
+             for side in (n.left, n.right) if isinstance(side, ast.Constant) and side.value in WORLD_DIRS}
+    return sorted(n.lineno for n in ast.walk(tree) if isinstance(n, ast.Constant) and isinstance(n.value, str)
+                  and id(n) not in docs and (id(n) in named or WORLD_PATH.search(n.value)))
+
+
+def test_verity_names_no_path_to_the_hardware_or_calibration() -> None:
+    """The protocols read nothing about the world: a card, a node file or a calibrated figure reaches ``verity`` as a
+    parameter its caller passes, so no string in its code (docstrings aside) is a path to ``hardware/`` or
+    ``calibration/``, written whole or joined with ``/``."""
+    found = {}
+    for path in _held_sources():
+        lines = _world_paths(ast.parse(path.read_text(encoding="utf-8"), filename=str(path)))
+        if lines:
+            found[path.relative_to(SRC).as_posix()] = lines
+    offenders = [f"verity/{f}:{n}" for f, lines in found.items() if f not in WORLD_PATHS_ALLOWED for n in lines]
+    assert not offenders, ("verity names a path to hardware/ or calibration/; take the figure, or the directory, as a "
+                           "parameter its caller passes:\n" + "\n".join(offenders))
+    stale = sorted(set(WORLD_PATHS_ALLOWED) - set(found))
+    assert not stale, f"WORLD_PATHS_ALLOWED entries that name no such path any more; remove them: {stale}"
+
+
+def test_a_path_to_the_hardware_is_found() -> None:
+    src = ('A = ROOT / "hardware" / "cards"\nB = "calibration/hardware/nodes"\nC = Path("x") / "calibration"\n'
+           'D = {"hardware": 1, "calibration": 2}\nE = "verity/hardware.json"\n')
+    assert _world_paths(ast.parse(src)) == [1, 2, 3]
 
 
 #: The listing: the tree's directories, bottom first; the directories under ``verity/`` that are distributions of their own;

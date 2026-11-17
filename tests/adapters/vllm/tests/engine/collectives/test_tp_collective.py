@@ -14,8 +14,6 @@ from verity.circuits.defs import REGISTRY, bind
 from verity.circuits.evaluation.reference import evaluate_region
 from verity.circuits.layout import resolve
 from verity.circuits.program import Program
-from verity_vllm.definitions.registry import b1_tp2
-from verity_vllm.definitions.registry import prims as P
 
 from tests.engine.collectives import collective_link as CL
 from tests.engine.collectives.collective_record import (
@@ -25,6 +23,9 @@ from tests.engine.collectives.collective_record import (
     SCHEMA_SHARD,
     validate_launch,
 )
+from tests.properties.quarantine_lint import lint
+from verity_vllm.definitions.registry import b1_tp2
+from verity_vllm.definitions.registry import prims as P
 from verity_vllm.observe.events import (
     DispatchEnter,
     DispatchExit,
@@ -37,7 +38,6 @@ from verity_vllm.observe.events import (
 )
 from verity_vllm.program.quarantine import collective as QC
 from verity_vllm.program.quarantine.collective import allreduce as A
-from tests.properties.quarantine_lint import lint
 
 REPO = (Path(__file__).resolve().parents[6] / "adapters" / "vllm")
 FIX = Path(__file__).resolve().parent / "fixtures" / "tp2"
