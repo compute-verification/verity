@@ -260,6 +260,11 @@ class Options:
     protocols_config: str | None = option("--protocols-config", default=None,
                                           help="--protocols' settings, {\"pouw\": {...}}: a JSON object, or a JSON file "
                                                "(serve_h1.config_of, serve_pearl.config_of)")
+    pearl_users: str | None = option("--pearl-users", default=None, metavar="REGEX",
+                                     help=f"with --protocols {SPL.ENTRY}: the arm opens on a window only at its first step "
+                                          "whose requests' users all match REGEX, the tied workload's; any other window "
+                                          "(the network attester's front's) serves no Pearl+ epoch and reserves no salt "
+                                          "session (serve_pearl)")
     gate: SH.GateOptions = group(SH.GateOptions)
     remote: SR.RemoteOptions = group(SR.RemoteOptions)
     retention: RL.RetentionOptions = group(RL.RetentionOptions)
@@ -606,6 +611,8 @@ def preflight(opts: Options, which: Callable[[str], str | None] = shutil.which,
         raise UsageError(f"--seal: {why}")
     if why := SS.scheme_refusal(opts):
         raise UsageError(why)
+    if opts.pearl_users is not None and opts.protocols != SPL.ENTRY:
+        raise UsageError(f"--pearl-users is {SPL.ENTRY}'s, and --protocols is {opts.protocols}")
     if why := (SPL.refusal if opts.protocols == SPL.ENTRY else SH.refusal)(opts) or SR.refusal(opts) or SL.refusal(opts) or SD.refusal(opts):
         raise UsageError(why)
     if opts.commit and which("ninja") is None:
