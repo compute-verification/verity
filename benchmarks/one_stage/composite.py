@@ -2,7 +2,7 @@
 `remote-v1 check`).
 
     composite.py onsite|remote|remote-v1 --cases DIR ... --private-out DIR --public-out DIR [--exe PATH]
-                 [--development WHY] [--configuration HASH]
+                 [--development WHY] [--configuration HASH [--hold-placement]]
 
 ``remote-v1`` is remote's composite of record (`Core.Remote.V1`, ``verity/remote/v1``), whose work subprotocol is
 Pearl+'s run verdict (`verity/pouw/pearl-plus/v1`) in the period's place; ``remote`` is v0, H1's development one.
@@ -47,9 +47,10 @@ line of its ``verdicts.txt`` and of what it prints after its ``COMPOSITE`` line.
 
 A memory case (`TRUSTING`) lists in its params the keys its Lean trusts, and the developer's node wrote that list. With
 ``--configuration HASH`` of a configuration committed in ``--tree`` (`COMMITTED`), a key it lists whose SHA-512 that
-configuration doesn't pin for the case's party and protocol is the run's key, not the configuration's pin. Under
-``VERITY_HOLD_PLACEMENT=1`` (`HOLD_PLACEMENT`) such a case is refused by name (exit 67, ``REFUSED``), before the check runs
-and with nothing written; otherwise it is taken (`RUN_KEY`). This script refuses, not the Lean verifier, which accepts any
+configuration doesn't pin for the case's party and protocol is the run's key, not the configuration's pin. With
+``--hold-placement`` (`served_composite.sh` passes it under ``VERITY_HOLD_PLACEMENT=1``) such a case is refused by name
+(exit 67, ``REFUSED``), before the check runs and with nothing written; without it, it is taken (`RUN_KEY`). This script
+refuses, not the Lean verifier, which accepts any
 key a case lists. No composite vouches for the keys: one that lists any is ``key_pin: run``, its ``key_pin_why`` and
 ``KEY_PIN`` line say so and why, and it is a development check, as ``--development`` makes it. A product with no memory
 case listing a key has no ``key_pin``.
@@ -109,10 +110,9 @@ RUN_KEYS = "no committed configuration was given, so nothing refused the memory 
 CHECKED = ("each key a memory case lists is one {path} (hash {hash}) pins for that case's party and protocol, and those "
            "pins were used only to refuse, by the composing script (composite.py), not by the Lean verifier, which accepts "
            "any key a case lists")
-#: Set to ``1``, a memory case listing a key the committed configuration doesn't pin is refused; otherwise it is taken.
-HOLD_PLACEMENT = "VERITY_HOLD_PLACEMENT"
 RUN_KEY = ("{ids}: each lists a key {path} (hash {hash}) pins for no session of its party and protocol, so that key is "
-           "the run's, not the configuration's pin; VERITY_HOLD_PLACEMENT is not 1, so it is taken, not refused")
+           "the run's, not the configuration's pin; with no hold on placement (VERITY_HOLD_PLACEMENT=1 holds it) it is "
+           "taken, not refused")
 UNVOUCHED = ("this composite does not vouch for the keys: a composite that does needs a signal only the auditor's "
              "compose gate can give, which does not exist yet")
 
@@ -375,7 +375,7 @@ def run(a: argparse.Namespace) -> int:
     if any(listed(p) for p in found):
         got = committed_pins(a.tree, a.configuration)
         refused = unpinned(found, *got) if got is not None else {}
-        if refused and os.environ.get(HOLD_PLACEMENT) == "1":
+        if refused and a.hold_placement:
             for ln in refused.values():
                 print(ln, flush=True)
             return UNPINNED
@@ -445,7 +445,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--development", help="why this composite claims no record: its outputs lead with it")
     ap.add_argument("--configuration", metavar="HASH",
                     help="the hash of a committed configuration: a memory case listing a key it doesn't pin is the "
-                         "run's key, refused under VERITY_HOLD_PLACEMENT=1 and taken with it unset")
+                         "run's key, refused under --hold-placement and otherwise taken")
+    ap.add_argument("--hold-placement", action="store_true",
+                    help="refuse a memory case listing a key the committed configuration doesn't pin (exit 67)")
     ap.add_argument("--tree", type=Path, default=Path(__file__).resolve().parents[2],
                     help="the checkout the executable was built from (default: this file's)")
     return run(ap.parse_args(argv))
