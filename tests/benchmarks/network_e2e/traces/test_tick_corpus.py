@@ -364,7 +364,7 @@ def test_summary_takes_a_network_attester_traces_releases_from_the_server_where_
     for trace in ("warden-heavy", "warden-heavy.admitted", "warden-heavy.released"):
         reqs = summary.read_jsonl(tmp_path / trace / "requests.jsonl")
         assert [(r["release"], r["bucket"]) for r in reqs] == [(0, 0), (1, 1)]
-    assert ("- warden-heavy: 2 released, 2 agree, 0 the certifier logged no release for, 0 disagree"
+    assert ("- warden-heavy: 2 released, 2 agree, 0 the network attester logged no release for, 0 disagree"
             in (tmp_path / "README.md").read_text())
 
 
