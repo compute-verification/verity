@@ -185,7 +185,8 @@ Preflight.  What breaks a candidate is cheap to catch at mark time, on the head 
 (`Preflight._fetch`, under drive.toml's `land_into = "main"`): a conflict with `main`, a stale Lake pin, a module string naming a
 module only an unlanded PR adds, a workspace member without its REAL_ROOTS entry, a test that errors at collection, an open PR
 it carries that isn't admitted, a merge of an old `next` that carries a PR's head the PR no longer lands (closed, rebuilt
-without it, or withdrawn: `stale_carried`, after `old_next` for one closed unlanded), and a failure of
+without it, or withdrawn: `stale_carried`, after `old_next` for one closed unlanded), an added line that names a path or
+module a move `main` landed since the head began renamed or retired (`stale_names`), and a failure of
 `tests/test_repository.py` (a report-genre name), which the preflight runs too, as it runs the landing gates on the head; a
 warn gate's failure (a Markdown file over its size limit) it prints as a warning, and so it prints what the vLLM integration's ratchet
 gate fails on the merged tree (`PREFLIGHT_RATCHET`), since the gate tells a new violation by its text and can take an honest
@@ -4537,6 +4538,207 @@ def lacks_why(lacked: list[tuple[str, str, list[str] | None]]) -> str:
             "new head ready")
 
 
+#: the files whose lines name old paths on purpose: the moves' own maps, scripts and records
+STALE_SKIP = ("tools/move/",)
+#: how many stale lines a refusal lists before it counts the rest
+STALE_SHOWN = 10
+#: the rest of a path after an old name `Renames.stale` matched
+TAIL_RE = re.compile(r"[\w./-]*")
+
+
+@dataclass(frozen=True)
+class Renames:
+    """What a layout move's map renames in text (`map_renames`): ``names``, each old path (a directory's without its `/`) or
+    dotted module name it moves or retires, with its new name (None: retired, no new one), and what its [keep] keeps: lines
+    holding a match of a ``keep`` pattern or a ``strings`` entry quote that text, and a name inside it isn't stale."""
+    names: dict[str, str | None]
+    keep: tuple[re.Pattern, ...] = ()
+    strings: tuple[str, ...] = ()
+
+    @functools.cached_property
+    def pattern(self) -> re.Pattern | None:
+        """A path with a `/` bounded as a path, a one-segment path only as a directory (before a `/`), a dotted module bounded as
+        a dotted name; the longest first."""
+        alts = []
+        for old in sorted(self.names, key=len, reverse=True):
+            if "/" in old:
+                alts.append(rf"(?<![\w./-]){re.escape(old)}(?=/|[^\w.-]|\.(?!\w)|$)")
+            elif "." in old:
+                alts.append(rf"(?<![\w.]){re.escape(old)}(?![\w])")
+            else:
+                alts.append(rf"(?<![\w./-]){re.escape(old)}(?=/)")
+        return re.compile("|".join(alts)) if alts else None
+
+    def kept(self, line: str) -> list[tuple[int, int]]:
+        spans = [m.span() for k in self.keep for m in k.finditer(line)]
+        for s in self.strings:
+            at = line.find(s)
+            while at >= 0:
+                spans.append((at, at + len(s)))
+                at = line.find(s, at + 1)
+        return spans
+
+    def stale(self, line: str) -> list[tuple[str, str, str | None]]:
+        """(old name, the path or name ``line`` spells with it, that spelled with the new name or None) for each old name
+        ``line`` spells outside what [keep] keeps."""
+        if self.pattern is None:
+            return []
+        kept = None
+        out = []
+        for m in self.pattern.finditer(line):
+            kept = self.kept(line) if kept is None else kept
+            if not any(a <= m.start() and m.end() <= b for a, b in kept):
+                old, tail = m.group(0), TAIL_RE.match(line, m.end())[0].rstrip(".")
+                new = self.names[old]
+                out.append((old, old + tail, None if new is None else new + tail))
+        return out
+
+
+def map_renames(text: str, where: str) -> Renames | None:
+    """The renames of a move map's ``text`` (`Renames`; ``where`` names it in a warning): a layout map's [paths] rows that send
+    a path elsewhere, its [retired] and [drop] paths (no new name) and its dotted [modules] and [aliases]; its [keep]
+    `patterns` and `strings`.  None when it doesn't parse; a word map renames no path, so it has no names."""
+    try:
+        data = tomllib.loads(text)
+    except tomllib.TOMLDecodeError as e:
+        print(f"research queue: the move map {where} doesn't parse ({e}): no stale names read from it", file=sys.stderr)
+        return None
+
+    def table(key: str) -> dict:
+        return t if isinstance(t := data.get(key), dict) else {}
+
+    names: dict[str, str | None] = {}
+    for k in ("retired", "drop"):
+        for p in ps if isinstance(ps := table(k).get("paths"), list) else ():
+            if isinstance(p, str) and p.strip("/"):
+                names[p.rstrip("/")] = None
+    for o, n in table("paths").items():
+        if isinstance(n, str) and o != n and o.strip("/"):
+            names[o.rstrip("/")] = n.rstrip("/")
+    for k in ("modules", "aliases"):
+        names |= {o: n for o, n in table(k).items() if isinstance(n, str) and o != n and "." in o}
+    keep, keep_t = [], table("keep")
+    for p in keep_t.get("patterns") or ():
+        try:
+            keep.append(re.compile(p))
+        except (re.error, TypeError) as e:
+            print(f"research queue: the move map {where}: [keep] pattern {p!r} doesn't compile ({e}): it keeps nothing",
+                  file=sys.stderr)
+    return Renames(names, tuple(keep), tuple(s for s in keep_t.get("strings") or () if isinstance(s, str) and s))
+
+
+def started_moves(repo: Path, main: str, head: str) -> list[tuple[str, list[str]]]:
+    """The moves ``main`` landed since ``head``'s own commits began (`moves_between`): those any base of its own commits (each
+    parent of a commit ``main`` lacks that isn't one itself) lacks, oldest first.  So a head that merged `main` across a move
+    still counts it: its first commits were made before it."""
+    rows = _out(repo, "rev-list", "--parents", head, f"^{main}").splitlines()
+    own = {r.split()[0] for r in rows}
+    bases = {p for r in rows for p in r.split()[1:] if p not in own}
+    seen, out = set(), []
+    for b in sorted(bases):
+        for commit, parents in moves_between(repo, main, b):
+            if commit not in seen:
+                seen.add(commit)
+                out.append((commit, parents))
+    order = {c: i for i, c in enumerate(_out(repo, "rev-list", "--topo-order", "--reverse", main, *(f"^{b}" for b in bases))
+                                        .splitlines())} if len(bases) > 1 else {}
+    return sorted(out, key=lambda m: order.get(m[0], 0))
+
+
+def added_lines(repo: Path, main: str, head: str) -> list[tuple[str, int, str]]:
+    """(file, line, text) of each line ``head`` adds against its merge base with ``main``, a rename found as one, so a line it
+    only carries to another file isn't its own."""
+    out, path, n = [], None, 0
+    diff = _out(repo, "diff", "-U0", "--no-color", "--no-ext-diff", "--find-renames", f"{main}...{head}")
+    for x in diff.splitlines():
+        if x.startswith("+++ "):
+            path = x[6:] if x.startswith("+++ b/") else None
+        elif x.startswith("@@"):
+            n = int(re.match(r"@@ -\S+ \+(\d+)", x)[1])
+        elif x.startswith("+") and path is not None:
+            out.append((path, n, x[1:]))
+            n += 1
+    return out
+
+
+def stale_names(repo: Path, main: str, head: str, maps: dict[bytes, Renames | None] | None = None) -> list[dict]:
+    """What ``head``'s own change still spells of the moves ``main`` landed since its own commits began (`started_moves`), each
+    map read at the move's base, else the move itself (`map_renames`, kept in ``maps`` by its bytes): each added line
+    (`added_lines`) naming an old path or module outside the map's [keep], and each file it adds under an old path, with the
+    new name, the move and its map, the moves' own files (`STALE_SKIP`) left out.  A path ``main`` holds again, as the line
+    spells it, isn't stale.  One git log reads the moves' lines and one `git cat-file --batch` their maps, and a map's names
+    are matched only once the added text holds one, so hundreds of moves take seconds."""
+    if not (moves := started_moves(repo, main, head)):
+        return []
+    lines = added_lines(repo, main, head)
+    added = [f for f in _out(repo, "diff", "--name-only", "--diff-filter=A", "--find-renames", f"{main}...{head}").splitlines()
+             if not f.startswith(STALE_SKIP)]
+    lines = [x for x in lines if not x[0].startswith(STALE_SKIP)]
+    if not lines and not added:
+        return []
+    log = _out(repo, "log", "--no-walk=unsorted", "--format=%H%x00%B%x1e", *(c for c, _ in moves))
+    bodies = {c: b for c, _, b in (r.strip().partition("\x00") for r in log.split("\x1e") if r.strip())}
+    wanted = []
+    for commit, parents in moves:
+        if m := MOVE_LINE_RE.search(bodies.get(commit, "")):
+            wanted.append((commit, m[1], [f"{parents[0] if parents else commit + '^'}:{m[1]}", f"{commit}:{m[1]}"]))
+    blobs = _blobs(repo, [s for _, _, specs in wanted for s in specs])
+    maps = {} if maps is None else maps
+    text = "\n".join([*(x[2] for x in lines), *added])
+    read = []
+    for commit, path, specs in wanted:
+        for s in specs:
+            if (data := blobs.get(s)) is None:
+                continue
+            if data not in maps:
+                maps[data] = map_renames(data.decode("utf-8", "replace"), f"{path} at {s.partition(':')[0][:12]}")
+            if (got := maps[data]) is not None:
+                if any(old in text for old in got.names):
+                    read.append((commit, path, got))
+                break
+    if not read:
+        return []
+    held: dict[str, bool] = {}
+
+    def at_main(name: str) -> bool:
+        if name not in held:
+            held[name] = not _git(repo, "cat-file", "-e", f"{main}:{name}", check=False).returncode
+        return held[name]
+
+    out = []
+    for path, n, text in lines:
+        for commit, mp, got in read:
+            for old, spelled, new in dict.fromkeys(got.stale(text)):
+                if not at_main(spelled.rstrip("/")):
+                    out.append({"file": path, "line": n, "text": text.strip()[:160], "old": spelled, "new": new,
+                                "move": commit, "map": mp})
+    for f in added:
+        for commit, mp, got in read:
+            old = next((o for o in sorted(got.names, key=len, reverse=True) if f == o or f.startswith(o + "/")), None)
+            if old is not None and not at_main(old):
+                new = got.names[old]
+                out.append({"file": f, "line": 0, "text": "", "old": old, "new": None if new is None else new + f[len(old):],
+                            "move": commit, "map": mp})
+                break
+    return out
+
+
+def stale_why(found: list[dict], branch: str | None) -> str:
+    """The refusal of a head `stale_names` found lines of: each file and line, the old name and the new one the map gives, and
+    the fix."""
+    def one(x: dict) -> str:
+        new = f"`{x['new']}`" if x["new"] is not None else "no new path (the move retired it)"
+        where = f"{x['file']}:{x['line']} names `{x['old']}`" if x["line"] else f"it adds {x['file']}, under `{x['old']}`"
+        return f"{where}, which the move {x['move'][:12]} ({x['map']}) sends to {new}"
+
+    shown = "; ".join(one(x) for x in found[:STALE_SHOWN]) + (
+        f"; and {len(found) - STALE_SHOWN} more" if len(found) > STALE_SHOWN else "")
+    first = found[0]["move"][:12]
+    return (f"its own lines name what a move `main` landed renamed, which no merge rewrites: {shown}. Carry the branch across "
+            f"the move (`python3 tools/move/restack.py {branch or 'BRANCH'} --main {first}`, then merge `main` into the "
+            "result), or rename each to the new path given here in one commit, and mark the new head ready")
+
+
 def merge_main(pr: str, branch: str | None) -> str:
     """How the owner of ``pr`` (as `#N`, or `it`) brings `main` into it: a plain merge where no move lies between, and else
     the carry across the move first, since a merge across a move is clean and leaves the files the line adds at their old
@@ -5737,8 +5939,10 @@ class Preflight:
     imports; or (f) merged onto `next` as the sync merges it (`lock_drops`), drops from a lock it changes a `shape.inline` premise or
     a `shape.frozen` key `next`'s statements still need (`dropped_entries`), naming each and the fix (`LOCK_DROP_FIX`); or (g)
     carries, through a merge of `next` (`carried_heads`), a PR's head that isn't on the landing branch and that the PR closed,
-    rebuilt without, or isn't admitted at (`stale_carried`), naming each and the fix.  A train most often breaks on one of (a) to
-    (c), and a Lean break is most often one of (e) or (f).
+    rebuilt without, or isn't admitted at (`stale_carried`), naming each and the fix; or (h) adds a line naming a path or module
+    that a move `main` landed since the head's own commits began renamed or retired, or a file under such a path
+    (`stale_names`, a merge of `main` since included), naming the file, the line and the new path, with the fix.  A train
+    most often breaks on one of (a) to (c), and a Lean break is most often one of (e) or (f).
 
     `next` is fetched fresh; a PR already on it is merged onto the commit below its merge there, as drive's next sync would
     rebuild it, found by its trailers among the commits of `next` the landing branch doesn't hold, past those without them
@@ -5793,7 +5997,7 @@ class Preflight:
         if why := self._old_next(pr, prs):
             return why
         notes: list[str] = []
-        found = self._contained(pr, prs) + self._gates(pr, notes)
+        found = self._contained(pr, prs) + self._gates(pr, notes) + self._stale(pr, notes)
         tree, files, r = None, [], None
         if not pr.move:
             tree, files, r = merged_tree(self.repo, base, pr.head)
@@ -5967,6 +6171,18 @@ class Preflight:
         for why in gate_refusal(self.repo, main, pr.head, warns, kind="warn gate")[0]:
             self.log(f"research queue: preflight: warning: #{pr.number} at {pr.head[:12]}: {why}. {WARN_GATE_SAYS}")
         return refused
+
+    def _stale(self, pr: PR, notes: list[str]) -> list[str]:
+        """(h): what the head's own lines still name of the moves `main` landed since it began (`stale_names`, `stale_why`).  A
+        move PR's head is only the request, and what git can't read is a note."""
+        if pr.move:
+            return []
+        try:
+            found = stale_names(self.repo, _out(self.repo, "rev-parse", "refs/queue/preflight/main"), pr.head)
+        except QueueError as e:
+            notes.append(f"the moves' stale names ({e})")
+            return []
+        return [stale_why(found, pr.branch)] if found else []
 
     def _collisions(self, pr: PR, prs: list[PR], base: str, onto: str) -> None:
         """A warning, never a refusal: each marked PR among ``prs``, the open ones, whose head doesn't merge with this head

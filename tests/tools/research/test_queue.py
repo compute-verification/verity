@@ -4467,6 +4467,70 @@ def test_a_landed_move_that_adds_its_own_map_judges_a_head_lacking_it_by_that_ma
     assert Q.lacked_moves(world.origin, move, names) == [(move, "tools/move/own_map.toml", ["c.txt"])]
 
 
+#: a layout move's map: `old/` goes to `new/`, `gone.txt` is retired, and a version tag (a format id `main` keeps) is kept
+STALE_MAP = ('[paths]\n"old/" = "new/"\n[retired]\npaths = ["gone.txt"]\n[modules]\n"pkg.old" = "pkg.new"\n'
+             "[keep]\npatterns = ['[\\w.-]+(?:/[\\w.-]+)*/v\\d+\\b']\nstrings = []\n")
+
+
+def _stale_world(world: World) -> tuple[str, str]:
+    """`main` with `old/a.txt` and a doc naming it, then a layout move (`STALE_MAP`) moving it to `new/a.txt` and rewriting the
+    doc.  Returns (the move's base, the move)."""
+    _move_main(world, {"old/a.txt": "a\n", "doc.txt": "see old/a.txt\nend\n", "gone.txt": "g\n"})
+    return _landed_move(world, STALE_MAP, {"old/a.txt": None, "new/a.txt": "a\n", "doc.txt": "see new/a.txt\nend\n",
+                                          "gone.txt": None})
+
+
+def _merge_main(world: World, head: str) -> str:
+    """``head`` with `main` merged in, as a branch's owner merges it: a merge commit on the origin."""
+    _git(world.dev, "fetch", "-q", "origin")
+    tree = _git(world.dev, "merge-tree", "--write-tree", head, "origin/main").splitlines()[0]
+    merge = _git(world.dev, "commit-tree", tree, "-p", head, "-p", "origin/main", "-m", "Merge main")
+    _git(world.dev, "push", "-q", "origin", f"{merge}:refs/dev/{merge}")
+    return merge
+
+
+def test_a_head_whose_own_added_line_names_a_path_a_landed_move_renamed_is_found_with_the_new_path(world):
+    """The calibration move's case: a head built before a move `main` landed adds a line naming the old path, and a plain
+    merge of `main` carries it through cleanly.  Merged or not, `stale_names` finds the line, with its number and the new path
+    the map gives, a retired path with none, a dotted module with its new name, and a file it adds under the old path."""
+    base, move = _stale_world(world)
+    head = world.change({"b.txt": "x\nreads old/a.txt and gone.txt\nfrom pkg.old import y\n", "old/c.txt": "c\n"}, base=base)
+    for h in (head, _merge_main(world, head)):
+        found = {(x["file"], x["line"], x["old"], x["new"]) for x in Q.stale_names(world.origin, move, h)}
+        assert found == {("b.txt", 2, "old/a.txt", "new/a.txt"), ("b.txt", 2, "gone.txt", None),
+                         ("b.txt", 3, "pkg.old", "pkg.new"), ("old/c.txt", 0, "old", "new/c.txt")}, found
+    why = Q.stale_why(Q.stale_names(world.origin, move, head), "lane/b")
+    assert "b.txt:2 names `old/a.txt`, which the move " in why and "sends to `new/a.txt`" in why, why
+    assert f"tools/move/restack.py lane/b --main {move[:12]}" in why and "in one commit" in why, why
+
+
+def test_a_head_whose_only_stale_looking_text_is_a_kept_name_or_a_removed_line_is_not_stale(world):
+    """A line quoting a name the map keeps (a version tag) isn't stale, nor is one the head only removes, nor a name that is
+    no directory's (a word that is no path), nor a path `main` holds again; and a head the move is below isn't judged by it."""
+    base, move = _stale_world(world)
+    kept = world.change({"b.txt": 'tag = "old/scan-state/v1"\nold hands\n'}, base=base)
+    removed = world.change({"doc.txt": "end\n"}, base=base)
+    assert Q.stale_names(world.origin, move, kept) == [] and Q.stale_names(world.origin, move, _merge_main(world, kept)) == []
+    assert Q.stale_names(world.origin, move, removed) == []
+    back = _move_main(world, {"old/a.txt": "back\n"})
+    again = world.change({"b.txt": "reads old/a.txt and old/c.txt\n"}, base=base)
+    assert [x["old"] for x in Q.stale_names(world.origin, back, again)] == ["old/c.txt"]
+    assert Q.stale_names(world.origin, back, world.change({"b.txt": "reads old/x.txt\n"}, base=back)) == []
+
+
+def test_the_preflight_refuses_a_head_whose_own_line_names_a_renamed_path_naming_the_line_and_the_new_path(world, capsys):
+    """At the mark: the preflight's refusal (h) names the file, the line and the new path, with the fix, and marks nothing."""
+    from research.queue import MarkOnly, StoreLabels, ready
+
+    _preflight_main(world)
+    base, move = _stale_world(world)
+    world.gh.put(2, head := _merge_main(world, world.change({"b.txt": "reads old/a.txt\n"}, base=base)), ready=False)
+    assert ready(world.gh, world.store, 2, "lane-2", MarkOnly(), preflight=_preflight(world)) == 1
+    err = capsys.readouterr().err
+    assert f"b.txt:1 names `old/a.txt`, which the move {move[:12]} (tools/move/x_map.toml) sends to `new/a.txt`" in err, err
+    assert "tools/move/restack.py" in err and StoreLabels(world.store, log=world.logs.append).ready(2, head) is False
+
+
 def test_a_head_crosses_a_move_in_flight_whose_map_at_its_head_and_on_main_retires_nothing_its_own_change_names(world):
     """`crossed` reads `lacked_moves`'s predicate against a move PR's map at its head, and `main`'s copy beside it: a head
     whose files or added lines name neither copy's retired names crosses it, and none crosses a move whose map can't be read
