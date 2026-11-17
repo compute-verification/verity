@@ -1116,7 +1116,7 @@ class NetworkAttester:
         """A bucket's release or its writes as the pacer reports them. A bucket that reached the pacer after its time,
         whose release started more than `slack` after it, or released unwritten (a connection's socket hadn't reached
         the pacer, so its cells are on no wire), faults every grid's window `monitor-unavailable`: the open window's
-        certifiers, or the records held for a closed one, published once every bucket of it that was handed is
+        attesters, or the records held for a closed one, published once every bucket of it that was handed is
         released. A connection's writes fault nothing, as on the loop: a client that doesn't read holds its own."""
         if report.end is not None:
             self.releases.append(report)
