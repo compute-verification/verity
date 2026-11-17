@@ -175,8 +175,8 @@ Each benchmark or loop declares the numbers a lead is held to in a `metrics.toml
 `infra/control/store_index.sh`, beside the loop), one `[[metric]]` table per number. Each metric's `owner` owns its
 file: the longest `owns` entry in `.agents/skills/using-slack/registry.json` covering the file names that handle, so a
 lead's numbers in another lead's directory take a file entry of their own there. The console's Metrics tab reads every
-`metrics.toml` on `main` under `benchmarks/`, `applications/`, `infra/` or `tools/`, and `research metrics show` reads the
-tab's report.
+`metrics.toml` on `main` under `benchmarks/`, `calibration/`, `applications/`, `infra/` or `tools/`, and `research
+metrics show` reads the tab's report.
 
 A metric's value has one of two sources. A run's value is the measurement its `id` names in the run's `result.json`,
 which the benchmark records it under (`serve_tax`'s `Model.metric`) and `research run` preserves to the evidence store;
@@ -194,7 +194,9 @@ the `command` of a metric whose newest value is older than its `every` as a `res
 docstring lists, and a metric whose command's script is under `infra/control/` is a loop's, which the loop sends. A
 metric's keys:
 
-- `id`: `OWNER/NAME`, under its owner's prefix.
+- `id`: `OWNER/NAME`, under its owner's prefix. A metric's line holds one quantity: when its meaning changes (a
+  denominator, a ceiling), it keeps its `id`, and the runs of the old quantity are labelled `superseded_by` the first
+  run from `main` that writes the new one.
 - `title`: the number's headline on the tab, three to six plain words with no digit or backtick.
 - `owner`: a handle in the registry.
 - `unit`: the unit its value is in, at most three words (`hours`, `GB`), a rate's two sides, either side of " a ",
@@ -202,7 +204,8 @@ metric's keys:
   not the unit.
 - `axis`: one sentence, on one line and ending with a period, saying what the chart's y axis is.
 - `better`: `lower` or `higher`.
-- `command`: the one command that measures it, naming a script under `benchmarks/`, `applications/`, `infra/` or `tools/`.
+- `command`: the one command that measures it, naming a script under `benchmarks/`, `calibration/`, `applications/`, `infra/` or
+  `tools/`.
 - `every`: how often its owner measures it, in minutes, hours or days (`5m`, `12h`, `7d`); a value older than that is
   stale, so a number that reaches the tab through the index needs an `every` well over the index's hour.
 - Optional: `floor`, the number it must not cross; `goal`, the narrowest goal on the Goals page it serves; `tags`, a
@@ -239,6 +242,38 @@ doesn't list, an id declared twice across all the files, an unknown owner, an ow
 an id outside its owner's prefix, a `title`, `unit` or `axis` that breaks its rule above, a `better` other than `lower`
 or `higher`, an `every` that isn't a count of minutes, hours or days, a command whose script is missing, a metric
 the directory of the file declaring it never names, and a shared `metrics.toml` directly under `benchmarks/`.
+
+## The serving cost in five stages
+
+The serving cost of a model too large to optimize on (`serve_tax/README.md`'s "The serving cost") is to be had in
+five stages. No stage has its command in the tree yet: the table states what each stage's command stores when it
+lands. Parts of two run today under other names, without a stage's refusal: stage 2's check of bindings is
+`circuit-check` on a Definition module's sidecar, its replay is `serve_tax/replay.py`'s, and stage 5's measured figure
+is `serve_tax`'s serving cost. Each stage is to be a run of its own that stores what the next one reads and refuses to
+run without the stored benchmark result of the stage before it. Its numbers are to be measurements under "Metrics"'
+rules, and a stage whose record is a verdict is to record what the check or the verifier returned ("What a benchmark
+may import and write").
+
+| Stage | What it runs | What it stores |
+| --- | --- | --- |
+| 1. Minify | a small copy of the model from random weights on one card, keeping the selectors that choose each code path | the copy's identity, the selectors it keeps and its size class; and for each part and each code path the part can take, a unit cost in seconds a call or a step, `measured`, with the count of calls behind it |
+| 2. Exact | `circuit-check` on the full model's bindings, and a replay on the copy | a verdict, not a number: `circuit-check`'s on the bindings, and the replay's on the copy (its tokens equal to the served tokens, its steps reproduced), saying whether the replay was the Python replay or a proof the Lean verifier accepted, so that exact is not read as proved |
+| 3. Capture | a short run of the real model | for each part and code path its counts (calls a step, steps a request), the baseline step time, and the value-dependent inputs a price needs |
+| 4. Price | stage 1's unit costs times stage 3's counts, over stage 3's baseline step time | the priced serving cost under the real model's metric and `member`, `modeled`, with the stage 1 and stage 3 runs it read among its `inputs`, and every (part, code path) it could not price |
+| 5. Confirm | one run of the real model at scale | the measured serving cost, `measured`, and the measured minus the priced as a measurement of its own |
+
+Stage 1 is to write no serving-cost percentage and no point under the real model's metric: a `member` tells apart
+configurations that read the same quantity, and a copy from random weights does not read the real model's serving
+cost. Stage 4 is to name the runs it read in its `inputs` and not as `from_run`, since its number is its own and
+`from_run` writes no measurement.
+
+Two cases decide where a price comes from:
+
+- **A cost that depends on the load,** such as the certified tick's holding a request back until its admission step,
+  is stored as a count from stage 3, the steps an admission was held under the captured load, times the step time,
+  and never as a unit cost from the copy.
+- **A code path the copy never takes** is listed as unpriced, and stage 4's point is `partial`, not `modeled`, until
+  a unit cost for that path comes from another source.
 
 ## On VCF's Slurm cluster
 
@@ -309,7 +344,6 @@ GPU code held bit for bit to its reference or Definition before it is timed.
 | Directory | What it measures | Status |
 | --- | --- | --- |
 | `hash/` | GPU kernels for PoUW's Dither prover (`dither/`: the no-fold and J10-R units, their gates and harnesses) and the served path's SHA-512 commitment library (`lib/`) | maintained |
-| `torch_gpu/` | the H200 demo's GPU kernels, each bit-exact to its Definition: the serve-time commit (`commit_slots`, `sha512_rows`) and the store's load with bandwidth receipts (`p2_stage`) | maintained |
 | `kernels/` | the served path's exact kernels and what a kernel build ships with: the exact W8A8 linear (`s8_linear`), vLLM's int8-exact linear kernels' gates and benches (`exactlin`), the ship frame every build here sources (`ship.sh`, `ship_clock.c`, `ship_nvcc.sh`, `ship_probe.sh`), the nvcc a job's own library compiles with (`job_nvcc.sh`), and the Marlin MoE path's `moe_align_block_size` made a function of its inputs by the integration's `verity_vllm.engine.moe_align`, checked run to run and against the pin's op and timed against it (`moe_align`) | maintained |
 | `pouw/` | Pearl-C's kernels on the RTX PRO 6000, their harness, and the served vLLM path and its audits; `contents.py` lists the rest | maintained |
 | `../calibration/tc_probe/` | tensor-core instructions bit for bit against their silicon models, and the trust each instruction's evidence earns | maintained |
@@ -321,8 +355,7 @@ GPU code held bit for bit to its reference or Definition before it is timed.
 
 | Directory | What it measures | Status |
 | --- | --- | --- |
-| `one_stage/` | the one-stage audit end to end: committed values, registration, the sample, Flock's circuit prover and the Lean verifier, to the audit record and its integrity profile, with its negatives; and a served window's two-stage audit (`two_stage.py`: each class's first stage, and a class's second stage through that audit, round 2 and the stream's outcome; `two_stage_small.sh` runs both at small statics) | maintained |
-| `two_stage/` | the two-stage audit end to end on a toy replay block: the boundary registered, a first-stage sample of replay blocks, their interiors replayed and registered, a second-stage sample per (replay block, template) cell, one Flock `--zk` session per template with link ports read at the boundary record, the Lean verifier, and the stream's outcome, with its negatives | maintained |
+| `one_stage/` | the one-stage audit end to end: committed values, registration, the sample, Flock's circuit prover and the Lean verifier, to the audit record and its integrity profile, with its negatives; and a served window's two-stage audit (`two_stage.py`: each class's first stage, and a class's second stage through that audit, round 2 and the stream's outcome; `two_stage_small.sh` runs both at small statics); and the two-stage audit end to end on a toy replay block (`toy.py`, `audit.py`): the boundary registered, a first-stage sample of replay blocks, their interiors replayed and registered, a second-stage sample per (replay block, template) cell, one Flock `--zk` session per template with link ports read at the boundary record, the Lean verifier, and the stream's outcome, with its negatives | maintained |
 | `prove_path/` | a served run's proof blocks proved after the fact: the compiler's Programs, a sample on live coins, Flock `--zk` behind the Lean ZK server, and the Lean verifier | maintained |
 | `served_units/` | a served model's proof blocks proved one type at a time from synthetic values, the Lean verifier accepting the honest run and refusing forgeries | maintained |
 | `unit_walk/` | the device witness's host walk of a served proof-block type's unit: CPU and wall seconds a statement at each width (lane groups a pass), distance asked ahead and pool size, with and without its row vectors kept, every walk's packed words held to the first's | maintained |
