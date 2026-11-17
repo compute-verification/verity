@@ -45,9 +45,9 @@
   "art:01c2b9eb67e8ef2eeb75523257351459a1f9265a1768692fabfff62d94260548": "tests/adapters/vllm/tests/regression/files.toml",
   "art:531cdd949cc1f2d8cf0e5239701f1defbbb2efd5b3285ed89e8132d3d1ff4954": "adapters/vllm/data/logs/m1.jsonl.gz",
   "art:08ab3b7ebebddff3d18d66ef890c8594b41c52388749aee610f3b117fad27de2": "adapters/vllm/data/logs/m6/log.jsonl.gz",
-  "art:ad56845b3654e20dbf3ac62ca346ca7a0c9f304160cc9a8d77a38a615135ded4": "benchmarks/machine_model/data/cover/corpus.json",
-  "art:61d521ebdf9cb49b76ba2343c027a6197addf0c83a6801a97801572202aeaa2b": "benchmarks/machine_model/data/cover/bu_12_9.json",
-  "art:eb79e5280af4a8bad9ff2a864de5ae4684e11cbed44a01d5ca6c66bafa24720c": "benchmarks/machine_model/data/cover/sass_isa_tables.json",
+  "art:ad56845b3654e20dbf3ac62ca346ca7a0c9f304160cc9a8d77a38a615135ded4": "calibration/machine_model/data/cover/corpus.json",
+  "art:61d521ebdf9cb49b76ba2343c027a6197addf0c83a6801a97801572202aeaa2b": "calibration/machine_model/data/cover/bu_12_9.json",
+  "art:eb79e5280af4a8bad9ff2a864de5ae4684e11cbed44a01d5ca6c66bafa24720c": "calibration/machine_model/data/cover/sass_isa_tables.json",
   "art:fbda52b07457b79607d0170e149923debd5ff104fb0c7e94bf3b933ddc946887": "adapters/vllm/tools/served_run/workloads/llama32-1b__bf16__rtxpro6000__tp1__b4__i256__o32__mixed__greedy__bi-eager.json",
   "art:6de3e339833a96cd1c2df2878be6525cbde4a81d32dc10aa6f0b0d330cc4f72b": "adapters/vllm/workloads/dsv4-pro__fp8__h200__tp8__b1__i256__o32__mixed__greedy__eager.json",
   "art:ac0642a356eff29ed4dc08992ebc2556dad56e76c2a54760bde4dbf7cd7d62c9": "adapters/vllm/workloads/dsv4-pro__fp8__h200__tp8__b8__i256__o32__mixed-arrivals__greedy__eager.json",
@@ -131,7 +131,7 @@
   "art:124a9d7ed54e99b74b05e0f90b7dbf48b7f2e6a59a16b2247ab2420addf04bc9": "adapters/vllm/workloads/workload_qwen15_32x16_1req.json",
   "art:312ea3d1cf187ff33570c6569c32dfdaa2aed0c21cc615096ff1e15c52231ff7": "tests/verity/circuits/ops/fixtures/gemm-B1-b3eba618b1b5-20260907T1731Z",
   "art:5f469df0920b86cf745da873d833a08666bffce8f055f7e817ac755724e9af2c": "tests/verity/circuits/ops/fixtures/tc-sm120-mxf4-2026-10-01",
-  "art:abb6201df38b08720d8251b836f523ed34396391c7977fa2a434f0a84ea86e4c": "tests/benchmarks/tc_probe_fp4/fixtures/tc-sm100-f8-2026-10-19.json",
+  "art:abb6201df38b08720d8251b836f523ed34396391c7977fa2a434f0a84ea86e4c": "tests/calibration/tc_probe_fp4/fixtures/tc-sm100-f8-2026-10-19.json",
   "art:98e17bc4c742c1b6b805dac8db153c0491003057da9373705396dd45f5394c36": "adapters/vllm/verity_vllm/check/tables/B0-divergence-20260907T1604Z/cos_sin_cache.npy",
   "art:3d22b35a2270253156b8ad3c251d3f3cb61f591ea4f8d0512dc25a6f4e4d325f": "tests/adapters/vllm/tests/engine/fixtures/llama31_8b_int8_attn_l0.values.npz",
   "art:95a86888df5f0424dbb5984f2c59180d2564a6e9fe28885f5f70ad84aa87c40c": "tests/adapters/vllm/tests/engine/fixtures/llama31_8b_int8_attn_l0.jsonl.gz",
@@ -162,9 +162,6 @@
   "art:30385407aad29494f71640c127a59912b9839722000d856fd095b2034174e259": "tests/adapters/vllm/tests/program/data/dsa_h200_logits.npz",
   "art:c1833dbbafe1d80f86f08e2b657b43607a506430d0b57827d8bc6d6ab4aa1bad": "tests/adapters/vllm/tests/program/data/dsa_glm53_kslots.npz",
   "art:d794e952dec34ad637dad0526ce839b942849d4ed283a05380b3434fa96d9301": "adapters/vllm/docs/data/ref-prims",
-  "art:6280390312958541295df2bef7381f195768b5ecfe7e82667a4ec3d1b17aeba3": "adapters/vllm/manifests/semantic-profiles/qwen2-eager-batch-invariant-v1.json",
-  "art:958f39a2b56cc3c0c9df8c21b03f3133b2764cfc789bca09bb7438eca62d6bb5": "adapters/vllm/manifests/semantic-profiles/llama-eager-batch-invariant-v2.json",
-  "art:017ac8d962ec2628f98f3a61a69eb5ad3ff8f3ee51caabea88c0825b03ec55fb": "adapters/vllm/manifests/semantic-profiles/llama-eager-batch-invariant-v1.json",
   "art:ca9544e3781926c76b0980b26326112bf86aae29d3481165bad816f05e5f22dd": "tests/adapters/vllm/tests/check/fixtures/glm_moe_dsa/config.json",
   "art:76398a8149f3e74bd9959f043570e8187a48354f0c259fa85dd9cc23a4fbf11e": "tests/adapters/vllm/tests/records/data",
   "art:98ccdf6cfe3a5a632e5babed1245d0600d6ef38d67672113d25a32ffa026ef4f": "tests/adapters/vllm/tests/commit/serving_row_leaf_vector.json",
@@ -176,11 +173,11 @@
   "art:80d0fa3b94c1d022767ce27f240113d9217adeb1530c4fa0c548639ed41224de": "tests/verity/protocols/proofs/flock/prover/fixtures/f1-gate",
   "art:6d14f28a00edc46e3aa4b3432ef2e4b56fbeb9e12e6e0ad4e6179500f18b70b4": "tests/verity/protocols/proofs/flock/prover/fixtures/rec-links",
   "art:b3c6b626af8e260c5d51316ab4cb69b8059cb2823a4dd16e4e57b11f6c7711b4": "tests/verity/protocols/proofs/spot/verifier/fixtures/form-refusals",
-  "art:5b4ba00d45618b4cf4aca1ccc01003e504f1e4dcfd517b9744e9f87ee31a6b0a": "verity/circuits/silicon/discrepancy_log.json",
+  "art:d351a150a5b589d8ab65ab0ba90502150193d4bd84992e177db38c578bf8e1fd": "verity/circuits/silicon/discrepancy_log.json",
   "art:7dd1c98def937458596a43889730245b4b2dff3c71af75cec5ae9e8dee0e9190": "tests/verity/protocols/resource_accounting/network/verifier/fixtures/arith_encode_vectors.json",
-  "art:4a1acc582ca22768ad4a658b6a9f5bb3c512ae49db3b50a1e48271b6ef9970b2": "benchmarks/training_slowdown/data/v3-selection.json",
+  "art:4a1acc582ca22768ad4a658b6a9f5bb3c512ae49db3b50a1e48271b6ef9970b2": "calibration/training/data/v3-selection.json",
   "art:1881d170c2833e3de28fa41662946272c99ca3e7edd13f10a3219b51bc657892": "tests/benchmarks/network_e2e/encodings/fixtures_draft",
-  "art:f164ac2c74b1dfdcc4835c72b8d6dfaa9a051c9621af7a13239c0a8b52058742": "tests/benchmarks/two_stage/fixtures/guard.tar.xz",
+  "art:f164ac2c74b1dfdcc4835c72b8d6dfaa9a051c9621af7a13239c0a8b52058742": "tests/benchmarks/one_stage/fixtures/guard.tar.xz",
   "art:3b4e100e16ec5f11bccadf73cab4d002d370ffe50815ac9eb4f3d37cbd36ec57": "tests/adapters/vllm/verity_vllm/definitions/fixtures/fa2_train_bwd_sm120.npz",
   "art:ed3b2d968923fe39be309d15f9e2c41cae215ff4fcce40590131b9f0b02a2d52": "tests/verity/protocols/compose/verifier/lean/fixtures/sampled-two-case",
   "art:9606d9658bc4fa470a1041657128bcb6acd171c98866a253ae07e8b8ef534d9a": "tests/adapters/vllm/tests/observe/fixtures/glm53_tp8_fp8_ds_mla.rank0.jsonl.gz",
@@ -253,7 +250,7 @@
       "art:824640c83f0408af007797dc8b5ceb902aafac8aaaeb81ae0f4859f89d5f3560",
       "art:b87fde52ae9f7ac0d129141534fcd4e56cc9bd06728bb0b658d155b521c3cdf9"
     ],
-    "art:5b4ba00d45618b4cf4aca1ccc01003e504f1e4dcfd517b9744e9f87ee31a6b0a": [
+    "art:d351a150a5b589d8ab65ab0ba90502150193d4bd84992e177db38c578bf8e1fd": [
       "art:aac898b703462ecb19c5d7460baf4690980d8e121a8b40e1745a4759a05d8fe6",
       "art:e960ec04a528595710d77cf274c57edc1a0b9be2d475b64a4a27ef0b93a68a8a",
       "art:5bf4b57b082bd187fe07849babf4db172843c5c71efd2ffbb0ee65b3bbd9105f",
@@ -265,7 +262,8 @@
       "art:92fc75530885f63076a7a5770ee5fc0e9d3259e7b8738ca82fd37c7047a8de58",
       "art:d0727338dc232e17efcb1fac07e0f938bf3db5cf23dc4e9d0a322978a5c54903",
       "art:0f06d319352cda8ee686374ee342ad0e6ffd16ee19cd845b365ca33e09af8cc5",
-      "art:d33c61991e10d9135f5fb7bb07227bcfacf90043d6f5b5810734664e6d89854d"
+      "art:d33c61991e10d9135f5fb7bb07227bcfacf90043d6f5b5810734664e6d89854d",
+      "art:5b4ba00d45618b4cf4aca1ccc01003e504f1e4dcfd517b9744e9f87ee31a6b0a"
     ]
   }
 }

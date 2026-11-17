@@ -33,8 +33,6 @@ vocabulary lacks refuses by name.  The leaf the shim exports in dsa_indexer_attn
 
 from __future__ import annotations
 
-__models__ = ("zai-org/GLM-5.3",)
-
 from collections.abc import Callable
 from typing import Any
 

@@ -5,8 +5,6 @@ between the comparisons and the record shows here and not in the card's lease (t
 `tests/properties/glm53_mtp_capture_card.sh NAME` on an H200)."""
 from __future__ import annotations
 
-__models__ = ("zai-org/GLM-5.3",)
-
 import contextlib
 import json
 import sys

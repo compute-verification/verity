@@ -25,13 +25,13 @@ cryptography's advantage:
   `r_in` the certified prompt ingress and `r_side` the timing and side channels no certifier reads. `r_in` is
   `intake · α Φ`, at most `α Φ` since a server's ingress carries only its inference blocks' declared inputs;
   with `declared` (`regime.onsite-w63`), each server's declared inputs at a cadence the network attester form's public parameters
-  set. Its δ is 0: the certifier is the auditor's device (`trusted-device`), and the side channels an assumed bound.
+  set. Its δ is 0: the network attester is the auditor's device (`trusted-device`), and the side channels an assumed bound.
 * The inference-only check is a registration check, not an envelope: the registered circuit's `(c, k)`-partition into inference
   blocks (`Policy`), registered once.
 
-A **regime** is the envelopes that run: `Remote` (PoUW, detection and the inference-only check; no wipe or certifier, so its
+A **regime** is the envelopes that run: `Remote` (PoUW, detection and the inference-only check; no wipe or network attester, so its
 server block is a server over the monitoring period and only the inference cut bounds it) and `Onsite` (with the wipe
-and the certifier, whose server block between two wipes gets the serving cut too). `Regime.partition` gives the server
+and the network attester, whose server block between two wipes gets the serving cut too). `Regime.partition` gives the server
 blocks (`theorem`), each with the cuts the envelopes make valid, and `Regime.delta` their δ summed over envelopes and
 server blocks. Its `layout` is what a protocol-abiding attack gets: the inference blocks and the free compute a
 strategy that never cheats can use (`ABIDING`), at the training MFU.
@@ -343,7 +343,7 @@ class Certifier:
     #: the certified prompt ingress in bit/s per location, given directly (None: `hosts · r_in` with `declared`, else
     #: `intake · α Φ`)
     ingress: float | None = None
-    #: per host, bit/s: the certifier's timing channel, and side channels no certifier sees
+    #: per host, bit/s: the network attester's timing channel, and side channels no attester sees
     timing: float = 0.0
     side: float = 0.0
     #: each server's ingress at most its inference blocks' declared inputs, at the parameters below
@@ -558,7 +558,7 @@ FORMS = ("certified", "links")
 
 @dataclass(frozen=True)
 class Onsite(Remote):
-    """The remote audit's envelopes plus the wipe and the certifier: each server block, one server between two wipes,
+    """The remote audit's envelopes plus the wipe and the network attester: each server block, one server between two wipes,
     gets the serving cut `q(c_S, k_S) + ω_max μ k_S` as well, and contributes the lesser."""
 
     #: the server-block bound, both its cuts' minimum
@@ -573,7 +573,7 @@ class Onsite(Remote):
     #: `Windows` as proved: memory and line rate, on the physical annotation's four constraints
     LINKS = ("ResourceAccounting.Guarantees.Actual.ServerBlocks", "ResourceAccounting.Placed.Causal", "ResourceAccounting.Placed.ComputeRate",
              "ResourceAccounting.Placed.Memory", "ResourceAccounting.Placed.Links")
-    #: `ServerBlocksAt` at the wipes, its state term from the wipe and its binding error from the certifier's ingress, which
+    #: `ServerBlocksAt` at the wipes, its state term from the wipe and its binding error from the network attester's ingress, which
     #: bounds information where `ServerBlocksAt` reads width at line rate: the information form is a draft
     SERVING = ("ResourceAccounting.Guarantees.Actual.ServerBlocksAt", "ResourceAccounting.Placed.Causal", "ResourceAccounting.Placed.ComputeRate",
                "ResourceAccounting.Placed.Links", "draft:windows-information-form")

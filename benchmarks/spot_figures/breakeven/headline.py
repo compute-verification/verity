@@ -108,8 +108,10 @@ WORLD = "ours"
 CLASSES_A_PROOF_BLOCK = 4130
 #: the symbols of one table's level-0 codewords, at most, in a row's binding bound: assumed
 TABLE_SYMBOLS = 2 ** 23
-#: what a binding bound summed over verification phases takes of the prover: assumed
-ONE_SAMPLE = "one commitment, one sample; every committed window is presented"
+#: what a binding bound summed over verification phases takes of the prover: assumed. The first clause is SPOT's two
+#: resampling holes (`verity_bench.spot_status.HOLES`) closed, which the code that ran may not hold
+ONE_SAMPLE = ("both of SPOT's resampling holes closed, one commitment and one sample; every committed window is "
+              "presented")
 
 #: the GPU prover at its measured 3.71 times, not the 4 times goal (1.101 s against 2.088 s over 3.71)
 PROVER_MEASURED = 1.101 / (2.088 / 3.71)

@@ -9,7 +9,7 @@ untraced = ["test_registration_difftest.py", "test_site_difftest.py"]
 # Test-only: the reference is the Site's Python mirror, `verity.device` (with what it imports and the data sheets it
 # reads), and the log's, `registration.py`; `lake` builds this package against the core protocol interface and the difftest harness, both required by
 # path, and through them the base packages.
-inputs = ["verity/__init__.py", "verity/device.py", "verity/channel.py", "verity/errors.py", "hardware",
+inputs = ["verity/__init__.py", "verity/device.py", "verity/channel.py", "verity/errors.py", "calibration/hardware",
           "verity/protocols/interface", "verity/circuits/difftest", "verity/circuits/base", "verity/circuits/lean",
           "verity/commitments/lean", "tools/difftest",
           "verity/protocols/__init__.py", "verity/protocols/resource_accounting/__init__.py",

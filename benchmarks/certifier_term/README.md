@@ -3,7 +3,7 @@
 `verity bench certifier_term` prints the network attester's term for GLM-5.3: the bits its accepted transcripts can
 carry over a monitoring period, at the load of a node, the census's reference datacenter and the world, in bits and
 GB, beside a target and one copy of the weights. Each row counts all its scope serves by its check's own rule, as
-the monitoring-period check charges it (`verity/protocols/resource_accounting/network/verifier/lean/NetworkCheck/`, `rowsTerms` and `terms`).
+the monitoring-period check charges it (`verity/protocols/resource_accounting/network/verifier/lean/NetworkVerifier/`, `rowsTerms` and `terms`).
 Its code is the calculator of K, `benchmarks/network_traces/leak_bounds.py` (`table`, `document`, `render`); this
 directory holds its runner, which with `--out` also writes the term of record's row as a result (The result, below).
 
@@ -55,7 +55,7 @@ say so; none is computed from a run's K.
   is the clause the figure rests on.
 - `certifier_term/modeled/<scope>/<period>/free`: the term K, in bits. The check bounds the free amount from above,
   so this is the network's amount of record. It stands against the same target, in bits.
-- `certifier_term/modeled/<scope>/<period>/capacity`: the bits the scope's certified boundary links carry out over
+- `certifier_term/modeled/<scope>/<period>/capacity`: the bits the scope's attested boundary links carry out over
   the period, the scope's machines × a registered uplink's `beta` × the period's seconds. `beta` is bits a second each
   way (`verity.device`) and the term is egress, so one direction counts. The uplink is read from a
   registration log, `--registration FILE`
@@ -107,7 +107,7 @@ still, those rows' terms among it.
 
 The suite beside the runner (`tests/`) holds the result to the calculator's document and to the kit's schema. What
 the command prints without `--out`, and the calculator's numbers, are held where the calculator's tests are,
-`tests/benchmarks/network_traces/test_certifier_term.py`.
+`tests/benchmarks/network_traces/test_attester_term.py`.
 
 ## The rows
 
@@ -150,7 +150,7 @@ The rows that hold the lengths by a stop block, `lengths`, `all three` and `desi
 schedules only as the network attester's own rule says (`verity.protocols.resource_accounting.network.verifier.class_charge.charge`),
 from the signed head of an execution phase and the verdict records on a class of it:
 
-- a class that holds a row owes four verdicts, the stop record, the response tie, the certified read of the request's
+- a class that holds a row owes four verdicts, the stop record, the response tie, the attested read of the request's
   three words and the compute audit's second stage, each accepted, complete and naming that head's digest;
 - with one missing, refused, not complete or decided under another head, another serve's among them, the class is
   charged its whole schedule on every row; a verdict without `complete` reads as not complete;
@@ -204,7 +204,7 @@ The reader holds what the rule charges below to two more things, which the rule 
 - **A negative control.** An execution phase is held only where each verifier that accepted has, at the same commit,
   a control of record that it refused: a run with the one thing changed that the verifier checks. The stop record's
   owes `stop_word` (a stop word changed, the count off by one), the response tie's `id` (a released id changed), the
-  certified read's `max_tokens` (a request word changed) and the compute audit's `output` (a committed output
+  attested read's `max_tokens` (a request word changed) and the compute audit's `output` (a committed output
   changed). A control counts only where it is refused for the reason its change aims at: its `reason` is held to
   the control's own word, `stop_word`, `id`, `max_tokens` or `output`, which the reader declares
   (`stop_verdicts.REASONS`). One control a verifier a commit serves every execution phase under that commit. A
@@ -313,7 +313,7 @@ schedules and says so. A caller that reaches the store names the runs and passes
 
 The lines print how the rows are charged, one line for each class of each head read, and each verdict read under the
 mark `run, not proved`: a verifier judged it on a run, and no proof of that verifier is read here, whatever the
-record's `proved_by` says. A head is read as its registration lists it, held to the digest its certificate names; its
+record's `proved_by` says. A head is read as its registration lists it, held to the digest its attestation names; its
 signature is not checked here, but by the offline check that writes `out/registrations.jsonl`, and that file is
 unsigned: a head is as good as the run of that check, and as the hash and the session that run was handed. The
 lines print the hash and the session each registrations' file names; the reader holds neither and compares them
@@ -378,7 +378,7 @@ with none given it moves only as the least lanes that serve them do.
   (derived from other figures), `assumed` or `simulated` (a stand-in runs in place of a device that is not deployed,
   and the figure is what that device would be charged: the set-time card, `set_time_card`, alone); the source is the
   file and key it is read from, the parameter that gave it, or for the card the clause its figures rest on. No run
-  has certified a class for GLM-5.3, so the class is assumed: the most ids a response holds
+  has attested a class for GLM-5.3, so the class is assumed: the most ids a response holds
   (`--response-ids`), an id's bits (`--id-bits`), an execution phase's buckets and their seconds
   (`--phase-buckets`, `--bucket-s`), and the schedule the count is at (`--lanes`, `--classes`, `--delay`,
   `--ingress-buckets`).
@@ -417,10 +417,10 @@ Each row holds its own `count`, in bits and GB.
 ## Where the scale comes from
 
 - The world is the slowdown calculator's world fleet (`benchmarks/slowdown/data/reference.toml`, `fleet.world-h200`): the census's inference
-  (`benchmarks/census/adversary.json`) on eight-GPU machines at the fleet's serving MFU. The datacenter is the census's
-  reference datacenter (`benchmarks/census/deployments.json`).
+  (`calibration/census/adversary.json`) on eight-GPU machines at the fleet's serving MFU. The datacenter is the census's
+  reference datacenter (`calibration/census/deployments.json`).
 - The requests are counted of one request, by the rule `benchmarks/spot_figures/figure1.py` plans with, at the
-  H200's dense FP8 peak (the H100 SXM5's entry of `benchmarks/census/hardware.json`, one die and one clock):
+  H200's dense FP8 peak (the H100 SXM5's entry of `calibration/census/hardware.json`, one die and one clock):
   - `plan`, the default: the sampling plan's request, so that the rows count the requests the compute audit's plan
     prices. The world's requests a year, a request's tokens and the served MACs a token are read from the break-even
     planner (`benchmarks/spot_figures/breakeven/`, `sweep.build` on the case `leak_bounds.PLAN_CASE`), which prices
@@ -433,4 +433,46 @@ Each row holds its own `count`, in bits and GB.
 - A bucket is the network attester's default.
 
 The scaling by links (`leak_bounds.at_link_rate`, which `chain_record.py leak` reads on a run) is a different count:
-every link at the rate one run certified, whatever its scope serves.
+every link at the rate one run attested, whatever its scope serves.
+
+## On a machine of your own
+
+From a fresh clone of the tree, with [uv](https://docs.astral.sh/uv/getting-started/installation/), at the tree's root:
+
+~~~text
+uv sync --all-packages --extra torch-cpu
+uv run --extra torch-cpu verity bench certifier_term
+~~~
+
+The runner reads files of the tree and computes: it needs no GPU, no key and no access to the evidence store, and it
+writes nothing into the tree. It prints the document of The tables, above, and `--help` lists every flag with its
+default.
+
+What you may change, each a flag:
+
+- `--requests {plan,census}`: the request a scope's requests are counted of.
+- `--world-requests N`: the world's requests a year, in place of either request's count.
+- `--response-ids N`: the most ids a response holds.
+- `--id-bits N`: an id's bits.
+- `--phase-buckets T`: an execution phase's buckets.
+- `--bucket-s S`: a bucket's seconds.
+- `--lanes N`: the connections a link holds at once, which makes the entries every slot's.
+- `--classes N`: the content classes whose held rows the count is of.
+- `--delay D`: the buckets from a connection's admission to its first egress cell's.
+- `--ingress-buckets I`: the buckets a release is within of its connection's admission.
+- `--failure-rate F`: the share of connections that fail.
+- `--scan-delta D`: each execution phase's scan's δ.
+- `--target-gb GB`: the GB the term is read against.
+- `--scope {node,datacenter,world}` and `--period {week,month,year}`: only these rows (each repeatable).
+- `--json`: the document as JSON in place of the tables.
+- `--out DIR`: also write the result through the harness kit's writer (`DIR/result.json` outside a research run).
+- `--commit`, `--run`: the commit and the run the document names.
+
+What is fixed: the inputs the Inputs table lists with their sources, the files that Where the scale comes from names
+(the census, the slowdown calculator's world fleet and hardware data, the break-even planner's case and GLM-5.3's
+workload card); the calculator's rules, in `benchmarks/network_traces/leak_bounds.py`; and the seven rows of each scope
+and monitoring period that the print lists under "The rows of a scope and a monitoring period".
+
+What it doesn't do: it serves nothing, runs no network attester, audits nothing and proves nothing. Every row is
+counted from those inputs, and it reads no verdict record, so the print says each connection's stop class is charged
+its whole schedule.

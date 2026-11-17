@@ -1,4 +1,4 @@
-"""The memory challenger's session as PoUS runs it: the wire both sides speak, the request and the id a session runs
+"""The memory attester's session as PoUS runs it: the wire both sides speak, the request and the id a session runs
 under, and the challenger's side as PoUS is handed it. The challenger's side is the
 auditor-trusted device (`challenger_party`, on a host the developer doesn't control: the challenger host, `trusted-device`),
 which imports this module and which this module never imports; how it runs a session is its docstring's.
@@ -65,7 +65,7 @@ from verity.channel import Body, Int, Message, Schema
 from verity.protocols.resource_accounting.memory.pous.verifier import run as R
 from verity.protocols.resource_accounting.memory.pous.verifier.schemes.p2 import P2Params
 
-from . import memory_challenger as mc
+from . import memory_attester as mc
 
 END = 2 ** 64 - 1
 #: the untimed exchanges before round 0 (`challenger_party`'s docstring); the index is public, so they reveal no coin
@@ -273,14 +273,14 @@ def placement(node: str, host: str, key_sha512: str | None = None, *, pins: Sequ
               configuration: str | None = None, committed: Collection[str] = frozenset(),
               verifier: str | None = None) -> dict[str, Any]:
     """Which host ran each party, what those names say (`kind`: ``own-host``, a challenger host other than the node, or
-    ``prover-node``), and `trusted-device`'s premise, `memory_challenger.trusted_device`'s for the session's key: the
+    ``prover-node``), and `trusted-device`'s premise, `memory_attester.trusted_device`'s for the session's key: the
     names are the run's own, so they bound nothing, and the premise holds only for `key_sha512`, the SHA-512 of the key
     the session was signed under, when the configuration whose hash is `configuration`, one of `committed`, pins it
     for the challenger's PoUS sessions (`pins`, its `[[pin]]` entries); and `SETUP` under ``setup``."""
     kind = "own-host" if host != node else "prover-node"
-    names = (f"the memory challenger ran on {host}, not the prover's {node}" if kind == "own-host" else
-             f"the memory challenger ran on the prover's node {node}")
-    return {"parties": {"memory_challenger": host, "prover": node, "verifier": verifier or node}, "kind": kind,
+    names = (f"the memory attester ran on {host}, not the prover's {node}" if kind == "own-host" else
+             f"the memory attester ran on the prover's node {node}")
+    return {"parties": {"memory_attester": host, "prover": node, "verifier": verifier or node}, "kind": kind,
             PREMISE: mc.trusted_device(pins, CHALLENGER, "pous", key_sha512, names, configuration=configuration,
                                        committed=committed), "setup": SETUP}
 
@@ -292,7 +292,7 @@ def salt(side: Side, audit: bytes, commitment: bytes) -> bytes:
     if rc == 0 and isinstance(doc.get("source"), str):
         return bytes.fromhex(doc["source"])
     why = doc.get("refused") or (f"it answered {line.strip()[:200]!r}" if "listening" in doc else f"it exited {rc}")
-    raise RuntimeError(f"the memory challenger on {side.host} drew no salt: {why}")
+    raise RuntimeError(f"the memory attester on {side.host} drew no salt: {why}")
 
 
 def request_of(node: str, point: R.Point, binding: bytes, *, audit: bytes | None = None,
