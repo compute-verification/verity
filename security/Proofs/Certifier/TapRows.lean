@@ -59,7 +59,7 @@ the network attester's. `MonitoringPeriodChecked` takes the leak relation at the
 An extracted trace that disagrees with the network attester opens a transfer gate to a value the network attester's
 opening there doesn't. The compiled extractor checked that opening with its own calls (`Compiled.passes_found`,
 `Compiled.ownLog_E`), so under `CommitmentScheme.Binds` its calls and those that check the network attester's opening
-collide, and `B_tap` finds the collision (`certifierColl_of_disagree`, `Pr_certifierColl_le_Btap`).
+collide, and `B_tap` finds the collision (`attesterColl_of_disagree`, `Pr_attesterColl_le_Btap`).
 
 The collision step follows the registration's (proofs' P1b), at the network attester's openings.
 -/
@@ -142,7 +142,7 @@ def CertifierColl (H : Msg → Msg) (D : Compiled Coin A)
 /-- **A disagreement with the network attester is a collision**: at an accepted run, an extracted trace that opens a
 gate the network attester opens to a value other than the network attester's makes, with the network attester's
 opening there, calls that collide among the extraction's own and the checks of the network attester's openings. -/
-theorem certifierColl_of_disagree (H : Msg → Msg) (D : Compiled Coin A) (hb : D.commit.Binds H)
+theorem attesterColl_of_disagree (H : Msg → Msg) (D : Compiled Coin A) (hb : D.commit.Binds H)
     (tops : AuditStatement → List (Opening Bool)) {Ω : Type} (P : Prover Ω) (x : Msg)
     (s : Ω × (Fin (D.V.k x) → Coin) × D.E.C x) {st : AuditStatement} (hst : D.parse x = some st)
     (hpass : ∀ q ∈ tops st, D.commit.Opens H st.roots q = true) (hacc : (run H P D.V x s.1 s.2.1).out = .acc)
@@ -172,7 +172,7 @@ theorem certifierColl_of_disagree (H : Msg → Msg) (D : Compiled Coin A) (hb : 
 
 /-- **The reduction's probability step**: the collisions against the network attester's openings have probability at
 most `B_tap`'s. -/
-theorem Pr_certifierColl_le_Btap (H : Msg → Msg) (D : Compiled Coin A)
+theorem Pr_attesterColl_le_Btap (H : Msg → Msg) (D : Compiled Coin A)
     (tops : AuditStatement → List (Opening Bool)) {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Prover Ω) (x : Msg) :
     Pr (fun s : Ω × (Fin (D.V.k x) → Coin) × D.E.C x => CertifierColl H D tops P x s) ≤
       (Btap H D.V D.E D.commit D.parse tops Ω P x).Pr H := by

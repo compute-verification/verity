@@ -44,7 +44,7 @@ def out(tmp_path_factory) -> tuple[O.AttestedOut, O.PublicKey]:
 
 def test_the_manifest_states_the_attester_and_spots_two() -> None:
     m = NC.MANIFEST
-    assert (m.protocol, m.version) == (domains.CERTIFIER_PROTOCOL, 1) and m.protocol == SP.IDS["certifier"]
+    assert (m.protocol, m.version) == (domains.ATTESTER_PROTOCOL, 1) and m.protocol == SP.IDS["certifier"]
     assert [r.name for r in m.parties] == ["network-certifier", "workers", "verifier"]
     assert m.role(NC.NETWORK_ATTESTER) == Role("network-certifier", "auditor", per="link",
                                                 needs=("clock", "coins", "signing-key"))

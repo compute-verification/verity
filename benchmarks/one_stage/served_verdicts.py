@@ -2217,8 +2217,8 @@ def terms(r: Mapping[str, Any], subprotocol: Mapping[str, Any] | None) -> list[s
     """What an accepted answer holds beyond its verdict: where its profile says when its weights were held and what share
     of the checkpoint they are, those; where it says which host ran each party (the network attester's ``placement``),
     the link K counts, named, with every other link of the node uncounted and uncertified, and what its `trusted-device`
-    premise rests on (the wipe's holds only under the key its challenger's host is pinned to, and reads a rehearsal's
-    otherwise); and each δ of the block record's at which its subprotocol's quantity is not established. A placement
+    premise rests on (the wipe's never holds: under the key its challenger's host is pinned to, it reads that the key
+    matched the pins this machine was handed, and otherwise rehearsal, either with no bound); and each δ of the block record's at which its subprotocol's quantity is not established. A placement
     with no links (the front's ``--gate local``) states no link."""
     profile = (r.get("answer") or {}).get("profile")
     w = profile.get("weights") if isinstance(profile, Mapping) else None

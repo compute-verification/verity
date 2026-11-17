@@ -49,7 +49,7 @@ use: with `WorkSound`'s hypotheses, and
 * the cards' hosts in the period's devices at the row `hr`'s AMX and SHA-512 rates (`HostsCounted`), so the honest
   optimum and the period's capacity count them;
 * the network term from the network attester's counts: it watches the replica's boundary, and the verdict refuses a
-  period whose signed counts into or out of the devices pass the caps `E_in`, `E_out` (`Counted`). The certifier counts
+  period whose signed counts into or out of the devices pass the caps `E_in`, `E_out` (`Counted`). The network attester counts
   every exchanged bit (`CertifierSeesImports`), so `E = E_in + E_out`, and an exchanged bit replaces at most
   `β = n_max W_mac` of priced work (`OutsourceWithinEgress`). `W_mac` is the honest sampling block's cost a MAC
   (`W_b ≤ W_mac · macs b`, `W_b = W_mm + W_sha + W_ans`: an outside machine that returns the root saves the block's

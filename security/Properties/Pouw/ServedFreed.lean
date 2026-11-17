@@ -10,14 +10,14 @@ public import Properties.Pouw.ServedWork
 outside it, and an accepted period's priced work on it is at least `p` a credited word, less the luck allowances.
 `ServedFreed` is the onsite form at the same check (the J10-R period, `PouwCheck.Credit.window` on each window): the
 inventory is the registered devices, a network attester counts the bits their window programs exchange with machines
-outside them, and an accepted period that the certifier also accepts frees at most `ε C` of the registered devices'
+outside them, and an accepted period that the network attester also accepts frees at most `ε C` of the registered devices'
 capacity at the period's dual price (`Pouw.Dither.Period.FreedWithin`). It composes:
 
 * `ServedWork` at an exchange-free replacement of the window programs;
 * the price of an exchanged bit over the period's window programs together (`OutsourceWithinEgressServed`): the
   window programs have exchange-free ones, each fixed before its window's salt, with the same outputs at the windows'
   inputs, whose priced work is at most `β` a bit the originals exchanged more;
-* the certifier's count (`CertifiedExchange`): it accepts a period whose window programs exchanged more than `K` bits
+* the network attester's count (`CertifiedExchange`): it accepts a period whose window programs exchanged more than `K` bits
   but with probability `δ`;
 * weak duality (`Pouw.Guarantees.Dither.FreedOfFloor`): a floor on the credited work at the dual price bounds what
   the period frees.
@@ -70,13 +70,13 @@ def OutsourceWithinEgressServed {C B I St : Type} (O : Type) {m n : ℕ} (hm : 0
           ∑ w, G.cost μ (work x w) (state x w, saltCoin hm x w) +
             β * ∑ w, G.ext (work x w) (state x w, saltCoin hm x w)
 
-/-- `pouw-certified-exchange` (proposed; the network attester's count at the served check). **The certifier
+/-- `pouw-certified-exchange` (proposed; the network attester's count at the served check). **The network attester
 accepts a period that exchanged more than `K` bits but with probability `δ`**: the probability over the period's coins
-that the certifier's check `cert` accepts while the period's window programs exchanged `ext > K` bits with machines
-outside the registered devices is at most `δ`. The served form of the certifier's count, which
-`Pouw.Assumptions.CertifierSeesImports` states surely for the onsite guarantee; the certifier's guarantee
+that the network attester's check `cert` accepts while the period's window programs exchanged `ext > K` bits with machines
+outside the registered devices is at most `δ`. The served form of the network attester's count, which
+`Pouw.Assumptions.CertifierSeesImports` states surely for the onsite guarantee; the network attester's guarantee
 (`NetTiming.Guarantees.MonitoringPeriodLeakAccepted`) bounds the information an accepted period carries out, and the step from it
-to this count is open. It is falsified by a strategy whose periods the certifier accepts, with
+to this count is open. It is falsified by a strategy whose periods the network attester accepts, with
 probability more than `δ`, after its window programs exchanged more than `K` bits. -/
 def CertifiedExchange {Ω : Type} [Fintype Ω] (cert : Ω → Prop) (ext : Ω → ℝ) (K δ : ℝ) : Prop :=
   prob (fun x => cert x ∧ K < ext x) ≤ δ
@@ -86,9 +86,9 @@ Under `ServedWork`'s premises and setting, with the inventory's closure (`ext = 
 `work` run on the registered devices, one machine `G` of 𝓜 at its device premises, and exchange bits with machines
 outside them; let `Pd` be the registered devices' period with `μ` its dual price at one credit (`Period.DualOpt μ 1`),
 `C = μ · hon > 0`, and `β ≥ 0`. If an exchanged bit replaces at most `β` of priced work over the period's window
-programs (`OutsourceWithinEgressServed`) and the certifier's check `cert` accepts a period whose window programs
+programs (`OutsourceWithinEgressServed`) and the network attester's check `cert` accepts a period whose window programs
 exchanged more than `K` bits but with probability `δ` (`CertifiedExchange`), then except with probability
-`δ_s + n·(δ_bind + δ_ks) + n·κ_deg(B) + δ`, a period that the work check and the certifier both accept frees at most
+`δ_s + n·(δ_bind + δ_ks) + n·κ_deg(B) + δ`, a period that the work check and the network attester both accept frees at most
 `ε(x) C` of the registered devices' capacity beside its windows' timed work, where
 `ε(x) C = max(0, C − (p · creditPrefix(x) − Σ_w lam(inst_w)) + β K)`: no other work `z` that fits beside the windows'
 use is worth more than an honest strategy's plus `ε(x) C`. Non-vacuous only on the fixed model (module doc). -/

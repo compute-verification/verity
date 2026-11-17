@@ -195,7 +195,7 @@ modelled menu, not proved over the B200: no program of 1 or 2 instructions on DS
 so such a program costs at least 2, above the LOP3's 4/3. The menu is IMAD, IMAD.HI, IDP.4A, IDP.2A and FFMA2;
 IMAD.WIDE, HFMA2 and the whole ALU class are outside it. The cheapest program known is 78 instructions, all on the IMAD
 pipe (33 IMAD, 45 IMAD.HI). FOLD-OPT is false for a keyed round's XOR with a constant, which takes 1 + 2|B| IMAD-pipe
-instructions (`benchmarks/pouw/theory/fold_min.py`), but plain li has no such round: every half step absorbs a word.
+instructions (`calibration/pouw/theory/fold_min.py`), but plain li has no such round: every half step absorbs a word.
 With the whole certificate at DS_issue alone, which needs no pipe premise, the sheet readings are 0.943% (H200, its
 `π*`) and 0.9998% (B200). With only the proved fan-in floor in its place each reading is tens of percent.
 

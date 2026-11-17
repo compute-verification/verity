@@ -1,4 +1,4 @@
-# `pouw_check`
+# `pouw_verifier`
 
 This Lean package is PoUW's verifier. It holds two checks, each a core protocol: one decides a single execution phase
 from its registration and the proof system's answer to it, and the other credits a whole credit period, all or nothing,
@@ -13,12 +13,12 @@ In this directory:
 
 ~~~sh
 lake build
-lake exe pouw-check id
+lake exe pouw-verifier id
 ~~~
 
-The build makes the library and its executables, `pouw-check` among them; the second line prints the execution phase
-check's id, `verity/pouw/v1`. `pouw-check check PARAMS COMMITMENT EVIDENCE` decides one case
-and `pouw-check serve` answers one case a line on standard input, the commands every core protocol has. The difftest is a suite of
+The build makes the library and its executables, `pouw-verifier` among them; the second line prints the execution phase
+check's id, `verity/pouw/v1`. `pouw-verifier check PARAMS COMMITMENT EVIDENCE` decides one case
+and `pouw-verifier serve` answers one case a line on standard input, the commands every core protocol has. The difftest is a suite of
 the check:
 
 ~~~sh
@@ -30,22 +30,22 @@ fields, the rules the check applies, and what each difftest covers.
 
 ## The two protocols
 
-One `Core.Protocol` (`verity/protocols/interface`), `PouwCheck.protocol`, id `verity/pouw/v1`, Lean core only:
+One `Core.Protocol` (`verity/protocols/interface`), `PouwVerifier.protocol`, id `verity/pouw/v1`, Lean core only:
 PoUW's verifier (`verity/protocols/resource_accounting/compute/pouw/verifier/verifier.py`), with `verity/protocols/resource_accounting/compute/pouw/verifier/core_check.py` the
 Python reference held to it.
 
 | field | here |
 | --- | --- |
-| `Params` | the verifier's own: the check item (`entries`, `scheme`, `template`, `tile_work`, and optionally `coins`, the execution phase's coin mode, `live` or `seeded`), `eps` and `delta` as ratio strings, `grid_bits`, the declared `range` of tile counts, the execution phase's `context`, the check query's SHA-512; the template one `PouwCheck.tiles` pins, with its tile work and query; and the rows' fixed `length` (`{max_tokens, stop}`, stop `fixed`) |
+| `Params` | the verifier's own: the check item (`entries`, `scheme`, `template`, `tile_work`, and optionally `coins`, the execution phase's coin mode, `live` or `seeded`), `eps` and `delta` as ratio strings, `grid_bits`, the declared `range` of tile counts, the execution phase's `context`, the check query's SHA-512; the template one `PouwVerifier.tiles` pins, with its tile work and query; and the rows' fixed `length` (`{max_tokens, stop}`, stop `fixed`) |
 | `Commitment` | the execution phase's registration, one-stage's record (`registration.record`) as canonical JSON, its execution phase `{kind, context, public}` holding `window.REGISTERED`, whose `length` item must be a fixed-length execution phase's at the verifier's max_tokens (`PouwWindow.lengthProblem`; an execution phase without one, registered before the rule, is refused as `window-form: no-fixed-length`) |
 | `digest` | the record's own: SHA-512(format ‖ 0 ‖ the canonical record), `registration.digest` |
 | `Evidence` | the proof system's answer for a registration, read by `Core.Answer.ofJson` (protocol one-stage's): on acceptance the profile, read by `Core.Integrity.ofJson`, and the public outputs `{"draw": d}`, `d` the verifier's sample as one-stage's `draw.py` writes it (`subset`, `bernoulli`, `stratified` or `work`, with exactly `check_draw`'s keys) |
-| `check` | `PouwCheck.check`: PoUW's rule over the registration (`registered`), then the service's answer to it (`outcome`); every refusal is the first rule it breaks, with `core_check.py`'s reason |
+| `check` | `PouwVerifier.check`: PoUW's rule over the registration (`registered`), then the service's answer to it (`outcome`); every refusal is the first rule it breaks, with `core_check.py`'s reason |
 | `Public` | `window.PUBLIC`: `verdict`, `work`, `check`, `sampling`, `length`, `drawn`, `root_W` |
 | `Profile` | the service's `Core.Integrity`, passed through once it is the registered partition's N proof blocks sampled subset:K′ at the execution phase's δ, and the sample is subset:K′ over N |
 
-A second `Core.Protocol`, `PouwCheck.Period.protocol`, id `verity/pouw/period/v1` (`pouw-period`), is a credit period's credit
-and onsite's PoUW subprotocol (`Core.Onsite.components`), with `verity/protocols/resource_accounting/compute/pouw/verifier/period_check.py` its Python
+A second `Core.Protocol`, `PouwVerifier.Period.protocol`, id `verity/pouw/period/v1` (`pouw-period`), is a credit period's credit
+and the PoUW subprotocol of remote's development composite (`Core.Remote.components`), with `verity/protocols/resource_accounting/compute/pouw/verifier/period_check.py` its Python
 (`tests/verity/protocols/resource_accounting/compute/pouw/verifier/lean/check/test_period_difftest.py`). It credits a credit period all or nothing: `Credit.periodCredit` accepts only when every
 execution phase of the credit period's close is credited.
 
@@ -56,14 +56,14 @@ execution phase of the credit period's close is credited.
 | `digest` | SHA-512(`verity/pouw/period/ledger/v1` ‖ 0 ‖ the ledger's bytes) |
 | `Evidence` | `{pins, windows}`: the challenger host's pins log, and each execution phase's evidence in the close's order (`Credit.PERIOD_KEYS`, each sampled proof block's and each round's proof outcome the verifier's verdict) |
 | `check` | `Credit.periodCredit`, then a session of the close the parameters don't list or that repeats one (`sessions`); a refusal is `code: why`, and it never leaves a credit period undecided |
-| `Public` | `Published.toJson`, what `PouwCheck.Period.account` (a `Core.Account`) reads: `Credit.PeriodCredit.toJson` (each execution phase's credited calls and credited served work, K, δ and each execution phase's ε) with the parameters' challenger `key`, the close's open `roots`, and the period's span in ledger entries (`start`, the period-open's seq, and `length` to its close); it names no device, as the accounting layer binds `key` to a registered device |
+| `Public` | `Published.toJson`, what `PouwVerifier.Period.account` (a `Core.Account`) reads: `Credit.PeriodCredit.toJson` (each execution phase's credited calls and credited served work, K, δ and each execution phase's ε) with the parameters' challenger `key`, the close's open `roots`, and the period's span in ledger entries (`start`, the period-open's seq, and `length` to its close); it names no device, as the accounting layer binds `key` to a registered device |
 | `Profile` | `{period, windows}`: the credit period's name and its number of execution phases |
 
 ## The rules
 
 `opening` holds a tile proof's public file to the registered execution phase: the proof block sampled (or opened unsampled, the filler's),
 the entries root's domain one-stage's served domain of the registered program and partition, the opening's entry under
-its salt that root's leaf, the proof block one of the entry's tiles, the proof one instance over the circuit `PouwCheck.tiles`
+its salt that root's leaf, the proof block one of the entry's tiles, the proof one instance over the circuit `PouwVerifier.tiles`
 pins for the check's template (its header's `circuit_sha512`, which `verity-verify-proof verify --zk` binds to the circuit it
 verifies against), and each opened row's b ‖ c its side tree's leaf at the proof block's row. An unsalted template's proof's
 first two ports, `a0` and `b0` (`PC8_PORTS`), are an A row and a B row of the fp8-p schemas. A salted template's
@@ -77,7 +77,7 @@ b ‖ c must be `publicBc` of the execution phase's context, the certified salt 
 certified execution phase opens a salted template's proof blocks, and only under a 64-byte salt; it opens no unsalted template's proof block,
 so a certified execution phase passed no salt opens nothing. So the circuit an execution phase's proof blocks are proved over is
 the pinned one, not whatever builds it: a change to a template's Definition or to Flock's lowering lands its new digest
-in `PouwCheck/Tile.lean` (and `core_check.TILES`), which benchmarks/pouw's test of a staged proof block enforces at K = 128. A
+in `PouwVerifier/Tile.lean` (and `core_check.TILES`), which benchmarks/pouw's test of a staged proof block enforces at K = 128. A
 template has one circuit, so its proof blocks proved under an earlier lowering no longer open.
 `served_commit.check` keeps the sample, the level and the population's domain and calls the opening rule for the rest.
 
@@ -105,7 +105,7 @@ refuses a bare commitment, and checks the opening against it
 in a replay of a recorded pass, the e2e-service passes' (`epoch-coins/v2`, whose binding and weights' root keep the
 first 32 bytes of `tagged`).
 
-`PouwCheck.Credit` holds a served execution phase's credit to what it fixed before each coin (`credit.py`, the Python reference).
+`PouwVerifier.Credit` holds a served execution phase's credit to what it fixed before each coin (`credit.py`, the Python reference).
 Its entries are `window` and `periodCredit`; the steps they compose are internal (`Credit.Internal`, which only the
 difftest reaches), so no caller credits an execution phase with a step skipped.
 `credited`: each manifest row (the execution phase's calls in order, `index` 0, 1, …) carries its call's verdict as `credit`, a
@@ -163,11 +163,11 @@ The properties are stated in `security/Properties/Pouw/Check.lean` and proved in
 
 ## The difftests
 
-`tests/verity/protocols/resource_accounting/compute/pouw/verifier/lean/check/test_difftest.py`, the suite `verity-pouw-check-difftest`, which `check` runs after the Lean builds, holds
-`core_check.case` to `pouw-check serve` on the shared harness (`tools/difftest/`) as a `ProtocolPort` with the Lean
+`tests/verity/protocols/resource_accounting/compute/pouw/verifier/lean/check/test_difftest.py`, the suite `verity-pouw-verifier-difftest`, which `check` runs after the Lean builds, holds
+`core_check.case` to `pouw-verifier serve` on the shared harness (`tools/difftest/`) as a `ProtocolPort` with the Lean
 of record, comparing whole answers, reasons included. Its cases are `tests/verity/protocols/resource_accounting/compute/pouw/verifier/lean/check/pouw_check_cases.py`: honest
 execution phases and one mutation per refusal, the case's own framing among them. A run needs an accept, a reject and an
-undecided. The same suite puts `pouw-check-difftest`'s `opening` against `core_check.opening` as a `Port`, comparing
+undecided. The same suite puts `pouw-verifier-difftest`'s `opening` against `core_check.opening` as a `Port`, comparing
 reasons, over `tests/verity/protocols/resource_accounting/compute/pouw/verifier/lean/check/pouw_opening_cases.py`: honest openings and one mutation per refusal (or per reading both sides
 share: hex as `bytes.fromhex` reads it, the header's keys sorted), every mutation also replayed over a few seeds, and
 every reason reached. Its `pass` and `draw` go against `core_check.pass_epoch_twin` and `core_check.draw_twin` the same way, over
@@ -204,8 +204,8 @@ holds the served `credit._lean_live_verified` to `credit._live_verified`; and `c
 form.
 
 ~~~text
-lake build                                                         the library, pouw-check and pouw-check-difftest
-lake exe pouw-check id | check PARAMS COMMITMENT EVIDENCE | serve    the interface's command line
+lake build                                                         the library, pouw-verifier and pouw-verifier-difftest
+lake exe pouw-verifier id | check PARAMS COMMITMENT EVIDENCE | serve    the interface's command line
 uv run tools/check/suites.py verity-pouw-check-difftest     the difftest
 python tools/verity/lean/check.py verity/protocols/resource_accounting/compute/pouw/verifier/lean/check   the Lean check
 ~~~

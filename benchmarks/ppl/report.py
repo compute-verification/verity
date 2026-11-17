@@ -9,12 +9,13 @@ from pathlib import Path
 
 import methodology
 
-__all__ = ["BASELINE_ARMS", "BASELINE_POINTS", "METRICS", "PEARL_C_ARM", "arm_stats", "baseline_check", "baseline_table", "load",
+__all__ = ["BASELINE_ARMS", "BASELINE_POINTS", "METRICS", "METRIC_POINT", "PEARL_C_ARM", "arm_stats", "baseline_check", "baseline_table", "load",
            "lock", "metrics", "pct", "point_key", "table"]
 
 METRICS = {"shipped": "compute-accounting/perplexity-shipped", "pearl_c": "compute-accounting/perplexity-pearl-c",
            "cost": "compute-accounting/perplexity-cost-pearl-c"}
 PEARL_C_ARM = "pearl-c-linears"
+METRIC_POINT = ("c4", 2048)
 
 
 def load(paths: Iterable[str | Path]) -> list[dict]:
@@ -177,6 +178,9 @@ def baseline_check(lk: dict, results: list[dict]) -> tuple[str, bool]:
 def metrics(r: dict, repo: str, revision: str) -> tuple[str, dict, list[dict]]:
     if not r.get("passed"):
         raise ValueError(f"{r.get('model')} {r.get('set')}/{r.get('ctx')}: its gates failed, so it has no perplexity")
+    if (r.get("set"), r.get("ctx")) != METRIC_POINT:
+        raise ValueError(f"{r.get('model')} {r.get('set')}/{r.get('ctx')}: the metrics are {'/'.join(map(str, METRIC_POINT))}'s "
+                         "(metrics.toml's axis), so this run has its table and no point")
     base, arm = arm_stats(r, "bf16"), arm_stats(r, PEARL_C_ARM)
     if arm is None:
         raise ValueError(f"{r['model']} {r['set']}/{r['ctx']}: no {PEARL_C_ARM} arm (run.py eval ... {PEARL_C_ARM})")
