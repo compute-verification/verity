@@ -5501,12 +5501,14 @@ def test_preflight_only_says_what_the_run_would_do_and_stops_before_anything_is_
     assert not (tmp_path / "root").exists() and not (tmp_path / "fw").exists()
 
 
-@pytest.mark.parametrize("extra, off", [({"PRODUCT": "remote"}, True), ({"PRODUCT": "remote", "COMPOSE_OFF_NODE": "0"}, False),
+@pytest.mark.parametrize("extra, off", [({"PRODUCT": "remote"}, False), ({"PRODUCT": "remote", "COMPOSE_OFF_NODE": "1"}, True),
+                                        ({"PRODUCT": "remote", "VERITY_HOLD_PLACEMENT": "1"}, True),
                                         ({"COMPOSITE": ""}, False), ({"COMPOSITE": "", "VERITY_HOLD_PLACEMENT": "1"}, True)])
-def test_with_placement_unset_remote_still_composes_off_the_node_and_onsite_on_it(tmp_path, extra, off):
-    """With VERITY_HOLD_PLACEMENT unset remote's composite is still composed off the node from its hand-off, as the
-    remote application has it, unless its caller sets COMPOSE_OFF_NODE=0; onsite's is composed on the node, off it
-    only under VERITY_HOLD_PLACEMENT=1."""
+def test_with_placement_unset_a_composite_is_composed_off_the_node_only_where_its_caller_runs_a_composer_there(
+        tmp_path, extra, off):
+    """With VERITY_HOLD_PLACEMENT unset a composite, remote's as onsite's, is composed on the node unless its caller
+    runs a composer off it and says so (COMPOSE_OFF_NODE=1); under VERITY_HOLD_PLACEMENT=1 it is composed off the
+    node as on main."""
     rc, lines, order, _limits = _v3c(tmp_path, (), PATH=f"{_hosts(tmp_path)}:{tmp_path / 'bin'}:{os.defpath}",
                                      HOST="vy-dc-h200-2", PREFLIGHT_ONLY="1", CERTIFIER_CHAIN_CMD=None,
                                      CERTIFIER_PERIOD_CMD=None, **{"VERITY_HOLD_PLACEMENT": None, **extra})
@@ -5765,8 +5767,8 @@ def test_witness_names_each_path_a_served_run_holds_as_its_witness_and_why(tmp_p
     ({"COMPOSITE": None}, None),
     ({"COMPOSITE": None, "COMPOSE_OFF_NODE": "1"}, None),
     ({}, None),
-    ({"COMPOSE_OFF_NODE": "yes"}, "PREFLIGHT: COMPOSE_OFF_NODE is 1 (the default under PRODUCT=remote or "
-                                    "VERITY_HOLD_PLACEMENT=1) or 0, not yes"),
+    ({"COMPOSE_OFF_NODE": "yes"}, "PREFLIGHT: COMPOSE_OFF_NODE is 1 (the default under VERITY_HOLD_PLACEMENT=1) "
+                                    "or 0, not yes"),
 ])
 def test_the_preflight_takes_an_onsite_composite_on_or_off_the_node_and_no_other_compose_off_node(tmp_path, extra, line):
     """The preflight passes onsite with a composite or none, on the node (COMPOSE_OFF_NODE=0, the default) or off it
@@ -6908,6 +6910,7 @@ def test_a_remote_composite_is_v1_under_pearl_plus_and_none_where_the_tree_lacks
 @pytest.mark.parametrize("extra, first, rc", [
     ({}, "COMPOSITE ON-NODE: composed on the served node {host}, which the prover controls", 1),
     ({"COMPOSE_ON_NODE": "composed by a follow-on here"}, "COMPOSITE ON-NODE: composed by a follow-on here", 1),
+    ({"PRODUCT": "remote"}, "COMPOSITE ON-NODE: composed on the served node {host}, which the prover controls", 1),
     ({"VERITY_HOLD_PLACEMENT": "1", "COMPOSE_OFF_NODE": "0"},
      "COMPOSITE DEVELOPMENT: composed on the served node {host}, which the prover controls: a development check, no "
      "claim of record (COMPOSE_OFF_NODE=0)", 1),
