@@ -1212,8 +1212,9 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--flip-proofs", type=int, default=0, metavar="N",
                    help="after an accepted audit, at most N one-bit edits of its first drawn session's proof, each of which "
                    "Lean verify must refuse (`proof_edits`)")
-    p.add_argument("--challenger", help="draw on the auditor's challenger's coins (a5_coins): local, loopback:HOST:PORT or "
-                   "gate:USER@HOST (the auditor device through its SSH gate, with --peer and --challenger-key)")
+    p.add_argument("--challenger", help="draw on the auditor's challenger's coins (a5_coins): local, loopback:HOST:PORT, "
+                   "gate:USER@HOST (the auditor device through its SSH gate, with --peer and --challenger-key) or "
+                   "command:WORDS (the gate as a command on this machine, with --peer: simulated coins)")
     p.add_argument("--deployed-key", action="store_true",
                    help="with --challenger local: the session's key at the deployed LMS parameters (a5_coins.start's deployed), "
                    "its whole tree made over this machine's cores")
@@ -1306,12 +1307,14 @@ def main(argv: list[str] | None = None) -> int:
     if not a.challenger:
         ap.error("audit draws on the auditor's challenger's coins, never the verifier's own: give --challenger local --main FILE")
     if a.challenger:
-        if a.challenger != "local" and not a.challenger.startswith(("gate:", "loopback:")):
-            ap.error(f"--challenger is local, loopback:HOST:PORT or gate:USER@HOST, not {a.challenger!r}")
+        if a.challenger != "local" and not a.challenger.startswith(("gate:", "loopback:", "command:")):
+            ap.error(f"--challenger is local, loopback:HOST:PORT, gate:USER@HOST or command:WORDS, not {a.challenger!r}")
         if a.deployed_key and a.challenger != "local":
             ap.error("--deployed-key is a local session's key: it goes with --challenger local")
         if a.challenger.startswith("gate:") and not (a.peer and a.challenger_key):
             ap.error("--challenger gate:USER@HOST needs --peer and --challenger-key")
+        if a.challenger.startswith("command:") and not a.peer:
+            ap.error("--challenger command:WORDS needs --peer, this machine as the gate's peers file names it")
         if not a.main:
             ap.error("--challenger needs --main")
     if a.day_ledger and (a.day is not None or a.day_log or a.day_params or not a.challenger_key):

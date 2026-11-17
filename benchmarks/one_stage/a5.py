@@ -2645,6 +2645,8 @@ def main() -> int:
             ap.error("--challenger samples a TP Commit's ranks (--tp-commit)")
         if a.challenger.startswith("gate:") and not (a.peer and a.challenger_key):
             ap.error("--challenger gate:USER@HOST needs --peer and --challenger-key")
+        if a.challenger.startswith("command:") and not a.peer:
+            ap.error("--challenger command:WORDS needs --peer")
         if not a.main:
             ap.error("--challenger needs --main: the verifier's `git rev-list --first-parent origin/main`, which must hold the "
                      "session's pin")

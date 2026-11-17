@@ -17,7 +17,10 @@ of record, from whose coins each rank's docket samples once (`spot.coins.Challen
   (`challenger_party.py`, `Loopback`), asked for its open and finish over loopback TCP. ``gate:USER@HOST``: the challenger host through infra's gate with the lane's gate key: `reserve` with this machine as its
   peer, `open` on the TP run root (`GateClient.open`), the client on the peer's 127.0.0.1:PORT with the session's
   secret, and once the session has ended its `status`, `fetch`, `ledger` and `pins` (`challenger_gate`); the verifier's
-  key is then the deployment's record (`challenger_gate.key_record`), never the session's key.json. Either way the session is a withheld
+  key is then the deployment's record (`challenger_gate.key_record`), never the session's key.json. ``command:WORDS``: the
+  same gate as a command on this machine (`challenger_gate.gate_argv`), its key the record when one is given, else the
+  gate's own ``pubkey``: a challenger the developer's machine runs, whose coins are simulated, never an auditor's.
+  Either way the session is a withheld
   one (`reserve --withhold`; the sample's verifier takes only such a session's coins, `challenger.withheld_on`): the gate
   hands out no coin commitment root before the session's end, its hello answers the layout alone, each coin comes as its
   raw bytes, and at the close the challenger releases its commitment and every coin's full opening, which the client
@@ -603,20 +606,24 @@ def opened_reason(got: dict, withhold: bool) -> str | None:
 
 
 class GateClient:
-    """The challenger host's session through infra's gate `gate` (USER@HOST) with the lane's gate key `ssh_key`, its challenger
-    listening on `peer`'s 127.0.0.1 (this machine's name in the host's /etc/vy/peers), and the challenger key the deployment
-    records at `key_record`; `main` is the verifier's copy of main's first-parent line."""
+    """The challenger host's session through infra's gate `gate` (USER@HOST, or a command's words, `challenger_gate.gate_argv`)
+    with the lane's gate key `ssh_key`, its challenger listening on `peer`'s 127.0.0.1 (this machine's name in the host's
+    /etc/vy/peers), and the challenger key the deployment records at `key_record`, which a command gate may leave None
+    to take the gate's own ``pubkey``; `main` is the verifier's copy of main's first-parent line."""
 
-    def __init__(self, gate: str, ssh_key: str | None, peer: str, key_record: str, main: list[str]) -> None:
+    def __init__(self, gate: str | list[str], ssh_key: str | None, peer: str, key_record: str | None,
+                 main: list[str]) -> None:
         self.gate, self.peer, self.ssh = gate, peer, G.ssh_args(ssh_key)
-        self.key = G.key_record(key_record)
+        if not key_record and isinstance(gate, str):
+            raise Ch.CoinError(f"the gate {gate.split('@')[-1]} is held to its deployment's key record, and none was given")
+        self.key = G.key_record(key_record) if key_record else G.gate_key(G.gate_call(gate, ["pubkey"], self.ssh))
         self.main = main
         self.session: str | None = None
 
-    def _raw(self, words: str) -> bytes:
-        p = subprocess.run([*self.ssh, self.gate, words], capture_output=True)
+    def _raw(self, *args: str) -> bytes:
+        p = subprocess.run(G.gate_argv(self.gate, args, self.ssh), capture_output=True)
         if p.returncode:
-            raise Ch.CoinError(f"infra's gate refused {words.split()[0]}: {p.stderr.decode().strip() or p.stdout.decode().strip()}")
+            raise Ch.CoinError(f"infra's gate refused {args[0]}: {p.stderr.decode().strip() or p.stdout.decode().strip()}")
         return p.stdout
 
     def open(self, root: str, layout: list, minutes: int = MINUTES, scheme: str = SCHEME,
@@ -655,7 +662,7 @@ class GateClient:
                 raise Ch.CoinError(f"session {self.session} has no end entry in the gate's ledger after {minutes + 5} minutes")
             time.sleep(10)
         dest.mkdir(parents=True, exist_ok=True)
-        with tarfile.open(fileobj=io.BytesIO(self._raw(f"fetch {self.session}"))) as tar:
+        with tarfile.open(fileobj=io.BytesIO(self._raw("fetch", self.session))) as tar:
             tar.extractall(dest, filter="data")
         (dest / "windows.jsonl").write_bytes(self._raw("ledger"))
         (dest / "pins.jsonl").write_bytes(self._raw("pins"))
@@ -738,9 +745,11 @@ def start(challenger: str, root: str, ranks: list[int], dest: Path, main: str | 
         session = Loopback(challenger.removeprefix("loopback:"))
     elif challenger.startswith("gate:") and peer and key_record:
         session = GateClient(challenger.removeprefix("gate:"), ssh_key, peer, key_record, first_parent)
+    elif (command := G.command_of(challenger)) and peer:
+        session = GateClient(command, None, peer, key_record, first_parent)
     else:
-        raise SystemExit(f"--challenger is local, loopback:HOST:PORT or gate:USER@HOST (with --peer and --challenger-key), "
-                         f"not {challenger!r}")
+        raise SystemExit(f"--challenger is local, loopback:HOST:PORT, gate:USER@HOST (with --peer and --challenger-key) "
+                         f"or command:WORDS (with --peer), not {challenger!r}")
     manager = _Manager(ctx=get_context("spawn"))
     manager.start()
     draws = manager.Draws(root, ranks, session.key.to_json(), first_parent, stage)

@@ -1,10 +1,11 @@
 """Infra's challenger gate, the SSH host that reserves, opens and publishes the auditor's challenger host's sessions, as
-its clients call it: ``ssh GATE VERB ...`` (`gate_call`) with the lane's gate key (`ssh_args`); where a session it
+its clients call it: ``ssh GATE VERB ...`` or a gate command on this machine (`gate_call`) with the lane's gate key (`ssh_args`); where a session it
 publishes (``fetch SESSION``) keeps the challenger's out/ (`published`); and the challenger's key from its deployment
 record (`key_record`). The gate is a transport: what it answers its callers check (`challenger_session.GateClient`,
 `remote.trusted_session`)."""
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
@@ -27,12 +28,38 @@ def ssh_args(key: str | None = None) -> list[str]:
 HEX, HEX_WITHHELD = re.compile(r"[0-9a-fA-F]{32,}"), "(hex withheld)"
 
 
-def gate_call(gate: str, args: list[str], ssh: Sequence[str] = SSH, run: Callable[..., Any] = subprocess.run) -> dict:
-    """The gate's answer to `args` (``ssh GATE VERB ...``, quoted for the gate's shell words); a refusal raises. It
+def command_of(challenger: str) -> list[str] | None:
+    """The gate command a ``--challenger command:WORDS`` names (WORDS shell-split), or None for any other challenger."""
+    if not challenger.startswith("command:"):
+        return None
+    return shlex.split(challenger.removeprefix("command:")) or None
+
+
+def gate_key(doc: Any) -> Ch.ChallengerKey:
+    """The key a gate's ``pubkey`` answers (`W`, `H`, `public`, `public_sha512`), refused unless `public` hashes to
+    `public_sha512`: the gate's own word for its key, which only a gate whose coins are simulated is taken on."""
+    key = Ch.ChallengerKey.from_json({k: doc.get(k) for k in ("W", "H", "public")} if isinstance(doc, dict) else None)
+    if hashlib.sha512(key.public).hexdigest() != doc.get("public_sha512"):
+        raise Ch.CoinError("the gate's pubkey answer names a public key whose SHA-512 is not the one it gives")
+    return key
+
+
+def gate_argv(gate: str | Sequence[str], args: Sequence[str], ssh: Sequence[str] = SSH) -> list[str]:
+    """The command asking the gate `args`: a ``USER@HOST`` gate over `ssh`, or a gate that is a command (its words, as
+    Pearl+'s gate is) run on this machine with `args` as its words, as one quoted line when that command is itself ssh,
+    whose remote side reads it with shlex."""
+    if isinstance(gate, str):
+        return [*ssh, gate, shlex.join(args)]
+    return [*gate, shlex.join(args)] if Path(gate[0]).name == "ssh" else [*gate, *args]
+
+
+def gate_call(gate: str | Sequence[str], args: list[str], ssh: Sequence[str] = SSH,
+              run: Callable[..., Any] = subprocess.run) -> dict:
+    """The gate's answer to `args` (`gate_argv`); a refusal raises. It
     quotes the gate's reason, else ssh's stderr, else the answer, whichever it is without its long hex runs (`HEX`): an
     open's answer holds its session's secret, which a gate failing mid-open can put in any of the three. The filter
     knows only hex: a secret in another encoding is quoted as it stands."""
-    p = run([*ssh, gate, shlex.join(args)], capture_output=True, text=True)
+    p = run(gate_argv(gate, args, ssh), capture_output=True, text=True)
 
     def refused(why: object = None) -> Ch.CoinError:
         quoted = str(why or p.stderr.strip() or p.stdout.strip() or f"exit {p.returncode}")
