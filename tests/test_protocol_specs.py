@@ -23,7 +23,6 @@ KEPT = {
 RETIRING = {
     "verity/protocols/resource_accounting/network/verifier/PROTOCOL.md": "verity/protocols/resource_accounting/network/attester/program/lean",
     "verity/protocols/resource_accounting/memory/pous/verifier/PROTOCOL.md": "tools/pous_grader",
-    "verity/protocols/resource_accounting/memory/poub/verifier/PROTOCOL.md": "verity/protocols/resource_accounting/memory/poub/verifier/lean",
 }
 
 

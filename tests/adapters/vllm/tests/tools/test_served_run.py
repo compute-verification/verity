@@ -5,14 +5,18 @@ import hashlib
 import io
 import json
 import os
+import re
 import shlex
 import shutil
 import subprocess
+import sys
 import tarfile
 import tomllib
 from pathlib import Path
 
 import pytest
+from verity_cli import run as verity_run
+from verity_cli import served_table
 
 HERE = Path(__file__).resolve().parents[5] / "adapters" / "vllm" / "tools" / "served_run"
 SERVED_RUN = Path("adapters/vllm/tools/served_run")
@@ -85,7 +89,7 @@ def test_the_window_run_serves_on_node_a_on_the_launchs_card_and_cores(tmp_path)
         "ROW": f"{NODE_A['LLAMA_ROOT']}/{NODE_A['builds'][PLACEMENT['row']]}/{PLACEMENT['row']}"}
     assert words[words.index("--") + 1:] == ["taskset", "-c", "0-11", "bash", "adapters/vllm/tools/served_run/window.sh"]
     assert f"adapters/vllm/workloads/{PLACEMENT['row']}.json" in flags(got, "--send")
-    assert "${" not in got.stdout
+    assert set(re.findall(r"\$\{(\w+)", got.stdout)) <= {"HOME", *NODE_A["env_files"]}
 
 
 def test_the_window_run_takes_the_gates_coins_by_default_with_mains_line(tmp_path):
@@ -93,9 +97,9 @@ def test_the_window_run_takes_the_gates_coins_by_default_with_mains_line(tmp_pat
     assert got.returncode == 0, got.stderr
     env = env_of(got)
     assert {k: env[k] for k in ("PP_CHALLENGER", "PP_PEER", "PP_GATE_KEY", "PP_CHALLENGER_KEY")} == {
-        "PP_CHALLENGER": "gate", "PP_PEER": "vy-spot-glm53", "PP_GATE_KEY": "~/.ssh/vllm_lane_ed25519",
-        "PP_CHALLENGER_KEY": "tests/benchmarks/pouw/fixtures/challenger-key.json"}
-    assert "CHALLENGER_ENV" in env and "DEVELOPMENT" not in env
+        "PP_CHALLENGER": "gate:research@${VY_CHALLENGER_1_HOST}", "PP_PEER": "vy-spot-glm53",
+        "PP_GATE_KEY": "${HOME}/.ssh/vllm_lane_ed25519", "PP_CHALLENGER_KEY": "tests/benchmarks/pouw/fixtures/challenger-key.json"}
+    assert "DEVELOPMENT" not in env
     main = [Path(s) for s in flags(got, "--send") if s.endswith("/main.txt")]
     assert len(main) == 1 and main[0].read_text().split() == [git(tmp_path / "tree", "rev-parse", "HEAD")]
 
@@ -104,7 +108,7 @@ def test_the_window_run_takes_the_gates_coins_by_default_with_mains_line(tmp_pat
 def test_no_address_reaches_a_dry_runs_command(tmp_path, args):
     got = run(tmp_path, *args, "--dry-run", VY_CHALLENGER_1_HOST=ADDRESS, **ROW_OF_CARDS)
     assert got.returncode == 0, got.stderr
-    assert ADDRESS not in got.stdout + got.stderr and "VY_CHALLENGER_1_HOST" not in got.stdout
+    assert ADDRESS not in got.stdout + got.stderr
 
 
 def test_the_tied_window_runs_with_the_settings_the_tree_writes(tmp_path):
@@ -116,6 +120,9 @@ def test_the_tied_window_runs_with_the_settings_the_tree_writes(tmp_path):
     assert (env["POUW"], env["PEARLPLUS_TIE"], env["V3C_CLASS"], env["PRECISION"]) == ("pearlplus", "1", "4,32,4", "bfloat16")
     assert env["H1_PEER"] == env["PP_PEER"] == "vy-spot-glm53" and "COMPOSITE" not in env
     assert int(env["V3C_AUDIT_MEM_GB"]) > 2015, "the records audit defers off node A, which has 2015 GB"
+    piece, lean = 60 * int(env["POUW_TIMEOUT"].removesuffix("m")), int(env["PEARLPLUS_LEAN_TIMEOUT"])
+    window = 3600 * int(PLACEMENT["run"]["window"]["research"][-1].removesuffix("h"))
+    assert lean + 3600 <= piece <= window - 1800, "Pearl+'s Lean follows its tie and Python check inside its piece, which ends inside the window's"
     assert env["NVDISASM_PATH"] == "/usr/local/cuda-13.0/bin" != f"{env['CUDA_HOME']}/bin", "the Pearl-C cubin's SASS needs nvdisasm"
     assert env["ROW_ID"] == PLACEMENT["tied_row"] and "__bf16__" in env["ROW"] and env["ROW"].endswith(PLACEMENT["tied_row"])
     assert not {"H1_TIE", "CERTIFIER_FRONT", "LOAD", "SLOTS", "PROMPTS"} & env.keys()
@@ -181,7 +188,7 @@ def test_development_coins_are_chosen_and_the_run_says_so(tmp_path):
     assert got.returncode == 0, got.stderr
     env = env_of(got)
     assert (env["PP_CHALLENGER"], env["DEVELOPMENT"]) == ("local", "1")
-    assert not {"PP_PEER", "PP_GATE_KEY", "PP_CHALLENGER_KEY", "CHALLENGER_ENV"} & env.keys()
+    assert env["PP_PEER"] == "vy-spot-glm53" and not {"PP_GATE_KEY", "PP_CHALLENGER_KEY"} & env.keys()
     assert not [s for s in flags(got, "--send") if s.endswith("/main.txt")]
 
 
@@ -215,7 +222,25 @@ def test_the_compose_run_sends_the_windows_hand_off_to_the_compose_node(tmp_path
     words = shlex.split(got.stdout)
     assert words[words.index("--on") + 1] == "vy-nebius-cpu-14" == PLACEMENT["run"]["window"]["env"]["COMPOSE_NODE"]
     assert flags(got, "--send") == [str(d / "compose.tar"), str(d / "compose.tar.sha256")]
-    assert words[words.index("--") + 1:] == ["bash", "adapters/vllm/tools/served_run/compose.sh"] and not flags(got, "--env")
+    assert words[words.index("--") + 1:] == ["bash", "adapters/vllm/tools/served_run/compose.sh"]
+    assert flags(got, "--env") == ["PP_PEER=vy-nebius-cpu-14"]
+
+
+@pytest.mark.parametrize("args", [("window",), ("window", "--development"), ("window", "--tie"), ("setup",), ("copy",),
+                                  ("audit",), ("audit", "--development"), ("compose",)])
+def test_every_run_carries_its_nodes_name_in_the_cluster_as_pp_peer_and_a_window_as_h1_peer(tmp_path, args):
+    at = {**ROW_OF_CARDS, "SERVED_RUN": "r-window", "AUDIT_NODE": "vy-nebius-cpu-16"}
+    if args[0] == "compose":
+        at["HANDOFF"] = str(handoff(tmp_path, git(make_tree(tmp_path), "rev-parse", "HEAD")))
+    got = run(tmp_path, *args, "--dry-run", **at)
+    assert got.returncode == 0, got.stderr
+    words, env = shlex.split(got.stdout), env_of(got)
+    assert env["PP_PEER"] == words[words.index("--on") + 1]
+    assert env.get("H1_PEER") == (env["PP_PEER"] if args[0] == "window" else None)
+
+
+def test_no_file_of_the_served_run_names_the_retired_node():
+    assert not [f.name for f in HERE.rglob("*") if f.is_file() and b"vy-dc-h200" in f.read_bytes()]
 
 
 def test_the_compose_run_refuses_another_commit_than_the_windows(tmp_path):
@@ -264,6 +289,96 @@ def test_the_deferred_audit_names_the_window_it_lacks(tmp_path):
     assert (got.returncode, got.stdout) == (1, "") and got.stderr.startswith("run.sh: SERVED_RUN is unset")
 
 
-@pytest.mark.parametrize("script", ["window.sh", "compose.sh", "setup.sh", "pin_link.sh", "copy.sh", "audit.sh", "handoff.sh"])
+@pytest.mark.parametrize("tie", [False, True])
+def test_the_settings_are_node_as_and_its_rows_and_name_no_address(tmp_path, tie):
+    row = PLACEMENT["tied_row" if tie else "row"]
+    got = run(tmp_path, "settings", f"some/{row[:14]}", VY_CHALLENGER_1_HOST=ADDRESS)
+    assert got.returncode == 0, got.stderr
+    env = dict(line.split("=", 1) for line in got.stdout.splitlines())
+    assert {k: env[k] for k in ("VENV", "HIDDEN_SO", "DISK_FLOOR_GB", "H1_PEER", "PP_PEER", "ROW_ID")} == {
+        "VENV": NODE_A["VENV"], "HIDDEN_SO": NODE_A["HIDDEN_SO"], "DISK_FLOOR_GB": NODE_A["DISK_FLOOR_GB"],
+        "H1_PEER": "vy-spot-glm53", "PP_PEER": "vy-spot-glm53", "ROW_ID": row}
+    assert env["ROW"] == f"{NODE_A['LLAMA_ROOT']}/{NODE_A['builds'][row]}/{row}" and (env["POUW"] == "pearlplus") == tie
+    assert not {"CARD", "CORES", "END", "PRODUCT", "PP_CHALLENGER"} & env.keys() and ADDRESS not in got.stdout
+
+
+def test_settings_refuse_a_model_no_row_places(tmp_path):
+    got = run(tmp_path, "settings", "some/other")
+    assert (got.returncode, got.stdout) == (1, "") and "not 'some/other'" in got.stderr
+
+
+def settings_tree(tmp_path: Path, mode: int = 0o600, sets: str = ADDRESS) -> Path:
+    tree = make_tree(tmp_path)
+    shutil.copy(HERE / "workload_env.sh", tree / SERVED_RUN / "workload_env.sh")
+    (tree / "adapters/vllm/manifests").mkdir(parents=True)
+    (tree / "adapters/vllm/manifests/checkpoints-int8.json").write_text('{"checkpoints": []}')
+    placement = tree / SERVED_RUN / "placement.toml"
+    text = placement.read_text().replace("/workspace/research/vllm-servedproof", str(tmp_path / "node"))
+    for var, path in NODE_A["env_files"].items():
+        f = tmp_path / Path(path).name
+        f.write_text(f"export {var}={sets}\n" if var == "VY_CHALLENGER_1_HOST" else f"{var}='192.0.2.22'\n")
+        f.chmod(mode)
+        text = text.replace(f'"{path}"', f'"{f}"')
+    placement.write_text(text)
+    return tree
+
+
+def test_a_command_runs_under_the_settings_with_the_env_files_filled_in(tmp_path):
+    settings_tree(tmp_path)
+    show = 'echo "$PP_CHALLENGER|$VY_CHALLENGER_1_HOST|$VENV|$H1_PEER|$ROW_ID"'
+    got = run(tmp_path, "settings", f"some/{PLACEMENT['row'][:14]}", "--", "bash", "-c", show,
+              PP_CHALLENGER="gate:research@${VY_CHALLENGER_1_HOST}", VENV="/the/callers")
+    assert got.returncode == 0, got.stderr
+    assert got.stdout.strip() == f"gate:research@{ADDRESS}|{ADDRESS}|/the/callers|vy-spot-glm53|{PLACEMENT['row']}"
+    assert (tmp_path / "node/serve-root").is_dir()
+
+
+@pytest.mark.parametrize(("mode", "sets", "refusal"), [(0o644, ADDRESS, "is missing or has another mode"),
+                                                        (0o600, "", "sets no VY_CHALLENGER_1_HOST")])
+def test_a_command_starts_only_under_the_nodes_env_files(tmp_path, mode, sets, refusal):
+    settings_tree(tmp_path, mode, sets)
+    got = run(tmp_path, "settings", f"some/{PLACEMENT['row'][:14]}", "--", "true")
+    assert (got.returncode, got.stdout) == (1, "") and refusal in got.stderr and ADDRESS not in got.stderr
+
+
+@pytest.mark.parametrize("demo", ["remote", "onsite_network"])
+def test_the_bindings_bind_every_party_of_the_demo_by_the_env_files_names(tmp_path, demo):
+    path = HERE.parents[3] / "applications" / f"{demo}.toml"
+    got = subprocess.run(["bash", str(HERE / "run.sh"), "bindings", str(path)], capture_output=True, text=True, check=False,
+                         env={**os.environ, "PATH": f"{Path(sys.executable).parent}:{os.environ['PATH']}"})
+    assert got.returncode == 0, got.stderr
+    (f := tmp_path / "bindings.toml").write_text(got.stdout)
+    cfg = tomllib.loads(path.read_text())
+    bound = verity_run.bindings(f, cfg, verity_run.registry())
+    assert bound and not [k for p in cfg["party"] for piece in served_table.pieces(cfg, p["name"]) for k in piece.unbound(bound)]
+    assert set(re.findall(r"\$\{(\w+)\}", got.stdout)) <= {*NODE_A["env_files"], "HOME"}
+    assert not re.search(r"\d+\.\d+\.\d+\.\d+", got.stdout)
+
+
+@pytest.mark.parametrize("script", ["window.sh", "compose.sh", "setup.sh", "workload_env.sh", "copy.sh", "audit.sh", "handoff.sh"])
 def test_the_runs_scripts_parse(script):
     assert subprocess.run(["bash", "-n", str(HERE / script)], capture_output=True, check=False).returncode == 0
+
+
+def window_exit(tmp_path: Path, rc: int, off_node: str, deferred: bool = False) -> tuple[int, str]:
+    d, out = tmp_path / "serve", tmp_path / "out"
+    out.mkdir(exist_ok=True)
+    if deferred:
+        (d / "private" / "deferred").mkdir(parents=True)
+        (d / "private" / "deferred" / "deferred.env").write_text("K=0\n")
+    got = subprocess.run(["bash", "-c", f'log() {{ echo "$*"; }}; . {shlex.quote(str(HERE / "handoff.sh"))}; window_exit {rc}'],
+                         capture_output=True, text=True, check=False, cwd=tmp_path,
+                         env={**os.environ, "D": str(d), "OUT": str(out), "COMPOSE_OFF_NODE": off_node, "RESEARCH_RUN_ID": "r1"})
+    return got.returncode, got.stdout
+
+
+@pytest.mark.parametrize(("rc", "off_node", "want"), [(0, "0", 0), (1, "0", 1), (2, "0", 2), (0, "1", 4), (1, "1", 1), (2, "1", 2)])
+def test_an_on_node_record_with_nothing_to_pack_exits_by_its_verdict_and_an_off_node_one_without_its_hand_off_exits_4(
+        tmp_path, rc, off_node, want):
+    assert window_exit(tmp_path, rc, off_node)[0] == want
+
+
+@pytest.mark.parametrize("off_node", ["0", "1"])
+def test_a_pending_record_deferred_off_the_node_exits_0_and_says_what_is_left(tmp_path, off_node):
+    rc, said = window_exit(tmp_path, 2, off_node, deferred=True)
+    assert rc == 0 and "pending: audited and composed off this node: `run.sh copy` and `run.sh audit` with SERVED_RUN=r1" in said
