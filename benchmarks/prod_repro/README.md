@@ -49,10 +49,12 @@ research run --on NODE --source . --cwd source -- bash benchmarks/prod_repro/run
   --again none --load agentic=4 --pass-prompts agentic=4 --lifetimes 4 --leave-out 1 --reps 2 --replay agentic@4
 ~~~
 
+The cost of `prod-all-on` over `prod` (`--ours prod-all-on`: the serving cost benchmark's README, "Everything on at the
+recipe's line") is a point of the cost's id too, and its `parts` say in words what it has on and what it leaves off.
 Each point names its `model` (the checkpoint, `repo@revision`), its `hardware` (the cards it was served on) and its
-`member`, the model, the card and the arm (the cost's over its stock), which tells its line from the id's other
-models' and arms'. A serve with no draft, such as the 1B's, keeps no draft, so its kept count is 0 bits and its
-advice is the arrivals'.
+`member`, the model, the card and the arm (the cost's over its stock), which tells its line from the id's other models'
+and arms'. A serve with no draft, such as the 1B's, keeps no draft, so its kept count is 0 bits and its advice is the
+arrivals'.
 
 **The method a serving cost is measured by.** Four arms, `prod`, `prod-again`, `prod-seeded` and `prod-record`, each
 served in nine server lifetimes in that alternating order, each lifetime opening with a 20-second warm-up pass that
