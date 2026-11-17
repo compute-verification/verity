@@ -42,10 +42,10 @@ verity_vllm.program.predict.node_window_reads       # a node window's boundary r
 verity_vllm.program.predict.node_window_values      # a node window's value check: a library entry point (`made_up`, `Values`, `Check`, `run`)
 verity_vllm.program.predict.steps      # I2, the compiler: a library entry point (`compile_steps`), called from outside the package
 verity_vllm.program.predict.window_circuit      # the window class circuit: a library entry point (`window_circuit`), called by benchmarks/prove_path (window-circuit, class-size)
-verity_vllm/pipeline/advice_code/      # advice v1, the network certifier's code: a library entry point, read by benchmarks/network_e2e and through Registered.code by predict.steps
+verity_vllm/pipeline/advice_code/      # advice v1, network certification's code: a library entry point, read by benchmarks/network_e2e and through Registered.code by predict.steps
 verity_vllm.program.predict.window_rows      # a window's rows: a library entry point (`Rows`, `weight_values`), for benchmarks/prove_path's window-commit
 verity_vllm.program.predict.window_weights      # the window circuit's weights: a library entry point (the committer's `weights_registration`, the verifier's `weights_record` and `registration_pins`), called from outside the package
-verity_vllm.program.predict.inference_blocks      # B's partition of a window circuit into inference blocks: a library entry point (`commit`, with `records.inference_blocks` its public statement), for the window commit and the network certifier's audit
+verity_vllm.program.predict.inference_blocks      # B's partition of a window circuit into inference blocks: a library entry point (`commit`, with `records.inference_blocks` its public statement), for the window commit and network certification's audit
 verity_vllm.program.predict.step_needs      # one served engine step's needs: a library entry point (`StepNeeds`, `workload_phi`), for benchmarks/route_capture's gap
 verity_vllm.program.moe_difftest      # the MoE source's evidence names it as the check of the bf16 Triton experts (acquire/sources/moe_source.py)
 verity_vllm.acquire.h1_commit      # pouw_h1_ranks.COMMIT_EXTENSION: vLLM's workers import it by name (worker_extension_cls)
@@ -65,7 +65,7 @@ verity_vllm.definitions.numerics.twins      # the twins register their kernels w
 # the engine core's seam and the stock engine: library entry points (tests/test_vllm_public_api.py's PUBLIC), which general plugins
 # and code outside the package call
 verity_vllm.engine.core_gate      # the engine core's seam between steps: general plugins add their gates and edges to its SEAM
-verity_vllm.engine.stock      # a stock engine at the pin with no protocol on, which benchmarks/replay_determinism builds
+verity_vllm.engine.stock      # a stock engine at the pin with no protocol on
 # the protocol options, each module a root: the adapters are imported by name when a run enables their protocol
 # (protocol_options.adapter)
 verity_vllm.protocols

@@ -39,6 +39,7 @@ def _scenario(seed: int, S=S, cls=V3.Stream) -> V3.Stream:
                 rng.getrandbits(128) | 1
         reqs[r] = n
     st = cls(S, V3.empty_pool(S, keys), 1, S.NB - 1)
+    active: dict
     nf, active = S.NB - 1, {}
     order = list(reqs)
     rng.shuffle(order)
@@ -79,12 +80,14 @@ def _blocked(seed: int, cls=V3.Stream) -> V3.Stream:
     (take, alloc, cache) only if the free queue covers it, else it stays at the head and looks up again next step, as
     vLLM's scheduler does: the memo's case, and where the step changed what its walk read, the dirty bit's."""
     rng = random.Random(seed)
+    fam: dict
     fam, keys, need = {}, {}, {}
     for r in range((1 << S.RW) - 1):
         need[r], f = rng.randint(2, 4), rng.randrange(2)
         for k in range(need[r]):
             keys[V3.rk(S, r, k)] = fam.setdefault((f, k), rng.getrandbits(128) | 1)
     st = cls(S, V3.empty_pool(S, keys), 1, S.NB - 1)
+    held: dict
     nf, held, waiting = S.NB - 1, {}, list(need)
     while waiting and len(st.slots) < 110:
         u = rng.random()

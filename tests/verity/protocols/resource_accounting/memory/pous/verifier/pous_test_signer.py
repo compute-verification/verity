@@ -1,7 +1,7 @@
-"""A TEST signer for the memory challenger's sessions: S1's LMS (`verity.commitments.crypto.lms`) at a small tree height,
-so a key is made in milliseconds.  Its scheme id starts with `memory_challenger.TEST_PREFIX`, which
-`memory_challenger.register` refuses, so a record it signs is accepted only by a test's own mapping (`SCHEMES`), never
-by `memory_challenger.SCHEMES`.  Its leaf state, and a test's session log (`session_log`), are each in a fresh directory
+"""A TEST signer for the memory attester's sessions: S1's LMS (`verity.commitments.crypto.lms`) at a small tree height,
+so a key is made in milliseconds.  Its scheme id starts with `memory_attester.TEST_PREFIX`, which
+`memory_attester.register` refuses, so a record it signs is accepted only by a test's own mapping (`SCHEMES`), never
+by `memory_attester.SCHEMES`.  Its leaf state, and a test's session log (`session_log`), are each in a fresh directory
 inside `directory`, else inside `DIR`: the directory a suite's fixture gives the running tests, under pytest's basetemp,
 which the check removes when the suite ends.  With neither they refuse, since nothing removes a directory made in
 `$TMPDIR`."""
@@ -12,7 +12,7 @@ import tempfile
 from pathlib import Path
 
 from verity.commitments.crypto import lms
-from verity.protocols.resource_accounting.memory.pous.attester import memory_challenger as mc
+from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
 
 HEIGHTS = range(1, 11)
 DIR: Path | None = None
@@ -65,7 +65,7 @@ class _SparseTree:
 
 
 class AtLeaf:
-    """`memory_challenger.LmsSigner` at S1's deployed parameters (`mc.LMS`), so a check that verifies only at those
+    """`memory_attester.LmsSigner` at S1's deployed parameters (`mc.LMS`), so a check that verifies only at those
     accepts what it signs, without a deployed key's 2^20-leaf keygen: it signs at leaf 0 every time and keeps no leaf
     state, which a deployed signer refuses."""
 
@@ -77,15 +77,15 @@ class AtLeaf:
         self.public_key = lms.public_key(self.key)
 
     def sign(self, session: bytes, record: bytes) -> bytes:
-        return lms.sign_at(self.key, 0, lms.memory_challenger_message(self.key.I, session, record)).encode()
+        return lms.sign_at(self.key, 0, lms.memory_attester_message(self.key.I, session, record)).encode()
 
 
 def session_log(directory: str | Path | None = None) -> mc.SessionLog:
-    """A new memory challenger session log in a fresh directory, so a test's sessions may reuse its ids."""
+    """A new memory attester session log in a fresh directory, so a test's sessions may reuse its ids."""
     path = _fresh("pous-session-log-", directory) / "sessions"
     mc.SessionLog.create(path)
     return mc.SessionLog(path)
 
 
 SCHEMES: dict[str, mc.Verify] = {scheme(h): mc.lms_verify(lms.Params(64, 1, h)) for h in HEIGHTS}
-"""The mapping a test passes to `memory_challenger.verdict`: the test signers accepted, in that test alone."""
+"""The mapping a test passes to `memory_attester.verdict`: the test signers accepted, in that test alone."""

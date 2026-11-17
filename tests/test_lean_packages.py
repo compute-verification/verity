@@ -273,7 +273,7 @@ def test_proofs_require_the_security_package():
 
 
 def test_code_never_requires_the_security_analysis():
-    """Code (Flock's verifier, the PoUS grader, the certifier's program) stays with its component and never imports
+    """Code (Flock's verifier, the PoUS grader, the network attester's program) stays with its component and never imports
     `security/`: the analysis reads the code, never the reverse."""
     code = [pkg for pkg in lake_packages() if not pkg.is_relative_to(SECURITY) and not pkg.is_relative_to(ROOT / "tools")]
     assert code, "no code packages outside security"
@@ -592,7 +592,7 @@ RETIRED_NAMES = {"draw": 1020, "law": 133, "escape": 98, "wrong": 130, "dampener
 #: entry whose FILE the tree doesn't have waits for the change on `next` that adds it
 IMPORT_ALL: dict[str, str] = {
     "security/Proofs/Flock/Claims/Sampling/Select/Second.lean: Spot.Draw":
-        "its proofs open `Spot.Draw`'s private `stratum?` and `natRanges` to read the stratified law's strata",
+        "its proofs open `Spot.Draw`'s private `stratum?` and `natRanges` to read the stratified sampling design's strata",
     "verity/protocols/resource_accounting/compute/pouw/verifier/lean/check/PouwCheck/CreditOnce.lean: Spot.ChallengerSession":
         "`pinnedChallengePhaseWith` restates `pinnedChallengePhase`, which reads the private `strOf`, and is held to it by "
         "`rfl`; a copy of `strOf` is another constant, so the `rfl` fails",
