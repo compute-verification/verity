@@ -1,5 +1,5 @@
 """The network attester's link and key, read from the registered hardware: the Python mirror of
-`NetworkCheck.Registered` (`lean/NetworkCheck/Registered.lean`), which defines it.
+`NetworkVerifier.Registered` (`lean/NetworkVerifier/Registered.lean`), which defines it.
 
 `registered(site, head, link, key)` reads a link's name and a network attester's key off the site of an accepted registration
 log's view: the link joins a network attester and a host, and the key is the one that certifier registered. It returns

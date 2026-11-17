@@ -47,7 +47,7 @@ states either, and the code refuses the plain sibling's list (`Core.Composites.o
 | | | `rowsCheck` (`verity/inference-only/rows/v1`, the rows check, not yet compiled) | | | yes |
 | PoUS | `.pous` | `PousCheck.RunProtocol.protocol` (`verity/pous/p2/v4/run`) | yes | | |
 | PoUB-P2 | `.poub` | `Poub.P2Protocol.protocol` (`verity/remote-bandwidth/p2/v0`) | yes | | |
-| the network attester | `.network` | `NetworkCheck.Period.protocol` (`verity/certifier/v0`) | yes | | |
+| the network attester | `.network` | `NetworkVerifier.Period.protocol` (`verity/certifier/v0`) | yes | | |
 | the wipe | | `MemoryChallenger.WipeProtocol.protocol` (`verity/wipe/v0`) | yes | | |
 
 The statement's form is the causal game, the committed files, one fixed extractor and one adversary form:
@@ -207,7 +207,7 @@ def Subprotocol.protocolAt : Subprotocol → Verity.Registration.Composite → B
   | .inferenceOnly, k => if rowsId ∈ k then rowsCheck else InferenceOnlyVerifier.Protocol.protocol
   | .pous, _ => PousCheck.RunProtocol.protocol
   | .poub, _ => Poub.P2Protocol.protocol
-  | .network, _ => NetworkCheck.Period.protocol
+  | .network, _ => NetworkVerifier.Period.protocol
   | .wipe, _ => MemoryAttester.WipeProtocol.protocol
 
 /-- **Subprotocol `a`'s protocol id in composite `k`**, its compiled check's there, which `k` lists it by. -/

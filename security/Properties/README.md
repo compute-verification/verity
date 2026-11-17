@@ -31,7 +31,7 @@ from the registry, path by path: `research msg owners PATH`.
 | Area | What it states |
 |---|---|
 | `ResourceAccounting/` | `Poub`'s verdicts, the joint period's bridges, a registered circuit's proof blocks and space |
-| `Certifier/` | The certificate and records checks (`NetworkCheck`), the network attester |
+| `Certifier/` | The certificate and records checks (`NetworkVerifier`), the network attester |
 | `Core/` | The evaluator's primitives and the Site's fold and check are `Definitions.Core`'s |
 | `Flock/` | The circuit a registered Flock circuit file describes; the verifier's two fixed nets build |
 | `Hash/` | Core's identity hash is Flock's SHA-512 |
@@ -45,6 +45,6 @@ from the registry, path by path: `research msg owners PATH`.
 | `Challenger.lean` | Coins from the device's log: what a sample's coins are (`Spot.OneStageZk`) |
 | `Composition.lean` | The composition of core protocols (`CoreComposition`) |
 | `ZkServer.lean` | The ZK server's record (`ZkServer.Record`, `ZkServer.Release`) |
-| `NetworkPeriod.lean` | The network period check's bound (`NetworkCheck.Period`) |
-| `NetworkScan.lean` | The rows form's scan fits its layout (`NetworkCheck.Period.scanOf`) |
+| `NetworkPeriod.lean` | The network period check's bound (`NetworkVerifier.Period`) |
+| `NetworkScan.lean` | The rows form's scan fits its layout (`NetworkVerifier.Period.scanOf`) |
 | `Remote.lean` | Remote's acceptance and the inference-only policy (`CoreRemote`) |

@@ -50,7 +50,7 @@ the honest round on the challenger's coins (``--challenger``), a `service.Stream
   boundary b (the outputs of the Program anchored there, read and its response ids, as `SlotEntry_v1` writes them),
   the o0 rows of the block round's lane-j member; and ``view``, T leaves, leaf t S_t's egress view.
 * **The block round** (`BLOCK`): the slot entries' stand-in (`SlotEntry{KO, IDB}`, whose Definition id,
-  ``SlotEntry_v1``, is the one `NetworkCheck.Period`'s `wired` reads: o0 its `entry_bits` input ``x`` through two
+  ``SlotEntry_v1``, is the one `NetworkVerifier.Period`'s `wired` reads: o0 its `entry_bits` input ``x`` through two
   NOTs, a committed row the verifier never opens; ``x`` a row-seg/v1 row, `ROW_SCHEMAS`), one unit a slot entry of the
   execution phase, cut as one-stage cuts a template into NR members of nb units, a lane each (``block-c<j>``,
   `members_of`): unit j·nb + b's ``x`` slot entry b of lane j, its free input (the member's own rows, `Frame`), and
@@ -61,7 +61,7 @@ the honest round on the challenger's coins (``--challenger``), a `service.Stream
   ingress head), so its root is the o0 frame root Flock commits under the same salts, and `stage` refuses a block
   member whose o0 frame root and domain aren't its lane's tree's: the registration's ``SlotEntry_v1{…}/c<j>/o0`` (its
   ports named as one-stage names a template's chunk j's, `entries_port`) and the honest round's ``scan/prog<j>`` are
-  one root and domain, the tie `NetworkCheck.Period`'s rows form checks for each lane (`progTied`, `wired`). Its
+  one root and domain, the tie `NetworkVerifier.Period`'s rows form checks for each lane (`progTied`, `wired`). Its
   registration also names the scan's ``state`` tree as ``scan/state``, as an anchored Program's names the
   `SCAN_STATE` it reads, the tie the rows form checks next (`stateTied`); the stand-in reads no state, so here that
   tie is its registration's alone. An execution phase's first round; accepted, with no output opened.
@@ -71,13 +71,13 @@ the honest round on the challenger's coins (``--challenger``), a `service.Stream
   j's ``prog<j>`` chunk j's o0 of its `SELECT_ENTRY` template (``<descriptor id>/c<j>/o0`` in its ``roots``, the rows
   and salts its member's prover body), each a `Held` tree at that registration's root and domain, refused by name where
   its rows aren't the scan's own. The honest round's ``scan/state`` and ``scan/prog<j>`` are then V3c's roots and
-  domains, which the consistency check (`NetworkCheck.Period`'s rows form: `stateTied`, `wired`) holds to V3c's
+  domains, which the consistency check (`NetworkVerifier.Period`'s rows form: `stateTied`, `wired`) holds to V3c's
   audit at any sample of it, and there is no block round: V3c's audit proves the anchored Programs' slot entries, and
   ``answers.json`` carries no ``audits`` (the period reads V3c's ``period.json``, `scan_period.rows_case`). `stateTied`
   reads an audit's state entry among its ``roots`` and its ``registered`` alone, so the check refuses V3c's audit,
   whose `SCAN_STATE` is in its window's activations alone, at the state tie.
 * **The honest round**: one Program of three templates (`TEMPLATES`) in the generator form (`scan_root`, the form
-  `NetworkCheck.Period`'s `scanOf` reads), 2T + 1 units: the start unit (`IngressScanStart`), T ingress units
+  `NetworkVerifier.Period`'s `scanOf` reads), 2T + 1 units: the start unit (`IngressScanStart`), T ingress units
   (`IngressScanBucket`, buckets 0 … T − 1) and T egress units, each template one batch with its row, state and egress
   parameters inputs of its own and every ingress unit's ``prog<j>`` a row of lane j's input of its slot entries, its
   members ``start``, ``ingress-0``, ``last`` (the execution phase's last ingress unit, whose o1 has no leaf to open) and
@@ -88,7 +88,7 @@ the honest round on the challenger's coins (``--challenger``), a `service.Stream
   the start by gates. Ingress unit t reads ``row`` (the network attester's ingress row t), ``sin`` (state leaf t,
   S_{t−1}) and each slot j's ``prog<j>`` (``prog<j>`` leaf ⌊t / EVERY⌋, its boundary's entry of the slot, one table row
   a boundary,
-  `NetworkCheck.Period`'s `readsEntries`), and outputs ``o0``, its ok bit, ``o1``, S_t, committed as state leaf t + 1,
+  `NetworkVerifier.Period`'s `readsEntries`), and outputs ``o0``, its ok bit, ``o1``, S_t, committed as state leaf t + 1,
   and ``o2``, its view, committed as view leaf t. Egress unit t reads ``state`` (view leaf t) and outputs ``o0``, its
   render bit, and ``o1``, the row it computes, committed as the network attester's egress row t. Each output row but a
   public o0 is a registered read of the row it is committed as (`Registered.checkPort` holds a hidden-output statement's
@@ -99,10 +99,10 @@ the honest round on the challenger's coins (``--challenger``), a `service.Stream
   member's own rows (`Frame`), committed and never opened: the port the next execution phase's start reads
   (`CARRY_PORT`). The registration's window states the state's reads, one run a port (``reads``, `state_reads`: the
   start unit's ``o0`` at leaf 0, the ingress units' ``sin`` from leaf 0 and their ``o1``, but the last's, from leaf
-  1, as `NetworkCheck.Period`'s `stateRead` holds them). Accepted: every public o0 opens to 1. Its registration names
+  1, as `NetworkVerifier.Period`'s `stateRead` holds them). Accepted: every public o0 opens to 1. Its registration names
   each lane's ``prog<j>`` tied, which R8 lets through though `EVERY` units read each slot entry, and both verifiers'
   verdict publishes them (``rests_on_period_check``, the lanes' ``prog<j>``): the acceptance rests on a period check,
-  `NetworkCheck.Period`'s `wired`, which ties each ``prog<j>``'s rows to the audit that registered them and refuses
+  `NetworkVerifier.Period`'s `wired`, which ties each ``prog<j>``'s rows to the audit that registered them and refuses
   this run's stand-in block, no pinned `SlotEntry_v1` (`period_case.UNWIRED`). The registration's roots also name, as
   ``rows/<direction>/<w>`` (`network_attester_roots`), the root and domain of each network attester row registration a member's
   network attester port reads (ingress's ``row``, egress's ``o1``), so a period check holds the answer to them.
@@ -110,7 +110,7 @@ the honest round on the challenger's coins (``--challenger``), a `service.Stream
   one row/v2 row), which the execution phase's record, a v2 record, names with its root and domain. The run's first
   record holds `CARRY` at the root the verifier computes and pins, the empty state's row under one-stage's registered
   domain and the public salt of a value the verifier fills (`empty_start`), and its `window` opens it (``empty``,
-  `NetworkCheck.Period`'s `startEmpty`: the state's zero words under that salt), public as that state is. Each later
+  `NetworkVerifier.Period`'s `startEmpty`: the state's zero words under that salt), public as that state is. Each later
   record's ``previous`` is the record before it and its `CARRY` entry is that record's ``last/o1`` (`CARRY_PORT`: its
   last ingress unit's o1), root and domain, which the verifier holds in the window-history form ``{"port": P}``, the
   port of its log's last record (`carry_of`); the start member's statement opens its ``sin`` row there, under the
@@ -137,7 +137,7 @@ the honest round on the challenger's coins (``--challenger``), a `service.Stream
   prover sends.
 * **The answers** (``answers.json``, `answers`): for each execution phase W of the group, the scan's registration of W,
   the network attester's two row registrations of W and the scan's one-stage answer for W (`window_answer`), which
-  `verity/certifier/v0`'s rows form (`NetworkCheck.Period`) checks for W with W's three records' certificates:
+  `verity/certifier/v0`'s rows form (`NetworkVerifier.Period`) checks for W with W's three records' certificates:
   accepted, one-stage's profile and bound at ``--delta`` (every unit sampled, the bound 0); refused, a reject naming
   the members Lean refused. Beside them, ``audits``: each execution phase's block round's, the compute audit whose
   lanes' o0 are that execution phase's scan's ``prog<j>`` (its registration and answer, its Program's descriptor, its
@@ -383,7 +383,7 @@ ANSWERS = "verity/certifier/scan-answers/v3"
 #: in V3c's window directory (``--v3c``), its `SCAN_STATE`'s rows (u16 little-endian, row-major) and then their salts,
 #: prover only (`prove_path.py window-commit` writes it): its ``v<j>-private.bin`` holds only the rows its members read
 SCAN_STATE_FILE = "scan-state-private.bin"
-#: the Definition id of V3c's slot entries, whose chunk j's o0 is lane j's ``prog<j>`` (`NetworkCheck.Period`'s `wired`)
+#: the Definition id of V3c's slot entries, whose chunk j's o0 is lane j's ``prog<j>`` (`NetworkVerifier.Period`'s `wired`)
 SELECT_ENTRY = "SelectEntry_v1"
 
 
@@ -424,7 +424,7 @@ def entries_of(cls: IS.Class, T: int) -> int:
 
 
 def entry_at(cls: IS.Class, t: int) -> int:
-    """The row of lane j's slot entries bucket t's ``prog<j>`` reads (`NetworkCheck.Period`'s `readsEntries`): slot
+    """The row of lane j's slot entries bucket t's ``prog<j>`` reads (`NetworkVerifier.Period`'s `readsEntries`): slot
     j's at t's boundary, row ⌊t / EVERY⌋ of the lane's tree."""
     return t // cls.EVERY
 
@@ -444,7 +444,7 @@ def members_of(templates: tuple[str, ...], T: int, entries: int = 0, lanes: int 
     ``start``, the start unit, which computes no bucket (its one unit is listed as bucket 0, the bucket whose ``sin``
     its o0 is); ``ingress-0``, buckets 0 … T − 2, and ``last``, bucket T − 1, a member of its own (its S_t has no
     state leaf, and a registered port holds every instance's row); ``egress-0``, buckets 0 … T − 1: the members
-    `NetworkCheck.ScanOk` names. A round of some of those templates has their members: the stale round's (`STALE`)
+    `NetworkVerifier.ScanOk` names. A round of some of those templates has their members: the stale round's (`STALE`)
     the start unit alone, the tampered round's the egress units, the unread round's (`UNREAD`) the ingress units, every
     bucket's, so that unit m of a template is bucket m in every Program that batches it. The block round's (`BLOCK`)
     the execution phase's ``entries`` slot entries (`entries_of`) cut into ``lanes`` members of consecutive units, as
@@ -544,7 +544,7 @@ def ok_salts(n: int) -> list[bytes]:
     """The salts a member's ``n`` proof blocks' public o0 rows are committed under: the verifier's public ones
     (`scan_ok.salt`), row i's by its index in the member. A proof block's public word is its ok bit, so a member
     whose every proof block is ok has the o0 frame root anyone computes from its template and count, and a period
-    check holds the round's registration to it (`scan_ok.constants` at the schedule's T, `NetworkCheck.ScanOk`): a
+    check holds the round's registration to it (`scan_ok.constants` at the schedule's T, `NetworkVerifier.ScanOk`): a
     proof block's ok bit is then no row the prover stated."""
     return [scan_ok.salt(i) for i in range(n)]
 
@@ -614,7 +614,7 @@ def tree_entry(kind: str, reg: ADV.Committed, positions) -> dict:
 
 
 def state_reads(ports: Sequence[Mapping[str, dict]]) -> dict:
-    """The scan's state reads as its registration's `window` states them (``reads``, `NetworkCheck.Period`'s
+    """The scan's state reads as its registration's `window` states them (``reads``, `NetworkVerifier.Period`'s
     `stateRead`), from each member's ``--registered`` ports (`tree_port`: unit ``reads_from + i`` at leaf ``reads[i]``):
     its ``o0`` (the start unit's), ``sin`` and ``o1`` of the state's value, each one run ``{"leaf": l, "units": [lo,
     hi]}``, unit lo + i at leaf l + i. SystemExit when a port's reads are no one run."""
@@ -1284,7 +1284,7 @@ def carry_of(pg: SimpleNamespace, cls: IS.Class, log: list[dict], port: dict) ->
     the start member's file must be it: SystemExit otherwise.
 
     The prover's (``record``): the record's ``previous`` and its entry of `CARRY`; and, where the start is the empty
-    state's, its opening as the record's `window` gives it (``empty``, `NetworkCheck.Period`'s `startEmpty`): the
+    state's, its opening as the record's `window` gives it (``empty``, `NetworkVerifier.Period`'s `startEmpty`): the
     state's ``words`` zero u16 words under the verifier's public ``salt``.
 
     ``negatives(rec)``: the round's record ``rec`` changed, or checked another way, as ``{name: (record, parameters,
@@ -1354,7 +1354,7 @@ def _defs(cls: IS.Class) -> dict[str, object]:
 
 
 def scan_root(members: list[tuple[object, int, int]], nb: int, every: int) -> Program:
-    """The scan's root in the generator form (`NetworkCheck.Period`'s `scanOf`): each `(template, n, fixed)` of
+    """The scan's root in the generator form (`NetworkVerifier.Period`'s `scanOf`): each `(template, n, fixed)` of
     `members` one batch over its n units, in order, its first `fixed` parameters inputs of its own (``<i>.<name>``),
     and each later one, lane j's ``prog<j>``, at bucket t (the first unit that reads slot entries bucket 0, each next
     such unit the next bucket) row ⌊t / every⌋ (`entry_at`) of lane j's input ``prog<j>``, its slot entries of nb
@@ -1418,7 +1418,7 @@ def program(M, cls: IS.Class, templates: tuple[str, ...], T: int, out: Path) -> 
     its own row. The scan's three templates' (`TEMPLATES`) is the generator form (`scan_root`), its one-stage reads
     of the slot entries each unit's (`entry_reads`), and its ``prog<j>``, one a lane, the values it names tied
     (``tied``): every `EVERY` units read one slot entry of each lane, the output of the block that registered it,
-    which `NetworkCheck.Period`'s rows form ties to the scan (`progTied`, `wired`), so R8 lets them through and the
+    which `NetworkVerifier.Period`'s rows form ties to the scan (`progTied`, `wired`), so R8 lets them through and the
     registration verdict publishes them (`rests_on_period_check`): the round's acceptance rests on that period
     check, which refuses the block round's stand-in; every other round's a population of its templates, which names
     none."""
@@ -1456,7 +1456,7 @@ def program(M, cls: IS.Class, templates: tuple[str, ...], T: int, out: Path) -> 
 
 def port_prefix(defn, mr: SimpleNamespace) -> str:
     """Member mr's ports' prefix in its round's registration: its name, the slot entries' (`BLOCK`) their lane's
-    chunk's, ``<descriptor id>/c<j>``, so lane j's o0 is the port `NetworkCheck.Period`'s `wired` holds lane j's
+    chunk's, ``<descriptor id>/c<j>``, so lane j's o0 is the port `NetworkVerifier.Period`'s `wired` holds lane j's
     ``scan/prog<j>`` to (`entries_port`)."""
     return f"{PA.template_id(defn)}/c{mr.lane}" if mr.template in BLOCK else mr.name
 
@@ -1696,7 +1696,7 @@ def network_attester_roots(members) -> list[dict]:
     """The registration's ``rows/<direction>/<w>`` roots: each network attester row registration its members' network
     attester ports read (an ingress proof block's ``row``, an egress proof block's ``o1``), its root and domain as the
     network attester registered them (`network_attester_rows.registration`, read back by the verifier), its T rows the leaves. A
-    period check (`NetworkCheck.Period`'s rows form) holds an execution phase's answer to its rows by these, by root and
+    period check (`NetworkVerifier.Period`'s rows form) holds an execution phase's answer to its rows by these, by root and
     domain.
 
     A port is never the row registration's value (``warden/<direction>/<w>``, the name Lean reports the reads under):

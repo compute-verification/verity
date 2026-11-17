@@ -1,7 +1,7 @@
 module
 
-public import NetworkCheck.Period
-public import NetworkCheck.Records
+public import NetworkVerifier.Period
+public import NetworkVerifier.Records
 public import NetworkAttester.Rows
 
 /-!
@@ -28,14 +28,14 @@ each egress cell with `io_tie.parse_cell`.
                   "lanes", "queue", "slots", "window"},
      "session": hex(session), "windows": W}
 
-`NetworkCheck.Period`'s rows-form terms, read by its decoders: the network attester's LMS public key (16 + N bytes) and
+`NetworkVerifier.Period`'s rows-form terms, read by its decoders: the network attester's LMS public key (16 + N bytes) and
 parameters, the link (the serving module's `LINK`, at most 65,535 UTF-8 bytes), the schedule (`NetworkAttesterParams`,
 `Period.scheduleOf`), whose digest every record head binds (`Period.Schedule.digest`), the certifier session (32 bytes)
 every certificate binds, and the run's `W ≥ 1` windows, `0 … W − 1`. A schedule with a response limit
 (`max_tokens_cap`, which `Period.scheduleOf` reads) is refused: `NetworkAttester.Rows.audit` holds no response to its
 request's `max_tokens`, so it doesn't cover a run under one.
 
-**Commitment**: `verity/network-records/v3`'s encoding (`NetworkCheck.Records.commitmentOf`) of `6 · W` records: for each
+**Commitment**: `verity/network-records/v3`'s encoding (`NetworkVerifier.Records.commitmentOf`) of `6 · W` records: for each
 window in order, the requests', the responses' and the fails' records, each raw (`grid.BlockGrid`, under the record's
 own name, `requests`, `responses` or `fails`) and then certified (`CertifiedRecord`). Its digest is
 `tagged_sha512("verity-network-certifier/rows-records/v1", the commitment's bytes)`.
@@ -58,11 +58,11 @@ its head and read once by the audit.
 set_option backward.privateInPublic true
 set_option backward.privateInPublic.warn false
 
-namespace NetworkCheck.RowsAudit
+namespace NetworkVerifier.RowsAudit
 
 open Lean (Json toJson)
 open Flock (V)
-open NetworkCheck.Records (Published Commitment)
+open NetworkVerifier.Records (Published Commitment)
 
 def protocolId : String := "verity/network-rows/v1"
 def commitmentTag : String := "verity-network-certifier/rows-records/v1"
@@ -189,4 +189,4 @@ def protocol : Core.Protocol where
   publicJson _ := Json.mkObj []
   profileJson := profileJson
 
-end NetworkCheck.RowsAudit
+end NetworkVerifier.RowsAudit
