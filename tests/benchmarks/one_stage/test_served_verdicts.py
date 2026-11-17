@@ -5479,11 +5479,11 @@ OFF_NODE = {"COMPOSE_OFF_NODE": "1"}
 
 @pytest.mark.parametrize("extra, said", [
     (OFF_NODE, f"512 GB: the serve's lease 60 min, capped at 128 GB; {OFF}"),
-    ({}, "512 GB: the serve's lease 60 min, capped at 128 GB"),
+    ({"VERITY_HOLD_PLACEMENT": None}, "512 GB: the serve's lease 60 min, capped at 128 GB"),
     ({**TIES, **OFF_NODE}, f"512 GB: the serve's lease 150 min, capped at 160 GB; {OFF}"),
     ({**TIES, **OFF_NODE, "LEASE_MEM_GB": "64"}, f"512 GB: the serve's lease 150 min, capped at 64 GB; {OFF}"),
     ({**SHORT_REMOTE, **OFF_NODE}, f"196 GB: the serve's lease 150 min, capped at 160 GB; {SHORT}, {DEFERS}; {OFF}"),
-    ({**SHORT_REMOTE, "COMPOSITE": None},
+    ({**SHORT_REMOTE, "COMPOSITE": None, "COMPOSE_OFF_NODE": "0"},
      f"196 GB: the serve's lease 150 min, capped at 160 GB; {SHORT}, so step 6 defers V3c's audit and the composite to a "
      "follow-on"),
     ({**OFF_NODE, "COMPOSITE": None, "PRODUCT": "remote", "CERTIFIER_CHAIN_CMD": None, "CERTIFIER_PERIOD_CMD": None},
