@@ -3,7 +3,7 @@ with no traffic. A run holds its key's device state from before its first tick u
 second run under the key is refused by name before it waits, ticks or writes anything; a session id the key has
 started is refused, and a new one starts where the last one's whole span ended on the key's life; the span is on
 disk before the publisher signs the start, and the start is signed before the origin is read; the start's
-certificate in `deployment.json` is what the check reads, and a deployment without it, or with another base, is
+attestation in `deployment.json` is what the check reads, and a deployment without it, or with another base, is
 refused; a host without the raw clock starts nothing; and the run's log says how far the wall time parted from the
 clock, for a drift the test picks."""
 
@@ -127,7 +127,7 @@ def test_a_run_holds_its_keys_device_state_and_a_session_starts_where_the_last_o
         assert not [p for p in result["problems"] if "start" in p]
 
 
-def test_the_check_refuses_a_deployment_whose_start_is_missing_or_is_not_the_one_certified(tmp_path):
+def test_the_check_refuses_a_deployment_whose_start_is_missing_or_is_not_the_one_attested(tmp_path):
     key = tmp_path / "key"
     ws.make_key(key, 4)
     signer = ws.ck.signer(key)

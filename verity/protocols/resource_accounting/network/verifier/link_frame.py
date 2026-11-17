@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import struct
 
-#: the workload declares the same header (`certifier.prover.workload.FRAME_HEADER`), held equal by
+#: the workload declares the same header (`attester.prover.workload.FRAME_HEADER`), held equal by
 #: `tests/test_network_attester_id_request_writers.py`
 HEADER = struct.Struct(">BII")
 PAD, DATA, SALT = 0, 1, 3

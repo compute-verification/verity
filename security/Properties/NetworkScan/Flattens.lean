@@ -1,6 +1,6 @@
 module
 
-public import NetworkCheck.Period
+public import NetworkVerifier.Period
 public import Definitions.Certifier.SampledAudit
 
 /-!
