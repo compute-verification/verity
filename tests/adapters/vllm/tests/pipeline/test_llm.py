@@ -248,11 +248,11 @@ def test_protocols_install_on_the_built_model_and_close_uninstalls_them(built, m
 
 def test_an_engine_class_fills_its_settings():
     assert L.class_options({"engine_class": "G", "max_model_len": CTX}) == {
-        "engine_class": "G", "execution": "eager", "max_num_seqs": 256, "max_model_len": CTX, **CLASS_G_ARGS}
+        "engine_class": "G", "execution": "eager", "max_num_seqs": 1024, "max_model_len": CTX, **CLASS_G_ARGS}
     assert L.class_options({"engine_class": "G", "max_num_seqs": 4, "seed": 3, "max_model_len": 131072}) == {
         "engine_class": "G", "execution": "eager", "max_num_seqs": 4, "seed": 3, "max_model_len": 131072, **CLASS_G_ARGS}
     assert L.class_options({"seed": 3}) == {"seed": 3}
-    assert EC.max_num_seqs("G") == EC.CLASS_G_LIMITS["max_num_seqs"] == 256
+    assert EC.max_num_seqs("G") == EC.CLASS_G_LIMITS["max_num_seqs"] == 1024
     assert all(0 < v <= EC.CLASS_G_LIMITS[k] for k, v in EC.CLASS_G_SERVED.items())
 
 
