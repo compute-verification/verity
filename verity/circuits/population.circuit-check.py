@@ -28,3 +28,11 @@ def _population_roots() -> list[Any]:
     return [population_program(shard, 2).fn, mixed_population_program([(shard, 1), (match, 2)]).fn,
             mixed_population_program([(shard, 1), (match, 2)], values=values).fn,
             wired_population_program([(shard, 1), (match, 2)], wired)[0].fn]
+
+
+def _wiring_roots() -> list[Any]:
+    from verity.circuits.defs import bind
+    from verity.circuits.population import BitsWord, WordBits, bit_of, word_of
+
+    return [*(bind(d, W=w) for d in (WordBits, BitsWord) for w in (16, 32)),
+            *(p for w in (16, 32) for p in (word_of(w), bit_of(w, 0), bit_of(w, w - 1)))]
