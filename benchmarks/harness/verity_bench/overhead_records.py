@@ -45,7 +45,8 @@ NODES = {"h200": "vy-spot-glm53"}
 NODE_JOB = "benchmarks/harness/overhead_node.sh"
 #: the options the door gives each node job (`launch_points`, `launch_run`); the node job sets the rest itself
 DOOR_OPTIONS = {"points": {"--card", "--model", "--precision"},
-                "run": {"--card", "--scheme", "--points", "--points-art", "--point", "--cubin", "--cubin-art"}}
+                "run": {"--card", "--scheme", "--points", "--points-art", "--point", "--cubin", "--cubin-art",
+                        "--keep-reports"}}
 #: the one variable a run of the door sets with `--env` (`launch_argv`): any other could change what the node job runs
 DOOR_ENV = frozenset({"VERITY_BENCH_VENV"})
 #: what `research run` records in every job's `params.env` (`research.result.ONEDNN_ISA`), admitted at that value alone
@@ -59,7 +60,7 @@ GATES = Path("benchmarks/slowdown/data/hardware.toml")
 #: the table a research run of `table` keeps beside its result, relative to the run's directory (`record`)
 TABLE = "out/overhead-table.json"
 #: the unit of every γ `record` writes
-GAMMA_UNIT = "busy SM-seconds over stock's, less one"
+GAMMA_UNIT = "busy SM-seconds over stock's, less one: a fraction, not a percent"
 #: each model but the kernel model as the words that open its member, `MODEL-CARD` (`measurements`)
 MEMBER_MODEL = {"llama3.2-1b": "llama-3.2-1b"}
 
@@ -90,10 +91,11 @@ def launch_points(root: Path, node: str, card: str, model: str, precision: str, 
 
 def launch_run(store: Any, root: Path, node: str, card: str, scheme: str, point: str, points: str | None = None,
                minutes: float | None = None, execute: Executor | None = None, cubin: str | None = None, *,
-               model: str = O.KERNEL_MODEL, gpu: str | None = None, cores: str | None = None) -> int:
+               model: str = O.KERNEL_MODEL, gpu: str | None = None, cores: str | None = None,
+               keep_reports: bool = False) -> int:
     """A scheme's timed run at the card's and `model`'s points of record (or the art `points`, which must be theirs), which
     it ships to the node with the art `cubin`, the one cubin the scheme's arm loads (without it the run is development
-    only)."""
+    only); with `keep_reports`, a profiling pass that keeps its Nsight reports in `$OUT` and is never of record."""
 
     if cubin is not None:
         if O.scheme(scheme).arm is None:
@@ -121,6 +123,8 @@ def launch_run(store: Any, root: Path, node: str, card: str, scheme: str, point:
             (Path(tmp) / "cubin").mkdir()
             sent.append(Path(store.fetch(cubin, Path(tmp) / "cubin")))
             job += ["--cubin", sent[-1].name, "--cubin-art", cubin]
+        if keep_reports:
+            job.append("--keep-reports")
         return (execute or _execute)(launch_argv(root, node, minutes or MINUTES["run"], job, sent, gpu=gpu, cores=cores),
                                      root)
 
@@ -339,8 +343,8 @@ def measurements(table: Mapping, metrics: Mapping[str, str]) -> list[dict]:
     """The measurements `record` writes: for each of `metrics`, an id for the γ of a row named ``scheme/card/point``, and
     for each model that row's γ of record with its interval (the kernel model's as the metric's own reading, every other
     model's as its `member`, `MEMBER_MODEL`'s words and the card), measured, held to the scheme gate (`overhead.GAMMA_MAX`)
-    as its target, from its run and its points' art, with its note and what the γ is over; where the table has no γ of
-    record there, no value and why."""
+    as its target, from its run and its points' art, with its note, whether its run timed y's commitment (`commits_y`,
+    where the row says) and what the γ is over; where the table has no γ of record there, no value and why."""
 
     rows = {(r["scheme"], r["card"], r["model"], r["point"]): r for r in table["rows"]}
     out = []
@@ -362,7 +366,8 @@ def measurements(table: Mapping, metrics: Mapping[str, str]) -> list[dict]:
             verdict = "within target" if g["gamma"] <= O.GAMMA_MAX else "over target"
             out.append(m | {"value": g["gamma"], "interval": g.get("ci95"), "verdict": verdict,
                             "inputs": [r["run"], r["points_art"]],
-                            "extra": m["extra"] | ({"note": r["note"]} if r.get("note") else {})})
+                            "extra": m["extra"] | ({"note": r["note"]} if r.get("note") else {})
+                            | ({"commits_y": r["commits_y"]} if r.get("commits_y") is not None else {})})
     return out
 
 
@@ -416,7 +421,7 @@ def render(table: Mapping) -> str:
 
 
 def _section(c: Mapping, rows: list[dict], covers: str) -> str:
-    lines = ["| Scheme | Card | Point | m | γ [95% CI] | over least-SM stock | weight side bound | A/A | ε | γ ≤ 10 | Run | Note |",
+    lines = ["| Scheme | Card | Point | m | γ, × stock − 1 [95% CI] | over least-SM stock | weight side bound | A/A | ε | γ ≤ 10 | Run | Note |",
              "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |"]
     refused = []
     for r in rows:

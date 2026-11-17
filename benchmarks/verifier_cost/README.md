@@ -5,7 +5,8 @@ description unrolls to. The rule it measures (AGENTS.md "Design rules"): a verif
 O(circuit description), never O(unrolled circuit).
 
 The workload is Serve_v1 (`benchmarks/network_sim/workload/served.py`) at a ladder of configs up to B0 (`Config.b0()`,
-30 layers), word-level and on bits. On bits it is `lift.on_bits`: every Definition Serve_v1 reaches, lifted to bits all
+30 layers) and at Llama 3.2 1B's sizes (`llama32-1b`: its layers, widths, heads and vocabulary, B0's other constants),
+word-level and on bits. On bits it is `lift.on_bits`: every Definition Serve_v1 reaches, lifted to bits all
 the way down (`ir="boolean"` can't derive Serve_v1; `lift.py`'s docstring says why). Two verifiers are measured:
 
 * `measure`, the inference-only check: `inference-only-check --policy` (`InferenceOnlyCheck.Desc`, one summary per Definition) on an instance whose θ is
@@ -25,7 +26,7 @@ verity bench verifier_cost partition --out DIR [--config NAME ...] [--ir word|bo
 research run --on auto --project verity --source . --cwd clone --cpus 16 --mem-gb 64 --timeout 3h -- \
   bash benchmarks/verifier_cost/job.sh measure|partition --unrolled-max 40000000   # every config, on a node
 research run --on auto --project verity --source . --cwd clone -- \
-  bash benchmarks/verifier_cost/job.sh measure --config b0 --ir boolean   # the dashboard's proofs/verifier-seconds-served-description
+  bash benchmarks/verifier_cost/job.sh measure --config llama32-1b --ir boolean   # the dashboard's proofs/verifier-seconds-served-description
 verity bench verifier_cost store RUN                     # its results.json or partition.json to the store; prints the art: id
 verity bench verifier_cost plot ART --to PNG             # from the store
 ~~~

@@ -216,9 +216,10 @@ F32Eq = definition("F32Eq", 2, lambda C, a, b: [f32_eq(C, a, b)], _AB, BIT, word
                    doc="a == b on f32 bits: F32Eq_v1 (NaN unequal to everything, +0 == -0)")
 F32Fabs = definition("F32Fabs", 2, lambda C, x: list(x[:31]) + [ZERO], (("x", F32),), F32, word=S.F32Fabs,
                      doc="fabsf on bits: F32Fabs_v1, the sign bit cleared")
-F32Fmaxf = definition("F32Fmaxf", 2, lambda C, a, b: fmaxmin(C, a, b, True), _AB, F32, word=S.F32Fmaxf,
+# committed: a fold's running max would otherwise carry its mux forms into every later step, and nonzeros grow with K²
+F32Fmaxf = definition("F32Fmaxf", 2, lambda C, a, b: C.commit(fmaxmin(C, a, b, True)), _AB, F32, word=S.F32Fmaxf,
                       doc="max.f32 on bits: F32Fmaxf_v1, NaN yields the other operand, max(+0, -0) = +0")
-F32Fminf = definition("F32Fminf", 2, lambda C, a, b: fmaxmin(C, a, b, False), _AB, F32, word=S.F32Fminf,
+F32Fminf = definition("F32Fminf", 2, lambda C, a, b: C.commit(fmaxmin(C, a, b, False)), _AB, F32, word=S.F32Fminf,
                       doc="min.f32 on bits: F32Fminf_v1, NaN yields the other operand, min(+0, -0) = -0")
 F32ToE4m3Sat = definition("F32ToE4m3Sat", 2, f32_to_e4m3_sat, (("x", F32),), E4M3, word=P.F32ToE4m3Sat,
                           doc="cvt.rn.satfinite.e4m3x2.f32 on bits: F32ToE4m3Sat_v1")

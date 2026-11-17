@@ -20,7 +20,20 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Pous.P2.RingTrunc
 import Proofs.Pous.P2.Rounds
 
-/-! Falsification tests of `P2RingRoundSecure`, at every block count from `2^19` to `2^25`. -/
+/-!
+# Falsification tests of `P2RingRoundSecure`, at every block count from `2^19` to `2^25`
+
+`RingTight`'s and `RingTrunc`'s responders, each at round `0` of a one-challenge audit at block count `N`:
+
+* recomputation (`recSeq`, `RingTight`'s responder: no state, both roots recomputed) is always right, so the
+  per-round floor is `p = 0` unless the bad event may take all the mass (`round_tight`, at `D ≥ 32,894`, `Q ≥ 2`,
+  `L ≥ 65,789`);
+* keeping `m` blocks without their low `t` bits within `S₀` passes round `0` with probability at least `m/N`, so
+  `m/N ≤ 1 − p + ε₀` (`round_trunc`, at `D ≥ 2`, `Q ≥ 2`, `L ≥ 2^(t+1)`).
+
+Both hold at every `N`, as `tight_p16448` does; `not_meetsOn_b19_k88`'s numbers are `2^19`'s, and here `m` and `t` are
+hypotheses, with `m·(16448 − t) ≤ S₀` at the `N` in question.
+-/
 
 @[expose] public section
 
@@ -33,6 +46,7 @@ section Tight
 
 variable {B w p b : ℕ} [NeZero B] [NeZero p]
 
+/-- `RingTight`'s responder: keep the state, recompute the challenged block from the payload. -/
 noncomputable def recSeq (B w p b : ℕ) [NeZero B] [NeZero p] (n D Q L : ℕ) (hD : 2 * (n + 1) ≤ D) (hQ : 2 ≤ Q)
     (hL : 4 * n + 5 ≤ L) : SeqResponderOn (p2ring B w p b) ((p2ring B w p b).stateBound Params.ρ) D Q L :=
   ⟨fun W _ _ σ i => progMap (fun c => (c, σ)) (recBlock n ((p + 1) / 4) (pad B w b W i) i),
@@ -50,6 +64,8 @@ theorem recSeq_accepts (hp : p.Prime) (h4 : p % 4 = 3) (hb : 2 ^ b ≤ p) (hp2 :
 
 end Tight
 
+/-- **Recomputation refutes every positive per-round floor**, at every block count from `2^19` to `2^25`: if `p` is
+prime, `P2RingRoundSecure p ε₀ D Q L` at `D ≥ 32,894`, `Q ≥ 2` and `L ≥ 65,789` forces `p = 0` whenever `ε₀ < 1`. -/
 theorem round_tight (hP : PrimeP16448) (p ε₀ : ℝ≥0∞) (D Q L : ℕ) (hD : 32894 ≤ D) (hQ : 2 ≤ Q)
     (hL : 65789 ≤ L) (h : P2RingRoundSecure p ε₀ D Q L) (N : ℕ) [NeZero N] (h1 : 2 ^ 19 ≤ N) (h2 : N ≤ 2 ^ 25)
     (hε : ε₀ < 1) : p = 0 := by
@@ -80,6 +96,10 @@ theorem round_tight (hP : PrimeP16448) (p ε₀ : ℝ≥0∞) (D Q L : ℕ) (hD 
     exact ENNReal.mul_lt_mul_left hpos hfin (ENNReal.sub_lt_self ENNReal.one_ne_top one_ne_zero hp)
   exact absurd hs (not_le.2 hlt)
 
+/-- **Truncation bounds the per-round floor**, at every block count from `2^19` to `2^25`: if `p` is prime, keeping
+`m ≤ N` blocks without their low `t` bits within `S₀` gives `m/N ≤ 1 − p + ε₀` under
+`P2RingRoundSecure p ε₀ D Q L` at `D ≥ 2`, `Q ≥ 2` and `L ≥ 2^(t+1)`. At `2^19`, `t = 166` and `m = 501,757` this
+refutes `p = 0.043` with `ε₀ ≤ 2^-130`. -/
 theorem round_trunc (hP : PrimeP16448) (p ε₀ : ℝ≥0∞) (D Q L t : ℕ) (hD : 2 ≤ D) (hQ : 2 ≤ Q)
     (ht : t ≤ 16448) (hL : 2 ^ (t + 1) ≤ L) (h : P2RingRoundSecure p ε₀ D Q L) (N : ℕ) [NeZero N]
     (h1 : 2 ^ 19 ≤ N) (h2 : N ≤ 2 ^ 25) (m : ℕ) (hm : m ≤ N)
@@ -104,23 +124,5 @@ theorem round_trunc (hP : PrimeP16448) (p ε₀ : ℝ≥0∞) (D Q L t : ℕ) (h
     _ ≤ (1 - p) * 1 + ε₀ := add_le_add (mul_le_mul' le_rfl (pr_le_one' _)) le_rfl
     _ = _ := by rw [mul_one]
 
-/-- A meet-in-the-middle decoder would put the threshold near `L ≥ 2^166` at `D ≥ 16,446`; that decoder is not
-proved here. -/
-theorem round_trunc_b19 (hP : PrimeP16448) (ε₀ : ℝ≥0∞) (D Q L : ℕ) (hD : 2 ≤ D) (hQ : 2 ≤ Q)
-    (hL : 2 ^ 167 ≤ L) (hε : ε₀ ≤ (2⁻¹ : ℝ≥0∞) ^ 130) : ¬ P2RingRoundSecure (43 / 1000) ε₀ D Q L := by
-  intro h
-  have hS : 501757 * (16448 - 166) ≤ (p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432).stateBound Params.ρ := by
-    rw [stateBound_p2ring_b19]
-    norm_num
-  have hb := (round_trunc hP _ ε₀ D Q L 166 hD hQ (by norm_num) hL h (2 ^ 19) le_rfl (by norm_num) 501757
-    (by norm_num) hS).trans (add_le_add le_rfl hε)
-  have hm : ((501757 : ℕ) : ℝ≥0∞) / ((2 ^ 19 : ℕ) : ℝ≥0∞) = ENNReal.ofReal (501757 / 2 ^ 19) := by
-    rw [← ENNReal.ofReal_natCast, ← ENNReal.ofReal_natCast (2 ^ 19), ← ENNReal.ofReal_div_of_pos (by norm_num)]
-    norm_num
-  have hr : (1 - 43 / 1000 : ℝ≥0∞) + (2⁻¹ : ℝ≥0∞) ^ 130 = ENNReal.ofReal (957 / 1000 + (2⁻¹ : ℝ) ^ 130) := by
-    rw [one_sub_043, ENNReal.ofReal_add (by norm_num) (by positivity), ENNReal.ofReal_pow (by norm_num),
-      ENNReal.ofReal_inv_of_pos (by norm_num), ENNReal.ofReal_ofNat]
-  rw [hm, hr, ENNReal.ofReal_le_ofReal_iff (by positivity)] at hb
-  norm_num at hb
 
 end PousP2Rounds

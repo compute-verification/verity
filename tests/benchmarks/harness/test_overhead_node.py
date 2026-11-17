@@ -148,6 +148,17 @@ def test_a_timed_run_gives_gamma_over_the_fastest_and_the_least_sm_stock_kernel_
         assert (m["run"], m["commit"], m["host"]) == (run_dir.name, SHA, STAMP)
 
 
+def test_a_profiling_pass_keeps_its_reports_in_out_and_is_not_of_record(tmp_path, scheme):
+    points = node_points(tmp_path, Node(tmp_path))
+    rc, run_dir = node_run(tmp_path, Node(tmp_path), points, "pearl-plus", "art:" + "b" * 64, extra=["--keep-reports"])
+    doc = json.loads((run_dir / "out" / "overhead.json").read_text())
+    kept = run_dir / "out" / "nsys"
+    assert rc == 0 and doc["whys"] == [overhead_node.KEEP_REPORTS_WHY]
+    assert [r["report"] for r in doc["reports"]] == sorted(p.name for p in kept.glob("*.nsys-rep")) != []
+    assert not list((tmp_path / "scratch").rglob("*.nsys-rep"))
+    assert all(p["gamma"]["gamma"] == pytest.approx(0.55, rel=1e-4) for p in doc["points"].values())
+
+
 def test_stocks_gamma_is_the_aa_control_of_its_twinned_kernel_against_its_original(tmp_path):
     points = node_points(tmp_path, Node(tmp_path))
     node = Node(tmp_path)
