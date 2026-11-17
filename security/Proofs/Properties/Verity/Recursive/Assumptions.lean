@@ -33,17 +33,8 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# live-verifier at the recursive session: the records hold the live coins
-
-Assumption (`live-verifier` at the recursive session), the premise the recursive component's property
-(`Proofs.Properties.Verity.Recursive`) and the recursive audit (`Flock.Guarantees.RecursiveAuditC3`) take. It is
-`live-verifier` as `FlockSoundness.Assumptions.InnerRecordCustody` states it at the inner session and
-`Assumptions.Zk.RecordCustodyZKJ` at each session (the challenger's live-coin part's records of a session are the live history's),
-restated at the check the compiled component can't make: the model verifier holds each V\* part's record to its own
-live coins (`FlockDeploy.custody`), and the compiled component, which holds no live coin, reads that record as a
-prover-sent blob.
--/
+/-! `live-verifier` at the recursive session, restated at the check the compiled component can't make because it holds
+no live coin. -/
 
 @[expose] public section
 

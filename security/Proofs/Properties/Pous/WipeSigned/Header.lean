@@ -12,16 +12,7 @@ import Mathlib.Tactic.SetLike
 import Proofs.Properties.Certifier.Records.Bytes
 import Proofs.Properties.Pous.MemoryChallenger.Sort
 
-/-!
-# The wipe's signed header determines its commitment
-
-`StreamedWipe.header` writes the commitment's fields, how the session ended, the start mark, the fill's readings, the
-number of batches as sorted JSON. The sort moves no field by its value (`header_eq`, through `Sort.qsort_map`). Each entry
-is its key, a colon and its value, and each value is read back from the value followed by a comma or the closing brace
-(`Sep`): a string or the tiers because what they write is a prefix code (`WipeJson`), a number because its characters
-are digits and a sign. So the entries come back one by one (`entries_inj`), and with them every field (`header_inj`),
-whatever characters the ending and the tiers' names hold.
--/
+/-! The wipe's signed header determines its commitment, whatever characters the ending and the tiers' names hold. -/
 
 @[expose] public section
 
@@ -29,17 +20,14 @@ namespace MemoryChallenger.Properties.SecurityProofs.WipeHeader
 
 open MemoryChallenger Flock WipeJson
 
-/-- The header's keys, each with its place in `vals`. -/
 def keys : List (String × Nat) :=
   [("protocol", 0), ("records_tree", 1), ("server", 2), ("session", 3), ("labels", 4), ("label_bytes", 5), ("k", 6),
    ("batch", 7), ("limit_ns", 8), ("tiers", 9), ("clock", 10), ("ended", 11), ("fill_start_ns", 12),
    ("fill_end_ns", 13), ("batches", 14), ("start_mark", 15)]
 
-/-- The header's values, in `keys`'s places. -/
 def vals (c : StreamedWipe.Commitment) (e : String) (sm : ByteArray) (fs fe : Int) (n : Nat) : List String :=
   c.headerFields.map (·.2) ++ [pyJsonStr e, toString fs, toString fe, toString n, pyJsonStr (hexOf sm)]
 
-/-- The order the header writes its keys in, which no field moves. -/
 def order : Array (String × Nat) := keys.toArray.qsort fun x y => decide (x.1 < y.1)
 
 def entry (c : StreamedWipe.Commitment) (e : String) (sm : ByteArray) (fs fe : Int) (n : Nat)
@@ -58,7 +46,6 @@ theorem header_eq (c : StreamedWipe.Commitment) (e : String) (sm : ByteArray) (f
   rw [hf, Sort.qsort_map, Array.toList_map, List.map_map]
   rfl
 
-/-- A value `v` (or `v'`), followed by a comma or the closing brace, is read back with what follows it. -/
 def Sep (v v' : List Char) : Prop :=
   ∀ {c c' : Char} {r r' : List Char}, (c = ',' ∨ c = '}') → (c' = ',' ∨ c' = '}') → v ++ c :: r = v' ++ c' :: r' →
     v = v' ∧ c :: r = c' :: r'
@@ -86,8 +73,6 @@ theorem sep_nat (n n' : Nat) : Sep (toString n).toList (toString n').toList :=
 theorem sep_int (x x' : Int) : Sep (toString x).toList (toString x').toList :=
   sep_stop (fun _ m => intStr_mem m) (fun _ m => intStr_mem m)
 
-/-- **Entries read back**: from `[e₁, …, eₙ]` written between commas and ending at the closing brace, each entry being
-a key part `kp x` then a value that `Sep` reads back, the values are read back. -/
 theorem entries_inj {α : Type} (kp f f' : α → List Char) :
     ∀ (L : List α), L ≠ [] → (∀ x ∈ L, Sep (f x) (f' x)) →
       [','].intercalate (L.map fun x => kp x ++ f x) ++ ['}'] =
@@ -144,7 +129,6 @@ theorem sep_vals (c c' : StreamedWipe.Commitment) (e e' : String) (sm sm' : Byte
   · exact sep_nat n n'
   · exact sep_str (hexOf sm) (hexOf sm')
 
-/-- The header's values are read back from it. -/
 theorem vals_inj {c c' : StreamedWipe.Commitment} {e e' : String} {sm sm' : ByteArray} {fs fs' fe fe' : Int}
     {n n' : Nat}
     (h : StreamedWipe.header c e sm fs fe n = StreamedWipe.header c' e' sm' fs' fe' n') :
@@ -184,8 +168,6 @@ theorem commitment_ext {c c' : StreamedWipe.Commitment} (h1 : c.server = c'.serv
   subst h1 h2 h3 h4 h5 h6 h7
   rfl
 
-/-- **The wipe's header determines its commitment**, how it ended, its start mark, the fill's readings and its number
-of batches. -/
 theorem header_inj {c c' : StreamedWipe.Commitment} {e e' : String} {sm sm' : ByteArray} {fs fs' fe fe' : Int}
     {n n' : Nat}
     (h : StreamedWipe.header c e sm fs fe n = StreamedWipe.header c' e' sm' fs' fe' n') :

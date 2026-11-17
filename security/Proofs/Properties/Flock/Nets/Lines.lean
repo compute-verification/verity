@@ -4,16 +4,7 @@ public import Proofs.Properties.Flock.Nets.Build
 import all Init.Data.String.Defs
 import all Init.Data.Repr
 
-/-!
-# A built circuit's lines fit
-
-A row's line (`VStar.rowLine`) takes at most 29 bytes per entry and per size when each is below `10 ^ 7`
-(`rowLine_size`), so a layout whose ANDs' rows read at most `W` bits and whose outputs read at most `Wo` has every row's
-line under `2 ^ 20` bytes when `29 (W + Wo + 4)` is (`layout_lines`). A header reads only the layout's header fields
-(`header_eq`), so the two fixed nets' headers are evaluated in the kernel at their fields (`sha_header`, `hm_header`),
-which needs the core's string and digit definitions whole. `builds_layout` puts these together with `layout_builds`:
-a built circuit's layout builds its net and its lines fit.
--/
+/-! A built circuit's lines fit under `2 ^ 20` bytes. -/
 
 @[expose] public section
 
@@ -48,7 +39,6 @@ theorem foldl_size : ∀ (l : List Nat) (s : String), (∀ x ∈ l, x < 10000000
     rw [List.length_cons]
     omega
 
-/-- **A row's line takes at most 29 bytes per entry and per size**, each entry and size below `10 ^ 7`. -/
 theorem rowLine_size (a b : Array Nat) (ha : ∀ x ∈ a, x < 10000000) (hb : ∀ x ∈ b, x < 10000000)
     (hsa : a.size < 10000000) (hsb : b.size < 10000000) :
     (VStar.rowLine a b).utf8ByteSize ≤ 29 * (a.size + b.size + 2) := by
@@ -71,8 +61,6 @@ theorem size_cols (nIn inRows cp : Nat) (f : Lin) : (cols nIn inRows cp f).size 
   unfold cols
   split <;> simp
 
-/-- **Every row's line of a built circuit's layout is under `2 ^ 20` bytes** when its ANDs' rows read at most `W` bits,
-its outputs at most `Wo`, its columns are below `10 ^ 7` and `29 (W + Wo + 4) < 2 ^ 20`. -/
 theorem layout_lines (st : St) (inBits outBits : Array Nat) (outs : Array Lin) (nIn inW outW start W Wo : Nat)
     (hnIn : inBits.foldl (· + ·) 0 = nIn) (hinW : groupWords nIn = inW)
     (houtW : groupWords (outBits.foldl (· + ·) 0) = outW)
@@ -139,24 +127,19 @@ theorem layout_lines (st : St) (inBits outBits : Array Nat) (outs : Array Lin) (
   show _ < 1048576
   omega
 
-/-- A header reads only the layout's header fields. -/
 theorem header_eq (name : String) (l : Laid) :
     VStar.header name l = VStar.header name ⟨l.useful, l.constPos, l.inGroups, l.outGroups, #[], #[]⟩ := rfl
 
-/-- `sha512x3`'s header at its fields fits. -/
 theorem sha_header : (VStar.header "sha512x3"
     ⟨253952 + 16 * WORD + 1, 253952 + 16 * WORD, #[⟨0, 64, SHA_IN⟩], #[⟨253952 / WORD, 16, SHA_OUT⟩], #[], #[]⟩).utf8ByteSize
       < 2 ^ 20 := by
   decide +kernel
 
-/-- `hm96`'s header at its fields fits. -/
 theorem hm_header : (VStar.header "hm96"
     ⟨245760 + 8 * WORD + 1, 245760 + 8 * WORD, #[⟨0, 32, HM_IN⟩], #[⟨245760 / WORD, 8, HM_OUT⟩], #[], #[]⟩).utf8ByteSize
       < 2 ^ 20 := by
   decide +kernel
 
-/-- **A built circuit's layout builds its net and its lines fit**: `layout_builds` and `layout_lines`, with the
-header's length at its fields. -/
 theorem builds_layout (name : String) (st : St) (inBits outBits : Array Nat) (outs : Array Lin)
     (nIn inW outW start W Wo : Nat) (hnIn : inBits.foldl (· + ·) 0 = nIn) (hinW : groupWords nIn = inW)
     (houtW : groupWords (outBits.foldl (· + ·) 0) = outW)

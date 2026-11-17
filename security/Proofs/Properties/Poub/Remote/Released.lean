@@ -6,16 +6,7 @@ import Batteries.Tactic.OpenPrivate
 import Proofs.Properties.Poub.Remote.Plan
 import Proofs.Properties.Poub.Remote.Sort
 
-/-!
-# Released blocks stay out of every later plan (`ReleasedStayOut`)
-
-`release` merges the accepted runs into `gone`, half-open intervals that, merged, still cover every block they covered
-(`merge_spec`); every other event leaves `gone` as it is. `receive` refuses a plan with a run overlapping an interval
-of `gone`, and each block a plan reads lies in one of its runs (`block_mem`), so a plan it accepts reads no block `gone`
-covers (`avoid_of_check`). The invariant (`Rel R old`): the points `R` stay covered by `gone`, and every pass recorded
-past the counts `old` reads none of them. It holds from `State.init` with no points, and from an accepted release on
-with that release's blocks and the passes recorded before it.
--/
+/-! Released blocks stay out of every later plan (`ReleasedStayOut`). -/
 
 @[expose] public section
 set_option backward.privateInPublic true
@@ -28,12 +19,8 @@ open private Poub.endsOf from Poub.Plan
 
 namespace Properties.Poub
 
-/-! ## Merging released runs -/
-
-/-- `x` lies in one of the half-open intervals `gs`. -/
 def Covered (gs : Array (Nat × Nat)) (x : Nat) : Prop := ∃ g ∈ gs, g.1 ≤ x ∧ x < g.2
 
-/-- `merge`'s step: an interval starting where the last one ends extends it. -/
 def mergeStep (out : Array (Nat × Nat)) (ab : Nat × Nat) : Array (Nat × Nat) :=
   match out.back? with
   | some (oa, ob) => if ob == ab.1 then out.pop.push (oa, ab.2) else out.push (ab.1, ab.2)
@@ -96,7 +83,6 @@ theorem fold_spec (l : List (Nat × Nat)) :
       · exact Or.inl (hc x (Or.inr ⟨h1, h2⟩))
       · exact Or.inr ⟨g, hg, h1, h2⟩
 
-/-- **Merged, the intervals still cover every block they covered.** -/
 theorem merge_spec (xs : Array (Nat × Nat)) (hwf : ∀ g ∈ xs, g.1 ≤ g.2) :
     (∀ g ∈ Poub.Session.merge xs, g.1 ≤ g.2) ∧
       ∀ x, Covered xs x → Covered (Poub.Session.merge xs) x := by
@@ -107,9 +93,6 @@ theorem merge_spec (xs : Array (Nat × Nat)) (hwf : ∀ g ∈ xs, g.1 ≤ g.2) :
   obtain ⟨hw, hc⟩ := fold_spec _ #[] (by simp) (fun g hg => hwf g ((hmem g).1 hg))
   exact ⟨hw, fun x ⟨g, hg, h1, h2⟩ => hc x (Or.inr ⟨g, (hmem g).2 hg, h1, h2⟩)⟩
 
-/-! ## The blocks a plan reads -/
-
-/-- A plan's running ends are its counts' prefix sums. -/
 def EndsOk (pl : Plan) : Prop := PrefixSums pl.ends (pl.runs.toList.map (·.2))
 
 theorem make_spec {runs : Array (Int × Int)} {blocks : Nat} {pl : Plan} (h : Plan.make? runs blocks = some pl) :
@@ -140,7 +123,6 @@ theorem endsOk_whole (N : Nat) : EndsOk (Plan.whole N) :=
     have : i = 0 := by simp [Plan.whole] at hi; omega
     subst this; simp [Plan.whole]⟩
 
-/-- **Each block a plan reads lies in one of its runs.** -/
 theorem block_mem {pl : Plan} (hP : EndsOk pl) {p : Nat} (hp : p < pl.length) :
     ∃ r ∈ pl.runs, r.1 ≤ pl.block p ∧ pl.block p < r.1 + r.2 := by
   obtain ⟨blocks, rs, ends⟩ := pl
@@ -152,7 +134,6 @@ theorem block_mem {pl : Plan} (hP : EndsOk pl) {p : Nat} (hp : p < pl.length) :
   rw [getElem!_pos rs _ hr] at hhi
   omega
 
-/-- **A plan whose runs overlap no interval of `gone` reads no block it covers.** -/
 theorem avoid_of_check {R : Nat → Prop} {s : State} (hcov : ∀ x, R x → Covered s.gone x) {plan : Plan}
     (hP : EndsOk plan) (hchk : ¬(!s.gone.isEmpty && plan.runs.any fun x => s.isReleased x.fst x.snd) = true) :
     ∀ p, p < plan.length → ¬ R (plan.block p) := by
@@ -176,10 +157,6 @@ theorem endsOk_changed {pl pl' : Plan} {added removed : Array (Int × Int)} {blo
   · rw [h0] at h; cases h
   · rw [h1] at h; exact (make_spec h).1
 
-/-! ## The invariant -/
-
-/-- The points `R` stay covered by `gone` (intervals each `first ≤ end`), the windows hold at least the passes `old`
-counts, and every pass past those counts reads none of `R`. -/
 structure RelOn (R : Nat → Prop) (old : Array Nat) (ws : Array Win) (gone : Array (Nat × Nat)) : Prop where
   wf : ∀ g ∈ gone, g.1 ≤ g.2
   covers : ∀ x, R x → Covered gone x
@@ -194,7 +171,6 @@ theorem rel_init (params : Params) (reg : Registration) (coins appendCoins : Arr
     Rel (fun _ => False) #[] (State.init params reg coins appendCoins notBeforeNs) :=
   ⟨by simp [State.init], fun _ h => h.elim, by simp, fun t ht => by simp at ht, fun _ _ _ _ _ _ _ h => h⟩
 
-/-- Windows with `ws`'s plans, one for one. -/
 def SamePlans (ws ws' : Array Win) : Prop :=
   ws'.size = ws.size ∧ ∀ t (h : t < ws.size) (h' : t < ws'.size), ws'[t].plans = ws[t].plans
 
@@ -291,8 +267,6 @@ theorem wf_runs (pl : Plan) : ∀ g ∈ pl.runs.map (fun (f, c) => (f, f + c)), 
   intro g hg
   obtain ⟨⟨f, c⟩, -, rfl⟩ := Array.mem_map.1 hg
   exact Nat.le_add_right f c
-
-/-! ## The events -/
 
 theorem rel_start {R old} {s : State} {now : Nat} {r : Result} {s' : State} (h : Rel R old s)
     (he : start s now = (r, s')) : Rel R old s' := by
@@ -420,8 +394,6 @@ theorem step_rel {R old} {s : State} {e : Event} {r : Result} {s' : State} (h : 
 theorem run_rel {R old} {s : State} {events : Array Event} {rs : Array Result} {s' : State} (h : Rel R old s)
     (he : run s events = .ok (rs, s')) : Rel R old s' :=
   run_inv (Rel R old) (fun _ _ _ _ hs he => step_rel hs he) _ _ _ _ h he
-
-/-! ## The statement -/
 
 theorem release_ok {s : State} {runs withdrawn : Array (Int × Int)} {s' : State}
     (he : release s runs withdrawn = (.ok, s')) (hwf : ∀ g ∈ s.gone, g.1 ≤ g.2) :

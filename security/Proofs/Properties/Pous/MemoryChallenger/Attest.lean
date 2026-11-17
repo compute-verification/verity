@@ -45,42 +45,9 @@ import Proofs.Flock.Claims.Prob
 import Std.Tactic.BVDecide.Normalize.BitVec
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# Proofs of a party's signed periods (`Properties.Attest`)
-
-**Soundness.** An accepted period (`accepts_ok`) has the public certificate verify under the identity over the lower
-key's party-key message, the root's signature under the lower key over the root's message, and each read open to the
-root.
-A role digest is SHA-512 of `[tag] ‖ I ‖ [context] ‖ [record]`, each `[·]` a u64 length then the bytes, so its input
-determines its tag, identifier, context and record (`roleInput_inj`), and a context its fields, every field under `2^64`
-bytes since the context is (`tail_inj`). Under no SHA-512 collision among the run's strings (`CF`), a message the
-devices signed under a key and the check's message under it, with one digest, have one input: the tags tell the
-certificate from the root and the liveness records, and the contexts give the party key the identity issued
-(`signed_party`) and the period the lower key closed (`signed_root`), with its record count and root. A read's climb
-(`climbRec`, `climb_eq`) that reaches that root starts at the tree's leaf at its position, level by level down from the
-root, each node's input fixing its two children (`climb_bind`), so the read's record is the period's
-(`opening_bind`). That is `PeriodSigned`; otherwise a string pair collides or a signature verifies over a message its key
-never signed. `PeriodSound` is the same at each coin, with the collision `findColl` finds (`finds`) and the forger's
-output (`bad_cases`), and the union bound.
-
-**Zero knowledge.** The party's code keeps, on inputs that differ only in the records' bytes, one key, one LMS counter
-and one number of open records (`trace_clear`): a block sends the same liveness record, and a close, refused for no root
-or for every one since each root is 64 bytes, sends nothing in the clear. That is `LivenessContentFree`, at an input
-list and its skeleton, whose skeleton is the same (`skeleton_skeleton`). Under `Confined` the party emits its code's
-messages, under `Faithful` on its true inputs, and under `WitnessPathPrivate` nobody overhears its path to the prover,
-so the auditor sees what the code sends in the clear on its coins and the skeleton (`auditorSeesSkeleton`); under
-`Secret` the prover gets its messages and no access to its state (`proverSeesMessages`).
-
-**Honest and nontrivial lemmas.** Each guarantee's hypotheses hold at the honest deployed instance: keys `Lms.key`
-derives at `Lms.deployed`, the identity certifying the memory challenger's lower key at leaf 0 and the lower key
-signing the root of the one-record period of `HONEST_RECORD` at leaf 0 (`honest_accepts`, by
-`Properties.CertifierDevice.Proofs.Lms.lmsCorrect`; `periodSigned_honest`, `periodSound_honest`), and the party's code
-run as it is meant to (`meantRun`). Each conclusion fails somewhere: at the empty run, which no device signed and which
-carries no break (`periodSigned_nontrivial`), so a verifier that accepts everything fails `PeriodSigned` and
-`PeriodSound` (`periodSigned_acceptAll`, `periodSound_acceptAll`; `periodSound_nontrivial` at `acceptAll`); at the
-party's whole output, which carries the records (`livenessContentFree_nontrivial`); at an overheard witness path
-(`auditorSeesSkeleton_nontrivial`); and at a prover that reads the party's state (`proverSeesMessages_nontrivial`).
--/
+/-! Proofs of a party's signed periods (`Properties.Attest`): soundness under no SHA-512 collision among the run's
+strings, zero knowledge under `Confined`, `Faithful`, `WitnessPathPrivate` and `Secret`, and their honest and nontrivial
+lemmas. -/
 
 @[expose] public section
 
@@ -92,16 +59,12 @@ open MemoryChallenger.Properties.SecurityProofs.Tree (CF next base lev le_pow_lo
   lev_width levels_size levels_get levels_eq root_eq frame_last frame_two node_hash leaf_hash next_get isEmpty_of_size)
 open Properties.Certifier.Bytes (bs bs_append bs_length bs_inj split_bytes be64_size be64_size_inj)
 
-/-- `ByteArray`'s `==` is its arrays', which is lawful. -/
 local instance instLawfulBEqByteArray_attest : LawfulBEq ByteArray where
   eq_of_beq h := ByteArray.ext (beq_iff_eq.1 h)
   rfl {a} := show (a.data == a.data) = true from beq_iff_eq.2 rfl
 
-/-! ## The role digests' inputs -/
-
 theorem lenField_bs (b : ByteArray) : bs (Lms.lenField b) = bs (be64 b.size.toUInt64) ++ bs b := bs_append _ _
 
-/-- A length-prefixed field of fewer than `2^64` bytes and what follows it determine the field and what follows. -/
 theorem field_split {a a' : ByteArray} {r r' : List UInt8} (ha : a.size < 2 ^ 64) (ha' : a'.size < 2 ^ 64)
     (h : bs (Lms.lenField a) ++ r = bs (Lms.lenField a') ++ r') : a = a' ∧ r = r' := by
   rw [lenField_bs, lenField_bs, List.append_assoc, List.append_assoc] at h
@@ -124,7 +87,6 @@ theorem roleStrings_ok {tag : String} {I c r m : ByteArray} (h : Lms.roleDigest 
     roleStrings tag I (.ok c) r = [roleInput tag I c r] := by
   simp [roleStrings, h]
 
-/-- A role digest's input determines its tag, identifier, context and record. -/
 theorem roleInput_inj {t t' : String} {I I' c c' r r' : ByteArray} (ht : t.toUTF8.size < 2 ^ 64)
     (ht' : t'.toUTF8.size < 2 ^ 64) (hI : I.size = 16) (hI' : I'.size = 16) (hc : c.size < 2 ^ 64)
     (hc' : c'.size < 2 ^ 64) (h : roleInput t I c r = roleInput t' I' c' r') : t = t' ∧ I = I' ∧ c = c' ∧ r = r' := by
@@ -140,8 +102,6 @@ theorem roleInput_inj {t t' : String} {I I' c c' r r' : ByteArray} (ht : t.toUTF
 theorem tag_party : Lms.PARTY_KEY_TAG.toUTF8.size < 2 ^ 64 := by decide
 theorem tag_root : Lms.PERIOD_ROOT_TAG.toUTF8.size < 2 ^ 64 := by decide
 theorem tag_live : Lms.LIVENESS_TAG.toUTF8.size < 2 ^ 64 := by decide
-
-/-! ## The contexts -/
 
 theorem u64_ok {x : Nat} {w : String} {b : ByteArray} (h : Lms.u64 x w = .ok b) : x < 2 ^ 64 ∧ b = be64 x.toUInt64 := by
   unfold Lms.u64 at h
@@ -173,8 +133,6 @@ theorem periodContext_ok {d a c : ByteArray} {p l : String} {per : Nat} (h : Lms
       obtain ⟨hper, rfl⟩ := u64_ok hu
       exact ⟨pc, rfl, hper, h.symm⟩
 
-/-- A period root's or a liveness record's context: the party's, the attachment, the link, the period's index and one
-more u64. -/
 theorem tail_ok {d a c : ByteArray} {p l : String} {per x : Nat} {w : String}
     (h : (do pure ((← Lms.periodContext d p a l per) ++ (← Lms.u64 x w)) : Lms.E ByteArray) = .ok c) :
     d.size = 64 ∧ per < 2 ^ 64 ∧ x < 2 ^ 64 ∧
@@ -218,8 +176,6 @@ theorem partyContext_inj {d d' c : ByteArray} {p p' : String} (h : Lms.partyCont
   obtain ⟨-, e⟩ := split_bytes e (by rw [be64_size, be64_size])
   exact ⟨ed, String.toByteArray_inj.mp (bs_inj e)⟩
 
-/-- A context of the deployment, the party, the attachment, the link, the period's index and one more u64, of fewer
-than `2^64` bytes, determines them. -/
 theorem tail_inj {d d' a a' : ByteArray} {p p' l l' : String} {per per' x x' : Nat} (hd : d.size = 64)
     (hd' : d'.size = 64) (hper : per < 2 ^ 64) (hper' : per' < 2 ^ 64) (hx : x < 2 ^ 64) (hx' : x' < 2 ^ 64)
     (hc : (Lms.lenField d ++ Lms.lenField p.toUTF8 ++ Lms.lenField a ++ Lms.lenField l.toUTF8 ++ be64 per.toUInt64 ++
@@ -240,8 +196,6 @@ theorem tail_inj {d d' a a' : ByteArray} {p p' l l' : String} {per per' x x' : N
   obtain ⟨eper, e⟩ := split_bytes e (by rw [be64_size, be64_size])
   exact ⟨ed, String.toByteArray_inj.mp ep, ea, String.toByteArray_inj.mp el, be64_size_inj hper hper' eper,
     be64_size_inj hx hx' (bs_inj e)⟩
-
-/-! ## The messages -/
 
 theorem partyKeyMessage_ok {I d lower m : ByteArray} {p : String} (h : Lms.partyKeyMessage I d p lower = .ok m) :
     ∃ c, Lms.partyContext d p = .ok c ∧ Lms.roleDigest Lms.PARTY_KEY_TAG I c lower = .ok m := by
@@ -272,8 +226,6 @@ theorem livenessMessage_ok {I d a m : ByteArray} {p l : String} {per b : Nat}
     simp only [hc, bind, Except.bind] at h
     exact ⟨c, rfl, h⟩
 
-/-- Under no collision among `S`, two role digests that agree, each with its input in `S`, have one tag, identifier,
-context and record. -/
 theorem role_bind {S : List ByteArray} (cf : CF S) {t t' : String} {I I' c c' r r' m : ByteArray}
     (ht : t.toUTF8.size < 2 ^ 64) (ht' : t'.toUTF8.size < 2 ^ 64)
     (h : Lms.roleDigest t I c r = .ok m) (h' : Lms.roleDigest t' I' c' r' = .ok m)
@@ -282,13 +234,10 @@ theorem role_bind {S : List ByteArray} (cf : CF S) {t t' : String} {I I' c c' r 
   obtain ⟨hI', hc', -, e⟩ := roleDigest_ok h'
   exact roleInput_inj ht ht' hI hI' hc hc' (cf _ hm _ hm' e)
 
-/-- A role digest's input is among the strings its role strings list, when it digests. -/
 theorem role_mem {tag : String} {I c r m : ByteArray} {ctx : Lms.E ByteArray} (hc : ctx = .ok c)
     (h : Lms.roleDigest tag I c r = .ok m) : roleInput tag I c r ∈ roleStrings tag I ctx r := by
   rw [hc, roleStrings_ok h]
   exact List.mem_singleton_self _
-
-/-! ## What the devices hash -/
 
 theorem issued_mem {dev : Device} {pk : ByteArray} {i : Issued} (hi : i ∈ dev.issued pk) :
     ∀ x ∈ roleStrings Lms.PARTY_KEY_TAG (pk.extract 0 16) (Lms.partyContext i.deployment i.party) i.lower,
@@ -313,8 +262,6 @@ theorem live_mem {dev : Device} {pk : ByteArray} {l : Live} (hl : l ∈ dev.live
   simp only [keyStrings, List.mem_append, List.mem_flatMap]
   exact Or.inr ⟨l, hl, hx⟩
 
-/-- Under no collision among `S`, which holds what the devices hash under `pk`, a party-key message the devices signed
-under `pk`, whose input is in `S`, is one the key issued. -/
 theorem signed_party {S : List ByteArray} (cf : CF S) {dev : Device} {pk d lower m : ByteArray} {p : String}
     (hK : ∀ x ∈ keyStrings dev pk, x ∈ S) (hm : Lms.partyKeyMessage (pk.extract 0 16) d p lower = .ok m)
     (hin : ∀ x ∈ roleStrings Lms.PARTY_KEY_TAG (pk.extract 0 16) (Lms.partyContext d p) lower, x ∈ S)
@@ -334,8 +281,6 @@ theorem signed_party {S : List ByteArray} (cf : CF S) {dev : Device} {pk d lower
     exact absurd (role_bind cf tag_party tag_live hr hr' hin (hK _ (live_mem hlv _ (role_mem hc' hr')))).1
       (by decide)
 
-/-- Under no collision among `S`, which holds what the devices hash under `pk`, a period root's message the devices
-signed under `pk`, whose input is in `S`, is one of a period the key closed, with its fields and its root. -/
 theorem signed_root {S : List ByteArray} (cf : CF S) {dev : Device} {pk d a root m : ByteArray} {p l : String}
     {per n : Nat} (hK : ∀ x ∈ keyStrings dev pk, x ∈ S)
     (hm : Lms.periodRootMessage (pk.extract 0 16) d p a l per n root = .ok m)
@@ -361,8 +306,6 @@ theorem signed_root {S : List ByteArray} (cf : CF S) {dev : Device} {pk d a root
   · obtain ⟨c', hc', hr'⟩ := livenessMessage_ok hlm
     exact absurd (role_bind cf tag_root tag_live hr hr' hin (hK _ (live_mem hlv _ (role_mem hc' hr')))).1
       (by decide)
-
-/-! ## The period tree -/
 
 theorem leaves_size (vs : Array ByteArray) : (Attest.leaves vs).size = vs.size := by simp [Attest.leaves]
 
@@ -410,8 +353,6 @@ theorem root_width (vs : Array ByteArray) : (Attest.root vs).size = 64 := by
   rw [lev_size _ _ _ (Nat.le_refl _), Nat.sub_self]
   decide
 
-/-! ## An opening climbs the device's tree -/
-
 def climbRec (d : Domain) : Nat → Nat → ByteArray → List ByteArray → ByteArray
   | _, _, digest, [] => digest
   | level, cursor, digest, sib :: rest => climbRec d (level + 1) (cursor >>> 1)
@@ -432,8 +373,6 @@ theorem climb_eq (d : Domain) (hd : d.start = 0) (pos : Nat) (schema : String) (
 
 theorem scheme_bytes : scheme.bytes = 64 := rfl
 
-/-- Under no collision among `S`, which holds the tree's node inputs and the climb's, a climb from `digest` at `level`
-and `cursor` that reaches the tree's root started from the tree's node there. -/
 theorem climb_bind {d : Domain} {L : Array ByteArray} {S : List ByteArray} (cf : CF S) (hw : ∀ x ∈ L, x.size = 64)
     (hnode : ∀ l i, l < log2ceil L.size → i < (lev d L l).size / 2 →
       FV3.input "node" [d.id, FV3.uint l, FV3.uint i, (lev d L l)[2 * i]!, (lev d L l)[2 * i + 1]!] ∈ S) :
@@ -486,9 +425,6 @@ theorem climb_bind {d : Domain} {L : Array ByteArray} {S : List ByteArray} (cf :
       · simp only [he, ↓reduceIte, node_hash] at hx ⊢
         exact List.mem_cons_of_mem _ hx
 
-/-- **An opening reads the device's record**: under no collision among `S`, which holds what the tree over `vs` hashes
-and what the opening's climb hashes, an opening `verifyOpening` accepts at the tree's root reads the record at its
-position. -/
 theorem opening_bind {vs : Array ByteArray} {S : List ByteArray} {pos : Nat} {v : ByteArray} {path : Array ByteArray}
     (cf : CF S) (hT : ∀ x ∈ treeStrings vs, x ∈ S)
     (hC : ∀ x ∈ climbStrings (Attest.periodDomain vs.size) pos Attest.PERIOD_SCHEMA v path, x ∈ S)
@@ -523,8 +459,6 @@ theorem opening_bind {vs : Array ByteArray} {S : List ByteArray} {pos : Nat} {v 
     Attest.PERIOD_SCHEMA.toUTF8]) (cf _ (hC _ (List.mem_cons_self ..)) _ (hT _ (leaf_mem hpos)) hleaf)
   rw [e, getElem?_pos vs pos hpos, getElem!_pos vs pos hpos]
 
-/-! ## The period check -/
-
 theorem verifyCertificate_ok {p : Lms.Params} {identity d lower : ByteArray} {party : String} {cert : Lms.Signature}
     (h : Lms.verifyCertificate p identity d party lower cert = .ok true) :
     identity.size = 16 + p.N ∧ ∃ cm, Lms.partyKeyMessage (identity.extract 0 16) d party lower = .ok cm ∧
@@ -541,9 +475,6 @@ theorem verifyCertificate_ok {p : Lms.Params} {identity d lower : ByteArray} {pa
       exact ⟨hi, cm, rfl, h⟩
   · simp [hi, throw, throwThe, MonadExceptOf.throw, bind, Except.bind] at h
 
-/-- What the verifier's acceptance of a period establishes: the lower key's length, the identity's, the certificate's
-verification under the identity over the lower key's party-key message, the root signature's under the lower key over
-the root's message, and each read's opening. -/
 theorem accepts_ok {p : Lms.Params} {identity deployment : ByteArray} {party : String} {k : Attest.PartyKey}
     {s : Attest.SignedRoot} {reads : Array Attest.Read}
     (h : Attest.accepts p identity deployment party k s reads = .ok true) :
@@ -580,8 +511,6 @@ theorem accepts_ok {p : Lms.Params} {identity deployment : ByteArray} {party : S
     · simp [hl, pure, Except.pure] at h
 
 
-/-! ## `PeriodSigned` -/
-
 theorem periodSigned : PeriodSigned := by
   intro p identity deployment party k s reads dev h
   obtain ⟨-, -, ⟨cm, hcm, hcv⟩, ⟨rm, hrm, hrv⟩, hreads⟩ := accepts_ok h
@@ -617,9 +546,6 @@ theorem periodSigned : PeriodSigned := by
     obtain ⟨x, hx, y, hy, hxy, hne⟩ := cf
     exact ⟨x, hx, y, hy, hne, hxy⟩
 
-/-! ## `PeriodSound` -/
-
-/-- `findColl` finds a collision whenever the list holds two different inputs with one output. -/
 theorem findColl_isSome :
     ∀ l : List (Claims.Msg × Claims.Msg), (∃ q ∈ l, ∃ q' ∈ l, q.1 ≠ q'.1 ∧ q.2 = q'.2) → (Claims.findColl l).isSome := by
   intro l
@@ -647,8 +573,6 @@ theorem sha512_bs (x : ByteArray) : sha512 x.data.toList = (Sha512.hash x).data.
   unfold sha512
   congr 3
 
-/-- Where two distinct strings of `L` share a SHA-512 digest, `findColl` over their digests outputs a SHA-512
-collision. -/
 theorem finds {L : List ByteArray} (h : ∃ x ∈ L, ∃ y ∈ L, x ≠ y ∧ Sha512.hash x = Sha512.hash y) :
     ∃ u v, Claims.findColl (L.map fun x => (x.data.toList, (Sha512.hash x).data.toList)) = some (u, v) ∧
       Claims.Collision sha512 u v := by
@@ -665,8 +589,6 @@ theorem finds {L : List ByteArray} (h : ∃ x ∈ L, ∃ y ∈ L, x ≠ y ∧ Sh
   obtain ⟨⟨u, v⟩, huv⟩ := Option.isSome_iff_exists.1 hs
   exact ⟨u, v, huv, Claims.findColl_spec sha512 _ hl u v huv⟩
 
-/-- On coins where the check accepts values that are not the device's, the collision finder outputs a collision or
-the forger a forgery. -/
 theorem bad_cases {p : Lms.Params} {Ω : Type} [Fintype Ω] [Nonempty Ω] (τ : Ω → PeriodRun) (ω : Ω)
     (ha : Attest.accepts p (τ ω).identity (τ ω).deployment (τ ω).party (τ ω).key (τ ω).root (τ ω).reads = .ok true)
     (hn : ¬ OfDevice (τ ω).dev (τ ω).identity (τ ω).deployment (τ ω).party (τ ω).key (τ ω).root (τ ω).reads) :
@@ -696,8 +618,6 @@ theorem periodSound : PeriodSound := by
   refine (Claims.Pr_mono fun ω h => bad_cases τ ω h.1 h.2).trans ?_
   exact Pr_union_le _ _
 
-/-! ## What the auditor and the prover see -/
-
 theorem roleDigest_record {tag : String} {I c r r' m : ByteArray} (h : Lms.roleDigest tag I c r = .ok m)
     (hr : r'.size = r.size) : ∃ m', Lms.roleDigest tag I c r' = .ok m' := by
   obtain ⟨hI, hc, hrs, -⟩ := roleDigest_ok h
@@ -707,7 +627,6 @@ theorem roleDigest_record {tag : String} {I c r r' m : ByteArray} (h : Lms.roleD
   simp only [hI, hn, ne_eq, not_true_eq_false, ↓reduceIte]
   rfl
 
-/-- A period root's message is refused for one root exactly when it is for another of the same length. -/
 theorem periodRootMessage_root {I d a root root' m : ByteArray} {p l : String} {per n : Nat}
     (h : Lms.periodRootMessage I d p a l per n root = .ok m) (hr : root'.size = root.size) :
     ∃ m', Lms.periodRootMessage I d p a l per n root' = .ok m' := by
@@ -719,8 +638,6 @@ theorem inClear_close (x : ByteArray) (records : List ByteArray) :
     inClear ((Ch.root, x) :: records.map fun v => (Ch.record, v)) = [] := by
   simp [inClear, dest, List.filter_map, Function.comp_def]
 
-/-- Two states that differ only in the open period's records' bytes send the same in the clear on inputs that differ
-only in the records' bytes, and stay so. -/
 theorem trace_clear {Ω : Type} (deployment : ByteArray) (party : String) (I : Ω → ByteArray)
     (hss : Ω → Nat → ByteArray → ByteArray) :
     ∀ (xs xs' : List Step) (st st' : Ω × Nat × List ByteArray), xs.map Step.skeleton = xs'.map Step.skeleton →
@@ -816,8 +733,6 @@ theorem proverSeesMessages : ProverSeesMessages := by
   rfl
 
 
-/-! ## The honest period and the empty run -/
-
 theorem roleDigest_some {tag : String} {I c r : ByteArray} (hI : I.size = 16) (hc : c.size < 2 ^ 64)
     (hr : r.size < 2 ^ 64) : Lms.roleDigest tag I c r = .ok (Sha512.hash (roleInput tag I c r)) := by
   unfold Lms.roleDigest
@@ -874,16 +789,12 @@ theorem honest_small : (Lms.lenField HONEST_DEPLOYMENT ++ Lms.lenField HONEST_PA
   rw [hp, hl, ha, deployment_size]
   decide
 
-/-- The honest party-key message: what an identity with identifier `I` signs to certify the lower key `lower` for the
-memory challenger in the honest deployment. -/
 theorem honest_partyKeyMessage {I lower : ByteArray} (hI : I.size = 16) (hl : lower.size = 80) :
     ∃ cm, Lms.partyKeyMessage I HONEST_DEPLOYMENT HONEST_PARTY lower = .ok cm := by
   unfold Lms.partyKeyMessage
   rw [partyContext_some deployment_size]
   exact ⟨_, roleDigest_some hI honest_small.2.2 (by omega)⟩
 
-/-- The honest period-root message: what a lower key with identifier `I` signs to close the honest one-record period
-whose record is `v`. -/
 theorem honest_periodRootMessage {I : ByteArray} (hI : I.size = 16) (v : ByteArray) :
     ∃ rm, Lms.periodRootMessage I HONEST_DEPLOYMENT HONEST_PARTY HONEST_ATTACHMENT HONEST_LINK 0 1
       (Attest.root #[v]) = .ok rm := by
@@ -891,21 +802,18 @@ theorem honest_periodRootMessage {I : ByteArray} (hI : I.size = 16) (v : ByteArr
   rw [periodRootContext_some deployment_size (by decide) (by decide)]
   exact ⟨_, roleDigest_some hI honest_small.1 (by rw [root_width]; decide)⟩
 
-/-- The honest liveness message: what a lower key with identifier `I` signs for sampling block 0 of the honest period. -/
 theorem honest_livenessMessage {I : ByteArray} (hI : I.size = 16) :
     ∃ m, Lms.livenessMessage I HONEST_DEPLOYMENT HONEST_PARTY HONEST_ATTACHMENT HONEST_LINK 0 0 = .ok m := by
   unfold Lms.livenessMessage
   rw [livenessContext_some deployment_size (by decide) (by decide)]
   exact ⟨_, roleDigest_some hI honest_small.2.1 (by decide)⟩
 
-/-- A one-record period's root is its record's leaf. -/
 theorem root_one (v : ByteArray) :
     Attest.root #[v] = (Attest.periodDomain 1).leaf 0 0 Attest.PERIOD_SCHEMA v := by
   unfold Attest.root
   rw [root_eq _ _ (leaves_isEmpty (by simp))]
   simp [lev, base, Attest.leaves, nextPow2, log2ceil]
 
-/-- A one-record period's record opens at position 0 with no siblings. -/
 theorem opening_one (v : ByteArray) :
     (Attest.periodDomain 1).verifyOpening (Attest.root #[v]) 1 0 v Attest.PERIOD_SCHEMA #[] = true := by
   have hc : (Attest.periodDomain 1).climb 0 Attest.PERIOD_SCHEMA v #[] =
@@ -917,8 +825,6 @@ theorem opening_one (v : ByteArray) :
   simp only [FV3.Domain.verifyOpening, hc, root_one, hw, scheme_bytes]
   simp [Attest.periodDomain, Attest.domainU64, log2ceil]
 
-/-- What `Lms.key` gives at the deployed parameters: a 16-byte identifier, and a public key of `16 + N` bytes that
-starts with it. -/
 theorem pub_spec {I seed : ByteArray} {k : Lms.PrivateKey} (hk : Lms.key Lms.deployed I seed = .ok k) :
     I.size = 16 ∧ k.publicKey.size = 16 + Lms.deployed.N ∧ k.publicKey.extract 0 16 = I := by
   obtain ⟨-, hIk, -, hIs, -, -, -⟩ := Properties.CertifierDevice.Proofs.Lms.key_spec hk
@@ -928,8 +834,6 @@ theorem pub_spec {I seed : ByteArray} {k : Lms.PrivateKey} (hk : Lms.key Lms.dep
   exact ⟨hIs, by simp only [Lms.PrivateKey.publicKey, ByteArray.size_append, hIs, hroot],
     ByteArray.extract_append_eq_left hIs.symm⟩
 
-/-- A key `Lms.key` derives at the deployed parameters signs every message at leaf 0 (`Lms.signAt`), and the signature
-verifies under its public key (`Properties.CertifierDevice.Proofs.Lms.lmsCorrect`). -/
 theorem signs {I seed : ByteArray} {k : Lms.PrivateKey} (hk : Lms.key Lms.deployed I seed = .ok k) (m : ByteArray) :
     ∃ σ, Lms.signAt k 0 m = .ok σ ∧ Lms.verify Lms.deployed k.publicKey m σ = .ok true := by
   obtain ⟨σ, hσ⟩ :=
@@ -997,7 +901,6 @@ theorem periodSigned_honest :
   obtain ⟨-, -, cert, σ, -, -, -, -, hc, ho⟩ := honest_accepts hk hk' HONEST_RECORD
   exact ⟨k, k', cert, σ, ⟨_, _, hk⟩, ⟨_, _, hk'⟩, hc, ho⟩
 
-/-- The empty run hashes nothing: its deployment hash has no bytes, so neither of its messages is formed. -/
 theorem empty_strings : runStrings emptyDevice .empty .empty "" emptyKey emptyRoot #[] = [] := by
   have h1 : Lms.partyContext ByteArray.empty "" = .error
       s!"a deployment's hash is {Lms.DEPLOYMENT_BYTES} bytes, not {ByteArray.empty.size}" := rfl
@@ -1045,8 +948,6 @@ theorem periodSigned_acceptAll (p : Lms.Params)
         OfDevice dev identity deployment party k s reads ∨ Break p dev identity deployment party k s reads :=
   fun h => empty_not_signed p (h _ _ _ _ _ _ _ (hall _ _ _ _ _ _))
 
-/-! ### `PeriodSound`'s lemmas -/
-
 theorem Pr_unit_true (q : Unit → Prop) (h : q ()) : Claims.Pr q = 1 := by
   classical
   unfold Claims.Pr Claims.prUniform
@@ -1061,8 +962,6 @@ theorem Pr_unit_false (q : Unit → Prop) (h : ¬ q ()) : Claims.Pr q = 0 := by
   rw [this]
   simp
 
-/-- The honest run: the honest period's check on the honest device's period, read through an extractor that reads
-the honest values. -/
 def honestRun (k k' : Lms.PrivateKey) (cert σ : Lms.Signature) (v : ByteArray) : PeriodRun :=
   ⟨honestDevice k.publicKey k'.publicKey v, k.publicKey, HONEST_DEPLOYMENT, HONEST_PARTY, honestKey k'.publicKey cert,
     honestRoot σ v, #[honestRead v]⟩
@@ -1098,8 +997,6 @@ theorem empty_forger (p : Lms.Params) : forgeryPr p emptyRun = 0 := by
   rw [h1, h2] at h
   cases h
 
-/-- At the empty run, for any parameters, `PeriodSound`'s right side is 0 (the collision finder outputs nothing, the
-forger nothing) and the run is not the device's: a verifier that accepted it would put probability 1 on the left. -/
 theorem empty_bound (p : Lms.Params) :
     (collisionFinder Unit emptyRun).Pr sha512 + forgeryPr p emptyRun = 0 ∧
       ¬ OfDevice emptyDevice .empty .empty "" emptyKey emptyRoot #[] := by
@@ -1138,23 +1035,16 @@ theorem periodSound_acceptAll (p : Lms.Params)
   · norm_num
   · exact ⟨hall _ _ _ _ _ _, hn⟩
 
-/-! ### What the auditor and the prover see: the lemmas -/
-
-/-- The honest identifier of a lower key, 16 bytes. -/
 def HONEST_I : ByteArray := ⟨Array.replicate 16 1⟩
 
-/-- The party's code at the honest deployment, under the honest lower key. -/
 def honestCode (hss : Unit → Nat → ByteArray → ByteArray) :=
   code HONEST_DEPLOYMENT HONEST_PARTY (fun _ => HONEST_I) hss
 
-/-- A sampling block of the honest period with the one record `v`, then the period's close. -/
 def honestSteps (v : ByteArray) : List Step :=
   [.block HONEST_ATTACHMENT HONEST_LINK 0 0 [v], .close HONEST_ATTACHMENT HONEST_LINK 0]
 
 theorem honestSteps_skeleton (v : ByteArray) : (honestSteps v).map Step.skeleton = honestSteps .empty := rfl
 
-/-- What the honest code sends on `honestSteps v`: the block's liveness record in the clear, then the root's signature
-and the record to the prover. -/
 theorem honest_messages (hss : Unit → Nat → ByteArray → ByteArray) (v : ByteArray) {m rm : ByteArray}
     (hm : Lms.livenessMessage HONEST_I HONEST_DEPLOYMENT HONEST_PARTY HONEST_ATTACHMENT HONEST_LINK 0 0 = .ok m)
     (hrm : Lms.periodRootMessage HONEST_I HONEST_DEPLOYMENT HONEST_PARTY HONEST_ATTACHMENT HONEST_LINK 0 1

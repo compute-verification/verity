@@ -4,23 +4,8 @@ public import Proofs.Properties.Spot
 public import VStarRecursion.Protocol
 import Proofs.Properties.Challenger
 
-/-!
-# A step of `acc_of_accepts`: what the compiled recursive component's acceptance unfolds to
-
-`VStar.Recursive.checkBlobs` accepting `(p, c, e, bs)` means, step by step through `checkBlobs`, `verdicts`,
-`partVerdicts` and `partVerdicts.partsAt`:
-
-* the inner session held off the blobs (`innerHeld`) and V\*'s statements at its shape (`RecVStar.statements`);
-* the shape dense (`dense`: public inner circuits, no RecSparse phase and no R);
-* the verifier's parts and the evidence's part sessions, one per statement;
-* every part's `verity-verify-proof verify --zk` verdict (`partVerdict`) set up and accepted, `.ok (.ok ())`;
-* one-stage v1's live check accepted the evidence with the one verdict of record `verdicts` computed, so its check at no
-  coins did (`Properties.Challenger.oneStage_check_of_accept`).
-
-The verdict of record says accepted exactly when every part's verdict does (`verdictJson_accepted`), and one-stage's check
-accepts only verdicts that say accepted (`Properties.Spot.acceptMeans`, `VerdictsAccept`), so no part's verdict
-is a refusal. Nothing here reads the model.
--/
+/-! A step of `acc_of_accepts`: what the compiled recursive component's acceptance (`VStar.Recursive.checkBlobs`)
+unfolds to, reading nothing of the model. -/
 
 @[expose] public section
 
@@ -45,7 +30,6 @@ theorem jeq_true {b : Bool} (h : jeq (.bool b) (.bool true) = true) : b = true :
   · simp [jeq, Flock.canon, pure, Except.pure] at h
   · rfl
 
-/-- The verdicts `partsAt` returns, all accepting, are each listed part's `partVerdict` at `.ok ()`. -/
 theorem partsAt_ok (h : VStar.Recursive.InnerHeld) (ss : Array VStar.Stmt) (o : VStar.Recursive.Own)
     (pr : VStar.Recursive.Proofs) (bs : Core.Blobs) :
     ∀ (js : List Nat) (l : List (String × Flock.V Unit)),
@@ -67,16 +51,12 @@ theorem partsAt_ok (h : VStar.Recursive.InnerHeld) (ss : Array VStar.Stmt) (o : 
       rw [hv, toBool_ok (v := v) (hall _ List.mem_cons_self)]
     · exact partsAt_ok h ss o pr bs js l' hr (fun x hx => hall x (List.mem_cons_of_mem _ hx)) j' hj'
 
-/-- `need b why` passed: `b` held. -/
 theorem need_ok {b : Bool} {why : String} {u : Unit} (h : VStar.Recursive.need b why = .ok u) : b = true := by
   unfold VStar.Recursive.need at h
   cases b
   · simp [throw, throwThe, MonadExceptOf.throw] at h
   · rfl
 
-/-- `partVerdicts` returning only accepting verdicts: the inner session held, V\*'s statements at its shape, the shape
-dense, one part of each side per statement, each part's verdict `.ok (.ok ())`, and the statement the inputs name under
-`FIELD_MAX` bytes. -/
 theorem partVerdicts_ok {o : VStar.Recursive.Own} {pr : VStar.Recursive.Proofs} {bs : Core.Blobs}
     {hd : VStar.Recursive.InnerHeld} {parts : Array (String × Flock.V Unit)}
     (hv : VStar.Recursive.partVerdicts o pr bs = .ok (hd, parts)) (hall : ∀ x ∈ parts, x.2.toBool = true) :
@@ -106,8 +86,6 @@ theorem partVerdicts_ok {o : VStar.Recursive.Own} {pr : VStar.Recursive.Proofs} 
   cases hp'; cases hs'
   exact hpv
 
-/-- `verdicts` returned: `partVerdicts` did, and the one verdict of record says accepted exactly when every part's
-verdict does. -/
 theorem verdicts_shape {o : VStar.Recursive.Own} {session : String} {pr : VStar.Recursive.Proofs}
     {pu : Option (Array Nat)} {bs : Core.Blobs} {vs : Array (String × Json)}
     (h : VStar.Recursive.verdicts o session pr pu bs = .ok vs) :
@@ -126,11 +104,6 @@ end Verity.Recursive.Compiled
 namespace Verity.Recursive
 
 open Compiled in
-/-- **The compiled component's acceptance, unfolded.** If `VStar.Recursive.checkBlobs` accepts, then the inner
-session is held off the blobs at a dense shape `h.shape` with V\*'s statements `ss`, the verifier's parts and the evidence's part
-sessions are one per statement, every part's verdict is set up and accepts (`.ok (.ok ())`), the statement the inputs
-name is under `FIELD_MAX` bytes (`statementFits`), and one-stage's check (its live check's, at no coins)
-accepted the evidence with the verdict of record `verdicts` computed on the evidence's one session. -/
 theorem parts_of_accepts {p : VStar.Recursive.Params} {c : OneStage.Commitment} {e : VStar.Recursive.Evidence}
     {bs : Core.Blobs} {pub : OneStage.Public} {prof : Core.Integrity}
     (hacc : VStar.Recursive.checkBlobs p c e bs = .accept pub prof) :

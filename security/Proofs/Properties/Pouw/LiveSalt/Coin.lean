@@ -14,19 +14,8 @@ import Mathlib.Tactic.Push
 import Mathlib.Tactic.SetLike
 import Proofs.Properties.Pouw.Commit
 
-/-!
-# A live root binds its commitment and its coins (`liveCoinBinding`)
-
-`liveReason` accepts an opening only when the coin's tree leaf climbs its path to the commitment's root (`reason_ok`).
-Every frame on that climb is a `node` or `leaf` frame, whose first part, after a 4-byte tag, is the tree's 64-byte domain,
-so one root names one domain unless two of the frames collide (`climb_top`, `framed_dom`). The domain's frame begins with
-the digest of the binding `{epoch, families, scheme}` (`domain_ok`), whose canonical form names all three
-(`Canon.binding_inj`). So two commitments with one root are one, or SHA-512 collides on two messages hashed in checking
-them (`same_commitment`). With one commitment, the two climbs start at one position and have one length, so equal roots
-give equal leaf digests, level by level (`climb_eq`), and the leaf's frame ends in the coin's hm96 leaf, which opens to its
-salt and coin (`coin_eq`). Frames are split only at their first part and their last parts, each 64 bytes: the `uint` parts
-between them are minimal big-endian, of varying length.
--/
+/-! A live root binds its commitment and its coins (`liveCoinBinding`), unless SHA-512 collides on two messages hashed
+in checking them. -/
 
 @[expose] public section
 
@@ -36,8 +25,6 @@ open Lean (Json)
 open Properties.Certifier.Bytes (bs bs_append bs_length bs_inj split_bytes hash_size be64_size be32_size)
 open Spot.Challenger (LiveCommitment LiveOpening liveReason liveDomain liveLeaf taggedSha512 familiesJson total
   BINDING)
-
-/-! ## Collisions -/
 
 theorem eq_or_collides {x y : ByteArray} {xs ys : List ByteArray} (hx : x ∈ xs) (hy : y ∈ ys)
     (h : Flock.Sha512.hash x = Flock.Sha512.hash y) : x = y ∨ Collides xs ys := by
@@ -55,9 +42,6 @@ theorem cancel_left {a b b' : ByteArray} (h : a ++ b = a ++ b') : b = b' := by
   rw [bs_append, bs_append] at e
   exact bs_inj (List.append_cancel_left e)
 
-/-! ## Frames -/
-
-/-- A part as a frame-v3 frame carries it: its size as u64be, then its bytes. -/
 def enc (p : ByteArray) : List UInt8 := bs (Flock.be64 p.size.toUInt64) ++ bs p
 
 theorem enc_length (p : ByteArray) : (enc p).length = 8 + p.size := by
@@ -83,7 +67,6 @@ theorem fv3_bs (t : String) (ps : List ByteArray) :
   | nil => simp
   | cons p ps ih => simp only [List.foldl_cons, ih, bs_append, List.flatMap_cons, enc, List.append_assoc]
 
-/-- Two frames whose tags have one length and whose first parts have one size have one first part. -/
 theorem first_eq {t t' : String} {d d' : ByteArray} {ps ps' : List ByteArray} (ht : t.toUTF8.size = t'.toUTF8.size)
     (hd : d.size = d'.size) (h : fv3Message t (d :: ps) = fv3Message t' (d' :: ps')) : d = d' := by
   have e := congrArg bs h
@@ -99,8 +82,6 @@ theorem fv3_cancel {t : String} {ps qs qs' : List ByteArray}
   rw [fv3_bs, fv3_bs, List.flatMap_append, List.flatMap_append] at e
   exact List.append_cancel_left (List.append_cancel_left e)
 
-/-- Two frames with one tag and the same leading parts, each ending in two parts whose first ones have one size, end in
-the same two parts. -/
 theorem pair_eq {t : String} {ps : List ByteArray} {l r l' r' : ByteArray} (hl : l.size = l'.size)
     (h : fv3Message t (ps ++ [l, r]) = fv3Message t (ps ++ [l', r'])) : l = l' ∧ r = r' := by
   have e := fv3_cancel h
@@ -114,9 +95,6 @@ theorem last_eq {t : String} {ps : List ByteArray} {x x' : ByteArray}
   simp only [List.flatMap_cons, List.flatMap_nil, List.append_nil] at e
   exact enc_inj e
 
-/-! ## The climb -/
-
-/-- The node frame `climbL` hashes at index `idx` of level `d`, over `cur` and its sibling `sib`. -/
 def nodeMsg (dom cur : ByteArray) (idx d : Nat) (sib : ByteArray) : ByteArray :=
   if idx % 2 = 0 then fv3Message "node" [dom, Flock.FV3.uint d, Flock.FV3.uint (idx / 2), cur, sib]
   else fv3Message "node" [dom, Flock.FV3.uint d, Flock.FV3.uint (idx / 2), sib, cur]
@@ -138,7 +116,6 @@ theorem climb_cons (dom cur sib : ByteArray) (idx d : Nat) (rest : List ByteArra
   · rw [ite_eq_right hi, ite_eq_right hi]
     rfl
 
-/-- `m` is a `node` or `leaf` frame of the tree whose domain is `dom`: its first part is `dom`. -/
 def Framed (dom m : ByteArray) : Prop :=
   ∃ t ps, (t = "node" ∨ t = "leaf") ∧ m = fv3Message t (dom :: ps)
 
@@ -158,8 +135,6 @@ theorem framed_dom {dom dom' m : ByteArray} (hd : dom.size = 64) (hd' : dom'.siz
     rcases hu with rfl | rfl <;> decide
   exact first_eq (by rw [hs ht, hs ht']) (by rw [hd, hd']) he
 
-/-- The root a climb reaches from a frame of its tree is the digest of a frame of its tree: the first, or one hashed
-on the way. -/
 theorem climb_top (dom : ByteArray) : ∀ (path : List ByteArray) (m0 : ByteArray) (idx d : Nat), Framed dom m0 →
     ∃ m, Framed dom m ∧ (m = m0 ∨ m ∈ climbFrames dom (Flock.Sha512.hash m0) idx d path) ∧
       Flock.Registered.climbL dom (Flock.Sha512.hash m0) idx d path = Flock.Sha512.hash m
@@ -175,8 +150,6 @@ theorem climb_top (dom : ByteArray) : ∀ (path : List ByteArray) (m0 : ByteArra
     · rw [climb_cons]
       exact he
 
-/-- Two climbs of one tree from one index and level, through paths of one length of 64-byte siblings, from 64-byte
-digests, reach one root only from one digest, unless two of the node frames they hash collide. -/
 theorem climb_eq (dom : ByteArray) : ∀ (path path' : List ByteArray) (cur cur' : ByteArray) (idx d : Nat),
     path.length = path'.length → (∀ s ∈ path, s.size = 64) → (∀ s ∈ path', s.size = 64) →
     cur.size = 64 → cur'.size = 64 →
@@ -201,9 +174,6 @@ theorem climb_eq (dom : ByteArray) : ∀ (path path' : List ByteArray) (cur cur'
           (by rw [hs sib List.mem_cons_self, hs' sib' List.mem_cons_self]) hm).2
     · exact Or.inr ⟨x, List.mem_cons_of_mem _ hx, y, List.mem_cons_of_mem _ hy, hxy, hh⟩
 
-/-! ## The domain and the binding -/
-
-/-- The bytes `taggedSha512 tag` hashes when the canonical form is `s`. -/
 def taggedBytes (tag s : String) : ByteArray :=
   "verity/tagged-sha512/v1".toUTF8.push 0 ++ Flock.be32 tag.toUTF8.size.toUInt32 ++ tag.toUTF8 ++
     Flock.be64 s.toUTF8.size.toUInt64 ++ s.toUTF8
@@ -236,11 +206,9 @@ theorem taggedBytes_inj {tag s s' : String} (h : taggedBytes tag s = taggedBytes
   simp only [taggedBytes, bs_append, List.append_assoc, List.append_cancel_left_eq] at e
   exact String.toByteArray_inj.1 (bs_inj (List.append_inj e (by rw [bs_length, bs_length, be64_size, be64_size])).2)
 
-/-- The positions object `liveDomain` hashes. -/
 def positions (fs : List (String × Nat)) : Json :=
   Json.mkObj [("start", Lean.toJson (0 : Nat)), ("step", Lean.toJson (1 : Nat)), ("stop", Lean.toJson (total fs))]
 
-/-- The domain's frame, over the binding's digest `b` and the positions' digest `p`. -/
 def domMsg (b p : ByteArray) (fs : List (String × Nat)) : ByteArray :=
   fv3Message "domain" [b, Flock.FV3.uint 1, p, Flock.FV3.uint (total fs)]
 
@@ -281,9 +249,6 @@ theorem domain_mem {c : LiveCommitment} {b p : ByteArray} {s : String} (L : List
   rw [domainHashed_eq hb hp, taggedMessage_eq hs]
   simp
 
-/-! ## The coin's leaf -/
-
-/-- The tree leaf's frame of the coin `o` at position `pos` of `c`'s tree, whose domain is `dom`. -/
 def leafMsg (dom : ByteArray) (pos : Nat) (c : LiveCommitment) (o : LiveOpening) : ByteArray :=
   fv3Message "leaf" [dom, Flock.FV3.uint pos, Flock.FV3.uint pos, c.scheme.toUTF8, liveLeaf c.scheme o.coin o.salt]
 
@@ -335,8 +300,6 @@ theorem xor_inj {x x' m : ByteArray} (hx : x.size = 64) (hx' : x'.size = 64)
     rw [← getElem!_pos d i h1, ← getElem!_pos d' i h2]
     exact e2
 
-/-- Two openings of one coin of one commitment whose tree leaves have one digest carry one coin, unless two messages
-hashed in checking them collide. -/
 theorem coin_eq {c : LiveCommitment} {dom : ByteArray} {pos : Nat} {o o' : LiveOpening}
     (h : Flock.Sha512.hash (leafMsg dom pos c o) = Flock.Sha512.hash (leafMsg dom pos c o')) :
     o.coin = o'.coin ∨ Collides (liveHashed c dom pos o) (liveHashed c dom pos o') := by
@@ -357,8 +320,6 @@ theorem coin_eq {c : LiveCommitment} {dom : ByteArray} {pos : Nat} {o o' : LiveO
   refine (eq_or_collides (xs := liveHashed c dom pos o) (ys := liveHashed c dom pos o')
     (by rw [liveHashed_eq]; simp) (by rw [liveHashed_eq]; simp) (xor_inj (hash_size _) (hash_size _) h5)).elim
     (fun h8 => Or.inl (cancel_left h8)) Or.inr
-
-/-! ## The acceptance -/
 
 theorem reason_ok {c : LiveCommitment} {o : LiveOpening} {label : String} {index : Int} {after : ByteArray}
     (h : liveReason c o label index after = .ok none) :
@@ -402,8 +363,6 @@ theorem commitment_eq {c c' : LiveCommitment} (hs : c.scheme = c'.scheme) (he : 
   subst hs he hf hr
   rfl
 
-/-- Two commitments with one root, each with a coin whose climb reaches it, are one commitment, unless two messages
-hashed in checking them collide. -/
 theorem same_commitment {c c' : LiveCommitment} {o o' : LiveOpening} {dom dom' : ByteArray} {pos pos' : Nat}
     (hd : liveDomain c.scheme c.epoch c.families = .ok dom)
     (hd' : liveDomain c'.scheme c'.epoch c'.families = .ok dom')
@@ -442,7 +401,6 @@ open Properties.Certifier.Bytes (hash_size)
 open Spot.Challenger (LiveCommitment LiveOpening liveReason)
 open Coin (reason_ok hashedBy_eq same_commitment climb_eq coin_eq collides_mono top_mem leafMsg)
 
-/-- `LiveCoinBinding` of two commitments with one root. -/
 theorem liveCoinBinding_root (c c' : LiveCommitment) (o o' : LiveOpening) (label : String) (index : Int)
     (after after' : ByteArray) (hr : c.root = c'.root) (h : liveReason c o label index after = .ok none)
     (h' : liveReason c' o' label index after' = .ok none) :

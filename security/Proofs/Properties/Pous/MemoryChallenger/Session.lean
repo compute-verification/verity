@@ -3,25 +3,8 @@ module
 public import Properties.Pous.MemoryChallenger.Session
 public import Proofs.Properties.Pous.MemoryChallenger.Attest
 
-/-!
-# Proofs of what the auditor sees of the memory challenger in a session (`Properties.Pous.MemoryChallenger.Session`)
-
-**The tie.** Soundness's record of a round (`Recorded.round`) is `roundSeen` on what it reads of the round, its size
-and its `blockDigest` (`round_eq_roundSeen`), so a change to soundness's function breaks the build here.
-
-**The view.** One step of the device's code is one step of `seenCode` on the exchange's skeleton (`step_skeleton`), and
-both start from one state, so on any inputs they send the same messages (`messages_skeleton`). Under `Confined` the
-device emits its code's messages, under `Faithful` on its true inputs, and under `WitnessPathPrivate` nobody overhears
-its path to the prover, so the auditor sees what `seenCode` sends in the clear on the device's challenges and the
-skeleton, at every `dest` (`auditorSeesSkeletonAt`); `auditorSeesDigests` is it at `reportPublic`.
-
-**Honest and nontrivial lemmas.** The premises hold of the device run as it is meant to run (`meantRun`), on any
-parameters, challenges and session (`auditorSeesDigests_honest`). Without `WitnessPathPrivate` the conclusion fails: an
-observer on the path to the prover who overhears a warm-up's frame shows it to the auditor, though the code sends
-nothing in the clear on a warm-up (`auditorSeesDigests_nontrivial`). And the view is not less than the digest: on a
-one-round session (`oneRound`), two answers whose `blockDigest`s differ show the auditor different reports
-(`auditorSeesDigests_digest`).
--/
+/-! Proofs of what the auditor sees of the memory challenger in a session, with soundness's record of a round tied to
+`roundSeen` so that a change to soundness's function breaks the build here. -/
 
 @[expose] public section
 
@@ -31,7 +14,6 @@ open ResourceAccounting.Assumptions
 open MemoryChallenger.Properties (Observed Recorded)
 open MemoryChallenger.Attest.Properties.SecurityProofs (meantRun meantRun_ok)
 
-/-- **The tie**: soundness's record of a round is `roundSeen` on what it reads of the round (`seen`). -/
 theorem round_eq_roundSeen (c : CoinTree) (l b : Nat) (st : Recorded) (o : Observed) :
     Recorded.round c l b st o = roundSeen c l b st (seen o) := by
   rfl
@@ -104,16 +86,10 @@ theorem auditorSeesDigests_nontrivial {Ω : Type} (p : Params Ω) (ω : Ω) :
   change [(Ch.challenge, Msg.warmup)] = [] at e
   exact List.cons_ne_nil _ _ e
 
-/-! ## The view is not less than the digest -/
-
-/-- The `CoinTree` of a one-round session over one block: its one challenge is block 0. -/
 def oneCoins : CoinTree := ⟨.empty, 1, #[0], .empty, #[.empty], #[], .empty⟩
 
-/-- A session of one round over one-byte answers, whose device signs every message with the empty signature. -/
 def oneRound : Params Unit := ⟨fun _ => oneCoins, 0, 1, .empty, "", fun _ => .empty, fun _ _ _ => .empty⟩
 
-/-- The round `oneRound`'s device records of an answer whose `blockDigest` is `d`: round 0, on block 0, both readings
-at 0. -/
 def oneRecord (d : ByteArray) : Round := ⟨0, 0, 0, 0, d⟩
 
 theorem round_one (b : ByteArray) (hb : b.size = 1) :
@@ -128,7 +104,6 @@ theorem message_one (c : ChallengePhaseCommitment) (e : String) {d : ByteArray} 
   simp [message, recordsDigest, recordsStream, Round.value, oneRecord, hd, beN, Bind.bind, Except.bind, Pure.pure,
     Except.pure]
 
-/-- The report `oneRound`'s device sends once its one round, of digest `d`, has completed the session. -/
 def oneReport (d : ByteArray) : Msg :=
   .report ⟨oneRound.commitment (), COMPLETE, #[oneRecord d], "", .empty, .empty⟩ (oneRound.commitment ())
     (#[oneRecord d].map fun r => oneCoins.opening r.j)

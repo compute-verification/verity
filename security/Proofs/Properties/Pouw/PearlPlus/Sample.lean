@@ -8,26 +8,8 @@ import Proofs.Core.Game.Basic
 import Proofs.Core.Game.Prob
 import Proofs.Pouw.Prob
 
-/-!
-# Pearl+'s run sample (`Properties.Pouw.PearlPlusSample`)
-
-`DrawIsOnItsStreams`, by `pearlDraw`'s steps. Its filter keeps the positive tickets with their positions (`posOf`), and
-`weightedDraw` reads sample `j`'s integer below their total, which is the run's `W` (`last_sums`), from `uniform`, which
-is `uniformOn` of the stream at `("u", j)`. Over their running sums (`runSums`) `bisectRight` finds the unit the integer
-falls in (`pick_posOf`), the unit `finSigmaFinEquiv` numbers that ticket on (`ticketAt_fst`): both count every unit's
-weight before it and skip a unit of none. Where some ticket holds weight the filter's list is nonempty
-(`posOf_ne_nil`); where none does it is empty (`posOf_eq_nil`) and the sample is too.
-
-`CoinBytesGiveUniformTickets`, by counting. `uniformOn` of a stream's bytes is Flock's rejection sampler on them
-(`uniformOn_bytesOf`, through `SampleExec.uniform_streamOf`), so at most `256^L / W` streams of `L` bytes give each
-integer below `W` (`card_uniformOn_le`, `SampleExec.uniformL_le` at one value). The streams that number tickets in `E` lie
-in the union over `E`'s tickets `c` of the products of those sets, each of at most `(256^L / W)^t` streams, and the
-tickets number `W^t` (`card_ticket_total`). Where `W^t` is 0 there is no ticket to number and no stream in the event.
-
-Their witnesses are at the honest pass of the deployed scheme (`honestPass`, one tile of 3,047,424 tickets): its
-tickets hold weight and each sample has bytes to read, a sample that names no tile is not on its streams, and a sampler
-that returns 0 whatever it reads numbers ticket 0 more often than uniform tickets do.
--/
+/-! Pearl+'s run sample (`DrawIsOnItsStreams`, `CoinBytesGiveUniformTickets`), with their witnesses at the honest pass
+of the deployed scheme. -/
 
 @[expose] public section
 
@@ -39,9 +21,6 @@ open Finset
 
 open scoped ENNReal
 
-/-! ## Running sums, positive tickets and the ticket a number falls in -/
-
-/-- The running sums `weightedDraw` folds, from `s`. -/
 def runSums : List ℕ → ℕ → List ℕ
   | [], _ => []
   | w :: ws, s => (s + w) :: runSums ws (s + w)
@@ -54,12 +33,10 @@ theorem foldl_sums : ∀ (ws : List ℕ) (a : Array ℕ) (s : ℕ),
     rw [List.foldl_cons, foldl_sums ws, runSums]
     simp
 
-/-- The unit ticket `r` falls in, by weights `ws`: past each unit's weight, the next. -/
 def pickIdx : List ℕ → ℕ → ℕ
   | [], _ => 0
   | w :: ws, r => if r < w then 0 else pickIdx ws (r - w) + 1
 
-/-- The positive weights of `ws`, each with its position from `n`: `pearlDraw`'s tickets. -/
 def posOf (ws : List ℕ) (n : ℕ) : List (ℕ × ℕ) := (ws.zipIdx n).filter (·.1 > 0)
 
 theorem posOf_cons (w : ℕ) (ws : List ℕ) (n : ℕ) :
@@ -68,8 +45,6 @@ theorem posOf_cons (w : ℕ) (ws : List ℕ) (n : ℕ) :
   rw [List.zipIdx_cons, List.filter_cons]
   by_cases hw : w > 0 <;> simp [hw]
 
-/-- The last running sum of the positive weights is their total, which is all of `ws`'s, and there is none when it is
-0. -/
 theorem last_sums : ∀ (ws : List ℕ) (n s : ℕ),
     (runSums ((posOf ws n).map (·.1)) s).getLast? = if ws.sum = 0 then none else some (s + ws.sum)
   | [], n, s => by simp [posOf, runSums]
@@ -99,8 +74,6 @@ theorem posOf_eq_nil : ∀ (ws : List ℕ) (n : ℕ), ws.sum = 0 → posOf ws n 
     rw [posOf_cons, ite_eq_right (show ¬w > 0 by omega)]
     exact posOf_eq_nil ws (n + 1) (by omega)
 
-/-- **`bisectRight` over the positive weights' running sums finds the unit the number falls in**, by its position in
-`ws`: the zero weights `pearlDraw` drops hold no number. -/
 theorem pick_posOf : ∀ (ws : List ℕ) (n s r : ℕ), s ≤ r → r < s + ws.sum →
     ((posOf ws n).getD (bisectRight (runSums ((posOf ws n).map (·.1)) s) r) (0, 0)).2 = n + pickIdx ws (r - s)
   | [], n, s, r, h1, h2 => by simp at h2; omega
@@ -123,7 +96,6 @@ theorem pick_posOf : ∀ (ws : List ℕ) (n s r : ℕ), s ≤ r → r < s + ws.s
       rw [ite_eq_right hw, pick_posOf ws (n + 1) s r h1 (by omega), pickIdx, ite_eq_right (by omega), Nat.sub_zero]
       omega
 
-/-- A number between the sums of the weights before `u` and through `u` falls in `u`. -/
 theorem pickIdx_of : ∀ (ws : List ℕ) (u r : ℕ), u < ws.length →
     ∑ i ∈ range u, ws.getD i 0 ≤ r → r < ∑ i ∈ range u, ws.getD i 0 + ws.getD u 0 → pickIdx ws r = u
   | [], u, r, hu, _, _ => by simp at hu
@@ -154,8 +126,6 @@ theorem sum_weightsOf (tk : List ((ℕ × ℕ) × ℕ)) : ∑ u : Fin tk.length,
   rw [hl, sum_range_getD]
   rfl
 
-/-- **`Ticket`'s order is the same**: the ticket numbered `r` is on the unit `r` falls in (`finSigmaFinEquiv_apply`:
-ticket `⟨u, i⟩` is numbered by the weights before `u`, plus `i`). -/
 theorem ticketAt_fst (tk : List ((ℕ × ℕ) × ℕ)) (r : ℕ) (h : r < ∑ u : Fin tk.length, weightsOf tk u) :
     ((ticketAt tk ⟨r, h⟩).1 : ℕ) = pickIdx (tk.map (·.2)) r := by
   set k := ticketAt tk ⟨r, h⟩ with hk
@@ -182,8 +152,6 @@ theorem uniformOn_lt {n : ℕ} (hn : 0 < n) {s : ByteArray} {r : ℕ}
     cases h
     exact Properties.Pouw.Commit.draw_uniform_lt n hn s _ _ rp hu
 
-/-! ## The sample -/
-
 theorem toOption_mapM {ε α β : Type} (f : α → Except ε β) :
     ∀ l : List α, (l.mapM f).toOption = l.mapM fun a => (f a).toOption
   | [] => rfl
@@ -202,7 +170,6 @@ theorem toOption_bind_pure {ε α β : Type} (x : Except ε α) (f : α → β) 
     (x >>= fun a => pure (f a) : Except ε β).toOption = x.toOption.map f := by
   cases x <;> rfl
 
-/-- Sample `j` of `weightedDraw` once its integer is read: its running-sum position, or the stream's refusal. -/
 def drawStep (cum : List ℕ) (j : ℕ) : Option ℕ → Except String ℕ
   | some r => pure (bisectRight cum r)
   | none => throw s!"draw {j} read {DRAW_WORDS} words of its stream without one below the limit"
@@ -211,7 +178,6 @@ theorem toOption_drawStep (cum : List ℕ) (j : ℕ) (o : Option ℕ) :
     (drawStep cum j o).toOption = o.map (bisectRight cum) := by
   cases o <;> rfl
 
-/-- `weightedDraw` over the positive tickets: sample `j`'s position of `uniform`'s integer below their total. -/
 theorem weightedDraw_eq (key : ByteArray) (ws : List ℕ) (t : ℕ) (hW : ws.sum ≠ 0) :
     weightedDraw key ((posOf ws 0).map (·.1)) t = (List.range t).mapM fun j =>
       drawStep (runSums ((posOf ws 0).map (·.1)) 0) j
@@ -262,11 +228,8 @@ theorem drawIsOnItsStreams : DrawIsOnItsStreams := by
   rw [toOption_drawStep]
   exact pick_eq tk _ fun r h => uniformOn_lt hpos h
 
-/-! ## The coin bytes -/
-
 open FlockSoundness.Audit.SampleExec (bsOf uniformL)
 
-/-- `uniformOn` of a stream's bytes is the rejection sampler on them. -/
 theorem uniformOn_bytesOf {L : ℕ} (s : Fin L → Fin 256) (n : ℕ) :
     FlockSoundness.Randomness.uniformOn n (Properties.Spot.bytesOf s) =
       (uniformL n (L + 1) (bsOf s)).map Prod.fst := by
@@ -284,7 +247,6 @@ theorem uniformOn_bytesOf {L : ℕ} (s : Fin L → Fin 256) (n : ℕ) :
     rw [h]
     rfl
 
-/-- **At most `256^L / n` streams of `L` bytes give each integer below `n`.** -/
 theorem card_uniformOn_le {L n v : ℕ} (hv : v < n) :
     (univ.filter fun s : Fin L → Fin 256 =>
       FlockSoundness.Randomness.uniformOn n (Properties.Spot.bytesOf s) = some v).card * n ≤ 256 ^ L := by
@@ -316,7 +278,6 @@ theorem card_uniformOn_le {L n v : ℕ} (hv : v < n) :
     mul_one] at this
   exact_mod_cast this
 
-/-- The run's tickets number its total `W`. -/
 theorem card_ticket_total (tk : List ((ℕ × ℕ) × ℕ)) :
     Fintype.card (_root_.Pouw.Ticket (weightsOf tk) tk.length) = ticketTotal tk := by
   rw [Fintype.card_sigma]
@@ -375,12 +336,8 @@ theorem coinBytesGiveUniformTickets : CoinBytesGiveUniformTickets := by
       exact_mod_cast hcount
   convert hgoal
 
-/-! ## Witnesses -/
-
-/-- The honest pass's one tile holds 3,047,424 tickets: `wref(1, 1024, 64)` a cell over its 16 credited rows. -/
 theorem honest_ticketTotal : ticketTotal (tickets [honestPass]) = 3047424 := by decide +kernel
 
-/-- Each sample has bytes to read: `DRAW_WORDS` words of at least 9 bytes. -/
 theorem drawBytes_pos (tk : List ((ℕ × ℕ) × ℕ)) : 0 < sampleBytes tk := by
   unfold sampleBytes DRAW_WORDS Flock.Draw.width
   omega
@@ -410,7 +367,6 @@ theorem drawIsOnItsStreams_nontrivial :
   rw [if_neg (by rw [honest_ticketTotal]; omega)]
   exact fun h => mapM_range_one_ne_nil _ h.symm
 
-/-- An event some `x` is outside has probability below 1. -/
 theorem pr_lt_one {α : Type} [Fintype α] {P : α → Prop} {x : α} (hx : ¬P x) : _root_.Pouw.pr P < 1 := by
   classical
   have hlt : (univ.filter P).card < Fintype.card α := by
@@ -420,8 +376,6 @@ theorem pr_lt_one {α : Type} [Fintype α] {P : α → Prop} {x : α} (hx : ¬P 
   rw [_root_.Pouw.pr_eq_card P (univ.filter P) (fun y => by simp), div_lt_one hpos]
   exact_mod_cast hlt
 
-/-- A sampler that returns 0 whatever it reads numbers ticket 0 with probability 1, more often than uniform tickets
-do wherever there are two. -/
 theorem zero_sampler_exceeds (tk : List ((ℕ × ℕ) × ℕ)) (hW : 1 < ticketTotal tk) :
     ¬ _root_.Pouw.pr (fun _ : Fin 1 → Fin (sampleBytes tk) → Fin 256 =>
         ∃ c : Fin 1 → _root_.Pouw.Ticket (weightsOf tk) tk.length,

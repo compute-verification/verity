@@ -2,17 +2,7 @@ module
 
 public import Properties.Poub.Remote.SubprotocolDeployed
 
-/-!
-# The bandwidth component accepts only what `Shared.run g` accepts, proved (`Properties.Poub.Subprotocol`)
-
-`check` matches on `replay`, which binds `sessionOf` and then `Shared.run g` (`replay_ok`), and accepts only at a state
-that ended accepted with a record, publishing `certify` of it at the session's parameters and g (`acceptIsVerified`).
-`plays_verified` reads `Plays` as `Verified`: the session `sessionOf` decodes is the one it decodes, so it is the
-record's at the node, at the node's windows a sample; `plays_iff_publishes` reads it as `Publishes` at some public
-outputs, and `publishes_publishedQBytes_iff` reads `PublishedQBytes`, which spells the acceptance out, as its statement
-at `Publishes`. `publishedEps` reads `certify`'s `eps` at the node's parameters
-and g: `ratio` of a nonnegative rational is that rational (`ratio_val`), and `openingsCoins` is `Node.samples`.
--/
+/-! The proof that the bandwidth component accepts only what `Shared.run g` accepts. -/
 
 @[expose] public section
 
@@ -60,7 +50,6 @@ theorem acceptIsVerified : AcceptIsVerified := by
     · cases h
     · cases h
 
-/-- Bytes that play the record on the node, accepted by the component, are a session the Lean verifier accepts. -/
 theorem plays_verified {node : Node} {rec : Record} {a b e : ByteArray} (h : Plays node rec a b e) :
     Verified node rec := by
   obtain ⟨p, ev, -, -, -, hs, pub, prof, hc⟩ := h
@@ -71,13 +60,11 @@ theorem plays_verified {node : Node} {rec : Record} {a b e : ByteArray} (h : Pla
   obtain ⟨rfl, rfl, rfl, rfl, rfl, rfl⟩ := hs'
   exact ⟨rs, s, hrun, hout⟩
 
-/-- `Plays` is `Publishes` at some public outputs. -/
 theorem plays_iff_publishes {node : Node} {rec : Record} {a b e : ByteArray} :
     Plays node rec a b e ↔ ∃ pub, Publishes node rec a b e pub :=
   ⟨fun ⟨p, ev, ha, hb, he, hs, pub, prof, hc⟩ => ⟨pub, p, ev, ha, hb, he, hs, prof, hc⟩,
     fun ⟨pub, p, ev, ha, hb, he, hs, prof, hc⟩ => ⟨p, ev, ha, hb, he, hs, pub, prof, hc⟩⟩
 
-/-- `PublishedQBytes`, which spells the acceptance out, is the same proposition as its statement at `Publishes`. -/
 theorem publishes_publishedQBytes_iff : PublishedQBytes ↔
     ∀ (node : Node) (rec : Record) (a b e : ByteArray) (pub : Poub.Protocol.Public),
       Publishes node rec a b e pub →
@@ -93,7 +80,6 @@ theorem publishes_publishedQBytes_iff : PublishedQBytes ↔
   · intro h node rec a b e pub p ev prof ha hb he hs hc
     exact h node rec a b e pub ⟨p, ev, ha, hb, he, hs, prof, hc⟩
 
-/-- The ratio the component publishes of a nonnegative rational is that rational. -/
 theorem ratio_val {q : ℚ} (hq : 0 ≤ q) :
     ((Poub.Protocol.ratio q).num : ℚ) / (Poub.Protocol.ratio q).den = q := by
   unfold Poub.Protocol.ratio

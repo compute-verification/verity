@@ -5,13 +5,7 @@ import all Init.Data.String.Defs
 import Mathlib.Basic.ENNReal.Real
 import Proofs.Properties.Pous.MemoryChallenger.Inputs
 
-/-!
-# What the wipe's hashes read
-
-The wipe's `message` and `recordsRoot` unfolded to the SHA-512 inputs they hash (`message_ok`, `recordsRoot_ok`), the
-session input split back into its header and records root (`signedWipe_split`), a batch's value into its batch
-(`value_inj`, `batches_inj`), and the wipe's session input told apart from PoUS's by their tags (`tags_differ`).
--/
+/-! What the wipe's hashes read, and the wipe's session input told apart from PoUS's by their tags. -/
 
 @[expose] public section
 
@@ -28,7 +22,6 @@ theorem beInt_ok {n : Nat} {x : Int} {w : String} {b : ByteArray} (h : StreamedW
   · rename_i hx
     exact ⟨Int.not_lt.mp hx, h⟩
 
-/-- A fixed-width field of either sign and what follows it determine the field's value and what follows. -/
 theorem beInt_split {n : Nat} {x y : Int} {w w' : String} {b b' : ByteArray} {r r' : List UInt8}
     (h : StreamedWipe.beInt n x w = .ok b) (h' : StreamedWipe.beInt n y w' = .ok b') (e : bs b ++ r = bs b' ++ r') :
     x = y ∧ r = r' := by
@@ -50,7 +43,6 @@ theorem value_ok {r : StreamedWipe.Batch} {v : ByteArray} (h : r.value = .ok v) 
     simp only [h1, h2, h3, h4, h5, h6, bind, Except.bind, pure, Except.pure, reduceCtorEq, Except.ok.injEq] at h
   exact ⟨_, _, _, _, _, _, rfl, rfl, rfl, rfl, rfl, rfl, h.symm⟩
 
-/-- A batch's value determines the batch. -/
 theorem value_inj {r r' : StreamedWipe.Batch} {v : ByteArray} (h : r.value = .ok v) (h' : r'.value = .ok v) :
     r = r' := by
   obtain ⟨b1, b2, b3, b4, b5, b6, h1, h2, h3, h4, h5, h6, rfl⟩ := value_ok h
@@ -111,7 +103,6 @@ theorem forall₂_inj : ∀ {l l' : List StreamedWipe.Batch} {vs : List ByteArra
   | a :: l, a' :: l', v :: vs, .cons ha hl, .cons ha' hl' => by
     rw [value_inj ha ha', forall₂_inj hl hl']
 
-/-- The batches' values determine the batches. -/
 theorem batches_inj {batches batches' : Array StreamedWipe.Batch} {vs : Array ByteArray}
     (h : batches.mapM StreamedWipe.Batch.value = .ok vs) (h' : batches'.mapM StreamedWipe.Batch.value = .ok vs) :
     batches = batches' :=
@@ -143,7 +134,6 @@ theorem message_ok {c : StreamedWipe.Commitment} {e : String} {sm : ByteArray} {
     simp only [hr, bind, Except.bind, pure, Except.pure, Except.ok.injEq] at h
     exact ⟨root, rfl, h.symm⟩
 
-/-- The wipe's session input, with records roots of one width, determines the header and the root. -/
 theorem signedWipe_split {h h' r r' : ByteArray} (hr : r.size = r'.size)
     (e : StreamedWipe.SESSION_TAG ++ be64 h.size.toUInt64 ++ h ++ r =
       StreamedWipe.SESSION_TAG ++ be64 h'.size.toUInt64 ++ h' ++ r') :
@@ -164,7 +154,6 @@ theorem tag_size : 12 < SESSION_TAG.size := by decide +kernel
 
 theorem wipe_tag_size : 12 < StreamedWipe.SESSION_TAG.size := by decide +kernel
 
-/-- **PoUS's session input is never the wipe's**: their tags differ at byte 12 (`memory` against `streamed`). -/
 theorem tags_differ (a b c a' b' c' : ByteArray) :
     SESSION_TAG ++ a ++ b ++ c ≠ StreamedWipe.SESSION_TAG ++ a' ++ b' ++ c' := by
   intro e

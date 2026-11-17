@@ -9,15 +9,8 @@ import Mathlib.Data.Finset.Attr
 import Mathlib.Tactic.Bound.Init
 import Mathlib.Tactic.SetLike
 
-/-!
-# A verifying signature is the device's, or the run carries a break
-
-The device ends a session `complete` or `late` (`ended_of_recorded`), both plain, so the header it signs is read back
-(`Header.header_inj`). If the session's signature verifies over its message and the device signed that message for one
-of its sessions, then under no SHA-512 collision among the run's strings the two signed inputs are one, so the two
-records, so the two headers and records digests, so the commitments, the ends and the records' streams, which under one
-round count split into the rounds (`Inputs.stream_inj`, `signedByDevice_of`). Otherwise the device never signed it: a forgery.
--/
+/-! A verifying signature is the device's, or the run carries a break: a SHA-512 collision among its strings or a
+forgery. -/
 
 @[expose] public section
 
@@ -26,7 +19,6 @@ namespace MemoryChallenger.Properties.SecurityProofs.Device
 open MemoryChallenger Flock
 open Tree (CF)
 
-/-- How a device's record has ended, if it has. -/
 def Ends (st : Recorded) : Prop := st.ended = none ∨ st.ended = some COMPLETE ∨ st.ended = some LATE
 
 theorem ends_round (coins : CoinTree) (limitNs blockBytes : Nat) (st : Recorded) (o : Observed) (h : Ends st) :
@@ -43,7 +35,6 @@ theorem ends_foldl (coins : CoinTree) (limitNs blockBytes : Nat) :
   | [], _, h => h
   | o :: l, st, h => ends_foldl coins limitNs blockBytes l _ (ends_round coins limitNs blockBytes st o h)
 
-/-- The device ends a session `complete` or `late`. -/
 theorem ended_of_recorded (r : Run) {e : String} (h : r.recorded.ended = some e) : e = COMPLETE ∨ e = LATE := by
   rcases ends_foldl r.coins r.limitNs r.blockBytes r.observed ⟨#[], none⟩ (Or.inl rfl) with h' | h' | h' <;>
     rw [show Run.recorded r = r.observed.foldl (Recorded.round r.coins r.limitNs r.blockBytes) ⟨#[], none⟩ from rfl,
@@ -56,8 +47,6 @@ theorem plain_of_recorded (r : Run) {e : String} (h : r.recorded.ended = some e)
   rcases ended_of_recorded r h with rfl | rfl
   · exact Header.plain_complete
   · exact Header.plain_late
-
-/-! ## The strings a session hashes -/
 
 theorem coinKey_mem (pk : ByteArray) (c : ChallengePhaseCommitment) (e : String) (rounds : Array Round) :
     c.coinKey ∈ challengePhaseStrings pk c e rounds := by
@@ -89,8 +78,6 @@ theorem device_mem {s : SignedChallengePhase} {dev : Challengers} {r : Run} (hr 
   refine List.mem_append_right _ (List.mem_flatMap.mpr ⟨r, hr, ?_⟩)
   simpa only [he] using hx
 
-/-! ## The argument -/
-
 theorem commitment_ext {c c' : ChallengePhaseCommitment} (h1 : c.session = c'.session) (h2 : c.coinRoot = c'.coinRoot)
     (h3 : c.coinKey = c'.coinKey) (h4 : c.blocks = c'.blocks) (h5 : c.k = c'.k) (h6 : c.limitNs = c'.limitNs)
     (h7 : c.blockBytes = c'.blockBytes) (h8 : c.binding = c'.binding) : c = c' := by
@@ -98,8 +85,6 @@ theorem commitment_ext {c c' : ChallengePhaseCommitment} (h1 : c.session = c'.se
   cases c'
   simp_all
 
-/-- Under no collision among the run's strings, a session whose message the device signed for one of its sessions is
-that session. -/
 theorem same_challengePhase {s : SignedChallengePhase} {dev : Challengers} (cf : CF (runStrings s dev)) (he : s.ended = COMPLETE)
     {m M : ByteArray} (hm : s.message = .ok m)
     (hM : memoryChallengerMessage (s.publicKey.extract 0 16) s.commitment.session m = .ok M)
@@ -126,7 +111,6 @@ theorem same_challengePhase {s : SignedChallengePhase} {dev : Challengers} (cf :
   refine ⟨r, hr, (commitment_ext hs hcr hkey hbl hk hl hbb hb).symm, by rw [hend, hen], ?_⟩
   exact (Inputs.stream_inj hst hst' hn e6).symm
 
-/-- **A verifying signature is the device's, or the run carries a break.** -/
 theorem signedByDevice_of {schemes : Schemes} {trusted : List ByteArray} {s : SignedChallengePhase} (dev : Challengers)
     {p : Lms.Params} (hp : schemes.lookup s.scheme = some p) (ht : s.publicKey ∈ trusted) {m : ByteArray}
     (hm : s.message = .ok m) (hv : lmsVerify p s.publicKey s.commitment.session m s.signature = .ok true)

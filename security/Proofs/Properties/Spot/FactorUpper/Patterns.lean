@@ -3,20 +3,7 @@ module
 public import Proofs.Properties.Spot.FactorUpper.Sets
 public import Proofs.Flock.SamplingGeneric.TwoRankinThreshold
 
-/-!
-# Rankin's factor bounded above: the patterns' form over requests
-
-`FactorUpperPatternsSound`. The requests that read in the replay block serve at most `S` bits each, and the factor only
-grows with their thresholds (`rankinFactorPatterns_le_at`), so the bound is proved for the factor at thresholds `thr`
-that are `S` at each of them (`rankinFactorPatternsAt`, `patterns_core`).
-Each pattern `c = (r ↦ lightOf (thr r) U_r)`'s supremum is at most `φ(Σ_r ŷ(c_r))^θ` over the
-patterns that meet no cell sampled whole, and `(1 − q)^θ` over those that do (`pat_bound`). The escape is a function
-of the whole replay block, which is how it couples the requests: they read disjoint proof blocks, so
-`y(U) ≥ Σ_r y(U_r)`, and `φ` is decreasing. The first sum is a product over the requests (`Finset.prod_univ_sum`) of
-`1 + Light + Heavy`, Heavy at `y_S`, the least `y` of a set of `S` bits or more (`heavyY_le`), raised to the at most
-`N` requests that read in the replay block (`chord_term`). The second is a union bound over the request that meets the
-whole cell (`touch_union`, `whole_term`).
--/
+/-! Rankin's factor bounded above in the patterns' form over requests (`FactorUpperPatternsSound`). -/
 
 @[expose] public section
 
@@ -49,7 +36,6 @@ theorem le_foldl_min {α : Type*} [LinearOrder α] {c : α} :
   | y :: l, a, ha, hl => le_foldl_min l (min a y) (le_min ha (hl y List.mem_cons_self))
       fun x hx => hl x (List.mem_cons_of_mem y hx)
 
-/-- The largest value a `LogUB` bound allows: `0` at `none`, `e^v` at `some v`. -/
 noncomputable def ubVal : Option ℚ → ℝ
   | none => 0
   | some v => Real.exp v
@@ -76,7 +62,6 @@ theorem prod_le_pow_filter {ι : Type*} (s : Finset ι) (P : ι → Prop) [Decid
   exact Finset.prod_le_prod₀ (fun i hi => hf0 i (Finset.mem_filter.1 hi).1)
     (fun i hi => hA i (Finset.mem_filter.1 hi).1 (Finset.mem_filter.1 hi).2)
 
-/-- **The union bound** over a finite index. -/
 theorem sum_filter_exists_le {ι κ : Type*} [Fintype κ] (s : Finset ι) (P : κ → ι → Prop)
     [∀ r, DecidablePred (P r)] [DecidablePred fun c => ∃ r, P r c] (f : ι → ℝ) (hf : ∀ c ∈ s, 0 ≤ f c) :
     ∑ c ∈ s.filter (fun c => ∃ r, P r c), f c ≤ ∑ r, ∑ c ∈ s.filter (P r), f c := by
@@ -95,8 +80,6 @@ theorem card_mul_pow_le {k N : ℕ} (hk : k ≤ N) {T A : ℝ} (hT : 0 ≤ T) (h
   mul_le_mul (mul_le_mul_of_nonneg_right (by exact_mod_cast hk) hT)
     (pow_le_pow_right₀ hA (Nat.sub_le_sub_right hk 1)) (by positivity) (by positivity)
 
-/-- **The sets meeting a part**: of the sets `A ⊆ D` under caps `m` on the keys `K`, those with a proof block of key
-outside `F`. -/
 theorem capped_split {G : Type*} [DecidableEq G] (K : Finset G) (κ : ℕ → G) (x : G → ℝ) (D : Finset ℕ)
     (hD : ∀ v ∈ D, κ v ∈ K) (m : G → ℕ) (F : G → Prop) [DecidablePred F] :
     ∑ A ∈ D.powerset with (∀ k ∈ K, cntOf κ A k ≤ m k) ∧ ¬ (∀ v ∈ A, F (κ v)), ∏ v ∈ A, x (κ v) =
@@ -144,7 +127,6 @@ theorem capped_split {G : Type*} [DecidableEq G] (K : Finset G) (κ : ℕ → G)
   rw [mul_sub, mul_one]
   linarith
 
-/-- A request's classes: `none`, the sets of `Xs` (each `some (some A)`) and the classes `Ys ⊆ {some none}`. -/
 theorem sum_classes (Xs : Finset (Finset ℕ)) (Ys : Finset (Option (Option (Finset ℕ)))) (hY : Ys ⊆ {some none})
     (f : Option (Option (Finset ℕ)) → ℝ) :
     ∑ a ∈ Xs.image (fun A => some (some A)) ∪ Ys, f a = ∑ A ∈ Xs, f (some (some A)) + ∑ a ∈ Ys, f a := by
@@ -187,16 +169,13 @@ section Request
 variable {s : AuditStatement} {Pt : Partition} {d : Design.Two} {ρ : ℕ} {cs : List Cell}
   {reads : List (List (ℕ × ℕ))} {R : Type} {req : Fin s.prog.outs.length → R}
 
-/-- The proof blocks of replay block `ρ` that request `r` reads. -/
 noncomputable def Dr (s : AuditStatement) (Pt : Partition) (d : Design.Two) {R : Type}
     (req : Fin s.prog.outs.length → R) (ρ : ℕ) (r : R) : Finset ℕ :=
   blocksTo s.prog Pt req (blocksIn Pt d.part ρ) r
 
-/-- The proof blocks of `D` in cells the bound samples at a rate. -/
 noncomputable def finOf (Pt : Partition) (cs : List Cell) (D : Finset ℕ) : Finset ℕ :=
   D.filter fun v => (cs.getD (Pt.stratumOf v) default).rate.isSome
 
-/-- The light sets of `D`: nonempty, fewer than `S` bits. -/
 noncomputable def lsets (s : AuditStatement) (Pt : Partition) (S : ℕ) (D : Finset ℕ) : Finset (Finset ℕ) :=
   D.powerset.filter fun A => A.Nonempty ∧ bitsOf s Pt A < S
 
@@ -211,7 +190,6 @@ theorem blocksTo_sub_self (U : Finset ℕ) (r : R) : blocksTo s.prog Pt req U r 
 
 theorem bitsOf_eq (A : Finset ℕ) : bitsOf s Pt A = ∑ v ∈ A, wid s Pt v := rfl
 
-/-- Request `r`'s keys and counts: every proof block it reads has a key of `reads`', each at most its count. -/
 theorem reads_keys (hc : Properties.Spot.Covers s Pt d ρ cs) {r : R}
     (hr : Properties.Spot.ReadsCover s Pt d req ρ reads r) {D : Finset ℕ}
     (hD : D ⊆ Dr s Pt d req ρ r) :
@@ -247,7 +225,6 @@ theorem finKeys_nodup (cs : List Cell) (reads : List (List (ℕ × ℕ))) : (fin
 theorem infKeys_nodup (cs : List Cell) (reads : List (List (ℕ × ℕ))) : (infKeys cs reads).Nodup :=
   (keysOf_nodup cs reads).filter _
 
-/-- The read keys of the cells sampled at a rate, then of those sampled whole: each read key once. -/
 theorem allKeys_nodup (cs : List Cell) (reads : List (List (ℕ × ℕ))) :
     (finKeys cs reads ++ infKeys cs reads).Nodup := by
   refine List.Nodup.append (finKeys_nodup cs reads) (infKeys_nodup cs reads) ?_
@@ -263,7 +240,6 @@ theorem mem_allKeys {k : ℕ × ℕ} (hk : k ∈ keysOf cs reads) : k ∈ finKey
   · exact List.mem_append_right _ (key_mem_inf hk h)
   · exact List.mem_append_left _ (key_mem_fin hk (by rw [h]; rfl))
 
-/-- The caps a light set's proof blocks meet: at most `n` of a width `0`, at most `S/b` of a width `b > 0`. -/
 def mcap (reads : List (List (ℕ × ℕ))) (S : ℕ) (k : ℕ × ℕ) : ℕ :=
   if k.2 = 0 then countIn (reads.getD k.1 []) k.2 else S / k.2
 
@@ -299,7 +275,6 @@ theorem prod_bits_exp (A : Finset ℕ) (c : ℝ) :
   rw [Finset.mul_sum, ← Finset.sum_neg_distrib]
   rfl
 
-/-- **The light sets' sum** of request `r` in the cells sampled at a rate, at weight `e^{−θs r}`. -/
 theorem light_req (hc : Properties.Spot.Covers s Pt d ρ cs) {r : R}
     (hr : Properties.Spot.ReadsCover s Pt d req ρ reads r) (S p : ℕ) (θs : ℚ) :
     LogUB (lightPatterns (Ln2.of p) (((finKeys cs reads).map (grp cs reads S p)).map fun g => (g, -(θs * g.r))) S p)
@@ -408,7 +383,6 @@ section Request
 variable {s : AuditStatement} {Pt : Partition} {d : Design.Two} {ρ : ℕ} {cs : List Cell}
   {reads : List (List (ℕ × ℕ))} {R : Type} {req : Fin s.prog.outs.length → R}
 
-/-- The product of the groups' capped sums at weight `1`, `∏_g L_g`-style, as `touchCount` reads it. -/
 noncomputable def capProd (gs : List Group) (S : ℕ) : ℝ :=
   (gs.map fun g => capVal g S (2 ^ g.b * Real.exp ((0 : ℚ) : ℝ))).prod
 
@@ -464,7 +438,6 @@ theorem prod_capP_le {K : List (ℕ × ℕ)} (hK : K.Nodup) (S p : ℕ) (c : ℕ
 theorem pow_bits (A : Finset ℕ) : (2 : ℝ) ^ bitsOf s Pt A = ∏ v ∈ A, (2 : ℝ) ^ (keyOf s Pt v).2 := by
   rw [Finset.prod_pow_eq_pow_sum]; rfl
 
-/-- **A request's light sets**, all of them: at most `∏_F L_g ∏_I L_g − 1`. -/
 theorem all_req (hc : Properties.Spot.Covers s Pt d ρ cs) {r : R}
     (hr : Properties.Spot.ReadsCover s Pt d req ρ reads r) (S p : ℕ) :
     ∑ A ∈ lsets s Pt S (Dr s Pt d req ρ r), (2 : ℝ) ^ bitsOf s Pt A ≤
@@ -504,7 +477,6 @@ theorem all_req (hc : Properties.Spot.Covers s Pt d ρ cs) {r : R}
       rw [← hsplit]
       exact sub_le_sub_right (mul_le_mul hf hi hi0 (by linarith)) 1
 
-/-- **A request's light sets meeting a cell sampled whole**: at most `∏_F L_g (∏_I L_g − 1)`. -/
 theorem touch_req (hc : Properties.Spot.Covers s Pt d ρ cs) {r : R}
     (hr : Properties.Spot.ReadsCover s Pt d req ρ reads r) (S p : ℕ) :
     ∑ A ∈ (lsets s Pt S (Dr s Pt d req ρ r)).filter (fun A => ¬ A ⊆ finOf Pt cs (Dr s Pt d req ρ r)),
@@ -538,7 +510,6 @@ theorem touch_req (hc : Properties.Spot.Covers s Pt d ρ cs) {r : R}
     _ ≤ _ := mul_le_mul hf (sub_le_sub_right hi 1) (by linarith)
         (by linarith [one_le_capProd ((finKeys cs reads).map (grp cs reads S p)) S])
 
-/-- A set's bits are at most its groups' `Σ n b`. -/
 theorem bits_le_total {K : List (ℕ × ℕ)} (hK : K.Nodup) {D : Finset ℕ} (hD : ∀ v ∈ D, keyOf s Pt v ∈ K)
     (hn : ∀ k, cntOf (keyOf s Pt) D k ≤ countIn (reads.getD k.1 []) k.2) {A : Finset ℕ} (hA : A ⊆ D) (S p : ℕ) :
     bitsOf s Pt A ≤ ((K.map (grp cs reads S p)).map fun g => g.n * g.b).sum := by
@@ -575,7 +546,6 @@ theorem heavyY_nonneg {K : List (ℕ × ℕ)} {S p : ℕ} {y : ℚ} (h : heavyY 
   rw [← hy]
   exact le_foldl_min ys y0 (hall y0 List.mem_cons_self) fun c hc => hall c (List.mem_cons_of_mem _ hc)
 
-/-- **No heavy set without `y_S`**: when `heavyY` finds none, every nonempty set of `D` has fewer than `S` bits. -/
 theorem heavyY_none {K : List (ℕ × ℕ)} (hK : K.Nodup) {D : Finset ℕ} (hD : ∀ v ∈ D, keyOf s Pt v ∈ K)
     (hn : ∀ k, cntOf (keyOf s Pt) D k ≤ countIn (reads.getD k.1 []) k.2) {S p : ℕ}
     (h : heavyY (K.map (grp cs reads S p)) S = none) {A : Finset ℕ} (hA : A ⊆ D) (hne : A.Nonempty) :
@@ -597,7 +567,6 @@ theorem heavyY_none {K : List (ℕ × ℕ)} (hK : K.Nodup) {D : Finset ℕ} (hD 
       exact (hcond v hv).2
     · cases h
 
-/-- **A heavy set's `y` is at least `y_S`**: every set of `D` of at least `S` bits. -/
 theorem heavyY_le {K : List (ℕ × ℕ)} {D : Finset ℕ} (hD : ∀ v ∈ D, keyOf s Pt v ∈ K) {S p : ℕ} {y : ℚ}
     (h : heavyY (K.map (grp cs reads S p)) S = some y) {A : Finset ℕ} (hA : A ⊆ D) (hne : A.Nonempty)
     (hS : S ≤ bitsOf s Pt A) : (y : ℝ) ≤ yOf Pt cs A := by
@@ -667,40 +636,33 @@ open _root_.Spot.FactorUpper
 open Claims.Sampling
 open Nat
 
-/-- The requests reading a proof block of replay block `ρ`. -/
 noncomputable def actOf (s : AuditStatement) (Pt : Partition) (d : Design.Two) {R : Type} [Fintype R]
     (req : Fin s.prog.outs.length → R) (ρ : ℕ) : Finset R :=
   Finset.univ.filter fun r => (Dr s Pt d req ρ r).Nonempty
 
 open Classical in
-/-- The classes `some (some A)` of the sets of `Xs`, with `some none` when `P`. -/
 noncomputable def clsOf (Xs : Finset (Finset ℕ)) (P : Prop) : Finset (Option (Option (Finset ℕ))) :=
   Xs.image (fun A => some (some A)) ∪ if P then {some none} else ∅
 
-/-- Request `r`'s classes avoiding the cells sampled whole: heavy when `y_S` exists. -/
 noncomputable def firstOf (s : AuditStatement) (Pt : Partition) (d : Design.Two) {R : Type} [Fintype R]
     (req : Fin s.prog.outs.length → R) (ρ : ℕ) (cs : List Cell) (yS : Option ℚ) (S : ℕ) (r : R) :
     Finset (Option (Option (Finset ℕ))) :=
   insert none (clsOf (lsets s Pt S (finOf Pt cs (Dr s Pt d req ρ r))) (r ∈ actOf s Pt d req ρ ∧ yS.isSome))
 
-/-- Request `r`'s classes, heavy when `H` (the groups hold `S` bits or more). -/
 noncomputable def allOf (s : AuditStatement) (Pt : Partition) (d : Design.Two) {R : Type} [Fintype R]
     (req : Fin s.prog.outs.length → R) (ρ : ℕ) (H : Prop) (S : ℕ) (r : R) : Finset (Option (Option (Finset ℕ))) :=
   insert none (clsOf (lsets s Pt S (Dr s Pt d req ρ r)) (r ∈ actOf s Pt d req ρ ∧ H))
 
-/-- Request `r`'s classes meeting a cell sampled whole. -/
 noncomputable def touchOf (s : AuditStatement) (Pt : Partition) (d : Design.Two) {R : Type} [Fintype R]
     (req : Fin s.prog.outs.length → R) (ρ : ℕ) (cs : List Cell) (H : Prop) (S : ℕ) (r : R) :
     Finset (Option (Option (Finset ℕ))) :=
   clsOf ((lsets s Pt S (Dr s Pt d req ρ r)).filter fun A => ¬ A ⊆ finOf Pt cs (Dr s Pt d req ρ r))
     (r ∈ actOf s Pt d req ρ ∧ H ∧ (Dr s Pt d req ρ r \ finOf Pt cs (Dr s Pt d req ρ r)).Nonempty)
 
-/-- `U`'s pattern. -/
 noncomputable def patOf (s : AuditStatement) (Pt : Partition) {R : Type} [DecidableEq R]
     (req : Fin s.prog.outs.length → R) (thr : R → ℕ) (U : Finset ℕ) (r : R) : Option (Option (Finset ℕ)) :=
   lightOf s Pt (thr r) (blocksTo s.prog Pt req U r)
 
-/-- A class's `y`: `0`, `y_S` heavy, `y(A)` light. -/
 noncomputable def yhat (Pt : Partition) (cs : List Cell) (yS : Option ℚ) : Option (Option (Finset ℕ)) → ℝ
   | none => 0
   | some none => ((yS.getD 0 : ℚ) : ℝ)
@@ -770,7 +732,6 @@ omit [Fintype R] [DecidableEq R] in
 theorem patOf_sub {U : Finset ℕ} (hU : U ⊆ blocksIn Pt d.part ρ) (r : R) :
     blocksTo s.prog Pt req U r ⊆ Dr s Pt d req ρ r := blocksTo_subset hU r
 
-/-- Every set's class at `r` is one of `r`'s classes. -/
 theorem pat_mem_all (hreq : ∀ r, (Dr s Pt d req ρ r).Nonempty → thr r = S) {H : Prop}
     (hH : ∀ r, ∀ A ⊆ Dr s Pt d req ρ r, A.Nonempty → S ≤ bitsOf s Pt A → H) {U : Finset ℕ}
     (hU : U ⊆ blocksIn Pt d.part ρ) (r : R) : patOf s Pt req thr U r ∈ allOf s Pt d req ρ H S r := by
@@ -787,7 +748,6 @@ theorem pat_mem_all (hreq : ∀ r, (Dr s Pt d req ρ r).Nonempty → thr r = S) 
     rw [h]
     exact Finset.mem_insert_of_mem (mem_clsOf_some.2 (Finset.mem_filter.2 ⟨Finset.mem_powerset.2 hA, hne, hb⟩))
 
-/-- **A pattern not avoiding the cells sampled whole** meets one, at a request whose class meets one. -/
 theorem pat_touch (hreq : ∀ r, (Dr s Pt d req ρ r).Nonempty → thr r = S) {H : Prop}
     (hH : ∀ r, ∀ A ⊆ Dr s Pt d req ρ r, A.Nonempty → S ≤ bitsOf s Pt A → H) {yS : Option ℚ}
     (hnone : yS = none → ∀ r, ∀ A ⊆ finOf Pt cs (Dr s Pt d req ρ r), A.Nonempty → bitsOf s Pt A < S)
@@ -848,7 +808,6 @@ theorem yhat_nonneg {yS : Option ℚ} (hy : ∀ y, yS = some y → 0 ≤ y) (a :
     · simpa using hy y h
   · exact yOf_nonneg A
 
-/-- **`y(U) ≥ Σ_r ŷ(c_r)`** for a set avoiding the cells sampled whole whose pattern `c` avoids them too. -/
 theorem pat_y_le (hreq : ∀ r, (Dr s Pt d req ρ r).Nonempty → thr r = S)
     (hdisj : ∀ r r', r ≠ r' → Disjoint (Dr s Pt d req ρ r) (Dr s Pt d req ρ r')) {yS : Option ℚ}
     (hsome : ∀ y, yS = some y → ∀ r, ∀ A ⊆ finOf Pt cs (Dr s Pt d req ρ r), A.Nonempty → S ≤ bitsOf s Pt A →
@@ -886,8 +845,6 @@ theorem pat_y_le (hreq : ∀ r, (Dr s Pt d req ρ r).Nonempty → thr r = S)
     exact Finset.disjoint_of_subset_left (patOf_sub hU r)
       (Finset.disjoint_of_subset_right (patOf_sub hU r') (hdisj r r' hne))
 
-/-- **A set's pass probability, by its pattern**: `φ(Σ_r ŷ(c_r))^θ` when its pattern avoids the cells sampled whole,
-else `(1 − q)^θ`, the pattern then meeting one. -/
 theorem pat_bound (hc : Properties.Spot.Covers s Pt d ρ cs)
     (hreq : ∀ r, (Dr s Pt d req ρ r).Nonempty → thr r = S)
     (hdisj : ∀ r r', r ≠ r' → Disjoint (Dr s Pt d req ρ r) (Dr s Pt d req ρ r')) {H : Prop}
@@ -927,12 +884,10 @@ open _root_.Spot.FactorUpper
 open Claims.Sampling
 open Nat
 
-/-- A pattern's weight, `2^{Σ_r b(c_r)}`. -/
 noncomputable def Wof (s : AuditStatement) (Pt : Partition) {R : Type} [Fintype R] [DecidableEq R]
     (req : Fin s.prog.outs.length → R) (thr : R → ℕ) (c : R → Option (Option (Finset ℕ))) : ℝ :=
   (2 : ℝ) ^ ∑ r, lightBits s Pt (thr r) (c r)
 
-/-- A pattern's `y`, `Σ_r ŷ(c_r)`. -/
 noncomputable def Yof (Pt : Partition) (cs : List Cell) (yS : Option ℚ) {R : Type} [Fintype R]
     (c : R → Option (Option (Finset ℕ))) : ℝ :=
   ∑ r, yhat Pt cs yS (c r)
@@ -1012,7 +967,6 @@ theorem W_eq_prod (c : R → Option (Option (Finset ℕ))) :
     Wof s Pt req thr c = ∏ r, (2 : ℝ) ^ lightBits s Pt (thr r) (c r) :=
   (Finset.prod_pow_eq_pow_sum _ _ _).symm
 
-/-- **A chord's weight factors over the requests.** -/
 theorem first_prod (yS : Option ℚ) (t : ℝ) :
     ∑ c ∈ Fintype.piFinset (firstOf s Pt d req ρ cs yS S), Wof s Pt req thr c * Real.exp (-(t * Yof Pt cs yS c)) =
       ∏ r, ∑ a ∈ firstOf s Pt d req ρ cs yS S r,
@@ -1027,7 +981,6 @@ theorem W_sum_pi (t : R → Finset (Option (Option (Finset ℕ)))) :
   rw [Finset.prod_univ_sum]
   exact Finset.sum_congr rfl fun c _ => W_eq_prod c
 
-/-- **The patterns' factor**, by the patterns avoiding the cells sampled whole and those meeting one. -/
 theorem patterns_le (hc : Properties.Spot.Covers s Pt d ρ cs)
     (hreq : ∀ r, (Dr s Pt d req ρ r).Nonempty → thr r = S)
     (hdisj : ∀ r r', r ≠ r' → Disjoint (Dr s Pt d req ρ r) (Dr s Pt d req ρ r')) {H : Prop}
@@ -1099,7 +1052,6 @@ theorem erase_filter_card {R : Type} [Fintype R] [DecidableEq R] {act : Finset R
     ext x; simp [and_comm]
   rw [this, Finset.card_erase_of_mem hr]
 
-/-- **The union bound over the requests**: of the patterns of classes `All r`, those with a request in `Touch r`. -/
 theorem touch_union {R T : Type} [Fintype R] [DecidableEq R] [DecidableEq T] (All Touch : R → Finset T)
     (w : R → T → ℝ) (hw : ∀ r a, 0 ≤ w r a) (act : Finset R) {N : ℕ} (hN : act.card ≤ N) {A Tb : ℝ}
     (hA1 : 1 ≤ A) (hT0 : 0 ≤ Tb) (hall : ∀ r ∈ act, ∑ a ∈ All r, w r a ≤ A)
@@ -1162,7 +1114,6 @@ theorem fin_keys_req (hc : Properties.Spot.Covers s Pt d ρ cs) {r : R}
   have hk := reads_keys hc hr (D := finOf Pt cs (Dr s Pt d req ρ r)) (finOf_subset _)
   exact ⟨fun v hv => key_mem_fin (hk.1 v hv) (Finset.mem_filter.1 hv).2, hk.2⟩
 
-/-- **The chords' sum**: `(requestFac)^N − 1`, the patterns avoiding the cells sampled whole at slope `θs`. -/
 theorem chord_term (hc : Properties.Spot.Covers s Pt d ρ cs) (hN : (actOf s Pt d req ρ).card ≤ N)
     (hreq : ∀ r, (Dr s Pt d req ρ r).Nonempty →
       thr r = S ∧ Properties.Spot.ReadsCover s Pt d req ρ reads r) (θs : ℚ) :
@@ -1213,7 +1164,6 @@ theorem chord_term (hc : Properties.Spot.Covers s Pt d ρ cs) (hN : (actOf s Pt 
   refine Finset.sum_nonneg fun c _ => mul_nonneg ?_ (Real.exp_pos _).le
   unfold Wof; positivity
 
-/-- **The patterns meeting a cell sampled whole**: `touchCount`'s union bound. -/
 theorem whole_term (hc : Properties.Spot.Covers s Pt d ρ cs) (hN : (actOf s Pt d req ρ).card ≤ N)
     (hreq : ∀ r, (Dr s Pt d req ρ r).Nonempty →
       thr r = S ∧ Properties.Spot.ReadsCover s Pt d req ρ reads r)
@@ -1329,7 +1279,6 @@ variable {s : AuditStatement} {Pt : Partition} {d : Design.Two} {ρ : ℕ} {cs :
   {reads : List (List (ℕ × ℕ))} {R : Type} [Fintype R] [DecidableEq R] {req : Fin s.prog.outs.length → R} {thr : R → ℕ}
   {S N p : ℕ}
 
-/-- **The patterns' factor at valid parameters `P`** (`P` with `y_S` a breakpoint, or `P` itself). -/
 theorem patterns_core (hc : Properties.Spot.Covers s Pt d ρ cs) (hN : (actOf s Pt d req ρ).card ≤ N)
     (hreq : ∀ r, (Dr s Pt d req ρ r).Nonempty →
       thr r = S ∧ Properties.Spot.ReadsCover s Pt d req ρ reads r)
@@ -1385,9 +1334,6 @@ theorem patterns_core (hc : Properties.Spot.Covers s Pt d ρ cs) (hN : (actOf s 
 
 end Main
 
-/-- **The bound is above the patterns' factor.** The requests that read in the replay block serve at most `S` bits
-each, so the factor is at most the factor at the threshold `S` (`rankinFactorPatterns_le_at`), which `patterns_core`
-bounds. -/
 theorem factorUpperPatterns_sound : Properties.Spot.FactorUpperPatternsSound := by
   intro cs reads N S P v hv s Pt d R _ _ req ρ hc hN hreq hdisj
   by_cases hP : P.valid = true

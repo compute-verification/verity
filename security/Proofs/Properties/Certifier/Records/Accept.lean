@@ -41,13 +41,7 @@ import NetworkCheck.RecordsBytes
 import Proofs.Properties.Certifier.Check.Check
 import Proofs.Properties.Certifier.Records.Check
 
-/-!
-# What the records check's acceptance means: the proof
-
-The check accepts exactly when the evidence fits, the parameters have their digests, and no execution phase has a violation
-(`check_accept`); an execution phase without one has its one complete record, the Program's (`egress_none`,
-`ingress_none`), so acceptance means `ProgramRecords` (`acceptMeans`, `answerAcceptMeans`).
--/
+/-! The proof that the records check accepts exactly the units whose records are the Program's. -/
 
 @[expose] public section
 
@@ -61,7 +55,6 @@ namespace Properties.NetworkRecords
 
 open CheckProofs
 
-/-- `e`'s egress links read as v2 reads them, paired with their names, are `e`'s. -/
 theorem zip_toLinks {egress : List String} {e : Records.ByteEvidence} {l : String} {L : LinkOpening}
     (hm : (l, L) ∈ egress.zip e.toEvidence.links.toList) :
     ∃ link, (l, link) ∈ egress.zip e.links.toList ∧ L = link.toLink := by
@@ -76,7 +69,6 @@ theorem toLinks_zip {egress : List String} {e : Records.ByteEvidence} {l : Strin
   simp only [Records.ByteEvidence.toEvidence, Array.toList_map, List.zip_map_right, List.mem_map]
   exact ⟨(l, link), hm, rfl⟩
 
-/-- `evaluate`'s three refusals of the evidence are v2's of the evidence read as bits. -/
 theorem fits_bytes {p : Params} {e : Records.ByteEvidence} : EvidenceFits p e.toEvidence ↔
     ¬ e.links.size ≠ p.egress.size ∧ ¬ (e.links.any fun x => decide (x.syncs.size ≠ p.windows)) = true ∧
       ¬ (e.links.any fun x => x.frames.any fun x => decide (x.payload.size ≠ p.grid.frameBytes)) = true := by
@@ -101,7 +93,6 @@ theorem verdicts_all {p : Params} {c : Records.Commitment} {e : Records.ByteEvid
     · exact he l link hm w hw
     · exact hi l hl w hw
 
-/-- With evidence that fits and the parameters' digests, the check is the verdicts' cascade. -/
 theorem check_digested {p : Params} {c : Records.Commitment} {e : Records.ByteEvidence} {eg ig : ByteArray}
     (hfit : EvidenceFits p e.toEvidence) (hpd : ParamsDigests p eg ig) :
     ((Records.verdicts p c e eg ig).find? (·.violation.any (· != "no-verdict")) = none →
@@ -122,7 +113,6 @@ theorem check_digested {p : Params} {c : Records.Commitment} {e : Records.ByteEv
     | (rw [hf1]; exact ⟨_, rfl⟩)
     | (rw [hf1, hf2]; exact ⟨_, rfl⟩)
 
-/-- The check accepts only evidence that fits, under parameters with their digests, and with no violation. -/
 theorem check_accept {p : Params} {c : Records.Commitment} {e : Records.ByteEvidence} {pub : Unit} {prof : Profile}
     (h : Records.check p c e = .accept pub prof) :
     EvidenceFits p e.toEvidence ∧ ∃ eg ig, ParamsDigests p eg ig ∧
@@ -197,9 +187,6 @@ theorem answerAcceptMeans : AnswerAcceptMeans := by
         | reject _ => rw [hch] at h; cases h
         | undecided _ => rw [hch] at h; cases h
 
-/-! ## Completeness -/
-
-/-- **The check accepts every unit whose records are the Program's.** -/
 theorem programRecords_accepted {p : Params} {c : Records.Commitment} {e : Records.ByteEvidence}
     (h : ProgramRecords p c e.toEvidence) :
     ∃ pub prof, Records.check p c e = .accept pub prof := by
@@ -213,7 +200,6 @@ theorem programRecords_accepted {p : Params} {c : Records.Commitment} {e : Recor
   · rw [hall v (Array.mem_def.mp hv)]; simp
   · rw [hall v (Array.mem_def.mp hv)]; simp
 
-/-- The check accepts exactly the units whose records are the Program's. -/
 theorem acceptMeans_iff {p : Params} {c : Records.Commitment} {e : Records.ByteEvidence} :
     (∃ pub prof, Records.protocol.check p c e = .accept pub prof) ↔ ProgramRecords p c e.toEvidence :=
   ⟨fun ⟨pub, prof, h⟩ => acceptMeans p c e pub prof h, programRecords_accepted⟩

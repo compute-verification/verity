@@ -4,16 +4,7 @@ public import Flock.HmNets
 public import Proofs.Flock.Verifier.HmNets
 public import Properties.Flock.Nets
 
-/-!
-# A built circuit's layout builds its net
-
-`Net.ofRows` succeeds on `HmNets.layout` of a builder's run, at the layout's own header fields, with A and B the sparse
-matrices of its rows (`layout_builds`), when the builder's rows output the bits after the inputs in creation order, each
-row reads only bits below its own, each output reads only committed bits, and the slot is `2 ^ 18` columns with the
-output group inside it. `ofRows_layout` is the same at the level of the rows: every check `Net.ofRows` runs passes on rows
-laid out as `layout` lays them (the loops by `checkOrder_ok` and `sparse_ok`). `layout_facts` reads the layout row by row,
-which the line lengths read too, and `rows_le` bounds every column by the constant's.
--/
+/-! A built circuit's layout builds its net. -/
 
 @[expose] public section
 
@@ -46,8 +37,6 @@ theorem bind_yield_ok {α β ε : Type} {x : Except ε α} {k : α → β} (hx :
   obtain ⟨a, rfl⟩ := hx
   exact ⟨k a, rfl⟩
 
-/-- **The row order passes** when every column a computed row reads is the constant, or an earlier column that is not
-input padding. -/
 theorem checkOrder_ok (name : String) (inCols constPos : Nat) (ra rb : Array (Array Nat))
     (h : ∀ r, inCols ≤ r → r < constPos → ∀ c ∈ ra.getD r #[] ++ rb.getD r #[], c = constPos ∨
       (c < r ∧ (c < inCols && (ra.getD c #[]).isEmpty && (rb.getD c #[]).isEmpty) = false)) :
@@ -70,7 +59,6 @@ theorem checkOrder_ok (name : String) (inCols constPos : Nat) (ra rb : Array (Ar
   · simp only [beq_eq_false_iff_ne.2 hcp, Bool.false_eq_true, ↓reduceIte, ge_iff_le, Nat.not_le.2 hlt, hpad]
     rfl
 
-/-- **`Sparse.ofRows` succeeds** when every column is below the width. -/
 theorem sparse_ok (rows : Array (Array Nat)) (width : Nat) (h : ∀ r ∈ rows, ∀ c ∈ r, c < width) :
     ∃ s, Sparse.ofRows rows width = .ok s := by
   unfold Sparse.ofRows
@@ -84,9 +72,6 @@ theorem sparse_ok (rows : Array (Array Nat)) (width : Nat) (h : ∀ r ∈ rows, 
 
 open Flock.HmNets hiding and
 
-/-- **The layout's sizes, padding and constant row**: both sides have a row per useful column; the input group's padding,
-the rows between the ANDs and the output group, and the output group's rows past the outputs are empty in A and B; the
-constant row is `[const]` in both. -/
 theorem layout_pad (st : St) (inBits outBits : Array Nat) (outs : Array Lin) :
     let l := layout st inBits outBits outs
     let nIn := inBits.foldl (· + ·) 0
@@ -158,7 +143,6 @@ theorem log2ceil_le (n : Nat) : n ≤ 2 ^ log2ceil n := le_nextPow2 n
 theorem isPow2_two_pow (k : Nat) : isPow2 (2 ^ k) = true := by
   simp only [isPow2, Nat.log2_two_pow, Nat.two_pow_pos, decide_true, beq_self_eq_true, Bool.and_self]
 
-/-- A bit below the `k`-th committed after the inputs has a column below that AND's row, outside the input padding. -/
 theorem col_lt {nIn inRows k v : Nat} (hIn : nIn ≤ inRows) (hv : v < nIn + k) :
     col nIn inRows v < inRows + k ∧ (col nIn inRows v < nIn ∨ inRows ≤ col nIn inRows v) := by
   by_cases h : v < nIn
@@ -168,7 +152,6 @@ theorem col_lt {nIn inRows k v : Nat} (hIn : nIn ≤ inRows) (hv : v < nIn + k) 
     rw [col_and]
     omega
 
-/-- **Every column of rows laid out as `layout` lays them is at most the constant's.** -/
 theorem rows_le (ra rb : Array (Array Nat)) (nIn inRows cp : Nat) (hsa : ra.size = cp + 1) (hsb : rb.size = cp + 1)
     (hIn : nIn ≤ inRows) (hcp : inRows ≤ cp)
     (hins : ∀ i < nIn, ra.getD i #[] = #[i] ∧ rb.getD i #[] = #[i])
@@ -196,10 +179,6 @@ theorem rows_le (ra rb : Array (Array Nat)) (nIn inRows cp : Nat) (hsa : ra.size
     rw [ha, hb] at hc
     simp at hc
 
-/-- **`Net.ofRows` builds a net from rows laid out as `layout` lays them**: `nIn` input rows `[i]·[i]` from column 0
-in a group of `inW` words, empty padding to the group's end, a constant row `[cp]·[cp]` at the last column `cp`, and
-between them rows that read only the constant or earlier columns outside the padding; one input group and one output
-group of power-of-two words, the output group aligned and inside a slot of `2 ^ 18` columns. -/
 theorem ofRows_layout (name : String) (inBits outBits : Array Nat) (ra rb : Array (Array Nat))
     (nIn inW outW start cp : Nat) (hsa : ra.size = cp + 1) (hsb : rb.size = cp + 1)
     (hnIn : inBits.foldl (· + ·) 0 = nIn) (hnInW : nIn ≤ inW * WORD) (hout : outBits.foldl (· + ·) 0 ≤ outW * WORD)
@@ -273,11 +252,6 @@ theorem ofRows_layout (name : String) (inBits outBits : Array Nat) (ra rb : Arra
     show ¬ inW * WORD > cp by omega, show (#[⟨start / WORD, outW, outBits⟩] : Array Group).isEmpty = false from rfl]
   rfl
 
-/-- **A built circuit's layout, row by row**: when the builder's rows output the bits after the `nIn` inputs in creation
-order, each row reads only bits below its own, and each output reads only committed bits and fits its group, the layout
-has a row per useful column on both sides, its groups and constant at its header fields, input rows `[i]·[i]`, empty
-padding, the `k`-th AND's forms' columns at row `inRows + k`, output `j`'s form's columns and the constant at row
-`start + j`, and every computed row reads only the constant or earlier columns outside the input padding. -/
 theorem layout_facts (st : St) (inBits outBits : Array Nat) (outs : Array Lin) (nIn inW outW start : Nat)
     (hnIn : inBits.foldl (· + ·) 0 = nIn) (hinW : groupWords nIn = inW)
     (houtW : groupWords (outBits.foldl (· + ·) 0) = outW)
@@ -362,10 +336,6 @@ theorem layout_facts (st : St) (inBits outBits : Array Nat) (outs : Array Lin) (
   · rw [(hpO r (by omega) h2).1, (hpO r (by omega) h2).2] at hc
     simp at hc
 
-/-- **A built circuit's layout builds its net**: when the builder's rows output the bits after the `nIn` inputs in
-creation order, each row reads only bits below its own, each output reads only committed bits and the outputs fit their
-group, and the slot is `2 ^ 18` columns with the output group inside it, `Net.ofRows` succeeds on the layout at its own
-header fields, with A and B the sparse matrices of its rows. -/
 theorem layout_builds (name : String) (st : St) (inBits outBits : Array Nat) (outs : Array Lin)
     (nIn inW outW start : Nat) (hnIn : inBits.foldl (· + ·) 0 = nIn) (hinW : groupWords nIn = inW)
     (houtW : groupWords (outBits.foldl (· + ·) 0) = outW)

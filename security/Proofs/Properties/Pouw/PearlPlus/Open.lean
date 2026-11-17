@@ -4,19 +4,8 @@ public import Properties.Pouw.PearlPlus
 public import Proofs.Properties.Pouw.Commit
 import all Init.Data.String.Defs
 
-/-!
-# An accepted opening binds its position's value (`Properties.Pouw.PearlPlus.OpeningBinds`)
-
-Unfolding `RowsDomain.verify` gives an accepted opening's shape: a path of `depth count` 64-byte siblings, a value of at
-least its 192-byte salt (in a tile tree, a digest and its salt), and the climb (`vfold`) from its frame leaf to the root.
-Two such climbs at one position meet at the root, so, one hash at a time from the root down, each pair of hashed messages
-is equal or is the collision: the node frames (their parts have fixed sizes, so equal frames have equal children), the
-leaf frames, the hm96 leaf's inputs (`Commit.leafValue_binding`'s steps), and in a row tree `sha512/row-seg/v1`'s outer
-message, whose first block fixes the row's length, then a segment where two different rows differ.
-
-It is on Lean core, as the properties are, so the row-seg steps are stated here on byte arrays rather than read from
-Flock's binding proof (`FlockSoundness.Binding.RowSeg`), which is on Mathlib.
--/
+/-! An accepted opening binds its position's value (`OpeningBinds`), its row-seg steps stated on byte arrays because the
+properties are on Lean core and Flock's binding proof is on Mathlib. -/
 
 @[expose] public section
 
@@ -28,22 +17,16 @@ theorem break_mono {L L' M M' : List ByteArray} (hL : ∀ x ∈ L, x ∈ M) (hL'
     Commit.Break L L' → Commit.Break M M'
   | ⟨x, hx, y, hy, hne, he⟩ => ⟨x, hL x hx, y, hL' y hy, hne, he⟩
 
-/-! ## The climb -/
-
-/-- One step of `Domain.verify`'s climb: the digest and its index, then the sibling and its level. -/
 def vstep (d : Domain) (acc : ByteArray × Nat) (x : ByteArray × Nat) : ByteArray × Nat :=
   (if acc.2 % 2 == 0 then d.node x.2 (acc.2 / 2) acc.1 x.1 else d.node x.2 (acc.2 / 2) x.1 acc.1, acc.2 / 2)
 
-/-- `Domain.verify`'s climb from the leaf digest `leaf` at `rank` along `path`: the digest it reaches and its index. -/
 def vfold (d : Domain) (path : List ByteArray) (leaf : ByteArray) (rank : Nat) : ByteArray × Nat :=
   path.zipIdx.foldl (vstep d) (leaf, rank)
 
-/-- The node frame hashed at level `lv` over the digest `dg` at index `cur` and its sibling `sib`. -/
 def nodeMsg (d : Domain) (lv cur : Nat) (dg sib : ByteArray) : ByteArray :=
   if cur % 2 == 0 then frameBytes "node" [d.id, Flock.FV3.uint lv, Flock.FV3.uint (cur / 2), dg, sib]
   else frameBytes "node" [d.id, Flock.FV3.uint lv, Flock.FV3.uint (cur / 2), sib, dg]
 
-/-- `Commit.pathFrames`'s step. -/
 def pstep (d : Domain) (acc : List ByteArray × ByteArray × Nat) (x : ByteArray × Nat) :
     List ByteArray × ByteArray × Nat :=
   (acc.1 ++ [nodeMsg d x.2 acc.2.2 acc.2.1 x.1], d.hash.run (nodeMsg d x.2 acc.2.2 acc.2.1 x.1), acc.2.2 / 2)
@@ -121,8 +104,6 @@ theorem pfold_concat (d : Domain) (q : List ByteArray) (s leaf : ByteArray) (ran
 theorem pstep_fst (d : Domain) (acc : List ByteArray × ByteArray × Nat) (x : ByteArray × Nat) :
     (pstep d acc x).1 = acc.1 ++ [nodeMsg d x.2 acc.2.2 acc.2.1 x.1] := rfl
 
-/-- **Two climbs at one rank that reach one digest** start from one leaf digest, or two different node frames on their
-paths have one SHA-512 digest. -/
 theorem climb (d : Domain) (hd : d.hash = .sha512) (rank : Nat) :
     ∀ (n : Nat) (p p' : List ByteArray) (leaf leaf' : ByteArray), p.length = n → p'.length = n →
       (∀ s ∈ p, s.size = 64) → (∀ s ∈ p', s.size = 64) → leaf.size = 64 → leaf'.size = 64 →
@@ -166,12 +147,8 @@ theorem climb (d : Domain) (hd : d.hash = .sha512) (rank : Nat) :
     · exact .inl e
     · exact .inr (break_mono (fun x hx => List.mem_append_left _ hx) (fun x hx => List.mem_append_left _ hx) b)
 
-/-! ## An accepted opening -/
-
-/-- An hm96 value's salt. -/
 def saltPart (v : ByteArray) : ByteArray := v.extract (v.size - HM96_SALT) v.size
 
-/-- The digest an hm96 leaf of `d` masks for the value `v`: the preimage itself in a tile tree, else its row digest. -/
 def xOf (d : RowsDomain) (v : ByteArray) : ByteArray :=
   if d.digests then openedValue v else Flock.HmRow.segDigest (8 * (openedValue v).size) (openedValue v)
 
@@ -216,8 +193,6 @@ theorem opens_ok {d : RowsDomain} {root : ByteArray} {schema : String} {o : Leaf
   · rename_i b hb; subst h; exact hb
   · cases h
 
-/-- **What `Domain.verify` accepts**: a path of `depth count` siblings of the frame's digest size, an opening within
-`max_proof_bytes`, a value the leaf function takes, and the climb from its leaf to the root. -/
 theorem verify_true {d : Domain} {root : ByteArray} {rank : Nat} {value : ByteArray} {path : List ByteArray}
     {leafOf : ByteArray → Except String ByteArray} (h : d.verify root rank value path leafOf = .ok true) :
     path.length = depth d.count ∧ (∀ s ∈ path, s.size = d.hash.bytes) ∧
@@ -248,8 +223,6 @@ theorem verify_true {d : Domain} {root : ByteArray} {rank : Nat} {value : ByteAr
     refine ⟨by simpa using h3, fun s hs => ?_, by omega, lf, rfl, beq_iff_eq.1 h⟩
     exact Decidable.byContradiction fun hc => h4 (List.any_eq_true.2 ⟨s, hs, by simpa using hc⟩)
 
-/-- **What an hm96 tree's leaf function takes**: a value at least its salt long (in a tile tree, a digest and its salt),
-whose frame leaf is the one over the hm96 leaf of its digest and salt. -/
 theorem leaf_ok {d : RowsDomain} {rank : Nat} {schema : String} {value lf : ByteArray} (hm : d.hm96 = true)
     (h : d.leaf rank schema value = .ok lf) : 192 ≤ value.size ∧ (d.digests = true → value.size = 256) ∧
       lf = d.frame.leaf rank Flock.HmRow.ROW_SCHEMA_SEG (Flock.Hm96.Default512.leaf (xOf d value) (saltPart value)) := by
@@ -270,10 +243,6 @@ theorem leaf_ok {d : RowsDomain} {rank : Nat} {schema : String} {value lf : Byte
   simp only [HM96_SALT] at h1 h2
   exact ⟨by omega, fun hd => by have := h2 hd; omega, h.symm⟩
 
-/-! ## The hm96 leaf and the row digest -/
-
-/-- **An hm96 leaf binds its digest and salt**: equal leaves have equal digests and salts, or a collision among the
-salt-digest and leaf inputs. -/
 theorem hm96_binds (L L' : List ByteArray) (x y x' y' : ByteArray) (hx : x.size = 64) (hx' : x'.size = 64)
     (h2 : Flock.Hm96.Default512.saltPrefix ++ y ∈ L) (h2' : Flock.Hm96.Default512.saltPrefix ++ y' ∈ L')
     (h3 : Flock.Hm96.Default512.leafPrefix ++ Flock.Hm96.Default512.commitString x y ∈ L)
@@ -301,7 +270,6 @@ theorem be64_inj (x y : Nat) (hx : x < 2 ^ 64) (hy : y < 2 ^ 64)
   simp at h0 h1 h2 h3 h4 h5 h6 h7
   omega
 
-/-- `sha512/row-seg/v1`'s first block fixes the row's length. -/
 theorem rowPrefixSeg_inj {l l' : Nat} (hl : l < 2 ^ 64) (hl' : l' < 2 ^ 64)
     (h : (Flock.HmRow.rowPrefixSeg l).data.toList = (Flock.HmRow.rowPrefixSeg l').data.toList) : l = l' := by
   simp only [Flock.HmRow.rowPrefixSeg, Flock.Hm96.pad, ByteArray.data_append, Array.toList_append,
@@ -316,12 +284,10 @@ theorem rowPrefixSeg_length (l : Nat) : (Flock.HmRow.rowPrefixSeg l).data.toList
   simp only [Flock.HmRow.rowPrefixSeg, Flock.Hm96.pad, ByteArray.size_append, ht, h4]
   simp [ByteArray.size, Flock.HmRow.be64]
 
-/-- Segment `j`'s message of a row of `l` bits whose bytes are `row`: its first block, then its bytes. -/
 def segIn (l : Nat) (row : ByteArray) (j : Nat) : ByteArray :=
   Flock.HmRow.segmentPrefix j (Flock.HmRow.segShape l).1.size (Flock.HmRow.segShape l).1[j]!.1 ++
     row.extract (1024 * j) (1024 * j + ((Flock.HmRow.segShape l).1[j]!.1 + 7) / 8)
 
-/-- The outer message: the first block, then each segment's digest. -/
 def segOut (l : Nat) (row : ByteArray) : ByteArray :=
   (List.range (Flock.HmRow.segShape l).1.size).foldl (fun acc j => acc ++ Flock.Sha512.hash (segIn l row j))
     (Flock.HmRow.rowPrefixSeg l)
@@ -383,7 +349,6 @@ theorem segIn_data (l : Nat) (row : ByteArray) (j : Nat) : (segIn l row j).data.
   simp only [segIn, ByteArray.data_append, Array.toList_append, ByteArray.data_extract, Array.toList_extract,
     List.extract_eq_take_drop, Nat.add_sub_cancel_left]
 
-/-- Two rows of one length whose segments' messages agree are one row. -/
 theorem row_eq_of_segIn {row row' : ByteArray} (hN : row.size = row'.size)
     (hall : ∀ j < (Flock.HmRow.segShape (8 * row.size)).1.size,
       segIn (8 * row.size) row j = segIn (8 * row.size) row' j) : row = row' := by
@@ -403,8 +368,6 @@ theorem row_eq_of_segIn {row row' : ByteArray} (hN : row.size = row'.size)
     exact e
   · rw [List.getElem?_eq_none (by simp; omega), List.getElem?_eq_none (by simp; omega)]
 
-/-- **`sha512/row-seg/v1` binds its row**: two rows with one digest are one row, or two different messages hashed in
-computing the two digests have one SHA-512 digest. -/
 theorem segDigest_binds (row row' : ByteArray) (hs : row.size < 2 ^ 32) (hs' : row'.size < 2 ^ 32)
     (h : Flock.HmRow.segDigest (8 * row.size) row = Flock.HmRow.segDigest (8 * row'.size) row') :
     row = row' ∨ Commit.Break (segHashed row) (segHashed row') := by
@@ -432,8 +395,6 @@ theorem segDigest_binds (row row' : ByteArray) (hs : row.size < 2 ^ 32) (hs' : r
     exact .inr ⟨_, List.mem_append_left _ (List.mem_map.2 ⟨j, List.mem_range.2 hj, rfl⟩),
       _, List.mem_append_left _ (List.mem_map.2 ⟨j, List.mem_range.2 hj, rfl⟩), hne,
       ByteArray.ext (Array.toList_inj.1 (hblk j hj))⟩
-
-/-! ## Binding -/
 
 theorem rowsHashed_eq (d : RowsDomain) (o : LeafOpening) : rowsHashed d o =
     ((if d.digests then [] else segHashed (openedValue o.value)) ++

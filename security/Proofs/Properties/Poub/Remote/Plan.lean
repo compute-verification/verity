@@ -5,16 +5,7 @@ public import Proofs.Properties.Poub.Remote.Sort
 public import Properties.Poub.Remote
 import Batteries.Tactic.OpenPrivate
 
-/-!
-# A pass's plan reads distinct blocks (`PlanReadsDistinct`, `ChangedReadsDistinct`)
-
-A plan's position `p` is block `runs[r].1 + (p − Σ_{<r} count)` with `r = bisectRight ends p` (`block_spec`): a block of
-run `r`, inside the store. `Plan.make?` refuses runs outside the store and checks that, sorted, each run ends at or
-before the next starts; so sorted they are pairwise disjoint (`chain_pairwise`), and disjointness, being symmetric,
-survives the sort's permutation back to the runs as given. Two positions in one run at one block are one position;
-two in different runs can't share a block (`readsDistinct_of`). `Plan.changed` returns `Plan.make?` of the runs it
-builds, or `none` (`changed_make`).
--/
+/-! A pass's plan reads distinct blocks (`PlanReadsDistinct`, `ChangedReadsDistinct`). -/
 
 @[expose] public section
 set_option backward.privateInPublic true
@@ -26,7 +17,6 @@ open private Poub.endsOf Poub.lexLt from Poub.Plan
 
 namespace Properties.Poub
 
-/-- Two runs that don't overlap. -/
 def Apart (x y : Nat × Nat) : Prop := x.1 + x.2 ≤ y.1 ∨ y.1 + y.2 ≤ x.1
 
 theorem endsOf_prefix (rs : Array (Nat × Nat)) : PrefixSums (Poub.endsOf rs) (rs.toList.map (·.2)) := by
@@ -50,7 +40,6 @@ theorem block_spec (blocks : Nat) (rs : Array (Nat × Nat)) (ends : Array Nat)
   rw [hoff]
   omega
 
-/-- **A plan whose runs are inside the store and pairwise apart reads distinct blocks.** -/
 theorem readsDistinct_of (blocks blocks' : Nat) (rs : Array (Nat × Nat)) (ends : Array Nat)
     (hP : PrefixSums ends (rs.toList.map (·.2))) (hin : ∀ x ∈ rs.toList, x.1 + x.2 ≤ blocks)
     (hdisj : rs.toList.Pairwise Apart) : ReadsDistinct ⟨blocks', rs, ends⟩ blocks := by
@@ -84,7 +73,6 @@ theorem readsDistinct_of (blocks blocks' : Nat) (rs : Array (Nat × Nat)) (ends 
       unfold Apart at this
       omega
 
-/-- Runs each ending at or before the next starts are pairwise apart. -/
 theorem chain_pairwise (l : List (Nat × Nat)) (h : ∀ k (hk : k + 1 < l.length), l[k].1 + l[k].2 ≤ l[k + 1].1) :
     l.Pairwise Apart := by
   have step : ∀ d i (hj : i + d + 1 < l.length), l[i].1 + l[i].2 ≤ (l[i + d + 1]'hj).1 := by
@@ -102,7 +90,6 @@ theorem chain_pairwise (l : List (Nat × Nat)) (h : ∀ k (hk : k + 1 < l.length
   simp only [show i + (j - i - 1) + 1 = j by omega] at this
   exact this
 
-/-- Runs inside the store whose sort by `lexLt` chains are pairwise apart, and a plan of them reads distinct blocks. -/
 theorem readsDistinct_sorted (blocks blocks' : Nat) (rs : Array (Nat × Nat))
     (hin : ∀ x ∈ rs.toList, x.1 + x.2 ≤ blocks)
     (hord : ∀ k, k < (rs.qsort Poub.lexLt).size - 1 →
@@ -147,9 +134,6 @@ theorem planReadsDistinct : PlanReadsDistinct := by
     have h' := this k (by simpa using hk)
     simpa using h'
 
-/-! ## A change of the previous pass's plan -/
-
-/-- A loop whose body keeps `Q` ends in a state with `Q`, and what follows it sees that state. -/
 theorem forIn_bind_inv {α σ β : Type} (Q : σ → Prop) (R : β → Prop) (F : α → σ → Id (ForInStep σ))
     (POST : σ → Id β) (hF : ∀ x s, Q s → Q (F x s).run.value) (hP : ∀ s, Q s → R (POST s).run) :
     ∀ (l : List α) (s : σ), Q s → R (forIn l s F >>= POST).run := by
@@ -173,13 +157,10 @@ theorem forIn_bind_inv_arr {α σ β : Type} (Q : σ → Prop) (R : β → Prop)
   rw [← Array.forIn_toList]
   exact forIn_bind_inv Q R F POST hF hP xs.toList s hs
 
-/-- A loop state whose early return, if taken, returned `none`. -/
 def Quiet {τ : Type} (s : Option (Option Plan) × τ) : Prop := s.1 = none ∨ s.1 = some none
 
-/-- What `Plan.changed` returns: `none`, or `Plan.make?` of some runs in the store. -/
 def MakeOrNone (blocks : Nat) (r : Option Plan) : Prop := r = none ∨ ∃ runs, r = Plan.make? runs blocks
 
-/-- **`Plan.changed` returns `none` or `Plan.make?` of the runs it builds.** -/
 theorem changed_make (pl : Plan) (added removed : Array (Int × Int)) (blocks : Nat) :
     MakeOrNone blocks (pl.changed added removed blocks) := by
   unfold Plan.changed

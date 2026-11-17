@@ -25,20 +25,13 @@ import Mathlib.Tactic.ReduceModChar
 import Proofs.Properties.InferenceOnly.BodiesOk.Basic
 import Std.Data.HashSet.Lemmas
 
-/-!
-# What `Prog.orderViolation` checks
-
-`order_closed`: when `Prog.orderViolation` finds nothing, the Definitions its walk saw hold the root and every callee of
-a composite among them, and each such composite's nodes name only parameters and earlier nodes (`Checked`). Its loops
-stop at the first violation, so each level is a `for` loop whose state carries an optional verdict (`forIn_all`).
--/
+/-! What `Prog.orderViolation` checks. -/
 
 @[expose] public section
 
 namespace InferenceOnlyCheck.Properties.SecurityProofs.BodiesOk
 open Flock.Program
 
-/-- The references `Prog.orderViolation` checks of a part, by collection and index. -/
 def partNames : Part → Array (Bool × ℕ)
   | .affine p idx _ c => if c > 0 then #[(p, idx)] else #[]
   | .strided p idx _ _ _ _ c => if c > 0 then #[(p, idx)] else #[]
@@ -60,20 +53,15 @@ theorem get_mem_names (q : Part) (t : ℕ) (ht : t < q.count) : ((q.get t).p, (q
     rw [getElem!_pos it t ht]
     exact Array.mem_map.2 ⟨it[t], Array.getElem_mem ht, rfl⟩
 
-/-- A name node `k` of `body` may read: a parameter, or an earlier node. -/
 def NameOk (body : Body) (k : ℕ) (nm : Bool × ℕ) : Prop :=
   (nm.1 = true → nm.2 < body.params.size) ∧ (nm.1 = false → nm.2 < k)
 
-/-- Node `k` of `body` reads only parameters and earlier nodes. -/
 def NodeChecked (body : Body) (k : ℕ) : Prop :=
   ∀ a < (body.nodes[k]!).args.size, ∀ q ∈ ((body.nodes[k]!).args[a]!).seq.parts, ∀ nm ∈ partNames q,
     NameOk body k nm
 
-/-- Definition `d`'s nodes read only parameters and earlier nodes, as `Prog.orderViolation` checks. -/
 def Checked (P : Prog) (d : ℕ) : Prop := ∀ k < (P.defs[d]!).body.nodes.size, NodeChecked (P.defs[d]!).body k
 
-/-- A `for` loop in `Id` whose state carries an optional verdict, `none` while it runs: it ends with `none` and every
-element passed `Q`, or with the verdict of the element that stopped it. -/
 theorem forIn_all {α γ δ : Type} (f : α → Option γ × δ → Id (ForInStep (Option γ × δ))) (Q : α → Prop)
     (E : γ → Prop)
     (hf : ∀ x b, b.1 = none → match (f x b).run with
@@ -97,12 +85,10 @@ theorem forIn_all {α γ δ : Type} (f : α → Option γ × δ → Id (ForInSte
     exact h2 j hj hj
   · exact Or.inr h
 
-/-- Definition `d` is done once `todo` holds its callees: its nodes are checked and their callees queued. -/
 def Done (P : Prog) (todo : Array ℕ) (d : ℕ) : Prop :=
   (P.defs[d]!).prim = false → Checked P d ∧
     ∀ k < (P.defs[d]!).body.nodes.size, ∃ j < todo.size, todo[j]! = ((P.defs[d]!).body.nodes[k]!).fn
 
-/-- `b` extends `a`. -/
 def Ext (a b : Array ℕ) : Prop := a.size ≤ b.size ∧ ∀ j < a.size, b[j]! = a[j]!
 
 theorem ext_refl (a : Array ℕ) : Ext a a := ⟨le_refl _, fun _ _ => rfl⟩
@@ -119,13 +105,10 @@ theorem done_mono {P : Prog} {a b : Array ℕ} {d : ℕ} (he : Ext a b) (h : Don
   obtain ⟨j, hj, e⟩ := h2 k hk
   exact ⟨j, by have := he.1; omega, by rw [he.2 j hj, e]⟩
 
-/-- The walk's invariant: no verdict yet, the root first in `todo`, and every Definition seen done. -/
 def OInv (P : Prog) (b : Option (Option Lean.Json) × Std.HashSet ℕ × Array ℕ × ℕ) : Prop :=
   b.1 = none ∧ 0 < b.2.2.1.size ∧ b.2.2.1[0]! = P.root ∧ b.2.2.2 ≤ b.2.2.1.size ∧
   (∀ j < b.2.2.2, b.2.1.contains b.2.2.1[j]! = true) ∧ (∀ d, b.2.1.contains d = true → Done P b.2.2.1 d)
 
-/-- What `Prog.orderViolation` passing establishes: a set of Definitions holding the root and closed under calls, each
-of whose nodes, if the Definition is not a primitive, reads only parameters and earlier nodes. -/
 theorem order_closed (P : Prog) (h : P.orderViolation = none) :
     ∃ S : ℕ → Prop, S P.root ∧ ∀ d, S d → (P.defs[d]!).prim = false →
       Checked P d ∧ ∀ k < (P.defs[d]!).body.nodes.size, S ((P.defs[d]!).body.nodes[k]!).fn := by

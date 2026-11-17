@@ -9,15 +9,8 @@ import Mathlib.Data.Finset.Attr
 import Mathlib.Tactic.Bound.Init
 import Mathlib.Tactic.SetLike
 
-/-!
-# A frame-v3-sha512 tree's levels and frames
-
-`Flock.FV3.Domain.levels` is the leaves padded to `nextPow2` of their count (`base`), then `log2ceil` levels
-each of the nodes over the pairs below (`next`, `lev`, `levels_eq`). Every node and leaf is SHA-512 of a frame whose
-parts are length-prefixed (`frame_last`, `frame_two`), so under no collision among the strings a tree hashes (`CF`) one
-root gives one level below it. The streamed wipe's records tree (`WipeTree`) and the attested period tree (`Attest`)
-bind their values through these.
--/
+/-! A frame-v3-sha512 tree's levels and frames, through which the streamed wipe's records tree and the attested period
+tree bind their values. -/
 
 @[expose] public section
 
@@ -26,18 +19,14 @@ namespace MemoryChallenger.Properties.SecurityProofs.Tree
 open MemoryChallenger Flock Flock.FV3.Sha512
 open Properties.Certifier.Bytes (bs bs_append bs_length bs_inj split_bytes be64_size)
 
-/-- No two distinct strings of `S` share a SHA-512 digest. -/
 def CF (S : List ByteArray) : Prop := ∀ x ∈ S, ∀ y ∈ S, Sha512.hash x = Sha512.hash y → x = y
 
-/-- One level up: the nodes over each pair. -/
 def next (d : Domain) (lvl : Nat) (level : Array ByteArray) : Array ByteArray :=
   (Array.range (level.size / 2)).map fun i => d.node lvl i level[2 * i]! level[2 * i + 1]!
 
-/-- The leaves padded to `nextPow2` of their count. -/
 def base (d : Domain) (leaves : Array ByteArray) : Array ByteArray :=
   leaves ++ (Array.range (nextPow2 leaves.size - leaves.size)).map fun k => d.pad (leaves.size + k)
 
-/-- Level `l` of the tree. -/
 def lev (d : Domain) (leaves : Array ByteArray) : Nat → Array ByteArray
   | 0 => base d leaves
   | l + 1 => next d l (lev d leaves l)
@@ -125,14 +114,12 @@ theorem frame_snoc (tag : String) (ps : List ByteArray) (v : ByteArray) :
     bs (FV3.input tag (ps ++ [v])) = bs (FV3.input tag ps) ++ (bs (be64 v.size.toUInt64) ++ bs v) := by
   simp [FV3.input, List.foldl_append, bs_append]
 
-/-- A frame's last part, after parts that agree, is determined. -/
 theorem frame_last {tag : String} {ps : List ByteArray} {v v' : ByteArray}
     (h : FV3.input tag (ps ++ [v]) = FV3.input tag (ps ++ [v'])) : v = v' := by
   have e := congrArg bs h
   rw [frame_snoc, frame_snoc] at e
   exact bs_inj (split_bytes (List.append_cancel_left e) (by rw [be64_size, be64_size])).2
 
-/-- A frame's two last parts, after parts that agree, are determined when the first of them has one width. -/
 theorem frame_two {tag : String} {ps : List ByteArray} {a b a' b' : ByteArray} (ha : a.size = a'.size)
     (h : FV3.input tag (ps ++ [a, b]) = FV3.input tag (ps ++ [a', b'])) : a = a' ∧ b = b' := by
   have e := congrArg bs h
