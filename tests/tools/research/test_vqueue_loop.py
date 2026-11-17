@@ -48,7 +48,7 @@ class Labels:
     but a head ``verdicts`` gives its own ({(PR, head): its `reviewed` labels}), which are its PR's other heads' too."""
 
     def __init__(self, gh):
-        self.gh, self.held, self.verdicts = gh, set(), {}
+        self.gh, self.held, self.verdicts, self.took = gh, set(), {}, {}
 
     def ready(self, n: int, head: str) -> bool:
         return (n, head) in self.gh.ready
@@ -1722,6 +1722,32 @@ def test_a_land_at_an_older_head_carries_to_its_merge_of_main_as_drive_toml_s_ve
     assert [r["members"] for r in recs if r["action"] == "build"] == ([[1]] if mode == "on" else [])
     assert [r for r in loop.tick() if r["action"] == "carry"] == [] and judged == ([(old, new)] if verb else [])
     assert env.labels.verdicts[1, new] == []                            # the loop writes no verdict
+
+
+def test_a_land_a_merge_of_main_takes_by_its_own_change_is_logged_as_a_carry_with_its_patch_id(env, tmp_path):
+    """#1's merge of `main` takes the mark and land verdict at ``old`` by its own change (`StoreLabels._counted`), with
+    drive.toml's `verdict_carry` off: the loop logs that as a `carry` line naming the head and the patch-id, once a head, so a
+    reader of the log finds where the verdict came from."""
+    from research.store.local import LocalStore
+
+    store = LocalStore(tmp_path / "store")
+    old = env.o.change({"a.txt": "1\n"})
+    main = _carry_main(env, "off")
+    env.o.gh.put(1, new := _merge(env.o, old, main))
+    store.add_label(Q.label_target(1, old), vocab.READY, True, "lane-1", ts="2026-11-16T10:00:00Z")
+    store.add_label(Q.label_target(1, old), vocab.REVIEWED, "land", "reviewer", ts="2026-11-16T11:00:00Z")
+    labels = Q.StoreLabels(store, log=lambda s: None)
+    labels._pulled.add(1)
+    loop = env.loop(policy)
+    loop.world.labels_at = lambda: labels
+    recs = loop.tick()
+    own = loop.world.q.own_change(new)
+    assert own == loop.world.q.own_change(old) is not None
+    assert [(r["number"], r["heads"], r["old"], r["carries"], r["patch_id"], r["why"]) for r in recs if r["action"] == "carry"] == [
+        (1, [new], old, True, own, f"carried #1's land from {old[:12]} to {new[:12]} (its own change is that head's, "
+                                   f"patch-id {own[:12]})")]
+    assert [r["members"] for r in recs if r["action"] == "build"] == [[1]]
+    assert [r for r in loop.tick() if r["action"] == "carry"] == []
 
 
 @pytest.mark.parametrize("change, because", [

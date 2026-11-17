@@ -1444,6 +1444,9 @@ class StoreLabels:
         #: under ``shadow``, why ``verify`` wouldn't count each mark and verdict read as counting, by (PR, the head it is on,
         #: its key, its author, its time)
         self.unauthenticated: dict[tuple[int, str, str, str, str], str] = {}
+        #: each head's labels taken from another head of its PR (`_counted`), by (PR, head, key): the head whose label taken is
+        #: newest, the own change's patch-id, and whether it was mapped across moves
+        self.took: dict[tuple[int, str, str], tuple[str, str, bool]] = {}
         self._pulled: set[int] = set()
         self._newest: dict[tuple[int, str], object] = {}
         self._fresh: set[str] = set()
@@ -1512,13 +1515,17 @@ class StoreLabels:
         counted, refused = self._verified(pr, head, self._labels(pr, head, key))
         if counted or self.change is None or not (others := self._other_heads(pr, head, key)) or not (own := self.change(head)):
             return counted, refused
-        came, moved = [], []
+        came, moved, newest = [], [], []
         for old, labs in others.items():
             if (same := self.change(old) == own) or (self.moved is not None and self.lands(pr, old)
                                                      and self.moved(old, head) == own):
                 got, why = self._verified(pr, old, labs)
                 counted, refused = [*counted, *got], [*refused, *why]
                 (came if same else moved).extend([old] if got else [])
+                newest.extend((lab.ts, old, not same) for lab in got)
+        if newest:
+            _, old, across = max(newest)
+            self.took[(pr, head, key)] = (old, own, across)
         if (came or moved) and (pr, head, key) not in self._said:
             self._said.add((pr, head, key))
             for heads, how in ((came, "theirs"), (moved, "theirs across the moves `main` landed since, as a restack carries it")):

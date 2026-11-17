@@ -997,7 +997,8 @@ class World:
         self._crossings: dict[tuple[str, str, frozenset[tuple[str, str]]], frozenset[str]] = {}
         #: each `carry.delta` judged, by its arguments (`_delta`)
         self._deltas: dict[tuple[str, str, tuple[str, ...], frozenset[str]], carry.Delta] = {}
-        #: what the last `ready` decided of the verdict carry (`_carry`): {number: its head, the older head, why, whether it
+        #: what the last `ready` decided of the verdict carry (`_carry`), and each land verdict a reviewed head took from another
+        #: head with its own change (`StoreLabels.took`, with its patch-id): {number: its head, the older head, why, whether it
         #: carries}
         self.carried: dict[int, dict] = {}
         #: under drive.toml's `signed_verdicts = "shadow"`, the labels' `StoreLabels.unauthenticated`, filled as they are read
@@ -1161,6 +1162,14 @@ class World:
         except Exception as e:  # noqa: BLE001 -- the carry never stops the reading, which takes the verdicts as they are
             self.log(f"research queue vqueue: the verdict carry didn't run: {type(e).__name__}: {e}")
             carried, self.carried = set(), {}
+        for n in sorted(self.reviewed):
+            head = entries[n].pr.head
+            if took := labels.took.get((n, head, vocab.REVIEWED)):
+                old, own, across = took
+                how = "its own change across the moves `main` landed since" if across else "its own change"
+                self.carried[n] = {"head": head, "old": old, "carries": True, "patch_id": own,
+                                   "why": f"carried #{n}'s land from {old[:12]} to {head[:12]} ({how} is that head's, "
+                                          f"patch-id {own[:12]})"}
         with concurrent.futures.ThreadPoolExecutor(JOBS) as pool:
             files = dict(zip(admitted, pool.map(lambda n: self._changed(main, entries[n].pr.head), admitted)))
             took, self.on_mark = [], set()
@@ -3825,10 +3834,11 @@ class Loop:
                            keys=list(keys), done=False)
 
     def _carried(self, t: Tick) -> list[dict]:
-        """Each verdict carry decision of the tick's `ready` (`World._carry`), logged once a head while it says the same."""
+        """Each verdict carry decision of the tick's `ready` (`World.carried`), logged once a head while it says the same."""
         said = t.past.carries()
         return [self.record(t, "carry", members=[n], heads=[c["head"]], number=n, why=c["why"], old=c["old"],
-                            carries=c["carries"]) for n, c in sorted(t.carried.items()) if said.get((n, c["head"])) != c["why"]]
+                            carries=c["carries"], **({"patch_id": c["patch_id"]} if "patch_id" in c else {}))
+                for n, c in sorted(t.carried.items()) if said.get((n, c["head"])) != c["why"]]
 
     def _unauthenticated(self, t: Tick) -> list[dict]:
         """Each ready mark and land verdict the tick counted that drive.toml's `signed_verdicts` wouldn't, on "shadow"
