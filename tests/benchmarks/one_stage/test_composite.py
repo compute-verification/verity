@@ -159,36 +159,44 @@ def test_the_product_trusts_only_the_keys_the_configuration_pins(tmp_path, capsy
 
 
 @pytest.mark.parametrize("id", sorted(C.TRUSTING))
-def test_a_key_the_configuration_pins_is_trusted(tmp_path, id):
+def test_a_key_the_configuration_pins_composes_and_is_still_the_run_s(tmp_path, id):
+    """The configuration's pins only refuse: a pinned key composes and the Lean's accept stands, but no composite
+    vouches for the keys, so it is ``key_pin: run`` and a development check."""
     rc, record = keyed(tmp_path, id, b"\x05" * 64, ["--configuration", COMMITTED_HASH])
     doc = json.loads(record.read_text())
-    assert (rc, doc["verdict"]["verdict"], doc["key_pin"], "development" in doc) == (0, "accept", "configuration", False)
-    held = C.HELD.format(path="configurations/c.toml", hash=COMMITTED_HASH)
-    assert doc["key_pin_why"] == held and "held by the composing script (composite.py), not by the Lean verifier" in held
-    assert f"KEY_PIN configuration: {held}" in (tmp_path / "public" / "verdicts.txt").read_text().splitlines()
+    why = f"{C.CHECKED.format(path='configurations/c.toml', hash=COMMITTED_HASH)}; {C.UNVOUCHED}"
+    assert (rc, doc["verdict"]["verdict"], doc["key_pin"], doc["key_pin_why"], doc["development"]) == (
+        0, "accept", "run", why, C.run_keys(why))
+    assert (tmp_path / "public" / "verdicts.txt").read_text().splitlines()[:2] == [
+        f"DEVELOPMENT {C.run_keys(why)}", f"KEY_PIN run: {why}"]
     trusted, = (c["params"]["trusted"] for c in json.loads((tmp_path / "private" / "params.json").read_text())["components"])
     assert trusted == [(b"\x05" * 64).hex()]
 
 
 @pytest.mark.parametrize("configuration", [[], ["--configuration", "d1" * 64]], ids=["none", "uncommitted"])
 def test_keys_no_committed_configuration_pins_are_the_run_s_and_claim_no_record(tmp_path, configuration):
-    """A key made for the run is pinned by no committed configuration: the composite runs, says ``key_pin: run`` and is
-    a development check, which `served_verdicts.composite_answer` takes as no record."""
+    """With no committed configuration nothing refuses: the composite runs, says ``key_pin: run`` and is a development
+    check, which `served_verdicts.composite_answer` takes as no record."""
     rc, record = keyed(tmp_path, "verity/pous/p2/v4/run", b"\x07" * 64, configuration)
     doc = json.loads(record.read_text())
-    assert (rc, doc["key_pin"], doc["key_pin_why"], doc["development"]) == (0, "run", C.RUN_KEYS, C.run_keys(C.RUN_KEYS))
-    assert (tmp_path / "public" / "verdicts.txt").read_text().splitlines()[:2] == [
-        f"DEVELOPMENT {C.run_keys(C.RUN_KEYS)}", f"KEY_PIN run: {C.RUN_KEYS}"]
-
-
-@pytest.mark.parametrize("key", [b"\x05" * 64, b"\x07" * 64], ids=["pinned", "unpinned"])
-def test_a_composite_on_a_machine_the_developer_controls_takes_no_pin(tmp_path, key):
-    """There the tree, its commits and the environment are the developer's, so a configuration's pins read there vouch
-    for nothing: whatever the key and the configuration, the keys are the run's and the composite claims no record."""
-    why = "composed on n0, the workload's node, which the developer controls, so nothing computed there vouches for a pin"
-    rc, record = keyed(tmp_path, "verity/wipe/v0", key, ["--configuration", COMMITTED_HASH, "--prover-host", why])
-    doc = json.loads(record.read_text())
+    why = f"{C.RUN_KEYS}; {C.UNVOUCHED}"
     assert (rc, doc["key_pin"], doc["key_pin_why"], doc["development"]) == (0, "run", why, C.run_keys(why))
+    assert (tmp_path / "public" / "verdicts.txt").read_text().splitlines()[:2] == [
+        f"DEVELOPMENT {C.run_keys(why)}", f"KEY_PIN run: {why}"]
+
+
+@pytest.mark.parametrize("env", [{}, {"SERVED_NODE": "vy-elsewhere", "COMPOSE_HANDOFF": "1", "PP_PEER": "vy-auditor-2"}],
+                         ids=["unset", "the-gate-s-variables-set-by-hand"])
+def test_no_environment_makes_a_composite_claim_the_configuration_s_pins(tmp_path, capsys, monkeypatch, env):
+    """The variables that say where a compose runs are the developer's to set: with them set by hand, a pinned key and a
+    committed configuration, ``key_pin: configuration`` is written nowhere."""
+    for k, v in env.items():
+        monkeypatch.setenv(k, v)
+    rc, record = keyed(tmp_path, "verity/wipe/v0", b"\x05" * 64, ["--configuration", COMMITTED_HASH])
+    assert (rc, json.loads(record.read_text())["key_pin"]) == (0, "run")
+    written = [f.read_bytes() for d in ("public", "private") for f in (tmp_path / d).rglob("*") if f.is_file()]
+    for text in (*written, capsys.readouterr().out.encode()):
+        assert b'"key_pin":"configuration"' not in text.replace(b" ", b"") and b"KEY_PIN configuration" not in text
 
 
 def test_memory_cases_listing_no_key_need_no_pin(tmp_path):

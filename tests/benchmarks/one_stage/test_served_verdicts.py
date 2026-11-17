@@ -6607,7 +6607,7 @@ def _composed(tmp_path: Path, env: dict[str, str]) -> tuple[int, list[str], list
     """served_composite.sh under PRODUCT=remote with `ARGV_COMPOSITE` for composite.py and `env` added: its exit, the
     composite.py arguments it gave and OUT/verdicts.txt."""
     tree, bin_, d, out = tmp_path / "tree", tmp_path / "bin", tmp_path / "serve", tmp_path / "out"
-    out.mkdir()
+    out.mkdir(parents=True)
     (d / "private").mkdir(parents=True)
     _script(bin_ / "lake", 'mkdir -p .lake/build/bin && touch ".lake/build/bin/$2"')
     _script(bin_ / "systemd-run", "exit 1")
@@ -6640,19 +6640,16 @@ def test_each_composite_gets_the_configuration_verity_run_read_and_says_what_it_
                             "configuration doesn't pin)")
 
 
-@pytest.mark.parametrize("where, env, prover", [
-    ("the workload's node", {}, "the workload's node, which the developer controls"),
-    ("a deferral's prover node", {"SERVED_NODE": "vy-elsewhere"}, "a prover-side copy of the workload's serve dir"),
-    ("the auditor's compose gate", {"SERVED_NODE": "vy-elsewhere", "COMPOSE_HANDOFF": "1"}, None),
-])
-def test_only_a_compose_from_a_hand_off_takes_the_configuration_s_pins(tmp_path, where, env, prover):
-    """Off the auditor's compose gate the machine composing is the developer's, so composite.py is told so
-    (``--prover-host``) and its composite is key_pin: run whatever configuration it is handed."""
-    rc, argv, lines = _composed(tmp_path, {**env, "EXIT": "0", "VERITY_CONFIGURATION": "ab" * 64})
-    assert (rc, _flag(argv, "--configuration")) == (0, "ab" * 64)
-    said = _flag(argv, "--prover-host")
-    assert (said is None) if prover is None else (prover in said and said.endswith("nothing computed there vouches for a pin")), said
-    assert lines[-1].startswith(f"COMPOSITE: composed on {socket.gethostname().split('.')[0]}")
+def test_where_a_compose_says_it_runs_decides_nothing_composite_py_is_given(tmp_path):
+    """`SERVED_NODE`, `PP_PEER` and `COMPOSE_HANDOFF` are the developer's to set on its own node, so composite.py gets
+    the same arguments on the workload's node, a deferral's prover node and the auditor's compose gate."""
+    given = []
+    for n, env in enumerate(({}, {"SERVED_NODE": "vy-elsewhere", "PP_PEER": "vy-prover"},
+                             {"SERVED_NODE": "vy-elsewhere", "COMPOSE_HANDOFF": "1"})):
+        rc, argv, _lines = _composed(tmp_path / str(n), {**env, "EXIT": "0", "VERITY_CONFIGURATION": "ab" * 64})
+        given.append((rc, [a.replace(str(tmp_path / str(n)), "T") for a in argv]))
+    assert given[0][0] == 0 and given[0][1][given[0][1].index("--configuration") + 1] == "ab" * 64
+    assert given == [given[0]] * 3
 
 
 def test_the_composite_step_publishes_only_each_cases_verdict_and_each_products_lean_verdict(tmp_path):
