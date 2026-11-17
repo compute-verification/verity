@@ -3,43 +3,7 @@ module
 public import Definitions.Pouw.PearlC.Device
 public import Definitions.Pouw.PearlC.Mend
 
-/-!
-# rev1: Pearl-C's credit without the promotions into a +0 total (trusted; definitions only)
-
-The granted credit counts `k/(32·G)` FP32 promotion adds per word, `T_g = RNE(T_{g−1} + S_g)` from `T_0 = +0`. A
-promotion into a +0 total returns `S_g` itself (`Defs.promote` on `0`; the scheme's `chain` reads `−0` as `+0`), so a
-program can skip it. rev1 takes every promotion into a +0 total out of the credit:
-* **the first of every word** (`T_0 = +0` always): out of the credit and out of `W_ref` (`firstAddDev`), since the
-  honest kernel needn't execute it either;
-* **any later one** (`T_{g−1} = 0` for `g ≥ 2`): debited by replay (`laterZeroPromos`), since only the chain's values
-  show it. It is rare: at most 3.9·10⁻⁶ of later promotions on the H100 atom and none measured on sm_120,
-  so it moves no gap. `W_ref` keeps it: the honest kernel can't skip it
-  without a per-word test that costs as much as the add.
-
-The maps, the domain and the cap's form are the device record's. The debit gains the later +0 promotions and is
-otherwise `inertWorkDev`, which still gives each flagged atom-word `add/G` of its group's promotion, the first group's
-included. That over-debits by at most `firstAddDev` per unit, so it only lowers the credit and tightens the cap.
-
-The debit also gains, at one MAC each, the products of a word that no salt of the support makes count (`wordMend`), so
-that a program which skips them gains nothing:
-* **a dead pair**: element `l` of both the A row and the B row is salt-dead (`saltDead`), so the product's codes, and its
-  value, are the same at every salt;
-* **a forced zero** (`Mend.ForcedZero`): the product is cut (its aligned contribution is 0) at both ends of the noise
-  support, the two salts at which every element's line is the flat pair with `F` at `+11/4` and at `−11/4`. A product
-  cut at every salt is cut at both (`Proofs.Pouw.PearlC.Mend.forcedZero_of_cutForEverySalt`).
-A product of both kinds counts once. At the H100 atom neither occurs on an honest workload's tiles (measured on the
-614b tiles: no dead pair and no product cut at both ends, so the two terms cost honest serving nothing there). At
-sm_120's step the honest cost of the two terms has not been measured and is owed. The planted products of a skipped step
-that stay uncut at some salt are not charged here.
-
-* `firstAddDev`, `creditDevRev1`, `wrefDevRev1`: the first add of every word at the device's add price, and the credit
-  and `W_ref` without it. `creditOfRev1` and `wrefOfRev1` are the same at `Params` and `Costs` (H100 prices).
-* `laterZeroPromos`, `wordMend`, `PearlCSem.unitInertWorkRev1`, `PearlCSem.tileInertWorkRev1`: the later +0 promotions of a
-  word, read off the record's own ticket map on column prefixes (`T_g` is the chain over the first `32·G·g` columns), a
-  word's dead pairs and forced zeros, and the unit and tile debits with them.
-* `pearlCProtocolDevRev1`, `pearlCTilesDevRev1`: `pearlCProtocolDev` and `pearlCTilesDev` with rev1's credit, debit and
-  `W_ref`, in the credit, the cap and `W_ref` alike.
--/
+/-! rev1, Pearl-C's credit without the promotions into a +0 total, which a program can skip. -/
 
 @[expose] public section
 
@@ -57,13 +21,11 @@ def creditDevRev1 (d : PearlCDevice) (s : Shape) : ℚ := creditDev d s - firstA
 /-- rev1's honest reference at a device: its credited work plus the forming that depends on the activations alone. -/
 def wrefDevRev1 (d : PearlCDevice) (s : Shape) : ℚ := creditDevRev1 d s + (d.prices.costs.qa : ℚ) * s.m * s.k
 
-/-- The first promotion add of every word at H100 prices (an FP32 add costs 32), as `creditOf` prices its adds. -/
+/-- At H100 prices, where an FP32 add costs 32. -/
 def firstAddOf (p : Params) (s : Shape) : ℚ := if p.G = 0 then 0 else 32 * s.m * s.n
 
-/-- **rev1's credited work of one unit** at `Params` and `Costs` (H100 prices): `creditOf` less the first add. -/
 def creditOfRev1 (p : Params) (c : Costs) (s : Shape) : ℚ := creditOf p c s - firstAddOf p s
 
-/-- rev1's honest reference at `Params` and `Costs`. -/
 def wrefOfRev1 (p : Params) (c : Costs) (s : Shape) : ℚ := creditOfRev1 p c s + (c.qa : ℚ) * s.m * s.k
 
 /-- The first `k'` columns of a matrix of codes. -/

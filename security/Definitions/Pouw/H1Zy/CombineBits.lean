@@ -5,23 +5,7 @@ import Mathlib.Data.Finset.Attr
 import Mathlib.Tactic.Finiteness.Attr
 import Mathlib.Tactic.SetLike
 
-/-!
-# `PouwH1Combine_v1{TILE}` on bits (trusted)
-
-The combine's body as circuit-check lowers it (`h1zy._combine_body`), each word a `Fin 32 → Bool`, bit `i` the word's
-bit `i` LSB first (`bitsOf`), with its three pieces at their bit lowerings rather than their word views:
-
-* `PouwXor32_v2` (`boolean.PouwXor32`, pinned `{"and": 0}` in `boolean.circuit-check.json`): the 32 bits' XORs
-  (`xor32Bits`);
-* `PouwEq32_v2` (`segment.PouwEq32`, `segment._eq`, not pinned): `and_reduce` of the 32 bits' XNORs, `and_reduce`
-  (`verity/circuits/boolean/forms.py`) being the pairwise AND tree with `1` for the empty list (`eq32Bits`);
-* `PouwAndBit_v2` (`h1zy.PouwAndBit`, pinned `{"and": 1}` in `h1zy.circuit-check.json`): one AND, `andBit` itself.
-
-They compose as on words (`Definitions.Pouw.H1Zy.Combine`): per word a `tree` of `xor32Bits` over the lanes, its
-`eq32Bits` against the receipt's word, and a `tree` of `andBit` over the words (`combineBits`). At a leaf of 32 lanes and
-32 words that is `32 · 31 + 31 = 1,023` ANDs. `Proofs.Pouw.H1Zy.CombineBits` proves each piece's lowering computes its
-word view and `combineBits` computes `combineOk`.
--/
+/-! `PouwH1Combine_v1{TILE}` on bits, its three pieces at their bit lowerings. -/
 
 @[expose] public section
 

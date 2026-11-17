@@ -2,46 +2,13 @@ module
 
 public import Definitions.Pouw.Fp8Atom.Fp32
 
-/-!
-# H-1T: the forming map, the checked chain and its credited words (trusted definitions)
-
-H-1T is `docs/pouw/hardness-shaped-matrices.md` §3.1.
-It is the map the module `h1_tagged` computes (`h1t_ref`, `tag_tuples`, `chain`; outside the tree), with the
-salt fields of the kernel `h1t_form_xq`.
-
-* **Layout.** Each k32 slice has 29 real lanes (0..28) and 3 tag lanes (29, 30, 31). There are `T = ⌈k/29⌉` slices,
-  and the row and the columns are zero-padded to `29·T`.
-* **Salt** (change 1). Per (row, slice) the kernel reads 18 raw XOF words `r0..r17` (`RawSlice`). The map reads
-  exactly these fields of them (`extract`, `SliceSalt`):
-  * the sign of real lane `ℓ` is bit 15 (`ℓ` even) or bit 31 (`ℓ` odd) of `r_(ℓ/2)`;
-  * tag lane 29 takes its sign and 3 mantissa bits from bits 31 and 25..23 of `r17`;
-  * tag lanes 30 and 31 take theirs from bits 15 and 9..7, and 31 and 25..23, of `r16`.
-  No other bit enters any word.
-* **Real lanes.** `M` is the slice's largest magnitude, `F = max(2^(e(M) − 6), 2^−2)`, `p = 2^⌊log₂ |x|⌋` (0 at
-  `x = 0`) and `μ = max(p/8, F)`. A set sign bit gives `s = +1`. Then `x1 = RNE_satfinite(x + s·μ)` and `x2 = −s·μ`,
-  with `x + s·μ` exact over ℚ, as in `h1t_ref`.
-* **Tag lanes.** `v = ±32F·(1 + m/8)`, negative when the sign bit is set, with `x1 = v` and `x2 = −v`.
-* **B′** is the registered real codes plus the fixed tag rows (change 3). Column `j` carries `t0 = A0[j mod 23]`,
-  `t1 = A1[(j / 23) mod 62]` and `t2 = A1[(j / 1426) mod 62]` on lanes 29, 30 and 31. Here `A0` is the 23 codes
-  `0x68..0x7E` and `A1` the 62 codes `0x60..0x7E` and `0xE0..0xFE`.
-* **Chain.** Position `p < T` is block 1 (`x1`) of slice `p`, and `T ≤ p < 2T` is block 2 (`x2`) of slice `p − T`.
-  `I_p = hopperStep(+0, x_b, B′)` over the slice's 32 lanes, `R_0 = I_0` and `R_(p+1) = RN_f32(R_p + I_(p+1))`. Words
-  are values in ℚ: two words equal as values count as equal.
-* **Credited words** (`Pos`, change 2), 0-based: `I_p` for `p < 2T` and `R_p` for `1 ≤ p ≤ 2T − 3`. This is §3.1's
-  `I_1..I_2T` and `R_2..R_(2T−2)`, `4T − 3` words per output for `T ≥ 2`.
-* **A unit** (`Unit`) is `m` rows of `X_q` against `n` columns of B′ over `k`. It has its own salt, and its salt
-  context binds the unit id (change 4), so different units' salts are independent coordinates.
-* **Legal** (change 5): `k ≤ 32,768`, `n ≤ 88,412`, every code finite. There is no `|x| ≤ 416` clause, which is
-  correctness and not security.
--/
+/-! H-1T's forming map, checked chain and credited words, as the module `h1_tagged` computes them. -/
 
 @[expose] public section
 
 namespace Pouw.Fp8Atom.H1T
 
 open Pouw.Fp8Atom
-
-/-! ## E4M3 encoding -/
 
 /-- A code's value (`0` for the two NaNs, which legal inputs exclude). -/
 def val (c : Code) : ℚ := (decode c).getD 0
@@ -61,8 +28,6 @@ def enc (y : ℚ) : Code :=
   else if 0 < y then ⟨encPos y, by have := encPos_le y; omega⟩
   else ⟨128 + encPos (-y), by have := encPos_le (-y); omega⟩
 
-/-! ## The salt -/
-
 /-- One (row, slice)'s 18 raw XOF words `r0..r17`. -/
 abbrev RawSlice := Fin 18 → Fin (2 ^ 32)
 
@@ -75,7 +40,6 @@ structure SliceSalt where
   pos : Fin 29 → Bool
   /-- Tag lane `29 + i`'s sign bit: set means `v` is negative. -/
   neg : Fin 3 → Bool
-  /-- Tag lane `29 + i`'s three mantissa bits `m`. -/
   man : Fin 3 → Fin 8
 
 /-- `a`, `b` or `c` at index 0, 1 or 2. -/
@@ -93,8 +57,6 @@ def extract (r : RawSlice) : SliceSalt where
   pos l := bitAt (r ⟨l.val / 2, by have := l.isLt; omega⟩) (if l.val % 2 = 0 then 15 else 31)
   neg := pick3 (bitAt (r 17) 31) (bitAt (r 16) 15) (bitAt (r 16) 31)
   man := pick3 (bits3 (r 17) 23) (bits3 (r 16) 7) (bits3 (r 16) 23)
-
-/-! ## The forming map (§3.1) -/
 
 /-- The slice maximum `M`: the largest magnitude over the 29 real lanes. -/
 def sliceMax (xs : Fin 29 → Code) : ℚ := (List.ofFn fun l => |val (xs l)|).foldl max 0
@@ -124,8 +86,6 @@ def formSlice (xs : Fin 29 → Code) (σ : SliceSalt) : (Fin 32 → Code) × (Fi
    fun l => if h : l.val < 29 then (formReal F (xs ⟨l.val, h⟩) (σ.pos ⟨l.val, h⟩)).2
     else enc (-tagVal F (σ.neg ⟨l.val - 29, by have := l.isLt; omega⟩) (σ.man ⟨l.val - 29, by have := l.isLt; omega⟩)))
 
-/-! ## The tag rows -/
-
 /-- `A0`: the 23 positive codes `0x68..0x7E` (64 to 448). -/
 def A0 (i : Fin 23) : Code := ⟨0x68 + i.val, by have := i.isLt; omega⟩
 
@@ -137,8 +97,6 @@ def A1 (i : Fin 62) : Code :=
 def tuple (j : ℕ) : Fin 3 → Code :=
   pick3 (A0 ⟨j % 23, Nat.mod_lt _ (by norm_num)⟩) (A1 ⟨j / 23 % 62, Nat.mod_lt _ (by norm_num)⟩)
     (A1 ⟨j / 1426 % 62, Nat.mod_lt _ (by norm_num)⟩)
-
-/-! ## The chain of one row and column -/
 
 /-- Real lane `ℓ` of slice `τ` of a zero-padded row: element `29τ + ℓ`. -/
 def realLanes (x : ℕ → Code) (τ : ℕ) : Fin 29 → Code := fun l => x (29 * τ + l.val)
@@ -163,8 +121,6 @@ def freshVal (T : ℕ) (x b : ℕ → Code) (j : ℕ) (σ : ℕ → SliceSalt) (
 def runVal (T : ℕ) (x b : ℕ → Code) (j : ℕ) (σ : ℕ → SliceSalt) : ℕ → ℚ
   | 0 => freshVal T x b j σ 0
   | p + 1 => rnAdd (runVal T x b j σ p) (freshVal T x b j σ (p + 1))
-
-/-! ## Units -/
 
 /-- The credited positions of one output (0-based): `I_p` for `p < 2T` (`inl`) and `R_p` for `1 ≤ p ≤ 2T − 3`
 (`inr`). -/

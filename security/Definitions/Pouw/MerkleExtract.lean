@@ -33,30 +33,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# Merkle commitments over an oracle, and their extractor (trusted)
-
-The vocabulary of `Extract`, the commit-and-open premise of the no-fold design (every committed word is a SHA-512 Merkle
-leaf), and of its discharge from SHA-512 as a random oracle.
-
-* `Enc`: the tree's leaf and node encodings into the oracle's domain, injective with disjoint images (frame-v3-sha512's
-  domain separation, a protocol-code fact).
-* `Opens h E d p w`: an opening of the word `w` along the path `p` verifies against the digest `d` under the hash `h`.
-  The path is root first; each step is its direction, the sibling's digest and the path child's digest, the values the
-  verifier's bottom-up recomputation passes through.
-* `pts E p w`: the points that verification hashes.
-* `ext h E L d dirs`: the extractor. It walks down from `d` along `dirs` through `L`, the points queried before the
-  commitment, and returns the leaf word it reaches, or `none`.
-* `kids E L`: the child digests named by `L`'s node points. With the root, they are the targets a later query must hit
-  to open something `L` doesn't determine.
-* `Prover X D q τ`: an adaptive prover against the random oracle in lazy-sampling form, `q` fresh queries answered by a
-  uniform stream, the first `τ` before its root. `Prover.oracle` is the oracle it sees and `Prover.pre` its
-  pre-commitment log.
-* `ExtractFails E A u`: on the stream `u`, some opening the prover can verify from its queries disagrees with the
-  extractor run on its pre-commitment log.
-* `Consistent qry h u`: `u` is the answer stream the oracle `h` gives the querier `qry`, the bridge from a uniform
-  oracle `X → D` to the uniform stream.
--/
+/-! Merkle commitments over an oracle and their extractor, the vocabulary of commit-and-open's extraction premise. -/
 
 @[expose] public section
 
@@ -85,7 +62,6 @@ def pts (E : Enc X D W) : List (Bool × D × D) → W → List X
   | [], w => [E.leaf w]
   | (b, s, c) :: p, w => E.pt b s c :: pts E p w
 
-/-- The digests that appear as children in the log's node points. -/
 def kids (E : Enc X D W) (L : Set X) : Set D := {c | ∃ l r, E.node l r ∈ L ∧ (c = l ∨ c = r)}
 
 open Classical in
@@ -96,8 +72,6 @@ noncomputable def ext (h : X → D) (E : Enc X D W) (L : Set X) : D → List Boo
       if hn : ∃ lr : D × D, E.node lr.1 lr.2 ∈ L ∧ h (E.node lr.1 lr.2) = d then
         ext h E L (if b then (Classical.choose hn).2 else (Classical.choose hn).1) bs
       else none
-
-/-! ### The random-oracle model (lazy sampling) -/
 
 /-- **An adaptive oracle prover** in the lazy-sampling form of the random oracle: its `q` queries, answered by the
 stream `u`, the first `τ` of them before its commitment. Over a uniform oracle the answers at `q` distinct points are
@@ -143,16 +117,13 @@ def Consistent {q : ℕ} (qry : Fin q → (Fin q → D) → X) (h : X → D) (u 
   ∀ i, u i = h (qry i u)
 
 open Classical in
-/-- **The extraction fails on the stream `u`**: some opening of some word verifies against the prover's root under the
-oracle, hashes only queried points, and isn't the word the extractor reads off the pre-commitment queries. "Hashes
-only queried points" is the normalization that `q` includes the verifier's evaluations (`Prover`): it quantifies over
-every opening whose check the run performs, once those evaluations are counted as queries. -/
+/-- "Hashes only queried points" is the normalization that `q` includes the verifier's evaluations: it quantifies over
+every opening whose check the run performs. -/
 def ExtractFails [Inhabited D] {q τ : ℕ} (E : Enc X D W) (A : Prover X D q τ) (u : Fin q → D) : Prop :=
   ∃ (p : List (Bool × D × D)) (w : W), Opens (A.oracle u) E (A.root u) p w ∧
     (∀ y ∈ pts E p w, ∃ i, A.qry i u = y) ∧ ext (A.oracle u) E (A.pre u) (A.root u) (p.map Prod.fst) ≠ some w
 
 open Classical in
-/-- The child digests of a point, if it is a node. -/
 noncomputable def children (E : Enc X D W) [DecidableEq D] (x : X) : Finset D :=
   if hx : ∃ lr : D × D, E.node lr.1 lr.2 = x then {(Classical.choose hx).1, (Classical.choose hx).2} else ∅
 

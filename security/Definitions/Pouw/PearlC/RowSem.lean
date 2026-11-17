@@ -3,32 +3,7 @@ module
 public import Definitions.Pouw.PearlC.Row4Circuit
 public import Definitions.Pouw.PearlC.DeviceFp4
 
-/-!
-# A row's statistics, scales and forming as the Programs compute them (spec)
-
-`pc8Sem ops p noise` and `pc4Sem ops lines` are Pearl-C's and Pearl-C4's semantics (`PearlCSem`, `Fp4Sem`) at the
-Programs' own row arithmetic: `α`, `β`, the noise floor and (for `pc8`) the forming are word formulas on core's
-primitives (`RowOps`, each primitive reduced to its width as a gate computes it, `Prim.eval`), in the order
-`verity.protocols.accounting.work.pouw.circuit.pc8`'s and `pc4`'s `_stats`, `_alpha` and `_form` compute them. They are
-not read off the gate tables: `SecurityProofs.PearlC.RowCircuit` proves that the tables compute them.
-
-On a row of `K` FP32 words `x_0, …, x_{K−1}` (`pc4`: BF16 words, widened):
-
-* `s = rowMax`: the running max of `|x_t|`, `s ← SelectI32(I32Le(s, |x_t|), |x_t|, s)` from `|x_0|`;
-* `ρ = rowRho`: with `n = K/8`, the FMA partials `fma(x_{8i}, x_{8i}, ·)` into accumulator `i mod 32` from `+0`
-  (`fmaAcc`), the butterfly of `F32Add_v2` sums over `16, 8, 4, 2, 1` (`bfly`), then
-  `ρ = PouwF32SqrtRn(F32Div(Σ, f32(n)))`;
-* `pc8`: `α = F32Div(448, F32Fmaxf(F32Add(s, F32Mul(4, ρ)), 2⁻³²))`, `β = F32Mul(F32Mul(ρ, α), 2^(−19/2))`, the floor
-  `F32Fma(ρ, α, −1)` (admitted at `≥ 0`), each noise code `ẽ_l = F32ToE4m3Sat(F32Mul(β, E4m3ToF32(e_l)))`, and position
-  `t`'s formed word `D_t = atom_p(F32Mul(α, x_t); ẽ; F_t)`, its code `F32ToE4m3Sat(D_t)`;
-* `pc4`: `δρ = F32Mul(ρ, 1/4)`, `α = F32Div(2688, F32Fmaxf(F32Add(s, F32Mul(4, δρ)), 2⁻³²))` and
-  `β = F32Mul(F32Mul(δρ, α), k_β)`, `k_β = 0x3EA920A7`.
-
-A `PearlCSem` reads a row as values (`wordsVal`), so these formulas run on the row's words re-encoded (`f32Word`; `pc4`'s
-`bf16WordOf`), and read their results back with `wordVal`. `pc8Sem`'s forming value is `D_t`'s, so `FormChain.elem`'s
-`e4m3` of it is `F32ToE4m3Sat(D_t)` wherever the cast agrees with `e4m3Word` and `D_t` is not NaN. The noise
-(`noise`, `lines`) stays a parameter, of codes in both: `pc8`'s noise codes are the words the Program reads.
--/
+/-! A row's statistics, scales and forming as the Programs compute them (`pc8Sem`, `pc4Sem`), stated apart from the gate tables, which `SecurityProofs.PearlC.RowCircuit` proves compute them. -/
 
 @[expose] public section
 
@@ -37,8 +12,6 @@ namespace Pouw.PearlC.RowCircuit
 open Pouw.Fp8Atom Pouw.PearlC Pouw.PearlC.TileCircuit
 
 variable (ops : RowOps)
-
-/-! ## The statistics both families compute -/
 
 /-- `s_t`: the running max of `|x_0|, …, |x_t|`, `|x|` read through `ab`. -/
 def rowMax (ab : Wire) (x : ℕ → ℕ) : ℕ → ℕ
@@ -67,8 +40,6 @@ def sumSq (w : Wire) (x : ℕ → ℕ) (n : ℕ) : ℕ :=
 def rowRho (w : Wire) (x : ℕ → ℕ) (K : ℕ) : ℕ :=
   Prim.eval ops .sqrt [Prim.eval ops .div [sumSq ops w x (K / 8), f32Word ((K / 8 : ℕ) : ℚ)]]
 
-/-! ## `pc8` -/
-
 /-- `pc8`'s `α`: `448 / max(s + 4·ρ, 2⁻³²)`. -/
 def alpha8 (x : ℕ → ℕ) (K : ℕ) : ℕ :=
   Prim.eval ops .div [0x43E00000, Prim.eval ops .fmaxf
@@ -89,10 +60,7 @@ row's codes `f`. -/
 def form8 (p : Pipeline) (α x : ℕ) (et f : ℕ → ℕ) : ℕ :=
   Prim.eval ops (.atom8 p) (Prim.eval ops .mul [α, x] :: (List.range 32).map et ++ (List.range 32).map f)
 
-/-- `pc8`'s code: the formed word's E4M3 cast. -/
 def code8W (p : Pipeline) (α x : ℕ) (et f : ℕ → ℕ) : ℕ := Prim.eval ops .toE4m3 [form8 ops p α x et f]
-
-/-! ## `pc4` -/
 
 /-- `pc4`'s `δρ`, `δ = 1/4`. -/
 def drho4 (x : ℕ → ℕ) (K : ℕ) : ℕ := Prim.eval ops .mul [rowRho ops .bf16 x K, 0x3E800000]
@@ -104,8 +72,6 @@ def alpha4 (x : ℕ → ℕ) (K : ℕ) : ℕ :=
 
 /-- `pc4`'s `β`: `δρ·α·k_β`. -/
 def beta4 (x : ℕ → ℕ) (K : ℕ) : ℕ := Prim.eval ops .mul [Prim.eval ops .mul [drho4 ops x K, alpha4 ops x K], 0x3EA920A7]
-
-/-! ## The semantics -/
 
 /-- A row of values as FP32 words, `0` past its end. -/
 def encRow (k : ℕ) (X : Fin k → ℚ) (l : ℕ) : ℕ := if h : l < k then f32Word (X ⟨l, h⟩) else 0

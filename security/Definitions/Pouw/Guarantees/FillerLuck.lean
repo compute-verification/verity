@@ -3,28 +3,7 @@ module
 public import Definitions.Pouw.Filler
 public import Definitions.Pouw.Assumptions.TS
 
-/-!
-# The filler's per-check luck (trusted)
-
-Lemma P2 over `ResourceAccounting.Filler`, each `def G : Prop` proved as `ResourceAccounting.SecurityProofs.FillerLuck.G` in
-`Proofs.Pouw.FillerLuck`:
-
-* `FillerCellLuck`: the filler's own cell check, a cell of a tile with every other row's and column's noise its own,
-  at pfill-bits and pfill-bU, in the s32 word (`ZMod (2 ^ 32)`) and over `ℤ`.
-* `FillerLuckAt`: a full-checking filler window meets (I7) `LuckAt` at `luck 1 ≤ 0.854`.
-* `FillerBudget`: a spot-checked filler window meets `BudgetAt (1/(1 − 0.854))`, Lemma C's budget at the filler's luck.
-* `FillerBlocksDeficit`: Theorem S with each block at its own `p`, the budget `eps.py`'s cheater LP reads: beside any
-  block whose one-draw check passes with probability at most `1 − (1 − p₀)·d₀`, outside probability `δ` an accepted
-  window has `Σ_w ((1 − p₀)·d₀ + (1 − 0.854)·d_fill) < ln(1/δ)`.
-* `PinnedFillLuckAt`, `PinnedFillBudget`, `PinnedFillBlocksDeficit`: the same three window statements at `p = 0` for a
-  filler whose check recomputes a pinned receipt from committed data and live coins (lfill's tile receipt, a lane chain
-  absorbed into the fold's receipt, keyed rounds in the fold, an FFMA chain recomputed bit for bit). Nothing in such a
-  check is left to guess, so a wrong receipt fails whenever its tile is sampled; what a right receipt cost is FILL-OPT's
-  (FOLD-OPT's for rounds in the fold).
-
-Probability statements put acceptance in the event: the probability that the window is accepted and the bound fails is
-at most `δ`.
--/
+/-! The filler's per-check luck (Lemma P2) and the window statements over it, each putting acceptance in its event. -/
 
 @[expose] public section
 

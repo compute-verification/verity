@@ -2,21 +2,7 @@ module
 
 public import Definitions.Pouw.PearlC.Defs
 
-/-!
-# Pearl-C's skip debit (definitions only)
-
-The debit agreed for Pearl-C's credit: debit (A), the joint flags under G4, and what the unit's credit reads from them.
-Skipping is in place: a skipped atom's incoming word passes through. The flags' properties (every atom of a set of one
-group's atoms whose joint skip leaves the word's output unchanged is flagged) are proved in `Pouw.PearlC.Freeze`; this
-module imports no proofs, so the game may read it.
-
-* **The joint flags** (`jointFlags`): the atoms in some set of one group's atoms whose joint skip leaves the output
-  unchanged, over all `2^|g|` masks of the group, each promoted and followed by the later promotions.
-* **The word's flags** (`wordFlags k a b t`): atom `t` of the word over rows `a` of `A′` and `b` of `B̃`, in groups of
-  four atoms (`Params.pi.G`).
-* **The unit's debits** (`unitFlags`, `chainInertWork`, `needed`, `neededSet`): the word flags over the unit's words, the
-  flagged atoms at a credit per atom, and the `A′` elements some word reads in an unflagged atom.
--/
+/-! Pearl-C's skip debit, the joint flags under G4 with in-place skips, and what the unit's credit reads from them; it imports no proofs, so the game may read it. -/
 
 @[expose] public section
 
@@ -72,8 +58,6 @@ def jointAt (g : List AtomIn) (t : Option ℚ) (ws : List Nat) : List Bool :=
 def jointFlags (gs : List (List AtomIn)) (i : Nat) : List Bool :=
   jointAt (gs.getD i []) (inTotal gs i) (laterWords gs i)
 
-/-! ## The debit -/
-
 /-- **The word's flags**, debit (A): atom `t` of the word over row `a` of `A′` and row `b` of `B̃` (its atoms
 `rowAtoms a b`, the chain `ctChain` promotes every four) is in `jointFlags` of its group `t / 4`, at position `t % 4`;
 `false` for `t ≥ k/32`. -/
@@ -87,8 +71,6 @@ variable {m n k : Nat}
 def unitFlags (Aq : Matrix (Fin m) (Fin k) Code) (Bq : Matrix (Fin n) (Fin k) Code) : Fin m → Fin n → ℕ → Bool :=
   fun i j t => wordFlags k (Aq i) (Bq j) t
 
-/-- **The unit's chain debit**: the flagged atoms `t < k/32` over the unit's `m·n` words, each at `c`, the chain's
-credit per atom; `c · Forming.flagCount k flag`. -/
 def chainInertWork (k : ℕ) (c : ℚ) (flag : Fin m → Fin n → ℕ → Bool) : ℚ :=
   c * ∑ i, ∑ j, ((Finset.range (k / 32)).filter fun t => flag i j t = true).card
 
@@ -99,7 +81,6 @@ def needed (flag : Fin m → Fin n → ℕ → Bool) (i : Fin m) (l : Fin k) : P
 instance instDecidableNeeded (flag : Fin m → Fin n → ℕ → Bool) (i : Fin m) (l : Fin k) : Decidable (needed flag i l) := by
   unfold needed; infer_instance
 
-/-- The needed elements of `A′`. -/
 def neededSet (flag : Fin m → Fin n → ℕ → Bool) : Finset (Fin m × Fin k) :=
   Finset.univ.filter fun p => needed flag p.1 p.2
 

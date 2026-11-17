@@ -4,41 +4,13 @@ public import Definitions.Pouw.H1Zy.LaneChunk
 public import Definitions.Pouw.H1Zy.Tile
 public import Definitions.Pouw.PearlC.Sha512
 
-/-!
-# A lane's fx1 chain on words: `h1tile._chain` at a 32 × 32 leaf (trusted)
-
-Lane `l` of a sampled leaf over `PouwH1Tile_v1` folds `KS + m` sets of 32 words into an fx1 state keyed from σ_R, and its
-partial is the state's two receipt words after each set (`h1tile.fold`, `h1zy.lane_partial` before the admit mask). This
-states that chain as the step machine `ChainSteps` (`h1Chain K`), so a lane's chain words are `chainOf (h1Chain K)` and a
-chunk's carry is its state. On the primitives' word views:
-
-* **Seeds and noise** (`seeds.py`). seed_j and σ_R are SHA-512 of the position's 8 big-endian bytes, then the tag, salt
-  and roots, each byte XORed with byte `i mod 8` of the position (`tagged`); block `t` of a seed's noise stream is
-  SHA-512 of `NOISE_TAG ‖ seed ‖ u64(t)` (`noiseChunk`), and its bit `β` is bit `β mod 32` of big-endian half
-  `⌊(β mod 512) / 32⌋` of block `⌊β / 512⌋` (`streamBit`). The salt, position and roots are the `pub` port's fields
-  (`SeedIn`): field bit `t` is bit `t mod 32` of the field's 32-bit half `⌊t / 32⌋`, halves big-endian (`seeds.leaves`).
-* **The lane's noise** (`h1tile.noise`, `fold_keys`, at the layout `h1tile.Layout(32, 32, K)`, `laneNoise`): row `i`'s
-  stream starts at block `i · RB` and holds its `K` dither bits then `m - 1` digit coins of 32 bits; column `j`'s at
-  block `32 RB + j · CB` holds its `K` coin bits then U's 32 bytes, each `PouwU129` of the byte's value; the lane's fold
-  keys are block `l` of σ_R's stream, 16 words. Its rows and columns are `laneRow l s` and `laneCol l t`.
-* **A segment** (`noiseChain`'s `seg`, `h1tile._row`, `_col` and `_chain`): `X = PouwI8AddBit(A, dither)` and
-  `W′ = PouwI8Add(PouwI8AddBit(B, coin), U)` at the segment's 32 entries; each of the 32 entries `e` takes
-  `PouwSegDot(T_e, X[row_slot e], W′[col_slot e])`; each row slot's residue sums `PouwResAdd(Y, X)`; the state absorbs
-  the 32 new T (`PouwFx1Absorb`) and the chain gains `PouwXinFinal` of its y half and of its z half. From `init`'s zero T
-  and Y this is `h1tile`'s first segment too: `PouwSegDot0` is `PouwSegDot` from 0, `PouwSx8` is `PouwResAdd` from 0.
-* **The end** (`fin`, `h1tile._digits` and `_chain`'s tail): each row slot's digits of its residue sums (`PouwDigitLo`,
-  `PouwDigitHi`, `PouwDigitZ` at the last coin digit, `PouwLow8`), then `O′ = PouwSegDot(T_last, PouwI8Neg(U), A_0)` and
-  `D_d = PouwSegDot(0, U, A_d)` for `d = 1 .. m - 1`, each absorbed as a set. The partial's word `w` is the chain's word
-  `w`, `0` past its `2 (KS + m)` words.
--/
+/-! A lane's fx1 chain on words, `h1tile._chain` at a 32 × 32 leaf, as the step machine `ChainSteps`. -/
 
 @[expose] public section
 
 namespace Pouw.H1Zy
 
 open Pouw.PearlC.Sha512 (digest beBytes beNat ascii padTo)
-
-/-! ## Seeds and the noise stream (`seeds.py`) -/
 
 /-- The public seed inputs as the lane's `pub` port holds them: the salt (512 bits), the position (64) and the roots
 (1024), each a field whose bit `t` is bit `t mod 32` of its 32-bit half `⌊t / 32⌋`. -/
@@ -81,8 +53,6 @@ def streamBit (seed : List ℕ) (first β : ℕ) : Bool := chunkBit (noiseChunk 
 def streamVal (seed : List ℕ) (first β n : ℕ) : ℕ :=
   ((List.range n).map fun i => if streamBit seed first (β + i) then 2 ^ i else 0).sum
 
-/-! ## The layout (`h1tile.Layout` at a 32 × 32 leaf) -/
-
 /-- `m` at contraction `K`. -/
 def digitsK (K : ℕ) : ℕ := nDigits (K / 32)
 
@@ -97,11 +67,6 @@ def rowFirst (K i : ℕ) : ℕ := i * rowBlocks K
 
 /-- Column `j`'s first block, past the 32 rows'. -/
 def colFirst (K j : ℕ) : ℕ := 32 * rowBlocks K + j * colBlocks K
-
-/-! ## duo and fx1 (`segment.py`)
-
-The segment and digit pieces' word views (`i8AddBit`, `i8Add`, `i8Neg`, `u129`, `segDot`, `resAdd`, `digitLo`,
-`digitHi`, `digitZ`, `low8`, `digits`, `nDigits`) are `Tile`'s. -/
 
 /-- `segment.mix32`. -/
 def mix32 (x : BitVec 32) : BitVec 32 :=
@@ -145,8 +110,6 @@ def rowSlot (q : Fin 32) : Fin 4 := ⟨2 * (q.val / 16) + q.val % 4 / 2, by omeg
 
 /-- Entry `q`'s column slot (`segment.col_slot`): `2 (⌊q / 4⌋ mod 4) + q mod 2`. -/
 def colSlot (q : Fin 32) : Fin 8 := ⟨2 * (q.val / 4 % 4) + q.val % 2, by omega⟩
-
-/-! ## The chain -/
 
 /-- **A lane's noise**: each row slot's dither bits and digit coins (`digit s d ρ`, coin `ρ` of digit `d`), each column
 slot's coin bits and U, and its fold keys. -/

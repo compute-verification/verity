@@ -4,9 +4,7 @@ public import Mathlib.Basic.Real.Basic
 import Mathlib.Data.Finset.Attr
 import Mathlib.Tactic.SetLike
 
-/-!
-# The chain's parameters (trusted)
--/
+/-! The chain's parameters. -/
 
 @[expose] public section
 
@@ -20,7 +18,6 @@ noncomputable def reductionGap (g₀ Ωmax : ℝ) : ℝ := 1 - (1 - g₀) / Ωma
 
 namespace Params
 
-/-- TT's target, `g₀ = 0.5%`. -/
 noncomputable def gap0 : ℝ := 1 / 200
 
 end Params

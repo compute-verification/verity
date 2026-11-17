@@ -3,36 +3,7 @@ module
 public import Definitions.Pouw.Game.Defs
 public import Definitions.Pouw.PearlC.Instance
 
-/-!
-# The per-tile cap and the sampled audit (trusted)
-
-The verifier opens sampled tiles, not units: `verity.protocols.accounting.work.pouw.audit` samples `t` tiles independently, each with probability
-`W_ref(tile)/W`, and recomputes each sampled tile from its openings (its activation rows and weight rows over the full k).
-So the debit cap has to be decided on a tile, and the gap has to hold for a verifier that checks sampled tiles only. This
-file states both; `TileGap` proves the gap from them.
-
-- **A tile** is the output words `rows g × cols g` of one unit (`Tiling`). The named tiling is the audit's grid of
-  `64 × 64` words (`auditTiling`).
-- **Credited rows.** A tile's rows whose activation row passes Π's rules (`PearlCSem.RowOK`, `PearlCSem.passRows`) are
-  credited. A row that fails them (a massive activation the fixed `S_ℓ` doesn't cover) stays in its unit, computed and
-  bound, and earns no credit: the plan's one per-row rule. The verifier checks
-  that an excluded row fails the rules, which is what makes it uncredited here.
-- **A good tile** (`TileGood`): its replayed debit on its credited rows is within the cap, each of its weight rows
-  passes the rules (`fixedOK`), and each ticket and useful word of its credited rows is correct. A weight row is never
-  excluded: a tile with a failing one is not good, and earns nothing. Each part reads only the tile's openings:
-  - the rules are per row;
-  - P1's flags of a word read only the word's two rows (`Skip.wordFlags`), so the chain debit, the flagged atoms summed
-    over the words, is replayed from the openings;
-  - the forming debit reads the tile's rows and its words' flags.
-- **The credit** of a good tile is fixed at `(1 − ρ)·creditOf` times its credited rows' share of its unit's words
-  (`pearlCTiles`), whatever its debit within the cap. The kernel credits an accepted tile this way.
-- **The sample's weights** are every tile's full `W_ref`, fixed by the layout; the certified work counts credited rows only
-  (`TileRules.Wcred`).
-- **Blank units** are the ones the prover leaves uncommitted. Their tiles are never checked and never credited.
-- **`GGapSampled`:** for every adversary, the probability that the audit accepts and the credited work, less `ε_s` of the
-  layout's, exceeds `T/(1 − g)`, `g` the gap, is at most `(1 − ε_s)^t + δ(q, N)`. The sample is independent of the oracle and the salt,
-  so its source must be fixed only after the trace's commitment.
--/
+/-! The per-tile cap and the sampled audit, which opens sampled tiles, not units, with a sample fixed only after the trace's commitment. -/
 
 @[expose] public section
 
@@ -112,7 +83,6 @@ noncomputable def claimedWref (TR : TileRules Q R S) (U : Workload) (τ : Trace)
 /-- The layout's `W_ref`, tile by tile. -/
 def tileWrefTotal (TR : TileRules Q R S) (L : Layout) : ℝ := ∑ g ∈ range (TR.tiling L).NT, TR.Wref L g
 
-/-- `AdmitsRef` with the reference's cost bounded tile by tile. -/
 def AdmitsRefTile (CM : CostModel Q R S) (P : Protocol Q R S) (TR : TileRules Q R S) (D : Layout → Prop)
     (qref : Workload → ℕ) : Prop :=
   ∃ prog : CM.Prog, ∀ U : Workload, U.InDomain P D → U.FixedOK P → ∀ act : ℕ → Codes,
@@ -137,20 +107,14 @@ def GGapSampled [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostMo
         ≤ (1 - εs) ^ t + δ q U.layout.N
 
 open Classical in
-/-- The tiles of the units `τ` commits whose inert work (the replayed debit) exceeds its bound: the tolerant audit
-accepts a sampled one and credits it nothing. -/
+/-- The tolerant audit accepts a sampled one and credits it nothing. -/
 noncomputable def overInertBoundTiles (TR : TileRules Q R S) (U : Workload) (H : Q → R) (s : S) (τ : Trace) : Finset ℕ :=
   (range (TR.tiling U.layout).NT).filter fun g =>
     ∃ c, τ ((TR.tiling U.layout).unit g) = some c ∧ ¬ TR.inertBoundOK H s U g c.act
 
-/-- **The gap property under the tolerant sampled audit.** Write `S` for the credit (the claimed work, the credited
-rows' `W_ref`; a number, where the type `S` is the salt's), `T` for the budget, `g` for the gap (the statement's `γ`),
-and `1 + ε_a = 1/(1 − g)`. As `GGapSampled`, for every miss-bound table `u` at `δ` (`MissBound`), the audit accepts (every
-sampled tile is good, of a blank unit, or over its inert-work bound) while `S > (1 + ε)·T` with probability at
-most `δ + η(q, N)`, the failure probability. Here `1 + ε = (1 + ε_a)/(1 − ε_s)` is the advantage and
-`ε_s = u(X_O)·W/S` is the sampling tolerance: the share of `S` an accepted run may hold in incorrect work. `W` is the
-layout's work, and `X_O` the number of samples on tiles over their bound. `GGapSampled` is its case `u 0 = ε_s`,
-`u x = 1` otherwise. -/
+/-- `S` is the credit (a number, where the type `S` is the salt's), `1 + ε_a = 1/(1 − g)`, `1 + ε = (1 + ε_a)/(1 − ε_s)` and
+`ε_s = u(X_O)·W/S`, with `X_O` the samples on tiles over their bound. `GGapSampled` is its case `u 0 = ε_s`, `u x = 1`
+otherwise. -/
 def GGapSampledTol [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S) (P : Protocol Q R S)
     (TR : TileRules Q R S) (D : Layout → Prop) (γ : ℝ) (η : ℕ → ℕ → ℝ) : Prop :=
   ∀ U : Workload, U.InDomain P D → ∀ T : ℝ, 0 ≤ T → ∀ q : ℕ, q ≤ 2 ^ 64 → ∀ A : Adversary CM, A.Bounded U T q →
@@ -163,8 +127,6 @@ def GGapSampledTol [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : Cos
           T < (1 - γ) * (claimedWref TR U (A.trace U x.1 x.2.1) -
             u (drawsIn (overInertBoundTiles TR U x.1 x.2.1 (A.trace U x.1 x.2.1)) x.2.2) * tileWrefTotal TR U.layout))
         ≤ δ + η q U.layout.N
-
-/-! ## Pearl-C's tiles -/
 
 open Classical in
 /-- A tile's credited rows: those whose activation row passes Π's rules. An excluded row stays in its unit, computed and

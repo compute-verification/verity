@@ -3,43 +3,7 @@ module
 public import Definitions.Claims
 public import Definitions.Pouw.Dither
 
-/-!
-# The no-fold Dither protocol's work-soundness: its named premises (trusted)
-
-The named premises of `Definitions.Pouw.Guarantees.Dither.WorkSound` besides the accelerator model (G1, G2, P1, P2) and
-commit-and-open's extraction (`Definitions.Pouw.Assumptions.ShaRealize.ExtractAdv`). They are the program's trust base
-(section 0) and nothing else:
-
-* `SAKMatmul`: symmetric algorithmic knowledge for exact matrix products, on the round's words, for
-  programs that exchange no bits with outside machines;
-* `SAKSha`: SHA-512's implementation speed, on the round's commitment, in sampling form, per prover;
-* `OutsourceWithinEgress`: an exchanged bit replaces at most `β` of priced work, the one premise that prices outside
-  machines;
-* `ProofSystemSound`: the service's verdict accepts only periods whose rounds' checks pass, but with probability `κ_S`
-  (Flock sound and zero knowledge, live coins from the auditor's challenger);
-* `ImportWithinCertifier`: an accepted period exchanged at most `K` bits, the network attester's count (class L).
-
-`CertifierSeesImports`, the network attester's counts take in every exchanged bit (class L, the auditor's devices), is
-the device premise under it: a verdict that refuses counts past `K` (`CountedWithin`) accepts only periods that
-exchanged at most `K` bits. `Definitions.Pouw.Guarantees.OnsiteFreed.OnsiteFreed` and the card instance read it.
-
-`Definitions.Pouw.Guarantees.Dither.FleetSound` adds two on the challenger's coins across a fleet's replicas:
-
-* `OwnDither`: the challenger issues each replica its own coins, uniform and independent of every other replica's
-  (the replicas' coins independent across the fleet, from the coins' derivation);
-* `CoinsConfidential`: a replica's coins reach no machine outside it before it has them, so the strategy run on it
-  reads none of them (for the MVP, by one device that produces a server's coins and runs its certifier).
-
-Only `SAKMatmul`, `SAKSha`, `OutsourceWithinEgress` and `ExtractAdv` say anything about which algorithms a prover
-runs.
-
-**Advice.** A round's programs read advice fixed before the round's coins, of at most `B` bits (an injection into
-`Fin (2 ^ B)`). The premises hold outside a degenerate set of the round's dithers of probability at most `κdeg B`:
-where the dither is degenerate (for the no-fold round, noise that leaves the product's structure, such
-as zero noise), advice that holds the un-noised product answers the check for free, so no premise of the exact form
-`moment ≤ 1` holds against it. `κdeg B` is the probability of the dithers on which some advice of `B` bits beats the
-public best; it enters `κ` once a round.
--/
+/-! The named premises of the no-fold Dither protocol's work-soundness, holding outside a degenerate set of the round's dithers of probability at most `κdeg B`. -/
 
 @[expose] public section
 

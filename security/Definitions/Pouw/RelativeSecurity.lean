@@ -35,30 +35,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# Relative security for matmul PoUW: the vocabulary its guarantees read (trusted)
-
-The definitions `Definitions.Pouw.Guarantees.RelativeSecurity` and `Definitions.Pouw.Assumptions.RelativeSecurity` read, moved
-verbatim from `Proofs.Pouw.RelativeSecurity` (same names, namespace and section variables), so the lock's `reads`
-follow them into the spec:
-
-* uniform probability (`prob`), `R` rounds of fresh coins (`Paths`), a prover's play (`RoundGame`, its acceptance
-  and deficiency) and a round's stages (`StageGame`);
-* the machine model (`Machine`, a run's `charge`), the service (`Service`) and its adversary floor (`ServiceFloor`;
-  adversary by adversary, `ServiceFloorPerProver`, at an adversary's error `breakBound`, read through the analysis's
-  collision finders, `Finders` and `finderTerm`, and `ecr/sha-512`'s `Claims.ecrBound` at budgets computed from the
-  adversary's time);
-* Theorem K's runs (`BitAff`, `bitInd`, `Slp`, `SlpG`), the re-encoded design's prefix words (`DBits`, `dPrefix`,
-  `wRe`, `DCells`), affine products (`AffProd`), degree-2 errors (`CubeQuad`, `pairDiff`) and the spot check's
-  deficiency (`spotDef`);
-* the staged spot check (`StagePlay`, `StagedPlay`, `DStage`) and an adversary's window run on it (`StagedRun`);
-* the spot check over a round's overlapping samples: its bit points (`drawInd`, `mergeAt`), K∥'s products (`AffMulAt`),
-  the per-draw deficiency (`ovDef`), the play (`OvPlay`, its game and errors), the round's bits, cell-blocks, samples
-  and coins (`OBits`, `OCells`, `ODraws`, `OSpot`), and an adversary's window run on it (`OverlapRun`);
-* the parity luck's scope: one-sided products of any form (`LeftOnly`, `RightOnly`, `OneSided`; per sample,
-  `OneSidedAt`), `Z/2³²` read mod 2 (`toF2`), a cell-block's frame (`dFrame`), products two-sided at a frame
-  (`XBlind`, `YBlind`, `TwoSidedAt`) and charging purity (`SlpG.ChargePure`; across samples, `SlpG.ChargePureAt`).
--/
+/-! The vocabulary relative security's guarantees and assumptions for matmul PoUW read. -/
 
 @[expose] public section
 
@@ -135,44 +112,31 @@ section Machine
 /-- A machine model: algorithms from inputs `I` to outputs `O` (coins are part of the input), what they compute, and
 their cost. The axioms are the properties of `time` the reduction uses. -/
 structure Machine where
-  /-- The algorithms from `I` to `O`. -/
   Alg : Type → Type → Type
-  /-- What an algorithm computes. -/
   eval : ∀ {I O : Type}, Alg I O → I → O
-  /-- Its cost (an abstract `time`: priced work, worst case over inputs and coins). -/
+  /-- Priced work, worst case over inputs and coins. -/
   time : ∀ {I O : Type}, Alg I O → ℝ
-  /-- One run's cost (RS-DEF §1.2's `cost_P(x; σ, ρ)`), which `time` bounds. -/
   cost : ∀ {I O : Type}, Alg I O → I → ℝ
-  /-- The program's size `|M|` (RS-DEF's T4), charged with every run (`charge`, RS-RT's V1). -/
+  /-- Charged with every run (`charge`). -/
   size : ∀ {I O : Type}, Alg I O → ℝ
-  /-- Run `f`, then `g` on its output. -/
   seq : ∀ {I O P : Type}, Alg I O → Alg O P → Alg I P
-  /-- Run `f` and `g` on the same input. -/
   pair : ∀ {I O P : Type}, Alg I O → Alg I P → Alg I (O × P)
-  /-- The projections (routing). -/
   fst : ∀ {I J : Type}, Alg (I × J) I
   snd : ∀ {I J : Type}, Alg (I × J) J
   eval_seq : ∀ {I O P : Type} (f : Alg I O) (g : Alg O P) (x : I), eval (seq f g) x = eval g (eval f x)
   eval_pair : ∀ {I O P : Type} (f : Alg I O) (g : Alg I P) (x : I), eval (pair f g) x = (eval f x, eval g x)
   eval_fst : ∀ {I J : Type} (x : I × J), eval (fst (I := I) (J := J)) x = x.1
   eval_snd : ∀ {I J : Type} (x : I × J), eval (snd (I := I) (J := J)) x = x.2
-  /-- Costs are nonnegative. -/
   time_nonneg : ∀ {I O : Type} (f : Alg I O), 0 ≤ time f
-  /-- `time` is the worst case: every run costs at most `time`. -/
   cost_le_time : ∀ {I O : Type} (f : Alg I O) (x : I), cost f x ≤ time f
-  /-- T4: a program's time is at least its size. -/
   size_le_time : ∀ {I O : Type} (f : Alg I O), size f ≤ time f
   size_nonneg : ∀ {I O : Type} (f : Alg I O), 0 ≤ size f
-  /-- Subadditivity of sequential composition. -/
   time_seq_le : ∀ {I O P : Type} (f : Alg I O) (g : Alg O P), time (seq f g) ≤ time f + time g
-  /-- Monotonicity: running `f` first costs at least `f`. (Not `g`: `g`'s worst case may lie outside `f`'s range.) -/
+  /-- Not `g`: `g`'s worst case may lie outside `f`'s range. -/
   le_time_seq : ∀ {I O P : Type} (f : Alg I O) (g : Alg O P), time f ≤ time (seq f g)
-  /-- Subadditivity of side-by-side composition. -/
   time_pair_le : ∀ {I O P : Type} (f : Alg I O) (g : Alg I P), time (pair f g) ≤ time f + time g
-  /-- Monotonicity: running `f` beside `g` costs at least each. -/
   le_time_pair_left : ∀ {I O P : Type} (f : Alg I O) (g : Alg I P), time f ≤ time (pair f g)
   le_time_pair_right : ∀ {I O P : Type} (f : Alg I O) (g : Alg I P), time g ≤ time (pair f g)
-  /-- Routing is free. -/
   time_fst : ∀ {I J : Type}, time (fst (I := I) (J := J)) = 0
   time_snd : ∀ {I J : Type}, time (snd (I := I) (J := J)) = 0
 
@@ -235,26 +199,14 @@ no bound. -/
 abbrev Finders (Mc : Machine) (S : Service) (R : ℕ) : Type 1 :=
   ∀ (Ω' : Type) [Fintype Ω'], Mc.Alg (S.Seed × Ω') (S.Com × S.Ans) → Ω' → Fin R → Claims.Finder
 
-/-- **An adversary's finder term at one value of its coins, at the budget `q`**: the `ecr/sha-512` bounds of its
-finders for every round (`Claims.ecrBound` at the hash `sha` and the budget), summed: `R · q / 2^256` where every
-finder meets the assumption within `q` calls in expectation, `⊤` otherwise. -/
+/-- `R · q / 2^256` where every finder meets `ecr/sha-512` within `q` calls in expectation, `⊤` otherwise. -/
 noncomputable def finderTerm {Mc : Machine} {S : Service} {R : ℕ} (sha : Claims.Msg → Claims.Msg)
     (fd : Finders Mc S R) (q : ℝ) (Ω : Type) [Fintype Ω] (M : Mc.Alg (S.Seed × Ω) (S.Com × S.Ans)) (r : Ω) :
     ENNReal :=
   ∑ w, Claims.ecrBound sha (fd Ω M r w) q
 
-/-- **An adversary's error in the floors per prover**: at each value `r` of its coins, the luck term `ε`, the
-constants `δb` and `δz` of each of the `R` rounds' binding and zero-knowledge breaks, and its binding and
-zero-knowledge finder terms at `r` (`finderTerm`) at the weights `βb` and `βz`, capped at 1, a probability; then
-averaged over `r`. The cap keeps one value of the coins whose finder fails `ecr/sha-512` (a prover that merely tries
-its coins as a collision) from sending the whole bound to `⊤`: that value adds its share of the coins, `1/|Ω|`.
-
-Each path's finders are read at a budget computed from the adversary: `cb · time M + db` SHA-512 calls for the
-binding finders and `cz · time M + dz` for the zero-knowledge ones, at constants the analysis states (its finders'
-reruns of `M` per unit of `M`'s time, and the calls they make besides). `M`'s time is the machine's worst case
-(`Machine.time`), which `M` can't set low, and the finders' declared costs only have to fit under the budgets. Where
-every finder fits and meets `ecr/sha-512`, the error is
-`ε + R (δb + δz) + R (βb (cb · time M + db) + βz (cz · time M + dz)) / 2^256`, capped at 1. -/
+/-- Each value of the coins' term is capped at 1, so a value whose finder fails `ecr/sha-512` adds only its share `1/|Ω|`;
+the finders' budgets are computed from `Machine.time`, which `M` can't set low. -/
 noncomputable def breakBound {Mc : Machine} {S : Service} {R : ℕ} (sha : Claims.Msg → Claims.Msg)
     (fb fz : Finders Mc S R) (cb db cz dz : ℝ) (ε δb βb δz βz : ℝ) (Ω : Type) [Fintype Ω]
     (M : Mc.Alg (S.Seed × Ω) (S.Com × S.Ans)) : ENNReal :=

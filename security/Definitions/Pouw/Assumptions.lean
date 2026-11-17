@@ -59,13 +59,6 @@ public import Definitions.Pouw.Assumptions.ShaRealize
 public import Definitions.Pouw.Game.Deadline
 public import Definitions.Pouw.PearlC.Deadline
 public import Definitions.Pouw.PearlC.Game
-/-!
-# PoUW's named assumptions, and the definitions and statements over them (trusted)
-
-The modules `lean-audit.json` lists under `assumptions` state the named assumptions, each a `Prop` taken as a
-hypothesis by the statements that use it, never an `axiom`; the game's are in `Game`. The layer's other modules hold
-the definitions and statements that read them, which an assumption module may import. They import `Definitions.Pouw` and
-each other, never a proof.
--/
+/-! PoUW's named assumptions, and the definitions and statements that read them, importing no proof. -/
 
 @[expose] public section

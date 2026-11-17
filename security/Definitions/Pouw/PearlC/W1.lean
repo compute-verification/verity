@@ -4,140 +4,13 @@ public import Definitions.Pouw.PearlC.Device
 public import Definitions.Pouw.PearlC.DeviceFp4Issue
 public import Definitions.Pouw.PearlC.Sha512
 
-/-!
-# The accounting W1 as a cost model (trusted; definitions only)
-
-`CostModel Q R S` (`Game.lean`) is abstract, and every TT_OUT form names "W1 at the device's measured prices" only in
-its docstring. This module is W1 as a definition: a machine, its instructions, their prices per device, and
-`w1 dv P salt : CostModel Q R S`, the cost of a program as W1 charges it. It states no assumption and changes no
-statement; a restatement of TT_OUT over it is separate.
-
-**What W1 is** (the problem statement §3.1,
-amended by H5):
-- an instruction is priced by its class at the measured rate, per 32-bit lane result, and a tensor-core instruction by
-  its whole fragment, however few of its outputs a program uses (`w1-complete/sm120`);
-- oblivious whole-word moves are free, at any memory level;
-- an instruction whose address, guard or enclosing branch depends on data costs one INT32 instruction per 32-bit word it
-  moves or produces (the taint discipline, H5);
-- the first fetch of a pre-salt byte (the preprocessed state, the declared weights, the program's constants) or of a
-  supplied one (the activations) costs the DRAM rate, except a unit's operands when the unit comes out correct (W1-1,
-  W1-3);
-- oracle calls are free, and counted in `q` (decision 1).
-
-**The machine** (`Instr`, `Code`, `exec`). Memory is addressed by `(region, index)` (`Addr`) and holds 32-bit words.
-The regions are the scratch (0), the salt's bytes (1), the preprocessed state σ (2: its length, then its entries as
-32-bit words), the program's constant bank (3), the activations (4) and the weights (5), both FP32 words at
-`Nat.pair`-coded positions, and the outputs: the ticket words (6) and the useful words (7). A program (`CodeImage`) is a
-constant bank and a code tree, both functions of the public layout, so the layout's control flow, unrolling and
-addressing are compiled in and free, as public control flow is on a GPU. Its text is bounded (`CodeImage.bounded`, below).
-What depends on data is an `ite` (a branch on a word) or an `ld`/`st` with a register address, and W1's taint rule
-prices both: an `ite` costs one INT32 instruction, and every instruction under it pays one INT32 instruction per word it
-writes (`Instr.price`). An instruction is one lane: its price is W1's per-lane price, except a tensor-core instruction,
-which is the warp's whole fragment.
-
-**The run.** `run` executes the program from the initial memory (`init`) and reads the transcript off the final memory
-(`readout`): every declared unit commits its activations (as the program left them; positions outside the unit's shape
-read back as supplied), its ticket words and its useful words. The commitment is ideal (`Commit`), so the readout is
-free. The model makes no oracle call (`calls = 0`), so it meets `CostModel.Queries` for any `Q`, `R`
-(`Proofs.Pouw.PearlC.W1Checks.w1_queries`).
-
-**The cost** is the instructions' prices plus `fetch` per distinct pre-salt or supplied word read, except the words of
-a correct unit's operands (its activation rows and its weight rows, within its shape), which is why the model takes the
-protocol `P`: whether a unit is correct is `P`'s `Correct` on the transcript the run commits.
-
-**The instructions and their classes** (`Instr`):
-- free moves: `mov`; with a register address, `ld` and `st`, which pay the taint rule's INT32 per word;
-- INT32 (`int32`): `iop` (add, subtract, multiply low and high, and, or, xor, shifts, comparisons, min, max), `iadd3`,
-  `lop3` (any three-input bitwise function), `prmt` (byte permute, the sub-word rule's PRMT) and `sel`;
-- FP32 (`fp32`): FADD, FMUL, FFMA, FMNMX on FP32 words, round to nearest even (`PeelExact.addWord?`, `fmaWord?`);
-- a cast (`cvt`): two FP32 words to two E4M3, BF16 or E2M1 codes packed into a field of the destination
-  (`F2FP…PACK_AB_MERGE_C`), one instruction; at S8 it leaves memory as it is, still at a cast's price, so no program
-  gains by it;
-- a tensor-core fragment (`mma`): `m × n` outputs of depth `k` (the device's for the format), at `m·n·k` times the
-  format's price per MAC, on the device's captured step (`W1Device`), or at S8 on the exact step `s8Step`;
-- a SHA-512 compression (`sha`), at `sha512`.
-
-**Prices per device** (`W1Prices`, in the record's unit: one dense E4M3 MAC with FP32 accumulation for the FP8
-records, one NVFP4 MAC for the FP4 record). The unit (CMP-438): each operation is charged in seconds at its own pipe's
-data-sheet ceiling, so a program's time is at least the sum of its operations over their pipes' ceilings. Each card's
-FP32 price is stated at two readings (the card files' `price.fp32.sm`, `price.fp32.tensor` and `price.fp32_loop`):
-the higher-ceiling one is the default, a statement over the prices reads it unless it says it rests on the other.
-- The H100 and the H200: `W1Prices.h100` (FP32 32, both pipes at `h100SmMHz`, 1980 MHz) is the default;
-  `W1Prices.h100Tensor` (FP32 `976/33` = 29.58, the tensor pipe at `h100TensorMHz`, 1830 MHz) credits more and holds
-  only if the tensor pipe never exceeds 1830 MHz.
-- The RTX PRO 6000: `W1Prices.sm120` (FP32 8, the add at its pipe's issue ceiling, both pipes on the one SM clock) is
-  the default; `W1Prices.sm120Loop` (FP32 8.376, the add in a timed loop at a locked 2,100 MHz) holds for an add issued
-  in that loop.
-
-The prices:
-- `W1Prices.sm120`: node 2's RTX PRO 6000 at locked 2,100 MHz (every
-  SASS, identity and numeric gate passed): QMMA E4M3 m16n8k32 1 per MAC, OMMA NVFP4 m16n8k64 0.5, HMMA BF16 m16n8k16
-  2; FADD and FFMA 8.00 issue-bound (8.376 in the measured loop: `W1Prices.sm120Loop`); a cast 16 per F2FP instruction
-  (7.7–8.0 per code alone, the shared half-rate integer pipe's 64 lanes per SM per clock); INT32 16 on that pipe. IMMA
-  S8 m16n8k32 1 per MAC is the data sheet's, not those runs' (NVIDIA's RTX PRO Blackwell whitepaper v1.1, Table 4:
-  INT8 1007.6 dense TOPS, FP8 with FP32 accumulate 1007.6 dense TFLOPS); only `W1Device.s8Sm120` has its fragment.
-- `W1Prices.h100`: the datasheet table `Dimension.H100.h100Nominal` (FP8 and INT8 1, BF16 2 per MAC; FFMA 32; INT32 64)
-  and the cast at 32 per code; the `wgmma` shapes `m64nNk32`/`m64nNk16` at `N ≥ 64` only, where Round 7's measured
-  price per register meets the nominal one (m64n8k32 measured 144 per register). INT8's 1 is also the data sheets'
-  (the H100 whitepaper's Table 1 and the H200 data sheet: INT8 TOPS equal to FP8 TFLOPS); only `W1Device.s8H100` has
-  its fragments, and it is the H200's setting too.
-- `W1Prices.h100Tensor`: `h100` at the tensor-clock reading, FP32, a cast and INT32 times `61/66` (the card file's
-  1830 MHz tensor clock over its 1980 MHz SM clock); `W1Device.s8H100Tensor` is the INT8 setting at it.
-- `W1Prices.fp4Sm120`: `sm120Loop` in FP4 units (an FP8 unit is 2), the record `devFp4Sm120` uses.
-
-Here are the machine and `W1Device.sm120At`, sm_120 at any prices. The settings at a card's numbers, their prices and
-fragment lists (`W1Device.sm120Loop`, `.sm120`, `.h100`, `.fp4Sm120`, `.s8Sm120`, `.s8H100`) are
-`Proofs.Pouw.PearlC.Records`': no listed statement reads one. The H100's prices and its INT8 setting at the tensor clock stay here
-(`W1Prices.h100`, `.h100Tensor`, `h100Frags`, `h100S8Frags`, `W1Device.s8H100At`, `.s8H100Tensor`), since
-`TTOutTilePearlCH100Rev1S8` reads them.
-
-`sha512` (a compression) and `fetch` (a first-fetched word) are unmeasured on both devices, so the records take them as
-parameters. The game's preprocessing is a `QTree` over `H`, which computes anything, SHA-512 included, for free before
-the salt; online, `sha512` is the one place W1 charges a compression.
-
-`W1Prices.toPrices` is the coarse record `Device.Prices` that `creditDev` and `wrefDev` read: the FP32 add, the BF16 MAC,
-and the forming per element, `fs = 32·mac(E4M3) + cvt/2` (the k32 noise atom and half a cast) and `qa = ⌈fp32/8⌉` (one
-FFMA per 8 elements). At `h100`, `sm120` and `sm120Loop` it is `Prices.h100`, `Prices.sm120` and `Prices.sm120Loop`
-(`Proofs.Pouw.PearlC.W1Checks`). `W1Prices.toFp4Prices pr p` is the FP4 record's `Fp4Prices` at a block-scale path
-`p`: the BF16 MAC, `fs = 64·mac(E2M1) + p.fixed + p.fp32Ops·fp32/16 + fp32 + cvt/2` (the k64 noise atom, the block
-scale, and the cast's FMUL and half an `F2FP`) and `qa = fp32 + fp32/8` (the noisy amax and ρ's accumulate on every 8th
-element). At `fp4Sm120` it is `Fp4Prices.sm120At (1047/125) p`, so `Fp4Prices.sm120` at `lut256`. The scale path's
-`fixed` part (an `LDS` and `PRMT`s per block) is the record's own, not a W1 price.
-
-**Where the model is narrower than W1**, each a named gap for the restatement:
-- the opcode set is the list above: an opcode outside it (MUFU, IMAD.WIDE, HADD2, warp shuffles and votes, atomics)
-  has no instruction here, so a program that needs it pays its expansion into these;
-- a non-finite FP32 result is the one NaN word `0x7FFFFFFF`, and a BF16 cast's overflow is `0x7FFF`;
-- a register address always pays the taint rule, and an `ite` always does: a public address or branch is compiled into
-  the program, which is free;
-- the BF16 fragment's step is the one-group pipeline `bf16Step` at the device's BF16 `Pipeline`; on sm_120 that is
-  `PeelExact.hopperBf16K16`, the stand-in `PeelExactP` uses, not a capture of sm_120's HMMA;
-- the S8 fragments are the `.satfinite` form the served path runs (`IMMA.16832.S8.S8.SAT`, `IGMMA.64xNx32.S8.S8.SAT`).
-  The wrapping form (without `.satfinite`, which the PoUW attack kernels under `benchmarks/pouw` issue), u8 operands,
-  the k16 shapes and sm_90's `mma.sync` m16n8k32 have no instruction here, and neither has a conversion to S8 (`F2I`,
-  `I2IP`): a program pays their expansion into these;
-- only `W1Device.s8Sm120` and `W1Device.s8H100` have S8 fragments. The other settings (`sm120`, `sm120Loop`,
-  `fp4Sm120`, `h100`) keep the fragments their records were stated over, so a program on them has no integer tensor
-  core, which both cards have, until their readers are restated on S8 settings;
-- program text is free within its bound: the code tree is the program's control flow, and unrolled code carries no
-  data (every operand is an address).
-
-**The text bound** (`CodeImage.bounded`). At
-every layout a program has at most `2^64` code nodes (`Code.size`) and `2^64` constants. W1 charges only the path a run
-takes, so with unbounded text a tree of `ite`s on the salt's 256 bits holds one leaf per salt. That is a table of the
-reference at `NoiseSha512.sha512Sem`, which reads no oracle, selected for 256 INT32 instructions. Under the bound
-that tree is not a program (`Proofs.Pouw.PearlC.W1Tabulate.tree_not_code`). The bound narrows every statement over W1 to
-programs a machine can hold. A deployed program is far inside it: W1 has no loops, so an honest code tree has about one
-node per instruction a run executes, and `2^64` instructions is far more than a device runs in a window.
--/
+/-! The accounting W1 as a cost model, `w1 dv P salt`, narrower than W1 in its opcode set and S8 fragments, with `sha512` and `fetch` as parameters and program text bounded so that no program tabulates the reference by salt. -/
 
 @[expose] public section
 
 namespace Pouw.PearlC.W1
 
 open Pouw.Fp8Atom Pouw.PearlC Pouw.PearlC.PeelExact Pouw.PearlC.Fp4 Pouw.PearlC.Fp4Dev
-
-/-! ## Formats, fragments, prices, devices -/
 
 /-- A tensor-core input format: E4M3, BF16, E2M1 (NVFP4's codes), or S8 (INT8, two's complement, accumulated in s32). -/
 inductive Fmt where
@@ -211,15 +84,12 @@ def W1Prices.h100Tensor (sha fetch : ℚ) : W1Prices :=
 def W1Prices.scale (c : ℚ) (pr : W1Prices) : W1Prices :=
   ⟨fun f => c * pr.mac f, c * pr.fp32, c * pr.cvt, c * pr.int32, c * pr.sha512, c * pr.fetch⟩
 
-/-- **The coarse record** `creditDev` and `wrefDev` read: the FP32 add, the BF16 MAC, and the forming per element,
-`fs = ⌈32·mac(E4M3) + cvt/2⌉` (the noise atom's 32 MACs and half a cast) and `qa = ⌈fp32/8⌉` (ρ's FFMA on every 8th). -/
+/-- Per element: the noise atom's 32 MACs and half a cast, and ρ's FFMA on every 8th. -/
 def W1Prices.toPrices (pr : W1Prices) : Prices :=
   ⟨pr.fp32, pr.mac .bf16, ⟨⌈32 * pr.mac .e4m3 + pr.cvt / 2⌉₊, ⌈pr.fp32 / 8⌉₊⟩⟩
 
-/-- **The FP4 coarse record** `creditFp4` and `wrefFp4` read, at the block-scale path `p`: the BF16 MAC, the forming
-per element `fs = 64·mac(E2M1) + p.fixed + p.fp32Ops·fp32/16 + fp32 + cvt/2` (the k64 noise atom, the block scale per
-16, and the cast's FMUL and half an `F2FP`), and `qa = fp32 + fp32/8` (the noisy amax's FMNMX and ρ's FFMA on every
-8th). -/
+/-- Per element: the k64 noise atom, the block scale per 16, and the cast's FMUL and half an `F2FP`; the noisy amax's
+FMNMX and ρ's FFMA on every 8th. -/
 def W1Prices.toFp4Prices (pr : W1Prices) (p : Fp4ScalePath) : Fp4Prices :=
   ⟨pr.mac .bf16, 64 * pr.mac .e2m1 + p.fixed + p.fp32Ops * pr.fp32 / 16 + pr.fp32 + pr.cvt / 2, pr.fp32 + pr.fp32 / 8⟩
 
@@ -265,8 +135,6 @@ def W1Device.s8H100At (pr : W1Prices) : W1Device := ⟨pr, hopperE4m3K32, hopper
 SM pipes at `61/66` of `W1Prices.h100`'s. -/
 def W1Device.s8H100Tensor (sha fetch : ℚ) : W1Device := W1Device.s8H100At (W1Prices.h100Tensor sha fetch)
 
-/-! ## Memory -/
-
 /-- An address: a region and an index in it. -/
 abbrev Addr : Type := ℕ × ℕ
 
@@ -279,19 +147,16 @@ def Addr.off (a : Addr) (o : ℕ) : Addr := (a.1, a.2 + o)
 /-- The `n` addresses from `a`. -/
 def Addr.span (a : Addr) (n : ℕ) : List Addr := (List.range n).map a.off
 
-/-- Byte `i` of the salt. -/
 def saltAt (i : ℕ) : Addr := (1, i)
 
 /-- The preprocessed state: index 0 its length, index `i + 1` its entry `i`. -/
 def stateAt (i : ℕ) : Addr := (2, i)
 
-/-- Word `i` of the program's constant bank. -/
 def constAt (i : ℕ) : Addr := (3, i)
 
 /-- Activation `(i, l)` of unit `u`. -/
 def actAt (u i l : ℕ) : Addr := (4, Nat.pair u (Nat.pair i l))
 
-/-- Weight `(j, l)` of weight `w`. -/
 def weightAt (w j l : ℕ) : Addr := (5, Nat.pair w (Nat.pair j l))
 
 /-- Ticket word `(i, j)` of unit `u`. -/
@@ -321,8 +186,6 @@ def zig (z : ℤ) : ℕ := w32 (if 0 ≤ z then 2 * z.toNat else 2 * (-z).toNat 
 /-- `M` with `n` words from `d` replaced by `f 0, …, f (n − 1)`. -/
 def Mem.fill (M : Mem) (d : Addr) (n : ℕ) (f : ℕ → ℕ) : Mem :=
   fun x => if x.1 = d.1 ∧ d.2 ≤ x.2 ∧ x.2 < d.2 + n then w32 (f (x.2 - d.2)) else M x
-
-/-! ## Instruction semantics -/
 
 /-- The INT32 binary operations. -/
 inductive Iop where
@@ -525,8 +388,6 @@ or an enclosing branch depends on data (`taint`). -/
 def Instr.price (dv : W1Device) (taint : Bool) (i : Instr) : ℚ :=
   i.base dv + if taint || i.dynamic then dv.prices.int32 * i.words dv else 0
 
-/-! ## Programs and runs -/
-
 /-- A code tree: stop, an instruction then the rest, or a branch on a word (nonzero: `t`, else `e`) then the rest. -/
 inductive Code where
   | done
@@ -586,8 +447,6 @@ def final (dv : W1Device) (salt : List ℕ) (pr : CodeImage) (U : Workload) (act
 
 variable {Q R S : Type}
 
-/-- A first fetch W1 does not charge: an activation within a correct unit's shape, or a weight row and column a correct
-unit of that weight reads. -/
 def FreeFetch (P : Protocol Q R S) (U : Workload) (H : Q → R) (s : S) (τ : Trace) (a : Addr) : Prop :=
   let x := Nat.unpair a.2
   let y := Nat.unpair x.2
@@ -595,9 +454,6 @@ def FreeFetch (P : Protocol Q R S) (U : Workload) (H : Q → R) (s : S) (τ : Tr
     (a.1 = 5 ∧ ∃ u ∈ correctSet P U H s τ, U.layout.fixedId u = x.1 ∧ y.1 < (U.layout.shape u).n ∧ y.2 < (U.layout.shape u).k)
 
 open Classical in
-/-- **The cost model W1** on the device `dv`, for the protocol `P` (whose `Correct` decides which operand fetches are
-free) and the salt's bytes `salt`: the instructions' prices plus `fetch` per distinct pre-salt or supplied word read and
-not free. No oracle call. -/
 noncomputable def w1 (dv : W1Device) (P : Protocol Q R S) (salt : S → List ℕ) : CostModel Q R S where
   Prog := CodeImage
   run := fun pr _ U act σ s => readout U act (final dv (salt s) pr U act σ).mem

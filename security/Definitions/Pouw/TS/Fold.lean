@@ -5,13 +5,7 @@ public import Mathlib.Tactic.ToAdditive
 public import Mathlib.Tactic.ToDual
 import Mathlib.Tactic.Finiteness.Attr
 
-/-!
-# A fold of words (trusted)
-
-The receipt folds' common form: a run of `N` words absorbed one at a time into a state of `c` registers, word `i` by
-its own step. A step binds when it is injective in the word at every state and in the state at every word; duo's and
-fx1's steps with odd multipliers do (`Pouw.Guarantees.Receipt.DuoStepBijective`, `Fx1StepBijective`).
--/
+/-! A fold of words, the receipt folds' common form, whose step binds when it is injective in the word at every state and in the state at every word. -/
 
 @[expose] public section
 

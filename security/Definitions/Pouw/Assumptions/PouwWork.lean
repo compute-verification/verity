@@ -3,15 +3,7 @@ module
 public import Definitions.Pouw.PouwWork
 public import Definitions.Pouw.Basic.Prob
 
-/-!
-# PoUW's named premises on one node (trusted)
-
-The premises of the converged model (v3.1) that its PoUW work lower bound takes, over `ResourceAccounting.PouwWork`'s
-vocabulary on the actual circuit. Each is a `Prop` about one strategy `S` and the verifier `P`, taken as a hypothesis by
-`ResourceAccounting.Guarantees.PouwLocalOff`, never an `axiom`. Their v3.1 names are A2 (`Detection`), A2b (`Luck`) and A5
-(`HelpBound`). They are under `shape.premises`. A3 (`FloorOff`), an open conjecture, is in
-`Definitions.Pouw.Assumptions.PouwFloor`.
--/
+/-! The named premises of PoUW's work lower bound on one node, besides its open floor conjecture. -/
 
 @[expose] public section
 

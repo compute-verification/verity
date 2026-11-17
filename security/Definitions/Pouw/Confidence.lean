@@ -6,38 +6,7 @@ public import Mathlib.Basic.Real.Basic
 public import Mathlib.Data.Set.Card
 public import Mathlib.Data.Finset.Sort
 
-/-!
-# Runs, strategies and the confidence set (trusted)
-
-The actual-circuit model's runs, strategies and confidence set. A *run* (`Actual.Run`) is an actual circuit with its
-gates' values, each computed gate's value its operation on the values it reads (faithfulness), and what each leaf holds
-at the start of each tick (`held`, constrained by `Placed.Holding`). A gate is seen as its tick, leaf, cell, width and
-value (`Actual.Run.seen`), so runs of different circuits compare. The verifier at leaves `V` sees its gates (`view`). A
-location's *state* at `t` (`Run.state`, of width `Run.mem`) is what its leaves hold and what is in flight between them;
-`Run.Memory` bounds it per run. Its *content* (`Run.content`) is its values as a bit string, in a fixed order of
-position (the leaves ordered by `L`'s order, then cell, then tick) with no position in it. A *strategy* maps coins
-`r : Ω` to a run.
-
-What crosses from one set of leaves to another, read during `I`, is `crossing` (arrival tick, reader's leaf, source as
-seen). What a location `X` does during `I` (`acts`) is its gates placed during `I`, what it sends from them (`sent`,
-keyed by the source's tick: the sender chooses what crosses, to whom and when) and its state at the end of each tick of
-`I` (what its leaves hold and what is in flight between them). A strategy is *causal from every tick* (`CausalFrom`)
-when what `X` does during `[t, u)` is a function of its state's content at `t` and of what it reads from outside during
-`[t, u)`; the state is the run's own, so fixing coins keeps it. What `X` can tell at `t` (`history`: its inputs, its
-gates before `t` and what it read from outside before `t`) and links as alphabets (`Alphabet`, by `signal`) are further
-hypotheses on a strategy. `portSignals` is what a list of ports (a link and the leaf it delivers to) carries at a tick.
-
-The *runtime* `t_A(P)` (`Actual.runtime`) reads the strategy too: the least `t` for which some positions before `t`
-(leaf of the developer's, cell, tick), the same for every value of `P`'s inputs put in place of `A`'s, hold `P`'s
-outputs in the run with that value (`Actual.Computes`).
-
-A guarantee `E` reads a strategy and a coin (a property of the run, or of how the strategy varies with the coins). It
-is *sound at `δ`* against the feasible runs `𝓕` (`Sound`) when every strategy causal from every tick with runs in `𝓕`
-whose prover's inputs (every input gate off `V`) don't depend on the coins accepts with `¬E` on at most a `δ` fraction
-of the coins, uniform over a finite `Ω`. For a quantity `μ` of a run: `req μ 𝓕 P` is the least `μ` of a feasible run
-that implements `P`, `Additive` says every run of a set that implements `P` has `μ ≥ cert + req`, and the residual is
-`min(cap, obs) − cert`.
--/
+/-! The actual-circuit model's runs, strategies, runtime and confidence set. -/
 
 @[expose] public section
 
@@ -98,7 +67,7 @@ noncomputable def content [LinearOrder L] (X : Finset L) (t : ℕ) : List Bool :
 /-- `mem X t`: the width of `X`'s state at `t`. -/
 noncomputable def mem (X : Finset L) (t : ℕ) : ℕ := R.A.width (R.state X t)
 
-/-- **Memory**, per run: each `X ∈ 𝒳` has a state of at most `M X` bits at every tick. -/
+/-- Each `X ∈ 𝒳` has a state of at most `M X` bits at every tick. -/
 def Memory (𝒳 : Set (Finset L)) (M : Finset L → ℕ) : Prop := ∀ X ∈ 𝒳, ∀ t, R.mem X t ≤ M X
 
 /-- What crosses from the leaves `X` to the leaves `Y`, read during `I`: each wire as its arrival tick, its reader's
@@ -143,21 +112,14 @@ def CausalFrom {Ω L : Type*} [LinearOrder L] (S : Ω → Actual.Run L) : Prop :
     (S r).crossing (↑X)ᶜ ↑X (Set.Ico t u) = (S r').crossing (↑X)ᶜ ↑X (Set.Ico t u) →
     (S r).acts X (Set.Ico t u) = (S r').acts X (Set.Ico t u)
 
-/-- **The developer at `X` holds `P`'s outputs at fixed positions before `t`**, across the runs `S v`, one for
-each value `v` of `P`'s inputs (`P.eval v` reads only them): `S v` is the strategy's run with `v` in place of `A`'s
-values at `P`'s inputs, the other inputs and the coins the same, which this takes as given. Each output `o` of `P` has a
-position, a leaf `y` of `X`, a cell `c` and a tick `u < t`, chosen before `v`, at which every run `S v` places a gate
-with `o`'s width and its value at `v`. With the position chosen after `v`, a one-bit output is among almost any run's
-values, so that form gives a runtime of about 0. -/
+/-- Each output's position is chosen before `v`: chosen after it, a one-bit output is among almost any run's values, and
+the runtime would be about 0. -/
 def Actual.Computes {L : Type*} {P : Verity.Circuit} (S : P.Trace → Actual.Run L) (X : Finset L) (t : ℕ) :
     Prop :=
   ∀ o ∈ P.outputs, ∃ y ∈ X, ∃ c u, u < t ∧ ∀ v, ∃ g, (S v).A.x g = y ∧ (S v).A.cell g = c ∧ (S v).A.t g = u ∧
     (S v).A.w g = P.w o ∧ ((S v).val g).toNat = (P.eval v o).toNat
 
-/-- **The runtime** `t_A(P)` of a circuit `P` at the developer's leaves `X`, read off the strategy: the least `t`
-by which some positions before `t` in `X`, the same for every value of `P`'s inputs, hold `P`'s outputs in every run
-`S v` (`Actual.Computes`); `⊤` when no `t` does. One run holds only the branches its data took, so no one run says
-this. -/
+/-- `⊤` when no `t` does; it reads the strategy because one run holds only the branches its data took. -/
 noncomputable def Actual.runtime {L : Type*} {P : Verity.Circuit} (S : P.Trace → Actual.Run L) (X : Finset L) :
     ℕ∞ :=
   ⨅ (t : ℕ) (_ : Actual.Computes S X t), (t : ℕ∞)

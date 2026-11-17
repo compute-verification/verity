@@ -33,42 +33,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# A window's proofs: what (I8) reads of the proof system (trusted)
-
-EPS1-SPEC §2.7's (I8), `ResourceAccounting.Assumptions.TS.ProofsSound`, reads three pieces of the proof system and one of the
-TS model's accounting:
-
-* **binding at `δ_bind`** (`ProofLayer.BindingAt`): an accepted proof opens its round's leaves (hm96 rows or keyed
-  leaves in frame-v3-sha512 trees, committed before the round's σ) to the values the round committed (`ProofLayer.Moved`, its
-  failure). Its fork form (`ProofLayer.Forked`, as ruled): two runs off one commitment, both accepted, open it
-  differently;
-* **proof soundness at `δ_ZK`**: an accepted proof's opening satisfies its relation on its path, outside `δ_ZK` a proof
-  (`ProofLayer.SoundAt`); Flock's `Flock.Guarantees.EndToEndHiddenSampled` is this bound for a session, against the
-  committed transcript fixed at registration. The relation also reads the rows link: the proof's input rows are the
-  rows its registered roots open to, and its output rows (the sinks committed after the coin) the Program's on those
-  rows and the coin. `Flock.Guarantees.EndToEndRegisteredRows` states that bound for one session. The bridge
-  from it to this premise is open: a window's proofs as Flock sessions under the window's coins, with `opened` the
-  rows Flock's bound reads;
-* **pinning**: the relations pin every committed value's derivation (`ProofLayer.Pins`), a property of the
-  Definitions the proofs pass. A check that takes an absorbed word as free witness lacks it (`PouwSegCheck_v2`: its
-  window's absorbed prefix-word sets are witness); one that recomputes every word it absorbs from the unit's operands,
-  its seed and its noise has it (`PouwCallCheck_v1`, `PouwWarpCheck_v1`, `PouwSegCheck_v3`).
-
-`ProofLayer` is what a window's proofs carry on each path of coins: per round `w < S` and proof `i < n_π`, whether the
-verifier accepted it, the values its opening gives the round's leaves (its session's committed transcript, salts
-included), and its relation (the public Program it must pass, with the leaves' rows among its outputs). The values the
-round committed (`ProofLayer.committed`) are its proofs' opening on a reference continuation: among the continuations
-of the path's coins before round `w` (`splice`), which share the leaves committed before σ_w, and on which every proof
-of round `w` is accepted, one whose opening is the most frequent. They are a function of the coins before round `w`.
-
-Round `w`'s leaves are those committed before σ_w only. The words a round computes under σ_w (its receipts, keyed by
-`round_key(σ_w, root)`, and its noised products) are committed after it, in their own trees, and are no leaves of round
-`w`: an honest prover's would differ on a continuation that resamples σ_w, so with them among the leaves binding fails
-for every prover. The relation and rightness read the path instead (`ProofLayer.rel`, `ProofLayer.right`): round `w`'s
-relation reads σ_w (the salt its unit takes) and the keyed words its proofs give on the path, which it fixes from the
-round's leaves and σ_w, so they need no binding of their own.
--/
+/-! A window's proofs, what (I8) reads of the proof system; the bridge from Flock's `EndToEndRegisteredRows` to this premise is open. -/
 
 @[expose] public section
 

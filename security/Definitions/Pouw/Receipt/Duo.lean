@@ -6,22 +6,7 @@ public import Mathlib.Data.Fin.Tuple.Basic
 import Mathlib.Data.Finset.Attr
 import Mathlib.Tactic.SetLike
 
-/-!
-# duo, a receipt fold (trusted)
-
-duo absorbs one word `d` into a chain's state `(y, z)`, two `n`-bit words, with keys `(k, a, r)`
-(`verity/protocols/accounting/pouw/verifier/receipts/receipt_folds.py`, `duo_word`, at `n = 32`):
-
-    u = y ⊕ d ⊕ k;   y ← u·a + z;   z ← rotl(u, r) + y
-
-pfill runs it with multipliers that pass `key_ok` and rotations 5, 11, 17, 29, and commits each chain's whole final
-state; a served chain (fgemm, EGEMM, E2E) runs it with the fixed odd multipliers `SERVED_KA` and commits
-`y ⊕ rotl(z, 16)`. A run's words are bound when two different runs leave different final states on some start state:
-the map from runs to final-state functions is injective (no all-state kernel).
-
-`duoRun` absorbs a run of any length one word at a time, `duoQuadWith` absorbs four words with keys bundled as
-`DuoQuadKeys`, and `duoCheckpoints` absorbs a run of four-word blocks and returns the state after each block.
--/
+/-! duo, a receipt fold `u = y ⊕ d ⊕ k; y ← u·a + z; z ← rotl(u, r) + y`, which binds a run's words when the map from runs to final-state functions is injective. -/
 
 @[expose] public section
 

@@ -2,25 +2,7 @@ module
 
 public import Definitions.Pouw.PearlC.RowCircuit
 
-/-!
-# Pearl-C4's row units as core circuits (definitions only)
-
-`pc4`'s row templates `Pc4RowA_v1{K}` and `Pc4RowB_v1{K}` (`verity.protocols.accounting.work.pouw.circuit.pc4`, their `_row_a_body`,
-`_row_b_body`, `_alpha`, `_form` and `_chain`) as gate tables (`RowCircuit.Rows`), generic in the depth `K`, as
-`RowCircuit` writes `pc8`'s. The inputs are laid out as `pc8`'s (`rowIn`), with `x` as BF16 words and the codes as
-E2M1 nibbles; the statistics read `x` widened (`Wire.bf16`). Then:
-
-* **`α`'s run** (`alpha4Run`): `α = 2688 / max(s + 4·δρ, 2⁻³²)` with `δ = 1/4`, `β = δρ·α·k_β`, `a_E` its E4M3 cast,
-  and the flag (`β` in range, `s` finite);
-* **the forming** (`d4Run`): per position, `α·x_t` and one NVF4 firing adding `e` at scale `a_E` against the form basis'
-  row at scale `24`;
-* **the quantisation** (`blk4Run`): per block of 16 positions, the block's max of `|d|`, its UE4M3 scale byte, and each
-  position's E2M1 code;
-* **the sides**: RowA's `P_A` chains (`af4Run`) and the noise' `Ẽ` (`et4Run`); RowB's `Ẽ`, its `P_B` blocks (`mid4Run`)
-  and `−Ẽ`.
-
-`verity/protocols/accounting/pouw/verifier/tests/test_circuit_row_lean.py` checks every gate against the templates, as for `pc8`.
--/
+/-! `pc4`'s row templates `Pc4RowA_v1{K}` and `Pc4RowB_v1{K}` as gate tables generic in the depth `K`, as `RowCircuit` writes `pc8`'s. -/
 
 @[expose] public section
 

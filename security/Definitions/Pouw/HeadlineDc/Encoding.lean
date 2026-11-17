@@ -33,19 +33,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# Exact data for a data-centre headline instance (trusted)
-
-`Definitions.Pouw.Headline.Encoding`'s encoding, with the two things the H200's and B200's instances
-(`benchmarks/pouw/lean_headline_dc.py`) need beside it:
-
-* `DesignData.modelFill`: `DesignData.model` with a filler, its menu the one route the floor program's filler runs
-  on, whose demand on each facet is the load of its counts a unit of honest work (the H200's ffill, which FILL-OPT
-  prices at `χ*`);
-* `cert`: a certificate over `Fin m` from sparse weights, for a certificate on more than one facet;
-* `SheetDataQ`: `SheetData` with a rational pipe width, for a pipe no document rates whose width is the census's
-  measured line (the uniform datapath's UP line, `DS_uniform`: 128 over 1.96110716 SMSP-cycles a uniform instruction).
--/
+/-! `Headline.Encoding`'s encoding with a filler, a certificate on several facets and a rational pipe width, for the H200's and B200's instances. -/
 
 @[expose] public section
 
@@ -53,8 +41,6 @@ namespace ResourceAccounting.TS.Headline
 
 open ResourceAccounting.TS
 
-/-- **The design's TS model on machine `G` with a filler**: `DesignData.model`, its filler menu one route whose demand
-is the load on `G` of `fill`, the filler's counts a unit of honest work. -/
 noncomputable def DesignData.modelFill {R : Type} (D : DesignData) (n nt nf : ℕ) [NeZero n] (G : Machine (Fin n) R)
     (fill : Sparse) : Model (Fin n) R (Fin nt) Unit Empty (Fin nf) Unit :=
   { D.model n nt nf G with fill := fun _ => G.load (Sparse.counts fill) }

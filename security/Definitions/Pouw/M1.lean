@@ -3,24 +3,7 @@ module
 public import Definitions.Pouw.Game.Params
 public import Definitions.Pouw.D1
 
-/-!
-# `D1.m1`: the named milestone instance (trusted; §3.2's derivation, tt-attacks §4, working decisions W4 and W6)
-
-* **Queries** (§3.2's `H(s, index, com(A_u), w(u))`, with ideal commitments):
-  - unit `u`'s `E_L` (`m × 16`): `(s, u, A_u, w(u), c)` for `c < 2^21`;
-  - the `E_R` of group `g = ⌊u/16⌋` on weight `w` (`16 × k`): `(s, w, g, c)` for `c < 2^20`;
-  - weight `w`'s `F_L` (`k × 16`) and `F_R` (`16 × n`): `(s, w, c)` for `c < 2^21`.
-  The index and the weight id are 64-bit fields and the group a 60-bit field. `A_u` enters as its block on
-  `2^17 × 2^16`, which contains every in-domain shape, entry-wise mod 128 (injective on int7). A unit's `E_L`
-  queries are asked for no other unit below `2^64`.
-* **Distribution** (tt-attacks §4, W6): the outer factors `E_L` and `F_R` uniform on
-  `{−3, …, 3}`, the inner factors `E_R` and `F_L` uniform on `{±1}`, all independent, one oracle answer each.
-  Noise entries are in `[−48, 48]`.
-* **Domain** `m1Domain`: `2^12 ≤ m ≤ 2^17` with `16 ∣ m`, `k = n = 2^16` (so `m·G ≤ 2^21`), 64-bit weight ids, and
-  every unit's group serving at least `2^16` rows on its weight.
-* **`W_ref`** is a parameter of `m1`. `m1Wref` is the explicit `H_ref` schedule of llm-shapes §3, with the
-  per-(epoch, weight) and per-(epoch, weight, group) products apportioned to units by rows.
--/
+/-! `D1.m1`, the named milestone instance, with `W_ref` a parameter and `m1Wref` an explicit `H_ref` schedule. -/
 
 @[expose] public section
 
@@ -120,7 +103,6 @@ def m1Wref (L : Layout) (u : ℕ) : ℕ :=
     rowShare (16 * k * n) m (m1GroupRows L u) + rowShare ((16 + 20) * k * n) m (L.rowsOf (L.fixedId u)) +
     576 * m + rowShare (576 * n) m (m1GroupRows L u)
 
-/-- The schedule's overhead bound on the domain, `1 + 233/2^16`. -/
 noncomputable def m1Omega : ℝ := 65769 / 65536
 
 end Pouw.D1

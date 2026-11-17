@@ -5,17 +5,7 @@ public import Definitions.Pouw.Game.Params
 public import Definitions.Pouw.Assumptions.Game
 public import Mathlib.Data.Fintype.Sigma
 
-/-!
-# PoUW's guarantee as a joint run's compute guarantee (trusted)
-
-PoUW's end-to-end guarantee (`Pouw.Guarantees.EndToEnd`) embeds into the device model unweakened: in a run that
-realizes PoUW's game (`ResourceAccounting.RealizesPouw`), the compute audit has its guarantee at EndToEnd's certificate and
-error unless the run breaks SHA-512 (`ResourceAccounting.Run.ComputeSoundUnless`), with the oracle-call budget `q` the device's
-oracle queries over the compute window.
-
-Proved by `ResourceAccounting.SecurityProofs.ComputeOfPouw : ResourceAccounting.Guarantees.ComputeOfPouw` (`Proofs.Pouw.Pouw`),
-from `Pouw.SecurityProofs.EndToEnd`.
--/
+/-! PoUW's end-to-end guarantee, embedded unweakened as a joint run's compute guarantee. -/
 
 @[expose] public section
 
