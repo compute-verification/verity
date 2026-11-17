@@ -60,7 +60,7 @@ path = "../../../resource_accounting/memory/poub/verifier/lean"
 name = "core_vstar_recursive"
 path = "../../../proofs/spot_flock/verifier/lean"
 
-# The wipe: the memory challenger's streamed-label wipe verdict (`MemoryAttester.WipeProtocol`, `verity/wipe/v0`).
+# The wipe: the memory challenger's streamed-label wipe verdict (`MemoryChallenger.WipeProtocol`, `verity/wipe/v0`).
 [[require]]
 name = "core_memory_attester"
 path = "../../../resource_accounting/memory/pous/attester/lean"

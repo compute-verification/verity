@@ -48,7 +48,7 @@ structure Run where
   binding : ByteArray
   observed : List Observed
 
-/-- The commitment the device builds before the session (`MemoryAttester.__init__`) and releases once it is signed. -/
+/-- The commitment the device builds before the session (`MemoryChallenger.__init__`) and releases once it is signed. -/
 def Run.commitment (r : Run) : ChallengePhaseCommitment :=
   ⟨r.coins.session, r.coins.root, r.coins.key, r.coins.blocks, r.coins.k, r.limitNs, r.blockBytes, r.binding⟩
 
@@ -75,7 +75,7 @@ structure Challengers where
   sessions : ByteArray → List Run
 
 /-- The messages the device signs under the key `pk`: for each session it runs under `pk` and ends,
-`memoryAttesterMessage` of the key's identifier, the session id and the session's `message`. -/
+`memoryChallengerMessage` of the key's identifier, the session id and the session's `message`. -/
 def Signed (dev : Challengers) (pk m : ByteArray) : Prop :=
   ∃ r ∈ dev.sessions pk, ∃ ended rec, r.recorded.ended = some ended ∧
     message r.commitment ended r.recorded.rounds = .ok rec ∧
@@ -85,14 +85,14 @@ def Signed (dev : Challengers) (pk m : ByteArray) : Prop :=
 def LmsVerifies (p : Lms.Params) (pk m sig : ByteArray) : Prop :=
   ∃ σ, Lms.Signature.decode p sig = .ok σ ∧ Lms.verify p pk m σ = .ok true
 
-/-- The message a signed session's signature signs: `memoryAttesterMessage` of its key's identifier, its session id
+/-- The message a signed session's signature signs: `memoryChallengerMessage` of its key's identifier, its session id
 and its `message`. -/
 def challengePhaseMessage (s : SignedChallengePhase) : Option ByteArray :=
   (s.message >>= memoryAttesterMessage (s.publicKey.extract 0 16) s.commitment.session).toOption
 
 /-- What SHA-512 hashes for a session `(c, ended, rounds)` signed under the key `pk`: the coin key (the header holds
 its digest), the records stream under its `sha512/row/v2` prefix, the input of the session's `message`, and that of
-`memoryAttesterMessage`. -/
+`memoryChallengerMessage`. -/
 def challengePhaseStrings (pk : ByteArray) (c : ChallengePhaseCommitment) (ended : String) (rounds : Array Round) : List ByteArray :=
   let head := (header c ended rounds.size).toUTF8
   [c.coinKey] ++

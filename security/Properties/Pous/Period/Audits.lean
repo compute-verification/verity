@@ -19,7 +19,7 @@ set_option exponentiation.threshold 20000
 memory-challenger keys and the session id the auditor designated, fixed for the period; the server's commitment and
 salt, its `C*` (`store`), setup's public outputs, the memory challenger's table of row digests and the payload as the
 ring game's bits (`W`), each fixed before the capacity coins are flipped, so a function of the compute and bandwidth audits'
-coins alone; and the memory challenger's signed session and its device record (`MemoryAttester.Properties.Challengers`), a
+coins alone; and the memory challenger's signed session and its device record (`MemoryChallenger.Properties.Challengers`), a
 function of all the run's coins. -/
 structure Audits (ΩW ΩQ : Type) where
   /-- the verifier's list of memory-challenger keys (never the run's record) -/

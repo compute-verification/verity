@@ -28,7 +28,7 @@ structure Params (Ω : Type) where
   sign : Ω → ByteArray → ByteArray → ByteArray
 
 /-- The session's commitment, which the device builds before the session and releases once it is signed
-(`MemoryAttester.Properties.Run.commitment`). -/
+(`MemoryChallenger.Properties.Run.commitment`). -/
 def Params.commitment {Ω : Type} (p : Params Ω) (ω : Ω) : ChallengePhaseCommitment :=
   (⟨p.coins ω, p.limitNs, p.blockBytes, p.binding, []⟩ : MemoryAttester.Properties.Run).commitment
 
@@ -168,7 +168,7 @@ Not covered:
 * the device's host: what the device keeps (its state, its logs, the sessions it completed) is not in the view;
 * what else the device sends: the port it listens on before the session, another session's messages, the salt's
   source it gives setup, and its signed period roots and liveness records, which
-  `MemoryAttester.Attest.Properties.AuditorSeesSkeleton` covers;
+  `MemoryChallenger.Attest.Properties.AuditorSeesSkeleton` covers;
 * a session cut short inside an exchange: a challenge the prover leaves unanswered is none of the code's messages, so
   the run is not `Confined` and the statement is silent on it. The device signs nothing and prints no report then;
 * that the Python device is `code`: no executable Lean of the device exists to hold it to. -/

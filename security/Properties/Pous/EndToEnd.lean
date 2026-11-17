@@ -60,7 +60,7 @@ def blockStrings (pk : ByteArray) (dev : Challengers) (C : Array (Array ByteArra
 
 /-- The run's own data holds a break: two distinct strings it hashes with one SHA-512 digest (`cr/sha-512`), or a
 signature verifying under a trusted key over a session message the device never signed (`euf-cma/lms-sha512-n64`,
-under the one-role reading of `MemoryAttester.Properties`). Every witness is bounded by the run. -/
+under the one-role reading of `MemoryChallenger.Properties`). Every witness is bounded by the run. -/
 def RunBreak (trusted : List ByteArray) (s : SignedChallengePhase) (dev : Challengers) (C : Array (Array ByteArray)) : Prop :=
   (let xs := runStrings s dev ++ blockStrings s.publicKey dev C
    ∃ x ∈ xs, ∃ y ∈ xs, x ≠ y ∧ Flock.Sha512.hash x = Flock.Sha512.hash y) ∨

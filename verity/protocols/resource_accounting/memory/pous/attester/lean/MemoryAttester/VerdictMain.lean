@@ -3,7 +3,7 @@ module
 public import Difftest
 public import MemoryAttester.Judge
 
-/-! `memory-attester-verdict`: the one function `verdict` (`MemoryAttester.Judge.verdictFn`) behind
+/-! `memory-challenger-verdict`: the one function `verdict` (`MemoryChallenger.Judge.verdictFn`) behind
 `Difftest.serve`. It reads one request a line on standard input, `{"fn": "verdict", "input": RECORD}`, the record
 `memory_challenger.verdict`'s arguments as JSON, until the input ends, and prints one line for each: `{"output": JSON}`,
 the whole verdict (`accepted`, `late`, `reasons`, `wrong`); `{"reject": REASON}`, where it refuses the record; or
