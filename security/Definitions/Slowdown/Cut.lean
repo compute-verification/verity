@@ -30,10 +30,11 @@ runs from the inputs towards the outputs. The input gates outside `θ` are the u
   same `α`), and `α = √(k Π(k) / b_y)` (`alpha`).
 
 A block reads at most `k` gates outside `θ` when `|in(I) \ θ| ≤ k` (`ReadsAtMost`, through
-`RegisteredCircuit.unregistered`). The slowdown `ρ = m c / |C|` prices each of a partition's `m` blocks at `c`, so it
-is read with blocks of at most `c` gates, none padded. A word is a set of gates, so a value and each of its casts are
-distinct words; `val` names the value each word carries, the casts of one value carrying one, one-to-one on each
-matmul's `w`-words and on its `x`-words (`ValuesInjective`), and `val = id` counts words. When no two matmuls share
+`RegisteredCircuit.unregistered`); over a set of the blocks, with what all the blocks read as a total and what the set's
+blocks read squared and summed, it is `ReadsOn`. The slowdown `ρ = m c / |C|` prices each of a partition's `m` blocks at
+`c`, so it is read with blocks of at most `c` gates, none padded. A word is a set of gates, so a value and each of its
+casts are distinct words; `val` names the value each word carries, the casts of one value carrying one, one-to-one on
+each matmul's `w`-words and on its `x`-words (`ValuesInjective`), and `val = id` counts words. When no two matmuls share
 both a `w`- and an `x`-value (`NoSharedPair`), or when the matmuls read shared arrays, matmul `a` the pair `e a`, an
 edge of a graph with no clique of `ω + 1` (`Arrays`), at least `q` a pair of values (`CostsAtLeast`), two cut
 conjectures bound the work: (H) and (E) (`Definitions.Assumptions`). The guarantees are
@@ -184,6 +185,13 @@ noncomputable def shareF (ω : ℕ) : ℝ := √(2 * (1 - 1 / ω))
 /-- Every block of `P` reads at most `k` gates outside `θ`: `|in(I) \ θ| ≤ k` (`RegisteredCircuit.unregistered`). -/
 def ReadsAtMost {m : ℕ} (d : RegisteredCircuit) (P : Partition d.D m) (k : ℕ) : Prop :=
   ∀ u, (d.unregistered (P.gates u)).card ≤ k
+
+/-- What the blocks of `P` read outside `θ`, with `G` the blocks a count is taken over and the blocks outside `G`
+charged whole: `k` limits the gates each block of `G` reads, `T` limits the gates all the blocks read between them,
+those outside `G` too, and `S` limits the sum over `G` of the squares of what each of its blocks reads. -/
+def ReadsOn {m : ℕ} (d : RegisteredCircuit) (P : Partition d.D m) (G : Finset (Fin m)) (k T S : ℕ) : Prop :=
+  (∀ u ∈ G, (d.unregistered (P.gates u)).card ≤ k) ∧ ∑ u, (d.unregistered (P.gates u)).card ≤ T ∧
+    ∑ u ∈ G, (d.unregistered (P.gates u)).card ^ 2 ≤ S
 
 /-- `val` names the value each word carries, one-to-one on each matmul's `w`-words and on its `x`-words: the casts of
 one value carry one, and a matmul's distinct words carry distinct values. -/

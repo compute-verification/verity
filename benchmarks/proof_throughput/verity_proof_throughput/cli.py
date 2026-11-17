@@ -8,7 +8,7 @@
     table    [RESULT ...] [--store --workload W [--commit C]] [--baseline] [--json]   the throughput frontier over B
     baseline [--workload W] [--lock RESULT ...]          the pinned hill-climb baseline (baseline.json), or pin one sweep
     instances --workload W [--write]                     regenerate the workload's frozen instance manifest
-    workloads                                            the VU families and their B caps
+    workloads                                            the proof-block families and their B caps
     zk                                                   what configuration 2 measures today (job.sh ZK=1: --zk sessions under the ZK server)
 
 The job scripts call the rest: ``population``, ``check-instances``, ``partition``, ``staged``, ``probe``, ``put-bundle``,
@@ -54,7 +54,7 @@ def _jsonl(path: Path) -> list[dict]:
 
 def cmd_population(a) -> int:
     """The point's population and sampling design: ``law.json`` (the verifier's stratified sampling design for B, ``serve --sample-design``) in
-    ``--out``; prints the VU Definition and n_max, the class sweep's PT_VU and PT_N."""
+    ``--out``; prints the proof block's Definition and n_max, the class sweep's PT_VU and PT_N."""
     w = workload(a.workload)
     if not 1 <= a.B <= w.n_max:
         print(f"{w.name}: B = {a.B} outside [1, {w.n_max}]", file=sys.stderr)

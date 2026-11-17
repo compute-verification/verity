@@ -28,7 +28,7 @@ from verity_bench import exfiltration as E
 def test_every_input_is_marked_measured_modeled_simulated_or_assumed_with_its_source(tmp_path):
     doc = E.build(store=recorded(tmp_path).fresh(), root=REPO)
     by = {i["input"]: i for i in doc["inputs"]}
-    assert all(i["mark"] in E.MARKS and i["source"] and i["part"] in ("compute audit", "network certifier", "both")
+    assert all(i["mark"] in E.MARKS and i["source"] and i["part"] in ("compute audit", "network attester", "both")
                for i in doc["inputs"])
     assert {k: (by[k]["part"], by[k]["mark"], by[k]["value"]) for k in (
         "planner_rows", "compute_share", "delta", "output_bits", "network_check_share", "advice")} == {
@@ -43,7 +43,7 @@ def test_every_input_is_marked_measured_modeled_simulated_or_assumed_with_its_so
     assert (by["request_count"]["part"], by["request_count"]["value"], by["request_count"]["mark"]) == ("both", "plan", "assumed")
     assert (by["weights"]["part"], by["weights"]["mark"]) == ("both", "measured")
     assert (by["response_ids"]["part"], by["response_ids"]["value"], by["response_ids"]["mark"]) == (
-        "network certifier", 1024, "assumed")
+        "network attester", 1024, "assumed")
     assert (by["mfu_serve"]["part"], by["mfu_serve"]["mark"], by["mfu_serve"]["value"]) == ("both", "assumed", 0.4)
     # a request is the plan's, not the census's
     assert (by["request_tokens"]["value"], by["request_tokens"]["mark"]) == (3320.5, "modeled")
@@ -173,8 +173,8 @@ def test_the_figure_is_the_plan_of_records_row_and_row_i_is_only_under_its_label
     assert (E.ROW, E.ASSUMED_ROW, doc["row"], doc["label"]) == ("(ii) honest", "(i) honest", "(ii) honest", None)
     assert doc["value"] == head["GB"] == year["compute_audit"]["GB"] == pytest.approx(YEAR_GB, rel=1e-12)
     for t in year["together"].values():
-        assert t["GB"] == pytest.approx(t["certifier_GB"] + YEAR_GB) and t["with_set_time_card"]["GB"] == pytest.approx(
-            t["with_set_time_card"]["certifier_GB"] + YEAR_GB)
+        assert t["GB"] == pytest.approx(t["attester_GB"] + YEAR_GB) and t["with_set_time_card"]["GB"] == pytest.approx(
+            t["with_set_time_card"]["attester_GB"] + YEAR_GB)
     a = doc["at_assumed_prices"]
     assert (a["row"], a["label"], a["run"], a["delta"], a["inside"], a["why"], a["sources"]) == (
         E.ASSUMED_ROW, E.ASSUMED_LABEL, ROWS, 0.01, True, None, None)
