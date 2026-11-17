@@ -1,7 +1,7 @@
 """The served window's table for `verity run` (`verity_cli.run.Registry`): onsite's and remote's components as a
 configuration declares them (`MANIFESTS`), the ``served-window`` workload (`SERVED`), each application's subprotocols and the
-configuration its file holds (`DEMOS`, `configuration`), each party's piece (`PARTIES`), and the run of the pieces placed
-on a machine (`live`).
+configuration its file holds (`DEMOS`, `configuration`), each party's piece (`PARTIES`), the parties `verity run`
+starts first (`STARTS`), and the run of the pieces placed on a machine (`live`).
 
 A piece is what one party does in the run (`Piece`), in one of four ways (``runs``):
 
@@ -58,7 +58,9 @@ from verity.protocols.resource_accounting.memory.pous.attester import challenger
 from verity.protocols.registration.verifier import registration as RL
 from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
 from verity.protocols.resource_accounting.memory.pous.verifier import wipe_parties as WP
+from verity.protocols.proofs.spot.prover.audit import local_challenger as LC
 from verity.protocols.proofs.spot.verifier import parties as SP
+from verity.protocols.proofs.spot.verifier.challenger import challenger_party as CP
 from verity.protocols.proofs.spot.verifier.one_stage.draw import parse_rate, parse_strata_rate
 from verity.channel import Refused
 from verity.runtime import runner
@@ -75,10 +77,14 @@ RUNNER = "benchmarks/one_stage/served_verdicts.sh"
 VERDICTS_SCRIPT = "benchmarks/one_stage/served_verdicts.py"
 ATTESTER_PIECE = "benchmarks/network_traces/attester_piece.py"
 PEARLPLUS_SCRIPT = "benchmarks/one_stage/served_pearlplus.sh"
+PEARLPLUS_GATE = "benchmarks/one_stage/pearlplus_local_e2e.py"
 ONSITE = "verity/onsite/v1"
 REMOTE = "verity/remote/v1"
 #: the deploy bindings `begin` keeps beside the run (`verity_cli.run.BINDINGS`)
 BINDINGS = "bindings.json"
+#: the parties `verity run` starts first where ``--bindings`` gives none of what they write, each registered once by
+#: its own `STARTS[PARTY] = Start(...)`, never by assigning the table again
+STARTS: dict[str, Start] = {}
 WORKERS, ZK_SERVER, PROVER, VERIFIER = SP.WORKERS, SP.ZK_SERVER, WP.PROVER, SP.VERIFIER
 CHALLENGER, MEMORY_ATTESTER = SP.CHALLENGER, WP.CHALLENGER
 BANDWIDTH_VERIFIER, NETWORK_ATTESTER = P2.CLOSER_PARTY, NC.NETWORK_ATTESTER
@@ -416,14 +422,19 @@ def _serve(cfg, params, bound):
 
 
 #: served_verdicts.sh's variable for each optional binding of SPOT's live challenger
-_PP = {"gate": "PP_CHALLENGER", "peer": "PP_PEER", "key": "PP_CHALLENGER_KEY", "gate-key": "PP_GATE_KEY"}
+_PP = {"gate": "PP_CHALLENGER", "peer": "PP_PEER", "key": "PP_CHALLENGER_KEY", "gate-key": "PP_GATE_KEY",
+       "main-file": "MAIN_FILE"}
 
 
 def _spot_challenger(cfg, params, bound):
-    """The live challenger's bindings; with no gate bound the sample's coins are a local development session's,
-    simulated, which served_verdicts.sh takes under VERITY_HOLD_PLACEMENT=1 only in a development run."""
+    """The live challenger's bindings; with no gate bound the sample's coins are the challenger party's loopback host's
+    where ``loopback`` is bound, else a local development session's, simulated either way, which served_verdicts.sh
+    takes under VERITY_HOLD_PLACEMENT=1 only in a development run."""
     hooks = {v: f"gate:{bound[k]}" if k == "gate" else bound[k] for k, v in _PP.items() if k in bound}
-    return hooks if "gate" in bound or not settings.hold_placement() else {**hooks, "DEVELOPMENT": "1"}
+    if "gate" in bound:
+        return hooks
+    hooks |= {"PP_CHALLENGER": f"loopback:{bound['loopback']}"} if "loopback" in bound else {}
+    return {**hooks, "DEVELOPMENT": "1"} if settings.hold_placement() else hooks
 
 
 def _pouw(cfg, params, bound):
@@ -515,6 +526,63 @@ def _pearlplus(cfg, params, bound):
     return hooks | ({"PEARLPLUS_TIE_UNIFORM": "1"} if params["tie-uniform"] else {})
 
 
+#: the challenger's hosts that `verity run` started on this machine, by the run's state, from its serve to its stop
+_HOSTS: dict[Path, CP.Host] = {}
+
+
+def _first_parent(state: Path) -> list[str]:
+    program = json.loads((state / "run.json").read_text())["program"]
+    p = subprocess.run(["git", "rev-list", "--first-parent", str(program)], cwd=ROOT, capture_output=True, text=True,
+                       check=False)
+    if p.returncode or not p.stdout.split():
+        raise Refused("challenger", f"`git rev-list --first-parent {program}` exited {p.returncode} in {ROOT}: the "
+                                    "challenger's hosts pin on the run's commit, held to its first-parent line")
+    return p.stdout.split()
+
+
+def _serve_challenger(cfg: Mapping[str, Any], state: Path) -> None:
+    """The challenger where `verity run` starts it, on this machine: SPOT's loopback host (`challenger_party.Host`)
+    and Pearl+'s gate (`PEARLPLUS_GATE`), each under a key made for the run in ``STATE/parties/challenger/``, flipping
+    its own coins, pinned on the run's commit, whose first-parent line is ``main.txt``; its bindings written whole, by
+    a rename. Refused by name (``challenger``) where Pearl+'s gate isn't made or isn't pinned on that commit."""
+    mine, public = state / "parties" / CHALLENGER, state / "public" / CHALLENGER
+    main = _first_parent(state)
+    public.mkdir(parents=True, exist_ok=True)
+    (line := public / "main.txt").write_text("\n".join(main) + "\n")
+    p = subprocess.run([sys.executable, str(ROOT / PEARLPLUS_GATE), "init", "--root", str(mine / "pearl-plus")],
+                       cwd=ROOT, capture_output=True, text=True, check=False)
+    if p.returncode:
+        raise Refused("challenger", f"{PEARLPLUS_GATE} init exited {p.returncode}: {p.stderr.strip()[-800:]}")
+    gate = json.loads(p.stdout.strip().splitlines()[-1])
+    if gate["pin"] != main[0]:
+        raise Refused("challenger", f"Pearl+'s gate pins {gate['pin']}, not the run's commit {main[0]}")
+    host = _HOSTS[state] = CP.Host(mine / "sampled-proofs", main, LC.Local)
+    spot = host.start()
+    written = {"sampled-proofs": {"loopback": spot["address"], "main-file": str(line)},
+               "pearl-plus": {"gate": gate["gate"], "peer": gate["peer"], "lane": gate["lane"],
+                              "key-sha512": gate["key_sha512"], "main-file": str(line)}}
+    part = public / f".{BINDINGS}"
+    part.write_text(json.dumps(written, sort_keys=True))
+    part.replace(public / BINDINGS)
+
+
+def _stop_challenger(cfg: Mapping[str, Any], state: Path) -> None:
+    """Both hosts stopped, and Pearl+'s gate's public files (its ledger, pins log, public key and sessions' public
+    files) copied under ``STATE/public/challenger/pearl-plus/``, which `verity run` transcribes."""
+    if (host := _HOSTS.pop(state, None)) is not None:
+        host.stop()
+    if (root := state / "parties" / CHALLENGER / "pearl-plus").is_dir():
+        subprocess.run([sys.executable, str(ROOT / PEARLPLUS_GATE), "stop", "--root", str(root), "--out",
+                        str(state / "public" / CHALLENGER / "pearl-plus")], cwd=ROOT, check=False)
+
+
+#: the challenger, whose coins SPOT's sample and Pearl+'s salt and sample read; its Lean coins' verifier is built when
+#: missing, so it waits long
+STARTS[CHALLENGER] = Start(writes={"sampled-proofs": ("loopback", "main-file"),
+                                   "pearl-plus": ("gate", "peer", "lane", "key-sha512", "main-file")},
+                           serve=_serve_challenger, stop=_stop_challenger, within=1800)
+
+
 #: PoUS's timed rounds (`challenger_session`'s parties), beside the served window: the challenger's header names the
 #: monotonic clock
 POUS = Session(("verity.protocols.resource_accounting.memory.pous.attester.challenger_party:PROTOCOL",
@@ -581,8 +649,9 @@ PARTIES: dict[str, dict[str, Piece]] = {
                         "one at a time, in the records audit"),
         WORKERS: Piece("sampled-proofs", WORKERS, SERVED_WINDOW, "the window's values committed under hiding leaves "
                        "and sealed, its registration before the sample, and the sampled proof blocks proved in Flock --zk; "
-                       "the sample on the live challenger when its gate is bound, else on a local development session's "
-                       "coins in a development run", reaches=CHALLENGER, optional=tuple(_PP), hooks=_spot_challenger),
+                       "the sample on the live challenger when its gate is bound, else on the challenger party's loopback "
+                       "host's coins, or with neither a local development session's, in a development run", reaches=CHALLENGER, optional=(*_PP, "loopback"),
+                       hooks=_spot_challenger),
         VERIFIER: Piece("sampled-proofs", VERIFIER, CHECK, "the onsite check: the record the served window "
                         "published, of the execution phase its seal's digest names (serve/phase.json): its rows (the "
                         "records audit's verdict the integrity row) and its composed verdict"),
