@@ -126,7 +126,7 @@ def lifetimes(out: Path, arm: str) -> list[Path]:
 def failure_s(steps_: list[tuple[int, int]], rows: float, table: dict, per_request: int, calls: int = CALLS) -> dict:
     """The seconds a card spends on ``rows`` failed rows over the decode steps ``steps_`` ((rows, keys) of each of a
     step's ``calls``), placed three ways: ``lo`` packed into the calls cheapest a row, ``mid`` a request's rows
-    (``per_request``) to a call, the calls drawn evenly, ``hi`` one a call in the dearest calls."""
+    (``per_request``) to a call, spread evenly over the calls, ``hi`` one a call in the dearest calls."""
     if rows <= 0 or not steps_:
         return dict.fromkeys(ENDS, 0.0)
     lo, left = 0.0, rows
