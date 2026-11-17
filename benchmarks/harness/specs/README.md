@@ -1,7 +1,8 @@
 # Benchmark specs
 
-The specs and sweeps `verity-bench` (`benchmarks/harness`) runs, one TOML file each. The harness's README is the contract:
-every key a spec may hold, how a point is timed, and what a result says. This file says what each one is for.
+A spec is one measurement written down so that it runs the same way every time: the model, the arms timed against each
+other, and the points it sweeps over. `verity-bench` ([`benchmarks/harness`](../README.md)) runs them. Each file here is
+a spec or a sweep, and this file says what each one is for.
 
 - A **spec** (`verity-bench/vllm-spec/v0`) is one measurement: a preset (the model at a pinned revision or a node-local
   checkpoint with its digest, its precision, the GPU, the vLLM pin and the engine settings), the arms timed against each
