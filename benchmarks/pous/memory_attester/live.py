@@ -119,7 +119,7 @@ def test_signer() -> Any:
 @functools.cache
 def lean_verdict() -> Any:
     """The Lean port's verdict module (`verdict.py` beside its Lake package): `verdict`, with `memory_attester.verdict`'s
-    signature, computed by `memory-challenger-verdict` (built with `lake` on first use)."""
+    signature, computed by `memory-attester-verdict` (built with `lake` on first use)."""
     spec = importlib.util.spec_from_file_location("memory_attester_lean_verdict", LEAN_VERDICT)
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)

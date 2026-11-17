@@ -81,10 +81,10 @@ an empty block at each proof block and hashes nothing leaves every block wrong, 
 probability `1` and the bound fails at `ε = 0`. -/
 def SetupGivesNontrivial : Prop :=
   ∃ (salt W : ByteArray) (v : Fin PousCheck.P2.Params.deployed.blocks → ByteArray × ByteArray),
-    ¬ prPMF (PMF.pure ()) (fun ω => (MemoryChallenger.Properties.InProofs.constRun v).accepts ω ∧
+    ¬ prPMF (PMF.pure ()) (fun ω => (MemoryAttester.Properties.InProofs.constRun v).accepts ω ∧
         PousCheck.P2.Params.deployed.blocks / 100 + 1 ≤
-          (incorrect PousCheck.P2.Params.deployed salt W (MemoryChallenger.Properties.InProofs.constRun v) ω).card ∧
-        ¬ Hash.CollisionIn Verity.sha512 ((MemoryChallenger.Properties.InProofs.constRun v).hashInputs ω)) ≤ 0
+          (incorrect PousCheck.P2.Params.deployed salt W (MemoryAttester.Properties.InProofs.constRun v) ω).card ∧
+        ¬ Hash.CollisionIn Verity.sha512 ((MemoryAttester.Properties.InProofs.constRun v).hashInputs ω)) ≤ 0
 
 end PousCheck.Properties.InProofs
 
@@ -116,14 +116,14 @@ theorem setupGives : SetupGives := by
 theorem setupGives_nontrivial : SetupGivesNontrivial := by
   refine ⟨.empty, .empty, fun _ => (.empty, .empty), fun h => ?_⟩
   have hw : incorrect PousCheck.P2.Params.deployed .empty .empty
-      (MemoryChallenger.Properties.InProofs.constRun fun _ => (.empty, .empty)) () = Finset.univ := by
+      (MemoryAttester.Properties.InProofs.constRun fun _ => (.empty, .empty)) () = Finset.univ := by
     ext u
-    simp [incorrect, BlockOk, BlockDecodes, MemoryChallenger.Properties.InProofs.constRun, PousCheck.P2.Params.blockBytes,
+    simp [incorrect, BlockOk, BlockDecodes, MemoryAttester.Properties.InProofs.constRun, PousCheck.P2.Params.blockBytes,
       PousCheck.P2.Params.deployed, PousCheck.W_BITS]
   have hpos : 0 < PousCheck.P2.Params.deployed.blocks := by
     simp [PousCheck.P2.Params.blocks, PousCheck.P2.Params.deployed]
   have hc : PousCheck.P2.Params.deployed.blocks / 100 + 1 ≤ (incorrect PousCheck.P2.Params.deployed .empty .empty
-      (MemoryChallenger.Properties.InProofs.constRun fun _ => (.empty, .empty)) ()).card := by
+      (MemoryAttester.Properties.InProofs.constRun fun _ => (.empty, .empty)) ()).card := by
     rw [hw, Finset.card_univ, Fintype.card_fin]
     exact Nat.div_lt_self hpos (by norm_num)
   have hn : ¬ Hash.CollisionIn Verity.sha512 [] := by simp [Hash.CollisionIn]

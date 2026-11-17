@@ -1,5 +1,5 @@
 """The Python side of the streamed wipe's difftests: `streamed_wipe.py` (the reference, unchanged) behind the Lean port's
-JSON formats (`MemoryChallenger.WipeJudge`), and the sessions the tests sample.
+JSON formats (`MemoryAttester.WipeJudge`), and the sessions the tests sample.
 
 The decoders mirror the Lean's: byte strings lowercase hex, the parameters naturals that `WipeParams` accepts, a batch
 record's fields and the fill's times integers of either sign, a start mark empty or 64 bytes, and the record
@@ -27,7 +27,7 @@ from verity.protocols.resource_accounting.memory.pous.prover import wipe_store a
 from verity.protocols.resource_accounting.memory.pous.verifier import streamed_wipe as sw
 from verity.protocols.resource_accounting.memory.pous.attester import wipe_challenger as WC
 
-#: Every scheme the port verifies, by id (`MemoryChallenger.KNOWN_SCHEMES`).
+#: Every scheme the port verifies, by id (`MemoryAttester.KNOWN_SCHEMES`).
 KNOWN = {**mc.SCHEMES, **M.ts.SCHEMES}
 SECRET = b"streamed-wipe-lean/auditor secret"
 SERVERS = [b"server-7", b"s", "é".encode()]
@@ -36,7 +36,7 @@ TIER_NAMES = ["gpu", "host-dram", "é ü", 'a"b\\', "\t\x00", "𝄞"]
 U = sw.EGRESS_UNIT_BITS
 
 
-# --- decoding, as `MemoryChallenger.StreamedWipe` decodes ----------------------------------------------------------------
+# --- decoding, as `MemoryAttester.StreamedWipe` decodes ----------------------------------------------------------------
 
 def int_(j: Any, k: str) -> int:
     """`J.asInt`: an integer of either sign, not a boolean."""

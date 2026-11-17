@@ -12,7 +12,7 @@ public import Lms.SignDifftest
 Executable Lean that reads LMS's canonical formats, the signature and the public key, and verifies, for every parameter
 set `verity/commitments/crypto/lms.py` admits (`Lms.Verify`); that derives a key from its seed and signs at a given leaf
 (`Lms.Sign`); that verifies a device's two-level HSS signatures and its keys' role digests (`Lms.Hss`, held to the Python
-by `MemoryChallenger.Difftest`); and their difftests against that file (`Lms.Difftest`, `Lms.SignDifftest`). Code: it
+by `MemoryAttester.Difftest`); and their difftests against that file (`Lms.Difftest`, `Lms.SignDifftest`). Code: it
 imports only Lean and Flock's verifier (`Flock.Hash`, `Flock.Bytes`).
 -/
 
