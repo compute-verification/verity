@@ -2,22 +2,13 @@ module
 
 public import Proofs.Core.NaiveStrassen.Sound
 
-/-!
-# Dominance and the size form (NaiveStrassen)
-
-A table reaches the RTX PRO 6000 sheet's table through `Dom`, which holds of one each of whose atoms is covered by one
-of the sheet's, no heavier and holding wherever it holds (`covers`, `dom_of_covers`). The size form follows from
-`bound`: Theorem 1 to `thmL = 12`, the least cost above `8^13` at depth 13, and `cost ≥ 7^l` from depth 14 on, where
-`7^14 > 2^39`.
--/
+/-! Dominance and the size form of NaiveStrassen. -/
 
 @[expose] public section
 
 namespace Verity.Accel.NaiveStrassen.Packed
 
 open Verity.Accel.NaiveStrassen
-
-/-! ## Dominance -/
 
 /-- `f'` covers `f`: no heavier, a cap at least as large, and for a float format a `k` no larger and a `w` no
 smaller; an integer `f'` holds on its whole cap. -/
@@ -52,8 +43,6 @@ theorem dom_rtx6000Sheet : Dom rtx6000Sheet := fun _ hf _ _ h => atomMin_le hf h
 
 theorem dom_h200Sheet : Dom h200Sheet := dom_of_covers (by decide)
 
-/-- Every atom of a table the sheet dominates weighs at least an eighth of an s8 MAC: every atom holds at `(0, 0)`,
-where the sheet's lightest atom is b1. -/
 theorem weight_pos_of_dom {fs : List Atom} (hD : Dom fs) : ∀ f ∈ fs, 1 ≤ f.weight8 := by
   intro f hf
   have h0 : f.holds 0 0 = true := by
@@ -62,10 +51,6 @@ theorem weight_pos_of_dom {fs : List Atom} (hD : Dom fs) : ∀ f ∈ fs, 1 ≤ f
   have e : atomMin rtx6000Sheet 0 0 = 1 := by decide
   omega
 
-/-! ## Every schedule costs at least `7^l` -/
-
-/-- With every atom at least an eighth of an s8 MAC, a schedule at depth `l` costs at least `7^l`: an atom costs
-`8^l` or more, and every scheme has at least seven products. -/
 theorem cost_ge_pow7 {fs : List Atom} (hw : ∀ f ∈ fs, 1 ≤ f.weight8) :
     ∀ (S : Sched) (l a b : Nat), S.valid fs schemes 0 l a b = true → 7 ^ l ≤ S.cost l := by
   intro S
@@ -106,8 +91,6 @@ theorem cost_ge_pow7 {fs : List Atom} (hw : ∀ f ∈ fs, 1 ≤ f.weight8) :
       rw [Nat.pow_succ']
       exact Nat.le_trans (Nat.mul_le_mul_right _ hR) hsum
 
-/-! ## The size form -/
-
 theorem cube_bound {n m b C : Nat} (hb : 0 < b) (hn : n ≤ m * b) (hC : 8 * m ^ 3 < C) : 8 * n ^ 3 < b ^ 3 * C := by
   have h1 : n ^ 3 ≤ m ^ 3 * b ^ 3 := Nat.mul_pow m b 3 ▸ Nat.pow_le_pow_left hn 3
   have hb3 : 0 < b ^ 3 := Nat.pow_pos hb
@@ -120,9 +103,6 @@ theorem eight_mul_cube (l : Nat) : 8 * (2 ^ l) ^ 3 = 8 ^ (l + 1) := by
   show 8 * 8 ^ l = 8 ^ (l + 1)
   exact (Nat.pow_succ' (m := 8) (n := l)).symm
 
-/-- **The size form** at `c = 4096 = 2^thmL`, from the tables: `n ≤ 2^l b` gives `8 n³ ≤ 8^(l+1) b³`, which Theorem 1
-beats to depth 12; `n ≤ 4096 b` gives `8 n³ ≤ 2^39 b³ = 8^13 b³`, which the least cost at depth 13 beats, and
-`7^l ≥ 7^14 > 2^39` beyond. -/
 theorem upTo_of_check (h : checkAll = true) {fs : List Atom} (hD : Dom fs) (hw : ∀ f ∈ fs, 1 ≤ f.weight8) :
     NaiveBeatsStrassenUpTo fs 4096 := by
   intro l b n S hv hf hn1 hnl hnc
@@ -143,7 +123,6 @@ theorem upTo_of_check (h : checkAll = true) {fs : List Atom} (hD : Dom fs) (hw :
     have e : 8 * 4096 ^ 3 < 7 ^ 14 := by decide
     exact cube_bound hb hnc (by omega)
 
-/-- Theorem 1 to `thmL`, from the tables. -/
 theorem beats_of_check (h : checkAll = true) {fs : List Atom} (hD : Dom fs) : NaiveBeatsStrassen fs thmL :=
   fun _ hl _ hv hf => (bound h hD (Nat.le_trans hl (by decide)) hv).1 hl hf
 

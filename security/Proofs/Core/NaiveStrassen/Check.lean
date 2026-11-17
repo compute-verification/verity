@@ -2,21 +2,12 @@ module
 
 public import Proofs.Core.NaiveStrassen.Table
 
-/-!
-# The check (NaiveStrassen's kernel tables)
-
-`checkAll` is the one Boolean the kernel evaluates (`Eval.lean`). It checks the grid's data (`checkGrid`) and, level by
-level as `run` computes the tables, that each level's tables are below every option of the model (`checkLevel`):
-atoms, splits of `A` (rows `e` and `rest i e`), the own-cell split, symmetry (splits of `B`), and at `l ≥ 1` the three
-schemes over the previous level. It also checks the root cell: `has ≥ 8^(l+1) + 32` up to `thmL`, and `lo > 8^l` above.
-`Sound.lean` proves that a passing check bounds the cost of every schedule.
--/
+/-! The check of NaiveStrassen's kernel tables, which `Sound.lean` proves bounds the cost of every schedule. -/
 
 @[expose] public section
 
 namespace Verity.Accel.NaiveStrassen.Packed
 
-/-- `f k` for every `k < n`. -/
 def allBelow (n : Nat) (f : Nat → Bool) : Bool := Nat.rec (motive := fun _ => Bool) true (fun k acc => acc && f k) n
 
 /-- The grid's data: `g` starts `1, 2` and increases, the root is the cell of 256 values, and `kc` and `rest` give
@@ -28,7 +19,6 @@ def checkGrid : Bool :=
     allBelow gsz (fun i => allBelow i (fun e => e == 0 ||
       decide (g (rest i e) ≤ (g i + (g (e + 1) - 1) - 1) / (g (e + 1) - 1))))
 
-/-- The root cell's bound at level `l`. -/
 def rootOK (l : Nat) (t : Nat × Nat) : Bool :=
   (!decide (l ≤ thmL) || decide (8 ^ (l + 1) + 32 ≤ fld (row t.2 (sz l) root) root)) &&
     (decide (l ≤ thmL) || decide (8 ^ l < fld (row t.1 (sz l) root) root))
@@ -62,7 +52,6 @@ def run (L : Nat) : Bool × (Nat × Nat) :=
     (let t := level 0 (0, 0); (checkLevel 0 t (0, 0), t))
     (fun l p => let t := level (l + 1) p.2; (p.1 && checkLevel (l + 1) t p.2, t)) L
 
-/-- The whole check. -/
 def checkAll : Bool := checkGrid && decide (topL ≤ 15) && (run topL).1
 
 end Verity.Accel.NaiveStrassen.Packed

@@ -2,39 +2,7 @@ module
 
 public import Proofs.Core.SamplingGeneric.FirstHit
 
-/-!
-# The first-hit finder by class: nodes that open together are waited for together
-
-The by-position finder (`sampleFinderAt`) pays, at a further run, for each node it still waits for that the run's
-sample holds, a node at a time (`c₂ ω J ≤ Σ_{p ∈ J} c₁ ω p`), so its expected calls are at most
-`E[c + Σ_{p ∈ sample} c₁(·, p)]`: one term for each node of a run's sample.
-
-Here the nodes fall in classes (`cls : P → Q`), and a run opens a class whole or not at all (`hall`: a run that opens
-a node opens every node of its class). What a run is read for is then a matter of classes: the finder that pays
-`cq ω q` once for each class `q` holding a node it still waits for in the run's sample (`classFinderAt`) has expected
-calls at most `E[c + Σ_{q ∈ classes of the sample} cq(·, q)]`: one term for each class of a run's sample
-(`ex_cost_classFinderAt_le`).
-
-* **Why the classes suffice** (`loopCostAt_cls_le`): the nodes still waited for lose a whole class at each further
-  run that opens one of its nodes (`hall`), so the loop over nodes that pays by class is at most the by-position loop
-  over the classes themselves, whose nodes are the classes (`clsOp`, `clsChk`), and that loop's bound is the
-  by-position one (`ex_costAt_tape_le_ex`) at the classes.
-* **What does not change**: the seed, the output (`outOfAt`), the nodes, the plurality table and the event. The
-  success half is `pr_off_at_le_finder` as it stands, so
-  `Pr[a run opens a node off the plurality] ≤ 2·Pr[the finder outputs a collision] + N/(K + 1)` with `N` the number
-  of nodes, and under `ExpectedCR` at the finder of one cap (`pr_off_cls_le_ex_cap`) or of every cap
-  (`pr_off_cls_le_ex`) the bound is `2·E[c + Σ_{q ∈ classes of the sample} cq(·, q)]/2^256`.
-* **What the loop charges** (`le_loopCostAt_cls`): at the first further tape that opens a node the first run opened,
-  the cost of that node's class there, which is what the output reads of that tape.
-
-* **The classes of a key** (`clsOf`): the least point with a point's key names its class, so two points have one
-  class exactly where they have one key (`clsOf_eq_iff`), and a point's class has its key (`key_clsOf`).
-
-Without `hall` the count by class fails: a run that opens one node of a class and not another leaves the other waited
-for, and the class is paid again.
-
-`classFinderAt` and `clsOf` are defined in `Definitions.Core.FirstHit`, with the by-position finder they are built on.
--/
+/-! The first-hit finder by class, where a run opens a class whole or not at all (`hall`), without which the count by class fails. -/
 
 @[expose] public section
 
@@ -46,8 +14,6 @@ open Verity.Rewinding Claims
 
 variable {Ω P V Q : Type}
 
-/-! ## The classes as nodes -/
-
 open Classical in
 /-- **A class's table**: a run opens class `q` when it opens some node of the class. -/
 noncomputable def clsOp (cls : P → Q) (op : Ω → P → Option V) (ω : Ω) (q : Q) : Option Unit :=
@@ -58,7 +24,6 @@ open Classical in
 noncomputable def clsChk (cls : P → Q) (chk : Ω → P → Bool) (ω : Ω) (q : Q) : Bool :=
   if ∃ p, cls p = q ∧ chk ω p = true then true else false
 
-/-- A run's sample holds a class exactly when it holds some node of the class. -/
 theorem clsChk_iff {cls : P → Q} {chk : Ω → P → Bool} {ω : Ω} {q : Q} :
     clsChk cls chk ω q = true ↔ ∃ p, cls p = q ∧ chk ω p = true := by
   rw [clsChk]
@@ -68,14 +33,12 @@ theorem clsChk_iff {cls : P → Q} {chk : Ω → P → Bool} {ω : Ω} {q : Q} :
   · rw [ite_eq_right hex]
     exact ⟨fun h => absurd h Bool.false_ne_true, fun h => absurd h hex⟩
 
-/-- A run that opens a node opens the node's class. -/
 theorem clsOp_isSome {cls : P → Q} {op : Ω → P → Option V} {ω : Ω} {p : P} (h : (op ω p).isSome) :
     (clsOp cls op ω (cls p)).isSome := by
   have hex : ∃ p', cls p' = cls p ∧ (op ω p').isSome := ⟨p, rfl, h⟩
   rw [clsOp, ite_eq_left hex]
   rfl
 
-/-- Where a run opens a class whole or not at all, a run that does not open a node does not open the node's class. -/
 theorem clsOp_isNone {cls : P → Q} {op : Ω → P → Option V}
     (hall : ∀ ω p p', cls p = cls p' → (op ω p).isSome → (op ω p').isSome) {ω : Ω} {p : P}
     (h : (op ω p).isNone) : (clsOp cls op ω (cls p)).isNone := by
@@ -88,19 +51,16 @@ theorem clsOp_isNone {cls : P → Q} {op : Ω → P → Option V}
   rw [clsOp, ite_eq_right hex]
   rfl
 
-/-- A sample that holds a node holds the node's class. -/
 theorem clsChk_of {cls : P → Q} {chk : Ω → P → Bool} {ω : Ω} {p : P} (h : chk ω p = true) :
     clsChk cls chk ω (cls p) = true :=
   clsChk_iff.2 ⟨p, rfl, h⟩
 
-/-- The classes of the nodes a run opens are classes the run opens. -/
 theorem image_opened_subset [Fintype P] [Fintype Q] [DecidableEq Q] (cls : P → Q) (op : Ω → P → Option V) (ω : Ω) :
     (univ.filter fun p => (op ω p).isSome).image cls ⊆ univ.filter fun q => (clsOp cls op ω q).isSome := by
   intro q hq
   obtain ⟨p, hp, rfl⟩ := Finset.mem_image.1 hq
   exact Finset.mem_filter.2 ⟨Finset.mem_univ _, clsOp_isSome (Finset.mem_filter.1 hp).2⟩
 
-/-- The classes a run's sample holds are the classes of the nodes it holds. -/
 theorem filter_clsChk [Fintype P] [Fintype Q] [DecidableEq Q] (cls : P → Q) (chk : Ω → P → Bool) (ω : Ω) :
     (univ.filter fun q => clsChk cls chk ω q) = (univ.filter fun p => chk ω p).image cls := by
   ext q
@@ -111,11 +71,6 @@ theorem filter_clsChk [Fintype P] [Fintype Q] [DecidableEq Q] (cls : P → Q) (c
   · rintro ⟨p, hp, hq⟩
     exact ⟨Finset.mem_univ _, p, hq, (Finset.mem_filter.1 hp).2⟩
 
-/-! ## The loop that pays by class -/
-
-/-- **The loop over nodes that pays by class is at most the by-position loop over the classes**, where a run opens a
-class whole or not at all: at each further tape the classes of the nodes still waited for are among the classes still
-waited for. -/
 theorem loopCostAt_cls_le [DecidableEq Q] (cls : P → Q) (op : Ω → P → Option V) (chk : Ω → P → Bool)
     (cq : Ω → Q → ℕ) (hall : ∀ ω p p', cls p = cls p' → (op ω p).isSome → (op ω p').isSome) (K : ℕ) :
     ∀ (need : Finset P) (need' : Finset Q) (ρ : Fin K → Ω), need.image cls ⊆ need' →
@@ -146,8 +101,6 @@ theorem loopCostAt_cls_le [DecidableEq Q] (cls : P → Q) (op : Ω → P → Opt
       obtain ⟨hpn, hpo⟩ := Finset.mem_filter.1 hp
       exact Finset.mem_filter.2 ⟨hsub (Finset.mem_image_of_mem cls hpn), clsOp_isNone hall hpo⟩
 
-/-- **The loop that pays by class charges, at the first tape that opens a node it waits for, that node's class
-there**, where a tape opens the node only if its sample holds it. -/
 theorem le_loopCostAt_cls [DecidableEq Q] (cls : P → Q) (op : Ω → P → Option V) (chk : Ω → P → Bool)
     (cq : Ω → Q → ℕ) (p : P) (hchk : ∀ ω, (op ω p).isSome → chk ω p = true) :
     ∀ (K : ℕ) (need : Finset P) (ρ : Fin K → Ω) (j : Fin K), p ∈ need → firstIdx op p K ρ = some j →
@@ -155,11 +108,6 @@ theorem le_loopCostAt_cls [DecidableEq Q] (cls : P → Q) (op : Ω → P → Opt
   le_loopCostAt op chk (fun ω J => ∑ q ∈ J.image cls, cq ω q) p (fun ω => cq ω (cls p)) hchk fun ω _ hp =>
     Finset.single_le_sum (f := cq ω) (fun _ _ => Nat.zero_le _) (Finset.mem_image_of_mem cls hp)
 
-/-! ## Cost -/
-
-/-- **Cost, by class, over the kept part**: the expected calls of a first run and of the further runs that pay by
-class are at most the expectation of a run's calls and, for each class of its coins' sample, what that class costs
-there. -/
 theorem ex_costCls_tape_le_ex {T : Type} [Fintype T] [Fintype Ω] [Nonempty Ω] [Fintype P] [Fintype Q]
     [DecidableEq Q] (cls : P → Q) (op : T → Ω → P → Option V) (chk : T → Ω → P → Bool)
     (hall : ∀ t ω p p', cls p = cls p' → (op t ω p).isSome → (op t ω p').isSome) (c : T → Ω → ℕ)
@@ -190,8 +138,6 @@ theorem ex_costCls_tape_le_ex {T : Type} [Fintype T] [Fintype Ω] [Nonempty Ω] 
     rw [filter_clsChk]
   exact (Ex_mono h1).trans (h2.trans (Ex_mono h3))
 
-/-- **The by-class finder's expected calls**: at most `E[c + Σ_{q ∈ classes of the sample} cq(·, q)]`, whatever it
-outputs and whatever its cap, where a run opens a class whole or not at all. -/
 theorem ex_cost_classFinderAt_le {T : Type} [Fintype T] [Nonempty T] [Fintype Ω] [Nonempty Ω] [Fintype P]
     [Fintype Q] [DecidableEq Q] (cls : P → Q) (op : T → Ω → P → Option V) (chk : T → Ω → P → Bool)
     (hall : ∀ t ω p p', cls p = cls p' → (op t ω p).isSome → (op t ω p').isSome) (c : T → Ω → ℕ)
@@ -201,11 +147,6 @@ theorem ex_cost_classFinderAt_le {T : Type} [Fintype T] [Nonempty T] [Fintype Ω
         ((c a.1 a.2 + ∑ q ∈ (univ.filter fun p : P => chk a.1 a.2 p).image cls, cq a.1 a.2 q : ℕ) : ℝ)) :=
   ex_costCls_tape_le_ex cls op chk hall c cq K
 
-/-! ## Success -/
-
-/-- **The off-plurality mass by the by-class finder's success, with no premise**:
-`Pr[a run opens a node off the plurality] ≤ 2·Pr[the finder outputs a collision of H] + N/(K + 1)`, `N` the number of
-nodes and `K` the finder's cap. Its expected calls are `ex_cost_classFinderAt_le`'s. -/
 theorem pr_off_cls_le_finder {T : Type} [Fintype T] [Nonempty T] [Fintype Ω] [Nonempty Ω] [Fintype P]
     [DecidableEq Q] [DecidableEq V] (H : Msg → Msg) (cls : P → Q) (op : T → Ω → P → Option V) {vstar : T → P → V}
     (hv : ∀ t, IsPlurality (op t) (vstar t)) (chk : T → Ω → P → Bool) (c : T → Ω → ℕ) (cq : T → Ω → Q → ℕ) (K : ℕ)
@@ -218,12 +159,8 @@ theorem pr_off_cls_le_finder {T : Type} [Fintype T] [Nonempty T] [Fintype Ω] [N
         (Fintype.card P : ℝ) / ((K : ℝ) + 1) :=
   pr_off_at_le_finder H op hv chk c (fun t ω J => ∑ q ∈ J.image cls, cq t ω q) K coll hc hs
 
-/-- **The off-plurality mass by class, under `ExpectedCR` at the finder of one cap**:
-`2·E[c + Σ_{q ∈ classes of the sample} cq(·, q)]/2^256 + N/(K + 1)`, the expectation over the kept part and a run's
-coins of the run's calls and, for each class that holds a node of its coins' sample, what that class costs there; `N`
-the number of nodes and `K` the finder's cap. A run opens a class whole or not at all (`hall`), and only nodes of its
-sample (`hchk`, which the proof doesn't read and under which the loop charges what the output reads,
-`le_loopCostAt_cls`). -/
+/-- `hchk`, that a run opens only nodes of its sample, is a premise the proof doesn't read: under it the loop
+charges what the output reads (`le_loopCostAt_cls`). -/
 theorem pr_off_cls_le_ex_cap {T : Type} [Fintype T] [Nonempty T] [Fintype Ω] [Nonempty Ω] [Fintype P] [Fintype Q]
     [DecidableEq Q] [DecidableEq V] (H : Msg → Msg) (cls : P → Q) (op : T → Ω → P → Option V) {vstar : T → P → V}
     (hv : ∀ t, IsPlurality (op t) (vstar t)) (chk : T → Ω → P → Bool)
@@ -252,9 +189,6 @@ theorem pr_off_cls_le_ex_cap {T : Type} [Fintype T] [Nonempty T] [Fintype Ω] [N
   rw [mul_div_assoc]
   linarith
 
-/-- **The off-plurality mass by class, under `ExpectedCR` at the finder of every cap**:
-`2·E[c + Σ_{q ∈ classes of the sample} cq(·, q)]/2^256`, `pr_off_cls_le_ex_cap` with nothing left of the cap's
-term. -/
 theorem pr_off_cls_le_ex {T : Type} [Fintype T] [Nonempty T] [Fintype Ω] [Nonempty Ω] [Fintype P] [Fintype Q]
     [DecidableEq Q] [DecidableEq V] (H : Msg → Msg) (cls : P → Q) (op : T → Ω → P → Option V) {vstar : T → P → V}
     (hv : ∀ t, IsPlurality (op t) (vstar t)) (chk : T → Ω → P → Bool)
@@ -271,14 +205,10 @@ theorem pr_off_cls_le_ex {T : Type} [Fintype T] [Nonempty T] [Fintype Ω] [Nonem
         2 ^ (256 : ℝ) :=
   le_of_forall_cap fun K => pr_off_cls_le_ex_cap H cls op hv chk hchk hall c cq K coll hc hs (hCR K)
 
-/-! ## The classes of a key -/
-
-/-- A point's class has its key. -/
 theorem key_clsOf {n : ℕ} {Key : Type} [DecidableEq Key] (key : Fin n → Key) (g : Fin n) :
     key (clsOf key g) = key g :=
   (mem_filter.1 (Finset.min'_mem (univ.filter fun g' => key g' = key g) _)).2
 
-/-- Two points have one class exactly where they have one key. -/
 theorem clsOf_eq_iff {n : ℕ} {Key : Type} [DecidableEq Key] (key : Fin n → Key) (g g' : Fin n) :
     clsOf key g = clsOf key g' ↔ key g = key g' := by
   constructor

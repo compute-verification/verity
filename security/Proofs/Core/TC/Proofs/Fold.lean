@@ -4,14 +4,7 @@ public import Definitions.Core.TC.Relation
 public import Definitions.Core.TC.Spec
 public import Proofs.Core.TC.Proofs.Prod
 
-/-!
-# `group_sum`'s two folds, against the relation's terms
-
-`Corr Z ts xs` pairs the semantics' finite terms of a group with the relation's `_terms` rows, one for one: equal scaled
-magnitudes, and equal exponents and signs where the magnitude is nonzero; a zero term sits at the floor. Under it,
-`group_sum`'s maximum exponent is the maximum of the rows' exponents and the floor (`maxExp_eq`), and its total is the
-sum of the rows' truncated, signed terms (`total_eq`).
--/
+/-! `group_sum`'s two folds, against the relation's terms. -/
 
 @[expose] public section
 

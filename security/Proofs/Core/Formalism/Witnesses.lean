@@ -5,13 +5,7 @@ public import Mathlib.Algebra.BigOperators.Ring.Finset
 public import Mathlib.Tactic.NormNum
 public import Mathlib.Tactic.Ring
 
-/-!
-# The size of a `(c, k)`-partitioned circuit and Theorem 3: proofs of the honest and nontrivial lemmas
-
-The proofs of `security/Definitions/Core/Guarantees/Formalism/Witnesses.lean`, at the instances of
-`security/Definitions/Core/Formalism/Instances.lean`, each by evaluation: the weights are natural numbers, so `decide`
-computes each counted weight and `exact_mod_cast` carries it to `ℝ`.
--/
+/-! The size of a `(c, k)`-partitioned circuit and Theorem 3: the honest and nontrivial lemmas' proofs, at the instances of `security/Definitions/Core/Formalism/Instances.lean`. -/
 
 @[expose] public section
 

@@ -5,21 +5,7 @@ public import Mathlib.Algebra.Order.Ring.Unbundled.Rat
 import Mathlib.Data.Rat.Floor
 import Mathlib.Tactic.Positivity.Finset
 
-/-!
-# Rounding to nearest, ties to even
-
-`RoundsEven x q`: the natural number `q` is the rational `x` rounded to an integer, to nearest with ties to even. A
-quotient of naturals rounded up by its remainder, as `Verity.Fp32.roundRn` and `Verity.Prims.roundEvenDyadic` round, is
-that rounding (`roundsEven_div`), and it is unique (`RoundsEven.unique`).
-
-On a floating-point grid, the points `M · 2^k` with significands `M < 2^(p + 1)` and exponents `k ≥ k₀`, the rounding
-`q` of `x / 2^j` gives the nearest point `q · 2^j` to `x ≥ 0` when `j` is `x`'s binade exponent clamped below at `k₀`:
-`j = k₀`, or `2^(j + p) ≤ x` (`nearest_grid`). Unless `x / 2^j` is a tie, every other point is strictly farther.
-
-A format's value is a sign and a magnitude, `signed s m`. A magnitude nearest to `x ≥ 0` is, under `x`'s sign, nearest
-among the signed values of every sign (`signed_near`), and when every other magnitude is strictly farther, no other
-signed value is as near (`signed_tie`): the two zeros are one value.
--/
+/-! Rounding to nearest, ties to even, and the nearest point of a floating-point grid. -/
 
 @[expose] public section
 
@@ -43,8 +29,6 @@ theorem RoundsEven.of_mul {x D : ℚ} (hD : 0 < D) {q : ℕ} (h1 : 2 * |(q : ℚ
   refine ⟨le_of_mul_le_mul_right (by rw [one_mul]; exact h1) hD, fun h => h2 ?_⟩
   rw [h, one_mul]
 
-/-- The quotient `n / D` rounded up when its remainder is past half of `D`, or half of it and the quotient odd, is
-`n / D` rounded to nearest even. -/
 theorem roundsEven_div (n D : ℕ) (hD : 0 < D) :
     RoundsEven ((n : ℚ) / D)
       (if 2 * (n % D) > D ∨ (2 * (n % D) = D ∧ n / D % 2 = 1) then n / D + 1 else n / D) := by
@@ -91,7 +75,6 @@ theorem RoundsEven.ge {x : ℚ} {q c : ℕ} (h : RoundsEven x q) (hx : (c : ℚ)
   have : c < q + 1 := by exact_mod_cast this
   omega
 
-/-- At the tie `x = c - 1/2` below an even `c`, the rounding is `c`. -/
 theorem RoundsEven.ge_even {x : ℚ} {q c : ℕ} (h : RoundsEven x q) (hx : (c : ℚ) - 1 / 2 ≤ x) (hc : c % 2 = 0) :
     c ≤ q := by
   rcases hx.lt_or_eq with hlt | heq
@@ -119,8 +102,6 @@ theorem RoundsEven.unique {x : ℚ} {q q' : ℕ} (h : RoundsEven x q) (h' : Roun
   · exact h.not_succ h' hl
   · exact h'.not_succ h hl
 
-/-- An integer within half of `y` is at least as near to `y` as every other integer, and strictly nearer unless it is
-exactly half away. -/
 theorem near_int {y : ℚ} {q : ℕ} (h : 2 * |(q : ℚ) - y| ≤ 1) (P : ℕ) :
     |(q : ℚ) - y| ≤ |(P : ℚ) - y| ∧ (2 * |(q : ℚ) - y| < 1 → P ≠ q → |(q : ℚ) - y| < |(P : ℚ) - y|) := by
   rcases eq_or_ne P q with rfl | hP
@@ -136,9 +117,6 @@ theorem near_int {y : ℚ} {q : ℕ} (h : 2 * |(q : ℚ) - y| ≤ 1) (P : ℕ) :
         _ = |(P : ℚ) - y| + |(q : ℚ) - y| := by rw [abs_sub_comm y]
     exact ⟨by linarith, fun _ _ => by linarith⟩
 
-/-- **The nearest grid point.** With `j` the exponent of `x`'s binade clamped at `k₀` (`j = k₀`, or `2^(j + p) ≤ x`)
-and `q` within half of `x / 2^j`, the point `q · 2^j` is at least as near to `x` as every `M · 2^k` with `M < 2^(p + 1)`
-and `k ≥ k₀`, and strictly nearer than every other such point when `q` is strictly within half. -/
 theorem nearest_grid {p k₀ j q : ℕ} {x : ℚ} (hlow : j = k₀ ∨ (2 : ℚ) ^ (j + p) ≤ x)
     (hq : 2 * |(q : ℚ) - x / 2 ^ j| ≤ 1) {M k : ℕ} (hM : M < 2 ^ (p + 1)) (hk : k₀ ≤ k) :
     |(q : ℚ) * 2 ^ j - x| ≤ |(M : ℚ) * 2 ^ k - x| ∧
@@ -172,8 +150,6 @@ theorem nearest_grid {p k₀ j q : ℕ} {x : ℚ} (hlow : j = k₀ ∨ (2 : ℚ)
     rw [hMx]
     exact ⟨by linarith, fun _ _ => by linarith⟩
 
-/-! ## Signed values -/
-
 /-- A sign and a magnitude as a signed value. -/
 def signed (negative : Bool) (m : ℚ) : ℚ := if negative then -m else m
 
@@ -198,13 +174,10 @@ theorem signed_le (s s' : Bool) {a b : ℚ} (ha : 0 ≤ a) (hb : 0 ≤ b) : |a -
   · rw [hs, signed_sub]
   · rw [signed_cross hs ha hb, abs_sub_le_iff]; constructor <;> linarith
 
-/-- A magnitude `m₀` at least as near to `x ≥ 0` as `m'` is, under `x`'s sign, at least as near as `m'` under any. -/
 theorem signed_near (s s' : Bool) {x m₀ m' : ℚ} (hx : 0 ≤ x) (hm' : 0 ≤ m') (hle : |m₀ - x| ≤ |m' - x|) :
     |signed s m₀ - signed s x| ≤ |signed s' m' - signed s x| := by
   rw [signed_sub]; exact hle.trans (signed_le s s' hm' hx)
 
-/-- When every other magnitude is strictly farther from `x > 0` than `m₀`, no signed value other than `m₀`'s under
-`x`'s sign is as near as it. -/
 theorem signed_tie (s s' : Bool) {x m₀ m' : ℚ} (hx : 0 < x) (hm₀ : 0 ≤ m₀) (hm' : 0 ≤ m')
     (hlt : m' ≠ m₀ → |m₀ - x| < |m' - x|) (hne : signed s' m' ≠ signed s m₀)
     (heq : |signed s' m' - signed s x| = |signed s m₀ - signed s x|) : False := by

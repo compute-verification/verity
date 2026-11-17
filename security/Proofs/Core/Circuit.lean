@@ -3,20 +3,7 @@ module
 public import Definitions.Core.Guarantees.Circuit
 import Mathlib.Algebra.BigOperators.Group.Finset.Basic
 
-/-!
-# Lemmas about circuits and partitions
-
-Evaluation unfolds one gate at a time (`run_eq`), and the partition lemmas Flock's audit uses, for gates of any
-width:
-
-* `compose`: if every unit is correct and the committed inputs are the anchors' values, every committed wire carries its
-  value in the circuit's evaluation;
-* `compose_cone`: the same for the wires `T` a consumer reads, given only that the units of `T`'s cone are correct;
-* `correct_congr`: a unit's correctness depends only on its committed inputs and outputs (`Partition.io`);
-* `Refines.exists_incorrect_fine`: when a fine partition refines a coarse one, a incorrect coarse unit has a incorrect fine unit
-  inside it, whatever the values on the coarse unit's interior;
-* `Containment.implementation`: a circuit that contains `C` implements it.
--/
+/-! Lemmas about circuits and partitions. -/
 
 @[expose] public section
 
@@ -52,11 +39,9 @@ theorem eval_op (a : C.Trace) {g : Fin C.N} (h : C.isInput g = false) :
     C.eval a g = C.op g (C.eval a) :=
   C.run_free (by simp [h])
 
-/-- The honest trace agrees with its inputs. -/
 theorem inputsAgree_eval (a : C.Trace) : C.InputsAgree (C.eval a) a :=
   fun _ h => C.eval_input a h
 
-/-- The evaluation reads only the inputs. -/
 theorem eval_congr {a b : C.Trace} (h : C.InputsAgree a b) : C.eval a = C.eval b := by
   funext g
   induction g using WellFoundedLT.induction with
@@ -75,7 +60,6 @@ variable {C : Circuit} {n : ℕ} (P : Partition C n)
 theorem mem_gates {u : Fin n} {g : Fin C.N} : g ∈ P.gates u ↔ P.unit g = some u := by
   simp [gates]
 
-/-- The units' gates are the computed gates, each in exactly one unit. -/
 theorem sum_card_gates : ∑ u, (P.gates u).card = C.computed.card := by
   classical
   rw [← Finset.card_biUnion]
@@ -89,7 +73,6 @@ theorem sum_card_gates : ∑ u, (P.gates u).card = C.computed.card := by
     rw [mem_gates] at hu hv
     exact Option.some_injective _ (hu.symm.trans hv)
 
-/-- A unit's gates are computed gates. -/
 theorem gates_subset_computed (u : Fin n) : P.gates u ⊆ C.computed := fun g hg => by
   simp only [Circuit.computed, Finset.mem_filter, Finset.mem_univ, true_and]
   cases h : C.isInput g
@@ -111,7 +94,6 @@ theorem mem_committed_of_input {g : Fin C.N} (hg : C.isInput g = true) : g ∈ P
   simp only [committed, Finset.mem_filter, Finset.mem_univ, true_and]
   exact Or.inl hg
 
-/-- Unit `u`'s committed gates are out(R) for its gates `R`. -/
 theorem committed_inter_gates (u : Fin n) : P.committed ∩ P.gates u = C.exits (P.gates u) := by
   ext g
   simp only [Finset.mem_inter, committed, Circuit.exits, Finset.mem_filter, Finset.mem_univ, true_and, mem_gates]
@@ -142,8 +124,6 @@ theorem mem_cone {T : Finset (Fin C.N)} {u : Fin n} {t g : Fin C.N} (ht : t ∈ 
   simp only [cone, Finset.mem_filter, Finset.mem_univ, true_and]
   exact ⟨t, ht, g, hg, hu⟩
 
-/-- The induction behind `compose_cone`: on the gates feeding `T`, committed wires carry their evaluation, and so does
-each unit's local evaluation of its own gates. -/
 theorem cone_induction (X a : C.Trace) (T : Finset (Fin C.N)) (hin : C.InputsAgree X a)
     (hc : ∀ u ∈ P.cone T, P.Correct X u) :
     ∀ m (g : Fin C.N), g.val = m → (∃ t ∈ T, C.Feeds g t) →
@@ -176,8 +156,6 @@ theorem cone_induction (X a : C.Trace) (T : Finset (Fin C.N)) (hin : C.InputsAgr
     exact hB u hu
   · rw [hin g hi, C.eval_input a hi]
 
-/-- **A consumer's value, through its cone.** If the committed inputs are the anchors' values and no unit of `T`'s cone
-is incorrect, every committed wire of `T` carries its evaluation. -/
 theorem compose_cone (X a : C.Trace) (T : Finset (Fin C.N)) (hin : C.InputsAgree X a)
     (h : Disjoint (P.incorrect X) (P.cone T)) : ∀ t ∈ T, t ∈ P.committed → X t = C.eval a t := by
   intro t ht htc
@@ -186,8 +164,6 @@ theorem compose_cone (X a : C.Trace) (T : Finset (Fin C.N)) (hin : C.InputsAgree
     exact Finset.disjoint_left.1 h (P.mem_incorrect.2 hw) hu
   exact (P.cone_induction X a T hin hc t.val t rfl ⟨t, ht, .refl t⟩).2 htc
 
-/-- **Composition.** If every unit is correct and the committed inputs are the anchors' values, every committed wire
-carries its value in the circuit's evaluation. -/
 theorem compose (X a : C.Trace) (hin : C.InputsAgree X a) (h : P.incorrect X = ∅) :
     ∀ g ∈ P.committed, X g = C.eval a g :=
   fun g hg => P.compose_cone X a P.committed hin (by simp [h]) g hg hg
@@ -208,7 +184,6 @@ theorem localEval_congr {X Y : C.Trace} {u : Fin n} (hXY : ∀ g ∈ P.io u, X g
     simp only [io, Finset.mem_filter]
     exact ⟨P.mem_committed_of_read hx (by rw [hu]; exact Ne.symm hxu), Or.inr ⟨g, hu, hx⟩⟩
 
-/-- A unit's correctness depends only on its committed inputs and outputs. -/
 theorem correct_congr {X Y : C.Trace} {u : Fin n} (hXY : ∀ g ∈ P.io u, X g = Y g)
     (hY : P.Correct Y u) : P.Correct X u := by
   classical
@@ -217,14 +192,11 @@ theorem correct_congr {X Y : C.Trace} {u : Fin n} (hXY : ∀ g ∈ P.io u, X g =
   rw [hXY g hio, P.localEval_congr hXY g.val g rfl hu]
   exact hY g hg hu
 
-/-! ## Refinement -/
-
 namespace Refines
 
 variable {nf nc : ℕ} {Pf : Partition C nf} {Pc : Partition C nc} (r : Refines Pf Pc)
 include r
 
-/-- A coarse committed wire is a fine committed wire. -/
 theorem committed_subset : Pc.committed ⊆ Pf.committed := by
   intro g hg
   simp only [committed, Finset.mem_filter, Finset.mem_univ, true_and] at hg ⊢
@@ -234,8 +206,6 @@ theorem committed_subset : Pc.committed ⊆ Pf.committed := by
   · refine Or.inr (Or.inr ⟨h, hgh, fun heq => hne ?_⟩)
     rw [r.sub h, r.sub g, heq]
 
-/-- The induction behind `exists_incorrect_fine`: when every fine unit inside `u` is correct in `Y`, and `Y` agrees with
-`X` on the coarse committed wires, `u`'s local evaluation in `X` is each fine unit's local evaluation in `Y`. -/
 theorem localEval_eq {X Y : C.Trace} {u : Fin nc}
     (hY : ∀ g ∈ Pc.committed, Y g = X g) (hf : ∀ v, r.parent v = u → Pf.Correct Y v) :
     ∀ m (g : Fin C.N) (v : Fin nf), g.val = m → Pf.unit g = some v → r.parent v = u →
@@ -264,8 +234,6 @@ theorem localEval_eq {X Y : C.Trace} {u : Fin nc}
     rw [Pc.localEval_of_not_mem X hxu, Pf.localEval_of_not_mem Y hxv]
     exact (hY x (Pc.mem_committed_of_read hx (by rw [hu]; exact Ne.symm hxu))).symm
 
-/-- **A incorrect coarse unit has a incorrect fine unit inside it**, whatever `Y` holds on the coarse unit's interior, as long
-as `Y` agrees with `X` on the coarse committed wires. -/
 theorem exists_incorrect_fine {X Y : C.Trace} (hY : ∀ g ∈ Pc.committed, Y g = X g)
     {u : Fin nc} (hu : u ∈ Pc.incorrect X) : ∃ v, r.parent v = u ∧ v ∈ Pf.incorrect Y := by
   by_contra hno
@@ -279,8 +247,6 @@ theorem exists_incorrect_fine {X Y : C.Trace} (hY : ∀ g ∈ Pc.committed, Y g 
     simpa using hgu
   rw [← hY g hg, hf v hvu g (r.committed_subset hg) hv, r.localEval_eq hY hf g.val g v rfl hv hvu]
 
-/-- A fine trace that extends a coarse one has at least as many incorrect fine units as the coarse one has incorrect
-coarse units. -/
 theorem card_incorrect_le {X Y : C.Trace} (hY : ∀ g ∈ Pc.committed, Y g = X g) :
     (Pc.incorrect X).card ≤ (Pf.incorrect Y).card := by
   classical
@@ -301,7 +267,6 @@ variable {C D : Circuit} (M : Containment C D)
 /-- The inputs `D` gives `C` through `M`. -/
 def pull (a : D.Trace) : C.Trace := fun g => (a (M.emb g)).cast (M.emb_w g)
 
-/-- `D`'s evaluation, read at the images of `C`'s gates, is `C`'s evaluation on the inputs `D` gives it. -/
 theorem eval_emb (a : D.Trace) (g : Fin C.N) : (D.eval a (M.emb g)).cast (M.emb_w g) = C.eval (M.pull a) g := by
   induction g using WellFoundedLT.induction with
   | _ g ih => ?_
@@ -314,7 +279,6 @@ theorem eval_emb (a : D.Trace) (g : Fin C.N) : (D.eval a (M.emb g)).cast (M.emb_
     rw [D.eval_input a hD, C.eval_input _ hi]
     rfl
 
-/-- Every circuit contains itself. -/
 def refl (C : Circuit) : Containment C C where
   emb := id
   emb_inj := Function.injective_id
@@ -324,7 +288,6 @@ def refl (C : Circuit) : Containment C C where
   op_emb _ _ _ := rfl
   outputs_emb _ h := h
 
-/-- **A circuit that contains `C` implements it.** -/
 def implementation : Implementation C D where
   inp := M.emb
   inp_input g h := by rw [M.isInput_emb, h]

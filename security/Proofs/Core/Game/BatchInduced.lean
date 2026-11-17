@@ -7,19 +7,7 @@ import Mathlib.Data.Finset.Max
 import Proofs.Core.Game.Basic
 import Proofs.Core.Game.Prob
 
-/-!
-# One game of a batch, for a strategy whose induced strategies are in a class
-
-`value_batch_getD_le` bounds an event of one position's output in a batch by the event's `value` in that game alone, for
-an optimal prover. A bound for a class of strategies (the query-bounded ones a computational soundness theorem speaks
-of) needs it per strategy: a strategy for the batch, read at one position, does no better than some strategy it induces
-on that position's game (`InducedAt`), the one that fixes each coin of the other games where the probability is largest.
-
-* `avg_le_of_max`: an average is at most its largest term, which picks the other game's coin;
-* `prob_interleave_fst_le_induced`, `prob_interleave_snd_le_induced`: either side of `interleave`;
-* `prob_batch_getD_le_induced`, `prob_batch_getD_le_of_induced`: one position of a batch, by induction on the games
-  before it.
--/
+/-! One game of a batch, for a strategy whose induced strategies are in a class. -/
 
 @[expose] public section
 
@@ -29,12 +17,10 @@ open scoped ENNReal
 
 variable {α β : Type}
 
-/-- An average is at most its largest term. -/
 theorem avg_le_of_max {C : Type} [Fintype C] [Nonempty C] (f : C → ℝ≥0∞) : ∃ c, avg f ≤ f c := by
   obtain ⟨c, -, hc⟩ := Finset.exists_max_image Finset.univ f Finset.univ_nonempty
   exact ⟨c, (avg_mono fun c' => hc c' (Finset.mem_univ c')).trans (avg_const (f c)).le⟩
 
-/-- An event already settled is no likelier in a game than at its end. -/
 theorem prob_const_le_ret {γ : Type} (P : α → Prop) (a : α) (g : Game γ) (s : Strategy g) :
     prob (fun _ => P a) g s ≤ prob P (.ret a) PUnit.unit := by
   classical
@@ -62,8 +48,6 @@ theorem inducedWithL_le {γ : Type} (g : Game γ) (Q : γ → Prop) (p : α × �
       obtain ⟨c, hc⟩ := avg_le_of_max fun c => prob p (interleaveWith adv₁ fin₁ (k c)) (σ' c)
       exact ⟨s c, ⟨c, hs c⟩, hc.trans (hle c)⟩
 
-/-- **The first of two interleaved games.** An event of the first game's output is at most as likely, for a strategy
-`σ` of the pair, as in the first game alone for some strategy that `σ` induces on it. -/
 theorem prob_interleave_fst_le_induced (Q : α → Prop) :
     ∀ (g : Game α) (h : Game β) (σ : Strategy (interleave g h)),
       ∃ s, InducedL g h σ s ∧ prob (fun x => Q x.1) (interleave g h) σ ≤ prob Q g s
@@ -108,8 +92,6 @@ theorem inducedWithR_le (Q : β → Prop) (p : α × β → Prop)
       choose s hs hle using fun c => inducedWithR_le Q p adv₁ fin₁ advR hadv hfin (k c) (σ' c)
       exact ⟨s, hs, avg_mono hle⟩
 
-/-- **The second of two interleaved games.** An event of the second game's output is at most as likely, for a strategy
-`σ` of the pair, as in the second game alone for some strategy that `σ` induces on it. -/
 theorem prob_interleave_snd_le_induced (Q : β → Prop) :
     ∀ (g : Game α) (h : Game β) (σ : Strategy (interleave g h)),
       ∃ s, InducedR g h σ s ∧ prob (fun x => Q x.2) (interleave g h) σ ≤ prob Q h s
@@ -134,8 +116,6 @@ theorem prob_interleave_snd_le_induced (Q : β → Prop) :
         (fun b σ' => (prob_map (fun x => Q x.2) (fun a => (a, b)) (@Game.coin _ C iF iN k) σ').trans_le
           (prob_const_le_ret Q b _ _)) h σ
 
-/-- **One position of a batch, for a fixed strategy.** An event of position `pre.length`'s output is at most as likely,
-for a strategy `σ` of the batch, as in that position's game alone for some strategy that `σ` induces on it. -/
 theorem prob_batch_getD_le_induced (Q : α → Prop) (d : α) (g : Game α) (post : List (Game α)) :
     ∀ (pre : List (Game α)) (σ : Strategy (batch (pre ++ g :: post))),
       ∃ s : Strategy g, InducedAt g post pre σ s ∧
@@ -156,8 +136,6 @@ theorem prob_batch_getD_le_induced (Q : α → Prop) (d : α) (g : Game α) (pos
         (fun x : α × List α => x.1 :: x.2) (h.interleave (batch (pre ++ g :: post))) σ
       exact e.trans_le (((prob_mono (fun x hx => by simpa using hx) _ _).trans hle).trans hle')
 
-/-- **A bound for a class of strategies holds in a batch.** If every strategy of `g` in `Cls` gives `Q` probability at
-most `ε`, so does a strategy of the batch at `g`'s position whenever every strategy it induces on `g` is in `Cls`. -/
 theorem prob_batch_getD_le_of_induced (Q : α → Prop) (d : α) (g : Game α) (post pre : List (Game α))
     (Cls : Strategy g → Prop) (ε : ℝ≥0∞) (hg : ∀ s, Cls s → prob Q g s ≤ ε)
     (σ : Strategy (batch (pre ++ g :: post))) (hσ : ∀ s, InducedAt g post pre σ s → Cls s) :

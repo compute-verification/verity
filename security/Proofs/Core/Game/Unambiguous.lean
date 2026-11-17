@@ -5,25 +5,7 @@ public import Mathlib.Order.Lattice.Nat
 import Mathlib.Algebra.Order.Module.Field
 import Mathlib.Basic.ENNReal.Real
 
-/-!
-# A batch of decisive games reads as no other list of games
-
-`unambiguous_of_decisive`: every game of `L` decisive (`Decisive`: every message type inhabited, two runs ending
-differently) makes `L` `Unambiguous`.
-
-The proof follows the equation `interleave g h = interleave g' h'` down both readings at once. Where both readings have
-both games live, the root is the scheduling choice in both, so the games advance alike (`interleave_live`). A reading
-can only drift where one of its games ends and the other reading's does not; then the game that ended is a relabelled
-copy of the other reading's interleaving, which is strictly deeper (`depth_interleave`: the least depth of
-`interleave x y` is `d x + d y + min (d x) (d y)`). Following `h` first (`split_right`) and `g` first (`split_left`)
-each either finds the readings equal or fixes how their least depths differ (`Split`), and the four ways of drifting on
-both sides contradict the depth of the root (`interleave_inj`). The game that ends needs no non-constancy below its
-root: only `g` and `h` themselves are asked to be non-constant. `batch` then peels one game at a time (`batch_inj`),
-the rest of a batch of decisive games being non-constant itself, or the empty batch, whose leaves have length zero.
-
-A constant game breaks it (`not_unambiguous_of_constant`): `[send Bool fun _ => ret true, send Bool fun b => ret b]` has
-the batch of `[ret true, g₂']`, where `g₂'` replays the first game's move and the schedule's choice.
--/
+/-! A batch of decisive games reads as no other list of games, and a constant game breaks it. -/
 
 @[expose] public section
 
@@ -32,8 +14,6 @@ namespace Verity.Game
 namespace Unambiguity
 
 variable {α β : Type}
-
-/-! ### Shapes -/
 
 /-- `g` has not ended. -/
 def Live : Game α → Prop
@@ -60,7 +40,6 @@ theorem interleave_ret_right : ∀ (g : Game α) (b : β), interleave g (.ret b)
   | .send _ _, _ => rfl
   | @Game.coin _ _ _ _ _, _ => rfl
 
-/-- With both games live, the root is the schedule's choice. -/
 theorem interleave_live : ∀ {g : Game α} {h : Game β}, Live g → Live h →
     interleave g h = .send Bool fun first => if first then stepL g h else stepR g h
   | .ret _, _, hg, _ => hg.elim
@@ -79,7 +58,6 @@ theorem map_send (f : α → β) (M : Type) (k : M → Game α) :
 theorem map_coin (f : α → β) (C : Type) [Fintype C] [Nonempty C] (k : C → Game α) :
     (Game.coin C k).map f = .coin C fun c => (k c).map f := rfl
 
-/-- Relabelling by an injective map is injective. -/
 theorem map_injective {f : α → β} (hf : Function.Injective f) {g g' : Game α} (e : g.map f = g'.map f) :
     g = g' := by
   induction g generalizing g' with
@@ -110,8 +88,6 @@ theorem map_injective {f : α → β} (hf : Function.Injective f) {g g' : Game �
       have hk := eq_of_heq hk
       exact congrArg (Game.coin C) (funext fun c => ih c (congrFun hk c))
 
-/-! ### Outputs -/
-
 theorem reaches_map {f : α → β} {g : Game α} {c : β} :
     Reaches (g.map f) c ↔ ∃ a, Reaches g a ∧ f a = c := by
   induction g with
@@ -125,7 +101,6 @@ theorem reaches_map {f : α → β} {g : Game α} {c : β} :
     simp only [ih]
     exact ⟨fun ⟨m, a, h1, h2⟩ => ⟨a, ⟨m, h1⟩, h2⟩, fun ⟨a, ⟨m, h1⟩, h2⟩ => ⟨m, a, h1, h2⟩⟩
 
-/-- Playing one game to its end and then the other reaches every pair of outputs. -/
 theorem reaches_interleave {g : Game α} {h : Game β} {a : α} {b : β} (hg : Reaches g a) (hh : Reaches h b) :
     Reaches (interleave g h) (a, b) := by
   induction g with
@@ -161,7 +136,6 @@ theorem reaches_interleave {g : Game α} {h : Game β} {a : α} {b : β} (hg : R
       obtain ⟨m, hm⟩ := hg
       exact ⟨true, m, ih m hm⟩
 
-/-- Every output of the interleaving is a pair of outputs. -/
 theorem reaches_of_interleave {g : Game α} {h : Game β} {a : α} {b : β} (r : Reaches (interleave g h) (a, b)) :
     Reaches g a ∧ Reaches h b := by
   induction g generalizing h with
@@ -224,15 +198,12 @@ theorem reaches_of_interleave {g : Game α} {h : Game β} {a : α} {b : β} (r :
         obtain ⟨n, r⟩ := r
         exact ⟨(ihh n r).1, ⟨n, (ihh n r).2⟩⟩
 
-/-- A game with two different outputs has not ended. -/
 theorem live_of_reaches {g : Game α} {a₁ a₂ : α} (ha : a₁ ≠ a₂) (h₁ : Reaches g a₁)
     (h₂ : Reaches g a₂) : Live g := by
   cases g with
   | ret a => exact ha (h₁.symm.trans h₂)
   | send _ _ => trivial
   | coin _ _ => trivial
-
-/-! ### Every message type inhabited -/
 
 theorem reaches_of_productive {g : Game α} (pg : Productive g) : ∃ a, Reaches g a := by
   induction g with
@@ -319,8 +290,6 @@ theorem productive_of_interleave {g : Game α} {h : Game β} (p : Productive (in
       have pk := p.2 true
       exact ⟨fun c' => (ih c' (pk c')).1, (ih c (pk c)).2⟩
 
-/-! ### Least depth -/
-
 /-- The least number of nodes on a run of `g` to its end (counting a message type with no message as one node). -/
 noncomputable def depth : Game α → ℕ
   | .ret _ => 0
@@ -340,7 +309,6 @@ theorem depth_pos {g : Game α} (hg : Live g) : 0 < depth g := by
   | send _ _ => exact Nat.succ_pos _
   | coin _ _ => exact Nat.succ_pos _
 
-/-- A monotone map commutes with the least value of a nonempty family. -/
 theorem iInf_monotone {ι : Type} [Nonempty ι] {φ : ℕ → ℕ} (hφ : Monotone φ) (f : ι → ℕ) :
     ⨅ i, φ (f i) = φ (⨅ i, f i) := by
   obtain ⟨i₀, hi₀⟩ := ciInf_mem f
@@ -373,8 +341,6 @@ theorem depth_live {g : Game α} {h : Game β} (hg : Live g) (hh : Live h) :
   rw [interleave_live hg hh, depth_send, iInf_bool]
   rfl
 
-/-- **The least depth of an interleaving**: play the shallower game first, the schedule's choice before each of its
-moves, then the other. -/
 theorem depth_interleave {g : Game α} {h : Game β} (pg : Productive g) (ph : Productive h) :
     depth (interleave g h) = depth g + depth h + min (depth g) (depth h) := by
   induction g generalizing h with
@@ -435,8 +401,6 @@ theorem depth_interleave {g : Game α} {h : Game β} (pg : Productive g) (ph : P
       rw [iInf_add_min, iInf_add_min', depth_coin C k, depth_coin C' j]
       omega
 
-/-! ### Two readings of one interleaving -/
-
 /-- How two readings of an interleaving relate, followed down one game: the other games are equal (`P`), or the other
 game of one reading is a relabelled interleaving of the other reading's with the extra depth `Y` of the followed game,
 so strictly deeper. `u`, `u'` are the other games' least depths, `v`, `v'` the followed games'. -/
@@ -444,7 +408,6 @@ def Split (P : Prop) (u u' v v' : ℕ) : Prop :=
   P ∨ (∃ Y, 0 < Y ∧ u = u' + Y + min u' Y ∧ v' = v + Y) ∨
     (∃ Z, 0 < Z ∧ u' = u + Z + min u Z ∧ v = v' + Z)
 
-/-- Every child of the followed games splits alike, so the games split so. -/
 theorem split_iInf {ι : Type} [Nonempty ι] {P : Prop} {u u' : ℕ} {a b : ι → ℕ}
     (h : ∀ i, Split P u u' (a i) (b i)) : Split P u u' ((⨅ i, a i) + 1) ((⨅ i, b i) + 1) := by
   by_cases hP : P
@@ -473,9 +436,6 @@ theorem split_iInf {ι : Type} [Nonempty ι] {P : Prop} {u u' : ℕ} {a b : ι �
       exact iInf_monotone (φ := fun x => x + Z) (fun x y hxy => by dsimp only; omega) b
     exact Or.inr (Or.inr ⟨Z, hZ, hu, by omega⟩)
 
-/-- **Following the second game.** While both readings have both games live they advance the second game alike; where
-one reading's second game ends and the other's does not, the first game that stays is a relabelled interleaving of the
-other reading's two. -/
 theorem split_right {g g' : Game α} (hg : Live g) (hg' : Live g') (pg : Productive g) (pg' : Productive g')
     {h h' : Game β} (ph : Productive h) (ph' : Productive h') (e : interleave g h = interleave g' h') :
     Split (g = g') (depth g) (depth g') (depth h) (depth h') := by
@@ -553,7 +513,6 @@ theorem split_right {g g' : Game α} (hg : Live g) (hg' : Live g') (pg : Product
       have hj := eq_of_heq hj
       exact split_iInf fun n => ih n (ph n) (ph' n) (congrFun hj n)
 
-/-- **Following the first game.** The mirror of `split_right`. -/
 theorem split_left {h h' : Game β} (hh : Live h) (hh' : Live h') (ph : Productive h) (ph' : Productive h')
     {g g' : Game α} (pg : Productive g) (pg' : Productive g') (e : interleave g h = interleave g' h') :
     Split (h = h') (depth h) (depth h') (depth g) (depth g') := by
@@ -631,8 +590,6 @@ theorem split_left {h h' : Game β} (hh : Live h) (hh' : Live h') (ph : Producti
       have hk := eq_of_heq hk
       exact split_iInf fun m => ih m (pg m) (pg' m) (congrFun hk m)
 
-/-- **Interleaving two non-constant games reads only one way.** Both games have every message type inhabited and two
-different outputs; the other reading's games are arbitrary. -/
 theorem interleave_inj {g g' : Game α} {h h' : Game β} (pg : Productive g) (ph : Productive h)
     {a₁ a₂ : α} (ha : a₁ ≠ a₂) (ha₁ : Reaches g a₁) (ha₂ : Reaches g a₂)
     {b₁ b₂ : β} (hb : b₁ ≠ b₂) (hb₁ : Reaches h b₁) (hb₂ : Reaches h b₂)
@@ -657,8 +614,6 @@ theorem interleave_inj {g g' : Game α} {h h' : Game β} (pg : Productive g) (ph
     rcases sL with rfl | ⟨X, hX, hx, hw⟩ | ⟨W, hW, hx, hw⟩ <;>
     first | exact ⟨rfl, rfl⟩ | omega
 
-/-! ### Batches -/
-
 theorem batch_cons (g : Game α) (gs : List (Game α)) :
     batch (g :: gs) = (interleave g (batch gs)).map fun x => x.1 :: x.2 := rfl
 
@@ -668,7 +623,6 @@ theorem productive_batch : ∀ {L : List (Game α)}, (∀ g ∈ L, Productive g)
     rw [batch_cons]
     exact productive_map.2 (productive_interleave (h g (by simp)) (productive_batch fun x hx => h x (by simp [hx])))
 
-/-- Every output of a batch has one entry per game. -/
 theorem reaches_batch_length : ∀ {L : List (Game α)} {l : List α}, Reaches (batch L) l → l.length = L.length
   | [], l, r => by
     have r : [] = l := r
@@ -679,7 +633,6 @@ theorem reaches_batch_length : ∀ {L : List (Game α)} {l : List α}, Reaches (
     obtain ⟨⟨a, l'⟩, hx, rfl⟩ := reaches_map.1 r
     simp [reaches_batch_length (reaches_of_interleave hx).2]
 
-/-- **A batch of decisive games is the batch of no other list.** -/
 theorem batch_inj {L : List (Game α)} (hL : ∀ g ∈ L, Decisive g) {L' : List (Game α)} (e : batch L' = batch L) :
     L' = L := by
   induction L generalizing L' with
@@ -742,13 +695,9 @@ end Unambiguity
 
 variable {α : Type}
 
-/-- **A list of decisive games is unambiguous**: when every game of `L` has every message type inhabited and two runs
-ending differently, `batch L` is the batch of no other list. -/
 theorem unambiguous_of_decisive (L : List (Game α)) (h : ∀ g ∈ L, Decisive g) : Unambiguous L :=
   fun _ _ _ e => Unambiguity.batch_inj h e
 
-/-- **A constant game breaks it.** The first game always accepts; its move and the schedule's choice fold into the
-second game of another reading. -/
 theorem not_unambiguous_of_constant :
     ¬ Unambiguous [Game.send Bool (fun _ => Game.ret true), Game.send Bool (fun b => Game.ret b)] := by
   intro h

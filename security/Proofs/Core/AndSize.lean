@@ -7,16 +7,7 @@ public import Mathlib.Tactic.LinearCombination
 public import Proofs.Core.Expand
 import Mathlib.Tactic.Ring.RingNF
 
-/-!
-# Proofs about the AND count
-
-* `Circuit.andSize_le_size`: AND gates are operation gates, so `andSize S ≤ size S`, and credit is at most the lowered
-  circuit's size (`CreditSizeLe`);
-* `Circuit.not_affine_of_and`: a gate that computes `p ∧ q` on the inputs that are `p` at `x`, `q` at `y` and `0`
-  elsewhere is not affine: an affine function's values on those four inputs sum to `0`, AND's to `1`;
-* `ToCircuitAnd`: Flock's XOR, NOT and input gates are affine, and its `and a b` (`a ≠ b`) and its rows whose XORs
-  differ are not.
--/
+/-! Proofs about the AND count: it is at most a circuit's size, and a gate that computes an AND is not affine. -/
 
 @[expose] public section
 
@@ -58,8 +49,6 @@ theorem Circuit.sum_andProbe {N : ℕ} (S : Finset (Fin N)) {x y : Fin N} (hxy :
   simp only [this, sum_add_distrib]
   cases p <;> cases q <;> simp [sum_ite_eq']
 
-/-- **A gate that is an AND on two inputs is not affine.** If gate `g` computes `p ∧ q` on inputs `v p q` whose bits are
-`p` at `x`, `q` at `y` and `0` elsewhere, it is not affine. -/
 theorem Circuit.not_affine_of_and (C : Circuit) (g : Fin C.N) {x y : Fin C.N} (hxy : x ≠ y)
     (v : Bool → Bool → (a : Fin C.N) → BitVec (C.w a))
     (hv : ∀ p q a, bitZ (v p q a) = if andProbe x y p q a then 1 else 0)
@@ -99,7 +88,6 @@ namespace Verity.Boolean.Circuit
 
 open Verity Verity.Circuit Finset
 
-/-- A gate of `toCircuit`'s bit is its operation on the bits it reads. -/
 theorem bitZ_toCircuit_op (B : Circuit) (g : Fin B.N) (v : (a : Fin B.toCircuit.N) → BitVec (B.toCircuit.w a)) :
     Verity.Circuit.bitZ (B.toCircuit.op g v) = if (B.op g).apply (fun a => (v a).getLsbD 0) then 1 else 0 := by
   show (if (BitVec.ofBool ((B.op g).apply fun a => (v a).getLsbD 0)).getLsbD 0 then (1 : ZMod 2) else 0) = _
@@ -114,7 +102,6 @@ theorem bitZ_toCircuit (B : Circuit) (z : Fin B.toCircuit.N) (b : Bool) :
     Verity.Circuit.bitZ (BitVec.ofBool b : BitVec (B.toCircuit.w z)) = if b then 1 else 0 := by
   cases b <;> rfl
 
-/-- **An `and`-shaped gate of `toCircuit` is not affine**: if its operation computes `p ∧ q` on `andProbe x y p q`. -/
 theorem not_affine (B : Circuit) (g : Fin B.N) {x y : Fin B.toCircuit.N} (hxy : x ≠ y)
     (h : ∀ p q, (B.op g).apply (andProbe x y p q) = (p && q)) : ¬ B.toCircuit.Affine g := by
   refine B.toCircuit.not_affine_of_and g hxy (fun p q a => BitVec.ofBool (andProbe x y p q a))
@@ -166,13 +153,11 @@ private theorem count_even {N : ℕ} (l : List (Fin N)) (x : Fin N) (h : Even (l
     ((l.count x : ℕ) : ZMod 2) = if false then 1 else 0 := by
   simpa using (ZMod.natCast_eq_zero_iff_even).2 h
 
-/-- An `and` of two different gates computes `p ∧ q` on `andProbe`. -/
 theorem apply_and_andProbe (B : Circuit) {a b : Fin B.N} (hab : a ≠ b) (p q : Bool) :
     (Op.and a b).apply (andProbe a b p q) = (p && q) := by
   show (andProbe a b p q a && andProbe a b p q b) = (p && q)
   rw [andProbe_x hab, andProbe_y hab]
 
-/-- A row whose XORs differ at `x` and `y` computes `p ∧ q` on `andProbe`. -/
 theorem apply_row_andProbe {N : ℕ} {a b : List (Fin N)} {x y : Fin N} (hxy : x ≠ y) (hxa : Odd (a.count x))
     (hxb : Even (b.count x)) (hya : Even (a.count y)) (hyb : Odd (b.count y)) (p q : Bool) :
     (Op.row a b).apply (andProbe x y p q) = (p && q) := by

@@ -1,16 +1,6 @@
 module
 
-/-!
-# Packed rows (NaiveStrassen's kernel tables)
-
-A row of a cost table is one natural number whose 64-bit fields are its entries. The kernel evaluates `>>>`, `&&&`, `+`
-and `-` on such numbers as single GMP operations, so a comparison of two whole rows (`leRow`, one guard bit a field) is
-a handful of kernel steps rather than one a field.
-
-`getW w X j` is field `j` of `X` at width `w`, and `packW w f n` packs `f 0, …, f (n - 1)`. The kernel-facing forms
-(`fld`, `row`, `packF`, `packRows`) are shifts and masks, each proved equal to its `getW` or `packW` form; the lemmas
-here say what a field of a sum, a multiple, a mask or a packing is, and that `leRow` compares every field.
--/
+/-! Packed rows of NaiveStrassen's kernel tables: one natural number a row, its 64-bit fields the entries, so the kernel compares two whole rows in a handful of GMP operations. -/
 
 @[expose] public section
 
@@ -23,8 +13,6 @@ def getW (w X j : Nat) : Nat := X / 2 ^ (w * j) % 2 ^ w
 def packW (w : Nat) (f : Nat → Nat) : Nat → Nat
   | 0 => 0
   | n + 1 => packW w f n + 2 ^ (w * n) * f n
-
-/-! ## Kernel-facing forms -/
 
 /-- Field `j` of a row (64 bits). -/
 def fld (X j : Nat) : Nat := (X >>> (64 * j)) &&& 18446744073709551615
@@ -54,8 +42,6 @@ def leRow (n X Y : Nat) : Bool := ((Y + guards n) - X) &&& guards n == guards n
 
 /-- Every one of `X`'s `n` fields is below `2^56`, and `X` has no other bits. -/
 def small (n X : Nat) : Bool := X < 2 ^ (64 * n) && X &&& highs n == 0
-
-/-! ## `getW` -/
 
 theorem two_pow_mul_succ (w j : Nat) : 2 ^ (w * (j + 1)) = 2 ^ w * 2 ^ (w * j) := by
   rw [Nat.mul_succ, Nat.pow_add, Nat.mul_comm]
@@ -160,8 +146,6 @@ theorem getW_mul {w c : Nat} : ∀ {j X : Nat}, (∀ k ≤ j, c * getW w X k < 2
 theorem getW_and (w X M j : Nat) : getW w (X &&& M) j = getW w X j &&& getW w M j := by
   simp only [getW, Nat.and_div_two_pow, Nat.and_mod_two_pow]
 
-/-! ## `packW` -/
-
 theorem packW_lt {w : Nat} {f : Nat → Nat} : ∀ {n : Nat}, (∀ j < n, f j < 2 ^ w) → packW w f n < 2 ^ (w * n)
   | 0, _ => by simp [packW]
   | n + 1, h => by
@@ -194,7 +178,6 @@ theorem packW_succ' (w : Nat) (f : Nat → Nat) : ∀ n : Nat,
   | n + 1 => by
     rw [packW, packW_succ' w f n, packW, two_pow_mul_succ, Nat.mul_add, Nat.mul_assoc, Nat.add_assoc]
 
-/-- A number whose `n` fields are each at most `c` is at most `c` packed `n` times. -/
 theorem le_packW_const {w c : Nat} : ∀ {n X : Nat}, X < 2 ^ (w * n) → (∀ j < n, getW w X j ≤ c) →
     X ≤ packW w (fun _ => c) n
   | 0, X, hX, _ => by simp at hX; simp [hX, packW]
@@ -210,8 +193,6 @@ theorem le_packW_const {w c : Nat} : ∀ {n X : Nat}, X < 2 ^ (w * n) → (∀ j
     have := Nat.mod_add_div X (2 ^ w)
     have := Nat.mul_le_mul_left (2 ^ w) ih
     omega
-
-/-! ## The kernel forms are the `getW` and `packW` forms -/
 
 theorem fld_eq (X j : Nat) : fld X j = getW 64 X j := by
   rw [fld, Nat.shiftRight_eq_div_pow, show (18446744073709551615 : Nat) = 2 ^ 64 - 1 by decide,
@@ -238,8 +219,6 @@ theorem packRows_eq (f : Nat → Nat) (n : Nat) : ∀ c, packRows f n c = packW 
 
 theorem and_rowMask (X n : Nat) : X &&& rowMask n = X % 2 ^ (64 * n) := by
   rw [rowMask, Nat.and_two_pow_sub_one_eq_mod]
-
-/-! ## Fields of rows -/
 
 theorem fld_lt (X j : Nat) : fld X j < 2 ^ 64 := by rw [fld_eq]; exact getW_lt _ _ _
 
@@ -275,8 +254,6 @@ theorem fld_guards {n j : Nat} (hj : j < n) : fld (guards n) j = 922337203685477
 theorem fld_highs {n j : Nat} (hj : j < n) : fld (highs n) j = 18374686479671623680 := by
   rw [highs, fld_packF (fun _ _ => by decide), ite_eq_left hj]
 
-/-! ## `small` and `leRow` -/
-
 theorem small_fld {n X : Nat} (h : small n X = true) : X < 2 ^ (64 * n) ∧ ∀ j < n, fld X j < 2 ^ 56 := by
   simp only [small, Bool.and_eq_true, decide_eq_true_eq, beq_iff_eq] at h
   refine ⟨h.1, fun j hj => ?_⟩
@@ -302,7 +279,6 @@ theorem leRow_fld_aux : ∀ {n X Y Z : Nat}, X < 2 ^ (64 * n) → (∀ j < n, ge
     have hB := Nat.two_pow_pos 64
     have hg : guards (n + 1) = 9223372036854775808 + 2 ^ 64 * guards n := by
       simp only [guards, packF_eq, packW_succ']
-    -- low fields
     have hX0 := hXf 0 (Nat.zero_lt_succ n)
     have hY0 := hYf 0 (Nat.zero_lt_succ n)
     simp only [getW_zero] at hX0 hY0
@@ -317,7 +293,6 @@ theorem leRow_fld_aux : ∀ {n X Y Z : Nat}, X < 2 ^ (64 * n) → (∀ j < n, ge
     have hXd := Nat.mod_add_div X (2 ^ 64)
     have hYd := Nat.mod_add_div Y (2 ^ 64)
     have hZlt := Nat.mod_lt Z hB
-    -- the low sum carries nothing
     have hs : Z % 2 ^ 64 + X % 2 ^ 64 = Y % 2 ^ 64 + 2 ^ 63 ∧
         Z / 2 ^ 64 + X / 2 ^ 64 = Y / 2 ^ 64 + guards n := by
       rw [hg] at hsum
@@ -362,7 +337,6 @@ theorem leRow_fld_aux : ∀ {n X Y Z : Nat}, X < 2 ^ (64 * n) → (∀ j < n, ge
           Nat.div_eq_of_lt (show (9223372036854775808 : Nat) < 2 ^ 64 by decide), Nat.zero_add] at this
         exact this
 
-/-- `leRow` compares each of the first `n` fields, when every field compared is below `2^63` and `X` has no others. -/
 theorem leRow_fld {n X Y : Nat} (h : leRow n X Y = true) (hX : X < 2 ^ (64 * n))
     (hXf : ∀ j < n, fld X j < 2 ^ 63) (hYf : ∀ j < n, fld Y j < 2 ^ 63) : ∀ j < n, fld X j ≤ fld Y j := by
   simp only [fld_eq] at *

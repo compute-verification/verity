@@ -2,19 +2,7 @@ module
 
 public import Proofs.Core.Game.Rewinding
 
-/-!
-# The rewinding lemma, counting each bad run at one position
-
-`bad_sq_le` covers `bad` by the per-position sets of off-plurality runs and counts a conflicting pair at every position
-where it conflicts, so it pays the most positions one run opens (`Q`). Count each bad run at one chosen position where it
-is off the plurality instead (`canon`). A run off at `p` conflicts at `p` with at least as many runs as are off at `p`
-(`off_le_row`), and each conflicting pair is then counted once, at its first run's chosen position, so
-
-  `#bad ² ≤ N · #conflict`   (`bad_sq_le_canon`),
-
-and `Pr[bad] ≤ √(N · Pr[conflict])` (`prBad_le_canon`). Positions no run opens don't count: at any `S` holding every
-position some run opens, `N` reads `#S` (`bad_sq_le_canon_on`, `prBad_le_canon_on`).
--/
+/-! The rewinding lemma, counting each bad run at one position. -/
 
 @[expose] public section
 
@@ -52,7 +40,6 @@ theorem bad_subset_canon (vstar : P → V) : bad op vstar ⊆ univ.biUnion (cano
   unfold canon
   exact mem_filter.mpr ⟨mem_univ _, hω, rfl⟩
 
-/-- `#canon_p ² ≤ Σ_{ω₁ ∈ canon_p} #{ω₂ : ω₁, ω₂ conflict at p}`. -/
 theorem canon_sq_le (vstar : P → V) (hv : IsPlurality op vstar) (p : P) :
     #(canon op vstar p) ^ 2 ≤
       ∑ ω₁ ∈ canon op vstar p, #(univ.filter fun ω₂ => ConflictAt op (ω₁, ω₂) p) := by
@@ -66,7 +53,6 @@ theorem canon_sq_le (vstar : P → V) (hv : IsPlurality op vstar) (p : P) :
         obtain ⟨v, hv₁⟩ := Option.isSome_iff_exists.mp hs
         exact off_le_row vstar hv p ω₁ v hv₁
 
-/-- Each conflicting pair is counted at most once, at its first run's chosen position. -/
 theorem sum_canon_le (vstar : P → V) :
     ∑ p, ∑ ω₁ ∈ canon op vstar p, #(univ.filter fun ω₂ => ConflictAt op (ω₁, ω₂) p) ≤ #(conflict op) := by
   have hrow : ∀ ω₁, (∑ p, if ω₁ ∈ canon op vstar p then
@@ -95,7 +81,6 @@ theorem sum_canon_le (vstar : P → V) :
     _ ≤ ∑ ω₁, #(univ.filter fun ω₂ => ∃ q, ConflictAt op (ω₁, ω₂) q) := sum_le_sum fun ω₁ _ => hrow ω₁
     _ = #(conflict op) := hsplit.symm
 
-/-- **Rewinding lemma, one position a run (counts).** `#bad ² ≤ N · #conflict`. -/
 theorem bad_sq_le_canon (vstar : P → V) (hv : IsPlurality op vstar) :
     #(bad op vstar) ^ 2 ≤ Fintype.card P * #(conflict op) := by
   calc #(bad op vstar) ^ 2
@@ -106,8 +91,6 @@ theorem bad_sq_le_canon (vstar : P → V) (hv : IsPlurality op vstar) :
         Nat.mul_le_mul_left _ (sum_le_sum fun p _ => canon_sq_le vstar hv p)
     _ ≤ Fintype.card P * #(conflict op) := Nat.mul_le_mul_left _ (sum_canon_le vstar)
 
-/-- **Rewinding lemma, one position a run (probabilities).** Over uniform coins,
-`Pr[bad] ≤ √(N · Pr[conflict])`, where `Pr[conflict]` is over two independent runs. -/
 theorem prBad_le_canon [Nonempty Ω] (vstar : P → V) (hv : IsPlurality op vstar) :
     (#(bad op vstar) : ℝ) / Fintype.card Ω ≤
       Real.sqrt (Fintype.card P * ((#(conflict op) : ℝ) / (Fintype.card Ω) ^ 2)) := by
@@ -117,8 +100,6 @@ theorem prBad_le_canon [Nonempty Ω] (vstar : P → V) (hv : IsPlurality op vsta
   rw [div_pow, mul_div_assoc']
   exact div_le_div_of_nonneg_right hc (by positivity)
 
-/-- **Positions no run opens don't count.** At any `S` holding every position some run opens,
-`#bad ² ≤ #S · #conflict`. -/
 theorem bad_sq_le_canon_on (vstar : P → V) (hv : IsPlurality op vstar) (S : Finset P)
     (hS : ∀ ω p, (op ω p).isSome → p ∈ S) :
     #(bad op vstar) ^ 2 ≤ #S * #(conflict op) := by
@@ -135,7 +116,6 @@ theorem bad_sq_le_canon_on (vstar : P → V) (hv : IsPlurality op vstar) (S : Fi
         Nat.mul_le_mul_left _ (sum_le_sum_of_subset (subset_univ S))
     _ ≤ #S * #(conflict op) := Nat.mul_le_mul_left _ (sum_canon_le vstar)
 
-/-- `prBad_le_canon` at the positions some run opens: `Pr[bad] ≤ √(#S · Pr[conflict])`. -/
 theorem prBad_le_canon_on [Nonempty Ω] (vstar : P → V) (hv : IsPlurality op vstar) (S : Finset P)
     (hS : ∀ ω p, (op ω p).isSome → p ∈ S) :
     (#(bad op vstar) : ℝ) / Fintype.card Ω ≤

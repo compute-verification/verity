@@ -4,27 +4,7 @@ public import Definitions.Core.Guarantees.ValueSalts
 public import Proofs.Core.Game.Basic
 public import Proofs.Core.Challenger
 
-/-!
-# What a registration leaks: proof
-
-`RegisteredLeakage`. Under `ZkServerOwnUser` the stack's choice at every key is its choice at `k₀`. The loop admits the
-record it hands and the record meets `A` only if one of its `m` sessions' genuine records meets `A` (the stack registered
-that session, or handed a copy of its record) or the record is admitted and none of theirs, the forge event at `k₀`
-(`forgeAdvantage`). Each session's genuine record is a uniform session's (`prCoin_coord`), so the union bound over the
-sessions gives `m` times `genuine`, which is at most the ideal probability plus the PRF gap.
-
-Its witnesses: `RegisteredLeakage_honest`, a stack that registers its one session and reads no key, where the premise and
-the bound hold; and `RegisteredLeakage_nontrivial`, where the bound fails at a stack that makes its record tag from the
-key (`RegisteredLeakage_nontrivial_stack`: it reads the key).
-
-`RegisteredStreamLeakage`, the same over a stream. The loop admits the stream the stack hands it and the stream meets `A`
-only if some choice `d` of `streamChoices` has genuine records that meet `A`, or the stack hands at some registration an
-admitted record none of that epoch's sessions has, the forge event at `k₀`. Each registration's record is the genuine
-record of a session of its epoch (one the stack registered, or a copy of its record: a record admitted at registration
-`i` carries the number `i`) or none, where the loop passed it over, so the records are a choice's, which passes over at
-most `b`. The union bound over the choices gives the sum of their genuine probabilities, each at most the ideal one plus
-the PRF gap at that choice. Its witnesses are the single registration's, on a stream of one with none passed over.
--/
+/-! What a registration leaks: the proofs of `RegisteredLeakage` and `RegisteredStreamLeakage`, with their honest and nontrivial witnesses. -/
 
 @[expose] public section
 
@@ -44,7 +24,6 @@ theorem avg_prod {C D : Type} [Fintype C] [Fintype D] (f : C × D → ℝ≥0∞
   refine Finset.sum_congr rfl fun d _ => ?_
   ring
 
-/-- One coordinate of a uniform tuple is uniform. -/
 theorem avg_coord {S : Type} [Fintype S] {m : ℕ} (i : Fin m) (g : S → ℝ≥0∞) :
     Game.avg (fun s : Fin m → S => g (s i)) = Game.avg g := by
   rcases isEmpty_or_nonempty S with hS | hS
@@ -54,7 +33,6 @@ theorem avg_coord {S : Type} [Fintype S] {m : ℕ} (i : Fin m) (g : S → ℝ≥
     simp only [Function.update_self]
     exact Game.avg_const _
 
-/-- An event of the key and one coordinate of `m` uniform sessions has that of the key and one uniform session. -/
 theorem prCoin_coord {K S : Type} [Fintype K] [Fintype S] {m : ℕ} (i : Fin m) (P : K → S → Prop) :
     Game.prCoin (fun p : K × (Fin m → S) => P p.1 (p.2 i)) = Game.prCoin fun q : K × S => P q.1 q.2 := by
   classical

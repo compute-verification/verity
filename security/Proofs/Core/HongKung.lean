@@ -34,25 +34,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# Loomis–Whitney, and Hong–Kung's count of a product's segments
-
-A part of the SAK lower bound (`Pouw.SakLb`): the combinatorial core of the data-movement lower bound for an exact
-matrix product.
-
-* `loomis_whitney`: a finite set `S` of triples `(i, j, l)` has `|S|² ≤ |S_ij| · |S_jl| · |S_il|`, its three
-  projections (the discrete Loomis–Whitney inequality, by Cauchy–Schwarz on the fibres over `(i, j)`).
-* `segment_le`: a set of MACs `A_ij B_jl → C_il` that touches at most `h` entries of each of `A`, `B` and `C` has at
-  most `h^{3/2}` of them: `|S|² ≤ h³`.
-* `parts_le`: if the `m k n` MACs of a product are done in `T` segments, each touching at most `h` entries of each
-  operand and of the result, then `(m k n)² ≤ T² h³`.
-
-Hong–Kung's argument reads `parts_le` at `h = 2M` (scaled by the words an entry takes): a run with `M` words of fast
-memory, cut into segments of `M` words moved, touches in each segment at most the `M` words it holds at the segment's
-start and the `M` it moves, so it moves at least `M (T − 1) ≥ m k n / (2√2 √M) − M` words. At the served shapes and the
-cards' rates this is at most 2.8% of the tensor units' time, so the bound does not bind: P1's floor on the tensor
-units does.
--/
+/-! Loomis–Whitney, and Hong–Kung's count of a product's segments: the combinatorial core of the SAK lower bound's data-movement part. -/
 
 @[expose] public section
 
@@ -101,7 +83,6 @@ theorem fibre_le_xz (S : Finset (X × Y × Z)) (q : X × Y) :
       have := congrArg Prod.snd hp.2; have := congrArg Prod.snd hp'.2; simp_all
     exact Prod.ext h.1 (Prod.ext h2 h.2)
 
-/-- **Discrete Loomis–Whitney**: `|S|² ≤ |S_ij| · |S_jl| · |S_il|`. -/
 theorem loomis_whitney (S : Finset (X × Y × Z)) : #S ^ 2 ≤ #(pxy S) * #(pyz S) * #(pxz S) := by
   set a : Y → ℕ := fun y => #{r ∈ pyz S | r.1 = y}
   set b : X → ℕ := fun x => #{r ∈ pxz S | r.1 = x}
@@ -137,16 +118,12 @@ theorem loomis_whitney (S : Finset (X × Y × Z)) : #S ^ 2 ≤ #(pxy S) * #(pyz 
         rw [sum_product, sum_mul_sum, sum_comm]
     _ = #(pxy S) * #(pyz S) * #(pxz S) := by rw [ha, hb, mul_assoc]
 
-/-- **A segment's MACs**: touching at most `h` entries of each of `A`, `B` and `C`, a set of MACs has at most `h^{3/2}`
-of them. -/
 theorem segment_le (S : Finset (X × Y × Z)) (h : ℕ) (h1 : #(pxy S) ≤ h) (h2 : #(pyz S) ≤ h) (h3 : #(pxz S) ≤ h) :
     #S ^ 2 ≤ h ^ 3 := by
   calc #S ^ 2 ≤ #(pxy S) * #(pyz S) * #(pxz S) := loomis_whitney S
     _ ≤ h * h * h := Nat.mul_le_mul (Nat.mul_le_mul h1 h2) h3
     _ = h ^ 3 := by ring
 
-/-- **Hong–Kung's count of segments**: if the `m k n` MACs of a product (every triple of `X × Y × Z`) are done in `T`
-segments, each touching at most `h` entries of each operand and of the result, then `(m k n)² ≤ T² h³`. -/
 theorem parts_le [Fintype X] [Fintype Y] [Fintype Z] {T : ℕ} (P : Fin T → Finset (X × Y × Z))
     (hcover : ∀ p, ∃ t, p ∈ P t) (h : ℕ) (hseg : ∀ t, #(pxy (P t)) ≤ h ∧ #(pyz (P t)) ≤ h ∧ #(pxz (P t)) ≤ h) :
     (Fintype.card X * Fintype.card Y * Fintype.card Z) ^ 2 ≤ T ^ 2 * h ^ 3 := by

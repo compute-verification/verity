@@ -6,13 +6,7 @@ public import Proofs.Core.TC.Proofs.Prod
 import Proofs.Core.TC.Proofs.Norm
 import Proofs.Core.TC.Proofs.Step
 
-/-!
-# Completeness: the honest witness satisfies every predicate
-
-`honestGroup` is the group row `step_witness` builds (the same columns, computed from the rows' exponents and scaled
-magnitudes), and `group_complete` checks each of the group's predicates on it, for any admissible accumulator and any
-sixteen BF16 operand pairs.
--/
+/-! Completeness: the honest witness satisfies every predicate. -/
 
 @[expose] public section
 
@@ -198,7 +192,6 @@ theorem group_complete (align : Align) (v : Value) (hv : Admissible v) (ab : Lis
   generalize hst : stateOf (-133) v = st at *
   have hins : terms HP st (ab.map (fun x => prodCols (-133) x.1 x.2)) =
       ⟨st.neg, st.e, st.M * 2 ^ HP.rho⟩ :: (ab.map (fun x => prodCols (-133) x.1 x.2)).map prodIn := rfl
-  -- every row is bounded
   have hrows : ∀ x ∈ terms HP st (ab.map (fun x => prodCols (-133) x.1 x.2)), RowOK x := by
     rw [hins]
     intro x hx
@@ -214,7 +207,6 @@ theorem group_complete (align : Align) (v : Value) (hv : Admissible v) (ab : Lis
       exact ⟨Int.mul_nonneg h.P_nonneg (by decide), by simp only [prodIn, HP]; omega, by simp only [prodIn]; omega,
         by simp only [prodIn]; omega, h.sp01⟩
   have hilen : (terms HP st (ab.map (fun x => prodCols (-133) x.1 x.2))).length = 17 := by rw [hins]; simp [hlen]
-  -- the sums of the special flags
   have hS : ∀ (p : Value → Bool) (x0 : Int), x0 = ind p v →
       0 ≤ x0 + ((ab.map (fun x => bf16ProductTotal x.1 x.2)).map (ind p)).sum ∧
         x0 + ((ab.map (fun x => bf16ProductTotal x.1 x.2)).map (ind p)).sum ≤ ((16 + 1 : Nat) : Int) := by
@@ -246,7 +238,6 @@ theorem group_complete (align : Align) (v : Value) (hv : Admissible v) (ab : Lis
   generalize (ins.map (contrib E)).sum = T at *
   have hT32 : T.natAbs < 2 ^ 32 := by push_cast at hTb; omega
   have hbl := bitLength_le T.natAbs 32 hT32
-  -- the window, for a nonzero total
   have hwin : T ≠ 0 → 2 ^ 31 ≤ T.natAbs * 2 ^ (32 - bitLength T.natAbs) ∧
       T.natAbs * 2 ^ (32 - bitLength T.natAbs) < 2 ^ 32 ∧ 2 ^ 25 ≤ magWOf T ∧ magWOf T < 2 ^ 26 ∧
       1 ≤ bitLength T.natAbs := by
