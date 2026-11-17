@@ -19,14 +19,14 @@ The canonical row's selection is the registered relation's top-k set (`verity_vl
 The device pass reads the fast kernel's selection only for a candidate k-th key ``tau``. Reading the row once, it
 writes the keys at or above ``tau`` in ascending order and counts them, then checks the candidate
 (``#{key > tau} < k <= #{key >= tau}``): with no tie across the k-th key the row stands as written; with one, the row
-is written again from the counts; a row whose candidate fails (it isn't the k-th key) is selected again by bisection
-over the keys. Every way the output is the row's canonical one. Rows of
+is written again from the counts; a row whose candidate fails (it isn't the k-th key) is selected again by refinement
+or bisection over the keys. Every way the output is the row's canonical one. Rows of
 ``n > k`` keys are a prefill's (``top_k_per_row_prefill``: keys ``[start, end)`` of the gathered row) or a decode's (the
 three decode selectors: keys ``[0, length)``).
 
 ``VERITY_DSA_TOPK_LOG=DIR`` keeps, per process, ``DIR/dsa_topk.PID.json`` (`log_to`), from the plugin's load on and
 whatever ends the process: each op's calls and canonicalizing launches as of its last call, and the rows rewritten,
-those with a tie across the k-th key, and those bisected, as its devices counted them when they were last read.
+those with a tie across the k-th key, and those bisected or refined, as its devices counted them when they were last read.
 """
 from __future__ import annotations
 
@@ -43,10 +43,14 @@ from typing import Any
 
 ENV = "VERITY_DSA_TOPK"
 LOG_ENV = "VERITY_DSA_TOPK_LOG"
+#: each mode gives the same output
+MODES = {"canonical": {}, "canonical-bisect": {"refine": False}}
 #: the indexer's top-k ops at the pin, under ``torch.ops._C``
 OPS = ("top_k_per_row_prefill", "top_k_per_row_decode", "persistent_topk", "cooperative_topk")
-#: the device counters: rows rewritten, rows with a tie across the k-th key, rows bisected
-STATS = ("rows_long", "rows_tied", "rows_bisected")
+#: rows_bisected and rows_refined both count rows whose candidate failed
+STATS = ("rows_long", "rows_tied", "rows_bisected", "rows_refined")
+#: `dsa_topk_kernels.HROW`
+HIST_WORDS = 2048 + 1024 + 1
 #: a segment of a row (a call of few rows splits each over programs) is at least this many keys
 SEG_MIN_KEYS = 8192
 #: keys a program reads at a time (32 to 2**14: canon_row reads 32-key words, and two block counts share an int32), and
@@ -119,19 +123,22 @@ def kernels() -> dict[str, Any]:
         import importlib
 
         mod = importlib.import_module("dsa_topk_kernels")
-        _KERNELS.update(canon_row=mod.canon_row, count_seg=mod.count_seg, emit_seg=mod.emit_seg)
+        _KERNELS.update({name: getattr(mod, name) for name in ("canon_row", "count_seg", "emit_seg", "fix_find",
+                                                               "fix_count", "fix_emit")})
     return _KERNELS
 
 
 class Canon:
     """The device pass, and its counters: `run` rewrites the rows of ``out`` (int32, rows x k) longer than ``k`` keys of
-    ``logits`` (float32, rows x columns) in place."""
+    ``logits`` (float32, rows x columns) in place. ``refine=False`` bisects every row whose candidate fails."""
 
     def __init__(self, seg_min_keys: int = SEG_MIN_KEYS, block: int = BLOCK, num_warps: int = NUM_WARPS,
-                 fill: int = FILL) -> None:
+                 fill: int = FILL, refine: bool = True) -> None:
         if not 32 <= block < 1 << 15 or block & (block - 1):
             raise ValueError(f"block: a power of two from 32 to 2**14, not {block}")
         self.seg_min_keys, self.block, self.num_warps, self.fill = seg_min_keys, block, num_warps, fill
+        self.refine = refine
+        self._fine: dict[Any, Any] = {}
         self.calls = {op: 0 for op in OPS}
         self.launches: dict[str, int] = {op: 0 for op in OPS}
         #: each device's counters as last read (`read_rows`), and the calls made by then
@@ -188,21 +195,40 @@ class Canon:
         if seg == 1:
             K["canon_row"][(rows,)](*args, stats, HW=logits.is_cuda, **const)
             return
-        ws = self.workspace(dev, rows * (2 * seg + 1))
+        ws = self.workspace(dev, rows * (5 * seg + 4))
+        fine = self.fine(dev, rows * HIST_WORDS) if self.refine else ws
         K["count_seg"][(rows, seg)](*args, ws, seg, **const)
         const.pop("KP2")
-        K["emit_seg"][(rows, seg)](*args, ws, stats, seg, SEGP2=next_pow2(seg), **const)
+        K["emit_seg"][(rows, seg)](*args, ws, fine, stats, seg, SEGP2=next_pow2(seg), REFINE=self.refine, **const)
+        if self.refine:
+            for name in ("fix_find", "fix_count", "fix_emit"):
+                K[name][(rows, seg)](*args, ws, fine, stats, seg, SEGP2=next_pow2(seg), **const)
 
-    def workspace(self, device: Any, words: int) -> Any:
-        """An int32 scratch of at least ``words`` for the current stream, kept between calls (a call's two kernels
-        are ordered on its stream, and each stream has its own)."""
+    def _stream_key(self, device: Any) -> tuple[Any, int]:
         import torch
 
-        key = (device, torch.cuda.current_stream(device).cuda_stream if device.type == "cuda" else 0)
+        return device, torch.cuda.current_stream(device).cuda_stream if device.type == "cuda" else 0
+
+    def workspace(self, device: Any, words: int) -> Any:
+        """An int32 scratch of at least ``words`` for the current stream, kept between calls (a call's kernels are
+        ordered on its stream, and each stream has its own)."""
+        import torch
+
+        key = self._stream_key(device)
         ws = self._ws.get(key)
         if ws is None or ws.numel() < words:
             ws = self._ws[key] = torch.empty(max(words, 1 << 16), dtype=torch.int32, device=device)
         return ws
+
+    def fine(self, device: Any, words: int) -> Any:
+        """The current stream's window tables. Every call leaves them zero, so none clears them first."""
+        import torch
+
+        key = self._stream_key(device)
+        t = self._fine.get(key)
+        if t is None or t.numel() < words:
+            t = self._fine[key] = torch.zeros(max(words, 1 << 20), dtype=torch.int32, device=device)
+        return t
 
     def read_rows(self) -> None:
         """Read each device's counters (synchronizes it)."""
@@ -446,13 +472,13 @@ def steps_setting() -> str:
 
 
 def register() -> None:
-    """The plugin: with ``VERITY_DSA_TOPK=canonical``, `install` on ``torch.ops._C`` in this process."""
+    """The plugin: with ``VERITY_DSA_TOPK`` one of `MODES`, `install` that pass on ``torch.ops._C`` in this process."""
     mode, log = settings()
     if mode in ("", "0"):
         return
-    if mode != "canonical":
-        raise ValueError(f"{ENV}: 'canonical' or unset, not {mode!r}")
-    canon = install()
+    if mode not in MODES:
+        raise ValueError(f"{ENV}: one of {', '.join(map(repr, MODES))} or unset, not {mode!r}")
+    canon = install(canon=Canon(**MODES[mode]))
     if log:
         log_to(canon, log)
     if steps := steps_setting():

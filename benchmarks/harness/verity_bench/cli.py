@@ -221,7 +221,7 @@ def _overhead_run(args: Any) -> int:
         raise ValueError("--scheme S, or --record RUN")
     return overhead_records.launch_run(_overhead_store(args), jobs.repository_root(), _overhead_node(args), args.card,
                                        args.scheme, args.point, args.points, args.minutes, cubin=args.cubin,
-                                       model=args.model, gpu=args.gpu, cores=args.cores)
+                                       model=args.model, gpu=args.gpu, cores=args.cores, keep_reports=args.keep_reports)
 
 
 def _overhead_table(args: Any) -> int:
@@ -262,6 +262,8 @@ def _overhead_parser(commands: Any) -> None:
     run.add_argument("--points", metavar="ART", help="time at this points art instead of the card's and model's of record")
     run.add_argument("--cubin", metavar="ART", help="the art of the cubin the scheme's arm loads, sent with the run (its "
                                                     "arm reads $VERITY_BENCH_CUBIN); without it the run is development only")
+    run.add_argument("--keep-reports", action="store_true", help="keep the run's Nsight reports in its $OUT/nsys: a "
+                                                                 "profiling pass, never of record")
     run.add_argument("--record", metavar="RUN", help="label RUN a run of record, once it stands as a whole")
     run.set_defaults(run=_overhead_run, command_parser=run)
 
