@@ -402,7 +402,8 @@ def _pearl_plus(cfg, params, bound):
     """Pearl+ as PoUW's piece, the window served under it (``PEARLPLUS_TIE``), its salt coins live sessions on the
     challenger's gate under its key."""
     return {"POUW": "pearlplus", "PEARLPLUS_TIE": "1", "PEARLC_CHALLENGER_GATE": bound["gate"],
-            "PEARLC_CHALLENGER_PEER": bound["peer"], "H1_KEY_SHA512": bound["key-sha512"]}
+            "PEARLC_CHALLENGER_PEER": bound["peer"], "H1_KEY_SHA512": bound["key-sha512"],
+            **({"MAIN_FILE": bound["main-file"]} if "main-file" in bound else {})}
 
 
 #: the wipe (`streamed_wipe`'s parties), before the card's engine loads: its challenger reads the raw monotonic clock its
@@ -481,7 +482,8 @@ PARTIES: dict[str, dict[str, Piece]] = {
         WORKERS: Piece("pearl-plus", WORKERS, SERVED_WINDOW, "the window served under Pearl+ (POUW=pearlplus, "
                        "PEARLPLUS_TIE=1), its salt coins the gate's, and Pearl+'s verdict over its passes; "
                        "served_verdicts.py record holds that verdict to the gate's sessions under its key",
-                       reaches=CHALLENGER, binds=("gate", "peer", "key-sha512"), hooks=_pearl_plus),
+                       reaches=CHALLENGER, binds=("gate", "peer", "key-sha512"), optional=("main-file",),
+                       hooks=_pearl_plus),
         VERIFIER: Piece("pearl-plus", VERIFIER, CHECK, "PoUW's row, Pearl+'s verdict"),
     },
     "inference-only": {
