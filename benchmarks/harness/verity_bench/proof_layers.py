@@ -44,6 +44,7 @@ from verity_bench.proof_layers_parse import (
     _lean_verdicts,
     _number,
     _sampled,
+    _serves,
     _tagged,
     _text,
 )
@@ -434,6 +435,7 @@ def read_a5(d: Path, result: Result) -> None:
     else:
         result.said(_challenger(coins.get("source"), coins.get("challenger")), None, said)
     result.commit, result.commit_from = _commit(d / "machine.txt"), "machine.txt's git HEAD"
+    result.serves = _serves(_text(d / "machine.txt"))
     result.proof = "plain" if summary.get("plain") else "zk" if summary else None
     result.device = _device((summary.get("timing") or {}).values())
     result.eps_delta = (_epsilon(summary.get("epsilon")) or _incorrect((summary.get("audit") or {}).get("wrong_units"))

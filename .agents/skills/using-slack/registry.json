@@ -946,8 +946,7 @@
       "linear": "HASH",
       "owns": [
         "benchmarks/hash/",
-        "benchmarks/kernels/",
-        "benchmarks/torch_gpu/"
+        "benchmarks/kernels/"
       ],
       "branch_suffixes": [
         "15ad",
