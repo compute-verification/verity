@@ -1,6 +1,6 @@
 """scan_zk.py --v3c: the scan's state and slot entries' trees are the ones V3c's window committed before its coins, at
 that registration's roots and domains, so the honest round's ``scan/state`` and ``scan/prog<j>`` are the roots the
-consistency check (`NetworkVerifier.Period`'s rows form: `stateTied`, `wired`) holds to V3c's audit, and no block round
+consistency check (`NetworkCheck.Period`'s rows form: `stateTied`, `wired`) holds to V3c's audit, and no block round
 is proved. The window here is `prove_path.py window-commit`'s layout with roots made by the implementations the window
 commit uses (the `SCAN_STATE` by `registered.Registered`, each `SelectEntry_v1` chunk's o0 by
 `windows.rows.commit_ports`), so a held tree's root is theirs; a window whose rows, roots or chunks aren't the scan's

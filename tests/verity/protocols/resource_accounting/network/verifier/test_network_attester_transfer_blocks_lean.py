@@ -1,4 +1,4 @@
-"""N2's execution phase verdict of record in Lean (`NetworkVerifier.TransferBlocks`, `TransferBlocks.lean_verdict`) held to the
+"""N2's execution phase verdict of record in Lean (`NetworkCheck.TransferBlocks`, `TransferBlocks.lean_verdict`) held to the
 Python (`TransferBlocks.python_verdict`), the reference that keeps running beside it: the same accept bit, public outputs
 and digest on a network attester's execution phases, honest and tampered (the session refused, rejected, naming another
 Program or other units; the public file's bytes flipped, cut, missing, naming another unit or its unit twice, or in a

@@ -3,7 +3,7 @@
 `verity bench certifier_term` prints the network attester's term for GLM-5.3: the bits its accepted transcripts can
 carry over a monitoring period, at the load of a node, the census's reference datacenter and the world, in bits and
 GB, beside a target and one copy of the weights. Each row counts all its scope serves by its check's own rule, as
-the monitoring-period check charges it (`verity/protocols/resource_accounting/network/verifier/lean/NetworkVerifier/`, `rowsTerms` and `terms`).
+the monitoring-period check charges it (`verity/protocols/resource_accounting/network/verifier/lean/NetworkCheck/`, `rowsTerms` and `terms`).
 Its code is the calculator of K, `benchmarks/network_traces/leak_bounds.py` (`table`, `document`, `render`); this
 directory holds its runner, which with `--out` also writes the term of record's row as a result (The result, below).
 
