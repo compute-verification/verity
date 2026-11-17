@@ -1465,13 +1465,20 @@ def test_a_spot_row_the_lean_here_accepts_in_the_per_member_form_says_what_it_co
     assert row["members"] == {"sampled": 2, "registered": 3}, row
     assert row["bounds"] == ["at most 1 incorrect of member m0's 2 proof blocks at δ 1/100",
                              "at most 0 incorrect of member m2's 1 proof block at δ 1/100"], row
+    leg = json.loads((tmp_path / "record" / "block-record.json").read_text())["legs"]["integrity"]
+    why = ("the sample reached 2 of 3 members, so no bound over the workload's 4 proof blocks holds; at most 1 "
+           "incorrect of member m0's 2 proof blocks at δ 1/1000000; at most 0 incorrect of member m2's 1 proof block "
+           "at δ 1/1000000")
+    assert leg["at"]["1/1000000"] == {"holds": False, "why": why} and not leg["at"]["1/100"]["holds"], leg
+    assert _line["check"] == {} and f"at δ = 1/1000000: {why}" in _line["reason"], _line
 
 
 def test_the_experiments_per_member_accept_bounds_its_one_sampled_member():
     answer = {"public": {"bound": 1, "drawn": [1], "proved": [1]}, "profile": {"delta": "1/2"}}
     got = S.members_reached({"m0": {"units": [[0, 1]]}, "m1": {"units": [[1, 2]]}}, answer)
     assert got == {"members": {"sampled": 1, "registered": 2},
-                   "bounds": ["at most 0 incorrect of member m1's 1 proof block at δ 1/2"]}
+                   "bounds": ["at most 0 incorrect of member m1's 1 proof block at δ 1/2"],
+                   "by_member": [{"member": "m1", "of": 1, "drawn": 1}]}
 
 
 @pytest.mark.parametrize("change, verdict, said", [

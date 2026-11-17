@@ -98,6 +98,11 @@ def integrity_bound(n: int, kd: int, delta: Fraction, strata: Sequence[Mapping[s
     return design.count_bound(delta)
 
 
+def member_bounds(by_member: Sequence[Mapping[str, Any]], delta: Fraction) -> list[str]:
+    return [f"at most {integrity_bound(m['of'], m['drawn'], delta)} incorrect of member {m['member']}'s {m['of']} "
+            f"proof block{'' if m['of'] == 1 else 's'} at δ {delta}" for m in by_member]
+
+
 def _sample(answer: Mapping[str, Any]) -> dict[str, Any]:
     """The sample of an integrity answer's checked level, as its quantity carries it: the level's size, the units
     sampled, and the ``strata`` of a stratified sampling design (`Stratified.to_json`); another design has none, and
@@ -140,7 +145,10 @@ def _quantity(subprotocol: str, row: Mapping[str, Any]) -> tuple[dict[str, Any],
     q, a = row.get("quantity") or {}, row["answer"]
     pub = a.get("public") or {}
     if subprotocol == "integrity":
-        return ({"symbol": "integrity bound", "value": int(q["bound"]), "unit": "wrong units", **_sample(a)},
+        members = row.get("members") or {}
+        missed = {"members": list(row["by_member"]), "registered": members["registered"]} if (
+            members.get("sampled", 0) < members.get("registered", 0)) else {}
+        return ({"symbol": "integrity bound", "value": int(q["bound"]), "unit": "wrong units", **_sample(a), **missed},
                 frac(row["delta"]), "delta")
     if subprotocol == "pouw":
         w = q["work"]
@@ -165,7 +173,11 @@ def at_deltas(subprotocol: str, quantity: Mapping[str, Any], error: Fraction) ->
     """The subprotocol's certificate at each δ of `DELTAS` (module docstring)."""
     out: dict[str, Any] = {}
     for d in DELTAS:
-        if subprotocol == "integrity":
+        if subprotocol == "integrity" and "members" in quantity:
+            out[str(d)] = {"holds": False, "why": f"the sample reached {len(quantity['members'])} of "
+                           f"{quantity['registered']} members, so no bound over the workload's {quantity['of']} proof "
+                           f"blocks holds; {'; '.join(member_bounds(quantity['members'], d))}"}
+        elif subprotocol == "integrity":
             b = integrity_bound(quantity["of"], quantity["drawn"], d, quantity.get("strata"))
             out[str(d)] = {"holds": True, "value": b, "epsilon": str(Fraction(b, quantity["of"])), "by": "draw"}
         elif error <= d:

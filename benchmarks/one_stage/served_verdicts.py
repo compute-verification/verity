@@ -1785,14 +1785,14 @@ def members_reached(members: Mapping[str, Any], answer: Mapping[str, Any]) -> di
     from verity_e2e_demo import block_record as BR
 
     drawn, delta = answer["public"].get("drawn") or [], Fraction(answer["profile"]["delta"])
-    bounds = []
+    by_member = []
     for name, m in sorted(members.items()):
         n = sum(hi - lo for lo, hi in m["units"])
         k = sum(lo <= u < hi for u in drawn for lo, hi in m["units"])
         if k:
-            b = BR.integrity_bound(n, k, delta)
-            bounds.append(f"at most {b} incorrect of member {name}'s {n} proof block{'' if n == 1 else 's'} at δ {delta}")
-    return {"members": {"sampled": len(bounds), "registered": len(members)}, "bounds": bounds}
+            by_member.append({"member": name, "of": n, "drawn": k})
+    return {"members": {"sampled": len(by_member), "registered": len(members)},
+            "bounds": BR.member_bounds(by_member, delta), "by_member": by_member}
 
 
 def lean_sampled_row(audit_dir: Path, scratch: Path, exe: str | os.PathLike | None = None,
@@ -2172,6 +2172,8 @@ def error_said(entry: Mapping[str, Any]) -> list[str]:
     named = entry.get("named_terms")
     error = BR.error_form(_ratio(Fraction(entry["error"]), BR.DELTAS), named)
     no = [d for d, x in entry["at"].items() if not x["holds"]]
+    if no and "members" in entry["quantity"]:
+        return [f"at δ = {d}: {entry['at'][d]['why']}" for d in no]
     if no:
         return [f"its quantity is not established at δ = {' or '.join(no)}: the run established it except with {error}"]
     return [f"its error reads {error}"] if named else []
