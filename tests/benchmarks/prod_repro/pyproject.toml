@@ -114,6 +114,7 @@ inputs = ["benchmarks/prod_repro", "benchmarks/serve_tax/serve_tax.py",
     "adapters/vllm/verity_vllm/settings.py",
     # a point's member carries its card's record's `short`, the record found by the name nvidia-smi gives the card
     "verity/device.py",
+    "verity/channel.py",
     "hardware/cards",
 ]
 # the runner's tests start `run.sh` under bash, a program the read guard can't trace: keyed on the suite's whole tree
