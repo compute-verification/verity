@@ -340,6 +340,10 @@ ARMS = {
                        "what a seed moves in vLLM's sampling, read apart", published=True, seeds=True),
     "prod-trace": Arm("prod", "+ the step trace and each request's ids, prod-record with the canonical top-k off: what "
                       "the canonical top-k moves, read apart", plugin=("record", "ids"), published=True),
+    "prod-tick": Arm("prod", "+ admission on the certified tick, its releases and watermark from a stand-in release "
+                     "front on the node: prod-all-on's tick with nothing recorded and no edge", plugin=("idle_reset",),
+                     published=True, tick=True, off=("the network attester's egress pacing", "useful-work kernels",
+                                                     "commitment of values", "the record", "the edge snapshot")),
     "prod-all-on": Arm("prod-record", "+ admission on the certified tick, its releases and watermark from a stand-in "
                        "release front on the node (`release_front`: admission real, no answer paced), and the edge "
                        "snapshot every --edges-every-s seconds as a server would take it, every rank's KV cache hashed "
@@ -765,7 +769,7 @@ def server_env(arm: Arm, d: Path, site: Path, tick: dict | None, window_s: float
     if arm.tick:
         if tick is None:
             raise SystemExit("the tick arms need τ: --tick-ms SAT,FREE or --tick-from STEP_TRACE")
-        env["VERITY_TICK"] = json.dumps({k: tick[k] for k in ("bucket_us", "sat_us", "free_us")} | {
+        env["VERITY_TICK"] = json.dumps({k: tick[k] for k in ("bucket_us", "sat_us", "free_us")} | tick.get("rule", {}) | {
             "hold_ms": 5000, "feed": str(d / "tick-feed.jsonl"), "log": str(d)})
     return env
 
@@ -1817,6 +1821,8 @@ def serve(a: argparse.Namespace, private: Path | None) -> int:
                        plan_need(rates, a.span_s, a.requests), a.docs, a.seed)
         print(f"[serve-tax] plan: {len(plan)} requests in {time.monotonic() - t:.1f} s", flush=True)
     tick = tick_args(a.tick_from, a.tick_ms) if arm.tick else None
+    if tick and a.tick_rule:
+        tick["rule"] = json.loads(a.tick_rule)
     srv = out / "server"
     srv.mkdir(exist_ok=True)
     site = plugin_site(out / ".site", arm)
@@ -1973,8 +1979,10 @@ def tick_counts(recs: list[dict]) -> dict:
     by = {}
     for k in sorted(held):
         by[str(k)] = by.get(str(k), 0) + 1
+    bits = sum(r["bits"] for r in recs if r.get("event") == "catch_up")
     return {"admitted": len(held), "deferred": sum(k > 0 for k in held), "held_steps": by,
-            "admitting_steps": sum("admitted" in r for r in recs), "events": events}
+            "admitting_steps": sum("admitted" in r for r in recs), "events": events,
+            **({"catch_up_bits": round(bits, 1)} if bits else {})}
 
 
 def topk_calls(d: Path | None) -> dict[str, int]:
@@ -4093,6 +4101,8 @@ def main(argv: list[str] | None = None) -> int:
     r.add_argument("--seed", type=int, default=0)
     r.add_argument("--tick-from", metavar="STEP_TRACE|RECORD_DIR", help="τ for the tick arms (ignored by the others)")
     r.add_argument("--tick-ms", metavar="SAT,FREE")
+    r.add_argument("--tick-rule", metavar="JSON", help="the tick arms: a rule other than the registered one, "
+                   "verity_vllm.pipeline.tick_plugin's token_ns and catch_up")
     r.add_argument("--side", choices=(SERVER, CLIENT),
                    help="an arm behind the network certifier: the side this command serves, the engine and the id "
                         "front on the node, or the certifier, its shim and vLLM's client on the certifier's host "

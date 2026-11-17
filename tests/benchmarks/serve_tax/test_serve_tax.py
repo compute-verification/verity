@@ -291,6 +291,22 @@ def test_prod_all_on_is_prod_record_with_the_tick_and_the_edge_snapshot_and_says
         S.main(["passes", "--loads", "chat", "--arms", "tick", "--model-id", "glm53"])
 
 
+def test_prod_tick_is_prod_all_ons_tick_alone_and_takes_a_rule_other_than_the_registered_one(tmp_path):
+    """``prod-tick`` serves the tick of ``prod-all-on`` on ``prod``, recording nothing; a rule named apart from τ reaches
+    the gate through VERITY_TICK, and none leaves the registered rule's keys out of it."""
+    glm = S.MODELS["glm53"]
+    assert S.changes_of("prod-tick") == ["admission on the certified tick"] and S.corpus_only(S.ARMS["prod-tick"]) is None
+    line = [S.server_argv(S.ARMS[a], glm, Path("/ck"), 8000, max_model_len=glm.published_context)
+            for a in ("prod", "prod-tick")]
+    assert line[1] == [*line[0], "--middleware", "verity_vllm.pipeline.tick_plugin.TickFeed"]
+    tick = {"bucket_us": 100_000, "sat_us": 7_761, "free_us": 9_485}
+    plain = json.loads(S.server_env(S.ARMS["prod-tick"], tmp_path, tmp_path, tick, 1.0, 1.0)["VERITY_TICK"])
+    assert "token_ns" not in plain and "catch_up" not in plain
+    ruled = S.server_env(S.ARMS["prod-tick"], tmp_path, tmp_path, tick | {"rule": {"token_ns": 18_500, "catch_up": "marks"}},
+                         1.0, 1.0)
+    assert json.loads(ruled["VERITY_TICK"]) == plain | {"token_ns": 18_500, "catch_up": "marks"}
+
+
 def test_the_boundary_rows_arm_keeps_the_prefix_cache_on_and_hands_the_plugin_its_object(tmp_path: Path):
     m = S.MODELS["glm53"]
     argv = S.server_argv(S.ARMS["boundary-rows"], m, Path("/ck"), 8000)
@@ -581,7 +597,7 @@ def test_the_published_arm_starts_the_server_as_the_models_recipe_does(tmp_path,
     for name, m in S.MODELS.items():
         assert bool(m.published) == (m.published_context is not None) == (set(m.published_tokenizer) == set(S.FRONT_ENDS)), name
     assert [n for n, a in S.ARMS.items() if a.published] == ["published", "prod", "prod-again", "prod-record", "prod-seeded",
-                                                             "prod-trace", "prod-all-on"]
+                                                             "prod-trace", "prod-tick", "prod-all-on"]
     assert S.ARMS["published"].parent == "compiled" and S.changes_of("published") == []
 
 

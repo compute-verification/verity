@@ -566,3 +566,13 @@ def test_a_blocks_fingerprint_reads_each_layer_at_its_own_width():
     rows[1][2, 7] += 1
     moved = B.fingerprints(rows) != fp
     assert moved.nonzero().tolist() == [[2, 1]]
+
+
+def test_a_single_width_pools_fingerprint_is_the_one_form_over_its_whole_row():
+    """Where every layer has one width the fingerprint is the form of that width over each row whole, as it was before
+    the pool's layers could differ."""
+    torch = pytest.importorskip("torch")
+    gen = torch.Generator().manual_seed(2)
+    rows = [torch.randint(-128, 128, (9, 64), generator=gen, dtype=torch.int8) for _ in range(3)]
+    coef = torch.randint(-(1 << 62), 1 << 62, (8,), generator=torch.Generator().manual_seed(0), dtype=torch.int64)
+    assert torch.equal(B.fingerprints(rows), torch.stack([(r.view(torch.int64) * coef).sum(1) for r in rows], 1))

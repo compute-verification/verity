@@ -45,7 +45,7 @@ def test_the_prod_arms_start_the_published_arms_server_and_are_costed_over_prod(
     assert S.changes_of("prod-record") == ["the step record", "the served ids", "the canonical top-k"]
     # an arm is costed over the nearest stock arm above it: at the recipe's settings, stock at those settings
     assert [S.stock_of(a) for a in ("prod-again", "prod-record", "prod", "published")] == ["prod", "prod", "published", "compiled"]
-    prods = ("prod", "prod-again", "prod-record", "prod-seeded", "prod-trace", "prod-all-on")
+    prods = ("prod", "prod-again", "prod-record", "prod-seeded", "prod-trace", "prod-tick", "prod-all-on")
     assert {S.stock_of(a) for a in S.ARMS if a not in prods} == {"compiled"}
     assert S.stock_of("no such arm") == "compiled" and all(n in S.ARMS and not S.changes_of(n) for n in S.STOCK)
     # the recipe is one model's; its arms serve at the job's context limit, the same for the three
