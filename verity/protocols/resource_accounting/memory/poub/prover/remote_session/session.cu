@@ -2023,7 +2023,10 @@ int rs_leaf_pass(const void *data, uint64_t n, uint64_t base, const uint32_t *pk
     if (cudaFuncGetAttributes(&fa, leaf_pass_kernel)) return 4;
     if (fa.binaryVersion == 90) {
       if (cudaEventRecord(go, sa) || cudaStreamWaitEvent(sb, go, 0)) return 4;
-      digest_count_kernel<<<(unsigned)sms, 256, 0, sa>>>(leaves, n, base, ctr, tiles_per);
+      // A digest CTA takes a whole SM and its claims are fixed, so none may wait for an SM: the side consumers, which
+      // start with it and wait on its counts, may each hold one.
+      const uint64_t free_sms = (uint64_t)sms > side ? (uint64_t)sms - side : 1;
+      digest_count_kernel<<<(unsigned)free_sms, 256, 0, sa>>>(leaves, n, base, ctr, tiles_per);
       if (cudaGetLastError()) return 4;
     }
   }
