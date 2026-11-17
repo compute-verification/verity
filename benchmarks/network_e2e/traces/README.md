@@ -12,7 +12,7 @@ Think of a trace as one load served on a fresh vLLM server with a hook in its sc
 every request handed to the scheduler, every step's batch, the sampled tokens and every finished request. A corpus is
 one plan of requests served as several traces: light, medium and saturating loads, chunked prefill and a small KV cache
 that makes the scheduler preempt, and also under a hostile scheduler, with the pool cut at each execution phase's edge,
-through the network attester as a relay, and under the certified tick. Comparing the traces of one plan says whether
+through the network attester as a relay, and under the attested tick. Comparing the traces of one plan says whether
 every trace gave each request the same output ids, and where a trace first diverged.
 
 Where a trace runs through the network attester, the network attester is a process beside the server on the serving

@@ -2,7 +2,7 @@
 ``verity/block-record/v2``).
 
 * `block_leg`: a period's accepted answer as the block record's attester entry: K
-  in bits, its error the answer's exact ``eps``, and the certificate at δ = 1/100 and 10⁻⁶ wherever ``eps`` is at most
+  in bits, its error the answer's exact ``eps``, and the attestation at δ = 1/100 and 10⁻⁶ wherever ``eps`` is at most
   δ (`BLOCK_DELTAS`).
 """
 from __future__ import annotations
@@ -13,7 +13,7 @@ from typing import Any, Mapping, Sequence
 from verity.protocol import DELTAS
 
 PROTOCOL = "verity/certifier/v0"
-#: the block record's δs (``verity/block-record/v2``'s ``at``): a leg's certificate holds at δ where its error is at
+#: the block record's δs (``verity/block-record/v2``'s ``at``): a leg's attestation holds at δ where its error is at
 #: most δ. A period's answer at δ has error δ when each of its terms was decided at its share of δ.
 BLOCK_DELTAS = DELTAS
 #: where the block record says a leg's error is read from: the runner row's ``quantity`` (the answer's public)
@@ -25,7 +25,7 @@ def block_leg(answer: Mapping[str, Any], *, server: str, runs: Sequence[str], so
     """The block record's attester leg (``legs.attester`` of ``verity/block-record/v2``) of one period's
     ``network-period check`` answer: the answer's verdict, reason, commitment and
     public; the quantity K, the bits a covert sender in ``server`` can move over the link in the period's ``windows``
-    execution phases; the error the answer's exact ``eps``; and the certificate at each δ of
+    execution phases; the error the answer's exact ``eps``; and the attestation at each δ of
     `BLOCK_DELTAS`, K wherever ``eps`` ≤ δ, else not established. ``runs``: the run ids it comes from; ``source``:
     ``real`` or ``fixture``. Only an accepted answer certifies a K, so any other is a ValueError: the record's
     quantity has no shape for a period that certifies nothing."""

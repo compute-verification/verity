@@ -1,13 +1,13 @@
 """kind-scan: each field the network attester's piece releases to the verifier, by kind. A field is one of the four
 public kinds (`verity.channel.PUBLIC`: protocol structure, the protocol's outputs, the verifier's coins and samples,
-hiding commitments) or what the network attester signed (`CERTIFICATE`: its certificates reach the verifier in the
+hiding commitments) or what the network attester signed (`CERTIFICATE`: its attestations reach the verifier in the
 clear from the auditor's device, a provisional exception to the four kinds, not a fifth). A field of no declared kind is
 a finding.
 
     python benchmarks/network_traces/kind_scan.py DIR
     python benchmarks/network_traces/kind_scan.py --received OUT
 
-DIR is a piece's DIR, or its hold as the leak guard reads it: `DOCS`' files, the execution phase's certificates among
+DIR is a piece's DIR, or its hold as the leak guard reads it: `DOCS`' files, the execution phase's attestations among
 them (`attester_piece.CERTIFICATES`, the case's evidence's and nothing else of it). The piece's case
 (`attester_piece.CASE`), the period check's three input files and the scan's answers are witness and have no
 declaration: one left in DIR is a finding. Each file's JSON is walked to its leaves, and each leaf's key path (a list's
@@ -111,9 +111,9 @@ ONE_STAGE = {
     "public": O, "public.bound": O, "public.per_template": O, "public.per_template.*": O, "public.drawn[]": C,
     "public.proved[]": C,
 }
-#: a certificate (`scan_period.CERTIFICATE_KEYS`), the network attester's in the clear
+#: an attestation (`scan_period.CERTIFICATE_KEYS`), the network attester's in the clear
 CERTIFICATE_DOC = dict.fromkeys(("digest", "direction", "key_id", "link", "signature", "window"), X)
-#: the execution phase's certificates as the piece publishes them (`attester_piece.certificates`): its records' and
+#: the execution phase's attestations as the piece publishes them (`attester_piece.certificates`): its records' and
 #: its row registrations', each with its own fields alone
 CERTIFICATES = {**under("records[]", CERTIFICATE_DOC), **under("rows[]", CERTIFICATE_DOC)}
 #: ``verity/certifier/v0``'s answer (`Answer.toJson`) with the piece's placement: K, ε and their terms the protocol's
