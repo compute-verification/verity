@@ -7186,8 +7186,8 @@ def main(argv: list[str]) -> int:
         print(text)
         return 0
     if a.command == "link":
-        if not (a.pr and a.pr.isdigit() and a.issue and ISSUE_KEY_RE.fullmatch(a.issue)) or a.dry_run:
-            ap.error("link needs the PR number and --issue KEY (its Linear issue, like ENG-123), and has no --dry-run")
+        if not (a.pr and a.pr.isdigit() and a.issue and ISSUE_KEY_RE.fullmatch(a.issue)):
+            ap.error("link needs the PR number and --issue KEY (its Linear issue, like ENG-123)")
         try:
             repo = remote_and_repo(a.remote, a.repo, Path.cwd())[1]
             print(f"research queue link: {link_issue(a.issue, f'https://github.com/{repo}/pull/{a.pr}')}")
