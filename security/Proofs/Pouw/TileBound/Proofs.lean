@@ -5,35 +5,8 @@ public import Mathlib.Algebra.Field.Rat
 public import Mathlib.Data.Matrix.Mul
 import Mathlib.LinearAlgebra.Matrix.Rank
 
-/-!
-# The FP4-tile model: the block-support count and what it bounds (proofs)
-
-`docs/pouw/fp4-tile-model.md` §2.
-
-* `crossX_count`: for every quadratic program correct on the live entries, the live count is at most the number of
-  (product, side, X-block) incidences, `Σ_t (touches (a t) + touches (a' t))`. Per X-block the matrix-product tensor
-  restricted to that block is a vector–matrix product of rank `|block|·(live columns)`, and each product touching the
-  block adds rank at most one (`block_count`); the proof is `card ι ≤ card κ` from `A * B = 1` over `K`.
-* `crossY_count`: the same for Y-blocks, by transposing the program (`QuadProg.transpose`).
-* `quad_support`: the two together, `2·nLive ≤ Σ_t (touches ℓ t + touches ℓ' t)`. Quadratic programs lose nothing
-  against bilinear ones in this count.
-* `cost_ge_support`: a slot program whose slots' inputs read at most `s t` blocks costs at least `price .fp4 · nLive`
-  whenever each slot's price covers `s t` FP4 slots. `cost_ge` is its instance at the representability rule's
-  capacities, which `fmt_closed_iff` says closes exactly FP4, FP8 and BF16. The others close up to a support per input
-  (the `*_closed_upto` pins): int8 2 blocks, FP16 4, TF32 8, `dp4a` 8, FFMA 16 (Strassen depth 1, 2, 3, 3, 4). FFMA's 16
-  is a tie at the bottom of its measured price range (8.0–8.15 units), not a margin.
-* `honest_crossOn`, `honest_cost`: the honest dense program is correct and meets the bound (`nLive_all`).
-* `tile_cost_ge`: a tile program costs at least `price .fp4 · nLive`. `realizes_out_at` says that at an input where
-  exact `sm120Nvf4` firings realize it, its decoded output is its slots' bilinear program. `realizesAt_nonvacuous` is a
-  kernel-checked firing that realizes a program with a nonzero output.
-* `crossOn_of_eval`: correct outputs at three unit and zero inputs give `CrossOn`. `tile_cost_ge_of_gates` chains them:
-  realizing firings with correct outputs there give the cost bound.
-* The shared cost lemma `cost_ge_supportAt` and `support_admits_openAt` are here; `cost_ge_support`
-  and `support_admits_open` are their instances at FP4's price.
-* `support_admits_open`: why wider pre-adds aren't closed. From 9 TF32 blocks, 5 FP16, 3 int8, 9 `dp4a` or 17 FFMA blocks
-  per input (the `*_open_at` pins), the support count can't rule out a cost profile below FP4's. The pin exhibits
-  numbers that pass the count, not a program.
--/
+/-! The FP4-tile model's block-support count `quad_support` and the cost bounds it gives, down to programs of
+`sm120Nvf4` gate firings. -/
 
 @[expose] public section
 
@@ -44,21 +17,15 @@ open Finset Pouw.Fp8Atom Pouw.PearlC.Fp4
 variable {K : Type*} [Field K] {m k n : ℕ} {τ : Type*} [Fintype τ] {β : Type*} [Fintype β] {γ : Type*}
   [Fintype γ]
 
-/-! ## The rank step -/
-
 omit [Fintype τ] [Fintype β] [Fintype γ] in
-/-- If `A * B = 1` then `A`'s row count is at most its column count. -/
 theorem card_le_of_mul_eq_one {ι κ : Type*} [Fintype ι] [Fintype κ] [DecidableEq ι] (A : Matrix ι κ K)
     (B : Matrix κ ι K) (h : A * B = 1) : Fintype.card ι ≤ Fintype.card κ := by
   have := Matrix.rank_mul_le_left A B
   rw [h, Matrix.rank_one] at this
   exact this.trans (Matrix.rank_le_card_width A)
 
-/-! ## The block count, X-side -/
-
 omit [Fintype β] [Fintype γ] in
 open Classical in
-/-- **Per block.** The live products in X-block `b` are at most the (product, side) pairs whose X-part reads `b`. -/
 theorem block_count (P : QuadProg K m k n τ) {liveX : Fin m × Fin k → Prop} {liveY : Fin k × Fin n → Prop}
     (h : P.CrossOn liveX liveY) (B : XBlocks m k β) (b : β) :
     Fintype.card {x // LiveIn B liveX liveY b x} ≤ Fintype.card {q // SideIn P B b q} := by
@@ -104,8 +71,6 @@ theorem block_count (P : QuadProg K m k n τ) {liveX : Fin m × Fin k → Prop} 
     simp [hl, hj, Subtype.ext_iff, Prod.ext_iff, eq_comm (a := j')]
 
 omit [Fintype γ] in
-/-- **The X-side count.** A quadratic program correct on the live entries has at least `nLive` (product, side, X-block)
-incidences. -/
 theorem crossX_count (P : QuadProg K m k n τ) {liveX : Fin m × Fin k → Prop} {liveY : Fin k × Fin n → Prop}
     (h : P.CrossOn liveX liveY) (B : XBlocks m k β) :
     nLive liveX liveY ≤ ∑ t, (B.touches (P.a t) + B.touches (P.a' t)) := by
@@ -131,8 +96,6 @@ theorem crossX_count (P : QuadProg K m k n τ) {liveX : Fin m × Fin k → Prop}
     simp only [SideIn, XBlocks.touches, Finset.card_filter, ite_true, ite_false, Bool.false_eq_true]
   rw [hfib, ← hdc]
   exact Finset.sum_le_sum fun b _ => block_count P h B b
-
-/-! ## The Y-side, by transposition -/
 
 /-- The transposed program, for `Yᵀ·Xᵀ = (X·Y)ᵀ`: Y's forms become X's. -/
 def QuadProg.transpose (P : QuadProg K m k n τ) : QuadProg K n k m τ where
@@ -179,7 +142,6 @@ theorem nLive_transpose (liveX : Fin m × Fin k → Prop) (liveY : Fin k × Fin 
   exact Fintype.card_congr (Equiv.subtypeEquiv e fun x => by simp [e, and_comm])
 
 omit [Fintype β] in
-/-- **The Y-side count.** -/
 theorem crossY_count (P : QuadProg K m k n τ) {liveX : Fin m × Fin k → Prop} {liveY : Fin k × Fin n → Prop}
     (h : P.CrossOn liveX liveY) (B : YBlocks k n γ) :
     nLive liveX liveY ≤ ∑ t, (B.touches (P.b t) + B.touches (P.b' t)) := by
@@ -189,10 +151,6 @@ theorem crossY_count (P : QuadProg K m k n τ) {liveX : Fin m × Fin k → Prop}
   change B.toXT.touches (fun e => P.b' t (e.2, e.1)) + B.toXT.touches (fun e => P.b t (e.2, e.1)) = _
   rw [B.touches_toXT, B.touches_toXT, add_comm]
 
-/-! ## Both sides: the support count -/
-
-/-- **Theorem 1, quadratic form.** A quadratic program correct on the live entries reads, over its products' two
-inputs, at least `2·nLive` blocks. No factor of 2 is lost against bilinear programs. -/
 theorem quad_support (P : QuadProg K m k n τ) {liveX : Fin m × Fin k → Prop} {liveY : Fin k × Fin n → Prop}
     (h : P.CrossOn liveX liveY) (BX : XBlocks m k β) (BY : YBlocks k n γ) :
     2 * nLive liveX liveY ≤ ∑ t, ((BX.touches (P.a t) + BY.touches (P.b t)) +
@@ -214,19 +172,12 @@ theorem XBlocks.touches_zero (B : XBlocks m k β) : B.touches (0 : Fin m × Fin 
   simp [XBlocks.touches, XBlocks.Touches]
 
 omit [Fintype γ] in
-/-- **Theorem 1, bilinear form.** A bilinear program correct on the live entries reads at least `nLive` X-blocks over its
-products. -/
 theorem bilin_support (P : BilinProg K m k n τ) {liveX : Fin m × Fin k → Prop} {liveY : Fin k × Fin n → Prop}
     (h : P.toQuad.CrossOn liveX liveY) (BX : XBlocks m k β) :
     nLive liveX liveY ≤ ∑ t, BX.touches (P.u t) := by
   have hx := crossX_count P.toQuad h BX
   simpa [BilinProg.toQuad, XBlocks.touches_zero] using hx
 
-/-! ## Cost under per-slot pricing -/
-
-/-- **The shared cost lemma** (moved here from its FP8-tile files). A quadratic program correct on the live
-entries, whose product `t` has both inputs reading at most `s t` blocks, costs at least `p₀` per live product under
-any per-product prices `c` with `s t · p₀ ≤ c t`. -/
 theorem cost_ge_supportAt (P : QuadProg K m k n τ) {liveX : Fin m × Fin k → Prop} {liveY : Fin k × Fin n → Prop}
     (h : P.CrossOn liveX liveY) (BX : XBlocks m k β) (BY : YBlocks k n γ) (s : τ → ℕ)
     (hs : ∀ t, BX.touches (P.a t) + BY.touches (P.b t) ≤ s t ∧ BX.touches (P.a' t) + BY.touches (P.b' t) ≤ s t)
@@ -248,9 +199,6 @@ theorem cost_ge_supportAt (P : QuadProg K m k n τ) {liveX : Fin m × Fin k → 
         exact Finset.sum_congr rfl fun t _ => mul_comm _ _
     _ ≤ ∑ t, c t := Finset.sum_le_sum fun t _ => hf t
 
-/-- **The cost bound, per-slot supports.** A slot program correct on the live entries whose slot `t` has both inputs
-reading at most `s t` blocks costs at least FP4's price for every live product, provided each slot's price covers
-`s t` FP4 slots. The shared lemma at `p₀ = price .fp4`. -/
 theorem cost_ge_support (P : SlotProg K m k n τ) {liveX : Fin m × Fin k → Prop} {liveY : Fin k × Fin n → Prop}
     (h : P.toQuadProg.CrossOn liveX liveY) (BX : XBlocks m k β) (BY : YBlocks k n γ) (s : τ → ℕ)
     (hs : ∀ t, BX.touches (P.a t) + BY.touches (P.b t) ≤ s t ∧ BX.touches (P.a' t) + BY.touches (P.b' t) ≤ s t)
@@ -258,76 +206,49 @@ theorem cost_ge_support (P : SlotProg K m k n τ) {liveX : Fin m × Fin k → Pr
     price .fp4 * nLive liveX liveY ≤ P.cost :=
   cost_ge_supportAt P.toQuadProg h BX BY s hs (fun t => price (P.fmt t)) (price .fp4) (by norm_num [price]) hf
 
-/-- **The cost bound.** A slot program correct on the live entries, under the representability rule, costs at least
-FP4's price for every live product, provided every format it uses has `capacity f · price .fp4 ≤ price f`. -/
 theorem cost_ge (P : SlotProg K m k n τ) {liveX : Fin m × Fin k → Prop} {liveY : Fin k × Fin n → Prop}
     (h : P.toQuadProg.CrossOn liveX liveY) (BX : XBlocks m k β) (BY : YBlocks k n γ) (hr : P.Representable BX BY)
     (hf : ∀ t, (capacity (P.fmt t) : ℚ) * price .fp4 ≤ price (P.fmt t)) :
     price .fp4 * nLive liveX liveY ≤ P.cost :=
   cost_ge_support P h BX BY (fun t => capacity (P.fmt t)) hr hf
 
-/-- **Which formats the representability rule closes:** exactly FP4, FP8 and BF16. FP16 and int8 at their prices, and
-`dp4a`, hold more blocks than they pay for (`open_fp16`, `open_int8`, `open_dp4a`). -/
 theorem fmt_closed_iff (f : Fmt) :
     (capacity f : ℚ) * price .fp4 ≤ price f ↔ f = .fp4 ∨ f = .fp8 ∨ f = .bf16 := by
   cases f <;> norm_num [capacity, price]
 
-/-- TF32 is not closed: 32 blocks per value at 8 FP4 slots' price. -/
 theorem open_tf32 : price .tf32 < capacity .tf32 * price .fp4 := by norm_num [capacity, price]
 
-/-- FP32 (FFMA) is not closed: 2¹⁸ blocks per value at about 16–17 FP4 slots' price (16.92 at the model's 8.46; 16.0–16.3
-measured). -/
 theorem open_fp32 : price .fp32 < capacity .fp32 * price .fp4 := by norm_num [capacity, price]
 
-/-- **TF32 pre-adds reading at most 8 blocks are closed** (at a tie): 8 FP4 slots' price is TF32's. A Strassen level-3
-pre-add reads 8 blocks. -/
 theorem tf32_closed_upto : (8 : ℚ) * price .fp4 ≤ price .tf32 := by norm_num [price]
 
-/-- **FP32 (FFMA) pre-adds reading at most 16 blocks are closed, as a tie:** 16 FP4 slots cost 8 units, FFMA 8.46 in the
-model and 8.0–8.15 measured (16.0–16.3 FP4 slots, GPU 4 F1). At the bottom of that range the two are equal; the
-statement is `≤`, so it holds across it. A Strassen level-4 pre-add reads 16 blocks. -/
 theorem fp32_closed_upto : (16 : ℚ) * price .fp4 ≤ price .fp32 := by norm_num [price]
 
-/-- From 9 blocks per input, TF32's price is below the count (`support_admits_open`). -/
 theorem tf32_open_at : price .tf32 < (9 : ℕ) * price .fp4 := by norm_num [price]
 
-/-- From 17 blocks per input, FFMA's price is below the count. That holds for any price below 8.5 units (17 FP4 slots),
-so for the model's 8.46 and the measured 8.0–8.15 alike. At 8.5 or more the closure would reach 17 blocks; below 8.0
-(16 slots) `fp32_closed_upto` would fail and the closure would stop at 15. -/
 theorem fp32_open_at : price .fp32 < (17 : ℕ) * price .fp4 := by norm_num [price]
 
-/-- FP16 is closed up to 4 blocks per input (a tie): FP16 at BF16's price but with 11 significand bits. Strassen depth 2. -/
 theorem fp16_closed_upto : (4 : ℚ) * price .fp4 ≤ price .fp16 := by norm_num [price]
 
-/-- From 5 blocks per input, FP16's price is below the count. -/
 theorem fp16_open_at : price .fp16 < (5 : ℕ) * price .fp4 := by norm_num [price]
 
-/-- int8 is closed up to 2 blocks per input (a tie). Strassen depth 1. -/
 theorem int8_closed_upto : (2 : ℚ) * price .fp4 ≤ price .int8 := by norm_num [price]
 
-/-- From 3 blocks per input, int8's price is below the count. -/
 theorem int8_open_at : price .int8 < (3 : ℕ) * price .fp4 := by norm_num [price]
 
-/-- `dp4a` is closed up to 8 blocks per input: 8 FP4 slots cost 4, `dp4a` 4.05. -/
 theorem dp4a_closed_upto : (8 : ℚ) * price .fp4 ≤ price .dp4a := by norm_num [price]
 
-/-- From 9 blocks per input, `dp4a`'s price is below the count. -/
 theorem dp4a_open_at : price .dp4a < (9 : ℕ) * price .fp4 := by norm_num [price]
 
-/-- FP16 is not closed at its capacity (32 blocks). -/
 theorem open_fp16 : price .fp16 < capacity .fp16 * price .fp4 := by norm_num [capacity, price]
 
-/-- int8 is not closed at its capacity (10 blocks). -/
 theorem open_int8 : price .int8 < capacity .int8 * price .fp4 := by norm_num [capacity, price]
 
-/-- `dp4a` is not closed at its capacity (10 blocks). -/
 theorem open_dp4a : price .dp4a < capacity .dp4a * price .fp4 := by norm_num [capacity, price]
 
 omit [Fintype τ] [Fintype β] [Fintype γ] in
-/-- **The support count can't rule out cheaper cost profiles, at any base price**. Wherever
-`c < s · p₀`, `M` products whose inputs each read `s` blocks meet the support count with equality for `s·M` live
-products, at a total price below `p₀` per live product. These are numbers that pass the count, not an exhibited
-program. -/
+/-- Wherever `c < s · p₀`, numbers that meet the support count at a total price below `p₀` per live product: not an
+exhibited program. -/
 theorem support_admits_openAt {c p₀ : ℚ} {s : ℕ} (hf : c < s * p₀) (M : ℕ) (hM : 0 < M) :
     2 * (s * M) ≤ ∑ _t : Fin M, (s + s) ∧ (∑ _t : Fin M, c) < p₀ * ((s * M : ℕ) : ℚ) := by
   refine ⟨by simp; ring_nf; omega, ?_⟩
@@ -336,18 +257,12 @@ theorem support_admits_openAt {c p₀ : ℚ} {s : ℕ} (hf : c < s * p₀) (M : 
   nlinarith
 
 omit [Fintype τ] [Fintype β] [Fintype γ] in
-/-- **Why wider pre-adds can't be closed by this argument.** Take a format and a support `s` with
-`price f < s · price .fp4`: TF32 from 9 blocks, FP16 from 5, int8 from 3, `dp4a` from 9, FFMA from 17. The support
-count and the per-slot prices can't rule out a cost below FP4's there. The pin exhibits numbers that pass the count,
-not a program. Ruling them out needs a lower bound on the number of products: a matrix-multiplication rank bound of
-order `m·k·n·price .fp4 / price f`, far above the best known (about `3n²` for `⟨n, n, n⟩`). For the known recursive
-algorithms the exactness-depth argument of `docs/pouw/fp4-tile-model.md` §2.5(a) closes them instead (Derived, not in
-Lean). -/
+/-- The support count can't rule out a cost below FP4's where `price f < s · price .fp4`: the pin exhibits numbers that
+pass the count, not a program. Ruling them out needs a matrix-multiplication rank bound of order
+`m·k·n·price .fp4 / price f`; the exactness-depth argument that closes known recursive algorithms is not in Lean. -/
 theorem support_admits_open {f : Fmt} {s : ℕ} (hf : price f < s * price .fp4) (M : ℕ) (hM : 0 < M) :
     2 * (s * M) ≤ ∑ _t : Fin M, (s + s) ∧ (∑ _t : Fin M, price f) < price .fp4 * ((s * M : ℕ) : ℚ) :=
   support_admits_openAt hf M hM
-
-/-! ## The honest program meets the bound -/
 
 omit [Fintype τ] [Fintype β] [Fintype γ] in
 theorem honest_crossOn : (honest K m k n).toQuadProg.CrossOn (fun _ => True) (fun _ => True) := by
@@ -373,7 +288,6 @@ theorem nLive_all : nLive (m := m) (k := k) (n := n) (fun _ => True) (fun _ => T
   simp [nLive, Fintype.card_subtype, Fintype.card_prod, Fintype.card_fin, mul_assoc]
 
 omit [Fintype τ] [Fintype β] [Fintype γ] in
-/-- The honest program costs exactly FP4's price for every product: the bound is tight. -/
 theorem honest_cost : (honest K m k n).cost = price .fp4 * (m * k * n : ℕ) := by
   simp [SlotProg.cost, honest, Finset.sum_const, Finset.card_univ, Fintype.card_prod, Fintype.card_fin]
   ring
@@ -410,7 +324,6 @@ theorem YBlocks.touches_zero (B : YBlocks k n γ) : B.touches (0 : Fin k × Fin 
   simp [YBlocks.touches, YBlocks.Touches]
 
 omit [Fintype τ] in
-/-- The honest program satisfies the representability rule on any blocks: each slot input is one entry. -/
 theorem honest_representable [DecidableEq β] [DecidableEq γ] (BX : XBlocks m k β) (BY : YBlocks k n γ) :
     (honest K m k n).Representable BX BY := by
   intro t
@@ -418,11 +331,7 @@ theorem honest_representable [DecidableEq β] [DecidableEq γ] (BX : XBlocks m k
     capacity]
   omega
 
-/-! ## Tile programs of `sm120Nvf4` gate firings -/
-
 omit [Fintype τ] [Fintype γ] in
-/-- **The tile count.** A tile program correct on the live entries, whose `P`-inputs each read at most one X-block,
-fires at least `nLive / 8192` gates. -/
 theorem tile_count {G : ℕ} (P : TileProg K m k n G) {liveX : Fin m × Fin k → Prop} {liveY : Fin k × Fin n → Prop}
     (h : P.toBilin.toQuad.CrossOn liveX liveY) (BX : XBlocks m k β) (hr : P.Representable BX) :
     nLive liveX liveY ≤ G * gateSlots := by
@@ -434,7 +343,6 @@ theorem tile_count {G : ℕ} (P : TileProg K m k n G) {liveX : Fin m × Fin k �
   omega
 
 omit [Fintype τ] [Fintype γ] in
-/-- **The tile cost bound.** Such a tile program costs at least FP4's per-slot price for every live product. -/
 theorem tile_cost_ge {G : ℕ} (P : TileProg K m k n G) {liveX : Fin m × Fin k → Prop}
     {liveY : Fin k × Fin n → Prop} (h : P.toBilin.toQuad.CrossOn liveX liveY) (BX : XBlocks m k β)
     (hr : P.Representable BX) : price .fp4 * nLive liveX liveY ≤ P.cost := by
@@ -449,8 +357,6 @@ theorem wordValue_zero : wordValue 0 = some 0 := by
   norm_num [Value.finite?, Term.value, Term.zero]
 
 omit [Fintype τ] [Fintype β] [Fintype γ] in
-/-- **The bridge to the gate, at one input.** When exact `sm120Nvf4` firings `gs` realize a tile program at `X`, `Y`, its
-output from them (the gate words decoded exactly and combined linearly) is its slots' bilinear program at `X`, `Y`. -/
 theorem realizes_out_at {G : ℕ} (P : TileProg ℚ m k n G) (gs : Fin G → Firing) (X : Fin m × Fin k → ℚ)
     (Y : Fin k × Fin n → ℚ) (hR : P.RealizesAt gs X Y) (o : Fin m × Fin n) :
     P.outAt gs o = P.toBilin.toQuad.eval X Y o := by
@@ -469,13 +375,9 @@ theorem realizes_out_at {G : ℕ} (P : TileProg ℚ m k n G) (gs : Fin G → Fir
   rw [Finset.mul_sum]
   exact Finset.sum_congr rfl fun l _ => by ring
 
-/-! ## From correct outputs to the cross identity -/
-
 omit [Fintype β] [Fintype γ] in
-/-- **Correct outputs at three inputs give `CrossOn`.** A quadratic program whose output is `X·Y` at the unit and zero
-inputs `(e_x, e_y)`, `(e_x, 0)` and `(0, e_y)`, for every live X-entry `x` and live Y-entry `y`, satisfies `CrossOn` on the
-live entries. Those inputs are FP4-representable (E2M1 has 0 and 1, and a UE4M3 scale 1), so a tile program's firings
-can carry them. The fourth input, `(0, 0)`, isn't needed. -/
+/-- The three inputs are FP4-representable (E2M1 has 0 and 1, and UE4M3 a scale 1), so a tile program's firings can
+carry them. -/
 theorem crossOn_of_eval (P : QuadProg K m k n τ) {liveX : Fin m × Fin k → Prop} {liveY : Fin k × Fin n → Prop}
     (h : ∀ x, liveX x → ∀ y, liveY y → ∀ o,
       P.eval (unitForm x) (unitForm y) o = matMul (unitForm x) (unitForm y) o ∧
@@ -513,12 +415,7 @@ theorem crossOn_of_eval (P : QuadProg K m k n τ) {liveX : Fin m × Fin k → Pr
   rw [this, e10, e01]
   ring
 
-/-! ## The chain from gate firings to the cost bound -/
-
 omit [Fintype τ] [Fintype γ] in
-/-- **From gate firings to the cost bound.** Take a tile program whose `P`-inputs each read at most one X-block. Suppose
-that, for every live X-entry `x` and live Y-entry `y`, exact firings realize it at `(e_x, e_y)`, `(e_x, 0)` and
-`(0, e_y)`, and output `X·Y` there. Then it costs at least FP4's per-slot price for every live product. -/
 theorem tile_cost_ge_of_gates {G : ℕ} (P : TileProg ℚ m k n G) {liveX : Fin m × Fin k → Prop}
     {liveY : Fin k × Fin n → Prop} (BX : XBlocks m k β) (hr : P.Representable BX)
     (hg : ∀ x, liveX x → ∀ y, liveY y → ∃ g11 g10 g01 : Fin G → Firing,
@@ -533,8 +430,6 @@ theorem tile_cost_ge_of_gates {G : ℕ} (P : TileProg ℚ m k n G) {liveX : Fin 
   exact ⟨(realizes_out_at P g11 _ _ h11 o).symm.trans o11, (realizes_out_at P g10 _ _ h10 o).symm.trans o10,
     (realizes_out_at P g01 _ _ h01 o).symm.trans o01⟩
 
-/-! ## `RealizesAt` is not vacuous: one exact firing, machine-checked -/
-
 /-- A one-gate witness: code 1.0 (nibble 2) at `P[0, 0]` and at `Q[0, 0]`, every other code 0, every scale byte
 `0x38` (UE4M3 1.0), accumulators `+0`. -/
 def oneGate : Firing where
@@ -544,7 +439,6 @@ def oneGate : Firing where
   qs _ _ := 0x38
   acc _ _ := 0
 
-/-- Every output word of the one-gate witness is exact: `sm120Nvf4.step` evaluated by the kernel on all 128 outputs. -/
 theorem oneGate_exact : oneGate.Exact := by
   unfold Firing.Exact
   decide +kernel
@@ -560,7 +454,6 @@ theorem sum_unitForm_mul {ι : Type*} [Fintype ι] [DecidableEq ι] (a b : ι) :
     ∑ e, unitForm (K := ℚ) a e * unitForm b e = if a = b then 1 else 0 := by
   by_cases h : a = b <;> simp [unitForm, Finset.sum_ite_eq', h, Ne.symm]
 
-/-- The honest one-gate program for a 16 × 64 × 8 product. -/
 def oneGateProg : TileProg ℚ 16 64 8 1 :=
   ⟨fun _ i l => unitForm (i, l), fun _ l j => unitForm (l, j), fun _ i j => unitForm (i, j)⟩
 
@@ -571,8 +464,6 @@ theorem oneGateProg_realizesAt :
   · rw [oneGate_p]; simp only [oneGateProg, sum_unitForm_mul]
   · rw [oneGate_q]; simp only [oneGateProg, sum_unitForm_mul]
 
-/-- **`RealizesAt` is satisfiable with a nonzero output.** An exact firing of `sm120Nvf4` realizes a tile program at the
-unit inputs, and the program's output there is 1. -/
 theorem realizesAt_nonvacuous : ∃ (P : TileProg ℚ 16 64 8 1) (gs : Fin 1 → Firing),
     P.RealizesAt gs (unitForm (0, 0)) (unitForm (0, 0)) ∧ P.outAt gs (0, 0) = 1 := by
   refine ⟨oneGateProg, fun _ => oneGate, oneGateProg_realizesAt, ?_⟩
