@@ -103,28 +103,44 @@ verdicts, `run_copy` `PageCopy`'s.
 """
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import replace
 from types import SimpleNamespace
-from typing import Any, Sequence
+from typing import Any
 
+from verity.circuits.boolean import BIT
 from verity.circuits.boolean import memcheck as MC
-from verity.circuits.boolean.forms import ONE, ZERO, and_reduce, const_bits, mux, or_reduce
+from verity.circuits.boolean.forms import (
+    ONE,
+    ZERO,
+    and_reduce,
+    const_bits,
+    mux,
+    or_reduce,
+)
 from verity.circuits.boolean.gf128 import mul_forms
+from verity.circuits.boolean.trace import part as _part
 from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.evaluation.bits import evaluate_bits
 from verity.circuits.types import Array, Tuple
 from verity.commitments import pool_row as PR
 from verity.commitments.gates import block_key as BK
 from verity.commitments.gates import rowleaf as RG
-from verity_vllm.compiler import cache_step as CST, compile_slice as CS
+from verity.commitments.gates.frame_v3 import _refs
+from verity.commitments.pool_row import PoolRow
+from verity.protocols.resource_accounting.network.verifier.head_check import (
+    _coll,
+    _Consts,
+    ands,
+)
+
+from verity_vllm.compiler import cache_step as CST
+from verity_vllm.compiler import cache_step_v3 as V3S
+from verity_vllm.compiler import compile_slice as CS
+from verity_vllm.compiler import compile_slice_v4 as V4
+from verity_vllm.compiler import compile_slice_v5 as V5
 from verity_vllm.compiler import replay_chain as RC
 from verity_vllm.compiler import replay_step as RS
-from verity_vllm.compiler import cache_step_v3 as V3S, compile_slice_v4 as V4
-from verity_vllm.compiler import compile_slice_v5 as V5
-from verity.circuits.boolean import BIT
-from verity.circuits.boolean.trace import part as _part
-from verity.commitments.gates.frame_v3 import _refs
-from verity.protocols.resource_accounting.network.verifier.head_check import _coll, _Consts, ands
 
 STATICS = V5.STATICS
 COMPILE_FLAGS = ("load", "steps", "cache", "served", "carry", "calls", "edge")
@@ -759,9 +775,6 @@ def demo_async() -> tuple[dict, CS.Slice]:
 # --- the specification ---------------------------------------------------------------------------------------------------
 
 
-PoolRow = PR.PoolRow
-
-
 def empty_row(S) -> PoolRow:
     """The empty pool: every block free, in order, nothing cached (`cache_step_v3.empty_pool`'s)."""
     return PR.empty(S.NB)
@@ -828,6 +841,7 @@ def closed(S, stream: V3S.Stream, row: PoolRow, sl: CS.Slice, delta: int) -> tup
     """The pool row `stream` leaves, run on `opened`'s stream of `row` and `sl`, and whether it holds no block."""
     S3, NW = V4.shape(S).S3, V5.shape(S).Z3.NW
     keys = {BK.key_print(k, delta): k for k in list(row.key) + _chains(S, sl) if k != NOKEY}
+    links: dict[str, list[int]]
     links, mlast, key, quiet = {f: [] for f in LINKS}, [], [], True
     for b in range(1, S.NB):
         d = V3S.bsplit(S3, stream.value(T3["B"], b))
@@ -900,6 +914,7 @@ def cut_open(S, sl: CS.Slice, row: PoolRow | None = None, delta: int = COINS[2]
     """`sl` served to its edge from the pool `row` (default the empty pool): each request open after its last step cut,
     its a_O the outputs it emitted by then, the others as given, and the cut bits (`cuts`'). None where the scan refuses
     the window or cutting changes which requests are open."""
+    cut: tuple[int, ...]
     row, cut = empty_row(S) if row is None else row, ()
     for _ in range(2):
         run = effective(S, sl, cut)
@@ -955,6 +970,7 @@ def reference(S, sl: CS.Slice, row: PoolRow | None = None, delta: int = COINS[2]
     held after it (else None). None where CompileSlice_v5's reference refuses the window on `opened`'s stream, or the M
     run passes NM entries."""
     row, cut = empty_row(S) if row is None else row, cuts(S, sl, cut)
+    got: dict[str, Any]
     run, carried, got = effective(S, sl, cut), heads(S, row, delta), {}
     r5 = V5.reference(S, run, delta, counts, opened(S, row, run, delta),
                       edge=lambda sc: got.update(edge=edge(S, sc, sl, cut)))
@@ -1074,7 +1090,7 @@ def run_chain(st: dict, args: Sequence[dict[str, list[int]]]) -> list[tuple[int,
     out = evaluate_bits(chain_unit(**st), *[[a[name] for a in args] for name, _t in params])
     words = [[sum(int(b) << j for j, b in enumerate(o[16 * i:16 * (i + 1)])) for i in range(4)]
              for o in out.reshape(len(args), -1).tolist()]
-    return [tuple(w) for w in words]
+    return [(a, b, c, d) for a, b, c, d in words]
 
 
 def size(**st) -> dict[str, int]:

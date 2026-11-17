@@ -21,7 +21,8 @@ import re
 import sys
 from pathlib import Path
 
-__all__ = ["analyze", "balanced", "K_OF", "lane_of", "LD_REGS", "main", "MARGIN", "SYNC_SLOTS", "tmem_model", "upper"]
+__all__ = ["analyze", "balanced", "HONEST", "K_OF", "lane_of", "LD_REGS", "main", "MARGIN", "METRIC", "record",
+           "SYNC_SLOTS", "tmem_model", "upper"]
 
 MARGIN = 0.02
 K_OF = {"s8": 32, "u8s8": 32, "e4m3": 32, "e5m2": 32, "f16": 16, "bf16": 16, "tf32": 8, "b1": 256}
@@ -325,6 +326,34 @@ def agree(a: Path, b: Path, margin: float = MARGIN) -> dict:
             "outside": off, "agree": not off and bool(ratios)}
 
 
+METRIC = "compute-research/fastest-tensor-form-over-honest"
+#: the honest form a family's tensor forms are held to: the first of these the run timed
+HONEST = {"sm90": ("wg_s8_n256_a1", "wg_s8_n256_a0"), "sm100": ("tc_i8_m128_n256",)}
+
+
+def record(where: Path, out: dict, failed: str | None) -> int:
+    """Writes the run's validation and, when `failed` is None, `METRIC`: the most slots a SM a clock any timed tensor form
+    with data writes, over the honest form's. Returns 1 when `failed`."""
+    from verity_bench import kit
+
+    w = kit.writer(where)
+    w.validation("failed" if failed else "passed", "probe.py gate and run, dgemm gate",
+                 failed or f"{len(out['forms'])} forms timed")
+    if failed:
+        return 1
+    forms, names = out["forms"], HONEST[out["family"]]
+    honest = next((forms[n] for n in names if n in forms), None)
+    best = max((f for f in forms.values() if f.get("slots") and not f.get("zero_data")), key=lambda f: f["slots"],
+               default=None)
+    extra = {"family": out["family"], "form": best and best["form"], "honest_form": honest and honest["form"]}
+    if honest and best and honest.get("slots"):
+        w.measurement(METRIC, best["slots"] / honest["slots"], "times honest", mark="measured", extra=extra)
+    else:
+        w.measurement(METRIC, None, "times honest", mark="measured", why=f"the run timed none of {', '.join(names)}",
+                      extra=extra)
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     argv = sys.argv[1:] if argv is None else argv
     if argv[:1] == ["agree"]:
@@ -335,6 +364,8 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("family", choices=("sm90", "sm100"))
     p.add_argument("dir", type=Path)
     p.add_argument("--json", type=Path)
+    p.add_argument("--record", type=Path, metavar="OUT", help="also write the run's result through the kit (`record`)")
+    p.add_argument("--failed", metavar="WHY", help="with --record: a gate failed, so the result holds no measurement")
     a = p.parse_args(argv)
     out = analyze(a.family, a.dir)
     text = json.dumps(out, indent=1, default=float)
@@ -343,7 +374,7 @@ def main(argv: list[str] | None = None) -> int:
     verdict = out.get("M3") or out.get("M4")
     print(json.dumps({"family": a.family, **verdict, "duo_words": out["duo_words"],
                       "fold_headroom": out.get("fold_headroom")}))
-    return 0
+    return record(a.record, out, a.failed) if a.record else 0
 
 
 if __name__ == "__main__":

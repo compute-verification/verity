@@ -1,5 +1,5 @@
 """No Python calls the wipe's counted check (`wipe_period.outcome_counted`, `counted_profile`) but its own module and the
-memory challenger's Lean package's tests, which hold it to `MemoryChallenger.WipeCount`.
+memory attester's Lean package's tests, which hold it to `MemoryChallenger.WipeCount`.
 
 `outcome_counted` certifies at the count the evidence states, and nothing holds that count to the network attester's
 count over the span until a composition ties `named` to it. So any other tracked Python file naming either fails here,

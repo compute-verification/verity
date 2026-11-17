@@ -1,6 +1,6 @@
-"""`timed_audit.py`: `pous-timed-audit` gives the memory challenger's `timed_audit.verdict`'s verdict on every generated
+"""`timed_audit.py`: `pous-timed-audit` gives the memory attester's `timed_audit.verdict`'s verdict on every generated
 record and its negative controls, a difference is reported, on the deployment's record (eight segments, twenty audits)
-and on the strict memory challenger's own documents; and a replay names what a run's record lacks."""
+and on the strict memory attester's own documents; and a replay names what a run's record lacks."""
 
 from __future__ import annotations
 
@@ -104,7 +104,7 @@ def _responder(block_bytes: int, block: Callable[[int], bytes], server_ns: int =
 
 
 def _live(limit_ns: int, wrong=lambda i: False):
-    """The memory challenger's `timed_audit.py --strict`'s document of `p2-16448/v4` at its registered point (one
+    """The memory attester's `timed_audit.py --strict`'s document of `p2-16448/v4` at its registered point (one
     segment) against a responder whose labels match the leaves (but for the indices `wrong` picks, answered with zeros),
     with its ready file and leaves."""
     scheme = schemes.get("p2-16448/v4")
@@ -120,8 +120,8 @@ def _live(limit_ns: int, wrong=lambda i: False):
 
 
 @pytest.mark.slow
-def test_the_strict_memory_challengers_documents_are_judged_alike():
-    """`judge` gives the document the memory challenger wrote, under the Lean's verdict, which is the Python's: accepted
+def test_the_strict_memory_attesters_documents_are_judged_alike():
+    """`judge` gives the document the memory attester wrote, under the Lean's verdict, which is the Python's: accepted
     at the RTT cap, refused before any challenge one microsecond past it, and rejected where the responder serves zeros
     for every index divisible by 7 (each audit of 105 challenges meets one but with probability (6/7)^105 < 2^-23)."""
     cap = 500_000 + p2.RTT_ALLOWANCE_CAP_NS
@@ -139,7 +139,7 @@ def test_the_strict_memory_challengers_documents_are_judged_alike():
 
 @pytest.fixture(scope="module")
 def strict_doc():
-    """The strict memory challenger's accepted document at the RTT cap, and the same with one answer's label flipped,
+    """The strict memory attester's accepted document at the RTT cap, and the same with one answer's label flipped,
     which both verdicts reject."""
     _, ready, leaves, doc = _live(500_000 + p2.RTT_ALLOWANCE_CAP_NS)
     bad = json.loads(json.dumps(doc))

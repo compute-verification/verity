@@ -31,8 +31,8 @@ from dataclasses import dataclass
 from typing import Any
 
 from verity.circuits.defs import bind
-from verity_vllm.definitions.registry import deepgemm, fp8
 
+from verity_vllm.definitions.registry import deepgemm, fp8
 from verity_vllm.observe.events import ViewDesc
 from verity_vllm.observe.fold.patterns.geometry import (
     GeometryError,
