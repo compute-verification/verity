@@ -8,7 +8,10 @@ import run as R
 
 CARD = "NVIDIA RTX PRO 6000 Blackwell Server Edition"
 UNMET = "challenger shares node-a with the developer's workers: Faithful and Secret unmet"
-MEMBER = f"Llama-3.2-1B-INT8 on {CARD}, remote, coins simulated ({UNMET})"
+ON = {"host": "node-a", "served_node": True, "from": "the served run's own files"}
+BASE = f"Llama-3.2-1B-INT8 on {CARD}, remote"
+MEMBER = f"{BASE}, coins simulated ({UNMET}), composed on node-a, the workload's node"
+STATED = {"composed_on": ON}
 
 
 @pytest.fixture
@@ -24,15 +27,19 @@ def here(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     return config
 
 
-def stand_in(monkeypatch: pytest.MonkeyPatch, lines: list[dict] | None, rc: int) -> list[list[str]]:
+def stand_in(monkeypatch: pytest.MonkeyPatch, lines: list[dict] | None, rc: int,
+             report: dict | None = STATED) -> list[list[str]]:
     seen = []
 
     def application(argv: list[str]) -> int:
         seen.append(argv)
+        state = Path(argv[argv.index("--state") + 1])
         if lines is not None:
-            record = Path(argv[argv.index("--state") + 1]) / "record"
-            record.mkdir(parents=True)
-            (record / "verdicts.jsonl").write_text("".join(json.dumps(x) + "\n" for x in lines))
+            (state / "record").mkdir(parents=True)
+            (state / "record" / "verdicts.jsonl").write_text("".join(json.dumps(x) + "\n" for x in lines))
+        if report is not None:
+            (state / R.REPORT).parent.mkdir(parents=True, exist_ok=True)
+            (state / R.REPORT).write_text(json.dumps(report))
         return rc
 
     monkeypatch.setattr(R, "application", application)
@@ -59,9 +66,10 @@ def test_an_accepting_run_writes_its_count_and_minutes_under_its_member(here, mo
     assert (m[R.ACCEPTED]["value"], m[R.ACCEPTED]["of"], m[R.ACCEPTED]["unit"]) == (4, 4, "verdicts")
     assert (m[R.MINUTES]["value"], m[R.MINUTES]["unit"]) == (75.0, "minutes")
     assert {x["member"] for x in m.values()} == {MEMBER}
+    assert [x["composed_on"] for x in m.values()] == [ON, ON]
     assert {x["mark"] for x in m.values()} == {"measured"}
     doc = json.loads((here.parent / "run" / "out" / "application_run.json").read_text())
-    assert (doc["accepted"], doc["of"], doc["minutes"], doc["verdicts"]) == (4, 4, 75.0, [line()])
+    assert (doc["accepted"], doc["of"], doc["minutes"], doc["verdicts"], doc["composed_on"]) == (4, 4, 75.0, [line()], ON)
 
 
 def test_a_run_whose_verdicts_do_not_all_accept_has_its_count_and_no_minutes(here, monkeypatch):
@@ -74,11 +82,12 @@ def test_a_run_whose_verdicts_do_not_all_accept_has_its_count_and_no_minutes(her
 
 
 def test_a_run_with_no_verdict_has_no_number(here, monkeypatch):
-    stand_in(monkeypatch, None, 2)
+    stand_in(monkeypatch, None, 2, None)
     assert R.main([str(here)]) == 2
     m = measurements(here)
     assert [(x["value"], x["why"]) for x in m.values()] == [(None, "verity run exited 2 with no verdict")] * 2
-    assert {x["member"] for x in m.values()} == {f"Llama-3.2-1B-INT8 on {CARD}, remote, no verdict, so no coins"}
+    assert {x["member"] for x in m.values()} == {f"{BASE}, no verdict, so no coins, composed on: not stated"}
+    assert [x["composed_on"] for x in m.values()] == [None, None]
 
 
 @pytest.mark.parametrize("lines, said", [
@@ -92,7 +101,23 @@ def test_the_member_names_the_coins_the_record_states_and_says_where_it_states_n
                                                                                                lines, said):
     stand_in(monkeypatch, lines, 0)
     R.main([str(here)])
-    assert {x["member"] for x in measurements(here).values()} == {f"Llama-3.2-1B-INT8 on {CARD}, remote, {said}"}
+    assert {x["member"] for x in measurements(here).values()} == {
+        f"{BASE}, {said}, composed on node-a, the workload's node"}
+
+
+@pytest.mark.parametrize("report, said", [
+    ({"composed_on": {**ON, "host": "auditor-1", "served_node": False}}, "composed on auditor-1, not the workload's node"),
+    (None, "composed on: not stated"),
+    ({"protocols": {}}, "composed on: not stated"),
+    ({"composed_on": {"served_node": False}}, "composed on: host not stated"),
+    ({"composed_on": {"host": "node-a"}}, "composed on node-a, whether it is the workload's node not stated"),
+])
+def test_the_member_says_where_the_record_was_composed_as_the_record_states_it(here, monkeypatch, report, said):
+    stand_in(monkeypatch, [line()], 0, report)
+    R.main([str(here)])
+    m = measurements(here)
+    assert {x["member"] for x in m.values()} == {f"{BASE}, coins simulated ({UNMET}), {said}"}
+    assert [x["composed_on"] for x in m.values()] == [(report or {}).get("composed_on")] * 2
 
 
 def test_the_state_is_the_runs_own(here, monkeypatch, capsys):

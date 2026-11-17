@@ -29,11 +29,11 @@ PYTHONPATH="$site" VERITY_DSA_TOPK=canonical "$PY" "$HERE/stress.py" plugin --ou
   > "$OUT/plugin.log" 2>&1
 rm -rf "$site"
 [ "${DSA_TOPK_SKIP_TIME:-0}" = 1 ] || "$PY" "$HERE/stress.py" time --out "$OUT" > "$OUT/time.log" 2>&1
-python3 - "$OUT" "$HERE/../harness" <<'EOF'
+python3 - "$OUT" "$HERE/../.." <<'EOF'
 import json, sys
 from pathlib import Path
 out = Path(sys.argv[1])
-sys.path.insert(0, sys.argv[2])
+sys.path[:0] = [f"{sys.argv[2]}/benchmarks/harness", f"{sys.argv[2]}/tools/config"]
 from verity_bench import kit
 res = kit.writer(out)
 v = json.loads((out / "summary.json").read_text())["verdict"]

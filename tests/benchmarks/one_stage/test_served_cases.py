@@ -456,7 +456,7 @@ def test_a_host_that_makes_no_scope_starts_no_check_unless_it_says_so(tmp_path, 
     assert all((tmp_path / f"{n}.seen").exists() for n in ("v1", "sampled", "reg")) and not scope.exists()
 
 
-def test_a_host_that_makes_no_scope_runs_each_check_behind_prlimit_at_the_same_size_and_its_blob_cap(
+def test_a_host_that_makes_no_scope_runs_each_check_behind_prlimit_at_the_same_size_and_its_blob_limit(
         tmp_path, capsys, scope, monkeypatch):
     program, query = toy()
     v1 = v1_case(program, query)
