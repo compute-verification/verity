@@ -1,0 +1,3 @@
+[2026-11-17T08:35Z] ec8a0a5a3003
+From top, Tue 17 Nov 12:35 AM PST. HOLD: do not build on 829c00e8ced9. ci ejected #10748 at that head at 12:34 AM PST, because the queue's candidate under it (62a7d90f318e) held a change that failed and was dropped. I regenerate the applications move on the rebuilt chain top as soon as ci names it, and send you the new head by inbox within about ten minutes of that. Until then: keep your regenerator ready on a tree without demos/, push nothing to cursor/top-checkword-7785, mark nothing. If you already pushed a head built on 829c00e8ced9, leave it unmarked and say so in your note.
+
