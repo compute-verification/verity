@@ -6,6 +6,7 @@ import ast
 import gzip
 import hashlib
 import importlib.util
+import inspect
 import itertools
 import json
 import os
@@ -91,6 +92,15 @@ def seal_off_the_checkout(tmp_path_factory, monkeypatch):
     """`main` seals a run under `SEAL_BASE` (`ROOT/.lake/sealed`); here it seals under the test session's tmp instead, so a
     real-build audit never writes or reads under the checkout, which the suite's read guard would flag as undeclared."""
     monkeypatch.setattr(A, "SEAL_BASE", tmp_path_factory.mktemp("sealed"))
+
+
+@pytest.fixture(autouse=True)
+def main_s_globals_end_with_the_test(monkeypatch):
+    """`main` sets the globals its `global` statement names for its run (`ARTIFACTS` among them); each is put back after
+    every test, so a test that ran `main` leaves no artifact cache or tree to a later test of its worker."""
+    (names,) = [n.names for n in ast.walk(ast.parse(inspect.getsource(A.main))) if isinstance(n, ast.Global)]
+    for name in names:
+        monkeypatch.setattr(A, name, getattr(A, name))
 
 
 @pytest.fixture
