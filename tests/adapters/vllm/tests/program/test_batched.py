@@ -13,8 +13,6 @@ from verity_vllm.definitions.replay import replayer
 
 from verity_torch.correspondence.runtime import SCHEMA, RuntimeCorrespondence
 from verity_torch import prune as P
-from verity_vllm.program import tp_binding as TB
-
 F32 = Value(32)
 MUL = bind(dense.MulVecF32, N=8)
 
@@ -107,10 +105,9 @@ def test_a_call_that_reads_the_run_ends_it():
 
 
 def test_a_collective_stays_a_call():
-    """A collective reads its peer Inputs in one operand of one Call (`tp_binding.rank_sites`): the form keeps it, by the reader's
+    """A collective reads its peer Inputs in one operand of one Call: the form keeps it, by the reader's
     own prefix. An attention's Calls batch like any other: `commit.memory_map` reads each member's KV
     (tests/commit/test_memory_map.py)."""
-    assert P.PEERS == TB.PEERS
     assert P.batched_form(_toy())[1][2:] == [1, 1]
 
 

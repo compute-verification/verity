@@ -776,8 +776,6 @@ theorem size_frameHash (tag : String) (parts : List ByteArray) : (Flock.FV3.Sha5
   unfold Flock.FV3.Sha512.hash Flock.FV3.hash
   exact size_sha512 _
 
-theorem size_node (d : Flock.FV3.Sha512.Domain) (l i : ℕ) (a b : ByteArray) : (d.node l i a b).size = 64 :=
-  size_frameHash _ _
 
 theorem size_leaf (d : Flock.FV3.Sha512.Domain) (r q : ℕ) (s : String) (v : ByteArray) :
     (d.leaf r q s v).size = 64 :=

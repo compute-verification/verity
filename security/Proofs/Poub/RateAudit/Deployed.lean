@@ -315,8 +315,6 @@ noncomputable def toInteractive (A : PIDevice N b h ρ S L q) (X : ℕ) : Intera
   chip st := PIChip.sim (fun _ _ => false) (L + X) q (A.chip st)
   bounded st w := PIChip.sim_bounded _ w (A.chip st) (L + X) q []
 
-theorem toInteractive_world (A : PIDevice N b h ρ S L q) (X : ℕ) (E : Store N b) (R : Bits ρ) (O : Oracle N b h ρ) :
-    (A.toInteractive X).world E R O = PIChip.simWorld (A.world E R O) := rfl
 
 theorem toInteractive_side (A : PIDevice N b h ρ S L q) (X : ℕ) (hA : ∀ E R O O', A.side E R O = A.side E R O') :
     ∀ E R O O', (A.toInteractive X).side E R O = (A.toInteractive X).side E R O' := fun E R O O' => by

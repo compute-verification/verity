@@ -2,7 +2,7 @@
 row of NP + 1 = 16 words, and O = 2 output steps. `AmpereBF16TcDot16_v3`'s unit j·O + k reads slot j's row of the scan's
 state (its ``a``, the circuit's external input), the loaded weights' row k (``b``) and the loaded bias (``acc``);
 `F32ToBf16Rn_v2`'s unit u is wired to its output, and its ``o0`` is the circuit's external output. The network attester
-on the host's uplink commits and signs each load (`transfer_rows`), and the verifier pins the loads from its certificates
+on the host's uplink commits and signs each load (`transfer_rows`), and the verifier pins the loads from its attestations
 alone (`blocks.pins`) and the scan's state beside them: with both, held to the roots the registrations record, the
 circuit's free inputs are 0. A record names no server and no transfer."""
 
@@ -77,7 +77,7 @@ class Certifier:
 
     def register(self, doc: dict, data: dict | None = None, *, at: dict | None = None) -> list[dict]:
         """Each load committed and signed as it crosses; ``at`` overrides the (link, direction, window) a value's
-        certificate signs for, its head the load's own."""
+        attestation signs for, its head the load's own."""
         out = []
         for v, rows in (data or values()).items():
             tr = TR.Transfer.commit(self.link, Direction.INGRESS, BK.SESSION_WINDOW, "load", doc["program"], v, rows)
@@ -93,7 +93,7 @@ def tiny():
     return c, record(c), layouts(c)
 
 
-def test_free_is_zero_only_with_the_loads_certified_pins_and_the_scans_state(tiny, tmp_path):
+def test_free_is_zero_only_with_the_loads_attested_pins_and_the_scans_state(tiny, tmp_path):
     _c, doc, lays = tiny
     cert = Certifier(tmp_path)
     regs = cert.register(doc)
@@ -129,7 +129,7 @@ def test_a_load_of_32_bit_leaves_is_pinned_at_the_verifiers_width_alone(tiny, tm
         BK.pins(doc, lays, regs, UPLINK, cert.key(), {"bias": (32, TR.SCHEMA), "w": (24, TR.SCHEMA)})
 
 
-def test_refuses_a_pin_without_a_certificate(tiny, tmp_path):
+def test_refuses_a_pin_without_a_attestation(tiny, tmp_path):
     _c, doc, lays = tiny
     cert = Certifier(tmp_path)
     regs = cert.register(doc)
@@ -150,7 +150,7 @@ def test_refuses_a_pin_without_a_certificate(tiny, tmp_path):
 
 
 @pytest.mark.parametrize("other,to", [("link", "s1/uplink"), ("window", 3), ("direction", Direction.EGRESS)])
-def test_refuses_a_certificate_for_another_phase_or_direction(tiny, tmp_path, other, to):
+def test_refuses_a_attestation_for_another_phase_or_direction(tiny, tmp_path, other, to):
     _c, doc, lays = tiny
     cert = Certifier(tmp_path)
     regs = cert.register(doc, at={"w": {other: to}})

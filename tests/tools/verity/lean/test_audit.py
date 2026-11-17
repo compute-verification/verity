@@ -7083,7 +7083,7 @@ def test_a_job_pinned_to_one_cpu_runs_lean_on_one_thread(monkeypatch):
 
 
 def test_the_lean_checks_audit_passes_record_differences_and_names_the_records_to_commit(tmp_path, monkeypatch):
-    """`--regenerate` (the lean-audit step of the Lean check of `next`): a package whose every failure is a record difference,
+    """`--regenerate` (the lean-audit step of a candidate's Lean check): a package whose every failure is a record difference,
     so the audit wrote the record `--update` would, passes, and `audit.json` names that record for drive to commit; one with any other
     failure fails as before, and the packages' own locks are never written."""
     a, b = tmp_path / "a", tmp_path / "b"
@@ -10431,7 +10431,7 @@ def test_a_property_on_a_conjecture_lists_it_and_one_on_a_falsified_conjecture_c
 
 def test_a_dev_cache_run_restores_dependencies_and_is_never_a_verdict(monkeypatch):
     """`--dev-cache` lets setup.sh and Lake restore the verified build cache (no `LEAN_CACHE=off`, no
-    `LAKE_ARTIFACT_CACHE=false`), so its reports carry the fast path's kind, which `check` and `research merge` refuse:
+    `LAKE_ARTIFACT_CACHE=false`), so its reports carry the fast path's kind, which `check` and `research.merge` refuse:
     the gate's from-source build is the cache's root of trust and must never read it."""
     monkeypatch.setattr(A, "ARTIFACTS", None)
     monkeypatch.setattr(A, "DEV_CACHE", False)

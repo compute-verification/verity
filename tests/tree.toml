@@ -22,8 +22,8 @@ path = "verity/"
 means = "the distribution `verity`: what a party, a channel, a device, a protocol and a configuration are, the runtime, the protocols, the circuit language and the commitment schemes"
 
 [[tree]]
-path = "hardware/"
-means = "the registered hardware's data sheets, TOML only, no code"
+path = "calibration/"
+means = "the cards, the probes and the measurements that choose parameters: hardware/, the registered hardware's data sheets, TOML only, no code, and one directory per measurement"
 
 [[tree]]
 path = "adapters/"

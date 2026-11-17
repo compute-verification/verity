@@ -1,7 +1,8 @@
 # Overhead
 
 γ is a PoUW scheme's prover overhead over stock: how much more busy GPU time, with the host CPU time it adds at a
-weight, the scheme spends than stock does for the same useful output, at a card's operating points.
+weight, the scheme spends than stock does for the same useful output, at a card's operating points. It is a fraction,
+so 0.1 is ten percent over stock and 10, the scheme gate, is eleven times stock.
 `verity bench overhead` is the one front door for it: it gives γ from labelled runs of record alone. Its code is the
 harness's ([`benchmarks/harness`](../harness/README.md)); this directory holds its runner.
 
@@ -22,8 +23,9 @@ then each γ over a monitoring period of a week, a month and a year, over a data
 reads the evidence store, so it needs the store's credentials, and no GPU. `--json` gives each row with `of_record` and
 `why`.
 
-Every γ covers the four linears of one layer and leaves the LM head out, and `table` says so. Pearl+'s rows carry the
-note `without y's commitment (y tree not timed)`: its arm commits no output y yet, so its γ leaves y's hash out.
+Every γ covers the four linears of one layer and leaves the LM head out, and `table` says so. A row whose run timed no
+y tree carries the note `without y's commitment (y tree not timed)`, and its γ leaves y's hash out. A row says whether
+its run timed y's commitment (`commits_y`), and two rows compare like for like only when they agree on it.
 
 The metrics, Pearl+'s γ at the H200's C and L, are Llama-3.1-70B's. Llama-3.2-1B's is written beside each as its member
 `llama-3.2-1b-h200`, and `table` prints its rows under their own heading, or says that no labelled run times it.

@@ -78,11 +78,11 @@ class Port:
     """One direction of a network attester: what leaves its block (`egress`) or enters it (`ingress`). The attester keeps one
     grid per port (`NetTiming.Grid`) and signs one record per port and window."""
 
-    certifier: str
+    attester: str
     direction: Literal["egress", "ingress"]
 
     def __repr__(self) -> str:
-        return f"{self.certifier}:{'out' if self.direction == 'egress' else 'in'}"
+        return f"{self.attester}:{'out' if self.direction == 'egress' else 'in'}"
 
 
 @dataclass(frozen=True)
@@ -123,7 +123,7 @@ class Zone:
 
 @dataclass
 class Datacenter:
-    """Blocks, the fabric devices between them (switches, certifiers, the challenger, the outside world), the links,
+    """Blocks, the fabric devices between them (switches, attesters, the challenger, the outside world), the links,
     the attesters' cadence, and whether they seal their pair links."""
 
     name: str
@@ -131,8 +131,8 @@ class Datacenter:
     fabric: list[DeviceEntry] = field(default_factory=list)
     links: list[LinkEntry] = field(default_factory=list)
     cadence: Cadence = field(default_factory=Cadence)
-    #: every link between two blocks' certifiers is a sealed pair link (the attester's `Proxy(pair=…)`, PROTOCOL.md
-    #: "Sealed pair links"), so what crosses from one block to another is ciphertext off the two certifiers, and the
+    #: every link between two blocks' attesters is a sealed pair link (the attester's `Proxy(pair=…)`, PROTOCOL.md
+    #: "Sealed pair links"), so what crosses from one block to another is ciphertext off the two attesters, and the
     #: export is charged at the facility boundary only (`Placed._exported`). Off by default.
     sealed: bool = False
 
@@ -155,7 +155,7 @@ class Datacenter:
 
     def uncovered_links(self) -> list[LinkEntry]:
         """The links outside every block with no trusted device at either end (a switch-to-switch fabric link, an outside
-        host's link to a switch), where two machines the auditor doesn't control meet with no certifier between them.
+        host's link to a switch), where two machines the auditor doesn't control meet with no attester between them.
         The network attesters cover every link when this is empty."""
         devices = self.devices
         inside = lambda l: self.zone_of(l.a) is not None and self.zone_of(l.a) is self.zone_of(l.b)  # noqa: E731
@@ -185,15 +185,15 @@ class Datacenter:
     def link(self, a: str, b: str) -> LinkEntry:
         return next(l for l in self.links if {l.a, l.b} == {a, b})
 
-    def uplink(self, certifier: str) -> LinkEntry:
+    def uplink(self, attester: str) -> LinkEntry:
         """The link between a network attester and the block it watches."""
-        return next(l for l in self.links if certifier in (l.a, l.b)
-                    and self.zone_of(l.b if l.a == certifier else l.a) is not None)
+        return next(l for l in self.links if attester in (l.a, l.b)
+                    and self.zone_of(l.b if l.a == attester else l.a) is not None)
 
     def watched(self, port: Port) -> Zone:
         """The block whose boundary `port` watches."""
-        l = self.uplink(port.certifier)
-        return self.zone_of(l.b if l.a == port.certifier else l.a)
+        l = self.uplink(port.attester)
+        return self.zone_of(l.b if l.a == port.attester else l.a)
 
     def validate(self) -> list[str]:
         """Every way the declaration falls short of the model; empty when it is an instance of it."""
@@ -205,7 +205,7 @@ class Datacenter:
                     problems.append(f"link {l.a}-{l.b} names an unknown device {end!r}")
         for l in self.boundary:
             if l.a in names and l.b in names and self.port(l.a, l.b) is None and self.port(l.b, l.a) is None:
-                problems.append(f"boundary link {l.a}-{l.b} passes no certifier (coverage)")
+                problems.append(f"boundary link {l.a}-{l.b} passes no attester (coverage)")
         return problems
 
     def assumptions(self) -> list[Assumption]:
@@ -234,7 +234,7 @@ class Datacenter:
 class Fleet:
     """Several datacenters under one developer, and the links between them. Blocks are the only units the account
     credits, and coverage is per block: every link off a block passes a network attester of its own, wherever the link's other
-    end is. A link between datacenters is fabric, as a switch is, so it needs no certifier, and the outside world is
+    end is. A link between datacenters is fabric, as a switch is, so it needs no attester, and the outside world is
     everything off every block."""
 
     datacenters: list[Datacenter]
@@ -270,5 +270,5 @@ class Fleet:
             if unknown or merged.zone_of(l.a) is merged.zone_of(l.b):
                 continue
             if merged.port(l.a, l.b) is None and merged.port(l.b, l.a) is None:
-                problems.append(f"inter-datacenter link {l.a}-{l.b} passes no certifier (coverage)")
+                problems.append(f"inter-datacenter link {l.a}-{l.b} passes no attester (coverage)")
         return problems
