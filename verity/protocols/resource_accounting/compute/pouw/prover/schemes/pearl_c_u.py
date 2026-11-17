@@ -2,12 +2,12 @@
 mirrors op for op.
 
 **Status: CPU-pinned.**  Each function equals `pearl_c`'s reference (`chain`, `peel_factors_a`, `peel_factors_b`, `peel`) bit
-for bit.  On the H100 kernel's gate problem (256 x 384 x 1,024, both formings) it reproduces the gate's expected C̃, A′·F_B,
+for bit.  On the H100 kernel's gate problem (256 x 384 x 1,024) it reproduces the gate's expected C̃, A′·F_B,
 B̃·F_A, G, P_A, P_B and U (``tests/vectors/pearl_c_u.json``, which records the gate files' hashes).  No kernel has run yet:
 the joint H100 request's B1 capture, the BF16 peel into C̃ as a nonzero FP32 accumulator, confirms it on silicon.
 
 **The order**, per output (i, j).  A′, B̃ are the formed E4M3 operands (k codes each), F_A, F_B the k x 32 bases, be_A,i and
-be_B,j the peel's scaled noise rows (32 BF16 words: bf16(β·bf16(E)) under v0, bf16(E′) under v1).  Words are FP32 unless
+be_B,j the peel's scaled noise rows (32 BF16 words, bf16(E′)).  Words are FP32 unless
 named; RN is round to nearest, ties to even, no flush to zero; every operation below rounds once.
 
 ~~~text

@@ -6,7 +6,7 @@ record's fields and the fill's times integers of either sign, a start mark empty
 exactly the canonical JSON of what it decodes to. Past decoding every reference is the Python's own function on the
 decoded objects.
 
-Sessions are run by `wipe_challenger.WipeMemoryChallenger` itself against `wipe_store.Prover`, on an injected clock,
+Sessions are run by `wipe_challenger.WipeMemoryAttester` itself against `wipe_store.Prover`, on an injected clock,
 with a mark source that returns the start certificate a test gives or with none, and signed by a test signer's key at a
 leaf the test picks (`mc_cases.AtLeaf`) or by a deployed-parameter key (`mc_cases.deployed_signer`). No real key is
 read."""
@@ -22,7 +22,7 @@ import mc_cases as M
 import verity_difftest as D
 from hypothesis import strategies as st
 
-from verity.protocols.resource_accounting.memory.pous.attester import memory_challenger as mc
+from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
 from verity.protocols.resource_accounting.memory.pous.prover import wipe_store as WS
 from verity.protocols.resource_accounting.memory.pous.verifier import streamed_wipe as sw
 from verity.protocols.resource_accounting.memory.pous.attester import wipe_challenger as WC
@@ -114,11 +114,11 @@ def tiers_of(labels: int, cuts: list[int], names: list[str], outside: int = 0) -
 def run(params: sw.WipeParams, signer: M.AtLeaf, *, server: bytes = SERVERS[0], session_id: bytes = bytes(32),
         start: int = 1_000, fill_ns: int = 7, spends=lambda b: 1, tampered=frozenset(),
         coins: bytes = b"coins", certificate: bytes | None = None) -> Session:
-    """One session of `WipeMemoryChallenger` against the honest `Prover`: batch `b`'s answer takes `spends(b)` ns, and
+    """One session of `WipeMemoryAttester` against the honest `Prover`: batch `b`'s answer takes `spends(b)` ns, and
     the batches in `tampered` have their first answer's last bit flipped. With `certificate`, the challenger's mark source returns it,
     and the session signs its SHA-512 as its start mark; with none the mark is empty."""
     clock = M.Clock(start)
-    c = WC.WipeMemoryChallenger(SECRET, server, session_id, params, signer, log=M.ts.session_log(), clock=clock,
+    c = WC.WipeMemoryAttester(SECRET, server, session_id, params, signer, log=M.ts.session_log(), clock=clock,
                                 coin_secret=coins, mark_source=None if certificate is None else lambda m: certificate)
     prover = WS.Prover(params)
     for first, data in c.fill(max(1, params.labels // 3)):
@@ -301,7 +301,7 @@ def _v1(j: dict, x: int) -> dict:
 
 
 def _slewed_clock(j: dict, x: int) -> dict:
-    """The record with `CLOCK_MONOTONIC ns`, the memory challenger's clock, named in both commitments where a wipe's
+    """The record with `CLOCK_MONOTONIC ns`, the memory attester's clock, named in both commitments where a wipe's
     header names the raw clock."""
     slewed = {"clock": "CLOCK_MONOTONIC ns"}
     return j | {"commitment": j["commitment"] | slewed,

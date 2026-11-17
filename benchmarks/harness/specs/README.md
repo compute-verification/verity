@@ -38,6 +38,7 @@ its checkpoint pin, and that every spec and sweep here has its line below.
 - `llama31-8b-fp8-rtx-served-arm`: `served_commit`'s served arm on Llama-3.1-8B FP8, compiled and eager, against stock
   in both.
 - `llama32-1b-bf16-rtx-served-arm`: the same on Llama-3.2-1B in BF16.
+- `llama32-1b-bf16-h200-served-arm`: `llama32-1b-bf16-rtx-served-arm` on one H200.
 - `qwen3-8b-bf16-rtx-served-arm`: the compiled served arm on Qwen3-8B in BF16.
 - `qwen3-8b-bf16-rtx-served-arm-eager`: the eager served arm on Qwen3-8B, in a run of its own: four Qwen3-8B engines
   don't fit one GPU beside the Commit's buffers.
