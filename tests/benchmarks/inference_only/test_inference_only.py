@@ -201,7 +201,7 @@ def test_the_report_puts_the_served_number_first_and_labels_a_refused_policy(cap
         of = served if r["policy"] == "served" else built
         assert r["share"] == pytest.approx(1 / of["value"])
         assert r["training_macs"] == pytest.approx(r["share"] * r["blocks"] * of["work"]["N"])
-    for word in ("proved", "premise", "scaled", "the two thirds", "BF16", report.CALCULATOR):
+    for word in ("proved", "premise", "scaled", "the two thirds", "BF16"):
         assert word in out
 
 

@@ -4,9 +4,8 @@ A citation is a string of the calculator's Python outside its tests that reads a
 but the last capitalized, under a namespace some lock's names are under), as a literal or as a module's value once
 built (a name its module composes, `min_cut.HE_CHARGED`). A name built inside a function, or one inside prose, is not
 seen. A lock lists a name `slowdown.lean.read` takes from the locks it reads (a guarantee's statement, an assumption, an
-open premise, a domain hypothesis, or a definition an assumptions module holds) or a guarantee those locks key, as
-`nci/arguments.py` reads them. A namespace (`min_cut.AREA`) is no citation. A name no lock lists is in `ALLOWED`,
-which only shrinks, with why."""
+open premise, a domain hypothesis, or a definition an assumptions module holds) or a guarantee those locks key. A
+namespace (`min_cut.AREA`) is no citation. A name no lock lists is in `ALLOWED`, which only shrinks, with why."""
 
 import ast
 import inspect

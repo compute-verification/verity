@@ -139,10 +139,8 @@ inputs = [
     "verity/channel.py", "verity/device.py", "verity/errors.py", "verity/party.py", "verity/runtime/__init__.py",
     "verity/runtime/handshake.py", "verity/runtime/framing.py", "tools/config/verity_config",
     # and `verity bench inference_only --stated-only`, run as its own process, prices the stated policy with the
-    # slowdown calculator, which reads the census, the NCI catalog and each name's standing from the locks
+    # slowdown calculator, which reads the census and each name's standing from the locks
     "benchmarks/inference_only", "benchmarks/slowdown", "security/lean-audit.json", "security/Properties/lean-audit.json",
-    "benchmarks/nci/tiers.py", "benchmarks/nci/bracket.py", "benchmarks/nci/catalog.py", "benchmarks/nci/algorithms.json",
-    "benchmarks/nci/calibrations.json",
     # the core benchmarks' interface: a test reads each directory that declares itself a core command in its own
     # pyproject.toml ([tool.verity.interface] core), its README and its runner, so a declared directory and its README
     # are listed here, which the test checks

@@ -2,11 +2,8 @@
 which bounds the feasible set 𝓕: the inventory's locations, its unregistered leaves and the monitoring period, in gates.
 
 `Units` is the one place a FLOP-model input becomes gates: `units.gates_per_flop` (`data/hardware.toml`), with its source
-and range. The datasheets' FLOP/s, the policy's `Γ`, the run's target, a sampled step's FLOPs and the classes' and
-attacks' FLOP-model statements all pass through it, so under `structure.reference` (whose `s_×` moves with it) the
-slowdown and the time to the task don't depend on its value (`tests/test_hardware.py`). Its `basis` says where the
-value comes from (`FLOP_MODEL`, or `boolean:<design>` when measured on one Boolean design); a structure's `s_×` must
-come from the same one (`classes.Structure.check`).
+and range. Its `basis` says where the value comes from (`FLOP_MODEL`, or `boolean:<design>` when measured on one
+Boolean design).
 
 A **location** is the largest set of devices joined by links no certifier sees (an 8-GPU server's NVLink domain, an NVL72
 rack, or a rack of servers whose certifiers sit only on its uplinks). Its `phi` is `Φ_X`, its capacity in gates per
@@ -22,7 +19,7 @@ registered and the unregistered gates. A **monitoring period** is the stretch of
 (`params.PERIODS`).
 
 A location table may leave out its hosts: it is then one host with no host memory or CPUs counted and no known line
-rate (no `links`-form server block).
+rate.
 """
 
 from __future__ import annotations

@@ -24,10 +24,9 @@ from typing import Any
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
 SLOWDOWN = ROOT / "benchmarks" / "slowdown"
-# first on the path: the slowdown calculator's `periods` imports the slowdown calculator's own `run`, not this benchmark's
 sys.path.insert(0, str(SLOWDOWN))
 
-from slowdown import hardware, min_cut  # noqa: E402
+from slowdown import hardware, min_cut, params  # noqa: E402
 from slowdown.params import Registry  # noqa: E402
 
 #: the served policy's public numbers
@@ -229,16 +228,14 @@ def bound(p: Policy, sh: Shape, blocks: float = 1.0, k: float | None = None) -> 
 
 
 def fleet_periods(work: float) -> list[dict[str, Any]]:
-    """For each of the slowdown calculator's fleets and monitoring periods (the slowdown calculator's `periods.FLEETS` and `PERIODS`): the
+    """For each of the slowdown calculator's fleets and monitoring periods (the slowdown calculator's `params.FLEETS` and `PERIODS`): the
     period's seconds and the policy's blocks the fleet holds at capacity, each of ``work`` MACs. A fleet's rate is its
     locations' data-sheet dense rate (`location.<name>.flops`, two FLOPs a MAC)."""
-    import periods as slowdown_periods
-
     reg, rows = Registry.load(), []
-    for fleet, label in slowdown_periods.FLEETS:
+    for fleet, label in params.FLEETS:
         f = hardware.fleet(reg, fleet)
         rate = f.count * reg[f"location.{f.location}.flops"] / 2
-        for name in slowdown_periods.PERIODS:
+        for name in params.PERIODS:
             seconds = hardware.monitoring_period(reg, name).seconds
             rows.append({"where": label, "fleet": fleet, "location": f.location, "locations": f.count, "period": name,
                          "seconds": seconds, "blocks": rate * seconds / work})

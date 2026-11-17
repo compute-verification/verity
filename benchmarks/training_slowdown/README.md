@@ -494,7 +494,7 @@ capture beside them. It computes no record's slowdown. Its tests are a suite of 
   Definitions catalog the grader prices them with. From the frontend's tests, by path: the lf model. From the
   slowdown calculator (`benchmarks/slowdown`), its directory put first on `sys.path`: its fleets and
   periods, its registry and its min-cut bound, which `calculator.py` reads, and with the registry the inference-only
-  policy's calibrations (`benchmarks/nci/calibrations.json`), which the registry loads. From the
+  policy's calibrations (`benchmarks/slowdown/data/calibrations.json`). From the
   census (`benchmarks/census/deployments.json`), by path: the reference deployment's execution phase. A run also reads the
   program it is given, the start's θ and, where the start is named in it, the starts registry. The grade reads the
   config, the starts registry and the records it is given.

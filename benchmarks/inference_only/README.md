@@ -266,8 +266,7 @@ The number is a block's ratio under two assumptions, on a check that Lean does n
   every row a block reads as fresh and refuses the policy on `k`. A built policy's `c` and `k` are the Python count of
   the record's description, which the Lean check does not establish; a stated policy's are not checked here at all.
 - **A block, not a deployment.** The periods table multiplies one block's ratio through the blocks a fleet holds at its
-  data sheet's rate. What a deployment registers, what it leaves free and what its proofs miss are the slowdown
-  calculator's (`uv run python benchmarks/slowdown/periods.py`).
+  data sheet's rate.
 - **Units, not converted.** `N` and `limit` are in the policy's own MACs, which count a MAC of the layers' linears as one
   and a BF16 MAC (attention, the LM head) as two, the card's dense int8 rate against its BF16 rate. The bound is at
   `F = 1`, which charges at most two of a training step's three kinds of product; the two thirds that leaves of a step

@@ -313,7 +313,6 @@
         "verity/protocols/resource_accounting/compute/pouw/verifier/receipts/",
         "benchmarks/numerical/",
         "benchmarks/ppl/",
-        "benchmarks/nci/",
         "benchmarks/unit_lowering/",
         "benchmarks/compute/",
         ".agents/skills/kernel-engineering/",

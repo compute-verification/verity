@@ -234,8 +234,6 @@ ALLOWED: dict[str, str] = {
     "report-proof-service-": "a cited note's id",
     "Faulty ANDs (`Stratified.harm_bound`": "`sampling_plan/h200.py`'s docstring: a queued PR on next rewrites the line beside "
                                             "it; renamed after it lands",
-    "no wrong certificate, faulty block or detection": "a comment beside `Remote.CITES` in `benchmarks/slowdown/slowdown/envelopes.py`, "
-                                                       "which a queued PR on next rewrites; renamed after it lands",
     "no faulty proof block, every one being drawn": "`benchmarks/network_traces/leak_bounds.py`'s docstring: a queued PR on "
                                                     "next rewrites the line beside it; renamed after it lands",
     "a tied audit no faulty term (its wrong units' outputs are the egress's)": "the network period check's refusal in "
