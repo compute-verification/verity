@@ -89,7 +89,7 @@ class BlockAccount:
     reads_local_at_least: float = 0.0
     forced: float = 0.0
     assumptions: list[str] = field(default_factory=list)
-    #: for a block with a salt in its certifier's custody, k: the bits that could carry it out before registration
+    #: for a block with a salt in its network attester's custody, k: the bits that could carry it out before registration
     custody: float | None = None
     #: each facet's share of the epoch
     loads: dict[str, float] = field(default_factory=dict)

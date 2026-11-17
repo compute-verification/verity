@@ -1,11 +1,12 @@
 """The harness kit: the calls benchmarks' runners share, each written once.
 
-- `lease(gpus, minutes)`: the `gpu-lease` argv a job's command follows, with its bound.
+- `lease(gpus, minutes, on=None, cores=None)`: the `gpu-lease` argv a job's command follows, with its bound.
 - `host_stamp()`: where a number was measured, as one dict: the card, each GPU's UUID and clocks, the driver, CUDA, the node
   and the commit. With no GPU it says so: `card` is ``"none"``, beside `why`.
 - `paired(arm, stock, confidence=0.95)`: an arm's ratio over stock from matched repetitions, its interval and `n`.
 - `writer(out).measurement(name, value, unit, ..., mark=..., period=None, over=None, member=None)`: appends one measurement to the run's result: under a research run
   (`RESEARCH_RUN_DIR` set) `$RESEARCH_RUN_DIR/result.json`, where `research` reads it, and outside one `out/result.json`.
+  Inside pytest it writes nothing into the research run the process started under (`refuse_the_started_run`).
   `writer(out).validation(status, checker, detail, evidence=())` writes the run's validation there, once, and
   `writer(out, kind)` writes a result of that `kind`, the artifact kind `research` stores it as.
   `writer(out).fingerprint(**fields)`, `.measurement_file(path)` and `.artifact(path)` add what actually ran and the files
@@ -31,9 +32,11 @@ model or stated figures no run measured, or scaled past what a run covered; ``"p
 name covers. The writer also puts it first among the `inputs`, where the console's Metrics tab reads it until it reads
 `mark`. A measurement of a figure that is over a span of time or of compute says which, each as its own field and held
 only where given: `period`, one of `PERIODS` (a verification phase, a week, a month or a year), and `over`, one of
-`OVER` (the world's compute or one datacenter's). A measurement of one member of a set (a deployed guarantee, a lead)
-says which as `member`, a non-empty string, held only where given. The writer appends: every
-writer of a research run, whatever its `out`, appends to the run's one result and keeps what the run already wrote there.
+`OVER` (the world's compute or one datacenter's). A measurement of one of a metric's lines says which as `member`, a
+non-empty string held only where given: whatever tells it from the metric's other lines, a guarantee, a lead, an area, or
+a configuration as a slug of lower-case words joined by hyphens, model, card, then arm where arms differ
+(`llama-3.2-1b-h200`). The writer appends: every writer of a research run, whatever its `out`, appends to the run's one
+result and keeps what the run already wrote there.
 A result holds one run's measurements, one a name, period, `over` and member (a name given none is one of them), and one
 validation, so a rerun writes a fresh directory.
 
@@ -62,6 +65,7 @@ import re
 import shutil
 import statistics
 import subprocess
+import sys
 from collections.abc import Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -103,16 +107,18 @@ KIND = re.compile(r"[a-z0-9][a-z0-9-]*/v[0-9]+")
 # ---- the lease ---------------------------------------------------------------------------------------------------------------
 
 
-def lease(gpus: int, minutes: float) -> list[str]:
-    """The `gpu-lease` argv a job's command follows: the wait for `gpus` GPUs of the node, held for the job's bound of
-    `minutes` (gpu-lease's `--max-min`, in whole minutes). The job takes the lease itself, since `research run --gpus` is
-    refused on a node whose GPUs gpu-lease doesn't hand out."""
+def lease(gpus: int, minutes: float, *, on: str | None = None, cores: str | None = None) -> list[str]:
+    """The `gpu-lease` argv a job's command follows: the wait for `gpus` GPUs of the node (only those `on` lists, and the
+    job pinned to the CPUs `cores` lists, where given), held for the job's bound of `minutes` (gpu-lease's `--max-min`, in
+    whole minutes). The job takes the lease itself, since `research run --gpus` is refused on a node whose GPUs gpu-lease
+    doesn't hand out."""
 
     if isinstance(gpus, bool) or not isinstance(gpus, int) or gpus < 1:
         raise ValueError(f"a lease holds one GPU or more, not {gpus!r}")
     if not (isinstance(minutes, numbers.Real) and math.isfinite(minutes) and minutes > 0):
         raise ValueError(f"a lease needs its bound in minutes, not {minutes!r}")
-    return ["gpu-lease", str(gpus), "--wait", "--max-min", str(math.ceil(minutes)), "--"]
+    return ["gpu-lease", str(gpus), "--wait", *(["--on", on] if on else []), *(["--cores", cores] if cores else []),
+            "--max-min", str(math.ceil(minutes)), "--"]
 
 
 # ---- the host stamp ----------------------------------------------------------------------------------------------------------
@@ -506,13 +512,51 @@ class Writer:
         return doc
 
 
+#: the environment this process started with, which no monkeypatch or conftest changes (Linux; elsewhere the kit's import)
+_START = Path("/proc/self/environ")
+_PLACES = ("RESEARCH_RUN_DIR", "OUT")
+
+
+def _started_under() -> tuple[Path, ...]:
+    if _START.is_file():
+        environ = {k: v for k, _, v in (e.partition("=") for e in os.fsdecode(_START.read_bytes()).split("\0"))
+                   if k in _PLACES}
+    else:
+        environ = {n: v for n in _PLACES if (v := settings.raw(n)) is not None}
+    return tuple(Path(settings.get(n, environ)).resolve() for n in _PLACES if settings.is_set(n, environ))
+
+
+#: `$RESEARCH_RUN_DIR` and `$OUT` as this process started: the places of the research run it runs under, which a test
+#: inherits
+STARTED_UNDER = _started_under()
+
+
+def under_pytest() -> bool:
+    # pytest's own modules load before any conftest or test module; PYTEST_CURRENT_TEST misses collection and imports
+    return "_pytest" in sys.modules
+
+
+def refuse_the_started_run(place: str | os.PathLike) -> None:
+    """Inside pytest, refuses to write `place` where it is in `STARTED_UNDER`, so a test's figures never become the
+    measurements of the run it runs under; a test that plays a run sets its own `RESEARCH_RUN_DIR`, which it may write."""
+    if not under_pytest():
+        return
+    p = Path(place).resolve()
+    if run := next((d for d in STARTED_UNDER if p.is_relative_to(d)), None):
+        raise ValueError(f"inside pytest the kit writes nothing into the research run this process started under, and "
+                         f"{place} is in {run}: name a test's tmp_path as the place, or run the suite with "
+                         "tools/check/suites.py, which drops the run's variables")
+
+
 def writer(out: str | os.PathLike, kind: str | None = None) -> Writer:
     """The writer of this run's result (`RESEARCH_RUN_ID`, ``local`` outside one), stamped with the host now, of `kind`
     where given (`Writer.kind`). Under a research run (`RESEARCH_RUN_DIR` set) the result is
     `$RESEARCH_RUN_DIR/result.json`, the one file `research` reads a run's result from, whatever `out` is, so its evidence
-    paths are relative to the run's directory; outside one it is `out/result.json`."""
+    paths are relative to the run's directory; outside one it is `out/result.json`. Inside pytest it refuses the run the
+    process started under (`refuse_the_started_run`)."""
 
     where = settings.RESEARCH_RUN_DIR if settings.is_set("RESEARCH_RUN_DIR") else out
+    refuse_the_started_run(where)
     return Writer(Path(where), settings.RESEARCH_RUN_ID, host_stamp(), kind, run_command())
 
 
