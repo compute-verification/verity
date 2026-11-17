@@ -397,7 +397,7 @@ def test_the_domain_is_one_stages_window_domain(tmp_path):
     assert lw.ports(0) != lw.ports(1)
 
 
-def test_the_challenger_never_holds_a_certificate_or_a_violation_kind(tmp_path):
+def test_the_challenger_never_holds_a_attestation_or_a_violation_kind(tmp_path):
     """Everything the challenger keeps (the registrations, receipts, samples and outcome records) names the salted root,
     the order and digests: no attestation, no head, no frame root, and a rejected window doesn't say why."""
     run = Run(tmp_path)
@@ -429,7 +429,7 @@ def test_an_extra_public_field_is_refused(tmp_path):
     assert run.lw.register(run.stream, rec).order == 0
 
 
-def test_a_certificate_in_the_clear_is_refused(tmp_path):
+def test_a_attestation_in_the_clear_is_refused(tmp_path):
     run = Run(tmp_path)
     opening = run.honest(0)
     rec = run.lw.registration(opening)
@@ -471,7 +471,7 @@ def test_a_bad_signature_is_a_reject(tmp_path):
     assert run.round(run.honest(2)).accepted and run.stream.symbols == ("reject", "reject", "accept")
 
 
-def test_a_certificate_from_another_session_is_a_reject(tmp_path):
+def test_a_attestation_from_another_session_is_a_reject(tmp_path):
     """The cross-session replay: the attester's own key signed the execution phase in an earlier session, and its
     attestation signs another message than this session's, so it is rejected."""
     run = Run(tmp_path)
