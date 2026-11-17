@@ -1113,6 +1113,45 @@ def test_core_never_reads_the_census() -> None:
     assert not offenders, offenders
 
 
+WORLD_DIRS = ("hardware", "calibration")
+WORLD_PATH = re.compile(r"(?<![\w.\-])(hardware|calibration)[/\\]")
+#: The files of ``verity`` that still name a path to ``hardware/`` or ``calibration/``, each with why.  It only shrinks.
+WORLD_PATHS_ALLOWED = {
+    "device.py": "proofs: the card and node readers' built-in directories, `CARDS` and `NODES`, until every caller names "
+                 "its own",
+}
+
+
+def _world_paths(tree: ast.AST) -> list[int]:
+    docs = _docstrings(tree)
+    named = {id(side) for n in ast.walk(tree) if isinstance(n, ast.BinOp) and isinstance(n.op, ast.Div)
+             for side in (n.left, n.right) if isinstance(side, ast.Constant) and side.value in WORLD_DIRS}
+    return sorted(n.lineno for n in ast.walk(tree) if isinstance(n, ast.Constant) and isinstance(n.value, str)
+                  and id(n) not in docs and (id(n) in named or WORLD_PATH.search(n.value)))
+
+
+def test_verity_names_no_path_to_the_hardware_or_calibration() -> None:
+    """The protocols read nothing about the world: a card, a node file or a calibrated figure reaches ``verity`` as a
+    parameter its caller passes, so no string in its code (docstrings aside) is a path to ``hardware/`` or
+    ``calibration/``, written whole or joined with ``/``."""
+    found = {}
+    for path in _held_sources():
+        lines = _world_paths(ast.parse(path.read_text(encoding="utf-8"), filename=str(path)))
+        if lines:
+            found[path.relative_to(SRC).as_posix()] = lines
+    offenders = [f"verity/{f}:{n}" for f, lines in found.items() if f not in WORLD_PATHS_ALLOWED for n in lines]
+    assert not offenders, ("verity names a path to hardware/ or calibration/; take the figure, or the directory, as a "
+                           "parameter its caller passes:\n" + "\n".join(offenders))
+    stale = sorted(set(WORLD_PATHS_ALLOWED) - set(found))
+    assert not stale, f"WORLD_PATHS_ALLOWED entries that name no such path any more; remove them: {stale}"
+
+
+def test_a_path_to_the_hardware_is_found() -> None:
+    src = ('A = ROOT / "hardware" / "cards"\nB = "calibration/hardware/nodes"\nC = Path("x") / "calibration"\n'
+           'D = {"hardware": 1, "calibration": 2}\nE = "verity/hardware.json"\n')
+    assert _world_paths(ast.parse(src)) == [1, 2, 3]
+
+
 #: The listing: the tree's directories, bottom first; the directories under ``verity/`` that are distributions of their own;
 #: the ties against the order; and the places of ``verity``'s own Python, each with the places it loads and, for the
 #: verifiers' side, what it reaches and what loads it.
