@@ -34,6 +34,8 @@ t0 = time.time()
 say = lambda *a: print(f"[{time.time() - t0:.0f} s]", *a, flush=True)  # noqa: E731
 
 serve = IO.serve_facts("unsloth/Llama-3.2-1B", "9535bd9b1d1dea6acafbdc4813b728796aeb28da")
+from verity_vllm import TargetProfile  # noqa: E402
+serve["target"] = TargetProfile.default().with_overrides(**{k: v for k, v in IO.H200.items() if k != "int8_exact"}).to_json()
 circuit = class_circuit(PP.registered_of_serve(serve, None, None, PP.CAP_BITS), IO.window_class("4,27,2"),
                         tables=PearlTables("pearl-c-h100-v1-h3"))
 say("circuit", circuit.name, "templates", len(circuit.templates), "wires", len(circuit.wires))
