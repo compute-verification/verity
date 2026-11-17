@@ -102,7 +102,7 @@ from verity.commitments.randomness import derive, frame
 
 ID = domains.POUW_PROTOCOL
 #: the Lean core protocol whose `serve` gives an execution phase's verdict of record
-EXE = "pouw-check"
+EXE = "pouw-verifier"
 ONE_STAGE = domains.ONE_STAGE_PROTOCOL
 SCHEME = "frame-v3-sha512/hm96-sha512"
 FORMATS = (domains.REGISTRATION_V1, domains.REGISTRATION)

@@ -69,7 +69,7 @@ if [ -n "${SBENCH_SHIP:-}" ]; then
   cp "$S"/ship/*.so "$S"/ && cp "$S"/ship/*.log "$S"/ship/*.txt "$OUT"/ 2>/dev/null
   while read -r name f; do export "$name=$S/$f"; done < "$S/ship/libs"
   (cd "$COINS_PKG" && mkdir -p .lake && flock .lake/build.lock tar -xf "$S/ship/lean.tar" -C "$ROOT" \
-    && lake build --no-build pouw-check-difftest) > "$OUT/lean-coins-build.log" 2>&1 \
+    && lake build --no-build pouw-verifier-difftest) > "$OUT/lean-coins-build.log" 2>&1 \
     || { echo "sbench: SHIP_STALE: lake build --no-build finds the coins' verifier unbuilt"; tail -5 "$OUT/lean-coins-build.log"
          exit 17; }
   echo "sbench: shipped ($(tail -1 "$S/key"))"
@@ -150,7 +150,7 @@ case " $* " in *" --bw-passes"*)
 esac
 fi
 if [ "${SBENCH_SHIP_OUT:-}" = 1 ]; then
-  (cd "$COINS_PKG" && mkdir -p .lake && flock .lake/build.lock lake build pouw-check-difftest) > "$OUT/lean-coins-build.log" 2>&1 \
+  (cd "$COINS_PKG" && mkdir -p .lake && flock .lake/build.lock lake build pouw-verifier-difftest) > "$OUT/lean-coins-build.log" 2>&1 \
     || { echo "sbench: LEAN_BUILD_FAIL"; tail -20 "$OUT/lean-coins-build.log"; exit 13; }
   mkdir -p "$S/ship"
   for name in $SHIP_LIBS; do [ -n "${!name:-}" ] && echo "$name $(basename "${!name}")"; done > "$S/ship/libs"
@@ -167,7 +167,7 @@ fi
 # the dither execution phases' coins are the Lean verifier's (pouw.verifier.coins): built before the lease, not inside it,
 # under a lock, since runs of one commit share its source tree and concurrent lake builds there corrupt each other's .c/.o
 command -v lake >/dev/null || export PATH="$HOME/.elan/bin:$PATH"
-(cd verity/protocols/resource_accounting/compute/pouw/verifier/lean/check && mkdir -p .lake && flock .lake/build.lock lake build pouw-check-difftest) \
+(cd verity/protocols/resource_accounting/compute/pouw/verifier/lean/check && mkdir -p .lake && flock .lake/build.lock lake build pouw-verifier-difftest) \
   > "$OUT/lean-coins-build.log" 2>&1 \
   || { echo "sbench: LEAN_BUILD_FAIL"; tail -20 "$OUT/lean-coins-build.log"; exit 13; }
 # and with --bw-passes PoUB's verifier, under the lock lean_verifier.build takes (BW_LEAN_EXE);

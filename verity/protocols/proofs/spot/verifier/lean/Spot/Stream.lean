@@ -133,7 +133,7 @@ def Covered.toJson (c : Covered) : Json :=
 /-- What the stream's rules hold of one registration. -/
 structure Entry where
   order : Nat
-  registration : String
+  docket : String
   draw : Option String := none
   proved : Nat := 0
   drawnAt : Option Json := none
@@ -189,7 +189,7 @@ def Entry.ofJson (j : Json) : V Entry := do
   if !Entry.keysOk j then
     throw "an entry is exactly {order, registration, draw, proved, drawn_at, delivered, session, final}, with interior then second under a two-stage rule"
   let some order := nat? (getD j "order") | throw "an entry's order is a natural number"
-  let some registration := str? (getD j "registration") | throw "an entry's registration is a token"
+  let some docket := str? (getD j "registration") | throw "an entry's registration is a token"
   let draw ← nullOr (getD j "draw") str? "an entry's draw is null or a token"
   let some proved := nat? (getD j "proved") | throw "an entry's proved is a count"
   let drawnAt ← nullOr (getD j "drawn_at") reading? "an entry's drawn_at is null or a reading"
@@ -201,7 +201,7 @@ def Entry.ofJson (j : Json) : V Entry := do
   let second ← nullOr (getD j "second") str? "an entry's second is its second stage's token"
   if (field? j "interior").isSome && interior.isNone || (field? j "second").isSome && second.isNone then
     throw "an entry's interior and second are tokens, written once there"
-  return { order, registration, draw, proved, drawnAt, delivered, session, final, interior, second }
+  return { order, docket, draw, proved, drawnAt, delivered, session, final, interior, second }
 
 def State.ofJson (j : Json) : V State := do
   if keys? j != some #["ended", "entries", "failures", "halted", "opened", "salted_at", "size"] then
@@ -223,7 +223,7 @@ def State.ofJson (j : Json) : V State := do
   return { size, opened, failures, saltedAt, ended, halted, entries }
 
 def Entry.toJson (e : Entry) : Json := Json.mkObj ([
-  ("order", Lean.toJson e.order), ("registration", .str e.registration), ("draw", (e.draw.map .str).getD .null),
+  ("order", Lean.toJson e.order), ("registration", .str e.docket), ("draw", (e.draw.map .str).getD .null),
   ("proved", Lean.toJson e.proved), ("drawn_at", e.drawnAt.getD .null),
   ("delivered", .bool e.delivered), ("session", (e.session.map fun cs => Json.arr (cs.map Covered.toJson)).getD .null),
   ("final", .bool e.final)] ++ (e.interior.map fun i => [("interior", Json.str i)]).getD [] ++
@@ -293,7 +293,7 @@ def entryAt (o : Option Nat) (reg : String) : M Entry := do
   let some o := o | no "unknown"
   if o ≥ (← get).size then no "unknown"
   let e ← held o
-  if e.registration != reg then no "unknown"
+  if e.docket != reg then no "unknown"
   pure e
 
 def entryOf (op : Json) : M Entry := do
@@ -333,7 +333,7 @@ def register (p : Params) (op : Json) : M Decision := do
   let reg ← token (← need op "registration") "registration"
   let s ← get
   let order := s.size
-  set { s with size := order + 1, entries := s.entries.push { order, registration := reg },
+  set { s with size := order + 1, entries := s.entries.push { order, docket := reg },
                opened := s.opened.push order }
   return .ok (Lean.toJson order)
 
