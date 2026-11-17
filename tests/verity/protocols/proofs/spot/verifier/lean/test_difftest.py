@@ -7829,9 +7829,9 @@ def test_the_run_reaches_every_step(pieces):
 def test_a_two_stage_run_reaches_every_step(pieces):
     """A two-stage run (`_two_stage_case`), Lean's the Python's whole: its first stage two of the four replay blocks and
     its second one proof block in each, its session reading the ports the links derived from `BLOCK` name (PAIR's `x`
-    and `o0`) at the boundary, with both audit records, and rejected on round 2's refusal of the two-stage form alone
-    (`two-stage-form`), which the Python allowing the form (`second_stage.FORM`) accepts, as it does the run whose
-    session also reads the interior's own `out`, each slot its own rows, which its verifier reports and its template's
+    and `o0`) at the boundary, with both audit records, and accepted, the form being allowed (`second_stage.FORM`, on in
+    the Lean and the Python); with it off in the Python it is rejected on round 2's refusal of the form alone
+    (`two-stage-form`), as is the run whose session also reads the interior's own `out`, each slot its own rows, which its verifier reports and its template's
     reference statement reads; a session reading `out` its reference doesn't is refused (`second-values`), as is one
     reading its linked `x` from the interior's own (`second-read`), a statement whose verifier checked its
     session against a public file whose header names another circuit file (`second-verified`), and an interior naming
@@ -7853,13 +7853,13 @@ def test_a_two_stage_run_reaches_every_step(pieces):
     out = run(copy.deepcopy(case))
     assert D.replay(RUN, case, pieces) == ("output", D.canonical(out))
     inner = json.loads(out["interior"]["audit"])
-    assert out["symbol"] == "reject" and out["public"] == {} and json.loads(out["audit"])["accepted"] is True, out
-    assert [k for k, c in inner["checks"].items() if not c["ok"]] == ["statements"]
-    assert inner["checks"]["statements"]["codes"] == ["two-stage-form"]
+    assert out["symbol"] == "accept" and out["public"] == {"credited": 12} and json.loads(out["audit"])["accepted"] is True, out
+    assert [k for k, c in inner["checks"].items() if not c["ok"]] == []
+    assert inner["checks"]["statements"]["codes"] == []
     assert len(out["draw"]["units"]) == 2 and sorted(u // 3 for u in out["interior"]["draw"]["units"]) == [0, 1]
-    with mock.patch.object(SS, "FORM", True):
-        allowed = run(copy.deepcopy(case))
-    assert allowed["symbol"] == "accept" and allowed["public"] == {"credited": 12}, allowed
+    with mock.patch.object(SS, "FORM", False):
+        refused = run(copy.deepcopy(case))
+    assert refused["symbol"] == "reject" and refused["public"] == {}, refused
     def reads(referred=True, **ports):
         def change(c, x):
             it = c["interior"]
@@ -7881,15 +7881,14 @@ def test_a_two_stage_run_reaches_every_step(pieces):
     elsewhere = _verdict_change(lambda v, c, x: {**v, **_checked_names(
         {**s0, "header": {**s0["header"], "circuit_sha512": "ab" * 64}})})(case, 0)
     evens = [2 * u for u in range(6)]
-    for changed, codes in ((reported("out")(reads(out=evens)(case, 0), 0), ["two-stage-form"]),
+    for changed, codes in ((reported("out")(reads(out=evens)(case, 0), 0), []),
                            (reported("out")(reads(False, out=evens)(case, 0), 0), ["second-values"]),
                            (reported("x")(reads(x=list(range(6)))(case, 0), 0), ["second-read"]),
                            (elsewhere, ["second-verified"])):
         out = run(copy.deepcopy(changed))
         assert D.replay(RUN, changed, pieces) == ("output", D.canonical(out))
         assert json.loads(out["interior"]["audit"])["checks"]["statements"]["codes"] == codes, out
-        with mock.patch.object(SS, "FORM", True):
-            assert (run(copy.deepcopy(changed))["symbol"] == "accept") == (codes == ["two-stage-form"])
+        assert (out["symbol"] == "accept") == (codes == [])
     named = _inner(lambda it, x: {**it, "links": [{"template": INTERIOR.templates[0], "port": "x", "value": BX}]})(
         case, 0)
     assert D.replay(RUN, named, pieces)[0] == "reject"
@@ -7945,8 +7944,8 @@ def test_round_two_holds_each_session_to_its_part(pieces):
     """Round 2's statement check, Lean's the Python's whole, over the two-template interior (`SECOND_MIXED`, its ports
     named by template) after a replay sample of two: the honest statements pass, one for each part, by position in the
     parts' order (else `second-order`), with a part's `x` read from the boundary where the design links it, each slot
-    at its unit's row of its cell's replay block, or read from its own `x` at its own rows, and fail only on the form
-    while it is refused (`two-stage-form`); every part needs a statement, the second stage sampling in it or not
+    at its unit's row of its cell's replay block, or read from its own `x` at its own rows, and pass, the form being
+    allowed (and fail only on the form where it is not, `two-stage-form`); every part needs a statement, the second stage sampling in it or not
     (`second-cover`); a read of the boundary at another cell's replay block, of a tree of more than `2^64` leaves, of
     its own `x` at another slot's rows, of a boundary port the design doesn't link, or of a linked port anywhere but
     the boundary port its link names (or the interior's value of its name, where the interior registers one), or a
