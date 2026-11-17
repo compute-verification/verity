@@ -34,9 +34,9 @@ not the deployed P2 this lemma reads; nothing here states the step from one to t
 
 @[expose] public section
 
-namespace PousCheck.Properties.InProofs
+namespace PousVerifier.Properties.InProofs
 
-open PousCheck.Properties Verity.InProofs Verity.Game
+open PousVerifier.Properties Verity.InProofs Verity.Game
 open scoped ENNReal
 
 /-- Block `u`'s slice of `W`: its `payloadBytes` bytes at offset `u · payloadBytes`, as `Decodes` reads it. -/
@@ -80,13 +80,13 @@ def SetupGives : Prop :=
 an empty block at each proof block and hashes nothing leaves every block wrong, more than `⌊B/100⌋`, so the event has
 probability `1` and the bound fails at `ε = 0`. -/
 def SetupGivesNontrivial : Prop :=
-  ∃ (salt W : ByteArray) (v : Fin PousCheck.P2.Params.deployed.blocks → ByteArray × ByteArray),
+  ∃ (salt W : ByteArray) (v : Fin PousVerifier.P2.Params.deployed.blocks → ByteArray × ByteArray),
     ¬ prPMF (PMF.pure ()) (fun ω => (MemoryAttester.Properties.InProofs.constRun v).accepts ω ∧
-        PousCheck.P2.Params.deployed.blocks / 100 + 1 ≤
-          (incorrect PousCheck.P2.Params.deployed salt W (MemoryAttester.Properties.InProofs.constRun v) ω).card ∧
+        PousVerifier.P2.Params.deployed.blocks / 100 + 1 ≤
+          (incorrect PousVerifier.P2.Params.deployed salt W (MemoryAttester.Properties.InProofs.constRun v) ω).card ∧
         ¬ Hash.CollisionIn Verity.sha512 ((MemoryAttester.Properties.InProofs.constRun v).hashInputs ω)) ≤ 0
 
-end PousCheck.Properties.InProofs
+end PousVerifier.Properties.InProofs
 
 /-!
 ## Proof
@@ -95,9 +95,9 @@ to their slice are exactly the proof blocks whose values fail `BlockOk`, so the 
 `right` gives it at `BlockOk` (`Gives.mono`).
 -/
 
-namespace PousCheck.Properties.InProofs.SecurityProofs
+namespace PousVerifier.Properties.InProofs.SecurityProofs
 
-open PousCheck.Properties.InProofs
+open PousVerifier.Properties.InProofs
 open Verity.InProofs Properties.ResourceAccounting.InProofs Verity.Game
 
 theorem setupGives : SetupGives := by
@@ -115,14 +115,14 @@ theorem setupGives : SetupGives := by
 
 theorem setupGives_nontrivial : SetupGivesNontrivial := by
   refine ⟨.empty, .empty, fun _ => (.empty, .empty), fun h => ?_⟩
-  have hw : incorrect PousCheck.P2.Params.deployed .empty .empty
+  have hw : incorrect PousVerifier.P2.Params.deployed .empty .empty
       (MemoryAttester.Properties.InProofs.constRun fun _ => (.empty, .empty)) () = Finset.univ := by
     ext u
-    simp [incorrect, BlockOk, BlockDecodes, MemoryAttester.Properties.InProofs.constRun, PousCheck.P2.Params.blockBytes,
-      PousCheck.P2.Params.deployed, PousCheck.W_BITS]
-  have hpos : 0 < PousCheck.P2.Params.deployed.blocks := by
-    simp [PousCheck.P2.Params.blocks, PousCheck.P2.Params.deployed]
-  have hc : PousCheck.P2.Params.deployed.blocks / 100 + 1 ≤ (incorrect PousCheck.P2.Params.deployed .empty .empty
+    simp [incorrect, BlockOk, BlockDecodes, MemoryAttester.Properties.InProofs.constRun, PousVerifier.P2.Params.blockBytes,
+      PousVerifier.P2.Params.deployed, PousVerifier.W_BITS]
+  have hpos : 0 < PousVerifier.P2.Params.deployed.blocks := by
+    simp [PousVerifier.P2.Params.blocks, PousVerifier.P2.Params.deployed]
+  have hc : PousVerifier.P2.Params.deployed.blocks / 100 + 1 ≤ (incorrect PousVerifier.P2.Params.deployed .empty .empty
       (MemoryAttester.Properties.InProofs.constRun fun _ => (.empty, .empty)) ()).card := by
     rw [hw, Finset.card_univ, Fintype.card_fin]
     exact Nat.div_lt_self hpos (by norm_num)
@@ -132,4 +132,4 @@ theorem setupGives_nontrivial : SetupGivesNontrivial := by
   · exact absurd h (by simp)
   · exact hE ⟨trivial, hc, hn⟩
 
-end PousCheck.Properties.InProofs.SecurityProofs
+end PousVerifier.Properties.InProofs.SecurityProofs

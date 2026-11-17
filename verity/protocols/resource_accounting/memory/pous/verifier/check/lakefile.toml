@@ -3,8 +3,8 @@
 # writes. It imports Lean core, Flock's executable primitives, the core protocol interface, the core primitives (the
 # identity hash, randomness's derivation and exact samplers) and the memory challenger's verdict only. Its properties are stated in
 # `security/Properties/Pous.lean`; it moves into `verity/protocols/resource_accounting/memory/pous` once they are proved.
-name = "pous_check"
-defaultTargets = ["PousCheck", "pous-setup", "pous-setup-difftest", "pous-audit-difftest", "pous-timed-audit", "pous-run",
+name = "pous_verifier"
+defaultTargets = ["PousVerifier", "pous-setup", "pous-setup-difftest", "pous-audit-difftest", "pous-timed-audit", "pous-run",
   "pous-run-protocol", "pous-signed-run", "pous-verdict-difftest"]
 
 [leanOptions]
@@ -37,36 +37,36 @@ name = "core_memory_attester"
 path = "../../attester/lean"
 
 [[lean_lib]]
-name = "PousCheck"
+name = "PousVerifier"
 
 [[lean_exe]]
 name = "pous-setup"
-root = "PousCheck.SetupProtocolMain"
+root = "PousVerifier.SetupProtocolMain"
 
 [[lean_exe]]
 name = "pous-setup-difftest"
-root = "PousCheck.SetupDifftestMain"
+root = "PousVerifier.SetupDifftestMain"
 
 [[lean_exe]]
 name = "pous-audit-difftest"
-root = "PousCheck.DifftestMain"
+root = "PousVerifier.DifftestMain"
 
 [[lean_exe]]
 name = "pous-timed-audit"
-root = "PousCheck.TimedAuditMain"
+root = "PousVerifier.TimedAuditMain"
 
 [[lean_exe]]
 name = "pous-run"
-root = "PousCheck.RunMain"
+root = "PousVerifier.RunMain"
 
 [[lean_exe]]
 name = "pous-run-protocol"
-root = "PousCheck.RunProtocolMain"
+root = "PousVerifier.RunProtocolMain"
 
 [[lean_exe]]
 name = "pous-signed-run"
-root = "PousCheck.SignedRunMain"
+root = "PousVerifier.SignedRunMain"
 
 [[lean_exe]]
 name = "pous-verdict-difftest"
-root = "PousCheck.VerdictDifftestMain"
+root = "PousVerifier.VerdictDifftestMain"

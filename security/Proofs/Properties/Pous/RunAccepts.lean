@@ -29,7 +29,7 @@ local instance instLawfulBEqByteArray_honest : LawfulBEq ByteArray where
   eq_of_beq h := ByteArray.ext (beq_iff_eq.1 h)
   rfl {a} := show (a.data == a.data) = true from beq_iff_eq.2 rfl
 
-theorem zeros_size (n : Nat) : (PousCheck.Prim.zeros n).size = n :=
+theorem zeros_size (n : Nat) : (PousVerifier.Prim.zeros n).size = n :=
   Array.size_replicate
 
 theorem node_size (d : Flock.FV3.Sha512.Domain) (lv i : Nat) (a b : ByteArray) : (d.node lv i a b).size = 64 :=
@@ -103,11 +103,11 @@ theorem log2ceil_105 : Flock.log2ceil 105 = 7 := by
 
 /-! ## The coins -/
 
-def honestSid : ByteArray := PousCheck.Prim.zeros 32
-def honestCoinKey : ByteArray := PousCheck.Prim.zeros 256
-def honestSalt : ByteArray := PousCheck.Prim.zeros 192
+def honestSid : ByteArray := PousVerifier.Prim.zeros 32
+def honestCoinKey : ByteArray := PousVerifier.Prim.zeros 256
+def honestSalt : ByteArray := PousVerifier.Prim.zeros 192
 
-theorem zeros_get! {n i : Nat} (h : i < n) : (PousCheck.Prim.zeros n).get! i = 0 := by
+theorem zeros_get! {n i : Nat} (h : i < n) : (PousVerifier.Prim.zeros n).get! i = 0 := by
   show (Array.replicate n (0 : UInt8))[i]! = 0
   rw [getElem!_pos _ i (by simpa using h)]
   simp
@@ -189,37 +189,37 @@ theorem findRev_honest {j : Nat} (hj : j < 105) :
 
 /-- Every block's digest zero. -/
 def honestDigests : ByteArray :=
-  PousCheck.Prim.zeros (PousCheck.P2.Params.deployed.blocks * PousCheck.Merkle.DIGEST)
+  PousVerifier.Prim.zeros (PousVerifier.P2.Params.deployed.blocks * PousVerifier.Merkle.DIGEST)
 
 def honestLeaves : Array ByteArray :=
-  PousCheck.Run.rowLeaves PousCheck.P2.Params.deployed (PousCheck.Prim.zeros 24) honestDigests
+  PousVerifier.Run.rowLeaves PousVerifier.P2.Params.deployed (PousVerifier.Prim.zeros 24) honestDigests
 
-def honestPub : PousCheck.SetupProtocol.Public :=
-  ⟨PousCheck.P2.Params.deployed.blocks, PousCheck.Prim.zeros 64,
-    PousCheck.Merkle.mth honestLeaves 0 honestLeaves.size, PousCheck.Prim.zeros 24⟩
+def honestPub : PousVerifier.SetupProtocol.Public :=
+  ⟨PousVerifier.P2.Params.deployed.blocks, PousVerifier.Prim.zeros 64,
+    PousVerifier.Merkle.mth honestLeaves 0 honestLeaves.size, PousVerifier.Prim.zeros 24⟩
 
-theorem blocks_pos : 0 < PousCheck.P2.Params.deployed.blocks := by decide
+theorem blocks_pos : 0 < PousVerifier.P2.Params.deployed.blocks := by decide
 
-theorem root_honest : (PousCheck.Merkle.root honestLeaves == some honestPub.root) = true := by
+theorem root_honest : (PousVerifier.Merkle.root honestLeaves == some honestPub.root) = true := by
   have hne : honestLeaves.isEmpty = false := by
     rw [Bool.eq_false_iff]
     intro h
     rw [Array.isEmpty_iff_size_eq_zero] at h
-    simp [honestLeaves, PousCheck.Run.rowLeaves] at h
+    simp [honestLeaves, PousVerifier.Run.rowLeaves] at h
     exact absurd h (by decide)
-  unfold PousCheck.Merkle.root
+  unfold PousVerifier.Merkle.root
   simp only [hne, Bool.false_eq_true, ↓reduceIte]
   exact beq_self_eq_true _
 
 /-- Round `j`: coin `j` opened block 0, sent and received at 0 ns, with row 0 of the table `digests`. -/
-def honestRound (digests : ByteArray) (j : Nat) : Round := ⟨j, 0, 0, 0, PousCheck.Run.row digests 0⟩
+def honestRound (digests : ByteArray) (j : Nat) : Round := ⟨j, 0, 0, 0, PousVerifier.Run.row digests 0⟩
 
 def honestRounds (digests : ByteArray) : Array Round := (Array.range 105).map (honestRound digests)
 
 /-- The session's commitment, bound to the setup's root `root`. -/
 def honestCommitment (root : ByteArray) : ChallengePhaseCommitment :=
-  ⟨honestSid, honestCoinRoot, honestCoinKey, PousCheck.P2.Params.deployed.blocks, 105,
-    PousCheck.Run.DEPLOYED.limitNs, PousCheck.P2.Params.deployed.blockBytes, root⟩
+  ⟨honestSid, honestCoinRoot, honestCoinKey, PousVerifier.P2.Params.deployed.blocks, 105,
+    PousVerifier.Run.DEPLOYED.limitNs, PousVerifier.P2.Params.deployed.blockBytes, root⟩
 
 theorem verifyCoin_honest (root : ByteArray) {j : Nat} (hj : j < 105) :
     verifyCoin (honestCommitment root) (honestOpening j) = true := by
@@ -234,7 +234,7 @@ theorem rounds_honest (root digests : ByteArray) : ∀ j (hj : j < (honestRounds
     (∃ o, honestOpenings.findRev? (·.j == j) = some o ∧ (honestRounds digests)[j].j = j ∧
       o.index = (honestRounds digests)[j].index ∧ verifyCoin (honestCommitment root) o = true) ∧
     (honestRounds digests)[j].index < (honestCommitment root).blocks ∧
-    PousCheck.Run.expected PousCheck.P2.Params.deployed digests (honestRounds digests)[j].index =
+    PousVerifier.Run.expected PousVerifier.P2.Params.deployed digests (honestRounds digests)[j].index =
       some (honestRounds digests)[j].digest ∧
     0 ≤ (honestRounds digests)[j].elapsedNs ∧ (honestRounds digests)[j].elapsedNs ≤ (honestCommitment root).limitNs := by
   intro j hj
@@ -243,7 +243,7 @@ theorem rounds_honest (root digests : ByteArray) : ∀ j (hj : j < (honestRounds
   simp only [hr]
   exact ⟨⟨honestOpening j, findRev_honest hj', rfl, rfl, verifyCoin_honest root hj'⟩,
     by simp [honestRound, honestCommitment, blocks_pos],
-    by simp [PousCheck.Run.expected, honestRound, blocks_pos],
+    by simp [PousVerifier.Run.expected, honestRound, blocks_pos],
     by simp [Round.elapsedNs, honestRound],
     by simp [Round.elapsedNs, honestRound, honestCommitment]⟩
 
@@ -257,17 +257,17 @@ theorem mapM_ok {α β ε : Type} (f : α → Except ε β) :
 
 /-- A table of the deployed parameters' `blocks` rows has its row 0 whole. -/
 theorem size_le_of_table {digests : ByteArray}
-    (hd : digests.size = PousCheck.P2.Params.deployed.blocks * PousCheck.Merkle.DIGEST) : 64 ≤ digests.size := by
+    (hd : digests.size = PousVerifier.P2.Params.deployed.blocks * PousVerifier.Merkle.DIGEST) : 64 ≤ digests.size := by
   rw [hd]
   first
     | decide
-    | simp [PousCheck.P2.Params.deployed, PousCheck.Merkle.DIGEST]
+    | simp [PousVerifier.P2.Params.deployed, PousVerifier.Merkle.DIGEST]
 
 /-- The honest rounds' message exists when `digests` holds row 0 whole: `Round.value` takes only a 64-byte digest. -/
 theorem message_honest (root digests : ByteArray) (hd : 64 ≤ digests.size) :
     ∃ m, message (honestCommitment root) COMPLETE (honestRounds digests) = .ok m := by
-  have h64 : (PousCheck.Run.row digests 0).size = 64 := by
-    simp only [PousCheck.Run.row, ByteArray.size_extract, PousCheck.Merkle.DIGEST]
+  have h64 : (PousVerifier.Run.row digests 0).size = 64 := by
+    simp only [PousVerifier.Run.row, ByteArray.size_extract, PousVerifier.Merkle.DIGEST]
     omega
   obtain ⟨vs, hvs⟩ : ∃ vs, (honestRounds digests).mapM Round.value = .ok vs := by
     rw [Array.mapM_eq_mapM_toList]
@@ -285,40 +285,40 @@ theorem message_honest (root digests : ByteArray) (hd : 64 ≤ digests.size) :
 /-! ## The composed check -/
 
 /-- `Run.checkAt` accepts a run that passes each of its checks. -/
-theorem checkAt_of {schemes : Schemes} {pt : PousCheck.Run.Point} {trusted : List ByteArray}
-    {pub : PousCheck.SetupProtocol.Public} {digests : ByteArray} {r : PousCheck.Run.ChallengePhaseRecord}
+theorem checkAt_of {schemes : Schemes} {pt : PousVerifier.Run.Point} {trusted : List ByteArray}
+    {pub : PousVerifier.SetupProtocol.Public} {digests : ByteArray} {r : PousVerifier.Run.ChallengePhaseRecord}
     {sid : ByteArray} (h1 : (pub.blocks == pt.params.blocks) = true)
-    (h2 : (pub.salt.size == PousCheck.Run.SALT) = true)
-    (h3 : (digests.size == pt.params.blocks * PousCheck.Merkle.DIGEST) = true)
-    (h4 : (PousCheck.Merkle.root (PousCheck.Run.rowLeaves pt.params pub.salt digests) == some pub.root) = true)
+    (h2 : (pub.salt.size == PousVerifier.Run.SALT) = true)
+    (h3 : (digests.size == pt.params.blocks * PousVerifier.Merkle.DIGEST) = true)
+    (h4 : (PousVerifier.Merkle.root (PousVerifier.Run.rowLeaves pt.params pub.salt digests) == some pub.root) = true)
     (h5 : (r.commitment.blocks == pt.params.blocks) = true) (h6 : (r.commitment.k == pt.k) = true)
     (h7 : decide (r.commitment.limitNs ≤ pt.limitNs) = true)
     (h8 : (r.commitment.blockBytes == pt.params.blockBytes) = true) (h9 : (r.commitment.binding == pub.root) = true)
     (h10 : (r.commitment.session == sid) = true)
-    (h11 : (verdict schemes trusted (PousCheck.Run.expected pt.params digests) r.signed r.commitment
+    (h11 : (verdict schemes trusted (PousVerifier.Run.expected pt.params digests) r.signed r.commitment
       r.openings).accepted = true) :
-    PousCheck.Run.checkAt schemes pt trusted pub digests r sid = .ok () := by
-  unfold PousCheck.Run.checkAt
-  simp only [h1, h2, h3, h4, h5, h6, h7, h8, h9, h10, h11, PousCheck.Run.need, ↓reduceIte, bind, Except.bind, pure,
+    PousVerifier.Run.checkAt schemes pt trusted pub digests r sid = .ok () := by
+  unfold PousVerifier.Run.checkAt
+  simp only [h1, h2, h3, h4, h5, h6, h7, h8, h9, h10, h11, PousVerifier.Run.need, ↓reduceIte, bind, Except.bind, pure,
     Except.pure]
 
 /-- **The composed check accepts a run on any published setup** `pub` whose salt, size and root agree with the table
 `digests` (the setup-side checks of `Run.checkAt`), at P2's deployed point under S1's LMS: a complete session of 105
 rounds at block 0 with `digests`' row 0, each coin opened in its tree, bound to `pub.root` and signed at leaf 0 of a
 key `Lms.key` derives at `Lms.deployed`, which is the verifier's one trusted key. -/
-theorem runCheck_acceptsSid (pub : PousCheck.SetupProtocol.Public) (digests : ByteArray)
-    (hb : pub.blocks = PousCheck.P2.Params.deployed.blocks) (hs : pub.salt.size = PousCheck.Run.SALT)
-    (hd : digests.size = PousCheck.P2.Params.deployed.blocks * PousCheck.Merkle.DIGEST)
-    (hr : (PousCheck.Merkle.root (PousCheck.Run.rowLeaves PousCheck.P2.Params.deployed pub.salt digests) ==
+theorem runCheck_acceptsSid (pub : PousVerifier.SetupProtocol.Public) (digests : ByteArray)
+    (hb : pub.blocks = PousVerifier.P2.Params.deployed.blocks) (hs : pub.salt.size = PousVerifier.Run.SALT)
+    (hd : digests.size = PousVerifier.P2.Params.deployed.blocks * PousVerifier.Merkle.DIGEST)
+    (hr : (PousVerifier.Merkle.root (PousVerifier.Run.rowLeaves PousVerifier.P2.Params.deployed pub.salt digests) ==
       some pub.root) = true) :
-    ∃ (key : ByteArray) (r : PousCheck.Run.ChallengePhaseRecord),
-      PousCheck.Run.check [key] pub digests r honestSid = .ok () := by
-  obtain ⟨k, hk⟩ := Properties.CertifierDevice.Proofs.Lms.key_ok Lms.deployed (I := PousCheck.Prim.zeros 16) rfl
-    (PousCheck.Prim.zeros 64)
+    ∃ (key : ByteArray) (r : PousVerifier.Run.ChallengePhaseRecord),
+      PousVerifier.Run.check [key] pub digests r honestSid = .ok () := by
+  obtain ⟨k, hk⟩ := Properties.CertifierDevice.Proofs.Lms.key_ok Lms.deployed (I := PousVerifier.Prim.zeros 16) rfl
+    (PousVerifier.Prim.zeros 64)
   obtain ⟨hIs, hps, hpI⟩ := pub_spec hk
   obtain ⟨m, hm⟩ := message_honest pub.root digests (size_le_of_table hd)
   obtain ⟨σ, hσs, hσv⟩ := signs hk
-    (Flock.Sha512.hash (field MEMORY_CHALLENGER_TAG.toUTF8 ++ PousCheck.Prim.zeros 16 ++ field (field honestSid) ++
+    (Flock.Sha512.hash (field MEMORY_CHALLENGER_TAG.toUTF8 ++ PousVerifier.Prim.zeros 16 ++ field (field honestSid) ++
       field m))
   have hdec := (Properties.CertifierDevice.Proofs.Lms.lmsCorrect 64 1 20 false Lms.deployed _ _ k 0 _ σ rfl hk hσs).2
   have hv : lmsVerify Lms.deployed k.publicKey honestSid m σ.encode = .ok true := by
@@ -328,28 +328,28 @@ theorem runCheck_acceptsSid (pub : PousCheck.SetupProtocol.Public) (digests : By
   refine ⟨k.publicKey,
     ⟨⟨honestCommitment pub.root, COMPLETE, honestRounds digests, LMS, k.publicKey, σ.encode⟩,
       honestCommitment pub.root, honestOpenings⟩, ?_⟩
-  unfold PousCheck.Run.check
+  unfold PousVerifier.Run.check
   refine checkAt_of (by rw [hb]; exact beq_self_eq_true _) (by simp [hs])
-    (by simp [hd, PousCheck.Run.DEPLOYED]) hr (beq_self_eq_true _) (beq_self_eq_true _)
+    (by simp [hd, PousVerifier.Run.DEPLOYED]) hr (beq_self_eq_true _) (beq_self_eq_true _)
     (by simp [honestCommitment]) (beq_self_eq_true _) (beq_self_eq_true _) (beq_self_eq_true _) ?_
   exact verdict_accepted_of (p := Lms.deployed) (m := m) (by simp [SCHEMES]) (by simp) hm hv
     (commitment_beq_self _) rfl (by simp [honestRounds, honestCommitment]) (rounds_honest pub.root digests)
 
 /-- `runCheck_acceptsSid`, its trusted list, record and session id unnamed. -/
-theorem runCheck_acceptsAt (pub : PousCheck.SetupProtocol.Public) (digests : ByteArray)
-    (hb : pub.blocks = PousCheck.P2.Params.deployed.blocks) (hs : pub.salt.size = PousCheck.Run.SALT)
-    (hd : digests.size = PousCheck.P2.Params.deployed.blocks * PousCheck.Merkle.DIGEST)
-    (hr : (PousCheck.Merkle.root (PousCheck.Run.rowLeaves PousCheck.P2.Params.deployed pub.salt digests) ==
+theorem runCheck_acceptsAt (pub : PousVerifier.SetupProtocol.Public) (digests : ByteArray)
+    (hb : pub.blocks = PousVerifier.P2.Params.deployed.blocks) (hs : pub.salt.size = PousVerifier.Run.SALT)
+    (hd : digests.size = PousVerifier.P2.Params.deployed.blocks * PousVerifier.Merkle.DIGEST)
+    (hr : (PousVerifier.Merkle.root (PousVerifier.Run.rowLeaves PousVerifier.P2.Params.deployed pub.salt digests) ==
       some pub.root) = true) :
-    ∃ (trusted : List ByteArray) (r : PousCheck.Run.ChallengePhaseRecord) (sid : ByteArray),
-      PousCheck.Run.check trusted pub digests r sid = .ok () := by
+    ∃ (trusted : List ByteArray) (r : PousVerifier.Run.ChallengePhaseRecord) (sid : ByteArray),
+      PousVerifier.Run.check trusted pub digests r sid = .ok () := by
   obtain ⟨key, r, h⟩ := runCheck_acceptsSid pub digests hb hs hd hr
   exact ⟨[key], r, honestSid, h⟩
 
 /-- **The composed check accepts a run**, on the table of zero digests and the setup whose root is its leaves'
 (`runCheck_acceptsAt`). -/
-theorem runCheck_accepts : ∃ (trusted : List ByteArray) (pub : PousCheck.SetupProtocol.Public) (digests : ByteArray)
-    (r : PousCheck.Run.ChallengePhaseRecord) (sid : ByteArray), PousCheck.Run.check trusted pub digests r sid = .ok () := by
+theorem runCheck_accepts : ∃ (trusted : List ByteArray) (pub : PousVerifier.SetupProtocol.Public) (digests : ByteArray)
+    (r : PousVerifier.Run.ChallengePhaseRecord) (sid : ByteArray), PousVerifier.Run.check trusted pub digests r sid = .ok () := by
   obtain ⟨tr, r, sid, h⟩ := runCheck_acceptsAt honestPub honestDigests rfl (zeros_size _) (zeros_size _) root_honest
   exact ⟨tr, honestPub, honestDigests, r, sid, h⟩
 

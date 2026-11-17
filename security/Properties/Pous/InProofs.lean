@@ -2,7 +2,7 @@ module
 
 public import MemoryAttester.Verdict
 public import Properties.Pous
-public import PousCheck.SetupInProofs
+public import PousVerifier.SetupInProofs
 public import Definitions.Core.Interaction
 public import Definitions.Core.Boolean
 
@@ -69,9 +69,9 @@ def RunInProofsDeployed (H : Claims.Msg → Claims.Msg) (UnitOutcome : Type)
 
 end MemoryAttester.Properties.SessionDeployed
 
-namespace PousCheck.Properties.SetupDeployed
+namespace PousVerifier.Properties.SetupDeployed
 
-open PousCheck PousCheck.Properties
+open PousVerifier PousVerifier.Properties
 
 open Classical in
 /-- **The blocks of `C*` that do not decode** to their slice of `W` (its `payloadBytes` bytes at `u · payloadBytes`)
@@ -109,16 +109,16 @@ their slice of `W`, except `εPa + εKs + εBind` and `Claims.KS`'s collision te
 def SetupInProofsDeployed (H : Claims.Msg → Claims.Msg) (εPa εKs εBind γ : ℝ) : Prop :=
   ∀ (q : P2.Params) (c : SetupProtocol.Commitment) (W : ByteArray)
     {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (V : Claims.Verifier Coin)
-    (claimOf : List Claims.Msg → Option _root_.PousCheck.SetupInProofs.Claim)
+    (claimOf : List Claims.Msg → Option _root_.PousVerifier.SetupInProofs.Claim)
     (read : Option ((C : Verity.Boolean.Circuit) × (String → List (Fin C.N)) × List (Fin C.N)))
     (supplied : Nat → String → List Bool) (decode : (String → List Bool) → ByteArray × ByteArray),
     (∀ (x : Claims.Msg) (Ω : Type) (P : Claims.Prover Ω) (ω : Ω) (r : Fin (V.k x) → Coin),
       (Claims.run H P V x ω r).out = .acc →
         ∃ cl pub, claimOf ((Claims.run H P V x ω r).msgs.map Prod.fst) = some cl ∧
-          _root_.PousCheck.SetupInProofs.check q c cl = .accept pub ()) →
+          _root_.PousVerifier.SetupInProofs.check q c cl = .accept pub ()) →
     SetupComputesBlockOk q c.salt read supplied decode →
     ∃ E : Claims.Extractor Coin (Fin q.blocks → ByteArray) V,
       Claims.KS H V (fun _ cs => (undecoded q c.salt W cs).card ≤ q.blocks / 100) E (fun _ => εPa + εKs + εBind)
         fun _ => γ
 
-end PousCheck.Properties.SetupDeployed
+end PousVerifier.Properties.SetupDeployed

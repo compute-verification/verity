@@ -205,7 +205,7 @@ def Subprotocol.protocolAt : Subprotocol → Verity.Registration.Composite → B
     if PouwVerifier.PearlPlus.Protocol.protocolId ∈ k then PouwVerifier.PearlPlus.Protocol.protocol
     else PouwVerifier.Period.protocol
   | .inferenceOnly, k => if rowsId ∈ k then rowsCheck else InferenceOnlyVerifier.Protocol.protocol
-  | .pous, _ => PousCheck.RunProtocol.protocol
+  | .pous, _ => PousVerifier.RunProtocol.protocol
   | .poub, _ => Poub.P2Protocol.protocol
   | .network, _ => NetworkVerifier.Period.protocol
   | .wipe, _ => MemoryAttester.WipeProtocol.protocol
