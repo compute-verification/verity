@@ -19,7 +19,7 @@ refactor item that changes it, and what has landed since.
 | Bandwidth (over PoUS's store) | all | none with a session layer | item 11 |
 | PoUB (over a node's registered store) | all | none with a session layer | item 11 |
 | Network attester | all | none: `SampledAuditAccepted` is proved and listed in the lock, but it takes `Claims.SamplingGeneric.Compiled.KS` as a hypothesis, and only the compiler at Flock (`Claims.SamplingGeneric.flockKS`), not a lock guarantee, gives it | item 10: proved on main and listed in the lock. The leak step is proved and listed on main, at the registered inputs: c = #(`freeInputs` \ `reg`). That the trace's values at `reg` are the registration's is not proved on main |
-| Inference-only policy | all | none with a session layer; it rests on the assumption `PouwSound`, which no PoUW guarantee instantiates | item 11's inference-only part: `PouwSound` replaced by item 9's e2e, after item 9 |
+| Inference-only policy | all | none with a session layer | item 11's inference-only part |
 | Remote (composite: SPOT, PoUW and the inference-only policy) | `--zk` | none: its composed theorem, `Verity.remote_soundness_of_subprotocols`, takes its three subprotocols' targets as open premises; its SPOT half reads one-stage v2, whose acceptance no Lean statement yet carries to `SampledKSLiveV3`'s event, and its PoUW half is broken at the proof layer (above) | the three targets proved at remote (owner soundness) |
 | Accounting (top layer) | — | Already modular: the pattern every lower layer should copy | — |
 
