@@ -140,9 +140,15 @@ def test_a_failed_stop_of_pearl_plus_gate_fails_the_challenger_and_the_run(stand
     assert Host.made[0].stopped
 
 
-def test_spots_piece_hands_the_runner_the_loopback_host_in_a_development_run_and_a_gate_before_it():
+def test_spots_piece_hands_the_runner_the_loopback_host_a_development_run_under_the_placement_hold_and_a_gate_first(
+        monkeypatch):
     cfg, piece = R.load(CONFIG, REG), T.PARTIES["sampled-proofs"][T.WORKERS]
     loop = {"loopback": ADDRESS, "main-file": "/s/public/challenger/main.txt"}
+    monkeypatch.delenv("VERITY_HOLD_PLACEMENT", raising=False)
+    assert piece.variables(cfg, {"challenger": {"sampled-proofs": loop}}) == {
+        "PP_CHALLENGER": f"loopback:{ADDRESS}", "MAIN_FILE": "/s/public/challenger/main.txt"}
+    assert piece.variables(cfg, {}) == {}
+    monkeypatch.setenv("VERITY_HOLD_PLACEMENT", "1")
     assert piece.variables(cfg, {"challenger": {"sampled-proofs": loop}}) == {
         "PP_CHALLENGER": f"loopback:{ADDRESS}", "MAIN_FILE": "/s/public/challenger/main.txt", "DEVELOPMENT": "1"}
     gated = piece.variables(cfg, {"challenger": {"sampled-proofs": {**loop, "gate": "user@gate-1"}}})
