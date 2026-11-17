@@ -107,7 +107,10 @@ card's share at its own sheet has no target; the goal's 0.14 at an error of at m
 
 **Where the result goes:** the text and one line of JSON on stdout. With `OUT=DIR`, the JSON goes to `DIR/memory.json`
 and the benchmark result to `DIR/result.json`, its metric `memory-accounting/one-machine-read-rate-uncertified` (`metrics.toml`)
-beside the bytes and the error. The session's records (the verifier's `verifier.json`, every process's log) go to a new
+beside the bytes and the error, and two metrics of their own from the session's calibration as the prover reports it:
+`memory-accounting/one-card-pass-time`, the median pass in ms, and `memory-accounting/one-card-bare-read-rate`, the
+bare read of the card's memory in TB a second, each point's `member` its model and card (`llama-3.2-1b-h200`).
+The session's records (the verifier's `verifier.json`, every process's log) go to a new
 directory under `LOCAL_WORK/runs/`, which stderr names; `verity bench memory --from DIR` reads it again with nothing of
 ours. The two reference numbers printed beside a node's number are runs in our evidence store, so `--local` prints
 them as not read, with that reason.
