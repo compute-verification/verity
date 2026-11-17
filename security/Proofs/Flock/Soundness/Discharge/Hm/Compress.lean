@@ -1,7 +1,3 @@
-/-
-What the compression gadget's rows force (`Flock.HmNets.compress`): Σ and σ, the schedule, one round, the rounds by induction,
-and the feed-forward, each against `Spec`. No `decide` on any of it.
--/
 module
 
 public import Proofs.Flock.Soundness.Discharge.Hm.Word
@@ -29,7 +25,7 @@ namespace FlockSoundness.Discharge.Hm
 
 open Flock.HmNets hiding and
 
-/-! ## Σ and σ -/
+/-! What the compression gadget's rows force (`Flock.HmNets.compress`), each against `Spec`, with no `decide`. -/
 
 theorem length_rot64 {w : Word} (h : w.length = 64) {n : ℕ} (hn : n ≤ 64) : (rot w n).length = 64 := by
   rw [length_rot w n (by omega), h]
@@ -69,9 +65,6 @@ theorem bv_ssig1W (z : Var → Bool) {a : Word} (h : a.length = 64) : bv z (ssig
   rw [ssig1W, bv_xor3 z (length_rot64 h (by norm_num)) (length_rot64 h (by norm_num)) (length_shr64 h (by norm_num)),
     bv_rot z h (by norm_num), bv_rot z h (by norm_num), bv_shr z h (by norm_num), ssig1]
 
-/-! ## The schedule -/
-
-/-- Every word of the list has 64 bits. -/
 def Words64 (w : List Word) : Prop := ∀ x ∈ w, x.length = 64
 
 theorem bv_nil (z : Var → Bool) : bv z [] = 0 := rfl
@@ -114,9 +107,6 @@ theorem sound_schedule : ∀ (n : ℕ) (w : List Word), Sound (schedule n w) fun
       obtain ⟨i1, i2, i3⟩ := ih h1 (by omega)
       exact ⟨i1, by omega, by rw [i3, h3]; rfl⟩
 
-/-! ## One round -/
-
-/-- All eight registers have 64 bits. -/
 def Len64 (r : Regs Word) : Prop :=
   r.a.length = 64 ∧ r.b.length = 64 ∧ r.c.length = 64 ∧ r.d.length = 64 ∧ r.e.length = 64 ∧ r.f.length = 64 ∧
     r.g.length = 64 ∧ r.h.length = 64
@@ -149,8 +139,6 @@ theorem sound_roundW (k : BitVec 64) (wt : Word) (r : Regs Word) : Sound (roundW
   simp only [Regs.map, roundV, a22, a12, t22, t12, e22, e12, mj2, ch2, List.map_cons, List.map_nil, List.foldl_cons,
     List.foldl_nil, bv_bsig0W z la, bv_bsig1W z le, bv_constW]
 
-/-! ## The rounds -/
-
 theorem sound_rounds (w : List Word) : ∀ (n t : ℕ) (r : Regs Word), Sound (rounds w n t r) fun z r' =>
     Words64 w → t + n ≤ w.length → Len64 r → Len64 r' ∧ r'.map (bv z) = roundsV (w.map (bv z)) n t (r.map (bv z))
   | 0, t, r => Sound.pure' fun z _ _ hr => ⟨hr, rfl⟩
@@ -160,8 +148,6 @@ theorem sound_rounds (w : List Word) : ∀ (n t : ℕ) (r : Regs Word), Sound (r
         obtain ⟨i1, i2⟩ := ih hw (by omega) h1
         refine ⟨i1, ?_⟩
         rw [i2, h2, roundsV, getD_map_bv]
-
-/-! ## The compression -/
 
 theorem sound_mapM_word {β : Type} (f : β → M Word) (Q : β → Prop) (g : (Var → Bool) → β → BitVec 64)
     (hf : ∀ x, Sound (f x) fun z r => Q x → r.length = 64 ∧ bv z r = g z x) :
@@ -199,8 +185,6 @@ theorem len64_toList {r : Regs Word} (h : Len64 r) : Words64 r.toList := by
   simp only [Regs.toList, List.mem_cons, List.not_mem_nil, or_false] at hv
   rcases hv with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl <;> assumption
 
-/-- **The compression gadget computes SHA-512's compression**: whenever its rows hold, its 8 output words are
-`compressV` of its chaining value and message words. -/
 theorem sound_compress (cv msg : List Word) : Sound (compress cv msg) fun z out =>
     cv.length = 8 → Words64 cv → msg.length = 16 → Words64 msg →
       Words64 out ∧ out.map (bv z) = compressV (cv.map (bv z)) (msg.map (bv z)) := by

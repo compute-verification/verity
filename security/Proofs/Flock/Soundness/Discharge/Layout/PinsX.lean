@@ -21,27 +21,14 @@ import Proofs.Flock.Soundness.Discharge.Hidden.Wide.SegCommit
 
 set_option Elab.async false
 
-/-!
-# A layout's rows each under its own encoding, and a `sha512/row-seg/v1` row's
-
-`Readers.rows` hashes every row under one injective encoding (`Binding.HmRows`). A `sha512/row-seg/v1` row's outer
-message (`RowSeg.enc`) is not injective in the row, so its rows are `Binding.HmRowsX`, each commit string under its own
-encoding with an extractor:
-
-* `encSeg l`: a value of `l` bits with nothing set past them (`RowShaped`) is `RowSeg.enc l` of its bytes (`rowBytes`),
-  any other value a longer code; `extSeg l`, `RowSeg.extPair` of the two values' bytes, is a SHA-512 collision when two
-  different values have the same `encSeg l` (`extSeg_spec`);
-* `encSeg_row`: at a row of `l = 16 k` bits it is `RowSeg.enc l` of the row's `2 k` bytes;
-* `Readers.rowsX`: `Readers.rows` with an encoding and an extractor per commit string.
--/
+/-! A layout's rows each under its own encoding (`Binding.HmRowsX`), because a `sha512/row-seg/v1` row's outer
+message `RowSeg.enc` is not injective in the row. -/
 
 namespace FlockSoundness.Discharge.Layout
 
 open Flock Binding
 
 variable {W : ℕ}
-
-/-! ## A `sha512/row-seg/v1` row's encoding -/
 
 /-- **The bytes `sha512/row-seg/v1`'s outer hash reads for a value**, at `l` bits: `RowSeg.enc l` of a row's bytes for a
 value of `l` bits with nothing set past them, and for any other value zero bytes and `bitCode`, longer. -/
@@ -65,8 +52,6 @@ theorem eq_of_rowBytes {v w : BitVal W} (hv : RowShaped v) (hw : RowShaped w) (h
   · exact get_of_rowBytes hv hk h i hi
   · rw [hv.2 i (by omega), hw.2 i (by rw [← hk]; omega)]
 
-/-- **Two different values with the same `encSeg l` give a SHA-512 collision** (`RowSeg.extPair_spec`): both are rows
-of `l` bits, so their bytes differ; any other value's code is longer, and `bitCode` is injective. -/
 theorem extSeg_spec (l : ℕ) (v v' : BitVal W) (hne : v ≠ v') (h : encSeg l v = encSeg l v') :
     Collides (extSeg l v v') := by
   have hl : ∀ {x : BitVal W}, RowShaped x ∧ x.1.val = l → (rowBytes x).length = (l + 7) / 8 := fun hx => by
@@ -90,7 +75,6 @@ theorem extSeg_spec (l : ℕ) (v v' : BitVal W) (hne : v ≠ v') (h : encSeg l v
   · rw [if_neg hv, if_neg hw] at h
     exact absurd (bitCode_inj (List.append_inj h rfl).2) hne
 
-/-- **A row's bytes at `16 k` bits**: byte `j`'s bit `t` its bit `8 j + t`. -/
 theorem rowBytes_row {K k : ℕ} (hK : K = 16 * k) (hKW : K ≤ W) (b : Fin K → Bool) :
     rowBytes (widthOf W K, (padBits b : Fin W → Bool)) =
       List.ofFn fun j : Fin (2 * k) => byteOf fun t => b ⟨8 * j.val + t.val, by omega⟩ := by
@@ -103,7 +87,6 @@ theorem rowBytes_row {K k : ℕ} (hK : K = 16 * k) (hKW : K ≤ W) (b : Fin K �
   have hj : 8 * j + t.val < K := by simp at h2; omega
   simp only [BitVal.get, show 8 * j + t.val < W by omega, ↓reduceDIte, padBits, hj]
 
-/-- **`encSeg` of a row of `l = 16 k` bits**: `RowSeg.enc l` of the row's `2 k` bytes. -/
 theorem encSeg_row {K k : ℕ} (hK : K = 16 * k) (hKW : K ≤ W) (b : Fin K → Bool) :
     encSeg K (widthOf W K, (padBits b : Fin W → Bool)) =
       RowSeg.enc K (List.ofFn fun j : Fin (2 * k) => byteOf fun t => b ⟨8 * j.val + t.val, by omega⟩) := by
@@ -115,8 +98,6 @@ theorem encSeg_row {K k : ℕ} (hK : K = 16 * k) (hKW : K ≤ W) (b : Fin K → 
       simp only [padBits, show ¬ i.val < K by omega, ↓reduceDIte]⟩
   unfold encSeg
   rw [if_pos ⟨hs, hw⟩, rowBytes_row hK hKW b]
-
-/-! ## Rows each under its own encoding -/
 
 namespace Readers
 

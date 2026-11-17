@@ -3,10 +3,7 @@ module
 public import Mathlib.Tactic
 public import Flock.HmNets
 
-/-!
-What the rows of the verifier's builder (`Flock.HmNets`) force: a Hoare-style judgement `Sound m P` (whenever every row of
-the final state holds, the result satisfies `P`) and the primitive gadgets' rules: a fresh bit, AND, majority, commit.
--/
+/-! What the rows of the verifier's builder (`Flock.HmNets`) force, as a Hoare-style judgement `Sound m P`. -/
 
 @[expose] public section
 
@@ -47,14 +44,11 @@ theorem ev_of_s_eq {f g : Lin} (h : f.s = g.s) (z : Var → Bool) : ev z f = (ev
   rw [ev_eq z f, ev_eq z g, h]
   cases f.c <;> cases g.c <;> simp
 
-/-- A row holds under `z`. -/
 def rowHolds (z : Var → Bool) (r : Row) : Prop := z r.out = (ev z r.a && ev z r.b)
 
-/-- Every row holds under `z`. -/
 def stHolds (z : Var → Bool) (s : St) : Prop := ∀ r ∈ s.rows, rowHolds z r
 
-/-- **What a builder program guarantees**: its rows only grow, and whenever every row of its final state holds under
-`z`, its result satisfies `P z`. No freshness is needed: if the rows hold, they hold. -/
+/-- Needs no freshness: if the rows hold, they hold. -/
 def Sound {α : Type} (m : M α) (P : (Var → Bool) → α → Prop) : Prop :=
   ∀ s : St, (∀ r ∈ s.rows, r ∈ (m.run s).2.rows) ∧ ∀ z, stHolds z (m.run s).2 → P z (m.run s).1
 
@@ -104,7 +98,6 @@ theorem sound_and (a b : Lin) : Sound (Flock.HmNets.and a b) fun z r => ev z r =
     · simp only [hc, ite_false, ev_zero, hab]
       cases ha' : a.c <;> cases hb' : b.c <;> simp_all
 
-/-- The majority of three bits. -/
 def maj3 (a b c : Bool) : Bool := (a && b) ^^ (a && c) ^^ (b && c)
 
 theorem sound_maj (x y w : Lin) : Sound (maj x y w) fun z r => ev z r = maj3 (ev z x) (ev z y) (ev z w) := by

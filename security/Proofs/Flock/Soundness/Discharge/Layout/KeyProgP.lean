@@ -9,22 +9,8 @@ import Proofs.Flock.Soundness.Discharge.Placed.Wiring
 
 set_option Elab.async false
 
-/-!
-# The row bits and public gates of the circuit's program on the keys with public inputs
-
-`KeyProg.lean`'s gates at `Placed.keyProgP c pi hU n`, whose unit inputs sit on the gate of their key with public inputs
-(`Aliased.keyIdxP`):
-
-* `keyRowOfP`: the row bits, input gates whose key is a row's message bit (as `keyRowOf`);
-* `keyPubOf`: the public gates, input gates `2 + u·B + b` whose key is bit `t` of public word `q` (`Aliased.KeyP.pub`),
-  unit `u`'s;
-* `keyGateP`: the registration's bit at a single gate: 1 at the constant, 0 at the zero, unit `u`'s public word `q`'s bit
-  `t` at a public gate (`pubBit`), `outBit`'s elsewhere;
-* `wire_inGateP`: a column of a unit's own instance on an input gate is the unit's input, keyed as the gate;
-* `single_gateP`: a single committed gate of a unit's own instance is the zero, the constant, a public gate of the
-  unit, or one of its computed gates, when every input a row reads has the zero, a row bit or a public word bit as its
-  key (`KeysRowP`).
--/
+/-! The row bits and public gates of `Placed.keyProgP c pi hU n`, the circuit's program on the keys with public
+inputs. -/
 
 namespace FlockSoundness.Discharge.Layout
 
@@ -82,8 +68,6 @@ def KeysRowP : Prop :=
 
 variable {c hU n pi rowW}
 
-/-- **`KeysRowP` from `KeysRow`**: an input on a public leaf has a public word bit as its key, and one off every public
-leaf keeps its key (`Aliased.srcKeyP_of_neg`). -/
 theorem keysRowP_of_keysRow (h : KeysRow c hU rowW) : KeysRowP c hU pi rowW := by
   intro i x hx hlt
   by_cases hp : 0 ≤ Aliased.pubLeaf c pi x.val
@@ -150,8 +134,6 @@ theorem keyPubOf_of {g : Fin (keyN c hU n)} (h2 : 2 ≤ g.val) (hlt : g.val < 2 
   simp only [h2, hlt, and_self, ↓reduceDIte, hk]
   exact ⟨_, rfl, rfl⟩
 
-/-- **A column of a unit's own instance on an input gate** `2 ≤ g < 2 + n·B` is an input column of the unit, the
-gate's unit index is the unit's, and the gate's key is the input's (`Aliased.keyIdxP_some`). -/
 theorem wire_inGateP (outs : Finset (Fin (keyN c hU n))) {u : Fin n} (x : Fin ((keyProgP c pi hU n).rows u).w)
     (h2 : 2 ≤ ((Const.Prog.instC (keyProgP c pi hU n) outs u).wire x).val)
     (hlt : ((Const.Prog.instC (keyProgP c pi hU n) outs u).wire x).val < 2 + n * keyB c hU) :
@@ -210,7 +192,6 @@ theorem wire_inGateP (outs : Finset (Fin (keyN c hU n))) {u : Fin n} (x : Fin ((
         Nat.add_mul_mod_self_right, Nat.mod_eq_of_lt b.isLt]
     exact ⟨hd, by rw [hm, Aliased.keyIdxP_some hb]⟩
 
-/-- **A column of a unit's own instance on a public gate** of unit `u'` is an input column of `u = u'` with that key. -/
 theorem keyPubOf_wire (outs : Finset (Fin (keyN c hU n))) {u u' : Fin n} (x : Fin ((keyProgP c pi hU n).rows u).w)
     {q t : ℕ} (h : keyPubOf c hU n pi ((Const.Prog.instC (keyProgP c pi hU n) outs u).wire x) = some (u', q, t)) :
     u' = u ∧ x.val < ((keyProgP c pi hU n).rows u).nIn ∧ Aliased.srcKeyP c pi x.val = .pub q t := by
@@ -218,8 +199,6 @@ theorem keyPubOf_wire (outs : Finset (Fin (keyN c hU n))) {u u' : Fin n} (x : Fi
   obtain ⟨hx, hd, hk⟩ := wire_inGateP outs x h2 hlt
   exact ⟨Fin.ext (hu.trans hd), hx, hk.symm.trans hkey⟩
 
-/-- **A column of a unit's own instance on a row bit** of unit `u'` is an input column of `u = u'` whose key is the row
-bit's message bit (`keyRowOf_wire` at `keyProgP`). -/
 theorem keyRowOfP_wire (outs : Finset (Fin (keyN c hU n))) {u u' : Fin n} (x : Fin ((keyProgP c pi hU n).rows u).w)
     {q : Fin c.ports.size} {k : Fin (rowW q)}
     (h : keyRowOfP c hU n pi rowW ((Const.Prog.instC (keyProgP c pi hU n) outs u).wire x) = some (u', ⟨q, k⟩)) :
@@ -229,7 +208,6 @@ theorem keyRowOfP_wire (outs : Finset (Fin (keyN c hU n))) {u u' : Fin n} (x : F
   obtain ⟨hx, hd, hk⟩ := wire_inGateP outs x h2 hlt
   exact ⟨Fin.ext (hu.trans hd), hx, hk.symm.trans hkey⟩
 
-/-- `KeysRowP` at a unit of `keyProgP`, whose rows are the circuit's. -/
 theorem keysRowP_keyProgP (hkeys : KeysRowP c hU pi rowW) (u : Fin n) (i : Fin ((keyProgP c pi hU n).rows u).nComp)
     (x : Fin ((keyProgP c pi hU n).rows u).w)
     (hx : x ∈ ((keyProgP c pi hU n).rows u).a i ++ ((keyProgP c pi hU n).rows u).b i)
@@ -241,8 +219,6 @@ theorem keysRowP_keyProgP (hkeys : KeysRowP c hU pi rowW) (u : Fin n) (i : Fin (
   subst e
   exact hkeys
 
-/-- **A single committed gate of a unit's own instance of `keyProgP`** is the zero, the constant, a public gate of the
-unit, or one of the unit's computed gates, when every input a row reads has a key with public inputs (`KeysRowP`). -/
 theorem single_gateP (outs : Finset (Fin (keyN c hU n))) (hkeys : KeysRowP c hU pi rowW) {u : Fin n}
     {g : Fin (keyN c hU n)}
     (hgx : ∃ x : Fin ((keyProgP c pi hU n).rows u).w, (Const.Prog.instC (keyProgP c pi hU n) outs u).wire x = g)

@@ -1,8 +1,3 @@
-/-
-Δ's copies into the rows' circuits' inputs. Each of Δ's later writes is a copy `(dst, dst), (dst, src)` (`pair2`), and at
-each `cv`, `pad` and chain bit of a row there is exactly one: the rows' wires (`rowWires_eq`) go into distinct inputs,
-since port `p`'s compressions sit at the distinct places `at_p + k` (`rowSlots_eq`).
--/
 module
 
 public import Proofs.Flock.Soundness.Discharge.Hm.Delta
@@ -30,7 +25,6 @@ open Flock FlockLevel3
 
 namespace FlockSoundness.Discharge.Hm
 
-/-- Port `p`'s chain wire into compression `k ≥ 1`, and its `hm96` wire. -/
 def chainWire (ports : Array Port) (sha p k : ℕ) : Wire :=
   ⟨(sha, ((HmRow.rowSlots ports).2[p]!)[k]!.1, 2 * ((HmRow.rowSlots ports).2[p]!)[k]!.2),
     (sha, ((HmRow.rowSlots ports).2[p]!)[k - 1]!.1, ((HmRow.rowSlots ports).2[p]!)[k - 1]!.2)⟩
@@ -47,13 +41,10 @@ theorem forIn_range1_append {γ : Type} (G : ℕ → List γ) (n : ℕ) {f : ℕ
     (by simp only [Std.Legacy.Range.size, List.mem_range'_1] at ha; omega) d) d
   simpa [Std.Legacy.Range.size] using this
 
-/-- An unsegmented row's only chain start is its first compression. -/
 theorem chainStart_unseg {p : Port} (hs : p.segs = none) (k : ℕ) :
     HmRow.chainStart p k = if k == 0 then some 0 else none := by
   simp only [HmRow.chainStart, hs]
 
-/-- **The rows' wires**, port by port, when every row has a compression and none is segmented: compression `k`'s `cv` from compression
-`k − 1`'s output for `k ≥ 1`, then the `hm96` slot's `cv` from the last compression's output. -/
 theorem rowWires_eq (ports : Array Port) (sha hm : ℕ) (hpos : ∀ p < ports.size, 0 < ports[p]!.chunks)
     (hs : ∀ p < ports.size, ports[p]!.segs = none) :
     (HmRow.rowWires ports sha hm).toList = (List.range (HmRow.rowSlots ports).2.size).flatMap fun p =>
@@ -87,9 +78,8 @@ theorem rowWires_eq (ports : Array Port) (sha hm : ℕ) (hpos : ∀ p < ports.si
     · rw [List.map_eq_flatMap]
   · simp
 
-/-! ## Copies, counted -/
+/-! Δ writes exactly one copy at each `cv`, `pad` and chain bit of a row's circuits' inputs. -/
 
-/-- The two pairs Δ writes for one copy `(dst, src)`. -/
 def pair2 (e : ℕ × ℕ) : List (ℕ × ℕ) := [(e.1, e.1), (e.1, e.2)]
 
 theorem count_pair2 (L : List (ℕ × ℕ)) (x j : ℕ) :
@@ -142,13 +132,11 @@ theorem filter_map_none {β : Type} (l : List ℕ) (D : ℕ) (S : ℕ → β) (x
   rw [List.map_eq_flatMap]
   exact filter_flatMap_none _ _ _ fun t ht => by simp [h t ht]
 
-/-- Δ's copies into the rows' constant bits. -/
 def rowCopies (c : Circuit) (pin : ℕ) : List (ℕ × ℕ) :=
   (List.range c.g).flatMap fun g => (List.range (HmRow.rowSlots c.ports).2.size).flatMap fun p =>
     (List.range 512).map (fun t => (cvCol c g p + t, constSrc c pin (HmRow.midstate c.ports[p]!.words) t)) ++
       (List.range 1024).map fun t => (padCol c g p + t, constSrc c pin (HmRow.padWords c.ports[p]!.words) t)
 
-/-- Δ's copies along the wires. -/
 def wireCopies (c : Circuit) : List (ℕ × ℕ) :=
   (List.range c.g).flatMap fun g => c.wires.toList.flatMap fun w =>
     (List.range (Flat.wireWidth c w)).map fun t => (Flat.wireDst c g w + t, Flat.wireSrc c g w + t)

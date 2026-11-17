@@ -3,15 +3,7 @@ module
 public import Proofs.Flock.Soundness.Discharge.ZkCoins.SessionDefs
 import Mathlib.Combinatorics.Matroid.Init
 
-/-!
-# The session on committed coins opens each round at most once
-
-`ReadsIn S g`: every committed round `g` opens is in `S`, and no path opens one twice. It gives `Distinct`
-(`distinct_of_readsIn`); `bind` and `interleave` of interactions on disjoint rounds read the union, `batch` of
-interactions on pairwise disjoint rounds the union of all, and a stream (`tagRep` on an injective `ix`) reads its rounds
-in order. So `sessionZKC` is `Distinct` (`distinct_sessionZKC`): the link points read the session stream's round 0,
-and table `j`'s rep `r` reads only the rounds of its own stream.
--/
+/-! The session on committed coins opens each round at most once (`distinct_sessionZKC`). -/
 
 @[expose] public section
 
@@ -24,7 +16,6 @@ namespace TGame
 
 variable {I Blk α β : Type}
 
-/-- **Every committed round `g` opens is in `S`, and no path opens one twice.** -/
 def ReadsIn : Set I → TGame I Blk α → Prop
   | _, .ret _ => True
   | S, .send _ k => ∀ m, ReadsIn S (k m)
@@ -132,7 +123,6 @@ theorem readsIn_interleave :
     exact readsIn_interleaveWith (fun b => readsIn_map h₁ _) h₂ hd
       fun S' g' hS' h' => fun c => readsIn_interleave (g₁ := k c) (h₁ c) h' (hd.mono_right hS')
 
-/-- A batch whose `k`-th interaction reads `L (n + k)`, the `L k` pairwise disjoint, reads `⋃ k ≥ n, L k`. -/
 theorem readsIn_batch (L : ℕ → Set I) (hL : ∀ a b, a ≠ b → Disjoint (L a) (L b)) :
     ∀ (gs : List (TGame I Blk α)) (n : ℕ), (∀ k (hk : k < gs.length), ReadsIn (L (n + k)) (gs.get ⟨k, hk⟩)) →
       ReadsIn {x | ∃ k, n ≤ k ∧ x ∈ L k} (TGame.batch gs)
@@ -159,8 +149,6 @@ open TGame
 
 variable {I Blk α : Type} [Fintype Blk]
 
-/-- **A stream reads its rounds in order**: from its `t`-th sample on, `tagRep` reads only `ix t'` with `t ≤ t'`, each
-at most once. -/
 theorem readsIn_tagRep (dc : Decoders Blk) {R : ℕ} (ix : Fin R → I) (hix : Function.Injective ix) :
     ∀ (t : ℕ) (g : Game α), ReadsIn {x | ∃ t' : Fin R, t ≤ t'.val ∧ x = ix t'} (tagRep dc ix t g)
   | _, .ret _ => trivial
@@ -180,7 +168,6 @@ theorem readsIn_tagRep (dc : Decoders Blk) {R : ℕ} (ix : Fin R → I) (hix : F
 
 variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K] {mPts : ℕ}
 
-/-- Table `j`'s rounds: round `t` of either of its reps' streams. -/
 def tabRounds (J R : ℕ) (k : ℕ) : Set (SessIdx J R) := {x | ∃ q : Fin J × Fin 2 × Fin R, q.1.val = k ∧ x = some q}
 
 omit [Fintype K] in
@@ -198,7 +185,6 @@ theorem readsIn_afterC (dc : Decoders Blk) (R : ℕ) {J : ℕ} (j : Fin J) (A : 
     · exact ⟨(j, 1, t), rfl, rfl⟩
 
 omit [Fintype K] in
-/-- **The session on committed coins opens each round at most once.** -/
 theorem distinct_sessionZKC (dc : Decoders Blk) (R : ℕ) (A : Arith F K) (ts : List (TabZK F mPts)) :
     (sessionZKC dc R A ts).Distinct := by
   have hL : ∀ a b, a ≠ b → Disjoint (tabRounds ts.length R a) (tabRounds ts.length R b) := by

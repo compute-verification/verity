@@ -18,18 +18,8 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 
-/-!
-# `--zk` rows each under its own encoding
-
-`HmRowsZ`, `HmRowsZ.ofShadow` and `zk_flock_countC_execOS_keyProg` for rows whose bytes need not be injective
-(`Binding.HmRowsX`, so that `sha512/row-seg/v1` rows sit beside `/row/v1` and `/row/v2` ones):
-
-* `HmRowsZX`: a `--zk` layout's rows, each commit string's bytes `enc p` with an extractor (`ext_spec`), its scheme
-  `hm96X` at the rows, `HmRowsZX.Computes` and the registration fact (`HmRowsZX.registered`), and the value binding
-  (`HmRowsZX.bindingZ`);
-* `HmRowsZX.ofShadow`: the `--zk` rows of a public layout's `HmRowsX`, and `HmRowsZX.ofShadow_computes`;
-* `zk_flock_countC_execOS_keyProgX`: the compiled `--zk` count curve at such rows' binding.
--/
+/-! `--zk` rows each under its own encoding (`HmRowsZX`), so that `sha512/row-seg/v1` rows sit beside `/row/v1` and
+`/row/v2` ones. -/
 
 @[expose] public section
 
@@ -80,7 +70,6 @@ def Computes : Prop :=
     (fun w => bytesAt (witZ A planZ tab w.S w.R w.u w.M) (rs.bcAt w.S w.R w.u (lay.pos w.g)))
 
 omit [Fintype K] [DecidableEq K] in
-/-- **The registration fact from `HmRowComputes`**, for `--zk` tables, each row under its own encoding. -/
 theorem registered (hHm : rs.Computes) : lay.Registered rs.scheme := by
   intro S R u hu M hM g hg
   unfold scheme
@@ -100,8 +89,6 @@ noncomputable def bindingZ (hHm : rs.Computes) : ValueBindingZ A P planZ tab dec
 end HmRowsZX
 
 end Rows
-
-/-! ## From a public layout's rows -/
 
 section Shadow
 
@@ -139,7 +126,6 @@ noncomputable def HmRowsZX.ofShadow : HmRowsZX (LayoutZ.ofShadow e lay hdec) whe
     rw [hr, hs]
     exact rs.other_registered S R u hu M hS g hg hrow
 
-/-- **`HmRowComputes` moves along**, each row under its own encoding. -/
 theorem HmRowsZX.ofShadow_computes (hHm : rs.Computes) : (HmRowsZX.ofShadow e hdec rs).Computes := by
   rintro ⟨S, R, u, M', g⟩ ⟨hu, hM', hg, hrow⟩
   obtain ⟨M, hM, hS⟩ := shadow_msg e S R u M' hM'
@@ -150,8 +136,6 @@ theorem HmRowsZX.ofShadow_computes (hHm : rs.Computes) : (HmRowsZX.ofShadow e hd
   exact h
 
 end Shadow
-
-/-! ## The compiled `--zk` count curve at such rows -/
 
 section Curve
 
@@ -164,7 +148,6 @@ variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K
   (planZ : Finset (Fin n) → Reg → List (TabZK F mPts))
   (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (planZ S R).length)
 
-/-- **`zk_flock_countC_execOS_keyProg` at rows each under its own encoding** (`HmRowsZX`). -/
 theorem zk_flock_countC_execOS_keyProgX (hA : A.Correct) {c : Flock.Circuit} (hU : FlockSoundness.Built c.unit)
     (si : SitesZ planZ tab)
     (hparse : ∀ (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u ∈ S),

@@ -6,19 +6,7 @@ import Mathlib.Combinatorics.Matroid.Init
 import Proofs.Flock.Soundness.Discharge.Aliased.Rows
 import Proofs.Flock.Soundness.ExecLookup
 
-/-!
-# A template instance's rows, placed by the statement the verifier accepted
-
-`instRows c` (`Inst/Rows.lean`) puts each column `code n i off` of template instance `g` at `pos c g`, its slot's
-column plus `off`, and `one` at the pin (`composePlace`). The verifier's level-0 matrices (`placedA`, `placedB`) place
-them there (`placement_inst`), from the layout facts (`Layout`) and the circuit's parse, check and Δ
-(`Aliased.UnitFacts`):
-- at a computed row, the ranges' entry is the net's local row in its slot (`rangesEntry_net`), and Δ adds nothing
-  (`delta_comp_net`);
-- at a slot's constant, the local row reads itself and Δ moves it to the pin (`delta_const_net`);
-- at an input bit a wire fills, Δ has the wire's one copy pair (`delta_wired`): `HmRow.check` wires each input port of
-  every slot but the rows' circuits' exactly once (`CheckFacts.wired`).
--/
+/-! A template instance's rows (`instRows c`), placed by the statement the verifier accepted (`placement_inst`). -/
 
 @[expose] public section
 
@@ -27,8 +15,6 @@ open Flock FlockLevel3
 namespace FlockSoundness.Discharge.Inst
 
 open Compose
-
-/-! ## The wire into an input bit -/
 
 theorem portBits_nodup_net {tags : Tags} {c : Circuit} (P : ParseFacts tags c) {n : ℕ} (hn : n < c.nets.size) :
     (portBits (netOf c n).inGroups).Nodup := by
@@ -50,7 +36,6 @@ theorem feed_some {c : Circuit} {n i o s : ℕ} (h : feed c n i o = some s) :
     · rw [hw] at h; exact ⟨w, rfl, (Option.some.inj h).symm⟩
   · cases h
 
-/-- **The wire into an input port `HmRow.check` wired** is its only one, and no cut reaches the port. -/
 theorem wire_one {c : Circuit} (C : CheckFacts c) {n i p : ℕ}
     (hn : n < c.nets.size) (hsha : n ≠ c.shaNet) (hhm : n ≠ c.hmNet) (hi : i < c.perVu.getD n 0)
     (hp : p < (portCols (netOf c n).inGroups).size) {w : Wire}
@@ -75,8 +60,6 @@ theorem wire_one {c : Circuit} (C : CheckFacts c) {n i p : ℕ}
   refine ⟨?_, List.length_eq_zero_iff.1 (by omega), hwm', hwd'⟩
   rw [hrest, List.length_eq_zero_iff.1 (show rest.length = 0 by omega)]
 
-/-! ## Net slots in the block -/
-
 theorem slotPairs_net {c : Circuit} {pin : ℕ} {r : Range} {i : ℕ} (hk : r.kind = .net i) :
     slotPairs c pin r = (List.range r.count).flatMap fun s =>
       if (r.slot s + (netOf c i).constPos != pin) = true then
@@ -90,8 +73,6 @@ section net
 variable {st : Stmt} (L : FlockSoundness.Layout st)
 include L
 
-/-- Two columns of net ranges' slots, each below its slot's size, are equal only in one net's range, in the same slot at
-the same offset. -/
 theorem eq_slot {R R' : Range} (hR : R ∈ st.c.ranges.toList) (hR' : R' ∈ st.c.ranges.toList) {n n' : ℕ}
     (hk : R.kind = .net n) (hk' : R'.kind = .net n') {s a s' b : ℕ} (hs : s < R.count) (ha : a < 2 ^ R.slotLog)
     (hs' : s' < R'.count) (hb : b < 2 ^ R'.slotLog) (he : R.slot s + a = R'.slot s' + b) :
@@ -100,7 +81,6 @@ theorem eq_slot {R R' : Range} (hR : R ∈ st.c.ranges.toList) (hR' : R' ∈ st.
   obtain rfl := eq_of_inSpan L.disj hR hR' (inSpan_of_covers (covers_slot hs ha)) hx
   exact ⟨Kind.net.inj (hk.symm.trans hk'), slot_add_inj ha hb he⟩
 
-/-- A column of a range's slot is in the block. -/
 theorem range_lt {R : Range} (hR : R ∈ st.c.ranges.toList) {s off : ℕ} (hs : s < R.count)
     (hoff : off < 2 ^ R.slotLog) : R.slot s + off < 2 ^ st.c.kLog := by
   have := (covers_iff _ _).1 (covers_slot hs hoff)
@@ -108,7 +88,6 @@ theorem range_lt {R : Range} (hR : R ∈ st.c.ranges.toList) {s off : ℕ} (hs :
   have := L.bound _ hR
   omega
 
-/-- Net `n`'s range: in the ranges, of net `n`, `perVu n` slots per template instance, of its net's size. -/
 theorem net_range (C : CheckFacts st.c) {n : ℕ} (hn : n < st.c.nets.size) :
     st.c.rangeOf n ∈ st.c.ranges.toList ∧ (st.c.rangeOf n).kind = .net n ∧
       (st.c.rangeOf n).count = st.c.g * st.c.perVu.getD n 0 ∧ (st.c.rangeOf n).slotLog = (netOf st.c n).unitLog := by
@@ -125,14 +104,12 @@ theorem pos_eq (c : Circuit) (g n i o : ℕ) :
     pos c g (code n i o) = (c.rangeOf n).slot (g * c.perVu.getD n 0 + i) + o := by
   rw [pos_code]; rfl
 
-/-- **A column of a net slot is in the block.** -/
 theorem pos_lt (C : CheckFacts st.c) {n g i o : ℕ} (hn : n < st.c.nets.size) (hg : g < st.c.g)
     (hi : i < st.c.perVu.getD n 0) (ho : o < netW st.c n) : pos st.c g (code n i o) < 2 ^ st.c.kLog := by
   obtain ⟨hm, -, -, hsl⟩ := net_range L C hn
   rw [pos_eq]
   exact range_lt L hm (net_slot_lt L C hn hg hi) (by rw [hsl]; exact ho)
 
-/-- A net with a slot in the block has its rows in `rd32`'s words. -/
 theorem netLog_le (C : CheckFacts st.c) {n g i : ℕ} (hn : n < st.c.nets.size) (hg : g < st.c.g)
     (hi : i < st.c.perVu.getD n 0) : (netOf st.c n).unitLog ≤ 32 := by
   have hp := Nat.two_pow_pos (netOf st.c n).unitLog
@@ -144,12 +121,10 @@ theorem netLog_le (C : CheckFacts st.c) {n g i : ℕ} (hn : n < st.c.nets.size) 
   have := L.kLog
   omega
 
-/-- **A net with a slot reads itself at its constant**, its input rows before it. -/
 theorem net_const {tags : Tags} (P : ParseFacts tags st.c) (C : CheckFacts st.c) {n g i : ℕ}
     (hn : n < st.c.nets.size) (hg : g < st.c.g) (hi : i < st.c.perVu.getD n 0) : ConstRow (netOf st.c n) :=
   ((nets_ok P n).2 hn).2 (netLog_le L C hn hg hi)
 
-/-- **The ranges' entry at a row of a net slot**: the net's local entry, in the same slot. -/
 theorem rangesEntry_net (C : CheckFacts st.c) {n g i o : ℕ} (hn : n < st.c.nets.size) (hg : g < st.c.g)
     (hi : i < st.c.perVu.getD n 0) (ho : o < netW st.c n) (e : Kind → ℕ → ℕ → ZMod 2) (j : ℕ) :
     rangesEntry st e (pos st.c g (code n i o)) j =
@@ -160,7 +135,6 @@ theorem rangesEntry_net (C : CheckFacts st.c) {n g i o : ℕ} (hn : n < st.c.net
   rw [pos_eq, rangesEntry_of_covers L.disj hm (covers_slot (net_slot_lt L C hn hg hi) ho') e j,
     (slot_div _ ho').1, (slot_div _ ho').2, hk, hsl]
 
-/-- **Δ adds nothing at a net slot's computed rows.** -/
 theorem delta_comp_net (C : CheckFacts st.c) {n g i o : ℕ} (hn : n < st.c.nets.size) (hg : g < st.c.g)
     (hi : i < st.c.perVu.getD n 0) (hlo : netIn st.c n ≤ o) (hhi : o < (netOf st.c n).constPos) (j : ℕ) :
     deltaEntry st.da (pos st.c g (code n i o)) j = 0 := by
@@ -173,7 +147,6 @@ theorem delta_comp_net (C : CheckFacts st.c) {n g i o : ℕ} (hn : n < st.c.nets
     List.count_eq_zero.2 (fun hm' => L.not_inBit hm hk hs hoffW hlo (hrest _ hm'))]
   simp
 
-/-- **Δ at a net slot's constant row**: `(k, k)` and `(k, pin)`, unless the constant is the pin. -/
 theorem delta_const_net (C : CheckFacts st.c) {n g i : ℕ} (hn : n < st.c.nets.size) (hg : g < st.c.g)
     (hi : i < st.c.perVu.getD n 0) (hin : netIn st.c n ≤ (netOf st.c n).constPos) (j : ℕ) :
     deltaEntry st.da (pos st.c g (code n i (netOf st.c n).constPos)) j =
@@ -215,7 +188,6 @@ theorem delta_const_net (C : CheckFacts st.c) {n g i : ℕ} (hn : n < st.c.nets.
         simp [h1, Ne.symm h1]
       · simp [h1, h2, Ne.symm h1, Ne.symm h2]
 
-/-- A net slot's input port bit, in another net's range, is none of that range's slots' columns. -/
 theorem ne_net_at {tags : Tags} {pre : Array (String × Net)} (P : ParseFactsU tags pre st.c) (hok : NetsFit st.c)
     (C : CheckFacts st.c) {n n₀ : ℕ}
     (hn : n < st.c.nets.size) (hn₀ : n₀ < st.c.nets.size) (hne : n ≠ n₀) {g i : ℕ} {q : ℕ × ℕ} {tt : ℕ}
@@ -232,7 +204,6 @@ theorem ne_net_at {tags : Tags} {pre : Array (String × Net)} (P : ParseFactsU t
   exact hne (eq_slot L hm hm₀ hk hk₀ (net_slot_lt L C hn hg hi) ha hs₀ (by rw [hsl₀]; exact hb)
     (by rw [← he]; unfold Circuit.slotCol; omega)).1
 
-/-- No pair of Δ's rows' loops is at a column of a net slot other than the rows' circuits'. -/
 theorem rows_ne {tags : Tags} {pre : Array (String × Net)} (P : ParseFactsU tags pre st.c) (hok : NetsFit st.c)
     (C : CheckFacts st.c) {n : ℕ} (hn : n < st.c.nets.size)
     (hsha : n ≠ st.c.shaNet) (hhm : n ≠ st.c.hmNet) {s₀ b : ℕ} (hs₀ : s₀ < (st.c.rangeOf n).count)
@@ -253,7 +224,6 @@ theorem rows_ne {tags : Tags} {pre : Array (String × Net)} (P : ParseFactsU tag
     rw [C.perVu_hm, ← hws]
     exact lt_of_lt_of_le hpp (le_nextPow2 _)
 
-/-- No leaf pair is at a column of another net's slot than the unit's. -/
 theorem leafPairs_ne (C : CheckFacts st.c) {n : ℕ} (hn : n < st.c.nets.size) (hne : n ≠ st.c.unitNet) {s₀ b : ℕ}
     (hs₀ : s₀ < (st.c.rangeOf n).count) (hb : b < netW st.c n) (j : ℕ) :
     (Flat.leafPairs st.c).count ((st.c.rangeOf n).slot s₀ + b, j) = 0 := by
@@ -281,7 +251,6 @@ theorem leafPairs_ne (C : CheckFacts st.c) {n : ℕ} (hn : n < st.c.nets.size) (
   exact hne (eq_slot L L.unit_mem hm L.unit_kind hk hk'' (L.port_lt_slot hjs htw) hs₀ (by rw [hsl]; exact hb)
     (by rw [← he]; omega)).1.symm
 
-/-- No cut pair is at a column of another net's slot than the unit's. -/
 theorem cutPairs_ne (C : CheckFacts st.c) {n : ℕ} (hn : n < st.c.nets.size) (hne : n ≠ st.c.unitNet) {s₀ b : ℕ}
     (hs₀ : s₀ < (st.c.rangeOf n).count) (hb : b < netW st.c n) (j : ℕ) :
     (Flat.cutPairs st.c).count ((st.c.rangeOf n).slot s₀ + b, j) = 0 := by
@@ -301,8 +270,6 @@ theorem cutPairs_ne (C : CheckFacts st.c) {n : ℕ} (hn : n < st.c.nets.size) (h
   exact hne (eq_slot L L.unit_mem hm L.unit_kind hk (L.slot_lt hg'' he1) (L.port_lt_slot he2 (List.mem_range.1 htt))
     hs₀ (by rw [hsl]; exact hb) heq).1.symm
 
-/-- **The wire pairs at a net slot's input port bit**: the copy pair of each wire into its port, in its template
-instance. -/
 theorem wirePairs_net {tags : Tags} {pre : Array (String × Net)} (P : ParseFactsU tags pre st.c) (hok : NetsFit st.c)
     (C : CheckFacts st.c) {n g i p t : ℕ}
     (hn : n < st.c.nets.size) (hg : g < st.c.g) (hi : i < st.c.perVu.getD n 0)
@@ -362,7 +329,6 @@ theorem wirePairs_net {tags : Tags} {pre : Array (String × Net)} (P : ParseFact
     rw [FlockSoundness.Layout.getD_portCols hp]
     exact ht
 
-/-- **Δ at an input bit a wire fills**: its one copy pair, `(x, x)` and `(x, src)`, the wire's source bit (`feed`). -/
 theorem delta_wired {tags : Tags} (F : Aliased.UnitFacts tags st) {n g i o s : ℕ} (hn : n < st.c.nets.size)
     (hsha : n ≠ st.c.shaNet) (hhm : n ≠ st.c.hmNet) (hg : g < st.c.g) (hi : i < st.c.perVu.getD n 0)
     (hf : feed st.c n i o = some s) (j : ℕ) :
@@ -427,25 +393,19 @@ theorem delta_wired {tags : Tags} (F : Aliased.UnitFacts tags st) {n g i o s : �
 
 end net
 
-/-- **Δ at the input bits a wire fills**: at each, its one copy pair, `(x, x)` and `(x, src)`, the wire's source bit
-(`feed`), at every template instance. -/
 def WiredDelta (st : Stmt) : Prop :=
   ∀ {n g i o s : ℕ}, n < st.c.nets.size → n ≠ st.c.shaNet → n ≠ st.c.hmNet → g < st.c.g →
     i < st.c.perVu.getD n 0 → feed st.c n i o = some s → ∀ j,
       st.da.toList.count (pos st.c g (code n i o), j) =
         (if pos st.c g (code n i o) = j then 1 else 0) + if pos st.c g s = j then 1 else 0
 
-/-- `delta_wired` as `WiredDelta`. -/
 theorem wiredDelta {tags : Tags} {st : Stmt} (L : FlockSoundness.Layout st) (F : Aliased.UnitFacts tags st) :
     WiredDelta st :=
   fun hn hsha hhm hg hi hf j => delta_wired L F hn hsha hhm hg hi hf j
 
-/-! ## Reads, placed -/
-
 theorem zmod2_cast (v : ZMod 2) : (((if v = 1 then 1 else 0 : ℕ)) : ZMod 2) = v := by
   revert v; decide
 
-/-- **A local row's reads, placed**: inside its slot `B`, the row's entry; outside, nothing. -/
 theorem count_reads {c : Circuit} {g n i : ℕ} (e : ℕ → ZMod 2) {B : ℕ}
     (hpos : ∀ j', pos c g (code n i j') = B * netW c n + j') (j : ℕ) :
     ((((reads c n i e).map (pos c g)).count j : ℕ) : ZMod 2) = if j / netW c n = B then e (j % netW c n) else 0 := by
@@ -488,7 +448,6 @@ theorem slot_iff {W B o j : ℕ} (hW : 0 < W) (ho : o < W) : B * W + o = j ↔ j
     rw [h1, h2] at this
     rw [← this, Nat.mul_comm]
 
-/-- A wired row's sum: the local row, Δ's `(x, x)` and `(x, src)`, read as the local row with `x` added, and `src`. -/
 theorem wired_sum {W B o j : ℕ} (hW : 0 < W) (ho : o < W) (e : ℕ → ZMod 2) (b : Prop) [Decidable b] :
     ((if j / W = B then e (j % W) else 0) + ((((if B * W + o = j then 1 else 0) + if b then 1 else 0 : ℕ)) : ZMod 2)) =
       (if j / W = B then addSelf e o (j % W) else 0) + (((if b then 1 else 0 : ℕ)) : ZMod 2) := by
@@ -499,8 +458,6 @@ theorem wired_sum {W B o j : ℕ} (hW : 0 < W) (ho : o < W) (e : ℕ → ZMod 2)
   · simp only [h1, h2, hiff, and_false, ↓reduceIte, zero_add, add_zero]
   · simp only [h1, h2, hiff, false_and, ↓reduceIte, zero_add]
   · simp only [h1, h2, hiff, false_and, ↓reduceIte, zero_add]
-
-/-! ## The template instance's columns -/
 
 theorem inX_lt {c : Circuit} {x : ℕ} (hx : x ∈ inX c) : x < c.upv * netIn c c.unitNet :=
   List.mem_range.1 (List.mem_filter.1 hx).1
@@ -513,7 +470,6 @@ theorem inCols_getD {c : Circuit} {ℓ : ℕ} (hℓ : ℓ < (inCols c).length) :
   rw [List.getD_eq_getElem _ _ hℓ']
   exact ⟨rfl, List.getElem_mem hℓ'⟩
 
-/-- A column's parts are a net, one of its slots, and a column of its slot. -/
 def Valid (c : Circuit) (x : ℕ) : Prop :=
   codeNet x < c.nets.size ∧ codeSlot x < c.perVu.getD (codeNet x) 0 ∧ codeOff x < netW c (codeNet x)
 
@@ -523,7 +479,6 @@ variable {tags : Tags} {st : Stmt} (L : FlockSoundness.Layout st) (F : Aliased.U
   (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog)))
 include L
 
-/-- **Every column of the order is a net slot's**: the unit's stacked inputs, then columns with a row. -/
 theorem order_valid {tags : Tags} {pre : Array (String × Net)} (P : ParseFactsU tags pre st.c) (C : CheckFacts st.c)
     (hg0 : 0 < st.c.g) {ℓ : ℕ}
     (hℓ : ℓ < (order st.c).length) : Valid st.c ((order st.c).getD ℓ 0) := by
@@ -545,7 +500,6 @@ theorem order_valid {tags : Tags} {pre : Array (String × Net)} (P : ParseFactsU
   · have := rowAt_dom (order_row hℓ (by omega))
     exact ⟨this.1, this.2.2.2.1, this.2.2.2.2⟩
 
-/-- The order's columns are in the block, at every template instance, from the parse and the check. -/
 theorem inst_hbOf {pre : Array (String × Net)} (P : ParseFactsU tags pre st.c) (C : CheckFacts st.c) {g : ℕ}
     (hg : g < st.c.g) :
     ∀ ℓ < (logical st.c).order.length, pos st.c g ((logical st.c).order.getD ℓ 0) < 2 ^ (L.model regs).kLog := by
@@ -555,13 +509,10 @@ theorem inst_hbOf {pre : Array (String × Net)} (P : ParseFactsU tags pre st.c) 
   rwa [code_parts] at this
 
 include F in
-/-- The order's columns are in the block, at every template instance. -/
 theorem inst_hb {g : ℕ} (hg : g < st.c.g) :
     ∀ ℓ < (logical st.c).order.length, pos st.c g ((logical st.c).order.getD ℓ 0) < 2 ^ (L.model regs).kLog :=
   inst_hbOf L regs F.parse F.check hg
 
-/-- **The block rows at a column with a computed row read its row's columns**, placed: a computed row's local rows, or
-an input bit's local self row with Δ's copy pair (`WiredDelta`). -/
 theorem placed_comp (C : CheckFacts st.c) (hD : WiredDelta st) {g n i o : ℕ} (hg : g < st.c.g)
     {p : List ℕ × List ℕ} (hrow : rowAt st.c n i o = some (some p))
     (r j : Fin (2 ^ st.c.kLog)) (hr : r.val = pos st.c g (code n i o)) :
@@ -608,7 +559,6 @@ theorem placed_comp (C : CheckFacts st.c) (hD : WiredDelta st) {g n i o : ℕ} (
       rw [hR]
       exact wired_sum hW ho _ _
 
-/-- **The block rows at a slot's constant read the pin.** -/
 theorem placed_const (hok : NetsFit st.c) (C : CheckFacts st.c) {g n i o : ℕ} (hg : g < st.c.g)
     (hrow : rowAt st.c n i o = some none)
     (r j : Fin (2 ^ (L.model regs).kLog)) (hr : r.val = pos st.c g (code n i o)) :
@@ -638,7 +588,6 @@ theorem placed_const (hok : NetsFit st.c) (C : CheckFacts st.c) {g n i o : ℕ} 
       ← ite_fin_val j L.pin_lt]
     exact const_row_sum _ _ _
 
-/-- **The pin's row reads the pin.** -/
 theorem placed_pin (j : Fin (2 ^ (L.model regs).kLog)) :
     (L.model regs).A₀ (L.model regs).pin j = (if j = (L.model regs).pin then 1 else 0) ∧
       (L.model regs).B₀ (L.model regs).pin j = if j = (L.model regs).pin then 1 else 0 := by
@@ -668,15 +617,11 @@ theorem placed_pin (j : Fin (2 ^ (L.model regs).kLog)) :
     rfl
 
 omit L in
-/-- The order's columns past the inputs have rows. -/
 theorem order_row' {c : Circuit} {k : ℕ} (hk : k < (logical c).order.length - (logical c).nIn) :
     row c ((logical c).order.getD ((logical c).nIn + k) 0) ≠ none :=
   order_row (show (logical c).nIn + k < (order c).length by
     have : (logical c).order = order c := rfl; rw [← this]; omega) (Nat.le_add_right _ _)
 
-/-- **A template instance's rows, placed by the accepted statement**, from the parse, the check and Δ at the input
-bits a wire fills (`WiredDelta`): template instance `g`'s columns at their positions (`pos`), `one` at the pin
-(`composePlace`). -/
 theorem placement_instOf {pre : Array (String × Net)} (P : ParseFactsU tags pre st.c) (hok : NetsFit st.c)
     (C : CheckFacts st.c) (hD : WiredDelta st) {g : ℕ} (hg : g < st.c.g) :
     Placement (L.model regs) (instRows st.c)
@@ -704,8 +649,6 @@ theorem placement_instOf {pre : Array (String × Net)} (P : ParseFactsU tags pre
   · exact fun j => (placed_pin L regs j).2
 
 include F in
-/-- **A template instance's rows, placed by the accepted statement**: template instance `g`'s columns at their
-positions (`pos`), `one` at the pin (`composePlace`). -/
 theorem placement_inst {g : ℕ} (hg : g < st.c.g) :
     Placement (L.model regs) (instRows st.c)
       (composePlace (L.model regs) (logical st.c) (logical_ordered st.c) (pos st.c g) (inst_hb L F regs hg)) :=

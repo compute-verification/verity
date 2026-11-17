@@ -1,7 +1,3 @@
-/-
-The verifier's SHA-512 compression (`Flock.Sha512.compress`, straight-line over `UInt64` locals) is `Spec.compressV`:
-FIPS 180-4's three loops as folds (`compress_unfold`), then each fold against the spec by induction.
--/
 module
 
 public import Mathlib.Tactic
@@ -18,18 +14,15 @@ open Flock.HmNets hiding and
 
 open Flock
 
-/-- Message word `i` of the block at `off`, big-endian (`Sha512.compress`'s first loop). -/
 def wordBE (data : ByteArray) (off i : ℕ) : UInt64 :=
   (List.range' 0 8).foldl (fun x j => x <<< 8 ||| (data.get! (off + 8 * i + j)).toUInt64) 0
 
-/-- `Sha512.compress`'s schedule loop body at `i`. -/
 def schedU (w : Array UInt64) (i : ℕ) : Array UInt64 :=
   w.push (w[i - 16]! + (Sha512.rotr w[i - 15]! 1 ^^^ Sha512.rotr w[i - 15]! 8 ^^^ w[i - 15]! >>> 7) + w[i - 7]! +
     (Sha512.rotr w[i - 2]! 19 ^^^ Sha512.rotr w[i - 2]! 61 ^^^ w[i - 2]! >>> 6))
 
 abbrev U8 := UInt64 × UInt64 × UInt64 × UInt64 × UInt64 × UInt64 × UInt64 × UInt64
 
-/-- `Sha512.compress`'s round loop body at `i`, on the state `(a, b, c, d, e, f, g, h)`. -/
 def roundU (w : Array UInt64) (s : U8) (i : ℕ) : U8 :=
   (s.2.2.2.2.2.2.2 + (Sha512.rotr s.2.2.2.2.1 14 ^^^ Sha512.rotr s.2.2.2.2.1 18 ^^^ Sha512.rotr s.2.2.2.2.1 41) +
         (s.2.2.2.2.1 &&& s.2.2.2.2.2.1 ^^^ ~~~s.2.2.2.2.1 &&& s.2.2.2.2.2.2.1) + Sha512.k[i]! + w[i]! +
@@ -49,7 +42,6 @@ theorem roundU_eq (w : Array UInt64) (s : U8) (i : ℕ) : roundU w s i = Sha512.
 theorem getElem!_mapRange (f : ℕ → UInt64) {m i : ℕ} (hi : i < m) : ((List.range m).map f).toArray[i]! = f i := by
   simp [hi]
 
-/-- The schedule loop over the words `f 0, …, f 15` gives `f 0, …, f (16 + n - 1)` when `f` follows the recurrence. -/
 theorem sched_fold (f : ℕ → UInt64)
     (hf : ∀ i, 16 ≤ i → i < 80 → f i = Sha512.sched (f (i - 16)) (f (i - 15)) (f (i - 7)) (f (i - 2))) :
     ∀ n ≤ 64, (List.range' 16 n).foldl schedU ((List.range 16).map f).toArray = ((List.range (16 + n)).map f).toArray
@@ -60,7 +52,6 @@ theorem sched_fold (f : ℕ → UInt64)
         getElem!_mapRange f (by omega), getElem!_mapRange f (by omega), ← hf _ (by omega) (by omega),
         ← Nat.add_assoc, List.range_succ, List.map_append, List.map_singleton, ← List.push_toArray]
 
-/-- The round loop from `S 0` gives `S n` when each `S (i + 1)` is round `i` of `S i`. -/
 theorem round_fold (w : Array UInt64) (S : ℕ → U8) (hS : ∀ i < 80, S (i + 1) = Sha512.round (S i) i w[i]!) :
     ∀ n ≤ 80, (List.range' 0 n).foldl (roundU w) (S 0) = S n
   | 0, _ => rfl
@@ -104,9 +95,8 @@ theorem compress_unfold (h : Array UInt64) (data : ByteArray) (off : ℕ) :
     exact round_fold _ S (fun i _ => by interval_cases i <;> rfl) 80 le_rfl
   rw [hs]
 
-/-! ## The loops are the spec -/
+/-! The verifier's SHA-512 compression (`Flock.Sha512.compress`) is `Spec.compressV`. -/
 
-/-- The words of an array as bit vectors. -/
 def toBV (w : Array UInt64) : List (BitVec 64) := w.toList.map UInt64.toBitVec
 
 theorem getD_toBV (w : Array UInt64) (i : ℕ) : (toBV w).getD i 0 = (w[i]!).toBitVec := by
@@ -153,7 +143,6 @@ theorem loop2_bv : ∀ (n : ℕ) (w : Array UInt64), 16 ≤ w.size →
       rw [List.range'_succ, List.foldl_cons, scheduleV, ← schedU_bv w, ← size_schedU w w.size]
       exact loop2_bv n _ (by rw [size_schedU]; omega)
 
-/-- The round state as registers. -/
 def toR (s : U8) : Regs (BitVec 64) :=
   ⟨s.1.toBitVec, s.2.1.toBitVec, s.2.2.1.toBitVec, s.2.2.2.1.toBitVec, s.2.2.2.2.1.toBitVec, s.2.2.2.2.2.1.toBitVec,
     s.2.2.2.2.2.2.1.toBitVec, s.2.2.2.2.2.2.2.toBitVec⟩
@@ -172,8 +161,6 @@ theorem loop3_bv (w : Array UInt64) : ∀ (n t : ℕ) (s : U8),
   | n + 1, t, s => by
       rw [List.range'_succ, List.foldl_cons, roundsV, loop3_bv w n (t + 1), roundU_bv, getD_toBV]
 
-/-- **The verifier's SHA-512 compression is `compressV`**: `Sha512.compress h data off`'s words, as bit vectors, are
-`compressV` of `h`'s first eight words and the block's sixteen big-endian message words. -/
 theorem compress_eq (h : Array UInt64) (data : ByteArray) (off : ℕ) :
     toBV (Sha512.compress h data off) =
       compressV ((List.range 8).map fun i => h[i]!.toBitVec) ((List.range 16).map fun i => (wordBE data off i).toBitVec) := by

@@ -6,32 +6,14 @@ import Proofs.Flock.Soundness.ExecLookup
 import Proofs.Flock.Soundness.Refine.Setup
 import Proofs.Flock.Soundness.Refine.Walk
 
-/-!
-# The accepted statement `Placed.Accepted` reads is the one the refinement plays
-
-`Placed.Accepted` reads an accepted statement as `Layout.model` (the matrices `placedA`, `placedB` of flock-verifier's
-`FlockLevel3.Placed`); the executable's refinement (`stmtOf_fold`, `accepts_tables_hm96`) plays at `Refine.stmtOf` (`matA`,
-`matB`). They read the same layout two ways:
-* the covering range: `FlockLevel3.lastCover` is a left fold, `Refine.lastCover` a right recursion (`lastCover_eq`);
-* Δ: a filter's length against `List.count` (`deltaEntry_eq`);
-* a net's entries: `sparseEntry` counts a column at any index, `spCnt` only below the matrix's width (`sparse_eq`). At a
-  net range's local columns (below `2^slotLog`) the width check holds: every net `HmRow.parse` builds is `2^unitLog`
-  wide (`net_width`), and a net range's slots are its net's rows;
-* a lookup slot's table rows: `lookupEntry` against `lkCnt`, which reads bit indices below 32 (`lookup_eq`, as
-  `Lookup.build` refuses more than 32 output bits);
-* a compression-leaf range: `setupH`'s leaf is the default one, whose matrices are empty (`setupH_leaf`).
-
-`model_eq_stmtOf`: for a statement `Stmt.setupH` accepted on the untyped path, `Layout.model regs = stmtOf st hwf regs` at
-any regions. `table_stmtOf`, `tableAt_stmtOf`: a sampled table of `sitesAt` is `stmtOf` of its statement at `regionsOf`.
--/
+/-! The statement `Placed.Accepted` reads (`Layout.model`) is the one the executable's refinement plays
+(`Refine.stmtOf`). -/
 
 @[expose] public section
 
 namespace FlockSoundness.Discharge.Integrate
 
 open Flock FlockLevel3 Refine
-
-/-! ### The covering range and Δ -/
 
 theorem lastCover_foldl (c : ℕ) : ∀ (rs : List Range) (acc : Option Range),
     rs.foldl (fun acc r => if covers r c then some r else acc) acc = (Refine.lastCover rs c).or acc
@@ -50,8 +32,6 @@ theorem deltaEntry_eq (pairs : Array (ℕ × ℕ)) (r j : ℕ) : deltaEntry pair
   congr 3
   funext x
   rw [beq_eq_decide]
-
-/-! ### A slot's entries -/
 
 theorem card_filter_range (n : ℕ) (p : ℕ → Prop) [DecidablePred p] :
     ((Finset.range n).filter p).card = ((List.range n).filter fun t => decide (p t)).length := by
@@ -105,8 +85,6 @@ theorem lookup_eq (lk : LookupTable) (hb : lk.bits ≤ 32) (i c : ℕ) :
       omega
     · rw [hu.1, hu.2, show c - lk.loTop = l by omega]; exact ht
 
-/-! ### The nets `HmRow.parse` builds -/
-
 theorem ofRows_width {rows : Array (Array ℕ)} {width : ℕ} {m : Sparse} (h : Sparse.ofRows rows width = .ok m) :
     m.width = width := by
   unfold Sparse.ofRows at h
@@ -115,7 +93,6 @@ theorem ofRows_width {rows : Array (Array ℕ)} {width : ℕ} {m : Sparse} (h : 
   cases h
   rfl
 
-/-- A lookup slot `Lookup.build` builds is `2^unitLog` wide, and reads at most 32 output bits. -/
 theorem build_width {name : String} {table : ByteArray} {n lo bits : ℕ} {net : Net}
     (h : Lookup.build name table n lo bits = .ok net) :
     net.a.width = 2 ^ net.unitLog ∧ net.b.width = 2 ^ net.unitLog ∧ ∀ lk, net.lookup = some lk → lk.bits ≤ 32 := by
@@ -141,8 +118,6 @@ theorem build_width {name : String} {table : ByteArray} {n lo bits : ℕ} {net :
   rintro lk ⟨⟩
   exact hb
 
-/-- Every net `HmRow.parse` accepted is `2^unitLog` wide on both sides, and a lookup slot's table reads at most 32 output
-bits. -/
 theorem net_width {tags : Tags} {c : Circuit} (P : ParseFacts tags c) {n : ℕ} (hn : n < c.nets.size) :
     (c.nets.getD n default).2.a.width = 2 ^ (c.nets.getD n default).2.unitLog ∧
       (c.nets.getD n default).2.b.width = 2 ^ (c.nets.getD n default).2.unitLog ∧
@@ -155,9 +130,7 @@ theorem net_width {tags : Tags} {c : Circuit} (P : ParseFacts tags c) {n : ℕ} 
     exact ⟨ofRows_width ha, ofRows_width hb, fun lk h => by rw [hlk] at h; cases h⟩
   · exact build_width hb
 
--- `walk_step` down `Stmt.setupH`'s unfolded do-block, a goal per branch
 set_option maxHeartbeats 2000000 in
-/-- **`Stmt.setupH`'s leaf is the default one**: an hm96 row statement has no compression leaf. -/
 theorem setupH_leaf {tags : Tags} {circuitFile publicFile : ByteArray} {coins : Coins}
     {tables : List (String × ByteArray)} {draw partition : Option Lean.Json} {program : Option ByteArray} {st : Stmt}
     (h : Stmt.setupH tags circuitFile publicFile coins tables draw partition program = .ok st) : st.leaf = default := by
@@ -170,17 +143,13 @@ theorem setupH_leaf {tags : Tags} {circuitFile publicFile : ByteArray} {coins : 
     subst h
     rfl
 
-/-! ### The statement -/
-
 section Model
 
-/-- Every net stores `A` and `B` at its slot's width and reads at most 32 lookup bits (`net_width`). -/
 abbrev NetWidths (c : Circuit) : Prop :=
   ∀ n < c.nets.size, (c.nets.getD n default).2.a.width = 2 ^ (c.nets.getD n default).2.unitLog ∧
     (c.nets.getD n default).2.b.width = 2 ^ (c.nets.getD n default).2.unitLog ∧
     ∀ lk, (c.nets.getD n default).2.lookup = some lk → lk.bits ≤ 32
 
-/-- Every net range names a net. -/
 abbrev NetKinds (c : Circuit) : Prop := ∀ r ∈ c.ranges.toList, ∀ i, r.kind = .net i → i < c.nets.size
 
 theorem netWidths_of {tags : Tags} {c : Circuit} (P : ParseFacts tags c) : NetWidths c := fun _ hn => net_width P hn
@@ -281,9 +250,6 @@ theorem model_eq (hwf : StmtWF st) (regs : List (Model.Region st.c.kLog (st.m - 
 
 end ModelFlat
 
-/-- **The accepted statement is `stmtOf`'s.** For a statement `Stmt.setupH` accepted on the untyped path, the
-statement `Placed.Accepted` reads (`Layout.model`: `placedA`, `placedB`) is the one the executable's refinement plays
-(`Refine.stmtOf`: `matA`, `matB`), at any regions. -/
 theorem model_eq_stmtOf {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
     {draw partition : Option Lean.Json} {program : Option ByteArray} {st : Stmt} (ht : tags.typed = false)
     (h : Stmt.setupH tags cf pf coins tables draw partition program = .ok st) (hwf : StmtWF st)
@@ -291,13 +257,10 @@ theorem model_eq_stmtOf {tags : Tags} {cf pf : ByteArray} {coins : Coins} {table
     (setupH_layout ht h).model regs = stmtOf st hwf regs :=
   model_eq (parse_facts (setupH_spec ht h).1) (setupH_layout ht h) (setupH_leaf h) hwf regs
 
-/-- **A sampled table of `sitesAt` is `stmtOf` of its statement**, at the statement's own regions (`regionsOf`). -/
 theorem table_stmtOf {I : Exec.Inputs} {mPts n : ℕ} (ht : I.tags.typed = false) {S : Finset (Fin n)} {d : Lean.Json}
     (x : SampleSetup I mPts S d) : (x.table ht).T.S = stmtOf x.st x.wf.1 (regionsOf x.st) :=
   model_eq_stmtOf ht x.h x.wf.1 _
 
-/-- **`tableAt`'s table at a sample that sets up is `stmtOf` of a statement `Stmt.setupH` accepted** on the session's inputs
-and the sample's JSON, with the same statement as any other setup of that sample. -/
 theorem tableAt_stmtOf {I : Exec.Inputs} {mPts n : ℕ} (ht : I.tags.typed = false) (dj : Finset (Fin n) → Lean.Json)
     {S₀ : Finset (Fin n)} (x₀ : SampleSetup I mPts S₀ (dj S₀)) {S : Finset (Fin n)} (x : SampleSetup I mPts S (dj S)) :
     ∃ y : SampleSetup I mPts S (dj S), y.st = x.st ∧

@@ -9,23 +9,7 @@ public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.SharedP
 
 set_option Elab.async false
 
-/-!
-# A sampled proof block's site in its accepted statement at public inputs
-
-`SiteH.lean` at `AcceptedHP T`, whose Δ is `HmOut.delta`'s without the pairs into a public leaf's bits. A satisfying
-witness satisfies the flat twin off the unit input rows (`Hidden.Any.sat_flatFP`), which is all the hash rows' facts read
-(`Hidden.Any.row_bc_tgtS`), so at template instance `g` of block `o`:
-
-* `siteAddrHP a o x`: in-block column `x` of block `o`, as an address of `T`;
-* `bc_site_ofHP`: in a satisfying witness, the 128 bytes at row `p`'s `hm96` output are the population's `b ‖ c` of the
-  proved unit at rank `o · c.g + g` (`Hidden.bc_sampledWP`); `BcSiteHP` bundles what it reads;
-* `copy_siteHP`: a stacked unit input off a public leaf whose Δ key is message bit `bit` of byte `byte` of row `q` holds
-  the witness's bit at that message column (`copyPos_blockHP`, `Aliased.copyPos_key` at the flat twin);
-* `out_copyHP`: copy `u'`'s output `j`, bit `t` of the statement circuit `c` holds the witness's bit at output row
-  `nIn + jo`'s message column for its bit `16 k + t` (`Hidden.Any.msg_copyFP`, `outCol_leaf`, `Hidden.outCol_commit16`);
-* `bc_site_colHP`, `bc_site_commitHP`: the `b ‖ c` at row `p`'s `hm96` output is the commit string of the bytes the row
-  hashes under the salt at `saltCol` (`AcceptedHP.row_bc`).
--/
+/-! A sampled proof block's site in its hidden-output table's accepted statement at public inputs. -/
 
 namespace FlockSoundness.Discharge.HiddenExec
 
@@ -41,7 +25,6 @@ variable (a : AcceptedHP T)
 theorem checkRows : HmOut.checkRows a.st.c = .ok () :=
   (Hidden.Committed.check a.ht a.committed).2.2
 
-/-- **The statement circuit `c` is the committed one with other nets and no template**, as `AcceptedH.stmt_eq`. -/
 theorem stmt_eq {c : Flock.Circuit} (hce : HmOut.unrolled a.st.c = c) :
     ∃ nets, c = { a.st.c with nets := nets, tmpl := none } := by
   obtain ⟨nets, he⟩ := Hidden.Committed.unrolled_eq a.ht a.committed
@@ -67,7 +50,6 @@ theorem checkRowsU {c : Flock.Circuit} (hce : HmOut.unrolled a.st.c = c) : Hidde
   obtain ⟨nets, rfl⟩ := a.stmt_eq hce
   exact fun j hj => Hidden.checkRows_out a.checkRows hj
 
-/-- **Every returned output is an output word** of the statement circuit (`Layout.check_out`). -/
 theorem leavesOut_ltU {c : Flock.Circuit} (hce : HmOut.unrolled a.st.c = c) (ho : c.outNet = c.unitNet) :
     ∀ u < c.upv, ∀ o ∈ (c.leavesOut[u]!).toList, o < c.outWords := by
   obtain ⟨nets, rfl⟩ := a.stmt_eq hce
@@ -78,8 +60,6 @@ theorem rowRanges : RowRanges a.st.c :=
   RowRanges.ofL (st := Hidden.flatTwin a.st) a.flatLayout a.unitFacts.parse a.unitFacts.check
 
 end AcceptedHP
-
-/-! ## Site addresses -/
 
 /-- **In-block column `x` of block `o`** of an accepted statement at public inputs, as an address of `T` (column 0 past
 the block). -/
@@ -113,8 +93,6 @@ theorem bytesAt_siteHP (a : AcceptedHP T) (z : Witness T.m) (o : Fin (2 ^ T.nbl)
       bytesOf (chunkBit T z o) N col :=
   ofFn_siteHP a z o N col hcol
 
-/-! ## The registered `b ‖ c` at a site -/
-
 /-- **What `bc_site_ofHP` reads at a site** (`BcSiteH`): block `o` and template instance `g` of an accepted statement at
 public inputs whose sample `d` decodes to `D`, whose proved units are in its population; whose public file
 `HmIn.loadPublic` loads to `pop`; with `g` below `2^⌊log₂ c.g⌋`; and whose proved unit at rank `o · c.g + g` is `u`. -/
@@ -123,8 +101,6 @@ def BcSiteHP (a : AcceptedHP T) (pop : Public) (o : Fin (2 ^ T.nbl)) (g u : ℕ)
     HmIn.loadPublic a.tags a.st.c a.pi a.pf = .ok pop ∧ g < 2 ^ a.st.c.g.log2 ∧
     D.proved[o.val * a.st.c.g + g]? = some u
 
-/-- **The `b ‖ c` at a sampled proof block's site is the population's** (`Hidden.bc_sampledWP`), at a `BcSiteHP`, for every row
-`p`. -/
 theorem bc_site_ofHP {a : AcceptedHP T} {pop : Public} {o : Fin (2 ^ T.nbl)} {g u : ℕ} (hs : BcSiteHP a pop o g u)
     {z : Witness T.m} (hz : T.Satisfies z) (hg : g < a.st.c.g) {p : ℕ} (hp : p < a.st.c.ports.size) :
     Binding.bytesAt z (fun (j : Fin 128) (t : Fin 8) => siteAddrHP a o (Layout.bcAddr a.st.c g p j.val t.val)) =
@@ -137,10 +113,6 @@ theorem bc_site_ofHP {a : AcceptedHP T} {pop : Public} {o : Fin (2 ^ T.nbl)} {g 
   obtain ⟨hr, rfl⟩ := Array.getElem?_eq_some_iff.1 hu
   exact Hidden.bc_sampledWP s hpop hD hlt L regs hregs hz o hg hg2 hp hr
 
-/-! ## Copies at a site -/
-
-/-- **A sampled proof block's message-keyed input off a public leaf holds its row's bit** (`copy_siteH`): a public leaf's input
-is the in regions' word instead (`pub_block`). -/
 theorem copy_siteHP (a : AcceptedHP T) {z : Witness T.m} (hz : T.Satisfies z) (o : Fin (2 ^ T.nbl)) {g : ℕ}
     (hg : g < a.st.c.g) (x : Fin a.rows.w) (hx : x.val < a.rows.nIn) (hneg : Aliased.pubLeaf a.st.c a.pi x.val < 0)
     {q byte bit : ℕ} (hk : Aliased.srcKey a.st.c x.val = .msg q byte bit)
@@ -177,8 +149,6 @@ theorem col_val_compHP (a : AcceptedHP T) {g : ℕ} (hg : g < a.st.c.g) (x : Fin
   rw [Fin.val_cast]
   exact a.L.col_val_comp a.regs hg hu' h1 h2 x hx
 
-/-- **A sampled proof block's returned output holds its output row's message bit**, at public inputs (`out_copyH`), at the
-statement circuit `c` (`HmOut.unrolled` of the committed one). -/
 theorem out_copyHP (a : AcceptedHP T) {c : Flock.Circuit} (hce : HmOut.unrolled a.st.c = c)
     (ho : c.outNet = c.unitNet) (hrf : Hidden.Any.RowsFitS c)
     {z : Witness T.m} (hz : T.Satisfies z) (o : Fin (2 ^ T.nbl)) {g : ℕ} (hg : g < a.st.c.g) (x : Fin a.rows.w)
@@ -249,10 +219,6 @@ theorem out_copyHP (a : AcceptedHP T) {c : Flock.Circuit} (hce : HmOut.unrolled 
     regs, hregs, rfl⟩ z o hin, Hidden.msgCol_delta st.c g (HmOut.nIn st.c + jo) (2 * k + t / 8) (t % 8), hmc, hsrc,
     ← hcol, chunkBit_of_lt _ z o (Fin.isLt _)]
 
-/-! ## The rows' `b ‖ c` at a site -/
-
-/-- `Hidden.Any.row_bc_tgtS` in an accepted statement at public inputs, through its flat twin off the unit input rows
-(`Hidden.Any.sat_flatFP`). -/
 theorem AcceptedHP.row_bc (a : AcceptedHP T) (hupv : 0 < a.st.c.upv)
     (hrf : Hidden.Any.RowsFitS a.st.c)
     {z : Witness T.m} (hz : T.Satisfies z) (o : Fin (2 ^ T.nbl)) {g p : ℕ} (hg : g < a.st.c.g)
@@ -270,7 +236,6 @@ theorem AcceptedHP.row_bc (a : AcceptedHP T) (hupv : 0 < a.st.c.upv)
     ((Hidden.committed_of_commit s.parse).unpinned_of_rep ht hrf.1.1)) hrf.1 hz
   exact Hidden.Any.row_bc_tgtS L0 F0 rfl hupv hz0 o hg hp (hrf.kind hp)
 
-/-- **A row's `b ‖ c` at a sampled proof block's site**, at public inputs (`bc_site_colH`). -/
 theorem bc_site_colHP (a : AcceptedHP T) (hupv : 0 < a.st.c.upv)
     (hrf : Hidden.Any.RowsFitS a.st.c)
     {z : Witness T.m} (hz : T.Satisfies z) (o : Fin (2 ^ T.nbl)) {g p : ℕ} (hg : g < a.st.c.g)
@@ -287,7 +252,6 @@ theorem bc_site_colHP (a : AcceptedHP T) (hupv : 0 < a.st.c.upv)
       (fun j _ t ht => Hidden.Committed.msgCol_lt a.ht a.committed hg hp j t ht)]
   exact a.row_bc hupv hrf hz o hg hp
 
-/-- `bc_site_colHP` at the address the regions pin (`Layout.bcAddr`). -/
 theorem bc_site_commitHP (a : AcceptedHP T) (hupv : 0 < a.st.c.upv)
     (hrf : Hidden.Any.RowsFitS a.st.c)
     {z : Witness T.m} (hz : T.Satisfies z) (o : Fin (2 ^ T.nbl)) {g p : ℕ} (hg : g < a.st.c.g)

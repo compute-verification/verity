@@ -3,12 +3,7 @@ module
 public import Proofs.Flock.Soundness.Binding.Layout
 import Mathlib.Combinatorics.Matroid.Init
 
-/-!
-# Bytes from their bits
-
-`Binding.bytesAt` reads a byte string off a witness, byte `j`'s bit `t` (bit 0 the least significant) at the address
-`a j t` (`Binding.byteOf`). `bytesAt_eq` says what it reads: a byte string whose bits the witness holds there.
--/
+/-! `Binding.bytesAt` reads byte `j`'s bit `t` (bit 0 the least significant) off a witness at the address `a j t`. -/
 
 @[expose] public section
 
@@ -16,7 +11,6 @@ namespace FlockSoundness.Discharge.Layout
 
 open Model Binding
 
-/-- A number below `2^k` is the sum of its first `k` bits' powers. -/
 theorem sum_testBit : ∀ (k N : ℕ), N < 2 ^ k → ∑ t : Fin k, (if N.testBit t.val then 2 ^ t.val else 0) = N
   | 0, N, h => by simp at h; simp [h]
   | k + 1, N, h => by
@@ -32,13 +26,11 @@ theorem sum_testBit : ∀ (k N : ℕ), N < 2 ^ k → ∑ t : Fin k, (if N.testBi
       simp only [Fin.val_zero, Nat.testBit_zero, pow_zero, decide_eq_true_eq]
       split_ifs with h0 <;> omega
 
-/-- **A byte from its bits** is the byte. -/
 theorem byteOf_testBit (x : UInt8) : byteOf (fun t => x.toNat.testBit t.val) = x := by
   unfold byteOf
   rw [sum_testBit 8 x.toNat x.toNat_lt]
   exact UInt8.ofNat_toNat
 
-/-- **The bytes a witness holds** at addresses where it holds the bits of `B`, byte `j`'s bit `t` at `a j t`. -/
 theorem bytesAt_eq {m N : ℕ} (z : Witness m) (a : Fin N → Fin 8 → Fin (2 ^ m)) (B : List UInt8) (hB : B.length = N)
     (h : ∀ j t, bit (z (a j t)) = (B.get ⟨j.val, hB ▸ j.isLt⟩).toNat.testBit t.val) : bytesAt z a = B := by
   subst hB

@@ -3,23 +3,7 @@ module
 public import Proofs.Flock.Soundness.Discharge.Tables.Sim
 public import Proofs.Flock.Soundness.Discharge.Exec.LiveOn
 
-/-!
-# The refinement for sessions of `J` tables: the live audit simulated in the salted audit
-
-`execRefines_on` (`Exec/LiveOn.lean`) is the refinement for one-table plans. This file is the refinement for any plan:
-at each sample the live session is `liveSession` over the plan's `J` tables, written out as a session directory by `wr`,
-and the audit's session is `batchedSessionL` on the plan.
-
-* `sessionBL_eq_modelSession`: the salted session on the tables `ts` is `modelSession`'s, with table `j`'s reps
-  `repsOf A (ts.get j)` and output `tableOutL`.
-* `live_le_sessionBLJ`: against any live prover of `liveSession`, the live verdict is no likelier than the salted
-  session's acceptance (every table's) against the simulated prover (`live_le_session` at `sessionBL_eq_modelSession`).
-* `DecodesOnJ`: the decoder is right on the sessions verity-verify-proof accepts, at the sampling design's samples, table by table: on every
-  live outcome verity-verify-proof accepts, table `j`'s reps run on the tapes decoded from its streams `(j, 0)`, `(j, 1)` and
-  its proof files, and the salted table's verdict on those runs holds. One `DecodesTable` per sample, registration and
-  table; at one table it is `DecodesOn`'s.
-* `simAuditJ`, `execRefines_tables`: the audit strategy built from a live one, and the refinement at it with `bad = ⊥`.
--/
+/-! The refinement for sessions of `J` tables: the live audit simulated in the salted audit (`execRefines_tables`). -/
 
 @[expose] public section
 
@@ -33,8 +17,6 @@ local notation "𝔽" => FlockLevel3.GF128
 variable {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] {mPts : ℕ}
 
 omit [Fintype K] in
-/-- **The salted session on the tables `ts` is `modelSession`'s**: `Commit`'s caps, the link points, every table's
-reps concurrently and its salted openings, the tables concurrently. -/
 theorem sessionBL_eq_modelSession (A : Arith 𝔽 K) (H : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D)
     (Lf : Merkle.Leaf (List 𝔽) Sl D H) (ts : List (TabSpec mPts)) :
     modelSession (J := ts.length) (fun _ cap pend os => tableOutL H E Lf cap pend os)
@@ -64,9 +46,6 @@ noncomputable def simSessJ (A : Arith 𝔽 K) (H : List UInt8 → D) (E : Merkle
       dec one fin capOf N (fun j => repsOf (D := D) A (ts.get j))
       (fun j _ _ => Model.allInh_repC A _ (ts.get j).S (ts.get j).sch (ts.get j).hm _) hdec).strategy Pr
 
-/-- **The transfer at `J` tables, for the salted session.** Against any live prover of `liveSession` over the tables
-`ts`, the live verdict `pL` holds with probability at most the salted session's acceptance of every table against the
-simulated prover, whenever every table's decoder is right on accepted sessions. -/
 theorem live_le_sessionBLJ (A : Arith 𝔽 K) (H : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D)
     (Lf : Merkle.Leaf (List 𝔽) Sl D H) (ts : List (TabSpec mPts)) (pL : LiveOutJ ts.length mPts → Prop)
     (opn : Array ByteArray → Fin ts.length → Opens 𝔽 D × Salts Sl) (dg : ByteArray → ByteArray)
@@ -81,8 +60,6 @@ theorem live_le_sessionBLJ (A : Arith 𝔽 K) (H : List UInt8 → D) (E : Merkle
   unfold simSessJ
   rw [prob_cast]
   exact live_le_session _ _ _ pL opn dg dec one fin capOf N _ _ hdec Pr
-
-/-! ## The audit -/
 
 variable {n : ℕ} {Reg : Type}
 
@@ -127,10 +104,6 @@ noncomputable def simAuditJ (hdec : DecodesOnJ H E Lf plan I wr opn dec one fin 
       (Strategy.ofMap (wr (L.draw ω) τ.1) _
         (Strategy.ofMap (fun t => (τ.1, L.draw ω, t)) _ (τ.2 ω)))))⟩
 
-/-- **The refinement for sessions of `J` tables.** Against any live prover `τ` of the live audit whose session at each
-sample is `liveSession` over the plan's tables, written out by `wr`, verity-verify-proof's acceptance is no likelier than the
-salted audit's acceptance against the simulated prover `simAuditJ … τ`, with no live event added (`bad = ⊥`), whenever
-the decoder is right on accepted sessions at the sampling design's samples, table by table (`DecodesOnJ`). -/
 theorem execRefines_tables (hdec : DecodesOnJ H E Lf plan I wr opn dec one fin capOf L)
     (τ : Strategy (auditLive L Reg (liveOfJ dg plan N wr))) :
     ExecRefines (auditLive L Reg (liveOfJ dg plan N wr)) τ (LiveAccepts I) (fun _ => False)

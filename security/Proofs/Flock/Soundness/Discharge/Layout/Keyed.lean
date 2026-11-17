@@ -14,21 +14,7 @@ public import Proofs.Flock.Soundness.Discharge.Zero
 
 set_option Elab.async false
 
-/-!
-# `lay` and `rs` at the proving program's places
-
-At `Discharge/Placed`'s places of the circuit's program on Δ's source keys (`Sites.progPlaces_keyProg hU hparse outs`), with
-row widths `16 · words` (`portRowW`), `lay` is `keyLayout` with the registration's bit `outBitOf` (the population's
-returned outputs) and `bitCode` for the single gates' commit strings, and `rs` is `keyRowsEnc` with `enc := rowEnc` (the
-bytes `sha512/row/v1` hashes, `keyRow_enc`) and `Const.constCols_keyProg` and
-`Zero.zeroCols_keyProg` for the constant's and the zero's gates (`keyedRows`). With `KeysRow` from the parse
-(`keysRow_of_parse`), `keyedRowsOfParse`; with the returned outputs' bits for the program's outputs (`outsOf`,
-`outsOut_outsOf`), `keyedRowsOuts`.
-
-What `rs` still takes: an untyped circuit whose unit returns the outputs (`c.outNet = c.unitNet`), the sampled proof blocks' sites
-(`BcSite`), and `outs` the returned outputs' bits (`OutsOut`); `keyedRowsOfParse` a unit with only its leaf group, and
-every input a unit row reads a port bit (`PortReads`); `keyedRowsOuts` no `OutsOut`.
--/
+/-! `lay` and `rs` at the proving program's places (`keyedLayout`, `keyedRows`, `keyedRowsOuts`). -/
 
 namespace FlockSoundness.Discharge.Layout
 
@@ -60,7 +46,6 @@ noncomputable def keyedRows (ho : c.outNet = c.unitNet)
   keyRowsEnc (rowW := portRowW c) (hparse := hparse) (saltCol := saltCol) ho hsite hkeys houts
     (Const.constCols_keyProg hU hparse outs) (Zero.zeroCols_keyProg hU hparse outs)
 
-/-- `keyedRows`' `enc` is `rowEnc`. -/
 theorem keyedRows_enc (ho : c.outNet = c.unitNet)
     (hsite : ∀ S R u (h : u ∈ S) M, Binding.Sat plan tab S R u M →
       BcSite (si.acc S R u h) (popOf R) (si.o S R u h) (si.vu S R u h) u.val)

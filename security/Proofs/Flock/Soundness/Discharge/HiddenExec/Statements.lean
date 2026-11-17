@@ -19,22 +19,7 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 
-/-!
-# The statements: verity-verify-proof's acceptance under either tag, hidden outputs included
-
-`Discharge/Exec`'s acceptance lemmas take `hh : I.tags.hiddenOutputs = false`: they are about `Stmt.setupH`'s
-statements, and under hidden outputs `Stmt.setupTables` calls `Stmt.setupHidden`. Each statement here is one of them
-without `hh`, so it covers the sessions main's prover writes (`verity/flock-circuit`, the default
-`--statement`). Where the original names `setupH`, this one names `setupOne`, the setup `setupTables` calls for the
-tag; where it doesn't, the conclusion is the original's.
-
-* `SetupTablesOkAny`, `AcceptsSetupOne`, `AcceptsOneAny`: `Exec.setupTables_ok`, `Exec.accepts_setupH`, `Exec.accepts_one`.
-* `AcceptsRetainedAny`, `AcceptsAllRetainedAny`, `AcceptsRepRoundsAny`: `accepts_retained`, `accepts_allRetained`,
-  `accepts_rep_rounds`.
-* `AcceptsTablesHm96Any`, `AcceptsTablesHm96OfLeafAny`, `AcceptsVerdictHm96Any`: `accepts_tables_hm96`,
-  `accepts_tables_hm96_of_leaf`, `accepts_verdict_hm96`.
-* `TableAtHOfAccepts`: Integrate's `tableAt_of_accepts` for the hidden tables (`tableAtH`, `Tables.lean`).
--/
+/-! `Discharge/Exec`'s acceptance lemmas without `hh : I.tags.hiddenOutputs = false`, with `setupOne` for `setupH`. -/
 
 @[expose] public section
 
@@ -46,9 +31,6 @@ open Lean (Json)
 
 local notation "𝔽" => FlockLevel3.GF128
 
-/-- **`setupTables` sets up each table with `setupOne`**, under any tag (`Exec.setupTables_ok` without `hh`): for one
-table, at the inputs and the session's sample, and the session's spec is the table's; for `count > 1`, `count` tables,
-table `j` under `Tags.tableIdentity count j` at a subset sample of its part. -/
 def SetupTablesOkAny : Prop :=
   ∀ {tags : Tags} {cf pf : ByteArray} {coins : Coins} {count : ℕ} {tables : List (String × ByteArray)}
     {draw partition : Option Json} {program : Option ByteArray} {work : Option (ℕ × Array (String × ℕ × ℕ))}
@@ -60,7 +42,6 @@ def SetupTablesOkAny : Prop :=
         setupOne { tags with identity := tags.tableIdentity count j } cf pf coins tables (some d) partition
           program = .ok sts[j]) ∧ (∀ (j : ℕ) (hj : j < sts.size), sts[j].mPts = spec.mPts) ∧ spec.points = 2)
 
-/-- **verity-verify-proof's acceptance sets up each table with `setupOne`** (`Exec.accepts_setupH` without `hh`). -/
 def AcceptsSetupOne : Prop :=
   ∀ {I : Exec.Inputs} {t : Exec.Transcript}, Accepts I t →
     ∃ spec sts, setupOf I t.record = .ok (spec, sts) ∧
@@ -69,27 +50,21 @@ def AcceptsSetupOne : Prop :=
         setupOne (tagsAt I.tags I.count j) I.circuitFile I.publicFile I.coins I.tables d I.partition I.program =
           .ok sts[j] ∧ (I.count ≤ 1 → d = recordDraw t.record)
 
-/-- **A one-table acceptance is one `setupOne` statement's** (`Exec.accepts_one` without `hh`). -/
 def AcceptsOneAny : Prop :=
   ∀ {I : Exec.Inputs} {t : Exec.Transcript}, I.count ≤ 1 → Accepts I t →
     ∃ st, setupOne I.tags I.circuitFile I.publicFile I.coins I.tables (recordDraw t.record) I.partition I.program =
         .ok st ∧ Flock.verify st.spec #[Setup.ofCircuit st] t.record t.proofs = .ok ()
 
-/-- **verity-verify-proof's acceptance under retaining tags has every round's bytes** (`Exec.accepts_retained` without
-`hh`). -/
 def AcceptsRetainedAny : Prop :=
   ∀ {I : Exec.Inputs} {t : Exec.Transcript}, I.tags.retainRounds = true → Accepts I t →
     ∃ spec sts sess, setupOf I t.record = .ok (spec, sts) ∧ Record.decode spec t.record = .ok sess ∧
       spec.retainRounds = true ∧ ∀ s ∈ sess.streams.toList, ∀ r ∈ s.rounds.toList, ∃ b, r.bytes = some b
 
-/-- **verity-verify-proof's acceptance under retaining tags gives `AllRetained`** for every stream
-(`Exec.accepts_allRetained` without `hh`). -/
 def AcceptsAllRetainedAny : Prop :=
   ∀ {I : Exec.Inputs} {t : Exec.Transcript}, I.tags.retainRounds = true → Accepts I t →
     ∃ spec sts sess, setupOf I t.record = .ok (spec, sts) ∧ Record.decode spec t.record = .ok sess ∧
       ∀ s ∈ sess.streams.toList, AllRetained s.rounds
 
-/-- **verity-verify-proof's acceptance, round by round** (`Exec.accepts_rep_rounds` without `hh`). -/
 def AcceptsRepRoundsAny : Prop :=
   ∀ {I : Exec.Inputs} {t : Exec.Transcript}, I.tags.retainRounds = true → Accepts I t →
     ∃ (spec : SessionSpec) (sts : Array Flock.Stmt) (sess : RunRecord), setupOf I t.record = .ok (spec, sts) ∧
@@ -98,8 +73,6 @@ def AcceptsRepRoundsAny : Prop :=
         RepRounds spec (Setup.ofCircuit sts[j]) sch sess j 0 t.proofs[2 * j]! ∧
         RepRounds spec (Setup.ofCircuit sts[j]) sch sess j 1 t.proofs[2 * j + 1]!
 
-/-- **verity-verify-proof refines each table of the session it accepts, under `hm96-sha512/v1`** (`Exec.accepts_tables_hm96`
-without `hh`, with `setupOne` for `setupH`). -/
 def AcceptsTablesHm96Any : Prop :=
   ∀ {I : Exec.Inputs} {t : Exec.Transcript}, Accepts I t →
     ∃ (spec : SessionSpec) (sts : Array Flock.Stmt) (sess : RunRecord), setupOf I t.record = .ok (spec, sts) ∧
@@ -122,8 +95,6 @@ def AcceptsTablesHm96Any : Prop :=
               (s₀.rounds.toList.map (·.coins) ++ s₁.rounds.toList.map (·.coins)) out ∧
             out.accepted = true ∧ out.opens = opensOf p₀ p₁ sch ∧ out.salts = saltsOf p₀ p₁ sch
 
-/-- **verity-verify-proof refines each table of the session it accepts, for tags that implement `hm96-sha512/v1`**
-(`Exec.accepts_tables_hm96_of_leaf` without `hh`, with `setupOne` for `setupH`). -/
 def AcceptsTablesHm96OfLeafAny : Prop :=
   ∀ {I : Exec.Inputs} {t : Exec.Transcript}, I.tags.merkleLeaf = "hm96-sha512/v1" → Accepts I t →
     ∃ (spec : SessionSpec) (sts : Array Flock.Stmt) (sess : RunRecord), setupOf I t.record = .ok (spec, sts) ∧
@@ -146,8 +117,6 @@ def AcceptsTablesHm96OfLeafAny : Prop :=
               (s₀.rounds.toList.map (·.coins) ++ s₁.rounds.toList.map (·.coins)) out ∧
             out.accepted = true ∧ out.opens = opensOf p₀ p₁ sch ∧ out.salts = saltsOf p₀ p₁ sch
 
-/-- **verity-verify-proof's acceptance makes each table's salted verdict accept** (`Exec.accepts_verdict_hm96` without
-`hh`). -/
 def AcceptsVerdictHm96Any : Prop :=
   ∀ {I : Exec.Inputs} {t : Exec.Transcript}, I.tags.merkleLeaf = "hm96-sha512/v1" → Accepts I t →
     ∃ (spec : SessionSpec) (sts : Array Flock.Stmt) (sess : RunRecord), setupOf I t.record = .ok (spec, sts) ∧
@@ -178,10 +147,6 @@ def AcceptsVerdictHm96Any : Prop :=
               sts[j].mPts (ptsOf sts[j].mPts sess.points)).length #[t.proofs[2 * j]!, t.proofs[2 * j + 1]!])).accepted =
             true
 
-/-- **At a sample verity-verify-proof accepts under hidden outputs, the headline's table is `stmtOf` of the statement it
-accepted** (Integrate's `tableAt_of_accepts` for `tableAtH`): for a one-table session under a tag with hidden outputs
-whose circuit file parses (untyped) to a circuit whose unit returns the outputs, when the session's record carries the
-challenger's sample `dj S`, that sample proves `S`, and setupHidden's statement at it has link points `mPts`. -/
 def TableAtHOfAccepts : Prop :=
   ∀ {I : Exec.Inputs} {mPts n : ℕ} {S : Finset (Fin n)} {c : Flock.Circuit}, I.tags.typed = false →
     HmOut.parse I.tags I.circuitFile I.tables = .ok c → c.outNet = c.unitNet →
