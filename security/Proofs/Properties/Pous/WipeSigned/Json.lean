@@ -4,18 +4,8 @@ import all Init.Data.Int.Repr
 import all Init.Data.Repr
 public import MemoryChallenger.Records
 
-/-!
-# What `pyJsonStr` writes is read back
-
-`pyJsonStr` writes a string as `json.dumps` does: each character as it is, or escaped (`enc`), between quotes. Every
-escape starts with a backslash and a plain character is neither a quote nor a backslash, so each character is read back
-from what it writes (`decC_enc`), and the string, with what follows its closing quote (`pyJsonStr_split`): the written
-strings are a prefix code, whatever characters they hold. A number is its decimal digits (`natStr_split`, `intStr_inj`),
-and the wipe's tiers, a list of `[name, bytes]` pairs, are a prefix code too (`tiers_split`).
-
-`pyJsonStr`'s `hex4` and the wipe's `tiersJson` are private to their modules, so the statements here are about copies,
-word for word (`jsonStr`, `tiersJson`), which are those definitions by `rfl` (`pyJsonStr_eq`).
--/
+/-! What `pyJsonStr` writes is read back, stated of word-for-word copies of `hex4` and `tiersJson` because those are
+private to their modules. -/
 
 @[expose] public section
 
@@ -49,22 +39,18 @@ theorem pyJsonStr_eq (s : String) : pyJsonStr s = jsonStr s := rfl
 def tiersJson (tiers : Array (String × Nat)) : String :=
   "[" ++ ",".intercalate (tiers.toList.map fun (t, b) => "[" ++ pyJsonStr t ++ "," ++ toString b ++ "]") ++ "]"
 
-/-- A hex digit as `hex4` writes it. -/
 def hexDigit (x : Nat) : Char := if x < 10 then Char.ofNat (48 + x) else Char.ofNat (87 + x)
 
-/-- `hex4 n`'s characters. -/
 def hex4L (n : Nat) : List Char :=
   [hexDigit (n / 4096 % 16), hexDigit (n / 256 % 16), hexDigit (n / 16 % 16), hexDigit (n % 16)]
 
 theorem hex4_toList (n : Nat) : (hex4 n).toList = hex4L n := by
   simp [hex4, hex4L, hexDigit, Nat.shiftRight_eq_div_pow]
 
-/-- A hex digit's value. -/
 def hexVal (c : Char) : Nat := if c.toNat < 58 then c.toNat - 48 else c.toNat - 87
 
 theorem hexVal_digit : ∀ x < 16, hexVal (hexDigit x) = x := by decide
 
-/-- Four hex digits' value. -/
 def hex4V (a b c d : Char) : Nat := hexVal a * 4096 + hexVal b * 256 + hexVal c * 16 + hexVal d
 
 theorem hex4L_val {n : Nat} (h : n < 65536) :
@@ -74,7 +60,6 @@ theorem hex4L_val {n : Nat} (h : n < 65536) :
     hexVal_digit _ (Nat.mod_lt _ (by decide)), hexVal_digit _ (Nat.mod_lt _ (by decide))]
   omega
 
-/-- What `pyJsonStr` writes for one character. -/
 def enc (c : Char) : List Char :=
   if c = '"' then ['\\', '"'] else if c = '\\' then ['\\', '\\'] else if c = '\n' then ['\\', 'n']
   else if c = '\r' then ['\\', 'r'] else if c = '\t' then ['\\', 't'] else if c.toNat = 8 then ['\\', 'b']
@@ -117,23 +102,18 @@ theorem pyJsonStr_toList (s : String) : (pyJsonStr s).toList = '"' :: (s.toList.
     · have hand : ∀ m : Nat, m &&& 0x3ff = m % 1024 := fun m => Nat.and_two_pow_sub_one_eq_mod m 10
       simp [k8, k12, kp, ku, String.toList_append, hex4_toList, Nat.shiftRight_eq_div_pow, hand]
 
-/-! ## Reading it back -/
-
-/-- The low half of a surrogate pair after the high half `v`. -/
 def decLo (v : Nat) : List Char → Option (Char × List Char)
   | x :: y :: a :: b :: c :: d :: r =>
     if x = '\\' ∧ y = 'u' then some (Char.ofNat (0x10000 + (v - 0xd800) * 1024 + (hex4V a b c d - 0xdc00)), r)
     else none
   | _ => none
 
-/-- A `\u` escape's digits, and the low half of a pair after a high half. -/
 def decU : List Char → Option (Char × List Char)
   | a :: b :: c :: d :: r =>
     if 0xd800 ≤ hex4V a b c d ∧ hex4V a b c d < 0xdc00 then decLo (hex4V a b c d) r
     else some (Char.ofNat (hex4V a b c d), r)
   | _ => none
 
-/-- An escape after its backslash. -/
 def decEsc : List Char → Option (Char × List Char)
   | [] => none
   | e :: r =>
@@ -141,7 +121,6 @@ def decEsc : List Char → Option (Char × List Char)
     else if e = 'r' then some ('\r', r) else if e = 't' then some ('\t', r) else if e = 'b' then some (Char.ofNat 8, r)
     else if e = 'f' then some (Char.ofNat 12, r) else if e = 'u' then decU r else none
 
-/-- One character read back from what `pyJsonStr` writes, and what follows it; none at the closing quote. -/
 def decC : List Char → Option (Char × List Char)
   | [] => none
   | c :: r => if c = '"' then none else if c = '\\' then decEsc r else some (c, r)
@@ -221,7 +200,6 @@ theorem enc_cons (c : Char) : ∃ h t, enc c = h :: t ∧ h ≠ '"' := by
     rw [he, hh] at this
     simp [decC] at this
 
-/-- A string read back from what `pyJsonStr` writes after its opening quote, and what follows its closing quote. -/
 def decS : Nat → List Char → Option (List Char × List Char)
   | 0, _ => none
   | _ + 1, [] => none
@@ -241,7 +219,6 @@ theorem decS_enc : ∀ (s r : List Char) (fuel : Nat), s.length < fuel →
     rw [List.flatMap_cons, List.append_assoc, he, List.cons_append]
     simp only [decS, ite_eq_right hx, hd, decS_enc s r fuel (by simp at h; omega), Option.map_some]
 
-/-- **`pyJsonStr` is a prefix code**: what it writes determines the string, and what follows. -/
 theorem pyJsonStr_split {s s' : String} {r r' : List Char}
     (h : (pyJsonStr s).toList ++ r = (pyJsonStr s').toList ++ r') : s = s' ∧ r = r' := by
   rw [pyJsonStr_toList, pyJsonStr_toList] at h
@@ -255,9 +232,6 @@ theorem pyJsonStr_split {s s' : String} {r r' : List Char}
 theorem pyJsonStr_inj {s s' : String} (h : pyJsonStr s = pyJsonStr s') : s = s' :=
   (pyJsonStr_split (r := []) (r' := []) (by rw [h])).1
 
-/-! ## Numbers -/
-
-/-- Two lists free of a stopping character, each followed by one, split there. -/
 theorem split_stop {P : Char → Prop} : ∀ {a a' : List Char} {c c' : Char} {r r' : List Char},
     (∀ x ∈ a, ¬ P x) → (∀ x ∈ a', ¬ P x) → P c → P c' → a ++ c :: r = a' ++ c' :: r' → a = a' ∧ c :: r = c' :: r'
   | [], [], _, _, _, _, _, _, _, _, h => ⟨rfl, by simpa using h⟩
@@ -316,9 +290,6 @@ theorem intStr_mem {x : Int} {c : Char} (h : c ∈ (toString x).toList) : c.isDi
     · exact Or.inr h
     · exact Or.inl (digit_of_mem h)
 
-/-! ## The tiers -/
-
-/-- One tier as `tiersJson` writes it. -/
 def tierItem (x : String × Nat) : List Char := '[' :: ((pyJsonStr x.1).toList ++ ',' :: ((toString x.2).toList ++ [']']))
 
 theorem item_split {x x' : String × Nat} {r r' : List Char} (h : tierItem x ++ r = tierItem x' ++ r') :
@@ -360,7 +331,6 @@ theorem tiersJson_toList (t : Array (String × Nat)) :
   rw [this]
   simp
 
-/-- **The tiers are a prefix code.** -/
 theorem tiers_split {t t' : Array (String × Nat)} {r r' : List Char}
     (h : (tiersJson t).toList ++ r = (tiersJson t').toList ++ r') : t = t' ∧ r = r' := by
   rw [tiersJson_toList, tiersJson_toList] at h

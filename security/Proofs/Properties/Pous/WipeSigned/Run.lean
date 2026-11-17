@@ -3,12 +3,7 @@ module
 public import Properties.Pous.WipeSigned
 import Mathlib.Basic.ENNReal.Real
 
-/-!
-# What the challenger's record of a wipe keeps
-
-Read by read (`WipeRun.step`), the challenger's record keeps an answer for each batch, each batch's wrong count is 0
-exactly when its answer is its read's label, and a session that has ended has a batch (`Inv`, `inv_recorded`).
--/
+/-! What the challenger's record of a wipe keeps, read by read. -/
 
 @[expose] public section
 
@@ -16,7 +11,6 @@ namespace MemoryChallenger.Properties.SecurityProofs.WipeRuns
 
 open MemoryChallenger Flock
 
-/-- What the record keeps through the reads. -/
 def Inv (r : WipeRun) (st : WipeRecorded) : Prop :=
   st.answers.size = st.batches.size ∧
     (∀ j (hj : j < r.commitment.params.k), j < st.batches.size →

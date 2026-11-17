@@ -51,15 +51,8 @@ import Proofs.Properties.Certifier.Records.Commit
 import Proofs.Properties.Certifier.Records.Program
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# An instance: a unit whose records are the Program's, which the check accepts
-
-One egress link `out` with no frames and one ingress link `in`, one window of one bucket of one slot, Σ_sync
-`{(0, 1)}`, and a complete raw record of each execution phase, `out`'s holding the Program's grid, one empty row
-(`program₀`). Its records are the Program's (`programRecords₀`) and the check accepts it (`accepted₀`), under the
-parameters' digests: `parametersDigest` reads `Flock.canonUtf8`, well-founded recursion the kernel does not evaluate, so
-they are taken as given.
--/
+/-! An instance the records check accepts, taking the parameters' digests as given because `parametersDigest` reads
+`Flock.canonUtf8`, well-founded recursion the kernel does not evaluate. -/
 
 @[expose] public section
 
@@ -99,7 +92,6 @@ def grid₀ : Records.RawGrid := programGrid p₀ (fun _ => sync₀) [] 0
 
 def c₀ : Records.Commitment := ⟨#[.raw "out" 0 none grid₀, .raw "in" 0 none #[]], .empty⟩
 
-/-- The Program's grid of `out` in window 0: one row, its one slot padding. -/
 theorem program₀ : grid₀ = #[#[none]] := by decide +kernel
 
 theorem programRecords₀ {eg ig : ByteArray} (hpd : ParamsDigests p₀ eg ig) : ProgramRecords p₀ c₀ e₀.toEvidence := by

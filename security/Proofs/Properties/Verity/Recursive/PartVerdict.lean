@@ -37,36 +37,8 @@ import Mathlib.Topology.Sheaves.Init
 import Std.Tactic.BVDecide.Normalize.Bool
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# A V\* part's compiled verdict is the model's decision at its session (a step of `acc_of_accepts`)
-
-The compiled recursive component runs, per V\* part `j`, `partVerdict`: part `j`'s setup at its record's sample
-(`buildSessionOf` and the recursive setup's checks), then `Zk.verify` on the record and the rep files the part names
-(`partFiles`), the scope check, the tables' sizes, the sample's sampling design, the full-draw and inner-draw refusals, the program and
-the record's canonical text. The model verifier (`RecDeploy.V`) decides session `s` with `RecDeploy.nextO` at the
-session's V\* statement `xO`: at SHA-512 it accepts exactly when `Zk.verify` at `xO`'s recursive setup accepts the last
-message's record and proof files, `FlockDeploy.checks` pass and so do the verdict's last refusals
-(`RecDeploy.nextO_decide_sha512`).
-
-`partVerdict_ok` unfolds the compiled verdict, and `decide_of_partVerdict` derives the model's three conditions from it.
-What the compiled part can't see is a hypothesis:
-
-* **The session** (`hD`): `xO`'s session is what `buildSessionOf` sets up at `xO`'s reading of the part's inputs.
-* **The inputs** (`hfind` … `hdraw`): `xO`'s reading (`s`, its `Ins`, and `innerOfO`, `srcOfO`) holds the compiled part's
-  inputs: the statement's tags, the circuit and public file it reads off the blobs, the session's tags, one table, no
-  lookup tables or public inputs, the registered reads, the verifier's inner shape and the inner session's record, and the
-  record's sample.
-* **`Shows`** (`hstmt`, `hrec`, `hreps`, `hnp`): the last message's statement is `xO`, its record is the part's record
-  blob and its proof files are the part's rep files, by `repName`, in `spec.repStreams` order. `hnp` (the last message
-  carries exactly one proof file per rep stream) is not in `Shows` yet: `Zk.verify` refuses any other count, so
-  without it the model can refuse what the compiled part accepts.
-* **`LiveCoins`** (`hlive`): the record's live session is the session's link message, first coin and round messages
-  with their coins (`FlockDeploy.custody`).
-
-`nextO_acc_of_partVerdict`, `decisionAt_of_partVerdict` and `next_of_partVerdict` restate the conclusion as the outer
-verifier's acceptance, as `FlockDeploy.decisionAt`'s verdict at SHA-512, and as the model verifier's answer at the
-session's last round.
--/
+/-! A step of `acc_of_accepts`: a V\* part's compiled verdict is the model's decision at its session, with what the
+compiled part can't see taken as hypotheses. -/
 
 @[expose] public section
 
@@ -78,8 +50,6 @@ open FlockDeploy (Coin Final Ins sha512 tabsOf checks)
 open RecDeploy (actO nextO setupO fullSampleO innerOfO srcOfO VO)
 open VStar.Recursive (InnerHeld PartOwn PartProof STATEMENT registeredOf partVerdict)
 
-/-- **Part `j`'s rep files** at the session `spec`: for each rep stream, the file the part names under the stream's
-name, off the blobs (`partVerdict`'s `files`). -/
 def partFiles (spec : SessionSpec) (s : PartProof) (bs : Core.Blobs) : V (Array ByteArray) :=
   spec.repStreams.mapM fun (_, _, w) => do
     let n := s!"{w.replace "/" "."}.bin"
@@ -107,7 +77,6 @@ private theorem throw_ne {α : Type} {e : String} {a : α} : (throw e : V α) �
   intro h
   first | cases h | simp [throw, throwThe, MonadExceptOf.throw] at h
 
-/-- A blob's bytes don't depend on the name a refusal would give it. -/
 theorem get_what {bs : Core.Blobs} {d w w' : String} {b : ByteArray} (h : bs.get d w = .ok b) :
     bs.get d w' = .ok b := by
   unfold Core.Blobs.get at h ⊢
@@ -141,8 +110,6 @@ private theorem mapM_ok_of_getElem {α β ε : Type} (g : α → Except ε β) :
         rwa [List.getElem_cons_succ, List.getElem_cons_succ] at h)
     simp [List.mapM_cons, h0, ht, bind, Except.bind, pure, Except.pure]
 
-/-- **The part's rep files are the last message's proof files** where each stream's file is that proof file and there
-are as many proof files as streams. -/
 theorem partFiles_eq {spec : SessionSpec} {s : PartProof} {bs : Core.Blobs} {proofs : Array ByteArray}
     (hreps : ∀ k (hk : k < spec.repStreams.size), ∃ d,
       (s.reps.find? (·.1 == s!"{spec.repStreams[k].2.2.replace "/" "."}.bin")).map (·.2) = some d ∧
@@ -175,11 +142,6 @@ private theorem innerSampled_record {s s' : Flock.RecCoins.Source} (h : s.record
 private theorem recordSample_eq (r : String) :
     FlockSoundness.Discharge.Exec.recordDraw r = Flock.Witness.recordDraw r := rfl
 
-/-- **The compiled part's verdict, unfolded**: where part `j`'s verdict is `.ok ()`, it read the statement's tags, the
-circuit, public file and registered reads, and a UTF-8 record with a sample off the blobs; `buildSessionOf` at the part's
-tags, coins and the record's sample set up a session `(spec, sts)`; the part's rep files are `.ok`; and `Zk.verify` at that
-session, the scope check at the session's tags, the full-draw and inner-draw refusals and the record's canonical text
-pass. -/
 theorem partVerdict_ok {h : InnerHeld} {j : Nat} {p : PartOwn} {s : PartProof} {bs : Core.Blobs}
     (hpart : partVerdict h j p s bs = .ok (.ok ())) :
     ∃ (tags0 : Flock.Tags) (circuitB pubB : ByteArray) (registered : Option (Array Flock.Registered.Port))
@@ -291,16 +253,8 @@ theorem partVerdict_ok {h : InnerHeld} {j : Nat} {p : PartOwn} {s : PartProof} {
     exact ⟨tags0, circuitB, pubB, registered, rB, record, _, _, proofs, rfl, hc, hp, hreg, hrB, hu, hds, hbs,
       hf, hzv, hsc, hfd, hid, hrt⟩
 
-/-- **A V\* part's compiled verdict is the model's decision at its session.** Where part `j`'s compiled
-verdict is `.ok ()` and the model decides at `xO` on the last message `f` with `xO`'s reading `s` and session
-`(spec, sts)`, the deployed `Zk.verify` at that session accepts `f`'s record and proof files, the custody checks pass and
-so do the verdict's last refusals, given:
-* the session: `(spec, sts)` is what `buildSessionOf` sets up at `s`'s reading of the part's inputs (`hD`);
-* the inputs: `s`, `innerOfO xO` and `srcOfO xO` hold the compiled part's inputs (`hfind` … `hsrc`), and `s`'s sample is the
-  record's (`hdraw`);
-* `Shows`: `f` is the part's last message at `xO` (`hstmt`), its record the part's record blob (`hrec`) and its proof
-  files the part's rep files (`hreps`), one per rep stream (`hnp`);
-* `LiveCoins`: the record's live session is the session's messages and coins (`hlive`). -/
+/-- `hnp` (one proof file per rep stream) is not part of `Shows`: `Zk.verify` refuses any other count, so without it the
+model can refuse what the compiled part accepts. -/
 theorem decide_of_partVerdict {h : InnerHeld} {j : Nat} {p : PartOwn} {q : PartProof} {bs : Core.Blobs}
     (hpart : partVerdict h j p q bs = .ok (.ok ()))
     {xO : Claims.Msg} {s : Ins} {spec : SessionSpec} {sts : Array Stmt}
@@ -383,8 +337,6 @@ theorem decide_of_partVerdict {h : InnerHeld} {j : Nat} {p : PartOwn} {q : PartP
           Except.toBool]
          try rfl)
 
-/-- **The outer verifier accepts the session** where the compiled part does, under the hypotheses of
-`decide_of_partVerdict` (`RecDeploy.nextO_decide_sha512`). -/
 theorem nextO_acc_of_partVerdict {h : InnerHeld} {j : Nat} {p : PartOwn} {q : PartProof} {bs : Core.Blobs}
     (hpart : partVerdict h j p q bs = .ok (.ok ()))
     {xO : Claims.Msg} {as' : List Claims.Msg} {cs' : List Coin} {s : Ins} {spec : SessionSpec} {sts : Array Stmt}
@@ -417,8 +369,6 @@ theorem nextO_acc_of_partVerdict {h : InnerHeld} {j : Nat} {p : PartOwn} {q : Pa
     (decide_of_partVerdict hpart hfind hcirc hpub htags hzk htables hcount hpi hreg hreadReg hinner hdn hsrc hdraw hD
       hstmt hrec hreps hnp hlive)
 
-/-- **`FlockDeploy.decisionAt`'s verdict at SHA-512 is `.ok ()`** at the session where the compiled part's is, under the
-hypotheses of `decide_of_partVerdict` (`FlockDeploy.decisionAt_eval`, `RecDeploy.verdictWithO_sha512`). -/
 theorem decisionAt_of_partVerdict {h : InnerHeld} {j : Nat} {p : PartOwn} {q : PartProof} {bs : Core.Blobs}
     (hpart : partVerdict h j p q bs = .ok (.ok ()))
     {xO : Claims.Msg} {as' : List Claims.Msg} {cs' : List Coin} {s : Ins} {spec : SessionSpec} {sts : Array Stmt}
@@ -453,9 +403,6 @@ theorem decisionAt_of_partVerdict {h : InnerHeld} {j : Nat} {p : PartOwn} {q : P
   rw [(FlockDeploy.decisionAt_eval sha512 true s spec sts xO link c₁ mids f).1, RecDeploy.verdictWithO_sha512 hi, hv]
   all_goals exact hc
 
-/-- **The model verifier's answer at the session's last round** is the compiled part's: `.acc` at the last session,
-`.msg []` before it, where the session is the part's staged one (`ract`), this is its last round, and the hypotheses of
-`decide_of_partVerdict` hold (`RecDeploy.next_decide_sha512`). -/
 theorem next_of_partVerdict {IV : Claims.Verifier Coin} {st : RecDeploy.Stage} {x : Claims.Msg} {as : List Claims.Msg}
     {cs : List Coin} {i j' : ℕ} {h : InnerHeld} {j : Nat} {p : PartOwn} {q : PartProof} {bs : Core.Blobs}
     (hpart : partVerdict h j p q bs = .ok (.ok ()))

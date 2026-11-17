@@ -4,13 +4,7 @@ public import Properties.Pous.WipeSigned
 public import Proofs.Properties.Pous.MemoryChallenger.Tree
 import Mathlib.Basic.ENNReal.Real
 
-/-!
-# The wipe's records tree binds its values
-
-`Tree`'s argument at the wipe's record schema: the tree's levels are the same functions of its leaves (`Tree.lev`), and
-only the leaves' schema differs, so under no collision among the strings two trees hash (`wipeTreeStrings`) one root
-gives one level below it, down to the leaves, and one leaf one value (`tree_bind`).
--/
+/-! The wipe's records tree binds its values. -/
 
 @[expose] public section
 
@@ -20,7 +14,6 @@ open MemoryChallenger Flock Flock.FV3.Sha512
 open Tree (CF lev levels_eq levels_size levels_get root_eq lev_size lev_width get!_mem hash_size frame_last frame_two
   node_hash leaf_hash next_get isEmpty_of_size)
 
-/-- The leaves the wipe's records tree is built over. -/
 def leavesOf (d : Domain) (vs : Array ByteArray) : Array ByteArray :=
   (Array.range vs.size).map fun r => d.leaf r r StreamedWipe.RECORD_SCHEMA vs[r]!
 
@@ -66,8 +59,6 @@ theorem node_mem {d : Domain} {vs : Array ByteArray} (hn : vs.isEmpty = false) {
   · rw [levels_get _ _ hn' (by rw [hs]; omega)]; exact hi
   · rw [levels_get _ _ hn' (by rw [hs]; omega)]
 
-/-- Under no SHA-512 collision among the strings both trees hash, trees over equally many values with one root agree
-level by level, from the root down. -/
 theorem lev_bind {d : Domain} {vs vs' : Array ByteArray} {S : List ByteArray} (hn : vs.size = vs'.size)
     (h0 : vs.size ≠ 0) (hS : ∀ x ∈ wipeTreeStrings d vs, x ∈ S) (hS' : ∀ x ∈ wipeTreeStrings d vs', x ∈ S)
     (cf : CF S) (hr : d.root (leavesOf d vs) = d.root (leavesOf d vs')) :
@@ -122,8 +113,6 @@ theorem lev_bind {d : Domain} {vs vs' : Array ByteArray} {S : List ByteArray} (h
     · rw [show 2 * i / 2 = i by omega] at ea; exact ea
     · rw [show (2 * i + 1) / 2 = i by omega] at eb; exact eb
 
-/-- **The wipe's records tree binds its values**: under no SHA-512 collision among the strings both trees hash, two
-lists of equally many values with one root are one. -/
 theorem tree_bind {d : Domain} {vs vs' : Array ByteArray} {S : List ByteArray} (hn : vs.size = vs'.size)
     (hS : ∀ x ∈ wipeTreeStrings d vs, x ∈ S) (hS' : ∀ x ∈ wipeTreeStrings d vs', x ∈ S) (cf : CF S)
     (hr : d.root (leavesOf d vs) = d.root (leavesOf d vs')) : vs = vs' := by

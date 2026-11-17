@@ -10,7 +10,6 @@ namespace Properties.Pouw.PearlPlus
 
 namespace Witness
 
-/-- The key of B's E lines (`Words.lineKey` of seed_B). -/
 def lineKeyB : ByteArray :=
   beBytes 32 [0xdec3da263f57eff0219219320eca345ad8292b1475b9b5c621d864115e2ece4e]
 

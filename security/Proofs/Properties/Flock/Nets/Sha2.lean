@@ -2,12 +2,7 @@ module
 
 public import Proofs.Properties.Flock.Nets.Seg
 
-/-!
-# `sha512x3`'s compression 2, chunk by chunk
-
-Compression 2 of `sha512x3` (`compression3`), from its inputs `cv2` and `msg2`: its certificate `sha2`, each of its
-fifteen chunks checked in the kernel, and the run they make (`seg_sha2`).
--/
+/-! `sha512x3`'s compression 2, chunk by chunk. -/
 
 @[expose] public section
 
@@ -15,13 +10,10 @@ open Flock Flock.HmNets FlockSoundness.Discharge.Hm
 
 namespace FlockDeploy.Concrete.Nets
 
-/-- `sha512x3`'s compression 2's chaining input. -/
 def sha2Cv : List Word := words (vars 3072 512) 8
 
-/-- `sha512x3`'s compression 2's message. -/
 def sha2Msg : List Word := words (vars 3584 1024) 16
 
-/-- Where `sha512x3`'s compression 2's run puts each committed word. -/
 def sha2 : Cert :=
   ⟨167412, [167637, 167926, 168215, 168504, 168793, 169082, 169371, 169660, 169949, 170238, 170527, 170816, 171105,
   171394, 171683, 171972, 172261, 172550, 172839, 173128, 173417, 173706, 173995, 174284, 174573, 174862, 175151,

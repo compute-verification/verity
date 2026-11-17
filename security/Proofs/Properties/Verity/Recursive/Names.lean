@@ -43,31 +43,8 @@ import Proofs.Flock.Claims.Recursion.PartsVStar
 import Proofs.Flock.Claims.Scope.Check
 import Proofs.Flock.Claims.Scope.Setup
 
-/-!
-# The statement the recursive component's inputs name, and its reading
-
-The compiled component (`VStar.Recursive.checkBlobs`) reads parameters, evidence and blobs; the model verifier
-(`RecDeploy.V`) reads a statement `x`. `Names p e bs x` says `x` is the statement those inputs name:
-
-* `x` decodes (`RecDeploy.decodeX`) to `w`, and `w`'s inner statement to Flock's plain statement `ri`
-  (`FlockDeploy.decode`);
-* `InnerNames`: `ri` is the inner session `innerHeld` reads: the inner circuit, public file and sample are the blobs the
-  verifier's own digests name (`Own`), its partition and program the verifier's own, its statement `INNER_STATEMENT`
-  without `--coins` (a seed's, as `Raw.ins` reads a plain statement) at one table with no lookup table, `--stratified` at the population the verifier's partition and
-  program give (`HmRow.stratifiedSamplingDesign` at `K = 1`, as the compiled `innerOk` sets it up) and none of `verify`'s other
-  inputs; `w`'s inner shape is
-  `innerHeld`'s; `w`'s registration the registration blob `Own` names; and `w` carries no link table;
-* `PartNames`: one part per part of the verifier's, part `j`'s raw statement the one `partVerdict` runs: its circuit
-  the part's circuit blob, its form `PartForm` (statement `STATEMENT` under `--zk` at one table), the part's partition,
-  program and registered reads, the part's own bindings (`PartX.bindings`) the verifier's bindings of that part, and
-  its sample the one compiled part `j` reads off the part's record blob. The part's public file and V*'s shared rows are
-  the staged ones (`Stage.pub`, `Stage.rows`), which `PartStatement` and `RowsShow` relate to the run.
-
-`readX_of_names`: where the component's inner session is held (`innerHeld`), V*'s list at its shape has one statement
-per part, Flock's own checks pass on the inner statement (`InnerOkAt`, which the compiled `innerHeld` runs as its
-`innerOk`: `RefusalsOf.innerOkAt_of_compiled`) and each part's session sets up (`PartsSetUp`, at `xrOf`, which reads no `readX`), the
-model reads `x` (`readXPre`, `readX`) at the component's inner shape, and `x` is dense (`DenseAt`).
--/
+/-! The statement the recursive component's inputs name (`Names`), and the model's dense reading of it
+(`readX_of_names`). -/
 
 @[expose] public section
 
@@ -161,19 +138,14 @@ def Names (p : VStar.Recursive.Params) (e : VStar.Recursive.Evidence) (bs : Core
     ∀ j q po pp, w.parts[j]? = some q → p.own.parts[j]? = some po → e.proofs.parts[j]? = some pp →
       PartNames po pp bs j q
 
-/-- **Flock's own checks on the inner statement** (`RecDeploy.innerOk`: Flock's plain setup with the sample, partition
-and program, its scope check, a sample, the header's sample at one table), which `Names` reads. The compiled `innerHeld`
-runs them as `VStar.Recursive.innerOk`, at `--stratified` the population the verifier's partition and program give
-(`InnerNames.stratified`), so its acceptance gives it (`RefusalsOf.innerOkAt_of_compiled`). -/
+/-- Flock's own checks on the inner statement (`RecDeploy.innerOk`), which the compiled `innerHeld` runs as
+`VStar.Recursive.innerOk` (`RefusalsOf.innerOkAt_of_compiled`). -/
 def InnerOkAt (x : Msg) : Prop := ∀ w, decodeX x = some w → innerOk w.inner = .ok ()
 
-/-- **The model's reading of `x`** at the component's inner session: the verifier's own partition, its inner shape as
-both the shape and the inner statement's dimensions. -/
 def xrOf (o : VStar.Recursive.Own) (h : VStar.Recursive.InnerHeld) (w : RecX) (ri : FlockDeploy.Raw) : XR :=
   ⟨w, ri, some o.partition, h.shape, h.shape⟩
 
-/-- **Each part's session sets up at `xrOf`** (at some staging), the shape `readX_of_sessions` takes. `partRaw` reads
-only `w` and `ri` of `xrOf`, so this reads no `readX`. -/
+/-- `partRaw` reads only `w` and `ri` of `xrOf`, so this reads no `readX`. -/
 def PartsSetUp (o : VStar.Recursive.Own) (h : VStar.Recursive.InnerHeld) (x : Msg) : Prop :=
   ∀ w ri, decodeX x = some w → FlockDeploy.decode w.inner = some ri → ∀ s q, w.parts[s]? = some q →
     ∃ (st : Stage) (ms : List (Msg × Out)) (i : RecIns) (spec : SessionSpec) (sts : Array Stmt),
@@ -193,9 +165,6 @@ theorem mapM_of_map {α β ε : Type} {f : α → Except ε β} {o : Option α} 
     simp only [Option.map_some, Option.some.injEq] at h
     simp [Option.mapM_some, h, Functor.map, Except.map]
 
-/-! ## The component's inner shape -/
-
-/-- `innerOf` at a public inner circuit leaves the shape's holo, sparse and stacked fields at their defaults. -/
 theorem innerOf_eta {cB pB : ByteArray} {pa : Option Json} {pr : Option ByteArray} {v : RecVStar.Inner}
     (h : RecVStar.innerOf cB pB pa pr false = .ok v) :
     ({ v with holo := false, sparse := none, stacked := none } : RecVStar.Inner) = v := by
@@ -204,7 +173,6 @@ theorem innerOf_eta {cB pB : ByteArray} {pa : Option Json} {pr : Option ByteArra
   repeat' split at h
   all_goals first | (cases h; done) | (cases h; rfl)
 
-/-- **`shapeOf` is `innerOf`** at the verifier's partition and program, where it accepts. -/
 theorem shapeOf_ok {cB pB : ByteArray} {P : Json} {prog : ByteArray} {i : RecVStar.Inner}
     (h : VStar.Recursive.shapeOf cB pB P prog = .ok i) :
     RecVStar.innerOf cB pB (some P) (some prog) = .ok i := by
@@ -221,13 +189,11 @@ theorem shapeOf_ok {cB pB : ByteArray} {P : Json} {prog : ByteArray} {i : RecVSt
     repeat' split at h
     all_goals first | (cases h; done) | (cases h; exact congrArg Except.ok hv.symm)
 
-/-- `innerOf` at a public inner circuit is dense: no holo, no RecSparse shape, no stacked shape. -/
 theorem innerOf_dense {cB pB : ByteArray} {pa : Option Json} {pr : Option ByteArray} {v : RecVStar.Inner}
     (h : RecVStar.innerOf cB pB pa pr = .ok v) : v.holo = false ∧ v.sparse = none ∧ v.stacked = none := by
   rw [← innerOf_eta h]
   exact ⟨rfl, rfl, rfl⟩
 
-/-- **What `innerHeld` read**: the inner circuit and public file blobs, and its shape `shapeOf`'s at them. -/
 theorem innerHeld_shape {o : VStar.Recursive.Own} {pr : VStar.Recursive.Proofs} {bs : Core.Blobs}
     {h : VStar.Recursive.InnerHeld} (hh : VStar.Recursive.innerHeld o pr bs = .ok h) :
     ∃ cB pB, bs.get o.circuit "the inner circuit" = .ok cB ∧ bs.get o.pub "the inner public file" = .ok pB ∧
@@ -243,9 +209,6 @@ theorem innerHeld_shape {o : VStar.Recursive.Own} {pr : VStar.Recursive.Proofs} 
   repeat' split at hh
   all_goals first | (cases hh; done) | (cases hh; rfl)
 
-/-! ## `readXPre` and `readX` -/
-
-/-- **`readXPre` reads `x`** where each of its steps does. -/
 theorem readXPre_mk {x : Msg} {w : RecX} {ri : FlockDeploy.Raw} {j : Json} {shape dims : RecVStar.Inner}
     {P : Option Json} {vs : Array VStar.Stmt} (hx : decodeX x = some w) (hi : FlockDeploy.decode w.inner = some ri)
     (hj : jsonOf "rec-inner" w.recInner = .ok j) (hsj : RecVStar.Inner.ofJson j = .ok shape)
@@ -257,7 +220,6 @@ theorem readXPre_mk {x : Msg} {w : RecX} {ri : FlockDeploy.Raw} {j : Json} {shap
   unfold readXPre
   simp [hx, hi, hj, hsj, hp, hd, hok, hv, hl, hpn, hcp, Except.toOption, bind, Except.bind, pure, Except.pure]
 
-/-- **`readX` is dense where its inner shape is**: the parser's form is off the shape (`RecScope.toStmt`). -/
 theorem denseAt_of_readX {x : Msg} {r : XR} (hr : readX x = some r) (hh : r.shape.holo = false)
     (hs : r.shape.sparse = none) : DenseAt x := by
   intro s hs'
@@ -270,9 +232,6 @@ theorem denseAt_of_readX {x : Msg} {r : XR} (hr : readX x = some r) (hh : r.shap
     subst hs'
     exact ⟨by simp [RecScope.toStmt, readOf, hh], by simp [RecScope.toStmt, readOf, hs]⟩
 
-/-! ## The parts' circuits, from their sessions -/
-
-/-- `checkPubRows` refuses a port of the reads that `fixedRow` knows without the inner transcript's commits. -/
 theorem pubRows_none {st : Stmt} {own : Array Registered.Port} {sp : Option RecSparse.Shape}
     (h : RecVStar.checkPubRows st (some own) none sp = .ok ()) {reg : Registered.Port} (hmem : reg ∈ own)
     (hfix : (RecVStar.fixedRow { reps := #[] } reg.value 0).isSome = true) : False := by
@@ -290,12 +249,6 @@ theorem pubRows_none {st : Stmt} {own : Array Registered.Port} {sp : Option RecS
       rw [Array.getElem?_eq_none_iff] at hz
       exact absurd (Array.size_pos_of_mem hreg) (by omega)
 
-/-- **A part whose session sets up names its statement's ports**: where part `s`'s session at `r` (`partRaw`, at any
-staging) reads its inputs, sets up and passes its scope check, its circuit (`partCircuit`) is V\*'s statement `s`'s as
-`checkParsed` holds it, and has a port of each name the statement registers under a `rec-c<k>`: `RecCoins.check`
-requires the verifier's reads at such a unit (`registered_of_coins`), `checkOwn` holds the port among them, and
-`checkPubRows` finds it among the circuit's ports (`checkPubRows_rows`) at the inner transcript's commits, without
-which it refuses (`pubRows_none`). -/
 theorem part_ports {r : XR} {st : Stage} {x : Msg} {ms : List (Msg × Out)} {s : ℕ}
     {p : PartX} {i : RecIns} {spec : SessionSpec} {sts : Array Stmt}
     (hsh : (do RecVStar.Inner.ofJson (← jsonOf "rec-inner" r.w.recInner)).toOption = some r.shape)
@@ -377,8 +330,6 @@ theorem part_ports {r : XR} {st : Stage} {x : Msg} {ms : List (Msg × Out)} {s :
     rw [← hname]
     exact Array.any_eq_true'.2 ⟨sts[0].c.ports[pp], Array.getElem_mem hlt, hpp⟩
 
-/-- **`portsNamed` from each part's circuit**: where part `s`'s circuit has a port of each name V\*'s statement `s`
-registers under a `rec-c<k>`. -/
 theorem portsNamed_of {parts : List PartX} {vs : Array VStar.Stmt} (hl : parts.length = vs.size)
     (hp : ∀ s (hs : s < vs.size), ∃ c, parts[s]?.bind partCircuit = some c ∧
       ∀ q ∈ RecVStar.ownPorts vs[s], (RecVStar.cIndex q.2.1).isSome = true → c.ports.any (·.name == q.1) = true) :
@@ -395,8 +346,6 @@ theorem portsNamed_of {parts : List PartX} {vs : Array VStar.Stmt} (hl : parts.l
   rw [getElem!_pos vs s hs'] at hq1
   exact hq q hq1 hq2
 
-/-- **`capPorted` from the last part's circuit**: V\*'s list ends with RecCap (`FlockC3.Reps.list_ok`), whose rows
-`checkParsed` holds the last part's circuit to, `top` among them (`top_port_cap`). -/
 theorem capPorted_of {parts : List PartX} {vs : Array VStar.Stmt} {sh : RecVStar.Inner}
     (hvs : RecVStar.statements sh = .ok vs) (hl : parts.length = vs.size)
     (hp : ∀ s (hs : s < vs.size), ∃ c, parts[s]?.bind partCircuit = some c ∧ RecVStar.checkParsed vs[s] c = .ok ()) :
@@ -424,7 +373,6 @@ theorem capPorted_of {parts : List PartX} {vs : Array VStar.Stmt} {sh : RecVStar
   rw [Array.findIdx?_isSome] at hsome
   exact hsome
 
-/-- **The parts' sessions give `readXPre`'s two port checks** at `r`'s shape. -/
 theorem ported_of_sessions {x : Msg} {r : XR} {vs : Array VStar.Stmt}
     (hsh : (do RecVStar.Inner.ofJson (← jsonOf "rec-inner" r.w.recInner)).toOption = some r.shape)
     (hvs : RecVStar.statements r.shape = .ok vs) (hl : r.w.parts.length = vs.size)
@@ -452,13 +400,6 @@ theorem ported_of_sessions {x : Msg} {r : XR} {vs : Array VStar.Stmt}
   · obtain ⟨c, hc, hp, -⟩ := hpart s hs
     exact ⟨c, hc, hp⟩
 
-/-! ## The statement map -/
-
-/-- **The component's inputs name a statement the model reads, densely** (`Names`). Where `x` is the statement the
-component's parameters, evidence and blobs name (`Names`), the component holds the inner session (`innerHeld`) with V*'s
-list at its shape one statement per part, Flock's own checks pass on the inner statement (`InnerOkAt`) and each part's
-session sets up (`PartsSetUp`): `readXPre` and `readX` read `x` as `xrOf`, at the component's inner shape
-(`(xrOf …).shape = h.shape`), and `x` is dense (`DenseAt`). -/
 theorem readX_of_names {p : VStar.Recursive.Params} {e : VStar.Recursive.Evidence} {bs : Core.Blobs} {x : Msg}
     {h : VStar.Recursive.InnerHeld} {ss : Array VStar.Stmt}
     (hn : Names p e bs x) (hh : VStar.Recursive.innerHeld p.own e.proofs bs = .ok h)

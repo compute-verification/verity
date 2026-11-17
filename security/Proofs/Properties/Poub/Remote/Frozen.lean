@@ -3,20 +3,7 @@ module
 public import Proofs.Properties.Poub.Remote.Coins
 public import Proofs.Properties.Poub.Remote.Bisect
 
-/-!
-# A sampled window's record is kept (`RecordKeptAfterSample`)
-
-Each event keeps every window's `KeepW`: once sampled, its samples, challenge, roots, plans and heads stay as they are;
-once final, it stays final; and it is sampled only if it was, or is final. No event changes the digest, and the appends
-only grow (`Frz`, `frz_step`). An event that adds a pass adds it to an unsampled window: the window it fills is not
-final (so unsampled, `DF`), or is the one after it, which has no root yet (`Inv.beyond`), and a sampled window has
-`min_passes ≥ 1` of them (`Inv.few`). So a run keeps `Frz` from a state on (`run_frz`), and a sampled window's record,
-which reads its own fields and the window before it (sampled too, `Prefix`), is kept.
-
-Its openable receipts are kept with it: `checkOpening` reads the appends only for the append holding its block
-(`appendOf`, `checkOpening_congr`), the block a sampled pass reads is below the store's extent then (`record_reads`), and
-every append after starts at that extent or above (`firsts_big`), so `appendOf` finds the same one (`appendOf_extend`).
--/
+/-! A sampled window's record and its openable receipts are kept (`RecordKeptAfterSample`). -/
 
 @[expose] public section
 
@@ -24,20 +11,15 @@ open Poub Poub.Session
 
 namespace Properties.Poub
 
-/-! ## Each window -/
-
-/-- What a window's record reads of it, and its sample, unchanged. -/
 def Fixed (w w' : Win) : Prop :=
   w'.drawn = w.drawn ∧ w'.challenge = w.challenge ∧ w'.roots = w.roots ∧ w'.plans = w.plans ∧ w'.heads = w.heads
 
-/-- `w'` keeps what `w` fixed once sampled, stays final once `w` is, and is sampled only if `w` was or `w'` is final. -/
 def KeepW (w w' : Win) : Prop :=
   (w.drawn.isSome → Fixed w w') ∧ (w.final → w'.final) ∧ (w'.drawn.isSome → w.drawn.isSome ∨ w'.final)
 
 /-- Each window of `ws'` keeps its namesake's in `ws` (an index past `ws` is a default, unsampled and not final). -/
 def KeepsF (ws ws' : Array Win) : Prop := ∀ u : Nat, KeepW ws[u]! ws'[u]!
 
-/-- Every sampled window is final. -/
 def DF (ws : Array Win) : Prop := ∀ u : Nat, ws[u]!.drawn.isSome → ws[u]!.final
 
 theorem keepW_refl (w : Win) : KeepW w w := ⟨fun _ => ⟨rfl, rfl, rfl, rfl, rfl⟩, id, Or.inl⟩
@@ -95,16 +77,13 @@ theorem keepsF_push (ws : Array Win) (w : Win) (hw : w.drawn = none) : KeepsF ws
     · rw [getElem!_neg (ws.push w) t (by simp; omega)] at h
       cases h
 
-/-- A change of fields a record and a sample don't read. -/
 theorem keepW_of {w w' : Win} (h : Fixed w w') (hf : w.final → w'.final) : KeepW w w' :=
   ⟨fun _ => h, hf, fun hd => Or.inl (h.1 ▸ hd)⟩
 
-/-- A change of an unsampled window that leaves it unsampled and as final as it was. -/
 theorem keepW_undrawn {w w' : Win} (hd : w.drawn = none) (hd' : w'.drawn = w.drawn) (hf : w'.final = w.final) :
     KeepW w w' :=
   ⟨fun h => (by rw [hd] at h; cases h), fun h => (by rw [hf]; exact h), fun h => (by rw [hd', hd] at h; cases h)⟩
 
-/-- The sample of an unsampled window, which makes it final. -/
 theorem keepW_sample {w w' : Win} (hd : w.drawn = none) (hf : w'.final = true) : KeepW w w' :=
   ⟨fun h => (by rw [hd] at h; cases h), fun _ => hf, fun _ => Or.inr hf⟩
 
@@ -124,9 +103,6 @@ theorem keepsF_fail (s : State) (t : Nat) (f : Failure) (a : Option (Nat × Nat)
   · exact keepsF_refl _
 
 
-/-! ## Each event -/
-
-/-- What the rest of a session keeps of `s`: each window (`KeepW`), the digest, and the appends, only extended. -/
 def Frz (s s' : State) : Prop :=
   KeepsF s.windows s'.windows ∧ s'.digest = s.digest ∧ ∃ more, s'.appends = s.appends ++ more
 
@@ -370,7 +346,6 @@ theorem frz_step {s : State} {e : Event} {r : Result} {s' : State} (h : Inv s) (
   | close t now => exact frz_close he
   | verify t openings => injection he with he; exact frz_verify he
 
-/-- What `Frz` needs of a state: the invariant, every sampled window final, and `min_passes` at least 1. -/
 def FInv (s : State) : Prop := Inv s ∧ DF s.windows ∧ 1 ≤ s.params.minPasses
 
 theorem finv_step {s : State} {e : Event} {r : Result} {s' : State} (h : FInv s) (he : step s e = .ok (r, s')) :
@@ -389,8 +364,6 @@ theorem finv_init (params : Params) (reg : Registration) (coins appendCoins : Ar
     (hm : 1 ≤ params.minPasses) : FInv (State.init params reg coins appendCoins notBeforeNs) :=
   ⟨inv_init .., fun u h => (by simp [State.init] at h; cases h), hm⟩
 
-/-! ## The record and the appends -/
-
 theorem dr_eq (ws : Array Win) (t : Nat) : dr ws t = ws[t]!.drawn := by
   by_cases ht : t < ws.size
   · simp [dr, Array.getElem?_eq_getElem ht, getElem!_pos ws t ht]
@@ -399,7 +372,6 @@ theorem dr_eq (ws : Array Win) (t : Nat) : dr ws t = ws[t]!.drawn := by
 theorem map_first (xs : Array Append) (a : Nat) (h : a < xs.size) : (xs.map (·.first))[a]! = xs[a]!.first := by
   rw [getElem!_pos _ a (by simpa using h), Array.getElem_map, getElem!_pos xs a h]
 
-/-- Appending appends whose firsts lie above `j` leaves the append holding `j` as it was. -/
 theorem appendOf_extend (A more : Array Append) (j : Nat) (hmono : Monotone' ((A ++ more).map (·.first)))
     (hbig : ∀ k, A.size ≤ k → k < (A ++ more).size → j < (A ++ more)[k]!.first) :
     appendOf (A ++ more) j = appendOf A j := by
@@ -455,7 +427,6 @@ theorem record_pass (s : State) (t i : Nat) (hi : i < (s.record t).passes.size) 
   refine ⟨?_, hi⟩
   rw [getElem!_pos _ i (by simp [hi]), Array.getElem_map, Array.getElem_range]
 
-/-- A sampled window's receipts read blocks below the store's extent. -/
 theorem record_reads {s : State} (h : Inv s) (t : Nat) (ht : t < s.windows.size) (i p : Nat)
     (hi : i < (s.record t).passes.size) (hp : p < (s.record t).passes[i]!.plan.length) :
     (s.record t).passes[i]!.plan.block p < s.extent := by
@@ -483,7 +454,6 @@ theorem firsts_mono {s : State} (h : Inv s) : Monotone' (s.appends.map (·.first
   have := sum_take_mono (s.appends.toList.map (·.count)) a b hab
   omega
 
-/-- The appends past `s₁`'s start at its extent or above. -/
 theorem firsts_big {s₁ s : State} (h₁ : Inv s₁) (h : Inv s) (more : Array Append) (ha : s.appends = s₁.appends ++ more)
     (hr : s.reg = s₁.reg) (k : Nat) (hk : s₁.appends.size ≤ k) (hk' : k < s.appends.size) :
     s₁.extent ≤ s.appends[k]!.first := by

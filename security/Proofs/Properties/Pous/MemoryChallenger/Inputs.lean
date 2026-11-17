@@ -10,15 +10,7 @@ import Mathlib.Tactic.Bound.Init
 import Mathlib.Tactic.Finiteness.Attr
 import Mathlib.Tactic.SetLike
 
-/-!
-# What the session's hashes read
-
-`message`, `recordsDigest` and `memoryChallengerMessage` unfolded to the SHA-512 inputs they hash (`message_ok`,
-`recordsDigest_ok`, `signedMessage_ok`), and each input split back into what it frames: the session input into its
-header and records digest (`challengePhase_split`), the signed message's input into its record (`signed_split`), the records'
-stream into its rounds (`stream_inj`: every value is `RECORD_BYTES` wide, `value_size`), a round's value into its round
-(`value_inj`, `rounds_inj`).
--/
+/-! What the session's hashes read, each SHA-512 input split back into what it frames. -/
 
 @[expose] public section
 
@@ -41,7 +33,6 @@ theorem beN_size {n x : Nat} {w : String} {b : ByteArray} (h : beN n x w = .ok b
   rw [← bs_length, (beN_ok h).2]
   simp
 
-/-- A fixed-width field and what follows it determine the field's value and what follows. -/
 theorem beN_split {n x y : Nat} {w w' : String} {b b' : ByteArray} {r r' : List UInt8} (h : beN n x w = .ok b)
     (h' : beN n y w' = .ok b') (e : bs b ++ r = bs b' ++ r') : x = y ∧ r = r' := by
   obtain ⟨hb, hr⟩ := split_bytes e (by rw [beN_size h, beN_size h'])
@@ -70,7 +61,6 @@ theorem value_size {r : Round} {v : ByteArray} (h : r.value = .ok v) : v.size = 
   simp only [ByteArray.size_append, beN_size h1, beN_size h2, beN_size h3, beN_size h4, hd]
   rfl
 
-/-- A round's value determines the round. -/
 theorem value_inj {r r' : Round} {v : ByteArray} (h : r.value = .ok v) (h' : r'.value = .ok v) : r = r' := by
   obtain ⟨-, b1, b2, b3, b4, h1, h2, h3, h4, rfl⟩ := value_ok h
   obtain ⟨-, c1, c2, c3, c4, k1, k2, k3, k4, e⟩ := value_ok h'
@@ -125,7 +115,6 @@ theorem forall₂_inj : ∀ {l l' : List Round} {vs : List ByteArray}, List.Fora
   | a :: l, a' :: l', v :: vs, .cons ha hl, .cons ha' hl' => by
     rw [value_inj ha ha', forall₂_inj hl hl']
 
-/-- The rounds' values determine the rounds. -/
 theorem rounds_inj {rounds rounds' : Array Round} {vs : Array ByteArray} (h : rounds.mapM Round.value = .ok vs)
     (h' : rounds'.mapM Round.value = .ok vs) : rounds = rounds' :=
   Array.toList_inj.mp (forall₂_inj (array_mapM h) (array_mapM h'))
@@ -149,7 +138,6 @@ theorem flat_length {n : Nat} : ∀ {l : List ByteArray}, (∀ v ∈ l, v.size =
     rw [List.flatMap_cons, List.length_append, bs_length, h v List.mem_cons_self,
       flat_length (fun x hx => h x (List.mem_cons_of_mem _ hx)), List.length_cons, Nat.mul_add_one, Nat.add_comm]
 
-/-- Equally many values of one width are determined by their concatenation. -/
 theorem flat_inj {n : Nat} : ∀ {l l' : List ByteArray}, (∀ v ∈ l, v.size = n) → (∀ v ∈ l', v.size = n) →
     l.length = l'.length → l.flatMap bs = l'.flatMap bs → l = l'
   | [], [], _, _, _, _ => rfl
@@ -182,7 +170,6 @@ theorem recordsDigest_ok {rounds : Array Round} {d : ByteArray} (h : recordsDige
     simp only [hs, bind, Except.bind, pure, Except.pure, Except.ok.injEq] at h
     exact ⟨s, rfl, h.symm⟩
 
-/-- Under one round count, the records' streams framed as `sha512/row/v2` inputs determine the rounds. -/
 theorem stream_inj {rounds rounds' : Array Round} {s s' : ByteArray} (h : recordsStream rounds = .ok s)
     (h' : recordsStream rounds' = .ok s') (hn : rounds.size = rounds'.size)
     (e : HmRow.rowPrefixV2 (8 * s.size) ++ s = HmRow.rowPrefixV2 (8 * s'.size) ++ s') : rounds = rounds' := by
@@ -221,7 +208,6 @@ theorem signedMessage_ok {I session rec m : ByteArray} (h : memoryChallengerMess
     simp only [pure, Except.pure, Except.ok.injEq] at h
     exact ⟨not_not.mp hI, h.symm⟩
 
-/-- The session input, with records digests of one width, determines the header and the digest. -/
 theorem challengePhase_split {h h' r r' : ByteArray} (hr : r.size = r'.size)
     (e : SESSION_TAG ++ be64 h.size.toUInt64 ++ h ++ r = SESSION_TAG ++ be64 h'.size.toUInt64 ++ h' ++ r') :
     h = h' ∧ r = r' := by
@@ -233,7 +219,6 @@ theorem challengePhase_split {h h' r r' : ByteArray} (hr : r.size = r'.size)
   obtain ⟨-, e1⟩ := split_bytes e1 (by rw [be64_size, be64_size])
   exact ⟨bs_inj e1, bs_inj e2⟩
 
-/-- The signed message's input, under one key identifier and with records of one width, determines the record. -/
 theorem signed_split {I s s' r r' : ByteArray} (hr : r.size = r'.size)
     (e : field MEMORY_CHALLENGER_TAG.toUTF8 ++ I ++ field (field s) ++ field r =
       field MEMORY_CHALLENGER_TAG.toUTF8 ++ I ++ field (field s') ++ field r') : r = r' := by

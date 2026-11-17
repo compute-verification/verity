@@ -3,14 +3,7 @@ module
 public import Batteries.Tactic.OpenPrivate
 import all Init.Data.Array.QSort.Basic
 
-/-!
-# `Array.qsort` permutes its input
-
-The samples' sampler sorts its values and a plan's check sorts its runs, both with `Array.qsort`. Every step of `qsort`
-is a swap of two elements of a vector (`qpartition`'s three pivot swaps and its loop's, `sort`'s recursion on two
-parts), and a swap permutes, so the result is a permutation of the input (`qsort_perm`): it holds the same elements,
-each as often.
--/
+/-! `Array.qsort` permutes its input, which the samples' sampler and a plan's check both sort with. -/
 
 @[expose] public section
 
@@ -74,7 +67,6 @@ private theorem sort_perm {n : Nat} (lt : α → α → Bool) :
             (ih (mid - lo) (by omega) _ _ _ _ _ _ rfl)).trans hp
     · exact Array.Perm.refl _
 
-/-- **`qsort` permutes its input.** -/
 theorem qsort_perm (as : Array α) (lt : α → α → Bool) : (as.qsort lt).Perm as := by
   unfold Array.qsort
   split

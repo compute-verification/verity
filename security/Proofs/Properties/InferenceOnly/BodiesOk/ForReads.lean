@@ -20,18 +20,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Properties.InferenceOnly.BodiesOk
 import Proofs.Properties.InferenceOnly.BodiesOk.Basic
 
-/-!
-# What `ReadsExact` reads of the decoder and of `BodiesOk`
-
-`decoded`: on a decoded Program, every Definition's facts `ReadsExact.Decoded` names (`decode_spec`): a primitive
-returns one leaf, a composite's return has as many leaves as its type, and each node's argument is the sequence of its
-parts, none naming a negative position, an argument of no leaves to a member going to a parameter of none.
-
-`bodyOk_reached`: every Definition `Desc.reached` marks, so every one `Desc.analyze` summarizes, is `Resolve.BodyOk`
-wherever `Prog.orderViolation` passes. `reached` marks the root and the callees of the composites it marks
-(`reached_spec`), so it marks only Definitions of `order_closed`'s call-closed set; a composite of that set is
-`body_ok`'s, and a primitive's body is empty.
--/
+/-! What `ReadsExact` reads of the decoder and of `BodiesOk`. -/
 
 @[expose] public section
 
@@ -53,7 +42,6 @@ theorem replicate_false (n x : ℕ) (h : (Array.replicate n false)[x]! = true) :
   · rw [getElem!_pos _ x (by simpa using hx), Array.getElem_replicate] at h; cases h
   · rw [getElem!_neg _ x (by simpa using hx)] at h; cases h
 
-/-- **`Desc.reached` marks only Definitions of a call-closed set holding the root**, one mark per Definition. -/
 theorem reached_spec (P : Prog) (S : ℕ → Prop) (hS0 : S P.root)
     (hS : ∀ d, S d → (P.defs[d]!).prim = false → ∀ k < (P.defs[d]!).body.nodes.size, S ((P.defs[d]!).body.nodes[k]!).fn) :
     (Desc.reached P).size = P.defs.size ∧ ∀ x, (Desc.reached P)[x]! = true → S x := by
@@ -102,7 +90,6 @@ theorem reached_lt (P : Prog) (S : ℕ → Prop) (hS0 : S P.root)
   rw [getElem!_neg _ x (by rw [(reached_spec P S hS0 hS).1]; exact hx)] at h
   cases h
 
-/-- A primitive Definition of a decoded Program is `Resolve.BodyOk`: its body is empty. -/
 theorem bodyOk_prim (P : Prog) (hok : ∀ i < P.defs.size, DefOk P.defs i P.defs[i]!) (d : ℕ) (hd : d < P.defs.size)
     (hp : (P.defs[d]!).prim = true) : Resolve.BodyOk P d := by
   obtain ⟨hb, -⟩ := (hok d hd).1.1 hp
@@ -110,8 +97,6 @@ theorem bodyOk_prim (P : Prog) (hok : ∀ i < P.defs.size, DefOk P.defs i P.defs
   · rw [hb] at hk; exact absurd hk (Nat.not_lt_zero _)
   · rw [hb] at ht; exact absurd ht (Nat.not_lt_zero _)
 
-/-- **Every Definition `Desc.reached` marks is `Resolve.BodyOk`**, on a decoded Program whose order
-`Prog.orderViolation` passes. -/
 theorem bodyOk_reached (bytes : ByteArray) (P : Prog) (hdec : Flock.Program.decode bytes = .ok P)
     (hov : P.orderViolation = none) (d : ℕ) (hd : (Desc.reached P)[d]! = true) :
     d < P.defs.size ∧ Resolve.BodyOk P d := by
@@ -133,7 +118,6 @@ theorem bodyOk_summarized (bytes : ByteArray) (P : Prog) (hdec : Flock.Program.d
     d < P.defs.size ∧ Resolve.BodyOk P d :=
   bodyOk_reached bytes P hdec hov d (by simp only [Bool.and_eq_true] at hd; exact hd.1)
 
-/-- **The root's body is `Resolve.BodyOk`**, on a decoded Program whose order `Prog.orderViolation` passes. -/
 theorem bodyOk_root (bytes : ByteArray) (P : Prog) (hdec : Flock.Program.decode bytes = .ok P)
     (hov : P.orderViolation = none) : Resolve.BodyOk P P.root := by
   obtain ⟨st, hP, hinv, hroot⟩ := decode_spec bytes P hdec
@@ -141,8 +125,6 @@ theorem bodyOk_root (bytes : ByteArray) (P : Prog) (hdec : Flock.Program.decode 
   have hok : ∀ i < P.defs.size, DefOk P.defs i P.defs[i]! := by rw [hP]; exact hinv.1
   exact body_ok P hok P.root (hS P.root hS0 hroot).1
 
-/-- **The decoder's facts `ReadsExact.Decoded` reads**, with this module's `PartNonneg` (`ReadsExact`'s, by
-`partNonneg_iff`, `decoded_reads`). -/
 theorem decoded (bytes : ByteArray) (P : Prog) (hdec : Flock.Program.decode bytes = .ok P) :
     ∀ d < P.defs.size, ((P.defs[d]!).prim = true → (P.defs[d]!).outLeaves = 1) ∧
       ((P.defs[d]!).prim = false → (P.defs[d]!).outLeaves = (P.defs[d]!).body.ret.count) ∧

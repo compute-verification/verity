@@ -23,26 +23,17 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Properties.InferenceOnly.Walk
 
-/-!
-# Parsed strided parts name no negative leaf
-
-`parsePartsIn` checks a strided part's corners against its collection, so no reference of a parsed strided part steps
-below leaf 0 (`parsePartsIn_nonneg`), given none of an argument an alias may name does. `ReadsExact.PartNonneg` is the
-same predicate (`partNonneg_iff`).
--/
+/-! Parsed strided parts name no negative leaf. -/
 
 @[expose] public section
 
 namespace InferenceOnlyCheck.Properties.SecurityProofs.BodiesOk
 open Flock.Program
 
-/-- A part's references never step below leaf 0: a strided part's pattern (`parsePartsIn` checks its corners). -/
 def PartNonneg : Part → Prop
   | .strided _ _ b inner os is c => ∀ k < c, 0 ≤ b + ((k / inner : Nat) : Int) * os + ((k % inner : Nat) : Int) * is
   | _ => True
 
-/-- One unfolding of `parsePartsIn`, as `Walk.parsePartsIn_step` takes it, for `PartNonneg`: a strided part's corners
-are within its collection, so every position it names is (`Walk.strided_corners`). -/
 theorem parsePartsIn_nonneg_step (leaves : Bool → Nat → Option Nat) (args : Nat → Nat → Option Seq)
     (hargs : ∀ k x s, args k x = some s → ∀ q ∈ s.parts, PartNonneg q) (n : Nat)
     (b : Nat.below (motive := fun _ => Lean.Json → Flock.V (Array Part)) (n + 1))
@@ -176,7 +167,6 @@ theorem parsePartsIn_nonneg_step (leaves : Bool → Nat → Option Nat) (args : 
               trivial
             · exact absurd h (by intro h; injection h)
 
-/-- **No position of a parsed strided part is negative**, given none of an argument an alias may name is. -/
 theorem parsePartsIn_nonneg (leaves : Bool → Nat → Option Nat) (args : Nat → Nat → Option Seq)
     (hargs : ∀ k x s, args k x = some s → ∀ q ∈ s.parts, PartNonneg q) :
     ∀ fuel j ps, Flock.Program.parsePartsIn fuel j leaves args = .ok ps → ∀ q ∈ ps, PartNonneg q := by

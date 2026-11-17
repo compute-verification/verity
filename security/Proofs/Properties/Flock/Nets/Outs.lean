@@ -6,14 +6,7 @@ public import Proofs.Properties.Flock.Nets.Sha2
 public import Proofs.Properties.Flock.Nets.Hm1
 public import Proofs.Properties.Flock.Nets.Hm3
 
-/-!
-# The two slot circuits' runs
-
-`sha512x3`'s three compressions run from bit 4608 to bit 248814, each row they add reading at most 128 bits, and output
-their certified words concatenated (`seg_shaOuts`), each bit reading at most 16 bits (`shaOuts_width`). `hm96`'s tail
-after its inputs runs from bit 3072 to bit 244562 the same way and outputs `b ‖ c` (`seg_hmTail`, `hmOut`): a bit of `c`
-reads at most 16 bits, and a bit of `b`, its digest bit masked by up to 1536 salt bits, at most 1552 (`hmOut_width`).
--/
+/-! The runs of the two slot circuits, `sha512x3` and `hm96`. -/
 
 @[expose] public section
 
@@ -37,7 +30,6 @@ theorem mapM_cons {f : β → M α} {b : β} {l : List β} {n n₁ n₂ : Nat} {
 
 end Seg
 
-/-- **`sha512x3`'s three compressions run from bit 4608 to bit 248814**, adding rows of at most 128 bits each. -/
 theorem seg_shaOuts : Seg 128 (shaOuts sha3Ins) 4608
     [(ffOut sha0Cv sha0).flatten, (ffOut sha1Cv sha1).flatten, (ffOut sha2Cv sha2).flatten] 248814 := by
   unfold shaOuts sha3Ins
@@ -59,12 +51,10 @@ theorem shaOuts_width : ∀ o ∈ [(ffOut sha0Cv sha0).flatten, (ffOut sha1Cv sh
   List.forall_mem_cons.2 ⟨flatten_width sha0_out, List.forall_mem_cons.2 ⟨flatten_width sha1_out,
     List.forall_mem_cons.2 ⟨flatten_width sha2_out, fun _ h => by cases h⟩⟩⟩
 
-/-- `hm96`'s output `b ‖ c` from its certified compressions. -/
 noncomputable def hmOut (key : ByteArray) : List Lin :=
   (List.range 512).map (fun i => maskBit key (vars 1536 1536) i ((ffOut hm1Cv hm1).flatten.getD (wordBit i) Lin.zero)) ++
     (List.range 512).map fun t => (ffOut hm3Cv hm3).flatten.getD (wordBit t) Lin.zero
 
-/-- **`hm96`'s tail runs from bit 3072 to bit 244562**, adding rows of at most 128 bits each. -/
 theorem seg_hmTail (key : ByteArray) : Seg 128 (hmTail key (vars 0 512) (vars 512 1024) (vars 1536 1536)) 3072
     (vars 0 512, vars 512 1024, vars 1536 1536, hmOut key) 244562 := by
   have h2 : Seg 128 (compress (saltMid.map constW) ((saltWords (vars 1536 1536)).take 16)) 84474 (ffOut hm2Cv hm2)
@@ -99,7 +89,6 @@ theorem vars_width (k n : Nat) : ∀ f ∈ vars k n, f.s.length ≤ 1 := by
   obtain ⟨i, -, rfl⟩ := List.mem_map.1 hf
   simp [Lin.var]
 
-/-- A masked bit reads at most its digest bit's bits and 1536 more, one per salt bit. -/
 theorem maskBit_width (key : ByteArray) {y : List Lin} (hy : ∀ f ∈ y, f.s.length ≤ 1) (i : Nat) (x : Lin) :
     (maskBit key y i x).s.length ≤ x.s.length + 1536 := by
   have hget : ∀ j, (y.toArray.getD j Lin.zero).s.length ≤ 1 := fun j => by
@@ -134,7 +123,6 @@ theorem getD_width {ws : List (List Lin)} (h : ∀ w ∈ ws, ∀ f ∈ w, f.s.le
     obtain ⟨w, hw, hf⟩ := List.mem_flatten.1 (List.mem_of_getElem? hk)
     exact h w hw f hf
 
-/-- **Each bit of `hm96`'s output reads at most 1552 bits.** -/
 theorem hmOut_width (key : ByteArray) : ∀ f ∈ hmOut key, f.s.length ≤ 1552 := by
   intro f hf
   rcases List.mem_append.1 hf with hf | hf

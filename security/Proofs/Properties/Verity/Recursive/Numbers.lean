@@ -42,26 +42,8 @@ import Proofs.Flock.Soundness.Discharge.Hidden.Public
 import Proofs.Flock.Soundness.Discharge.Layout.Drawn
 import Proofs.Flock.Soundness.Refine.Walk
 
-/-!
-# A staged part's numbers don't read its public file
-
-Part `s`'s staged statement at inner rounds `ms` (`RecDeploy.staged`) differs from the one at `ms'` only in what
-the rounds put in it: the part's public file, the inner session's record and the transcript. Its numbers (`numsOf`:
-`ε_table`, `N₀`, the weight and the rounds) read only its one table's `m`, `k_log`, region count and `m_pts` and its
-statement's version (`Stmt.wideLeaf`), the same at both rounds (`RecDeploy.NumsFix.staged_same`). The first four
-read the circuit, the tables, the sample and the unit count `n`:
-
-* `RecSetup.oneFull`, under the inner shape every staged statement carries, passes one table only.
-* `RecVStar.checkStmt` passes only `verity/flock-circuit`, a statement with hidden outputs, so the table is
-  `Stmt.setupHidden`'s.
-* With a sample, `n` is the sample's proved units (`HmRow.drawn`). Without one, the public file records no population
-  (`HmRow.loadPublic`), so `n` is the table's population, which `checkStmt` pins to V*'s statement `s` at the inner
-  shape.
-
-So the numbers agree at any two rounds where the staged statement sets up (`numsOf_staged_eq`), they are `nums`'
-(`numsOf_staged`), and `vstarAt` is the staged statement itself (`vstarAt_staged`). Nothing here assumes the verifier's
-own public input words (`--public-inputs`) are absent: the walks of `Stmt.setupTables` and `Stmt.setupHidden` take any.
--/
+/-! A staged part's numbers (`numsOf`) don't read its public file, so they agree at any two inner rounds where its
+staged statement sets up. -/
 
 @[expose] public section
 
@@ -79,7 +61,6 @@ variable {tags : Tags} {cf pf : ByteArray} {coins : Flock.Coins} {count : ℕ} {
   {stratified : Option ℕ} {closure : Option (Std.HashMap ℕ (Array ℕ))} {publicInputs : Option ByteArray}
   {spec : SessionSpec} {sts : Array Flock.Stmt}
 
-/-- A setup followed by a refusal guard (`setupTables`' refusal of pinned outputs) passes only the setup's own table. -/
 theorem guard_ok {α : Type} {x : Flock.V α} {p : α → Bool} {e : α → String} {w : α}
     (h : (x >>= fun st => if p st = true then throw (e st) else pure st) = .ok w) : x = .ok w := by
   cases x with
@@ -92,7 +73,6 @@ theorem guard_ok {α : Type} {x : Flock.V α} {p : α → Bool} {e : α → Stri
       rfl
 
 set_option maxHeartbeats 4000000 in
-/-- Under hidden outputs, `setupTables` at any public input words is `setupHidden`'s one table, or several. -/
 theorem setupTables_hidden (hh : tags.hiddenOutputs = true)
     (h : Flock.Stmt.setupTables tags cf pf coins count tables draw partition program work stratified closure
       publicInputs = .ok (spec, sts)) :
@@ -131,8 +111,6 @@ theorem setupTables_hidden (hh : tags.hiddenOutputs = true)
        exact Or.inr ⟨by omega, hsz⟩)
 
 set_option maxHeartbeats 4000000 in
-/-- What `setupHidden`'s table is made of, at any public input words: its circuit, its population and sample, the unit
-count `n` the shape reads, and its regions. -/
 theorem setupHidden_shape {st : Flock.Stmt}
     (h : Flock.Stmt.setupHidden tags cf pf coins tables draw partition program publicInputs = .ok st) :
     ∃ pi pop A B, HmOut.parseCommit tags cf tables = .ok st.c ∧ HmIn.parse st.c = .ok pi ∧
@@ -151,7 +129,6 @@ theorem setupHidden_shape {st : Flock.Stmt}
     · first | rfl | cases hd
     · first | (cases hd; assumption) | cases hd
 
-/-- `HmIn.loadPublic`'s population is `HmRow.loadPublic`'s, at the circuit with its public input row. -/
 theorem hmIn_loadPublic_row {c : Flock.Circuit} {pi : HmIn.Ports} {f : ByteArray} {pop : Public}
     (h : HmIn.loadPublic tags c pi f = .ok pop) : ∃ c', HmRow.loadPublic tags c' f = .ok pop := by
   unfold HmIn.loadPublic at h
@@ -163,7 +140,6 @@ theorem hmIn_loadPublic_row {c : Flock.Circuit} {pi : HmIn.Ports} {f : ByteArray
     subst h
     exact ⟨_, by assumption⟩
 
-/-- `HmIn.regions` returns one region per public input block, a count of the circuit's alone. -/
 theorem hmIn_regions_size {c : Flock.Circuit} {pi : HmIn.Ports} {pub : Public} {B : Array Region}
     (h : HmIn.regions c pi pub = .ok B) : B.size = if pi.ports.isEmpty then 0 else (HmIn.inRegions c pi).size := by
   unfold HmIn.regions at h
@@ -179,9 +155,6 @@ theorem hmIn_regions_size {c : Flock.Circuit} {pi : HmIn.Ports} {pub : Public} {
 
 end Walks
 
-/-! ## What the statement's readers take from the staged statement -/
-
-/-- The verifier's readers keep the statement's circuit, table count and tables. -/
 theorem raw_ins_files {w : FlockDeploy.Raw} {s : FlockDeploy.Ins} (h : w.ins = .ok s) :
     s.read.I.circuitFile = w.circuit ∧ s.read.I.count = w.count ∧ s.read.I.tables = w.tables := by
   unfold FlockDeploy.Raw.ins at h
@@ -189,7 +162,6 @@ theorem raw_ins_files {w : FlockDeploy.Raw} {s : FlockDeploy.Ins} (h : w.ins = .
   repeat' split at h
   all_goals first | (cases h; done) | (cases h; exact ⟨rfl, rfl, rfl⟩)
 
-/-- A `--zk` statement's tags are its statement's under the circuit's mask and its table count. -/
 theorem read_tags_of {w : FlockDeploy.Raw} {s : FlockDeploy.Ins} (h : w.ins = .ok s) (hz : w.zk = true) :
     s.read.tags = Zk.tags s.stmtTags (Zk.maskLogOf w.circuit) w.count := by
   obtain ⟨-, hT⟩ := ResLower.raw_ins_tags h
@@ -198,7 +170,6 @@ theorem read_tags_of {w : FlockDeploy.Raw} {s : FlockDeploy.Ins} (h : w.ins = .o
   unfold Flock.Readable.Read.tags
   rw [if_pos hz', FlockSoundness.Discharge.ZkExec.zkTags_eq, hT, hc, hn]
 
-/-- Part `s`'s staged statement is read from its part's raw statement with the staged public file. -/
 theorem staged_ins {st : Stage} {x : Claims.Msg} {ms : List (Claims.Msg × Claims.Out)} {s : ℕ} {i : RecIns}
     (h : insO (staged st x ms s) = some i) :
     ∃ r p, readX x = some r ∧ r.w.parts[s]? = some p ∧ p.base.zk = true ∧
@@ -213,7 +184,6 @@ theorem staged_ins {st : Stage} {x : Claims.Msg} {ms : List (Claims.Msg × Claim
   have h' : (partRaw r st x ms s p).ins.toOption = some i := by simpa using h
   exact ⟨r, p, hr, hp, by simpa [partRaw] using hz, RecRaw.ins_base (toOption_eq_some h')⟩
 
-/-- **The staged statements at any two rounds are read alike**: the same tags, circuit file, tables and sample. -/
 theorem reads_eq {st : Stage} {x : Claims.Msg} {ms ms' : List (Claims.Msg × Claims.Out)} {s : ℕ} {i i' : RecIns}
     (hi : insO (staged st x ms s) = some i) (hi' : insO (staged st x ms' s) = some i') :
     i.base.read.tags = i'.base.read.tags ∧ i.base.read.I.circuitFile = i'.base.read.I.circuitFile ∧
@@ -232,14 +202,10 @@ theorem reads_eq {st : Stage} {x : Claims.Msg} {ms ms' : List (Claims.Msg × Cla
   refine ⟨?_, hc.trans hc'.symm, ht.trans ht'.symm, by rw [hdr, hdr', edd]⟩
   rw [read_tags_of hb hz, read_tags_of hb' hz, e1] <;> rfl
 
-/-! ## One staged table's shape -/
-
-/-- The unit count a staged table must have: the sample's proved units, else V*'s statement `s`'s instances. -/
 def nOf (r : XR) (s : ℕ) : Option Json → Option ℕ
   | some d => (Draw.UnitSample.ofJson d).toOption.map (·.proved.size)
   | none => ((RecVStar.statements r.shape).toOption.bind (·[s]?)).map (·.instances)
 
-/-- **A staged statement that sets up has one table**, from `setupHidden` at its circuit, with the unit count `nOf`. -/
 theorem side {st : Stage} {x : Claims.Msg} {ms : List (Claims.Msg × Claims.Out)} {s : ℕ} {i : RecIns}
     {spec : SessionSpec} {sts : Array Flock.Stmt} (h : setupO (staged st x ms s) = some (i, spec, sts)) :
     ∃ r t, readX x = some r ∧ spec = t.spec ∧ sts = #[t] ∧
@@ -292,9 +258,6 @@ theorem side {st : Stage} {x : Claims.Msg} {ms : List (Claims.Msg × Claims.Out)
       rw [e, hn, hnD]
   · rw [hreg, Array.size_append, (FlockSoundness.Discharge.Hidden.regions_get hA).1]
 
-/-! ## The numbers of one table -/
-
-/-- The numbers of a session of one table `t`. -/
 noncomputable def numsT (t : Flock.Stmt) : Claims.Recursion.Nums :=
   ⟨FlockDeploy.tableErr true t.spec t, (2 : ℚ) ^ (Claims.Flock.zkLevel0 t.wideLeaf t.m).d, FlockDeploy.tableWeight true t,
     2 + 2 * FlockDeploy.repRounds true t.spec t, Claims.Flock.Numbers.waits, Claims.Flock.Numbers.cap, 0, 0⟩
@@ -314,7 +277,6 @@ theorem numsOf_one {xO : Claims.Msg} {i : RecIns} {t : Flock.Stmt} (h : setupO x
   rw [ht, hk, rounds_one]
   all_goals simp only [List.map_cons, List.map_nil, List.sum_cons, List.sum_nil, add_zero]
 
-/-- One table's numbers read only its `m`, `k_log`, region count and `m_pts` and its statement's version. -/
 theorem numsT_congr {t u : Flock.Stmt} (hm : t.m = u.m) (hk : t.c.kLog = u.c.kLog)
     (hr : t.regions.size = u.regions.size) (hp : t.mPts = u.mPts) (hw : t.wideLeaf = u.wideLeaf) :
     numsT t = numsT u := by
@@ -327,8 +289,6 @@ namespace Verity.Recursive
 
 open RecDeploy Verity.Recursive.Numbers
 
-/-- **A staged part's numbers don't read its rounds** (C2): at any two inner rounds where part `s`'s staged statement
-sets up, its numbers agree. -/
 theorem numsOf_staged_eq {st : Stage} {x : Claims.Msg} {ms ms' : List (Claims.Msg × Claims.Out)} {s : ℕ}
     {o o' : RecIns × Flock.SessionSpec × Array Flock.Stmt}
     (h : setupO (staged st x ms s) = some o) (h' : setupO (staged st x ms' s) = some o') :
@@ -358,7 +318,6 @@ theorem numsOf_staged_eq {st : Stage} {x : Claims.Msg} {ms ms' : List (Claims.Ms
   · rw [hmP, hmP', ec, en]
   · exact ew
 
-/-- **Part `s`'s numbers are `nums`'** at any inner rounds where its staged statement sets up. -/
 theorem numsOf_staged {st : Stage} {x : Claims.Msg} {ms : List (Claims.Msg × Claims.Out)} {s : ℕ}
     {o : RecIns × Flock.SessionSpec × Array Flock.Stmt} (h : setupO (staged st x ms s) = some o) :
     numsOf (staged st x ms s) = nums st x s := by
@@ -368,7 +327,6 @@ theorem numsOf_staged {st : Stage} {x : Claims.Msg} {ms : List (Claims.Msg × Cl
   rw [dif_pos hex]
   exact numsOf_staged_eq h ho'
 
-/-- **Part `s`'s V\* statement is the staged one** at any inner rounds where it sets up. -/
 theorem vstarAt_staged {st : Stage} {x : Claims.Msg} {ms : List (Claims.Msg × Claims.Out)} {s : ℕ}
     {o : RecIns × Flock.SessionSpec × Array Flock.Stmt} (h : setupO (staged st x ms s) = some o) :
     vstarAt st x ms s = staged st x ms s := by

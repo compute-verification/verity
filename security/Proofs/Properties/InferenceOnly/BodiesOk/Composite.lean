@@ -21,18 +21,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Properties.InferenceOnly.BodiesOk.Basic
 
-/-!
-# `composite`'s step
-
-`composite_succ`: a composite Definition that `composite` decodes is `DefOk` and keeps the decoder's invariant,
-given that `getDef` and `staticFns` one fuel lower do (`GetSpec`, `StatSpec`). The node loop's invariant is `NodesOk`:
-each node built so far calls an already decoded Definition as `NodeOk` says (`buildNode_spec`), declares the output it
-computes, and holds arguments whose parts name leaves (`Walk.parsePartsIn_valid`). `specs` closes the induction on the
-fuel.
-
-The decoder is a `do` block whose join points Lean inlines once a step applies them to the decoder state, so each step
-names them first (`st_get_bind`, `lift_lets`, `extract_lets`) and splits each `if` and `match` once.
--/
+/-! `composite`'s step: a composite Definition it decodes is `DefOk` and keeps the decoder's invariant. -/
 
 @[expose] public section
 
@@ -49,7 +38,6 @@ theorem st_modify {f : DecState → DecState} {s : DecState} {u : PUnit} {s' : D
     (h : (modify f : DM PUnit) s = .ok (u, s')) : s' = f s := by
   injection h with h; injection h with h1 h2; exact h2.symm
 
-/-- A loop whose every step leaves the state alone leaves it alone. -/
 theorem forIn_same {α β : Type} (l : List α) (f : α → β → DM (ForInStep β))
     (hf : ∀ x b s t s', f x b s = .ok (t, s') → s' = s) :
     ∀ (b : β) (s : DecState) (r : β) (s' : DecState), forIn l b f s = .ok (r, s') → s' = s := by
@@ -81,7 +69,6 @@ theorem array_mapM_same {α β : Type} (f : α → DM β) (hf : ∀ x s y s', f 
   rw [← h.2]
   exact list_mapM_same f hf _ _ _ _ h1
 
-/-- The leaves `composite` gives `parseParts`: a parameter's, or a node's declared output's. -/
 def leavesOf (params : Array (String × Ty)) (outs : Array Ty) (p : Bool) (i : ℕ) : Option ℕ :=
   if p = true then params[i]?.map (·.2.leaves) else outs[i]?.map (·.leaves)
 
@@ -109,7 +96,6 @@ theorem refIn_of (params : Array (String × Ty)) (outs : Array Ty) (retType : Ty
     show rj < (params[ri]!).2.leaves
     rw [getElem!_pos params ri hlt, hpr]; exact hj
 
-/-- What the node loop has established of the nodes it built. -/
 def NodesOk (defs : Array Defn) (outs : Array Ty) (leaves : Bool → ℕ → Option ℕ) (nodes : Array Node) : Prop :=
   ∀ k < nodes.size, (nodes[k]!).fn < defs.size ∧ NodeOk defs[(nodes[k]!).fn]! (nodes[k]!) ∧
     (nodes[k]!).out = outs[k]! ∧ ∀ a < (nodes[k]!).args.size, ∃ ps : Array Part,
@@ -522,7 +508,6 @@ theorem statSpec_zero : StatSpec 0 := by
   unfold staticFns at h
   exact absurd h (by intro h; injection h)
 
-/-- **The decoder's step specs, at every fuel.** -/
 theorem specs : ∀ fuel, GetSpec fuel ∧ CompSpec fuel ∧ StatSpec fuel
   | 0 => ⟨getSpec_zero, compSpec_zero, statSpec_zero⟩
   | n + 1 =>

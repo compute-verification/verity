@@ -2,14 +2,7 @@ module
 
 public import Properties.Certifier.Records
 
-/-!
-# The check without the grid: the proof
-
-An egress execution phase's verdict without the grid is the full check's, or the full check's is `mismatch` and it is
-accepted (`egress_noGrid`); an ingress execution phase's is the same function's. So `verdictsNoGrid` is `verdicts` but for
-the egress grid comparison (`verdicts_noGrid`), and `evaluateNoGrid` refuses where `evaluate` does, and a raw or
-committed egress record besides (`uncertifiedEgress_iff`): `noGridMeans`, `noGridAcceptsMore`.
--/
+/-! The proof that the records check without the grid is the full check but for the egress grid comparison. -/
 
 @[expose] public section
 
@@ -20,8 +13,6 @@ namespace Properties.NetworkRecords
 
 namespace NoGridProofs
 
-/-- **An egress execution phase's verdict without the grid** is the full check's, or the full check's is `mismatch` and it
-is none: the two run the same tests, in the same order, up to the grid comparison, which is the full check's last. -/
 theorem egress_noGrid (p : Params) (c : Records.Commitment) (e : Records.ByteEvidence) (eg : ByteArray) (l : String)
     (link : Records.ByteLink) (expected : Records.RawGrid) (w : Nat) :
     Records.egressVerdictNoGrid p c e l link w = Records.egressVerdict p c e eg l link expected w ∨
@@ -69,7 +60,6 @@ theorem egress_noGrid (p : Params) (c : Records.Commitment) (e : Records.ByteEvi
 
 theorem gridOnly_refl (v : TransferBlocks) : GridOnly v v := ⟨rfl, rfl, rfl, Or.inl rfl⟩
 
-/-- An execution phase `GridOnly` accepts every execution phase it is of that is accepted. -/
 theorem gridOnly_accepts {v v' : TransferBlocks} (h : GridOnly v v') (hv : v.violation = none) : v'.violation = none := by
   rcases h.2.2.2 with h | ⟨-, h, -⟩
   · rw [h, hv]
@@ -111,7 +101,6 @@ theorem zip_append {β γ : Type} (R : β → γ → Prop) {a b : List β} {a' b
   · exact ha.2 x hx
   · exact hb.2 x hx
 
-/-- **`verdictsNoGrid` is `verdicts` but for the egress grid comparison.** -/
 theorem verdicts_noGrid (p : Params) (c : Records.Commitment) (e : Records.ByteEvidence) (eg ig : ByteArray) :
     AllGridOnly (Records.verdicts p c e eg ig) (Records.verdictsNoGrid p c e ig) := by
   unfold AllGridOnly Records.verdicts Records.verdictsNoGrid

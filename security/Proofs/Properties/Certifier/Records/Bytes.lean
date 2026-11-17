@@ -3,12 +3,7 @@ module
 public import NetworkCheck.RecordsGrid
 public import Proofs.Properties.Certifier.Check.Bytes
 
-/-!
-# Bytes the committed digest is written in
-
-`k`-byte pieces of whole bits are `k` bytes (`bytesOfBits_size`). The hex lemmas the digest's checks read (`hexOf_inj`,
-`flatten_inj`) live in `Proofs.Flock.Bytes`, under this namespace.
--/
+/-! Bytes the committed digest is written in; the hex lemmas its checks read live in `Proofs.Flock.Bytes`. -/
 
 @[expose] public section
 

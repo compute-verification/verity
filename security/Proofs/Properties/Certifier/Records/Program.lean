@@ -14,13 +14,7 @@ import Mathlib.Data.Finset.Attr
 import Mathlib.Order.Fin.Basic
 import Mathlib.Tactic.SetLike
 
-/-!
-# Every frame of the Program's grid is one of the link's frames
-
-The FIFO releases no more frames than were enqueued (`queue_add`), and no more are enqueued than the link has
-(`sum_enqueued_le`), so each slot the Program fills holds the payload of a frame the link has (`expectedRow_frame`): of
-`B` bytes when every payload is `8·B` bits (`programGrid_sizes`).
--/
+/-! Every frame of the Program's grid is one of the link's frames. -/
 
 @[expose] public section
 
@@ -95,7 +89,6 @@ theorem offset_last {S t : Nat} (f : Nat → Fin (S + 1)) :
   rw [h1, h2, List.append_nil, List.map_map, ← List.map_coe_finRange_eq_range, List.map_map]
   rfl
 
-/-- A slot the Program fills holds the payload of one of the link's frames. -/
 theorem expectedRow_frame {S T W : Nat} {syncs : Fin W → ClockSync} {frames : List LogicalFrame} {t : Nat}
     {s : Fin S} {f : List Bool} (h : expectedRow S T W syncs frames t s = some f) :
     ∃ k < frames.length, f = payloads frames k := by
@@ -112,7 +105,6 @@ theorem expectedRow_frame {S T W : Nat} {syncs : Fin W → ClockSync} {frames : 
     omega
   · cases h
 
-/-- Every frame of the Program's grid is `B` bytes when every payload of the link is `8·B` bits. -/
 theorem programGrid_sizes {p : NetworkCheck.Check.Params} {syncs : Fin p.windows → ClockSync}
     {frames : List LogicalFrame} {w : Nat} (hf : ∀ f ∈ frames, f.payload.length = 8 * p.grid.frameBytes) :
     ∀ row ∈ (programGrid p syncs frames w).toList, ∀ f ∈ (row.filterMap id).toList, f.size = p.grid.frameBytes := by

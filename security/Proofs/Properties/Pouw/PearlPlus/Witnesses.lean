@@ -18,28 +18,8 @@ import all Init.Data.Repr
 import all Init.Data.String.Defs
 import all Lean.Data.Json.Basic
 
-/-!
-# Pearl+'s properties say something
-
-Each Pearl+ property's witnesses (`security/Properties/lean-audit.json`'s `witnesses`): an `honest` one, its premises at an
-instance the code accepts, and a `nontrivial` one, its conclusion false at a verifier that accepts everything.
-
-`OpeningBinds`: an hm96 tile tree of two positions accepts an opening of position 0 against the node over its two leaves
-(`openingBinds_honest`), and two openings of one position whose values differ, each hashing three different messages with
-three different SHA-512 digests, neither open one value nor collide (`openingBinds_nontrivial`). The digests are computed by
-the kernel, one declaration each, once the hm96 mask of their zero salt is known to be zero (`Witness.mask_zero`), since
-the mask's tables are too large for it to build.
-
-`YIsTheUnscale`, `RefusedBeforeTheCoin`, `TileKeepsTheInertBound`, `LoadedGivesUp`, `PlanMeans`, `AcceptMeans`,
-`TileAcceptMeans` and `WorkIsTheCredit` have both witnesses. `LoadedGivesUp`'s, `PlanMeans`' and `AcceptMeans`' `honest`
-ones are at one honest pass of the deployed scheme (`honestPass`, loaded from `honestManifest`): `load` reads it, `plan`
-samples its one tile, and `check` accepts its run at no samples, since a sampled tile of the deployed scheme is replayed on the
-noise `check` derives itself (`fixedNoise` at k = 1,024), past what the kernel reaches. A sampled tile's are at a test
-instance (`testPass`, k = 128, 1 × 1 tiles, its run `testRun`): `check` loads the pass, samples its tile, derives its noise
-(`testNoise`) and passes the tile on it (`acceptMeans_drawn`). `TileAcceptMeans`' `honest` ones are that tile on the test
-noise and on the noise `check` derives for it (`tileAcceptMeans_derived`). `WorkIsTheCredit`'s are the credit both runs
-publish: the honest pass's at no samples, and the test pass's at one, a test instance's, crediting nothing.
--/
+/-! Pearl+'s properties' witnesses, a sampled tile's at a test instance of k = 128 because a deployed tile's replay at k
+= 1,024 is past what the kernel reaches. -/
 
 @[expose] public section
 
@@ -48,8 +28,6 @@ namespace Properties.Pouw.PearlPlus
 open PouwCommit PouwCheck.PearlPlus
 
 namespace Witness
-
-/-! ## The hm96 mask of a zero salt -/
 
 theorem foldl_inv {α β : Type} (P : β → Prop) (f : β → α → β) :
     ∀ (l : List α) (init : β), P init → (∀ a ∈ l, ∀ b, P b → P (f b a)) → P (l.foldl f init)
@@ -74,7 +52,6 @@ def tablesAt (P N : Nat) (C : Array UInt64) : Array UInt64 := Id.run do
 
 theorem tables_at : Flock.Hm96.Default512.tables = tablesAt 192 (8 * 256 * 192) Flock.Hm96.Default512.cols := rfl
 
-/-- The table's entries at a zero salt byte (`i / 8 % 256 = 0`) are never written. -/
 theorem tablesAt_zero (P N : Nat) (C : Array UInt64) (i : Nat) (hi : i / 8 % 256 = 0) : (tablesAt P N C)[i]! = 0 := by
   unfold tablesAt
   simp only [Id.run, Std.Legacy.Range.forIn_eq_forIn_range', List.forIn_pure_yield_eq_foldl, pure_bind]
@@ -114,7 +91,6 @@ def outAt (acc : Array UInt64) : ByteArray := Id.run do
     for j in [0:8] do out := out.push ((acc[k]! >>> (8 * j).toUInt64) &&& 0xff).toUInt8
   return out
 
-/-- `Hm96.Default512.mask` at any number of salt bytes `P` and table `T`. -/
 def maskAt (P : Nat) (T : Array UInt64) (salt : ByteArray) : ByteArray := Id.run do
   let mut acc := Array.replicate 8 (0 : UInt64)
   for p in [0:P] do
@@ -157,12 +133,9 @@ theorem outAt_zero : outAt (Array.replicate 8 0) = ⟨Array.replicate 64 0⟩ :=
 theorem tables_zero (i : Nat) (hi : i / 8 % 256 = 0) : Flock.Hm96.Default512.tables[i]! = 0 := by
   rw [tables_at]; exact tablesAt_zero _ _ _ i hi
 
-/-- **The hm96 mask of a zero salt is zero.** -/
 theorem mask_zero (salt : ByteArray) (hs : ∀ p, salt.get! p = 0) :
     Flock.Hm96.Default512.mask salt = ⟨Array.replicate 64 0⟩ := by
   rw [mask_at, maskAt_split, accAt_zero _ _ _ hs tables_zero, outAt_zero]
-
-/-! ## Trees -/
 
 theorem rowsDomain_eq (b : ByteArray) (o : Int) (c : Nat) (dg : Bool) (hb : b.size = 64) (ho : -2 ≤ o) :
     rowsDomain b o c HM96 dg = .ok ⟨⟨.sha512, c, frameHash .sha512 "domain"
@@ -246,8 +219,6 @@ end Witness
 
 open Witness
 
-/-! ## `OpeningBinds` -/
-
 /-- An hm96 tile tree of two positions (owner −1, the transcript's) accepts the opening of position 0 against the node over
 its two leaves. -/
 theorem openingBinds_honest :
@@ -325,8 +296,6 @@ theorem openingBinds_nontrivial :
     exact absurd hp0 (by decide +kernel)
   · exact distinct x hx y hy hne heq
 
-/-! ## `YIsTheUnscale` -/
-
 /-- The H200's first stored cell of y (`Rule.H200_Y`'s): its U and α give the served word 0x3F7E, which the check's `yOf`
 gives, and which is the Definition's unscale. -/
 theorem yIsTheUnscale_honest :
@@ -341,8 +310,6 @@ theorem yIsTheUnscale_nontrivial :
       some (Pouw.PearlC.unscale 0x478391C0 0x426D4BA7 0x448F000E)) := by
   decide
 
-/-! ## `RefusedBeforeTheCoin` -/
-
 /-- `plan` refuses a run that retains no pass, before any coin. -/
 theorem refusedBeforeTheCoin_honest : plan emptyRun = .error emptyRefusal := rfl
 
@@ -356,11 +323,8 @@ theorem refusedBeforeTheCoin_nontrivial :
 
 /-! ## `LoadedGivesUp`, `PlanMeans` and `AcceptMeans`
 
-The honest pass loads in the kernel once `load` is unfolded down to the salt coin's hm96 leaf, whose mask at its zero salt
-is given (`maskOr`) and whose leaf prefix is a literal (`Witness.leafPrefix_eq`), to the salt's and the sample's `derive`,
-whose sorted contexts are given (`qsort_salt`, `qsort_run`), and to the fixed operands' ids' `String.toNat?`, whose value on digits
-is given (`toNatOr`): the kernel computes the rest, the coin's opening, the salt, the fixed operands' and records' roots, and
-`plan`'s commitment and sample on that pass. -/
+The honest pass loads in the kernel once the salt coin's hm96 mask, `derive`'s sorted contexts and `String.toNat?` on
+digits are given; the kernel computes the rest. -/
 
 namespace Witness
 
@@ -441,7 +405,6 @@ theorem planMeans_nontrivial : ¬ (acceptAllPlan.root = runCommitment acceptAllP
   rw [runCommitment, Commit.taggedSize] at this
   exact absurd this (by decide)
 
-/-- `plan` takes the honest pass's run at no samples: no tile to open. -/
 theorem Witness.plan_honestRun0 :
     plan (honestRun 0) = .ok ⟨[honestPass], runCommitment [honestPass], honestSource, [], 0, [], none⟩ := by
   apply eq_ok_of_toOption
@@ -461,15 +424,10 @@ theorem acceptMeans_nontrivial : ∀ pl, ¬ ((acceptAllCheck emptyRun noOpening)
   intro pl h
   cases h
 
-/-! ## A tile: `TileAcceptMeans` and `TileKeepsTheInertBound` -/
-
 namespace Witness
 
-/-- `checkTile`'s outcome on a tile on which each of its other checks passes, at a call that commits no y: the tile is
-the verifier's own and its call in the scheme's domain, the openings cover it and open against their roots, the words
-formed from the opened rows at the noise `wn'` are `ch`, their leaf is the opened one, and its rows keep the per-row rules;
-the inert-work bound's verdict `bound` is the tile's, a pass at `none` and over the bound at `some why`. Each hypothesis
-is one computation the kernel does on its own. -/
+/-- `checkTile`'s outcome on a tile on which each of its other checks passes, at a call that commits no y; each
+hypothesis is one computation the kernel does on its own. -/
 theorem checkTile_eq_outcome {p : Pass} {wn : Except String Words.FixedNoise} {tid : Nat} {o : TileOpening} {pos : Nat}
     {rows cols : List Nat} {wn' : Words.FixedNoise} {ops : Words.Ops} {ch : Words.Checked} {bound : Option String}
     (ht : p.tile? tid = some (pos, rows, cols))
@@ -614,8 +572,6 @@ theorem test_opensLeaf : (testOpening.leaf.position != 0 || !opens (transcriptDo
     Flock.Hm96.Default512.treeLeaf, Flock.Hm96.Default512.commitString, mask_eq_maskOr, leafPrefix_eq]
   decide +kernel
 
-/-- `Words.encode` with its steps as parameters: the E line (`S`), the line key (`L`), the row seed (`RS`), the row's
-parse (`P`), the forming (`F`) and the peels (`PA`, `PB`). -/
 def encodeWith (S : ByteArray → Nat → Nat → Nat → Nat → Words.Reject (Array Nat)) (L : ByteArray → ByteArray)
     (RS : ByteArray → ByteArray → Nat → Nat → ByteArray → ByteArray) (P : ByteArray → Nat → Words.Reject (Array Nat))
     (F : Array (Array Nat) → Array (Array Nat) → Array (Array Nat) → Words.Reject Words.Formed)
@@ -634,7 +590,6 @@ theorem encode_eq_encodeWith (salt rootB : ByteArray) (wn : Words.FixedNoise) (i
     Words.encode salt rootB wn index k rows aRows cols bRows = encodeWith Words.sampleLine Words.lineKey Words.rowSeed
       Words.parseRow Words.formV1 Words.peelA Words.peelB salt rootB wn index k rows aRows cols bRows := rfl
 
-/-- `encodeWith` of one A row and one B row, at any steps. -/
 theorem encodeWith_one {S : ByteArray → Nat → Nat → Nat → Nat → Words.Reject (Array Nat)} {L : ByteArray → ByteArray}
     {RS : ByteArray → ByteArray → Nat → Nat → ByteArray → ByteArray} {P : ByteArray → Nat → Words.Reject (Array Nat)}
     {F : Array (Array Nat) → Array (Array Nat) → Array (Array Nat) → Words.Reject Words.Formed}
@@ -648,10 +603,8 @@ theorem encodeWith_one {S : ByteArray → Nat → Nat → Nat → Nat → Words.
   simp only [encodeWith, List.zip_cons_cons, List.zip_nil_left, Array.mapM_eq_mapM_toList, List.mapM_cons,
     List.mapM_nil, hea, hxa, heb, hxb, hfa, hfb, hpa, hpb, bind, Except.bind, pure, Except.pure, Functor.map, Except.map]
 
-/-- `encode` of one A row and one B row: each side's E line, its parsed row and its formed side, then the peel factors.
-Each hypothesis is one computation the kernel does on its own. It is `encodeWith_one` at `encode`'s own steps
-(`encode_eq_encodeWith`): a proof that unfolds `encode` at its steps has the kernel reduce a match on an E line
-(`Words.sampleLine`) of an unknown row, which evaluates SHA-512 as far as the row lets it. -/
+/-- `encode` of one A row and one B row, as `encodeWith_one` at `encode`'s own steps, because unfolding `encode` there
+has the kernel reduce a match on an E line of an unknown row, which evaluates SHA-512. -/
 theorem encode_one {salt rootB : ByteArray} {wn : Words.FixedNoise} {index k i j : Nat} {ra rb : ByteArray}
     {ea eb xa xb : Array Nat} {a b : Words.Formed} {pa pb : Array (Array Nat)}
     (hea : Words.sampleLine (Words.lineKey (Words.rowSeed salt rootB index i ra)) 0 0 0 Words.NORM_E = .ok ea)
@@ -669,28 +622,22 @@ theorem size_testRowB : testRowB.size = 512 := by decide +kernel
 
 theorem size_zeroSalt : zeroSalt.size = HM96_SALT := by decide +kernel
 
-/-- A row opened from `row ++ zeroSalt` is `row`: the opening drops the salt's 192 bytes. -/
 theorem openedValue_salted (row : ByteArray) : openedValue (row ++ zeroSalt) = row :=
   ByteArray.extract_append_eq_left (by rw [ByteArray.size_append, size_zeroSalt, Nat.add_sub_cancel])
 
-/-- Row A's `sha512/row-seg/v1` digest, the inner digest of its hm96 leaf and the key of its seed. -/
 def rowDigestA : ByteArray :=
   beBytes 64 [0x140f6a9bd2d2b0d00682751661f9065654e014ac6608062bbd2fe6acd5bf29619737d459f93ea07519da2b55ab13234cd5298b6acbad448a0322ba066a66ae7c]
 
-/-- Row A's seed (`Words.rowSeed`). -/
 def rowSeedA : ByteArray :=
   beBytes 32 [0x84d7543fc5fbc6240cb86e24c7120d81495306013292f0b083d66d9149c1b666]
 
-/-- The key of row A's E line (`Words.lineKey` of its seed). -/
 def lineKeyA : ByteArray :=
   beBytes 32 [0x9f31bc07d278c3502ee6ffab08f73ce847b175833166316570371968113900d7]
 
-/-- Row A's E line: 32 E4M3 codes at norm 256. -/
 def eA : Array Nat := #[
   0xe5, 0xd6, 0xd3, 0x61, 0x60, 0xe9, 0xe2, 0xe8, 0xe6, 0x5b, 0x67, 0x64, 0x3f, 0x56, 0x66, 0x69,
   0xe2, 0xd1, 0x63, 0x60, 0x58, 0xe8, 0x68, 0xda, 0xe2, 0xd5, 0x69, 0xe2, 0xde, 0x66, 0x61, 0x67]
 
-/-- Column 0's E line of B: 32 E4M3 codes at norm 256. -/
 def eB : Array Nat := #[
   0x4e, 0xe6, 0xe6, 0xd8, 0x60, 0xd7, 0x67, 0x5c, 0xe8, 0xe0, 0xe8, 0x60, 0xb3, 0xda, 0x5c, 0xe5,
   0x68, 0xe2, 0xe2, 0xe6, 0x5b, 0xe2, 0x60, 0xea, 0x69, 0xd9, 0xdc, 0xc0, 0xd7, 0xe4, 0xe7, 0xe9]
@@ -838,12 +785,8 @@ example (h : TileKeepsTheInertBound) (hc : Rule.checkOpened capScheme inertBound
 
 /-! ## A sampled tile: `AcceptMeans` and `WorkIsTheCredit` at a test instance
 
-`check` accepts `testRun`, the test pass's run at one sample read as a test instance's: `load` reads the test pass from its
-manifest, `plan` samples its one tile, and the replay derives the fixed operand's noise itself (`fixedNoise`), which is the
-test noise (`Witness.test_noise`), and passes the tile on it (`tileAcceptMeans_honest`). The noise is 2k = 256 noise lines
-and 32 × 32 FP32 chains of k = 128: each 16 lines and each 4 rows of G are one kernel computation, in modules of their
-own, one per kind (`Proofs.Properties.Pouw.PearlPlus.Noise`), and the replay and the noise are proved over their steps
-as parameters (`Witness.replayWith`, `Witness.fixedNoiseWith`), so the kernel never reduces a step of unknown arguments. -/
+The replay and the noise are proved over their steps as parameters (`Witness.replayWith`, `Witness.fixedNoiseWith`), so
+the kernel never reduces a step of unknown arguments. -/
 
 namespace Witness
 
@@ -858,14 +801,12 @@ theorem mapM_ok_of_zip {α β : Type} [DecidableEq β] {f : α → Except String
   | [], _ :: _, hn, _ => absurd hn (by simp)
   | _ :: _, [], hn, _ => absurd hn (by simp)
 
-/-- An array's `mapM` gives `o` where each element's step gives `o`'s at its place. -/
 theorem arr_mapM_ok {α β : Type} [DecidableEq β] {f : α → Except String β} (a : Array α) (o : Array β)
     (hn : a.size = o.size)
     (h : (a.toList.zip o.toList).all (fun p => decide ((f p.1).toOption = some p.2)) = true) : a.mapM f = .ok o := by
   rw [Array.mapM_eq_mapM_toList, mapM_ok_of_zip _ _ (by simpa using hn) h]
   rfl
 
-/-- `l.all P` from its first `c` chunks of `w` and the rest. -/
 theorem all_of_chunks {α : Type} (P : α → Bool) (l : List α) (w : Nat) :
     ∀ c, (∀ i < c, ((l.drop (w * i)).take w).all P = true) → (l.drop (w * c)).all P = true → l.all P = true
   | 0, _, h => by simpa using h
@@ -874,7 +815,6 @@ theorem all_of_chunks {α : Type} (P : α → Bool) (l : List α) (w : Nat) :
         show w * c + w = w * (c + 1) by rw [Nat.mul_succ], h]
       rfl)
 
-/-- `Words.fixedNoise`'s body with its steps (seed_B, a basis, a chain) as parameters. -/
 def fixedNoiseWith (SB : ByteArray → ByteArray → ByteArray)
     (BA : ByteArray → Nat → Nat → Words.Reject (Array (Array Nat))) (CH : Array Nat → Array Nat → Words.Reject Nat)
     (salt rootB : ByteArray) (k : Nat) : Words.Reject Words.FixedNoise := do
@@ -951,8 +891,6 @@ theorem test_gram : ((Array.range R).map (Words.column testFb)).mapM (fun fbp =>
   | 6, _ => exact test_gram6
   | 7, _ => exact test_gram7
 
-/-- The test noise is the fixed operand's noise `check` derives for the test pass: seed_B of its salt and B's root, F_A
-and F_B at the line norm, and G. -/
 theorem test_noise : Words.fixedNoise testSalt testRootB 128 = .ok testNoise := by
   rw [fixedNoise_eq_fixedNoiseWith]
   exact fixedNoiseWith_ok test_seedB test_fa test_fb test_gram
@@ -969,7 +907,6 @@ theorem test_noiseOf : noiseOf testPass 0 = .ok testNoise := by
   rw [test_tile]
   exact h
 
-/-- `replay`'s body with the noise's derivation and the tile check as parameters. -/
 def replayWith (fixedNoise : ByteArray → ByteArray → Nat → Except String Words.FixedNoise)
     (checkTile : Pass → Except String Words.FixedNoise → Nat → TileOpening → TileOutcome)
     (pl : Plan) (opener : Nat → Nat → Except String TileOpening) : List TileVerdict := Id.run do
@@ -996,7 +933,6 @@ def replayWith (fixedNoise : ByteArray → ByteArray → Nat → Except String W
 theorem replay_eq_replayWith (pl : Plan) (opener : Nat → Nat → Except String TileOpening) :
     replay pl opener = replayWith Words.fixedNoise checkTile pl opener := rfl
 
-/-- The replay of a plan of one tile, of its first pass: that tile's outcome on the noise derived for it. -/
 theorem replayWith_one {FN : ByteArray → ByteArray → Nat → Except String Words.FixedNoise}
     {CT : Pass → Except String Words.FixedNoise → Nat → TileOpening → TileOutcome} {pl : Plan}
     {opener : Nat → Nat → Except String TileOpening} {tid pos : Nat} {p : Pass} {rows cols : List Nat}

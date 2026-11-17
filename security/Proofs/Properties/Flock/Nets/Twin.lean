@@ -2,14 +2,8 @@ module
 
 public import Flock.HmNets
 
-/-!
-# The builder as the kernel runs it
-
-`HmNets.symm` is well-founded recursion, which the kernel doesn't reduce, so no run of the builder evaluates under
-`decide`. `symmK` is the same merge by structural recursion (`symmK_eq`), and `beqK` the supports' equality as a `Bool`;
-each `…K` below is its `HmNets` namesake with those two in place of `symm` and `decide (a.s = b.s)`, and equal to it
-(`scheduleK_eq`, `roundsK_eq`, `ffK_eq` and the lemmas before them).
--/
+/-! The builder as the kernel runs it: each `…K` is its `HmNets` namesake by structural recursion, because the kernel
+does not reduce `HmNets.symm`'s well-founded recursion. -/
 
 @[expose] public section
 
@@ -17,15 +11,11 @@ open Flock Flock.HmNets
 
 namespace FlockDeploy.Concrete.Nets
 
-/-! ## The twin -/
-
-/-- `symm` by structural recursion. -/
 noncomputable def symmK : List Var → List Var → List Var := fun xs =>
   List.rec (motive := fun _ => List Var → List Var) (fun ys => ys)
     (fun x xs rec => fun ys => List.rec (motive := fun _ => List Var) (x :: xs)
       (fun y ys recY => cond (Nat.blt x y) (x :: rec (y :: ys)) (cond (Nat.blt y x) (y :: recY) (rec ys))) ys) xs
 
-/-- Equality of two supports, by structural recursion. -/
 noncomputable def beqK : List Var → List Var → Bool := fun xs =>
   List.rec (motive := fun _ => List Var → Bool)
     (fun ys => List.rec (motive := fun _ => Bool) true (fun _ _ _ => false) ys)
@@ -209,7 +199,6 @@ theorem roundsK_eq (w : List Word) : ∀ (n t : Nat) (r : Regs Word), roundsK w 
     funext r'
     exact roundsK_eq w n (t + 1) r'
 
-/-- The feed-forward of a compression: each chaining word plus its register. -/
 def ff (cv : List Word) (r : Regs Word) : M (List Word) := (cv.zip r.toList).mapM fun x => add2 x.1 x.2
 
 noncomputable def ffK (cv : List Word) (r : Regs Word) : M (List Word) := (cv.zip r.toList).mapM fun x => add2K x.1 x.2

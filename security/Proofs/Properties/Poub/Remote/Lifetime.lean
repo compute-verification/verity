@@ -3,25 +3,13 @@ module
 public import Proofs.Properties.Poub.Remote.Released
 import Proofs.Properties.Poub.Remote.Plan
 
-/-!
-# Each append's blocks are read within `lifetime` windows (`LifetimeCapped`)
-
-`receive` gives every append not yet joined the window it is filling (`joined`), so `joined` has one entry an append
-received before the latest pass, each at most the window being filled, and nondecreasing. `staleBelow t` is the first
-index of the first append that joined within `L` windows of `t` (the store's end if none did), and `receive` refuses a
-plan with a run overlapping `[N, staleBelow t)`. The appends are the store's next indices in order (`Inv.firsts`), so a
-block a plan reads past `N` lies in exactly one append, and the plan is refused unless that append joined within `L`
-windows. The invariant (`Life`): every block past `N` a recorded pass in window `t` reads lies in an append `k` with
-`joined[k] ≤ t < joined[k] + L`.
--/
+/-! Each append's blocks are read within `lifetime` windows (`LifetimeCapped`). -/
 
 @[expose] public section
 
 open Poub Poub.Session
 
 namespace Properties.Poub
-
-/-! ## The store's appends -/
 
 theorem sum_take_le (c : List Nat) {i j : Nat} (h : i ≤ j) : (c.take i).sum ≤ (c.take j).sum := by
   obtain ⟨d, rfl⟩ := Nat.exists_eq_add_of_le h
@@ -46,7 +34,6 @@ theorem cover_list (c : List Nat) : ∀ x, x < c.sum → ∃ k, ∃ hk : k < c.l
       · simp only [List.take_succ_cons, List.sum_cons]; omega
       · simp only [List.take_succ_cons, List.sum_cons, List.getElem_cons_succ]; omega
 
-/-- The appends' counts, in order. -/
 abbrev counts (as : Array Append) : List Nat := as.toList.map (·.count)
 
 theorem counts_take (as : Array Append) (k : Nat) : (as.toList.take k).map (·.count) = (counts as).take k :=
@@ -56,7 +43,6 @@ theorem counts_get (as : Array Append) (k : Nat) (hk : k < as.size) :
     (counts as)[k]'(by simpa using hk) = as[k].count := by
   simp
 
-/-- An earlier append ends at or before a later one starts. -/
 theorem appends_ordered {N : Nat} {as : Array Append}
     (hf : ∀ k (hk : k < as.size), as[k].first = N + ((as.toList.take k).map (·.count)).sum)
     {k₁ k₂ : Nat} (h₁ : k₁ < as.size) (h₂ : k₂ < as.size) (hlt : k₁ < k₂) :
@@ -65,7 +51,6 @@ theorem appends_ordered {N : Nat} {as : Array Append}
     ← sum_take_succ _ _ (by simpa using h₁)]
   exact Nat.add_le_add_left (sum_take_le _ hlt) _
 
-/-- A block between `N` and the store's end lies in an append. -/
 theorem appends_cover {N extent : Nat} {as : Array Append} (he : extent = N + ((as.toList.map (·.count)).sum))
     (hf : ∀ k (hk : k < as.size), as[k].first = N + ((as.toList.take k).map (·.count)).sum)
     {b : Nat} (h₁ : N ≤ b) (h₂ : b < extent) :
@@ -76,7 +61,6 @@ theorem appends_cover {N extent : Nat} {as : Array Append} (he : extent = N + ((
   · rw [hf k hk', counts_take]; omega
   · rw [hf k hk', counts_take, ← counts_get as k hk']; omega
 
-/-- The append holding a block is the only one. -/
 theorem appends_unique {N : Nat} {as : Array Append}
     (hf : ∀ k (hk : k < as.size), as[k].first = N + ((as.toList.take k).map (·.count)).sum)
     {b k₁ k₂ : Nat} (h₁ : k₁ < as.size) (h₂ : k₂ < as.size)
@@ -100,11 +84,6 @@ theorem takeWhile_stop {α} (p : α → Bool) (l : List α) (k : Nat) (hk : (l.t
     · simp only [List.takeWhile_cons, ha]
       simpa using ha
 
-/-! ## The invariant -/
-
-/-- `joined` has at most one entry an append, each at most the window being filled, nondecreasing; and every block
-past `N` a recorded pass in window `t` reads lies in an append `k` that joined at or before `t` and within `L` windows
-of it. -/
 structure LifeOn (N L : Nat) (ws : Array Win) (appends : Array Append) (joined : Array Nat) (filling : Nat) : Prop where
   size : joined.size ≤ appends.size
   le : ∀ k (hk : k < joined.size), joined[k] ≤ filling
@@ -204,7 +183,6 @@ theorem life_accept {s : State} (h : Life s) (u : Nat) :
     Life { s with windows := s.windows.modify u ({· with verdict := some .accept}) } :=
   lifeOn_same h (samePlans_modify _ _ _ fun _ => rfl)
 
-/-- `receive` gives each append not yet joined the window being filled. -/
 theorem life_join {s : State} (h : Life s) :
     Life { s with joined := s.joined ++ Array.replicate (s.appends.size - s.joined.size) s.filling } ∧
       (s.joined ++ Array.replicate (s.appends.size - s.joined.size) s.filling).size = s.appends.size := by
@@ -241,8 +219,6 @@ theorem life_join {s : State} (h : Life s) :
     rw [get k hk₂, dite_eq_left hk]
     exact ⟨h3, h4⟩
 
-/-- A plan `receive` lets past the lifetime check reads, past `N`, only blocks of appends that joined within `L` windows
-of the window being filled. -/
 theorem life_check {s : State} (hi : Inv s) (hl : Life s) (hJ : s.joined.size = s.appends.size) {plan : Plan}
     (hP : EndsOk plan) (hR : ReadsDistinct plan s.extent)
     (hchk : ¬(decide (s.staleBelow s.filling > s.reg.blocks) &&
@@ -277,8 +253,6 @@ theorem life_check {s : State} (hi : Inv s) (hl : Life s) (hJ : s.joined.size = 
   · rw [Array.getElem?_eq_none (by omega)] at hge
     dsimp only at hge
     omega
-
-/-! ## The events -/
 
 theorem life_start {s : State} {now : Nat} {r : Result} {s' : State} (h : Life s)
     (he : start s now = (r, s')) : Life s' := by
@@ -410,8 +384,6 @@ theorem step_life {s : State} {e : Event} {r : Result} {s' : State} (hi : Inv s)
   | receive t i root runs change st now => injection he with he; exact life_receive hi h he
   | close t now => exact life_close h he
   | verify t openings => injection he with he; exact life_verify h he
-
-/-! ## The statement -/
 
 theorem lifetimeCapped : LifetimeCapped := by
   intro params reg coins appendCoins notBeforeNs events rs s hrun
