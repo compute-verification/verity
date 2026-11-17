@@ -7,14 +7,20 @@ Each case runs on w212 at its vLLM engine class (`test_network_attester_compile_
 from __future__ import annotations
 
 import pytest
-
-from verity.protocols.resource_accounting.network.verifier import arith_encode as AE, charge_chain as CC
-from verity_vllm.compiler import compile_slice as CS
-from tests.compiler.test_network_attester_compile_slice import BOOK
-from tests.compiler.test_network_attester_compile_slice_w212 import CARRY, CLASS, FITTED, OWN
-from tests.compiler.test_network_attester_compile_slice_w212 import _load
-from verity.protocols.proofs.spot.verifier.one_stage import produced
 from verity.commitments import hm96
+from verity.protocols.resource_accounting.network.verifier import arith_encode as AE
+from verity.protocols.resource_accounting.network.verifier import charge_chain as CC
+from verity.protocols.proofs.spot.verifier.one_stage import produced
+
+from tests.compiler.test_network_attester_compile_slice import BOOK
+from tests.compiler.test_network_attester_compile_slice_w212 import (
+    CARRY,
+    CLASS,
+    FITTED,
+    OWN,
+    _load,
+)
+from verity_vllm.compiler import compile_slice as CS
 
 PROGRAM, REGISTRATION = "compile-slice-phase14", "cd" * 64
 

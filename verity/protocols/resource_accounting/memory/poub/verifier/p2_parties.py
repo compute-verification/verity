@@ -4,7 +4,7 @@ so they run on a host the developer doesn't control (`trusted-device`) while the
 The channel is a pair of byte streams carrying one JSON object of one key a line: the ssh session that starts this side
 (`--stdio`, as a gate's verb starts it) or a TCP connection (`--listen`). The session has no round-trip floor, so ssh's
 latency changes nothing in its verdict. The verifier holds its own registration, never the prover's word for it: the
-memory challenger's own record of a PoUS session's setup on this host (`--pous-record DIR --pous-session SID`,
+memory attester's own record of a PoUS session's setup on this host (`--pous-record DIR --pous-session SID`,
 `pous_record`: the store PoUS's session SID bound, its whole store the plan), or the auditor's registration file
 (`--registration FILE`, `registration_json`); and it flips its coins from its own host's OS.
 The record's `plan` is the units every pass reads (`plan_of`): the units holding a tensor's block, so not the store's
@@ -27,10 +27,10 @@ padding past the last tensor, which is PoUS's and which the decode never reads; 
   released coin's opening (`audit.AuditRun.disclose`), against which the prover checks each challenge it was sent
   (`audit_prover.Prover.end`). The commitment is a function of every coin, so the prover gets it only after its last root.
 - `{"case": {...}}`: the session's core case (`p2_case`), the log of every request the Lean answered with the
-  registration, the request, the verifier's clock floor, the session id and the memory challenger's close of the case
+  registration, the request, the verifier's clock floor, the session id and the memory attester's close of the case
   (its registration's digest, its clock floor and its log), signed with its key (`Closer`), which
   `Poub.P2Protocol` checks and replays; it is witness, which the prover
-  keeps private. A session the books vetoed, or one with no memory challenger to sign it, has none.
+  keeps private. A session the books vetoed, or one with no memory attester to sign it, has none.
 - `{"answer": {...}}` ends the session (`answer`): the verdict, the failure and where, and on acceptance the credited
   reads `q_bytes`, the receipts less the wrong ones the pooled bound leaves (`pooled.bound` at δ = 2^-40), a unit's
   8,224 bytes each, over the session's span. `core_answer` puts it in the core interface's form.
@@ -56,7 +56,7 @@ Lean takes as given is the clock's readings and the coins the challenger (`coins
 `python -m verity.protocols.resource_accounting.memory.poub.verifier.p2_parties (--registration FILE | --pous-record DIR --pous-session SID)
 (--stdio | --listen HOST:PORT [--sessions N]) [--answer FILE | --device DIR] [--lean-exe EXE] [--challenger DIR
 --session SID --trusted-sha512 HEX]` is the verifier's side (`main`), each session with fresh coins, the memory
-challenger's key and session log in `--challenger`'s directory (the key loaded by the `device_key` the caller hands
+attester's key and session log in `--challenger`'s directory (the key loaded by the `device_key` the caller hands
 `main`, PoUS's device's `onsite.device_key` in the auditor's gate, refused unless `--trusted-sha512` pins it) signing the
 close of the one session the auditor named `--session SID`, which is claimed in its log before the session's first coin, the
 Lean built in its package (`lake build poub-verifier`) unless `--lean-exe` names a built one, or, without `lake`
@@ -87,7 +87,7 @@ from verity.channel import Body, Message, Schema
 from verity.party import Finish, Identity, Received, Send, Timer
 from verity.protocol import Channel, Manifest, ProtocolDef, Role, Start, Starter
 from verity.protocols.resource_accounting.memory.pous.attester import challenger_session as CS
-from verity.protocols.resource_accounting.memory.pous.attester import memory_challenger as mc
+from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
 from verity.protocols.resource_accounting.memory.pous.verifier.schemes.p2 import P2Params
 
 from . import audit, p2, p2_lean, pooled
@@ -227,7 +227,7 @@ def registration_of(doc: Mapping[str, Any]) -> p2.Registration:
 
 
 def registration_of_setup(record: Mapping[str, Any]) -> p2.Registration:
-    """The registration of the PoUS setup the memory challenger kept for one session (`challenger_party.keep`): the
+    """The registration of the PoUS setup the memory attester kept for one session (`challenger_party.keep`): the
     request's node, the setup's P2 parameters, commitment and salt, and the session's binding as the vk root, at
     sketch-sha512's rows; ValueError for a record without a setup, or one `challenger_session.setup_of` refuses."""
     request = record["request"]
@@ -241,7 +241,7 @@ def registration_of_setup(record: Mapping[str, Any]) -> p2.Registration:
 
 
 def pous_record(directory: Path, session_id: str) -> bytes:
-    """The registration file's bytes (`registration_json`, every unit its plan) of the setup the memory challenger whose
+    """The registration file's bytes (`registration_json`, every unit its plan) of the setup the memory attester whose
     device is `directory` kept for the session `session_id` (64 lowercase hex), on this host (`registration_of_setup`)."""
     if not re.fullmatch(r"[0-9a-f]{64}", session_id):
         raise ValueError("a session id is 64 lowercase hex digits")
@@ -628,9 +628,9 @@ def hold(lean: Lean, data: bytes, chunk: int = CHUNK,
 
 
 class Closer:
-    """The memory challenger that signs a session's close (`p2_case.close_of`): its `signer`
-    (`memory_challenger.Signer`, the key it signs PoUS's sessions with), its session log (`log`,
-    `memory_challenger.SessionLog`), and the session id the auditor gave it for this session (`session`, 32 bytes),
+    """The memory attester that signs a session's close (`p2_case.close_of`): its `signer`
+    (`memory_attester.Signer`, the key it signs PoUS's sessions with), its session log (`log`,
+    `memory_attester.SessionLog`), and the session id the auditor gave it for this session (`session`, 32 bytes),
     which `claim` records in the log before the session's first coin and refuses once it is there."""
 
     def __init__(self, signer: Any, log: Any, session: bytes) -> None:
@@ -643,7 +643,7 @@ class Closer:
         try:
             self.log.claim(self.session)
         except mc.SessionLogError as e:
-            return f"the memory challenger refuses the session id: {e}"
+            return f"the memory attester refuses the session id: {e}"
         return None
 
 
@@ -713,7 +713,7 @@ def drive(party: Any, params: Mapping[str, Any], identity: Identity, f_in: Binar
 class Verifier:
     """The verifier and its challenger: one session, decided by the Lean beside the books (`Twin`), on its clock and
     coins. Its capabilities are `lean` (holding `registration` and `plan`: `hold`), the auditor's session parameters
-    `auditor`, its `host`'s name, the memory challenger signing the close (`closer`, or None), where its case is kept
+    `auditor`, its `host`'s name, the memory attester signing the close (`closer`, or None), where its case is kept
     (`keep`, or None) and a progress `log`.
     It claims the closer's session id, flips the session's coins, and reads the prover's request; then each pass is
     asked for in order under the plan, each window's openings sampled once its roots are final and verified, and the
@@ -922,7 +922,7 @@ def session(f_in: BinaryIO, f_out: BinaryIO, registration: p2.Registration, *, c
 
 def case_digest(case: Mapping[str, Any]) -> str:
     """The one SHA-512 a verifier's device keeps of `case` (`p2_case`), as 128 lowercase hex digits: its close's
-    chain, which the memory challenger's signed close signs, over the case's head (its registration's digest and its
+    chain, which the memory attester's signed close signs, over the case's head (its registration's digest and its
     clock floor) and every entry of its log (`p2_case.chain`)."""
     return str(json.loads(bytes.fromhex(case["evidence"]))["close"]["chain"])
 
@@ -942,7 +942,7 @@ def main(argv: Sequence[str] | None = None, *, device_key: Callable[[Path], mc.L
     ap = argparse.ArgumentParser(prog=MODULE, description=__doc__.split("\n\n")[0])
     held = ap.add_mutually_exclusive_group(required=True)
     held.add_argument("--registration", type=Path, help="the auditor's registration with its plan (registration_json)")
-    held.add_argument("--pous-record", type=Path, help="the memory challenger's device on this host, whose record of "
+    held.add_argument("--pous-record", type=Path, help="the memory attester's device on this host, whose record of "
                                                        "--pous-session's setup is the registration (pous_record)")
     ap.add_argument("--pous-session", help="with --pous-record: the PoUS session id (64 hex) whose setup is the store")
     where = ap.add_mutually_exclusive_group(required=True)
@@ -961,11 +961,11 @@ def main(argv: Sequence[str] | None = None, *, device_key: Callable[[Path], mc.L
     ap.add_argument("--lean-exe", type=Path, help=f"the built {p2_lean.EXE}, the Lean verifier (default: built "
                                                   "in its Lake package, or without lake on the PATH, the one built "
                                                   "there)")
-    ap.add_argument("--challenger", type=Path, help="the memory challenger's device on this host: its LMS key, which "
+    ap.add_argument("--challenger", type=Path, help="the memory attester's device on this host: its LMS key, which "
                                                     "the caller's `device_key` loads, and session log, which sign the "
                                                     "session's close (`Closer`)")
     ap.add_argument("--session", help="with --challenger: the session id (64 hex) the auditor gave the memory "
-                                      "challenger for this session; without them, no session has a case")
+                                      "attester for this session; without them, no session has a case")
     ap.add_argument("--trusted-sha512", help="with --challenger: the SHA-512 (128 hex) of the key the configuration "
                                              f"pins for the close ({CLOSER_PARTY}'s for {COMPONENT}); the "
                                              "challenger's key is refused before any session unless it is that key")
@@ -981,7 +981,7 @@ def main(argv: Sequence[str] | None = None, *, device_key: Callable[[Path], mc.L
     if a.session is not None and a.listen is not None and a.sessions != 1:
         ap.error("--session names one session: --sessions 1")
     if a.challenger is not None and device_key is None:
-        ap.error("--challenger needs the memory challenger's key loader handed to main (device_key): run the party as "
+        ap.error("--challenger needs the memory attester's key loader handed to main (device_key): run the party as "
                  "the auditor's gate does (live_verifier/host.py's bw_party)")
     closer = None
     if a.challenger is not None:

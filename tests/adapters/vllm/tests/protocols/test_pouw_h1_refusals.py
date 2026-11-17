@@ -79,9 +79,6 @@ else:
 import verity.protocols.resource_accounting.compute.pouw.prover.serving.h1.answers as AN
 import verity.protocols.resource_accounting.compute.pouw.prover.serving.h1.challenger as PHC
 import verity.protocols.resource_accounting.compute.pouw.prover.serving.h1.commit as CT
-import verity.protocols.resource_accounting.compute.pouw.prover.serving.h1.sample as PHD
-import verity.protocols.resource_accounting.compute.pouw.prover.serving.h1.sampled as DN
-import verity.protocols.resource_accounting.compute.pouw.prover.serving.h1.sampled_rows as DR
 import verity.protocols.resource_accounting.compute.pouw.prover.serving.h1.handoff as HO
 import verity.protocols.resource_accounting.compute.pouw.prover.serving.h1.kept as KP
 import verity.protocols.resource_accounting.compute.pouw.prover.serving.h1.live as LV
@@ -89,6 +86,9 @@ import verity.protocols.resource_accounting.compute.pouw.prover.serving.h1.model
 import verity.protocols.resource_accounting.compute.pouw.prover.serving.h1.prover as PV
 import verity.protocols.resource_accounting.compute.pouw.prover.serving.h1.registered as NR
 import verity.protocols.resource_accounting.compute.pouw.prover.serving.h1.requests as RQ
+import verity.protocols.resource_accounting.compute.pouw.prover.serving.h1.sample as PHD
+import verity.protocols.resource_accounting.compute.pouw.prover.serving.h1.sampled as DN
+import verity.protocols.resource_accounting.compute.pouw.prover.serving.h1.sampled_rows as DR
 import verity.protocols.resource_accounting.compute.pouw.prover.serving.h1.served as SV
 import verity.protocols.resource_accounting.compute.pouw.prover.serving.h1.served_files as SF
 import verity.protocols.resource_accounting.compute.pouw.prover.serving.h1.static as ST

@@ -3,7 +3,7 @@ arguments and targets it serves and refuses, the store binder it installs before
 and its audit run in lockstep with the Commit's instrumented run (`lockstep`: each pass's engine step the run's next
 step), over a CPU store and PoUB's verifier on a thread.  PoUB's serving loop under it, and the helpers these tests share
 with its tests (`PassClock`, `verifying`, `store`, `engine`, `TickingBackend`), are PoUB's prover's
-(`tests/verity/protocols/resource_accounting/memory/poub/test_remote_session.py`)."""
+(`tests/verity/protocols/resource_accounting/memory/poub/test_poub_session.py`)."""
 from __future__ import annotations
 
 import json
@@ -19,10 +19,13 @@ from xml.etree import ElementTree
 import numpy as np
 import pytest
 from verity.protocols.resource_accounting.memory.poub.prover.node_store import serving
-from verity.protocols.resource_accounting.memory.poub.prover.node_store.registry import ArrayBacking, NodeMemory
+from verity.protocols.resource_accounting.memory.poub.prover.node_store.registry import (
+    ArrayBacking,
+    NodeMemory,
+)
 from tests.verity.protocols.resource_accounting.memory.poub.test_memory_map import BLOCK
 from tests.verity.protocols.resource_accounting.memory.poub.test_registry import CODEC, RECEIPT
-from tests.verity.protocols.resource_accounting.memory.poub.test_remote_session import (
+from tests.verity.protocols.resource_accounting.memory.poub.test_poub_session import (
     P512,
     PassClock,
     TickingBackend,
@@ -401,7 +404,7 @@ import os
 from pathlib import Path
 
 from tests.protocols.poub import test_commit_session as C
-from tests.verity.protocols.resource_accounting.memory.poub import test_remote_session as T
+from tests.verity.protocols.resource_accounting.memory.poub import test_poub_session as T
 
 
 def deliberate(*a, **kw):

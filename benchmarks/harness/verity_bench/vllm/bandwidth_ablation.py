@@ -1,5 +1,5 @@
 """The top-up-off arms of the bandwidth audit's breakdown (``llama31-8b-fp8-1gpu-bandwidth-ablation``), built with memory
-accounting's supported ``BandwidthArm`` (``benchmarks/vllm_encoded/README.md``). Spans time where each step's time goes,
+accounting's supported ``BandwidthArm`` (``benchmarks/vllm_encoded/DESIGN.md``). Spans time where each step's time goes,
 but the top-up runs beside the step, so its cost shows only as the other parts' stretch: these two arms are the spans
 arms with the top-up never started, and the top-up's contention is the audit's and plain's time over theirs.
 
