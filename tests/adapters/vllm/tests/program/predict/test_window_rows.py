@@ -766,7 +766,7 @@ def test_a_windows_rows_are_what_its_definitions_compute_on_its_committed_inputs
 
 def test_a_cut_norms_parts_hold_its_sum_and_its_tail_the_nodes_value():
     """At a class whose norm after down_proj is cut at its residual add (`test_window_circuit.SPLIT`), each add part holds its
-    words of the node's sum, which is `RMSNormFusedCudaAdd_v1` on the node's x and res, and the tail the node's value, which
+    words of the node's sum, which is `RMSNormFusedCudaAdd_v2` on the node's x and res, and the tail the node's value, which
     is `RMSNormFusedCudaTail_v1` on the parts' sums in order of AT; every unit is filled."""
     low, _f, values, _w, slots = _window(SPLIT, SPLIT_GRAIN)
     rows = WR.Rows(low, slots, values)

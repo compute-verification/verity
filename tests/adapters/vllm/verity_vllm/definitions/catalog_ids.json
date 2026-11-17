@@ -1314,7 +1314,7 @@
 "RMSNormDecodeCuda_v1",
 "RMSNormFusedApplyCudaVector8_v1",
 "RMSNormFusedApplyCudaVector8_v2",
-"RMSNormFusedCudaAdd_v1",
+"RMSNormFusedCudaAdd_v2",
 "RMSNormFusedCudaTail_v1",
 "RMSNormFusedCudaVector8_v1",
 "RMSNormFusedCudaVector8_v2",

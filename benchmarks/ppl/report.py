@@ -183,12 +183,14 @@ def metrics(r: dict, repo: str, revision: str) -> tuple[str, dict, list[dict]]:
     cost = 100 * (arm["ppl"] / base["ppl"] - 1)
     env = r["env"]
     fields = {"model": repo, "revision": revision, "hardware": env["device"], "set": r["set"], "ctx": r["ctx"]}
+    member = f"{r['model']}-{'-'.join(env['device'].lower().split()).removeprefix('nvidia-')}"
     run = env.get("run") or None
     inputs = [run] if run else []
-    measured = [{"name": METRICS["shipped"], "value": base["ppl"], "unit": "perplexity", "inputs": inputs, "extra": fields},
-                {"name": METRICS["pearl_c"], "value": arm["ppl"], "unit": "perplexity", "inputs": inputs,
+    kw = {"inputs": inputs, "member": member}
+    measured = [{"name": METRICS["shipped"], "value": base["ppl"], "unit": "perplexity", **kw, "extra": fields},
+                {"name": METRICS["pearl_c"], "value": arm["ppl"], "unit": "perplexity", **kw,
                  "extra": fields | {"seeds": arm["seeds"]}},
-                {"name": METRICS["cost"], "value": cost, "unit": "percent", "inputs": inputs, "extra": fields}]
+                {"name": METRICS["cost"], "value": cost, "unit": "percent", **kw, "extra": fields}]
     doc = {"value": cost, "unit": "percent", "commit": env.get("commit") or None, "run": run, **fields,
            "shipped": base["ppl"], "pearl_c": arm["ppl"], "pearl_c_seeds": arm["seeds"]}
     text = "\n".join([f"ppl: {cost:+.3f}% perplexity with Pearl-C linears ({repo} on {env['device']}, "

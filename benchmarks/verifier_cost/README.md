@@ -3,8 +3,8 @@
 A verifier must work in proportion to the description it reads, never to the circuit that description unrolls to
 (AGENTS.md "Design rules": O(circuit description), never O(unrolled circuit)). This benchmark holds the verifiers to
 that rule by timing them against both sizes: the inference-only check (`measure`) and the one-stage verifier's
-partition (`partition`) on the Serve_v1 workload at a ladder of configs, and a set of scripts that time the Lean
-verifiers' other steps one by one.
+partition (`partition`) on the Serve_v1 workload at a ladder of configs and at Llama 3.2 1B's sizes (`llama32-1b`), and a
+set of scripts that time the Lean verifiers' other steps one by one.
 
 ## Try it
 
@@ -27,7 +27,7 @@ verity bench verifier_cost partition --out DIR [--config NAME ...] [--ir word|bo
 research run --on auto --project verity --source . --cwd clone --cpus 16 --mem-gb 64 --timeout 3h -- \
   bash benchmarks/verifier_cost/job.sh measure|partition --unrolled-max 40000000   # every config, on a node
 research run --on auto --project verity --source . --cwd clone -- \
-  bash benchmarks/verifier_cost/job.sh measure --config b0 --ir boolean   # the dashboard's proofs/verifier-seconds-served-description
+  bash benchmarks/verifier_cost/job.sh measure --config llama32-1b --ir boolean   # the dashboard's proofs/verifier-seconds-served-description
 verity bench verifier_cost store RUN                     # its results.json or partition.json to the store; prints the art: id
 verity bench verifier_cost plot ART --to PNG             # from the store
 ~~~
