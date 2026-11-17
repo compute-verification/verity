@@ -39,8 +39,8 @@ and what the run wrote under `out/`. `--from` takes a directory or a run id (`ma
 record from there through no store (`kit.record_dir`): nothing of research's is imported, no credential is looked up
 and nothing goes over the network. DIR must hold the answer and the policy below (exit 2 naming the file it lacks). The
 run printed is the `run.id` its `job.json` states and the commit its `store.conditions` state (`source.commit`,
-`-dirty` when `source.dirty`), as the store's attempt states them; without them, the directory's name and no commit.
-Nothing is withdrawn from a directory. Given a run id (`kit_report.RUN_ID`) that names
+`-dirty` when `source.dirty`), as the store's attempt states them; without them, the directory's name and the commit
+`out/compute-run.json` states. Nothing is withdrawn from a directory. Given a run id (`kit_report.RUN_ID`) that names
 no directory, it reads that run's record from the evidence store, through research's client. Anything else is refused
 (exit 2). `result.json`'s entries are written only by the run whose record it reads (`kit.report`'s ``from_run``): a
 reprint of another run writes none. A record whose `job.json` says it is made up (``made_up``, as the tests' fixture
@@ -760,7 +760,9 @@ def from_dir(record: Path, per_call: bool = False, given: Path | None = None, to
     try:
         job, run = _held(record, JOB) or {}, record_run(record)
         conds = (job.get("store") or {}).get("conditions") or {}
-        commit = commit_of({"source": {"commit": conds.get("source.commit"), "dirty": conds.get("source.dirty")}})
+        ran = (_optional(record, RAN) or {}).get("commit")
+        commit = (commit_of({"source": {"commit": conds.get("source.commit"), "dirty": conds.get("source.dirty")}})
+                  or (ran if ran != "unknown" else None))
     except (OSError, ValueError, AttributeError) as e:
         raise Unreadable(f"the record's {JOB} doesn't read as the run's ({type(e).__name__}: {e})") from e
     return _with_split(document(record, commit, run, [], given), record, per_call, given, top)

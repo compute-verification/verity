@@ -1007,6 +1007,10 @@ def test_a_record_directory_with_no_job_is_the_directorys_run_with_no_commit(tmp
     dirty = a_record(tmp_path / "dirty", JOB=to("store", "conditions", "source.dirty", value=True))
     assert C.main(["--from", str(dirty)], store_of=no_store) == 0
     assert printed(capsys)[1]["commit"] == f"{COMMIT}-dirty"
+    for said, commit in (("e" * 40, "e" * 40), ("unknown", None)):
+        ran = a_record(tmp_path / said, JOB=None, RAN=json.dumps({"commit": said}))
+        assert C.main(["--from", str(ran)], store_of=no_store) == 0
+        assert printed(capsys)[1]["commit"] == commit
     assert C.main(["--from", str(a_record(tmp_path / "bad", JOB="not json"))], store_of=no_store) == 2
     assert f"compute: the record's {C.JOB} doesn't read as the run's" in capsys.readouterr().err
 
