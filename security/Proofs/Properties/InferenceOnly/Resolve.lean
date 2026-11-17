@@ -41,7 +41,7 @@ resolution reads through each node are in range, which `Flock.Program.decode` an
 
 @[expose] public section
 
-namespace InferenceOnlyCheck.Properties.SecurityProofs.Resolve
+namespace InferenceOnlyVerifier.Properties.SecurityProofs.Resolve
 
 open Flock.Program
 
@@ -604,4 +604,4 @@ theorem operandsEarlier_of (hB : BodiesOk) : Walk.OperandsEarlier := by
     omega
   exact gate_operands_lt P ⟨hr, hrp⟩ (hB bytes P hdec hov hlo hin hwk han) hlay hx a ha
 
-end InferenceOnlyCheck.Properties.SecurityProofs.Resolve
+end InferenceOnlyVerifier.Properties.SecurityProofs.Resolve

@@ -1,11 +1,11 @@
-"""The desc fuzzer's run (`InferenceOnlyCheck.DescFuzzMain`): the Python half.
+"""The desc fuzzer's run (`InferenceOnlyVerifier.DescFuzzMain`): the Python half.
 
-`verity/protocols/workload_classification/training_detection/inference_only/verifier/lean/scripts/desc_fuzz_programs.py` writes the 1,330 Programs `InferenceOnlyCheck/DescFuzzMain.lean`
+`verity/protocols/workload_classification/training_detection/inference_only/verifier/lean/scripts/desc_fuzz_programs.py` writes the 1,330 Programs `InferenceOnlyVerifier/DescFuzzMain.lean`
 decides the statements behind `DescAgrees` on (`runs` in that package's `lean-audit.json`), which the Lean audit runs and
 caches on the Lean package's files alone, against the data's SHA-256 in the record. So the first test is what says the
 data is still what the generator writes. The second, that it holds this shape: one gate reading, through one
 reference to one root node, whole batch members returning leaves of arguments they share, each another root node's
-output, which `InferenceOnlyCheck.Desc` once attributed to the copy's first piece's node alone.
+output, which `InferenceOnlyVerifier.Desc` once attributed to the copy's first piece's node alone.
 """
 
 from __future__ import annotations
@@ -31,7 +31,7 @@ def _load(name: str):
 
 fuzz = _load("desc_fuzz_programs")
 reference = _load("inference_only_reference")
-RUN = json.loads((LEAN / "lean-audit.json").read_text())["runs"]["InferenceOnlyCheck.DescFuzzMain"]
+RUN = json.loads((LEAN / "lean-audit.json").read_text())["runs"]["InferenceOnlyVerifier.DescFuzzMain"]
 
 
 def test_the_data_is_what_the_audit_pins(tmp_path):

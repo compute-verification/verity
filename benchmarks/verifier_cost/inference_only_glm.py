@@ -1,4 +1,4 @@
-"""``inference_only_glm.py measure``: the inference-only check (`inference-only-check --policy`, `InferenceOnlyCheck.Desc`) on GLM-5.3's registered Programs, the B1
+"""``inference_only_glm.py measure``: the inference-only check (`inference-only-verifier --policy`, `InferenceOnlyVerifier.Desc`) on GLM-5.3's registered Programs, the B1
 Build's workload Program of each TP rank, and on Programs derived from them for the divisions the registered ones can't
 express (README.md).
 
@@ -9,7 +9,7 @@ express (README.md).
 
 `--rank` names each rank's workload descriptor (`build/rank<r>/build_workload/descriptor.json.gz` of the Build), in rank
 order, and `--pins` the Build's meta (`rank_workload_digests`), which each must match. `--check-mem-gb` caps each
-`inference-only-check`'s address space, so one that outgrows its share fails rather than the node. The cases:
+`inference-only-verifier`'s address space, so one that outgrows its share fails rather than the node. The cases:
 
   registered  each rank's Program as registered, whose root is its inputs and one Call, the request: θ its weights
               (`annotations["theta"]`), then θ empty, one inference block (the Call)
@@ -28,12 +28,12 @@ order, and `--pins` the Build's meta (`rank_workload_digests`), which each must 
               at A (`GAMMA`, `ALPHA`), its neighbours and C (`ALPHA_C` at `GAMMA` and `GAMMA_C`). Given its
               registration, the node is held to it before any check (it is the program of the record `--node-trusted`
               cites as the run's own, `run`, and `--node-provenance` has one entry per θ node, each citing the log's
-              first record), and the check of record runs too, at A (`inference-only-check INSTANCE TRUSTED`,
-              `InferenceOnlyCheck.Theta`: the policy check, then θ's provenance against the registration log).
+              first record), and the check of record runs too, at A (`inference-only-verifier INSTANCE TRUSTED`,
+              `InferenceOnlyVerifier.Theta`: the policy check, then θ's provenance against the registration log).
               `--node-points` picks some of `NODE_POINTS`
 
 A finer division of a whole session (per engine step, per layer, per Call) is not checked here. Its root would be the
-request's body, whose reads `InferenceOnlyCheck.Desc` holds as segments of gates, each Definition's return coalesced into runs
+request's body, whose reads `InferenceOnlyVerifier.Desc` holds as segments of gates, each Definition's return coalesced into runs
 (`Desc.coalesce`); `inference_only_cost.py glm` counts and times them (`summarize_steps`).
 
 DIR/results.json has a row per check: the Program (SHA-512 digest, bytes, root nodes, gates), the division, the verdict
@@ -419,7 +419,7 @@ def join(srcs: list[Source], bodies: list[dict], colls: list[list[int]]) -> dict
 
 
 class Runs:
-    """Instances written to scratch and checked by `inference-only-check` on a pool; rows and inference blocks collected into `out`."""
+    """Instances written to scratch and checked by `inference-only-verifier` on a pool; rows and inference blocks collected into `out`."""
 
     def __init__(self, args) -> None:
         self.args, self.out = args, Path(args.out)
@@ -429,7 +429,7 @@ class Runs:
         self.rows: list[dict] = []
 
     def submit(self, path: Path, row: dict, unrolled: bool = False, trusted: Path | None = None) -> None:
-        """`inference-only-check --policy` on the instance `path`, or with `trusted` the check of record against it."""
+        """`inference-only-verifier --policy` on the instance `path`, or with `trusted` the check of record against it."""
         argv = [str(self.args.exe), *([str(path), str(trusted)] if trusted else
                                       ["--policy", *(["--unrolled"] if unrolled else []), str(path)])]
         if self.args.check_mem_gb:
@@ -474,7 +474,7 @@ def summary(v: dict | None) -> dict:
 
 def write_instance(path: Path, ptext: str, theta: list, owner: list, gamma: int, alpha: tuple[int, int],
                    provenance: list | None = None) -> Path:
-    """`InferenceOnlyCheck.Desc`'s instance, `ptext` the program as a JSON string; with `provenance`, `InferenceOnlyCheck.Theta`'s."""
+    """`InferenceOnlyVerifier.Desc`'s instance, `ptext` the program as a JSON string; with `provenance`, `InferenceOnlyVerifier.Theta`'s."""
     with open(path, "w") as f:
         f.write(f'{{"alpha":[{alpha[0]},{alpha[1]}],"gamma":{gamma},"owner":')
         f.write(json.dumps(owner, separators=(",", ":")))

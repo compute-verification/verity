@@ -8,8 +8,8 @@ import Mathlib.Algebra.Order.Field.Basic
 
 `complies_of`: the rate rule on a record's circuit (`Complies`) from four statements about the check, that a record it
 reads carries its instance's fields (`Owns`) and lays out a circuit (`LaidOut`), that its summary counts every block
-(`Counts`), and that its rate rule is the policy's on a summary (`Rates`). `InferenceOnlyCheck.SecurityProofs.ServedComplies` is
-that theorem as the guarantee `InferenceOnlyCheck.Guarantees.ServedComplies` states it.
+(`Counts`), and that its rate rule is the policy's on a summary (`Rates`). `InferenceOnlyVerifier.SecurityProofs.ServedComplies` is
+that theorem as the guarantee `InferenceOnlyVerifier.Guarantees.ServedComplies` states it.
 
 `pinnedOpens_of`: what a pinned reader opens (`PinnedOpens`) from the closure digest's pin (`DigestPins`), the
 check's provenance (`Provenance`) and a layout that reads a Definition's signature alone (`LayoutReads`).
@@ -24,12 +24,12 @@ root's ranges are the same whatever templates the template query is asked for (`
 
 @[expose] public section
 
-namespace InferenceOnlyCheck.Properties.Record.SecurityProofs
+namespace InferenceOnlyVerifier.Properties.Record.SecurityProofs
 
 open Lean (Json)
 open Flock.Program (Prog Scope)
 open Flock.TemplateQuery (TRange)
-open InferenceOnlyCheck.DefinitionDigest (closureDigest)
+open InferenceOnlyVerifier.DefinitionDigest (closureDigest)
 open Spot.RecordText (Row Tmpl tmplOf templatesOf)
 
 theorem complies_of {F : Form} (hown : Owns F) (hlaid : LaidOut F) (hcount : Counts F) (hrate : Rates F) :
@@ -305,14 +305,14 @@ theorem unitAt_iff {P : Prog} {doc : Json} {ts : List Tmpl} {tids : Array String
   · rintro ⟨i, t, hi, hti, -, -, htu, hu, hsc⟩
     exact ⟨i, u, hi, hti, by rw [← htu]; exact hu, by rw [hzero i hi hti, Nat.zero_add], hsc⟩
 
-end InferenceOnlyCheck.Properties.Record.SecurityProofs
+end InferenceOnlyVerifier.Properties.Record.SecurityProofs
 
-namespace InferenceOnlyCheck.SecurityProofs
+namespace InferenceOnlyVerifier.SecurityProofs
 
-open InferenceOnlyCheck.Properties.Record
+open InferenceOnlyVerifier.Properties.Record
 
-theorem ServedComplies : InferenceOnlyCheck.Guarantees.ServedComplies := by
+theorem ServedComplies : InferenceOnlyVerifier.Guarantees.ServedComplies := by
   intro F hown hlaid hcount hrate
-  exact InferenceOnlyCheck.Properties.Record.SecurityProofs.complies_of hown hlaid hcount hrate
+  exact InferenceOnlyVerifier.Properties.Record.SecurityProofs.complies_of hown hlaid hcount hrate
 
-end InferenceOnlyCheck.SecurityProofs
+end InferenceOnlyVerifier.SecurityProofs
