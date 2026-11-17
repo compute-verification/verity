@@ -31,6 +31,7 @@ from verity.protocols.resource_accounting.memory.pous.attester import challenger
 from verity.protocols.workload_classification.training_detection.inference_only.verifier import parties as IO
 from verity.protocols.proofs.spot.verifier.service import SamplingDesign
 from verity_cli import run as R
+from verity_cli import settings
 
 ROOT = Path(R.ROOT)
 CONFIG = ROOT / "applications" / "onsite_full.toml"
@@ -695,7 +696,7 @@ def test_the_onsite_line_is_the_published_records_and_takes_none_of_its_accepts(
     published record and the execution phase's seal digest; under the placement hold, since the workload's node
     composed that record, a reject or an error stands and each accept, a row's or the composed verdict, reads
     undecided."""
-    monkeypatch.setenv(T.HOLD_PLACEMENT, "1")
+    monkeypatch.setenv(settings.HOLD_PLACEMENT, "1")
     state = tmp_path / "state"
     published(state, rows, composed, "the network attester: error")
     assert sorted(p.relative_to(state).as_posix() for p in state.rglob("*") if p.is_file()) == [
@@ -719,7 +720,7 @@ def test_the_onsite_line_is_the_published_records_and_takes_none_of_its_accepts(
 def test_a_row_the_serving_node_says_came_from_elsewhere_is_no_accept_either(tmp_path, capsys, monkeypatch, source):
     """``answer_from`` is the serving node's word too: under the placement hold, a record whose every row says it was
     recomputed elsewhere, under a composed accept, is still undecided."""
-    monkeypatch.setenv(T.HOLD_PLACEMENT, "1")
+    monkeypatch.setenv(settings.HOLD_PLACEMENT, "1")
     state = tmp_path / "state"
     published(state, {"bandwidth": "accept", "inference-only": "accept"}, source=source)
     assert R.run_main([str(CONFIG), "--on", T.AUDITOR_HOST, "--party", "verifier", "--state", str(state)], REG) == 2
@@ -741,7 +742,7 @@ def test_without_the_placement_hold_the_onsite_line_is_the_record_as_the_workloa
     """With ``VERITY_HOLD_PLACEMENT`` unset, the line's verdicts are the record's, the composed one and each row's,
     and each row's ``answer_from`` still says the workload's node wrote it; a record composed with no composite stays
     undecided, and a reject or an error stands."""
-    monkeypatch.delenv(T.HOLD_PLACEMENT, raising=False)
+    monkeypatch.delenv(settings.HOLD_PLACEMENT, raising=False)
     state = tmp_path / "state"
     published(state, rows, composed, lean=lean)
     assert R.run_main([str(CONFIG), "--on", T.AUDITOR_HOST, "--party", "verifier", "--state", str(state)], REG) == rc
@@ -1051,7 +1052,7 @@ def test_the_wipes_run_keys_beside_a_pin_or_an_attester_is_refused_before_the_ca
 ])
 def test_a_set_no_lean_verifier_takes_reads_the_published_record_and_no_python_verdict(tmp_path, monkeypatch, rows,
                                                                                       composed, source, verdict, reason):
-    monkeypatch.setenv(T.HOLD_PLACEMENT, "1")
+    monkeypatch.setenv(settings.HOLD_PLACEMENT, "1")
     state = tmp_path / "state"
     published(state, rows, composed, source=source)
     line = T.onsite_check(R.load(NETWORK, REG), state)
@@ -1069,9 +1070,9 @@ def test_a_set_no_lean_verifier_takes_is_undecided_under_its_own_id(tmp_path, ca
                                                                     reason):
     """Python never accepts where a Lean verifier is written: with the placement hold or without it."""
     if hold:
-        monkeypatch.setenv(T.HOLD_PLACEMENT, hold)
+        monkeypatch.setenv(settings.HOLD_PLACEMENT, hold)
     else:
-        monkeypatch.delenv(T.HOLD_PLACEMENT, raising=False)
+        monkeypatch.delenv(settings.HOLD_PLACEMENT, raising=False)
     state = tmp_path / "state"
     published(state, rows, composed)
     assert R.run_main([str(NETWORK), "--on", T.AUDITOR_HOST, "--party", "verifier", "--state", str(state)], REG) == 2

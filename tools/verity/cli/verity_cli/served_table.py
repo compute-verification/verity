@@ -58,6 +58,7 @@ from verity.protocols.registration.verifier import registration as RL
 from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
 from verity.protocols.resource_accounting.memory.pous.verifier import wipe_parties as WP
 from verity.protocols.proofs.spot.verifier import parties as SP
+from verity_cli import settings
 from verity.protocols.proofs.spot.verifier.one_stage.draw import parse_rate, parse_strata_rate
 from verity.channel import Refused
 from verity.runtime import runner
@@ -82,9 +83,6 @@ RECORD_NAMES = {"integrity": "sampled-proofs", "work": "pouw", "inference-only":
                 "bandwidth": "bandwidth", "communication": "certifier", "wipe": "wipe"}
 #: served_verdicts.py's ``answer_from`` for a row it carries from a file the served node wrote (its ``AS_WRITTEN``)
 AS_WRITTEN = "as the served node wrote it"
-#: the setting that restores this week's lifted placement holds (``1``); unset, `onsite_check` prints a record the
-#: workload's node composed as it has it
-HOLD_PLACEMENT = "VERITY_HOLD_PLACEMENT"
 
 
 # --- what each component and the workload declare -------------------------------------------------------------------
@@ -747,7 +745,7 @@ def onsite_check(cfg: Mapping[str, Any], state: Path) -> dict[str, Any]:
     reason = (wrong or composed.get("reason")) if verdict == "reject" else \
         (f"missing {missing}" if missing else None) or (f"no row for {absent}" if absent else None) \
         or (composed.get("lean") if verdict != "accept" else None)
-    if os.environ.get(HOLD_PLACEMENT) == "1":
+    if settings.hold_placement():
         # The workload's node composed this record, so none of its accepts stands; one recomputed by the verifier would.
         held = (["the composed verdict"] if verdict == "accept" else []) + \
             sorted(c for c, v in components.items() if v == "accept")
