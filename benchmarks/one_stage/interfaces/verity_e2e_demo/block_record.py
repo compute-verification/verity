@@ -331,6 +331,9 @@ def check(record: Mapping[str, Any]) -> dict[str, str]:
             bad[key] = "its source is neither real nor fixture"
         if lg["at"] != at_deltas(name, lg["quantity"], frac(lg["error"])):
             bad[key] = "its certificates at the deltas are not its quantity's at its error"
+        m = lg["quantity"].get("members") or {}
+        if (lg["quantity"]["value"] is None) != (name == "integrity" and m.get("sampled", 0) < m.get("registered", 0)):
+            bad[key] = "its quantity's value is null exactly when it is integrity's and its sample missed a member"
         if "named_terms" not in lg:
             if name in NAMES_TERMS:
                 bad[key] = f"it names no term its error leaves out; {NAMES_TERMS_FIX}, and the record is built from that"
