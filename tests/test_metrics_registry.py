@@ -162,7 +162,7 @@ def test_a_row_that_breaks_a_rule_is_refused() -> None:
         "'infra/serving-cost-glm53'"]
     assert _problems({**good, "owner": "nobody", "command": "echo"}, {"vllm"}, here) == [
         f"owner 'nobody' is no handle in {HANDLES}",
-        "its command names no script under benchmarks/, demos/, infra/ or tools/"]
+        "its command names no script under benchmarks/, applications/, infra/ or tools/"]
     assert _problems({**good, "id": "vllm/serving-cost-glm53"}, {"vllm"}, "benchmarks/landing") == [
         "its command's script benchmarks/serve_tax/run.sh is not under benchmarks/landing/: move the row to "
         "benchmarks/serve_tax/metrics.toml, beside its script"]
@@ -236,20 +236,20 @@ def test_a_row_a_loop_sends_sits_beside_the_loop_and_may_be_due_in_minutes() -> 
 
 
 def test_a_row_under_demos_is_found_and_held_to_the_same_rules(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    (tmp_path / "demos" / "remote").mkdir(parents=True)
-    (tmp_path / "demos" / "remote" / NAME).write_text("", encoding="utf-8")
+    (tmp_path / "applications" / "remote").mkdir(parents=True)
+    (tmp_path / "applications" / "remote" / NAME).write_text("", encoding="utf-8")
     monkeypatch.setattr(sys.modules[__name__], "ROOT", tmp_path)
-    assert _files() == ["demos/remote/metrics.toml"]
+    assert _files() == ["applications/remote/metrics.toml"]
     row = {"id": "vllm/remote-demo-minutes", "title": "Remote demo run time", "owner": "vllm", "unit": "minutes",
            "axis": "Minutes from the first command to the verdict.", "better": "lower",
-           "command": "bash demos/remote/no-such-run.sh", "every": "7d"}
-    assert _problems(row, {"vllm"}, "demos/remote") == ["its command's script demos/remote/no-such-run.sh doesn't exist"]
+           "command": "bash applications/remote/no-such-run.sh", "every": "7d"}
+    assert _problems(row, {"vllm"}, "applications/remote") == ["its command's script applications/remote/no-such-run.sh doesn't exist"]
     assert _problems({**row, "title": "Remote demo", "every": "weekly"}, {"vllm"}, "benchmarks/serve_tax") == [
         "title 'Remote demo' is 2 words, not 3 to 6: make it a plain headline and say the rest in axis",
         "every is 'weekly', not a count of minutes, hours or days such as 5m, 12h or 7d",
-        ("its command's script demos/remote/no-such-run.sh is not under benchmarks/serve_tax/: move the row to "
-         "demos/remote/metrics.toml, beside its script"),
-        "its command's script demos/remote/no-such-run.sh doesn't exist"]
+        ("its command's script applications/remote/no-such-run.sh is not under benchmarks/serve_tax/: move the row to "
+         "applications/remote/metrics.toml, beside its script"),
+        "its command's script applications/remote/no-such-run.sh doesn't exist"]
 
 
 def test_a_row_in_a_file_another_handle_owns_is_refused() -> None:
