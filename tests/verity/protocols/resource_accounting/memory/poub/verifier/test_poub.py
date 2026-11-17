@@ -1087,8 +1087,8 @@ def test_the_write_ceilings_are_the_sheets_above_every_write_measured() -> None:
             if isinstance(a, ast.Assign) and isinstance(a.targets[0], ast.Name) and isinstance(b, ast.Expr)
             and isinstance(b.value, ast.Constant)}
     gpu, host = docs["GPU_WRITE_BYTES_PER_S"], docs["HOST_WRITE_BYTES_PER_S"]
-    assert "benchmarks/bandwidth/write.cu" in gpu and "SQUARINGS_PER_S[width]" in gpu
-    assert "benchmarks/bandwidth/write_host.c" in host and "benchmarks/bandwidth/write.cu" in host and "No DPU" in host
+    assert "calibration/bandwidth/write.cu" in gpu and "SQUARINGS_PER_S[width]" in gpu
+    assert "calibration/bandwidth/write_host.c" in host and "calibration/bandwidth/write.cu" in host and "No DPU" in host
     labels = timing.GPU_SQUARINGS_PER_S[codec.DEFAULT.field.name] * codec.BLOCK_BYTES / codec.DEFAULT.encode_squarings
     assert labels == pytest.approx(1.05e9, rel=0.01)
     assert not [name for name in vars(timing) if name.startswith("DPU_")]

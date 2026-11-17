@@ -21,7 +21,7 @@ import pytest
 import uniform as un
 from conftest import load
 
-DC = Path(__file__).resolve().parents[3] / "benchmarks" / "pouw" / "dc"
+DC = Path(__file__).resolve().parents[3] / "calibration" / "pouw" / "dc"
 MODEL_DATA = Path(__file__).resolve().parents[3] / "benchmarks" / "machine_model" / "data"
 
 #: the two modules that dc's own scripts load from their files, under the names `load` gives them; census.py loads
@@ -31,7 +31,7 @@ an = load("dc/analyze.py")
 
 
 def test_wgmma_header_is_current():
-    assert (DC / "wgmma.cuh").read_text() == gen.render(), "run python benchmarks/pouw/dc/gen_wgmma.py"
+    assert (DC / "wgmma.cuh").read_text() == gen.render(), "run python calibration/pouw/dc/gen_wgmma.py"
 
 
 def _loop_receipts(X, W, seed, bn, L=32):
