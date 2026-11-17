@@ -1,6 +1,6 @@
 # facet_break: try to beat every facet of the ACCEL model
 
-The ACCEL model (`../../../benchmarks/machine_model/`) bounds what a program can issue on sm_120 by a polytope of facets: row r says
+The ACCEL model (`../../machine_model/`) bounds what a program can issue on sm_120 by a polytope of facets: row r says
 Σ_k c_kr·x_k ≤ 1 for the program's warp instructions x_k of census class k a SMSP-cycle. ε is proved conditional on
 every facet being a true ceiling.
 
