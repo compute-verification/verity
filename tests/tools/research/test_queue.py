@@ -3900,6 +3900,19 @@ def test_the_lean_step_builds_the_changed_modules_and_their_importers_transitive
     assert lean_graph(tmp_path, files, ["lean/a/README.md", "a.txt"]).targets == {}
 
 
+def test_the_lean_step_leaves_the_auditor_s_fixture_packages_to_its_controls(tmp_path):
+    """The builder skips the auditor's fixture packages (`lean_audit.packages`), so a change to one builds nothing here."""
+    from research.queue import lean_graph
+
+    tree = {f"{d}/{rel}": text for d in ("tools/verity/lean/fixtures/old", "tests/tools/verity/lean/fixtures/finders")
+            for rel, text in (("lakefile.toml", 'name = "f"\n\n[[lean_lib]]\nname = "F"\n'), ("lean-audit.json", "{}\n"),
+                              ("F.lean", "def x := 1\n"))}
+    for rel, text in tree.items():
+        (tmp_path / rel).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / rel).write_text(text)
+    assert lean_graph(tmp_path, sorted(tree), [f for f in tree if f.endswith(".lean")]).targets == {}
+
+
 #: `lean_changed.py --build`'s stand-in for Lake: a file whose `-- needs NAME` line names no `def NAME` of the tree's Lean files
 #: fails, as Lean's `unknown identifier` would; each call's files are appended to $FAKE_LEAN_SEEN, and $FAKE_LEAN_SKIP skips
 FAKE_LEAN_BUILDER = """\

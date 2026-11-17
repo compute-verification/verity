@@ -5052,7 +5052,8 @@ LEAN_BUILDER, LEAN_BUILD_LINE = "tools/verity/lean/lean_changed.py", "lean-build
 #: `lean_slot.py`'s SLOTS: a machine whose file lists a `build` pool keeps warm Lean trees; an agent VM has none
 LEAN_SLOTS = Path(os.environ.get("LEAN_SLOTS", "/workspace/research/locks/lean-slots"))
 #: the Lake packages the Lean step reads: a directory with a lakefile and a `lean-audit.json`, the auditor's fixtures aside
-LEAN_FIXTURES = "tools/verity/lean/"
+#: (`lean_audit.packages`' prefixes: the builder skips them, and the audit suite's controls build them)
+LEAN_FIXTURES = ("tools/verity/lean/", "tests/tools/verity/lean/")
 #: the temporary worktrees' prefix (`merged_worktree`), `<tmp>/research-merged-<pid>-*`: one whose process is gone is swept (a kill
 #: skips `finally`)
 MERGED_PREFIX = "research-merged-"
