@@ -47,8 +47,6 @@ sys.path.insert(0, str(HERE))
 import cuda_lib  # noqa: E402
 import kv as K  # noqa: E402
 
-from verity.device import load_card  # noqa: E402
-
 SEED = hashlib.sha256(b"verity/word-codec/kv/bench/seed").digest()
 SPIN_CYCLES = 20_000_000
 L2_DEFEAT_BYTES = 1 << 30
@@ -68,7 +66,6 @@ ATTN_RTOL = 1e-3
 ATTN_FORMS = {1: "phased", 2: "ws"}  # kv_attn's encoded forms: decode and attention in turn, or in their own warps
 NATIVE_70B_S = 0.0457  # bench.py's tuned FP8 linears step at 70B, batch 1: x's denominator
 CLOCK_LOCKED_MHZ = 2092  # the nodes' locked SM clock (their clock-locking unit)
-CLOCK_MAX_MHZ = load_card("rtx-pro-6000-server")["clock"]["sm"]["value"]  # the card's max
 RATES_SCHEMA = "verity/codec-frontier-rates/v0"
 
 
@@ -401,7 +398,7 @@ def rates(lib: Lib, torch, ks, sms: int, reps: int, log) -> dict:
     return out
 
 
-def frontier_rates(res: dict, libs, run: str | None) -> list[dict]:
+def frontier_rates(res: dict, libs, run: str | None, clock_max_mhz: float) -> list[dict]:
     """Each field's compute-only rates at each k as `RATES_SCHEMA` records, for the frontier's pooled x: x is the encode
     of 70B's linears (`E_70B` bytes as words) at the measured rate, in `NATIVE_70B_S` steps, at the locked clock;
     `x_max_clock` scales it by the clocks' ratio (not measured: the nodes' clocks are locked)."""
@@ -424,9 +421,9 @@ def frontier_rates(res: dict, libs, run: str | None) -> list[dict]:
                         "roots_per_s": e["per_s"] * int(k), "encode_words_per_s": e["per_s"],
                         "root_over_squaring_floor": e["per_s"] * int(k) / r["encode_floor_words_s"],
                         "decode_words_per_s": d["per_s"], "r": d["per_s"] / e["per_s"],
-                        "x": x, "x_boosted": False, "x_max_clock": x * CLOCK_LOCKED_MHZ / CLOCK_MAX_MHZ,
+                        "x": x, "x_boosted": False, "x_max_clock": x * CLOCK_LOCKED_MHZ / clock_max_mhz,
                         "delta": words / d["per_s"] / NATIVE_70B_S, "clock_mhz": CLOCK_LOCKED_MHZ,
-                        "clock_max_mhz": CLOCK_MAX_MHZ, "max_clock_measured": False, "sms": res["sms"],
+                        "clock_max_mhz": clock_max_mhz, "max_clock_measured": False, "sms": res["sms"],
                         "measured": True, "run": run, "art": None})
     return out
 
@@ -722,6 +719,7 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--lib", action="append", required=True, help="NAME=PATH, NAME a field of kv.FIELDS (or FIELD-TAG)")
     ap.add_argument("--out", required=True)
+    ap.add_argument("--clock-max-mhz", type=float, required=True, help="the card's highest SM clock, its `clock.sm`")
     ap.add_argument("--ks", default="1,2,4,6")
     ap.add_argument("--attn-ks", default="1", help="the rounds `attention` decodes inside attention at (empty: none)")
     ap.add_argument("--batches", default="1,8,32")
@@ -788,7 +786,7 @@ def main() -> int:
         if not a.no_native:
             res["native"] = native_70b(torch, batches, a.reps, log)
         res["model"] = model(res, libs, batches, contexts, props.total_memory)
-        res["frontier_rates"] = frontier_rates(res, libs, os.environ.get("RESEARCH_RUN_ID"))
+        res["frontier_rates"] = frontier_rates(res, libs, os.environ.get("RESEARCH_RUN_ID"), a.clock_max_mhz)
         (out_dir / "rates.json").write_text(json.dumps(res["frontier_rates"], indent=1) + "\n")
     (out_dir / "kv-codec.json").write_text(json.dumps(res, indent=1, default=str))
     write_result(res, libs, out_dir)

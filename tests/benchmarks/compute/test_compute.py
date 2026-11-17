@@ -23,6 +23,7 @@ import pytest
 import run as C
 
 HERE = Path(__file__).resolve().parent
+CARD_FILES = HERE.parents[2] / "hardware/cards"
 RUN = "r20000101-000000-aaaa"
 COMMIT = "c" * 40
 RECORD = HERE / "fixtures" / "record"
@@ -584,7 +585,7 @@ def test_the_shared_result_is_the_metric_by_its_id_verified_and_error_with_capac
 def h200_site(devices: int):
     """A registered site of one host with `devices` H200s, each naming the sheet its card file gives."""
     from verity import device as S
-    sheet = S.Sheet.of_file(S.load_card("h200-sxm-141gb"))
+    sheet = S.Sheet.of_file(S.load_card("h200-sxm-141gb", directory=CARD_FILES))
     locs = [S.Loc("site", "site"), S.Loc("host", "host", "site")]
     locs += [S.Loc(f"gpu{i}", "device", "host", sheet=sheet.digest()) for i in range(devices)]
     return S.Site((sheet,), tuple(locs))

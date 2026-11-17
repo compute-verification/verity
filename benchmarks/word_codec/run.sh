@@ -46,7 +46,12 @@ if "$PY" -c 'import pytest' 2> /dev/null; then
 fi
 KV_SCRIPT=${KV_SCRIPT:-kv_bench.py}
 # kv_bench.py is with PoUB's prover; any other KV_SCRIPT is a file of this directory
-case $KV_SCRIPT in kv_bench.py) KV=verity/protocols/resource_accounting/memory/poub/prover/word_codec/kv_bench.py ;; *) KV=$WC/$KV_SCRIPT ;; esac
+case $KV_SCRIPT in
+  kv_bench.py) KV=verity/protocols/resource_accounting/memory/poub/prover/word_codec/kv_bench.py
+    LIBS+=(--clock-max-mhz "$("$PY" -c 'from pathlib import Path; from verity.device import load_card
+print(load_card("rtx-pro-6000-server", directory=Path("hardware/cards"))["clock"]["sm"]["value"])')") || exit 3 ;;
+  *) KV=$WC/$KV_SCRIPT ;;
+esac
 if [ "${SANITIZE:-0}" != 0 ]; then
   SAN=/usr/local/cuda-13.0/bin/compute-sanitizer
   # shellcheck disable=SC2086

@@ -290,16 +290,17 @@ fi
 phi() {
   CUDA_VISIBLE_DEVICES='' "$PY" -c '
 import json, sys
+from pathlib import Path
 from verity.device import load_card, number
 from verity_vllm import TargetProfile
 from verity_vllm.engine.served_seed import DEFAULT_SEED
-sms = int(number(load_card("h200-sxm-141gb")["sm"]["count"]))
+sms = int(number(load_card("h200-sxm-141gb", directory=Path(sys.argv[4]))["sm"]["count"]))
 doc = {"model": sys.argv[1], "revision": sys.argv[2], "default_seed": DEFAULT_SEED,
        "target": TargetProfile.default().with_overrides(compute_capability=(9, 0), num_sms=sms).to_json(),
        "execution": "bi-eager"}
 open(sys.argv[3], "w").write(json.dumps(doc, indent=1) + "\n")
 print(json.dumps(doc, sort_keys=True))
-' "$REPO" "$REV" "$REC/serve-phi.json"
+' "$REPO" "$REV" "$REC/serve-phi.json" "$TREE/hardware/cards"
 }
 step serve-phi phi \
   && step policy env CUDA_VISIBLE_DEVICES='' "$PY" benchmarks/one_stage/inference_only.py policy --class "$CLASS" \

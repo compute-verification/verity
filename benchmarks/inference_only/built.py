@@ -38,13 +38,15 @@ from verity.device import load_card
 
 import policy as P
 
+CARD_FILES = Path(__file__).resolve().parents[2] / "hardware/cards"
+
 # a served step's pricing, `block_work`'s
 sys.path.append(str(P.ROOT / "benchmarks" / "one_stage"))
 
 #: the pinned exact-int8 checkpoint of Llama 3.2 1B
 MODEL = "verity-int8/Llama-3.2-1B-INT8"
 #: the card the class is registered for, serving an exact-int8 checkpoint's linears int8; its SMs are the card's
-H200 = {"compute_capability": (9, 0), "num_sms": load_card("h200-sxm-141gb")["sm"]["count"]["value"],
+H200 = {"compute_capability": (9, 0), "num_sms": load_card("h200-sxm-141gb", directory=CARD_FILES)["sm"]["count"]["value"],
         "int8_exact": "linears"}
 DIVISIONS = ("session", "position", "proof block")
 #: the inference-only policy's check, a Lake package

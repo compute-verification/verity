@@ -40,10 +40,13 @@ import json
 import sys
 from collections.abc import Callable
 from fractions import Fraction
+from pathlib import Path
 
 import run as compute
 from verity.device import load_card, rate as peak
 from verity_bench import kit
+
+CARD_FILES = Path(__file__).resolve().parents[2] / "hardware/cards"
 
 __all__ = ["BESIDE", "CARD", "METRIC", "READINGS", "UNIT", "document", "honest_rate", "main", "measured"]
 
@@ -85,7 +88,7 @@ def duty_points(store: compute.EvidenceStore, run: str) -> list[dict]:
 
 def document(share_doc: dict, rate: Fraction, duty_run: str) -> dict:
     """The printed document: the number at each reading, from `run.py`'s document `share_doc` and the honest `rate`."""
-    card = load_card(CARD)
+    card = load_card(CARD, directory=CARD_FILES)
     share = Fraction(share_doc["credited_macs"], share_doc["model_macs"])
     readings = {}
     for r in READINGS:
