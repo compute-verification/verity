@@ -8,18 +8,8 @@ import Mathlib.Tactic.NormNum.Pow
 import Proofs.Pouw.Receipt.Duo
 import Proofs.Pouw.Receipt.Run
 
-/-!
-# duo runs: four words bound anywhere in a run, checkpoints every four words, and the kernel of long runs
-
-A run is a bijection of the state (`duoRun_state_injective`, and so `duoRun_state_surjective` on the finite states).
-Two runs that share the words before and after four middle words, with final states equal at every start state, then
-have the four-word maps equal at every state the shared prefix reaches, which is every state, and `duoQuad_injective`
-makes the middle words equal (`duoWindow_injective`). Checkpoints every four words are equal from the first differing
-block's start on, whose state the earlier blocks map onto every state (`duoCheckpoints_injective`).
-
-No run of more than `2·4ⁿ` words is injective into the final-state maps: `2^(nL)` runs against `(4ⁿ)^(4ⁿ)` maps
-(`duoRun_kernel`).
--/
+/-! duo runs bind four words anywhere in a run and checkpoints every four words, and no run of more than `2·4ⁿ`
+words is injective into the final-state maps. -/
 
 @[expose] public section
 

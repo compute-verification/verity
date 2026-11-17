@@ -2,28 +2,8 @@ module
 
 public import Mathlib
 
-/-!
-# Steiner rigidity in the rank metric (PoUW work floor)
-
-The setting of the laminar Steiner-rigidity draft: matrices over a field `F`, the rank metric
-`d(A, B) = rank (A - B)`, and a Steiner tree as a finite tree whose vertices carry matrices, its length the sum over
-its edges of the rank of the difference of the endpoints' labels.
-
-* `BlockRigidity` is Theorem 1 (block rigidity) and `ConjectureA` is its matmul case, both stated as `Prop`s, and
-  both are proved: `blockRigidity` and `conjectureA`.
-* The proof follows the note. Lemma 1 (`treeLaminarDecomposition`): rooting the tree at a vertex labelled `0`, the
-  targets below each edge form a laminar family, and the steps of the edges sum to each target. Lemma 2: the
-  flattening is no longer than the decomposition (`rank_flattening_le`) and, for labels independent within each row
-  and each column of cells, at least the sum of the targets' ranks (`flatteningLowerBound`). Lemma 3 (`labelLemma`):
-  such labels exist for every laminar family, by induction up a binary refinement of it (`Hier`), typing each node
-  by the rule of Claims 3–5 and taking the labels from annihilators (Claims 1, 2). That gives Theorem 1 in coordinate
-  blocks (`blockRigidityCoord`), and an invertible change of coordinates gives it for independent subspaces. The
-  star attains it (`exists_star`, `blockRigidity_min`).
-* Conjecture A: Theorem 1 on the full outputs gives `N³ ≤ length` (`conjectureA_lower`), and a spanning tree of the
-  spider (`0`, then each output cell's chain of prefix targets) has length `N³` (`conjectureA_upper`).
-* Also here: the rank metric's facts, and the merge-proof case (Corollary 6 of the note) for any connected labelled
-  graph: targets whose column spaces (or row spaces) are independent cost at least the sum of their ranks.
--/
+/-! Steiner rigidity in the rank metric, the PoUW work floor: Theorem 1 (`BlockRigidity`) and its matmul case
+(`ConjectureA`), both proved (`blockRigidity`, `conjectureA`). -/
 
 @[expose] public section
 
@@ -78,7 +58,6 @@ variable [Fintype m]
 noncomputable def rowSpace (A : Matrix m n F) : Submodule F (n → F) :=
   colSpace Aᵀ
 
-/-- Subadditivity of rank. -/
 theorem rank_add_le (A B : Matrix m n F) : (A + B).rank ≤ A.rank + B.rank := by
   rw [rank_eq_finrank_colSpace, rank_eq_finrank_colSpace, rank_eq_finrank_colSpace]
   exact (Submodule.finrank_mono (colSpace_add_le A B)).trans
@@ -92,11 +71,9 @@ variable {F : Type*} [Field F] {m n : Type*} [Fintype m] [Fintype n]
 
 /-- A Steiner tree in the rank metric: a finite tree whose vertices carry matrices. -/
 structure SteinerTree (F : Type*) [Field F] (m n : Type*) where
-  /-- The vertices. -/
   V : Type
   [instFintype : Fintype V]
   [instDecEq : DecidableEq V]
-  /-- The tree. -/
   G : SimpleGraph V
   [instDecAdj : DecidableRel G.Adj]
   isTree : G.IsTree
@@ -146,8 +123,6 @@ noncomputable def edgeColSpace {V : Type} (label : V → Matrix m n F) : Sym2 V 
     dsimp only
     rw [← neg_sub, colSpace_neg]⟩
 
-/-- Along any walk, the column space of the difference of the endpoints' labels lies in the sum of the column
-spaces of the graph's edges. -/
 theorem colSpace_sub_le_of_walk {V : Type} [Fintype V] [DecidableEq V] {G : SimpleGraph V}
     [DecidableRel G.Adj] (label : V → Matrix m n F) {u v : V} (w : G.Walk u v) :
     colSpace (label v - label u) ≤ ⨆ e ∈ G.edgeFinset, edgeColSpace label e := by
@@ -165,7 +140,6 @@ theorem colSpace_sub_le_of_walk {V : Type} [Fintype V] [DecidableEq V] {G : Simp
 variable [Fintype m]
 
 omit [Fintype m] in
-/-- If the tree reaches `0` and `A`, the column space of `A` lies in the sum of the edges' column spaces. -/
 theorem colSpace_le_edgeColSpaces (T : SteinerTree F m n) {A : Matrix m n F} (h0 : T.Reaches 0)
     (hA : T.Reaches A) : colSpace A ≤ ⨆ e ∈ T.G.edgeFinset, edgeColSpace T.label e := by
   obtain ⟨v₀, hv₀⟩ := h0
@@ -215,7 +189,6 @@ def blockSubspace (F : Type*) [Field F] {ι κ : Type*} (blk : ι → κ) (k : �
     intro c v hv i hi
     simp [hv i hi]
 
-/-- The coordinate blocks of a partition of the coordinates are independent. -/
 theorem iSupIndep_blockSubspace {ι κ : Type*} (blk : ι → κ) : iSupIndep (blockSubspace F blk) := by
   refine iSupIndep_def.mpr fun k => ?_
   let S : Submodule F (ι → F) :=
@@ -256,7 +229,6 @@ def ConjectureA (F : Type*) [Field F] : Prop :=
 
 variable {N L : ℕ}
 
-/-- A prefix target that covers the whole inner dimension has rank at least `N`. -/
 theorem le_rank_prefixTarget (r c : Fin N) {s : ℕ} (hs : N ≤ s * L) :
     N ≤ (prefixTarget F N L r c s).rank := by
   classical
@@ -283,7 +255,6 @@ section Flattening
 
 variable {F : Type*} [Field F] {m n : Type*} [Fintype m] [Fintype n]
 
-/-- Rank is subadditive over finite sums. -/
 theorem rank_sum_le {ι : Type*} (s : Finset ι) (A : ι → Matrix m n F) :
     (∑ i ∈ s, A i).rank ≤ ∑ i ∈ s, (A i).rank := by
   classical
@@ -309,7 +280,6 @@ theorem kron_sum_left {α β ι : Type*} (s : Finset ι) (Λ : ι → Matrix α 
   ext i j
   simp [kron, Matrix.sum_apply, Finset.sum_mul]
 
-/-- `rank ((u vᵀ) ⊗ W) ≤ rank W`. -/
 theorem rank_kron_vecMulVec_le {α β : Type*} [Fintype α] [Fintype β] [DecidableEq m] [DecidableEq n]
     (u : α → F) (v : β → F) (W : Matrix m n F) : (kron (vecMulVec u v) W).rank ≤ W.rank := by
   let U : Matrix (α × m) m F := Matrix.of fun i x => if i.2 = x then u i.1 else 0
@@ -333,7 +303,6 @@ def Laminar {κ : Type*} (𝓕 : Finset (Finset κ)) : Prop :=
   ∀ S ∈ 𝓕, ∀ S' ∈ 𝓕, S ⊆ S' ∨ S' ⊆ S ∨ Disjoint S S'
 
 omit [Fintype m] [Fintype n] in
-/-- The flattening of a decomposition `M t = ∑ S ∈ 𝓕, S ∋ t, W S` regroups by the sets of `𝓕`. -/
 theorem flattening_eq_sum {κ α β : Type*} [DecidableEq κ] (P : Finset κ) (a : κ → α → F)
     (b : κ → β → F) (M : κ → Matrix m n F) (𝓕 : Finset (Finset κ)) (W : Finset κ → Matrix m n F)
     (hsub : ∀ S ∈ 𝓕, S ⊆ P) (hdec : ∀ t ∈ P, ∑ S ∈ 𝓕.filter (t ∈ ·), W S = M t) :
@@ -349,8 +318,6 @@ theorem flattening_eq_sum {κ α β : Type*} [DecidableEq κ] (P : Finset κ) (a
         rw [← Finset.sum_filter, kron_sum_left, Finset.filter_mem_eq_inter,
           Finset.inter_eq_right.mpr (hsub S hS)]
 
-/-- **Lemma 2(a).** If every `Λ(S) = ∑ t ∈ S, a t (b t)ᵀ` (`S ∈ 𝓕`) is a rank-one product, the flattening of a
-decomposition over `𝓕` has rank at most `∑ S ∈ 𝓕, rank (W S)`. -/
 theorem rank_flattening_le {κ α β : Type*} [DecidableEq κ] [Fintype α] [Fintype β] [DecidableEq m]
     [DecidableEq n] (P : Finset κ) (a : κ → α → F) (b : κ → β → F) (M : κ → Matrix m n F)
     (𝓕 : Finset (Finset κ)) (W : Finset κ → Matrix m n F) (hsub : ∀ S ∈ 𝓕, S ⊆ P)
@@ -389,7 +356,6 @@ def tensorLeft {α : Type*} (u : α → F) : (m → F) →ₗ[F] (α × m → F)
     simp only [Pi.smul_apply, smul_eq_mul, RingHom.id_apply]
     ring
 
-/-- Independent vectors have a dual vector: one that pairs to `1` with a chosen vector and `0` with the rest. -/
 theorem exists_dual_of_linearIndepOn {κ β : Type*} [Fintype β] [DecidableEq κ] {s : Finset κ}
     {b : κ → β → F} (h : LinearIndepOn F b ↑s) {t₀ : κ} (ht₀ : t₀ ∈ s) :
     ∃ g : β → F, ∀ t ∈ s, b t ⬝ᵥ g = if t = t₀ then 1 else 0 := by
@@ -427,7 +393,6 @@ theorem kron_mulVec_tensor {α β : Type*} [Fintype β] (u : α → F) (v : β �
   refine Finset.sum_congr rfl fun y' _ => ?_
   ring
 
-/-- **Lemma 2(b), proved.** -/
 theorem flatteningLowerBound [DecidableEq m] [DecidableEq n] : FlatteningLowerBound F m n := by
   classical
   intro p q α β rowBlk colBlk P M a b hM hIa hIb
@@ -545,7 +510,6 @@ def LaminarBound (F : Type*) [Field F] (m n : Type*) [Fintype m] [Fintype n] : P
       Laminar 𝓕 → (∀ S ∈ 𝓕, S ⊆ P) → (∀ t ∈ P, ∑ S ∈ 𝓕.filter (t ∈ ·), W S = M t) →
         ∑ t ∈ P, (M t).rank ≤ ∑ S ∈ 𝓕, (W S).rank
 
-/-- Lemma 3 gives Theorem 1 for laminar decompositions (with Lemma 2, proved). -/
 theorem laminarBound_of_labelLemma [DecidableEq m] [DecidableEq n] (h3 : LabelLemma F) :
     LaminarBound F m n := by
   intro p q rowBlk colBlk P M hM 𝓕 W hlam hsub hdec
@@ -570,14 +534,12 @@ def BlockRigidityCoord (F : Type*) [Field F] (m n : Type*) [Fintype m] [Fintype 
     ∀ T : SteinerTree F m n, T.Reaches 0 → (∀ t ∈ P, T.Reaches (M t)) →
       ∑ t ∈ P, (M t).rank ≤ T.length
 
-/-- Lemma 1 and Theorem 1 for laminar decompositions give Theorem 1 in coordinates. -/
 theorem blockRigidityCoord_of_laminarBound (h1 : TreeLaminarDecomposition F m n)
     (hlam : LaminarBound F m n) : BlockRigidityCoord F m n := by
   intro p q rowBlk colBlk P M hM T h0 hT
   obtain ⟨𝓕, W, hl, hsub, hdec, hlen⟩ := h1 (Fin p × Fin q) P M T h0 hT
   exact (hlam p q rowBlk colBlk P M hM 𝓕 W hl hsub hdec).trans hlen
 
-/-- **Conjecture A's lower bound from Theorem 1 in coordinates.** -/
 theorem conjectureA_lower_of_blockRigidityCoord {N L : ℕ}
     (h1 : BlockRigidityCoord F (Fin N × Fin N) (Fin N × Fin N)) (hL : 0 < L) (hLN : L ∣ N)
     (T : SteinerTree F (Fin N × Fin N) (Fin N × Fin N)) (h0 : T.Reaches 0)
@@ -736,7 +698,6 @@ theorem restrict_mem_blockSubspace {ι : Type*} {blk : κ → ι} {r : ι} {S : 
 
 variable {ι : Type*} {blk : κ → ι}
 
-/-- **Claim 5, the other type's side**: at a node whose `V_x` is the sum of the children's. -/
 theorem sideValid_node_false {l r : Hier κ} (hd : Disjoint l.cells r.cells)
     (hl : SideValid F blk l) (hr : SideValid F blk r) : SideValid F blk (node false l r) := by
   intro r₀
@@ -755,7 +716,6 @@ theorem sideValid_node_false {l r : Hier κ} (hd : Disjoint l.cells r.cells)
     (e₂ ▸ restrict_mem_blockSubspace hw₀)
   rw [h₁, h₂, add_zero]
 
-/-- A node's `V_x` at an x-node, as a sum. -/
 theorem mem_Vx_node_true {l r : Hier κ} {w : κ → F} (hw : w ∈ (node true l r).Vx F) :
     ∃ v' ∈ l.Vx F, ∃ v'' ∈ r.Vx F, ∃ μ : F, w = v' + v'' + μ • (l.xi F - r.xi F) := by
   obtain ⟨u, hu, s, hs, rfl⟩ := Submodule.mem_sup.mp hw
@@ -763,7 +723,6 @@ theorem mem_Vx_node_true {l r : Hier κ} {w : κ → F} (hw : w ∈ (node true l
   obtain ⟨μ, rfl⟩ := Submodule.mem_span_singleton.mp hs
   exact ⟨v', hv', v'', hv'', μ, rfl⟩
 
-/-- **Claim 5, the node's own side**: at an x-node whose children have no handle in common. -/
 theorem sideValid_node_true {l r : Hier κ} (hd : Disjoint l.cells r.cells)
     (hl : SideValid F blk l) (hr : SideValid F blk r)
     (hρ : ∀ r₀, r₀ ∈ handle F blk l → r₀ ∈ handle F blk r → False) :
@@ -806,7 +765,6 @@ theorem sideValid_node_true {l r : Hier κ} (hd : Disjoint l.cells r.cells)
       exact Submodule.add_mem_sup (Submodule.smul_mem _ _ hv'')
         (Submodule.neg_mem _ (Submodule.smul_mem _ _ m₂))
 
-/-- **Claim 3, at a leaf**: `ρ(t) ⊆ {r_t}`. -/
 theorem handle_leaf {t : κ} {r₀ : ι} (h : r₀ ∈ handle F blk (leaf t)) : blk t = r₀ := by
   change Pi.single t 1 ∈ (⊥ : Submodule F (κ → F)) ⊔ blockSubspace F blk r₀ at h
   rw [bot_sup_eq] at h
@@ -814,7 +772,6 @@ theorem handle_leaf {t : κ} {r₀ : ι} (h : r₀ ∈ handle F blk (leaf t)) : 
   have := h t hne
   simp at this
 
-/-- **Claim 3, the node's own side**: `ρ(S) ⊆ ρ(S') ∪ ρ(S'')` at an x-node. -/
 theorem handle_node_true {l r : Hier κ} (hd : Disjoint l.cells r.cells) {r₀ : ι}
     (h : r₀ ∈ handle F blk (node true l r)) : r₀ ∈ handle F blk l ∨ r₀ ∈ handle F blk r := by
   change l.xi F ∈ (node true l r).Vx F ⊔ blockSubspace F blk r₀ at h
@@ -856,7 +813,6 @@ theorem handle_node_true {l r : Hier κ} (hd : Disjoint l.cells r.cells) {r₀ :
     rw [this]
     exact Submodule.add_mem_sup (Submodule.smul_mem _ _ hv') (Submodule.smul_mem _ _ mf₁)
 
-/-- **Claim 3, the other type's side**: `γ(S) ⊆ γ(S') ∩ γ(S'')` at a node whose `V` is the children's sum. -/
 theorem handle_node_false {l r : Hier κ} (hd : Disjoint l.cells r.cells) {r₀ : ι}
     (h : r₀ ∈ handle F blk (node false l r)) : r₀ ∈ handle F blk l ∧ r₀ ∈ handle F blk r := by
   change l.xi F + r.xi F ∈ (l.Vx F ⊔ r.Vx F) ⊔ blockSubspace F blk r₀ at h
@@ -893,7 +849,6 @@ variable {F : Type*} [Field F] {p q : ℕ}
 
 open Hier
 
-/-- **Claim 4 (a handle pair pins a cell).** If `r ∈ ρ(S)` and `c ∈ γ(S)`, the cell `(r, c)` is below `S`. -/
 theorem Hier.mem_cells_of_handles :
     ∀ h : Hier (Fin p × Fin q), h.WF → ∀ {r : Fin p} {c : Fin q},
       r ∈ handle F Prod.fst h → c ∈ handle F Prod.snd h.flip → (r, c) ∈ h.cells
@@ -926,8 +881,6 @@ noncomputable def Hier.retype (F : Type*) [Field F] : Hier (Fin p × Fin q) → 
     node (if Disjoint (handle F Prod.fst (retype F l)) (handle F Prod.fst (retype F r)) then true
       else false) (retype F l) (retype F r)
 
-/-- **Lemma 3's induction.** The typing rule never gets stuck: on a hierarchy with disjoint siblings it gives a
-typing of the same shape that is valid on both sides (`V_x ∩ F^row r = 0` and `V_y ∩ F^col c = 0` for all `r, c`). -/
 theorem Hier.retype_spec : ∀ h : Hier (Fin p × Fin q), h.WF →
     (retype F h).untype = h.untype ∧ (retype F h).cells = h.cells ∧ (retype F h).WF ∧
       SideValid F Prod.fst (retype F h) ∧ SideValid F Prod.snd (retype F h).flip
@@ -980,7 +933,6 @@ theorem ev_sub {α : Type*} (a : κ → α → F) (φ ψ : κ → F) : ev a (φ 
 theorem ev_single {α : Type*} (a : κ → α → F) (t : κ) : ev a (Pi.single t 1) = a t := by
   simp [ev, Pi.single_apply]
 
-/-- Labels whose coordinates span the annihilator of `V`: `ev a φ = 0` exactly when `φ ∈ V`. -/
 theorem exists_labels (V : Submodule F (κ → F)) :
     ∃ (α : ℕ) (a : κ → Fin α → F), ∀ φ, ev a φ = 0 ↔ φ ∈ V := by
   let W := V.dualAnnihilator
@@ -1020,8 +972,6 @@ theorem Vx_children_le {b : Bool} {l r : Hier κ} :
   · exact ⟨le_sup_left, le_sup_right⟩
   · exact ⟨le_sup_left.trans le_sup_left, le_sup_right.trans le_sup_left⟩
 
-/-- **Claim 1 (rank one).** If the labels annihilate `V ⊇ V_x(S)` and `V' ⊇ V_y(S)`, then
-`Λ(S) = ξ_S(a) η_S(b)ᵀ`. -/
 theorem claim1 {α β : Type*} (a : κ → α → F) (b : κ → β → F) {V V' : Submodule F (κ → F)}
     (ha : ∀ φ ∈ V, ev a φ = 0) (hb : ∀ φ ∈ V', ev b φ = 0) :
     ∀ h : Hier κ, h.WF → h.Vx F ≤ V → h.flip.Vx F ≤ V' →
@@ -1069,7 +1019,6 @@ theorem Hier.sets_untype : ∀ h : Hier κ, h.untype.sets = h.sets
   | node _ l r => by
     simp only [untype, sets, sets_untype l, sets_untype r, cells_untype l, cells_untype r]
 
-/-- **Claim 1 at every node**: (L) for every node set of the hierarchy. -/
 theorem claim1_sets {α β : Type*} (a : κ → α → F) (b : κ → β → F) {V V' : Submodule F (κ → F)}
     (ha : ∀ φ ∈ V, ev a φ = 0) (hb : ∀ φ ∈ V', ev b φ = 0) :
     ∀ h : Hier κ, h.WF → h.Vx F ≤ V → h.flip.Vx F ≤ V' →
@@ -1088,8 +1037,6 @@ theorem claim1_sets {α β : Type*} (a : κ → α → F) (b : κ → β → F) 
       · exact claim1_sets a b ha hb l hl (hVl.1.trans hV) (hVf.1.trans hV') S hS
       · exact claim1_sets a b ha hb r hr (hVl.2.trans hV) (hVf.2.trans hV') S hS
 
-/-- **Claim 2 (independence).** If `ev a φ = 0` only for `φ ∈ V`, and `V` meets no block of `blk`, the labels of each
-block are linearly independent. -/
 theorem claim2 {α ι : Type*} [DecidableEq ι] (a : κ → α → F) (V : Submodule F (κ → F))
     (ha : ∀ φ, ev a φ = 0 → φ ∈ V) (blk : κ → ι) (r : ι) (hV : Disjoint V (blockSubspace F blk r))
     (s : Finset κ) : LinearIndepOn F a ↑(s.filter (blk · = r)) := by
@@ -1109,7 +1056,6 @@ theorem claim2 {α ι : Type*} [DecidableEq ι] (a : κ → α → F) (V : Submo
   simp only [φ, ht, ↓reduceIte, Pi.zero_apply] at h0
   exact h0
 
-/-- **Lemma 3 for a binary hierarchy**: labels with (L) at every node and (I) in every row and column. -/
 theorem labels_of_hier {p q : ℕ} (h : Hier (Fin p × Fin q)) (hwf : h.WF) :
     ∃ (α β : ℕ) (a : Fin p × Fin q → Fin α → F) (b : Fin p × Fin q → Fin β → F),
       (∀ S ∈ h.sets, ∃ u v, ∑ t ∈ S, vecMulVec (a t) (b t) = vecMulVec u v) ∧
@@ -1133,7 +1079,6 @@ def BinaryRefinement (κ : Type*) [DecidableEq κ] : Prop :=
   ∀ (P : Finset κ) (𝓕 : Finset (Finset κ)), P.Nonempty → Laminar 𝓕 → (∀ S ∈ 𝓕, S ⊆ P) →
     ∃ h : Hier κ, h.WF ∧ h.cells = P ∧ ∀ S ∈ 𝓕, S.Nonempty → S ∈ h.sets
 
-/-- **Lemma 3 from binary refinement.** -/
 theorem labelLemma_of_binaryRefinement (href : ∀ p q : ℕ, BinaryRefinement (Fin p × Fin q)) :
     LabelLemma F := by
   intro p q P 𝓕 hlam hsub
@@ -1161,8 +1106,6 @@ theorem laminar_filter {𝓕 : Finset (Finset κ)} (h : Laminar 𝓕) (p : Finse
   h S (Finset.mem_filter.mp hS).1 S' (Finset.mem_filter.mp hS').1
 
 omit [Fintype κ] in
-/-- A laminar family on `P` with `|P| ≥ 2` leaves a proper nonempty `A ⊆ P` that every other set of the family
-lies in or misses: a largest proper nonempty set of the family, or a singleton if there is none. -/
 theorem exists_split {P : Finset κ} {𝓕 : Finset (Finset κ)} (hP : P.Nonempty) (h1 : P.card ≠ 1)
     (hlam : Laminar 𝓕) (hsub : ∀ S ∈ 𝓕, S ⊆ P) :
     ∃ A ⊆ P, A.Nonempty ∧ A ≠ P ∧ ∀ S ∈ 𝓕, S ≠ P → S ⊆ A ∨ Disjoint S A := by
@@ -1190,7 +1133,6 @@ theorem exists_split {P : Finset κ} {𝓕 : Finset (Finset κ)} (hP : P.Nonempt
     · exact Or.inr h.symm
 
 omit [Fintype κ] in
-/-- **Binary refinement, proved.** -/
 theorem binaryRefinement : BinaryRefinement κ := by
   intro P
   induction P using Finset.strongInduction with
@@ -1223,7 +1165,6 @@ theorem binaryRefinement : BinaryRefinement κ := by
         · exact Or.inl (sA S (Finset.mem_filter.mpr ⟨hS, h⟩) hne)
         · exact Or.inr (sB S (Finset.mem_filter.mpr ⟨hS, Finset.subset_sdiff.mpr ⟨hsub S hS, h⟩⟩) hne)
 
-/-- **Lemma 3 (labels for a laminar family), proved.** -/
 theorem labelLemma : LabelLemma F :=
   labelLemma_of_binaryRefinement fun _ _ => binaryRefinement
 
@@ -1233,16 +1174,13 @@ section Assembly
 
 variable {F : Type*} [Field F] {m n : Type*} [Fintype m] [Fintype n] [DecidableEq m] [DecidableEq n]
 
-/-- **Theorem 1 for laminar decompositions, proved.** -/
 theorem laminarBound : LaminarBound F m n :=
   laminarBound_of_labelLemma labelLemma
 
-/-- **Theorem 1 in coordinates from Lemma 1.** -/
 theorem blockRigidityCoord_of_treeLaminarDecomposition (h1 : TreeLaminarDecomposition F m n) :
     BlockRigidityCoord F m n :=
   blockRigidityCoord_of_laminarBound h1 laminarBound
 
-/-- **Conjecture A's lower bound from Lemma 1.** -/
 theorem conjectureA_lower_of_treeLaminarDecomposition {N L : ℕ}
     (h1 : TreeLaminarDecomposition F (Fin N × Fin N) (Fin N × Fin N)) (hL : 0 < L) (hLN : L ∣ N)
     (T : SteinerTree F (Fin N × Fin N) (Fin N × Fin N)) (h0 : T.Reaches 0)
@@ -1272,8 +1210,6 @@ theorem eq_path (T : SteinerTree F m n) {u x : T.V} {p : T.G.Walk u x} (hp : p.I
     p = T.path u x :=
   (T.isTree.existsUnique_path u x).unique hp (T.path_isPath u x)
 
-/-- Every dart of a path from `u` is the last dart of the tree's path from `u` to its head; that path is a prefix,
-and the head is one step further from `u` than the tail. -/
 theorem path_darts (T : SteinerTree F m n) {u x : T.V} (p : T.G.Walk u x) (hp : p.IsPath) :
     ∀ d ∈ p.darts, d ∈ (T.path u d.snd).darts ∧ (T.path u d.snd).darts <+: p.darts ∧
       (T.path u d.snd).length = (T.path u d.fst).length + 1 := by
@@ -1307,8 +1243,6 @@ theorem sum_darts_sub {V : Type} {G : SimpleGraph V} (label : V → Matrix m n F
 
 variable [Fintype m] [Fintype n]
 
-/-- **Lemma 1, proved.** Root the tree at a vertex labelled `0`; each dart gets the set of targets whose root path
-uses it, and each set of the family gets the sum of the steps of the darts with that set. -/
 theorem treeLaminarDecomposition : TreeLaminarDecomposition F m n := by
   classical
   intro κ _ P M T h0 hP
@@ -1405,13 +1339,9 @@ theorem treeLaminarDecomposition : TreeLaminarDecomposition F m n := by
 
 variable [DecidableEq m] [DecidableEq n]
 
-/-- **Theorem 1 in coordinates, proved**: rows and columns split into coordinate blocks, targets in distinct cells;
-every Steiner tree spanning `0` and the targets has length at least the sum of their ranks. -/
 theorem blockRigidityCoord : BlockRigidityCoord F m n :=
   blockRigidityCoord_of_treeLaminarDecomposition treeLaminarDecomposition
 
-/-- **Conjecture A's lower bound, proved**: a Steiner tree spanning `0` and every prefix target
-`E_rc ⊗ I_{sL}` has length at least `N³`. -/
 theorem conjectureA_lower {N L : ℕ} (hL : 0 < L) (hLN : L ∣ N)
     (T : SteinerTree F (Fin N × Fin N) (Fin N × Fin N)) (h0 : T.Reaches 0)
     (hT : ∀ r c : Fin N, ∀ s ∈ Finset.Icc 1 (N / L), T.Reaches (prefixTarget F N L r c s)) :
@@ -1454,7 +1384,6 @@ theorem iSupIndep_option_elim {M : Type*} [AddCommGroup M] [Module F M] {ι : Ty
 
 variable {m : Type*} [Fintype m] [DecidableEq m]
 
-/-- Independent subspaces of `m → F` lie in coordinate blocks after an invertible change of coordinates. -/
 theorem exists_blockCoords {p : ℕ} (hp : 0 < p) (R : Fin p → Submodule F (m → F)) (hR : iSupIndep R) :
     ∃ (A : Matrix m m F) (blk : m → Fin p), IsUnit A.det ∧
       ∀ r, ∀ v ∈ R r, A *ᵥ v ∈ blockSubspace F blk r := by
@@ -1517,9 +1446,6 @@ theorem SteinerTree.length_conj (T : SteinerTree F m n) {A : Matrix m m F} {B : 
     rw [rankDist, rankDist, ← Matrix.sub_mul, ← Matrix.mul_sub,
       Matrix.rank_mul_eq_left_of_isUnit_det _ _ hB, Matrix.rank_mul_eq_right_of_isUnit_det _ _ hA]
 
-/-- **Theorem 1, proved** (block rigidity as stated: independent row subspaces `R_r`, independent column subspaces
-`C_c`, targets in distinct cells): every Steiner tree spanning `0` and the targets has length at least the sum of
-their ranks. -/
 theorem blockRigidity : BlockRigidity F m n := by
   intro p q R C hR hC P M hM T h0 hT
   rcases Nat.eq_zero_or_pos p with rfl | hp
@@ -1558,8 +1484,6 @@ section Star
 variable {F : Type*} [Field F] {m n : Type*} [Fintype m] [Fintype n]
 
 omit [Fintype m] in
-/-- **The star**: for any targets, a spanning tree of the star from `0` to the targets is no longer than the sum of
-their ranks. -/
 theorem exists_star {κ : Type} (P : Finset κ) (M : κ → Matrix m n F) :
     ∃ T : SteinerTree F m n, T.Reaches 0 ∧ (∀ t ∈ P, T.Reaches (M t)) ∧ T.length ≤ ∑ t ∈ P, (M t).rank := by
   classical
@@ -1604,8 +1528,6 @@ theorem exists_star {κ : Type} (P : Finset κ) (M : κ → Matrix m n F) :
 
 variable [DecidableEq m] [DecidableEq n]
 
-/-- **Theorem 1 is tight**: with targets in distinct cells, the minimum Steiner length is exactly the sum of their
-ranks. -/
 theorem blockRigidity_min {p q : ℕ} (R : Fin p → Submodule F (m → F)) (C : Fin q → Submodule F (n → F))
     (hR : iSupIndep R) (hC : iSupIndep C) (P : Finset (Fin p × Fin q)) (M : Fin p × Fin q → Matrix m n F)
     (hM : ∀ t ∈ P, colSpace (M t) ≤ R t.1 ∧ rowSpace (M t) ≤ C t.2) :
@@ -1625,7 +1547,6 @@ theorem prefixTarget_zero (r c : Fin N) : prefixTarget F N L r c 0 = 0 := by
   ext i j
   simp [prefixTarget]
 
-/-- Consecutive prefix targets are at rank distance at most `L`. -/
 theorem rank_prefixTarget_succ_sub_le (r c : Fin N) (k : ℕ) :
     (prefixTarget F N L r c (k + 1) - prefixTarget F N L r c k).rank ≤ L := by
   classical
@@ -1726,8 +1647,6 @@ theorem spider_edgeLength_le {K : ℕ} {H : SimpleGraph (Option (Fin N × Fin N 
       rw [rankDist_comm]
       exact rankDist_spiderParent_le a
 
-/-- **Conjecture A's upper bound, proved**: a spanning tree of the spider (`0`, then for each output cell the chain
-of its prefix targets) has length `N³`. -/
 theorem conjectureA_upper (hL : 0 < L) (hLN : L ∣ N) :
     ∃ T : SteinerTree F (Fin N × Fin N) (Fin N × Fin N), T.Reaches 0 ∧
       (∀ r c : Fin N, ∀ s ∈ Finset.Icc 1 (N / L), T.Reaches (prefixTarget F N L r c s)) ∧
@@ -1754,8 +1673,6 @@ theorem conjectureA_upper (hL : 0 < L) (hLN : L ∣ N) :
         rw [Finset.sum_const, smul_eq_mul, hE, mul_assoc, mul_assoc, Nat.div_mul_cancel hLN]
         ring
 
-/-- **Conjecture A, proved**: for `N × N × N` matrix multiplication and every chunk `L ∣ N`, every Steiner tree in
-the rank metric spanning `0` and every prefix target has length at least `N³`, and one has length `N³`. -/
 theorem conjectureA : ConjectureA F := fun _ _ hL hLN =>
   ⟨fun T h0 hT => conjectureA_lower hL hLN T h0 hT, conjectureA_upper hL hLN⟩
 

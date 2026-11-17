@@ -5,17 +5,7 @@ public import Definitions.Pouw.PearlC.TileCheck
 public import Proofs.Properties.Pouw.PearlPlus.Open
 public import Proofs.Pouw.PearlPlus.Semantics
 
-/-!
-# Pearl+'s bridge, part (d): a passed tile is good in the game
-
-`TileAcceptMeans` says what `checkTile` establishes about a tile that passes, or is only over its inert-work bound, in
-the code's terms: its openings, the words its replay forms, its leaf and its rows' rules. This part reads it in the
-game's: a tile of a loaded pass that the check passes or finds only over the bound, whose openings are its unit's commitment, has `TileWordsGood` at the deployed semantics, or SHA-512 collides on
-two different messages, one hashed in digesting the words the check forms and one in digesting the commitment's words on
-the tile (the leaf binds the tile's words through `sha512/row-seg/v1`). The check refuses a tile whose unit is outside its
-scheme's domain, `k ≤ K_MAX` among its bounds, which `WordsAreTheSemantics` reads. `TileGood` adds the cap and every fixed-operand row's rules, which wait on
-the restated credit set and acceptance event (`Rules.lean`).
--/
+/-! Pearl+'s bridge, part (d): a passed tile is good in the game, or SHA-512 collides. -/
 
 @[expose] public section
 
@@ -34,7 +24,6 @@ def TileOf (p : Pass) (tid : ℕ) (U : Pouw.PearlC.Workload) (g : ℕ) : Prop :=
     U.layout.fixedId ((auditTiling 64 64 U.layout).unit g) = p.records[pos]!.matmul.weight ∧
     (auditTiling 64 64 U.layout).rows g = rows.toFinset ∧ (auditTiling 64 64 U.layout).cols g = cols.toFinset
 
-/-- Commitment `c`'s ticket and useful words on a tile's rows and columns, row by row, as the check's `Checked`. -/
 def commitWords (c : Pouw.PearlC.Commit) (rows cols : List ℕ) : Words.Checked :=
   ⟨(rows.map fun i => (cols.map fun j => c.ticket i j).toArray).toArray,
     (rows.map fun i => (cols.map fun j => c.useful i j).toArray).toArray⟩
@@ -47,8 +36,6 @@ def leafBytes (ch : Words.Checked) : ByteArray :=
         Words.le32s (urow.extract (Words.CHUNK * h) (Words.CHUNK * h + Words.CHUNK)))
       acc) ByteArray.empty
 
-/-- The messages SHA-512 hashes in digesting the words the check forms for tile `tid` from the openings `o` (none where
-it forms none). -/
 def leafHashed (p : Pass) (tid : ℕ) (o : TileOpening) : List ByteArray :=
   match p.tile? tid with
   | some (pos, rows, cols) =>
@@ -58,7 +45,6 @@ def leafHashed (p : Pass) (tid : ℕ) (o : TileOpening) : List ByteArray :=
     | .error _ => []
   | none => []
 
-/-- The messages SHA-512 hashes in digesting commitment `c`'s words on tile `tid`. -/
 def commitHashed (p : Pass) (tid : ℕ) (c : Pouw.PearlC.Commit) : List ByteArray :=
   match p.tile? tid with
   | some (_, rows, cols) => Properties.Pouw.PearlPlus.segHashed (leafBytes (commitWords c rows cols))
@@ -75,12 +61,6 @@ def OpensCommitted (p : Pass) (tid : ℕ) (o : TileOpening) (U : Pouw.PearlC.Wor
     (∀ j ∈ cols, ∀ l < (U.layout.shape u).k, U.fixed (U.layout.fixedId u) j l < 2 ^ 32) ∧
     ∀ i ∈ rows, ∀ j ∈ cols, c.ticket i j < 2 ^ 32 ∧ c.useful i j < 2 ^ 32
 
-/-- **(d) A passed tile's words are good**: a tile of a pass `load` gives, which is audit tile `g` of `U`, under the
-semantics' salt and fixed operand's root, whose fixed-operand rows all pass the rules (`TileGood`'s second conjunct), whose openings are
-its unit's commitment `c`, and that `checkTile` passes on its fixed operand's noise or finds only over its inert-work bound, has
-every word of its credited rows at the
-reference values, or SHA-512 collides on two different messages, one hashed in digesting the words the check forms and
-one in digesting `c`'s words on the tile. -/
 def TilePassGivesTheWords : Prop :=
   ∀ {Q R S : Type} (saltOf : S → List ℕ) (rootOf : ℕ → List ℕ) (ρ : ℚ) (H : Q → R) (s : S)
     (coins : PouwCheck.PearlPlus.EpochCoins) (man : Lean.Json) (p : Pass) (tid : ℕ) (o : TileOpening)
@@ -103,13 +83,10 @@ namespace Pouw.PearlPlus.Assembly
 
 open PouwCheck.PearlPlus
 
-/-- A tile that passes or is only over its inert-work bound is `TileAcceptMeans`' outcome at some bound. -/
 theorem passOrOver_bound {t : TileOutcome} (h : t = .pass ∨ ∃ why, t = .overInertBound why) :
     ∃ bound : Option String, t = match bound with | none => .pass | some why => .overInertBound why := by
   rcases h with h | ⟨why, h⟩
   exacts [⟨none, h⟩, ⟨some why, h⟩]
-
-/-! ## `Except`, `mapM` and `for` -/
 
 theorem bind_ok {ε α β : Type} {x : Except ε α} {f : α → Except ε β} {b : β} (h : x >>= f = .ok b) :
     ∃ a, x = .ok a ∧ f a = .ok b := by
@@ -179,8 +156,6 @@ theorem mapM_ok_mem {ε α β : Type} {f : α → Except ε β} :
     · obtain ⟨a', ha', h'⟩ := mapM_ok_mem hbs b hb
       exact ⟨a', List.mem_cons_of_mem _ ha', h'⟩
 
-/-! ## The domain a passed tile keeps -/
-
 theorem domain_k {s : PouwCheck.PearlPlus.Scheme} {u : PouwCheck.PearlPlus.Matmul} (h : s.domainReason u = none) :
     u.k ≤ PouwCheck.PearlPlus.K_MAX ∧ u.k % PouwCheck.PearlPlus.WINDOW = 0 := by
   unfold PouwCheck.PearlPlus.Scheme.domainReason at h
@@ -206,15 +181,11 @@ theorem tile_domain {p : Pass} {wn} {tid pos : ℕ} {rows cols : List ℕ} {o : 
       rfl
     rcases hc with h | ⟨why, h⟩ <;> rw [hf] at h <;> cases h
 
-/-- A tile `checkTile` passes, or finds only over its inert-work bound, has `k ≤ K_MAX` and whole promotion windows
-(`128 ∣ k`). -/
 theorem record_domain {p : Pass} {wn} {tid pos : ℕ} {rows cols : List ℕ} {o : TileOpening}
     (ht : p.tile? tid = some (pos, rows, cols))
     (hc : checkTile p wn tid o = .pass ∨ ∃ why, checkTile p wn tid o = .overInertBound why) :
     p.records[pos]!.matmul.k ≤ 2 ^ 16 ∧ p.records[pos]!.matmul.k % 128 = 0 :=
   domain_k (tile_domain ht hc)
-
-/-! ## The shape of the formed words -/
 
 theorem formV1_shape {rows eRows f : Array (Array ℕ)} {out : Words.Formed} (h : Words.formV1 rows eRows f = .ok out) :
     out.codes.size = (rows.zip eRows).size ∧ out.ep.size = (rows.zip eRows).size := by
@@ -278,7 +249,6 @@ theorem encode_shape {salt rootB : ByteArray} {wn : Words.FixedNoise} {index k :
   try dsimp only
   refine ⟨by omega, by omega, by omega⟩
 
-/-- The check's words of a formed tile: its noise, operands and checked words, as `formed` computes them. -/
 theorem formed_ok {p : Pass} {wn : Words.Reject Words.FixedNoise} {rows cols : List ℕ}
     {u : PouwCheck.PearlPlus.Matmul} {o : TileOpening} {ops : Words.Ops} {ch : Words.Checked}
     (h : Properties.Pouw.PearlPlus.formed p wn rows cols u o = .ok (ops, ch)) :
@@ -312,9 +282,6 @@ theorem commitHashed_eq {p : Pass} {tid pos : ℕ} {rows cols : List ℕ} {c : P
     Bridge.commitHashed p tid c = Properties.Pouw.PearlPlus.segHashed (Bridge.leafBytes (Bridge.commitWords c rows cols)) := by
   simp only [Bridge.commitHashed, h]
 
-/-! ## The leaf's bytes -/
-
-/-- A word's four little-endian bytes, as `le32s` writes them. -/
 def bytes4 (x : ℕ) : List UInt8 := (Words.le 4 x).data.toList
 
 theorem bytes4_eq (x : ℕ) : bytes4 x = (List.range 4).map fun i => (x / 256 ^ i % 256).toUInt8 := by
@@ -360,12 +327,10 @@ theorem le32s_data (xs : Array ℕ) : (Words.le32s xs).data.toList = xs.toList.f
   rw [← Array.foldl_toList, foldl_le_data]
   rfl
 
-/-- One 32-column chunk of a row's bytes: its C̃ words, then its U words. -/
 def chunkL (crow urow : Array ℕ) (h : ℕ) : List UInt8 :=
   (crow.extract (Words.CHUNK * h) (Words.CHUNK * h + Words.CHUNK)).toList.flatMap bytes4 ++
     (urow.extract (Words.CHUNK * h) (Words.CHUNK * h + Words.CHUNK)).toList.flatMap bytes4
 
-/-- One row's bytes: its chunks in order. -/
 def rowL (crow urow : Array ℕ) : List UInt8 :=
   (List.range ((crow.size + Words.CHUNK - 1) / Words.CHUNK)).flatMap (chunkL crow urow)
 
@@ -441,7 +406,6 @@ theorem rowL_length_eq {c₁ u₁ c₂ u₂ : Array ℕ} (hc : c₁.size = c₂.
   rw [hc]
   exact flatMap_length_eq _ _ rfl fun i _ _ => by rw [chunkL_length, chunkL_length, hc, hu]
 
-/-- Two rows' bytes of one shape are equal only where their words agree below `2^32`. -/
 theorem rowL_inj {c₁ u₁ c₂ u₂ : Array ℕ} {C : ℕ} (h1c : c₁.size = C) (h1u : u₁.size = C) (h2c : c₂.size = C)
     (h2u : u₂.size = C) (h : rowL c₁ u₁ = rowL c₂ u₂) :
     ∀ z < C, c₁[z]! % 2 ^ 32 = c₂[z]! % 2 ^ 32 ∧ u₁[z]! % 2 ^ 32 = u₂[z]! % 2 ^ 32 := by
@@ -499,7 +463,6 @@ theorem leafBytes_shape_len {ch₁ ch₂ : Words.Checked} {R C : ℕ}
   rw [zip_get h1c h1u i h₁, zip_get h2c h2u i h₂]
   exact rowL_length_eq (by rw [(h1 i hi).1, (h2 i hi).1]) (by rw [(h1 i hi).2, (h2 i hi).2])
 
-/-- Two tiles' words of one shape give leaf bytes of one length. -/
 theorem leafBytes_size {ch₁ ch₂ : Words.Checked} {R C : ℕ}
     (h1c : ch₁.c.size = R) (h1u : ch₁.u.size = R) (h2c : ch₂.c.size = R) (h2u : ch₂.u.size = R)
     (h1 : ∀ x < R, ch₁.c[x]!.size = C ∧ ch₁.u[x]!.size = C) (h2 : ∀ x < R, ch₂.c[x]!.size = C ∧ ch₂.u[x]!.size = C) :
@@ -509,7 +472,6 @@ theorem leafBytes_size {ch₁ ch₂ : Words.Checked} {R C : ℕ}
     exact flatMap_length_eq _ _ (by simp [h1c, h1u, h2c, h2u]) (leafBytes_shape_len h1c h1u h2c h2u h1 h2)
   simpa using e
 
-/-- **The leaf's bytes fix the words**: two tiles' words of one shape with one leaf byte string agree below `2^32`. -/
 theorem leafBytes_words {ch₁ ch₂ : Words.Checked} {R C : ℕ}
     (h1c : ch₁.c.size = R) (h1u : ch₁.u.size = R) (h2c : ch₂.c.size = R) (h2u : ch₂.u.size = R)
     (h1 : ∀ x < R, ch₁.c[x]!.size = C ∧ ch₁.u[x]!.size = C) (h2 : ∀ x < R, ch₂.c[x]!.size = C ∧ ch₂.u[x]!.size = C)
@@ -528,8 +490,6 @@ theorem leafBytes_words {ch₁ ch₂ : Words.Checked} {R C : ℕ}
 theorem leaf_eq (ch : Words.Checked) :
     Words.leaf ch = Flock.HmRow.segDigest (8 * (Bridge.leafBytes ch).size) (Bridge.leafBytes ch) := rfl
 
-/-- **`sha512/row-seg/v1` binds a row of a known length**: two rows of one length with one digest are one row, or two
-different messages hashed in computing the two digests have one SHA-512 digest. -/
 theorem segDigest_binds_eq (row row' : ByteArray) (hN : row.size = row'.size)
     (h : Flock.HmRow.segDigest (8 * row.size) row = Flock.HmRow.segDigest (8 * row'.size) row') :
     row = row' ∨ Properties.Pouw.Commit.Break (Properties.Pouw.PearlPlus.segHashed row)
@@ -557,8 +517,6 @@ theorem segDigest_binds_eq (row row' : ByteArray) (hN : row.size = row'.size)
       _, List.mem_append_left _ (List.mem_map.2 ⟨j, List.mem_range.2 hj, rfl⟩), hne,
       ByteArray.ext (Array.toList_inj.1 (hblk j hj))⟩
 
-/-! ## The commitment's words -/
-
 theorem toArray_map_get! {α : Type} [Inhabited α] (f : ℕ → α) {l : List ℕ} {x : ℕ} (hx : x < l.length) :
     (l.map f).toArray[x]! = f l[x] := by
   rw [getElem!_pos (l.map f).toArray x (by simpa using hx)]
@@ -582,7 +540,6 @@ theorem commitWords_get (c : Pouw.PearlC.Commit) {rows cols : List ℕ} {x z : �
     toArray_map_get! (α := ℕ) _ hz, toArray_map_get! (α := ℕ) _ hz]
   exact ⟨rfl, rfl⟩
 
-/-- A word's value reads only its low 32 bits. -/
 theorem wordQ_mod (w : ℕ) : Pouw.Fp8Atom.wordQ (w % 2 ^ 32) = Pouw.Fp8Atom.wordQ w := by
   have he : ((w % 2 ^ 32) >>> 23) % 256 = (w >>> 23) % 256 := by
     rw [Nat.shiftRight_eq_div_pow, Nat.shiftRight_eq_div_pow]
@@ -613,8 +570,6 @@ namespace Pouw.PearlPlus.Bridge
 
 open Pouw.PearlC Pouw.Fp8Atom PouwCheck.PearlPlus
 
-/-- **(d)** from what a passed tile establishes (`TileAcceptMeans`) and what its words are (`wordsAreTheSemantics`):
-the leaf binds the check's words to the commitment's, or SHA-512 collides on the two digests' messages. -/
 theorem tilePassGivesTheWords (hT : Properties.Pouw.PearlPlus.TileAcceptMeans) : TilePassGivesTheWords := by
   intro Q R S saltOf rootOf ρ H s coins man p tid o U g c _ hof hsalt hroot hwOK hopen hpass
   obtain ⟨pos, rows, cols, htile, -, hunit, -, hk, -, hwid, hrows, hcols⟩ := hof

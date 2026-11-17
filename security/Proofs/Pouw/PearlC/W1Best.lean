@@ -4,24 +4,7 @@ public import Proofs.Pouw.Prob
 public import Proofs.Pouw.PearlC.TTOutW1
 public import Definitions.Pouw.Assumptions.PearlC.TTOutS8
 
-/-!
-# TT_OUT along a domination within every bound, and W1's unpriced resources at the adversary's best case
-
-* **A domination within every bound carries TT_OUT down** (`Pouw.PearlC.ttOutTile_of_dominatedWithin`): if `CM'`
-  dominates `CM` within every bound on the tiles (`CostModel.DominatedWithin`), every adversary of `CM` within `T` and
-  `q` has one of `CM'` within `T` and `q` whose good tiles beat TT_OUT's threshold at least as often, so TT_OUT per tile
-  at `CM'` is TT_OUT per tile at `CM`.
-* **The program-by-program forms imply it.** `CostModel.DominatedBy` (for each adversary, a program of `CM'` on its
-  inputs at no more cost and calls on every oracle and salt, whose good tiles earn no less there) gives a domination
-  within every bound (`CostModel.dominatedWithin_of_dominatedBy`), and a simulation (`CostModel.SimulatedBy`, the same
-  run at no more cost and calls) is such a domination (`CostModel.dominatedBy_of_simulatedBy`).
-  `ttOutTile_of_dominatedBy` and `ttOutTile_of_simulatedBy` are the transfers along them.
-* **A compression and a first fetch at 0 is the best case** (`W1.w1Priced_s8H100Tensor_simulatedBy_best`): the run's
-  memory and its fetched words never read a price, and its cost only grows with each, so at any `sha, fetch ≥ 0`
-  `W1Device.s8H100Tensor sha fetch` is simulated by `W1Device.s8H100Best`, each program by itself.
-  `ttOutTilePearlCDevRev1W1_s8H100Tensor_of_best` is the consequence for TT_OUT: `TTOutTilePearlCH100Rev1S8` holds at
-  every such price.
--/
+/-! TT_OUT along a domination within every bound, and W1's unpriced resources at the adversary's best case. -/
 
 @[expose] public section
 
@@ -29,8 +12,6 @@ namespace Pouw.PearlC
 
 variable {Q R S : Type}
 
-/-- **TT_OUT per tile moves along a domination within every bound**: at `CM`, given `CM.Queries` and a domination
-of `CM` by `CM'` within every bound on the tiles, from TT_OUT per tile at `CM'`. -/
 theorem ttOutTile_of_dominatedWithin [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] {CM CM' : CostModel Q R S}
     {P : Protocol Q R S} {TR : TileRules Q R S} {D : Layout → Prop} {g₀ : ℝ} {δ : ℕ → ℕ → ℝ}
     (hQ : CM.Queries) (hD : CM.DominatedWithin P TR D CM') (h : Assumptions.TTOutTile CM' P TR D g₀ δ) :
@@ -53,8 +34,6 @@ def CostModel.DominatedBy (P : Protocol Q R S) (TR : TileRules Q R S) (D : Layou
         ∑ g ∈ goodTiles P TR U H s (CM'.run p' H U A.act (A.pre.eval H) s),
           TR.credit H s U g (actOf (CM'.run p' H U A.act (A.pre.eval H) s) ((TR.tiling U.layout).unit g))
 
-/-- A program-by-program domination is a domination within every bound: the dominating program, with the adversary's
-preprocessing and activations, stays within its bounds and earns no less on every oracle and salt. -/
 theorem CostModel.dominatedWithin_of_dominatedBy [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
     {CM CM' : CostModel Q R S} {P : Protocol Q R S} {TR : TileRules Q R S} {D : Layout → Prop}
     (hD : CM.DominatedBy P TR D CM') : CM.DominatedWithin P TR D CM' := by
@@ -64,8 +43,6 @@ theorem CostModel.dominatedWithin_of_dominatedBy [Fintype Q] [DecidableEq Q] [Fi
     ⟨(hp H s).1.trans (hA H s).1, (Nat.add_le_add_left (hp H s).2.1 _).trans (hA H s).2⟩, fun c => ?_⟩
   exact pr_mono fun x hx => hx.trans_le (hp x.1 x.2).2.2
 
-/-- **TT_OUT per tile moves along a program-by-program domination**: `ttOutTile_of_dominatedWithin` at
-`dominatedWithin_of_dominatedBy`. -/
 theorem ttOutTile_of_dominatedBy [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] {CM CM' : CostModel Q R S}
     {P : Protocol Q R S} {TR : TileRules Q R S} {D : Layout → Prop} {g₀ : ℝ} {δ : ℕ → ℕ → ℝ}
     (hQ : CM.Queries) (hD : CM.DominatedBy P TR D CM') (h : Assumptions.TTOutTile CM' P TR D g₀ δ) :
@@ -79,7 +56,6 @@ def CostModel.SimulatedBy (CM CM' : CostModel Q R S) : Prop :=
     CM'.run p' H U act σ s = CM.run p H U act σ s ∧ CM'.cost p' H U act σ s ≤ CM.cost p H U act σ s ∧
       CM'.calls p' H U act σ s ≤ CM.calls p H U act σ s
 
-/-- A simulation is a domination on any tiles: the simulating program commits the same trace. -/
 theorem CostModel.dominatedBy_of_simulatedBy {CM CM' : CostModel Q R S} (P : Protocol Q R S) (TR : TileRules Q R S)
     (D : Layout → Prop) (h : CM.SimulatedBy CM') : CM.DominatedBy P TR D CM' := by
   intro U _ A
@@ -88,7 +64,6 @@ theorem CostModel.dominatedBy_of_simulatedBy {CM CM' : CostModel Q R S} (P : Pro
   rw [(hp H U A.act (A.pre.eval H) s).1]
   exact le_rfl
 
-/-- **TT_OUT per tile moves along a simulation**: `ttOutTile_of_dominatedBy` at `dominatedBy_of_simulatedBy`. -/
 theorem ttOutTile_of_simulatedBy [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] {CM CM' : CostModel Q R S}
     {P : Protocol Q R S} {TR : TileRules Q R S} {D : Layout → Prop} {g₀ : ℝ} {δ : ℕ → ℕ → ℝ}
     (hQ : CM.Queries) (hS : CM.SimulatedBy CM') (h : Assumptions.TTOutTile CM' P TR D g₀ δ) :
@@ -113,8 +88,6 @@ theorem price_s8H100Tensor_le (h : a' ≤ a) (t : Bool) (i : Instr) :
     i.price (W1Device.s8H100Tensor a' b') t ≤ i.price (W1Device.s8H100Tensor a b) t := by
   cases i <;> first | exact le_rfl | exact add_le_add h le_rfl
 
-/-- A run on `s8H100Tensor a' b'` and one on `s8H100Tensor a b` from states with one memory and one fetch list keep them equal,
-and the first's cost stays at most the second's when `a' ≤ a`. -/
 theorem exec_s8H100Tensor_le (h : a' ≤ a) (c : Code) : ∀ (t : Bool) (st st' : St), st'.mem = st.mem →
     st'.fetched = st.fetched → st'.cost ≤ st.cost →
     (exec (W1Device.s8H100Tensor a' b') t c st').mem = (exec (W1Device.s8H100Tensor a b) t c st).mem ∧
@@ -153,8 +126,6 @@ theorem final_s8H100Tensor (h : a' ≤ a) (salt : List ℕ) (pr : CodeImage) (U 
       (final (W1Device.s8H100Tensor a' b') salt pr U act σ).cost ≤ (final (W1Device.s8H100Tensor a b) salt pr U act σ).cost :=
   exec_s8H100Tensor_le h _ false _ _ rfl rfl le_rfl
 
-/-- **A compression and a first fetch at 0 is the adversary's best case**: at `sha, fetch ≥ 0`, W1 priced on
-`s8H100Tensor sha fetch` is simulated by W1 priced on `s8H100Best`, each program by itself. -/
 theorem w1Priced_s8H100Tensor_simulatedBy_best {Q R S : Type} {sha fetch : ℚ} (hs : 0 ≤ sha) (hf : 0 ≤ fetch)
     (salt : S → List ℕ) :
     (w1Priced (W1Device.s8H100Tensor sha fetch) salt : CostModel Q R S).SimulatedBy
@@ -186,8 +157,6 @@ open Pouw.PearlC.Assumptions Pouw.PearlC.TTOutW1
 
 variable {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
 
-/-- **`TTOutTilePearlCH100Rev1S8` holds at every price of a compression and a first fetch**: TT_OUT rev1 per tile at
-the H100 record on `W1Device.s8H100Tensor sha fetch`, at any `sha, fetch ≥ 0`. -/
 theorem ttOutTilePearlCDevRev1W1_s8H100Tensor_of_best {sha fetch : ℚ} (hs : 0 ≤ sha) (hf : 0 ≤ fetch)
     {salt : S → List ℕ} {sem : PearlCSem Q R S} {ρ : ℚ} (h : TTOutTilePearlCH100Rev1S8 salt sem ρ) :
     TTOutTilePearlCDevRev1W1 (W1.W1Device.s8H100Tensor sha fetch) salt devH100Tensor sem ρ :=

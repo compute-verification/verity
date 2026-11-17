@@ -7,17 +7,7 @@ import Mathlib.Analysis.SpecialFunctions.Pow.Real
 import Mathlib.Tactic.Positivity.Finset
 import Proofs.Pouw.PearlC.TileGap
 
-/-!
-# g against the honest kernel's `W_ref`, from the record's TT_OUT (staged)
-
-* **TT_OUT does not read `W_ref`** (`ttOut_wref`, `ttOutTile_wref`): TT_OUT at a protocol holds at the same protocol
-  with any other `W_ref`, and per tile with any other `W_ref` and credited rows' `W_ref`. So TT_OUT at a record gives
-  TT_OUT at `pearlCProtocolDevK` and `pearlCTilesDevK` (and their rev1 forms): the kernel's gap rests on the record's
-  assumption.
-* **The gap at any record against the kernel's `W_ref`**, on the one-shape domain at `g = 1 − (399/400)/ω`: `G_g` from TT_OUT
-  (`pearlCGapDevKAt`, `pearlCGapDevRev1KAt`) and `GGapSampled` from TT_OUT per tile (`pearlCSampledDevKAt`,
-  `pearlCSampledDevRev1KAt`), where `wrefDevK d c = ω·(1 − ρ)·creditDev` (rev1: `wrefDevRev1K`, `creditDevRev1`).
--/
+/-! g against the honest kernel's `W_ref` from the record's TT_OUT, staged: TT_OUT does not read `W_ref`. -/
 
 @[expose] public section
 
@@ -25,21 +15,17 @@ namespace Pouw.PearlC
 
 open Finset Pouw.PearlC.Assumptions Pouw.Fp8Atom
 
-/-- TT_OUT does not read `W_ref`. -/
 theorem ttOut_wref {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] {CM : CostModel Q R S}
     {P : Protocol Q R S} {D : Layout → Prop} {g₀ : ℝ} {δ : ℕ → ℕ → ℝ} (W : Layout → ℕ → ℝ)
     (h : TTOut CM P D g₀ δ) : TTOut CM { P with Wref := W } D g₀ δ :=
   h
 
-/-- TT_OUT per tile reads neither `W_ref` nor the credited rows' `W_ref`. -/
 theorem ttOutTile_wref {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] {CM : CostModel Q R S}
     {P : Protocol Q R S} {TR : TileRules Q R S} {D : Layout → Prop} {g₀ : ℝ} {δ : ℕ → ℕ → ℝ}
     (W : Layout → ℕ → ℝ) (W' : Layout → ℕ → ℝ) (Wc : Layout → ℕ → Codes → ℝ) (h : TTOutTile CM P TR D g₀ δ) :
     TTOutTile CM { P with Wref := W } { TR with Wref := W', Wcred := Wc } D g₀ δ :=
   h
 
-/-- TT_OUT at a device record gives `G_g` against the kernel's `W_ref` on the one-shape domain at
-`g = 1 − (399/400)/ω`, where `wrefDevK d c = ω·(1 − ρ)·creditDev`. -/
 theorem pearlCGapDevKAt {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S)
     (d : PearlCDevice) (sem : PearlCSem Q R S) (ρ c : ℚ) (s : Shape) (ω g : ℚ) (hω0 : 0 < ω)
     (hω : wrefDevK d c s = ω * ((1 - ρ) * creditDev d s)) (hg : g = 1 - (1 - 1 / 400) / ω)
@@ -67,8 +53,6 @@ theorem pearlCGapDevKAt {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [
   rw [e]
   exact key
 
-/-- TT_OUT per tile at a device record gives `GGapSampled` against the kernel's `W_ref` on the one-shape domain at
-`γ = 1 − (399/400)/ω`, where `wrefDevK d c = ω·(1 − ρ)·creditDev ≥ 0`. -/
 theorem pearlCSampledDevKAt {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S)
     (d : PearlCDevice) (sem : PearlCSem Q R S) (ρ c : ℚ) (s : Shape) (ω γ : ℚ) (hω0 : 0 < ω)
     (hw0 : 0 ≤ wrefDevK d c s) (hω : wrefDevK d c s = ω * ((1 - ρ) * creditDev d s))
@@ -103,8 +87,6 @@ theorem pearlCSampledDevKAt {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype 
   rw [e]
   exact key
 
-/-- TT_OUT rev1 at a device record gives `G_g` against the kernel's `W_ref` on the one-shape domain at
-`g = 1 − (399/400)/ω`, where `wrefDevRev1K d c = ω·(1 − ρ)·creditDevRev1`. -/
 theorem pearlCGapDevRev1KAt {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
     (CM : CostModel Q R S) (d : PearlCDevice) (sem : PearlCSem Q R S) (ρ c : ℚ) (s : Shape) (ω g : ℚ) (hω0 : 0 < ω)
     (hω : wrefDevRev1K d c s = ω * ((1 - ρ) * creditDevRev1 d s)) (hg : g = 1 - (1 - 1 / 400) / ω)
@@ -132,8 +114,6 @@ theorem pearlCGapDevRev1KAt {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype 
   rw [e]
   exact key
 
-/-- TT_OUT rev1 per tile at a device record gives `GGapSampled` against the kernel's `W_ref` on the one-shape domain at
-`γ = 1 − (399/400)/ω`, where `wrefDevRev1K d c = ω·(1 − ρ)·creditDevRev1 ≥ 0`. -/
 theorem pearlCSampledDevRev1KAt {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
     (CM : CostModel Q R S) (d : PearlCDevice) (sem : PearlCSem Q R S) (ρ c : ℚ) (s : Shape) (ω γ : ℚ) (hω0 : 0 < ω)
     (hw0 : 0 ≤ wrefDevRev1K d c s) (hω : wrefDevRev1K d c s = ω * ((1 - ρ) * creditDevRev1 d s))

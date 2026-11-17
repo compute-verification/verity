@@ -9,24 +9,7 @@ import Proofs.Pouw.PerRunTruncation
 import Proofs.Pouw.Prob
 import Proofs.Pouw.Sampling
 
-/-!
-# Proof of the priced per-run guarantees
-
-Pearl-C's game with `t` tickets weighted by `w`, at units whose `W_ref` is `κ·w`: an accepted run whose correct units
-carry at least `1 − ε_s` of the tickets' weight carry at least `1 − ε_s` of `W_ref`, so a cost below
-`(1 − g)(1 − ε_s)·∑ W_ref` wins the gap game (`winsPearlC_of_accept`). Work-weighted sampling and `GGap` bound the
-two (`pearlC_endToEnd`, every adversary within a sure budget), and truncation (`pr_lt_of_abort`, with `abortPearlC`)
-makes it per run. A run that realizes Pearl-C's game with its cost covered by the priced sum has the compute audit's
-per-run guarantee on that sum.
-
-When the reads are attributed, the bits read over the window are the bandwidth account's, the compute account's and the
-rest (`Run.read_add_pouwRead_add_covertRead`), within the device's `BW·T`. So, beside the compute account's work and
-every other account's within `F·T`, a run whose priced sum and window reads reach their certificates leaves the other
-accounts at most `(F + pRead·BW)·T − (W + pRead·Q)` of priced work and reads (`Run.pricedLt_of_covert`).
-
-`BudgetAbortPearlC` is compute-accounting's `Pouw.PearlC.W1BudgetAbort.BudgetAbortPearlC` (`budgetAbortPearlC_iff`),
-and a cost model whose costs and calls don't depend on the coins satisfies it (`budgetAbortPearlC_of_oblivious`).
--/
+/-! The priced per-run guarantees. -/
 
 @[expose] public section
 
@@ -40,9 +23,6 @@ theorem budgetAbortPearlC_iff (CM : PearlC.CostModel Q R S) :
     BudgetAbortPearlC CM ↔ PearlC.W1BudgetAbort.BudgetAbortPearlC CM :=
   Iff.rfl
 
-/-- A Pearl-C cost model whose programs' costs and calls do not depend on the oracle, the preprocessed state or the
-salt, with nonnegative costs and a program that costs nothing and calls nothing, truncates, so `BudgetAbortPearlC` is
-satisfiable. -/
 theorem budgetAbortPearlC_of_oblivious (CM : PearlC.CostModel Q R S)
     (hnn : ∀ prog H U act σ s, 0 ≤ CM.cost prog H U act σ s)
     (hobl : ∀ prog U act, ∃ c : ℝ, ∃ n : ℕ, ∀ H σ s, CM.cost prog H U act σ s = c ∧ CM.calls prog H U act σ s = n)
@@ -56,7 +36,6 @@ theorem budgetAbortPearlC_of_oblivious (CM : PearlC.CostModel Q R S)
   · refine ⟨null, fun H σ s => ⟨(hnull H U act σ s).1 ▸ hb, (hnull H U act σ s).2 ▸ Nat.zero_le _, fun h => ?_⟩⟩
     exact absurd ((hc H σ s).1 ▸ h) hcb
 
-/-- **Pearl-C's adversaries are closed under budget-abort** when its cost model truncates. -/
 theorem abortPearlC {CM : PearlC.CostModel Q R S} (hCM : BudgetAbortPearlC CM) (A : PearlC.Adversary CM)
     (U : PearlC.Workload) {q : ℕ} (hq : CallsWithinPearlC A U q) {b : ℝ} (hb : 0 ≤ b) :
     ∃ A' : PearlC.Adversary CM, A'.Bounded U b q ∧
@@ -65,8 +44,6 @@ theorem abortPearlC {CM : PearlC.CostModel Q R S} (hCM : BudgetAbortPearlC CM) (
   refine ⟨⟨A.pre, prog', A.act⟩, fun H s => ⟨(h H _ s).1, ?_⟩, fun H s hc => (h H _ s).2.2 hc⟩
   exact (Nat.add_le_add_left (h H _ s).2.1 _).trans (hq H s)
 
-/-- A run whose correct units carry all but `ε_s` of the tickets' weight, at units whose `W_ref` is `κ·w`, and whose
-cost is below `(1 − g)(1 − ε_s)·∑ W_ref`, wins Pearl-C's gap-gap game. -/
 theorem winsPearlC_of_accept (P : PearlC.Protocol Q R S) (U : PearlC.Workload) (H : Q → R) (s : S)
     (τ : PearlC.Trace) {w : ℕ → ℕ} {κ g T εs : ℝ} (hκ : 0 ≤ κ)
     (hw : ∀ u < U.layout.N, P.Wref U.layout u = κ * w u) (hg : g < 1)
@@ -97,8 +74,6 @@ theorem winsPearlC_of_accept (P : PearlC.Protocol Q R S) (U : PearlC.Workload) (
     _ ≤ (1 - g) * ∑ u ∈ PearlC.correctSet P U H s τ, P.Wref U.layout u := mul_le_mul_of_nonneg_left hgood h1g.le
     _ = _ := by ring
 
-/-- **Pearl-C's gap-gap property, audited by work-weighted tickets**: an adversary within a sure budget `T` is accepted
-with `T < (1 − g)(1 − ε_s)·∑ W_ref` with probability at most `(1 − ε_s)^t + δ(q, N)`. -/
 theorem pearlC_endToEnd [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] {CM : PearlC.CostModel Q R S}
     {P : PearlC.Protocol Q R S} {D : PearlC.Layout → Prop} {g : ℝ} {δ : ℕ → ℕ → ℝ} (hg : g < 1)
     (hG : PearlC.GGap CM P D g δ) {U : PearlC.Workload} (hU : U.InDomain P D) {w : ℕ → ℕ} {κ : ℝ} (hκ : 0 ≤ κ)
@@ -133,14 +108,11 @@ section Sure
 
 variable [Fintype ΩW]
 
-/-- A compute guarantee on the work alone gives the priced one at any read price `pRead ≥ 0`. -/
 theorem computeSoundPerRunPriced_of_perRun {p : Price} {pRead W ε : ℝ} (h0 : 0 ≤ pRead)
     (h : r.ComputeSoundPerRun p W ε) : r.ComputeSoundPerRunPriced p pRead W ε := fun o =>
   (pr_mono fun _ hx => ⟨hx.1, lt_of_le_of_lt (le_add_of_nonneg_right (mul_nonneg h0 (Nat.cast_nonneg _))) hx.2⟩).trans
     (h o)
 
-/-- An ideal compute audit, accepting only runs whose priced sum reaches `W`, has its priced per-run guarantee with
-error 0. -/
 theorem computeSoundPerRunPriced_ideal {p : Price} {pRead W : ℝ}
     (h : ∀ ω, r.accepts .compute ω → W ≤ (r.work p ω : ℝ) + pRead * r.pouwRead ω) :
     r.ComputeSoundPerRunPriced p pRead W 0 := fun _ =>
@@ -182,8 +154,6 @@ theorem totalRead_le (ω : ΩW × ΩQ × ΩS) : r.totalRead ω ≤ d.bw * (r.win
 
 variable [DecidableEq α]
 
-/-- **No bit read is credited twice**: when the reads are attributed, the bits read over the window are the bandwidth
-account's, the compute account's and the other accounts'. -/
 theorem read_add_pouwRead_add_covertRead (h : r.ReadsAttributed) (ω : ΩW × ΩQ × ΩS) :
     r.read ω + r.pouwRead ω + r.covertRead ω = r.totalRead ω := by
   have hc : r.acct .compute ∈ Finset.univ.erase (r.acct .bandwidth) := Finset.mem_erase.2 ⟨h.1, Finset.mem_univ _⟩
@@ -194,8 +164,6 @@ theorem read_add_pouwRead_add_covertRead (h : r.ReadsAttributed) (ω : ΩW × Ω
   unfold read pouwRead covertRead totalRead
   rw [h.2, add_assoc, h1, h2]
 
-/-- On a run whose bandwidth account reads at least `Q` bits, the other accounts beyond the priced budget
-`(F + pRead·BW)·T − (W + pRead·Q)` put the priced sum below `W`. -/
 theorem pricedLt_of_covert (hA : r.ReadsAttributed) {p : Price} {pRead W Q : ℝ} (h0 : 0 ≤ pRead)
     {ω : ΩW × ΩQ × ΩS} (hQ : Q ≤ r.read ω)
     (h : ((d.priced p * (r.win .compute).len : ℕ) : ℝ) + pRead * ((d.bw * (r.win .compute).len : ℕ) : ℝ) -

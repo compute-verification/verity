@@ -2,20 +2,7 @@ module
 
 public import Proofs.Pouw.PearlC.TileInertBoundRev1Gap
 
-/-!
-# v1 under rev1 at the served linears, at any batch (compute accounting's file)
-
-* **One linear at any `m`:** `pearlCDomainDevNK d n k` holds the units of one linear `m × n × k` at any mix of batch
-  sizes, decode and prefill in one layout. Every term of `creditDevRev1` and `wrefDevRev1K` is linear in `m`, so
-  `ω = wrefDevRev1K/((1 − ρ)·creditDevRev1)` is one number per `(n, k)`, and `pearlCGapDevRev1KNK`,
-  `pearlCSampledDevRev1KNK` and `pearlCSampledDevRev1KNK_of_inert_bound` are `KernelWrefGap`'s and `TileInertBoundRev1Gap`'s
-  one-shape theorems on it.
-* **The gap at the linears a served pass credits** at v1's record with FP32 at 8.376 and the honest cast at 8.72, at the cap
-  1/1,000: Llama-3.1-8B's `(n, k)` = (6144, 4096) qkv, (4096, 4096) o, (28672, 4096) gate_up, (4096, 14336) down, and
-  Qwen3-8B's (6144, 4096), (4096, 4096), (24576, 4096) gate_up, (4096, 12288) down. Per unit and per audit tile from
-  TT_OUT at 1/1,000, and per unit from TT_OUT at 1/400 at the same g: 0.35535% (Llama's gate_up) to 0.38912% (Llama's
-  down). Per tile from TT_OUT per tile at 1/400 the g is 1/400's (`TileInertBoundRev1Gap`): 0.50496% to 0.53869%.
--/
+/-! v1 under rev1 at the served linears, at any batch. -/
 
 @[expose] public section
 
@@ -33,8 +20,6 @@ theorem shape_eq_mk_of_nk {s : Shape} {n k : ℕ} (h : s.n = n ∧ s.k = k) : s 
   subst h1 h2
   rfl
 
-/-- `pearlCGapDevRev1KAt` on one linear at any `m`: TT_OUT rev1 at a device record gives `G_g` against the kernel's
-`W_ref` at `g = 1 − (399/400)/ω`, where `wrefDevRev1K d c = ω·(1 − ρ)·creditDevRev1` at every `m × n × k`. -/
 theorem pearlCGapDevRev1KNK [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
     (CM : CostModel Q R S) (d : PearlCDevice) (sem : PearlCSem Q R S) (ρ c : ℚ) (n k : ℕ) (ω g : ℚ) (hω0 : 0 < ω)
     (hω : ∀ m : ℕ, wrefDevRev1K d c ⟨m, n, k⟩ = ω * ((1 - ρ) * creditDevRev1 d ⟨m, n, k⟩))
@@ -63,7 +48,6 @@ theorem pearlCGapDevRev1KNK [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
   rw [e]
   exact key
 
-/-- `pearlCSampledDevRev1KAt_gen` on one linear at any `m`. -/
 theorem pearlCSampledDevRev1KNK_gen [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
     (CM : CostModel Q R S) (d : PearlCDevice) (sem : PearlCSem Q R S) (ρ c : ℚ) (n k : ℕ) (ω : ℚ) (g₀ : ℝ)
     (hg₀ : g₀ < 1) (hω0 : 0 < ω) (hw0 : ∀ m : ℕ, 0 ≤ wrefDevRev1K d c ⟨m, n, k⟩)
@@ -96,9 +80,6 @@ theorem pearlCSampledDevRev1KNK_gen [Fintype Q] [DecidableEq Q] [Fintype R] [Fin
     (pearlCDomainDevNK d n k) g₀ (ω : ℝ) δPearlC hg₀ (by exact_mod_cast hω0) hW hWc
     (ttOutTile_mono_domain (fun _ h => h.1) (ttOutTile_wref _ _ _ hTT))
 
-/-- `pearlCSampledDevRev1KAt` on one linear at any `m`: TT_OUT rev1 per tile at a device record gives `GGapSampled`
-against the kernel's `W_ref` at `g = 1 − (399/400)/ω`, where `wrefDevRev1K d c = ω·(1 − ρ)·creditDevRev1 ≥ 0` at every
-`m × n × k`. -/
 theorem pearlCSampledDevRev1KNK [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
     (CM : CostModel Q R S) (d : PearlCDevice) (sem : PearlCSem Q R S) (ρ c : ℚ) (n k : ℕ) (ω g : ℚ) (hω0 : 0 < ω)
     (hw0 : ∀ m : ℕ, 0 ≤ wrefDevRev1K d c ⟨m, n, k⟩)
@@ -111,9 +92,6 @@ theorem pearlCSampledDevRev1KNK [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype
   rw [e]
   exact key
 
-/-- `pearlCSampledDevRev1KAt_of_inert_bound` on one linear at any `m`: the sampled g at a cap `ρ' ≤ ρ < 1` from TT_OUT rev1 per
-tile at `ρ` is the g at `ρ`, `1 − (399/400)/ω` where `wrefDevRev1K d c = ω·(1 − ρ)·creditDevRev1 ≥ 0` at every
-`m × n × k`. -/
 theorem pearlCSampledDevRev1KNK_of_inert_bound [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
     (CM : CostModel Q R S) (d : PearlCDevice) (sem : PearlCSem Q R S) (ρ ρ' c : ℚ) (n k : ℕ) (ω g : ℚ)
     (hadd : 0 ≤ d.prices.add) (hbf : 0 ≤ d.prices.bf16) (hle : ρ' ≤ ρ) (hρ1 : ρ < 1) (hω0 : 0 < ω)
@@ -167,8 +145,6 @@ theorem wrefDevRev1K_sm120v1LoopCast8p72_n6144k4096_nonneg (m : ℕ) :
   · rw [show (devSm120v1 Prices.sm120Loop).prices = Prices.sm120Loop from rfl]; norm_num [Prices.sm120Loop]
   · rw [show (devSm120v1 Prices.sm120Loop).G = 4 from rfl]; norm_num
 
-/-- **v1 under rev1 at the cap 1/1,000, `m × 6144 × 4096` at any `m` (Llama-3.1-8B's and Qwen3-8B's qkv)**, FP32 at
-8.376, the honest cast at 8.72: `g = 851373343/226641700000` (0.37565%). -/
 theorem pearlCGapSm120v1LoopCast8p72Rev1InertShare1000_n6144k4096
     (hTT : TTOutPearlCDevRev1 CM (devSm120v1 Prices.sm120Loop) sem (1 / 1000)) :
     GGap CM (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120Loop) sem (1 / 1000) (218 / 25 - 8953 / 1000))
@@ -176,8 +152,6 @@ theorem pearlCGapSm120v1LoopCast8p72Rev1InertShare1000_n6144k4096
   pearlCGapDevRev1KNK CM _ sem _ _ _ _ (2266417 / 2265828 / (1 - 1 / 1000)) _ (by norm_num)
     (fun m => by rw [wrefDevRev1K_sm120v1LoopCast8p72_n6144k4096 m]; field_simp) (by norm_num) hTT
 
-/-- **v1 under rev1 per audit tile at the cap 1/1,000, `m × 6144 × 4096` at any `m` (Llama-3.1-8B's and Qwen3-8B's
-qkv)**, FP32 at 8.376, the honest cast at 8.72: `g = 851373343/226641700000` (0.37565%). -/
 theorem pearlCSampledSm120v1LoopCast8p72Rev1InertShare1000_n6144k4096
     (hTT : TTOutTilePearlCDevRev1 CM (devSm120v1 Prices.sm120Loop) sem (1 / 1000)) :
     GGapSampled CM (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120Loop) sem (1 / 1000) (218 / 25 - 8953 / 1000))
@@ -204,8 +178,6 @@ theorem wrefDevRev1K_sm120v1LoopCast8p72_n4096k4096_nonneg (m : ℕ) :
   · rw [show (devSm120v1 Prices.sm120Loop).prices = Prices.sm120Loop from rfl]; norm_num [Prices.sm120Loop]
   · rw [show (devSm120v1 Prices.sm120Loop).G = 4 from rfl]; norm_num
 
-/-- **v1 under rev1 at the cap 1/1,000, `m × 4096 × 4096` at any `m` (Llama-3.1-8B's and Qwen3-8B's o)**, FP32 at 8.376,
-the honest cast at 8.72: `g = 295006781/75957050000` (0.38839%). -/
 theorem pearlCGapSm120v1LoopCast8p72Rev1InertShare1000_n4096k4096
     (hTT : TTOutPearlCDevRev1 CM (devSm120v1 Prices.sm120Loop) sem (1 / 1000)) :
     GGap CM (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120Loop) sem (1 / 1000) (218 / 25 - 8953 / 1000))
@@ -213,8 +185,6 @@ theorem pearlCGapSm120v1LoopCast8p72Rev1InertShare1000_n4096k4096
   pearlCGapDevRev1KNK CM _ sem _ _ _ _ (1519141 / 1518552 / (1 - 1 / 1000)) _ (by norm_num)
     (fun m => by rw [wrefDevRev1K_sm120v1LoopCast8p72_n4096k4096 m]; field_simp) (by norm_num) hTT
 
-/-- **v1 under rev1 per audit tile at the cap 1/1,000, `m × 4096 × 4096` at any `m` (Llama-3.1-8B's and Qwen3-8B's o)**,
-FP32 at 8.376, the honest cast at 8.72: `g = 295006781/75957050000` (0.38839%). -/
 theorem pearlCSampledSm120v1LoopCast8p72Rev1InertShare1000_n4096k4096
     (hTT : TTOutTilePearlCDevRev1 CM (devSm120v1 Prices.sm120Loop) sem (1 / 1000)) :
     GGapSampled CM (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120Loop) sem (1 / 1000) (218 / 25 - 8953 / 1000))
@@ -241,8 +211,6 @@ theorem wrefDevRev1K_sm120v1LoopCast8p72_n28672k4096_nonneg (m : ℕ) :
   · rw [show (devSm120v1 Prices.sm120Loop).prices = Prices.sm120Loop from rfl]; norm_num [Prices.sm120Loop]
   · rw [show (devSm120v1 Prices.sm120Loop).G = 4 from rfl]; norm_num
 
-/-- **v1 under rev1 at the cap 1/1,000, `m × 28672 × 4096` at any `m` (Llama-3.1-8B's gate_up)**, FP32 at 8.376, the
-honest cast at 8.72: `g = 1863165467/524322650000` (0.35535%). -/
 theorem pearlCGapSm120v1LoopCast8p72Rev1InertShare1000_n28672k4096
     (hTT : TTOutPearlCDevRev1 CM (devSm120v1 Prices.sm120Loop) sem (1 / 1000)) :
     GGap CM (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120Loop) sem (1 / 1000) (218 / 25 - 8953 / 1000))
@@ -250,8 +218,6 @@ theorem pearlCGapSm120v1LoopCast8p72Rev1InertShare1000_n28672k4096
   pearlCGapDevRev1KNK CM _ sem _ _ _ _ (10486453 / 10485864 / (1 - 1 / 1000)) _ (by norm_num)
     (fun m => by rw [wrefDevRev1K_sm120v1LoopCast8p72_n28672k4096 m]; field_simp) (by norm_num) hTT
 
-/-- **v1 under rev1 per audit tile at the cap 1/1,000, `m × 28672 × 4096` at any `m` (Llama-3.1-8B's gate_up)**, FP32 at
-8.376, the honest cast at 8.72: `g = 1863165467/524322650000` (0.35535%). -/
 theorem pearlCSampledSm120v1LoopCast8p72Rev1InertShare1000_n28672k4096
     (hTT : TTOutTilePearlCDevRev1 CM (devSm120v1 Prices.sm120Loop) sem (1 / 1000)) :
     GGapSampled CM (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120Loop) sem (1 / 1000) (218 / 25 - 8953 / 1000))
@@ -278,8 +244,6 @@ theorem wrefDevRev1K_sm120v1LoopCast8p72_n4096k14336_nonneg (m : ℕ) :
   · rw [show (devSm120v1 Prices.sm120Loop).prices = Prices.sm120Loop from rfl]; norm_num [Prices.sm120Loop]
   · rw [show (devSm120v1 Prices.sm120Loop).G = 4 from rfl]; norm_num
 
-/-- **v1 under rev1 at the cap 1/1,000, `m × 4096 × 14336` at any `m` (Llama-3.1-8B's down)**, FP32 at 8.376, the honest
-cast at 8.72: `g = 3045273083/782596025000` (0.38912%). -/
 theorem pearlCGapSm120v1LoopCast8p72Rev1InertShare1000_n4096k14336
     (hTT : TTOutPearlCDevRev1 CM (devSm120v1 Prices.sm120Loop) sem (1 / 1000)) :
     GGap CM (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120Loop) sem (1 / 1000) (218 / 25 - 8953 / 1000))
@@ -287,8 +251,6 @@ theorem pearlCGapSm120v1LoopCast8p72Rev1InertShare1000_n4096k14336
   pearlCGapDevRev1KNK CM _ sem _ _ _ _ (31303841 / 31291472 / (1 - 1 / 1000)) _ (by norm_num)
     (fun m => by rw [wrefDevRev1K_sm120v1LoopCast8p72_n4096k14336 m]; field_simp) (by norm_num) hTT
 
-/-- **v1 under rev1 per audit tile at the cap 1/1,000, `m × 4096 × 14336` at any `m` (Llama-3.1-8B's down)**, FP32 at
-8.376, the honest cast at 8.72: `g = 3045273083/782596025000` (0.38912%). -/
 theorem pearlCSampledSm120v1LoopCast8p72Rev1InertShare1000_n4096k14336
     (hTT : TTOutTilePearlCDevRev1 CM (devSm120v1 Prices.sm120Loop) sem (1 / 1000)) :
     GGapSampled CM (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120Loop) sem (1 / 1000) (218 / 25 - 8953 / 1000))

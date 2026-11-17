@@ -5,15 +5,7 @@ public import Mathlib.Data.FinEnum
 public import Mathlib.Data.Fintype.Card
 public import Proofs.ResourceAccounting.Lemmas.TS.LowBit
 
-/-!
-# A one-register fold's low bit
-
-`OneRegisterLowBit`: a step that binds its word is injective in it, so on the finite type of words it is onto, and its
-bit-0 map `h` is onto in the word's bit at each state bit; binding its state makes `h` onto in the state's bit too. A
-map on two bits that is onto in each argument is `a ⊕ e ⊕ h(0, 0)`, so each step adds its word's bit 0 and a constant,
-and a run adds them all. `LiLowBit`: an odd multiplier keeps bit 0, an addition XORs its operands' bits 0, and so does
-an XOR.
--/
+/-! A one-register fold's low bit is the sum of its words' bits 0 and a constant. -/
 
 @[expose] public section
 
@@ -26,7 +18,6 @@ namespace LowBit
 theorem getLsbD_ofNat_toNat (w : ℕ) (b : Bool) : (BitVec.ofNat (w + 1) b.toNat).getLsbD 0 = b := by
   cases b <;> simp
 
-/-- A map on two bits that is onto in each argument is their XOR, plus its value at `(0, 0)`. -/
 theorem latin (h : Bool → Bool → Bool) (hw : ∀ a t, ∃ e, h a e = t) (hs : ∀ e t, ∃ a, h a e = t) :
     ∀ a e, h a e = (a ^^ e ^^ h false false) := by
   have k1 : h false true = !h false false := by
@@ -47,7 +38,6 @@ theorem latin (h : Bool → Bool → Bool) (hw : ∀ a t, ∃ e, h a e = t) (hs 
   intro a e
   cases a <;> cases e <;> simp [k1, k2, k3]
 
-/-- A step that binds its word is onto in it. -/
 theorem word_surj {w : ℕ} (g : BindingStep 1 (BitVec (w + 1))) (s : Fin 1 → BitVec (w + 1)) :
     Function.Surjective fun d => g.1 s d 0 := by
   apply Finite.surjective_of_injective
@@ -57,7 +47,6 @@ theorem word_surj {w : ℕ} (g : BindingStep 1 (BitVec (w + 1))) (s : Fin 1 → 
   rw [Fin.fin_one_eq_zero j]
   exact hdd
 
-/-- A step that binds its state is onto in it. -/
 theorem state_surj {w : ℕ} (g : BindingStep 1 (BitVec (w + 1))) (d : BitVec (w + 1)) :
     Function.Surjective fun x : BitVec (w + 1) => g.1 (fun _ => x) d 0 := by
   apply Finite.surjective_of_injective
@@ -68,7 +57,6 @@ theorem state_surj {w : ℕ} (g : BindingStep 1 (BitVec (w + 1))) (d : BitVec (w
     exact hxx
   exact congrFun (g.2.2 d h1) 0
 
-/-- A run of steps that each add their word's bit 0 and a constant `C i` adds them all. -/
 theorem foldl_lowBit {w : ℕ} :
     ∀ (N : ℕ) (G : Fin N → (Fin 1 → BitVec (w + 1)) → BitVec (w + 1) → Fin 1 → BitVec (w + 1)) (C : Fin N → Bool), (∀ i s e, (G i s e 0).getLsbD 0 = ((s 0).getLsbD 0 ^^ e.getLsbD 0 ^^ C i)) →
     ∀ (s : Fin 1 → BitVec (w + 1)) (d : Fin N → BitVec (w + 1)),

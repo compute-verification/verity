@@ -10,17 +10,8 @@ import Proofs.Pouw.PerRunPouw
 import Proofs.Pouw.Prob
 public import Proofs.Pouw.Break
 
-/-!
-# PoUW's per-run guarantee needs the cost model to truncate
-
-`Pouw.Assumptions.TT` and EndToEnd's other hypotheses do not give `ResourceAccounting.Guarantees.PouwEndToEndPerRun`'s
-conclusion without `ResourceAccounting.BudgetAbort`. In this cost model a workload of one 1×1×1 unit has one program, which
-commits a correct unit on every salt, costs nothing on salt `true` and the unit's full work on salt `false`. TT holds
-with error 0, since every adversary within budget `T` has `T` at least the whole workload's work, but the audit accepts
-on every coin, so the probability of acceptance with realized cost below `(1 − γ)(1 − ε_s)·W` is `1/2`, above
-`(1 − ε_s)^t + ε = 1/4` at `ε_s = 1/2` and `t = 2` (`tt_not_perRun`). The cost reads the salt, which the program
-cannot branch on, so the class has no aborted program and `BudgetAbort` fails (`not_budgetAbort`).
--/
+/-! PoUW's per-run guarantee needs the cost model to truncate: `Pouw.Assumptions.TT` and EndToEnd's other hypotheses
+do not give it without `ResourceAccounting.BudgetAbort`. -/
 
 @[expose] public section
 
@@ -28,13 +19,10 @@ namespace ResourceAccounting.PerRunNecessity
 
 open Pouw Finset
 
-/-- One unit of shape `1 × 1 × 1`. -/
 def layout : Layout := ⟨1, fun _ => ⟨1, 1, 1⟩, fun _ => 0⟩
 
-/-- The workload: `layout` with zero weights. -/
 def U : Workload := ⟨layout, fun _ _ _ => 0⟩
 
-/-- The zero commitment, correct for `U`'s unit under `P`. -/
 def commit : Commit := ⟨fun _ _ => 0, fun _ _ _ => 0, fun _ _ => 0⟩
 
 /-- One program, committing `commit` for every unit; free on salt `true`, the workload's plain work on salt `false`. -/
@@ -44,7 +32,6 @@ def CM : CostModel Unit Unit Bool where
   cost _ _ U _ _ s := if s then 0 else ∑ u ∈ range U.layout.N, ((U.layout.shape u).Wmm : ℝ)
   calls _ _ _ _ _ _ := 0
 
-/-- A protocol that compares no checked value and charges one per unit. -/
 def P : Protocol Unit Unit Bool where
   Y _ _ _ _ _ := fun _ _ _ => 0
   checkIdx _ := ∅
@@ -52,10 +39,8 @@ def P : Protocol Unit Unit Bool where
   refOut _ _ _ _ _ := fun _ _ => 0
   Wref _ _ := 1
 
-/-- Layouts whose units each have positive work, so `W_ref ≤ Ω_max · W_mm` at `Ω_max = 1`. -/
 def D (L : Layout) : Prop := ∀ u < L.N, 1 ≤ (L.shape u).Wmm
 
-/-- The adversary with no preprocessing that runs the one program. -/
 def A : Adversary CM := ⟨.done [], (), fun _ _ => 0⟩
 
 theorem tt : Assumptions.TT CM P D 0 (fun _ _ => 0) := by
@@ -104,10 +89,7 @@ theorem pr_mid_true {α γ : Type} [Fintype α] [Fintype γ] [Nonempty α] [None
     Nat.cast_one, Nat.cast_ofNat]
   field_simp
 
-/-- **TT alone does not give PoUW's per-run guarantee.** The cost model `CM`, protocol `P` and domain `D` satisfy
-EndToEnd's hypotheses at `γ₀ = 0`, `Ω_max = 1` and error 0, and the adversary `A` on the in-domain workload `U` makes no
-oracle call; yet with `ε_s = 1/2` and `t = 2` the audit accepts with realized online cost below
-`(1 − γ)(1 − ε_s)·W` with probability `1/2 > (1 − ε_s)^t + ε = 1/4`. -/
+/-- **TT alone does not give PoUW's per-run guarantee.** -/
 theorem tt_not_perRun :
     Assumptions.TT CM P D 0 (fun _ _ => 0) ∧
       (∀ U' : Workload, U'.InDomain D → ∀ u < U'.layout.N,
@@ -134,8 +116,6 @@ theorem tt_not_perRun :
       fun x => x.2.1 = true from funext fun x => propext (hev x), pr_mid_true]
   norm_num
 
-/-- `CM` does not truncate: by `PouwEndToEndPerRun`, a truncating cost model would bound the probability in
-`tt_not_perRun` by `1/4`. -/
 theorem not_budgetAbort : ¬ BudgetAbort CM := by
   intro h
   obtain ⟨hTT, hW, hU, hA, hlt⟩ := tt_not_perRun

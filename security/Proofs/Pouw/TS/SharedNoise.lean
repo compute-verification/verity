@@ -4,22 +4,7 @@ public import Proofs.Pouw.TS.Grind
 public import Proofs.ResourceAccounting.Lemmas.TS.SharedNoise
 public import Proofs.ResourceAccounting.Lemmas.TS.Grind
 
-/-!
-# One noise seed a call: proofs
-
-`CondReceiptLuckMarginal` averages each round's bound over the rest (`prob_equiv`, then `Stages.prob_prod`).
-
-`GridLuck` integrates the columns out from the last (`SharedNoise.sum_prod_seq`): given the rows and the columns before
-`j`, column `j`'s `r` units are bounded by Hölder at equal exponents (`SharedNoise.sum_prod_le_prod_rpow`, AM-GM after
-scaling each factor by its norm) by `∏_i φ_{ij}^{1/r}`, where `φ_{ij}` is the unit's moment at `rθ` (`e^{rθw}` dead,
-`LuckMoment`'s bound otherwise). That reads row `i`'s coins alone, so the sum over the rows factors
-(`Fintype.prod_sum`), and AM-GM over a row's `n` units (`Grind.prod_le_mean_pow`) leaves each unit's `E[φ^{n/r}]`, the condition.
-
-`GridTemplateCondition` reduces every ratio `e = n/r` to `e = 64`: below it by convexity of `exp` in `e` (the left side
-is `1` at `e = 0`), above it by concavity of `y ↦ y^{64/e}` (the alive term's base is a power mean). At `e = 64` it is
-`SharedNoise.grid_point`, from `Grind.alive_le` squared and `e^{1/4} ≤ 1.2842`. `GridTemplateMoment` is `GridLuck` at
-`θ = 1/(4·max(64·r, n))`, with `r·θ = 1/(4·max(64, n/r))`.
--/
+/-! One noise seed a call. -/
 
 @[expose] public section
 
@@ -29,8 +14,6 @@ open ResourceAccounting.TS Pouw.RelativeSecurity
 
 namespace SharedNoise
 
-/-- Hölder at equal exponents, from AM-GM after scaling each factor by its norm: if each `f i` has `r`th moment at
-most `φ i > 0`, their product has mean at most `∏ φ i^{1/r}`. -/
 theorem sum_prod_le_prod_rpow {X : Type} [Fintype X] {r : ℕ} (hr : 0 < r) (f : Fin r → X → ℝ)
     (hf : ∀ i x, 0 ≤ f i x) (φ : Fin r → ℝ) (hφ : ∀ i, 0 < φ i)
     (h : ∀ i, ∑ x, f i x ^ r ≤ φ i * Fintype.card X) :
@@ -70,8 +53,6 @@ theorem castSucc_of_le {n : ℕ} {k : Fin (n + 1)} {j : Fin n} (hk : k ≤ j.cas
   refine ⟨k.castPred hne, (Fin.castSucc_castPred k hne).symm, ?_⟩
   rw [← Fin.castSucc_le_castSucc_iff, Fin.castSucc_castPred]; exact hk
 
-/-- **Integrating the columns out from the last.** Factors `A j` that read the columns up to `j` only, each with mean
-at most `c j` over its own column whatever the others, have a product of mean at most `∏ c j`. -/
 theorem sum_prod_seq {Cl : Type} [Fintype Cl] [Nonempty Cl] : ∀ (n : ℕ) (A : Fin n → (Fin n → Cl) → ℝ)
     (c : Fin n → ℝ), (∀ j γ, 0 ≤ A j γ) → (∀ j γ γ', (∀ k, k ≤ j → γ k = γ' k) → A j γ = A j γ') →
     (∀ j γ, ∑ x, A j (Function.update γ j x) ≤ c j * Fintype.card Cl) →
@@ -171,7 +152,6 @@ theorem gridLuck {Rw Cl : Type} [Fintype Rw] [Fintype Cl] {r n : ℕ} (w : Fin r
     simp only [hφ]; split_ifs
     · exact Real.exp_pos _
     · exact hf0 i j
-  -- one unit at rate rθ, given the rows and the other columns
   have hunit : ∀ i j ρ γ, ∑ x : Cl, Real.exp (r * θ * gain i j ρ (Function.update γ j x)) ≤
       φ i j (ρ i) * Fintype.card Cl := by
     intro i j ρ γ
@@ -189,7 +169,6 @@ theorem gridLuck {Rw Cl : Type} [Fintype Rw] [Fintype Cl] {r n : ℕ} (w : Fin r
     · simp only [hφ, hd, ↓reduceIte]
       exact LuckMoment (fun x => lucky i j ρ (Function.update γ j x)) (p i j) (w i j) (r * θ) κ (hw i j) hrθ hκ
         (halive i j ρ γ hd)
-  -- a column's r units: Hölder over them, given the rows and the columns before it
   set A : (Fin r → Rw) → Fin n → (Fin n → Cl) → ℝ := fun ρ j γ => ∏ i, Real.exp (θ * gain i j ρ γ) with hA
   have hcol : ∀ ρ j γ, ∑ x, A ρ j (Function.update γ j x) ≤
       (∏ i, φ i j (ρ i) ^ ((1 : ℝ) / r)) * Fintype.card Cl := by
@@ -209,7 +188,6 @@ theorem gridLuck {Rw Cl : Type} [Fintype Rw] [Fintype Cl] {r n : ℕ} (w : Fin r
   have hseq : ∀ ρ, ∑ γ : Fin n → Cl, ∏ j, A ρ j γ ≤
       (∏ j, ∏ i, φ i j (ρ i) ^ ((1 : ℝ) / r)) * (Fintype.card Cl : ℝ) ^ n := fun ρ =>
     sum_prod_seq n (A ρ) _ (fun j γ => Finset.prod_nonneg fun i _ => (Real.exp_pos _).le) (hAread ρ) (hcol ρ)
-  -- the rows: each unit's dead mass at exponent n/r
   have hpow : ∀ i j, ∑ y : Rw, φ i j y ^ ((n : ℝ) / r) ≤ Fintype.card Rw := by
     intro i j
     have hc := Grind.card_filter_le (dead i j) (hdead i j)
@@ -248,7 +226,6 @@ theorem gridLuck {Rw Cl : Type} [Fintype Rw] [Fintype Cl] {r n : ℕ} (w : Fin r
           gcongr with j; exact hpow i j
       _ = Fintype.card Rw := by
           rw [Finset.sum_const, Finset.card_univ, Fintype.card_fin, nsmul_eq_mul]; field_simp
-  -- assemble
   have hsplitω : ∀ ω : (Fin r → Rw) × (Fin n → Cl),
       Real.exp (θ * ∑ i, ∑ j, w i j * ((1 + κ) * (if lucky i j ω.1 ω.2 then 1 else 0) - κ)) =
         ∏ j, A ω.1 j ω.2 := by
@@ -274,7 +251,6 @@ theorem gridLuck {Rw Cl : Type} [Fintype Rw] [Fintype Cl] {r n : ℕ} (w : Fin r
     _ = Fintype.card ((Fin r → Rw) × (Fin n → Cl)) := by
         simp [Fintype.card_prod]
 
-/-- `e^{-a} ≤ 1/(1 + a + a²/2)` for `a ≥ 0`. -/
 theorem exp_neg_le_quad (a : ℝ) (ha : 0 ≤ a) : Real.exp (-a) ≤ 1 / (1 + a + a ^ 2 / 2) := by
   rw [Real.exp_neg, ← one_div]
   exact one_div_le_one_div_of_le (by positivity) (Real.quadratic_le_exp_of_nonneg ha)
@@ -319,8 +295,6 @@ theorem grid_point_num (w : ℕ) (hw : w ≤ 32) :
     nlinarith [mul_nonneg hq0 (Real.exp_pos (-(3 / 8) * (w : ℝ) + 17 / 2048 * (w : ℝ) ^ 2)).le]
 
 
-/-- The grid template's condition at `n/r = 64`, the point every ratio reduces to:
-`2^{-w}·e^{w/4} + (1 − 2^{-w})·(½e^{w/256} + ½e^{-w/64})^{64} ≤ 1`. -/
 theorem grid_point (w : ℕ) (hw : w ≤ 32) :
     (1 / 2 : ℝ) ^ w * Real.exp (w / 4) +
       (1 - (1 / 2 : ℝ) ^ w) * (1 / 2 * Real.exp (1 / 256 * w) + (1 - 1 / 2) * Real.exp (-(4 * (1 / 256) * w))) ^ 64

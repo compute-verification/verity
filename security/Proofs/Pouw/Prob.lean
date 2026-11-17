@@ -14,9 +14,7 @@ import Mathlib.Tactic.NormNum.OfScientific
 import Mathlib.Tactic.Positivity.Finset
 import Mathlib.Tactic.Ring.RingNF
 
-/-!
-# Lemmas about `pr`
--/
+/-! Lemmas about `pr`. -/
 
 @[expose] public section
 
@@ -81,7 +79,6 @@ theorem pr_equiv (e : α ≃ β) (P : β → Prop) : pr (fun x => P (e x)) = pr 
   rw [← Fintype.card_subtype, ← Fintype.card_subtype]
   exact_mod_cast Fintype.card_congr (e.subtypeEquiv fun _ => Iff.rfl)
 
-/-- An event that reads only the first component has at most its marginal probability. -/
 theorem pr_fst_le (P : α → Prop) : pr (fun x : α × β => P x.1) ≤ pr P := by
   classical
   unfold pr Claims.Pr Claims.prUniform
@@ -93,12 +90,10 @@ theorem pr_fst_le (P : α → Prop) : pr (fun x : α × β => P x.1) ≤ pr P :=
   · push_cast
     rw [mul_div_mul_right _ _ (by exact_mod_cast h.ne')]
 
-/-- An event on `α × β × γ` that reads only the first two components. -/
 theorem pr_fst2_le {γ : Type} [Fintype γ] (P : α × β → Prop) :
     pr (fun x : α × β × γ => P (x.1, x.2.1)) ≤ pr P :=
   (pr_equiv (Equiv.prodAssoc α β γ).symm (fun y => P y.1)).le.trans (pr_fst_le P)
 
-/-- If every section `x.1 = a` has probability at most `p ≥ 0`, so has the whole event. -/
 theorem pr_prod_le (P : α × β → Prop) (p : ℝ) (hp : 0 ≤ p) (h : ∀ a, pr (fun b => P (a, b)) ≤ p) :
     pr P ≤ p := by
   classical
@@ -123,7 +118,6 @@ theorem pr_prod_le (P : α × β → Prop) (p : ℝ) (hp : 0 ≤ p) (h : ∀ a, 
 
 namespace Proofs
 
-/-- The union bound over a finite index set. -/
 theorem pr_exists_le_sum {ι : Type} (s : Finset ι) (P : ι → α → Prop) :
     pr (fun x => ∃ i ∈ s, P i x) ≤ ∑ i ∈ s, pr (P i) := by
   classical

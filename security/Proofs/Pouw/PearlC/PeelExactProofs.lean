@@ -10,45 +10,8 @@ import Mathlib.Tactic.Positivity.Finset
 import Proofs.Pouw.Fp8Atom.Fp32Proofs
 import Proofs.Pouw.Fp8Atom.H1TAtomProofs
 
-/-!
-# P2 on the served U (staging, nothing pinned)
-
-`Peel.lean`'s clean-up facts (a)–(c), proved on `PeelExact.peelExact`, the pinned order the verifier replays, rather
-than on exact peel factors.
-
-**(a) The noise cancels exactly.** Each pinned step has an exact counterpart, with every truncation and rounding
-replaced by the exact value: the chains `C̃_ij`, `A′·F_B`, `B̃·F_A` and `G = F_Bᵀ·F_A` (`chainQ`: `cQ`, `afQ`, `bfQ`,
-`gQ`), the rows `P_A,i = [be_A,i ‖ A′·F_B]` (`paQ`) and `P_B,j = [Σ_p be_B,jp·G_pq − B̃·F_A ‖ −be_B,j]` (`accQ`, `pbQ`),
-and U's four K16 steps from `C̃_ij` (`k16Q`, `uQ`). When `32 ∣ k`, `uQ` is Pearl's U with unit `β` on the served noise
-(`uQ_eq_peelUQ`, on rational factors since the rows are BF16 words, not codes: `peelUQ`): `E_A`, `E_B` are the values
-of the peel's rows `beA`, `beB` and `F_A`, `F_B` the bases' values. So it is `(A′ − N_A)·(B̃ − N_B)ᵀ` with
-`N_A = be_A·F_Aᵀ`, `N_B = be_B·F_Bᵀ` (`uQ_cancel`, by `peelUQ_cancel`). Which noise the rows hold: under v1 they are
-`bf16(E′)`, and `RN_bf16` of an E4M3 value is the value (`bf16_e4m3`, all 256 codes by the kernel), so the served rows'
-values are `Noise.atomLines`' noise lines (`bfVals_v1`) and `uQ` is §5's `(A′ − E′_A·F_Aᵀ)·(B̃ − E′_B·F_Bᵀ)ᵀ`
-(`uQ_cancel_v1`, as `Peel.peelU_cancel_atomMix`). Under v0 they are
-`bf16(β·bf16(E))`, each within `(2^−7 + 2^−16)·|β·e|` of `β·e` (`bf16_v0_err`), so the served `N_A` is within
-`(2^−7 + 2^−16)·Σ_t |β·e_t·f_t|` of `β·N_A` (`servedNA_v0_err`): under v0 the peel cancels the noise it is served, which
-is `β·N` up to those two BF16 roundings.
-
-**(b) The rounding is bounded.** Wherever the served entry is finite, `peelExactVal_err` puts it within `peelBound` of
-`uQ`, on the named range `PeelRange`. The range asks, for every E4M3 chain of the entry (`C̃_ij`, the rows of `A′·F_B`,
-`B̃·F_A` and `G`), `ChainRange`: each `hopperStep` on `H8Range`, its codes zero or normal (`ZeroOrNormal8`, no E4M3
-subnormal) and its exponent in `[−113, 120]` unless every term is zero. For U's four K16 steps it asks `URange`: each
-step on `K16Range`, its BF16 words zero or normal and its exponent in `[−101, 121]` unless every term is zero. FP32 adds
-and FMAs need no range: a finite result is within `|v|·2^−24 + 2^−150` (`addWord_err`, `fmaWord_err`), and `RN_bf16`
-within `|x|·2^−8 + 2^−134` (`rnBf16_err`). The stages: one K16 step is within `eps16 ≈ 2^−20.6` of its exact sum,
-relative to `|acc| + Σ|x·y|` (`k16Step_rel`); one E4M3 step within `eps8 ≈ 2^−7.9` (`hopperStep_rel`); an E4M3 chain
-of `w` windows within `chainBound`, about `(epsC + w·2^−24)·Σ|a·b|` with `epsC ≈ 2^−5.9` a window of at most four atoms
-and its promotion (`chainWord_err`: only the promotions' `2^−24` compounds, by `fold_rel2`); and `P_B`'s FMA chain within
-`(1 + 2^−24)^32 − 1` (`accChain_err`). `peelBound` composes them in exact quantities: U's steps
-`((1 + eps16)^4 − 1)·(|C̃| + Σ_t |P_A,t·P_B,t| + errors)`, `C̃`'s `chainBound`, and each row entry's error times the
-other row's exact entry (`rowErr`, from `paEntry_err` and `pbEntry_err`).
-
-**(c) Salt-dependence**, by witness: at `Peel.lean`'s degenerate inputs (`x = 0` with `β = 1`, `B = 0` with
-`β = 1/3`, `m = n = 1`, `k = 32`), the salts whose noises are `wNoise 1 1` and `wNoise 2 (−1)` give the served entries
-`0` and `10` (`served_live`, `served_salt_dependent`). For all inputs, (a) says what the entry is up to (b)'s rounding:
-`(A′ − N_A)·(B̃ − N_B)ᵀ`, a function of the salt through `N_A` and `N_B`.
--/
+/-! P2 on the served U, staged and nothing pinned: `Peel.lean`'s clean-up facts (a)–(c) on `PeelExact.peelExact`,
+the pinned order the verifier replays. -/
 
 @[expose] public section
 
@@ -57,8 +20,6 @@ namespace Pouw.PearlC.PeelExactProofs
 open Pouw.Fp8Atom Pouw.PearlC Pouw.PearlC.PeelExact Matrix
 
 variable {m n k : Nat}
-
-/-! ## (a) The noise cancels exactly -/
 
 /-- A BF16 word's value: the FP32 word `h <<< 16`'s, `0` where that is not finite. -/
 def bfVal (h : Nat) : ℚ := (wordQ (h <<< 16)).getD 0
@@ -70,8 +31,6 @@ def peelUQ (Ct : Matrix (Fin m) (Fin n) ℚ) (A' : Matrix (Fin m) (Fin k) ℚ) (
     (FB : Matrix (Fin k) (Fin 32) ℚ) : Matrix (Fin m) (Fin n) ℚ :=
   Ct + fromCols EA (A' * FB) * (fromCols ((EB * FBᵀ - B') * FA) (-EB))ᵀ
 
-/-- `peelUQ`'s cancellation identity, `Peel.peelU_cancel`'s on rational factors: with `C̃ = A′·B̃ᵀ` exact, it is
-`(A′ − E_A·F_Aᵀ)·(B̃ − E_B·F_Bᵀ)ᵀ`. -/
 theorem peelUQ_cancel (A' : Matrix (Fin m) (Fin k) ℚ) (B' : Matrix (Fin n) (Fin k) ℚ) (EA : Matrix (Fin m) (Fin 32) ℚ)
     (FA : Matrix (Fin k) (Fin 32) ℚ) (EB : Matrix (Fin n) (Fin 32) ℚ) (FB : Matrix (Fin k) (Fin 32) ℚ) :
     peelUQ (A' * B'ᵀ) A' B' EA FA EB FB = (A' - EA * FAᵀ) * (B' - EB * FBᵀ)ᵀ := by
@@ -129,7 +88,6 @@ def uQ (i : Fin m) (j : Fin n) : ℚ :=
 
 end Exact
 
-/-- The exact chain over one output's atoms is the dot product of the two rows, when `32 ∣ k`. -/
 theorem chainQ_rowAtoms (hk : 32 ∣ k) (a b : Fin k → Code) :
     chainQ (rowAtoms a b) = ∑ l, codeVal (a l) * codeVal (b l) := by
   unfold chainQ rowAtoms atomQ
@@ -142,7 +100,6 @@ theorem chainQ_rowAtoms (hk : 32 ∣ k) (a b : Fin k → Code) :
     ext; simp [finProdFinEquiv]; ring
   rw [e]
 
-/-- The four exact K16 steps add the 64 products `P_A,i t · P_B,j t` to the accumulator. -/
 theorem foldl_k16Q (c : ℚ) (pa pb : Fin 64 → ℚ) :
     (List.range 4).foldl (fun acc s => k16Q acc (sliceQ pa s) (sliceQ pb s)) c = c + ∑ t, pa t * pb t := by
   rw [show List.range 4 = [0, 1, 2, 3] from rfl]
@@ -167,8 +124,6 @@ section Exact
 variable (Aq : Matrix (Fin m) (Fin k) Code) (Bq : Matrix (Fin n) (Fin k) Code) (FA FB : Matrix (Fin k) (Fin 32) Code)
   (beA : Matrix (Fin m) (Fin 32) Nat) (beB : Matrix (Fin n) (Fin 32) Nat)
 
-/-- **The exact counterpart is Pearl's U on the served noise**: with unit `β`, `E_A`, `E_B` the values of `beA`, `beB`
-and `F_A`, `F_B` the bases' values (`peelUQ`). -/
 theorem uQ_eq_peelUQ (hk : 32 ∣ k) (i : Fin m) (j : Fin n) :
     uQ Aq Bq FA FB beA beB i j =
       peelUQ (ctExact Aq Bq) (vals Aq) (vals Bq) (beA.map bfVal) (vals FA) (beB.map bfVal) (vals FB) i j := by
@@ -203,8 +158,6 @@ theorem uQ_eq_peelUQ (hk : 32 ∣ k) (i : Fin m) (j : Fin n) :
       simp only [afQ, chainQ_rowAtoms hk, Matrix.mul_apply, Matrix.neg_apply, vals, Matrix.map_apply, transpose_apply,
         mul_neg]
 
-/-- **(a) The noise cancels exactly**: U's exact counterpart in the pinned order is `(A′ − N_A)·(B̃ − N_B)ᵀ` for the
-served noise `N_A = be_A·F_Aᵀ`, `N_B = be_B·F_Bᵀ` (on values). -/
 theorem uQ_cancel (hk : 32 ∣ k) (i : Fin m) (j : Fin n) :
     uQ Aq Bq FA FB beA beB i j =
       ((vals Aq - beA.map bfVal * (vals FA)ᵀ) * (vals Bq - beB.map bfVal * (vals FB)ᵀ)ᵀ) i j := by
@@ -212,14 +165,8 @@ theorem uQ_cancel (hk : 32 ∣ k) (i : Fin m) (j : Fin n) :
 
 end Exact
 
-/-! ### Which noise `beA` and `beB` hold -/
-
-/-- **`RN_bf16` of an E4M3 value is the value**: the pin's `bf16(E′)` is `E′` exactly, for each of the 256 codes (an
-E4M3 value has a 4-bit significand and an exponent in `[−9, 8]`, inside BF16's normal range). -/
 theorem bf16_e4m3 : ∀ c : Code, (rnBf16? (f32Word (codeVal c))).map bfVal = some (codeVal c) := by decide +kernel
 
-/-- **Under v1** the peel's rows are `bf16(E′)`, the noise lines' codes cast to BF16 (`hb`): their values are the
-lines' values, the noise lines of `Noise.atomLines`, which the atom-mix added. -/
 theorem bfVals_v1 {p : Nat} (β : Fin p → ℚ) (E : Matrix (Fin p) (Fin 32) Code) (be : Matrix (Fin p) (Fin 32) Nat)
     (hb : ∀ i t, rnBf16? (f32Word (codeVal (castLines β E i t))) = some (be i t)) :
     be.map bfVal = vals (castLines β E) := by
@@ -228,8 +175,6 @@ theorem bfVals_v1 {p : Nat} (β : Fin p → ℚ) (E : Matrix (Fin p) (Fin 32) Co
   rw [hb i t] at e
   exact Option.some_injective _ e
 
-/-- **(a) under v1**: the exact counterpart of U on the atom-mix's operands, with the peel's rows `bf16(E′)` and the
-lines' bases, is `(A′ − E′_A·F_Aᵀ)·(B̃ − E′_B·F_Bᵀ)ᵀ`, §5's cancellation (as `Peel.peelU_cancel_atomMix`). -/
 theorem uQ_cancel_v1 (hk : 32 ∣ k) (beA : Matrix (Fin m) (Fin 32) Nat) (beB : Matrix (Fin n) (Fin 32) Nat)
     (αA βA : Fin m → ℚ) (αB βB : Fin n → ℚ) (X : Matrix (Fin m) (Fin k) ℚ) (B : Matrix (Fin n) (Fin k) ℚ)
     (z : Noise m n k 32)
@@ -240,8 +185,6 @@ theorem uQ_cancel_v1 (hk : 32 ∣ k) (beA : Matrix (Fin m) (Fin 32) Nat) (beB : 
         (vals (FormChain.atomMix.quantB αB βB B z) - vals (castLines βB z.EB) * (vals z.FB)ᵀ)ᵀ) i j := by
   rw [uQ_cancel _ _ _ _ _ _ hk, bfVals_v1 βA z.EA beA hA, bfVals_v1 βB z.EB beB hB]
 
-/-- **Under v0** the peel's rows are `bf16(β·bf16(E))`: each served entry is within `(2^−7 + 2^−16)·|β·e|` of `β·e`,
-so the served `N_A = be_A·F_Aᵀ` is within `(2^−7 + 2^−16)·Σ_t |β·e_t·f_t|` of `β·N_A` entry by entry. -/
 theorem bf16_v0_err (β e : ℚ) : |bf16Rn (β * bf16Rn e) - β * e| ≤ (2 / 2 ^ 8 + 1 / 2 ^ 16) * |β * e| := by
   have e1 := Peel.bf16Rn_sub_le e
   have e2 := Peel.bf16Rn_sub_le (β * bf16Rn e)
@@ -268,13 +211,9 @@ theorem servedNA_v0_err {FA : Matrix (Fin k) (Fin 32) Code} {beA : Matrix (Fin m
   calc _ ≤ (2 / 2 ^ 8 + 1 / 2 ^ 16) * |βA i * EA i t| * |codeVal (FA l t)| := by gcongr
     _ = _ := by ring
 
-/-! ## (b) The rounding is bounded -/
-
 section Rounding
 
 open Pouw.Fp8Atom.Proofs Pouw.Fp8Atom.H1T Pouw.Fp8Atom.H1T.Proofs
-
-/-! ### The K16 step -/
 
 /-- A BF16 word's value: `±s·2^(max(E, 1) − 134)`, for exponent field `E ≠ 255`. -/
 def bf16Value (h : Nat) : ℚ := (if bf16Sign h then -1 else 1) * (bf16Sig h : ℚ) * 2 ^ ((bf16ExpOr1 h : ℤ) - 134)
@@ -379,8 +318,6 @@ theorem k16Step_fin {w : Nat} {tc : Term} (hw : fp32Value w = .fin tc) (x y : Fi
     simp [Value.finite?]
   simp only [h1, h2, h3, Bool.false_eq_true, ite_false, Bool.and_self]
 
-/-! ### The first truncation on the 26-bit adder -/
-
 theorem toAdder26 (m : Nat) : toAdder 26 m = 4 * m := by
   unfold toAdder; rw [ite_eq_left (by norm_num), Nat.shiftLeft_eq]; norm_num; ring
 
@@ -418,7 +355,6 @@ theorem aligned26_eq_truncZ (E : ℤ) (t : Term) :
     · subst h0; simp
     · rw [ite_eq_right (by intro h; exact h0 (by linarith)), neg_neg]
 
-/-- An aligned term on the 26-bit adder, on the grid `2^(E − 25)`, is its value truncated toward zero to the grid. -/
 theorem aligned26_value {E : ℤ} {t : Term} (hE : t.mag ≠ 0 → t.exp ≤ E) :
     (aligned 26 E t : ℚ) * 2 ^ (E - 25) = truncTo (2 ^ (E - 25)) t.value := by
   by_cases hm : t.mag = 0
@@ -443,12 +379,9 @@ theorem bf16Product_mag_lt (x y : Nat) : (bf16Product x y).mag < 2 ^ 25 := by
     rw [Nat.shiftLeft_eq]
     omega
 
-/-! ### The second truncation, to 24 significant bits -/
-
 /-- Truncation toward zero to 24 significant bits. -/
 def trunc24 (y : ℚ) : ℚ := if y = 0 then 0 else truncTo (2 ^ (binade |y| - 23)) y
 
-/-- Truncation to 24 significant bits moves `y` by at most `|y|·2^−23`. -/
 theorem abs_trunc24_sub_le (y : ℚ) : |trunc24 y - y| ≤ |y| / 2 ^ 23 := by
   rcases eq_or_ne y 0 with rfl | hy
   · simp [trunc24]
@@ -478,7 +411,6 @@ theorem floor_shift24 (n L : ℕ) : (⌊(n : ℚ) * 2 ^ ((23 : ℤ) - L)⌋ : �
 theorem fromAdder26 (m : Nat) : fromAdder 26 m = m / 4 := by
   unfold fromAdder; rw [ite_eq_left (by norm_num), Nat.shiftRight_eq_div_pow]
 
-/-- The 26-bit adder's normalised magnitude, back on the 24-bit grid, is the magnitude normalised to 24 bits. -/
 theorem shift26_24 (n L : ℕ) :
     fromAdder 26 (if 26 < L + 1 then n >>> (L + 1 - 26) else n <<< (26 - (L + 1))) =
       if 24 < L + 1 then n >>> (L + 1 - 24) else n <<< (24 - (L + 1)) := by
@@ -494,8 +426,6 @@ theorem shift26_24 (n L : ℕ) :
       ← mul_assoc]
     exact Nat.mul_div_cancel _ (by norm_num)
 
-/-- `normalize` on the 26-bit adder, on a nonzero sum below `2^32` at an exponent of at least −101: a normal term at an
-exponent of at most `E + 6`, the sum truncated toward zero to 24 significant bits. -/
 theorem normalize26_spec {E total : ℤ} (h0 : total ≠ 0) (hE1 : -101 ≤ E) (hT : total.natAbs < 2 ^ 32) :
     2 ^ 23 ≤ (normalize 26 E total).mag ∧ (normalize 26 E total).mag < 2 ^ 24 ∧
       -126 ≤ (normalize 26 E total).exp ∧ (normalize 26 E total).exp ≤ E + 6 ∧
@@ -555,11 +485,6 @@ theorem normalize26_spec {E total : ℤ} (h0 : total ≠ 0) (hE1 : -101 ≤ E) (
   · simp only [hneg, decide_true, ite_true, hs.2 hneg]
   · simp only [hneg, decide_false, ite_false, Bool.false_eq_true, (not_congr hs).2 hneg]
 
-/-! ### The step -/
-
-/-- **The K16 step's value.** On a finite accumulator term `tc` and finite BF16 words, with the step's exponent
-`E = k16Exp tc x y` in `[−101, 121]`, the step writes a finite word whose value is two truncations toward zero: the
-accumulator and each product to the grid `g = 2^(E − 25)`, then their sum to 24 significant bits. -/
 theorem k16Step_value {w : Nat} {tc : Term} (hw : fp32Value w = .fin tc) (x y : Fin 16 → Nat)
     (hx : ∀ l, bf16Exp (x l) ≠ 255) (hy : ∀ l, bf16Exp (y l) ≠ 255) (hE1 : -101 ≤ k16Exp tc x y)
     (hE2 : k16Exp tc x y ≤ 121) :
@@ -606,8 +531,6 @@ theorem k16Step_value {w : Nat} {tc : Term} (hw : fp32Value w = .fin tc) (x y : 
   dsimp only
   rw [ite_eq_right (fun h => absurd h.2 (by omega)), packValue, wordQ_packTerm m1 m2 e1 e2, hv]
 
-/-- **The K16 step's error.** Under `k16Step_value`'s hypotheses, the step's value is within
-`17·g + (|S| + 17·g)·2^−23` of the exact sum `S = c + Σ_l x_l·y_l`, for the grid `g = 2^(E − 25)`. -/
 theorem k16Step_err {w : Nat} {tc : Term} (hw : fp32Value w = .fin tc) (x y : Fin 16 → Nat)
     (hx : ∀ l, bf16Exp (x l) ≠ 255) (hy : ∀ l, bf16Exp (y l) ≠ 255) (hE1 : -101 ≤ k16Exp tc x y)
     (hE2 : k16Exp tc x y ≤ 121) :
@@ -646,8 +569,6 @@ theorem k16Step_err {w : Nat} {tc : Term} (hw : fp32Value w = .fin tc) (x y : Fi
   have h3 : |T| / 2 ^ 23 ≤ (|S| + 17 * g) / 2 ^ 23 := div_le_div_of_nonneg_right hTa (by norm_num)
   exact abs_le.2 ⟨by linarith, by linarith⟩
 
-/-! ### The step's relative error on a range -/
-
 /-- A BF16 word that is zero or normal: its exponent field is below 255, and zero only with a zero mantissa. -/
 def ZeroOrNormal (h : Nat) : Prop := bf16Exp h ≠ 255 ∧ (bf16Exp h = 0 → bf16Man h = 0)
 
@@ -657,7 +578,6 @@ def K16Range (tc : Term) (x y : Fin 16 → Nat) : Prop :=
   (∀ l, ZeroOrNormal (x l)) ∧ (∀ l, ZeroOrNormal (y l)) ∧ k16Exp tc x y ≤ 121 ∧
     (-101 ≤ k16Exp tc x y ∨ (tc.mag = 0 ∧ ∀ l, (bf16Product (x l) (y l)).mag = 0))
 
-/-- The K16 step's relative error on the range, `17·2^−25 + (1 + 17·2^−25)·2^−23`, about `2^−20.6`. -/
 def eps16 : ℚ := 17 / 2 ^ 25 + (1 + 17 / 2 ^ 25) / 2 ^ 23
 
 theorem eps16_nonneg : 0 ≤ eps16 := by unfold eps16; positivity
@@ -690,7 +610,6 @@ theorem two_zpow_term_le {t : Term} (h : 2 ^ 23 ≤ t.mag) : (2 : ℚ) ^ t.exp �
   rw [e, AtomErr.abs_termValue]
   exact mul_le_mul_of_nonneg_right (by exact_mod_cast h) (two_zpow_pos _).le
 
-/-- On the range, the step's grid is bounded by its terms: `2^E ≤ |c| + Σ_l |x_l·y_l|`. -/
 theorem two_zpow_k16Exp_le {w : Nat} {tc : Term} (hw : fp32Value w = .fin tc) {x y : Fin 16 → Nat}
     (hx : ∀ l, ZeroOrNormal (x l)) (hy : ∀ l, ZeroOrNormal (y l)) (hE1 : -101 ≤ k16Exp tc x y) :
     (2 : ℚ) ^ k16Exp tc x y ≤ |tc.value| + ∑ l, |bfVal (x l) * bfVal (y l)| := by
@@ -713,7 +632,6 @@ theorem two_zpow_k16Exp_le {w : Nat} {tc : Term} (hw : fp32Value w = .fin tc) {x
           (Finset.mem_univ l)
       linarith
 
-/-- The step on zero terms writes `+0`. -/
 theorem k16Step_zero {w : Nat} {tc : Term} (hw : fp32Value w = .fin tc) (x y : Fin 16 → Nat)
     (hx : ∀ l, bf16Exp (x l) ≠ 255) (hy : ∀ l, bf16Exp (y l) ≠ 255) (h0 : tc.mag = 0)
     (hp : ∀ l, (bf16Product (x l) (y l)).mag = 0) : wordQ (k16Step w x y) = some 0 := by
@@ -741,8 +659,6 @@ theorem rel_of_err {v S B g : ℚ} (he : |v - S| ≤ 17 * g + (|S| + 17 * g) / 2
     _ ≤ 17 * (B / 2 ^ 25) + (B + 17 * (B / 2 ^ 25)) / 2 ^ 23 := by gcongr
     _ = eps16 * B := by unfold eps16; ring
 
-/-- **The K16 step's relative error on the range**: the word is finite, and within `eps16·(|c| + Σ_l |x_l·y_l|)` of
-`c + Σ_l x_l·y_l`. -/
 theorem k16Step_rel {w : Nat} {tc : Term} (hw : fp32Value w = .fin tc) {x y : Fin 16 → Nat}
     (hR : K16Range tc x y) :
     ∃ v, wordQ (k16Step w x y) = some v ∧
@@ -772,8 +688,6 @@ theorem k16Step_rel {w : Nat} {tc : Term} (hw : fp32Value w = .fin tc) {x y : Fi
       rw [bfVal_eq (hx l).1, bfVal_eq (hy l).1, ← bf16Product_value]
       simp [Term.value, hp l]
     simp only [hc, hp', Finset.sum_const_zero, add_zero, sub_zero, abs_zero, abs_zero, mul_zero, le_refl]
-
-/-! ### U's four steps -/
 
 /-- **The K16 range along U's steps**: the range at each step's accumulator, as the steps before it wrote it. -/
 def URange (pa pb : List Nat) : List Nat → Nat → Prop
@@ -855,8 +769,6 @@ theorem sum_slices (f : ℕ → ℚ) :
   norm_num
   ring
 
-/-- **U's four steps on the range**: `uWord?` writes a finite word within `((1 + eps16)^4 − 1)·(|c| + Σ_t |P_A,t·P_B,t|)`
-of `c + Σ_t P_A,t·P_B,t`, over the 64 positions of the served rows. -/
 theorem uWord_err {c u : Nat} {cv : ℚ} (pa pb : List Nat) (hc : wordQ c = some cv) (hu : uWord? c pa pb = some u)
     (hR : URange pa pb (List.range 4) c) :
     ∃ uv, wordQ u = some uv ∧
@@ -869,8 +781,6 @@ theorem uWord_err {c u : Nat} {cv : ℚ} (pa pb : List Nat) (hc : wordQ c = some
   simp only [sliceP, slice16, List.length_range] at he
   rw [← h1, ← h2]
   exact he
-
-/-! ### The entry's decomposition into U's steps, `C̃`'s chain and the rows -/
 
 /-- The served factor rows of entry `(i, j)`: `C̃`'s word and the rows `P_A,i`, `P_B,j`, as `peelExact` computes them
 before U's four steps. -/
@@ -900,7 +810,6 @@ theorem finite?_eq_some {w w' : Nat} (h : finite? w = some w') : w' = w ∧ ∃ 
   simp only [he, ite_false]
   split_ifs <;> simp [Value.finite?]
 
-/-- A chain's word is finite. -/
 theorem chainWord_fin {atoms : List AtomIn} {c : Nat} (h : chainWord? atoms = some c) : ∃ v, wordQ c = some v := by
   unfold chainWord? at h
   suffices H : ∀ (gs : List (List AtomIn)) (t : Nat), (∃ v, wordQ t = some v) →
@@ -925,9 +834,6 @@ theorem chainWord_fin {atoms : List AtomIn} {c : Nat} (h : chainWord? atoms = so
       · exact hv
     · cases hs
 
-/-- **The served U against its exact counterpart**, entry by entry: on the K16 range along U's steps, the served
-entry is within U's four steps' `((1 + eps16)^4 − 1)·(|C̃| + Σ_t |P_A,t·P_B,t|)`, plus `C̃`'s chain error, plus the
-rows' errors `Σ_t |P_A,t·P_B,t − P̂_A,t·P̂_B,t|`, of the exact counterpart `uQ` (whose rows `P̂` are `paQ`, `pbQ`). -/
 theorem peelExact_err (Aq : Matrix (Fin m) (Fin k) Code) (Bq : Matrix (Fin n) (Fin k) Code)
     (FA FB : Matrix (Fin k) (Fin 32) Code) (beA : Matrix (Fin m) (Fin 32) Nat) (beB : Matrix (Fin n) (Fin 32) Nat)
     (i : Fin m) (j : Fin n) {c : Nat} {pa pb : List Nat} {v : ℚ}
@@ -970,13 +876,9 @@ theorem peelExact_err (Aq : Matrix (Fin m) (Fin k) Code) (Bq : Matrix (Fin n) (F
     _ ≤ |v - (cv + S)| + |cv - cQ Aq Bq i j| + |S - Sq| := abs_add_three _ _ _
     _ ≤ _ := by gcongr
 
-/-! ### FP32 add and FMA -/
-
 theorem wordQ_inf (sb : Nat) (hs : sb ≤ 1) : wordQ (sb * 2 ^ 31 + 0x7F800000) = none := by
   rcases Nat.le_one_iff_eq_zero_or_eq_one.1 hs with rfl | rfl <;> decide
 
-/-- **`f32Word`'s error where the word is finite**: within half an FP32 ulp of `y`, at most `|y|·2^−24`, or `2^−150`
-among the subnormals (`AtomErr.f32Word_spec` without its range: a finite word is its own range). -/
 theorem f32Word_fin_err {y v : ℚ} (hfin : wordQ (f32Word y) = some v) :
     |v - y| ≤ max (|y| / 2 ^ 24) (2 ^ (-150 : ℤ)) := by
   rcases eq_or_ne y 0 with rfl | hy0
@@ -1107,7 +1009,6 @@ theorem max_le_add_of_nonneg {a b : ℚ} (ha : 0 ≤ a) (hb : 0 ≤ b) : max a b
 theorem wordQ_negZero : wordQ 0x80000000 = some 0 := by
   unfold wordQ fp32Value; norm_num [Value.finite?, Term.zero, Term.value]
 
-/-- One rounding of a nonzero-or-signed-zero value: the finite word is within `|v|·2^−24 + 2^−150` of `v`. -/
 theorem rnWord_err {v : ℚ} {nz : Bool} {r : ℚ} (h : wordQ (rnWord v nz) = some r) :
     |r - v| ≤ |v| / 2 ^ 24 + 2 ^ (-150 : ℤ) := by
   have h150 := two_zpow_pos (-150)
@@ -1122,7 +1023,6 @@ theorem rnWord_err {v : ℚ} {nz : Bool} {r : ℚ} (h : wordQ (rnWord v nz) = so
   · rw [ite_eq_right hv] at h
     exact le_trans (f32Word_fin_err h) (max_le_add_of_nonneg (by positivity) h150.le)
 
-/-- **FP32 add's error**: a finite sum word is within `|x + y|·2^−24 + 2^−150` of `x + y`. -/
 theorem addWord_err {a b s : Nat} {x y : ℚ} (ha : wordQ a = some x) (hb : wordQ b = some y)
     (hs : addWord? a b = some s) : ∃ sv, wordQ s = some sv ∧ |sv - (x + y)| ≤ |x + y| / 2 ^ 24 + 2 ^ (-150 : ℤ) := by
   unfold addWord? at hs
@@ -1130,7 +1030,6 @@ theorem addWord_err {a b s : Nat} {x y : ℚ} (ha : wordQ a = some x) (hb : word
   obtain ⟨rfl, sv, hsv⟩ := finite?_eq_some hs
   exact ⟨sv, hsv, rnWord_err hsv⟩
 
-/-- **FMA's error**: a finite word is within `|x·y + z|·2^−24 + 2^−150` of `x·y + z`. -/
 theorem fmaWord_err {a b c s : Nat} {x y z : ℚ} (ha : wordQ a = some x) (hb : wordQ b = some y)
     (hc : wordQ c = some z) (hs : fmaWord? a b c = some s) :
     ∃ sv, wordQ s = some sv ∧ |sv - (x * y + z)| ≤ |x * y + z| / 2 ^ 24 + 2 ^ (-150 : ℤ) := by
@@ -1138,8 +1037,6 @@ theorem fmaWord_err {a b c s : Nat} {x y z : ℚ} (ha : wordQ a = some x) (hb : 
   rw [ha, hb, hc] at hs
   obtain ⟨rfl, sv, hsv⟩ := finite?_eq_some hs
   exact ⟨sv, hsv, rnWord_err hsv⟩
-
-/-! ### Sign flips -/
 
 theorem xor31_fields (w : Nat) :
     ((w ^^^ 0x80000000) >>> 23) % 256 = (w >>> 23) % 256 ∧ (w ^^^ 0x80000000) % 2 ^ 23 = w % 2 ^ 23 ∧
@@ -1155,7 +1052,6 @@ theorem xor31_fields (w : Nat) :
     generalize (w >>> 31) % 2 ^ 1 = b at hb ⊢
     rcases (by omega : b = 0 ∨ b = 1) with rfl | rfl <;> rfl
 
-/-- `negWord` negates a word's value. -/
 theorem wordQ_xor31 (w : Nat) : wordQ (w ^^^ 0x80000000) = (wordQ w).map (- ·) := by
   obtain ⟨h1, h2, h3⟩ := xor31_fields w
   unfold wordQ fp32Value
@@ -1168,17 +1064,12 @@ theorem wordQ_xor31 (w : Nat) : wordQ (w ^^^ 0x80000000) = (wordQ w).map (- ·) 
 
 theorem wordQ_negWord (w : Nat) : wordQ (negWord w) = (wordQ w).map (- ·) := wordQ_xor31 w
 
-/-- Flipping a BF16 word's sign bit negates its value. -/
 theorem bfVal_xor (h : Nat) : bfVal (h ^^^ 0x8000) = -bfVal h := by
   unfold bfVal
   rw [Nat.shiftLeft_xor_distrib, show (0x8000 : Nat) <<< 16 = 0x80000000 from rfl, wordQ_xor31]
   cases wordQ (h <<< 16) <;> simp
 
 
-/-! ### `RN_bf16` -/
-
-/-- A finite FP32 word's value from its fields: sign bit `s`, exponent field `e` and mantissa `m`,
-`±((e = 0 ? 0 : 2^23) + m)·2^(max(e, 1) − 150)`. -/
 theorem wordQ_fields {w : Nat} (he : (w >>> 23) % 256 ≠ 255) :
     wordQ w = some ((if (w >>> 31) % 2 = 1 then (-1 : ℚ) else 1) *
       ((((if (w >>> 23) % 256 = 0 then 0 else 2 ^ 23) + w % 2 ^ 23 : ℕ) : ℚ) *
@@ -1237,8 +1128,6 @@ theorem out_fields (sb e q r : ℕ) (hsb : sb ≤ 1) (he : e ≤ 254) (hq : q < 
     omega
   refine ⟨by omega, by omega, fun h => ⟨by omega, by omega⟩, fun h => ⟨by omega, by omega⟩⟩
 
-/-- **`RN_bf16`'s error**: a BF16 word `rnBf16?` writes is finite and within `|x|·2^−8 + 2^−134` of the FP32 value
-`x`: half a BF16 ulp, `2^15` units of the FP32 word's last place. -/
 theorem rnBf16_err {w h : Nat} {x : ℚ} (hx : wordQ w = some x) (hh : rnBf16? w = some h) :
     bf16Exp h ≠ 255 ∧ |bfVal h - x| ≤ |x| / 2 ^ 8 + 2 ^ (-134 : ℤ) := by
   have he : (w >>> 23) % 256 ≠ 255 := by
@@ -1338,8 +1227,6 @@ theorem rnBf16_err {w h : Nat} {x : ℚ} (hx : wordQ w = some x) (hh : rnBf16? w
     have h134 := two_zpow_pos (-134)
     linarith
 
-/-! ### Folds of rounded steps -/
-
 /-- A range along a fold of word steps: `R` at each step's accumulator, as the steps before it wrote it. -/
 def FoldRange {α : Type} (f : Nat → α → Option Nat) (R : Nat → α → Prop) : List α → Nat → Prop
   | [], _ => True
@@ -1350,8 +1237,6 @@ theorem foldRange_true {α : Type} (f : Nat → α → Option Nat) :
   | [], _ => trivial
   | _ :: xs, _ => ⟨trivial, fun _ _ => foldRange_true f xs _⟩
 
-/-- **A fold of rounded steps**: when each step on the range writes a finite word within `ε·(|c| + a_x)` of
-`c + t_x`, with `|t_x| ≤ a_x`, the fold is within `((1 + ε)^n − 1)·(|c| + Σ a_x)` of `c + Σ t_x`. -/
 theorem fold_rel {α : Type} (f : Nat → α → Option Nat) (R : Nat → α → Prop) (t a : α → ℚ) {ε : ℚ} (hε : 0 ≤ ε)
     (ht : ∀ x, |t x| ≤ a x)
     (hstep : ∀ c x c' cv, R c x → wordQ c = some cv → f c x = some c' →
@@ -1394,9 +1279,6 @@ theorem fold_rel {α : Type} (f : Nat → α → Option Nat) (R : Nat → α →
           nlinarith [mul_nonneg (mul_nonneg (by linarith : (0 : ℚ) ≤ C) hε) hP]
       _ = _ := by rw [hC, ← pow_succ]
 
-/-- **A fold of rounded steps, two rates**: when each step on the range writes a finite word within `ε·|c| + b_x` of
-`c + t_x`, with `|t_x| ≤ a_x` and `0 ≤ b_x`, the fold is within `((1 + ε)^n − 1)·(|c| + Σ a_x) + (1 + ε)^n·Σ b_x` of
-`c + Σ t_x`: only the rate on the running total compounds. -/
 theorem fold_rel2 {α : Type} (f : Nat → α → Option Nat) (R : Nat → α → Prop) (t a b : α → ℚ) {ε : ℚ} (hε : 0 ≤ ε)
     (ht : ∀ x, |t x| ≤ a x) (hb : ∀ x, 0 ≤ b x)
     (hstep : ∀ c x c' cv, R c x → wordQ c = some cv → f c x = some c' →
@@ -1442,8 +1324,6 @@ theorem fold_rel2 {α : Type} (f : Nat → α → Option Nat) (R : Nat → α �
           nlinarith [mul_nonneg (mul_nonneg (by linarith : (0 : ℚ) ≤ C) hε) (by linarith : 0 ≤ a x + P + b x + Bs)]
       _ = _ := by rw [hC, ← pow_succ]
 
-/-! ### The FMA chain -/
-
 theorem fmaWord_some {a b c s : Nat} (h : fmaWord? a b c = some s) :
     ∃ x y z, wordQ a = some x ∧ wordQ b = some y ∧ wordQ c = some z := by
   unfold fmaWord? at h
@@ -1457,8 +1337,6 @@ theorem wordVal_of {w : Nat} {v : ℚ} (h : wordQ w = some v) : PearlC.wordVal w
 theorem bfVal_of {h : Nat} {v : ℚ} (hv : wordQ (h <<< 16) = some v) : bfVal h = v := by
   unfold bfVal; rw [hv]; rfl
 
-/-- **The FMA chain's error**: `accChain? be gq` is within `((1 + 2^−24)^n − 1)·Σ_p (|be_p·g_p| + 2^−126)` of
-`Σ_p be_p·g_p`, over the `n` pairs of `be` and `gq`. -/
 theorem fmaStep_err {c c' : Nat} {x : Nat × Nat} {cv : ℚ} (hc : wordQ c = some cv)
     (hs : fmaWord? (x.1 <<< 16) x.2 c = some c') :
     ∃ v, wordQ c' = some v ∧ |v - (cv + bfVal x.1 * PearlC.wordVal x.2)| ≤
@@ -1475,8 +1353,6 @@ theorem fmaStep_err {c c' : Nat} {x : Nat × Nat} {cv : ℚ} (hc : wordQ c = som
     _ ≤ (|p * g| + |cv|) / 2 ^ 24 + 2 ^ (-150 : ℤ) := by gcongr
     _ = 1 / 2 ^ 24 * (|cv| + (|p * g| + 2 ^ (-126 : ℤ))) := by rw [e]; ring
 
-/-- **The FMA chain's error**: `accChain? be gq` is within `((1 + 2^−24)^n − 1)·Σ_p (|be_p·g_p| + 2^−126)` of
-`Σ_p be_p·g_p`, over the `n` pairs of `be` and `gq`. -/
 theorem accChain_err {be gq : List Nat} {acc : Nat} (h : accChain? be gq = some acc) :
     ∃ v, wordQ acc = some v ∧
       |v - ((be.zip gq).map fun x => bfVal x.1 * PearlC.wordVal x.2).sum| ≤
@@ -1494,8 +1370,6 @@ theorem accChain_err {be gq : List Nat} {acc : Nat} (h : accChain? be gq = some 
   rw [zero_add, abs_zero, zero_add] at he
   exact he
 
-/-! ### The E4M3 chain -/
-
 /-- An E4M3 code that is zero or normal: not NaN, and exponent field `0` only with a zero mantissa. -/
 def ZeroOrNormal8 (c : Code) : Prop := c.isNaN = false ∧ (c.expField = 0 → c.manField = 0)
 
@@ -1505,7 +1379,6 @@ def H8Range (tc : Term) (a b : Fin 32 → Code) : Prop :=
   (∀ l, ZeroOrNormal8 (a l)) ∧ (∀ l, ZeroOrNormal8 (b l)) ∧ Freeze.stepExp tc a b ≤ 120 ∧
     (-113 ≤ Freeze.stepExp tc a b ∨ (tc.mag = 0 ∧ ∀ l, (product (a l) (b l)).mag = 0))
 
-/-- The E4M3 step's relative error on the range, `33·2^−13 + (1 + 33·2^−13)·2^−13`, about `2^−7.9`. -/
 def eps8 : ℚ := 33 / 2 ^ 13 + (1 + 33 / 2 ^ 13) / 2 ^ 13
 
 theorem eps8_nonneg : 0 ≤ eps8 := by unfold eps8; positivity
@@ -1529,7 +1402,6 @@ theorem product_normal8 {a b : Code} (ha : ZeroOrNormal8 a) (hb : ZeroOrNormal8 
   have hp := two_zpow_pos (product a b).exp
   nlinarith
 
-/-- On the range, the step's grid is bounded by its terms: `2^E ≤ |c| + Σ_l |a_l·b_l|`. -/
 theorem two_zpow_stepExp_le' {w : Nat} {tc : Term} (hw : fp32Value w = .fin tc) {a b : Fin 32 → Code}
     (ha : ∀ l, ZeroOrNormal8 (a l)) (hb : ∀ l, ZeroOrNormal8 (b l)) (hE1 : -113 ≤ Freeze.stepExp tc a b) :
     (2 : ℚ) ^ Freeze.stepExp tc a b ≤ |tc.value| + ∑ l, |val (a l) * val (b l)| := by
@@ -1551,7 +1423,6 @@ theorem two_zpow_stepExp_le' {w : Nat} {tc : Term} (hw : fp32Value w = .fin tc) 
           (Finset.mem_univ l)
       linarith
 
-/-- The step on zero terms writes `+0`. -/
 theorem hopperStep_zero' {w : Nat} {tc : Term} (hw : fp32Value w = .fin tc) (a b : Fin 32 → Code)
     (ha : ∀ l, (a l).isNaN = false) (hb : ∀ l, (b l).isNaN = false) (h0 : tc.mag = 0)
     (hp : ∀ l, (product (a l) (b l)).mag = 0) : wordQ (hopperStep w a b) = some 0 := by
@@ -1579,8 +1450,6 @@ theorem rel_of_err8 {v S B g : ℚ} (he : |v - S| ≤ 33 * g + (|S| + 33 * g) / 
     _ ≤ 33 * (B / 2 ^ 13) + (B + 33 * (B / 2 ^ 13)) / 2 ^ 13 := by gcongr
     _ = eps8 * B := by unfold eps8; ring
 
-/-- **The E4M3 step's relative error on the range**: the word is finite, and within `eps8·(|c| + Σ_l |a_l·b_l|)` of
-`c + Σ_l a_l·b_l`. -/
 theorem hopperStep_rel {w : Nat} {tc : Term} (hw : fp32Value w = .fin tc) {a b : Fin 32 → Code}
     (hR : H8Range tc a b) :
     ∃ v, wordQ (hopperStep w a b) = some v ∧
@@ -1617,7 +1486,6 @@ def winStep (w : Nat) (x : AtomIn) : Option Nat := finite? (hopperStep w x.1 x.2
 def WindowRange (g : List AtomIn) : Prop :=
   FoldRange winStep (fun c x => ∀ tc, fp32Value c = .fin tc → H8Range tc x.1 x.2) g 0
 
-/-- **A window's error**: its word is within `((1 + eps8)^n − 1)·Σ |a·b|` of its atoms' exact sum. -/
 theorem windowWord_err {g : List AtomIn} {w : Nat} (h : windowWord? g = some w) (hR : WindowRange g) :
     ∃ v, wordQ w = some v ∧ |v - (g.map atomQ).sum| ≤ ((1 + eps8) ^ g.length - 1) * (g.map atomAbs).sum := by
   have key := fold_rel winStep (fun c x => ∀ tc, fp32Value c = .fin tc → H8Range tc x.1 x.2) atomQ atomAbs
@@ -1639,7 +1507,6 @@ def chainStep (t : Nat) (g : List AtomIn) : Option Nat := (windowWord? g).bind (
 def ChainRange (atoms : List AtomIn) : Prop :=
   FoldRange chainStep (fun _ g => WindowRange g) (atoms.toChunks Params.pi.G) 0
 
-/-- A promotion's relative error: `(1 + 2^−24)·(1 + eps8)^4 − 1`, about `2^−5.9`, per window of at most four atoms. -/
 def epsC : ℚ := (1 + 1 / 2 ^ 24) * (1 + eps8) ^ 4 - 1
 
 theorem epsC_ge : 1 / 2 ^ 24 ≤ epsC := by
@@ -1727,7 +1594,6 @@ def chainBound (atoms : List AtomIn) : ℚ :=
     (1 + 1 / 2 ^ 24) ^ (atoms.toChunks Params.pi.G).length *
       (epsC * (atoms.map atomAbs).sum + (atoms.toChunks Params.pi.G).length * 2 ^ (-150 : ℤ))
 
-/-- **The E4M3 chain's error on its range**: `chainWord?`'s word is within `chainBound` of the exact chain. -/
 theorem chainWord_err {atoms : List AtomIn} {w : Nat} (h : chainWord? atoms = some w) (hR : ChainRange atoms) :
     ∃ v, wordQ w = some v ∧ |v - chainQ atoms| ≤ chainBound atoms := by
   have hlen : ∀ g ∈ atoms.toChunks Params.pi.G, ∀ _c : Nat, g.length ≤ 4 := by
@@ -1752,8 +1618,6 @@ theorem chainWord_err {atoms : List AtomIn} {w : Nat} (h : chainWord? atoms = so
     rw [List.sum_map_add, List.map_const', List.sum_replicate, nsmul_eq_mul, List.sum_map_mul_left, e2]
   rw [e1, e2, e3] at he
   exact he
-
-/-! ### The served rows, unpacked -/
 
 theorem mapM_getD {α β : Type} (f : α → Option β) (dα : α) (dβ : β) :
     ∀ (l : List α) (l' : List β), l.mapM f = some l' →
@@ -1824,9 +1688,6 @@ theorem pbRow_spec {be bf pb : List Nat} {g : List (List Nat)} (h : pbRow? be bf
   · rw [List.getD_append_right _ _ _ _ (by omega), show 32 + p - mid.length = p by omega,
       List.getD_eq_getElem _ _ (by simp; omega), List.getElem_map, List.getD_eq_getElem _ _ (by omega)]
 
-/-! ### The rows' entries -/
-
-/-- `P_A`'s rounded half: `RN_bf16` of a chain word within `δ` of `A` is within `δ + (|A| + δ)·2^−8 + 2^−134` of `A`. -/
 theorem paEntry_err {aw h : Nat} {A δ : ℚ} (ha : ∃ av, wordQ aw = some av ∧ |av - A| ≤ δ) (hh : rnBf16? aw = some h) :
     |bfVal h - A| ≤ δ + (|A| + δ) / 2 ^ 8 + 2 ^ (-134 : ℤ) := by
   obtain ⟨av, hav, he⟩ := ha
@@ -1855,7 +1716,6 @@ theorem zip_col {be : Fin 32 → Nat} {g : List (List Nat)} (hg : g.length = 32)
     simp only [List.getElem_zip, List.getElem_ofFn, PeelExact.col, List.getElem_map]
     rw [List.getD_eq_getElem _ _ hp]
 
-/-- **`P_B`'s rounded half**: the served entry is within `pbErrOf` of `Σ_p be_p·G_p − B`. -/
 theorem pbEntry_err {be : Fin 32 → Nat} {g : List (List Nat)} {q : Nat} {bw acc s h : Nat} {G δG : Fin 32 → ℚ}
     {B δB : ℚ} (hg : g.length = 32)
     (hgw : ∀ p : Fin 32, ∃ gv, wordQ ((g.getD p []).getD q 0) = some gv ∧ |gv - G p| ≤ δG p)
@@ -1912,8 +1772,6 @@ theorem pbEntry_err {be : Fin 32 → Nat} {g : List (List Nat)} {q : Nat} {bw ac
     _ ≤ (|D| + d) / 2 ^ 8 + 2 ^ (-134 : ℤ) + d := add_le_add (le_trans hr (by gcongr)) hsd
     _ = _ := by ring
 
-/-! ### The served entry against its exact counterpart -/
-
 section Bound
 
 variable (Aq : Matrix (Fin m) (Fin k) Code) (Bq : Matrix (Fin n) (Fin k) Code) (FA FB : Matrix (Fin k) (Fin 32) Code)
@@ -1947,7 +1805,6 @@ def PeelRange (i : Fin m) (j : Fin n) : Prop :=
     (∀ q, ChainRange (rowAtoms (Bq j) (FAᵀ q))) ∧ (∀ p q, ChainRange (rowAtoms (FBᵀ p) (FAᵀ q))) ∧
     ∀ c pa pb, peelRows Aq Bq FA FB beA beB i j = some (c, pa, pb) → URange pa pb (List.range 4) c
 
-/-- **(b) The served U is within `peelBound` of its exact counterpart** on the range, wherever the entry is finite. -/
 theorem peelExactVal_err (i : Fin m) (j : Fin n) {v : ℚ} (hv : peelExactVal Aq Bq FA FB beA beB i j = some v)
     (hR : PeelRange Aq Bq FA FB beA beB i j) :
     |v - uQ Aq Bq FA FB beA beB i j| ≤ peelBound Aq Bq FA FB beA beB i j := by
@@ -2024,8 +1881,6 @@ end Bound
 
 end Rounding
 
-/-! ## (c) The terms stay salt-dependent on the pinned U -/
-
 theorem mapM_id_replicate {β : Type} {n : Nat} (hn : n ≠ 0) (y : Option β) :
     (List.replicate n y).mapM id = y.map (List.replicate n) := by
   obtain ⟨n, rfl⟩ := Nat.exists_eq_succ_of_ne_zero hn
@@ -2051,7 +1906,6 @@ theorem mapM_congr_mem {α β : Type} {l : List α} {f g : α → Option β} (h 
     rw [List.mapM_cons, List.mapM_cons, h x List.mem_cons_self,
       ih fun y hy => h y (List.mem_cons_of_mem _ hy)]
 
-/-- `pbRow?` on a constant `B̃·F_A` row and a constant `G`: every column's FMA chain is the same. -/
 theorem pbRow_const (be : List Nat) (b gw : Nat) :
     pbRow? be (List.replicate 32 b) (List.replicate 32 (List.replicate 32 gw)) =
       (do
@@ -2080,7 +1934,6 @@ theorem pbRow_const (be : List Nat) (b gw : Nat) :
       · simp only [Option.bind_eq_bind, Option.bind_some, h1, h2, Option.map_some]
         rfl
 
-/-- **`peelExact` on constant operand and basis rows**: four chains, one `P_A` row, one FMA chain and U's four steps. -/
 theorem peelExact_const (a b f g : Code) (beA : Matrix (Fin m) (Fin 32) Nat) (beB : Matrix (Fin n) (Fin 32) Nat)
     (i : Fin m) (j : Fin n) :
     peelExact (k := k) (fun _ _ => a) (fun _ _ => b) (fun _ _ => f) (fun _ _ => g) beA beB i j =
@@ -2133,8 +1986,8 @@ theorem wServed_eq (a b : ℚ) (cA cB : Code)
   rw [hA', hB']
   rfl
 
--- the kernel evaluates `peelExact` at `k := 32` and two concrete noises (`decide +kernel`); unbounded until a bound is
--- measured
+-- the kernel evaluates `peelExact` at `k := 32` and two concrete noises (`decide +kernel`), whose cost has no
+-- measured bound
 set_option maxHeartbeats 0 in
 /-- **(c) on the served U**: at `Peel.lean`'s degenerate inputs (`x = 0` with `β = 1`, `B = 0` with `β = 1/3`), two
 salts give different entries of `peelExactVal`: `0` under the all-ones noise and `10` when `E_A`'s row starts with `2`
@@ -2146,7 +1999,6 @@ theorem served_live : wServed (wNoise 1 1) = some 0 ∧ wServed (wNoise 2 (-1)) 
   · rw [wServed_eq 2 (-1) (e4m3 32) (e4m3 10) (by decide +kernel) (by decide +kernel), peelExact_const]
     decide +kernel
 
-/-- The two salts' served entries differ. -/
 theorem served_salt_dependent : wServed (wNoise 1 1) ≠ wServed (wNoise 2 (-1)) := by
   rw [served_live.1, served_live.2]
   decide

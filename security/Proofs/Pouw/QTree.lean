@@ -4,9 +4,7 @@ public import Definitions.Pouw.Basic.QTree
 public import Mathlib.Algebra.BigOperators.Group.Finset.Defs
 import Mathlib.Algebra.Order.BigOperators.Group.Finset
 
-/-!
-# Oracle programs: what sequencing, querying a list, and a transcript built unit by unit evaluate to and cost
--/
+/-! What sequencing, querying a list and a transcript built unit by unit evaluate to and cost, for oracle programs. -/
 
 @[expose] public section
 
@@ -69,7 +67,6 @@ theorem calls_upTo_le {C : Type} (H : Q → R) (f : ℕ → QTree Q R C) (n c : 
   have := Finset.sum_le_card_nsmul (range n) (fun u => (f u).calls H) c fun u hu => h u (Finset.mem_range.1 hu)
   simpa using this
 
-/-- A program that makes no queries against `H` returns the same value against every oracle. -/
 theorem eval_of_calls_eq_zero {H : Q → R} {t : QTree Q R α} (h : t.calls H = 0) (H' : Q → R) :
     t.eval H' = t.eval H := by
   cases t with

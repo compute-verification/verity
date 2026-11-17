@@ -3,38 +3,7 @@ module
 public import Proofs.Pouw.TS.Sampled
 public import Proofs.ResourceAccounting.Lemmas.TS.Fixed
 
-/-!
-# An honest run meets option A's hypotheses (non-vacuity)
-
-The witness Rule I asks of `ResourceAccounting.Guarantees.TS.UnitFixedOfWords` and `ResourceAccounting.Guarantees.TS.AdditiveFixed`:
-an honest word layer, with a K-chunk running sum and a glue, that meets every hypothesis of both statements.
-
-One round (`S = 1`) with one coin bit (`m = 1`, `C = Bool`), a sample bit (`B = Bool`) and four units, four samples a round
-(`s = 4`), values, noise and words in `ℤ`, the noise being the coin bit `n`:
-
-* `chunk0` (unit 0) computes `S₀ = 2·(3 + n)` from two inputs committed before the coin;
-* `chunk1` (unit 1) computes `S₁ = 5·(7 + n) + S₀`: its product of two inputs committed before the coin, plus `chunk0`'s
-  running sum, an additive operand written after the coin;
-* `glue` (unit 2) computes `G = S₁·2`, its noise not read, its multiplicative operand `S₁` written after the coin by
-  `chunk1`, which is always proved;
-* `prod` (unit 3) computes `G·(11 + n)`, its multiplicative operand `G` written after the coin by `glue`.
-
-Samples 0, 1 and 3 name units 0, 1 and 3; sample 2 names `glue` when the sample bit is set and `prod` when it isn't. So
-`glue` is sampled, not always proved, and priced: sample 2 lands on it with probability `1/2`, and its late cone (`glue`
-and `prod`) weighs `1 ≤ 1/2 · 3`, the mean round weight `N_w` being `3`. `prod` is fixed through the priced `glue`,
-`glue` through the always-proved `chunk1`, and the chunks by their bound operands. `prod` also reads `glue`'s other
-input, so every position is opened on every path.
-
-Each unit writes its words at every output slot and its receipt commits them. Every unit is paid (`mode = paid`) and
-`fixed` is the total weight, `glue` weighing nothing. So every unit is fixed under option A, computed, and good, and
-`chunk0` steers `prod` (through `chunk1` and `glue`): `FixedWords` asks of `prod` what `Fixed ∧ Computed` doesn't. For
-`AdditiveFixed`, `chunk1`'s multiplicative operands are bound before its coin, it is computed on every path, and its
-additive operand takes two values on two continuations from its coin.
-
-This witness tests no skip. No unit is skipped, so it shows the hypotheses can all hold of an honest run, not that a
-skipped, priced writer's cone is charged at its sample probability: every unit is good, nothing here charges a unit that
-isn't (`SampledLayer.Covers`), and `Priced` holds of `glue` without a run in which `glue` is skipped.
--/
+/-! An honest run meets option A's hypotheses, so `UnitFixedOfWords` and `AdditiveFixed` are not vacuous. -/
 
 @[expose] public section
 
@@ -45,13 +14,10 @@ open ResourceAccounting.TS ResourceAccounting.Assumptions.TS Pouw.RelativeSecuri
 /-- The window's coins: one round, one coin bit, a sample bit. -/
 abbrev FCoins := Paths (Paths Bool 1 × Bool) 1
 
-/-- The coin bit. -/
 def fbit (y : FCoins) : Bool := coinAt (coinAt y 0).1 0
 
-/-- A bit as `0` or `1`. -/
 def nzb (b : Bool) : ℤ := if b then 1 else 0
 
-/-- The noise on `y`: its coin bit. -/
 def nz (y : FCoins) : ℤ := nzb (fbit y)
 
 /-- Sample `i` on sample bit `b`: sample 2 names `glue` when `b` is set and `prod` when it isn't; sample `i` otherwise names
@@ -63,7 +29,6 @@ writes `5`; `glue` reads `5, 6` and writes `7`; `prod` reads `7, 8` and `6` and 
 def posF : Fin 4 → Fin 5 → Fin 10 :=
   ![![0, 1, 2, 2, 2], ![3, 4, 2, 5, 5], ![5, 6, 7, 7, 7], ![7, 8, 9, 9, 6]]
 
-/-- Each position's honest value under noise `n`. -/
 def hval (ℓ : Fin 10) (n : ℤ) : ℤ :=
   ![2, 3, 2 * (3 + n), 5, 7, 5 * (7 + n) + 2 * (3 + n), 2, (5 * (7 + n) + 2 * (3 + n)) * 2, 11,
     (5 * (7 + n) + 2 * (3 + n)) * 2 * (11 + n)] ℓ
@@ -72,7 +37,6 @@ def hval (ℓ : Fin 10) (n : ℤ) : ℤ :=
 def cutF : Fin 10 → Fin 1 × Fin 2 :=
   ![(0, 0), (0, 0), (0, 1), (0, 0), (0, 0), (0, 1), (0, 0), (0, 1), (0, 0), (0, 1)]
 
-/-- Each output's writer. -/
 def srcF : Fin 10 → Option (Fin 1 × Fin 4) :=
   ![none, none, some (0, 0), none, none, some (0, 1), none, some (0, 2), none, some (0, 3)]
 
@@ -91,11 +55,9 @@ def prodF (u : Fin 1 × Fin 4) (a : {k : Fin 5 // roleF u k = SlotRole.mul} → 
 def accF (u : Fin 1 × Fin 4) (b : {k : Fin 5 // roleF u k = SlotRole.add} → ℤ) : ℤ :=
   if h : roleF u 2 = SlotRole.add then b ⟨2, h⟩ else 0
 
-/-- What a unit writes: its words. -/
 def outF (u : Fin 1 × Fin 4) (v : Fin 5 → ℤ) (n : ℤ) (_ : Fin 5) : ℤ :=
   v 0 * (v 1 + eFac u * n) + if u.2 = 1 then v 2 else 0
 
-/-- A unit's receipt slot: its first output slot. -/
 def receiptF (u : Fin 1 × Fin 4) : Fin 5 := if u.2 = 1 then 3 else 2
 
 /-- The sampled layer: samples by `sampleF`, every proof accepted, opening the honest values. -/
@@ -128,7 +90,6 @@ def fmode : FCoins → Fin 1 × Fin 4 → Mode := fun _ _ => .paid
 /-- Each unit's words: `glue` none, the others one. -/
 noncomputable def fwt (_ : Fin 1) (j : Fin 4) : ℝ := if j = 2 then 0 else 1
 
-/-- The total weight. -/
 noncomputable def ftot : ℝ := ∑ w : Fin 1, ∑ j : Fin 4, fwt w j
 
 /-- The play: one round, always accepted, with the total weight fixed. -/
@@ -139,14 +100,11 @@ noncomputable def fPlay : Play (Paths Bool 1 × Bool) 1 Unit Unit Unit Unit wher
     { run := ⟨fun _ => 0, 0, 0⟩, nword := fun _ _ => 0, nfold := fun _ => 0, nfill := fun _ => 0,
       words := fun _ => 0, fixed := ftot }
 
-/-- The run's folded words: the total weight. -/
 noncomputable def ffolded : FCoins → ℝ := fun _ => ftot
 
-/-- The paths with coin bit `1` and `0`. -/
 def xt : FCoins := (((true, ()), false), ())
 def xf : FCoins := (((false, ()), false), ())
 
-/-- On either sample bit, the sampled proof blocks read every position. -/
 theorem read_all : ∀ ℓ : Fin 10, ∀ b : Bool, ∃ i : Fin 4, ∃ k : Fin 5, posF (sampleF b i) k = ℓ := by decide
 
 theorem opens_iff (y : FCoins) (ℓ : Fin 10) (v : ℤ) : fdl.Opens y ℓ v ↔ v = hval ℓ (nz y) := by
@@ -159,8 +117,6 @@ theorem opens_iff (y : FCoins) (ℓ : Fin 10) (v : ℤ) : fdl.Opens y ℓ v ↔ 
     obtain ⟨i, k, rfl⟩ := read_all ℓ (coinAt y 0).2
     exact ⟨0, i, k, rfl, trivial, rfl⟩
 
-/-- A plurality whose every continuation opens one value, a function of the path that the continuations keep, is that
-value. -/
 theorem plural_of_val {X V : Type} [Fintype X] [Nonempty V] (sp : X → X → X) (opens : X → V → Prop) (f : X → V)
     (hf : ∀ y v, opens y v ↔ v = f y) (x : X) (hx : ∀ z, f (sp x z) = f x) : plural sp opens x = f x := by
   classical
@@ -179,19 +135,15 @@ theorem plural_of_val {X V : Type} [Fintype X] [Nonempty V] (sp : X → X → X)
   have hpos : 0 < Fintype.card X := Fintype.card_pos_iff.2 ⟨x⟩
   omega
 
-/-- Each position is cut at its round's start (an input) or after the coin (an output). -/
 theorem cut2 : ∀ ℓ : Fin 10, (cutF ℓ).2 = 0 ∨ (cutF ℓ).2 = 1 := by decide
 
-/-- An input's honest value doesn't read the noise bit. -/
 theorem hval_input : ∀ ℓ : Fin 10, (cutF ℓ).2 = 0 → ∀ b b' : Bool, hval ℓ (nzb b) = hval ℓ (nzb b') := by decide
 
-/-- A continuation from an output's cut, after the coin, keeps the coin bit. -/
 theorem nz_cont (x z : FCoins) (ℓ : Fin 10) (h : (cutF ℓ).2 = 1) : nz (fdl.cont ℓ x z) = nz x := by
   show nz (spliceAt (cutF ℓ).1 (cutF ℓ).2 x z) = nz x
   rw [h, Subsingleton.elim (cutF ℓ).1 0]
   rfl
 
-/-- A position's honest value is the same on every continuation from its cut. -/
 theorem cont_val (x z : FCoins) (ℓ : Fin 10) : hval ℓ (nz (fdl.cont ℓ x z)) = hval ℓ (nz x) := by
   rcases cut2 ℓ with h | h
   · exact hval_input ℓ h (fbit (fdl.cont ℓ x z)) (fbit x)
@@ -256,23 +208,19 @@ theorem sample_fix (b : Bool) (i : Fin 4) (h : i ≠ 2) : sampleF b i = i := by
   unfold sampleF
   exact ite_eq_right fun h' => h h'.1
 
-/-- Every unit but `glue` is always proved. -/
 theorem always_proved (v : Fin 1 × Fin 4) (h : v.2 ≠ 2) : fpf.AlwaysProved v := fun b => ⟨v.2, sample_fix b v.2 h⟩
 
-/-- **`glue` is sampled**: no sample names it when the sample bit isn't set. -/
 theorem glue_sampled : ¬ fpf.AlwaysProved (0, 2) := fun h => by
   have h2 : ∀ i : Fin 4, sampleF false i ≠ 2 := by decide
   obtain ⟨i, hi⟩ := h false
   exact h2 i hi
 
-/-- A late edge out of `glue` or `prod` lands on `glue` or `prod`. -/
 theorem late_closed (u v : Fin 1 × Fin 4) (h : fpf.Late u v) (hu : u.2 = 2 ∨ u.2 = 3) : v.2 = 2 ∨ v.2 = 3 := by
   have key : ∀ (j : Fin 4) (k : Fin 5) (u : Fin 1 × Fin 4), srcF (posF j k) = some u → (u.2 = 2 ∨ u.2 = 3) →
       j = 2 ∨ j = 3 := by decide
   obtain ⟨k, hk, -⟩ := h
   exact key v.2 k u hk hu
 
-/-- `glue`'s late cone is `glue` and `prod`. -/
 theorem cone_glue (v : Fin 1 × Fin 4) (h : Relation.ReflTransGen fpf.Late (0, 2) v) : v.2 = 2 ∨ v.2 = 3 := by
   induction h with
   | refl => exact Or.inl rfl
@@ -301,7 +249,6 @@ theorem cone_term (v : Fin 1 × Fin 4) :
     split_ifs <;> norm_num
 
 open Classical in
-/-- `glue`'s late cone weighs `1`, `prod`'s weight. -/
 theorem coneWt_glue : fpf.coneWt fwt (0, 2) ≤ 1 := by
   unfold SampledLayer.coneWt
   calc (∑ v : Fin 1 × Fin 4, if Relation.ReflTransGen fpf.Late (0, 2) v then fwt v.1 v.2 else 0)
@@ -312,7 +259,6 @@ theorem sum_fwt : ∑ j, fwt 0 j = 3 := by
   rw [Fin.sum_univ_four, fwt_ne2 0 0 (by decide), fwt_ne2 0 1 (by decide), fwt2, fwt_ne2 0 3 (by decide)]
   norm_num
 
-/-- Sample 2 lands on `glue` on half the sample bits. -/
 theorem prob_glue : prob (fun b : Bool => sampleF b 2 = 2) = 1 / 2 := by
   have h : ∀ inst : DecidablePred (fun b : Bool => sampleF b 2 = 2),
       (@Finset.filter _ _ inst Finset.univ).card = 1 := by
@@ -327,8 +273,6 @@ theorem prob_glue : prob (fun b : Bool => sampleF b 2 = 2) = 1 / 2 := by
   rw [h, Fintype.card_bool]
   norm_num
 
-/-- **`glue` is priced at its public fan-out**: sample 2 lands on it with probability `1/2`, and its late cone weighs `1`,
-at most `1/2` of the mean round weight `N_w = 3` (one round). -/
 theorem priced_glue : fpf.Priced fwt (0, 2) := by
   refine ⟨2, ?_⟩
   show fpf.coneWt fwt (0, 2) ≤
@@ -387,10 +331,7 @@ theorem tot_pos : 0 < ftot := by
       (Finset.mem_univ 0)
   linarith
 
-/-- **`UnitFixedOfWords`'s hypotheses hold of an honest run** with a K-chunk running sum and a sampled glue: nonnegative
-weights, positive in total, every credited unit fixed, the modes the run's, the labelling counting fixed words, every
-writer reading what it writes, every path accepted and every unit good, `chunk0` steering `prod` through a late
-multiplicative operand, and `glue`, which writes it, sampled and priced, not always proved. -/
+/-- **`UnitFixedOfWords`'s hypotheses hold of an honest run** with a K-chunk running sum and a sampled glue. -/
 theorem unitFixedOfWords_meets :
     (∀ w j, 0 ≤ fwt w j) ∧ 0 < ftot ∧ (∀ w j, fwt w j ≠ 0 → fpf.Fixed fwt (w, j)) ∧ ModesRun fpf fmode ∧
       CountsFixed fPlay fpf fwt ffolded ∧ fpf.WriterReads ∧ (∀ x, fPlay.accepts x) ∧
@@ -413,9 +354,7 @@ theorem additive_moves :
   rw [committed_eq, committed_eq, nz_xt, nz_splice]
   decide
 
-/-- **`AdditiveFixed`'s hypotheses hold of an honest K-chunk** whose running sum is written after its coin: `chunk1`'s
-multiplicative operands are bound before its coin and it is computed on every path, while its additive operand, which
-`chunk0` writes after that coin, takes two values on two continuations from it. -/
+/-- **`AdditiveFixed`'s hypotheses hold of an honest K-chunk** whose running sum is written after its coin. -/
 theorem additiveFixed_meets :
     (∀ k, fpf.role (0, 1) k = SlotRole.mul → fpf.Bound (0, 1) k) ∧ (∀ x, fpf.Computed x (0, 1)) ∧
       fpf.role (0, 1) 2 = SlotRole.add ∧ fpf.Late (0, 0) (0, 1) ∧

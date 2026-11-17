@@ -38,30 +38,7 @@ import Proofs.Pouw.TS.Session.Lanes.KnownRead
 import Std.Tactic.BVDecide.Normalize.Bool
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# A leaf's 33 linked sessions realize one unit (the proof)
-
-`ResourceAccounting.SecurityProofs.TS.LeafLanesSound` is the group argument (`ResourceAccounting.TS.Group.group_soundAt`) at option A's
-33 statements (`Option (Fin 32)`) and their layer `leafLayer`, where `ResourceAccounting.Assumptions.TS.GroupRealizes` is proved
-(`ResourceAccounting.TS.Lanes.groupRealizes_lanes32`) rather than assumed. The lanes cover the leaf
-(`ResourceAccounting.TS.Lanes.cover`: cell `(i, j)` is lane `4 (i mod 8) + ⌊(j mod 8)/2⌋`'s at row slot `⌊i/8⌋` and column slot
-`2⌊j/8⌋ + (j mod 2)`), so a leaf whose 33 statements each hold at their committed rows is served right
-(`unitServed_of`): `LeafChecks`, which the circuits computing their Definitions give (`leafChecks_of_computes`), gives
-each lane's `LaneOk` at a `K` the lanes bind at, which the leaf verifier's tile check gives (`k_of_check`), and the
-combine's `CombineOk`, and each lane's view agrees with the leaf on what `LaneOk` reads (`LaneAgrees`). The leaf is the
-one the lanes' committed rows decode to and the receipt the combine's (`ResourceAccounting.TS.Lanes.leafOf`, `receiptOf`): each
-A row as lane `4 (r mod 8)` decodes it, each B row as lane `⌊(j mod 8)/2⌋` does, each cell of the record as the one
-lane whose cell it is. The four lanes that read one A row (or one B row) read one registered tree at one row in full, so
-wherever the sessions' registrants' rows agree they decode it alike (`read_bits`, `decodes_of_checks`); the known
-ports' fields follow from the known-read check (`laneKnownHolds_of_check`, `combKnownOk_of_check`); the partials record
-is the combine's decoded one: lane `l`'s `partials` and the combine's `p<l>` are `ownOf`'s ports of one table at the
-leaf's row `l`, placed from one base row for the unit (`place`), read in full (`partials_bits`). Each statement's known
-content (`knownOf`) is the `okKnown` form the group layer reads, its other known rows then its `o0` row
-(`knownOf_okKnown`). The union bound over the 33 sessions gives `33 δ`.
-
-This module imports `Proofs.Flock.SoundAtBridge` (through `Proofs.Pouw.TS.GroupSound`), whose imports make `X`
-a token, so `Proofs/ResourceAccounting.lean` imports it.
--/
+/-! A leaf's 33 linked sessions realize one unit, with `GroupRealizes` proved rather than assumed. -/
 
 @[expose] public section
 
@@ -69,8 +46,6 @@ namespace ResourceAccounting.TS.Lanes
 
 open ResourceAccounting.TS.Checked Flock.SoundAtBridge
 
-/-- **The 32 lanes cover the leaf**: cell `(i, j)` is lane `4 (i mod 8) + ⌊(j mod 8)/2⌋`'s at row slot `⌊i/8⌋` and
-column slot `2⌊j/8⌋ + (j mod 2)`. -/
 theorem cover (i j : Fin 32) : ∃ l s t, rowOf l s = i ∧ colOf l t = j := by
   have hi := i.isLt
   have hj := j.isLt
@@ -82,8 +57,8 @@ theorem cover (i j : Fin 32) : ∃ l s t, rowOf l s = i ∧ colOf l t = j := by
       (2 * (j.val / 8) + j.val % 2) % 2 = j.val
     omega
 
-/-- **The leaf verifier's tile check gives a `K` the lanes bind at**: where `PouwWindow.Lanes.Tile.check` accepts a
-tile, its `K` is whole 32-wide steps and below `2^17`, where the lanes' s8 accumulator is exact. -/
+/-- **The leaf verifier's tile check gives a `K` the lanes bind at**: whole 32-wide steps below `2^17`, where the
+lanes' s8 accumulator is exact. -/
 theorem k_of_check {T : PouwWindow.Lanes.Tile} (h : T.check = .ok ()) : 32 ∣ T.k ∧ T.k < 2 ^ 17 := by
   unfold PouwWindow.Lanes.Tile.check at h
   by_cases h1 : T.k % 32 = 0
@@ -95,11 +70,6 @@ theorem k_of_check {T : PouwWindow.Lanes.Tile} (h : T.check = .ok ()) : 32 ∣ T
   · simp [h1] at h
     cases h
 
-/-- **A leaf whose 33 statements hold at their committed rows is served right**: at a `K` the lanes bind at, where
-each session's committed rows are the port rows of a wire assignment its evaluation agrees with at every unit, each
-lane's decode agrees with the leaf `L` on what `LaneOk` reads (`LaneAgrees`) and the combine's decode is the partials
-record `parts`, the receipt and `ok = 1`, `LeafChecks` gives every lane's `LaneOk` and the combine's `CombineOk`, and
-the lanes cover the leaf. -/
 theorem unitServed_of {K nw : ℕ} {Pub : Type} {dq : List ℤ → ℤ}
     {part : Pub → Fin 32 → (Fin 4 → Row K) → (Fin 8 → Row K) → Fin nw → BitVec 32}
     {sess : Option (Fin 32) → RowsSession} {decL : RowsSession → (ℕ → ℕ → Option Bool) → LaneView K nw Pub}
@@ -134,17 +104,6 @@ end ResourceAccounting.TS.Lanes
 
 open ResourceAccounting.TS ResourceAccounting.TS.Checked ResourceAccounting.TS.Lanes Flock.SoundAtBridge PouwWindow.Lanes
 
-/-- **The decodes read the committed leaf, from acceptance**: where each session has a unit, its served roots
-registered, whose units read their one-row ports at their rows (`ReadsOwnRow`), whose registrants' rows agree at one
-tree and position (`RowsAgree`) and whose known rows hold, at every proof whose sessions pass verity-verify-proof's complete
-and known-read checks at the known content of the public inputs `pub` (`knownOf`) and the ports read in full
-(`readFull`), and the leaf verifier's check of their files at `ownOf` (`roots`, the unit's placement `place`,
-`checkOwn`), each lane's decode agrees
-with the leaf the lanes' committed rows decode to (`leafOf`) at the combine's decoded partials, and the combine's
-decode is those partials, its decoded receipt (`receiptOf`) and `ok = 1`. Lane `l`'s A row at slot `s` is lane
-`4⌊l/4⌋`'s at that slot and its B row at slot `t` lane `l mod 4`'s, one row of one tree each lane reads in full
-(`read_bits`); its cells are its own (`cellLane_rowOf_colOf`, `laneAgrees_of`); its partials row is the combine's
-(`partials_bits`, `part_eq`); its known fields are the checks' (`laneKnownHolds_of_check`, `combKnownOk_of_check`). -/
 theorem ResourceAccounting.TS.Lanes.decodes_of_checks {K nw : ℕ} {sess : Option (Fin 32) → RowsSession}
     {salts : Option (Fin 32) → String → ByteArray} {pub : LanePub} {roots : String → _root_.Flock.Registered.Port}
     {place : String → String × ℕ}
@@ -196,12 +155,7 @@ theorem ResourceAccounting.TS.Lanes.decodes_of_checks {K nw : ℕ} {sess : Optio
 
 open ResourceAccounting.TS ResourceAccounting.TS.Checked ResourceAccounting.TS.Lanes Flock.SoundAtBridge PouwWindow.Lanes in
 /-- **`GroupRealizes` at option A's 33 statements, from the circuits' lowerings** (the honest witness of
-`accounting-ts-group-realizes` at the 32 × 32 leaf, one chunk a lane): where the lanes' and the combine's circuits
-compute their pieces' compositions (`LaneLowers`, `CombineLowers`), the 33 statements realize the unit's served checks
-(`UnitServed`) of the leaf their committed rows decode to (`leafOf`), at the known content of the public inputs `pub`
-(`knownOf`), the ports read in full (`readFull`) and the leaf verifier's file check at `ownOf`, past its tile check:
-`decodes_of_checks` gives the decodes' agreement with the leaf, `k_of_check` a `K` the lanes bind at, and
-`unitServed_of` the unit's checks from `LeafChecks` (`leafChecks_of_computes`). -/
+`accounting-ts-group-realizes` at the 32 × 32 leaf, one chunk a lane). -/
 theorem ResourceAccounting.TS.Lanes.groupRealizes_lanes32 {K nw : ℕ} (sess : Option (Fin 32) → RowsSession)
     (salts : Option (Fin 32) → String → ByteArray) (pub : LanePub) (roots : String → _root_.Flock.Registered.Port)
     (place : String → String × ℕ) (hL : LaneLowers (servedTile K) (laneChain K nw) Pouw.H1Zy.zyDequant sess)
@@ -216,9 +170,6 @@ theorem ResourceAccounting.TS.Lanes.groupRealizes_lanes32 {K nw : ℕ} (sess : O
   exact unitServed_of (leafChecks_of_computes (servedTile K) (laneChain K nw) Pouw.H1Zy.zyDequant sess
     (laneComputes_of_lowers hL) (combineComputes_of_lowers hC)) hKr.1 hKr.2 hLa hCb hV
 
-/-- **Option A's known content is the group layer's form**: statement `k`'s known rows at the public inputs `P`
-(`knownOf`, `PouwWindow.Lanes.knownRows`) are its other known rows (lane `l`'s `admit` and `pub`, the combine's none)
-followed by its `o0` row 1 under its salt (`ResourceAccounting.TS.Group.okKnown`). -/
 theorem ResourceAccounting.TS.Lanes.knownOf_okKnown (P : LanePub) (salts : String → ByteArray) (k : Option (Fin 32)) :
     ∃ pre, knownOf P salts k = ResourceAccounting.TS.Group.okKnown pre (salts "o0") := by
   cases k with

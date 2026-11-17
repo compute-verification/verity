@@ -3,27 +3,8 @@ module
 public import Definitions.Pouw.PearlC.W1
 public import Proofs.Pouw.PearlC.Records
 
-/-!
-# W1 doesn't truncate
-
-`BudgetAbortPearlC` is `Accounting.BudgetAbort`'s statement over Pearl-C's `CostModel` (the hypothesis of the
-per-run bound). W1 (`Pouw.PearlC.W1.w1`) fails it whenever its prices are positive (`Positive`), because a correct
-unit's operand fetches are free and whether a unit is correct is decided on the final transcript under the oracle,
-which no W1 program reads.
-
-- `copyAct` moves unit 0's activation word `(0, 0)` into its ticket word `(0, 0)`: one free move and one fetch, which
-  W1 doesn't charge when unit 0 comes out correct.
-- A program that costs nothing on a run fetches no pre-salt word and runs only free moves and fragments the device
-  lacks, so every word outside the pre-salt regions stays below 256 (`small_exec_code`).
-- `w1_not_budgetAbort`: at budget 0, a copy of `copyAct` must commit its transcript under every oracle, since W1's run
-  doesn't read the oracle. Under an oracle where unit 0 is wrong, nothing is free, so the copy must cost nothing and
-  can't write a ticket word of 256 or more.
-- `sm120_not_budgetAbort`: on sm_120 at any positive SHA-512 and fetch prices, with a one-unit protocol whose cap holds
-  exactly when the oracle says so (`toyP`), so the theorem's hypotheses hold of a concrete instance.
-
-Without the refund, W1's charge is fixed by the run's path and fetches, but its language still has no free abort: an
-`ite`'s continuation is shared by both branches, and moving it into them taints it. That case is open here.
--/
+/-! W1 doesn't truncate at positive prices, because a correct unit's operand fetches are free and whether a unit is
+correct is decided on the final transcript under the oracle, which no W1 program reads. -/
 
 @[expose] public section
 
@@ -84,7 +65,6 @@ theorem price_nonneg (h : Positive dv) (t : Bool) (i : Instr) : 0 ≤ i.price dv
 
 end Prices
 
-/-- A run only adds to its cost and its fetches. -/
 theorem exec_mono (dv : W1Device) (h : Positive dv) :
     ∀ (c : W1.Code) (t : Bool) (st : St), st.cost ≤ (exec dv t c st).cost ∧ st.fetched <+: (exec dv t c st).fetched
   | .done, _, _ => ⟨le_rfl, List.prefix_refl _⟩
@@ -123,7 +103,6 @@ theorem small_init (salt : List ℕ) (pr : CodeImage) (U : Workload) (act : ℕ 
   · rw [if_neg h1, if_neg h2, if_neg h3, if_neg h4, if_neg h5]
     norm_num
 
-/-- An instruction W1 charges nothing, that fetches no pre-salt word, keeps the words outside the pre-salt regions small. -/
 theorem small_exec {dv : W1Device} (h : Positive dv) {t : Bool} {i : Instr} {M : Mem} (hp : i.price dv t = 0)
     (hr : (i.reads dv M).filter preSalt = []) (hM : Small M) : Small (i.exec dv M) := by
   have pos : ∀ x : ℚ, 0 < x → x ≤ i.base dv → False := fun x hx hle => by
@@ -162,7 +141,6 @@ theorem small_exec {dv : W1Device} (h : Positive dv) {t : Bool} {i : Instr} {M :
       rw [e]
       exact hM
 
-/-- **A run W1 charges nothing, with no pre-salt fetch, keeps the words outside the pre-salt regions small.** -/
 theorem small_exec_code (dv : W1Device) (h : Positive dv) :
     ∀ (c : W1.Code) (t : Bool) (st : St), (exec dv t c st).cost = st.cost → (exec dv t c st).fetched = st.fetched →
       Small st.mem → Small (exec dv t c st).mem
@@ -197,13 +175,10 @@ theorem small_exec_code (dv : W1Device) (h : Positive dv) :
         dsimp only at h1
         linarith [h.1]
 
-/-! ## The counterexample -/
-
 /-- Unit 0's activation word `(0, 0)` moved into its ticket word `(0, 0)`: two nodes of text, within W1's bound. -/
 def copyAct : CodeImage := ⟨fun _ => [], fun _ => .op (.mov (ticketAt 0 0 0) (actAt 0 0 0)) .done,
   fun _ => by norm_num [W1.Code.size]⟩
 
-/-- What `copyAct` commits, on every oracle. -/
 abbrev copyTrace (dv : W1Device) (salt : List ℕ) (U : Workload) (act : ℕ → Codes) : Trace :=
   readout U act (final dv salt copyAct U act []).mem
 
@@ -220,8 +195,6 @@ theorem copy_ticket (dv : W1Device) (salt : List ℕ) (U : Workload) (act : ℕ 
   simp [final, copyAct, exec, Instr.exec, init, actAt, ticketAt, w32]
 
 open Classical in
-/-- **W1 doesn't truncate**: given positive prices, a one-unit workload whose first activation word is 256 or more, and
-oracles under which `copyAct`'s unit 0 is correct and isn't, no program of W1 is `copyAct` aborted at budget 0. -/
 theorem w1_not_budgetAbort (dv : W1Device) (hdv : Positive dv) (P : Protocol Q R S) (salt : S → List ℕ)
     (U : Workload) (act : ℕ → Codes) (s : S) (H₁ H₂ : Q → R) (hN : U.layout.N = 1) (hm : 0 < (U.layout.shape 0).m)
     (hk : 0 < (U.layout.shape 0).k) (hbig : 256 ≤ w32 (act 0 0 0))
@@ -287,12 +260,8 @@ theorem w1_not_budgetAbort (dv : W1Device) (hdv : Positive dv) (P : Protocol Q R
   rw [Option.some.inj e] at hlt
   omega
 
-/-! ## A concrete instance -/
-
-/-- One unit of shape `1 × 1 × 1`, weight 0, all zero. -/
 def toyU : Workload := ⟨⟨1, fun _ => ⟨1, 1, 1⟩, fun _ => 0⟩, fun _ _ _ => 0⟩
 
-/-- Activations of 256 everywhere. -/
 def toyAct : ℕ → Codes := fun _ _ _ => 256
 
 /-- A protocol whose ticket word `(0, 0)` is the unit's activation `(0, 0)`, whose useful word is 0, and whose cap holds
@@ -325,7 +294,6 @@ theorem sm120_positive (sha fetch : ℚ) (hs : 0 < sha) (hf : 0 < fetch) : Posit
   · norm_num [W1Device.sm120, W1Device.sm120At, W1Device.depth, PeelExact.hopperBf16K16, W1Prices.sm120]
   · norm_num [W1Device.sm120, W1Device.sm120At, W1Device.depth, Fp4.sm120Nvf4, W1Prices.sm120]
 
-/-- **W1 on sm_120 doesn't truncate**, at any positive SHA-512 and fetch prices. -/
 theorem sm120_not_budgetAbort (sha fetch : ℚ) (hs : 0 < sha) (hf : 0 < fetch) :
     ¬ BudgetAbortPearlC (w1 (W1Device.sm120 sha fetch) toyP (fun _ => [])) :=
   w1_not_budgetAbort _ (sm120_positive sha fetch hs hf) toyP _ toyU toyAct () (fun _ => true) (fun _ => false) rfl
