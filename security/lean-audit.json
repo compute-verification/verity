@@ -2963,12 +2963,6 @@
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "Slowdown.Assumptions.CheatingAtMost": {
-   "owner": "@training",
-   "digest": "2b96e0d89847f4740dc43946bfbbdbe28bb1c26b5c9d2af7eff282755dbe805e",
-   "issue": "TRN-167",
-   "due": "2026-11-30"
-  },
   "Slowdown.Assumptions.CoversEfficientMethods": {
    "owner": "@training",
    "digest": "31434d1d96fba03501675e23b856036bf46703007954325e7d695059f52cb538",
@@ -2981,18 +2975,6 @@
    "issue": "TRN-168",
    "due": "2026-11-30"
   },
-  "Slowdown.Assumptions.ExecutionPhaseLength": {
-   "owner": "@lean",
-   "digest": "1dc767d5429ed240388b694750d513791e18b4b17ede1c6b9aa4cdec58db7f4c",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "Slowdown.Assumptions.ExecutionPhasesHold": {
-   "owner": "@lean",
-   "digest": "1820461d985de8311c3e04b724f7b5ca22436a4e10e04a1e36c3557c7bfeac5d",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
   "Slowdown.Assumptions.Fits": {
    "owner": "@lean",
    "digest": "7009539caddc7117cbc327151a95b7809721425be2efca73b170a16afb8c0f7b",
@@ -3003,12 +2985,6 @@
    "owner": "@lean",
    "digest": "eea8efd71a6d93a7f157f3ec5ccb2618ec8967e1daa36b0137896895c60aefd5",
    "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "Slowdown.Assumptions.IdentitySchedule": {
-   "owner": "@training",
-   "digest": "a51e966eb062f2566583095e4d1fba9d445fd6ce06208a2d2fdc9034a966aa20",
-   "issue": "TRN-167",
    "due": "2026-11-30"
   },
   "Slowdown.Assumptions.MinEntropyHard": {
@@ -3026,18 +3002,6 @@
   "Slowdown.Assumptions.ParameterHardAt": {
    "owner": "@compute-accounting",
    "digest": "e10d2aedbb182bfcd092888a91f20e1091a840e5d9d71371982f4534f6feca86",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "Slowdown.Assumptions.PouwPerExecutionPhase": {
-   "owner": "@training",
-   "digest": "f82343b4f7ef920a833f26b96afd90b125a89ee3e5d7e053e0016f43c82d56ba",
-   "issue": "TRN-167",
-   "due": "2026-11-30"
-  },
-  "Slowdown.Assumptions.PouwSound": {
-   "owner": "@lean",
-   "digest": "1230a431acfeb9aef741312b9b62d2325e9e14c8a777bc2e8543144cc9b96761",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
@@ -3065,46 +3029,10 @@
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "Slowdown.Assumptions.ResidualAtMost": {
-   "owner": "@lean",
-   "digest": "7128ee9e7644cb0d898cab4c646169f72ff837e840260f951446bdf82fdc7402",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "Slowdown.Assumptions.SampledDetection": {
-   "owner": "@lean",
-   "digest": "1f92af0b2eb07a4ae1287823e8d8c2dcd97347829bc2112855d43c741b4a1551",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "Slowdown.Assumptions.SampledPerExecutionPhase": {
-   "owner": "@training",
-   "digest": "665d5583062078351384a76c85f392e37a5dbc976695d39338e2bbbb103b6fc6",
-   "issue": "TRN-167",
-   "due": "2026-11-30"
-  },
   "Slowdown.Assumptions.SourceHard": {
    "owner": "@training",
    "digest": "dd31da45c70ea0a1f2769cddea4bebca15841ecaf9edc688834049cae03e6758",
    "issue": "TRN-168",
-   "due": "2026-11-30"
-  },
-  "Slowdown.Assumptions.SourcesCover": {
-   "owner": "@training",
-   "digest": "5bb30ca42f3b7593ff0b911cc49b3e60e1a456ecfd802d80fdde516d7ca30f4e",
-   "issue": "TRN-167",
-   "due": "2026-11-30"
-  },
-  "Slowdown.Assumptions.TerminalDetection": {
-   "owner": "@lean",
-   "digest": "421875cd935d425129248b2966691fba3ddf955ee4ff83db833aede5c6cc0e28",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "Slowdown.Assumptions.UnmonitoredAtMost": {
-   "owner": "@training",
-   "digest": "2d6e33471e6b5483c5732f0c6b2be4f94e19977b70a83dcaa16b997c55464058",
-   "issue": "TRN-167",
    "due": "2026-11-30"
   },
   "Slowdown.Assumptions.WeightsIncompressible": {
@@ -3116,12 +3044,6 @@
   "Slowdown.Assumptions.WeightsIncompressibleSlots": {
    "owner": "@lean",
    "digest": "d6e434b3bed5d4cd3385ffbbf2d4244535dbf98347ecbc869f52a3a2d9ba771f",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "Slowdown.Assumptions.WithinCompute": {
-   "owner": "@lean",
-   "digest": "de77ceb2e0452fbb74e3adecabf1b59cc71b17e1f19da187c9ceffd09f466928",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
@@ -4350,21 +4272,6 @@
    "honest": ["RecDeploy.HonestHalfFixture.honest_half_fixture"],
    "nontrivial": "Flock.Guarantees.recursiveKSEvery_nontrivial"
   },
-  "Slowdown.SecurityProofs.SlowdownRemote": {
-   "honest": ["Slowdown.SecurityProofs.SlowdownRemote_honest"],
-   "nontrivial": "Slowdown.SecurityProofs.SlowdownRemote_nontrivial",
-   "kind": "exclusion"
-  },
-  "Slowdown.SecurityProofs.SlowdownThreaded": {
-   "honest": ["Slowdown.SecurityProofs.SlowdownThreaded_honest"],
-   "nontrivial": "Slowdown.SecurityProofs.SlowdownThreaded_nontrivial",
-   "kind": "exclusion"
-  },
-  "Slowdown.SecurityProofs.SlowdownThreadedSlots": {
-   "honest": ["Slowdown.SecurityProofs.SlowdownThreadedSlots_honest"],
-   "nontrivial": "Slowdown.SecurityProofs.SlowdownThreadedSlots_nontrivial",
-   "kind": "exclusion"
-  },
   "Slowdown.SecurityProofs.LayeredTraining": {
    "honest": ["Slowdown.SecurityProofs.LayeredTraining_honest"],
    "nontrivial": "Slowdown.SecurityProofs.LayeredTraining_nontrivial",
@@ -4690,11 +4597,6 @@
   "Slowdown.Cut.SecurityProofs.CountHE": {
    "honest": ["Slowdown.Cut.SecurityProofs.CountHE_honest"],
    "nontrivial": "Slowdown.Cut.SecurityProofs.CountHE_nontrivial",
-   "kind": "exclusion"
-  },
-  "Slowdown.SecurityProofs.SlowdownRemoteMonitoringPeriod": {
-   "honest": ["Slowdown.SecurityProofs.SlowdownRemoteMonitoringPeriod_honest"],
-   "nontrivial": "Slowdown.SecurityProofs.SlowdownRemoteMonitoringPeriod_nontrivial",
    "kind": "exclusion"
   },
   "ResourceAccounting.SecurityProofs.TableReadBinding": {
@@ -5270,14 +5172,6 @@
   "ResourceAccounting.SecurityProofs.Actual.ServerBlocksAt": {
    "type_hash": "e9201ef974a43ae555299415df13c299f7b1b329742eb56fe742cc09a5d3c8b2",
    "unfolded_hash": "577ae1e2947fea70b19fa6f4f630736a5bec70c581654b691eb16511ae2317a8"
-  },
-  "ResourceAccounting.SecurityProofs.Actual.SlowdownServerBlocksCap": {
-   "type_hash": "63ca7d130072841c447d6fe71ffc6611e4f6da761b85ac8f64f1a2a2599cf06e",
-   "unfolded_hash": "8bc632a14d5494309ea80a0d4819436e7fc6a6c74cae4ef1e9bac3f34bacc0a3"
-  },
-  "ResourceAccounting.SecurityProofs.Actual.SlowdownServerBlocksCapSlots": {
-   "type_hash": "37367957b50fb032120d987f127fc94f99f0395715efb73ad8a2fffeeda69ea5",
-   "unfolded_hash": "8047c81b2b963c88364aba47153802702b3913eff2b21addd96ac904c7b38603"
   },
   "ResourceAccounting.SecurityProofs.Actual.ThreadedRate": {
    "type_hash": "7fe548ffbe19cc1be1737a6518f5296eb920e26bc0aa38741852e17fc4ba9fed",
@@ -18192,80 +18086,6 @@
    "type_hash": "e9201ef974a43ae555299415df13c299f7b1b329742eb56fe742cc09a5d3c8b2",
    "unfolded_hash": "577ae1e2947fea70b19fa6f4f630736a5bec70c581654b691eb16511ae2317a8"
   },
-  "ResourceAccounting.SecurityProofs.Actual.SlowdownServerBlocksCap": {
-   "owner": "@lean",
-   "signature": [
-    "ResourceAccounting.SecurityProofs.Actual.SlowdownServerBlocksCap.{u_1, u_2} :",
-    "  ResourceAccounting.Guarantees.Actual.SlowdownServerBlocksCap"
-   ],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [
-     "ResourceAccounting.Placed.Causal",
-     "ResourceAccounting.Placed.ComputeRate",
-     "ResourceAccounting.Placed.Links",
-     "Slowdown.Assumptions.WeightsIncompressible",
-     "Slowdown.Threading.Threaded",
-     "Verity.RegisteredCircuit.Contains"
-    ],
-    "reads": [
-     "ResourceAccounting.Placed",
-     "ResourceAccounting.Placed.cut",
-     "ResourceAccounting.Placed.declaration",
-     "ResourceAccounting.Placed.mk",
-     "ResourceAccounting.Placed.readOn",
-     "ResourceAccounting.Placed.region",
-     "ResourceAccounting.Placed.state",
-     "ResourceAccounting.Placed.t",
-     "ResourceAccounting.Placed.toCircuit",
-     "ResourceAccounting.Placed.work",
-     "ResourceAccounting.Placed.x",
-     "ResourceAccounting.boundary",
-     "ResourceAccounting.linkCapacity"
-    ]
-   },
-   "type_hash": "63ca7d130072841c447d6fe71ffc6611e4f6da761b85ac8f64f1a2a2599cf06e",
-   "unfolded_hash": "8bc632a14d5494309ea80a0d4819436e7fc6a6c74cae4ef1e9bac3f34bacc0a3"
-  },
-  "ResourceAccounting.SecurityProofs.Actual.SlowdownServerBlocksCapSlots": {
-   "owner": "@lean",
-   "signature": [
-    "ResourceAccounting.SecurityProofs.Actual.SlowdownServerBlocksCapSlots.{u_1, u_2} :",
-    "  ResourceAccounting.Guarantees.Actual.SlowdownServerBlocksCapSlots"
-   ],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [
-     "ResourceAccounting.Placed.Causal",
-     "ResourceAccounting.Placed.ComputeRate",
-     "ResourceAccounting.Placed.Links",
-     "Slowdown.Assumptions.WeightsIncompressibleSlots",
-     "Slowdown.Threading.Threaded",
-     "Verity.RegisteredCircuit.Contains"
-    ],
-    "reads": [
-     "ResourceAccounting.Placed",
-     "ResourceAccounting.Placed.cut",
-     "ResourceAccounting.Placed.declaration",
-     "ResourceAccounting.Placed.mk",
-     "ResourceAccounting.Placed.readOn",
-     "ResourceAccounting.Placed.region",
-     "ResourceAccounting.Placed.state",
-     "ResourceAccounting.Placed.t",
-     "ResourceAccounting.Placed.toCircuit",
-     "ResourceAccounting.Placed.work",
-     "ResourceAccounting.Placed.x",
-     "ResourceAccounting.boundary",
-     "ResourceAccounting.linkCapacity"
-    ]
-   },
-   "type_hash": "37367957b50fb032120d987f127fc94f99f0395715efb73ad8a2fffeeda69ea5",
-   "unfolded_hash": "8047c81b2b963c88364aba47153802702b3913eff2b21addd96ac904c7b38603"
-  },
   "ResourceAccounting.SecurityProofs.Actual.ThreadedRate": {
    "owner": "@lean",
    "signature": [
@@ -24718,19 +24538,6 @@
    "type_hash": "c412049209c53a962bb6344192a032bc00ab52a11baebb87473af8955b6af46e",
    "unfolded_hash": "d6e85948923c8c026022e852c8894098641b3c884eb671d25e6180919fecad45"
   },
-  "Slowdown.SecurityProofs.CertificateSlack": {
-   "owner": "@lean",
-   "signature": ["Slowdown.SecurityProofs.CertificateSlack : Slowdown.Guarantees.CertificateSlack"],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": ["Slowdown.Assumptions.PouwSound"],
-    "reads": []
-   },
-   "type_hash": "bf5a6ff429b47c198a4af7702deb262d3b7082eb7cfaa4567bcb2c69ffc166f9",
-   "unfolded_hash": "0ef74840e65d858dca6edcef3d0e7dbaff371fa87919b819c0ed24544925873a"
-  },
   "Slowdown.SecurityProofs.CoveringBound": {
    "owner": "@compute-accounting",
    "signature": ["Slowdown.SecurityProofs.CoveringBound : Slowdown.Guarantees.CoveringBound"],
@@ -25085,293 +24892,6 @@
    },
    "type_hash": "1818bdeba041ed089562c62f1bdfca840e31d46eea7c3d7d1641b810be2e0a65",
    "unfolded_hash": "1e535fc6bd1fe03ebd96f63598ba952b0d5b07b7b2c443e780e6f525974dcb3d"
-  },
-  "Slowdown.SecurityProofs.Slowdown": {
-   "owner": "@lean",
-   "signature": ["Slowdown.SecurityProofs.Slowdown : Slowdown.Guarantees.Slowdown"],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [],
-    "reads": []
-   },
-   "type_hash": "db09f48f6f964dcd5da41c26a10d55ba4c5c228e20c305e80a47498fbe15b2db",
-   "unfolded_hash": "8c413d340037468d8dfda0e3f644c2a7a3df76129dee9d260d601b36d75596b1"
-  },
-  "Slowdown.SecurityProofs.SlowdownExecutionPhases": {
-   "owner": "@lean",
-   "signature": ["Slowdown.SecurityProofs.SlowdownExecutionPhases : Slowdown.Guarantees.SlowdownExecutionPhases"],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [],
-    "reads": []
-   },
-   "type_hash": "54b2544ee909679cd3aa43e289fbc326abdd129d15d9015d273263037546cfa9",
-   "unfolded_hash": "e7d9ff256ef43353cef2160d5dfba8b7eb91448445c8ffdaf1e35c1ef6a7b702"
-  },
-  "Slowdown.SecurityProofs.SlowdownRemote": {
-   "owner": "@lean",
-   "signature": ["Slowdown.SecurityProofs.SlowdownRemote : Slowdown.Guarantees.SlowdownRemote"],
-   "assumptions": [],
-   "premises": {
-    "assumptions": ["Slowdown.Cut.Assumptions.Exports", "Slowdown.Cut.Assumptions.Hardness"],
-    "domain": ["InferenceOnly.CompliesAtMost", "Slowdown.Cut.NoSharedPair", "Slowdown.Cut.ValuesInjective"],
-    "open": [
-     "Slowdown.Assumptions.PouwSound",
-     "Slowdown.Assumptions.ResidualAtMost",
-     "Slowdown.Assumptions.SampledDetection",
-     "Slowdown.Assumptions.SourcesCover",
-     "Slowdown.Assumptions.TerminalDetection",
-     "Slowdown.Assumptions.WithinCompute"
-    ],
-    "reads": []
-   },
-   "type_hash": "9d52522462073f92846df010985979d82f5f313446d5ec088671e89831012dc3",
-   "unfolded_hash": "a4786134ebd2822353f6ff7da3deff57de9a923122e93410c19b3c9014701e06"
-  },
-  "Slowdown.SecurityProofs.SlowdownRemoteMonitoringPeriod": {
-   "owner": "@training",
-   "signature": [
-    "Slowdown.SecurityProofs.SlowdownRemoteMonitoringPeriod : Slowdown.Guarantees.SlowdownRemoteMonitoringPeriod"
-   ],
-   "assumptions": [],
-   "premises": {
-    "assumptions": ["Slowdown.Cut.Assumptions.Exports", "Slowdown.Cut.Assumptions.Hardness"],
-    "domain": ["InferenceOnly.CompliesAtMost", "Slowdown.Cut.NoSharedPair", "Slowdown.Cut.ValuesInjective"],
-    "open": [
-     "Slowdown.Assumptions.CheatingAtMost",
-     "Slowdown.Assumptions.IdentitySchedule",
-     "Slowdown.Assumptions.PouwPerExecutionPhase",
-     "Slowdown.Assumptions.ResidualAtMost",
-     "Slowdown.Assumptions.SampledPerExecutionPhase",
-     "Slowdown.Assumptions.SourcesCover",
-     "Slowdown.Assumptions.TerminalDetection",
-     "Slowdown.Assumptions.UnmonitoredAtMost",
-     "Slowdown.Assumptions.WithinCompute"
-    ],
-    "reads": []
-   },
-   "type_hash": "9d559b29a892552d252d8b9885642d8e4b791c4533ffbdf93a6c694f60b18540",
-   "unfolded_hash": "f2d60a77f5139dcfdccc0e52aad0097b1df2eb930167b87d1c7cb431a36fc462"
-  },
-  "Slowdown.SecurityProofs.SlowdownRemoteMonitoringPeriod_honest": {
-   "owner": "@training",
-   "signature": [
-    "Slowdown.SecurityProofs.SlowdownRemoteMonitoringPeriod_honest :",
-    "  Slowdown.Guarantees.SlowdownRemoteMonitoringPeriod_honest"
-   ],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [],
-    "reads": [
-     "Slowdown.Assumptions.CheatingAtMost",
-     "Slowdown.Assumptions.IdentitySchedule",
-     "Slowdown.Assumptions.PouwPerExecutionPhase",
-     "Slowdown.Assumptions.ResidualAtMost",
-     "Slowdown.Assumptions.SampledPerExecutionPhase",
-     "Slowdown.Assumptions.SourcesCover",
-     "Slowdown.Assumptions.TerminalDetection",
-     "Slowdown.Assumptions.UnmonitoredAtMost",
-     "Slowdown.Assumptions.WithinCompute",
-     "Slowdown.Cut.Assumptions.Exports",
-     "Slowdown.Cut.Assumptions.Hardness"
-    ]
-   },
-   "type_hash": "7f8cf9a2017988639a7ebfcab9a22f65e26b6b2267f499310bb429edfef67e3e",
-   "unfolded_hash": "3c1d523f588876de204ded8a64f9cdd29b27330bfa6b890e9664b75e0e8f9f82"
-  },
-  "Slowdown.SecurityProofs.SlowdownRemoteMonitoringPeriod_nontrivial": {
-   "owner": "@training",
-   "signature": [
-    "Slowdown.SecurityProofs.SlowdownRemoteMonitoringPeriod_nontrivial :",
-    "  Slowdown.Guarantees.SlowdownRemoteMonitoringPeriod_nontrivial"
-   ],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [],
-    "reads": [
-     "Slowdown.Assumptions.CheatingAtMost",
-     "Slowdown.Assumptions.IdentitySchedule",
-     "Slowdown.Assumptions.PouwPerExecutionPhase",
-     "Slowdown.Assumptions.ResidualAtMost",
-     "Slowdown.Assumptions.SampledPerExecutionPhase",
-     "Slowdown.Assumptions.SourcesCover",
-     "Slowdown.Assumptions.TerminalDetection",
-     "Slowdown.Assumptions.UnmonitoredAtMost",
-     "Slowdown.Assumptions.WithinCompute",
-     "Slowdown.Cut.Assumptions.Exports",
-     "Slowdown.Cut.Assumptions.Hardness"
-    ]
-   },
-   "type_hash": "40771c5fce0ed7315e76891e89fd8cdff730631e8fdc037cdc18ffe80be55279",
-   "unfolded_hash": "2813076e16d3fb0796435c0c0b7573199aa2f827157b88502a9daf3573f00785"
-  },
-  "Slowdown.SecurityProofs.SlowdownRemote_honest": {
-   "owner": "@lean",
-   "signature": ["Slowdown.SecurityProofs.SlowdownRemote_honest : Slowdown.Guarantees.SlowdownRemote_honest"],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [],
-    "reads": [
-     "Slowdown.Assumptions.PouwSound",
-     "Slowdown.Assumptions.ResidualAtMost",
-     "Slowdown.Assumptions.SampledDetection",
-     "Slowdown.Assumptions.SourcesCover",
-     "Slowdown.Assumptions.TerminalDetection",
-     "Slowdown.Assumptions.WithinCompute",
-     "Slowdown.Cut.Assumptions.Exports",
-     "Slowdown.Cut.Assumptions.Hardness"
-    ]
-   },
-   "type_hash": "1977a04ceddefff80f53beecc5b1593361c7a35ed0bf5a2be0f57be07eb3c017",
-   "unfolded_hash": "c296d31d72beef70fbd51d74b47c51ac40213715b505ba72e92c9c8b9528fd73"
-  },
-  "Slowdown.SecurityProofs.SlowdownRemote_nontrivial": {
-   "owner": "@lean",
-   "signature": ["Slowdown.SecurityProofs.SlowdownRemote_nontrivial : Slowdown.Guarantees.SlowdownRemote_nontrivial"],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [],
-    "reads": [
-     "Slowdown.Assumptions.PouwSound",
-     "Slowdown.Assumptions.ResidualAtMost",
-     "Slowdown.Assumptions.SampledDetection",
-     "Slowdown.Assumptions.SourcesCover",
-     "Slowdown.Assumptions.TerminalDetection",
-     "Slowdown.Assumptions.WithinCompute",
-     "Slowdown.Cut.Assumptions.Exports",
-     "Slowdown.Cut.Assumptions.Hardness"
-    ]
-   },
-   "type_hash": "fb3a9024b79150d71a1c92ec4ad4fa6d59798a767c0d2ed5d264669b6f528f79",
-   "unfolded_hash": "04087fdd4b94d1b40ad4f1dc57862421770d8ddb385927e86c841f450b70b8f7"
-  },
-  "Slowdown.SecurityProofs.SlowdownThreaded": {
-   "owner": "@lean",
-   "signature": ["Slowdown.SecurityProofs.SlowdownThreaded : Slowdown.Guarantees.SlowdownThreaded"],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [
-     "InferenceOnly.Assumptions.ThetaRegistered",
-     "InferenceOnly.CompliesRate",
-     "Slowdown.Assumptions.ExecutionPhaseLength",
-     "Slowdown.Assumptions.ExecutionPhasesHold",
-     "Slowdown.Assumptions.WeightsIncompressible",
-     "Slowdown.Threading.Threaded"
-    ],
-    "reads": []
-   },
-   "type_hash": "ffe03a9e376ff11957d9b3597aa70041bd05b8b385153adaabd639499ed18204",
-   "unfolded_hash": "5a1d0af79cf12840c57b7fa774749967cdda3c98fa9faa29cc14e763a6ac6200"
-  },
-  "Slowdown.SecurityProofs.SlowdownThreadedSlots": {
-   "owner": "@lean",
-   "signature": ["Slowdown.SecurityProofs.SlowdownThreadedSlots : Slowdown.Guarantees.SlowdownThreadedSlots"],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [
-     "InferenceOnly.Assumptions.ThetaRegistered",
-     "InferenceOnly.CompliesRate",
-     "Slowdown.Assumptions.ExecutionPhaseLength",
-     "Slowdown.Assumptions.ExecutionPhasesHold",
-     "Slowdown.Assumptions.WeightsIncompressibleSlots",
-     "Slowdown.Threading.Threaded"
-    ],
-    "reads": []
-   },
-   "type_hash": "3d69cb00dc4c27e35530b46790f0a4b82273039c18c7d08f151cf6f2c62f046c",
-   "unfolded_hash": "4d13930a058201c6ea81d1baae090f6de39aacac4b20a43db20963bcf7cbabee"
-  },
-  "Slowdown.SecurityProofs.SlowdownThreadedSlots_honest": {
-   "owner": "@lean",
-   "signature": [
-    "Slowdown.SecurityProofs.SlowdownThreadedSlots_honest : Slowdown.Guarantees.SlowdownThreadedSlots_honest"
-   ],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": ["Slowdown.Small"],
-    "reads": [
-     "InferenceOnly.Assumptions.ThetaRegistered",
-     "Slowdown.Assumptions.ExecutionPhaseLength",
-     "Slowdown.Assumptions.ExecutionPhasesHold",
-     "Slowdown.Assumptions.WeightsIncompressibleSlots"
-    ]
-   },
-   "type_hash": "a64f74fd42044cf0083307ff9dcd30fa93f683dc00b89d46f9889c5e8197ce58",
-   "unfolded_hash": "e0d74d437ca9310cb7e4975577bd40b17be5f8c4301eb4b8dcb7031eb0f16f0b"
-  },
-  "Slowdown.SecurityProofs.SlowdownThreadedSlots_nontrivial": {
-   "owner": "@lean",
-   "signature": [
-    "Slowdown.SecurityProofs.SlowdownThreadedSlots_nontrivial : Slowdown.Guarantees.SlowdownThreadedSlots_nontrivial"
-   ],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": ["Slowdown.Small"],
-    "reads": [
-     "InferenceOnly.Assumptions.ThetaRegistered",
-     "Slowdown.Assumptions.ExecutionPhaseLength",
-     "Slowdown.Assumptions.ExecutionPhasesHold",
-     "Slowdown.Assumptions.WeightsIncompressibleSlots"
-    ]
-   },
-   "type_hash": "08b220f929f1b47706f2488bec8f750340bdbe80c9a153fddba1b4fb18c7dfee",
-   "unfolded_hash": "fdaeb866c2a7331fa6ce86388a77e0e593319561bff1e12a02a18a9bbd80e6af"
-  },
-  "Slowdown.SecurityProofs.SlowdownThreaded_honest": {
-   "owner": "@lean",
-   "signature": ["Slowdown.SecurityProofs.SlowdownThreaded_honest : Slowdown.Guarantees.SlowdownThreaded_honest"],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": ["Slowdown.Small"],
-    "reads": [
-     "InferenceOnly.Assumptions.ThetaRegistered",
-     "Slowdown.Assumptions.ExecutionPhaseLength",
-     "Slowdown.Assumptions.ExecutionPhasesHold",
-     "Slowdown.Assumptions.WeightsIncompressible"
-    ]
-   },
-   "type_hash": "321fd7cda6efdb96b1825a0b3d7972acfe565825f564fc7a40bf1205fdbb7335",
-   "unfolded_hash": "7d2795265b66e0a4aca700d5e03d734dfc9a5af2235911b5f1d063394c1bf451"
-  },
-  "Slowdown.SecurityProofs.SlowdownThreaded_nontrivial": {
-   "owner": "@lean",
-   "signature": ["Slowdown.SecurityProofs.SlowdownThreaded_nontrivial : Slowdown.Guarantees.SlowdownThreaded_nontrivial"],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": ["Slowdown.Small"],
-    "reads": [
-     "InferenceOnly.Assumptions.ThetaRegistered",
-     "Slowdown.Assumptions.ExecutionPhaseLength",
-     "Slowdown.Assumptions.ExecutionPhasesHold",
-     "Slowdown.Assumptions.WeightsIncompressible"
-    ]
-   },
-   "type_hash": "79ea115d2d0d66af3bd7aac873cde7a4c5116f8d2ba689421f72e8a15208935e",
-   "unfolded_hash": "dbe8f5a9f5b83498ffc32fa3ebe8506df63e24608c45285ae90b75f859ab9d13"
   },
   "Slowdown.SecurityProofs.StatHeldBudget": {
    "owner": "@training",
@@ -25773,19 +25293,6 @@
    },
    "type_hash": "d0bd29d413ed5bf646e161ff238703f7e72c0197010c0a5de55fc68ae50c56ef",
    "unfolded_hash": "1931c8322617fc2378fc459f64d443a502d6d61cc8cfe52c24b6472577ec1ec4"
-  },
-  "Slowdown.SecurityProofs.VerdictLag": {
-   "owner": "@lean",
-   "signature": ["Slowdown.SecurityProofs.VerdictLag : Slowdown.Guarantees.VerdictLag"],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": ["Slowdown.Assumptions.TerminalDetection"],
-    "reads": []
-   },
-   "type_hash": "948e7c8c8aa04272d5d4e2c5e38b54981c80acfbd9c77156fcba6955dc714b4c",
-   "unfolded_hash": "7bc9b4ac931f2848a73ce6e616fb45fbd4f95875e599ef67cbb0f810be2c602c"
   },
   "Verity.Sampled.onsite_soundness_deployedReady": {
    "owner": "@soundness",
@@ -28388,8 +27895,6 @@
    "ResourceAccounting.SecurityProofs.RatePooled": "frozen (no-function,hash): As ResourceAccounting.SecurityProofs.PooledSampling for the passes of a chained window of abstract chip programs in the random-oracle model (security/Definitions/Poub/RateAuditRemote.lean, Chain), each pass's correct receipts its good set, not the rate audit's code.",
    "ResourceAccounting.SecurityProofs.RateWindowSample": "frozen (no-function,hash): As ResourceAccounting.SecurityProofs.PooledSampling's one round at M = P * N, for a chained window of abstract chip programs in the random-oracle model whose single draw opens d of all its passes' receipts after the last root (security/Definitions/Poub/RateAuditHorizon.lean, WindowCoins, Chain.correctAll), not the rate audit's code.",
    "ResourceAccounting.SecurityProofs.RateRunSample": "frozen (no-function,hash): As ResourceAccounting.SecurityProofs.PooledSampling for a session of such windows, each a function of the earlier windows' coins and draws (security/Definitions/Poub/RateAuditHorizon.lean, Session), each window's correct receipts its good set, and again with every window's receipts good but the first holding at most K_w: abstract chip programs in the random-oracle model, not the rate audit's code.",
-   "ResourceAccounting.SecurityProofs.Actual.SlowdownServerBlocksCap": "frozen (no-function,world-unlisted): It is ThreadedRuntime's memory cap over an arbitrary actual circuit (ResourceAccounting.Placed) and a threaded reference circuit its developer's declaration contains, read as the compute dampener's windows hypothesis (Slowdown.Guarantees.SlowdownExecutionPhases) when one threading counts the residual and the declared computation together, under the physical constraints Causal, ComputeRate and Links, a bound on the state at each window's start and the named WeightsIncompressible, per-run hypotheses rather than a function's acceptance.",
-   "ResourceAccounting.SecurityProofs.Actual.SlowdownServerBlocksCapSlots": "frozen (no-function,world-unlisted): It is ThreadedRuntimeSlots's memory cap over an arbitrary actual circuit (ResourceAccounting.Placed) and a threaded reference circuit its developer's declaration contains, read as the compute dampener's windows hypothesis (Slowdown.Guarantees.SlowdownExecutionPhases) when one threading counts the residual and the declared computation together, under the physical constraints Causal, ComputeRate and Links, a bound on the state at each window's start and the named WeightsIncompressibleSlots, weights charged per parameter slot, per-run hypotheses rather than a function's acceptance.",
    "ResourceAccounting.SecurityProofs.Remote.PooledSample": "frozen (no-function): It is about the verifier's opening draw as deployed (ResourceAccounting.Remote.Sample: Key.subset on the first SHA-512 blocks prf t gives window t's uniform openings coin, released after the window's size and correct receipts are fixed, the rejection sampler exact on each draw's first block and its fallbacks free) and a trace over the coins, not a function's acceptance (Poub.draws, Key.subset); the session is the one the prover plays, which holds no coin commitment while it runs (the challenger sends each coin as it releases it and its commitment to the session's coins only after the prover's last root, with the outcome: soundness's ruling of 27 Oct, no hiding premise on the root), so Live, Refused and Counted are stated on that session and no hiding term is charged (note:20261027T0118Z-report-coin-order-rbw), Refused lets an opened receipt through only correct or moved off the row its root holds (ResourceAccounting.Remote.Sample.Receipts.held, by definition the plurality of the rows the receipt shows over the window's continuations, so read off its cut: ResourceAccounting.SecurityProofs.Remote.Binding.held_cont, tally_le_held), charged as the receipts' binding term (ResourceAccounting.Remote.Sample.Receipts.binding), which ResourceAccounting.SecurityProofs.Remote.ReceiptsBindingOfCR bounds under claim cr/sha-512 for the fork finder that runs the prover twice from the window's cut, at sum_t sqrt(|L_t| s_t (q_t^2/2^513 + split_t)), split_t the chance that the two runs' roots differ, which is not bounded here: the prover sends window t's roots before it holds anything of window t's openings coin, but that they read only the cut is not a premise (the gap binding-split; note:20261024T2140Z-report-err-terms, note:20261025T0010Z-report-bind-fork, note:20261025T0115Z-report-bind-close), and the coin function enters as the advantage of each window's distinguisher (claim prf/sha-512: SHA-512's keyed stream as a PRF, a term of the statement's error that no premise assumes and nothing prices), one a window and fixed by the session (ResourceAccounting.Remote.Sample.Session.distinguisher, read by Pous.pr, which is not a shape.events probability; note:20261024T1346Z-report-draw-oracle), and that audit.pooled's greedy reaches the pooled bound's supremum is not stated (note:20261024T0920Z-report-draw-exact)",
    "ResourceAccounting.SecurityProofs.Remote.LiveCoinsSampled": "frozen (no-function): It is ResourceAccounting.SecurityProofs.Remote.PooledSample at a fixed W, about the verifier's opening draw as deployed (ResourceAccounting.Remote.Sample: Key.subset on the first SHA-512 blocks prf t gives window t's uniform openings coin, released after the window's size and correct receipts are fixed, the rejection sampler exact on each draw's first block and its fallbacks free) and a trace over the coins, not a function's acceptance (Poub.draws, Key.subset); the session is the one the prover plays, which holds no coin commitment while it runs (the challenger sends each coin as it releases it and its commitment to the session's coins only after the prover's last root, with the outcome: soundness's ruling of 27 Oct, no hiding premise on the root), so Live, Refused and Counted are stated on that session and no hiding term is charged (note:20261027T0118Z-report-coin-order-rbw), Refused lets an opened receipt through only correct or moved off the row its root holds (ResourceAccounting.Remote.Sample.Receipts.held, by definition the plurality of the rows the receipt shows over the window's continuations, so read off its cut: ResourceAccounting.SecurityProofs.Remote.Binding.held_cont, tally_le_held), charged as the receipts' binding term (ResourceAccounting.Remote.Sample.Receipts.binding), which ResourceAccounting.SecurityProofs.Remote.ReceiptsBindingOfCR bounds under claim cr/sha-512 for the fork finder that runs the prover twice from the window's cut, at sum_t sqrt(|L_t| s_t (q_t^2/2^513 + split_t)), split_t the chance that the two runs' roots differ, which is not bounded here: the prover sends window t's roots before it holds anything of window t's openings coin, but that they read only the cut is not a premise (the gap binding-split; note:20261024T2140Z-report-err-terms, note:20261025T0010Z-report-bind-fork, note:20261025T0115Z-report-bind-close), and the coin function enters as the advantage of each window's distinguisher, one a window and fixed by the session (ResourceAccounting.Remote.Sample.Session.distinguisher, read by Pous.pr, which is not a shape.events probability; note:20261024T1346Z-report-draw-oracle), and that audit.pooled's greedy reaches the pooled bound's supremum is not stated (note:20261024T0920Z-report-draw-exact)",
    "ResourceAccounting.SecurityProofs.Remote.HeldSampled": "frozen (no-function): It is ResourceAccounting.SecurityProofs.Remote.Held with LiveCoins derived from the verifier's opening draw as deployed (ResourceAccounting.Remote.Sample: Key.subset on the first SHA-512 blocks prf t gives window t's uniform openings coin, released after the window's size and correct receipts are fixed, the rejection sampler exact on each draw's first block and its fallbacks free) and a trace over the coins, not a function's acceptance (Poub.draws, Key.subset); the session is the one the prover plays, which holds no coin commitment while it runs (the challenger sends each coin as it releases it and its commitment to the session's coins only after the prover's last root, with the outcome: soundness's ruling of 27 Oct, no hiding premise on the root), so Live, Refused and Counted are stated on that session and no hiding term is charged (note:20261027T0118Z-report-coin-order-rbw), Refused lets an opened receipt through only correct or moved off the row its root holds (ResourceAccounting.Remote.Sample.Receipts.held, by definition the plurality of the rows the receipt shows over the window's continuations, so read off its cut: ResourceAccounting.SecurityProofs.Remote.Binding.held_cont, tally_le_held), charged as the receipts' binding term (ResourceAccounting.Remote.Sample.Receipts.binding), which ResourceAccounting.SecurityProofs.Remote.ReceiptsBindingOfCR bounds under claim cr/sha-512 for the fork finder that runs the prover twice from the window's cut, at sum_t sqrt(|L_t| s_t (q_t^2/2^513 + split_t)), split_t the chance that the two runs' roots differ, which is not bounded here: the prover sends window t's roots before it holds anything of window t's openings coin, but that they read only the cut is not a premise (the gap binding-split; note:20261024T2140Z-report-err-terms, note:20261025T0010Z-report-bind-fork, note:20261025T0115Z-report-bind-close), and the coin function enters as the advantage of each window's distinguisher, one a window and fixed by the session (ResourceAccounting.Remote.Sample.Session.distinguisher, read by Pous.pr, which is not a shape.events probability; note:20261024T1346Z-report-draw-oracle), and that audit.pooled's greedy reaches the pooled bound's supremum is not stated (note:20261024T0920Z-report-draw-exact), at W the record's pooled bound; SketchBound is stated on the trace and derived on a model of the receipts' sketch (ResourceAccounting.Remote.Sketch) by ResourceAccounting.SecurityProofs.Remote.SketchBoundDeployed, whose premises Receipted and Present tie that model to the trace and whose random-oracle step is the named premise ResourceAccounting.Assumptions.SketchHashRandom at ε_ro = (Q + P)^2/2^257, added to δs (note:20261024T0839Z-report-sketchbound, note:20261024T1350Z-report-sketch-named, note:20261024T1817Z-report-rt4-fixes)",
@@ -28448,9 +27953,6 @@
    "Slowdown.SecurityProofs.ThreadedThrottledOn": "frozen (no-function): It is about an arbitrary reference circuit, a threading of it and a declaration that contains part of it (a PartialContainment, security/Definitions/Slowdown/Dark.lean, with its baseline registered: the named ThetaRegistered, security/Definitions/InferenceOnly/Assumptions/Theta.lean), under the named WeightsIncompressible (security/Definitions/Slowdown/Assumptions/Threads.lean), not about the NCI check's code; joining it to InferenceOnlyCheck.Properties.Witnesses is what would give it an acceptance.",
    "Slowdown.SecurityProofs.ThreadedThrottledDark": "frozen (no-function): It is about an arbitrary reference circuit, a threading of it and a declaration that contains part of it (a PartialContainment, security/Definitions/Slowdown/Dark.lean, with its baseline registered: the named ThetaRegistered, security/Definitions/InferenceOnly/Assumptions/Theta.lean), under the named WeightsIncompressible (security/Definitions/Slowdown/Assumptions/Threads.lean), not about the NCI check's code; InferenceOnlyCheck.Properties.SecurityProofs.ThrottlesDark (security/Properties/InferenceOnly/Threads.lean) joins it to InferenceOnlyCheck.Properties.Witnesses, so a verdict of compliance of InferenceOnlyCheck.evaluate carries its bound.",
    "Slowdown.SecurityProofs.ThreadedTrainingOn": "frozen (no-function): It is about an arbitrary reference circuit, a threading of it and a declaration that contains part of it (a PartialContainment, security/Definitions/Slowdown/Dark.lean, with its baseline registered: the named ThetaRegistered, security/Definitions/InferenceOnly/Assumptions/Theta.lean), under the named WeightsIncompressible (security/Definitions/Slowdown/Assumptions/Threads.lean), not about the NCI check's code; joining it to InferenceOnlyCheck.Properties.Witnesses is what would give it an acceptance.",
-   "Slowdown.SecurityProofs.Slowdown": "frozen (no-function): It composes the compute dampener over real numbers from each source's bound, taken as a hypothesis (security/Definitions/Slowdown/Guarantees/Slowdown.lean says which guarantee each one reads), not from a function's acceptance; joining the sources to their protocols' verifiers is what would give it one.",
-   "Slowdown.SecurityProofs.SlowdownExecutionPhases": "frozen (no-function): It composes the compute dampener over real numbers from each source's bound and the memory challenger's per-window cap, taken as hypotheses (security/Definitions/Slowdown/Guarantees/Slowdown.lean says which guarantee each one reads), not from a function's acceptance; joining the sources to their protocols' verifiers is what would give it one.",
-   "Slowdown.SecurityProofs.SlowdownThreaded": "frozen (no-function): It composes the compute dampener with ThreadedThrottled discharging the declared source, about an arbitrary reference circuit, a threading of it and a declaration that contains it, under the named WeightsIncompressible (security/Definitions/Slowdown/Assumptions/Threads.lean), with the other sources' bounds as hypotheses, not from a function's acceptance; joining it to InferenceOnlyCheck.Properties.Witnesses and the other sources to their verifiers is what would give it one.",
    "Slowdown.SecurityProofs.FitBound": "frozen (conjecture,no-function): It is about an arbitrary reference circuit, a threading of it and its division into windows, under the named empirical premises Reach (F3) and Fits (F1 and F4) (security/Definitions/Slowdown/Assumptions/Fit.lean), not about the NCI check's code; joining it to Accounting's Windows and the wipe certificate is what would give it an acceptance. It rests on the open conjecture Reach (shape.conjectures, LEAN-35: false at token threads for a token-routed MoE, the per-sequence form at sequence threads).",
    "Slowdown.SecurityProofs.ThreadedOfLayered": "frozen (no-function): It is about an arbitrary keyed reference circuit (Layered, security/Definitions/Slowdown/Layered.lean) and a threading of it, not about the NCI check's code; joining it to InferenceOnlyCheck.Properties.Witnesses is what would give it an acceptance.",
    "Slowdown.SecurityProofs.LayeredTraining": "frozen (no-function): It is about an arbitrary keyed reference circuit, a threading of it and a declaration that contains it, under the named WeightsIncompressible (security/Definitions/Slowdown/Assumptions/Threads.lean), not about the NCI check's code; joining it to InferenceOnlyCheck.Properties.Witnesses is what would give it an acceptance.",
@@ -28461,18 +27963,11 @@
    "Slowdown.SecurityProofs.ThreadedThrottledSlots": "frozen (no-function): It is about an arbitrary reference circuit, a threading of it and a declaration that contains it, under the named WeightsIncompressibleSlots (security/Definitions/Slowdown/Assumptions/Threads.lean), weights charged per parameter slot, not about the NCI check's code; InferenceOnlyCheck.Properties.SecurityProofs.ThrottlesSlots (security/Properties/InferenceOnly/Threads.lean) joins it to InferenceOnlyCheck.Properties.Witnesses, so a verdict of compliance of InferenceOnlyCheck.evaluate carries its bound.",
    "Slowdown.SecurityProofs.ThreadedThrottledOnSlots": "frozen (no-function): It is about an arbitrary reference circuit, a threading of it and a declaration that contains part of it (a PartialContainment, security/Definitions/Slowdown/Dark.lean, with its baseline registered: the named ThetaRegistered, security/Definitions/InferenceOnly/Assumptions/Theta.lean), under the named WeightsIncompressibleSlots (security/Definitions/Slowdown/Assumptions/Threads.lean), weights charged per parameter slot, not about the NCI check's code; joining it to InferenceOnlyCheck.Properties.Witnesses is what would give it an acceptance.",
    "Slowdown.SecurityProofs.ThreadedThrottledDarkSlots": "frozen (no-function): It is about an arbitrary reference circuit, a threading of it and a declaration that contains part of it (a PartialContainment, security/Definitions/Slowdown/Dark.lean, with its baseline registered: the named ThetaRegistered, security/Definitions/InferenceOnly/Assumptions/Theta.lean), under the named WeightsIncompressibleSlots (security/Definitions/Slowdown/Assumptions/Threads.lean), weights charged per parameter slot, not about the NCI check's code; InferenceOnlyCheck.Properties.SecurityProofs.ThrottlesDarkSlots (security/Properties/InferenceOnly/Threads.lean) joins it to InferenceOnlyCheck.Properties.Witnesses, so a verdict of compliance of InferenceOnlyCheck.evaluate carries its bound.",
-   "Slowdown.SecurityProofs.SlowdownThreadedSlots": "frozen (no-function): It composes the compute dampener with ThreadedThrottledSlots discharging the declared source, about an arbitrary reference circuit, a threading of it and a declaration that contains it, under the named WeightsIncompressibleSlots (security/Definitions/Slowdown/Assumptions/Threads.lean), weights charged per parameter slot, with the other sources' bounds as hypotheses, not from a function's acceptance; joining it to InferenceOnlyCheck.Properties.Witnesses and the other sources to their verifiers is what would give it one.",
-   "Slowdown.SecurityProofs.CertificateSlack": "frozen (no-function): It is Markov's inequality over the windows of an arbitrary distribution on a finite outcome space, under the named PouwSound (security/Definitions/Slowdown/Assumptions/Remote.lean) as a bound on each window's marginal, not from a function's acceptance; joining it to PoUW's verifier, whose rejection of a wrong certificate PouwSound bounds, is what would give it one.",
-   "Slowdown.SecurityProofs.VerdictLag": "frozen (no-function): It bounds the declared work an arbitrary set of faulty proof blocks skips past the escaped ones, under the named TerminalDetection (security/Definitions/Slowdown/Assumptions/Remote.lean) and a per-identity capacity bound taken as a hypothesis, not from a function's acceptance; joining it to the halt's verdict and the sampled proofs' verifier is what would give it one.",
-   "Slowdown.SecurityProofs.SlowdownRemote": "frozen (no-function): It composes the remote protocol's compute dampener from CertificateSlack, VerdictLag, the escape slack and CountHE bounding the declared source on its count verdict (InferenceOnly.CompliesAtMost), under the named PouwSound, TerminalDetection, SampledDetection (security/Definitions/Slowdown/Assumptions/Remote.lean) and (H) and (E) (Slowdown.Cut.Assumptions.Hardness and Exports, security/Definitions/Assumptions.lean), with the other sources' bounds as hypotheses, not from a function's acceptance; joining the sources to their protocols' verifiers is what would give it one.",
    "Slowdown.SecurityProofs.CoveringBound": "frozen (no-function): It is about an arbitrary declaration, its multiplication blocks and token computations (Slowdown.Covering.MulBlocks) and a covering by inference blocks (Slowdown.Covering.Covers, security/Definitions/Slowdown/Covering.lean), under the named ParameterHard and with ActivationChained read in its statement (security/Definitions/Slowdown/Assumptions/Covering.lean), not about the NCI check's code; joining it to InferenceOnlyCheck.Properties.Witnesses is what would give it an acceptance.",
    "Slowdown.SecurityProofs.CoveringBoundTwoCosts": "frozen (no-function): CoveringBound's twin at two costs, a weight's c_w and an activation's c_a, beside it: it is about an arbitrary declaration, its multiplication blocks and token computations (Slowdown.Covering.MulBlocks) and a covering by inference blocks (Slowdown.Covering.Covers, security/Definitions/Slowdown/Covering.lean), under the named ParameterHardAt and with ActivationChainedAt read in its statement (security/Definitions/Slowdown/Assumptions/CoveringTwoCosts.lean), not about the NCI check's code; joining it to InferenceOnlyCheck.Properties.Witnesses is what would give it an acceptance.",
    "InferenceOnly.SecurityProofs.PartitionCovers": "frozen (no-function): It is the working draft's Lemma A.1, about an arbitrary (c,k)-partition (Verity.Partition.IsCK, security/Definitions/Core/Formalism.lean) and the covering its completed blocks give (Slowdown.Covering.Covers, security/Definitions/Slowdown/Covering.lean), not about the NCI check's code; joining it to InferenceOnlyCheck.Properties.Witnesses is what would give it an acceptance.",
    "InferenceOnly.SecurityProofs.CompliesCK": "frozen (no-function): It is about an arbitrary Boolean declaration that complies with the inference-only policy at a rate (InferenceOnly.CompliesRate, security/Definitions/InferenceOnly.lean), whose division into inference blocks is a (c,k)-partition (Verity.Partition.IsCK), not about the NCI check's code; InferenceOnlyCheck.Properties.Witnesses joined to it is what would give it an acceptance.",
    "InferenceOnly.SecurityProofs.ExpandComplies": "frozen (no-function): It is about an arbitrary multi-bit registered circuit that complies with the inference-only policy at a rate (InferenceOnly.CompliesRate, security/Definitions/InferenceOnly.lean) and its bit-level expansion (Verity.RegisteredCircuit.expand, security/Definitions/Core/Expand.lean), not about the NCI check's code.",
-   "Slowdown.SecurityProofs.SlowdownRemoteMonitoringPeriod": "frozen (no-function): It composes the remote protocol's overhead bound over a monitoring period of T windows on live coins from CertificateSlack, the union over the windows, the per-identity escape tail and VerdictLag, under the named TerminalDetection (security/Definitions/Slowdown/Assumptions/Remote.lean) and (H) and (E) on each declared day's work (security/Definitions/Assumptions.lean), with each protocol's per-window bound (CircuitCredit's conclusion, the sampled-proofs window's draw-miss and knowledge-soundness bounds) and each day's count verdict (InferenceOnly.CompliesAtMost, what InferenceOnlyCheck.Properties.DescCountsCK gives a published complies) taken as a hypothesis, not from a function's acceptance; joining the windows to their protocols' verifiers is what would give it one.",
-   "Slowdown.SecurityProofs.SlowdownRemoteMonitoringPeriod_honest": "frozen (no-function): It states that SlowdownRemoteMonitoringPeriod's premises hold at a constructed honest developer over one window at p = 3 * 2^-40, a value no guarantee gives, and eps' = 2p/10^-6, with one declared day, the toy Slowdown.Cut.Toy complying with CompliesAtMost 1 2 2 under (H) at unit costs and (E) at b = 2, with the failure probability at most 10^-6 and the overhead bound above 1, an existence over the statement's parameters, not a function's acceptance.",
-   "Slowdown.SecurityProofs.SlowdownRemoteMonitoringPeriod_nontrivial": "frozen (no-function): It states that at AcceptAll, one window at a PoUW verifier that accepts every certificate and no declared day, every other premise of SlowdownRemoteMonitoringPeriod holds, its PoUW per-window bound fails, and its conclusion fails, so it is false without that bound: a counterexample at an instance, not a function's acceptance.",
    "Slowdown.SecurityProofs.HeldBudget": "frozen (no-function): It is Lemma 1 with description hardness, about an arbitrary registration of a (c,k)-partition, item family, decoder and evaluator (Slowdown.Capability.HeldPriceAtMost, Slowdown.Assumptions.DescriptionHard, security/Definitions/Slowdown/Capability/Items.lean), not about a function's code; a check of declared blocks joined to it is what would give it an acceptance.",
    "Slowdown.SecurityProofs.StatHeldBudget": "frozen (no-function): It is the statistical held budget, about an arbitrary registration of a (c,k)-partition, item family and distribution of honest runs (Slowdown.Capability.HeldPriceAtMost, Slowdown.Assumptions.MinEntropyHard, security/Definitions/Slowdown/Assumptions/Capability/Information.lean), not about a function's code; a check of declared blocks joined to it is what would give it an acceptance.",
    "Slowdown.SecurityProofs.RecoveredBudget": "frozen (no-function): It is Lemma 1 with a recoverable hard source, about an arbitrary registration of a (c,k)-partition, decoder, evaluator and source (Slowdown.Assumptions.SourceHard, Slowdown.Assumptions.Recovers, security/Definitions/Slowdown/Assumptions/Capability/Information.lean), not about a function's code; a check of declared blocks joined to it is what would give it an acceptance.",
@@ -29189,22 +28684,6 @@
     "∀ (a : Fin A.N), SetLike.instMembership.mem θ a → Eq (A.isInput a) Bool.true": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (i j : Fin n), Ne i j → Disjoint (X i) (X j)": "a disequality, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
-   "ResourceAccounting.SecurityProofs.Actual.SlowdownServerBlocksCap": {
-    "∀ (a : Fin A.N), SetLike.instMembership.mem θ a → Eq (A.isInput a) Bool.true": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (i j : Fin n), Ne i j → Disjoint (X i) (X j)": "a disequality, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (i : Fin n), instLENat.le (instHMul.hMul (Φ (X i)) ω) Γ": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (i : Fin n), Real.instLE.le (ResourceAccounting.linkCapacity ends β (X i)).cast (instHMul.hMul α F)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (i : Fin n) (k : Nat), instLTNat.lt (instHMul.hMul k ω) t → Real.instLE.le (A.state (X i) (instHMul.hMul k ω)).cast R": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "instLENat.le (instHAdd.hAdd Mr Md) T.M.card": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
-   },
-   "ResourceAccounting.SecurityProofs.Actual.SlowdownServerBlocksCapSlots": {
-    "∀ (a : Fin A.N), SetLike.instMembership.mem θ a → Eq (A.isInput a) Bool.true": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (i j : Fin n), Ne i j → Disjoint (X i) (X j)": "a disequality, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (i : Fin n), instLENat.le (instHMul.hMul (Φ (X i)) ω) Γ": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (i : Fin n), Real.instLE.le (ResourceAccounting.linkCapacity ends β (X i)).cast (instHMul.hMul α F)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (i : Fin n) (k : Nat), instLTNat.lt (instHMul.hMul k ω) t → Real.instLE.le (A.state (X i) (instHMul.hMul k ω)).cast R": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "instLENat.le (instHAdd.hAdd Mr Md) T.M.card": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
-   },
    "ResourceAccounting.SecurityProofs.Actual.ThreadedRate": {
     "∀ (a : Fin A.N), SetLike.instMembership.mem θ a → Eq (A.isInput a) Bool.true": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (i j : Fin n), Ne i j → Disjoint (X i) (X j)": "a disequality, inline when the rule came: name it or state it as a guarantee's conclusion",
@@ -29853,9 +29332,6 @@
    "Slowdown.SecurityProofs.CapabilityFloor": {
     "∀ (C : In → ResourceAccounting.Actual.Run L) (x : In), Set.instMembership.mem 𝒜 { fst := C, snd := x } → Core C x → instLENat.le Lc (cost (C x))": "#6636's statement when the inline rule landed, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
-   "Slowdown.SecurityProofs.CertificateSlack": {
-    "Real.instLE.le (Finset.univ.sum fun i => c i) C": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
-   },
    "Slowdown.SecurityProofs.CoveringBound": {
     "Real.instLT.lt k.cast (instHMul.hMul (instHMul.hMul r b) D.cast)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
@@ -29890,58 +29366,8 @@
    "Slowdown.SecurityProofs.ReferenceThreaded": {
     "Real.instLE.le S (instHMul.hMul 2 (instHPow.hPow 10 7))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
-   "Slowdown.SecurityProofs.Slowdown": {
-    "instLENat.le M (instHAdd.hAdd (instHAdd.hAdd (instHAdd.hAdd Mu Mr) Md) Mx)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Real.instLE.le Mu.cast (instHDiv.hDiv (instHMul.hMul κ U) 2)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Real.instLE.le Mr.cast (instHDiv.hDiv (instHMul.hMul κ (instHSub.hSub C W)) 2)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Real.instLE.le Md.cast (instHDiv.hDiv C ρ)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Real.instLE.le Mx.cast (instHDiv.hDiv (instHMul.hMul (instHMul.hMul κ χ) (instHAdd.hAdd C U)) 2)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Real.instLE.le (instHAdd.hAdd Mr.cast Md.cast) (instHDiv.hDiv (instHMul.hMul (instHMul.hMul κ μ) C) 2)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
-   },
-   "Slowdown.SecurityProofs.SlowdownExecutionPhases": {
-    "instLENat.le M (instHAdd.hAdd (instHAdd.hAdd (instHAdd.hAdd Mu Mr) Md) Mx)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Real.instLE.le Mu.cast (instHDiv.hDiv (instHMul.hMul κ U) 2)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Real.instLE.le Mr.cast (instHDiv.hDiv (instHMul.hMul κ (instHSub.hSub C W)) 2)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Real.instLE.le Md.cast (instHDiv.hDiv C ρ)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Real.instLE.le Mx.cast (instHDiv.hDiv (instHMul.hMul (instHMul.hMul κ χ) (instHAdd.hAdd C U)) 2)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Real.instLE.le (instHMul.hMul (instHMul.hMul n.cast F) H) C": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Eq (instHMul.hMul (instHMul.hMul α F) L) R": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Real.instLE.le e (instHDiv.hDiv (instHMul.hMul reuse (instHMul.hMul 2 R)) (instHMul.hMul (instHMul.hMul 4 d) b_w))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Real.instLE.le (instHMul.hMul b_a (instHAdd.hAdd Mr.cast Md.cast)) (instHMul.hMul (instHMul.hMul n.cast (Nat.ceil (instHDiv.hDiv H L)).cast) (instHMul.hMul (instHAdd.hAdd R (instHMul.hMul (instHMul.hMul α F) L)) (Slowdown.Slowdown.Lambda reuse e d b_w (instHAdd.hAdd R (instHMul.hMul (instHMul.hMul α F) L)))))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
-   },
-   "Slowdown.SecurityProofs.SlowdownRemote": {
-    "Real.instLE.le (instHMul.hMul Φ H) C": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (ω : Ω) (b : β), SetLike.instMembership.mem (bad ω) b → SetLike.instMembership.mem I (ident b)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (ω : Ω) (j : ι) (t : Real), Real.instLE.le ((Finset.filter (fun b => And (Eq (ident b) j) (And (Real.instLE.le t (τ b)) (Real.instLE.le (τ b) (instHAdd.hAdd t Δ)))) (bad ω)).sum fun b => w b) (instHMul.hMul Φ Δ)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (ω : Ω) (b : β), SetLike.instMembership.mem (bad ω) b → Real.instLE.le (w b) B": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (ω : Ω), Real.instLE.le (Mu ω).cast (instHDiv.hDiv (instHMul.hMul (instHMul.hMul mfu κ) U) 2)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (ω : Ω), Real.instLE.le (Mx ω).cast (instHDiv.hDiv (instHMul.hMul (instHMul.hMul κ χ) (instHAdd.hAdd C U)) 2)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
-   },
-   "Slowdown.SecurityProofs.SlowdownThreaded": {
-    "Real.instLE.le (d.D.size d.D.computed).cast C": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "instLENat.le M (instHAdd.hAdd (instHAdd.hAdd (instHAdd.hAdd Mu Mr) T.M.card) Mx)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Real.instLE.le Mu.cast (instHDiv.hDiv (instHMul.hMul κ U) 2)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Real.instLE.le Mr.cast (instHDiv.hDiv (instHMul.hMul κ (instHSub.hSub C W)) 2)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Real.instLE.le Mx.cast (instHDiv.hDiv (instHMul.hMul (instHMul.hMul κ χ) (instHAdd.hAdd C U)) 2)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Real.instLE.le (instHMul.hMul (instHMul.hMul n.cast F) H) C": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Real.instLE.le e.cast (instHDiv.hDiv (instHMul.hMul T.reuse.cast (instHMul.hMul 2 R)) (instHMul.hMul (instHMul.hMul 4 dd.cast) b_w))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
-   },
-   "Slowdown.SecurityProofs.SlowdownThreadedSlots": {
-    "Real.instLE.le (d.D.size d.D.computed).cast C": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "instLENat.le M (instHAdd.hAdd (instHAdd.hAdd (instHAdd.hAdd Mu Mr) T.M.card) Mx)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Real.instLE.le Mu.cast (instHDiv.hDiv (instHMul.hMul κ U) 2)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Real.instLE.le Mr.cast (instHDiv.hDiv (instHMul.hMul κ (instHSub.hSub C W)) 2)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Real.instLE.le Mx.cast (instHDiv.hDiv (instHMul.hMul (instHMul.hMul κ χ) (instHAdd.hAdd C U)) 2)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Real.instLE.le (instHMul.hMul (instHMul.hMul n.cast F) H) C": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Real.instLE.le e.cast (instHDiv.hDiv (instHMul.hMul T.reuse.cast (instHMul.hMul 2 R)) (instHMul.hMul (instHMul.hMul 4 dd.cast) b_w))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
-   },
    "Slowdown.SecurityProofs.ThreadedOfLayered": {
     "Real.instLT.lt S (instHMul.hMul (instHAdd.hAdd E 1) b).cast": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
-   },
-   "Slowdown.SecurityProofs.VerdictLag": {
-    "Real.instLE.le (instHMul.hMul Φ H) C": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (b : β), SetLike.instMembership.mem bad b → SetLike.instMembership.mem I (ident b)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (j : ι) (t : Real), Real.instLE.le ((Finset.filter (fun b => And (Eq (ident b) j) (And (Real.instLE.le t (τ b)) (Real.instLE.le (τ b) (instHAdd.hAdd t Δ)))) bad).sum fun b => w b) (instHMul.hMul Φ Δ)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Verity.SecurityProofs.AmpereUnitBf16": {
     "∀ (s : Prod (List Nat) (Prod (List Nat) Verity.TC.Relation.Witness)), List.instMembership.mem steps s → And (Eq s.fst.length 16) (And (Eq s.snd.fst.length 16) (And (∀ (x : Nat), List.instMembership.mem s.fst x → instLTNat.lt x (instHPow.hPow 2 16)) (∀ (x : Nat), List.instMembership.mem s.snd.fst x → instLTNat.lt x (instHPow.hPow 2 16))))": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion"
@@ -40993,29 +40419,6 @@
     "Slowdown.Assumptions.ReferenceLayered": "3253024713db6cf3451d6dab5c5a6fd385759ee0cf849351f34f2d63cdaa9fd0"
    }
   },
-  "Definitions.Slowdown.Assumptions.Remote": {
-   "digest": "470ed5276584b9923e0a578580e1f9ad227bb5e03c8720b196d86463f6152924",
-   "definitions": {
-    "Slowdown.Assumptions.IdentitySchedule": "a51e966eb062f2566583095e4d1fba9d445fd6ce06208a2d2fdc9034a966aa20",
-    "Slowdown.Assumptions.PouwPerExecutionPhase": "f82343b4f7ef920a833f26b96afd90b125a89ee3e5d7e053e0016f43c82d56ba",
-    "Slowdown.Assumptions.PouwSound": "1230a431acfeb9aef741312b9b62d2325e9e14c8a777bc2e8543144cc9b96761",
-    "Slowdown.Assumptions.SampledDetection": "1f92af0b2eb07a4ae1287823e8d8c2dcd97347829bc2112855d43c741b4a1551",
-    "Slowdown.Assumptions.SampledPerExecutionPhase": "665d5583062078351384a76c85f392e37a5dbc976695d39338e2bbbb103b6fc6",
-    "Slowdown.Assumptions.TerminalDetection": "421875cd935d425129248b2966691fba3ddf955ee4ff83db833aede5c6cc0e28"
-   }
-  },
-  "Definitions.Slowdown.Assumptions.Slowdown": {
-   "digest": "baad3d79aef4cec215dcc29b6cfc5d19ff9f580296760029d0e2428b74cc2744",
-   "definitions": {
-    "Slowdown.Assumptions.CheatingAtMost": "2b96e0d89847f4740dc43946bfbbdbe28bb1c26b5c9d2af7eff282755dbe805e",
-    "Slowdown.Assumptions.ExecutionPhaseLength": "1dc767d5429ed240388b694750d513791e18b4b17ede1c6b9aa4cdec58db7f4c",
-    "Slowdown.Assumptions.ExecutionPhasesHold": "1820461d985de8311c3e04b724f7b5ca22436a4e10e04a1e36c3557c7bfeac5d",
-    "Slowdown.Assumptions.ResidualAtMost": "7128ee9e7644cb0d898cab4c646169f72ff837e840260f951446bdf82fdc7402",
-    "Slowdown.Assumptions.SourcesCover": "5bb30ca42f3b7593ff0b911cc49b3e60e1a456ecfd802d80fdde516d7ca30f4e",
-    "Slowdown.Assumptions.UnmonitoredAtMost": "2d6e33471e6b5483c5732f0c6b2be4f94e19977b70a83dcaa16b997c55464058",
-    "Slowdown.Assumptions.WithinCompute": "de77ceb2e0452fbb74e3adecabf1b59cc71b17e1f19da187c9ceffd09f466928"
-   }
-  },
   "Definitions.Slowdown.Assumptions.Threads": {
    "digest": "3edd87a3f6081e34961b59a8fc0355bc1b33932928a46a6d424eb1bcfd66cb97",
    "definitions": {
@@ -41283,13 +40686,6 @@
     "ResourceAccounting.Guarantees.Actual.ServerBlocksAt": "1b18c5c6281937a777e0f60f0c089fe8e80e940b9551d3d05e948fcdd3dc2298"
    }
   },
-  "Definitions.Slowdown.Guarantees.Actual.Slowdown": {
-   "digest": "f2cc8c8c4d67679fa6d32e87fbfbebcf793b010b8876d3e4621c4565e4fe936b",
-   "definitions": {
-    "ResourceAccounting.Guarantees.Actual.SlowdownServerBlocksCap": "a998441ae63e2a478c13c95896735a77a61e428bde313a9f95a3c68e5c5aa0eb",
-    "ResourceAccounting.Guarantees.Actual.SlowdownServerBlocksCapSlots": "570926a3e984d7c6facfbdc6d31de8386ca2b414ff09c4823187041a93edaa01"
-   }
-  },
   "Definitions.Slowdown.Guarantees.Actual.Threaded": {
    "digest": "fbb6e9b36281bbb72e4828c7dfcabbbc656fcc1a2543d3cb6855b12589b3896b",
    "definitions": {
@@ -41425,41 +40821,6 @@
     "Slowdown.Guarantees.ThreadedOfLayered": "eedc1c3fb7dfc2b097ea454f28b77120e010c3fd912a9b549dc6346c7789d014"
    }
   },
-  "Definitions.Slowdown.Guarantees.Remote": {
-   "digest": "c4ffced07282f0f5f876290bc4ea18fe78d77cd355466996a9dc990d2d16eb61",
-   "definitions": {
-    "Slowdown.Guarantees.CertificateSlack": "a17a07ffb2bde74bbaa06261c7343635e37d514c48b17a07a5da22af557488f9",
-    "Slowdown.Guarantees.SlowdownRemote": "1e4009d20aacac17512fd7dac6ebc493a0502f4b7a0174ae0292981c3b727a2a",
-    "Slowdown.Guarantees.VerdictLag": "51b96006a2b2204c1955a00c96807a78f439bb5dac66135e71c3a9753494d4c6"
-   }
-  },
-  "Definitions.Slowdown.Guarantees.RemoteMonitoringPeriod": {
-   "digest": "eeb66e1c747d0e16756a8d1a6528142cd7aaa834c102e1d60e89ab23bff2987c",
-   "definitions": {
-    "Slowdown.Guarantees.AcceptAll.M": "bc569b2661cf8d40be790e4e9479035da9a7490f5ba9f6aa3e7f7ee8a5a1eaea",
-    "Slowdown.Guarantees.AcceptAll.Mr": "8e5854142c37e45c983a8a06d708d8a5b61a056ca8ae86549f218c5dd8835d96",
-    "Slowdown.Guarantees.AcceptAll.Mu": "9815de184f1bbe7e38721e9a6ee74c507604968bfcdc9b9037183705ede14aaa",
-    "Slowdown.Guarantees.AcceptAll.Mx": "5610fe767a6647b830a14c1f89cfa41716bdff9051e5036f38c86ffdbaa35804",
-    "Slowdown.Guarantees.AcceptAll.W": "c2b6c91996841b7f4399f9a81a8948bbf410051ada92982938334d430cb7d71d",
-    "Slowdown.Guarantees.AcceptAll.Wk": "8adf51623d7650a82967f570338f6a2d144f7e5f539e5f43c1243a58109e14eb",
-    "Slowdown.Guarantees.AcceptAll.bad": "5b70a0f59454c9598e1911bcc00a05bb382f3401319bf67a99c77785139c8355",
-    "Slowdown.Guarantees.AcceptAll.cap": "ff752aead2d07e11a48c45d5b0a2e79109741da3c1741427f7937e408d0763bb",
-    "Slowdown.Guarantees.AcceptAll.d": "1bf024532c6830207022d9a6eb5c59669fdc0ce7c862a2ace4bc3daf0916998b",
-    "Slowdown.Guarantees.AcceptAll.detected": "d79a3e0c04876820e3f6b88983e3a1a8a036ad9855cb5614d5ea8bd3c34d1087",
-    "Slowdown.Guarantees.AcceptAll.drawn": "16ac0d2800583d8577b76a4997a7e9aee3476b78f12187411eb8560d8d37d28d",
-    "Slowdown.Guarantees.AcceptAll.idW": "fcf2674e5c208d8b91fcf3b33026cc3b178b3ac66e3e4a9fac0978b54e66da21",
-    "Slowdown.Guarantees.AcceptAll.incorrect": "8a9d55e23513b5c7ce1902ceb4495710d02fee92ab4bccdbe68f947488e9be18",
-    "Slowdown.Guarantees.AcceptAll.ks": "0b8fcc6e923ab53719ecb81bda4e5b25031ba377e7d2de03b868c9f5d934bdba",
-    "Slowdown.Guarantees.AcceptAll.n": "1634da0df4ad2f05d4f0ca25653f2f63e760413ea1385cacdd90822c92730277",
-    "Slowdown.Guarantees.AcceptAll.val": "8d1a950d3b75cff7a3e857645c0468ce572b8606065f403cc13e08be7713d414",
-    "Slowdown.Guarantees.AcceptAll.w": "7649a872215cb1da301cb0811bc57ecdae3c703990242214dba4fd650141672b",
-    "Slowdown.Guarantees.AcceptAll.win": "f32d5e82d41f7f8d5cb1b9932b4538194be923234e18f200b0c5ca5ea21e1a4f",
-    "Slowdown.Guarantees.AcceptAll.τw": "4740d224faa75d2ccf9a468d9341869405120f3953227c7745e3110564adcb58",
-    "Slowdown.Guarantees.SlowdownRemoteMonitoringPeriod": "1ce86a8338887d1ec354c240346e2dcd07b4ca8359ecc1d314e3a88e51bdd492",
-    "Slowdown.Guarantees.SlowdownRemoteMonitoringPeriod_honest": "e6f32c8eac03e250a8f22d7ab06526dd6ed0240a521ee060672144b5f019338f",
-    "Slowdown.Guarantees.SlowdownRemoteMonitoringPeriod_nontrivial": "bd390a6eacde06b94c75edb30eb3c0bbdcb10217b08c4d9d9eba7816c825c950"
-   }
-  },
   "Definitions.Slowdown.Guarantees.ServingBlocks": {
    "digest": "c3ece75ccb891c041c690f879fcef4f66aae7623827244bcaad8777cd4f41137",
    "definitions": {
@@ -41477,15 +40838,6 @@
     "ResourceAccounting.Guarantees.ServingBlocks.ServingBlockBound_nontrivial": "1caacd612dfd96ed178f3b41a4a4026e73acf95796a0eafec2fd28b7ef3a28ea",
     "ResourceAccounting.Guarantees.ServingBlocks.UncertifiedElementary_honest": "8b48f605cc0c9264852d23ad9ccb28f75b2f13ab5184241da3d0ed9bf40e17a7",
     "ResourceAccounting.Guarantees.ServingBlocks.UncertifiedElementary_nontrivial": "26eee0d3607fc34e9a89735aeb4426a103fae1d27ba7edf25e7856a49f087b43"
-   }
-  },
-  "Definitions.Slowdown.Guarantees.Slowdown": {
-   "digest": "d67405820e80c6fc8546613118bd9d1ea00524310a4485d6c01c5597b2fd615f",
-   "definitions": {
-    "Slowdown.Guarantees.Slowdown": "089f3fefa587c129e662ee7468467903f6df4ba32036e11784f962e85ee2be6a",
-    "Slowdown.Guarantees.SlowdownExecutionPhases": "a6168b8ee8995e9709eec8c86685e256a8dec14f0f16053a38257e0f6c84944f",
-    "Slowdown.Guarantees.SlowdownThreaded": "5329203fdfa464f8bd58d3e5775c860bb24ac7e30494c008f903ffd13dd16e91",
-    "Slowdown.Guarantees.SlowdownThreadedSlots": "98fb4ef07cb91c1a47e42f0836e90b3884615a197672c91f061d80f72242ffa6"
    }
   },
   "Definitions.Slowdown.Guarantees.Threads": {
@@ -41510,12 +40862,6 @@
     "Slowdown.Cover.Guarantees.CoverTraining_nontrivial": "72a2f1006251a4fa0efe304eaa37af6ce51ef603c0c64d71c74a64868563d334",
     "Slowdown.Guarantees.LayeredTraining_honest": "800f91f919853ddd516010c9c42f1411069562804947b23f4500109f1e9d224b",
     "Slowdown.Guarantees.LayeredTraining_nontrivial": "96f254410c5edac32d7a60a6e05d0ca7c0639cda10da565c49339e2232d1b988",
-    "Slowdown.Guarantees.SlowdownRemote_honest": "ee2a50572fa75ac995ba48206088d76932c10e7d22992d991434a9e5f94bea0d",
-    "Slowdown.Guarantees.SlowdownRemote_nontrivial": "2f26df605752888d4dd362295d5e846e5412967a8f2c61215640faa17b03111e",
-    "Slowdown.Guarantees.SlowdownThreadedSlots_honest": "9dac158d58a9c434fa44437384fa675dc75878865a8c01d5b0eda13bae39b2a7",
-    "Slowdown.Guarantees.SlowdownThreadedSlots_nontrivial": "21a9b9b2d2901727217b592fa5e93a38763e04746cec171d6a8e16f0ea560d33",
-    "Slowdown.Guarantees.SlowdownThreaded_honest": "7077ee4220ddddf7840334e1536c5c0be8e10056b851308b4adafb9b0adbde91",
-    "Slowdown.Guarantees.SlowdownThreaded_nontrivial": "cec1c3168604cf7d5494880e928c3808a92027ff0653086f85f7c7e93373a451",
     "Slowdown.Guarantees.ThreadedThrottledDarkSlots_nontrivial": "c0a25496085453d2d966323f193c4894640a50e81222a8526feb419f1b7d2b38",
     "Slowdown.Guarantees.ThreadedThrottledDark_nontrivial": "1b8c4116dd0425fbe3d1317a6e45c86af4a1f7e4b2fd973834f6fcad778c5033",
     "Slowdown.Guarantees.ThreadedThrottledOnSlots_nontrivial": "dc2fe01121cf720d3e78ce3fd2c726310f66e2d043081d96f0ab6b8b17b8cfcf",
@@ -41536,17 +40882,6 @@
     "Slowdown.KeyPath.refl": "37615f62a22e267a4439aeeeaa5bad685051214db9466d579cc383fded8e2910",
     "Slowdown.KeyPath.step": "3fca73b1f1d02feae63f040b2ce1364efd8930853fde0bbcee6fcc82230f3559",
     "Slowdown.Layered": "09ad4a4a8c46053e167926777f5d1e4862b99464d53476f2e0fd0f3812eccaa7"
-   }
-  },
-  "Definitions.Slowdown.Remote": {
-   "digest": "1515e4665958d1a42056ec6bfcd97b81b2268a4daca45ca5e5ca24a77ace7199",
-   "definitions": {
-    "Slowdown.Slowdown.escaped": "27b6afe828b853046e3d6c858e6c0ebe58cbea26fbd673e613c3f0c3b4d11037",
-    "Slowdown.Slowdown.hardwareMultiple": "5d9ff5f32e8e4592705cc6e34defd4183a8c2c6b8d26bb6ad894e4a8c816012e",
-    "Slowdown.Slowdown.incorrectCapacity": "c9ec8bae101560b18bcf83ce8894a94f5d2c4d347d8b1536f994edcef7786203",
-    "Slowdown.Slowdown.lagShare": "efeaacfd22883c38d528cb95d2ac4106b2d84e4f9609d52802497bce432b5f45",
-    "Slowdown.Slowdown.noDetectionBefore": "1ab89da5fe3b670202fc19b9fe6d9a69a3601cb17c819f10f1fcec3e364d6887",
-    "Slowdown.Slowdown.remoteSlowdown": "0d4c00ad61f89a2f96a5f936b3abcb88aa98f0465920ae1d653c57cd615cc6bd"
    }
   },
   "Definitions.Slowdown.ServingBlocks": {
@@ -41593,18 +40928,6 @@
     "ResourceAccounting.ServingBlocks.refl": "d141032ac306db8705385806fc1e492c9525d7ebc6bb6619f413cbb65775d6f8"
    }
   },
-  "Definitions.Slowdown.Slowdown": {
-   "digest": "1e562770bf5cc5d1695a8c22ed04915c58e68c924deb94dbcf99b24b1f3f7255",
-   "definitions": {
-    "Slowdown.Slowdown.Lambda": "84bcb1ec2ee5ad2d4a7b3546c0b267f3773e024720e8193e3dccba4e8b0fc70b",
-    "Slowdown.Slowdown.declaredShare": "52511408867dbc5c7b67dcf496f1b37576e4c148584f9b0ad83af5d8b60e3818",
-    "Slowdown.Slowdown.efficiency": "dbb3157bcf4500e9c1ba4b09529ce4ff06aa36d7024bdc862b8861a3e4c93188",
-    "Slowdown.Slowdown.memoryCap": "4bb90e94936f1ebbaf83e9fdfa723c8b0fdda23b984c62dbe81bbd6ccb42fbad",
-    "Slowdown.Slowdown.residualShare": "fceaa2b8b8b8f1e8627390dc580d20cc76ed43903a82086d4178bb6ab77727bc",
-    "Slowdown.Slowdown.rhoT": "f1764ffab5407406a6b1aee23e75a3d4d2aa1f1dbe9c3929c3506220354baf85",
-    "Slowdown.Slowdown.unregisteredShare": "4747fbf485ca4f0a89d062fd4f3c3242b8be245985e361e6e331735b43724ebb"
-   }
-  },
   "Definitions.Slowdown.Tasks": {
    "digest": "2c90e91771fcdb29845c1077832a8ac72290b8322450647fe9c367b4ddb47805",
    "definitions": {
@@ -41644,12 +40967,6 @@
     "Slowdown.Witness.Dθ": "871bd8c72a6a98e29510c301ce7dd91bdd2cdda15acf49bc92c82ca067d77218",
     "Slowdown.Witness.M1": "58d5c4b55d6d279983adbabad0648d0a20c3573b0a317cf8708f3aaf4cb36ac5",
     "Slowdown.Witness.Mθ": "5c533f11355d7c99813e5fb41091759fa3decd68aa4b74d03614a5d91ba9880e",
-    "Slowdown.Witness.OneWindow.bad": "dea3c3845cde4573b7dcff2bbb876031e0a856c1ab802a04588b014a446677e7",
-    "Slowdown.Witness.OneWindow.cap": "15a2785e7e740443c61e6c8023899d6198a2a519616a8f40656342082813b2f1",
-    "Slowdown.Witness.OneWindow.ident": "561afd3a280ddb2ca810a12fb698d932dd90f14a3d0bea9fc481837e7eeb7ce3",
-    "Slowdown.Witness.OneWindow.incorrect": "fdb4464490bab0c8344945b43d6b40b9b3fe9ed99e76afc3c46478ece2d5ea36",
-    "Slowdown.Witness.OneWindow.right": "61865804a32271e988d6fafa81cdbee77647925674528535328e51ee56a18da3",
-    "Slowdown.Witness.OneWindow.time": "c9df3acaf085bbf9b37a74d06fbfc046e4e8303d022fbdb555faac1b4ca8e89a",
     "Slowdown.Witness.T0": "2df7304281572d2a9eb9075dddd2154cc5605e97f09ac5254799ff5d83852b46",
     "Slowdown.Witness.T1": "b58a1b6afb28d0c276e230e6fa38c91affe44960e9a47f6702d7136f6c2e0a8c",
     "Slowdown.Witness.idC": "b013eaf1a73651011d31a5090567c19547d4cff1b3054dd0693763d718ebcb17",
