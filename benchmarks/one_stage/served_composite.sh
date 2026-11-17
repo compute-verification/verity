@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Remote's and onsite's Lean verdicts on a served run's cases, with the tree as cwd (a clone: it builds Lean in it):
-# off the served node `served_verdicts.sh`'s step before its final record, which takes its product's answer from
-# OUT/composite as the record's verdict (`served_verdicts.py record --composite`); on the served node its step after it:
+# `served_verdicts.sh`'s step before its final record, which takes its product's answer from OUT/composite as the
+# record's verdict (`served_verdicts.py record --composite`); under VERITY_HOLD_PLACEMENT=1 that is only off the served
+# node, and on the served node it is the step after the record:
 #
 #   bash benchmarks/one_stage/served_composite.sh SERVE_DIR OUT
 #

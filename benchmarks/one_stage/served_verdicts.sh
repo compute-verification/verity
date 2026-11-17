@@ -1557,7 +1557,7 @@ follow() {  # `served_verdicts.sh v3c` on a deferral's copy of the serve dir: th
 sampled_of_record() {
   if [ -f "$D/v3c-w$K-$vtag/audit/summary.json" ]; then echo "v3c-w$K-$vtag/audit"; else echo sampled-proofs-served; fi
 }
-# The compose hand-off (COMPOSE_OFF_NODE=1, the default): what the final record and the composite read, relative to the
+# The compose hand-off (COMPOSE_OFF_NODE=1): what the final record and the composite read, relative to the
 # serve dir, and nothing else. The record's: its SPOT audit's (`sampled_of_record`) summary, audit record,
 # registration and runs, and of each piece the files `piece_row` and `piece_server` read (copied to
 # private/compose/pieces), Pearl+'s verdict of record's among them (`pearlplus_of_record`'s: the auditor's ledger, the

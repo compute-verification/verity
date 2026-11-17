@@ -1419,10 +1419,10 @@ def test_record_reads_the_inference_only_verdict_beside_it_into_its_row(tmp_path
 
 
 def test_the_served_nodes_run_exits_nonzero_since_its_record_reads_no_composite():
-    """On the served node no composite is of record (under COMPOSE_OFF_NODE=0 a development one), so the main run's record
-    reads none and is pending, and the run's exit is that record's (2), or 1 where a step failed: never 0. The main run
-    serves before it records, which no harness here stubs, so this reads the script: its one record of `$OUT/pieces`
-    takes no --composite, and the run ends on the record's exit."""
+    """The main run's first record of `$OUT/pieces` takes no --composite, and the run ends on the last record's exit:
+    under VERITY_HOLD_PLACEMENT=1, where no composite on the served node is of record (under COMPOSE_OFF_NODE=0 a
+    development one), that record is the last, pending, and the exit 2, or 1 where a step failed: never 0. The main run
+    serves before it records, which no harness here stubs, so this reads the script."""
     script = (HERE.parents[2] / "benchmarks" / "one_stage" / "served_verdicts.sh").read_text()
     on_node = [c for c in re.findall(r'^"\$TPY" benchmarks/one_stage/served_verdicts\.py record .*?publish_lines$', script,
                                      re.M | re.S) if '--pieces "$OUT/pieces"' in c]
