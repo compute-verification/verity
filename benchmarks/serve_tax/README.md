@@ -446,7 +446,8 @@ reads as more than it is:
 - **τ.** The tick's bucket is the network attester's 100 ms; τ_sat and τ_free are 0.9 and 1.1 times the mean engine
   cycle of a `prod-record` step trace on the agentic load at four users (`serve_tax.py tick OUT/prod-record.1 --load
   agentic@4`, which prints them), given as `TICK_MS`.
-- **The edge snapshot** is taken every `EDGES_EVERY_S` seconds of server time: the engine drains, every rank's KV
+- **The edge snapshot** is taken every `EDGES_EVERY_S` seconds of a load's serving, counted on through the load's
+  passes and users (`servetax_plugin.edge_load`) and again from a new load: the engine drains, every rank's KV
   cache is hashed where it lies (its root is part of the snapshot) and copied to host memory on every rank
   (`KV_COPY=all`). The cost model prices an edge every 600 s (`serve_tax.PRICED_EDGE_S`); at 60 s a run takes ten
   times as many edges, and its parts say its cost errs high by 10×. Each edge's record holds its pause and each
