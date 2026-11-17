@@ -10,7 +10,7 @@ meta import MemoryAttester.SetupRecord
 
 `RunProtocol`'s run with the store's place taken by what the memory challenger's device signed at setup:
 `period.answer_signed`'s check in Lean. The run's check (`Run.checkAt`) reads the memory challenger's table of `C*` and
-ties it to the published root; this one reads the device's setup record (`MemoryAttester.SetupRecord`, the published
+ties it to the published root; this one reads the device's setup record (`MemoryChallenger.SetupRecord`, the published
 outputs it was given), signed by the session's own key under the session's id, and one Merkle path per round, so its
 case is the session, the record and the paths, a few megabytes at a served store where the run's is the whole table and
 `C*`. Its guarantee is not proved, and it certifies nothing: its profile says why (`GAPS`). Setup's acceptance is not

@@ -1,4 +1,4 @@
-"""The streamed wipe's verifier, the wipe's component of onsite Verity (`verity/wipe/v0`, `MemoryAttester.WipeProtocol`
+"""The streamed wipe's verifier, the wipe's component of onsite Verity (`verity/wipe/v0`, `MemoryChallenger.WipeProtocol`
 in `verity/protocols/resource_accounting/memory/pous/attester/lean/`): the memory attester fills the node's memory with its streamed
 labels and times its spot reads (`streamed_wipe`) and signs the session, and the verifier answers (`answer`), as the
 Lean does, on the commitment and the evidence: the signed session and one egress count beside it, `egress_mib`, in whole
@@ -24,7 +24,7 @@ what the bound rests on. The session signs no egress, and this check holds the e
 count whoever writes the evidence gives. That it is the network attester's count over the span between the session's
 two marks is for the check that composes the wipe with the network attester to establish.
 
-`named` and `outcome_counted` are the wipe's half of that check (`MemoryAttester/WipeCount.lean`). `named` is what a
+`named` and `outcome_counted` are the wipe's half of that check (`MemoryChallenger/WipeCount.lean`). `named` is what a
 composition's tie reads off the wipe's case: the session's start mark, the 64 bytes its two marks open to, and the
 evidence's count. `outcome_counted` is `outcome` that publishes `certify` at the evidence's count, for a composition
 that holds `named` to the network attester's count over the span between those marks; it rejects an evidence with no
@@ -54,7 +54,7 @@ from . import wipe_party
 from .wipe_party import READS
 
 PROTOCOL = "verity/wipe/v0"
-"""`MemoryAttester.WipeProtocol.ID`; a test signer's wipes answer under `memory_attester.TEST_PREFIX` + it."""
+"""`MemoryChallenger.WipeProtocol.ID`; a test signer's wipes answer under `memory_attester.TEST_PREFIX` + it."""
 EPS = Fraction(1, 2 ** 128)
 MAX_READS = 1 << 17
 """The most reads the certificate is computed at: `ratio` compares numbers of about `k · log₂ r` bits."""
@@ -79,7 +79,7 @@ EGRESS_RANGE = "the evidence's egress is {} MiB, outside 0 to {}"
 UNSIGNED = "the memory challenger has not signed the wipe: its reads are incomplete or not yet verified"
 NO_JUDGE = ("no wipe-protocol among the period's tools: the Lean decides the wipe, and the Python's accept decides "
             "nothing alone")
-#: The id of the wipe's component whose count a composition holds (`MemoryAttester.WipeProtocol.COUNTED_ID`).
+#: The id of the wipe's component whose count a composition holds (`MemoryChallenger.WipeProtocol.COUNTED_ID`).
 COUNTED = "verity/wipe/counted/v0"
 NO_COUNT = "the evidence gives no egress count: a counted wipe is held to the network certifier's count over its span"
 NO_MARK = "the session names no start mark: the memory challenger held no start certificate, so no count is of its span"
@@ -101,7 +101,7 @@ def memory_bits(p: sw.WipeParams) -> int:
 
 
 def ratio(k: int) -> int:
-    """`MemoryAttester.WipeProtocol.ratio`: the largest `r` with `(r − 1)^k · 2^129 ≤ r^k`, `(1 − 1/r)^k ≤ 2^-129`, by
+    """`MemoryChallenger.WipeProtocol.ratio`: the largest `r` with `(r − 1)^k · 2^129 ≤ r^k`, `(1 − 1/r)^k ≤ 2^-129`, by
     bisection between `1`, which meets it for every `k ≥ 1`, and `k // 89 + 2`, which doesn't (`(1 − 1/r)^k ≥
     e^(−k/(r − 1))` and `129 · ln 2 > 89`)."""
     lo, hi = 1, k // 89 + 2
@@ -121,7 +121,7 @@ def foreign_bits(p: sw.WipeParams, r: int) -> int:
 
 
 def gaps(p: sw.WipeParams, egress_mib: int) -> list[str]:
-    """`MemoryAttester.WipeProtocol.gaps`: why the bound doesn't cover an accepted wipe (none when it does). `k = 0` is
+    """`MemoryChallenger.WipeProtocol.gaps`: why the bound doesn't cover an accepted wipe (none when it does). `k = 0` is
     one: `WipeParams` refuses it, but `ratio(0) = 1` doesn't sample."""
     out = []
     if p.k == 0:
@@ -139,7 +139,7 @@ def ratio_of(p: sw.WipeParams) -> int:
 
 
 def certify(p: sw.WipeParams, egress_mib: int) -> dict[str, Any]:
-    """`MemoryAttester.WipeProtocol.certify`'s public outputs, eps an exact ratio."""
+    """`MemoryChallenger.WipeProtocol.certify`'s public outputs, eps an exact ratio."""
     m, r = memory_bits(p), ratio_of(p)
     if gaps(p, egress_mib):
         return {"certified": False, "egress_mib": egress_mib, "eps": "0", "foreign_bits": m, "k": p.k, "memory_bits": m,
@@ -149,13 +149,13 @@ def certify(p: sw.WipeParams, egress_mib: int) -> dict[str, Any]:
 
 
 def uncounted(p: sw.WipeParams) -> dict[str, Any]:
-    """`MemoryAttester.WipeProtocol.uncounted`, what an accepted wipe publishes: `certify` at `EGRESS_MAX_UNITS`,
+    """`MemoryChallenger.WipeProtocol.uncounted`, what an accepted wipe publishes: `certify` at `EGRESS_MAX_UNITS`,
     which certifies nothing, whatever count the evidence names, since no network attester signs that count."""
     return certify(p, sw.EGRESS_MAX_UNITS)
 
 
 def writer_gap(egress_mib: int) -> list[str]:
-    """`MemoryAttester.WipeProtocol.writerGap`: the evidence's count, when it names one `gaps` doesn't: the evidence
+    """`MemoryChallenger.WipeProtocol.writerGap`: the evidence's count, when it names one `gaps` doesn't: the evidence
     writer's, which no network attester signs."""
     if not 0 <= egress_mib < sw.EGRESS_MAX_UNITS:
         return []
@@ -164,7 +164,7 @@ def writer_gap(egress_mib: int) -> list[str]:
 
 
 def profile(p: sw.WipeParams, egress_mib: int) -> dict[str, Any]:
-    """`MemoryAttester.WipeProtocol.profileJson`: the wipe the session ran, the bound and every gap, the evidence's
+    """`MemoryChallenger.WipeProtocol.profileJson`: the wipe the session ran, the bound and every gap, the evidence's
     count among them."""
     return {"batch": p.batch,
             "certificate": {"eps": str(EPS), "max_reads": MAX_READS, "outside_bits": p.outside_bits, "r": ratio_of(p),
@@ -175,7 +175,7 @@ def profile(p: sw.WipeParams, egress_mib: int) -> dict[str, Any]:
 
 
 def egress_of(egress_mib: int | None) -> int:
-    """`MemoryAttester.WipeProtocol.Evidence.egress`: the check's one egress count, in whole MiB: the evidence's, or
+    """`MemoryChallenger.WipeProtocol.Evidence.egress`: the check's one egress count, in whole MiB: the evidence's, or
     `EGRESS_MAX_UNITS`, which bounds nothing, when it gives none."""
     return sw.EGRESS_MAX_UNITS if egress_mib is None else egress_mib
 
@@ -183,7 +183,7 @@ def egress_of(egress_mib: int | None) -> int:
 def outcome(server: bytes, session: bytes, trusted: Collection[bytes], commitment: sw.WipeCommitment,
             signed: sw.SignedWipe | None, schemes: Mapping[str, mc.Verify] = mc.SCHEMES, *,
             egress_mib: int | None = None) -> tuple:
-    """`MemoryAttester.WipeProtocol.check` on decoded inputs, the evidence the signed session and `egress_mib` beside
+    """`MemoryChallenger.WipeProtocol.check` on decoded inputs, the evidence the signed session and `egress_mib` beside
     it (`egress_of`): `("accept", public, profile)`, `("reject", reason)` or `("undecided", reason)`."""
     if commitment.server != server or commitment.session != session:
         return ("reject", OTHER)
@@ -228,7 +228,7 @@ def answer(server: bytes, session: bytes, trusted: Collection[bytes], commitment
 
 def named(commitment: sw.WipeCommitment, signed: sw.SignedWipe | None,
           egress_mib: int | None) -> dict[str, Any] | None:
-    """`MemoryAttester.WipeProtocol.named`, what a composition's tie reads off the wipe's case: the start mark the
+    """`MemoryChallenger.WipeProtocol.named`, what a composition's tie reads off the wipe's case: the start mark the
     signed message names, the session's start and end messages (`streamed_wipe.start_message` and `end_message`, the
     64 bytes the memory attester hands the network attester for each of its two marks) and the evidence's count in
     whole MiB. None while the session is unsigned or the evidence gives no count. It raises what `end_message` raises
@@ -241,7 +241,7 @@ def named(commitment: sw.WipeCommitment, signed: sw.SignedWipe | None,
 
 
 def counted_profile(p: sw.WipeParams, egress_mib: int) -> dict[str, Any]:
-    """`MemoryAttester.WipeProtocol.countedProfileJson`: `profile` whose gaps are the bound's alone (`gaps`), the
+    """`MemoryChallenger.WipeProtocol.countedProfileJson`: `profile` whose gaps are the bound's alone (`gaps`), the
     count being no gap once a composition holds it."""
     return profile(p, egress_mib) | {"gaps": gaps(p, egress_mib)}
 
@@ -249,7 +249,7 @@ def counted_profile(p: sw.WipeParams, egress_mib: int) -> dict[str, Any]:
 def outcome_counted(server: bytes, session: bytes, trusted: Collection[bytes], commitment: sw.WipeCommitment,
                     signed: sw.SignedWipe | None, schemes: Mapping[str, mc.Verify] = mc.SCHEMES, *,
                     egress_mib: int | None) -> tuple:
-    """`MemoryAttester.WipeProtocol.checkCounted`, the check with its count held by a composition: `outcome`'s
+    """`MemoryChallenger.WipeProtocol.checkCounted`, the check with its count held by a composition: `outcome`'s
     refusals, then a rejection where `named` refuses the session, of an evidence that gives no count (`NO_COUNT`) and
     of a session that names no start mark (`NO_MARK`), and on acceptance `certify` at the evidence's count with
     `counted_profile`. It holds the count to nothing, as `outcome` does: only under a composition that ties `named` to

@@ -13,7 +13,7 @@ import Mathlib.Tactic.SetLike
 /-!
 # What the session's hashes read
 
-`message`, `recordsDigest` and `memoryAttesterMessage` unfolded to the SHA-512 inputs they hash (`message_ok`,
+`message`, `recordsDigest` and `memoryChallengerMessage` unfolded to the SHA-512 inputs they hash (`message_ok`,
 `recordsDigest_ok`, `signedMessage_ok`), and each input split back into what it frames: the session input into its
 header and records digest (`challengePhase_split`), the signed message's input into its record (`signed_split`), the records'
 stream into its rounds (`stream_inj`: every value is `RECORD_BYTES` wide, `value_size`), a round's value into its round
