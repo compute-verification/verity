@@ -207,12 +207,12 @@ def test_an_axis_is_one_sentence() -> None:
 
 
 def test_a_row_sits_beside_the_code_that_records_it() -> None:
-    row = {"id": "vllm/remote-demo-minutes", "title": "Remote demo run time", "owner": "vllm", "unit": "minutes",
-           "axis": "Minutes from the first command to the verdict.", "better": "lower",
-           "command": "research run --cwd source -- python3 benchmarks/demo_minutes/minutes.py FIRST_RUN VERDICT_RUN", "every": "7d"}
-    assert _problems(row, {"vllm"}, "benchmarks/demo_minutes") == []
+    row = {"id": "vllm/application-minutes", "title": "Application run time", "owner": "vllm", "unit": "minutes",
+           "axis": "Minutes from the start of one application run to its verdicts.", "better": "lower",
+           "command": "research run --cwd clone -- uv run python benchmarks/application_runs/run.py CONFIG", "every": "1d"}
+    assert _problems(row, {"vllm"}, "benchmarks/application_runs") == []
     assert _problems(row, {"vllm"}, "benchmarks/serve_tax") == [
-        "nothing under benchmarks/serve_tax/ records a measurement named 'vllm/remote-demo-minutes'"]
+        "nothing under benchmarks/serve_tax/ records a measurement named 'vllm/application-minutes'"]
 
 
 def test_a_row_a_loop_sends_sits_beside_the_loop_and_may_be_due_in_minutes() -> None:

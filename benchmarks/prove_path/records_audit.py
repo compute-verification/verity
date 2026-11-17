@@ -1096,6 +1096,7 @@ def audit(a: argparse.Namespace) -> int:
         manager.shutdown()
     row = {"seconds": round(time.time() - t0, 1), "verifier_window_s": window_s, "circuit": held["circuit"],
            "compiler": held["compiler"], "advice": held["advice"], "compile": compiled, "law": a.sampling_design,
+           "sampling_design": a.sampling_design,
            **{x: s.get(x) for x in ("run_root", "population", "members", "registration", "source", "refused", "checks_before_draw",
                                     "audit", "draw", "draw_counts", "negatives", "negatives_skipped", "coins",
                                     "timing", "outputs", "negative_workers", "plain", "arm", "coin_trees")}}
