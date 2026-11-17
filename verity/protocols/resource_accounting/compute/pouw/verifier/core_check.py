@@ -1260,7 +1260,7 @@ def pass_epoch_twin(coins: Any, raw: bytes | None, context: str, recorded: bool 
                committed: bytes | None = None, stream: bytes | None = None, prover: bytes | None = None,
                live: Any = None, verify: Ch.Verify | None = None) -> tuple[str | None, tuple[str, str] | None]:
     """How the pass's salt was had (``coin``, ``live coin``, ``recorded beacon`` in a replay of a recorded pass, or
-    ``certifier``) and None, or None and the refusal (``coin`` or ``manifest``, and why): its manifest `raw` re-starts
+    ``attester``) and None, or None and the refusal (``coin`` or ``manifest``, and why): its manifest `raw` re-starts
     its execution phase under `coins`, the challenger's own coin commitment (its JSON), and the execution phase's `context` names it by its
     SHA-512.  A live Pearl-C pass, whose manifest's coins are a live session's (`window.LIVE_SCHEME`), is read only
     through the verifier's `live` inputs (`LIVE`, ``{key, ledger, main, pins, session}``, the challenger's signatures

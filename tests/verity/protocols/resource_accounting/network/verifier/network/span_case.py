@@ -11,7 +11,7 @@ its row registration's (`WR.check_registration`), gives one reason (`REASONS` ha
 parameters, commitments, evidence and cases). The span is on one link, its name any UTF-8 (`LINKS`), under a small
 sampled schedule
 (`period_case._small_schedule`, one in four with a bound on a response's length, its tail at most `TAIL` execution
-phases) and a small LMS key, in a sampled certifier session. An `Issuer` on that key certifies the two marks
+phases) and a small LMS key, in a sampled attester session. An `Issuer` on that key certifies the two marks
 (`Issuer.mark`, each a sampled 64-byte message under a salt of the issuer's coins), the start's at an execution phase
 and the end's at most two later, and signs each execution phase of the span and its tail: its two egress certificates,
 the responses' record's and the fails record's, each over a sampled digest (the count opens no record), and its egress
@@ -63,7 +63,7 @@ LINKS = ("eth0", "rack/out", "a b", "l", "x" * 40, "r\u00e9seau/0", "\u7ebf\u8de
 EXPECT = {
     "honest": ACCEPT, "far": ACCEPT, "edge": ACCEPT, "registered": ACCEPT,
     # the registered hardware in the parameters: a site in which the link is none, or joins something else than a
-    # network attester and a host; whose certifier registers another key, or one not in lower-case hex; a site
+    # network attester and a host; whose attester registers another key, or one not in lower-case hex; a site
     # without a head or a head without a site; and a site that is not one a registration log's view writes
     "site-link": REJECT, "site-key": REJECT, "site-alone": REJECT, "site-form": REJECT,
     # a mark: on another link name, an ingress certificate, under another key, under the key's identifier with other
@@ -176,11 +176,11 @@ def site(r: random.Random, link: str, key: str, elsewhere: str,
          joins: tuple[str, str] | None = ("node0", "cert0"), alone: bool = False) -> dict:
     """The site of a registration log's view, as the Site's JSON writes it: the host `node0` behind the network
     attester `cert0`, which registers `key` and splits the host's uplink in the link `link` and its other half, to the
-    outside; a second host behind a second certifier, on the link `elsewhere`; a link between the two hosts and the
-    second host's bare uplink. `joins`: what the link `link` joins in place of the host and its certifier, or None for
+    outside; a second host behind a second attester, on the link `elsewhere`; a link between the two hosts and the
+    second host's bare uplink. `joins`: what the link `link` joins in place of the host and its attester, or None for
     a site with no such link. `alone`: the site without the link between the two hosts, so that the link `link` is the
     host's one link. The site states its unit of time, each host the auditor's figure for its on-chip state, and each
-    certifier its key's scheme."""
+    attester its key's scheme."""
     def loc(i: str, kind: str, **more: Any) -> dict:
         return {"bw": None, "bytes": 0, "chip": None, "drift": None, "id": i, "key": "", "kind": kind, "owner": "prover",
                 "parent": "site0", "scheme": "", "shared": [], "sheet": "", "tier": None, "time_unit": None,
