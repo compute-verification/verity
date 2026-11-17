@@ -55,7 +55,7 @@ record's, that parses to a document whose cuts and wires SPOT's reader reads as 
 (`Spot.RecordText.wiring`: no template and no order, which no wire's rows read). -/
 def RecordWiring (record : Lean.Json) (W : Spot.Wires.Wiring) : Prop :=
   ∃ (text : String) (doc : Lean.Json),
-    InferenceOnlyCheck.Theta.strAt (InferenceOnlyCheck.Theta.getD record "window") "circuit" =
+    InferenceOnlyVerifier.Theta.strAt (InferenceOnlyVerifier.Theta.getD record "window") "circuit" =
         some (Flock.hexOf (Flock.Sha512.hash text.toUTF8)) ∧
       Flock.JsonParse.parse text = .ok doc ∧ Spot.RecordText.wiring doc = .ok W
 
@@ -153,7 +153,7 @@ What it does not say:
   computes its template is not in it.
 * **That the wiring is well formed.** It reads the wires of the record's text as they stand, without
   `Spot.Wires.check`, whose templates the text does not hold.
-* **Anything of a composite whose policy check is another one.** The case is the one `InferenceOnlyCheck.Protocol.protocol`
+* **Anything of a composite whose policy check is another one.** The case is the one `InferenceOnlyVerifier.Protocol.protocol`
   decodes (`PolicyCase`); at a composite whose list has another policy check in its place no case decodes, and the
   claim holds of every play.
 * **Anything of a record that names no wiring.** Where the record's `window.circuit` is the SHA-512 of no text

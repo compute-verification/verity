@@ -5,7 +5,7 @@ public import Properties.InferenceOnly.Theta
 /-!
 # θ's provenance check, step by step
 
-What each step of `InferenceOnlyCheck.Theta.evaluate` establishes when it returns: the trusted input's reading (`trustedOf_ok`:
+What each step of `InferenceOnlyVerifier.Theta.evaluate` establishes when it returns: the trusted input's reading (`trustedOf_ok`:
 the log in R6's chain, each record's digest, the run's record and the parameters), the provenance's (`provenanceOf_ok`),
 one θ entry's checks (`entryStep_ok`), and the loop over θ (`provenance_ok`). `Proofs.Properties.InferenceOnly.Theta` joins them
 with the policy check's θ fold into `ThetaProvenance`.
@@ -16,11 +16,11 @@ is then what these lemmas read. This module imports no Mathlib.
 
 @[expose] public section
 
-namespace InferenceOnlyCheck.Properties.SecurityProofs.ThetaSteps
+namespace InferenceOnlyVerifier.Properties.SecurityProofs.ThetaSteps
 
 open Lean (Json)
 open Flock.Program (Ty)
-open InferenceOnlyCheck.Theta
+open InferenceOnlyVerifier.Theta
 
 /-- `mapM` in `Except`, entry by entry. -/
 theorem list_mapM_ok_get {α β ε : Type} [Inhabited α] [Inhabited β] (f : α → Except ε β) :
@@ -387,4 +387,4 @@ theorem provenanceHeld_of (j tr out : Json) (h : Theta.evaluate j tr = .ok out)
   exact ⟨prov, ps[t]!.registration, ps[t]!.value, ps[t]!.root, hprovj, hpsz, fk, freg, fval, froot, by omega,
     by rw [← h0r]; exact hdg 0 (by omega), ⟨e, he, her⟩, k, p, own, hk, hown, hp, e', he', her'⟩
 
-end InferenceOnlyCheck.Properties.SecurityProofs.ThetaSteps
+end InferenceOnlyVerifier.Properties.SecurityProofs.ThetaSteps

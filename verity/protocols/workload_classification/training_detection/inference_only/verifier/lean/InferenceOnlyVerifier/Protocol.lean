@@ -1,8 +1,8 @@
 module
 
-public import InferenceOnlyCheck.Theta
+public import InferenceOnlyVerifier.Theta
 public import CoreProtocol.Protocol
-meta import InferenceOnlyCheck.Theta
+meta import InferenceOnlyVerifier.Theta
 meta import CoreProtocol.Protocol
 
 /-!
@@ -10,8 +10,8 @@ meta import CoreProtocol.Protocol
 
 The inference-only policy (`InferenceOnly.CompliesRate Γ α`, `security/Definitions/InferenceOnly.lean`) asks that the registered circuit
 divide into inference blocks of at most `Γ` gates, each reading at most `α` bits of fresh input per gate: input from
-outside the block that is not registered information. `InferenceOnlyCheck.Theta.evaluate` is the policy's check: the division's
-check at the size of the description (`InferenceOnlyCheck.Desc.evaluate`), then the provenance of the registered information
+outside the block that is not registered information. `InferenceOnlyVerifier.Theta.evaluate` is the policy's check: the division's
+check at the size of the description (`InferenceOnlyVerifier.Desc.evaluate`), then the provenance of the registered information
 against the deployment's registration log. This module makes that check a `Core.Protocol`, which both composites list
 among their subprotocols (`Core.Remote.components`, `Core.Onsite.components`). v0 publishes the division and isn't
 zero-knowledge, so they compose it only as a stated exception, which v1, the private form, replaces. It has no rounds
@@ -28,15 +28,15 @@ Its case splits the check's instance and trusted input as SPOT's one-stage audit
   `verity-ir/descriptor/v1` Program, as text);
 * **commitment**: the run's own registration record, canonical JSON, an object, fixed before the run: the record whose
   digest SPOT's one-stage audit commits to. Its digest is `SHA-512(format || 0 || canon(record))`
-  (`InferenceOnlyCheck.Theta.digest`, as one-stage's). Its `program` must be the registered circuit's SHA-512 (`names`), and
+  (`InferenceOnlyVerifier.Theta.digest`, as one-stage's). Its `program` must be the registered circuit's SHA-512 (`names`), and
   θ's provenance reads the roots its `registered` entries give the program function's parameters;
 * **evidence**: canonical JSON with exactly the keys `owner` (the declared division: per root node of the registered
   circuit, its inference block or `"input"`), `provenance` (per `theta` entry, the registration record, value and root
-  it was registered under) and `theta` (the root input nodes that hold registered information), as `InferenceOnlyCheck.Desc` and
-  `InferenceOnlyCheck.Theta` read them;
+  it was registered under) and `theta` (the root input nodes that hold registered information), as `InferenceOnlyVerifier.Desc` and
+  `InferenceOnlyVerifier.Theta` read them;
 * **check**: first that the record names the registered circuit, its `program` the circuit's SHA-512 (`names`), so that
   the commitment binds the circuit whether or not the case has registered information; then
-  `InferenceOnlyCheck.Theta.evaluate` on the instance `{alpha, gamma, owner, program, provenance, theta}` (`instanceOf`) and
+  `InferenceOnlyVerifier.Theta.evaluate` on the instance `{alpha, gamma, owner, program, provenance, theta}` (`instanceOf`) and
   the trusted input `{log: log ++ [record], params: parameters, run: the record's digest}` (`trustedOf`). It rejects
   when the record names another circuit, with the check's refusal code (and its fix, where the check has one) when the
   instance or the trusted input is refused, and naming the first inference block over its budget when the division
@@ -50,7 +50,7 @@ Its case splits the check's instance and trusted input as SPOT's one-stage audit
 set_option backward.privateInPublic true
 set_option backward.privateInPublic.warn false
 
-namespace InferenceOnlyCheck.Protocol
+namespace InferenceOnlyVerifier.Protocol
 
 open Lean (Json)
 open Flock (V)
@@ -64,7 +64,7 @@ structure Params where
   parameters : Json
   program : String
 
-/-- The run's own registration record, with its digest as `InferenceOnlyCheck.Theta.digest` writes it and as bytes. -/
+/-- The run's own registration record, with its digest as `InferenceOnlyVerifier.Theta.digest` writes it and as bytes. -/
 structure Commitment where
   record : Json
   hex : String
@@ -182,4 +182,4 @@ private def answer (params commitment evidence : String) : Core.Answer :=
 #guard failureOf (Json.mkObj [("failure", .arr #[Json.num 2, .str "nci"])]) ==
   "the division does not comply: inference block 2 reads more than α bits of fresh input per gate"
 
-end InferenceOnlyCheck.Protocol
+end InferenceOnlyVerifier.Protocol
