@@ -364,7 +364,7 @@ def _refusals(lean, certificates, clocks, seen=(), session=SESSION):
     return got
 
 
-def test_the_clients_certificate_refusals_are_the_references(lean):
+def test_the_clients_attestation_refusals_are_the_references(lean):
     """`lean_audit.certificate_refusals` (`network-records verdicts`' ``certificates``, `NetworkCheck.TransferBlocks`) gives
     `audit.certificate_refusals`'s refusal of each attestation and clock attestation of a served window: another key's,
     another link's or window's, a forged signature, one that doesn't decode and an altered digest, a second of a
@@ -402,7 +402,7 @@ def test_on_generated_answers_the_lean_is_the_reference(lean):
     assert found == {None, "key", "link-window", "clock", "signature", "second", "reused"}, found
 
 
-def test_a_certificate_disagreement_refuses_the_window(lean, monkeypatch):
+def test_a_attestation_disagreement_refuses_the_window(lean, monkeypatch):
     """With the reference made to keep everything, every attestation and clock attestation of the window is a
     `disagreement`, those the Lean keeps among them; a reference that raises where the Lean answers raises."""
     key, c = _served()
@@ -420,7 +420,7 @@ def test_a_certificate_disagreement_refuses_the_window(lean, monkeypatch):
         lean_audit.certificate_refusals(key, SESSION, "n2", 1, [c["egress"]], [], server=lean)
 
 
-def test_certificates_outside_the_domain_are_refused(lean):
+def test_attestations_outside_the_domain_are_refused(lean):
     """A key other than an `LmsKey`, an attestation of ill-typed fields (a negative window, a link that isn't a string)
     and an LMS key of another length each raise `ValueError`, with no refusal computed in Python."""
     key, c = _served()
