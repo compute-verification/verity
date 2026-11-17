@@ -1,0 +1,13 @@
+# This directory's numbers, one [[metric]] each: benchmarks/README.md's "Metrics"; tests/test_metrics_registry.py
+# enforces it.
+
+# measured: the lowering child's peak RSS in the run, on a CPU node with 64 GB
+[[metric]]
+id = "compute-accounting/h1-lane-lowering-peak-memory"
+title = "Lane lowering peak memory"
+owner = "compute-accounting"
+unit = "GiB"
+axis = "Peak RSS of the child process writing PoUW H1's lane circuit file at K 2048 for a 16 by 16 leaf, flat form, measured."
+better = "lower"
+command = "research run --on auto --cwd source --mem-gb 64 --timeout 60m -- bash -c 'uv sync -q --all-packages --extra torch-cpu && d=$(mktemp -d) && trap \"rm -rf $d\" EXIT && .venv/bin/python benchmarks/unit_lowering/run.py --unit lane --k 2048 --tile 16,16 --scratch \"$d\" --out \"$OUT\"'"
+every = "7d"

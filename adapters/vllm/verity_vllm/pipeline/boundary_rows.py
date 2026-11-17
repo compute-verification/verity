@@ -424,17 +424,17 @@ class Layout:
         runs = SS.link_runs(definitions(self.program), descriptor_id(self.replay)) or ()
         read = [(x, per, rs) for x, per, rs in runs if x.port in params.get(x.template, {})]
         got = {x.template: (per, rs) for x, per, rs in read}
-        K, O = len(units), self.outputs
+        K, n_out = len(units), self.outputs
         want = [P.template_id(u.defn) for u in units]
         ok = (len(got) == len(read) and sorted(got) == sorted(want) and {x.value for x, _p, _r in read} == {LOGITS}
-              and all(u.lanes == (k * N, (k + 1) * N) and got[w][0] == K * O
-                      and [SS.row_at(got[w][1], j) for j in range(O)] == [j * K + k for j in range(O)]
+              and all(u.lanes == (k * N, (k + 1) * N) and got[w][0] == K * n_out
+                      and [SS.row_at(got[w][1], j) for j in range(n_out)] == [j * K + k for j in range(n_out)]
                       for k, (u, w) in enumerate(zip(units, want, strict=True))))
         if not ok:
             raise ValueError(f"{t}: round 2's links at its units' parameters are not each unit k's {LOGITS} at row j·{K} + k "
-                             f"of {K * O} a block, its lanes [k·{N}, (k + 1)·{N}): "
+                             f"of {K * n_out} a block, its lanes [k·{N}, (k + 1)·{N}): "
                              f"{[(x.template, x.port, x.value, per) for x, per, _rs in read][:4]}")
-        return K * O, N
+        return K * n_out, N
 
     @cached_property
     def logits_port(self) -> str | None:
@@ -736,6 +736,7 @@ def reopen(directory: Path, check: SpecializedDefinition, kept: BT.Kept | None =
 
 
 __all__ = ["COMMIT", "EGRESS", "FORMAT", "INDEX", "INGRESS", "LOGITS", "MIN_CAP", "PARAMS", "PARTS", "PORTS", "PROMPT",
-           "REQUEST", "RETURN", "SALTS", "SCHEMA", "STOP", "U32", "Committed", "Layout", "Span", "cap", "check_template",
-           "class_signature", "class_size", "commit", "ends", "inlined", "layout_of", "linked", "port_rows", "record",
-           "reopen", "return_port", "row_type", "run_root", "window_domain", "write"]
+           "REQUEST", "RETURN", "SALTS", "SCHEMA", "STOP", "TABLES_UNDER_A_RULE", "U32", "Committed", "Layout", "Span",
+           "cap", "check_template", "class_signature", "class_size", "commit", "descriptor_id", "ends", "inlined",
+           "layout_of", "linked", "port_rows", "record", "reopen", "return_port", "row_type", "run_root", "table_roots",
+           "window_domain", "write"]

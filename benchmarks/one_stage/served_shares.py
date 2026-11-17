@@ -49,13 +49,14 @@ from typing import Any
 from verity.device import READINGS, load_card, readings
 
 HERE = Path(__file__).resolve().parent
+CARD_FILES = HERE.parents[1] / "hardware/cards"
 sys.path.insert(0, str(HERE))
 
 import served_overhead as O  # noqa: E402
 
 #: the H200 card's readings of its tensor's clock (`verity.device.readings`), the tensor clock's (the data sheet's dense
 #: int8 and FP8 rate) and the SM clock's, and θ at each, in int8 MACs a second
-H200 = load_card("h200-sxm-141gb")
+H200 = load_card("h200-sxm-141gb", directory=CARD_FILES)
 CLOCKS_MHZ = {r: H200["clock"][r]["value"] for r in READINGS}
 RHO = {r: float(rho) for r, rho in readings(H200).items()}
 #: Llama-3.2-1B's layer: its four linears (name, n, k), merged as vLLM serves them at TP 1

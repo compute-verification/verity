@@ -12,7 +12,7 @@ challenger and the verifier never hold a row, a salt or a served value):
    what ``scaled_mm_zy`` writes), and the calls' B rows (each with its s_w) as the weights' b/<K> (`window.py commit`),
    and the salt coin opens after those roots are recorded;
 2. the prover serves every tile's receipt under the unit salt, PoUW's window salt (`h1unit.unit_salt`: `pouw_salt` of the
-   coin's stand-in for the certifier's reveal, the execution phase as the execution phase, a stand-in stream and prover) and commits them
+   coin's stand-in for the network attester's reveal, the execution phase as the execution phase, a stand-in stream and prover) and commits them
    (`window.py serve`); the registration (the execution phase's commitment and its receipt root) is recorded, and the sampling coin
    opens after it. The verifier builds the execution phase's public Program and its template-instance partition from the
    commitment's public shape (`window_program`: WORK/verifier/program.json and partition.json, Lean's ``--program`` and

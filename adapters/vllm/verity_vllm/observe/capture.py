@@ -7,6 +7,7 @@ calls `runner.sample(hidden_states, input_batch, grammar_output)` (lm_head GEMM,
 are wrapped (pattern `capture.py:679-720`); the observer mode is entered separately in each, with phase "forward"
 (the runner's own input-preparation dispatcher calls / Triton kernels before the model's root forward carry phase
 "other" when module hooks are on) and phase "sample".  Dummy / profile runs and empty steps are passed through.
+The speculator's `propose`, after `sample`, is observed only under the opt-in draft phase (`capture_draft`).
 
 Log order requires `StepStart` (whose facts are known only after input preparation) before the step's dispatch
 events, and `SampleEnd` needs the sampled ids: the step's events are **buffered in memory**; the tiny per-step
@@ -50,11 +51,10 @@ import torch
 
 from verity_vllm.engine import hooks
 from verity_vllm.engine.build import Engine
-from verity_vllm.engine.run_facts import model_config_subset, profile_manifest
-from verity_vllm.observe import triton_adapter
+from verity_vllm.observe import capture_draft, triton_adapter
+from verity_vllm.observe.capture_draft import DRAFTER_PREFIX
 from verity_vllm.observe.capture_types import ObserverConfig, _Step
 from verity_vllm.observe.events import (
-    SCHEMA,
     Event,
     Note,
     Root,
@@ -73,7 +73,6 @@ from verity_vllm.observe.observer import (
     ModuleNamer,
     Observer,
     Recorder,
-    reenter_impl_name,
 )
 from verity_vllm.observe.pinned import (
     DEVICE_BACKED,
@@ -86,11 +85,13 @@ from verity_vllm.observe.pinned import (
 from verity_vllm.observe.storage import StorageAdapter
 from verity_vllm.records.schema_ids import CAPTURE_SNAPSHOTS_SCHEMA
 
-__all__ = ["Capture", "ObserverConfig", "make_header"]
+__all__ = ["Capture", "ObserverConfig"]
 
 
 class Capture:
     """Install with `install()`, run the workload, `close()`.  One instance per run."""
+
+    drafter: torch.nn.Module | None = None  # the speculator's model, under the draft phase alone (`capture_draft.drafter_of`)
 
     def __init__(self, engine: Engine, *, header: RunHeader | None, log_path: str | Path | None,
                  config: ObserverConfig | None = None, log: Callable[..., None] = print) -> None:
@@ -152,6 +153,7 @@ class Capture:
         model, cfg = self.model, self.cfg
         if self.header is not None:
             self._write(self.header)
+        self.drafter = capture_draft.drafter_of(self)
         self._install_roots()
         self._install_external_buffers()
         if cfg.mode == "record":
@@ -169,6 +171,7 @@ class Capture:
     def uninstall(self) -> None:
         if not self.installed:
             return
+        capture_draft.close_awaiting(self)
         self._finalize_pending()
         self._hooks.uninstall()
         if self.namer is not None:
@@ -200,20 +203,23 @@ class Capture:
                 "roots": len(self.roots), "step_times": self.step_times}
 
     def _install_roots(self) -> None:
+        """The model's parameters and buffers, then (`ObserverConfig.draft`) the drafter's, named under `DRAFTER_PREFIX`; a
+        tensor the drafter shares with the model stays the model's one root."""
         seen: set[int] = set()
-        for role, items, origin in (("weight", list(self.model.named_parameters()), "param"),
-                                    ("buffer", list(self.model.named_buffers()), "buffer")):
-            for name, t in items:
-                if not isinstance(t, torch.Tensor) or id(t) in seen:
-                    continue
-                seen.add(id(t))
-                view = self.storage.view_of(t, origin=origin)
-                self.root_allocs.add(view.alloc)
-                for e in self.storage.events_pending():
-                    self._write(e)
-                r = Root(view, role, name)
-                self.roots.append(r)
-                self._write(r)
+        for module, prefix in ((self.model, ""), *(((self.drafter, DRAFTER_PREFIX),) if self.drafter is not None else ())):
+            for role, items, origin in (("weight", list(module.named_parameters()), "param"),
+                                        ("buffer", list(module.named_buffers()), "buffer")):
+                for name, t in items:
+                    if not isinstance(t, torch.Tensor) or id(t) in seen:
+                        continue
+                    seen.add(id(t))
+                    view = self.storage.view_of(t, origin=origin)
+                    self.root_allocs.add(view.alloc)
+                    for e in self.storage.events_pending():
+                        self._write(e)
+                    r = Root(view, role, prefix + name)
+                    self.roots.append(r)
+                    self._write(r)
 
     def _install_external_buffers(self) -> None:
         named: dict[str, dict] = {}
@@ -225,7 +231,10 @@ class Capture:
                 named[f"input_buffers.{attr}"] = {"alloc": v.alloc, "shape": list(v.shape), "dtype": v.dtype}
         kvs = getattr(self.runner, "kv_caches", None) or []
         layer_of_alloc: dict[int, list[str]] = {}
-        for name, mod in self.model.named_modules():
+        modules = list(self.model.named_modules())
+        if self.drafter is not None:
+            modules += [(DRAFTER_PREFIX + name, mod) for name, mod in self.drafter.named_modules()]
+        for name, mod in modules:
             kc = getattr(mod, "kv_cache", None)
             if isinstance(kc, torch.Tensor) and kc.numel():
                 v = self.storage.view_of(kc, origin="external")
@@ -275,6 +284,7 @@ class Capture:
         orig_execute, orig_sample = runner.execute_model, runner.sample
 
         def execute_model(scheduler_output, *a, **kw):
+            capture_draft.close_awaiting(self)
             dummy = bool(kw.get("dummy_run", False)) or (len(a) >= 2 and bool(a[1]))
             if dummy or getattr(scheduler_output, "total_num_scheduled_tokens", 0) == 0:
                 return orig_execute(scheduler_output, *a, **kw)
@@ -307,6 +317,9 @@ class Capture:
         self._hooks.patch(runner, "execute_model", execute_model)
         self._hooks.patch(runner, "sample", sample)
 
+        if self.drafter is not None:
+            capture_draft.patch_propose(self)
+
         # the logits tensor is the return value of model.compute_logits (V2 runner: sample() -> compute_logits ->
         # sampler); record its ViewDesc only (no tensor reference is kept)
         model = self.model
@@ -316,7 +329,7 @@ class Capture:
             def compute_logits(*a, **kw):
                 out = orig_cl(*a, **kw)
                 st = cap._cur
-                if st is not None and cap.cfg.mode == "record" and isinstance(out, torch.Tensor):
+                if st is not None and cap.cfg.mode == "record" and isinstance(out, torch.Tensor) and self.rec.phase != "draft":
                     try:
                         st.logits_view = cap.storage.view_of(out)
                     except Exception as e:  # noqa: BLE001
@@ -464,6 +477,14 @@ class Capture:
             st.event.record()
         except Exception as e:  # noqa: BLE001
             self.errors.append({"where": "after_sample", "step": st.step, "error": repr(e)[:400]})
+        if self.drafter is not None:
+            # held open for the speculator's propose; closed after it, or at the next execute_model or uninstall without it
+            st.awaiting_draft = True
+            return
+        self._close_step(st)
+
+    def _close_step(self, st: _Step) -> None:
+        st.awaiting_draft = False
         st.wall_s = time.perf_counter() - st.t_wall0
         if st.step in self.cfg.snapshot_steps and self.cfg.mode == "record":
             self._flush_snapshots(st)
@@ -613,7 +634,7 @@ class Capture:
         self._write(StepEnd(st.step, st.forward_s, st.sample_s))
         self.step_times.append({"step": st.step, "num_tokens": num_tokens, "num_reqs": n, "forward_s": st.forward_s,
                                 "sample_s": st.sample_s, "wall_s": st.wall_s, "events": len(st.events), "phase": phase_hint,
-                                "snapshots": st.n_snap})
+                                "snapshots": st.n_snap, **({"draft_s": st.draft_s} if self.drafter is not None else {})})
 
     # ------------------------------------------------------------------ snapshots
 
@@ -770,26 +791,3 @@ class Capture:
                  "snapshot_max_bytes_op": self.cfg.snapshot_max_bytes_op, "entries": self._snap_index}
         (Path(self.cfg.snapshot_dir) / "snapshots.json").write_text(json.dumps(index, separators=(",", ":")))
 
-
-def make_header(engine: Engine, workload: dict, *, adapter_revision: str, wheel_sha256: str | None = None,
-                vllm_commit: str | None = None, extra_notes: dict | None = None) -> RunHeader:
-    manifest, pid, notes = profile_manifest(engine, adapter_revision=adapter_revision, wheel_sha256=wheel_sha256,
-                                            vllm_commit=vllm_commit, sampling=workload["sampling"])
-    notes["reenter_impls"] = {op: reenter_impl_name(op) for op in ("vllm.unified_attention_with_output", "vllm.unified_kv_cache_update")}
-    notes["phases"] = ("forward = inside the model's root forward; other = the runner's input preparation / post-forward work inside "
-                       "execute_model; sample = runner.sample (lm_head GEMM + sampler)")
-    notes["observer_sync"] = ("no observer-issued synchronisation; step facts + sampled ids are copied D2H asynchronously behind a "
-                              "CUDA event and read at the next step start; torch.cuda.synchronize only at the end of snapshot steps")
-    if extra_notes:
-        notes.update(extra_notes)
-    model = {"repo": engine.cp["repo"], "revision": engine.cp["revision"], "local_path": engine.cp.get("local_path"),
-             "case": engine.case, "config": model_config_subset(engine)}
-    wl = {"requests": workload["requests"], "sampling": workload["sampling"], "source": workload.get("source"), "sha256": workload.get("sha256")}
-    # n > 1: the request ids the runner sees are vLLM's children (`parallel_sampling.ParentRequest.get_child_info`:
-    # id f"{index}_{request_id}", seed + index when seeded).  Recorded as a fact of the fork; the request record itself is unchanged.
-    children = [{"request_id": f"{i}_{r['request_id']}", "parent": r["request_id"], "index": i,
-                 "seed": None if r.get("seed") is None else int(r["seed"]) + i}
-                for r in workload["requests"] for i in range(int(r.get("n") or 1)) if int(r.get("n") or 1) > 1]
-    if children:
-        wl["children"] = children
-    return RunHeader(SCHEMA, time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), pid, manifest, model, wl, notes)

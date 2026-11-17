@@ -1,6 +1,6 @@
 """`lead.feed`: a call's sizes, coins and feed against the layout's definitions, restated here independently of the module
 (the step count, the balanced base-13 column codes and row tags, and the coin lanes' weights), and the in-process
-certifier's refusals."""
+network attester's refusals."""
 from __future__ import annotations
 
 import itertools
@@ -239,7 +239,7 @@ def test_in_process_certifier_releases_once_after_the_root():
 
 
 def test_in_process_certifier_samples_a_windows_salt_after_its_key_leaf_weights_root_and_call_count():
-    """C3's order: a window's salt is sampled once, from the certifier's source, after it holds the window's key leaf,
+    """C3's order: a window's salt is sampled once, from the network attester's source, after it holds the window's key leaf,
     weights' root and call count. No coins are released before the salt, and none past the call count."""
     cert = F.InProcessCertifier(rand_of(5))
     call = F.Call(2, 0, 0, 4, 64, 8)

@@ -5,24 +5,22 @@ Definitions and the H200 capture's models (`bf16_gemm_check.cublas_splitk_rows`,
 (the split-K-off switch's unsplit router) replays unequal, by name."""
 from __future__ import annotations
 
-__models__ = ("zai-org/GLM-5.3", "deepseek-ai/DeepSeek-V4-Pro")
-
 import re
 
 import numpy as np
 import pytest
 from verity.circuits.defs import bind, conformance_label
 from verity.circuits.evaluation import evaluate
+
+from verity_vllm.check.replay import evaluate as EV
+from verity_vllm.check.replay import index as IX
+from verity_vllm.check.replay import opening as OP
 from verity_vllm.definitions.numerics import cublas_gemm_rows as C
 from verity_vllm.definitions.numerics import rows
 from verity_vllm.definitions.numerics.kernel_registry import Declined
 from verity_vllm.definitions.registry import b1, hopper
 from verity_vllm.definitions.registry import bf16_gemm_check as BC
 from verity_vllm.definitions.registry import cublas_bf16 as CB
-
-from verity_vllm.check.replay import evaluate as EV
-from verity_vllm.check.replay import index as IX
-from verity_vllm.check.replay import opening as OP
 
 HOP = '{"fn":"HopperBF16WgmmaDot16_v1"}'
 DOTS = pytest.mark.parametrize("dot", [b1.P.AmpereBF16TcDot16, hopper.HopperBF16WgmmaDot16], ids=["ampere", "hopper"])

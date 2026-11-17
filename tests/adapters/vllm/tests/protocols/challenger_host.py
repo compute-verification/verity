@@ -27,13 +27,12 @@ from pathlib import Path
 
 import numpy as np
 from verity.commitments.crypto import lms
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import challenger as PHC
 from verity.protocols.resource_accounting.compute.pouw.verifier import credit as CR
 from verity.protocols.resource_accounting.compute.pouw.verifier import weights as Wt
 from verity.protocols.resource_accounting.compute.pouw.verifier import window as Wd
 from verity.protocols.proofs.spot.verifier.challenger import challenger as LC
 from verity.protocols.proofs.spot.verifier.challenger import remote as R
-
-from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import challenger as PHC
 
 HOST = "vy-challenger-1"
 #: the commit every open here was run from (``pinned``), the host's pins log recording it as main's, and the

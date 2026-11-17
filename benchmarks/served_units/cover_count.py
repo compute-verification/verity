@@ -1,5 +1,5 @@
-"""cover_count.py (COVER | art:ID) [--card CARD] [--form boolean|listed] [--check]: how many of a request's block types
-have no statement the Lean verifier accepted, recounted from a request cover record (`cover.json`, schema
+"""cover_count.py (COVER | art:ID) [--card CARD] [--form boolean|listed] [--check]: how many of a request's proof-block
+types have no statement the Lean verifier accepted, recounted from a request cover record (`cover.json`, schema
 `circuits/request-cover/v7`, or v8: v7 with `card`, the card it is of, by its `source`, `path` and `tree`).
 
 `--card CARD` holds the record to a sampling plan's card (`benchmarks/sampling_plan/glm53_blocks.json`): the record's
@@ -19,9 +19,9 @@ any disagreement, an unknown schema or an extra naming no listed type on the car
 stderr and the exit status is 2.
 
 `--form listed` counts a type as accepted only in its listed form; the default, `--form boolean`, also counts a type
-whose listed form has none when its Boolean version was accepted. It prints the types and blocks on the card, those
+whose listed form has none when its Boolean version was accepted. It prints the types and proof blocks on the card, those
 accepted in the listed form, those accepted on the Boolean version only, those with none by family (each with the
-record's reason and its blocks), and last a line that starts with the count. `--check` exits 1 when the count is not 0.
+record's reason and its proof blocks), and last a line that starts with the count. `--check` exits 1 when the count is not 0.
 """
 from __future__ import annotations
 
@@ -198,14 +198,14 @@ def report(c: dict, recount: dict, form: str) -> tuple[list[str], int]:
     types, total = recount["types"], recount["total"]
 
     def line(what: str, ts: list) -> str:
-        return f"{what}: {len(ts)} types, {sum(t['blocks'] for t in ts):,} blocks"
+        return f"{what}: {len(ts)} types, {sum(t['blocks'] for t in ts):,} proof blocks"
 
     listed = [t for t in types if t["listed"]]
     boolean = [t for t in types if t["boolean_only"]]
     none = [t for t in types if not t["accepted"]]
     card = c.get("card")
     out = [f"record: {c['schema']}, tree {c.get('tree')}" + (f", of the card {card['source']}" if card else ""),
-           f"on the card: {len(types)} types, {total:,} blocks",
+           f"on the card: {len(types)} types, {total:,} proof blocks",
            line("accepted in the listed form", listed),
            line("accepted on the Boolean version only", boolean)
            + (" (not counted: --form listed)" if form == "listed" else ""),
@@ -216,8 +216,8 @@ def report(c: dict, recount: dict, form: str) -> tuple[list[str], int]:
     for f in sorted(blocks_of, key=lambda f: (-blocks_of[f], f)):
         ts = sorted((t for t in none if t["family"] == f), key=lambda t: t["tag"] or "")
         out.append("  " + line(f, ts))
-        out += [f"    {t['tag'] or '-'}  {t['blocks']:,} blocks  {t['reason']}  {t['block']}" for t in ts]
-    out.append(f"{len(none)} of {len(types)} block types have no statement the Lean verifier accepted (--form {form})")
+        out += [f"    {t['tag'] or '-'}  {t['blocks']:,} proof blocks  {t['reason']}  {t['block']}" for t in ts]
+    out.append(f"{len(none)} of {len(types)} proof-block types have no statement the Lean verifier accepted (--form {form})")
     return out, len(none)
 
 
