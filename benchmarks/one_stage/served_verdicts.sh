@@ -661,16 +661,25 @@ kept_windows() {  # the tied windows the serve root's other serve dirs keep, the
 # V3c's audit's coins (`v3c_audit`, records_audit's --challenger): V3C_CHALLENGER, by default SPOT's PP_CHALLENGER,
 # on the gate with its peer V3C_PEER (default PP_PEER: the node the audit runs on, as the gate's /etc/vy/peers names it,
 # in a follow-on not the served node) under PP_CHALLENGER_KEY and PP_GATE_KEY. A local or loopback session's coins are a
-# development session's, which only a development run (DEVELOPMENT=1) takes.
+# development session's, which only a development run (DEVELOPMENT=1) takes. A gate that is a command on this machine
+# (command:WORDS, with V3C_PEER) needs no development run: its coins are simulated, which the record says.
 V3C_CHALLENGER=${V3C_CHALLENGER:-${PP_CHALLENGER:-local}} V3C_PEER=${V3C_PEER:-${PP_PEER:-}} DEVELOPMENT=${DEVELOPMENT:-}
 v3c_live() { [[ $V3C_CHALLENGER == gate:* ]]; }
-# Step 3's: PP_CHALLENGER's, but local while V3c's audit is live, since both open on the window's run root, which the
-# gate opens once, ever, and V3c's is the SPOT audit of record
+v3c_gated() { [[ $V3C_CHALLENGER == gate:* || $V3C_CHALLENGER == command:* ]]; }
+# Step 3's: PP_CHALLENGER's, but local while V3c's audit is on a gate, since both open on the window's run root, which
+# the gate opens once, ever, and V3c's is the SPOT audit of record
 SP_CHALLENGER=${PP_CHALLENGER:-local}
-[ -n "$V3C" ] && v3c_live && SP_CHALLENGER=local
+[ -n "$V3C" ] && v3c_gated && SP_CHALLENGER=local
+coins_on() {  # the machine the sampled proofs' challenger flips its coins on, which the record names
+  local c=$SP_CHALLENGER
+  [ -z "$V3C" ] || c=$V3C_CHALLENGER
+  case $c in gate:*) echo "${c#*@}" ;; *) echo "${V3C_AUDITED:-${SERVED_NODE:-$(hostname -s)}}" ;; esac
+}
 v3c_coins() {  # where V3c's audit's coins come from, as its COINS line says
   if v3c_live; then
     echo "the challenger ${V3C_CHALLENGER%%@*} (peer $([ -n "${DEFER:-}" ] && echo "the follow-on's node's" || echo "$V3C_PEER")), the window's run root's one session, the sampled-proofs audit of record"
+  elif v3c_gated; then
+    echo "simulated: a gate command on $(hostname -s), not the auditor's challenger (V3C_CHALLENGER command:)"
   else
     echo "a development challenger session where it runs (V3C_CHALLENGER $V3C_CHALLENGER), in a development run (DEVELOPMENT=1)"
   fi
@@ -898,6 +907,8 @@ v3c_audit() {  # the committed window audited from its records alone: its circui
     say "V3C-$(tail -1 <<< "$gl" | cut -c1-1200) (checked $(date -u +%Y-%m-%dT%H:%M:%SZ))"
     [ "$rc" = 0 ] || return 1
     ch+=(--peer "$V3C_PEER" --challenger-key "$PP_CHALLENGER_KEY" ${PP_GATE_KEY:+--gate-key "$PP_GATE_KEY"})
+  elif v3c_gated; then
+    ch+=(--peer "$V3C_PEER")
   fi
   V3C_AUDITED=$(hostname -s)
   local link=() gpus=() ld=() bin=$FW/flock-gpu-link/flock/target/release/flock-circuit
@@ -1507,12 +1518,12 @@ follow() {  # `served_verdicts.sh v3c` on a deferral's copy of the serve dir: th
   fi
   local lean=()
   if [ -n "${COMPOSITE-1}" ]; then
-    TPY=$TPY SERVED_NODE=$SERVED_NODE bash benchmarks/one_stage/served_composite.sh "$D" "$OUT" || comp=1
+    TPY=$TPY SERVED_NODE=$SERVED_NODE COINS_ON=$(coins_on) bash benchmarks/one_stage/served_composite.sh "$D" "$OUT" || comp=1
     lean=(--composite "$OUT/composite")
   fi
   "$TPY" benchmarks/one_stage/served_verdicts.py record --serve-run "$D" --window "$K" --sampled-proofs "$D/$(sampled_of_record)" \
     --pieces "$DEFER_DIR/pieces" --out "$OUT/record" --product "$PRODUCT" --node "$SERVED_NODE" ${wt[@]+"${wt[@]}"} \
-    --key-sha512 "$H1_KEY_SHA512" --lane "${PEARLC_CHALLENGER_LANE:-${H1_LANE:-vllm}}" ${DEVELOPMENT:+--development} \
+    --key-sha512 "$H1_KEY_SHA512" --lane "${PEARLC_CHALLENGER_LANE:-${H1_LANE:-vllm}}" --coins-on "$(coins_on)" ${DEVELOPMENT:+--development} \
     ${lean[@]+"${lean[@]}"} 2>&1 | publish_lines
   rec=${PIPESTATUS[0]}
   echo "---- verdicts"; cat "$OUT/verdicts.txt"
@@ -1634,14 +1645,14 @@ compose() {  # `served_verdicts.sh compose` on a copy of a compose hand-off: the
   fi
   local lean=()
   if [ -n "${COMPOSITE-1}" ]; then
-    TPY=$TPY SERVED_NODE=$SERVED_NODE COMPOSE_HANDOFF=1 bash benchmarks/one_stage/served_composite.sh "$D" "$OUT" || comp=1
+    TPY=$TPY SERVED_NODE=$SERVED_NODE COMPOSE_HANDOFF=1 COINS_ON=$(coins_on) bash benchmarks/one_stage/served_composite.sh "$D" "$OUT" || comp=1
     lean=(--composite "$OUT/composite")
   fi
   "$TPY" benchmarks/one_stage/served_verdicts.py record --serve-run "$D" --window "$K" \
     --sampled-proofs "$D/${SAMPLED_AUDIT:-sampled-proofs-served}" \
     --pieces "$COMPOSE_DIR/pieces" --out "$OUT/record" --product "$PRODUCT" --node "$SERVED_NODE" --steps "$STEPS" \
     ${PEARLPLUS_TIE:+--window-tie "$(pearl_dir)/tie" --served-compare "$SERVED_COMPARE"} \
-    --key-sha512 "$H1_KEY_SHA512" --lane "${PEARLC_CHALLENGER_LANE:-${H1_LANE:-vllm}}" --off-node --sampled-lean ${DEVELOPMENT:+--development} \
+    --key-sha512 "$H1_KEY_SHA512" --lane "${PEARLC_CHALLENGER_LANE:-${H1_LANE:-vllm}}" --coins-on "$(coins_on)" --off-node --sampled-lean ${DEVELOPMENT:+--development} \
     ${SAMPLED_EXE:+--sampled-exe "$SAMPLED_EXE"} --tree "$(tree_sha)" ${COMPOSE_TREE_ON:+--tree-on "$COMPOSE_TREE_ON"} \
     ${lean[@]+"${lean[@]}"} 2>&1 | publish_lines
   rec=${PIPESTATUS[0]}
@@ -1865,7 +1876,10 @@ if [ -n "$V3C" ] && [ -z "$COMPOSE" ]; then  # V3c's audit's coins: the live cha
       elif [ -z "$FOLLOW" ] && [ -n "$here" ] && [ "$V3C_PEER" != "$here" ]; then
         say "PREFLIGHT: V3C_PEER (default PP_PEER) is $V3C_PEER, and $what is $here: each names the node the run serves on, where V3c's audit's session listens as the other one does"; exit 3
       fi ;;
-    *) say "PREFLIGHT: V3C_CHALLENGER (default PP_CHALLENGER) is local, loopback:HOST:PORT or gate:USER@HOST, not ${V3C_CHALLENGER%%@*}"; exit 3 ;;
+    command:?*)
+      [ -n "$V3C_PEER" ] \
+        || { say "PREFLIGHT: V3c's audit's session on the gate command V3C_CHALLENGER listens on its peer's 127.0.0.1, and V3C_PEER (default PP_PEER), this node's name in that gate's peers file, is unset"; exit 3; } ;;
+    *) say "PREFLIGHT: V3C_CHALLENGER (default PP_CHALLENGER) is local, loopback:HOST:PORT, gate:USER@HOST or command:WORDS, not ${V3C_CHALLENGER%%@*}"; exit 3 ;;
   esac
 fi
 if [ -z "$V3C" ] && [ -z "$FOLLOW$COMPOSE" ] && [ "$DEVELOPMENT" != 1 ]; then  # step 3's audit is then the one of record
@@ -2048,8 +2062,12 @@ if [ -n "$H1_GATE" ]; then
   H1_COINS="PoUW H1: each window's coins from a session of its own on vy-challenger-1's gate (peer $H1_PEER, T $T, S $WINDOW_STEPS), a development run: it credits nothing"
   export POUW_CMD=${POUW_CMD:-"$TREE/.venv/bin/python benchmarks/one_stage/served_verdicts.py pouw \$1 \$2 \$3${H1_STATEMENTS:+ --statements $H1_STATEMENTS}${H1_LIVE_EVIDENCE:+ --live-evidence $H1_LIVE_EVIDENCE}"}
 fi
-if [ "$SP_CHALLENGER" != local ]; then
+if [[ $SP_CHALLENGER == command:* ]]; then
+  COINS="simulated: a gate command on $(hostname -s), not the auditor's challenger (peer ${PP_PEER:-?})"
+elif [ "$SP_CHALLENGER" != local ]; then
   COINS="the challenger ${SP_CHALLENGER%%@*} (peer ${PP_PEER:-?})"
+elif [[ ${PP_CHALLENGER:-local} == command:* ]]; then
+  COINS="a local development challenger session on $(hostname -s), the served node, for step 3, a development check, since V3c's audit's session on the gate command takes the window's run root, which that gate opens once, ever"
 elif [ "${PP_CHALLENGER:-local}" != local ]; then
   COINS="a local development challenger session on $(hostname -s), the served node, for step 3, a development check, since V3c's audit's live session takes the window's run root, which the gate opens once, ever"
 else
@@ -2286,7 +2304,7 @@ elif [ -n "$DEFER" ]; then LEFT="$DEFERRED_WHAT, to a follow-on on a node with t
 record_here() {
   "$TPY" benchmarks/one_stage/served_verdicts.py record --serve-run "$D" --window "$K" --sampled-proofs "$1" \
     --pieces "$OUT/pieces" --out "$OUT/record" --product "$PRODUCT" ${WT[@]+"${WT[@]}"} ${SC[@]+"${SC[@]}"} \
-    --key-sha512 "$H1_KEY_SHA512" --lane "${PEARLC_CHALLENGER_LANE:-${H1_LANE:-vllm}}" \
+    --key-sha512 "$H1_KEY_SHA512" --lane "${PEARLC_CHALLENGER_LANE:-${H1_LANE:-vllm}}" --coins-on "$(coins_on)" \
     ${LEFT:+--deferred "$LEFT"} ${DEVELOPMENT:+--development} "${@:2}" 2>&1 | publish_lines
   rec=${PIPESTATUS[0]}
   private_pieces
@@ -2308,6 +2326,7 @@ if [ -n "$v3c_done" ]; then :
 elif [ -n "$V3C" ]; then v3c_commit && v3c_proved
 else say "V3C: not in this run (V3C_CLASS empty): \`served_verdicts.sh v3c\` runs it on the serve dir"; fi
 if [ -n "$HERE" ]; then
+  COINS_ON=$(coins_on) && export COINS_ON
   TPY=$TPY bash benchmarks/one_stage/served_composite.sh "$D" "$OUT" || comp=1
   record_here "$D/$(sampled_of_record)" --sampled-lean ${SAMPLED_EXE:+--sampled-exe "$SAMPLED_EXE"} --composite "$OUT/composite"
 fi

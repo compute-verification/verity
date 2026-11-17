@@ -776,6 +776,39 @@ def test_spot_alone_composes_to_an_undecided_block_record(tmp_path):
     assert line["elsewhere"] == {} and "unserved" not in line
 
 
+def test_a_same_machine_gate_never_reads_as_live_coins_from_an_auditor_s_challenger(tmp_path):
+    """Sampled proofs' coins are live only when the audit's case names the challenger key this machine pins
+    (``--key-sha512``): a gate on the prover's machine signs with its own key, so its row says ``coins`` simulated and the
+    machine, gives ε at δ only as what the same sample would establish under an auditor's challenger, and so do the
+    ``RECORD`` line and the block record's leg; a record told nothing of the coins says the same."""
+    public = bytes(range(80))
+    audit = tmp_path / "audit"
+    (audit / "window").mkdir(parents=True)
+    (audit / "window" / "case-v2.json").write_text(json.dumps(
+        {"params": {"challenger": {"key": {"H": 5, "W": 4, "public": public.hex()}}}}))
+    pin = hashlib.sha512(public).hexdigest()
+    assert S.sampled_coins(audit, pin) == "live"
+    assert {S.sampled_coins(audit, "0" * 128), S.sampled_coins(audit, None), S.sampled_coins(tmp_path, pin)} == {"simulated"}
+    assert S.challenger_coins("command:python3 -I local_gate.py /gate").startswith("simulated: ")
+    on = {S.NAMES["integrity"]: "vy-dc-h200"}
+    for coins in ((S.sampled_coins(audit, "0" * 128), "vy-dc-h200"), None):
+        report, rec, line = S.record(_rows(_accepted(), tmp_path / "pieces"), window=1, steps=(5, 11), node="vy-dc-h200",
+                                     run="r1", **({"coins": coins} if coins else {}))
+        row, leg = report["protocols"]["integrity"], rec["legs"]["integrity"]
+        assert (row["coins"], line["coins"], leg["coins"]) == ("simulated",) * 3
+        if coins:
+            assert row["coins_on"] == line["coins_on"] == leg["coins_on"] == on
+        assert (row["epsilon"], row["delta"]) == (None, None)
+        assert row[S.UNDER_AUDITOR] == {"epsilon": "1/2", "delta": "1/100"} and leg["at_is"] == S.UNDER_AUDITOR
+        jsonschema.Draft202012Validator(SCHEMA).validate(rec)
+        assert BR.check(rec) == {}
+    report, rec, line = S.record(_rows(_accepted(), tmp_path / "pieces"), window=1, steps=(5, 11), node="vy-dc-h200",
+                                 run="r1", coins=("live", "vy-challenger-1"))
+    row = report["protocols"]["integrity"]
+    assert (row["coins"], row["epsilon"], row["delta"]) == ("live", "1/2", "1/100") and S.UNDER_AUDITOR not in row
+    assert "at_is" not in rec["legs"]["integrity"]
+
+
 def test_an_accepted_pous_answer_says_when_its_weights_were_held_their_share_and_where_its_quantity_is_not_established(
         tmp_path):
     """PoUS's answer in the shape its served piece writes: weights reloaded on the card after the window's serve, 64.9% of
@@ -3958,8 +3991,11 @@ def _not_development(challenger: str) -> str:
     ({"DEVELOPMENT": None}, _not_development("local")),
     ({"DEVELOPMENT": None, "V3C_CHALLENGER": "loopback:127.0.0.1:7000"}, _not_development("loopback:127.0.0.1:7000")),
     ({"DEVELOPMENT": "yes"}, "PREFLIGHT: DEVELOPMENT is 1, a development run, or unset, not yes"),
-    ({"V3C_CHALLENGER": "gate:auditor"}, "PREFLIGHT: V3C_CHALLENGER (default PP_CHALLENGER) is local, loopback:HOST:PORT or "
-                                         "gate:USER@HOST, not gate:auditor"),
+    ({"V3C_CHALLENGER": "gate:auditor"}, "PREFLIGHT: V3C_CHALLENGER (default PP_CHALLENGER) is local, loopback:HOST:PORT, "
+                                         "gate:USER@HOST or command:WORDS, not gate:auditor"),
+    ({"DEVELOPMENT": None, "V3C_CHALLENGER": "command:python3 -I local_gate.py /gate"},
+     "PREFLIGHT: V3c's audit's session on the gate command V3C_CHALLENGER listens on its peer's 127.0.0.1, and V3C_PEER "
+     "(default PP_PEER), this node's name in that gate's peers file, is unset"),
     ({"PP_CHALLENGER": LIVE}, f"PREFLIGHT: V3c's audit's session on {LIVE_SAID} listens on its peer's 127.0.0.1, and V3C_PEER "
                               "(default PP_PEER), this node's name in the gate's /etc/vy/peers, is unset"),
     ({"PP_CHALLENGER": LIVE, "PP_PEER": "vy-dc-h200"}, f"PREFLIGHT: V3c's audit's session on {LIVE_SAID} is held to the "
@@ -3973,6 +4009,19 @@ def test_the_preflight_refuses_v3c_on_a_development_session_outside_a_developmen
     no peer for its session to listen on or no key record to hold it to; each before anything runs."""
     rc, lines, order, _limits = _v3c(tmp_path, **extra)
     assert (rc, lines, order) == (3, [line], [])
+
+
+def test_a_gate_command_on_this_machine_runs_v3c_outside_a_development_run_on_coins_it_says_are_simulated(tmp_path):
+    """A gate that is a command on the served node (vllm's one-node gate) needs no development run: V3c's audit samples
+    on it with its peer and no key record, gate key or gate check, and its COINS line says the coins are simulated, not
+    the auditor's challenger's."""
+    command = "command:python3 -I local_gate.py /gate"
+    rc, lines, order, _limits = _v3c(tmp_path, DEVELOPMENT=None, V3C_CHALLENGER=command, V3C_PEER="local")
+    assert rc == 0 and "audit" in order and not any(x.startswith("gate-") for x in order), (lines, order)
+    assert _audited(tmp_path, COIN_FLAGS) == {"--challenger": command, "--peer": "local", "--challenger-key": None,
+                                              "--gate-key": None}
+    assert lines[0].startswith("COINS V3c's audit: simulated: a gate command on "), lines[0]
+    assert lines[0].endswith(", not the auditor's challenger (V3C_CHALLENGER command:)"), lines[0]
 
 
 @pytest.mark.parametrize("challenger", [None, "loopback:127.0.0.1:7000"])
@@ -4949,6 +4998,9 @@ def test_the_follow_on_holds_the_copy_to_the_served_nodes_sums_then_audits_and_c
     assert _audited(tmp_path) == {"--sampling-design": TIED_RULE, "--tie": str(d / "h1" / "w7" / "registration.json"),
                                   "--tie-prefix": "h1/", "--ports": "3"}
     argv = json.loads((tmp_path / "order.record").read_text())
+    i = argv.index("--coins-on")
+    assert argv[i + 1] == "cpu-6"
+    del argv[i:i + 2]
     assert argv[:-7] == [
         "record", "--serve-run", str(d), "--window", "7", "--sampled-proofs", str(d / f"v3c-w7-{VTAG}" / "audit"),
         "--pieces", str(d / "private" / "deferred" / "pieces"), "--out", str(out / "record"), "--product", "remote",
@@ -5527,6 +5579,9 @@ def test_the_compose_follow_on_holds_the_hand_off_to_its_sums_and_composes_the_r
     assert lines[-2] == "COMPOSITE: composed on vy-auditor-2"
     assert json.loads(lines[-1].removeprefix("RECORD "))["composed"] == {"undecided": "pending"}.get(lean, lean or "pending")
     argv = json.loads((tmp_path / "order.record").read_text())
+    i = argv.index("--coins-on")
+    assert argv[i + 1] == "vy-dc-h200"
+    del argv[i:i + 2]
     assert argv[:17] == [
         "record", "--serve-run", str(d), "--window", "7", "--sampled-proofs", str(d / "sampled-proofs-served"), "--pieces",
         str(d / "private" / "compose" / "pieces"), "--out", str(out / "record"), "--product", "remote", "--node",
