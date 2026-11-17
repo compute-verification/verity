@@ -164,8 +164,6 @@ BitsWord = CompositeDefinition("BitsWord", 1, ("W",), lambda S: ((("bits", Array
 
 
 def _converts(src: Any, dst: Any) -> int | None:
-    """The word width W when leaves of type ``src`` reach a row of type ``dst`` through `WordBits` or `BitsWord`, the same
-    bits in W-bit words on one side and one-bit leaves on the other; None when they need no conversion."""
     if src.leaf_widths() == dst.leaf_widths():
         return None
     a, b = src.homogeneous_width(), dst.homogeneous_width()

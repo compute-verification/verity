@@ -626,13 +626,13 @@ PIECES = {
     "TanhF32Rn_v1": tanh_rn,
     "GeluTanhMulBf16_v1": gelu_tanh_mul_bf16,
 }
+
+
 def word_of(C, *bits):
-    """``WordOf{W}_v1``: the word of W one-bit leaves, a wiring."""
     return [b[0] for b in bits]
 
 
 def bit_of(m):
-    """``BitOf{W}x{I}_v1``: bit I of a W-bit word, a wiring."""
     i = int(m[2])
     return lambda C, word: [word[i]]
 

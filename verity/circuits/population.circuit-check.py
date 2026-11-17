@@ -31,8 +31,6 @@ def _population_roots() -> list[Any]:
 
 
 def _wiring_roots() -> list[Any]:
-    """`WordBits_v1` and `BitsWord_v1` at the word widths a served window's wires and reads change, 16 and 32, and their
-    gates: `WordOf{W}` and the lowest and highest `BitOf{W}x{I}`."""
     from verity.circuits.defs import bind
     from verity.circuits.population import BitsWord, WordBits, bit_of, word_of
 

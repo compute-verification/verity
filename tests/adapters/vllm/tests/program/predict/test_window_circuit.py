@@ -1058,8 +1058,6 @@ def wired(circuit: IF.Circuit) -> tuple[Any, dict[str, Any]]:
 
 
 def root_kinds(circuit: IF.Circuit, prog: Any) -> Counter:
-    """The wired Program's parameters by what fills them: a registered read's value, a table read's root or domain, an
-    opening's port."""
     reg = circuit.description()["registered"]
     tables = {t["name"]: t["param"] for t in reg["tables"]}
     kind = {**{r["param"]: "read" for r in reg["reads"]},
@@ -1079,7 +1077,6 @@ def made_up(prog: Any, seed: int = 11) -> dict[str, np.ndarray]:
 
 
 def node_outputs(prog: Any, inputs: dict[str, np.ndarray]) -> list[np.ndarray]:
-    """The wired Program's root nodes' leaves, each node evaluated by `evaluate_batch` on the leaves its references name."""
     vals: list[np.ndarray] = []
     params = iter(inputs.values())
     for node in prog.root.body.nodes:
@@ -1092,9 +1089,6 @@ def node_outputs(prog: Any, inputs: dict[str, np.ndarray]) -> list[np.ndarray]:
 
 
 def by_hand(circuit: IF.Circuit, inputs: dict[str, np.ndarray], prog: Any) -> dict[str, np.ndarray]:
-    """Each template's units' outputs, ``(units, leaves)``, from its members evaluated in the record's order on the rows the
-    record names, in committed words: a wire's writer's output words, a read's value words from its source, a table read's
-    root or domain words, an opening's port words; each row's leaves are its words as `interface.leaves_of_rows` reads them."""
     d = circuit.description()
     reg, ids = d["registered"], circuit.ids
     fns, units = {i: fn for i, (fn, _) in zip(ids, circuit.templates)}, dict(zip(ids, (n for _, n in circuit.templates)))
