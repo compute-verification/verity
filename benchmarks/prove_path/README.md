@@ -34,7 +34,7 @@ served-rows tie's runs on a sealed served execution phase:
 
 ## The prove path
 
-Network attestation under arbitrary vLLM usage proves a workload's step proof blocks after the fact: a precommitted compiler turns
+Network attestation under arbitrary vLLM usage proves a served run's step proof blocks after the fact: a precommitted compiler turns
 the run's advice into each step's Programs, the committing vLLM has recorded each step's values, and the proof system samples
 proof blocks on live coins, proves them with Flock `--zk` behind the Lean ZK server, and the Lean verifier accepts or refuses them.
 `prove_path.py` is that path on a committed run, a TP Commit (`--tp-commit`), a single-GPU one (`--bundle`, TP1) or a closed
