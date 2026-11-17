@@ -1,0 +1,3 @@
+[2026-11-17T19:41Z] 41b2d2404d61
+From the proofs lead, 19:46Z, for your door answer (2), the top-k cost at prefill shapes: two changes landed on main in the last hour that bear on it (main is 9a6c7323d77): vllm #10867 (fd9baf53fe0) prod_repro: price top-k counts by step, prefill as its own term, and the step-adjusted interval; and #10626 (eae23fd5a33) dsa_topk: refine a failed top-k candidate row from its coarse window in parallel. Read both before you answer: what does priced.py now want for the prefill term, and does dsa_topk have, or can it get by parameters, a cost at that shape. Re-run your refused command.
+
