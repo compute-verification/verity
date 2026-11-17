@@ -159,8 +159,8 @@ noncomputable def lockMaskedZ (A : Arith F K) (r : ℕ) (hr : r < 2) {np e : ℕ
     (Lock.same _)
 
 /-- **The pads openings agree with the fixed pads oracle at the queried positions**: query `jj`'s pads pair, if it
-verifies against the root's cap at the position `qpos jj` that query sampled, is the oracle's two words there. Every
-reader passes the positions its pending record's `innerGameC` sampled (`PendZ.qpos`). -/
+verifies against the root's cap at the position `qpos jj` that query drew, is the oracle's two words there. Every
+reader passes the positions its pending record's `innerGameC` drew (`PendZ.qpos`). -/
 def PadsAgreeAt (Hs : Hashes F D Sl) (N q : ℕ) (qpos : ℕ → ℕ) (j : IZ F D) (io : InnerOpens F D Sl) : Prop :=
   ∀ O c, j.pads = some (O, c) → ∀ jj < q, ∀ p : Fin N, p.val = qpos jj →
     Merkle.VerifiesL Hs.H Hs.Ep Hs.Lp (fun _ => c 0) (Nat.log 2 N) p.val (io.pads jj).1 (io.pads jj).2.1

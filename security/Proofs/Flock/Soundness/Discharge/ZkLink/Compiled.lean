@@ -141,7 +141,7 @@ def qposOf {N q : ℕ} (pos : F → Fin N) (w : Fin q → F) (jj : ℕ) : ℕ :=
 
 /-- **The inner proof, compiled** (`innerGame` with `τ` committed, §5): `ε`, `[ρ, σ]`, `γ`, `τ`'s commitment, `β`, `Y`
 and the queries. Its verdict is a function of the openings, sent after the last coin, and it records the position each
-query `w` sampled (`qposOf`), the only position where the verifier hashes that query's pads opening. -/
+query `w` drew (`qposOf`), the only position where the verifier hashes that query's pads opening. -/
 def innerGameC (H : List UInt8 → D) (Ep : Merkle.Enc (F × F) D) (Lp : Merkle.Leaf (F × F) Sl D H)
     (Lτ : Merkle.Leaf F Sl D H) {N : ℕ} (dom : Fin N ↪ F) (s nP q : ℕ) (pos : F → Fin N) {nA : ℕ}
     (rows : Fin nA → Lin F s) (tr : Triple s) (root : D) : Game ((InnerOpens F D Sl → Prop) × (ℕ → ℕ)) := do
@@ -166,7 +166,7 @@ structure Hashes (F D Sl : Type) where
   Lτ : Merkle.Leaf F Sl D H
 
 /-- **A compiled `--zk` rep's result**, pending the openings: the Ligerito levels' verdict, caps and requests, the
-inner proof's check, and the position the inner proof's query `jj` sampled (`qpos jj`, set only by `innerGameC`). -/
+inner proof's check, and the position the inner proof's query `jj` drew (`qpos jj`, set only by `innerGameC`). -/
 structure PendZ (F D Sl : Type) where
   lig : PendL F D
   inner : InnerOpens F D Sl → Prop

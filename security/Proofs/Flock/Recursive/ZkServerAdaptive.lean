@@ -10,7 +10,7 @@ namespace FlockSoundness.Discharge.Recursion.ZkServerAdaptive
 
 open Flock Flock.ZkServer ZkServerRun ZkServerTemplate ZkServerLive ZkServerAny
 
-/-- **What the live zk_server answered so far**: per request, what it sent the challenger's live-coin part and the salts it sampled. -/
+/-- **What the live zk_server answered so far**: per request, what it sent the challenger's live-coin part and the salts it drew. -/
 abbrev History := List (List Sent × List ByteArray)
 
 /-- **An inner worker**: its next request, read from the answers so far, or `none` when it closes the session. Its

@@ -23,7 +23,7 @@ def blank : Sent → Sent
   | .round stream tops level0 rows n => .round stream (tops.map blankTop) level0 (blankTop rows) n
   | .finish ok => .finish ok
 
-/-- A message's commit strings, in the order the ZK server sampled their salts. -/
+/-- A message's commit strings, in the order the ZK server drew their salts. -/
 def holes : Sent → List ByteArray
   | .hello _ => []
   | .commit roots => roots.flatMap (·.2)

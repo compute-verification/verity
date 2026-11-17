@@ -102,11 +102,11 @@ theorem runPairs_deployRec {W : Type} (H : Msg → Msg) (I : Claims.Recursion.In
     rfl
 
 /-- **A reader of the challenger's live-coin part's transcript**: at a compiled statement `x`, the rounds a transcript's bytes say,
-each as the prover's message and the coin values the round sampled. -/
+each as the prover's message and the coin values the round drew. -/
 abbrev TrReader : Type := Msg → ByteArray → Option (List (Msg × Array Flock.F128))
 
-/-- **The values `vs` are the coin `c`'s first ones**: what a round that sampled `vs.size` values shows of its coin. The
-challenger's live-coin part's record keeps only the values a round sampled (its `n`), so a transcript shows no more of a coin. -/
+/-- **The values `vs` are the coin `c`'s first ones**: what a round that drew `vs.size` values shows of its coin. The
+challenger's live-coin part's record keeps only the values a round drew (its `n`), so a transcript shows no more of a coin. -/
 def Drawn (c : Coin) (vs : Array Flock.F128) : Prop := vs = c.vals vs.size
 
 /-- A named premise: it asks nothing at a list of rounds no accepted run sends, and nothing of a coin past what its round sampled. -/
@@ -141,7 +141,7 @@ theorem readsBackB_of_readsBack {H : Msg → Msg} {IV : Claims.Verifier Coin} {b
 def shownOf (untr : TrReader) (x xO : Msg) : Option (List (Msg × Array Flock.F128)) :=
   ((decodeRec xO).bind RecRaw.transcript).bind (untr x)
 
-/-- **The coins a V\* statement shows**: at each round its transcript shows, the values that round sampled are the coin's
+/-- **The coins a V\* statement shows**: at each round its transcript shows, the values that round drew are the coin's
 first ones (`Drawn`). It shows nothing of a coin past them, so a part's check at the coins it shows (`PartChecksB`)
 holds at every coin with those values. -/
 def showsTr (untr : TrReader) (_s : ℕ) (x xO : Msg) (c : ℕ → Coin) : Prop :=
