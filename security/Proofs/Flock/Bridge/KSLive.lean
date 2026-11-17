@@ -40,15 +40,7 @@ import Proofs.Flock.Bridge.EndToEndHiddenC
 import Proofs.Flock.Bridge.OpeningsCanon
 import Proofs.Flock.Bridge.Transports
 
-/-!
-# `SampledKSLiveV2` and `SampledKSLiveV3`, proved
-
-`Flock.SecurityProofs.SampledKSLiveV2 : Flock.Guarantees.SampledKSLiveV2`: `AssemblyTargetC` (`assemblyTargetC`) with
-canonical transport (`transportsLiveC`), M1's core (`faultyRightTargetC`), the slot count (`partBlocks`), the count lemma
-(`count`) and `EndToEndHiddenC` (`endToEndHiddenC_of`, from `openingsCanon`) plugged in.
-`Flock.SecurityProofs.SampledKSLiveV3 : Flock.Guarantees.SampledKSLiveV3`: V2 with its statement, file and sample
-preconditions read off the verifiers' acceptance (`sampledKSLiveV3_of`).
--/
+/-! `SampledKSLiveV2` and `SampledKSLiveV3`, proved by plugging the bridge's proved targets into the assembly. -/
 
 @[expose] public section
 

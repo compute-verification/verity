@@ -38,20 +38,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# The verifier over `OC`: every SHA-512 call an oracle query
-
-The claims' oracle programs `OC` form a lawful monad (`OC.bind`), and `OCV := ExceptT String OC` is a verdict monad the
-hash-parametric verifier runs in: `Hashes.oc` answers each SHA-512 call with `OC.query`, and SHA-256 and BLAKE3 as
-shipped (`Hashes.ofSha512`'s). Evaluated against `H : Msg → Msg`, a run of `verifyWithM Hashes.oc` has
-`verifyWith (hOf H)`'s verdict, and its oracle log is the SHA-512 inputs `verifyLogged (hOf H)` logs, `shaCalls (hOf H)`
-of them (`verifyOC_eval`, `verifyOC_log`, `verifyOC_log_length`, and their `Zk` copies). So too the statement's setup:
-a run of `Stmt.setupTablesWith Hashes.oc` has the verdict of setup at `hOf H`, and makes `Stmt.setupCalls (hOf H)`
-queries (`setupOC_eval`, `setupOC_log`, `setupOC_log_length`). All of it is one simulation of `Flock.With.Sim` (`ocLog`)
-between `OCV` and the logging monad `LogV`, at `verifyWithM_sim` and at `setupTablesWith_sim` (`Flock.With.SimSetup`).
-
-`hOf H` is `H` on byte arrays: `ByteArray` and `Msg = List UInt8` are the same bytes (`ofMsg_toMsg`).
--/
+/-! The verifier over `OC`, every SHA-512 call an oracle query, has the shipped verdict. -/
 
 @[expose] public section
 
@@ -88,7 +75,6 @@ instance instLawfulMonad : LawfulMonad OC := LawfulMonad.mk' OC
   (pure_bind := fun _ _ => rfl)
   (bind_assoc := fun x f g => bind_assoc' x f g)
 
-/-- A bind's run against `H`: the second program's result, the two logs in order. -/
 theorem eval_bind (H : Msg → Msg) {α β : Type} (x : OC α) (f : α → OC β) :
     (x.bind f).eval H = (((f (x.eval H).1).eval H).1, (x.eval H).2 ++ ((f (x.eval H).1).eval H).2) := by
   induction x with
@@ -119,8 +105,6 @@ def Hashes.oc : _root_.Flock.Hashes OCV :=
 
 open _root_.Flock
 
-/-- An `OCV` run against `H` and a `LogV` run from the log `l`: the same verdict, and the log is `l` with the run's
-queries appended. -/
 def ocLog (H : Msg → Msg) : With.Sim OCV LogV where
   R x y := ∀ l : Array ByteArray, (y.go l).1 = ((x.run).eval H).1 ∧
     (y.go l).2.toList = l.toList ++ ((x.run).eval H).2.map fun p => ofMsg p.1
@@ -155,14 +139,12 @@ theorem ocLog_hashes (H : Msg → Msg) : (ocLog H).Hashes Hashes.oc (Hashes.logg
   blake3 b l := ⟨rfl, by show l.toList = l.toList ++ List.map _ (OC.eval H (OC.ret _)).2; simp [OC.eval]⟩
   blake3Keyed k b l := ⟨rfl, by show l.toList = l.toList ++ List.map _ (OC.eval H (OC.ret _)).2; simp [OC.eval]⟩
 
-/-- **The verifier over `OC`, against `H`, is `verifyWith (hOf H)`.** -/
 theorem verifyOC_eval (H : Msg → Msg) (spec : SessionSpec) (tabs : Array Setup) (record : String)
     (proofs : Array ByteArray) :
     ((verifyWithM Hashes.oc spec tabs record proofs).run.eval H).1 = verifyWith (hOf H) spec tabs record proofs := by
   rw [← (With.verifyWithM_sim (ocLog H) (ocLog_hashes H) spec tabs record proofs #[]).1]
   exact verifyLogged_fst _ _ _ _ _ _
 
-/-- **Its oracle log is `verifyLogged`'s log**: the SHA-512 inputs, in call order. -/
 theorem verifyOC_log (H : Msg → Msg) (spec : SessionSpec) (tabs : Array Setup) (record : String)
     (proofs : Array ByteArray) :
     ((verifyWithM Hashes.oc spec tabs record proofs).run.eval H).2.map (fun p => ofMsg p.1) =
@@ -172,7 +154,6 @@ theorem verifyOC_log (H : Msg → Msg) (spec : SessionSpec) (tabs : Array Setup)
   rw [this]
   simp
 
-/-- **It makes `shaCalls (hOf H)` queries.** -/
 theorem verifyOC_log_length (H : Msg → Msg) (spec : SessionSpec) (tabs : Array Setup) (record : String)
     (proofs : Array ByteArray) :
     ((verifyWithM Hashes.oc spec tabs record proofs).run.eval H).2.length =
@@ -181,7 +162,6 @@ theorem verifyOC_log_length (H : Msg → Msg) (spec : SessionSpec) (tabs : Array
 
 namespace Zk
 
-/-- **The `--zk` verifier over `OC`, against `H`, is `Zk.verifyWith (hOf H)`.** -/
 theorem verifyOC_eval (H : Msg → Msg) (spec : SessionSpec) (tabs : Array Setup) (record : String)
     (proofs : Array ByteArray) :
     ((_root_.Flock.Zk.verifyWithM Hashes.oc spec tabs record proofs).run.eval H).1 =
@@ -198,7 +178,6 @@ theorem verifyOC_log (H : Msg → Msg) (spec : SessionSpec) (tabs : Array Setup)
   rw [this]
   simp
 
-/-- **It makes `Zk.shaCalls (hOf H)` queries.** -/
 theorem verifyOC_log_length (H : Msg → Msg) (spec : SessionSpec) (tabs : Array Setup) (record : String)
     (proofs : Array ByteArray) :
     ((_root_.Flock.Zk.verifyWithM Hashes.oc spec tabs record proofs).run.eval H).2.length =
@@ -207,7 +186,6 @@ theorem verifyOC_log_length (H : Msg → Msg) (spec : SessionSpec) (tabs : Array
 
 end Zk
 
-/-- **Setup over `OC`, against `H`, is setup at `hOf H`.** -/
 theorem setupOC_eval (H : Msg → Msg) (tags : Tags) (circuitFile publicFile : ByteArray) (coins : Coins) (count : ℕ)
     (tables : List (String × ByteArray)) (draw : Option Lean.Json) (partition : Option Lean.Json)
     (program : Option ByteArray) (work : Option (ℕ × Array (String × ℕ × ℕ))) (stratified : Option ℕ)
@@ -220,7 +198,6 @@ theorem setupOC_eval (H : Msg → Msg) (tags : Tags) (circuitFile publicFile : B
     publicFile coins count tables draw partition program work stratified closure publicInputs #[]).1]
   exact Stmt.setupLogged_fst _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
 
-/-- **Its oracle log is `Stmt.setupLogged`'s log**: the SHA-512 inputs, in call order. -/
 theorem setupOC_log (H : Msg → Msg) (tags : Tags) (circuitFile publicFile : ByteArray) (coins : Coins) (count : ℕ)
     (tables : List (String × ByteArray)) (draw : Option Lean.Json) (partition : Option Lean.Json)
     (program : Option ByteArray) (work : Option (ℕ × Array (String × ℕ × ℕ))) (stratified : Option ℕ)
@@ -235,7 +212,6 @@ theorem setupOC_log (H : Msg → Msg) (tags : Tags) (circuitFile publicFile : By
   rw [this]
   simp
 
-/-- **It makes `Stmt.setupCalls (hOf H)` queries.** -/
 theorem setupOC_log_length (H : Msg → Msg) (tags : Tags) (circuitFile publicFile : ByteArray) (coins : Coins)
     (count : ℕ) (tables : List (String × ByteArray)) (draw : Option Lean.Json) (partition : Option Lean.Json)
     (program : Option ByteArray) (work : Option (ℕ × Array (String × ℕ × ℕ))) (stratified : Option ℕ)

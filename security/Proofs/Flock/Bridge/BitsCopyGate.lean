@@ -4,22 +4,7 @@ public import Proofs.Flock.Bridge.UnitRows
 public import Proofs.Flock.Bridge.BitsKeyProg
 import Proofs.Flock.Soundness.Discharge.Placed.Keyed
 
-/-!
-# A copy's gate at a column is Bits' gate there
-
-`copyGate D hU n u hj c` is the gate of the circuit `D` describes on column `c` of copy `j` of unit `u` (`UnitRows`).
-`Spot.Bits.inGate` and `outGate` give a gate as a number, from a unit, an instance and a bit of an input port or of a
-returned output. They are one gate:
-
-* `copyGate_inGate`: the gate `Spot.Bits.inGate` gives on bit `t` of input port `p` of instance `j` of unit `u` is
-  the copy's gate on the port's first column plus `t`, an input column.
-* `copyGate_outGate`: the gate `Spot.Bits.outGate` gives on bit `t` of returned output `i` of instance `j` of unit `u`
-  is the copy's gate on the output's column (`Spot.Bits.outCol`), a computed one (`outGate_col_lt`).
-
-`unitInst_wire_input` and `unitInst_wire_comp` are a unit's wires in closed form: an input column on the gate the
-program wires it to (`Const.Prog.insAt`), a computed column on its row's gate.
-No verifier path reads this file.
--/
+/-! A copy's gate at a column is the gate `Spot.Bits` gives there, at an input port's bit and at a returned output's. -/
 
 @[expose] public section
 
@@ -29,7 +14,6 @@ open FlockSoundness FlockSoundness.Discharge
 
 variable (D : Flock.Desc) (hU : FlockSoundness.Built D.unroll.unit) (n : ℕ)
 
-/-- **A unit's input column is on the gate the program wires it to** (`Const.Prog.insAt`). -/
 theorem unitInst_wire_input (u : Fin n) (c : Fin (Placed.circuitRows D.unroll hU).w) {x : ℕ} (hx : c.val = x)
     (hc : x < (Placed.circuitRows D.unroll hU).nIn) :
     ((unitInst D hU n u).wire c).val = (Const.Prog.insAt (Placed.keyProg D.unroll hU n) u x).val := by
@@ -39,7 +23,6 @@ theorem unitInst_wire_input (u : Fin n) (c : Fin (Placed.circuitRows D.unroll hU
       (Fin.cast (congrArg Rows.w (rows_keyProg D hU n u)).symm c)
       (lt_of_lt_of_eq hc (congrArg Rows.nIn (rows_keyProg D hU n u)).symm)))
 
-/-- **A unit's computed column `x` is on its row's gate**, `2 + n·B + u·nComp + (x − B)`, `B` the unit's inputs. -/
 theorem unitInst_wire_comp (u : Fin n) (c : Fin (Placed.circuitRows D.unroll hU).w) {x : ℕ} (hx : c.val = x)
     (h1 : (Placed.circuitRows D.unroll hU).nIn ≤ x)
     (h2 : x < (Placed.circuitRows D.unroll hU).nIn + (Placed.circuitRows D.unroll hU).nComp) :
@@ -50,9 +33,6 @@ theorem unitInst_wire_comp (u : Fin n) (c : Fin (Placed.circuitRows D.unroll hU)
     (rowsWireC_keyProg_comp (c := D.unroll) (hU := hU) u
       (Fin.cast (congrArg Rows.w (rows_keyProg D hU n u)).symm c) h1 h2)
 
-/-- **Bits' gate on an input port's bit is the copy's gate on the bit's column.** Where `Spot.Bits.inGate` gives the
-gate `g` on bit `t` of input port `p` of instance `j` of unit `u`, the copy's gate on the input column `col`, the
-port's first column plus `t`, is `g`. -/
 theorem copyGate_inGate (u : Fin n) {j : ℕ} (hj : j < D.unroll.upv) (col : Fin (Rows.ofNet hU).w)
     (hc : col.val < (Rows.ofNet hU).nIn) {p t g : ℕ}
     (hcol : col.val = ((Flock.portCols D.unroll.unit.inGroups).getD p default).1 + t)
@@ -81,9 +61,6 @@ theorem copyGate_inGate (u : Fin n) {j : ℕ} (hj : j < D.unroll.upv) (col : Fin
   rw [hb'] at hv
   exact hw.trans hv
 
-/-- Where `copyGate_outGate`'s rows sit: with `cI` and `cM` the inputs and the rows of `k` stacked copies of rows of
-`rN` inputs and `rC` computed rows, copy `j`'s computed column `x` is a row of the stack, the one `j·(rC + 1) + 1 +
-(x − rN)` rows past the stack's inputs. -/
 theorem outGate_arith {n u j k rN rC x cI cM : ℕ} (hI : cI = k * rN) (hM : cM = k * (rC + 1)) (hj : j < k)
     (hlo : rN ≤ x) (hhi : x < rN + rC) :
     cI ≤ k * rN + (j * (rC + 1) + (1 + (x - rN))) ∧
@@ -95,14 +72,10 @@ theorem outGate_arith {n u j k rN rC x cI cM : ℕ} (hI : cI = k * rN) (hM : cM 
   rw [Nat.succ_mul] at hjM
   refine ⟨?_, ?_, ?_⟩ <;> omega
 
-/-- **A returned output's bit that has a gate is on a computed column** of the unit net's rows. -/
 theorem outGate_col_lt {u j i t g : ℕ} (h : Spot.Bits.outGate D.unroll n u j i t = some g) :
     Spot.Bits.outCol D.unroll i t < (Rows.ofNet hU).nIn + (Rows.ofNet hU).nComp :=
   ((outGate_eq_some D.unroll n).1 h).2.2.2.2.2.1
 
-/-- **Bits' gate on a returned output's bit is the copy's gate on the output's column.** Where `Spot.Bits.outGate`
-gives the gate `g` on bit `t` of returned output `i` of instance `j` of unit `u`, the copy's gate on the output's
-column (`Spot.Bits.outCol`) is `g`. -/
 theorem copyGate_outGate (u : Fin n) {j : ℕ} (hj : j < D.unroll.upv) (col : Fin (Rows.ofNet hU).w) {i t g : ℕ}
     (hcol : col.val = Spot.Bits.outCol D.unroll i t)
     (h : Spot.Bits.outGate D.unroll n u.val j i t = some g) : (copyGate D hU n u hj col).val = g := by

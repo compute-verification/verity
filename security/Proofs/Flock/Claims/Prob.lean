@@ -39,12 +39,7 @@ import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# Uniform averages over finite coin spaces
-
-Lemmas on `Claims.Pr` and `Claims.Ex`: bounds, congruence, events of some coordinates of a product, a product of
-independent events, and the uniform round guess.
--/
+/-! Lemmas on uniform averages over finite coin spaces (`Claims.Pr`, `Claims.Ex`). -/
 
 @[expose] public section
 
@@ -71,7 +66,6 @@ theorem Pr_mono {α : Type} [Fintype α] {p q : α → Prop} (h : ∀ a, p a →
 
 theorem Pr_false {α : Type} [Fintype α] : Pr (fun _ : α => False) = 0 := by simp [Pr, Claims.prUniform]
 
-/-- `Pr` as an average of indicators. -/
 theorem Pr_eq_sum {α : Type} [Fintype α] (p : α → Prop) [DecidablePred p] :
     Pr p = (∑ a, if p a then (1 : ℝ) else 0) / Fintype.card α := by
   unfold Pr Claims.prUniform
@@ -100,7 +94,6 @@ theorem Ex_const {α : Type} [Fintype α] [Nonempty α] (c : ℝ) : Ex (fun _ : 
   rw [Finset.sum_const, Finset.card_univ, nsmul_eq_mul]
   field_simp
 
-/-- An event of the first coordinate has the same probability over a product. -/
 theorem Pr_fst {α β : Type} [Fintype α] [Fintype β] [Nonempty β] (p : α → Prop) :
     Pr (fun s : α × β => p s.1) = Pr p := by
   classical
@@ -112,7 +105,6 @@ theorem Pr_fst {α β : Type} [Fintype α] [Fintype β] [Nonempty β] (p : α �
   push_cast
   field_simp
 
-/-- An event of the first two coordinates has the same probability over a triple. -/
 theorem Pr_drop {α β γ : Type} [Fintype α] [Fintype β] [Fintype γ] [Nonempty γ] (p : α → β → Prop) :
     Pr (fun s : α × β × γ => p s.1 s.2.1) = Pr (fun s : α × β => p s.1 s.2) := by
   classical
@@ -126,8 +118,6 @@ theorem Pr_drop {α β γ : Type} [Fintype α] [Fintype β] [Fintype γ] [Nonemp
   push_cast
   field_simp
 
-/-- **Independent coordinates**: an event of the first two coordinates and one of the first and third, over a triple,
-has probability the average over the first of the product of the two conditional probabilities. -/
 theorem Pr_indep {α β γ : Type} [Fintype α] [Fintype β] [Fintype γ] (p : α → β → Prop) (q : α → γ → Prop) :
     Pr (fun s : α × β × γ => p s.1 s.2.1 ∧ q s.1 s.2.2) = Ex fun a => Pr (p a) * Pr (q a) := by
   classical
@@ -143,7 +133,6 @@ theorem Pr_indep {α β γ : Type} [Fintype α] [Fintype β] [Fintype γ] (p : �
     split_ifs <;> simp_all
   · ring
 
-/-- **A product of independent events**: over `m` independent coordinates, `Pr[∀ i, q (ρ i)] = Pr[q]^m`. -/
 theorem Pr_pi {δ : Type} [Fintype δ] (m : ℕ) (q : δ → Prop) :
     Pr (fun ρ : Fin m → δ => ∀ i, q (ρ i)) = Pr q ^ m := by
   classical
@@ -155,7 +144,6 @@ theorem Pr_pi {δ : Type} [Fintype δ] (m : ℕ) (q : δ → Prop) :
   rw [Finset.prod_boole]
   simp
 
-/-- **The round guess**: `Pr[p]` over a uniform round `j` and the rest is the average over `j`. -/
 theorem Pr_guess {k : ℕ} {β : Type} [Fintype β] (p : Fin k × β → Prop) :
     Pr p = (∑ r : Fin k, Pr fun b : β => p (r, b)) / k := by
   classical

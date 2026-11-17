@@ -21,20 +21,7 @@ import Mathlib.Tactic.ReduceModChar
 import Proofs.Flock.Soundness.Audit.SamplingDesign
 import Proofs.Flock.Soundness.Game
 
-/-!
-# Proof of the integrity audit over a period, per sampling block and pooled
-
-* `Flock.SecurityProofs.IntegrityMonitoringPeriod`: `monitoringPeriod_union` over the sampling blocks, each sampling block's bound
-  `Flock.SecurityProofs.EndToEndHidden` at the strategy that plays it (`SamplingBlock.accepted_incorrect_le`), with its
-  knowledge term at the worst registration.
-* `Flock.SecurityProofs.IntegrityPooled`: a run in which every sampling block is accepted and the incorrect proof blocks total at
-  least `M` either has a sampling block accepted with a sampled proof block incorrect, at most `Σ_w (ε_ks,w + ε_bind,w)` by
-  `monitoringPeriod_union` over `Flock.SecurityProofs.EndToEndHiddenSampled` (`SamplingBlock.accepted_drawnIncorrect_le`), or every
-  sampling block's sample misses its incorrect proof blocks with at least `M` of them in all, at most `(1 − q)^M` by
-  `monitoringPeriod_horizon`: sampling block `w`'s sample misses its `|W|` incorrect proof blocks with probability at most
-  `C(n − |W|, kd)/C(n, kd) ≤ (1 − kd/n)^{|W|}` under A3 (`SamplingBlock.sampleMiss_le`; `SamplingDesign.execOS_subset_escape_le`,
-  `SamplingDesign.choose_div_le_one_sub_pow`). At `M = ⌈ln(1/δ)/q⌉`, `(1 − q)^M ≤ e^{−qM} ≤ δ`.
--/
+/-! Proof of the integrity audit over a period, per sampling block and pooled. -/
 
 @[expose] public section
 
@@ -42,7 +29,6 @@ namespace Flock.SecurityProofs
 
 open scoped ENNReal
 
-/-- `(1 − q)^M ≤ e^{−qM} ≤ δ` once `M ≥ ln(1/δ)/q`. -/
 theorem one_sub_pow_le_of_log {q δ : ℝ} (hq : 0 < q) (hδ : 0 < δ) {M : ℕ} (hM : Real.log (1 / δ) / q ≤ M) :
     ENNReal.ofReal (1 - q) ^ M ≤ ENNReal.ofReal δ := by
   calc ENNReal.ofReal (1 - q) ^ M ≤ ENNReal.ofReal (Real.exp (-q)) ^ M :=
@@ -66,7 +52,6 @@ open scoped ENNReal
 variable (w : SamplingBlock)
 
 open Classical in
-/-- **One sampling block's `EndToEndHidden`**, at the strategy `τ` that plays it. -/
 theorem accepted_incorrect_le (hA3 : FlockSoundness.Assumptions.UniformRandomBytes w.Lb w.src) (τ : Strategy w.game)
     (hcr : w.CR τ) :
     prob (fun o => LiveAcceptsZK w.I o ∧ w.K₀ ≤ (w.incorrectSet τ).card) w.game τ ≤ w.miss + w.ks + w.link := by
@@ -80,8 +65,6 @@ theorem accepted_incorrect_le (hA3 : FlockSoundness.Assumptions.UniformRandomByt
         exact le_iSup (fun R => ksAvgStrictZ (planZHJ w.dj w.y₀) w.L w.k w.qF w.qS R) _
 
 open Classical in
-/-- **One sampling block's `EndToEndHiddenSampled`**, at the strategy `τ` that plays it: accepted with a sampled proof block
-incorrect. -/
 theorem accepted_drawnIncorrect_le (τ : Strategy w.game) (hcr : w.CR τ) :
     prob (fun o => LiveAcceptsZK w.I o ∧ ∃ u ∈ o.2.1, u ∈ w.incorrectSet τ) w.game τ ≤ w.ks + w.link := by
   have h := Flock.SecurityProofs.EndToEndHiddenSampled w.n w.Reg w.I w.ht w.D w.hD w.hU w.pub w.hpub w.hpt w.hscope
@@ -102,7 +85,6 @@ private theorem prob_const {α : Type} (Q : Prop) [Decidable Q] (g : Game α) (s
     exact prob_false g s
 
 open Classical in
-/-- **A sampling block's sample misses its incorrect proof blocks** with the acceptance probability of its live sample. -/
 theorem prob_sampleMiss (B : Finset (Fin w.n)) (τ : Strategy w.game) :
     prob (fun o => ¬ ∃ u ∈ o.2.1, u ∈ B) w.game τ = w.L.missProb B := by
   show avg (fun ω => prob _ ((liveOfZJ w.dg (planZHJ w.dj w.y₀) w.N w.wr (w.L.draw ω) τ.1).map
@@ -117,7 +99,6 @@ theorem prob_sampleMiss (B : Finset (Fin w.n)) (τ : Strategy w.game) :
   · rw [if_neg (mt hiff.1 hd), if_neg hd]
 
 open Classical in
-/-- **A sampling block's sample misses its incorrect proof blocks** with probability at most `(1 − kd/n)^{|W|}`, under A3. -/
 theorem sampleMiss_le (hA3 : FlockSoundness.Assumptions.UniformRandomBytes w.Lb w.src) (B : Finset (Fin w.n))
     (τ : Strategy w.game) :
     prob (fun o => ¬ ∃ u ∈ o.2.1, u ∈ B) w.game τ ≤ (1 - (w.kd : ℝ≥0∞) / w.n) ^ B.card := by
@@ -127,7 +108,6 @@ theorem sampleMiss_le (hA3 : FlockSoundness.Assumptions.UniformRandomBytes w.Lb 
   exact SamplingDesign.choose_div_le_one_sub_pow w.hkd (by simpa using B.card_le_univ)
 
 
-/-- A sample covering a fraction `q` of the sampling block's units: `1 − kd/n ≤ 1 − q`. -/
 theorem one_sub_le {q : ℝ} (hq : 0 < q) (hqk : q ≤ (w.kd : ℝ) / w.n) :
     1 - (w.kd : ℝ≥0∞) / w.n ≤ ENNReal.ofReal (1 - q) := by
   have hn : (0 : ℝ) < w.n := by
@@ -140,7 +120,6 @@ theorem one_sub_le {q : ℝ} (hq : 0 < q) (hqk : q ≤ (w.kd : ℝ) / w.n) :
   rw [← ENNReal.ofReal_one, ← ENNReal.ofReal_sub _ (div_nonneg (Nat.cast_nonneg _) hn.le)]
   exact ENNReal.ofReal_le_ofReal (by linarith)
 
-/-- **The sampling term at `δ`**: `C(n − K₀, kd)/C(n, kd) ≤ (1 − q)^{K₀} ≤ δ` once `K₀ ≥ ln(1/δ)/q`. -/
 theorem miss_le {q δ : ℝ} (hq : 0 < q) (hδ : 0 < δ) (hqk : q ≤ (w.kd : ℝ) / w.n)
     (hK : Real.log (1 / δ) / q ≤ w.K₀) : w.miss ≤ ENNReal.ofReal δ :=
   (SamplingDesign.choose_div_le_one_sub_pow w.hkd w.hK₀).trans
@@ -185,12 +164,10 @@ theorem IntegrityPooled : Flock.Guarantees.IntegrityPooled := by
   have hfac : ∀ t < T, ∀ m : ℕ, (1 - ((W t).kd : ℝ≥0∞) / (W t).n) ^ m ≤ x ^ m :=
     fun t ht m => pow_le_pow_left₀ zero_le ((W t).one_sub_le hq (hqt t ht)) m
   have hgood := monitoringPeriodGood_mono _ T 0 s (fun j τ _ hj hcr => (⟨by omega, hcr⟩ : j < T ∧ (W j).CR τ)) hs
-  -- every sampling block accepted with a sampled proof block incorrect
   have hA := monitoringPeriod_union (fun t => (W t).game) (fun t => (W t).record t)
     (fun r => r.accepted ∧ r.sampledWrong) (fun t τ => t < T ∧ (W t).CR τ)
     (fun t => (W t).ks + (W t).link)
     (fun t τ hτ => (W t).accepted_drawnIncorrect_le τ hτ.2) T 0 s hgood
-  -- every sample misses, with at least `M` incorrect proof blocks in all
   have hB := monitoringPeriod_horizon (fun t => (W t).game) (fun t => (W t).record t) (fun r => ¬ r.sampledWrong)
     SamplingBlockRec.incorrect (fun t τ => t < T ∧ (W t).CR τ) x hx
     (fun t τ hτ => ⟨((W t).incorrectSet τ).card, fun _ => rfl,

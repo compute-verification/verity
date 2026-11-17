@@ -382,11 +382,7 @@ public import Proofs.Flock.Claims.GS.ZkRadius
 public import Proofs.Flock.Claims.GS.RadiusFamily
 public import Proofs.Flock.Claims.GS.RadiusDeploy
 
-/-! `Flock.SecurityProofs.ClaimsStated : Flock.Guarantees.ClaimsStated`, by reflexivity: the guarantee is there for its
-record, which holds the claims' text.
-
-The claims' lemmas sit under `Proofs.Flock.Claims`, one module per piece, imported above; each module's docstring
-says what it proves. -/
+/-! `Flock.SecurityProofs.ClaimsStated`, by reflexivity, and the claims' lemmas under `Proofs.Flock.Claims`. -/
 
 @[expose] public section
 

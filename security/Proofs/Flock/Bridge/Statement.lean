@@ -4,33 +4,8 @@ public import Proofs.Flock.EndToEndHidden.Statement
 public import Proofs.Flock.Soundness.Discharge.HiddenExec.KeyH
 public import Proofs.Flock.Bridge.Deployed
 
-/-!
-# The sampled audit's knowledge soundness, live (stated, not proved)
-
-`SampledKSLive` is `EndToEndHidden`'s setting with its event read in the sampling claims' relation, at the deployed
-trace commitment: for every live prover, the probability that verity-verify-proof accepts and the committed transcript fixed
-at registration (`XplurZC`), read as the sampling witness `Bridge.witDep` of the session's statement (`Bridge.stmtOf`
-at the circuit's constants `Bridge.constsOf` and the design `subset kd`, `Bridge.partOf` at the population's strata
-`ns`), is outside `RelS` at `δ = C(n − K₀, kd)/C(n, kd)` is at most `δ + ε_ks + ε_bind`, `EndToEndHidden`'s terms. `RelS` is read at SHA-512 (`Claims.Sampling.sha512Msg`), under the registration's frame-v3 roots over the public
-file's rows (`Bridge.rootsOf`), and at the deployed commitment `Bridge.commitDep`, whose layout is the game's rows read
-off the circuit file (`HiddenExec.rowOfH`); nothing of the commitment, its roots or its hash is a free parameter. Its
-named assumptions are `EndToEndHidden`'s: A3, `live-verifier`, `cr/sha-512` and `ecr/sha-512`.
-
-**Strata.** `Bridge.partOf P κ ns` lays the population in strata of sizes `ns`, each a run of consecutive units, as the
-deployed `Slots.layout` lays one stratum per template; `subset kd`'s miss doesn't read them.
-
-**Input rows.** `Bridge.partOf P κ ns` puts each input row in the proof block of the unit that owns it, its first reader
-(`Bridge.blockOf`), and has no input class: that is what the deployed verifier checks, whose session (`HmRow.drawn`)
-opens only the rows its sampled proof blocks read, while registration opens none. So a unit whose owned input row doesn't open is a
-faulty slot, and `δ` bounds those slots with the rest. An input no unit reads is in no slot. The deployed
-`Slots.layout` still lays a separate input class, which the claims' design reads `all`, so `partOf` is not yet its
-partition.
-
-`SampledKSLiveStated` freezes the statement and the definitions it reads; no proof of `SampledKSLive` exists yet.
-`SampledKSLive` holds at `kd = 0` (`δ = 1`), and elsewhere follows from `EndToEndHidden` at
-`min K₀ (n − kd + 1)` by `Bridge.TransportsLive`, `Bridge.FaultyRightTarget` and `Bridge.CountTarget`
-(`Bridge.AssemblyTarget`).
--/
+/-! `SampledKSLive`, the sampled audit's knowledge soundness, live, at the deployed trace commitment (stated, not
+proved). -/
 
 @[expose] public section
 
@@ -88,7 +63,6 @@ def SampledKSLive : Prop :=
     (_hr : ∀ S R j, rateZ (planZHJ (Reg := Reg) dj y₀ S R) j k ≤ ρ) (t' : ℝ) (_ht' : 0 ≤ t') (K₀ : ℕ) (_hK₀ : K₀ ≤ n)
     (τ : Strategy (auditLive (SamplingDesign.execOS (n := n) src (.subset kd) n) Reg (liveOfZJ dg (planZHJ dj y₀) N wr)))
     (qF qS : ℝ)
-    -- the population's strata
     (ns : List ℕ) (_hns : ns.sum = n)
     -- what the sampling statement carries and `RelS` doesn't read
     (desc : Claims.Msg) (q : Claims.Sampling.Query),
@@ -104,15 +78,12 @@ def SampledKSLive : Prop :=
           fun _ => sampleOkZKHJ_of_file I ht (Flock.Desc.parse_flat hD) kd n hdiv dj hCust.2 _)) τ
     let Xr := XplurZC execArith hs512 P (planZHJ dj y₀) (tabZHJ dj y₀) vb (reg σ) (cont σ) k Rw
     let δ : ℝ := ((n - K₀).choose kd : ℝ) / (n.choose kd : ℝ)
-    -- the deployed commitment's layout: the game's rows, read off the circuit file
     let Cc := (keyProg D.unroll hU n).circuit (Discharge.Layout.outsOf D.unroll hU n)
     let rows : Fin Cc.N → Option Bridge.RowAt := fun g =>
       (FlockSoundness.Discharge.HiddenExec.rowOfH D.unroll hU n (Discharge.Layout.outsOf D.unroll hU n) g).map fun r =>
         ⟨r.2.1.val, r.1.val, Discharge.Layout.portRowW D.unroll r.2.1, r.2.2.val⟩
-    -- the registration's frame-v3 roots, over the public file's rows
     let roots := Bridge.rootsOf D.unroll pub n
     let Cd := Bridge.commitDep Cc rows D.unroll pub n roots
-    -- the circuit's constants, public
     let κ : Fin Cc.N → Option Bool := fun g => Bridge.constsOf D.unroll hU n g
     -- cr/sha-512 for the knowledge finders of each table the prover's session runs
     (∀ ω j, TableCRZ execArith hs512 (planZHJ dj y₀ (L.draw ω) (reg σ)) j
@@ -130,10 +101,6 @@ def SampledKSLive : Prop :=
           (2 * (t' * (1 + k)) / 2 ^ (256 : ℝ) + 1 / (Real.exp 1 * M) + k / (Real.exp 1 * Rw)) / (1 - ρ))
 
 open Classical in
-/-- **The registered openings open the deployed commitment** (at `SampledKSLive`'s commitment, roots, hash and
-registration): in `EndToEndHidden`'s setting, at every unit `u`, every committed wire `g` of `u` and every opening `o`
-of `g`'s registered commit string at the prover's registration, some data `d` opens `g`'s claims position
-(`posOf Cc g`) to `o`'s bit there, `vb.bit (vb.val o) g`, under the registration's roots at SHA-512 (`Cd.Opens`). -/
 def _root_.Flock.Bridge.TransportsLive : Prop :=
   ∀ (n : ℕ) (Reg : Type)
     (I : Inputs) (ht : I.tags.typed = false)
@@ -161,12 +128,10 @@ def _root_.Flock.Bridge.TransportsLive : Prop :=
         (runsZCJH_live I ht (Flock.Desc.parse_flat hD) (Discharge.Layout.scopeOkH_spec hU hscope).2.1 dj y₀ wr _ hTags
           hCust.1
           fun _ => sampleOkZKHJ_of_file I ht (Flock.Desc.parse_flat hD) kd n hdiv dj hCust.2 _)) τ
-    -- the deployed commitment's layout: the game's rows, read off the circuit file
     let Cc := (keyProg D.unroll hU n).circuit (Discharge.Layout.outsOf D.unroll hU n)
     let rows : Fin Cc.N → Option Bridge.RowAt := fun g =>
       (FlockSoundness.Discharge.HiddenExec.rowOfH D.unroll hU n (Discharge.Layout.outsOf D.unroll hU n) g).map fun r =>
         ⟨r.2.1.val, r.1.val, Discharge.Layout.portRowW D.unroll r.2.1, r.2.2.val⟩
-    -- the registration's frame-v3 roots, over the public file's rows
     let roots := Bridge.rootsOf D.unroll pub n
     let Cd := Bridge.commitDep Cc rows D.unroll pub n roots
     ∀ u, ∀ g ∈ P.io u, ∀ o : vb.Opening, vb.com o = vb.cs (reg σ) (vb.pos g) →

@@ -8,11 +8,7 @@ import Mathlib.Tactic.ContinuousFunctionalCalculus
 import Mathlib.Tactic.NormNum.GCD
 import Mathlib.Tactic.Positivity.Finset
 
-/-!
-# Berlekamp's trace root finder: the algorithm
-
-The definitions whose correctness and step count `Proofs.Flock.Claims.RootFindCorrect` states.
--/
+/-! Berlekamp's trace root finder: the algorithm. -/
 
 @[expose] public section
 
@@ -99,14 +95,11 @@ def roots (n : ℕ) (basis : List F) (f : List F) : List F := (rootsC n basis f)
 
 end Algorithm
 
-/-- The trace `Σ_{i<n} z^(2^i)`, from `F` with `2^n` elements to its prime field `{0, 1}`. -/
 def trace {F : Type} [CommRing F] (n : ℕ) (z : F) : F := ∑ i ∈ Finset.range n, z ^ 2 ^ i
 
-/-- `basis` separates `F`: for each `c ≠ 0` some `β ∈ basis` has `Tr(β·c) ≠ 0`. -/
 def Separates {F : Type} [CommRing F] (n : ℕ) (basis : List F) : Prop :=
   ∀ c : F, c ≠ 0 → ∃ β ∈ basis, trace n (β * c) ≠ 0
 
-/-- The root finder's operation bound, at `n` squarings, `b` basis elements and an input of `d` coefficients. -/
 def costBound (n b d : ℕ) : ℕ := 64 * (n + 1) * (b + 1) * (d + 3) ^ 4
 
 end Claims.RootFind

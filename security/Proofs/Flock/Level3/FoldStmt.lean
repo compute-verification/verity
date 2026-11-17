@@ -1,8 +1,3 @@
-/-
-Level 3, L3-A: the lincheck fold `Stmt.fold` (`Flock.Piop`, `Flock.Statement`). `fold_get`: when the fold succeeds, entry `c` of
-the block is the base of the last range whose slots cover `c`, scaled by that slot's `eq(ρ_hi, q)`, plus Δ's entries at
-`c`. `baseOf_get` and `slot_factor` then read a slot's base as `α·Aᵀe + Bᵀe` on the slot's rows.
--/
 module
 
 public import Proofs.Flock.Level3.LookupFold
@@ -86,7 +81,7 @@ theorem placeRange_get (r : Range) (eHi base : Array F128) : ∀ (fuel k : ℕ) 
 
 /-! ### The ranges, with the slot-type cache -/
 
-/-- The base the fold uses for range `r` (the slot type's `slotBase`; junk if it fails, which the fold then does). -/
+/-- The base the fold uses for range `r`; junk if it fails, which the fold then does. -/
 def baseFor (st : Stmt) (alpha : F128) (lw rho : Array F128) (r : Range) : Array F128 :=
   match st.slotBase alpha lw rho (r.kind, r.slotLog) with
   | .ok b => b
@@ -99,7 +94,6 @@ def covers (r : Range) (c : ℕ) : Prop := r.pos0 ≤ c / 2 ^ r.slotLog ∧ c / 
 
 instance instDecidableCovers (r : Range) (c : ℕ) : Decidable (covers r c) := inferInstanceAs (Decidable (_ ∧ _))
 
-/-- What the ranges leave at `c`: the last covering range's scaled base, else `v`. -/
 def rangesVal (st : Stmt) (alpha : F128) (lw rho : Array F128) : List Range → ℕ → F128 → F128
   | [], _, v => v
   | r :: rs, c, v => rangesVal st alpha lw rho rs c
@@ -147,8 +141,6 @@ theorem foldRanges_get (st : Stmt) (alpha : F128) (lw rho : Array F128) : ∀ (r
         rw [hget c (by rw [placeRange_size]; exact hc), placeRange_get _ _ _ _ 0 out c hc, rangesVal, hbase]
         congr 1
 
-/-! ### Δ, and the fold -/
-
 theorem addDelta_get (w : ℕ → F128) : ∀ (pairs : List (ℕ × ℕ)) (out : Array F128) (c : ℕ), c < out.size →
     (Stmt.addDelta w pairs out).size = out.size ∧
     GF128.of (Stmt.addDelta w pairs out)[c]! =
@@ -164,11 +156,8 @@ theorem addDelta_get (w : ℕ → F128) : ∀ (pairs : List (ℕ × ℕ)) (out :
     rw [h.2, modify_get! out _ c _ hc, List.map_cons, List.sum_cons]
     split_ifs <;> simp [of_add] <;> ring
 
-/-- `e(i) = lw[i mod 64] · eq(ρ, ⌊i/64⌋)`, the in-block tensor. -/
 def eIn (lw rho : Array F128) (i : ℕ) : F128 := lw[i % 64]! * (eqTable rho)[i / 64]!
 
-/-- **The fold.** When `Stmt.fold` succeeds, entry `c < 2^k_log` is what the ranges leave there (the last covering
-range's base, scaled by `eq(ρ_hi, q)`) plus `α·e(i)` for each `(i, c) ∈ Δ_A` and `e(i)` for each `(i, c) ∈ Δ_B`. -/
 theorem fold_get (st : Stmt) (alpha : F128) (lw rho out : Array F128) (h : st.fold alpha lw rho = .ok out)
     (c : ℕ) (hc : c < 2 ^ st.c.kLog) :
     GF128.of out[c]! = GF128.of (rangesVal st alpha lw rho st.c.ranges.toList c 0) +
@@ -193,9 +182,6 @@ theorem fold_get (st : Stmt) (alpha : F128) (lw rho out : Array F128) (h : st.fo
     rw [getElem!_pos _ c (by simpa using hc), Array.getElem_replicate]
     simp only [of_mul]
 
-/-! ### A slot's base is `α·Aᵀe_lo + Bᵀe_lo`, and `eq(ρ_hi, q)·e_lo(i) = e(q·2^sl + i)` -/
-
-/-- The lookup table's share of the B side at `i'` (zero for a slot without a table). -/
 noncomputable def lookupTerm (eLo : Array F128) : Option LookupTable → ℕ → GF128
   | none, _ => 0
   | some t, i' => ∑ h ∈ Finset.range (2 ^ (t.n - t.lo)), ∑ l ∈ Finset.range (2 ^ t.lo),
@@ -210,7 +196,6 @@ theorem foldRows_size (m : Sparse) (e : Array F128) : ∀ (fuel i : ℕ) (acc : 
 theorem foldT_size (m : Sparse) (e : Array F128) : (m.foldT e).size = m.width := by
   simp [Sparse.foldT, foldRows_size]
 
-/-- `(Xᵀe)[i']` as the double sum `foldT_get` gives. -/
 noncomputable def sparseT (m : Sparse) (e : Array F128) (i' : ℕ) : GF128 :=
   ∑ i ∈ Finset.range (min m.rows e.size), ∑ t ∈ Finset.range m.len[i]!, if m.col i t = i' then GF128.of e[i]! else 0
 
@@ -235,9 +220,6 @@ theorem slot_scale (lw rho : Array F128) (hlw : lw.size = 64) (sl : ℕ) (hsl : 
       GF128.of (eIn lw rho (q * 2 ^ sl + i)) := by
   rw [eIn, slot_factor lw rho hlw sl hsl hslr q i hq hi, mul_comm]
 
-/-- **A unit or compression slot's entry.** If the range's base is `baseOf` of the slot's matrices `A`, `B` (and table),
-then entry `q·2^sl + i'` of the fold's slot part is `α·(Aᵀe)[i'] + (Bᵀe)[i']` (+ the table's B side) on the rows
-`q·2^sl + i` of the slot, scaled into the block: the local tensor at `i` times `eq(ρ_hi, q)` is `e(q·2^sl + i)`. -/
 theorem slot_term (st : Stmt) (alpha : F128) (lw rho : Array F128) (r : Range) (a b : Sparse) (lk : Option LookupTable)
     (hbase : baseFor st alpha lw rho r =
       Stmt.baseOf alpha (Stmt.tensor lw (rho.extract 0 (r.slotLog - 6))) a b lk r.slotLog)
@@ -249,7 +231,6 @@ theorem slot_term (st : Stmt) (alpha : F128) (lw rho : Array F128) (r : Range) (
           lookupTerm (Stmt.tensor lw (rho.extract 0 (r.slotLog - 6))) lk (c % 2 ^ r.slotLog)) := by
   rw [of_mul, hbase, baseOf_get _ _ _ _ _ _ _ (Nat.mod_lt _ (Nat.two_pow_pos _)) hc.1 hc.2]
 
-/-- **A mask slot's entry**: `(α + 1)·e(c)`. -/
 theorem mask_term (lw rho : Array F128) (hlw : lw.size = 64) (sl : ℕ) (hsl : 6 ≤ sl) (hslr : sl - 6 ≤ rho.size)
     (alpha : F128) (c : ℕ) (hq : c / 2 ^ sl < 2 ^ (rho.size - (sl - 6))) :
     GF128.of ((eqTable (rho.extract (sl - 6) rho.size))[c / 2 ^ sl]! *
@@ -270,8 +251,6 @@ theorem tensor_size (lw rho : Array F128) (hlw : lw.size = 64) (sl : ℕ) (hsl :
   simp [Stmt.tensor, eqTable_size, hlw]
   rw [show sl = sl - 6 + 6 by omega, pow_add]; simp [min_eq_left hslr]; ring_nf
 
-/-- **The slot's rows.** `eq(ρ_hi, q)·(Xᵀe_lo)[i'] = Σ_{i : col(i, t) = i'} e(q·2^sl + i)`: the sparse fold of the slot's
-matrix on the block's tensor, restricted to the slot's rows. -/
 theorem sparseT_scale (lw rho : Array F128) (hlw : lw.size = 64) (sl : ℕ) (hsl : 6 ≤ sl) (hslr : sl - 6 ≤ rho.size)
     (q : ℕ) (hq : q < 2 ^ (rho.size - (sl - 6))) (m : Sparse) (i' : ℕ) :
     GF128.of (eqTable (rho.extract (sl - 6) rho.size))[q]! * sparseT m (Stmt.tensor lw (rho.extract 0 (sl - 6))) i' =

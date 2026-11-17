@@ -38,26 +38,11 @@ import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Prob
 
-/-!
-# `E^rep`'s expected reruns, and `ERepCost`
-
-At a tape `ω` a run accepts with probability `ε`. `E^rep` replays the judged run (one rerun), and only an accepted judged
-run (probability `ε`) starts the `m` waits. A wait that stops at `k` accepted runs among `K` fresh samples makes
-`N(K, a)` reruns in expectation from `a` accepted so far, and `ε · N(K, a) ≤ k − a` (`waitRuns_exp`, by induction on
-the samples: `ε·N(K+1, a) = ε + ε·(ε·N(K, a+1)) + (1−ε)·(ε·N(K, a))`). So the waits add at most `ε · m · k/ε = m·k`, and
-`E^rep` reruns the prover at most `1 + m·k` times in expectation (`ERep_runs_exp`), the second half of `ERepCost`
-(`ERep_cost`).
-
-Between reruns, Flock's `assemble` checks each table's decoded list once (`Flock.assembleCounted`, the checks
-`find?` makes table by table): at most the lists' lengths summed (`Flock.assembleCounted_spec`), which `Flock.Efficient`
-bounds by `p` at each table's opened word's encoded length (`Flock.assemble_checks_le`).
--/
+/-! `E^rep`'s expected reruns, and `ERepCost`. -/
 
 @[expose] public section
 
 namespace Claims
-
-/-! ## Averages over products and sequences -/
 
 theorem Ex_prod {α β : Type} [Fintype α] [Fintype β] (g : α × β → ℝ) :
     Ex g = Ex fun a => Ex fun b => g (a, b) := by
@@ -83,7 +68,6 @@ theorem Ex_ite {α : Type} [Fintype α] [Nonempty α] (p : α → Prop) [Decidab
   rw [e, Ex_add, Ex_mul_left, Ex_ind, Ex_const]
   ring
 
-/-- `K + 1` uniform coins are a uniform first coin and `K` uniform others. -/
 theorem Ex_cons {D : Type} [Fintype D] (K : ℕ) (f : D → (Fin K → D) → ℝ) :
     Ex (fun ρ : Fin (K + 1) → D => f (ρ 0) fun i => ρ i.succ) = Ex fun d => Ex fun σ => f d σ := by
   refine Eq.trans ?_ (Ex_prod fun p : D × (Fin K → D) => f p.1 p.2)
@@ -92,7 +76,6 @@ theorem Ex_cons {D : Type} [Fintype D] (K : ℕ) (f : D → (Fin K → D) → �
   congr 1
   exact (Fintype.sum_equiv (Fin.consEquiv fun _ => D) _ _ fun p => by simp [Fin.consEquiv]).symm
 
-/-- A sum over `m` independent coordinates averages to `m` times one coordinate's average. -/
 theorem Ex_sum_pi {E : Type} [Fintype E] [Nonempty E] (f : E → ℝ) :
     ∀ m : ℕ, Ex (fun ρ : Fin m → E => ∑ i, f (ρ i)) = m * Ex f
   | 0 => by simp [Ex]
@@ -107,9 +90,6 @@ theorem Ex_sum_pi {E : Type} [Fintype E] [Nonempty E] (f : E → ℝ) :
           congr 1; funext d; rw [Ex_add, Ex_const, Ex_sum_pi f m]
       _ = ((m + 1 : ℕ) : ℝ) * Ex f := by rw [Ex_add, Ex_const]; push_cast; ring
 
-/-! ## One wait's reruns -/
-
-/-- A wait's reruns over the coin samples `rs`, from `a` accepted so far. -/
 def waitRuns {R : Type} (run : R → Transcript) (k : ℕ) : List R → ℕ → ℕ
   | [], _ => 0
   | r :: rs, a => if k ≤ a then 0 else waitRuns run k rs (if (run r).out = .acc then a + 1 else a) + 1
@@ -126,7 +106,6 @@ theorem waitAcc_runs_eq {R : Type} (H : Msg → Msg) (run : R → Transcript) (k
     · simp [RP.eval]
     all_goals simp [RP.eval, ih, Transcript.seen, hacc]
 
-/-- The waits rerun the prover at most as often as the waits do, each on its own. -/
 theorem firstWait_runs_le_sum {R W Op : Type} (H : Msg → Msg) (run : R → Transcript) (k : ℕ) (opens : Seen → List Op)
     (assemble : List Op → Option W) (check : W → Bool) :
     ∀ rss : List (List R), ((firstWait k opens assemble check rss).eval H run).2.2 ≤
@@ -144,11 +123,9 @@ theorem firstWait_runs_le_sum {R W Op : Type} (H : Msg → Msg) (run : R → Tra
       · exact ih
     · exact ih
 
-/-- `N(K, a)`: one wait's expected reruns over `K` uniform samples, from `a` accepted so far. -/
 noncomputable def waitExp {D : Type} [Fintype D] (run : D → Transcript) (k K a : ℕ) : ℝ :=
   Ex fun σ : Fin K → D => (waitRuns run k ((List.finRange K).map σ) a : ℝ)
 
-/-- **One wait's expected reruns**: `ε · N(K, a) ≤ k − a`, so a wait makes at most `k/ε` reruns in expectation. -/
 theorem waitRuns_exp {D : Type} [Fintype D] [Nonempty D] (run : D → Transcript) (k K : ℕ) :
     ∀ a, a ≤ k → Pr (fun d => (run d).out = .acc) * waitExp run k K a ≤ k - a := by
   induction K with
@@ -185,7 +162,6 @@ theorem waitRuns_exp {D : Type} [Fintype D] [Nonempty D] (run : D → Transcript
       linarith
     · simp [waitExp, waitRuns, List.finRange_succ, Ex]
 
-/-- The waits' bound, over the judged run's coins and `m` waits of `K` samples: `𝔼[1[acc] · Σᵢ wait_i + 1] ≤ 1 + m·k`. -/
 theorem waits_exp {D : Type} [Fintype D] [Nonempty D] (run : D → Transcript) (k m K : ℕ) :
     Ex (fun s : D × (Fin m → Fin K → D) => (if (run s.1).out = .acc then (1 : ℝ) else 0) *
       ∑ i, (waitRuns run k ((List.finRange K).map (s.2 i)) 0 : ℝ) + 1) ≤ (1 : ℝ) + m * k := by
@@ -208,13 +184,10 @@ theorem waits_exp {D : Type} [Fintype D] [Nonempty D] (run : D → Transcript) (
         linarith [show Pr (fun d => (run d).out = .acc) * (m * waitExp run k K 0) =
           m * (Pr (fun d => (run d).out = .acc) * waitExp run k K 0) by ring]
 
-/-! ## `E^rep`'s expected reruns -/
-
 section ERep
 
 variable {Coin W Op : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
 
-/-- **`E^rep` reruns the prover at most `1 + m·k` times in expectation**, at every prover and tape. -/
 theorem ERep_runs_exp (H : Msg → Msg) (V : Verifier Coin) (m k K : Msg → ℕ) (opens : Seen → List Op)
     (assemble : Msg → List Op → Option W) (check : Msg → W → Bool) :
     ExtractRunsExpLe H (ERep V m k K opens assemble check) (fun x => 1 + m x * k x) := by
@@ -233,7 +206,6 @@ theorem ERep_runs_exp (H : Msg → Msg) (V : Verifier Coin) (m k K : Msg → ℕ
   · have hs : ¬ (run H P V x ω r₀).seen.out = .acc := h
     simp [hs, h, RP.eval]
 
-/-- **`ERepCost`**: `E^rep` reruns the prover at most `1 + m·K` times, and `1 + m·k` in expectation. -/
 theorem ERep_cost (H : Msg → Msg) (V : Verifier Coin) (m k K : Msg → ℕ) (opens : Seen → List Op)
     (assemble : Msg → List Op → Option W) (check : Msg → W → Bool) :
     ERepCost H V m k K opens assemble check :=
@@ -241,9 +213,6 @@ theorem ERep_cost (H : Msg → Msg) (V : Verifier Coin) (m k K : Msg → ℕ) (o
 
 end ERep
 
-/-- **Flock: efficiency rests on the decoder alone**: `ERepCost` holds at every deployment, so Flock's `Efficient` is
-the deployed decoder meeting the list-decoding spec, with its count and its lists at most `p` at the opened word's
-encoded length. -/
 theorem Flock.Efficient_of_decoder {Coin F T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [Fintype F]
     [DecidableEq F] [Zero (List F)] (H : Msg → Msg) (D : Flock.Deploy Coin (List F) T) (p : Polynomial ℕ)
     (hl : Flock.ListWithin D.len D.enc D.θ D.decode) (hs : ∀ os, (D.dec os).2 ≤ p.eval (Flock.wordLen os))
@@ -251,7 +220,6 @@ theorem Flock.Efficient_of_decoder {Coin F T : Type} [Fintype Coin] [Nonempty Co
     Flock.Efficient H D p :=
   ⟨ERep_cost H D.V D.waits D.k D.cap (fun v => [D.cols v]) _ _, hl, hs, hlen⟩
 
-/-- An opened word has at most as many columns as its encoded length has bits: each column takes at least one. -/
 theorem Flock.length_le_wordLen {F : Type} [Fintype F] (os : List (ℕ × List F)) : os.length ≤ Flock.wordLen os := by
   unfold Flock.wordLen
   induction os with
@@ -260,9 +228,6 @@ theorem Flock.length_le_wordLen {F : Type} [Fintype F] (os : List (ℕ × List F
     simp only [List.map_cons, List.sum_cons, List.length_cons]
     omega
 
-/-! ## `assemble`'s checks -/
-
-/-- `find?` with the number of tests it makes: up to and including the first that passes, every one if none does. -/
 def findC {α : Type} (q : α → Bool) : List α → Option α × ℕ
   | [] => (none, 0)
   | a :: l => if q a then (some a, 1) else ((findC q l).1, (findC q l).2 + 1)
@@ -282,16 +247,12 @@ theorem findC_snd_le {α : Type} (q : α → Bool) : ∀ l : List α, (findC q l
     · simp only [findC, h, Bool.false_eq_true, ↓reduceIte, List.length_cons]
       exact Nat.succ_le_succ (findC_snd_le q l)
 
-/-- `assemble`'s step at table `j`, with its count: the first decoded trace of the table's columns whose read is in the
-relation of the table's own statement, and the checks `find?` makes for it. -/
 def Flock.assembleStep {Col T : Type} (table : Msg → ℕ → Option Flock.Stmt) (decode : List (ℕ × Col) → List T)
     (read : List T → Flock.Wit) (x : Msg) (opens : List (ℕ → List (ℕ × Col))) (j : ℕ) : Option T × ℕ :=
   match table x j with
   | none => (none, 0)
   | some t => findC (fun M => decide (Flock.RelS t (read [M]))) (decode (opens.flatMap fun o => o j))
 
-/-- **`assemble` with its count of relation checks**: every table's step, its checks summed over the statement's
-tables. -/
 def Flock.assembleCounted {Col T : Type} (parse : Msg → Option Flock.Stmt) (table : Msg → ℕ → Option Flock.Stmt)
     (decode : List (ℕ × Col) → List T) (read : List T → Flock.Wit) (x : Msg) (opens : List (ℕ → List (ℕ × Col))) :
     Option Flock.Wit × ℕ :=
@@ -301,8 +262,6 @@ def Flock.assembleCounted {Col T : Type} (parse : Msg → Option Flock.Stmt) (ta
     (((List.range s.tables).mapM fun j => (Flock.assembleStep table decode read x opens j).1).map read,
       ((List.range s.tables).map fun j => (Flock.assembleStep table decode read x opens j).2).sum)
 
-/-- **`assemble` checks each table's list once**: `assembleCounted` is `assemble`, and its checks are at most the
-tables' list lengths summed, so at most `p(size)` per table when every list is at most `p(size)` long. -/
 theorem Flock.assembleCounted_spec {Col T : Type} (parse : Msg → Option Flock.Stmt)
     (table : Msg → ℕ → Option Flock.Stmt) (decode : List (ℕ × Col) → List T) (read : List T → Flock.Wit)
     (size : List (ℕ × Col) → ℕ) (p : Polynomial ℕ) (hlen : ∀ os, (decode os).length ≤ p.eval (size os)) (x : Msg)
@@ -327,8 +286,6 @@ theorem Flock.assembleCounted_spec {Col T : Type} (parse : Msg → Option Flock.
     · exact Nat.zero_le _
     · exact (findC_snd_le _ _).trans (hlen _)
 
-/-- **Flock's `Efficient` bounds `assemble`'s checks**: at most `p` at each table's opened word's encoded length,
-summed over the statement's tables. -/
 theorem Flock.assemble_checks_le {Coin F T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [Fintype F]
     [DecidableEq F] [Zero (List F)] {H : Msg → Msg} {D : Flock.Deploy Coin (List F) T} {p : Polynomial ℕ}
     (hE : Flock.Efficient H D p) (x : Msg) (opens : List (ℕ → List (ℕ × List F))) (s : Flock.Stmt)

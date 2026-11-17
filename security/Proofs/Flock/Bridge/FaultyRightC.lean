@@ -38,28 +38,7 @@ import Proofs.Flock.Bridge.Lowers
 import Proofs.Flock.SamplingBoundary
 import Std.Tactic.BVDecide.Normalize.BitVec
 
-/-!
-# A unit right on its canonical openings is not faulty
-
-`faultyRightC`, the canonical form of `FaultyRightTarget` (`Bridge.Targets`), proves `FaultyRightTargetC`
-(`Bridge.Canon`). `canon g v` is any predicate on the value of an opening at wire `g`; the bridge's is `canonRow`: the
-wire has a row, and the value is RowShaped at its row's width. A unit `u` is not faulty in `witDep C Cm H roots Xr`
-when its committed wires each carry, in some canonical opening of their registered commit string, their value in `C`'s
-evaluation on `Xr`'s inputs (`RightRegZc`'s second conjunct), and each of its canonical registered openings opens its
-wire's position under `Cm` and `roots`. It reads the transport only at the right openings, so at
-`canon := fun _ _ => True` it is `FaultyRightTarget`.
-
-* `reads_lower_args`: a lowered gate reads the positions of its wire's arguments, or a row's AND its own two XORs.
-* `need_posOf`: every gate of `need` that the unit reads from outside or commits is the position of a wire in `P.io u`
-  (`boundary_inner` excludes a row's two XORs).
-* `witDep_val`: `witDep` opens a wire's position at its value wherever some datum passes there (`posOf_injective`).
-* Slot `u` is unit `u`'s proof block with the inputs it owns, which leave its values alone (`ref_blockOf`), so it is
-  correct when the unit's gates are and each owned input opens (`correct_blockOf`). `correct_blockOf_of`: at any wire
-  values `V` that apply the unit's gates, carried by the committed values at its committed wires, `lowers_of` gives the
-  unit's gates correct whatever the interior, and each input the unit owns is one of its committed wires
-  (`mem_io_of_owner`), so it opens. `faultyRightC` takes `V` the evaluation on `Xr`; `correct_of_local` takes `u`'s
-  local evaluation on values `X` that make `u` correct (`Partition.Correct`), which is `X` on `u`'s committed wires.
--/
+/-! A unit right on its canonical openings is not faulty (`faultyRightC`, which proves `FaultyRightTargetC`). -/
 
 @[expose] public section
 
@@ -75,7 +54,6 @@ theorem mem_io_of_read {n : ℕ} {P : FlockSoundness.Audit.Partition C n} {u : F
     Finset.mem_univ, true_and]
   exact ⟨Or.inr (Or.inr ⟨h, ha, hne⟩), Or.inr ⟨h, hh, ha⟩⟩
 
-/-- **An input a unit owns is one of its committed wires**: an input is committed, and its owner reads it. -/
 theorem mem_io_of_owner {n : ℕ} {P : FlockSoundness.Audit.Partition C n} {u : Fin n} {a : Fin C.N}
     (ha : a ∈ insOf P κ u) : a ∈ P.io u := by
   obtain ⟨hin, -, ho⟩ := mem_insOf.1 ha
@@ -84,8 +62,6 @@ theorem mem_io_of_owner {n : ℕ} {P : FlockSoundness.Audit.Partition C n} {u : 
   rw [hh, (P.input_iff a).2 (by simp [hin, Verity.Boolean.Op.isInput])]
   simp
 
-/-- **A position the unit commits is a wire of `P.io u`**: a gate of `unitGates P u` that `Boundary` commits is the
-position of one of `u`'s wires, and that wire is committed. -/
 theorem posOf_of_boundary {n : ℕ} {P : FlockSoundness.Audit.Partition C n} {u : Fin n} {i : ℕ}
     (hi : i ∈ unitGates P u) (hB : (progOf C κ).Boundary (unitGates P u) i = true) :
     ∃ a ∈ P.io u, i = posOf C a := by
@@ -130,8 +106,6 @@ theorem posOf_of_boundary {n : ℕ} {P : FlockSoundness.Audit.Partition C n} {u 
   simp only [FlockSoundness.Audit.Partition.io, Finset.mem_filter]
   exact ⟨hcom, Or.inl hu⟩
 
-/-- **What the unit needs, outside its interior, is its committed wires' positions**: a gate of `need` of
-`unitGates P u` outside the unit, or one the unit commits, is the position of a wire in `P.io u`. -/
 theorem need_posOf {n : ℕ} {P : FlockSoundness.Audit.Partition C n} {u : Fin n} {i : ℕ}
     (hi : i ∈ FlockSoundness.Discharge.ZkLink.WrongSet.need (progOf C κ) (unitGates P u))
     (hB : i ∉ unitGates P u ∨ (progOf C κ).Boundary (unitGates P u) i = true) :
@@ -164,7 +138,6 @@ theorem witDep_mem {Cm : CommitmentScheme Bool} {H : Claims.Msg → Claims.Msg} 
   subst hg
   split <;> exact ⟨rfl, rfl⟩
 
-/-- **`witDep` opens a wire's position at its value** wherever some datum passes there. -/
 theorem witDep_val {Cm : CommitmentScheme Bool} {H : Claims.Msg → Claims.Msg} {roots : List Claims.Msg}
     {xv : Fin C.N → Bool} (s : Claims.Sampling.AuditStatement) (hs : s.roots = roots) (a : Fin C.N)
     (hex : ∃ d : Claims.Msg, Cm.Opens H roots ⟨posOf C a, C.eval xv a, d⟩ = true) :
@@ -185,10 +158,6 @@ theorem witDep_val {Cm : CommitmentScheme Bool} {H : Claims.Msg → Claims.Msg} 
   rw [posOf_injective (hg'p.symm.trans hpo.1)] at hg'v
   rw [hg'v]
 
-/-- **Slot `u` is correct on committed values that carry wire values `V` applying the unit's gates**: its proof block
-`blockOf P κ u` is correct on committed values `val` carrying `V` at each committed wire of `u` that `κ` doesn't fix,
-whatever its interior values `ι`, at constants that fix only inputs and that are `V`'s at `u`'s committed wires
-(`lowers_of` at `wireAt`, and each input `u` owns is one of its committed wires). -/
 theorem correct_blockOf_of {n : ℕ} (P : FlockSoundness.Audit.Partition C n) (u : Fin n)
     (hκin : ∀ g b, κ g = some b → (C.op g).isInput = true)
     (V : Fin C.N → Bool) (hV : ∀ g, P.unit g = some u → V g = (C.op g).apply V)
@@ -222,11 +191,6 @@ theorem correct_blockOf_of {n : ℕ} (P : FlockSoundness.Audit.Partition C n) (u
     obtain ⟨w, -⟩ := mem_unitGates.1 hg
     exact absurd ⟨w⟩ hN
 
-/-- **A unit correct on its own values is correct at its slot**: where `Xu` makes `u` correct (`Partition.Correct`: its
-committed outputs are its gates applied to its committed inputs, all read from `Xu`) and is `κ`'s constant at each of
-`u`'s committed wires `κ` fixes, slot `u`'s proof block is correct on committed values that carry `Xu` at each committed
-wire of `u` that `κ` doesn't fix, whatever its interior values (`correct_blockOf_of` at `u`'s local evaluation on `Xu`,
-which is `Xu` on `u`'s committed wires). -/
 theorem correct_of_local {n : ℕ} (P : FlockSoundness.Audit.Partition C n) (u : Fin n)
     (hκin : ∀ g b, κ g = some b → (C.op g).isInput = true)
     (Xu : Fin C.N → Bool) (hX : P.Correct Xu u) (hκ : ∀ g ∈ P.io u, ∀ b, κ g = some b → Xu g = b)
@@ -242,9 +206,6 @@ theorem correct_of_local {n : ℕ} (P : FlockSoundness.Audit.Partition C n) (u :
     (fun g hg b hk => (hloc g hg).trans (hκ g hg b hk)) val
     (fun g hg hk => (hval g hg hk).trans (congrArg some (hloc g hg).symm)) ι
 
-/-- **A unit right on its canonical openings is not faulty** (`FaultyRightTarget` at canonical openings), at constants
-`κ` that fix only inputs: a constant the unit reads is `.const`, which carries its value when `hκ` holds there, and any
-other wire it reads is transported (`correct_blockOf_of` at `C`'s evaluation on `Xr`). -/
 theorem faultyRightC {n : ℕ} (P : FlockSoundness.Audit.Partition C n) {Pos Val Opn Com : Type}
     (pos : Fin C.N → Pos) (bit : Val → Fin C.N → Bool) (val : Opn → Val) (com : Opn → Com) (cs : Pos → Com)
     (canon : Fin C.N → Val → Prop) (H : Claims.Msg → Claims.Msg) (Cm : CommitmentScheme Bool) (roots : List Claims.Msg)
@@ -272,7 +233,6 @@ theorem faultyRightC {n : ℕ} (P : FlockSoundness.Audit.Partition C n) {Pos Val
     ((witDep C Cm H roots Xr).val H Cm (stmtOf P κ r desc q roots)) (fun _ => false)) (blockOf P κ u)
   exact correct_blockOf_of P u hκin (C.eval Xr) (fun _ hu => C.eval_op Xr (isInput_of_unit hu)) hκ _ hval _
 
-/-- **`FaultyRightTargetC`**, at any `canon` (`Bridge.Canon`): `faultyRightC`. -/
 theorem faultyRightTargetC : FaultyRightTargetC := by
   intro C n P Pos Val Opn Com pos bit val com cs canon H Cm roots Xr κ u hκin hright htr hκ ns r desc q hns
   exact faultyRightC P pos bit val com cs canon H Cm roots Xr κ u hκin hright htr hκ hns r desc q

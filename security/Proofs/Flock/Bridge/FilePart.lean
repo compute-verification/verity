@@ -6,39 +6,13 @@ public import Proofs.Flock.Bridge.Targets
 public import Proofs.Flock.C3.Reps.ReadWhole
 public import Proofs.Flock.Soundness.Discharge.Layout.Scope
 
-/-!
-# The circuit file's partition, computed (`FilePartTarget`, proved), and `RelDeployTarget`'s partition hypothesis
-
-`filePartTarget : FilePartTarget` (`filePart_of_log`): at every descriptor whose unit net has `unitLog ≤ 32`, unit `u`'s
-block of `Spot.FilePart.ofCircuit` is `blockOf` of the key program's partition at `constsOf`
-(`blockOf_keyProg`). That is the block at the constant wires `constWiresOf` (`blockOf_constsOf`: past the constant and
-the zero, `constsOf` fixes only inputs no unit reads): its rows' lowered gates (`FilePart.blockOf_uniform`), then the
-sources it owns
-(`FilePart.mem_srcs_iff`), because `RecResiduals.readIns` marks exactly the template inputs a computed row of
-`Rows.ofNet` reads (`readIns_iff`).
-
-The bound is the one `Rows.ofNet_a` and `Rows.ofNet_b` take: `readIns` reads the net's sparse rows, which hold each
-column modulo `2^32`, while `Rows.ofNet` holds rows whose columns run to `2^unitLog`. Past `unitLog = 32` a computed row
-of `Rows.ofNet` can read a column `readIns` doesn't mark, and the equation is then neither provable nor refutable. A
-deployed statement carries it: the scope check `Layout.scopeOkH` checks it (`unitLog_le_of_scopeOkH`).
-
-`RelDeployTarget`'s partition hypothesis, `cd.partition s = some (partOf P κ ns)`, at the key program's partition and
-the circuit's constants:
-
-* `filePartOf c n ns`: the code's partition, `FilePart.ofCircuit c n`'s blocks, unit `u`'s at slot `u`, in consecutive
-  runs of the sizes `ns`.
-* `partOf_ofCircuit`: at a circuit in scope it is `partOf`'s, so `relDeploy_ofCircuit` is `RelDeployTarget` with the
-  partition hypothesis `cd.partition s = some (filePartOf D.unroll n ns)`.
-* `why_eq_none`, `check_ok`: the population check (`FilePart.check`) passes exactly where the registration's strata,
-  read stratum by stratum, are the units in order, of sizes `ns` (`FilePart.sizes`), and the public file's units are
-  `0, …, N − 1`, `N` their sum: the `ns` and `n` of `filePartOf`.
--/
+/-! `FilePartTarget`, proved at `unitLog ≤ 32`, past which its equation is neither provable nor refutable, and
+`RelDeployTarget`'s partition hypothesis. -/
 
 @[expose] public section
 
 namespace Flock.Bridge
 
-/-- **`readIns` marks exactly the template inputs a computed row reads**, at `unitLog ≤ 32`. -/
 theorem readIns_iff {net : Flock.Net} (hU : FlockSoundness.Built net) (hlog : net.unitLog ≤ 32) (y : ℕ)
     (hy : y < (FlockSoundness.Rows.ofNet hU).nIn) :
     (Flock.RecResiduals.readIns net).getD y false = true ↔
@@ -53,7 +27,6 @@ theorem readIns_iff {net : Flock.Net} (hU : FlockSoundness.Built net) (hlog : ne
     exact (FlockC3.Reps.ReadWhole.getD_readIns net y).2
       ⟨lt_of_lt_of_eq hy (FlockSoundness.Rows.ofNet_nIn hU), r, hr, hr', hc⟩
 
-/-- **The circuit's constant wires fix exactly the constant's and the zero's gates**, `0` and `1`. -/
 theorem constWiresOf_eq_none (c : Flock.Circuit) (hU : FlockSoundness.Built c.unit) (n : ℕ)
     (g : Fin (FlockSoundness.Discharge.Layout.keyN c hU n)) : constWiresOf c hU n g = none ↔ 2 ≤ g.val := by
   have h1 : (FlockSoundness.Discharge.Layout.oneG : Fin (FlockSoundness.Discharge.Layout.keyN c hU n)).val = 0 := rfl
@@ -77,8 +50,6 @@ theorem constWiresOf_eq_none (c : Flock.Circuit) (hU : FlockSoundness.Built c.un
       have h0' : g.val ≠ 1 := fun h => hz (Fin.ext (h.trans h0.symm))
       exact ⟨fun _ => by omega, fun _ => rfl⟩
 
-/-- **A proof block reads the constants only at its unit's inputs**: constants that agree at every gate whose owner is
-`u` give unit `u` one block. -/
 theorem blockOf_congr {C : Verity.Boolean.Circuit} {n : ℕ} (P : FlockSoundness.Audit.Partition C n)
     {κ κ' : Fin C.N → Option Bool} (u : Fin n) (h : ∀ g, owner P g = some u → κ g = κ' g) :
     blockOf P κ u = blockOf P κ' u := by
@@ -91,8 +62,6 @@ theorem blockOf_congr {C : Verity.Boolean.Circuit} {n : ℕ} (P : FlockSoundness
   unfold blockOf insOf
   rw [hf]
 
-/-- **At a gate a unit reads, the circuit's constants are the constant wires'**: past the constant and the zero,
-`constsOf` fixes only inputs no unit reads (`owner`). -/
 theorem constsOf_eq_constWiresOf (c : Flock.Circuit) (hU : FlockSoundness.Built c.unit) (n : ℕ)
     (g : Fin (FlockSoundness.Discharge.Layout.keyN c hU n))
     (hown : owner ((FlockSoundness.Discharge.Placed.keyProg c hU n).partition
@@ -110,8 +79,6 @@ theorem constsOf_eq_constWiresOf (c : Flock.Circuit) (hU : FlockSoundness.Built 
       refine ite_eq_right ?_
       exact fun h => h.elim hz fun h' => hown h'.2
 
-/-- **The circuit's constants give the constant wires' blocks**: past the constant and the zero they fix only inputs no
-unit reads (`owner`), which are in no block. -/
 theorem blockOf_constsOf (c : Flock.Circuit) (hU : FlockSoundness.Built c.unit) (n : ℕ)
     (outs : Finset (Fin (FlockSoundness.Discharge.Layout.keyN c hU n))) (u : Fin n) :
     blockOf ((FlockSoundness.Discharge.Placed.keyProg c hU n).partition outs) (fun g => constsOf c hU n g) u =
@@ -127,8 +94,6 @@ theorem blockOf_constsOf (c : Flock.Circuit) (hU : FlockSoundness.Built c.unit) 
     exact Option.some_ne_none u
   exact constsOf_eq_constWiresOf c hU n g hown
 
-/-- **The code's block is `blockOf`'s**: at `unitLog ≤ 32`, any outputs `outs` and unit `u`, `ofCircuit`'s block `u` is
-`blockOf` of the key program's partition at the circuit's constants. -/
 theorem blockOf_keyProg (c : Flock.Circuit) (hU : FlockSoundness.Built c.unit) (hlog : c.unit.unitLog ≤ 32) (n : ℕ)
     (outs : Finset (Fin (FlockSoundness.Discharge.Layout.keyN c hU n))) (u : Fin n) :
     ((Spot.FilePart.ofCircuit c n).block u.val).toList =
@@ -153,9 +118,6 @@ theorem blockOf_keyProg (c : Flock.Circuit) (hU : FlockSoundness.Built c.unit) (
     (fun g v hg2 hgk => FilePart.reads_uniform outs g v hg2 hgk) _
     (Spot.FilePart.ofCircuit_srcs_sorted c n) hSm u).symm
 
-/-- **`FilePartTarget` at `unitLog ≤ 32`**: at every descriptor `D` whose unit net has `unitLog ≤ 32`, unit rows `hU`,
-population `n` and unit `u`, `FilePart.ofCircuit`'s block `u` is `blockOf` of the key program's partition at the
-circuit's constants. -/
 theorem filePart_of_log (D : Flock.Desc) (hU : FlockSoundness.Built D.unroll.unit) (hlog : D.unroll.unit.unitLog ≤ 32)
     (n : ℕ) (u : Fin n) :
     let P := (FlockSoundness.Discharge.Placed.keyProg D.unroll hU n).partition
@@ -168,7 +130,6 @@ theorem filePartTarget : FilePartTarget := by
   intro D hU hlog n u
   exact filePart_of_log D hU hlog n u
 
-/-- **The scope check bounds the unit's size**: `scopeOkH` checks `unitLog ≤ 32`. -/
 theorem unitLog_le_of_scopeOkH {c : Flock.Circuit} (h : FlockSoundness.Discharge.Layout.scopeOkH c = true) :
     c.unit.unitLog ≤ 32 := by
   unfold FlockSoundness.Discharge.Layout.scopeOkH at h
@@ -176,12 +137,9 @@ theorem unitLog_le_of_scopeOkH {c : Flock.Circuit} (h : FlockSoundness.Discharge
   obtain ⟨⟨⟨⟨-, -⟩, hu⟩, -⟩, -⟩ := h
   exact hu
 
-/-- **The code's partition of the circuit file `c` at `n` units, in strata of sizes `ns`**: `FilePart.ofCircuit c n`'s
-blocks, unit `u`'s at slot `u`, in consecutive runs of slots. -/
 def filePartOf (c : Flock.Circuit) (n : ℕ) (ns : List ℕ) : Claims.Sampling.Partition :=
   ⟨[ns.splitLengths ((List.range n).map fun u => ((Spot.FilePart.ofCircuit c n).block u).toList)]⟩
 
-/-- **`partOf` is the code's partition** at the key program of a circuit in scope, at the circuit's constants. -/
 theorem partOf_ofCircuit (D : Flock.Desc) (hU : FlockSoundness.Built D.unroll.unit)
     (hscope : FlockSoundness.Discharge.Layout.scopeOkH D.unroll = true) (n : ℕ) (ns : List ℕ) :
     partOf ((FlockSoundness.Discharge.Placed.keyProg D.unroll hU n).partition
@@ -197,8 +155,6 @@ theorem partOf_ofCircuit (D : Flock.Desc) (hU : FlockSoundness.Built D.unroll.un
   unfold partOf filePartOf
   rw [h]
 
-/-- **rel_deploy at the code's partition**: `RelDeployTarget` at the key program of a circuit in scope and the
-circuit's constants, its partition hypothesis the deployed partition being the code's (`filePartOf`). -/
 theorem relDeploy_ofCircuit (hR : RelDeployTarget) {T : Type}
     (F : Claims.Flock.Deploy FlockDeploy.Coin (List FlockLevel3.GF128) T) (cd : SamplingDeploy.Code)
     (D : Flock.Desc) (hU : FlockSoundness.Built D.unroll.unit)
@@ -226,8 +182,6 @@ theorem relDeploy_ofCircuit (hR : RelDeployTarget) {T : Type}
   exact hR F cd P rows D.unroll pub nl ns r κ desc q roots Xr δ x hL hx
     (hpart.trans (congrArg some (partOf_ofCircuit D hU hscope n ns).symm)) hrel
 
-/-- **The population check's verdict**: `why` finds nothing exactly where the strata, read stratum by stratum, are the
-units in order, of sizes `ns`, and the public file's units are `0, …, N − 1`, `N` their sum. -/
 theorem why_eq_none {strata : Array (String × Array (ℕ × ℕ))} {indices : Array ℕ} :
     Spot.FilePart.why strata indices = none ↔
       ∃ ns, Spot.FilePart.sizes strata = some ns ∧ indices = Array.range (ns.foldl (· + ·) 0) := by
@@ -247,8 +201,6 @@ theorem why_eq_none {strata : Array (String × Array (ℕ × ℕ))} {indices : A
     rw [hs]
     simp
 
-/-- **A session the population check accepts**: the verifier's program parses, its strata under the query are the
-units in order, of sizes `ns`, and the public file's units are `0, …, N − 1`, `N` their sum. -/
 theorem check_ok {program : ByteArray} {query : Lean.Json} {pubB : ByteArray}
     (h : Spot.FilePart.check program query pubB = .ok ()) :
     ∃ p strata ns, Spot.Program.parse program = .ok p ∧

@@ -16,8 +16,7 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 
-/-! `Flock.SecurityProofs.EndToEndRegisteredRows : Flock.Guarantees.EndToEndRegisteredRows`: the reduction
-`EndToEndRegisteredRows_of_rowsLink` at the rows' extraction bound `rowsLinkLe`. -/
+/-! The proof of `EndToEndRegisteredRows`, from the rows' extraction bound `rowsLinkLe`. -/
 
 @[expose] public section
 

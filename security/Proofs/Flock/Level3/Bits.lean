@@ -6,10 +6,8 @@ public import Mathlib.Data.ZMod.Defs
 import Mathlib.Algebra.Polynomial.Coeff
 import Mathlib.Data.ZMod.Basic
 
-/-!
-Level 3, L3-F (`Flock.Field`, `verity/protocols/proofs/flock/prover/agreement/README.md` stage 2): the bits of a natural number as a polynomial over GF(2). XOR is addition,
-a left shift is multiplication by a power of `X`, and a number split at bit `w` is `X^w · high + low`.
--/
+/-! The bits of a natural number as a polynomial over GF(2): XOR is addition and a left shift is multiplication by a
+power of `X`. -/
 
 @[expose] public section
 
@@ -19,7 +17,6 @@ namespace FlockLevel3
 
 abbrev P := Polynomial (ZMod 2)
 
-/-- `1` for a set bit, `0` otherwise. -/
 def b2 (b : Bool) : ZMod 2 := if b then 1 else 0
 
 @[simp] theorem b2_true : b2 true = 1 := rfl
@@ -87,7 +84,6 @@ theorem natPoly_split (a b w : ℕ) (hb : b < 2 ^ w) : natPoly (2 ^ w * a + b) =
   · have hbk : b.testBit k = false := Nat.testBit_lt_two_pow (lt_of_lt_of_le hb (Nat.pow_le_pow_right (by norm_num) (by omega)))
     simp [h, show w ≤ k by omega, hbk]
 
-/-- A number below `2^w` has degree below `w`. -/
 theorem natPoly_degree_lt (n w : ℕ) (hn : n < 2 ^ w) : (natPoly n).degree < w := by
   rw [Polynomial.degree_lt_iff_coeff_zero]
   intro k hk

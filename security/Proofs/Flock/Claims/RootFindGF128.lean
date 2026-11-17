@@ -48,16 +48,7 @@ import Std.Tactic.BVDecide.Normalize.Prop
 public import Proofs.Flock.Claims.RootFindCost
 public import Proofs.Flock.Claims.RootFind
 
-/-!
-# The root finder over GF(2^128)
-
-Flock's decoder works over `GF128` (the executable's GF(2^128), `FlockLevel3.GF128`: `2^128` elements, characteristic
-2). `roots128` is Berlekamp's trace root finder (`RootFind.roots`) there, at `n = 128` squarings and the packing basis
-`x^v`, `v < 128` (`basis128`), which separates the field (`separates_basis128`: the trace form is nondegenerate and the
-basis spans). It lists exactly the roots of a nonzero polynomial, each once (`roots128_spec`), and its counted version
-meets `Claims.DecoderComplexity` at the input's length, with `roots128Cost = 64·129²·(d + 3)^4`
-(`roots128_complexity`).
--/
+/-! The root finder over GF(2^128) (`roots128`). -/
 
 @[expose] public section
 
@@ -71,8 +62,6 @@ noncomputable def basis128 : List GF128 := (List.finRange 128).map fun v => pack
 theorem trace_zero {F : Type} [CommRing F] (n : ℕ) : trace n (0 : F) = 0 := by
   simp [trace]
 
-/-- Over `F` with `2^n` elements, `n > 0`, the trace is not identically zero: `Σ_{i<n} X^(2^i)` has degree
-`2^(n−1)`, so fewer roots than `F` has elements. -/
 theorem exists_trace_ne_zero {F : Type} [Field F] [Fintype F] [DecidableEq F] {n : ℕ} (hn : 0 < n)
     (hcard : Fintype.card F = 2 ^ n) : ∃ z : F, trace n z ≠ 0 := by
   by_contra h
@@ -113,8 +102,6 @@ theorem pack_zero : pack 0 = 0 := by
   rw [add_zero] at h
   simpa using h
 
-/-- The packing basis separates GF(2^128): if `Tr(x^v·c) = 0` for every `v`, then by additivity `Tr(y·c) = 0` for
-every `y`, so the trace vanishes on all of GF(2^128) (`y = z·c⁻¹`), which it does not (`exists_trace_ne_zero`). -/
 theorem separates_basis128 : Separates 128 basis128 := by
   intro c hc
   by_contra h
@@ -148,13 +135,10 @@ noncomputable def roots128Counted (f : List GF128) : List GF128 × ℕ :=
 /-- The operation bound, a polynomial in the input's length `d`: `64·129²·(d + 3)^4`. -/
 noncomputable def roots128Cost : Polynomial ℕ := C (64 * 129 * 129) * (X + C 3) ^ 4
 
-/-- **`roots128` lists exactly the roots of a nonzero polynomial, each once.** -/
 theorem roots128_spec {f : List GF128} (hf : toPoly f ≠ 0) :
     (roots128 f).Nodup ∧ ∀ a, a ∈ roots128 f ↔ (toPoly f).IsRoot a :=
   roots_spec card_F separates_basis128 hf
 
-/-- **`roots128`'s complexity**: its counted version's value is `roots128`'s, and its count is at most
-`roots128Cost` at the input's length. -/
 theorem roots128_complexity : DecoderComplexity roots128 roots128Counted List.length roots128Cost := by
   intro f
   refine ⟨rfl, ?_⟩

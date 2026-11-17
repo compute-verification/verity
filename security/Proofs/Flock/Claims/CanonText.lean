@@ -7,13 +7,7 @@ import all Init.Data.Int.Repr
 import all Init.Data.Ord.String
 import all Lean.Data.Json.Basic
 
-/-!
-# What `Flock.canonUtf8` prints
-
-A list and an object, unfolded (`canon_arr`, `canon_obj`). A string: each character is itself or one escape (`esc`),
-each escape decodes to its character (`unesc_esc`), so an escaped string ends at its first unescaped quote
-(`canonStr_split`). A numeral: a decimal numeral ends at its first non-digit (`digits_split`, `nat_split`).
--/
+/-! What `Flock.canonUtf8` prints, unfolded for lists, objects, strings and numerals. -/
 
 @[expose] public section
 
@@ -22,8 +16,6 @@ open private hex4 from Base.Canon
 namespace Properties.Pouw.LiveSalt.Canon
 
 open Lean (Json)
-
-/-! ## `canonUtf8`, unfolded -/
 
 theorem canon_arr (a : Array Json) : Flock.canonUtf8 (.arr a) =
     (do let parts ← a.mapM Flock.canonUtf8; pure ("[" ++ ",".intercalate parts.toList ++ "]")) := by
@@ -38,9 +30,6 @@ theorem canon_obj (kvs : Std.TreeMap.Raw String Json) : Flock.canonUtf8 (.obj kv
   rw [Flock.canonUtf8]
   simp only [Array.mapM_subtype, Array.unattach_attach]
 
-/-! ## Escaped strings -/
-
-/-- What `canonStrUtf8` writes for one character. -/
 def esc (c : Char) : List Char :=
   match c with
   | '"' => ['\\', '"']
@@ -71,16 +60,13 @@ theorem canonStr_toList (s : String) : (Flock.canonStrUtf8 s).toList = '"' :: s.
       | (simp; done)
       | ((repeat' split) <;> simp_all)
 
-/-- A hex digit's value. -/
 def nib (c : Char) : Nat := if c.toNat < 87 then c.toNat - 48 else c.toNat - 87
 
-/-- A hex numeral's value. -/
 def unhexL (l : List Char) : Nat := l.foldl (fun acc c => 16 * acc + nib c) 0
 
 theorem hex4_ok : ∀ n, n < 32 → (hex4 n).toList.length = 4 ∧ unhexL (hex4 n).toList = n := by
   decide
 
-/-- Reads one escape's character after its backslash. -/
 def unesc2 : List Char → Option (Char × List Char)
   | '"' :: r => some ('"', r)
   | '\\' :: r => some ('\\', r)
@@ -92,7 +78,6 @@ def unesc2 : List Char → Option (Char × List Char)
   | 'u' :: a :: b :: c :: d :: r => some (Char.ofNat (unhexL [a, b, c, d]), r)
   | _ => none
 
-/-- Reads one character of an escaped string. -/
 def unesc : List Char → Option (Char × List Char)
   | [] => none
   | c :: r => if c = '\\' then unesc2 r else some (c, r)
@@ -154,14 +139,11 @@ theorem escs_inj : ∀ (cs cs' r r' : List Char), cs.flatMap esc ++ '"' :: r = c
       obtain ⟨rfl, rfl⟩ := ih cs' r r' h2
       exact ⟨rfl, rfl⟩
 
-/-- An escaped string ends where it ends: what follows it doesn't change which string it is. -/
 theorem canonStr_split {s s' : String} {r r' : List Char}
     (h : (Flock.canonStrUtf8 s).toList ++ r = (Flock.canonStrUtf8 s').toList ++ r') : s = s' ∧ r = r' := by
   simp only [canonStr_toList, List.cons_append, List.append_assoc, List.cons.injEq, true_and] at h
   obtain ⟨h1, h2⟩ := escs_inj _ _ _ _ h
   exact ⟨String.toList_inj.mp h1, h2⟩
-
-/-! ## Numbers -/
 
 theorem digits_split : ∀ (D D' : List Char) (c c' : Char) (r r' : List Char), (∀ x ∈ D, x.isDigit = true) →
     (∀ x ∈ D', x.isDigit = true) → c.isDigit = false → c'.isDigit = false → D ++ c :: r = D' ++ c' :: r' →
@@ -194,7 +176,6 @@ theorem digits_split : ∀ (D D' : List Char) (c c' : Char) (r r' : List Char), 
 
 theorem toString_toList (n : Nat) : (toString n).toList = Nat.toDigits 10 n := Nat.toList_repr
 
-/-- A numeral ends at the first non-digit. -/
 theorem nat_split {n n' : Nat} {c c' : Char} {r r' : List Char} (hc : c.isDigit = false) (hc' : c'.isDigit = false)
     (h : (toString n).toList ++ c :: r = (toString n').toList ++ c' :: r') : n = n' ∧ c = c' ∧ r = r' := by
   rw [toString_toList, toString_toList] at h

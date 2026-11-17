@@ -3,19 +3,7 @@ module
 public import Mathlib.FieldTheory.Finite.Basic
 public import Mathlib.Data.List.GetD
 
-/-!
-# Counted field arithmetic on coefficient lists
-
-A step count is the number of field operations a computation performs. `Counted α` is a value with that number: `op a`
-is the result of one field operation, `pure` costs none and `>>=` adds the counts, so a function written in `Counted`
-counts each operation it performs, and its `.val` is the plain computation's result. Every field operation below is one
-`op` of its own (`+`, `-`, `*`, a negation, an inverse, a test for zero); building lists and comparing their lengths
-are not field operations.
-
-A polynomial is its coefficient list, lowest degree first (`toPoly`), and a list is normalized (`Norm`) when its last
-coefficient isn't zero. The operations are the schoolbook ones: `trim` (normalize), `add`, `smul`, `mul`, `divmod`
-(long division by a normalized divisor), `gcd` (Euclid) and `monic`.
--/
+/-! Counted field arithmetic on coefficient lists, lowest degree first (`Counted`). -/
 
 @[expose] public section
 
@@ -52,12 +40,10 @@ section Ops
 
 variable {F : Type}
 
-/-- The polynomial with coefficient list `l`, lowest degree first. -/
 noncomputable def toPoly [Semiring F] : List F → F[X]
   | [] => 0
   | a :: l => C a + X * toPoly l
 
-/-- A polynomial's coefficient list, up to its degree. -/
 noncomputable def ofPoly [Semiring F] (p : F[X]) : List F := (List.range (p.natDegree + 1)).map p.coeff
 
 /-- A coefficient list is normalized when its last coefficient isn't zero (the empty list is). -/
@@ -151,8 +137,6 @@ def monic [Field F] (p : List F) : Counted (List F) :=
 
 end Ops
 
-/-! ## Coefficient lists -/
-
 section Lists
 
 variable {F : Type}
@@ -227,8 +211,6 @@ theorem Norm.cons [Zero F] {a : F} {l : List F} (hl : Norm l) (h : l ≠ []) : N
 theorem Norm.singleton [Zero F] {a : F} (ha : a ≠ 0) : Norm [a] := fun _ => ha
 
 end Lists
-
-/-! ## The operations: values, lengths and counts -/
 
 section Specs
 
