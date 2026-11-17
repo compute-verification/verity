@@ -5,7 +5,7 @@ registered tables at the rows the verifier reads them.
 
 * **extract** (the H1 venv: it unpickles the prover's saved window, whose classes import torch). From the window's record
   (``pouw-h1-calls.json``: its manifest checked by `pouw_h1_challenger.manifest_reason`, so the served trees' entries
-  are the ones its ``calls_root`` binds), the sampled proof blocks (``--sampled``, `h1_prove/served.py`'s), the period's
+  are the ones its ``calls_root`` binds), the sampled proof blocks (``--drawn``, `h1_prove/served.py`'s), the period's
   descriptor and the prover's private directory (``--prover``, `pouw_h1_prover`: its salt key, each call's kept values
   and the saved window ``state/`` `pouw_h1_handoff.FILE`): the verifier's own reads of the sampled proof block's call
   (`credit.registered_file` at the record's roots, the window's root, steps and Program salt), and for each of its data
@@ -128,7 +128,7 @@ def extract(a: argparse.Namespace) -> None:
 
     t0 = time.time()
     doc = json.loads(Path(a.calls).read_text())
-    sampled = json.loads(Path(a.sampled).read_text())
+    sampled = json.loads(Path(a.drawn).read_text())
     commits = doc["commitment"]
     root = commits["session"]["root"]
     steps, psalt = int(commits["steps"]), PHC.program_salt_of(commits).hex()
@@ -208,7 +208,7 @@ def extract(a: argparse.Namespace) -> None:
     with os.fdopen(fd, "w") as f:
         json.dump(out, f)
     pub = {**{x: out[x] for x in ("window", "program", "draw_root", "k", "unit", "served_rows", "other")},
-           "drawn": len(sampled["units"]), "sampled_at_k": [x["unit"] for x in mine],
+           "drawn": len(sampled["units"]), "drawn_at_k": [x["unit"] for x in mine],
            "entries": {p: v["entry"] for p, v in ports.items()},
            "reads": {p: v["opening"]["position"] for p, v in ports.items()}, "checks": checks,
            "seconds": round(time.time() - t0, 1)}
@@ -564,7 +564,7 @@ def main() -> None:
     ap.add_argument("summaries", nargs="*")
     ap.add_argument("--seed", type=int, default=20261023)
     ap.add_argument("--calls")
-    ap.add_argument("--sampled")
+    ap.add_argument("--drawn")
     ap.add_argument("--descriptor")
     ap.add_argument("--prover", help="extract: the window's prover directory (pouw_h1_prover)")
     ap.add_argument("--public")

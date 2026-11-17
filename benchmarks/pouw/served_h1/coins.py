@@ -47,14 +47,14 @@ first-parent history of main (``--main``, `challenger.pinned_session`), so a ses
 though this check credits nothing. On top of it `check` holds the manifest's session and window to that session's, the open's
 layout to the signed commitment's, and its period to the verifier's; then the salt coin after the window's root, round
 s's coin after round s's root for every round the challenger logged, and the sampling coin from the sample session the
-ledger opens withheld on the sample root (``--sample-out``, `sampling_reason`). The key record, the window's root and its period are the verifier's to name; while it names any not, the coins
+ledger opens withheld on the sample root (``--draw-out``, `draw_reason`). The key record, the window's root and its period are the verifier's to name; while it names any not, the coins
 are ``off-node HOST (checked; key, root, period unanchored)`` (under key.json's own key, the manifest's root, any
 period), and only with all three are they ``off-node HOST (checked)``.
 
     python3 coins.py families --rounds S                        # the challenger's FAMILIES for a window of S rounds
     python3 coins.py open --gate USER@HOST --peer NODE --epoch E --rounds S [--minutes M] --secret-file F
     python3 coins.py check --challenger-out SESSION_DIR --ledger HEAD [--ledger HEAD ...] --pins LOG --main FILE
-        --manifest OUT/manifest.json [--sample-out SAMPLE_SESSION_DIR] [--key-record KEY] [--period P] [--root R]
+        --manifest OUT/manifest.json [--draw-out SAMPLE_SESSION_DIR] [--key-record KEY] [--period P] [--root R]
 """
 from __future__ import annotations
 
@@ -263,8 +263,8 @@ class Coins:
         self.label = (f"off-node session {session.id} at {session.address} (unchecked)" if session is not None
                       else IN_PROCESS)
         self.epoch, self.entropy, self.open_sample, self.connect, self.wait_s = epoch, entropy, open_sample, connect, wait_s
-        self.sample_commitment: Ch.LiveCommitment | None = None
-        self.sample_session: Endpoint | None = None
+        self.draw_commitment: Ch.LiveCommitment | None = None
+        self.draw_session: Endpoint | None = None
 
     def salt(self, after: bytes) -> Ch.LiveOpening:
         return self.challenger.open(Wd.SALT, 0, after)
@@ -275,7 +275,7 @@ class Coins:
         it: the coin comes back raw, and its commitment and full opening at the session's close, which `close` checks."""
         if self.source != "off-node":
             d = Wd.sample_challenger(self.epoch, self.entropy)
-            self.sample_commitment = d.commitment
+            self.draw_commitment = d.commitment
             return d.open(Wd.SAMPLE, 0, after)
         if self.open_sample is None:
             raise Ch.CoinError(NO_SAMPLE_GATE)
@@ -289,7 +289,7 @@ class Coins:
             if why is not None:
                 raise Ch.CoinError(why)
             client.open(Wd.SAMPLE, 0, after)
-        self.sample_commitment, self.sample_session = client.commitment, at
+        self.draw_commitment, self.draw_session = client.commitment, at
         return client.opened[(Wd.SAMPLE, 0)]
 
     def close(self) -> None:
@@ -298,10 +298,10 @@ class Coins:
             self.challenger.close()
 
     def record(self) -> dict:
-        s, d = self.session, self.sample_session
+        s, d = self.session, self.draw_session
         return {"source": self.source, "label": self.label, "challenger": s and s.address, "session": s and s.id,
                 "draw_session": d and d.id,
-                "draw_commitment": self.sample_commitment and self.sample_commitment.to_json()}
+                "draw_commitment": self.draw_commitment and self.draw_commitment.to_json()}
 
 
 class RoundPipe:
@@ -531,7 +531,7 @@ def window_reasons(audited: Ch.Audited, entries: dict[str, dict], commitment: Ch
     }
 
 
-def sampling_reason(directory: str | os.PathLike | None, heads: Sequence[str | os.PathLike], after: bytes | None,
+def draw_reason(directory: str | os.PathLike | None, heads: Sequence[str | os.PathLike], after: bytes | None,
                 sample: list[Ch.LiveOpening], key: Ch.ChallengerKey, pins: Any, main: Any) -> str | None:
     """Why the sampling coins `sample` the prover received are not its window's sample session's: none when `after` is None, else
     the one the session `directory` (as infra's gate publishes it) opens after `after`, the sample root, where the ledger
@@ -554,7 +554,7 @@ def sampling_reason(directory: str | os.PathLike | None, heads: Sequence[str | o
 def check(directory: str | os.PathLike, coins: dict, heads: Sequence[str | os.PathLike], pins: Any, main: Any,
           rounds: list[bytes], salts: dict[int, str] | None = None, flip_after: bytes | None = None,
           key: Ch.ChallengerKey | None = None, period: str | None = None, root: bytes | None = None,
-          sample_out: str | os.PathLike | None = None) -> dict:
+          draw_out: str | os.PathLike | None = None) -> dict:
     """The verifier's check of a window's coins against the session `directory` as infra's gate publishes it
     (`published`) and every head of the auditor's ledger infra published, `heads`, read from the challenger's own run,
     with the host's pins log infra published `pins` (its lines) and the verifier's own first-parent history of main
@@ -569,7 +569,7 @@ def check(directory: str | os.PathLike, coins: dict, heads: Sequence[str | os.Pa
     and its period is `period` (`window_reasons`); the window's commitment is the record's, a live epoch's; the salt coin
     opened after the window's root; the challenger received exactly `rounds`, and round r's coin opened once after round
     r's root (`rounds_reason` over the challenger's roots); each salt is `h1tile.live_salt` of the opened coin; and the
-    sampling coin, or none opened when `flip_after` is None, is its own sample session's, `sample_out` as infra's gate publishes
+    sampling coin, or none opened when `flip_after` is None, is its own sample session's, `draw_out` as infra's gate publishes
     it: the session the ledger opens on `flip_after` (`audited_window`), opened withheld (`challenger.withheld_on`), a
     sample session's layout (`window.sample_epoch_reason`), and its sampling coin opened once after `flip_after`.  ``ok`` only
     when all hold."""
@@ -600,7 +600,7 @@ def check(directory: str | os.PathLike, coins: dict, heads: Sequence[str | os.Pa
     except (KeyError, TypeError, Ch.CoinError) as e:
         return {**out, "reason": f"{type(e).__name__}: {e}"}
     got = roots[Wd.ROUND]
-    sample_reason = sampling_reason(sample_out, heads, flip_after, sample, key, pins, main)
+    sample_reason = draw_reason(draw_out, heads, flip_after, sample, key, pins, main)
     bad_salts = sorted(r for r, s in (salts or {}).items()
                        if not (0 <= r < min(len(got), len(openings)))
                        or HT.live_salt(commitment, openings[r].coin, r, got[r]).hex() != s)
@@ -650,8 +650,8 @@ def main(argv: list[str] | None = None) -> int:
     c.add_argument("--main", type=Path, required=True, help="the verifier's own `git rev-list --first-parent "
                    "origin/main`, a commit a line")
     c.add_argument("--manifest", required=True, help="the window's manifest.json")
-    c.add_argument("--sample-out", help="the window's sample session as infra's gate publishes it, or its out/ (the "
-                   "manifest's coins.sample_session)")
+    c.add_argument("--draw-out", help="the window's sample session as infra's gate publishes it, or its out/ (the "
+                   "manifest's coins.draw_session)")
     c.add_argument("--key-record", help="the challenger's key record from its deployment (challenger-key/v1, an art: "
                    "fetched with `research data fetch`)")
     c.add_argument("--period", help="the window's period, as the verifier knows it")
@@ -689,7 +689,7 @@ def main(argv: list[str] | None = None) -> int:
     key = key_record(a.key_record) if a.key_record else None
     pins = [x for x in a.pins.read_text().split("\n") if x]
     got = check(a.challenger_out, m.get("coins", {}), a.ledger, pins, R.main_lines(a.main), **SV.coins_expect(m),
-                key=key, period=a.period, root=bytes.fromhex(a.root) if a.root else None, sample_out=a.sample_out)
+                key=key, period=a.period, root=bytes.fromhex(a.root) if a.root else None, draw_out=a.draw_out)
     print(json.dumps(got, indent=1))
     return 0 if got["ok"] else 1
 

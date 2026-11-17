@@ -41,7 +41,7 @@ UNITS = ("v1", "j10r")
 
 def of(raw: Mapping[str, Any]) -> tuple[Any, ...]:
     """The settings ``rows``, ``steps``, ``runner``, ``rounds``, ``challenger``, ``session``, ``admission``, ``gate``,
-    ``served``, ``graphs``, ``period``, ``unit``, ``ks``, ``sample_session`` and ``commit_record`` of `raw`, in that order
+    ``served``, ``graphs``, ``period``, ``unit``, ``ks``, ``draw_session`` and ``commit_record`` of `raw`, in that order
     (``ks`` sorted, each once); ValueError names the first bad one."""
     rows, steps = raw.get("rows"), raw.get("steps")
     if rows is not None and (not isinstance(rows, int) or isinstance(rows, bool) or rows < 32 or rows % 32):
@@ -161,10 +161,10 @@ def refusals(scheme: str, settings: Any, stage: str, filled: tuple[str, ...] = (
         out.append("the pouw setting 'session' is the session of the challenger at 'challenger'")
     if scheme in CHALLENGED and settings.challenger is not None:
         out += window_refusals(scheme, settings, stage, opens=OPENS.get(scheme))
-    if settings.sample_session is not None and (scheme != H1_SCHEME or settings.challenger is None):
+    if settings.draw_session is not None and (scheme != H1_SCHEME or settings.challenger is None):
         out.append(f"the pouw setting 'draw_session' is the sample session of H1's window ({H1_SCHEME}) on the "
                    "challenger at 'challenger'")
-    elif scheme == H1_SCHEME and settings.challenger is not None and stage != "capture" and settings.sample_session is None:
+    elif scheme == H1_SCHEME and settings.challenger is not None and stage != "capture" and settings.draw_session is None:
         out.append(NO_SAMPLE_SESSION)
     if scheme in PEARL_C_SCHEMES and settings.challenger is not None and settings.session is not None:
         why = period_reason(settings.period, settings.session)

@@ -133,7 +133,7 @@ class _Session:
     def remote(self, **kw) -> dict:
         """`test_pouw_h1._remote`'s settings, the window reserving this challenge phase and its sample's (`SAMPLE_NAME`)
         and opening them through `open`."""
-        return T._remote(session={"session": self.name}, sample_session={"session": SAMPLE_NAME}, gate=self.open, **kw)
+        return T._remote(session={"session": self.name}, draw_session={"session": SAMPLE_NAME}, gate=self.open, **kw)
 
     def _reach(self, at, secret):
         if self.sample is not None and at == self.sample.at:
@@ -230,7 +230,7 @@ def _window(gate, tmp_path, monkeypatch, name: str, seed: int):
         made["session"] = _Session(tmp_path, monkeypatch, name, gate.take(), seed, close=gate.take, reserved=True)
         made["session"].window = {"root": root}
         return {**made["reply"], "commitment": made["session"].commitment}
-    served = _serve(T._remote(session={"session": name}, sample_session={"session": sample}, gate=opened))
+    served = _serve(T._remote(session={"session": name}, draw_session={"session": sample}, gate=opened))
     session = made["session"]
     assert session.ended() is None and session.secrets == [bytes.fromhex(made["reply"]["secret"])]
     assert session.sample.ended() is None

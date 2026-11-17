@@ -256,7 +256,7 @@ def period_inputs(serve_dir: Path, k: int, pouw: Path, key_sha512: str, main: Pa
     sid = rec["commitment"]["session"]["session"]
     dsid = (rec["commitment"].get("draw_session") or {}).get("session")
     if not dsid:
-        raise Missing(f"window {k}'s record names no sample session (sample_session), whose coin credit reads its sample from")
+        raise Missing(f"window {k}'s record names no sample session (draw_session), whose coin credit reads its sample from")
     tree, draw = pouw / "session" / sid / "out", pouw / "session" / dsid / "out"
     for p in (pouw / "ledger.jsonl", pouw / "pins.jsonl", tree / "key.json", draw):
         if not p.exists():

@@ -285,8 +285,8 @@ def test_a_forged_peer_row_passes_the_per_rank_window_and_fails_the_tp_windows_w
     assert WI.check_sampled(ms, bad, others) == {}
     print(json.dumps({"site": [site.k, site.lo, site.hi], "coordinate": q,
                       "row": "the combine unit's parts#1 (rank 1's gathered row, one bit of the coordinate flipped)",
-                      "rank0_window": WI.check(ms0, publics0), "tp_window_check": caught, "tp_window_check_sampled": sampled,
-                      "sampled_without_it": WI.check_sampled(ms, bad, others)}))
+                      "rank0_window": WI.check(ms0, publics0), "tp_window_check": caught, "tp_window_check_drawn": sampled,
+                      "drawn_without_it": WI.check_sampled(ms, bad, others)}))
 
 
 def test_the_fused_all_reduce_is_chunk_units_reading_the_residual_row_whole():

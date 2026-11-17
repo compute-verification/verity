@@ -28,7 +28,7 @@ Without ``--runs`` it selects every `job.sh` attempt in the evidence store and f
   receipt, one unit fewer under the registration's K), each refused; and where ``--pass RUN=MANIFEST`` gives the run's pass (its ``served_run``),
   ``receive-honest``'s pass and the coin controls ``receive-coin-<case>`` and ``receive-unrecorded``, regenerated as
   `job.sh` made them (a v2 pass's ``receive-unrecorded`` relabelled v1 under a fixed beacon, where `job.sh` drew one).
-  A SAMPLED or REGISTERED check must get no refusal; a REFUSED one or a control a refusal.  Each is a replay of a recorded run, so the rules read the recorded coin versions too (`core_check.COINS_RECORDED`,
+  A DRAWN or REGISTERED check must get no refusal; a REFUSED one or a control a refusal.  Each is a replay of a recorded run, so the rules read the recorded coin versions too (`core_check.COINS_RECORDED`,
   `COIN_EARLY`).
 * the other checks (coins, the stream's state, the ZK server, Lean's tile verifier, replays, shapes) are not core_check's.
 
@@ -206,11 +206,11 @@ def _variant(man: dict, coins: dict, opening: dict, case: str) -> dict:
 
 
 def selected_stream(ch: Path) -> str | None:
-    """The stream digest the honest select read, from its SAMPLED reply (a window stopped before its outcome has no
+    """The stream digest the honest select read, from its DRAWN reply (a window stopped before its outcome has no
     audit.json); None for a run whose replies don't carry it."""
     for line in (ch / "requests.jsonl").read_text().splitlines():
         r, q = json.loads(line), json.loads(json.loads(line)["request"])
-        if (q.get("op"), q.get("name")) == ("select", "honest") and r["reply"].startswith("SAMPLED "):
+        if (q.get("op"), q.get("name")) == ("select", "honest") and r["reply"].startswith("DRAWN "):
             return json.loads(r["reply"].split(" ", 1)[1]).get("stream")
     return None
 
@@ -234,13 +234,13 @@ def coin_inputs(out: Path, checks: dict, summary: dict, passes: dict[str, Path])
              "population": reg["population"], "units": d["units"]}
         got.append(("select", "draw", x, checks["select"]["verdict"]))
         other = load(out / "other/registration.json") if (out / "other/registration.json").is_file() else {"x": 1}
-        for name, edit in (("sample-unit", {"units": sorted({*x["units"][1:], next(u for u in range(x["population"])
+        for name, edit in (("draw-unit", {"units": sorted({*x["units"][1:], next(u for u in range(x["population"])
                                                                                     if u not in x["units"])})}),
-                           ("sample-coin", {"opening": {**opened, "coin": f"{int(opened['coin'][:2], 16) ^ 1:02x}" + opened["coin"][2:]}}),
+                           ("draw-coin", {"opening": {**opened, "coin": f"{int(opened['coin'][:2], 16) ^ 1:02x}" + opened["coin"][2:]}}),
                            ("draw-after", {"registration": hashlib.sha512(D.canonical(other).encode()).hexdigest()}),
-                           ("sample-stream", {"stream": "00" * 64}),
-                           ("sample-receipt", {"receipt": {**receipt, "received": "1"}}),
-                           ("sample-fewer", {"units": x["units"][:-1]})):
+                           ("draw-stream", {"stream": "00" * 64}),
+                           ("draw-receipt", {"receipt": {**receipt, "received": "1"}}),
+                           ("draw-fewer", {"units": x["units"][:-1]})):
             got.append((name, "draw", {**x, **edit}, "CONTROL"))
     pass_path = passes.get(summary.get("served_run") or "")
     salt = out / "salt-opening.json"
@@ -266,7 +266,7 @@ def coin_inputs(out: Path, checks: dict, summary: dict, passes: dict[str, Path])
 def coin_judged(recorded: str, kind: str, out: Any) -> bool:
     """Whether the coin check's outcome `out` is the recorded verdict (a control's: refused)."""
     refused = out is not None and "refused" in out
-    if recorded in ("SAMPLED", "REGISTERED"):
+    if recorded in ("DRAWN", "REGISTERED"):
         return not refused and (kind == "draw" or out.get("how") is not None)
     return refused
 

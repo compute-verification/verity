@@ -322,7 +322,7 @@ LEVERS = [
           "a verifier on main), instead of 439.1 s of launch-bound torch receipts, at any unit size",
           dict(t_window_s=T_WINDOW_DITHER, receipts_per_unit=False)),
     Lever("draws per window", "compute-accounting", 1,
-          "the service challenger's K_d (H1_SAMPLE), the best of 4 to 256: a larger sample means fewer windows and so fewer "
+          "the service challenger's K_d (H1_DRAW), the best of 4 to 256: a larger sample means fewer windows and so fewer "
           "statements' fixed costs, but more sampled proof blocks a period once x = K_d/(r·M) is not small",
           dict(draws=K_D_SCAN)),
     Lever("Lean: one process checks many windows", "proofs", 2,
@@ -504,7 +504,7 @@ def report() -> dict:
         lanes_per_unit=lanes_per_unit(), statement_lanes={k: statement_lanes(v) for k, v in RATES.items()},
         node_gb=NODE_GB, configurations=[period(c) for c in configs], near_term=[period(c) for c in near_term()],
         levers=single_levers(), route_end=end.name,
-        samples_scan=scan(end, "draws", K_D_SCAN), rounds_scan=scan(end, "rounds", ROUNDS_SCAN),
+        draws_scan=scan(end, "draws", K_D_SCAN), rounds_scan=scan(end, "rounds", ROUNDS_SCAN),
         long_windows=[period(long_window(c)) for c in (configs[1], configs[3], end)],
         sensitivity=sensitivity(),
     )
@@ -519,7 +519,7 @@ def markdown(rep: dict) -> str:
             table(rep["near_term"]), "",
             "Each lever alone on today's configuration (work: 1 a parameter, 2 one module, 3 a new path, 4 a new form):",
             "", lever_table(rep["levers"]), ""]
-    for key, field in (("samples_scan", "draws"), ("rounds_scan", "rounds")):
+    for key, field in (("draws_scan", "draws"), ("rounds_scan", "rounds")):
         out.append(f"At the route's end, by {field} a window: " + "; ".join(
             f"{r['value']}: {r['windows']:,} windows, {r['days']:,.2f} d, {r['node_days']:,.1f} node-d" for r in rep[key]))
     out += ["", "One window long enough on its own (no period), with the custody it holds until its sample:", ""]

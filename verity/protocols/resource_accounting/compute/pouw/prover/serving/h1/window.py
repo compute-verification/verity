@@ -14,7 +14,7 @@ over W (`EPOCHS`), its salt coin opened after R (`salt_session`); its salt is `a
 the gate's open answer, and opens its salt after the weights' root. Round s's coin opens after round s's root
 (`pouw_h1.H1Run`); `finish` closes the session once the window has finished. The host opens a salt coin only after the
 root its session was opened on (serve.py's ``--root``), H1's R. An H1 window's sampling coin is not S's: it comes
-from a sample session of its own (`SampleSession`, the pouw setting ``sample_session``, reserved withheld with
+from a sample session of its own (`SampleSession`, the pouw setting ``draw_session``, reserved withheld with
 `window.SAMPLE_FAMILIES`: ``reserve --withhold``), which the gate opens on the window's sample root once the prover's
 commitment is in, its open answering no root (`gate_of`), so its challenger releases its coin commitment only after
 that commitment. The challenger is auditor-trusted
@@ -111,7 +111,7 @@ def connect(at: str, given: Mapping[str, Any], wait_s: float = remote.TUNNEL_WAI
 
 
 def reserved_of(raw: Any, name: str = "session") -> dict[str, Any] | None:
-    """H1's pouw setting ``session`` (or ``sample_session``, `name`): None, or the gate's answer to the window's
+    """H1's pouw setting ``session`` (or ``draw_session``, `name`): None, or the gate's answer to the window's
     ``reserve`` (its ``session``, a gate session id, and optionally its `RESERVE_FIELDS`); ValueError otherwise."""
     if raw is None:
         return None

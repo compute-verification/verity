@@ -260,7 +260,7 @@ def test_a_window_whose_close_fails_is_discarded_not_waited_on():
 
 
 def opts(**retention):
-    r = {"retain": "device", "retain_device_gb": 32.0, "retain_exclude": "", "release_after": "spot,pouw_h1", "samples_dir": "",
+    r = {"retain": "device", "retain_device_gb": 32.0, "retain_exclude": "", "release_after": "spot,pouw_h1", "draws_dir": "",
          **retention}
     return SimpleNamespace(retention=SimpleNamespace(**r), commit=True, scheme=R.NAME, window_gb=32.0, seal=True)
 
@@ -272,7 +272,7 @@ def test_serve_openai_gates_every_device_held_seal_on_named_samples(tmp_path):
     assert "distinct protocol names" in SL.retention_refusal(opts(release_after="spot,spot"))
     assert "distinct protocol names" in SL.retention_refusal(opts(release_after="a/b"))
     rec = SL.retention_record(opts(), SimpleNamespace())
-    assert rec["release_after"] == "spot,pouw_h1" and rec["samples_dir"] == "OUT/draws"
+    assert rec["release_after"] == "spot,pouw_h1" and rec["draws_dir"] == "OUT/draws"
     samples, d = SL.release_of(opts(), tmp_path)
     assert samples.protocols == ("spot", "pouw_h1") and d.path == tmp_path / "draws" and d.path.is_dir()
     assert SL.release_of(opts(retain="host", release_after=""), tmp_path) == (None, None)

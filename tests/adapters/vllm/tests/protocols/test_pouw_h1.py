@@ -1033,10 +1033,10 @@ def test_h1_takes_its_salt_and_round_coins_from_the_auditor_hosts_challenger(tmp
     """With the setting ``challenger`` the window's one challenge phase on the auditor device, reserved on the gate, is
     opened on the window's open root once round 0 is admitted (over the weights' root, round 0's request table and the
     challenge phase), its salt coin after that root and round s's coin after round s's root, and closes once the window
-    has finished; its sampling coin is its sample's challenge phase's (the setting ``sample_session``), which the gate opens
+    has finished; its sampling coin is its sample's challenge phase's (the setting ``draw_session``), which the gate opens
     withheld on the window's sample root; the verifier, reading the challenger's own directories under its key, trusts the
     window's coins (`trusted_rounds_reason`) only with the host's pins log and the sample's directory, and every request
-    entry and slot still opens under its round's root. Without ``sample_session`` the install is refused."""
+    entry and slot still opens under its round's root. Without ``draw_session`` the install is refused."""
     host = _host(tmp_path, monkeypatch)
     assert PO.refusals(PO.Context(stage="serve", enabled=(_entry(),), settings=_remote())) == ()
     no_sample = {k: v for k, v in _remote()["pouw"].items() if k != "draw_session"}

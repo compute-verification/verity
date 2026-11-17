@@ -2911,7 +2911,7 @@ def test_the_rule_line_reads_whether_the_sample_was_the_lanes_first_reserve_afte
 
 
 def test_the_pouw_piece_fetches_the_windows_sample_session_and_gives_the_check_its_tree(tmp_path, monkeypatch):
-    """A window whose record names its sample's session (``sample_session``, which the coin check refuses without): the
+    """A window whose record names its sample's session (``draw_session``, which the coin check refuses without): the
     piece fetches it beside the window's session, and the check gets its tree as ``--draw-dir``."""
     calls, got = [], []
     monkeypatch.setattr(S, "_gate_out", _gate(calls))

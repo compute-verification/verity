@@ -129,7 +129,7 @@ def test_the_served_sample_weighs_mixed_linears_by_the_cited_statements_wref():
         return credit + qa * m * k + c * m * k
 
     s = C.PearlC(forming="v1", device=SM120, hashing="h0")
-    assert CW.sample_wref(s) is CW.SM120_LOOP_CAST_8P72 and CW.sample_wref(S) is None
+    assert CW.draw_wref(s) is CW.SM120_LOOP_CAST_8P72 and CW.draw_wref(S) is None
     linears = {"llama": [(6144, 4096), (4096, 4096), (28672, 4096), (4096, 14336)],
                "qwen": [(6144, 4096), (4096, 4096), (24576, 4096), (4096, 12288)]}
     for nks in linears.values():

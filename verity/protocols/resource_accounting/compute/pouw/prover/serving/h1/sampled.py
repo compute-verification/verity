@@ -576,7 +576,7 @@ def stage(a: Any) -> int:
     for c in sampled:
         by_k.setdefault(ks[lay["calls"][c][0]], []).append(c)
     work.mkdir(parents=True, exist_ok=True)
-    print(f"SAMPLED at K = {k_sample}: {sum(map(len, sampled.values()))} units in calls {sorted(sampled)}", flush=True)
+    print(f"DRAWN at K = {k_sample}: {sum(map(len, sampled.values()))} units in calls {sorted(sampled)}", flush=True)
     population = sum(size for size, _w in CR.call_work(lay))
     _rows, _salts, ok = CR.ok_table(win["program"], f"{win['shape']['prefix']}{CR.OK_VALUE}", win["root"], population)
     plan = {"window": a.window, "draw_k": k_sample, "program": win["program"], "calls": [], "leaves": [],

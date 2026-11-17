@@ -13,7 +13,7 @@ package's as `verity.protocols.resource_accounting.compute.pouw.prover.clear.cle
   - A credited row must pass the rules.
 * **Credit.**
   - A cell's sample weight is its row's share of `W_ref` at |K|, with no weight side (F2), so padding to `k_unit` and
-    filler earn nothing. `W_ref` is the one the sample's Lean statement weighs by (`sample_wref`): on sm_120 at its inert-work bound
+    filler earn nothing. `W_ref` is the one the sample's Lean statement weighs by (`draw_wref`): on sm_120 at its inert-work bound
     1/1,000, `wrefDevRev1K` at `Prices.sm120Loop` and the honest cast at 8.72 (`SM120_LOOP_CAST_8P72`), so that a served
     step's mixed linears are sampled in proportion to it; elsewhere the scheme's own `wref`, Lean's
     `wrefDevRev1` at its record.  W, the profile's work, stays the scheme's own `wref`.
@@ -161,7 +161,7 @@ SM120_LOOP_CAST_8P72 = SampleWref("pearlCSampledSm120v1LoopCast8p72Rev1InertShar
 SAMPLE_WREF = {(SM120.name, SM120.prices, SM120.cap): SM120_LOOP_CAST_8P72}
 
 
-def sample_wref(scheme: C.PearlC) -> SampleWref | None:
+def draw_wref(scheme: C.PearlC) -> SampleWref | None:
     """The statement the scheme's sample weighs by, or None for the scheme's own `wref` (Lean's at its record, c = 0)."""
     if type(scheme) is not C.PearlC:
         return None
@@ -169,8 +169,8 @@ def sample_wref(scheme: C.PearlC) -> SampleWref | None:
 
 
 def ticket_cell(scheme: C.PearlC, record: UnitRecord) -> Fraction:
-    """A credited cell's sample weight: its row's share of the sampled statement's `W_ref` at |K| (`sample_wref`)."""
-    at = sample_wref(scheme)
+    """A credited cell's sample weight: its row's share of the sampled statement's `W_ref` at |K| (`draw_wref`)."""
+    at = draw_wref(scheme)
     if at is None:
         return cell_wref(scheme, record)
     priced = copy.copy(scheme)
@@ -186,7 +186,7 @@ def tile_weight(scheme: C.PearlC, record: UnitRecord, tile: Tile) -> Fraction:
 
 def tickets(scheme: C.PearlC, records: Sequence[UnitRecord]) -> list[tuple[int, Tile, int]]:
     """(record position, tile, integer ticket) for every tile of every record, by its credited cells' `W_ref` at the
-    statement the sample cites (`sample_wref`)."""
+    statement the sample cites (`draw_wref`)."""
     weights = [(p, t, tile_weight(scheme, r, t)) for p, r in enumerate(records) for t in scheme.tiles(r.matmul.shape)]
     den = lcm(*(w.denominator for _, _, w in weights)) if weights else 1
     return [(p, t, int(w * den)) for p, t, w in weights]

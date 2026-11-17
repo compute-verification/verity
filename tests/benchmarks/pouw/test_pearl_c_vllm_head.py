@@ -30,7 +30,7 @@ M16, K, N, REAL, WEIGHT, INDEX = 16, 2_048, 128_256, 4, 64, 0
 #: the vocabulary row that is all +0 (it fails liveness, so it is declared excluded), in column tile 2,001
 ZERO_ROW = 128_100
 #: the column tiles the sample is fixed to: the first, one in the middle and the last
-SAMPLED = (0, 1_002, 2_003)
+DRAWN = (0, 1_002, 2_003)
 EXCLUSION = ZERO_ROW // 64
 KEY = bytes([1]) * 32
 SAMPLES = 3
@@ -61,7 +61,7 @@ def _prove(ts: list[int]) -> list[tuple[int, bytes, np.ndarray]]:
     return out
 
 
-def head_pass(d: Path, prove: tuple[int, ...] | None = (*SAMPLED, EXCLUSION), jobs: int = 1) -> Path:
+def head_pass(d: Path, prove: tuple[int, ...] | None = (*DRAWN, EXCLUSION), jobs: int = 1) -> Path:
     """The head's pass in the device run's layout under `d`, its manifest's path. Tiles `prove` are proved (every tile
     with None), in `jobs` forked processes, the rest of the transcript and of y left +0."""
     s = T.PPD.scheme_of(SCHEME)
@@ -149,7 +149,7 @@ def head(tmp_path_factory):
 @pytest.fixture
 def fixed_sample(monkeypatch):
     tiles = T.PPD.scheme_of(SCHEME).tiles(T.Shape(M16, K, N))
-    monkeypatch.setattr(T.VR.CW, "sample", lambda scheme, records, key, samples: [(0, tiles[t]) for t in SAMPLED][:samples])
+    monkeypatch.setattr(T.VR.CW, "sample", lambda scheme, records, key, samples: [(0, tiles[t]) for t in DRAWN][:samples])
 
 
 def verdict(path: Path, **kw) -> dict:
@@ -166,7 +166,7 @@ def test_the_verifier_accepts_the_heads_call_opens_its_last_column_tile_and_cred
     got = verdict(head, window=T.window_record(head), cross_check=2)
     assert got["answer"]["verdict"] == "accept", got["line"]
     profile, public = got["answer"]["profile"], got["answer"]["public"]
-    assert profile["tiles"] == [[0, t] for t in (*SAMPLED, EXCLUSION)] and profile["exclusion_tiles"] == 1
+    assert profile["tiles"] == [[0, t] for t in (*DRAWN, EXCLUSION)] and profile["exclusion_tiles"] == 1
     assert all(v["ok"] for v in got["verdicts"]) and got["replay"] == "batch"
     assert "y committed and checked on 1 of 1 calls" in got["line"] and "on its 3 tables" in got["line"], got["line"]
     assert public["tie"]["tables"] == 3 and "weights" not in public["tie"]

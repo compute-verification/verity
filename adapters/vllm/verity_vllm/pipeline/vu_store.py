@@ -188,7 +188,7 @@ def export_vus(programs: dict[str, dict[str, Any]], bmap: dict[str, Any], commit
         for k, res in enumerate(_run_sample(len(picked), int(limits.workers), float(limits.max_seconds), t_sample)):
             st = fam_stats.setdefault(picked[k]["family"], Counter())
             if res is None:
-                st["not_sampled_time_budget"] += 1
+                st["not_drawn_time_budget"] += 1
                 continue
             unit, blobs, dt = res
             st["drawn"] += 1
@@ -240,7 +240,7 @@ def export_vus(programs: dict[str, dict[str, Any]], bmap: dict[str, Any], commit
                "by_family": {f: dict(c) | {"seconds": round(fam_time.get(f, 0), 3)} for f, c in sorted(fam_stats.items())},
                "store": {"values": len(list((root / "values").iterdir())), "bytes": sum(p.stat().st_size for p in root.rglob("*") if p.is_file())},
                "sets": sets, "wall_s": round(time.perf_counter() - t0, 3),
-               "timing": {"population_s": round(t_sample - t0, 3), "sample_s": round(t_extract - t_sample, 3), "extract_s": round(time.perf_counter() - t_extract, 3),
+               "timing": {"population_s": round(t_sample - t0, 3), "draw_s": round(t_extract - t_sample, 3), "extract_s": round(time.perf_counter() - t_extract, 3),
                           "rule": "max_seconds budgets the sample from after the population is built; max_population_seconds budgets the build"}}
     (out / "export.json").write_text(json.dumps(summary, indent=1, default=str) + "\n")
     return summary

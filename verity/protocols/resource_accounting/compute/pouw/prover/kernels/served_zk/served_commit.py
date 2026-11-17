@@ -1264,7 +1264,7 @@ def handle(ch: Challenger, cmd: Mapping[str, Any]) -> tuple[str, dict]:
     ``register`` (``registration`` a record's file, ``manifest`` its pass's manifest and ``recorded`` true for a pass
     recorded before the execution phase's coins; ``stream`` and ``replay`` for a control; ``out`` the receipt), ``select`` (``out`` the
     sample; the reply adds the stream's digest the sample read), ``deliver`` (``units``: the job's rows, each with its ``session`` record) and ``outcome`` (``units``; ``out`` a
-    directory: outcome.json, audit.json).  Replies: COINS, OPENED, REGISTERED, SAMPLED, DELIVERED, ACCEPT, REJECT, LATE,
+    directory: outcome.json, audit.json).  Replies: COINS, OPENED, REGISTERED, DRAWN, DELIVERED, ACCEPT, REJECT, LATE,
     PENDING, REFUSED, or ERROR for a request it couldn't read."""
     op, name = cmd.get("op"), cmd.get("name")
     try:
@@ -1284,7 +1284,7 @@ def handle(ch: Challenger, cmd: Mapping[str, Any]) -> tuple[str, dict]:
         if op == "select":
             d = ch.select(name)
             _put(cmd.get("out"), d.draw)
-            return "SAMPLED", {**d.draw, "stream": ch._held(name)[0].digest}
+            return "DRAWN", {**d.draw, "stream": ch._held(name)[0].digest}
         if op == "deliver":
             o = ch.deliver(name, _sessions(_json(cmd["units"])))
             return ("DELIVERED", {"sessions": len(ch.sessions[name])}) if o is None else (o.verdict.codes[0].upper(), {})
@@ -1410,7 +1410,7 @@ def cmd_commit(a) -> int:
     advice["provenance"] = {"run": man.get("run"), "manifest_sha512": sha, "scheme": man["scheme"],
                             "transcript_root": man.get("transcript_root"), "commitment": man.get("commitment"),
                             "records_root": man.get("records_root"),
-                            "call_sample": {"source": source.hex(), "among": [x["index"] for x in calls]} if not a.call else {"given": a.call}}
+                            "call_draw": {"source": source.hex(), "among": [x["index"] for x in calls]} if not a.call else {"given": a.call}}
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     (out / "commitment.json").write_text(json.dumps(public, sort_keys=True))
@@ -1605,8 +1605,8 @@ def cmd_coin_variant(a) -> int:
 
 def cmd_check(a) -> int:
     record = a.record(lean=False if a.python_record else None)
-    params, reg, d = _json(a.params), _json(a.registration), _json(a.sample)
-    why = check(params, reg, d, a.unit, Path(a.pub).read_bytes(), _json(a.opening), sampled=not a.unsampled, record=record)
+    params, reg, d = _json(a.params), _json(a.registration), _json(a.draw)
+    why = check(params, reg, d, a.unit, Path(a.pub).read_bytes(), _json(a.opening), sampled=not a.undrawn, record=record)
     record.close()
     if a.out:
         Path(a.out).write_text(json.dumps({"of_record": False, "accepted": why is None, "why": why or "",
@@ -1735,7 +1735,7 @@ def main(argv=None, *, record: Callable[..., OR.Record] = lean_record,
     p.add_argument("pub")
     p.add_argument("opening")
     p.add_argument("--out", help="the opening check's verdict, for the outcome")
-    p.add_argument("--unsampled", action="store_true", help="a control: open a unit the sample did not sample")
+    p.add_argument("--undrawn", action="store_true", help="a control: open a unit the sample did not sample")
     p.add_argument("--expect-reject", action="store_true")
     p.add_argument("--python-record", action="store_true", help=PYTHON_RECORD)
     p = sub.add_parser("shape")

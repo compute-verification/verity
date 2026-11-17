@@ -114,7 +114,7 @@ from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import 
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1.sample import (
     NO_SAMPLE_SESSION,
     sample_files,
-    sample_reason,
+    draw_reason,
     sample_session_reason,
 )
 
@@ -764,7 +764,7 @@ def period_credit(ledger: Ledger, period: str, windows: Sequence[Mapping[str, An
 
 
 __all__ = ["SAMPLE_EPS", "EXPECTED_CREDIT", "Fetch", "Ledger", "NO_SAMPLE_SESSION", "REPLY_FIELDS", "SCHEME", "SESSION_FIELDS",
-           "address", "carried", "credit_reason", "sample_families", "sample_files", "sample_k", "sample_reason",
+           "address", "carried", "credit_reason", "sample_families", "sample_files", "sample_k", "draw_reason",
            "sample_session_reason", "sampled_of", "evidence", "families", "held", "lms_verify",
            "manifest_reason", "period_credit", "period_reason", "pinned_key", "pins_head", "pins_of", "program_salt_of",
            "salt_session_reason", "session_of", "session_reason", "statement", "trusted_rounds_reason", "window_evidence"]

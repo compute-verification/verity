@@ -15,7 +15,8 @@ stack, and the challenge round trips, so the fill time and the challenger's GPU 
 - `session`: one whole session of the reference (`wipe_challenger.WipeMemoryAttester`, test signer) against the honest
   prover in its own process over TCP: a `2^20`-label fill streamed, then 74,000 sequential challenges, signed, and
   judged by `wipe_verdict.judge` (the Lean verdict, `streamed-wipe-verdict`, unless `--verdict` says otherwise), each
-  side's verdict recorded.
+  side's verdict recorded.  Under `--verdict python` no Lean judges it, so an honest session is `undecided`, never
+  accepted (`wipe_verdict.NO_JUDGE`), and the Python's own accept is only in `verdicts`.
 """
 
 from __future__ import annotations
@@ -317,7 +318,8 @@ def session(port: int, verdict: str) -> dict:
     v, sides = wv.judge(signed, c.commitment, trusted={signer.public_key}, schemes=ts.SCHEMES, decide=verdict)
     t4 = time.perf_counter_ns()
     per = [r.elapsed_ns for r in signed.batches]
-    return {"labels": n, "k": k, "ended": signed.ended, "accepted": v.accepted, "reasons": list(v.reasons),
+    return {"labels": n, "k": k, "ended": signed.ended, "accepted": v.accepted, "outcome": wv.outcome(v),
+            "reasons": list(v.reasons),
             "verdict": verdict, "verdicts": sides, "verdict_s": (t4 - t3) / 1e9,
             "fill_s": (t1 - t0) / 1e9, "challenges_s": (t2 - t1) / 1e9, "per_round": _stats(per),
             "limit_ns": params.limit_ns}

@@ -19,7 +19,7 @@ window's served rows to, `credit.committed_length`; cap 2, the window's challeng
 window's challenge phase (``reserve --peer PEER --scheme S --families F``) and its sample's (``--families`` the sampling
 coin alone, `pouw_h1_challenger.sample_families`), and serves
 `pouw_h1.FILL` (Llama-3.1-8B int8, 64 in flight, T = 64, S = 18) with ``pouw_h1_gpu.py --workload fill --served
---model MODEL --circuit DIGEST --challenger AT --session RESERVE --sample-session SAMPLE --gate GATE`` (the window's
+--model MODEL --circuit DIGEST --challenger AT --session RESERVE --draw-session SAMPLE --gate GATE`` (the window's
 b/<K> salted with the key the
 gate's ``model-key`` gives the lane's key), under ``gpu-lease 1 --wait --max-min MIN`` with ``--gpu-lease MIN``, so
 the GPU is held only while it serves (a run without ``--gpus`` sees no GPU, and gets the one its own
@@ -289,7 +289,7 @@ def serve(a: argparse.Namespace, gate: Gate, reserved: dict[str, Any], out: Path
     holder = HO.Holder(scratch / "stream.sock")
     gpu = [sys.executable, "-m", "tests.protocols.pouw_h1_gpu", "--workload", "fill", "--out", str(out)]
     argv = [*gpu, *(["--served", "--model", MODEL, "--circuit", circuit] if a.served else []),
-            "--challenger", a.at_addr, "--session", json.dumps(reserved), "--sample-session", json.dumps(sample),
+            "--challenger", a.at_addr, "--session", json.dumps(reserved), "--draw-session", json.dumps(sample),
             "--gate", shlex.join(gate.argv), "--at", a.pin_at, "--by", a.pin_by, "--prover-dir", str(prover),
             "--handoff", str(holder.path), "--handoff-state", str(prover / PV.STATE)]
     if a.gpu_lease:
@@ -365,7 +365,7 @@ def evidence(gate: Gate, session: str, d: Path, sample: str | None = None) -> di
                 t.extractall(d / "fetch", filter="data")
         return frc == 0
     return {"ledger_lines": ledger.count(b"\n") if rc == 0 else 0, "pins_lines": pins.count(b"\n") if prc == 0 else 0,
-            "pubkey": pub, "fetched": fetched(session), **({"sample_fetched": fetched(sample)} if sample is not None else {})}
+            "pubkey": pub, "fetched": fetched(session), **({"draw_fetched": fetched(sample)} if sample is not None else {})}
 
 
 def check(calls: Path, tree: Path, pin: str, ledger: list[Path], out: Path, window: dict | None = None,
@@ -596,7 +596,7 @@ def rehearse(a: argparse.Namespace) -> dict[str, Any]:
         return doc
     sampled = gate("reserve", "--peer", a.peer, "--scheme", PHC.SCHEME, "--families", PHC.sample_families(),
                  "--minutes", str(a.minutes), "--withhold")
-    doc["sample_reserved"] = sampled
+    doc["draw_reserved"] = sampled
     if "refused" in sampled:
         doc["gate_log"] = gate.log
         return doc
@@ -604,7 +604,7 @@ def rehearse(a: argparse.Namespace) -> dict[str, Any]:
     doc["stages"] = serve(a, gate, reserved, out / "serve", circuit, sampled)
     doc["serve_rc"] = doc["stages"]["rc"]
     doc["key_custody"] = key_custody(Path(doc["stages"]["prover"]["directory"]), out)
-    for s, unit in ((sid, "unit"), (dsid, "sample_unit")):
+    for s, unit in ((sid, "unit"), (dsid, "draw_unit")):
         if gate("status", s).get("open") is not None:
             doc[unit] = gate("wait", s) if a.gate is None else _poll_end(gate, s)
     doc["period_close"] = gate("period-close", "--name", a.period)

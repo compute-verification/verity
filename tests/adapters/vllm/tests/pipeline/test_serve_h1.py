@@ -150,7 +150,7 @@ def test_an_unserved_window_is_released_off_the_loop_in_window_order_and_puts_no
     assert set(unserved["seconds"]) == {"reserve", "install", "close_on_loop", "queued", "release", "ended"}
     assert (tmp_path / "h1" / "w0" / PH.CALLS_FILE).is_file() and not (tmp_path / "h1" / "w1").exists()
     summary = samples.summary()
-    assert 1 not in summary["sampled_not_released"] and 1 not in summary["refused"], summary
+    assert 1 not in summary["drawn_not_released"] and 1 not in summary["refused"], summary
     srv.src.uninstall()
 
 

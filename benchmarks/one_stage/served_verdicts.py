@@ -98,7 +98,7 @@ serve-openai run and refuses unless the digest is that run's.
 
 ``pouw``: PoUW's development piece (``POUW_CMD``): window K's H1 outcome (``windows.jsonl``'s ``pouw_h1``) and record
 (``h1/w<K>/pouw-h1-calls.json``); with the auditor device's challenger's coins, the window's session and its sample's
-session (the record's ``sample_session``, ``--draw-dir``) as the gate's ``fetch`` gives them, the auditor's ledger and pins
+session (the record's ``draw_session``, ``--draw-dir``) as the gate's ``fetch`` gives them, the auditor's ledger and pins
 log as the gate answers now and main's first-parent history (``--main``),
 checked by `pouw_h1_gpu.check_challenger` under the key the deployment pins (``--key-sha512``). Its verdict is accept when
 H1's tables are tied to the window's Commit, its coins are the session the ledger opened and ended for it, and its record

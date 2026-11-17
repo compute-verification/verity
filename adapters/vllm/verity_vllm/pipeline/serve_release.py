@@ -186,7 +186,7 @@ class Samples:
             self._kept[window] = {s: frozenset(v) for s, v in union.items()}
             self._got.pop(window, None)
         line = {"window": window, "protocols": list(self.protocols), "leaves_by_protocol": by,
-                "union_leaves": sum(len(v) for v in union.values()), "sample_wait_s": round(waited, 6), **rec}
+                "union_leaves": sum(len(v) for v in union.values()), "draw_wait_s": round(waited, 6), **rec}
         self.releases.append(line)
         return line
 
@@ -211,7 +211,7 @@ class Samples:
         return {"protocols": list(self.protocols), "released": len(self.releases),
                 "kept_bytes": sum(r.get("kept_bytes", 0) for r in self.releases),
                 "dropped_bytes": sum(r.get("dropped_bytes", 0) for r in self.releases),
-                "sampled_not_released": pending, "refused": refused, "discarded": dict(self.discarded), "failure": self.failure,
+                "drawn_not_released": pending, "refused": refused, "discarded": dict(self.discarded), "failure": self.failure,
                 "device_pool": self.pool.record() if self.pool is not None else None}
 
 
@@ -226,7 +226,7 @@ class SampleDir:
         self.path.mkdir(parents=True, exist_ok=True)
         self.seen: set[str] = set()
         self._stop = threading.Event()
-        self.thread = threading.Thread(target=self._run, name="samples-dir", daemon=True)
+        self.thread = threading.Thread(target=self._run, name="draws-dir", daemon=True)
 
     def scan(self) -> int:
         """Put every sample file not yet seen; how many."""
@@ -285,7 +285,7 @@ class RetentionOptions:
                                      "window its release waits for; the union of the leaves their sampled proof blocks open is kept "
                                      "(serve_release); pouw is PoUW H1's, put by its arm (--protocols), the rest come in "
                                      "through --draws-dir")
-    samples_dir: str = option("--draws-dir", default="", metavar="DIR",
+    draws_dir: str = option("--draws-dir", default="", metavar="DIR",
                             help="--release-after: where each sample comes in, w<k>.<protocol>.json (default OUT/draws)")
 
 
@@ -293,7 +293,7 @@ def retention_record(opts: Any, com: Any) -> dict[str, Any]:
     """serve.json's record of ``opts.retention``: the families left unretained, where values wait for their samples, and the pool."""
     r = opts.retention
     return {"retain_exclude": r.retain_exclude or None, "retain": r.retain, "device_pool": getattr(com, "device_pool_record", None),
-            "release_after": r.release_after or None, "samples_dir": (r.samples_dir or "OUT/draws") if r.release_after else None}
+            "release_after": r.release_after or None, "draws_dir": (r.draws_dir or "OUT/draws") if r.release_after else None}
 
 
 def retention_refusal(opts: Any) -> str | None:
@@ -336,7 +336,7 @@ def release_of(opts: Any, out: Path, com: Any = None) -> tuple[Samples | None, S
     if not r.release_after:
         return None, None
     samples = Samples(protocols_of(r.release_after), getattr(com, "device_pool", None))
-    return samples, SampleDir(Path(r.samples_dir) if r.samples_dir else Path(out) / "draws", samples)
+    return samples, SampleDir(Path(r.draws_dir) if r.draws_dir else Path(out) / "draws", samples)
 
 
 def fail(samples: Samples | None, error: BaseException | None) -> None:

@@ -1,6 +1,6 @@
 """recorded.py: one recorded H1 execution phase's sampled tile units through SPOT, the challenger's and the verifier's side.
 
-    python recorded.py prepare --work W --stage SW --lean FLOCK_VERIFY --layer L1.npz --layer2 L2.npz [--sample 8] [--k K] [--cols N]
+    python recorded.py prepare --work W --stage SW --lean FLOCK_VERIFY --layer L1.npz --layer2 L2.npz [--draw 8] [--k K] [--cols N]
     python recorded.py summarize --work W --out OUT
 
 ``prepare`` runs one execution phase of the execution phase and plans its proofs, the prover's steps by `window.py` (a subprocess: the
@@ -19,7 +19,7 @@ challenger and the verifier never hold a row, a salt or a served value):
    ``--partition``), holds the commitment's registration to them (`check_registration`), and the stager builds its
    statement bound to them;
 3. the verifier registers the execution phase's ok rows itself (`ok_registration`: value ``ok``, row u the one word 1 under unit
-   u's public salt), samples ``--sample`` units of the execution phase's tiles by Lean ``verity-verify-proof draw`` on the coin's stream,
+   u's public salt), samples ``--draw`` units of the execution phase's tiles by Lean ``verity-verify-proof draw`` on the coin's stream,
    groups them by call (a registered port reads one value, and a call's units read its own tables, so a statement holds
    one call's units), and writes each call's ``--registered`` file (`registered_file`: `h1unit.registered_reads` from
    its own Program under the execution phase's roots and its own ``ok``, the ok port o1 beside the A, B and record ports,
@@ -511,7 +511,7 @@ def cmd_prepare(a: argparse.Namespace) -> int:
     work, sw = Path(a.work), Path(a.stage)
     work.mkdir(parents=True, exist_ok=True)
     (sw / "requests").mkdir(parents=True, exist_ok=True)
-    record: dict = {"schema": "verity/pouw/h1-prove/record/v1", "draw_k": a.sample}
+    record: dict = {"schema": "verity/pouw/h1-prove/record/v1", "draw_k": a.draw}
     w1, w2 = f"{a.name}-w1", f"{a.name}-w2"
     com1, served1, salt1, ch1 = epoch(work, w1, a.layer, 1, a, record)
     # the execution phase's public Program and partition: the verifier's own copies, and the shape the stager binds its statement to
@@ -543,7 +543,7 @@ def cmd_prepare(a: argparse.Namespace) -> int:
     do = ch1.open("draw", reg)
     assert coin_reason(ch1.commitment, do, "draw", reg) is None
     T = com1["tiles"]
-    units = sample_units(a.lean, do.coin, w1, reg.hex(), T, a.sample)
+    units = sample_units(a.lean, do.coin, w1, reg.hex(), T, a.draw)
     u0 = units[0]
     by_call: dict[int, list[int]] = {}
     for u in units:
@@ -552,8 +552,8 @@ def cmd_prepare(a: argparse.Namespace) -> int:
     units0 = by_call[c0]
     # one statement a sampled call: "honest" the first sampled proof block's (the negatives'), "honest-c<c>" each other's
     honest = {c: "honest" if c == c0 else f"honest-c{c}" for c in by_call}
-    record["windows"][w1].update(registration=reg.hex(), sample_opening=do.to_json())
-    record["draw"] = {"population": T, "k": a.sample, "units": units, "by": "verity-verify-proof draw (Lean)",
+    record["windows"][w1].update(registration=reg.hex(), draw_opening=do.to_json())
+    record["draw"] = {"population": T, "k": a.draw, "units": units, "by": "verity-verify-proof draw (Lean)",
                       "calls": {honest[c]: {"call": c, "units": us} for c, us in by_call.items()},
                       "reads": {str(u): U.unit_reads(win.program, win.tp, u) for u in units}}
     log(f"drew {units} of {T}: {record['draw']['calls']}")
@@ -656,7 +656,7 @@ def cmd_prepare(a: argparse.Namespace) -> int:
     # the statements: each sampled call's units on the honest rows, the other execution phase's unit, the tampered A row, and each
     # in-proof negative's base (the first sampled call's units on its execution phase's rows) where its records are not the honest
     # execution phase's
-    sets, set_o = {c: f"{w1}-sample-c{c}" for c in by_call}, f"{w1}-u{u0}"
+    sets, set_o = {c: f"{w1}-draw-c{c}" for c in by_call}, f"{w1}-u{u0}"
     set_h = sets[c0]
     req = lambda rows, set_, out, idx: {"rows": str(rows), "set": set_, "out": str(out), "indices": idx}  # noqa: E731
     stmts = {**{h: req(work / f"open-{h}" / "rows.npz", sets[c], sw / f"st-{h}", by_call[c]) for c, h in honest.items()},
@@ -958,7 +958,7 @@ def cmd_summarize(a: argparse.Namespace) -> int:
                "circuit_bytes": record["circuit"]["circuit_bytes"], "circuit_build_seconds": record["circuit"]["build_seconds"],
                "window_tiles": record["draw"]["population"], "drawn_units": len(record["draw"]["units"]),
                "program": record.get("program"),
-               "units": record["draw"]["units"], "sample_calls": record["draw"].get("calls"),
+               "units": record["draw"]["units"], "draw_calls": record["draw"].get("calls"),
                "statements": len(plan["statements"]),
                "statement_instances": {s["tag"]: s["n"] for s in plan["statements"]},
                "epsilon_at_delta": {f"{d}": round(1 - d ** (1 / record["draw_k"]), 4) for d in (0.5, 0.1, 0.01)},

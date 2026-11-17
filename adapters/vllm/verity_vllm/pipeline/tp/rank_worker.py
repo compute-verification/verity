@@ -1209,7 +1209,7 @@ class TP2CaptureWorkerExtension:
         fams = sorted({i[4].split(".")[-1].split("/")[0] if not i[4].startswith(bd.HIDDEN_FAMILIES) else i[4].split("/")[0] for i, e, _l in samples})
         tp_samples = sum(1 for i, e, _l in samples if str(i[5]).startswith(("part_rank", "shard_rank")))
         return _jsonable({"rank": st["rank"], "n": len(samples), "opened": len(ops), "verified": sum(ok), "unbound_n": len(unbound), "unbound": unbound[:5],
-                          "late_step_in_sample": any(i[2] == late for i, e, _l in samples), "families": fams, "tp_partial_identities_sampled": tp_samples,
+                          "late_step_in_sample": any(i[2] == late for i, e, _l in samples), "families": fams, "tp_partial_identities_drawn": tp_samples,
                           "open_verify_s": _t.perf_counter() - t0, "map_digest": bmap["digest"],
                           "claimed_root": (claimed_root_hex or rc.run_root.hex()), "claimed_root_is_own": rcv is rc, "context": {"ok": ctx_ok, "why": ctx_why}})
 

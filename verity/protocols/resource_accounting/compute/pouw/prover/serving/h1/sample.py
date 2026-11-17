@@ -40,7 +40,7 @@ def sample_session_reason(commits: Mapping[str, Any], key: ChallengerKey, lines:
     on `main` (`challenger.trusted_session_of` over its files `files`, as infra's gate publishes them; None names none),
     opened withheld (`challenger.withheld_on`), so its challenger released its coin root only after that root, of a sample
     session's layout (`window.sample_epoch_reason`), and the coin its sampling coin 0 opened after that root
-    (`sample_reason`); None when it is."""
+    (`draw_reason`); None when it is."""
     root = _sample(commits).get("root")
     if not (isinstance(root, str) and _ROOT.match(root)):
         return "the window's sample root is not 128 lowercase hex"
@@ -57,10 +57,10 @@ def sample_session_reason(commits: Mapping[str, Any], key: ChallengerKey, lines:
     why = Wd.sample_epoch_reason(trusted)
     if why is not None:
         return f"the window's draw session's signed coins: {why}"
-    return sample_reason(commits, trusted, received.get(Wd.SAMPLE, ()))
+    return draw_reason(commits, trusted, received.get(Wd.SAMPLE, ()))
 
 
-def sample_reason(commits: Mapping[str, Any], trusted: LiveCommitment, received: Sequence[bytes]) -> str | None:
+def draw_reason(commits: Mapping[str, Any], trusted: LiveCommitment, received: Sequence[bytes]) -> str | None:
     """Why the window's sampling coin isn't its one sampling coin 0, opened after its `pouw_h1_requests.sample_root` (over the
     manifest's ``calls_root``, the last round's receipts and every round's root and coin), given its sample session's
     signed commitment `trusted` and the sample roots its log shows it received; None when it is."""
@@ -98,4 +98,4 @@ def sample_files(commits: Mapping[str, Any], ledger: Any, fetch: Any, verify: An
         return e
 
 
-__all__ = ["NO_SAMPLE_SESSION", "sample_files", "sample_reason", "sample_session_reason"]
+__all__ = ["NO_SAMPLE_SESSION", "sample_files", "draw_reason", "sample_session_reason"]

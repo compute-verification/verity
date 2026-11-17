@@ -550,7 +550,7 @@ def test_off_node_coins_are_checked_from_the_published_session_and_its_ledger_an
     assert cs.record()["session"] == SID
     m = _serve_window(cs, SV, _calls(ROUNDS), ROOT)
     assert host.sample.ended() is None and host.ended() is None
-    assert m["coins"]["draw_session"] == SAMPLE_SID and cs.sample_commitment.families == CO.Wd.SAMPLE_FAMILIES
+    assert m["coins"]["draw_session"] == SAMPLE_SID and cs.draw_commitment.families == CO.Wd.SAMPLE_FAMILIES
     (tmp_path / "manifest.json").write_text(json.dumps(m))
     session, heads, key = host.directory.parent, [host.ledger], host.key
     early = tmp_path / "early.jsonl"
@@ -563,13 +563,13 @@ def test_off_node_coins_are_checked_from_the_published_session_and_its_ledger_an
     assert CO.main(["check", "--challenger-out", str(session), "--ledger", str(early), "--ledger", str(host.ledger),
                     "--pins", str(tmp_path / "pins.jsonl"), "--main", str(tmp_path / "main.txt"),
                     "--manifest", str(tmp_path / "manifest.json"), "--key-record", str(tmp_path / "key-record.json"),
-                    "--period", PERIOD, "--root", ROOT.hex(), "--sample-out", str(host.sample.directory.parent)]) == 0
+                    "--period", PERIOD, "--root", ROOT.hex(), "--draw-out", str(host.sample.directory.parent)]) == 0
     for bad, why in (({"pubkey_sha512": "00" * 64}, "not the one whose SHA-512 it names"),
                      ({"schema": "challenger-key/v2"}, "a challenger key record is challenger-key/v1")):
         (tmp_path / "bad-record.json").write_text(json.dumps({**record, **bad}))
         with pytest.raises(CO.Ch.CoinError, match=why):
             CO.key_record(tmp_path / "bad-record.json")
-    e = {**SV.coins_expect(m), "sample_out": host.sample.directory.parent}
+    e = {**SV.coins_expect(m), "draw_out": host.sample.directory.parent}
     got = CO.check(session, m["coins"], heads, PINS, MAIN, **e, key=key, period=PERIOD, root=ROOT)
     assert got["ok"] and got["coins"] == f"off-node vy-challenger-1.{SID} (checked)"
     assert (got["rounds"], got["draws"], got["window"], got["root"]) == (ROUNDS, 1, WINDOW, ROOT.hex())
@@ -654,8 +654,8 @@ def test_off_node_coins_are_checked_from_the_published_session_and_its_ledger_an
     assert refused(salts={**e["salts"], 2: e["salts"][1]}) == {"salts"}
     assert refused(flip_after=other) == {"draw"}
     assert refused(flip_after=None) == {"draw"}
-    assert refused(sample_out=None) == {"draw"}
-    assert refused(sample_out=session) == {"draw"}
+    assert refused(draw_out=None) == {"draw"}
+    assert refused(draw_out=session) == {"draw"}
     assert refused(heads=resigned("unwithheld", lambda x: x[4]["body"].pop("withheld"))) == {"draw"}
     alone = CO.open_coins(None, EPOCH, ROUNDS, random.Random("prover").randbytes)
     assert refused(coins={**m["coins"], "commitment": alone.commitment.to_json()}) == {"commitment"}
@@ -678,7 +678,7 @@ def test_an_off_node_sampling_coin_comes_only_from_a_withheld_sample_session(tmp
         cs.flip(after)
     cs.close()
     assert host.sample.ended() is None and host.ended() is None
-    assert cs.sample_commitment is None and not CO.Ch.withheld_on(host.lines, after.hex())
+    assert cs.draw_commitment is None and not CO.Ch.withheld_on(host.lines, after.hex())
 
 
 def test_round_coins_pipelined_off_node_open_each_after_its_root_in_order(tmp_path):

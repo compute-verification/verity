@@ -245,7 +245,7 @@ def test_pass_and_sample(pass_server):
                      for name in ["honest", *passes.SAMPLE_NAMES] for seed in range(3))
     print(f"pouw-check-difftest pass: {stats['pass']}; sample: {stats['draw']}; and {sum(swept.values())} swept "
           f"({dict(swept)}); by outcome: {dict(sorted(PASSED.items()))}")
-    assert {k for k in PASSED if not k.startswith("sample ")} >= {"coin", "recorded beacon", "certifier", "live coin"}
+    assert {k for k in PASSED if not k.startswith("draw ")} >= {"coin", "recorded beacon", "certifier", "live coin"}
     for part in (CC.LIVE_UNHELD, CC.LIVE_FORM, CC.LIVE_NOT_SIGNED, CC.LIVE_SESSION, CC.INCOMPLETE, CC.PASS_FORM,
                  "the pass's salt coin opens against the epoch's published coin commitment",
                  "the coin commitment's coins are not a Pearl-C salt session's",
@@ -345,7 +345,7 @@ def _port(name: str, fn, instance, names: list[str]) -> D.Port:
 
 
 CREDIT = _port("credit", credit, credit_cases.credit_instance, credit_cases.CREDIT_NAMES)
-SAMPLED = _port("drawn", sampled, credit_cases.sampled_instance, credit_cases.SAMPLED_NAMES)
+DRAWN = _port("drawn", sampled, credit_cases.sampled_instance, credit_cases.SAMPLED_NAMES)
 WINDOW_SAMPLED = _port("window-drawn", window_sampled, credit_cases.window_sampled_instance, credit_cases.WINDOW_SAMPLED_NAMES)
 OUTCOME = _port("outcome", outcome, credit_cases.outcome_instance, credit_cases.OUTCOME_NAMES)
 WINDOW = _port("window", window, credit_cases.window_instance, credit_cases.WINDOW_NAMES)
@@ -378,13 +378,13 @@ def test_credit(pass_server):
     refusal of `credit.window`, `credit.period_credit` and the steps they run."""
     CREDITED.clear()
     stats = {p.fn: D.run(p, examples=n, server=pass_server)
-             for p, n in ((CREDIT, 300), (SAMPLED, 300), (WINDOW_SAMPLED, 100), (OUTCOME, 300), (WINDOW, 150), (PERIOD, 100), (A_LINK, 400),
+             for p, n in ((CREDIT, 300), (DRAWN, 300), (WINDOW_SAMPLED, 100), (OUTCOME, 300), (WINDOW, 150), (PERIOD, 100), (A_LINK, 400),
                              (WEIGHTS, 300), (REGISTERED_FILE, 150))}
     swept = Counter()
     for port, instance, names in ((CREDIT, credit_cases.credit_instance, credit_cases.CREDIT_NAMES),
                                   (REGISTERED_FILE, credit_cases.registered_file_instance,
                                    credit_cases.REGISTERED_FILE_NAMES),
-                                  (SAMPLED, credit_cases.sampled_instance, credit_cases.SAMPLED_NAMES),
+                                  (DRAWN, credit_cases.sampled_instance, credit_cases.SAMPLED_NAMES),
                                   (WINDOW_SAMPLED, credit_cases.window_sampled_instance, credit_cases.WINDOW_SAMPLED_NAMES),
                                   (OUTCOME, credit_cases.outcome_instance, credit_cases.OUTCOME_NAMES),
                                   (WINDOW, credit_cases.window_instance, credit_cases.WINDOW_NAMES),

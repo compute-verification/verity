@@ -329,7 +329,7 @@ def test_h1s_settings_refuse_a_steps_count_and_round_coins_that_are_not_a_live_e
 
 
 def test_a_sample_session_or_a_period_without_what_it_goes_with_is_refused():
-    """``sample_session`` is the sample session of H1's window on its challenger, and ``period`` goes with a Pearl-C
+    """``draw_session`` is the sample session of H1's window on its challenger, and ``period`` goes with a Pearl-C
     install's ``challenger`` and ``session``: H1 without a challenger, and a scheme that is neither, are refused each by
     name."""
     def refused(entry, settings):
@@ -659,9 +659,9 @@ def test_a_windows_sample_is_held_to_its_root_its_parts_and_its_coin(served):
         assert _trusted(host, {**honest, "draw": {**sample, "coin": coin}}) == (
             f"the window's draw coin is malformed ({NO_OPENING})")
     signed, root = host.sample.challenger.commitment, bytes.fromhex(sample["root"])
-    assert PHD.sample_reason(honest, signed, (root,)) is None
+    assert PHD.draw_reason(honest, signed, (root,)) is None
     for received in ((bytes(64),), (root, root), (bytes(64), root)):
-        assert PHD.sample_reason(honest, signed, received) == (
+        assert PHD.draw_reason(honest, signed, received) == (
             "the challenger's log does not show the window's sample root as the one root its sampling coin followed: a sample "
             "opened before the window's rounds, or after another root")
 

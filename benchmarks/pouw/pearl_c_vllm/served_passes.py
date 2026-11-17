@@ -222,7 +222,7 @@ CASE_SCHEMA = "verity-pouw/pearl-plus-case-parts/v1"
 CASE_RECORD = ("commitment", "draw", "schema", "source")
 CASE_PARTS, CASE_BLOBS = "parts.json", "blobs"
 #: why `retain` and `volunteer` refuse once the verifier's coin is flipped
-SAMPLED = "the verifier's coin is flipped (DIR/coin.json), so the passes and their records are fixed"
+DRAWN = "the verifier's coin is flipped (DIR/coin.json), so the passes and their records are fixed"
 #: why ``retain --window-record`` drops a warm-up pass (`pearl_c.window`)
 WARM_UP = "the warm-up's (timed false): a tied run's W lists only the timed call's rounds, so it credits nothing"
 #: why `serve` refuses ``--seeded`` beside retention or a live session's coins
@@ -471,7 +471,7 @@ def volunteer(args: argparse.Namespace) -> int:
         print(f"volunteer FAIL: {UNRETAINED[1]}", flush=True)
         return 1
     if (passes / COIN).exists():
-        print(f"volunteer FAIL: {SAMPLED}", flush=True)
+        print(f"volunteer FAIL: {DRAWN}", flush=True)
         return 1
     paths, _ = manifests(passes)
     coins = VR.epoch_coins(passes / "coins.json")
@@ -541,7 +541,7 @@ def retain(args: argparse.Namespace) -> int:
     passes = Path(args.passes)
     served = json.loads((passes / "served.json").read_text())
     if served.get("retained") is False or (passes / COIN).exists():
-        print(f"retain FAIL: {UNRETAINED[1] if served.get('retained') is False else SAMPLED}", flush=True)
+        print(f"retain FAIL: {UNRETAINED[1] if served.get('retained') is False else DRAWN}", flush=True)
         return 1
     held = [p for p in served["passes"] if p["units"]]
     if bad := [s for s in args.drop if not 0 <= s < len(held)]:

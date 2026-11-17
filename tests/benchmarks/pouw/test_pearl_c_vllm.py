@@ -3265,7 +3265,7 @@ def test_the_served_table_cites_each_models_worst_input_and_refuses_what_it_cann
     assert l["epsilon"] == pytest.approx(math.log(100) / 48)
     assert q["fresh"]["epsilon"] == SD.clopper_pearson_upper(1, 320, 0.01) and q["fresh"]["trials"] == 640 and "fresh" not in l
     assert [v["accepted"] for v in q["verify"]] == [True, False] and "| qwen | `rq` | 2 |" in (out / "table.md").read_text()
-    assert q["tile_samples"] == 96 and "m = 5" in (out / "table.md").read_text()
+    assert q["tile_draws"] == 96 and "m = 5" in (out / "table.md").read_text()
     assert ST.main(["--model", "qwen", str(files["q"]), "--absent", "llama", "its pass is gone", "--out", str(out)]) == 0
     table = json.loads((out / "table.json").read_text())
     assert table["m"] == 2 and table["models"][0]["epsilon"] == pytest.approx(math.log(40) / 32)

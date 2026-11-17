@@ -461,7 +461,7 @@ class Host:
         """The gate's open of the window's sample session `session` on its sample root `root`, withheld unless not
         `withhold`: reserved in this host's ledger, served by a `Host` of its own (`sample`) over a sample session's coins
         (`window.sample_challenger`), and reached at `SAMPLE_PORT` (the answer's ``port``)."""
-        host = self.sample = Host(self.directory.parent / f"{self.directory.name}-sample",
+        host = self.sample = Host(self.directory.parent / f"{self.directory.name}-draw",
                                 Wd.sample_challenger(0, entropy(self.seed + 0x100)), self.seed, session, self.leaves,
                                 self.ledger, gated=True, withhold=withhold)
         return {**host.open(session, root), "port": SAMPLE_PORT}

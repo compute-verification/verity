@@ -2324,10 +2324,10 @@ def check_end(win: SoWindow, name: str, lib_h1o: str) -> dict:
     sample_why = CO.Ch.live_reason(com, rec["sample"], CO.Wd.SAMPLE, 0, mroot)
     coins = {"source": rec["coins"].source, "salt_after_window_root": salt_why is None, "salt_reason": salt_why,
              "rounds_reason": CO.Wd.rounds_reason(com, pipe.roots, pipe.openings),
-             "flip_after_manifest_root": sample_why is None and mroot == rec["mroot"], "draw_reason": sample_why,
+             "draw_after_manifest_root": sample_why is None and mroot == rec["mroot"], "draw_reason": sample_why,
              "rounds_cover_steps": i_f == n + 1 and len(rows) == n}
     coins["ok"] = bool(coins["salt_after_window_root"] and coins["rounds_reason"] is None
-                       and coins["flip_after_manifest_root"] and coins["rounds_cover_steps"])
+                       and coins["draw_after_manifest_root"] and coins["rounds_cover_steps"])
     doc["coins"] = coins
     bad = []
     for r in range(n):
@@ -2401,9 +2401,9 @@ def check_end(win: SoWindow, name: str, lib_h1o: str) -> dict:
         o_, units, nw = win.plan.offs[w]
         if (plan.receipts(w) != last["receipts"][o_:o_ + units * nw].view(units, nw)).any():
             rc_bad.append(w)
-    doc.update(order_bad=order_bad[:8], order_bad_n=len(order_bad), rounds_after_flip=after, salts_bad=salts_bad[:8],
+    doc.update(order_bad=order_bad[:8], order_bad_n=len(order_bad), rounds_after_draw=after, salts_bad=salts_bad[:8],
                salts_expected_bad=rearly, tail_leaves_bad=tail_bad, final_root_ok=final_ok,
-               receipts_after_flip=late_steps, last_step=s, last_m=m, a_roots_bad=a_bad, receipt_roots_bad=rr_bad,
+               receipts_after_draw=late_steps, last_step=s, last_m=m, a_roots_bad=a_bad, receipt_roots_bad=rr_bad,
                receipts_vs_h1r_bad=rc_bad[:8], receipts_vs_h1r_bad_n=len(rc_bad))
     sp = open_spill(win, rec, kinds)
     if sp is not None:

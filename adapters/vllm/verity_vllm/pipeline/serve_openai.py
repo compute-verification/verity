@@ -648,7 +648,7 @@ def main(opts: Options) -> int:
     trace = advice_trace(out, llm)
     mirror = records_mirror(out, opts.copy_records_to)
     windows = sealer = warmed = arm = None
-    samples, samples_dir = RL.release_of(opts, out, com)
+    samples, draws_dir = RL.release_of(opts, out, com)
     if com is not None:
         from verity_vllm.engine.step_trace import scheduler_config
 
@@ -679,8 +679,8 @@ def main(opts: Options) -> int:
                                 request_cap=opts.window_requests, arm=arm, release=samples, pool=pool, pool_block=pool_block)
         if arm is not None:
             arm.sampling(samples)
-    if samples_dir is not None:
-        samples_dir.start()
+    if draws_dir is not None:
+        draws_dir.start()
     if session is not None:
         session.begin(windows)
     loop = EngineLoop(session.paced(engine) if session is not None else engine, windows, cap=opts.window_requests)
@@ -768,8 +768,8 @@ def main(opts: Options) -> int:
             stopped(False)
             print(f"SERVE-OPENAI stopping: {sealer.summary()['held'] / SS.GB:.1f} GB of windows still to seal", flush=True)
             sealer.close()
-        if samples_dir is not None:                        # the pending seals have had their windows' samples
-            samples_dir.stop()
+        if draws_dir is not None:                        # the pending seals have had their windows' samples
+            draws_dir.stop()
         if arm is not None:                              # each H1 window's release (off the loop) ends before ``final``
             arm.drain()
         watchdog.stop()

@@ -93,8 +93,8 @@ class GateSessions:
         print(f"[serve-h1] window {window}: reserved sampling session {reserved['session']} on {self.peer}", flush=True)
         return reserved
 
-    def sample_session(self, session: str) -> dict[str, Any] | None:
-        """The pouw setting ``sample_session`` of `session`'s window: its sampling session's reserve (`reserve_sample`)."""
+    def draw_session(self, session: str) -> dict[str, Any] | None:
+        """The pouw setting ``draw_session`` of `session`'s window: its sampling session's reserve (`reserve_sample`)."""
         from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import window as PHW
 
         sample = self.held_of(session).get("draw")
