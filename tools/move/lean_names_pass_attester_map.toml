@@ -1,0 +1,28 @@
+# The memory attester's Lean names: its namespace, modules and Lake targets, wherever code spells them. The Python
+# classes, the party and role `memory-challenger`, the domain tags and every string a Python twin mirrors keep their bytes.
+[words]
+"memoryChallenger" = "memoryAttester"
+"core_memory_challenger" = "core_memory_attester"
+"memory-challenger-test" = "memory-attester-test"
+"memory-challenger-verdict" = "memory-attester-verdict"
+"memory-challenger-difftest" = "memory-attester-difftest"
+
+[[words_in]]
+files = ["*.lean", "*/lakefile.toml", "*lean-audit.json", "*/lake-manifest.json"]
+[words_in.words]
+"MemoryChallenger" = "MemoryAttester"
+
+[[words_in]]
+files = ["*"]
+[words_in.words]
+"MemoryChallenger." = "MemoryAttester."
+"MemoryChallenger/" = "MemoryAttester/"
+
+[keep]
+patterns = [
+    '[\w.-]+(?:/[\w.-]+)*/v\d+(?:\.\d+)*\b',
+    '\b(?:mc|memory_challenger)\.MemoryChallenger\b',
+]
+
+[rewrite]
+exclude = ["tools/move/**", "archive/**", "**/CHANGELOG.md", "**/fixtures/**", "fixtures/**", "*.patch", "uv.lock", "tools/research/src/research/store/**", "tests/tools/move/**", "GLOSSARY.md"]
