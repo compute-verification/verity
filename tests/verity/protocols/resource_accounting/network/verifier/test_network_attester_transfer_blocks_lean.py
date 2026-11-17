@@ -121,7 +121,7 @@ def _findings(c):
             [replace(f, units=(1,))], [replace(f, units=())], [f, f], [f, replace(f, accepted=False)]]
 
 
-def _certificates(c):
+def _attestations(c):
     e, i = c.certificates
     flip = lambda b, k=0: b[:k] + bytes([b[k] ^ 1]) + b[k + 1:]
     edits = [{"digest": flip(e.digest)}, {"digest": e.digest[:-1]}, {"signature": flip(e.signature, 40)},
@@ -153,7 +153,7 @@ def test_the_lean_verdict_is_the_pythons(tmp_path):
         {"pub": bytes(192)}, {"o0": bytes(192)}, {"pub": c.delivered.salts["pub"][:-1]}, {"pub": "x"}, {"pub": None})]
     cases += [{"delivered": replace(c.delivered, salts={"o0": c.delivered.salts["o0"]})}]
     cases += [{"delivered": replace(c.delivered, output=w)} for w in (0, 1, 2, 4, 1 << 16, -1, "3", None, True)]
-    cases += [{"certificates": cs} for cs in _certificates(c)]
+    cases += [{"certificates": cs} for cs in _attestations(c)]
     rejected = 0
     for k, kw in enumerate(cases):
         lean, python = c.both(**kw)
