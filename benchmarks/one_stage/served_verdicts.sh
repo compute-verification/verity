@@ -679,7 +679,19 @@ SP_CHALLENGER=${PP_CHALLENGER:-local}
 coins_on() {  # the machine SPOT's challenger flips its coins on, which the record names
   local c=$SP_CHALLENGER
   [ -z "$V3C" ] || c=$V3C_CHALLENGER
-  case $c in gate:*) echo "${c#*@}" ;; *) echo "${V3C_AUDITED:-${SERVED_NODE:-$PP_PEER}}" ;; esac
+  case $c in gate:*) gate_machine "$c" ;; *) echo "${V3C_AUDITED:-${SERVED_NODE:-$PP_PEER}}" ;; esac
+}
+# a gate whose address no NAME_HOST variable holds, named by its kind: no line or record names a gate's address
+GATE_UNNAMED="the auditor's gate"
+gate_machine() {  # GATE: the machine gate:USER@HOST reaches, by the NAME_HOST that gives or holds its address (NAME,
+  # lower case, - for _: VY_CHALLENGER_1_HOST is vy-challenger-1), else GATE_UNNAMED; never the address
+  local h=${1#*@} v n=
+  if [[ $h =~ ^\$\{([A-Za-z_][A-Za-z0-9_]*)_HOST\}$ ]]; then n=${BASH_REMATCH[1]}
+  elif [ -n "$h" ]; then
+    for v in $(compgen -v); do [[ $v == ?*_HOST && ${!v-} == "$h" ]] && { n=${v%_HOST}; break; }; done
+  fi
+  n=${n,,}
+  if [ -n "$n" ]; then echo "${n//_/-}"; else echo "$GATE_UNNAMED"; fi
 }
 v3c_coins() {  # where V3c's audit's coins come from, as its COINS line says
   if v3c_live; then

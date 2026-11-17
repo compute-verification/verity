@@ -615,7 +615,7 @@ class GateClient:
                  main: list[str]) -> None:
         self.gate, self.peer, self.ssh = gate, peer, G.ssh_args(ssh_key)
         if not key_record and isinstance(gate, str):
-            raise Ch.CoinError(f"the gate {gate.split('@')[-1]} is held to its deployment's key record, and none was given")
+            raise Ch.CoinError("a USER@HOST gate is held to its deployment's key record, and none was given")
         self.key = G.key_record(key_record) if key_record else G.gate_key(G.gate_call(gate, ["pubkey"], self.ssh))
         self.main = main
         self.session: str | None = None
@@ -749,7 +749,7 @@ def start(challenger: str, root: str, ranks: list[int], dest: Path, main: str | 
         session = GateClient(command, None, peer, key_record, first_parent)
     else:
         raise SystemExit(f"--challenger is local, loopback:HOST:PORT, gate:USER@HOST (with --peer and --challenger-key) "
-                         f"or command:WORDS (with --peer), not {challenger!r}")
+                         f"or command:WORDS (with --peer), not {challenger.partition('@')[0]!r}")
     manager = _Manager(ctx=get_context("spawn"))
     manager.start()
     draws = manager.Draws(root, ranks, session.key.to_json(), first_parent, stage)
