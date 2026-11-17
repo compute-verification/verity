@@ -7,7 +7,7 @@ Run from the flock checkout after `git apply` of flock-link-b684b12.patch and fl
 copying verity/protocols/proofs/flock/prover/live to crates/flock-live. It applies the CUDA half of cuda_live_patch.py (the live hook in
 challenger.hpp, pow_grind.cuh and prove_ffi.cu; its gpu_roundtrip.rs half needs flock-128's harness and is skipped),
 copies prove_chunk.cuh next to prove_ffi.cu and includes it at the end, names prove_ffi.cu's anonymous namespace, has the
-device arena take small blocks from its top,
+device arena take small blocks from its top and report its peak live bytes and reserved bytes (`flock_cuda_arena_stats`),
 moves zerocheck round 1's GF(2^8) products from its shared-memory log tables onto clmad on sm_90
 (zerocheck_round1_cpustyle.cuh), and points build.rs at SM (default 90) and CUDA (default /usr/local/cuda-13.3), without
 upstream's -lineinfo (`--lineinfo` keeps it).
@@ -93,6 +93,23 @@ if "    size_t high_ = 0;\n" not in s:
         assert s.count(a) == 1, f"prove_ffi.cu's DeviceArena changed: {a!r}"
         s = s.replace(a, b)
     print("prove_ffi.cu: the device arena zeroes what each prove call used")
+# the arena's own use: the most bytes live in it at once (its high-water offset is no measure: small blocks come from the
+# top) and the bytes it reserved, read and restarted by flock_cuda_arena_stats after a session's prove calls
+if "    size_t peak_live_ = 0;\n" not in s:
+    for a, b in (("        live_.emplace(*ptr, Block{offset, aligned});\n        return cudaSuccess;\n",
+                  "        live_.emplace(*ptr, Block{offset, aligned});\n        live_bytes_ += aligned;\n"
+                  "        if (live_bytes_ > peak_live_) peak_live_ = live_bytes_;\n        return cudaSuccess;\n"),
+                 ("        size_t bytes = live->second.bytes;\n        live_.erase(live);\n",
+                  "        size_t bytes = live->second.bytes;\n        live_.erase(live);\n        live_bytes_ -= bytes;\n"),
+                 ("private:\n    struct Block { size_t offset, bytes; };\n",
+                  "    void stats(size_t* reserved, size_t* peak) {\n        *reserved = capacity_;\n        *peak = peak_live_;\n"
+                  "        peak_live_ = live_bytes_;\n    }\n\nprivate:\n    struct Block { size_t offset, bytes; };\n"),
+                 ("    size_t high_ = 0;\n", "    size_t high_ = 0;\n    size_t live_bytes_ = 0;\n    size_t peak_live_ = 0;\n")):
+        assert s.count(a) == 1, f"prove_ffi.cu's DeviceArena changed: {a!r}"
+        s = s.replace(a, b)
+    s = s.rstrip("\n") + ('\n\nextern "C" int flock_cuda_arena_stats(size_t* reserved, size_t* peak) {\n'
+                          "    flock_ffi::device_arena.stats(reserved, peak);\n    return 0;\n}\n")
+    print("prove_ffi.cu: the device arena reports its peak live bytes and its reserved bytes")
 pf.write_text(s)
 
 # Round 1 folds each lane's eight k's as Σ_k x^k·(a_k·b_k) in GF(2^8) (AES polynomial), reduced once. Under clmad the eight

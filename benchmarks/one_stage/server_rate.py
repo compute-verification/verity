@@ -58,6 +58,9 @@ An ``FC_`` switch in the environment reaches every prover, ``FC_UNIT_WALK`` amon
 window's device reps ran (``unit_walk``: ``[true]`` the device's level walk in every rep, ``[false]`` in none, both when
 the sessions differ, empty when no session's record says).
 
+A row's ``device_peak_mib`` is the whole card's memory in use; its ``device_arena`` is the provers' own: the most bytes a
+session's device arena reserved and held live at once, over all its sessions, warm ones included.
+
 A row is **void** when any session was refused (a refused session files fast, so it would raise the rate), any of the
 server's processes exited nonzero, a prover's log reports the device out of memory, or a finished session ran another
 statement version than the row's: it has no rate (``statements_per_s`` is null), ``void`` lists the reasons, and a
@@ -267,6 +270,14 @@ def unit_walk(lives) -> list[bool]:
     no record says (a CPU prover's, or a prover without the field)."""
     return sorted({b["unit_walk"] for live in lives for b in (live or {}).get("buckets") or []
                    if isinstance(b, dict) and isinstance(b.get("unit_walk"), bool)})
+
+
+def device_arena(lives) -> dict[str, int] | None:
+    """The provers' own device memory, from each session's record's ``device_arena``: the most bytes any session's device
+    arena reserved (``reserved_bytes``) and held live at once (``peak_live_bytes``), and None when no record says (a CPU
+    prover's, or a prover without the field)."""
+    arenas = [a for live in lives if isinstance(a := (live or {}).get("device_arena"), dict)]
+    return {k: max(int(a.get(k) or 0) for a in arenas) for k in ("reserved_bytes", "peak_live_bytes")} if arenas else None
 
 
 def void_reasons(refused: int, sessions: int, exits: dict[str, int], out: Path) -> list[str]:
@@ -503,6 +514,7 @@ def one(a, dev: str, t: str, K: int) -> dict:
     if rec["median"]["e2e_s"] is not None and rec["median"]["prove_total_s"] is not None:
         rec["median"]["front_s"] = round(rec["median"]["e2e_s"] - rec["median"]["prove_total_s"], 4)
     rec["unit_walk"] = unit_walk(r["s"].live for r in win)
+    rec["device_arena"] = device_arena(r["s"].live for r in done)
     if lean is not None:
         rec["lean"] = []
         for s in judged:

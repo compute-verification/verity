@@ -4077,6 +4077,8 @@ struct Proved {
     tp0: Instant,
     /// how long the reps waited for the previous session's ([`Turn`]); inside `e2e_s`
     device_wait_s: f64,
+    /// the device arena's reserved bytes and the most bytes live in it at once over this session's reps (GPU only)
+    device_arena: Option<(usize, usize)>,
 }
 
 /// [`session`] up to its proofs; `Err` is a session the prover stopped before proving (its record).
@@ -4674,6 +4676,11 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
             None => Ok(()),
         }
     })();
+    // read before the turn passes: the next session's reps use the same arena
+    #[cfg(feature = "gpu")]
+    let device_arena = plan.gpu.then(flock_live::gpu_circuit::arena_stats);
+    #[cfg(not(feature = "gpu"))]
+    let device_arena = None;
     if let Some(t) = &plan.turn {
         t.end();
     }
@@ -4700,12 +4707,12 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
     }
     give_level0_bufs(l0_held);
     Ok(Proved { t, log, tabs, plan: plan.clone(), hello, commit, sig, res, proofs, early, e2e_s, wait_e2e_s, witness_s, witness_prebuilt_s,
-                prove_s, buckets, tp0, device_wait_s })
+                prove_s, buckets, tp0, device_wait_s, device_arena })
 }
 
 fn session_finish(p: Proved) -> (Value, Vec<Vec<u8>>) {
     let Proved { t, log, tabs, plan, hello, commit, sig, res, proofs, early, e2e_s, wait_e2e_s, witness_s, witness_prebuilt_s, prove_s,
-                 buckets, tp0, device_wait_s } = p;
+                 buckets, tp0, device_wait_s, device_arena } = p;
     let (st, inst) = (&tabs.list[0].st, &tabs.list[0].inst);
     if let Err(e) = res {
         let v = match call(&t, Req::Finish) {
@@ -4750,6 +4757,9 @@ fn session_finish(p: Proved) -> (Value, Vec<Vec<u8>>) {
     // past json!'s recursion limit in the literal above
     live["public_file_sha512"] = json!(hex(&inst.public_file_sha512));
     live["device_wait_s"] = json!(device_wait_s);
+    if let Some((reserved, peak)) = device_arena {
+        live["device_arena"] = json!({"reserved_bytes": reserved, "peak_live_bytes": peak});
+    }
     (live, proofs)
 }
 

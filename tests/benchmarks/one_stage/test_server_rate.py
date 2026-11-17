@@ -9,7 +9,7 @@ row; and the CPUs its processes could run on (``cores``: this process's affinity
 that hold them, on a made-up node directory). A templated staging is proved with its unit placed, and verified under its
 own statement. The Lean verdict is on the row's Program when one is given, and the row keeps what the verdict says of it.
 A row whose sessions ran another statement version than it asked for (a prover that ignores ``--wide-leaf``, or one that
-runs the wide leaf unasked) or name none is void."""
+runs the wide leaf unasked) or name none is void. A row's device arena is the most any session reserved and held live."""
 from __future__ import annotations
 
 import io
@@ -433,3 +433,10 @@ def test_a_flock_verify_that_does_not_know_the_statement_is_said_as_that(tmp_pat
     assert got["why"].startswith("no verdict (rc 2): this ")
     assert f" does not know the statement {statement!r} and refused it unread" in got["why"]
     assert ("Flock/Tags.lean" in got["why"]) is statement.endswith(SR.WIDE_LEAF)
+
+
+def test_a_rows_device_arena_is_the_most_any_session_reserved_and_held_live():
+    lives = [{"device_arena": {"reserved_bytes": 9, "peak_live_bytes": 5}}, None, {"buckets": []},
+             {"device_arena": {"reserved_bytes": 7, "peak_live_bytes": 6}}]
+    assert SR.device_arena(lives) == {"reserved_bytes": 9, "peak_live_bytes": 6}
+    assert SR.device_arena([None, {"prove_s": [1.0]}]) is None
