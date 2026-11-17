@@ -11,7 +11,7 @@ from typing import Any
 
 from verity_vllm.engine.hooks import Hooks
 
-from verity_bench.vllm.presets import NO_CONTROL, SERVED_EXECUTIONS, ArmSettings
+from verity_bench.vllm.presets import NO_CONTROL, SERVED_EXECUTIONS, VLLM, ArmSettings
 
 log = logging.getLogger(__name__)
 
@@ -37,9 +37,20 @@ class Arm:
     #: an experimental arm's name for the engine its own ``engine_overrides`` build (its ``engine_label``), recorded in
     #: its identity only: it never changes how the harness builds the engine, unlike ``execution``
     engine_label: str | None = None
+    #: the engine settings (`presets.ARM_ENGINE`) and request sampling (`presets.ARM_SAMPLING`) the arm overrides for
+    #: itself, a `presets.VLLM` value taking `vllm serve`'s (`serve_defaults.resolve`)
+    engine: Mapping[str, Any] | None = None
+    sampling: Mapping[str, Any] | None = None
+    #: gated, then timed, each in an engine lifetime of its own after the other arms (`runner.ALONE`): its engine takes
+    #: what vLLM leaves no other engine beside it
+    alone: bool = False
 
     def to_json(self) -> dict[str, Any]:
-        return asdict(self)
+        return {k: v for k, v in asdict(self).items() if k not in OWN or v}
+
+
+#: The fields an arm's record carries only when set, so the record of an arm without them is what it was before them
+OWN = ("engine", "sampling", "alone")
 
 
 @dataclass
@@ -69,6 +80,21 @@ BUILTINS = {
     # their bit-exact control.
     "stock-fp8": Arm("stock-fp8", precision="fp8"),
 }
+#: What `vllm serve MODEL` takes by default at the pin, as far as the harness sets it: vLLM's compile, scheduler, KV
+#: sizing, utilization, prefix caching, context length and dtype (`serve_defaults.resolve`). The requests stay the
+#: workload's, greedy with `ignore_eos`, so every arm serves the same requests; `serve_defaults.differences` records the
+#: `vllm serve` defaults that leaves out.
+SERVE_ENGINE = {k: VLLM for k in ("max_num_seqs", "max_num_batched_tokens", "max_model_len", "kv_cache_memory_bytes",
+                                  "gpu_memory_utilization", "enable_prefix_caching", "dtype")}
+SERVE = {"execution": "compiled", "sampling": {"detokenize": True}, "alone": True}
+BUILTINS |= {
+    "stock@serve": Arm("stock@serve", precision="bfloat16", engine={**SERVE_ENGINE, "quantization": VLLM}, **SERVE),
+    "stock-fp8@serve": Arm("stock-fp8@serve", precision="fp8", engine=SERVE_ENGINE, **SERVE),
+}
+
+
+def _overrides(settings: ArmSettings) -> dict[str, Any]:
+    return {k: dict(v) for k in OWN[:2] if (v := getattr(settings, k, None))}
 
 
 def _protocols(value: Any) -> tuple[str, ...]:
@@ -151,7 +177,7 @@ def _protocol_arm(name: str, settings: ArmSettings | None = None) -> Arm:
     s = settings or ArmSettings()
     control = "stock-fp8" if s.control is None else None if s.control == NO_CONTROL else s.control
     config = {k: dict(v) for k, v in s.protocols_config.items()} or None
-    return Arm(name, protocols=entries, precision=s.precision, control=control, protocols_config=config)
+    return Arm(name, protocols=entries, precision=s.precision, control=control, protocols_config=config, **_overrides(s))
 
 
 def served_variant(name: str, settings: ArmSettings | None = None) -> Arm:
@@ -160,12 +186,13 @@ def served_variant(name: str, settings: ArmSettings | None = None) -> Arm:
     built-in unless its `ArmSettings` say otherwise."""
 
     base, _, label = name.partition("@")
-    if base not in BUILTINS or label not in SERVED_EXECUTIONS:
-        raise ValueError(f"served variant {name!r}: expected BUILTIN@LABEL with BUILTIN one of {sorted(BUILTINS)} and "
+    plain = sorted(b for b in BUILTINS if "@" not in b)
+    if base not in plain or label not in SERVED_EXECUTIONS:
+        raise ValueError(f"served variant {name!r}: expected BUILTIN@LABEL with BUILTIN one of {plain} and "
                          f"LABEL one of {list(SERVED_EXECUTIONS)}")
     s = settings or ArmSettings()
     control = base if s.control is None else None if s.control == NO_CONTROL else s.control
-    return Arm(**{**BUILTINS[base].to_json(), "id": name, "control": control, "execution": label})
+    return Arm(**{**BUILTINS[base].to_json(), "id": name, "control": control, "execution": label, **_overrides(s)})
 
 
 def protocols_config(arm: Arm, environ: Mapping[str, str]) -> dict[str, dict[str, Any]]:

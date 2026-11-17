@@ -16,6 +16,7 @@ from typing import Any, Protocol
 from verity.protocols.resource_accounting.compute.pouw.verifier.salt import epoch_open_root
 
 from verity_bench.vllm import result as result_format
+from verity_bench.vllm import serve_defaults
 from verity_bench.vllm.arms import Arm
 from verity_bench.vllm.presets import Preset, SweepPoint
 
@@ -23,7 +24,12 @@ METRICS = ("time_per_output_token_s", "time_to_first_token_s", "tokens_per_s", "
 # Recorded for an arm at a point only when its every rep and the baseline's have it (the engine exposes its scheduler;
 # the point's requests generate more than one token).
 OPTIONAL_METRICS = ("decode_time_per_token_s", "inter_token_latency_p50_s", "inter_token_latency_p99_s")
-ENGINE_IDENTITY = ("vllm_version", "torch_version", "gpu", "kv_cache_tokens", "kernel_digest", "engine_overrides")
+ENGINE_IDENTITY = ("vllm_version", "torch_version", "gpu", "kv_cache_tokens", "kernel_digest", "engine_overrides",
+                   "arm_settings")
+#: Why an `alone` arm (`arms.Arm.alone`) runs as it does, which a result with one records
+ALONE = ("its engine takes vLLM's 0.92 of the card's memory, which leaves no room for another engine: it is gated and "
+         "timed in an engine lifetime of its own after every other arm's timed reps, so its reps are paired with the "
+         "baseline's by index, not interleaved with them")
 T95 = {1: 12.706, 2: 4.303, 3: 3.182, 4: 2.776, 5: 2.571, 6: 2.447, 7: 2.365, 8: 2.306, 9: 2.262, 10: 2.228,
        11: 2.201, 12: 2.179, 13: 2.160, 14: 2.145, 15: 2.131, 16: 2.120, 17: 2.110, 18: 2.101, 19: 2.093, 20: 2.086,
        25: 2.060, 30: 2.042, 40: 2.021, 60: 2.000, 120: 1.980}
@@ -405,6 +411,7 @@ def _identity(
             "kernel_digest": runtime.get("kernel_digest") or arm.kernel_digest,
             "engine_overrides": dict(runtime.get("engine_overrides") or {}),
             "kv_cache_tokens": runtime.get("kv_cache_tokens"),
+            **({"arm_settings": runtime["arm_settings"]} if runtime.get("arm_settings") else {}),
         })
     return {
         "preset": preset.to_json(),
@@ -439,7 +446,8 @@ def run_benchmark(
     """Run every gate before any timing, then use resident interleaving or `blocks`, with at least `warmups`
     discarded runs of a point before an engine's first timed one and, up to `max_warmups`, as many more as it takes two
     consecutive runs to agree (`_warm`). An arm's own gate is read again after its timed runs (`arm-closing`), and a
-    failure there leaves the result without points."""
+    failure there leaves the result without points. An `alone` arm is gated afterwards in an engine lifetime of its own
+    (`ALONE`), which times it once every gate so far has passed."""
 
     if reps < 1 or not arms or not points:
         raise ValueError("benchmark needs at least one arm, point, and repetition")
@@ -448,15 +456,22 @@ def run_benchmark(
         raise ValueError("benchmark needs at least one warm-up a point, and max_warmups no fewer than warmups")
     if any(a.control == a.id for a in arms):
         raise ValueError("an arm cannot be its own control: its greedy gate would compare it with itself")
-    baseline = "stock-fp8" if any(a.id == "stock-fp8" for a in arms) else "stock" if any(a.id == "stock" for a in arms) else arms[0].id
+    alone = tuple(a for a in arms if a.alone)
+    shared = tuple(a for a in arms if not a.alone)
+    ids = [a.id for a in shared or arms]
+    baseline = "stock-fp8" if "stock-fp8" in ids else "stock" if "stock" in ids else ids[0]
     schedule: list[dict[str, Any]] = []
     samples: dict[tuple[str, str], list[dict[str, Any]]] = {(a.id, p.id): [] for a in arms for p in points}
     versions: dict[str, Mapping[str, Any]] = {}
     engines: dict[str, BenchEngine] = {}
     resident_failure: str | None = None
+    tokens: dict[tuple[str, str], Mapping[str, tuple[int, ...]]] = {}
+    custom: dict[str, Mapping[str, Any]] = {}
+    if bad := sorted({a.control for a in arms} & {a.id for a in alone}):
+        raise ValueError(f"{bad} run alone, after the arms they would control: no arm's control can be one")
 
     try:
-        for arm in arms:
+        for arm in shared:
             engine = factory.create(arm, preset, resident=True)
             engines[arm.id] = engine
             versions[arm.id] = engine.identity
@@ -471,23 +486,24 @@ def run_benchmark(
 
     if resident_failure is None:
         try:
-            tokens, custom = _collect_gates(engines, arms, points)
-            gates = _evaluate_gates(arms, points, tokens, custom, versions)
+            got, own = _collect_gates(engines, shared, points)
+            tokens.update(got)
+            custom.update(own)
+            gates = _evaluate_gates(shared, points, tokens, custom, versions)
             if all(g["passed"] for g in gates):
                 for point in points:
-                    for arm in arms:
+                    for arm in shared:
                         _warm(engines[arm.id], point, warmups, max_warmups, schedule, {"mode": "resident", "arm": arm.id})
-                    for rep in range(reps):
-                        for arm_id in interleave_order(arms, baseline, rep):
+                    for rep in range(reps if shared else 0):
+                        for arm_id in interleave_order(shared, baseline, rep):
                             _record(samples, schedule, arm_id, point, rep, engines[arm_id], "resident")
-                gates += [g for arm in arms for g in _closing_gate(arm, engines[arm.id])]
+                gates += [g for arm in shared for g in _closing_gate(arm, engines[arm.id])]
         finally:
             _close_all(engines)
         mode = "resident"
     else:
         # Gate each arm in its own lifetime. Nothing is timed until all gates have passed.
-        tokens, custom, gates = {}, {}, []
-        for arm in arms:
+        for arm in shared:
             engine = factory.create(arm, preset, resident=False)
             versions[arm.id] = engine.identity
             try:
@@ -496,12 +512,12 @@ def run_benchmark(
                 custom[arm.id] = engine.custom_gate()
             finally:
                 engine.close()
-        gates = _evaluate_gates(arms, points, tokens, custom, versions)
+        gates = _evaluate_gates(shared, points, tokens, custom, versions)
         if all(g["passed"] for g in gates):
             # Two engine-lifetime cycles, the second in reverse arm order so that drift over the run cancels; each rep
             # belongs to one cycle.
             for cycle in range(min(2, reps)):
-                for arm in arms if cycle == 0 else tuple(reversed(arms)):
+                for arm in shared if cycle == 0 else tuple(reversed(shared)):
                     indices = [r for r in range(reps) if r % min(2, reps) == cycle]
                     if not indices or not all(g["passed"] for g in gates):
                         continue
@@ -520,8 +536,27 @@ def run_benchmark(
                         engine.close()
         mode = "blocks"
 
+    for arm in alone:
+        engine = factory.create(arm, preset, resident=False)
+        versions[arm.id] = engine.identity
+        try:
+            for point in points:
+                tokens[(arm.id, point.id)] = engine.gate(point)
+            custom[arm.id] = engine.custom_gate()
+            gates += _evaluate_gates((arm,), points, tokens, custom, versions)
+            if all(g["passed"] for g in gates):
+                for point in points:
+                    _warm(engine, point, warmups, max_warmups, schedule, {"mode": "alone", "arm": arm.id})
+                    for rep in range(reps):
+                        _record(samples, schedule, arm.id, point, rep, engine, "alone")
+                gates += _closing_gate(arm, engine)
+        finally:
+            engine.close()
+
     if all(g["passed"] for g in gates):
-        gates += _timed_token_gates(arms, points, samples, tokens, mode, custom)
+        gates += _timed_token_gates(shared, points, samples, tokens, mode, custom)
+        # gated and timed by one engine, as a resident arm is
+        gates += _timed_token_gates(alone, points, samples, tokens, "resident", custom)
     identity = _identity(preset, arms, sweep, git_commit or _git_head(), versions, config_identity,
                          reps=reps, warmups=warmups, max_warmups=max_warmups, interleave=mode)
     doc = {
@@ -532,8 +567,23 @@ def run_benchmark(
         "gates": gates,
         "execution": {"interleave": mode, "resident_failure": resident_failure, "reps": reps, "warmups": warmups,
                       "max_warmups": max_warmups,
-                      "schedule": schedule},
+                      "schedule": schedule,
+                      **({"alone": {"arms": [a.id for a in alone], "why": ALONE}} if alone else {})},
         "points": _aggregate(arms, points, baseline, samples) if all(g["passed"] for g in gates) else [],
+        **_vllm_serve(arms, versions),
     }
     result_format.validate(doc)
     return doc
+
+
+def _vllm_serve(arms: tuple[Arm, ...], versions: Mapping[str, Mapping[str, Any]]) -> dict[str, Any]:
+    """Where each arm's engine differs from `vllm serve`'s defaults (`serve_defaults.differences`), as its engine
+    reported it, with the card and checkpoint they resolved for; nothing when no engine reported it."""
+
+    reported = {a.id: versions[a.id]["vllm_serve"] for a in arms if "vllm_serve" in versions[a.id]}
+    if not reported:
+        return {}
+    ctx = next(iter(reported.values()))["context"]
+    return {"vllm_serve": {"vllm": serve_defaults.VLLM_COMMIT, "context": ctx,
+                           "arms": {a: {k: v for k, v in r.items() if k != "context" or v != ctx}
+                                    for a, r in reported.items()}}}

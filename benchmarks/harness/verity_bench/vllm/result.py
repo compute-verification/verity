@@ -167,6 +167,8 @@ def merge(docs: list[Mapping[str, Any]]) -> dict[str, Any]:
     ids = [p["id"] for d in docs for p in d["sweep"]]
     if len(set(ids)) != len(ids):
         raise ValueError(f"a point appears in two results: {sorted({i for i in ids if ids.count(i) > 1})}")
+    if any(d.get("vllm_serve") != first.get("vllm_serve") for d in rest):
+        raise IdentityMismatch("the results' engines differ from vllm serve's defaults differently: they are not one table")
     identity = dict(first["identity"])
     if "config" in identity:
         identity["config"] = {**identity["config"], "point_identity": [d["identity"]["config"].get("point_identity")
@@ -178,6 +180,7 @@ def merge(docs: list[Mapping[str, Any]]) -> dict[str, Any]:
         "execution": {**first["execution"], "schedule": [s for d in docs for s in d["execution"]["schedule"]],
                       "resident_failure": [d["execution"]["resident_failure"] for d in docs]},
         "points": [p for d in docs for p in d["points"]] if all(d["points"] for d in docs) else [],
+        **({"vllm_serve": first["vllm_serve"]} if "vllm_serve" in first else {}),
     }
     validate(doc)
     return doc

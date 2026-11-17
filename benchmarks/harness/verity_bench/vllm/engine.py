@@ -19,15 +19,17 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
-from verity_vllm import LLM
+from verity_vllm import LLM, EnginePin
 from verity_vllm.engine import handle
 from verity_vllm.engine.arrivals import run_requests_arrivals
 from verity_vllm.engine.env import INDUCTOR_DIR_MARK, apply_compile_fresh, apply_engine, apply_target, own_inductor_dir
 from verity_vllm.engine.hooks import Hooks, live
+from verity_vllm.engine.profiles.dense_generic import pinned_hf_config
 
 from verity_bench import settings
+from verity_bench.vllm import serve_defaults
 from verity_bench.vllm.arms import Arm, Target, build_bound, plugin, protocols_config
-from verity_bench.vllm.presets import GREEDY, Preset, SweepPoint
+from verity_bench.vllm.presets import GREEDY, VLLM, Preset, SweepPoint
 from verity_bench.vllm.runner import BenchEngine, ResidentCapacityError, _numeric_leaves, _pearl_c_gate, _token_digest
 from verity_bench.vllm.timing import (
     HostProbe,
@@ -75,6 +77,11 @@ class _DirectLLM:
 
 
 PASS_COUNTS = ("units", "tiles", "screened_rows", "failing_rows", "unsure_rows")
+#: Every request's `SamplingParams` but its seed (its index) and max_tokens (its output length), before its arm's own
+REQUEST = {"ignore_eos": True, "detokenize": False, **GREEDY}
+#: A prefix-caching engine's timed rep's extra: the prompt tokens its requests read from the cache, 0 after the reset
+#: before every run unless a request reads another's blocks
+PREFIX_HITS = "prefix_cache_hit_tokens"
 
 
 def _pearl_c_run(llm: Any) -> Any | None:
@@ -106,7 +113,8 @@ def _kv_cache_tokens(llm: Any) -> int | None:
     return int(blocks) * int(block_size)
 
 
-def engine_args(preset: Preset, precision: str, *, resident: bool, eager: bool) -> dict[str, Any]:
+def engine_args(preset: Preset, precision: str, *, resident: bool, eager: bool,
+                overrides: Mapping[str, Any] | None = None) -> dict[str, Any]:
     """The engine options every arm of a preset shares, before an arm's own overrides.
 
     With ``serving_defaults`` the engine compiles as vLLM serves (torch.compile, its CUDA-graph mode and capture sizes,
@@ -115,7 +123,8 @@ def engine_args(preset: Preset, precision: str, *, resident: bool, eager: bool) 
     share one exact KV pool, ``resident_kv_cache_memory_bytes`` or ``block_kv_cache_memory_bytes``: vLLM schedules by
     free KV pages, and an arm whose install leaves a different amount of free memory would otherwise get a different
     pool, a different schedule, and (through batch-composition-dependent kernels) different tokens than its control.
-    Without a pin the kv-pool gate catches unequal pools."""
+    Without a pin the kv-pool gate catches unequal pools. An arm's resolved `overrides` (`serve_defaults.resolve`) replace
+    these, a None dropping the setting for vLLM's own."""
 
     settings = preset.engine_settings
     engine: dict[str, Any] = {
@@ -144,7 +153,40 @@ def engine_args(preset: Preset, precision: str, *, resident: bool, eager: bool) 
     kv_pin = settings.get("resident_kv_cache_memory_bytes" if resident else "block_kv_cache_memory_bytes")
     if kv_pin is not None:
         engine["kv_cache_memory_bytes"] = int(kv_pin)
+    for key, value in (overrides or {}).items():
+        if value is None:
+            engine.pop(key, None)
+        else:
+            engine[key] = value
     return engine
+
+
+def serves(arm: Arm) -> bool:
+    """Whether the arm takes any engine setting at `vllm serve`'s (`presets.VLLM`): its processes keep torch's Inductor
+    caches, as `vllm serve`'s do, and its record notes the sampling it keeps the workload's (`serve_defaults.NOTE`)."""
+
+    return VLLM in (arm.engine or {}).values()
+
+
+def _serve_context(preset: Preset) -> dict[str, Any]:
+    import torch
+
+    props = torch.cuda.get_device_properties(0)
+    if preset.model_digest is not None:
+        root: Path | None = Path(preset.model)
+        config: Path | None = root / "config.json"
+    else:
+        try:
+            config = pinned_hf_config(preset.model, str(preset.revision))
+        except ValueError:
+            config = None
+        try:
+            local = EnginePin.resolve(preset.model, str(preset.revision)).local_path
+        except ValueError:
+            local = None
+        root = Path(local) if local else None
+    return serve_defaults.context(int(props.total_memory), torch.cuda.get_device_name(0),
+                                  config if config is not None and config.is_file() else None, root)
 
 
 class _VllmEngine:
@@ -153,9 +195,10 @@ class _VllmEngine:
     def __init__(self, arm: Arm, preset: Preset, resident: bool, eager: bool) -> None:
         if preset.revision is None and preset.model_digest is None:
             raise ValueError(f"preset {preset.id} has no pinned checkpoint revision")
-        if preset.engine_settings.get("serving_defaults"):
+        compile_fresh = bool(preset.engine_settings.get("serving_defaults")) and not serves(arm)
+        if compile_fresh:
             apply_compile_fresh()
-        apply_engine(None)
+        env = apply_engine(None)
         import torch
         import vllm
 
@@ -173,18 +216,21 @@ class _VllmEngine:
 
         kernel_digest = arm.kernel_digest
         precision = arm.precision or preset.precision
-        engine = engine_args(preset, precision, resident=resident, eager=eager)
+        ctx = _serve_context(preset)
+        resolved = {"engine": serve_defaults.resolve(arm.engine or {}, ctx),
+                    "sampling": serve_defaults.resolve_sampling(arm.sampling or {})}
+        engine = engine_args(preset, precision, resident=resident, eager=eager, overrides=resolved["engine"])
         overrides = _callback(self.obj, "engine_overrides", self.target, {}) if self.obj is not None else {}
         engine.update(overrides or {})
+        self.sampling = {**REQUEST, **resolved["sampling"]}
+        self.prefix_caching = bool(engine.get("enable_prefix_caching"))
         if preset.model_digest is not None:
             if arm.protocols:
                 raise ValueError("a local checkpoint override supports stock and experimental arms, not protocol-option arms")
             self.llm = _DirectLLM(
                 vllm.LLM(
                     model=preset.model,
-                    enable_prefix_caching=False,
-                    seed=0,
-                    **{k: v for k, v in engine.items() if k != "execution"},
+                    **{"enable_prefix_caching": False, "seed": 0, **{k: v for k, v in engine.items() if k != "execution"}},
                 ),
                 {k: engine[k] for k in ("dtype", "quantization", "compilation_config", "kv_cache_memory_bytes")
                  if engine.get(k) is not None},
@@ -219,6 +265,13 @@ class _VllmEngine:
             "gpu": torch.cuda.get_device_name(0),
             "torch_version": f"{torch.__version__} cuda {torch.version.cuda}",
             "engine_overrides": dict(self.llm.engine_record.get("engine_overrides") or {}),
+            **({"arm_settings": {k: v for k, v in resolved.items() if v}} if arm.engine or arm.sampling else {}),
+            "vllm_serve": {
+                "context": ctx,
+                "differences": serve_defaults.differences(
+                    serve_defaults.settings(engine, self.sampling, env, ctx, compile_fresh=compile_fresh), ctx),
+                **({"note": serve_defaults.NOTE} if serves(arm) else {}),
+            },
         }
         self.ready_at = time.perf_counter()
 
@@ -253,9 +306,11 @@ class _VllmEngine:
 
         measured = phase == "measure"
         requests = self._requests(point)
-        params = lambda r: SamplingParams(max_tokens=r.max_tokens, ignore_eos=True,  # noqa: E731
-                                          detokenize=False, seed=r.seed, **GREEDY)
+        params = lambda r: SamplingParams(**{"max_tokens": r.max_tokens, "seed": r.seed, **self.sampling})  # noqa: E731
         returns: list[tuple[float, dict[str, int]]] = []
+        # Every run repeats its point's prompts: a prefix-caching engine would serve the next run from this one's blocks.
+        if self.prefix_caching and not self.llm.vllm.reset_prefix_cache():
+            raise RuntimeError(f"arm {self.arm.id!r}: vLLM did not reset its prefix cache before the {phase} run")
 
         def on_step(outs: list[Any]) -> None:
             returns.append((time.perf_counter(), {o.request_id: len(o.outputs[0].token_ids) for o in outs if o.outputs}))
@@ -293,6 +348,9 @@ class _VllmEngine:
         generated = sum(map(len, tokens.values()))
         after = self._spans()
         extras = _callback(self.obj, "extras", self.target, {}) if self.obj is not None else {}
+        if self.prefix_caching:
+            hits = sum(int(getattr(out, "num_cached_tokens", None) or 0) for out in finished.values())
+            extras = {**(extras or {}), PREFIX_HITS: hits}
         metrics: dict[str, float | None] = {
             "time_per_output_token_s": wall / generated,
             "time_to_first_token_s": statistics.fmean(ttft),

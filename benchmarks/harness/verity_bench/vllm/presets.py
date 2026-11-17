@@ -75,12 +75,71 @@ class ArmSettings:
     """A protocol arm's own engine (`[arm_settings."pouw:SCHEME"]`): the precision its engine loads, its control (an arm
     the spec names, or `NO_CONTROL`; default stock FP8), and the protocols config handed to `verity_vllm.LLM`
     (``{protocol: {...}}``), where a string value ``"$NAME"`` is the point's environment variable NAME, which the spec's
-    setup exports. A served variant (`[arm_settings."stock-fp8@compiled"]`) takes only its control (default its
-    built-in). All of it is in the point's identity."""
+    setup exports. A served variant (`[arm_settings."stock-fp8@compiled"]`) takes its control (default its built-in) and no
+    precision or protocols config. Either may override engine settings and sampling for itself (`ArmOverrides`). All of
+    it is in the point's identity."""
 
     precision: str | None = None
     control: str | None = None
     protocols_config: Mapping[str, Mapping[str, Any]] = field(default_factory=dict)
+
+
+#: The value of an arm's engine or sampling override that takes `vllm serve`'s own at the pin
+#: (`verity_bench.vllm.serve_defaults`): an engine setting vLLM resolves for the card and checkpoint, or leaves unset
+VLLM = "vllm"
+#: The engine settings an arm may override for itself (`ArmOverrides.engine`), each one `engine.engine_args` sets
+ARM_ENGINE = ("max_num_seqs", "max_num_batched_tokens", "max_model_len", "kv_cache_memory_bytes", "gpu_memory_utilization",
+              "enable_prefix_caching", "quantization", "dtype")
+#: The `SamplingParams` fields an arm may override for its requests (`ArmOverrides.sampling`)
+ARM_SAMPLING = ("temperature", "top_p", "ignore_eos", "detokenize", "seed")
+
+
+def _int(v: Any) -> bool:
+    return isinstance(v, int) and not isinstance(v, bool) and v > 0
+
+
+_ENGINE_VALUES = {
+    "max_num_seqs": (_int, "a positive integer"),
+    "max_num_batched_tokens": (_int, "a positive integer"),
+    "max_model_len": (_int, "a positive integer"),
+    "kv_cache_memory_bytes": (_int, "a positive integer"),
+    "gpu_memory_utilization": (lambda v: isinstance(v, float) and 0 < v <= 1, "a float in (0, 1]"),
+    "enable_prefix_caching": (lambda v: isinstance(v, bool), "a boolean"),
+    "quantization": (lambda v: v == "fp8", '"fp8"'),
+    "dtype": (lambda v: v in ("bfloat16", "float16", "float32"), "bfloat16, float16 or float32"),
+}
+_SAMPLING_VALUES = {
+    "temperature": (lambda v: isinstance(v, float) and v >= 0, "a float at least 0"),
+    "top_p": (lambda v: isinstance(v, float) and 0 < v <= 1, "a float in (0, 1]"),
+    "ignore_eos": (lambda v: isinstance(v, bool), "a boolean"),
+    "detokenize": (lambda v: isinstance(v, bool), "a boolean"),
+    "seed": (lambda v: isinstance(v, int) and not isinstance(v, bool), "an integer"),
+}
+
+
+def override_errors(engine: Mapping[str, Any], sampling: Mapping[str, Any]) -> list[str]:
+    """What is wrong with an arm's engine and sampling overrides: a key outside `ARM_ENGINE` or `ARM_SAMPLING`, or a value
+    of the wrong kind. Every engine setting and the sampling seed take `VLLM`."""
+
+    errors = []
+    for kind, given, allowed, vllm in (("engine", engine, _ENGINE_VALUES, set(_ENGINE_VALUES)),
+                                       ("sampling", sampling, _SAMPLING_VALUES, {"seed"})):
+        for key, v in given.items():
+            if key not in allowed:
+                errors.append(f"{kind} setting {key!r} is not one an arm overrides ({', '.join(allowed)})")
+            elif not (v == VLLM and key in vllm) and not allowed[key][0](v):
+                takes = allowed[key][1] + (f' or "{VLLM}"' if key in vllm else "")
+                errors.append(f"{kind} setting {key!r} is {takes}, not {v!r}")
+    return errors
+
+
+@dataclass(frozen=True)
+class ArmOverrides(ArmSettings):
+    """An arm's `ArmSettings` with the engine settings (`ARM_ENGINE`) and request sampling (`ARM_SAMPLING`) it overrides for
+    itself over the preset's (`[arm_settings."ARM".engine]`, `[arm_settings."ARM".sampling]`)."""
+
+    engine: Mapping[str, Any] = field(default_factory=dict)
+    sampling: Mapping[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -96,7 +155,7 @@ class BenchmarkSpec:
     eager: bool
     preset: Preset
     arm_modules: tuple[str, ...] = ()
-    arm_settings: Mapping[str, ArmSettings] = field(default_factory=dict)
+    arm_settings: Mapping[str, ArmOverrides] = field(default_factory=dict)
     env: Mapping[str, str] = field(default_factory=dict)
     setup: str | None = None
     admission: Admission = Admission()
@@ -189,12 +248,18 @@ def load_spec(spec: str | Path) -> BenchmarkSpec:
             raise ConfigError(f"{path}: arm_settings {name!r} must name a protocol arm (protocol:scheme) or a served "
                               f"variant (BUILTIN@{'|'.join(SERVED_EXECUTIONS)}) in arms")
         if variant and (arm.precision is not None or arm.protocols_config):
-            raise ConfigError(f"{path}: arm_settings {name!r}: a served variant takes only its control")
+            raise ConfigError(f"{path}: arm_settings {name!r}: a served variant takes its control and overrides, no "
+                              "precision or protocols config")
+        if errors := override_errors(arm.engine, arm.sampling):
+            raise ConfigError(f"{path}: arm_settings {name!r}: " + "; ".join(errors))
         if arm.precision is not None and arm.precision not in PRECISIONS:
             raise ConfigError(f"{path}: arm_settings {name!r}: precision is one of {', '.join(PRECISIONS)}")
         if arm.control is not None and arm.control != NO_CONTROL and (arm.control not in doc.arms or arm.control == name):
             raise ConfigError(f"{path}: arm_settings {name!r}: control must be another arm in arms, or {NO_CONTROL!r}")
-    return doc
+    # An arm without overrides stays an `ArmSettings`, so a spec's digest is what it was before arms had overrides.
+    plain = {name: arm if arm.engine or arm.sampling else ArmSettings(arm.precision, arm.control, arm.protocols_config)
+             for name, arm in doc.arm_settings.items()}
+    return replace(doc, arm_settings=plain)
 
 
 def load_sweep(name: str) -> Sweep:
