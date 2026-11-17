@@ -1,4 +1,4 @@
-"""steady_walk.py [OUT]: what walking the witness's units on the card buys the prover, read from the store and written
+"""steady_walk.py [--out DIR]: what walking the witness's units on the card buys the prover, read from the store and written
 as `METRIC` into the run's result (`verity_bench.kit`): GPU-seconds a statement of the head block's `FIRST=false` point
 at `PROVERS` prover, from the passing run of `WALK`'s point (`FC_UNIT_WALK=1`) over the same from `BASE`'s, its member
 the model and the card, both rates and both runs beside it. Each point is timed by
@@ -8,9 +8,8 @@ the model and the card, both rates and both runs beside it. Each point is timed 
 """
 from __future__ import annotations
 
+import argparse
 import json
-import os
-import sys
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
@@ -56,9 +55,9 @@ def record(out: Path, base: Mapping[str, Any], walk: Mapping[str, Any], runs: Ma
     from verity_bench import kit
 
     on, off = gpu_seconds(walk), gpu_seconds(base)
-    out.mkdir(parents=True, exist_ok=True)
-    (out / "rows.json").write_text(json.dumps({"walk": walk, "host": base, "runs": runs}, indent=1, sort_keys=True))
     w = kit.writer(out)
+    w.out.mkdir(parents=True, exist_ok=True)
+    (w.out / "rows.json").write_text(json.dumps({"walk": walk, "host": base, "runs": runs}, indent=1, sort_keys=True))
     w.validation("passed", "benchmarks/kernels/steady_walk.py",
                  "both points' runs passed the steady harness's checks, and their rows differ in the walk alone",
                  ["rows.json"])
@@ -113,4 +112,6 @@ def main(out: Path) -> None:
 
 
 if __name__ == "__main__":
-    main(Path(sys.argv[1] if len(sys.argv) > 1 else os.environ["OUT"]))
+    ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
+    ap.add_argument("--out", default="out", help="where the result goes outside a research run")
+    main(Path(ap.parse_args().out))
