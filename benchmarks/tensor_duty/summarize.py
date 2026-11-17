@@ -357,16 +357,42 @@ def beside(pts: list[dict], sku: str = SKU) -> tuple[bool, list[str], dict]:
 
 
 METRIC = "compute-research/eight-bit-mac-rate-over-sheet"
+UNIT = "higher ceiling share"
 
 
-def top_share(pts: list[dict], sku: str = SKU) -> dict:
-    """The fastest point's MACs a second over its host interval as a share of the card's tensor rate (`share`), that
-    share over the interval lengthened and shortened by a stamp (`share_lo`, `share_hi`), and where the point ran."""
-    bound = readings(sku)[0]
+def lock_result(out: Path) -> list[dict] | None:
+    """Each clock run.sh asked nvidia-smi to lock, as `out/lock.txt` holds it: whether the lock ran and its exit code;
+    [] where the run asked for none, None where there is no lock.txt."""
+    p = out / "lock.txt"
+    if not p.exists():
+        return None
+    return [{"clock": {"value": int(m[1]), "unit": "MHz"}, "ran": m[2] == "0", "rc": int(m[2])}
+            for m in re.finditer(r"^clock (\d+) rc (\d+)$", p.read_text(), re.M)]
+
+
+def top_share(pts: list[dict], sku: str = SKU, lock: list[dict] | None = None) -> dict:
+    """The fastest point's MACs a second over its host interval as a share of the tensor's ceiling at the higher of the
+    card's readings (`share`, of `reading`), that share over the interval lengthened and shortened by a stamp
+    (`share_lo`, `share_hi`), the rate itself, its share at each reading, the clock it held by nvidia-smi and by its
+    kernel's clock64, ``lock`` (`lock_result`), and where the point ran."""
+    card = load_card(sku, directory=CARD_FILES)
+    peaks = {r: float(x) for r, x in card_readings(card).items()}
+    head = max(peaks, key=peaks.__getitem__)
     top = max(pts, key=host_rate)
-    return {"share": host_rate(top) / bound, "share_lo": host_rate(top, STAMP_S) / bound,
-            "share_hi": host_rate(top, -STAMP_S) / bound, "sheet": sku,
-            **{k: top[k] for k in ("clock", "arm", "class")}}
+
+    def mhz(x: float | None) -> dict | None:
+        return None if x is None else {"value": x, "unit": "MHz"}
+
+    return {"share": host_rate(top) / peaks[head], "share_lo": host_rate(top, STAMP_S) / peaks[head],
+            "share_hi": host_rate(top, -STAMP_S) / peaks[head], "reading": head, "sheet": sku,
+            "rate": {"value": host_rate(top), "unit": "MACs a second"},
+            "readings": [{"reading": r, "clock": mhz(card["clock"][r]["value"]),
+                          "ceiling": {"value": peaks[r], "unit": "MACs a second"},
+                          "share": host_rate(top) / peaks[r]} for r in READINGS],
+            "held": {"smi_mean": mhz(top.get("smi_mhz_mean")), "smi_max": mhz(top.get("smi_mhz_max")),
+                     "smi_samples": top.get("smi_n", 0), "clock64": mhz(top["clock64_mhz"]),
+                     "tensor_phase": mhz(top["tensor_mhz"])},
+            "lock": lock, **{k: top[k] for k in ("clock", "arm", "class")}}
 
 
 def gate_failures(out: Path) -> list[str]:
@@ -390,8 +416,8 @@ def record(out: Path, pts: list[dict]) -> bool:
                  "; ".join(fails) or f"{len(pts)} points")
     if fails:
         return False
-    t = top_share(pts)
-    w.measurement(METRIC, t.pop("share"), "share of sheet", mark="measured", extra=t)
+    t = top_share(pts, lock=lock_result(out))
+    w.measurement(METRIC, t.pop("share"), UNIT, mark="measured", extra=t)
     return True
 
 

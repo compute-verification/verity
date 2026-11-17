@@ -338,7 +338,7 @@ def test_a_sample_session_or_a_period_without_what_it_goes_with_is_refused():
     period = {"period": "p1", "lane": "vllm"}
     for entry, settings in ((_entry(), _settings()), ("pouw:ncp-v1", other)):
         assert refused(entry, settings) == ()
-        no_window = (f"{entry}: the pouw setting 'draw_session' is the draw session of H1's window "
+        no_window = (f"{entry}: the pouw setting 'draw_session' is the sample session of H1's window "
                      f"({PH.SCHEME}) on the challenger at 'challenger'")
         assert refused(entry, {"pouw": {**settings["pouw"], "draw_session": {"session": CH.session_id(0xd)}}}) == (no_window,)
         no_install = (f"{entry}: the pouw setting 'period' is the lane's open period that a Pearl-C install's "

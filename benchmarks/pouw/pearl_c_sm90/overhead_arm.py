@@ -96,7 +96,7 @@ def verifier() -> dict:
     ``REJECT`` and names the manifest's sha256, and where the Lean refuses or disagrees it names none. The no-write
     control's at the same path under ``negative/``, which the Lean must reject."""
     pass_ = ["--passes", "{dir}", "--manifest", "{transcript}"]
-    return {"name": "served_passes.py lean: Pearl+'s verdict in Lean (PouwCheck.PearlPlus) on a retained Pearl-C pass, "
+    return {"name": "served_passes.py lean: Pearl+'s verdict in Lean (PouwVerifier.PearlPlus) on a retained Pearl-C pass, "
                     "held to its Python twin", "per": "shape",
             "transcript": "transcripts/{arm}/{shape}/manifest.json", "control": "negative/{arm}/{shape}/manifest.json",
             "commands": [["{python}", SERVED_PASSES, "verify", *pass_, "--coin-record", "{dir}/coin.json",

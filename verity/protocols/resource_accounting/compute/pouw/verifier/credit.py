@@ -3180,7 +3180,7 @@ def pearl_c_period_credit(key: Any, ledger: Any, pins: Any, main: Any, name: Any
                           verify: Ch.Verify) -> tuple[dict | None, tuple[str, str] | None]:
     """A Pearl-C credit period's credit of record: the Lean `Credit.pearlCMonitoringPeriodCredit`'s, not yet written, so this
     raises (`verifier.not_written`); `pearl_c_period_credit_twin` is its Python twin."""
-    return V.not_written("pearl_c_period_credit", "PouwCheck.Credit.pearlCMonitoringPeriodCredit")
+    return V.not_written("pearl_c_period_credit", "PouwVerifier.Credit.pearlCMonitoringPeriodCredit")
 
 
 def period_credit(key: Any, ledger: Any, pins: Any, main: Any, name: Any, windows: Any, verify: Ch.Verify,
