@@ -8,14 +8,14 @@ verifier's check that a served window's coins are that challenger's.
   and the auditor's signed ledger, which opens and ends the one session of the window (`remote.trusted_session`): the coin
   commitment the challenger signed and the roots its signed release log shows it received. The window's coins must be
   that commitment's, its salt coin must have followed its own open root, the root the ledger opened its session on
-  (PoUW's salt rule of record, Lean `PouwCheck.saltCheck`, `core_check.salt_of_record`, `core_check.salt_twin` its Python
+  (PoUW's salt rule of record, Lean `PouwVerifier.saltCheck`, `core_check.salt_of_record`, `core_check.salt_twin` its Python
   twin and a disagreement a refusal: that root is `salt.window_open_root` of the
   window's weights' root, its round-0 request table's root, round 0's ``requests`` in its log, and the session the
   ledger's signed reserve entry names, each read from the ledger and the session's own files, never the prover's; a salt
   opened after another window's root or after the bare weights' root is refused, and so is a session opened without a
   reserve), and its rounds pass PoUW's
   round rule of record
-  (`core_check.rounds`, Lean `PouwCheck.roundsCheck`): each coin opened after its root, the roots the challenger's log
+  (`core_check.rounds`, Lean `PouwVerifier.roundsCheck`): each coin opened after its root, the roots the challenger's log
   shows in order. A window whose coins came from a challenger the prover holds (the in-process ``coins`` and ``rounds``
   of tests, or a host of the prover's), whose log no one signed, or whose ledger is signed under another key, is cut
   before the session's end or opens a second session for the window, is refused. The window's sampling coin comes from a
@@ -72,7 +72,7 @@ verifier's check that a served window's coins are that challenger's.
   ``h1/b/<K>``, and the registration theirs. It reports the ε the sample established at δ = 2^-40
   (`credit.established`). A period earns only as a whole (`period_credit`, `credit.period_credit`): the windows
   presented are exactly its close's, in order, the close complete, each window proving the period's circuit and
-  credited. Both verdicts are the Lean's (`PouwCheck.Credit.window`, `Credit.periodCredit`), core's Python their twin
+  credited. Both verdicts are the Lean's (`PouwVerifier.Credit.window`, `Credit.periodCredit`), core's Python their twin
   and a disagreement a refusal (`verifier.of_record`). The serving process's gate-passed count
   (`pouw_h1.H1Run.credit`) is never credit.
 """

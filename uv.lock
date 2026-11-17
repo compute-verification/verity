@@ -65,7 +65,7 @@ members = [
     "verity-ops",
     "verity-ops-tests",
     "verity-pouw-benchmarks",
-    "verity-pouw-check-difftest",
+    "verity-pouw-verifier-difftest",
     "verity-pouw-window-difftest",
     "verity-proof-throughput",
     "verity-proof-throughput-tests",
@@ -2862,7 +2862,7 @@ requires-dist = [
 provides-extras = ["research", "exact-kit"]
 
 [[package]]
-name = "verity-pouw-check-difftest"
+name = "verity-pouw-verifier-difftest"
 version = "0.0.0"
 source = { virtual = "tests/verity/protocols/resource_accounting/compute/pouw/verifier/lean/check" }
 

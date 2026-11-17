@@ -1398,7 +1398,7 @@ def test_shape_compares_what_the_prover_sends(tmp_path):
 def test_a_staged_unit_opens_under_the_window_root(served, tmp_path):
     """stage_tile.py, run by hidden_zk/served_stage.py, stages a call's tile and a filler tile of a committed execution phase as `Pc8TileSide` units, each in its own
     process, on the committer's side rows and salts: each is over the circuit the verifier pins for the template
-    (`core_check.TILES`, Lean's `PouwCheck.tiles`), and each public file's rows are the side trees' leaves, so the opening
+    (`core_check.TILES`, Lean's `PouwVerifier.tiles`), and each public file's rows are the side trees' leaves, so the opening
     accepts.  Nothing cheaper catches a unit whose committed rows are not the side rows (the index field dropped or moved),
     or a change to the template or to Flock's lowering that moves the circuit off its pin, which only staging shows;
     about a minute at K = 128."""
@@ -1422,7 +1422,7 @@ def test_a_staged_unit_opens_under_the_window_root(served, tmp_path):
             [L.ROW_SCHEMA["fp8-pi", SC.SIDES[s]], 16 * L.ROW_WORDS["fp8-pi"](K)] for s in "ab"]
         assert st["circuit_sha512"] == CC.TILES[st["definition"]].circuit, (
             f"unit {t}: {st['definition']} builds circuit {st['circuit_sha512']}, not the one the verifier pins: a change "
-            "to the template or to Flock's lowering lands its new digest in PouwCheck/Tile.lean and core_check.TILES")
+            "to the template or to Flock's lowering lands its new digest in PouwVerifier/Tile.lean and core_check.TILES")
         op = json.loads((out / "opening.json").read_text())
         assert SC.check(params, rec, sample, t, (out / "pub.bin").read_bytes(), op, record=ORL.Record()) is None, t
     assert json.loads((tmp_path / "u25" / "stage.json").read_text())["kind"] == "filler"

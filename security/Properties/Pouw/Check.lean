@@ -1,9 +1,9 @@
 module
 
-public import PouwCheck.Protocol
+public import PouwVerifier.Protocol
 
 /-!
-# PoUW's window check: what its Lean code (`PouwCheck.protocol`) does
+# PoUW's window check: what its Lean code (`PouwVerifier.protocol`) does
 
 The properties of the executable check (`verity/protocols/accounting/pouw/verifier/lean/check/`, the port of
 `verity/protocols/accounting/pouw/verifier/core_check.py`), stated against `protocol.check` as it runs, for every input of
@@ -23,7 +23,7 @@ check establishes that the service drew exactly `K′ = kPrime ε δ` distinct u
 
 namespace Properties.Pouw.Check
 
-open PouwCheck
+open PouwVerifier
 open PouwWindow (Work point level floorPoint)
 
 /-! ## Acceptance -/

@@ -1,7 +1,7 @@
-"""The Lean verifier of a served window's statements (`PouwCheck.Verified`, `pouw-check-difftest`'s
+"""The Lean verifier of a served window's statements (`PouwVerifier.Verified`, `pouw-verifier-difftest`'s
 ``credit-verified``) held to its Python reference, `credit._asks` and `credit._verified`, on `pouw_verified_cases`:
 with `runs` null, the verifier runs the Lean names (or the verdict, when it names none); with the answers, the verdict,
-each sampled proof block's outcome or the refusal, string for string, the lanes form's (`PouwCheck.Lanes`) among them.
+each sampled proof block's outcome or the refusal, string for string, the lanes form's (`PouwVerifier.Lanes`) among them.
 `credit.window` and `credit.period_credit` take their outcomes from the Lean (`credit._lean_verified`), so here the Lean
 is of record."""
 from __future__ import annotations
@@ -50,7 +50,7 @@ def verified(case: dict) -> dict:
     return {"refused": list(refused)} if refused is not None else {"outcomes": got}
 
 
-VERIFIED_PORT = D.Port("pouw-check-difftest", "credit-verified", verified, package=LEAN, need_rejects=False,
+VERIFIED_PORT = D.Port("pouw-verifier-difftest", "credit-verified", verified, package=LEAN, need_rejects=False,
                        of_record=V.RECORD_VERDICT,
                        inputs=st.builds(cases.verified_instance, st.randoms(use_true_random=False),
                                         st.sampled_from(["honest"] * (len(cases.NAMES) // 3) + cases.NAMES)))
@@ -65,7 +65,7 @@ def test_verified(server):
     stats = D.run(VERIFIED_PORT, examples=300, server=server)
     swept = Counter(D.replay(VERIFIED_PORT, cases.verified_instance(random.Random(f"{name}/{seed}"), name), server)[0]
                     for name in ["honest", *cases.NAMES] for seed in range(10 if name in cases.LANES_NAMES else 4))
-    print(f"pouw-check-difftest credit-verified: {stats}; and {sum(swept.values())} swept ({dict(swept)}); by outcome: "
+    print(f"pouw-verifier-difftest credit-verified: {stats}; and {sum(swept.values())} swept ({dict(swept)}); by outcome: "
           f"{dict(sorted(VERIFIED.items()))}")
     assert {"run", "accept", "lanes: accept"} <= set(VERIFIED)
     for part in ("circuit: the committed circuit files are not", "proof: the window's statements are not a list",
