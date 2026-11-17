@@ -30,7 +30,10 @@ conclusion false at an audit that accepts everything. Those statements read thes
 * `fxRows`: a rows format of the Python network attester's fixture `fxQueue` (three connections), one window of ten
   buckets, whose schedule is `fxQueueSched`;
 * `noFormat`: the record format of a network attester with no connection over a monitoring period of no execution
-  phases, at which `MonitoringPeriodLeakChecked`'s honest lemma states its period's premises.
+  phases, at which `MonitoringPeriodLeakCharged`'s honest lemma states its period's premises;
+* `frameFormat`: the record format of a network attester with no connection over a monitoring period of one execution
+  phase, whose record of it is one step with a frame (`obs1`), at which `MonitoringPeriodLeakChecked`'s honest lemma
+  states its period's premises and its execution phase's good event.
 
 The lemma that drops its read-back is stated at a network attester of one connection of one cell with no data
 (`Cell := Empty`), over a monitoring period of one window of one step:
@@ -66,6 +69,12 @@ def obs0 : Obs 1 1 1 := ⟨fun _ _ => none, 0, fun _ => .complete⟩
 
 /-- One step: a frame on the link, every status complete. -/
 def obs1 : Obs 1 1 1 := ⟨fun _ _ => some [], 0, fun _ => .complete⟩
+
+/-- The record format of a network attester with no connection, over a monitoring period of one window: it holds every
+schedule, its record of the window is one step with a frame on the link (`obs1`), and no cell reads back from it, as
+the code sends none. -/
+def frameFormat : RecordFormat Empty Unit (Fin 1 → List (Obs 1 1 1)) :=
+  ⟨fun _ _ _ _ => [obs1], fun _ _ c => c.elim, fun _ => True, fun _ _ _ => funext fun c => c.elim⟩
 
 /-! ## The operator -/
 

@@ -7,6 +7,7 @@ public import Proofs.Certifier.SampledAuditAccepted
 public import Proofs.Certifier.MonitoringPeriodChecked
 public import Proofs.Flock.SamplingGeneric
 public import Proofs.Flock.Claims.Prob
+public import Proofs.Flock.Claims.Witnesses.SamplingGenericPlaced
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -40,6 +41,9 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.Polynomial.Basic
 import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
+import Proofs.Certifier.SampledLeakRegPlain
+import Proofs.Flock.Claims.KS.ZkExtend
+import Proofs.Flock.Claims.Sampling.Assembled
 import Std.Tactic.BVDecide.Normalize.Bool
 
 /-!
@@ -72,10 +76,25 @@ verifier `certL`, as `MonitoringPeriodLeakAccepted`'s does, at the check every r
 any runs (`checkedWitness_true`): a witness in `RLeakCertifierChecked` is in `RLeakCertifier`
 (`rLeakCertifier_of_rLeakCertifierChecked`), and none is (`certL_noWit`).
 
-**The statement's honest lemma.** `MonitoringPeriodLeakChecked_honest`: its premises at the toy code, as `MonitoringPeriodLeakAccepted`'s
-(`MonitoringPeriodLeakAccepted_honest`), over a monitoring period of no windows. The toy code gives no statement a partition, so
-it places no window, and its verifier rejects every run: the lemma shows the premises hold together. It shows no run
-that passes, holds no window's check to `CheckedUnique` and states no window's good event.
+**The statement's honest lemma.** `MonitoringPeriodLeakChecked_honest`: its premises and the good event of its one
+execution phase, over a monitoring period of one execution phase, under the deployed compiled form at a toy code
+(`placedCode`) that gives every statement a partition and accepts the statement `[]`:
+
+* `ks_placed`: `Compiled.KS` there, by the compiler's theorem (`SamplingDeploy.ks_compiled`) and the code's facts, which
+  hold since the code parses every statement into scope (`inScope_copy`), samples its one proof block at rate `0`
+  (`placed_sampleDesign`) and opens no session;
+* `placed_acc`, `placed_extract`: a run at `[]` passes whatever the prover sends, and its extracted witness opens
+  nothing;
+* `copy_checkedUnique`: with no input checked, two runs of the horizon of one step with one ingress and one advice are
+  one run;
+* `executionPhaseGoodChecked_placed`: `ExecutionPhaseGoodChecked` at `[]`, that extracted witness, the network
+  attester's openings `certOps` and the observations the network attester's code records in `frameFormat`: the
+  program copies the ingress to the egress presence gate, so the record the openings register is accepted with no
+  incorrect proof block (`copy_val_true`).
+
+The good event's hypotheses hold by the instance's construction: no input is registered, the check is `True`, the
+rate is `0` and the record is one step. The lemma does not show the network attester's openings pass under the
+deployed commitment (`CertifierRegisters`, the antecedent under which the guarantee reads the good event).
 -/
 
 @[expose] public section
@@ -544,33 +563,250 @@ theorem MonitoringPeriodLeakChecked_nontrivial :
     (fun w hw => certL_noWit FlockDeploy.sha512 _ [] w (rLeakCertifier_of_rLeakCertifierChecked hw))
     (by linarith [certL_κ (Coin := Bool) []])
 
+/-! ## One placed execution phase -/
+
+section Placed
+
+open Claims.Witness.SamplingGeneric (copyProg copyStmt stmtV placedCode)
+
+local notation "placedL" =>
+  SamplingDeploy.compiled (FlockDeploy.deployZk _root_.Flock.Readable.relation) placedCode (fun _ _ _ => [])
+
+theorem inScope_copy : Claims.Sampling.InScope notPart copyStmt := by
+  refine ⟨⟨fun g x hx i hi => ?_, by decide⟩,
+    ⟨by decide, by decide, by decide, by decide, by decide⟩, rfl, ?_⟩
+  · rcases g with _ | _ | g
+    · simp [copyStmt, copyProg] at hx
+      subst hx
+      simp [BGate.reads] at hi
+    · simp [copyStmt, copyProg] at hx
+      subst hx
+      simp [BGate.reads] at hi
+      omega
+    · simp [copyStmt, copyProg] at hx
+  · simp [copyStmt, notPart, Claims.Sampling.OneStage.WellFormed]
+
+theorem notLay_fits_copy : notLay.Fits copyProg 1 := by
+  refine ⟨fun t _ ℓ σ g hg => ?_, fun t _ g hg => ?_, fun t ht t' ht' htt' => absurd htt' (by omega)⟩
+  · simp [notLay, slotGates] at hg
+    subst hg
+    decide
+  · simp [notLay] at hg
+    subst hg
+    rfl
+
+/-- The design accepts every set of proof blocks with probability `1`: it samples none. -/
+theorem copy_Pa (B : Finset ℕ) : copyStmt.design.Pa notPart B = 1 := selfXor_Pa B
+
+/-- The exclusive or of gate `0` alone is gate `0`. -/
+theorem xorOne_getD (f : ℕ → Bool) (own : Option Bool) :
+    ((BGate.xor [0]).val (fun i => if _h : i < 1 then some (f i) else some false) own).getD false = f 0 := by
+  have h : (BGate.xor [0]).val (fun i => if _h : i < 1 then some (f i) else some false) own =
+      some (Bool.xor false (f 0)) := rfl
+  rw [h]
+  cases f 0 <;> rfl
+
+/-- **The run of the ingress `true`**: with no gate held, gate `1` holds the ingress, `true`. -/
+theorem copy_val_true : valOver copyProg (notLay.inputOf 1 [[true]] fun _ => false) (fun _ => none) 1 = true := by
+  rw [valOver_gate (free := fun _ => none) (g := 1) rfl (show copyProg.gates[1]? = some (.xor [0]) from rfl)]
+  refine (xorOne_getD _ _).trans ?_
+  rw [valOver_gate (free := fun _ => none) (g := 0) rfl (show copyProg.gates[0]? = some .input from rfl)]
+  rfl
+
+/-- **The check pins nothing, at one step**: at the horizon `1` two runs whose ingress agrees at step `0` and whose
+inputs agree everywhere are one run. -/
+theorem copy_checkedUnique :
+    CheckedUnique copyProg notPart copyStmt.design notLay 1 ∅ fun _ => True ∧ True := by
+  intro t ht ins ins' a a' free hl hl' hagree hoff _ _ _ ℓ
+  obtain rfl : t = 0 := by omega
+  obtain ⟨i, rfl⟩ := List.length_eq_one_iff.1 hl
+  obtain ⟨i', rfl⟩ := List.length_eq_one_iff.1 hl'
+  obtain rfl : i = i' := hagree 0 le_rfl
+  obtain rfl : a = a' := funext fun g => hoff g (by simp)
+  rfl
+
+/-- **The code's facts** behind `Compiled.KS` at `placedCode`: it samples nothing, at a design whose rate is `0`, and
+every statement it parses is in scope. -/
+theorem placed_sampleDesign : placedCode.SampleDesign := by
+  intro x s P hs hP _ B _
+  obtain rfl : s = copyStmt := (Option.some.inj hs).symm
+  obtain rfl : P = notPart := (Option.some.inj hP).symm
+  exact ⟨fun _ => 1, fun _ => zero_le_one, fun _ => Pr_le_one _, ((Ex_const 1).trans (copy_Pa B).symm).le⟩
+
+set_option synthInstance.maxSize 1024 in
+/-- **`Compiled.KS` at `placedCode`**, the deployed compiled form over the masked Flock record at the deployed relation,
+at SHA-512: the compiler at Flock's KS there, its decoder within the radius, the code's commitment binding
+(`binds_deployOf`), and the code's facts, which hold since it parses every statement into scope, samples no proof block
+and opens no session. -/
+theorem ks_placed : (placedL).KS FlockDeploy.sha512 :=
+  SamplingDeploy.ks_compiled (FlockDeploy.deployZk _root_.Flock.Readable.relation) placedCode (fun _ _ _ => [])
+    FlockDeploy.sha512 FlockDeploy.KS.zk_KS_untrim (listWithin_deployZk _root_.Flock.Readable.relation)
+    (binds_deployOf (FlockDeploy.deployZk _root_.Flock.Readable.relation) placedCode FlockDeploy.sha512)
+    placed_sampleDesign
+    (fun _ _ _ _ _ _ => ⟨copyStmt, notPart, rfl, rfl, inScope_copy⟩)
+    (fun _ _ _ _ _ _ _ => rfl)
+    (fun _ _ _ ⟨p, hp⟩ => by
+      change ([] : List ℕ)[p.val]? = some _ at hp
+      simp at hp)
+    (fun _ _ _ _ _ _ ⟨p, hp⟩ => by
+      change ([] : List ℕ)[p.val]? = some _ at hp
+      simp at hp)
+    (fun _ _ _ _ _ hs => by
+      change (none : Option (Msg × Seen)) = some _ at hs
+      simp at hs)
+    (fun _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ ⟨p, hp⟩ => by
+      change ([] : List ℕ)[p.val]? = some _ at hp
+      simp at hp)
+
+theorem placed_unchecked (x : Msg) (r : Fin ((placedL).V.k x) → FlockDeploy.Coin) : (placedL).checked x r = [] :=
+  (SamplingDeploy.compiled_checked _ _ _ x r).trans List.take_nil
+
+theorem run_stmtV_out {Ω : Type} (H : Msg → Msg) (P : Prover Ω) (ω : Ω) (r : Fin (stmtV.k []) → FlockDeploy.Coin) :
+    (run H P stmtV [] ω r).out = .acc := by
+  simp [run, stmtV, stepWith, OC.eval]
+
+/-- **Every run at the statement `[]` passes**, whatever the prover sends. -/
+theorem placed_acc {Ω : Type} (H : Msg → Msg) (P : Prover Ω) (ω : Ω) (r : Fin ((placedL).V.k []) → FlockDeploy.Coin) :
+    (run H P (placedL).V [] ω r).out = .acc :=
+  run_stmtV_out H P ω r
+
+/-- **The extracted witness of a passing run at `[]` opens nothing**: the code samples no proof block, so the
+compiled extractor assembles no opening. -/
+theorem placed_extract {Ω : Type} (H : Msg → Msg) (P : Prover Ω) (ω : Ω)
+    (r : Fin ((placedL).V.k []) → FlockDeploy.Coin) (c : (placedL).E.C []) :
+    ((placedL).E.eval H P [] ω r c).1 = some ⟨[]⟩ := by
+  obtain ⟨w, hw⟩ : ∃ w, ((placedL).E.eval H P [] ω r c).1 = some w :=
+    ⟨_, Claims.SamplingGeneric.Compiled.E_eval H (placedL) P [] ω r c (s := copyStmt) rfl (placed_acc H P ω r)⟩
+  have hvals : w.vals = [] :=
+    retAll_eval H (run H P (placedL).V [] ω) ((placedL).E.ext [] r c)
+      (retAll_E_nil (placedL) placed_unchecked [] r c) w hw
+  rw [hw]
+  obtain ⟨vals⟩ := w
+  obtain rfl : vals = [] := hvals
+  rfl
+
+theorem placed_scopeAcc (x : Msg) : ScopeAcc (placedL) (fun _ => notLay) (fun _ => 1) x :=
+  ⟨⟨copyStmt, notPart, rfl, rfl, inScope_copy⟩, copyStmt, rfl, notLay_fits_copy⟩
+
+/-- **The execution phase's good event at one placed execution phase**: at `placedCode` under the deployed compiled
+form, the statement `[]` (parsed as `copyStmt`, its partition `notPart`), the extracted witness `⟨[]⟩` of a run that
+passes there (`placed_extract`), the network attester's openings `certOps` (the input and its copy, both `true`) and
+the observations `[obs1]` (one step, a frame on the link, every status complete), with no input registered, no check
+(`True` twice), `δ = 0` and jitter below `1`: every record the network attester registers at those openings is
+accepted with no incorrect proof block and a valid run, since the circuit copies the ingress `true` to the egress
+presence gate as the openings do; the statement is in scope and registered as `copyStmt`; and the observations have the
+horizon's length, jitter `0` and every status complete.
+
+It is a toy instance: `placedCode` parses every statement as one copy statement, its verifier checks only that the
+statement is `[]`, and it samples and opens nothing, so it is not the deployed check; no input is registered
+(`reg = ∅`) or checked (`chk = ∅`), the check is `True` and the sample rate is `0`. So it shows the good event's scope
+is not empty at a period of one placed execution phase, and does not show that an honest run of the deployed network
+attester is inside it, nor anything about the checked inputs the guarantee leaves out of its count. -/
+theorem executionPhaseGoodChecked_placed :
+    ExecutionPhaseGoodChecked FlockDeploy.sha512 (placedL) 1 1 1 (fun _ => notLay) (fun _ => 1) 0 (fun _ => ∅)
+      (fun _ _ => True ∧ True) 1 copyStmt (fun _ => false) (fun _ => certOps) [] ⟨[]⟩ [obs1] := by
+  refine ⟨?_, placed_scopeAcc [], copyStmt, rfl, ⟨rfl, rfl, rfl, rfl, rfl, rfl⟩, rfl,
+    fun g hg => absurd hg (by simp), fun t ht _ κ => ?_, rfl, fun y hy => ?_⟩
+  · refine ⟨copyStmt, notPart, rfl, rfl, fun op o hreg hcov hlen hjit =>
+      ⟨hlen, hjit, ∅, ?_, ⟨fun _ => false, ⟨fun g hg => absurd hg (by simp), fun _ _ => rfl⟩, fun _ => none,
+        fun g b h => absurd h (by simp), ⟨trivial, trivial⟩, ?_⟩⟩⟩
+    · simp only [incorrectSets, Finset.mem_filter]
+      refine ⟨Finset.empty_mem_powerset _, ?_, Finset.disjoint_empty_left _⟩
+      show (0 : ℝ) < copyStmt.design.Pa notPart ∅
+      rw [copy_Pa]
+      exact one_pos
+    · intro t ht
+      obtain rfl : t = 0 := by
+        have : t < 1 := ht
+        omega
+      obtain ⟨h0, hrows, hop⟩ := (hreg.2 0 Nat.one_pos).2.2
+      refine ⟨h0, ?_, hcov 0 Nat.one_pos h0⟩
+      have hin : ingressUpTo op o 0 = [[true]] := by
+        show [op 0 (o.take 0)] = [[true]]
+        rw [hop]
+        rfl
+      funext ℓ
+      rw [hrows ℓ]
+      show _ = rowOf (valOver copyProg (notLay.inputOf 1 (ingressUpTo op o 0) fun _ => false) fun _ => none)
+        (notLay.egress 0 ℓ)
+      rw [hin]
+      funext σ
+      have he : notLay.egress 0 ℓ σ = (1, []) := rfl
+      simp only [rowOf, he, copy_val_true]
+      rfl
+  · obtain rfl : t = 0 := by
+      have : t < 1 := ht
+      omega
+    rfl
+  · simp only [List.mem_singleton] at hy
+    subst hy
+    decide
+
+end Placed
+
 /-! ## The statement's honest lemma -/
 
 set_option synthInstance.maxSize 1024 in
-/-- **`MonitoringPeriodLeakChecked`'s premises at the toy code**, over a monitoring period of no windows, the one period the toy
-code places, since it gives no statement a partition: `Compiled.KS` and the commitment's binding
-(`MonitoringPeriodLeakAccepted_honest`); the windows' registrations (`ExecutionPhasesPlaced`) and their checks' pinning
-(`CheckedUnique`), of which that period has none; and, at the record format of no connection (`noFormat`), the
-read-back under the one parameter (`RecordFormat.ReadsBy`) and the channel of the one secret (`MonitoringPeriodChannelReg`),
-whose view holds no cell. The toy code parses no statement and its verifier rejects every run, so the lemma shows that
-the premises hold together and nothing of a window: no run passes there, and a period of no windows states no window's
-good event (`ExecutionPhaseGoodChecked`). -/
+/-- **`MonitoringPeriodLeakChecked`'s premises and its scope at one placed execution phase**, under the deployed
+compiled form at `placedCode`, a toy code that parses every statement as `copyStmt` with the partition `notPart`,
+samples its one proof block at rate `0` and accepts the statement `[]`: `Compiled.KS` (`ks_placed`) and the
+commitment's binding (`binds_deployOf`); the period of one execution phase registered as `copyStmt` with its partition
+and the committed bits of every possible incorrect set (`ExecutionPhasesPlaced`) and its check's pinning, of no input
+(`CheckedUnique`); at the record format of no connection whose record of the phase is one step with a frame
+(`frameFormat`), the read-back under the one parameter (`RecordFormat.ReadsBy`) and the channel of the one secret
+(`MonitoringPeriodChannelReg`); a run at `[]` passes at every prover and coins, and its extracted witness is `⟨[]⟩`
+(`placed_extract`); and the execution phase's good event (`ExecutionPhaseGoodChecked`) at that statement, that
+witness, the network attester's openings `certOps` and the observations the network attester's code records
+(`executionPhaseGoodChecked_placed`). The code checks no proof block and the extracted witness opens nothing, so the
+good event's leak relation holds by the circuit computing the network attester's openings, with no incorrect proof
+block; that the network attester's openings pass under the deployed commitment (`CertifierRegisters`) is not shown.
+The acceptance clause holds for every prover because the toy verifier (`stmtV`) accepts everything at `[]`, so it is
+no evidence that an honest prover in particular passes.
+
+It is a toy instance: `placedCode` parses every statement as one copy statement, its verifier checks only that the
+statement is `[]`, and it samples and opens nothing, so it is not the deployed check; no input is registered
+(`reg = ∅`) or checked (`chk = ∅`), the check is `True` and the sample rate is `0`. So it shows the good event's scope
+is not empty at a period of one placed execution phase, and does not show that an honest run of the deployed network
+attester is inside it, nor anything about the checked inputs the guarantee leaves out of its count. -/
 theorem MonitoringPeriodLeakChecked_honest :
-    (SamplingDeploy.compiled (FlockDeploy.deployZk _root_.Flock.Readable.relation) SamplingDeploy.toyCode
-        (fun _ _ _ => [])).KS FlockDeploy.sha512 ∧
-      (SamplingDeploy.compiled (FlockDeploy.deployZk _root_.Flock.Readable.relation) SamplingDeploy.toyCode
-        (fun _ _ _ => [])).commit.Binds FlockDeploy.sha512 ∧
+    (SamplingDeploy.compiled (FlockDeploy.deployZk _root_.Flock.Readable.relation)
+        Claims.Witness.SamplingGeneric.placedCode (fun _ _ _ => [])).KS FlockDeploy.sha512 ∧
+      (SamplingDeploy.compiled (FlockDeploy.deployZk _root_.Flock.Readable.relation)
+        Claims.Witness.SamplingGeneric.placedCode (fun _ _ _ => [])).commit.Binds FlockDeploy.sha512 ∧
       ExecutionPhasesPlaced
-        (SamplingDeploy.compiled (FlockDeploy.deployZk _root_.Flock.Readable.relation) SamplingDeploy.toyCode
-          (fun _ _ _ => [])).partition 0 (Fin.elim0 : Fin 0 → Claims.Sampling.AuditStatement) Fin.elim0 Fin.elim0 ∧
-      (∀ i : Fin 0, CheckedUnique ((Fin.elim0 : Fin 0 → Claims.Sampling.AuditStatement) i).prog
-        ((Fin.elim0 : Fin 0 → Claims.Sampling.Partition) i)
-        ((Fin.elim0 : Fin 0 → Claims.Sampling.AuditStatement) i).design trivLay 1 ∅ fun _ => True ∧ True) ∧
-      noFormat.ReadsBy (fun (_ : Unit) _ c => c.elim) (fun _ _ => True) ∧
-      MonitoringPeriodChannelReg noFormat (fun (_ : Unit) _ => True) Set.univ (Set.univ : Set Unit)
+        (SamplingDeploy.compiled (FlockDeploy.deployZk _root_.Flock.Readable.relation)
+          Claims.Witness.SamplingGeneric.placedCode (fun _ _ _ => [])).partition 0
+        (fun _ : Fin 1 => Claims.Witness.SamplingGeneric.copyStmt) (fun _ => notPart)
+        (fun _ => faultyBits Claims.Witness.SamplingGeneric.copyProg notPart (Finset.range notPart.blocks.length)) ∧
+      (∀ _ : Fin 1, CheckedUnique Claims.Witness.SamplingGeneric.copyProg notPart
+        Claims.Witness.SamplingGeneric.copyStmt.design notLay 1 ∅ fun _ => True ∧ True) ∧
+      frameFormat.ReadsBy (fun (_ : Unit) _ c => c.elim) (fun _ _ => True) ∧
+      MonitoringPeriodChannelReg frameFormat (fun (_ : Unit) _ => True) Set.univ (Set.univ : Set Unit)
         (fun _ => ⟨0, 0, Empty.elim, Empty.elim⟩) (fun _ => ()) (fun _ => ())
-        (fun p => (recordingCode noFormat p.1 fun c => c.elim).1) :=
-  ⟨MonitoringPeriodLeakAccepted_honest.1, MonitoringPeriodLeakAccepted_honest.2, ⟨fun i => i.elim0, fun i => i.elim0⟩, fun i => i.elim0,
-    fun _ _ _ _ _ => funext fun c => c.elim, ⟨fun _ _ => ⟨trivial, (), Set.mem_univ _, trivial⟩, fun _ _ => rfl⟩⟩
+        (fun p => (recordingCode frameFormat p.1 fun c => c.elim).1) ∧
+      (∀ (Ω : Type) (P : Prover Ω) (ω : Ω)
+          (r : Fin ((SamplingDeploy.compiled (FlockDeploy.deployZk _root_.Flock.Readable.relation)
+            Claims.Witness.SamplingGeneric.placedCode (fun _ _ _ => [])).V.k []) → FlockDeploy.Coin)
+          (c : (SamplingDeploy.compiled (FlockDeploy.deployZk _root_.Flock.Readable.relation)
+            Claims.Witness.SamplingGeneric.placedCode (fun _ _ _ => [])).E.C []),
+        (run FlockDeploy.sha512 P (SamplingDeploy.compiled (FlockDeploy.deployZk _root_.Flock.Readable.relation)
+            Claims.Witness.SamplingGeneric.placedCode (fun _ _ _ => [])).V [] ω r).out = .acc ∧
+          ((SamplingDeploy.compiled (FlockDeploy.deployZk _root_.Flock.Readable.relation)
+            Claims.Witness.SamplingGeneric.placedCode (fun _ _ _ => [])).E.eval FlockDeploy.sha512 P [] ω r c).1 =
+            some ⟨[]⟩) ∧
+      ExecutionPhaseGoodChecked FlockDeploy.sha512
+        (SamplingDeploy.compiled (FlockDeploy.deployZk _root_.Flock.Readable.relation)
+          Claims.Witness.SamplingGeneric.placedCode (fun _ _ _ => [])) 1 1 1 (fun _ => notLay) (fun _ => 1) 0
+        (fun _ => ∅) (fun _ _ => True ∧ True) 1 Claims.Witness.SamplingGeneric.copyStmt (fun _ => false)
+        (fun _ => certOps) [] ⟨[]⟩ ((recordingCode frameFormat ⟨0, 0, Empty.elim, Empty.elim⟩ fun c => c.elim).2 0) :=
+  ⟨ks_placed,
+    binds_deployOf (FlockDeploy.deployZk _root_.Flock.Readable.relation) Claims.Witness.SamplingGeneric.placedCode
+      FlockDeploy.sha512,
+    ⟨fun _ => rfl, fun _ _ hF => by
+      simp only [incorrectSets, Finset.mem_filter, Finset.mem_powerset] at hF
+      exact Finset.sum_le_sum_of_subset hF.1⟩,
+    fun _ => copy_checkedUnique, fun _ _ _ _ _ => funext fun c => c.elim,
+    ⟨fun _ _ => ⟨trivial, (), Set.mem_univ _, trivial⟩, fun _ _ => rfl⟩,
+    fun _ P ω r c => ⟨placed_acc _ P ω r, placed_extract _ P ω r c⟩, executionPhaseGoodChecked_placed⟩
 
 end NetTiming.Witness
