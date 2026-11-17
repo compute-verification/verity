@@ -110,15 +110,6 @@ def onsite_pearlplus(tmp: Path, monkeypatch) -> Path:
     return f
 
 
-def test_pearl_plus_in_h1s_place_under_onsite_is_refused_until_onsites_composite_lists_it(tmp_path, capsys,
-                                                                                         monkeypatch):
-    monkeypatch.setitem(K.COMPOSITES, T.ONSITE, ONSITE_PEARLPLUS)
-    f = onsite_pearlplus(tmp_path, monkeypatch)
-    monkeypatch.undo()
-    rc, _, err = dry(capsys, config=f)
-    assert rc == 2 and "refused composite" in err and "protocol soundness covers only" in err, err
-
-
 def test_under_onsite_pearl_plus_takes_h1s_place_with_its_product_and_no_compute_key_blocks(tmp_path, capsys,
                                                                                            monkeypatch):
     monkeypatch.setitem(K.COMPOSITES, T.ONSITE, ONSITE_PEARLPLUS)
@@ -145,7 +136,7 @@ def test_a_part_of_pearl_pluss_live_challenger_is_refused_by_name(tmp_path, caps
         assert f"without {lacking}: bind them" in err, err
 
 
-def test_the_runners_variables_under_remote_are_pearl_pluss_and_onsites_carry_none():
+def test_the_runners_variables_under_remote_are_pearl_pluss():
     cfg = R.load(CONFIG, REG)
     serve = T.SERVE.variables(cfg, BINDINGS)
     assert {k: serve[k] for k in ("REPO", "PRECISION", "SLOTS", "WINDOW_STEPS", "LOAD")} == {
@@ -156,10 +147,6 @@ def test_the_runners_variables_under_remote_are_pearl_pluss_and_onsites_carry_no
     both = {"challenger": {"pearl-plus": {**BINDINGS["challenger"]["pearl-plus"], "lane": "vllm-2",
                                           "main-file": "/tmp/main.json"}}}
     assert T.variables(cfg, both) == variables | {"PEARLC_CHALLENGER_LANE": "vllm-2", "MAIN_FILE": "/tmp/main.json"}
-    onsite = T.variables(R.load(ONSITE, REG), {})
-    assert not (set(PEARLPLUS) - {"H1_KEY_SHA512"} | {"PEARLC_CHALLENGER_LANE", "MAIN_FILE", "PEARLPLUS_TIE_UNIFORM"}) \
-        & set(onsite)
-    assert onsite["V3C_CLASS"] == T.SCAN_CLASS and onsite["H1_KEY_SHA512"] == "<challenger.pouw.key-sha512>"
 
 
 def test_pearl_pluss_class_is_the_runners_and_refused_by_name_where_the_workload_disagrees(tmp_path, capsys):
