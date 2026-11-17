@@ -11,7 +11,9 @@ from __future__ import annotations
 import dataclasses
 import hashlib
 import json
+import os
 import re
+import subprocess
 import sys
 import tomllib
 from pathlib import Path
@@ -25,7 +27,7 @@ from verity.channel import Refused
 from verity.protocols.resource_accounting.network.verifier import parties as NC
 from verity.protocols.resource_accounting.memory.pous.attester import onsite
 from verity.protocols.resource_accounting.memory.pous.attester import memory_challenger as mc
-from verity.protocols.resource_accounting.memory.pous.attester import wipe_challenger as WC
+from verity.protocols.resource_accounting.memory.pous.attester import challenger_party as CP
 from verity.protocols.workload_classification.training_detection.inference_only.verifier import parties as IO
 from verity.protocols.proofs.spot.verifier.service import SamplingDesign
 from verity_cli import run as R
@@ -35,6 +37,7 @@ CONFIG = ROOT / "demos" / "onsite_full.toml"
 REG = R.registry()
 T = sys.modules["served_table"]
 KEY = "0" * 128
+WIPE_PIN = next(p["key-sha512"] for p in tomllib.loads(CONFIG.read_text())["pin"] if p["protocol"] == "wipe")
 #: every binding the pieces read, on documentation addresses (RFC 5737)
 BINDINGS = {
     "challenger": {"pouw": {"gate": "gate-command", "peer": "peer-1", "key-sha512": KEY}},
@@ -53,15 +56,13 @@ VARIABLES = {
     "DEVELOPMENT": "1", "H1_GATE": "gate-command", "H1_KEY_SHA512": KEY, "H1_PEER": "peer-1", "LOAD": "varied",
     "PRECISION": "verity_int8", "REPO": "verity-int8/Llama-3.2-1B-INT8",
     "REV": "15b0976d400d796ee589e7737d03a919526bf800", "SERVE_ARGS": "--protocol ids --id-payload 503", "SLOTS": "4",
-    "V3C_LAW": "rate:1/3481648", "WINDOW_STEPS": "16",
+    "V3C_LAW": "rate:1/3481648", "WINDOW_STEPS": "16", "WIPE_ADDRESS": "192.0.2.1:7001",
+    "WIPE_CMD": f'WIPE_KEY_SHA512={WIPE_PIN} bash benchmarks/pous/streamed_wipe/served_wipe.sh "$1" "$2" "$3"',
 }
 KEYS = ["challenger.pouw.gate", "challenger.pouw.peer", "challenger.pouw.key-sha512", "memory-challenger.pous.address",
         "bandwidth-verifier.bandwidth.address", "network-certifier.certifier.gate", "memory-challenger.wipe.address"]
 #: each runtime party: its protocol (None while a half isn't in the tree), its role there, its machine and its clock
 RUNTIME = {
-    ("memory-challenger", "wipe"): ("verity/pous/streamed-wipe", "memory-challenger", "auditor-host",
-                                    "CLOCK_MONOTONIC_RAW ns"),
-    ("prover", "wipe"): ("verity/pous/streamed-wipe", "prover", "prover-node", None),
     ("memory-challenger", "pous"): ("verity/pous/memory-challenger", "memory-challenger", "auditor-host",
                                     "CLOCK_MONOTONIC ns"),
     ("prover", "pous"): ("verity/pous/memory-challenger", "prover", "prover-node", None),
@@ -218,7 +219,7 @@ def test_a_dry_run_resolves_every_party_channel_and_piece(tmp_path, capsys):
     pieces = {(x["party"], e["component"]) for x in got["plan"] for e in x["entries"]}
     assert {c for _, c in pieces} == {*T.PROTOCOLS, T.SERVED_WINDOW}
     hooks = {k: v for x in got["plan"] for e in x["entries"] for k, v in e["hooks"].items()}
-    assert not {"POUS_CMD", "POUS_ARGS", "WIPE_CMD", "BANDWIDTH_CMD"} & set(hooks)
+    assert not {"POUS_CMD", "POUS_ARGS", "BANDWIDTH_CMD"} & set(hooks) and hooks["WIPE_CMD"] == VARIABLES["WIPE_CMD"]
     assert {e["component"]: e["hooks"]["SERVE_ARGS"] for x in got["plan"] for e in x["entries"]
             if "SERVE_ARGS" in e["hooks"]} == {"certifier": T.ID_FORM}
     assert (hooks["H1_GATE"], hooks["H1_PEER"], hooks["H1_KEY_SHA512"]) == ("gate-command", "peer-1", KEY)
@@ -227,7 +228,7 @@ def test_a_dry_run_resolves_every_party_channel_and_piece(tmp_path, capsys):
 
 
 def test_a_dry_run_prints_each_runtime_party_with_its_protocol_role_machine_clock_and_channels(tmp_path, capsys):
-    """The wipe's, PoUS's rounds' and PoUB's parties are their protocols' (`Session`), each on the machine the
+    """PoUS's rounds' and PoUB's parties are their protocols' (`Session`), each on the machine the
     configuration places it on, the clock its header names on the one that reads a clock, the auditor's side listening
     at the address the prover's side dials; PoUB's is ``absent`` while its halves aren't in the tree."""
     rc, got, err = dry(capsys, "--bindings", bindings(tmp_path))
@@ -251,15 +252,13 @@ def test_a_dry_run_prints_each_runtime_party_with_its_protocol_role_machine_cloc
 
 
 def test_the_runtime_sessions_are_one_manifest_with_every_configured_role_and_a_clock_where_one_is_read():
-    for s in (T.WIPE, T.POUS, T.POUB):
+    for s in (T.POUS, T.POUB):
         if s.absent():
             continue
         m = s.protocol().manifest
         assert sorted(s.roles.values()) == sorted(r.name for r in m.parties)
         assert sorted(s.clocks) == sorted(r.name for r in m.parties if "clock" in r.needs)
         assert sorted(s.protocol().parties) == sorted(s.roles.values())
-    assert T.WIPE.clocks[T.WP.CHALLENGER][1] == T.sw.CLOCK and T.WIPE.before
-    assert not T.POUS.before and not T.POUB.before
 
 
 def test_a_dry_run_without_bindings_names_every_one_it_lacks(capsys):
@@ -296,7 +295,7 @@ def test_the_certifiers_script_is_its_developer_sides_and_no_gate_piece_names_on
                                                     "CERTIFIER_PERIOD_CMD", "V3C_CLASS", "CLASSES"}
     assert device.runs == T.GATE
     gates = [e for ps in REG.parties.values() for e in ps.values() if e.runs == T.GATE]
-    assert len(gates) == 3
+    assert len(gates) == 4
     assert all((e.scripts, e.binds, e.optional, e.variables(cfg, BINDINGS)) == ((), (), (), {}) for e in gates)
     principal = {p["name"]: p["principal"] for p in cfg["party"]}
     assert all(principal[p] == "auditor" for ps in REG.parties.values() for p, e in ps.items() if e.runs == T.GATE)
@@ -340,28 +339,27 @@ def test_the_memory_challengers_key_is_refused_unless_this_configuration_pins_it
     run = [str(CONFIG), "--on", T.AUDITOR_HOST, "--bindings", bindings(tmp_path), "--state", str(state)]
     assert R.run_main(run, REG) == 2 and "refused key" in capsys.readouterr().err
     other = b"a key the auditor never pinned"
-    for component in ("pous", "wipe"):
-        mine = state / "runs" / component / T.MEMORY_CHALLENGER
-        mine.mkdir(parents=True)
-        (mine / "seed").write_bytes(bytes(lms.DEPLOYED.N))
-        lms.LeafState.create(mine / onsite.KEY_STATE, other, lms.DEPLOYED.H)
+    mine = state / "runs" / "pous" / T.MEMORY_CHALLENGER
+    mine.mkdir(parents=True)
+    (mine / "seed").write_bytes(bytes(lms.DEPLOYED.N))
+    lms.LeafState.create(mine / onsite.KEY_STATE, other, lms.DEPLOYED.H)
     assert R.run_main(run, REG) == 2
     err = capsys.readouterr().err
     assert "refused pin" in err and hashlib.sha512(other).hexdigest() in err
     assert not (state / "runs" / "pous" / T.MEMORY_CHALLENGER / "tree.bin").exists()
 
 
-def test_the_wipes_the_rounds_and_poubs_parties_each_have_their_protocols_start():
-    for s in (T.WIPE, T.POUS, T.POUB):
+def test_the_rounds_and_poubs_parties_each_have_their_protocols_start():
+    for s in (T.POUS, T.POUB):
         assert sorted(s.protocol().starts) == sorted(s.roles.values())
 
 
 def test_a_run_raises_at_its_request_until_the_two_sides_compare_it(tmp_path, monkeypatch):
     """With its start and its party key given, a runtime party still raises before it runs: the two sides' requests
     are compared nowhere yet (`request_bound`)."""
-    monkeypatch.setitem(WC.PROTOCOL.starts, WC.CHALLENGER, lambda configuration, bound, state: Start({"k": 1}))
+    monkeypatch.setitem(CP.PROTOCOL.starts, T.CS.CHALLENGER, lambda configuration, bound, state: Start({"k": 1}))
     monkeypatch.setattr(T, "held", lambda piece, role: T.Held(None, None))
-    piece, cfg = T.PARTIES["wipe"][T.MEMORY_CHALLENGER], R.load(CONFIG, REG)
+    piece, cfg = T.PARTIES["pous"][T.MEMORY_CHALLENGER], R.load(CONFIG, REG)
     with pytest.raises(NotImplementedError) as e:
         T.prepare(cfg, tmp_path, BINDINGS, piece)
     assert e.value.args == (T.NOT_YET,)
@@ -378,16 +376,14 @@ def test_the_onsite_lines_trusted_device_is_each_memory_challengers_placement(tm
     cfg = {**cfg, "pin": [{**p, "key-sha512": hashlib.sha512(key).hexdigest()} if p["protocol"] == "pous" else p
                           for p in cfg["pin"]]}
     monkeypatch.setattr(mc, "committed", lambda: frozenset({K.digest(cfg)}))
-    outcomes = {"pous": {"outcome": {"public_key": key.hex()}, "refused": None},
-                "wipe": {"outcome": {"labels": 0}, "refused": None}}
+    outcomes = {"pous": {"outcome": {"public_key": key.hex()}, "refused": None}}
     monkeypatch.setattr(T, "prepare", lambda cfg, state, bindings, x: lambda: outcomes[x.component])
     monkeypatch.setattr(T, "registration", lambda cfg, state: None)
     monkeypatch.setattr(T, "onsite_check", lambda cfg, state: {"verdict": "undecided"})
     (tmp_path / T.BINDINGS).write_text(json.dumps(BINDINGS))
     line, = T.live(cfg, tmp_path, [T.MEMORY_CHALLENGER, T.VERIFIER]).outcomes[T.VERIFIER]["outcome"]["verdicts"]
-    assert set(line[mc.PREMISE]) == {"pous", "wipe"} and line["verdict"] == "undecided"
+    assert set(line[mc.PREMISE]) == {"pous"} and line["verdict"] == "undecided"
     assert line[mc.PREMISE]["pous"].startswith("holds")
-    assert line[mc.PREMISE]["wipe"].startswith(mc.REHEARSAL)
 
 
 def test_the_bandwidth_verifiers_start_reads_the_memory_challengers_run_beside_it(tmp_path, monkeypatch):
@@ -420,9 +416,9 @@ def test_the_bandwidth_verifiers_start_is_handed_pouss_pin_check(tmp_path):
 
 
 def test_the_runtime_components_channels_are_their_protocols_manifests():
-    """The configuration's channels of PoUS's rounds, the wipe and PoUB are their protocols' manifests', each role
+    """The configuration's channels of PoUS's rounds and PoUB are their protocols' manifests', each role
     under the configuration's name for its party, with the channel to onsite's verifier beside them."""
-    for component, s in (("pous", T.POUS), ("wipe", T.WIPE), ("bandwidth", T.POUB)):
+    for component, s in (("pous", T.POUS), ("bandwidth", T.POUB)):
         named = {r: c for c, r in s.roles.items()}
         mine = {(c.sender, c.receiver, c.messages, c.carries_coins) for c in T.MANIFESTS[component].channels
                 if T.VERIFIER not in (c.sender, c.receiver)}
@@ -518,7 +514,7 @@ def test_the_served_window_runs_once_with_every_piece_s_hooks(tmp_path, capsys, 
     assert rc == 0
     assert said(out, "PARTY") == [{"party": p, "refused": None} for p in ("firewall", "workers")]
     hooks = dict(x.split("=", 1) for x in (state / "out" / "hooks.txt").read_text().splitlines())
-    assert hooks["SLOTS"] == "4" and not {"POUS_CMD", "POUS_ARGS", "WIPE_CMD"} & set(hooks)
+    assert hooks["SLOTS"] == "4" and not {"POUS_CMD", "POUS_ARGS"} & set(hooks)
     # the served window's rule is the configuration's, a rate: its audit states it to its stream, which takes no fixed count
     assert SamplingDesign(hooks["V3C_LAW"]).text == K.parse(CONFIG.read_text())["service"]["law"]
     kept = set(VARIABLES) - {"PRECISION", "WINDOW_STEPS", "DEVELOPMENT"}
@@ -615,4 +611,65 @@ def test_the_onsite_check_is_the_records_composed_verdict(tmp_path, capsys, monk
     assert line["verdict"] == verdict and line["block"] == 2 and line["product"] == T.ONSITE
     assert line["components"] == {**{c: "accept" for c in T.PROTOCOLS},
                                   **{c: rows.get(c, "absent") for c in ("bandwidth", "inference-only")}}
-    assert line["coins"] == "development" and line["reason"] == reason
+    assert line["coins"] == "development" and line["reason"] == reason and "combined_by" not in line
+
+
+NETWORK = ROOT / "demos" / "onsite_network.toml"
+NETWORK_PIN = next(p["key-sha512"] for p in tomllib.loads(NETWORK.read_text())["pin"] if p["protocol"] == "wipe")
+NETWORK_BINDINGS = {"memory-challenger": {"wipe": {"address": "192.0.2.1:7001", "host": "auditor-1",
+                                                   "command": "ssh auditor-1"}},
+                    "network-certifier": {"certifier": {"gate": "user@gate-1"}}}
+
+
+def test_the_wipe_runs_in_the_workload_under_the_configurations_pin_and_no_party_of_it_raises(tmp_path, monkeypatch):
+    monkeypatch.setattr(T, "RUNNER", stand_in(tmp_path, "runner.sh", RUNNER))
+    state = tmp_path / "state"
+    state.mkdir()
+    (state / T.BINDINGS).write_text(json.dumps(NETWORK_BINDINGS))
+    got = T.live(R.load(NETWORK, REG), state, [T.WORKERS, T.PROVER]).outcomes
+    assert got[T.PROVER] == got[T.WORKERS] == {"outcome": {"served-window": 0}, "refused": None}
+    hooks = dict(x.split("=", 1) for x in (state / "out" / "hooks.txt").read_text().splitlines())
+    assert hooks["WIPE_CMD"] == f'WIPE_KEY_SHA512={NETWORK_PIN} bash {T.WIPE_SCRIPT} "$1" "$2" "$3"'
+    assert (hooks["WIPE_ADDRESS"], hooks["WIPE_CHALLENGER"], hooks["WIPE_COMMAND"]) == (
+        "192.0.2.1:7001", "auditor-1", "ssh auditor-1")
+
+
+@pytest.mark.parametrize("pinned", [True, False])
+def test_served_wipe_gets_the_configurations_pin_and_no_other(tmp_path, pinned):
+    cfg = R.load(NETWORK, REG)
+    cmd = T.PARTIES["wipe"][T.PROVER].variables(cfg if pinned else {**cfg, "pin": []}, NETWORK_BINDINGS)["WIPE_CMD"]
+    env = {"PATH": os.pathsep.join([str(Path(sys.executable).parent), os.defpath]), "HOME": str(tmp_path), "WIPE_KEY_SHA512": "f" * 128,
+           "VERITY_PINS": json.dumps(cfg["pin"]), "WIPE_COMMAND": "true", "WIPE_PROTOCOL_EXE": "true",
+           "GPU_LEASE_UUID": "no-such-card"}
+    p = subprocess.run(["bash", "-c", cmd, "_", str(tmp_path / "serve"), "all", str(tmp_path / "wipe")], cwd=ROOT,
+                       env=env, capture_output=True, text=True, check=False)
+    refused = (tmp_path / "wipe" / "refused.txt").read_text()
+    assert p.returncode == 3
+    assert ("nvidia-smi can't read the card no-such-card" in refused) == pinned
+    assert ("no challenger key is pinned" in refused) != pinned
+
+
+@pytest.mark.parametrize("rows, verdict, reason", [
+    ({}, "accept", None),
+    ({"communication": "reject"}, "reject", "certifier reject"),
+    ({"wipe": "missing"}, "undecided", "wipe missing"),
+])
+def test_a_set_no_lean_verifier_takes_is_its_rows_combined_in_python_and_says_so(tmp_path, monkeypatch, rows,
+                                                                                verdict, reason):
+    monkeypatch.setattr(T, "VERDICTS_SCRIPT", stand_in(tmp_path, "record.py", RECORD % json.dumps(rows)))
+    state = tmp_path / "state"
+    (state / "out").mkdir(parents=True)
+    (state / "out" / "machine.txt").write_text("research\nprover-1\n")
+    line = T.onsite_check(R.load(NETWORK, REG), state)
+    assert (line["verdict"], line["reason"], line["product"]) == (verdict, reason, "verity/onsite-network/v0")
+    assert line["combined_by"].startswith("python: no Lean verifier takes verity/onsite-network/v0")
+    assert line["combined_by"].endswith("not a Lean verifier's")
+
+
+def test_the_workloads_bindings_are_the_runners_settings_under_the_pieces_hooks(tmp_path, capsys, monkeypatch):
+    monkeypatch.setattr(T, "RUNNER", stand_in(tmp_path, "runner.sh", 'mkdir -p "$OUT"\necho "$VENV|$SLOTS" > "$OUT/node.txt"\n'))
+    tables = {**BINDINGS, "workers": {"served-window": {"VENV": "/workspace/venv312", "SLOTS": "9"}}}
+    state = tmp_path / "state"
+    assert R.run_main([str(CONFIG), "--on", T.PROVER_NODE, *SERVED_PARTIES, "--bindings", bindings(tmp_path, tables),
+                       "--state", str(state)], REG) == 0, capsys.readouterr().err
+    assert (state / "out" / "node.txt").read_text() == "/workspace/venv312|4\n"

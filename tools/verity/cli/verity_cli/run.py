@@ -17,8 +17,8 @@ parties are those of the static table `REGISTRY` names: the served window's (`to
 
 ``--bindings FILE`` gives the bindings: the hosts, addresses and gate commands the table's pieces reach the
 parties by, which the configuration never states, so binding another host changes no hash. It is TOML, a table per
-party and in it a table per listed subprotocol that declares that party, of strings and integers
-(``[memory-challenger.pous] address = "HOST:PORT"``); one naming another party or subprotocol is refused by name
+party and in it a table per listed subprotocol that declares that party, and for the workload's party one for the
+workload, of strings and integers (``[memory-challenger.pous] address = "HOST:PORT"``); one naming another party or subprotocol is refused by name
 (``binding``). They are kept beside the run (``STATE/bindings.json``), never in its record.
 
 ``--dry-run`` runs nothing: it prints a ``PLAN`` line for each party it would run (without ``--on``, the ``--party``
@@ -195,7 +195,9 @@ def bindings(path: Path | None, cfg: Mapping[str, Any], reg: Registry) -> dict[s
         if party not in parties:
             raise Refused("binding", f"{path} binds {party}, which the configuration has no party of (its parties: "
                                      f"{', '.join(sorted(parties))})")
-        mine = [c for c in cfg["protocols"] if any(r.name == party for r in reg.components[c].parties)]
+        w = cfg["workload"]["name"]
+        mine = [w] * any(r.name == party for r in reg.workloads[w].parties) + \
+            [c for c in cfg["protocols"] if any(r.name == party for r in reg.components[c].parties)]
         if not isinstance(tables, Mapping) or not all(isinstance(t, Mapping) for t in tables.values()):
             raise Refused("binding", f"{path}: [{party}] holds a table per component ([{party}.COMPONENT])")
         if extra := sorted(set(tables) - set(mine)):
