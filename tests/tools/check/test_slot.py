@@ -540,7 +540,7 @@ def test_a_slots_file_that_lists_none_is_not_started_naming_the_pools_beside_it(
         (tmp_path / name).mkdir()
         (tmp_path / name / "slots").write_text(text)
     err = not_started()
-    assert "`research run --on MACHINE --pool NAME --as LANE`): proofs, research; " in err
+    assert "--pool NAME --as LANE -- CMD`): proofs, research; " in err
     assert "trains" not in err and ".bak-" not in err
     assert "`research queue ready N --on auto` places a quick tier itself" in err
     assert not list(tmp_path.glob("check-*"))   # no lock taken and no line joined
