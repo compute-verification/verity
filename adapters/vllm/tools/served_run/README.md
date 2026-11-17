@@ -20,7 +20,7 @@ PoUW's verdict on the served run credits nothing. The challenger's gate holds a 
 run is a development run. And an H1 commitment's served execution blocks aren't yet a `verity/pouw/period/v1` case, the form
 remote's PoUW subprotocol reads. So the remote verdict can't accept on this run yet, and the run's record stays `pending`.
 
-Its run is `moved` (`demos/README.md`, `remote.toml`'s row): it has no passing run of record. Its proof level
+Its run is `moved` (`applications/README.md`, `remote.toml`'s row): it has no passing run of record. Its proof level
 is none. SPOT's guarantee, `Flock.Guarantees.SampledKSLiveV3`, is proved: when the verifier accepts a `--zk`
 session, the committed trace is outside the sampling relation with probability at most δ plus the proof system's
 errors. But the remote protocol's composed theorem, `Verity.remote_soundness_of_subprotocols`, takes its three subprotocols'

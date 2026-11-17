@@ -91,7 +91,7 @@ The compiler is a circuit the developer registers up front. Given the period's a
 | **Party, channel, device, protocol, config** five files in `verity/` | The shared types: what a party is, what two parties exchange, the registered hardware, what a protocol declares, the file a run starts from. | Nothing. | Types every protocol uses. | Any one protocol. |
 | **Runtime** `verity/runtime/` | Runs a configuration's parties on real machines: sockets, randomness, clock, transcripts. | A configuration. | Running parties and their transcripts. | Any protocol's rules. |
 | **Hardware** `hardware/` | One data sheet per GPU, host or server model: what one device can do in a second and what it holds. Each figure names its source and says whether it is a ceiling or a measurement. Data, no code. The auditor brings it. | The vendor's published figures and our own measurements, written in by hand. | Figures a run passes to the registration check. The protocols take a device's capacity from the registration. | Everything. It never holds a figure the audited device reports about itself. |
-| **Demos** `demos/` | One file each, a configuration: its protocols, its adapter, which party on which machine. The remote demo, and the onsite demo at three sizes: network, compute (the default) and full. A demo holds no code and is never tuned. | All of the above. | A run anyone can repeat with one command. | Nothing uses a demo. |
+| **Demos** `applications/` | One file each, a configuration: its protocols, its adapter, which party on which machine. The remote demo, and the onsite demo at three sizes: network, compute (the default) and full. A demo holds no code and is never tuned. | All of the above. | A run anyone can repeat with one command. | Nothing uses a demo. |
 | **Security** `security/` | Lean, in three parts: what each protocol guarantees, written to be read; what ties each guarantee to the verifier's own Lean code; and the proofs. A statement never reads a proof. | The verifiers' Lean. | Guarantees, each with its named assumptions and its open premises; one composition theorem for any list of protocols; and the error budget, each failure chance summed over a week, a month and a year (above 1 it prints "no bound at this period"). | Nothing in the system uses it. |
 | **The Lean check and the guarantee record** `tools/`, and one record file beside each Lean package | Has Lean's kernel check every proof again. Refuses a missing proof, an added axiom or a way around the kernel. Records each guarantee's statement and every premise it rests on. | Every Lean file: each protocol's `verifier/`, and `security/`. | Pass or fail, to the check. For each guarantee the deployed system rests on, the open premises still under it, to the dashboard. | What a proof is about. It decides no verdict. |
 | **Benchmarks** `benchmarks/` | Each benchmark is one command that records named numbers, each marked measured or modeled. Each benchmark's directory declares its numbers: name, owner, unit, command, and how often it should run. | The system, as a user. | Numbers, in the evidence store. | It never decides a verdict, and nothing uses a benchmark. |
@@ -115,7 +115,7 @@ An arrow reads "uses". Nothing points upward.
 ```mermaid
 flowchart TD
     bench["benchmarks/<br/>measure and record"]
-    demos["demos/<br/>one file per demo"]
+    demos["applications/<br/>one file per demo"]
     hw["hardware/<br/>data sheets, read by a run"]
     subgraph adapters["adapters/"]
         vllm["vllm/"]
@@ -231,7 +231,7 @@ verity/
 adapters/
   torch/
   vllm/            on torch/, with the circuits of the kernels it serves
-demos/             one file per demo, the configuration `verity run` reads. A demo holds no code
+applications/             one file per demo, the configuration `verity run` reads. A demo holds no code
   README.md        one table: the file, what it shows, its command, how far it runs and is proved
   remote.toml      SPOT, PoUW and the inference-only policy
   onsite_network.toml    the network attester, SPOT and the memory wipe
@@ -247,7 +247,7 @@ Not in it: `fixtures/` (each file goes beside its reader), an archive directory 
 
 The rules that keep the parts apart. A test enforces each one:
 
-1. Nothing in `verity/` uses `adapters/` or `demos/`, or names PyTorch, vLLM or a model.
+1. Nothing in `verity/` uses `adapters/` or `applications/`, or names PyTorch, vLLM or a model.
 2. No code uses `security/` or `hardware/`. A run reads the data sheets and passes them in.
 3. `runtime/` uses no protocol, and no protocol or adapter uses `runtime/`. Only what starts a run does.
 4. `party.py`, `channel.py` and `device.py` use nothing. `protocol.py` uses only those three. `config.py` uses only `protocol.py`.
@@ -281,7 +281,7 @@ Each difference's owner and day are in `tests/tree.toml` (its `[[not_yet]]` line
 | The network attester's developer side | Its serving loop and keys are in `attester/`, which the auditor's device starts. Its developer side hangs off one edge, the served table's `CERTIFIER_PIECE`: about 6,800 lines of `benchmarks/network_traces/`, which start the proof drivers in `prover/` on about 4,900 lines of `benchmarks/one_stage/` (`proof_drivers.install`), which rule 9 forbids | network attestation's `prover/` |
 | vLLM's scheduler and the advice format, which rule 1 keeps out of `verity/` | The modules that restate the scheduler (the replay step and chain, the compile slices, the cache step, the served rows, tie and statics, the advice check) are in `adapters/vllm/verity_vllm/compiler/`. Four files of the advice's format and its charge are in network attestation's `verifier/` and `prover/` (`advice.py`, `arith_encode.py`, `charge_chain.py`, `window_charge.py`) | The four stay until network attestation takes the advice through an interface: the trusted tie service reads the format, and the charge is mirrored in network attestation's Lean (`AdviceV1`, `WindowCharge`), so moving it changes a Lean statement |
 | The areas of `security/` | named before the carve | each carries its protocol's name, and the accounting area holds one protocol's files |
-| Applications | `demos/`, the name sections 3 to 6 still use | `applications/`, one file per application, run by `verity run NAME` |
+| Applications | `applications/`, the name sections 3 to 6 still use | `applications/`, one file per application, run by `verity run NAME` |
 | Calibration | `hardware/`'s data sheets, and under `benchmarks/` the probes and harnesses that choose a parameter or test an assumption one rests on | `calibration/`, which nothing imports |
 | Hardware figures | `verity/device.py` reads the data sheets itself (`CARDS`, `NODES`, `load_card`, `load_node`), so code under `verity/` holds parameters | an application passes them in, and nothing under `verity/` reads a data sheet |
 | Security figures | computed by directories under `benchmarks/` | not under `benchmarks/`; where they go is not decided |
@@ -294,7 +294,7 @@ Each difference's owner and day are in `tests/tree.toml` (its `[[not_yet]]` line
 | The messages between workload and prover as one stated list | Function calls and files; 15 files with no settled name or place |
 | PoUW's serving code and GPU kernels in one package under `verity/protocols/resource_accounting/compute/pouw/`, reached by one call | The serving code is in `verity/protocols/resource_accounting/compute/pouw/prover/serving/` (12,000 lines), reached by `run_matmul` and `observe_matmul`. The adapter keeps the option with its H1 hooks, the serve loops (`serve_h1`, `serve_pearl`, `serve_tie`), Pearl's row GEMM (`gemm_rows`), H1's commit at acquire, the ncp-v2 replay check and the GPU row-table commit (3,500 lines); the last two and `serve_pearl` still import modules below `serving`. Kernel checks are under `benchmarks/` |
 | Benchmarks and demos reach the adapter through its public interface only | 133 modules are reached past it |
-| Each demo is one file under `demos/` that `verity run` starts: `remote.toml`, `onsite_network.toml`, `onsite_compute.toml` (the default) and `onsite_full.toml` | The four files are there and `demos/` holds nothing else. `verity run` resolves only `onsite_full.toml`, as a dry run with no party live: it refuses `remote.toml` by name, since Pearl+ has no party, and stops on the two smaller onsite files. Its table writes each file and reads back only the pins, where the file should be the source the code reads |
+| Each demo is one file under `applications/` that `verity run` starts: `remote.toml`, `onsite_network.toml`, `onsite_compute.toml` (the default) and `onsite_full.toml` | The four files are there and `applications/` holds nothing else. `verity run` resolves only `onsite_full.toml`, as a dry run with no party live: it refuses `remote.toml` by name, since Pearl+ has no party, and stops on the two smaller onsite files. Its table writes each file and reads back only the pins, where the file should be the source the code reads |
 | Dither and the FP4 variant (Pearl-C4) are protocols being tried, under `verity/protocols/experimental/` | Dither's kernels and circuit are there, and Pearl-C4's kernel; Pearl-C4's scheme, circuit and vectors are in PoUW's package, whose own circuits load its circuit |
 | The team's platform is in its own repository, today's `compute-verification/infra` | `infra/`, the run recorder and the agents' guard are in this one until their day in `tests/tree.toml`. The move tool stays, since its maps are this tree's records |
 | Python never returns accept or reject | Several protocols still decide in Python. SPOT's two-stage outcome is joined in Python; its Lean check is written and refuses every audit until its proof exists |

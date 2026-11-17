@@ -76,7 +76,7 @@ LOCAL = "local"
 COMPOSITES = {"verity/onsite/v0": ("bandwidth", "certifier", "inference-only", "pous", "pouw", "sampled-proofs",
                                     "wipe"),
               "verity/remote/v1": ("inference-only", "pearl-plus", "sampled-proofs")}
-#: onsite's two smaller sets, by id (`demos/onsite_network.toml`, `demos/onsite_compute.toml`): each a deployment of its
+#: onsite's two smaller sets, by id (`applications/onsite_network.toml`, `applications/onsite_compute.toml`): each a deployment of its
 #: own with its own claim, so that an accepted one is never read as onsite. No composite `Core.Composites.ofIds` accepts
 #: is one, so `check` reads and hashes them and `verity run` runs neither (`NotImplementedError`)
 UNACCEPTED = {"verity/onsite-network/v0": ("certifier", "sampled-proofs", "wipe"),
