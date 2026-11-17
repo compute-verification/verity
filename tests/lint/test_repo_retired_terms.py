@@ -263,7 +263,11 @@ HELD_KEYS = {
     "sampled-proofs:*": (("benchmarks/harness/README.md", "benchmarks/harness/specs/llama31-8b-fp8-1gpu-commit-served.toml",
                           "tests/benchmarks/harness/test_bench.py", "benchmarks/harness/verity_bench/vllm/commit_arm.py"),
                          "a stored run's arm key, vllm's"),
-    "coin_source": (("benchmarks/harness/verity_bench/vllm/runner.py", "tests/benchmarks/harness/test_bench.py"),
+    "coin_source": (("benchmarks/harness/verity_bench/vllm/runner.py", "tests/benchmarks/harness/test_bench.py",
+                     "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/__init__.py",
+                     "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/challenger.py",
+                     "verity/protocols/resource_accounting/compute/pouw/prover/serving/lead/__init__.py",
+                     "verity/protocols/resource_accounting/compute/pouw/prover/serving/pearl_c/window.py"),
                     "the PoUW commitment's key, compute-accounting's"),
 }
 #: a character of an identifier a held key stands in
