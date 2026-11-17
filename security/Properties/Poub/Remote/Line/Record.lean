@@ -35,46 +35,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# The line of record's inputs, read as the memory model's (`Properties.Poub.Line`)
-
-What a gate run's memory line (`Poub.Line.lineOfRecordAt`) reads of one session, and the paced session
-(`ResourceAccounting.Remote.Held.Pace`) the memory model reads it as:
-
-* `Node`: what is fixed before the coins: the session's parameters, the windows a sample (`groups_per_coin`, g) and the
-  registration it runs on (so its windows, one group each, `Node.windows`, its samples, `Node.samples`, and its
-  registered blocks, `Node.blocks`), the groups a stretch, a block's bytes, the node's on-chip storage and memory in
-  bytes, its rates (`Poub.Line.Rates`) and the δ the line reads its pooled bound at. `Node.squarings` …
-  `Node.chipBlocks` are those rates in the model's units: a tick is a nanosecond on the record's clock and a block is
-  `blockBytes`. Its δ is a nonnegative rational (`ℚ≥0`): the line computes at no δ outside `(0, 1)`.
-* `Record`: what one outcome gives: the verifier's inputs (its coins, the earliest coin release and the session's
-  events in order) and what the auditor saw of each window (`Poub.Line.Seen`: its coin's release and last root,
-  and its passes' reads by kind).
-* `Verified`: the Lean verifier accepts the record's session (`Shared.run` at the node's g from `State.init` at its
-  parameters and registration, then `outcome`; at g = 1 `Session.run`, `Poub.Shared.run_one`).
-* `Record.summary`: the Lean verifier's record of the session (`Session.State.summary`), which is some summary
-  exactly where it accepts. The line reads it (`lineOf`, `lineOfRecordAt`): each window's passes, each sample's receipts
-  and samples (`sampleReceipts`: sample `c` is windows `c·g … (c + 1)·g − 1`, a window at g = 1), and the registered
-  blocks; `Record.groups` and `Record.receipts` are its groups, one a window, and its samples' receipts.
-* `Record.reached`: the state the record's session reaches in the Lean verifier, its run's last or the one before the
-  first event that throws; `Record.receiptsAt` its windows' receipts and `Record.sampleReceiptsAt` its samples'.
-* `recordSample`: the record's opening sample (`ResourceAccounting.Remote.Sample.Run`), one sample for each of the session's
-  (`Node.samples`), sample `c`'s size at `ω` its receipts in the state the record reaches at `ω`, at most `receiptMax`
-  (`2^64 − 1`, the verifier's `RECEIPT_LIMIT` less one). It reads the reached state rather than the record's summary so
-  that `Live`, a sample's size fixed by the coins before it, can hold of a session whose acceptance turns on later
-  coins.
-* `recordCommitted`: the prover's records read through the coin commitment (`ResourceAccounting.Remote.Sample.Committed`):
-  holding commitment `c` its record at `ω` is `recs c ω`, and the session it plays is that record's `recordSample`;
-  `played` is the record of outcome `ω`, the prover's holding the deployed commitment `com ω`.
-* `ofRecord`: a trace over the registration's blocks (`overBlocks`) with the Lean verifier's verdict on the record as
-  its own, the trace the line's premises read.
-* `recordPace`: the record's groups as the model's paced session, group `g`'s first pass the passes before it, its coin
-  and its end `e_g` the record's as `stretches` reads them (`ended`); past the last group its coin stands, so the coins
-  stay in order.
-* `stretchPace`: stretch `m`'s groups `m·per … (m + 1)·per` alone as a paced session, `per` credited groups and the
-  closing group `(m + 1)·per`; `spanStart` and `spanStop` its span `[u, v)` as `stretches` reads it, from group 0's end
-  for the first stretch and from group `m·per`'s coin for the rest, to group `(m + 1)·per`'s coin.
--/
+/-! The line of record's inputs (`Node`, `Record`), read as the memory model's paced session. -/
 
 @[expose] public section
 
@@ -84,12 +45,10 @@ open ResourceAccounting.Remote.Held _root_.Poub.Line
 
 /-- The node and the session's structure the line reads, fixed before the coins. -/
 structure Node where
-  /-- the session's parameters: its windows, one group each, and the receipts each sample samples -/
   params : Poub.Session.Params
   /-- the windows a sample, `groups_per_coin`: windows `c·g … (c + 1)·g − 1` are sampled from one openings coin; at most 1,
   one a window -/
   groupsPerCoin : ℕ
-  /-- the registration the session runs on, its registered blocks among it -/
   reg : Poub.Registration
   /-- the groups a stretch -/
   per : ℕ

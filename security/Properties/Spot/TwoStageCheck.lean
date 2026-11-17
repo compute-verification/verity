@@ -3,32 +3,8 @@ module
 public import Spot.TwoStageCheck
 public import Properties.Spot.FactorUpper
 
-/-!
-# A two-stage point, checked: what its bits bound (`Spot.TwoStageCheck`)
-
-`Spot.TwoStageCheck.checkTwoStage` returns the bits a two-stage point certifies, from its first stage's rate,
-Rankin's `θ`, `δ` and its replay blocks' classes. These properties say that number bounds the count
-`Claims.Sampling.CompiledTwo.Exfil` bounds the influence set by, at every deployment the point describes:
-
-* `FirstStageAt d q`: the registered first stage samples each replay block at a rate at least `q`: `bernoulli:NUM/DEN`
-  with `q ≤ NUM/DEN`, or the deployed uniform `Q`-subset of the population's `N` replay blocks with every input replay
-  block (`[subset Q, all]`) with `q N ≤ Q`;
-* `ClassesCover`: each replay block `ρ` is in a class `cls ρ` whose cells cover it (`Covers`), and class `i` holds at
-  most its `count` replay blocks;
-* `RequestsCover`, the patterns' form: no two requests read one proof block, and at most a class's `N` requests read in
-  each of its replay blocks, each serving at most the point's `S` bits and reading at most the class's `reads`
-  (`ReadsCover`);
-  a request may read in several replay blocks;
-* `ServedCover`, the capped form: no two requests read one proof block, and the requests reading in each replay block
-  serve at most its class's `N` times the point's `S` bits together;
-* `TwoStageCheckSound`: a sets' point's bits `b` bound `Σ_{T admissible} 2^{b(T)} ≤ 2^b`;
-* `TwoStageCheckPatternsSound`: a patterns' point's bits bound the admissible sets' patterns' sum
-  (`Claims.Sampling.AdmissibleTwoRankinPatterns`' left side) by `2^b`;
-* `TwoStageCheckServedSound`: a capped point's bits bound the admissible sets' sum with each set's bits capped at what
-  the requests reading it serve (`Claims.Sampling.AdmissibleTwoRankinServed`' left side) by `2^b`.
-
-How tight the bits are (the figure's driver measures them against `optimize.two_stage_exfil`) is not stated.
--/
+/-! The bits a checked two-stage point certifies (`Spot.TwoStageCheck`) bound the count
+`Claims.Sampling.CompiledTwo.Exfil` bounds; how tight they are is not stated. -/
 
 @[expose] public section
 
@@ -107,11 +83,6 @@ def TwoStageCheckServedSound : Prop :=
         ((∑ T ∈ admissibleTwo Pt d D.δ, 2 ^ min (bitsOf s Pt T)
             (∑ r ∈ Finset.univ.filter (fun r => (blocksTo s.prog Pt req T r).Nonempty),
               min (bitsOf s Pt (blocksTo s.prog Pt req T r)) (servedBits req r)) : ℕ) : ℝ) ≤ (2 : ℝ) ^ (b : ℝ)
-
-/-! ## The witnesses' points
-
-The guarantees' witnesses (`Properties.Spot.SecurityProofs`) read these: `FactorUpperWitness.pairDesign`'s
-replay block and a million deployed-shaped ones as points, and a first stage that samples nothing. -/
 
 namespace TwoStageCheckWitness
 

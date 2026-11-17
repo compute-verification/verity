@@ -3,50 +3,8 @@ module
 public import Properties.Verity.Subprotocols
 public import Definitions.Compose.JointPeriod
 
-/-!
-# The causal game's coins, flipped up front: each subprotocol's bound in the coins model carried to the play
-
-In the causal game (`Verity.play`) the device flips its coins as the prover drives it, round by round: each frame the
-prover sends picks what the device samples next, after every coin before it. A subprotocol's guarantee is stated over coins
-flipped up front: `ResourceAccounting.PeriodRun.Sound` bounds, at every value of the other coins, the probability over the audit's
-own coins. This module states the coupling between the two and the bounds it carries.
-
-* **The coins flipped up front** (`UpFrontAll fs D`): every coin of the coin commitment's families `fs` (`UpFront fs`),
-  family `j`'s coin `n` the one the device releases when the family goes from `n + 1` coins left to `n`
-  (`UpFront.read`, `coinsLeft`), and the device's sample at the close under its signer `D` (`finish`: each coin's salt
-  and the coins it committed to and didn't release), which no release reads. The coin trees' coins are not among them:
-  what a tree samples depends on the shape and nonce the prover sends at its `Hello`, so they are resolved from the
-  device's log so far (`TreeCoins`).
-* **The play at those coins** (`outUp fs D θ F c ρ σ t`): the play of `σ` with each family coin read from `t`, each coin
-  tree's from `ρ` and the close's sample from `t`: the prover's request, the device's log, the bytes the close leaves to
-  the device, the sample and the device's signatures, and the evidence `σ` sends after it (`outK`). Each family coin is
-  read once: a family's coins left only go down. A frame the device refuses, a tree frame past its coin-tree lines or a
-  `Hello` of a spec it doesn't sample among them, ends its releases, as in the play.
-* **The coupling**, which every guarantee here rests on and which the proofs tree proves (`play_couples`): for every
-  event, the play's probability at `σ` lies between its probabilities over the coins flipped up front at two resolutions
-  of the coin trees' coins. An event that reads no coin tree's coin has the same probability in both.
-* **Each subprotocol's bound over the coins flipped up front** (`Vocab.UpFrontFor acc k a`, `Vocab.UpFrontBound k a`): at
-  every resolution of the coin trees' coins, the probability over the coins flipped up front that `acc` holds while `a`'s
-  claim fails is at most `a`'s error at the strategy. It gives `a`'s target at `acc` in the play (`CoinsCouple`), and so
-  `Vocab.ComponentBound` at `acc = ComponentAccepts`.
-* **From a period guarantee** (`TargetOfPeriods`): for the subprotocol that decides `Audit` `b`, a run of the coins model
-  (`ResourceAccounting.PeriodRun`) whose coins are in bijection with the coins flipped up front (`Vocab.PeriodCoupling`), whose
-  verdict `acc` refines and whose claim refines `b`'s in the play, meeting `PeriodRun.Sound` within the published `δ`,
-  with the rest of the event (a log out of place, the coupling's break) bounded by the forger's and the finder's terms
-  (`Vocab.PeriodCoupling.BreakBound`; together `Vocab.PeriodsCouple`), gives `b`'s target at `acc` in the play. At
-  `acc = ComponentAccepts` it is `Vocab.ComponentBound`, which is then no longer a hypothesis of
-  `SoundnessOfComponents` for that subprotocol.
-* **The wipe** (`WipeTarget`): the wipe's guarantee (`Verity.Wipe.SurvivorBound`) is over its own sample, and its coupling
-  to the play (`Vocab.WipeCoupling`) is `Verity.Wipe.OfRun.Preserves`, the wipe's verdict refining `acc` and the
-  survivor error within the wipe's; with them it gives the wipe's target at `acc`. `Preserves` reads the foreign
-  content as uniform on the play.
-* **Soundness** (`SoundnessOfUpFront`): at every composite, each subprotocol's bound at its component, over the coins
-  flipped up front, or as its target (`Vocab.SubprotocolBound`), gives `Vocab.SoundnessAt`.
-
-A subprotocol whose claim reads the coin trees' coins (SPOT) is bounded at every resolution of them only if a
-prover choosing them can't break it, so its bound stays at its component (`Vocab.ComponentBound`) or its target
-(`Vocab.Target`), proved in the play itself. The inference-only policy's claim reads no coin, so its bound is its own.
--/
+/-! The causal game's coins flipped up front, and the coupling that carries each subprotocol's bound in the coins
+model to the play. -/
 
 @[expose] public section
 

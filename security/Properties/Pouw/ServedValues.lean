@@ -3,52 +3,8 @@ module
 public import Definitions.Core.Formalism
 public import Properties.Pouw.MonitoringPeriodJ10R
 
-/-!
-# The served PoUW's values in AND gates (`PouwCheck.Credit.window`, J10-R)
-
-`Properties.Pouw.MonitoringPeriodJ10R.H1J10RCheckedCreditMonitoringPeriod` is stated in words: except with probability
-`δ_s + n·(δ_bind + δ_ks)`, an accepted period's fixed words are at least `(1 − ε(j))₊` of the live words of the windows
-before the first refusal. `RightValues` states that bound in AND gates of the registered circuit under its
-pinned lowering (`Verity.creditSize lower D`): except with probability δ_coin + δ_crypto,
-an accepted period's right values cover at least `(1 − ε_skip)₊·S` AND gates. It is the values guarantee, "declared
-size, values certified".
-
-*Not a compute claim.* Right values aren't work: one cheap faulty value upstream can make its
-whole cone right, and values that read no live coin can be replayed. So this says which of the registered circuit's
-values are certified, never what the prover spent. A compute guarantee for the served PoUW is a separate statement,
-which adds SAK to H1.
-
-* `BlockMap`: the public map from words to gates. Proof block `t`'s gates in `lower D`, the registered declaration `D`
-  under the lowering `lower` pinned at registration (the record carries its digest), and word `i`'s bits there,
-  which are outputs of its block. Each unit is one instance of its `K`'s `PouwH1WindowTile_v1{UNIT=…,K=…}`
-  (`Credit.layoutOf`), and its proof block is that instance's gates.
-* `BlockMap.size`: block `t`'s credit size, the AND count (`Verity.Circuit.andSize`) of its gates outside `ledger`,
-  the gates of `lower D` another protocol already credits (SPOT certifies the served GEMMs too). One
-  ledger, so no gate is counted twice, and the blocks' sizes sum to at most the credit `Verity.creditSize lower D`
-  (`Proofs.Pouw.ServedValues`' `sum_size_le_creditSize`).
-* `liveSize`, `creditedSize`: the credited size `S`, the size of each live block of credited words over the windows
-  before the first refusal: `creditLive` with each block's size in place of its words. It is public, read off the
-  registration, the live tiles and the verdict.
-* `rightSize`: the size of the blocks the run computed with their late cones, `SampledLayer.Good`: the blocks whose
-  values are right. E1(c) (`accounting-ts-unit-fixed`) says a good block's words are its own right values: its unit
-  and every unit that writes it a value after its coin are computed, none skipped and guessed. "Right" is the
-  accounting model's `SampledLayer.Good`: nothing yet ties it to the committed values `Credit.window` checks.
-* `sizePerWord`, `epsSkip`, `creditFloor`: the most size a credited word carries, `σ = max_t size_t / words_t` over the
-  blocks of credited words. Then `ε_skip = σ·ε(j)·N_live/S`, and the right values must cover `(1 − ε_skip)₊·S` AND
-  gates. When every block of credited words carries the same size per word, `S = σ·N_live` and `ε_skip = ε(j)`.
-* `RightValues`: except with H1's probability, an accepted period's right blocks have total size at least
-  `(1 − ε_skip)₊·S`.
-
-*No algorithmic premise.* Being about values, it takes no SAK and no premise beyond H1's: `TileSampleIsCoin` (the sample),
-`TileServiceSound` (the proof system's soundness, open), `RegisteredBeforeDraw`, `SaltIsLiveCoin` and
-`SharedNoiseLucks`, with the structure H1 reads (`Scope`, the live share `ρ`, the game and its prefix, the binding at
-`δ_bind`). `SharedNoiseLucks` is its one computational premise: the fold receipts' detection, which is to be
-proved in the slot's model or designed away by the no-fold receipt, not assumed. It drops H1's `UnitFixed` (and
-the play's `folded` words): it reads the right blocks themselves, not the play's abstract `fixed` count.
-
-Its `δ_s` is δ_coin and its `n·(δ_bind + δ_ks)` is δ_crypto. `BlockMap` is a named map from words to gates of the
-registered circuit, the unit the PoUW component's `Holds` is restated in.
--/
+/-! The served PoUW's values guarantee in AND gates of the registered circuit (`RightValues`): which values are
+certified, never what the prover spent. -/
 
 @[expose] public section
 

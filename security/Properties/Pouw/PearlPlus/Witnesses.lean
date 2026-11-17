@@ -2,12 +2,7 @@ module
 
 public import PouwPearlPlus
 
-/-!
-# The instances Pearl+'s witnesses are stated at
-
-`Proofs.Properties.Pouw.PearlPlus.Witnesses` proves each Pearl+ property's `honest` and `nontrivial` witnesses
-(`lean-audit.json`'s `witnesses`); the instances they read are here, so their statements read only this tree and the code.
--/
+/-! The instances Pearl+'s witnesses are stated at. -/
 
 @[expose] public section
 
@@ -71,15 +66,6 @@ def shortSide : Words.Formed := { capSide with codes := #[Array.replicate 32 0x3
 
 /-- `inertBoundRecord`'s tile with `shortSide`'s codes. -/
 def shortOps : Words.Ops := ⟨shortSide, shortSide, #[], #[]⟩
-
-/-! ## One honest pass
-
-One pass of the deployed scheme (`pearl-c-h100-v1-h3`, `k_min` 1,024, 64 × 64 tiles): one call of A (16 × 1,024) against
-its fixed operand's B (64 × 1,024), each element a BF16 value sampled from a standard normal, proved by the honest prover
-(`clear_audit.Prover`) and declared by it (`clear_work.declare`: no row excluded), whose one tile `clear_audit.Verifier`
-and `clear_work.check_opened` pass. Every hm96 salt in it is zero, the challenger's (which its entropy may give) and the
-prover's rows' and leaf's. Its epoch's coins are the challenger's of epoch 0, the salt coin 0x11…11 and the sampling coin
-0x22…22. The digests below are the Python's for these values, and the kernel computes the Lean's in each witness. -/
 
 /-- Bytes from hex, as `bytes.fromhex` reads them. -/
 def hexBytes (s : String) : ByteArray := (pyFromHex s).toOption.getD .empty
@@ -154,16 +140,6 @@ def honestSource : ByteArray := "verifierverifierverifierverifier".toUTF8
 
 /-- A run of the one honest pass at `draws` samples, on the verifier's source. -/
 def honestRun (draws : Nat) : Input := { coins := honestCoins, manifests := [honestManifest], draws, source := some honestSource }
-
-/-! ## A test tile
-
-One tile of a test instance of the scheme (`capScheme`, a manifest's `"instance": {"k_min": 128, "tile": [1, 1]}`): one
-1 × 128 call of A against its fixed operand's 1 × 128 B, each element a BF16 value sampled from a standard normal, proved by the
-honest prover (`clear_audit.Prover`) and declared by it (`clear_work.declare`: `inertBoundRecord`, no row excluded), whose tile
-`clear_audit.Verifier` and `clear_work.check_opened` pass. Every hm96 salt is zero and the epoch's coins are
-`honestPass`'s; each tree holds one leaf, so every opening's path is empty. The bytes are the Python's, written as
-big-endian numerals, which the kernel reads as numbers (a hex string it would decode character by character), and the
-noise's codes and words as arrays of numbers, which it indexes without decoding bytes. -/
 
 /-- The `w`-byte big-endian bytes of each of `ns`, in order. -/
 def beBytes (w : Nat) (ns : List Nat) : ByteArray :=
@@ -925,7 +901,6 @@ def testRun : Input :=
 /-- The test pass's honest prover: the test tile's openings, whatever tile is asked. -/
 def testOpener (_pass _tile : Nat) : Except String TileOpening := .ok testOpening
 
-/-- `testRun`'s plan: the test pass, its run commitment, the verifier's source, and the one tile its one sample names. -/
 def testPlan : Plan := ⟨[testPass], runCommitment [testPass], honestSource, [(0, 0)], 1, [(0, 0)], none⟩
 
 end Properties.Pouw.PearlPlus

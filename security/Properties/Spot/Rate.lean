@@ -2,49 +2,8 @@ module
 
 public import Spot.Select
 
-/-!
-# The count a parsed selection rule names is at least its rate, whatever population the prover registers
-
-The population a selection rule samples is the registration's, which the prover sizes. A fixed count `K` of `N` units
-samples each unit with `K/N`, which falls as the prover pads `N`. So `Select.Rule.ofJson` parses a rule only when its
-design text is a rate (`Select.rate?`, `Select.replaySamplingDesign?`) and refuses a fixed count (`Select.FIXED`), and
-`Select.Rule.over` turns the rate into a count once the population is known. `RuleAtRate` says what that gives, against
-those functions, and takes no premise. It is about the count a rule names, not the sample made from it. It has three
-parts:
-
-* a rule `Rule.ofJson` parses, over any `n` units in strata of any `sizes` where `Rule.over` gives a rule, is one of
-  `AtRate`'s forms. Under `all` it stays `all`. Under a rate design `rate:NUM/DEN[:T]`, and under a two-stage rule's
-  replay design, it is `subset:k` with `1 ≤ k ≤ n` and `NUM·n ≤ DEN·k`. Under `stratified-rate:NUM/DEN` it is
-  `stratified:K` with `1 ≤ K ≤ n`, at which Flock's stratified rule (`Flock.Draw.stratumK`) gives every stratum of `s`
-  of the `n` units a count `k_s` with `NUM·s ≤ DEN·k_s`. Under `work-rate:NUM/DEN` it is `work:K` with `1 ≤ K ≤ n`. The
-  one other text `Rule.ofJson` parses is `bernoulli:NUM/DEN`, which stays itself, a sampling design `Draw.bernoulli`
-  marks;
-* the work table `Select.Rule.tableOver` writes for a work rate design has an entry under each stratum's template, over
-  the strata of the program under the query: some work and the floor `Rate.floor NUM DEN n_s f` at some `f`, at which
-  Flock's work rule (`Flock.Draw.workK`) gives the stratum a count `k_s` with `NUM·n_s ≤ DEN·k_s` under any `K` and any
-  population work (`TableAtRate`). That work and that `f` are only said to exist: the statement ties them to no table;
-* a rule object whose design text is a fixed count, `subset:K`, `stratified:K` or `work:K`, is refused with `FIXED`.
-
-So the count is at least the rate's share only where a part says so: of the `n` units under a rate design and under a
-two-stage rule's replay design, and of each stratum under a stratified rate design. Under a work rate design the rate
-is within the table's floors. Of `all` and of a Bernoulli text the property says only that each stays itself. Each
-bound holds for every population and every strata where `Rule.over` gives a rule, so the prover's choice of them moves
-none: it holds at a population the prover picks after seeing the coins of earlier windows too. Under a rate design, a
-stratified rate design and a work rate design, `Rule.over` gives no rule at `n = 0`; nor under `rate:NUM/DEN:T` where
-the count, a multiple of `T`, is more than `n` (`rate:1/1:2` over 3 units asks 4); nor under a stratified rate design
-with no strata. The property says nothing there.
-
-Not proved here, each the code's or another statement's:
-
-* that the stream's run calls these functions at the population and the strata it then samples, reads the table
-  `tableOver` wrote, and refuses a registration under a Bernoulli design, of whose text the property says only that it
-  stays itself, whatever its rate (`bernoulli:0/1` parses);
-* that the sample `Select.select` makes holds the rule's count of units of each stratum, which is the sampled audit's
-  own statement;
-* anything of a two-stage rule's second stage, whose counts are fixed per cell;
-* a bound pooled over windows whose populations the prover picks one after another: each pooled statement fixes every
-  window's population before the period.
--/
+/-! The count a parsed selection rule names is at least its rate, whatever population the prover registers
+(`RuleAtRate`), with no premise. -/
 
 @[expose] public section
 

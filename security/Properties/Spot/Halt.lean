@@ -2,25 +2,8 @@ module
 
 public import Spot.Fleet
 
-/-!
-# The proof system's halt: detection is terminal (`Spot.Stream.run`, `Spot.Fleet.run`)
-
-The properties of R5-all as the service's Lean of record runs it: when a stream of an operator reaches its failure budget,
-the fleet halts the operator (`Fleet.failures`), and each of the operator's streams then takes a `halt` op
-(`Stream.halt`), which ends every outcome not yet final as `halted` and keeps those already final. Each is stated against
-the function as it runs, for every state and op its decoders produce, and takes no premise.
-
-* `HaltIsFinal`: a halted stream refuses every op `halted` and its state stays as it is, so nothing after its halt is
-  accepted, registered or ended.
-* `HaltEndsOpen`: a halt the stream accepts names the entries that were open, makes each of them final, leaves none open
-  and changes nothing else the stream counts: its size, failures, salt and end.
-* `NoAcceptAfterHalt`: over any run of ops (`runs`), every decision after an accepted halt is the `halted` refusal.
-* `FleetHaltIsFinal`: an operator the fleet has halted stays halted with its cause, and every op that names it (an
-  `attach` of it, or a `register` or `failures` of one of its streams) is refused `halted` and changes nothing.
-* `HaltCoversOperator`: a stream's failures at its budget leave its operator halted, with the fleet's streams unchanged;
-  when the operator was not yet halted, the cause is that stream at the fleet's position, and the decision names every
-  stream of the operator (`Fleet.streamsOf`), each of which the service then halts.
--/
+/-! The proof system's halt is terminal: the properties of R5-all as the service's Lean of record runs it
+(`Spot.Stream.run`, `Spot.Fleet.run`). -/
 
 @[expose] public section
 

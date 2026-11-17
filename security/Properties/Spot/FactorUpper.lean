@@ -3,24 +3,8 @@ module
 public import Spot.FactorUpper
 public import Definitions.Claims.SamplingTwoRankin
 
-/-!
-# Rankin's factor, bounded above: what the bound bounds (`Spot.FactorUpper`)
-
-`Spot.FactorUpper` bounds Rankin's factor of a replay block above, in exact arithmetic, from the block's cells
-(`Cell`: the second stage's `k` and the proof blocks by committed bits). These properties say the bound is above the
-factor `Claims.Sampling.AdmissibleTwoRankin` and its patterns' form multiply, at every `q`, `θ`, breakpoints and
-precision it accepts:
-
-* `FactorUpperSound`: when `lnFactorUpper cs P` returns `v`, `G_ρ(θ) ≤ e^v` (`Claims.Sampling.rankinFactor`) for every
-  replay block `ρ` whose cells `cs` covers (`Covers`: as many proof blocks of each width or more, a `k` or less);
-* `FactorUpperPatternsSound`: when `lnFactorUpperPatterns cs reads N S P` returns `v`, the patterns' factor is at most
-  `e^v` (`Claims.Sampling.rankinFactorPatterns`) for every such `ρ` whose proof blocks are read by at most `N` requests,
-  each serving at most `S` bits and reading at most `reads` (`ReadsCover`), no two reading one proof block;
-* `FactorUpperCappedSound`: when `lnFactorUpperCapped cs S P` returns `v`, the capped factor, each set's bits capped at
-  `S`, is at most `e^v` (`Claims.Sampling.rankinFactorCapped`) for every replay block `ρ` that `cs` covers.
-
-How tight the bound is against `optimize.two_stage_exfil`'s figure is not stated.
--/
+/-! Rankin's factor bounded above (`Spot.FactorUpper`): the bound is above the factor at every input it accepts, and
+how tight it is is not stated. -/
 
 @[expose] public section
 
@@ -74,11 +58,6 @@ def FactorUpperCappedSound : Prop :=
   ∀ (cs : List Cell) (S : ℕ) (P : Params) (v : ℚ), lnFactorUpperCapped cs S P = some v →
     ∀ (s : AuditStatement) (Pt : Partition) (d : Design.Two) (ρ : ℕ), Covers s Pt d ρ cs →
       rankinFactorCapped s Pt d S (P.q : ℝ) (P.θ : ℝ) ρ ≤ Real.exp (v : ℝ)
-
-/-! ## The witnesses' replay blocks
-
-The guarantees' witnesses (`Properties.Spot.SecurityProofs`) read these: a replay block with no proof blocks,
-where each factor is `1`, a replay block of two one-bit proof blocks, and a deployed-shaped cell list. -/
 
 namespace FactorUpperWitness
 

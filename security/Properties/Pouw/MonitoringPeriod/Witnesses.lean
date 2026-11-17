@@ -3,22 +3,7 @@ module
 public import Properties.Pouw.MonitoringPeriod
 public import Mathlib.Data.Finset.Sort
 
-/-!
-# The instance `h1CheckedCreditMonitoringPeriod`'s witnesses are stated at
-
-`Proofs.Pouw.MonitoringPeriod.Witnesses` proves `Properties.Pouw.MonitoringPeriod.SecurityProofs.h1CheckedCreditMonitoringPeriod`'s `honest` and
-`nontrivial` witnesses (`lean-audit.json`'s `witnesses`), and `Proofs.Pouw.MonitoringPeriod.Honest` that the instance meets every
-premise (`h1_meets`); the instance they read is here, so their statements read only this tree, the spec and the code.
-
-* The twin's circuit word, scheme and anatomy (`ResourceAccounting.SecurityProofs.ComposeMonitoringPeriod.Honest`): one
-  committed `S8Dot_v1` word, every kind credited with its operand luck pinned, `r_B = ½` and guess `½`, one word fixed.
-* The deployed check's numbers at the all-protocols PoUW subprotocol (`Accept`): the pinned H1 tile's check item, its
-  parameters `h1Params`, the loop's honest registration `h1Reg` and one-stage's answer accepting it, `h1Evidence`.
-* H1's honest live-salt period (`HonestH1`): 128 committed words of no operands, one a unit, on `N_p = 144` tiles, one
-  live round; its windows registering `h1Reg` and answered with the sample's units at `K_d = 24`; its salt the round's
-  coin, its openings in `Unit`; and its plays: `play`, accepted on every path, `checkedPlay`, accepted where the deployed
-  check accepts every window, and `acceptAll`, the verifier that accepts everything, fixing no word.
--/
+/-! The instance `h1CheckedCreditMonitoringPeriod`'s witnesses are stated at. -/
 
 @[expose] public section
 
@@ -137,8 +122,6 @@ open PouwCheck (Params)
 open ResourceAccounting.TS ResourceAccounting.Compose Pouw.RelativeSecurity
 open ResourceAccounting.SecurityProofs.ComposeMonitoringPeriod
 
-/-! ## The circuit -/
-
 /-- 128 committed words of no operands, one a unit, one live round. -/
 def circuit : Declared Unit where
   dag := List.replicate 128 Honest.word
@@ -155,8 +138,6 @@ def circuit : Declared Unit where
 theorem hr1 : 0 < circuit.rounds := Nat.one_pos
 
 theorem hK24 : 24 ≤ 144 := by decide
-
-/-! ## The period, its windows and its proofs -/
 
 /-- A window's coins: its round's coin, the sample's permutation and the proofs' (none). -/
 abbrev Ω1 : Type := Paths Bool circuit.rounds × (Equiv.Perm (Fin 144) × Unit)
@@ -216,8 +197,6 @@ noncomputable def play (n : ℕ) : Play Ω1 n Unit Unit Unit Unit where
   game := monitoringPeriodGame (tileStage circuit 144) (liveCone Honest.scheme circuit 144) 1 1 24 (period n)
   accepts := fun _ => True
   run := fun _ => anatomy
-
-/-! ## The witnesses' plays -/
 
 /-- The uniform measure's instance on `64` windows' coins: instance search unfolds `Paths` 64 levels deep and fails. -/
 instance (priority := high) fintypePaths64 : Fintype (Paths Ω1 64) := Paths.instFintype Ω1 64

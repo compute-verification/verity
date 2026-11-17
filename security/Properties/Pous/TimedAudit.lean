@@ -3,26 +3,7 @@ module
 public import PousCheck.TimedAudit
 public import Properties.Pous
 
-/-!
-# The timed audit's property, stated against the Lean code
-
-What `PousCheck.TimedAudit.verdict` (package `pous_check`, `memory_challenger.verdict` driving `protocol.TimedAudit`)
-accepts, stated over its three inputs, `READY.json`, `LEAVES.bin` and the audit document, and over the store `C*` whose
-leaves (`leaves`, as setup publishes them: `PublishesRoot`) have the document's root.
-
-* `TimedAuditAccepts`: an accepted record reads a P2 v4 store and salt from `READY.json`, one 64-byte leaf digest a
-  block from `LEAVES.bin` whose `Merkle.root` is the document's root, and `Δ`, the RTT allowance and `k` from the
-  document; it has an audit, and in each audit each round `j` answers the challenged index `i` (round `j`'s
-  `uniform(B, j)` under `derive(source, CHALLENGE_DOMAIN, {root, salt})`, a block of the store) with a block of the
-  width whose leaf (`Merkle.packageLeaf`) is leaf `i` of `LEAVES.bin` and of every `C*` of `B` blocks under the root,
-  within `Δ + RTT`. A strict record is covered: the store is the certificate's point, `k`, `Δ` and the allowance are
-  within it, and it reports no gap exactly when `W` has the certificate's 8 segments (a strict record of another segment
-  count is accepted with that gap: `Certificate.gate` refuses only `k`, `Δ` and the allowance).
-
-It takes the binding form: the conclusion holds, or the run hashed two distinct strings to one SHA-512 digest
-(`runStrings`: the inner nodes of the tree over `LEAVES.bin` the audit computes, and of the tree over `C*`'s leaves setup
-computes). Proved (`Proofs.Properties.Pous.TimedAudit`).
--/
+/-! The timed audit's property (`TimedAuditAccepts`), stated against the Lean code in the binding form. -/
 
 @[expose] public section
 

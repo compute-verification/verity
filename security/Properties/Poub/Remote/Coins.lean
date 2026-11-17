@@ -2,43 +2,8 @@ module
 
 public import Properties.Poub.Remote
 
-/-!
-# When the verifier reads a window's openings coin (`Poub`)
-
-The code's half of the opening sample's premises (`ResourceAccounting.Remote.Sample.Assumptions`): what `verifyWindow` and the
-session give of `Refused` and of `Live`, stated against the verifier's functions, for every input of their types.
-
-A session's coins are `coins[0 … W − 1]`, window `t`'s challenge at `t` (`releaseCoin`), and `coins[W + t]`, window
-`t`'s openings coin, which only `close t` reads, to sample the window's receipts (`draws`).
-
-* `AcceptSamplesOpenable` (`Refused`, per window): an accepted window's samples are the sampler's values on its openings
-  key, and each is a receipt of the window with an opening that passes `checkOpening` (`Openable`). So the receipts a
-  window opens are among its openable ones, the model's correct receipts.
-* `OpeningsUnreadUntilSampled` (`Live`, the coin order): a run, on the same events, gives the same results and the same
-  state, whatever the coins at `W + t` and above, as long as window `t` is not sampled by its end. Every challenge and
-  the earlier windows' openings coins may be read; window `t`'s openings coin and the later ones are not.
-* `RecordKeptAfterSample` (`Live`, the receipts fixed at the sample): once window `t` is sampled, the rest of the
-  session keeps its samples, its record (what `verify` checks the openings against: its challenge, the previous window's
-  last root and its passes' roots, plans and heads, so its size `U_t`) and which of its receipts are openable, whatever
-  events follow. A later append doesn't move the append a sampled receipt's block is in.
-
-So the code gives `Live` once the events up to window `t`'s sample are fixed by the coins below `W + t`, and that is
-what it cannot give: the order the deployment releases coins in, the challenger releasing `coins[W + t]` only to
-`close t`'s sample and the prover seeing nothing of it before (the coin commitment's root comes only with the outcome,
-`audit.Session.disclose`, so the guarantees take `Live` of the session the prover plays). `ReleaseOrder` names it, a
-premise of the deployment's,
-which no property here takes. `LiveUnder` is `Live` as the code states it, on the events a session sees on its
-coins: two sessions on coins that agree below `W + t`, wherever each has sampled window `t`, see the same record and
-the same openable receipts. `Proofs.Properties.Poub.Remote.Order` derives it from the three properties and
-`ReleaseOrder` (`liveUnder`), a lemma rather than a property since its premise is the deployment's. And `Counted`
-reads the trace's held blocks, which the code never sees: that a credited pass's wrong registered blocks are receipts
-no opening passes is the hash binding of the receipts and the store's commitments, not a property of the verifier's
-functions.
-
-The statements need `1 ≤ W` (with no window, `start` reads `coins[0]`, window 0's openings coin) and
-`1 ≤ min_passes` (with none, an empty window sampled on its deadline could take a root afterwards, once the window
-before it is sampled), which `audit.py`'s `Params` and the difftest's `positive` check.
--/
+/-! What PoUB's verifier gives of the opening sample's premises `Refused` and `Live`, and the release order it cannot
+give. -/
 
 @[expose] public section
 
@@ -89,11 +54,8 @@ def RecordKeptAfterSample : Prop :=
       sampledOf s' t = some d ∧ s'.record t = s.record t ∧
         ∀ u, Openable reg s'.appends (s'.record t) u ↔ Openable reg s.appends (s.record t) u
 
-/-- **The release order** (the deployment's, which the code cannot give): `D` gives the events a session sees on its
-coins (the prover's and the world's choices fixed, the coin commitment among them), and window `t`'s openings coin
-reaches none of them before the one that samples the window. While the first `k` events leave window `t` unsampled, the
-next is the same on coins that agree below `W + t`. It is what `Live` needs beyond `OpeningsUnreadUntilSampled`, up to the sample, and
-`RecordKeptAfterSample`, after it. -/
+/-- **The release order**, the deployment's, which the code cannot give: window `t`'s openings coin reaches none of
+the events `D` gives a session before the one that samples the window. -/
 def ReleaseOrder (params : Session.Params) (reg : Registration) (appendCoins : Array ByteArray) (notBeforeNs : Nat)
     (D : Array ByteArray → Array Session.Event) : Prop :=
   ∀ (coins coins' : Array ByteArray) (t k : Nat) (rs : Array Session.Result) (s : Session.State),

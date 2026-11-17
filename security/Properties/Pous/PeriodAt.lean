@@ -3,27 +3,7 @@ module
 public import Properties.Pous.Period
 public import Properties.Pous.EndToEndAt
 
-/-!
-# PoUS over one period at any point and block count
-
-`Pous.Period` states the per-period guarantee (`PeriodHeld`) at the deployed point: its audit is `Run.check`, at
-`Run.DEPLOYED`, and its ring game is at `2^19` blocks. This module states it at every point `pt` of the composed check
-(`Run.checkAt SCHEMES pt`, `Pous.EndToEnd.AcceptedAt`) and every block count `N` of the ring game
-(`Pous.EndToEnd.PassesAt N`) that the widened per-round floor covers, `2^19 ≤ N ≤ 2^27`, and at Demo B's store,
-`N = 1038·2^16`.
-
-* `AuditsOf sch`, `AuditsAt N`: `Audits` with the payload as `sch`'s bits and the capacity coins the ring model's at `N`.
-  `Accepts pt`, `Break pt` and `Certified pt` read the composed check, the table's break and the certificate at `pt`.
-* `RingDeviceAt N pt`: a ring-model server at `N` for `pt`'s certificate (`ServerAt N`, `PassesAt N`, state bound
-  `SAt N`): `pous-ring-device`, `pous-ring-instantiation` and `prf/sha-512` per run, read at `N`, still in the form the
-  deployed point's premise had before `PeriodHeld` split it into `DeviceModel` and `Instantiates` over every prover
-  strategy (`Pous.Period`'s header). It is meaningful at `N = pt.params.blocks`, the block count `pt`'s session
-  challenges.
-* `PeriodHeldAt`: at every such `pt` and `N`, from `P2RingRoundSecureWide`, the verifier's whole decision at `pt`
-  accepts a period with no break while the capacity account held fewer than `S · len` bit-ticks with probability at most
-  `δ + ε_max`.
-* `PeriodHeldDemo`: `PeriodHeldAt` at `N = 1038·2^16`, whose state bound is 1,060,008,348,186 bits.
--/
+/-! PoUS over one period at every point and block count `2^19 ≤ N ≤ 2^27`, and at Demo B's store. -/
 
 @[expose] public section
 
@@ -47,7 +27,6 @@ structure AuditsOf {B w p : ℕ} [NeZero p] (sch : Scheme (ringRO B w p)) (ΩW �
   commitment : ΩW × ΩQ → SetupProtocol.Commitment
   /-- `C*`, the blocks setup checks -/
   store : ΩW × ΩQ → Array (Array ByteArray)
-  /-- setup's public outputs -/
   pub : ΩW × ΩQ → SetupProtocol.Public
   /-- the memory challenger's table of `C*`'s row digests -/
   digests : ΩW × ΩQ → ByteArray

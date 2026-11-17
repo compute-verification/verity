@@ -2,30 +2,7 @@ module
 
 public import Spot.OneStageZk
 
-/-!
-# v2 holds the session's lookup tables to the registered circuit's (`Spot.OneStageZk.tablesHeld`)
-
-The parameters of the one-stage audit's v2 (`Spot.OneStageZk`) register its circuit file by its SHA-512, and
-the circuit names the lookup tables its session reads: its META's `lookups` (`OneStageZk.lookupsOf`). v2 refuses blobs
-whose pinned MUFU tables (`OneStageZk.tablesOf`, the tables `inputsOf` hands `verity-verify-proof`) are other than those
-before it sets up a session (`tablesHeld`, the first statement of `run`), so wherever the one statement's check
-accepts, the session's table set is the registered circuit's.
-
-In the per-member form the blobs are one set a window, and its members' circuits may look up different tables. There
-each member's statement (`Spot.OneStageZk.Member.statement`) is handed the blobs' pinned tables its own circuit looks
-up (`OneStageZk.ownTables`) and refuses where the blobs lack one of them, so a member's inputs hold its own circuit's
-tables and no other, whatever other pinned table the blobs hold.
-
-* `TablesRegistered`: on blobs `tablesHeld` accepts, the registered circuit file is among the blobs and the pinned
-  tables the blobs hold are, by name, the ones it looks up (`HoldsRegisteredTables`); on blobs on which v2's check
-  at any coins (`checkBlobsAt`) accepts, that holds of the verifier's own files where the parameters name no members,
-  and where they name members the blobs hold each table each member's circuit looks up, sampled or not
-  (`AcceptHoldsTables`); and where a member's statement reads, its circuit file is among the blobs and the lookup
-  tables its inputs hold are the blobs' pinned tables among the names it looks up, every one of those names
-  (`HandedOwnTables`).
-
-It takes no premise.
--/
+/-! v2 holds the session's lookup tables to the registered circuit's (`TablesRegistered`), with no premise. -/
 
 @[expose] public section
 
