@@ -174,7 +174,7 @@ def table_lines(text: str) -> dict[str, str]:
 
 def test_a_plain_sampling_result_writes_null_with_why_under_every_id(tmp_path):
     results = [PL.read("flock", None), PL.read("zk", None), PL.read("sampling", str(a5_out(tmp_path, plain=True)))]
-    own = [m for m in PL.measured(results, IDS) if m["member"] is None]
+    own = [m for m in PL.measured(results, IDS) if m["member"] == "sampling"]
     assert [m["name"] for m in own] == list(IDS)
     assert all(m["value"] is None and "says its proof is plain" in m["why"] and m["extra"]["proof"] == "plain" for m in own)
 
@@ -243,10 +243,10 @@ def test_the_command_prints_every_layer_and_writes_each_id_flock_zero_knowledge_
     assert json.loads((tmp_path / "report" / "proof-layers.json").read_text()) == doc
     written = json.loads((tmp_path / "report" / "result.json").read_text())["measurements"]
     assert [(m["name"], m.get("member")) for m in written] == [
-        (name, member) for name in IDS for member in ("flock", "zero knowledge", None)]
+        (name, member) for name in IDS for member in ("flock", "flock-zero-knowledge", "sampling")]
     values = {(m["name"], m.get("member")): m for m in written}
-    assert [values[name, "zero knowledge"]["value"] for name in IDS] == [3.0, 1.0, 850000.0]
-    assert [values[name, None]["value"] for name in IDS] == [5.0, 2.0, 125.0]
+    assert [values[name, "flock-zero-knowledge"]["value"] for name in IDS] == [3.0, 1.0, 850000.0]
+    assert [values[name, "sampling"]["value"] for name in IDS] == [5.0, 2.0, 125.0]
     assert all(values[name, "flock"]["value"] is None and values[name, "flock"]["why"].startswith("not run") for name in IDS)
     assert {m["unit"] for m in written} == {"s a proof block", "bytes a proof block"} and all(m["mark"] == "measured"
                                                                                            for m in written)
@@ -278,7 +278,7 @@ def test_a_layer_without_an_accept_or_a_per_block_figure_writes_no_number_under_
     results = [PL.read("flock", None), refused, chunk, PL.read("recursion", str(recursion(tmp_path / "r")))]
     written = PL.measured(results, IDS)
     assert len(written) == 9 and all(m["value"] is None and m["why"] for m in written)
-    assert {m["member"] for m in written} == {"flock", "zero knowledge", None}
+    assert {m["member"] for m in written} == {"flock", "flock-zero-knowledge", "sampling"}
     with pytest.raises(ValueError, match="not one of"):
         PL.measured(results, {"benchmarks/x": "seconds"})
 

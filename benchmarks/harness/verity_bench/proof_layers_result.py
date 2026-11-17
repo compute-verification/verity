@@ -29,8 +29,8 @@ REPORT = "proof-layers"
 #: what a runner's metric id may name (`benchmarks/prove/run.py`'s ``LAYER_METRICS``), each with the unit it is written in
 FIGURES = {"prover_s": "s a proof block", "lean_s": "s a proof block", "proof_bytes": "bytes a proof block"}
 #: the layers each metric id holds, in the order they are written, each with its member: the sampling layer, the system
-#: as served, is the id's own reading, written last with no member
-MEMBERS = {"flock": "flock", "zk": "zero knowledge", "sampling": None}
+#: as served, last
+MEMBERS = {"flock": "flock", "zk": "flock-zero-knowledge", "sampling": "sampling"}
 #: a research run's id, which the store fetches
 RUN_ID = re.compile(r"^r\d{8}-\d{6}-[0-9a-f]{4}$")
 #: the files of a run's record the readers read, fetched from the store by these globs
