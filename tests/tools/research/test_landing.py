@@ -44,7 +44,6 @@ class Harness:
         monkeypatch.setattr(merge, "caught_up", lambda repo, remote, tool, since="", log=print, runs=None:
                             self.after.append((since, runs)))
         monkeypatch.setattr(merge, "_sweep_after", lambda *a, **k: None)
-        monkeypatch.setattr(merge, "sweep_branches", lambda *a, **k: (0, 0))
         self.q = world.queue(**kw)
         self.q.now = lambda: self.clock
         self.d = self.make(self.q, on="m1", launch=self.launch, states=lambda repo, ids: {i: self.run_state[i] for i in ids},
@@ -1069,7 +1068,7 @@ def test_a_refused_notice_is_told_again_and_one_told_is_not(world, monkeypatch):
     assert state["told"] == [] and "could not post" in logged[-1]
     ok[0] = True
     h.d.tell(state, ["k"], "#1 conflicts", "circuits", "lean")
-    assert state["told"] == ["k"] and logged[-1].startswith("research queue drive: told @circuits @lean")
+    assert state["told"] == ["k"] and logged[-1].startswith("research queue: told @circuits @lean")
     assert sent[-1] == ("@circuits @lean queue: #1 conflicts", ("@circuits", "@lean"))
     h.d.tell(state, ["k"], "#1 conflicts", "circuits")
     assert len(sent) == 2

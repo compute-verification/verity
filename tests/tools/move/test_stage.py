@@ -106,7 +106,7 @@ def test_a_word_map_and_a_path_map_stage_as_a_chain_of_certified_commits(tmp_pat
 
 
 def test_an_open_branch_crosses_every_landed_move_with_one_restack_command(tmp_path, monkeypatch, capsys):
-    """The window: two moves staged on main and landed as `research merge` lands a ref (`--no-ff`), then a commit after
+    """The window: two moves staged on main and landed as a `--no-ff` merge of a ref, then a commit after
     them; a branch from before them crosses both with `restack.py BRANCH`, which finds each by its move line and reruns its
     script on the branch's own changes, so what the branch added is renamed and moved too."""
     repo, base = _repo(tmp_path, {**TREE, "tools/move/zorble_map.toml": WORDS, "tools/move/alpha_map.toml": PATHS})

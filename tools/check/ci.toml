@@ -108,7 +108,7 @@ part = "tests"
 group = 7
 
 # The shard plans: `check.py --record --shard K/N --on POD` runs shard K of the plan with N shards, on a pod of the lander's
-# choosing, and `check.py --record --combine RUN...` records their union as the commit's check (`research merge` re-reads the
+# choosing, and `check.py --record --combine RUN...` records their union as the commit's check (`research.merge.shard_set` re-reads the
 # shards). These are written by hand and stay as fallbacks: `--shard auto[:MAX]` plans the shards from measured costs instead
 # (`shards.py`, `check.py --shard-plan` prints the plan), N the fewest that reach the critical path. Balanced on a cold check's
 # costs, whose longest part is the security analysis's audit.

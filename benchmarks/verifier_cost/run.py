@@ -57,6 +57,8 @@ CONFIGS: dict[str, dict | tuple[str, int]] = {
     "mid": {"layers": 1, "hidden": 128, "intermediate": 256, "vocab": 64},
     **{f"b0-{n}": ("b0", n) for n in (1, 2, 4, 8, 16)},
     "b0": ("b0", 30),
+    "llama32-1b": {"layers": 16, "hidden": 2048, "heads": 32, "kv_heads": 8, "head_dim": 64, "intermediate": 8192,
+                   "vocab": 128256},
 }
 BOOLEAN = ("tiny", "tiny-2", "small", "mid", "b0-1", "b0")
 
