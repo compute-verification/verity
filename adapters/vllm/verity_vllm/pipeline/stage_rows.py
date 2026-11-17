@@ -22,11 +22,16 @@ from functools import cache
 from typing import Any
 
 import numpy as np
-
 from verity.commitments.periods import rows as CS
+
 from verity_vllm.check.replay.index import SAMPLER_OP, SEED_PARAM, const_word
 from verity_vllm.pipeline import slice_rows as SL
-from verity_vllm.pipeline.serving_templates import STAGE_OF, STAGE_PLANS, Template, template
+from verity_vllm.pipeline.serving_templates import (
+    STAGE_OF,
+    STAGE_PLANS,
+    Template,
+    template,
+)
 from verity_vllm.program.compact import runs_from_file_items
 from verity_vllm.query.program_view import spec_base
 

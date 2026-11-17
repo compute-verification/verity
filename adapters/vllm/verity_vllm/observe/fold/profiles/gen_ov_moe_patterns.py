@@ -39,17 +39,37 @@ from dataclasses import dataclass, field
 from typing import Any, ClassVar
 
 from verity.circuits.defs import bind
-from verity_vllm.definitions.registry import act as _ACT
-from verity_vllm.definitions.registry import moe as _MOE
-from verity_vllm.program.frontend import targets as T
-from verity_vllm.definitions.registry import moe as Q
 
+from verity_vllm.definitions.registry import act as _ACT
+from verity_vllm.definitions.registry import moe as Q
+from verity_vllm.definitions.registry import moe as _MOE
 from verity_vllm.observe.events import ViewDesc
-from verity_vllm.observe.fold.patterns import (SiluAndMul, bound_args, find_descendants, is_int, is_row_major, op_name, scope_transparents, target_of,
-                        triton_name, unsupported)
-from verity_vllm.observe.fold.resolver import Compute, Gather, Group, PerRow, Resolution, Shared, StepContext, Transparent, Unsupported
-from verity_vllm.observe.fold.tree import TreeNode
+from verity_vllm.observe.fold.patterns import (
+    SiluAndMul,
+    bound_args,
+    find_descendants,
+    is_int,
+    is_row_major,
+    op_name,
+    scope_transparents,
+    target_of,
+    triton_name,
+    unsupported,
+)
 from verity_vllm.observe.fold.profiles.gen_llama_patterns import GemmLaunchTuned
+from verity_vllm.observe.fold.resolver import (
+    Compute,
+    Gather,
+    Group,
+    PerRow,
+    Resolution,
+    Shared,
+    StepContext,
+    Transparent,
+    Unsupported,
+)
+from verity_vllm.observe.fold.tree import TreeNode
+from verity_vllm.program.frontend import targets as T
 from verity_vllm.program.frontend.target_profile import TargetProfile
 
 #: The op name prefix of the MoE custom op(s) (`vllm.moe_forward.default`, `vllm.moe_forward_shared.default`).

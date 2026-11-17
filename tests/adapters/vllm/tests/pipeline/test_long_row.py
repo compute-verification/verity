@@ -33,12 +33,16 @@ from verity.circuits.refs import Affine, Coll, concat
 from verity.circuits.types import Array, Tuple
 from verity.commitments import history as HT
 from verity.commitments.gates.embedding import read
+from verity.protocols.proofs.spot.verifier import second_stage as SS
+from verity.protocols.proofs.spot.verifier.one_stage import partition as P
+
 from verity_vllm.definitions.registry import dsa_topk_mask_cut as X
 from verity_vllm.definitions.registry import dsa_topk_reads as R
-from verity_vllm.pipeline import boundary_rows as BR, boundary_tables as BT, interior_links as IL, interior_rows as IR
+from verity_vllm.pipeline import boundary_rows as BR
+from verity_vllm.pipeline import boundary_tables as BT
+from verity_vllm.pipeline import interior_links as IL
+from verity_vllm.pipeline import interior_rows as IR
 from verity_vllm.pipeline import long_row as LR
-from verity.protocols.proofs.spot.verifier.one_stage import partition as P
-from verity.protocols.proofs.spot.verifier import second_stage as SS
 
 RUN = "0" * 128
 

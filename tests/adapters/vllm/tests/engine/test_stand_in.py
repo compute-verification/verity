@@ -2,7 +2,14 @@ import json
 
 import pytest
 
-from verity_vllm.engine.profiles.stand_in import COPIED, EXPERTS, GLM53, LAYERS, cut, stand_in
+from verity_vllm.engine.profiles.stand_in import (
+    COPIED,
+    EXPERTS,
+    GLM53,
+    LAYERS,
+    cut,
+    stand_in,
+)
 
 
 def test_keeps_what_one_card_must_and_cuts_the_rest(tmp_path):

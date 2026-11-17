@@ -2,7 +2,8 @@
 forms (`circuit_check.sidecars`)."""
 from __future__ import annotations
 
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 
 def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
@@ -11,6 +12,7 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     rows at D = 16.  Every column and norm is over `targets.MAX_GATES` (each ex2 and rsqrt is a MUFU piece), so `select` keeps a
     family's smallest; the served widths are the word Definitions' (`dsv4_compressor.circuit-check.py`)."""
     from verity.circuits.defs import bind
+
     from verity_vllm.definitions.registry import boolean_dsv4_compressor as BC
 
     row = {"D": 16, "QB": 8, "EPS": 1e-6}

@@ -244,7 +244,7 @@ def main(argv: list[str] | None = None) -> int:
     if not a.out:
         ap.error("--out is required (or --verify RECORD)")
     out = str(Path(a.out).resolve())
-    os.chdir((Path(__file__).resolve().parents[5] / "adapters" / "vllm"))
+    os.chdir(Path(__file__).resolve().parents[5] / "adapters" / "vllm")
     return 0 if run(a.case, out)["ok"] else 1
 
 

@@ -23,6 +23,18 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 import torch
+from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
+    pearl_c as PPD,
+)
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import (
+    window as PHW,
+)
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import (
+    served_y as SY,
+)
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import (
+    window as PWR,
+)
 from verity.protocols.resource_accounting.compute.pouw.verifier import verifier
 from verity.protocols.resource_accounting.compute.pouw.verifier import window as Wd
 from verity.protocols.resource_accounting.compute.pouw.verifier.audit import (
@@ -33,7 +45,13 @@ from verity.protocols.resource_accounting.compute.pouw.verifier.audit import (
     weights_root,
 )
 from verity.protocols.resource_accounting.compute.pouw.verifier.coins import Challenger
-from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import Matmul, Shape
+from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import (
+    Matmul,
+    Shape,
+)
+from verity_torch.pouw.pearl_c import passes as PP
+from verity_torch.pouw.pearl_c import run_device as PPDR
+from verity_torch.pouw.pearl_c.ends import PassEnds, _Pass
 
 from tests.pipeline import predicted
 from tests.pipeline.test_serve_openai import CERTIFIER_BODY, Runner, Serving, records
@@ -43,13 +61,6 @@ from verity_vllm.pipeline import serve_openai as so
 from verity_vllm.pipeline import serve_pearl as SPL
 from verity_vllm.program.predict.window_class import PearlTables, WindowClass
 from verity_vllm.protocols import pouw
-from verity.protocols.resource_accounting.compute.pouw.prover.serving import pearl_c as PPD
-from verity_torch.pouw.pearl_c import run_device as PPDR
-from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import window as PHW
-from verity_torch.pouw.pearl_c import passes as PP
-from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import served_y as SY
-from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import window as PWR
-from verity_torch.pouw.pearl_c.ends import PassEnds, _Pass
 
 CLASS, PEARL = WindowClass(1, 27, 2), PearlTables(SPL.SCHEME, words=64)
 #: a round's calls: the layer's q/k/v, o, gate/up and down

@@ -7,8 +7,9 @@ up word through `+ 0.0f` (-0 to +0), and the product's `cvt.rn.bf16.f32` with Na
 """
 from __future__ import annotations
 
-from functools import lru_cache
-from typing import Any, Sequence
+from collections.abc import Sequence
+from functools import cache
+from typing import Any
 
 import numpy as np
 
@@ -17,7 +18,7 @@ EVALUATOR = ("verity_vllm.definitions.numerics.act_rows.silu_mul_expf_rows (Silu
              "up + 0.0f, NaN 0x7FFF; registry.act)")
 
 
-@lru_cache(maxsize=None)
+@cache
 def silu_expf_mid_table() -> np.ndarray:
     """`cvt.rn.bf16.f32(f / (1.0f + expf(-f)))` on each of the 65,536 bf16 gate words, `SiluMulBf16_v2`'s interior."""
     from verity_vllm.definitions.registry import act
@@ -44,6 +45,7 @@ def silu_mul_expf(statics: dict[str, Any], ops: Sequence[np.ndarray]) -> dict[st
 
 def check_targets(rng) -> list:
     from verity.circuits.defs import bind
+
     from verity_vllm.definitions.registry import act
     return [bind(act.SiluMul, I=8)]
 

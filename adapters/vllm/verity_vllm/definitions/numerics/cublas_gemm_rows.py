@@ -13,7 +13,8 @@ register from `rows` (kernel "rows") through `register_rows`.
 """
 from __future__ import annotations
 
-from typing import Any, Callable, Sequence
+from collections.abc import Callable, Sequence
+from typing import Any
 
 import numpy as np
 
@@ -130,7 +131,9 @@ def check_targets(family: str) -> list:
     """K = 64 (four k16 blocks, the circuit-check binding's statics) and K = 160 (two 64-element chunks and a 32-element remainder at
     SPLIT_K 3), N = 3, at the Ampere and the Hopper step."""
     from verity.circuits.defs import bind
-    from verity_vllm.definitions.registry import b1, cublas_bf16 as CB, hopper
+
+    from verity_vllm.definitions.registry import b1, hopper
+    from verity_vllm.definitions.registry import cublas_bf16 as CB
 
     dots = (b1.P.AmpereBF16TcDot16, hopper.HopperBF16WgmmaDot16)
     if family == GEMM_F32_OUT:

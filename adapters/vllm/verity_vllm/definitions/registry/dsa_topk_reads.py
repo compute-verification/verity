@@ -49,8 +49,9 @@ AT .. AT+N-1 are runs of 2^L that start at a multiple of 2^L, each `DsaPositionW
 from __future__ import annotations
 
 from collections import Counter
+from collections.abc import Sequence
 from types import SimpleNamespace
-from typing import Any, Sequence
+from typing import Any
 
 from verity.circuits import boolean as BL
 from verity.circuits.boolean.forms import ZERO, add, const_bits, mux, sub
@@ -58,6 +59,7 @@ from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.ops.boolean import elementwise as EW
 from verity.circuits.refs import Coll, concat, strided_view, tuple_of
 from verity.circuits.types import Array, Tuple
+
 from verity_vllm.definitions.registry import boolean_dsa_topk_mask as BM
 from verity_vllm.definitions.registry import dsa_topk_mask as M
 from verity_vllm.definitions.registry import dsa_topk_mask_cut as X

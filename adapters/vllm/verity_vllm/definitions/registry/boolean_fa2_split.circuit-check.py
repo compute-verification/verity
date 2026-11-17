@@ -2,13 +2,15 @@
 (`circuit_check.sidecars`)."""
 from __future__ import annotations
 
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 
 def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     """This module's Definitions at small statics: three splits combined; a head of T = 17 at BN = 16 in three splits (a full
     block, the partial one, an empty split); two heads of one KV head in two splits."""
     from verity.circuits.defs import bind
+
     from verity_vllm.definitions.registry import boolean_fa2_split as BX
 
     fa2 = BX.ATTENTION_FA2_SM120

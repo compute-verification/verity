@@ -13,6 +13,9 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from verity import device as S
+from verity.protocols.registration.verifier import registration as G
+from verity.protocols.resource_accounting.network.verifier import advice as I1
 
 from tests.pipeline.test_serve_advice import C, _served
 from tests.pipeline.test_serve_day import PROGRAM, _day, _opts, _params
@@ -20,9 +23,6 @@ from tests.pipeline.test_serve_h1 import PROMPTS, Later, _Server
 from tests.pipeline.test_serve_tie import SEALED, WindowCommit
 from tests.protocols.test_pouw_h1_commit import AUDITED, ROWS, STEPS
 from tests.protocols.test_pouw_h1_served import _unit
-from verity import device as S
-from verity.protocols.registration.verifier import registration as G
-from verity.protocols.resource_accounting.network.verifier import advice as I1
 from verity_vllm.engine import step_trace as ST
 from verity_vllm.pipeline import advice as ADV
 from verity_vllm.pipeline import advice_windows as AW

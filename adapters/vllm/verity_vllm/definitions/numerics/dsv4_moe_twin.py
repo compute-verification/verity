@@ -5,11 +5,11 @@ Programs are the reference: tests/properties/test_dsv4_moe_capture.py holds each
 capture tests/properties/dsv4_moe_capture_gpu.py holds the kernels to the twins on every captured row."""
 from __future__ import annotations
 
-from functools import lru_cache
+from functools import cache
 
 import numpy as np
-
 from verity.circuits.ops import mufu as MU
+
 from verity_vllm.definitions.numerics import derived_rows as DR
 from verity_vllm.definitions.numerics.act_rows import silu_mul_expf_rows
 from verity_vllm.definitions.numerics.libdevice import nv_logf
@@ -30,7 +30,7 @@ def _gpu_nan(w) -> np.ndarray:
     return np.where(MC.is_nan(w), U32(QNAN), w).astype(U32)
 
 
-@lru_cache(maxsize=None)
+@cache
 def _lg2_tables() -> tuple[np.ndarray, ...]:
     c = np.array(D.LG2_COEFFS, np.int64)
     return c[:, 0], c[:, 1], c[:, 2], D.truncated_square(np.arange(1 << D.LG2_OFFSET_BITS, dtype=np.int64))

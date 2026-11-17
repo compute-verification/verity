@@ -2,7 +2,8 @@
 (`circuit_check.sidecars`)."""
 from __future__ import annotations
 
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 
 def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
@@ -12,6 +13,7 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     length also at the widest active top-k width, 8192.  The c128a row is not bound at 8192: its `Dsv4ShortContextTopK_v1{8192,
     128}` spells two 32-bit literals per lane, and each `Const32[...]_v1` a body reaches is a target of its own (16,328 here)."""
     from verity.circuits.defs import bind
+
     from verity_vllm.definitions.registry import dsv4_decode_metadata as X
 
     S = X.DSV4_DECODE_METADATA

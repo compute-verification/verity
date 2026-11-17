@@ -44,12 +44,31 @@ from dataclasses import dataclass
 from typing import Any
 
 from verity.circuits.defs import bind
-from verity_vllm.definitions.registry import b1 as B1, dense as D
 
+from verity_vllm.definitions.registry import b1 as B1
+from verity_vllm.definitions.registry import dense as D
 from verity_vllm.observe.events import ViewDesc
-from verity_vllm.observe.fold.patterns import (BiasAdd, _check_pins, as_float, attribution_for, base_op, bound_args, hint_of, is_row_major,
-                                     op_name, triton_name, unsupported, widened_source)
-from verity_vllm.observe.fold.resolver import Compute, PerRow, Resolution, Shared, StepContext
+from verity_vllm.observe.fold.patterns import (
+    BiasAdd,
+    _check_pins,
+    as_float,
+    attribution_for,
+    base_op,
+    bound_args,
+    hint_of,
+    is_row_major,
+    op_name,
+    triton_name,
+    unsupported,
+    widened_source,
+)
+from verity_vllm.observe.fold.resolver import (
+    Compute,
+    PerRow,
+    Resolution,
+    Shared,
+    StepContext,
+)
 from verity_vllm.observe.fold.tree import TreeNode
 
 KERNELS_ELEMENTWISE = ("vectorized_elementwise_kernel", "elementwise_kernel", "unrolled_elementwise_kernel")

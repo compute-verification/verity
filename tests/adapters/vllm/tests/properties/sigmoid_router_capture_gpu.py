@@ -49,8 +49,9 @@ from typing import Any
 import numpy as np
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
-from verity_vllm.definitions.numerics import derived_rows as DR
 from verity.circuits.ops import mufu as MU
+
+from verity_vllm.definitions.numerics import derived_rows as DR
 from verity_vllm.definitions.registry import moe
 
 SCHEMA = "verity-vllm/sigmoid-router-capture/v2"
@@ -482,11 +483,10 @@ def _verdict(doc: dict[str, Any]) -> bool:
 
 def run(out: str, seed: int, n: int, min_driver: int, want_cc: str, want_sms: int, workers: int, program_sample: int,
         do_sweep: bool) -> dict[str, Any]:
-    from verity_vllm.engine.env import served_defaults
-    from verity_vllm.records.property_record import seal as seal_record
-
     from tests.properties import fa2_target_capture_gpu as C
     from tests.properties import fa_tap_exactness_gpu as G
+    from verity_vllm.engine.env import served_defaults
+    from verity_vllm.records.property_record import seal as seal_record
 
     cleared = served_defaults()
     import torch
@@ -573,7 +573,7 @@ def main(argv: list[str] | None = None) -> int:
     if not a.out:
         ap.error("--out is required (or --check DIR, --verify RECORD)")
     out = str(Path(a.out).resolve())
-    os.chdir((Path(__file__).resolve().parents[5] / "adapters" / "vllm"))
+    os.chdir(Path(__file__).resolve().parents[5] / "adapters" / "vllm")
     doc = run(out, a.seed, a.rows, a.min_driver, a.want_cc, a.want_sms, a.workers, a.program_sample, not a.no_sweep)
     return 0 if doc["ok"] else 1
 

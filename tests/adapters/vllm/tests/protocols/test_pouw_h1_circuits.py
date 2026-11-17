@@ -18,13 +18,19 @@ import pytest
 pytest.importorskip("torch")
 
 from verity.circuits import partition_object as PO
-from verity.protocols.resource_accounting.compute.pouw.prover.circuit import h1tile as HT
-from verity.protocols.resource_accounting.compute.pouw.prover.circuit import h1window as HW
+from verity.protocols.proofs.spot.verifier.one_stage import partition as P
+from verity.protocols.resource_accounting.compute.pouw.prover.circuit import (
+    h1tile as HT,
+)
+from verity.protocols.resource_accounting.compute.pouw.prover.circuit import (
+    h1window as HW,
+)
 from verity.protocols.resource_accounting.compute.pouw.prover.circuit import live as L
 from verity.protocols.resource_accounting.compute.pouw.prover.serving import h1 as PH
-from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import served as SV
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import (
+    served as SV,
+)
 from verity.protocols.resource_accounting.compute.pouw.verifier import credit as CR
-from verity.protocols.proofs.spot.verifier.one_stage import partition as P
 
 from tests.protocols import challenger_host as CH
 from tests.protocols import pouw_h1_circuits as PC

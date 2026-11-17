@@ -57,6 +57,8 @@ from typing import Any
 import numpy as np
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
+from verity.circuits.ops import mufu as MU
+
 from verity_vllm.definitions.numerics import derived_rows as DR
 from verity_vllm.definitions.numerics.dsv4_moe_twin import (
     clamp_twin,
@@ -65,7 +67,6 @@ from verity_vllm.definitions.numerics.dsv4_moe_twin import (
     router_twin,
     score_words,
 )
-from verity.circuits.ops import mufu as MU
 from verity_vllm.definitions.registry import dsv4_moe as D
 from verity_vllm.definitions.registry import mla_check as MC
 
@@ -670,11 +671,10 @@ def _verdict(doc: dict[str, Any]) -> bool:
 
 def run(out: str, seed: int, n: int, clamp_n: int, min_driver: int, want_cc: str, want_sms: int, workers: int,
         program_sample: int) -> dict[str, Any]:
-    from verity_vllm.engine import engine_profile as prof
-    from verity_vllm.records.property_record import seal as seal_record
-
     from tests.properties import fa2_target_capture_gpu as C
     from tests.properties import fa_tap_exactness_gpu as G
+    from verity_vllm.engine import engine_profile as prof
+    from verity_vllm.records.property_record import seal as seal_record
 
     env_flags = prof.apply_env()
     os.environ["VLLM_BATCH_INVARIANT"] = "1"
@@ -769,7 +769,7 @@ def main(argv: list[str] | None = None) -> int:
     if not a.out:
         ap.error("--out is required (or --check DIR, --verify RECORD)")
     out = str(Path(a.out).resolve())
-    os.chdir((Path(__file__).resolve().parents[5] / "adapters" / "vllm"))
+    os.chdir(Path(__file__).resolve().parents[5] / "adapters" / "vllm")
     doc = run(out, a.seed, a.rows, a.clamp_rows, a.min_driver, a.want_cc, a.want_sms, a.workers, a.program_sample)
     return 0 if doc["ok"] else 1
 

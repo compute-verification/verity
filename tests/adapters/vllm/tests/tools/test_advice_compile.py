@@ -12,8 +12,8 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-
 from tests.pipeline.test_window_advice import W1, W2
+
 from verity_vllm.engine.profiles.dense_generic import pinned_hf_config
 from verity_vllm.engine.served_seed import DEFAULT_SEED, derived
 from verity_vllm.pipeline import window_advice as WA
@@ -75,6 +75,7 @@ def test_an_unseeded_stochastic_request_served_in_a_window_compiles_under_its_wi
     The compile is read at its plan (`plan_steps`: `compile_steps` up to building Programs), which settles each request's seed
     and refuses a request that has none; the test below builds the Program."""
     from tests.program.predict.test_steps import _registered
+
     from verity_vllm.program.predict.build import Unexpressible
     from verity_vllm.program.predict.steps import plan_steps
 
@@ -111,6 +112,7 @@ def test_the_session_compiled_under_the_windows_coin_carries_the_seed_the_window
     and a window whose engine used a seed of its own. Each Program is of the window's one request, whose `seed` Input takes
     the seed its plan derived."""
     from tests.program.predict.test_steps import _registered
+
     from verity_vllm.program.predict.steps import compile_steps
 
     (tmp_path / "ok").mkdir()

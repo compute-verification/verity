@@ -2,7 +2,8 @@
 (`circuit_check.sidecars`)."""
 from __future__ import annotations
 
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 
 def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
@@ -19,6 +20,7 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     from verity.circuits.defs import bind
     from verity.circuits.ops import gemm as G
     from verity.circuits.ops.boolean import gemm as BG
+
     from verity_vllm.definitions.registry import cublas_bf16 as CB
 
     HOP = word_of(BG.HopperBF16WgmmaDot16)
@@ -55,6 +57,7 @@ def _boolean_roots() -> list[Any]:
     training routes' step (`CB.TRAIN_DOT`, `HopperBF16WgmmaDot16_v3`)."""
     from verity.circuits.defs import bind
     from verity.circuits.ops.boolean import gemm as BG
+
     from verity_vllm.definitions.registry import cublas_bf16 as CB
 
     HOP, TRAIN = BG.HopperBF16WgmmaDot16, CB.TRAIN_DOT

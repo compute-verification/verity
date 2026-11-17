@@ -2,7 +2,8 @@
 (`circuit_check.sidecars`)."""
 from __future__ import annotations
 
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 
 def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
@@ -11,6 +12,7 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     the q/k norm-RoPE at Qwen3's head dim in its combo kernel's two autotune candidates (one chunk of four columns a thread, two
     chunks of two) and in cc 12.0's winner (two chunks of eight columns over eight lanes a row)."""
     from verity.circuits.defs import bind
+
     from verity_vllm.definitions.registry import hopper, inductor
 
     one = {"N": 512, "EPS": 1e-5, "XBLOCK": 2, "R0_BLOCK": 512, "NUM_WARPS": 4}

@@ -2,7 +2,8 @@
 (`circuit_check.sidecars`)."""
 from __future__ import annotations
 
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 
 def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
@@ -11,6 +12,7 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     (an odd N, K = N - 1), with a pick (N 6, K 3), and its index routing; and one switch at GLM-5.3's row width (576 bf16), the
     network's unit."""
     from verity.circuits.defs import bind
+
     from verity_vllm.definitions.registry import boolean_dsa_topk
 
     return [

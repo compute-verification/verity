@@ -16,18 +16,18 @@ from pathlib import Path
 
 import pytest
 
-sys.path.insert(0, str((Path(__file__).resolve().parents[5] / "adapters" / "vllm")))
+sys.path.insert(0, str(Path(__file__).resolve().parents[5] / "adapters" / "vllm"))
 
 from verity.circuits import Program
 from verity.circuits.defs import composite
 from verity.circuits.layout import resolve
 from verity.circuits.refs import Coll, concat
 from verity.circuits.types import Array, Value
+
+from tests.program.test_serve3 import D_MAX, EOS_FOR, LP, TINY, _inputs
 from verity_vllm.definitions.numerics import serve3_reference as ref
 from verity_vllm.definitions.registry import lifted as L
 from verity_vllm.definitions.registry.b1 import weights_type
-
-from tests.program.test_serve3 import D_MAX, EOS_FOR, LP, TINY, _inputs
 
 I32 = Value(32)
 

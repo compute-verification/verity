@@ -2,7 +2,8 @@
 (`circuit_check.sidecars`)."""
 from __future__ import annotations
 
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 #: GLM-5.3's rows past INDEX_TOPK in the mask form at its TOPK = K = 2,048: vLLM reads a row of more than INDEX_TOPK keys at its
 #: size class, the next multiple of INDEX_TOPK, so the served key counts are the 63 classes from 4,096 to the longest row at 128k
@@ -60,6 +61,7 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     and the tags' scan), with picks (N 33, K 8) and in the rows' read (N 7, K 3); the rows' read of 6 rows padded to 9, and of 9
     padded to 16, a long row's shape (T >= K, N = 2K)."""
     from verity.circuits.defs import bind
+
     from verity_vllm.definitions.registry import dsa_topk_mask
 
     return [

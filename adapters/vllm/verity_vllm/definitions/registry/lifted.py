@@ -53,12 +53,32 @@ no payload-only width rule (no `validate_width_lifted`, no `n_max`).  `LAG`: `la
 from __future__ import annotations
 
 import re
-from typing import Any, Callable, Iterable, Sequence
+from collections.abc import Callable, Iterable, Sequence
+from typing import Any
 
-from verity.circuits.defs import (REGISTRY, Builder, CompositeDefinition, FunctionDefinition, BodyNode, PrimitiveDefinition, SpecializedDefinition, bind,
-                    composite)
-from verity.circuits.refs import Affine, Coll, Concat, Explicit, Refs, Strided, concat, tuple_of
+from verity.circuits.defs import (
+    REGISTRY,
+    BodyNode,
+    Builder,
+    CompositeDefinition,
+    FunctionDefinition,
+    PrimitiveDefinition,
+    SpecializedDefinition,
+    bind,
+    composite,
+)
+from verity.circuits.refs import (
+    Affine,
+    Coll,
+    Concat,
+    Explicit,
+    Refs,
+    Strided,
+    concat,
+    tuple_of,
+)
 from verity.circuits.types import Array, RecordType, Tuple, Type, Value
+
 from verity_vllm.definitions.registry import b1, operand_widths
 
 LIFTING_VERSION = "v1"  # the `lifting: v1` the derive report names
@@ -1759,7 +1779,7 @@ def replay_body(B: Builder, body, args: Sequence[Coll]) -> Coll:
     return Coll(body.ret_type, _remap(body.ret, args, k0))
 
 
-def as_program(fn: SpecializedDefinition, **kw) -> "Program":
+def as_program(fn: SpecializedDefinition, **kw) -> Program:
     """`Program(fn)` for any complete specialization, INCLUDING body-only ones (a decoded `WorkloadRequest_v1` component or a
     `Lifted[decoded]`): those get a same-id definition whose python body is the identity replay of the set body, so the root lowers,
     evaluates and digests exactly as the body says (the spec id — hence `program_fn` in the digest — is unchanged)."""

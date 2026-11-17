@@ -2,7 +2,8 @@
 (`circuit_check.sidecars`)."""
 from __future__ import annotations
 
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 
 def _scan_slots(ns: int, firsts: tuple[int, int, int, int], stride: int, lanes: int, np_: int) -> Any:
@@ -10,6 +11,7 @@ def _scan_slots(ns: int, firsts: tuple[int, int, int, int], stride: int, lanes: 
     (`verity.protocols.resource_accounting.network.prover.ingress_scan.layout`): its ``ns`` words, lane 0's occupancy, prompt length, max_tokens
     and ids bit offsets (``firsts``), the lane ``stride``, at ``lanes`` lanes of ``np_`` prompt ids."""
     from verity.circuits.defs import bind
+
     from verity_vllm.definitions.registry import boolean_io_shell as BX
 
     occ, lp, mx, ids = (tuple(f + stride * j for j in range(lanes)) for f in firsts)
@@ -22,6 +24,7 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     `ScanSlots_v2` at TINY's class's scan state row (2 lanes, KO 2, 4 prompt ids) and the class of record's (4 lanes, KO 64,
     1,024)."""
     from verity.circuits.defs import bind
+
     from verity_vllm.definitions.registry import boolean_io_shell as BX
 
     return [

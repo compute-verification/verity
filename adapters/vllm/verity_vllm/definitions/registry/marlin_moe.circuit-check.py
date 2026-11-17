@@ -2,7 +2,8 @@
 (`circuit_check.sidecars`)."""
 from __future__ import annotations
 
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 
 def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
@@ -10,6 +11,7 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     served shapes on one TP8 rank (w13 at one token: TK 128, TN 64, two CTAs per SM of 132; one token's 6 pairs over 384 experts
     in blocks of 8; w2's K = 384 over its 384 experts)."""
     from verity.circuits.defs import bind
+
     from verity_vllm.definitions.registry import marlin_moe as MM
 
     D = MM.DOT

@@ -5,7 +5,8 @@ as the Definitions' `I32Add` and `I32Div` do.  The row kernels register from `ro
 """
 from __future__ import annotations
 
-from typing import Any, Callable, Sequence
+from collections.abc import Callable, Sequence
+from typing import Any
 
 import numpy as np
 
@@ -70,6 +71,7 @@ ROWS: dict[str, tuple[Callable[..., dict[str, np.ndarray]], tuple[str, ...]]] = 
 def check_targets(family: str) -> list:
     """The small specialisations `family`'s self-check binds: a moe block of 2 and of 4 over 8 and 12 pairs."""
     from verity.circuits.defs import bind
+
     from verity_vllm.definitions.registry import marlin_moe as MM
     return {
         "MoeAlignRanks_v1": [bind(MM.MoeAlignRanks, E=3, P=8, BM=2), bind(MM.MoeAlignRanks, E=4, P=12, BM=4)],

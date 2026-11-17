@@ -29,12 +29,13 @@ from typing import TYPE_CHECKING
 import numpy as np
 import pytest
 
-sys.path.insert(0, str((Path(__file__).resolve().parents[5] / "adapters" / "vllm")))
+sys.path.insert(0, str(Path(__file__).resolve().parents[5] / "adapters" / "vllm"))
 
 from verity.circuits import codec
 from verity.circuits.defs import REGISTRY, CompositeDefinition, bind
 from verity.circuits.evaluation import evaluate_call
 from verity.circuits.program import Program
+
 from verity_vllm.definitions.numerics import ref_prims_twins
 from verity_vllm.definitions.registry import b1
 from verity_vllm.definitions.registry import prims as P

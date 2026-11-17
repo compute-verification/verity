@@ -36,30 +36,31 @@ from dataclasses import replace
 
 import numpy as np
 import pytest
-from verity_flock.class_statement import UnitStager
+from verity.circuits.codec import descriptor_id
+from verity.circuits.defs import bind
+from verity.circuits.evaluation import evaluate_batch
+from verity.circuits.ops.boolean import versions as BB
+from verity.circuits.types import Tuple, field_types
 from verity.commitments.periods import interface as IF
 from verity.commitments.periods import rows as CS
 from verity.commitments.periods import wiring as WI
-from verity_vllm.pipeline import chain_rows as CH
-from verity_vllm.pipeline import chunk_rows as CR
-from verity_vllm.pipeline import serving_rows as SRW
-from verity_vllm.pipeline.serving_templates import values_widths
-from verity.circuits.ops.boolean import versions as BB
+from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
+from verity.protocols.proofs.spot.verifier.one_stage import docket as R
+from verity.protocols.proofs.spot.verifier.one_stage import draw as D
+from verity_flock.class_statement import UnitStager
+
 from verity_vllm.definitions.numerics import sparse_mla_split_twins as TW
 from verity_vllm.definitions.registry import boolean_sparse_mla as BM
 from verity_vllm.definitions.registry import boolean_sparse_mla_split as BX
 from verity_vllm.definitions.registry import hopper
 from verity_vllm.definitions.registry import sparse_mla as M
 from verity_vllm.definitions.registry import sparse_mla_split as W
+from verity_vllm.pipeline import chain_rows as CH
+from verity_vllm.pipeline import chunk_rows as CR
+from verity_vllm.pipeline import serving_rows as SRW
+from verity_vllm.pipeline.serving_templates import values_widths
 from verity_vllm.query.manifest import format as MF
 from verity_vllm.query.program_view import spec_statics
-
-from verity.protocols.proofs.spot.verifier.one_stage import draw as D, docket as R
-from verity.circuits.codec import descriptor_id
-from verity.circuits.defs import bind
-from verity.circuits.evaluation import evaluate_batch
-from verity.circuits.types import Tuple, field_types
-from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
 
 FA3 = {"DOT": hopper.HopperBF16WgmmaDot16, "INV": hopper.Fa3InvSum}
 BOOL = {"DOT": BX.SPARSE_MLA_GLM53["DOT"], "INV": BX.SPARSE_MLA_GLM53["INV"]}

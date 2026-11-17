@@ -68,6 +68,7 @@ def dump_cos_sin(engine: va.Engine, out: Path) -> Path | None:
     import torch
 
     from verity_vllm import messages as M
+
     # the one by-name recognition of the two analytic-table buffers
     from verity_vllm.acquire.plan import analytic_table_of_buffer
 

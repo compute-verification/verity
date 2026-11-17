@@ -39,16 +39,24 @@ import sys
 import time
 import zlib
 from collections import Counter
+from collections.abc import Callable
 from functools import partial
-from typing import Any, Callable
+from typing import Any
 
 import numpy as np
-
-from verity.circuits.evaluation import self_check
 from verity.circuits.defs import SpecializedDefinition, bind
-from verity_vllm.definitions.numerics.kernel_registry import Declined, covers, instance, register
-from verity_vllm.definitions.registry import b1, prims as P
-from verity_vllm.definitions.numerics import cuda_rmsnorm_rows as CNR, prims_twins
+from verity.circuits.evaluation import self_check
+
+from verity_vllm.definitions.numerics import cuda_rmsnorm_rows as CNR
+from verity_vllm.definitions.numerics import prims_twins
+from verity_vllm.definitions.numerics.kernel_registry import (
+    Declined,
+    covers,
+    instance,
+    register,
+)
+from verity_vllm.definitions.registry import b1
+from verity_vllm.definitions.registry import prims as P
 
 SCHEMA = "verity-gen/twins/v1"
 U16, U32, U64, F32, F64 = np.uint16, np.uint32, np.uint64, np.float32, np.float64

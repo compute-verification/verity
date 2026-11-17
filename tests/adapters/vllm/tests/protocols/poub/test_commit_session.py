@@ -23,8 +23,13 @@ from verity.protocols.resource_accounting.memory.poub.prover.node_store.registry
     ArrayBacking,
     NodeMemory,
 )
+from verity.protocols.resource_accounting.memory.poub.verifier import audit, memory_map
+from verity.protocols.resource_accounting.memory.poub.verifier.session import (
+    verifier,
+    wire,
+)
+
 from tests.verity.protocols.resource_accounting.memory.poub.test_memory_map import BLOCK
-from tests.verity.protocols.resource_accounting.memory.poub.test_registry import CODEC, RECEIPT
 from tests.verity.protocols.resource_accounting.memory.poub.test_poub_session import (
     P512,
     PassClock,
@@ -34,9 +39,10 @@ from tests.verity.protocols.resource_accounting.memory.poub.test_poub_session im
     store,
     verifying,
 )
-from verity.protocols.resource_accounting.memory.poub.verifier import audit, memory_map
-from verity.protocols.resource_accounting.memory.poub.verifier.session import verifier, wire
-
+from tests.verity.protocols.resource_accounting.memory.poub.test_registry import (
+    CODEC,
+    RECEIPT,
+)
 from verity_vllm.protocols.poub import remote
 
 VLLM_TESTS = Path(__file__).resolve().parents[3]  # tests/adapters/vllm, where the adapter's tests import as `tests`

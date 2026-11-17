@@ -2,7 +2,8 @@
 forms (`circuit_check.sidecars`)."""
 from __future__ import annotations
 
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 
 def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
@@ -11,6 +12,7 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     served length (top-k 1024).  The served row is TOPK Calls of the served slot, the word Definition's
     (`dsv4_decode_indices.circuit-check.py`)."""
     from verity.circuits.defs import bind
+
     from verity_vllm.definitions.registry import boolean_dsv4_decode_indices as BX
 
     return [

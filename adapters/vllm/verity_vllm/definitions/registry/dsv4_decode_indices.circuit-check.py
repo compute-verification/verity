@@ -2,7 +2,8 @@
 (`circuit_check.sidecars`)."""
 from __future__ import annotations
 
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 
 def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
@@ -10,6 +11,7 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     table's row at max_model_len 1,048,576 and 4096), which reach its slot and length, and at a small one (top-k 8, block size 4,
     a row of 8)."""
     from verity.circuits.defs import bind
+
     from verity_vllm.definitions.registry import dsv4_decode_indices as X
 
     S = X.DSV4_DECODE_INDICES

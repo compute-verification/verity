@@ -2,7 +2,8 @@
 (`circuit_check.sidecars`)."""
 from __future__ import annotations
 
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 #: the Boolean gathers this module makes only inside other bodies, which no id names alone
 #: (`circuit_check.sidecars.body_family`)
@@ -15,6 +16,7 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     pair forms over 3 experts, which reach the gathers and the schedule."""
     from verity.circuits.defs import bind
     from verity.circuits.ops.boolean import gemm as BG
+
     from verity_vllm.definitions.registry import boolean_marlin_moe as BM
 
     D = BG.HopperBF16WgmmaDot16

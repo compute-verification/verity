@@ -38,10 +38,10 @@ Run from the tree's root: PYTHONPATH=. python3 tests/adapters/vllm/tests/remotet
 """
 import hashlib
 
-from verity.protocols.resource_accounting.compute.pouw.verifier import credit as C
-from verity.protocols.resource_accounting.compute.pouw.verifier import weights as W
 from verity.protocols.proofs.spot.verifier.one_stage import docket as R
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
+from verity.protocols.resource_accounting.compute.pouw.verifier import credit as C
+from verity.protocols.resource_accounting.compute.pouw.verifier import weights as W
 
 H1 = hashlib.sha512(b"the H1 window Program's descriptor").hexdigest()
 I2 = hashlib.sha512(b"V3c's I2 window circuit's population Program").hexdigest()

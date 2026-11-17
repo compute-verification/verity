@@ -23,13 +23,34 @@ from dataclasses import dataclass
 from typing import Any
 
 from verity.circuits.defs import bind
-from verity_vllm.definitions.registry import b1
-from verity_vllm.definitions.registry import act, layer_norm
 
+from verity_vllm.definitions.registry import act, b1, layer_norm
 from verity_vllm.observe.events import ViewDesc
-from verity_vllm.observe.fold.patterns import (BiasAdd, GeometryError, RotaryEmbedding, _fmt, _group_compute, _positions_ok, as_float,
-                                     attribution_for, base_op, bound_args, hint_of, is_row_major, op_name, split_heads, unsupported)
-from verity_vllm.observe.fold.resolver import Compute, Gather, PerRow, Resolution, Shared, StepContext
+from verity_vllm.observe.fold.patterns import (
+    BiasAdd,
+    GeometryError,
+    RotaryEmbedding,
+    _fmt,
+    _group_compute,
+    _positions_ok,
+    as_float,
+    attribution_for,
+    base_op,
+    bound_args,
+    hint_of,
+    is_row_major,
+    op_name,
+    split_heads,
+    unsupported,
+)
+from verity_vllm.observe.fold.resolver import (
+    Compute,
+    Gather,
+    PerRow,
+    Resolution,
+    Shared,
+    StepContext,
+)
 from verity_vllm.observe.fold.tree import TreeNode
 
 KERNELS_ELEMENTWISE = ("vectorized_elementwise_kernel", "elementwise_kernel", "unrolled_elementwise_kernel")

@@ -71,8 +71,9 @@ from pathlib import Path
 from typing import Any
 
 import verity.protocols.resource_accounting.network.verifier.advice as I1
-from verity.protocols.registration.verifier import registration as REG
 from verity.commitments.periods import interface as IF
+from verity.protocols.registration.verifier import registration as REG
+
 from verity_vllm import messages as M
 from verity_vllm.config import UsageError, option
 from verity_vllm.engine import step_trace as ST

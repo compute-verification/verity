@@ -2,7 +2,8 @@
 (`circuit_check.sidecars`)."""
 from __future__ import annotations
 
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 
 def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
@@ -11,6 +12,7 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     at one row of a small K; y at qkv (N = 3,072 in rows of 64), at o_proj's and down_proj's (N = 2,048 in rows of 64) and
     at gate_up's, the widest (N = 16,384 in rows of 256); each word Definition and its σ."""
     from verity.circuits.defs import bind
+
     from verity_vllm.definitions.registry import linear_cut as LC
 
     return [

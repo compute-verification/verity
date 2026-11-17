@@ -16,9 +16,6 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-from verity_vllm.definitions.replay import replayer
-from verity_vllm.program.frontend.target_profile import DEFAULT_TARGET, TargetProfile
-
 from verity.circuits import boolean as BL
 from verity.circuits.codec import descriptor_id, encode_program, program_digest
 from verity.circuits.defs import Builder, CompositeDefinition, PrimitiveDefinition, bind
@@ -39,6 +36,9 @@ from verity.circuits.refs import (
 )
 from verity.circuits.types import Array, RecordType, Value
 from verity.circuits.types import Tuple as TupleT
+
+from verity_vllm.definitions.replay import replayer
+from verity_vllm.program.frontend.target_profile import DEFAULT_TARGET, TargetProfile
 
 F32, BF16 = Value(32), Value(16)
 PARAMS = (("x", Array(4, F32)), ("y", Array(2, Array(4, F32))), ("weights", RecordType(("s", F32), ("t", Array(3, BF16)), ("u", Array(2, F32)))))
@@ -148,10 +148,10 @@ def test_a_boolean_primitive_is_its_own_version_under_its_own_family_only():
 
 @pytest.mark.slow
 def test_the_served_norms_bind_their_mufu_statics_to_mufus_boolean_versions():
+    from verity.circuits.ops.boolean import mufu as BM
+
     from verity_vllm.definitions.registry import b1
     from verity_vllm.definitions.registry import boolean_norms as BN
-
-    from verity.circuits.ops.boolean import mufu as BM
     cuda = BB.boolean_version(bind(b1.RMSNormFusedCuda, N=16, EPS=1e-5))
     triton = BB.boolean_version(bind(b1.RMSNormTriton, N=16, EPS=1e-5))
     assert descriptor_id(cuda) == descriptor_id(bind(BN.RMSNormFusedCuda, N=16, EPS=1e-5, RSQRT=bind(BM.RsqrtApprox)))
@@ -241,6 +241,7 @@ def test_derive_refuses_a_call_with_no_boolean_version_by_name():
     pytest.importorskip("torch")
     import torch
     from verity_torch.frontend.boolean import derived
+
     from verity_vllm.program.frontend.vllm_derive import derive_report
 
     class M(torch.nn.Module):

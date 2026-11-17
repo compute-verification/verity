@@ -16,7 +16,8 @@ kernel (`rows._instance`).  Registered from `rows` (kernel "rows").
 from __future__ import annotations
 
 import json
-from typing import Any, Callable, Sequence
+from collections.abc import Callable, Sequence
+from typing import Any
 
 import numpy as np
 
@@ -207,6 +208,7 @@ ROWS: dict[str, tuple[Callable, tuple[str, ...]]] = {
 def check_targets(family: str = FAMILY) -> list:
     from verity.circuits.defs import bind
     from verity.circuits.ops import gemm
+
     from verity_vllm.definitions.registry import int8_exact as X
     return {
         FAMILY: lambda: [bind(X.Int8RowQuant, K=k) for k in (1, 8, 33)],
