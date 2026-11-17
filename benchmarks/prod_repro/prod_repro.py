@@ -110,7 +110,7 @@ INTERVAL = "Student's t 95% over the lifetime pairs, t at the pairs less one, ev
 #: by model: the ids the replay's match and the advice of the pass it re-ran are recorded under, of its default arms'
 #: ours, and their units (`measurements`; benchmarks/prod_repro/metrics.toml)
 MATCH = {"glm53": "vllm/prod-replay-match-glm53", "llama32-1b": "vllm/prod-replay-match-glm53"}
-ADVICE = {"glm53": "vllm/prod-advice-bits-glm53"}
+ADVICE = {"glm53": "vllm/prod-advice-bits-glm53", "llama32-1b": "vllm/prod-advice-bits-glm53"}
 MATCH_UNIT, ADVICE_UNIT = "percent of served tokens", "bits a request"
 #: the replay's match it is held to: every served token given back
 MATCH_TARGET = 100.0
@@ -856,7 +856,8 @@ def advice(dirs: list[Path], ours: str, load: str, rep: int, replay_dir: Path) -
     has it (``charged``, the bits of the code it builds and decodes back; ``alone``, the counts' entropy over the rows
     that verified drafts, which is not sent; ``derived`` where the audited block computes it). ``bits`` is what is
     charged: the arrivals, unless the serve is under the tick, and the kept count's ``charged``. Not measured where ours holds no such pass or it can't be read back, or where the loader
-    refuses it: a schedule its replay does not reproduce, which it names the step of, or a serve with no draft."""
+    refuses it: a schedule its replay does not reproduce, which it names the step of. A serve with no draft keeps no
+    draft, so its kept count is 0 bits."""
     arm_dir = replayed_dir(dirs, replay_dir)
     if arm_dir is None or not (arm_dir / load / f"rep-{rep}" / "meta.json").is_file():
         return not_measured(f"{ours} holds no pass {load} rep {rep}, the one the replay re-runs: the advice is that "

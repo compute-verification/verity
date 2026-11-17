@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import os
 import shutil
+import socket
 import subprocess
 import sys
 import tempfile
@@ -17,7 +18,7 @@ import pytest
 
 SANDBOX = Path(__file__).resolve().parents[4] / "tools" / "verity" / "lean" / "sandbox.sh"
 CONTROL = Path(__file__).resolve().parent / "fixtures" / "control"
-UNSHARE = ["unshare", "--user", "--map-root-user", "--mount", "--net", "--pid", "--fork", "--kill-child"]
+UNSHARE = ["unshare", "--user", "--map-root-user", "--mount", "--net", "--ipc", "--pid", "--fork", "--kill-child"]
 
 FAKE = {
     # the mount points mountinfo lists, one per line of $MOUNTS, as `awk '{print $5}' /proc/self/mountinfo` prints them;
@@ -26,6 +27,10 @@ FAKE = {
     "mount": '#!/bin/sh\necho "$*" >> "$LOG"\nexit 0\n',
     "setpriv": '#!/bin/sh\nwhile [ "$1" != -- ]; do shift; done\nshift\nexec "$@"\n',
 }
+
+#: what the sandbox hides under a private read-only tmpfs here, where no TMPDIR is set: /run, and /var/run unless it is
+#: a link to it
+HIDDEN = [d for d in ("/run", "/var/run") if Path(d).is_dir() and not Path(d).is_symlink()]
 
 needs_unshare = pytest.mark.skipif(subprocess.run([*UNSHARE, "--", "true"], capture_output=True).returncode != 0,
                                    reason="no unprivileged user namespaces here (`unshare`), so no sandbox")
@@ -66,7 +71,7 @@ def test_a_symlinked_rw_dir_is_bound_and_kept_by_its_resolved_path(tmp_path):
     assert (real / ".lake").is_dir()
     assert f"--bind {real}/.lake {real}/.lake" in log
     read_only = [line.rsplit(" ", 1)[1] for line in log if line.startswith("-o remount,bind,ro ")]
-    assert read_only == ["/", str(other)]
+    assert read_only == ["/", str(other), *HIDDEN]
 
 
 @needs_unshare
@@ -329,7 +334,7 @@ def test_a_failing_dirname_stops_the_probe_at_once_and_the_sandbox_before_its_co
     climb ends at that failure, with the mount writable. The stand-in counts its calls, and prints `/` after 64 so a climb
     that ignores its failure ends at all. On an absolute path outside the test's directory it is the real `dirname`: a
     host mount whose remount fails on this node (tracefs under /sys/kernel/debug on some) is probed too, as in
-    production, and adds no call to the count."""
+    a real check, and adds no call to the count."""
     tmp = tmp_path.resolve()
     count = tmp / "tree" / "pkg" / ".lake" / "dirname-calls"
     monkeypatch.setenv("COUNT", str(count))
@@ -758,3 +763,142 @@ def test_a_sandboxed_build_restores_from_a_read_only_artifact_cache_and_leaves_i
     assert "restored artifact from cache" in r.stdout + r.stderr
     assert (real / "b" / ".lake" / "build" / "lib" / "lean" / "B.olean").stat().st_nlink == 1
     assert contents() == kept
+
+
+SOCKETS = SANDBOX.parent / "sockets.py"
+#: run as the command runs: a line per name, `reached` or `refused`
+CONNECT = """import socket, sys
+for name in sys.argv[1:]:
+    try:
+        s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        s.connect("\\0" + name[1:] if name.startswith("@") else name)
+        print(name, "reached")
+    except OSError:
+        print(name, "refused")
+"""
+
+
+def listening(path: str) -> socket.socket:
+    s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    s.bind("\0" + path[1:] if path.startswith("@") else path)
+    s.listen(8)
+    return s
+
+
+@needs_unshare
+@pytest.mark.parametrize("fetch", [False, True], ids=["build", "fetch"])
+def test_the_command_reaches_no_unix_socket_it_did_not_make(tmp_path, fetch):
+    """A read-only mount doesn't stop `connect`, and the build's network namespace hides only abstract names: a socket
+    the host listens on (a user's systemd bus, through which `systemd-run --user` runs anything outside the sandbox) was
+    reachable from the command. Here a socket outside every RW_DIR, one in the job's TMPDIR and an abstract name the
+    host's network namespace holds (which a fetch keeps) are each refused, and the TMPDIR's is not even seen."""
+    (outside := tmp_path / "outside").mkdir()
+    (job := tmp_path / "jobtmp").mkdir()
+    names = [str(outside / "s"), str(job / "s"), f"@verity-sandbox-test-{os.getpid()}-{tmp_path.name}"]
+    held = [listening(n) for n in names]
+    try:
+        assert all(line.endswith("reached") for line in subprocess.run(
+            [sys.executable, "-c", CONNECT, *names], capture_output=True, text=True, check=True).stdout.splitlines())
+        unshare = [a for a in UNSHARE if a != "--net"] if fetch else UNSHARE
+        r = subprocess.run([*unshare, "--", "bash", str(SANDBOX), *(["--net"] if fetch else []), str(tmp_path / "rw"),
+                            "--", "bash", "-c", '[ ! -e "$1" ] && echo unseen; shift; exec "$@"', "_", str(job / "s"),
+                            sys.executable, "-I", "-S", "-c", CONNECT, *names],
+                           env={**os.environ, "TMPDIR": str(job)}, capture_output=True, text=True)
+    finally:
+        for s in held:
+            s.close()
+    assert r.returncode == 0, r.stderr
+    assert r.stdout.splitlines() == ["unseen", *(f"{n} refused" for n in names)]
+
+
+@needs_unshare
+@pytest.mark.parametrize("given", ["datagram socket", "pipe"])
+def test_the_command_s_stdin_is_dev_null_whatever_the_caller_s_is(tmp_path, given):
+    """The filter refuses making a unix socket, not using one the command was handed: a datagram socket given as the
+    caller's stdin would send to any datagram socket by its address. The command's fd 0 is /dev/null instead."""
+    held = ([os.fdopen(fd, mode) for fd, mode in zip(os.pipe(), ("rb", "wb"))] if given == "pipe"
+            else list(socket.socketpair(socket.AF_UNIX, socket.SOCK_DGRAM)))
+    try:
+        r = subprocess.run([*UNSHARE, "--", "bash", str(SANDBOX), str(tmp_path / ".lake"), "--", "readlink",
+                            "/proc/self/fd/0"], stdin=held[0].fileno(), capture_output=True, text=True)
+    finally:
+        for h in held:
+            h.close()
+    assert r.returncode == 0, r.stderr
+    assert r.stdout == "/dev/null\n"
+
+
+def test_the_probe_refuses_a_socket_the_command_could_reach_and_names_it(tmp_path):
+    """The probe, run unconfined as a broken filter would leave the command: a listening socket of the inventory is
+    reached and named, exit 3, and so is one only a D-Bus address names; a socket file no process listens on is not."""
+    live, bus, dead = str(tmp_path / "live"), str(tmp_path / "bus"), str(tmp_path / "dead")
+    held = [listening(live), listening(bus)]
+    listening(dead).close()
+    try:
+        r = subprocess.run([sys.executable, "-I", "-S", str(SOCKETS), "probe", f"unix:path={bus},guid=0", ""],
+                           capture_output=True, text=True, input=f"{live}\n{dead}\n", env={})
+    finally:
+        for s in held:
+            s.close()
+    assert r.returncode == 3, r.stderr
+    assert f"{live} (stream)" in r.stderr and f"{bus} (stream)" in r.stderr and dead not in r.stderr
+
+
+@pytest.mark.skipif(os.uname().machine not in ("x86_64", "aarch64"), reason="no seccomp filter for this machine")
+def test_under_the_filter_no_unix_socket_and_no_io_uring_can_be_made_but_a_pair_can(tmp_path):
+    """`sockets.py exec`'s filter: `socket(AF_UNIX, ...)` and `io_uring_setup` (whose rings make sockets without
+    `socket`) fail with EACCES, a `socketpair` and an inet socket are made, and the filter outlives an `exec`."""
+    check = ("import ctypes, socket\n"
+             "try:\n    socket.socket(socket.AF_UNIX); print('unix made')\n"
+             "except PermissionError: print('unix refused')\n"
+             "libc = ctypes.CDLL(None, use_errno=True)\n"
+             "p = ctypes.create_string_buffer(120)\n"
+             "print('uring', 'refused' if libc.syscall(425, 1, p) == -1 and ctypes.get_errno() == 13 else 'made')\n"
+             "a, b = socket.socketpair(); a.sendall(b'x'); print('pair', b.recv(1).decode())\n"
+             "socket.socket(socket.AF_INET).close(); print('inet made')\n")
+    r = subprocess.run([sys.executable, "-I", "-S", str(SOCKETS), "exec", "--", "sh", "-c", 'exec "$0" -c "$1"',
+                        sys.executable, check], capture_output=True, text=True)
+    assert r.returncode == 0, r.stderr
+    assert r.stdout.splitlines() == ["unix refused", "uring refused", "pair x", "inet made"]
+
+
+@pytest.mark.skipif(os.uname().machine not in ("x86_64", "aarch64"), reason="no seccomp filter for this machine")
+def test_under_the_filter_no_pair_sends_to_a_datagram_socket_bound_outside(tmp_path):
+    """A unix datagram pair sends to any datagram socket by its address (`sendto`), and the kernel makes a `SOCK_RAW`
+    pair a datagram one: under the filter neither pair, nor a seqpacket one, is made, and nothing sent from inside
+    arrives at a datagram socket bound outside."""
+    path = str(tmp_path / "outside")
+    outside = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
+    outside.bind(path)
+    outside.setblocking(False)
+    send = ("import socket, sys\n"
+            "for name in ('SOCK_DGRAM', 'SOCK_RAW', 'SOCK_SEQPACKET'):\n"
+            "    try:\n        a, b = socket.socketpair(socket.AF_UNIX, getattr(socket, name))\n"
+            "    except PermissionError:\n        print(name, 'refused'); continue\n"
+            "    try:\n        a.sendto(name.encode(), sys.argv[1]); print(name, 'sent')\n"
+            "    except OSError as e:\n        print(name, 'made, not sent', e.errno)\n")
+    try:
+        r = subprocess.run([sys.executable, "-I", "-S", str(SOCKETS), "exec", "--", sys.executable, "-I", "-S", "-c",
+                            send, path], capture_output=True, text=True)
+        assert r.returncode == 0, r.stderr
+        assert r.stdout.splitlines() == ["SOCK_DGRAM refused", "SOCK_RAW refused", "SOCK_SEQPACKET refused"]
+        with pytest.raises(BlockingIOError):
+            outside.recv(64)
+    finally:
+        outside.close()
+
+
+def test_the_inventory_lists_a_socket_in_a_directory_no_walk_can_list(tmp_path):
+    """The kernel lists every bound name, so a socket in a directory one may search but not read, which `find -type s`
+    can't see, is still tried."""
+    (hid := tmp_path / "hid").mkdir()
+    held = listening(str(hid / "s"))
+    hid.chmod(0o311)
+    try:
+        assert not subprocess.run(["find", str(hid), "-type", "s"], capture_output=True, text=True).stdout
+        r = subprocess.run([sys.executable, "-I", "-S", str(SOCKETS), "inventory"], capture_output=True, text=True)
+    finally:
+        hid.chmod(0o755)
+        held.close()
+    assert r.returncode == 0, r.stderr
+    assert str(hid / "s") in r.stdout.splitlines()
