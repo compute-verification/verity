@@ -98,6 +98,7 @@
   "Properties.InferenceOnly.Opening",
   "Properties.InferenceOnly.PinnedRead",
   "Properties.InferenceOnly.RecordForm",
+  "Properties.InferenceOnly.RecordRows",
   "Properties.Certifier.JointBridge.SpaceOfPeriodHeld",
   "Properties.Poub.Remote",
   "Properties.Poub.Remote.Coins",
