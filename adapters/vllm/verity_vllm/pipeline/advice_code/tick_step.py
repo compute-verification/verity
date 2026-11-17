@@ -67,7 +67,6 @@ from dataclasses import dataclass
 from types import SimpleNamespace
 
 from verity_vllm.compiler import replay_step as RS
-
 from verity_vllm.pipeline.advice_code.schedule import Tick
 
 __all__ = ["Inputs", "Out", "State", "empty", "reference"]

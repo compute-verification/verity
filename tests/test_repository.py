@@ -24,7 +24,7 @@ ROOT = Path(__file__).resolve().parents[1]
 #: notes store (cite it from here by ``note:<id>``).
 ALLOWED_MD_BASENAMES = frozenset({"README.md", "AGENTS.md", "ARCHITECTURE.md", "PROTOCOL.md", "DESIGN.md", "SKILL.md",
                                   "DISCREPANCIES.md", "CHANGELOG.md"})
-#: The Glossary's second file, at the root only: no directory holds a glossary.
+#: The Glossary, at the root only: no directory holds a glossary.
 ROOT_ONLY_MD = frozenset({"GLOSSARY.md"})
 #: Layout/spec documents left in place by the layout migration; a human folds them into PROTOCOL.md / README.md.
 ALLOWED_EXTRA = (
@@ -47,9 +47,10 @@ SOURCE_SUFFIXES = frozenset({".py", ".rs", ".toml", ".sh", ".cu", ".c", ".h", ".
 
 MD_SIZE_CAP = 48 * 1024
 PROTOCOL_SIZE_CAP = 256 * 1024
-#: The Glossary's "Older names" table is the list `tests/test_retired_terms.py` scans the tree for, so it grows by a row
-#: with each retired name and no row can go while its term is retired.
-GLOSSARY_SIZE_CAP = 64 * 1024
+#: The one Glossary: every term, the notation and the older names. Its table of older names is the list
+#: `tests/test_retired_terms.py` scans the tree for, so it grows by an entry with each retired name, and none can go while
+#: its term is retired.
+GLOSSARY_SIZE_CAP = 112 * 1024
 #: A skill is loaded into an agent's context whole, so it states the current procedure and rules, never their history
 #: (`.agents/skills/authoring-skills/`).
 SKILL_SIZE_CAP = 16 * 1024

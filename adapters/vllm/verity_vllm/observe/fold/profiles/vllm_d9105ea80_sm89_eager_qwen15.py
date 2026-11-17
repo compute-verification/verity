@@ -11,7 +11,6 @@ linear's separate `aten.add` -> `BiasAdd_v1{N=2048}`, the `qkv_b` weight field),
 from __future__ import annotations
 
 from verity_vllm.definitions.registry import b1
-
 from verity_vllm.observe.fold.profiles.vllm_d9105ea80_sm89_eager import (
                                         build_profile,
                                         make_check_header,
