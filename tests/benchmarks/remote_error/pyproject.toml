@@ -11,7 +11,7 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # the wire), the locks' records of the guarantee, and writes a research run's result through the harness kit (stdlib only
 # with verity_config); the parameters it reads from the Lean verifier, the proofs, the composer's sizes, the remote
 # application's configuration and the commitment card; the tests read the Lean files the terms name
-inputs = ["benchmarks/census/deployments.json", "benchmarks/census/adversary.json",
+inputs = ["calibration/census/deployments.json", "calibration/census/adversary.json",
           "security/lean-audit.json", "security/Properties/lean-audit.json",
           "verity/protocol.py", "verity/channel.py", "verity/__init__.py", "verity/errors.py", "tools/config/verity_config",
           "verity/protocols/__init__.py", "benchmarks/harness/verity_bench/__init__.py",

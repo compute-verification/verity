@@ -23,7 +23,7 @@ total at two other choices of each.
 Pooling: a period holds one play a machine a window, plays = machines · period / window. A term a + b·t + c·t² a play
 sums over the plays to at most plays·a + b·T + c·T², with T the fleet's SHA-512 calls over the period (Σ t² ≤ (Σ t)²):
 its GPUs at the figure's one adversary parameter, `hash_rate` calls a second each. The world's compute (the adversary
-resource model, `benchmarks/census/adversary.json`'s reference) counts as machines of the datacenter's size. Each total's
+resource model, `calibration/census/adversary.json`'s reference) counts as machines of the datacenter's size. Each total's
 share is per machine-window audited: the census states no AND gates a machine-window. Under a research run it writes
 `METRICS` into the run's result.
 """
@@ -44,7 +44,7 @@ from verity_bench import kit, settings
 from verity.protocol import MONITORING_PERIODS
 
 ROOT = Path(__file__).resolve().parents[2]
-CENSUS = ROOT / "benchmarks" / "census"
+CENSUS = ROOT / "calibration" / "census"
 LOCKS = (ROOT / "security" / "lean-audit.json", ROOT / "security" / "Properties" / "lean-audit.json")
 #: the remote application's configuration, whose sampling design the sample follows
 APPLICATION = ROOT / "applications" / "remote.toml"

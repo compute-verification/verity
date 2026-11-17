@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "benchmarks/census/schemas/input_sets.schema.json",
+  "$id": "calibration/census/schemas/input_sets.schema.json",
   "title": "Census frozen input sets, one per subcircuit (an input is one instance of a subcircuit)",
   "type": "array",
   "items": {
@@ -27,7 +27,7 @@
       "subcircuit": {
         "type": "string",
         "pattern": "^[a-z0-9]+(-[a-z0-9]+)*/[a-z0-9][a-z0-9._-]*/[a-z0-9][a-z0-9._-]*$",
-        "description": "the bound subcircuit its inputs are of (benchmarks/census/subcircuits.json)"
+        "description": "the bound subcircuit its inputs are of (calibration/census/subcircuits.json)"
       },
       "target": {
         "type": "string",

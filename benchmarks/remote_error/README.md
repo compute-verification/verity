@@ -74,8 +74,8 @@ remote composite's error is the union bound over its subprotocols' errors (`Veri
     without the forgery term.
 - **Arithmetic.** Exact rationals: each irrational (√, e) is bounded on the side that keeps the figure an upper bound.
 - **Monitoring periods and fleets.** One play a machine a window. Over one window and each monitoring period
-  (`verity.protocol.MONITORING_PERIODS`), over one datacenter (`benchmarks/census/deployments.json`'s reference, its
-  machines and window length) and over the world's compute (`benchmarks/census/adversary.json`'s reference, as machines
+  (`verity.protocol.MONITORING_PERIODS`), over one datacenter (`calibration/census/deployments.json`'s reference, its
+  machines and window length) and over the world's compute (`calibration/census/adversary.json`'s reference, as machines
   of the datacenter's size), at the adversary's SHA-512 rate a GPU. A term a + b·t + c·t² a play pools to at most
   plays·a + b·T + c·T². Each total is given with its share a machine-window audited. The census gives no AND gates a
   machine-window, so no share is given in AND gates.
