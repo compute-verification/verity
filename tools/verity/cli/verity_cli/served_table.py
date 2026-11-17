@@ -326,7 +326,10 @@ class Piece:
     """One party's piece of the served window (module docstring): ``hooks(cfg, params, bound)`` gives the runner's
     variables for it from the configuration, the component's checked parameters and the bindings of the party it
     reaches (``bound``: each of ``binds``, a ``<party.component.key>`` placeholder while unbound, and each bound one of
-    ``optional``). A ``runtime`` piece's ``session`` is the protocol it is a party of."""
+    ``optional``). A ``runtime`` piece's ``session`` is the protocol it is a party of. The workload's piece names the
+    runner's verbs it stands for (``verbs``, `RUNNER`'s ``served_verdicts.sh VERB``, in the order its main path runs
+    them) and what they write that the other pieces read (``writes``: under the serve dir, ``D/``, or the public record,
+    ``OUT/``); `live` still runs the runner whole (`served_window`)."""
 
     component: str
     party: str
@@ -338,6 +341,8 @@ class Piece:
     optional: tuple[str, ...] = ()
     hooks: Hooks = _none
     session: Session | None = None
+    verbs: tuple[str, ...] = ()
+    writes: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         if self.runs not in RUNS:
@@ -372,7 +377,8 @@ class Piece:
         what it raises; a protocol whose halves aren't all in this tree is ``absent``, by module."""
         out = {"component": self.component, "runs": self.runs, "what": self.what, "scripts": list(self.scripts),
                "reaches": self.reaches or self.party, "missing": self.missing(),
-               "hooks": self.variables(cfg, bindings), "unbound": self.unbound(bindings)}
+               "hooks": self.variables(cfg, bindings), "unbound": self.unbound(bindings),
+               **({"verbs": list(self.verbs), "writes": list(self.writes)} if self.verbs else {})}
         if self.session is None:
             return out
         s, machine = self.session, {p["name"]: p["machine"] for p in cfg["party"]}[self.party]
@@ -482,7 +488,10 @@ def _certifier_piece(cfg, params, bound):
 SERVE = Piece(SERVED_WINDOW, WORKERS, SERVED_WINDOW, "Execution: serve-openai on the prover node under its GPU lease, the "
               "requests, every closed window sealed and the audited window picked; then SPOT's records audit "
               "(Flock --zk behind the Lean ZK server, the Lean verifier) and each listed component's piece",
-              scripts=(RUNNER, VERDICTS_SCRIPT), hooks=_serve)
+              scripts=(RUNNER, VERDICTS_SCRIPT), hooks=_serve,
+              verbs=("predict", "serve", "seal", "window", "advice", "circuits", "publish"),
+              writes=("D/requests.jsonl", "D/windows.jsonl", "D/seals.jsonl", "D/serve.json", "D/windows/w<K>/",
+                      "D/advice/w<K>/", "OUT/serve/", "OUT/machine.txt"))
 #: each listed component's party -> its piece
 PARTIES: dict[str, dict[str, Piece]] = {
     "sampled-proofs": {
