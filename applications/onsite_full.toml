@@ -104,6 +104,11 @@ to = "verifier"
 messages = ["Registration"]
 
 [[channel]]
+from = "challenger"
+to = "workers"
+messages = ["PearlSalt"]
+
+[[channel]]
 from = "memory-challenger"
 to = "prover"
 messages = ["Warmup", "Index", "End", "Fill", "FillDone", "Read"]
