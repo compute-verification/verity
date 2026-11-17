@@ -145,7 +145,7 @@ def test_the_gate_publishes_a_registration_less_its_wiring_and_the_guard_holds_t
         [*released, *gate_files])
 
 
-def test_a_network_attester_runs_certificates_io_and_link_are_its_own(tmp_path):
+def test_a_network_attester_runs_attestations_io_and_link_are_its_own(tmp_path):
     run = gate_run(tmp_path)
     got, private = WC.checked(run)
     assert got == WC.certificates(run) and not set(WC.WITNESS_KEYS) & set(got) and set(private) == set(WC.WITNESS_KEYS)
@@ -188,7 +188,7 @@ def test_a_network_attester_runs_certificates_io_and_link_are_its_own(tmp_path):
     assert not [p for p in check["problems"] if p in json.dumps(got)]
 
 
-def test_the_certificates_step_writes_of_the_check_what_the_gates_end_publishes(tmp_path):
+def test_the_attestations_step_writes_of_the_check_what_the_gates_end_publishes(tmp_path):
     """Of the network attester's own check, the attestations step writes the gate's end's verdict, key for key:
     whether it accepted and the gate's own list of counts (`auditor.NETWORK_ATTESTER_COUNTS`, its `cell_rows` cut to
     `auditor.CELL_ROWS`). The step's list is the gate's, so a key the gate does not publish is not written by the
@@ -228,7 +228,7 @@ def test_the_certificates_step_writes_of_the_check_what_the_gates_end_publishes(
     assert WC.verdict(worded)["failed"] == ["cut", "error"] == G.failed_words(worded["summary"]["failed"])
 
 
-def test_the_certificates_step_releases_its_declared_keys_and_keeps_the_traffics_in_the_witness(tmp_path,
+def test_the_attestations_step_releases_its_declared_keys_and_keeps_the_traffics_in_the_witness(tmp_path,
                                                                                                monkeypatch):
     """``chain_record.py certs`` writes ``certs.json`` with only the keys the list of released_keys.json names, on an
     accepted run and on one the network attester's own check refuses, and every count of `verdict` the list names;
