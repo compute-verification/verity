@@ -1470,6 +1470,8 @@ def test_a_spot_row_the_lean_here_accepts_in_the_per_member_form_says_what_it_co
            "incorrect of member m0's 2 proof blocks at δ 1/1000000; at most 0 incorrect of member m2's 1 proof block "
            "at δ 1/1000000")
     assert leg["at"]["1/1000000"] == {"holds": False, "why": why} and not leg["at"]["1/100"]["holds"], leg
+    assert leg["quantity"]["value"] is None and leg["quantity"]["members"] == {"sampled": 2, "registered": 3}, leg
+    jsonschema.Draft202012Validator({"$defs": SCHEMA["$defs"], "$ref": "#/$defs/leg"}).validate({**leg, "runs": ["r1"]})
     assert _line["check"] == {} and f"at δ = 1/1000000: {why}" in _line["reason"], _line
 
 

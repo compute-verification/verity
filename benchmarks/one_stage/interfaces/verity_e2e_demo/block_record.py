@@ -15,7 +15,9 @@ steps, every subprotocol in one shape, the Lean verdict with the JointPooledLive
   ``⌊ρ·|C|⌋``, which a record may carry as ``S_cert``, read and never written); ``error`` the probability over the subprotocol's
   own coins that it accepts while its claim fails, as the run established it, read from ``error_from``; ``at`` the
   certificate at δ = 1/100 and 1/10^6 (core's `DELTAS`): the run's own wherever ``error`` ≤ δ (a claim holding except with
-  ``error`` holds except with δ), integrity's recomputed from its sample at δ (`integrity_bound`, the bound SPOT's Lean ``countBound`` gives), else not established. The sample is the answer's own sampling design: where its
+  ``error`` holds except with δ), integrity's recomputed from its sample at δ (`integrity_bound`, the bound SPOT's Lean ``countBound`` gives), else not established. A per-member sample that missed a member has no integrity bound
+  (``value`` null) and holds at no δ: its ``why`` gives each sampled member's bound over that member's own proof blocks,
+  beside ``members`` (sampled, registered). The sample is the answer's own sampling design: where its
   profile samples each stratum on its own, the quantity carries the ``strata`` (``[{name, size, k}]``) and the bound is
   the stratified design's, the most incorrect proof blocks that some placement over the strata hides with probability
   at least δ, which a uniform sample of as many units understates. ``named_terms``, which a subprotocol of
@@ -146,9 +148,10 @@ def _quantity(subprotocol: str, row: Mapping[str, Any]) -> tuple[dict[str, Any],
     pub = a.get("public") or {}
     if subprotocol == "integrity":
         members = row.get("members") or {}
-        missed = {"members": list(row["by_member"]), "registered": members["registered"]} if (
-            members.get("sampled", 0) < members.get("registered", 0)) else {}
-        return ({"symbol": "integrity bound", "value": int(q["bound"]), "unit": "wrong units", **_sample(a), **missed},
+        if members.get("sampled", 0) < members.get("registered", 0):
+            return ({"symbol": "integrity bound", "value": None, "unit": "wrong units", **_sample(a),
+                     "members": dict(members), "by_member": list(row["by_member"])}, frac(row["delta"]), "delta")
+        return ({"symbol": "integrity bound", "value": int(q["bound"]), "unit": "wrong units", **_sample(a)},
                 frac(row["delta"]), "delta")
     if subprotocol == "pouw":
         w = q["work"]
@@ -174,9 +177,10 @@ def at_deltas(subprotocol: str, quantity: Mapping[str, Any], error: Fraction) ->
     out: dict[str, Any] = {}
     for d in DELTAS:
         if subprotocol == "integrity" and "members" in quantity:
-            out[str(d)] = {"holds": False, "why": f"the sample reached {len(quantity['members'])} of "
-                           f"{quantity['registered']} members, so no bound over the workload's {quantity['of']} proof "
-                           f"blocks holds; {'; '.join(member_bounds(quantity['members'], d))}"}
+            m = quantity["members"]
+            out[str(d)] = {"holds": False, "why": f"the sample reached {m['sampled']} of {m['registered']} members, so "
+                           f"no bound over the workload's {quantity['of']} proof blocks holds; "
+                           f"{'; '.join(member_bounds(quantity['by_member'], d))}"}
         elif subprotocol == "integrity":
             b = integrity_bound(quantity["of"], quantity["drawn"], d, quantity.get("strata"))
             out[str(d)] = {"holds": True, "value": b, "epsilon": str(Fraction(b, quantity["of"])), "by": "draw"}
