@@ -62,7 +62,8 @@ def run(tmp_path: Path, *args: str, **env: str) -> subprocess.CompletedProcess:
     tree = tmp_path / "tree"
     if not tree.exists():
         make_tree(tmp_path)
-    held = {k: v for k, v in os.environ.items() if k not in {"VY_CHALLENGER_1_HOST", "HANDOFF", *ROW_OF_CARDS}}
+    held = {k: v for k, v in os.environ.items()
+            if k not in {"VY_CHALLENGER_1_HOST", "HANDOFF", "VERITY_HOLD_PLACEMENT", "COMPOSE_OFF_NODE", *ROW_OF_CARDS}}
     return subprocess.run(["bash", str(tree / SERVED_RUN / "run.sh"), *args], capture_output=True, text=True, check=False,
                           env={**held, "HOME": str(tmp_path), **env})
 
@@ -300,6 +301,23 @@ def test_the_settings_are_node_as_and_its_rows_and_name_no_address(tmp_path, tie
         "H1_PEER": "vy-spot-glm53", "PP_PEER": "vy-spot-glm53", "ROW_ID": row}
     assert env["ROW"] == f"{NODE_A['LLAMA_ROOT']}/{NODE_A['builds'][row]}/{row}" and (env["POUW"] == "pearlplus") == tie
     assert not {"CARD", "CORES", "END", "PRODUCT", "PP_CHALLENGER"} & env.keys() and ADDRESS not in got.stdout
+
+
+@pytest.mark.parametrize(("hold", "off_node"), [({}, "0"), ({"VERITY_HOLD_PLACEMENT": "1"}, "1")])
+def test_the_window_composes_off_the_node_only_under_the_placement_hold(tmp_path, hold, off_node):
+    env = env_of(got := run(tmp_path, "window", "--dry-run", **ROW_OF_CARDS, **hold))
+    assert got.returncode == 0, got.stderr
+    assert (env["COMPOSE_OFF_NODE"], env.get("VERITY_HOLD_PLACEMENT")) == (off_node, hold.get("VERITY_HOLD_PLACEMENT"))
+    assert env["COMPOSE_NODE"] == PLACEMENT["run"]["window"]["env"]["COMPOSE_NODE"]
+
+
+@pytest.mark.parametrize(("hold", "off_node"), [({}, "0"), ({"VERITY_HOLD_PLACEMENT": "1"}, "1")])
+def test_an_applications_command_composes_on_the_node_unless_the_placement_hold_is_set(tmp_path, hold, off_node):
+    settings_tree(tmp_path)
+    got = run(tmp_path, "settings", f"some/{PLACEMENT['row'][:14]}", "--", "bash", "-c",
+              'echo "$COMPOSE_OFF_NODE|${VERITY_HOLD_PLACEMENT:-}|$COMPOSE_NODE"', **hold)
+    assert got.returncode == 0, got.stderr
+    assert got.stdout.strip() == f"{off_node}|{hold.get('VERITY_HOLD_PLACEMENT', '')}|vy-nebius-cpu-14"
 
 
 def test_settings_refuse_a_model_no_row_places(tmp_path):
