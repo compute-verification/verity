@@ -58,6 +58,7 @@
   "art:0c6c7466d04c21421c34fe5846a25b322e72aecd1a92367a7d97d953728f9de9": "adapters/vllm/workloads/glm53__fp8__h200__tp8__b8__i256__o32__mixed-arrivals__greedy__eager.json",
   "art:2ef95ab96ed8fee75fb0dd8e8fb1fff52ec9eefe58dc93fe9f72d6bb22deb6b0": "adapters/vllm/workloads/glm53__fp8__h200__tp8__b8__i256__o32__mixed-arrivals__stoch-t0.8-p0.95__eager.json",
   "art:6b0fb3b73055af2546d48a7637cbe40879f43ca18d97021c2f76a4007ca8e1e1": "adapters/vllm/workloads/glm53__fp8__h200__tp8__b8__i256__o32__prefix-arrivals__greedy__eager.json",
+  "art:53bf938df143b5a1f9974585020301a567d1f9bdf5cb5dd3d3d379bdea3d233b": "adapters/vllm/workloads/llama32-1b__bf16__h100__tp1__b4__i256__o32__mixed__greedy__bi-eager.json",
   "art:2d7822df037f762683c1635227a2db1d7ff36d77f2dd20e32b9fe75ddee41816": "adapters/vllm/workloads/llama32-1b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager.json",
   "art:c755d0340db8ae973e9d081703a3c8f38c394ce3e4ec79fe6f0afeb79acabc71": "adapters/vllm/workloads/llama32-1b__bf16__h200__tp1__b1__i256__o32__mixed__greedy__bi-eager.json",
   "art:c09f3332010ed9ae495921604eacd1dd7487365fde39504149897e5d3c23b5c7": "adapters/vllm/workloads/llama32-1b__bf16__h200__tp1__b2__i168__o10__prefix__greedy__bi-eager.json",
