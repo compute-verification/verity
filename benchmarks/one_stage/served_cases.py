@@ -106,13 +106,14 @@ Pearl+'s the Lean verdict of record's.
 
 **No check runs outside a memory limit of its own, and none is started that cannot fit** (`lean_answer`, `Limits`).
 Each check is its own process in a systemd user scope of its own (``MemoryMax`` ``CHECK_MEM_GB``, default
-`CHECK_MEM_GB`, no swap), and on a host with no such scope it is not started (``CHECK_SCOPE=none`` runs it under no
-limit, a development host's choice, which its line then says). The executables read every blob file into memory before
+`CHECK_MEM_GB`, no swap), on a host with no such scope behind ``prlimit`` under an address-space limit of the same
+size, and on a host with neither it is not started (``CHECK_SCOPE=none`` runs it under no limit, a development host's
+choice). The executables read every blob file into memory before
 they check anything (`Core.BlobProtocol`), so a case whose blob files sum past ``CHECK_BLOBS_GB`` (default
 `CHECK_BLOBS_GB`) is not started either.
 
-This prints a ``CASE {"protocol", "verdict", "dir"}`` line per case written (with ``memory``, where its check ran
-under no limit), a ``NOT_STARTED {"protocol", "reason", "blob_bytes", "limit_bytes", "blobs"}`` line per check not
+This prints a ``CASE {"protocol", "verdict", "dir"}`` line per case written (with ``host`` and ``memory``, where its
+Lean check ran and under which limit, when it ran here), a ``NOT_STARTED {"protocol", "reason", "blob_bytes", "limit_bytes", "blobs"}`` line per check not
 started, the case's blob files' sum and the limit beside it, and
 a ``NOT_WRITTEN {"protocol", "reason"}`` line per case refused, and nothing of a case's params or evidence: not α and Γ
 either, which ``--from-division`` reads off the division, so on a one-block window they'd publish its block's gates
@@ -130,6 +131,7 @@ import hashlib
 import importlib
 import json
 import os
+import socket
 import subprocess
 import sys
 import tempfile
@@ -211,9 +213,12 @@ NO_SCOPE = "none"
 UNLIMITED = f"no limit (CHECK_SCOPE={NO_SCOPE}: a development host's choice)"
 #: the scope a check runs in, ahead of its memory limit
 SCOPE = ("systemd-run", "--user", "--scope", "--quiet", "--collect")
-#: why no check starts on a host that makes no such scope
-NO_SCOPE_HERE = (f"this host makes no systemd user scope ({' '.join(SCOPE)}), and no check runs outside a memory limit "
-                 f"of its own (CHECK_SCOPE={NO_SCOPE} runs it under none, on a development host)")
+#: what a check runs behind, ahead of its address-space limit, on a host that makes no such scope
+ADDRESS_SPACE = ("prlimit",)
+#: why no check starts on a host that makes no such scope and runs no `ADDRESS_SPACE`
+NO_SCOPE_HERE = (f"this host makes no systemd user scope ({' '.join(SCOPE)}) and runs no prlimit, and no "
+                 f"check runs outside a memory limit of its own (CHECK_SCOPE={NO_SCOPE} runs it under none, on a "
+                 "development host)")
 
 
 class Refused(Exception):
@@ -232,16 +237,22 @@ class NotStarted(Refused):
 @dataclasses.dataclass(frozen=True)
 class Limits:
     """What a check runs under: the most its case's blob files may sum to, in bytes, and the command its process runs
-    behind, a scope of its own with its memory limit (``mem_gb``), or none where the host said `NO_SCOPE`. ``refusal``:
-    why no check starts under them (`NO_SCOPE_HERE`), else None."""
+    behind, a scope of its own with its memory limit (``mem_gb``), else (``address_space``) an address-space limit of
+    that size, or none where the host said `NO_SCOPE`. ``refusal``: why no check starts under them (`NO_SCOPE_HERE`),
+    else None."""
     blob_bytes: int
     mem_gb: int
     scope: tuple[str, ...] | None
     refusal: str | None = None
+    address_space: bool = False
 
     @property
     def memory(self) -> str:
-        return UNLIMITED if self.scope is None else f"its own scope, MemoryMax {self.mem_gb}G, no swap"
+        if self.scope is None:
+            return UNLIMITED
+        if self.address_space:
+            return f"its own address space, RLIMIT_AS {self.mem_gb}G (prlimit; this host makes no systemd user scope)"
+        return f"its own scope, MemoryMax {self.mem_gb}G, no swap"
 
 
 def scope_here() -> bool:
@@ -252,10 +263,19 @@ def scope_here() -> bool:
         return False
 
 
+def address_space_here() -> bool:
+    try:
+        return subprocess.run([*ADDRESS_SPACE, f"--as={1 << 30}", "--", "true"], capture_output=True,
+                              check=False).returncode == 0
+    except OSError:
+        return False
+
+
 def limits(env: Mapping[str, str] | None = None) -> Limits:
     """The limits a check runs under here, from ``env`` (default the environment): ``CHECK_BLOBS_GB`` and
-    ``CHECK_MEM_GB`` over their defaults, and a scope of its own where the host makes one (`scope_here`). On a host
-    that makes none they start no check (``refusal``), unless ``CHECK_SCOPE`` is `NO_SCOPE`."""
+    ``CHECK_MEM_GB`` over their defaults, and a scope of its own where the host makes one (`scope_here`), else an
+    address-space limit of the same size where it runs `ADDRESS_SPACE` (`address_space_here`). On a host with neither
+    they start no check (``refusal``), unless ``CHECK_SCOPE`` is `NO_SCOPE`."""
     env = os.environ if env is None else env
     try:
         blobs, mem = (int(env.get(k) or d) for k, d in (("CHECK_BLOBS_GB", CHECK_BLOBS_GB), ("CHECK_MEM_GB", CHECK_MEM_GB)))
@@ -264,9 +284,11 @@ def limits(env: Mapping[str, str] | None = None) -> Limits:
     _need(blobs > 0 and mem > 0, "CHECK_BLOBS_GB and CHECK_MEM_GB are positive")
     if env.get("CHECK_SCOPE") == NO_SCOPE:
         return Limits(blobs * 10**9, mem, None)
-    if not scope_here():
-        return Limits(blobs * 10**9, mem, None, NO_SCOPE_HERE)
-    return Limits(blobs * 10**9, mem, (*SCOPE, "-p", f"MemoryMax={mem}G", "-p", "MemorySwapMax=0", "--"))
+    if scope_here():
+        return Limits(blobs * 10**9, mem, (*SCOPE, "-p", f"MemoryMax={mem}G", "-p", "MemorySwapMax=0", "--"))
+    if address_space_here():
+        return Limits(blobs * 10**9, mem, (*ADDRESS_SPACE, f"--as={mem << 30}", "--"), address_space=True)
+    return Limits(blobs * 10**9, mem, None, NO_SCOPE_HERE)
 
 
 def blob_bytes(case: Mapping[str, Any]) -> tuple[int, int]:
@@ -726,10 +748,11 @@ def produce(a: argparse.Namespace) -> int:
 
     kept: dict[str, dict[str, Any]] = {}
 
-    def written(id: str, case: Mapping[str, Any], line: str, verdict: Any, memory: str | None = None) -> None:
+    def written(id: str, case: Mapping[str, Any], line: str, verdict: Any, within: Limits | None = None) -> None:
         write(private / DIRS[id], case, line, kept.get(id))
-        print("CASE " + json.dumps({"dir": str(private / DIRS[id]), "protocol": id, "verdict": verdict,
-                                    **({"memory": memory} if memory else {})}, sort_keys=True), flush=True)
+        ran = {} if within is None else {"host": socket.gethostname(), "memory": within.memory}
+        print("CASE " + json.dumps({"dir": str(private / DIRS[id]), "protocol": id, "verdict": verdict, **ran},
+                                   sort_keys=True), flush=True)
 
     def refused(id: str, e: Exception) -> None:
         nonlocal bad
@@ -748,7 +771,7 @@ def produce(a: argparse.Namespace) -> int:
             tie(answer, id, digest)
         except (Refused, PF.LeanError) as e:
             return refused(id, e)
-        written(id, case, line, answer.get("verdict"), UNLIMITED if within.scope is None else None)
+        written(id, case, line, answer.get("verdict"), within)
 
     one(V1, lambda: v1, functools.cache(lambda: a.v1_exe or build(*V1_LEAN)))
     one(SAMPLED, lambda: sampled_case(audit), functools.cache(lambda: a.sampled_exe or build(*SAMPLED_LEAN)), SAMPLED_CMD)

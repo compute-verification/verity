@@ -28,14 +28,14 @@
 # COMPONENTS), but for ONSITE_SKIP's, which `onsite_cases` sets to those of a PoUS or wipe case that is not its piece's
 # with its Lean's answer, and for SERVE_DIR/private/pouw, whose period case only served_cases.py hands on, tied to R;
 # each within
-# COMPOSITE_TIMEOUT (default 60m) and, where a systemd user scope is available,
-# COMPOSITE_MEM_GB GiB (default 170). A case's evidence and params, and an answer's query, digests and profile, are
-# witness, so composite.py's private output and every log of this step are under SERVE_DIR/private/composite/PRODUCT, on
+# COMPOSITE_TIMEOUT (default 60m) and COMPOSITE_MEM_GB GiB (default 170): a systemd user scope's MemoryMax, else
+# prlimit's address-space limit, and on a host with neither it is not run. A case's evidence and params, and an
+# answer's query, digests and profile, are witness, so composite.py's private output and every log of this step are under SERVE_DIR/private/composite/PRODUCT, on
 # the node; its public output (composite.json: the composite's commitment, each case's id, params digest and commitment,
 # what is missing and each outcome; and its verdict lines), which it refuses to write when it shares bytes with any
 # case's evidence, is OUT/composite/PRODUCT. OUT/verdicts.txt gets each case's protocol and verdict (the CASE lines),
 # each case not written or left out by its protocol, each case whose check was not started (`served_cases.py`'s
-# NOT_STARTED: no check runs outside a memory scope of its own, CHECK_MEM_GB, or on blob files that sum past
+# NOT_STARTED: no check runs outside a memory limit of its own, CHECK_MEM_GB, or on blob files that sum past
 # CHECK_BLOBS_GB, and the per-member sampled case is not asked) with why, its blob files' sum and the limit, each
 # product's NOT_ESTABLISHED and VERDICT lines, and the host it composed on
 # (the serve dir's: the served node's, or, where SERVED_NODE names another, the node a compose follow-on composed on from
@@ -105,9 +105,15 @@ exe() {  # Lean executable $1 of package dir $2, built, its path printed
     || { say "COMPOSITE: $1 doesn't build in $2 (its log on the node)" >&2; return 1; }
   echo "$TREE/$2/.lake/build/bin/$1"
 }
-scope=()
-command -v systemd-run > /dev/null && systemd-run --user --scope --quiet --collect true > /dev/null 2>&1 \
-  && scope=(systemd-run --user --scope --quiet --collect -p "MemoryMax=${COMPOSITE_MEM_GB:-170}G" -p MemorySwapMax=0 --)
+if command -v systemd-run > /dev/null && systemd-run --user --scope --quiet --collect true > /dev/null 2>&1; then
+  scope=(systemd-run --user --scope --quiet --collect -p "MemoryMax=${COMPOSITE_MEM_GB:-170}G" -p MemorySwapMax=0 --)
+elif command -v prlimit > /dev/null && prlimit "--as=$((1 << 30))" -- true > /dev/null 2>&1; then
+  # RLIMIT_AS binds each process alone: each Lean composite.py starts gets the whole limit, not a share of it.
+  scope=(prlimit "--as=$((${COMPOSITE_MEM_GB:-170} << 30))" --)
+else
+  say "COMPOSITE: not run, this host makes no systemd user scope and runs no prlimit: composite.py runs only under a memory limit of its own"
+  exit 1
+fi
 
 [ "$PRODUCT" != onsite ] || onsite_cases
 
