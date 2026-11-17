@@ -885,13 +885,14 @@ def amounts(doc: dict, ledger: dict, metric: str = METRIC) -> list[dict]:
 
 
 def member(machine: dict) -> str:
-    card = next((word for word in LOCAL_SHEETS if word in machine["card"]), machine["sheet"])
-    return "-".join([MEMBER_MODEL, *card.lower().split()])
+    """The model and the `short` of the card record holding the card's name (`kit.card_short`), which refuses
+    (`SystemExit`, naming what to add) a name no one record holds."""
+    return f"{MEMBER_MODEL}-{kit.card_short(machine['card'], directory=CARD_FILES)}"
 
 
 def pass_points(doc: dict, calibration: dict) -> list[dict]:
     """A `--local` session's pass time and bare read from its record's `calibration`, each left out where it lacks
-    it."""
+    it, and both where no card record holds the card's name, the reason on stderr."""
     run = [doc["run"]] if doc["run"] else []
     pass_ns = _at(calibration, "pass_ns", "p50")
     read_bytes, read_ms = (_at(calibration, "read_tiers", "hbm", k) for k in ("bytes", "ms"))
@@ -902,8 +903,15 @@ def pass_points(doc: dict, calibration: dict) -> list[dict]:
     if read_bytes and read_ms:
         out.append({"name": READ_METRIC, "value": read_bytes / read_ms / 1e9, "unit": READ_UNIT,
                     "inputs": [*run, "calibration.read_tiers.hbm.bytes", "calibration.read_tiers.hbm.ms"]})
-    return [m | {"member": member(doc["machine"]),
-                 "extra": {"card": doc["machine"]["card"], "store_bytes": doc["store_bytes"]}} for m in out]
+    if not out:
+        return []
+    try:
+        name = member(doc["machine"])
+    except SystemExit as e:
+        print(f"memory: no {' or '.join(m['name'] for m in out)} point: {e}", file=sys.stderr)
+        return []
+    return [m | {"member": name, "extra": {"card": doc["machine"]["card"], "store_bytes": doc["store_bytes"]}}
+            for m in out]
 
 
 def text(doc: dict) -> str:
