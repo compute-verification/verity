@@ -2,27 +2,8 @@ module
 
 public import Proofs.Properties.Verity.SampledTwo.SessionMiddle
 
-/-!
-# A session the masked verdict accepts has messages
-
-A session's messages (`SessionMsgs.sessionMsgs`) are read from its record: the link message from the live session
-`FlockDeploy.liveOf` reads, then each recorded round's retained bytes, then the last message. There are none where the
-record doesn't read as a live session or a round kept no bytes. Here both hold of a one-table session the masked
-verdict (`Flock.Zk.verify`) accepts at a setup that retains rounds.
-
-* **The record reads as a live session** (`live_of_verify`). The verdict decoded the record
-  (`Verity.Sampled.zkVerify_decode`), and `FlockDeploy.liveOf` reads no field `Flock.Record.decode` did not: the link,
-  each table's `root_B` (`rootField_reads`), public words (`pubField_reads`) and link points (`pointField_reads`),
-  as `Claims.Bridge.Custody.decode_ok` and `FlockDeploy.KS.decode_pubs` give them, and each rep stream's rounds
-  (`roundFields_reads`, `streamJ_of_decode`). The verdict ran both reps of the one table
-  (`Verity.Sampled.verifyRep_of_accepted`), and each rep's check found its stream by name among the decoded
-  (`FlockSoundness.Discharge.ZkExec.zk_verifyRep_ok`), so the record's streams hold it (`streamJ_of_decode`).
-* **Each round kept its bytes**: the live session's rounds have the decoded rounds' bytes, and the decoder refuses a
-  round without them where the setup retains rounds (`FlockSoundness.Discharge.Exec.decode_retained`).
-* **The session has messages** (`sessionMsgs_of_verify`).
-
-**Not established here**: that a session's setup retains rounds and has one table, each a hypothesis.
--/
+/-! A one-table session the masked verdict accepts has messages; that its setup retains rounds and has one
+table are hypotheses here. -/
 
 @[expose] public section
 
@@ -33,9 +14,6 @@ open Lean (Json)
 open Verity.Sampled (repStreamName)
 open Claims.Bridge.Custody (RootField PointField RoundFields DecStream)
 
-/-! ## Reads that return -/
-
-/-- A read that returns, then a read of what it returned that returns, returns. -/
 theorem bind_returns {ε α β : Type} {x : Except ε α} {f : α → Except ε β} {a : α} {b : β} (hx : x = .ok a)
     (hf : f a = .ok b) : (x >>= f) = .ok b := by
   rw [hx]
@@ -48,7 +26,6 @@ theorem list_mapM_returns {α β ε : Type} {f : α → Except ε β} :
     rw [List.mapM_cons]
     exact bind_returns hab (bind_returns (list_mapM_returns h) rfl)
 
-/-- A read of each member that returns reads the array (`Claims.Bridge.Custody.mapM_forall₂`, turned around). -/
 theorem mapM_returns {α β ε : Type} {f : α → Except ε β} {xs : Array α} {ys : Array β}
     (h : List.Forall₂ (fun a b => f a = .ok b) xs.toList ys.toList) : xs.mapM f = .ok ys := by
   rw [Array.mapM_eq_mapM_toList, list_mapM_returns h]
@@ -62,15 +39,11 @@ theorem mapM_some_of {α β : Type} {f : α → Option β} :
     obtain ⟨bs, hbs⟩ := mapM_some_of (l := l) fun a' ha' => h a' (List.mem_cons_of_mem a ha')
     exact ⟨b :: bs, by rw [List.mapM_cons, hb, hbs]; rfl⟩
 
-/-! ## What the live session reads, of what the decoder read -/
-
-/-- The live session reads a table's `root_B` the decoder read. -/
 theorem rootField_reads {l : Json} {t : String} {rb : ByteArray} (h : RootField l t rb) :
     (do Flock.unhex (← Flock.Record.str (← Flock.Record.fld l "root_b") t) : Flock.V ByteArray) = .ok rb := by
   obtain ⟨v, s, h1, h2, h3⟩ := h
   exact bind_returns h1 (bind_returns h2 h3)
 
-/-- The live session reads a table's public words the decoder read. -/
 theorem pubField_reads {pubs : Json} {t : String} {p : ByteArray} (h : FlockDeploy.KS.PubField pubs t p) :
     (if Flock.Record.isNull pubs t then pure ByteArray.empty
       else do Flock.unhex (← Flock.Record.str pubs t) : Flock.V ByteArray) = .ok p := by
@@ -81,7 +54,6 @@ theorem pubField_reads {pubs : Json} {t : String} {p : ByteArray} (h : FlockDepl
   · rw [h.1 hn, ite_eq_left rfl]
     rfl
 
-/-- The live session reads a link point the decoder read. -/
 theorem pointField_reads {p : Json} {pt : Array Flock.F128} (h : PointField p pt) :
     (match p.getArr? with
       | .ok a => Flock.Record.f128s a
@@ -90,7 +62,6 @@ theorem pointField_reads {p : Json} {pt : Array Flock.F128} (h : PointField p pt
   rw [h1]
   exact h2
 
-/-- **The live session reads a round the decoder read**: its coin count, coins and retained bytes, with no digest. -/
 theorem roundFields_reads {r : Json} {n : ℕ} {coins : Array Flock.F128} {bytes : Option ByteArray}
     (h : RoundFields r n coins bytes) : FlockDeploy.roundJ r = .ok ⟨n, ByteArray.empty, coins, bytes⟩ := by
   obtain ⟨hn, ⟨cs, hcs, hcoins⟩, h0, h1⟩ := h
@@ -107,9 +78,6 @@ theorem roundFields_reads {r : Json} {n : ℕ} {coins : Array Flock.F128} {bytes
   · rw [h0 hnull, ite_eq_left rfl]
     rfl
 
-/-- **The live session reads a rep stream the decoded record has by name**: the record's first stream so named is
-the one the decoder read as it (`Claims.Bridge.Custody.stream_pred`), and its rounds read as the decoded rounds, each
-with the decoded round's bytes. -/
 theorem streamJ_of_decode {spec : Flock.SessionSpec} {recs : Array Json} {sess : Flock.RunRecord} {name : String}
     {y : Flock.StreamRec} (hstr : List.Forall₂ (DecStream spec) recs.toList sess.streams.toList)
     (hy : sess.streams.find? (fun x => x.name == name) = some y) :
@@ -130,16 +98,6 @@ theorem streamJ_of_decode {spec : Flock.SessionSpec} {recs : Array Json} {sess :
   · rw [Array.toList_map, List.forall₂_map_right_iff]
     exact List.forall₂_same.2 fun _ _ => rfl
 
-/-! ## The live session of an accepted record -/
-
-/-- **The record of a one-table session the masked verdict accepts reads as a live session, each of whose rounds
-kept its bytes**, where the session retains rounds. The verdict decoded the record
-(`Verity.Sampled.zkVerify_decode`); the live session's link, roots, public words and link points are fields the
-decoder read (`Claims.Bridge.Custody.decode_ok`, `FlockDeploy.KS.decode_pubs`); each of the table's two rep streams
-is one a rep's check found among the decoded (`Verity.Sampled.verifyRep_of_accepted`,
-`FlockSoundness.Discharge.ZkExec.zk_verifyRep_ok`), so the live session reads it (`streamJ_of_decode`) with the
-decoded rounds' bytes, which the decoder refuses a round without
-(`FlockSoundness.Discharge.Exec.decode_retained`). -/
 theorem live_of_verify {spec : Flock.SessionSpec} {tabs : Array Flock.Setup} {record : String}
     {proofs : Array ByteArray} {T : String} (hv : Flock.Zk.verify spec tabs record proofs = .ok ())
     (hT : spec.tables = #[T]) (hret : spec.retainRounds = true) :
@@ -183,9 +141,6 @@ theorem live_of_verify {spec : Flock.SessionSpec} {tabs : Array Flock.Setup} {re
     · exact hb0 r hr
     · exact hb1 r hr
 
-/-- **A one-table session the masked verdict accepts has messages**, where the session retains rounds: its record
-reads as a live session, each of whose rounds kept its bytes (`live_of_verify`), which is all
-`SessionMsgs.sessionMsgs` reads of it. -/
 theorem sessionMsgs_of_verify {spec : Flock.SessionSpec} {tabs : Array Flock.Setup} (x : Msg) {record : String}
     {proofs : Array ByteArray} {T : String} (hv : Flock.Zk.verify spec tabs record proofs = .ok ())
     (hT : spec.tables = #[T]) (hret : spec.retainRounds = true) :

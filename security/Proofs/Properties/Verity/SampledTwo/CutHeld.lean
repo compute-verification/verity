@@ -4,24 +4,7 @@ public import Proofs.Properties.Verity.SampledTwo.CutPrints
 public import Proofs.Properties.Verity.Sampled.MemberForm
 public import Proofs.Properties.Verity.SampledTwo.Steps
 
-/-!
-# The two-stage form holds the interior's records to its session's trees
-
-`CutPrints.binds_of_prints` takes, of each accepted play, that the interior's records are held to the coin trees its
-session's lines hold (`InteriorHeld`). The form's check reads them so: where it accepts, it ran the interior audit's
-per-member sessions (`accepted_steps`, `inputAt_ok`: `OneStageZk.membersRun`), which reads the challenger's trees
-from the interior's coin evidence (`treesOf`) and holds every statement's session's record to them
-(`membersTreesHeld`): `membersTreeReason` accepts each as `memberTreeReason` does (`MemberForm.membersTreeReason_none`),
-a logged tree whose last round closes the session and which, less that round, passes `sessionTreeReason`
-(`MemberForm.memberTreeReason_none`). The trees `treesOf` reads are those `coinTreesOf` reads from the lines `linesOf`
-reads (`Binding.trees_of`).
-
-* `members_trees`: an accepted `membersRun` read its trees and held its statements' sessions to them.
-* `held_size`: the statements' members (`membersHeld`) are one a statement, so every statement is in `sts.zip held`.
-* `named_mem`: `membersTreesHeld`'s two loops name every statement's session whose record is on the blobs.
-* `interiorHeld_of_accepts`: `Accepts s → InteriorHeld s`, and so `binds_of_accepts`: `BindsOfPrints` with no premise
-  beyond the printing.
--/
+/-! The two-stage form's check holds the interior's records to its session's coin trees. -/
 
 @[expose] public section
 
@@ -29,8 +12,6 @@ namespace Verity.SampledTwo
 
 open Lean (Json)
 open Properties.Challenger Spot.Challenger
-
-/-! ## Lists -/
 
 theorem mapM_str_inv {f : Json → Flock.V String} (hf : ∀ j x, f j = .ok x → j = .str x) :
     ∀ (js : List Json) (l : List String), js.mapM f = .ok l → js = l.map Json.str
@@ -45,7 +26,6 @@ theorem mapM_str_inv {f : Json → Flock.V String} (hf : ∀ j x, f j = .ok x �
     obtain rfl : x :: xs = l := Except.ok.inj h
     simp [hf j x hx, mapM_str_inv hf js xs hxs]
 
-/-- The lines `linesOf` reads are the session's log's, as JSON strings. -/
 theorem linesOf_arr {e : Spot.OneStageZk.Evidence} {l : List String} (h : Verity.Sampled.linesOf e = .ok l) :
     ∃ ls : Array Json, Spot.getD (Spot.getD e.base.coins "session") "log" = .arr ls ∧ ls.toList = l.map Json.str := by
   unfold Verity.Sampled.linesOf at h
@@ -65,8 +45,6 @@ theorem mem_zip_left {α β : Type} {a : α} :
     · exact ⟨b, by simp⟩
     · obtain ⟨b', hb'⟩ := mem_zip_left as bs (by simpa using hl) ha
       exact ⟨b', by simp [hb']⟩
-
-/-! ## The statements' members -/
 
 theorem heldStep_size {ms held h' : Array Spot.OneStageZk.Member} {st : Spot.OneStageZk.StatementFiles}
     (h : Spot.OneStageZk.heldStep ms held st = .ok h') : h'.size = held.size + 1 := by
@@ -91,16 +69,12 @@ theorem foldlM_held_size {ms : Array Spot.OneStageZk.Member} :
     simp only [List.length_cons]
     omega
 
-/-- **The statements' members are one a statement.** -/
 theorem held_size {ms held : Array Spot.OneStageZk.Member} {sts : Array Spot.OneStageZk.StatementFiles}
     (h : Spot.OneStageZk.membersHeld ms sts = .ok held) : held.size = sts.size := by
   unfold Spot.OneStageZk.membersHeld at h
   rw [← Array.foldlM_toList] at h
   simpa using foldlM_held_size sts.toList #[] held h
 
-/-! ## The per-member sessions held to the trees -/
-
-/-- **An accepted `membersRun` read the challenger's trees and held its statements' sessions to them.** -/
 theorem members_trees {p : Spot.OneStageZk.Params} {ms : Array Spot.OneStageZk.Member}
     {c : Spot.OneStage.Commitment} {e : Spot.OneStageZk.Evidence} {sts : Array Spot.OneStageZk.StatementFiles}
     {bs : _root_.Core.Blobs} {r : Spot.OneStageZk.Run} (h : Spot.OneStageZk.membersRun p ms c e sts bs = .ok r) :
@@ -132,9 +106,6 @@ theorem members_trees {p : Spot.OneStageZk.Params} {ms : Array Spot.OneStageZk.M
   obtain ⟨ts, L, hts, hM⟩ := hrest
   exact ⟨held, ts, L, hheld, hts, hM⟩
 
-/-- **`membersTreesHeld` names every statement's session whose record is on the blobs**: its two loops push, of each
-session of each statement with its member, the record `Flock.JsonParse.parse` reads, beside its tables and its
-evidence's digest. -/
 theorem named_mem {ts : Array LoggedTree} {L : List String}
     {sts : Array (Spot.OneStageZk.StatementFiles × Spot.OneStageZk.Member)} {bs : _root_.Core.Blobs}
     (h : Spot.OneStageZk.membersTreesHeld ts L sts bs = .ok ()) :
@@ -192,12 +163,6 @@ theorem named_mem {ts : Array LoggedTree} {L : List String}
         obtain rfl : str' = record := Option.some.inj (hs''.symm.trans hrec)
         exact ⟨_, _, Array.mem_push.2 (.inr rfl)⟩
 
-/-! ## The interior held -/
-
-/-- **The form's check holds the interior's records to its session's trees** (`InteriorHeld`): where it accepts, each
-record `secondRecords` reads is a statement's session's, which `membersTreesHeld` named; `membersTreeReason` accepted
-it as `memberTreeReason` does, at a tree less its closing round; and the trees `treesOf` read are those `coinTreesOf`
-reads from the session's lines. -/
 theorem interiorHeld_of_accepts {s : Verity.Sent} (ha : Accepts s) : InteriorHeld s := by
   intro p c e h1 recs hrecs lines hlines ts hts rec hrec
   obtain ⟨p', c', e', pub, prof, h1', hacc⟩ := ha
@@ -231,8 +196,6 @@ theorem interiorHeld_of_accepts {s : Verity.Sent} (ha : Accepts s) : InteriorHel
     exact hS
   exact ⟨t, ht, tabs, hS'⟩
 
-/-- **`Binds` where the device printed each play's log in its two sessions**: `binds_of_prints` with the interior's
-records held by the form's own check (`interiorHeld_of_accepts`). -/
 theorem binds_of_accepts (dev : Exchange → History) (θ : ByteArray) : BindsOfPrints dev θ :=
   binds_of_prints dev θ fun _ _ ha => interiorHeld_of_accepts ha
 

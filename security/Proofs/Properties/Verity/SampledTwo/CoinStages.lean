@@ -5,28 +5,8 @@ public import Proofs.Properties.Verity.SampledTwo.CoinMapDistribution
 public import Proofs.Properties.Verity.SampledDraw
 public import Proofs.Flock.Soundness.Discharge.ZkView.Decode
 
-/-!
-# The two-stage audit's coins from their families
-
-The coin map's locator for the two-stage audit (`stageLocate`): the first stage's family's fresh coins continue the
-first stage's coin, and the second stage's family's continue the second stage's coins in order, 16384 fresh coins
-(65536 elements) a coin. At it, the coin `dev` reads for each stage starts with the bytes the log shows released in
-the stage's family after its root:
-
-* `devBits_first`, `devBits_second`: the bits the locator collects for a stage are the family's released coins
-  (`Verity.Sampled.freshCoins`), all of them for the first stage and the stage's slice of them for the second, where
-  the log shows the family's coins after one root only (`OneRoot`);
-* `coinByte_testBit`, `src_testBit`: bit `q` of a coin's byte `k` (`SpotFlock.src`) is bit `8 (k % 16) + q` of its
-  element `k / 16` (`F128.toBytes`' order), which is bit `8 k + q` of the bits `dev` collected;
-* `bitsOf_getD`: bit `8 k + q` of a byte string's bits (`Properties.Challenger.bitsOf`) is bit `q` of its byte `k`;
-* `devFirst_stage`, `devSecond_stage`: where a stage's sample names the locator's family and the log shows that family's
-  coins after the sample's root only (`StageSamples`), bytes whose bits start the family's released coins start the coin
-  `dev` reads for the stage, coin by coin for the second.
-
-`StageSamples` is a hypothesis: it is what the run's coin check gives at the key change, where the family is the
-verifier's (`Spot.Run.coinsCode`'s `family`) and a family whose log shows a root other than the registration's digest is
-refused (`Challenger.FAMILY_ROOT`, `Properties.Challenger.FamilyOneCommitmentRead`'s `∀ r ∈ s.roots label, r = after`).
--/
+/-! The two-stage audit's locator (`stageLocate`) and the stages' coins it reads; `StageSamples` is a
+hypothesis, which the run's coin check gives at the key change. -/
 
 @[expose] public section
 
@@ -35,9 +15,6 @@ namespace Verity.SampledTwo.CoinMap
 open Verity.Game
 open Claims
 
-/-! ## The locator -/
-
-/-- Whether a release is a fresh coin of family `l`. -/
 def isFresh (l : String) (rl : Verity.Release) : Bool :=
   match rl.frame with
   | .fresh l' => l' == l
@@ -51,19 +28,14 @@ def stageLocate (ℓ₁ ℓ₂ : String) : Locate := fun pre fr _ =>
   | .fresh l => if l = ℓ₁ then some 0 else if l = ℓ₂ then some (1 + pre.countP (isFresh ℓ₂) / 16384) else none
   | _ => none
 
-/-- **The log shows family `ℓ`'s coins after one root**: every fresh coin of `ℓ` the log holds answers `after`. -/
 def OneRoot (ℓ : String) (after : ByteArray) (log : List Verity.Release) : Prop :=
   ∀ rl ∈ log, rl.frame = .fresh ℓ → rl.answers = after
 
-/-- **Every fresh coin the log holds carries its 512 bits**, as every play of the device's game releases them
-(`Verity.releases`). -/
 def FreshWide (log : List Verity.Release) : Prop :=
   ∀ rl ∈ log, ∀ l, rl.frame = .fresh l → rl.coins.length = 512
 
-/-- **A stage's sample is the locator's family after one root** (owner TWOLEG, from
-`Properties.Challenger.FamilyOneCommitmentRead` once the base holds the key change): on a play `Acc` holds of, where
-the stage's sample (`draw`, the case's family and digest) is `(label, after)`, `label` is the locator's `ℓ` and the log
-shows `ℓ`'s coins after `after` only. -/
+/-- On a play `Acc` holds of, where the stage's sample is `(label, after)`, `label` is the locator's `ℓ`
+and the log shows `ℓ`'s coins after `after` only; a hypothesis, not proved here. -/
 def StageSamples (Acc : Verity.Exchange → Prop) (draw : Verity.Exchange → Option (String × ByteArray)) (ℓ : String) :
     Prop :=
   ∀ o, Acc o → ∀ label after, draw o = some (label, after) → label = ℓ ∧ OneRoot ℓ after o.log
@@ -75,7 +47,6 @@ theorem locAt_fresh {ℓ₁ ℓ₂ : String} {pre : List Verity.Release} {fr : V
   | hello _ => exact absurd h (by simp [locAt])
   | opening _ _ _ => exact absurd h (by simp [locAt, stageLocate])
 
-/-- **Where the locator puts no element on a stage, it collects no bit for it.** -/
 theorem devBits_nil_of_used (ℓ₁ ℓ₂ : String) (i : ℕ) :
     ∀ (log pre : List Verity.Release), usedOf (stageLocate ℓ₁ ℓ₂) i pre log = 0 →
       devBits (stageLocate ℓ₁ ℓ₂) i pre log = []
@@ -91,10 +62,6 @@ theorem devBits_nil_of_used (ℓ₁ ℓ₂ : String) (i : ℕ) :
       simp [widthOf] at h
     · rw [if_neg hloc]
 
-/-! ## Every play's fresh coins carry their 512 bits -/
-
-/-- **Every leaf of `g` satisfies `P`**, whatever the prover sends and the coins (`FlockSoundness.Game.Leaves`'s
-shape, which this module doesn't import). -/
 def Leaves {β : Type} (P : β → Prop) : Game β → Prop
   | .ret a => P a
   | .send _ k => ∀ m, Leaves P (k m)
@@ -123,8 +90,6 @@ theorem leaves_optGame {β γ : Type} {P : β → Prop} {n : Game β} {y : γ �
   | none => hn
   | some x => hy x
 
-/-- **The device's releases release each fresh coin's 512 bits**: where `f` at every such log has `P` at every leaf,
-so do the releases then `f`. -/
 theorem leaves_relK {β : Type} (P : β → Prop) :
     ∀ (k : ℕ) (fs : List (String × ℕ)) (ts : List OpenTree) (f : List Verity.Release → Game β),
       (∀ log, FreshWide log → Leaves P (f log)) → Leaves P (relK k fs ts f)
@@ -155,7 +120,6 @@ theorem leaves_relK {β : Type} (P : β → Prop) :
           exact leaves_relK P k fs _ _ fun log hl => hf _ (FreshWide.cons (fun _ h => by cases h) hl)
         · exact h0
 
-/-- **Every play of the period's game releases each fresh coin's 512 bits.** -/
 theorem freshWide_play {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α] (V : Vocab d α) (θ : ByteArray)
     (F : Array ByteArray) (c : ByteArray) (σ : Strategy (V.game θ F c)) {o : Verity.Exchange}
     (h : PlayReaches (V.game θ F c) σ o) : FreshWide o.log := by
@@ -167,9 +131,6 @@ theorem freshWide_play {ι : Type} {d : ResourceAccounting.Device ι} {α : Type
     exact hl
   exact Leaves.reach _ σ hl h
 
-/-! ## The bits collected for each stage -/
-
-/-- **The first stage's bits are its family's released coins.** -/
 theorem devBits_first (ℓ₁ ℓ₂ : String) (after : ByteArray) :
     ∀ (log pre : List Verity.Release), OneRoot ℓ₁ after log →
       devBits (stageLocate ℓ₁ ℓ₂) 0 pre log = (Verity.Sampled.freshCoins ℓ₁ after log).flatten
@@ -195,8 +156,6 @@ theorem devBits_first (ℓ₁ ℓ₂ : String) (after : ByteArray) :
     | hello _ => simp [locAt]
     | opening _ _ _ => simp [locAt, stageLocate]
 
-/-- **Stage `j + 1`'s bits are its slice of the second stage's family's released coins**: those numbered `16384 j`
-to `16384 (j + 1)` among the family's, counting the `n₀` the releases before had. -/
 theorem devBits_second (ℓ₁ ℓ₂ : String) (hne : ℓ₁ ≠ ℓ₂) (after : ByteArray) (j : ℕ) :
     ∀ (log pre : List Verity.Release), OneRoot ℓ₂ after log →
       devBits (stageLocate ℓ₁ ℓ₂) (j + 1) pre log =
@@ -249,8 +208,6 @@ theorem devBits_second (ℓ₁ ℓ₂ : String) (hne : ℓ₁ ≠ ℓ₂) (after
       rw [hc, Nat.add_zero]
       simp [locAt, stageLocate]
 
-/-! ## Lists of chunks of one length -/
-
 theorem length_flatten_const {β : Type} {m : ℕ} : ∀ (cs : List (List β)), (∀ c ∈ cs, c.length = m) →
     cs.flatten.length = m * cs.length
   | [], _ => by simp
@@ -273,7 +230,6 @@ theorem getD_prefix {β : Type} {l₁ l₂ : List β} (h : l₁ <+: l₂) {t : �
   obtain ⟨r, rfl⟩ := h
   exact List.getD_append _ _ _ _ ht
 
-/-- **The bits of a slice of chunks of one length, from the bits of all.** -/
 theorem getD_slice {β : Type} {m : ℕ} (cs : List (List β)) (h : ∀ c ∈ cs, c.length = m) (A n : ℕ) {t : ℕ}
     (ht : t < m * n) (d : β) : (((cs.take (A + n)).drop A).flatten).getD t d = cs.flatten.getD (m * A + t) d := by
   have hd : ∀ c ∈ cs.drop A, c.length = m := fun c hc => h c (List.mem_of_mem_drop hc)
@@ -287,8 +243,6 @@ theorem getD_slice {β : Type} {m : ℕ} (cs : List (List β)) (h : ∀ c ∈ cs
     rw [length_flatten_const _ (fun c hc => hd c (List.mem_of_mem_take hc)), List.length_take, Nat.min_eq_left hn]
     exact ht
   · rw [List.take_of_length_le (by omega)]
-
-/-! ## Bytes and bits -/
 
 theorem toList_loop' (b : ByteArray) (i : Nat) (r : List UInt8) :
     ByteArray.toList.loop b i r = r.reverse ++ b.data.toList.drop i := by
@@ -335,7 +289,6 @@ theorem length_bitsOf (b : ByteArray) : (Properties.Challenger.bitsOf b).length 
   rw [toList_eq', length_flatMap_const _ (m := 8) (fun a => by simp)]
   simp
 
-/-- **Bit `8 k + q` of a byte string's bits is bit `q` of its byte `k`.** -/
 theorem bitsOf_getD (b : ByteArray) {k q : ℕ} (hk : k < b.size) (hq : q < 8) :
     (Properties.Challenger.bitsOf b).getD (8 * k + q) false = b[k].toNat.testBit q := by
   unfold Properties.Challenger.bitsOf
@@ -355,7 +308,6 @@ theorem testBit_shift (x : UInt64) {j : ℕ} (hj : j < 8) (q : ℕ) :
   rw [UInt64.toNat_shiftRight, Nat.toUInt64, UInt64.toNat_ofNat', Nat.mod_eq_of_lt (by omega),
     Nat.mod_eq_of_lt (by omega), Nat.testBit_shiftRight]
 
-/-- **Bit `q` of an element's byte `m` is its bit `8 m + q`** (`F128.toBytes`: `le64 lo ‖ le64 hi`). -/
 theorem toBytes_testBit (a : Flock.F128) {m q : ℕ} (hm : m < 16) (hq : q < 8) :
     (a.toBytes.data.toList.getD m 0).toNat.testBit q = a.bit (8 * m + q) := by
   have hd : a.toBytes.data.toList.getD m 0 =
@@ -370,7 +322,6 @@ theorem toBytes_testBit (a : Flock.F128) {m q : ℕ} (hm : m < 16) (hq : q < 8) 
   · rw [if_neg h8, if_neg (show ¬ 8 * m + q < 64 by omega), Flock.F128.bitU64 _ _ (by omega), testBit_toUInt8 _ hq,
       testBit_shift _ (show m - 8 < 8 by omega), show 8 * m + q - 64 = 8 * (m - 8) + q by omega]
 
-/-- **Bit `q` of a coin's byte `k` is bit `8 (k % 16) + q` of its element `k / 16`.** -/
 theorem coinByte_testBit (d : FlockDeploy.Coin) (k : Fin SpotFlock.L) {q : ℕ} (hq : q < 8) :
     (SpotFlock.coinByte d k).val.testBit q =
       (d ⟨k.val / 16, by have := k.isLt; simp only [SpotFlock.L] at this; omega⟩).bit (8 * (k.val % 16) + q) := by
@@ -389,7 +340,6 @@ theorem coinByte_testBit (d : FlockDeploy.Coin) (k : Fin SpotFlock.L) {q : ℕ} 
   dsimp only
   rw [e, toBytes_testBit _ (Nat.mod_lt _ (by norm_num)) hq]
 
-/-- **Bit `q` of byte `k` of the coin `dev` reads is bit `8 k + q` of the bits it collected.** -/
 theorem src_testBit {L : Locate} {log : List Verity.Release} {i : ℕ} {d : FlockDeploy.Coin}
     (h : dev L log i = some d) (k : Fin SpotFlock.L) {q : ℕ} (hq : q < 8) :
     (SpotFlock.coinByte d k).val.testBit q = (devBits L i [] log).getD (8 * k.val + q) false := by
@@ -418,7 +368,6 @@ theorem byte_eq_of_testBit {x y : UInt8} (h : ∀ q < 8, x.toNat.testBit q = y.t
 theorem size_bytesOf {n : ℕ} (f : Fin n → Fin 256) : (Properties.Spot.bytesOf f).size = n := by
   simp [Properties.Spot.bytesOf, ByteArray.size]
 
-/-- Byte `k` of a source's bytes is the source's `k`. -/
 -- Stated at every length `n`: at `SpotFlock.L` the kernel would unroll `Array.ofFn`'s 1048576 steps to check the
 -- index's bound.
 theorem bytesOf_getElem {n : ℕ} (f : Fin n → Fin 256) {k : ℕ} (hn : k < n) (hk : k < (Properties.Spot.bytesOf f).size) :
@@ -432,7 +381,6 @@ theorem src_getElem (d : FlockDeploy.Coin) {k : ℕ} (hk : k < (SpotFlock.src d)
     ((SpotFlock.src d)[k]).toNat = (SpotFlock.coinByte d ⟨k, by rwa [size_src] at hk⟩).val :=
   bytesOf_getElem (SpotFlock.coinByte d) _ hk
 
-/-- **Bytes whose bits are the collected bits from `8 off` on, `w` of them, start the coin `dev` reads.** -/
 theorem src_extract {L : Locate} {log : List Verity.Release} {i : ℕ} {d : FlockDeploy.Coin}
     (h : dev L log i = some d) (b : ByteArray) (off w : ℕ) (hw : w ≤ SpotFlock.L) (hb : off + w ≤ b.size)
     (hbits : ∀ k < w, ∀ q < 8, (devBits L i [] log).getD (8 * k + q) false =
@@ -449,10 +397,6 @@ theorem src_extract {L : Locate} {log : List Verity.Release} {i : ℕ} {d : Floc
     simp only [Nat.zero_add]
     rw [src_getElem, src_testBit h _ hq, hbits k (by omega) q hq, bitsOf_getD b (by omega) hq]
 
-/-! ## The stages' coins -/
-
-/-- **The first stage's coin starts with the bytes its family's released coins start with**, where the log shows the
-family's coins after one root only. -/
 theorem devFirst_of (ℓ₁ ℓ₂ : String) {log : List Verity.Release} {after : ByteArray} (hone : OneRoot ℓ₁ after log)
     {b : ByteArray} (hb : Properties.Challenger.bitsOf b <+: (Verity.Sampled.freshCoins ℓ₁ after log).flatten)
     (h0 : 0 < b.size) (hL : b.size ≤ SpotFlock.L) :
@@ -491,9 +435,6 @@ theorem freshCoins_length {ℓ : String} {after : ByteArray} {log : List Verity.
   | hello _ => intro he; cases he
   | opening _ _ _ => intro he; cases he
 
-/-- **Stage `j + 1`'s coin starts with the bytes of its slice of the second stage's bytes**, where the second stage's
-family's released coins start with the second stage's bytes, the log shows them after one root only and each carries
-its 512 bits. -/
 theorem devSecond_of (ℓ₁ ℓ₂ : String) (hne : ℓ₁ ≠ ℓ₂) {log : List Verity.Release} {after : ByteArray}
     (hone : OneRoot ℓ₂ after log) (hw : FreshWide log) {b : ByteArray}
     (hb : Properties.Challenger.bitsOf b <+: (Verity.Sampled.freshCoins ℓ₂ after log).flatten) (j : ℕ)
@@ -538,9 +479,6 @@ theorem devSecond_of (ℓ₁ ℓ₂ : String) (hne : ℓ₁ ≠ ℓ₂) {log : L
     cases hd
   | some d => exact ⟨d, rfl, src_extract hd b _ _ hwid.1 hwid.2 hbits⟩
 
-/-! ## How many elements each stage's coin reads -/
-
-/-- **Where every release a round takes has 4 elements, the elements that fit are all, up to the coin's 65536.** -/
 theorem fitOf_ge (L : Locate) (i : ℕ) (hW : ∀ pre fr b, locAt L pre fr b = some i → widthOf fr = 4) :
     ∀ (log pre : List Verity.Release), 4 ∣ usedOf L i [] pre →
       min (usedOf L i pre log) (65536 - usedOf L i [] pre) ≤ fitOf L i pre log
@@ -571,7 +509,6 @@ theorem widthOf_stage (ℓ₁ ℓ₂ : String) (i : ℕ) :
   obtain ⟨l, rfl⟩ := locAt_fresh h
   rfl
 
-/-- **The bits a stage collects are 128 a element**, where each fresh coin carries its 512 bits. -/
 theorem length_devBits (ℓ₁ ℓ₂ : String) (i : ℕ) :
     ∀ (log : List Verity.Release), FreshWide log → ∀ pre,
       (devBits (stageLocate ℓ₁ ℓ₂) i pre log).length = 128 * usedOf (stageLocate ℓ₁ ℓ₂) i pre log
@@ -587,8 +524,6 @@ theorem length_devBits (ℓ₁ ℓ₂ : String) (i : ℕ) :
     · rw [if_neg hl, if_neg hl]
       simp
 
-/-- **The first stage's bytes fit in what its coin reads**: bytes whose bits start the first stage's family's
-released coins, at most a coin's, are at most 16 bytes an element that fits. -/
 theorem size_le_fit_first (ℓ₁ ℓ₂ : String) {log : List Verity.Release} {after : ByteArray}
     (hone : OneRoot ℓ₁ after log) (hw : FreshWide log) {b : ByteArray}
     (hb : Properties.Challenger.bitsOf b <+: (Verity.Sampled.freshCoins ℓ₁ after log).flatten)
@@ -602,8 +537,6 @@ theorem size_le_fit_first (ℓ₁ ℓ₂ : String) {log : List Verity.Release} {
   simp only [SpotFlock.L] at hL
   omega
 
-/-- **Each second stage's slice fits in what its coin reads**: stage `j + 1`'s bytes (`stageWidth`) are at most 16
-bytes an element that fits. -/
 theorem stageWidth_le_fit_second (ℓ₁ ℓ₂ : String) (hne : ℓ₁ ≠ ℓ₂) {log : List Verity.Release} {after : ByteArray}
     (hone : OneRoot ℓ₂ after log) (hw : FreshWide log) {b : ByteArray}
     (hb : Properties.Challenger.bitsOf b <+: (Verity.Sampled.freshCoins ℓ₂ after log).flatten) (j : ℕ) :
@@ -624,8 +557,6 @@ theorem stageWidth_le_fit_second (ℓ₁ ℓ₂ : String) (hne : ℓ₁ ≠ ℓ�
   simp only [SpotFlock.L]
   omega
 
-/-- **`FirstElems`' elements at the locator**: where the coins agree below what fits for stage 0 (`ElemAgrees`), they
-agree below some `u` whose `16 u` bytes hold the first stage's. -/
 theorem elems_first (ℓ₁ ℓ₂ : String) {log : List Verity.Release} {after : ByteArray} (hone : OneRoot ℓ₁ after log)
     (hw : FreshWide log) {b : ByteArray}
     (hb : Properties.Challenger.bitsOf b <+: (Verity.Sampled.freshCoins ℓ₁ after log).flatten)
@@ -634,7 +565,6 @@ theorem elems_first (ℓ₁ ℓ₂ : String) {log : List Verity.Release} {after 
     ∃ u, b.size ≤ 16 * u ∧ ∀ j : Fin 65536, j.val < u → c j = c' j :=
   ⟨_, size_le_fit_first ℓ₁ ℓ₂ hone hw hb hL, he⟩
 
-/-- **`SecondElems`' elements at the locator**: as `elems_first`, at stage `j + 1` and its slice (`stageWidth`). -/
 theorem elems_second (ℓ₁ ℓ₂ : String) (hne : ℓ₁ ≠ ℓ₂) {log : List Verity.Release} {after : ByteArray}
     (hone : OneRoot ℓ₂ after log) (hw : FreshWide log) {b : ByteArray}
     (hb : Properties.Challenger.bitsOf b <+: (Verity.Sampled.freshCoins ℓ₂ after log).flatten) (j : ℕ)
@@ -642,8 +572,6 @@ theorem elems_second (ℓ₁ ℓ₂ : String) (hne : ℓ₁ ≠ ℓ₂) {log : L
     ∃ u, stageWidth b j ≤ 16 * u ∧ ∀ k : Fin 65536, k.val < u → c k = c' k :=
   ⟨_, stageWidth_le_fit_second ℓ₁ ℓ₂ hne hone hw hb j, he⟩
 
-/-- **`DevFirst` at the locator** (STAGECOINS's, at `draw` the first stage's sample): where the first stage's sample is the
-locator's family after one root (`StageSamples`). -/
 theorem devFirst_stage {Acc : Verity.Exchange → Prop} {draw : Verity.Exchange → Option (String × ByteArray)}
     (ℓ₁ ℓ₂ : String) (hS : StageSamples Acc draw ℓ₁) :
     ∀ o, Acc o → ∀ label after (b : ByteArray), draw o = some (label, after) →
@@ -654,9 +582,6 @@ theorem devFirst_stage {Acc : Verity.Exchange → Prop} {draw : Verity.Exchange 
   obtain ⟨rfl, hone⟩ := hS o hA label after hd
   exact devFirst_of _ ℓ₂ hone hb h0 hL
 
-/-- **`DevSecond` at the locator** (STAGECOINS's, at `draw` the second stage's sample): where the second stage's sample is
-the locator's second family after one root (`StageSamples`), the two families differ and each fresh coin the log holds
-carries its 512 bits (`FreshWide`). -/
 theorem devSecond_stage {Acc : Verity.Exchange → Prop} {draw : Verity.Exchange → Option (String × ByteArray)}
     (ℓ₁ ℓ₂ : String) (hne : ℓ₁ ≠ ℓ₂) (hS : StageSamples Acc draw ℓ₂) (stage : ℕ) :
     ∀ o, Acc o → FreshWide o.log → ∀ label after (b : ByteArray), draw o = some (label, after) →

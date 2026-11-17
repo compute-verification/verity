@@ -4,31 +4,8 @@ public import Proofs.Properties.Verity.SampledTwo.Majority
 public import Proofs.Hash.RowBinding
 public import Proofs.ResourceAccounting.ReadUnit.Sha
 
-/-!
-# Two readings of a bound wire are a SHA-512 collision
-
-`ReadsBind` (`SampledTwo.Majority`) asks for a finder `collOf` that, given two witnesses in the relation that both bind
-a unit holding the wire `g` and read `g` differently, outputs a SHA-512 collision. This module gives one and proves it
-(`readsBind_of`) where each witness carries the row-leaf opening its reading of each placed wire rests on (`OpensBy`).
-
-* **The openings** (`OpensBy`): where a witness's transcript opens the wire `g`, which is not a constant and sits at
-  `p`, `openOf` returns an opening the row-leaf check accepts at `p` whose row holds the reading's bits at `p.offset`.
-* **The finder** (`collOfOpen`): a collision among the messages both witnesses' openings of every wire hash
-  (`hashedAll`), where one exists.
-* **The proof** (`readsBind_of`): a constant wire opens only to its constant, so both readings agree on it. At a placed
-  wire the two openings are accepted at one root and rank, and row binding (`Hash.SecurityProofs.RowBinding`) gives
-  equal rows, which read equal bits, or a collision in what the two checks hashed.
-* **The bound from what the instance owes** (`majorityBound_opens`): `majorityBound_ecr` with `HoldsOnWitness` from
-  `holdsOnWitness_of` and `ReadsBind` from `readsBind_of`.
-
-**What `OpensBy` does and does not assume.** For every `readX` some `openOf` meets `OpensBy` (`exists_opensBy`):
-`Opens` says an accepted opening exists, and choice picks one. So `OpensBy` restricts no transcript. What it fixes is the `openOf` the finder
-reads, and the bound means something only where that `openOf` is computed from the witness: `ecr/sha-512` at the
-binding finder (`ExpectedCR`) prices the SHA-512 calls of an algorithm, and a finder that reads openings picked by
-choice is none. The finder's pair is among `hashedAll` (`collOfOpen_mem`), the messages the row-leaf checks hash on
-both witnesses' openings of every wire, so a `dColl` that prices it is at least the calls that compute `openOf` on
-both witnesses plus `hashedAll`'s length.
--/
+/-! A finder for `ReadsBind` from witnesses carrying their row-leaf openings (`OpensBy`); `OpensBy`
+restricts no transcript, and the bound means something only where `openOf` is computed from the witness. -/
 
 @[expose] public section
 
@@ -38,14 +15,12 @@ open Claims
 
 variable {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α]
 
-/-- `Verity.sha512`'s bytes are `FlockDeploy.sha512` of the same message. -/
 theorem sha512_bytes (m : Msg) : (Verity.sha512 m).bytes = FlockDeploy.sha512 m :=
   ResourceAccounting.ReadUnit.Gates.isSha512_sha512 m
 
-/-- **The witness carries its openings**: where `readX w` opens the wire `g`, which is not a constant and sits at `p`,
-`openOf w g` is an opening the row-leaf check accepts at `p` whose row holds the reading's bits from `p.offset`.
-Some `openOf` meets it at every `readX` (by choice), so it is a condition on the `openOf` the finder reads, which the
-instance takes from the witness. -/
+/-- Where `readX w` opens the wire `g`, not a constant and at `p`, `openOf w g` is an opening the row-leaf
+check accepts at `p` with the reading's bits from `p.offset`; some `openOf` meets it by choice, so it constrains only
+the `openOf` the finder reads, which the instance takes from the witness. -/
 def OpensBy (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
     (readX : Claims.Sampling.Wit → Verity.Circuit.Trace (V.circuitOf θ F))
     (openOf : Claims.Sampling.Wit → Fin (V.circuitOf θ F).N → Option Hash.RowLeaf.Opening) : Prop :=
@@ -78,7 +53,6 @@ theorem exists_opensBy (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (
   · rw [← hp']; exact h.choose_spec.2.choose_spec.1
   · rw [← hp']; exact h.choose_spec.2.choose_spec.2
 
-/-- The messages the row-leaf check hashes on `w`'s opening of the wire `g`: none where `g` has no place or no opening. -/
 def hashedOf (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
     (openOf : Claims.Sampling.Wit → Fin (V.circuitOf θ F).N → Option Hash.RowLeaf.Opening)
     (w : Claims.Sampling.Wit) (g : Fin (V.circuitOf θ F).N) : List Msg :=
@@ -90,7 +64,6 @@ def hashedOf (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (c : ByteAr
     | some o => Hash.RowLeaf.outerHashed Verity.sha512 Verity.sha512 p.verifier p.rank o ++
         Hash.RowLeaf.innerHashed Verity.sha512 p.verifier o
 
-/-- The messages both witnesses' openings of every wire hash. -/
 noncomputable def hashedAll (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
     (openOf : Claims.Sampling.Wit → Fin (V.circuitOf θ F).N → Option Hash.RowLeaf.Opening)
     (w₁ w₂ : Claims.Sampling.Wit) : List Msg :=
@@ -98,7 +71,6 @@ noncomputable def hashedAll (V : Vocab d α) (θ : ByteArray) (F : Array ByteArr
     hashedOf V θ F c openOf w₁ g ++ hashedOf V θ F c openOf w₂ g
 
 open Classical in
-/-- **The finder**: a SHA-512 collision among `hashedAll`, where one exists. -/
 noncomputable def collOfOpen (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
     (openOf : Claims.Sampling.Wit → Fin (V.circuitOf θ F).N → Option Hash.RowLeaf.Opening)
     (w₁ w₂ : Claims.Sampling.Wit) : Option (Msg × Msg) :=
@@ -107,8 +79,6 @@ noncomputable def collOfOpen (V : Vocab d α) (θ : ByteArray) (F : Array ByteAr
     some (h.choose, h.choose_spec.2.choose)
   else none
 
-/-- **The finder's pair is among the messages it hashes**: what `collOfOpen` outputs is a SHA-512 collision of two
-messages of `hashedAll`. -/
 theorem collOfOpen_mem (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
     (openOf : Claims.Sampling.Wit → Fin (V.circuitOf θ F).N → Option Hash.RowLeaf.Opening)
     (w₁ w₂ : Claims.Sampling.Wit) (m m' : Msg) (h : collOfOpen V θ F c openOf w₁ w₂ = some (m, m')) :
@@ -121,8 +91,6 @@ theorem collOfOpen_mem (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (
     exact ⟨hc.choose_spec.1, hc.choose_spec.2.choose_spec.1, hc.choose_spec.2.choose_spec.2⟩
   next => cases h
 
-/-- **Two readings of a bound wire are a collision**: where the witnesses carry their openings (`OpensBy`), the finder
-`collOfOpen` meets `ReadsBind`. -/
 theorem readsBind_of (V : Vocab d α) (A : Live₂) (x : Msg) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
     (readX : Claims.Sampling.Wit → Verity.Circuit.Trace (V.circuitOf θ F))
     (openOf : Claims.Sampling.Wit → Fin (V.circuitOf θ F).N → Option Hash.RowLeaf.Opening)
@@ -196,11 +164,6 @@ theorem readsBind_of (V : Vocab d α) (A : Live₂) (x : Msg) (θ : ByteArray) (
     rw [dite_eq_left hcol]
     exact ⟨_, _, rfl, hcol.choose_spec.2.choose_spec.2⟩
 
-/-- **The witness fixed at registration, from what the instance owes**: where the vocabulary's transcript is the
-majority (`hX`), the statement parses with the session's partitions, the units are the replay blocks (`hU`), the design
-caps the claim's share (`hcap`), the witnesses carry their openings (`hO`) and the binding finder at `collOfOpen` meets
-`ExpectedCR` (`hbind`), an accepted run of the frame's prover whose extracted witness is in the session's relation,
-where the claim fails on the vocabulary's transcript, is at most `√(min(W, 2n) · E[cost] / 2^256)` likely. -/
 theorem majorityBound_opens (V : Vocab d α) (A : Live₂) (x : Msg) (θ : ByteArray) (F : Array ByteArray)
     (c : ByteArray) (σ : Verity.Game.Strategy (V.game θ F c)) (Fr : Frame V A x θ F c σ)
     (s : Claims.Sampling.AuditStatement) (Pt : Claims.Sampling.Partition) (dd : Claims.Sampling.Design.Two)

@@ -8,43 +8,8 @@ import Proofs.Core.Game.InterleaveBridge
 import Proofs.Properties.Verity.Sampled.CoinMap
 import Proofs.Properties.Verity.Sampled.RecordDraw
 
-/-!
-# The two-stage subprotocol's projection, assembled
-
-`projection_of` proves `ProjectionOf`: the projection's named pieces give its bound. The argument is probability
-bookkeeping over the pieces' `Prop`s, and reads nothing of the form's check but what they state.
-
-1. On a play of the game after `θ`, which is at the parameters `θ` (`play_params`), the sampled verdict accepts only
-   where the form's check does (`Acc`, the composite's wiring's), so a sampled accept is an accepted play whose log
-   the check read is the device's (`Good`), or a sampled accept with `¬ Good`, which the cut bounds by `terms`
-   (`CutBound`).
-2. The first is moved to the frame's plays, at a uniform tape and uniform run coins where the coin map's agreement
-   `Ag` holds, by the coin map's distribution (`CoinMapDistribution`), at the cost `hide`.
-3. On a frame play with `Acc ∧ Good` and `Ag`, each read round's coin read agrees with the run's (`ReadAgrees`;
-   `projection_core`'s one premise about coins). There, either a message the check reads differs from the frame's
-   prover's, which the messages' piece bounds by `miss`, or the run at the same tape and coins accepts: the check reads
-   the frame's statement (`StmtAt`), and the accept piece (`AcceptsRun`) gives the run's accept.
-
-Step 3's coins: every release the play's log holds for a read round agrees with the run's coin there (`DevAgrees`, at
-`Ag`), and the coin the check reads there agrees with whatever that release agrees with, by the coins' piece of its
-group (`CoinsAgree`; the statements' round reads none, `StmtReadsNone`).
-
-Step 3's messages: the assembly meets a differing message only on plays where the coins read agree with the run's, so
-it takes the messages' piece with that agreement in its event (`MessagesFixedAgreed`, which `MessagesFixed` gives:
-`projection_agreed`, and `projection_of` from it). The difference matters to whoever proves the piece: on coins the
-check did not read, the run's verifier may refuse before its last round, and the run then has no message where the
-check read one, with no digest opened two ways. `messagesFixedAgreed_of_reached` gives the piece from the messages
-fixed at the rounds a run reaches and the run reaching every round on agreeing coins.
-
-`Good` is one predicate across the pieces. Each piece that takes it as a hypothesis of its plays holds at any stronger
-one (`devAgrees_mono`, `coinsAgree_mono`, `messagesFixedAgreed_mono`), so the pieces may be proved at a weaker `Good`
-than the cut's. A fact every play of the game has, which a piece needs of each exchange it speaks of, joins the cut's
-`Good` at no cost (`cutBound_and`).
-
-Where `CutBound` is instantiated at the deployed composite it meets an open hole of the device's history: a strategy
-whose evidence carries a genuine challenger signature from an earlier period makes the forger's term `⊤`, because the
-history holds one play's signatures. The assembly takes `terms` as given and neither closes nor widens that hole.
--/
+/-! The projection's bound from its named pieces (`projection_of`); it takes `terms` as given and neither
+closes nor widens the earlier-period signature hole at the deployed composite. -/
 
 @[expose] public section
 
@@ -55,7 +20,6 @@ open scoped ENNReal
 
 variable {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α]
 
-/-- **A play of the game after `θ`, `F` and `c` is at the parameters `θ`.** -/
 theorem play_params (V : Vocab d α) {θ : ByteArray} {F : Array ByteArray} {c : ByteArray}
     {σ : Verity.Game.Strategy (V.game θ F c)} {o : Verity.Exchange}
     (h : Verity.Game.PlayReaches (V.game θ F c) σ o) : o.params = θ := by
@@ -63,14 +27,11 @@ theorem play_params (V : Vocab d α) {θ : ByteArray} {F : Array ByteArray} {c :
     (releases (frames (V.families θ)) (V.families θ) []) σ.2 h
   exact (Verity.Sampled.reaches_finish ⟨s, h⟩).1
 
-/-- **The coins the check read agree with the run's**: on the play `o`, at each round the run's verifier reads, the
-coin the check reads agrees with the run's coin `r` there. It is `AcceptsRun`'s premise on the coins. -/
 def ReadAgrees (A : Live₂) (x : Msg) (Rd : Reading A) (o : Verity.Exchange) (r : Coins A x) : Prop :=
   ∀ i : Fin (A.L.V.k x), Rd.reads i.val → ∀ c', Rd.coin o i.val = some c' → Rd.agree o i.val c' (r i)
 
-/-- **The messages fixed where the coins agree** (the messages' piece as the assembly uses it): `MessagesFixed` with,
-in its event, the coins the check read agreeing with the run's (`ReadAgrees`). `MessagesFixed` gives it
-(`messagesFixedAgreed_of_fixed`). -/
+/-- `MessagesFixed` with the coins the check read agreeing with the run's in its event: on coins the check
+did not read, the run's verifier may refuse before its last round. -/
 def MessagesFixedAgreed (V : Vocab d α) (A : Live₂) (x : Msg) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
     (σ : Verity.Game.Strategy (V.game θ F c)) (Fr : Frame V A x θ F c σ) (Rd : Reading A)
     (Acc Good : Verity.Exchange → Prop) (miss : ℝ≥0∞) : Prop :=
@@ -79,7 +40,6 @@ def MessagesFixedAgreed (V : Vocab d α) (A : Live₂) (x : Msg) (θ : ByteArray
         ∃ i < A.L.V.k x, Rd.msg (Fr.out s.1 s.2) i ≠
           msgAt (Claims.run FlockDeploy.sha512 Fr.P A.L.V x s.1 s.2) i) ≤ miss
 
-/-- **`MessagesFixed` gives `MessagesFixedAgreed`**: the event is within `MessagesFixed`'s. -/
 theorem messagesFixedAgreed_of_fixed {V : Vocab d α} {A : Live₂} {x : Msg} {θ : ByteArray} {F : Array ByteArray}
     {c : ByteArray} {σ : Verity.Game.Strategy (V.game θ F c)} {Fr : Frame V A x θ F c σ} {Rd : Reading A}
     {Acc Good : Verity.Exchange → Prop} {miss : ℝ≥0∞} (h : MessagesFixed V A x θ F c σ Fr Rd Acc Good miss) :
@@ -88,10 +48,6 @@ theorem messagesFixedAgreed_of_fixed {V : Vocab d α} {A : Live₂} {x : Msg} {�
   obtain ⟨hA, hG, -, hm⟩ := hs
   exact ⟨hA, hG, hm⟩
 
-/-- **The messages fixed where the coins agree, from the rounds a run reaches**: where on agreeing coins a run whose
-messages are the check's at every round it reaches has all the verifier's messages, and a message the check reads
-differs from the run's at a round the run reaches on plays at most `miss` likely, `MessagesFixedAgreed` holds at
-`miss`. -/
 theorem messagesFixedAgreed_of_reached {V : Vocab d α} {A : Live₂} {x : Msg} {θ : ByteArray} {F : Array ByteArray}
     {c : ByteArray} {σ : Verity.Game.Strategy (V.game θ F c)} {Fr : Frame V A x θ F c σ} {Rd : Reading A}
     {Acc Good : Verity.Exchange → Prop} {miss : ℝ≥0∞}
@@ -114,18 +70,15 @@ theorem messagesFixedAgreed_of_reached {V : Vocab d α} {A : Live₂} {x : Msg} 
     fun j hj => Classical.not_not.1 fun hne' => hnone ⟨j, hj, hne'⟩
   exact hne (hall i (lt_of_lt_of_le hi (hR s.1 s.2 hA hG hC hall)))
 
-/-- **The releases' agreement at a stronger `Good`**: `DevAgrees` at `Good` holds at any `Good'` that gives `Good`. -/
 theorem devAgrees_mono {A : Live₂} {x : Msg} {Rd : Reading A} {Acc Good Good' : Verity.Exchange → Prop}
     {Ag : Verity.Exchange → Coins A x → Prop} (hG : ∀ o, Good' o → Good o) (h : DevAgrees A x Rd Acc Good Ag) :
     DevAgrees A x Rd Acc Good' Ag :=
   fun o hA hG' => h o hA (hG o hG')
 
-/-- **A group's coins at a stronger `Good`**: `CoinsAgree` at `Good` holds at any `Good'` that gives `Good`. -/
 theorem coinsAgree_mono {A : Live₂} {Rd : Reading A} {Acc Good Good' : Verity.Exchange → Prop} {g : Group}
     (hG : ∀ o, Good' o → Good o) (h : CoinsAgree A Rd Acc Good g) : CoinsAgree A Rd Acc Good' g :=
   fun o hA hG' => h o hA (hG o hG')
 
-/-- **The messages at a stronger `Good`**: `MessagesFixedAgreed` at `Good` holds at any `Good'` that gives `Good`. -/
 theorem messagesFixedAgreed_mono {V : Vocab d α} {A : Live₂} {x : Msg} {θ : ByteArray} {F : Array ByteArray}
     {c : ByteArray} {σ : Verity.Game.Strategy (V.game θ F c)} {Fr : Frame V A x θ F c σ} {Rd : Reading A}
     {Acc Good Good' : Verity.Exchange → Prop} {miss : ℝ≥0∞} (hG : ∀ o, Good' o → Good o)
@@ -135,8 +88,6 @@ theorem messagesFixedAgreed_mono {V : Vocab d α} {A : Live₂} {x : Msg} {θ : 
   obtain ⟨hA, hG', hrest⟩ := hs
   exact ⟨hA, hG _ hG', hrest⟩
 
-/-- **The cut with what every play has**: a predicate `Good'` that holds of every play of the game after `θ`, `F` and
-`c` joins the cut's `Good` at the same `terms`. -/
 theorem cutBound_and {V : Vocab d α} {k : Verity.Registration.Composite} {θ : ByteArray} {F : Array ByteArray}
     {c : ByteArray} {σ : Verity.Game.Strategy (V.game θ F c)} {Good Good' : Verity.Exchange → Prop} {terms : ℝ≥0∞}
     (hR : ∀ o, Verity.Game.PlayReaches (V.game θ F c) σ o → Good' o) (h : CutBound V k θ F c σ Good terms) :
@@ -146,10 +97,6 @@ theorem cutBound_and {V : Vocab d α} {k : Verity.Registration.Composite} {θ : 
     (q := fun o => V.Verdict k .sampled o ∧ ¬ Good o) (V.game θ F c) σ fun o hr ho => ?_) h
   exact ⟨ho.1, fun hg => ho.2 ⟨hg, hR o hr⟩⟩
 
-/-- **The projection's bound from the coins of accepted plays**: the wiring, the coin map's distribution at an agreement `Ag`,
-the messages fixed where the coins agree, the cut, the accept on the plays `Acc` and `Good` hold of, and the statement
-read give the projection's bound at `hide + miss + terms`, where on every frame play the check accepts, whose log it
-read is the device's and where `Ag` holds, each coin it reads at a read round agrees with the run's coin there. -/
 theorem projection_core (V : Vocab d α) (k : Verity.Registration.Composite) (A : Live₂) (x : Msg) (θ : ByteArray)
     (F : Array ByteArray) (c : ByteArray) (σ : Verity.Game.Strategy (V.game θ F c)) (Fr : Frame V A x θ F c σ)
     (Rd : Reading A) (Acc Good : Verity.Exchange → Prop) (Ag : Verity.Exchange → Coins A x → Prop)
@@ -209,8 +156,6 @@ theorem projection_core (V : Vocab d α) (k : Verity.Registration.Composite) (A 
             (Claims.run FlockDeploy.sha512 Fr.P A.L.V x s.1 s.2).out = .acc) + (hide + miss + terms) := by
           ring
 
-/-- **The projection from its pieces, the messages fixed where the coins agree**: `ProjectionOf`'s premises, with
-`MessagesFixedAgreed` in the place of `MessagesFixed`, give the projection's bound at `hide + miss + terms`. -/
 theorem projection_agreed (V : Vocab d α) (k : Verity.Registration.Composite) (A : Live₂) (x : Msg) (θ : ByteArray)
     (F : Array ByteArray) (c : ByteArray) (σ : Verity.Game.Strategy (V.game θ F c)) (Fr : Frame V A x θ F c σ)
     (Rd : Reading A) (Acc Good : Verity.Exchange → Prop) (Ag : Verity.Exchange → Coins A x → Prop)
@@ -232,8 +177,6 @@ theorem projection_agreed (V : Vocab d α) (k : Verity.Registration.Composite) (
   | stmt => exact absurd hgi (hStmt _ hi)
   | sessions => exact hSessions _ ha hg _ hi hgi c' hc (r i) hd
 
-/-- **The projection from its pieces**: `ProjectionOf` holds at every vocabulary, composite, session of record,
-statement, committed files, commitment and strategy. -/
 theorem projection_of (V : Vocab d α) (k : Verity.Registration.Composite) (A : Live₂) (x : Msg) (θ : ByteArray)
     (F : Array ByteArray) (c : ByteArray) (σ : Verity.Game.Strategy (V.game θ F c)) :
     ProjectionOf V k A x θ F c σ := by

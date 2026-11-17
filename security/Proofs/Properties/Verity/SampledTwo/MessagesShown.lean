@@ -7,22 +7,7 @@ public import Proofs.Flock.Claims.Recursion.VStarCross
 public import Proofs.Flock.Claims.Bridge.Committed
 public import Proofs.Flock.SpotFlock.Sessions
 
-/-!
-# The run's history shows the coins its answers read
-
-`Messages.RunShown` asks that a run's history before a round shows the run's coins (each answer that is a coin's bytes
-is that round's coin's), and that the run's rounds before it are the same at any coins agreeing with what it shows.
-This module gives it from two facts about the verifier's step alone, which a stateless prover's run then carries
-round by round:
-
-* **An answer that is a coin's bytes is the round's own coin's** (`AnswersOwn`).
-* **An answer reads only the coins earlier answers showed, and the round's own where it answers with it**
-  (`AnswersShown`), on messages and coins whose every earlier answer was a message (a run that got that far).
-
-`runShown_of` is `RunShown` from the two. The run's agreement round by round is `stepWith_agree_on`: two verifiers
-that answer alike on the messages one run of them actually sends give the same rounds. `runShown` holds at every
-`Live₂`, so `messagesFixed` is `Messages.messagesBound` without it.
--/
+/-! `Messages.RunShown` from two facts about the verifier's step alone, and at SPOT[Flock]'s verifier. -/
 
 @[expose] public section
 
@@ -30,14 +15,10 @@ namespace Verity.SampledTwo.Messages
 
 open Claims
 
-/-! ## Runs that agree along one run's messages -/
-
 section Agree
 
 variable {Ω : Type} (H : Msg → Msg) (P : Prover Ω) (x : Msg) (ω : Ω)
 
-/-- **Two verifiers that answer alike on the messages the first one's run sends give the same rounds**, and the runs go
-past round `m` together. -/
 theorem stepWith_agree_on (vn vn' : List Msg → Claims.OC Out) :
     ∀ (f m : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t t' : Transcript), t.msgs = t'.msgs →
       (∀ l < m, ∀ new : List (Msg × Out), new.length = l →
@@ -95,7 +76,6 @@ theorem stepWith_agree_on (vn vn' : List Msg → Claims.OC Out) :
         RecDeploy.stepWith_succ_rej H P x ω vn' f hist as t' hvb']
       simp [ht]
 
-/-- **A round before a run's last answered a message.** -/
 theorem stepWith_msg_lt (vn : List Msg → Claims.OC Out) :
     ∀ (f : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Transcript) (j : ℕ),
       t.msgs.length + j + 1 < (stepWith H P x ω vn f hist as t).msgs.length →
@@ -136,7 +116,6 @@ theorem stepWith_msg_lt (vn : List Msg → Claims.OC Out) :
 
 end Agree
 
-/-- **A round before a run's last answered a message.** -/
 theorem run_msg_lt {Ω C : Type} [Inhabited C] (H : Msg → Msg) (P : Prover Ω) (Vr : Verifier C) (x : Msg) (ω : Ω)
     (r : Fin (Vr.k x) → C) {j : ℕ} (h : j + 1 < (Claims.run H P Vr x ω r).msgs.length) :
     ∃ e mm, (Claims.run H P Vr x ω r).msgs[j]? = some e ∧ e.2 = .msg mm := by
@@ -144,8 +123,6 @@ theorem run_msg_lt {Ω C : Type} [Inhabited C] (H : Msg → Msg) (P : Prover Ω)
     ⟨[], [], [], .rej⟩ j (by simpa [Claims.run] using h)
   simpa [Claims.run] using this
 
-/-- **Runs at two coins agree on their first `n` rounds** where the verifier answers alike at both on the messages the
-first coins' run sends. -/
 theorem run_agree_on {Ω C : Type} [Inhabited C] (H : Msg → Msg) (P : Prover Ω) (Vr : Verifier C) (x : Msg) (ω : Ω)
     (r r' : Fin (Vr.k x) → C) (n : ℕ)
     (h : ∀ l < n, l < (Claims.run H P Vr x ω r).msgs.length →
@@ -174,17 +151,11 @@ theorem run_agree_on {Ω C : Type} [Inhabited C] (H : Msg → Msg) (P : Prover �
   simp only [List.length_nil, Nat.zero_add] at this
   exact this.symm
 
-/-! ## The verifier's step -/
-
-/-- **An answer that is a coin's bytes is the round's own coin's.** -/
 def AnswersOwn (Vr : Verifier FlockDeploy.Coin) : Prop :=
   ∀ (x : Msg) (as : List Msg) (cs : List FlockDeploy.Coin) (c : FlockDeploy.Coin), as ≠ [] →
     cs.length = as.length → msgOf ((Vr.next x as cs).eval FlockDeploy.sha512).1 = c.bytes →
       c = cs.getD (as.length - 1) default
 
-/-- **An answer reads only the coins the earlier answers showed, and the round's own where it answers with it**: on
-messages and coins whose earlier answers were all messages, coins `cs'` that agree with `cs` at every round whose
-answer at `cs` is that round's coin's bytes get the same answer. -/
 def AnswersShown (Vr : Verifier FlockDeploy.Coin) : Prop :=
   ∀ (x : Msg) (as : List Msg) (cs cs' : List FlockDeploy.Coin), as ≠ [] → cs.length = as.length →
     cs'.length = as.length →
@@ -193,8 +164,6 @@ def AnswersShown (Vr : Verifier FlockDeploy.Coin) : Prop :=
     (∀ j < as.length, msgOf ((Vr.next x (as.take (j + 1)) (cs.take (j + 1))).eval FlockDeploy.sha512).1 =
         (cs.getD j default).bytes → cs'.getD j default = cs.getD j default) →
     ((Vr.next x as cs').eval FlockDeploy.sha512).1 = ((Vr.next x as cs).eval FlockDeploy.sha512).1
-
-/-! ## The history shows the coins -/
 
 theorem shownCoin_bytes {m : Msg} {c : FlockDeploy.Coin} (h : shownCoin m = some c) : c.bytes = m := by
   unfold shownCoin at h
@@ -254,7 +223,6 @@ theorem shownAt_some {hist : List (Msg × Msg)} {j : ℕ} {c : FlockDeploy.Coin}
     rw [he, Option.bind_some] at h
     exact ⟨e, rfl, h⟩
 
-/-- **A run's answer at round `j`** is the verifier's on the run's first `j + 1` messages and coins. -/
 theorem run_answer {Ω : Type} (P : Prover Ω) (Vr : Verifier FlockDeploy.Coin) (x : Msg) (ω : Ω)
     (r : Fin (Vr.k x) → FlockDeploy.Coin) {j : ℕ} (hj : j < (Claims.run FlockDeploy.sha512 P Vr x ω r).msgs.length) :
     ∃ e, (Claims.run FlockDeploy.sha512 P Vr x ω r).msgs[j]? = some e ∧
@@ -265,14 +233,10 @@ theorem run_answer {Ω : Type} (P : Prover Ω) (Vr : Verifier FlockDeploy.Coin) 
   rw [List.take_succ, hget, ← hnew]
   simp
 
-/-- **`RunShown` from the verifier's step**: where an answer that is a coin's bytes is its round's own coin's, and an
-answer reads only the coins earlier answers showed and its own where it answers with it, every run's history shows its
-coins, and coins agreeing with what it shows give the same rounds. -/
 theorem runShown_of {A : Live₂} {x : Msg} (hO : AnswersOwn A.L.V) (hS : AnswersShown A.L.V) : RunShown A x := by
   intro Ω P ω r i
   have hk : ∀ j, j < (Claims.run FlockDeploy.sha512 P A.L.V x ω r).msgs.length → j < A.L.V.k x := fun j hj =>
     lt_of_lt_of_le hj (Claims.Recursion.run_length_le _ _ _ _ _ _)
-  -- the messages the run sends, up to round `l`, are the first `l + 1` of its transcript's
   have hasEq : ∀ l, l < (Claims.run FlockDeploy.sha512 P A.L.V x ω r).msgs.length →
       ((Claims.run FlockDeploy.sha512 P A.L.V x ω r).msgs.take l).map Prod.fst ++
           [((P.next x (((Claims.run FlockDeploy.sha512 P A.L.V x ω r).msgs.take l).map RecDeploy.histOf) ω).eval
@@ -282,7 +246,6 @@ theorem runShown_of {A : Live₂} {x : Msg} (hO : AnswersOwn A.L.V) (hS : Answer
     obtain ⟨new, hnew, hget⟩ := RecDeploy.run_get FlockDeploy.sha512 P A.L.V x ω r l hl
     rw [List.take_succ, hget, ← hnew]
     simp
-  -- a round whose answer is its coin's bytes shows that coin
   have hshow : ∀ j, j < i → (hj : j < (Claims.run FlockDeploy.sha512 P A.L.V x ω r).msgs.length) →
       msgOf ((A.L.V.next x (((Claims.run FlockDeploy.sha512 P A.L.V x ω r).msgs.take (j + 1)).map Prod.fst)
         ((List.range (j + 1)).map (coinSeq r))).eval FlockDeploy.sha512).1 = (r ⟨j, hk j hj⟩).bytes →
@@ -340,8 +303,6 @@ theorem runShown_of {A : Live₂} {x : Msg} (hO : AnswersOwn A.L.V) (hS : Answer
       rw [getD_range_map _ hj, getD_range_map _ hj, coinSeq_lt r (hk j hjr),
         coinSeq_lt r' (hk j hjr), hs]
 
-/-! ## Lists read position by position -/
-
 theorem getD_take {β : Type} (l : List β) {n j : ℕ} (hj : j < n) (d : β) : (l.take n).getD j d = l.getD j d := by
   rw [List.getD_eq_getElem?_getD, List.getD_eq_getElem?_getD, List.getElem?_take_of_lt hj]
 
@@ -374,12 +335,6 @@ theorem getD_of_getLast?_drop {β : Type} {l : List β} {o : ℕ} {c : β} (d : 
   · rw [List.getElem?_eq_none (show l.length ≤ o + (l.length - o - 1) by omega)] at hc
     cases hc
 
-/-! ## Flock's step reads its coins as `AnswersShown` needs
-
-Flock's step at a session's messages is a coin request's coin, a refusal, or a decision. A decision needs the
-session's first message to be its link (tag `0`) and its last to be final (tag `1`), so a session's first message
-alone is never decided, and a step that is no coin request reads no coin but those before its last. -/
-
 theorem linkOf_of_finalOf {a : Msg} {f : FlockDeploy.Final} (hf : FlockDeploy.finalOf a = some f) :
     FlockDeploy.linkOf a = none := by
   rcases a with _ | ⟨b, body⟩
@@ -398,7 +353,6 @@ theorem linkOf_of_finalOf {a : Msg} {f : FlockDeploy.Final} (hf : FlockDeploy.fi
         | simp [FlockDeploy.linkOf, hb]
         | (unfold FlockDeploy.linkOf; split <;> simp_all)
 
-/-- **A lone message that is no coin request is refused.** -/
 theorem act_single (zk : Bool) (x : Msg) {a : Msg} (ha : ∀ t, a ≠ 0 :: t) (e : FlockDeploy.Coin) :
     FlockDeploy.act zk x [a] [e] = .rej := by
   unfold FlockDeploy.act
@@ -428,7 +382,6 @@ theorem decidedAt_take {xS : Msg} {as : List Msg} {cs : List FlockDeploy.Coin} {
   unfold SpotFlock.decidedAt
   rw [List.take_take, List.take_take, Nat.min_eq_left hj]
 
-/-- **A coin request** is a setup, a last message tagged `0`, and a coin. -/
 theorem act_coin_iff {zk : Bool} {x : Msg} {as : List Msg} {cs : List FlockDeploy.Coin} :
     (∃ c, FlockDeploy.act zk x as cs = .coin c) ↔
       (FlockDeploy.setupOf zk x).isSome = true ∧ (∃ t, as.getLast? = some (0 :: t)) ∧ cs ≠ [] := by
@@ -475,7 +428,6 @@ theorem decidedAt_congr {xS : Msg} {as : List Msg} {cs cs' : List FlockDeploy.Co
     cases h1
   · rfl
 
-/-- **A step that is no coin request reads no coin but those before its last.** -/
 theorem act_eq_last {zk : Bool} {x : Msg} {As : List Msg} {Cs Cs' : List FlockDeploy.Coin}
     (hlen : Cs.length = As.length) (hl : Cs'.length = Cs.length) (hpos : 0 < Cs.length)
     (hag : ∀ j, j + 1 < Cs.length → Cs'.getD j default = Cs.getD j default)
@@ -506,7 +458,6 @@ theorem act_eq_last {zk : Bool} {x : Msg} {As : List Msg} {Cs Cs' : List FlockDe
       rw [act_single zk x ha' e', act_single zk x ha' e]
     | cons c₀ mid => exact FlockDeploy.act_cons_snoc zk x As c₀ mid e e' ha
 
-/-- **Flock's answer** is a refusal, an acceptance, or its last coin's bytes. -/
 theorem flock_answer (H : Msg → Msg) (zk : Bool) (xS : Msg) (As : List Msg) (Cs : List FlockDeploy.Coin) :
     ((FlockDeploy.next zk xS As Cs).eval H).1 = .rej ∨ ((FlockDeploy.next zk xS As Cs).eval H).1 = .acc ∨
       ∃ c, Cs.getLast? = some c ∧ ((FlockDeploy.next zk xS As Cs).eval H).1 = .msg c.bytes := by
@@ -520,8 +471,6 @@ theorem flock_answer (H : Msg → Msg) (zk : Bool) (xS : Msg) (As : List Msg) (C
     | msg m => exact absurd hv (SpotFlock.outOf_ne_msg _ H m)
     | acc => exact Or.inr (Or.inl rfl)
     | rej => exact Or.inl rfl
-
-/-! ## SPOT[Flock]'s verifier answers as `RunShown` needs -/
 
 section Spot
 
@@ -537,7 +486,6 @@ theorem slotOf_some {n t : ℕ} (ht : slotOf h n = some t) :
   simp only [decide_eq_true_eq] at hp
   exact ⟨List.mem_range.1 hm, hp.1, hp.2⟩
 
-/-- **Every answer is the round's coin's bytes or carries no bytes.** -/
 theorem answers_spot (x : Msg) (as : List Msg) (cs : List FlockDeploy.Coin) (hne : as ≠ [])
     (hcs : cs.length = as.length) :
     ((next h x as cs).eval FlockDeploy.sha512).1 = .msg (cs.getD (as.length - 1) default).bytes ∨
@@ -589,13 +537,11 @@ theorem answersShown : AnswersShown (V h) := by
   change ∀ j < as.length, msgOf ((next h x (as.take (j + 1)) (cs.take (j + 1))).eval FlockDeploy.sha512).1 =
     (cs.getD j default).bytes → cs'.getD j default = cs.getD j default at hrev
   have h0 : 0 < as.length := List.length_pos_iff.2 hne
-  -- the last round's coin, where it answers with it
   have hlast : msgOf ((next h x as cs).eval FlockDeploy.sha512).1 = (cs.getD (as.length - 1) default).bytes →
       cs'.getD (as.length - 1) default = cs.getD (as.length - 1) default := by
     intro hm
     refine hrev (as.length - 1) (by omega) ?_
     rwa [Nat.sub_add_cancel h0, List.take_of_length_le le_rfl, List.take_of_length_le (le_of_eq hcs)]
-  -- a round up to the first stage's last answers its coin, which then agrees
   have hpre : ∀ j, j < as.length - 1 → j + 1 ≤ h.stage + 1 → cs'.getD j default = cs.getD j default := by
     intro j hj hjs
     obtain ⟨m, hm⟩ := hcont j hj
@@ -655,7 +601,6 @@ theorem answersShown : AnswersShown (V h) := by
       sessStep_eval h _ t xS as cs hund]
     dsimp only
     congr 1
-    -- the session's earlier rounds were coin requests, so they showed their coins
     have hmid : ∀ j, off h t ≤ j → j + 1 < as.length → cs'.getD j default = cs.getD j default := by
       intro j hoj hj
       obtain ⟨c, hc⟩ := decidedAt_false_iff.1 (hund (j + 1 - off h t) (by omega) (by omega))
@@ -716,18 +661,13 @@ theorem answersShown : AnswersShown (V h) := by
 
 end Spot
 
-/-- **The two-stage audit's verifier** is SPOT[Flock]'s. -/
 theorem L_V (A : Live₂) : A.L.V = SpotFlock.V A.h := rfl
 
-/-- **SPOT[Flock]'s runs show their coins.** -/
 theorem runShown (A : Live₂) (x : Msg) : RunShown A x := by
   have hO : AnswersOwn A.L.V := by rw [L_V]; exact answersOwn A.h
   have hS : AnswersShown A.L.V := by rw [L_V]; exact answersShown A.h
   exact runShown_of hO hS
 
-/-- **`MessagesFixed` at the frame's prover**, at the sum over the rounds of the square roots of their finders'
-successes: where the message the check reads opens the digest the play records, each round's digest is fixed by the
-coins the history before it shows, and the run reaches every round. -/
 theorem messagesFixed {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α] (V : Vocab d α) (A : Live₂)
     (x : Msg) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (σ : Verity.Game.Strategy (V.game θ F c))
     (place : TapeOf V θ F c σ → Coins A x → TapeOf V θ F c σ) (Rd : Reading A) (Acc Good : Verity.Exchange → Prop)
