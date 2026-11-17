@@ -69,21 +69,38 @@ DESIGN_SCOPE = "world year"
 WARM_SUMMARY, WARM_CONFIG = "out/gpu*/out/summary.json", "out/gpu*/out/config.txt"
 
 
-def census(store: Any, workload: Workload) -> tuple[P.Census, list[dict]]:
-    """The workload's census of record under its cut of record, and the two inputs."""
+def census_docs(store: Any, workload: Workload) -> tuple[str, Any, list[tuple[str | None, dict]]]:
+    """The workload's census of record: its art, the art's manifest and each request's `census.json` by its request.
+    The art holds one at its root (a request named None) or, as `block_census.sh --request` writes them, one a request
+    at `REQUEST/census.json`."""
 
     art = of_record(store, workload.record(CENSUS), "block census")
     manifest = store.get_manifest(art)
     if manifest.kind != CENSUS_KIND or manifest.meta.get("model") != workload.model:
         raise ValueError(f"{art} isn't a block census of {workload.model} ({CENSUS_KIND}): it is a {manifest.kind} of "
                          f"{manifest.meta.get('model')}")
-    whole = P.Census.of(_read(store, art, CENSUS_FILE))
+    if manifest.payload.type == "file" or store.listing(art, [CENSUS_FILE]):
+        return art, manifest, [(None, _read(store, art, CENSUS_FILE))]
+    paths = sorted(p for row in store.listing(art, [f"*/{CENSUS_FILE}"]) if (p := row["path"]).count("/") == 1)
+    if not paths:
+        raise ValueError(f"{art} holds no `{CENSUS_FILE}` and no `REQUEST/{CENSUS_FILE}`")
+    tree = Path(store.fetch(art, paths=paths))
+    return art, manifest, [(p.split("/", 1)[0], json.loads((tree / p).read_text())) for p in paths]
+
+
+def census(store: Any, workload: Workload) -> tuple[P.Census, list[dict]]:
+    """The workload's census of record, its requests summed (`prove.summed`), under its cut of record, and the two
+    inputs."""
+
+    art, manifest, docs = census_docs(store, workload)
+    whole = P.Census.of(docs[0][1] if len(docs) == 1 else P.summed([d for _, d in docs]))
+    over = "" if len(docs) == 1 else f" over {len(docs)} requests ({', '.join(str(r) for r, _ in docs)}), summed"
     cut_art = of_record(store, workload.record(CUT), "cut")
     cut = card(store, cut_art, "partition", workload)
     recut = whole.recut(cut)
     return recut, [
         _input(CENSUS, workload, [art], f"{len(whole.blocks)} block types holding {whole.macs_in_blocks:.1%} of a served "
-               f"token's {whole.served_macs_per_token:.4g} MACs (run {manifest.meta.get('run')})"),
+               f"token's {whole.served_macs_per_token:.4g} MACs{over} (run {manifest.meta.get('run')})"),
         _input(CUT, workload, [cut_art], f"`{cut['name']}`, {len(recut.blocks)} block types under it: {cut.get('label')}")]
 
 
@@ -188,6 +205,23 @@ def steady_rows(store: Any, target: str, superseded: bool = False) -> dict[str, 
     return {target: (found, [verdict, *whys] if verdict else whys)}
 
 
+def steady_of_record(store: Any, workload: Workload) -> tuple[list[PF.Steady], list[str], list[dict]]:
+    """The workload's steady-state record (`steady_rows`): its rows that name a staged Definition, the runs and arts
+    that hold them, and the runs, arts and rows left out with why."""
+
+    steady, runs, refused = [], [], []
+    read: dict[str, tuple[list[PF.Steady], list[str]]] = {}
+    for target in records(store).get(workload.record(STEADY), []):
+        read |= steady_rows(store, target)
+    for target in sorted(read, reverse=True):
+        found, whys = read[target]
+        refused += [{"target": target, "record": workload.record(STEADY), "why": why} for why in whys]
+        if found:
+            steady += found
+            runs.append(target)
+    return steady, runs, refused
+
+
 def flock(store: Any, workload: Workload, census: P.Census, provers: int = 1,
           cores: int = P.HOST_CORES) -> tuple[PF.Flock, list[dict], list[dict]]:
     """Flock's prover at `provers` provers on a host of `cores` CPU cores a card from the workload's records: the
@@ -199,16 +233,7 @@ def flock(store: Any, workload: Workload, census: P.Census, provers: int = 1,
     value = card(store, art, "proof_overhead", workload)
     sessions = tuple(PF.Session(b["block"], b["k_log"], b["seconds_per_block"], b["fixed_seconds"], b["statement_blocks"])
                      for b in value["blocks"])
-    steady, runs, refused = [], [], []
-    read: dict[str, tuple[list[PF.Steady], list[str]]] = {}
-    for target in records(store).get(workload.record(STEADY), []):
-        read |= steady_rows(store, target)
-    for target in sorted(read, reverse=True):
-        found, whys = read[target]
-        refused += [{"target": target, "record": workload.record(STEADY), "why": why} for why in whys]
-        if found:
-            steady += found
-            runs.append(target)
+    steady, runs, refused = steady_of_record(store, workload)
     aliases = sorted({(s.definition, s.type) for target in records(store).get(workload.record(STEADY), [])
                       if _superseded(store, target) for found, _ in steady_rows(store, target, True).values() for s in found})
     prover = PF.Flock(tuple(steady), sessions, art, provers=provers, cores=cores, aliases=tuple(aliases),
