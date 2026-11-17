@@ -860,12 +860,6 @@
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "Slowdown.Cover.MulBlocks.Upstream": {
-   "owner": "@training",
-   "digest": "56a4eaf3bd6d46fab7599fd8370ce2f50d8f2473f007100a30dc08103aa537c8",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
   "Verity.GateARow": {
    "owner": "@lean",
    "digest": "8ed5fd9ffdd456a4dde757fd6bb97e8cd95bfd186b3569b3dde7525d52094526",
