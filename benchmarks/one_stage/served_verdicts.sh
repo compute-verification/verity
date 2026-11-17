@@ -435,7 +435,7 @@ ROOT=${SERVE_ROOT:-/workspace/research/vllm-served-verdicts}
 D=${D:-$ROOT/${RESEARCH_RUN_ID:-local-$(date -u +%Y%m%dT%H%M%SZ)}}
 # step 6's deferral (`defer`): the settings the follow-on runs at, its inputs' list and sums, and the pieces the record read
 DEFER_DIR=$D/private/deferred
-FOLLOWS="K PRODUCT V3C_CLASS V3C_LAW V3C_CHALLENGER DEVELOPMENT H1_TIE PEARLPLUS_TIE COMPOSITE ALPHA GAMMA SERVED_NODE SERVED_PEER DEFERRED_TREE COMPOSE_OFF_NODE COMPOSE_NODE DAY"
+FOLLOWS="K PRODUCT V3C_CLASS V3C_LAW V3C_CHALLENGER DEVELOPMENT H1_TIE PEARLPLUS_TIE PEARLPLUS_TIE_UNIFORM COMPOSITE ALPHA GAMMA SERVED_NODE SERVED_PEER DEFERRED_TREE COMPOSE_OFF_NODE COMPOSE_NODE DAY"
 # the compose hand-off (`handoff`): the settings its follow-on composes at, its inputs' list and sums, and the pieces
 COMPOSE_DIR=$D/private/compose
 COMPOSES="K PRODUCT POUW PEARLPLUS_TIE COMPOSITE ALPHA GAMMA SERVED_NODE SERVED_DIR COMPOSE_NODE COMPOSE_TREE AUDITED_ON SAMPLED_AUDIT STEPS"
@@ -887,7 +887,7 @@ v3c_audit() {  # the committed window audited from its records alone: its circui
   if [ -n "${H1_TIE:-}$PEARLPLUS_TIE" ]; then
     if [ -n "${H1_TIE:-}" ]; then tie=(--tie "$D/h1/w$K/registration.json" --tie-prefix h1/)
     else tie=(--tie "$(pearl_dir)/registration.json"); fi
-    [ -n "${V3C_PORTS:-}" ] || ports=$("$PY" -c 'import json, sys; print(sum(int(s["k"]) for s in json.load(open(sys.argv[1]))["law"]["strata"]))' \
+    [ -n "${V3C_PORTS:-}" ] || [ "${PEARLPLUS_TIE_UNIFORM:-}" = 1 ] || ports=$("$PY" -c 'import json, sys; print(sum(int(s["k"]) for s in json.load(open(sys.argv[1]))["law"]["strata"]))' \
       "$VW/window/registration.json") || { say "V3C-AUDIT: R, the window's registration, has no strata to size the audit's ports by: set V3C_PORTS"; return 1; }
   fi
   leanb=$TREE/verity/protocols/proofs/flock/verifier/.lake/build/bin
@@ -1443,7 +1443,7 @@ defer() {  # step 6 on a node short of V3c's audit's memory ($1, why), left to a
   printf '%s=%q\n' K "$K" PRODUCT "$PRODUCT" V3C_CLASS "$V3C" V3C_LAW "$V3C_LAW" V3C_CHALLENGER "$V3C_CHALLENGER" \
     DEVELOPMENT "$DEVELOPMENT" H1_TIE "${H1_TIE:-}" PEARLPLUS_TIE "$PEARLPLUS_TIE" COMPOSITE "${COMPOSITE-1}" ALPHA "${ALPHA:-}" GAMMA "${GAMMA:-}" \
     SERVED_NODE "$(hostname)" SERVED_PEER "$V3C_PEER" DEFERRED_TREE "$(tree_sha)" COMPOSE_OFF_NODE "$COMPOSE_OFF_NODE" \
-    COMPOSE_NODE "$COMPOSE_NODE" DAY "${DAY:-}" > "$DEFER_DIR/deferred.env" || return 1
+    COMPOSE_NODE "$COMPOSE_NODE" DAY "${DAY:-}" PEARLPLUS_TIE_UNIFORM "${PEARLPLUS_TIE_UNIFORM:-}" > "$DEFER_DIR/deferred.env" || return 1
   deferred_inputs > "$DEFER_DIR/inputs.txt"
   (cd "$D" && tr '\n' '\0' < "$DEFER_DIR/inputs.txt" | xargs -0 -r sha256sum) > "$DEFER_DIR/inputs.sha256" || return 1
   echo private/deferred/inputs.sha256 >> "$DEFER_DIR/inputs.txt"
@@ -1922,7 +1922,7 @@ if [ -n "${H1_TIE:-}$PEARLPLUS_TIE" ] && [ -z "$COMPOSE" ]; then  # V3c's audit 
     || { say "PREFLIGHT: under $TIED V3c's audit is tied to $WHOSE W, whose tables the circuit reads, with records_audit's --tie, which this tree's records_audit.py doesn't take"; exit 3; }
   [ -n "$V3C_LAW" ] \
     || { say "PREFLIGHT: under PEARLPLUS_TIE V3C_LAW has no default: the window is cut at Pearl+'s linears, and how many proof blocks each of its templates holds is not known here. The launch states V3C_LAW, a stratified rate: stratified-rate:1/DEN samples one proof block of each template while none holds more than DEN"; exit 3; }
-  [[ $V3C_LAW == stratified-rate:* ]] \
+  [[ $V3C_LAW == stratified-rate:* ]] || { [ "$TIED" = PEARLPLUS_TIE ] && [ "${PEARLPLUS_TIE_UNIFORM:-}" = 1 ]; } \
     || { say "PREFLIGHT: under $TIED every table $WHOSE W registers needs a sampled reader, which only a stratified rate (stratified-rate:NUM/DEN), a stratum of each table's readers, gives: V3C_LAW is $V3C_LAW"; exit 3; }
 fi
 # V3c's rule is a rate: window-commit and the audit's stream take no fixed count, and the class circuit has no work table
