@@ -1260,7 +1260,7 @@ def test_a_store_below_half_the_cards_memory_prints_no_number(store, capsys, wor
     assert bench(store, "--local", run=Machine(record=a_local_record(a_session(gamma=0.199), arena=71))) == 0
 
 
-def test_a_local_session_under_a_research_run_writes_its_own_metrics_row(store, capsys, work, tmp_path, monkeypatch):
+def test_a_local_session_under_a_research_run_writes_its_own_benchmark_result(store, capsys, work, tmp_path, monkeypatch):
     """Its document is the run's `out/memory.json`, and its number reaches the Metrics tab under its own row, not the
     node's: a measurement, not an audit, of a share the Python ledger computed, which its entry says."""
     monkeypatch.setenv("RESEARCH_RUN_DIR", str(tmp_path / "rundir"))

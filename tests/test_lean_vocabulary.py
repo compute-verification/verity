@@ -660,7 +660,7 @@ KNOWN: dict[str, str] = {
     "benchmarks/datacenter/datacenter/observe.py::Trace":
         "homonym, what a datacenter run leaves behind, all of it witness: rename (network-accounting)",
     "benchmarks/harness/verity_bench/served_table.py::Protocol":
-        "homonym, a protocol's served benchmark rows: rename (benchmarks)",
+        "homonym, a protocol's served benchmark results: rename (benchmarks)",
     "benchmarks/network_e2e/encodings/replay.py::Trace":
         "homonym, a served run's step trace (`verity-vllm/step-trace/v1`): rename (network-accounting)",
     "benchmarks/network_sim/workload/block.py::Block":
@@ -702,7 +702,7 @@ KNOWN: dict[str, str] = {
     "benchmarks/pouw/served_h1/partials.py::Window":
         "duplicate of the execution block (no canonical yet): becomes a client of it (compute-accounting)",
     "benchmarks/pouw/served_h1/serve.py::Record":
-        "homonym, a served request's benchmark row: rename (compute-accounting)",
+        "homonym, a served request's benchmark result: rename (compute-accounting)",
     "verity/protocols/resource_accounting/compute/pouw/prover/kernels/served_zk/of_record.py::Record":
         "homonym, a check's two verdicts side by side: rename (compute-accounting)",
     "benchmarks/pouw/served_zk/replay_window.py::Window":
@@ -726,7 +726,7 @@ KNOWN: dict[str, str] = {
     "benchmarks/remote_session/serve.py::Trace":
         "homonym, the engine's steps as a remote session runs them: rename (memory-accounting)",
     "benchmarks/slowdown/slowdown/circuits.py::Circuit":
-        "homonym, a benchmark row naming a Definition at its size: rename (training)",
+        "homonym, a benchmark result naming a Definition at its size: rename (training)",
     "benchmarks/slowdown/slowdown/params.py::Registry": "homonym, a table of benchmark parameters: rename (training)",
     "benchmarks/slowdown/slowdown/theorem.py::Partition":
         "homonym, a benchmark's serving blocks and dark leaves: rename (training)",
