@@ -28,7 +28,6 @@ def kbench(monkeypatch: pytest.MonkeyPatch) -> types.ModuleType:
     for name, mod in (("torch", torch), ("verity_vllm", package), ("verity_vllm.engine", engine),
                       ("kgate", types.ModuleType("kgate"))):
         monkeypatch.setitem(sys.modules, name, mod)
-    monkeypatch.delenv("RESEARCH_RUN_DIR", raising=False)
     from verity_bench import kit
     monkeypatch.setattr(kit, "host_stamp", lambda: {"card": "NVIDIA H200", "gpus": [], "node": "n", "commit": None})
     spec = importlib.util.spec_from_file_location("kbench_under_test", DIR / "kbench.py")
