@@ -6,9 +6,9 @@ public import InferenceOnlyVerifier.Difftest
 /-!
 # The difftest of the description-sized check: against the unrolled one, and against the Python reference
 
-`scripts/desc_difftest_vectors.py` writes instances of `InferenceOnlyVerifier.Desc` (θ and the owners per root node), each one expanded
-gate by gate where it is well-formed, and `scripts/inference_only_reference.py`'s `check_desc` on each. `InferenceOnlyVerifier/DescDifftestMain.lean`
-fails unless `InferenceOnlyVerifier.Desc.check` gives Python's result on every instance and `InferenceOnlyVerifier.check`'s on every expansion: per
+`scripts/desc_difftest_vectors.py` writes instances of `InferenceOnlyCheck.Desc` (θ and the owners per root node), each one expanded
+gate by gate where it is well-formed, and `scripts/inference_only_reference.py`'s `check_desc` on each. `InferenceOnlyCheck/DescDifftestMain.lean`
+fails unless `InferenceOnlyCheck.Desc.check` gives Python's result on every instance and `InferenceOnlyCheck.check`'s on every expansion: per
 inference block its size and fresh input bits, the verdict and the first failing inference block, or the first malformation's code. The Lean audit runs
 it (`runs` in `lean-audit.json`): compiled evaluation, a test and not a proof.
 -/
@@ -19,15 +19,15 @@ namespace InferenceOnlyVerifier.DescDifftest
 
 open Lean (Json)
 
-/-- How `a` differs from `b`, one line per field of `InferenceOnlyVerifier.Difftest.fields`. -/
+/-- How `a` differs from `b`, one line per field of `InferenceOnlyCheck.Difftest.fields`. -/
 def compare (i : Nat) (what : String) (a b : Json) : List String :=
   InferenceOnlyVerifier.Difftest.fields.filterMap fun k =>
     let x := a.getObjValD k
     let y := b.getObjValD k
     if x == y then none else some s!"instance {i}: {k}: Desc {x.compress}, {what} {y.compress}"
 
-/-- How instance line `i` differs: `InferenceOnlyVerifier.Desc.check` against Python's result and, on an expansion, against
-`InferenceOnlyVerifier.check` on it. -/
+/-- How instance line `i` differs: `InferenceOnlyCheck.Desc.check` against Python's result and, on an expansion, against
+`InferenceOnlyCheck.check` on it. -/
 def differences (i : Nat) (inst exp python : String) : List String :=
   match Json.parse inst, Json.parse exp, Json.parse python with
   | .error e, _, _ => [s!"instance {i}: not JSON: {e}"]
@@ -37,7 +37,7 @@ def differences (i : Nat) (inst exp python : String) : List String :=
     let desc := Desc.check j
     compare i "Python" desc py ++ (if x.isNull then [] else compare i "InferenceOnlyVerifier.check" desc (check x))
 
-/-- `lake env lean --run InferenceOnlyVerifier/DescDifftestMain.lean INSTANCES EXPANDED PYTHON N`: fails unless the three files have
+/-- `lake env lean --run InferenceOnlyCheck/DescDifftestMain.lean INSTANCES EXPANDED PYTHON N`: fails unless the three files have
 `N` lines each and no line differs. -/
 def main (args : List String) : IO UInt32 := do
   let [insts, exp, py, n] := args

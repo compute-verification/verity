@@ -15,7 +15,7 @@ The remote protocol composes three subprotocols, tied to one record, and accepts
 - **the inference-only policy** (`verity/protocols/workload_classification/training_detection/inference_only/verifier/`): the registered circuit divides into inference
   blocks within their gate and fresh-input budgets. The served run checks it on the served node: once step 3 has
   counted the window's circuit at the policy's class (`IO_CLASS`), `inference_only.py verdict` judges the window's
-  blocks against the policy written before the serve, and the Lean `inference-only-verifier --count` counts one block's
+  blocks against the policy written before the serve, and the Lean `inference-only-check --count` counts one block's
   gates, which must agree. That answer is the served node's own. The compose off the node carries it into the record
   as the node wrote it and doesn't check it again; only a composite (`COMPOSITE` set) checks the policy's case, in the
   product's Lean on the compose host, and the placed window composes none.
