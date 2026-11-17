@@ -1184,11 +1184,48 @@ def test_the_verdict_carry_takes_the_newest_land_at_an_older_head_but_for_a_hold
                 reviews=lambda pr, head: [Label(f"pr/{pr}@{head}", "reviewed", v, by, ts, *ref)
                                           for by, v, ts, *ref in labels.get(head, ())])
     q.handle = lambda pr: None
+    q._clone()
     d.delta = lambda old, new, landed, trusted: asked.append((old, new, landed, trusted)) or Delta(
         "merge-only" if carries else "edited-merge", "only merges")
     assert d._carried_from(Member(1, NEW, owner, ""), [OLDER, OLD], why, ["m" * 40], {"t" * 40}) == got
     assert asked == ([(got[0], NEW, ["m" * 40], {"t" * 40})] if got and got[1] in ("only merges", "edited-merge: only merges")
                      else [])
+
+
+def test_a_hold_at_a_later_head_voids_an_older_heads_land_however_old_the_hold(world):
+    """`Landing._carried_from` over real heads: a land at ``old`` newer than a hold at ``later``, a head pushed on it, carries
+    nothing (`carry.voided`), and neither does one a later head that took ``old``'s place holds. A hold at an ancestor of
+    the land's head is what that head answered, so the land carries; and a land at a head after the held one carries as the
+    newest that stands, though an older head's land is newer still."""
+    from research.carry import Delta
+    from research.store.model import Label
+
+    earlier = world.change({"a.txt": "0\n"})
+    old = world.change({"a.txt": "1\n"}, base=earlier)
+    later = world.change({"a.txt": "2\n"}, base=old)
+    latest = world.change({"a.txt": "3\n"}, base=later)
+    rebased = world.change({"b.txt": "1\n"})
+    new = world.change({"a.txt": "4\n"}, base=latest)
+    q = world.queue()
+    q._clone()
+    _git(q.workdir, "fetch", "-q", "origin", *(f"refs/dev/{c}" for c in (earlier, old, later, latest, rebased, new)))
+
+    def judged(labels: dict[str, list[tuple[str, str, str]]]):
+        d = Landing(q, on="", ready_by=lambda pr, head: None,
+                    reviews=lambda pr, head: [Label(f"pr/{pr}@{head}", "reviewed", v, by, ts, "why")
+                                              for by, v, ts in labels.get(head, ())])
+        q.handle = lambda pr: None
+        d.delta = lambda o, n, landed, trusted: Delta("merge-only", f"only merges from {o[:12]}")
+        return d._carried_from(Member(1, new, "lane-1", ""), sorted(labels), "no land verdict", ["m" * 40], set())
+
+    void = f"top's hold at {later[:12]} (why), a later head, voids the land at {old[:12]}"
+    assert judged({later: [("top", "hold", "T1")], old: [("rev", "land", "T2")]}) == (old, void, False)
+    assert judged({rebased: [("top", "hold", "T1")], old: [("rev", "land", "T2")]}) == (
+        old, f"top's hold at {rebased[:12]} (why), a later head, voids the land at {old[:12]}", False)
+    assert judged({earlier: [("top", "hold", "T1")], old: [("rev", "land", "T2")]}) == (
+        old, f"only merges from {old[:12]}", True)
+    assert judged({later: [("top", "hold", "T1")], latest: [("rev", "land", "T2")], old: [("rev2", "land", "T3")]}) == (
+        latest, f"only merges from {latest[:12]}", True)
 
 
 def test_a_landing_reads_verdicts_and_ready_marks_from_the_store_and_whose_verdict_doesnt_count(world):
