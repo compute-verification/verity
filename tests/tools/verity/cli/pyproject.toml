@@ -33,8 +33,8 @@ inputs = ["verity", "tools/difftest/python/verity_difftest", "tools/verity/lean/
           "tools/verity/lean/headers.py", "tools/verity/lean/check.py", "security/lean-audit.json",
           "security/Properties/lean-audit.json", "security/Proofs/lean-audit.json",
           "benchmarks/one_stage/served_verdicts.sh", "benchmarks/one_stage/served_verdicts.py",
-          "benchmarks/network_traces/certifier_piece.py", "demos/onsite_full.toml", "demos/onsite_compute.toml",
-          "demos/onsite_network.toml", "demos/remote.toml"]
+          "benchmarks/network_traces/certifier_piece.py", "applications/onsite_full.toml", "applications/onsite_compute.toml",
+          "applications/onsite_network.toml", "applications/remote.toml"]
 
 # What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
 # what a program it starts reads): the graph's test-file tasks are keyed on it.
