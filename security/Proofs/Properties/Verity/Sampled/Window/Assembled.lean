@@ -5,27 +5,7 @@ public import Proofs.Properties.Verity.Sampled.Binding
 public import Proofs.Properties.Verity.Sampled.Window.FilesSent
 public import Proofs.Properties.Verity.Sampled.Digest
 
-/-!
-# SPOT's subprotocol over a window, assembled from its pieces
-
-`executionPhaseSpotSound_of_sample` at the cut the one-session subprotocol uses (`couplingTarget_assembled`): the log v2's check read
-is the device's (`Binding.Logged Binding.readsV2`), v2 reads each pinned table at its registered file (`TablesSent`)
-and each member's files at its registered files (`FilesSent`), and v2 samples at the strategy's `afterAt`
-(`SampledDigest`). The binding, the digest and the sample's coins are stated of the period's game and not of a
-session, so they hold at a window as they do at one session:
-
-* **(a), the binding** (`logged_files_le`): at the window's read finder (`executionPhaseReadFinder`) and the forger at the
-  device's history `dev`, wherever the device printed each play's log (`Binding.binds_of_prints`) and its history at
-  each play signed what the play's signatures are on (`Binding.SignsPlay`).
-* **(a'), the digest** (`prob_not_sampledDigest_le`): at the bound digests' two-continuation finder at the window's
-  budget (`executionPhaseBindFinder`).
-* **The sample's coins** (`ExecutionPhase.srcCoinsAt`, `ExecutionPhase.avg_srcCoinsAt`): the window's bytes as `m` fresh frames' coins,
-  uniform by A3 wherever the window's bytes are `m` frames.
-
-What is left is `executionPhaseSpotSound_assembled`'s hypotheses: the deployment's side (`ExecutionPhaseDeployed`, `ExecutionPhaseCovers`), the
-device's printed log and signatures, the window's bytes as whole frames, that each round's reading picks only
-openings, and the members' steps off the openings' empty classes at their counts (`MemberSteps`).
--/
+/-! SPOT's subprotocol over a window, assembled from its pieces. -/
 
 @[expose] public section
 
@@ -39,12 +19,9 @@ local notation "𝔽" => FlockLevel3.GF128
 
 variable {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α]
 
-/-- **The sample's coins at `m` frames, at a window**: the window's bytes as `m` fresh frames' coins (`byteCoins`)
-where the window reads `m` frames' bytes, else none. -/
 noncomputable def ExecutionPhase.srcCoinsAt (m : ℕ) (W : ExecutionPhase) : W.Ω → Fin m → Fin 512 → Bool :=
   if h : W.Lb 0 = m * 64 then byteCoins W.src h else fun _ _ _ => false
 
-/-- **The window's sample's coins are uniform** where the window reads `m` frames' bytes (`ExecutionPhase.avg_byteCoins`). -/
 theorem ExecutionPhase.avg_srcCoinsAt {m : ℕ} {W : ExecutionPhase} (hL : W.Lb 0 = m * 64) (H : (Fin m → Fin 512 → Bool) → ℝ≥0∞) :
     avg (fun ω => H (W.srcCoinsAt m ω)) = avg H := by
   have h : W.srcCoinsAt m = byteCoins W.src hL := by
@@ -55,8 +32,6 @@ theorem ExecutionPhase.avg_srcCoinsAt {m : ℕ} {W : ExecutionPhase} (hL : W.Lb 
 
 variable (V : Vocab d α) (k : Verity.Registration.Composite)
 
-/-- **The bound digests' two-continuation finder, at a window** (`bindFinder`): the commitment's cut's, `σ`'s play on
-two independent tapes from the start, at the window's budget, `2t + 2h` SHA-512 calls. -/
 noncomputable def executionPhaseBindFinder (W : ExecutionPhase) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
     (σ : Strategy (V.game θ F c)) : Claims.Finder :=
   (bindCut V k θ F c).finder σ (2 * V.cost θ F c σ + 2 * W.h)
@@ -67,9 +42,6 @@ theorem executionPhaseBindFinder_calls : ∀ (W : ExecutionPhase) (θ : ByteArra
   show ((2 * V.cost θ F c σ + 2 * W.h : ℕ) : ℝ) ≤ W.qM (V.cost θ F c σ)
   simp [ExecutionPhase.qM]
 
-/-- **The window's constructions with the binding's finders**: `K`'s with the window's read finder and the forger at
-the device's history `dev` (`executionPhaseReadFinder`, `Binding.forger`) and the bound digests' finder at composite `k`
-(`executionPhaseBindFinder`). -/
 noncomputable def ExecutionPhaseConstructions.withBinding {V : Vocab d α} (K : ExecutionPhaseConstructions V)
     (T : PinnedTables) (dev : Exchange → Properties.Challenger.History) (k : Verity.Registration.Composite) :
     ExecutionPhaseConstructions V :=
@@ -79,16 +51,6 @@ noncomputable def ExecutionPhaseConstructions.withBinding {V : Vocab d α} (K : 
     bindFinder := executionPhaseBindFinder V k
     bind_calls := executionPhaseBindFinder_calls V k }
 
-/-- **SPOT's subprotocol over a window of several members, assembled from its pieces**: `executionPhaseSpotSound_of_sample` at the
-binding's cut and the digest's. Soundness's vocabulary at `.sampled` reading, at the deployment's windows `S` and the
-constructions with the binding's finders at the device's history `dev`, the window's projection at the readings `rd`,
-the members' decoders `D` and the sample-coupled coin maps at the family `label`, the strategy's `afterAt` and the
-window's bytes as `nc` frames' coins, with `S` covering the one-stage form, meets SPOT's target at composite `k`
-wherever, at each window of `S`: the device printed each play's log after the parameters (`hP`); its history at each
-play signed what the play's signatures are on (`hS`); the window reads `nc` frames' bytes (`hL`); each round's reading
-picks only openings (`hR`); and the members' steps hold off the openings' empty classes at their counts (`hm`,
-`MemberSteps`) at accepted plays whose log v2 read is the device's, whose blobs sent hold each pinned table and each
-member's files at their registered files and whose sample answers the strategy's `afterAt`. -/
 theorem executionPhaseSpotSound_assembled (e : 𝔽 ≃ (Fin 128 → Bool)) (rd : ExecutionPhaseReadings) (K : ExecutionPhaseConstructions V)
     (T : PinnedTables) (dev : Exchange → Properties.Challenger.History)
     (D : (W : ExecutionPhase) → (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → (σ : Strategy (V.game θ F c)) →

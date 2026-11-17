@@ -5,32 +5,7 @@ public import Proofs.Properties.Spot.Credited
 public import Proofs.Flock.Bridge.V5.Accepted
 public import Proofs.Flock.Claims.Complete.Json.Record
 
-/-!
-# A member's files pass the files check where the per-member form's run held them
-
-The per-member form's run holds every member of the parameters' files before any session, with a proof block in
-the sample or not (`Spot.OneStageZk.Member.FilesHeld`, `Spot.OneStageZk.membersRun_files`): the member's statement
-reads off the blobs, and at it the scope check, the files' ports and roots and the population check pass. A window's
-setup asks, of each of its members, that its files pass the files check (`FilesPass`). This module carries the first
-to the second, at the window's member that is the parameters' member on the registered files (`MemberOn`):
-
-* **The circuit the checks read** (`circuitOf_flat`, `circuitOf_back`): an untyped statement's circuit file that
-  parses with some lookup tables is the circuit `Flock.ProvedScope.circuitOf` reads with them, and with tables that
-  find by name whatever they find.
-* **What the statement's checks are** (`statementOf_checks`, `statement_checks`): the files' check of a member's
-  statement is `Flock.PortRoots.checkOf` at the circuit read with its inputs' tables, and its population check the
-  member's on its public file.
-* **The public file's count** (`population_header`, `headerHeld_instances`, `slice_population`, `load_count`): the
-  member's population check holds its public file's header to the member's slice of the registration, whose
-  population is the member's units' count, so a load of the file has as many proof blocks as the member has units.
-* **The member's files pass** (`filesPass_of_held`): on blobs where v2 reads the member's files among the files
-  the window's member is on (`ReadsFiles`) and each pinned table the blobs hold is its registered file
-  (`TablesSent`), a member whose files the run held has `FilesPass` at the window's member; so has every member of
-  a window (`ExecutionPhaseOn.passes`).
-* **Files that pass fix their roots' domains** (`FilesPass.rootsFix`, `FilesPass.checked_all`,
-  `MembersSetUp.rootsFix`): the ports check refuses two ports of one root and different published domains, so a
-  member whose files pass has `Member.RootsFix`, and is `Checked` as Flock's member at every cost.
--/
+/-! A member's files pass the files check where the per-member form's run held them. -/
 
 @[expose] public section
 
@@ -42,10 +17,6 @@ open FlockSoundness.Refine (ebind_ok TablesExtend parse_okLe parseCommit_okLe)
 
 variable {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α]
 
-/-! ## The circuit the checks read -/
-
-/-- An untyped statement's circuit file that `HmOut.parse` reads is what `HmOut.parseCommit` and `HmRow.parse`
-read. -/
 theorem parse_both {tags : Flock.Tags} {cf : ByteArray} {T : List (String × ByteArray)} {c : Flock.Circuit}
     (ht : tags.typed = false) (hp : Flock.HmOut.parse tags cf T = .ok c) :
     Flock.HmOut.parseCommit tags cf T = .ok c ∧ Flock.HmRow.parse tags cf T = .ok c := by
@@ -62,8 +33,6 @@ theorem parse_both {tags : Flock.Tags} {cf : ByteArray} {T : List (String × Byt
     cases hp
     exact hc'
 
-/-- **The circuit the checks read is the one the file parses to**: an untyped statement's circuit file that
-`HmOut.parse` reads as `c` with the tables `T` is the circuit `ProvedScope.circuitOf` reads with them. -/
 theorem circuitOf_flat {tags : Flock.Tags} {cf : ByteArray} {T : List (String × ByteArray)} {c : Flock.Circuit}
     (ht : tags.typed = false) (hp : Flock.HmOut.parse tags cf T = .ok c) :
     Flock.ProvedScope.circuitOf tags cf T = .ok c := by
@@ -73,8 +42,6 @@ theorem circuitOf_flat {tags : Flock.Tags} {cf : ByteArray} {T : List (String ×
   · exact hpc
   · exact hr
 
-/-- **More lookup tables read the same circuit**: where `T'` finds by name whatever `T` finds and the circuit file
-parses with `T`, `ProvedScope.circuitOf` reads with `T'` the circuit it parses to. -/
 theorem circuitOf_back {tags : Flock.Tags} {cf : ByteArray} {T T' : List (String × ByteArray)} {c : Flock.Circuit}
     (hext : TablesExtend T T') (ht : tags.typed = false) (hp : Flock.HmOut.parse tags cf T = .ok c) :
     Flock.ProvedScope.circuitOf tags cf T' = .ok c := by
@@ -84,10 +51,6 @@ theorem circuitOf_back {tags : Flock.Tags} {cf : ByteArray} {T T' : List (String
   · exact parseCommit_okLe hext _ _ c hpc
   · exact parse_okLe hext _ _ _ _ c hr
 
-/-! ## What the statement's checks are -/
-
-/-- **The files' check and the population check of the statement `statementOf` read**: `PortRoots.checkOf` at the
-circuit read with the statement's inputs' tables, on its public file, and `population` on its public file. -/
 theorem statementOf_checks {p : _root_.Spot.OneStageZk.Own} {population : ByteArray → Flock.V Unit}
     {tables : List (String × ByteArray)} {bs : _root_.Core.Blobs} {a : _root_.Spot.OneStageZk.StepAt}
     (h : _root_.Spot.OneStageZk.statementOf p population tables bs = .ok a) :
@@ -114,8 +77,6 @@ theorem statementOf_checks {p : _root_.Spot.OneStageZk.Own} {population : ByteAr
           subst ha
           exact ⟨rfl, rfl⟩
 
-/-- **The files' check and the population check of a member's statement** (`statementOf_checks`, at the member's
-own inputs and its population check at its slice). -/
 theorem statement_checks {vm : _root_.Spot.OneStageZk.Member} {slice : Json} {bs : _root_.Core.Blobs}
     {a : _root_.Spot.OneStageZk.StepAt} (h : vm.statement slice bs = .ok a) :
     a.ksFiles = Flock.PortRoots.checkOf
@@ -130,9 +91,6 @@ theorem statement_checks {vm : _root_.Spot.OneStageZk.Member} {slice : Json} {bs
   obtain ⟨tables, -, hs⟩ := ebind_ok hs
   exact statementOf_checks hs
 
-/-! ## The public file's count -/
-
-/-- A member's population check that passes read the public file's header and held it to the slice. -/
 theorem population_header {vm : _root_.Spot.OneStageZk.Member} {slice : Json} {pubB : ByteArray}
     (h : vm.population slice pubB = .ok ()) :
     ∃ hd, _root_.Spot.FilePart.header pubB = .ok hd ∧ _root_.Spot.OneStageZk.headerHeld slice hd = .ok () := by
@@ -143,7 +101,6 @@ theorem population_header {vm : _root_.Spot.OneStageZk.Member} {slice : Json} {p
   obtain ⟨⟨⟩, -, h⟩ := ebind_ok h
   exact ⟨hd, hh, h⟩
 
-/-- A header held to a record names the record's population as its `instances`. -/
 theorem headerHeld_instances {rec hd : Json} (h : _root_.Spot.OneStageZk.headerHeld rec hd = .ok ()) :
     _root_.Spot.jeq (_root_.Spot.getD hd "instances") (_root_.Spot.getD rec "population") = true := by
   unfold _root_.Spot.OneStageZk.headerHeld at h
@@ -155,7 +112,6 @@ theorem headerHeld_instances {rec hd : Json} (h : _root_.Spot.OneStageZk.headerH
       exact Properties.Spot.Credited.population_of_matchesPublic (Array.isEmpty_iff.1 he)
     · cases h
 
-/-- A member's slice of the registration names the member's units' count as its population. -/
 theorem slice_population (vm : _root_.Spot.OneStageZk.Member) (rec : Json)
     (roots : Std.HashMap String (Array Json)) :
     _root_.Spot.getD (vm.slice rec roots) "population" = .num ⟨Int.ofNat vm.count, 0⟩ := by
@@ -165,8 +121,6 @@ theorem slice_population (vm : _root_.Spot.OneStageZk.Member) (rec : Json)
     simp only [_root_.Spot.getD, _root_.Spot.field?, h, Except.toOption, Option.getD_some]
   exact e
 
-/-- **A public file the member's population check passes on loads to the member's units' count**: at the member's
-slice of the registration, any load of the file has `Member.count` proof blocks. -/
 theorem load_count {vm : _root_.Spot.OneStageZk.Member} {rec : Json} {roots : Std.HashMap String (Array Json)}
     {pubB : ByteArray} (hpop : vm.population (vm.slice rec roots) pubB = .ok ()) {tags : Flock.Tags}
     {c : Flock.Circuit} {pi : Flock.HmIn.Ports} {P : Flock.Public}
@@ -182,12 +136,6 @@ theorem load_count {vm : _root_.Spot.OneStageZk.Member} {rec : Json} {roots : St
   rw [hi, slice_population] at hj
   exact Properties.Spot.Credited.eq_of_jeq hj
 
-/-! ## The member's files pass -/
-
-/-- **A member whose files the per-member form's run held has its files pass, at the window's member**: on the
-blobs sent `s`, where v2 reads the member's files among the files `R` and each pinned table the blobs hold is its
-registered file in `T`, the parameters' member `vm` whose files the run held at its slice of the registration
-(`Spot.OneStageZk.Member.FilesHeld`) has `FilesPass` at the window's member `m` that is `vm` on `R`. -/
 theorem filesPass_of_held {T : PinnedTables} {R : Array ByteArray} {s : Verity.Sent} (ht : TablesSent T s)
     {vm : _root_.Spot.OneStageZk.Member} {nJ : ℕ} {m : Member nJ} (hon : MemberOn T R vm m)
     (hr : ReadsFiles R vm (_root_.Core.Blobs.ofArray s.blobs)) {rec : Json}
@@ -219,10 +167,6 @@ theorem filesPass_of_held {T : PinnedTables} {R : Array ByteArray} {s : Verity.S
   rw [circuitOf_flat hty hflat]
   exact hports
 
-/-- **Every member of a window has its files pass, where the run held every member's**: at a window that is the
-parameters' members on the registered files, on blobs sent where v2 reads each member's files among the registered
-files, each pinned table the blobs hold is its registered file and the run held each member's files at its slice
-of the registration. -/
 theorem ExecutionPhaseOn.passes {V : Vocab d α} {T : PinnedTables} {θ : ByteArray} {F : Array ByteArray} {W : ExecutionPhase}
     (h : ExecutionPhaseOn V T θ F W) {s : Verity.Sent} (ht : TablesSent T s)
     {p : _root_.Spot.OneStageZk.Params} {ms : Array _root_.Spot.OneStageZk.Member} (hp : ParamsAt θ p)
@@ -241,11 +185,6 @@ theorem ExecutionPhaseOn.passes {V : Vocab d α} {T : PinnedTables} {θ : ByteAr
   have hvm' : vm ∈ ms := Array.mem_toList_iff.1 (hperm.mem_iff.1 hvm)
   exact filesPass_of_held ht hon (hF vm hvm') (hheld vm hvm')
 
-/-! ## Files that pass fix their roots' domains -/
-
-/-- **A member whose files pass has roots that fix their domains**: the ports check, which passes at the circuit
-the member's file parses to, refuses two ports of one root and different published domains
-(`Flock.Bridge.v5Files_of_checks`), at the member's population, the count its public file loads to. -/
 theorem FilesPass.rootsFix {nJ : ℕ} {m : Member nJ} (h : FilesPass m) : m.RootsFix := by
   obtain ⟨pubO, hO, hnO⟩ := h.loads
   have hty : (zkTags m.I).typed = false := (FlockSoundness.Discharge.ZkExec.zkTags_typed m.I).trans m.ht
@@ -254,13 +193,9 @@ theorem FilesPass.rootsFix {nJ : ℕ} {m : Member nJ} (h : FilesPass m) : m.Root
   have hn : m.pub.n = m.n := (Flock.Bridge.loadPublic_inOut m.hpub hO).1.symm.trans hnO
   exact (Flock.Bridge.v5Files_of_checks m.hpub hn hports).2
 
-/-- **A member whose files pass is `Checked` as Flock's member**, at every cost (`FilesPass.checked` at
-`FilesPass.rootsFix`). -/
 theorem FilesPass.checked_all {nJ : ℕ} {m : Member nJ} (h : FilesPass m) (t : ℕ) : (m.toV5 t).Checked :=
   h.checked h.rootsFix t
 
-/-- **At a window the verifier sets up, every member's roots fix their domains**, the members the sample holds and
-those it misses. -/
 theorem MembersSetUp.rootsFix {V : Vocab d α} {T : PinnedTables} {θ : ByteArray} {F : Array ByteArray} {W : ExecutionPhase}
     (h : MembersSetUp V T θ F W) : W.RootsFix :=
   fun m hm => (h.passes m hm).rootsFix

@@ -3,52 +3,22 @@ module
 public import Proofs.Properties.Verity.Sampled.Stops
 public import Proofs.Properties.Verity.Sampled.Layout
 
-/-!
-# SPOT's coupling over a window: the readings, a session at a time
-
-A window's play holds one session for each member with a proof block in the sample, each on its own coin tree, held
-one after another. The readings here say which opening of the device's log is which session's round, by the order
-the trees are first opened in: the members' statements share their tags, so a tree's `Hello` doesn't say whose it is.
-
-* **The trees a log opens, in the order it first opens them** (`openedTrees`): it grows by appending as the log does
-  (`openedTrees_append`), names no tree twice (`openedTrees_nodup`), and an opening of a tree not opened before
-  appends that tree (`openedTrees_new`).
-* **Which opening a session's round picks** (`sessionRound`, `slotRound` at the `u`-th session): the link's is an
-  opening the device serves of a tree not opened before, after `u` trees were; round `k` of table `t`'s rep `r`
-  stream is an opening the device serves of the `u`-th tree opened, of its stream named `t/rep<r>`, after `k`
-  openings of that stream; and the session's closing round, the slot past the tables (`closeSlot`, `slotStream`), is
-  the opening of the tree's stream named the session's after the link's, the one that stream has had. No two
-  sessions' slots pick one frame after one log (`sessionRound_unique`), and a slot that picks a release of a log
-  picks none of the log's later releases, where the log's trees each name their streams distinctly
-  (`sessionRound_once`).
-* **A session's slots** (`slotOf`): at `per` rounds a session, the closing round's at the last place and the layout's
-  (`slotAt`) before it: the link's first, then the rep rounds'.
-* **The window's readings** (`executionPhaseReadingAt`): round `j` is the slot `slotOf (j % per)` of session `j / per`, at
-  `per` rounds a session, with what the play reveals for a session's slot a parameter. Each round picks only
-  openings the device serves (`executionPhaseReadingAt_picks`, `executionPhaseReadingAt_served`), no two rounds pick one frame
-  (`executionPhaseReadingAt_unique`), and each picks at most one release of a log whose trees each name their streams
-  distinctly (`picksOnce_executionPhaseReadingAt`).
--/
+/-! SPOT's coupling over a window: the readings, a session at a time. -/
 
 @[expose] public section
 
 namespace Verity.Sampled
-
-/-! ## The trees a log opens, in order -/
 
 /-- **The tree an opening frame opens**; `none` at any other frame. -/
 def _root_.Verity.Frame.tree? : Frame → Option ℕ
   | .opening i _ _ => some i
   | _ => none
 
-/-- **The trees opened after one more release**, in the order of their first opening: the release's tree after
-them, where it opens one not among them. -/
 def openStep (acc : List ℕ) (r : Release) : List ℕ :=
   match r.frame.tree? with
   | some i => if i ∈ acc then acc else acc ++ [i]
   | none => acc
 
-/-- **The trees the log's openings open**, each once, in the order the log first opens them. -/
 def openedTrees (log : List Release) : List ℕ := log.foldl openStep []
 
 theorem openStep_some {acc : List ℕ} {r : Release} {i : ℕ} (h : r.frame.tree? = some i) :
@@ -76,7 +46,6 @@ theorem foldl_openStep_prefix : ∀ (l : List Release) (acc : List ℕ), ∃ d, 
     obtain ⟨e, he⟩ := foldl_openStep_prefix l (openStep acc r)
     exact ⟨d ++ e, by rw [List.foldl_cons, he, hd, List.append_assoc]⟩
 
-/-- **The trees a log opens stay, in their order, as the log grows.** -/
 theorem openedTrees_append (L d : List Release) : ∃ e, openedTrees (L ++ d) = openedTrees L ++ e := by
   unfold openedTrees
   rw [List.foldl_append]
@@ -102,11 +71,9 @@ theorem foldl_openStep_nodup : ∀ (l : List Release) (acc : List ℕ), acc.Nodu
   | [], _, h => h
   | r :: l, _, h => foldl_openStep_nodup l _ (openStep_nodup r h)
 
-/-- **A log's opened trees name no tree twice.** -/
 theorem openedTrees_nodup (L : List Release) : (openedTrees L).Nodup :=
   foldl_openStep_nodup L [] List.nodup_nil
 
-/-- **An opening of a tree the log before it didn't open appends that tree.** -/
 theorem openedTrees_new {L : List Release} {r : Release} {i s n : ℕ} (hr : r.frame = .opening i s n)
     (hi : i ∉ openedTrees L) (d : List Release) : ∃ e, openedTrees (L ++ r :: d) = openedTrees L ++ i :: e := by
   have ht : r.frame.tree? = some i := by
@@ -119,17 +86,11 @@ theorem openedTrees_new {L : List Release} {r : Release} {i s n : ℕ} (hr : r.f
     rw [List.foldl_append, List.foldl_cons]
   rw [h1, he, openStep_some ht, ite_eq_right hi, List.append_assoc, List.singleton_append]
 
-/-- **The `u`-th tree a log opens stays the `u`-th as the log grows.** -/
 theorem openedTrees_getElem?_append {L : List Release} {u i : ℕ} (h : (openedTrees L)[u]? = some i)
     (d : List Release) : (openedTrees (L ++ d))[u]? = some i := by
   obtain ⟨e, he⟩ := openedTrees_append L d
   rw [he, List.getElem?_append_left (List.getElem?_eq_some_iff.1 h).1, h]
 
-/-! ## Which opening a session's round picks -/
-
-/-- **The stream of a session's tree that a slot's table and rep name**: table `t`'s rep `r` stream
-(`repStreamName`); past the tables, at rep `0`, the tree's stream named the session's, which the link's opening and
-the session's closing round open. -/
 def slotStream (tables : Array String) (t : ℕ) (r : Fin 2) : Option String :=
   if t = tables.size ∧ r.val = 0 then some _root_.Spot.Challenger.TREE_SESSION
   else tables[t]?.map (repStreamName · r.val)
@@ -152,7 +113,6 @@ theorem slotStream_close (tables : Array String) :
     slotStream tables tables.size 0 = some _root_.Spot.Challenger.TREE_SESSION :=
   if_pos ⟨rfl, rfl⟩
 
-/-- **A slot names the session's stream only past the tables, at rep `0`.** -/
 theorem slotStream_session {tables : Array String} {t : ℕ} {r : Fin 2}
     (h : slotStream tables t r = some _root_.Spot.Challenger.TREE_SESSION) : t = tables.size ∧ r = 0 := by
   unfold slotStream at h
@@ -161,7 +121,6 @@ theorem slotStream_session {tables : Array String} {t : ℕ} {r : Fin 2}
   · rw [if_neg hc] at h
     exact absurd h rep_ne_session
 
-/-- **No two tables' reps name one stream** of a session's tree, where the tables are distinct. -/
 theorem slotStream_inj {tables : Array String} (ht : tables.toList.Nodup) {t t' : ℕ} {r r' : Fin 2} {x : String}
     (h : slotStream tables t r = some x) (h' : slotStream tables t' r' = some x) : t = t' ∧ r = r' := by
   by_cases hc : t = tables.size ∧ r.val = 0
@@ -189,12 +148,6 @@ theorem slotStream_inj {tables : Array String} (ht : tables.toList.Nodup) {t t' 
       rw [← Array.getElem?_toList] at ha ha'
       exact ⟨nodup_getElem?_inj ht ha ha', rfl⟩
 
-/-- **Whether a frame after the log `pre` is the round at the slot of the `u`-th session**, the sessions counted in
-the order their trees are first opened (`slotRound`, at a session of a window): the link's, an opening the device
-serves of a tree `pre` didn't open, after `pre` opened `u` trees; round `k` of table `t`'s rep `r` stream, an opening
-the device serves of the `u`-th tree `pre` opened, of its stream named `t/rep<r>`, after `k` openings of that
-stream; and, past the tables at rep `0`, round `k` of that tree's stream named the session's (`slotStream`), whose
-round `0` is the link's opening and whose round `1` is the session's closing round. -/
 def sessionRound (tables : Array String) (u : ℕ) : Slot → List Release → Frame → Prop
   | .link, pre, fr => ∃ i s n, fr = .opening i s n ∧ Served pre i s n ∧ i ∉ openedTrees pre ∧
       (openedTrees pre).length = u
@@ -202,7 +155,6 @@ def sessionRound (tables : Array String) (u : ℕ) : Slot → List Release → F
       ((helloSpecs pre)[i]?.bind fun sp => sp.streams[s]?) = slotStream tables t r ∧
       openedOf pre i s = k
 
-/-- **A session's round's reading picks only openings the device serves.** -/
 theorem sessionRound_served {tables : Array String} {u : ℕ} {σ : Slot} {pre : List Release} {i s n : ℕ}
     (h : sessionRound tables u σ pre (.opening i s n)) : Served pre i s n := by
   cases σ with
@@ -215,7 +167,6 @@ theorem sessionRound_served {tables : Array String} {u : ℕ} {σ : Slot} {pre :
     obtain ⟨rfl, rfl, rfl⟩ := Frame.opening.inj hfr
     exact hS
 
-/-- **A session's round's reading picks only openings.** -/
 theorem sessionRound_opening {tables : Array String} {u : ℕ} {σ : Slot} {pre : List Release} {fr : Frame}
     (h : sessionRound tables u σ pre fr) : ∃ i s n, fr = .opening i s n := by
   cases σ with
@@ -226,9 +177,6 @@ theorem sessionRound_opening {tables : Array String} {u : ℕ} {σ : Slot} {pre 
     obtain ⟨i, s, n, h, -⟩ := h
     exact ⟨i, s, n, h⟩
 
-/-- **No two sessions' slots pick one frame** after one log, where the tables are distinct: the frame's tree is
-opened before or not, at one place in the order of first opening, and its stream's name and count fix the slot
-(`slotRound_unique`). -/
 theorem sessionRound_unique {tables : Array String} (ht : tables.toList.Nodup) {u u' : ℕ} {σ σ' : Slot}
     {pre : List Release} {fr : Frame} (h : sessionRound tables u σ pre fr) (h' : sessionRound tables u' σ' pre fr) :
     u = u' ∧ σ = σ' := by
@@ -263,9 +211,6 @@ theorem sessionRound_unique {tables : Array String} (ht : tables.toList.Nodup) {
       subst hk hk'
       exact ⟨rfl, rfl⟩
 
-/-- **A session's slot that picks a release of a log picks none of its later releases**, where the log's trees each
-name their streams distinctly: after the link's opening the log has opened one more tree, and each opening of a rep
-stream raises the count of that stream's openings (`picksOnce_readingAt`'s step, at a session of a window). -/
 theorem sessionRound_once {tables : Array String} {u : ℕ} {σ : Slot} {L₁ d : List Release} {r r' : Release}
     {Lg : List Release} (hn : ∀ sp ∈ helloSpecs Lg, sp.streams.toList.Nodup) {L₂' : List Release}
     (he' : Lg = (L₁ ++ r :: d) ++ r' :: L₂') (hq : sessionRound tables u σ L₁ r.frame)
@@ -295,7 +240,6 @@ theorem sessionRound_once {tables : Array String} {u : ℕ} {σ : Slot} {L₁ d 
     have := openedOf_lt L₁ hfr d
     omega
 
-/-- **Each round picks at most one release of a log**, where no round that picks a release picks a later one. -/
 theorem picksOnce_of_once {R : ℕ} {P : Fin R → List Release → Frame → Prop} {Lg : List Release}
     (h : ∀ j L₁ r d r' L₂', Lg = (L₁ ++ r :: d) ++ r' :: L₂' → P j L₁ r.frame → P j (L₁ ++ r :: d) r'.frame →
       False) : PicksOnce P Lg := by
@@ -322,22 +266,14 @@ theorem picksOnce_of_once {R : ℕ} {P : Fin R → List Release → Frame → Pr
     exact (List.append_inj (he.symm.trans he') hl).1
   · exact (key j L₁' L₁ h₁' h₁ hl).elim
 
-/-! ## A session's slots -/
-
-/-- **The slot of a session's closing round**, at `T` tables: round `1` of the session's tree's stream named the
-session's (`slotStream`, past the tables), after the link's opening, that stream's round `0`. The round releases no
-coin: it follows the bytes of the session's evidence. -/
 def closeSlot (T : ℕ) : Slot := .rep T 0 1
 
-/-- **The slot at place `i` of a session's `per` rounds**, at `T` tables: the closing round's at the last place, and
-the layout's (`slotAt`) before it. -/
 def slotOf (T per i : ℕ) : Slot := if i + 1 = per then closeSlot T else slotAt i
 
 theorem slotOf_last (T : ℕ) {per i : ℕ} (h : i + 1 = per) : slotOf T per i = closeSlot T := if_pos h
 
 theorem slotOf_of_ne (T : ℕ) {per i : ℕ} (h : i + 1 ≠ per) : slotOf T per i = slotAt i := if_neg h
 
-/-- The layout's slots are of the first table, so none is the closing round's where there is a table. -/
 theorem slotAt_ne_close {T : ℕ} (hT : 0 < T) (i : ℕ) : slotAt i ≠ closeSlot T := by
   intro h
   cases i with
@@ -347,7 +283,6 @@ theorem slotAt_ne_close {T : ℕ} (hT : 0 < T) (i : ℕ) : slotAt i ≠ closeSlo
     rw [Slot.rep.injEq] at h'
     omega
 
-/-- **A session's slot is the link's only at the session's first place.** -/
 theorem slotOf_link {T per i : ℕ} (h : slotOf T per i = .link) : i = 0 := by
   by_cases hc : i + 1 = per
   · rw [slotOf_last T hc] at h
@@ -357,7 +292,6 @@ theorem slotOf_link {T per i : ℕ} (h : slotOf T per i = .link) : i = 0 := by
     | zero => rfl
     | succ i => exact absurd h (by simp [slotAt])
 
-/-- **A session's slot of a table is the layout's**: a rep round of the first table, before the last place. -/
 theorem slotOf_rep {T per i t k : ℕ} {r : Fin 2} (h : slotOf T per i = .rep t r k) (ht : t < T) :
     i + 1 ≠ per ∧ slotAt i = .rep t r k := by
   by_cases hc : i + 1 = per
@@ -367,7 +301,6 @@ theorem slotOf_rep {T per i t k : ℕ} {r : Fin 2} (h : slotOf T per i = .rep t 
     exact absurd h'.1 (by omega)
   · exact ⟨hc, (slotOf_of_ne T hc).symm.trans h⟩
 
-/-- **A session's places hold distinct slots**, where there is a table. -/
 theorem slotOf_inj {T per i i' : ℕ} (hT : 0 < T) (hi : i < per) (hi' : i' < per)
     (h : slotOf T per i = slotOf T per i') : i = i' := by
   by_cases hc : i + 1 = per
@@ -381,11 +314,6 @@ theorem slotOf_inj {T per i i' : ℕ} (hT : 0 < T) (hi : i < per) (hi' : i' < pe
     · rw [slotOf_of_ne T hc, slotOf_of_ne T hc'] at h
       exact slotAt_injective h
 
-/-! ## The window's readings -/
-
-/-- **The readings of a window, a session at a time**, at `per` rounds a session: round `j` is the slot
-`slotOf (j % per)` of session `j / per` (`sessionRound`), what the play reveals for it is `reveal` at that session
-and slot, with the record the play's output reveals (`record`) and the record's digest (`recordDigest`). -/
 def executionPhaseReadingAt {R : ℕ} (tables : Array String) (per : ℕ) (reveal : ℕ → Slot → Exchange → Option Claims.Msg)
     (record : Exchange → Option Claims.Msg) (recordDigest : Claims.Msg) : Reading R where
   round j := sessionRound tables (j.val / per) (slotOf tables.size per (j.val % per))
@@ -393,7 +321,6 @@ def executionPhaseReadingAt {R : ℕ} (tables : Array String) (per : ℕ) (revea
   record := record
   recordDigest := recordDigest
 
-/-- **Each round of a window's readings picks only openings.** -/
 theorem executionPhaseReadingAt_picks {R : ℕ} (tables : Array String) (per : ℕ)
     (reveal : ℕ → Slot → Exchange → Option Claims.Msg) (record : Exchange → Option Claims.Msg)
     (recordDigest : Claims.Msg) :
@@ -401,7 +328,6 @@ theorem executionPhaseReadingAt_picks {R : ℕ} (tables : Array String) (per : �
       ∃ i s n, fr = .opening i s n :=
   fun _ _ _ h => sessionRound_opening h
 
-/-- **Each round of a window's readings picks only openings the device serves.** -/
 theorem executionPhaseReadingAt_served {R : ℕ} (tables : Array String) (per : ℕ)
     (reveal : ℕ → Slot → Exchange → Option Claims.Msg) (record : Exchange → Option Claims.Msg)
     (recordDigest : Claims.Msg) :
@@ -409,8 +335,6 @@ theorem executionPhaseReadingAt_served {R : ℕ} (tables : Array String) (per : 
       Served pre i s n :=
   fun _ _ _ _ _ h => sessionRound_served h
 
-/-- **No two rounds of a window's readings pick one frame** after one log, where the tables are distinct and there
-is one (`sessionRound_unique`, `slotOf_inj`). -/
 theorem executionPhaseReadingAt_unique {R : ℕ} {tables : Array String} (ht : tables.toList.Nodup) (hT : 0 < tables.size)
     {per : ℕ} (hper : 0 < per) (reveal : ℕ → Slot → Exchange → Option Claims.Msg)
     (record : Exchange → Option Claims.Msg) (recordDigest : Claims.Msg) {j j' : Fin R} {pre : List Release}
@@ -420,8 +344,6 @@ theorem executionPhaseReadingAt_unique {R : ℕ} {tables : Array String} (ht : t
   have hm := slotOf_inj hT (Nat.mod_lt _ hper) (Nat.mod_lt _ hper) hs
   exact Fin.ext (by rw [← Nat.div_add_mod j.val per, ← Nat.div_add_mod j'.val per, hu, hm])
 
-/-- **Each round of a window's readings picks at most one release of a log** whose trees each name their streams
-distinctly (`sessionRound_once`). -/
 theorem picksOnce_executionPhaseReadingAt {R : ℕ} (tables : Array String) (per : ℕ)
     (reveal : ℕ → Slot → Exchange → Option Claims.Msg) (record : Exchange → Option Claims.Msg)
     (recordDigest : Claims.Msg) {Lg : List Release} (hn : ∀ sp ∈ helloSpecs Lg, sp.streams.toList.Nodup) :

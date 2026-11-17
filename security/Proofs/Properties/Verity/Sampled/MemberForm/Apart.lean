@@ -4,24 +4,7 @@ public import Proofs.Properties.Verity.Sampled.MemberForm.Accept
 public import Proofs.Core.QSort
 public import Proofs.Core.QSortPerm
 
-/-!
-# The parameters' members share no unit
-
-The per-member form's parameters are read by `Spot.OneStageZk.membersOf`, which sorts every member's ranges by
-their starts and refuses a range that starts before the one before it ends. This file proves what that check gives:
-no unit is in two members' ranges (`Apart`).
-
-* **The loop ran at every place** (`forIn_yields`): a loop that returns ran its body at every entry, where a pass
-  of the body yields.
-* **Sorted ranges that each end by the next one's start share no unit** (`apart_of_adjacent`): the sorted ranges
-  are a permutation of the members' (`Verity.QSort.qsort_perm`), in the order of their starts
-  (`Verity.QSort.ByKey.qsort_sorted`), so a range ends by the start of every later one.
-* **The parse's members share no unit** (`membersOf_apart`, `membersParamsOfJson_apart`,
-  `paramsEitherOfJson_apart`: in either form, as the one statement's parse names no members).
-* **The form's accepts' members share no unit** (`FormApart`): of everything v2 accepts at the coins it read
-  (`V2Accepts`) on parameters that name members. It holds of the check (`formApart`), which reads them by
-  `paramsEitherOfJson`: its accept carries that parse.
--/
+/-! The parameters' members share no unit. -/
 
 @[expose] public section
 
@@ -31,7 +14,6 @@ open Lean (Json)
 open Properties.Challenger (Draws)
 open FlockSoundness.Refine (ebind_ok)
 
-/-- **A loop over a list that returns ran its body at every entry**, where a pass of the body yields. -/
 theorem forIn_yields {f : ℕ → PUnit.{1} → Except String (ForInStep PUnit.{1})}
     (hy : ∀ i s, f i ⟨⟩ = .ok s → s = .yield ⟨⟩) :
     ∀ (l : List ℕ) {u : PUnit.{1}}, forIn l ⟨⟩ f = .ok u → ∀ i ∈ l, f i ⟨⟩ = .ok (.yield ⟨⟩)
@@ -45,23 +27,19 @@ theorem forIn_yields {f : ℕ → PUnit.{1} → Except String (ForInStep PUnit.{
     · exact hs
     · exact forIn_yields hy l h i hi
 
-/-- The ranges a fold appends are the members' ranges, in the members' order. -/
 theorem foldl_units (l : List _root_.Spot.OneStageZk.Member) (init : Array (ℕ × ℕ)) :
     (l.foldl (fun acc m => acc ++ m.units) init).toList = init.toList ++ l.flatMap fun m => m.units.toList := by
   induction l generalizing init with
   | nil => simp
   | cons m l ih => rw [List.foldl_cons, ih, Array.toList_append, List.flatMap_cons, List.append_assoc]
 
-/-- **No unit is in two of the members' ranges.** -/
 def Apart (ms : List _root_.Spot.OneStageZk.Member) : Prop :=
   ms.Pairwise fun a b => ∀ x ∈ a.units.toList, ∀ y ∈ b.units.toList,
     ∀ u, x.1 ≤ u → u < x.2 → y.1 ≤ u → u < y.2 → False
 
-/-- The members' ranges, in the order of their starts, as `Spot.OneStageZk.membersOf` sorts them. -/
 def sortedUnits (ms : Array _root_.Spot.OneStageZk.Member) : Array (ℕ × ℕ) :=
   (ms.foldl (fun acc m => acc ++ m.units) #[]).qsort (·.1 < ·.1)
 
-/-- **Members whose ranges, sorted by their starts, each end by the next one's start share no unit.** -/
 theorem apart_of_adjacent (ms : Array _root_.Spot.OneStageZk.Member)
     (hadj : ∀ i, 1 ≤ i → i < (sortedUnits ms).size → (sortedUnits ms)[i - 1]!.2 ≤ (sortedUnits ms)[i]!.1) :
     Apart ms.toList := by
@@ -92,8 +70,6 @@ theorem apart_of_adjacent (ms : Array _root_.Spot.OneStageZk.Member)
   exact key _ (_root_.Verity.QSort.qsort_perm _ _)
     (_root_.Verity.QSort.ByKey.qsort_sorted (fun x : ℕ × ℕ => x.1) _) hadj
 
-/-- **The members `membersOf` reads share no unit**: it sorts every member's ranges by their starts and refuses a
-range that starts before the one before it ends. -/
 theorem membersOf_apart {shared : _root_.Spot.OneStageZk.Own} {j : Json}
     {ms : Array _root_.Spot.OneStageZk.Member} (h : _root_.Spot.OneStageZk.membersOf shared j = .ok ms) :
     Apart ms.toList := by
@@ -124,7 +100,6 @@ theorem membersOf_apart {shared : _root_.Spot.OneStageZk.Own} {j : Json}
         exact Nat.le_of_not_lt hc
   · cases h
 
-/-- **The per-member form's parameters' members share no unit**: they are the ones `membersOf` reads. -/
 theorem membersParamsOfJson_apart {j : Json} {p : _root_.Spot.OneStageZk.Params}
     (h : _root_.Spot.OneStageZk.membersParamsOfJson j = .ok p) {ms : Array _root_.Spot.OneStageZk.Member}
     (hm : p.members = some ms) : Apart ms.toList := by
@@ -141,9 +116,6 @@ theorem membersParamsOfJson_apart {j : Json} {p : _root_.Spot.OneStageZk.Params}
     exact membersOf_apart hms'
   · cases h
 
-/-- **Parameters parsed in either form name members that share no unit**: the per-member form's parse reads them by
-`membersOf` (`membersParamsOfJson_apart`), and the one statement's parse names none
-(`Spot.OneStageZk.paramsOfJson_members`). -/
 theorem paramsEitherOfJson_apart {j : Json} {p : _root_.Spot.OneStageZk.Params}
     (h : _root_.Spot.OneStageZk.paramsEitherOfJson j = .ok p) {ms : Array _root_.Spot.OneStageZk.Member}
     (hm : p.members = some ms) : Apart ms.toList := by
@@ -152,20 +124,12 @@ theorem paramsEitherOfJson_apart {j : Json} {p : _root_.Spot.OneStageZk.Params}
   · exact membersParamsOfJson_apart h hm
   · cases hm.symm.trans (_root_.Spot.OneStageZk.paramsOfJson_members h)
 
-/-- **The per-member form's accepts' members share no unit**: wherever v2 accepts at the coins it read
-(`V2Accepts`) on parameters that name members, no unit is in two of their ranges. An accept carries the parse of
-its parameters' bytes (`V2Accepts`' first clause), so a check that reads them by `paramsEitherOfJson` has it of
-that parse (`paramsEitherOfJson_apart`); the form's run does not give it, which holds each member to one range and
-the counts to the population and passes two ranges that share a unit. -/
 def FormApart : Prop :=
   ∀ (bs : _root_.Core.Blobs) (a b e : ByteArray) (p : _root_.Spot.OneStageZk.Params)
     (c : _root_.Spot.OneStage.Commitment) (ev : _root_.Spot.OneStageZk.Evidence) (ξ : ByteArray) (dr : Draws)
     (ms : Array _root_.Spot.OneStageZk.Member),
     V2Accepts bs a b e p c ev ξ dr → p.members = some ms → Apart ms.toList
 
-/-- **The check's accepts' members share no unit**: an accept carries the parse of its parameters' bytes, which the
-sampled component reads by `paramsEitherOfJson` (`dispatch_params`), and that parse names members that share no unit
-(`paramsEitherOfJson_apart`). -/
 theorem formApart : FormApart := by
   intro bs a b e p c ev ξ dr ms h hm
   obtain ⟨hp, -⟩ := h

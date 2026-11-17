@@ -6,34 +6,7 @@ public import Proofs.Properties.Verity.Sampled.MovesLayout
 public import Proofs.Properties.Verity.Sampled.CountsLayout
 public import Proofs.Properties.Verity.Sampled.Window.Closing
 
-/-!
-# What the verifier's read of a member's session holds the device's log to
-
-A window's sessions take, of each sampled member's session, what the verifier's read holds the device's log to at
-that session's tree (`Verity.Sampled.SessionRead`). This module proves it of the per-member form's read: v2's read
-(`readLog`) of release log lines `coinTreesOf` accepts, against which `Spot.Challenger.membersTreeReason` accepts
-the sessions' records and evidence.
-
-* **The session's tree** (`session_tree`): the `j`-th session's record names a logged tree, whose last opening is the
-  session's closing round, opened after the session's evidence, and which less that round is the session's as
-  `sessionTreeReason` holds one.
-* **The record v2's read gives a tree's coins from** (`recordTree_strOf`, `find_of_nodup`, `find_record`,
-  `openCoins_record`): no tree is two sessions', so the record v2's read finds first of a session's tree is that
-  session's, and the coins the read shows of a round are that record's.
-* **The record's link** (`record_link`): a record `sessionTreeReason` accepts on one table, decoded at a session of
-  that table, has its tree's `session` round 0 opened after the SHA-512 of its link message.
-* **An opening of a session's tree** (`openedOf_zero`, `session_opening`): an opening the read shows of the session's
-  tree is the opening that tree shows of that round, the first of a tree its round 0.
-* **Link first** (`LinkFirst`): each tree's first opening is of its stream named the session's. It is a premise
-  here; `MemberForm.Links` proves it of the read of lines `membersTreeReason` accepts.
-* **The read less the closing round** (`sessionOpens_read`), **with it** (`sessionRead_read`): `SessionOpens` and
-  `SessionRead` at the `j`-th session, on the read, at a session of one table whose record's text decodes at a
-  session on that table and its coin tree.
-* **On the device's log** (`openedTrees_congr`, `coins_of_read`, `forall₂_split_left`, `sessionOpens_of_read`,
-  `sessionRead_of_read`, `sessionRead_logged`, `members_place_logged`): a log whose releases v2's read reads has the
-  same trees opened and sampled, the same answers, and the coins the read shows, so what the read is held to, the
-  log is.
--/
+/-! What the verifier's read of a member's session holds the device's log to. -/
 
 @[expose] public section
 
@@ -45,15 +18,10 @@ open Claims.Bridge.Custody (decode_ok RootField forall₂_getElem)
 
 open private strOf from Spot.ChallengerTrees
 
-/-! ## The session's tree -/
-
 variable {label : String} {after : ByteArray} {recs : List Json} {ξ : ByteArray} {lines : List String}
   {log : List Verity.Release} {trees : Array LoggedTree}
   {records : Array (String × Array (String × Option ℕ) × Json × String)}
 
-/-- **The `j`-th session's tree, by the members' check**: its record names a logged tree `t`, the one `usedOf` lists
-at the session's place; `t` less its last opening is the session's as `sessionTreeReason` holds one; and `t`'s last
-opening is round 1 of its stream named the session's, opened after the session's evidence's SHA-512 in hex. -/
 theorem session_tree (hM : membersTreeReason trees lines records = none) {j : ℕ}
     {x : String × Array (String × Option ℕ) × Json × String} (hx : records[j]? = some x) :
     ∃ t ∈ trees, recordTree x.2.2.1 = t.root ∧ (usedOf records)[j]? = some t.root ∧
@@ -67,15 +35,11 @@ theorem session_tree (hM : membersTreeReason trees lines records = none) {j : �
     rw [hroot]
   · rw [usedOf_getElem? hx, hroot, strOf_str]
 
-/-! ## The record v2's read gives a tree's coins from -/
-
-/-- A record's tree is the root `usedOf` lists for it. -/
 theorem recordTree_strOf (J : Json) : recordTree J = strOf (getD (getD J "coin_tree") "root") := by
   unfold recordTree
   generalize getD (getD J "coin_tree") "root" = v
   cases v <;> rfl
 
-/-- In a list whose images under `f` are distinct, the first member with a member's image is that member. -/
 theorem find_of_nodup {β : Type} (f : β → String) : ∀ {l : List β} {a : β}, (l.map f).Nodup → a ∈ l →
     l.find? (f · == f a) = some a
   | [], _, _, h => absurd h List.not_mem_nil
@@ -92,7 +56,6 @@ theorem find_of_nodup {β : Type} (f : β → String) : ∀ {l : List β} {a : �
       · exact absurd rfl hb
       · exact find_of_nodup f hn.2 hl
 
-/-- **The record v2's read finds first of a session's tree is that session's**, where no tree is two sessions'. -/
 theorem find_record {j : ℕ} {x : String × Array (String × Option ℕ) × Json × String} (hx : records[j]? = some x)
     (hn : (usedOf records).toList.Nodup) :
     (records.toList.map (·.2.2.1)).find? (recordTree · == recordTree x.2.2.1) = some x.2.2.1 := by
@@ -105,17 +68,11 @@ theorem find_record {j : ℕ} {x : String × Array (String × Option ℕ) × Jso
     exact hn
   · exact List.mem_map.2 ⟨x, Array.mem_toList_iff.2 (Array.mem_of_getElem? hx), rfl⟩
 
-/-- **The coins v2's read shows of a round are the record's**, the record it finds first of the round's tree. -/
 theorem openCoins_record {recs : List Json} {ρ : String} {J : Json}
     (hf : recs.find? (recordTree · == ρ) = some J) {name : String} {k : ℕ} {b : ByteArray}
     (hb : recordRound J name k = some b) : Lines.openCoins recs ρ name k = Verity.bitsOfBytes b := by
   simp only [Lines.openCoins, hf, hb, Option.map_some, Option.getD_some]
 
-/-! ## The record's link -/
-
-/-- **A record `sessionTreeReason` accepts on one table has its tree's `session` round 0 opened after the SHA-512 of
-its link message**: where `Record.decode` reads the record's text at a session of that table, the link message is
-the session's `root_F`, then the table's `root_B` (`sessionTreeReason_link`, `decode_rootF`). -/
 theorem record_link {trees : Array LoggedTree} {tb : String} {n? : Option ℕ} {J : Json}
     (h : sessionTreeReason trees #[(tb, n?)] J = none) {spec : Flock.SessionSpec} {text : String}
     {sess : Flock.RunRecord} (hd : Flock.Record.decode spec text = .ok sess)
@@ -158,9 +115,6 @@ theorem record_link {trees : Array LoggedTree} {tb : String} {n? : Option ℕ} {
     rfl
   exact ⟨t, htm, o, rb, ho, hm, hafter⟩
 
-/-! ## An opening of a session's tree -/
-
-/-- A log that didn't open a tree opened no round of it. -/
 theorem openedOf_zero {L : List Verity.Release} {i : ℕ} (h : i ∉ openedTrees L) (s : ℕ) : openedOf L i s = 0 := by
   rcases Nat.eq_zero_or_pos (openedOf L i s) with h0 | hpos
   · exact h0
@@ -169,11 +123,6 @@ theorem openedOf_zero {L : List Verity.Release} {i : ℕ} (h : i ∉ openedTrees
     obtain ⟨n, hn⟩ := opening_of_opensAt hp
     exact absurd (opening_mem_openedTrees hr hn) h
 
-/-- **An opening the read shows of a tree read is the opening that tree shows of that round**: where `t` is the tree
-read first of its root at `i`, an opening `x` the read shows of tree `i`'s stream `si`, named `name` in the `Hello`s
-before it, of `n` coins, is the opening `t` shows of the round of `name` that the read's openings of that stream
-before `x` count, of `n` coins, after bytes that in hex are what `x` answers, with the coins the records give that
-round (`read_opening`, `tree_of_key`). -/
 theorem session_opening (hT : coinTreesOf lines = .ok trees) (hR : readLog label after recs ξ lines = some log)
     {t : LoggedTree} (ht : t ∈ trees) {i : ℕ} (hi : (heldTrees trees).findIdx? (·.1 == t.root) = some i)
     {pre : List Verity.Release} {x : Verity.Release} {post : List Verity.Release} (he : log = pre ++ x :: post)
@@ -187,19 +136,10 @@ theorem session_opening (hT : coinTreesOf lines = .ok trees) (hR : readLog label
   rw [e, e2] at ho hco
   exact ⟨o, ho, hn, hun, hco⟩
 
-/-! ## The read of a session, less its closing round -/
-
-/-- **Each tree's first opening is of its stream named the session's**, in the log `log`. -/
 def LinkFirst (log : List Verity.Release) : Prop :=
   ∀ L₁ x L₂ i s n, log = L₁ ++ x :: L₂ → x.frame = .opening i s n → i ∉ openedTrees L₁ →
     ((helloSpecs L₁)[i]?.bind fun sp => sp.streams[s]?) = some TREE_SESSION
 
-/-- **What the per-member form's read of its `j`-th session holds the read to, less the closing round**
-(`Verity.Sampled.SessionOpens`): where `coinTreesOf` accepts the release log's lines, `readLog` reads them at the
-sessions' records, `membersTreeReason` accepts the sessions `records` against them, each tree's first opening is of
-its stream named the session's (`LinkFirst`), and the `j`-th session, of one table `tb`, has a record whose text
-parses as the record the check read and decodes at a session of that table on its coin tree under SHA-512
-digests. -/
 theorem sessionOpens_read (hT : coinTreesOf lines = .ok trees) (hR : readLog label after recs ξ lines = some log)
     (hM : membersTreeReason trees lines records = none) (hrecs : recs = records.toList.map (·.2.2.1))
     (hLF : LinkFirst log) {j : ℕ} {x : String × Array (String × Option ℕ) × Json × String}
@@ -358,11 +298,6 @@ theorem sessionOpens_read (hT : coinTreesOf lines = .ok trees) (hR : readLog lab
     rw [getElem!_pos st.rounds _ hk]
     exact hon.symm.trans hn'
 
-/-! ## The read of a session -/
-
-/-- **What the per-member form's read of its `j`-th session holds the read to** (`Verity.Sampled.SessionRead`):
-with `sessionOpens_read`'s premises, at the evidence `w` whose SHA-512 in hex the check held the session's closing
-round to. -/
 theorem sessionRead_read (hT : coinTreesOf lines = .ok trees) (hR : readLog label after recs ξ lines = some log)
     (hM : membersTreeReason trees lines records = none) (hrecs : recs = records.toList.map (·.2.2.1))
     (hLF : LinkFirst log) {j : ℕ} {x : String × Array (String × Option ℕ) × Json × String}
@@ -396,8 +331,6 @@ theorem sessionRead_read (hT : coinTreesOf lines = .ok trees) (hR : readLog labe
   rw [he] at hopens ⊢
   exact SessionRead.of_dropped hcf hv hname hcount hw hlast (hopens.drop hcf hmem hname)
 
-/-! ## On the device's log -/
-
 theorem foldl_openStep_congr : ∀ {l l' : List Verity.Release},
     List.Forall₂ (fun x y => x.frame = y.frame ∧ x.answers = y.answers) l l' →
       ∀ acc, l.foldl openStep acc = l'.foldl openStep acc
@@ -410,13 +343,11 @@ theorem foldl_openStep_congr : ∀ {l l' : List Verity.Release},
     rw [e]
     exact foldl_openStep_congr t _
 
-/-- **Logs of the same frames open the same trees, in the same order.** -/
 theorem openedTrees_congr {l l' : List Verity.Release}
     (h : List.Forall₂ (fun x y => x.frame = y.frame ∧ x.answers = y.answers) l l') :
     openedTrees l = openedTrees l' :=
   foldl_openStep_congr h []
 
-/-- A release of a list related to another, with the releases before and after it. -/
 theorem forall₂_split_left {α β : Type} {R : α → β → Prop} {r : α} {post : List α} :
     ∀ {pre : List α} {l' : List β}, List.Forall₂ R (pre ++ r :: post) l' →
       ∃ pre' r' post', l' = pre' ++ r' :: post' ∧ List.Forall₂ R pre pre' ∧ R r r' ∧ List.Forall₂ R post post'
@@ -425,7 +356,6 @@ theorem forall₂_split_left {α β : Type} {R : α → β → Prop} {r : α} {p
     let ⟨pre', r', post', he, hp, hr, hq⟩ := forall₂_split_left t
     ⟨_ :: pre', r', post', by rw [he]; rfl, .cons h hp, hr, hq⟩
 
-/-- **The coins v2's read shows of a release are the release's.** -/
 theorem coins_of_read {x y : Verity.Release} (h : (Binding.Read.ofV2 x).Of y) (hne : x.coins ≠ []) :
     y.coins = x.coins := by
   have hm : x.coins ∈ (Binding.Read.ofV2 x).coins := by
@@ -439,8 +369,6 @@ theorem coins_of_read {x y : Verity.Release} (h : (Binding.Read.ofV2 x).Of y) (h
 variable {lr Lg : List Verity.Release} {tables : Array String} {u : ℕ} {text : String} {J : Json}
   {sess : Flock.RunRecord}
 
-/-- **What v2's read is held to less the closing round, the device's log is**: where v2's read `lr` reads the
-releases of the log `Lg`, `SessionOpens` on `lr` is `SessionOpens` on `Lg`. -/
 theorem sessionOpens_of_read (hl : List.Forall₂ Binding.Read.Of (lr.map Binding.Read.ofV2) Lg)
     (h : SessionOpens lr tables u text J sess) : SessionOpens Lg tables u text J sess := by
   have hR := List.forall₂_map_left_iff.1 hl
@@ -501,8 +429,6 @@ theorem sessionOpens_of_read (hl : List.Forall₂ Binding.Read.Of (lr.map Bindin
     rw [← hO₁ i s] at hk ⊢
     exact h.roundCount L₁ x L₂ i s n name hlr (hxy.1.trans hy) hτ hname hnT st hst hk
 
-/-- **What v2's read is held to, the device's log is**: where v2's read `lr` reads the releases of the log `Lg`,
-`SessionRead` on `lr` is `SessionRead` on `Lg`. -/
 theorem sessionRead_of_read (hl : List.Forall₂ Binding.Read.Of (lr.map Binding.Read.ofV2) Lg) {w : Claims.Msg}
     (h : SessionRead lr tables u text J sess w) : SessionRead Lg tables u text J sess w := by
   have hR := List.forall₂_map_left_iff.1 hl
@@ -531,8 +457,6 @@ theorem sessionRead_of_read (hl : List.Forall₂ Binding.Read.Of (lr.map Binding
     rw [← hp1.length_eq, ← hpc.length_eq]
     exact h1
 
-/-- **What the per-member form's read of its `j`-th session holds the device's log to**
-(`Verity.Sampled.SessionRead`): `sessionRead_read`, on a log `Lg` whose releases the read reads. -/
 theorem sessionRead_logged (hT : coinTreesOf lines = .ok trees) (hR : readLog label after recs ξ lines = some lr)
     (hM : membersTreeReason trees lines records = none) (hrecs : recs = records.toList.map (·.2.2.1))
     (hLF : LinkFirst lr) (hl : List.Forall₂ Binding.Read.Of (lr.map Binding.Read.ofV2) Lg) {j : ℕ}
@@ -544,8 +468,6 @@ theorem sessionRead_logged (hT : coinTreesOf lines = .ok trees) (hR : readLog la
     SessionRead Lg #[tb] j text x.2.2.1 sess w :=
   sessionRead_of_read hl (sessionRead_read hT hR hM hrecs hLF hx htab hJ hd hc hst h512 hev)
 
-/-- **The `j`-th tree the device's log opens is the `j`-th session's, and it opens as many trees as sessions**
-(`members_place`, `members_count`, on a log whose releases the read reads). -/
 theorem members_place_logged (hT : coinTreesOf lines = .ok trees)
     (hR : readLog label after recs ξ lines = some lr) (hM : membersTreeReason trees lines records = none)
     (hl : List.Forall₂ Binding.Read.Of (lr.map Binding.Read.ofV2) Lg) :

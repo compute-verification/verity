@@ -3,21 +3,7 @@ module
 public import Proofs.Properties.Verity.Sampled.Decoders
 public import Proofs.Properties.Verity.Sampled.Walk
 
-/-!
-# SPOT's coupling: the readings at a layout
-
-The readings `MovesReach` reads, at a layout of the session's rounds (`Slot`): where each round's message is fixed on
-the period's game, and what the play's output reveals for it.
-
-* **Which opening a round's reading picks** (`slotRound`): the link's is the first opening, round `k` of table `t`'s rep
-  `r` stream an opening of that stream of the first tree opened after `k` openings of it, each one the device serves
-  (`Served`). The device's trees, as its log shows them, have room for a served opening (`Served.cap`) and answer it
-  with a round's coins (`Served.next`), so the walk stops there at an opening's coin.
-* **What the play reveals** (`slotReveal`): the link's message (`linkIn`) and round `k`'s message on the rep stream
-  (`roundIn`), in the record v2 reads.
-* **The readings at a layout** (`readingAt`): each picks only openings (`readingAt_picks`), and where the layout is
-  injective and the tables distinct, no two rounds pick one frame (`readingAt_unique`).
--/
+/-! SPOT's coupling: the readings at a layout. -/
 
 @[expose] public section
 
@@ -70,7 +56,6 @@ theorem slotRound_opening {tables : Array String} {σ : Slot} {pre : List Releas
     obtain ⟨i, s, n, h, -⟩ := h
     exact ⟨i, s, n, h⟩
 
-/-- **Each round's reading picks only openings.** -/
 theorem readingAt_picks {R : ℕ} (tables : Array String) (L : Fin R → Slot) (record : Exchange → Option Claims.Msg)
     (recordDigest : Claims.Msg) :
     ∀ j pre fr, (readingAt tables L record recordDigest).round j pre fr → ∃ i s n, fr = .opening i s n :=
@@ -82,7 +67,6 @@ theorem nodup_getElem?_inj {α : Type} {l : List α} (hl : l.Nodup) {i j : ℕ} 
   obtain ⟨hj', hj''⟩ := List.getElem?_eq_some_iff.1 hj
   exact (List.Nodup.getElem_inj_iff hl).1 hj''.symm
 
-/-- **No two slots pick one frame** after one log, where the tables are distinct. -/
 theorem slotRound_unique {tables : Array String} (ht : tables.toList.Nodup) {σ σ' : Slot} {pre : List Release}
     {fr : Frame} (h : slotRound tables σ pre fr) (h' : slotRound tables σ' pre fr) : σ = σ' := by
   cases σ with
@@ -116,15 +100,12 @@ theorem slotRound_unique {tables : Array String} (ht : tables.toList.Nodup) {σ 
       subst hk hk'
       rfl
 
-/-- **No two rounds pick one frame** after one log, where the layout is injective and the tables distinct. -/
 theorem readingAt_unique {R : ℕ} {tables : Array String} {L : Fin R → Slot} (hL : Function.Injective L)
     (ht : tables.toList.Nodup) (record : Exchange → Option Claims.Msg) (recordDigest : Claims.Msg) {j j' : Fin R}
     {pre : List Release} {fr : Frame} (h : (readingAt tables L record recordDigest).round j pre fr)
     (h' : (readingAt tables L record recordDigest).round j' pre fr) : j = j' :=
   hL (slotRound_unique ht h h')
 
-/-- **The device's trees answer an opening it serves** with the stream's next round, the log's count of its openings,
-where the trees are the ones the log shows. -/
 theorem Served.next {pre : List Release} {ts : List OpenTree} (hT : TreesOf pre ts) {i s n : ℕ}
     (h : Served pre i s n) :
     ∃ T, ts[i]? = some T ∧ ∃ (hs : s < T.spec.streams.size) (hr : T.opened ⟨s, hs⟩ < 2 ^ T.spec.roundsLog),
@@ -139,8 +120,6 @@ theorem Served.next {pre : List Release} {ts : List OpenTree} (hT : TreesOf pre 
     exact hr
   exact ⟨T, hTi, hs, hr', OpenTree.next_eq hs hr' hn, ho⟩
 
-/-- **The device's trees have room for an opening it serves**: they hold fewer than `maxTreeLines` coin-tree lines,
-where they are the ones the log shows. -/
 theorem Served.cap {pre : List Release} {ts : List OpenTree} (hT : TreesOf pre ts) {i s n : ℕ}
     (h : Served pre i s n) : treeLines ts < maxTreeLines := by
   obtain ⟨-, -, -, -, -, hc⟩ := h

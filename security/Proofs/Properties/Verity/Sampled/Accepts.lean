@@ -9,44 +9,8 @@ public import Proofs.Flock.Soundness.Discharge.ZkExec.Verify
 public import Proofs.Properties.Certifier.Check.Bytes
 public import Proofs.Properties.Spot.Tables
 
-/-!
-# SPOT's acceptance: v2's verdict is verity-verify-proof `--zk`'s on the session's files
-
-The decoders' premise of the logged coupling (`Decodes`) asks that on the joint distribution's support, off the events at the
-stops it is held off, an accepted play is beside an outcome verity-verify-proof `--zk` accepts (`LiveAcceptsZKP`), which
-judges the writer's transcript with `AcceptsZKP`.
-v2 judges the session's files on the blobs sent with `verity-verify-proof --zk` as `Spot.OneStageZk.run` runs it. They
-are one check on one pair of byte strings, and the writer carries the acceptance to what it writes:
-
-* **v2's session is `--zk`'s** (`buildSessionOf_ok`, `sessionAt_ok`, `setupAt_ok`, `setup_eq`, `setupAt_setupOfP`):
-  the session `setupAt` sets up at a record's own sample is `Exec.setupOfP` at `--zk`'s inputs (`ZkExec.zkInputs`) of v2's
-  (`toExec`), with no public inputs (`Recursion.Witness.setupOf_eq`), and every table passes `Zk.shapeOk`.
-* **What v2 verified is accepted** (`v2Verified_accepts`): the record and the proof files v2's check verified
-  (`V2Verified`) are a transcript `AcceptsZKP` accepts at v2's inputs, and the record decodes (`zkVerify_decode`).
-* **v2's files are `A`'s** (`FilesOn`, `zkInputs_toExec`): v2's circuit and public file, which it finds on the blobs
-  by its parameters' digests, are `A`'s, and the lookup tables the blobs hold extend `A`'s (`TablesExtend`). `SetsUp`
-  fixes the rest of v2's inputs, so v2's `--zk` inputs are `A`'s but for the tables.
-* **More lookup tables change nothing** (`setupOfP_back`, `acceptsZKP_back`): verity-verify-proof reads a table only by
-  `find?` at a name its circuit lists (`Refine.setupTables_back`), so where `A`'s circuit file parses with `A`'s tables,
-  the session `--zk` sets up with tables that extend them is `A`'s, and so is what it accepts.
-* **v2's files are the vocabulary's** (`DigestsAt`, `get_named`, `tables_registered`, `filesOn_of`): the blobs sent
-  are the committed files, then the evidence's, and `Blobs.get` returns the first whose SHA-512 is the digest, so where
-  v2's parameters name the vocabulary's digests and the files are registered, v2 finds the committed files `namedFile`
-  names, `A`'s by `SetsUp`. The vocabulary reads the lookup tables the circuit file registers (`pinnedTables`); v2's
-  acceptance holds the blobs sent to every table the circuit file looks up (`tables_registered`), so where v2 reads each
-  at its registered file (`TablesSent`, whose failure is a SHA-512 collision the read finder outputs), v2's tables
-  extend `A`'s.
-* **v2's verdict at `A`** (`accepts_sent`): the record and the proof files v2 reads in what the prover sent
-  (`sentRecord`, `sentProofs`) are a transcript `AcceptsZKP A.I A.own` accepts.
-* **The writer** (`MovesOf`, `wr_accepts_of_verdict`): where the session's writer keeps an accepted transcript's view
-  (`WritesView`, which `wrZP` does), what it writes for moves v2's files decode to, at a sample the record carries
-  (`MovesOf`), is accepted.
-* **The pointwise acceptance** (`play_ends`, `MovesReach`, `decodes_of`, `filesOn_play`, `decodes_of_digests`): a
-  play of the period's game ends at its parameters and committed files, so `Decodes` holds wherever v2 reads `A`'s
-  files on the accepted plays `P` holds of (at the vocabulary's digests, and at the registered tables where `P` holds
-  them) and the outcomes on the joint distribution's support off
-  the held-off events are the writer's at moves v2's files decode to (`MovesReach`, the decoders' and the coin map's).
--/
+/-! v2's verdict is verity-verify-proof `--zk`'s acceptance on the session's files, which gives the decoders'
+premise of the logged coupling (`Decodes`). -/
 
 @[expose] public section
 
@@ -62,9 +26,6 @@ open FlockSoundness.Discharge.Tables (LiveOutJ)
 open FlockSoundness.Refine (ebind_ok ptsOf OkLe TablesExtend setupTables_back extend_filterMap mufu_nodup)
 open Claims.Bridge.CustodyZkP (repRounds)
 
-/-! ## v2's session is `--zk`'s -/
-
-/-- `buildSessionOf`'s setup is `Stmt.setupTables`'s, on either tag (`Stmt.setupTables_eq`). -/
 theorem setup_if (tags : Flock.Tags) (cf pf : ByteArray) (coins : Flock.Coins) (count : ℕ)
     (tables : List (String × ByteArray)) (draw partition : Option Json) (program : Option ByteArray) :
     (if tags.hiddenOutputs then
@@ -77,7 +38,6 @@ theorem setup_if (tags : Flock.Tags) (cf pf : ByteArray) (coins : Flock.Coins) (
   · rw [ite_eq_left hh, Flock.Stmt.setupTables_eq, Flock.ProvedScope.circuitOf, ite_eq_left hh]
   · rw [ite_eq_right hh]
 
-/-- **v2's `buildSessionOf` sets up what `Stmt.setupTables` sets up** on the circuit `ProvedScope.circuitOf` parses. -/
 theorem buildSessionOf_ok {tags : Flock.Tags} {cf pf : ByteArray} {coins : Flock.Coins}
     {tables : List (String × ByteArray)} {count : ℕ} {draw partition : Option Json} {program : Option ByteArray}
     {registered : Option (Array Flock.Registered.Port)} {r : Flock.SessionSpec × Array Flock.Stmt}
@@ -91,8 +51,6 @@ theorem buildSessionOf_ok {tags : Flock.Tags} {cf pf : ByteArray} {coins : Flock
   repeat' walk_step
   all_goals (cases h; exact hr)
 
-/-- **The session `sessionAt` sets up** is `Stmt.setupTables`'s at `--zk`'s tags and coins, and every table passes
-`Zk.shapeOk`. -/
 theorem sessionAt_ok {W : Flock.Witness.Inputs} {rd : _root_.Spot.OneStageZk.Reads} {draw : Option Json}
     {r : Flock.SessionSpec × Array Flock.Stmt} (h : _root_.Spot.OneStageZk.sessionAt W rd draw = .ok r) :
     Flock.Stmt.setupTables (Flock.Witness.zkTags W) W.circuitFile W.publicFile (Flock.Witness.zkCoins W) W.count
@@ -109,7 +67,6 @@ theorem sessionAt_ok {W : Flock.Witness.Inputs} {rd : _root_.Spot.OneStageZk.Rea
   cases h
   exact ⟨buildSessionOf_ok hr, hs⟩
 
-/-- **`setupAt`'s session is `sessionAt`'s**, its tables' verifier-side setups `Setup.ofCircuit` of its statements. -/
 theorem setupAt_ok {W : Flock.Witness.Inputs} {rd : _root_.Spot.OneStageZk.Reads} {draw : Option Json}
     {spec : Flock.SessionSpec} {tabs : Array Flock.Setup} {x : Json × Json}
     (h : _root_.Spot.OneStageZk.setupAt W rd draw = .ok (spec, tabs, x)) :
@@ -125,17 +82,12 @@ theorem setupAt_ok {W : Flock.Witness.Inputs} {rd : _root_.Spot.OneStageZk.Reads
   | error e => rw [hs] at h1; cases h1
   | ok b => rw [hs] at h1; cases h1; rfl
 
-/-- **v2's setup at a record's own sample is the event's** (`Recursion.Witness.setupOf_eq`): `Exec.setupOfP` at `--zk`'s
-inputs of v2's, with no public inputs. -/
 theorem setup_eq (W : Flock.Witness.Inputs) (record : String) :
     Flock.Stmt.setupTables (Flock.Witness.zkTags W) W.circuitFile W.publicFile (Flock.Witness.zkCoins W) W.count
         W.tables (Flock.Witness.recordDraw record) W.partition W.program =
       Exec.setupOfP (ZkExec.zkInputs (toExec W)) none record :=
   setupOf_eq W record
 
-/-- **v2's session at a record's own sample is `--zk`'s**: where `setupAt` sets up `(spec, tabs)`, `Exec.setupOfP` at
-`--zk`'s inputs of v2's, with no public inputs, sets up `spec` with statements that each pass `Zk.shapeOk` and whose
-verifier-side setups are `tabs`. -/
 theorem setupAt_setupOfP {W : Flock.Witness.Inputs} {rd : _root_.Spot.OneStageZk.Reads} {record : String}
     {spec : Flock.SessionSpec} {tabs : Array Flock.Setup} {x : Json × Json}
     (h : _root_.Spot.OneStageZk.setupAt W rd (Flock.Witness.recordDraw record) = .ok (spec, tabs, x)) :
@@ -146,18 +98,12 @@ theorem setupAt_setupOfP {W : Flock.Witness.Inputs} {rd : _root_.Spot.OneStageZk
   rw [setup_eq] at hset
   exact ⟨sts, hset, hshape, rfl⟩
 
-/-! ## What v2 verified is accepted -/
-
-/-- **`Zk.verify` accepts only a record that decodes** at the session's spec (`ZkExec.zk_verify_ok`). -/
 theorem zkVerify_decode {spec : Flock.SessionSpec} {tabs : Array Flock.Setup} {record : String}
     {proofs : Array ByteArray} (h : Flock.Zk.verify spec tabs record proofs = .ok ()) :
     ∃ sess, Flock.Record.decode spec record = .ok sess := by
   obtain ⟨-, sess, -, hs, -⟩ := ZkExec.zk_verify_ok spec tabs record proofs h
   exact ⟨sess, hs⟩
 
-/-- **What v2's check verified is a transcript verity-verify-proof `--zk` accepts** at v2's inputs: the record and the proof
-files of `V2Verified`, at the statement's tags and the circuit and public files v2 found on the blobs (`inputsOf`),
-with no public inputs, at the session `Exec.setupOfP` sets up there. -/
 theorem v2Verified_accepts {p : _root_.Spot.OneStageZk.Params} {e : _root_.Spot.OneStageZk.Evidence}
     {bs : _root_.Core.Blobs} {record : String} {spec : Flock.SessionSpec} {tabs : Array Flock.Setup}
     {rest : Json × Json} {proofs : Array ByteArray} (h : V2Verified p e bs record spec tabs rest proofs) :
@@ -171,10 +117,6 @@ theorem v2Verified_accepts {p : _root_.Spot.OneStageZk.Params} {e : _root_.Spot.
   obtain ⟨sts, hs, hshape, rfl⟩ := setupAt_setupOfP hst
   exact ⟨tags0, circuitB, pubB, sts, ht, hc, hp, hs, spec, sts, hs, hshape, hv⟩
 
-/-! ## v2's files are `A`'s -/
-
-/-- **`--zk`'s inputs of v2's are `I`'s at v2's lookup tables** where v2's inputs are `I`'s but the coins and the
-tables, and `I` has no work, stratified or closure input. -/
 theorem zkInputs_toExec {W : Flock.Witness.Inputs} {I : Exec.Inputs} (htags : W.tags = I.tags)
     (hcf : W.circuitFile = I.circuitFile) (hpf : W.publicFile = I.publicFile) (hcount : W.count = I.count)
     (hpart : W.partition = I.partition) (hprog : W.program = I.program)
@@ -186,15 +128,11 @@ theorem zkInputs_toExec {W : Flock.Witness.Inputs} {I : Exec.Inputs} (htags : W.
   subst htags hcf hpf hcount hpart hprog hwork hstrat hclo
   rfl
 
-/-- `AcceptsZKP` reads the inputs only through `--zk`'s. -/
 theorem acceptsZKP_congr {I I' : Exec.Inputs} (h : ZkExec.zkInputs I = ZkExec.zkInputs I') {own : Option ByteArray}
     {t : Exec.Transcript} : AcceptsZKP I own t ↔ AcceptsZKP I' own t := by
   unfold AcceptsZKP
   rw [h]
 
-/-- **More lookup tables set up `I`'s session** (`Refine.setupTables_back`): where `T'` finds by name whatever `I`'s
-tables find, `I`'s statement is untyped with at most one table and its circuit file parses at `--zk`'s tags, the
-session `Exec.setupOfP` sets up at `--zk`'s inputs with the tables `T'` is the one it sets up with `I`'s. -/
 theorem setupOfP_back {I : Exec.Inputs} {T' : List (String × ByteArray)} (hext : TablesExtend I.tables T')
     (hcount : I.count ≤ 1) (ht : I.tags.typed = false) {c : Flock.Circuit}
     (hp : Flock.HmOut.parse (ZkExec.zkTags I) I.circuitFile I.tables = .ok c) (own : Option ByteArray)
@@ -203,8 +141,6 @@ theorem setupOfP_back {I : Exec.Inputs} {T' : List (String × ByteArray)} (hext 
       (Exec.setupOfP (ZkExec.zkInputs I) own record) :=
   setupTables_back hext hcount ((ZkExec.zkTags_typed I).trans ht) hp _ _ _ _ _ _ _ _ _
 
-/-- **What verity-verify-proof `--zk` accepts with more lookup tables it accepts with `I`'s**, under `setupOfP_back`'s
-premises. -/
 theorem acceptsZKP_back {I : Exec.Inputs} {T' : List (String × ByteArray)} (hext : TablesExtend I.tables T')
     (hcount : I.count ≤ 1) (ht : I.tags.typed = false) {c : Flock.Circuit}
     (hp : Flock.HmOut.parse (ZkExec.zkTags I) I.circuitFile I.tables = .ok c) {own : Option ByteArray}
@@ -212,9 +148,6 @@ theorem acceptsZKP_back {I : Exec.Inputs} {T' : List (String × ByteArray)} (hex
   obtain ⟨spec, sts, hs, hshape, hv⟩ := h
   exact ⟨spec, sts, setupOfP_back hext hcount ht hp own t.record _ hs, hshape, hv⟩
 
-/-- **v2 reads `A`'s files on the blobs sent**: under v2's parameters in what the prover sent (`ParamsAt`), the circuit
-and the public file v2 finds on the blobs by its parameters' digests are `A`'s, and the lookup tables the blobs hold
-(`Spot.OneStageZk.tablesOf`) find by name whatever `A`'s find (`TablesExtend`). -/
 structure FilesOn (A : Live) (s : Verity.Sent) : Prop where
   circuit : ∀ p, ParamsAt s.params p → ∀ b,
     (_root_.Core.Blobs.ofArray s.blobs).get p.own.circuit "circuit" = .ok b → b = A.I.circuitFile
@@ -223,8 +156,6 @@ structure FilesOn (A : Live) (s : Verity.Sent) : Prop where
   tables : TablesExtend A.I.tables (_root_.Spot.OneStageZk.tablesOf (_root_.Core.Blobs.ofArray s.blobs))
 
 variable {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α]
-
-/-! ## v2's files are the vocabulary's -/
 
 theorem getD_inj {a b : ByteArray} (ha : a.size = 64) (hb : b.size = 64)
     (h : (fun i : Fin 64 => a.data.getD i.val 0) = fun i => b.data.getD i.val 0) : a = b := by
@@ -242,8 +173,6 @@ theorem sha512_data (f : ByteArray) :
   unfold Verity.sha512
   rw [Array.toArray_toList]
 
-/-- **`Blobs.get` on the committed files, then the evidence's blobs, returns the first committed file `q` holds of**,
-where `q` holds of a file exactly when its SHA-512 is the digest and one committed file has it. -/
 theorem get_first {F B : Array ByteArray} {s what : String} {b : ByteArray} {q : ByteArray → Bool}
     (hq : ∀ dg, Flock.unhex s = .ok dg → dg.size = 64 → ∀ f, (Flock.Sha512.hash f == dg) = q f)
     (hreg : ∃ f ∈ F, q f = true) (hg : (_root_.Core.Blobs.ofArray (F ++ B)).get s what = .ok b) :
@@ -269,9 +198,6 @@ theorem get_first {F B : Array ByteArray} {s what : String} {b : ByteArray} {q :
   have hb : f0 = b := by cases hg; rfl
   rw [← hb, hf0, Option.getD_some]
 
-/-- **A blob v2 finds by a digest the committed files carry is the committed file the digest names**: the blobs are
-the committed files `F`, then the evidence's `B`, and `Blobs.get` returns the first whose SHA-512 is the digest, as
-`namedFile` does on `F`. -/
 theorem get_named {F B : Array ByteArray} {s what : String} {h : Option Hash.Digest} {b : ByteArray}
     (hd : ∀ dg, Flock.unhex s = .ok dg → h = some fun i => dg.data.getD i.val 0)
     (hreg : ∃ f ∈ F, h = some (Verity.sha512 f.data.toList))
@@ -288,9 +214,6 @@ theorem get_named {F B : Array ByteArray} {s what : String} {h : Option Hash.Dig
   · obtain ⟨f, hf, hfh⟩ := hreg
     exact ⟨f, hf, decide_eq_true hfh⟩
 
-/-- **An accepted play's blobs hold the registered circuit's lookup tables and no other pinned table**, on parameters
-that name no members: v2's case in it accepts on the blobs sent, the committed files then the evidence's
-(`Properties.Spot.TablesRegistered`, the one statement's clause). -/
 theorem tables_registered {V : Vocab d α} {k : Verity.Registration.Composite} {o : Verity.Exchange}
     {p₀ : _root_.Spot.OneStageZk.Params} (hθ : ParamsAt o.params p₀) (hone : OneStatement o.params)
     (hv : V.Verdict k .sampled o) :
@@ -302,9 +225,6 @@ theorem tables_registered {V : Vocab d α} {k : Verity.Registration.Composite} {
   rw [hone _ hθ] at h
   exact h
 
-/-- **The tables the blobs sent hold extend the ones a circuit file registers**, where the circuit file looks up
-exactly the pinned tables the blobs hold (`Spot.OneStageZk.lookupsOf`) and each the blobs hold is its
-registered file (`TablesSent`). -/
 theorem pinnedTables_extend {T : PinnedTables} {s : Verity.Sent} {circuitB : ByteArray} {names : List String}
     (hl : _root_.Spot.OneStageZk.lookupsOf circuitB = .ok names)
     (hn : names = (_root_.Spot.OneStageZk.tablesOf (_root_.Core.Blobs.ofArray s.blobs)).map (·.1))
@@ -341,10 +261,6 @@ theorem pinnedTables_extend {T : PinnedTables} {s : Verity.Sent} {circuitB : Byt
       simp only [ha, ht _ ht' a b ha hb, Option.map_some]
     · cases h
 
-/-- **The blobs' pinned tables a circuit file looks up extend the ones it registers**, where the blobs sent hold
-each pinned table the circuit file looks up (`Spot.OneStageZk.tablesAmong`, every name of
-`Spot.OneStageZk.lookupsOf`) and each the blobs hold is its registered file (`TablesSent`), whatever other pinned
-table the blobs hold. -/
 theorem pinnedTables_among {T : PinnedTables} {s : Verity.Sent} {circuitB : ByteArray} {names : List String}
     (hl : _root_.Spot.OneStageZk.lookupsOf circuitB = .ok names)
     (hn : (_root_.Spot.OneStageZk.tablesAmong names (_root_.Core.Blobs.ofArray s.blobs)).map (·.1) = names)
@@ -398,10 +314,6 @@ theorem pinnedTables_among {T : PinnedTables} {s : Verity.Sent} {circuitB : Byte
       · cases hft'
     · cases h
 
-/-- **v2 reads `A`'s files** where its parameters name the vocabulary's digests, the vocabulary reads the lookup tables
-the circuit file registers, the committed files are registered, the blobs sent are the committed files, then the
-evidence's, the blobs sent hold the circuit file's lookup tables (`HoldsRegisteredTables`, which v2's acceptance gives,
-`tables_registered`), and each pinned table they hold is its registered file (`TablesSent`). -/
 theorem filesOn_of {V : Vocab d α} {T : PinnedTables} {θ : ByteArray} {F B : Array ByteArray} {A : Live}
     {s : Verity.Sent} (hA : SetsUp V θ F A) (hD : DigestsAt V T θ) (hreg : V.Registered θ F) (hθ : s.params = θ)
     (hs : s.blobs = F ++ B) {p₀ : _root_.Spot.OneStageZk.Params} (hp₀ : ParamsAt s.params p₀)
@@ -424,12 +336,6 @@ theorem filesOn_of {V : Vocab d α} {T : PinnedTables} {θ : ByteArray} {F B : A
     rw [h, ← hc p₀ hp₀ circuitB hg]
     exact pinnedTables_extend hl rfl ht
 
-/-! ## v2's verdict at `A` -/
-
-/-- **v2's verdict is verity-verify-proof `--zk`'s at `A` on the session's files**: where `A` is the session v2 sets up on
-the parameters and v2 reads `A`'s files on the blobs sent, the record and the proof files v2 reads in what the prover
-sent (`sentRecord`, `sentProofs`) are a transcript `AcceptsZKP A.I A.own` accepts, at the session `Exec.setupOfP` sets
-up at `A`'s inputs. -/
 theorem accepts_sent {V : Vocab d α} {k : Verity.Registration.Composite} {A : Live} {θ : ByteArray}
     {F : Array ByteArray} {o : Verity.Exchange} (hA : SetsUp V θ F A) (hθ : o.params = θ)
     (hv : V.Verdict k .sampled o) (hF : FilesOn A o.sent) :
@@ -454,11 +360,6 @@ theorem accepts_sent {V : Vocab d α} {k : Verity.Registration.Composite} {A : L
   exact ⟨record, proofs, spec, sts, hrec, hpr, setupOfP_back hF.tables hA.count.le A.ht hp none record _ hs,
     acceptsZKP_back hF.tables hA.count.le A.ht hp ((acceptsZKP_congr hz).1 hat)⟩
 
-/-! ## The writer -/
-
-/-- **The moves of `out` are those v2's files decode to** in what the prover sent `s`, at the sample `S`: v2's record
-carries the sample `A.dj S`, and `out`'s roots, link points and rounds are those of the session the record decodes to at
-the session `--zk` sets up at `A`'s inputs, and its proof files are v2's. -/
 def MovesOf (A : Live) (s : Verity.Sent) (S : Finset (Fin A.n)) (R : A.Reg) (out : LiveOutJ (A.J S R) A.mP) : Prop :=
   ∀ record proofs spec sts sess, sentRecord s = some record → sentProofs s = some proofs →
     Exec.setupOfP (ZkExec.zkInputs A.I) A.own record = .ok (spec, sts) →
@@ -466,10 +367,6 @@ def MovesOf (A : Live) (s : Verity.Sent) (S : Finset (Fin A.n)) (R : A.Reg) (out
     Exec.recordDraw record = some (A.dj S) ∧ out.rootB = sess.rootB ∧ out.pts = ptsOf A.mP sess.points ∧
       (∀ j r, out.reps j r = repRounds spec sess j.val r.val) ∧ out.proofs = proofs
 
-/-- **v2's verdict is verity-verify-proof `--zk`'s acceptance of what the writer writes**: where `A` is the session v2 sets up
-on the parameters, v2 reads `A`'s files on the blobs sent and the session's writer keeps an accepted transcript's view
-(`WritesView`), the sampled verdict implies `AcceptsZKP A.I A.own` of what the writer writes for moves v2's files
-decode to (`MovesOf`). -/
 theorem wr_accepts_of_verdict {V : Vocab d α} {k : Verity.Registration.Composite} {A : Live} {θ : ByteArray}
     {F : Array ByteArray} {o : Verity.Exchange} (hA : SetsUp V θ F A) (hθ : o.params = θ)
     (hv : V.Verdict k .sampled o) (hF : FilesOn A o.sent) (hW : WritesView A) {S : Finset (Fin A.n)} {R : A.Reg}
@@ -483,16 +380,12 @@ theorem wr_accepts_of_verdict {V : Vocab d α} {k : Verity.Registration.Composit
   obtain ⟨hdr, hB, hP, hR, hPf⟩ := hM record proofs spec sts sess hrec hpr hs hd
   exact wr_accepts hW hat hdr hs hd hB hP hR hPf
 
-/-! ## The pointwise acceptance -/
-
-/-- A tape's play reaches its output. -/
 theorem run_reaches {β : Type} : ∀ (g : Verity.Game β) (s : Verity.Game.Strategy g)
     (x : Verity.Game.CoinTape g s), Verity.Game.PlayReaches g s (Verity.Game.CoinTape.run g s x)
   | .ret _, _, _ => rfl
   | .send _ k, s, x => run_reaches (k s.1) s.2 x
   | @Verity.Game.coin _ _ _ _ k, s, x => ⟨x.1, run_reaches (k x.1) (s x.1) (x.2 x.1)⟩
 
-/-- **A play of the period's game ends at its parameters and its committed files.** -/
 theorem play_ends (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
     (σ : Verity.Game.Strategy (V.game θ F c)) (x : Verity.Game.CoinTape (V.game θ F c) σ) :
     (Verity.Game.CoinTape.run (V.game θ F c) σ x).params = θ ∧
@@ -505,11 +398,6 @@ theorem play_ends (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (c : B
   rw [ho]
   exact ⟨rfl, rfl⟩
 
-/-- **The outcomes on the joint distribution's support are the writer's at moves v2's files decode to** (the decoders' and the
-coin map's premise): on the joint distribution's support off the held-off events `BL` and `B`, beside a tape whose play's sampled
-verdict at `k` accepts, that misses at no round and not at the record, and whose play `P` holds of, the outcome is the
-writer's at a sample `S`, a registration `R` and an outcome `out` of the live session whose moves are those v2's files
-decode to in what the prover sent (`MovesOf`). -/
 def MovesReach (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (k : Verity.Registration.Composite)
     (P : Verity.Exchange → Prop) (A : Live) (rd : Reading A.rounds) (σ : Verity.Game.Strategy (V.game θ F c))
     (D : Decoders A.rounds A.Reg) (M : CoinMap (V.game θ F c) σ A.Ω A.rounds A.mP) (BL : LinkHold A.mP)
@@ -520,11 +408,6 @@ def MovesReach (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (c : Byte
     ∃ (S : Finset (Fin A.n)) (R : A.Reg) (out : LiveOutJ (A.J S R) A.mP), o.1 = (R, S, A.wr S R out) ∧
       MovesOf A (Verity.Game.CoinTape.run (V.game θ F c) σ o.2).sent S R out
 
-/-- **The decoders' premise, pointwise** (`Decodes`): where `A` is the session v2 sets up on the parameters and the
-committed files, v2 reads `A`'s files on the blobs of each accepted play,
-the session's writer keeps an accepted transcript's view (`WritesView`) and the outcomes on the joint distribution's support off
-`BL` and `B` are the writer's at moves v2's files decode to (`MovesReach`), every accepted play there that misses
-nowhere and that `P` holds of is beside an outcome verity-verify-proof `--zk` accepts at `A.own`. -/
 theorem decodes_of {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {c : ByteArray}
     {k : Verity.Registration.Composite} {P : Verity.Exchange → Prop} {A : Live} {rd : Reading A.rounds}
     {σ : Verity.Game.Strategy (V.game θ F c)} {D : Decoders A.rounds A.Reg}
@@ -537,9 +420,6 @@ theorem decodes_of {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {c : 
   rw [h1]
   exact wr_accepts_of_verdict hA (play_ends V θ F c σ o.2).1 hacc.1 (hF o.2 hacc.1 hacc.2.2) hW hmo
 
-/-- **v2 reads `A`'s files on an accepted play that reads the registered tables**: the play ends at its parameters
-and committed files, the verdict holds the files registered and the blobs sent to the circuit file's lookup tables
-(`tables_registered`), and the blobs sent are the committed files, then the evidence's. -/
 theorem filesOn_play {V : Vocab d α} {T : PinnedTables} {θ : ByteArray} {F : Array ByteArray} {c : ByteArray}
     {k : Verity.Registration.Composite} {A : Live} {σ : Verity.Game.Strategy (V.game θ F c)}
     (hA : SetsUp V θ F A) (hD : DigestsAt V T θ) {x : Verity.Game.CoinTape (V.game θ F c) σ}
@@ -556,11 +436,6 @@ theorem filesOn_play {V : Vocab d α} {T : PinnedTables} {θ : ByteArray} {F : A
     (by show (Verity.Game.CoinTape.run (V.game θ F c) σ x).files ++ _ = _; rw [hf]) hp₀'
     (tables_registered hp₀' (by rw [hp]; exact hA.single) hv) ht
 
-/-- **The decoders' premise, pointwise, at the vocabulary's digests** (`decodes_of` with `filesOn_play`): where v2's
-parameters name the vocabulary's digests and the vocabulary reads the lookup tables the circuit file registers
-(`DigestsAt`), `Decodes` at a `P` that holds v2 to the registered tables (`TablesSent`) holds wherever the writer keeps
-an accepted transcript's view and the outcomes on the joint distribution's support off the held-off events are the writer's at
-moves v2's files decode to. -/
 theorem decodes_of_digests {V : Vocab d α} {T : PinnedTables} {θ : ByteArray} {F : Array ByteArray} {c : ByteArray}
     {k : Verity.Registration.Composite} {P : Verity.Exchange → Prop} {A : Live} {rd : Reading A.rounds}
     {σ : Verity.Game.Strategy (V.game θ F c)} {D : Decoders A.rounds A.Reg}

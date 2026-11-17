@@ -4,23 +4,7 @@ public import Proofs.Properties.Verity.Sampled.MemberForm.Order
 public import Proofs.Properties.Verity.Sampled.MemberForm.Named
 public import Proofs.Properties.Verity.Sampled.MovesReach
 
-/-!
-# A member's session's record, held to its own tree of a log of several
-
-The per-member form holds each session's record to one tree of the release log less that tree's last opening, the
-session's closing round (`Spot.Challenger.memberTreeReason`: `sessionTreeReason #[t.unclosed]`), where the
-one-statement form holds its record to the log's trees. What the record's check gives of the tree it finds, it gives
-of `t`:
-
-* **The record at its member's tree** (`tree_coinTree`; `tree_round` and the tree less its last opening are
-  `MemberForm.Named`'s): each round the record gives coins of is one `t` shows opened, and the record's `coin_tree`
-  prints as `t`'s record.
-* **On the read of the log** (`tree_open`, `tree_keyAt`, `tree_rounds_le`): a round the record gives is an
-  open line of the log naming `t`; each stream the record gives rounds of is a stream of `t` among the trees read;
-  and the read opens each of the record's streams at least its rounds.
-* **The tree's spec** (`helloSpec_of_tree`, `helloSpec_of_text`): `t` is sampled in the device's log with the coin
-  tree of the session the record's text decodes at.
--/
+/-! A member's session's record, held to its own tree of a log of several. -/
 
 @[expose] public section
 
@@ -30,25 +14,17 @@ open Lean (Json)
 open Spot Spot.Challenger
 open Properties.Challenger.CanonRead (sorted_getD)
 
-/-! ## The record at its member's tree -/
-
 variable {t : LoggedTree} {tables : Array (String × Option ℕ)} {record : Json}
 
-/-- **A member's record's coin tree is its tree**, and its `coin_tree` prints as the tree's record
-(`Trees.coinTree_held`). -/
 theorem tree_coinTree (h : sessionTreeReason #[t.unclosed] tables record = none) :
     recordTree record = t.root ∧ jeq (getD record "coin_tree") t.record = true := by
   obtain ⟨t', ht', hroot, hj⟩ := Trees.coinTree_held h
   obtain rfl := mem_one ht'
   exact ⟨hroot, hj⟩
 
-/-! ## On the read of the log -/
-
 variable {label : String} {after : ByteArray} {recs : List Json} {ξ : ByteArray} {lines : List String}
   {log : List Verity.Release} {trees : Array LoggedTree}
 
-/-- **A round a member's record gives coins of is an open line of the release log** naming the member's tree, with
-that round's stream and number and those coins' SHA-512 (`Trees.open_held`, at a log of several trees). -/
 theorem tree_open (hT : coinTreesOf lines = .ok trees) (ht : t ∈ trees)
     (h : sessionTreeReason #[t.unclosed] tables record = none) {stream : String} {k : ℕ} {cs : ByteArray}
     (hr : recordRound record stream k = some cs) :
@@ -61,8 +37,6 @@ theorem tree_open (hT : coinTreesOf lines = .ok trees) (ht : t ∈ trees)
   rw [← hc, ← hp.1, ← hp.2]
   exact hol
 
-/-- **Each stream a member's record gives rounds of is a stream of its tree among the trees read**
-(`keyAt_of_record`, at a log of several trees). -/
 theorem tree_keyAt (hT : coinTreesOf lines = .ok trees) (ht : t ∈ trees)
     (h : sessionTreeReason #[t.unclosed] tables record = none) {name : String}
     (hpos : 0 < recordRounds record name) : ∃ i si, KeyAt (heldTrees trees) i si t.root name := by
@@ -70,8 +44,6 @@ theorem tree_keyAt (hT : coinTreesOf lines = .ok trees) (ht : t ∈ trees)
   obtain ⟨l, hl, _, _, htl, d, hev, hTE, hroot, hs, -⟩ := tree_open hT ht h hcs
   exact treeFold_keyAt (records := []) lines [] _ (coinTreesOf_fold [] hT) l hl htl d hev hTE hroot hs
 
-/-- **The read opens each of a member's record's streams at least its rounds** (`recordRounds_le_openedOf`, at a
-log of several trees): tree `i`'s stream `si`, that stream of the member's tree. -/
 theorem tree_rounds_le (hT : coinTreesOf lines = .ok trees) (hR : readLog label after recs ξ lines = some log)
     (ht : t ∈ trees) (h : sessionTreeReason #[t.unclosed] tables record = none) {name : String} {i si : ℕ}
     (hk : KeyAt (heldTrees trees) i si t.root name) : recordRounds record name ≤ openedOf log i si := by
@@ -84,12 +56,6 @@ theorem tree_rounds_le (hT : coinTreesOf lines = .ok trees) (hR : readLog label 
   have := opening_lt_openedOf hT hR ht ho hk
   omega
 
-/-! ## The tree's spec in the read -/
-
-/-- **A member's tree is sampled in the device's log with the spec `checkRecord` held its record's `coin_tree` to**
-(`helloSpec_of_record`, at a log of several trees): where `readLog` reads the release log as releases of the frames
-and answers of the device's log `Lg`, tree `i` of the trees read, the member's tree (`KeyAt`), is sampled in `Lg`
-with `sp`. -/
 theorem helloSpec_of_tree (hT : coinTreesOf lines = .ok trees) (hR : readLog label after recs ξ lines = some log)
     {Lg : List Verity.Release}
     (hl : List.Forall₂ (fun x y => x.frame = y.frame ∧ x.answers = y.answers) log Lg) (ht : t ∈ trees)
@@ -122,9 +88,6 @@ theorem helloSpec_of_tree (hT : coinTreesOf lines = .ok trees) (hR : readLog lab
     rw [← helloSpecs_congr hl, hsp']
     exact hv'.symm
 
-/-- **A member's tree is sampled in the device's log with its session's coin tree**, where `Record.decode` accepts
-the record's text at a session on that tree and `record` is the text's value (`helloSpec_of_decode`, at a log of
-several trees). -/
 theorem helloSpec_of_text {spec : Flock.SessionSpec} {text : String} {sess : Flock.RunRecord}
     {sp : Flock.CoinTree.Spec} (hd : Flock.Record.decode spec text = .ok sess) (hc : spec.coinTree = some sp)
     (hJ : Flock.JsonParse.parse text = .ok record) (hT : coinTreesOf lines = .ok trees)

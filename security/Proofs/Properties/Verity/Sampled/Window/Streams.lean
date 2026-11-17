@@ -2,23 +2,7 @@ module
 
 public import Proofs.Properties.Verity.Sampled.Window.Sessions
 
-/-!
-# SPOT's coupling over a window: the rounds a session's trace leaves on one stream
-
-A member's session's trace answers its rounds at releases of the one play's log (`Window/Answered.lean`), and the
-window's readings say which opening is which session's round (`Window/Sessions.lean`). This module reads, on lists
-alone, the rounds the trace's answered stops leave on one rep stream of the session's tree, as `Stops.lean` does at
-one session:
-
-* **The answered stops of one stream are at its openings, in order** (`session_stream_logs`): where the stops each
-  release their coins at an opening a rep round of the session picks, every release a round of the session picks is
-  the link's, one of theirs or the closing round's, the tree's first opening is of its stream named the session's, and
-  the session has a
-  round for each opening of the stream, the logs after which the stops on that stream release their coins are the
-  logs before each of its openings.
-* **The rounds of one stream** (`session_stream_rounds`): so the rounds the trace appends to a stream are one per
-  opening of it, the `k`-th after the log that has opened it `k` times.
--/
+/-! SPOT's coupling over a window: the rounds a session's trace leaves on one stream. -/
 
 @[expose] public section
 
@@ -26,16 +10,6 @@ namespace Verity.Sampled
 
 open FlockSoundness.Discharge.Tables (addRoundJ)
 
-/-- **The answered stops of one stream of a session are at its openings, in order**, at the readings of a window a
-session at a time, of distinct tables: where each answered stop `as` releases its round's coins after one of the logs
-`ms` of `Lg`, each longer than the one before, at an opening a round of session `u` picks, a rep round of the stop's
-table and rep; every release a round of session `u` picks in `Lg` is after `L₀` or one of `ms`, or is the session's
-closing round's, and only the link's round picks after `L₀`; each opening of `Lg` is one the device serves, each tree
-of `Lg` names its streams distinctly,
-the first opening of the `u`-th tree `Lg` opens is of its stream named the session's, that tree's stream `s` is named
-table `t`'s rep `r`, and session `u` has a round for each of `Lg`'s openings of it: the logs after which the stops
-submitting on table `t`'s rep `r` release their coins are the logs before each of `Lg`'s openings of `s`, in order
-(`stream_logs`, at a session of a window). -/
 theorem session_stream_logs {γ : Type _} {J : ℕ} (tab : γ → Fin J) (rep : γ → Fin 2) {R : ℕ}
     {tables : Array String} (ht : tables.toList.Nodup) {per : ℕ} (hper : 0 < per)
     (reveal : ℕ → Slot → Exchange → Option Claims.Msg) (record : Exchange → Option Claims.Msg)
@@ -130,10 +104,6 @@ theorem session_stream_logs {γ : Type _} {J : ℕ} (tab : γ → Fin J) (rep : 
       rw [← he, hs] at h1
       exact absurd h1 rep_ne_session
 
-/-- **The rounds the answered stops leave on one stream of a session are one per opening of it**, under
-`session_stream_logs`'s premises: where the round each answered stop on table `t`'s rep `r` appends is `f` at the
-count of the stream's openings its log has, the stream's rounds are `f` at none, one, and so on up to the count of
-them in `Lg` (`stream_rounds`, at a session of a window). -/
 theorem session_stream_rounds {γ : Type _} {J : ℕ} (tab : γ → Fin J) (rep : γ → Fin 2) (rd : γ → Flock.Round)
     {R : ℕ} {tables : Array String} (ht : tables.toList.Nodup) {per : ℕ} (hper : 0 < per)
     (reveal : ℕ → Slot → Exchange → Option Claims.Msg) (record : Exchange → Option Claims.Msg)

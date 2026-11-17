@@ -2,19 +2,7 @@ module
 
 public import Proofs.Properties.Verity.Sampled.Trees
 
-/-!
-# The release log's first opening, and the one coin tree of v2's sessions
-
-v2 holds a `--zk` session's record to the coin trees the release log shows sampled (`coinTreesOf`), one tree a session
-(`sessionsTreeReason`):
-
-* **One tree a session** (`sessions_size`, `treesHeld_size`): where `treesHeld` accepts, the log shows as many trees as
-  the evidence names sessions, since `sessionsTreeReason` refuses a tree no session records.
-* **The first opening** (`FirstRound`, `first_round`): `coinTreesOf` takes a stream's round `k` only as its `k`-th
-  opened, so the log's first line opening a round opens round 0, of a tree the log shows sampled.
-* **The link's coins** (`link_some`): a record `sessionTreeReason` accepts gives the coins of its session stream's
-  round 0 (`Verity.Sampled.recordRound`), its link points.
--/
+/-! The release log's first opening, and the one coin tree of v2's sessions. -/
 
 @[expose] public section
 
@@ -23,10 +11,6 @@ namespace Verity.Sampled.LinkTrees
 open Lean (Json)
 open Spot Spot.Challenger
 
-/-! ## One tree a session -/
-
-/-- **A loop that returns at its first reason and pushes a member at each step it yields**, from the state `(none, u)`,
-returns a reason, or none at a state of `u.size + l.length` members. -/
 theorem forIn_count {α γ β : Type}
     {f : α → Option (Option γ) × Array β → Id (ForInStep (Option (Option γ) × Array β))}
     (hf : ∀ x u s, f x (none, u) = s →
@@ -44,8 +28,6 @@ theorem forIn_count {α γ β : Type}
       · exact .inl ⟨w, hw⟩
       · exact .inr ⟨hn, hs.trans (by rw [Array.size_push, List.length_cons]; omega)⟩
 
-/-- **A loop that returns at its first reason and pushes a member at each step it yields, then its reason**: where none
-returns, it returns none at a state of a member for each step. -/
 theorem ret_count {α γ β : Type}
     {f : α → Option (Option γ) × Array β → Id (ForInStep (Option (Option γ) × Array β))}
     {g : Option (Option γ) × Array β → Id (Option γ)}
@@ -65,7 +47,6 @@ theorem ret_count {α γ β : Type}
     rw [e] at h
     exact ⟨Prod.snd (forIn (m := Id) xs.toList (none, u₀) f), by rw [hs, Array.length_toList], h⟩
 
-/-- **Sessions `sessionsTreeReason` accepts use every tree**: as many as the log shows. -/
 theorem sessions_size {trees : Array LoggedTree} {records : Array (String × Array (String × Option Nat) × Json)}
     (h : sessionsTreeReason trees records = none) : trees.size = records.size := by
   unfold sessionsTreeReason at h
@@ -83,7 +64,6 @@ theorem sessions_size {trees : Array LoggedTree} {records : Array (String × Arr
     case h_1 => exact .inl ⟨_, _, hs.symm⟩
     exact .inr ⟨_, hs.symm⟩
 
-/-- **The trees `treesHeld` holds the evidence's sessions to are one a session.** -/
 theorem treesHeld_size {p : Spot.OneStageZk.Own} {ts : Array LoggedTree}
     {e : Spot.OneStageZk.Evidence} {bs : _root_.Core.Blobs}
     (h : Spot.OneStageZk.treesHeld p ts e bs = .ok ()) : ts.size = e.sessions.size := by
@@ -111,7 +91,6 @@ theorem treesHeld_size {p : Spot.OneStageZk.Own} {ts : Array LoggedTree}
     refine ⟨_, rfl, ?_⟩
     rw [Array.size_push, hI', List.length_append, List.length_singleton]
 
-/-- An array of one member holds no other. -/
 theorem eq_of_size_one {β : Type} {xs : Array β} (h : xs.size = 1) {a b : β} (ha : a ∈ xs) (hb : b ∈ xs) :
     a = b := by
   obtain ⟨i, hi, rfl⟩ := Array.mem_iff_getElem.1 ha
@@ -120,10 +99,6 @@ theorem eq_of_size_one {β : Type} {xs : Array β} (h : xs.size = 1) {a b : β} 
   subst e
   rfl
 
-/-! ## The link's coins -/
-
-/-- **A record `sessionTreeReason` accepts, at any tables, gives its link points' coins**, its session stream's
-round 0. -/
 theorem link_some {trees : Array LoggedTree} {tables : Array (String × Option Nat)} {record : Json}
     (h : sessionTreeReason trees tables record = none) :
     ∃ cs, Verity.Sampled.recordRound record TREE_SESSION 0 = some cs := by
@@ -149,9 +124,6 @@ theorem link_some {trees : Array LoggedTree} {tables : Array (String × Option N
   rw [ite_eq_left (by simp), hps]
   exact hpts
 
-/-! ## The first opening -/
-
-/-- **A coin tree's line whose event isn't a tree's sample opens a round** (`Verity.Sampled.openLine`). -/
 theorem openLine_of_open {l : String} {d : Json} (ht : treeLine l = true) (hev : event l = .ok d)
     (hT : ¬ jsonStrIs (getD d "event") TREE_EVENT = true) : Verity.Sampled.openLine l = true := by
   have htl : (jsonStrIs (getD d "event") TREE_EVENT || jsonStrIs (getD d "event") OPEN_EVENT) = true := by
@@ -181,18 +153,12 @@ theorem root_mem_modify {xs : Array LoggedTree} {i : Nat} {f : LoggedTree → Lo
   · exact hf _
   · rfl
 
-/-- **The trees after the release log's lines `pre`, up to its first opening**: where no line of `pre` opens a round
-(`Verity.Sampled.openLine`), none of `trees` shows a round opened; and the first line of `pre` that `coinTreesOf`
-reads as an opening (a coin tree's line whose event isn't a tree's sample) opens round 0, of a tree of `trees` by its
-root. -/
 def FirstRound (pre : List String) (trees : Array LoggedTree) : Prop :=
   ((∀ l ∈ pre, Verity.Sampled.openLine l = false) → ∀ t ∈ trees, t.opened = #[]) ∧
     ∀ p₀ l p₁ d, pre = p₀ ++ l :: p₁ → (∀ l' ∈ p₀, Verity.Sampled.openLine l' = false) → treeLine l = true →
       event l = .ok d → jsonStrIs (getD d "event") TREE_EVENT = false →
       nat? (getD d "round") = some 0 ∧ ∃ root, getD d "tree" = .str root ∧ ∃ t ∈ trees, t.root = root
 
-/-- A line `coinTreesOf` reads as no opening keeps `FirstRound`, at trees of the earlier ones and new ones that open
-nothing, where each earlier tree is a later one. -/
 theorem first_keep {pre : List String} {line : String} {ts ts' : Array LoggedTree} (hI : FirstRound pre ts)
     (hnot : ∀ d, treeLine line = true → event line = .ok d → jsonStrIs (getD d "event") TREE_EVENT = false → False)
     (hnew : ∀ t ∈ ts', t ∈ ts ∨ t.opened = #[]) (hold : ∀ t ∈ ts, t ∈ ts') : FirstRound (pre ++ [line]) ts' := by
@@ -205,8 +171,6 @@ theorem first_keep {pre : List String} {line : String} {ts ts' : Array LoggedTre
     · obtain ⟨hk, root, hroot, t, ht, htr⟩ := hI.2 p₀ l p₁' d hp hno htl hev hT
       exact ⟨hk, root, hroot, t, hold t ht, htr⟩
 
-/-- A line `coinTreesOf` reads as opening round `k` of stream `s` of the tree `t` of root `root`, its `k`-th opened,
-keeps `FirstRound`. -/
 theorem first_open {pre : List String} {line : String} {ts : Array LoggedTree} {d : Json} {root s : String}
     {i k : Nat} {t : LoggedTree} {f : LoggedTree → LoggedTree} (hI : FirstRound pre ts) (htl : treeLine line = true)
     (hev : event line = .ok d) (hT : ¬ jsonStrIs (getD d "event") TREE_EVENT = true)
@@ -234,7 +198,6 @@ theorem first_open {pre : List String} {line : String} {ts : Array LoggedTree} {
     obtain ⟨t'', ht'', htr''⟩ := root_mem_modify (i := i) hf ht'
     exact ⟨hk', root', hroot'', t'', ht'', htr''.trans htr'⟩
 
-/-- **The trees `coinTreesOf` reads hold `FirstRound` of the whole log.** -/
 theorem first_round_inv {log : List String} {trees : Array LoggedTree} (h : coinTreesOf log = .ok trees) :
     FirstRound log trees := by
   unfold coinTreesOf at h
@@ -296,9 +259,6 @@ theorem first_round_inv {log : List String} {trees : Array LoggedTree} (h : coin
             fun _ => rfl⟩
         · cases hr
 
-/-- **The release log's first opening opens round 0 of a tree the log shows sampled**: where `coinTreesOf` reads the
-log `p₀ ++ l :: p₁` to `trees` and no line of `p₀` opens a round, the line `l`, read as an opening, names round 0 and the
-root of a tree of `trees`. -/
 theorem first_round {log : List String} {trees : Array LoggedTree} (h : coinTreesOf log = .ok trees)
     {p₀ p₁ : List String} {l : String} {d : Json} (hlog : log = p₀ ++ l :: p₁)
     (hno : ∀ l' ∈ p₀, Verity.Sampled.openLine l' = false) (htl : treeLine l = true) (hev : event l = .ok d)

@@ -4,26 +4,12 @@ public import Proofs.Properties.Verity.Sampled.MemberForm.Sample
 public import Proofs.Properties.Verity.Sampled.MemberForm.Apart
 public import Proofs.Properties.Verity.Sampled.Window.Instance
 
-/-!
-# A window whose members' files pass is laid out in order
-
-`ExecutionPhase.Laid` asks that the members' proof-block counts sum to the window's population and that each member's proof
-blocks sit after the earlier members'. This file proves it of the window the parameters' members are on
-(`ExecutionPhaseOn`), where every member's files pass (`FilesPass`), each member is one range of units and no unit is in two
-members' ranges (`Apart`).
-
-* **Each member sits after the earlier ones** (`ExecutionPhaseOn.laid`): the members are in the order of their first units,
-  each at the range from its first unit, the ranges share no unit and lie inside the population, and their counts sum
-  to it (`ExecutionPhaseOn.total`), so each starts where the ones before it end (`emb_of_tiles`).
-* **From the counts and the places to `ExecutionPhase.Laid`** (`ExecutionPhase.laid_of`).
--/
+/-! A window whose members' files pass is laid out in order. -/
 
 @[expose] public section
 
 namespace Verity.Sampled
 
-/-- **A window whose members' counts sum to its population and whose members sit at their bases is laid out in
-order**: `ExecutionPhase.Laid` reads the members' counts and places alone. -/
 theorem ExecutionPhase.laid_of {W : ExecutionPhase} (ht : (W.ms.map fun m => m.n).sum = W.nJ)
     (he : ∀ (j : Fin W.ms.length) (u : Fin (W.ms.get j).n),
       ((W.ms.get j).emb u).val = MemberLayout.base (W.ms.map fun m => m.n) j.1 + u.val) : W.Laid := by
@@ -42,10 +28,6 @@ namespace MemberForm
 
 variable {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α]
 
-/-- **A window whose members' files pass is laid out in order**, where each of the parameters' members is one range
-of units and no unit is in two members' ranges: the members are in the order of their first units, each at the range
-from its first unit, inside the population, and their counts sum to it (`ExecutionPhaseOn.total`), so each member's proof
-blocks sit after the earlier members' (`emb_of_tiles`). -/
 theorem ExecutionPhaseOn.laid {V : Vocab d α} {T : PinnedTables} {θ : ByteArray} {F : Array ByteArray} {W : ExecutionPhase}
     (h : ExecutionPhaseOn V T θ F W) (hp : ∀ m ∈ W.ms, FilesPass m) {p : _root_.Spot.OneStageZk.Params}
     {ms : Array _root_.Spot.OneStageZk.Member} (hpa : ParamsAt θ p) (hms : p.members = some ms)

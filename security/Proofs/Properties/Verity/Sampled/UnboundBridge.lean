@@ -4,32 +4,7 @@ public import Definitions.Compose.JointLive
 public import Proofs.Flock.Bridge.CircuitOf
 public import Proofs.Flock.Bridge.FaultyRightC
 
-/-!
-# A unit unbound in the transcript a witness opens is faulty
-
-`ResourceAccounting.unbound` at a game circuit's partition (`Verity.Partition.ofAudit P`), the transcript a witness opens
-(`openedOf C κ val`) and any openings `opens` of the circuit's gates that hold at the constants `κ` fix and wherever
-`val` opens a value: a unit there is incorrect in the transcript, or one of its committed inputs and outputs (`io`) is not
-opened to its value. Either way its lowered gates `unitGates P u` are correct in `progOf C κ` at no interior values
-(`not_correct_of_unbound`). An incorrect proof block is `correct_of_progCorrect`'s converse. A gate the constants fix is an input
-opened to its constant, and a gate `val` opens is opened to its value, so the gate `opens` misses has no value at its
-position: on the unit's boundary (`boundary_posOf`) the unit commits none, and read by one of the unit's gates
-(`exists_lower_reads`) it is no constant (`const_pos`), so the unit reads none.
-
-So the unbound units are faulty in the sampling statement of `progOf C κ` under every partition whose slot `u` is unit
-`u`'s lowered gates (`unbound_subset_faulty_slots`) or its proof block `blockOf P κ u` (`unbound_subset_faulty_partOf`),
-whatever the witness, the commitment and the design. `Wit.val` reads only the statement's roots (`val_roots`), and
-a value it opens passes the commitment under them (`opens_of_val`).
-
-The two guards:
-
-* `unbound_subset_faulty_honest`: the premises hold at the honest instance, where no unit is unbound. The witness opening
-  the evaluation on the honest inputs (`witDep C Cm H roots Xr`), under openings that hold at the constants and wherever
-  the commitment opens, leaves no unit faulty (`faultyRightC`), so none unbound.
-* `unbound_subset_faulty_nontrivial`: the conclusion fails where the openings miss a value the witness opens. On
-  `Unbound.notCircuit` (an input and its negation, the output, one unit), under a commitment that passes every
-  opening, the honest witness leaves its one unit not faulty, while openings that open nothing leave it unbound.
--/
+/-! A unit unbound in the transcript a witness opens is faulty. -/
 
 @[expose] public section
 
@@ -37,13 +12,11 @@ namespace Flock.Bridge
 
 open Claims.Sampling
 
-/-- **A witness's values read only the statement's roots.** -/
 theorem val_roots {H : Claims.Msg → Claims.Msg} {Cm : CommitmentScheme Bool} {s s' : AuditStatement} (w : Wit)
     (h : s.roots = s'.roots) : w.val H Cm s = w.val H Cm s' := by
   unfold Wit.val
   rw [h]
 
-/-- **A value a witness opens passes the commitment** under the statement's roots. -/
 theorem opens_of_val {H : Claims.Msg → Claims.Msg} {Cm : CommitmentScheme Bool} {s : AuditStatement} {w : Wit} {p : ℕ}
     {b : Bool} (h : w.val H Cm s p = some b) : ∃ d : Claims.Msg, Cm.Opens H s.roots ⟨p, b, d⟩ = true := by
   unfold Wit.val at h
@@ -58,9 +31,6 @@ section Unbound
 
 variable {C : Verity.Boolean.Circuit}
 
-/-- **An unbound unit's lowered gates are correct at no interior values**: under openings `opens` that hold at the
-constants `κ` (which fix only inputs) and wherever `val` opens a value, a unit unbound in the transcript `val` opens
-(`openedOf C κ val`) is not correct in `progOf C κ` on `val`, whatever its interior values `ι`. -/
 theorem not_correct_of_unbound {n : ℕ} (P : FlockSoundness.Audit.Partition C n) (κ : Fin C.N → Option Bool)
     (val : ℕ → Option Bool)
     (opens : (g : Fin (Verity.Circuit.ofAudit C).N) → BitVec ((Verity.Circuit.ofAudit C).w g) → Prop)
@@ -118,9 +88,6 @@ theorem not_correct_of_unbound {n : ℕ} (P : FlockSoundness.Audit.Partition C n
             apply hne
             simp [Claims.Sampling.Prog.refIn, hna, hv]
 
-/-- **The unbound units are faulty, at slots of lowered gates**: in the sampling statement `s` of `progOf C κ`, under
-any partition `Ps` whose slot `u` is unit `u`'s lowered gates and any witness `w`, a unit unbound in the transcript `w`
-opens, under openings that hold at the constants and wherever `w` opens a value, is faulty. -/
 theorem unbound_subset_faulty_slots {n : ℕ} (P : FlockSoundness.Audit.Partition C n) (κ : Fin C.N → Option Bool)
     (H : Claims.Msg → Claims.Msg) (Cm : CommitmentScheme Bool) (s : AuditStatement) (hs : s.prog = progOf C κ)
     (Ps : Claims.Sampling.Partition) (hslot : ∀ u : Fin n, Ps.blocks[u.val]? = some (unitGates P u)) (w : Wit)
@@ -140,8 +107,6 @@ theorem unbound_subset_faulty_slots {n : ℕ} (P : FlockSoundness.Audit.Partitio
   rw [hs] at hι
   exact not_correct_of_unbound P κ _ opens hκ hK hO hu ι hι
 
-/-- **The unbound units are faulty, at their proof blocks**: as `unbound_subset_faulty_slots`, at `partOf P κ ns`,
-whose slot `u` is unit `u`'s proof block `blockOf P κ u`, at any strata `ns` that sum to `n`. -/
 theorem unbound_subset_faulty_partOf {n : ℕ} (P : FlockSoundness.Audit.Partition C n) (κ : Fin C.N → Option Bool)
     {ns : List ℕ} (hns : ns.sum = n) (H : Claims.Msg → Claims.Msg) (Cm : CommitmentScheme Bool) (s : AuditStatement)
     (hs : s.prog = progOf C κ) (w : Wit)
@@ -161,11 +126,8 @@ theorem unbound_subset_faulty_partOf {n : ℕ} (P : FlockSoundness.Audit.Partiti
   rw [hs, ref_blockOf, correct_blockOf] at hι
   exact not_correct_of_unbound P κ _ opens hκ hK hO hu ι hι.1
 
-/-- **The premises hold at the honest instance, where no unit is unbound**: the witness opening the evaluation on the
-honest inputs `Xr`, in a statement at the roots `roots`, under the openings `opens` that hold exactly at the constants and
-wherever the commitment opens under `roots` (`hop`), satisfies `unbound_subset_faulty_slots`' and
-`unbound_subset_faulty_partOf`'s premises on the openings, and leaves no unit unbound, when the commitment opens every
-value the constants don't fix and the constants fix only inputs and agree with `Xr`'s evaluation. -/
+/-- The premises hold at the honest instance, where no unit is unbound: the witness opening the evaluation on
+the honest inputs `Xr`. -/
 theorem unbound_subset_faulty_honest {n : ℕ} (P : FlockSoundness.Audit.Partition C n) (κ : Fin C.N → Option Bool)
     (roots : List Claims.Msg) (H : Claims.Msg → Claims.Msg) (Cm : CommitmentScheme Bool) (Xr : Fin C.N → Bool)
     (hκin : ∀ g b, κ g = some b → (C.op g).isInput = true) (hκ : ∀ g b, κ g = some b → C.eval Xr g = b)
@@ -201,14 +163,12 @@ end Unbound
 
 namespace Unbound
 
-/-- An input and its negation, the output. -/
 def notCircuit : Verity.Boolean.Circuit where
   N := 2
   op g := if g = 0 then .input else .not 0
   topo := by decide
   outputs := {1}
 
-/-- `notCircuit`'s negation, its one unit. -/
 def notPartition : FlockSoundness.Audit.Partition notCircuit 1 where
   unit g := if g.val = 0 then none else some 0
   input_iff := by decide
@@ -216,10 +176,6 @@ def notPartition : FlockSoundness.Audit.Partition notCircuit 1 where
 end Unbound
 
 open Unbound in
-/-- **The conclusion fails where the openings miss a value the witness opens**: on `Unbound.notCircuit`, under the
-commitment that passes every opening, at any roots and strata of its one unit, the witness opening its evaluation on
-the input `false` leaves the unit not faulty, while openings that open nothing leave it unbound. Every premise of
-`unbound_subset_faulty_partOf` but the openings' holds there: the constants fix nothing. -/
 theorem unbound_subset_faulty_nontrivial (H : Claims.Msg → Claims.Msg) (roots : List Claims.Msg) {ns : List ℕ}
     (hns : ns.sum = 1) (r : OneStage) (desc : Claims.Msg) (q : Query) :
     let Cm : CommitmentScheme Bool := ⟨fun _ _ => .ret true, fun _ _ _ => []⟩

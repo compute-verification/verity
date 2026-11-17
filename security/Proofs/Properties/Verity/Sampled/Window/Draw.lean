@@ -4,43 +4,7 @@ public import Proofs.Properties.Verity.Sampled.Window.Walk
 public import Proofs.Properties.Verity.Sampled.CoinMap
 public import Proofs.Properties.Verity.Sampled.Members.Widen
 
-/-!
-# A window's one sample, its members' parts, and the coin map over the window
-
-The period's one sample covers a window's population of all its members' proof blocks; each member's session proves
-the member's part of it (`Member.part`), and the window's projection hands each member's session that part
-(`seqP`). What the subprotocol reads of the one sample and of the coin map over the members' sessions:
-
-* **The members' parts** (`Member.mem_part`, `ExecutionPhase.Partitions`, `ExecutionPhase.sum_part_card`): a member's part of a
-  sample is its proof blocks the sample holds, and where the members' places partition the population the parts'
-  sizes add up to the sample's.
-* **The registered layout** (`ExecutionPhase.Laid`, `ExecutionPhase.Laid.partitions`): the members in unit order, member `k`'s proof
-  block `v` at the population's place `base k + v`, its base the sum of the counts of the members before it
-  (`JointAuditV5.Laid`), both fixed by the registration before the sample. A sampled proof block `u` is then the proof block
-  of the one member with `base ≤ u < base + n` (`JointAuditV5.Laid.mem_iff`, `Laid.member_unique`), so the members'
-  places partition the population.
-* **The marginals** (`ExecutionPhase.avg_design`, `ExecutionPhase.sampleMiss_extend`, `ExecutionPhase.joint_extend`, `ExecutionPhase.eps_extend`,
-  `ExecutionPhase.sessionDelta_extend`): member `k`'s sampling design in Flock's window is its part of the window's one
-  sample, a mean of a reading of the part over the sample's coins; the members' knowledge and binding terms read only
-  that, so the window's error is the same at the window widened by the coins a projection reads.
-* **The coin map's premise within a term** (`stopErrK`, `roundsErrK`, `sessionErrK`, `seqErr`, `executionPhaseErr`,
-  `ExecutionPhaseStartWithin`, `ExecutionPhaseFirstStopFresh`, `ExecutionPhaseCouplesWithin`, `executionPhaseCouples_of_close`): `CoinMap`'s
-  (`couples_of_close`), over the members' sessions in order. Wherever each member's coin map writes its link points
-  in within `γL` of the tape's own and each round's coins within `γ`, the start leaves the tape from the first stop
-  fresh and is within `ε₀` of the uniform tape, the joint distribution's tape off the held-off events is within `ε₀` and the
-  stops' term, every member's session's summed along the walk, of the uniform tape at every event; so the coin map's
-  premise holds wherever that is at most the hiding term (`executionPhaseCouples_of_within`). The induction is one session's
-  with what follows it (`avg_roundsOffK_le`, `avg_sessionOffK_le`), then over the members (`avg_seqOff_le`,
-  `seqOff_couples`); a session reads the position it starts from only at its next stop (`Pos.toStop_toStop`), which
-  is how the start's freshness at the first stop reaches the first member's session.
-* **The coin map into the openings, over the window** (`executionPhaseOpenMap`, `executionPhaseSampleMap`, `executionPhaseSampleMaps`):
-  `openMap` and `sampleMap` with one widening and one start for the window, every member's link points and round
-  coins written into the openings at its own stops. The sample-coupled start leaves the tape from the first stop
-  fresh (`executionPhaseSampleMap_fresh`) and is the uniform tape wherever the sample's coins are uniform
-  (`executionPhaseSampleMap_start`), and each member's map writes its coins in within the stop's opening's gap
-  (`executionPhaseOpenMap_roundClose`, `executionPhaseOpenMap_linkClose`), so the coupling at the window follows from the decoders'
-  premise wherever the stops' term is at most the hiding term (`executionPhaseCouplingTarget_of_close`).
--/
+/-! A window's one sample, its members' parts, and the coin map over the window. -/
 
 @[expose] public section
 
@@ -48,16 +12,13 @@ namespace Flock.Guarantees.JointAuditV5.Laid
 
 variable {w : JointAuditV5}
 
-/-- Under the layout each member's proof blocks sit at distinct places. -/
 theorem inj_of_mem (h : w.Laid) : ∀ m ∈ w.ms, Function.Injective m.emb := fun m hm => by
   obtain ⟨k, rfl⟩ := List.mem_iff_get.1 hm
   exact h.emb_injective k
 
-/-- Under the layout no two members share a place. -/
 theorem pairwise (h : w.Laid) : w.ms.Pairwise fun m m' => ∀ u u', m.emb u ≠ m'.emb u' :=
   List.pairwise_iff_get.2 fun _ _ hij _ _ e => absurd (h.member_eq e) (ne_of_lt hij)
 
-/-- Under the layout every place is some member's. -/
 theorem cover (h : w.Laid) (v : Fin w.nJ) : ∃ m ∈ w.ms, ∃ u, m.emb u = v := by
   obtain ⟨k, u, hu⟩ := h.exists_emb v
   exact ⟨w.ms.get k, List.get_mem _ _, u, hu⟩
@@ -73,25 +34,18 @@ open scoped ENNReal
 
 local notation "𝔽" => FlockLevel3.GF128
 
-/-! ## The members' parts of the one sample -/
-
-/-- **A member's part of a sample is its proof blocks the sample holds.** -/
 theorem Member.mem_part {nJ : ℕ} (m : Member nJ) (S : Finset (Fin nJ)) (u : Fin m.n) :
     u ∈ m.part S ↔ m.emb u ∈ S := by
   have h : ∀ (m' : Flock.Guarantees.MemberV5 ByteArray nJ) (u' : Fin m'.n), u' ∈ m'.part S ↔ m'.emb u' ∈ S :=
     fun m' u' => by simp [Flock.Guarantees.MemberV5.part]
   exact h (m.toV5 0) u
 
-/-- **The members' places partition the window's population**: each member's proof blocks sit at distinct places,
-no two members share a place, and every place is some member's. -/
 structure ExecutionPhase.Partitions (W : ExecutionPhase) : Prop where
   inj : ∀ m ∈ W.ms, Function.Injective m.emb
   disjoint : W.ms.Pairwise fun m m' => ∀ u u', m.emb u ≠ m'.emb u'
   cover : ∀ v : Fin W.nJ, ∃ m ∈ W.ms, ∃ u, m.emb u = v
 
 open Classical in
-/-- **A member's part of a sample has the size of the sample's places that are the member's**, where the member's
-proof blocks sit at distinct places. -/
 theorem Member.card_part {nJ : ℕ} (m : Member nJ) (h : Function.Injective m.emb) (S : Finset (Fin nJ)) :
     (m.part S).card = (S.filter fun v => ∃ u, m.emb u = v).card := by
   rw [← Finset.card_image_of_injective _ h]
@@ -104,8 +58,6 @@ theorem Member.card_part {nJ : ℕ} (m : Member nJ) (h : Function.Injective m.em
     exact ⟨u, (m.mem_part S u).2 hv, rfl⟩
 
 open Classical in
-/-- **Members' parts of a sample have, between them, the size of the sample's places that are theirs**, where each
-member's proof blocks sit at distinct places and no two members share a place. -/
 theorem sum_part_card_filter {nJ : ℕ} (S : Finset (Fin nJ)) : ∀ l : List (Member nJ),
     (∀ m ∈ l, Function.Injective m.emb) → (l.Pairwise fun m m' => ∀ u u', m.emb u ≠ m'.emb u') →
     (l.map fun m => (m.part S).card).sum = (S.filter fun v => ∃ m ∈ l, ∃ u, m.emb u = v).card
@@ -133,24 +85,14 @@ theorem sum_part_card_filter {nJ : ℕ} (S : Finset (Fin nJ)) : ∀ l : List (Me
       · exact Or.inl ⟨hv, u, hu⟩
       · exact Or.inr ⟨hv, m', hm', u, hu⟩
 
-/-- **The members' parts of a sample have its size between them**, where the members' places partition the
-population. -/
 theorem ExecutionPhase.sum_part_card (W : ExecutionPhase) (h : W.Partitions) (S : Finset (Fin W.nJ)) :
     (W.ms.map fun m => (m.part S).card).sum = S.card := by
   classical
   rw [sum_part_card_filter S W.ms h.inj h.disjoint]
   exact congrArg Finset.card (Finset.filter_true_of_mem fun v _ => h.cover v)
 
-/-! ## The registered layout -/
-
-/-- **The window's members are laid out in unit order** (`JointAuditV5.Laid`): their proof-block counts sum to the
-population, and member `k`'s proof block `v` sits at the population's place `base k + v`, its base the sum of the
-counts of the members before it. The counts, the bases and the places are the registration's, fixed before the
-sample; a sampled proof block `u` is the proof block of the member with `base ≤ u < base + n`
-(`JointAuditV5.Laid.mem_iff`). -/
 def ExecutionPhase.Laid (W : ExecutionPhase) : Prop := (W.joint 0).Laid
 
-/-- **Members laid out in unit order partition the window's population.** -/
 theorem ExecutionPhase.Laid.partitions {W : ExecutionPhase} (h : W.Laid) : W.Partitions where
   inj m hm := Flock.Guarantees.JointAuditV5.Laid.inj_of_mem h (m.toV5 0) (List.mem_map_of_mem hm)
   disjoint := List.pairwise_map.1 (Flock.Guarantees.JointAuditV5.Laid.pairwise h)
@@ -159,75 +101,54 @@ theorem ExecutionPhase.Laid.partitions {W : ExecutionPhase} (h : W.Laid) : W.Par
     obtain ⟨m, hm, rfl⟩ := List.mem_map.1 hm'
     exact ⟨m, hm, u, hu⟩
 
-/-- **The members' parts of a sample have its size between them**, where the members are laid out in unit order. -/
 theorem ExecutionPhase.Laid.sum_part_card {W : ExecutionPhase} (h : W.Laid) (S : Finset (Fin W.nJ)) :
     (W.ms.map fun m => (m.part S).card).sum = S.card :=
   W.sum_part_card h.partitions S
 
-/-! ## The marginals -/
-
-/-- **Member `k`'s sampling design is its part of the window's one sample**: a mean of a reading of the member's
-sample over its design's coins is the mean, over the window's sample's coins, of the reading at the member's part. -/
 theorem ExecutionPhase.avg_design (W : ExecutionPhase) (t : ℕ) (k : Fin (W.joint t).ms.length)
     (G : Finset (Fin ((W.joint t).ms.get k).n) → ℝ≥0∞) :
     avg (fun ω : ((W.joint t).design k).Ω => G (((W.joint t).design k).draw ω)) =
       avg fun ω : W.L.Ω => G (((W.joint t).ms.get k).part (W.L.draw ω)) :=
   rfl
 
-/-- The sample's term doesn't read the widening. -/
 theorem ExecutionPhase.sampleMiss_extend (W : ExecutionPhase) (S : Widening) : (W.extend S).sampleMiss = W.sampleMiss :=
   rfl
 
-/-- **Flock's window at the widened window is Flock's window, widened** (`JointAuditV5.extend`). -/
 theorem ExecutionPhase.joint_extend (W : ExecutionPhase) (S : Widening) (t : ℕ) : (W.extend S).joint t = (W.joint t).extend S :=
   rfl
 
-/-- The sample at widened coins is the sample at the device's coins. By `dsimp`, not `rfl`: elaborating the two
-samples as definitionally equal reduces their `match` and evaluates `sampleUnits`. -/
+/-- By `dsimp`, not `rfl`: elaborating the two samples as definitionally equal reduces their `match` and
+evaluates `sampleUnits`. -/
 theorem ExecutionPhase.sample_extend (W : ExecutionPhase) (S : Widening) (ω : (W.extend S).L.Ω) :
     (W.extend S).L.draw ω = W.L.draw ω.1 := by
   dsimp only [ExecutionPhase.L, Flock.Bridge.execSel, ExecutionPhase.extend]
 
-/-- **The members' terms read only their parts of the one sample**: the members' knowledge and binding terms summed
-are the same at the window widened by the coins `S`. -/
 theorem ExecutionPhase.eps_extend (W : ExecutionPhase) (S : Widening) (t : ℕ) : ((W.extend S).joint t).eps = (W.joint t).eps :=
   (congrArg Flock.Guarantees.JointAuditV5.eps (W.joint_extend S t)).trans ((W.joint t).eps_extend S)
 
-/-- **The window's error doesn't read the widening** (`Live.sessionDelta_extend`). -/
 theorem ExecutionPhase.sessionDelta_extend (W : ExecutionPhase) (S : Widening) (t : ℕ) :
     (W.extend S).sessionDelta t = W.sessionDelta t := by
   unfold ExecutionPhase.sessionDelta
   rw [W.sampleMiss_extend S, W.eps_extend S t, W.rootsErr_extend S]
-
-/-! ## The coin map's premise within a term, over the members' sessions -/
 
 section SessionErr
 
 variable {g : Game Exchange} {σ : Strategy g} {Ω Reg : Type} {R mPts : ℕ} (D : PosDecoders g σ R Reg) (J : ℕ)
   (γ : Pos g σ Claims.Msg (Fin R) → (j : ℕ) → SubmitJ j → ℝ≥0∞)
 
-/-- **One stop's error, then what follows the session** (`stopErr`): `fin` at the session's end there; `γ` there and
-the next rounds' error over the tapes from the stop where a submission is decoded. -/
 noncomputable def stopErrK (fin e : Pos g σ Claims.Msg (Fin R) → ℝ≥0∞) (q : Pos g σ Claims.Msg (Fin R)) :
     Option (SubmitJ J) → ℝ≥0∞
   | none => fin q
   | some s => γ q J s + Pos.resample e q.consume
 
-/-- **The rounds' error, then what follows the session** (`roundsErr`) from the position `p`: `γ` at each stop a
-uniform tape from `p` reaches, and `e` at the position the session's walk ends at. -/
 noncomputable def roundsErrK (e : Pos g σ Claims.Msg (Fin R) → ℝ≥0∞) : ℕ → Pos g σ Claims.Msg (Fin R) → ℝ≥0∞
   | 0, p => e p
   | N + 1, p => stopErrK J γ e (roundsErrK e N) p.toStop (D.sub J p.toStop.modes)
 
-/-- **The session's error, then what follows it**, from the position `p`: `γL` at the session's first stop and the
-rounds' error over the tapes from it. -/
 noncomputable def sessionErrK (γL : Pos g σ Claims.Msg (Fin R) → ℝ≥0∞) (e : Pos g σ Claims.Msg (Fin R) → ℝ≥0∞)
     (N : ℕ) (p : Pos g σ Claims.Msg (Fin R)) : ℝ≥0∞ :=
   γL p.toStop + Pos.resample (roundsErrK D J γ e N) p.toStop.consume
 
-/-- **A member's error, then what follows it**: its session's (`sessionErrK`) where the sample holds one of its proof
-blocks (`true`), then what follows over the tapes from the session's closing round's stop, past it (a closing round
-releases no coin, so its stop adds no error of its own); else what follows, from the same position. -/
 noncomputable def memberErrK (γL : Pos g σ Claims.Msg (Fin R) → ℝ≥0∞) (e : Pos g σ Claims.Msg (Fin R) → ℝ≥0∞)
     (N : ℕ) (p : Pos g σ Claims.Msg (Fin R)) : Bool → ℝ≥0∞
   | true => sessionErrK D J γ γL (fun q => Pos.resample e q.toStop.consume) N p
@@ -235,7 +156,6 @@ noncomputable def memberErrK (γL : Pos g σ Claims.Msg (Fin R) → ℝ≥0∞) 
 
 variable (M : CoinMap g σ Ω R mPts) (B : RoundHold)
 
-/-- The rounds' share off `B`, then what follows the session, is at most 1 wherever what follows is. -/
 theorem roundsOffK_le_one {e : Pos g σ Claims.Msg (Fin R) → ℝ≥0∞} (he : ∀ q, e q ≤ 1) :
     ∀ (N : ℕ) (p : Pos g σ Claims.Msg (Fin R)), roundsOffK D M J B e N p ≤ 1
   | 0, p => he p
@@ -249,7 +169,6 @@ theorem roundsOffK_le_one {e : Pos g σ Claims.Msg (Fin R) → ℝ≥0∞} (he :
       · exact zero_le_one
       · exact roundsOffK_le_one he N _
 
-/-- The session's share off `BL` and `B`, then what follows it, is at most 1 wherever what follows is. -/
 theorem sessionOffK_le_one (BL : LinkHold mPts) {e : Pos g σ Claims.Msg (Fin R) → ℝ≥0∞} (he : ∀ q, e q ≤ 1) (N : ℕ)
     (p : Pos g σ Claims.Msg (Fin R)) : sessionOffK D M J B BL e N p ≤ 1 := by
   refine (avg_mono fun pts => ?_).trans_eq (avg_const 1)
@@ -257,32 +176,27 @@ theorem sessionOffK_le_one (BL : LinkHold mPts) {e : Pos g σ Claims.Msg (Fin R)
   · exact zero_le_one
   · exact roundsOffK_le_one D J M B he N _
 
-/-- The session's share off `BL` and `B` reads the position only at its next stop. -/
 theorem sessionOffK_toStop (BL : LinkHold mPts) (e : Pos g σ Claims.Msg (Fin R) → ℝ≥0∞) (N : ℕ)
     (p : Pos g σ Claims.Msg (Fin R)) : sessionOffK D M J B BL e N p.toStop = sessionOffK D M J B BL e N p := by
   unfold sessionOffK
   rw [Pos.toStop_toStop]
 
-/-- The session's error reads the position only at its next stop. -/
 theorem sessionErrK_toStop (γL e : Pos g σ Claims.Msg (Fin R) → ℝ≥0∞) (N : ℕ) (p : Pos g σ Claims.Msg (Fin R)) :
     sessionErrK D J γ γL e N p.toStop = sessionErrK D J γ γL e N p := by
   unfold sessionErrK
   rw [Pos.toStop_toStop]
 
-/-- A member's share off `BL` and `B`, then what follows it, is at most 1 wherever what follows is. -/
 theorem memberOffK_le_one (BL : LinkHold mPts) {e : Pos g σ Claims.Msg (Fin R) → ℝ≥0∞} (he : ∀ q, e q ≤ 1) (N : ℕ)
     (p : Pos g σ Claims.Msg (Fin R)) : ∀ b : Bool, memberOffK D M J B BL e N p b ≤ 1
   | true => sessionOffK_le_one D J M B BL (fun q => he q.toStop.consume) N p
   | false => he p
 
-/-- A member's share off `BL` and `B` reads the position only at its next stop, wherever what follows does. -/
 theorem memberOffK_toStop (BL : LinkHold mPts) (e : Pos g σ Claims.Msg (Fin R) → ℝ≥0∞)
     (he : ∀ q, e q.toStop = e q) (N : ℕ) (p : Pos g σ Claims.Msg (Fin R)) :
     ∀ b : Bool, memberOffK D M J B BL e N p.toStop b = memberOffK D M J B BL e N p b
   | true => sessionOffK_toStop D J M B BL (fun q => e q.toStop.consume) N p
   | false => he p
 
-/-- A member's error reads the position only at its next stop, wherever what follows does. -/
 theorem memberErrK_toStop (γL e : Pos g σ Claims.Msg (Fin R) → ℝ≥0∞) (he : ∀ q, e q.toStop = e q) (N : ℕ)
     (p : Pos g σ Claims.Msg (Fin R)) :
     ∀ b : Bool, memberErrK D J γ γL e N p.toStop b = memberErrK D J γ γL e N p b
@@ -290,11 +204,6 @@ theorem memberErrK_toStop (γL e : Pos g σ Claims.Msg (Fin R) → ℝ≥0∞) (
   | false => he p
 
 variable {D J γ M B} in
-/-- **The rounds' share off `B`, then what follows the session, is within the rounds' error of uniform from where it
-starts** (`avg_roundsOff_le`): wherever the coin map writes each round's coins in within `γ` of the tape's own, and
-what follows the session has, over a uniform tape from each position, the event's share within its own error, an
-event of the tape has, over a uniform tape from the position `p`, at most its share off `B` plus the rounds' error at
-`γ` and `B`'s probability at each stop. -/
 theorem avg_roundsOffK_le (hR : M.RoundClose γ) (Q : CoinTape g σ → Prop)
     {eO eE : Pos g σ Claims.Msg (Fin R) → ℝ≥0∞} (hO : ∀ q, eO q ≤ 1)
     (hK : ∀ q : Pos g σ Claims.Msg (Fin R), avg (fun z : CoinTape q.g' q.s' => tapeInd Q (q.withTape z)) ≤
@@ -369,11 +278,6 @@ theorem avg_roundsOffK_le (hR : M.RoundClose γ) (Q : CoinTape g σ → Prop)
 
 open Classical in
 variable {D J γ M B} in
-/-- **The session's share off `BL` and `B`, then what follows it, is within the session's error of uniform from where
-it starts** (`resample_sessionOff_le`): wherever the coin map writes the link points in within `γL` of the tape's own
-and each round's coins within `γ`, and what follows the session has the event's share within its own error, an event
-of the tape has, over a uniform tape from the position `p`, at most its share off `BL` and `B` plus the session's
-error: `γL` and `BL`'s probability at the first stop and the rounds' error after it. -/
 theorem avg_sessionOffK_le {γL : Pos g σ Claims.Msg (Fin R) → ℝ≥0∞} (hL : M.LinkClose γL) (hR : M.RoundClose γ)
     (BL : LinkHold mPts) (Q : CoinTape g σ → Prop) {eO eE : Pos g σ Claims.Msg (Fin R) → ℝ≥0∞} (hO : ∀ q, eO q ≤ 1)
     (hK : ∀ q : Pos g σ Claims.Msg (Fin R), avg (fun z : CoinTape q.g' q.s' => tapeInd Q (q.withTape z)) ≤
@@ -435,11 +339,6 @@ theorem avg_sessionOffK_le {γL : Pos g σ Claims.Msg (Fin R) → ℝ≥0∞} (h
     _ = _ := rfl
 
 open Classical in
-/-- **Past a stop with nothing written in, what follows keeps its share within its error**: wherever what follows
-has, over a uniform tape from each position, the event's share within its own error, it has from a position the
-event's share within its error past the position's next stop, consumed as it is, the error taken over the tapes from
-that stop. The tape from the next stop is uniform and independent of the walk to it (`Pos.avg_toStop`), and consuming
-a stop changes no tape. -/
 theorem avg_tapeInd_consume (Q : CoinTape g σ → Prop) {eO eE : Pos g σ Claims.Msg (Fin R) → ℝ≥0∞}
     (hK : ∀ q : Pos g σ Claims.Msg (Fin R), avg (fun z : CoinTape q.g' q.s' => tapeInd Q (q.withTape z)) ≤
       avg (fun z : CoinTape q.g' q.s' => eO (q.withTape z)) + avg fun z : CoinTape q.g' q.s' => eE (q.withTape z))
@@ -462,10 +361,6 @@ theorem avg_tapeInd_consume (Q : CoinTape g σ → Prop) {eO eE : Pos g σ Claim
 
 open Classical in
 variable {D J γ M B} in
-/-- **A member's share off `BL` and `B`, then what follows it, is within the member's error of uniform from where it
-starts**: its session's (`avg_sessionOffK_le`) where the sample holds one of its proof blocks, with what follows
-taken past the session's closing round's stop (`avg_tapeInd_consume`); else what follows has the event's share within
-its own error, from the same position. -/
 theorem avg_memberOffK_le {γL : Pos g σ Claims.Msg (Fin R) → ℝ≥0∞} (hL : M.LinkClose γL) (hR : M.RoundClose γ)
     (BL : LinkHold mPts) (Q : CoinTape g σ → Prop) {eO eE : Pos g σ Claims.Msg (Fin R) → ℝ≥0∞} (hO : ∀ q, eO q ≤ 1)
     (hK : ∀ q : Pos g σ Claims.Msg (Fin R), avg (fun z : CoinTape q.g' q.s' => tapeInd Q (q.withTape z)) ≤
@@ -488,9 +383,6 @@ variable {g : Game Exchange} {σ : Strategy g} {Reg : Type} {R nJ : ℕ} (D : �
   (γ : ℕ → Pos g σ Claims.Msg (Fin R) → (j : ℕ) → SubmitJ j → ℝ≥0∞)
   (γL : ℕ → (mPts : ℕ) → Pos g σ Claims.Msg (Fin R) → ℝ≥0∞) (S : Finset (Fin nJ)) (Rg : Reg)
 
-/-- **The sessions' error, in the members' order** from the position `p`: each member's session's, at its own `γ`
-and `γL`, then the rest's from the position its walk ends at. A member with no proof block in the sample has no
-session and adds nothing (`memberErrK`). -/
 noncomputable def seqErr : (i : ℕ) → (l : List (Flock.Guarantees.MemberV5 Reg nJ)) → Pos g σ Claims.Msg (Fin R) →
     ℝ≥0∞
   | _, [], _ => 0
@@ -498,7 +390,6 @@ noncomputable def seqErr : (i : ℕ) → (l : List (Flock.Guarantees.MemberV5 Re
     memberErrK (D i) (memberTabs S Rg m) (γ i) (γL i (memberPts m)) (fun q => seqErr (i + 1) l q) m.N p
       (memberSampled S m)
 
-/-- The sessions' error reads the position only at its next stop. -/
 theorem seqErr_toStop : ∀ (l : List (Flock.Guarantees.MemberV5 Reg nJ)) (i : ℕ) (p : Pos g σ Claims.Msg (Fin R)),
     seqErr D γ γL S Rg i l p.toStop = seqErr D γ γL S Rg i l p
   | [], _, _ => rfl
@@ -508,7 +399,6 @@ theorem seqErr_toStop : ∀ (l : List (Flock.Guarantees.MemberV5 Reg nJ)) (i : �
 
 variable {Ω : Type} (M : ExecutionPhaseCoinMap g σ Ω R) (BL : ExecutionPhaseLinkHold) (B : ExecutionPhaseRoundHold)
 
-/-- The sessions' share off the held-off events is at most 1. -/
 theorem seqOff_le_one (Q : CoinTape g σ → Prop) : ∀ (l : List (Flock.Guarantees.MemberV5 Reg nJ)) (i : ℕ)
     (p : Pos g σ Claims.Msg (Fin R)), seqOff D M BL B S Rg Q i l p ≤ 1
   | [], _, p => tapeInd_le_one Q p
@@ -516,7 +406,6 @@ theorem seqOff_le_one (Q : CoinTape g σ → Prop) : ∀ (l : List (Flock.Guaran
     memberOffK_le_one (D i) (memberTabs S Rg m) (M.member i (memberPts m)) (B i) (BL i (memberPts m))
       (fun q => seqOff_le_one Q l (i + 1) q) m.N p (memberSampled S m)
 
-/-- The sessions' share off the held-off events reads the position only at its next stop. -/
 theorem seqOff_toStop (Q : CoinTape g σ → Prop) : ∀ (l : List (Flock.Guarantees.MemberV5 Reg nJ)) (i : ℕ)
     (p : Pos g σ Claims.Msg (Fin R)), seqOff D M BL B S Rg Q i l p.toStop = seqOff D M BL B S Rg Q i l p
   | [], _, p => tapeInd_toStop Q p
@@ -526,10 +415,6 @@ theorem seqOff_toStop (Q : CoinTape g σ → Prop) : ∀ (l : List (Flock.Guaran
 
 open Classical in
 variable {D γ γL M} in
-/-- **The sessions' share off the held-off events is within the sessions' error of uniform from where it starts**:
-wherever each member's coin map writes its link points in within `γL` of the tape's own and each round's coins within
-`γ`, an event of the tape has, over a uniform tape from the position `p`, at most its share off the held-off events
-through the members' sessions in order, plus every session's error. -/
 theorem avg_seqOff_le (hR : ∀ i mPts, (M.member i mPts).RoundClose (γ i))
     (hL : ∀ i mPts, (M.member i mPts).LinkClose (γL i mPts)) (Q : CoinTape g σ → Prop) :
     ∀ (l : List (Flock.Guarantees.MemberV5 Reg nJ)) (i : ℕ) (p : Pos g σ Claims.Msg (Fin R)),
@@ -546,10 +431,6 @@ theorem avg_seqOff_le (hR : ∀ i mPts, (M.member i mPts).RoundClose (γ i))
 
 open Classical in
 variable {D γ γL M} in
-/-- **The sessions' share off the held-off events from a coupled start is within the start's term and the sessions'
-error of uniform**: over coins `ω` that give a sample and a start of the period's tape, wherever the start leaves the
-tape from the first stop fresh (`hF`) and is within `ε₀` of the uniform tape (`hS`), and each member's coin map
-writes its live coins in within `γL` and `γ` of the tape's own. -/
 theorem seqOff_couples (Ks : Fin R → DigestCut Claims.Msg g) {C : Type} [Fintype C] (draw : C → Finset (Fin nJ))
     (start : C → CoinTape g σ) {ε₀ : ℝ≥0∞} (hR : ∀ i mPts, (M.member i mPts).RoundClose (γ i))
     (hL : ∀ i mPts, (M.member i mPts).LinkClose (γL i mPts))
@@ -599,36 +480,28 @@ variable {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α]
 
 variable (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
 
-/-- **The window's coin map's premise within `ε`, off the held-off events** (`CouplesWithin`). -/
 def ExecutionPhaseCouplesWithin (W : ExecutionPhase) (t : ℕ) (rd : Reading W.rounds) (σ : Strategy (V.game θ F c))
     (D : ExecutionPhaseDecoders V θ F c W σ) (M : ExecutionPhaseCoinMap (V.game θ F c) σ W.Ω W.rounds) (BL : ExecutionPhaseLinkHold)
     (B : ExecutionPhaseRoundHold) (ε : ℝ≥0∞) : Prop :=
   ∀ Q : CoinTape (V.game θ F c) σ → Prop, ENNReal.ofReal (Claims.Pr Q) ≤
     executionPhaseOff V θ F c W t rd σ D M BL B Q + ε
 
-/-- **The window's coin map's premise at a term within the hiding term.** -/
 theorem executionPhaseCouples_of_within {W : ExecutionPhase} {t : ℕ} {rd : Reading W.rounds} {σ : Strategy (V.game θ F c)}
     {D : ExecutionPhaseDecoders V θ F c W σ} {M : ExecutionPhaseCoinMap (V.game θ F c) σ W.Ω W.rounds} {BL : ExecutionPhaseLinkHold}
     {B : ExecutionPhaseRoundHold} {ε : ℝ≥0∞} (h : ExecutionPhaseCouplesWithin V θ F c W t rd σ D M BL B ε)
     (hε : ε ≤ W.hidingTerm) : ExecutionPhaseCouples V θ F c W t rd σ D M BL B := fun Q =>
   (h Q).trans (add_le_add le_rfl hε)
 
-/-- **The window's coin map's start is within `ε₀` of the uniform tape** (`StartWithin`). -/
 def ExecutionPhaseStartWithin (W : ExecutionPhase) (σ : Strategy (V.game θ F c))
     (M : ExecutionPhaseCoinMap (V.game θ F c) σ W.Ω W.rounds) (ε₀ : ℝ≥0∞) : Prop :=
   ∀ H : CoinTape (V.game θ F c) σ → ℝ≥0∞, (∀ x, H x ≤ 1) →
     avg H ≤ avg (fun ω : (W.extend M.widening).L.Ω => H (M.start ω)) + ε₀
 
-/-- **The window's projection's first stop** on the widened coins `ω`: where the first member's `Commit`'s roots are
-decoded. -/
 noncomputable def executionPhaseFirstStop (W : ExecutionPhase) (rd : Reading W.rounds) (σ : Strategy (V.game θ F c))
     (M : ExecutionPhaseCoinMap (V.game θ F c) σ W.Ω W.rounds) (ω : (W.extend M.widening).L.Ω) :
     Pos (V.game θ F c) σ Claims.Msg (Fin W.rounds) :=
   (Pos.root (roundCuts V θ F c rd) (M.start ω)).toStop
 
-/-- **The window's coin map's start leaves the tape from the first stop fresh** (`FirstStopFresh`): over the widened
-coins, any reading of the sample and the projection's first stop has the mean of its average over the tapes from the
-stop. -/
 def ExecutionPhaseFirstStopFresh (W : ExecutionPhase) (rd : Reading W.rounds) (σ : Strategy (V.game θ F c))
     (M : ExecutionPhaseCoinMap (V.game θ F c) σ W.Ω W.rounds) : Prop :=
   ∀ G : Finset (Fin W.nJ) → Pos (V.game θ F c) σ Claims.Msg (Fin W.rounds) → ℝ≥0∞,
@@ -637,8 +510,6 @@ def ExecutionPhaseFirstStopFresh (W : ExecutionPhase) (rd : Reading W.rounds) (�
       avg fun ω : (W.extend M.widening).L.Ω =>
         Pos.resample (G ((W.extend M.widening).L.draw ω)) (executionPhaseFirstStop V θ F c W rd σ M ω)
 
-/-- **The stops' term over the window**: over the widened coins, every member's session's error along the walk from
-the play's start, in the members' order (`seqErr`). -/
 noncomputable def executionPhaseErr (W : ExecutionPhase) (t : ℕ) (rd : Reading W.rounds) (σ : Strategy (V.game θ F c))
     (D : ExecutionPhaseDecoders V θ F c W σ) (M : ExecutionPhaseCoinMap (V.game θ F c) σ W.Ω W.rounds)
     (γ : ℕ → Pos (V.game θ F c) σ Claims.Msg (Fin W.rounds) → (j : ℕ) → SubmitJ j → ℝ≥0∞)
@@ -648,11 +519,6 @@ noncomputable def executionPhaseErr (W : ExecutionPhase) (t : ℕ) (rd : Reading
       ((W.extend M.widening).joint t).ms (Pos.root (roundCuts V θ F c rd) (M.start ω))
 
 open Classical in
-/-- **The window's coin map's premise within a term, off its local ones** (`couples_of_close`): the joint distribution's tape
-off the held-off events is within the start's term and the stops' of the uniform tape at every event, wherever each
-member's coin map writes its link points in within `γL` of the tape's own and each round's coins within `γ`, the start
-leaves the tape from the first stop fresh, and the start is within `ε₀` of the uniform tape. The stops' term carries,
-beside each member's `γL` and `γ`, the probability of its held-off events at each stop. -/
 theorem executionPhaseCouples_of_close (W : ExecutionPhase) (t : ℕ) (rd : Reading W.rounds) (σ : Strategy (V.game θ F c))
     (D : ExecutionPhaseDecoders V θ F c W σ) (M : ExecutionPhaseCoinMap (V.game θ F c) σ W.Ω W.rounds)
     {γ : ℕ → Pos (V.game θ F c) σ Claims.Msg (Fin W.rounds) → (j : ℕ) → SubmitJ j → ℝ≥0∞}
@@ -668,11 +534,6 @@ theorem executionPhaseCouples_of_close (W : ExecutionPhase) (t : ℕ) (rd : Read
     (C := (W.extend M.widening).L.Ω) (fun ω => (W.extend M.widening).L.draw ω) (fun ω => M.start ω) hR hL hF hS Q
     ((W.extend M.widening).joint t).ms 0
 
-/-! ## The coin map into the openings, over the window -/
-
-/-- **The window's coin map that writes the live coins into the openings** (`openMap`), at the widening `T` and the
-start `start`: at every member's stops, the link points' bits or a round's coins' bits under `e`, written into the
-stop's opening in a play that ends in `E` (`writeOpening`). -/
 noncomputable def executionPhaseOpenMap {g : Game Exchange} {σ : Strategy g} {Ω : Type} {R : ℕ}
     (E : List Release → Game Exchange) (T : Type) [Fintype T] [Nonempty T] (start : Ω × T → CoinTape g σ) :
     ExecutionPhaseCoinMap g σ Ω R where
@@ -681,8 +542,6 @@ noncomputable def executionPhaseOpenMap {g : Game Exchange} {σ : Strategy g} {�
   link _ p _ pts := writeOpening E p.s' (linkBits e pts)
   round _ p _ _ c := writeOpening E p.s' (roundBits e c)
 
-/-- **Every member's coin map writes each round's coins in within the stop's opening's gap**
-(`openMap_roundClose`). -/
 theorem executionPhaseOpenMap_roundClose {g : Game Exchange} {σ : Strategy g} {Ω : Type} {R : ℕ}
     (E : List Release → Game Exchange) (T : Type) [Fintype T] [Nonempty T] (start : Ω × T → CoinTape g σ)
     (i mPts : ℕ) :
@@ -690,7 +549,6 @@ theorem executionPhaseOpenMap_roundClose {g : Game Exchange} {σ : Strategy g} {
       openGap E q.g' (roundBits e : (Fin s.n → 𝔽) → List Bool) := fun q _ _ G hG =>
   avg_le_writeOpening E (roundBits e) q.s' G hG
 
-/-- **Every member's coin map writes the link points in within the stop's opening's gap** (`openMap_linkClose`). -/
 theorem executionPhaseOpenMap_linkClose {g : Game Exchange} {σ : Strategy g} {Ω : Type} {R : ℕ}
     (E : List Release → Game Exchange) (T : Type) [Fintype T] [Nonempty T] (start : Ω × T → CoinTape g σ)
     (i mPts : ℕ) :
@@ -698,23 +556,17 @@ theorem executionPhaseOpenMap_linkClose {g : Game Exchange} {σ : Strategy g} {�
       openGap E q.g' (linkBits e : (Fin 2 → Fin mPts → 𝔽) → List Bool) := fun q G hG =>
   avg_le_writeOpening E (linkBits e) q.s' G hG
 
-/-- **The sample-coupled coin map over the window** (`sampleMap`): widened by a tape of the period's game, its start
-writes the sample's coins `κ` into the fresh frames of the sample's family (`sampleStart`), once for the window, and
-at each member's stops it writes the live coins into the stop's opening in `σ`'s play, whose log ends in the close
-after `σ`'s request (`executionPhaseOpenMap`). -/
 noncomputable def executionPhaseSampleMap (W : ExecutionPhase) (rd : Reading W.rounds) (σ : Strategy (V.game θ F c))
     (label : String) (after : ByteArray) {m : ℕ} (κ : W.Ω → Fin m → Fin 512 → Bool) :
     ExecutionPhaseCoinMap (V.game θ F c) σ W.Ω W.rounds :=
   executionPhaseOpenMap e (finish (V.signer θ) θ F c σ.1) (CoinTape (V.game θ F c) σ)
     (sampleStart V θ F c rd σ label after κ)
 
-/-- The window's projection's first stop is the walk from the start's tape to the first stop. -/
 theorem executionPhaseFirstStop_eq (W : ExecutionPhase) (rd : Reading W.rounds) (σ : Strategy (V.game θ F c))
     (M : ExecutionPhaseCoinMap (V.game θ F c) σ W.Ω W.rounds) (ω : (W.extend M.widening).L.Ω) :
     executionPhaseFirstStop V θ F c W rd σ M ω = Pos.walk (V.game θ F c) σ (roundCuts V θ F c rd) (M.start ω) id :=
   rfl
 
-/-- The sample-coupled start is the fill of the widening's tape with the coins `κ` at the device's coins. -/
 theorem executionPhaseSampleMap_start_eq (W : ExecutionPhase) (rd : Reading W.rounds) (σ : Strategy (V.game θ F c))
     (label : String) (after : ByteArray) {m : ℕ} (κ : W.Ω → Fin m → Fin 512 → Bool)
     (ω : (W.extend (executionPhaseSampleMap e V θ F c W rd σ label after κ).widening).L.Ω) :
@@ -722,7 +574,6 @@ theorem executionPhaseSampleMap_start_eq (W : ExecutionPhase) (rd : Reading W.ro
       fill (sampleSel V θ F c σ label after) (V.game θ F c) σ (roundCuts V θ F c rd) m (κ ω.1) ω.2 :=
   rfl
 
-/-- The sample-coupled map's first stop is the walk to it from the filled tape. -/
 theorem executionPhaseFirstStop_sampleMap (W : ExecutionPhase) (rd : Reading W.rounds) (σ : Strategy (V.game θ F c))
     (label : String) (after : ByteArray) {m : ℕ} (κ : W.Ω → Fin m → Fin 512 → Bool)
     (ω : (W.extend (executionPhaseSampleMap e V θ F c W rd σ label after κ).widening).L.Ω) :
@@ -733,8 +584,6 @@ theorem executionPhaseFirstStop_sampleMap (W : ExecutionPhase) (rd : Reading W.r
     (congrArg (fun t => Pos.walk (V.game θ F c) σ (roundCuts V θ F c rd) t id)
       (executionPhaseSampleMap_start_eq e V θ F c W rd σ label after κ ω))
 
-/-- **The sample-coupled start leaves the tape from the first stop fresh** (`sampleMap_fresh`): it writes nothing
-from the first stop on, and the window's one sample reads only the device's coins (`avg_prod_walk_fill`). -/
 theorem executionPhaseSampleMap_fresh (W : ExecutionPhase) (rd : Reading W.rounds) (σ : Strategy (V.game θ F c)) (label : String)
     (after : ByteArray) {m : ℕ} (κ : W.Ω → Fin m → Fin 512 → Bool) :
     ExecutionPhaseFirstStopFresh V θ F c W rd σ (executionPhaseSampleMap e V θ F c W rd σ label after κ) := fun G => by
@@ -750,7 +599,6 @@ theorem executionPhaseSampleMap_fresh (W : ExecutionPhase) (rd : Reading W.round
   exact avg_prod_walk_fill (C := W.Ω) (sampleSel V θ F c σ label after) (fun ω₁ : W.Ω => G (dr ω₁))
     (roundCuts V θ F c rd) m κ
 
-/-- **The sample-coupled start is the uniform tape** wherever the sample's coins are uniform (`sampleMap_start`). -/
 theorem executionPhaseSampleMap_start (W : ExecutionPhase) (rd : Reading W.rounds) (σ : Strategy (V.game θ F c)) (label : String)
     (after : ByteArray) {m : ℕ} (κ : W.Ω → Fin m → Fin 512 → Bool)
     (hκ : ∀ H : (Fin m → Fin 512 → Bool) → ℝ≥0∞, avg (fun ω => H (κ ω)) = avg H) :
@@ -761,16 +609,11 @@ theorem executionPhaseSampleMap_start (W : ExecutionPhase) (rd : Reading W.round
     (hκ fun κ' => avg fun t =>
       H (fill (sampleSel V θ F c σ label after) (V.game θ F c) σ (roundCuts V θ F c rd) m κ' t)).symm
 
-/-- **The window's bytes the sample reads, as fresh frames' coins, are uniform** (`avg_byteCoins`, A3 at the
-window's bytes), the premise `executionPhaseSampleMap_start` takes of the sample's coins. -/
 theorem ExecutionPhase.avg_byteCoins (W : ExecutionPhase) {m : ℕ} (hL : W.Lb 0 = m * 64) (H : (Fin m → Fin 512 → Bool) → ℝ≥0∞) :
     avg (fun ω : W.Ω => H (byteCoins W.src hL ω)) = avg H :=
   _root_.Verity.Sampled.avg_byteCoins W.hA3 hL H
 
 omit θ F c in
-/-- **The sample-coupled coin maps over the windows** at the readings `rd` (`sampleMaps`): at each window, commitment
-and strategy, `executionPhaseSampleMap` at the family `label θ F c σ` answering `after θ F c σ` and the window's coins
-`κ W`. -/
 noncomputable def executionPhaseSampleMaps (rd : ExecutionPhaseReadings)
     (label : (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → Strategy (V.game θ F c) → String)
     (after : (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → Strategy (V.game θ F c) → ByteArray) {m : ℕ}
@@ -781,11 +624,6 @@ noncomputable def executionPhaseSampleMaps (rd : ExecutionPhaseReadings)
 variable (k : Verity.Registration.Composite)
 
 omit θ F c in
-/-- **The coupling at the window's projection, off the coin map's premises within a term**
-(`couplingTarget_withProject_of_close`): `executionPhaseCouplingTarget_of_logged` at the cut `P` and `Q`, off the held-off
-events `BL` and `B`, with the coin map's premise discharged by `executionPhaseCouples_of_close` at each commitment and
-strategy, wherever the start's term and the stops' (each member's `γL` and `BL`'s probability at its first stop, `γ`
-and `B`'s at each later one) sum to at most the hiding term. -/
 theorem executionPhaseCouplingTarget_of_close (rd : ExecutionPhaseReadings) (K : ExecutionPhaseConstructions V)
     (D : (W : ExecutionPhase) → (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → (σ : Strategy (V.game θ F c)) →
       ExecutionPhaseDecoders V θ F c W σ)

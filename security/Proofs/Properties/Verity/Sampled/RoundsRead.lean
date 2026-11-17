@@ -5,37 +5,7 @@ public import Proofs.Properties.Verity.Sampled.Walk
 public import Proofs.Properties.Verity.Sampled.Lines
 public import Proofs.Properties.Verity.Sampled.Stops
 
-/-!
-# Each opening v2's read shows opens the round its stream's openings before it count
-
-v2's check reads the device's log from the lines of the challenger session's release log (`readLog`), and
-`Spot.Challenger.coinTreesOf` reads the same lines as the coin trees the session sampled, accepting a line that
-opens a round of a tree's stream only where that round is the count of the stream's rounds the tree shows opened. The
-per-round bridge between the two:
-
-* **The lines that open a stream** (`opensLine`, `OpensRound`): a coin tree's line whose event isn't a tree's sample,
-  naming the tree's root and the stream, and the round it names.
-* **What `coinTreesOf` counts** (`OpensCounted`, `coinTreesOf_counted`): where it accepts the lines, each tree, the first
-  of its root, shows as many rounds of a stream opened as the lines open that stream of that root, and each line opening
-  a round opens the round the lines before it count (`coinTreesOf_round`).
-* **What the read shows** (`readLog_opening`, `readLog_openedOf`): each opening the read shows, of tree `i`'s stream
-  `si`, is a line that reads as it (`ReadsOpen`): the round it names, with the coins the sessions' records give that
-  round (`Lines.openCoins`), its count of coins and the bytes it answers. Tree `i`'s stream `si` is the stream of the
-  tree it names (`KeyAt`), and the read opens each stream as often as the lines before it do.
-* **The bridge** (`readLog_round`): so the round each opening the read shows names is the count of its stream's openings
-  in the log before it (`Verity.openedOf`), as `Verity.Frame.opening` numbers a stream's rounds. And each round a tree
-  shows opened (`LoggedTree.opening`) is below the read's openings of that stream (`opening_lt_openedOf`), which with a
-  record's last round opened bounds the record's rounds by the read's.
-* **The trees' specs in the read** (`readTail_specs`, `readLog_specs`, `readLog_named`, `specStreams_getElem`,
-  `readLog_nodup`, `KeyAt.of_named`): the read's `Hello`s are the specs of the trees read, so a stream of a tree read
-  (`KeyAt`) is named so in them; they name each tree's streams distinctly, since `coinTreesOf` accepts only specs that
-  do, so any stream they name of that tree is its stream so named.
-* **The record's rounds, opened** (`recordRounds_le_openedOf`, `openedOf_eq_recordRounds`): where
-  `sessionTreeReason` accepts a record each round of whose stream gives coins, the read opens that stream of the
-  record's tree at least the rounds the record gives it (`recordRounds`): the record's last round is opened
-  (`Trees.round_held`), below the read's openings. So where the device's log has the read's frames, opens only the
-  record's rounds (`OpenedRecorded`) and serves each opening (`LogServed`), it opens that stream exactly that often.
--/
+/-! Each opening v2's read shows opens the round its stream's openings before it count. -/
 
 @[expose] public section
 
@@ -44,10 +14,6 @@ namespace Verity.Sampled
 open Lean (Json)
 open Spot Spot.Challenger
 
-/-! ## The lines that open a stream -/
-
-/-- Whether release log line `l` opens a round of stream `name` of the coin tree whose root is `root`: a coin tree's
-line (`treeLine`) whose event isn't a tree's sample, naming that tree and that stream, as `coinTreesOf` reads it. -/
 def opensLine (root name : String) (l : String) : Bool :=
   treeLine l && match event l with
     | .ok d => !jsonStrIs (getD d "event") TREE_EVENT && jsonStrIs (getD d "tree") root &&
@@ -69,8 +35,6 @@ theorem opensLine_open {ρ name l root stream : String} {d : Json} (ht : treeLin
   simp only [hT, hr, hs, Bool.true_and, Bool.not_false]
   rfl
 
-/-- **Release log line `l` opens round `k` of stream `name` of the coin tree whose root is `root`**, as
-`coinTreesOf` reads it. -/
 def OpensRound (l root name : String) (k : ℕ) : Prop :=
   treeLine l = true ∧ ∃ d, event l = .ok d ∧ jsonStrIs (getD d "event") TREE_EVENT = false ∧
     getD d "tree" = .str root ∧ getD d "stream" = .str name ∧ nat? (getD d "round") = some k
@@ -95,12 +59,6 @@ theorem snoc_eq_append_cons {α : Type} {pre a b : List α} {x l : α} (h : pre 
     obtain rfl := (List.cons.inj h2).1
     exact .inr ⟨b', rfl, h1⟩
 
-/-! ## What `coinTreesOf` counts -/
-
-/-- **The trees `coinTreesOf` holds after the release log's lines `pre`, counted**: each tree, the first of its root,
-shows as many rounds of a stream opened as `pre` has lines opening that stream of that root (`opensLine`); `pre` opens
-no stream of a root none of the trees has; and each line of `pre` opening a round opens the round its stream's lines
-before it count. -/
 structure OpensCounted (pre : List String) (trees : Array LoggedTree) : Prop where
   held : ∀ i t, trees[i]? = some t → trees.findIdx? (·.root == t.root) = some i →
     ∀ s, (t.opened.filter (·.stream == s)).size = pre.countP (opensLine t.root s)
@@ -257,8 +215,6 @@ theorem OpensCounted.opening {pre : List String} {ts : Array LoggedTree} {line :
       rw [hkc, hI.held i t hget (by rw [hroot]; exact hidx) s, hroot]
     · exact hI.round a l b' ρ s' k' he' ho'
 
-/-- **`coinTreesOf` counts each stream's rounds**: where it accepts the release log, its trees and each line opening a
-round are as `OpensCounted` says. -/
 theorem coinTreesOf_counted {log : List String} {trees : Array LoggedTree} (h : coinTreesOf log = .ok trees) :
     OpensCounted log trees := by
   unfold coinTreesOf at h
@@ -310,19 +266,11 @@ theorem coinTreesOf_counted {log : List String} {trees : Array LoggedTree} (h : 
             (beq_iff_eq.1 hcond.1.1.1.1.2) rfl⟩
         · cases hr
 
-/-- **Each line opening a round opens the round its stream's lines before it count**: where `coinTreesOf` accepts
-the release log `lines`, a line of it opening round `k` of stream `name` of the tree whose root is `ρ` (`OpensRound`)
-has `k` lines before it opening that stream of that tree (`opensLine`). -/
 theorem coinTreesOf_round {lines pre post : List String} {l : String} {trees : Array LoggedTree} {ρ name : String}
     {k : ℕ} (h : coinTreesOf lines = .ok trees) (hl : lines = pre ++ l :: post) (ho : OpensRound l ρ name k) :
     k = pre.countP (opensLine ρ name) :=
   (coinTreesOf_counted h).round pre l post ρ name k hl ho
 
-/-! ## What the read shows -/
-
-/-- **Tree `i`'s stream `si` among the trees read `ts` is stream `name` of the coin tree whose root is `ρ`**, each tree
-read its root and its line's spec: the first tree of root `ρ` is the `i`-th, and `name` is first at place `si` of its
-spec's streams (`specStreams`), as `treeStep` finds them. -/
 def KeyAt (ts : List (String × Json)) (i si : ℕ) (ρ name : String) : Prop :=
   ts.findIdx? (·.1 == ρ) = some i ∧ ∃ sp, ts[i]? = some (ρ, sp) ∧
     (specStreams sp).findIdx? (jsonStrIs · name) = some si
@@ -335,7 +283,6 @@ theorem KeyAt.append {ts : List (String × Json)} {i si : ℕ} {ρ name : String
   · rw [List.findIdx?_append, hf, Option.some_or]
   · rw [List.getElem?_append_left hlt, hg]
 
-/-- Two streams of the trees read are one exactly where they are the same stream of the same tree. -/
 theorem keyAt_beq {ts : List (String × Json)} {i₁ s₁ i₂ s₂ : ℕ} {ρ₁ n₁ ρ₂ n₂ : String}
     (h₁ : KeyAt ts i₁ s₁ ρ₁ n₁) (h₂ : KeyAt ts i₂ s₂ ρ₂ n₂) :
     (i₁ == i₂ && s₁ == s₂) = (ρ₁ == ρ₂ && n₁ == n₂) := by
@@ -362,9 +309,6 @@ private theorem ok_of_toOption {ε α : Type} {x : Except ε α} {a : α} (h : x
   | error e => cases h
   | ok b => cases h; rfl
 
-/-- **A coin tree's line that isn't a tree's sample reads as an opening** (`treeStep`): of the round its `round` names
-of its stream `stream` of its tree `root`, tree `i`'s stream `si` among the trees read (`KeyAt`), its first `n`
-coins after the bytes its `after` gives, with the coins the records give that round (`Lines.openCoins`). -/
 theorem opening_of_treeStep {records : List Json} {ts ts' : List (String × Json)} {d : Json} {r : Verity.Release}
     (h : treeStep records ts d = some (r, ts')) (hT : jsonStrIs (getD d "event") TREE_EVENT = false) :
     ∃ root stream k n i si aft, getD d "tree" = .str root ∧ getD d "stream" = .str stream ∧
@@ -400,7 +344,6 @@ theorem opening_of_treeStep {records : List Json} {ts ts' : List (String × Json
     · simp at h
   · simp at h
 
-/-- The trees `treeFold` reads after `ts` extend `ts`. -/
 theorem treeFold_prefix {records : List Json} :
     ∀ (ls : List String) (ts tsF : List (String × Json)), treeFold records ts ls = some tsF →
       ∃ more, ts ++ more = tsF
@@ -427,9 +370,6 @@ theorem treeFold_skip {records : List Json} {ts : List (String × Json)} {l : St
     (ht : ¬treeLine l = true) : treeFold records ts (l :: ls) = treeFold records ts ls := by
   simp only [treeFold, ite_eq_right ht]
 
-/-- **A release a coin tree's line reads opens a stream exactly where its line opens it** (`opensLine`): tree `i`'s
-stream `si` of the trees read by the end, stream `name` of the tree whose root is `ρ` (`KeyAt`), where the trees the
-line is read after are the first of them. -/
 theorem treeStep_opensAt {records : List Json} {ts ts' more : List (String × Json)} {d : Json} {r : Verity.Release}
     {l : String} (htl : treeLine l = true) (he : event l = .ok d) (h : treeStep records ts d = some (r, ts'))
     {i si : ℕ} {ρ name : String} (hk : KeyAt (ts ++ more) i si ρ name) :
@@ -445,9 +385,6 @@ theorem treeStep_opensAt {records : List Json} {ts ts' more : List (String × Js
     rw [hr, opensLine_open htl he hT hroot hstream]
     exact keyAt_beq (hk'.append more) hk
 
-/-- **Line `l` of the release log reads as release `r`, an opening of round `k` of stream `name` of the coin tree whose
-root is `ρ`** (`OpensRound`): with the coins the records give that round (`Lines.openCoins`), as many coins as the
-line's `n`, after the bytes the line's `after` gives. -/
 def ReadsOpen (records : List Json) (l : String) (r : Verity.Release) (ρ name : String) (k : ℕ) : Prop :=
   OpensRound l ρ name k ∧ r.coins = Lines.openCoins records ρ name k ∧ ∃ d, event l = .ok d ∧
     (∀ i si n, r.frame = .opening i si n → nat? (getD d "n") = some n) ∧
@@ -461,11 +398,6 @@ theorem helloSpecs_fresh (P : List Verity.Release) {q : Verity.Release} {lab : S
   rw [helloSpecs_append]
   simp [helloSpecs, hq]
 
-/-- **An opening `readTail` reads is a line opening a round, counted**: where `readTail` reads the lines `lines` after
-the trees `ts` and the releases `P`, and the trees read by the end are `tsF`, each opening it reads, of tree `i`'s
-stream `si`, is a line of `lines` reading as it (`ReadsOpen`) of the stream `KeyAt` names there, named so in the specs
-of the `Hello`s before it; and each stream is opened in the releases before it as often as the lines before that line
-open it (`opensLine`). -/
 theorem readTail_opening {label : String} {after : ByteArray} {records : List Json} {tsF : List (String × Json)} :
     ∀ (lines : List String) (ts : List (String × Json)) (pending : Option String) (ξ : ByteArray)
       (P : List Verity.Release) {log : List Verity.Release},
@@ -591,8 +523,6 @@ theorem readTail_opening {label : String} {after : ByteArray} {records : List Js
           obtain ⟨rest, hrest, hR⟩ := Option.bind_eq_some_iff.1 hR
           exact step _ lab _ rest rfl hrest (Option.some.inj hR).symm
 
-/-- **An opening `readLog` reads is a line opening a round, counted** (`readTail_opening`): the head's line, which
-`readLog` reads first, reads at most a tree's `Hello`. -/
 theorem readLog_opening {label : String} {after : ByteArray} {records : List Json} {ξ : ByteArray}
     {lines : List String} {log : List Verity.Release} {tsF : List (String × Json)}
     (hR : readLog label after records ξ lines = some log) (hF : treeFold records [] lines = some tsF)
@@ -648,9 +578,6 @@ theorem readLog_opening {label : String} {after : ByteArray} {records : List Jso
       rw [List.countP_cons, opensLine_skip ht, ← hcnt i' si' ρ' name' hk']
       rfl
 
-/-- **The read opens each stream as often as the release log's lines do** (`opensLine`): where `readTail` reads the
-lines `lines` after the trees `ts`, and the trees read by the end are `tsF`, tree `i`'s stream `si` among them, stream
-`name` of the tree whose root is `ρ` (`KeyAt`). -/
 theorem readTail_openedOf {label : String} {after : ByteArray} {records : List Json} {tsF : List (String × Json)}
     {i si : ℕ} {ρ name : String} (hk : KeyAt tsF i si ρ name) :
     ∀ (lines : List String) (ts : List (String × Json)) (pending : Option String) (ξ : ByteArray)
@@ -711,8 +638,6 @@ theorem readTail_openedOf {label : String} {after : ByteArray} {records : List J
           obtain ⟨rest, hrest, hR⟩ := Option.bind_eq_some_iff.1 hR
           exact step _ lab _ rest rfl hrest (Option.some.inj hR).symm
 
-/-- **`readLog`'s read opens each stream as often as the release log's lines do** (`readTail_openedOf`), the head's
-line read first. -/
 theorem readLog_openedOf {label : String} {after : ByteArray} {records : List Json} {ξ : ByteArray}
     {lines : List String} {log : List Verity.Release} {tsF : List (String × Json)}
     (hR : readLog label after records ξ lines = some log) (hF : treeFold records [] lines = some tsF) {i si : ℕ}
@@ -745,13 +670,6 @@ theorem readLog_openedOf {label : String} {after : ByteArray} {records : List Js
       rw [List.countP_cons, opensLine_skip ht, ← readTail_openedOf hk ls [] none ξ hR hF]
       rfl
 
-/-! ## The bridge -/
-
-/-- **The per-round bridge**: where `coinTreesOf` accepts the release log `lines` and `readLog` reads it, each opening
-the read shows, of tree `i`'s stream `si`, is a line of the log that reads as it (`ReadsOpen`), opening round `k` of the
-stream `name` of the tree whose root is `ρ`: tree `i`'s stream `si` among `coinTreesOf`'s trees (`KeyAt`), named
-`name` in the specs of the `Hello`s before it, where `k` is the count of that stream's openings before it
-(`openedOf`). -/
 theorem readLog_round {label : String} {after : ByteArray} {records : List Json} {ξ : ByteArray}
     {lines : List String} {log : List Verity.Release} {trees : Array LoggedTree} (hT : coinTreesOf lines = .ok trees)
     (hR : readLog label after records ξ lines = some log) {pre : List Verity.Release} {r : Verity.Release}
@@ -764,7 +682,6 @@ theorem readLog_round {label : String} {after : ByteArray} {records : List Json}
   rw [hcnt i si ρ name hkey]
   exact coinTreesOf_round hT hls hro.1
 
-/-- The `i`-th tree is the first of its root, where the trees' roots are distinct. -/
 theorem findIdx?_root {trees : Array LoggedTree} (hn : (trees.toList.map (·.root)).Nodup) {i : ℕ} {t : LoggedTree}
     (h : trees[i]? = some t) : trees.findIdx? (·.root == t.root) = some i := by
   have hm : (trees.toList.map (·.root))[i]? = some t.root := by
@@ -775,9 +692,6 @@ theorem findIdx?_root {trees : Array LoggedTree} (hn : (trees.toList.map (·.roo
   rw [← findIdx?_toList]
   exact e
 
-/-- **A round a tree shows opened is below the read's openings of its stream**: where `coinTreesOf` accepts the
-release log `lines` and `readLog` reads it, round `k` of stream `name` that a tree `t` of `coinTreesOf`'s shows opened
-(`LoggedTree.opening`) is below the openings the read shows of tree `i`'s stream `si`, that stream of `t` (`KeyAt`). -/
 theorem opening_lt_openedOf {label : String} {after : ByteArray} {records : List Json} {ξ : ByteArray}
     {lines : List String} {log : List Verity.Release} {trees : Array LoggedTree} (hT : coinTreesOf lines = .ok trees)
     (hR : readLog label after records ξ lines = some log) {t : LoggedTree} (ht : t ∈ trees) {name : String} {k : ℕ}
@@ -794,11 +708,6 @@ theorem opening_lt_openedOf {label : String} {after : ByteArray} {records : List
   rw [readLog_openedOf hR (coinTreesOf_fold records hT) hk, ← hc, ← hs]
   exact hTr.rounds t ht o hmem
 
-/-! ## The trees' specs in the read -/
-
-/-- **The read's `Hello`s give the trees' specs**: where `readTail` reads the lines `lines` after the trees `ts`, whose
-specs parse (`specOf`) as those of the `Hello`s of the releases `P`, and the trees read by the end are `tsF`, theirs
-parse as those of the `Hello`s of `P` and the read. -/
 theorem readTail_specs {label : String} {after : ByteArray} {records : List Json} {tsF : List (String × Json)} :
     ∀ (lines : List String) (ts : List (String × Json)) (pending : Option String) (ξ : ByteArray)
       (P : List Verity.Release) {log : List Verity.Release},
@@ -857,7 +766,6 @@ theorem readTail_specs {label : String} {after : ByteArray} {records : List Json
           obtain ⟨rest, hrest, hR⟩ := Option.bind_eq_some_iff.1 hR
           exact step _ lab _ rest rfl hrest (Option.some.inj hR).symm
 
-/-- **`readLog`'s `Hello`s give the trees' specs** (`readTail_specs`), the head's line read first. -/
 theorem readLog_specs {label : String} {after : ByteArray} {records : List Json} {ξ : ByteArray}
     {lines : List String} {log : List Verity.Release} {tsF : List (String × Json)}
     (hR : readLog label after records ξ lines = some log) (hF : treeFold records [] lines = some tsF) :
@@ -894,9 +802,6 @@ theorem readLog_specs {label : String} {after : ByteArray} {records : List Json}
       rw [treeFold_skip ht] at hF
       exact readTail_specs ls [] none ξ [] hR hF .nil
 
-/-- **A stream of a tree read is named so in the read's `Hello`s**: where `readLog` reads the release log and
-`treeFold` reads its trees as `tsF`, tree `i`'s stream `si` among them, stream `name` (`KeyAt`), is the stream the
-`i`-th `Hello`'s spec has at `si`. -/
 theorem readLog_named {label : String} {after : ByteArray} {records : List Json} {ξ : ByteArray}
     {lines : List String} {log : List Verity.Release} {tsF : List (String × Json)}
     (hR : readLog label after records ξ lines = some log) (hF : treeFold records [] lines = some tsF) {i si : ℕ}
@@ -908,8 +813,6 @@ theorem readLog_named {label : String} {after : ByteArray} {records : List Json}
   obtain ⟨hlt, heq, -⟩ := Array.findIdx?_eq_some_iff_getElem.1 hs
   exact specOf_streams hsp (by rw [Array.getElem?_eq_getElem hlt, Trees.strIs heq])
 
-/-- **A stream of a coin tree's parsed spec is its line's** (`specOf_streams`, the other way): where the line's spec
-parses (`specOf`), the parsed spec's stream at a place is the one the list the line names (`specStreams`) has there. -/
 theorem specStreams_getElem {j : Json} {sp : Flock.CoinTree.Spec} (h : specOf j = some sp) {s : ℕ} {x : String}
     (hx : sp.streams[s]? = some x) : (specStreams j)[s]? = some (.str x) := by
   unfold specOf at h
@@ -937,8 +840,6 @@ theorem specStreams_getElem {j : Json} {sp : Flock.CoinTree.Spec} (h : specOf j 
       | _ => cases hx'
   | _ => simp [hss] at h
 
-/-- **A coin tree's `Hello` line adds its line's spec to the trees read**: where `treeStep` reads a line whose `event`
-is `TREE_EVENT`, the trees read after it are those before it and one of the line's spec. -/
 theorem treeStep_tree {records : List Json} {ts ts' : List (String × Json)} {j : Json} {r : Verity.Release}
     (h : treeStep records ts j = some (r, ts')) (hT : jsonStrIs (getD j "event") TREE_EVENT = true) :
     ∃ root, ts' = ts ++ [(root, getD j "spec")] := by
@@ -959,8 +860,6 @@ theorem treeStep_tree {records : List Json} {ts ts' : List (String × Json)} {j 
     · simp at h
   · simp at h
 
-/-- **Each tree `treeFold` reads has a spec `isTreeSpec` accepts**, where each tree before the lines has one and each
-`Hello` line's spec is one it accepts (as `Lines.TreesOf.spec` gives where `coinTreesOf` accepts the lines). -/
 theorem treeFold_isTreeSpec {records : List Json} :
     ∀ {lines : List String} {ts tsF : List (String × Json)}, treeFold records ts lines = some tsF →
       (∀ t ∈ ts, isTreeSpec t.2 = true) →
@@ -1014,8 +913,6 @@ theorem mapM_some_str_arr {f : Json → Option String} (hf : ∀ x y, f x = some
   rw [mapM_some_str hf hl']
   simp
 
-/-- **A coin tree's line spec names its parsed spec's streams**: where the line's spec parses (`specOf`), the list it
-names is the parsed spec's streams. -/
 theorem specOf_streams_arr {j : Json} {sp : Flock.CoinTree.Spec} (h : specOf j = some sp) :
     getD j "streams" = .arr (sp.streams.map .str) := by
   unfold specOf at h
@@ -1029,9 +926,6 @@ theorem specOf_streams_arr {j : Json} {sp : Flock.CoinTree.Spec} (h : specOf j =
     rw [mapM_some_str_arr (fun x y hx => by cases x <;> simp at hx; simp [hx]) hst]
   | _ => simp [hss] at h
 
-/-- **The read's `Hello`s name each tree's streams distinctly**: where `coinTreesOf` accepts the release log `lines`
-and `readLog` reads it, each `Hello`'s spec is a tree's (`readLog_specs`), whose line's spec `isTreeSpec` accepts
-(`treeFold_isTreeSpec`, `Lines.TreesOf.spec`), so it names distinct streams (`Lines.streams_nodup`). -/
 theorem readLog_nodup {label : String} {after : ByteArray} {records : List Json} {ξ : ByteArray}
     {lines : List String} {log : List Verity.Release} {trees : Array LoggedTree} (hT : coinTreesOf lines = .ok trees)
     (hR : readLog label after records ξ lines = some log) : ∀ sp ∈ helloSpecs log, sp.streams.toList.Nodup := by
@@ -1041,8 +935,6 @@ theorem readLog_nodup {label : String} {after : ByteArray} {records : List Json}
   exact Lines.streams_nodup (specOf_streams_arr hspec)
     (treeFold_isTreeSpec hF (fun _ h => absurd h List.not_mem_nil) (Lines.trees_log hT).spec t ht)
 
-/-- **A line opening a round is read as an opening**: where `readTail` reads the lines `lines`, a coin tree's line of
-them whose `event` isn't `TREE_EVENT` is read as a release opening a round (`treeStep_some`). -/
 theorem readTail_opens {label : String} {after : ByteArray} {records : List Json} :
     ∀ (lines : List String) (ts : List (String × Json)) (pending : Option String) (ξ : ByteArray)
       {log : List Verity.Release}, readTail label after records lines ts pending ξ = some log →
@@ -1093,7 +985,6 @@ theorem readTail_opens {label : String} {after : ByteArray} {records : List Json
           obtain ⟨rest, hrest, hR⟩ := Option.bind_eq_some_iff.1 hR
           exact step _ _ rest hrest (Option.some.inj hR).symm
 
-/-- **A line opening a round is read as an opening** (`readTail_opens`), the head's line read first. -/
 theorem readLog_opens {label : String} {after : ByteArray} {records : List Json} {ξ : ByteArray}
     {lines : List String} {log : List Verity.Release} (hR : readLog label after records ξ lines = some log)
     {l : String} (hl : l ∈ lines) (ht : treeLine l = true) {d : Json} (hev : event l = .ok d)
@@ -1123,9 +1014,6 @@ theorem readLog_opens {label : String} {after : ByteArray} {records : List Json}
       · exact absurd ht ht₀
       · exact readTail_opens ls [] none ξ hR l hl ht d hev hTE
 
-/-- **A line opening a round names a stream of a tree `treeFold` reads**: where `treeFold` reads the lines `lines`
-after the trees `ts` as `tsF`, a coin tree's line of them whose `event` isn't `TREE_EVENT`, naming tree `root`'s stream
-`stream`, names that stream of that tree among them (`opening_of_treeStep`, `KeyAt.append`). -/
 theorem treeFold_keyAt {records : List Json} {root stream : String} :
     ∀ (lines : List String) (ts tsF : List (String × Json)), treeFold records ts lines = some tsF →
       ∀ l ∈ lines, treeLine l = true → ∀ d, event l = .ok d → jsonStrIs (getD d "event") TREE_EVENT = false →
@@ -1150,10 +1038,6 @@ theorem treeFold_keyAt {records : List Json} {root stream : String} :
       · exact absurd ht ht₀
       · exact treeFold_keyAt ls ts tsF h l hl ht d hev hTE hr hs
 
-/-- **Another stream the read's `Hello`s name of a tree read is that tree's stream so named**: where `readLog` reads
-the release log and `treeFold` reads its trees as `tsF`, the `i`-th of them of root `ρ` (`KeyAt`, at any of its
-streams), the read's `Hello`s name each tree's streams distinctly and the `i`-th names its stream `s` `name`, tree
-`i`'s stream `s` is stream `name` of the tree of root `ρ`. -/
 theorem KeyAt.of_named {label : String} {after : ByteArray} {records : List Json} {ξ : ByteArray}
     {lines : List String} {log : List Verity.Release} {tsF : List (String × Json)}
     (hR : readLog label after records ξ lines = some log) (hF : treeFold records [] lines = some tsF) {i s₀ s : ℕ}
@@ -1176,13 +1060,6 @@ theorem KeyAt.of_named {label : String} {after : ByteArray} {records : List Json
     (h1.trans h2.symm)
   omega
 
-/-! ## The record's rounds, opened -/
-
-/-- **The read opens each of a record's streams at least its rounds**: where `coinTreesOf` accepts the release log
-`lines`, `readLog` reads it, `sessionTreeReason` accepts `record` against its trees and each round `record` gives
-stream `name` gives coins (`recordRound`), the read opens tree `i`'s stream `si`, that stream of the record's tree
-(`KeyAt`), at least the rounds `record` gives it (`recordRounds`): its last round is one the tree shows opened
-(`Trees.round_held`), below the read's openings of it (`opening_lt_openedOf`). -/
 theorem recordRounds_le_openedOf {label : String} {after : ByteArray} {records : List Json} {ξ : ByteArray}
     {lines : List String} {log : List Verity.Release} {trees : Array LoggedTree} (hT : coinTreesOf lines = .ok trees)
     (hR : readLog label after records ξ lines = some log) {tables : Array (String × Option ℕ)} {record : Json}
@@ -1198,12 +1075,6 @@ theorem recordRounds_le_openedOf {label : String} {after : ByteArray} {records :
   have := opening_lt_openedOf hT hR ht ho hk
   omega
 
-/-- **The device's log opens each of a record's streams exactly its rounds**: where `coinTreesOf` accepts the release
-log `lines` and `readLog` reads it as releases of the frames and answers of the device's log `Lg`,
-`sessionTreeReason` accepts `record` against its trees, each round `record` gives stream `name` gives coins, and `Lg`
-opens only the record's rounds (`OpenedRecorded`) and serves each opening (`LogServed`), `Lg` opens tree `i`'s stream
-`si`, that stream of the record's tree (`KeyAt`), exactly the rounds `record` gives it (`recordRounds`): at most by
-`openedOf_le_recordRounds`, at least by `recordRounds_le_openedOf`. -/
 theorem openedOf_eq_recordRounds {label : String} {after : ByteArray} {records : List Json} {ξ : ByteArray}
     {lines : List String} {log : List Verity.Release} {trees : Array LoggedTree} (hT : coinTreesOf lines = .ok trees)
     (hR : readLog label after records ξ lines = some log) {Lg : List Verity.Release}

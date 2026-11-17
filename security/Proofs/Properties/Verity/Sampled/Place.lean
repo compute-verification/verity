@@ -5,23 +5,7 @@ public import Proofs.Flock.Bridge.Spec
 public import Proofs.Flock.Bridge.LeafMap
 public import Proofs.Flock.Soundness.Discharge.HiddenExec.KeyHP
 
-/-!
-# The place the committed files register for a gate
-
-A base's `Vocab.place` read off the committed files alone, so a deployed base can define its place by it and
-`Instance.OpensAt` reads it (`Sampled/OpensAt.lean`):
-
-* `placeFrom`: **the place a commitment's layout registers for a claims position** (`Flock.Bridge.commitDepL`'s): the
-  registered port whose root is the position's row's root, as the deployed path check finds it
-  (`Claims.Sampling.regPath`), read as `Hash.RowLeaf`'s verifier (the port's frame-v3 domain, the executable's hm96
-  key, the format of the port's registered schema), the port's root, the row's leaf, and the bit's place in its row.
-* `placeOfRead`: **the place the committed files register for a gate**: the files parsed as `verify --zk` parses them,
-  and `placeFrom` at the deployed commitment's layout there, at the gate's claims position.
-* `placeOfFiles`: **the place a window's committed files register for a gate**: the gate's member's own
-  (`placeOfRead` at that member's files, so under that member's public file's roots), each member at its own gates of
-  the window's circuit (`placeOfWith`). No root is the window's own. At a window of one member it is that member's, by
-  definition.
--/
+/-! The place the committed files register for a gate. -/
 
 @[expose] public section
 

@@ -8,50 +8,7 @@ import all Init.Data.Ord.String
 import all Lean.Data.Json.Basic
 import all Init.Data.String.Defs
 
-/-!
-# The device's history at a play: the run that printed the play's log
-
-`Lines.PrintsLog` is what the device's history at a play is to have for v2's read of a session to be the play's log
-(`Binding.binds_of_prints`). This file builds that history from the play (`dev`) and proves it has them
-(`printsLog_dev`), so `Binding.Binds` holds at it at every setup (`binds_dev`). At a deployment's setup it also signed
-what the play's signatures are on (`signsPlay_dev`), so `Binding.logged_le` holds at it (`logged_le_dev`).
-
-* **The lines** (`rootValue`, `releaseValue`, `helloValue`, `openValue`): the values the deployed challenger writes as
-  its release log's lines (`LiveRecord._root` and `LiveRecord._release`, `LiveChallenger.sample_tree` and
-  `LiveChallenger.open_tree` in `verity/protocols/proofs/spot/device/challenger.py`), each line its value's
-  `Flock.canon` text (`lineOf`). Each value holds its keys in order and prints, so its line is its text
-  (`canon_lineOf`), and it has the fields v2 reads (`root_value`, `release_plain`, `hello_value`, `open_value`).
-* **The printer** (`printLog`, `prints_printLog`): a log's lines, from what the device holds between releases (its
-  trees, each family's count of coins, each stream's count of rounds and the next line's place: `PrintState`); the lines
-  it prints print the log (`Lines.Prints`).
-* **Every play prints** (`printable_releases`, `printable_play`): the device releases only what the printer prints: a
-  family's coin of `8 * COIN_BYTES` bits, a tree's root and key of whole bytes, and a round's coins of whole bytes, of a
-  tree it sampled and a stream of that tree's spec.
-* **The history** (`RunSetup`, `runOf`, `dev`): under the device's key, the run that released the play's log, its
-  release log its head and the printed lines, its coins the play's where the play released them. It holds no run where
-  the play's log releases more of a family's coins than the setup's layout holds (`Fits`), which no play under that
-  layout does (`coins_fit`). At every play it is the history's one run (`dev_play`), and every run in it prints the
-  play's log (`prints_dev`).
-* **The roots v2 reads** (`view`, `RootsAfter`, `rootsOf_ok`, `prints_pairs`): where `releasedRootsOf` accepts a run's
-  release log, each family's roots are the ones the first lines of its pairs of lines after the head, but the coin
-  trees', show, in order; of lines the device printed, the bytes each fresh release of that family answered.
-* **The coins it released** (`fold_released`, `position_place`, `holds_dev`): `Run.released` concatenates the run's
-  coins at the positions of the family's coins whose root is the bytes after. Each has a position its layout places as
-  that coin (`position_place`), where the run holds the play's coin, `COIN_BYTES` bytes of it (`coinAt`,
-  `printLog_fresh`), so the run released of each family after each root the play's coins (`Lines.Holds`).
-* **What the device signs** (`Deployment`, `Deployment.signer`, `signsPlay_dev`): a deployment fixes the run's setup
-  from what the play fixed, under the parameters' key and at their layout, with the auditor's ledger lines the device
-  signs before any coin and at the close. Its signer signs before any coin the messages of the lines the request fixes,
-  and at the close the run's record and close and the messages of the lines at the close, each what
-  `Properties.Challenger.signedBy` lists, so at a vocabulary whose signer is the deployment's, the device's history at
-  each play signed what the play's signatures are on (`Binding.SignsPlay`). It signs at most `Q` messages in a play,
-  one per ledger line and the run's record and close (`Deployment.signatures`, `Deployment.signs_le`), the vocabulary's
-  `signs_le` at that signer.
-
-What a run holds beside its releases (its id and host, its layout, the coins and salts the play didn't release, how it
-ended, its lines' times and the ledger lines it signed) is the history's parameter (`RunSetup`), which a deployment
-fixes from what the play fixed (`Deployment.setupOf`).
--/
+/-! The device's history at a play: the run that printed the play's log. -/
 
 @[expose] public section
 set_option backward.privateInPublic true
@@ -65,8 +22,6 @@ open Lean (Json)
 open Spot Spot.Challenger
 open Properties.Challenger (History Run OpensOn)
 open Verity.Sampled.Lines (Canon PlainValue RootValue SpecValue HelloValue OpenValue Prints)
-
-/-! ## The lines the device writes -/
 
 /-- **A root's line**, as the deployed challenger writes a family's root on its receipt (`LiveRecord._root`): coin `i`
 of family `label`, received at `t`, after the bytes `b`. -/
@@ -96,8 +51,6 @@ def lineOf (d : Json) : String :=
   | .ok l => l
   | .error _ => ""
 
-/-! ## Each line is its value's text -/
-
 theorem sortedKeys_mkObj {l : List (String × Json)} (hl : (l.map (·.1)).Pairwise (· < ·))
     (hv : ∀ p ∈ l, sortedKeys p.2 = true) : sortedKeys (Json.mkObj l) = true := by
   have hwf : (Std.TreeMap.Raw.ofList l compare).WF := Std.TreeMap.Raw.WF.ofList
@@ -112,7 +65,6 @@ theorem sortedKeys_mkObj {l : List (String × Json)} (hl : (l.map (·.1)).Pairwi
     rw [← Std.TreeMap.Raw.get?_eq_getElem?, Properties.Challenger.CanonRead.get?_ofList hl] at hg
     exact hv _ (Properties.Challenger.CanonRead.lookup_toList hg)
 
-/-- A value that holds its keys in order and that `Flock.canon` prints. -/
 def Printed (d : Json) : Prop := sortedKeys d = true ∧ ∃ t, Flock.canon d = .ok t
 
 theorem printed_str (s : String) : Printed (.str s) :=
@@ -137,7 +89,6 @@ theorem printed_spec (spec : Flock.CoinTree.Spec) : Printed spec.toJson := by
     · obtain ⟨s, -, rfl⟩ := Array.mem_map.1 hx
       first | exact (printed_str s).1 | exact (printed_str s).2
 
-/-- **A printed value's line is its text.** -/
 theorem canon_lineOf {d : Json} (h : Printed d) : Canon d (lineOf d) := by
   obtain ⟨hs, t, ht⟩ := h
   refine ⟨hs, ?_⟩
@@ -168,8 +119,6 @@ theorem canon_open (root : ByteArray) (stream : String) (k n : ℕ) (b cb : Byte
   simp only [List.mem_cons, List.not_mem_nil, or_false] at hp
   rcases hp with rfl | rfl | rfl | rfl | rfl | rfl | rfl <;> first | exact printed_str _ | exact printed_nat _
 
-/-! ## Each line has the fields v2 reads -/
-
 private theorem nat_toJson (m : ℕ) : nat? (Lean.toJson m) = some m := by
   simp [nat?, int?, Lean.toJson, Lean.JsonNumber.fromNat]
 
@@ -188,8 +137,6 @@ theorem open_value (root : ByteArray) (stream : String) (k n : ℕ) (b cb : Byte
     OpenValue (openValue root stream k n b cb) root stream k n b cb :=
   ⟨rfl, rfl, rfl, by show nat? (Lean.toJson k) = _; exact nat_toJson _,
     by show nat? (Lean.toJson n) = _; exact nat_toJson _, rfl, rfl⟩
-
-/-! ## The printer -/
 
 /-- **What the device holds between releases, for its lines**: the coin trees it sampled, each its root and spec; each
 family's count of coins released; each tree's streams' counts of rounds opened; and its release log's next line. -/
@@ -253,8 +200,6 @@ def printLog (time : ℕ → ℕ) : PrintState → List Release → Option (List
             (lineOf (openValue root stream (st.opened i s) n b (Lines.coinBytes cs)) :: ·)
         else none
 
-/-- **What the printer prints, the device printed** (`Lines.Prints`): each line its value's text, with the fields v2
-reads. -/
 theorem prints_printLog (time : ℕ → ℕ) :
     ∀ (st : PrintState) (log : List Release) {lines : List String}, printLog time st log = some lines →
       Prints st.trees lines log
@@ -300,8 +245,6 @@ theorem prints_printLog (time : ℕ → ℕ) :
           rwa [Lines.bits_coinBytes hcs] at hp
         · cases h
 
-/-! ## Every play prints -/
-
 theorem set_self {α : Type} {l : List α} {i : ℕ} {a : α} (h : l[i]? = some a) : l.set i a = l := by
   obtain ⟨hi, rfl⟩ := List.getElem?_eq_some_iff.1 h
   exact List.set_getElem_self hi
@@ -311,8 +254,6 @@ theorem opened_length {block : ℕ} (d : TreeDraw block) (n : ℕ) : (TreeDraw.o
   rw [Lines.bitsOfBytes_length] at h
   omega
 
-/-- **The device prints every log its releases can end with**: at most `k` frames more under the families `fs`, with
-the trees `ts` open, from a state whose trees' specs are theirs. -/
 theorem printable_releases (time : ℕ → ℕ) :
     ∀ (k : ℕ) (fs : List (String × ℕ)) (ts : List OpenTree) (st : PrintState) (log : List Release),
       st.trees.map (·.2) = ts.map (·.spec) → Game.Reaches (releases k fs ts) log →
@@ -392,7 +333,6 @@ theorem printable_releases (time : ℕ → ℕ) :
       · cases hm
         exact ⟨[], rfl⟩
 
-/-- **The device prints every play's log**, at any times. -/
 theorem printable_play {fs : List (String × ℕ)} {D : Signer} {θ : ByteArray} {F : Array ByteArray} {c : ByteArray}
     {o : Exchange} (h : Game.Reaches (play fs D θ F c) o) (time : ℕ → ℕ) :
     ∃ lines, printLog time PrintState.init o.log = some lines := by
@@ -401,8 +341,6 @@ theorem printable_play {fs : List (String × ℕ)} {D : Signer} {θ : ByteArray}
   obtain ⟨b, ρ, e, he⟩ := hf
   subst he
   exact printable_releases time _ fs [] PrintState.init log rfl hlog
-
-/-! ## The device's history -/
 
 /-- **What a run of the device holds beside its releases**: the key it runs under, its session's id and host, its coin
 commitment's layout, its coins and salts by position where the play released none, how it ended, each line's time by
@@ -498,8 +436,6 @@ theorem takeCoin_count {l : String} : ∀ {fs fs' : List (String × ℕ)}, takeC
         rw [ite_eq_left rfl, ite_eq_left rfl, ite_eq_right (Ne.symm hl), Nat.add_zero]
       · rw [ite_eq_right hL, ite_eq_right hL, takeCoin_count h' label]
 
-/-- **The device releases at most each family's coins**: at most `k` frames more under the families `fs`, with the trees
-`ts` open, a log releases at most the coins `fs` holds of each family. -/
 theorem coins_fit : ∀ (k : ℕ) (fs : List (String × ℕ)) (ts : List OpenTree) (log : List Release),
     Game.Reaches (releases k fs ts) log → Fits fs log
   | 0, _, _, log, h => by
@@ -555,8 +491,6 @@ theorem coins_fit : ∀ (k : ℕ) (fs : List (String × ℕ)) (ts : List OpenTre
       · cases hm
         exact fun _ => Nat.zero_le _
 
-/-- **At every play the device's history holds the play's run under its key, and no other run**, at a setup whose
-layout is the play's families. -/
 theorem dev_play (S : Exchange → RunSetup) {fs : List (String × ℕ)} {D : Signer} {θ : ByteArray}
     {F : Array ByteArray} {c : ByteArray} {o : Exchange} (h : Game.Reaches (play fs D θ F c) o)
     (hS : (S o).families = fs) :
@@ -576,7 +510,6 @@ theorem dev_play (S : Exchange → RunSetup) {fs : List (String × ℕ)} {D : Si
   · simp only [dev]
     rw [ite_eq_right fun h => hpk h.1]
 
-/-- **Each run of the device's history prints the play's log after its head** (`Lines.PrintsLog`'s first part). -/
 theorem prints_dev (S : Exchange → RunSetup) (o : Exchange) {pk : ByteArray} {r : Run}
     (hr : r ∈ (dev S o).runs pk) : Prints [] r.log.tail o.log := by
   simp only [dev] at hr
@@ -589,10 +522,6 @@ theorem prints_dev (S : Exchange → RunSetup) (o : Exchange) {pk : ByteArray} {
     · cases hr
   · cases hr
 
-/-! ## The roots v2 reads of the run's release log -/
-
-/-- **The roots `releasedRootsOf` holds of family `L` in the state `s`**: its first entry's of that family, as
-`Run.released` reads them; none where no entry is of that family. -/
 def view (s : Array (String × Array ByteArray)) (L : String) : List ByteArray :=
   ((s.toList.find? (·.1 == L)).map (·.2.toList)).getD []
 
@@ -659,8 +588,6 @@ theorem view_init (fs : Families) (L : String) :
     obtain ⟨a, -, rfl⟩ := hy
     rfl
 
-/-- **What `releasedRootsOf`'s loop holds after the pairs of lines `pre`**: each pair's lines parse (`event`), and each
-family's roots in the state `s` are the ones `Verity.Sampled.rootOf` reads of those pairs' first lines, in order. -/
 def RootsAfter (pre : List (String × String)) (s : Array (String × Array ByteArray)) : Prop :=
   (∀ p ∈ pre, (∃ j, event p.1 = .ok j) ∧ ∃ j, event p.2 = .ok j) ∧
     ∀ L, view s L = ((pre.filterMap fun p => Verity.Sampled.rootOf p.1).filter (·.1 == L)).map (·.2)
@@ -671,8 +598,6 @@ theorem bind_ok {ε α β : Type} {x : Except ε α} {f : α → Except ε β} {
   | error e => cases h
   | ok a => exact ⟨a, rfl, h⟩
 
-/-- **The roots `releasedRootsOf` accepts are its loop's** (`RootsAfter`) over the pairs of its log's lines after the
-head that are no coin tree's, an even number of them. -/
 theorem rootsOf_ok {c : LiveCommitment} {log : List String} {roots : Roots} (h : releasedRootsOf c log = .ok roots) :
     ∃ res, RootsAfter (pairs (log.tail.filter fun l => !treeLine l)) res ∧
       (log.tail.filter fun l => !treeLine l).length % 2 = 0 ∧
@@ -743,16 +668,12 @@ theorem mem_pairs :
       · obtain ⟨p, hp, he⟩ := mem_pairs (rest := rest) (by simp only [List.length_cons] at h; omega) l hl
         exact ⟨p, List.mem_cons_of_mem _ hp, he⟩
 
-/-- The family and the bytes each fresh release of `log` answered, in order. -/
 def freshRoots : List Release → List (String × ByteArray)
   | [] => []
   | x :: xs => match x.frame with
     | .fresh l => (l, x.answers) :: freshRoots xs
     | _ => freshRoots xs
 
-/-- **The roots v2 reads of lines the device printed are its fresh releases'**: where each line `releasedRootsOf` keeps
-(no coin tree's) parses, its pairs' first lines read (`Verity.Sampled.rootOf`) as each fresh release's family and the
-bytes it answered. -/
 theorem prints_pairs : ∀ {ts : List (ByteArray × Flock.CoinTree.Spec)} {lines : List String} {log : List Release},
     Prints ts lines log → (∀ l ∈ lines.filter (fun l => !treeLine l), ∃ j, event l = .ok j) →
       (pairs (lines.filter fun l => !treeLine l)).filterMap (fun p => Verity.Sampled.rootOf p.1) = freshRoots log := by
@@ -799,13 +720,10 @@ theorem prints_pairs : ∀ {ts : List (ByteArray × Flock.CoinTree.Spec)} {lines
       rw [hf] at hev ⊢
       exact ih hev
 
-/-! ## The coins the run released -/
-
 local instance lawfulBEqByteArrayDevice : LawfulBEq ByteArray where
   eq_of_beq h := ByteArray.ext (beq_iff_eq.1 h)
   rfl {a} := by show (a.data == a.data) = true; exact beq_self_eq_true _
 
-/-- The coins of family `label` the releases `log` released, each with the bytes it answered, in order. -/
 def freshList (label : String) : List Release → List (ByteArray × List Bool)
   | [] => []
   | x :: xs => match x.frame with
@@ -852,7 +770,6 @@ theorem freshRoots_filter (L : String) : ∀ log : List Release,
     · exact freshRoots_filter L xs
     · exact freshRoots_filter L xs
 
-/-- The bytes of the coins `css`, each coin's (`Lines.coinBytes`) in order. -/
 def catBytes : List (List Bool) → ByteArray
   | [] => .empty
   | cs :: css => Lines.coinBytes cs ++ catBytes css
@@ -902,13 +819,11 @@ theorem go_place (label : String) (i : ℕ) : ∀ (fs : Families) (offset : ℕ)
       · rw [LiveCommitment.position.go, ite_eq_right (by simpa using hl), hp, Nat.add_assoc]
       · rw [placeOf, ite_eq_right (show ¬n + p < n by omega), Nat.add_sub_cancel_left, hpl]
 
-/-- **A coin of family `label` below its count has a position**, which the layout places as that coin. -/
 theorem position_place {c : LiveCommitment} {label : String} {i : ℕ} (h : i < firstCount label c.families) :
     ∃ p, c.position label i = some p ∧ placeOf c.families p = some (label, i) := by
   obtain ⟨p, hp, hpl⟩ := go_place label i c.families 0 h
   exact ⟨p, by rw [LiveCommitment.position, hp, Nat.zero_add], hpl⟩
 
-/-- **The printer prints only fresh coins of `8 * COIN_BYTES` bits**. -/
 theorem printLog_fresh (time : ℕ → ℕ) (label : String) :
     ∀ (st : PrintState) (log : List Release) {lines : List String}, printLog time st log = some lines →
       ∀ p ∈ freshList label log, p.2.length = 8 * COIN_BYTES
@@ -950,11 +865,6 @@ theorem commitment_families {s : Run} {c : LiveCommitment} (h : s.commitment = s
     rfl
   · cases h
 
-/-- **Where v2 reads a run of the device's history, it released of each family after each root the play's coins**
-(`Lines.PrintsLog`'s second part): at the run's commitment, where `releasedRootsOf` accepts its release log, the roots
-it reads are the play's fresh releases' (`rootsOf_ok`, `prints_pairs`), each coin has a position its layout places as
-that coin (`position_place`, where the play's log fits the layout), and the run's coin there is the play's
-(`coinAt`). -/
 theorem holds_dev (S : Exchange → RunSetup) (o : Exchange) {pk : ByteArray} {r : Run} (hr : r ∈ (dev S o).runs pk)
     {c : LiveCommitment} {roots : Roots} (hc : r.commitment = some c) (hroots : releasedRootsOf c r.log = .ok roots)
     (label : String) (after : ByteArray) :
@@ -1003,28 +913,19 @@ theorem holds_dev (S : Exchange → RunSetup) (o : Exchange) {pk : ByteArray} {r
     · cases hr
   · cases hr
 
-/-- **The device printed the play's log** (`Lines.PrintsLog`), at every setup: each run of its history prints the
-play's log after its head (`prints_dev`), and where v2 reads it, released the play's coins (`holds_dev`). -/
 theorem printsLog_dev (S : Exchange → RunSetup) (o : Exchange) : Lines.PrintsLog (dev S o) o.log :=
   fun _ _ _ hr _ => ⟨prints_dev S o hr, fun ⟨_, _, hc, hroots⟩ => holds_dev S o hr hc hroots⟩
 
-/-- **`Binds` at v2's read, at the device's history at each play** (`Binding.binds_of_prints`): at every setup, each
-play's history printed its log (`printsLog_dev`). -/
 theorem binds_dev {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α] (V : Vocab d α)
     (k : Verity.Registration.Composite) (S : Exchange → RunSetup) (θ : ByteArray) :
     Binding.Binds V k Binding.readsV2 (dev S) θ :=
   Binding.binds_of_prints V k (dev S) θ fun o _ => printsLog_dev S o
 
-/-! ## What the device signs at a play -/
-
-/-- The messages of a play's signatures are the messages its signer signs, in order. -/
 theorem signatures_fst (D : Signer) (a : ByteArray) (log : List Release) (b : ByteArray) (ρ : List Bool) :
     (D.signatures a log b ρ).map Prod.fst = D.signs a log b ρ := by
   unfold Signer.signatures
   exact List.ext_getElem (by simp) fun i _ _ => by simp
 
-/-- **A history signs under `pk` what another signs there**, where it holds the other's runs and ledger lines under
-`pk` (`Properties.Challenger.signedBy`). -/
 theorem signedBy_mono {h h' : History} {pk m : ByteArray} (hm : m ∈ Properties.Challenger.signedBy h pk)
     (hr : ∀ s ∈ h.runs pk, s ∈ h'.runs pk) (hl : ∀ l ∈ h.ledger pk, l ∈ h'.ledger pk) :
     m ∈ Properties.Challenger.signedBy h' pk := by
@@ -1042,8 +943,6 @@ theorem length_flatMap_le {β γ : Type} (f : β → List γ) {n : ℕ} (hf : �
     rw [List.flatMap_cons, List.length_append, List.length_cons, Nat.mul_succ, Nat.add_comm (n * _)]
     exact Nat.add_le_add (hf b) (length_flatMap_le f hf l)
 
-/-- **A history signs under `pk` at most two messages per run and one per ledger line**
-(`Properties.Challenger.signedBy`): a run's record and close, and a line's entry. -/
 theorem signedBy_length (h : History) (pk : ByteArray) :
     (Properties.Challenger.signedBy h pk).length ≤ 2 * (h.runs pk).length + (h.ledger pk).length := by
   unfold Properties.Challenger.signedBy
@@ -1126,11 +1025,6 @@ def signer (fs : ByteArray → Families) (θ : ByteArray) : Signer where
 (`ledgerLines`) and the run's record and close. -/
 def signatures (θ : ByteArray) : ℕ := P.ledgerLines θ + 2
 
-/-- **The deployed device signs at most `Q` messages in a play** (`Vocab.signs_le`): before any coin at most one per
-line the request fixes, and at the close at most the printed run's record and close and one per line at the close
-(`signedBy_length`, `printedRun_length`). A vocabulary whose device is the deployment's has `signer := P.signer
-families`, `signatures := P.signatures` and `signs_le := P.signs_le families`, at which `logged_le_dev`'s tie is
-`rfl`. -/
 theorem signs_le (fs : ByteArray → Families) (θ a : ByteArray) (log : List Release) (b : ByteArray)
     (ρ : List Bool) : ((P.signer fs θ).signs a log b ρ).length ≤ P.signatures θ := by
   have h1 : (Properties.Challenger.signedBy ⟨fun _ => [], fun _ => P.opens θ a⟩ (pubOf θ)).length ≤
@@ -1151,11 +1045,6 @@ theorem signs_le (fs : ByteArray → Families) (θ a : ByteArray) (log : List Re
 
 end Deployment
 
-/-- **The deployed device's history at each play signed what the play's signatures are on** (`Binding.SignsPlay`),
-at a vocabulary whose signer at the parameters is the deployment's at the vocabulary's layouts. Each message the play's
-signer signs is one a history of the setup's ledger lines, or of the run that released the play's log, signs
-(`Deployment.signer`), and the device's history at the play holds that run (`dev_play`) and those lines under the
-parameters' key. -/
 theorem signsPlay_dev {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α] (V : Vocab d α) (P : Deployment)
     (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (hD : V.signer θ = P.signer V.families θ) :
     Binding.SignsPlay V (dev (P.setupOf V.families)) θ F c := by
@@ -1202,10 +1091,6 @@ theorem signsPlay_dev {ι : Type} {d : ResourceAccounting.Device ι} {α : Type}
       rw [hled]
       exact List.mem_append.2 (.inr hl')
 
-/-- **(a) at the deployed device's history**: at a vocabulary whose signer at the parameters is the deployment's, an
-accepted play whose log v2 read isn't the device's is at most as likely as the read finder's collision plus the
-forger's forgery (`Binding.logged_le`), the device's history at each play having printed the play's log (`binds_dev`)
-and signed what the play's signatures are on (`signsPlay_dev`). -/
 theorem logged_le_dev {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α] (V : Vocab d α)
     (T : PinnedTables) (k : Verity.Registration.Composite) (P : Deployment) (θ : ByteArray) (F : Array ByteArray)
     (c : ByteArray) (σ : Game.Strategy (V.game θ F c)) (hD : V.signer θ = P.signer V.families θ) :
