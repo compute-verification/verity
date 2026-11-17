@@ -82,7 +82,7 @@ the receipt `(i, p)` of the sample's passes with that number, so they are distin
 value; and each window `u` of the sample holds its share of them (`shareOf`), renumbered to its own passes. -/
 def SampleIsSubset : Prop :=
   ∀ (g : Nat) (s : Session.State) (t : Int) (now : Nat) (sampled : Array (Nat × Nat)) (s' : Session.State),
-    Shared.close g s t now = .ok (.drew sampled, s') →
+    Shared.close g s t now = .ok (.sampled sampled, s') →
       ∃ L us, FlockSoundness.Randomness.subset
           (openingsKey s.digest (t.toNat / g) s.coins[s.params.windows + t.toNat / g]!)
           (min s.params.samples (sampleLengths g s (t.toNat / g)).toList.sum) (sampleLengths g s (t.toNat / g)).toList.sum
