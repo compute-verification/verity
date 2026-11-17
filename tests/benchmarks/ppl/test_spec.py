@@ -67,6 +67,7 @@ def test_every_spec_parses_with_its_scope_and_plain_arm():
         want[name] = ("all", "int8-all", True)
     want["int8-channel127-v3"] = want["fp8-block"] = ("linears", "int8-linears", False)
     want["pearl-c-linears"] = ("linears", "int8-linears", True)
+    want["fp8-linears"] = ("linears", "int8-linears", False)
     got = {p.stem: spec.load(str(p)) for p in spec.SPECS.glob("*.toml")}
     assert set(got) == set(want)
     for name, (scope, plain, seeded) in want.items():

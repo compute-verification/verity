@@ -26,7 +26,10 @@ research run --on NODE --gpus 1 --project verity --source . --cwd source --max-m
 checkpoint is fetched once, 2.5 GB), builds the sm_90a cubin (`benchmarks/harness/setup/pearl_c_sm90.sh`), fetches the
 C4 shard from the hub into the same cache (its sha256 held to `datasets.json`'s), runs `run.py eval ... pearl-c-linears`
 and then `run.py metrics`. `env GPU=I CORES=A-B` pins its lease to card I and those cores, for which the command drops
-`--gpus 1` (research's own lease would take any card and leave the script none to pin).
+`--gpus 1` (research's own lease would take any card and leave the script none to pin). `SET=wikitext2` measures
+WikiText-2 instead, built from the hub's parquet of its test split into the bench's pinned file, with pyarrow installed
+beside the venv (`$WORK/ppl-pyarrow`) if it lacks one. `ARMS` runs other arms beside `pearl-c-linears` in the same eval,
+e.g. `fp8-linears`, the same linears in plain E4M3 with no noise, and `PPL_OUT` names the output directory.
 
 This file holds no table: `run.py tables` (`tables.py`) prints each one from the code and data it describes, the
 registered steps, the arms in `specs/`, the window lists, the models and the locked baseline, so a new step, arm,
