@@ -31,7 +31,7 @@ from pathlib import Path
 
 NODE = "rtx-pro-6000-server-x8"
 _UP = Path(__file__).resolve().parents   # laid out as in the repository: its root is six directories above this one
-HARDWARE = _UP[min(6, len(_UP) - 1)] / "hardware"
+HARDWARE = _UP[min(6, len(_UP) - 1)] / "calibration" / "hardware"
 
 
 def figures(hardware: Path = HARDWARE) -> dict:
