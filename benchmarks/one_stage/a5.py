@@ -1161,8 +1161,8 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
                 "sessions": [a0.sha512_file(f) for f in sorted((sdir / "sessions").glob("*/session.json"))],
                 "challenger": (live or {}).get("challenger"), "handle": s.get("handle"), "closing": s.get("closing")}
 
-    # every member's statement is staged before any session flips a coin, and outer proofs run one at a time
-    # (`ONE_AT_A_TIME`): the sessions run in the members' order, on the proof server's one prover or each as its own process
+    # every member's statement is staged before any session flips a coin, and the sessions run one at a time
+    # (`ONE_AT_A_TIME`): they run in the members' order, on the proof server's one prover or each as its own process
     # pair, and only Lean's checks of finished members, outside any ZK server, overlap the next member's session. A process
     # pair's session holds its memory estimate from the pool while it runs, and the checks run `LeanPool`'s workers at a
     # time beside it; a proof server's sessions are the server's, which the pool holds nothing for, and its checks stay
@@ -1700,8 +1700,10 @@ ARCHIVE_LINK_HELP = ("link each member's circuit file into the archive under its
 ZK_SERVER_LOOP = "flock-zk-server"
 #: the file an audit keeps a sample in: the window's (``out``) and each session's (``session-m<k>/``)
 SAMPLE_FILE = "draw.json"
-#: AGENTS.md's live-coins rule, which keeps an audit's sampled members' sessions one after another
-ONE_AT_A_TIME = "outer proofs go through the ZK server one at a time (AGENTS.md, \"Live coins only\")"
+#: the verifier's order of an audit's sampled members' sessions, which keeps them one after another
+ONE_AT_A_TIME = ("the verifier takes the members' sessions only one after another on the window's challenger session, no "
+                 "line of a member's coin tree before the closing round of the one before (Challenger.membersOrder, "
+                 "MEMBERS_ORDER)")
 
 
 def one_session(s: str) -> int:

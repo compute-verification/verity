@@ -3743,6 +3743,27 @@ def test_v3c_links_each_members_circuit_into_its_archive_only_where_the_run_says
     assert ("--archive-link" in json.loads((tmp_path / "order.audit").read_text())) is linked
 
 
+@pytest.mark.parametrize("cards", [None, "3"])
+def test_v3c_audits_on_the_cards_v3c_gpus_names_with_a_cuda_prover_of_its_own_else_on_the_cpu(tmp_path, cards):
+    pod = tmp_path / "tree" / "verity" / "protocols" / "proofs" / "flock" / "prover" / "pod"
+    pod.mkdir(parents=True)
+    (pod / "cuda-13.3.sh").write_text("export CUDA_TK=/tk\n")
+    _script(tmp_path / "bin" / "flock",
+            f'echo "$FLOCK_WORK GPU=$GPU CUDA_TK=${{CUDA_TK:-}}" >> {tmp_path}/builds\nshift\nexec "$@"')
+    rc, lines, order, _limits = _v3c(tmp_path, V3C_GPUS=cards)
+    assert rc == 0 and "audit" in order, (lines, order)
+    fw = tmp_path / "fw"
+    builds = (tmp_path / "builds").read_text().splitlines()
+    assert builds == [f"{fw} GPU=0 CUDA_TK="] + ([f"{fw / 'gpu'} GPU=1 CUDA_TK=/tk"] if cards else [])
+    prover = (fw / "gpu" if cards else fw) / "flock-gpu-link" / "flock" / "target" / "release" / "flock-circuit"
+    assert _audited(tmp_path, ("--gpus", "--bin")) == {"--gpus": cards, "--bin": str(prover)}
+
+
+def test_the_preflight_refuses_v3c_gpus_that_names_no_cards(tmp_path):
+    rc, lines, order, _limits = _v3c(tmp_path, V3C_GPUS="cuda:0")
+    assert (rc, order) == (3, []) and lines[-1].startswith("PREFLIGHT: V3C_GPUS is the cards"), lines
+
+
 @pytest.mark.parametrize("tied, extra, limit", [
     (False, {}, None), (False, {"V3C_WARM_JOBS": "2"}, "180m"),
     (True, {"V3C_WARM_JOBS": "3", "V3C_WARM_TIMEOUT": "5h"}, "5h"),
