@@ -55,8 +55,10 @@ The placed window (`[run.window.plain]`) is remote with no accounting piece: it 
 (`H1_GATE` empty), so PoUW's piece is `MISSING`, and it runs no V3c (`V3C_CLASS` empty, so step 3's audit is the SPOT
 audit of record) and no composite (`COMPOSITE` empty). Its record is composed off the node by `run.sh compose`. The
 tied window (`run.sh window --tie`, `[run.window.tie]`) serves the BF16 row (`tied_row`) under Pearl+
-(`PEARLPLUS_TIE`, `POUW=pearlplus`), its linears committed at V3c's class `4,32,4` (4 slots, prompts 32:32), sets no
-`COMPOSITE`, and defers V3c's audit off the node (`V3C_AUDIT_MEM_GB` above node A's memory) to `run.sh copy` and
+(`PEARLPLUS_TIE`, `POUW=pearlplus`), its linears committed at V3c's class `4,32,4` (4 slots, prompts 32:32), leaves
+`COMPOSITE` at its default, so its hand-off carries `POUW` and the compose off the node composes remote's composite of
+record, `verity/remote/v1` (a hand-off without `POUW` composes v0, which its record says is not of record), and it
+defers V3c's audit off the node (`V3C_AUDIT_MEM_GB` above node A's memory) to `run.sh copy` and
 `run.sh audit`. Its sampling design is a setting of the launch's environment (`[run.window.tie]`), by default the benchmark's
 `stratified-rate:1/2097152`.
 
@@ -107,6 +109,8 @@ read, may run on the endpoint's node too. Being placed needs each of them on a m
   script names a node. No file or command line holds a machine's address: `window.sh` reads the gate's
   (`VY_CHALLENGER_1_HOST`) from `CHALLENGER_ENV`, a mode-600 env file on the node. The window's card, cores and end
   are `CARD`, `CORES` and `END`, which `run.sh` fills from the environment the run is launched in.
+- `local_gate.py`: the challenger's gate (`live_challenger/auditor.py`) on one node under a test key, its coins the
+  Lean verifier's; `init` refuses when that verifier doesn't build.
 - `workloads/` keeps a bf16 RTX PRO 6000 workload, which the served run doesn't serve.
 
 ## Commands
@@ -131,7 +135,8 @@ run starts. FLAGs go to the recorder (`--timeout 200m` to end with the row); `--
    landed `run.sh` refuses: land it first, or take development coins with `--development`. It refuses a commit that
    changed the taps' sources since `TAPS_AT`.
 3. `HANDOFF=DIR run.sh compose`, DIR holding the window run's `out/handoff/`: `compose.sh`, the window's record composed
-   off the served node, its SPOT Lean verifier run there on the audit. `run.sh` refuses it from any commit but the
+   off the served node, its SPOT Lean verifier run there on the audit, and a tied window's composite, remote v1, with
+   it. `run.sh` refuses it from any commit but the
    window's (the hand-off's `COMPOSE_TREE`).
 4. A tied window's deferred audit, between the window and the compose: `SERVED_RUN=<window run id> AUDIT_NODE=<node>
    run.sh copy` sends its serve dir's deferral (its files, held to their `inputs.sha256`) from node A to the same path on

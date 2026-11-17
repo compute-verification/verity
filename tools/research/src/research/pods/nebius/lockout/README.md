@@ -54,9 +54,8 @@ Apply order. Every step runs as vy-admin on the node and has its own rollback. W
    sudo did refuse. It prints command shapes, never arguments. Fix each such form by PR before the fallback expires. Once the fallback is gone, research's
    `sudo -n true` still passes, since it is on the allowlist, and any other root command (`sudo -n id`) is refused.
 
-On a sealed run, `research retention gc` and `rm` used to fail: gc reported it as read-only, and rm refused it as
-read-only. `research data evict --runs` would have raised on its first unlink. Now each passes the whole run dir to the root
-helper once its own checks pass (store/sealed.py): gc and rm run `sudo -n vy-seal-runs delete DIR`, and evict runs
+On a sealed run, `research retention gc`, `rm` and `research data evict --runs` pass the whole run dir to the root helper
+once their own checks pass (store/sealed.py): gc and rm run `sudo -n vy-seal-runs delete DIR`, and evict runs
 `vy-seal-runs evict DIR --min-bytes N`. The helper checks again, as root, that the dir sits directly under a runs root, is
 sealed and still has custody. Evict removes only the files `.custody` lists, at the size it recorded and unchanged since.
 A path inside a sealed run is refused.
