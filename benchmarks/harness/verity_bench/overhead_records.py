@@ -59,7 +59,7 @@ GATES = Path("benchmarks/slowdown/data/hardware.toml")
 #: the table a research run of `table` keeps beside its result, relative to the run's directory (`record`)
 TABLE = "out/overhead-table.json"
 #: the unit of every γ `record` writes
-GAMMA_UNIT = "busy SM-seconds over stock's, less one"
+GAMMA_UNIT = "busy SM-seconds over stock's, less one: a fraction, not a percent"
 #: each model but the kernel model as the words that open its member, `MODEL-CARD` (`measurements`)
 MEMBER_MODEL = {"llama3.2-1b": "llama-3.2-1b"}
 
@@ -416,7 +416,7 @@ def render(table: Mapping) -> str:
 
 
 def _section(c: Mapping, rows: list[dict], covers: str) -> str:
-    lines = ["| Scheme | Card | Point | m | γ [95% CI] | over least-SM stock | weight side bound | A/A | ε | γ ≤ 10 | Run | Note |",
+    lines = ["| Scheme | Card | Point | m | γ, × stock − 1 [95% CI] | over least-SM stock | weight side bound | A/A | ε | γ ≤ 10 | Run | Note |",
              "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |"]
     refused = []
     for r in rows:
