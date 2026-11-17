@@ -2681,6 +2681,7 @@
     "InferenceOnlyVerifier.Protocol",
     "InferenceOnlyVerifier.Count",
     "InferenceOnlyVerifier.Record",
+    "InferenceOnlyVerifier.RowsProtocol",
     "Properties.InferenceOnly.Record",
     "Properties.InferenceOnly"
    ],
