@@ -1,9 +1,4 @@
-/-
-The frame-v3 read is sound: whenever the rows `Flock.ReadNet.frame D schema` emits hold, its bit is set only where
-`Hash.Tree.climb` over the opened value, position and path reaches the root (`Gates.FrameReadSpec`). Its gadgets' lemmas
-are in `Frame/Bytes.lean` and `Frame/Gadgets.lean`, its messages' and SHA-512's in `Frame/Sha.lean`, and the leaf's,
-the node's and the climb's in `Frame/Parts.lean`.
--/
+/- The frame-v3 read is sound (`Gates.FrameReadSpec`). -/
 module
 
 public import Proofs.ResourceAccounting.ReadUnit.Frame.Parts
@@ -22,9 +17,7 @@ theorem length_utf8_seg : (Hash.utf8 Hash.RowLeaf.Format.seg.schema).length = 22
   rw [length_utf8]
   simp [Char.utf8Size]
 
-/-- **The frame-v3 read is sound** at every depth up to 32 under the row-seg schema: whenever its rows hold, the
-read's bit is set only where the frame leaf over the opened digest, climbed through the opened siblings, reaches the
-root. Past depth 32 a rank takes five bytes and the leaf's message a third block, which the net's one layout per length
+/-- Past depth 32 a rank takes five bytes and the leaf's message a third block, which the net's one layout per length
 doesn't follow. -/
 theorem frameReadSpec {D : ℕ} (hD : D ≤ 32) :
     FrameReadSpec D Hash.RowLeaf.Format.seg.schema (Flock.ReadNet.frame D Hash.RowLeaf.Format.seg.schema) := by

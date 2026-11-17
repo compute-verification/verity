@@ -5,27 +5,7 @@ public import Proofs.Spot.Pointer
 import Mathlib.Tactic.Bound.Init
 import Proofs.Spot.Oblivious
 
-/-!
-# The converse: a corruptible address needs the padding's cones
-
-`Transfer` gives a program every population theorem with the cones of its padding over the assignments holding the
-public values. This file shows that nothing smaller works.
-
-* `AddressMap.closure_expresses` and `AddressMap.mem_of_expresses`, **the padding is the least wiring that expresses
-  every program with a given address map**: the closure decides every compatible program's correctness, and any static
-  wiring that does contains every slot a unit reads in some assignment holding the public values, apart from the
-  public slots and the unit's own writes (`closureReads_sub_of_expresses`). The unit function that witnesses it
-  compares the slot it may read with its value in one assignment, so a wiring without that slot cannot tell a correct
-  unit from an incorrect one. `DynPopulation.addressMap_closureReads`: for a program, the closure is `padOver`'s read
-  sets.
-* `vm_not_addressedBy_inputs`: the pointer machine's read sets depend on more than all its inputs, since the pointer is
-  a unit's write.
-* `vm_pad_pub_secret_up`: in its padding over the assignments holding the public zero region, every secret word is
-  upstream of the egress, so `card_egress_le_pad` says nothing about the secrets.
-* `vm_honest_wiring_fails`, **the honest wiring is not enough**: in every honest run no secret is upstream of the
-  egress, yet with the one-bit pointer step incorrect the egress takes `2 ^ N` values, more than the `|V| ^ |writes B| = 2`
-  the capacity theorem would give were the honest run's upstream the public one.
--/
+/-! The converse: a corruptible address needs the padding's cones. -/
 
 @[expose] public section
 
@@ -40,8 +20,6 @@ theorem mem_closureReads [Fintype S] {Pub : Finset S} {a : S → V} {u : U} {s :
   classical
   simp only [closureReads, mem_filter, mem_univ, true_and]
 
-/-- **The closure expresses the address map**: every compatible program's correctness, among the assignments holding
-`a` on `Pub`, depends only on the closure's reads and the unit's writes. -/
 theorem closure_expresses [Fintype S] (Pub : Finset S) (a : S → V) : A.Expresses Pub a (A.closureReads Pub a) := by
   intro f hf u σ τ hσ _ hR hW
   have hr : ∀ s ∈ A.reads u σ, σ s = τ s := fun s hs => hR s ((A.mem_closureReads).2 ⟨σ, hσ, hs⟩)
@@ -61,8 +39,6 @@ open Finset
 
 variable {U S : Type} (A : AddressMap U S Bool)
 
-/-- **Any wiring that expresses the address map wires every slot its units can read**: if unit `u` writes something and
-reads `x` in some assignment holding `a` on `Pub`, with `x` neither public nor written by `u`, then `x ∈ R u`. -/
 theorem mem_of_expresses [DecidableEq U] [DecidableEq S] {Pub : Finset S} {a : S → Bool} {R : U → Finset S}
     (hR : A.Expresses Pub a R) {u : U} {w x : S} (hw : w ∈ A.writes u) {σ0 : S → Bool}
     (h0 : ∀ t ∈ Pub, σ0 t = a t) (hx : x ∈ A.reads u σ0) (hxP : x ∉ Pub) (hxw : x ∉ A.writes u) : x ∈ R u := by
@@ -123,8 +99,6 @@ theorem mem_of_expresses [DecidableEq U] [DecidableEq S] {Pub : Finset S} {a : S
     cases hb : σ0 w <;> simp [hb] at h1
   exact hc1 ((hR f hf u σ0 τ0 h0 hτP hsame hsamew).1 hc0)
 
-/-- **The closure is the least expressing wiring**: every slot of the closure is wired by any expressing `R`, public,
-or the unit's own write. -/
 theorem closureReads_sub_of_expresses [Fintype S] [DecidableEq U] [DecidableEq S] {Pub : Finset S}
     {a : S → Bool} {R : U → Finset S} (hR : A.Expresses Pub a R) {u : U} (hw : (A.writes u).Nonempty) :
     ∀ x ∈ A.closureReads Pub a u, x ∈ R u ∨ x ∈ Pub ∨ x ∈ A.writes u := by
@@ -145,10 +119,8 @@ open Finset
 
 variable {U S V : Type} (D : DynPopulation U S V)
 
-/-- A program's own unit functions are compatible with its address map. -/
 theorem addressMap_compatible (hac : D.AddressClosed) : (D.addressMap hac).Compatible D.f := D.reads_only
 
-/-- **For a program, the closure is the padding over the assignments holding the public values.** -/
 theorem addressMap_closureReads [Fintype S] (hac : D.AddressClosed) (Pub : Finset S) (a : S → V) (u : U) :
     (D.addressMap hac).closureReads Pub a u = (D.padOver {σ | ∀ t ∈ Pub, σ t = a t}).reads u := by
   ext s
@@ -161,11 +133,8 @@ namespace Population
 
 open Finset
 
-/-- The pointer machine's public inputs: the zero region. -/
 def vmPub (N : ℕ) : Finset (Slot N) := univ.filter fun s => s.isInput && !s.isSecret
 
-/-- **The pointer machine's read sets depend on more than its inputs**: copy step `i` reads the zero word or the secret
-word as the pointer, a unit's write, says. -/
 theorem vm_not_addressedBy_inputs {N : ℕ} (i : Fin N) :
     ¬ (vm N).AddressedBy (univ.filter fun s => s.isInput) := by
   intro ho
@@ -175,7 +144,6 @@ theorem vm_not_addressedBy_inputs {N : ℕ} (i : Fin N) :
   rw [← h] at hmem
   simp [vm, src] at hmem
 
-/-- **In the padding over the public values every secret word is upstream of the egress.** -/
 theorem vm_pad_pub_secret_up (N : ℕ) (i : Fin N) :
     Slot.secret i ∈ ((vm N).padOver {σ | ∀ t ∈ vmPub N, σ t = false}).up (univ.filter fun s => s.isOut) := by
   refine ⟨.out i, by simp, .single ⟨some i, ?_, ?_⟩⟩
@@ -186,9 +154,6 @@ theorem vm_pad_pub_secret_up (N : ℕ) (i : Fin N) :
   · show Slot.out i ∈ (vm N).writes (some i)
     simp [vm]
 
-/-- **The honest wiring is not enough**: no honest run has a secret upstream of the egress, yet one incorrect one-bit unit
-gives `2 ^ N` egress values over the secrets, more than the `|V| ^ |writes B|` the capacity theorem gives a static
-population whose secrets lie outside the egress's upstream cone. -/
 theorem vm_honest_wiring_fails (N : ℕ) (hN : 2 ≤ N) :
     (∀ σ, (∀ u, (vm N).Correct σ u) → ∀ i, Slot.secret i ∉ (vm N).up σ (univ.filter fun s => s.isOut)) ∧
       Fintype.card Bool ^ ((vm N).writesOf {none}).card <

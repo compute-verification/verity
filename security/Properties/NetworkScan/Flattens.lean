@@ -3,15 +3,7 @@ module
 public import NetworkCheck.Period
 public import Definitions.Certifier.SampledAudit
 
-/-!
-# A sampling statement's gates are its descriptor's Program flattened
-
-`Flattens P C`: the sampling statement's gates (`Claims.Sampling.AuditStatement.prog`, "the descriptor flattened") are
-the Program `P`'s canonical layout, gate for gate: as many, an input gate exactly where its primitive is an input node,
-reading exactly the gates its operands name, returning the gates its root's return resolves to. `Properties.NetworkScan`
-states the scan's fit over every flattening, and `Properties.NetworkScan.Assumptions` the deployment's premise that each
-statement it parses is its descriptor flattened.
--/
+/-! A sampling statement's gates are its descriptor's Program flattened. -/
 
 @[expose] public section
 

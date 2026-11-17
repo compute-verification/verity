@@ -33,27 +33,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# The joint period's PoUW guarantee from a credit in words, at any price
-
-`ResourceAccounting.PeriodRun.Sound` at `.pouw` is the joint period's PoUW guarantee, in priced ops: the probability over PoUW's
-own coins that it accepts while the compute account did less than the work certificate `W` at price `p` is at most its
-error. A PoUW source statement credits words instead: the probability that its game accepts while its words fixed right
-fall below its credit is at most its error (`Properties.Pouw.MonitoringPeriod.H1CheckedCreditMonitoringPeriod`, at
-`δ_s + n·(δ_bind + δ_ks)`).
-
-`WorkOfCreditedWords` turns the second into the first at the same error, for every price `p`, when the work certificate
-is the credit priced less the units the network attester admits (`ResourceAccounting.RealizesCreditedWords`' `cert_le`:
-`W ≤ m·p(tc)·credit − u·p(tc)·K/b_unit`), each right word of a unit the device didn't outsource cost `m` multiply-adds
-of priced work (`ResourceAccounting.Assumptions.WordCostsMacs`, `m` the fewest any credited word stands for, `u` a unit's), and
-the device outsourced at most `K/b_unit` units (`ResourceAccounting.Assumptions.HelpWithinCertifier`). It takes the source's
-bound as a hypothesis over the source's own event, so it restates neither bound, and needs no time credit (Compose's
-time line): the joint period's claim is priced ops.
-
-H1's instance is `Properties.Certifier.JointBridge.WorkOfH1CheckedCreditMonitoringPeriod`, and its H200 one at INT8 is stated
-beside its proof (`ResourceAccounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditMonitoringPeriodH200`). Any other source that credits
-words, a period of v5/v6 tiles among them, takes the bridge unchanged.
--/
+/-! The joint period's PoUW guarantee from a credit in words, at any price. -/
 
 @[expose] public section
 

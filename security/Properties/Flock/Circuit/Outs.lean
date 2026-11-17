@@ -4,14 +4,7 @@ public import Properties.Flock.Circuit.Keyed
 import Mathlib.Tactic.NormNum.Inv
 import Mathlib.Tactic.NormNum.Pow
 
-/-!
-# The program's own wiring of each unit, and the returned outputs' bits
-
-`Const.Prog.rowsWireC p u`: unit `u`'s rows wired as `p` wires them. `Layout.outsOf c hU n`: the gates `keyProg`'s
-units put on returned outputs' columns (`OutColAt`), the outputs of the circuit a registered circuit file describes.
-Moved unchanged from `Proofs.Flock.Soundness.Discharge.Const.Inst` and
-`Proofs.Flock.Soundness.Discharge.Layout.{KeyProg,OutPin,Outs}`; the lemmas about them stay there.
--/
+/-! The program's own wiring of each unit, and the returned outputs' bits. -/
 
 @[expose] public section
 

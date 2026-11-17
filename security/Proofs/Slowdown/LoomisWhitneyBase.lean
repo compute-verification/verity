@@ -2,16 +2,7 @@ module
 
 public import Mathlib.Analysis.Real.Sqrt
 
-/-!
-# The discrete Loomis–Whitney inequality, on Mathlib alone
-
-A finite set of triples has at most `√(|π₁₂| |π₁₃| |π₂₃|)` elements, where the `π` are its three coordinate-pair images.
-The proof slices the set by its first coordinate: a slice lies in the product of its two projections' slices and injects
-into the third projection, so its size squared is at most the product of the three, and Cauchy–Schwarz sums the slices.
-
-The min-cut bound applies it (`loomis_whitney`) to a block's MACs of one matmul (`card_inBlock_sq_le`), and imports it
-from here, which needs nothing but Mathlib.
--/
+/-! The discrete Loomis–Whitney inequality, on Mathlib alone. -/
 
 @[expose] public section
 
@@ -29,8 +20,6 @@ private theorem card_image_eq_sum_fibres {ω δ : Type*} [DecidableEq δ] (T : F
     obtain ⟨x, hx, rfl⟩ := mem_image.1 hy
     exact hf x ▸ mem_image_of_mem _ hx
 
-/-- **The discrete Loomis–Whitney inequality** in three dimensions: a finite set of triples, squared, has at most the
-product of the sizes of its three coordinate-pair projections. -/
 theorem loomis_whitney (T : Finset (α × β × γ)) :
     #T ^ 2 ≤ #(T.image fun x => (x.1, x.2.1)) * #(T.image fun x => (x.1, x.2.2)) *
       #(T.image fun x => (x.2.1, x.2.2)) := by

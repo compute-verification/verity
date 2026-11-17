@@ -35,16 +35,7 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.ResourceAccounting.Requirement
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# A pass's credit against its tiles of the registered circuit
-
-The piece of `ResourceAccounting.SecurityProofs.RegisteredCircuitRequirement` that reads a pass's credit pass by pass. `W`'s owned
-blocks at the pass's step are planned, at distinct positions of the pass's store, so the pass's tiles of `W` are as many
-as its owned blocks (`credit_le_tiles`). Its held credit is `W`'s credited live bits in those blocks, packed, so at most a
-block's bits each; its moved credit is the bits it reads from appended blocks, those in owned blocks at most a block's
-bits each and the rest in one block a group. So the credit is at most a tile's bits for each of its tiles of `W`, and
-those are appended tiles (`tiles_subset_appended`).
--/
+/-! A pass's credit against its tiles of the registered circuit. -/
 
 @[expose] public section
 
@@ -52,9 +43,6 @@ namespace ResourceAccounting.Requirement
 
 variable {G : Type} [DecidableEq G]
 
-/-- **A pass's credit is at most a tile's bits for each of its tiles of `W`**, at a step whose memory map and plan hold
-`W`'s credited blocks, whose reads from incomplete blocks lie in one block a group, and whose plan's blocks are at
-distinct positions of the pass's layout `lay`. -/
 theorem credit_le_tiles {K : Type} [DecidableEq K] {N T M : ℕ} (W : Wiring G) (e : Execution G)
     (ℓ : Store.Placement G) (σ : Store) (plan : Finset ℕ) (grp : G → K) (t : ℕ) (addr : ℕ → Fin T × Fin M)
     (lay : Fin N ↪ Fin T × Fin M)
@@ -125,8 +113,6 @@ theorem credit_le_tiles {K : Type} [DecidableEq K] {N T M : ℕ} (W : Wiring G) 
     omega
   exact max_le hheld (by omega)
 
-/-- **A pass's tiles of `W` are appended tiles**: the tiles at positions of `W`'s owned blocks, each at an append after
-the registration. -/
 theorem tiles_subset_appended {Pfx Y : Type} {N T M : ℕ} (layout : Pfx → Y → Fin N ↪ Fin T × Fin M) (c : Pfx) (y : Y)
     (addr : ℕ → Fin T × Fin M) (O : Finset ℕ) :
     (Finset.univ.filter fun i : Fin N => layout c y i ∈ (O.filter fun b => ((addr b).1 : ℕ) ≠ 0).image addr) ⊆

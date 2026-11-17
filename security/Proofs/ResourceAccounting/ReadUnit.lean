@@ -36,35 +36,18 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# Read units bind to their tables' rows
-
-The binding of table reads at a picked index (`Definitions.ResourceAccounting.ReadUnit`), each read's gate refinement
-(`ResourceAccounting.ReadUnit.GatesRefine`) a hypothesis:
-
-* `readUnitBinds`: at a transcript where a read unit is correct and its registered rows hold, it returns its table's
-  row at its index in its local evaluation, or SHA-512 collides on what the two checks hashed
-  (`Hash.SecurityProofs.EmbeddingReadBinding`). The local evaluation is the row the unit's own gates consume, and the
-  transcript's where the row's gates are committed (`localEval_of_committed`).
-* `readUnitSampled`: over a run's coins, the run accepts with a sampled read that returns another row than its table's
-  at its index, where nothing its check and the table's check hashed collides, with probability at most the layer
-  below's bound: that the run accepts with a sampled read's unit wrong, or the read's registered rows failing, in the
-  extractor's transcript. A unit may hold several reads, and a read is sampled when its unit is.
-* `readUnitSampledCR`: the same with the collision priced through `Claims.ExpectedCR` at the reads' collision finder
-  (`ResourceAccounting.ReadUnit.Reads.finder`): the layer below's bound plus the finder's expected SHA-512 calls over `2^256`.
--/
+/-! Read units bind to their tables' rows, each read's gate refinement (`ResourceAccounting.ReadUnit.GatesRefine`) a
+hypothesis. -/
 
 @[expose] public section
 
 namespace ResourceAccounting.ReadUnit
 
-/-- A collision among some messages is one among any list holding them. -/
 theorem collisionIn_mono {H : Hash.Msg → Verity.Digest} {xs ys : List Hash.Msg} (h : Hash.CollisionIn H xs)
     (hs : ∀ m ∈ xs, m ∈ ys) : Hash.CollisionIn H ys := by
   obtain ⟨x, hx, y, hy, hxy⟩ := h
   exact ⟨x, hs x hx, y, hs y hy, hxy⟩
 
-/-- A union bound for uniform coins. -/
 theorem pr_or_le {α : Type} [Fintype α] (p q : α → Prop) :
     Claims.Pr (fun a => p a ∨ q a) ≤ Claims.Pr p + Claims.Pr q := by
   classical
@@ -75,7 +58,6 @@ theorem pr_or_le {α : Type} [Fintype α] (p q : α → Prop) :
     simp only [Finset.mem_filter, Finset.mem_union, Finset.mem_univ, true_and] at ha ⊢; exact ha).trans
     (Finset.card_union_le _ _)
 
-/-- A correct unit's local evaluation is the transcript at a gate outside the unit, and at a committed gate in it. -/
 theorem localEval_of_committed {C : Verity.Circuit} {n : ℕ} {P : Verity.Partition C n} {X : C.Trace} {u : Fin n}
     (hcorrect : P.Correct X u) {g : Fin C.N} (hg : P.unit g = some u → g ∈ P.committed) :
     P.localEval X u g = X g := by
@@ -83,8 +65,6 @@ theorem localEval_of_committed {C : Verity.Circuit} {n : ℕ} {P : Verity.Partit
   · exact (hcorrect g (hg hu) hu).symm
   · exact P.localEval_of_not_mem X hu
 
-/-- The bits gates hold in a correct unit's local evaluation are the transcript's, where those in the unit are
-committed. -/
 theorem bits_localEval {C : Verity.Circuit} {n : ℕ} {P : Verity.Partition C n} {X : C.Trace} {u : Fin n}
     (hcorrect : P.Correct X u) {k : ℕ} {gs : Fin k → Fin C.N}
     (hg : ∀ i, P.unit (gs i) = some u → gs i ∈ P.committed) : bits (P.localEval X u) gs = bits X gs := by
@@ -100,11 +80,6 @@ open ResourceAccounting.ReadUnit
 
 variable {C : Verity.Circuit}
 
-/-- **A read unit returns its table's row at its index**: at a transcript `X` where unit `u` is correct and its
-registered rows hold for the table under the root `r` and the domain id `d`, the read's gate refinement (`GatesRefine`,
-a hypothesis) makes the row it returns in `u`'s local evaluation the table's row at the index its index gates hold
-there, for every opening of that leaf the root accepts, or `H` or `G` collides on what the read's check and the
-opening's hashed. -/
 theorem readUnitBinds (H G : Hash.Msg → Verity.Digest) (key : Hash.Msg) (consts : Fin C.N → Option Bool) {n : ℕ}
     (P : Verity.Partition C n) (u : Fin n) (q : Ports C) (r d : Verity.Digest) (X : C.Trace)
     (hgates : GatesRefine H G key consts P u q) (hcorrect : P.Correct X u) (hrows : RegisteredRows consts P u q r d X) :
@@ -126,14 +101,6 @@ theorem readUnitBinds (H G : Hash.Msg → Verity.Digest) (key : Hash.Msg) (const
   exact Hash.SecurityProofs.EmbeddingReadBinding H G (q.domainAt d) key r q.count q.words (q.tokOf (P.localEval X u))
     (q.opening (P.localEval X u)) hok' o₀ hlt h₀
 
-/-- **At an accepted run's sampled reads, each returns its table's row at its index, or SHA-512 collides on what its
-check and the table's hashed**, but with probability at most the layer below's bound. Over the run's coins `Ω`, with its
-acceptance `acc`, its sampled proof blocks `sampled` and the extractor's transcript `X`: where each read's gates compute its
-reference in its unit (`GatesRefine`, a hypothesis), each read's table is committed under its root, and the run accepts
-with a sampled read's unit wrong or the read's registered rows failing in `X` with probability at most `ε`, it accepts
-with a sampled read that returns, in its unit's local evaluation of `X`, another row than its table's at its index, where
-no two messages the read's check and the table's check hashed collide under `H`, with probability at most `ε`. A read
-is sampled when its unit is. -/
 theorem readUnitSampled {Ω : Type} [Fintype Ω] (H : Hash.Msg → Verity.Digest) (key : Hash.Msg)
     (consts : Fin C.N → Option Bool) {n : ℕ} {ι : Type} (P : Verity.Partition C n) (R : Reads C n ι)
     (acc : Ω → Prop) (sampled : Ω → Finset (Fin n)) (X : Ω → C.Trace) (ε : ℝ)
@@ -157,11 +124,7 @@ theorem readUnitSampled {Ω : Type} [Fintype Ω] (H : Hash.Msg → Verity.Digest
   · exact hnc (collisionIn_mono h fun m hm => List.mem_append_left _ hm)
   · exact hnc (collisionIn_mono h fun m hm => List.mem_append_right _ hm)
 
-/-- **At an accepted run's sampled reads, each returns its table's row at its index**, in its unit's local evaluation of
-the extractor's transcript, but with probability at most the layer below's bound plus the reads' collision finder's
-(`Reads.finder`) expected SHA-512 calls over `2^256`, at a finder that meets `Claims.ExpectedCR` (`ecr/sha-512`). The
-finder outputs two messages the sampled reads hashed that collide under `H`, if there are two; its cost `cost` is the
-reader's to state from the adversary it runs. -/
+/-- The finder's cost `cost` is the reader's to state from the adversary it runs. -/
 theorem readUnitSampledCR {Ω : Type} [Fintype Ω] [Nonempty Ω] (H : Hash.Msg → Verity.Digest) (key : Hash.Msg)
     (consts : Fin C.N → Option Bool) {n : ℕ} {ι : Type} (P : Verity.Partition C n) (R : Reads C n ι)
     (acc : Ω → Prop) (sampled : Ω → Finset (Fin n)) (X : Ω → C.Trace) (cost : Ω → ℕ) (ε : ℝ)

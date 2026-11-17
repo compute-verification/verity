@@ -4,22 +4,7 @@ public import Proofs.ResourceAccounting.ReadUnit.Binding
 public import Proofs.Flock.Bridge.BitsCopyGate
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Ret
 
-/-!
-# A read's ports are Bits' gates
-
-`portsAt` puts a table read's ports on the copy's gates at the read template's columns: input bit `x` on column `x`,
-the outputs on `Layout.outCol`'s. `Spot.Bits.inGate` and `outGate` name a gate by an input port's bit and by a returned
-output's bit. In the unit a template the read's check accepts unrolls to, they are the same gates:
-
-* `unrolled_inGroups`, `checked_inGroups`, `unrolled_inCol`: the unrolled unit has its template's input groups, the
-  read's one group of 16-bit ports from column 0, so input port `p` starts at column `16 p`.
-* `unrolled_readIn_lt`: the read's input bits are input columns.
-* `copyGate_colAt_inGate`: the gate Bits gives on bit `t` of input port `p` is `portsAt`'s gate at column `16 p + t`.
-* `copyGate_colAt_outGate`: the gate Bits gives on bit `t` of returned output `i` is `portsAt`'s gate at
-  `Layout.outCol`'s column, in any circuit.
-
-No verifier path reads this file.
--/
+/-! A read's ports are `Spot.Bits`' gates in the unit a template the read's check accepts unrolls to. -/
 
 @[expose] public section
 
@@ -28,7 +13,6 @@ namespace ResourceAccounting.ReadUnit.Gates
 open FlockSoundness FlockSoundness.TmplSpec FlockSoundness.Discharge.Hm Flock.ReadNet
 open Flock.HmNets hiding and
 
-/-- A templated circuit's unrolled unit has its template's input groups. -/
 theorem unrolled_inGroups {ct : Flock.Circuit} {tu : Flock.TmplUnit} (ht : ct.tmpl = some tu)
     (hsz : ct.unitNet < ct.nets.size) : (Flock.HmOut.unrolled ct).unit.inGroups = tu.t.inGroups := by
   obtain ⟨-, n, -, -, -, hun⟩ := TmplValue.unroll_of_unrollAt tu.unrolled
@@ -39,7 +23,6 @@ theorem unrolled_inGroups {ct : Flock.Circuit} {tu : Flock.TmplUnit} (ht : ct.tm
   obtain ⟨-, -, -, -, -, hi, -⟩ := Flock.Net.ofRows_ok hn
   exact hi
 
-/-- An array whose image is a one-element array's is one element, of that image. -/
 theorem map_single {α β : Type} (f : α → β) {gs : Array α} {g0 : α} (h : gs.map f = #[g0].map f) :
     ∃ g, gs = #[g] ∧ f g = f g0 := by
   have hl : gs.toList.map f = [f g0] := by
@@ -53,7 +36,6 @@ theorem map_single {α β : Type} (f : α → β) {gs : Array α} {g0 : α} (h :
     simp only [List.length_map, List.length_cons, List.length_nil] at hlen
     omega
 
-/-- **A template the read's check accepts has one input group**: the read's ports, from column 0. -/
 theorem checked_inGroups {V H : ℕ} {t : Flock.Tmpl.Tmpl} (hc : Checked V H t) :
     ∃ g : Flock.Group, t.inGroups = #[g] ∧ g.col = 0 ∧ g.bits = Flock.ReadNet.portBits V H := by
   obtain ⟨w, hr⟩ : ∃ w, (readTmpl V H).inGroups = #[⟨0, w, Flock.ReadNet.portBits V H⟩] := ⟨_, rfl⟩
@@ -62,7 +44,6 @@ theorem checked_inGroups {V H : ℕ} {t : Flock.Tmpl.Tmpl} (hc : Checked V H t) 
   obtain ⟨g, hg, hk⟩ := map_single groupKey h
   exact ⟨g, hg, congrArg Prod.fst hk, congrArg (fun p : ℕ × ℕ × Array ℕ => p.2.2) hk⟩
 
-/-- **The unrolled unit's input port `p` starts at column `16 p`**, where the read's check accepts its template. -/
 theorem unrolled_inCol {V H : ℕ} {ct : Flock.Circuit} {tu : Flock.TmplUnit} (ht : ct.tmpl = some tu)
     (hsz : ct.unitNet < ct.nets.size) (hcheck : Flock.ReadNet.check V H tu.t = true) {p : ℕ}
     (hp : p < 162 + H + 32 * Hash.Tree.depth V) :
@@ -78,7 +59,6 @@ theorem unrolled_inCol {V H : ℕ} {ct : Flock.Circuit} {tu : Flock.TmplUnit} (h
   rw [unrolled_inGroups ht hsz, hg, FlockSoundness.Discharge.HiddenExec.portCols_16_get h16 hq, hcol, Nat.zero_mul,
     Nat.zero_add]
 
-/-- **The read's input bits are input columns** of the unit a template the read's check accepts unrolls to. -/
 theorem unrolled_readIn_lt {V H : ℕ} {ct : Flock.Circuit} {tu : Flock.TmplUnit} (ht : ct.tmpl = some tu)
     (hsz : ct.unitNet < ct.nets.size) (hcheck : Flock.ReadNet.check V H tu.t = true)
     (hB : Built (Flock.HmOut.unrolled ct).unit) {x : ℕ} (hx : x < readIn H (Hash.Tree.depth V)) :
@@ -94,13 +74,9 @@ open Flock.HmNets hiding and
 open FlockSoundness.Discharge.Hm
 open Gates
 
-/-- `colAt` at a column of the rows is that column. -/
 theorem colAt_val {R : FlockSoundness.Rows} {x : ℕ} (h : x < R.w) : (colAt R x).val = x :=
   congrArg Fin.val (colAt_of_val (c := ⟨x, h⟩) rfl)
 
-/-- **Bits' gate on a read's input port's bit is `portsAt`'s gate at the bit's column.** In a templated circuit
-whose unit template the read's check accepts, at copy `j` of unit `u`: where `Spot.Bits.inGate` gives the gate `g` on
-bit `t` of input port `p`, the copy's gate at column `16 p + t` is `g`. -/
 theorem copyGate_colAt_inGate {V H : ℕ} {ct : Flock.Circuit} {tu : Flock.TmplUnit} (ht : ct.tmpl = some tu)
     (hsz : ct.unitNet < ct.nets.size) (hcheck : Flock.ReadNet.check V H tu.t = true)
     (hB : FlockSoundness.Built (Flock.HmOut.unrolled ct).unit) (n : ℕ) (u : Fin n) {j : ℕ}
@@ -116,9 +92,6 @@ theorem copyGate_colAt_inGate {V H : ℕ} {ct : Flock.Circuit} {tu : Flock.TmplU
   exact Flock.Bridge.copyGate_inGate (.tmpl ct) hB n u hj _ (lt_of_eq_of_lt hv hin)
     (hv.trans (congrArg (fun x => x + t) (unrolled_inCol ht hsz hcheck hp).symm)) h
 
-/-- **Bits' gate on a returned output's bit is `portsAt`'s gate at the output's column.** At copy `j` of unit `u` of
-the circuit `D` describes: where `Spot.Bits.outGate` gives the gate `g` on bit `t` of returned output `i`, the copy's
-gate at `Layout.outCol`'s column is `g`. -/
 theorem copyGate_colAt_outGate (D : Flock.Desc) (hU : FlockSoundness.Built D.unroll.unit) (n : ℕ) (u : Fin n) {j : ℕ}
     (hj : j < D.unroll.upv) {i t g : ℕ} (h : Spot.Bits.outGate D.unroll n u.val j i t = some g) :
     (Flock.Bridge.copyGate D hU n u hj (colAt (FlockSoundness.Rows.ofNet hU)

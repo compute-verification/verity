@@ -5,30 +5,7 @@ public import Proofs.Slowdown.Remote
 public import Proofs.Slowdown.CutWitness
 public import Proofs.Flock.Soundness.Audit.Periods
 
-/-!
-# Proof of the remote overhead bound over a monitoring period
-
-`SlowdownRemoteMonitoringPeriod` is `SlowdownRemote`'s argument with each protocol's leg read window by window. A per-window bound
-is a bound on the period's coins (`prob_le_of_update`: the run's average is, by `avg_update`, the average over the other
-windows of window `t`'s own). Three events carry the failure:
-
-* PoUW's incorrect windows hold more than `ε' C`: `CertificateSlack` at the period's law, each window's marginal from its
-  per-window bound, at most `p/ε'`;
-* some window samples a faulty block and detects none: the union over the windows (`prob_exists_le`), at most `∑_t ks t`;
-* no window does, and some identity has more than `K` escaped blocks: `escape_tail`, over the identities, at most
-  `J (1 − q)^(K+1)`. Up to its first detection an identity's windows each miss all their faulty blocks, so the escaped
-  blocks are the faulty blocks of windows that missed them; counted at a weight fixed before each window's coins, that
-  of its faulty blocks while the identity is undetected and has at most `K` so far (`truncated_sum_ge`), the tail is
-  `FlockSoundness.Audit.Periods.prCoin_forall_sum_le_pow`.
-
-Outside them, `VerdictLag` and the escape share bound the faulty blocks' skipped work, and `remote_core` sums the
-sources.
-
-The witnesses, `SlowdownRemoteMonitoringPeriod_honest` and `SlowdownRemoteMonitoringPeriod_nontrivial`, are at constructed instances of one
-window with no incorrect proof block, the first with one declared day (the toy `Slowdown.Cut.Toy`), the second with none,
-where each event holds on every run or on none. The `example` at
-the end applies `SlowdownRemoteMonitoringPeriod` to the nontrivial lemma's conjuncts, so they are its premises as it states them.
--/
+/-! Proof of the remote overhead bound over a monitoring period. -/
 
 @[expose] public section
 
@@ -40,7 +17,6 @@ open Verity Slowdown.Slowdown FlockSoundness.Audit.Periods
 open FlockSoundness.Game (avg prCoin avg_mono avg_const prCoin_mono)
 open scoped ENNReal
 
-/-- Under the uniform law, `prob` is `prCoin` as a real number. -/
 theorem prob_uniform_eq {α : Type} [Fintype α] [Nonempty α] (E : α → Prop) :
     prob (PMF.uniformOfFintype α) E = (prCoin E).toReal := by
   classical
@@ -51,7 +27,6 @@ theorem prob_uniform_eq {α : Type} [Fintype α] [Nonempty α] (E : α → Prop)
     by_cases h : E a <;> simp [h, PMF.uniformOfFintype_apply]
   · by_cases h : E a <;> simp [h]
 
-/-- The union bound over a finite family. -/
 theorem prob_exists_le {Ω ι : Type} [Fintype Ω] (μ : PMF Ω) (s : Finset ι) (E : ι → Ω → Prop) :
     prob μ (fun ω => ∃ i ∈ s, E i ω) ≤ ∑ i ∈ s, prob μ (E i) := by
   classical
@@ -69,12 +44,10 @@ theorem prob_exists_le {Ω ι : Type} [Fintype Ω] (μ : PMF Ω) (s : Finset ι)
   · simp only [h, ↓reduceIte]
     exact Finset.sum_nonneg fun i _ => by split_ifs <;> simp [hq]
 
-/-- A uniform coin's event has probability at most 1. -/
 theorem prCoin_le_one {α : Type} [Fintype α] [Nonempty α] (E : α → Prop) : prCoin E ≤ 1 := by
   refine (prCoin_mono (q := fun _ => True) fun _ _ => trivial).trans_eq ?_
   simp [prCoin, avg_const]
 
-/-- Changing coordinate `t` of a run split at `t` is changing the split's first part. -/
 theorem update_piSplitAt_symm {T : ℕ} {Ω : Fin T → Type} (t : Fin T) (a₀ a : Ω t) (ρ : ∀ j : {j // j ≠ t}, Ω j) :
     Function.update ((Equiv.piSplitAt t Ω).symm (a₀, ρ)) t a = (Equiv.piSplitAt t Ω).symm (a, ρ) := by
   funext j
@@ -87,8 +60,6 @@ section Coords
 
 variable {T : ℕ} {Ω : Fin T → Type} [∀ t, Fintype (Ω t)] [∀ t, Nonempty (Ω t)]
 
-/-- **One coordinate's tower rule**: averaging over the run is averaging, over the run, coordinate `t`'s average with
-the others fixed. -/
 theorem avg_update (t : Fin T) (F : ((t : Fin T) → Ω t) → ℝ≥0∞) :
     avg F = avg fun ξ => avg fun a : Ω t => F (Function.update ξ t a) := by
   classical
@@ -110,15 +81,12 @@ theorem avg_update (t : Fin T) (F : ((t : Fin T) → Ω t) → ℝ≥0∞) :
         rw [h1, one_mul]
     _ = _ := by ring
 
-/-- **A per-window bound is a marginal bound**: an event of the run whose slice along coordinate `t` has probability at
-most `p` at every value of the other coordinates has probability at most `p`. -/
 theorem prCoin_le_of_update (t : Fin T) (E : ((t : Fin T) → Ω t) → Prop) {x : ℝ≥0∞}
     (h : ∀ ξ, prCoin (fun a : Ω t => E (Function.update ξ t a)) ≤ x) : prCoin E ≤ x := by
   unfold prCoin
   rw [avg_update t]
   refine (avg_mono fun ξ => h ξ).trans_eq (avg_const x)
 
-/-- `prCoin_le_of_update` for `prob` under the uniform laws. -/
 theorem prob_le_of_update (t : Fin T) (E : ((t : Fin T) → Ω t) → Prop) {p : ℝ}
     (h : ∀ ξ, prob (PMF.uniformOfFintype (Ω t)) (fun a => E (Function.update ξ t a)) ≤ p) :
     prob (PMF.uniformOfFintype ((t : Fin T) → Ω t)) E ≤ p := by
@@ -133,8 +101,6 @@ theorem prob_le_of_update (t : Fin T) (E : ((t : Fin T) → Ω t) → Prop) {p :
     (prCoin_le_one _)) hp).2 this
 
 
-/-- **The truncated count**: keeping each term while the sum before it is at most `K` keeps at least `K + 1` when the
-total is at least `K + 1`. -/
 theorem truncated_sum_ge {T : ℕ} (x : Fin T → ℕ) (K : ℕ) (hx : K + 1 ≤ ∑ t, x t) :
     K + 1 ≤ ∑ t, (if ∑ t' ∈ Finset.univ.filter (· < t), x t' ≤ K then x t else 0) := by
   classical
@@ -156,11 +122,6 @@ theorem truncated_sum_ge {T : ℕ} (x : Fin T → ℕ) (K : ℕ) (hx : K + 1 ≤
           Finset.sum_congr rfl fun t ht => by simp only [hlt t (Finset.mem_filter.1 ht).2, ↓reduceIte]
       _ ≤ _ := Finset.sum_le_sum_of_subset (Finset.filter_subset _ _)
 
-/-- **The escape tail, one identity.** Under `SlowdownRemoteMonitoringPeriod`'s SPOT legs, the runs where no window
-samples a faulty block without detecting one, and identity `j` has more than `K` escaped blocks (faulty, and accepted
-before its first detection), have probability at most `(1 − q)^(K+1)`. Up to its first detection, the identity's windows
-each miss all their faulty blocks, which, at a weight fixed before each window's coins (its faulty blocks while the
-identity is undetected and has at most `K` escaped so far), is `prCoin_forall_sum_le_pow`. -/
 theorem escape_tail {β : Type} (bad drawn detected : ((t : Fin T) → Ω t) → Finset β) (win : β → Fin T) {ι : Type}
     [DecidableEq ι] (idW : Fin T → ι) (τw : Fin T → ℝ) (q : ℝ) (K : ℕ) (j : ι)
     (hbadP : ∀ t (ξ ξ' : (t : Fin T) → Ω t), (∀ s, s < t → ξ s = ξ' s) → ∀ b, win b = t → (b ∈ bad ξ ↔ b ∈ bad ξ'))
@@ -177,18 +138,14 @@ theorem escape_tail {β : Type} (bad drawn detected : ((t : Fin T) → Ω t) →
             fun b => idW (win b) = j).card) ≤
       (1 - q) ^ (K + 1) := by
   classical
-  -- window `t` detects one of its faulty blocks
   let D : Fin T → ((t : Fin T) → Ω t) → Prop := fun t ξ => ∃ b ∈ bad ξ, win b = t ∧ b ∈ detected ξ
-  -- window `t`'s faulty blocks
   let m : Fin T → ((t : Fin T) → Ω t) → ℕ := fun t ξ => ((bad ξ).filter fun b => win b = t).card
-  -- identity `j` is undetected before window `t`
   let st : Fin T → ((t : Fin T) → Ω t) → Prop := fun t ξ => ∀ t', t' < t → idW t' = j → ¬ D t' ξ
   let m' : Fin T → ((t : Fin T) → Ω t) → ℕ := fun t ξ => if idW t = j ∧ st t ξ then m t ξ else 0
   let cum : Fin T → ((t : Fin T) → Ω t) → ℕ := fun t ξ => ∑ t' ∈ Finset.univ.filter (· < t), m' t' ξ
   let wt : Fin T → ((t : Fin T) → Ω t) → ℕ := fun t ξ => if cum t ξ ≤ K then m' t ξ else 0
   let Miss : Fin T → ((t : Fin T) → Ω t) → Prop := fun t ξ => ∀ b ∈ bad ξ, win b = t → b ∉ drawn ξ
   let E : Fin T → ((t : Fin T) → Ω t) → Prop := fun t ξ => wt t ξ ≠ 0 → Miss t ξ
-  -- what reads what
   have hm : ∀ t (ξ ξ' : (t : Fin T) → Ω t), (∀ s, s < t → ξ s = ξ' s) → m t ξ = m t ξ' := by
     intro t ξ ξ' h
     refine congrArg Finset.card (Finset.ext fun b => ?_)
@@ -223,7 +180,6 @@ theorem escape_tail {β : Type} (bad drawn detected : ((t : Fin T) → Ω t) →
     refine propext ⟨fun H hne b hb' hwb => ?_, fun H hne b hb' hwb => ?_⟩
     · exact fun hdr => H (hw ▸ hne) b ((hb b hwb).2 hb') hwb (((hd b hwb).1).2 hdr)
     · exact fun hdr => H (hw.symm ▸ hne) b ((hb b hwb).1 hb') hwb (((hd b hwb).1).1 hdr)
-  -- each window's bound, given the past
   have hρ : ENNReal.ofReal (1 - q) ≤ 1 := ENNReal.ofReal_le_one.2 (by linarith)
   have hstep : ∀ t (ξ : (t : Fin T) → Ω t),
       prCoin (fun a : Ω t => E t (Function.update ξ t a)) ≤ ENNReal.ofReal (1 - q) ^ wt t ξ := by
@@ -246,13 +202,11 @@ theorem escape_tail {β : Type} (bad drawn detected : ((t : Fin T) → Ω t) →
         ← ENNReal.ofReal_toReal (ne_top_of_le_ne_top ENNReal.one_ne_top (prCoin_le_one _)), ← prob_uniform_eq]
       exact ENNReal.ofReal_le_ofReal ((hmiss t ξ).trans (pow_le_pow_of_le_one (by linarith) (by linarith) hle))
   have htail := prCoin_forall_sum_le_pow E wt hE hwt hρ hstep (K + 1)
-  -- the event lies inside the tail's
   have hin : ∀ ξ : (t : Fin T) → Ω t,
       ((∀ t, ¬ ((∃ b ∈ bad ξ, win b = t ∧ b ∈ drawn ξ) ∧ ∀ b ∈ bad ξ, win b = t → b ∉ detected ξ)) ∧
         K + 1 ≤ ((escaped (bad ξ) (detected ξ) (fun b => idW (win b)) (fun b => τw (win b))).filter
           fun b => idW (win b) = j).card) → (∀ t, E t ξ) ∧ K + 1 ≤ ∑ t, wt t ξ := by
     rintro ξ ⟨hG, hesc⟩
-    -- identity `j` is undetected up to window `t`
     let A : Fin T → Prop := fun t => idW t = j ∧ ∀ t', t' ≤ t → idW t' = j → ¬ D t' ξ
     have hfil : (escaped (bad ξ) (detected ξ) (fun b => idW (win b)) (fun b => τw (win b))).filter
         (fun b => idW (win b) = j) = (bad ξ).filter fun b => A (win b) := by
@@ -351,17 +305,14 @@ theorem SlowdownRemoteMonitoringPeriod : Guarantees.SlowdownRemoteMonitoringPeri
   classical
   obtain ⟨hbadP, hdrawnA, hmiss, hks⟩ := hS
   obtain ⟨hord, hI, hΦ, hcap, hwB⟩ := hId
-  -- each day's verdict bounds its MACs (`CountHE`), pooled over the period's days
   have hdecl : ((∑ i, (Wk i).N : ℕ) : ℝ) ≤ C / (C / ∑ i, Cut.workHE (n i) k (βw * βx) b (Wk i).O) := by
     refine declared_le_div hC ?_
     rw [Nat.cast_sum]
     exact Finset.sum_le_sum fun i _ => (Cut.SecurityProofs.CountHE γ V (d i) (Wk i) (val i) c k (n i) βw βx b hβw hβx
       hb (hval i) (hshare i) (hHard i) (hExp i) (hcomp i)).1
   set μ := PMF.uniformOfFintype ((t : Fin T) → Ω t)
-  -- window `t` samples a faulty block and detects none
   let Bad : Fin T → ((t : Fin T) → Ω t) → Prop := fun t ξ =>
     (∃ b ∈ bad ξ, win b = t ∧ b ∈ drawn ξ) ∧ ∀ b ∈ bad ξ, win b = t → b ∉ detected ξ
-  -- no window does, and identity `j` has more than `K` escaped blocks
   let Esc : ι → ((t : Fin T) → Ω t) → Prop := fun j ξ => (∀ t, ¬ Bad t ξ) ∧
     K + 1 ≤ ((escaped (bad ξ) (detected ξ) (fun b => idW (win b)) (fun b => τw (win b))).filter
       fun b => idW (win b) = j).card
@@ -427,9 +378,6 @@ theorem SlowdownRemoteMonitoringPeriod : Guarantees.SlowdownRemoteMonitoringPeri
           add_le_add_left (prob_or_le _ _ _) _
       _ ≤ p / ε + I.card * (1 - q) ^ (K + 1) + ∑ t, ks t := by linarith
 
-/-! ## The witnesses -/
-
-/-- An event that holds on no run has probability 0. -/
 theorem prob_of_forall_not {Ω : Type} [Fintype Ω] (μ : PMF Ω) {E : Ω → Prop} (h : ∀ ω, ¬ E ω) : prob μ E = 0 := by
   simp only [prob_eq_sum]
   exact Finset.sum_eq_zero fun ω _ => by simp [h ω]
@@ -508,9 +456,6 @@ theorem SlowdownRemoteMonitoringPeriod_nontrivial : Guarantees.SlowdownRemoteMon
         Finset.univ_eq_empty, Finset.sum_empty, Guarantees.AcceptAll.M, Guarantees.AcceptAll.W] at h2
       norm_num at h2]
     norm_num [Guarantees.AcceptAll.ks]
-
-/-! `SlowdownRemoteMonitoringPeriod_nontrivial`'s conjuncts are `SlowdownRemoteMonitoringPeriod`'s premises as it states them at
-`AcceptAll`: with PoUW's per-window bound they give the conclusion the last conjunct refutes. -/
 
 open Guarantees.AcceptAll in
 example (h5 : ∀ (t : Fin 1) (ξ : Fin 1 → Bool),

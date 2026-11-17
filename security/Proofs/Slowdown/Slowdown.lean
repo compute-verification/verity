@@ -3,16 +3,7 @@ module
 public import Definitions.Slowdown.Guarantees.Slowdown
 public import Proofs.Slowdown.Threads
 
-/-!
-# Proofs of the slowdown
-
-The arithmetic core is `sources_le`: the four sources' bounds, summed, with the memory cap taken over the residual and
-the declared computation together, give `η ≤ s + (1 − s) min(r, μ) + ν + χ`; the guarantee drops the factor `1 − s`.
-The window optimization is `executionPhase_quadratic` (and `executionPhase_quadratic_any` at every window length, with its rounding term
-exact) and `executionPhase_linear` (`Λ = e`, one window); `executionPhases_cap` turns the servers' windows into the memory cap's
-hypothesis. `SlowdownThreadedSlots` discharges the declared computation's bound with `ThreadedThrottledSlots`, and
-`SlowdownThreaded` is its instance at one slot per weight gate.
--/
+/-! Proofs of the slowdown. -/
 
 @[expose] public section
 
@@ -22,8 +13,6 @@ namespace Slowdown.SecurityProofs
 
 open Verity Slowdown.Slowdown
 
-/-- **The four sources, summed** (the slowdown's arithmetic core, its tight form): with the residual and the declared
-computation under the memory cap together, `η ≤ s + (1 − s) min(r, μ) + ν + χ`. -/
 theorem sources_le {κ C U W ρ μ χ M Mu Mr Md Mx : ℝ} (hκ : 0 < κ) (hC : 0 < C) (hU : 0 ≤ U) (hMd : 0 ≤ Md)
     (hM : M ≤ Mu + Mr + Md + Mx) (hu : Mu ≤ κ * U / 2) (hr : Mr ≤ κ * (C - W) / 2) (hd : Md ≤ C / ρ)
     (hx : Mx ≤ κ * χ * (C + U) / 2) (hμ : Mr + Md ≤ κ * μ * C / 2) :
@@ -54,8 +43,6 @@ theorem sources_le {κ C U W ρ μ χ M Mu Mr Md Mx : ℝ} (hκ : 0 < κ) (hC : 
   have hfac : 0 ≤ 2 / κ / (C + U) := div_nonneg (div_nonneg zero_le_two hκ.le) hS.le
   linarith [mul_nonneg hfac hB]
 
-/-- **The four sources, summed**, in the guarantee's form: `η ≤ s + min(r, μ) + ν + χ`. Both `r` and `μ` are
-nonnegative here, since the residual and the declared computation hold no negative count. -/
 theorem slowdown_core {κ C U W ρ μ χ M Mu Mr Md Mx : ℝ} (hκ : 0 < κ) (hC : 0 < C) (hU : 0 ≤ U) (hMr : 0 ≤ Mr)
     (hMd : 0 ≤ Md) (hM : M ≤ Mu + Mr + Md + Mx) (hu : Mu ≤ κ * U / 2) (hr : Mr ≤ κ * (C - W) / 2)
     (hd : Md ≤ C / ρ) (hx : Mx ≤ κ * χ * (C + U) / 2) (hμ : Mr + Md ≤ κ * μ * C / 2) :
@@ -88,10 +75,6 @@ theorem Slowdown : Guarantees.Slowdown := by
   intro κ C U W ρ μ χ M Mu Mr Md Mx hκ hC hU hM hu hr hd hx hμ
   exact slowdown_core hκ hC hU (Nat.cast_nonneg Mr) (Nat.cast_nonneg Md) (by exact_mod_cast hM) hu hr hd hx hμ
 
-/-- **The window optimization, quadratic regime** (the slowdown's memory cap): a server's horizon `H ≥ 0` cut into
-windows of length `L = R/λ`, each reading `R + λL = 2R` bits and holding at most `(2R)²/(2 d b_w b_a)` counted
-multiplications (`K Λ(K)/b_a` with `Λ(K) = K/(2 d b_w)`, `D = d b_w b_a`), holds at most `2 R λ H/D` of them in all, plus
-the rounding term `2 R²/D`: one window more, the last one, cut at `H`. -/
 theorem executionPhase_quadratic {R l H D : ℝ} (hR : 0 < R) (hl : 0 < l) (hH : 0 ≤ H) (hD : 0 < D) :
     (⌈H / (R / l)⌉₊ : ℝ) * (R + l * (R / l)) ^ 2 / (2 * D) ≤ 2 * R * l * H / D + 2 * R ^ 2 / D := by
   have hli : l * l⁻¹ = 1 := mul_inv_cancel₀ hl.ne'
@@ -105,9 +88,6 @@ theorem executionPhase_quadratic {R l H D : ℝ} (hR : 0 < R) (hl : 0 < l) (hH :
         mul_le_mul_of_nonneg_right hc.le (div_nonneg (by positivity) hD.le)
     _ = 2 * R * l * H / D + 2 * R ^ 2 / D := by linear_combination (2 * H * l * R / D) * hRi
 
-/-- **The window bound at every window length**, quadratic regime: windows of length `L > 0` over a horizon `H ≥ 0`,
-each reading `R + λL` bits, hold at most `2 R λ H/D` counted multiplications plus `((R − λL)² H/L + (R + λL)²)/(2D)`.
-The first part of that term is the cost of `L ≠ R/λ`, which `L = R/λ` makes zero; the second is the last window. -/
 theorem executionPhase_quadratic_any {R l H L D : ℝ} (hL : 0 < L) (hH : 0 ≤ H) (hD : 0 < D) :
     (⌈H / L⌉₊ : ℝ) * (R + l * L) ^ 2 / (2 * D) ≤
       2 * R * l * H / D + ((R - l * L) ^ 2 * H / L + (R + l * L) ^ 2) / (2 * D) := by
@@ -120,15 +100,10 @@ theorem executionPhase_quadratic_any {R l H L D : ℝ} (hL : 0 < L) (hH : 0 ≤ 
     _ = 2 * R * l * H / D + ((R - l * L) ^ 2 * H / L + (R + l * L) ^ 2) / (2 * D) := by
         linear_combination (2 * R * l * H / D) * hLi
 
-/-- **The window optimization, linear regime** (`Λ = e`): one window over the whole horizon `H > 0` reads `R + λH` bits
-and holds at most `(R + λH) e/b_a` counted multiplications, the bound itself: the starting state counts once. -/
 theorem executionPhase_linear {R l H e b : ℝ} (hH : 0 < H) :
     (⌈H / H⌉₊ : ℝ) * ((R + l * H) * e / b) = (R + l * H) * e / b := by
   rw [div_self hH.ne', Nat.ceil_one, Nat.cast_one, one_mul]
 
-/-- **The window bound at every window length**, linear regime (`Λ = e`): windows of length `L > 0` over a horizon
-`H ≥ 0` hold at most `(R + λH + RH/L + λL) e/b_a` counted multiplications, the starting state once a window: no window
-length beats one window (`executionPhase_linear`) by more than the state's share. -/
 theorem executionPhase_linear_any {R l H L e b : ℝ} (hL : 0 < L) (hH : 0 ≤ H) (hR : 0 ≤ R) (hl : 0 ≤ l) (he : 0 ≤ e)
     (hb : 0 < b) :
     (⌈H / L⌉₊ : ℝ) * ((R + l * L) * e / b) ≤ (R + l * H + R * H / L + l * L) * e / b := by
@@ -139,8 +114,6 @@ theorem executionPhase_linear_any {R l H L e b : ℝ} (hL : 0 < L) (hH : 0 ≤ H
         mul_le_mul_of_nonneg_right hc.le (div_nonneg (mul_nonneg (by positivity) he) hb.le)
     _ = (R + l * H + R * H / L + l * L) * e / b := by linear_combination (l * H * e / b) * hLi
 
-/-- **The memory cap from windows**: `n` servers' windows of `L` ticks, with `α F L = R` so that each reads `2R` bits,
-in the quadratic regime of `Λ(2R)`, hold at most `μ (1 + L/H) κ C/2` counted multiplications when `n F H ≤ C`. -/
 theorem executionPhases_cap {κ C n F H L R α reuse e d b_w b_a X : ℝ} (hκ : 0 < κ) (hn : 0 ≤ n) (hH : 0 < H) (hL : 0 < L)
     (hR : 0 ≤ R) (hα : 0 ≤ α) (hreuse : 0 ≤ reuse) (hd : 0 < d) (hbw : 0 < b_w) (hba : 0 < b_a)
     (hC : n * F * H ≤ C) (hRL : α * F * L = R) (he : e ≤ reuse * (2 * R) / (4 * d * b_w))
@@ -190,12 +163,9 @@ theorem SlowdownExecutionPhases : Guarantees.SlowdownExecutionPhases := by
   exact Slowdown κ C U W ρ (memoryCap reuse κ R α d b_w b_a * (1 + L / H)) χ M Mu Mr Md Mx hκ hC hU hM hu hr hdecl hx
     (executionPhases_cap hκ (Nat.cast_nonneg n) hH hL hR hα hreuse hd hbw hba hnC hRL he hcap)
 
-/-- `Lambda` is `Threading.bound` with real arguments. -/
 theorem bound_eq_Lambda {c : RegisteredCircuit} (T : Threading c) (S b_w : ℝ) (d e : ℕ) :
     T.bound S b_w d e = Lambda T.reuse e d b_w S := rfl
 
-/-- **The declared computation at the inference-only policy's thread bound, per parameter slot**: `ThreadedThrottledSlots`'s
-`b_a |M| ≤ α Λ size(d)`, with `size(d) ≤ C`, is the slowdown's `M_d ≤ C/ρ_T`. -/
 theorem declared_le_slots {Γ : ℕ} {α b_w b_a C : ℝ} {c d : RegisteredCircuit} {T : Threading c} {σ : T.Slots} {dd e : ℕ}
     {Mc : Containment c.D d.D} (hα : 0 ≤ α) (hbw : 0 < b_w) (hba : 0 < b_a) (hdd : 0 < dd) (hcomp : CompliesRate Γ α d)
     (hB : Assumptions.ThetaRegistered c d (PartialContainment.ofContainment Mc))
@@ -242,10 +212,8 @@ theorem SlowdownThreaded : Guarantees.SlowdownThreaded := by
     hR hα hbw hba hdd hcomp hB hT (weightsIncompressibleSlots_of (Fit.idSlots T) hbw.le hW) hsize hM hu hr hx hnC hRL he
     hcap
 
-/-- **The bound is attained** (completeness, not a claim): at `κ = 2`, `C = 4`, `U = 0`, `W_cert = 3`, `ρ = 4`, `μ = 1`
-and `χ = 1/4`, with one counted multiplication in each of the residual, the declared computation and an incorrect proof
-block, every hypothesis of `Slowdown.Guarantees.Slowdown` holds and `η = 3/4 = s + min(r, μ) + ν + χ`: the hypotheses can
-hold together, and the inequality is not loose there. -/
+/-- Completeness, not a claim: at `κ = 2`, `C = 4`, `U = 0`, `W_cert = 3`, `ρ = 4`, `μ = 1` and `χ = 1/4` every
+hypothesis holds and the inequality is an equality. -/
 theorem slowdown_attained :
     ((0 : ℕ) : ℝ) ≤ 2 * 0 / 2 ∧ ((1 : ℕ) : ℝ) ≤ 2 * (4 - 3) / 2 ∧ ((1 : ℕ) : ℝ) ≤ 4 / 4 ∧
       ((1 : ℕ) : ℝ) ≤ 2 * (1 / 4) * (4 + 0) / 2 ∧ ((1 : ℕ) : ℝ) + ((1 : ℕ) : ℝ) ≤ 2 * 1 * 4 / 2 ∧

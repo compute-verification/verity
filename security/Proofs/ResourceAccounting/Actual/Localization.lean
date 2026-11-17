@@ -13,27 +13,7 @@ import Mathlib.Tactic.NormNum.Pow
 import Proofs.ResourceAccounting.Actual.Confidence
 import Proofs.ResourceAccounting.Actual.Split
 
-/-!
-# Localization, proved
-
-`Localization`, over strategies, is function composition. What the rest reads from outside before `u ≤ t₁`
-(`crossing_split`) is what it read before `t₀` (part of what it can tell at `t₀`), what `X` sent it during `[t₀, u)`,
-and what it heard from the leaves in neither during `W`, cut at `u`. With its inputs fixed, causality's global form
-(`global_of_causal`) makes what the rest does before `u` a function of what `X` sent. The table picks a run for each
-key, and the count is the image's. `memory_of_mem`: memory per run on the state bounds the circuit's `state`.
-`markov_mem`: the `not_markov` circuit (a gate of `X` reading nothing, with the coin's value) has `mem X 2 ≥ 1` at some
-coin in every strategy causal from every tick, whatever it holds (`markov_holding`: it can). `zero_link_alphabet`: the
-`zero_link` circuit (a width-0 wire sent at the coin's tick) meets `Links` at capacity 0 (`zero_links`) and fails
-`Alphabet` there. `Recall` is `CausalFrom` read through a table, as `Localization` is, with the content's length bound
-(`content_length_le`).
-
-`localization_wires` is the per-run lemma (not the model's `e = 0`, which reads the strategy): under causality a gate
-downstream of `C` runs at or after `C`'s ticks (`le_t_of_downstream`), so one that `A[Y, W]` reads runs during `W`; and
-one not in `C` reads a gate downstream of `C`, so it is computed (`downstream_pred`). Placed in `Y` it would be in
-`A[Y, W]`, and placed at the verifier's `Reaches` refuses it, so it is in `A[X, W]`. When no wire from `X` to `Y`
-carries a gate downstream of `C`, a gate of `A[Y, W]` downstream of `C` reads one, which is then in `A[Y, W]` and
-earlier (the gates are in topological order), so none is.
--/
+/-! `Localization`, proved, with the counterexamples that fix its premises (`not_markov`, `and_causal`, `zero_link`). -/
 
 @[expose] public section
 
@@ -49,7 +29,6 @@ theorem mem_downstream {C : Finset (Fin A.N)} {g : Fin A.N} :
     g ∈ A.downstream C ↔ ∃ c ∈ C, Relation.ReflTransGen (fun a g => a ∈ A.reads g) c g := by
   simp [Placed.downstream]
 
-/-- A gate downstream of `C` that is not in `C` is computed and reads a gate downstream of `C`. -/
 theorem downstream_pred {C : Finset (Fin A.N)} {g : Fin A.N} (hg : g ∈ A.downstream C) (hC : g ∉ C) :
     A.isInput g = false ∧ ∃ a ∈ A.reads g, a ∈ A.downstream C := by
   obtain ⟨c, hc, h⟩ := (mem_downstream A).1 hg
@@ -60,7 +39,6 @@ theorem downstream_pred {C : Finset (Fin A.N)} {g : Fin A.N} (hg : g ∈ A.downs
   · rfl
   · simp [A.input_reads g hi] at hag
 
-/-- Under causality a gate downstream of `C` runs no earlier than a tick `t₀` at most each of `C`'s. -/
 theorem le_t_of_downstream {ℓ : L → L → ℕ} (hc : A.Causal ℓ) {C : Finset (Fin A.N)} {t₀ : ℕ}
     (h₀ : ∀ c ∈ C, t₀ ≤ A.t c) {g : Fin A.N} (hg : g ∈ A.downstream C) : t₀ ≤ A.t g := by
   obtain ⟨c, hcC, h⟩ := (mem_downstream A).1 hg
@@ -69,11 +47,6 @@ theorem le_t_of_downstream {ℓ : L → L → ℕ} (hc : A.Causal ℓ) {C : Fins
   | refl => exact h₀ c hcC
   | tail _ hab ih => exact ih.trans ((Nat.le_add_right _ _).trans (hc _ _ hab))
 
-/-- **Localization on one circuit's wires.** Under causality, for a set `C` of gates, a location `X` it reaches the
-prover through during `W = [t₀, t₁)` (`t₀` at most each tick of `C`) and the rest `Y` of the prover: every gate
-downstream of `C` that `A[Y, W]` reads from outside itself is in `A[X, W]`; and when no gate of `C` is placed in `Y` and
-no wire from `X` to `Y` during `W` carries a gate downstream of `C`, no gate of `A[Y, W]` is downstream of `C`, nor is
-any gate it reads from outside itself, nor any gate placed in `Y` that `A[X, W]` reads. -/
 theorem localization_wires {ℓ : L → L → ℕ} (hc : A.Causal ℓ) {C : Finset (Fin A.N)} {X Y : Finset L} {t₀ t₁ : ℕ}
     (h₀ : ∀ c ∈ C, t₀ ≤ A.t c) (hR : A.Reaches C X Y (Set.Ico t₀ t₁)) :
     (∀ a ∈ A.into (A.region Y (Set.Ico t₀ t₁)), a ∈ A.downstream C → a ∈ A.region X (Set.Ico t₀ t₁)) ∧
@@ -111,8 +84,6 @@ theorem localization_wires {ℓ : L → L → ℕ} (hc : A.Causal ℓ) {C : Fins
     refine region a ((mem_region A).2 ⟨hai, hy, le_t_of_downstream A hc h₀ had, ?_⟩) had
     exact ((Nat.le_add_right _ _).trans (hc g a hag)).trans_lt ((mem_region A).1 hg).2.2.2
 
-/-- What `Y` reads from outside before `u ≤ t₁`, for `X` apart from `Y`: what it read before `t₀` (cut at `u`), what it
-read from `X` during `[t₀, u)`, and what it read from the leaves in neither during `[t₀, t₁)` (cut at `u`). -/
 theorem crossing_split {L : Type*} (R : Actual.Run L) {X Y : Finset L} (h : Disjoint X Y) {t₀ u t₁ : ℕ}
     (hu : u ≤ t₁) : R.crossing (↑Y)ᶜ ↑Y (Set.Iio u) = R.crossing (↑Y)ᶜ ↑Y (Set.Iio t₀) ∩ {p | p.1 < u} ∪
       (R.crossing ↑X ↑Y (Set.Ico t₀ u) ∪ R.crossing (↑X ∪ ↑Y)ᶜ ↑Y (Set.Ico t₀ t₁) ∩ {p | p.1 < u}) := by
@@ -130,8 +101,6 @@ theorem crossing_split {L : Type*} (R : Actual.Run L) {X Y : Finset L} (h : Disj
     · exact ⟨g, a, hr, fun hy => Finset.disjoint_left.1 h ha hy, hg, ht.2, rfl⟩
     · exact ⟨g, a, hr, fun hy => ha (Or.inr hy), hg, hlt, rfl⟩
 
-/-- Memory per run on the state bounds the circuit's `state`: its gates are in the run's state (in flight between
-`X`'s leaves, or held). -/
 theorem memory_of_mem {L : Type*} {R : Actual.Run L} {𝒳 : Set (Finset L)} {M : Finset L → ℕ} (h : R.Memory 𝒳 M) :
     R.A.Memory 𝒳 M := by
   classical
@@ -143,9 +112,6 @@ theorem memory_of_mem {L : Type*} {R : Actual.Run L} {𝒳 : Set (Finset L)} {M 
   simp only [Actual.Run.state, Finset.mem_filter, Finset.mem_univ, true_and]
   exact Or.inr ⟨hai, hx⟩
 
-/-- The actual circuit of `not_markov` at coin `b`, over leaves `true` (the verifier) and `false` (`X`): the verifier's
-input `g0` and its copy `g1` at tick 0, `g2` at `X` at tick 1 reading `g1`, and `g3` at `X` at tick 3, reading nothing,
-with value `b`; gate `gi` in cell `i`. -/
 abbrev markovPlaced (b : Bool) : Placed Bool where
   N := 4
   w _ := 1
@@ -161,7 +127,6 @@ abbrev markovPlaced (b : Bool) : Placed Bool where
   cell g := g.val
   cell_inj _ _ h := Fin.ext (congrArg (fun p => p.2.1) h)
 
-/-- Its run at coin `b`, every gate's value `b`, with what each leaf holds given by `held`. -/
 abbrev markovRun (b : Bool) (held : Bool → ℕ → Finset (Fin 4)) (h : (markovPlaced b).Holding held) :
     Actual.Run Bool where
   A := markovPlaced b
@@ -170,10 +135,7 @@ abbrev markovRun (b : Bool) (held : Bool → ℕ → Finset (Fin 4)) (h : (marko
   held := held
   holding := h
 
-/-- **`not_markov` is closed** (the counterexample to per-run memory): a strategy running that circuit at each coin,
-holding anything `Holding` allows, and causal from every tick has `mem X 2 ≥ 1` at some coin, so `M_X = 0` fails there.
-`g3`'s value is what `X` does during `[2, 4)` and nothing reaches `X` then, so `X`'s state at tick 2 tells the coins
-apart: `b` is held at `X` across tick 2. -/
+/-- The counterexample to per-run memory: at some coin `mem X 2 ≥ 1`, so `M_X = 0` fails there. -/
 theorem markov_mem (held : Bool → Bool → ℕ → Finset (Fin 4)) (h : ∀ b, (markovPlaced b).Holding (held b))
     (hc : CausalFrom fun b => markovRun b (held b) (h b)) : ∃ b, 1 ≤ (markovRun b (held b) (h b)).mem {false} 2 := by
   by_contra hne
@@ -207,8 +169,6 @@ theorem markov_holding (b : Bool) :
   · fin_cases a <;> simp_all
   · fin_cases g <;> fin_cases a <;> simp_all
 
-/-- An honest location, at one leaf: the inputs `g0` and `g1` at tick 0, in cells 0 and 1, and `g2` at tick 1, in cell
-2, computing `g0 ∧ ¬g1`. -/
 abbrev andPlaced : Placed Unit where
   N := 3
   w _ := 1
@@ -224,7 +184,6 @@ abbrev andPlaced : Placed Unit where
   cell g := g.val
   cell_inj _ _ h := Fin.ext (congrArg (fun p => p.2.1) h)
 
-/-- Its run at coins `c = (a, b)`, the inputs held through tick 1. -/
 abbrev andRun (c : Bool × Bool) : Actual.Run Unit where
   A := andPlaced
   val g := BitVec.ofBool (if g.val = 0 then c.1 else if g.val = 1 then c.2 else c.1 && !c.2)
@@ -237,7 +196,6 @@ abbrev andRun (c : Bool × Bool) : Actual.Run Unit where
     · fin_cases a <;> simp_all
     · fin_cases g <;> fin_cases a <;> simp_all
 
-/-- Through tick 1 its content is `[a, b]`: the inputs, in the order of their cells. -/
 theorem and_content (c : Bool × Bool) {t : ℕ} (ht : t ≤ 1) : (andRun c).content univ t = [c.1, c.2] := by
   obtain ⟨a, b⟩ := c
   have hs : (andRun (a, b)).state univ t = {0, 1} := by
@@ -252,9 +210,8 @@ theorem and_content (c : Bool × Bool) {t : ℕ} (ht : t ≤ 1) : (andRun c).con
       (h₂ := by simp [Actual.position, Actual.Run.seen]), sort_singleton]
   cases a <;> cases b <;> rfl
 
-/-- **The honest location is causal**: `g0` and `g1` are in different cells, so the coins `(0, 1)` and `(1, 0)` have
-contents `[false, true]` and `[true, false]`, and the strategy running it at each coin is causal from every tick.
-Without cells, the content order put them by value, alike at those coins, while `g2` tells them apart. -/
+/-- Without cells, the content order puts `g0` and `g1` by value, alike at the coins `(0, 1)` and `(1, 0)`, while
+`g2` tells them apart. -/
 theorem and_causal : CausalFrom andRun := by
   intro X t u r r' hc _
   rcases X.eq_empty_or_nonempty with rfl | ⟨⟨⟩, hx⟩
@@ -281,9 +238,6 @@ theorem and_causal : CausalFrom andRun := by
           omega
       rw [h0 r, h0 r']
 
-/-- The actual circuit of `zero_link` at coin `b`, over leaves `true` (the verifier) and `false` (`X`): the verifier's
-input `g0` at tick 0, `g1` at the verifier of width 0 at tick `b`, reading `g0`, and `g2` at `X` at tick 3, reading
-`g1`. Every gate is `b` at its width; gate `gi` in cell `i`. -/
 abbrev zeroPlaced (b : Bool) : Placed Bool where
   N := 3
   w g := if g.val = 1 then 0 else 1
@@ -299,7 +253,6 @@ abbrev zeroPlaced (b : Bool) : Placed Bool where
   cell g := g.val
   cell_inj _ _ h := Fin.ext (congrArg (fun p => p.2.1) h)
 
-/-- Its run at coin `b`, with what each leaf holds given by `held`. -/
 abbrev zeroRun (b : Bool) (held : Bool → ℕ → Finset (Fin 3)) (h : (zeroPlaced b).Holding held) :
     Actual.Run Bool where
   A := zeroPlaced b
@@ -308,7 +261,6 @@ abbrev zeroRun (b : Bool) (held : Bool → ℕ → Finset (Fin 3)) (h : (zeroPla
   held := held
   holding := h
 
-/-- Its one link has capacity 0 and carries every wire between the leaves: `g1`'s width is 0. -/
 theorem zero_links (b : Bool) : (zeroPlaced b).Links (fun _ : Unit => (true, false)) (fun _ => 0) fun _ _ => () := by
   have w0 : ∀ T : Finset (Fin 3), (∀ a ∈ T, a = 1) → ∀ n, (zeroPlaced b).width T ≤ 0 * n := fun T hT n => by
     simp only [zero_mul, nonpos_iff_eq_zero, Verity.Circuit.width]
@@ -319,10 +271,8 @@ theorem zero_links (b : Bool) : (zeroPlaced b).Links (fun _ : Unit => (true, fal
     obtain ⟨g, hzg, hne, -⟩ := hz
     fin_cases g <;> fin_cases z <;> simp_all
 
-/-- **`zero_link` fails `Alphabet` at `β = 0`** (the counterexample to a bound by `Links` alone, "a link of
-capacity 0 carries a bit"): whatever its runs hold, the signal its link delivers to `X` at tick 3 is `g1` as seen, whose
-sender's tick is the coin, so the link takes two signals across the strategy where an alphabet of capacity 0 allows
-one. It meets `Links` at capacity 0 (`zero_links`); a bound that counts what crosses goes through `Alphabet`. -/
+/-- The counterexample to a bound by `Links` alone: `zero_link` meets `Links` at capacity 0 (`zero_links`), so a
+bound that counts what crosses goes through `Alphabet`. -/
 theorem zero_link_alphabet (held : Bool → Bool → ℕ → Finset (Fin 3)) (h : ∀ b, (zeroPlaced b).Holding (held b)) :
     ¬Alphabet (fun b => zeroRun b (held b) (h b)) (fun _ : Unit => 0) fun _ _ _ => () := by
   intro hA

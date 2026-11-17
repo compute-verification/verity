@@ -1,11 +1,3 @@
-/-
-Part A, `sha512/row-seg/v1`'s generators against `Hash.RowSeg`: the segment generator is SHA-512 continued from its
-chaining value over the segment's bytes (`sound_segment`), so SHA-512 of its prefix and the segment from the prefix's
-chaining value (`sound_segment_mid`); the outer generator is SHA-512 of `Q(l)` and the digests (`sound_outer`); the row
-generator is `Hash.RowSeg.digest` of the row's bits wherever its callees compute their constants (`ConstSpec`) and SHA-512
-of their messages (`SegSpec`, `OuterSpec`) (`rowSeg_spec`), so over `constBit`, `segment` and `outer` it meets
-`Gates.RowSegSpec` (`rowSegNet_spec`).
--/
 module
 
 public import Flock.ReadNet.RowSeg
@@ -50,7 +42,7 @@ namespace ResourceAccounting.ReadUnit.Gates
 open Flock.HmNets hiding and
 open FlockSoundness.Discharge.Hm
 
-/-! ## A segment's bytes -/
+/-! Part A, `sha512/row-seg/v1`'s generators against `Hash.RowSeg`. -/
 
 theorem length_packBits (bs : List Bool) : (Hash.RowSeg.packBits bs).length = (bs.length + 7) / 8 := by
   simp [Hash.RowSeg.packBits]
@@ -67,7 +59,6 @@ theorem testBit_bitsVal : ∀ (bs : List Bool) (i : ℕ), (Hash.RowSeg.bitsVal b
       cases b <;> simp
       omega
 
-/-- Bit `q` of a row's bytes is the row's bit `q`, zero past its end. -/
 theorem bitL_packBits {bs : List Bool} {q : ℕ} (hq : q < 8 * ((bs.length + 7) / 8)) :
     bitL (Hash.RowSeg.packBits bs) q = bs.getD q false := by
   have hj : q / 8 < (bs.length + 7) / 8 := by omega
@@ -88,7 +79,6 @@ theorem getD_constBits {l : List UInt8} {q : ℕ} (hq : q < 8 * l.length) :
   simp only [Flock.ReadNet.constBits, List.getElem_map, List.getElem_range]
   rfl
 
-/-- The segment generator's message bits are the segment's bytes and then `pad`, bit by bit. -/
 theorem ev_segBits (z : Var → Bool) {m : ℕ} {bits : List Lin} (hbl : bits.length = m) (pad : List UInt8) {q : ℕ}
     (hq : q < 8 * ((m + 7) / 8) + 8 * pad.length) :
     ev z ((bits ++ List.replicate (8 * ((m + 7) / 8) - m) Lin.zero ++ Flock.ReadNet.constBits pad).getD q Lin.zero) =
@@ -112,8 +102,6 @@ theorem ev_segBits (z : Var → Bool) {m : ℕ} {bits : List Lin} (hbl : bits.le
       List.getD_append_right _ _ _ _ (by rw [hn]; omega), hn, show (q - 8 * ((m + 7) / 8)) / 8 = q / 8 - (m + 7) / 8 by
       omega, show (q - 8 * ((m + 7) / 8)) % 8 = q % 8 by omega]
 
-/-! ## Message words -/
-
 theorem length_msgWords (fs : List Lin) : (Flock.ReadNet.msgWords fs).length = fs.length / 64 := by
   simp [Flock.ReadNet.msgWords]
 
@@ -123,7 +111,6 @@ theorem words64_msgWords (fs : List Lin) : Words64 (Flock.ReadNet.msgWords fs) :
   obtain ⟨i, _, rfl⟩ := hw
   simp
 
-/-- Message words over forms that hold a byte string's bits hold its big-endian words. -/
 theorem map_bv_msgWords (z : Var → Bool) {fs : List Lin} {L : List UInt8} (hl : fs.length = 8 * L.length)
     (h : ∀ q < fs.length, ev z (fs.getD q Lin.zero) = bitL L q) :
     (Flock.ReadNet.msgWords fs).map (bv z) = wordsBE L := by
@@ -140,11 +127,6 @@ theorem map_bv_msgWords (z : Var → Bool) {fs : List Lin} {L : List UInt8} (hl 
     rw [h _ hw, bitL, getLsbD_wordL _ _ _ hp, show wordBit (64 * i + p) / 8 = 0 + 8 * i + (7 - p / 8) by
       unfold wordBit; omega, show wordBit (64 * i + p) % 8 = p % 8 by unfold wordBit; omega]
 
-/-! ## The segment and the outer hash -/
-
-/-- **The segment generator** (`Sha512RowSegSegment_v1{M}`): whenever its rows hold, its eight words are the chain from
-its chaining value over the segment's bytes (its `m` bits, zero-filled to whole bytes) and the padding of a
-`128 + ⌈m / 8⌉`-byte message. -/
 theorem sound_segment (m : ℕ) (cv : List Word) (bits : List Lin) :
     Sound (Flock.ReadNet.segment m cv bits) fun z out => cv.length = 8 → Words64 cv → bits.length = m →
       out.length = 8 ∧ Words64 out ∧
@@ -169,9 +151,6 @@ theorem sound_segment (m : ℕ) (cv : List Word) (bits : List Lin) :
   rw [o3, length_msgWords, hfs, show 1024 * (blocks (128 + (m + 7) / 8) - 1) / 64 / 16 =
     blocks (128 + (m + 7) / 8) - 1 by omega, hmw]
 
-/-- **From a block's chaining value, the segment generator hashes the block and the segment**: whenever its rows hold
-and `cv` holds the 128-byte `pre`'s chaining value, its words are SHA-512 of `pre` and the segment's bytes
-(`sha512/row-seg/v1`'s `d_j` at `pre = S(j, s, m)`). -/
 theorem sound_segment_mid {G : Hash.Msg → Verity.Digest} (hG : IsSha512 G) (m : ℕ) {pre : ByteArray}
     (hpre : pre.size = 128) (cv : List Word) (bits : List Lin) :
     Sound (Flock.ReadNet.segment m cv bits) fun z out => cv.length = 8 → Words64 cv → cv.map (bv z) = chainV pre 1 →
@@ -193,13 +172,11 @@ theorem be32_1024 : (Flock.be32 1024).data.toList = Hash.be 4 1024 := by
   have hi : i < 4 := by simpa [Hash.be] using h2
   interval_cases i <;> simp [Hash.be]
 
-/-- The code's `Q(l)` is `Hash.RowSeg.outerPrefix l`. -/
 theorem outerPrefix_data (l : ℕ) : (Flock.HmRow.rowPrefixSeg l).data.toList = Hash.RowSeg.outerPrefix l := by
   rw [Flock.HmRow.rowPrefixSeg, pad_data, Hash.RowSeg.outerPrefix, ByteArray.toList_data_append,
     ByteArray.toList_data_append, ByteArray.toList_data_append, push_zero_data, be64_data, be64_data, be32_1024]
   rfl
 
-/-- The code's `S(j, s, m)` is `Hash.RowSeg.segmentPrefix j s m`. -/
 theorem segmentPrefix_data (j s m : ℕ) :
     (Flock.HmRow.segmentPrefix j s m).data.toList = Hash.RowSeg.segmentPrefix j s m := by
   rw [Flock.HmRow.segmentPrefix, pad_data, Hash.RowSeg.segmentPrefix, ByteArray.toList_data_append,
@@ -221,8 +198,6 @@ theorem size_segmentPrefix (j s m : ℕ) : (Flock.HmRow.segmentPrefix j s m).siz
   simp only [List.length_append, Hash.BindingProofs.be_length, this]
   norm_num
 
-/-- **The outer generator** (`Sha512RowSegOuter_v1{N_BITS}`): whenever its rows hold, its words are SHA-512 of `Q(l)` and
-the digests' bytes. -/
 theorem sound_outer {G : Hash.Msg → Verity.Digest} (hG : IsSha512 G) (l : ℕ) (d : List Word) :
     Sound (Flock.ReadNet.outer l d) fun z out => Words64 d →
       out.length = 8 ∧ Words64 out ∧
@@ -241,20 +216,14 @@ theorem sound_outer {G : Hash.Msg → Verity.Digest} (hG : IsSha512 G) (l : ℕ)
   rw [← outerPrefix_data, hash_mid hG (size_rowPrefixSeg l), o3, hn, map_bv_midstate, List.map_append,
     map_bv_constWords, wordsBE_append, length_bytesBE, List.length_map]
 
-/-! ## The row -/
-
-/-- What `rowSeg`'s constant callee must compute: the bit it is asked for. -/
 def ConstSpec (const : Bool → M Lin) : Prop := ∀ b, Sound (const b) fun z r => ev z r = b
 
-/-- What `rowSeg`'s segment callee must compute: from words holding a block's chaining value, SHA-512 of the block and
-the bits' bytes. -/
 def SegSpec (seg : ℕ → List Word → List Lin → M (List Word)) : Prop :=
   ∀ (m : ℕ) (pre : ByteArray) (cv : List Word) (bits : List Lin), pre.size = 128 →
     Sound (seg m cv bits) fun z out => cv.length = 8 → Words64 cv → cv.map (bv z) = chainV pre 1 → bits.length = m →
       out.length = 8 ∧ Words64 out ∧
         (Verity.sha512 (pre.data.toList ++ Hash.RowSeg.packBits (evs z bits))).bytes = bytesBE (out.map (bv z))
 
-/-- What `rowSeg`'s outer callee must compute: SHA-512 of `Q(l)` and the digests' bytes. -/
 def OuterSpec (out : ℕ → List Word → M (List Word)) : Prop :=
   ∀ (l : ℕ) (d : List Word), Sound (out l d) fun z o => Words64 d →
     o.length = 8 ∧ Words64 o ∧
@@ -276,7 +245,6 @@ theorem words64_cvWords (zero one : Lin) (pre : ByteArray) : Words64 (Flock.Read
   obtain ⟨i, _, rfl⟩ := hw
   simp
 
-/-- Words over a 0 and a 1 hold the chaining value they spell. -/
 theorem map_bv_cvWords (z : Var → Bool) {zero one : Lin} (h0 : ev z zero = false) (h1 : ev z one = true)
     (pre : ByteArray) : (Flock.ReadNet.cvWords zero one pre).map (bv z) = chainV pre 1 := by
   rw [chainV, chain_one, Flock.ReadNet.cvWords, List.map_map]
@@ -292,7 +260,6 @@ theorem map_bv_cvWords (z : Var → Bool) {zero one : Lin} (h0 : ev z zero = fal
     rw [h0]
     exact (Bool.eq_false_iff.2 hc).symm
 
-/-- A generator mapped over a list: what it computes of each element, in order. -/
 theorem sound_mapM_eq {β γ δ : Type} (f : β → M γ) (Q : (Var → Bool) → β → Prop) (R : (Var → Bool) → γ → Prop)
     (F : (Var → Bool) → γ → δ) (g : (Var → Bool) → β → δ)
     (hf : ∀ x, Sound (f x) fun z r => Q z x → R z r ∧ F z r = g z x) :
@@ -324,7 +291,6 @@ theorem take_min_eq {α : Type} (l : List α) (a k : ℕ) :
   · intro i h1 h2
     simp only [List.getElem_take]
 
-/-- Segment `j`'s message is the code's prefix for it and the bytes of the bits the row generator hands it. -/
 theorem segmentMsg_eq (z : Var → Bool) {row : List Lin} {n : ℕ} (hl : row.length = n) (j : ℕ) :
     Hash.RowSeg.segmentMsg (evs z row) j =
       (Flock.HmRow.segmentPrefix j ((n + Flock.HmRow.ROW_SEG_BITS - 1) / Flock.HmRow.ROW_SEG_BITS)
@@ -340,8 +306,6 @@ theorem segmentMsg_eq (z : Var → Bool) {row : List Lin} {n : ℕ} (hl : row.le
   rw [Hash.RowSeg.segmentMsg, segmentPrefix_data, hseg, length_evs, length_evs, hl, List.length_take, List.length_drop,
     hl, hR, Hash.RowSeg.segCount, Nat.min_eq_left (by omega)]
 
-/-- **The row generator computes `sha512/row-seg/v1`** wherever its callees compute their constants and SHA-512: on a row
-of `n` forms it returns 8 words that hold the row's digest whenever its rows hold. -/
 theorem rowSeg_spec {const : Bool → M Lin} {seg : ℕ → List Word → List Lin → M (List Word)}
     {out : ℕ → List Word → M (List Word)} (hconst : ConstSpec const) (hseg : SegSpec seg) (hout : OuterSpec out)
     (n : ℕ) : RowSegSpec n (Flock.ReadNet.rowSeg const seg out n) := by
@@ -377,8 +341,6 @@ theorem rowSeg_spec {const : Bool → M Lin} {seg : ℕ → List Word → List L
     rw [← Hash.BindingProofs.bytes_inj, wordsDigest_bytes z ⟨o1, o2⟩, ← o3, hmsg, Hash.RowSeg.digest,
       Hash.RowSeg.outerMsg, length_evs, hl]
 
-/-- **Part A**: the row generator over the constant, segment and outer generators meets `Gates.RowSegSpec`, for every
-row length. -/
 theorem rowSegNet_spec (n : ℕ) : RowSegSpec n (Flock.ReadNet.rowSegNet n) :=
   rowSeg_spec constBit_spec segment_spec outer_spec n
 

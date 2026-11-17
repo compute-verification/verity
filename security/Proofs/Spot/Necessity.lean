@@ -3,21 +3,7 @@ module
 public import Definitions.Spot.Dataflow
 import Proofs.Spot.Determinacy
 
-/-!
-# Integrity: what the checker confirms is exactly determinacy for every choice of unit functions
-
-`determinate_iff_checked`: a population is `Determinate` (every input has exactly one assignment making every unit
-correct, whatever the units compute) if and only if it is `Checked` (single assignment and acyclic). A circuit is not
-needed; the dataflow and these two checks are.
-
-The counterexamples, each a choice of Boolean unit functions:
-* a unit writing an input slot, and an input it disagrees with: no correct assignment;
-* two units writing one slot, one writing `true` and one `false`: no correct assignment;
-* a slot no unit writes: two correct assignments, differing there;
-* a cycle: every unit of the cycle's strongly connected component computes the OR of what it reads, and every other
-  unit `false`; then "all `false`" and "`true` on the component's writes" are both correct (`cycle_two_fixed_points`):
-  a self-consistent incorrect fixed point, with no incorrect proof block.
--/
+/-! Integrity: what the checker confirms is exactly determinacy for every choice of unit functions. -/
 
 @[expose] public section
 
@@ -71,9 +57,6 @@ theorem singleAssignment_of_determinate (h : P.Determinate) : P.SingleAssignment
         rw [Function.update_of_ne hts]
         exact hσc u t
 
-/-- In a single-assignment population with a cycle through `u₀`, two different assignments hold the all-`false`
-inputs and make every unit correct, for the unit functions that OR their reads on the cycle's strongly connected
-component and write `false` elsewhere. -/
 theorem cycle_two_fixed_points (hsa : P.SingleAssignment) {u₀ : U} (hcyc : Relation.TransGen P.Dep u₀ u₀) :
     ∃ (f : P.Fns Bool) (σ τ : S → Bool), σ ≠ τ ∧ (∀ s ∈ P.input, σ s = false) ∧ (∀ s ∈ P.input, τ s = false) ∧
       (∀ u, P.Correct f σ u) ∧ ∀ u, P.Correct f τ u := by
@@ -120,8 +103,6 @@ theorem acyclic_of_determinate (h : P.Determinate) : P.Acyclic := by
   obtain ⟨_, _, huniq⟩ := h Bool f (fun _ => false)
   exact hne ((huniq σ ⟨hσa, hσc⟩).trans (huniq τ ⟨hτa, hτc⟩).symm)
 
-/-- **Integrity's necessary and sufficient condition**: determinacy for every choice of unit functions holds exactly
-when the dataflow is single assignment and acyclic. -/
 theorem determinate_iff_checked [Finite U] : P.Determinate ↔ P.Checked :=
   ⟨fun h => ⟨P.singleAssignment_of_determinate h, P.acyclic_of_determinate h⟩, P.determinate_of_checked⟩
 

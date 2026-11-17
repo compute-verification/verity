@@ -5,36 +5,13 @@ public import Definitions.Core.Scalar
 public import Definitions.Core.Fp32
 public import Definitions.Core.Prims
 
-/-!
-# The evaluator's primitives: each is the definition of `Definitions.Core` it copies
-
-The descriptor v1 evaluator (`verity/circuits/evaluate/`, package `verity_evaluate`) is code, so it
-requires nothing of `security/`: where `Definitions.Core` defines a primitive, the evaluator holds a copy, whose doc names
-the definition it must equal. These are those equalities, each a `Prop` stated against the two functions as they are, and
-`Proofs.Properties.Core.Evaluate` proves every one.
-
-A function that takes words is equal to its definition on every natural number, not only on words, wherever the two
-are: `Evaluate.Fp32.decode` masks its operand to 32 bits and `Verity.Fp32.decode` does not, and they still decode every
-natural number alike, as `Evaluate.Casts.f2fpBf16` and `Verity.Prims.f2fpBf16` round it alike.
-
-The evaluator's types are its own (`Evaluate.Fp32.Decoded`, and `Evaluate.TC.Spec`'s `Pipeline`, `Term`, `Value` and
-`Cls`), so each is related to Security's by the map that sends each constructor to Security's of the same name and
-fields (`toCore`), which has an inverse (`ofCore`). A function that returns one of them is equal to Security's after
-`toCore`, and one that takes one is equal to Security's on its `toCore`.
-
-Stated here: the scalar primitives (`Definitions.Core.Scalar`), the FP32 and BF16 arithmetic (`Definitions.Core.Fp32`),
-the casts (`Definitions.Core.Prims`), the BF16 tensor-core step and its two dot primitives (`Definitions.Core.TC`), and
-the Boolean gates on bits, against Lean core's `Bool` (`Gates`). Not stated, because the definitions they name import
-Mathlib and this module imports none of it: the gates' equality to the Boolean circuit's (`Definitions.Core.Boolean`),
-the FP8 and FP4 steps (`Pouw.Fp8Atom`, `Pouw.PearlC.Fp4`) and the PoUW words (`Pouw.NCP`, `Pouw.Basic`,
-`Pouw.PearlC.RowCircuit`).
--/
+/-! The evaluator's primitives, each equal to the definition of `Definitions.Core` it copies; the gates' equality to
+the Boolean circuit's, the FP8 and FP4 steps and the PoUW words are not stated, because their definitions import
+Mathlib. -/
 
 @[expose] public section
 
 namespace Properties.Evaluator
-
-/-! ## Scalar: `Evaluate.Scalar` is `Verity.Scalar` -/
 
 namespace Scalar
 
@@ -52,8 +29,6 @@ def SelectBf16 : Prop := Evaluate.Scalar.selectBf16 = Verity.Scalar.selectBf16
 
 end Scalar
 
-/-! ## FP32 and BF16: `Evaluate.Fp32` is `Verity.Fp32` -/
-
 namespace Fp32
 
 /-- Each decoded value as Security's of the same constructor and fields. -/
@@ -62,7 +37,6 @@ def Decoded.toCore : Evaluate.Fp32.Decoded → Verity.Fp32.Decoded
   | .inf s => .inf s
   | .fin s m => .fin s m
 
-/-- The inverse of `Decoded.toCore`. -/
 def Decoded.ofCore : Verity.Fp32.Decoded → Evaluate.Fp32.Decoded
   | .nan => .nan
   | .inf s => .inf s
@@ -122,8 +96,6 @@ def Bf16MulBf16 : Prop := Evaluate.Fp32.bf16MulBf16 = Verity.Fp32.bf16MulBf16
 
 end Fp32
 
-/-! ## Casts: `Evaluate.Casts` is `Verity.Prims` -/
-
 namespace Casts
 
 def BitLength : Prop := Evaluate.Casts.bitLength = Verity.TC.bitLength
@@ -145,8 +117,6 @@ def F32ToE2m1Sat : Prop := Evaluate.Casts.f32ToE2m1Sat = Verity.Prims.f32ToE2m1S
 
 end Casts
 
-/-! ## The BF16 tensor-core step: `Evaluate.TC.Spec` is `Verity.TC` and `Verity.TC.Spec` -/
-
 namespace TC
 
 open Evaluate.TC.Spec (Pipeline Term Value Cls)
@@ -154,13 +124,11 @@ open Evaluate.TC.Spec (Pipeline Term Value Cls)
 /-- Each pipeline as Security's of the same fields. -/
 def Pipeline.toCore (p : Pipeline) : Verity.TC.Pipeline := ⟨p.groups, p.width, p.zeroExponent⟩
 
-/-- The inverse of `Pipeline.toCore`. -/
 def Pipeline.ofCore (p : Verity.TC.Pipeline) : Pipeline := ⟨p.groups, p.width, p.zeroExponent⟩
 
 /-- Each term as Security's of the same fields. -/
 def Term.toCore (t : Term) : Verity.TC.Spec.Term := ⟨t.negative, t.exponent, t.magnitude⟩
 
-/-- The inverse of `Term.toCore`. -/
 def Term.ofCore (t : Verity.TC.Spec.Term) : Term := ⟨t.negative, t.exponent, t.magnitude⟩
 
 /-- Each value as Security's of the same constructor, a finite one's term by `Term.toCore`. -/
@@ -169,7 +137,6 @@ def Value.toCore : Value → Verity.TC.Spec.Value
   | .inf s => .inf s
   | .fin t => .fin (Term.toCore t)
 
-/-- The inverse of `Value.toCore`. -/
 def Value.ofCore : Verity.TC.Spec.Value → Value
   | .nan => .nan
   | .inf s => .inf s
@@ -182,7 +149,6 @@ def Cls.toCore : Cls → Verity.TC.Spec.Cls
   | .zero => .zero
   | .finite => .finite
 
-/-- The inverse of `Cls.toCore`. -/
 def Cls.ofCore : Verity.TC.Spec.Cls → Cls
   | .nan => .nan
   | .inf => .inf
@@ -232,12 +198,6 @@ def HopperBf16Dot16 : Prop :=
   Evaluate.TC.hopperBf16Dot16 = Verity.TC.Spec.tcDotTotal Verity.TC.HOPPER_BF16_WGMMA_K16
 
 end TC
-
-/-! ## The Boolean gates on bits
-
-The Boolean circuit's gates (`Definitions.Core.Boolean`) are AND, XOR (`xorSum`, the fold `foldr Bool.xor false`) and
-NOT of `Bool`s, but its module imports Mathlib, so the evaluator's gates are stated here against Lean core's `Bool`
-operations of the same names: on operands that are bits (`Bool.toNat`), each gate's word is the bit of the operation. -/
 
 namespace Gates
 

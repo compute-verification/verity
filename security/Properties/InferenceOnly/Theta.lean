@@ -2,31 +2,8 @@ module
 
 public import InferenceOnlyCheck.Theta
 
-/-!
-# What θ's provenance check's acceptance means
-
-`InferenceOnlyCheck.Theta.evaluate` (`verity/protocols/policy/inference_only/verifier/lean/InferenceOnlyCheck/Theta.lean`) is the inference-only check of
-record: the policy check, then each θ entry's provenance against the trusted input, the service's registration log, the
-run's own record and the program function's parameters. `InferenceOnly.Assumptions.ThetaRegistered`
-(`Definitions/InferenceOnly/Assumptions/Theta.lean`, [THETA-REGISTERED]) states what θ must hold: registered information,
-public data registered at the start of the deployment, which the log's first record registers.
-
-* `ThetaProvenance`: on every instance and trusted input it accepts, the trusted input's log is in R6's chain from a
-  record that opens it (`Chained`), the run's own record is one of its records and is this Program's whatever θ is (its
-  `program` is the Program's SHA-512), the parameters are the trusted input's (`ParamsOf`), and every θ entry `t`
-  is `HeldAtStart`: its provenance cites, by digest, the log's first record, which registers the cited value under the
-  cited root, and the run's own record registers the parameter whose input node θ names under that same root.
-
-What this does not give, and `ThetaRegistered` still assumes, is what no check sees, since commitments are hiding:
-that equal roots hold equal values (the binding premise the reduction would name, `InferenceOnly.Assumptions.RootsBind`, not
-stated in Lean yet), that the data the log's first record registers was public and not computed off the books, that
-the auditor knows which log is the deployment's, and how the reference training circuit `c` takes its own `c.θ`.
-`theta-width` (the cited value's dimensions give the parameter's gates) is checked but not stated here: under the
-binding premise equal roots already give equal rows.
-
-Proved as `InferenceOnlyCheck.Properties.SecurityProofs.ThetaProvenance : InferenceOnlyCheck.Properties.ThetaProvenance` in
-`Proofs.Properties.InferenceOnly.Theta`.
--/
+/-! What θ's provenance check's acceptance means; what no check sees, because commitments are hiding,
+`ThetaRegistered` still assumes. -/
 
 @[expose] public section
 

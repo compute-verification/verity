@@ -9,27 +9,12 @@ import Mathlib.Tactic.NormNum.Abs
 import Mathlib.Tactic.NormNum.DivMod
 import Mathlib.Tactic.NormNum.OfScientific
 
-/-!
-# The cover theorem: what a block pays for the products it finishes
-
-`whole_use_entry`: a block that computes whole a counted product of use `j` is handed a gate of `A j`. The product's
-gate `g` reads the certificate's activation `a ∈ A j`, so `a ∈ I`; were `I` handed no gate of `A j`, it would compute
-the output gate of each of `j`'s upstream products (`backwardClosure`), and so each of their gates, which reaches the
-output inside the product and the region (`reachesIn_output`, `entry`), and `UpdateHardness` would charge it `b D > k`
-bits.
-`activationCharge` counts these gates, distinct across uses since the regions are disjoint and none is in `θ`.
-
-`finished_sdiff_whole_card_le`: each counted product whose output gate `I` computes but not all of whose gates has a
-gate `x ∉ computed I`, which reaches the output inside the product (`reachesIn_output`), so the path meets an input of
-`I` among the product's gates (`entry`): a non-input gate, so not in `θ`, and distinct across products since they are
-disjoint.
--/
+/-! The cover theorem: what a block pays for the products it finishes. -/
 
 @[expose] public section
 
 namespace Slowdown.Cover.SecurityProofs
 
-/-- A block that computes whole a counted product of use `j` is handed a gate of `j`'s activation region. -/
 theorem whole_use_entry {C : Circuit} {J L : Type} [DecidableEq J] [DecidableEq L] (M : MulBlocks C J L)
     (A : J → Finset (Fin C.N)) {s k D : ℕ} {b : ℝ} (hb : 0 < b) (hH : Assumptions.UpdateHardness M s b)
     (hU : M.Upstream A D) (hk : (k : ℝ) < b * D) {I : Finset (Fin C.N)} (hI : C.InferenceBlock s k I) :
@@ -58,8 +43,6 @@ theorem whole_use_entry {C : Circuit} {J L : Type} [DecidableEq J] [DecidableEq 
   have := mul_le_mul_of_nonneg_left hD hb.le
   linarith
 
-/-- **Activation charge**: under `UpdateHardness` and the upstream certificate at depth `D` with `k < b D`, an inference
-block computes whole counted products of at most `#(inputs I \ θ)` uses. -/
 theorem activationCharge {C : Circuit} {J L : Type} [DecidableEq J] [DecidableEq L] (M : MulBlocks C J L)
     (A : J → Finset (Fin C.N)) {s k D : ℕ} {b : ℝ} (hb : 0 < b) (hH : Assumptions.UpdateHardness M s b)
     (hU : M.Upstream A D) (hk : (k : ℝ) < b * D) {I : Finset (Fin C.N)} (hI : C.InferenceBlock s k I) :
@@ -76,7 +59,6 @@ theorem activationCharge {C : Circuit} {J L : Type} [DecidableEq J] [DecidableEq
   obtain ⟨hxi, hxA⟩ := Finset.mem_inter.1 hx
   exact Finset.mem_sdiff.2 ⟨hxi, Finset.disjoint_left.1 (hU.disjoint_θ j (hWuses hj)) hxA⟩
 
-/-- The counted products a set of gates finishes without computing them whole are at most its inputs outside `θ`. -/
 theorem finished_sdiff_whole_card_le {C : Circuit} {J L : Type} [DecidableEq J] [DecidableEq L] (M : MulBlocks C J L)
     {I : Finset (Fin C.N)} :
     (M.finished I \ M.whole I).card ≤ (C.inputs I \ C.θ).card := by

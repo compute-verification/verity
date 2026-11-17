@@ -4,15 +4,7 @@ public import Flock.Circuit
 public import Flock.Net
 public import Mathlib.Data.Nat.Notation
 
-/-!
-# Δ's source keys of a circuit's unit inputs
-
-`Aliased.srcKey c x` names the column Δ copies into stacked unit input `x`, without the template instance, and
-`Aliased.keyIdx` encodes `n` inputs' keys in `Option (Fin n)`: the input gates of the circuit's program
-(`Placed.keyProg`) are indexed by it. Moved unchanged from `Proofs.Flock.Soundness.ExecTyped` (`Typed.starts`),
-`Proofs.Flock.Soundness.ExecFlatCopies` (`portBits`, `portOf`) and `Proofs.Flock.Soundness.Discharge.Aliased.Keys`;
-the lemmas about them stay there.
--/
+/-! Δ's source keys of a circuit's unit inputs. -/
 
 @[expose] public section
 

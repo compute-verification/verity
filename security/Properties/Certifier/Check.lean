@@ -3,20 +3,7 @@ module
 public import NetworkCheck.Check
 public import Properties.Hash.Identity
 
-/-!
-# The network certificate check: what its Lean code (`NetworkCheck.Check`) does
-
-The properties of `NetworkCheck.protocol` (`verity/network-certificate/v4`, the port of `audit.py`'s `Audit`), stated
-against its functions as they run, each in one shape: for every input, if the function accepts (or, for a refusal,
-doesn't reject; for the undecided outcome, is undecided), its named conclusion holds. They say what `answer` and the
-check refuse, what an acceptance establishes about each execution phase and what an undecided outcome means.
-`Proofs.Properties.Certifier.Check` proves them; the converses (that the check accepts, or is undecided on, what
-these conclusions describe) and the honest transcript's acceptance are completeness, at the end of
-`Proofs.Properties.Certifier.Check.Outcomes`.
-
-The predicates below say what an execution phase's records, certificate and digests are, in the check's own terms; none
-restates the check. An execution phase is a direction, a link of the unit in that direction and a window `w < W`.
--/
+/-! The network certificate check: what its Lean code (`NetworkCheck.Check`) does. -/
 
 @[expose] public section
 
@@ -25,8 +12,6 @@ open NetworkCheck.Check
 open NetworkAttester (ClockSync LogicalFrame expectedRow)
 
 namespace Properties.Certifier
-
-/-! ## An execution phase's records and certificate -/
 
 /-- The unit's links in direction `d`. -/
 def linkNames (p : Params) : Direction → List String
@@ -61,8 +46,6 @@ def Settled (p : Params) (c : Commitment) (d : Direction) (l : String) (w : Nat)
 settled by the deadline. -/
 def Pending (p : Params) (c : Commitment) (d : Direction) (l : String) (w : Nat) : Prop :=
   recordsOf c d l w = [] ∨ ∃ r dg, Signs p c d l w r dg ∧ r.head.deadline = false
-
-/-! ## The evidence, the advice and the Program's grid -/
 
 /-- The evidence fits the parameters: one entry per egress link, `W` declared syncs on each, every payload `8·B` bits. -/
 def EvidenceFits (p : Params) (e : Evidence) : Prop :=
@@ -108,8 +91,6 @@ def IngressAccepted (p : Params) (c : Commitment) (ig : ByteArray) (l : String) 
     r.head.allocation = (p.ingressGrid.allocation : Int) ∧ r.head.frameBytes = (p.ingressGrid.frameBytes : Int) ∧
     r.head.bucketMs = (p.ingressGrid.bucketMs : Int) ∧ r.head.parameters = ig
 
-/-! ## (1) Refusals -/
-
 /-- The three byte strings decode: the parameters as canonical JSON and then as parameters, the commitment and the
 evidence. -/
 def Decodes (a b c : ByteArray) : Prop :=
@@ -153,8 +134,6 @@ def OneRecordEach (p : Params) (c : Commitment) : Prop :=
 def AcceptsOneRecordEach : Prop :=
   ∀ (p : Params) c e, protocol.Accepts p c e → OneRecordEach p c
 
-/-! ## (2) What an acceptance establishes -/
-
 /-- Every execution phase of the unit is accepted: the evidence fits, the parameters have their digests, every egress
 execution phase is `EgressAccepted` and every ingress execution phase `IngressAccepted`. -/
 def TransferBlocksAccepted (p : Params) (c : Commitment) (e : Evidence) : Prop :=
@@ -166,8 +145,6 @@ def TransferBlocksAccepted (p : Params) (c : Commitment) (e : Evidence) : Prop :
 such a unit, is completeness: `accepts_of_transferBlocksAccepted`.) -/
 def AcceptsTransferBlocks : Prop :=
   ∀ (p : Params) c e, protocol.Accepts p c e → TransferBlocksAccepted p c e
-
-/-! ## (3) Undecided -/
 
 /-- No execution phase is refused and some awaits its record: the evidence fits, the parameters have their digests, every
 execution phase is accepted or `Pending`, and some is `Pending`. -/
@@ -183,11 +160,6 @@ such a unit is undecided, is completeness: `undecided_of_somePending`.) -/
 def UndecidedPending : Prop :=
   ∀ (p : Params) c e, (∃ why, protocol.check p c e = .undecided why) → SomePending p c e
 
-/-! ## The strings the check hashes
-
-What a claim about an accepted run searches for a SHA-512 collision: the check's part. -/
-
-/-- The message a record's certificate signs in certifier session `session`, `certificateMessage` of its own fields. -/
 def certMessage (session : ByteArray) (r : Certified) : Option ByteArray :=
   (certificateMessage r.certificate.keyId session r.certificate.link r.certificate.direction r.certificate.window
     r.certificate.digest).toOption
@@ -196,23 +168,18 @@ def certMessage (session : ByteArray) (r : Certified) : Option ByteArray :=
 def headStrings (h : RecordHead) : List ByteArray :=
   (h.encode.toOption.bind fun enc => (Properties.Identity.taggedInput recordTag enc).toOption).toList
 
-/-- What SHA-512 hashes for the digest a certificate signs over head `h` under `salt`: `certificate_digest`'s input. -/
 def saltedStrings (salt : ByteArray) (h : RecordHead) : List ByteArray :=
   (h.digest.toOption.map (certificateInput salt)).toList
 
-/-- The node inputs `pairs lv` hashes on one level. -/
 def pairInputs (lv : Nat) : List ByteArray → List ByteArray
   | a :: b :: rest => nodeInput a b :: pairInputs lv rest
   | [a] => [nodeInput a (empty lv)]
   | [] => []
 
-/-- Level `k` of the tree over `level`, from level 0. -/
 def levelAt : Nat → List ByteArray → List ByteArray
   | 0, level => level
   | k + 1, level => pairs k (levelAt k level)
 
-/-- What SHA-512 hashes for the tree of `frames` under grid parameters `g`: each frame's leaf, every empty subtree up
-to the depth, and each node of each level below the root. -/
 def framesStrings (g : Grid) (frames : Array ByteArray) : List ByteArray :=
   frames.toList.filterMap (fun f => (leafInput f g.frameBytes).toOption) ++ [emptyInput] ++
     (List.range (depth g)).map (fun l => nodeInput (empty l) (empty l)) ++
@@ -220,17 +187,13 @@ def framesStrings (g : Grid) (frames : Array ByteArray) : List ByteArray :=
     | .ok ls => (List.range (depth g)).flatMap fun lv => pairInputs lv (levelAt lv ls.toList)
     | .error _ => []
 
-/-- What SHA-512 hashes for the frame tree of a grid: `framesStrings` of its real frames. -/
 def treeStrings (g : Grid) (grid : Array (Array (Option ByteArray))) : List ByteArray :=
   match realFrames grid g with
   | .ok frames => framesStrings g frames
   | .error _ => []
 
-/-- The syncs `link` declares, one per window, as the check reads them. -/
 def declared (W : Nat) (link : LinkOpening) : Fin W → ClockSync := fun v => link.syncs.getD v.1 noSync
 
-/-- The strings the check hashes under egress parameters digest `eg`: each record's head, its digest under the record's
-salt and its certificate message, and the frame tree and head it recomputes of each egress execution phase. -/
 def checkStrings (p : Params) (c : Commitment) (e : Evidence) (eg : ByteArray) : List ByteArray :=
   c.records.toList.flatMap (fun r => headStrings r.head ++ saltedStrings r.salt r.head ++
     (messageInput r.certificate.keyId p.session r.certificate.link r.certificate.direction r.certificate.window

@@ -15,35 +15,7 @@ import Proofs.Spot.NecessitySkeleton
 import Proofs.Spot.Transfer
 import Proofs.Spot.Work
 
-/-!
-# The policy × property matrix: what each policy needs beyond tier 1, and what each property buys
-
-Tier 1 (`NecessitySkeleton`) gives the certificate; a policy is inferable from it exactly when a bound on its
-amplification is known (`inference_iff`). These are the matrix's cells that a theorem settles, one section per
-policy. Each cell is a sufficiency (the property bounds the amplification) or a counterexample (without it the
-amplification is unbounded).
-
-* **Integrity.** `integrity_inferred` (tier 1 alone, `π ∝ E`). `integrity_inferred_off`, **what an always-proved set
-  buys**: the cone-egress bound is needed only off `A`, so a massive value that fans out costs nothing when it is
-  always proved.
-* **Control.** `card_egressWidth_le`, **control at the public widths**: the runs whose incorrect proof blocks write at
-  most `M` slots in all show at most `#{B : Σ_B w ≤ M} · |V|^M` egress values, with no bound on any unit's width;
-  `card_widthSets_le` counts those sets when every unit writes. `control_inferred`: sampling by width, `w(u) ≤ C · π(u)`,
-  an accepted run lies in that set at `M ≥ C ε` but with probability at most `(1 − ε)^k`. `wide_egress`, **what bounded
-  width buys**: under the count sample one incorrect proof block writing `N` slots shows `2^N` values, so a width bound is
-  what the count sample needs, and the width-weighted sample needs none.
-* **ε_skip work.** `fan_skips`, **the late cone is necessary**: in a checked population of `N + 1` unit-weight units,
-  one incorrect proof block (`x := false`) makes every unit's work skippable with no unit lucky, `N + 1` skipped at
-  incorrect weight `1`, which is the cone `F = N + 1` (`fan_down`). `late_operand` and `early_operand`, **commit before
-  the work coin is necessary**: an operand chosen after the coin `c` zeroes `(x + c) · b` at every coin, and one
-  committed before it does so at one coin in `|𝔽|`, the luck rate. `skipped_work_le_wt_off`: the cone bound `F` is
-  needed only off the always-proved set.
-* **Weight isolation.** `isolation_of_range`, **range restriction suffices**: if a public bound `R u` holds every slot
-  unit `u` reads in every admitted run, and no secret is upstream of the egress in `rangeFlow D R`, leakage is at most
-  control. Addresses may be computed and corrupted inside their range: uncorruptible addressing (Theorem O1) is the
-  case `R` = the padding. Necessity is `DynPopulation.leak_of_moved_read`: a corruptible address that moves a read onto
-  a slot no honest run reads leaks that slot through one incorrect proof block.
--/
+/-! The policy × property matrix: what each policy needs beyond tier 1, and what each property buys. -/
 
 @[expose] public section
 
@@ -53,15 +25,10 @@ open Finset
 
 variable {U : Type}
 
-/-! ## Integrity and work: what an always-proved set buys -/
-
 section AlwaysProved
 
 variable {S : Type} (P : Dataflow U S)
 
-/-- **Integrity, inferred, with the cone bound needed only off the always-proved set**: sampling by cone egress off `A`
-(`E(u) ≤ C · π(u)` for `u ∉ A`, anything on `A`), an accepted run differs from the honest run on more than `C ε` egress
-slots with probability at most `(1 − ε)^k`. -/
 theorem integrity_inferred_off [Fintype U] (h : P.Checked) {V : Type} (f : P.Fns V) (a : S → V) {honest : S → V}
     (hh : ∀ s ∈ P.input, honest s = a s) (hc : ∀ u, P.Correct f honest u) {π : PMF U}
     (A : Finset U) (k : ℕ) {ε : ℝ} (hε : ε ≤ 1) (O : Finset S) {C : ℝ} (hC : 0 ≤ C)
@@ -91,8 +58,6 @@ theorem integrity_inferred_off [Fintype U] (h : P.Checked) {V : Type} (f : P.Fns
   rw [ite_eq_left hσ, one_mul] at this
   exact this
 
-/-- **The skipped work, with the cone bound needed only off the always-proved set**: when no always-proved unit is
-incorrect, `F` need bound only the cones rooted off `A`. -/
 theorem skipped_work_le_wt_off [Fintype U] [DecidableEq U] (h : P.Checked) {V : Type} (f : P.Fns V) (a : S → V)
     {honest σ : S → V} (hh : ∀ s ∈ P.input, honest s = a s) (hc : ∀ u, P.Correct f honest u)
     (hσ : ∀ s ∈ P.input, σ s = a s) {K L : Finset U} (hl : P.SkipsLucky f honest σ K L) (wt : U → ℕ) (F : ℕ)
@@ -112,14 +77,10 @@ theorem skipped_work_le_wt_off [Fintype U] [DecidableEq U] (h : P.Checked) {V : 
 
 end AlwaysProved
 
-/-! ## Control: the public widths -/
-
 section Control
 
 variable {S : Type} (P : Dataflow U S)
 
-/-- **Control at the public widths**: the runs whose incorrect proof blocks write at most `M` slots in all show at most
-`#{B : Σ_B w ≤ M} · |V|^M` egress values. No unit's width is bounded. -/
 theorem card_egressWidth_le [Fintype U] [Fintype S] (hc : P.Covered) (ha : P.Acyclic) {V : Type} [Fintype V]
     [Nonempty V] (f : P.Fns V) (a : S → V) {X O : Finset S} (hX : ∀ s ∈ X, s ∉ P.up O) (M : ℕ) :
     (egressWidth P f a X O M).card ≤
@@ -144,8 +105,6 @@ theorem card_egressWidth_le [Fintype U] [Fintype S] (hc : P.Covered) (ha : P.Acy
     _ ≤ ∑ _B ∈ small, Fintype.card V ^ M := sum_le_sum hB
     _ = small.card * Fintype.card V ^ M := by rw [sum_const, smul_eq_mul]
 
-/-- When every unit writes, the incorrect sets within the budget `M` have at most `M` units: at most
-`Σ_{j ≤ M} C(|U|, j)` of them. -/
 theorem card_widthSets_le [Fintype U] (hw : ∀ u, 1 ≤ (P.writes u).card) (M : ℕ) :
     (univ.filter fun B : Finset U => ∑ u ∈ B, (P.writes u).card ≤ M).card ≤
       ∑ j ∈ range (M + 1), (Fintype.card U).choose j := by
@@ -162,9 +121,6 @@ theorem card_widthSets_le [Fintype U] (hw : ∀ u, 1 ≤ (P.writes u).card) (M :
   refine (card_le_card hsub).trans (card_biUnion_le.trans (le_of_eq (sum_congr rfl fun j _ => ?_)))
   rw [card_powersetCard, card_univ]
 
-/-- **Control, inferred at the public widths**: sampling by write width (`w(u) ≤ C · π(u)`), an accepted run's egress
-lies outside the width-`M` egress values, for any `M ≥ C ε`, with probability at most `(1 − ε)^k`. With
-`card_egressWidth_le`, control is at most `log #{B : Σ_B w ≤ M} + M log |V|` bits. -/
 theorem control_inferred [Fintype U] [Fintype S] {V : Type} [Fintype V] (f : P.Fns V) (a : S → V) (X O : Finset S)
     {π : PMF U} (A : Finset U) (k : ℕ) {ε : ℝ} (hε : ε ≤ 1) {C : ℝ} (hC : 0 ≤ C)
     (hw : ∀ u, ((P.writes u).card : ℝ) ≤ C * (π u).toReal) (M : ℕ) (hM : C * ε ≤ M) (σ : S → V) (hσ : P.Holds a X σ) :
@@ -187,18 +143,13 @@ end Control
 
 section Wide
 
-/-- One unit, reading nothing, writing all `N` slots. -/
 def wide (N : ℕ) : Dataflow Unit (Fin N) where
   input := ∅
   reads _ := ∅
   writes _ := univ
 
-/-- It writes `false` everywhere. -/
 def wideFns (N : ℕ) : (wide N).Fns Bool := fun _ _ _ => false
 
-/-- **What bounded width buys**: one incorrect proof block, of count cost `1`, shows every one of `2^N` egress values.
-The count sample's amplification for control is at least `N` bits per incorrect proof block, unbounded without a width
-bound; the width sample charges this unit `N`. -/
 theorem wide_egress (N : ℕ) (a : Fin N → Bool) :
     ((wide N).egress (wideFns N) a ∅ univ {()}).card = 2 ^ N := by
   classical
@@ -211,14 +162,10 @@ theorem wide_egress (N : ℕ) (a : Fin N → Bool) :
 
 end Wide
 
-/-! ## ε_skip work: the late cone, and the operand before the coin -/
-
 section Fan
 
-/-- The fan's slots: `inl u` is unit `u`'s output (`inl none` is `x`, `inl (some i)` is `yᵢ`), `inr i` the input `bᵢ`. -/
 abbrev Fs (N : ℕ) := Option (Fin N) ⊕ Fin N
 
-/-- **The fan**: unit `none` writes `x` from nothing, and unit `some i` writes `yᵢ` from `x` and `bᵢ`. -/
 def fan (N : ℕ) : Dataflow (Option (Fin N)) (Fs N) where
   input := univ.image Sum.inr
   reads
@@ -226,15 +173,12 @@ def fan (N : ℕ) : Dataflow (Option (Fin N)) (Fs N) where
     | some i => {Sum.inl none, Sum.inr i}
   writes u := {Sum.inl u}
 
-/-- `x := true`, and `yᵢ := x ∧ bᵢ`: honestly `yᵢ = bᵢ`, the work. -/
 def fanFns (N : ℕ) : (fan N).Fns Bool
   | none => fun _ _ => true
   | some i => fun r _ => r ⟨Sum.inl none, by simp [fan]⟩ && r ⟨Sum.inr i, by simp [fan]⟩
 
-/-- The honest run on the inputs `b`. -/
 def fanHonest {N : ℕ} (b : Fin N → Bool) : Fs N → Bool := Sum.elim (fun u => u.elim true b) b
 
-/-- **The skipping run**: `x := false`, so every `yᵢ = false` without reading `bᵢ`. -/
 def fanSkip {N : ℕ} (b : Fin N → Bool) : Fs N → Bool := Sum.elim (fun _ => false) b
 
 theorem mem_incorrect_iff {S V : Type} [Fintype U] {P : Dataflow U S} {f : P.Fns V} {σ : S → V} {u : U} :
@@ -271,7 +215,6 @@ theorem fan_dep {N : ℕ} {u v : Option (Fin N)} (h : (fan N).Dep u v) : u = non
   · simp [fan] at hr
     exact ⟨hr, by simp⟩
 
-/-- The fan is a checked population. -/
 theorem fan_checked (N : ℕ) : (fan N).Checked := by
   refine ⟨fun s => ?_, fun u hu => ?_⟩
   · rcases s with u | i
@@ -296,9 +239,6 @@ theorem fan_down (N : ℕ) : (fan N).down {none} = univ := by
   · exact .refl
   · exact .single ⟨Sum.inl none, mem_singleton_self _, by simp [fan]⟩
 
-/-- **The late cone is necessary**: on any inputs `b`, the skipping run holds the inputs, its one incorrect proof block
-is `x`, no unit is lucky (`SkipsLucky` with nothing computed and nothing lucky), and its outputs are all `false`, read
-from no `bᵢ`. All `N + 1` units' work is skipped at incorrect weight `1`, which is exactly `x`'s cone. -/
 theorem fan_skips {N : ℕ} (b : Fin N → Bool) :
     (∀ s ∈ (fan N).input, fanSkip b s = fanHonest b s) ∧
       (fan N).incorrect (fanFns N) (fanSkip b) = {none} ∧
@@ -323,11 +263,8 @@ end Fan
 
 section Operand
 
-/-- **An operand chosen after the work coin skips the work**: `x := −c` zeroes `(x + c) · b` for every `b`. -/
 theorem late_operand {R : Type} [Ring R] (c b : R) : (-c + c) * b = 0 := by simp
 
-/-- **An operand committed before the work coin skips it at one coin in `|𝔽|`**: for `b ≠ 0`, exactly one coin `c`
-zeroes `(x + c) · b`. The luck rate is `1 / |𝔽|`. -/
 theorem early_operand {𝔽 : Type} [Field 𝔽] [Fintype 𝔽] [DecidableEq 𝔽] (x b : 𝔽) (hb : b ≠ 0) :
     (univ.filter fun c : 𝔽 => (x + c) * b = 0).card = 1 := by
   rw [card_eq_one]
@@ -337,8 +274,6 @@ theorem early_operand {𝔽 : Type} [Field 𝔽] [Fintype 𝔽] [DecidableEq �
   rw [eq_neg_iff_add_eq_zero, add_comm]
 
 end Operand
-
-/-! ## Weight isolation: range restriction -/
 
 section Isolation
 
@@ -356,9 +291,7 @@ theorem padOver_up_sub [Fintype S] {C : Set (S → V)} {R : U → Finset S} (hR 
   rintro s ⟨o, ho, hso⟩
   exact ⟨o, ho, Relation.ReflTransGen.mono (fun _ _ ⟨u, hr, hw⟩ => ⟨u, padOver_reads_sub D hR u hr, hw⟩) _ _ hso⟩
 
-/-- **Isolation by range restriction**: if a public bound `R u` holds every slot unit `u` reads in every admitted run
-(`C`), and no secret slot is upstream of the egress in `R`'s static dataflow, the leakage is at most the control.
-Addresses may be computed and corrupted, as long as they stay in range. -/
+/-- Addresses may be computed and corrupted, as long as they stay in range. -/
 theorem isolation_of_range [Fintype U] [Fintype S] [DecidableEq S] [Fintype V] [DecidableEq V] [Inhabited V]
     (hsa : D.SingleAssignment) {step : U → ℕ} (ht : D.TimeOrdered step) {C : Set (S → V)} {R : U → Finset S}
     (hR : ∀ σ ∈ C, ∀ u, D.reads u σ ⊆ R u) {X O : Finset S} (a : S → V)

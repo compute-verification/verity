@@ -6,28 +6,8 @@ import Mathlib.Data.Int.Interval
 import Mathlib.Data.List.GetD
 import Mathlib.NumberTheory.LegendreSymbol.Basic
 
-/-!
-# The circuit model's window and lower bounds, proved
-
-`ProvenWindow` by induction over the gates (each value lies in its derived interval: `Iv.add`, `Iv.scale` and
-`Iv.mul` are sound, and a gather's value is a column word or its fill, in the hull `Iv.join` gives), and `ClampOrWrap`
-from it (in the window a clamp and a wrap are both the identity); `Fooling` by induction over the gates (every free
-gate is 2-adically triangular in its window) and a count of the charged gates' joint values; `SquaringCarry` from it
-at `j = 1` on the sparse family, whose squares have no carries between bytes; `SquaringCarryNibbles` from it at
-`j = 4` on the nibble family, whose squares first differ two bytes above their first differing nibble
-(`a² − a'² = (a − a')(a + a')`); `UnitsFooling` by the same induction, the trace being each dynamic run input's and
-budgeted gate's value and each dynamic index's two classes, `idxCls b v` (`min(v, 2^b − 1)`, and `2^b − 1` for a
-negative `v`, which reads the fill as an index past the column does) at the most index bits `b` its gathers read and
-`v mod 2^b'` at the most `b'` its table reads read, which the fresh index bits of each kind pay for; `SquaringUnits`
-from it on the nibble family; `FoolingCap` by injecting the family into its outputs' residues mod `2^j`;
-`EncodeBudget` and `EncodeCost` from `SquaringFloor` and `ChainSum` (the encode bound at `k · S · e`, so at any
-`E` below it) by summing the census's units and data products, and each window's run-input bound, over the windows and
-classes; `RhoPairs` from Fermat's little theorem
-(`s² = x · x^((p−1)/2) = ±x`). `DeclaredWindow` by `ProvenWindow`'s induction, each gate's declared bound earned from
-the earlier gates' intervals; `Int8LinearWindow` and `LutPvWindow` from `dotChain_ok`, which proves any s8 dot chain
-over declared operands whose `32·S` products fit s32. `Bf16ToF32Affine` by the registry's entry and, on a 16-bit
-word, the mask's identity and `(u + 2^15) mod 2^16 · 2^16 = (u · 2^16 + 2^31) mod 2^32`.
--/
+/-! The circuit model's window and lower bounds (`ProvenWindow`, `ClampOrWrap`, `Fooling` and the carry and encode
+bounds), proved. -/
 
 @[expose] public section
 
@@ -36,8 +16,6 @@ namespace ResourceAccounting.SecurityProofs.Gates
 open ResourceAccounting.Gates ResourceAccounting.Assumptions
 
 variable {ι : Type}
-
-/-! ## Values -/
 
 lemma foldl_length (C : IntDag ι) (x : ι → ℤ) (vs : List ℤ) :
     (C.foldl (fun vs g => vs ++ [g.value x vs]) vs).length = vs.length + C.length := by
@@ -77,8 +55,6 @@ lemma val_eq (C : IntDag ι) (x : ι → ℤ) (i : ℕ) (h : i < C.length) :
   have := getD_values_take C x i h C.length h le_rfl
   rwa [List.take_length] at this
 
-/-! ## Free gates are 2-adically triangular -/
-
 lemma sum_zipWith_const_congr {m : ℤ} (F F' : ℕ → ℤ) (hF : ∀ j, F j ≡ F' j [ZMOD m]) :
     ∀ (cs : List ℤ) (u : List ℕ),
       (List.zipWith (· * ·) cs (u.map F)).sum ≡ (List.zipWith (· * ·) cs (u.map F')).sum [ZMOD m]
@@ -107,7 +83,6 @@ lemma wrapS32_of {z : ℤ} (h1 : s32Min ≤ z) (h2 : z ≤ s32Max) : wrapS32 z =
   rw [Int.emod_eq_of_lt (by omega) (by rw [hmin] at h1 ⊢; rw [hmax] at h2; norm_num; omega)]
   omega
 
-/-- A gate's value is its exact value in its window. -/
 lemma value_eq_raw (g : IntGate ι) (x : ι → ℤ) (vs : List ℤ) (hg : g.Ok x vs) : g.value x vs = g.raw x vs := by
   obtain ⟨h1, h2, -, h4⟩ := hg
   unfold IntGate.value
@@ -119,8 +94,6 @@ lemma value_eq_raw (g : IntGate ι) (x : ι → ℤ) (vs : List ℤ) (hg : g.Ok 
     · simp only [IntOp.out]; exact clampS32_of (by omega) (by omega)
   | _ => simp [IntOp.out]
 
-/-- **The triangular step**: an uncharged gate in its window, on operands that agree mod `m`, takes values that agree
-mod `m`, given that a registered or coin input it reads agrees mod `m`. -/
 lemma value_congr {m : ℤ} (g : IntGate ι) (x x' : ι → ℤ) (vs vs' : List ℤ)
     (hv : ∀ j, vs.getD j 0 ≡ vs'.getD j 0 [ZMOD m]) (hc : g.op.charged = false)
     (hx : ∀ b i, b ≠ .run → g.op = .input b i → x i ≡ x' i [ZMOD m]) (hg : g.Ok x vs) (hg' : g.Ok x' vs') :
@@ -148,8 +121,6 @@ lemma value_congr {m : ℤ} (g : IntGate ι) (x x' : ι → ℤ) (vs vs' : List 
   | gather _ _ => rw [hop] at hc; simp [IntOp.charged] at hc
   | budgeted cls f => rw [hop] at hc; simp [IntOp.charged] at hc
 
-/-- Two inputs on which `C` is in its window, that agree mod `m` in every registered and coin input, and on which
-every charged gate takes one value: every gate's values agree mod `m`. -/
 lemma values_congr {m : ℤ} (C : IntDag ι) (x x' : ι → ℤ) (hw : InWindow C x) (hw' : InWindow C x')
     (hreg : ∀ i, FreeInput C i → x i ≡ x' i [ZMOD m])
     (hch : ∀ i (h : i < C.length), C[i].op.charged = true → val C x i = val C x' i) :
@@ -179,9 +150,6 @@ lemma values_congr {m : ℤ} (C : IntDag ι) (x x' : ι → ℤ) (hw : InWindow 
       rw [hk]
       simp [Int.ModEq.refl]
 
-/-! ## The window, proven -/
-
-/-- `z` lies in interval `a`. -/
 abbrev Holds (a : Iv) (z : ℤ) : Prop := a.1 ≤ z ∧ z ≤ a.2
 
 lemma Holds.add {a b : Iv} {u v : ℤ} (hu : Holds a u) (hv : Holds b v) : Holds (Iv.add a b) (u + v) :=
@@ -209,7 +177,6 @@ lemma Holds.mul {a b : Iv} {u v : ℤ} (hu : Holds a u) (hv : Holds b v) : Holds
   rw [mul_comm b.1 a.2, mul_comm b.2 a.2, mul_comm v a.2] at g2
   exact ⟨le_trans (min_le_min g1.1 g2.1) h.1, le_trans h.2 (max_le_max g1.2 g2.2)⟩
 
-/-- An affine map's derived interval holds its exact value, given each operand in its interval. -/
 lemma holds_scale_sum (I : ℕ → Iv) (V : ℕ → ℤ) (hIV : ∀ j, Holds (I j) (V j)) :
     ∀ (cs : List ℤ) (u : List ℕ) (s : Iv) (z : ℤ), Holds s z →
       Holds ((List.zipWith Iv.scale cs (u.map I)).foldl Iv.add s) (z + (List.zipWith (· * ·) cs (u.map V)).sum)
@@ -220,7 +187,6 @@ lemma holds_scale_sum (I : ℕ → Iv) (V : ℕ → ℤ) (hIV : ∀ j, Holds (I 
     have := holds_scale_sum I V hIV cs u _ _ (h.add ((hIV j).scale c))
     rwa [add_assoc] at this
 
-/-- An s8-family step's derived interval holds its exact sum, given each operand in its interval. -/
 lemma holds_mul_sum (I : ℕ → Iv) (V : ℕ → ℤ) (hIV : ∀ j, Holds (I j) (V j)) :
     ∀ (u w : List ℕ) (s : Iv) (z : ℤ), Holds s z →
       Holds ((List.zipWith Iv.mul (u.map I) (w.map I)).foldl Iv.add s)
@@ -232,7 +198,6 @@ lemma holds_mul_sum (I : ℕ → Iv) (V : ℕ → ℤ) (hIV : ∀ j, Holds (I j)
     have := holds_mul_sum I V hIV u w _ _ (h.add ((hIV i).mul (hIV j)))
     rwa [add_assoc] at this
 
-/-- A hull holds what its start or any of its intervals holds. -/
 lemma holds_foldl_join : ∀ (l : List Iv) (s : Iv) (z : ℤ), (Holds s z ∨ ∃ b ∈ l, Holds b z) →
     Holds (l.foldl Iv.join s) z
   | [], s, z, h => by simpa using h
@@ -245,7 +210,6 @@ lemma holds_foldl_join : ∀ (l : List Iv) (s : Iv) (z : ℤ), (Holds s z ∨ �
       · exact .inl ⟨min_le_of_right_le h.1, le_max_of_le_right h.2⟩
       · exact .inr ⟨b', hb', h⟩
 
-/-- A derived gate's derived interval holds its exact value, given each operand in its derived interval. -/
 lemma derive_holds (g : IntGate ι) (x : ι → ℤ) (ivs : List Iv) (vs : List ℤ)
     (hinv : ∀ j, Holds (ivs.getD j (0, 0)) (vs.getD j 0)) (hd : g.op.IsDerived) :
     Holds (g.derive ivs) (g.raw x vs) := by
@@ -280,9 +244,6 @@ lemma derive_holds (g : IntGate ι) (x : ι → ℤ) (ivs : List Iv) (vs : List 
   | input b i => rw [hop] at hd; exact hd.elim
   | budgeted cls f => rw [hop] at hd; exact hd.elim
 
-/-- **The window's step**: a gate whose window is proven (`Proven`'s clauses for it) and whose declared interval
-holds if it isn't derived, on operands each in its derived interval, is in its window, its value in its derived
-interval. -/
 lemma gate_window (g : IntGate ι) (x : ι → ℤ) (ivs : List Iv) (vs : List ℤ)
     (hinv : ∀ j, Holds (ivs.getD j (0, 0)) (vs.getD j 0))
     (hP1 : g.op.IsDerived → (g.derive ivs).Within g.lo g.hi)
@@ -345,8 +306,6 @@ lemma intervals_take_succ (C : IntDag ι) (i : ℕ) (h : i < C.length) :
   rw [List.take_add_one, List.getElem?_eq_getElem h, Option.toList_some]
   simp only [intervals, List.foldl_append, List.foldl_cons, List.foldl_nil]
 
-/-- Every value of a proven circuit lies in its derived interval (and past the gates, `0` in `(0, 0)`), on an input on
-which each gate that isn't derived holds its declared interval whenever the gates before it hold their derived ones. -/
 lemma window_inv' (C : IntDag ι) (x : ι → ℤ) (hP : Proven C)
     (hD : ∀ i (h : i < C.length),
       (∀ j, Holds ((intervals (C.take i)).getD j (0, 0)) ((values (C.take i) x).getD j 0)) → ¬ C[i].op.IsDerived →
@@ -375,8 +334,6 @@ lemma window_inv' (C : IntDag ι) (x : ι → ℤ) (hP : Proven C)
       rw [hk]
       simp
 
-/-- Every value of a proven circuit, on an input on which its declared intervals hold, lies in its derived interval
-(and past the gates, `0` in `(0, 0)`). -/
 lemma window_inv (C : IntDag ι) (x : ι → ℤ) (hP : Proven C) (hD : DeclaredHold C x) :
     ∀ n, n ≤ C.length → ∀ j, Holds ((intervals (C.take n)).getD j (0, 0)) ((values (C.take n) x).getD j 0) :=
   window_inv' C x hP fun i h _ => hD i h
@@ -425,8 +382,6 @@ theorem ClampOrWrap : ResourceAccounting.Guarantees.Gates.ClampOrWrap := by
         rw [h1, h2, hout s', hout s]
     rw [hval]
 
-/-! ## The fooling bound -/
-
 theorem Fooling : ResourceAccounting.Guarantees.Gates.Fooling := by
   intro ι κ C F x j out hw hreg hdist
   classical
@@ -461,8 +416,6 @@ theorem Fooling : ResourceAccounting.Guarantees.Gates.Fooling := by
       unfold IntGate.charge IntGate.size
       split_ifs <;> simp [Int.card_Icc]
 
-/-! ## The fooling bound's information cap -/
-
 theorem FoolingCap : ResourceAccounting.Guarantees.Gates.FoolingCap := by
   intro ι κ C F x j out hsep
   classical
@@ -480,9 +433,6 @@ theorem FoolingCap : ResourceAccounting.Guarantees.Gates.FoolingCap := by
         Finset.card_le_card_of_injOn f (fun _ _ => Finset.mem_coe.mpr (Finset.mem_univ _)) hinj
     _ = 2 ^ (j * out.length) := by simp [Finset.card_univ, ZMod.card, ← pow_mul]
 
-/-! ## The carry bound -/
-
-/-- Byte `l` of a base-256 numeral whose digits are `f`. -/
 lemma byte_sum : ∀ (M : ℕ) (f : ℕ → ℕ), (∀ m, f m < 256) → ∀ l,
     byte (∑ m ∈ Finset.range M, f m * 256 ^ m) l = if l < M then f l else 0
   | 0, f, _, l => by simp [byte]
@@ -512,7 +462,6 @@ lemma byte_mul_256 (N l : ℕ) : byte (256 * N) (l + 1) = byte N l := by
   unfold byte
   rw [pow_succ', Nat.mul_div_mul_left _ _ (by norm_num : 0 < 256)]
 
-/-- `ν_m`: the pairs of `S` that sum to `m`, the coefficient of `256^m` in `(Σ_{i ∈ S} 256^i)²`. -/
 def nu (S : Finset ℕ) (m : ℕ) : ℕ := ((S ×ˢ S).filter fun q => q.1 + q.2 = m).card
 
 lemma nu_le (S : Finset ℕ) (m : ℕ) : nu S m ≤ S.card := by
@@ -592,7 +541,6 @@ lemma sparse_sq_lt (S : Finset ℕ) (s : ℕ) (hS : S ⊆ Finset.range s) : spar
 
 lemma sparse_sq (S : Finset ℕ) : sparse S ^ 2 = 256 * (∑ i ∈ S, 256 ^ i) ^ 2 := by unfold sparse; ring
 
-/-- Byte `2i + 1` of `a_S²` is `ν_{2i}`, odd exactly when `i ∈ S`. -/
 lemma byte_sparse_sq (S : Finset ℕ) (s i : ℕ) (hs : s ≤ 255) (hS : S ⊆ Finset.range s) (hi : i < s) :
     byte (sparse S ^ 2) (2 * i + 1) % 2 = if i ∈ S then 1 else 0 := by
   have hcard : S.card ≤ s := by simpa using Finset.card_le_card hS
@@ -607,7 +555,6 @@ lemma sparse_eq (S : Finset ℕ) (s : ℕ) (hS : S ⊆ Finset.range s) :
   simp only [ite_mul, zero_mul]
   rw [Finset.sum_ite_mem, Finset.inter_eq_right.mpr hS]
 
-/-- Every byte of `a_S` is even. -/
 lemma byte_sparse_even (S : Finset ℕ) (s l : ℕ) (hS : S ⊆ Finset.range s) : byte (sparse S) l % 2 = 0 := by
   rw [sparse_eq S s hS, byte_sum s (fun m => if m ∈ S then 16 else 0) (fun m => by split_ifs <;> norm_num)]
   split_ifs <;> norm_num
@@ -652,9 +599,6 @@ theorem SquaringCarry : ResourceAccounting.Guarantees.Gates.SquaringCarry := by
       rw [ite_eq_left h'] at h2
       omega
 
-/-! ## The nibble family -/
-
-/-- `a_t`'s base-256 digits: byte 0 is `8`, byte `i + 1` is `16·t_i + 8`, and none above byte `s`. -/
 def nibDigit {s : ℕ} (t : Fin s → Fin 16) (m : ℕ) : ℕ :=
   if m = 0 then 8 else if h : m - 1 < s then 16 * (t ⟨m - 1, h⟩ : ℕ) + 8 else 0
 
@@ -673,7 +617,6 @@ lemma nibbles_eq (s : ℕ) (t : Fin s → Fin 16) :
   intro i _
   simp [nibDigit, i.isLt]
 
-/-- Every byte of `a_t` is `8 mod 16` up to byte `s`, and `0` above it. -/
 lemma byte_nibbles (s : ℕ) (t : Fin s → Fin 16) (l : ℕ) :
     byte (nibbles s t) l % 16 = if l ≤ s then 8 else 0 := by
   rw [nibbles_eq, byte_sum (s + 1) (nibDigit t) (fun m => by have := nibDigit_le t m; omega)]
@@ -693,7 +636,6 @@ lemma nibbles_mod (p s : ℕ) (hp : (249 * 256 ^ s) ^ 2 ≤ p) (t : Fin s → Fi
     nibbles s t ^ 2 % p = nibbles s t ^ 2 :=
   Nat.mod_eq_of_lt (lt_of_lt_of_le (Nat.pow_lt_pow_left (nibbles_lt s t) (by norm_num)) hp)
 
-/-- Two numbers `256^k·D` apart, `D ≢ 0 mod 16`, differ mod 16 in byte `k`. -/
 lemma byte_mod16_ne (N N' k : ℕ) (D : ℤ) (h : (N : ℤ) - N' = 256 ^ k * D) (hD : ¬ (16 : ℤ) ∣ D) :
     byte N k % 16 ≠ byte N' k % 16 := by
   have hP : 0 < 256 ^ k := by positivity
@@ -723,7 +665,6 @@ lemma byte_mod16_ne (N N' k : ℕ) (D : ℤ) (h : (N : ℤ) - N' = 256 ^ k * D) 
     apply hD
     omega
 
-/-- `Σ_{i<s} e_i·256^(i+1)` with `e` zero below `m < s` is `256^(m+1)·(e_m + 256·γ)`. -/
 lemma sum_split (e : ℕ → ℤ) (m : ℕ) (h0 : ∀ i < m, e i = 0) (s : ℕ) (hs : m + 1 ≤ s) :
     ∃ γ : ℤ, ∑ i ∈ Finset.range s, e i * 256 ^ (i + 1) = 256 ^ (m + 1) * (e m + 256 * γ) := by
   induction s, hs using Nat.le_induction with
@@ -738,8 +679,6 @@ lemma sum_split (e : ℕ → ℤ) (m : ℕ) (h0 : ∀ i < m, e i = 0) (s : ℕ) 
     rw [Finset.sum_range_succ, hγ]
     ring
 
-/-- The squares of two members of the nibble family first apart at nibble `m` differ mod 16 in byte `m + 2`:
-`a_t² − a_t'² = (a_t − a_t')(a_t + a_t') = 16·256^(m+1)·(d + 256γ) · 16·(1 + 256β)`, with `0 < |d| < 16`. -/
 lemma nibbles_sq_ne (s : ℕ) (t t' : Fin s → Fin 16) (hne : t ≠ t') :
     ∃ m < s, byte (nibbles s t ^ 2) (m + 2) % 16 ≠ byte (nibbles s t' ^ 2) (m + 2) % 16 := by
   classical
@@ -794,7 +733,6 @@ lemma nibbles_sq_ne (s : ℕ) (t t' : Fin s → Fin 16) (hne : t ≠ t') :
     rw [hem]
     omega
 
-/-- On the nibble family, the squares' bytes tell members apart mod 16. -/
 lemma nibbles_out (C : IntDag ι) (p n s : ℕ) (G : Finset (Fin s → Fin 16)) (x : (Fin s → Fin 16) → ι → ℤ)
     (out : ℕ → ℕ) (hp : (249 * 256 ^ s) ^ 2 ≤ p) (hn : s + 2 ≤ n)
     (hout : ∀ t ∈ G, ∀ l < n, val C (x t) (out l) = byte (nibbles s t ^ 2 % p) l) :
@@ -807,7 +745,6 @@ lemma nibbles_out (C : IntDag ι) (p n s : ℕ) (G : Finset (Fin s → Fin 16)) 
   norm_num
   omega
 
-/-- A byte of a member of the nibble family, mod 16, is the same on every member. -/
 lemma nibbles_byte_congr (s : ℕ) (t t' : Fin s → Fin 16) (l : ℕ) :
     ((byte (nibbles s t) l : ℕ) : ℤ) ≡ (byte (nibbles s t') l : ℕ) [ZMOD 2 ^ 4] := by
   have h1 := byte_nibbles s t l
@@ -824,14 +761,11 @@ theorem SquaringCarryNibbles : ResourceAccounting.Guarantees.Gates.SquaringCarry
   rw [hreg t ht i hi, hreg t' ht' i hi]
   exact nibbles_byte_congr s t t' (slot i)
 
-/-! ## The encode budget -/
-
 lemma countAt_cons (g : IntGate ι) (C : IntDag ι) (s : ℕ → Prop) [DecidablePred s] (p : IntGate ι → ℕ) :
     countAt (g :: C) s p = (if s g.step then p g else 0) + countAt C s p := by
   unfold countAt
   by_cases hs : s g.step <;> simp [hs]
 
-/-- Summing a gate count over the windows: every gate is in one of them. -/
 lemma sum_countAt (C : IntDag ι) (win : ℕ → ℕ) (N : ℕ) (p : IntGate ι → ℕ) (h : ∀ g ∈ C, win g.step < N) :
     ∑ v ∈ Finset.range N, countAt C (fun t => win t = v) p = (C.map p).sum := by
   induction C with
@@ -842,20 +776,16 @@ lemma sum_countAt (C : IntDag ι) (win : ℕ → ℕ) (N : ℕ) (p : IntGate ι 
     simp only [countAt_cons, Finset.sum_add_distrib, Finset.sum_ite_eq, Finset.mem_range, hg, ite_true, ih,
       List.map_cons, List.sum_cons]
 
-/-- A gate of no budgeted class has no units. -/
 lemma units_of_budget_none (C : IntDag ι) (i : ℕ) (g : IntGate ι) (hg : C[i]? = some g) (hb : g.op.budget = none) :
     units C i = 0 := by
   simp only [units, hg]
   split <;> simp_all [IntOp.budget]
 
-/-- A gather's outcomes at its index, its column's `V` words and the fill outside it, fit its index bits. -/
 lemma indexBits_outcomes (g : IntGate ι) (d : ℤ) (hg : g.op = .gather none d) : g.args.length ≤ 2 ^ g.indexBits := by
   unfold IntGate.indexBits
   rw [hg]
   exact Nat.le_pow_clog (by norm_num) _
 
-/-- Summing the census's units over the windows and classes: each gate's units are in its window's census, under its
-class. -/
 lemma budgeted_eq (C : IntDag ι) (A : Audit) (h : ∀ g ∈ C, A.win g.step < A.windows) :
     budgeted C = ∑ v ∈ Finset.range A.windows, (census C fun t => A.win t = v).budgeted := by
   simp only [census, Census.budgeted, unitsAt, ← Finset.sum_add_distrib]
@@ -869,7 +799,6 @@ lemma budgeted_eq (C : IntDag ι) (A : Audit) (h : ∀ g ∈ C, A.win g.step < A
   · simp [units_of_budget_none C i C[i] hg hb]
   · cases b <;> simp [Finset.sum_ite_eq, hw]
 
-/-- Summing the data products over the windows: each gate's products are in its window's count. -/
 lemma products_eq (C : IntDag ι) (A : Audit) (h : ∀ g ∈ C, A.win g.step < A.windows) :
     products C = ∑ v ∈ Finset.range A.windows, productsAt C fun t => A.win t = v := by
   simp only [products, productsAt]
@@ -880,7 +809,6 @@ lemma products_eq (C : IntDag ι) (A : Audit) (h : ∀ g ∈ C, A.win g.step < A
   have hw := h C[i] (List.getElem_mem hi')
   simp [hg, Finset.sum_ite_eq, hw]
 
-/-- The encode bound at a price holds at any lower one. -/
 lemma EncodeBound.mono {F : Field} {k B E E' εnum εden : ℕ} (h : EncodeBound F k B E' εnum εden) (hE : E ≤ E') :
     EncodeBound F k B E εnum εden := by
   intro ι C m x words out hR hci hnd hlt hcw
@@ -900,7 +828,6 @@ lemma EncodeBound.mono {F : Field} {k B E E' εnum εden : ℕ} (h : EncodeBound
     calc q * E * N = r * E + t * E := by rw [show q * E * N = q * N * E by ring, ht]; ring
       _ ≤ c * N + r * E := by omega
 
-/-- The encode bound at `E ≤ k · S · e`, from `SquaringFloor` at `e` and `ChainSum`, inside their floor. -/
 theorem encodeBound_of {F : Field} {k B E e εnum εden : ℕ} (hS : SquaringFloor F e εnum εden)
     (hC : ChainSum F k B e εnum εden) (hE : E ≤ k * F.squarings * e) (hε : εden ≤ 2 ^ 64 * εnum) (hk : 0 < k)
     (hp : 2 ^ 66 ≤ F.p) (hp4 : F.p % 4 = 3) : EncodeBound F k B E εnum εden :=
@@ -929,7 +856,6 @@ theorem EncodeBudget : ResourceAccounting.Guarantees.Gates.EncodeBudget := by
     exact_mod_cast Nat.mul_le_mul_right E hr
   exact h'.trans (add_le_add (mul_le_mul_of_nonneg_right hb (Nat.cast_nonneg _)) hr')
 
-/-- The encode bound at `E` prices `q` distinct words at `q · E` nonlinear units, for `n ≥ 2`. -/
 theorem encodeCost_ge {F : Field} {k B E εnum εden : ℕ} (H : EncodeBound F k B E εnum εden) (hn : 2 ≤ F.n)
     (q : ℕ) : ((q * E : ℕ) : ℕ∞) ≤ encodeCost F k B εnum εden q := by
   unfold encodeCost
@@ -944,7 +870,6 @@ theorem EncodeCost : ResourceAccounting.Guarantees.Gates.EncodeCost := by
   exact encodeCost_ge (encodeBound_of hS hC hE hε hk hp hp4) hn q
 
 set_option exponentiation.threshold 1100 in
-/-- A root's squarings at p1024: `⌊log₂((p + 1)/4)⌋ = 1021`. -/
 theorem p1024_squarings : p1024.squarings = 1021 := by
   have h8 : (2 : ℕ) ^ 1024 = 2 ^ 1021 * 8 := by rw [show (8 : ℕ) = 2 ^ 3 by norm_num, ← pow_add]
   have hN : 1021 < (2 : ℕ) ^ 1021 := Nat.lt_two_pow_self
@@ -955,15 +880,6 @@ theorem p1024_squarings : p1024.squarings = 1021 := by
   generalize (2 : ℕ) ^ 1021 = N at hN ⊢
   omega
 
-/-! ## The premises' floor
-
-`SquaringFloor` and `ChainSum` keep the falsified `EncodeChainHardness`'s floor (`ε ≥ 2^−64`, `k ≥ 1`, `p ≥ 2^66`,
-`p ≡ 3 mod 4`). `2^n − c` with `n ≥ 68` and `c ≡ 1 mod 4`, `c ≤ 2^66`, is inside it, p1024 among them. Outside it the
-premises claim nothing, so the counterexamples outside it don't refute them: at `ε = 0`, at `k = 0` and at a field
-narrower than a byte `ChainSum` holds, and the one-sample circuit behind the `ε = 0` counterexample is right on more
-than `ε` of the samples at no `ε` and field the floor admits. -/
-
-/-- A field `2^n − c` with `n ≥ 68`, `c ≡ 1 mod 4` and `c ≤ 2^66` is inside the premises' floor on `p`. -/
 theorem floor_of_pow_sub (n c : ℕ) (hn : 68 ≤ n) (hc : c % 4 = 1) (hc' : c ≤ 2 ^ 66) :
     2 ^ 66 ≤ 2 ^ n - c ∧ (2 ^ n - c) % 4 = 3 := by
   obtain ⟨m, rfl⟩ : ∃ m, n = m + 2 := ⟨n - 2, by omega⟩
@@ -976,7 +892,6 @@ theorem floor_of_pow_sub (n c : ℕ) (hn : 68 ≤ n) (hc : c % 4 = 1) (hc' : c �
   rw [hMe] at hc'
   omega
 
-/-- p1024 is inside the premises' floor on `p`: `2^66 ≤ p` and `p ≡ 3 mod 4`. -/
 theorem p1024_floor : 2 ^ 66 ≤ p1024.p ∧ p1024.p % 4 = 3 := by
   unfold Field.p
   exact floor_of_pow_sub p1024.n p1024.c (by show 68 ≤ 1024; norm_num) (by show 105 % 4 = 1; norm_num)
@@ -1019,35 +934,27 @@ example (F : Field) (k εnum εden : ℕ) (d : Sample k) (hε : εden ≤ 2 ^ 64
       _ = εnum * (samples F k).card := Nat.mul_comm _ _
   exact lt_irrefl _ (h.trans_le (hε.trans h3))
 
-/-! ## The fooling bound in units -/
-
-/-- Gate `i` depends on a run or coin input. -/
 abbrev dynAt (C : IntDag ι) (i : ℕ) : Bool := (dynamic C).getD i false
 
-/-- The most index bits a gather of index `j` and kind `k` in `C` reads. -/
 def maxIdx (C : IntDag ι) (k : Bool) (j : ℕ) : ℕ :=
   ((C.filter fun h => h.op.gatherKind == some k && h.args.head? == some j).map IntGate.indexBits).foldl max 0
 
-/-- `dynamic`'s step at a gate, from the flags of the gates before it. -/
 def dynStep (ds : List Bool) (g : IntGate ι) : Bool :=
   match g.op with
   | .input b _ => b != .registered
   | _ => g.args.any fun j => ds.getD j false
 
-/-- A run input or a budgeted gate but a gather: the gates whose values the units bound reads off. -/
 def traced (g : IntGate ι) : Bool :=
   match g.op with
   | .input .run _ => true
   | .budgeted _ _ => true
   | _ => false
 
-/-- A budgeted gate but a gather. -/
 def isBudg (g : IntGate ι) : Bool :=
   match g.op with
   | .budgeted _ _ => true
   | _ => false
 
-/-- The fresh index bits a gather of kind `k` at `i` pays when its index depends on a run or coin input. -/
 def freshAt (C : IntDag ι) (k : Bool) (i : ℕ) (g : IntGate ι) : ℕ :=
   match g.op, g.args with
   | .gather low _, j :: _ => if low.isSome = k ∧ dynAt C j = true then g.indexBits - maxIdx (C.take i) k j else 0
@@ -1097,7 +1004,6 @@ lemma dynAt_eq (C : IntDag ι) (n : ℕ) (h : n < C.length) : dynAt C n = dynSte
   rw [List.getD_append_right _ _ _ _ (by rw [dynamic_length, List.length_take]; omega), dynamic_length,
     List.length_take, min_eq_left h.le, Nat.sub_self, List.getD_cons_zero]
 
-/-- A gate but an input depends on a run or coin input when one of its operands does. -/
 lemma dynAt_of_op (C : IntDag ι) (n : ℕ) (h : n < C.length) (hop : ∀ b i, C[n].op ≠ .input b i) :
     dynAt C n = C[n].args.any fun j => (dynamic (C.take n)).getD j false := by
   rw [dynAt_eq C n h]
@@ -1106,7 +1012,6 @@ lemma dynAt_of_op (C : IntDag ι) (n : ℕ) (h : n < C.length) (hop : ∀ b i, C
   | input b i => exact absurd hopn (hop b i)
   | _ => rfl
 
-/-- A gate but an input that depends on no run or coin input reads only gates that don't either. -/
 lemma args_static (C : IntDag ι) (n : ℕ) (h : n < C.length) (hop : ∀ b i, C[n].op ≠ .input b i)
     (hd : dynAt C n = false) : ∀ j ∈ C[n].args, j < n → dynAt C j = false := by
   intro j hj hjn
@@ -1115,7 +1020,6 @@ lemma args_static (C : IntDag ι) (n : ℕ) (h : n < C.length) (hop : ∀ b i, C
   rw [getD_dynamic_take C n j h.le, ite_eq_left hjn] at this
   simpa using this
 
-/-- A gate but an input that depends on a run or coin input reads one that does. -/
 lemma any_dyn (C : IntDag ι) (n : ℕ) (h : n < C.length) (hop : ∀ b i, C[n].op ≠ .input b i)
     (hd : dynAt C n = true) : (C[n].args.any fun j => (dynamic C).getD j false) = true := by
   rw [dynAt_of_op C n h hop, List.any_eq_true] at hd
@@ -1125,7 +1029,6 @@ lemma any_dyn (C : IntDag ι) (n : ℕ) (h : n < C.length) (hop : ∀ b i, C[n].
   split_ifs at hjd
   · exact ⟨j, hj, hjd⟩
 
-/-- A gate but an input takes one value on operands that agree. -/
 lemma value_eq_of_operands (g : IntGate ι) (x x' : ι → ℤ) (vs vs' : List ℤ) (hop : ∀ b i, g.op ≠ .input b i)
     (h : ∀ j ∈ g.args, vs.getD j 0 = vs'.getD j 0) : g.value x vs = g.value x' vs' := by
   have ho : g.operands vs = g.operands vs' := List.map_congr_left h
@@ -1135,8 +1038,6 @@ lemma value_eq_of_operands (g : IntGate ι) (x x' : ι → ℤ) (vs vs' : List �
   | input b i => exact absurd hg (hop b i)
   | _ => rfl
 
-/-- A gather's word, from columns that agree mod `m`, at positions of one class among the column's words and the fill
-`d` past it. -/
 lemma getD_map_congr {m : ℤ} (col : List ℕ) (vs vs' : List ℤ) (hv : ∀ j, vs.getD j 0 ≡ vs'.getD j 0 [ZMOD m])
     (d : ℤ) (k k' : ℕ) (hk : min k col.length = min k' col.length) :
     (col.map fun c => vs.getD c 0).getD k d ≡ (col.map fun c => vs'.getD c 0).getD k' d [ZMOD m] := by
@@ -1149,12 +1050,8 @@ lemma getD_map_congr {m : ℤ} (col : List ℕ) (vs vs' : List ℤ) (hv : ∀ j,
   · have hk' : col.length ≤ k' := by omega
     rw [List.getD_eq_default _ _ (by simpa using h), List.getD_eq_default _ _ (by simpa using hk')]
 
-/-- A gather's index class: `min(v, 2^b − 1)`, and `2^b − 1` for a negative `v`, which reads the fill as an index
-past the column does. -/
 def idxCls (b : ℕ) (v : ℤ) : ℕ := if v < 0 then 2 ^ b - 1 else min v.toNat (2 ^ b - 1)
 
-/-- In a column of `L ≤ 2^b − 1` words, a gather's position is fixed, up to every position past the column, by its
-index's class. -/
 lemma min_gatherAt (b L : ℕ) (hL : L ≤ 2 ^ b - 1) (z : ℤ) :
     min (IntOp.gatherAt none L z) L = min (idxCls b z) L := by
   simp only [IntOp.gatherAt, idxCls]
@@ -1174,11 +1071,6 @@ lemma indexBits_le_maxIdx (C : IntDag ι) (n : ℕ) (h : n < C.length) (low : Op
   (le_foldl_max _ 0).2 _ (List.mem_map.mpr ⟨C[n], List.mem_filter.mpr ⟨List.getElem_mem h,
     by simp [hop, hargs, IntOp.gatherKind]⟩, rfl⟩)
 
-/-- Two inputs on which `C` is in its window, that agree in every registered input and mod `m` in every coin input,
-on which each run input and each budgeted gate but a gather that depends on a run or coin input takes one value, and
-each gate that does takes one class `idxCls b v` at the most index bits `b` a gather of it reads at its index, and
-one class `v mod 2^b'` at the most `b'` a table read of it reads: every gate's values agree mod `m`, and those of the
-gates that depend on no run or coin input agree. -/
 lemma values_congr_units {m : ℤ} (C : IntDag ι) (x x' : ι → ℤ) (hw : InWindow C x) (hw' : InWindow C x')
     (hreg : ∀ i, (∃ g ∈ C, g.op = .input .registered i) → x i = x' i)
     (hcoin : ∀ i, (∃ g ∈ C, g.op = .input .coin i) → x i ≡ x' i [ZMOD m])
@@ -1310,8 +1202,6 @@ lemma values_congr_units {m : ℤ} (C : IntDag ι) (x x' : ι → ℤ) (hw : InW
       rw [hk]
       simp [Int.ModEq.refl]
 
-/-- Each gate's units are at least its unit as a budgeted gate but a gather and its fresh index bits as a gather of
-either kind. -/
 lemma units_ge (C : IntDag ι) (i : ℕ) (h : i < C.length) :
     (if (isBudg C[i] && dynAt C i) = true then 1 else 0) + (freshAt C false i C[i] + freshAt C true i C[i]) ≤
       units C i := by
@@ -1340,8 +1230,6 @@ lemma maxIdx_take_succ (C : IntDag ι) (n : ℕ) (h : n < C.length) (k : Bool) (
     List.foldl_append]
   split_ifs with hp <;> simp [hp]
 
-/-- The fresh index bits telescope: over the gathers of each index and kind, they sum to the most that index's
-gathers of that kind read. -/
 lemma sum_freshAt (C : IntDag ι) (k : Bool) : ∀ n, n ≤ C.length →
     ∑ i ∈ Finset.range n, (if h : i < C.length then freshAt C k i C[i] else 0) =
       ∑ j ∈ Finset.range C.length, if dynAt C j = true then maxIdx (C.take n) k j else 0 := by
@@ -1522,14 +1410,10 @@ theorem SquaringUnits : ResourceAccounting.Guarantees.Gates.SquaringUnits := by
   rw [hcoin t ht i hi, hcoin t' ht' i hi]
   exact nibbles_byte_congr s t t' (slot i)
 
-/-! ## `ρ` on pairs -/
-
-/-- A natural below `p` is its residue: two that agree mod `p` are equal. -/
 lemma eq_of_cast_eq {p a b : ℕ} (ha : a < p) (hb : b < p) (h : (a : ZMod p) = b) : a = b := by
   rw [ZMod.natCast_eq_natCast_iff'] at h
   rwa [Nat.mod_eq_of_lt ha, Nat.mod_eq_of_lt hb] at h
 
-/-- `ρ(x)` is `s = x^((p+1)/4) mod p` or `p − s`, of parity `[s² ≢ x]`, when `0 < s < p` and `p` is odd. -/
 lemma rho_cases (p x : ℕ) (hp : p % 2 = 1) (h0 : 0 < x ^ ((p + 1) / 4) % p) (hsp : x ^ ((p + 1) / 4) % p < p) :
     (rho p x = x ^ ((p + 1) / 4) % p ∨ rho p x = p - x ^ ((p + 1) / 4) % p) ∧
       rho p x % 2 = if x ^ ((p + 1) / 4) % p * (x ^ ((p + 1) / 4) % p) % p = x then 0 else 1 := by
@@ -1537,18 +1421,15 @@ lemma rho_cases (p x : ℕ) (hp : p % 2 = 1) (h0 : 0 < x ^ ((p + 1) / 4) % p) (h
   generalize x ^ ((p + 1) / 4) % p = s at h0 hsp ⊢
   split_ifs <;> omega
 
-/-- At `p ≡ 3 mod 4`, the square of `a^((p+1)/4)` is `a · a^(p/2)`, so `±a`. -/
 lemma sq_pow_quarter {p : ℕ} [Fact p.Prime] (hp : p % 4 = 3) (a : ZMod p) :
     (a ^ ((p + 1) / 4)) ^ 2 = a * a ^ (p / 2) := by
   rw [← pow_mul, ← pow_succ']
   congr 1
   omega
 
-/-- `(p − a) mod p` is `−a`. -/
 lemma cast_sub_self {p a : ℕ} (h : a ≤ p) : ((p - a : ℕ) : ZMod p) = -(a : ZMod p) := by
   rw [Nat.cast_sub h, ZMod.natCast_self, zero_sub]
 
-/-- A residue `b < p` whose cast is `±a`'s, for `0 < a < p`, is `a` or `p − a`. -/
 lemma eq_or_sub_of_cast {p a b : ℕ} (ha : 0 < a) (hap : a < p) (hb : b < p)
     (h : (b : ZMod p) = a ∨ (b : ZMod p) = -(a : ZMod p)) : b = a ∨ b = p - a := by
   rcases h with h | h
@@ -1610,12 +1491,8 @@ theorem RhoPairs : ResourceAccounting.Guarantees.Gates.RhoPairs := by
     rw [← hsq_iff]
     split_ifs <;> simp_all
 
-/-! ## The codec at toy fields, against `codec.py` -/
-
-/-- Rows `(n, c, c_r, K, τ, i, m, y)`: `codec.encode_word(m, i)` is `y` at `p = 2^n − c` (251 and 65519) under round
-constants `c_r`, mask `K` and tweak multiplier `τ`. Between them they take both arms of `σ_K` and every arm of `ρ`
-(a square, a non-square, zero). `test_encode_chain.py` reads them from this file and recomputes each with
-`codec.encode_word`. -/
+/-- Rows `(n, c, c_r, K, τ, i, m, y)`: `codec.encode_word(m, i)` is `y` at `p = 2^n − c`. `test_encode_chain.py`
+reads them from this file and recomputes each with `codec.encode_word`. -/
 def codecRows : List (ℕ × ℕ × List ℕ × ℕ × ℕ × ℕ × ℕ × ℕ) := [
   (8, 5, [17, 200, 99], 248, 3, 5, 219, 234),
   (8, 5, [92, 7], 253, 18, 54, 195, 147),
@@ -1629,7 +1506,6 @@ def codecRows : List (ℕ × ℕ × List ℕ × ℕ × ℕ × ℕ × ℕ × ℕ)
   (16, 17, [27420, 1802, 17095], 22236, 6729, 817333, 53283, 48655),
   (16, 17, [60688, 23696, 15300], 349, 10049, 806969, 33473, 64012)]
 
-/-- `Encodes`'s word, `encodeWord F.p d.key (d.tweak F i) m`, is `codec.encode_word`'s on every row. -/
 theorem encodeWord_codecRows :
     codecRows.all (fun (n, c, cs, K, τ, i, m, y) =>
       let F : Field := ⟨n, c⟩
@@ -1637,13 +1513,6 @@ theorem encodeWord_codecRows :
       encodeWord F.p d.key (d.tweak F i) m == y) := by
   decide +kernel
 
-/-! ## Primitives' output intervals
-
-Each rule's interval holds its primitive's value: `fmaxf` and `fminf` by the operands' signs (`fmaxf_bounds`,
-`fminf_bounds`), the truncation by its monotonicity below `128.0` (`rzByteNat_mono`), the clamps and the dither by
-arithmetic, and the LUT by a gather's value being a column word or its fill, 0 (`getD_hull0`). -/
-
-/-- `fmaxf` with a non-negative operand is at least it and at most `+inf`, and with two is their larger. -/
 lemma fmaxf_bounds {x y : ℤ} (hx : S32 x) (hy : S32 y) :
     (0 ≤ x → x ≤ f32Inf → x ≤ f32Fmaxf x y ∧ f32Fmaxf x y ≤ f32Inf) ∧
     (0 ≤ y → y ≤ f32Inf → y ≤ f32Fmaxf x y ∧ f32Fmaxf x y ≤ f32Inf) ∧
@@ -1656,7 +1525,6 @@ lemma fmaxf_bounds {x y : ℤ} (hx : S32 x) (hy : S32 y) :
       Bool.and_eq_true, decide_eq_true_eq] <;>
     split_ifs <;> omega
 
-/-- `fminf` with a non-negative operand is at most it, and with two is their smaller. -/
 lemma fminf_bounds {x y : ℤ} (hx : S32 x) (hy : S32 y) :
     (0 ≤ x → x ≤ f32Inf → s32Min ≤ f32Fminf x y ∧ f32Fminf x y ≤ x) ∧
     (0 ≤ y → y ≤ f32Inf → s32Min ≤ f32Fminf x y ∧ f32Fminf x y ≤ y) ∧
@@ -1736,8 +1604,6 @@ theorem LutSoftmaxRange : ResourceAccounting.Guarantees.Gates.LutSoftmaxRange :=
   intro T d
   exact getD_hull0 T _
 
-/-! ## `Bf16ToF32`, free-affine -/
-
 theorem Bf16ToF32Affine : ResourceAccounting.Guarantees.Gates.Bf16ToF32Affine := by
   refine ⟨by decide, fun ⟨u, hu⟩ => ?_⟩
   have hmask : u &&& 0xFFFF = u := by
@@ -1746,13 +1612,6 @@ theorem Bf16ToF32Affine : ResourceAccounting.Guarantees.Gates.Bf16ToF32Affine :=
     List.zipWith_nil_right, List.sum_cons, List.sum_nil]
   push_cast
   omega
-
-/-! ## The rows the Python checks agree on
-
-`f32Rows` are `scalar.F32Fmaxf` and `F32Fminf` on pairs of special encodings (s32 readings), `rzRows`
-`f32_to_u32_rz_byte` on encodings across the exponents, and `ruleRows` and `rzRuleRows` property/v1's rules
-(`stacking.RANGES`) on ranges about the specials. The kernel evaluates the Lean functions on each, and
-`test_gate_ranges.py` recomputes each from the Python. -/
 
 def f32Rows : List (ℤ × ℤ × ℤ × ℤ) := [
   (0, 0, 0, 0),
@@ -2097,8 +1956,6 @@ def rzRuleRows : List (Rng × Rng) := [
 theorem rzByteRule_rzRuleRows : rzRuleRows.all (fun r => rzByteRule r.1 == r.2) := by
   decide +kernel
 
-/-! ## The exact-int8 profile's primitives -/
-
 theorem F32ToS8RziRange : ResourceAccounting.Guarantees.Gates.F32ToS8RziRange := by
   intro a
   unfold f32ToS8Rzi
@@ -2111,7 +1968,6 @@ theorem F32ToS8RziRange : ResourceAccounting.Guarantees.Gates.F32ToS8RziRange :=
     have h2 : (0 : ℤ) ≤ min 127 ((truncNat a.toNat : ℕ) : ℤ) := le_min (by norm_num) (Int.natCast_nonneg _)
     exact ⟨by dsimp only; omega, by dsimp only; omega⟩
 
-/-- A float of magnitude at most `127.0` truncates to at most 127. -/
 lemma truncNat_le (u : ℕ) (hu : u ≤ 0x42FE0000) : truncNat u ≤ 127 := by
   obtain ⟨e, he⟩ : ∃ e, u / 2 ^ 23 = e := ⟨_, rfl⟩
   have he' : e ≤ 133 := by omega
@@ -2201,8 +2057,6 @@ theorem S32LowByteRange : ResourceAccounting.Guarantees.Gates.S32LowByteRange :=
   refine ⟨fun z => ?_, fun t => ?_⟩ <;> unfold s32LowByte
   · exact ⟨by dsimp only; omega, by dsimp only; omega⟩
   · have := t.isLt; omega
-
-/-! ## Declared bounds, earned -/
 
 theorem DeclaredWindow : ResourceAccounting.Guarantees.Gates.DeclaredWindow := by
   intro ι C x hP hD hX
@@ -2339,9 +2193,6 @@ lemma dotChain_take : (dotChain pre fa fb sat prim S a b).take pre.length = pre 
 
 end chain
 
-/-- **The chain's window**: a dot chain on gates `pre` that are proven and earn their bounds, with no affine map or
-s8-family step among them, whose operands' derived intervals lie in `Ia` and `Ib` within the steps' formats, and
-whose `32·S` products' sum stays in s32, is proven and earns its bounds. -/
 lemma dotChain_ok (pre : IntDag ι) (fa fb : Int8Fmt) (sat : Bool) (prim : String) (S : ℕ) (a b : ℕ → List ℕ)
     (Ia Ib : Iv) (hT : Topological pre) (hfree : ∀ g ∈ pre, ¬ g.op.IsMma ∧ ∀ c₀ cs, g.op ≠ .affine c₀ cs)
     (hpre : ∀ i (h : i < pre.length), pre[i].op.IsDerived →

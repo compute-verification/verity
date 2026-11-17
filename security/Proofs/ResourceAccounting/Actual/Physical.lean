@@ -5,20 +5,8 @@ public import Proofs.ResourceAccounting.Actual.Split
 import Mathlib.Algebra.BigOperators.Ring.Finset
 import Mathlib.Algebra.Order.BigOperators.Group.Finset
 
-/-!
-# The physical assumptions' first consequences
-
-* `forward_of_causal`: causality at any latency makes wires run forward in time inside every location, the form the
-  split needs.
-* `ingress_le`, `egress_le`: under `Links`, `in_X(I), out_X(I) ≤ β_X |I|`. A gate that `A[X, I]` reads from outside `X`
-  reaches it on a link across `X`'s boundary, read during `I` at the link's end inside `X` (`inner`); a gate of `X` that
-  a gate outside `X` reads during `I` leaves on one, read during `I` at its end outside (`outer`). Each counts one way
-  of each link, at the readers' ticks.
-* `computeRate_one`: compute rate at a pricing of at least one per computed gate bounds the number of gates, compute
-  rate at one per gate.
-* `state_eq_stateIn_add_compl`: the state is its part in `G` plus its part outside `G`, so memory at a tick bounds
-  the part in any `G` there (`stateIn_le_of_memoryAt`).
--/
+/-! The physical assumptions' first consequences: wires forward inside a location, ingress and egress at most `β_X` a
+tick, and the state's split. -/
 
 @[expose] public section
 
@@ -66,7 +54,6 @@ theorem inner_outer {E : Type*} {ends : E → L × L} {X : Finset L} {e : E} {x 
   unfold inner outer
   rcases he with he | he <;> rw [he] <;> simp [hx, hy]
 
-/-- **Ingress is at most `β_X` a tick**: `in_X([a, b)) ≤ β_X (b − a)`. -/
 theorem ingress_le {E : Type*} [Fintype E] {ends : E → L × L} {β : E → ℕ} {link : Fin A.N → Fin A.N → E}
     (h : A.Links ends β link) (X : Finset L) (a b : ℕ) :
     A.ingress X (Set.Ico a b) ≤ linkCapacity ends β X * (b - a) := by
@@ -85,7 +72,6 @@ theorem ingress_le {E : Type*} [Fintype E] {ends : E → L × L} {β : E → ℕ
   simp only [Placed.readOn, mem_filter, mem_univ, true_and]
   exact ⟨g, hcg, hne, rfl, (inner_outer hcX hgX he).1.symm, hgt⟩
 
-/-- **Egress is at most `β_X` a tick**: `out_X([a, b)) ≤ β_X (b − a)`. -/
 theorem egress_le {E : Type*} [Fintype E] {ends : E → L × L} {β : E → ℕ} {link : Fin A.N → Fin A.N → E}
     (h : A.Links ends β link) (X : Finset L) (a b : ℕ) :
     A.egress X (Set.Ico a b) ≤ linkCapacity ends β X * (b - a) := by
@@ -111,7 +97,6 @@ theorem width_inter_add_compl (S G : Finset (Fin A.N)) : A.width S = A.width (S 
   unfold Circuit.width
   exact (sum_inter_add_sum_sdiff S G A.w).symm
 
-/-- **The state splits along any set of gates**: `mem_X(t)` is its part in `G` plus its part outside `G`. -/
 theorem state_eq_stateIn_add_compl (X : Finset L) (t : ℕ) (G : Finset (Fin A.N)) :
     A.state X t = A.stateIn X t G + A.stateIn X t Gᶜ := by
   unfold Placed.stateIn Placed.state
@@ -125,13 +110,10 @@ theorem memoryAt_of_memory {𝒳 : Set (Finset L)} {M : Finset L → ℕ} (h : A
     A.MemoryAt 𝒳 M T :=
   fun X hX t _ => h X hX t
 
-/-- Memory at a tick bounds the state's part in any set of gates there. -/
 theorem stateIn_le_of_memoryAt {𝒳 : Set (Finset L)} {M : Finset L → ℕ} {T : Set ℕ} (h : A.MemoryAt 𝒳 M T)
     {X : Finset L} (hX : X ∈ 𝒳) {t : ℕ} (ht : t ∈ T) (G : Finset (Fin A.N)) : A.stateIn X t G ≤ M X :=
   (stateIn_le_state A X t G).trans (h X hX t ht)
 
-/-- **Pricing at least one per gate bounds the gates**: compute rate at a pricing `π ≥ 1` on computed gates is compute
-rate at one per gate. -/
 theorem computeRate_one {𝒳 : Set (Finset L)} {π : Fin A.N → ℕ} {compute : Finset L → ℕ}
     (h : A.ComputeRate 𝒳 π compute) (hπ : ∀ g, A.isInput g = false → 1 ≤ π g) :
     A.ComputeRate 𝒳 (fun _ => 1) compute := fun X hX a b =>
