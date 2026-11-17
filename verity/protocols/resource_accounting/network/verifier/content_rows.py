@@ -122,7 +122,7 @@ no server can compute: which releases a class holds is the network attester's to
 no end, and such a release has its rows.
 
 **A schedule that can be tied** (`can_be_tied`; `untied` says what keeps one from it). A class is tied where a
-response tie's proof block returns each of its response rows (`certifier.prover.response_tie`). Three things of
+response tie's proof block returns each of its response rows (`attester.prover.response_tie`). Three things of
 the schedule are needed for that, whatever a run holds:
 
 - each P is listed once, so a release's class is told by its request's length alone;
