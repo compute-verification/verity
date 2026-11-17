@@ -26,6 +26,7 @@ from datetime import datetime, timezone
 from .consumer import ASK_CHANNELS, PERSON_SUBTYPES, is_line_for, line_names
 from .deps import (
     CANARY_SENT,
+    COMMENTS_RUNG,
     DEAD,
     LAST_DONE,
     LAST_ENQUEUED,
@@ -62,7 +63,7 @@ LINEAR_Q = ("query($f: IssueFilter!, $after: String) { issues(filter: $f, first:
             "pageInfo { hasNextPage endCursor } nodes { identifier title url team { key } labels { nodes { name } } "
             "creator { name } botActor { userDisplayName } comments(first: 1) { nodes { id } } } } }")
 LINEAR_C = ("query($f: CommentFilter!, $after: String) { comments(filter: $f, first: " + str(LINEAR_PAGE) + ", after: $after) { "
-            "pageInfo { hasNextPage endCursor } nodes { body botActor { userDisplayName } issue { identifier url } } } }")
+            "pageInfo { hasNextPage endCursor } nodes { id body botActor { userDisplayName } issue { identifier url } } } }")
 SIGNED = re.compile(r"([a-z][a-z0-9-]*)(?:/[\w.-]+)?(?:\s*\([^()\n]{1,30}\))?,\s")
 OPENING = 80
 
@@ -403,6 +404,7 @@ def new_comments(deps: Deps, reg: dict, routes, now: float) -> int | None:
     rs, rang, inboxes = deps.rs, 0, {}
     handles = {h["handle"] for h in reg["handles"]}
     created, team = window(reg, now)
+    rung = {k: t for k, t in (deps.read(COMMENTS_RUNG) or {}).items() if t > now - LINEAR_S}
     for c in linear_nodes(deps, LINEAR_C, {"createdAt": created, "issue": {"team": team}}, "comments"):
         body, i = c.get("body") or "", c.get("issue")
         names = [n for n in rs.lead_names(body, reg) if n in handles]
@@ -416,7 +418,7 @@ def new_comments(deps: Deps, reg: dict, routes, now: float) -> int | None:
             said = said[:rs.DOORBELL_MAX].rstrip() + "\u2026"
         for n in names:
             to, r = routes.resolve(n)
-            if sender and sender in (n, to):
+            if sender and sender in (n, to) or f"{c['id']}:{n}" in rung:
                 continue
             if why := rs.unreachable(n, to, r):
                 deps.log("new-comment-unrung", issue=i["identifier"], to=n, why=why)
@@ -426,6 +428,8 @@ def new_comments(deps: Deps, reg: dict, routes, now: float) -> int | None:
                    for t in inboxes[inbox]):
                 continue
             ring(deps, inbox, inboxes, rs.linear_doorbell(sender or "linear", i, said))
+            rung[f"{c['id']}:{n}"] = now
+            deps.write(COMMENTS_RUNG, rung, LINEAR_S)
             rang += 1
             deps.log("new-comment-rung", issue=i["identifier"], to=to)
     return rang

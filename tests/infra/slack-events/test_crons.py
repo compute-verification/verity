@@ -441,7 +441,7 @@ def test_an_issue_filed_in_a_lanes_team_by_any_means_rings_that_lane_once(world)
 
 
 def comment(ident: str, body: str, app: str | None = None) -> dict:
-    return {"body": body, "botActor": {"userDisplayName": app} if app else None,
+    return {"id": f"{ident}/{body}", "body": body, "botActor": {"userDisplayName": app} if app else None,
             "issue": {"identifier": ident, "url": f"https://linear.app/x/{ident}"}}
 
 
@@ -476,6 +476,15 @@ def test_a_comment_by_the_app_naming_no_one_or_already_rung_rings_nothing(world)
                                         comment("CIR-4", later)])
     assert crons.reconcile(world.deps)["comments"] == 1
     assert world.rung("circuits") == [bell("CIR-4", "kernels", sent), bell("CIR-4", "kernels", later)]
+
+
+def test_a_comment_whose_ring_slack_reads_back_altered_rings_once(world, monkeypatch):
+    real = world.slack.add
+    monkeypatch.setattr(world.slack, "add", lambda ch, **m: real(ch, **{**m, "text": m.get("text", "").replace("tile", ":tile:")}))
+    world.deps.linear = FakeLinear([], [comment("CIR-1", "@circuits dashboard-goals, Mon 16 Nov 8:00 AM PST. Which tile?")])
+    assert crons.reconcile(world.deps)["comments"] == 1
+    world.clock.t += 600
+    assert crons.reconcile(world.deps)["comments"] == 0 and len(world.rung("circuits")) == 1
 
 
 def test_without_a_linear_reader_reconciliation_reads_no_issues_and_a_failing_one_leaves_slacks_part_done(world):
