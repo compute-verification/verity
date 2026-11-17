@@ -11,25 +11,8 @@ import Proofs.Flock.Soundness.Game
 import Proofs.Flock.Soundness.LincheckPhase
 import Proofs.Flock.Soundness.OpeningPhase
 
-/-!
-# One rep is sound
-
-`rep_sound`: from a doomed start (no codeword near the committed table packs a witness that
-satisfies the R1CS and the pin and makes every region claim true), one rep accepts with
-probability at most `repError`. It is proved here from four phase lemmas, one per phase of
-`Flock.Piop`, `Flock.Opening`, `Flock.Ligerito`, each bounding the probability that its phase ends outside a doomed state:
-
-| phase | doomed at its end, for every codeword near the committed table | error |
-|---|---|---|
-| zerocheck (§9) | the `a`, `b`, `c` claims, the pin at `ρ_out` and the region claims do not all hold | `εZc` |
-| lincheck (§10) | the `ab`, `c` and region claims do not all hold | `εLc` |
-| opening (§12) | the batched inner product `Σ_y f(y)·b(y)` is not `T` | `εOp` |
-| Ligerito (`Flock.Ligerito`) | (accepts) | `εLig` |
-
-The errors add up to `repError` exactly (`repError_eq`), and `Game.value_bind_le` chains the
-phases. Each phase lemma is a chain of per-coin (round-by-round) steps: `Rounds` for the sumcheck
-rounds, `Verity.Game.prCoin_mvEval_eq_zero_le` for the vector coins.
--/
+/-! One rep is sound (`rep_sound`): from a doomed start it accepts with probability at most `repError`, the sum of its
+four phases' errors. -/
 
 @[expose] public section
 
@@ -40,22 +23,16 @@ open scoped ENNReal
 
 variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K]
 
-/-! ## The error of each phase -/
-
-/-- Zerocheck and the pin (Z3, Z5, Z6 and `ρ_out`). -/
 noncomputable def εZc (s : Schedule) (st : Stmt) : ℝ :=
   (((s.listBound₀ + 1) * (s.m - 13) + s.listBound₀ * 127 + s.listBound₀ * (2 * (s.m - 6))
       + s.listBound₀ * (s.m - st.kLog) : ℕ) : ℝ) / qF
 
-/-- Lincheck (L1, L2, L3, L5). -/
 noncomputable def εLc (s : Schedule) (st : Stmt) : ℝ :=
   ((s.listBound₀ * (2 + 2 * (st.kLog - 6) + 63) : ℕ) : ℝ) / qF
 
-/-- Opening (O5 per claim, O6). -/
 noncomputable def εOp (s : Schedule) (st : Stmt) : ℝ :=
   ((s.listBound₀ * (7 * st.nClaims + 1) : ℕ) : ℝ) / qF
 
-/-- Ligerito: the level-0 out-of-domain claim's batching coin, then every level. -/
 noncomputable def εLig (s : Schedule) : ℝ := (s.listBound₀ : ℝ) / qF + ligeritoError s.levels
 
 theorem repError_eq (s : Schedule) (st : Stmt) :
@@ -77,14 +54,6 @@ theorem ofReal_nat_div_qF (N : ℕ) : ENNReal.ofReal ((N : ℝ) / qF) = (N : ℝ
   rw [ENNReal.ofReal_div_of_pos (by positivity), ENNReal.ofReal_natCast, ENNReal.ofReal_pow (by norm_num),
     ENNReal.ofReal_ofNat]
 
-/-! ## The four phases -/
-
-/-- **Zerocheck.** From a doomed start, the zerocheck ends doomed except with probability `εZc`:
-the eq-reduction of each nonzero Boolean row (degree `m − 13`, the pinned coordinates independent
-over GF(2)), the skip point (`127/|F|`), the `m − 6` residual rounds (`Rounds.residualRound_sound`,
-which needs every `r_eq ≠ 1`, the exceptional event charged once), the pin's extension at
-`ρ_out` (degree `m − k_log`); every term but the exceptional one times the list bound. Proved in
-`ZerocheckPhase` for any list size (`zerocheck_phase_of_card`), with `closeMsgs_card_le`. -/
 theorem zerocheck_phase (A : Arith F K) (hA : A.Correct) (S : Statement) (sch : Schedule)
     (hsch : fast100 S.m = some sch) (hm : 13 ≤ S.m) (mPts : ℕ) (C : Oracle F)
     (extra : List (Claim F S.m)) (hdoom : RepDoomed A S sch C extra) :
@@ -105,10 +74,6 @@ theorem zerocheck_phase (A : Arith F K) (hA : A.Correct) (S : Statement) (sch : 
     ring
   · norm_num
 
-/-- **Lincheck.** `α` and `β` (degree 1 each; `β` catches a pin whose extension is not 1), the
-`k_log − 6` rounds (`Rounds.lincheckRound_sound`), the skip coin `r'` (degree 63); every term
-times the list bound. Proved in `LincheckPhase` for any list size (`lincheck_phase_of_card`),
-with `closeMsgs_card_le`. -/
 theorem lincheck_phase (A : Arith F K) (hA : A.Correct) (S : Statement) (sch : Schedule)
     (hsch : fast100 S.m = some sch) (mPts : ℕ) (C : Oracle F) (extra : List (Claim F S.m))
     (zc : ZcOut F S.m) (hzc : DZc A S sch C extra (some zc)) :
@@ -123,16 +88,6 @@ theorem lincheck_phase (A : Arith F K) (hA : A.Correct) (S : Statement) (sch : S
   rw [mul_div_assoc]
   norm_num
 
-/-! ## The opening phase
-
-Every phase pays a union bound over the list of codewords near the committed table, whose size is
-`closeMsgs_card_le` (`ListSize`: ArkLib's Johnson bound for the level-0 interleaved Reed–Solomon
-code). -/
-
-/-- **Opening.** Per claim, a wrong message survives its seven coins `r''` with probability at
-most `7/|F|` (the injective recombination over GF(2) of paper Appendix B), and the batch `γ`
-keeps a false claim false except with probability `1/|F|`; times the list bound. Proved in
-`OpeningPhase` for any list size (`opening_phase_of_card`), with `closeMsgs_card_le`. -/
 theorem opening_phase (A : Arith F K) (hA : A.Correct) (S : Statement) (sch : Schedule)
     (hsch : fast100 S.m = some sch) (h7 : 7 ≤ S.m) (mPts : ℕ) (C : Oracle F)
     (extra : List (Claim F S.m)) (hextra : extra.length = 2 * S.regions.length)
@@ -155,11 +110,6 @@ theorem opening_phase (A : Arith F K) (hA : A.Correct) (S : Statement) (sch : Sc
   rw [mul_div_assoc]
   norm_num
 
-/-- **Ligerito.** Level by level: the folds (sumcheck `2L/|K|` per round; mutual correlated
-agreement at BCHKS25's printed bound, `mcaError_le_bchks25`, with the row union of paper
-Lemma 9), the binding of the next level by its two out-of-domain samples, the stratified
-queries (`(1 − γ)^Q`), and the batching coins. Proved in `LigeritoPhase` (`ligerito_sound`) for
-every schedule of the `fast100` shape (`fast100_shape`). -/
 theorem ligerito_phase (A : Arith F K) (hA : A.Correct)
     (S : Statement) (sch : Schedule) (hsch : fast100 S.m = some sch) (C : Oracle F)
     (op : OpenOut F) (hop : DOp A S sch C (some op)) :
@@ -181,10 +131,6 @@ theorem ligerito_phase (A : Arith F K) (hA : A.Correct)
       | cons l rest => simp [Schedule.listBound₀, Schedule.level₀, h]
     rw [εLig, hL]
 
-/-! ## Composition -/
-
-/-- **One rep is sound** (`Flock.Piop`, `Flock.Opening`, `Flock.Ligerito`): from a doomed start, whatever the prover does,
-the rep accepts with probability at most `repError`. Proved from the four phase lemmas. -/
 theorem rep_sound (A : Arith F K) (hA : A.Correct)
     (S : Statement) (sch : Schedule) (hsch : fast100 S.m = some sch) (hm : 13 ≤ S.m)
     (mPts : ℕ) (C : Oracle F) (extra : List (Claim F S.m))
@@ -200,7 +146,6 @@ theorem rep_sound (A : Arith F K) (hA : A.Correct)
     ENNReal.ofReal_add hZc hLc]
   unfold rep
   simp only [bind_eq]
-  -- zerocheck
   refine (value_bind_le _ _ _ (DZc A S sch C extra)
     (ENNReal.ofReal (εLc sch (S.shape mPts)) + ENNReal.ofReal (εOp sch (S.shape mPts))
       + ENNReal.ofReal (εLig sch)) (fun o ho => ?_)).trans ?_
@@ -208,7 +153,6 @@ theorem rep_sound (A : Arith F K) (hA : A.Correct)
     | none => simp
     | some zc =>
       simp only
-      -- lincheck
       refine (value_bind_le _ _ _ (DLc A S sch C extra zc)
         (ENNReal.ofReal (εOp sch (S.shape mPts)) + ENNReal.ofReal (εLig sch))
         (fun o₂ ho₂ => ?_)).trans ?_
@@ -216,7 +160,6 @@ theorem rep_sound (A : Arith F K) (hA : A.Correct)
         | none => simp
         | some ab =>
           simp only
-          -- opening
           refine (value_bind_le _ _ _ (DOp A S sch C) (ENNReal.ofReal (εLig sch))
             (fun o₃ ho₃ => ?_)).trans ?_
           · cases o₃ with

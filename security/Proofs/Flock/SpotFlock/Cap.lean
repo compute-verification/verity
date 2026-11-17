@@ -5,21 +5,8 @@ public import Proofs.Flock.SamplingGeneric.TwoCode
 public import Proofs.Flock.Claims.Sampling.Select.OS
 public import Proofs.Flock.Bridge.Draw
 
-/-!
-# SPOT[Flock]'s replay cap
-
-`replayCap`: at SPOT[Flock]'s code, the replay sample of record at outer coins some second-stage fork of which is
-accepted has at most `cap h` proof blocks (`Code.ReplayCap`):
-
-* an accepted fork passed round `stage + 1` (`stmtOk`), whose reads check at template `0` reads the second stage's sample
-  (`stmtOk_sample`), so its second stage accepted the replay sample, which is then not empty: the first stage accepted,
-  and the sample of record is the slots `Slots.checked` keeps of the units it proved. With no template there is no
-  proof block;
-* each population slot `ρ` it keeps is unit `ρ`, whose cell of each template `t` is `blockOf ρ t` on `[0, n_t)`, and
-  every proof block of an input slot is always checked (`regMatchesTwo`), so the sample has at most `|proved| · Σ_t n_t`
-  proof blocks of population slots (`perBlock`) and always checked ones besides;
-* a first stage with no closure map whose sampling design Flock reads as a uniform `K`-subset (`firstK`) proves `K` units.
--/
+/-! SPOT[Flock]'s replay cap (`replayCap`): the replay sample of record at an accepted fork has at most `cap h` proof
+blocks. -/
 
 @[expose] public section
 
@@ -29,8 +16,6 @@ open Claims Claims.Sampling SamplingDeploy Finset
 open Properties.Spot (bytesOf membersPart)
 open Properties.Spot.SecurityProofs (bind_eq_ok samplingDesignObj mem_checked flockSamplingDesign_subset deriveSamplingDesign_subset)
 open Lean (Json)
-
-/-! ## The first stage's count -/
 
 /-- The `K` of the first stage's sampling design over the population, where Flock reads it as a uniform `K`-subset. -/
 def firstKOf (g : Reg) : Option ℕ :=
@@ -74,8 +59,6 @@ theorem firstK_some {g : Reg} {K : ℕ} (hK : firstK g = some K) :
         subst hK'
         exact ⟨n, named, rfl, hl, hf⟩
 
-/-- **`Select.select` proves exactly the units it drew where it has no closure map**: `select_ok`'s steps, the units all
-of `proved` when `cm` is none. -/
 theorem select_proved (rule : Spot.Select.Rule) (d : Spot.Program) (query : Json) (table : Option Json)
     (cm : Option (Array (Int × Array Int))) (src : ByteArray) (draw : Json) (proved : Array ℕ) (read : ℕ)
     (h : Spot.Select.select rule d query table cm src = .ok (draw, proved, read)) :
@@ -118,7 +101,6 @@ theorem select_proved (rule : Spot.Select.Rule) (d : Spot.Program) (query : Json
       exact ⟨units, fun hc => by subst hc; exact (tail _ _ _ _ _ _ h).trans Array.append_empty,
         Or.inr ⟨fun e => hne e, parsed, read', hp, hu⟩⟩
 
-/-- **A first stage of count `K` proves `K` units**: with no closure map it proves the units it drew, `K` of them. -/
 theorem select_subset_size {g : Reg} {K : ℕ} (hK : firstK g = some K) {src : ByteArray} {draw : Json}
     {proved : Array ℕ} {read : ℕ}
     (h : Spot.Select.select g.rule g.program g.query g.table g.closure src = .ok (draw, proved, read)) :
@@ -139,9 +121,6 @@ theorem select_subset_size {g : Reg} {K : ℕ} (hK : firstK g = some K) {src : B
     have hu' : Spot.Draw.sampleUnits (.subset K) n src = .ok (units, read') := hu
     exact _root_.Flock.Bridge.sampleUnits_size (samplingDesign := .subset K) (ns := [K]) (kd := K) ⟨rfl, by simp⟩ hu'
 
-/-! ## The cap -/
-
-/-- **An accepting run passed round `j` at its own coins**: `run_acc_at`, the verifier's coins the run's. -/
 theorem run_acc_coins {Coin Ω : Type} [Inhabited Coin] (H : Msg → Msg) (P : Prover Ω) (V : Verifier Coin) (x : Msg)
     (ω : Ω) (r : Fin (V.k x) → Coin) (j : ℕ) (hj0 : 0 < j)
     (hj : ∀ as cs, cs.length = as.length → as.length ≤ j → ((V.next x as cs).eval H).1 ≠ .acc)
@@ -169,8 +148,6 @@ def cap (_ : Msg) : ℕ :=
   | some K => min (nBlocks h) (K * perBlock h + ((range (nBlocks h)).filter fun v => h.reg.always v = true).card)
   | none => nBlocks h
 
-/-- **Round `stage + 1` passes only at coins whose second stage samples**, where there is a template: template `0`'s
-statement check reads the second stage's sample (`readsOk`). -/
 theorem stmtOk_sample {x m₁ m₂ : Msg} {c₀ : FlockDeploy.Coin} {c₁ : Stage h} (hok : stmtOk h x m₁ m₂ c₀ c₁ = true)
     (hm : 0 < h.ms.length) : ∃ draw, secondDraw h c₀ c₁ = some draw := by
   obtain ⟨s, hp⟩ : ∃ s, parse h x = some s := by
@@ -188,9 +165,6 @@ theorem stmtOk_sample {x m₁ m₂ : Msg} {c₀ : FlockDeploy.Coin} {c₁ : Stag
   · exact ⟨_, ‹secondDraw h c₀ c₁ = some _›⟩
   · simp at hr
 
-/-- **The replay cap holds** at SPOT[Flock]'s code (`Code.ReplayCap`): an accepted fork's second stage accepted the
-first stage's sample, whose replay blocks' proof blocks `regMatchesTwo` counts. With no template there is no proof
-block to count. -/
 theorem replayCap (H : Msg → Msg) : ((base h).atOrder (order h)).ReplayCap H (two h) (rs h) (cap h) := by
   intro x s Pt d hs hPt hd hin Ω P ω r e hacc
   have hs' : parse h x = some s := hs

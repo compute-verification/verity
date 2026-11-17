@@ -22,15 +22,8 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.Soundness.SparseRows
 import Proofs.Flock.Soundness.TmplUnrollAt
 
-/-!
-# A templated unit's surely read columns are read by its committed net
-
-`Tmpl.readsSure` marks, from the template's description, input columns that a row of `Tmpl.rows` from the input rows to
-the constant reads (`Flock.TmplReads.rows_sure`). On the committed net (`Tmpl.unitNet`, `Tmpl.unrollAt`'s under
-`unrollOk`) each is a column `RecResiduals.readIns` marks (`readsSure_readIns`): the input rows stay at their columns, and
-a row past them is placed past them and before the constant. So where `KnownRead.readsOk` checks a templated unit's known
-bits at the columns `KnownRead.sureReads` gives, it accepts only what it would at `readIns` (`readsAt_of_readsOk`).
--/
+/-! A templated unit's surely read columns are read by its committed net, so `KnownRead.readsOk` accepts only what it
+would at `readIns` (`readsAt_of_readsOk`). -/
 
 @[expose] public section
 
@@ -38,7 +31,6 @@ open Flock Flock.Tmpl
 
 namespace FlockSoundness.TmplFold
 
-/-- **Every column a template's description surely reads is one its committed net's computed rows read.** -/
 theorem readsSure_readIns {t : Tmpl} {mode : Mode} {lays : Array Lay} (hL : layoutM t mode = .ok lays)
     (h : unrollOk t lays = true) (hlog : (unitNet t lays).unitLog ≤ 32) {y : Nat}
     (hy : t.readsSure.getD y false = true) : (RecResiduals.readIns (unitNet t lays)).getD y false = true := by
@@ -79,7 +71,6 @@ theorem readsSure_readIns {t : Tmpl} {mode : Mode} {lays : Array Lay} (hL : layo
   · exact List.mem_append_left _ (List.mem_map.2 ⟨y, hyr, hyy⟩)
   · exact List.mem_append_right _ (List.mem_map.2 ⟨y, hyr, hyy⟩)
 
-/-- **The columns `KnownRead.sureReads` gives are read by the unit's computed rows.** -/
 theorem sureReads_sound {c : Circuit} {rd : Array Bool} (h : KnownRead.sureReads c = some rd) {y : Nat}
     (hy : rd.getD y false = true) : (RecResiduals.readIns c.unit).getD y false = true := by
   unfold KnownRead.sureReads at h
@@ -98,8 +89,6 @@ theorem sureReads_sound {c : Circuit} {rd : Array Bool} (h : KnownRead.sureReads
     next => cases h
   next => cases h
 
-/-- **What `KnownRead.readsOk` accepted, at columns the unit's computed rows read**: `readsOkAt` at some `rd` every
-column of which `readIns` marks. -/
 theorem readsAt_of_readsOk {c : Circuit} {known : Array (String × Array (Array Nat × ByteArray))}
     (h : KnownRead.readsOk c known = .ok ()) :
     ∃ rd, KnownRead.readsOkAt c known rd = .ok () ∧

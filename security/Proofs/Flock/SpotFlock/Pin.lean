@@ -3,28 +3,8 @@ module
 public import Proofs.Flock.SpotFlock.Facts
 public import Proofs.Flock.Claims.Sampling.Path
 
-/-!
-# The circuit pin as round 2's driver checks it
-
-Round 2's driver refuses a session unless its circuit file's SHA-512 is the committed `circuit_sha512`, the reference
-statement's circuit file's (`proofs.verify`), while `pinOk` holds the circuit file to the reference's byte for byte.
-`pinHash` is the driver's check: the session statement is the reference one in every field `pinOk` reads but the
-circuit file, whose SHA-512 is the reference's. The two differ only at a SHA-512 collision, which `pinColl` outputs.
-
-* `pinHash_of_pinOk`: a statement `pinOk` passes, `pinHash` passes.
-* `pinOk_of_pinHash`: a statement `pinHash` passes whose circuit file exposes no collision (`pinColl = none`), `pinOk`
-  passes.
-* `pinColl_collides`: what `pinColl` outputs is a SHA-512 collision (`Claims.Collision sha512Msg`).
-
-`VHash` is the two-stage verifier with round 2's pin as the driver checks it, and `V` stays the stricter one the
-guarantees read. The two give one run unless the message that states the session statements (round `stage + 1`'s)
-exposes a collision:
-
-* `run_hash`: a run of `VHash` is the run of `V` on the same tape and coins when `pinCollOf` finds nothing in that
-  message of the run of `V`.
-* `pr_acc_hash_le`: over the prover's tape, the verifier's coins and any further coins, `VHash` accepts with an event
-  at most as often as `V` does, plus the probability that `pinFinder` outputs a SHA-512 collision.
--/
+/-! The circuit pin as round 2's driver checks it, by SHA-512 where `pinOk` compares bytes, and the two verifiers'
+coupling up to a collision. -/
 
 @[expose] public section
 
@@ -35,9 +15,6 @@ open Properties.Certifier.Bytes (bs bs_inj)
 
 variable (h : Held)
 
-/-- **Template `t`'s session statement is its reference one, its circuit file held by SHA-512**, as round 2's driver
-holds it: decoded as `w`, it is `xS₀ t`'s in every field but its sample, its registered reads, its public file and its
-circuit file, and its circuit file's SHA-512 is the reference's. -/
 def pinHash (t : ℕ) (w : FlockDeploy.Raw) : Bool :=
   match FlockDeploy.decode (h.xS₀ t) with
   | some w₀ =>
@@ -46,8 +23,6 @@ def pinHash (t : ℕ) (w : FlockDeploy.Raw) : Bool :=
       decide (_root_.Flock.Sha512.hash w.circuit = _root_.Flock.Sha512.hash w₀.circuit)
   | none => false
 
-/-- **The collision template `t`'s session statement exposes**: the reference's circuit file and the session's, where
-the two differ and have one SHA-512 digest. -/
 def pinColl (t : ℕ) (w : FlockDeploy.Raw) : Option (Msg × Msg) :=
   match FlockDeploy.decode (h.xS₀ t) with
   | some w₀ =>
@@ -110,11 +85,8 @@ theorem pin_eq {t : ℕ} {w : FlockDeploy.Raw} (hn : pinColl h t w = none) : pin
     | false => rfl
     | true => simpa [hp] using pinOk_of_pinHash hq hn
 
-/-! ## The verifier with the driver's pin -/
-
 variable (h)
 
-/-- `readsOk` with the circuit pin as round 2's driver checks it (`pinHash`). -/
 def readsOkHash (t : ℕ) (x m₁ xS : Msg) (c₀ : FlockDeploy.Coin) (c₁ : Stage h) : Bool :=
   match decode x, jsonMsg m₁, secondDraw h c₀ c₁, FlockDeploy.decode xS with
   | some st, some rec, some draw, some w =>
@@ -125,7 +97,6 @@ def readsOkHash (t : ℕ) (x m₁ xS : Msg) (c₀ : FlockDeploy.Coin) (c₁ : St
       ((stmtJsonOf h t w).map (codesOk h own t)).getD false && pinHash h t w
   | _, _, _, _ => false
 
-/-- `stmtOk` with each template's reads checked by `readsOkHash`. -/
 def stmtOkHash (x m₁ m₂ : Msg) (c₀ : FlockDeploy.Coin) (c₁ : Stage h) : Bool :=
   match parse h x, stmtsOf m₂ with
   | some s, some xs =>
@@ -135,30 +106,25 @@ def stmtOkHash (x m₁ m₂ : Msg) (c₀ : FlockDeploy.Coin) (c₁ : Stage h) : 
           readsOkHash h t x m₁ (xs.getD t (h.xS₀ t)) c₀ c₁
   | _, _ => false
 
-/-- `next` with round `stage + 1` checked by `stmtOkHash`. -/
 def nextHash (x : Msg) (as : List Msg) (cs : List FlockDeploy.Coin) : OC Out :=
   if as.length = h.stage + 2 ∧ cs.length = h.stage + 2 then
     .ret (if stmtOkHash h x (as.getD 1 []) (as.getD (h.stage + 1) []) (cs.getD 0 default) (stageOf h cs) then .msg []
       else .rej)
   else next h x as cs
 
-/-- **The two-stage verifier as round 2's driver pins circuits**: `V` with each session's circuit file held to the
-reference's by SHA-512. -/
+/-- `V` stays the stricter one the guarantees read; the two give one run unless round `stage + 1`'s message exposes a
+SHA-512 collision (`run_hash`, `pr_acc_hash_le`). -/
 def VHash : Verifier FlockDeploy.Coin where
   k _ := off h h.ms.length + 1
   next := nextHash h
 
-/-- **The collision a session statements' message exposes**: at the first template whose session statement's circuit
-file differs from the reference's under one SHA-512 digest, the two files (`pinColl`). -/
 def pinCollOf (m₂ : Msg) : Option (Msg × Msg) :=
   match stmtsOf m₂ with
   | some xs =>
     (List.range h.ms.length).findSome? fun t => (FlockDeploy.decode (xs.getD t (h.xS₀ t))).bind (pinColl h t)
   | none => none
 
-/-- **The circuit-pin finder**: over the prover's tape and the verifier's coins, the collision the session statements'
-message of the run of `V` exposes (`pinCollOf`). Its cost is the run's SHA-512 calls and two per template, the circuit
-files'. -/
+/-- Its cost is the run's SHA-512 calls and two per template, the circuit files'. -/
 def pinFinder (H : Msg → Msg) : FinderFamily := fun Ω _ _ P x =>
   { S := Ω × (Fin ((V h).k x) → FlockDeploy.Coin)
     out := fun s => pinCollOf h ((run H P (V h) x s.1 s.2).msgs.getD (h.stage + 1) ([], .rej)).1
@@ -191,7 +157,6 @@ theorem readsOkHash_eq {t : ℕ} {x m₁ xS : Msg} {c₀ : FlockDeploy.Coin} {c�
     have hp : pinHash h t w = pinOk h t w := pin_eq (by simpa [hw] using hn)
     cases decode x <;> cases jsonMsg m₁ <;> cases secondDraw h c₀ c₁ <;> simp only [hp]
 
-/-- **The two statement checks agree** where the session statements' message exposes no collision. -/
 theorem stmtOkHash_eq {x m₁ m₂ : Msg} {c₀ : FlockDeploy.Coin} {c₁ : Stage h} (hn : pinCollOf h m₂ = none) :
     stmtOkHash h x m₁ m₂ c₀ c₁ = stmtOk h x m₁ m₂ c₀ c₁ := by
   unfold stmtOkHash stmtOk
@@ -220,10 +185,6 @@ theorem nextHash_eq {x : Msg} {as : List Msg} {cs : List FlockDeploy.Coin}
     rw [ite_eq_left hl, next_stmt h x (hl.2.trans hl.1.symm) hl.1, stmtOkHash_eq (hn hl.1)]
   · exact nextHash_of_ne hl
 
-/-! ## One run, unless the session statements' message exposes a collision -/
-
-/-- **Two verifiers that answer alike off `L` prover messages give one run** wherever they answer alike at the run's
-own first `L`. -/
 theorem stepWith_congr_at {Ω : Type} (H : Msg → Msg) (P : Prover Ω) (x : Msg) (ω : Ω) (v₁ v₂ : List Msg → OC Out)
     (L : ℕ) (hv : ∀ bs : List Msg, bs.length ≠ L → v₁ bs = v₂ bs) :
     ∀ (n : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Transcript), as = t.msgs.map Prod.fst →
@@ -260,8 +221,6 @@ theorem getD_fst_take (ms : List (Msg × Out)) {n k : ℕ} (hk : n < k) :
   rw [List.getD_eq_getElem?_getD, List.getD_eq_getElem?_getD, List.getElem?_take_of_lt hk, List.getElem?_map]
   cases ms[n]? <;> rfl
 
-/-- **The coupling, run by run**: on any tape and coins, the run of `VHash` is the run of `V` when the latter's
-session statements' message exposes no collision. -/
 theorem run_hash {Ω : Type} (H : Msg → Msg) (P : Prover Ω) (x : Msg) (ω : Ω) (r : Fin ((V h).k x) → FlockDeploy.Coin)
     (hn : pinCollOf h ((run H P (V h) x ω r).msgs.getD (h.stage + 1) ([], .rej)).1 = none) :
     run H P (VHash h) x ω r = run H P (V h) x ω r := by
@@ -272,8 +231,6 @@ theorem run_hash {Ω : Type} (H : Msg → Msg) (P : Prover Ω) (x : Msg) (ω : �
       rw [getD_fst_take _ (show h.stage + 1 < h.stage + 2 by omega)]
       exact hn
 
-/-- **The coupling**: over the prover's tape, the verifier's coins and any further coins `C`, `VHash` accepts with
-event `E` at most as often as `V` does, plus the probability that the circuit-pin finder outputs a SHA-512 collision. -/
 theorem pr_acc_hash_le {Ω : Type} [Fintype Ω] [Nonempty Ω] (H : Msg → Msg) (P : Prover Ω) (x : Msg) {C : Type}
     [Fintype C] [Nonempty C] (E : Ω × (Fin ((V h).k x) → FlockDeploy.Coin) × C → Prop) :
     Pr (fun s : Ω × (Fin ((V h).k x) → FlockDeploy.Coin) × C => (run H P (VHash h) x s.1 s.2.1).out = .acc ∧ E s) ≤

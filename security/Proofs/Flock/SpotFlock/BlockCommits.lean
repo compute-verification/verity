@@ -2,21 +2,8 @@ module
 
 public import Proofs.Flock.SpotFlock.BlockSize
 
-/-!
-# What a unit's proof block commits, from its circuit file's descriptor
-
-A proof block commits its gates that `Prog.Boundary` marks: those returned, the inputs, and those a gate outside it
-reads. Where each block reads only its own gates and constants, the blocks are disjoint and every gate but a constant
-or an input is in one, no gate outside a block reads one of its gates, so it commits only its returned gates and its
-inputs (`committed_le_ends`). A member's units' blocks are such (`member_closed`), so a unit's block commits at most
-its stacked rows' inputs and the sixteen bits of each returned output leaf of each of its instances,
-`(bitsRows c).nIn + outBits c` (`length_ends_le`): a bound on one proof block that reads neither the member's unit count
-nor its rows.
-
-* `committed_le_ends`: a closed block among disjoint blocks that cover the program commits at most its `ends`.
-* `unit_outGate`: a returned gate of unit `u` is one of the copy rows `outGate c n u k j t`.
-* `length_ends_le`: a unit's block's returned gates and inputs.
--/
+/-! What a unit's proof block commits, bounded from its circuit file's descriptor without reading the member's unit
+count or rows (`length_ends_le`). -/
 
 @[expose] public section
 
@@ -24,15 +11,10 @@ namespace Flock.Bridge.BlockCommits
 
 open Claims.Sampling Properties.Spot Flock.Bridge.NeededBitsOf Flock.Bridge.BlockSize
 
-/-- Whether gate `g` of `C` is returned or an input. -/
 def IsEnd (C : Prog) (g : ℕ) : Bool := C.outs.contains g || decide (C.gates[g]? = some .input)
 
-/-- **The gates of `u` that are returned or are inputs.** -/
 def ends (C : Prog) (u : List ℕ) : List ℕ := u.filter (IsEnd C)
 
-/-- **A closed proof block commits only its returned gates and its inputs**: where every block of `bs` reads only its
-own gates and constants and holds no constant, distinct blocks share no gate, and every gate but a constant or an input
-is in some block, no gate outside a block reads one of its gates. -/
 theorem committed_le_ends {C : Prog} {bs : List (List ℕ)} {bu : List ℕ} (hbu : bu ∈ bs)
     (hdis : ∀ bv ∈ bs, ∀ g ∈ bu, g ∈ bv → bv = bu)
     (hcov : ∀ i < C.gates.length, (∀ b, C.gates[i]? ≠ some (.const b)) → C.gates[i]? ≠ some .input →
@@ -69,7 +51,6 @@ theorem committed_le_ends {C : Prog} {bs : List (List ℕ)} {bu : List ℕ} (hbu
     · exact hnot (hdis bv hbv g hg hgv ▸ hg'v)
     · exact (hcl bu hbu g hg _ hcb).1 b rfl
 
-/-- A list's length, from the lengths of a `flatMap`'s pieces. -/
 theorem length_flatMap_le_sum {α β : Type} (f : α → List β) (w : α → ℕ) :
     ∀ l : List α, (∀ a ∈ l, (f a).length ≤ w a) → (l.flatMap f).length ≤ (l.map w).sum
   | [], _ => by simp
@@ -86,7 +67,6 @@ theorem sum_const_range (m w : ℕ) : ((List.range m).map fun _ => w).sum = w * 
     rw [List.range_succ, List.map_append, List.sum_append, ih]
     simp [Nat.mul_succ]
 
-/-- A list without repeats whose entries are all in `L` is no longer than `L`. -/
 theorem length_le_of_subset {l L : List ℕ} (hnd : l.Nodup) (h : ∀ x ∈ l, x ∈ L) : l.length ≤ L.length := by
   have hc := Finset.card_le_card (show l.toFinset ⊆ L.toFinset from
     fun x hx => List.mem_toFinset.2 (h x (List.mem_toFinset.1 hx)))
@@ -95,10 +75,8 @@ theorem length_le_of_subset {l L : List ℕ} (hnd : l.Nodup) (h : ∀ x ∈ l, x
 
 variable (c : Flock.Circuit) (n : ℕ)
 
-/-- **The returned output bits of one unit**: sixteen for each returned output leaf of each of its `upv` instances. -/
 def outBits (c : Flock.Circuit) : ℕ := ((List.range c.upv).map fun k => 16 * (c.leavesOut.getD k #[]).size).sum
 
-/-- **Unit `u`'s returned gates**, as copy rows: instance `k`'s returned output leaf `j`, bit `t`. -/
 def unitOuts (u : ℕ) : List ℕ :=
   (List.range c.upv).flatMap fun k => (List.range (c.leavesOut.getD k #[]).size).flatMap fun j =>
     (List.range 16).filterMap (Spot.Bits.outGate c n u k j)
@@ -109,7 +87,6 @@ theorem length_unitOuts_le (u : ℕ) : (unitOuts c n u).length ≤ outBits c := 
   refine (length_flatMap_le_sum _ (fun _ => 16) _ fun j _ => ?_).trans (le_of_eq (sum_const_range _ _))
   exact (List.length_filterMap_le _ _).trans (by simp)
 
-/-- **A returned gate of unit `u` is one of its copy rows.** -/
 theorem unit_outGate {u o : ℕ} (ho : o ∈ (Spot.Bits.keyProg c n).outs)
     (hu : Spot.Bits.unitOf (Spot.Bits.keyProg c n) o = some u) : o ∈ unitOuts c n u := by
   obtain ⟨u', k, j, t, hk⟩ := of_mem_outs c n ho
@@ -121,7 +98,6 @@ theorem unit_outGate {u o : ℕ} (ho : o ∈ (Spot.Bits.keyProg c n).outs)
   simp only [List.mem_flatMap, List.mem_range, List.mem_filterMap]
   exact ⟨k, hkl, j, hjl, t, htl, hk⟩
 
-/-- **A unit's lowered gates' returned ones** are the positions of its returned copy rows, one a row. -/
 theorem length_ends_unitGates_le (u : ℕ) :
     ((Spot.Bits.unitGates (Spot.Bits.keyProg c n) u).filter (IsEnd (memberProg c n))).length ≤
       outBits c := by
@@ -182,8 +158,6 @@ theorem length_ends_unitGates_le (u : ℕ) :
     rw [Bool.and_eq_true, beq_iff_eq, List.contains_iff_mem] at hp
     exact unit_outGate c n hp.2 hp.1
 
-/-- **A unit's proof block's returned gates and inputs**: at most its stacked rows' inputs and its returned output
-bits, whatever the member's unit count and its rows. -/
 theorem length_ends_le (u : ℕ) :
     (ends (memberProg c n) (Spot.Bits.blockOf (Spot.Bits.keyProg c n) (Spot.Bits.consts c n) u)).length ≤
       (bitsRows c).nIn + outBits c := by

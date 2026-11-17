@@ -2,22 +2,13 @@ module
 
 public import Proofs.Flock.SpotFlock.Cap
 
-/-!
-# A first stage of count `K` samples below its population
-
-A first stage that samples a uniform `K`-subset (`firstK`) proves exactly the units it samples (`select_proved`), and a
-`subset` sample that ends is distinct indices below the population it samples over (`Discharge.Exec.subset_spec`). So
-every unit it proves is below the registration's population, `Partition.units` (`select_subset_lt`), and every block of
-the replay sample is (`RegTwo.sample_lt`).
--/
+/-! A first stage of count `K` samples below its population (`RegTwo.sample_lt`). -/
 
 @[expose] public section
 
 namespace Flock.Bridge
 
 open Properties.Spot.SecurityProofs (bind_ok bind_error onWith_take) in
-/-- **A `subset` sample that ends holds units below the population**: `sampleUnits`' units are `Draw.subset`'s, the
-values of a permutation that keeps `[0, n)` on `[0, k)`, and `k ≤ n` (`subset_spec`). -/
 theorem sampleUnits_subset_lt {k n : ℕ} {src : ByteArray} {units : Array ℕ} {read : ℕ}
     (h : Spot.Draw.sampleUnits (.subset k) n src = .ok (units, read)) : ∀ x ∈ units, x < n := by
   unfold Spot.Draw.sampleUnits at h
@@ -59,8 +50,6 @@ open Claims Claims.Sampling SamplingDeploy
 open Properties.Spot.SecurityProofs (flockSamplingDesign_subset deriveSamplingDesign_subset)
 open Lean (Json)
 
-/-- **A first stage of count `K` proves units below its population**: with no closure map it proves the units it
-drew (`select_proved`), a `subset K` sample over the population `Partition.units` gives. -/
 theorem select_subset_lt {g : Reg} {K : ℕ} (hK : firstK g = some K) {src : ByteArray} {draw : Json}
     {proved : Array ℕ} {read : ℕ}
     (h : Spot.Select.select g.rule g.program g.query g.table g.closure src = .ok (draw, proved, read)) :
@@ -88,8 +77,6 @@ namespace SamplingDeploy
 
 open SpotFlock (firstK firstK_some select_subset_lt)
 
-/-- **Every block of the replay sample is below the first stage's population**, where the first stage samples a
-uniform `K`-subset: the sample is the units the first stage proves, and none where it is refused. -/
 theorem RegTwo.sample_lt (g : RegTwo) {K : ℕ} (hK : firstK g.first = some K) (src : ByteArray) :
     ∃ n, Spot.Partition.units g.first.program g.first.query = .ok n ∧ ∀ ρ ∈ g.sample src, ρ < n := by
   obtain ⟨-, -, n, -, hn, -, -⟩ := firstK_some hK

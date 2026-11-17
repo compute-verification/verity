@@ -5,20 +5,7 @@ public import Proofs.Flock.Soundness.SessionAcc
 public import Proofs.Flock.Soundness.SessionBatch
 import Proofs.Flock.Soundness.Game
 
-/-!
-# Several tables in one batched session, from accepted reruns (DESIGN.md §3)
-
-`SessionBatch.lean` for the expected-time extractor. The extractor of table `j` fills it from `k`
-reruns of everything after `Commit` in which **the session** accepts (every table accepts), so its
-relative term is relative to the probability that the audit accepts. Conditioning on table `j`'s
-own acceptance would make it relative to that, which can be far larger.
-
-* `extractProbAccB`, `failProbAccB`: the probabilities over those reruns (`Extract.expectAcc`);
-* `joint_le_accB`: `Pr[the session accepts] · failProbAccB ≤ ksBoundAccB + rateB · Pr[accepts]`,
-  with `ksBoundAccB` table `j`'s `ε_c⁻ + √(k·adv₀)` and `rateB` its `N₀/(ek)`, from
-  `session_knowledge_sound_acc`;
-* `one_le_fail_add_accB`: the audit's `cover`, when the session accepts with positive probability.
--/
+/-! `SessionBatch.lean` for the expected-time extractor, from reruns in which the session accepts. -/
 
 @[expose] public section
 
@@ -40,24 +27,19 @@ theorem expectAcc_cast {α : Type} {g₁ g₂ : Game α} (h : g₁ = g₂) (s : 
   subst h; rfl
 
 open Classical in
-/-- **An event of table `j`'s extraction, from accepted reruns**: the probability, over `k` reruns
-of everything after `Commit` in which the session accepts, that the table the extractor fills from
-table `j`'s openings satisfies `G`. -/
+/-- Over reruns in which the session accepts, not table `j`: conditioning on table `j`'s own acceptance would make the
+relative term relative to that, which can be far larger. -/
 noncomputable def extractProbAccB [Inhabited D] (A : Arith F K) (H : List UInt8 → D)
     (E : Merkle.Enc (List F) D) (ts : List (TabSpec mPts)) (j : Fin ts.length) (k : ℕ)
     (τ : Strategy (sessionB A H E ts)) (G : Oracle F → Prop) : ℝ :=
   Extract.expectAcc (sessAfterB (gamesB A H E ts τ.1)) τ.2 (acceptedB ts) k
     (ind fun bs => G (extractTableS H E (ts.get j).sch j (τ.1 j) bs))
 
-/-- **Table `j`'s extraction from accepted reruns fails**: no codeword near the extracted table
-packs a satisfying witness. -/
 noncomputable def failProbAccB [Inhabited D] (A : Arith F K) (H : List UInt8 → D)
     (E : Merkle.Enc (List F) D) (ts : List (TabSpec mPts)) (j : Fin ts.length) (k : ℕ)
     (τ : Strategy (sessionB A H E ts)) : ℝ :=
   extractProbAccB A H E ts j k τ fun T => ¬ Committed A (ts.get j).S (ts.get j).sch T
 
-/-- **Table `j`'s knowledge bound from accepted reruns**, without its relative term:
-`ε_c⁻ + √(k·adv₀)`, every term the table's own, computed in the session. -/
 noncomputable def ksBoundAccB [Inhabited D] (A : Arith F K) (H : List UInt8 → D)
     (E : Merkle.Enc (List F) D) (ts : List (TabSpec mPts)) (j : Fin ts.length) (k : ℕ)
     (τ : Strategy (sessionB A H E ts)) : ℝ :=
@@ -86,9 +68,6 @@ theorem ksBoundAccB_nonneg [Inhabited D] (A : Arith F K) (H : List UInt8 → D)
   add_nonneg (epsS_nonneg _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _) (Real.sqrt_nonneg _)
 
 open Classical in
-/-- **Knowledge soundness of table `j` in a batched session, from accepted reruns**, in the product
-form: `Pr[the session accepts] · Pr[table j's extraction fails] ≤ ε_c⁻ + √(k·adv₀) + N₀/(ek) ·
-Pr[the session accepts]`, over `k ≥ 1` reruns in which the session accepts. -/
 theorem joint_le_accB (A : Arith F K) (hA : A.Correct)
     [Inhabited D] (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (ts : List (TabSpec mPts))
     (j : Fin ts.length) (k : ℕ) (hk : 1 ≤ k) (τ : Strategy (sessionB A H E ts)) :
@@ -116,9 +95,6 @@ theorem joint_le_accB (A : Arith F K) (hA : A.Correct)
 
 omit [Fintype K] in
 open Classical in
-/-- **The audit's `cover`, per table, from accepted reruns.** If commitment implies `G` and the
-session accepts with positive probability, every extracted table is uncommitted or satisfies `G`,
-so table `j`'s failure and `G` have probabilities adding up to at least `1`. -/
 theorem one_le_fail_add_accB [Inhabited D] (A : Arith F K) (H : List UInt8 → D)
     (E : Merkle.Enc (List F) D) (ts : List (TabSpec mPts)) (j : Fin ts.length) (k : ℕ)
     (τ : Strategy (sessionB A H E ts)) (G : Oracle F → Prop)

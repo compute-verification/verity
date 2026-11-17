@@ -11,31 +11,8 @@ import Proofs.Flock.Soundness.Game
 import Proofs.Flock.Soundness.ListSize
 import VCVio.Prelude.Core
 
-/-!
-# Soundness of Flock's interactive protocol, as the Lean verifier (`verity/protocols/proofs/flock/verifier/`) runs it
-
-**`table_sound`.** For every prover strategy, the probability that the verifier accepts a table
-(both reps, on one committed root, with live coins) while no codeword within the level-0 radius
-of the committed table packs a witness satisfying the statement, is at most
-`tableError (fast100 m) shape`.
-
-**`table_sound_fast100`, `table_sound_fast100_34_35`.** With the numbers: at most `2^-205` for
-`22 ≤ m ≤ 33` and `2^-205` for `m = 34, 35`, for every statement shape in `Stmt.InRange`.
-
-This is the interactive-oracle layer, a16z's security stage 1a (`DESIGN.md` §7): the
-committed tables are oracles. The Merkle layer (`Merkle`, stages 1b and 1c with live coins) adds
-SHA-512's collision term for the compiled protocol (`table_sound_compiled`), under `SHA512CRStrict`
-(`StrictCR.table_sound_compiled_strict`).
-
-**Status.** Proved. `table_sound` follows from `rep_sound` (one rep from a doomed start,
-`RepSound`, itself proved from four phase lemmas, Ligerito's in `LigeritoPhase`) and `link_sound`
-(the link points, `BindSound`). Mutual correlated agreement up to the Johnson bound is proved
-(`mcaError_le_bchks25`, from DKT26), so there is no named assumption; `tools/verity/lean/check.py` audits every declaration's axioms.
-
-Both theorems assume the link points' layout (`Statement.LinkLayout`): each region's free bits
-are distinct and read link coordinates below `PT_LOCAL`, and the block coordinates `PT_LOCAL …`
-fit inside the point, as the statements of `Flock.Statement` have them.
--/
+/-! Soundness of Flock's interactive protocol as the Lean verifier runs it (`table_sound`, and `table_sound_fast100`
+with the numbers). -/
 
 @[expose] public section
 
@@ -45,10 +22,6 @@ open Game Model Accounting
 
 variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K]
 
-/-- **The link points** (`Flock.Statement`): if the committed values do not satisfy the statement, the two
-link points leave some rep start undoomed with probability at most `linkError`: Schwartz–Zippel
-on a failing region's difference, at two independent points, for every codeword near the
-committed table (`BindSound`, `link_sound_of_card`, with `closeMsgs_card_le`). -/
 theorem link_sound (A : Arith F K) (hA : A.Correct) (S : Statement) (sch : Schedule)
     (hsch : fast100 S.m = some sch) (ptLocal mPts : ℕ) (C : Oracle F)
     (hC : ¬ Committed A S sch C) (hlay : S.LinkLayout ptLocal mPts) :
@@ -66,10 +39,8 @@ theorem link_sound (A : Arith F K) (hA : A.Correct) (S : Statement) (sch : Sched
   push_cast
   ring
 
-/-- **Soundness of one table, for the optimal prover** (interactive-oracle layer): the verifier
-accepts both reps while the committed values do not satisfy the statement with probability at most
-`tableError`. `table_sound` is its form for every prover strategy; this form composes with other
-tables through `Game.value_interleave_le`. -/
+/-- `table_sound` for the optimal prover, the form that composes with other tables through
+`Game.value_interleave_le`. -/
 theorem table_value_sound (A : Arith F K) (hA : A.Correct)
     (S : Statement) (sch : Schedule) (hsch : fast100 S.m = some sch) (hm : 13 ≤ S.m)
     (ptLocal mPts : ℕ) (hlay : S.LinkLayout ptLocal mPts) :
@@ -82,7 +53,7 @@ theorem table_value_sound (A : Arith F K) (hA : A.Correct)
   simp only [table, bind_eq, pure_eq, recv, draw, bind_send, bind_ret, bind_coin, value_send]
   refine iSup_le fun C => ?_
   by_cases hC : Committed A S sch C
-  · -- every outcome carries `C`, so the event never happens
+  ·
     have h0 : value (fun out : Bool × Oracle F => out.1 = true ∧ ¬ Committed A S sch out.2)
         (.coin (Fin 2 → Fin mPts → F) fun pts =>
           ((rep A S sch hm C (extraClaims S ptLocal mPts pts)).interleave
@@ -114,9 +85,6 @@ theorem table_value_sound (A : Arith F K) (hA : A.Correct)
         _ ≤ ENNReal.ofReal ε * ENNReal.ofReal ε := mul_le_mul' h h
     · rw [tableError, ENNReal.ofReal_add hlink0 (by positivity), sq, ENNReal.ofReal_mul hε]
 
-/-- **Soundness of one table** (interactive-oracle layer). For every prover strategy, the
-verifier accepts both reps while the committed values do not satisfy the statement with
-probability at most `tableError`. -/
 theorem table_sound (A : Arith F K) (hA : A.Correct)
     (S : Statement) (sch : Schedule) (hsch : fast100 S.m = some sch) (hm : 13 ≤ S.m)
     (ptLocal mPts : ℕ) (hlay : S.LinkLayout ptLocal mPts)
@@ -125,8 +93,6 @@ theorem table_sound (A : Arith F K) (hA : A.Correct)
       ≤ ENNReal.ofReal (tableError sch (S.shape mPts)) :=
   (prob_le_value _ _ σ).trans (table_value_sound A hA S sch hsch hm ptLocal mPts hlay)
 
-/-- **The theorem with the numbers.** `fast100` run twice on one root with live coins: at most
-`2^-205` per table for `22 ≤ m ≤ 33`, for every statement shape in range. -/
 theorem table_sound_fast100 (A : Arith F K) (hA : A.Correct)
     (S : Statement) (sch : Schedule) (hsch : fast100 S.m = some sch) (hm1 : 22 ≤ S.m)
     (hm2 : S.m ≤ 33) (ptLocal mPts : ℕ) (hshape : (S.shape mPts).InRange)
@@ -136,7 +102,6 @@ theorem table_sound_fast100 (A : Arith F K) (hA : A.Correct)
   (table_sound A hA S sch hsch (by omega) ptLocal mPts hlay σ).trans
     (ENNReal.ofReal_le_ofReal (tableError_le_of_le_33 hm1 hm2 hsch _ hshape))
 
-/-- **The numbers, `m = 34, 35`.** -/
 theorem table_sound_fast100_34_35 (A : Arith F K)
     (hA : A.Correct) (S : Statement) (sch : Schedule) (hsch : fast100 S.m = some sch)
     (hm1 : 34 ≤ S.m) (hm2 : S.m ≤ 35) (ptLocal mPts : ℕ) (hshape : (S.shape mPts).InRange)

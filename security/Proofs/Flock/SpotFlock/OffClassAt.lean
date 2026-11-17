@@ -7,30 +7,8 @@ import Proofs.Flock.Masked
 import Proofs.Flock.Claims.Sampling.Assembled
 import Proofs.Flock.SpotFlock.RevealsLe
 
-/-!
-# The three masses a first-hit error reads, at a budget, at SPOT[Flock]'s code
-
-A first-hit error of the two-stage verifier reads three masses of one prover's runs and their extractions: that
-`B_conf,X` finds a collision, that an accepted run's extractions open a gate away from the boundary trace read at the
-statement, and that they open one away from its replay block's committed interior. At SPOT[Flock]'s compiled
-two-stage verifier, under `Built` and `Addresses` at a statement in the two-stage scope, each is at most twice a cost
-in calls of SHA-512 over `2^256`, where the machine that finds the collision meets the linear expected-time bound:
-
-* `code_bconfX_le_at`: `Pr[B_conf,X finds a collision] ≤ 2·runCost/2^256`, where `B_conf,X` meets it;
-* `code_offRegX_le_cls_at`: `Pr[acc ∧ off the boundary trace] ≤ 2·firstHitCost/2^256`, where the by-class finder
-  under the statement's roots meets it at every `K`;
-* `code_offIreg_le_cls_at`: `Pr[acc ∧ off a committed interior] ≤ 2·firstHitCost/2^256`, where the by-class finder
-  under the interior roots meets it at every `K`,
-
-with `runCost = T·(1 + e_s·N_s) + n_PU·openCalls` and
-`firstHitCost = T·(1 + e_s·N_s + K_s + e_s·K_m) + (1 + K_s)·n_PU·openCalls` at a budget `T` on a run's calls, the
-gates each proof block's reveal opens (`Reveal.needs`) and the classes of `gateKey`.
-
-The code supplies the commitment's binding, the sessions' contract, the opening checks' count (`code_contract`) and
-that a run's extractions open a class of the key whole or not at all (`code_opens_cls`). What each bound still takes:
-the budget `T` a run, the counts over the coins, and the linear expected-time bound at its one machine. So a statement
-that reads the three masses as costs can read them from that bound on SHA-512 in place of three premises of its own.
--/
+/-! The three masses a first-hit error reads, each at most twice a cost in SHA-512 calls over `2^256` at SPOT[Flock]'s
+code, where the machine that finds the collision meets the linear expected-time bound. -/
 
 @[expose] public section
 
@@ -40,9 +18,6 @@ open Claims Claims.Sampling SamplingDeploy
 
 variable (h : Held)
 
-/-- **What the code supplies to a bound at a budget**: at SPOT[Flock]'s compiled two-stage verifier, under `Built`
-and `Addresses`, the commitment binds, the sessions meet the two-stage contract, and the opening checks call SHA-512
-at most `openCalls` times a slot. -/
 theorem code_contract (hB : Built h) (hS : Addresses h)
     {L : Claims.SamplingGeneric.CompiledTwo FlockDeploy.Coin
       (Claims.SamplingGeneric.Arg.ofFlock (FlockDeploy.deployZk _root_.Flock.Readable.relation))}
@@ -62,9 +37,6 @@ theorem code_contract (hB : Built h) (hS : Addresses h)
     exact SamplingDeploy.openCallsLe_compiled _ (code h) iroots _ (revealsLe h)
   exact ⟨hbind, hSess, hopen⟩
 
-/-- **At the code a run's extractions open a class of the key whole or not at all**, under the statement's roots and
-under a replay block's interior roots: `Built` and `Addresses` at a statement in the two-stage scope give the two
-hypotheses on the classes that the by-class bounds take, at the classes of `gateKey`. -/
 theorem code_opens_cls (hB : Built h) (hS : Addresses h)
     {L : Claims.SamplingGeneric.CompiledTwo FlockDeploy.Coin
       (Claims.SamplingGeneric.Arg.ofFlock (FlockDeploy.deployZk _root_.Flock.Readable.relation))}
@@ -99,10 +71,6 @@ theorem code_opens_cls (hB : Built h) (hS : Addresses h)
     fun t ec g g' hgg hg =>
       L.iopTable_isSome_cls FlockDeploy.sha512 P x t.1 hs d.part cls hblock t.2 ec (hkept t.1 _ ec.2) g g' hgg hg⟩
 
-/-- **`B_conf,X` finds a collision with probability at most `2·runCost/2^256`, at the code**: under `Built` and
-`Addresses`, where every run calls SHA-512 at most `T` times, both parties' calls counted (`hT`), `N_s` is at least
-the expected number of sessions in a run's sample and `B_conf,X` meets the linear expected-time bound. The first of
-the three masses, at `c_R = runCost = T·(1 + e_s·N_s) + n_PU·openCalls`. -/
 theorem code_bconfX_le_at (hB : Built h) (hS : Addresses h)
     {L : Claims.SamplingGeneric.CompiledTwo FlockDeploy.Coin
       (Claims.SamplingGeneric.Arg.ofFlock (FlockDeploy.deployZk _root_.Flock.Readable.relation))}
@@ -120,12 +88,6 @@ theorem code_bconfX_le_at (hB : Built h) (hS : Addresses h)
   obtain ⟨_, hSess, hopen⟩ := code_contract h hB hS hL
   exact Claims.SamplingGeneric.Compiled.bconfX_le_at hSess.toCostContract hopen x P T hT hNs hBc
 
-/-- **An accepted run is off the boundary trace read at the statement with probability at most
-`2·firstHitCost/2^256`, at the code**: under `Built` and `Addresses` at a statement in the two-stage scope, with
-`needs` the gates each proof block's reveal opens and `cls` the classes of `gateKey`, where every run calls SHA-512
-at most `T` times (`hT`), `N_s`, `K_s` and `K_m` are `code_eventTwoX_le_cls_at_budget`'s three counts, and the
-by-class finder under the statement's roots meets the linear expected-time bound at every `K`. The second of the
-three masses, at `c_F = firstHitCost`. -/
 theorem code_offRegX_le_cls_at (hB : Built h) (hS : Addresses h)
     {L : Claims.SamplingGeneric.CompiledTwo FlockDeploy.Coin
       (Claims.SamplingGeneric.Arg.ofFlock (FlockDeploy.deployZk _root_.Flock.Readable.relation))}
@@ -160,10 +122,6 @@ theorem code_offRegX_le_cls_at (hB : Built h) (hS : Addresses h)
   exact Claims.SamplingGeneric.CompiledTwo.pr_acc_offRegX_le_cls_at hbind hSess hopen hs P needs hpos cls
     (code_opens_cls h hB hS hL hx hP hd hin P hcls).1 T hT hNs hKs hKm hX
 
-/-- **An accepted run is off a committed interior with probability at most `2·firstHitCost/2^256`, at the code**:
-under `code_offRegX_le_cls_at`'s hypotheses, with the by-class finder under the interior roots of the design's
-second-stage partition in place of the one under the statement's roots. The third of the three masses, at
-`c_F = firstHitCost`. -/
 theorem code_offIreg_le_cls_at (hB : Built h) (hS : Addresses h)
     {L : Claims.SamplingGeneric.CompiledTwo FlockDeploy.Coin
       (Claims.SamplingGeneric.Arg.ofFlock (FlockDeploy.deployZk _root_.Flock.Readable.relation))}

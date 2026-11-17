@@ -5,33 +5,14 @@ public import Proofs.Flock.SpotFlock.AddressesAt
 public import Proofs.Flock.Bridge.BitsRowMap
 public import Proofs.Flock.Bridge.Members
 
-/-!
-# Every gate a checked unit needs is one of its own unit's bits, where each member's bits are rowed
-
-`NeededBits h` asks, at every accepted run, that each gate its checked unit's proof block needs be a bit of that unit
-(`BitOf`): a free source gate with a commitment position, or a returned gate with one. This file proves it from one
-hypothesis on the members' circuit files, `MembersRowed h`: each member's free source gates have a commitment position
-(`Bits.rowBit`), and so does each returned output leaf bit (`Bits.outRowBit`).
-
-* `blocksClosed_bitsProgs`, `sideBySide_of_held`: the members' proof blocks stand side by side (`SideBySide h`), with no
-  hypothesis. A unit's rows read its own source gates (`2 + u·B + b`, whose owner is the unit), the constant and the
-  zero (both fixed), and its own rows; a proof block holds only XORs, ANDs and free inputs.
-* So a needed gate is a gate of the block (`mem_of_needs`): a free source gate the unit owns, or one of its rows' gates,
-  which is then returned (`SpotFlock.needs_committed_of_closed`).
-* `neededBits_of_rowed`: a free source gate is a source bit (`sourceBits`) of the unit, and a returned row gate a written
-  bit (`writtenBits`) of the unit, each at its member's own positions (`pos_eq`).
-
-`MembersRowed h` fails at a member whose unit reads a source no row port holds (a wire into the unit, a literal, a
-padding row): its source gate is free, its block needs it, and it has no commitment position.
--/
+/-! `NeededBits` where each member's bits are rowed (`neededBits_of_rowed`), the members' proof blocks standing side by
+side with no hypothesis. -/
 
 @[expose] public section
 
 namespace Flock.Bridge.NeededBitsOf
 
 open Claims.Sampling Properties.Spot
-
-/-! ## Arithmetic -/
 
 theorem div_units {N u i : ℕ} (hi : i < N) : (u * N + i) / N = u := by
   rw [Nat.mul_comm, Nat.mul_add_div (by omega), Nat.div_eq_of_lt hi, Nat.add_zero]
@@ -57,8 +38,6 @@ theorem split_units {k m n g : ℕ} (h1 : k ≤ g) (h2 : g < k + n * m) :
 theorem src_lt {B n u b : ℕ} (hu : u < n) (hb : b < B) : 2 + u * B + b < 2 + n * B := by
   have := mul_add_lt hu hb
   omega
-
-/-! ## A key program's gates, lowered -/
 
 section kp
 
@@ -161,7 +140,6 @@ theorem posOf_lt_off {g : ℕ} (hg : g < kp.size) : Spot.Bits.posOf kp g < Spot.
   unfold Spot.Bits.posOf
   omega
 
-/-- **Distinct gates' lowered gates are apart.** -/
 theorem eq_of_off {g g' j j' : ℕ} (hg : g < kp.size) (hg' : g' < kp.size) (hj : j < Spot.Bits.gateSize kp g)
     (hj' : j' < Spot.Bits.gateSize kp g') (h : Spot.Bits.off kp g + j = Spot.Bits.off kp g' + j') : g = g' := by
   refine Nat.le_antisymm (Nat.le_of_not_lt fun hlt => ?_) (Nat.le_of_not_lt fun hlt => ?_)
@@ -206,7 +184,6 @@ theorem lower_row (κ : ℕ → Option Bool) {g : ℕ} {a b : List ℕ} (h : kp.
       .and [Spot.Bits.off kp g, Spot.Bits.off kp g + 1]] := by
   simp only [Spot.Bits.lower, h]
 
-/-- **Gate `g`'s lowered gate `j`** sits at `off kp g + j`. -/
 theorem bitsProg_gate_at (κ : ℕ → Option Bool) {g j : ℕ} (hg : g < kp.size) (hj : j < Spot.Bits.gateSize kp g) :
     (bitsProg kp κ).gates[Spot.Bits.off kp g + j]? = ((Spot.Bits.lower kp κ g)[j]?).map bitsGate := by
   have hoff : Spot.Bits.off kp g = ((List.range g).map fun x => (Spot.Bits.lower kp κ x).length).sum := by
@@ -255,8 +232,6 @@ theorem lt_length_of_mem_blockOf {κ : ℕ → Option Bool} {u q : ℕ} (hq : q 
 
 end kp
 
-/-! ## A circuit file's key program -/
-
 section key
 
 variable (c : Flock.Circuit) (n : ℕ)
@@ -272,8 +247,6 @@ theorem consts_zero : Spot.Bits.consts c n 0 = some true := by
 theorem consts_one : Spot.Bits.consts c n 1 = some false := by
   simp [Spot.Bits.consts]
 
-/-- **Unit `u`'s column `col`** is the constant, the zero, a source gate `2 + u·B + b` of its own, or one of its own
-rows. -/
 theorem keyWire_cases (u col : ℕ) :
     keyWire c n u col = 0 ∨ keyWire c n u col = 1 ∨
       (∃ b, Spot.Bits.keyIdx c (bitsRows c).nIn col = some b ∧
@@ -321,7 +294,6 @@ theorem unitOf_row {u i : ℕ} (hu : u < n) (hi : i < (bitsRows c).nComp) :
   · simp only [Bool.or_eq_true, decide_eq_true_eq, beq_iff_eq, not_or]
     omega
 
-/-- **What a unit's row reads**: the constant, the zero, one of the unit's own source gates, or one of its own rows. -/
 theorem args_of_unit {g u w : ℕ} (hg : Spot.Bits.unitOf (Spot.Bits.keyProg c n) g = some u)
     (hw : w ∈ Spot.Bits.args (Spot.Bits.keyProg c n) g) :
     u < n ∧ (w = 0 ∨ w = 1 ∨
@@ -338,7 +310,6 @@ theorem args_of_unit {g u w : ℕ} (hg : Spot.Bits.unitOf (Spot.Bits.keyProg c n
     · exact Or.inr (Or.inr (Or.inl ⟨col, b, hb, h⟩))
     · exact Or.inr (Or.inr (Or.inr ⟨j, hj, h⟩))
 
-/-- **A unit owns the source gates its rows read**: no earlier unit reads them. -/
 theorem owner_src {g u b : ℕ} (hg : Spot.Bits.unitOf (Spot.Bits.keyProg c n) g = some u)
     (hb : b < (bitsRows c).nIn) (hw : 2 + u * (bitsRows c).nIn + b ∈ Spot.Bits.args (Spot.Bits.keyProg c n) g) :
     Spot.Bits.owner (Spot.Bits.keyProg c n) (2 + u * (bitsRows c).nIn + b) = some u := by
@@ -394,8 +365,6 @@ theorem of_mem_outs {o : ℕ} (ho : o ∈ (Spot.Bits.keyProg c n).outs) :
 
 end key
 
-/-! ## Commitment positions -/
-
 theorem srcPos_leaf {c : Flock.Circuit} {u : ℕ} {s : Spot.Bits.Src} {rp : Spot.Bits.RowPos}
     (h : Spot.Bits.srcPos c u s = some rp) : rp.leaf = u := by
   unfold Spot.Bits.srcPos at h
@@ -420,8 +389,6 @@ theorem outRowBit_leaf {c : Flock.Circuit} {u k j t : ℕ} {rp : Spot.Bits.RowPo
   dsimp only at hx
   obtain ⟨o, -, rfl⟩ := Option.map_eq_some_iff.1 hx
   rfl
-
-/-! ## Programs side by side -/
 
 theorem gates_sideBySide (ps : List Claims.Sampling.Prog) {m p : ℕ} (hm : m < ps.length)
     (hp : p < ps[m].gates.length) :
@@ -474,8 +441,6 @@ theorem exists_of_mem_outs_bitsProgs {i : ℕ} (hi : i ∈ (bitsProgs ms).outs) 
   refine ⟨m, hm', p, by simpa using hp, ?_⟩
   rw [Members.offsetOf_bitsProgs]
 
-/-- **Positions of two members are apart**: a position of member `m`'s program is one of member `t`'s only where
-`m = t`, at the same gate. -/
 theorem pos_eq {m t p q : ℕ} (hm : m < ms.length) (ht : t < ms.length)
     (hp : p < (memberProg ms[m].1 ms[m].2.size).gates.length) (hq : q < (memberProg ms[t].1 ms[t].2.size).gates.length)
     (h : Spot.Bits.base ms m + p = Spot.Bits.base ms t + q) : m = t ∧ p = q := by
@@ -523,14 +488,10 @@ theorem getD_ms {m : ℕ} (hm : m < ms.length) : ms.getD m default = ms[m] := by
 
 end members
 
-/-! ## The members' proof blocks stand side by side -/
-
 section closed
 
 variable (c : Flock.Circuit) (n : ℕ)
 
-/-- **A member's proof block is closed**: each of its gates reads only gates of the block and constants, and none is a
-constant. -/
 theorem member_closed {u q : ℕ} (hq : q ∈ Spot.Bits.blockOf (Spot.Bits.keyProg c n) (Spot.Bits.consts c n) u)
     {x : BGate} (hx : (memberProg c n).gates[q]? = some x) :
     (∀ b, x ≠ .const b) ∧ ∀ w ∈ x.reads, w ∈ Spot.Bits.blockOf (Spot.Bits.keyProg c n) (Spot.Bits.consts c n) u ∨
@@ -598,8 +559,6 @@ theorem member_closed {u q : ℕ} (hq : q ∈ Spot.Bits.blockOf (Spot.Bits.keyPr
 
 end closed
 
-/-- **The members' proof blocks stand side by side**, with no hypothesis: `BlocksClosed` at the members' programs and
-units. -/
 theorem blocksClosed_bitsProgs (ms : Spot.Bits.Members) :
     _root_.SpotFlock.BlocksClosed (bitsProgs ms) (membersPart ms) := by
   have key : ∀ bl ∈ (membersPart ms).blocks, ∀ i ∈ bl, ∀ x : BGate, (bitsProgs ms).gates[i]? = some x →
@@ -621,7 +580,6 @@ theorem blocksClosed_bitsProgs (ms : Spot.Bits.Members) :
   exact And.intro (fun bl hbl i hi x hx => (key bl hbl i hi x hx).2)
     (fun bl hbl i hi b hb => (key bl hbl i hi _ hb).1 b rfl)
 
-/-- **A gate a closed proof block needs is one of its gates.** -/
 theorem mem_of_needs {C : Claims.Sampling.Prog} {Pt : Partition} (hcl : _root_.SpotFlock.BlocksClosed C Pt)
     {bu : List ℕ} (hbu : bu ∈ Pt.blocks) {g : ℕ} (hg : C.Needs bu g) : g ∈ bu := by
   obtain ⟨hc, -⟩ := hcl
@@ -631,8 +589,6 @@ theorem mem_of_needs {C : Claims.Sampling.Prog} {Pt : Partition} (hcl : _root_.S
   · rcases hc bu hbu g' hg' x hx g hi with hin | ⟨c, hcc⟩
     · exact absurd hin hgb
     · exact absurd hcc (hncg c)
-
-/-! ## Source bits and written bits -/
 
 theorem find?_of_all {α : Type} {p : α → Bool} {l : List α} {Q : α → Prop} (hex : ∃ a ∈ l, p a = true)
     (hQ : ∀ b ∈ l, p b = true → Q b) : ∃ a, l.find? p = some a ∧ Q a := by
@@ -708,7 +664,6 @@ theorem mem_writtenBits_of {m u k j t x : ℕ} {r : Spot.Bits.RowPos} (hm : m < 
   rw [getD_ms ms hm]
   exact ⟨u, hu, k, hk, j, hj, t, ht, by simp [hx, hr]⟩
 
-/-- **A written bit at a row gate of member `t`'s unit `k`** is member `t`'s, of unit `k`. -/
 theorem written_eq {t m g k j u k' j' t' x : ℕ} (ht : t < ms.length) (hm : m < ms.length)
     (hgu : Spot.Bits.unitOf (Spot.Bits.keyProg ms[t].1 ms[t].2.size) g = some k)
     (hj : j < Spot.Bits.gateSize (Spot.Bits.keyProg ms[t].1 ms[t].2.size) g)
@@ -736,7 +691,6 @@ theorem written_eq {t m g k j u k' j' t' x : ℕ} (ht : t < ms.length) (hm : m <
   rw [hxg, hgu] at hxu
   exact ⟨rfl, (Option.some.inj hxu).symm⟩
 
-/-- **No source bit sits at a row gate.** -/
 theorem src_ne_row {t m g k j g' : ℕ} (ht : t < ms.length) (hm : m < ms.length)
     (hgu : Spot.Bits.unitOf (Spot.Bits.keyProg ms[t].1 ms[t].2.size) g = some k)
     (hj : j < Spot.Bits.gateSize (Spot.Bits.keyProg ms[t].1 ms[t].2.size) g)
@@ -762,16 +716,14 @@ namespace SpotFlock
 
 open Properties.Spot (bitsProgs membersPart memberProg unitBase)
 
-/-- **A member's bits are rowed**: each source gate its constants leave free has a commitment position
-(`Bits.rowBit`), and so does each returned output leaf bit (`Bits.outRowBit`). -/
 def MemberRowed (c : _root_.Flock.Circuit) (n : ℕ) : Prop :=
   (∀ g < (Spot.Bits.keyProg c n).inputs, Spot.Bits.consts c n g = none → (Spot.Bits.rowBit c n g).isSome) ∧
     ∀ u k j t x, Spot.Bits.outGate c n u k j t = some x → (Spot.Bits.outRowBit c u k j t).isSome
 
-/-- **Every member's bits are rowed** (`MemberRowed`). -/
+/-- It fails at a member whose unit reads a source no row port holds (a wire into the unit, a literal, a padding row):
+its source gate is free, its block needs it, and it has no commitment position. -/
 def MembersRowed (h : Held) : Prop := ∀ ci ∈ h.ms, MemberRowed ci.1 ci.2.size
 
-/-- **The code's proof blocks stand side by side**, at every held code. -/
 theorem sideBySide_of_held (h : Held) : SideBySide h :=
   _root_.Flock.Bridge.NeededBitsOf.blocksClosed_bitsProgs h.ms
 
@@ -893,7 +845,6 @@ end Flock.Bridge.NeededBitsOf
 
 namespace SpotFlock
 
-/-- **`NeededBits` where every member's bits are rowed.** -/
 theorem neededBits_of_rowed {h : Held} (hR : MembersRowed h) : NeededBits h :=
   _root_.Flock.Bridge.NeededBitsOf.neededBits_of_membersRowed hR
 

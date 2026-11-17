@@ -5,25 +5,8 @@ public import Proofs.Flock.Soundness.ExecRows
 public import Proofs.Flock.Soundness.TmplUnitNet
 public import Proofs.Flock.Soundness.TmplValue
 
-/-!
-# Template unroll compositionality: a templated unit's rows meet each Definition's specification at every copy
-
-A verifier that checks a templated unit once per Definition (`Flock.Tmpl`'s `Def`s and their calls), never on the rows
-it unrolls to, needs what it checks of one Definition to hold at every copy the template places. A specification is any
-predicate `Spec d v inp` of a copy of Definition `d`: its own columns' values `v` and its inputs' `inp`, the constant 1.
-`Steps` asks each Definition to meet its specification wherever its own rows hold, every copy of each of its calls meets
-its callee's, and its unwritten columns are 0: a fact about one Definition at a time. `holds_spec` gives it at every copy
-that satisfies its Definition's equations (`Flock.Tmpl.Holds`), and `unroll_spec` at the unit: where the audit's `Rows` of
-the net `Tmpl.unroll` builds hold with the constant 1, the root's rows past the input rows hold, and every copy of each of
-the root's calls past the input rows meets its specification. `unrolled_spec` states it for the circuit a templated
-descriptor `Desc.tmpl ct` unrolls to, `HmOut.unrolled ct`, with its constant read where the audit's `Rows` put it.
-
-A Definition's own rows force the builder rows they realize (`Realizes`): `rowHolds_of_realizes`,
-`stHolds_of_realizes` and `outs_of_realizes` are `Discharge.Hm.laid_rows` and `laid_outs` for a Definition, its
-references in place of a laid-out net's columns (`refsOf`, as `HmNets.cols`). So a Definition with no calls whose rows
-realize a builder program's rows meets that program's `stHolds`, and its committed outputs hold their forms. No verifier
-path reads this file.
--/
+/-! Template unroll compositionality: a templated unit's rows meet each Definition's specification at every copy
+(`unroll_spec`); no verifier path reads this file. -/
 
 @[expose] public section
 
@@ -31,12 +14,6 @@ namespace FlockSoundness.TmplSpec
 
 open Flock Flock.Tmpl Flock.HmNets FlockSoundness.Discharge.Hm
 
-/-! ## Specifications closed under a Definition's rows and calls -/
-
-/-- **Each Definition meets its specification from its rows and its calls' copies** (`Spec d v inp`: a copy of `d`,
-its own columns' values `v`, its inputs' `inp`, the constant 1): wherever it is bound to as many inputs as it has, its
-own rows hold, every copy of each of its calls meets its callee's specification at the copy's columns and bound inputs,
-and its columns no row or copy writes are 0, Definition `d` meets its own. -/
 def Steps (defs : Array Def) (Spec : ℕ → (ℕ → Bool) → List Bool → Prop) : Prop :=
   ∀ d < defs.size, ∀ (v : ℕ → Bool) (inp : List Bool), inp.length = (defs.getD d default).ins →
     (∀ r ∈ (defs.getD d default).rows.toList, v r.1 = rowVal ((defs.getD d default).refV v inp true) r) →
@@ -46,8 +23,6 @@ def Steps (defs : Array Def) (Spec : ℕ → (ℕ → Bool) → List Bool → Pr
       (defs.getD d default).copyAt defs y = none → v y = false) →
     Spec d v inp
 
-/-- **A copy that satisfies its Definition's equations meets its specification**, by induction over the copies inside
-it: each callee is an earlier Definition, bound to as many inputs as it has. -/
 theorem holds_spec {defs : Array Def} (hwf : ∀ d < defs.size, (defs.getD d default).wellFormed defs d = true)
     {Spec : ℕ → (ℕ → Bool) → List Bool → Prop} (hS : Steps defs Spec) :
     ∀ (fuel d : ℕ) (v : ℕ → Bool) (inp : List Bool), d < defs.size → inp.length = (defs.getD d default).ins →
@@ -72,10 +47,6 @@ theorem holds_spec {defs : Array Def} (hwf : ∀ d < defs.size, (defs.getD d def
     rw [e, List.length_map]
     exact Flock.TmplValue.call_bound_length hw hc _ j
 
-/-- **Template unroll compositionality**: where the audit's `Rows` of the net a template unrolls to hold at `z` with the
-constant 1, the root's rows past the input rows hold at `z`, and every copy of each of the root's calls past the input
-rows meets its Definition's specification at its columns and bound inputs, whenever each Definition meets its
-specification from its rows and its calls' copies (`Steps`). -/
 theorem unroll_spec {t : Tmpl} {n : Net} (hwf : t.wellFormed = true) (ha : t.apart = true)
     (h : Flock.Tmpl.unroll t = .ok n) (hu : n.unitLog ≤ 32) {Spec : ℕ → (ℕ → Bool) → List Bool → Prop}
     (hS : Steps t.defs Spec) {z : ℕ → Bool} (hs : (Rows.ofNet (TmplValue.unroll_built h)).Sat fun c => z c.val)
@@ -151,7 +122,6 @@ theorem unroll_spec {t : Tmpl} {n : Net} (hwf : t.wellFormed = true) (ha : t.apa
     rw [← e, List.length_map]
     exact Flock.TmplValue.call_bound_length (hwfd t.root) hc _ j
 
-/-- The audit `Rows` of the net a template unrolls to have their constant at the template's constant column. -/
 theorem unroll_one {t : Tmpl} {n : Net} (h : Flock.Tmpl.unroll t = .ok n) (hB : Built n) :
     (Rows.ofNet hB).one.val = t.constPos := by
   have h' := h
@@ -160,7 +130,6 @@ theorem unroll_one {t : Tmpl} {n : Net} (h : Flock.Tmpl.unroll t = .ok n) (hB : 
   obtain ⟨-, -, -, -, hc, -⟩ := Net.ofRows_ok hn
   exact (Rows.ofNet_one hB).trans hc
 
-/-- A templated circuit's statement circuit (`HmOut.unrolled`) has its template's unrolled net as its unit. -/
 theorem unrolled_unit_of {ct : Circuit} {tu : TmplUnit} {n : Net} (ht : ct.tmpl = some tu)
     (hun : Flock.Tmpl.unroll tu.t = .ok n) (hsz : ct.unitNet < ct.nets.size) : (HmOut.unrolled ct).unit = n := by
   have he : HmOut.unrolled ct = { ct with nets := ct.nets.set! ct.unitNet ("unit", n), tmpl := none } := by
@@ -171,10 +140,6 @@ theorem unrolled_unit_of {ct : Circuit} {tu : TmplUnit} {n : Net} (ht : ct.tmpl 
   show ((ct.nets.set! ct.unitNet ("unit", n)).getD ct.unitNet default).2 = n
   simp [Array.getD_eq_getD_getElem?, hsz]
 
-/-- **`unroll_spec` at a templated circuit's statement circuit**: for a circuit `ct` carrying its unit's template `tu`
-(`Desc.tmpl ct` unrolls to `HmOut.unrolled ct`), where the audit's `Rows` of `HmOut.unrolled ct`'s unit hold at `z` with
-their constant 1, the template's root rows past its input rows hold at `z`, and every copy of each of its root's calls past
-the input rows meets its specification. -/
 theorem unrolled_spec {ct : Circuit} {tu : TmplUnit} (ht : ct.tmpl = some tu) (hsz : ct.unitNet < ct.nets.size)
     (hB : Built (HmOut.unrolled ct).unit) (hu : (HmOut.unrolled ct).unit.unitLog ≤ 32)
     {Spec : ℕ → (ℕ → Bool) → List Bool → Prop} (hS : Steps tu.t.defs Spec) {z : ℕ → Bool}
@@ -195,17 +160,12 @@ theorem unrolled_spec {ct : Circuit} {tu : TmplUnit} (ht : ct.tmpl = some tu) (h
   rw [unroll_one hun hB] at hone
   exact unroll_spec hwf ha hun hu hS hs hone
 
-/-! ## A Definition's rows force the builder rows they realize -/
-
-/-- A form's references in Definition `df`, its variables through `φ`: its variables' references, then the constant's
-(`df.cols + df.ins`) when its constant is set (`HmNets.cols`, a laid-out net's, with `φ` for `col`). -/
 def refsOf (df : Def) (φ : Var → ℕ) (f : Lin) : Array ℕ :=
   (f.s.map φ).toArray ++ (if f.c then #[df.cols + df.ins] else #[])
 
 theorem refV_const (df : Def) (v : ℕ → Bool) (inp : List Bool) (kv : Bool) : df.refV v inp kv (df.cols + df.ins) = kv := by
   simp [Def.refV]
 
-/-- A form's references sum, at a copy with the constant 1, to the form's value under its variables' references. -/
 theorem xorAt_refsOf (df : Def) (φ : Var → ℕ) (f : Lin) (v : ℕ → Bool) (inp : List Bool) :
     xorAt (refsOf df φ f).toList (df.refV v inp true) = ev (fun x => df.refV v inp true (φ x)) f := by
   unfold refsOf
@@ -218,14 +178,10 @@ theorem xorAt_canon_eq {xs ys : Array ℕ} (h : canon xs = canon ys) (z : ℕ �
     xorAt xs.toList z = xorAt ys.toList z := by
   rw [← Flock.TmplValue.xorAt_canon xs, h, Flock.TmplValue.xorAt_canon]
 
-/-- **Definition `df`'s own rows realize the builder rows `rows` under `φ`**: each one's output is at one of `df`'s own
-columns, where `df` has a row whose `A` and `B` are its forms' references up to order and repeated pairs (`canon`). -/
 def Realizes (df : Def) (φ : Var → ℕ) (rows : List Row) : Prop :=
   ∀ r ∈ rows, φ r.out < df.cols ∧ ∃ r' ∈ df.rows.toList, r'.1 = φ r.out ∧
     canon r'.2.1 = canon (refsOf df φ r.a) ∧ canon r'.2.2 = canon (refsOf df φ r.b)
 
-/-- **A Definition's rows force the builder rows they realize** (`laid_rows` for a Definition): at a copy whose own rows
-hold, the constant 1, every realized builder row holds under its references' values (`refV ∘ φ`). -/
 theorem rowHolds_of_realizes {df : Def} {φ : Var → ℕ} {rows : List Row} (hre : Realizes df φ rows) {v : ℕ → Bool}
     {inp : List Bool} (hrows : ∀ r ∈ df.rows.toList, v r.1 = rowVal (df.refV v inp true) r) :
     ∀ r ∈ rows, rowHolds (fun x => df.refV v inp true (φ x)) r := by
@@ -238,14 +194,11 @@ theorem rowHolds_of_realizes {df : Def} {φ : Var → ℕ} {rows : List Row} (hr
   unfold rowVal
   rw [xorAt_canon_eq eA, xorAt_canon_eq eB, xorAt_refsOf, xorAt_refsOf]
 
-/-- `rowHolds_of_realizes` for a builder state's rows. -/
 theorem stHolds_of_realizes {df : Def} {φ : Var → ℕ} {st : St} (hre : Realizes df φ st.rows) {v : ℕ → Bool}
     {inp : List Bool} (hrows : ∀ r ∈ df.rows.toList, v r.1 = rowVal (df.refV v inp true) r) :
     stHolds (fun x => df.refV v inp true (φ x)) st :=
   rowHolds_of_realizes hre hrows
 
-/-- **A Definition's rows force the outputs they commit** (`laid_outs` for a Definition): output `j`, committed at own
-column `oc j` by a row `form · 1`, holds its form under its references' values (`refV ∘ φ`). -/
 theorem outs_of_realizes {df : Def} {φ : Var → ℕ} {outs : List Lin} {oc : ℕ → ℕ}
     (hre : ∀ j (hj : j < outs.length), oc j < df.cols ∧ ∃ r' ∈ df.rows.toList, r'.1 = oc j ∧
       canon r'.2.1 = canon (refsOf df φ outs[j]) ∧ canon r'.2.2 = #[df.cols + df.ins])

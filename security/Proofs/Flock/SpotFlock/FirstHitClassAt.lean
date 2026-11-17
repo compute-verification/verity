@@ -7,26 +7,7 @@ import Proofs.Flock.Masked
 import Proofs.Flock.Claims.Sampling.Assembled
 import Proofs.Flock.SpotFlock.RevealsLe
 
-/-!
-# The by-class first-hit bound at a budget, at SPOT[Flock]'s code
-
-`CompiledTwo.eventTwoX_le_cls_at_budget` bounds the event of `KSRegTwoX` by `CompiledTwo.εclsAt` for any compiled
-two-stage verifier, a set of gates each proof block needs and classes of the gates that a run's extractions open whole
-or not at all. `code_eventTwoX_le_cls_at_budget` is that bound at SPOT[Flock]'s compiled two-stage verifier, where
-
-* a proof block needs the gates its reveal opens (`Reveal.needs`, `code_hpos`), and
-* a gate's class is its key's (`gateKey`: the proof blocks that need the gate opened, the replay block that holds it,
-  and whether it is on that block's boundary).
-
-Under `Built` and `Addresses` at a statement in the two-stage scope, the code supplies Flock's knowledge soundness (the
-masked record's), the commitment's binding, the sessions' contract, the opening checks' count, and the three
-hypotheses on the classes: a proof block that needs a gate needs its class's representative (`gateKey_needs`), a class
-lies in one replay block (`gateKey_block`), and a run's extractions open a class whole (`code_hwit`).
-
-What the theorem still takes: the budget `T` a run, the three counts over the coins (the sample's sessions, the
-classes of the gates the sample needs, and the classes its sessions need, session by session), and the linear
-expected-time bound at `B_conf,X` and at the two by-class finders. Nothing here counts the classes.
--/
+/-! The by-class first-hit bound at a budget at SPOT[Flock]'s code (`code_eventTwoX_le_cls_at_budget`). -/
 
 @[expose] public section
 
@@ -36,7 +17,6 @@ open Claims Claims.Sampling SamplingDeploy
 
 variable (h : Held)
 
-/-- **The positions a proof block's reveal opens are the gates it needs**, at the code. -/
 theorem code_hpos (s : AuditStatement) (u : ℕ) (v : Seen) (w : Claims.Flock.Wit) :
     ∀ p ∈ (code h).reveal s u v w, p.2.pos ∈ (Reveal.needs (partition h) s u).toFinset := by
   intro p hp
@@ -45,14 +25,8 @@ theorem code_hpos (s : AuditStatement) (u : ℕ) (v : Seen) (w : Claims.Flock.Wi
   rw [hpos]
   exact List.mem_toFinset.2 hg
 
-/-- **The by-class first-hit bound at a budget, at the code and its key**: `CompiledTwo.eventTwoX_le_cls_at_budget`
-at SPOT[Flock]'s compiled two-stage verifier `L`, with `needs` the gates each proof block's reveal opens and `cls` the
-classes of `gateKey`, under `Built` and `Addresses` at a statement in the two-stage scope. Where every run calls
-SHA-512 at most `T` times, both parties' calls counted (`hT`), `N_s` is at least the expected number of sessions in a
-run's sample, `K_s` at least the expected number of classes of the gates the sample needs and `K_m` at least the
-expected number of the classes' representatives its sessions need, session by session, and `B_conf,X` and the two
-by-class finders of every cap meet the linear expected-time bound, an accepted run samples a proof block of
-`FregTwoX` with probability at most `εclsAt`. -/
+/-- Nothing here counts the classes: the budget `T` a run, the three counts over the coins and the linear expected-time
+bound at `B_conf,X` and at the two by-class finders stay hypotheses. -/
 theorem code_eventTwoX_le_cls_at_budget (hB : Built h) (hS : Addresses h)
     {L : Claims.SamplingGeneric.CompiledTwo FlockDeploy.Coin
       (Claims.SamplingGeneric.Arg.ofFlock (FlockDeploy.deployZk _root_.Flock.Readable.relation))}

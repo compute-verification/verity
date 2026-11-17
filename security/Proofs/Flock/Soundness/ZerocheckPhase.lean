@@ -16,24 +16,8 @@ import Proofs.Flock.Soundness.Game
 import Proofs.Core.Game.Poly
 import Proofs.Flock.Soundness.Rounds
 
-/-!
-# The zerocheck phase (`Flock.Piop`)
-
-For one codeword near the committed table whose witness makes the region claims true, the doomed
-start says the block R1CS or the pin fails. The zerocheck then ends with the `a`, `b`, `c` claims
-and the pin's extension all true with small probability:
-
-* **R1CS.** A nonzero error bit at skip index `s₀` stays visible after the eq-reduction over the
-  other address bits (`m − 13` random coordinates: the pinned coordinates' weights are independent
-  over GF(2)). `Pcomb` vanishes on the skip nodes by construction, so either the prover's `P_c` is
-  wrong at `z` or its `P_ab` is (degree 127). The residual rounds keep a false claim false
-  (`2/|F|` each, given every `r_eq ≠ 1`, one event for all codewords), and a false final claim
-  makes the `a` or the `b` claim false.
-* **Pin.** A block whose pin bit is 0 makes the pin's extension at `ρ_out` a nonzero polynomial of
-  degree `m − k_log` in the rounds' coins.
-
-`zerocheck_phase_of_card` takes the union over a list of at most `L` codewords.
--/
+/-! The zerocheck phase (`Flock.Piop`): from a doomed start it ends with the `a`, `b`, `c` claims and the pin's
+extension all true only with small probability. -/
 
 @[expose] public section
 
@@ -43,8 +27,6 @@ open Game Model Accounting Polynomial
 open scoped ENNReal
 
 variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K]
-
-/-! ## Averages and coins -/
 
 theorem avg_sum {C ι : Type} [Fintype C] (s : Finset ι) (f : ι → C → ℝ≥0∞) :
     avg (fun c => ∑ i ∈ s, f i c) = ∑ i ∈ s, avg (f i) := by
@@ -61,7 +43,6 @@ theorem value_coin_le_of_forall {α : Type} (p : α → Prop) (C : Type) [Fintyp
   (value_coin_le_avg p C k _ h).trans (avg_const ε).le
 
 omit [DecidableEq F] in
-/-- A uniform vector on `Fin (n+1)` is a uniform head and an independent uniform tail. -/
 theorem prCoin_cons {n : ℕ} (P : (Fin (n + 1) → F) → Prop) :
     prCoin P = avg (fun a : F => prCoin (fun v : Fin n → F => P (Fin.cons a v))) := by
   classical
@@ -74,7 +55,6 @@ theorem prCoin_cons {n : ℕ} (P : (Fin (n + 1) → F) → Prop) :
   rw [pow_succ', ENNReal.mul_inv (Or.inr (by simp)) (Or.inl (by simp))]
 
 omit [DecidableEq F] in
-/-- A single coordinate of a uniform vector hits a given value with probability `1/|F|`. -/
 theorem prCoin_coord_le {n : ℕ} (j : Fin n) (c : F) :
     prCoin (fun v : Fin n → F => v j = c) ≤ 1 / Fintype.card F := by
   classical
@@ -93,9 +73,6 @@ theorem prCoin_coord_le {n : ℕ} (j : Fin n) (c : F) :
     _ ≤ (Q.totalDegree : ℝ≥0∞) / Fintype.card F := Verity.Game.prCoin_mvEval_eq_zero_le _ hQ
     _ ≤ 1 / Fintype.card F := by gcongr; exact_mod_cast hdeg
 
-/-! ## Folding the lowest bit, and the equality weights -/
-
-/-- Splitting off the lowest coordinate of an equality weight. -/
 theorem eqAt_two_mul_add {R : Type} [CommRing R] {n : ℕ} (r : Fin (n + 1) → R) (y b : ℕ)
     (hb : b < 2) :
     eqAt r (2 * y + b) = (if b = 1 then r 0 else 1 + r 0) * eqAt (Fin.tail r) y := by
@@ -111,19 +88,16 @@ theorem eqAt_two_mul_add {R : Type} [CommRing R] {n : ℕ} (r : Fin (n + 1) → 
       rw [Nat.testBit_succ]; congr 1; omega
     simp only [Fin.val_succ, htb, Fin.tail]
 
-/-- Splitting off the lowest coordinate at an even index. -/
 theorem eqAt_two_mul {R : Type} [CommRing R] {n : ℕ} (r : Fin (n + 1) → R) (y : ℕ) :
     eqAt r (2 * y) = (1 + r 0) * eqAt (Fin.tail r) y := by
   have := eqAt_two_mul_add r y 0 (by norm_num)
   simpa using this
 
-/-- Splitting off the lowest coordinate at an odd index. -/
 theorem eqAt_two_mul_add_one {R : Type} [CommRing R] {n : ℕ} (r : Fin (n + 1) → R) (y : ℕ) :
     eqAt r (2 * y + 1) = r 0 * eqAt (Fin.tail r) y := by
   have := eqAt_two_mul_add r y 1 (by norm_num)
   simpa using this
 
-/-- Sums over `2^(n+1)` indices by pairs `(2y, 2y+1)`. -/
 theorem sum_range_pairs {M : Type} [AddCommMonoid M] (n : ℕ) (f : ℕ → M) :
     ∑ x ∈ Finset.range (2 ^ (n + 1)), f x =
       ∑ y ∈ Finset.range (2 ^ n), (f (2 * y) + f (2 * y + 1)) := by
@@ -138,13 +112,11 @@ theorem sum_range_pairs {M : Type} [AddCommMonoid M] (n : ℕ) (f : ℕ → M) :
 /-- Fold the lowest bit at `t`: `u'(y) = u(2y) + t·(u(2y+1) + u(2y))`. -/
 def foldLo (t : F) (u : ℕ → F) : ℕ → F := fun y => u (2 * y) + t * (u (2 * y + 1) + u (2 * y))
 
-/-- Fold every bit, lowest first, by the coins `ρ`. -/
 def foldLoAll : {n : ℕ} → (Fin n → F) → (ℕ → F) → (ℕ → F)
   | 0, _, u => u
   | _ + 1, ρ, u => foldLoAll (Fin.tail ρ) (foldLo (ρ 0) u)
 
 omit [Fintype F] [DecidableEq F] in
-/-- Folding every bit evaluates the multilinear extension at the coins. -/
 theorem foldLoAll_eq [CharP F 2] : ∀ (n : ℕ) (ρ : Fin n → F) (u : ℕ → F),
     foldLoAll ρ u 0 = ∑ x ∈ Finset.range (2 ^ n), eqAt ρ x * u x
   | 0, ρ, u => by simp [foldLoAll, eqAt]
@@ -155,10 +127,6 @@ theorem foldLoAll_eq [CharP F 2] : ∀ (n : ℕ) (ρ : Fin n → F) (u : ℕ →
       simp only [foldLo]
       ring
 
-/-! ## The residual rounds (Z6) -/
-
-/-- The true eq-stripped quadratic of a residual round over `Σ_x eq(req, x)·u(x)·v(x)`:
-`G(X) = Σ_y eq(req[1…], y)·(u(2y) + X·(u(2y+1) + u(2y)))·(v(2y) + X·(v(2y+1) + v(2y)))`. -/
 noncomputable def resPoly {n : ℕ} (req : Fin (n + 1) → F) (u v : ℕ → F) : F[X] :=
   ∑ y ∈ Finset.range (2 ^ n), C (eqAt (Fin.tail req) y) *
     ((C (u (2 * y)) + C (u (2 * y + 1) + u (2 * y)) * Polynomial.X) *
@@ -205,9 +173,6 @@ theorem residualRounds_succ (n : ℕ) (req : Fin (n + 1) → F) (claim : F) :
   rw [residualRounds]
   rfl
 
-/-- **The residual rounds** (Z6). From a false claim about `Σ_x eq(r, x)·u(x)·v(x)`, with every
-`r_eq ≠ 1`, the rounds end with a true claim about the folded values with probability at most
-`2n/|F|`, whatever the prover sends. -/
 theorem value_residualRounds_le [CharP F 2] : ∀ (n : ℕ) (req : Fin n → F), (∀ j, req j ≠ 1) →
     ∀ (u v : ℕ → F) (claim : F), claim ≠ ∑ x ∈ Finset.range (2 ^ n), eqAt req x * u x * v x →
     value (fun r : (Fin n → F) × F => r.2 = foldLoAll r.1 u 0 * foldLoAll r.1 v 0)
@@ -237,7 +202,6 @@ theorem value_residualRounds_le [CharP F 2] : ∀ (n : ℕ) (req : Fin n → F),
         ring_nf
         exact le_rfl
 
-/-- An event on the rounds' coins alone has at most its probability over uniform coins. -/
 theorem value_residualRounds_coin_le : ∀ (n : ℕ) (req : Fin n → F) (claim : F)
     (P : (Fin n → F) → Prop), value (fun r => P r.1) (residualRounds n req claim) ≤ prCoin P
   | 0, req, claim, P => by
@@ -256,12 +220,8 @@ theorem value_residualRounds_coin_le : ∀ (n : ℕ) (req : Fin n → F) (claim 
       rw [value_bind_ret]
       exact value_residualRounds_coin_le n _ _ (fun v => P (Fin.cons ρ v))
 
-/-! ## The nodes, and polynomials through them -/
-
-/-- The skip nodes `S` (§9). -/
 noncomputable def nodeS (A : Arith F K) (hA : A.Correct) : Fin 64 → F := hA.nodes.choose
 
-/-- The output coset `Λ` (`Flock.Piop`). -/
 noncomputable def nodeΛ (A : Arith F K) (hA : A.Correct) : Fin 64 → F :=
   hA.nodes.choose_spec.choose
 
@@ -274,15 +234,12 @@ theorem nodes_spec (A : Arith F K) (hA : A.Correct) :
       ∀ ζ, ∑ i, A.combW ζ i * p.eval (nodeΛ A hA i) = p.eval ζ) :=
   hA.nodes.choose_spec.choose_spec
 
-/-- The polynomial of degree below 64 with the given values on the skip nodes. -/
 noncomputable def polyS (A : Arith F K) (hA : A.Correct) (vals : Fin 64 → F) : F[X] :=
   Lagrange.interpolate Finset.univ (nodeS A hA) vals
 
-/-- The polynomial of degree below 64 with the given values on `Λ`. -/
 noncomputable def polyΛ (A : Arith F K) (hA : A.Correct) (vals : Fin 64 → F) : F[X] :=
   Lagrange.interpolate Finset.univ (nodeΛ A hA) vals
 
-/-- `Pcomb` (`Flock.Piop`): the polynomial of degree below 128 that is 0 on `S` and `vals` on `Λ`. -/
 noncomputable def polyComb (A : Arith F K) (hA : A.Correct) (vals : Fin 64 → F) : F[X] :=
   Lagrange.interpolate (Finset.univ : Finset (Fin 64 ⊕ Fin 64))
     (Sum.elim (nodeS A hA) (nodeΛ A hA)) (Sum.elim (fun _ => 0) vals)
@@ -355,17 +312,13 @@ theorem polyComb_eval (A : Arith F K) (hA : A.Correct) (vals : Fin 64 → F) (ζ
     (polyComb_nodeS A hA vals) ζ]
   simp only [polyComb_nodeΛ]
 
-/-! ## The witness by skip index -/
-
 theorem two_pow_six_mul {m : ℕ} (hm : 6 ≤ m) : 2 ^ (m - 6) * 64 = 2 ^ m := by
   rw [show (64 : ℕ) = 2 ^ 6 by norm_num, ← pow_add, Nat.sub_add_cancel hm]
 
-/-- The address `s + 64·x` of skip index `s` at address bits 6… equal to `x`. -/
 def addr64 {m : ℕ} (hm : 6 ≤ m) (x : Fin (2 ^ (m - 6))) (s : Fin 64) : Fin (2 ^ m) :=
   ⟨s.val + 64 * x.val, by
     rw [← two_pow_six_mul hm]; have := x.isLt; have := s.isLt; omega⟩
 
-/-- A claim evaluates by skip index: `Σ_x eq(x_claim, x)·Σ_s skip[s]·ω[s + 64x]`. -/
 theorem claim_eval_skip {m : ℕ} (hm : 6 ≤ m) (c : Claim F m) (ω : Witness m) :
     c.eval ω = ∑ x : Fin (2 ^ (m - 6)), eqAt c.x x.val *
       ∑ s : Fin 64, c.skip s * ((ω (addr64 hm x s)).val : F) := by
@@ -384,12 +337,10 @@ theorem claim_eval_skip {m : ℕ} (hm : 6 ≤ m) (c : Claim F m) (ω : Witness m
   rw [hskip, hdiv]
   ring
 
-/-- `ω̂_x(Y)`: the polynomial through the bits `ω[s + 64x]` on the skip nodes. -/
 noncomputable def hatP (A : Arith F K) (hA : A.Correct) {m : ℕ} (hm : 6 ≤ m) (ω : Witness m)
     (x : Fin (2 ^ (m - 6))) : F[X] :=
   polyS A hA fun s => ((ω (addr64 hm x s)).val : F)
 
-/-- A claim with the skip weights `L_s(ζ)` evaluates to `Σ_x eq(x_claim, x)·ω̂_x(ζ)`. -/
 theorem claim_eval_hat (A : Arith F K) (hA : A.Correct) {m : ℕ} (hm : 6 ≤ m) (v ζ : F)
     (x : Fin (m - 6) → F) (ω : Witness m) :
     (⟨v, A.lagS ζ, x⟩ : Claim F m).eval ω =
@@ -397,11 +348,9 @@ theorem claim_eval_hat (A : Arith F K) (hA : A.Correct) {m : ℕ} (hm : 6 ≤ m)
   rw [claim_eval_skip hm]
   simp only [hatP, polyS_eval]
 
-/-- The R1CS error bit at an address: `(Az)·(Bz) + z`, zero exactly where the constraint holds. -/
 def errBit (S : Statement) (w : Witness S.m) (a : Fin (2 ^ S.m)) : ZMod 2 :=
   aVec S w a * bVec S w a + w a
 
-/-- The block R1CS fails at some address. -/
 def R1CSFails (S : Statement) (w : Witness S.m) : Prop := ∃ a, errBit S w a ≠ 0
 
 theorem r1cs_of_not_fails (S : Statement) (w : Witness S.m) (h : ¬ R1CSFails S w) :
@@ -413,14 +362,10 @@ theorem r1cs_of_not_fails (S : Statement) (w : Witness S.m) (h : ¬ R1CSFails S 
   have key : ∀ x y : ZMod 2, x + y = 0 → x = y := by decide
   exact key _ _ h0
 
-/-! ## The true polynomials of the zerocheck -/
-
-/-- The true `P_c(Y) = Σ_x eq(r, x)·ẑ_x(Y)` (degree below 64). -/
 noncomputable def PcT (A : Arith F K) (hA : A.Correct) {m : ℕ} (hm : 6 ≤ m) (w : Witness m)
     (r : Fin (m - 6) → F) : F[X] :=
   ∑ x : Fin (2 ^ (m - 6)), C (eqAt r x.val) * hatP A hA hm w x
 
-/-- The true `P_ab(Y) = Σ_x eq(r, x)·Â_x(Y)·B̂_x(Y)` (degree at most 126). -/
 noncomputable def PabT (A : Arith F K) (hA : A.Correct) (S : Statement) (hm : 6 ≤ S.m)
     (w : Witness S.m) (r : Fin (S.m - 6) → F) : F[X] :=
   ∑ x : Fin (2 ^ (S.m - 6)), C (eqAt r x.val) *
@@ -453,7 +398,6 @@ theorem PabT_eval (A : Arith F K) (hA : A.Correct) (S : Statement) (hm : 6 ≤ S
       (hatP A hA hm (aVec S w) x).eval ζ * (hatP A hA hm (bVec S w) x).eval ζ := by
   simp only [PabT, eval_finset_sum, eval_mul, eval_C, mul_assoc]
 
-/-- At a skip node, `P_ab + P_c` is the eq-reduction of the error bits there. -/
 theorem errSum_eq [CharP F 2] (A : Arith F K) (hA : A.Correct) (S : Statement) (hm : 6 ≤ S.m)
     (w : Witness S.m) (r : Fin (S.m - 6) → F) (s : Fin 64) :
     (PabT A hA S hm w r + PcT A hA hm w r).eval (nodeS A hA s) =
@@ -463,10 +407,7 @@ theorem errSum_eq [CharP F 2] (A : Arith F K) (hA : A.Correct) (S : Statement) (
   simp only [hatP, polyS_node, errBit, val_cast_eq, map_add, map_mul]
   ring
 
-/-! ## The three coin bounds -/
-
 omit [Fintype F] [DecidableEq F] in
-/-- In characteristic 2 the equality weights sum to 1. -/
 theorem sum_eqAt [CharP F 2] : ∀ (n : ℕ) (r : Fin n → F),
     ∑ x ∈ Finset.range (2 ^ n), eqAt r x = 1
   | 0, r => by simp [eqAt]
@@ -477,9 +418,6 @@ theorem sum_eqAt [CharP F 2] : ∀ (n : ℕ) (r : Fin n → F),
       simp only [one_mul]
       exact sum_eqAt n _
 
-/-- **Z3.** A nonzero error bit survives the eq-reduction over address bits 6… at some skip node,
-except with probability `(m − 13)/|F|`: the pinned coordinates' 128 weights are independent over
-GF(2), and what remains is a nonzero multilinear polynomial in `r[13…]`. -/
 theorem prCoin_zc3_le (A : Arith F K) (hA : A.Correct) (S : Statement) (hm : 13 ≤ S.m)
     (w : Witness S.m) (hfail : R1CSFails S w) :
     prCoin (fun rs : Fin (S.m - 13) → F => ∀ s : Fin 64,
@@ -539,17 +477,12 @@ theorem prCoin_zc3_le (A : Arith F K) (hA : A.Correct) (S : Statement) (hm : 13 
         prCoin_mono fun rs h => by rw [← hsplit]; exact h s₀
     _ ≤ ((S.m - 13 : ℕ) : ℝ≥0∞) / Fintype.card F := prCoin_eqSum_le d x₀' hd
 
-/-- `Pc(z)` as the verifier computes it from `round1_c` (Z5). -/
 def pcOf (A : Arith F K) (msg : (Fin 64 → F) × (Fin 64 → F)) (z : F) : F :=
   ∑ i, A.lagΛ z i * msg.2 i
 
-/-- The zerocheck's starting claim `Pcomb(z) + Pc(z)` (Z5). -/
 def claim0 (A : Arith F K) (msg : (Fin 64 → F) × (Fin 64 → F)) (z : F) : F :=
   ∑ i, A.combW z i * (msg.1 i + msg.2 i) + pcOf A msg z
 
-/-- **Z5, the skip point.** If the error does not vanish at some skip node, then at a live `z`
-either the prover's `P_c` is off the true one or its `P_ab = Pcomb + P_c` is, since `Pcomb`
-vanishes on the skip nodes by construction: probability at most `127/|F|` of neither. -/
 theorem prCoin_zc5_le (A : Arith F K) (hA : A.Correct) (S : Statement) (h6 : 6 ≤ S.m)
     (w : Witness S.m) (r : Fin (S.m - 6) → F) (msg : (Fin 64 → F) × (Fin 64 → F)) (s₀ : Fin 64)
     (hE : ∑ x : Fin (2 ^ (S.m - 6)), eqAt r x.val * ((errBit S w (addr64 h6 x s₀)).val : F) ≠ 0) :
@@ -584,12 +517,9 @@ theorem prCoin_zc5_le (A : Arith F K) (hA : A.Correct) (S : Statement) (h6 : 6 �
     · rw [hpc] at hz; exact hz.1
     · gcongr; norm_num
 
-/-- `ρ_out` from the residual challenges: address bits `k_log …` (as `ZcOut.ρOut` reads them). -/
 def ρOutOf (S : Statement) (ρ : Fin (S.m - 6) → F) : Fin S.nbl → F := fun j =>
   if h : S.kLog - 6 + j.val < S.m - 6 then ρ ⟨S.kLog - 6 + j.val, h⟩ else 0
 
-/-- **The pin.** A block whose pin bit is 0 makes the pin's extension at `ρ_out` differ from 1,
-except with probability `(m − k_log)/|F|` over the residual challenges. -/
 theorem prCoin_pin_le (A : Arith F K) (hA : A.Correct) (S : Statement) (w : Witness S.m)
     (o₀ : Fin (2 ^ S.nbl)) (ho₀ : S.block w o₀ S.pin ≠ 1) :
     prCoin (fun ρ : Fin (S.m - 6) → F => pinMLE S w (ρOutOf S ρ) = 1) ≤
@@ -630,15 +560,11 @@ theorem prCoin_pin_le (A : Arith F K) (hA : A.Correct) (S : Statement) (w : Witn
     _ ≤ (R.totalDegree : ℝ≥0∞) / Fintype.card F := Verity.Game.prCoin_mvEval_eq_zero_le R hR
     _ ≤ ((S.nbl : ℕ) : ℝ≥0∞) / Fintype.card F := by gcongr
 
-/-! ## The game -/
-
-/-- The zerocheck's verdict (Z7). -/
 def zcResult (A : Arith F K) (m : ℕ) (rs : Fin (m - 13) → F)
     (msg : (Fin 64 → F) × (Fin 64 → F)) (z : F) (ρ : Fin (m - 6) → F) (claim : F) (v : F × F) :
     Option (ZcOut F m) :=
   if claim = v.1 * v.2 then some ⟨z, ρ, zcVector A rs, v.1, v.2, pcOf A msg z⟩ else none
 
-/-- The zerocheck after `r[13…]` (Z4–Z7). -/
 def zcRest (A : Arith F K) (m : ℕ) (rs : Fin (m - 13) → F) : Game (Option (ZcOut F m)) :=
   Game.send ((Fin 64 → F) × (Fin 64 → F)) fun msg => Game.coin F fun z =>
     (residualRounds (m - 6) (zcVector A rs) (claim0 A msg z)).bind fun r =>
@@ -648,12 +574,10 @@ theorem zerocheck_eq (A : Arith F K) (m : ℕ) :
     zerocheck A m = Game.coin (Fin 6 → F) fun _ => Game.coin (Fin (m - 13) → F) fun rs =>
       zcRest A m rs := rfl
 
-/-- The `a`, `b` and `c` claims all hold for a witness at the zerocheck's output. -/
 def ZcHolds (A : Arith F K) (S : Statement) (w : Witness S.m) (zc : ZcOut F S.m) : Prop :=
   (⟨zc.va, A.lagS zc.z, zc.ρ⟩ : Claim F S.m).Holds (aVec S w) ∧
     (⟨zc.vb, A.lagS zc.z, zc.ρ⟩ : Claim F S.m).Holds (bVec S w) ∧ (cClaim A zc).Holds w
 
-/-- The values `ω̂_x(ζ)`, as a vector for the rounds. -/
 noncomputable def hatVals (A : Arith F K) (hA : A.Correct) {m : ℕ} (hm : 6 ≤ m) (ω : Witness m)
     (ζ : F) : ℕ → F := fun x =>
   if hx : x < 2 ^ (m - 6) then (hatP A hA hm ω ⟨x, hx⟩).eval ζ else 0
@@ -666,9 +590,6 @@ theorem sum_hatVals {m : ℕ} (A : Arith F K) (hA : A.Correct) (hm : 6 ≤ m) (�
   refine Finset.sum_congr rfl fun x _ => ?_
   simp only [hatVals, dif_pos x.isLt]
 
-/-- **Z5–Z7, the R1CS path.** With the error visible at a skip node and every `r_eq ≠ 1`, the rest
-of the zerocheck ends with the `a`, `b` and `c` claims all true with probability at most
-`(127 + 2(m − 6))/|F|`. -/
 theorem value_zcRest_r1cs_le (A : Arith F K) (hA : A.Correct) (S : Statement) (hm : 13 ≤ S.m)
     (w : Witness S.m) (rs : Fin (S.m - 13) → F) (hreq : ∀ j, zcVector A rs j ≠ 1) (s₀ : Fin 64)
     (hE : ∑ x : Fin (2 ^ (S.m - 6)), eqAt (zcVector A rs) x.val *
@@ -695,7 +616,7 @@ theorem value_zcRest_r1cs_le (A : Arith F K) (hA : A.Correct) (S : Statement) (h
         (⟨vb, A.lagS z, ρ⟩ : Claim F S.m).eval (bVec S w) = foldLoAll ρ uB 0 := fun vb ρ => by
       rw [claim_eval_hat A hA h6, foldLoAll_eq, sum_hatVals]
     by_cases hc : (PcT A hA h6 w r).eval z = pcOf A msg z
-    · -- the start claim is false: the rounds, then the final check
+    ·
       have hclaim : claim0 A msg z ≠ ∑ x ∈ Finset.range (2 ^ (S.m - 6)), eqAt r x * uA x * uB x := by
         intro h
         apply hz ⟨hc, ?_⟩
@@ -721,7 +642,7 @@ theorem value_zcRest_r1cs_le (A : Arith F K) (hA : A.Correct) (S : Statement) (h
       · rw [add_zero]
         refine (value_mono (fun r' h => not_not.1 h) _).trans ?_
         exact value_residualRounds_le (S.m - 6) r hreq uA uB (claim0 A msg z) hclaim
-    · -- the `c` claim is false at every output
+    ·
       refine (value_bind_le _ _ _ (fun _ => True) 0 (fun r' _ => ?_)).trans ?_
       · rw [value_send]
         refine iSup_le fun v => ?_
@@ -745,8 +666,6 @@ theorem value_zcRest_r1cs_le (A : Arith F K) (hA : A.Correct) (S : Statement) (h
     push_cast
     exact le_rfl
 
-/-- **The pin path.** A block whose pin bit is 0: the rest of the zerocheck ends with the pin's
-extension at `ρ_out` equal to 1 with probability at most `(m − k_log)/|F|`. -/
 theorem value_zcRest_pin_le (A : Arith F K) (hA : A.Correct) (S : Statement) (w : Witness S.m)
     (rs : Fin (S.m - 13) → F) (o₀ : Fin (2 ^ S.nbl)) (ho₀ : S.block w o₀ S.pin ≠ 1) :
     value (fun o => ∃ zc, o = some zc ∧ pinMLE S w (zc.ρOut S) = 1) (zcRest A S.m rs) ≤
@@ -772,9 +691,6 @@ theorem value_zcRest_pin_le (A : Arith F K) (hA : A.Correct) (S : Statement) (w 
     exact (value_residualRounds_coin_le _ _ _ (fun ρ => pinMLE S w (ρOutOf S ρ) = 1)).trans
       (prCoin_pin_le A hA S w o₀ ho₀)
 
-/-! ## The phase -/
-
-/-- Some coordinate of `r[13…]` is 1: the one event charged once for every codeword. -/
 theorem prCoin_req_one_le (m : ℕ) :
     prCoin (fun rs : Fin (m - 13) → F => ∃ j, rs j = 1) ≤ ((m - 13 : ℕ) : ℝ≥0∞) / Fintype.card F := by
   calc prCoin (fun rs : Fin (m - 13) → F => ∃ j, rs j = 1)
@@ -788,9 +704,6 @@ theorem prCoin_req_one_le (m : ℕ) :
         rw [Finset.sum_const, Finset.card_univ, Fintype.card_fin, nsmul_eq_mul, mul_one_div]
 
 open Classical in
-/-- **The zerocheck phase** (`Flock.Piop`), for a list `W` of at most `L` messages: from a doomed start over
-`W`, the zerocheck ends undoomed with probability at most
-`(m − 13)/|F| + L·(m − 13 + 127 + 2(m − 6) + (m − k_log))/|F|`. -/
 theorem zerocheck_phase_of_list (A : Arith F K) (hA : A.Correct) (S : Statement) (sch : Schedule)
     (hm : 13 ≤ S.m) (W : Set (Message F sch.k0 sch.level₀.logCols)) (extra : List (Claim F S.m))
     (hdoom : RepDoomedW A S sch W extra) (L : ℕ)
@@ -900,8 +813,6 @@ theorem zerocheck_phase_of_list (A : Arith F K) (hA : A.Correct) (S : Statement)
         exact le_rfl
 
 open Classical in
-/-- **The zerocheck phase** for the codewords near the committed table: `zerocheck_phase_of_list`
-at `closeMsgs`. -/
 theorem zerocheck_phase_of_card (A : Arith F K) (hA : A.Correct) (S : Statement) (sch : Schedule)
     (hm : 13 ≤ S.m) (C : Oracle F) (extra : List (Claim F S.m))
     (hdoom : RepDoomed A S sch C extra) (L : ℕ)

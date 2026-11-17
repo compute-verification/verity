@@ -9,24 +9,14 @@ import Proofs.Flock.Soundness.SparseRows
 import Proofs.Flock.Soundness.TmplFoldRef
 import Std.Data.HashMap.Lemmas
 
-/-!
-# What `walk` reads, against `refVal`
-
-- `refX_eq`, `refS_eq`: `Tab.ref`'s weight for a reference, times nothing more, is the slot weight `refVal` reads at
-  `readAt`; `rowLow_e`, `rowLow_e_sum`: a row's low factor times its chunk's high factor is its `E` weight.
-- `refVal_stable`: a copy's `refVal` doesn't depend on the depth bound past its Definition, so a table walked once serves
-  every placement.
-- `forIn_list_sumS`, `forIn_range_sumS`, `forIn_array_sumS`, `sv_bind_ok`: `walk`'s loops and binds in `StateT`, each step
-  adding a known term while an invariant of the value and the state holds.
--/
+/-! What `walk` reads, against `refVal`: a reference's weight, the depth bound, and `walk`'s loops and binds in
+`StateT`. -/
 
 @[expose] public section
 
 open Flock Flock.Tmpl FlockLevel3 GF128 Std
 
 namespace FlockSoundness.TmplFold
-
-/-! ## A reference's weight and a row's factor -/
 
 theorem refX_eq (t : Tmpl) (lays : Array Lay) (pt : FoldPt) (hR : pt.rT = Tmpl.halves pt.r) {d s β al off H : ℕ}
     {as : Array ℕ} {k : ℕ} (h6 : 6 ≤ β + al) (hL : β + al - 6 ≤ pt.r.size) (hk : as.getD k 0 < 2 ^ β)
@@ -78,10 +68,6 @@ theorem rowLow_e_sum (pt : FoldPt) (hT : pt.rhoT = Tmpl.halves pt.rho) {β al a 
   rw [e_chunk_sum pt hT h6 hL ha, mul_assoc]
   rfl
 
-/-! ## The depth bound -/
-
-/-- **`refVal` past its Definition's depth**: with every callee an earlier Definition, `refVal` at any bound above `d`
-is the same. -/
 theorem refVal_stable {t : Tmpl} {lays : Array Lay} {pt : FoldPt} {s : ℕ}
     (hcall : ∀ d i, i < (t.defs.getD d default).calls.size → ((t.defs.getD d default).calls.getD i default).def_ < d) :
     ∀ f f' d A B ip, d < f → d < f' → refVal t lays pt s f d A B ip = refVal t lays pt s f' d A B ip
@@ -93,8 +79,6 @@ theorem refVal_stable {t : Tmpl} {lays : Array Lay} {pt : FoldPt} {s : ℕ}
     refine Finset.sum_congr rfl fun i hi => Finset.sum_congr rfl fun j _ => ?_
     have hc := hcall d i (Finset.mem_range.mp hi)
     exact refVal_stable hcall f f' _ _ _ _ (by omega) (by omega)
-
-/-! ## Loops and binds in `StateT` -/
 
 theorem sv_bind_ok {σ α β : Type} {x : StateT σ V α} {f : α → StateT σ V β} {st st' : σ} {b : β}
     (h : (x >>= f).run st = .ok (b, st')) : ∃ a st1, x.run st = .ok (a, st1) ∧ (f a).run st1 = .ok (b, st') := by
@@ -141,9 +125,6 @@ theorem forIn_range_sumS {β σ : Type} (S : β → GF128) (Q : β → σ → Pr
   rw [← list_range_sum]
   exact forIn_list_sumS S Q g _ h hq fun k hk => hf k (List.mem_range.mp hk)
 
-/-! ## The `eq` halves cache -/
-
-/-- Every cached half is the `eq` table of its key. -/
 def HalvesOk (pt : FoldPt) (st : SplitSt) : Prop :=
   ∀ key T, st.halves.get? key = some T → T = eqHalf (if key.1 then pt.rho else pt.r) key.2.1 key.2.2
 

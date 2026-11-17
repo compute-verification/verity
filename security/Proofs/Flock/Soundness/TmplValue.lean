@@ -11,16 +11,8 @@ import Proofs.Flock.Soundness.ExecParse
 import Proofs.Flock.Soundness.SparseRows
 import Proofs.Flock.Soundness.TmplUnrollAt
 
-/-!
-# A templated unit's committed net, satisfied, composes its Definitions
-
-Column values `z` that satisfy the committed net `Tmpl.unrollAt` builds, its whole `2^unitLog`-row slot, read through
-`posMap`'s positions satisfy the template's logical rows (`rowHolds_of_netSat`), so `Flock.TmplValue.rows_eval` applies:
-at every copy placed under one of the root's calls past the input rows, at any depth, the copy's columns hold its
-Definition's value (`Tmpl.evalDef`) on its bound inputs (`unrollAt_eval`). A read templated unit's net is that net
-(`TmplUnit.eval`). The same holds of the audit's `Rows` of the logical net `Tmpl.unroll` builds (`rowHolds_of_rowsSat`,
-`unroll_eval`), the rows a partition unit is an instance of (`TmplValueUnit`). No verifier path reads this file.
--/
+/-! A templated unit's committed net, satisfied, composes its Definitions (`unrollAt_eval`); no verifier path reads this
+file. -/
 
 @[expose] public section
 
@@ -28,7 +20,6 @@ open Flock Flock.Tmpl FlockSoundness.Audit FlockSoundness.SparseRows
 
 namespace FlockSoundness.TmplValue
 
-/-- **The committed rows, holding, are the logical rows holding through `pos`.** -/
 theorem rowHolds_of_netSat {name : String} {useful constPos : ℕ} {ig og : Array Group} {acc : Acc}
     {pos : Array ℕ} {n' : Net} (h : Net.ofRowsAt name useful constPos ig og acc.ra acc.rb pos = .ok n')
     (hu : n'.unitLog ≤ 32) {z : ℕ → Bool} (hs : NetSat n' (2 ^ n'.unitLog) z) :
@@ -44,9 +35,6 @@ theorem rowHolds_of_netSat {name : String} {useful constPos : ℕ} {ig og : Arra
     Array.toList_map, xorSum_map, xorSum_map] at e
   exact e
 
-/-- **The eval composition on the committed net**: column values that satisfy a templated unit's committed net take,
-at the position of every column of every copy placed under one of the root's calls past the input rows, at any depth,
-the value of that copy's Definition on the values at its bound inputs' positions, the constant at its position's. -/
 theorem unrollAt_eval {t : Tmpl} {lays : Array Lay} {net : Net} (hwf : t.wellFormed = true)
     (ha : t.apart = true) (ho : t.ordered = true) (h : Tmpl.unrollAt t lays = .ok net) (hlog : net.unitLog ≤ 32)
     {z : ℕ → Bool} (hs : NetSat net (2 ^ net.unitLog) z) {c : Call} {j f e o : ℕ} {inp : List ℕ}
@@ -60,10 +48,6 @@ theorem unrollAt_eval {t : Tmpl} {lays : Array Lay} {net : Net} (hwf : t.wellFor
   exact Flock.TmplValue.rows_eval hwf ha ho hr (fun x => z ((posMap t lays).getD x 0))
     (fun x _ hx => rowHolds_of_netSat hat hlog hs x (by have := Flock.TmplUnroll.wf_cols hwf; omega)) hc hb hj hw
 
-/-! ## The logical net's audit `Rows` -/
-
-/-- **A built net's audit `Rows`, holding, are its rows holding** from its first computed row to its constant: the
-converse of `rowsSat_of_netSat` on the rows `Rows.ofNet` reads. -/
 theorem netRow_of_rowsSat {net : Net} (hB : Built net) (hu : net.unitLog ≤ 32) {z : ℕ → Bool}
     (hs : (Rows.ofNet hB).Sat fun c => z c.val) {r : ℕ} (h1 : min (net.inWords * WORD) net.constPos ≤ r)
     (h2 : r < net.constPos) : z r = (Verity.Boolean.xorSum (net.a.row r).toList z && Verity.Boolean.xorSum (net.b.row r).toList z) := by
@@ -77,7 +61,6 @@ theorem netRow_of_rowsSat {net : Net} (hB : Built net) (hu : net.unitLog ≤ 32)
   simp only [hr] at e
   exact e
 
-/-- **The audit `Rows` of a template's logical net, holding, are its logical rows holding** past the input rows. -/
 theorem rowHolds_of_rowsSat {t : Tmpl} {acc : Acc} {n : Net}
     (hn : Net.ofRows t.name (t.defs.getD t.root default).cols t.constPos t.inGroups t.outGroups acc.ra acc.rb = .ok n)
     (hu : n.unitLog ≤ 32) {z : ℕ → Bool} (hs : (Rows.ofNet ⟨_, _, _, _, _, _, _, hn⟩).Sat fun c => z c.val) :
@@ -90,15 +73,11 @@ theorem rowHolds_of_rowsSat {t : Tmpl} {acc : Acc} {n : Net}
   rw [ofRows_row ha w32, ofRows_row hb w32] at e
   exact e
 
-/-- `Tmpl.unroll`'s net is built by `Net.ofRows`. -/
 theorem unroll_built {t : Tmpl} {n : Net} (h : Flock.Tmpl.unroll t = .ok n) : Built n := by
   unfold Flock.Tmpl.unroll at h
   obtain ⟨_, -, hn⟩ := Flock.TmplOrder.bind_ok h
   exact ⟨_, _, _, _, _, _, _, hn⟩
 
-/-- **The eval composition on the logical net's audit `Rows`**: column values that satisfy the `Rows` of the net
-`Tmpl.unroll` builds take, at every column of every copy placed under one of the root's calls past the input rows, at any
-depth, the value of that copy's Definition on the values at its bound inputs, the constant at the constant column's. -/
 theorem unroll_eval {t : Tmpl} {n : Net} (hwf : t.wellFormed = true) (ha : t.apart = true) (ho : t.ordered = true)
     (h : Flock.Tmpl.unroll t = .ok n) (hu : n.unitLog ≤ 32) {z : ℕ → Bool}
     (hs : (Rows.ofNet (unroll_built h)).Sat fun c => z c.val) {c : Call} {j f e o : ℕ} {inp : List ℕ}
@@ -115,7 +94,6 @@ end FlockSoundness.TmplValue
 
 namespace Flock
 
-/-- **A read templated unit's net composes its Definitions** (`FlockSoundness.TmplValue.unrollAt_eval`). -/
 theorem TmplUnit.eval (tu : TmplUnit) (hlog : tu.net.unitLog ≤ 32) {z : ℕ → Bool}
     (hs : FlockSoundness.NetSat tu.net (2 ^ tu.net.unitLog) z) {c : Tmpl.Call} {j f e o : ℕ} {inp : List ℕ}
     (hc : c ∈ (tu.t.defs.getD tu.t.root default).calls.toList) (hb : tu.t.inCols ≤ c.base) (hj : j < c.count)

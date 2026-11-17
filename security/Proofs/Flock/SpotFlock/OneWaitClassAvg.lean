@@ -13,35 +13,8 @@ import Proofs.Flock.Claims.ERepCost
 import Proofs.Flock.Claims.Sampling.Assembled
 import Proofs.Flock.SpotFlock.RevealsLe
 
-/-!
-# The one-wait by-class first-hit bound at the prover's expected calls, at SPOT[Flock]'s code
-
-`CompiledTwo.eventTwoX_oneWait_le_cls_avg` reads, besides a run's expected calls `T`, three averages of a run's
-calls times a count of its sample (`Compiled.CallsAvg`): the sessions in the sample (`A_s`), the classes of the
-gates it needs (`A_k`) and the classes' representatives its sessions need, session by session (`A_m`). At
-SPOT[Flock]'s compiled verifier each count is at most a weight summed over the checked proof blocks. Where the second
-stage accepts, the checked blocks are the always-checked ones and those it proves; where it is refused, every block
-below `N`. So a count times a nonnegative weight `p` of the run averages at most
-
-`C · E[p] + S · E[p on the refused runs]`,
-
-with `C` the always-checked blocks' weights plus `K · Σ_t k_t · M_t`, and `S` every block's weight below `N`: the
-whole partition's count is paid only on the calls spent in refused runs.
-
-* `RegTwo.ex_checked_mul_le`: `RegTwo.ex_checked_le` with the function multiplied by a nonnegative weight.
-* `code_ex_mul_le_strata`: a function of the checked proof blocks times a weight, at the code, by template.
-* `code_hAs`, `code_hAk_cls`, `code_hAm_cls`: the three averages at the code.
-* `code_callsAvg`: `Compiled.CallsAvg` at the code, from a run's expected calls `T`, its expected calls in refused
-  runs `T_R` and the expected number of classes its sample needs: `A_s ≤ C_s·T + N·T_R` and
-  `A_k, A_m ≤ C_k·T + S_k·T_R`.
-* `code_eventTwoX_oneWait_le_cls_avg`: `CompiledTwo.eventTwoX_oneWait_le_cls_avg` at SPOT[Flock]'s compiled
-  two-stage verifier, with `code_eventTwoX_oneWait_le_cls_at_budget`'s gates and classes.
-* `code_eventTwoX_oneWait_le_cls_avg_strata`: that bound at `code_callsAvg`'s three products.
-* `code_phases_oneWait_le_avg`: the bound over a monitoring period at the period's averages
-  (`CompiledTwo.phases_oneWait_le_avg`), at SPOT[Flock]'s compiled two-stage verifier.
-* `code_phases_oneWait_le_avg_strata`: that bound at the period's expected calls and its expected calls in runs
-  whose second stage is refused, the three totals by template.
--/
+/-! The one-wait by-class first-hit bound at SPOT[Flock]'s code at the prover's expected calls, the whole partition's
+count paid only on the calls spent in refused runs. -/
 
 @[expose] public section
 
@@ -49,10 +22,6 @@ namespace SamplingDeploy
 
 open Claims
 
-/-- **The refused second stage, in expectation, with a weight**: over coins `ω` with first-stage bytes `src₁ ω` and
-second-stage bytes `src₂ ω`, a function `F` of the checked blocks at most `B ≥ 0` wherever the second stage
-accepts, times a nonnegative weight `p`, averages at most `B` times the weight's average plus `F` at every block
-below `N` times the weight's average on the refused coins. -/
 theorem RegTwo.ex_checked_mul_le {Ω : Type} [Fintype Ω] (g : RegTwo) (N : ℕ) (src₁ src₂ : Ω → ByteArray)
     (F : List ℕ → ℝ) (p : Ω → ℝ) {B : ℝ} (hB : 0 ≤ B) (hp : ∀ ω, 0 ≤ p ω)
     (hok : ∀ ω sel n, Spot.Select.selectSecond (g.sample (src₁ ω)) g.ns g.ks (src₂ ω) = .ok (sel, n) →
@@ -93,14 +62,8 @@ open Claims Claims.Sampling SamplingDeploy
 
 variable (h : Held)
 
-/-- SPOT[Flock]'s compiled two-stage verifier over a deployment `F`. -/
 local notation "𝓛[" F "]" => compiledTwo F (code h) iroots (two h) (rs h) (cap h)
 
-/-- **A function of the checked proof blocks times a weight of the run, at SPOT[Flock]'s code, by template**: a
-function `G` at most a weight `w` summed over its blocks, with `w` at most `M t` on template `t`'s blocks, times a
-nonnegative `p` of the prover's tape and the coins, averages at most the always-checked blocks' weights below `N`
-plus `K · Σ_t k_t · M t`, times `p`'s average, plus every block's weight below `N` times `p`'s average on the coins
-whose second stage is refused. -/
 theorem code_ex_mul_le_strata (x : Msg) (G : List ℕ → ℝ) (w M : ℕ → ℕ)
     (hM : ∀ ρ t i, t < h.reg.ns.size → i < h.reg.ns.getD t 0 → w (h.reg.blockOf ρ t i) ≤ M t)
     (hG : ∀ l, G l ≤ ((l.map w).sum : ℝ)) {K : ℕ} (hK : firstK h.reg.first = some K) {Ω : Type} [Fintype Ω]
@@ -150,9 +113,6 @@ section Counts
 
 variable {Tr : Type} (F : Claims.Flock.Deploy FlockDeploy.Coin (List FlockLevel3.GF128) Tr)
 
-/-- **`A_s` at SPOT[Flock]'s code**: the sessions of a run's sample times a nonnegative weight `p` of the run
-average at most the always-checked blocks below `N` plus `K · Σ_t k_t`, times `p`'s average, plus `N` times `p`'s
-average on the coins whose second stage is refused. -/
 theorem code_hAs (x : Msg) {K : ℕ} (hK : firstK h.reg.first = some K) {Ω : Type} [Fintype Ω]
     (p : Ω × (Fin (𝓛[F].V.k x) → FlockDeploy.Coin) → ℝ) (hp : ∀ q, 0 ≤ p q) :
     Ex (fun q : Ω × (Fin (𝓛[F].V.k x) → FlockDeploy.Coin) =>
@@ -174,10 +134,6 @@ theorem code_hAs (x : Msg) {K : ℕ} (hK : firstK h.reg.first = some K) {Ω : Ty
   simp only [mul_one] at this
   exact this
 
-/-- **`A_k` by class at SPOT[Flock]'s code**: with every block of template `t` needing at most `M t` classes under
-`cls`, the classes of the gates a run's sample needs times a nonnegative weight `p` of the run average at most the
-always-checked blocks' classes below `N` plus `K · Σ_t k_t · M t`, times `p`'s average, plus every block's classes
-below `N` times `p`'s average on the coins whose second stage is refused. -/
 theorem code_hAk_cls (x : Msg) (needs : ℕ → Finset ℕ) (cls : Fin (𝓛[F].nG x) → Fin (𝓛[F].nG x)) (M : ℕ → ℕ)
     (hM : ∀ ρ t i, t < h.reg.ns.size → i < h.reg.ns.getD t 0 →
       (Claims.SamplingGeneric.Compiled.clsNeeds (𝓛[F].nG x) cls needs (h.reg.blockOf ρ t i)).card ≤ M t) {K : ℕ}
@@ -211,11 +167,6 @@ theorem code_hAk_cls (x : Msg) (needs : ℕ → Finset ℕ) (cls : Fin (𝓛[F].
       exact_mod_cast hc.trans (sum_map_take_le l _ fun u =>
         (Claims.SamplingGeneric.Compiled.clsNeeds (𝓛[F].nG x) cls needs u).card)) hK p hp
 
-/-- **`A_m` by class at SPOT[Flock]'s code**: with a representative representing itself under `cls` and every block
-of template `t` needing at most `M t` classes, the classes' representatives a run's sessions need, session by
-session, times a nonnegative weight `p` of the run average at most the always-checked blocks' classes below `N`
-plus `K · Σ_t k_t · M t`, times `p`'s average, plus every block's classes below `N` times `p`'s average on the
-coins whose second stage is refused. -/
 theorem code_hAm_cls (x : Msg) (needs : ℕ → Finset ℕ) (cls : Fin (𝓛[F].nG x) → Fin (𝓛[F].nG x))
     (hidem : ∀ g, cls (cls g) = cls g) (M : ℕ → ℕ)
     (hM : ∀ ρ t i, t < h.reg.ns.size → i < h.reg.ns.getD t 0 →
@@ -252,15 +203,6 @@ theorem code_hAm_cls (x : Msg) (needs : ℕ → Finset ℕ) (cls : Fin (𝓛[F].
       exact_mod_cast hc.trans (sum_map_take_le l _ fun u =>
         (Claims.SamplingGeneric.Compiled.clsNeeds (𝓛[F].nG x) cls needs u).card)) hK p hp
 
-/-- **The averages of `Compiled.CallsAvg` at SPOT[Flock]'s code, by class**: with a representative representing
-itself under `cls` and every block of template `t` needing at most `M t` classes, where a run calls SHA-512 at most
-`T` times on average, both parties' calls counted, at most `T_R` of them on average in the runs whose second stage
-is refused, and its sample needs gates of at most `K_s` classes on average, the three products average at most
-
-`A_s ≤ C_s · T + N · T_R` and `A_k, A_m ≤ C_k · T + S_k · T_R`,
-
-with `C_s` the always-checked blocks below `N` plus `K · Σ_t k_t`, `C_k` their classes plus `K · Σ_t k_t · M t`,
-and `S_k` every block's classes below `N`. -/
 theorem code_callsAvg (x : Msg) (needs : ℕ → Finset ℕ) (cls : Fin (𝓛[F].nG x) → Fin (𝓛[F].nG x))
     (hidem : ∀ g, cls (cls g) = cls g) (M : ℕ → ℕ)
     (hM : ∀ ρ t i, t < h.reg.ns.size → i < h.reg.ns.getD t 0 →
@@ -304,17 +246,9 @@ theorem code_callsAvg (x : Msg) (needs : ℕ → Finset ℕ) (cls : Fin (𝓛[F]
 
 end Counts
 
-/-- The zero-knowledge deployment of Flock's readable relation. -/
 local notation "Fzk" => FlockDeploy.deployZk _root_.Flock.Readable.relation
 
-/-- **The by-class first-hit bound at the prover's expected calls, the finders run on one wait a session, at the
-code and its key**: `CompiledTwo.eventTwoX_oneWait_le_cls_avg` at SPOT[Flock]'s compiled two-stage verifier `L`,
-with `needs` the gates each proof block's reveal opens and `cls` the classes of `gateKey`, under `Built` and
-`Addresses` at a statement in the two-stage scope. Where a run's calls and their products with its sample's three
-counts average at most `T`, `A_s`, `A_k` and `A_m`, the sample needs gates of at most `K_s` classes on average
-(`Compiled.CallsAvg`), and the one-wait compiled verifier's `B_conf,X` and its two by-class finders at every `K`
-meet the linear expected-time bound, an accepted run samples a proof block of the one-wait compiled verifier's
-`FregTwoX` with probability at most `εclsOneWaitAvg`. No budget is held on every run. -/
+/-- No budget is held on every run. -/
 theorem code_eventTwoX_oneWait_le_cls_avg (hB : Built h) (hS : Addresses h)
     {L : Claims.SamplingGeneric.CompiledTwo FlockDeploy.Coin (Claims.SamplingGeneric.Arg.ofFlock Fzk)}
     (hL : L = 𝓛[Fzk]) {x : Msg} {s : AuditStatement} {Pt : Partition} {d : Design.Two} (hx : parse h x = some s)
@@ -377,13 +311,6 @@ theorem code_eventTwoX_oneWait_le_cls_avg (hB : Built h) (hS : Addresses h)
         hgg hg)
     hC hBc hX hI
 
-/-- **The by-class first-hit bound at the prover's expected calls, at the code, by template**:
-`code_eventTwoX_oneWait_le_cls_avg` at the three products of `code_callsAvg`. Where a run calls SHA-512 at most `T`
-times on average, both parties' calls counted, at most `T_R` of them on average in the runs whose second stage is
-refused, its sample needs gates of at most `K_s` classes on average, and every block of template `t` needs at most
-`M t` classes, an accepted run samples a proof block of the one-wait compiled verifier's `FregTwoX` with probability
-at most `εclsOneWaitAvg` at `A_s = C_s · T + N · T_R` and `A_k = A_m = C_k · T + S_k · T_R`: the whole partition's
-counts `N` and `S_k` multiply only the calls spent in refused runs. -/
 theorem code_eventTwoX_oneWait_le_cls_avg_strata (hB : Built h) (hS : Addresses h) {x : Msg} {s : AuditStatement}
     {Pt : Partition} {d : Design.Two} (hx : parse h x = some s) (hP : partition h s = some Pt)
     (hd : two h s = some d) (hin : InScopeTwo Pt d s) {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Prover Ω)
@@ -433,21 +360,7 @@ theorem code_eventTwoX_oneWait_le_cls_avg_strata (hB : Built h) (hS : Addresses 
     (code_callsAvg h Fzk x needs cls (by subst hcls; exact Claims.SamplingGeneric.Compiled.clsOf_idem _) M hM hK P
       hT hR hKs) hBc hX hI
 
-/-- **The one-wait bound over a monitoring period, at the code and the period's averages**:
-`CompiledTwo.phases_oneWait_le_avg` at SPOT[Flock]'s compiled two-stage verifier `L`, under `Built` and `Addresses`.
-A period of `n` phases, phase `i` at its statement `x i` in the two-stage scope and its prover `P i`, whose tape and
-the phase's coins split the period's sample space (`φ`); `needs i` is the gates each proof block's reveal opens and
-`cls i` the classes of `gateKey`. Where the period's phases call SHA-512 at most `T` times on average in total, both
-parties' calls counted, a phase's calls times its sample's three counts average at most `A_s`, `A_k` and `A_m` in
-total, each phase's sample needs gates of at most `K_s` classes on average, the expected reruns a session are at most
-`e` and the opening checks' calls at most `c` at every phase, and each phase's `B_conf,X` and two by-class finders
-meet the linear expected-time bound, some phase's accepted run samples a proof block of the one-wait compiled
-verifier's `FregTwoX` with probability at most
-
-`Σ_i (3·κ_s + 2·√(k·γ_s·Pr[B_i]))`
-`+ 2·(2·(T + e·A_s + n·c) + 4·(T + e·A_s + A_k + e·A_m + (1 + K_s)·n·c))/2^256`.
-
-No count is held at every sample, and no run or phase of a prover to a budget. -/
+/-- No count is held at every sample, and no run or phase of a prover to a budget. -/
 theorem code_phases_oneWait_le_avg (hB : Built h) (hS : Addresses h)
     {L : Claims.SamplingGeneric.CompiledTwo FlockDeploy.Coin (Claims.SamplingGeneric.Arg.ofFlock Fzk)}
     (hL : L = 𝓛[Fzk]) {n : ℕ} {x : Fin n → Msg} {s : Fin n → AuditStatement} {Pt : Fin n → Partition}
@@ -493,15 +406,6 @@ theorem code_phases_oneWait_le_avg (hB : Built h) (hS : Addresses h)
       (hneeds i) (hcls i) hC (hBc i) (hX i) (hI i))
     he0 hKs0 hT hAs hAk hAm hKs he hc
 
-/-- **The one-wait bound over a monitoring period, at the code, by template**: `code_phases_oneWait_le_avg` at the
-period's totals that `code_hAs`, `code_hAk_cls` and `code_hAm_cls` give phase by phase. `C_s`, `C_k`, `N` and `S_k`
-are at least every phase's counts of `code_callsAvg`: the always-checked blocks plus `K · Σ_t k_t`, their classes
-plus `K · Σ_t k_t · M t`, the partition's proof blocks and the partition's classes. Where the period's phases call
-SHA-512 at most `T` times on average in total, both parties' calls counted, and at most `T_R` of them on average in
-the runs whose second stage is refused, some phase's accepted run samples a proof block of the one-wait compiled
-verifier's `FregTwoX` with probability at most `code_phases_oneWait_le_avg`'s bound at
-`A_s = C_s · T + N · T_R` and `A_k = A_m = C_k · T + S_k · T_R`: over the whole period the partition's counts
-multiply only the calls spent in refused runs. -/
 theorem code_phases_oneWait_le_avg_strata (hB : Built h) (hS : Addresses h) {n : ℕ} {x : Fin n → Msg}
     {s : Fin n → AuditStatement} {Pt : Fin n → Partition} {d : Fin n → Design.Two}
     (hx : ∀ i, parse h (x i) = some (s i)) (hP : ∀ i, partition h (s i) = some (Pt i))

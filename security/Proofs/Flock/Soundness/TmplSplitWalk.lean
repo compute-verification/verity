@@ -10,13 +10,7 @@ import Proofs.Flock.Soundness.TmplFoldRef
 import Proofs.Flock.Soundness.TmplPosMap
 import Std.Data.HashMap.Lemmas
 
-/-!
-# Every walk means its class's
-
-- `walkCall_exp`, `walkCall_sum`: a call's step (`walkCall`), from its callee's table (`walkChild_ok`), adds the callee's
-  copies' `refVal`s (`callVal`), for an explicit and a summed class.
-- `walk_ok`: by induction on the depth, every walk's table means its class's (`WalkOk`).
--/
+/-! Every walk's table means its class's (`walk_ok`). -/
 
 @[expose] public section
 
@@ -24,7 +18,6 @@ open Flock Flock.Tmpl FlockLevel3 GF128 Std
 
 namespace FlockSoundness.TmplFold
 
-/-- Call `i` of Definition `d`'s copy at `(A, B)`, its inputs at `ip`: its callee's copies' `refVal`s at depth `fuel`. -/
 noncomputable def callVal (t : Tmpl) (lays : Array Lay) (pt : FoldPt) (s fuel d A B : ℕ) (ip : List ℕ) (i : ℕ) :
     GF128 :=
   ∑ j ∈ Finset.range ((t.defs.getD d default).calls.getD i default).count,
@@ -39,8 +32,6 @@ theorem refVal_succ (t : Tmpl) (lays : Array Lay) (pt : FoldPt) (s fuel d A B : 
         rowVal pt s (pt.e (A + B * Flock.Tmpl.posIn t lays (t.defs.size + 1) d r.1)) (readAt t lays pt d A B ip) r).sum +
       ∑ i ∈ Finset.range (t.defs.getD d default).calls.size, callVal t lays pt s fuel d A B ip i := by
   simp only [refVal, callVal]
-
-/-! ## Folds in `StateT`, and small facts -/
 
 theorem foldlM_sumF {ι α β σ : Type} (S : ι → β → GF128) (Q : β → σ → Prop) (g : ι → α → GF128) :
     ∀ (l : List α) {f : β → α → StateT σ V β} {b b' : β} {st st' : σ},
@@ -106,8 +97,6 @@ theorem flatMap_sum (c : ℕ) (f : ℕ → ℕ → ℕ) (g : ℕ → GF128) : �
       Finset.sum_range_succ, ← list_range_sum (fun j => g (f n j))]
     simp [Function.comp_def]
 
-/-- A run of lanes's position: lane `j` of copy `a` at chunk origin `H` is the caller's position of the copy's `j`-th
-child. -/
 theorem lane_pos {a β j m ms H al off nb cs : ℕ} (hpow : 2 ^ m = ms) (hdiv : (off + nb) % ms = 0) (hm : m ≤ al)
     (hcs : cs = 1) :
     a + 2 ^ β * j + 2 ^ (β + m) * (H * 2 ^ (al - m) + (off + nb) / ms) =
@@ -141,8 +130,6 @@ theorem lane_glue2 {R : Type} [CommRing R] (eL X gl gc Sc Cc : R) (E Rr U : ℕ 
     simp only [Finset.sum_range_succ]
     linear_combination ih
 
-/-! ## A bound input, read -/
-
 theorem iv_exp (t : Tmpl) (lays : Array Lay) (pt : FoldPt) (hR : pt.rT = Tmpl.halves pt.r) {d s β al off H : ℕ}
     {as : Array ℕ} (h6 : 6 ≤ β + al) (hL : β + al - 6 ≤ pt.r.size) (ip : ℕ → List ℕ) (c : Call) {k j t' : ℕ}
     (hk : as.getD k 0 < 2 ^ β) (ht : t' < (c.bound id j).length) :
@@ -162,7 +149,6 @@ theorem iv_sum (t : Tmpl) (lays : Array Lay) (pt : FoldPt) (hR : pt.rT = Tmpl.ha
       Gs pt s ((c.bound (readAt t lays pt d (a + 2 ^ β * (H * 2 ^ al + off)) (2 ^ β) ip) j).getD t' pt.qc) := by
   rw [refS_eq t lays pt hR h6 hL ha, getD_toArray (c.bound id j), getD_bound c _ j t' pt.qc ht]
 
-/-- `child_expW`, its open inputs read through `Z`. -/
 theorem child_expW' (D : Def) (pt : FoldPt) {s : ℕ} (hs : s < 64) (L H Lc Hc A B : ℕ) (as : Array ℕ) (gL : Half)
     (pos : ℕ → ℕ) (iv : ℕ → ℕ → GF128) (c : Call) (o ch : Tab) (count nk n : ℕ) (rm cm : ℕ → ℕ × F128)
     (W : Array F128) (EL : F128) (E : ℕ → ℕ → F128) (hk : ReKey pt L H Lc Hc rm cm) (Z : ℕ → ℕ → ℕ → GF128)
@@ -180,7 +166,6 @@ theorem child_expW' (D : Def) (pt : FoldPt) {s : ℕ} (hs : s < 64) (L H Lc Hc A
     (fun e => hiE pt Lc Hc e.2.2 * refX D pt s L H A B as gL pos iv k ((c.bound id j).toArray.getD e.1 0))
     (fun e => hiE pt Lc Hc e.2.2 * Z k j e.1) fun x hx => by rw [hZ k j x hx]]
 
-/-- `child_sumL`, its open inputs read through `Z`. -/
 theorem child_sumL' (D : Def) (pt : FoldPt) (L H Lc Hc A B : ℕ) (as : Array ℕ) (gL : Half) (pos : ℕ → ℕ)
     (gl gc : GF128) (iv : ℕ → GF128) (c : Call) (o ch : Tab) (count : ℕ) (rm cm : ℕ → ℕ × F128) (ls lc : F128)
     (E : ℕ → F128) (hk : ReKey pt L H Lc Hc rm cm) (Z : ℕ → ℕ → GF128)
@@ -196,9 +181,6 @@ theorem child_sumL' (D : Def) (pt : FoldPt) (L H Lc Hc A B : ℕ) (as : Array �
     (fun e => hiE pt Lc Hc e.2.2 * refS D pt L H A gL pos gl gc iv ((c.bound id j).toArray.getD e.1 0))
     (fun e => hiE pt Lc Hc e.2.2 * Z j e.1) fun x hx => by rw [hZ j x hx]]
 
-/-! ## A call's step -/
-
-/-- **An explicit class's call**: it adds its callee's copies' `refVal`s, copy by copy. -/
 theorem walkCall_exp {t : Tmpl} {lays : Array Lay} {multi : Array Bool} {pt : FoldPt} {s : ℕ} (hs : s < 64)
     (hT : pt.rhoT = Tmpl.halves pt.rho) (hR : pt.rT = Tmpl.halves pt.r) (hlay : LayOk t lays)
     (hcall : ∀ d i, i < (t.defs.getD d default).calls.size → ((t.defs.getD d default).calls.getD i default).def_ < d)
@@ -224,7 +206,7 @@ theorem walkCall_exp {t : Tmpl} {lays : Array Lay} {multi : Array Bool} {pt : Fo
   generalize (t.defs.getD d default).calls.getD i default = c at h he hbd hlan ⊢
   generalize (lays.getD d default).places.getD i default = pl at h hlan ⊢
   split at h
-  · -- a copy placed directly
+  ·
     rename_i hm
     have hm1 : pl.ms = 1 := by simpa using hm
     have key := foldlM_sumF
@@ -279,7 +261,7 @@ theorem walkCall_exp {t : Tmpl} {lays : Array Lay} {multi : Array Bool} {pt : Fo
       by_contra hc
       exact hal (by simp [Nat.lt_of_not_le hc])
     split at h
-    · -- a run of lanes below an explicit class
+    ·
       rename_i hlt
       obtain ⟨⟨ch, rm, cm⟩, st3, hc, hr⟩ := sv_bind_ok h
       try dsimp only at hr
@@ -317,7 +299,7 @@ theorem walkCall_exp {t : Tmpl} {lays : Array Lay} {multi : Array Bool} {pt : Fo
       have hlt' : k * c.count + j < as.size * c.count :=
         Nat.lt_of_lt_of_le (Nat.add_lt_add_left hj _) (by rw [← Nat.succ_mul]; exact Nat.mul_le_mul_right _ hk)
       rw [getD_lanes _ _ _ _ hlt', divmod_div hc0 hj, divmod_mod hj, lane_pos hpow hal1 hal2 hcs, hB]
-    · -- a run of lanes from an explicit class into a summed one
+    ·
       rename_i hlt
       simp only [eLow_eq] at h
       obtain ⟨⟨ch, rm, cm⟩, st3, hc, hr⟩ := sv_bind_ok h
@@ -351,7 +333,6 @@ theorem walkCall_exp {t : Tmpl} {lays : Array Lay} {multi : Array Bool} {pt : Fo
       · intro k j x hx
         exact iv_exp t lays pt hR h6a hL2 ip c (low_lt (has h6) k) (by rw [hbd]; exact (hchU x hx).1)
 
-/-- **A summed class's call**: it adds its callee's copies' `refVal`s, each times its copy's `E(a)`. -/
 theorem walkCall_sum {t : Tmpl} {lays : Array Lay} {multi : Array Bool} {pt : FoldPt} {s : ℕ}
     (hT : pt.rhoT = Tmpl.halves pt.rho) (hR : pt.rT = Tmpl.halves pt.r) (hlay : LayOk t lays)
     (hcall : ∀ d i, i < (t.defs.getD d default).calls.size → ((t.defs.getD d default).calls.getD i default).def_ < d)
@@ -378,7 +359,7 @@ theorem walkCall_sum {t : Tmpl} {lays : Array Lay} {multi : Array Bool} {pt : Fo
   generalize (t.defs.getD d default).calls.getD i default = c at h he hbd hlan ⊢
   generalize (lays.getD d default).places.getD i default = pl at h hlan ⊢
   split at h
-  · -- one copy placed directly
+  ·
     rename_i hm
     have hm1 : pl.ms = 1 := by simpa using hm
     split at h
@@ -457,10 +438,6 @@ theorem walkCall_sum {t : Tmpl} {lays : Array Lay} {multi : Array Bool} {pt : Fo
     beta_reduce
     ring
 
-/-! ## The walk -/
-
-/-- `walk`'s position table: with every layout in order (`DefPos`), `posTab`'s entries are `posIn`'s, so a position read
-from it is `posIn`'s. -/
 theorem tabled_posTab {t : Tmpl} {lays : Array Lay} (hpos : ∀ d < t.defs.size, DefPos t lays d) (d off m : ℕ)
     (hm : m = 0 ∨ m = (t.defs.getD d default).cols) :
     tabled (posTab t lays d off m) (fun y => off + Flock.Tmpl.posIn t lays (t.defs.size + 1) d y) =
@@ -492,7 +469,6 @@ theorem tabled_posTab {t : Tmpl} {lays : Array Lay} (hpos : ∀ d < t.defs.size,
     · rw [ite_eq_right hy]
   · exact absurd (hm'.trans (by simp [Array.getD, hd]; rfl)) h0
 
-/-- **A walk's step**: every class's walk at depth `F + 1` means its class's, from every walk's at `F`. -/
 theorem walk_step {t : Tmpl} {lays : Array Lay} {multi : Array Bool} {pt : FoldPt} {s : ℕ} (hs : s < 64)
     (hT : pt.rhoT = Tmpl.halves pt.rho) (hR : pt.rT = Tmpl.halves pt.r) (hlay : LayOk t lays)
     (hcall : ∀ d i, i < (t.defs.getD d default).calls.size → ((t.defs.getD d default).calls.getD i default).def_ < d)
@@ -605,7 +581,6 @@ theorem walk_step {t : Tmpl} {lays : Array Lay} {multi : Array Bool} {pt : FoldP
       rw [← hP]
       ring
 
-/-- **Every walk means its class's**, at every depth. -/
 theorem walk_ok {t : Tmpl} {lays : Array Lay} {multi : Array Bool} {pt : FoldPt} {s : ℕ} (hs : s < 64)
     (hT : pt.rhoT = Tmpl.halves pt.rho) (hR : pt.rT = Tmpl.halves pt.r) (hlay : LayOk t lays)
     (hcall : ∀ d i, i < (t.defs.getD d default).calls.size → ((t.defs.getD d default).calls.getD i default).def_ < d) :

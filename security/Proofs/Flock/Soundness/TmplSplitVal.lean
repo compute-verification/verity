@@ -7,18 +7,7 @@ import Mathlib.Data.Nat.Totient
 import Proofs.Flock.Level3.Nodes
 import Proofs.Flock.Soundness.TmplFoldClassOk
 
-/-!
-# A class's table, valued at a chunk origin
-
-`walk` folds a class at local offset `off` in chunks of `2^al`; placed at chunk origin `H` (so at `h = H · 2^al + off`
-in `foldDef`'s terms), an entry at row chunk `cx` and column chunk `cy` has high factors `eq(ρ[L ..], H + cx)` and
-`eq(r[L ..], H + cy)`, `L = β + al − 6` (`hiE`, `hiG`). `tabExp` and `tabSum` value a table as `expVal` and `sumVal`
-value an `Out`.
-
-- `e_chunk`, `g_chunk` (explicit) and `e_chunk_sum`, `g_chunk_sum` (summed): a position's `E` and slot weights are the
-  low factors `walk` reads from its `eq` halves times the high factors.
-- `ref_tabExp`, `ref_tabSum`: `Tab.ref` adds its reference's term.
--/
+/-! A class's table valued at a chunk origin (`tabExp`, `tabSum`), as `expVal` and `sumVal` value an `Out`. -/
 
 @[expose] public section
 
@@ -26,26 +15,18 @@ open Flock Flock.Tmpl FlockLevel3 GF128 Std
 
 namespace FlockSoundness.TmplFold
 
-/-- Chunk `H + c`'s high `E` factor, `eq(ρ[L ..], H + c)`. -/
 noncomputable def hiE (pt : FoldPt) (L H c : ℕ) : GF128 := of (Tmpl.eqTail pt.rhoT L (H + c))
 
-/-- Chunk `H + c`'s high slot factor, `eq(r[L ..], H + c)`. -/
 noncomputable def hiG (pt : FoldPt) (L H c : ℕ) : GF128 := of (Tmpl.eqTail pt.rT L (H + c))
 
-/-- An explicit class's table at chunk origin `H`, slot `s`: its own entries at `s` by their chunks' high factors, the
-constant's by its row chunk's, and copy `k`'s open input `t` by `iv t k`. -/
 noncomputable def tabExp (pt : FoldPt) (s L H : ℕ) (iv : ℕ → ℕ → GF128) (T : Tab) : GF128 :=
   hsum T.P (fun e => if e.2.2 = s then hiE pt L H e.1 * hiG pt L H e.2.1 else 0) +
     hsum T.PC (fun e => if e.2 = s then hiE pt L H e.1 else 0) +
     hsum T.U (fun e => hiE pt L H e.2.2 * iv e.1 e.2.1)
 
-/-- A summed class's table at chunk origin `H`: its own entries by `gl`, the constant's by `gc`, open input `t` by
-`iv t`, each by its chunks' high factors. -/
 noncomputable def tabSum (pt : FoldPt) (L H : ℕ) (gl gc : GF128) (iv : ℕ → GF128) (T : Tab) : GF128 :=
   gl * hsum T.S (fun e => hiE pt L H e.1 * hiG pt L H e.2) + gc * hsum T.C (fun c => hiE pt L H c) +
     hsum T.U (fun e => hiE pt L H e.2.2 * iv e.1)
-
-/-! ## A position's factors, split at its chunk -/
 
 theorem chunk_pos (β al a H P : ℕ) :
     a + 2 ^ β * (H * 2 ^ al + P) = (a + 2 ^ β * (P % 2 ^ al)) + 2 ^ (β + al) * (H + P / 2 ^ al) := by
@@ -110,9 +91,6 @@ theorem g_chunk_sum (pt : FoldPt) (hR : pt.rT = Tmpl.halves pt.r) {s β al a : �
     eqHalf_at _ _ _ _ (Nat.mod_lt _ (Nat.two_pow_pos _)), show β - 6 + al = β + al - 6 by omega]
   ring
 
-/-! ## A reference's step -/
-
-/-- An explicit reference's slot-`s` weight: an own column's slot factor, an input's `iv`, the constant's slot weight. -/
 noncomputable def refX (D : Def) (pt : FoldPt) (s L H A B : ℕ) (as : Array ℕ) (gL : Half) (pos : ℕ → ℕ)
     (iv : ℕ → ℕ → GF128) (k v : ℕ) : GF128 :=
   if v < D.cols then
@@ -121,13 +99,11 @@ noncomputable def refX (D : Def) (pt : FoldPt) (s L H A B : ℕ) (as : Array ℕ
   else if v < D.cols + D.ins then iv (v - D.cols) k
   else if pt.qc % 64 = s then of (pt.g pt.qc) else 0
 
-/-- A summed reference's weight: an own column's by `gl`, an input's `iv`, the constant's `gc`. -/
 noncomputable def refS (D : Def) (pt : FoldPt) (L H A : ℕ) (gL : Half) (pos : ℕ → ℕ) (gl gc : GF128)
     (iv : ℕ → GF128) (v : ℕ) : GF128 :=
   if v < D.cols then gl * of (gL.at (pos v % A)) * hiG pt L H (pos v / A)
   else if v < D.cols + D.ins then iv (v - D.cols) else gc
 
-/-- **An explicit reference's step**: an own column adds at its slot, an input opens, the constant adds at `qc`'s slot. -/
 theorem ref_tabExp (D : Def) (pt : FoldPt) (s L H A B : ℕ) (as : Array ℕ) (gL : Half) (pos : ℕ → ℕ)
     (iv : ℕ → ℕ → GF128) (o : Tab) (k cx : ℕ) (w : F128) (v : ℕ) :
     tabExp pt s L H iv (Tab.ref D pt false A B as gL pos o k cx w v) = tabExp pt s L H iv o +
@@ -142,7 +118,6 @@ theorem ref_tabExp (D : Def) (pt : FoldPt) (s L H A B : ℕ) (as : Array ℕ) (g
     · simp only [h1, h2, ↓reduceIte, Bool.false_eq_true, hsum_bump]
       split_ifs <;> simp only [of_mul] <;> ring
 
-/-- **A summed reference's step**: an own column adds to the own entries, an input opens, the constant adds. -/
 theorem ref_tabSum (D : Def) (pt : FoldPt) (L H A B : ℕ) (as : Array ℕ) (gL : Half) (pos : ℕ → ℕ)
     (gl gc : GF128) (iv : ℕ → GF128) (o : Tab) (k cx : ℕ) (w : F128) (v : ℕ) :
     tabSum pt L H gl gc iv (Tab.ref D pt true A B as gL pos o k cx w v) = tabSum pt L H gl gc iv o +
@@ -157,9 +132,6 @@ theorem ref_tabSum (D : Def) (pt : FoldPt) (L H A B : ℕ) (as : Array ℕ) (gL 
     · simp only [h1, h2, ↓reduceIte, hsum_bump]
       ring
 
-/-! ## A child's table, added and bound -/
-
-/-- A table step that bumps each entry into `init` at a re-keyed key adds each entry's re-keyed term. -/
 theorem hsum_fold_bump {κ κ' : Type} [BEq κ] [Hashable κ] [BEq κ'] [LawfulBEq κ'] [Hashable κ'] [LawfulHashable κ']
     [DecidableEq κ'] (m : HashMap κ F128) (init : HashMap κ' F128) (f : κ' → GF128) (g : κ → F128 → κ' × F128) :
     hsum (m.fold (fun acc k v => bump acc (g k v).1 (g k v).2) init) f =
@@ -167,7 +139,6 @@ theorem hsum_fold_bump {κ κ' : Type} [BEq κ] [Hashable κ] [BEq κ'] [LawfulB
   fold_val (fun acc => hsum acc f) _ (fun k v => of (g k v).2 * f (g k v).1)
     (fun acc k v => hsum_bump acc f _ _) m init
 
-/-- **A child's table added** at re-keyed chunks (`rm` rows, `cm` columns, each a chunk and a factor). -/
 theorem addChild_tabExp (pt : FoldPt) (s L H : ℕ) (iv : ℕ → ℕ → GF128) (o ch : Tab) (rm cm : ℕ → ℕ × F128)
     (ls lc : F128) :
     tabExp pt s L H iv (o.addChild ch rm cm ls lc) = tabExp pt s L H iv o +
@@ -211,9 +182,6 @@ theorem addChild_tabSum (pt : FoldPt) (L H : ℕ) (gl gc : GF128) (iv : ℕ → 
   simp only [e1, e2, List.sum_map_mul_left]
   ring
 
-/-- **The re-key**: a child table at chunk origin `Hc = H · 2^(al' − alc) + oc / 2^alc` (offset `oc` a multiple of its
-chunks `2^alc`), at its chunk `c`, has the caller's chunk `⌊P / 2^al'⌋` factor times `eq` of the coordinates between,
-`P = oc + c · 2^alc`. -/
 theorem rekey (x : Array F128) {Lc alc al' oc : ℕ} (hle : alc ≤ al') (hk : Lc + (al' - alc) ≤ x.size)
     (hoc : oc % 2 ^ alc = 0) (H c : ℕ) :
     of (Tmpl.eqTail (Tmpl.halves x) Lc (H * 2 ^ (al' - alc) + oc / 2 ^ alc + c)) =
@@ -234,7 +202,6 @@ theorem rekey (x : Array F128) {Lc alc al' oc : ℕ} (hle : alc ≤ al') (hk : L
         2 ^ (al' - alc) * ((oc / 2 ^ alc + c) / 2 ^ (al' - alc)) + H * 2 ^ (al' - alc) := by rw [hm]; ring
     _ = _ := by ring
 
-/-- The terms a list of low parts and factors `(k, f)` adds through `ref`, each with weight `f · v · fx`. -/
 theorem foldl_ref_exp (D : Def) (pt : FoldPt) (s L H A B : ℕ) (as : Array ℕ) (gL : Half) (pos : ℕ → ℕ)
     (iv : ℕ → ℕ → GF128) (px : ℕ) (v fx : F128) (u : ℕ) :
     ∀ (l : List (ℕ × F128)) (o : Tab),
@@ -257,8 +224,6 @@ theorem foldl_ref_sum (D : Def) (pt : FoldPt) (L H A B : ℕ) (as : Array ℕ) (
     rw [List.foldl_cons, foldl_ref_sum D pt L H A B as gL pos gl gc iv px v fx u l, ref_tabSum, List.map_cons,
       List.sum_cons, add_assoc]
 
-/-- **A copy's bindings**: each open input entry of the child, through `wk`'s low parts and factors, adds `ref`'s term
-for the caller reference bound to it. -/
 theorem bind_tabExp (D : Def) (pt : FoldPt) (s L H A B : ℕ) (as : Array ℕ) (gL : Half) (pos : ℕ → ℕ)
     (iv : ℕ → ℕ → GF128) (c : Call) (o : Tab) (j : ℕ) (ch : Tab) (rm : ℕ → ℕ × F128)
     (wk : ℕ → ℕ → List (ℕ × F128)) :

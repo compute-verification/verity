@@ -7,24 +7,13 @@ public import Proofs.Flock.Claims.Complete.Json.Goals
 public import Proofs.Flock.Level3.ArithFacts
 public import Proofs.Flock.Soundness.ZK.Hiding
 
-/-!
-# SPOT[Flock]'s stage bytes are uniform on its coins
-
-Each stage of SPOT[Flock] reads its `L = 2^20` bytes off its round's coin (`coinByte`): the coin's `65536` field elements'
-`16` bytes each, in order (`FlockDeploy.Coin.bytes`). Those bytes determine the coin (`Claims.Bridge.coin_bytes_injective`)
-and there are as many coins as byte strings of length `L` (`2^128` elements, `65536` times), so the map is a bijection
-(`coinEquiv`) and carries the uniform distribution on coins to the uniform distribution on the bytes. That is `CallsUniform` at SPOT's
-byte maps (`callsUniform`), A3 at each stage's call, as a theorem with no premise on the operating system.
-
-A stage that reads `R` rounds' coins reads their `R · L` bytes coin by coin (`stageByte`), one for one with the `R`
-coins (`stageEquiv`), so those bytes are uniform too: `SamplingDeploy.StageUniform` at every `R` (`stageUniform`).
--/
+/-! SPOT[Flock]'s stage bytes are uniform on its coins: A3 at each stage's call (`callsUniform`, `stageUniform`), a
+theorem with no premise on the operating system. -/
 
 @[expose] public section
 
 namespace SpotFlock
 
-/-- **A coin's stage bytes determine the coin.** -/
 theorem coinByte_injective : Function.Injective fun (c : FlockDeploy.Coin) (_ : Fin 1) => coinByte c := by
   intro c d h
   have hb : ∀ i : Fin L, coinByte c i = coinByte d i := fun i => congrFun (congrFun h 0) i
@@ -41,7 +30,6 @@ theorem coinByte_injective : Function.Injective fun (c : FlockDeploy.Coin) (_ : 
     Option.getD_some] at e
   exact UInt8.toNat_inj.mp e
 
-/-- **As many coins as stage byte strings**: `(2^128)^65536 = 256^(2^20)`. -/
 theorem card_coin : Fintype.card FlockDeploy.Coin = Fintype.card (Fin 1 → Fin L → Fin 256) := by
   have h₁ : Fintype.card FlockDeploy.Coin = (2 ^ 128) ^ 65536 := by
     rw [show Fintype.card FlockDeploy.Coin = Fintype.card (Fin 65536 → FlockLevel3.GF128) from
@@ -51,17 +39,13 @@ theorem card_coin : Fintype.card FlockDeploy.Coin = Fintype.card (Fin 1 → Fin 
   rw [h₁, h₂, ← pow_mul, show (256 : ℕ) = 2 ^ 8 by norm_num, ← pow_mul]
   exact congrArg (2 ^ ·) (by norm_num [L])
 
-/-- **The stage bytes and the coins, one for one** (`coinByte`). -/
 noncomputable def coinEquiv : FlockDeploy.Coin ≃ (Fin 1 → Fin L → Fin 256) :=
   Equiv.ofBijective (fun c _ => coinByte c)
     ((Fintype.bijective_iff_injective_and_card _).2 ⟨coinByte_injective, card_coin⟩)
 
-/-- **A3 at SPOT[Flock]'s stage bytes**: the bytes each stage reads off a uniform coin are uniform bytes, at every
-statement. -/
 theorem callsUniform : SamplingDeploy.CallsUniform (fun _ => L) fun _ => coinByte := fun _ E =>
   FlockSoundness.ZK.prCoin_congr_equiv coinEquiv E
 
-/-- **A stage's bytes and its coins, one for one** (`stageByte`): each coin's bytes (`coinEquiv`), laid end to end. -/
 noncomputable def stageEquiv (R : ℕ) : (Fin R → FlockDeploy.Coin) ≃ (Fin 1 → Fin (R * L) → Fin 256) :=
   ((Equiv.piCongrRight fun _ : Fin R => coinEquiv.trans (Equiv.funUnique (Fin 1) (Fin L → Fin 256))).trans
     ((Equiv.curry (Fin R) (Fin L) (Fin 256)).symm.trans
@@ -70,8 +54,6 @@ noncomputable def stageEquiv (R : ℕ) : (Fin R → FlockDeploy.Coin) ≃ (Fin 1
 
 theorem stageEquiv_apply (R : ℕ) (cs : Fin R → FlockDeploy.Coin) : stageEquiv R cs = fun _ => stageByte cs := rfl
 
-/-- **A3 at a stage of `R` coins**: the `R · L` bytes a stage reads off `R` uniform coins are uniform bytes, at every
-statement and every `R`. -/
 theorem stageUniform (R : ℕ) : SamplingDeploy.StageUniform (fun _ => R) (fun _ => R * L) fun _ => stageByte :=
   fun _ E => FlockSoundness.ZK.prCoin_congr_equiv (stageEquiv R) E
 

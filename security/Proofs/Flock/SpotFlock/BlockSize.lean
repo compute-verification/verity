@@ -2,19 +2,8 @@ module
 
 public import Proofs.Flock.SpotFlock.NeededBitsOf
 
-/-!
-# A unit's proof block's size, from its circuit file's descriptor
-
-A unit's proof block in a member's program (`Spot.Bits.blockOf` at the member's key program) holds the unit's lowered
-gates and the position of each input it owns. `length_blockOf_le` bounds its length by the stacked unit rows' inputs
-plus three gates a computed row, `(bitsRows c).nIn + 3 * (bitsRows c).nComp`, whatever the member's unit count `n`:
-the bound a member's size condition can ask of one proof block.
-
-* `length_unitGates_le`: a unit's rows are the `nComp` gates `2 + n·B + u·R + i` (`unitOf_some`), three lowered gates
-  each.
-* `length_insOf_le`: an input a unit owns is one its rows read (`exists_of_owner`), so the constant or the zero, which
-  the constants fix, one of its own rows, which is no input, or one of its `B` source gates `2 + u·B + b`.
--/
+/-! A unit's proof block's size, bounded from its circuit file's descriptor whatever the member's unit count
+(`length_blockOf_le`). -/
 
 @[expose] public section
 
@@ -22,7 +11,6 @@ namespace Flock.Bridge.BlockSize
 
 open Claims.Sampling Properties.Spot Flock.Bridge.NeededBitsOf
 
-/-- A list of naturals without repeats, all in `[a, a + w)`, has at most `w` entries. -/
 theorem length_le_of_executionPhase {l : List ℕ} {a w : ℕ} (hnd : l.Nodup) (h : ∀ x ∈ l, a ≤ x ∧ x < a + w) :
     l.length ≤ w := by
   have hs : l.toFinset ⊆ Finset.Ico a (a + w) := fun x hx => Finset.mem_Ico.2 (h x (List.mem_toFinset.1 hx))
@@ -30,8 +18,6 @@ theorem length_le_of_executionPhase {l : List ℕ} {a w : ℕ} (hnd : l.Nodup) (
   rw [List.toFinset_card_of_nodup hnd, Nat.card_Ico] at hc
   omega
 
-/-- A `flatMap` whose pieces have at most `k` entries where `p` holds, and none elsewhere, has at most `k` entries for
-each element `p` holds at. -/
 theorem length_flatMap_le {α β : Type} (f : α → List β) (p : α → Bool) (k : ℕ) :
     ∀ l : List α, (∀ a ∈ l, (f a).length ≤ if p a = true then k else 0) →
       (l.flatMap f).length ≤ k * (l.filter p).length
@@ -50,7 +36,6 @@ theorem length_flatMap_le {α β : Type} (f : α → List β) (p : α → Bool) 
 
 variable (c : Flock.Circuit) (n : ℕ)
 
-/-- **A unit's lowered gates**: three for each of its `nComp` rows. -/
 theorem length_unitGates_le (u : ℕ) :
     (Spot.Bits.unitGates (Spot.Bits.keyProg c n) u).length ≤ 3 * (bitsRows c).nComp := by
   unfold Spot.Bits.unitGates
@@ -64,7 +49,6 @@ theorem length_unitGates_le (u : ℕ) :
   · obtain ⟨-, i, hi, rfl⟩ := unitOf_some c n (eq_of_beq (List.mem_filter.1 hg).2)
     exact ⟨by omega, by omega⟩
 
-/-- **The inputs a unit owns** are among its `nIn` source gates `2 + u·B + b`. -/
 theorem length_insOf_le (u : ℕ) :
     (Spot.Bits.insOf (Spot.Bits.keyProg c n) (Spot.Bits.consts c n) u).length ≤ (bitsRows c).nIn := by
   refine length_le_of_executionPhase (a := 2 + u * (bitsRows c).nIn) ?_ fun g hg => ?_
@@ -83,8 +67,6 @@ theorem length_insOf_le (u : ℕ) :
       exact ⟨by omega, by omega⟩
     · exact absurd hin (by omega)
 
-/-- **A unit's proof block has at most its stacked rows' inputs and three gates a computed row**, whatever the member's
-unit count. -/
 theorem length_blockOf_le (u : ℕ) :
     (Spot.Bits.blockOf (Spot.Bits.keyProg c n) (Spot.Bits.consts c n) u).length ≤
       (bitsRows c).nIn + 3 * (bitsRows c).nComp := by

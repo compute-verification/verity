@@ -3,26 +3,8 @@ module
 public import Proofs.Flock.SpotFlock.FirstHitClassAt
 public import Proofs.Flock.SpotFlock.ClassCounts
 
-/-!
-# The by-class first-hit bound at a budget, at SPOT[Flock]'s code, at caps by template
-
-`code_eventTwoX_le_cls_at_budget` takes three counts over the coins as hypotheses: the sessions of a run's sample
-(`N_s`), the classes of the gates the sample needs (`K_s`) and the classes its sessions need, session by session
-(`K_m`). At the code each is a closed expression (`code_hNs`, `code_hKs_cls`, `code_hKm_cls`), so the bound holds with
-those expressions in their place (`code_eventTwoX_le_cls_at_caps`):
-
-* `N_s = |always| + K₀ · Σ_t k_t + Pr[refused] · N`;
-* `K_s = K_m = Σ_always |clsNeeds u| + K₀ · Σ_t k_t · M_t + Pr[refused] · Σ_{u<N} |clsNeeds u|`,
-
-with `K₀` the first stage's count (`hK`), `k_t` the second stage's samples of template `t`, `M_t` a cap on the classes
-a block of template `t` needs (`hM`), and `Pr[refused]` the probability that the second stage's selection refuses,
-where every block below `N` is checked. A class's representative represents itself (`Compiled.clsOf_idem`), which
-`code_hKm_cls` asks of the classes.
-
-What the theorem still takes: the caps `M_t` and the first stage's count `K₀`, read off the registration, the budget
-`T` a run, and the linear expected-time bound at `B_conf,X` and at the two by-class finders.
-`code_eventTwoX_le_cls_at_cap` is the case of one cap `M` for every template.
--/
+/-! The by-class first-hit bound at a budget at SPOT[Flock]'s code, with its three counts in closed form at caps by
+template. -/
 
 @[expose] public section
 
@@ -32,13 +14,8 @@ open Claims Claims.Sampling SamplingDeploy
 
 variable (h : Held)
 
-/-- **The by-class first-hit bound at a budget, at the code, at caps by template**: `code_eventTwoX_le_cls_at_budget`
-with its three counts in closed form. Under `Built` and `Addresses` at a statement in the two-stage scope, where every
-run calls SHA-512 at most `T` times, both parties' calls counted (`hT`), every block of template `t` the second stage
-can sample needs at most `M t` classes (`hM`), the first stage's count is `K₀` (`hK`), and `B_conf,X` and the two
-by-class finders of every cap meet the linear expected-time bound, an accepted run samples a proof block of
-`FregTwoX` with probability at most `εclsAt` at `N_s = |always| + K₀ · Σ_t k_t + Pr[refused] · N` and
-`K_s = K_m = Σ_always |clsNeeds u| + K₀ · Σ_t k_t · M t + Pr[refused] · Σ_{u<N} |clsNeeds u|`. -/
+/-- What it still takes: the caps `M t` and the first stage's count `K₀`, read off the registration, the budget `T` a
+run, and the linear expected-time bound at `B_conf,X` and at the two by-class finders. -/
 theorem code_eventTwoX_le_cls_at_caps (hB : Built h) (hS : Addresses h)
     {L : Claims.SamplingGeneric.CompiledTwo FlockDeploy.Coin
       (Claims.SamplingGeneric.Arg.ofFlock (FlockDeploy.deployZk _root_.Flock.Readable.relation))}
@@ -89,8 +66,6 @@ theorem code_eventTwoX_le_cls_at_caps (hB : Built h) (hS : Addresses h)
       (by subst hcls; exact Claims.SamplingGeneric.Compiled.clsOf_idem _) M hM hK)
     hBc hX hI
 
-/-- **The by-class first-hit bound at a budget, at the code, at one cap**: `code_eventTwoX_le_cls_at_caps` where every
-block the second stage can sample needs at most `M` classes, whatever its template. -/
 theorem code_eventTwoX_le_cls_at_cap (hB : Built h) (hS : Addresses h)
     {L : Claims.SamplingGeneric.CompiledTwo FlockDeploy.Coin
       (Claims.SamplingGeneric.Arg.ofFlock (FlockDeploy.deployZk _root_.Flock.Readable.relation))}

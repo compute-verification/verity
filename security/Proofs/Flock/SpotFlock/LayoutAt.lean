@@ -6,20 +6,7 @@ public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.Block
 
 @[expose] public section
 
-/-!
-# A session layout at a rank, and `Embeds` there
-
-`layoutAt rank pick` puts unit `u` of a session statement `xS` in the statement's first table, at template instance
-`rank % g` of block `(rank / g) % 2^nbl`, where `rank` is the unit's rank in its session (`rank x m₁ xS u`) and `g` the
-table's template instances per block. Each wire the unit computes or reads goes to the gate at which the accepted
-statement places the column `pick` chooses for it (`colAt`, as `Layout.col` places it), which must be one of the unit's
-columns on that wire (`Picks`; `pickAny` is one such choice).
-
-`embeds_layoutAt`: at every `rank` and every such `pick` the layout holds each checked unit's gates (`Embeds`). The
-layout reads only the session statement's first table and the unit's template, never the run's values, and every
-accepted statement of that table places the unit's rows at every template instance of every block. Which `rank` and
-`pick` the frame opens at, so that the decoded values are the unit's committed ones, is `FrameIs`'s.
--/
+/-! A session layout at a rank and a column choice (`layoutAt`), and `Embeds` there (`embeds_layoutAt`). -/
 
 namespace SpotFlock
 
@@ -37,7 +24,6 @@ noncomputable def colAt (st : _root_.Flock.Stmt) (hb : Built (lunit st.c)) (gi x
       upos st.c (stackLocal (unitRows st hb) st.c.upv x)
   else st.pin
 
-/-- **The accepted statement's column `x` at template instance `gi` is `colAt`'s.** -/
 theorem col_val {T : Model.Statement} (a : HiddenExec.AcceptedH T) {gi : ℕ} (hg : gi < a.st.c.g) (x : Fin a.rows.w) :
     (a.col hg x).val = colAt a.st a.L.unit_built gi x.val := by
   show (stackPlaceAt (a.L.model a.regs) (unitRows a.st a.L.unit_built) a.st.c.upv
@@ -51,9 +37,6 @@ theorem col_val {T : Model.Statement} (a : HiddenExec.AcceptedH T) {gi : ℕ} (h
 
 variable (h : Held)
 
-/-- **A column choice places each unit's wires** (`Picks`): for member `t`'s unit `k` and each wire `y` the unit
-computes or reads, `pick t k` at the wire's position in the members' program (`Bits.base`, then Bridge's `posOf`) is a
-column of the unit's rows on that wire. -/
 def Picks (pick : ℕ → ℕ → ℕ → ℕ) : Prop :=
   ∀ t (ht : t < h.ms.length) (hU : Built h.ms[t].1.unit) (k : Fin h.ms[t].2.size) (y : Fin (keyC h t ht hU).N),
     ((keyP h t ht hU).unit y = some k ∨ ∃ g', (keyP h t ht hU).unit g' = some k ∧ y ∈ ((keyC h t ht hU).op g').args) →
@@ -80,8 +63,6 @@ noncomputable def pickAny (t k G : ℕ) : ℕ :=
     else 0
   else 0
 
-/-- **`pickAny` places each unit's wires**: every wire a unit computes or reads is one of its columns' (`exists_wire`),
-and its position fixes the wire (`posOf_injective`). -/
 theorem picks_pickAny : Picks h (pickAny h) := by
   classical
   intro t ht hU k y hy
@@ -110,9 +91,6 @@ noncomputable def layoutAt (rank : Msg → Msg → Msg → ℕ → ℕ) (pick : 
         (pick (templateOf h.ms u) (u - Properties.Spot.unitBase h.ms (templateOf h.ms u)) G)
     else 0).getD 0
 
-/-- **`layoutAt` places every unit of a session statement that has a table** (`PlacesAt`), in its first table: at the
-accepted statement's template instance `rank % g`, in range since `HmRow.check` gives `0 < g` (`check_g_pos`), of block
-`(rank / g) % 2^nbl`, and each wire the unit computes or reads at the column `pick` gives it (`Picks`, `col_val`). -/
 theorem placesAt_layoutAt (rank : Msg → Msg → Msg → ℕ → ℕ) {pick : ℕ → ℕ → ℕ → ℕ} (hpick : Picks h pick)
     {x m₁ xS : Msg} {u : ℕ}
     (hpos : ∀ p : Parsed, parseBytes (FlockDeploy.readOf true) xS = some p → 0 < p.sts.size) :
@@ -154,7 +132,6 @@ theorem placesAt_layoutAt (rank : Msg → Msg → Msg → ℕ → ℕ) {pick : �
     rw [hL, he, Nat.zero_mul, Nat.zero_add]
     exact (col_val a hgi (Fin.cast (congrArg FlockSoundness.Rows.w (rows_keyProg hU a hparse k)) cc)).symm
 
-/-- **A session statement that passes round 2 has a table** (`zkOk_sound`). -/
 theorem sts_pos_of_stmtOkAt {x m₁ xS : Msg} {c₀ : FlockDeploy.Coin} {c₁ : Stage h} {t : ℕ} {p : Parsed}
     (hok : stmtOkAt h x m₁ xS c₀ c₁ t = true) (hp : parseBytes (FlockDeploy.readOf true) xS = some p) :
     0 < p.sts.size := by
@@ -164,15 +141,13 @@ theorem sts_pos_of_stmtOkAt {x m₁ xS : Msg} {c₀ : FlockDeploy.Coin} {c₁ : 
   obtain ⟨rfl, -⟩ := parsed_setupOf hset hp
   exact hpos
 
-/-- **`Embeds` at `layoutAt rank pick`, for every `rank` and every column choice that places each unit's wires**:
-each checked unit's session statement passes round 2, so it has a table (`sts_pos_of_stmtOkAt`), and `layoutAt` places
-the unit there (`placesAt_layoutAt`, `embeds_of_placesAt`). -/
+/-- The layout reads only the session statement's first table and the unit's template, never the run's values; which
+`rank` and `pick` the frame opens at is `FrameIs`'s. -/
 theorem embeds_layoutAt (rank : Msg → Msg → Msg → ℕ → ℕ) {pick : ℕ → ℕ → ℕ → ℕ} (hpick : Picks h pick) :
     Embeds h (layoutAt h rank pick) :=
   embeds_of_placesAt h fun _ _ _ _ _ _ _ hx hok hu =>
     placesAt_layoutAt h rank hpick fun _ hp => sts_pos_of_stmtOkAt h (stmtOkAt_unit h hx hok hu) hp
 
-/-- **`Embeds` at `layoutAt rank (pickAny h)`, for every `rank`** (`picks_pickAny`). -/
 theorem embeds_layoutAt_any (rank : Msg → Msg → Msg → ℕ → ℕ) : Embeds h (layoutAt h rank (pickAny h)) :=
   embeds_layoutAt h rank (picks_pickAny h)
 
