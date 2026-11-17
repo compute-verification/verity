@@ -6933,6 +6933,63 @@ def test_a_composite_on_the_served_node_is_composed_and_says_where_unless_placem
                          ["COMPOSITE: not run, this tree has no benchmarks/one_stage/composite.py"])
 
 
+ARGV_COMPOSITE = '''import os, sys
+from pathlib import Path
+Path(os.environ["ARGV_TO"]).write_text("\\n".join(sys.argv[1:]))
+print("REFUSED verity/wipe/v0: its case trusts 1 key(s)" if os.environ["EXIT"] == "67" else "DEVELOPMENT key_pin: run")
+sys.exit(int(os.environ["EXIT"]))
+'''
+
+
+def _composed(tmp_path: Path, env: dict[str, str]) -> tuple[int, list[str], list[str]]:
+    """served_composite.sh under PRODUCT=remote with `ARGV_COMPOSITE` for composite.py and `env` added: its exit, the
+    composite.py arguments it gave and OUT/verdicts.txt."""
+    tree, bin_, d, out = tmp_path / "tree", tmp_path / "bin", tmp_path / "serve", tmp_path / "out"
+    out.mkdir(parents=True)
+    (d / "private").mkdir(parents=True)
+    _script(bin_ / "lake", 'mkdir -p .lake/build/bin && touch ".lake/build/bin/$2"')
+    _script(bin_ / "systemd-run", "exit 1")
+    _script(bin_ / "prlimit", PRLIMIT.format(seen=tmp_path / "prlimit.seen"))
+    (tree / "verity" / "protocols" / "compose" / "verifier" / "remote").mkdir(parents=True)
+    (tree / "benchmarks" / "one_stage").mkdir(parents=True)
+    (tree / "benchmarks" / "one_stage" / "composite.py").write_text(ARGV_COMPOSITE)
+    r = subprocess.run(["bash", str(HERE.parents[2] / "benchmarks" / "one_stage" / "served_composite.sh"), str(d), str(out)],
+                       cwd=tree, env={"PATH": f"{bin_}:{os.defpath}", "HOME": str(tmp_path), "PY": sys.executable,
+                                      "TPY": sys.executable, "PRODUCT": "remote", "ARGV_TO": str(tmp_path / "argv"), **env},
+                       check=False, capture_output=True, text=True)
+    return r.returncode, (tmp_path / "argv").read_text().splitlines(), (out / "verdicts.txt").read_text().splitlines()
+
+
+def _flag(argv: list[str], flag: str) -> str | None:
+    return argv[argv.index(flag) + 1] if flag in argv else None
+
+
+@pytest.mark.parametrize("configuration, exit, said", [
+    (None, "0", "COMPOSITE remote: DEVELOPMENT key_pin: run"),
+    ("ab" * 64, "67", "COMPOSITE remote: REFUSED verity/wipe/v0: its case trusts 1 key(s)"),
+])
+def test_each_composite_gets_the_configuration_verity_run_read_and_says_what_it_refused(tmp_path, configuration, exit,
+                                                                                        said):
+    rc, argv, lines = _composed(tmp_path, {"SERVED_NODE": "vy-elsewhere", "COMPOSE_HANDOFF": "1", "EXIT": exit,
+                                           **({"VERITY_CONFIGURATION": configuration} if configuration else {})})
+    assert (_flag(argv, "--configuration"), lines[0], rc) == (configuration, said, 0 if exit == "0" else 1)
+    if exit == "67":
+        assert lines[1] == ("COMPOSITE remote: composite.py ran no check (exit 67: a memory case trusts a key the "
+                            "configuration doesn't pin)")
+
+
+def test_where_a_compose_says_it_runs_decides_nothing_composite_py_is_given(tmp_path):
+    """`SERVED_NODE`, `PP_PEER` and `COMPOSE_HANDOFF` are the developer's to set on its own node, so composite.py gets
+    the same arguments on the workload's node, a deferral's prover node and the auditor's compose gate."""
+    given = []
+    for n, env in enumerate(({}, {"SERVED_NODE": "vy-elsewhere", "PP_PEER": "vy-prover"},
+                             {"SERVED_NODE": "vy-elsewhere", "COMPOSE_HANDOFF": "1"})):
+        rc, argv, _lines = _composed(tmp_path / str(n), {**env, "EXIT": "0", "VERITY_CONFIGURATION": "ab" * 64})
+        given.append((rc, [a.replace(str(tmp_path / str(n)), "T") for a in argv]))
+    assert given[0][0] == 0 and given[0][1][given[0][1].index("--configuration") + 1] == "ab" * 64
+    assert given == [given[0]] * 3
+
+
 def test_the_composite_step_publishes_only_each_cases_verdict_and_each_products_lean_verdict(tmp_path):
     """served_composite.sh with a stand-in lake, served_cases.py and composite.py: PoUS's case, which its piece wrote
     under the serve dir's private dir beside its Lean's answer, is composed as written, with no card asked for and no
@@ -6950,9 +7007,8 @@ def test_the_composite_step_publishes_only_each_cases_verdict_and_each_products_
     audit hands served_cases.py step 3's records audit (``--audit SERVE_DIR/sampled-proofs-served``) once it holds a
     case, but not under H1's tie (a ``SERVE_DIR/h1/log.jsonl``), whose cases are on the record H1 named; and no product
     is handed a case under ``SERVE_DIR/private/pouw``, tied or not, whose period case reaches a product only as
-    served_cases.py writes it, tied to that record. On the served node (SERVED_NODE unset) under VERITY_HOLD_PLACEMENT=1 it
-    composes only under COMPOSE_OFF_NODE=0, a development check its first line and each product's composite.py say claims
-    no record. Where SERVED_NODE names
+    served_cases.py writes it, tied to that record. On the served node (SERVED_NODE unset) it says it composed there,
+    and no product's composite.py is told it is a development check. Where SERVED_NODE names
     another host it says it composed there, from the compose hand-off (COMPOSE_HANDOFF) or a deferral's prover-side copy
     of the serve dir's audit inputs."""
     tree, bin_, d, out = tmp_path / "tree", tmp_path / "bin", tmp_path / "serve", tmp_path / "out"
@@ -6990,8 +7046,7 @@ sys.exit(1)
 ''')
     unstarted = ("COMPOSITE NOT_STARTED verity/sampled-proofs/v1: its check was not started; the case names 3 blob files "
                  "that sum to 9000 bytes, and the limit a check is started on is 8000 bytes; too large to read")
-    env = {"PATH": f"{bin_}:{os.defpath}", "HOME": str(tmp_path), "PY": sys.executable, "TPY": sys.executable,
-           "COMPOSE_OFF_NODE": "0", "VERITY_HOLD_PLACEMENT": "1"}
+    env = {"PP_PEER": socket.gethostname(), "PATH": f"{bin_}:{os.defpath}", "HOME": str(tmp_path), "PY": sys.executable, "TPY": sys.executable}
     run = lambda: subprocess.run(["bash", str(HERE.parents[2] / "benchmarks" / "one_stage" / "served_composite.sh"), str(d), str(out)], cwd=tree, env=env,  # noqa: E731
                                  check=False, capture_output=True, text=True)
     host = subprocess.run(["hostname", "-s"], check=True, capture_output=True, text=True).stdout.strip()
@@ -7098,13 +7153,10 @@ sys.exit(1)
     (out / "verdicts.txt").unlink()
     for x in (out / "composite", p, v2):
         shutil.rmtree(x)
-    del env["SERVED_NODE"], env["COMPOSE_OFF_NODE"]
-    assert run().returncode == 1
-    assert (out / "verdicts.txt").read_text().splitlines() == [
-        f"COMPOSITE refused: this is the served node {host}, which the prover controls, so a composite here claims no "
-        "record; served_verdicts.sh composes it off the node from its compose hand-off (COMPOSE_OFF_NODE=0 composes it "
-        "here as a development check, VERITY_HOLD_PLACEMENT unset composes it here)"]
-    assert not (out / "composite").exists() and not p.exists()
+    del env["SERVED_NODE"], env["COMPOSE_HANDOFF"]
+    assert run().returncode == 0
+    assert (out / "verdicts.txt").read_text().splitlines()[-1] == on
+    assert json.loads((p / "remote" / "private" / "development.json").read_text()) is None
 
 
 #: onsite's own protocols: the piece's private directory, its public summary, its Lean, and a directory that isn't its
