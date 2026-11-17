@@ -2,7 +2,7 @@
 
 `benchmarks/` holds measurement only: each directory measures something, or holds the data measurements are computed
 against. A benchmark is never the verifier, writes no verdict and computes no number a guarantee reads, and
-nothing outside `benchmarks/` reads it. A demo is one configuration file in `applications/`, which `verity run`
+nothing outside `benchmarks/` reads it. An application is one configuration file in `applications/`, which `verity run`
 reads. This file is the directory's interface: its entry points, the shared harness, what a benchmark may import
 and write, and the index of every directory.
 
@@ -39,7 +39,7 @@ and `uv run verity bench NAME [ARGS]` runs one. These are the directories that h
 | `verity bench pouw NAME` | a PoUW benchmark by its directory's name: `pouw/NAME/`'s runner, its `run.py` or else its `run.sh`; given no NAME, the names |
 | `verity bench ppl` | the perplexity an intervention on a served model's matmuls or attention costs: `eval`, `submit`, `report`, `baseline` |
 | `verity bench prod_repro` | vLLM served at its published serving settings with and without our changes and the served window replayed, as the settings and three lines: the replayed tokens against the served, the cost over stock, the advice a request; on Llama 3.2 1B and one H200, `--client vllm-bench --model llama32-1b` (its README's command) |
-| `verity bench proof_throughput` | the proof blocks a second Flock proves and the Lean verifier accepts, over the batch size |
+| `verity bench proof_throughput` | the proof blocks a second Flock proves and the Lean verifier accepts, over the batch size, and on one node's H200s with one prover and with two at once (`record`) |
 | `verity bench prove` | what a proof system's prover costs on a workload (`--system flock` or `spot`) for each block type, and the Lean verifier timed on one kept proof (`lean-verify`); and the proof benchmark by layer, Flock, with zero knowledge, with sampling and with recursion, the benchmark result for each layer read from its own run's output (`layers`). From a clone, in order: `benchmarks/one_stage/proof_layers.sh`, the Flock, zero-knowledge and sampling runs (`benchmarks/one_stage/README.md`'s section "The three benchmarks of the proof-layers table"); the recursion job, `bash benchmarks/recursion_e2e/job.sh K=2048 N=2 GPU=0 FLOCK_WORK=DIR` (`benchmarks/prove/README.md`'s "On a machine of your own"); then `verity bench prove layers --flock A --zk B --sampling C --recursion E` on the four runs' `OUT` directories |
 | `verity bench prove_path` | a served run's proof blocks proved after the fact, behind the Lean ZK server and through the Lean verifier, with one forged run |
 | `verity bench rate_squaring` | squarings a second modulo the store codec's primes, each form gated before it is timed: `sq` on one GPU, `ifma` on the host's CPUs |
@@ -261,7 +261,7 @@ What the protocols cost: measured on served inference, and bounded on training.
 | `overhead/` | `verity bench overhead`, the one front door for overhead: a card's operating points C and L, a scheme's γ over stock at them in busy SM-time, and the table of γ from labelled runs of record | maintained |
 | `served_commit/` | what the Commit, every value of every step committed, adds to served vLLM: throughput, time to first token and per-token latency | maintained |
 | `application_runs/` | one application run's verdicts that accept, of how many, and its minutes, written by the run that measures (`run.py`, which runs `verity run`) | maintained |
-| `demo_minutes/` | the onsite demo's minutes from its first command to its verdict, read off its two `verity run` runs' records (`onsite_minutes.py`, on `run_minutes.py`) | maintained |
+| `demo_minutes/` | the onsite application's minutes from its first command to its verdict, read off its two `verity run` runs' records (`onsite_minutes.py`, on `run_minutes.py`) | maintained |
 | `dsa_topk/` | the DSA indexer's top-k at the integration's vLLM pin made a function of its logits by a vLLM plugin: outputs run to run, its set against the registered relation's, and its cost against the pin's kernels | maintained |
 | `replay_ladder/` | whether replaying a saturated window under its recorded schedule gives the served tokens across a ladder of dense and MoE models, run after run, against each request served alone; and the per-model status table | maintained |
 | `serve_tax/` | what each change to serving (step trace, release order, the certified tick, committing tokens and the KV cache) costs vLLM's own server against stock compiled vLLM at three loads, the serving cost (one number with a target: the served engine's best goodput against stock's, by vLLM's own benchmark client), and replaying a recorded window under its committed schedule | maintained |
@@ -300,7 +300,7 @@ GPU code held bit for bit to its reference or Definition before it is timed.
 | `flock_s8_block/` | Flock `--zk`'s price for a proof block of adjacent cells of one int8 GEMM output row, on one GPU node and on the CPU | maintained |
 | `unit_block/` | a word primitive's Boolean version built as one Flock proof block: the select's slot alone and with its rows' openings, against the 2^27 block | maintained |
 | `prove/` | `verity bench prove`, the one command for a proof system's prover on a workload: per block type the blocks proved per token, the ms per block and that figure's source, and the prover GPUs per serving GPU with every block proved or at a sampling plan, from the store's labelled records | maintained |
-| `proof_throughput/` | the proof blocks a second Flock proves and the Lean verifier accepts on GLM-5.3's dot products, over the batch size | maintained |
+| `proof_throughput/` | the proof blocks a second Flock proves and the Lean verifier accepts on GLM-5.3's dot products, over the batch size and the number of provers at once | maintained |
 | `commitments/` | the commitment schemes' cost: hashing leaves and building the tree, hiding leaves per row, and serving's per-step row tables | maintained |
 | `sampling_plan/` | the sampling plan for one served workload: a cost model fitted to proving measurements, and ε at δ over the verification overhead (a model, not a measurement) | maintained |
 | `spot_figures/` | the SPOT post's Figures 1-3 for a model from its cards (`spot-card/v1`) and SPOT's planner: what an adversary serving it on all of a scope's compute can exfiltrate, infiltrate or skip against total cost (each server configuration's serve tax plus the share of compute for verification) and against proof overhead, proof overhead per proof-block type, and the serve-time commitment's cost over fast serving (a model, not a measurement) | maintained |
@@ -353,7 +353,7 @@ GPU code held bit for bit to its reference or Definition before it is timed.
 | --- | --- | --- |
 | `pous/` | every PoUS implementation on one dataset, by its effective weight bandwidth | maintained |
 | `bandwidth/` | the device ceilings PoUB's timing cites: how fast a card and a host write labels, and the chip's on-chip stores; and a node's own report of its interfaces' line rates, its disks' interfaces and its cards' usable memory | maintained |
-| `poub_session/` | PoUB's session harness: a verifier's and a prover's process over TCP, end to end. The remote protocol's demo is `applications/remote.toml`, not this | maintained |
+| `poub_session/` | PoUB's session harness: a verifier's and a prover's process over TCP, end to end. The remote protocol's application is `applications/remote.toml`, not this | maintained |
 | `memory/` | `verity bench memory`, the front door for the memory audit's number: the share of a node's memory read rate one accepted PoUB session leaves uncertified, at the data sheet's read bandwidth, from a gate run on the whole node, a recorded run or a loopback | maintained |
 | `kv_filler/` | the filler top-up beside vLLM serving, and what it costs inference | maintained |
 | `stacked_share/` | the share of a node's live KV a prover could hold as encoded carriers inside the audit's compute budget | maintained |

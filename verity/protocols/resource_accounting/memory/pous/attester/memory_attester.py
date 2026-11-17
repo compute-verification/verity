@@ -389,7 +389,7 @@ UNCOMMITTED = "rehearsal, no bound: the configuration is not a committed one"
 MATCHED = ("rehearsal, no bound: the key matched the pins this machine was handed, which no record vouches for until the "
            "auditor's compose gate gives its signal")
 COMMITTED = Path(__file__).resolve().parents[6] / "tools" / "verity" / "cli" / "verity_cli" / "configurations.toml"
-"""The committed configurations' hashes, each demo's configuration by its path: the only configurations under which
+"""The committed configurations' hashes, each application's configuration by its path: the only configurations under which
 `trusted_device` says `PREMISE` holds."""
 
 
