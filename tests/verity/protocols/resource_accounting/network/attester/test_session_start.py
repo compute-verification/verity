@@ -3,7 +3,7 @@ with no traffic. A run holds its key's device state from before its first tick u
 second run under the key is refused by name before it waits, ticks or writes anything; a session id the key has
 started is refused, and a new one starts where the last one's whole span ended on the key's life; the span is on
 disk before the publisher signs the start, and the start is signed before the origin is read; the start's
-certificate in `deployment.json` is what the check reads, and a deployment without it, or with another base, is
+attestation in `deployment.json` is what the check reads, and a deployment without it, or with another base, is
 refused; a host without the raw clock starts nothing; and the run's log says how far the wall time parted from the
 clock, for a drift the test picks."""
 
