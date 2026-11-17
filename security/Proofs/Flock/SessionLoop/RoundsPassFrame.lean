@@ -3,22 +3,7 @@ module
 public import Proofs.Flock.SessionLoop.Fill
 public import Proofs.Flock.Claims.ZK.FrameProg
 
-/-!
-# A scheduled round with values in its free words passes the frame's checks
-
-`Loop.RoundsPass` at the device `Loop.valsDev vs L` asks that each frame round's device round pass the frame's checks.
-Outside the inner proof that device round is the scheduled round with a value of `vs` written into each word the frame
-frees in it (`Loop.fill`). Where the frame takes the scheduled round, of frames none of which is the inner proof's label
-(`Sched.MidAll`), at the state the stream's coins leave, at a rep not stopped:
-
-* `fill_frames`: the filled round is the bytes of frames alike to the scheduled round's, and the scheduled round outside
-  the words the frame frees;
-* `check_fill`: the frame takes the filled round, freeing the same words, and its check passes it against the scheduled
-  round;
-* `LeanRelease.roundOk_valsDev`: so the frame round passes the frame's checks at `valsDev` wherever `cross` passes its
-  device round. At the inner proof's round 0 or 2 `valsDev` would write `final_c'` or `τ`; outside the inner proof neither
-  applies, as the filled round is not the inner proof's round 0 (`Loop.roundFree_own0_inner`).
--/
+/-! A scheduled round with `vs`'s values in its free words passes the frame's checks (`LeanRelease.roundOk_valsDev`). -/
 
 @[expose] public section
 
@@ -43,7 +28,6 @@ theorem setWord_getElem?_out {L : List UInt8} {o i : ℕ} (a : F128) (h : o + 16
     congr 1
     omega
 
-/-- **`fill` keeps every byte outside the words it sets.** -/
 theorem fill_getElem?_out (L : List UInt8) (fr : Array ℕ) (vals : ℕ → F128) (i : ℕ)
     (hb : ∀ k < fr.size, fr[k]! + 16 ≤ L.length) (hi : ∀ k < fr.size, i < fr[k]! ∨ fr[k]! + 16 ≤ i) :
     ∀ m, m ≤ fr.size → ((List.range m).foldl (fun L k => Loop.setWord L fr[k]! (vals k)) L)[i]? = L[i]?
@@ -65,7 +49,6 @@ theorem firstDiff_eq_none {v r : ByteArray} {free : Array ℕ}
     · simp [h i hi' hf]
     · simp
 
-/-- **The frame's check passes a device round that `passes` and that `round` takes**, at a rep not stopped. -/
 theorem check_of_passes {c : Cfg} {s : Masker} {v r : ByteArray} {n : ℕ} {out : ByteArray} {s' : Masker}
     (hs : s.stopped = false) (hp : passes c s v r n = .ok none)
     (h : _root_.Flock.ZkServer.Frame.round c s v n = .ok (out, s')) : check c s v r n = .ok (out, s', none) := by
@@ -77,9 +60,6 @@ theorem check_of_passes {c : Cfg} {s : Masker} {v r : ByteArray} {n : ℕ} {out 
     | .error e => if e.startsWith _root_.Flock.ZkServer.Frame.STOP then throw e else standIn c s r n e) = _
   rw [h]
 
-/-- **A scheduled round with values in its free words**: where the frame takes the scheduled round of frames `fs`
-(none the inner proof's label) and its squeeze, freeing the words at `fr`, the round `fill` writes `vals` into is as long,
-keeps every byte outside those words, and is the bytes of frames alike to `fs` and the same squeeze. -/
 theorem fill_frames {c : Cfg} {m : Masker} {fs : List Frame} {k : UInt8} {n : ℕ} (hin : m.inner = none)
     (hM : Sched.MidAll fs) (hk : k = 2 ∨ (k = 1 ∧ n = 1)) (h0 : ¬ (n = 0 ∧ k = 2)) (hn : n < 2 ^ 64)
     {o : ByteArray} {t : Masker} {fr : Array ℕ}
@@ -117,9 +97,6 @@ theorem fill_frames {c : Cfg} {m : Masker} {fs : List Frame} {k : UInt8} {n : �
       · exact Or.inr (Nat.le_of_not_lt fun h' => hi (hfree _ hmem i h h'))
     exact ⟨fs', hA, Sched.midAll_alike hA hM, he⟩
 
-/-- **The frame takes the filled round and passes it**: where it takes the scheduled round of frames `fs` (none the inner
-proof's label) at a rep not stopped outside the inner proof, freeing the words at `fr`, it takes the round with values
-in those words, freeing the same words, and its check passes that round against the scheduled one. -/
 theorem check_fill {c : Cfg} {m : Masker} {fs : List Frame} {k : UInt8} {n : ℕ} (hst : m.stopped = false)
     (hin : m.inner = none) (hM : Sched.MidAll fs) (hk : k = 2 ∨ (k = 1 ∧ n = 1)) (h0 : ¬ (n = 0 ∧ k = 2))
     (hn : n < 2 ^ 64) {o : ByteArray} {t : Masker} {fr : Array ℕ}
@@ -167,11 +144,6 @@ theorem roundOk_withDevice {W R : Type} (L : LeanRelease W R)
         L.takes x ρ g (d x w ρ g (computedOf (L.computed x w ρ g)))) :=
   rfl
 
-/-- **A frame round outside the inner proof passes the frame's checks at `valsDev`**: where the frame took the stream's
-coins (`answered`) at a state outside the inner proof, and takes there, at a rep not stopped, the scheduled round, of
-frames none the inner proof's label and its squeeze, `valsDev`'s round is the scheduled round with `vs`'s values in the
-words it frees (`fill`), which the frame's check passes and the frame takes (`check_fill`). The cross-round check is
-`L`'s own (`hcr`). -/
 theorem roundOk_valsDev (vs : (CoinLayer.session Loop.loopNr Masked.dataE).SwVals) (L : LeanRelease Flock.Wit Loop.Tp)
     {x : Msg} {w : Flock.Wit} {ρ : Loop.Tp} {g : List (Msg × Msg)} {m : Masker} {fs : List Frame} {k : UInt8}
     {o : ByteArray} {t : Masker} {fr : Array ℕ} (hm : L.answered x ρ g = .ok m) (hin : m.inner = none)

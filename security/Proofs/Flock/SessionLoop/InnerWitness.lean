@@ -3,18 +3,8 @@ module
 public import Proofs.Flock.SessionLoop.Inner
 public import Proofs.Flock.Claims.Recursion.Assumptions.LoopFixture
 
-/-!
-# `LoopInnerRound0Own` says something
-
-Both lemmas are at a deployed session loop's run, `Loop.ReachesInner` (the named assumption of
-`Proofs.Flock.Claims.Recursion.Assumptions.LoopFixture`), whose history stands at a rep stream's inner proof's round 0:
-
-* `Flock.SecurityProofs.LoopInnerRound0Own_honest`: there `LoopInnerRound0`'s premises hold at the deployed tables
-  (`Masked.dataE`) and the loop's own tables (`Loop.realOf`), and the loop's own release (`withInner`, at every `L₀` and
-  finish) releases the inner proof's label frame and the finish's `final_c'` between its headers.
-* `Flock.SecurityProofs.LoopInnerRound0Own_nontrivial`: there `LoopInnerRound0` fails at `LeanRelease.silent`, the
-  release that releases nothing, whose round is empty where the inner proof's round 0 is at least its two headers.
--/
+/-! `LoopInnerRound0Own` is not vacuous at `Loop.ReachesInner`, a named assumption's run: its premises hold there and it
+fails at the release that releases nothing. -/
 
 @[expose] public section
 

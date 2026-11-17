@@ -35,25 +35,8 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Complete.ZkTables.Scope
 
-/-!
-# (c.3) `FinRepFwView`, in parts
-
-`FinRepFwView` asks that where the session's rep on the loop's table and request (`Loop.RepAt`), answered by the opened
-coins, returns a proof `p`, rep stream `k`'s run from the views (`Loop.viewRep`) return a proof whose file at the
-session's shape is `p`'s at the table's. The file is `encZk` of the whole proof, the final-only data (level 0's opened
-rows and salts, `τ` and its salt, the pads' opened columns and salts) included, so the two proofs must be one. Its parts,
-each named here, none a premise of a guarantee:
-
-* **`Loop.FinRepErased`**: the run from the views returns, with the same transcript, a proof equal to `p` up to
-  `eraseZ`: `Masked.swSrcE_repCut` at the views' source, the views' values tied to the history's by `LiveRoundEqOwn`.
-* **`Loop.FinRepFinal`**: where it returns so, the final-only data agree (`Masked.FinalEq`).
-* **`Loop.FinRepXs`**: the extra claims from the views have the request's coordinates (`Drive.extras`), so as many
-  claims as `claimsOf`.
-
-**`Loop.finRepFwView_of_parts`**: in the masked scope they give `FinRepFwView`: the proofs are one
-(`Masked.eq_of_eraseZ`), the table and schedule are the loop's (`Loop.finRepTab`), and the two encoders are one
-(`Finish.encZk_view`, `Finish.shapeZk_view`). **`Loop.finRepProofs_of_view`** then gives (c) with `Loop.finRepCut`.
--/
+/-! (c.3) `FinRepFwView` from its parts `FinRepErased`, `FinRepFinal` and `FinRepXs`, none a premise of a guarantee
+(`Loop.finRepFwView_of_parts`). -/
 
 @[expose] public section
 
@@ -61,10 +44,8 @@ namespace Flock.ZkServer.Finish
 
 open Flock
 
-/-- The ZK server's proof file is the session's encoder's. -/
 theorem encZk_view (sh : Shape) (p : Zk.ZkProof) : encZk sh p = FlockSoundness.Discharge.ZkView.encZk sh p := rfl
 
-/-- The ZK server's file shape is the session's. -/
 theorem shapeZk_view (st : Setup) (sch : Flock.Schedule) (n : ℕ) : shapeZk st sch n = FlockComplete.shapeZk st sch n := rfl
 
 end Flock.ZkServer.Finish
@@ -84,9 +65,6 @@ variable (vs : finS.SwVals) (L₀ : LeanRelease Flock.Wit Tp)
   (real : Msg → Flock.Wit → Tp → ℕ → V (_root_.Flock.ZkServer.Finish.Tab × Array ByteArray))
   (wk : (LeanRelease.ofLoopLink L₀ src real).toSrv.Worker) (x : Msg) (w : Flock.Wit)
 
-/-- **The rep from the views up to `eraseZ`**: at (c.3)'s context, where the session's rep on the loop's table and
-request, answered by the opened coins, returns `(p, tr)` from a history at the rep's first round, the run from the views
-returns `(p', tr)` with `eraseZ p' = eraseZ p`. -/
 def FinRepErased : Prop :=
   ∀ ν t κ m₀ ρ₀ ops, FinCtx (LeanRelease.ofLoopLink L₀ src real) wk x w ν t κ m₀ ρ₀ ops →
     ∀ s0 spec, FlockDeploy.setupOf true x = some (s0, spec, Masked.stsOf x) →
@@ -110,8 +88,6 @@ def FinRepErased : Prop :=
       ∃ p' l', (viewRep vs x w ν t m₀ ρ₀ ops spec schs cms k extras ic).go l = (.ok (p', tr), l') ∧
         FlockComplete.eraseZ p' = FlockComplete.eraseZ p
 
-/-- **The final-only data from the views**: at (c.3)'s context, where the session's rep returns `(p, tr)` and the run
-from the views returns a proof equal to `p` up to `eraseZ`, their final-only data agree. -/
 def FinRepFinal : Prop :=
   ∀ ν t κ m₀ ρ₀ ops, FinCtx (LeanRelease.ofLoopLink L₀ src real) wk x w ν t κ m₀ ρ₀ ops →
     ∀ s0 spec, FlockDeploy.setupOf true x = some (s0, spec, Masked.stsOf x) →
@@ -135,8 +111,6 @@ def FinRepFinal : Prop :=
       ∀ p' l', (viewRep vs x w ν t m₀ ρ₀ ops spec schs cms k extras ic).go l = (.ok (p', tr), l') →
         FlockComplete.eraseZ p' = FlockComplete.eraseZ p → Masked.FinalEq p' p
 
-/-- **The extra claims' coordinates**: at a `Finish` `FinishIs` reads, rep stream `k`'s extra claims from the views are
-at its request's coordinates. -/
 def FinRepXs : Prop :=
   ∀ ν t κ m₀ ρ₀ ops, FinCtx (LeanRelease.ofLoopLink L₀ src real) wk x w ν t κ m₀ ρ₀ ops →
     ∀ s0 spec, FlockDeploy.setupOf true x = some (s0, spec, Masked.stsOf x) →
@@ -145,8 +119,6 @@ def FinRepXs : Prop :=
     ∀ tb hi q f, RepAt L₀.draws src x w (ν, t) ((m₀, ρ₀) :: ops) spec k tb hi q f →
       extras.map (·.x) = q.xs
 
-/-- **The session's table and schedule are the loop's**: in the masked scope, rep stream `k`'s table is table `k / 2`
-of the session's (`tabsOf`), and its `--zk` schedule and padding are the session's (`schedsPZk`). -/
 theorem finRepTab (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Readable.relation) x) {s0 spec}
     (hsx : FlockDeploy.setupOf true x = some (s0, spec, Masked.stsOf x)) {schs}
     (hschs : (FlockComplete.schedsPZk (FlockDeploy.tabsOf (Masked.stsOf x)) : V _) = .ok schs) {k : ℕ}
@@ -183,10 +155,6 @@ theorem finRepTab (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.R
   rw [← getElem!_pos (FlockDeploy.tabsOf (Masked.stsOf x)) (k / 2) hj', htab, hts, hsch] at e
   exact (Except.ok.inj e).symm
 
-/-- **The parts give (c.3)**: the run from the views returns a proof equal to the session's up to `eraseZ`
-(`FinRepErased`) whose final-only data are the session's (`FinRepFinal`), so it is the session's proof
-(`Masked.eq_of_eraseZ`); its table, schedule (`finRepTab`) and claim count (`FinRepXs`) are the loop's, and the two
-encoders are one. -/
 theorem finRepFwView_of_parts (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Readable.relation) x)
     (h : FinRepErased vs L₀ src real wk x w ∧ FinRepFinal vs L₀ src real wk x w ∧ FinRepXs L₀ src real wk x w) :
     FinRepFwView vs L₀ src real wk x w := by
@@ -205,7 +173,6 @@ theorem finRepFwView_of_parts (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _r
   refine ⟨p', tr, l', hv, ?_⟩
   rw [hpp, htab, hsch, hsz, _root_.Flock.ZkServer.Finish.encZk_view, _root_.Flock.ZkServer.Finish.shapeZk_view]
 
-/-- **(c) from (c.3)'s parts**, with `FinRepCut` in the masked scope (`finRepCut`). -/
 theorem finRepProofs_of_view (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Readable.relation) x)
     (h : FinRepErased vs L₀ src real wk x w ∧ FinRepFinal vs L₀ src real wk x w ∧ FinRepXs L₀ src real wk x w) :
     FinRepProofs vs L₀ src real wk x w :=

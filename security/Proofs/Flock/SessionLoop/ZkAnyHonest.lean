@@ -7,25 +7,8 @@ public import Proofs.Flock.SessionLoop.Concrete.LiveNets
 public import Proofs.Flock.SessionLoop.Concrete.Scope
 public import Proofs.Flock.SessionLoop.Concrete.Serves
 
-/-!
-# `SessionLoopZKAnyDeployed`'s premises at the honest session loop
-
-`Flock.Guarantees.SessionLoopZKAnyDeployed` takes, at a relation `Rl`, values `vs` and a worker `wk`, that the
-session's table witnesses are valid at `Rl`'s statements (`Complete`), that the values' unswitched round encoding is
-causal (`UnCausal`) and that the transport's trusts hold at `Rl`'s statements (`LeanRelease.TrustsStop`). All three hold
-at one instance:
-
-* the relation of one pair, the concrete `--zk` statement with its trace (`FlockDeploy.concreteStmt`,
-  `FlockDeploy.wC`), which are in the deployed relation (`FlockDeploy.concreteStmt_rel`) and in its scope
-  (`FlockDeploy.concreteStmt_scope`);
-* `Loop.tapeRel`: a release whose frames sample the tape's samples at that statement (`Loop.tapeSamples`), released as
-  the session loop's own inner rounds (`withInner`, at the finish's honest rounds `finHonest` and with Rust's checks
-  passing, `acceptCross`), link and `Finish` (`ofLoopLink`) on the source `Loop.tapeSrcHi`;
-* the honest values (`finS.honestVals`) and the honest worker (`valsWk`).
-
-`Flock.SecurityProofs.SessionLoopZKAnyDeployed_honest` concludes the three from `finS_complete`, `finS_unCausal` and
-`LeanRelease.trustsStop_tape`, since the loop serves the statement (`Loop.concreteServes`).
--/
+/-! `SessionLoopZKAnyDeployed`'s premises hold together at one instance: the concrete `--zk` statement, the tape's release,
+and the honest values and worker (`SessionLoopZKAnyDeployed_honest`). -/
 
 @[expose] public section
 

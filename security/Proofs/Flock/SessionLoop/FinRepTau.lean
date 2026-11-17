@@ -56,25 +56,7 @@ import Proofs.Flock.SessionLoop.Tables
 import Proofs.Flock.Soundness.Discharge.ZkExec.RunsSeams
 import Proofs.Flock.Soundness.Refine.Arith
 
-/-!
-# (c.3)'s `FinRepTau`: `τ` from the views is the session's
-
-`Loop.FinRepTau` asks that where the session's rep (`repFwC` on the loop's table and request) and the run from the views
-return proofs equal up to `eraseZ`, their `τ` agree. `eraseZ` forgets `τ`, so each side's is computed:
-
-* the views' run sends its source's `τ` (`FinRep.repCut_map_tau`), the switched view's. Where table `k / 2`'s rows hold
-  at its base (`Loop.FinRows`), that is the view at the workers' values (`Coined.swExe_tau`), the worker's view's `τ`
-  (`Masked.swViewE`; `Loop.finSrc_tau`);
-* the session's rep's `τ` is `InZ.tau` over its constraints at the coins from the round its inner proof begins
-  (`FinTau.innerP_cut_tau`). Those constraints are the worker's view's first seven rows (`Composed.tauFw_at_coef`,
-  `Masked.swRows_coef`) wherever the masked values below `zp 64` are the switched source's (`Loop.swSrcE_hmk_live`), the
-  pads are the tape's (`Masked.pads_frame_eq`) and the inner proof begins at `repSlot … (innerOff 0)`; `InZ.tau` over
-  them is the view's `τ` (`Masked.swTau_of_rows`; `Masked.fwTau_at`).
-
-**`Loop.finRepTau`**: in the masked scope, with a witness, at a statement the loop serves whose level 0 and pads the
-source samples from the tape (`Loop.Level0Src`, `Loop.RepSrc`), `FinRepTau` holds wherever every table's rows hold at its
-base (`Loop.FinRepRows`).
--/
+/-! (c.3)'s `FinRepTau`: where every table's rows hold at its base, `τ` from the views is the session's (`Loop.finRepTau`). -/
 
 @[expose] public section
 
@@ -86,15 +68,12 @@ namespace FlockSoundness.ZK.Table
 theorem toBase_tau {F K W Salt Seed D Hi VL : Type} [Field F] [Field K] (T : Table F K W Salt Seed D Hi VL)
     (v : T.onVals.View) : (T.toBase v).tau = v.tau := rfl
 
-/-- A real view's `τ` is the view's: `viewWith` changes only the hidden leaves. -/
 theorem Hm96.viewR_tau {F K W Salt B D Hi VL C : Type} [Field F] [Field K] [AddCommGroup B] [CharP F 2]
     {T : Table F K W Salt (B × Salt) D Hi VL} (M : T.Hm96 C) (p : W) (ω : T.Rand) (ys : T.Hid → Salt) :
     (M.viewR p ω ys).tau = (T.view p ω).tau := rfl
 
 end FlockSoundness.ZK.Table
 
-/-- **Where its rows hold at its base, a switched view's `τ` is the view's at the workers' values** (`Hm96.swViewR_eq`):
-the real view keeps the view's `τ` and changes the leaves alone. -/
 theorem FlockSoundness.Discharge.ZkView.Coined.swExe_tau {K W Hi VL : Type} [Field K]
     {z : FlockSoundness.Discharge.ZkView.Sizes} (T : FlockSoundness.Discharge.ZkView.Coined K W Hi VL z) (w : W)
     (v : T.tab.Vals) (ω : T.tab.Rand) (ys : T.tab.Hid → FlockSoundness.Discharge.ZkView.Salt)
@@ -115,12 +94,6 @@ open FlockSoundness.Refine (fOf gOf)
 
 namespace Masked
 
-/-- **A deployed rep's `τ` from the ZK server's run**: where `repFwC` on table `j`'s rep `r`, answered by the opened
-coins from the rep's base at the packed table of the witness's trace (`hg`), at the tape's pads (`hP`), returns, and
-below `zp 64` the passed values plus the pads are the switched source's masked values (`hmk`), its `τ` is the worker's
-view's at the clear values `v`, wherever table `j`'s rows hold at its base there (`hrows`). The inner proof's `τ` is
-`InZ.tau` at the coins from the round it begins (`FinTau.innerP_cut_tau`), `repSlot … (innerOff 0)`, over the run's
-constraints, the view's first seven rows (`tauFw_at_coef`, `swRows_coef`), so the view's `τ` (`swTau_of_rows`). -/
 theorem fwTau_at (x : Msg) (hx : Live x) (w : Claims.Flock.Wit) (hw : RZk x w) (τ : UE.Tape)
     (c : Fin (refK x) → FlockDeploy.Coin) (n : ℕ) (hnr : ¬ Refused x c n) (s : _) (spec : _root_.Flock.SessionSpec)
     (hs : FlockDeploy.setupOf true x = some (s, spec, stsOf x)) (j : Fin (jOf x)) (r : Fin 2)
@@ -149,7 +122,6 @@ theorem fwTau_at (x : Msg) (hx : Live x) (w : Claims.Flock.Wit) (hw : RZk x w) (
   have hfk : (stAt x j).circuitFold.kLog = (stAt x j).c.kLog := rfl
   have hj : j.val < (stsOf x).size := lt_of_jOf j
   have hstj : (stsOf x)[j.val]! = stAt x j := getElem!_pos (stsOf x) j.val hj
-  -- the setup is the statement's
   have hSm : st.m = (stAt x j).m := by
     subst hst
     rfl
@@ -173,7 +145,6 @@ theorem fwTau_at (x : Msg) (hx : Live x) (w : Claims.Flock.Wit) (hw : RZk x w) (
     have h := innerLayE_len x j
     rw [innerLayE_layE] at h
     exact h
-  -- the coins from the rep's base are `czExe`'s
   have ez : ligCoin c (l.size + 2) 0 = Composed.zcF (zkTab x j).table (stAt x j) (czExe PE x c j) r := by
     rw [hl]
     rfl
@@ -210,12 +181,10 @@ theorem fwTau_at (x : Msg) (hx : Live x) (w : Claims.Flock.Wit) (hw : RZk x w) (
     subst hst
     rw [hl]
     rfl
-  -- the masked values below `zp 64` are the view's
   have hmk' : ∀ k < (Composed.layOf (zkTab x j).table (stAt x j)).zp 64,
       (Composed.msgAt ((swViewE x c w v τ j).pre.2.1 r) k).val = vals[k]! + pads.h[k]! := fun k hk => by
     rw [swViewMasked x c w v τ j r hrows k]
     exact hmk k hk
-  -- the ring switch's `ŝ`s for claims `0` and `1` are the view's
   have hsw : ∀ zp zc t₁ l₁ lp lc t₂ l₂ ss T sws t₃ l₃,
       ((FlockComplete.zerocheckCut (FlockComplete.asksCut (ligCoin c) n) st.m st.digest (FlockComplete.flat cm0.cap)
           ic.root (_root_.Flock.Zk.PadLayout.new st.m st.kLog (zkTab x j).sch.k0)
@@ -243,7 +212,6 @@ theorem fwTau_at (x : Msg) (hx : Live x) (w : Claims.Flock.Wit) (hw : RZk x w) (
       unfold rankSlot
       rw [hstj]
       omega
-    -- the switched source's switched vectors are the ZK server's
     have hsv : ∀ k < 2,
         ((swSrcE x c w v τ j.val).rep r.val).sv k =
           _root_.Flock.ZkServer.Finish.switchVec (ligTab x w τ j)
@@ -313,7 +281,6 @@ theorem fwTau_at (x : Msg) (hx : Live x) (w : Claims.Flock.Wit) (hw : RZk x w) (
     have e0 := e 0 (by norm_num)
     rw [Nat.add_zero] at e0
     exact ⟨e0, e 1 (by norm_num)⟩
-  -- the run: the PIOP, Ligerito, the replay and level 0's constraints, then the inner proof
   dsimp only [_root_.Flock.ZkServer.Finish.repFwC] at h
   obtain ⟨⟨zp, zc⟩, t₁, l₁, h₁, h⟩ := _root_.Flock.ZkServer.Finish.run_bind_ok h
   try dsimp only at h
@@ -341,7 +308,6 @@ theorem fwTau_at (x : Msg) (hx : Live x) (w : Claims.Flock.Wit) (hw : RZk x w) (
   · obtain ⟨_, _, _, h', _⟩ := _root_.Flock.ZkServer.Finish.run_bind_ok hc
     rw [_root_.Flock.ZkServer.Finish.throw_run_go] at h'
     cases h'
-  -- the inner proof's `τ` is `InZ.tau` at the coins from the round it begins
   have htau : p.inner.tau = FlockComplete.Replay.InZ.tau
       (_root_.Flock.Zk.PadLayout.new st.m st.kLog (zkTab x j).sch.k0) pads
       (rp.cons ++ #[("ring switch ab", rp.abValue.addConst (_root_.Flock.Zk.claimCheck rp.claims[0]! ss[0]!)),
@@ -351,7 +317,6 @@ theorem fwTau_at (x : Msg) (hx : Live x) (w : Claims.Flock.Wit) (hw : RZk x w) (
     simp only [StateT.run_pure, FlockComplete.JsonRT.go_pure, Prod.mk.injEq, Except.ok.injEq] at hp
     obtain ⟨⟨rfl, -⟩, -⟩ := hp
     exact (FinTau.innerP_cut_tau h₈).2
-  -- the inner proof's slot: the PIOP's sends, then Ligerito's
   have hl0 := (FlockComplete.RankAt.zerocheckCut_round1 (ligCoin c) n hm14 _ _ _ _ _ h₁).1
   obtain ⟨hl1, hl1n, -⟩ := (FlockComplete.CutEq.zerocheckCut_eqAt (ligCoin c) n hm14 st.digest
     (FlockComplete.flat cm0.cap) ic.root (_root_.Flock.Zk.PadLayout.new st.m st.kLog (zkTab x j).sch.k0)
@@ -390,7 +355,6 @@ theorem fwTau_at (x : Msg) (hx : Live x) (w : Claims.Flock.Wit) (hw : RZk x w) (
     rw [repSlot_eq hs hzq, stsOf_half, ← repBase_eq hs (2 * j.val + r.val), ← hl]
     unfold FlockComplete.piopRoundsZk
     omega
-  -- level 0's record holds the rep's coins at its slots (`ligeritoPZk_lanes`), `czExe`'s
   have hrec := (FlockComplete.L0.ligeritoPZk_lanes (respE c) _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ (by omega) hk0 hS4).record
   have hLC : LaneCoins (zkTab x j).table (stAt x j) (czExe PE x c j) r rec := by
     refine ⟨fun i => ?_, fun i hi => ?_, ?_⟩
@@ -411,7 +375,6 @@ theorem fwTau_at (x : Msg) (hx : Live x) (w : Claims.Flock.Wit) (hw : RZk x w) (
       simp only [FlockComplete.coinKOf, coinOf_respE, hslot]
       rw [show l₃.size + 2 + (zkTab x j).sch.k0 = l₃.size + ((zkTab x j).sch.k0 + 2) by omega,
         show l₃.size + 3 + (zkTab x j).sch.k0 = l₃.size + ((zkTab x j).sch.k0 + 2) + 1 by omega]
-  -- the run's constraints are the view's first seven rows
   obtain ⟨hlsz, hlasz, hrow⟩ := Composed.tauFw_at_coef (zkTab x j).table (stAt x j) (czExe PE x c j) r
     ((swViewE x c w v τ j).pre.2.1 r) (swViewE x c w v τ j).pre.1
     ((swViewE x c w v τ j).pre.2.2.2.2.2 r).1 ((swViewE x c w v τ j).pre.2.2.2.2.1 r)
@@ -453,9 +416,6 @@ set_option synthInstance.maxHeartbeats 1000000 -- `ofLoop`'s session types, as i
 
 namespace Loop
 
-/-- **Where its rows hold, the views' `τ` is the worker's view's**: table `i`'s rep `r` source from the switched views
-reads the switched view's `τ`, the view's at the workers' values (`Coined.swExe_tau`), whose `τ` reads the base's mask,
-lanes, pads and `μ` alone, as `Masked.swViewE`'s. -/
 theorem finSrc_tau (vs : finS.SwVals) (x : Msg) (w : Flock.Wit) (ν : finS.Nonce) (t : finS.Tape)
     (ops : List (Msg × Msg)) {i r : ℕ} (hi : i < Masked.jOf x) (hr : r < 2) (hrows : FinRows vs x w ν t ops ⟨i, hi⟩) :
     ((finSrc vs x w ν t ops i).rep r).tau =
@@ -477,12 +437,6 @@ variable (vs : finS.SwVals) (L₀ : LeanRelease Flock.Wit Tp)
   (real : Msg → Flock.Wit → Tp → ℕ → V (_root_.Flock.ZkServer.Finish.Tab × Array ByteArray))
   (wk : (LeanRelease.ofLoopLink L₀ src real).toSrv.Worker) (x : Msg) (w : Flock.Wit)
 
-/-- **`FinRepTau` where every table's rows hold at its base**: in the masked scope, with a witness, at a statement the
-loop serves (no coin fault at the opened coins, `frameUnrefused_ofLoop`) whose level 0 and pads the source samples from
-the tape (`Level0Src`, `RepSrc`). The run from the views sends the views' `τ` (`FinRep.repCut_map_tau`), the worker's
-view's (`finSrc_tau`); the session's rep runs at the session's table, schedule and packed table (`finRepTab`,
-`schedsPZk_live`, `Level0Src.realOf`), at the tape's pads (`pads_frame_eq`), with the switched source's masked values
-below `zp 64` (`swSrcE_hmk_live`), so its `τ` is the worker's view's too (`Masked.fwTau_at`). -/
 theorem finRepTau (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Readable.relation) x)
     (hR : Claims.Flock.R (FlockDeploy.deployZk _root_.Flock.Readable.relation).parse x w) (hServe : Loop.Serves x)
     (hS0 : Loop.Level0Src src x w) (hS : Loop.RepSrc L₀ src x w) (hRows : FinRepRows vs L₀ src real wk x w) :
@@ -496,7 +450,6 @@ theorem finRepTau (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.R
   intro ν t κ m₀ ρ₀ ops hctx s0 spec hsx schs hschs cms hcms k hk extras hxe ic l hic hl tb hi q f hRep ic' p tr hic'
     hrun p' l' hv hz
   have hmk := swSrcE_hmk_live vs wk hsc hR hServe hctx hsx hk hRep hrun hv hz
-  -- the views' `τ`
   have e1 : p'.inner.tau = ((finSrc vs x w ν t ops (k / 2)).rep (k % 2)).tau :=
     Masked.FinRep.field_of_map (fun z => z.inner.tau) (Masked.FinRep.repCut_map_tau _ _ _ _ _ _ _ _ _ _ _ _) hv
   obtain ⟨-, -, hT, -⟩ := FlockComplete.ZkTables.tables_of_setup hx.1 hsx
@@ -509,7 +462,6 @@ theorem finRepTau (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.R
     unfold Loop.frepOf
     omega
   have e2 := finSrc_tau vs x w ν t ops hj hr (hRows ν t κ m₀ ρ₀ ops hctx ⟨k / 2, hj⟩)
-  -- the request's pads are the tape's
   have hq := hRep.2.1
   unfold repInOf at hq
   obtain ⟨⟨lay, ms⟩, hst0, hq⟩ := bok hq
@@ -540,7 +492,6 @@ theorem finRepTau (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.R
   have hP' : (_root_.Flock.ZkServer.Finish.padsOf q.draws).toC = Masked.innerPadsE x t ⟨k / 2, hj⟩ ⟨k % 2, hr⟩ :=
     hP.trans (congrArg (FlockComplete.padsOf (Masked.UE.tapeZk t) (k / 2) (k % 2))
       (Masked.innerLayE_layE x ⟨k / 2, hj⟩)).symm
-  -- the session's table, schedule and packed table
   have hnr : ¬ Masked.Refused x (finCoins x ops) (refK x) :=
     LeanRelease.frameUnrefused_ofLoop Masked.dataE (LeanRelease.withFiles (LeanRelease.withLink L₀ src) src) real
       CoinOpen.shaH wk x w hServe hx ν t κ m₀ ρ₀ ops hctx.1 hctx.2.1 hctx.2.2.1 hctx.2.2.2.1
@@ -555,7 +506,6 @@ theorem finRepTau (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.R
     rw [Nat.div_add_mod]
     exact hRep.1
   obtain ⟨-, -, -, hg⟩ := hS0.realOf ν t ⟨k / 2, hj⟩ ⟨k % 2, hr⟩ hR1
-  -- the masked values below `zp 64` are the switched source's
   have hlay : _root_.Flock.Zk.PadLayout.new tb.st.m tb.st.kLog tb.sch.k0 =
       Composed.layOf (Masked.zkTab x ⟨k / 2, hj⟩).table (Masked.stAt x ⟨k / 2, hj⟩) := by
     rw [hst, hsch]
@@ -565,7 +515,6 @@ theorem finRepTau (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.R
         q.vals[i]! + (_root_.Flock.ZkServer.Finish.padsOf q.draws).toC.h[i]! := by
     rw [← hlay]
     exact hmk
-  -- as many extra claims as the statement
   have hxsz : (_root_.Flock.ZkServer.Finish.claimsOf q.xs).size =
       spec.points * (Masked.stAt x ⟨k / 2, hj⟩).regions.size := by
     have hjs : k / 2 < (Masked.stsOf x).size := by omega
@@ -585,7 +534,6 @@ theorem finRepTau (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.R
     rw [flatMap_size_const _ _ _ fun _ => Array.size_map]
     simp only [viewPoints, Array.size_map, Array.size_range]
     exact Nat.mul_comm _ _
-  -- the session's rep at table `k / 2`'s rep `k % 2`
   have hl' : l.size = Masked.repBase x (2 * (⟨k / 2, hj⟩ : Fin (Masked.jOf x)).val + (⟨k % 2, hr⟩ : Fin 2).val) := by
     rw [hl]
     show Masked.repBase x k = Masked.repBase x (2 * (k / 2) + k % 2)

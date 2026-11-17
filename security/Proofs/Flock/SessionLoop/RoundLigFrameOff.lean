@@ -4,18 +4,8 @@ public import Proofs.Flock.SessionLoop.RoundLigFramePast
 public import Proofs.Flock.SessionLoop.LiveInner
 import all Init.Data.String.Defs
 
-/-!
-# The frame past level 0's close
-
-From the opening's first round on, the frame keeps its phase and rank (`Ranked.Good`); level 0's closing label `C`
-leaves it outside every masked phase, and so does each later round of good frames (`LigOff.PastRound`). So where the
-frame's check passes a device round at the close or past it, the round is the scheduled one and leaves as it came:
-
-* **`LigOff.check_closeAt`**, **`LigOff.check_pastAt`**: the closing round, where on the frame is in level 0, and a
-  later round outside every masked phase, pass only as the scheduled round, released as its frames came.
-* **`LigOff.repState_close`**: the loop's state at a rep's round from the close to the opening's last, where it takes
-  the coins before it, is in level 0 if anywhere, and past the close outside every masked phase.
--/
+/-! Past level 0's close the frame is outside every masked phase, so a round passes only as the scheduled one
+(`LigOff.check_pastAt`). -/
 
 @[expose] public section
 
@@ -29,7 +19,6 @@ open _root_.Flock.ZkServer.Frame (Cfg Masker roundFree check labelFrame isLabel 
 open FlockSoundness.Refine (Frame encs)
 open Loop
 
-/-- Frames without a domain frame leave unmasked as they are. -/
 theorem maskFrames_id : ∀ (p : ℕ) (fs : List Frame), (∀ f ∈ fs, noDom f) → maskFrames (fun _ v => v) p fs = fs
   | _, [], _ => rfl
   | p, f :: fs, h => by
@@ -42,7 +31,6 @@ theorem maskFrames_id : ∀ (p : ℕ) (fs : List Frame), (∀ f ∈ fs, noDom f)
     | vec vs => simp only [maskFrames, maskVals_id, maskFrames_id (p + vs.length) fs h']
     | sq k n => simp only [maskFrames, maskFrames_id p fs h']
 
-/-- Coins the frame takes keep its phase flags. -/
 theorem answer_flags {cfg : Cfg} {s s' : Masker} {cs : Array F128} (h : s.answer cfg cs = .ok s') :
     s'.on = s.on ∧ s'.l0 = s.l0 := by
   cases hi : s.inner with
@@ -56,8 +44,6 @@ theorem answer_flags {cfg : Cfg} {s s' : Masker} {cs : Array F128} (h : s.answer
     · obtain ⟨-, a, b, -, -⟩ := Ranked.answer_proj (Or.inr hl) h
       exact ⟨a, b.trans hl⟩
 
-/-- **Level 0's closing label**, where the frame takes it at a state in level 0 if in a masked phase at all, leaves
-it outside every masked phase and releases its label frame. -/
 theorem label_close_out {c : Cfg} {s : Masker} {q : Masker × ByteArray} (hl : s.on = true → s.l0 = true)
     (h : s.label c _root_.Flock.Zk.LABEL_CLOSE.toUTF8 = .ok q) :
     q.1.on = false ∧ q.2 = labelFrame _root_.Flock.Zk.LABEL_CLOSE.toUTF8 := by
@@ -82,8 +68,6 @@ theorem label_close_out {c : Cfg} {s : Masker} {q : Masker × ByteArray} (hl : s
     · simp [Masker.label, Ranked.isLabel_self, p1, p2, p3, p4, hl0, hpos] at h
       cases h
 
-/-- **A round outside every masked phase stays outside**: where the frame takes plain frames and the squeeze there,
-past the inner proof's label or not, it is still outside. -/
 theorem roundFree_offAt_on {c : Cfg} {s : Masker} {fs : List Frame} {k : UInt8} {n : ℕ} (hon : s.on = false)
     (hm : ∀ f ∈ fs, midFrame f) (hp : ∀ f ∈ fs, plainFrame f) (hk : k = 2 ∨ (k = 1 ∧ n = 1))
     (h0 : ¬ (n = 0 ∧ k = 2)) (hn : n < 2 ^ 64) {q : ByteArray × Masker × Array ℕ}
@@ -101,9 +85,6 @@ theorem roundFree_offAt_on {c : Cfg} {s : Masker} {fs : List Frame} {k : UInt8} 
   subst e
   exact hon
 
-/-- **Level 0's closing round**: where the frame takes the closing label, then plain frames and the squeeze, at a state
-in level 0 if in a masked phase at all, it frees no word, leaves the frame outside every masked phase and releases the
-frames as they came, then the squeeze. -/
 theorem roundFree_closeAt {c : Cfg} {s : Masker} {fs : List Frame} {k : UInt8} {n : ℕ}
     (hl : s.on = true → s.l0 = true) (hm : ∀ f ∈ fs, midFrame f) (hp : ∀ f ∈ fs, plainFrame f)
     (hk : k = 2 ∨ (k = 1 ∧ n = 1)) (h0 : ¬ (n = 0 ∧ k = 2)) (hn : n < 2 ^ 64) {q : ByteArray × Masker × Array ℕ}
@@ -151,9 +132,6 @@ theorem roundFree_closeAt {c : Cfg} {s : Masker} {fs : List Frame} {k : UInt8} {
   rw [data_append', h2, data_append', hout, labelFrame_data, sq_enc]
   simp [maskFrames, encs]
 
-/-- **Level 0's closing round passes only as itself**: where the frame's check passes the device round `v` against
-the scheduled closing round, at a state in level 0 if in a masked phase at all, `v` is that round and leaves as its
-frames. -/
 theorem check_closeAt {c : Cfg} {m s' : Masker} {fs : List Frame} {k : UInt8} {n : ℕ} {v out : ByteArray}
     (hl : m.on = true → m.l0 = true) (hm : ∀ f ∈ fs, midFrame f) (hp : ∀ f ∈ fs, plainFrame f)
     (hk : k = 2 ∨ (k = 1 ∧ n = 1)) (h0 : ¬ (n = 0 ∧ k = 2)) (hn : n < 2 ^ 64)
@@ -170,9 +148,6 @@ theorem check_closeAt {c : Cfg} {m s' : Masker} {fs : List Frame} {k : UInt8} {n
   rw [hv] at hf
   exact (roundFree_closeAt hl hm hp hk h0 hn hf).2.2
 
-/-- **A round of the schedule past level 0's close passes only as itself**: where the frame's check passes the device
-round `v` against the scheduled round `r` (`PastRound`), at the close in level 0 if in a masked phase at all and past
-it outside every masked phase, `v` is `r` and leaves as `r`'s bytes. -/
 theorem check_pastAt {c : Cfg} {m s' : Masker} {C p : ℕ} {r : ByteArray × ℕ} {v out : ByteArray}
     (hCp : C ≤ p) (hr : PastRound C p r) (hl : m.on = true → m.l0 = true) (hon : C < p → m.on = false)
     (h : check c m v r.1 r.2 = .ok (out, s', none)) :
@@ -197,8 +172,6 @@ theorem check_pastAt {c : Cfg} {m s' : Masker} {C p : ℕ} {r : ByteArray × ℕ
     refine ⟨hv, ?_⟩
     rw [ho, maskFrames_id 0 _ hdf]
 
-/-- **A rep's frame from its first round keeps its phase and rank**: where its scheduled rounds up to `J > 0` run on,
-the frame is `Ranked.Good`. -/
 theorem run_good {c : Cfg} (hc : ∀ p, p < c.order.size → c.order[p]! < c.h.size) (P : Array F128)
     (sched : Array (ByteArray × ℕ)) (cr : Array (Array F128)) {digest cap dom : ByteArray}
     (hdg : digest.size < 2 ^ 64) (hcap : cap.size < 2 ^ 64) (hdom : dom.size < 2 ^ 64)
@@ -220,9 +193,6 @@ theorem run_good {c : Cfg} (hc : ∀ p, p < c.order.size → c.order[p]! < c.h.s
   exact (Ranked.run_head hc p hdg hcap hdom (Ranked.qOf_round sched #[])
     (by simp only [Ranked.nnOf, hS, ↓reduceIte, h0]) hJ0 h2).1
 
-/-- **A round of the schedule past the opening's first**: from a good state past the opening, outside every masked
-phase from the close `C` on, a round that is `PastRound`'s from the close on leaves the frame good and past the opening,
-and from the close on outside every masked phase. -/
 theorem past_round {c : Cfg} {s : Masker} {C J : ℕ} {r : ByteArray × ℕ} {q : ByteArray × Masker × Array ℕ}
     (hg : Ranked.Good c s) (hd : s.done = true) (hon : C ≤ J → s.on = false)
     (hpast : C ≤ J + 1 → PastRound C (J + 1) r) (h : roundFree c s r.1 r.2 = .ok q) :
@@ -240,9 +210,6 @@ theorem past_round {c : Cfg} {s : Masker} {C J : ℕ} {r : ByteArray × ℕ} {q 
     exact roundFree_offAt_on (hon (by omega)) (fun f hf => (hfs f hf).1) (fun f hf => (hfs f hf).2.1) hk
       (fun h' => hn0 h'.1) hn h
 
-/-- **A rep's frame past the opening's first round**: where its scheduled rounds up to `J`, from the opening's first at
-`A` on, run on, quiet before `A` and `PastRound`'s from the close `C` to `J`, the frame owes nothing or is good, past
-the opening, and from the close on outside every masked phase. -/
 theorem run_past {c : Cfg} (hc : ∀ p, p < c.order.size → c.order[p]! < c.h.size) (P : Array F128)
     (sched : Array (ByteArray × ℕ)) (cr : Array (Array F128)) {digest cap dom : ByteArray}
     (hdg : digest.size < 2 ^ 64) (hcap : cap.size < 2 ^ 64) (hdom : dom.size < 2 ^ 64)
@@ -291,9 +258,6 @@ theorem run_past {c : Cfg} (hc : ∀ p, p < c.order.size → c.order[p]! < c.h.s
           exact Or.inl ho1
       · simp [hb] at h2
 
-/-- **The loop's state at a rep's round from level 0's close**: where the loop's state at a rep's round from the close
-`C` to the opening's last takes the coins before it, at the layout `c''`, the frame is in level 0 if in a masked phase
-at all, and past the close outside every masked phase. -/
 theorem repState_close {c c'' : Cfg} (hc : ∀ p, p < c.order.size → c.order[p]! < c.h.size)
     {t : _root_.Flock.ZkServer.Finish.Tab} {rep : ℕ} {dom : ByteArray} {xs : Array (Array F128)}
     {hi : Array ByteArray} {cr0 cr : Array (Array F128)} {ns : ℕ → ℕ} {alg : Array (ByteArray × ℕ)}

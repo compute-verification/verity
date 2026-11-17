@@ -36,16 +36,7 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Soundness.Discharge.ZkReg.Checked
 import Proofs.Flock.Soundness.Discharge.ZkReg.SoundHJCustody
 
-/-!
-# `ServedRowsLinked`'s proof
-
-`RowsSession.ownReadsHJ_of_served`: at an accepted outcome, a sampled proof block whose registrant's reads are the rows of its
-served roots (`ServedRegistered`) has every one of them owned (`OwnReadsHJ`), as C3's `FlockC3.Compose.ownReads_cover`
-has it for the honest registrant: the record's sample is the sampling design's sample file (`RecordCustodyZKJ`), the unit's table has a
-sampled statement (`sampled_of_acceptsZKR`) whose sample proves the unit (`sampleOkZKHJ_of_file`), and acceptance gives each
-`own` port's position at the unit's label (`reads_of_acceptsZKR`). With it, `RowsAt` is the rows link at those reads
-(`RowsSession.xv_eq_of_rowsAt`).
--/
+/-! `ServedRowsLinked`'s proof: a sampled proof block's served reads are owned at an accepted outcome. -/
 
 @[expose] public section
 
@@ -59,8 +50,6 @@ namespace RowsSession
 
 variable (s : RowsSession)
 
-/-- **A sampled proof block's served reads are owned** at an accepted outcome, when its registrant's reads are its served roots'
-rows (`ServedRegistered`); acceptance names each port of the circuit once (`names_of_acceptsZKR`). -/
 theorem ownReadsHJ_of_served {S : Finset (Fin s.n)} {R : s.Reg}
     {o : LiveOutJ (planZHJ (Reg := s.Reg) s.dj s.y₀ S R).length (mPtsOf s.c.g (s.kd / nTab s.I))}
     (hacc : LiveAcceptsZKR s.I s.own (R, S, s.wr S R o)) {u : Fin s.n} (hu : u ∈ S) (hS : s.ServedRegistered u) :
@@ -88,7 +77,6 @@ theorem ownReadsHJ_of_served {S : Finset (Fin s.n)} {R : s.Reg}
 
 end RowsSession
 
-/-- **Flock's rows link at served roots** (`Flock.Guarantees.ServedRowsLinked`). -/
 theorem servedRowsLinked : Flock.Guarantees.ServedRowsLinked := by
   intro s S R o u hacc hu hS hrows g hg hr
   exact s.xv_eq_of_rowsAt (s.ownReadsHJ_of_served hacc hu hS) hrows hg hr

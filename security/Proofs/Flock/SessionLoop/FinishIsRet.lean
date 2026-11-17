@@ -36,15 +36,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.SessionLoop.FinRepMsgsFw
 
-/-!
-# `FinishIs` with the clear values and level 0 read off the returns
-
-`finishIs_of_consumed` takes four facts `FinRepRows` consumes and level 0's openings. Two of them hold at its premises
-with no rows: below `zp 64` the workers' clear values are the request's (`Loop.finRepMsgs_ret`), and the returned
-proof's level 0 is the clear values plus the request's pads (`Loop.finRepLanes_ret`).
-
-**`Loop.finishIs_of_ret`**: `FinishIs` from the ring switch's target, the restart and level 0's openings alone.
--/
+/-! `FinishIs` with the clear values and level 0 read off the returns (`Loop.finishIs_of_ret`). -/
 
 @[expose] public section
 
@@ -63,8 +55,6 @@ variable (vs : finS.SwVals) (L₀ : LeanRelease Flock.Wit Tp)
   (src : Msg → Flock.Wit → Tp → ℕ → V (Array F128 × ByteArray × Array ByteArray))
   (wk : (LeanRelease.ofLoopLink L₀ src (realOf src)).toSrv.Worker) (x : Msg) (w : Flock.Wit)
 
-/-- **`FinishIs` from the target, the restart and level 0's openings**: `finishIs_of_consumed` at its premises, its
-clear values below `zp 64` and its level 0 values from the returns (`finRepMsgs_ret`, `finRepLanes_ret`). -/
 theorem finishIs_of_ret (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Readable.relation) x)
     (hR : Claims.Flock.R (FlockDeploy.deployZk _root_.Flock.Readable.relation).parse x w) (hServe : Serves x)
     (hL0 : _root_.Flock.Guarantees.LoopInnerRound0 Masked.dataE L₀ (realOf src) x w) (hSrc : Loop.Src L₀ src x w)

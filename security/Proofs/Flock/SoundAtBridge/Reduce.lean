@@ -35,16 +35,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Soundness.Game
 
-/-!
-# `SoundAtBridge` from `EndToEndRegisteredRows`
-
-* `RowsSession.prob_badU_le` (gap 3): at a session with one registrant's opening per unit, the per-unit event has
-  probability at most `n` times `EndToEndRegisteredRows`' bound: that guarantee at each unit's opening, and the union
-  bound over the units (`game_prob_exists_le`);
-* `openedPlur_zero` (gap 2 at `δo = 0`): a layer whose accepted opening is the value layer's reading meets
-  `OpenedPlurAt` at `0`;
-* `soundAtBridge_of_rows`: `SoundAtBridge` from `EndToEndRegisteredRows`, through `soundAt_of_sessions`.
--/
+/-! `SoundAtBridge` from `EndToEndRegisteredRows` (`soundAtBridge_of_rows`). -/
 
 @[expose] public section
 
@@ -56,9 +47,6 @@ open scoped ENNReal
 
 namespace RowsSession
 
-/-- **The per-unit link, by a union bound over the units** (gap 3): `EndToEndRegisteredRows` at each unit's opening
-`rdU u` bounds its event by the session's `bound`; a sampled proof block wrong or off at its own reads is in its own opening's
-event, so the per-unit event is at most `n · bound`. -/
 theorem prob_badU_le (hE : Flock.Guarantees.EndToEndRegisteredRows) (s : RowsSession) (hs : s.CR) :
     Game.prob s.BadU s.G s.τ ≤ (s.n : ℝ≥0∞) * s.bound := by
   obtain ⟨hCR, hA2, hRows, hReg⟩ := hs
@@ -80,8 +68,6 @@ end RowsSession
 
 variable {Ω : Type} [Fintype Ω] {S nπ : ℕ} {V : Type}
 
-/-- **Gap 2 at `δo = 0`**: a layer whose accepted opening is its session's value layer read as a layer value meets
-`OpenedPlurAt` at `0`. -/
 theorem openedPlur_zero (pf : ProofLayer Ω S nπ V) (sess : Paths Ω S → Fin S → Fin nπ → RowsSession)
     (rows : ∀ s : RowsSession, (Fin s.Circ.N → Bool) → V)
     (h : ∀ x w i, pf.accepted x w i → pf.opened x w i = rows (sess x w i) (sess x w i).Xv) :
@@ -93,9 +79,6 @@ theorem openedPlur_zero (pf : ProofLayer Ω S nπ V) (sess : Paths Ω S → Fin 
   unfold Pouw.RelativeSecurity.prob Claims.prUniform
   simp
 
-/-- **The proof layer a family of sessions gives**: proof `i` of round `w` is accepted exactly where verity-verify-proof
-accepts its session's outcome, its opening is the session's value layer read as a layer value, and its relation holds
-there when no sampled proof block of the session is wrong or off at its own reads. -/
 noncomputable def rowsLayer (sess : Paths Ω S → Fin S → Fin nπ → RowsSession) (out : ∀ x w i, (sess x w i).Out)
     (rows : ∀ s : RowsSession, (Fin s.Circ.N → Bool) → V) (right : Paths Ω S → (Fin S → Fin nπ → V) → Prop) :
     ProofLayer Ω S nπ V where
@@ -104,10 +87,7 @@ noncomputable def rowsLayer (sess : Paths Ω S → Fin S → Fin nπ → RowsSes
   rel x w i _ := ∀ u ∈ (out x w i).2.1, ¬ (sess x w i).IncorrectAt u ∧ (sess x w i).RowsAt (out x w i) u
   right := right
 
-/-- **The layer's premises hold together, at verity-verify-proof's acceptance** (non-vacuity of `AcceptedLive`,
-`OpenedPlurAt` and `RelOfRows`): at any family of sessions, `rowsLayer` accepts exactly where verity-verify-proof accepts, and
-meets `AcceptedLive`, `OpenedPlurAt` at `δo = 0` and `RelOfRows`. `ExecutionPhaseSamplingDesign` and `RowsSession.CR` are premises of the
-sessions, not of the layer. -/
+/-- `ExecutionPhaseSamplingDesign` and `RowsSession.CR` are premises of the sessions, not of the layer. -/
 theorem rowsLayer_premises (sess : Paths Ω S → Fin S → Fin nπ → RowsSession) (out : ∀ x w i, (sess x w i).Out)
     (rows : ∀ s : RowsSession, (Fin s.Circ.N → Bool) → V) (right : Paths Ω S → (Fin S → Fin nπ → V) → Prop) :
     (∀ x w i, (rowsLayer sess out rows right).accepted x w i ↔
@@ -116,11 +96,6 @@ theorem rowsLayer_premises (sess : Paths Ω S → Fin S → Fin nπ → RowsSess
     RelOfRows (rowsLayer sess out rows right) sess out rows :=
   ⟨fun _ _ _ => Iff.rfl, fun _ _ _ h => h, openedPlur_zero _ sess rows fun _ _ _ _ => rfl, fun _ _ _ h => h⟩
 
-/-- **`SoundAtBridge` from `EndToEndRegisteredRows`**: an unsound proof whose opening is the value layer's reading
-fails its relation there, so by `RelOfRows` some sampled proof block of its session is wrong or off at its own reads, and by
-`AcceptedLive` verity-verify-proof accepted: the per-unit event, at most `n · bound ≤ δ` in every session
-(`RowsSession.prob_badU_le`); one whose opening isn't is in `OpenedPlurAt`'s event, at most `δo`. `ExecutionPhaseSamplingDesign` carries
-the sessions' bound to the window's paths (`soundAt_of_sessions`). -/
 theorem soundAtBridge_of_rows (hE : Flock.Guarantees.EndToEndRegisteredRows) : Flock.Guarantees.SoundAtBridge := by
   intro Ω _ S nπ V pf sess out rows δo δ hCR hSamplingDesign hAcc hOpen hRel hδ hδ0
   refine soundAt_of_sessions pf (Out := fun s : RowsSession => s.Out) (fun s => s.G) (fun s => s.τ)

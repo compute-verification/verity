@@ -3,25 +3,7 @@ module
 public import Proofs.Flock.SessionLoop.SchedAt
 public import Proofs.Flock.SessionLoop.RhoKeepRep
 
-/-!
-# The frame's release at a rep's level-0 rounds
-
-At rep stream `2j + r`'s level-0 round `i`, `1 ≤ i ≤ k₀ + 3` (`Masked.repSlot` `i`), the loop schedules level 0's
-body `i` at zero pads, at its own table and the coins from the binding on, and the frame releases it at the rep's pads.
-
-* `LigLock.l0BodyAt_bind_congr`: past the binding a body reads neither the pending bytes, the target nor the cap.
-* `LigLock.l0BodyAt_congr_lt`: body `i` reads only the coins of the rounds before it: `z`'s from `1`, `β₀`'s first
-  from `2` and lane challenge `j`'s from `j + 3`.
-* `Loop.loopNr_l0r`: the loop asks level 0's round `i` for `l0Nc i` coins, `ρ₁`'s at `k₀ + 3` included.
-* **`LeanRelease.release_l0_at`**: where the frame takes the coins before level-0 round `i` in its masked phase at the
-  round's position and its check passes the device's round against body `i` at zero pads, the release is body `i` at
-  the rep's pads (`L0Sent.release`; at `k₀ + 3`, `ρ₁`'s squeeze alone, `release_zcOuter`).
-* **`LeanRelease.l0_frame`**: on a live history whose next round is the rep's level-0 round `i`, the loop's table there
-  is of the rep's setup, the zerocheck's and lincheck's claims are at the points of the openings' words from the rep's
-  start, and the release is body `i` at the table, the basis of its switched vectors, the rep's pads and the opened
-  coins from the binding on (`Bind.sched_l0`), the frame taking the round's coins in level 0's masked phase at body
-  `i`'s position (`RhoKeep.repState_l0`).
--/
+/-! The frame releases a rep's level-0 rounds past the binding at the rep's pads (`LeanRelease.l0_frame`). -/
 
 @[expose] public section
 
@@ -37,15 +19,12 @@ section L0Congr
 variable {coin coin' : ℕ → ℕ → F128} {p0 p0' : ℕ} {sch : Schedule} {t b : Array F128} {lay : Zk.PadLayout}
   {h : Array F128} {rep : ℕ} {extra : ℕ → ℕ → F128} {nonce : ℕ → ℕ → UInt64}
 
-/-- **Past the binding a level-0 body reads neither the pending bytes, the target nor the cap.** -/
 theorem l0BodyAt_bind_congr {i : ℕ} (hi : 1 ≤ i) (P P' : List UInt8) (T T' : F128) (cap cap' : ByteArray) :
     l0BodyAt coin p0 P T cap sch t b lay h rep extra nonce i =
       l0BodyAt coin p0 P' T' cap' sch t b lay h rep extra nonce i := by
   unfold l0BodyAt l0Body
   split_ifs <;> first | rfl | omega
 
-/-- **Level-0 body `i` reads only the coins of the rounds before it**: `z`'s `n` from body `1`, `β₀`'s first from
-body `2`, and lane challenge `j`'s two from body `j + 3`. -/
 theorem l0BodyAt_congr_lt {P : List UInt8} {T : F128} {cap : ByteArray} {i : ℕ}
     (hz : 1 ≤ i → ∀ e < sch.n, coin p0 e = coin' p0' e) (hb0 : 2 ≤ i → coin (p0 + 1) 0 = coin' (p0' + 1) 0)
     (hc : ∀ j < sch.k0, j + 3 ≤ i → ∀ e < 2, coin (p0 + 2 + j) e = coin' (p0' + 2 + j) e) :
@@ -78,8 +57,6 @@ open _root_.Flock.ZkServer.Finish (Tab)
 
 namespace Loop
 
-/-- **The loop's counts at level 0's rounds past the binding**: `l0Nc i` for `1 ≤ i ≤ k₀ + 3`, `ρ₁`'s two at
-`k₀ + 3` (`Count.repPlan_rho`). -/
 theorem loopNr_l0r {x : Msg} {s : FlockDeploy.Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hsx : FlockDeploy.setupOf true x = some (s, spec, sts)) {q : ℕ} (hq : q < spec.repStreams.size)
     {sch : _root_.Flock.Schedule} {tp : ℕ} (hz : _root_.Flock.Zk.schedule sts[q / 2]!.wideLeaf sts[q / 2]!.m = .ok (sch, tp))
@@ -116,10 +93,6 @@ namespace LeanRelease
 open _root_.Flock.ZkServer.Frame (Cfg Masker roundFree)
 open FlockSoundness.Refine (Frame encs)
 
-/-- **The release at a level-0 round past the binding**: where the frame takes the coins before level 0's round
-`1 ≤ i ≤ k₀ + 3` in its masked phase at the round's position (`absPos` of the out-of-domain pad plus `l0Off i`), asks
-the round's `l0Nc i` coins, and its check passes the device's round against body `i` at zero pads, the release is body
-`i` at the rep's pads, tagged `0` (`L0Sent.release`; at `k₀ + 3`, `ρ₁`'s squeeze alone, `release_zcOuter`). -/
 theorem release_l0_at {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ : R) (hh : List (Msg × Msg)) (st : Bool)
     {m : Masker} (hA : L.answered x ρ hh = .ok m) {coin : ℕ → ℕ → F128} {p0 : ℕ} {P : List UInt8} {T : F128}
     {cap : ByteArray} {sch : _root_.Flock.Schedule} {t b : Array F128} {lay : _root_.Flock.Zk.PadLayout} {rep : ℕ}
@@ -211,14 +184,6 @@ theorem release_l0_at {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ : R) (hh 
 
 open Loop Ranked in
 set_option maxHeartbeats 4000000 in
-/-- **The frame releases a rep's level-0 round past the binding at its pads**: at a live history whose next round is
-rep stream `2j + r`'s level-0 round `1 ≤ i ≤ k₀ + 3` (`Masked.repSlot` `i`), on the rep's own tables where `real`
-answers the loop's, the loop's table there is of the rep's setup, the zerocheck's and lincheck's claims of the schedule
-are at the points of the openings' words from the rep's start (`Loop.pts_raw`), and the release is body `i` at the
-table, the basis of its switched vectors at those claims and the extra claims at the link points off the first
-opening's words, the rep's pads, and the opened coins from the binding on (`Bind.sched_l0`, `Loop.loopNr_l0r`,
-`release_l0_at`). The frame takes the round's coins in level 0's masked phase at body `i`'s position: the loop's state
-at the placeholder table (`progOf_at`) is in level 0 at the next body's first value (`RhoKeep.repState_l0`). -/
 theorem l0_frame (L₁ : LeanRelease Flock.Wit Loop.Tp)
     (real : Msg → Flock.Wit → Loop.Tp → ℕ → V (Tab × Array ByteArray))
     (wk : (ofLoop Masked.dataE L₁ real).toSrv.Worker) {x : Msg} {w : Flock.Wit} (hx : Masked.Live x)
@@ -273,7 +238,6 @@ theorem l0_frame (L₁ : LeanRelease Flock.Wit Loop.Tp)
     unfold roundsOf
     rw [List.getD_eq_getElem _ _ (by simp only [List.length_map, List.length_range]; omega)]
     simp
-  -- the round's place: `A + (3 + P) + i` into the rep's rounds, `A` the algebraic phase's, `2 + P` the ring switch's
   obtain ⟨A, hAd⟩ : ∃ A, A = (Masked.stAt x j).m + (Masked.stAt x j).c.kLog - 6 := ⟨_, rfl⟩
   obtain ⟨P, hPd⟩ : ∃ P, P = spec.points * (Masked.stAt x j).regions.size := ⟨_, rfl⟩
   have hRk : Masked.rankSlot x j.val r.val = Masked.repBase x (2 * j.val + r.val) + A := by
@@ -297,7 +261,6 @@ theorem l0_frame (L₁ : LeanRelease Flock.Wit Loop.Tp)
     unfold FlockComplete.repStartZk
     omega
   have hpos : 0 < ops.length := by omega
-  -- the extra claims: the table's regions at each link point
   obtain ⟨hmp, hmp0, hpc⟩ := Masked.live_links hx hsx hq2
   have hmp' : (Masked.stAt x j).mPts = spec.mPts := by rw [← hst]; exact hmp
   have hl0 : loopNr x 0 = spec.points * spec.mPts := by
@@ -322,7 +285,6 @@ theorem l0_frame (L₁ : LeanRelease Flock.Wit Loop.Tp)
       ((Loop.linkPoints_size_le (Masked.stAt x j) (wordsAt x (ops.map fun p => ZKMal.CoinLayer.rd p.2) 0)).trans
         (show _ ≤ _root_.Flock.ZkServer.Frames.COIN_MAX by rw [hW0]; exact hpc))
     omega
-  -- the located round
   have hbase : Masked.repBase x (2 * j.val + r.val) =
       1 + ((roundsOf spec (Masked.stsOf x)).take (2 * j.val + r.val)).sum := by
     rw [Masked.repBase_eq hsx, repStartZk_eq spec _ hq2.le]
@@ -351,7 +313,6 @@ theorem l0_frame (L₁ : LeanRelease Flock.Wit Loop.Tp)
     congr 1
     omega
   have hj1 : (ZKMal.CoinLayer.locate (roundsOf spec (Masked.stsOf x)) 0 (u + 1)).2 = a + 1 := by rw [hloc]
-  -- the frame takes the round's coins
   have hlast : (ofLoop Masked.dataE L₁ real).last x = refK x + 1 :=
     loop_last loopNr Masked.dataE (withFrames Masked.dataE L₁ real) x
   have hkd : (ofLoop Masked.dataE L₁ real).kindAt x ((m₀, ρ₀) :: ops).length = .masked :=
@@ -362,7 +323,6 @@ theorem l0_frame (L₁ : LeanRelease Flock.Wit Loop.Tp)
   have hA' := hA
   rw [ofLoop_answered_same Masked.dataE L₁ real x (ν, t) (m₀, ρ₀) ops hsx (q := u + 1) (by omega) hj1 ho ht] at hA'
   replace hA' := (bind_rankStop_ok hA').1
-  -- the loop's placeholder table there
   have hcs : (ops.map fun p => ZKMal.CoinLayer.rd p.2).length = u + 2 := by rw [List.length_map]; omega
   have ho' : (progOf x (ops.map fun p => ZKMal.CoinLayer.rd p.2)).owed ≠ none := fun h => answer_owed_none _ h hA'
   obtain ⟨c', tb, dom, xs, his, hph0⟩ := progOf_placeholder x _ hsx hcs ho'
@@ -383,7 +343,6 @@ theorem l0_frame (L₁ : LeanRelease Flock.Wit Loop.Tp)
     simp only [_root_.Flock.Setup.ofCircuit, ByteArray.size_extract]
     omega
   have hmkt : tb.st.merkle = _root_.Flock.MerkleScheme.hm96Sha512 := by rw [hts']; exact hmk
-  -- the loop's own round there
   obtain ⟨tr, hir, sched', hre, hs'⟩ := ofLoop_sched_live Masked.dataE L₁ real wk x w (ν, t) κ (m₀, ρ₀) ops hl hkd
     hsx (q := u + 1) (by omega)
   have hre' : real x w (ν, t) (2 * j.val + r.val) = .ok (tr, hir) := by
@@ -418,7 +377,6 @@ theorem l0_frame (L₁ : LeanRelease Flock.Wit Loop.Tp)
     rw [(alg_cnt hmT (by rw [htrk]; omega) hmT' hal').1, htrm, htrk, hAd]
   have hT1' : tr.st = _root_.Flock.Setup.ofCircuit (Masked.stAt x j) := hT1.trans hts'
   have hT2' : tr.sch = (Masked.zkTab x j).sch := hT2.trans hsch
-  -- the schedule: level 0's first `i + 1` bodies at zero pads
   obtain ⟨hssz, T, sws, ⟨zc, lc, hptsR, hsws⟩, hbody⟩ := Bind.sched_l0 hal' hs'' hdom' (by rw [hT1]; exact hdg)
     hcapR hmT' (by rw [hT1]; exact hmkt) hXb (by rw [hT2]; exact hk0) (by rw [hT2]; exact hnn)
     (by rw [hT2]; exact hq) (by rw [hT2']; omega) hmT (j := i) (by rw [hT2']; omega)
@@ -433,7 +391,6 @@ theorem l0_frame (L₁ : LeanRelease Flock.Wit Loop.Tp)
     rw [hT1', hT2']
     all_goals rfl
   rw [hNL, hT2'] at hck
-  -- the round's rep, its layout and its coins
   have hrep : (ofLoop Masked.dataE L₁ real).rep x ((m₀, ρ₀) :: ops).length = 2 * j.val + r.val := by
     show repOf x (ops.length + 1) = _
     rw [show ops.length + 1 = u + 1 + 2 by omega, repOf_add_two hsx, hloc]
@@ -457,7 +414,6 @@ theorem l0_frame (L₁ : LeanRelease Flock.Wit Loop.Tp)
     show loopNr x (((m₀, ρ₀) :: ops).length - 1) = _
     rw [List.length_cons, Nat.add_sub_cancel, hn, Masked.repSlot_eq hsx hz]
     exact loopNr_l0r hsx hq2 hz (by rw [hst]; omega) (by rw [hst]; exact hk6) h1 hi
-  -- the frame's state there: in level 0 at body `i`'s first value
   have hph : placeholder spec (Masked.stsOf x) (ZKMal.CoinLayer.locate (roundsOf spec (Masked.stsOf x)) 0 (u + 1)).1
       (wordsAt x (ops.map fun p => ZKMal.CoinLayer.rd p.2) 0) = .ok (c', tb, dom, xs, his) := by
     rw [hloc]
@@ -496,7 +452,6 @@ theorem l0_frame (L₁ : LeanRelease Flock.Wit Loop.Tp)
     omega
   have hpm : m.pos = absPos (Masked.layE x j) ((Masked.layE x j).lgOod 0) + l0Off i := by
     rw [hpm0, hc', hlayE, nPiop_ood _ _ _ hkL]
-  -- the release: body `i` at the rep's pads
   have hrel := release_l0_at (ofLoop Masked.dataE L₁ real) x (ν, t) ((m₀, ρ₀) :: ops) false hA
     (lay := Masked.layE x j) (sch := (Masked.zkTab x j).sch) (Masked.layE x j).len (by rw [hrep]; exact hLk)
     (by rw [← hsch]; omega) rfl rfl h1 hi hon hin hpm hcn hck

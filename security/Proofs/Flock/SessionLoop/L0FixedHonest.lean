@@ -3,16 +3,7 @@ module
 public import Proofs.Flock.SessionLoop.L0Fixed
 public import Proofs.Flock.SessionLoop.FinalC
 
-/-!
-# `L0Fixed` at the honest values
-
-At the honest values the deployed source's masked words below `h_ab` are `vsWord` plus the rep's pads
-(`Loop.vsWord_honestVals`, `Masked.srcE_masked_pad`), and from `zp 64` to `h_ab` they are level 0's opening at the coins
-plus the same pads (`Masked.ligOodE`, `ligMsgE`, `ligSumsE`). Cancelling the pads gives `vsWord = l0Clear`.
-
-* **`Loop.l0Fixed_honestVals`**: `L0Fixed` holds at the honest values, at every live statement and witness of the
-  masked relation.
--/
+/-! `L0Fixed` holds at the honest values (`Loop.l0Fixed_honestVals`). -/
 
 @[expose] public section
 
@@ -28,7 +19,6 @@ private theorem cancel_pad {a b p : _root_.Flock.F128} (h : a + p = b + p) : a =
   rw [← FlockSoundness.Discharge.Composed.ZerocheckMasked.add_add_self a p, h,
     FlockSoundness.Discharge.Composed.ZerocheckMasked.add_add_self]
 
-/-- Word `t` of a masked lane message. -/
 private theorem mm_word {src : _root_.FlockComplete.RepSrc} {lay : _root_.Flock.Zk.PadLayout}
     {h : Array _root_.Flock.F128} {i : ℕ}
     {P : _root_.Flock.F256 × _root_.Flock.F256} (e : mmOf src lay i = maskMsg lay h i P) {t : ℕ} (ht : t < 4) :
@@ -39,7 +29,6 @@ private theorem mm_word {src : _root_.FlockComplete.RepSrc} {lay : _root_.Flock.
   · exact congrArg (fun q : _root_.Flock.F256 × _root_.Flock.F256 => q.2.c0) e
   · exact congrArg (fun q : _root_.Flock.F256 × _root_.Flock.F256 => q.2.c1) e
 
-/-- Word `t` of a masked pair sum. -/
 private theorem e_word {src : _root_.FlockComplete.RepSrc} {lay : _root_.Flock.Zk.PadLayout}
     {h : Array _root_.Flock.F128} {i : ℕ}
     {m : _root_.Flock.F256}
@@ -50,9 +39,6 @@ private theorem e_word {src : _root_.FlockComplete.RepSrc} {lay : _root_.Flock.Z
   · exact congrArg _root_.Flock.F256.c0 e
   · exact congrArg _root_.Flock.F256.c1 e
 
-/-- **`L0Fixed` holds at the honest values**: the deployed source masks `vsWord` under the rep's pads below `h_ab`, and
-from `zp 64` on its masked words are level 0's opening at the coins under the same pads (`ligOodE`, `ligMsgE`,
-`ligSumsE`). -/
 theorem l0Fixed_honestVals (x : Msg) (w : Flock.Wit) (hx : Masked.Live x) (hw : Masked.RZk x w) :
     L0Fixed (CoinLayer.session Loop.loopNr Masked.dataE).honestVals x w := by
   intro ν τ c n hn s spec hs j r extras he k hlo hhi

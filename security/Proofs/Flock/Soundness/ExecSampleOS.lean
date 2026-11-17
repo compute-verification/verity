@@ -4,38 +4,8 @@ public import Proofs.Flock.Soundness.ExecStratified
 public import Proofs.Flock.Soundness.Assumptions
 public import Init.Internal.Order.While
 
-/-!
-# The live sample, extend-and-rerun included, escapes no more often than the model's
-
-The verifier has no randomness of its own. The live sample is `Flock.Draw.drawWith` on the challenger's coins, read in
-order (`Spot.Draw.sampleUnits`, as the one-stage audit runs it): each stratum's `subset` runs on a stream of
-`need` bytes, and `Flock.Draw.onWith` extends the stream by `need` more and reruns it whenever it runs out.
-`Flock.Draw.sampleOS` is the same `drawWith` with every stream's bytes from `IO.getRandomBytes` (`sampleOS_def`, by `rfl`).
-
-To Lean's logic `IO.getRandomBytes` is an opaque constant, so the theorems read `drawWith` on a model byte source,
-`tapeGet`: stream `i` reads a tape in order, and a read past its end fails. `runOS f samplingDesign pop` is the sample on the bytes
-`f i` of each stream `i` (`some d`), or `none` if it would read past them. The bytes come from a source `t` over a finite
-probability space `Ω`, uniform by assumption A3 (`Assumptions.UniformRandomBytes`, `uniform/io-getrandombytes`).
-
-* `subset_append`: a `subset` sample that succeeds is the same on a longer stream, so rerunning on the extended stream
-  never changes a sample once it succeeds.
-* `onWith_tape`: `onWith` in the model, through `Lean.Loop.forIn_eq_of_monadTail`, by an invariant (`loop_inv`): the
-  stream so far is the tape's first bytes, so a sample it returns is the sampler's on the whole tape.
-* `stratifiedWith_tape`: a stratified run on unread streams returns `Flock.Draw.stratified`'s sample on the whole tapes.
-* `sampleOS_subset_escape_le`, `sampleOS_stratified_escape_le`, `sampleOS_work_escape_le`: the live sample misses `B` with
-  probability at most the model's missProb, `SamplingDesign.subset`'s or `SamplingDesign.stratified`'s, for every number of bytes `L` read,
-  through `subset_exec_escape_le` and `stratified_exec_escape_le`.
-* `execOS`: the live sample as a sampling design, a run that would read past the source's bytes sampling every unit.
-  `execOS_escape_le`, `execOS_work_escape_le` and `execOS_subset_escape_le` bound its missProb, and `execOS_miss_le` its
-  count curve.
-
-The live sample reads as many bytes as its reruns need. On a run that reads at most `L i` bytes of each stream it returns
-what `runOS` does on those bytes, and these runs exhaust every run as `L` grows, so its missProb is the limit of the ones
-bounded here, each at most the model's. A3 is what makes those bytes uniform. The limit itself is measure theory the
-theorems don't state.
-
-The Bernoulli sampling design's live sample is `Proofs.Flock.Claims.Sampling.ExecBernoulli`'s `sampleOS_bernoulli_escape_le`.
--/
+/-! The live sample, extend-and-rerun included, escapes no more often than the model's for every number of bytes it
+reads; the limit as that number grows is measure theory the theorems don't state. -/
 
 @[expose] public section
 
@@ -60,7 +30,6 @@ theorem beNat_append (a b : ByteArray) (off len : ℕ) (h : off + len ≤ a.size
   refine List.foldl_ext _ _ _ fun acc i hi => ?_
   rw [get!_append a b (off + i) (by have := List.mem_range.1 hi; omega)]
 
-/-- **A sample of `uniform` that succeeds is the same on a longer stream**, with at least as much fuel. -/
 theorem uniform_append (n : ℕ) (a b : ByteArray) : ∀ fuel pos r p, Flock.Draw.uniform n a fuel pos = some (r, p) →
     ∀ fuel', fuel ≤ fuel' → Flock.Draw.uniform n (a ++ b) fuel' pos = some (r, p) := by
   intro fuel
@@ -97,8 +66,6 @@ theorem loopSw_append (n : ℕ) (a b : ByteArray) : ∀ (l : List ℕ) (sw : Std
       rw [uniform_append (n - i) a b _ pos r p hu _ (by rw [ByteArray.size_append]; omega)]
       exact ih _ _ _ h
 
-/-- **A `subset` sample that succeeds is the same on a longer stream**: extending the stream and rerunning changes nothing
-once the sample has succeeded. -/
 theorem subset_append (k n : ℕ) (a b : ByteArray) (D : Array ℕ) (h : Flock.Draw.subset k n a = some D) :
     Flock.Draw.subset k n (a ++ b) = some D := by
   rw [SampleExec.subset_eq] at h ⊢
@@ -106,8 +73,6 @@ theorem subset_append (k n : ℕ) (a b : ByteArray) (D : Array ℕ) (h : Flock.D
   | none => rw [hl] at h; exact absurd h (by simp)
   | some sw => rw [hl] at h; rw [loopSw_append n a b _ _ _ sw hl]; exact h
 
-/-- A `repeat` loop in `StateT σ Option`, by an invariant `I` and a measure `μ` that each `yield` lowers: when it
-returns, its value and state meet `Q`. -/
 theorem loop_inv {σ β : Type} (f : Unit → β → StateT σ Option (ForInStep β)) (I Q : β → σ → Prop) (μ : β → σ → ℕ)
     (hf : ∀ b s, I b s → ∀ b' s', (f () b).run s = some (.done b', s') → Q b' s')
     (hy : ∀ b s, I b s → ∀ b' s', (f () b).run s = some (.yield b', s') → I b' s' ∧ μ b' s' < μ b s) :
@@ -141,12 +106,9 @@ def tapeGet (T : ℕ → ByteArray) (i need : ℕ) : StateT (ℕ → ℕ) Option
   if pos i + need ≤ (T i).size then some ((T i).extract (pos i) (pos i + need), Function.update pos i (pos i + need))
   else none
 
-/-- A tape splits at any point up to its end. -/
 theorem extract_split (a : ByteArray) (j : ℕ) (hj : j ≤ a.size) : a = a.extract 0 j ++ a.extract j a.size := by
   rw [← ByteArray.extract_eq_extract_append_extract j (Nat.zero_le _) hj, ByteArray.extract_zero_size]
 
-/-- **`onWith` in the model**: a run from a stream not yet read that returns the sampler's `some v` has `v` from the
-sampler on the whole tape (`run` keeping a success on a longer stream, as `subset` does), and moves no other stream. -/
 theorem onWith_tape (T : ℕ → ByteArray) (i need : ℕ) (hneed : 0 < need) (run : ByteArray → Option (Array ℕ))
     (hrun : ∀ a b u, run a = some u → run (a ++ b) = some u) (pos pos' : ℕ → ℕ) (u : Option (Array ℕ))
     (hpos : pos i = 0) (h : (Flock.Draw.onWith (tapeGet T i) need run).run pos = some (u, pos')) :
@@ -246,7 +208,6 @@ theorem onWith_tape (T : ℕ → ByteArray) (i need : ℕ) (hneed : 0 < need) (r
     · exact absurd hg' (by simp)
 
 
-/-- The stratified loop as a list recursion: stratum `i`'s sampler `g i`, its values appended under `u i`. -/
 def catOpt (g : ℕ → Option (Array ℕ)) (u : ℕ → ℕ → ℕ) : List ℕ → Array ℕ → Option (Array ℕ)
   | [], out => some out
   | i :: is, out => (g i).bind fun l => catOpt g u is (out ++ l.map (u i))
@@ -265,7 +226,6 @@ theorem forIn_cat (g : ℕ → Option (Array ℕ)) (u : ℕ → ℕ → ℕ) (F 
     | none => rfl
     | some l => exact ih (out ++ Array.map (u i) l)
 
-/-- `Flock.Draw.stratified` is `catOpt` over the strata, sorted. -/
 theorem stratified_cat (strata : Array Flock.Draw.Stratum) (streams : Array ByteArray) :
     Flock.Draw.stratified strata streams =
       (catOpt (fun i => Flock.Draw.subset strata[i]!.k strata[i]!.size (streams.getD i ByteArray.empty))
@@ -287,8 +247,6 @@ theorem stratified_cat (strata : Array Flock.Draw.Stratum) (streams : Array Byte
 theorem need_pos (s : Flock.Draw.Stratum) : 0 < s.need := by
   unfold Flock.Draw.Stratum.need; omega
 
-/-- **`stratifiedWith` in the model**: a run from unread streams that returns a sample returns `Flock.Draw.stratified`'s on
-the whole tapes. -/
 theorem stratifiedWith_tape (strata : Array Flock.Draw.Stratum) (streams : Array ByteArray) (pos' : ℕ → ℕ)
     (D : Array ℕ) (h : (Flock.Draw.stratifiedWith (tapeGet fun i => streams.getD i ByteArray.empty) strata).run
       (fun _ => 0) = some (some D, pos')) :
@@ -406,8 +364,7 @@ def runOS {m : ℕ} {L : Fin m → ℕ} (f : (i : Fin m) → Fin (L i) → Fin 2
   | some (some d, _) => some d
   | _ => none
 
-/-- **The sample's missProb test at `B`**: on the bytes `f`, the live sample runs and samples no unit of `B`. The soundness
-bounds read the verifier's bytes only through it (`execOS_escape_le_of`), so A3 per test
+/-- The soundness bounds read the verifier's bytes only through it, so A3 per test
 (`Assumptions.UniformRandomBytesTest`) is taken at it, at every `B`. -/
 def missProbTest {L : Fin m → ℕ} (samplingDesign : Flock.Draw.SamplingDesign) (pop : ℕ) (B : Finset (Fin n))
     (f : (i : Fin m) → Fin (L i) → Fin 256) : Prop :=
@@ -435,8 +392,6 @@ theorem runOS_strata {m : ℕ} {L : Fin m → ℕ} (f : (i : Fin m) → Fin (L i
       rw [← hd, hg]
       exact stratifiedWith_tape strata _ pos' D hs
 
-/-- **The live stratified sample escapes no more often than the model's** (`SamplingDesign.stratified`), on a uniform byte source
-(A3). -/
 theorem sampleOS_stratified_escape_le (σ : Fin n → Fin m) (k : Fin m → ℕ) (hk : ∀ s, k s ≤ (stratum σ s).card)
     (S : Fin m → Flock.Draw.Stratum) (hS : ExecStrata σ k S) (K pop : ℕ) {Ω : Type} [Fintype Ω] (L : Fin m → ℕ)
     (t : Ω → (i : Fin m) → Fin (L i) → Fin 256) (ht : Assumptions.UniformRandomBytes L t) (B : Finset (Fin n)) :
@@ -446,7 +401,6 @@ theorem sampleOS_stratified_escape_le (σ : Fin n → Fin m) (k : Fin m → ℕ)
   refine le_trans (prCoin_mono fun f ⟨d, hd, hmiss⟩ => ⟨d.units, ?_, hmiss⟩) (stratified_exec_escape_le σ k hk S hS L B)
   exact runOS_strata f _ _ pop d (fun get s => ⟨_, fun _ => rfl, sampleWith_stratified_run get K pop _ s⟩) hd
 
-/-- **The live work sample escapes no more often than the model's**: the work sampling design's strata, as the stratified sampling design's. -/
 theorem sampleOS_work_escape_le (σ : Fin n → Fin m) (k : Fin m → ℕ) (hk : ∀ s, k s ≤ (stratum σ s).card)
     (S : Fin m → Flock.Draw.Stratum) (hS : ExecStrata σ k S) (K pop : ℕ) (W : Array Flock.Draw.WorkStratum)
     (hW : W.map (·.toStratum) = Array.ofFn S) {Ω : Type} [Fintype Ω] (L : Fin m → ℕ)
@@ -459,7 +413,6 @@ theorem sampleOS_work_escape_le (σ : Fin n → Fin m) (k : Fin m → ℕ) (hk :
     fun _ => rfl, ?_⟩) hd
   rw [sampleWith_work_run, hW]
 
-/-- **The live subset sample escapes no more often than the uniform `k`-subset**, on a uniform byte source (A3). -/
 theorem sampleOS_subset_escape_le (n k : ℕ) (hk : k ≤ n) {Ω : Type} [Fintype Ω] (L : Fin 1 → ℕ)
     (t : Ω → (i : Fin 1) → Fin (L i) → Fin 256) (ht : Assumptions.UniformRandomBytes L t) (B : Finset (Fin n)) :
     prCoin (fun ω => ∃ d, runOS (t ω) (.subset k) n = some d ∧ ∀ u ∈ B, u.val ∉ d.units) ≤ (subset n k hk).missProb B := by
@@ -531,8 +484,6 @@ theorem stratified_escape_empty (σ : Fin n → Fin m) (k : Fin m → ℕ) (hk :
   simp only [Finset.filter_empty, Finset.card_empty, Nat.sub_zero]
   exact ENNReal.div_self (by exact_mod_cast (Nat.choose_pos (hk s)).ne') (ENNReal.natCast_ne_top _)
 
-/-- **The live stratified sample, as a sampling design, escapes no more often than `SamplingDesign.stratified`**, on a uniform byte source (A3),
-for every number of bytes `L` the model reads. -/
 theorem execOS_escape_le (σ : Fin n → Fin m) (k : Fin m → ℕ) (hk : ∀ s, k s ≤ (stratum σ s).card)
     (S : Fin m → Flock.Draw.Stratum) (hS : ExecStrata σ k S) (K pop : ℕ) {Ω : Type} [Fintype Ω] [Nonempty Ω]
     (L : Fin m → ℕ) (t : Ω → (i : Fin m) → Fin (L i) → Fin 256) (ht : Assumptions.UniformRandomBytes L t)
@@ -541,8 +492,6 @@ theorem execOS_escape_le (σ : Fin n → Fin m) (k : Fin m → ℕ) (hk : ∀ s,
   execOS_escape_le_of t _ pop B _ (fun h => by rw [h, stratified_escape_empty])
     (sampleOS_stratified_escape_le σ k hk S hS K pop L t ht B)
 
-/-- **The live work sample, as a sampling design, escapes no more often than `SamplingDesign.stratified`**, on a uniform byte source (A3): the work
-sampling design's strata as the stratified sampling design's. -/
 theorem execOS_work_escape_le (σ : Fin n → Fin m) (k : Fin m → ℕ) (hk : ∀ s, k s ≤ (stratum σ s).card)
     (S : Fin m → Flock.Draw.Stratum) (hS : ExecStrata σ k S) (K pop : ℕ) (W : Array Flock.Draw.WorkStratum)
     (hW : W.map (·.toStratum) = Array.ofFn S) {Ω : Type} [Fintype Ω] [Nonempty Ω] (L : Fin m → ℕ)
@@ -551,7 +500,6 @@ theorem execOS_work_escape_le (σ : Fin n → Fin m) (k : Fin m → ℕ) (hk : �
   execOS_escape_le_of t _ pop B _ (fun h => by rw [h, stratified_escape_empty])
     (sampleOS_work_escape_le σ k hk S hS K pop W hW L t ht B)
 
-/-- **The live subset sample, as a sampling design, escapes no more often than the uniform `k`-subset**, on a uniform byte source (A3). -/
 theorem execOS_subset_escape_le (n k : ℕ) (hk : k ≤ n) {Ω : Type} [Fintype Ω] [Nonempty Ω] (L : Fin 1 → ℕ)
     (t : Ω → (i : Fin 1) → Fin (L i) → Fin 256) (ht : Assumptions.UniformRandomBytes L t) (B : Finset (Fin n)) :
     (execOS (n := n) t (.subset k) n).missProb B ≤ (subset n k hk).missProb B :=
@@ -559,15 +507,12 @@ theorem execOS_subset_escape_le (n k : ℕ) (hk : k ≤ n) {Ω : Type} [Fintype 
     (Nat.choose_pos hk).ne'])
     (sampleOS_subset_escape_le n k hk L t ht B)
 
-/-- The live sample's count curve is at most `SamplingDesign.stratified`'s, which `stratified_miss_eq_greedy` computes. -/
 theorem execOS_miss_le (σ : Fin n → Fin m) (k : Fin m → ℕ) (hk : ∀ s, k s ≤ (stratum σ s).card)
     (S : Fin m → Flock.Draw.Stratum) (hS : ExecStrata σ k S) (K pop : ℕ) {Ω : Type} [Fintype Ω] [Nonempty Ω]
     (L : Fin m → ℕ) (t : Ω → (i : Fin m) → Fin (L i) → Fin 256) (ht : Assumptions.UniformRandomBytes L t) (c : ℕ) :
     (execOS (n := n) t (.stratified K (Array.ofFn S)) pop).miss c ≤ (stratified σ k hk).miss c :=
   iSup₂_mono fun B _ => execOS_escape_le σ k hk S hS K pop L t ht B
 
-/-- **`sampleOS` is `drawWith` on `IO.getRandomBytes`**: the sample the theorems above are about, on the operating system's
-bytes. -/
 theorem sampleOS_def (samplingDesign : Flock.Draw.SamplingDesign) (pop : ℕ) :
     Flock.Draw.sampleOS samplingDesign pop = (do
       let some d ← Flock.Draw.drawWith (fun _ need => IO.getRandomBytes need.toUSize) samplingDesign pop

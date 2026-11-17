@@ -4,19 +4,7 @@ public import Proofs.Flock.SessionLoop.SchedAt
 public import Proofs.Flock.SessionLoop.Tables
 public import Proofs.Flock.Claims.ZK.FrameRankFault
 
-/-!
-# The ring switch's switched vectors at the loop's coins and at the session's
-
-At rep stream `2j + r`'s ring switch the loop's table schedules each claim's switched vector at the points of the
-openings' words, and the switched session sends the switched source's. They agree at every claim the session switches
-before its stop.
-
-* `Loop.linkPoints_slot`: the link points at the first opening's words are the session's (`Masked.ptsE`).
-* `Loop.rsBody_congr`: the switch's body `k` reads its switched vector `k` alone.
-* **`Loop.switch_sv`**: on the loop's table (`Level0Src.realOf`), the switched vector of the loop's claim `k`, at the
-  points of the openings' words, is the switched source's (`Masked.swSrc_sv`): the loop's claims are at the session's
-  points (`ptsAt_claims_x`), its extra claims at the session's link points (`extraClaims_xs`).
--/
+/-! The ring switch's switched vectors at the loop's coins are the switched source's (`Loop.switch_sv`). -/
 
 @[expose] public section
 
@@ -30,8 +18,6 @@ open _root_.Flock (V F128 SessionSpec)
 
 namespace Loop
 
-/-- **The link points at the first opening's words are the session's**: after openings `ops`, at most `refK x`, rep
-stream `k`'s link points off opening `0`'s words are `Masked.ptsE` at the opened coins. -/
 theorem linkPoints_slot {x : Msg} (hx : Masked.Live x) {s0 : FlockDeploy.Ins} {spec : SessionSpec}
     (hsx : FlockDeploy.setupOf true x = some (s0, spec, Masked.stsOf x)) {ops : List (Msg × Msg)}
     (hpos : 0 < ops.length) (hl : ops.length ≤ refK x) {k : ℕ} (hk : k < spec.repStreams.size) :
@@ -68,7 +54,6 @@ theorem linkPoints_slot {x : Msg} (hx : Masked.Live x) {s0 : FlockDeploy.Ins} {s
     simp only [Array.getElem_extract, Array.getElem_map, Array.getElem_range]
     exact (getElem!_pos (wordsAt x (ops.map fun e => CoinLayer.rd e.2) 0) (p * spec.mPts + i) hlt).symm.trans hw
 
-/-- **The switch's body `k` reads its switched vector `k` alone.** -/
 theorem rsBody_congr {sv sv' : ℕ → Array F128} {N : ℕ} (P : List UInt8) {k : ℕ} (h : k < N → sv k = sv' k) :
     Switch.rsBody sv N P k = Switch.rsBody sv' N P k := by
   unfold Switch.rsBody
@@ -77,11 +62,7 @@ theorem rsBody_congr {sv sv' : ℕ → Array F128} {N : ℕ} (P : List UInt8) {k
   · rw [if_neg hk, if_neg hk]
 
 set_option maxHeartbeats 1000000 in
-/-- **The loop's switched vectors are the switched source's**: on the loop's table `tr` at rep stream `2j + r`, where
-`src` samples the tape's level 0, with the zerocheck's and lincheck's claims at the points of the openings' words from
-the rep's start, after openings `ops` that show no refusal by round `rankSlot + k`, the loop's extra claims (at the
-link points off the first opening's words) are as many as the session's, and the loop's claim `k`'s switched vector,
-`k` at most the claims' count, is the switched source's. -/
+/-- Holds after openings that show no refusal by round `rankSlot + k`. -/
 theorem switch_sv (vs : finS.SwVals) {x : Msg} {w : Flock.Wit}
     (hR : Claims.Flock.R (FlockDeploy.deployZk _root_.Flock.Readable.relation).parse x w) (hx : Masked.Live x)
     {s0 : FlockDeploy.Ins} {spec : SessionSpec} (hsx : FlockDeploy.setupOf true x = some (s0, spec, Masked.stsOf x))
@@ -125,7 +106,6 @@ theorem switch_sv (vs : finS.SwVals) {x : Msg} {w : Flock.Wit}
       Masked.repBase x (2 * j.val + r.val) + ((Masked.stAt x j).m + (Masked.stAt x j).c.kLog - 6) := by
     show Masked.repBase x (2 * j.val + r.val) + ((Masked.stsOf x)[j.val]!.m + (Masked.stsOf x)[j.val]!.c.kLog - 6) = _
     rw [hstj]
-  -- the opened coins' words at the algebraic phase's rounds
   obtain ⟨h1, h3, h5, -, -⟩ := loopNr_piop hsx hq2 hzq (by rw [Masked.stsOf_half]; omega)
     (by rw [Masked.stsOf_half]; exact hk6)
   rw [Masked.stsOf_half, ← Masked.repBase_eq hsx (2 * j.val + r.val)] at h1 h3 h5
@@ -147,7 +127,6 @@ theorem switch_sv (vs : finS.SwVals) {x : Msg} {w : Flock.Wit}
       (fun i hi => hW _ _ (by omega) (by rw [h1, hCM, Nat.min_eq_left (by omega)]; exact hi))
       (fun i hi => hW _ _ (by omega) (by rw [h3 i hi, hCM]; decide))
       (fun i hi => hW _ _ (by omega) (by rw [h5 i hi, hCM]; decide)) hpts
-  -- the session's claims at the same points
   have hpS : FlockComplete.LigLock.Fed.PtsAt (Masked.stAt x j).m (Masked.stAt x j).c.kLog
       (fun p e => Masked.slotAt (finS.pad (K := refK x) cs) p e) (Masked.repBase x (2 * j.val + r.val))
       (FlockComplete.Replay.Zc.out (Masked.stAt x j).m (Masked.zcE (finS.pad (K := refK x) cs) j r)
@@ -160,7 +139,6 @@ theorem switch_sv (vs : finS.SwVals) {x : Msg} {w : Flock.Wit}
     FlockComplete.LigLock.Fed.ptsAt_out (Masked.stAt x j).m (Masked.stAt x j).circuitFold
       (fun p e => Masked.slotAt (finS.pad (K := refK x) cs) p e) (Masked.repBase x (2 * j.val + r.val))
       (Masked.trsE x w (Masked.UE.tapeZk t))[j.val]!
-  -- the loop's extra claims are at the session's link points
   have heS : (Masked.stAt x j).extraClaims (Masked.ptsE (finS.pad (K := refK x) cs) spec) = .ok extras := by
     rw [Masked.tabsOf_stAt] at hext
     exact hext

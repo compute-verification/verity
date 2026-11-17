@@ -11,15 +11,8 @@ import Mathlib.Tactic.NormNum.DivMod
 import Mathlib.Tactic.NormNum.OfScientific
 import Mathlib.Tactic.NormNum.Pow
 
-/-!
-# The rows the verifier parses, as the audit's `Rows`
-
-The executable's parser (`Flock.Net.parse`) holds every expanded circuit's rows to an order
-(`Net.checkOrder`): a computed row, `inCols ≤ r < constPos`, reads in `A` and in `B` only
-the constant or an earlier column that is not input padding (`RowOrder`). `checkOrder_ok` turns an
-accepted check into that property, and `Rows.ofOrdered` builds the audit's `Rows` from rows that
-have it, with `topo` proved: the parser checks it.
--/
+/-! The rows the verifier parses, as the audit's `Rows`: `Rows.topo` of a parsed net is the parser's check
+(`parse_rowOrder`), not a hypothesis. -/
 
 @[expose] public section
 
@@ -55,8 +48,6 @@ theorem Rows.ofOrdered_one : (Rows.ofOrdered inCols constPos ra rb h).one.val = 
 
 end ofOrdered
 
-/-! ## What `Net.parse` accepted -/
-
 theorem except_bind_ok {α β ε : Type} {x : Except ε α} {f : α → Except ε β} {v : β}
     (h : (x >>= f) = .ok v) : ∃ a, x = .ok a ∧ f a = .ok v := by
   cases x with
@@ -81,7 +72,6 @@ theorem parse_tail {α : Type} {x y : Except String Sparse} {mk : Sparse → Spa
   exact ⟨a, b, ha, hb, rfl⟩
 
 set_option maxHeartbeats 1000000 in
-/-- **`Net.parse` builds its net with `Net.ofRows`**, after reading its rows and trailing lines. -/
 theorem parse_built {lines : Array String} {net : Net} (h : Net.parse lines = .ok net) : Built net := by
   unfold Net.parse at h
   simp only at h
@@ -102,20 +92,14 @@ theorem parse_built {lines : Array String} {net : Net} (h : Net.parse lines = .o
   · rw [ite_eq_right_of_eq_false _ _ (eq_false hL)] at h
     exact ite_throw_ok (ite_throw_ok h)
 
-/-- **The parser orders every net it accepts**: the rows it stored as `A` and `B` have `RowOrder`,
-so `Rows.topo` for a parsed net is an executable check, not a hypothesis. -/
 theorem parse_rowOrder {lines : Array String} {net : Net} (h : Net.parse lines = .ok net) :
     ∃ ra rb, RowOrder (net.inWords * WORD) net.constPos ra rb ∧
       Sparse.ofRows ra (2 ^ net.unitLog) = .ok net.a ∧ Sparse.ofRows rb (2 ^ net.unitLog) = .ok net.b :=
   built_rowOrder (parse_built h)
 
-/-! ## `Sparse`: the bytes `ofRows` writes, and `row` reads them back (`SparseRows`) -/
-
 export SparseRows (le32 pushLe32_data getElem!_of_some testBit_mod256 le32_or rd32_le32 encRow le32_length
   encRow_length rowStarts forIn_cols_ok forIn_rows_ok ofRows_spec rowStarts_getElem? rowStarts_length
   flatMap_le32_getElem? flatMap_encRow_length ofRows_row)
-
-/-! ## The audit's `Rows` for a built net -/
 
 section ofNet
 
@@ -128,7 +112,6 @@ theorem Rows.ofNet_one : (Rows.ofNet h).one.val = net.constPos := Rows.ofOrdered
 theorem Rows.ofNet_comp (i : Fin (Rows.ofNet h).nComp) :
     ((Rows.ofNet h).comp i).val = (Rows.ofNet h).nIn + i.val := rfl
 
-/-- Computed row `i` reads, in `A`, exactly the columns of the net's row `nIn + i`. -/
 theorem Rows.ofNet_a (hu : net.unitLog ≤ 32) (i : Fin (Rows.ofNet h).nComp) :
     ((Rows.ofNet h).a i).map Fin.val = (net.a.row ((Rows.ofNet h).nIn + i.val)).toList := by
   have hs := Classical.choose_spec (Classical.choose_spec (built_rowOrder h))
@@ -136,7 +119,6 @@ theorem Rows.ofNet_a (hu : net.unitLog ≤ 32) (i : Fin (Rows.ofNet h).nComp) :
   rw [ofRows_row hs.2.1 (Nat.pow_le_pow_right (by norm_num) hu)]
   rfl
 
-/-- Computed row `i` reads, in `B`, exactly the columns of the net's row `nIn + i`. -/
 theorem Rows.ofNet_b (hu : net.unitLog ≤ 32) (i : Fin (Rows.ofNet h).nComp) :
     ((Rows.ofNet h).b i).map Fin.val = (net.b.row ((Rows.ofNet h).nIn + i.val)).toList := by
   have hs := Classical.choose_spec (Classical.choose_spec (built_rowOrder h))
@@ -146,20 +128,14 @@ theorem Rows.ofNet_b (hu : net.unitLog ≤ 32) (i : Fin (Rows.ofNet h).nComp) :
 
 end ofNet
 
-/-! ## An instance placed in a statement -/
-
 section Place
 
 variable (S : Model.Statement) (R : Rows) (k : ℕ) (base : ℕ → ℕ)
   (hb : ∀ u < k, base u + (R.nIn + R.nComp) < 2 ^ S.kLog)
 
-/-- Copy `u`'s column `c` in the block: `base u + c`. -/
 def posIn {u : ℕ} (hu : u < k) (c : Fin R.w) : Fin (2 ^ S.kLog) :=
   ⟨base u + c.val, by have := hb u hu; have := c.isLt; simp only [Rows.w] at this; omega⟩
 
-/-- **Where the stacked columns sit in the block**: copy `u`'s inputs and computed rows at
-`base u + c`, its constant row at its slot's constant `base u + (nIn + nComp)`, and the shared
-constant at the pin. -/
 def stackPlace (x : Fin (R.stackW k)) : Fin (2 ^ S.kLog) :=
   if h1 : x.val < k * R.nIn then
     ⟨base (x.val / R.nIn) + x.val % R.nIn, by
@@ -182,7 +158,6 @@ theorem div_mod_copy {u n c : ℕ} (hc : c < n) : (u * n + c) / n = u ∧ (u * n
   · rw [Nat.add_comm, Nat.add_mul_div_right _ _ hn, Nat.div_eq_of_lt hc, Nat.zero_add]
   · rw [Nat.add_comm, Nat.add_mul_mod_self_right, Nat.mod_eq_of_lt hc]
 
-/-- A copy's column, stacked and then placed, is `base u + c`. -/
 theorem stackPlace_stackCol {u : ℕ} (hu : u < k) (c : Fin R.w) :
     stackPlace S R k base hb (R.stackCol k hu c) = posIn S R k base hb hu c := by
   have hc := c.isLt
@@ -223,8 +198,6 @@ theorem stackPlace_last (h : k * R.nIn + k * (R.nComp + 1) < R.stackW k) :
 theorem stackPlace_one : stackPlace S R k base hb (R.stack k).one = S.pin :=
   stackPlace_last S R k base hb _
 
-/-- Stacked computed row `i` of copy `u = i / (nComp + 1)` sits at the copy's constant when it is the
-copy's constant row, and at the copy's computed row otherwise. -/
 theorem stackPlace_comp (i : Fin (R.stack k).nComp) :
     stackPlace S R k base hb ((R.stack k).comp i) =
       if hj : i.val % (R.nComp + 1) = 0 then posIn S R k base hb (R.stack_copy_lt k i.isLt) R.one
@@ -243,10 +216,6 @@ theorem stackPlace_comp (i : Fin (R.stack k).nComp) :
   · rw [dite_eq_right hj]
     simp only [Rows.comp, hn, Nat.add_sub_cancel_left, hj, ite_false, posIn]
 
-/-- **An instance's rows placed in a statement.** If, at every copy `u`'s computed rows, the level-0
-matrices read the template's rows shifted to the copy's slot (`hrowA`, `hrowB`), and every copy's
-constant row and the pin's own row read the pin (`hconstA`, …), then the stacked rows are placed at
-`stackPlace`. -/
 theorem placement_stack
     (hrowA : ∀ u (hu : u < k) (i : Fin R.nComp) (j : Fin (2 ^ S.kLog)),
       S.A₀ (posIn S R k base hb hu (R.comp i)) j = (((R.a i).map (posIn S R k base hb hu)).count j : ZMod 2))
@@ -289,11 +258,6 @@ theorem placement_stack
     hB₁ := fun j => by rw [stackPlace_one]; exact hpinB j }
 
 end Place
-
-/-! ## An instance placed through a column map
-
-A templated unit's committed net is its logical net with every column moved (`Net.ofRowsAt`): copy `u`'s logical column
-`c` sits at `base u + pos c`. -/
 
 section PlaceAt
 
@@ -342,7 +306,6 @@ def stackPlaceAt (x : Fin (R.stackW k)) : Fin (2 ^ S.kLog) :=
     posInAt S R k base pos hb (stackCopy_lt R k h) ⟨stackLocal R k x.val, stackLocal_lt R k x.val⟩
   else S.pin
 
-/-- A stacked copy column decodes to its copy and its column. -/
 theorem stackCol_copy_local {u : ℕ} (hu : u < k) (c : Fin R.w) :
     (R.stackCol k hu c).val < R.stackW k - 1 ∧ stackCopy R k (R.stackCol k hu c).val = u ∧
       stackLocal R k (R.stackCol k hu c).val = c.val := by
@@ -381,7 +344,6 @@ theorem stackCol_copy_local {u : ℕ} (hu : u < k) (c : Fin R.w) :
         rw [stackLocal, if_neg h1, Nat.add_sub_cancel_left, hm, if_pos (rfl : (0 : ℕ) = 0)]
         omega
 
-/-- A copy's column, stacked and then placed, is `base u + pos c`. -/
 theorem stackPlaceAt_stackCol {u : ℕ} (hu : u < k) (c : Fin R.w) :
     stackPlaceAt S R k base pos hb (R.stackCol k hu c) = posInAt S R k base pos hb hu c := by
   obtain ⟨hlt, hcp, hl⟩ := stackCol_copy_local R k hu c
@@ -391,7 +353,6 @@ theorem stackPlaceAt_stackCol {u : ℕ} (hu : u < k) (c : Fin R.w) :
   apply Fin.ext
   simp only [posInAt, hcp, hpc]
 
-/-- **A stacked input, placed**: input `x` of the stack is copy `x / nIn`'s input `x % nIn`. -/
 theorem stackPlaceAt_val_in (x : Fin (R.stackW k)) (hx : x.val < k * R.nIn) :
     ∃ hu : x.val / R.nIn < k, ∃ hc : x.val % R.nIn < R.w,
       (stackPlaceAt S R k base pos hb x).val = base (x.val / R.nIn) + pos ⟨x.val % R.nIn, hc⟩ := by
@@ -408,7 +369,6 @@ theorem stackPlaceAt_val_in (x : Fin (R.stackW k)) (hx : x.val < k * R.nIn) :
       = (stackPlaceAt S R k base pos hb (R.stackCol k hu ⟨x.val % R.nIn, hcw⟩)).val := by rw [← e]
     _ = _ := by rw [stackPlaceAt_stackCol]; rfl
 
-/-- **Copy `u'`'s computed column `c0`, stacked and placed**, is `base u' + pos c0`. -/
 theorem stackPlaceAt_val_comp {u' c0 : ℕ} (hu' : u' < k) (h1 : R.nIn ≤ c0) (h2 : c0 < R.nIn + R.nComp)
     (x : Fin (R.stackW k)) (hx : x.val = k * R.nIn + (u' * (R.nComp + 1) + (1 + (c0 - R.nIn)))) :
     ∃ hc : c0 < R.w, (stackPlaceAt S R k base pos hb x).val = base u' + pos ⟨c0, hc⟩ := by
@@ -429,8 +389,6 @@ theorem stackPlaceAt_last (h : k * R.nIn + k * (R.nComp + 1) < R.stackW k) :
 theorem stackPlaceAt_one : stackPlaceAt S R k base pos hb (R.stack k).one = S.pin :=
   stackPlaceAt_last S R k base pos hb _
 
-/-- Stacked computed row `i` of copy `u = i / (nComp + 1)` sits at the copy's constant when it is the copy's constant
-row, and at the copy's computed row otherwise, each through `pos`. -/
 theorem stackPlaceAt_comp (i : Fin (R.stack k).nComp) :
     stackPlaceAt S R k base pos hb ((R.stack k).comp i) =
       if hj : i.val % (R.nComp + 1) = 0 then posInAt S R k base pos hb (R.stack_copy_lt k i.isLt) R.one
@@ -460,8 +418,6 @@ theorem stackPlaceAt_comp (i : Fin (R.stack k).nComp) :
     simp only [posInAt, hcp, hl]
     rfl
 
-/-- **An instance's rows placed in a statement through `pos`**: `placement_stack` with copy `u`'s column `c` at
-`base u + pos c`. -/
 theorem placement_stackAt
     (hrowA : ∀ u (hu : u < k) (i : Fin R.nComp) (j : Fin (2 ^ S.kLog)),
       S.A₀ (posInAt S R k base pos hb hu (R.comp i)) j =

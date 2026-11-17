@@ -7,27 +7,7 @@ import Mathlib.Tactic.NormNum.Inv
 import Mathlib.Tactic.NormNum.Pow
 import Proofs.Flock.Soundness.Audit.Circuit
 
-/-!
-# A unit's rows in logical order (verified-lowering phase 1, 1d step 1)
-
-The verifier folds a unit's rows at physical columns; the audit reads them as `Rows`, whose columns are in logical order:
-the unit's input bits, then its computed rows, each reading only earlier columns or `one`. `Rows.compose` builds the
-audit's `Rows` from a `Logical`: the columns in logical order (`order`), and each column's row as the block holds it
-(`row`), or `none` for a row that copies the block's `one`. So the audit's rows are the verifier's, read in another order:
-- logical column `ℓ < |order|` is physical column `order[ℓ]`, and the last logical column is the block's `one`;
-- computed row `k` is the row at `order[nIn + k]`, each column it reads mapped to its place in `order`.
-
-Placement (for every `Logical` whose rows are `Ordered`):
-- `placement_of_realizes`: `Placement` for `Rows.compose` at `composePlace` (each logical column at its physical
-  column's block position, `one` at the pin), when the block's matrices at those positions read the rows' columns'
-  positions, a row that copies `one` and the pin's row read the pin.
-
-For every flat type `derive` accepts, whose `Logical` is `ofDerived` (`order`, the rows, the constant copying `one` as Δ
-binds it):
-- `compose_ordered`: the rows are `Ordered`;
-- `Rows.compose_eval`: satisfied composed rows, with `one` at 1, carry the type's outputs (`Types.eval`) on the output
-  columns. This is `Types.compose_sound` read through the logical order.
--/
+/-! A flat type's unit rows in logical order (`Rows.compose`) compute the type (`Rows.compose_eval`). -/
 
 @[expose] public section
 
@@ -86,8 +66,6 @@ theorem lidx_lt_of_mem_take {c ℓ : ℕ} (hc : c ∈ L.order.take ℓ) : lidx L
   rw [← List.take_append_drop ℓ L.order, List.idxOf_append_of_mem hc]
   exact lt_of_lt_of_le (List.idxOf_lt_length_iff.2 hc) (List.length_take_le _ _)
 
-/-- **`Ordered` from reads earlier in `order`**: each computed row, at `order[ℓ]` for `ℓ ≥ nIn`, reads only columns that
-come before it in `order`. -/
 theorem ordered_of_take (hle : L.nIn ≤ L.order.length)
     (hread : ∀ ℓ < L.order.length, L.nIn ≤ ℓ → ∀ p, L.row (L.order.getD ℓ 0) = some p →
       ∀ c ∈ p.1 ++ p.2, c ∈ L.order.take ℓ) : Ordered L := by
@@ -153,8 +131,6 @@ theorem compose_b (k : Fin (Rows.compose L h).nComp) : ((Rows.compose L h).b k).
 
 end Rows
 
-/-! ## Placing the composed rows -/
-
 section Place
 
 variable (S : Model.Statement) (L : Logical) (h : Ordered L) (pos : ℕ → ℕ)
@@ -171,7 +147,6 @@ theorem composePlace_val (ℓ : Fin (Rows.compose L h).w) :
   unfold composePlace
   split <;> simp_all
 
-/-- A row's logical reads, placed, are its physical reads' positions. -/
 theorem map_composePlace (M : List (Fin (Rows.compose L h).w)) (cs : List ℕ) (hcs : ∀ c ∈ cs, c ∈ L.order)
     (hM : M.map Fin.val = cs.map (lidx L)) : (M.map (composePlace S L h pos hb)).map Fin.val = cs.map pos := by
   have : (Fin.val ∘ composePlace S L h pos hb) =
@@ -190,9 +165,6 @@ theorem count_composePlace (M : List (Fin (Rows.compose L h).w)) (cs : List ℕ)
     (((M.map (composePlace S L h pos hb)).count j : ℕ) : ZMod 2) = (((cs.map pos).count j.val : ℕ) : ZMod 2) := by
   rw [← List.count_map_of_injective _ Fin.val Fin.val_injective, map_composePlace M cs hcs hM]
 
-/-- **The composed rows, placed.** Suppose the block's matrices, at each computed row's position, read exactly the
-positions of the row's columns, or the pin for a row that copies `one`, and the pin's row reads the pin. Then
-`Rows.compose` is placed at `composePlace`. -/
 theorem placement_of_realizes
     (hrowA : ∀ k < L.order.length - L.nIn, ∀ p, L.row (L.order.getD (L.nIn + k) 0) = some p →
       ∀ r j : Fin (2 ^ S.kLog), r.val = pos (L.order.getD (L.nIn + k) 0) →
@@ -216,7 +188,6 @@ theorem placement_of_realizes
     have := k.isLt
     rw [composePlace_val, Rows.compose_comp,
       ite_eq_left (by show L.nIn + k.val < _; simp only [Rows.compose] at this; omega)]
-  -- a row that copies `one` reads the pin
   have hcopy : ∀ M : List (Fin (Rows.compose L h).w), M.map Fin.val = [L.order.length] →
       M.map (composePlace S L h pos hb) = [S.pin] := by
     intro M hM
@@ -270,14 +241,10 @@ theorem placement_of_realizes
 
 end Place
 
-/-! ## Values on the physical columns -/
-
 namespace Compose
 
 variable {L : Logical} {h : Ordered L}
 
-/-- **The composed rows' values on the physical columns**: a column in `order` carries its logical column's value, and
-every other column 0. -/
 def physical (z : Fin (Rows.compose L h).w → Bool) (c : ℕ) : Bool :=
   if hc : lidx L c < L.order.length then z ⟨lidx L c, by rw [Rows.compose_w]; omega⟩ else false
 
@@ -292,7 +259,6 @@ theorem physical_not_mem (z : Fin (Rows.compose L h).w → Bool) {c : ℕ} (hc :
   unfold physical
   rw [dite_eq_right (by unfold lidx; rw [List.idxOf_eq_length hc]; omega)]
 
-/-- A row's logical reads, on the composed values, are its physical reads on the physical values. -/
 theorem xorSum_physical (z : Fin (Rows.compose L h).w → Bool) (M : List (Fin (Rows.compose L h).w)) (cs : List ℕ)
     (hM : M.map Fin.val = cs.map (lidx L)) (hcs : ∀ c ∈ cs, c ∈ L.order) : Verity.Boolean.xorSum M z = Verity.Boolean.xorSum cs (physical z) := by
   let zN : ℕ → Bool := fun ℓ => if hℓ : ℓ < (Rows.compose L h).w then z ⟨ℓ, hℓ⟩ else false
@@ -306,14 +272,10 @@ theorem xorSum_physical (z : Fin (Rows.compose L h).w → Bool) (M : List (Fin (
 
 end Compose
 
-/-! ## Flat types: the rows `derive` lays out -/
-
 namespace Compose
 
 variable (d : Derived)
 
-/-- **A flat type's rows in logical order**: `derive`'s `order` and rows, the constant copying `one` (Δ binds the unit's
-constant to the pin). -/
 abbrev ofDerived : Logical :=
   ⟨d.nIn, d.order, fun c => if c = d.geo.const then none else some (d.rows.getD c ([], []))⟩
 
@@ -359,8 +321,6 @@ section flat
 
 variable {t : CircuitType} {inSplit outSplit : List ℕ} {d : Derived}
 
-/-- The logical columns a flat type's rows read: an input wire's is its bit, an AND wire's its row after the constant,
-and the constant's is its place after the inputs. -/
 theorem lidx_reads (hd : derive t inSplit outSplit = .ok d) :
     (∀ w < t.inBits + d.geo.nAnd, lidx (ofDerived d) (d.geo.col t.inBits w) =
       if w < t.inBits then w else d.nIn + 1 + (w - t.inBits)) ∧ lidx (ofDerived d) d.geo.const = d.nIn := by
@@ -395,8 +355,6 @@ theorem lidx_form (hd : derive t inSplit outSplit = .ok d) {f : Form} {m : ℕ} 
     · rw [List.mem_singleton] at hx; rw [hx, hconst]; omega
     · cases hx
 
-/-- **A flat type's composed rows read only earlier columns**, or `one`: its constant copies `one`; an AND row reads the
-inputs, the constant and the ANDs before it; an output copy reads any wire and the constant. -/
 theorem compose_ordered (hd : derive t inSplit outSplit = .ok d) : Ordered (ofDerived d) := by
   have hlen := order_length d
   have hconst := (lidx_reads hd).2
@@ -413,7 +371,6 @@ theorem compose_ordered (hd : derive t inSplit outSplit = .ok d) : Ordered (ofDe
     rw [Types.rows_get hr]
     rfl
   have hnAnd : d.geo.nAnd = t.items.size := by rw [hG]; rfl
-  -- row `k`'s physical columns, other than the constant's: each maps to a logical column below `nIn + k`
   have hreads : ∀ k < d.order.length - d.nIn, d.order.getD (d.nIn + k) 0 ≠ d.geo.const →
       ∀ x ∈ (d.rows.getD (d.order.getD (d.nIn + k) 0) ([], [])).1 ++
         (d.rows.getD (d.order.getD (d.nIn + k) 0) ([], [])).2, lidx (ofDerived d) x < d.nIn + k := by
@@ -462,11 +419,8 @@ theorem compose_ordered (hd : derive t inSplit outSplit = .ok d) : Ordered (ofDe
     have : d.order.idxOf x < d.nIn + k := hreads k hk' hck x hx
     exact List.idxOf_lt_length_iff.1 (show d.order.idxOf x < d.order.length by omega)
 
-/-! ## What a flat type's composed rows compute -/
-
 namespace Compose
 
-/-- The wire values below `w + |items|` depend only on the values below `w`. -/
 theorem run_congr : ∀ (items : List Item) (v v' : ℕ → Bool) (w : ℕ), Types.ReadsEarlier w items →
     (∀ j < w, v j = v' j) → ∀ j < w + items.length, Types.run v w items j = Types.run v' w items j
   | [], _, _, _, _, hv, j, hj => hv j (by simpa using hj)
@@ -479,7 +433,6 @@ theorem run_congr : ∀ (items : List Item) (v v' : ℕ → Bool) (w : ℕ), Typ
         exact Types.itemVal_congr fun f hf x hx => hv x (by have := hr 0 (by simp) f (by simpa using hf) x hx; omega)
       · rw [ite_eq_right hjw, ite_eq_right hjw]; exact hv j' (by omega)
 
-/-- A flat type's outputs depend only on its input bits. -/
 theorem eval_congr {t : CircuitType} (hflat : flatOk t = true) {x x' : ℕ → Bool} (hx : ∀ i < t.inBits, x i = x' i) :
     Types.eval t x = Types.eval t x' := by
   obtain ⟨-, hof⟩ := Types.flatOk_outputs hflat
@@ -491,8 +444,6 @@ theorem eval_congr {t : CircuitType} (hflat : flatOk t = true) {x x' : ℕ → B
   rw [Array.getElem_toList] at hy
   exact run_congr _ _ _ _ (Types.flatOk_reads hflat) hx y (by have := hof o ho' y hy; simpa using this)
 
-/-- **The composed rows' values, on the physical columns, satisfy `derive`'s rows**: an input bit's row and the constant's
-read only their own column, a column outside `order` is a zero row carrying 0, and every other row is a composed row. -/
 theorem sat_physical (hd : derive t inSplit outSplit = .ok d) {h : Ordered (ofDerived d)}
     {z : Fin (Rows.compose (ofDerived d) h).w → Bool} (hz : (Rows.compose (ofDerived d) h).Sat z) :
     Types.Sat d.rows (physical z) := by
@@ -544,9 +495,6 @@ theorem sat_physical (hd : derive t inSplit outSplit = .ok d) {h : Ordered (ofDe
 
 end Compose
 
-/-- **The composed rows compute the type.** Column values that satisfy `Rows.compose` of a flat type's `derive`, with
-`one` at 1, carry on output `o`'s logical column (after the inputs, the constant and the ANDs) the type's output `o` on
-the input columns' values. -/
 theorem Rows.compose_eval (hd : derive t inSplit outSplit = .ok d) {h : Ordered (ofDerived d)}
     {z : Fin (Rows.compose (ofDerived d) h).w → Bool} (hz : (Rows.compose (ofDerived d) h).Sat z)
     (h1 : z (Rows.compose (ofDerived d) h).one = true) {x : ℕ → Bool}
@@ -560,7 +508,6 @@ theorem Rows.compose_eval (hd : derive t inSplit outSplit = .ok d) {h : Ordered 
   have hnIn : d.nIn = t.inBits := by rw [hdd]
   have hnOut : d.nOut = t.outBits := by rw [hdd]
   obtain ⟨hosz, -⟩ := Types.flatOk_outputs hflat
-  -- the constant carries 1: its row copies `one`
   have hconst : physical z d.geo.const = true := by
     have h0 : 0 < (Rows.compose (ofDerived d) h).nComp := by show 0 < d.order.length - d.nIn; omega
     have hz0 := hz ⟨0, h0⟩

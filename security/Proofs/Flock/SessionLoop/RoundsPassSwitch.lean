@@ -5,21 +5,7 @@ public import Proofs.Flock.SessionLoop.RoundSwitchRel
 import all Init.Data.String.Defs
 import all Init.Data.Array.Basic
 
-/-!
-# The ring switch's rounds, taken without liveness
-
-`LeanRelease.SchedTaken` at rep stream `2j + r`'s ring-switch round `k` (`Masked.rankSlot + k`, before the opening's
-binding), wherever the frame takes its coins (**`LeanRelease.schedTaken_switch`**): the scheduled round on the rep's own
-table is the switch's body `k` (`ofLoop_sched_unrefused`, `Bind.sched_switch_sv`), and the frame takes it. Round `0`
-opens with the opening's label, which the frame takes where its rank stop passed (`Ranked.label_pcs_of_rank`); past it
-the frame is outside every masked phase. This is `switch_frame`'s argument with the frame's answer from `refusesCoins`
-in liveness's place.
-
-* `Loop.roundFree_pcs_ok`: the frame takes a round of the opening's label and plain frames wherever it takes the label.
-* `Ranked.repState_switched_in`: `repState_switched`, the frame outside the inner proof as well.
-* `LeanRelease.rs_taken`: the frame takes the switch's body `k` from a state outside the inner proof, past the masked
-  phase from round `1` on and taking the opening's label at round `0`.
--/
+/-! The frame takes a rep's ring-switch rounds without liveness (`LeanRelease.schedTaken_switch`). -/
 
 @[expose] public section
 
@@ -37,8 +23,6 @@ open FlockSoundness.Refine (Frame encs)
 
 namespace Loop
 
-/-- **The frame takes a round of the opening's label and plain frames** from a state outside the inner proof, wherever
-it takes the label. -/
 theorem roundFree_pcs_ok (c : Cfg) (s : Masker) (fs : List Frame) (k : UInt8) (n : ℕ) {q : Masker × ByteArray}
     (hi : s.inner = none) (hl : s.label c LABEL_PCS.toUTF8 = .ok q)
     (hm : ∀ f ∈ fs, midFrame f) (hp : ∀ f ∈ fs, plainFrame f) (hk : k = 2 ∨ (k = 1 ∧ n = 1))
@@ -83,8 +67,6 @@ namespace Ranked
 
 open Loop
 
-/-- **Past the ring switch's first round the frame is outside every masked phase and the inner proof**:
-`repState_switched`, with the flags `Flags.sched_flags` carries. -/
 theorem repState_switched_in {c c'' : Cfg} (hc : ∀ p, p < c.order.size → c.order[p]! < c.h.size)
     {t : _root_.Flock.ZkServer.Finish.Tab} {rep : ℕ} {dom : ByteArray} {xs : Array (Array F128)}
     {hi : Array ByteArray} {cr0 cr : Array (Array F128)} {ns : ℕ → ℕ} {alg : Array (ByteArray × ℕ)}
@@ -150,9 +132,6 @@ end Ranked
 namespace LeanRelease
 
 open Loop in
-/-- **The frame takes the ring switch's body `k`** from state `m` after a history, of `7` coins below `N` and `N` at
-`N`: from a state outside the inner proof, past the masked phase from round `1` on and taking the opening's label at
-round `0`. -/
 theorem rs_taken {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ : R) (g : List (Msg × Msg)) {m : Masker}
     {sv : ℕ → Array F128} {N k : ℕ} (hin : m.inner = none) (hon : k ≠ 0 → m.on = false)
     (hlab : k = 0 → ∃ q, ({ m with stopped := false } : Masker).label (L.cfg x ρ g) LABEL_PCS.toUTF8 = .ok q)
@@ -189,13 +168,6 @@ theorem rs_taken {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ : R) (g : List
 
 open Loop Ranked in
 set_option maxHeartbeats 4000000 in
-/-- **The frame takes a rep's ring-switch round where it takes its coins**: at a history whose next round is rep stream
-`2j + r`'s ring-switch round `k` (`Masked.rankSlot + k`, before the opening's binding), whose coins the loop's frame
-takes, on the loop's own tables where `src` samples the tape's level 0. The scheduled round is the switch's body `k` on
-the rep's own table (`ofLoop_sched_unrefused`, `Bind.sched_switch_sv`, `Loop.loopNr_piop`). At `k = 0` the frame is in
-the algebraic phase at its last position (`repState_piop`, `repState_pre_pcs`) and its rank stop passed, so it takes the
-opening's label (`label_pcs_of_rank`); past it the frame is outside every masked phase (`repState_switched_in`), and the
-frame takes the round (`rs_taken`). -/
 theorem schedTaken_switch (L₁ : LeanRelease Flock.Wit Loop.Tp)
     (src : Msg → Flock.Wit → Loop.Tp → ℕ → V (Array F128 × ByteArray × Array ByteArray))
     {x : Msg} {w : Flock.Wit} (hx : Masked.Live x) (hSv : Loop.Serves x) (hS0 : Loop.Level0Src src x w)
@@ -226,7 +198,6 @@ theorem schedTaken_switch (L₁ : LeanRelease Flock.Wit Loop.Tp)
     unfold roundsOf
     rw [List.getD_eq_getElem _ _ (by simp only [List.length_map, List.length_range]; omega)]
     simp
-  -- the round's place: `A + k` into the rep's rounds, `A` the algebraic phase's
   obtain ⟨A, hAd⟩ : ∃ A, A = (Masked.stAt x j).m + (Masked.stAt x j).c.kLog - 6 := ⟨_, rfl⟩
   have hRk : Masked.rankSlot x j.val r.val = Masked.repBase x (2 * j.val + r.val) + A := by
     rw [hAd]
@@ -244,7 +215,6 @@ theorem schedTaken_switch (L₁ : LeanRelease Flock.Wit Loop.Tp)
     unfold FlockComplete.repStartZk
     omega
   have hpos : 0 < ops.length := by omega
-  -- the extra claims: the table's regions at each link point
   obtain ⟨hmp, hmp0, hpc⟩ := Masked.live_links hx hsx hq2
   have hmp' : (Masked.stAt x j).mPts = spec.mPts := by rw [← hst]; exact hmp
   have hl0 : loopNr x 0 = spec.points * spec.mPts := by
@@ -269,7 +239,6 @@ theorem schedTaken_switch (L₁ : LeanRelease Flock.Wit Loop.Tp)
       ((Loop.linkPoints_size_le (Masked.stAt x j) (wordsAt x (ops.map fun p => ZKMal.CoinLayer.rd p.2) 0)).trans
         (show _ ≤ _root_.Flock.ZkServer.Frames.COIN_MAX by rw [hW0]; exact hpc))
     omega
-  -- the located round
   have hbase : Masked.repBase x (2 * j.val + r.val) =
       1 + ((roundsOf spec (Masked.stsOf x)).take (2 * j.val + r.val)).sum := by
     rw [Masked.repBase_eq hsx, repStartZk_eq spec _ hq2.le]
@@ -298,7 +267,6 @@ theorem schedTaken_switch (L₁ : LeanRelease Flock.Wit Loop.Tp)
     congr 1
     omega
   have hj1 : (ZKMal.CoinLayer.locate (roundsOf spec (Masked.stsOf x)) 0 (i + 1)).2 = a + 1 := by rw [hloc]
-  -- the frame's answer, past the rank stop
   have hlast : (ofLoop Masked.dataE L₁ (Loop.realOf src)).last x = refK x + 1 :=
     loop_last loopNr Masked.dataE (withFrames Masked.dataE L₁ (Loop.realOf src)) x
   have hkd : (ofLoop Masked.dataE L₁ (Loop.realOf src)).kindAt x ((m₀, ρ₀) :: ops).length = .masked :=
@@ -309,7 +277,6 @@ theorem schedTaken_switch (L₁ : LeanRelease Flock.Wit Loop.Tp)
   rw [ofLoop_answered_same Masked.dataE L₁ (Loop.realOf src) x (ν, t) (m₀, ρ₀) ops hsx (q := i + 1) (by omega) hj1
     ho ht] at hA'
   obtain ⟨hA', hrf⟩ := bind_rankStop_ok hA'
-  -- the loop's placeholder table and its state there
   have hcs : (ops.map fun p => ZKMal.CoinLayer.rd p.2).length = i + 2 := by rw [List.length_map]; omega
   have ho' : (progOf x (ops.map fun p => ZKMal.CoinLayer.rd p.2)).owed ≠ none := fun h => answer_owed_none _ h hA'
   obtain ⟨c', tb, dom, xs, his, hph0⟩ := progOf_placeholder x _ hsx hcs ho'
@@ -354,7 +321,6 @@ theorem schedTaken_switch (L₁ : LeanRelease Flock.Wit Loop.Tp)
       c'.order.size := by
     rw [hc', Loop.ofSamples_order, absorbed_size]
     exact le_trans (piopV_length_le lay hm14t hk6t hnM hnL hsz.le) (by omega)
-  -- past the ring switch's first round the frame is outside every masked phase
   have hsw : k ≠ 0 → m.on = false ∧ m.inner = none := by
     intro hk0'
     have hA'' := hA'
@@ -368,7 +334,6 @@ theorem schedTaken_switch (L₁ : LeanRelease Flock.Wit Loop.Tp)
       exact (repState_piop hcc hal hs0 hm14t hmb hdg (placeholder_cap hph0) (hdm ▸ hdom') (a := a) (by omega)
         (by rw [show a + 1 = alg.size by omega]; exact hbA) hA').2.1
     · exact (hsw (by omega)).2
-  -- at the ring switch's first round the frame takes the opening's label: its rank stop passed
   have hlab : k = 0 → ∃ q, ({ m with stopped := false } : Masker).label
       ((ofLoop Masked.dataE L₁ (Loop.realOf src)).cfg x (ν, t) ((m₀, ρ₀) :: ops)) LABEL_PCS.toUTF8 = .ok q := by
     intro hkz
@@ -397,7 +362,6 @@ theorem schedTaken_switch (L₁ : LeanRelease Flock.Wit Loop.Tp)
       (hA'' ▸ hcnt) (fun i e => (CR.getD i #[])[e]!) (fun _ _ _ _ => rfl)
     exact Ranked.label_pcs_of_rank (s := { m with stopped := false }) hon0 hd hl0' (hpN.trans hCA.nPiop.symm)
       (fun _ _ => ⟨P, by rw [hlayC]; exact hP⟩) hrf
-  -- the loop's own round there
   obtain ⟨tr, hir, sched', hre, hs'⟩ := ofLoop_sched_unrefused L₁ src x w hx hSv hS0 hST ν t m₀ ρ₀ ops href hkd
     hsx (q := i + 1) (by omega)
   have hre' : Loop.realOf src x w (ν, t) (2 * j.val + r.val) = .ok (tr, hir) := by
@@ -451,7 +415,6 @@ theorem schedTaken_switch (L₁ : LeanRelease Flock.Wit Loop.Tp)
     · exact h7 k (by omega)
     · rw [show k = 2 + spec.points * (Masked.stAt x j).regions.size by omega, h8]
       omega
-  -- the frame takes it
   refine schedTaken_of hA hin ?_
   rw [ofLoop_scheduled Masked.dataE L₁ (Loop.realOf src) x w (ν, t) (m₀, ρ₀) ops _ hsx (q := i + 1) (by omega) hre hs'
     hlt', hj1, show a + 1 = alg'.size + k by omega, (hbody k le_rfl).1]

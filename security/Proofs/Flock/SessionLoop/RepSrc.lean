@@ -35,21 +35,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Complete.Zk.PadAlgebra
 
-/-!
-# The rep samples as the finish reads them
-
-`Loop.RepSrc` (`Loop.Src`'s rep-draws half) gives, at a release whose samples are `L₀`'s and whose layout at rep stream
-`2j + r` is the tape's (`Masked.layE`), the premises `Masked.swSrcE_repCut` takes of the frame's samples and the tape, at
-the frame reps `Loop.frepOf`:
-
-* `Loop.RepSrc.size`: the samples are `sampleBytes` long (`hz`).
-* `Loop.RepSrc.pads`: the tape's pads are those of the tape of the frames' samples (`hpads`).
-* `Loop.RepSrc.h`: below `h_ab`, the tape's `h` is the tape of the frames' samples' (`htape`).
-* `Loop.RepSrc.innerSalt`: at each leaf of the pads tree, the masked prover's fitted leaf salts agree.
-
-At the loop's own release (`ofLoopLink`) the samples are `L₀`'s (`LeanRelease.samples_ofLoopLink`), and where the rep's frame
-starts, its layout is the tape's (`LeanRelease.lay_ofLoopLink`, `swSrcE_repCut`'s `hlayR`).
--/
+/-! `Loop.RepSrc` gives the premises `Masked.swSrcE_repCut` takes of the frame's samples and the tape. -/
 
 @[expose] public section
 
@@ -61,7 +47,6 @@ open _root_.Flock (V F128)
 set_option synthInstance.maxSize 100000
 set_option synthInstance.maxHeartbeats 1000000 -- `ofLoop`'s session types, as in `FrameZK`
 
-/-- The frame rep of table `i`'s rep `r`: rep stream `2i + r`. -/
 def Loop.frepOf (i r : ℕ) : ℕ := 2 * i + r
 
 variable {L₀ : LeanRelease Flock.Wit
@@ -70,8 +55,6 @@ variable {L₀ : LeanRelease Flock.Wit
       (CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand →
       ℕ → V (Array F128 × ByteArray × Array ByteArray)} {x : Msg} {w : Flock.Wit}
 
-/-- **The frame's samples are `sampleBytes` long** at the release `Lr`, whose samples are `L₀`'s and whose layout at the rep is
-the tape's. -/
 theorem Loop.RepSrc.size (hS : Loop.RepSrc L₀ src x w)
     (Lr : LeanRelease Flock.Wit
       ((CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand))
@@ -83,8 +66,6 @@ theorem Loop.RepSrc.size (hS : Loop.RepSrc L₀ src x w)
   rw [hd, hlay]
   exact (hS ν t j r).1
 
-/-- **The tape's pads are the frame's**: table `j`'s rep `r`'s pads on the tape are those on the tape of the frames'
-samples (`tapeOfSamples`, at any other entries `tz`). -/
 theorem Loop.RepSrc.pads (hS : Loop.RepSrc L₀ src x w)
     (Lr : LeanRelease Flock.Wit
       ((CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand))
@@ -100,8 +81,6 @@ theorem Loop.RepSrc.pads (hS : Loop.RepSrc L₀ src x w)
   rw [hlay, hd]
   exact (hS ν t j r).2.1
 
-/-- **Below `h_ab`, the tape's `h` is the frame's**: table `j`'s rep `r`'s `h` on the tape is that on the tape of the
-frames' samples, where `padsOf` reads it as it stands (`padsOf_get`). -/
 theorem Loop.RepSrc.h (hS : Loop.RepSrc L₀ src x w)
     (Lr : LeanRelease Flock.Wit
       ((CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand))
@@ -117,8 +96,6 @@ theorem Loop.RepSrc.h (hS : Loop.RepSrc L₀ src x w)
     hS.pads Lr hd ν t j r hlay tz,
     FlockComplete.padsOf_get _ j.val r.val (Masked.layE x j) k (by omega) (by omega) (by omega)]
 
-/-- **The pads tree's leaf salts are the frame's**: at each leaf, the masked prover's `fitBytes 192` of the tape's leaf
-salt is that of the tape of the frames' samples. -/
 theorem Loop.RepSrc.innerSalt (hS : Loop.RepSrc L₀ src x w)
     (Lr : LeanRelease Flock.Wit
       ((CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand))
@@ -133,7 +110,6 @@ theorem Loop.RepSrc.innerSalt (hS : Loop.RepSrc L₀ src x w)
     (by rw [hlay]; exact hq), hlay, hd]
   exact (hS ν t j r).2.2.1 q hq
 
-/-- The release at the loop's own frames and link samples `L₀`'s bytes. -/
 theorem LeanRelease.samples_ofLoopLink (src : Msg → Flock.Wit →
       (CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand →
       ℕ → V (Array F128 × ByteArray × Array ByteArray))
@@ -142,8 +118,6 @@ theorem LeanRelease.samples_ofLoopLink (src : Msg → Flock.Wit →
       ℕ → V (_root_.Flock.ZkServer.Finish.Tab × Array ByteArray)) :
     (LeanRelease.ofLoopLink L₀ src real).draws = L₀.draws := rfl
 
-/-- **The loop lays table `j`'s rep `r` out at the tape's layout** (`Masked.layE`), where its frame starts
-(`Drive.start`, the loop's `Frames.startRep`). -/
 theorem LeanRelease.lay_ofLoopLink (src : Msg → Flock.Wit →
       (CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand →
       ℕ → V (Array F128 × ByteArray × Array ByteArray))

@@ -6,19 +6,7 @@ public import Proofs.Flock.SessionLoop.RoundSwitchCut
 public import Proofs.Flock.SessionLoop.RoundSwitchSv
 public import Proofs.Flock.SessionLoop.RoundSwitchRel
 
-/-!
-# A rep's ring-switch rounds
-
-`LiveSched`'s equation at rep stream `2j + r`'s rounds from its rank check's round (`Masked.rankSlot`) to the round
-before the opening's binding (`Masked.repSlot` `0`): the opening's first round (the PCS label, where the frame runs the
-rank check, and ring-switch claim `0`), claims `1` to `N − 1`, and `γ`'s squeeze, `N = 2 + points · regions` the rep's
-claims. Past the algebraic phase passing is byte equality, so the release is the frame's scheduled round, the ring
-switch's body at the switch vectors of the frame's table over the claims' points; the switched session sends the same
-body at its table's vectors (`Masked.swSrcE_sv`).
-
-* **`LeanRelease.release_sched_switch`**: the release of the worker's round there is the switched session's message
-  without its leading domain frame.
--/
+/-! `LiveSched`'s equation at a rep's ring-switch rounds (`LeanRelease.release_sched_switch`). -/
 
 @[expose] public section
 
@@ -33,13 +21,6 @@ open _root_.Flock.ZkServer.Finish (Tab)
 
 namespace LeanRelease
 
-/-- **The ring switch's rounds**: at rep stream `2j + r`'s round `k` from its rank check's round, before the opening's
-binding (`Masked.repSlot` `0`), the release of the worker's round is the switched session's message without its leading
-domain frame. The frame releases the switch's body `k` at the loop's table's switched vectors (`switch_frame`); no
-refusal shows by the round (`unrefused_of_rank`, the rep's rank check holding at the round itself by
-`rank_unrefused_pcs` and past it by `rank_unrefused_sched`), so the session sends the body at the switched source's
-vectors (`Loop.swMsgAt_switch`), which are the loop's (`Loop.switch_sv`), and the body has no domain frame
-(`Loop.dropDom_rs`). -/
 theorem release_sched_switch (vs : Loop.finS.SwVals) (L₀ : LeanRelease Flock.Wit Loop.Tp)
     (src : Msg → Flock.Wit → Loop.Tp → ℕ → V (Array F128 × ByteArray × Array ByteArray))
     (real : Msg → Flock.Wit → Loop.Tp → ℕ → V (Tab × Array ByteArray)) (hreal : real = Loop.realOf src)
@@ -88,7 +69,6 @@ theorem release_sched_switch (vs : Loop.finS.SwVals) (L₀ : LeanRelease Flock.W
           href hj hr2 h0
       · exact rank_unrefused_sched Masked.dataE (withFiles (withLink L₀ src) src) real wk x w hx hSv (ν, t) κ m₀ ρ₀
           ops hlt.le hl href hj hr2 (by omega)
-  -- the session's round: the switch's body at the switched source's vectors, which are the loop's
   generalize hcs : (ops.map fun p => Loop.finS.decOf p.2) = cs
   rw [hcs] at hN
   obtain ⟨extras, hext⟩ := Masked.extra_ok hx hsx (Loop.finS.pad (K := refK x) cs) hj

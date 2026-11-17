@@ -37,16 +37,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# `FinishIs` at `SessionLoopZKDeployed`'s premises
-
-`finishIs_of_ret` takes three facts beyond `SessionLoopZKDeployed`'s premises: the ring switch's target
-(`Loop.finRepTarget`), the restart (`Loop.finRepRestart`) and level 0's openings (`Loop.finRepL0`). Each holds in the
-masked scope with a witness where the loop samples level 0 from the tape (`Loop.Src`'s level-0 half).
-
-**`Loop.finishIsOn`**: `FinishIs` at `SessionLoopZKDeployed`'s premises, with no other hypothesis; `Loop.finishIs` is
-it at causal switched values.
--/
+/-! `FinishIs` at `SessionLoopZKDeployed`'s premises, with no other hypothesis (`Loop.finishIsOn`). -/
 
 @[expose] public section
 
@@ -64,10 +55,6 @@ variable (vs : finS.SwVals) (L₀ : LeanRelease Flock.Wit Tp)
   (src : Msg → Flock.Wit → Tp → ℕ → V (Array F128 × ByteArray × Array ByteArray))
   (wk : (LeanRelease.ofLoopLink L₀ src (realOf src)).toSrv.Worker) (x : Msg) (w : Flock.Wit)
 
-/-- **`FinishIs` at `SessionLoopZKDeployed`'s premises**: in the masked scope, with a witness, at a statement the loop
-serves whose inner round 0 is the loop's and whose inputs from its host are the tape's, at live rounds the loop's and
-switched values causal at `Loop.SwOk`'s coins, the `Finish` the loop runs is the session's (`finishIs_of_ret`, at
-`finRepTarget`, `finRepRestart` and `finRepL0`). -/
 theorem finishIsOn (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Readable.relation) x)
     (hR : Claims.Flock.R (FlockDeploy.deployZk _root_.Flock.Readable.relation).parse x w) (hServe : Serves x)
     (hL0 : _root_.Flock.Guarantees.LoopInnerRound0 Masked.dataE L₀ (realOf src) x w) (hSrc : Loop.Src L₀ src x w)
@@ -79,7 +66,6 @@ theorem finishIsOn (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.
     (finRepRestart vs L₀ src (realOf src) wk x w hsc hR hSrc.1)
     (finRepL0 vs L₀ src (realOf src) wk x w hsc hR hSrc.1)
 
-/-- **`finishIsOn` at causal switched values** (`swCausalOn_of_swCausal`). -/
 theorem finishIs (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Readable.relation) x)
     (hR : Claims.Flock.R (FlockDeploy.deployZk _root_.Flock.Readable.relation).parse x w) (hServe : Serves x)
     (hL0 : _root_.Flock.Guarantees.LoopInnerRound0 Masked.dataE L₀ (realOf src) x w) (hSrc : Loop.Src L₀ src x w)

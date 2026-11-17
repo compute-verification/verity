@@ -36,30 +36,8 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.DeployK
 import Proofs.Flock.Claims.ZK.FinExe
 
-/-!
-# `FinishIs` at the loop's own `Finish`, in parts
-
-At the deployed tables the session's last message is `finExe`, `finMsg` of `sessionCut` read from the tables' switched
-views (`Masked.finExe_eq`). So `FinishIs` at the loop's release (`LeanRelease.ofLoopLink`, whose files are `Loop.filesE`)
-asks that `sessionCut` on the views' source (`Loop.finSrc`), answered by the opened coins, return the loop's record and
-proof files. `sessionCut` runs the schedules, level 0's commitments, the link, then each rep stream, then the record
-(`FlockComplete.finSessionCut_eq`, `afterLinkCut`). Each of its parts is a named statement here, none a premise of a
-guarantee, each at a `Finish` `FinishIs` reads (`Loop.FinCtx`):
-
-* **(a) `Loop.FinCommits`**: the schedules return, level 0's commitments from the views' leaves send nothing and carry the
-  roots the loop drew (`Loop.rootsOf`), and each rep's pads commitment sends nothing.
-* **(b) `Loop.FinPoints`**: the link points at the opened coins are the ones the auditor saw (`Loop.pointsOf`), and each
-  table's extra claims at them return.
-* **(c) `Loop.FinRepProofs`**: rep stream `k`'s run from the views (`Loop.viewRep`) returns a proof whose file
-  (`encZk` at `shapeZk`) is the loop's (`Loop.proofsOf`'s `k`-th, `Finish.proofFile`'s). The proof file's bytes are
-  part of this statement: `proofFile` is `encZk` of its rep's proof at the same shape, so they follow from the two proofs
-  being one.
-* **(d) `Loop.FinRepRounds`**: where rep stream `k`'s run returns, its rounds are the ones the auditor saw
-  (`Loop.streamOf`) and the history is at rep `k + 1`'s first round (`Masked.repBase`).
-
-Each rep's run reads the streams before it as the auditor saw them (`FlockComplete.priorOf` of `Loop.streamOf`), which
-(d) makes the session's. **`Loop.finishIs_of_parts`**: (a) to (d) give `FinishIs` at `ofLoopLink`.
--/
+/-! `FinishIs` at the loop's own `Finish` from its parts (a) to (d), none a premise of a guarantee
+(`Loop.finishIs_of_parts`). -/
 
 @[expose] public section
 
@@ -79,9 +57,6 @@ noncomputable abbrev finS : RefSession := CoinLayer.session Loop.loopNr Masked.d
 /-- The release's tape: the session's nonce and tape. -/
 abbrev Tp : Type := finS.refP.Nonce × finS.refP.Rand
 
-/-- **A `Finish` `FinishIs` reads** at the release `L`: after `Hello` `(m₀, ρ₀)` and `refK x` openings `ops`, the run is
-live, the openings pass, no coin is refused, the loop's `Finish` does not stop, and the history's messages are the
-release's own (`ZkServer.OwnHist`). -/
 def FinCtx (L : LeanRelease Flock.Wit Tp) (wk : L.toSrv.Worker) (x : Msg) (w : Flock.Wit) (ν : finS.Nonce)
     (t : finS.Tape) (κ : L.toSrv.Chk) (m₀ ρ₀ : Msg) (ops : List (Msg × Msg)) : Prop :=
   ops.length = refK x ∧ L.toSrv.live wk x w (ν, t) κ ((m₀, ρ₀) :: ops) = true ∧
@@ -89,25 +64,20 @@ def FinCtx (L : LeanRelease Flock.Wit Tp) (wk : L.toSrv.Worker) (x : Msg) (w : F
     L.refusesCoins x (ν, t) ((m₀, ρ₀) :: ops) = false ∧ L.finStops x w (ν, t) ((m₀, ρ₀) :: ops) = false ∧
     L.toSrv.OwnHist L.fillOf wk x w (ν, t) κ ((m₀, ρ₀) :: ops)
 
-/-- The coins the openings `ops` open. -/
 noncomputable def finCoins (x : Msg) (ops : List (Msg × Msg)) : Fin (refK x) → finS.Coin :=
   finS.pad (ops.map fun p => finS.decOf p.2)
 
-/-- **The views' source**: what `sessionCut` reads from the tables' switched views at the opened coins, the workers'
-values `vs` and the tape `t` (`Masked.tabSrcView`, as `finExe` reads them). -/
 noncomputable def finSrc (vs : finS.SwVals) (x : Msg) (w : Flock.Wit) (ν : finS.Nonce) (t : finS.Tape)
     (ops : List (Msg × Msg)) : ℕ → FlockComplete.TabSrc :=
   Masked.tabSrcView Masked.PE x (Masked.czExe Masked.PE x (finCoins x ops))
     (finS.swViewsAt x (finCoins x ops) (finS.wt x w) (vs x w ν (finCoins x ops)) t)
 
-/-- **Level 0's commitments from the views' leaves**, at the schedules `schs` (`sessionCut`'s). -/
 noncomputable def commitsView (vs : finS.SwVals) (x : Msg) (w : Flock.Wit) (ν : finS.Nonce) (t : finS.Tape)
     (ops : List (Msg × Msg)) (schs : Array (_root_.Flock.Schedule × ℕ)) : FlockComplete.PS (Array FlockComplete.Commit) :=
   (Array.range (FlockDeploy.tabsOf (Masked.stsOf x)).size).mapM fun i =>
     FlockComplete.commit0Cut (_root_.Flock.Hashes.ofSha512 _root_.Flock.Sha512.hash)
       (FlockDeploy.tabsOf (Masked.stsOf x))[i]!.merkle (schs[i]!.1.levels.getD 0 default) (finSrc vs x w ν t ops i)
 
-/-- **Rep stream `k`'s pads commitment from the views' leaves** (table `k / 2`'s rep `k % 2`), at the schedules `schs`. -/
 noncomputable def padsView (vs : finS.SwVals) (x : Msg) (w : Flock.Wit) (ν : finS.Nonce) (t : finS.Tape)
     (ops : List (Msg × Msg)) (schs : Array (_root_.Flock.Schedule × ℕ)) (k : ℕ) :
     FlockComplete.PS FlockComplete.InnerCommit :=
@@ -116,14 +86,10 @@ noncomputable def padsView (vs : finS.SwVals) (x : Msg) (w : Flock.Wit) (ν : fi
       (FlockDeploy.tabsOf (Masked.stsOf x))[k / 2]!.kLog schs[k / 2]!.1.k0).len + _root_.Flock.Zk.K_PAD).nextPowerOfTwo *
       2 ^ _root_.Flock.Zk.INNER_LOG_INV_RATE) ((finSrc vs x w ν t ops (k / 2)).rep (k % 2))
 
-/-- **The link points at the opened coins**: `sessionCut`'s, from the link's coin (round `0`'s). -/
 noncomputable def viewPoints (x : Msg) (ops : List (Msg × Msg)) (spec : SessionSpec) : Array (Array F128) :=
   (Array.range spec.points).map fun p => (Array.range spec.mPts).map fun j =>
     Masked.slotAt (finCoins x ops) 0 (p * spec.mPts + j)
 
-/-- **Rep stream `k`'s run from the views** (`afterLinkCut`'s `repCut`): table `k / 2`'s rep `k % 2`, answered by the
-opened coins, at the schedules `schs`, level 0's commitments `cms`, the extra claims `extras` and the pads commitment
-`ic`, from the streams before it as the auditor saw them (`streamOf`). -/
 noncomputable def viewRep (vs : finS.SwVals) (x : Msg) (w : Flock.Wit) (ν : finS.Nonce) (t : finS.Tape) (m₀ ρ₀ : Msg)
     (ops : List (Msg × Msg)) (spec : SessionSpec) (schs : Array (_root_.Flock.Schedule × ℕ))
     (cms : Array FlockComplete.Commit) (k : ℕ) (extras : Array _root_.Flock.Claim) (ic : FlockComplete.InnerCommit) :
@@ -142,9 +108,6 @@ variable (vs : finS.SwVals) (L₀ : LeanRelease Flock.Wit Tp)
   (real : Msg → Flock.Wit → Tp → ℕ → V (_root_.Flock.ZkServer.Finish.Tab × Array ByteArray))
   (wk : (LeanRelease.ofLoopLink L₀ src real).toSrv.Worker) (x : Msg) (w : Flock.Wit)
 
-/-- **(a) The commitments**: at a `Finish` `FinishIs` reads, the schedules return; level 0's commitments from the views'
-leaves send nothing, and their roots are the ones the loop drew (`rootsOf`, as its `Commit` carries them); and each rep
-stream's pads commitment from the views' leaves sends nothing. -/
 def FinCommits : Prop :=
   ∀ ν t κ m₀ ρ₀ ops, FinCtx (LeanRelease.ofLoopLink L₀ src real) wk x w ν t κ m₀ ρ₀ ops →
     ∀ s0 spec, FlockDeploy.setupOf true x = some (s0, spec, Masked.stsOf x) →
@@ -153,8 +116,6 @@ def FinCommits : Prop :=
           cms.map (fun c => FlockComplete.flat c.cap) = rootsOf src x w (ν, t) (Masked.stsOf x) ∧
           ∀ k < 2 * spec.tables.size, ∀ l, ∃ ic, (padsView vs x w ν t ops schs k).go l = (.ok ic, l)
 
-/-- **(b) The link points**: at a `Finish` `FinishIs` reads, the link points at the opened coins are the ones the auditor
-saw (`pointsOf`, the `Commit`'s coins), and each table's extra claims at them return. -/
 def FinPoints : Prop :=
   ∀ ν t κ m₀ ρ₀ ops, FinCtx (LeanRelease.ofLoopLink L₀ src real) wk x w ν t κ m₀ ρ₀ ops →
     ∀ s0 spec, FlockDeploy.setupOf true x = some (s0, spec, Masked.stsOf x) →
@@ -162,9 +123,6 @@ def FinPoints : Prop :=
         ∀ k < 2 * spec.tables.size, ∃ extras,
           (FlockDeploy.tabsOf (Masked.stsOf x))[k / 2]!.extra (viewPoints x ops spec) = .ok extras
 
-/-- **(c) The reps' proof files**: at a `Finish` `FinishIs` reads, at the schedules and level 0's commitments (a) gives,
-where the loop's proof files are `files`, rep stream `k`'s run from the views, at extra claims and a pads commitment the
-session computes and from the history at its first round, returns a proof whose file is the loop's `k`-th. -/
 def FinRepProofs : Prop :=
   ∀ ν t κ m₀ ρ₀ ops, FinCtx (LeanRelease.ofLoopLink L₀ src real) wk x w ν t κ m₀ ρ₀ ops →
     ∀ s0 spec, FlockDeploy.setupOf true x = some (s0, spec, Masked.stsOf x) →
@@ -178,9 +136,6 @@ def FinRepProofs : Prop :=
         FlockSoundness.Discharge.ZkView.encZk
           (FlockComplete.shapeZk (FlockDeploy.tabsOf (Masked.stsOf x))[k / 2]! schs[k / 2]!.1 extras.size) p = files[k]!
 
-/-- **(d) The reps' rounds**: at a `Finish` `FinishIs` reads, at the schedules and level 0's commitments (a) gives, where
-rep stream `k`'s run from the views returns from the history at its first round, its rounds are the ones the auditor saw
-(`streamOf`) and the history is at rep `k + 1`'s first round. -/
 def FinRepRounds : Prop :=
   ∀ ν t κ m₀ ρ₀ ops, FinCtx (LeanRelease.ofLoopLink L₀ src real) wk x w ν t κ m₀ ρ₀ ops →
     ∀ s0 spec, FlockDeploy.setupOf true x = some (s0, spec, Masked.stsOf x) →
@@ -192,8 +147,6 @@ def FinRepRounds : Prop :=
     ∀ p tr l', (viewRep vs x w ν t m₀ ρ₀ ops spec schs cms k extras ic).go l = (.ok (p, tr), l') →
       tr.rounds = streamOf x ((m₀, ρ₀) :: ops) spec (Masked.stsOf x) k ∧ l'.size = Masked.repBase x (k + 1)
 
-/-- **A loop that accumulates**: where each body, from the state `B k` and a history the invariant `I k` holds at,
-yields `B (k + 1)` at a history `I (k + 1)` holds at, the loop from `B 0` returns `B xs.length`. -/
 theorem forIn_go_acc {α β : Type} (xs : List α) (f : α → β → FlockComplete.PS (ForInStep β)) (B : ℕ → β)
     (I : ℕ → Array Msg → Prop)
     (h : ∀ k (hk : k < xs.length) l, I k l →
@@ -208,8 +161,6 @@ theorem forIn_go_acc {α β : Type} (xs : List α) (f : α → β → FlockCompl
     rw [List.forIn_cons, FlockComplete.go_bind, e₁']
     exact ih (fun k => B (k + 1)) (fun k => I (k + 1)) (fun k hk l hI => h (k + 1) (by simpa using hk) l hI) l₁ h₁
 
-/-- **A loop that accumulates, then the rest**: `forIn_go_acc`, and the rest from `B xs.length` at every history
-`I xs.length` holds at. -/
 theorem forIn_bind_acc {α β γ : Type} {xs : List α} {b : β} {f : α → β → FlockComplete.PS (ForInStep β)}
     {g : β → FlockComplete.PS γ} {l : Array Msg} {R : Except String γ} (B : ℕ → β) (I : ℕ → Array Msg → Prop)
     (h : ∀ k (hk : k < xs.length) l, I k l →
@@ -225,10 +176,6 @@ theorem map_range_succ {β : Type} (f : ℕ → β) (k : ℕ) :
     (Array.range (k + 1)).map f = ((Array.range k).map f).push (f k) := by
   simp [Array.range_succ]
 
-/-- **(a) to (d) give `FinishIs` at the loop's own `Finish`.** Where the loop's `Finish` does not stop, `x` sets up and
-the loop's files are `(rec, files)`; the session read from the views runs part by part (`finSessionCut_eq`): the
-schedules and level 0's commitments (a), the link and its points (b), each rep stream (c, d), accumulating the streams
-the auditor saw and the loop's proof files (`forIn_bind_acc`), then the same record (`recordJson_quietZ`). -/
 theorem finishIs_of_parts
     (h : FinCommits vs L₀ src real wk x w ∧ FinPoints L₀ src real wk x w ∧ FinRepProofs vs L₀ src real wk x w ∧
       FinRepRounds vs L₀ src real wk x w) :

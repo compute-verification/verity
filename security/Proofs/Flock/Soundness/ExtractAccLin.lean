@@ -2,27 +2,8 @@ module
 
 public import Proofs.Flock.Soundness.LinkFinder
 
-/-!
-# Extraction from accepted reruns, linearly: a conflict finder at level 0
-
-`joint_acc_le` bounds `ε · Pr[the extractor's table fails]` by `ε_c + N·ε/(ek) + √(k·Pr₂[conflict])`: an accepted fresh
-run off the table conflicts with the rerun that supplied the row, at `(k/ε)·Pr₂`, and the product with `ε` turns that
-into a root. Here the fresh run's acceptance stays with the conflict, so the conflict is one among `k + 1` accepted runs,
-and the bound is linear:
-
-* `expectAcc_off_le_lin`: against `k` accepted reruns, an accepted fresh run's off-table mass is at most
-  `ε · expectAcc_{k+1}[two of the runs conflict] + N·ε/(ek)` (`PairConflict`; the missing positions as in
-  `expectAcc_off_le`, `expectAcc_missing_le`);
-* `joint_acc_le_lin`: so `ε · Pr[fails] ≤ ε_c + N·ε/(ek) + ε · expectAcc_{k+1}[PairConflict]`;
-* `conflictG`: the extractor's own runs as a finder: a run, then `k` waits of at most `R` runs. It succeeds
-  (`ConflictSucc`) when the run accepts, every wait finds an accepted run (`firsts`), and two of those `k + 1` accepted
-  runs conflict. Its runs are independent runs of one game, so nothing is rewound;
-* `conflict_succ_ge`: `ε · expectAcc_{k+1}[PairConflict] ≤ Pr[ConflictSucc] + (k + 1)/(eR)`;
-* `expect_conflictCost_le`: the finder plays at most `k + 1` runs in expectation, whatever `ε` (the waits are played
-  only after an accepted run, and `ε · geom ε R ≤ 1`);
-* `joint_acc_le_ecr`: under expected-time collision resistance at the finder, `ε · Pr[fails]` is at most
-  `ε_c + N·ε/(ek) + (k + 1)·E[c]/2^256 + (k + 1)/(eR)`: weight 1, `k + 1` runs.
--/
+/-! Extraction from accepted reruns with a bound linear in the conflict, the extractor's own runs a level-0 conflict
+finder whose runs are independent runs of one game, so nothing is rewound (`joint_acc_le_ecr`). -/
 
 @[expose] public section
 
@@ -34,11 +15,9 @@ open Game Rewinding
 
 variable {β P V : Type}
 
-/-- **Two runs of the list conflict** at some position. -/
 def PairConflict (op : β → P → Option V) (bs : List β) : Prop :=
   ∃ a ∈ bs, ∃ b ∈ bs, ∃ p, ConflictAt op (a, b) p
 
-/-- **`k + 1` runs, the last split off.** -/
 theorem expectN_snoc (g : Game β) (s : Strategy g) : ∀ (k : ℕ) (F : List β → ℝ),
     expectN g s (k + 1) F = expectN g s k (fun bs => expect (fun ω => F (bs ++ [ω])) g s)
   | 0, _ => rfl
@@ -47,8 +26,6 @@ theorem expectN_snoc (g : Game β) (s : Strategy g) : ∀ (k : ℕ) (F : List β
         expect (fun a => expectN g s k fun bs => expect (fun ω => F ((a :: bs) ++ [ω])) g s) g s
       exact congrArg (fun f => expect f g s) (funext fun a => expectN_snoc g s k (fun as => F (a :: as)))
 
-/-- **The last of `k + 1` accepted runs, split off**: `ε · expectAcc_{k+1} F` is `expectAcc_k` of the last run's
-accepted expectation. -/
 theorem mul_expectAcc_succ (g : Game β) (s : Strategy g) (acc : β → Prop) (k : ℕ) (F : List β → ℝ)
     (hε : 0 < expect (ind acc) g s) :
     expect (ind acc) g s * expectAcc g s acc (k + 1) F =
@@ -67,8 +44,6 @@ theorem mul_expectAcc_succ (g : Game β) (s : Strategy g) (acc : β → Prop) (k
   field_simp
 
 open Classical in
-/-- Pointwise: an accepted run off the table conflicts, accepted, with a rerun, or is accepted and opens a position no
-rerun opened. -/
 theorem ind_acc_off_le_lin [Fintype P] [DecidableEq V] (op : β → P → Option V) (z₀ : P → V)
     (acc : β → Prop) (bs : List β) (ω : β) :
     ind (fun ω => acc ω ∧ ∃ p, Off op (firstTable op z₀ bs) ω p) ω ≤
@@ -119,8 +94,6 @@ theorem ind_acc_off_le_lin [Fintype P] [DecidableEq V] (op : β → P → Option
     linarith
 
 open Classical in
-/-- **The positions no accepted rerun opened**: `Σ_p q_p (1 − q_p/ε)^k ≤ N·ε/(ek)` over `k` accepted reruns, with `q_p`
-the probability that a run accepts and opens `p`. -/
 theorem expectAcc_missing_le [Fintype P] (op : β → P → Option V) (g : Game β) (s : Strategy g)
     (acc : β → Prop) (k : ℕ) (hk : 1 ≤ k) :
     expectAcc g s acc k (fun bs => ∑ p, (bs.map fun b => ind (fun b => op b p = none) b).prod *
@@ -174,9 +147,6 @@ theorem expectAcc_missing_le [Fintype P] (op : β → P → Option V) (g : Game 
         rw [Finset.sum_const, Finset.card_univ, nsmul_eq_mul]; ring
 
 open Classical in
-/-- **The accepted fresh run's off-table mass, against `k` accepted reruns, linearly**: `ε · expectAcc_{k+1}` of a
-conflicting pair among the `k + 1` accepted runs, and `N·ε/(ek)` for the positions no accepted rerun opened. Where
-`expectAcc_off_le` has `(k/ε)·Pr₂[conflict]`, the fresh run's acceptance stays here with its conflict. -/
 theorem expectAcc_off_le_lin [Fintype P] [DecidableEq V] (op : β → P → Option V) (z₀ : P → V)
     (g : Game β) (s : Strategy g) (acc : β → Prop) (k : ℕ) (hk : 1 ≤ k) :
     expectAcc g s acc k (fun bs =>
@@ -212,9 +182,6 @@ theorem expectAcc_off_le_lin [Fintype P] [DecidableEq V] (op : β → P → Opti
         linarith [expectAcc_missing_le op g s acc k hk]
 
 open Classical in
-/-- **The product form for accepted reruns, linearly.** If every run list whose table fails leaves an accepted fresh run
-at least `ε − ε_c` of off-table mass (`hX`), then `ε · Pr[fails] ≤ ε_c + N·ε/(ek) + ε · expectAcc_{k+1}[PairConflict]`
-over the extractor's `k` accepted reruns. -/
 theorem joint_acc_le_lin [Fintype P] [DecidableEq V] (op : β → P → Option V) (z₀ : P → V)
     (g : Game β) (s : Strategy g) (acc : β → Prop) (X : List β → Prop) (εc : ℝ) (hεc : 0 ≤ εc)
     (hX : ∀ bs, ¬ X bs → expect (ind acc) g s ≤
@@ -246,11 +213,9 @@ theorem joint_acc_le_lin [Fintype P] [DecidableEq V] (op : β → P → Option V
     · linarith [hM0 bs]
   linarith
 
-/-- **The level-0 conflict finder**: a run, then `k` waits of at most `R` runs each. -/
 def conflictG (g : Game β) (R k : ℕ) : Game (β × List (List β)) :=
   g.bind fun a => (runsG (runsG g R) k).map fun bl => (a, bl)
 
-/-- `s` in every run. -/
 def conflictStrat (g : Game β) (s : Strategy g) (R k : ℕ) : Strategy (conflictG g R k) :=
   Strategy.bind g _ s fun _ => Strategy.map _ _ (runsStrat (runsG g R) (runsStrat g s R) k)
 
@@ -262,8 +227,6 @@ theorem expect_conflictG (g : Game β) (s : Strategy g) (R k : ℕ) (F : β × L
   refine congrArg (fun f => expect f g s) (funext fun a => ?_)
   rw [expect_map, expect_runsG]
 
-/-- **The conflict finder succeeds**: its run accepts, every wait finds an accepted run, and two of those `k + 1`
-accepted runs conflict. -/
 def ConflictSucc (acc : β → Prop) (op : β → P → Option V) (x : β × List (List β)) : Prop :=
   acc x.1 ∧ ∃ bs, firsts acc x.2 = some bs ∧ PairConflict op (x.1 :: bs)
 
@@ -275,8 +238,6 @@ theorem ind_conflictSucc (acc : β → Prop) (op : β → P → Option V) (a : �
   | some bs =>
       by_cases ha : acc a <;> by_cases hc : PairConflict op (a :: bs) <;> simp [ConflictSucc, ind, h, ha, hc]
 
-/-- **The conflict finder's success** is the sampling design of `k + 1` runs, weighted by their acceptance, having a conflicting
-pair, times the waits' `geom ε R ^ k`. -/
 theorem expect_conflictSucc (g : Game β) (s : Strategy g) (acc : β → Prop) (op : β → P → Option V) (R k : ℕ) :
     expect (ind (ConflictSucc acc op)) (conflictG g R k) (conflictStrat g s R k) =
       geom (expect (ind acc) g s) R ^ k *
@@ -301,7 +262,6 @@ theorem expect_conflictSucc (g : Game β) (s : Strategy g) (acc : β → Prop) (
       funext h, expect_const_mul]
   rfl
 
-/-- **The finder against the accepted sampling design**: `ε · expectAcc_{k+1}[PairConflict] ≤ Pr[ConflictSucc] + (k + 1)/(eR)`. -/
 theorem conflict_succ_ge (g : Game β) (s : Strategy g) (acc : β → Prop) (op : β → P → Option V) (R k : ℕ)
     (hR : 1 ≤ R) :
     expect (ind acc) g s * expectAcc g s acc (k + 1) (ind (PairConflict op)) ≤
@@ -325,12 +285,10 @@ theorem conflict_succ_ge (g : Game β) (s : Strategy g) (acc : β → Prop) (op 
   push_cast at h
   linarith
 
-/-- **A wait's cost**: its runs' costs, up to and including the first accepted one, or all of them. -/
 noncomputable def waitCostC (acc : β → Prop) (c : β → ℝ) : List β → ℝ
   | [] => 0
   | b :: bs => c b + (1 - ind acc b) * waitCostC acc c bs
 
-/-- **A wait costs `geom ε R` runs** in expectation. -/
 theorem expectN_waitCostC (g : Game β) (s : Strategy g) (acc : β → Prop) (c : β → ℝ) : ∀ R : ℕ,
     expectN g s R (waitCostC acc c) = geom (expect (ind acc) g s) R * expect c g s
   | 0 => by simp [expectN, waitCostC, geom]
@@ -348,11 +306,9 @@ theorem expectN_waitCostC (g : Game β) (s : Strategy g) (acc : β → Prop) (c 
         expect_add, expect_const_mul, expect_sub, expect_const, geom_succ]
       ring
 
-/-- **The conflict finder's cost**: its run's, and when that accepts, its waits'. -/
 noncomputable def conflictCost (acc : β → Prop) (c : β → ℝ) (x : β × List (List β)) : ℝ :=
   c x.1 + ind acc x.1 * (x.2.map (waitCostC acc c)).sum
 
-/-- **The conflict finder plays at most `k + 1` runs** in expectation, whatever `ε`: `1 + ε · k · geom ε R`. -/
 theorem expect_conflictCost_le (g : Game β) (s : Strategy g) (acc : β → Prop) (c : β → ℝ) (hc : ∀ b, 0 ≤ c b)
     (R k : ℕ) :
     expect (conflictCost acc c) (conflictG g R k) (conflictStrat g s R k) ≤ (k + 1) * expect c g s := by
@@ -376,9 +332,6 @@ theorem expect_conflictCost_le (g : Game β) (s : Strategy g) (acc : β → Prop
     exact mul_le_of_le_one_right (mul_nonneg hk0 hc0) hεg
   linarith
 
-/-- **Level 0 under expected-time collision resistance, linearly**: where every success of the conflict finder outputs
-a collision of `Hc` and the finder obeys the generic bound at its cost,
-`ε · Pr[fails] ≤ ε_c + N·ε/(ek) + (k + 1)·E[c]/2^256 + (k + 1)/(eR)`: weight 1, at `k + 1` runs. -/
 theorem joint_acc_le_ecr [Fintype P] [DecidableEq V] {Dh : Type} (Hc : List UInt8 → Dh)
     (op : β → P → Option V) (z₀ : P → V) (g : Game β) (s : Strategy g) (acc : β → Prop) (X : List β → Prop)
     (εc : ℝ) (hεc : 0 ≤ εc)

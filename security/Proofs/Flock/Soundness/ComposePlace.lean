@@ -7,25 +7,8 @@ import Mathlib.Combinatorics.Matroid.Init
 import Mathlib.Data.List.GetD
 import Mathlib.Data.Nat.Totient
 
-/-!
-# Composed rows, placed: what 1d and 1e hand to a table's class (`dp`)
-
-`placement_of_realizes` (`Compose.lean`) proves `Placement` for `Rows.compose` from facts about the block matrices. Here
-those facts are one proposition, and they are discharged for a flat statement `Stmt.setupH` accepted:
-- **`Compose.Realizes S L pos`**: each logical column's position is in the block; at each computed row's position the
-  matrices read exactly the positions of its columns, or the pin for a row that copies `one`; and the pin's row reads
-  the pin. `Realizes.placement` is the `Placement` it gives, at `composePlace`.
-- **`Compose.BlockFacts`**: 1e's form of the same facts, over the unit's block rows (`blockRow`, Δ applied), for the
-  verifier's own `deriveChecked` run. `BlockFacts.realizes` turns them into `Realizes` for the unit's composed rows
-  (`ofBlock`), and `BlockFacts.placement` is a table class's `placed` at a slot (the soundness model's `TableClass`).
-- **`Layout.realizes`**: in the model of a statement `setupH` accepted (`Layout`),
-  at unit slot `s₀` with positions `slot s₀ + c`, `Realizes` holds for every `Logical` whose rows are the unit net's
-  (`Compose.NetRows`). It reads Δ only as `Layout` does, for statements without a typed template.
-
-`NetRows st.c.unit (ofBlock words done u)` is the link between the unit net `setupH` accepted and the rows the verifier
-derives. For a typed flat class, whose unit net is built from those rows (`Typed.netOfD`), it is `netRows_flat`
-(`ExecFlatClass.lean`).
--/
+/-! Composed rows, placed: the block-matrix facts that give a table class's placement (`Compose.Realizes`,
+`Layout.realizes`). -/
 
 @[expose] public section
 
@@ -37,8 +20,6 @@ open Audit
 
 namespace Compose
 
-/-- **The block matrices realize the composed rows at `pos`**: `placement_of_realizes`'s hypotheses, with the positions in
-the block. -/
 structure Realizes (S : Model.Statement) (L : Logical) (pos : ℕ → ℕ) : Prop where
   lt : ∀ ℓ < L.order.length, pos (L.order.getD ℓ 0) < 2 ^ S.kLog
   rowA : ∀ k < L.order.length - L.nIn, ∀ p, L.row (L.order.getD (L.nIn + k) 0) = some p →
@@ -58,9 +39,6 @@ theorem Realizes.placement {S : Model.Statement} {L : Logical} {pos : ℕ → �
     Placement S (Rows.compose L h) (composePlace S L h pos hr.lt) :=
   placement_of_realizes hr.rowA hr.rowB hr.oneA hr.oneB hr.pinA hr.pinB
 
-/-- **The composed rows are the net's**: every column of the order is at most the net's constant; each computed
-row that doesn't copy `one` sits between the net's input rows and its constant and is the net's row there, in `A` and in
-`B`; and a row that copies `one` is the net's constant. -/
 structure NetRows (net : Net) (L : Logical) : Prop where
   le : ∀ c ∈ L.order, c ≤ net.constPos
   rows : ∀ k < L.order.length - L.nIn, ∀ p, L.row (L.order.getD (L.nIn + k) 0) = some p →
@@ -71,9 +49,6 @@ structure NetRows (net : Net) (L : Logical) : Prop where
 
 open Flock.DeriveAll Types.Dag
 
-/-- **1e's facts at one slot of a table** (the plan's flock-verifier item 2): at each non-input column `c` of the unit's
-order, the block matrices' rows at `pos c` read the unit's block row (`blockRow`: Δ's copy, else the row as the verifier
-folds it), each column at `pos` and `one` at the pin; and the pin's row reads the pin. -/
 structure BlockFacts (S : Model.Statement) (words : String → Option (Array ℕ)) (done : Array D) (u : D) (one : ℕ)
     (pos : ℕ → ℕ) : Prop where
   lt : ∀ c ∈ order done u, pos c < 2 ^ S.kLog
@@ -102,8 +77,6 @@ theorem count_pin {S : Model.Statement} (j : Fin (2 ^ S.kLog)) :
   · rw [ite_eq_right hj, List.count_singleton]
     simp [Fin.val_inj, Ne.symm hj]
 
-/-- **1e's facts give the class's placement facts.** For the verifier's own run `deriveChecked … = .ok done`, with `one`
-past every row of the unit, `BlockFacts` at `pos` is `Realizes` for the unit's composed rows (`ofBlock`) at `pos`. -/
 theorem BlockFacts.realizes {types : String → Option CircuitType} {ls : Array Flock.BlockLayout} {info : String → Option TableInfo}
     {words : String → Option (Array ℕ)} {unit : ℕ} {done : Array D}
     (hd : deriveChecked types ls info words unit = .ok done) {S : Model.Statement} {one : ℕ} {pos : ℕ → ℕ}
@@ -171,8 +144,6 @@ theorem BlockFacts.realizes {types : String → Option CircuitType} {ls : Array 
     · rw [hr'] at hp; cases hp
     · rw [hr'] at hp; cases hp
 
-/-- **A table class's placement at one slot**, from 1e's facts there: the unit's composed rows, placed at
-`composePlace`. -/
 theorem BlockFacts.placement {types : String → Option CircuitType} {ls : Array Flock.BlockLayout}
     {info : String → Option TableInfo} {words : String → Option (Array ℕ)} {unit : ℕ} {done : Array D}
     (hd : deriveChecked types ls info words unit = .ok done) {S : Model.Statement} {one : ℕ} {pos : ℕ → ℕ}
@@ -185,9 +156,6 @@ end Compose
 
 open Compose
 
-/-! ## A flat statement's unit slots realize the rows of its unit net -/
-
-/-- Shifting a list below `W` by `B·W`, counted at `j`: the count at `j mod W` when `j` is in block `B`, else 0. -/
 theorem count_map_add_ite {W B : ℕ} (hW : 0 < W) (l : List ℕ) (hl : ∀ x ∈ l, x < W) (j : ℕ) :
     (((l.map (B * W + ·)).count j : ℕ) : ZMod 2) = if j / W = B then ((l.count (j % W) : ℕ) : ZMod 2) else 0 := by
   by_cases hq : j / W = B
@@ -212,7 +180,6 @@ namespace Layout
 variable {st : Stmt} (L : Layout st)
 include L
 
-/-- The unit net's computed row `c`'s columns are below its slot's size. -/
 theorem unit_row_lt (hU : Built st.c.unit) {c : ℕ} (hlo : st.c.unit.inWords * WORD ≤ c) (hhi : c < st.c.unit.constPos)
     (hu : st.c.unit.unitLog ≤ 32) :
     (∀ x ∈ (st.c.unit.a.row c).toList, x < 2 ^ st.c.unit.unitLog) ∧
@@ -241,7 +208,6 @@ theorem unit_row_lt (hU : Built st.c.unit) {c : ℕ} (hlo : st.c.unit.inWords * 
 theorem slot_eq {s₀ : ℕ} : st.c.unitRange.slot s₀ = (st.c.unitRange.pos0 + s₀) * 2 ^ st.c.unit.unitLog := by
   unfold Range.slot; rw [L.unit_slotLog]
 
-/-- **The block's `A` at a unit slot's computed row**: the unit net's row, shifted to the slot. -/
 theorem placedA_comp (hU : Built st.c.unit) {s₀ c : ℕ} (hs : s₀ < st.c.unitRange.count) (hlo : st.c.unit.inWords * WORD ≤ c)
     (hhi : c < st.c.unit.constPos) (r j : Fin (2 ^ st.c.kLog)) (hr : r.val = st.c.unitRange.slot s₀ + c) :
     placedA st r j = ((((st.c.unit.a.row c).toList.map (st.c.unitRange.slot s₀ + ·)).count j.val : ℕ) : ZMod 2) := by
@@ -250,7 +216,6 @@ theorem placedA_comp (hU : Built st.c.unit) {s₀ c : ℕ} (hs : s₀ < st.c.uni
     count_map_add_ite (Nat.two_pow_pos _) _ (L.unit_row_lt hU hlo hhi (L.unitLog_le hs)).1]
   exact if_congr Iff.rfl (sparseEntry_built_a hU _ _) rfl
 
-/-- **The block's `B` at a unit slot's computed row**: the unit net's row, shifted to the slot. -/
 theorem placedB_comp (hU : Built st.c.unit) {s₀ c : ℕ} (hs : s₀ < st.c.unitRange.count) (hlo : st.c.unit.inWords * WORD ≤ c)
     (hhi : c < st.c.unit.constPos) (r j : Fin (2 ^ st.c.kLog)) (hr : r.val = st.c.unitRange.slot s₀ + c) :
     placedB st r j = ((((st.c.unit.b.row c).toList.map (st.c.unitRange.slot s₀ + ·)).count j.val : ℕ) : ZMod 2) := by
@@ -264,7 +229,6 @@ theorem placedB_comp (hU : Built st.c.unit) {s₀ c : ℕ} (hs : s₀ < st.c.uni
   show sparseEntry st.c.unit.b _ _ + 0 = _
   rw [add_zero, sparseEntry_built_b hU]
 
-/-- **The block's `A` at a unit slot's constant reads the pin.** -/
 theorem placedA_const {s₀ : ℕ} (hs : s₀ < st.c.unitRange.count) (r j : Fin (2 ^ st.c.kLog))
     (hr : r.val = st.c.unitRange.slot s₀ + st.c.unit.constPos) :
     placedA st r j = if j.val = st.pin then 1 else 0 := by
@@ -275,7 +239,6 @@ theorem placedA_const {s₀ : ℕ} (hs : s₀ < st.c.unitRange.count) (r j : Fin
       (L.unit_const (L.unitLog_le hs)).2.1, ← L.slot_eq]
   exact const_row_sum _ _ _
 
-/-- **The block's `B` at a unit slot's constant reads the pin.** -/
 theorem placedB_const {s₀ : ℕ} (hs : s₀ < st.c.unitRange.count) (r j : Fin (2 ^ st.c.kLog))
     (hr : r.val = st.c.unitRange.slot s₀ + st.c.unit.constPos) :
     placedB st r j = if j.val = st.pin then 1 else 0 := by
@@ -286,7 +249,6 @@ theorem placedB_const {s₀ : ℕ} (hs : s₀ < st.c.unitRange.count) (r j : Fin
       (L.unit_const (L.unitLog_le hs)).2.2, ← L.slot_eq]
   exact const_row_sum _ _ _
 
-/-- **The pin's row reads the pin**, in `A` and in `B`. -/
 theorem placed_pin (j : Fin (2 ^ st.c.kLog)) :
     placedA st ⟨st.pin, L.pin_lt⟩ j = (if j.val = st.pin then 1 else 0) ∧
       placedB st ⟨st.pin, L.pin_lt⟩ j = if j.val = st.pin then 1 else 0 := by
@@ -310,8 +272,6 @@ theorem placed_pin (j : Fin (2 ^ st.c.kLog)) :
       hp]
     rfl
 
-/-- **A flat accepted statement realizes, at unit slot `s₀`, every `Logical` whose rows are its unit net's.** The
-positions are `slot s₀ + c`, and the statement is the model of the matrices the verifier folds (`Layout.model`). -/
 theorem realizes (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))) {s₀ : ℕ} (hs : s₀ < st.c.unitRange.count)
     (hU : Built st.c.unit) {Lg : Logical} (hm : NetRows st.c.unit Lg) :
     Realizes (L.model regs) Lg (fun c => st.c.unitRange.slot s₀ + c) := by

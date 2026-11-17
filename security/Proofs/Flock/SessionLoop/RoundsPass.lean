@@ -10,25 +10,8 @@ public import Proofs.Flock.SessionLoop.SchedSlot
 public import Proofs.Flock.SessionLoop.SchedTotalHolds
 public import Proofs.Flock.SessionLoop.Fill
 
-/-!
-# Every round of the honest session loop passes the frame's checks at `valsDev honestVals`
-
-`Loop.RoundsPass` at `withInner`'s session loop on `Loop.finHonest`, at its honest device
-(**`LeanRelease.roundsPass_valsDev`**), wherever `cross` passes the device's rounds: after every history of
-`2 ≤ g.length ≤ refK x` whose coins the frame takes, the round there passes. The rep's schedule on its own table is not
-refused (`ofLoop_sched_unrefused`, at `Loop.scheduleTotal`), so the round is one of the rep's schedule or one of the
-inner proof's:
-
-* **`LeanRelease.schedTaken_slot`**: before the rep's inner proof (`Loop.sched_slot_at`) the round is the rep's first
-  (`schedTaken_zcBind`), in its PIOP (`schedTaken_piop`), in the ring switch from its rank check's (`schedTaken_switch`),
-  the opening's binding (`schedTaken_openBind`), level 0's (`schedTaken_l0`) or from level 0's close on
-  (`schedTaken_lig`), and the frame takes it (`SchedTaken`, so `roundOk_of_schedTaken`);
-* at the end of the rep's schedule, the inner proof's round 0 (`roundOk_inner0`), and past it its rounds 1 to 3
-  (`roundOk_innerAt`).
-
-**`LeanRelease.fillRoundEq_finHonest`**: so `FillRoundEq` holds there at the honest worker
-(`fillRoundEq_honestVals`), at every `vs`.
--/
+/-! Every round of the honest session loop passes the frame's checks at `valsDev honestVals`, wherever `cross` passes
+the device's rounds (`LeanRelease.roundsPass_valsDev`). -/
 
 @[expose] public section
 
@@ -45,11 +28,6 @@ namespace LeanRelease
 
 open Loop in
 set_option maxHeartbeats 1000000 in
-/-- **The frame takes a rep's round before its inner proof where it takes its coins**: at a history whose next round
-is rep stream `2j + r`'s, from its first (`Masked.repBase`) to the last before its inner proof (`Masked.innerOff 0`),
-whose coins the loop's frame takes, on the loop's own tables where `src` samples the tape's level 0: the round is the
-rep's first, in its PIOP, in the ring switch from its rank check's, the opening's binding, level 0's or from level 0's
-close on, and the frame takes it in each. -/
 theorem schedTaken_slot (L₁ : LeanRelease Flock.Wit Loop.Tp)
     (src : Msg → Flock.Wit → Loop.Tp → ℕ → V (Array F128 × ByteArray × Array ByteArray))
     {x : Msg} {w : Flock.Wit} (hx : Masked.Live x) (hSv : Loop.Serves x) (hS0 : Loop.Level0Src src x w)
@@ -104,12 +82,6 @@ theorem schedTaken_slot (L₁ : LeanRelease Flock.Wit Loop.Tp)
 
 open Loop in
 set_option maxHeartbeats 1000000 in
-/-- **Every round of `withInner`'s session loop on `finHonest` passes the frame's checks at `valsDev honestVals`**,
-wherever `cross` passes the device's rounds: at a `Live` statement the loop serves, where `src` samples the tape's
-level 0, after every history of `2 ≤ g.length ≤ refK x` whose coins the frame takes. The rep's schedule on its own
-table is not refused there (`ofLoop_sched_unrefused`); a round before the end of it is the rep's own, which the frame
-takes (`schedTaken_slot`), the round at its end is the inner proof's round 0 (`roundOk_inner0`), and one past it is
-among its rounds 1 to 3 (`roundOk_innerAt`). -/
 theorem roundsPass_valsDev (L₁ : LeanRelease Flock.Wit Tp)
     (src : Msg → Flock.Wit → Tp → ℕ → V (Array F128 × ByteArray × Array ByteArray))
     {x : Msg} {w : Flock.Wit} (hx : Masked.Live x) (hSv : Serves x) (hS0 : Level0Src src x w)
@@ -169,9 +141,6 @@ theorem roundsPass_valsDev (L₁ : LeanRelease Flock.Wit Tp)
         ops hlt href hs hcs hloc hre hrs hgt hc
 
 open Loop in
-/-- **`FillRoundEq` at the honest worker of `withInner`'s session loop on `finHonest`**, at every `vs`, wherever `cross`
-passes the device's rounds: `fillRoundEq_honestVals` at `roundsPass_valsDev`, the loop's `Finish` being round
-`refK x + 1` (`loop_last`). -/
 theorem fillRoundEq_finHonest (vs : finS.SwVals) (L₁ : LeanRelease Flock.Wit Tp)
     (src : Msg → Flock.Wit → Tp → ℕ → V (Array F128 × ByteArray × Array ByteArray))
     {x : Msg} {w : Flock.Wit} (hx : Masked.Live x) (hSv : Serves x) (hS0 : Level0Src src x w)
