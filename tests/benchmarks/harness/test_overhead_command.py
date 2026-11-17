@@ -228,3 +228,43 @@ def test_a_run_that_keeps_its_reports_goes_through_the_door_and_is_never_of_reco
     assert overhead_node.KEEP_REPORTS_WHY in R.of_record(s.store, kept)[1]
     with pytest.raises(ValueError, match="a profiling pass is never of record"):
         R.record_run(s.store, kept)
+
+
+def test_the_h100_s_door_sweeps_times_and_records_on_its_own_node_with_the_h200_node_s_host_weight(tmp_path, monkeypatch,
+                                                                                                    scheme):
+    """The H100 is a card of its own records (its SMs, L2 and datasheet rate), its host CPU weighed at the H200 node's 0.48,
+    which every point it times says; its sweep and timed run launch on its node and pass the door, and its run of record is
+    a row of its own beside the H200's, whose note is unchanged."""
+
+    h100, h200 = O.CARDS["h100"], O.CARDS["h200"]
+    assert (h100.sms, h100.l2_bytes, h100.arch, h100.datasheet) == (132, 50 << 20, "sm_90a", h200.datasheet)
+    assert h100.cpu_sm_s_per_core_s == h200.cpu_sm_s_per_core_s and h200.note is None
+    assert O.row_note({"commits_y": True}, "h100") == h100.note
+    assert O.row_note({"commits_y": False}, "h100") == f"{O.WITHOUT_Y}; {h100.note}"
+    assert all(O.row_note(arm, "h200") == O.y_note(arm) for arm in (None, {}, {"commits_y": True}, {"commits_y": False}))
+
+    s = Store(tmp_path)
+    old = stored_points(tmp_path, s, "r20261104-020000-0001")
+    art = stored_points(tmp_path, s, "r20261104-020000-0003", card="h100")
+    assert R.current_points(s.store, "h100") == art and R.current_points(s.store, "h200") == old
+    monkeypatch.setenv("RESEARCH_STORE", str(tmp_path / "producer"))
+    monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(s.config))
+    monkeypatch.delenv("VERITY_BENCH_VENV", raising=False)
+    launched = []
+    monkeypatch.setattr(R, "_execute", lambda argv, root: launched.append(list(argv)) or 0)
+    assert main(["overhead", "points", "--card", "h100"]) == 0
+    assert main(["overhead", "run", "--card", "h100", "--scheme", "pearl-plus", "--cubin", s.cubin, "--local-only"]) == 0
+    for argv in launched:
+        assert argv[argv.index("--on") + 1] == "vy-h100-1"
+        assert R.door_why({"argv": argv[argv.index("--") + 1:]}, "r", argv[argv.index("bash") + 2]) is None
+    assert job(launched[1], "60")[:9] == ["run", "--card", "h100", "--scheme", "pearl-plus", "--points", "points.json",
+                                          "--points-art", art]
+
+    seventy = timed(tmp_path, s, old, "pearl-plus", "r20261104-030000-0002")
+    run = timed(tmp_path, s, art, "pearl-plus", "r20261104-030000-0004", card="h100")
+    assert R.record_run(s.store, seventy) == [] and R.record_run(s.store, run) == []
+    rows = {(r["card"], r["point"]): r for r in R.build(s.store, local_only=True)["rows"]}
+    for point in O.POINTS:
+        assert rows["h100", point]["of_record"] and rows["h100", point]["run"] == run
+        assert rows["h100", point]["note"] == f"{O.WITHOUT_Y}; {h100.note}"
+        assert rows["h200", point]["note"] == O.WITHOUT_Y

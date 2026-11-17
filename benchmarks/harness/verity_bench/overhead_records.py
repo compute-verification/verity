@@ -41,7 +41,7 @@ POINTS_RECORD, RUN_RECORD = "overhead-points", "overhead"
 POINTS_KIND = "verity-bench-overhead-points/v1"
 BY = "benchmarks"
 #: each card's GPU node, where `--on` names none
-NODES = {"h200": "vy-spot-glm53"}
+NODES = {"h200": "vy-spot-glm53", "h100": "vy-h100-1"}
 NODE_JOB = "benchmarks/harness/overhead_node.sh"
 #: the options the door gives each node job (`launch_points`, `launch_run`); the node job sets the rest itself
 DOOR_OPTIONS = {"points": {"--card", "--model", "--precision"},
@@ -251,7 +251,7 @@ def gamma_rows(store: Any) -> list[dict]:
                    "gamma_weight_side_bound": p.get("gamma_weight_side_bound"), "aa": p.get("aa"),
                    "epsilon": p.get("epsilon"), "perplexity": p.get("perplexity"), "gate": p.get("gate"),
                    "linears": p.get("linears"), "commits_y": None if arm is None else bool(arm.get("commits_y")),
-                   "note": O.y_note(arm)}
+                   "note": O.row_note(arm, doc.get("card"))}
             why = whys + list(p.get("whys") or [])
             row |= {"of_record": not why, "why": "; ".join(why) or None}
             best[(row["scheme"], row["card"], row["model"], name)] = row
