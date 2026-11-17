@@ -1,4 +1,4 @@
-# The onsite demo's minutes from the first command to the verdict (`onsite_minutes.py`, which runs `run_minutes.py`
+# The onsite application's minutes from the first command to the verdict (`onsite_minutes.py`, which runs `run_minutes.py`
 # with the onsite verdict). Not a package: its tests run in the workspace environment.
 [tool.pytest.ini_options]
 testpaths = ["."]
