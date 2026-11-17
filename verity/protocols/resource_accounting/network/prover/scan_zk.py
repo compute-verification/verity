@@ -137,7 +137,7 @@ the honest round on the challenger's coins (``--challenger``), a `service.Stream
   prover sends.
 * **The answers** (``answers.json``, `answers`): for each execution phase W of the group, the scan's registration of W,
   the network attester's two row registrations of W and the scan's one-stage answer for W (`window_answer`), which
-  `verity/certifier/v0`'s rows form (`NetworkCheck.Period`) checks for W with W's three records' certificates:
+  `verity/certifier/v0`'s rows form (`NetworkCheck.Period`) checks for W with W's three records' attestations:
   accepted, one-stage's profile and bound at ``--delta`` (every unit sampled, the bound 0); refused, a reject naming
   the members Lean refused. Beside them, ``audits``: each execution phase's block round's, the compute audit whose
   lanes' o0 are that execution phase's scan's ``prog<j>`` (its registration and answer, its Program's descriptor, its
@@ -1972,7 +1972,7 @@ def answers(ats: Sequence[SimpleNamespace], out: Path, results: Mapping[str, dic
     each round's files under ``out / <round>``): for each execution phase W, in order, the scan's registration of W, its
     answer (`window_answer`: accepted where the round's outputs all open to 1; a refused round's, a void execution
     phase's, names the members Lean refused) and the network attester's ingress and egress row registrations of W, the
-    rows form's evidence of W but its certificates. With W's block round's audit, the compute audit whose lanes' o0 are
+    rows form's evidence of W but its attestations. With W's block round's audit, the compute audit whose lanes' o0 are
     W's scan's
     ``prog<j>`` (``audits``, in execution phase order): its registration and answer, and the terms a period's parameters
     give it, its Program's descriptor, its free inputs (every bit of every slot entry, the stand-in's ``x``: it
