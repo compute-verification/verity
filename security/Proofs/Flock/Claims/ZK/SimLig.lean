@@ -55,35 +55,13 @@ import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
 import Proofs.Flock.Soundness.Discharge.ZkExec.RunsSeams
 import Proofs.Flock.Soundness.Refine.Arith
 
-/-!
-# A rep's Ligerito opening from the cut (`SimLig`)
-
-`SimLig` (`Split`) compares `repMix 1`, whose Ligerito opening reads level 0's masked messages, `y₁'`, `ȳ` and levels
-≥ 1's salts from the cut (`ligeritoCut`), with `repMix 2`, the session's (`ligeritoPZk`).
-
-* **The salt roundtrip** (`blobSalt_saltBlob`): level `l ≥ 1`'s salt at position `p`, read back from the salts' string,
-  is the salt fitted to 192 bytes; a 192-byte salt comes back whole (`fit192_of_size`).
-* **Lockstep** (`ligeritoCut_alike`): where the source holds what the session's opening computes at the coins from
-  round `p₀` on (`LigHyp`), the two openings send the same and return the same erased proof; `simLig_of` from that at
-  the deployed rep (`LigSrcE`).
-* **The PIOP answered by `asksCut`** (`cutS`, `piopPZk_cut_ok`, `piopPZk_exact`): where it returns, it is the run at
-  `asksS` with replies reading as the coins, so it sent `piopZk` bodies and returned the closed form's switched vectors.
-* **At the deployed rep's coins** (`ligSrcE_of`, `ligHypE_of`): `LigSrcE` from the source's values at round
-  `repSlot … 0` and the basis at the coins (`LigHypE`), and that from the schedule's facts and six value statements
-  (`LigOodE`, `LigMsgE`, `LigSumsE`, `LigY1E`, `LigYbarE`, `LigSaltE`; `simLig_of_fields`).
-* **The six values** (`ligOodE`, `ligYbarE`, `ligY1E`, `ligSaltE`, `ligMsgE`, `ligSumsE`): the cut's source holds the
-  cut's view's values, which at the coins are the executable's: the packed table's extension, the lane pads and folds,
-  the tape's salts (HiSalts' `hiSalt_exe`), and the lane rounds' tables, whose basis is the PIOP's switched vectors'
-  (`openB_basis`); so `simLig`.
--/
+/-! A rep's Ligerito opening from the cut (`SimLig`). -/
 
 @[expose] public section
 
 namespace Claims.ZKMal.Masked
 
 namespace LigPf
-
-/-! ## The salt roundtrip -/
 
 theorem fit192_size (b : ByteArray) : (fit192 b).size = 192 := by
   unfold fit192
@@ -97,7 +75,6 @@ theorem fit192_of_size {b : ByteArray} (h : b.size = 192) : fit192 b = b := by
   rw [h, Nat.sub_self, ← h, ByteArray.extract_zero_size]
   exact ByteArray.append_empty
 
-/-- Level `l`'s salts, fitted, one after another. -/
 def levelBlob (s : ℕ → ℕ → ByteArray) (l N : ℕ) : ByteArray :=
   (List.range N).foldl (fun acc p => acc ++ fit192 (s l p)) ByteArray.empty
 
@@ -141,7 +118,6 @@ theorem levelBlob_extract (s : ℕ → ℕ → ByteArray) (l : ℕ) :
     · rw [extract_append_left_of_le (by rw [levelBlob_size]; nlinarith [show p + 1 ≤ N by omega])]
       exact levelBlob_extract s l N p (by omega)
 
-/-- The salts' string through level `k`. -/
 def blobUpTo (ls : List FlockSoundness.Accounting.Level) (s : ℕ → ℕ → ByteArray) (k : ℕ) : ByteArray :=
   (List.range' 1 k).foldl (fun acc l =>
     (List.range (2 ^ (ls.getD l default).logLen)).foldl (fun acc p => acc ++ fit192 (s l p)) acc) ByteArray.empty
@@ -172,8 +148,6 @@ theorem blobUpTo_prefix (ls : List FlockSoundness.Accounting.Level) (s : ℕ →
 theorem saltBlob_eq (ls : List FlockSoundness.Accounting.Level) (s : ℕ → ℕ → ByteArray) :
     saltBlob ls s = blobUpTo ls s (ls.length - 1) := rfl
 
-/-- **The salt roundtrip**: level `l ≥ 1`'s salt at position `p` of its tree, read back from the salts' string, is the
-salt fitted to 192 bytes. -/
 theorem blobSalt_saltBlob {ls : List FlockSoundness.Accounting.Level} {s : ℕ → ℕ → ByteArray} {l p : ℕ}
     (h : HiAt ls l p) : blobSalt ls (saltBlob ls s) l p = fit192 (s l p) := by
   obtain ⟨h1, hl, hp⟩ := h
@@ -195,7 +169,6 @@ theorem blobSalt_saltBlob {ls : List FlockSoundness.Accounting.Level} {s : ℕ �
     ByteArray.extract_append_size_add' hsz.symm]
   exact levelBlob_extract s l _ p hp
 
-/-- A 192-byte salt comes back whole. -/
 theorem blobSalt_saltBlob_of_size {ls : List FlockSoundness.Accounting.Level} {s : ℕ → ℕ → ByteArray} {l p : ℕ}
     (h : HiAt ls l p) (hs : (s l p).size = 192) : blobSalt ls (saltBlob ls s) l p = s l p := by
   rw [blobSalt_saltBlob h, fit192_of_size hs]
@@ -210,12 +183,6 @@ namespace LigLock
 
 open Flock Transcript Replay
 
-/-! ## Lockstep
-
-The two openings are compared in lockstep, as `SimZerocheck`'s `GoAlike` compares the zerocheck: both threw the same
-error after the same bodies, or both returned at the same transcript after the same bodies, with related values. -/
-
-/-- **Two runs in lockstep.** -/
 abbrev Alike {α β : Type} (R : α → β → Array Claims.Msg → Prop)
     (x : Except String (α × Transcript) × Array Claims.Msg) (y : Except String (β × Transcript) × Array Claims.Msg) :
     Prop :=
@@ -246,7 +213,6 @@ theorem Alike.mono {α β : Type} {R S : α → β → Array Claims.Msg → Prop
   · exact .inl ⟨e, L, hx, hy⟩
   · exact .inr ⟨a, b, t, L, hx, hy, hRS a b L hR⟩
 
-/-- **A bind in lockstep**: related programs, and continuations related from every common return. -/
 theorem alike_bind {α β γ δ : Type} {R : α → β → Array Claims.Msg → Prop} {S : γ → δ → Array Claims.Msg → Prop}
     {x : TMW PS α} {y : TMW PS β} {f : α → TMW PS γ} {g : β → TMW PS δ} {t : Transcript} {l : Array Claims.Msg}
     (hxy : Alike R ((x.run t).go l) ((y.run t).go l))
@@ -258,16 +224,12 @@ theorem alike_bind {α β γ δ : Type} {R : α → β → Array Claims.Msg → 
   · rw [bind_go hx, bind_go hy]
     exact hfg a b t' L hx hy hR
 
-/-- **A shared step**: the same program, then continuations related from each of its returns. -/
 theorem alike_bind_eq {α γ δ : Type} {S : γ → δ → Array Claims.Msg → Prop} {x : TMW PS α}
     {f : α → TMW PS γ} {g : α → TMW PS δ} {t : Transcript} {l : Array Claims.Msg}
     (hfg : ∀ a t' l', (x.run t).go l = (.ok (a, t'), l') → Alike S (((f a).run t').go l') (((g a).run t').go l')) :
     Alike S (((x >>= f).run t).go l) (((x >>= g).run t).go l) :=
   alike_bind (Alike.refl _) fun a b t' l' hx _ (hab : a = b) => by subst hab; exact hfg a t' l' hx
 
-/-! ## `LP`'s steps in lockstep -/
-
-/-- **An `LP` bind in lockstep.** -/
 theorem lbind {α β γ δ : Type} {R : α × LigState → β × LigState → Array Claims.Msg → Prop}
     {S : γ × LigState → δ × LigState → Array Claims.Msg → Prop} {x : LP PS α} {y : LP PS β} {f : α → LP PS γ}
     {g : β → LP PS δ} {s s' : LigState} {t : Transcript} {l : Array Claims.Msg}
@@ -289,7 +251,6 @@ theorem liftT_bind_run {α γ : Type} (m : TMW PS α) (f : α → LP PS γ) (s :
     (liftT m >>= f).run s = m >>= fun a => (f a).run s := by
   simp only [StateT.run_bind, liftT, StateT.run_lift, bind_assoc, pure_bind]
 
-/-- **A shared transcript step** from any two states. -/
 theorem lliftT {α γ δ : Type} {S : γ × LigState → δ × LigState → Array Claims.Msg → Prop} {m : TMW PS α}
     {f : α → LP PS γ} {g : α → LP PS δ} {s s' : LigState} {t : Transcript} {l : Array Claims.Msg}
     (h : ∀ a t' l', (m.run t).go l = (.ok (a, t'), l') →
@@ -329,7 +290,6 @@ theorem powP_bind_run {γ : Type} (f : Unit → LP PS γ) (s : LigState) :
 theorem throw_go {α : Type} (e : String) (s : LigState) (t : Transcript) (l : Array Claims.Msg) :
     ((((throw e : LP PS α)).run s).run t).go l = (.error e, l) := rfl
 
-/-- **A shared `LP` step** from one state. -/
 theorem lbind_eq {α γ δ : Type} {S : γ × LigState → δ × LigState → Array Claims.Msg → Prop} {x : LP PS α}
     {f : α → LP PS γ} {g : α → LP PS δ} {s : LigState} {t : Transcript} {l : Array Claims.Msg}
     (h : ∀ a s₁ t' l', ((x.run s).run t).go l = (.ok ((a, s₁), t'), l') →
@@ -339,8 +299,6 @@ theorem lbind_eq {α γ δ : Type} {S : γ × LigState → δ × LigState → Ar
     obtain ⟨rfl, rfl⟩ := Prod.mk.inj hR
     exact h a s₁ t' l' hx
 
-/-- **A loop in lockstep**: if step `i`, from values, states and bodies related by `I i`, yields ones related by
-`I (i + 1)`, the loops over `[0:n]` end related by `I n`. -/
 theorem lforIn {σ τ : Type} (body : ℕ → σ → LP PS (ForInStep σ)) (body' : ℕ → τ → LP PS (ForInStep τ))
     (I : ℕ → σ × LigState → τ × LigState → Array Claims.Msg → Prop) (n : ℕ)
     (hb : ∀ i < n, ∀ (u : σ) (s : LigState) (u' : τ) (s' : LigState) (t : Transcript) (l : Array Claims.Msg),
@@ -373,7 +331,6 @@ theorem lforIn {σ τ : Type} (body : ℕ → σ → LP PS (ForInStep σ)) (body
     subst hv hv'
     exact ih (a + 1) v s₁ v' s₁' t₁ l₁ (by omega) hI₁
 
-/-- **A loop of equal steps**: bodies alike to equality from every value and state run the loops alike to equality. -/
 theorem lforIn_eq {σ : Type} (body body' : ℕ → σ → LP PS (ForInStep σ)) (n : ℕ)
     (hb : ∀ i < n, ∀ (u : σ) (s : LigState) (t : Transcript) (l : Array Claims.Msg),
       Alike (fun a b _ => a = b) ((((body i u).run s).run t).go l) ((((body' i u).run s).run t).go l))
@@ -399,11 +356,8 @@ theorem lforIn_eq {σ : Type} (body body' : ℕ → σ → LP PS (ForInStep σ))
     · exact Alike.refl _
     · exact ih (a + 1) v s₁ t₁ l₁ (by omega)
 
-/-- Equal programs run alike to equality. -/
 theorem Alike.of_eq {α : Type} {x y : LP PS α} (h : x = y) (s : LigState) (t : Transcript) (l : Array Claims.Msg) :
     Alike (fun a b _ => a = b) (((x.run s).run t).go l) (((y.run s).run t).go l) := h ▸ Alike.refl _
-
-/-! ## `asksCut`'s squeezes -/
 
 theorem asksCut_round_go (coin : ℕ → ℕ → F128) (n : ℕ) (c : ByteArray) (l : Array Claims.Msg) :
     ((asksCut coin n).round c).go l =
@@ -427,7 +381,6 @@ theorem squeezeP_cut_err (coin : ℕ → ℕ → F128) {n : ℕ} (kind : UInt8) 
   rw [go_bind, asksCut_round_go, ite_eq_left hl]
   rfl
 
-/-- **A squeeze that returned** was before round `n`, returned the coins at `l.size` and sent one body. -/
 theorem squeezeP_cut_inv (coin : ℕ → ℕ → F128) {n : ℕ} (kind : UInt8) {k : ℕ} (hk : k ≠ 0) {t t' : Transcript}
     {l l' : Array Claims.Msg} {a : Array F128}
     (h : ((squeezeP (asksCut coin n) kind k).run t).go l = (.ok (a, t'), l')) :
@@ -469,7 +422,6 @@ theorem sampleKP_cut_inv (coin : ℕ → ℕ → F128) {n : ℕ} {t t' : Transcr
     obtain ⟨⟨rfl, rfl⟩, rfl⟩ := h
     exact ⟨by omega, by simp, by simp⟩
 
-/-- A transcript action sends nothing. -/
 theorem liftTM_inv {α : Type} {x : TM α} {t t' : Transcript} {l l' : Array Claims.Msg} {a : α}
     (h : ((liftTM x : TMW PS α).run t).go l = (.ok (a, t'), l')) : l = l' :=
   congrArg Prod.snd ((liftTM_go x t l).symm.trans h)
@@ -490,9 +442,6 @@ theorem alike_bind_eq_assoc {α γ δ ε : Type} {S : γ → ε → Array Claims
     Alike S (((x >>= f).run t).go l) ((((x >>= g) >>= C).run t).go l) :=
   alike_bind_assoc (Alike.refl _) fun a b t' l' hx _ (hab : a = b) => by subst hab; exact hfg a t' l' hx
 
-/-! ## Commitments' salts and erased openings -/
-
-/-- A commitment reads its salt function only on its positions, cut to the scheme's width. -/
 theorem commitP_congr (hs : Hashes PS) (ms : MerkleScheme) (lv : Level) (g : Array F128) {s s' : ℕ → ByteArray}
     (h : ∀ q < 2 ^ lv.d, fitBytes ms.saltBytes (s q) = fitBytes ms.saltBytes (s' q)) :
     commitP hs ms lv g s = commitP hs ms lv g s' := by
@@ -510,7 +459,6 @@ theorem getElem!_map_const {α β : Type} [Inhabited β] (xs : Array α) (b : β
   · rw [getElem!_pos (xs.map fun _ => b) p (by simpa using hp)]; simp
   · rw [getElem!_neg (xs.map fun _ => b) p (by simpa using hp), hb]
 
-/-- **An erased commitment opens to the erased opening.** -/
 theorem eraseLP_openP (ms : MerkleScheme) (cm : Commit) (lv : Level) (pos : Array ℕ) :
     eraseLP (openP ms cm lv pos) = openP ms (eraseC cm) lv pos := by
   simp only [eraseLP, openP, eraseC]
@@ -526,41 +474,30 @@ theorem queryP_eraseC (io : Asks PS) (nonce : ℕ → ℕ → UInt64) (ms : Merk
     queryP io nonce ms lv (eraseC cm) = (fun p => (eraseLP p.1, p.2)) <$> queryP io nonce ms lv cm := by
   simp only [queryP, map_bind, map_pure, eraseLP_openP]
 
-/-! ## Level 0's opening at the coins from round `p₀` -/
-
 section Vals
 
 variable (coin : ℕ → ℕ → F128) (p0 : ℕ)
 
-/-- Level 0's out-of-domain point, the reply to round `p₀`. -/
 def zS (n : ℕ) : Array F128 := (Array.range n).map (coin p0)
 
-/-- Lane round `j`'s challenge, the reply to round `p₀ + 2 + j`. -/
 def chS (j : ℕ) : F256 := ⟨coin (p0 + 2 + j) 0, coin (p0 + 2 + j) 1⟩
 
-/-- The table after the first `j` lane challenges. -/
 def tabS (t : Array F128) : ℕ → Array F256
   | 0 => embedF t
   | j + 1 => foldK (chS coin p0 j) (tabS t j)
 
-/-- The weight after the first `j` lane challenges: the basis plus `b₀·eq(z, ·)`, `b₀` the reply to round `p₀ + 1`. -/
 def wS (b : Array F128) (n : ℕ) : ℕ → Array F256
   | 0 => addScaled (embedF b) (embedF (eqTable (zS coin p0 n))) (coin (p0 + 1) 0)
   | j + 1 => foldK (chS coin p0 j) (wS b n j)
 
-/-- The pair's coins, the replies to rounds `p₀ + 2 + k₀` and `p₀ + 3 + k₀`. -/
 def rhoS (k0 : ℕ) : F256 × F256 :=
   (⟨coin (p0 + 2 + k0) 0, coin (p0 + 2 + k0) 1⟩, ⟨coin (p0 + 3 + k0) 0, coin (p0 + 3 + k0) 1⟩)
 
 end Vals
 
-/-- Lane round `j`'s message as the source holds it, masked. -/
 def mmOf (src : RepSrc) (lay : Zk.PadLayout) (j : ℕ) : F256 × F256 :=
   (⟨src.masked (lay.lgMsg j 0), src.masked (lay.lgMsg j 1)⟩, ⟨src.masked (lay.lgMsg j 2), src.masked (lay.lgMsg j 3)⟩)
 
-/-- **What level 0's opening reads from the source**, as the session computes it at the coins from round `p₀`: the
-out-of-domain value, each lane message, the pair's sums; where the pair's coins are answered and independent, the
-restart `y₁'`, `ȳ`, and the salts of levels ≥ 1 on the positions their commitments read. -/
 structure LigHyp (coin : ℕ → ℕ → F128) (n p0 : ℕ) (ms : MerkleScheme) (sch : Schedule) (t b : Array F128)
     (lay : Zk.PadLayout) (h : Array F128) (rep tPad : ℕ) (extra lanePad : ℕ → ℕ → F128)
     (salt : ℕ → ℕ → ByteArray) (src : RepSrc) : Prop where
@@ -590,9 +527,6 @@ structure LigHyp (coin : ℕ → ℕ → F128) (n p0 : ℕ) (ms : MerkleScheme) 
     ∀ i, 1 ≤ i → i < sch.levels.size → ∀ q < 2 ^ (sch.levels.getD i default).d,
       fitBytes ms.saltBytes (src.hiSalt i q) = fitBytes ms.saltBytes (salt i q)
 
-/-- **Level 0's opening from the source, in lockstep with the session's**: answered by `asksCut` from `l`, where the
-source holds what the session computes at the coins from round `l.size` on (`LigHyp`), the source's opening of `cm0`
-erased sends what the session's sends and returns the session's proof but level 0's opened rows and salts. -/
 theorem ligeritoCut_alike (coin : ℕ → ℕ → F128) (n : ℕ) (hs : Hashes PS) (ms : MerkleScheme) (sch : Schedule)
     (T : F128) (cm0 : Commit) (t b : Array F128) (lay : Zk.PadLayout) (h : Array F128) (rep tPad : ℕ)
     (extra lanePad : ℕ → ℕ → F128) (salt : ℕ → ℕ → ByteArray) (src : RepSrc) (tr : Transcript)
@@ -765,8 +699,6 @@ theorem go_bind_congr_l {α β : Type} {x y : TMW PS α} {f : α → TMW PS β} 
   · rw [bind_go_err hx, bind_go_err (h ▸ hx)]
   · rw [bind_go hx, bind_go (h ▸ hx)]
 
-/-- **Hybrids 1 and 2 differ in level 0's opening only**: both run the session's PIOP, and where it returns, an opening
-from the source that sends what the session's sends and returns its erased proof runs the same rep. -/
 theorem repMix_one_two (io : Asks PS) (hs : Hashes PS) (st : Setup) (sch : Schedule) (tPad rep : ℕ) (dom : ByteArray)
     (tr : Trace) (t : Array F128) (cm0 : Commit) (extras : Array Claim) (pads : PadsZk) (ic : InnerCommit)
     (extra lanePad : ℕ → ℕ → F128) (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64)
@@ -795,13 +727,10 @@ theorem repMix_one_two (io : Asks PS) (hs : Hashes PS) (st : Setup) (sch : Sched
   rcases b with ⟨lg, zl, rec⟩
   exact Alike.refl _
 
-/-! ## The session's PIOP answered by `asksCut` -/
-
 section Cut
 
 open Replay With
 
-/-- **A run answered by `asksCut` that returns is the run answered by `asksS`.** -/
 def cutS : With.Sim PS PS where
   R x y := ∀ l a l', x.go l = (.ok a, l') → y.go l = (.ok a, l')
   pure _ _ _ _ h := h
@@ -866,8 +795,6 @@ theorem piopPZk_cutS (st : Setup) (lay : Zk.PadLayout) (h : Array F128) (tr : Tr
   unfold piopPZk rankCheckP
   sim_walk [zerocheckPZk_cutS coin n resp hr, lincheckPZk_cutS coin n resp hr, ringSwitchP_cutS coin n resp hr]
 
-/-- **The session's PIOP from `asksCut`, where it returns, is the session's from `asksS`** at replies reading as the
-coins before round `n`. -/
 theorem piopPZk_cut_ok (st : Setup) (lay : Zk.PadLayout) (h : Array F128) (tr : Trace) (cap root : ByteArray)
     (extras : Array Claim) (prior : Array (List F128)) (words : List ℕ) {t : Transcript} {l l' : Array Claims.Msg}
     {a : (ZerocheckProof × LincheckProof × Array (Array F128) × F128 × Array Switched) × Transcript}
@@ -877,8 +804,6 @@ theorem piopPZk_cut_ok (st : Setup) (lay : Zk.PadLayout) (h : Array F128) (tr : 
 
 end CutS
 
-/-- **The session's PIOP at `asksS`, where it returns**, sent `piopZk st extras` bodies, and its ring switch's vectors
-are the closed form's at the replies (`ringSwitchP_go`, after `zerocheckPZk_go` and `lincheckPZk_go`). -/
 theorem piopPZk_exact (resp : ℕ → Claims.Msg) (st : Setup) (hm : 14 ≤ st.m) (lay : Zk.PadLayout) (h : Array F128)
     (tr : Trace) (cap root : ByteArray) (extras : Array Claim) (prior : Array (List F128)) (words : List ℕ)
     {t t' : Transcript} {l l' : Array Claims.Msg}
@@ -930,8 +855,6 @@ namespace Claims.ZKMal.Masked
 
 open Claims FlockSoundness.ZK FlockSoundness.Discharge CoinLayer
 
-/-- **What the deployed source carries for level 0's opening**: wherever the deployed rep's PIOP returns, the cut's
-source holds what the session's opening computes at the coins from the PIOP's last send on (`LigHyp`). -/
 def LigSrcE : Prop :=
   ∀ x, Live x → ∀ w, RZk x w → ∀ (τ : UE.Tape) (c : Fin (refK x) → FlockDeploy.Coin) (n : ℕ), ¬ Refused x c n →
     ∀ s spec, FlockDeploy.setupOf true x = some (s, spec, stsOf x) →
@@ -961,9 +884,6 @@ def LigSrcE : Prop :=
         r.val (zkTab x j).tPad ((UE.tapeZk τ).extra j.val) ((UE.tapeZk τ).lanePad j.val)
         ((UE.tapeZk τ).salt j.val r.val) ((srcE x c w τ j.val).rep r.val)
 
-/-- **`SimLig` from what the cut carries for level 0's opening**: hybrids 1 and 2 run the session's PIOP, and where it
-returns, the source's opening sends what the session's sends and returns its erased proof (`ligeritoCut_alike`, at the
-coins from the PIOP's last send on), every nonce `0` (`exeTape`'s). -/
 theorem simLig_of (h : LigSrcE) : SimLig := by
   intro x hx w hw τ c n hn s spec hs j r dom cm0 ic extras he l hl
   unfold mixE
@@ -972,7 +892,6 @@ theorem simLig_of (h : LigSrcE) : SimLig := by
   exact FlockComplete.LigLock.ligeritoCut_alike _ n _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
     (h x hx w hw τ c n hn s spec hs j r dom cm0 ic extras he l hl zp lp ss T sws t' l' hp)
 
-/-- **The replies the opened coins read as**: round `k`'s coin's bytes, the zero coin's past the pre-final rounds. -/
 noncomputable def ligRespE {x : Msg} (c : Fin (refK x) → FlockDeploy.Coin) (k : ℕ) : Msg :=
   (if h : k < refK x then c ⟨k, h⟩ else default).bytes
 
@@ -986,8 +905,6 @@ theorem coinOf_ligRespE {x : Msg} (c : Fin (refK x) → FlockDeploy.Coin) (k : �
   · unfold FlockDeploy.Coin.at
     split <;> rfl
 
-/-- **Table `j`'s rep `r` switched vectors at the opened coins**: the session's ring switch's, in closed form at the
-replies `ligRespE c` from the rep's first round (`piopPZk_exact`). -/
 noncomputable def swsE (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (w : Claims.Flock.Wit) (τ : UE.Tape)
     (j : Fin (jOf x)) (r : Fin 2) (extras : Array _root_.Flock.Claim) : Array _root_.Flock.Switched :=
   FlockComplete.Replay.Rs.sws (_root_.Flock.abcClaims (FlockDeploy.tabsOf (stsOf x))[j.val]!.m
@@ -1005,10 +922,6 @@ noncomputable def swsE (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (w : Cl
       (repBase x (2 * j.val + r.val) + 3 + ((FlockDeploy.tabsOf (stsOf x))[j.val]!.m - 6) + 3 +
         ((FlockDeploy.tabsOf (stsOf x))[j.val]!.fold.kLog - 6)) (2 + extras.size))
 
-/-! ## Level 0's opening at the deployed rep's coins -/
-
-/-- **A statement of each deployed rep**: at a live statement and a witness, a tape, opened coins `c` not refused by
-round `n`, the session's setup, table `j`, rep `r` and the table's extra claims at the link's points. -/
 def LigEach (P : (x : Msg) → Claims.Flock.Wit → UE.Tape → (Fin (refK x) → FlockDeploy.Coin) → ℕ →
     _root_.Flock.SessionSpec → Fin (jOf x) → Fin 2 → Array _root_.Flock.Claim → Prop) : Prop :=
   ∀ x, Live x → ∀ w, RZk x w → ∀ (τ : UE.Tape) (c : Fin (refK x) → FlockDeploy.Coin) (n : ℕ), ¬ Refused x c n →
@@ -1016,40 +929,29 @@ def LigEach (P : (x : Msg) → Claims.Flock.Wit → UE.Tape → (Fin (refK x) �
     ∀ (j : Fin (jOf x)) (r : Fin 2) (extras : Array _root_.Flock.Claim),
       (FlockDeploy.tabsOf (stsOf x))[j.val]!.extra (ptsE c spec) = .ok extras → P x w τ c n spec j r extras
 
-/-- Table `j`'s setup. -/
 abbrev ligSt (x : Msg) (j : Fin (jOf x)) : _root_.Flock.Setup := (FlockDeploy.tabsOf (stsOf x))[j.val]!
 
-/-- Table `j`'s pad layout. -/
 noncomputable abbrev ligLay (x : Msg) (j : Fin (jOf x)) : _root_.Flock.Zk.PadLayout :=
   _root_.Flock.Zk.PadLayout.new (ligSt x j).m (ligSt x j).kLog (zkTab x j).sch.k0
 
-/-- Table `j`'s rep `r` pads. -/
 noncomputable abbrev ligPad (x : Msg) (τ : UE.Tape) (j : Fin (jOf x)) (r : Fin 2) : Array _root_.Flock.F128 :=
   (FlockComplete.padsOf (UE.tapeZk τ) j.val r.val (ligLay x j)).h
 
-/-- Table `j`'s packed table, at `w`'s trace. -/
 noncomputable abbrev ligTab (x : Msg) (w : Claims.Flock.Wit) (τ : UE.Tape) (j : Fin (jOf x)) : Array _root_.Flock.F128 :=
   FlockComplete.packed (trsE x w (UE.tapeZk τ))[j.val]! (ligSt x j).m
 
-/-- Table `j`'s rep `r` basis at the opened coins: its switched vectors' (`swsE`). -/
 noncomputable abbrev ligBasis (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (w : Claims.Flock.Wit) (τ : UE.Tape) (j : Fin (jOf x))
     (r : Fin 2) (extras : Array _root_.Flock.Claim) : Array _root_.Flock.F128 :=
   FlockComplete.basisVals (swsE x c w τ j r extras) ((ligSt x j).m - 7)
 
-/-- Rep `2j + r`'s round after its PIOP: Ligerito's first. -/
 abbrev ligP0 (x : Msg) (j : Fin (jOf x)) (r : Fin 2) : ℕ := repSlot x (2 * j.val + r.val) fun _ => 0
 
-/-- The opened coins by round and element. -/
 abbrev ligCoin {x : Msg} (c : Fin (refK x) → FlockDeploy.Coin) : ℕ → ℕ → _root_.Flock.F128 := fun k i => slotAt c k i
 
-/-- Table `j`'s rep `r` source. -/
 noncomputable abbrev ligSrc (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (w : Claims.Flock.Wit) (τ : UE.Tape) (j : Fin (jOf x))
     (r : Fin 2) : FlockComplete.RepSrc :=
   (srcE x c w τ j.val).rep r.val
 
-/-- **What the deployed source carries for level 0's opening, at the coins**: rep `r`'s source holds what the
-session's opening computes at the coins from round `ligP0` on, the round after the rep's PIOP, with the basis of the
-PIOP's switched vectors at the coins (`ligBasis`). -/
 def LigHypE : Prop := LigEach fun x w τ c n _ j r extras =>
   FlockComplete.LigLock.LigHyp (ligCoin c) n (ligP0 x j r) (ligSt x j).merkle (zkTab x j).sch (ligTab x w τ j)
     (ligBasis x c w τ j r extras) (ligLay x j) (ligPad x τ j r) r.val (zkTab x j).tPad ((UE.tapeZk τ).extra j.val)
@@ -1059,22 +961,16 @@ section Fields
 
 open FlockComplete FlockComplete.LigLock
 
-/-- **Level 0's out-of-domain value at the coins**: the source's, masked, is the packed table's multilinear extension
-at the reply to round `p₀`, plus its pad. -/
 def LigOodE : Prop := LigEach fun x w τ c _ _ j r _ =>
   (ligSrc x c w τ j r).masked ((ligLay x j).lgOod 0) =
     mleF (ligTab x w τ j) (zS (ligCoin c) (ligP0 x j r) (zkTab x j).sch.n) + (ligPad x τ j r)[(ligLay x j).lgOod 0]!
 
-/-- **Level 0's lane messages at the coins**: the source's, masked, are the round polynomials of the table and the
-weight after each lane challenge. -/
 def LigMsgE : Prop := LigEach fun x w τ c _ _ j r extras =>
   ∀ i < (zkTab x j).sch.k0, mmOf (ligSrc x c w τ j r) (ligLay x j) i =
     maskMsg (ligLay x j) (ligPad x τ j r) i
       (roundPoly (tabS (ligCoin c) (ligP0 x j r) (ligTab x w τ j) i)
         (wS (ligCoin c) (ligP0 x j r) (ligBasis x c w τ j r extras) (zkTab x j).sch.n i))
 
-/-- **Level 0's pair's sums at the coins**: the source's, masked, are the folded weight's products with the rep's
-extra lanes. -/
 def LigSumsE : Prop := LigEach fun x w τ c _ _ j r extras =>
   let sch := (zkTab x j).sch
   let src := ligSrc x c w τ j r
@@ -1088,8 +984,6 @@ def LigSumsE : Prop := LigEach fun x w τ c _ _ j r extras =>
       dotK wk (embedF ((Array.range N).map ((UE.tapeZk τ).extra j.val (2 * r.val + 1)))) +
         ⟨h[lay.lgE 1 0]!, h[lay.lgE 1 1]!⟩
 
-/-- **The restart's `y₁'` at the coins**: where the pair's coins are answered and independent, the source's is the
-folded table plus the pair's coins times the rep's extra lanes. -/
 def LigY1E : Prop := LigEach fun x w τ c n _ j r _ =>
   let sch := (zkTab x j).sch
   let tk := tabS (ligCoin c) (ligP0 x j r) (ligTab x w τ j) sch.k0
@@ -1099,8 +993,6 @@ def LigY1E : Prop := LigEach fun x w τ c n _ j r _ =>
       tk[i]! + ρ.1.smul ((Array.range tk.size).map ((UE.tapeZk τ).extra j.val (2 * r.val)))[i]! +
         ρ.2.smul ((Array.range tk.size).map ((UE.tapeZk τ).extra j.val (2 * r.val + 1)))[i]!
 
-/-- **The restart's `ȳ` at the coins**: where the pair's coins are answered and independent, the source's is the lane
-pads under the lane challenges' `eq` table plus the pair's coins times the rep's extra lane pads. -/
 def LigYbarE : Prop := LigEach fun x w τ c n _ j r _ =>
   let sch := (zkTab x j).sch
   let ρ := rhoS (ligCoin c) (ligP0 x j r) sch.k0
@@ -1112,8 +1004,6 @@ def LigYbarE : Prop := LigEach fun x w τ c n _ j r _ =>
         (fun acc l => acc + ((_root_.Flock.eqTableK ((Array.range sch.k0).map (chS (ligCoin c) (ligP0 x j r))))[l]!).smul (lp l i))
         (ρ.1.smul (lp (L + 2 * r.val) i) + ρ.2.smul (lp (L + 2 * r.val + 1) i))
 
-/-- **Levels ≥ 1's salts at the coins**: where the pair's coins are answered and independent, the source's, fitted,
-are the tape's on the positions each level's commitment reads. -/
 def LigSaltE : Prop := LigEach fun x w τ c n _ j r _ =>
   let sch := (zkTab x j).sch
   ligP0 x j r + 3 + sch.k0 < n → _root_.Flock.Zk.rhoIndependent (rhoS (ligCoin c) (ligP0 x j r) sch.k0) = true →
@@ -1123,8 +1013,6 @@ def LigSaltE : Prop := LigEach fun x w τ c n _ j r _ =>
 
 end Fields
 
-/-- **`LigHypE` from its fields**: the schedule's facts (`zk_schedule_seams`: `k₀ ≥ 1`, `n = m − 7` with `m ≥ 25`, at
-least two levels) and the values at the coins. -/
 theorem ligHypE_of (hood : LigOodE) (hmsg : LigMsgE) (hsum : LigSumsE) (hy1 : LigY1E) (hybar : LigYbarE)
     (hsalt : LigSaltE) : LigHypE := by
   intro x hx w hw τ c n hn s spec hs j r extras he
@@ -1142,20 +1030,15 @@ theorem ligHypE_of (hood : LigOodE) (hmsg : LigMsgE) (hsum : LigSumsE) (hy1 : Li
       ybar := hybar x hx w hw τ c n hn s spec hs j r extras he
       salt := hsalt x hx w hw τ c n hn s spec hs j r extras he }
 
-/-- Table `j`'s statement is rep `2j + r`'s. -/
 theorem stsOf_half (x : Msg) (j : Fin (jOf x)) (r : Fin 2) : (stsOf x)[(2 * j.val + r.val) / 2]! = stAt x j := by
   rw [show (2 * j.val + r.val) / 2 = j.val by omega]
   exact getElem!_pos (stsOf x) j.val (lt_of_jOf j)
 
-/-- The session's setup of table `j` is its statement's. -/
 theorem tabsOf_stAt (x : Msg) (j : Fin (jOf x)) :
     (FlockDeploy.tabsOf (stsOf x))[j.val]! = _root_.Flock.Setup.ofCircuit (stAt x j) := by
   rw [getElem!_pos _ _ (by simpa [FlockDeploy.tabsOf] using lt_of_jOf j)]
   simp [FlockDeploy.tabsOf, stAt]
 
-/-- **`LigSrcE` from the source at the coins** (`LigHypE`): the deployed rep's PIOP, answered by `asksCut`, returns as
-it does at `asksS (ligRespE c)` (`piopPZk_cut_ok`), so it sent `piopZk` bodies from `repBase`, landing at `repSlot … 0`,
-and returned `swsE` (`piopPZk_exact`). -/
 theorem ligSrcE_of (h : LigHypE) : LigSrcE := by
   intro x hx w hw τ c n hn s spec hs j r dom cm0 ic extras he l hl zp lp ss T sws t' l' hp
   have hr : ∀ k < n, FlockComplete.coinOf (ligRespE c k) = (fun k i => slotAt c k i) k := fun k _ => coinOf_ligRespE c k
@@ -1187,31 +1070,19 @@ theorem ligSrcE_of (h : LigHypE) : LigSrcE := by
   rw [hslot, show sws = swsE x c w τ j r extras from hsws]
   exact h x hx w hw τ c n hn s spec hs j r extras he
 
-/-- **`SimLig` from level 0's opening at the deployed rep's coins**: the out-of-domain value, the lane messages, the
-pair's sums, and where the pair's coins are answered and independent the restart's `y₁'`, `ȳ` and levels ≥ 1's salts. -/
 theorem simLig_of_fields (hood : LigOodE) (hmsg : LigMsgE) (hsum : LigSumsE) (hy1 : LigY1E) (hybar : LigYbarE)
     (hsalt : LigSaltE) : SimLig :=
   simLig_of (ligSrcE_of (ligHypE_of hood hmsg hsum hy1 hybar hsalt))
 
-/-! ### The out-of-domain sample
-
-The deployed source's masked value at `lgOod 0` is the cut's clear value there plus the tape's pad
-(`srcE_masked_pad_L`). The clear value is `Σ_y eqAt(z, y)·word(y)` at the sampled point `z` (`Composed.honestAt_lgOod`),
-which is the executable's `mleF` of the packed trace at `zS` (`ligOodE`). -/
-
 section Ood
 
-/-- Table `j`'s pad layout at the executable's schedule. -/
 private noncomputable abbrev layL (x : Msg) (j : Fin (jOf x)) : _root_.Flock.Zk.PadLayout :=
   _root_.Flock.Zk.PadLayout.new (stAt x j).m (stAt x j).c.kLog (zkTab x j).sch.k0
 
-/-- Table `j`'s witness as the cut's view reads it: `w`'s share with the tape's mask words (`Composed.zWith`). -/
 noncomputable abbrev zwL (x : Msg) (w : Claims.Flock.Wit) (τ : UE.Tape) (j : Fin (jOf x)) :
     FlockSoundness.Model.Witness (tabC PE x j).S.m :=
   Composed.zWith (stAt x j) (wtOf PE x w j) ((UE.tape x τ).1 j).1
 
-/-- **The deployed source's masked value at a sent index** `k < n_E` is the clear value the cut's view masks
-(`Composed.honestAt`) plus the tape's pad `k` of table `j`'s rep `r`. -/
 private theorem srcE_masked_L (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (w : Claims.Flock.Wit) (τ : UE.Tape)
     (j : Fin (jOf x)) (r : Fin 2) {k : ℕ} (hk : k < (tabC PE x j).z.nE) :
     ((srcE x c w τ j.val).rep r.val).masked k =
@@ -1239,7 +1110,6 @@ private theorem srcE_masked_L (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) 
   congr 1
   exact (congrArg FlockLevel3.GF128.val (tH ⟨k, by omega⟩)).symm
 
-/-- **The deployed source's masked value below `h_ab`** is the clear value plus the session's pad (`padsOf`). -/
 private theorem srcE_masked_pad_L (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (w : Claims.Flock.Wit) (τ : UE.Tape)
     (j : Fin (jOf x)) (r : Fin 2) {k : ℕ} (hk : k < (layL x j).hab) :
     ((srcE x c w τ j.val).rep r.val).masked k =
@@ -1256,13 +1126,11 @@ private theorem srcE_masked_pad_L (x : Msg) (c : Fin (refK x) → FlockDeploy.Co
 
 
 
-/-- An equation in the field read as one between its values. -/
 private theorem val_eq_of {a : FlockLevel3.GF128} {b : _root_.Flock.F128} (h : a = FlockLevel3.GF128.of b) :
     FlockLevel3.GF128.val a = b := by
   rw [h]
   rfl
 
-/-- `eqAt` at points of equal dimension and coordinates. -/
 private theorem eqAt_congr_fin {a b : ℕ} (h : a = b) (p : Fin a → FlockLevel3.GF128) (q : Fin b → FlockLevel3.GF128)
     (hpq : ∀ i (ha : i < a) (hb : i < b), p ⟨i, ha⟩ = q ⟨i, hb⟩) (y : ℕ) :
     FlockSoundness.Model.eqAt p y = FlockLevel3.eqAt q y := by
@@ -1271,8 +1139,6 @@ private theorem eqAt_congr_fin {a b : ℕ} (h : a = b) (p : Fin a → FlockLevel
   subst this
   rfl
 
-/-- **The deployed witness's bits are its trace's**: table `j`'s share with the tape's mask words (`zwL`) at address `a`
-is the bit the session's trace holds there. -/
 theorem zwL_trace {x : Msg} (w : Claims.Flock.Wit) (τ : UE.Tape) (j : Fin (jOf x)) :
     ∀ a : Fin (2 ^ (zkTab x j).table.S.m),
       zwL x w τ j a = _root_.Flock.Readable.toZ ((trsE x w (UE.tapeZk τ))[j.val]!).z[a.val]! := by
@@ -1289,7 +1155,6 @@ theorem zwL_trace {x : Msg} (w : Claims.Flock.Wit) (τ : UE.Tape) (j : Fin (jOf 
   rw [← hzw, htr, FlockComplete.Replay.traceOf_z _ _ a.isLt]
   simp [_root_.Flock.Readable.zOf]
 
-/-- **Level 0's out-of-domain point's `eq` at the coins** is the executable's `eq` table at the reply to round `p₀`. -/
 private theorem eqAt_oodPoint {x : Msg} (c : Fin (refK x) → FlockDeploy.Coin) (j : Fin (jOf x)) (r : Fin 2) {y : ℕ}
     (hy : y < 2 ^ ((zkTab x j).table.S.m - 7)) :
     FlockSoundness.Model.eqAt (Composed.oodPoint (zkTab x j).table (stAt x j) (czExe PE x c j) r 0) y =
@@ -1362,18 +1227,10 @@ theorem ligOodE : LigOodE := by
 
 end Ood
 
-/-! ### The restart's `ȳ`
-
-The deployed source's `ȳ` is the cut's view's, the table's `ȳ` of the tape's paddings (`srcE_ybar_L`, unguarded by
-the cut). Its lane sum is the executable's fold under `eqTableK` of the lane challenges (`eqTableK_eqList`, the lane
-coins at `p₀ + 2 + l`), and its pair's terms are `rhoS`'s times the extra lanes' paddings (`rhoAt` at `p₀ + 2 + k₀`)
-(`ligYbarE`). -/
-
 section Ybar
 
 variable {wideLeaf : Bool}
 
-/-- **The deployed source's `ȳ`** is the cut's view's: the table's `ȳ` of the tape's lane paddings and extra lanes'. -/
 private theorem srcE_ybar_L (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (w : Claims.Flock.Wit) (τ : UE.Tape)
     (j : Fin (jOf x)) (r : Fin 2) :
     ((srcE x c w τ j.val).rep r.val).ybar = Array.ofFn fun i =>
@@ -1384,7 +1241,6 @@ private theorem srcE_ybar_L (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (w
   rw [dite_eq_left r.isLt]
   rfl
 
-/-- **The table's `ȳ`**: the lane paddings under `eq(r̄)` plus the pair's coins times the extra lanes' paddings. -/
 private theorem tab_ybar_L (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (j : Fin (jOf x)) (r : Fin 2)
     (μ0 : Fin (tabC PE x j).z.nL → Fin (tabC PE x j).z.tpad → FlockLevel3.GF128)
     (μR : Fin 2 → Fin 2 → Fin (tabC PE x j).z.tpad → FlockLevel3.GF128) (i : Fin (tabC PE x j).z.tpad) :
@@ -1420,7 +1276,6 @@ theorem prod_fin_range {M : Type} [CommMonoid M] {a b : ℕ} (h : a = b) (f : Fi
   rw [← Fin.prod_univ_eq_prod_range]
   exact Finset.prod_congr rfl fun l _ => hfg l l.isLt
 
-/-- Table `j`'s rep `r`'s rounds past its PIOP, from `p₀`. -/
 theorem repSlot_p0 {x : Msg} {s spec} (hs : FlockDeploy.setupOf true x = some (s, spec, stsOf x))
     (j : Fin (jOf x)) (r : Fin 2) (f : _root_.Flock.Schedule → ℕ) :
     repSlot x (2 * j.val + r.val) f = ligP0 x j r + f (zkTab x j).sch := by
@@ -1482,17 +1337,8 @@ theorem ligYbarE : LigYbarE := by
 
 end Ybar
 
-/-! ### The restart's `y₁'`
-
-Where the pair's coins are answered (`hlt`) the restart is sent (`famPasses_of`, guard slot `ρ`'s plus two), so the
-deployed source's `y₁'` is the cut's view's, the table's `y₁'` of the witness lanes and the extra lanes (`srcE_y1_L`).
-Its lane sum is the executable's iterated fold of the packed table (`tabS_foldKs`, `foldLoL_eq_sum`), whose entries are
-the witness's lane words (`wordOf_packed`), and its pair's terms are `rhoS`'s times the extra lanes (`ligY1E`). -/
-
 section Y1
 
-/-- **The deployed source's `y₁'`** where the rep's restart is sent: the table's `y₁'` of the table witness, the tape's
-mask slot and extra lanes. -/
 private theorem srcE_y1_L (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (w : Claims.Flock.Wit) (τ : UE.Tape)
     (j : Fin (jOf x)) (r : Fin 2)
     (hS : famPasses (fun j => ((tabC PE x j).T (czExe PE x c j)).tab) (fun j => ((tabC PE x j).T (czExe PE x c j)).rep)
@@ -1510,7 +1356,6 @@ private theorem srcE_y1_L (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (w :
   dsimp only
   rw [e]
 
-/-- **The table's `y₁'`**: the witness lanes under `eq(r̄)` plus the pair's coins times the extra lanes. -/
 theorem tab_y1_L (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (w : Claims.Flock.Wit) (τ : UE.Tape)
     (j : Fin (jOf x)) (r : Fin 2) (i : Fin (tabC PE x j).z.L) :
     ((tabC PE x j).T (czExe PE x c j)).tab.y1' (wtOf PE x w j) ((UE.tape x τ).1 j).1 ((UE.tape x τ).1 j).2.1.2.1 r i =
@@ -1519,7 +1364,6 @@ theorem tab_y1_L (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (w : Claims.F
         (FlockLevel3.GF256.of (rhoAt c j.val r.val).1 * FlockLevel3.embed (((UE.tape x τ).1 j).2.1.2.1 r 0 i) +
           FlockLevel3.GF256.of (rhoAt c j.val r.val).2 * FlockLevel3.embed (((UE.tape x τ).1 j).2.1.2.1 r 1 i)) := rfl
 
-/-- **`tabS` is the executable's iterated fold**: the table after `k` lane challenges, lowest variable first. -/
 theorem tabS_foldKs (coin : ℕ → ℕ → _root_.Flock.F128) (p0 : ℕ) (t : Array _root_.Flock.F128) :
     ∀ k, FlockComplete.LigLock.tabS coin p0 t k =
       FlockComplete.Replay.Lg.foldKs ((List.range k).map (FlockComplete.LigLock.chS coin p0)) (FlockComplete.embedF t)
@@ -1628,22 +1472,12 @@ theorem ligY1E : LigY1E := by
 
 end Y1
 
-/-! ### Levels ≥ 1's salts
-
-Where the restart is sent its levels ≥ 1 value is sent too, `PE`'s salts as one string (`saltBlob` of `hiSalt` at the
-tape's levels ≥ 1 salts, `srcE_hiSalt_L`), so the source's salt at a level `≥ 1` and position of the schedule is
-`hiSalt`'s fitted to 192 bytes (`blobSalt_saltBlob`), the tape's by HiSalts' `hiSalt_exe` (`HiSaltE`), and the deployed
-scheme's salts are 192 bytes (`ligSaltE`). -/
-
 section Salt
 
-/-- **Levels ≥ 1's salts at the executable's layout**: rep `r`'s levels ≥ 1 salt that `hiSalt` reads at a level `l ≥ 1`
-and position `p` of the schedule is the masked prover's tape's. -/
 def HiSaltE : Prop :=
   ∀ (x : Msg) (t : UE.Tape) (j : Fin (jOf x)) (r : Fin 2) (l p : ℕ), HiAt (zkTab x j).table.sch.levels l p →
     hiSalt (zkTab x j).table.sch.levels (((UE.tape x t).1 j).2.2.2.2.2.2.2.2.2 r) l p = (exeTape t).salt j.val r.val l p
 
-/-- HiSalts' `hiSalt_exe` at `PE`. -/
 theorem hiSaltE : HiSaltE := fun x t j r _ _ h => hiSalt_exe PE x t j r h
 
 private theorem fitBytes_fit192 (b : ByteArray) :
@@ -1652,8 +1486,6 @@ private theorem fitBytes_fit192 (b : ByteArray) :
   unfold fit192 FlockComplete.fitBytes
   rw [show 192 - min 192 b.size = 192 - b.size by omega]
 
-/-- **The deployed source's levels ≥ 1 salts** where the rep's restart is sent: read back from `PE`'s string of the
-tape's levels ≥ 1 salts. -/
 private theorem srcE_hiSalt_L (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (w : Claims.Flock.Wit) (τ : UE.Tape)
     (j : Fin (jOf x)) (r : Fin 2)
     (hS : famPasses (fun j => ((tabC PE x j).T (czExe PE x c j)).tab) (fun j => ((tabC PE x j).T (czExe PE x c j)).rep)
@@ -1710,17 +1542,8 @@ theorem ligSaltE (hhi : HiSaltE) : LigSaltE := by
 
 end Salt
 
-/-! ### The opening's basis
-
-At the coins, the model's batched basis (`Composed.openB`) is the executable's basis of the PIOP's switched vectors
-(`ligBasis`, `fOf_basisVals`): term by term, the ring switch's `γ` and `rpp` coins are the coins at the rep's slots,
-and the claims' points past their first coordinate are the model's (`abTail`, `cTail`, and the table's extra claims'
-region points, `extras_pt`) (`openB_basis`). -/
-
 section Basis
 
-/-- **The deployed table's extra claims**: claim `i` has `m − 6` coordinates, and past its first it is region `i / 2`'s
-point at link point `i % 2` of the coins (`regionPtOf`). -/
 private theorem extras_pt {x : Msg} (hx : Live x) (c : Fin (refK x) → FlockDeploy.Coin) {s spec}
     (hs : FlockDeploy.setupOf true x = some (s, spec, stsOf x)) (j : Fin (jOf x)) {extras : Array _root_.Flock.Claim}
     (he : (stAt x j).extraClaims (ptsE c spec) = .ok extras) (i : ℕ) (hi : i < 2 * (stAt x j).regions.size) :
@@ -1770,13 +1593,11 @@ private theorem extras_pt {x : Msg} (hx : Live x) (c : Fin (refK x) → FlockDep
   · rw [hxe, extract_six_one]
     rfl
 
-/-- Past its first coordinate, entry `i` of a point is entry `i + 1`. -/
 private theorem extract_one_get (a : Array _root_.Flock.F128) {i : ℕ} (hi : i + 1 < a.size) :
     (a.extract 1 a.size)[i]! = a[i + 1]! := by
   rw [getElem!_pos _ i (by rw [Array.size_extract]; omega), Array.getElem_extract,
     ← getElem!_pos a (1 + i) (by omega), Nat.add_comm]
 
-/-- `eqAt` at points of equal dimension and coordinates. -/
 private theorem eqAt_congr_fin' {a b : ℕ} (h : a = b) (p : Fin a → FlockLevel3.GF128) (q : Fin b → FlockLevel3.GF128)
     (hpq : ∀ i (ha : i < a) (hb : i < b), p ⟨i, ha⟩ = q ⟨i, hb⟩) (y : ℕ) :
     FlockSoundness.Model.eqAt p y = FlockSoundness.Model.eqAt q y := by
@@ -1785,8 +1606,6 @@ private theorem eqAt_congr_fin' {a b : ℕ} (h : a = b) (p : Fin a → FlockLeve
   subst this
   rfl
 
-/-- **The opening's basis is the deployed basis** at any extra claims two per region, at the region points of the link
-(`hpt`, as `extras_pt` reads the statement's). -/
 theorem openB_basisOf {x : Msg} (hx : Live x) (w : Claims.Flock.Wit) (τ : UE.Tape)
     (c : Fin (refK x) → FlockDeploy.Coin) {s spec} (hs : FlockDeploy.setupOf true x = some (s, spec, stsOf x))
     (j : Fin (jOf x)) (r : Fin 2) (extras : Array _root_.Flock.Claim)
@@ -1969,19 +1788,8 @@ theorem openB_basis {x : Msg} (hx : Live x) (w : Claims.Flock.Wit) (τ : UE.Tape
 
 end Basis
 
-/-! ### Level 0's lane rounds
-
-At the coins, the model's lane tables (`Composed.laneF`, `Composed.laneB`) are the executable's arrays (`tabS`, `wS`)
-on their entries (`Lg.gv`): both fold by `foldLo` at the lane challenges (`fold_gv`, `laneCh_chS`), from the packed
-table (`laneF_tabS`) and from the basis plus the out-of-domain term (`laneB_wS`: `openB_basis`, `eqAt_oodPoint`). So
-each lane message is the round polynomial of the two arrays (`laneMsg_roundPoly`, `ligMsgE`), and the pair's sums are
-the folded weight's products with the rep's extra lanes (`ligSumsE`). -/
-
 section Lane
 
-/-- **Folds that agree on their entries**: tables folded by `foldLo` at `t i` and arrays folded by `foldK` at `ch i`,
-equal on the first `2^M` entries and at each of the first `k ≤ M` challenges, agree on the first `2^(M − i)` entries
-after `i ≤ k` folds. -/
 private theorem fold_gv {M k : ℕ} (hk : k ≤ M) (u : ℕ → ℕ → FlockLevel3.GF256) (a : ℕ → Array _root_.Flock.F256)
     (t : ℕ → FlockLevel3.GF256) (ch : ℕ → _root_.Flock.F256)
     (hu : ∀ i, u (i + 1) = FlockSoundness.foldLo (t i) (u i)) (ha : ∀ i, a (i + 1) = FlockComplete.foldK (ch i) (a i))
@@ -2006,7 +1814,6 @@ private theorem fold_gv {M k : ℕ} (hk : k ≤ M) (u : ℕ → ℕ → FlockLev
     unfold FlockSoundness.foldLo
     rw [hu' (2 * y) (by omega), hu' (2 * y + 1) (by omega)]
 
-/-- **The model's lane challenges are the executable's** (`chS`, the replies to rounds `p₀ + 2 + i`). -/
 private theorem laneCh_chS {x : Msg} (c : Fin (refK x) → FlockDeploy.Coin) {s spec}
     (hs : FlockDeploy.setupOf true x = some (s, spec, stsOf x)) (j : Fin (jOf x)) (r : Fin 2) :
     ∀ i < (zkTab x j).sch.k0, Composed.laneCh (zkTab x j).table (stAt x j) (czExe PE x c j) r i =
@@ -2019,7 +1826,6 @@ private theorem laneCh_chS {x : Msg} (c : Fin (refK x) → FlockDeploy.Coin) {s 
     simp only [kAt, FlockComplete.LigLock.chS, ligCoin, Nat.add_assoc]
   · exact absurd hi h
 
-/-- **The model's lane tables `f` are the executable's** (`tabS`, from the packed table). -/
 private theorem laneF_tabS {x : Msg} (w : Claims.Flock.Wit) (τ : UE.Tape) (c : Fin (refK x) → FlockDeploy.Coin)
     {s spec} (hs : FlockDeploy.setupOf true x = some (s, spec, stsOf x)) (j : Fin (jOf x)) (r : Fin 2) :
     ∀ i ≤ (zkTab x j).sch.k0,
@@ -2049,8 +1855,6 @@ private theorem laneF_tabS {x : Msg} (w : Claims.Flock.Wit) (τ : UE.Tape) (c : 
   rw [hmL]
   exact FlockComplete.wordOf_packed _ _ (zwL_trace w τ j) hy hM7
 
-/-- **The model's lane bases `B` are the executable's weights** (`wS`, from the basis plus the out-of-domain term),
-wherever the opening's basis is the deployed one (`hob`). -/
 theorem laneB_wSOf {x : Msg} (w : Claims.Flock.Wit) (τ : UE.Tape)
     (c : Fin (refK x) → FlockDeploy.Coin) {s spec} (hs : FlockDeploy.setupOf true x = some (s, spec, stsOf x))
     (j : Fin (jOf x)) (r : Fin 2) (extras : Array _root_.Flock.Claim)
@@ -2101,8 +1905,6 @@ theorem laneB_wSOf {x : Msg} (w : Claims.Flock.Wit) (τ : UE.Tape)
   · show FlockSoundness.Refine.fOf (slotAt c (repSlot x (2 * j.val + r.val) fun _ => 1) 0) = _
     rw [repSlot_p0 hs j r]
 
-/-- **Two limbs read as one element**: where the model's element of limbs `a`, `b` is `R`'s, `R` is the pair of the
-limbs' values. -/
 private theorem mk_val_eq {a b : FlockLevel3.GF128} {R : _root_.Flock.F256}
     (h : FlockSoundness.execArith.ofLimbs a b = FlockSoundness.Refine.gOf R) :
     (⟨FlockLevel3.GF128.val a, FlockLevel3.GF128.val b⟩ : _root_.Flock.F256) = R := by
@@ -2123,8 +1925,6 @@ private theorem laneB_wS {x : Msg} (hx : Live x) (w : Claims.Flock.Wit) (τ : UE
           (FlockComplete.LigLock.wS (ligCoin c) (ligP0 x j r) (ligBasis x c w τ j r extras) (zkTab x j).sch.n i) y :=
   laneB_wSOf w τ c hs j r extras fun y hy => openB_basis hx w τ c hs j r extras he y hy
 
-/-- **Lane round `i`'s message at the coins**: the model's (`Composed.laneMsg`) is the round polynomial of the
-executable's table and weight after the first `i` lane challenges. -/
 private theorem laneMsg_roundPoly {x : Msg} (hx : Live x) (w : Claims.Flock.Wit) (τ : UE.Tape)
     (c : Fin (refK x) → FlockDeploy.Coin) {s spec} (hs : FlockDeploy.setupOf true x = some (s, spec, stsOf x))
     (j : Fin (jOf x)) (r : Fin 2) (extras : Array _root_.Flock.Claim)
@@ -2252,7 +2052,6 @@ theorem ligSumsE : LigSumsE := by
 
 end Lane
 
-/-- **Hybrid step 1** (`SimLig`): the six value statements, `ligSaltE` at HiSalts' salts (`hiSaltE`). -/
 theorem simLig : SimLig :=
   simLig_of_fields ligOodE ligMsgE ligSumsE ligY1E ligYbarE (ligSaltE hiSaltE)
 

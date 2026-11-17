@@ -46,38 +46,8 @@ import Proofs.Flock.Soundness.Game
 import Std.Tactic.BVDecide.Normalize.Prop
 import VCVio.Prelude.Core
 
-/-!
-# The Goldreich–Kahan simulator with estimation, in expected polynomial time
-
-`Proto.simulatorE t M` is the session analysis's simulator (`FlockSoundness.ZK.GK.gk`, the deployed `gk_simulate`) as a
-`Claims.Simulator`, with threshold `t` and cap `M`, using `V*` only through `SP.ask`:
-
-1. one dummy-witness run; if it does not open every coin, its transcript is the output;
-2. **estimation**: fresh dummy-witness runs on the same nonce until `t` of them open every coin, at most `M`; `N` runs;
-3. **rewinds**: at most `4N` rewinds at the coins the first run opened, each the SHVZK simulator's messages sent by the
-   forced prover; the first that opens them all is the output.
-
-A rewind that opens one of those coins as another (a binding failure), the cap, and running out of rewinds output the
-empty transcript.
-
-* `Proto.gkE_zk`: it meets `ZKmalR` at `ε_zk = 4·δ_A + 4t·δ_B + 3^{-t} + t/M` and `γ = 4M`: the old hybrids
-  (`sim_hyb₁`, `hyb₁_hyb₂`, `hyb₂_real`) on the old `Model`, built from the protocol at each nonce (`Proto.model`),
-  whose `bind_real` is `real_eq_of_not_mism`, `PrefinalClose` is `PrefixHides` and `RewindClose` is `SHVZK`. Hybrid 1's
-  binding failure is a rewind with the honest prover's messages; `PrefixHides` moves its first run to the real one, where
-  it is a collision of two real runs on one nonce (`rwMism_coll`), `Fork`'s event (`Proto.hyb₁_bind_le`);
-* `Proto.gkE_costExp`: at most `(1 + 5t)·runBound` calls in expectation over its coins against every verifier, for every
-  cap `M` (`SimCost`, the old `sim_runs_ev`); `Proto.gkE_cost`: at most `(1 + 5M)·runBound` on every coin
-  (`SimCostLe`, the old `sim_runs_le`);
-* `Proto.gkE_zk_pow`: at the cap `M = t·3^t`, `ε_zk = 4·δ_A + 4t·δ_B + 2·3^{-t}` and `γ = 4t·3^t`.
-
-**Why a cap.** A `Claims.Simulator` has finitely many coins and stops on every one, so the uncapped simulator is not
-one. The cap costs `t/M` in `ε_zk` and nothing in the expected cost, which is uniform in `M`; at `M = t·3^t` its term is
-the rewinds' `3^{-t}`, and only the worst case grows with it.
-
-**The coins.** `gk` flips its coins as it goes (a `Rand` program); the simulator reads them from tapes fixed in advance,
-the nonce and the first run's tape, `M` dummy-witness tapes and `4M` SHVZK tapes, each read at most once (`gkT`). The
-two have one sampling design (`ev_gkT`, from `ev_estimateT` and `ev_rewindsT`).
--/
+/-! The Goldreich–Kahan simulator with estimation, in expected polynomial time, capped at `M` runs since a
+`Claims.Simulator` has finitely many coins. -/
 
 @[expose] public section
 
@@ -87,13 +57,10 @@ open Claims
 
 local notation "GOut" => FlockSoundness.ZK.GK.Out
 
-/-! ## The simulator's program on tapes -/
-
 section Tape
 
 open FlockSoundness.ZK.GK
 
-/-- **The estimation on a tape**: `estimate`, reading its at most `b` coins from `ω` in order. -/
 def estimateT {C : Type} (comp : C → Bool) : (b k : ℕ) → (Fin b → C) → ℕ × Bool
   | _, 0, _ => (0, true)
   | 0, _ + 1, _ => (0, false)
@@ -123,7 +90,6 @@ theorem ev_estimateT {C : Type} [Fintype C] [Nonempty C] (comp : C → Bool) :
       funext d
       exact ev_estimateT comp b _ fun r => f (r.1 + 1, r.2)
 
-/-- **The rewinds on a tape**: `rewinds`, reading its at most `n` coins from `σ` in order (`n ≤ L`). -/
 def rewindsT {V C : Type} (v₀ : V) (rw : C → V) (comp bad : V → Bool) : (n L : ℕ) → (Fin L → C) → GOut V × ℕ
   | 0, _, _ => (.fail, 0)
   | _ + 1, 0, _ => (.fail, 0)
@@ -168,21 +134,17 @@ theorem ev_rewindsT {V C : Type} [Fintype C] [Nonempty C] (v₀ : V) (rw : C →
         · simp only [hb, hc, Bool.false_eq_true, ite_false]
           exact ev_rewindsT v₀ rw comp bad n L (by omega) fun o => f (o.1, o.2 + 1)
 
-/-- What follows the estimation's result `r`: at most `4·r.1` rewinds from `v₀` if it succeeded, else a failure; the
-count adds the first run and the estimation's. -/
 def afterT {V C : Type} (v₀ : V) (rw : C → V) (comp bad : V → Bool) (L : ℕ) (r : ℕ × Bool) (σ : Fin L → C) :
     GOut V × ℕ :=
   if r.2 then ((rewindsT v₀ rw comp bad (4 * r.1) L σ).1, (rewindsT v₀ rw comp bad (4 * r.1) L σ).2 + 1 + r.1)
   else (.fail, 1 + r.1)
 
-/-- **`gk` on tapes**: the first run's coin `ω₀`, the estimation's `M` coins `ωs` and the rewinds' `4M` coins `σs`. -/
 def gkT {V Cd Cr : Type} (dummy : Cd → V) (rw : V → Cr → V) (comp : V → Bool) (bad : V → V → Bool) (t M : ℕ)
     (ω₀ : Cd) (ωs : Fin M → Cd) (σs : Fin (4 * M) → Cr) : GOut V × ℕ :=
   if comp (dummy ω₀) then
     afterT (dummy ω₀) (rw (dummy ω₀)) comp (bad (dummy ω₀)) (4 * M) (estimateT (fun ω => comp (dummy ω)) M t ωs) σs
   else (.view (dummy ω₀), 1)
 
-/-- **`gk` and `gkT` have one sampling design.** -/
 theorem ev_gkT {V Cd Cr : Type} [Fintype Cd] [Nonempty Cd] [Fintype Cr] [Nonempty Cr] (dummy : Cd → V)
     (rw : V → Cr → V) (comp : V → Bool) (bad : V → V → Bool) (t M : ℕ) (f : GOut V × ℕ → ℝ) :
     Ex (fun q : Cd × (Fin M → Cd) × (Fin (4 * M) → Cr) => f (gkT dummy rw comp bad t M q.1 q.2.1 q.2.2)) =
@@ -240,7 +202,6 @@ theorem rewindsT_bind {V C : Type} (v₀ : V) (rw : C → V) (comp bad : V → B
       · obtain ⟨i, hi⟩ := rewindsT_bind v₀ rw comp bad n L _ a b h
         exact ⟨i.succ, hi⟩
 
-/-- **A binding outcome of `gk` on tapes** is a rewind on one of its tapes, from a completed first run. -/
 theorem gkT_bind {V Cd Cr : Type} (dummy : Cd → V) (rw : V → Cr → V) (comp : V → Bool) (bad : V → V → Bool)
     (t M : ℕ) (ω₀ : Cd) (ωs : Fin M → Cd) (σs : Fin (4 * M) → Cr) (a b : V)
     (h : (gkT dummy rw comp bad t M ω₀ ωs σs).1 = .bind a b) :
@@ -250,8 +211,6 @@ theorem gkT_bind {V Cd Cr : Type} (dummy : Cd → V) (rw : V → Cr → V) (comp
   exact ⟨hc, rewindsT_bind _ _ _ _ _ _ σs a b h⟩
 
 end Tape
-
-/-! ## Indicators -/
 
 theorem ind_comp {α β : Type} (U : β → Prop) (f : α → β) :
     (fun a => FlockSoundness.Game.ind U (f a)) = FlockSoundness.Game.ind fun a => U (f a) := rfl
@@ -266,9 +225,6 @@ theorem Ex_ind_comp {α β : Type} [Fintype α] (U : β → Prop) (f : α → β
 
 theorem avgR_eq_Ex {α : Type} [Fintype α] (f : α → ℝ) : FlockSoundness.ZK.GK.avgR f = Ex f := rfl
 
-/-! ## The forced run away from a binding failure -/
-
-/-- Every round of a transcript but the last is answered with a message. -/
 theorem interact_msg (ask : List Msg → Out) (pm : List (Msg × Msg) → Msg) :
     ∀ (n : ℕ) (hist : List (Msg × Msg)) (j : ℕ) (hj : j + 1 < (interact ask pm n hist).length),
       ∃ m, ((interact ask pm n hist)[j]'(by omega)).2 = .msg m
@@ -290,10 +246,6 @@ namespace Proto
 
 variable {W : Type}
 
-/-- **Away from a binding failure, the forced prover with the real messages answers as the honest prover**: on every
-history of a transcript whose rounds but the last are answered with messages and whose rewind at `c` is not a binding
-failure. Where a history is not consistent with `c`, its first opening that is not passes no check, and both provers
-abort. -/
 theorem pm_eq_of_not_mism (G : Proto W) (H : Msg → Msg) (x : Msg) (w : W) (ν : G.Nonce) (r : G.Rand)
     (c : Fin (G.K x) → G.Coin) (τ : List (Msg × Out))
     (hmsg : ∀ (j : ℕ) (hj : j + 1 < τ.length), ∃ m, (τ[j]'(by omega)).2 = .msg m) (hlen : τ.length ≤ G.K x + 2)
@@ -354,7 +306,6 @@ section Runs
 
 variable (G : Proto W) (H : Msg → Msg) (ask : List Msg → Out) (x : Msg) (w : W) (ν : G.Nonce) (r : G.Rand)
 
-/-- **A forced run at `c` with the real messages that is not a binding failure is the real run.** -/
 theorem real_eq_of_not_mism (c : Fin (G.K x) → G.Coin)
     (h : G.fcls H x ν c (interact ask (G.pmF H x ν c (G.realVec H x w ν r c)) (G.k x) []) ≠ .mism) :
     interact ask (G.pmR H x w ν r) (G.k x) [] = interact ask (G.pmF H x ν c (G.realVec H x w ν r c)) (G.k x) [] :=
@@ -365,7 +316,6 @@ theorem real_eq_of_not_mism (c : Fin (G.K x) → G.Coin)
 
 end Runs
 
-/-- A transcript that opens some coin vector is, at every `c`, a rewind that opens all of `c` or a binding failure. -/
 theorem fcls_ne_abort_of_cls (G : Proto W) (H : Msg → Msg) (x : Msg) (ν : G.Nonce) (c c' : Fin (G.K x) → G.Coin)
     (τ : List (Msg × Out)) (h : G.cls H x ν τ = some c') : G.fcls H x ν c τ ≠ .abort := by
   classical
@@ -391,33 +341,25 @@ theorem fcls_ne_abort_of_cls (G : Proto W) (H : Msg → Msg) (x : Msg) (ν : G.N
     rw [this]
     decide
 
-/-! ## The session analysis's model of the protocol at a nonce -/
-
-/-- The dummy-witness run on the nonce `ν` and tape `r`. -/
 def dumT (G : Proto W) (H : Msg → Msg) (ask : List Msg → Out) (x : Msg) (ν : G.Nonce) (r : G.Rand) :
     List (Msg × Out) :=
   interact ask (G.pmD H x ν r) (G.k x) []
 
-/-- The run opened every coin. -/
 def compT (G : Proto W) (H : Msg → Msg) (x : Msg) (ν : G.Nonce) (τ : List (Msg × Out)) : Bool :=
   (G.cls H x ν τ).isSome
 
-/-- The simulator's rewind from the completed run `τ₀`: the SHVZK simulator's messages at its coins, sent by the forced
-prover. -/
 def rwST (G : Proto W) (H : Msg → Msg) (ask : List Msg → Out) (x : Msg) (ν : G.Nonce) (τ₀ : List (Msg × Out))
     (s : G.SimRand x) : List (Msg × Out) :=
   match G.cls H x ν τ₀ with
   | some c => (G.fRun H ask x ν c ((G.sim x ν c s).eval H).1).2
   | none => τ₀
 
-/-- Hybrid 1's rewind from `τ₀`: the honest prover's messages at its coins on a fresh tape, sent by the forced prover. -/
 def rwRT (G : Proto W) (H : Msg → Msg) (ask : List Msg → Out) (x : Msg) (w : W) (ν : G.Nonce)
     (τ₀ : List (Msg × Out)) (r : G.Rand) : List (Msg × Out) :=
   match G.cls H x ν τ₀ with
   | some c => (G.fRun H ask x ν c (G.realVec H x w ν r c)).2
   | none => interact ask (G.pmR H x w ν r) (G.k x) []
 
-/-- A binding failure: the rewind `τ` opened one of the coins `τ₀` opened as another. -/
 def badT (G : Proto W) (H : Msg → Msg) (x : Msg) (ν : G.Nonce) (τ₀ τ : List (Msg × Out)) : Bool :=
   match G.cls H x ν τ₀ with
   | some c => decide (G.fcls H x ν c τ = .mism)
@@ -438,7 +380,6 @@ theorem badT_of_cls (G : Proto W) (H : Msg → Msg) (x : Msg) (ν : G.Nonce) {τ
     G.badT H x ν τ₀ τ = decide (G.fcls H x ν c τ = .mism) := by
   simp [badT, h]
 
-/-- Away from a binding failure, a rewind at `c` opens every coin exactly when it opens all of `c`. -/
 theorem compT_iff (G : Proto W) (H : Msg → Msg) (x : Msg) (ν : G.Nonce) (c : Fin (G.K x) → G.Coin)
     (τ : List (Msg × Out)) (h : G.fcls H x ν c τ ≠ .mism) : G.compT H x ν τ = true ↔ G.fcls H x ν c τ = .succ := by
   unfold compT
@@ -464,9 +405,6 @@ theorem compT_view0 (G : Proto W) (H : Msg → Msg) (x : Msg) (ν : G.Nonce) (τ
   unfold compT view0
   cases G.cls H x ν τ <;> rfl
 
-/-- **The session analysis's `Model` of the protocol at the nonce `ν`**, against the verifier's answers `ask`: the
-real and dummy-witness runs; the simulator's rewinds and hybrid 1's, at the coins the first run opened; a binding
-failure; and the extraction run's view (`view0`). `bind_real` is `real_eq_of_not_mism`. -/
 def model (G : Proto W) (H : Msg → Msg) (ask : List Msg → Out) (x : Msg) (w : W) (ν : G.Nonce) :
     FlockSoundness.ZK.GK.Model (List (Msg × Out)) (List (Msg × Out) ⊕ (Fin (G.K x) → G.Coin)) G.Rand G.Rand
       (G.SimRand x) where
@@ -488,8 +426,6 @@ def model (G : Proto W) (H : Msg → Msg) (ask : List Msg → Out) (x : Msg) (w 
     rw [G.badT_of_cls H x ν hc] at hb
     exact (G.real_eq_of_not_mism H ask x w ν ω c fun e => by simp [fRun, e] at hb).symm
 
-/-- The same model with the dummy-witness run in place of the real one: what the simulator's cost reads, without a
-witness. -/
 def modelD (G : Proto W) (H : Msg → Msg) (ask : List Msg → Out) (x : Msg) (ν : G.Nonce) :
     FlockSoundness.ZK.GK.Model (List (Msg × Out)) (List (Msg × Out) ⊕ (Fin (G.K x) → G.Coin)) G.Rand G.Rand
       (G.SimRand x) where
@@ -507,7 +443,6 @@ def modelD (G : Proto W) (H : Msg → Msg) (ask : List Msg → Out) (x : Msg) (�
   inc_dummy _ h := (G.inc_view0 H x ν _ h).symm
   bind_real _ _ _ _ := rfl
 
-/-- **Lemma C's distance at the model** is `PrefixHides`. -/
 theorem prefinalClose_model (G : Proto W) (H : Msg → Msg) (R : Rel W) (δA : Msg → ℝ) (hA : G.PrefixHides H R δA)
     (x : Msg) (w : W) (hR : R x w) {Θ : Type} (Vs : VStar Θ) (θ : Θ) (hk : Vs.k x = G.k x) (ν : G.Nonce) :
     (G.model H (fun as => ((Vs.next x as θ).eval H).1) x w ν).PrefinalClose (δA x) := by
@@ -518,7 +453,6 @@ theorem prefinalClose_model (G : Proto W) (H : Msg → Msg) (R : Rel W) (δA : M
   rw [avgR_eq_Ex, avgR_eq_Ex, Ex_ind_comp, Ex_ind_comp]
   exact this
 
-/-- **Lemma B's distance at the model, one rewind** is `SHVZK` at the coins the first run opened. -/
 theorem rewindClose_model (G : Proto W) (H : Msg → Msg) (ask : List Msg → Out) (R : Rel W) (δB : Msg → ℝ)
     (hB : G.SHVZK H R δB) (x : Msg) (w : W) (hR : R x w) (hB0 : 0 ≤ δB x) (ν : G.Nonce) :
     (G.model H ask x w ν).RewindClose (δB x) := by
@@ -531,16 +465,11 @@ theorem rewindClose_model (G : Proto W) (H : Msg → Msg) (ask : List Msg → Ou
 
 end Proto
 
-/-! ## The simulator -/
-
 /-- The transcript an outcome outputs: a view's, else the empty transcript. -/
 def outT : GOut (List (Msg × Out)) → List (Msg × Out)
   | .view τ => τ
   | _ => []
 
-/-- **An event of the output, from two tests of the outcome**: the outcome's value at `Ev` and at its complement, each
-within `e` of `P` and `1 − P`, put the output's probability of `Ev` within `e` of `P`, whichever `Ev` says of the empty
-transcript. -/
 theorem pr_outT_close {Q : Type} [Fintype Q] [Nonempty Q] (g : Q → GOut (List (Msg × Out)))
     (Ev : List (Msg × Out) → Prop) (P e : ℝ)
     (h1 : |Ex (fun q => FlockSoundness.ZK.GK.Out.val (FlockSoundness.Game.ind Ev) (g q)) - P| ≤ e)
@@ -601,12 +530,8 @@ def simulatorE (G : Proto W) (t M : ℕ) : Simulator where
         if r.2 then spBind (G.rewSP x c.1 cs p.1 (4 * r.1) (4 * M) c.2.2.2) fun o => .ret (outT o)
         else .ret []
 
-/-- One run's calls: a simulation, the classification's `K` checks, and `k` rounds of one question to `V*`, the checks of
-every opening so far and a message. -/
 def runBound (G : Proto W) (cChk cMsg cSim : Msg → ℕ) (x : Msg) : ℕ :=
   cSim x + G.K x * cChk x + G.k x * (1 + G.k x * cChk x + cMsg x)
-
-/-! ## What the simulator computes -/
 
 section Eval
 
@@ -648,7 +573,6 @@ theorem rewSP_eval {c : Fin (G.K x) → G.Coin} {τ₀ : List (Msg × Out)} (hc 
           simp only [hm, hs, hf, ite_false, decide_false, Bool.false_eq_true]
           exact rewSP_eval hc n L _
 
-/-- **The simulator's output** is the outcome of `gk` on its tapes, with the protocol's runs. -/
 theorem simE_eval (t M : ℕ) (r₀ : G.Rand) (rs : Fin M → G.Rand) (ss : Fin (4 * M) → G.SimRand x) :
     (SP.eval H ask ((G.simulatorE t M).prog x (ν, r₀, rs, ss))).1 =
       outT (gkT (G.dumT H ask x ν) (G.rwST H ask x ν) (G.compT H x ν) (G.badT H x ν) t M r₀ rs ss).1 := by
@@ -666,8 +590,6 @@ theorem simE_eval (t M : ℕ) (r₀ : G.Rand) (rs : Fin M → G.Rand) (ss : Fin 
       · simp [SP.eval, outT]
 
 end Eval
-
-/-! ## The simulator's cost -/
 
 section Cost
 
@@ -743,7 +665,6 @@ theorem rewSP_cost {c : Fin (G.K x) → G.Coin} {τ₀ : List (Msg × Out)} (hc 
           rw [Nat.add_mul, one_mul]
           omega
 
-/-- **The simulator's calls are at most its runs' count times one run's.** -/
 theorem simE_cost (t M : ℕ) (r₀ : G.Rand) (rs : Fin M → G.Rand) (ss : Fin (4 * M) → G.SimRand x)
     (cChk cMsg cSim : Msg → ℕ) (hc : G.CostLe H cChk cMsg cSim) :
     (SP.eval H ask ((G.simulatorE t M).prog x (ν, r₀, rs, ss))).2 ≤
@@ -774,16 +695,10 @@ theorem simE_cost (t M : ℕ) (r₀ : G.Rand) (rs : Fin M → G.Rand) (ss : Fin 
 
 end Cost
 
-/-! ## Hybrid 1's binding failure is a collision in the real game -/
-
-/-- From the view `v` of a first run that opened `c`, a rewind at `c` with the honest prover's messages on one of the
-tapes `σs` opens one of `c`'s coins as another. -/
 def rwMism (G : Proto W) (H : Msg → Msg) (ask : List Msg → Out) (x : Msg) (w : W) (ν : G.Nonce) {L : ℕ}
     (v : List (Msg × Out) ⊕ (Fin (G.K x) → G.Coin)) (σs : Fin L → G.Rand) : Prop :=
   ∃ c, v = .inr c ∧ ∃ i, (G.fRun H ask x ν c (G.realVec H x w ν (σs i) c)).1 = .mism
 
-/-- **Hybrid 1's binding failure, on its tapes**, reads the first run only through its view before `V*`'s final
-message. -/
 theorem hyb₁_bind_rwMism (G : Proto W) (H : Msg → Msg) (ask : List Msg → Out) (x : Msg) (w : W) (ν : G.Nonce)
     (t M : ℕ) (ω₀ : G.Rand) (ωs : Fin M → G.Rand) (σs : Fin (4 * M) → G.Rand)
     (h : FlockSoundness.ZK.GK.Out.bindBy (G.badT H x ν)
@@ -802,7 +717,6 @@ theorem hyb₁_bind_rwMism (G : Proto W) (H : Msg → Msg) (ask : List Msg → O
   rw [G.badT_of_cls H x ν hcls, G.rwRT_of_cls H ask x w ν hcls] at hi
   exact of_decide_eq_true hi
 
-/-- **On the real run, it is a collision of two real runs** (`mism_coll`). -/
 theorem rwMism_coll (G : Proto W) (H : Msg → Msg) (hC : G.Binding H) {Θ : Type} (Vs : VStar Θ) (θ : Θ) (x : Msg)
     (w : W) (ν : G.Nonce) (hk : Vs.k x = G.k x) {L : ℕ} (r : G.Rand) (σs : Fin L → G.Rand)
     (h : G.rwMism H (fun as => ((Vs.next x as θ).eval H).1) x w ν
@@ -820,10 +734,6 @@ theorem rwMism_coll (G : Proto W) (H : Msg → Msg) (hC : G.Binding H) {Θ : Typ
   rw [runStar_msgs, hk]
   exact hcls
 
-/-! ## The theorems -/
-
-/-- **Hybrid 1's binding failure** is at most `δ_A` plus `4M` times the collision of two real runs on the nonce:
-`PrefixHides` moves its first run to the real one, where it is `rwMism_coll`'s collision for one of the `4M` tapes. -/
 theorem hyb₁_bind_le (G : Proto W) (H : Msg → Msg) (R : Rel W) (δA : Msg → ℝ) (hA : G.PrefixHides H R δA)
     (hC : G.Binding H) (x : Msg) (w : W) (hR : R x w) {Θ : Type} (Vs : VStar Θ) (θ : Θ) (hk : Vs.k x = G.k x)
     (ν : G.Nonce) (t M : ℕ) :
@@ -861,12 +771,6 @@ theorem hyb₁_bind_le (G : Proto W) (H : Msg → Msg) (R : Rel W) (δA : Msg �
   have := abs_le.mp e2
   linarith [this.1, this.2]
 
-/-- **The Goldreich–Kahan simulator with estimation meets `ZKmalR`** at
-`ε_zk(x) = 4·δ_A(x) + 4t·δ_B(x) + 3^{-t} + t/M` and `γ = 4M`, for a protocol whose dummy-witness run hides the witness
-until the last coin, whose messages at a fixed coin vector are simulated and whose opening check binds. The session
-analysis's hybrids (`sim_hyb₁`, `hyb₁_hyb₂`, `hyb₂_real`) leave hybrid 1's binding failure, a rewind with the honest
-prover's messages; `PrefixHides` moves its first run to the real one (`δ_A`), where it is a collision of two real runs
-on one nonce (`rwMism_coll`) for one of the `4M` tapes. -/
 theorem gkE_zk (G : Proto W) (H : Msg → Msg) (R : Rel W) (t M : ℕ) (hM : 0 < M) (δA δB : Msg → ℝ)
     (hA : G.PrefixHides H R δA) (hB : G.SHVZK H R δB) (hB0 : ∀ x, 0 ≤ δB x) (hC : G.Binding H) :
     ZKmalR H G.k G.prover R (G.simulatorE t M) (fun x => 4 * δA x + 4 * t * δB x + (1 / 3) ^ t + t / M)
@@ -945,7 +849,6 @@ theorem gkE_zk (G : Proto W) (H : Msg → Msg) (R : Rel W) (t M : ℕ) (hM : 0 <
   rw [Ex_const_add, Ex_mul_const, mul_comm (Ex _)]
   exact add_le_add le_rfl (mul_le_mul_of_nonneg_left (G.pr_collR_le H Vs θ x w) (by positivity))
 
-/-- **At the cap `M = t·3^t`**: `ε_zk(x) = 4·δ_A(x) + 4t·δ_B(x) + 2·3^{-t}` and `γ = 4t·3^t`. -/
 theorem gkE_zk_pow (G : Proto W) (H : Msg → Msg) (R : Rel W) (t : ℕ) (ht : 0 < t) (δA δB : Msg → ℝ)
     (hA : G.PrefixHides H R δA) (hB : G.SHVZK H R δB) (hB0 : ∀ x, 0 ≤ δB x) (hC : G.Binding H) :
     ZKmalR H G.k G.prover R (G.simulatorE t (t * 3 ^ t)) (fun x => 4 * δA x + 4 * t * δB x + 2 * (1 / 3) ^ t)
@@ -961,8 +864,6 @@ theorem gkE_zk_pow (G : Proto W) (H : Msg → Msg) (R : Rel W) (t : ℕ) (ht : 0
   beta_reduce
   linarith
 
-/-- **The simulator's expected cost**: at most `(1 + 5t)·runBound` calls in expectation over its coins, against every
-verifier, at every cap `M`. -/
 theorem gkE_costExp (G : Proto W) (H : Msg → Msg) (t M : ℕ) (cChk cMsg cSim : Msg → ℕ)
     (hc : G.CostLe H cChk cMsg cSim) :
     SimCost H (G.simulatorE t M) fun x => (1 + 5 * t) * G.runBound cChk cMsg cSim x := by
@@ -985,7 +886,6 @@ theorem gkE_costExp (G : Proto W) (H : Msg → Msg) (t M : ℕ) (cChk cMsg cSim 
     _ ≤ (1 + 5 * t) * (G.runBound cChk cMsg cSim x : ℝ) :=
         mul_le_mul_of_nonneg_right ((G.modelD H ask x ν).sim_runs_ev t M) (Nat.cast_nonneg _)
 
-/-- **The simulator's worst-case cost**: at most `(1 + 5M)·runBound` calls on every coin, against every verifier. -/
 theorem gkE_cost (G : Proto W) (H : Msg → Msg) (t M : ℕ) (cChk cMsg cSim : Msg → ℕ)
     (hc : G.CostLe H cChk cMsg cSim) :
     SimCostLe H (G.simulatorE t M) fun x => (1 + 5 * M) * G.runBound cChk cMsg cSim x := by

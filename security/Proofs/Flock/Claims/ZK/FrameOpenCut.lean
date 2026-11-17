@@ -35,26 +35,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.ZK.SimZerocheck
 
-/-!
-# Level 0's masked rounds of the opening, cut round by round
-
-The masked Ligerito (`FlockComplete.ligeritoPZk`), answered by `asksCut` from a log `l` and cut `j` rounds on, stops
-past the openings having sent exactly level 0's first `j + 1` bodies, for every `j` up to `ρ_1`'s squeeze, at any pads
-`h` and grinding nonces: the rep's (`h` its pads) and the ZK server's live opening's (`openLive`, zero pads) alike.
-Its bodies are the rounds `FrameOpen` releases (`oodFr`, `pairFr`), at the values SimLig's `LigHyp` reads, the coins
-those of rounds `l.size`, `l.size + 1`, …:
-
-* **The bodies** (`l0Body`, `l0Msg`, `l0BodyAt`): the opening's binding (the basis label, `T`, level 0's cap,
-  `LABEL_OPEN`) after the pending bytes, with `z`'s squeeze; the out-of-domain value and the claim nonce's bytes, with
-  `β_0`'s; lane round `i`'s masked message for `i < k_0`, with its challenge's; the pair's sums, with `ρ_0`'s; `ρ_1`'s
-  squeeze alone.
-* **A run that stops** (`CutStop`, `cutStop_bind`, `cutStop_lbind`, `sent_push`): it threw past the openings, its log
-  as a property reads it; a bind after it stops too.
-* **The lane loop that never finishes** (`lforIn_stop`): where each step from an invariant either stops or yields into
-  it at the next step, and the invariant holds at no step past the loop's, the loop stops.
-* **The cut opening** (`ligeritoPZk_cutL0`): cut `j < k_0 + 4` rounds on, the opening stops past the openings having
-  sent `l0BodyAt`'s first `j + 1` bodies after `l`.
--/
+/-! Level 0's masked rounds of the opening, cut round by round. -/
 
 @[expose] public section
 
@@ -63,11 +44,6 @@ namespace FlockComplete.LigLock
 open Flock Transcript Replay
 open FlockSoundness.Refine (Frame encs label_enc absorbBytes_enc absorbSlice_enc absorbF_enc framed_enc)
 
-/-! ## The bodies -/
-
-/-- **Level 0's masked bodies** from the pending bytes `P`: the opening's binding with `z`'s squeeze of `n` coins; the
-out-of-domain value `y` and the nonce's bytes `nb` with `β_0`'s; lane round `i`'s message `msg i` with its
-challenge's, for `i < k_0`; the pair's sums `e_0`, `e_1` with `ρ_0`'s; `ρ_1`'s squeeze alone. -/
 def l0Body (P : List UInt8) (T : F128) (cap : ByteArray) (n k0 : ℕ) (y : F128) (nb : ByteArray)
     (msg : ℕ → F256 × F256) (e0 e1 : F256) (i : ℕ) : Claims.Msg :=
   if i = 0 then
@@ -113,13 +89,10 @@ theorem l0Body_r1 : l0Body P T cap n k0 y nb msg e0 e1 (k0 + 3) = (Frame.sq 2 2)
 
 end Body
 
-/-- Lane round `i`'s masked message at the coins from round `p₀`. -/
 def l0Msg (coin : ℕ → ℕ → F128) (p0 : ℕ) (sch : Schedule) (t b : Array F128) (lay : Zk.PadLayout) (h : Array F128)
     (i : ℕ) : F256 × F256 :=
   maskMsg lay h i (roundPoly (tabS coin p0 t i) (wS coin p0 b sch.n i))
 
-/-- **Level 0's masked bodies of `ligeritoPZk` at the coins from round `p₀`**, from the pending bytes `P`: `LigHyp`'s
-out-of-domain value, lane messages and pair's sums at the pads `h`, the claim nonce `0` (R4). -/
 def l0BodyAt (coin : ℕ → ℕ → F128) (p0 : ℕ) (P : List UInt8) (T : F128) (cap : ByteArray) (sch : Schedule)
     (t b : Array F128) (lay : Zk.PadLayout) (h : Array F128) (rep : ℕ) (extra : ℕ → ℕ → F128)
     (_nonce : ℕ → ℕ → UInt64) : ℕ → Claims.Msg :=
@@ -165,9 +138,6 @@ theorem l0BodyAt_r1 : l0BodyAt coin p0 P T cap sch t b lay h rep extra nonce (sc
 
 end BodyAt
 
-/-! ## A run that stops -/
-
-/-- **A run that stopped past the openings**, its log `L` as `Q` reads it. -/
 def CutStop {α : Type} (Q : Array Claims.Msg → Prop) (r : Except String α × Array Claims.Msg) : Prop :=
   ∃ L, r = (.error "past the openings", L) ∧ Q L
 
@@ -186,14 +156,11 @@ theorem cutStop_lbind {α β : Type} {Q : Array Claims.Msg → Prop} {x : LP PS 
   rw [StateT.run_bind]
   exact cutStop_bind h
 
-/-- A log that sent bodies `B 0, …, B (i − 1)` after `l`, with `B i` pushed. -/
 theorem sent_push (i : ℕ) {k : ℕ} {l L : Array Claims.Msg} {B : ℕ → Claims.Msg} {m : Claims.Msg}
     (h : L.toList = l.toList ++ (List.range i).map B) (hm : m = B i) (hk : k = i + 1) :
     (L.push m).toList = l.toList ++ (List.range k).map B := by
   subst hm hk
   simp [h, List.range_succ]
-
-/-! ## `asksCut`'s squeezes at a log's size -/
 
 theorem sampleVecP_at (coin : ℕ → ℕ → F128) {n : ℕ} (k p : ℕ) (hk : k ≠ 0) (t : Transcript) {l : Array Claims.Msg}
     (hp : l.size = p) (hl : p < n) :
@@ -238,10 +205,6 @@ theorem powP2_bind_run {γ : Type} (nonce : ℕ → ℕ → UInt64) (f : Unit �
       (liftT (liftTM (pow 0)) >>= f).run { s with cbn := s.cbn.push 0 } := by
   simp only [powP, bind_assoc, get_bind_run, set_bind_run]
 
-/-! ## The lane loop that never finishes -/
-
-/-- **A loop that stops**: where step `i` from `I i` either stops or yields into `I (i + 1)`, and `I` holds at no step
-past the loop's, the loop over `[0:k]` from `I 0` stops. -/
 theorem lforIn_stop {σ : Type} (body : ℕ → σ → LP PS (ForInStep σ)) (k : ℕ) (Q : Array Claims.Msg → Prop)
     (I : ℕ → σ → LigState → Transcript → Array Claims.Msg → Prop) (hI : ∀ i u s t L, I i u s t L → i < k)
     (hb : ∀ i < k, ∀ u s t L, I i u s t L →
@@ -267,11 +230,6 @@ theorem lforIn_stop {σ : Type} (body : ℕ → σ → LP PS (ForInStep σ)) (k 
     · rw [bind_go hv]
       exact ih (a + 1) v s' t' L' (by omega) hI'
 
-/-! ## The cut opening -/
-
-/-- **Level 0's masked opening, cut round by round**: answered by `asksCut` from `l` and cut `j < k_0 + 4` rounds on, the
-masked Ligerito at any pads `h` and nonces stops past the openings having sent level 0's first `j + 1` bodies
-(`l0BodyAt`, at the coins from round `l.size`) after `l`. -/
 theorem ligeritoPZk_cutL0 (coin : ℕ → ℕ → F128) (hs : Hashes PS) (ms : MerkleScheme) (sch : Schedule) (T : F128)
     (cm0 : Commit) (t b : Array F128) (lay : Zk.PadLayout) (h : Array F128) (rep tPad : ℕ)
     (extra lanePad : ℕ → ℕ → F128) (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64) (tr : Transcript)
@@ -288,7 +246,6 @@ theorem ligeritoPZk_cutL0 (coin : ℕ → ℕ → F128) (hs : Hashes PS) (ms : M
     bind_go (liftTM_ok (_root_.Flock.RecAlgebra.label_eq _ _) _)]
   refine cutStop_bind ?_
   rw [liftT_bind_run]
-  -- `z`'s squeeze, round `l.size`
   rcases Nat.eq_zero_or_pos j with rfl | hj0
   · refine cutStop_bind (cutStop_err (squeezeP_cut_err coin 2 hn _ (by simp)) ?_)
     refine sent_push 0 (by simp) ?_ rfl
@@ -301,7 +258,6 @@ theorem ligeritoPZk_cutL0 (coin : ℕ → ℕ → F128) (hs : Hashes PS) (ms : M
   try dsimp only
   rw [modify_bind_run, liftT_bind_run, bind_go (liftTM_ok (_root_.Flock.RecAlgebra.absorbF_eq _ _) _),
     powP2_bind_run, liftT_bind_run, bind_go (liftTM_ok (pow_ok _ _) _), liftT_bind_run]
-  -- `β_0`'s squeeze, round `l.size + 1`
   rcases Nat.lt_or_ge 1 j with hj1 | hj1
   swap
   · obtain rfl : j = 1 := by omega
@@ -323,7 +279,6 @@ theorem ligeritoPZk_cutL0 (coin : ℕ → ℕ → F128) (hs : Hashes PS) (ms : M
   try dsimp only
   rw [modify_bind_run, get_bind_run, sendMsg_bind_run, liftT_bind_run,
     bind_go (liftTM_ok (absorbK_ok _ _) _), liftT_bind_run, bind_go (liftTM_ok (absorbK_ok _ _) _)]
-  -- the lane rounds, round `l.size + 2 + i` lane round `i`'s challenge
   refine cutStop_lbind (lforIn_stop _ sch.k0 _
     (fun i _ (s : LigState) (tt : Transcript) (L : Array Claims.Msg) =>
       i < sch.k0 ∧ i + 2 ≤ j ∧ s.tab = tabS coin l.size t i ∧ s.w = wS coin l.size b sch.n i ∧

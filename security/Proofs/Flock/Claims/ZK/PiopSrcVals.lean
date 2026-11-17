@@ -41,22 +41,7 @@ import Proofs.Flock.Claims.Complete.ZkTables.Trace
 import Proofs.Flock.Claims.Scope.InScope
 import Proofs.Flock.Claims.Scope.StmtOf
 
-/-!
-# The deployed source's zerocheck values at the opened coins
-
-`PiopSrcE`'s zerocheck fields: at the deployed source (`srcE`), table `j`'s rep `r` masks at the zerocheck's layout
-indices the plain prover's messages at `zcCoins` from the rep's first round, plus the session's pads.
-
-* `Replay.Zc.bitF_eq`, `rounds_honest`, `finalA_honest`, `finalB_honest`, `finalC_honest`: the soundness analysis's
-  honest zerocheck on the trace's bits sends the executable's residual rounds and finals (`msg_eq`, `of_tab`, `c_eval`).
-* `Masked.srcE_masked_pad`: the source's masked value at a sent index `k < h_ab` is the clear value the cut's view masks
-  (`Composed.honestAt`) plus the session's pad `k` (`padsOf`), the tape's cell read back (`cellAt`, `fAt`).
-* `Masked.trsE_bits`: the model's tables (`aT`, `bT`, `cT`) are the session's trace's bits (`trace_bits`, `zOf_ofLayout`),
-  so the sample's honest zerocheck is `Zerocheck.honest` on them at the opened coins (`zcH_exe`: `rF_czExe`, the outer coins
-  of the round after the rep's first, and `rhoF_czExe`).
-* `Masked.src_r1ab`, `src_r1c`, `src_ml0`, `src_ml1`, `src_fa`, `src_fb`, `src_fc`: `PiopSrc`'s zerocheck fields at the
-  deployed source.
--/
+/-! The deployed source's zerocheck values at the opened coins. -/
 
 @[expose] public section
 
@@ -66,7 +51,6 @@ open Flock FlockLevel3 FlockSoundness.Discharge.Composed.Zerocheck
 
 local notation "𝔽" => FlockLevel3.GF128
 
-/-- A bit table of `2^M` entries as field values is any table agreeing with it below `2^M` and `0` past it. -/
 theorem bitF_eq {bits : Array Bool} {M : ℕ} (hs : bits.size = 2 ^ M) {f : ℕ → 𝔽}
     (hlt : ∀ i, i < 2 ^ M → bitF bits i = f i) (hge : ∀ i, ¬ i < 2 ^ M → f i = 0) : bitF bits = f := by
   funext i
@@ -77,7 +61,6 @@ theorem bitF_eq {bits : Array Bool} {M : ℕ} (hs : bits.size = 2 ^ M) {f : ℕ 
     rw [getElem!_neg bits i (by rw [hs]; exact hi)]
     rfl
 
-/-- **The honest residual round `j` is the prover's** on the trace's `A·z`, `B·z` bits (`msg_eq`). -/
 theorem rounds_honest (tr : Trace) (n : ℕ) (r : Array F128) (hr : r.size = n) (z : F128) (ρ : ℕ → F128)
     (rho : Array F128) (hρ : ∀ k < n, rho[k]! = ρ k) (c : ℕ → 𝔽) {j : ℕ} (hj : j < n) :
     (honest n (bitF tr.az) (bitF tr.bz) c r rho z).rounds[j]! = msg tr n r z ρ j := by
@@ -85,7 +68,6 @@ theorem rounds_honest (tr : Trace) (n : ℕ) (r : Array F128) (hr : r.size = n) 
   rw [get_map_range _ hj]
   exact (msg_eq tr n r hr z ρ rho hρ j hj).symm
 
-/-- **The honest `final_a` is the prover's**: its `A·z` table folded through every residual round (`of_tab`). -/
 theorem finalA_honest (tr : Trace) (n : ℕ) (z : F128) (ρ : ℕ → F128) (rho : Array F128)
     (hρ : ∀ k < n, rho[k]! = ρ k) (b c : ℕ → 𝔽) (r : Array F128) :
     (honest n (bitF tr.az) b c r rho z).finalA = (tab n z ρ tr.az n)[0]! := by
@@ -93,7 +75,6 @@ theorem finalA_honest (tr : Trace) (n : ℕ) (z : F128) (ρ : ℕ → F128) (rho
   rw [of_tab n z ρ tr.az rho hρ n le_rfl 0 (by simp)]
   rfl
 
-/-- **The honest `final_b` is the prover's**: its `B·z` table folded through every residual round (`of_tab`). -/
 theorem finalB_honest (tr : Trace) (n : ℕ) (z : F128) (ρ : ℕ → F128) (rho : Array F128)
     (hρ : ∀ k < n, rho[k]! = ρ k) (a c : ℕ → 𝔽) (r : Array F128) :
     (honest n a (bitF tr.bz) c r rho z).finalB = (tab n z ρ tr.bz n)[0]! := by
@@ -101,7 +82,6 @@ theorem finalB_honest (tr : Trace) (n : ℕ) (z : F128) (ρ : ℕ → F128) (rho
   rw [of_tab n z ρ tr.bz rho hρ n le_rfl 0 (by simp)]
   rfl
 
-/-- **The honest `final_c` is the prover's**: `round1_c` evaluated at `z` (`r1c_eq`, `c_eval`). -/
 theorem finalC_honest (tr : Trace) (n : ℕ) (r : Array F128) (hrs : r.size = n) (a b : ℕ → 𝔽) (rho : Array F128)
     (z : F128) :
     (honest n a b (bitF tr.z) r rho z).finalC =
@@ -125,29 +105,23 @@ local notation "𝔽" => FlockLevel3.GF128
 noncomputable abbrev layE (x : Msg) (j : Fin (jOf x)) : _root_.Flock.Zk.PadLayout :=
   _root_.Flock.Zk.PadLayout.new (stAt x j).m (stAt x j).c.kLog (zkTab x j).sch.k0
 
-/-- Table `j`'s witness as the cut's view reads it: `w`'s share with the tape's mask words (`Composed.zWith`). -/
 noncomputable abbrev zwE (x : Msg) (w : Claims.Flock.Wit) (τ : UE.Tape) (j : Fin (jOf x)) :
     FlockSoundness.Model.Witness (tabC PE x j).S.m :=
   Composed.zWith (stAt x j) (wtOf PE x w j) ((UE.tape x τ).1 j).1
 
-/-- Table `j`'s rep `r` zerocheck coins at the opened coins, from the rep's first round. -/
 abbrev zcE {x : Msg} (c : Fin (refK x) → FlockDeploy.Coin) (j : Fin (jOf x)) (r : Fin 2) :
     FlockComplete.Replay.Zc.Challenges :=
   FlockComplete.zcCoins (fun k i => slotAt c k i) (repBase x (2 * j.val + r.val))
 
-/-- The session's setup of table `j` is its statement's. -/
 theorem tabsOf_live (x : Msg) (j : Fin (jOf x)) :
     (FlockDeploy.tabsOf (stsOf x))[j.val]! = _root_.Flock.Setup.ofCircuit (stAt x j) := by
   rw [getElem!_pos _ _ (by simpa [FlockDeploy.tabsOf] using lt_of_jOf j)]
   simp [FlockDeploy.tabsOf, stAt]
 
-/-- Every zerocheck index is below `h_ab`. -/
 theorem lt_hab (L : _root_.Flock.Zk.PadLayout) {k : ℕ} (hk : k ≤ L.fc) : k < L.hab := by
   simp only [_root_.Flock.Zk.PadLayout.hab, _root_.Flock.Zk.PadLayout.zp, _root_.Flock.Zk.PadLayout.lc]
   omega
 
-/-- **The deployed source's masked value at a sent index** `k < n_E` is the clear value the cut's view masks
-(`Composed.honestAt`) plus the tape's pad `k` of table `j`'s rep `r`. -/
 theorem srcE_masked (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (w : Claims.Flock.Wit) (τ : UE.Tape)
     (j : Fin (jOf x)) (r : Fin 2) {k : ℕ} (hk : k < (tabC PE x j).z.nE) :
     ((srcE x c w τ j.val).rep r.val).masked k =
@@ -175,7 +149,6 @@ theorem srcE_masked (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (w : Claim
   congr 1
   exact (congrArg FlockLevel3.GF128.val (tH ⟨k, by omega⟩)).symm
 
-/-- **The deployed source's masked value below `h_ab`** is the clear value plus the session's pad (`padsOf`). -/
 theorem srcE_masked_pad (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (w : Claims.Flock.Wit) (τ : UE.Tape)
     (j : Fin (jOf x)) (r : Fin 2) {k : ℕ} (hk : k < (layE x j).hab) :
     ((srcE x c w τ j.val).rep r.val).masked k =
@@ -190,8 +163,6 @@ theorem srcE_masked_pad (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (w : C
   rw [srcE_masked x c w τ j r (k := k) (by omega),
     FlockComplete.padsOf_get (UE.tapeZk τ) j.val r.val (layE x j) k (by omega) (by omega) (by omega)]
 
-/-- **The sample's zerocheck vector is the opened coins'**: the pinned coordinates, then the outer coins of the round
-after the rep's first (`outerAt_eq`). -/
 theorem rF_czExe {x : Msg} (c : Fin (refK x) → FlockDeploy.Coin) {s spec}
     (hsx : FlockDeploy.setupOf true x = some (s, spec, stsOf x)) (j : Fin (jOf x)) (r : Fin 2) :
     Composed.rF (zkTab x j).table (stAt x j) (czExe PE x c j) r = (zcE c j r).r (zkTab x j).table.S.m := by
@@ -205,7 +176,6 @@ theorem rF_czExe {x : Msg} (c : Fin (refK x) → FlockDeploy.Coin) {s spec}
   · simp only [Array.getElem_ofFn, Array.getElem_map, Array.getElem_range]
     exact outerAt_eq c hsx j.val r.val i
 
-/-- **The sample's residual coins are the opened coins'**, coin `0` of the rep's rounds `3 …`. -/
 theorem rhoF_czExe {x : Msg} (c : Fin (refK x) → FlockDeploy.Coin) (j : Fin (jOf x)) (r : Fin 2) :
     ∀ k < (zkTab x j).table.S.m - 6,
       (Composed.rhoF (zkTab x j).table (stAt x j) (czExe PE x c j) r)[k]! = (zcE c j r).ρ k := fun k hk => by
@@ -213,9 +183,6 @@ theorem rhoF_czExe {x : Msg} (c : Fin (refK x) → FlockDeploy.Coin) (j : Fin (j
   rw [getElem!_pos _ k (by rw [Array.size_ofFn]; exact hk), Array.getElem_ofFn]
   exact congrArg (fun q => slotAt c q 0) (Nat.add_assoc (repBase x (2 * j.val + r.val)) 3 k).symm
 
-/-- **The model's tables are the session's trace's bits**: at a witness in the deployed relation, table `j`'s `A·z`,
-`B·z` and `z` tables on `w`'s share with the tape's mask words (`zwE`) are the bits of its trace (`trace_bits`, the share
-as `zOf_ofLayout` reads it), each `0` past `2^m`. -/
 theorem trsE_bits {x : Msg} {w : Claims.Flock.Wit} (hw : RZk x w) (τ : UE.Tape) (j : Fin (jOf x)) :
     FlockComplete.Replay.Zc.bitF ((trsE x w (UE.tapeZk τ))[j.val]!).az = Composed.aT (zkTab x j).table (zwE x w τ j) ∧
       FlockComplete.Replay.Zc.bitF ((trsE x w (UE.tapeZk τ))[j.val]!).bz =
@@ -270,8 +237,6 @@ theorem trsE_bits {x : Msg} {w : Claims.Flock.Wit} (hw : RZk x w) (τ : UE.Tape)
   · unfold Composed.cT
     exact dite_eq_right hi
 
-/-- **The sample's honest zerocheck is the executable's**: `Zerocheck.honest` on the session's trace's bits, at the opened
-coins' zerocheck vector (`trsE_bits`, `rF_czExe`). -/
 theorem zcH_exe {x : Msg} (c : Fin (refK x) → FlockDeploy.Coin) {w : Claims.Flock.Wit} (hw : RZk x w) (τ : UE.Tape)
     {s spec} (hsx : FlockDeploy.setupOf true x = some (s, spec, stsOf x)) (j : Fin (jOf x)) (r : Fin 2) :
     Composed.zcH (zkTab x j).table (stAt x j) (czExe PE x c j) r (zwE x w τ j) =
@@ -284,8 +249,6 @@ theorem zcH_exe {x : Msg} (c : Fin (refK x) → FlockDeploy.Coin) {w : Claims.Fl
   obtain ⟨ha, hb, hz⟩ := trsE_bits hw τ j
   unfold Composed.zcH
   rw [← ha, ← hb, ← hz, rF_czExe c hsx j r]
-
-/-! ## `PiopSrc`'s zerocheck fields at the deployed source -/
 
 section Fields
 

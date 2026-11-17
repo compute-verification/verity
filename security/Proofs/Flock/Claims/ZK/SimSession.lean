@@ -2,22 +2,7 @@ module
 
 public import Proofs.Flock.Claims.ZK.Split
 
-/-!
-# The session from the cut sends the session's bodies
-
-`SimSession` from `SimCommit` and the hybrids `HybridStep 0, 1, 2` (`simSession_of`).
-
-* **The opened coins as replies** (`respOf`, `cutS`): a run answered by `asksCut` at the opened coins that returns is
-  the run answered by `asksS` at their bytes (`repPZk_cut`), so a masked rep of the session stopped after round `n`
-  that returns sent its rounds (`repPZk_exact`) and its rounds carry its claim points (`repPZk_points`).
-* **Two runs in step** (`Both`): the same bodies, both stopped or both returned with related values; through binds
-  and the rep streams' loop (`forIn_both`).
-* **The rep from the cut is the first hybrid** (`repCut_mix0`): at the erased commitments, `repCut` is `repMix 0` but
-  what only the final message reads. **The last hybrid is the session's rep** (`repMix3_eq`): neither the replay nor
-  level 0's constraints read level 0's opened rows and salts.
-* **The session** (`simSession_of`): the schedules, the commitments from the cut's leaves (`SimCommit`), the link and
-  each rep stream in turn, from its first round (`repBase`) and with rep `1`'s prior points rep `0`'s (`priorE`).
--/
+/-! The session from the cut sends the session's bodies. -/
 
 @[expose] public section
 
@@ -31,9 +16,6 @@ namespace Masked
 
 open FlockComplete Flock.With
 
-/-! ## The opened coins as replies -/
-
-/-- **A run that returns** from the bodies `l` returns the same on the right. -/
 def cutS : Sim FlockComplete.PS FlockComplete.PS where
   R x y := ∀ l a l', x.go l = (.ok a, l') → y.go l = (.ok a, l')
   pure _ _ _ _ h := h
@@ -165,7 +147,6 @@ theorem innerP_cut (hr : ∀ k, coinOf (resp k) = coin k) (hs : _root_.Flock.Has
   unfold innerP sampleVecP
   sim_walk [sampleP_cut hr, squeezeP_cut hr, cutS_reflT, cutS_refl]
 
-/-- **A masked rep answered by `asksCut` that returns** is the rep answered by `asksS` at the same coins. -/
 theorem repPZk_cut (hr : ∀ k, coinOf (resp k) = coin k) (hs : _root_.Flock.Hashes FlockComplete.PS) (st : _root_.Flock.Setup)
     (sch : _root_.Flock.Schedule) (tPad rep : ℕ) (dom : ByteArray) (tr : FlockComplete.Trace) (t : Array _root_.Flock.F128)
     (cm0 : Commit) (extras : Array _root_.Flock.Claim) (pads : PadsZk) (ic : InnerCommit)
@@ -180,7 +161,6 @@ theorem repPZk_cut (hr : ∀ k, coinOf (resp k) = coin k) (hs : _root_.Flock.Has
 
 end Bridge
 
-/-- **The opened coins' replies**: round `k`'s coin's bytes, the zero coin's past the pre-final rounds. -/
 def respOf {x : Msg} (c : Fin (refK x) → FlockDeploy.Coin) (k : ℕ) : Msg :=
   (if h : k < refK x then c ⟨k, h⟩ else default : FlockDeploy.Coin).bytes
 
@@ -194,10 +174,6 @@ theorem coinOf_respOf {x : Msg} (c : Fin (refK x) → FlockDeploy.Coin) (k : ℕ
   · unfold FlockDeploy.Coin.at
     split_ifs <;> rfl
 
-/-! ## Two runs in step -/
-
-/-- **Two runs in step**: they end at the same bodies, and both stopped, or both returned with `P` of their values and
-the bodies. -/
 def Both {α β : Type} (P : α → β → Array Msg → Prop) (x : Except String α × Array Msg)
     (y : Except String β × Array Msg) : Prop :=
   x.2 = y.2 ∧ match x.1, y.1 with
@@ -248,7 +224,6 @@ theorem both_sends_bind {α β γ δ : Type} {P : α → β → Array Msg → Pr
   · exact hr.elim
   · exact hfg _ _ _ hr
 
-/-- One computation run twice is in step with itself. -/
 theorem both_rfl {α : Type} (x : FlockComplete.PS α) (l : Array Msg) :
     Both (fun a b l' => a = b ∧ x.go l = (.ok a, l')) (x.go l) (x.go l) := by
   refine ⟨rfl, ?_⟩
@@ -257,7 +232,6 @@ theorem both_rfl {α : Type} (x : FlockComplete.PS α) (l : Array Msg) :
   · trivial
   · exact ⟨rfl, rfl⟩
 
-/-- Two runs in step, the right one's run recorded. -/
 theorem both_right {α β : Type} {P : α → β → Array Msg → Prop} {x : Except String α × Array Msg}
     {y : Except String β × Array Msg} (h : Both P x y) : Both (fun a b l' => P a b l' ∧ y = (.ok b, l')) x y := by
   obtain ⟨hl, hr⟩ := h
@@ -271,7 +245,6 @@ theorem both_right {α β : Type} {P : α → β → Array Msg → Prop} {x : Ex
   · exact hr.elim
   · exact ⟨hr, by rw [hl]⟩
 
-/-- A run that ends as another's mapped by `e` is in step with it. -/
 theorem both_of_map_eq {α β : Type} {x : FlockComplete.PS α} {y : FlockComplete.PS β} {e : β → α} {l : Array Msg}
     (h : x.go l = (e <$> y).go l) : Both (fun a b _ => a = e b) (x.go l) (y.go l) := by
   rw [h, go_map]
@@ -297,7 +270,6 @@ theorem both_map {α β γ δ : Type} {P : α → β → Array Msg → Prop} {Q 
   · exact hr.elim
   · exact hPQ _ _ _ hr
 
-/-- **Two `mapM`s in step**, each element's run on the left the right one's mapped by `e`. -/
 theorem both_mapM_list {α β γ : Type} (f : α → FlockComplete.PS β) (g : α → FlockComplete.PS γ) (e : γ → β) :
     ∀ (xs : List α), (∀ a ∈ xs, ∀ l, (f a).go l = (e <$> g a).go l) → ∀ l : Array Msg,
       Both (fun bs cs _ => bs = cs.map e) ((xs.mapM f).go l) ((xs.mapM g).go l)
@@ -322,8 +294,6 @@ theorem both_mapM_array {α β γ : Type} (f : α → FlockComplete.PS β) (g : 
   rintro bs cs _ rfl
   simp
 
-/-- **Two `for` loops in step over one list**, from position `k` of `s`, with an invariant of the position, the two
-loops' states and the bodies; each step sees the element at its position. -/
 theorem forIn_list_both {α β γ : Type} (f : α → β → FlockComplete.PS (ForInStep β))
     (g : α → γ → FlockComplete.PS (ForInStep γ)) (inv : ℕ → β → γ → Array Msg → Prop) (s : List α)
     (hs : ∀ k a b c l, s[k]? = some a → inv k b c l →
@@ -350,7 +320,6 @@ theorem forIn_list_both {α β γ : Type} (f : α → β → FlockComplete.PS (F
     rw [List.length_cons, show k + (xs.length + 1) = k + 1 + xs.length by omega]
     exact this
 
-/-- **Two `for` loops in step over one array**, with an invariant of the steps taken. -/
 theorem forIn_both {α β γ : Type} (xs : Array α) (f : α → β → FlockComplete.PS (ForInStep β))
     (g : α → γ → FlockComplete.PS (ForInStep γ)) (inv : ℕ → β → γ → Array Msg → Prop)
     (hs : ∀ k a b c l, xs[k]? = some a → inv k b c l →
@@ -363,9 +332,6 @@ theorem forIn_both {α β γ : Type} (xs : Array α) (f : α → β → FlockCom
     (by simp) b c l h0
   simpa using this
 
-/-! ## A rep's run up to its proof -/
-
-/-- **A rep's run with its proof forgotten**: the verdict's transcript and the bodies. -/
 def nf (z : Except String (_root_.Flock.Zk.ZkProof × _root_.Flock.Transcript) × Array Msg) :
     Except String _root_.Flock.Transcript × Array Msg :=
   (Except.map Prod.snd z.1, z.2)
@@ -378,7 +344,6 @@ theorem nf_map (f : _root_.Flock.Zk.ZkProof → _root_.Flock.Zk.ZkProof)
   rcases (prog.run t).go l with ⟨r, l'⟩
   cases r <;> rfl
 
-/-- Runs alike but their proofs are in step, the right one's run recorded. -/
 theorem both_of_nf {x y : Except String (_root_.Flock.Zk.ZkProof × _root_.Flock.Transcript) × Array Msg}
     (h : nf x = nf y) : Both (fun a b l' => a.2 = b.2 ∧ y = (.ok b, l')) x y := by
   rcases x with ⟨rx, lx⟩
@@ -394,14 +359,10 @@ theorem both_of_nf {x y : Except String (_root_.Flock.Zk.ZkProof × _root_.Flock
   · dsimp only
     exact ⟨by simpa [Except.map] using h1, rfl⟩
 
-/-! ## The rep from the cut is the first hybrid -/
-
 theorem eraseC_cap (cm : Commit) : (eraseC cm).cap = cm.cap := rfl
 
 theorem eraseIC_root (ic : InnerCommit) : (eraseIC ic).root = ic.root := rfl
 
-/-- **The inner proof from the source reads the pads commitment's columns and salts only where the final message
-does.** -/
 theorem innerCut_eraseIC (io : Asks FlockComplete.PS) (lay : _root_.Flock.Zk.PadLayout) (ic : InnerCommit)
     (finalC : _root_.Flock.F128) (src : RepSrc) (cons : Array (String × _root_.Flock.Zk.Lin)) :
     eraseIP <$> innerCut io lay (eraseIC ic) finalC src cons = eraseIP <$> innerCut io lay ic finalC src cons := by
@@ -409,7 +370,6 @@ theorem innerCut_eraseIC (io : Asks FlockComplete.PS) (lay : _root_.Flock.Zk.Pad
   simp only [map_bind, map_pure, apply_ite (Functor.map (f := _root_.Flock.TMW FlockComplete.PS) eraseIP),
     eraseIP, eraseIC, Array.size_map, Array.map_map, Function.comp_def]
 
-/-- A rep's proof forgotten reads its inner proof forgotten. -/
 theorem bind_eraseZ {xa xb : _root_.Flock.TMW FlockComplete.PS _root_.Flock.Zk.InnerProof}
     (h : eraseIP <$> xa = eraseIP <$> xb) (p : _root_.Flock.Proof) (zl : _root_.Flock.Zk.Level0Msgs) :
     (xa >>= fun inner => pure (eraseZ { proof := p, level0 := zl, inner })) =
@@ -422,7 +382,6 @@ theorem bind_eraseZ {xa xb : _root_.Flock.TMW FlockComplete.PS _root_.Flock.Zk.I
     rfl
   rw [e, e, h]
 
-/-- **The rep from the cut at the erased commitments is the first hybrid** but what only the final message reads. -/
 theorem repCut_mix0 (io : Asks FlockComplete.PS) (hs : _root_.Flock.Hashes FlockComplete.PS) (st : _root_.Flock.Setup)
     (sch : _root_.Flock.Schedule) (tPad rep : ℕ) (dom : ByteArray) (tr : FlockComplete.Trace) (t : Array _root_.Flock.F128)
     (cm0 : Commit) (extras : Array _root_.Flock.Claim) (pads : PadsZk) (ic : InnerCommit)
@@ -441,9 +400,6 @@ theorem repCut_mix0 (io : Asks FlockComplete.PS) (hs : _root_.Flock.Hashes Flock
   simp only [map_pure]
   exact bind_eraseZ (innerCut_eraseIC _ _ _ _ _ _).symm _ _
 
-/-! ## The last hybrid is the session's rep -/
-
-/-- The replay reads the proof's cap, zerocheck and lincheck only. -/
 theorem replay_eraseL (st : _root_.Flock.Setup) (lay : _root_.Flock.Zk.PadLayout) (cap : Array ByteArray)
     (params : _root_.Flock.PcsParams) (zp : _root_.Flock.ZerocheckProof) (lp : _root_.Flock.LincheckProof)
     (ss : Array (Array _root_.Flock.F128)) (lg : _root_.Flock.LigeritoProof) (root : ByteArray) :
@@ -454,7 +410,6 @@ theorem replay_eraseL (st : _root_.Flock.Setup) (lay : _root_.Flock.Zk.PadLayout
   unfold _root_.Flock.Zk.replay
   dsimp only
 
-/-- Level 0's constraints read the opening's messages and out-of-domain values only. -/
 theorem ligeritoConstraints_eraseL (lay : _root_.Flock.Zk.PadLayout) (rec : _root_.Flock.Zk.L0Rec)
     (lg : _root_.Flock.LigeritoProof) (zl : _root_.Flock.Zk.Level0Msgs) :
     _root_.Flock.Zk.ligeritoConstraints lay rec (eraseL lg) zl = _root_.Flock.Zk.ligeritoConstraints lay rec lg zl := by
@@ -464,7 +419,6 @@ theorem ligeritoConstraints_eraseL (lay : _root_.Flock.Zk.PadLayout) (rec : _roo
 theorem eraseL_eraseL (lg : _root_.Flock.LigeritoProof) : eraseL (eraseL lg) = eraseL lg := by
   simp only [eraseL, eraseLP, Array.map_map, Function.comp_def]
 
-/-- **The last hybrid is the session's rep** but what only the final message reads. -/
 theorem repMix3_eq (io : Asks FlockComplete.PS) (hs : _root_.Flock.Hashes FlockComplete.PS) (st : _root_.Flock.Setup)
     (sch : _root_.Flock.Schedule) (tPad rep : ℕ) (dom : ByteArray) (tr : FlockComplete.Trace) (t : Array _root_.Flock.F128)
     (cm0 : Commit) (extras : Array _root_.Flock.Claim) (pads : PadsZk) (ic : InnerCommit)
@@ -490,10 +444,6 @@ theorem repMix3_eq (io : Asks FlockComplete.PS) (hs : _root_.Flock.Hashes FlockC
   rw [map_pure]
   simp only [eraseZ, eraseL_eraseL]
 
-/-! ## A rep from the cut against the session's -/
-
-/-- **Table `j`'s rep `r` from the cut sends what the session's rep sends**, to the same transcript: from its first
-round, at the erased commitments, through the hybrids. -/
 theorem repCut_nf (h0 : HybridStep 0) (h1 : HybridStep 1) (h2 : HybridStep 2) {x : Msg} (hx : Live x)
     {w : Claims.Flock.Wit} (hw : RZk x w) (τ : UE.Tape) (c : Fin (refK x) → FlockDeploy.Coin) (n : ℕ)
     (hn : ¬ Refused x c n) {s : FlockDeploy.Ins} {spec : _root_.Flock.SessionSpec}
@@ -527,9 +477,6 @@ theorem repCut_nf (h0 : HybridStep 0) (h1 : HybridStep 1) (h2 : HybridStep 2) {x
   unfold mixE
   rw [repMix3_eq, nf_map]
 
-/-! ## The session -/
-
-/-- **The record sends nothing.** -/
 theorem recordJson_still (spec : _root_.Flock.SessionSpec) (rootB : Array ByteArray)
     (points : Array (Array _root_.Flock.F128)) (streams : Array (Array _root_.Flock.Round))
     (proofs : Array ByteArray) : JsonRT.Still (recordJson hsE spec rootB points streams proofs) := by

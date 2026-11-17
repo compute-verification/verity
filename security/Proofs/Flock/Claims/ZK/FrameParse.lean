@@ -24,25 +24,7 @@ import Mathlib.Tactic.Polynomial.Basic
 import Mathlib.Tactic.ReduceModChar
 import VCVio.Prelude.Core
 
-/-!
-# The frame's round over a round's frames
-
-The Lean frame parses each round the transport hands it (`Flock.ZkServer.Frame.roundFree`): a loop over the round's
-bytes that reads each frame's 16-byte header, takes its payload, and labels, copies or absorbs it, until the round's
-squeeze. The analysis models a round's bytes as its frames (`FlockSoundness.Refine.Frame`, `encs`). This file runs the
-loop on those bytes:
-
-* **The frame's step** (`stepAt`): one frame before the round's squeeze, from the rep's state, the release so far, its
-  free offsets and where the frame starts: a domain is skipped, a label goes through `Masker.label`, bytes are copied, and
-  an observe absorbs its values one at a time (`absorb1`), each free while the algebraic phase masks.
-* **The round** (`roundFree_encs`): at the bytes of frames `fs` followed by the squeeze of `n` coins of kind `k`,
-  `roundFree` is the fold of `stepAt` over `fs`, then the inner proof's own round where one is open (`innerOwn`) and the
-  squeeze's header (`lastAt`). The frames before the squeeze are `midFrame`s: lengths that fit their headers, and a
-  squeeze among them is a zero-coin one.
-* The loops as folds (`forIn_range'_foldlM`, `forIn_range'_foldlM_all`), and an observe's inner loop as the fold of
-  `absorb1` over the values its body holds (`observe_loop`), read through the frame's own byte reads (`header_at`,
-  `body_at`, `word_lo`, `word_hi`).
--/
+/-! The frame's round over a round's frames. -/
 
 @[expose] public section
 
@@ -54,9 +36,6 @@ open _root_.Flock.ZkServer.Frame (Cfg Masker INNER_ROUNDS bytesFrame innerOwn ro
 open FlockSoundness.Refine (Frame encs colBytes toBytes_length header_data le64_data padded_data)
 open FlockSoundness.Discharge.ZkView (get!_eq u64OfLE_eq foldl_le64)
 
-/-! ## Loops as folds -/
-
-/-- A `for` over `[a, a + |fs|)` whose body is `step` on each of `fs`, as long as it runs: the fold of `step`. -/
 theorem forIn_range'_foldlM_all {τ ρ γ : Type} (g : ℕ → τ → V (ForInStep τ)) (emb : ρ → τ)
     (step : ρ → γ → V ρ) (Inv : ℕ → ρ → List γ → Prop)
     (hstep : ∀ a r f fs, Inv a r (f :: fs) → g a (emb r) = (fun r' => ForInStep.yield (emb r')) <$> step r f)
@@ -77,7 +56,6 @@ theorem forIn_range'_foldlM_all {τ ρ γ : Type} (g : ℕ → τ → V (ForInSt
       simp only [Functor.map, Except.map, bind, Except.bind]
       exact this
 
-/-- A `for` of more than `|fs|` turns whose body is `step` on each of `fs`, then returns `last` of the state. -/
 theorem forIn_range'_foldlM {τ ρ γ : Type} (g : ℕ → τ → V (ForInStep τ)) (emb : ρ → τ)
     (step : ρ → γ → V ρ) (last : ρ → V τ) (Inv : ρ → List γ → Prop)
     (hstep : ∀ r f fs i, Inv r (f :: fs) → g i (emb r) = (fun r' => ForInStep.yield (emb r')) <$> step r f)
@@ -106,8 +84,6 @@ theorem forIn_range'_foldlM {τ ρ γ : Type} (g : ℕ → τ → V (ForInStep �
       simp only [Functor.map, Except.map, bind, Except.bind]
       exact this
 
-/-! ## Reading a frame's bytes -/
-
 theorem get!_list (L : List UInt8) (i : ℕ) : (ByteArray.mk L.toArray).get! i = L[i]! := by
   rw [get!_eq]
   simp
@@ -133,7 +109,6 @@ theorem u64OfLE_of_get (d : ByteArray) (o : ℕ) (x : UInt64)
   rw [foldl_le64 x 8 (Nat.le_refl _)]
   exact Nat.mod_eq_of_lt x.toNat_lt
 
-/-- A frame's header at `p` reads back as its op, kind and length. -/
 theorem header_at (L : List UInt8) (p : ℕ) (f : Frame) (rest : List UInt8) (hd : L.drop p = f.enc ++ rest)
     (hw : f.len < 2 ^ 64) :
     (ByteArray.mk L.toArray).get! p = f.op ∧ (ByteArray.mk L.toArray).get! (p + 1) = f.kind ∧
@@ -204,8 +179,6 @@ theorem encs_length (fs : List Frame) : 16 * fs.length ≤ (encs fs).length := b
   | nil => simp
   | cons f fs ih => rw [encs_cons, List.length_append, Frame.enc_length, List.length_cons]; omega
 
-/-! ## The frame's steps -/
-
 /-- A frame a round holds before its squeeze: its length fits its header, and a squeeze there is a zero-coin one. -/
 def midFrame : Frame → Prop
   | .dom b => b.size < 2 ^ 64
@@ -218,14 +191,11 @@ def midFrame : Frame → Prop
 theorem midFrame_len {f : Frame} (h : midFrame f) : f.len < 2 ^ 64 := by
   cases f <;> simp_all [midFrame, Frame.len]
 
-/-- One value of an observe whose body is at `r.2.2.2`: free while the algebraic phase masks, then absorbed. -/
 def absorb1 (c : Cfg) (r : Masker × ByteArray × Array ℕ × ℕ) (v : F128) : V (Masker × ByteArray × Array ℕ × ℕ) :=
   (fun q : Masker × F128 => (q.1, F128.pushBytes r.2.1 q.2,
       if (r.1.on && decide (r.1.pos < c.nPiop)) = true then r.2.2.1.push r.2.2.2 else r.2.2.1, r.2.2.2 + 16)) <$>
     r.1.absorb c v
 
-/-- **The frame's step** at a frame before the round's squeeze whose header is at `r.2.2.2`: the state, the round's
-release so far, its free offsets, and where the next frame starts. -/
 def stepAt (c : Cfg) (r : Masker × ByteArray × Array ℕ × ℕ) : Frame → V (Masker × ByteArray × Array ℕ × ℕ)
   | .dom b => pure (r.1, r.2.1, r.2.2.1, r.2.2.2 + 16 + (b.size + 15) / 16 * 16)
   | .label b => (fun q => (q.1, r.2.1 ++ q.2, r.2.2.1, r.2.2.2 + 16 + (b.size + 15) / 16 * 16)) <$> r.1.label c b
@@ -266,7 +236,6 @@ theorem stepAt_pos (c : Cfg) (r r' : Masker × ByteArray × Array ℕ × ℕ) (f
   | vec vs => rw [foldlM_absorb1_pos c vs _ r' h]; simp [Frame.payLen]; omega
   | sq k n => cases h; simp [Frame.payLen]
 
-/-- **An observe's loop** over the values `vs` its body `B` holds, from offset `q`: the fold of `absorb1`. -/
 theorem observe_loop (c : Cfg) (q N : ℕ) (vs : List F128) (hN : N = vs.length) (B : ByteArray)
     (hB : B.data.toList = colBytes vs) (m : Masker) (o : ByteArray) (fr : Array ℕ) :
     (forIn (List.range' 0 N) (m, o, fr) (fun i (__s : Masker × ByteArray × Array ℕ) =>
@@ -324,8 +293,6 @@ theorem observe_tail (c : Cfg) (vs : List F128) (r0 : Masker × ByteArray × Arr
     subst hq this
     rfl
 
-/-- The round's final squeeze, of `n` coins of kind `k`: the inner proof's own round when one is open, then the
-squeeze's header after the round's release, and the state that owes the round's coins. -/
 def lastAt (c : Cfg) (C : ByteArray) (k : UInt8) (n : ℕ) (r : Masker × ByteArray × Array ℕ × ℕ) :
     V (Option (ByteArray × Masker × Array ℕ) × Masker × ByteArray × Array ℕ × ℕ) :=
   (fun _ => (some (r.2.1 ++ header 4 k n, { r.1 with owed := some n }, r.2.2.1), r.1, r.2.1, r.2.2.1, r.2.2.2 + 16)) <$>
@@ -333,8 +300,6 @@ def lastAt (c : Cfg) (C : ByteArray) (k : UInt8) (n : ℕ) (r : Masker × ByteAr
      | some j => innerOwn c r.1 j C n
      | none => pure () : V Unit)
 
-/-- **The frame's round over a round's frames**: `roundFree` at the bytes of frames `fs` and the round's squeeze of `n`
-coins of kind `k` is the fold of the frame's step over `fs`, then the squeeze. -/
 theorem roundFree_encs (c : Cfg) (s : Masker) (fs : List Frame) (k : UInt8) (n : ℕ)
     (hs : s.inner ≠ some INNER_ROUNDS) (hm : ∀ f ∈ fs, midFrame f)
     (hk : k = 2 ∨ (k = 1 ∧ n = 1)) (h0 : ¬ (n = 0 ∧ k = 2)) (hn : n < 2 ^ 64) :

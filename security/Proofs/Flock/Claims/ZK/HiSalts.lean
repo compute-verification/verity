@@ -2,21 +2,7 @@ module
 
 public import Proofs.Flock.Claims.ZK.SaltProver
 
-/-!
-# Levels ≥ 1's salts at the executable's indices
-
-A Ligerito prover of levels ≥ 1 (`Composed.LigProver`) gets rep `r`'s levels ≥ 1 salts as one array `HiOf Tz`, and the
-masked prover reads them by level and position (`ligeritoPZk`'s `salt l q`, `1 ≤ l < |levels|`, `q < 2^d`). Here the
-array is read at `hiIdx` (`hiSalt`), the order `TapeLayout.exe` lays them out in, so the later rounds' prover reads the
-tape's salts.
-
-* `hiSalt_exe`: at the executable's layout, the salts the model hands table `j`'s rep `r` (`Base`'s last field, as
-  `Coined.randOf` and the view read it) are, at every level `l ≥ 1` and position `p` of its tree, the masked prover's
-  tape's `salt j r l p` (`exeTape`); `hiSalt_exe_eq` as functions, empty off the schedule.
-* `ofSalts_exe_on`: so at the executable's layout, `ofSalts Pc` sends what `Pc` sends on the tape's salts on the
-  schedule, empty off it; on the tape's salts once `Pc` reads only the schedule's levels ≥ 1 and their positions
-  (`ofSalts_exe`, `SaltsOn`).
--/
+/-! Levels ≥ 1's salts at the executable's indices. -/
 
 @[expose] public section
 
@@ -44,7 +30,6 @@ theorem length_le_sum (ls : List FlockSoundness.Accounting.Level) :
     have := Nat.two_pow_pos a.logLen
     omega
 
-/-- **Level `l`'s salt at position `p` is in the levels ≥ 1's array**: before the levels after it. -/
 theorem hiOff_add_lt {ls : List FlockSoundness.Accounting.Level} {l p : ℕ} (h : HiAt ls l p) :
     hiOff ls l + p < (ls.tail.map fun lv => 2 ^ lv.logLen).sum := by
   obtain ⟨h1, hl, hp⟩ := h
@@ -60,28 +45,23 @@ theorem le_sum_tail {ls : List FlockSoundness.Accounting.Level} {l p : ℕ} (h :
   have := h.2.1
   omega
 
-/-- **Table `j`'s rep `r` levels ≥ 1 salts at the executable's layout**: `Base`'s last field of its randomness, what
-`Coined.randOf` hands `lig`. -/
 noncomputable abbrev hiTape (P : Composed.LigProver) (x : Msg) (t : Fin Claims.Flock.zkTableCap → ExeCell)
     (j : Fin (jOf x)) (r : Fin 2) : Fin (Composed.hiCount (zkTab x j).table) → ZkView.Salt :=
   (((TapePlan.ofLayout (TapeLayout.exe P) exeTape).tape x t).1 j).2.2.2.2.2.2.2.2.2 r
 
-/-- `exeRead`'s levels ≥ 1 salts: the cell's, by level and position or at a leftover place, at `ιH`. -/
 theorem exeRead_hi {z : ZkView.Sizes} (hz : Fits z zMax) {h : ℕ}
     (ιH : Fin h ↪ (Fin (schMax + 1) × Fin schMax) ⊕ Fin schMax) (c : ExeCell) (r : Fin 2) :
     (exeRead hz ιH c).1.2.2.2.2.2.2.2.2.2 r = Sum.elim (c.1.2.2.2.2.2.2.2.2.2 r).1 (c.1.2.2.2.2.2.2.2.2.2 r).2 ∘ ιH :=
   rfl
 
-/-- **Table `j`'s rep `r` levels ≥ 1 salts at the executable's layout** are cell `j`'s at `hiEmb`. Each side unfolds to
-the other by the definitions alone, so the kernel never compares `schMax` with another size. -/
+/-- Each side unfolds to the other by the definitions alone, so the kernel never compares `schMax` with
+another size. -/
 theorem hiTape_eq (P : Composed.LigProver) (x : Msg) (t : Fin Claims.Flock.zkTableCap → ExeCell)
     (j : Fin (jOf x)) (r : Fin 2) :
     hiTape P x t j r = Sum.elim ((t (Fin.castLE (jOf_le_cap x) j)).1.2.2.2.2.2.2.2.2.2 r).1
       ((t (Fin.castLE (jOf_le_cap x) j)).1.2.2.2.2.2.2.2.2.2 r).2 ∘ hiEmb x j :=
   exeRead_hi (fits_zkTab P (zkTab x j)) (hiEmb x j) (t (Fin.castLE (jOf_le_cap x) j)) r
 
-/-- **The salts the model hands levels ≥ 1 are the executable's**: at the executable's layout, table `j`'s rep `r`
-salt at level `l ≥ 1` and position `p` of its tree, read at `hiIdx`, is the masked prover's tape's `salt j r l p`. -/
 theorem hiSalt_exe (P : Composed.LigProver) (x : Msg) (t : Fin Claims.Flock.zkTableCap → ExeCell)
     (j : Fin (jOf x)) (r : Fin 2) {l p : ℕ} (h : HiAt (zkTab x j).table.sch.levels l p) :
     hiSalt (zkTab x j).table.sch.levels (hiTape P x t j r) l p = (exeTape t).salt j.val r.val l p := by
@@ -111,7 +91,6 @@ theorem hiSalt_exe (P : Composed.LigProver) (x : Msg) (t : Fin Claims.Flock.zkTa
   rw [hiTape_eq, Function.comp_apply, he, Sum.elim_inl]
   exact hR.symm
 
-/-- `hiSalt_exe` as functions: the tape's salts on the schedule's levels ≥ 1 and their positions, empty off them. -/
 theorem hiSalt_exe_eq (P : Composed.LigProver) (x : Msg) (t : Fin Claims.Flock.zkTableCap → ExeCell)
     (j : Fin (jOf x)) (r : Fin 2) :
     hiSalt (zkTab x j).table.sch.levels (hiTape P x t j r) = fun l p =>
@@ -122,9 +101,6 @@ theorem hiSalt_exe_eq (P : Composed.LigProver) (x : Msg) (t : Fin Claims.Flock.z
   · unfold hiSalt
     rw [ite_eq_right h]
 
-/-- **At the executable's layout the later rounds' prover reads the tape's salts on the schedule**: `ofSalts Pc` on table
-`j`'s rep `r` salts sends what `Pc` sends on the masked prover's tape's (`exeTape`'s `salt j r`) at the schedule's levels
-≥ 1 and their positions, empty off them. -/
 theorem ofSalts_exe_on (Pc : SaltProver) (x : Msg) (t : Fin Claims.Flock.zkTableCap → ExeCell)
     (j : Fin (jOf x)) (c : Composed.CoinsZK (Composed.RestOf (zkTab x j).table (stAt x j))) (r : Fin 2) (L : ℕ)
     (y : Fin L → 𝕂) :
@@ -133,9 +109,6 @@ theorem ofSalts_exe_on (Pc : SaltProver) (x : Msg) (t : Fin Claims.Flock.zkTable
         if HiAt (zkTab x j).table.sch.levels l p then (exeTape t).salt j.val r.val l p else ByteArray.empty :=
   congrArg (Pc (zkTab x j).table (stAt x j) c r L y) (hiSalt_exe_eq (ofSalts Pc) x t j r)
 
-/-- **At the executable's layout the later rounds' prover reads the tape's salts**: `ofSalts Pc` on table `j`'s rep `r`
-salts sends what `Pc` sends on the masked prover's tape's (`exeTape`'s `salt j r`), once `Pc` reads only the schedule's
-levels ≥ 1 and their positions. -/
 theorem ofSalts_exe (Pc : SaltProver) (hPc : SaltsOn Pc) (x : Msg) (t : Fin Claims.Flock.zkTableCap → ExeCell)
     (j : Fin (jOf x)) (c : Composed.CoinsZK (Composed.RestOf (zkTab x j).table (stAt x j))) (r : Fin 2) (L : ℕ)
     (y : Fin L → 𝕂) :

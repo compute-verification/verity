@@ -36,21 +36,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.ZK.LinkRecheck
 
-/-!
-# Level 0 as the session loop keeps it is `commit0`'s
-
-The finish on the session loop's frames port reads table `i`'s level-0 commitment off the loop's `Level0`
-(`Finish.commitOf`) instead of committing it again (`Finish.commit0`, `flock-zk-server finish`'s `table` path). Here the
-two are one, wherever the loop drew that `Level0` (`Level0.ofSamples`):
-
-* `commitRowsP_tree`: through `Hashes` whose node and leaf are functions, `FlockComplete.commitRowsP` returns, its
-  layers are the tree's layers from the leaves to the cap and its cap the top one (`commitRowsP_cap_eq`'s, with the
-  layers).
-* `commitRows_tree`: so the port's `commitRows` keeps `Link.layer`'s layers over the rows' `hm96-sha512/v1` leaves
-  (`commitRowsP_eq`).
-* **`commitOf_eq`**: a `Level0` that `ofSamples` returns commits as `commit0` at its own level, `t_pad` and table
-  (`Level0.ofSamples_ok`: its rows and layers are `Link`'s of `toIn`).
--/
+/-! Level 0 as the session loop keeps it is `commit0`'s. -/
 
 @[expose] public section
 
@@ -59,9 +45,6 @@ namespace Flock.ZkServer.Finish
 variable {wideLeaf : Bool}
 
 
-/-- **A level's tree from its leaves**: through `Hashes` whose node is `nd` and whose leaf is `lf`, `commitRowsP`
-returns, its layers are layers `0, …, d − cap` of the tree over the rows' leaves under their fitted salts, and its cap
-the last of them. -/
 theorem commitRowsP_tree {hs : Hashes V} {ms : MerkleScheme} {nd : ByteArray → ByteArray → ByteArray}
     {lf : Array F128 → ByteArray → ByteArray} (hn : ∀ l r, (ms.opsWith hs).node l r = .ok (nd l r))
     (hl : ∀ row s, (ms.opsWith hs).leaf row s = .ok (lf row s)) (lv : Level) (rows : Array (Array F128))
@@ -96,8 +79,6 @@ theorem commitRowsP_tree {hs : Hashes V} {ms : MerkleScheme} {nd : ByteArray →
   subst hr
   exact ⟨_, rfl, hI.1, hI.2⟩
 
-/-- **The port's tree** of given rows: `commitRows` keeps layers `0, …, d − cap` of `Link.layer` over the rows'
-`hm96-sha512/v1` leaves under their salts fitted to 192 bytes, and the last as its cap. -/
 theorem commitRows_tree (lv : Level) (rows : Array (Array F128)) (salt : ℕ → ByteArray) :
     (commitRows lv rows salt).layers = (Array.range (lv.d - lv.cap + 1)).map
         (Link.layer lv.d fun q => MerkleScheme.hm96Sha512.leaf rows[q]! (fitBytes 192 (salt q))) ∧
@@ -113,9 +94,6 @@ theorem commitRows_tree (lv : Level) (rows : Array (Array F128)) (salt : ℕ →
   rw [hlay] at hly hcp
   exact ⟨hly, hcp⟩
 
-/-- **The session loop's level 0 is `commit0`'s**: where `ofSamples` returns `l`, the commitment read off it
-(`commitOf`) is `commit0`'s at its level, `t_pad` and table, so the loop's finish proves at the commitment the `table`
-path commits. -/
 theorem commitOf_eq {m : ℕ} {g : Array F128} {d : ByteArray} {l : Level0.Level0} (h : Level0.ofSamples wideLeaf m g d = .ok l) :
     commitOf l = commit0 l.lv l.tPad l.toIn := by
   obtain ⟨-, -, -, hrows, hlayers, -⟩ := Level0.ofSamples_ok h

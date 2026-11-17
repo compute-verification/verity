@@ -2,20 +2,7 @@ module
 
 public import Proofs.Flock.Claims.ZK.FinishStopAt
 
-/-!
-# The replay's rows on a view's masked values, constants included
-
-`Zk.replay`'s three constraints and the two ring-switch rows after them read only the masked proof, the transcript's
-coins and the switched vectors. Where the proof's zerocheck, lincheck rounds and `z_partial` are a view's (`zcOf`,
-`lcRoundsOf`, `zPartialOf`), the coins are the model's and the switched vectors are the view's `ŝ`, they are `rowsOf`'s
-first five as whole forms (`InnerTauRep.tauRep` identifies their coefficients only, which is all `InnerTauVal` reads;
-the ZK server's stop, `rowsAt_of_cons`, reads their constants too).
-
-* **`replay_rows`**: the five rows, whatever the Ligerito constraints after them.
-* **`zcOf_eq`**, **`lcRoundsOf_eq`**, **`zPartialOf_eq`**: the view's masked proof is the one the cut's zerocheck and
-  lincheck return (`Claims.ZKServer.zerocheckCut_proof`, `lincheckCut_proof`) at masked values that are the view's below
-  `zp 64`, the PIOP's words.
--/
+/-! The replay's rows on a view's masked values, constants included. -/
 
 @[expose] public section
 
@@ -24,10 +11,6 @@ open Flock Model ZkSession ZkView ZK Refine
 local notation "𝔽" => FlockLevel3.GF128
 local notation "𝕂" => FlockLevel3.GF256
 
-/-- **The replay's five rows are `rowsOf`'s**: on a run of `Zk.replay` at `layOf` (at `m ≥ 14`) whose proof's masked
-messages are the view's `v`, whose transcript's coins are `c`'s, whose fold folds as the model's (`combvOf`), and whose
-switched vectors at the `ab` and `c` claims are `ŝ`'s, the replay's three constraints and the two ring-switch rows, as
-the ZK server and the session append them, are `rowsOf`'s first five, constants included. -/
 theorem replay_rows {mPts : ℕ} (Tz : TabZK 𝔽 mPts) (st : Stmt) (c : CoinsZK (RestOf Tz st)) (r : Fin 2) {nE : ℕ}
     (v : Fin nE → 𝔽) {nC : ℕ} (sh : Fin nC → Fin 128 → 𝔽) (T' : 𝕂) (ρσ : 𝔽 × 𝔽)
     (S : Flock.Setup) (p : Flock.Proof) (root : ByteArray) {t t' : Flock.Transcript} {rp : Zk.Replayed}
@@ -84,8 +67,6 @@ variable {mPts : ℕ} (Tz : TabZK 𝔽 mPts) (st : Stmt) {nE : ℕ} (v : Fin nE 
 theorem zp64_gt_fa : (layOf Tz st).fa + 2 < (layOf Tz st).zp 64 := by
   simp only [Zk.PadLayout.zp, Zk.PadLayout.lc, Zk.PadLayout.fc]; omega
 
-/-- **`zcOf` is the proof the cut's zerocheck returns** (`Claims.ZKServer.zerocheckCut_proof`) at masked values `g`
-that are the view's below `zp 64`. -/
 theorem zcOf_eq (hg : ∀ k < (layOf Tz st).zp 64, (msgAt v k).val = g k) :
     zcOf Tz st v = ⟨(Array.range 64).map fun i => g ((layOf Tz st).r1ab i),
       (Array.range 64).map fun i => g ((layOf Tz st).r1c i),
@@ -111,8 +92,6 @@ theorem zcOf_eq (hg : ∀ k < (layOf Tz st).zp 64, (msgAt v k).val = g k) :
   · exact hg _ (by simp only [Zk.PadLayout.fb]; omega)
   · exact hg _ (by simp only [Zk.PadLayout.fc]; omega)
 
-/-- **`lcRoundsOf` is the rounds the cut's lincheck returns** (`Claims.ZKServer.lincheckCut_proof`) at masked values
-`g` that are the view's below `zp 64`. -/
 theorem lcRoundsOf_eq (hg : ∀ k < (layOf Tz st).zp 64, (msgAt v k).val = g k) :
     lcRoundsOf Tz st v =
       FlockComplete.Replay.pushes (fun j => (g ((layOf Tz st).lc j 0), g ((layOf Tz st).lc j 1))) (st.c.kLog - 6) := by
@@ -125,8 +104,6 @@ theorem lcRoundsOf_eq (hg : ∀ k < (layOf Tz st).zp 64, (msgAt v k).val = g k) 
   simp only [Array.getElem_map, Array.getElem_range]
   rw [hg _ (hlc j hj 0 (by omega)), hg _ (hlc j hj 1 (by omega))]
 
-/-- **`zPartialOf` is the `z_partial` the cut's lincheck returns** at masked values `g` that are the view's below
-`zp 64`. -/
 theorem zPartialOf_eq (hg : ∀ k < (layOf Tz st).zp 64, (msgAt v k).val = g k) :
     zPartialOf Tz st v = (Array.range 64).map fun i => g ((layOf Tz st).zp i) := by
   unfold zPartialOf

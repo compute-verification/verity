@@ -44,35 +44,8 @@ import Proofs.Flock.Soundness.ZK.RealLeaves
 import Proofs.Flock.Soundness.ZK.Session
 import VCVio.Prelude.Core
 
-/-!
-# Special honest-verifier zero knowledge at every coin vector: `SHVZK` from Lemmas B and C
-
-`SHVZK` asks, at every nonce and every coin vector `c`, that the honest prover's messages at `c` (`realVec`) and the
-protocol's SHVZK simulator's (`sim`) be close. The session analysis has one result for each way the honest prover meets
-`c`:
-
-* **where it goes on** (the session's tables at `c` non-degenerate: `Rank`, `PadOnto`, each `W^r` a bijection,
-  `PadsOnto`, `β ≠ 0`), Lemma B (`Session.session_shvzk_hm96`): the session's view is within `Σ_j 2·|Hid_j|·δ₁` of the
-  tuple of the tables' `S_shvzk` outputs, for a witness that satisfies the inner constraint (`InnerHolds`).
-  `Proto.shvzk_at_hm96`: `SHVZK` at `c` within `2·n_hid·δ₁`, when the honest prover's messages at `c` and the simulator's
-  are one function of those views (`hR`, `hS`), on randomness read through maps with fibers of one size;
-* **where it refuses** (it stops at a degenerate coin, as `flock-circuit --zk` does), its messages at `c` are a function
-  of the session's pre-final view cut where it stops, which Lemma A (`Session.session_prefinal_indep_cut`) shows is
-  witness-independent in world `W₀` at every coin vector; with real hm96 leaves (T1) the witness's messages at `c` are
-  within `2·|L|·δ₁` of the dummy witness's. There the simulator sends the dummy-witness prover's messages at `c`
-  (`Proto.dVec`): `Proto.shvzk_refused_hm96`, Lemma C at fixed answers (`oneRound`).
-
-So `SHVZK` holds at `δ_B = 2·max(n_hid, |L|)·δ₁`.
-
-**`InnerHolds` is needed, where the prover goes on.** `S_shvzk` computes `τ` from the verifier's replay `(λ, θ)` of the
-simulated messages, `τ = (⟨λ, Y₁⟩ − θ)/β`, which is the real `τ = ⟨λ, μ⟩` only if the honest prover's pads `h` satisfy the
-inner proof's constraint `⟨λ, h⟩ = θ` in every run (`Table.InnerHolds`: for every randomness and rep, the replay on the
-prover's own messages gives `Σ_i λ_i·h_i = θ`). It holds because a valid witness's clear values pass the clear checks,
-each of the ten constraints being affine in `h`: at the tables `verify --zk` sets up it is `CoinedOK`'s
-(`innerOf_holds_of`, through `coinedOf_setup_of`), which `Proofs.Flock.Claims.ZK.Deployed` reads; at the tables here it
-is a hypothesis. Where the prover refuses, the inner proof is not sent and nothing reads it; Lemma A needs no witness
-property but the public region data (`hreg`).
--/
+/-! Special honest-verifier zero knowledge at every coin vector: `SHVZK` from Lemmas B and C, with
+`InnerHolds` a hypothesis where the prover goes on. -/
 
 @[expose] public section
 
@@ -80,12 +53,10 @@ namespace Claims.ZKMal
 
 open Claims
 
-/-- A message as a strategy of one round, which reads no answer. -/
 def oneRound {Ω M : Type} (f : Ω → M) : FlockSoundness.ZK.Strategy Ω M Unit 1 where
   msg ω _ _ := f ω
   causal _ _ _ _ _ := rfl
 
-/-- The one-round responder. -/
 def unitResp (M : Type) : FlockSoundness.ZK.Responder M Unit 1 := ⟨fun _ _ => (), fun _ _ _ _ => rfl⟩
 
 theorem run_oneRound {Ω M : Type} [Inhabited M] (f : Ω → M) (V : FlockSoundness.ZK.Responder M Unit 1) (ω : Ω) :
@@ -95,16 +66,9 @@ namespace Proto
 
 variable {W : Type}
 
-/-- The dummy-witness prover's messages at the fixed coin vector `c`: after `j` coins, `dmsg` at `c`'s first `j`. -/
 def dVec (G : Proto W) (H : Msg → Msg) (x : Msg) (ν : G.Nonce) (r : G.Rand) (c : Fin (G.K x) → G.Coin) : List Msg :=
   (List.range (G.K x + 1)).map fun j => ((G.dmsg x ν r ((List.ofFn c).take j)).eval H).1
 
-/-- **`SHVZK` at a coin vector where the prover goes on, from Lemma B** (`Session.session_shvzk_hm96`, within
-`2·n_hid·δ₁`): the session's tables `T` at `c` non-degenerate, with hm96 leaves `Mh` of one hiding pair, the witness's
-table witnesses `wt` carrying the public region data and satisfying the inner constraint; the honest prover's messages at
-`c` are `lift` of the session's real view (`hR`) and the simulator's are `lift` of the tables' `S_shvzk` outputs on the
-dummy's `wt₀` (`hS`), each on randomness read through a map with fibers of one size; the session has at most `nH`
-hidden leaves. -/
 theorem shvzk_at_hm96 (G : Proto W) (H : Msg → Msg) (x : Msg) (w : W) (ν : G.Nonce) (c : Fin (G.K x) → G.Coin)
     {F K Wt Salt B D Hi VL Cc : Type} [Field F] [Field K] [CharP F 2] [AddCommGroup Salt] [AddCommGroup B]
     [AddCommGroup Hi] [Fintype F] [DecidableEq F] [Fintype K] [DecidableEq K] [Fintype Salt] [DecidableEq Salt]
@@ -152,11 +116,6 @@ theorem shvzk_at_hm96 (G : Proto W) (H : Msg → Msg) (x : Msg) (w : W) (ν : G.
   rw [eReal, eSim, abs_le]
   constructor <;> linarith
 
-/-- **`SHVZK` at a coin vector where the prover refuses, from Lemma C at fixed answers** (within `2·|L|·δ₁`): the
-honest prover's messages at `c`, on the witness and on the dummy, are `msgs` of the session's leaves, each a real hm96
-leaf `H(dig + M·y, c(y))` (`hR`, `hD`), whose world-`W₀` form is `out` of the session's pre-final view cut where the
-prover stops at `c` (`hI`), on randomness read through maps with fibers of one size; the table witnesses carry the
-public region data; and the simulator at `c` sends the dummy-witness prover's messages at `c` (`hS`). -/
 theorem shvzk_refused_hm96 (G : Proto W) (H : Msg → Msg) (x : Msg) (w : W) (ν : G.Nonce) (c : Fin (G.K x) → G.Coin)
     {F K Wt Salt B D Hi VL Cc Ω L : Type} [Field F] [Field K] [CharP F 2] [AddCommGroup Salt] [AddCommGroup B]
     [AddCommGroup Hi] [Fintype F] [DecidableEq F] [Fintype Salt] [DecidableEq Salt] [Fintype B] [DecidableEq B]

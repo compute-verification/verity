@@ -34,27 +34,8 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# The masked session from the values it sends
-
-`sessionPZk` with every value it computes from the witness or the tape read instead from a source beside it: each
-rep's masked values by pad index, its switched vectors, its restarted table `y₁'` and `ȳ`, levels ≥ 1's salts, the
-triple's openings, `τ`'s commitment, `Y`, and the leaves of level 0's and the pads' trees (`RepSrc`, `TabSrc`). The
-coins, the public data and every check on them are the session's: the extra claims, the circuit fold, the rank check,
-the pair `ρ₀, ρ₁` and `β`. The inner proof's batched constraint on the pads is not checked (the honest pads pass it).
-Levels ≥ 1 run as the session runs them, from `y₁'` and their salts. What only the final message reads (level 0's
-opened rows and salts, the pads' opened columns and salts, `τ` and its salt) is read from the source too, and nothing
-before it reads it.
-
-* `zerocheckCut`, `lincheckCut`, `ringSwitchCut`, `ligeritoCut`, `innerCut`: the rep's phases.
-* `commit0Cut`, `padsTreeCut`: level 0's commitment and a rep's pads commitment from their leaves.
-* `piopPZk`, `piopCut`: a rep's zerocheck, lincheck, rank check and ring switch, the session's and from the source.
-* `repCut`, `sessionCut`: a rep and the session from the source. `repMix k`: a rep whose first `k` phases are the
-  session's and the rest the source's, the hybrids between `repCut` and `repPZk`.
-* `asksCut coin n`: the sends that answer round `k` with `coin k` and stop right after the send at round `n`.
-* `eraseC`, `eraseL`, `eraseIC`, `eraseZ`: a commitment, an opening, a pads commitment and a rep's proof with what only the
-  final message reads forgotten.
--/
+/-! The masked session from the values it sends (`RepSrc`, `TabSrc`), which leaves the inner proof's
+batched constraint on the pads unchecked. -/
 
 @[expose] public section
 
@@ -94,35 +75,25 @@ structure TabSrc where
   rep : Nat → RepSrc
   deriving Inhabited
 
-/-! ## What only the final message reads -/
-
-/-- A commitment without its rows and salts. -/
 def eraseC (cm : Commit) : Commit :=
   { cm with rows := cm.rows.map fun _ => #[], salts := cm.salts.map fun _ => ByteArray.empty }
 
-/-- An opening without its rows and salts. -/
 def eraseLP (op : LevelProof) : LevelProof :=
   { op with rows := op.rows.map fun _ => #[], salts := op.salts.map fun _ => ByteArray.empty }
 
-/-- A Ligerito proof without level 0's opened rows and salts. -/
 def eraseL (lg : LigeritoProof) : LigeritoProof := { lg with initialProof := eraseLP lg.initialProof }
 
-/-- A pads commitment without its columns and salts. -/
 def eraseIC (ic : InnerCommit) : InnerCommit :=
   { ic with ch := ic.ch.map fun _ => 0, cm := ic.cm.map fun _ => 0, salts := ic.salts.map fun _ => ByteArray.empty }
 
-/-- An inner proof without `τ`, its salt, and the opened columns and their salts. -/
 def eraseIP (ip : Zk.InnerProof) : Zk.InnerProof :=
   { ip with tau := 0, tauSalt := ByteArray.empty, opened := ip.opened.map fun _ => (0, 0),
             salts := ip.salts.map fun _ => ByteArray.empty }
 
-/-- A rep's proof without what only the final message reads. -/
 def eraseZ (p : Zk.ZkProof) : Zk.ZkProof :=
   { p with proof := { p.proof with ligerito := eraseL p.proof.ligerito }, inner := eraseIP p.inner }
 
 variable {M : Type → Type} [Monad M] [MonadExceptOf String M] [MonadLiftT V M]
-
-/-! ## A rep's phases -/
 
 /-- **The masked zerocheck** sending the masked values `mk` at their pad indices. -/
 def zerocheckCut (io : Asks M) (m : Nat) (digest cap root : ByteArray) (lay : Zk.PadLayout) (mk : Nat → F128) :
@@ -206,7 +177,6 @@ def ringSwitchCut (io : Asks M) (sv : Nat → Array F128) (claims : Array Claim)
   let sws := (Array.range n).map fun k => { gamma := gamma[k]!, rpp := (perClaim[k]!).1, z := (perClaim[k]!).2 : Switched }
   return (ss, T, sws)
 
-/-- **A rep's zerocheck, lincheck, rank check and ring switch**, as `repPZk` runs them before Ligerito. -/
 def piopPZk (io : Asks M) (st : Setup) (lay : Zk.PadLayout) (h : Array F128) (tr : Trace) (cap root : ByteArray)
     (extras : Array Claim) (prior : Array (List F128)) (words : List Nat) :
     TMW M (ZerocheckProof × LincheckProof × Array (Array F128) × F128 × Array Switched) := do
@@ -361,8 +331,6 @@ def innerCut (io : Asks M) (lay : Zk.PadLayout) (ic : InnerCommit) (finalC : F12
            opened := qs.map fun j => (ic.ch[j]!, ic.cm[j]!), salts := qs.map fun j => ic.salts[j]!,
            paths := qs.map fun j => (Array.range (Nat.log2 n)).map fun k => (ic.layers[k]!)[(j >>> k) ^^^ 1]! }
 
-/-! ## The commitments from their leaves -/
-
 /-- **Level 0's commitment from its leaves**: `commitRowsP`'s tree on the leaves `src.leaf0` by tree position, with the
 rows and salts `src.row0`, `src.salt0`. -/
 def commit0Cut (hs : Hashes M) (ms : MerkleScheme) (lv : Level) (src : TabSrc) : M Commit := do
@@ -386,8 +354,6 @@ def padsTreeCut (hs : Hashes M) (n : Nat) (src : RepSrc) : M InnerCommit := do
     layers := layers.push cur
   return ⟨(Array.range n).map src.ch, (Array.range n).map src.cm, (Array.range n).map src.padSalt, layers, cur[0]!⟩
 
-/-! ## A rep and the session -/
-
 /-- **One masked rep from the source** (`repPZk`'s phases with `piopCut`, `ligeritoCut`, `innerCut`): the replay and
 the constraints as the session builds them. -/
 def repCut (io : Asks M) (hs : Hashes M) (st : Setup) (sch : Schedule) (_rep : Nat) (dom : ByteArray) (cm0 : Commit)
@@ -408,10 +374,6 @@ def repCut (io : Asks M) (hs : Hashes M) (st : Setup) (sch : Schedule) (_rep : N
     (rp.cons ++ #[("ring switch ab", rp.abValue.addConst ccAb), ("ring switch c", rp.cValue.addConst ccC)] ++ lgc)
   return { proof := p, level0 := zl, inner }
 
-/-- **A rep with its first `k` phases the session's and the rest from the source** (`k = 0`: none; `1`: the PIOP; `2`:
-and Ligerito; `3`: and the inner proof), level 0's commitment `cm0` and the pads commitment `ic` the session's, and
-what only the final message reads forgotten (`eraseC` before the source's Ligerito, `eraseL` after the session's,
-`eraseZ` at the end). Between `repMix k` and `repMix (k + 1)` one phase changes. -/
 def repMix (k : Nat) (io : Asks M) (hs : Hashes M) (st : Setup) (sch : Schedule) (tPad rep : Nat) (dom : ByteArray)
     (tr : Trace) (t : Array F128) (cm0 : Commit) (extras : Array Claim) (pads : PadsZk) (ic : InnerCommit)
     (extra lanePad : Nat → Nat → F128) (salt : Nat → Nat → ByteArray) (nonce : Nat → Nat → UInt64)
@@ -476,7 +438,6 @@ def asksCut (coin : Nat → Nat → F128) (n : Nat) : Asks PS where
     set (l.push (Claims.toMsg c))
     if n ≤ l.size then throw "past the openings" else pure (coin l.size)
 
-/-- **`asksCut` reads only the coins before round `n`.** -/
 theorem asksCut_congr {coin coin' : Nat → Nat → F128} {n : Nat} (h : ∀ k < n, coin k = coin' k) :
     asksCut coin n = asksCut coin' n := by
   unfold asksCut

@@ -17,29 +17,8 @@ import Proofs.Flock.Soundness.ZK.SHVZK
 import Proofs.Flock.Soundness.ZK.Session
 import Std.Data.TreeMap.Raw.Lemmas
 
-/-!
-# Lemma B at values read from what the workers see
-
-`Worker` proves Lemma B at values that read a table's mask slot and level 0's hiding (`Table.Vals`). A worker sees more
-before its algebraic phase: level 0's salts, at the opened positions and at the others, and every table's cells, not
-only its own. Its values are then a function of what all the tables' workers see (`Table.Seen`), and a masked value
-may read randomness sampled after its pad, so Lemma B's sequential masking no longer applies to the switched view.
-
-The chain is reordered instead. With the pads trees' hidden leaves ideal first, a bijection of each table's
-randomness that keeps what the workers see moves the switched view at constant values `c` to the honest view
-(`fixE`): where `c`'s rows hold it moves the free pads by `padShift`, `μ`, `pad_h` and `pad_μ` so that every message
-stays (`swView_fix`), elsewhere it is `shift`. Then level 0's hidden leaves go ideal and Lemma B is the honest prover's.
-
-* `constVals`, `fixAmt`, `fixE`: the constant values, the move of the inner proof's pads and the bijection.
-* `realCore_fix`, `swView_fix`, `swViewWith_fix`, `swDig_inl_fix`: the switched view, with its hidden leaves given, and
-  its level-0 digests at constant values, at the moved randomness, are the honest prover's.
-* `fixP`, `cut_swPre_fixP`: before the last coin the view shows no `C_h`, so a fix map that moves the free pads and `μ`
-  alone makes the switched pre-final view, cut, the honest one at every coin vector.
-* `swPre_congr`, `Hm96.swViewR_congr`: the switched views read the values at their own mask slot and level 0's hiding
-  alone, so values read from what the workers see are constant values on each fiber of what they see.
-* `mix_shvzk_hm96`, `fam_sw_shvzk_hm96`: Lemma B in that order, for one table and jointly at `J` tables, whose values
-  read every table's seen randomness.
--/
+/-! Lemma B at values read from what the workers see, which may read randomness sampled after a pad, so the
+chain is reordered. -/
 
 @[expose] public section
 
@@ -52,10 +31,8 @@ set_option synthInstance.maxHeartbeats 1000000
 
 variable {F K W Salt Seed D Hi VL : Type} [Field F] [Field K]
 
-/-- **Constant clear values**: `c` at every witness, mask slot and level 0's hiding. -/
 def constVals (T : Table F K W Salt Seed D Hi VL) (c : Fin 2 → Fin T.nE → F) : T.Vals := fun r _ _ _ => c r
 
-/-- `padShift` from the honest values to `c`'s, as the table's own type. -/
 def padShiftC (T : Table F K W Salt Seed D Hi VL) (w : W) (c : Fin 2 → Fin T.nE → F) (u : T.Mask) (V : T.Vis) :
     Fin 2 → (Fin T.nE → F) × F × F :=
   T.onVals.padShift (w, T.constVals c) (w, T.vals) u V
@@ -69,9 +46,6 @@ theorem padShiftC_apply (T : Table F K W Salt Seed D Hi VL) (w : W) (c : Fin 2 �
 variable [CharP F 2]
 
 open Classical in
-/-- **The move of the inner proof's pads** at `(u, V, h)`: where `c`'s rows hold, with `h' := h + padShift` and
-`d := h − h'` on the full pad vectors, `pad_h` by a solution `δ` of `C_p·δ = C_h·d`, `pad_μ` by `−δ/β` and `μ` by
-`d/β`; nothing elsewhere. -/
 noncomputable def fixAmt (T : Table F K W Salt Seed D Hi VL) (w : W) (c : Fin 2 → Fin T.nE → F) (u : T.Mask)
     (V : T.Vis) (h : Fin 2 → (Fin T.nE → F) × F × F) :
     (Fin 2 → Fin T.nPad → F) × (Fin 2 → Fin T.nPad → F) × (Fin 2 → PadIdx T.nE → F) :=
@@ -84,8 +58,6 @@ noncomputable def fixAmt (T : Table F K W Salt Seed D Hi VL) (w : W) (c : Fin 2 
       fun r i => (T.hFull (h r) i - T.hFull (h r + T.padShiftC w c u V r) i) / T.β r)
   else 0
 
-/-- **The fix map** at constant values `c`: the free pads moved by `padShift`, the inner proof's pads by `fixAmt`, the
-mask slot, level 0's hiding and every salt and seed kept. -/
 noncomputable def fixE (T : Table F K W Salt Seed D Hi VL) (w : W) (c : Fin 2 → Fin T.nE → F) : T.Rand ≃ T.Rand where
   toFun ω := (ω.1, ω.2.1, ω.2.2.1 + T.padShiftC w c ω.1 ω.2.1,
     ω.2.2.2.1 + (T.fixAmt w c ω.1 ω.2.1 ω.2.2.1).1, ω.2.2.2.2.1 + (T.fixAmt w c ω.1 ω.2.1 ω.2.2.1).2.1,
@@ -111,7 +83,6 @@ theorem fixE_apply (T : Table F K W Salt Seed D Hi VL) (w : W) (c : Fin 2 → Fi
       ω.2.2.2.2.2.1 + (T.fixAmt w c ω.1 ω.2.1 ω.2.2.1).2.2, ω.2.2.2.2.2.2) :=
   rfl
 
-/-- Where `c`'s rows fail, the fix map is `shift`. -/
 theorem fixE_of_not_rows (T : Table F K W Salt Seed D Hi VL) (w : W) (c : Fin 2 → Fin T.nE → F) (ω : T.Rand)
     (hr : ¬ T.onVals.RowsAt (w, T.constVals c) ω.1 ω.2.1) :
     T.fixE w c ω = T.onVals.shift (w, T.constVals c) (w, T.vals) ω := by
@@ -122,9 +93,8 @@ theorem fixE_of_not_rows (T : Table F K W Salt Seed D Hi VL) (w : W) (c : Fin 2 
   simp only [Prod.fst_zero, Prod.snd_zero, add_zero]
   rfl
 
-/-- **The pre-final fix map** at constant values `c`: the free pads moved by `padShift` and `μ` as `fixE` moves it;
-the mask slot, level 0's hiding, `pad_h`, `pad_μ` and every salt and seed kept. The pre-final view shows no `C_h`, so it
-needs no move of `pad_h` and holds at every coin vector. -/
+/-- The pre-final view shows no `C_h`, so this fix map needs no move of `pad_h` and holds at every coin
+vector. -/
 noncomputable def fixP (T : Table F K W Salt Seed D Hi VL) (w : W) (c : Fin 2 → Fin T.nE → F) : T.Rand ≃ T.Rand where
   toFun ω := (ω.1, ω.2.1, ω.2.2.1 + T.padShiftC w c ω.1 ω.2.1, ω.2.2.2.1, ω.2.2.2.2.1,
     ω.2.2.2.2.2.1 + (T.fixAmt w c ω.1 ω.2.1 ω.2.2.1).2.2, ω.2.2.2.2.2.2)
@@ -137,7 +107,6 @@ noncomputable def fixP (T : Table F K W Salt Seed D Hi VL) (w : W) (c : Fin 2 �
     obtain ⟨u, V, h, padh, padμ, μ, s⟩ := ω
     simp only [sub_add_cancel]
 
-/-- Where `c`'s rows fail, the pre-final fix map is `shift`. -/
 theorem fixP_of_not_rows (T : Table F K W Salt Seed D Hi VL) (w : W) (c : Fin 2 → Fin T.nE → F) (ω : T.Rand)
     (hr : ¬ T.onVals.RowsAt (w, T.constVals c) ω.1 ω.2.1) :
     T.fixP w c ω = T.onVals.shift (w, T.constVals c) (w, T.vals) ω := by
@@ -151,7 +120,6 @@ theorem fixP_of_not_rows (T : Table F K W Salt Seed D Hi VL) (w : W) (c : Fin 2 
   rfl
 
 omit [CharP F 2] in
-/-- The `δ` of `fixAmt` solves `C_p·δ = C_h·d`. -/
 theorem fixAmt_spec (T : Table F K W Salt Seed D Hi VL) (hpads : T.PadsOnto) (r : Fin 2) (d : PadIdx T.nE → F) :
     (fun k => ∑ j, T.Cp r k j *
         Function.invFun (fun p : Fin T.nPad → F => fun k => ∑ j, T.Cp r k j * p j) (fun k => ∑ i, T.Ch r k i * d i) j)
@@ -159,7 +127,6 @@ theorem fixAmt_spec (T : Table F K W Salt Seed D Hi VL) (hpads : T.PadsOnto) (r 
   Function.invFun_eq (hpads r _)
 
 omit [CharP F 2] in
-/-- `padShift` reads `p`'s clear values at its own mask slot and level 0's hiding alone. -/
 theorem onVals_padShift_congr (T : Table F K W Salt Seed D Hi VL) (w : W) (v v' : T.Vals) (q : W × T.Vals)
     (u : T.Mask) (V : T.Vis) (h : ∀ r, v r w u V = v' r w u V) :
     T.onVals.padShift (w, v) q u V = T.onVals.padShift (w, v') q u V := by
@@ -167,7 +134,6 @@ theorem onVals_padShift_congr (T : Table F K W Salt Seed D Hi VL) (w : W) (v v' 
   funext r
   simp only [padShift, h']
 
-/-- Whether the rows hold reads the clear values at the mask slot and level 0's hiding alone. -/
 theorem onVals_rowsAt_congr (T : Table F K W Salt Seed D Hi VL) (w : W) (v v' : T.Vals) (u : T.Mask) (V : T.Vis)
     (h : ∀ r, v r w u V = v' r w u V) : T.onVals.RowsAt (w, v) u V ↔ T.onVals.RowsAt (w, v') u V := by
   unfold RowsAt
@@ -182,7 +148,6 @@ theorem onVals_shift_congr (T : Table F K W Salt Seed D Hi VL) (w : W) (v v' : T
   unfold shift
   rw [T.onVals_padShift_congr w v v' q ω.1 ω.2.1 h]
 
-/-- **The switched pre-final view reads the clear values at its own mask slot and level 0's hiding alone.** -/
 theorem swPre_congr (T : Table F K W Salt Seed D Hi VL) (w : W) (v v' : T.Vals) (ω : T.Rand)
     (h : ∀ r, v r w ω.1 ω.2.1 = v' r w ω.1 ω.2.1) : T.swPre w v ω = T.swPre w v' ω := by
   have hc := T.onVals_rowsAt_congr w v v' ω.1 ω.2.1 h
@@ -194,7 +159,6 @@ theorem swPre_congr (T : Table F K W Salt Seed D Hi VL) (w : W) (v v' : T.Vals) 
 variable [AddCommGroup Salt] [AddCommGroup Seed] [AddCommGroup Hi]
 
 set_option smartUnfolding false in
-/-- The view's components at a table's witness paired with any clear values: the table's, with `v`'s values masked. -/
 theorem onVals_realCore (T : Table F K W Salt Seed D Hi VL) (w : W) (v : T.Vals) (ω : T.Rand) :
     T.onVals.realCore (w, v) ω = ((T.nu w + T.maskHom ω.1,
       (fun q l => ∑ c, T.lanes w ω.1 l c * T.E q c, fun r => T.y1 w ω.1 r, 0) + T.mask1 ω.2.1,
@@ -203,8 +167,6 @@ theorem onVals_realCore (T : Table F K W Salt Seed D Hi VL) (w : W) (v : T.Vals)
         T.mask3 ω.2.2.2) : T.Core) :=
   rfl
 
-/-- **Where `c`'s rows hold, the fix map keeps every component of the view** (Lemma B's sampling order): the masked
-values and `ρ_in`, `σ_in` by `padShift`, `C_h` by `C_p·δ = C_h·d`, `Y₂` and `Y₁` by `−δ/β` and `d/β`. -/
 theorem realCore_fix (T : Table F K W Salt Seed D Hi VL) (hpads : T.PadsOnto) (hβ : ∀ r, T.β r ≠ 0) (w : W)
     (c : Fin 2 → Fin T.nE → F) (ω : T.Rand) (hr : T.onVals.RowsAt (w, T.constVals c) ω.1 ω.2.1) :
     T.onVals.realCore (w, T.constVals c) ω = T.realCore w (T.fixE w c ω) := by
@@ -244,8 +206,6 @@ set_option smartUnfolding false in
 theorem toBase_psi (T : Table F K W Salt Seed D Hi VL) (κ : T.Core) : T.toBase (T.onVals.psi κ) = T.psi κ :=
   rfl
 
-/-- **The switched view at constant values is the honest view at the moved randomness**: where `c`'s rows hold by
-`realCore_fix` (both are `psi` of their components), elsewhere because the fix map is `shift`. -/
 theorem swView_fix (T : Table F K W Salt Seed D Hi VL) (hW : ∀ r, Function.Bijective fun p : F × F => T.Wr r p.1 p.2)
     (hpads : T.PadsOnto) (hβ : ∀ r, T.β r ≠ 0) (w : W) (hreg : T.sReg w = T.pubReg) (hinner : T.InnerHolds w)
     (c : Fin 2 → Fin T.nE → F) (ω : T.Rand) :
@@ -261,9 +221,6 @@ theorem swView_fix (T : Table F K W Salt Seed D Hi VL) (hW : ∀ r, Function.Bij
 omit [AddCommGroup Salt] [AddCommGroup Seed] [AddCommGroup Hi] in
 open Classical in
 set_option smartUnfolding false in
-/-- **The switched pre-final view at constant values, cut, is the honest one at the pre-final fix map**, at every coin
-vector: the masked values by `padShift`, `ρ_in`, `σ_in` kept by it, and `Y₁` by `μ`'s move wherever it is sent, which
-is where `β ≠ 0` (`Admits`). -/
 theorem cut_swPre_fixP (T : Table F K W Salt Seed D Hi VL) (S : T.Sent) (hS : T.Admits S) (w : W)
     (c : Fin 2 → Fin T.nE → F) (ω : T.Rand) :
     T.cut S (T.swPre w (T.constVals c) ω) = T.cut S (T.preView w (T.fixP w c ω)) := by
@@ -295,17 +252,13 @@ theorem cut_swPre_fixP (T : Table F K W Salt Seed D Hi VL) (S : T.Sent) (hS : T.
       · rw [ite_eq_right hf, ite_eq_right hf]
   · rw [swPre, ite_eq_right hr, T.fixP_of_not_rows w c ω hr]
 
-/-- **What a worker sees of a table's randomness** before its algebraic phase: the mask slot, level 0's hiding, and
-level 0's salts at the opened positions and at the others. -/
 abbrev Seen (T : Table F K W Salt Seed D Hi VL) : Type :=
   T.Mask × T.Vis × (Fin T.nS → Salt) × (Fin T.nU → Salt)
 
-/-- What a worker sees of the randomness `ω` and level 0's hidden leaves' salts `ys`. -/
 def seenOf (T : Table F K W Salt Seed D Hi VL) (ω : T.Rand) (ys : Fin T.nU → Salt) : T.Seen :=
   (ω.1, ω.2.1, ω.2.2.2.2.2.2.1, ys)
 
 omit [AddCommGroup Salt] [AddCommGroup Seed] [AddCommGroup Hi] in
-/-- The fix map keeps what the workers see. -/
 theorem seenOf_fixE (T : Table F K W Salt Seed D Hi VL) (w : W) (c : Fin 2 → Fin T.nE → F) (ω : T.Rand)
     (ys : Fin T.nU → Salt) : T.seenOf (T.fixE w c ω) ys = T.seenOf ω ys :=
   rfl
@@ -315,8 +268,6 @@ section Hm96
 variable {B C : Type} [AddCommGroup B]
 
 
-/-- **The switched view with its hidden leaves given, at constant values**, is the honest one at the moved
-randomness. -/
 theorem swViewWith_fix (T : Table F K W Salt (B × Salt) D Hi VL)
     (hW : ∀ r, Function.Bijective fun p : F × F => T.Wr r p.1 p.2) (hpads : T.PadsOnto) (hβ : ∀ r, T.β r ≠ 0) (w : W)
     (hreg : T.sReg w = T.pubReg) (hinner : T.InnerHolds w) (c : Fin 2 → Fin T.nE → F) (ω : T.Rand) (L : T.Hid → D) :
@@ -333,8 +284,6 @@ theorem swViewWith_fix (T : Table F K W Salt (B × Salt) D Hi VL)
     rfl
 
 omit [AddCommGroup Salt] [AddCommGroup Hi] in
-/-- **The switched view's level-0 digests are the honest ones at the moved randomness**: they read the mask slot and
-level 0's hiding, which the fix map and `shift` keep. -/
 theorem swDig_inl_fix (T : Table F K W Salt (B × Salt) D Hi VL) (M : T.Hm96 C) (w : W) (c : Fin 2 → Fin T.nE → F)
     (ω : T.Rand) (q : Fin T.nU) :
     M.onVals.swDig (w, T.constVals c) (w, T.vals) ω (.inl q) = M.dig w (T.fixE w c ω) (.inl q) := by
@@ -342,7 +291,6 @@ theorem swDig_inl_fix (T : Table F K W Salt (B × Salt) D Hi VL) (M : T.Hm96 C) 
   split_ifs <;> rfl
 
 omit [CharP F 2] [AddCommGroup Salt] [AddCommGroup Hi] in
-/-- The hidden leaves' digests read no clear value. -/
 theorem Hm96.onVals_dig_congr {T : Table F K W Salt (B × Salt) D Hi VL} (M : T.Hm96 C) (w : W) (v v' : T.Vals)
     (ω : T.Rand) : M.onVals.dig (w, v) ω = M.onVals.dig (w, v') ω := by
   funext i
@@ -355,7 +303,6 @@ theorem onVals_viewWith_congr (T : Table F K W Salt (B × Salt) D Hi VL) (w : W)
   simp only [viewWith, T.onVals_view_congr w v v' ω h]
 
 omit [AddCommGroup Salt] [AddCommGroup Hi] in
-/-- **The switched view with real leaves reads the clear values at its own mask slot and level 0's hiding alone.** -/
 theorem Hm96.swViewR_congr {T : Table F K W Salt (B × Salt) D Hi VL} (M : T.Hm96 C) (w : W) (v v' : T.Vals)
     (ω : T.Rand) (ys : T.Hid → Salt) (h : ∀ r, v r w ω.1 ω.2.1 = v' r w ω.1 ω.2.1) :
     M.onVals.swViewR (w, v) (w, T.vals) ω ys = M.onVals.swViewR (w, v') (w, T.vals) ω ys := by
@@ -368,13 +315,10 @@ theorem Hm96.swViewR_congr {T : Table F K W Salt (B × Salt) D Hi VL} (M : T.Hm9
     exact T.onVals_viewWith_congr w v v' ω _ h
   · rw [ite_eq_right hr, ite_eq_right (mt hc.2 hr), T.onVals_shift_congr w v v' _ ω h]
 
-/-- **The honest view with level 0's hidden leaves real and the pads trees' ideal**: real hm96 leaves of level 0's
-columns under the salts `ys`, ideal leaves of the seeds `ωu.2` in the pads trees. -/
 noncomputable def Hm96.viewMix {T : Table F K W Salt (B × Salt) D Hi VL} (M : T.Hm96 C) (w : W) (ωu : T.Rand × (Fin 2 × Fin T.nPU → B × Salt))
     (ys : Fin T.nU → Salt) : T.View :=
   T.viewWith w ωu.1 (Sum.elim (fun q => M.H (M.dig w ωu.1 (.inl q) + M.My (ys q), M.cs (ys q))) fun i => T.ideal (ωu.2 i))
 
-/-- The hidden leaves' seeds split into level 0's and the pads trees'. -/
 def hidSplit (T : Table F K W Salt (B × Salt) D Hi VL) (X : Type) :
     (T.Rand × (Fin 2 × Fin T.nPU → X)) × (Fin T.nU → X) ≃ T.Rand × (T.Hid → X) where
   toFun p := (p.1.1, Sum.elim p.2 p.1.2)
@@ -391,9 +335,6 @@ open Game
 variable {B C : Type} [AddCommGroup B] [Fintype F] [DecidableEq F] [Fintype K] [DecidableEq K] [Fintype Salt]
   [DecidableEq Salt] [Fintype B] [DecidableEq B] [Fintype Hi] [DecidableEq Hi]
 
-/-- **Lemma B with level 0's hidden leaves real and the pads trees' ideal**, for one table: every event has
-probabilities within `(n_U + |Hid|)·δ₁` of each other under the honest prover with those leaves and under `S_shvzk`
-with real leaves (`ideal_leaves_swap_fintype` on level 0's leaves, then `table_shvzk_hm96`'s steps). -/
 theorem mix_shvzk_hm96 (T : Table F K W Salt (B × Salt) D Hi VL) (M : T.Hm96 C) {δ₁ : ENNReal}
     (hT1 : Claims.Hm96Hiding M.My M.cs δ₁) (hrank : T.Rank) (hpad : T.PadOnto)
     (hW : ∀ r, Function.Bijective fun p : F × F => T.Wr r p.1 p.2) (hpads : T.PadsOnto) (hβ : ∀ r, T.β r ≠ 0)
@@ -469,28 +410,22 @@ section Joint
 variable {J : ℕ} {F K Salt B D C : Type} {W Hi VL : Fin J → Type} [Field F] [Field K] [CharP F 2]
   [AddCommGroup Salt] [AddCommGroup B] [∀ j, AddCommGroup (Hi j)]
 
-/-- What the workers see of every table's randomness. -/
 def famSeen (T : ∀ j, Table F K (W j) Salt (B × Salt) D (Hi j) (VL j)) (p : ∀ j, (T j).Rand × ((T j).Hid → Salt)) :
     ∀ j, (T j).Seen :=
   fun j => (T j).seenOf (p j).1 fun q => (p j).2 (.inl q)
 
-/-- **The tables' switched views at values read from what every table's workers see** (`vc`), with real leaves. -/
 noncomputable def famSw (T : ∀ j, Table F K (W j) Salt (B × Salt) D (Hi j) (VL j)) (M : ∀ j, (T j).Hm96 C)
     (w : ∀ j, W j) (vc : (∀ j, (T j).Seen) → ∀ j, Fin 2 → Fin (T j).nE → F)
     (p : ∀ j, (T j).Rand × ((T j).Hid → Salt)) : ∀ j, (T j).View :=
   fun j => (T j).toBase ((M j).onVals.swViewR (w j, (T j).constVals (vc (famSeen T p) j)) (w j, (T j).vals) (p j).1
     (p j).2)
 
-/-- The randomness with the pads trees' hidden leaves ideal: each table's randomness and pads seeds, and level 0's
-hidden salts. -/
 abbrev MixRand (T : ∀ j, Table F K (W j) Salt (B × Salt) D (Hi j) (VL j)) : Type :=
   ∀ j, ((T j).Rand × (Fin 2 × Fin (T j).nPU → B × Salt)) × (Fin (T j).nU → Salt)
 
-/-- What the workers see, on that randomness. -/
 def mixSeen (T : ∀ j, Table F K (W j) Salt (B × Salt) D (Hi j) (VL j)) (q : MixRand T) : ∀ j, (T j).Seen :=
   fun j => (T j).seenOf (q j).1.1 (q j).2
 
-/-- **The switched views with the pads trees' hidden leaves ideal.** -/
 noncomputable def famSwMix (T : ∀ j, Table F K (W j) Salt (B × Salt) D (Hi j) (VL j)) (M : ∀ j, (T j).Hm96 C)
     (w : ∀ j, W j) (vc : (∀ j, (T j).Seen) → ∀ j, Fin 2 → Fin (T j).nE → F) (q : MixRand T) : ∀ j, (T j).View :=
   fun j => (T j).toBase ((T j).onVals.swViewWith (w j, (T j).constVals (vc (mixSeen T q) j)) (w j, (T j).vals)
@@ -498,7 +433,6 @@ noncomputable def famSwMix (T : ∀ j, Table F K (W j) Salt (B × Salt) D (Hi j)
       (w j, (T j).vals) (q j).1.1 (.inl q') + (M j).My ((q j).2 q'), (M j).cs ((q j).2 q')))
       fun i => (T j).ideal ((q j).1.2 i)))
 
-/-- **The fix map at every table**, at the values read from what the workers see, which it keeps. -/
 noncomputable def famFix (T : ∀ j, Table F K (W j) Salt (B × Salt) D (Hi j) (VL j)) (w : ∀ j, W j)
     (vc : (∀ j, (T j).Seen) → ∀ j, Fin 2 → Fin (T j).nE → F) : MixRand T ≃ MixRand T where
   toFun q j := (((T j).fixE (w j) (vc (mixSeen T q) j) (q j).1.1, (q j).1.2), (q j).2)
@@ -506,8 +440,6 @@ noncomputable def famFix (T : ∀ j, Table F K (W j) Salt (B × Salt) D (Hi j) (
   left_inv q := funext fun j => Prod.ext (Prod.ext (((T j).fixE (w j) (vc (mixSeen T q) j)).symm_apply_apply _) rfl) rfl
   right_inv q := funext fun j => Prod.ext (Prod.ext (((T j).fixE (w j) (vc (mixSeen T q) j)).apply_symm_apply _) rfl) rfl
 
-/-- **With the pads trees' leaves ideal, the switched views are the honest prover's on the fixed randomness**
-(`swViewWith_fix`, `swDig_inl_fix`). -/
 theorem famSwMix_fix (T : ∀ j, Table F K (W j) Salt (B × Salt) D (Hi j) (VL j)) (M : ∀ j, (T j).Hm96 C)
     (hW : ∀ j r, Function.Bijective fun p : F × F => (T j).Wr r p.1 p.2) (hpads : ∀ j, (T j).PadsOnto)
     (hβ : ∀ j r, (T j).β r ≠ 0) (w : ∀ j, W j) (hreg : ∀ j, (T j).sReg (w j) = (T j).pubReg)
@@ -523,8 +455,6 @@ theorem famSwMix_fix (T : ∀ j, Table F K (W j) Salt (B × Salt) D (Hi j) (VL j
       ((T j).swDig_inl_fix (M j) (w j) (vc (mixSeen T q) j) (q j).1.1 q')
   · rfl
 
-/-- The joint randomness split into what stays (each table's randomness and level 0's hidden salts) and the pads trees'
-hidden salts, indexed by table. -/
 def padsSplit (T : ∀ j, Table F K (W j) Salt (B × Salt) D (Hi j) (VL j)) (X : Type) :
     (∀ j, (T j).Rand × ((T j).Hid → X)) ≃
       (∀ j, (T j).Rand × (Fin (T j).nU → X)) × ((Σ j, Fin 2 × Fin (T j).nPU) → X) where
@@ -533,7 +463,6 @@ def padsSplit (T : ∀ j, Table F K (W j) Salt (B × Salt) D (Hi j) (VL j)) (X :
   left_inv p := funext fun j => Prod.ext rfl (funext fun i => by rcases i with q | i <;> rfl)
   right_inv _ := rfl
 
-/-- The pads trees' seeds regrouped by table. -/
 def padsJoin (T : ∀ j, Table F K (W j) Salt (B × Salt) D (Hi j) (VL j)) :
     (∀ j, (T j).Rand × (Fin (T j).nU → Salt)) × ((Σ j, Fin 2 × Fin (T j).nPU) → B × Salt) ≃ MixRand T where
   toFun b j := (((b.1 j).1, fun i => b.2 ⟨j, i⟩), (b.1 j).2)
@@ -557,8 +486,6 @@ variable [Fintype F] [DecidableEq F] [Fintype K] [DecidableEq K] [Fintype Salt] 
   [DecidableEq B] [∀ j, Fintype (Hi j)] [∀ j, DecidableEq (Hi j)]
 
 omit [DecidableEq F] [Fintype K] [DecidableEq K] [DecidableEq Salt] [DecidableEq B] [∀ j, DecidableEq (Hi j)] in
-/-- **The pads trees' hidden leaves go ideal at every table at once**, at `δ₁` per leaf (`ideal_leaves_swap_fintype` on
-all of them): the values read level 0's salts, never the pads trees'. -/
 theorem famSw_pads_swap (T : ∀ j, Table F K (W j) Salt (B × Salt) D (Hi j) (VL j)) (M : ∀ j, (T j).Hm96 C)
     (My : Salt → B) (cs : Salt → C) (Hh : B × C → D) (hMy : ∀ j, (M j).My = My) (hcs : ∀ j, (M j).cs = cs)
     (hH : ∀ j, (M j).H = Hh) {δ₁ : ENNReal} (hT1 : Claims.Hm96Hiding My cs δ₁) (w : ∀ j, W j)
@@ -607,13 +534,6 @@ theorem famSw_pads_swap (T : ∀ j, Table F K (W j) Salt (B × Salt) D (Hi j) (V
   rw [hl, ← hr, ← hc]
   exact ⟨v1, v2⟩
 
-/-- **Lemma B at values read from what every table's workers see, with real leaves**: at `J` tables, at a fixed
-non-degenerate coin vector of each, for witnesses `w` carrying the public region data whose honest pads satisfy the inner
-constraint, and for any values `vc` read from what every table's workers see (`Table.Seen`: the mask slots, level 0's
-hiding and level 0's salts), the tables' switched views and their `S_shvzk` with real leaves on any dummies are within
-`Σ_j 2·|Hid_j|·δ₁` both ways. The pads trees' hidden leaves go ideal first (`famSw_pads_swap`); then the fix map, a
-bijection that keeps what the workers see, makes the switched views the honest prover's (`famSwMix_fix`), whose tables
-are independent, each within `(n_U + |Hid|)·δ₁` of its `S_shvzk` (`mix_shvzk_hm96`, `prCoin_pi_close`). -/
 theorem fam_sw_shvzk_hm96 (T : ∀ j, Table F K (W j) Salt (B × Salt) D (Hi j) (VL j)) (M : ∀ j, (T j).Hm96 C)
     (My : Salt → B) (cs : Salt → C) (Hh : B × C → D) (hMy : ∀ j, (M j).My = My) (hcs : ∀ j, (M j).cs = cs)
     (hH : ∀ j, (M j).H = Hh) {δ₁ : ENNReal} (hT1 : Claims.Hm96Hiding My cs δ₁) (hrank : ∀ j, (T j).Rank)

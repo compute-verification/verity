@@ -46,34 +46,13 @@ import Proofs.Flock.Claims.ZK.SentE
 import Proofs.Flock.Soundness.Discharge.ZkExec.RunsSeams
 import Proofs.Flock.Soundness.Refine.Arith
 
-/-!
-# `hinner` at the switched source
-
-`FinishSrc.repCut_fw` asks of its source, at the ZK server's Ligerito and constraints, the inner proof's (`hinner`,
-`InnerSrc`). At the switched prover's source (`swSrcE`) at the ZK server's clear values (`valsFw`), `InnerSrc` holds
-where the ZK server's constraints are the worker's view's first seven rows (`swSrcE_innerSrc_rows`, `SwRows`), and
-`Composed.tauFw_at_coef` gives those rows from what the deployed rep fixes: the coins are the opened coins from the
-rep's base (`czExe`'s), the masked values below `zp 64` are the view's (`swViewMasked`, `swSrcE_hmk_frame`), the fold
-is the model's (`folded_unique`), and level 0's record holds the coins at the rep's slots (`ligeritoPZk_lanes`'
-`record`, `LaneCoins`). The PIOP's `piopZk` sends come first, then Ligerito's `k₀ + 7 + 11 R`, so the inner proof
-begins at `repSlot … (innerOff 0)`.
-
-* `swViewMasked`: where table `j`'s rows hold at its base, the worker's view's masked message `k` of rep `r` is the
-  switched source's.
-* **`swSrcE_hinner`**: `repCut_fw`'s `hinner` at the switched source and the request's pads, where the ring switch's
-  vectors are the view's (`hsw`).
-* `FlockComplete.ringSwitchCut_ss`: a returned ring switch's `ŝ`s are its switched vectors in turn.
-* `swSrcE_sv_rank`: past rep `r`'s rank check, the switched source's switched vector `k < 2` is the view's `ŝ_{2r+k}`.
-* **`swSrcE_hinner_sv`**: `swSrcE_hinner` with `hsw` from `hpiop`'s switched vectors (`hpsv`): no premise on the
-  ZK server's runs is left.
--/
+/-! `hinner` at the switched source. -/
 
 @[expose] public section
 
 set_option synthInstance.maxSize 100000
-set_option synthInstance.maxHeartbeats 1000000 -- as in the ZK files this builds on; its own need is unmeasured
+set_option synthInstance.maxHeartbeats 1000000  -- as in the ZK files this builds on
 
-/-- A view at clear values, as the table's: its `ŝ` is `ν + maskHom` at its mask. -/
 theorem FlockSoundness.ZK.Table.toBase_onVals_sHat {F K W Salt Seed D Hi VL : Type} [Field F] [Field K] [CharP F 2]
     (T : FlockSoundness.ZK.Table F K W Salt Seed D Hi VL) (w : W) (v : T.Vals) (ω : T.onVals.Rand) :
     (T.toBase (T.onVals.view (w, v) ω)).pre.1 = T.nu w + T.maskHom ω.1 :=
@@ -83,7 +62,6 @@ namespace FlockComplete
 
 open Flock Transcript Replay
 
-/-- **A returned ring switch's `ŝ`s are its switched vectors in turn**: claim `k`'s step pushes `sv k`. -/
 theorem ringSwitchCut_ss (coin : ℕ → ℕ → F128) (n : ℕ) (sv : ℕ → Array F128) (claims : Array Claim)
     {t t' : Transcript} {l l' : Array Claims.Msg} {ss : Array (Array F128)} {T : F128} {sws : Array Switched}
     (h : ((ringSwitchCut (asksCut coin n) sv claims).run t).go l = (.ok ((ss, T, sws), t'), l')) :
@@ -140,8 +118,6 @@ open FlockSoundness.Refine (fOf)
 
 namespace Masked
 
-/-- **The worker's view's masked message is the switched source's**, where table `j`'s rows hold at its base: the
-switched cut's masked values are the view's there (`swCutE_masked_of_rowsAt`), and past `n_E` both are `0`. -/
 theorem swViewMasked (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (w : Claims.Flock.Wit)
     (v : ∀ j, ((tabC PE x j).T (czExe PE x c j)).tab.Vals) (τ : UE.Tape) (j : Fin (jOf x)) (r : Fin 2)
     (hrows : ((tabC PE x j).T (czExe PE x c j)).tab.onVals.RowsAt (wtOf PE x w j, v j)
@@ -161,14 +137,6 @@ theorem swViewMasked (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (w : Clai
   all_goals first | rfl | (exfalso; exact h₂ h₁) | (exfalso; exact h₁ h₂) | (exfalso; contradiction) |
     exact FlockLevel3.GF128.zero_eq
 
-/-- **`repCut_fw`'s `hinner` at the switched source**, for table `j`'s rep `r` at the ZK server's request `q` (frame rep
-`frep j r` of the release `Lr`), at the setup `st` of table `j`'s statement and the log `l` at the rep's base: where
-table `j`'s rows hold at its base at the ZK server's clear values (`valsFw`), the passed values are `q`'s and the pads
-the request's (`swSrcE_hmk_frame`'s and `swSrcE_innerSrc_rows`'s premises), then wherever the ZK server's PIOP and
-Ligerito return, its replay and level 0's constraints return, and the batched constraint holds, `InnerSrc` holds at the
-switched source. The ZK server's constraints are the worker's view's first seven rows (`tauFw_at_coef`, `swRows_coef`)
-where the ring switch's vectors are the view's (`hsw`), level 0's record holding the rep's coins
-(`ligeritoPZk_lanes`), and the inner proof begins at `repSlot … (innerOff 0)`. -/
 theorem swSrcE_hinner {W R : Type} (Lr : Claims.ZKServer.LeanRelease W R) (ρ : R) (tz : FlockComplete.TapeZk)
     (frep : ℕ → ℕ → ℕ) (x : Msg) (hx : Live x) (w : Claims.Flock.Wit) (τ : UE.Tape)
     (c : Fin (refK x) → FlockDeploy.Coin) (n : ℕ) (hnr : ¬ Refused x c n) (s : _) (spec : _root_.Flock.SessionSpec)
@@ -241,7 +209,6 @@ theorem swSrcE_hinner {W R : Type} (Lr : Claims.ZKServer.LeanRelease W R) (ρ : 
   obtain ⟨zc, t₁, l₁, lc, t₂, l₂, h₁, h₂, h₃⟩ := _root_.Flock.ZkServer.Finish.piopFw_split hP
   obtain ⟨h25, -, hsm, hk0, -, ⟨hn7, h2, -⟩, hlv, -, -⟩ := ZkExec.zk_schedule_seams _ _ _ _ (zkTab x j).hz
   have hk6' : 6 ≤ (stAt x j).c.kLog := (zkTab x j).wf.1.hk6
-  -- the setup is the statement's
   have hm14 : 14 ≤ st.m := by
     subst hst
     show 14 ≤ (stAt x j).m
@@ -266,7 +233,6 @@ theorem swSrcE_hinner {W R : Type} (Lr : Claims.ZKServer.LeanRelease W R) (ρ : 
     have h := innerLayE_len x j
     rw [innerLayE_layE] at h
     exact h
-  -- the coins from the rep's base are `czExe`'s
   have ez : ligCoin c (l.size + 2) 0 = Composed.zcF (zkTab x j).table (stAt x j) (czExe PE x c j) r := by
     rw [hl]
     rfl
@@ -303,13 +269,11 @@ theorem swSrcE_hinner {W R : Type} (Lr : Claims.ZKServer.LeanRelease W R) (ρ : 
     subst hst
     rw [hl]
     rfl
-  -- the masked values below `zp 64` are the view's
   have hmk : ∀ k < (Composed.layOf (zkTab x j).table (stAt x j)).zp 64,
       (Composed.msgAt ((swViewE x c w (valsFw x c A B) τ j).pre.2.1 r) k).val =
         q.vals[k]! + (_root_.Flock.ZkServer.Finish.padsOf q.draws).toC.h[k]! := fun k hk => by
     rw [swViewMasked x c w (valsFw x c A B) τ j r hrows k]
     exact swSrcE_hmk_frame Lr ρ tz frep x c w A B τ j r q hA hq hlayR hz htape hrows k hk
-  -- the inner proof's slot: the PIOP's sends, then Ligerito's
   have hl0 := (FlockComplete.RankAt.zerocheckCut_round1 (ligCoin c) n hm14 _ _ _ _ _ h₁).1
   obtain ⟨hl1, hl1n, -⟩ := (FlockComplete.CutEq.zerocheckCut_eqAt (ligCoin c) n hm14 st.digest
     (FlockComplete.flat cm0.cap) ic.root (_root_.Flock.Zk.PadLayout.new st.m st.kLog (zkTab x j).sch.k0)
@@ -348,7 +312,6 @@ theorem swSrcE_hinner {W R : Type} (Lr : Claims.ZKServer.LeanRelease W R) (ρ : 
     rw [repSlot_eq hs hzq, stsOf_half, ← repBase_eq hs (2 * j.val + r.val), ← hl]
     unfold FlockComplete.piopRoundsZk
     omega
-  -- level 0's record holds the rep's coins at its slots (`ligeritoPZk_lanes`), `czExe`'s
   have hrec := (FlockComplete.L0.ligeritoPZk_lanes (respE c) _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ (by omega) hk0 hS4).record
   have hLC : LaneCoins (zkTab x j).table (stAt x j) (czExe PE x c j) r rec := by
     refine ⟨fun i => ?_, fun i hi => ?_, ?_⟩
@@ -369,7 +332,6 @@ theorem swSrcE_hinner {W R : Type} (Lr : Claims.ZKServer.LeanRelease W R) (ρ : 
       simp only [FlockComplete.coinKOf, coinOf_respE, hslot]
       rw [show l₃.size + 2 + (zkTab x j).sch.k0 = l₃.size + ((zkTab x j).sch.k0 + 2) by omega,
         show l₃.size + 3 + (zkTab x j).sch.k0 = l₃.size + ((zkTab x j).sch.k0 + 2) + 1 by omega]
-  -- the rows
   obtain ⟨hlsz, hlasz, hrow⟩ := Composed.tauFw_at_coef (zkTab x j).table (stAt x j) (czExe PE x c j) r
     ((swViewE x c w (valsFw x c A B) τ j).pre.2.1 r) (swViewE x c w (valsFw x c A B) τ j).pre.1
     ((swViewE x c w (valsFw x c A B) τ j).pre.2.2.2.2.2 r).1 ((swViewE x c w (valsFw x c A B) τ j).pre.2.2.2.2.1 r)
@@ -401,7 +363,6 @@ theorem swSrcE_hinner {W R : Type} (Lr : Claims.ZKServer.LeanRelease W R) (ρ : 
   exact swSrcE_innerSrc_rows Lr ρ tz frep x hx w τ c n hnr s spec hs j r (valsFw x c A B) q hq hlayR hz hpads hrows _
     hcons hL₀ fun _ => hbat
 
-/-- The worker's view's `ŝ` is `ν + maskHom` at the tape's mask, at any clear values. -/
 theorem swViewE_sHat (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (w : Claims.Flock.Wit)
     (v : ∀ j, ((tabC PE x j).T (czExe PE x c j)).tab.Vals) (τ : UE.Tape) (j : Fin (jOf x)) :
     (swViewE x c w v τ j).pre.1 = ((tabC PE x j).T (czExe PE x c j)).tab.nu (wtOf PE x w j) +
@@ -410,9 +371,6 @@ theorem swViewE_sHat (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (w : Clai
     (wtOf PE x w j, v j) (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0))).pre.1 = _
   exact (FlockSoundness.ZK.Table.toBase_onVals_sHat _ _ _ _).trans rfl
 
-/-- **The switched source's `ŝ` vector `k < 2` is the worker's view's `ŝ_{2r+k}`**, where rep `r`'s rank check is
-reached before the stop: the switched source's switched vectors are the honest source's (`swSrcE_sv`), whose `ŝ` the
-guard passes there, `ν + maskHom` at the tape's mask, the view's `ŝ` at any clear values. -/
 theorem swSrcE_sv_rank (x : Msg) (hx : Live x) (c : Fin (refK x) → FlockDeploy.Coin) (w : Claims.Flock.Wit)
     (v : ∀ j, ((tabC PE x j).T (czExe PE x c j)).tab.Vals) (τ : UE.Tape) {n : ℕ} (hn : ¬ Refused x c n) {s spec}
     (hsx : FlockDeploy.setupOf true x = some (s, spec, stsOf x)) (j : Fin (jOf x)) (r : Fin 2)
@@ -443,10 +401,6 @@ theorem swSrcE_sv_rank (x : Msg) (hx : Live x) (c : Fin (refK x) → FlockDeploy
   unfold Composed.shArr Composed.sHatAt
   rw [dite_eq_left hC]
 
-/-- **`swSrcE_hinner` at the ring switch's vectors from `repCut_fw`'s `hpiop`**: where the switched source's switched
-vectors are the ZK server's (`hpsv`, `hpiop`'s second half), the ZK server's `ŝ`s for claims `0` and `1` are the
-worker's view's `ŝ_{2r}` and `ŝ_{2r+1}` (`ringSwitchCut_ss`, `swSrcE_sv_rank`), the rank check's slot being the ring
-switch's start. -/
 theorem swSrcE_hinner_sv {W R : Type} (Lr : Claims.ZKServer.LeanRelease W R) (ρ : R) (tz : FlockComplete.TapeZk)
     (frep : ℕ → ℕ → ℕ) (x : Msg) (hx : Live x) (w : Claims.Flock.Wit) (τ : UE.Tape)
     (c : Fin (refK x) → FlockDeploy.Coin) (n : ℕ) (hnr : ¬ Refused x c n) (s : _) (spec : _root_.Flock.SessionSpec)

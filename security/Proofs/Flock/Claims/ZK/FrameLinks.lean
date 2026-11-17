@@ -42,13 +42,7 @@ import Proofs.Flock.Soundness.Discharge.Hidden.Spec
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Setup
 
-/-!
-# A live session's link points
-
-`live_links`: at a `Live` statement, the table of every rep stream has the session's link points, of `PT_LOCAL` to 64
-coordinates at two points, so the link fits in `Frames.COIN_MAX` words. These are the setup facts
-`ofLoop_progChecks_of` takes as `hP`.
--/
+/-! A live session's link points. -/
 
 @[expose] public section
 
@@ -56,9 +50,6 @@ namespace Claims.ZKMal.Masked
 
 open _root_.Flock FlockDeploy FlockComplete
 
-/-- **At a `Live` statement every rep stream's table has the session's link points**, nonzero and within
-`Frames.COIN_MAX` at the session's two points (`setupTables_pointsAny`, and each table's `checkInRange` at
-`PT_LOCAL + nbl` coordinates, as `live_bounds`). -/
 theorem live_links {x : Msg} (hx : Live x) {s : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hsx : setupOf true x = some (s, spec, sts)) {k : ℕ} (hk : k < spec.repStreams.size) :
     sts[k / 2]!.mPts = spec.mPts ∧ 0 < spec.mPts ∧

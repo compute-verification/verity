@@ -2,25 +2,13 @@ module
 
 public import Proofs.Flock.Claims.ZK.GK
 
-/-!
-# Runs as transcripts
-
-* `runStar_msgs`: `runStar`'s messages are `interact`'s (the transcript of `n` rounds of a prover's next message `pm`,
-  evaluated, against a verifier's answers `ask`, which Core states); `spRun_eval`: so are the simulator's `spRun`.
-* `interact_take_congr`, `interact_congr`: two provers that agree on a run's histories, up to a round, give the same
-  transcript up to that round.
-* `runStar_round_log`: each round's calls of the prover are in the run's `pLog`, and every call there is `H`'s
-  (`runStar_pLog_calls`), so a collision `findColl` finds among two runs' calls is `Fork`'s (`Fork_pr_ge`).
-* The evaluation of composed programs (`ocBind`, `spBind`, `ocSP`): results and calls.
--/
+/-! Runs as transcripts. -/
 
 @[expose] public section
 
 namespace Claims.ZKMal
 
 open Claims
-
-/-! ## Composed programs -/
 
 section Eval
 
@@ -64,7 +52,6 @@ theorem ocSP_eval {α : Type} : ∀ o : OC α, SP.eval H ask (ocSP o) = ((o.eval
 
 end Eval
 
-/-- An oracle program's logged calls are `H`'s. -/
 theorem oc_eval_calls (H : Msg → Msg) {α : Type} : ∀ (o : OC α), ∀ e ∈ (o.eval H).2, e.2 = H e.1
   | .ret _, _, he => by simp [OC.eval] at he
   | .query q k, e, he => by
@@ -72,8 +59,6 @@ theorem oc_eval_calls (H : Msg → Msg) {α : Type} : ∀ (o : OC α), ∀ e ∈
       rcases he with rfl | he
       · rfl
       · exact oc_eval_calls H (k (H q)) e he
-
-/-! ## Transcripts -/
 
 theorem stepWith_msgs {Ω : Type} (H : Msg → Msg) (P : Prover Ω) (x : Msg) (ω : Ω) (vnext : List Msg → OC Out) :
     ∀ (n : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Transcript), as = hist.map Prod.fst →
@@ -91,15 +76,12 @@ theorem stepWith_msgs {Ω : Type} (H : Msg → Msg) (P : Prover Ω) (x : Msg) (�
       | acc => simp
       | rej => simp
 
-/-- **`runStar`'s messages are `interact`'s**, against `V*`'s answers. -/
 theorem runStar_msgs {Ω Θ : Type} (H : Msg → Msg) (P : Prover Ω) (Vs : VStar Θ) (x : Msg) (ω : Ω) (θ : Θ) :
     (runStar H P Vs x ω θ).msgs =
       interact (fun as => ((Vs.next x as θ).eval H).1) (fun h => ((P.next x h ω).eval H).1) (Vs.k x) [] := by
   unfold runStar
   rw [stepWith_msgs H P x ω _ (Vs.k x) [] [] _ rfl]
   rfl
-
-/-! ## The prover's calls in a run -/
 
 section Calls
 
@@ -129,8 +111,6 @@ theorem stepWith_pLog_calls : ∀ (n : ℕ) (hist : List (Msg × Msg)) (as : Lis
       · exact h'
       · exact h'
 
-/-- **Each round's calls of the prover are in the run's `pLog`**: round `i`'s message is computed from the history of
-the run's first `i` rounds. -/
 theorem stepWith_round_log : ∀ (n : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Transcript),
     as = hist.map Prod.fst →
       ∀ i < (interact (fun as => ((vnext as).eval H).1) (fun h => ((P.next x h ω).eval H).1) n hist).length,
@@ -182,7 +162,6 @@ theorem runStar_pLog_calls {Ω Θ : Type} (H : Msg → Msg) (P : Prover Ω) (Vs 
     ∀ e ∈ (runStar H P Vs x ω θ).pLog, e.2 = H e.1 :=
   stepWith_pLog_calls H P x ω _ (Vs.k x) [] [] ⟨[], [], [], .rej⟩ (by simp)
 
-/-- **A collision among two runs' calls on one nonce is `Fork`'s.** -/
 theorem Fork_pr_ge {N Ω Θ : Type} [Fintype N] [Nonempty N] [Fintype Ω] [Nonempty Ω] (H : Msg → Msg)
     (P : Prover (N × Ω)) (Vs : VStar Θ) (θ : Θ) (x : Msg) :
     Pr (fun s : N × Ω × Ω => findColl ((runStar H P Vs x (s.1, s.2.1) θ).pLog ++
@@ -194,7 +173,6 @@ theorem Fork_pr_ge {N Ω Θ : Type} [Fintype N] [Nonempty N] [Fintype Ω] [Nonem
   · exact runStar_pLog_calls H P Vs x _ θ e he
   · exact runStar_pLog_calls H P Vs x _ θ e he
 
-/-- **The simulator's runs are `interact`'s.** -/
 theorem spRun_eval (H : Msg → Msg) (ask : List Msg → Out) (nxt : List (Msg × Msg) → OC Msg) :
     ∀ (n : ℕ) (hist : List (Msg × Msg)),
       (SP.eval H ask (spRun nxt n hist)).1 = interact ask (fun h => ((nxt h).eval H).1) n hist
@@ -218,13 +196,11 @@ theorem interact_length_le (ask : List Msg → Out) (pm : List (Msg × Msg) → 
       | acc => simp
       | rej => simp
 
-/-- The first round: the prover's message on `hist`, and the verifier's answer to it. -/
 theorem interact_head (ask : List Msg → Out) (pm : List (Msg × Msg) → Msg) (n : ℕ) (hist : List (Msg × Msg)) :
     (interact ask pm (n + 1) hist)[0]? = some (pm hist, ask (hist.map Prod.fst ++ [pm hist])) := by
   simp only [interact]
   cases ask (hist.map Prod.fst ++ [pm hist]) <;> simp
 
-/-- **Two provers that agree on a run's histories up to round `j` give its transcript up to round `j`.** -/
 theorem interact_take_congr (ask : List Msg → Out) (pm₁ pm₂ : List (Msg × Msg) → Msg) :
     ∀ (n : ℕ) (hist : List (Msg × Msg)) (j : ℕ),
       (∀ i ≤ j, i < (interact ask pm₁ n hist).length →
@@ -252,7 +228,6 @@ theorem interact_take_congr (ask : List Msg → Out) (pm₁ pm₂ : List (Msg ×
       | acc => simp
       | rej => simp
 
-/-- **Two provers that agree on a run's histories give its transcript.** -/
 theorem interact_congr (ask : List Msg → Out) (pm₁ pm₂ : List (Msg × Msg) → Msg) (n : ℕ) (hist : List (Msg × Msg))
     (h : ∀ i < (interact ask pm₁ n hist).length,
       pm₂ (hist ++ histOf ((interact ask pm₁ n hist).take i)) =

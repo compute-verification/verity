@@ -33,30 +33,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# The masked session's tape at the executable's indices
-
-`flock-circuit --zk`'s tape (`FlockComplete.TapeZk`) is indexed by table, rep, level and position, and some of its
-indices depend on the statement: extra lane `e`'s padding is lane `2^lanes + e`'s (`ligeritoPZk`'s `ybar`), and the
-pads `h_x, h_y` sit at `n_E + 1, n_E + 2` of the pads layout (`padsOf`, `Composed.padIdx`). So the tape is read
-from cells at the executable's own indices, and each statement reads its tables' coordinates at the indices its
-sizes give.
-
-* `ExeCell`: one table's cell, each `TapeZk` field the table samples as an array at its indices up to the live tables'
-  largest sizes (`zMax`, `schMax`): the mask slot's words, the lane paddings by lane (`2^lanes + 4` lanes), the extra
-  lanes, each rep's pads `h`, `μ` and their padding, level 0's salts by tree position, the pads trees' and `τ`'s salts,
-  and each rep's levels ≥ 1 salts by level and position; besides them, the coordinates the honest prover never reads
-  (the revealed salts `RefSession.baseWith` overwrites, the levels ≥ 1 salts no position takes, the ideal seeds).
-* `exeRead`: a statement's reading of a cell as one table's randomness, every coordinate at its executable index: an
-  injection of places, so with fibers of one size (`fibersEq_exeRead`; `fibersEq_pair` where two coordinates share one
-  array). Levels ≥ 1's salt `k` of rep `r` is the salt at the level and position `hiIdx` puts at `k` (`hiEmbOf`).
-* `TapeLayout.exe`, `exeTape`: the layout, and the masked prover's tape read from the cells (`exeTape`), its PoW
-  nonces `0` (the live device grinds with nonce `0`, `zk_server.rs`'s `grind_pow`).
-* `agrees0_exe`: the layout agrees with the executable at round `0` (`Agrees0`), so round `0`'s honest message is
-  `enc0`'s (`honest_round0_exe`), and `HonestPreOn` at that layout is its rounds after the first
-  (`honestPreOn_exe_of_pos`).
-* `Flock.zk_deployZk_masked_exe_gap`: `Flock.zk_deployZk_masked_layout_gap` at this layout, round `0` discharged.
--/
+/-! The masked session's tape at the executable's indices. -/
 
 @[expose] public section
 
@@ -67,13 +44,10 @@ open FlockSoundness.Discharge
 open CoinLayer
 
 set_option synthInstance.maxSize 100000
-set_option synthInstance.maxHeartbeats 1000000 -- as in the ZK files this builds on; its own need is unmeasured
+set_option synthInstance.maxHeartbeats 1000000  -- as in the ZK files this builds on
 
 local notation "𝔽" => FlockLevel3.GF128
 
-/-! ## Two readings of one array -/
-
-/-- **Reading one function at two injections' disjoint points has fibers of one size**: one injection of their sum. -/
 theorem fibersEq_pair {A B C Cod : Type} [Finite A] [Finite Cod] (ι₁ : B ↪ A) (ι₂ : C ↪ A)
     (hd : ∀ b c, ι₁ b ≠ ι₂ c) : FibersEq fun f : A → Cod => (f ∘ ι₁, f ∘ ι₂) := by
   let ι : B ⊕ C ↪ A := ⟨Sum.elim ι₁ ι₂, by
@@ -85,14 +59,11 @@ theorem fibersEq_pair {A B C Cod : Type} [Finite A] [Finite Cod] (ι₁ : B ↪ 
   exact (fibersEq_comp_emb (Cod := Cod) ι).comp
     (fibersEq_of_bijective (Equiv.sumArrowEquivProdArrow B C Cod).bijective)
 
-/-- **A restriction then a bijection has fibers of one size.** -/
 theorem fibersEq_emb_bij {A D Cod Out : Type} [Finite A] [Finite Cod] (ι : D ↪ A) {e : (D → Cod) → Out}
     (he : Function.Bijective e) : FibersEq fun f : A → Cod => e (f ∘ ι) :=
   (fibersEq_comp_emb (Cod := Cod) ι).comp (fibersEq_of_bijective he)
 
 namespace Masked
-
-/-! ## The cell -/
 
 /-- **A table's base samples at the executable's indices**: the mask slot's `2^35` words; the lane paddings by lane
 (`schMax + 4` lanes of `schMax` coefficients) and the extra lanes; each rep's pads `h` by layout index; each rep's
@@ -125,8 +96,6 @@ noncomputable instance ExeCell.fintype : Fintype ExeCell :=
         @instFintypeProd _ _ (inferInstance : Fintype (Fin 2 → Fin (_root_.Flock.Zk.Q + 2 ^ 64) → ZkView.Salt))
           (inferInstance : Fintype (Fin 2 → ZkView.Salt)))
       (inferInstance : Fintype (ZkView.LeafPos zMax → ZkView.Bits × ZkView.Salt))
-
-/-! ## A statement's reading of a cell -/
 
 section Read
 
@@ -271,8 +240,6 @@ theorem fibersEq_exeRead (hz : Fits z zMax) {h : ℕ} (ιH : Fin h ↪ (Fin (sch
 
 end Read
 
-/-! ## Levels ≥ 1's salts by level and position -/
-
 /-- Where level `l ≥ 1`'s salts start among the levels ≥ 1's: the positions of the levels before it. -/
 def hiOff (ls : List FlockSoundness.Accounting.Level) (l : ℕ) : ℕ :=
   ((ls.tail.take (l - 1)).map fun lv => 2 ^ lv.logLen).sum
@@ -341,8 +308,6 @@ theorem hiEmbOf_hiIdx (ls : List FlockSoundness.Accounting.Level) {n : ℕ} (hn 
   rw [dite_eq_left h]
   exact congrArg Sum.inl (hiIdx_injOn ls h.choose_spec.1 hq h.choose_spec.2)
 
-/-! ## The layout and the tape -/
-
 /-- Table `j`'s levels ≥ 1's salts' places at `x`. -/
 noncomputable def hiEmb (x : Msg) (j : Fin (jOf x)) :
     Fin (Composed.hiCount (zkTab x j).table) ↪ (Fin (schMax + 1) × Fin schMax) ⊕ Fin schMax :=
@@ -403,19 +368,12 @@ noncomputable def exeTape (t : Fin Claims.Flock.zkTableCap → ExeCell) : FlockC
   lanePad i l k := fAt 0 (fun l => fAt 0 ((cellAt t i).1.2.1.1 l) k) l
   mask _ _ := 0
 
-/-! ## What the workers see -/
-
-/-- **What the workers see of a cell**: the mask slot's words, the lanes' paddings with the extra lanes (whose
-paddings are among them), and level 0's salts by tree position, which the device's level-0 commitment reads; never the
-pads, `pad_h`, `pad_μ`, `μ`, the pads trees', `τ`'s or levels ≥ 1's salts, or the ideal seeds. -/
 abbrev ExeSeen : Type :=
   (Fin (2 ^ 35) → Fin 128 → ZMod 2) × ((Fin (schMax + 4) → Fin schMax → 𝔽) × (Fin 2 → Fin 2 → Fin schMax → 𝔽)) ×
     (Fin (schMax + schMax) → ZkView.Salt)
 
-/-- A cell's part the workers see. -/
 def exeSeen (c : ExeCell) : ExeSeen := (c.1.1, c.1.2.1, c.2.1.1)
 
-/-- **What the workers see of the nonce and the tape**: the nonce and each cell's `exeSeen`. -/
 def seenOf {N : Type} (ρ : N × (Fin Claims.Flock.zkTableCap → ExeCell)) :
     N × (Fin Claims.Flock.zkTableCap → ExeSeen) :=
   (ρ.1, fun i => exeSeen (ρ.2 i))
@@ -423,8 +381,6 @@ def seenOf {N : Type} (ρ : N × (Fin Claims.Flock.zkTableCap → ExeCell)) :
 theorem seenOf_surjective {N : Type} : Function.Surjective (seenOf (N := N)) := fun s =>
   ⟨(s.1, fun i => (((s.2 i).1, (s.2 i).2.1, Classical.arbitrary _), ((s.2 i).2.2, Classical.arbitrary _),
     Classical.arbitrary _)), rfl⟩
-
-/-! ## Round `0` at the executable's layout -/
 
 theorem saltBytes_size (y : ZkView.Salt) : (ZkView.saltBytes y).size = 192 := by
   simp [ZkView.saltBytes, ZkView.bytesOf, ByteArray.size]
@@ -435,7 +391,6 @@ theorem fitBytes_of_size {n : ℕ} {b : ByteArray} (h : b.size = n) : FlockCompl
   rw [ByteArray.extract_zero_size, Nat.min_self, Nat.sub_self]
   exact ByteArray.append_empty
 
-/-- A cell's lane padding at lane `a` (index `l`), coefficient `b`, is `exeTape`'s `lanePad`. -/
 theorem lanePad_at (t : Fin Claims.Flock.zkTableCap → ExeCell) {j : ℕ} (hc : j < Claims.Flock.zkTableCap)
     (a : Fin (schMax + 4)) {l : ℕ} (ha : a.val = l) (b : Fin schMax) :
     (t ⟨j, hc⟩).1.2.1.1 a b =
@@ -443,7 +398,6 @@ theorem lanePad_at (t : Fin Claims.Flock.zkTableCap → ExeCell) {j : ℕ} (hc :
   subst ha
   simp only [fAt, cellAt, hc, a.isLt, b.isLt, ↓reduceDIte]
 
-/-- A cell's extra lane `(r, i)`, column `b`, is `exeTape`'s `extra` at `2r + i`. -/
 theorem extra_at (t : Fin Claims.Flock.zkTableCap → ExeCell) {j : ℕ} (hc : j < Claims.Flock.zkTableCap)
     (r i : Fin 2) (b : Fin schMax) :
     (t ⟨j, hc⟩).1.2.1.2 r i b = ext4 (fun r i' => fAt (0 : _root_.Flock.F128) ((cellAt t j).1.2.1.2 r i') b.val)
@@ -451,8 +405,6 @@ theorem extra_at (t : Fin Claims.Flock.zkTableCap → ExeCell) {j : ℕ} (hc : j
   rw [ext4_eq]
   simp only [fAt, cellAt, hc, b.isLt, ↓reduceDIte]
 
-/-- **The executable's layout agrees with the executable at round `0`**: lane `l`'s padding, extra lane `2r + i` and its
-padding at lane `2^lanes + 2r + i`, and level 0's salt at each tree position are the tape's at their indices. -/
 theorem agrees0_exe (P : Composed.LigProver) : Agrees0 P (TapeLayout.exe P) exeTape where
   pad x t j l k := by
     obtain ⟨t, rfl⟩ : ∃ t' : Fin Claims.Flock.zkTableCap → ExeCell, t' = t := ⟨t, rfl⟩
@@ -490,7 +442,6 @@ theorem agrees0_exe (P : Composed.LigProver) : Agrees0 P (TapeLayout.exe P) exeT
     rfl
 
 open Classical in
-/-- **Round `0`'s honest message is `enc0`'s at the executable's layout** (`honest_round0` at `agrees0_exe`). -/
 theorem honest_round0_exe (H : Msg → Msg) (hH : Claims.hOf H = _root_.Flock.Sha512.hash) (P : Composed.LigProver)
     {x : Msg} (hx : Live x) (w : Claims.Flock.Wit) (t : Fin Claims.Flock.zkTableCap → ExeCell)
     (cz : ∀ j, Composed.CoinsZK (tabC P x j).Rest) :
@@ -501,8 +452,6 @@ theorem honest_round0_exe (H : Msg → Msg) (hH : Claims.hOf H = _root_.Flock.Sh
         ((TapePlan.ofLayout (TapeLayout.exe P) exeTape).tapeZk t)).eval H).1 :=
   honest_round0 H hH P (TapeLayout.exe P) exeTape (agrees0_exe P) hx w t cz
 
-/-- **`HonestPreOn` after the first round**: at a pre-final round after at least one opening
-(`0 < ops.length < refK x`), `enc` of the cut pre-final view is `honestPR`'s next message. -/
 def _root_.Claims.ZKMal.RefSession.HonestPreOnPos (S : RefSession) (A : Msg → Prop) (R : Rel Claims.Flock.Wit)
     (H : Msg → Msg) (coinOf : Msg → Msg) (tapeOf : S.refP.Nonce × S.refP.Rand → FlockComplete.TapeZk) : Prop :=
   ∀ x, A x → ∀ w, R x w → ∀ ν t (ops : List (Msg × Msg)), 0 < ops.length → ops.length < refK x →
@@ -511,8 +460,6 @@ def _root_.Claims.ZKMal.RefSession.HonestPreOnPos (S : RefSession) (A : Msg → 
       (((FlockComplete.ZkTables.honestPR w).next x (ops.map fun p => (p.1, coinOf p.2)) (tapeOf (ν, t))).eval H).1
 
 open Classical in
-/-- **`HonestPreOn` at the executable's layout is its rounds after the first**, at a round plan whose round `0` is
-`enc0` and where `hOf H` is SHA-512: round `0` is `honest_round0_exe`. -/
 theorem honestPreOn_exe_of_pos (H : Msg → Msg) (hH : Claims.hOf H = _root_.Flock.Sha512.hash) (nr : Msg → ℕ → ℕ)
     (P : Composed.LigProver) (Q : RoundPlan (tabC P))
     (h0 : ∀ x c cut, Q.enc x c 0 cut = enc0 P x (Q.cz x c) cut)
@@ -531,10 +478,6 @@ end Masked
 open Masked
 
 open Classical in
-/-- **Flock's zero knowledge at the deployed masked session, at the executable's layout**:
-`Flock.zk_deployZk_masked_layout_gap` at `TapeLayout.exe` and `exeTape`, `hOf H` SHA-512, at a round plan whose round
-`0` is `enc0`, so `HonestPreOn` is asked after the first round only (`honestPreOn_exe_of_pos`). Left: the round plan's
-`Causal`, the rounds after the first, and the last round. -/
 theorem Flock.zk_deployZk_masked_exe_gap (H : Msg → Msg) (hH : Claims.hOf H = _root_.Flock.Sha512.hash)
     (nr : Msg → ℕ → ℕ) (P : Composed.LigProver) (Q : RoundPlan (tabC P))
     (h0 : ∀ x c cut, Q.enc x c 0 cut = enc0 P x (Q.cz x c) cut) (t : ℕ) (ht : 0 < t) (hc : Q.Causal)

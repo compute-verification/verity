@@ -36,21 +36,7 @@ import Proofs.Flock.Claims.Complete.ZkTables.Scope
 import Proofs.Flock.Claims.Complete.ZkTables.Table
 import Proofs.Flock.Soundness.Discharge.Composed.Coins
 
-/-!
-# The checks the deployed cut passes, from the refusals its coins show
-
-The cut (`cutE`, `cutAt`) sends a guarded message where every check up to it in the session's order passes
-(`famPasses`). At opened coins `c` and a stop `n` where no refusal is seen (`¬ Refused x c n`), every check whose coins
-are answered by round `n` passes, at any coin plan reading the claim points, `β` and the pair coins at their rounds
-(`PointReads`, `CoinReads`; `czExe` is one).
-
-* `guardSlot x j r p`: the round by which table `j`'s rep `r`'s phase `p` check is seen: the rank check's (`rankSlot`),
-  past both pair coins (`rhoSlot + 2`), past `β` (`betaSlot + 1`). `slots_le`: a rep's slots in order, inside the rep;
-  `guardSlot_mono`: so the slots follow the session's order (`Session.pos`).
-* `rankOn_of`: the rank check over a set of claims, from full rank at points carrying their weights.
-* `famGuard_of`: the check at a seen slot passes (`RankBad`, `rhoIndependent`, `β.isZero` refused otherwise);
-  `famPasses_of`: so does every check before it.
--/
+/-! The checks the deployed cut passes, from the refusals its coins show. -/
 
 @[expose] public section
 
@@ -64,15 +50,11 @@ namespace Masked
 
 local notation "𝔽" => FlockLevel3.GF128
 
-/-- **The round by which table `j`'s rep `r`'s phase `p` check is seen**: its rank check's round, the round after its
-second pair coin's, the round after its `β`'s. -/
 def guardSlot (x : Msg) (j r : ℕ) : Session.Phase → ℕ
   | .opening => rankSlot x j r
   | .restart => rhoSlot x j r + 2
   | .inner => betaSlot x j r + 1
 
-/-- **A rep's slots in order, inside the rep**: its rank check after `14` rounds, its pair coins after the rank check's,
-`β` after the pair coins', and the next rep after `β`'s. -/
 theorem slots_le {x : Msg} (hx : Live x) {s spec} (hsx : FlockDeploy.setupOf true x = some (s, spec, stsOf x))
     {j r : ℕ} (hj : j < (stsOf x).size) (hr : r < 2) :
     repBase x (2 * j + r) + 14 ≤ rankSlot x j r ∧ rankSlot x j r + 3 ≤ rhoSlot x j r ∧
@@ -116,8 +98,6 @@ theorem slots_le {x : Msg} (hx : Live x) {s spec} (hsx : FlockDeploy.setupOf tru
 theorem phase_idx_le (p : Session.Phase) : p.idx ≤ 2 := by
   cases p <;> decide
 
-/-- **The slots follow the session's order**: a check at an earlier position (`Session.pos`) is seen by an earlier
-round. -/
 theorem guardSlot_mono {x : Msg} (hx : Live x) {s spec} (hsx : FlockDeploy.setupOf true x = some (s, spec, stsOf x))
     {j r j' r' : ℕ} (hj : j < (stsOf x).size) (hr : r < 2) (hj' : j' < (stsOf x).size) (hr' : r' < 2)
     {p p' : Session.Phase} (h : (2 * j' + r') * 3 + p'.idx ≤ (2 * j + r) * 3 + p.idx) :
@@ -135,8 +115,6 @@ theorem guardSlot_mono {x : Msg} (hx : Live x) {s spec} (hsx : FlockDeploy.setup
     obtain rfl : r' = r := by omega
     cases p <;> cases p' <;> simp only [guardSlot, Session.Phase.idx] at h ⊢ <;> omega
 
-/-- **The rank check over the claims `P`** (`Table.RankOn`), from full rank (`MaskRankOk`) at points `pts` carrying
-their weights, one point to each claim. -/
 theorem rankOn_of {Wt Hi VL : Type} {z : ZkView.Sizes} (T : ZkView.Coined FlockLevel3.GF256 Wt Hi VL z)
     {P : Fin z.nC → Prop} {k : ℕ} (pts : Fin k → List _root_.Flock.F128) (words : Fin z.nMask → ℕ)
     (e : {i // P i} → Fin k) (he : Function.Injective e)
@@ -163,8 +141,7 @@ variable {P : Composed.LigProver}
 
 include hp hc hx hn hsx
 
-/-- **The check at a seen slot passes**: where no refusal is seen by round `n`, table `j`'s rep `r`'s phase `p` check
-passes once its slot is (`RankBad`, a dependent pair, `β = 0` would be refused). -/
+/-- **The check at a seen slot passes** where no refusal is seen by round `n`. -/
 theorem famGuard_of (j : Fin (jOf x)) (r : Fin 2) (p : Session.Phase) (h : guardSlot x j.val r.val p ≤ n) :
     famGuard (fun j => ((tabC P x j).T (cz x c j)).tab) (fun j => ((tabC P x j).T (cz x c j)).rep) j r p := by
   have hj := lt_of_jOf j
@@ -252,7 +229,6 @@ theorem famGuard_of (j : Fin (jOf x)) (r : Fin 2) (p : Session.Phase) (h : guard
     rw [(hc x c j r).1]
     exact Composed.fOf_ne_zero hb
 
-/-- **Every check up to a seen slot passes** (`famPasses`): the earlier checks' slots are earlier (`guardSlot_mono`). -/
 theorem famPasses_of (j : Fin (jOf x)) (r : Fin 2) (p : Session.Phase) (h : guardSlot x j.val r.val p ≤ n) :
     famPasses (fun j => ((tabC P x j).T (cz x c j)).tab) (fun j => ((tabC P x j).T (cz x c j)).rep) j r p :=
   fun j' r' p' hpos => famGuard_of hp hc hx hn hsx j' r' p'

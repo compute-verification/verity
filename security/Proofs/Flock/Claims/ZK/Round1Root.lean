@@ -38,24 +38,7 @@ import Proofs.Flock.Claims.Complete.Zk.InnerGo
 import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictInner
 import Proofs.Flock.Soundness.Refine.Arith
 
-/-!
-# Round `1` of the masked session: the pads root at the executable's layout
-
-The masked session's second body absorbs table `0`'s rep `0` pads root (`FlockComplete.sessionPZk_go_round1`),
-`innerCommitP`'s root of the tape's pads. Here that root is the model's:
-
-* `FlockComplete.innerCommitP_root_layerOf`: `innerCommitP`'s root is `layerOf`'s, of the leaves
-  `H(H(c_h(p) ‖ c_μ(p)), salt p)`, where `c_h`, `c_μ` are the codes of `h ‖ pad_h` and `μ ‖ pad_μ` at `X = p + 1`
-  (`Zk.codeAt`).
-* `Composed.sum_padCode`: `padColAt`'s sums, each pad at its layout index (`padIdx`, a bijection onto the layout's
-  `n_E + 4` positions: `Composed.padIdxEquiv`) and padding symbol `j` at `len + j`, are the code's sum over the array.
-* `Masked.exeOf_pads`: so at the executable's layout (`TapeLayout.exe`), the executable's pads leaf of the cut's view at
-  tree position `p` is `innerCommitP`'s leaf `p` of the tape's pads, under the tape's pads salt `p`, at every coin
-  vector: the tape's pads are the cell's, with `h_ab = h_a·h_b` and `w = x·y` (`FlockComplete.padsOf_hab`,
-  `FlockComplete.padsOf_tw`) as `Composed.padH` puts them.
-* `Masked.innerRoot_exe`: the root of the tape's pads is `layerOf`'s of the cut's pads leaves by tree position
-  (`Masked.leafAtP`).
--/
+/-! Round `1` of the masked session: the pads root at the executable's layout. -/
 
 @[expose] public section
 
@@ -63,12 +46,10 @@ namespace FlockComplete
 
 open Flock FlockDeploy
 
-/-- Entry `|a| + k` of `a ++ b` is `b`'s entry `k`. -/
 theorem get_append_right (a b : Array F128) {k : ℕ} (hk : k < b.size) : (a ++ b)[a.size + k]! = b[k]! := by
   rw [getElem!_pos (a ++ b) _ (by simp; omega), getElem!_pos b k hk, Array.getElem_append_right (by omega)]
   simp
 
-/-- `layerOf`'s level `h ≤ d` has `2^(d-h)` nodes. -/
 theorem layerOf_size (nd : ByteArray → ByteArray → ByteArray) (d : ℕ) (lf : ℕ → ByteArray) :
     ∀ h ≤ d, (layerOf nd d lf h).size = 2 ^ (d - h)
   | 0, _ => by simp [layerOf]
@@ -77,7 +58,6 @@ theorem layerOf_size (nd : ByteArray → ByteArray → ByteArray) (d : ℕ) (lf 
     simp only [layerOf, Array.size_map, Array.size_range]
     rw [ih, show d - h = d - (h + 1) + 1 by omega, Nat.pow_succ, Nat.mul_div_cancel _ (by norm_num)]
 
-/-- **A pads tree of `n = 2^k` leaves is `layerOf`'s** of its leaves, level by level. -/
 theorem innerTree_layerOf {n : ℕ} {ic : InnerCommit} (hT : InnerTree (Hashes.ofSha512 Sha512.hash) n ic)
     (lf : ℕ → ByteArray) (hlf : ∀ j < n, (ic.layers[0]!)[j]! = lf j) (hn : n = 2 ^ Nat.log2 n) :
     ∀ h ≤ Nat.log2 n, ∀ i < 2 ^ (Nat.log2 n - h),
@@ -112,7 +92,6 @@ theorem innerTree_layerOf {n : ℕ} {ic : InnerCommit} (hT : InnerTree (Hashes.o
     rw [getElem!_pos _ i (by simpa using hk)]
     simp
 
-/-- `innerCommitP`'s salts are the tape's, each fitted to 192 bytes. -/
 theorem innerCommitP_salts {hs : Hashes V} {p : PadsZk} {salt : ℕ → ByteArray} {ic : InnerCommit}
     (h : innerCommitP hs p salt = .ok ic) :
     ic.salts = (Array.range ((p.h ++ p.padH).size.nextPowerOfTwo * 2 ^ Zk.INNER_LOG_INV_RATE)).map
@@ -123,7 +102,6 @@ theorem innerCommitP_salts {hs : Hashes V} {p : PadsZk} {salt : ℕ → ByteArra
   cases h
   rfl
 
-/-- **`innerCommitP`'s root is `layerOf`'s**, of the leaves `H(H(c_h(j) ‖ c_μ(j)), salt j)`. -/
 theorem innerCommitP_root_layerOf {p : PadsZk} {salt : ℕ → ByteArray} {ic : InnerCommit}
     (h : (innerCommitP (Hashes.ofSha512 Sha512.hash) p salt : V InnerCommit) = .ok ic) :
     ic.root = (layerOf (fun l r => Sha512.hash (l ++ r))
@@ -153,7 +131,6 @@ open Flock FlockSoundness.Refine
 
 local notation "𝔽" => FlockLevel3.GF128
 
-/-- A pad's layout index is below `n_E + 4`. -/
 theorem padIdx_lt {nE : ℕ} (p : ZK.PadIdx nE) : padIdx p < nE + 4 := by
   rcases p with k | j
   · show k.val < nE + 4
@@ -168,14 +145,11 @@ theorem padIdx_injective {nE : ℕ} : Function.Injective (padIdx (nE := nE)) := 
   · have := b.isLt; fin_cases a <;> simp at h <;> omega
   · fin_cases a <;> fin_cases b <;> simp at h ⊢
 
-/-- **The pads layout's indices**: pad `i` at `padIdx i`, a bijection onto the layout's `n_E + 4` positions. -/
 noncomputable def padIdxEquiv (nE : ℕ) : ZK.PadIdx nE ≃ Fin (nE + 4) :=
   Equiv.ofBijective (fun p => ⟨padIdx p, padIdx_lt p⟩)
     ((Fintype.bijective_iff_injective_and_card _).2
       ⟨fun a b h => padIdx_injective (congrArg Fin.val h), by simp [ZK.PadIdx]⟩)
 
-/-- **`padColAt`'s sums are a code's sum over its array** `y` of `n_E + 4 + K` symbols, where pad `i` is `y`'s entry
-`padIdx i` and padding symbol `j` is entry `n_E + 4 + j`. -/
 theorem sum_padCode {nE K padLen : ℕ} (hpl : padLen = nE + 4) (y : Array F128) (ξ : 𝔽) (f : ZK.PadIdx nE → 𝔽)
     (g : Fin K → 𝔽) (hf : ∀ i, fOf y[padIdx i]! = f i) (hg : ∀ j : Fin K, fOf y[nE + 4 + j.val]! = g j) :
     ∑ i, ξ ^ padIdx i * f i + ∑ j : Fin K, ξ ^ (padLen + j.val) * g j =
@@ -195,9 +169,6 @@ namespace Claims.ZKMal.Masked
 
 open Claims FlockSoundness FlockSoundness.Refine FlockSoundness.Discharge
 
-/-- **Table `j`'s rep `r` pads leaf at tree position `p` is the masked prover's**: at the executable's layout, the
-executable's leaf of the cut's view (`exeOf`) is `verifyInner`'s leaf of `innerCommitP`'s column `p`, the codes of
-`h ‖ pad_h` and `μ ‖ pad_μ` at `X = p + 1`, under the tape's pads salt `p`, at every coin vector. -/
 theorem exeOf_pads (P : Composed.LigProver) {x : Msg} (w : Claims.Flock.Wit)
     (t : Fin Claims.Flock.zkTableCap → ExeCell) (cz : ∀ j, Composed.CoinsZK (tabC P x j).Rest) (j : Fin (jOf x))
     (r : Fin 2) (p : Fin ((tabC P x j).z.nQ + (tabC P x j).z.nPU)) :
@@ -343,8 +314,6 @@ theorem exeOf_pads (P : Composed.LigProver) {x : Msg} (w : Claims.Flock.Wit)
   rw [h1, h2, hs]
   rfl
 
-/-- **Table `j`'s rep `r` pads root at the executable's layout is the model's**: where `innerCommitP` commits the tape's
-pads, its root is `layerOf`'s of the cut's pads leaves by tree position (`leafAtP`), at every coin vector. -/
 theorem innerRoot_exe (P : Composed.LigProver) {x : Msg} (w : Claims.Flock.Wit)
     (t : Fin Claims.Flock.zkTableCap → ExeCell) (cz : ∀ j, Composed.CoinsZK (tabC P x j).Rest) (j : Fin (jOf x))
     (r : Fin 2) {ic : FlockComplete.InnerCommit}

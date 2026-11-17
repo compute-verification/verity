@@ -42,31 +42,17 @@ import Proofs.Flock.Claims.ZK.FinishSwPts
 import Proofs.Flock.Claims.ZK.FinishSwRep
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
 
-/-!
-# The cut PIOP's end and basis at the deployed rep
-
-`L0Pin`'s `repCut_cutL0` puts level 0's bodies at the coins from the round the rep's PIOP from a source ended at, and the
-basis of its switched claims. `l0BodyAt_pads` compares two runs only at one coins, table and basis. Here the PIOP from
-any source, answered by the opened coins from rep `2j + r`'s base, is shown to end at `ligP0` with the basis `ligBasis`,
-the round and basis `swSrcE_repCut`'s `hB` names: the PIOP's switched claims read their claims' points alone, which are
-the coins' (`piopFw_at`'s argument, at the source's switched vectors).
-
-* `FlockComplete.piopCut_split`, **`FlockComplete.piopCut_at`**: a returned PIOP from a source ran zerocheck, lincheck,
-  the rank check and the ring switch, and its switched claims are `Rs.sws` of the closed-form claims at its coins.
-* **`Masked.piopCut_lig`**: at the deployed rep's base and the opened coins, it ended at `ligP0`, before the cut's
-  stop, and its basis is `ligBasis`.
--/
+/-! The cut PIOP's end and basis at the deployed rep. -/
 
 @[expose] public section
 
 set_option synthInstance.maxSize 100000
-set_option synthInstance.maxHeartbeats 1000000 -- as in the ZK files this builds on; its own need is unmeasured
+set_option synthInstance.maxHeartbeats 1000000  -- as in the ZK files this builds on
 
 namespace FlockComplete
 
 open Flock Transcript Replay
 
-/-- **A returned PIOP from a source ran its four phases**, the rank check keeping the transcript and the log. -/
 theorem piopCut_split {coin : ℕ → ℕ → F128} {n : ℕ} {st : Setup} {lay : Zk.PadLayout} {src : RepSrc}
     {cap root : ByteArray} {extras : Array Claim} {prior : Array (List F128)} {words : List ℕ} {t₀ : Transcript}
     {l : Array Claims.Msg} {zp lp ss T sws t₃ l₃}
@@ -93,9 +79,6 @@ theorem piopCut_split {coin : ℕ → ℕ → F128} {n : ℕ} {st : Setup} {lay 
   obtain ⟨⟨⟨rfl, rfl, rfl, rfl, rfl⟩, rfl⟩, rfl⟩ := h
   exact ⟨zc, t₁, l₁, lc, t₂, l₂, h₁, h₂, h₃⟩
 
-/-- **The PIOP from a source's switched claims at the coins**: answered by `asksCut` from `l`, where the PIOP from a
-source returns, its switched claims are `Rs.sws` of the closed-form claims at any trace `tr` at the ring switch's coins,
-and it sent `3 + (m − 6) + 3 + (k_log − 6) + (2 + |extras|) + 1` bodies, all before the cut's stop `n`. -/
 theorem piopCut_at {coin : ℕ → ℕ → F128} {n : ℕ} {st : Setup} {lay : Zk.PadLayout} {src : RepSrc}
     {cap root : ByteArray} {extras : Array Claim} {prior : Array (List F128)} {words : List ℕ} {t₀ : Transcript}
     {l : Array Claims.Msg} {zp lp ss T sws t₃ l₃} (hm : 14 ≤ st.m)
@@ -130,10 +113,6 @@ open CoinLayer
 
 namespace Masked
 
-/-- **The PIOP from a source at the deployed rep ends at `ligP0` with the basis `ligBasis`**: at a live statement,
-the session's setup and table `j`'s extra claims at the opened coins' points, the PIOP of rep `r` from any source,
-answered by the opened coins from the rep's base, where it returns, ended at `ligP0`, before the cut's stop, and its
-switched claims' basis is `ligBasis` at any witness and tape. -/
 theorem piopCut_lig {x : Msg} (hx : Live x) (w : Claims.Flock.Wit) (τ : UE.Tape) (c : Fin (refK x) → FlockDeploy.Coin)
     (n : ℕ) {s spec} (hs : FlockDeploy.setupOf true x = some (s, spec, stsOf x)) (j : Fin (jOf x)) (r : Fin 2)
     {extras : Array _root_.Flock.Claim} (he : (FlockDeploy.tabsOf (stsOf x))[j.val]!.extra (ptsE c spec) = .ok extras)

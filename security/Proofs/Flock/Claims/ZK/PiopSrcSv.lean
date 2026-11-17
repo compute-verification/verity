@@ -42,21 +42,7 @@ import Proofs.Flock.Soundness.Discharge.FailClosed.Mask
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
 import Proofs.Flock.Soundness.Refine.Arith
 
-/-!
-# The deployed source's switched vectors at the opened coins
-
-`PiopSrcE`'s ring-switch field: at the deployed source (`srcE`), table `j`'s rep `r` switched vector `k` is the plain
-prover's `switchVec` of claim `k` at the opened coins wherever the rep sends it before the stop.
-
-* `Replay.Rs.switchVec_shat`: entry `v` of a claim's switched vector of a trace whose bits are `w`'s is `shat` of `w` at
-  the claim (`switch_eval`'s body).
-* `Masked.extras_x`: extra claim `i` is region `i / 2`'s at link point `i % 2` (`extraClaims_ok`).
-* `Masked.src_sv_abc`: switched vectors `0` and `1`, whatever claims follow the zerocheck's and lincheck's.
-* `Masked.src_sv`: `PiopSrc`'s ring-switch field at the deployed source. Masked claim `2r + k` (`k < 2`) is sent where
-  its rank check is seen (`famPasses_of`), and its `ŝ` is `shat` at `z = (w, u)` (`sHat_shat`) at the zerocheck's and
-  lincheck's coins (`rhoF_out`, `rF_czExe`, `tsF_lc`); region claim `k − 2`'s is the witness's, the region's words off
-  the mask slot (`regions_off_of_words`, `zWith_off`), at the link points of round `0`'s coin.
--/
+/-! The deployed source's switched vectors at the opened coins. -/
 
 @[expose] public section
 
@@ -66,8 +52,6 @@ open Flock FlockLevel3 FlockSoundness FlockSoundness.Refine
 
 local notation "𝔽" => FlockLevel3.GF128
 
-/-- **Entry `v` of a claim's switched vector**, on a trace whose bits are the witness's, is the witness's `shat` at the
-claim. -/
 theorem switchVec_shat {m : ℕ} (hm : 7 ≤ m) (c : Claim) (hx : c.x.size = m - 6) (tr : Trace) (w : Model.Witness m)
     (hz : ∀ a : Fin (2 ^ m), Zc.bitF tr.z a.val = ((w a).val : 𝔽)) (v : Fin 128) :
     GF128.of (switchVec tr c)[v.val]! = shat hm (Discharge.Composed.RingSwitch.claimOf m c) w v := by
@@ -113,8 +97,6 @@ namespace Masked
 
 local notation "𝔽" => FlockLevel3.GF128
 
-/-- **Extra claim `i` is region `i / 2`'s at link point `i % 2`**, its point's last `m − 6` coordinates
-(`extraClaims_ok`'s lists). -/
 theorem extras_x (st : _root_.Flock.Stmt) (p0 p1 : Array _root_.Flock.F128) (L : List _root_.Flock.Region)
     (ess : List (List _root_.Flock.Claim))
     (h : List.Forall₂ (fun reg es => List.Forall₂ (fun r e => ∃ v, st.regionValue reg r = .ok v ∧
@@ -136,7 +118,6 @@ theorem extras_x (st : _root_.Flock.Stmt) (p0 p1 : Array _root_.Flock.F128) (L :
       simp only [List.flatten_cons, List.cons_append, List.nil_append, List.getElem!_cons_succ]
       exact ih i' (by simp only [List.length_cons] at hi; omega)
 
-/-- A point's last coordinates past the first seven. -/
 theorem extract_six_one {α : Type} (a : Array α) : ((a.extract 6 a.size).extract 1).toList = a.toList.drop 7 := by
   rw [Composed.extract_one_toList, Array.toList_extract, List.extract_eq_take_drop,
     List.take_of_length_le (by rw [List.length_drop, Array.length_toList])]
@@ -149,9 +130,6 @@ variable {x : Msg} (c : Fin (refK x) → FlockDeploy.Coin) {w : Claims.Flock.Wit
 
 include hw
 
-/-- **Masked claim `2r + k`'s `ŝ` is the prover's switched vector** of a claim whose point past its first coordinate is
-the rank check's point `2r + k`: `ν + maskHom` is `shat` at `z = (w, u)` (`sHat_shat`, `shat_eqWord`), and so is the
-switched vector of the session's trace (`switchVec_shat`, `bits_z`). -/
 theorem sv_masked (hm7 : 7 ≤ (stAt x j).m) (k : ℕ) (h4 : 2 * r.val + k < _root_.Flock.Zk.RANK_POINTS)
     (cl : _root_.Flock.Claim) (hx6 : cl.x.size = (stAt x j).m - 6)
     (hpt : Composed.pointsOf ((czExe PE x c j).rest : Composed.RestOf (zkTab x j).table (stAt x j))
@@ -177,9 +155,6 @@ theorem sv_masked (hm7 : 7 ≤ (stAt x j).m) (k : ℕ) (h4 : 2 * r.val + k < _ro
       (fun y => FlockSoundness.Refine.fOf (Composed.eqWord (Composed.pointsOf ((czExe PE x c j).rest :
         Composed.RestOf (zkTab x j).table (stAt x j)) ⟨2 * r.val + k, h4⟩) y)) ⟨v, hv128⟩).symm
 
-/-- **Region claim `i`'s `ŝ` is the prover's switched vector** of a claim whose point past its first coordinate is the
-region's point at the link: off the mask slot's words `z = (w, u)` is the witness (`zWith_off`), and on them the region's
-point weighs nothing (`regions_off_of_words`). -/
 theorem sv_region (hm7 : 7 ≤ (stAt x j).m) (i : Fin (2 * (stAt x j).regions.size)) (cl : _root_.Flock.Claim)
     (hx6 : cl.x.size = (stAt x j).m - 6)
     (hpt : (cl.x.extract 1).toList = Composed.regionPtOf (stAt x j)
@@ -213,9 +188,6 @@ theorem sv_region (hm7 : 7 ≤ (stAt x j).m) (i : Fin (2 * (stAt x j).regions.si
         (FlockSoundness.addr128 hm7 y ⟨v, hv128⟩).isLt)]
       exact congrArg (fun b : ZMod 2 => ((b.val : ℕ) : 𝔽)) hz
 
-/-- **The rep's first two switched vectors at the deployed source**: wherever the rep's ring-switch body `k < 2` is sent
-before the stop, switched vector `k` is the prover's of the zerocheck's or lincheck's claim at the opened coins, whatever
-claims follow them. -/
 theorem src_sv_abc (hx : Live x) {n : ℕ} (hn : ¬ Refused x c n) {s spec}
     (hsx : FlockDeploy.setupOf true x = some (s, spec, stsOf x)) (e : Array _root_.Flock.Claim) :
     ∀ k < 2, repBase x (2 * j.val + r.val) + 3 + ((stAt x j).m - 6) + 3 + ((stAt x j).circuitFold.kLog - 6) + k ≤ n →
@@ -293,9 +265,6 @@ theorem src_sv_abc (hx : Live x) {n : ℕ} (hn : ¬ Refused x c n) {s spec}
     · exact FlockComplete.Replay.Zc.r_size (stAt x j).m (by omega) (zcE c j r)
   exact sv_masked c hw τ j r hm7 k h4 _ hx6 hpt
 
-/-- **`PiopSrc`'s ring-switch field at the deployed source**: wherever the rep's ring-switch body `k` is sent before the
-stop, switched vector `k` is the prover's of claim `k`, the zerocheck's and lincheck's claims at the opened coins, then
-the statement's extra claims at the link points of round `0`'s coin. -/
 theorem src_sv (hx : Live x) {n : ℕ} (hn : ¬ Refused x c n) {s spec}
     (hsx : FlockDeploy.setupOf true x = some (s, spec, stsOf x)) {extras : Array _root_.Flock.Claim}
     (he : (stAt x j).extraClaims (ptsE c spec) = .ok extras) :

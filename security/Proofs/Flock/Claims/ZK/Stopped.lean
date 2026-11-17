@@ -36,32 +36,7 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Complete.ZkTables.Refuse
 import Proofs.Flock.Claims.Complete.ZkTables.Scope
 
-/-!
-# The masked session's rounds after a refusal its coins show
-
-`flock-circuit --zk` sends nothing more once it refuses: at an outer coin `1` as soon as it is answered
-(`honestPR_stop`), and at `β = 0`, a dependent pair `ρ₀, ρ₁` or a rank-deficient mask slot once `sessionPZk` throws,
-right after the round that answers the refused coin's last part. A round plan sees each refusal once every coin it
-reads is answered, so its encoding can send `[]` from there on.
-
-* `rankSlot`: table `j`'s rep `r`'s rank check's round, after its zerocheck's and lincheck's `m + k_log − 6` rounds.
-  `RankBad`: that check refuses at the opened coins.
-* `Thrown x c i`: a throw whose coins are all below round `i` refuses at `c`: a rank check (rep `0`'s and rep `r`'s
-  check rounds both reached), a pair `ρ₀, ρ₁` (both answered) or a `β` (answered). `Refused`: that, or an answered outer
-  coin `1`. `refused_congr`: `Refused x c i` reads the coins below `i` only; `refused_zero`: round `0` sees none.
-* `encStop enc`: `[]` at a round where a refusal is seen, `enc`'s message elsewhere. `causal_encStop`: causal where
-  `enc` is.
-* `outerHit_of_lt`: an answered outer coin `1` is an outer hit, after any number of openings.
-* `honestPreOnPos_stop`: `HonestPreOnPos` at `encStop enc`, from `enc` at the rounds where no refusal is seen and from a
-  seen throw stopping `honestPR`.
-* `Flock.zk_deployZk_masked_exe_stopped_gap`: `Flock.zk_deployZk_masked_exe_refusals_gap` at `encStop enc`, its rounds
-  after the first asked only where no refusal is seen, given that a seen throw stops `honestPR`.
-* `honestPR_thrown`: a seen throw does stop `honestPR`. The session on the mask witness stops right after the send whose
-  reply it refused (`sessionPZk_rho_stop`, `sessionPZk_beta_stop`, `sessionPZk_rank_stop`), within the openings'
-  answers, so the prover sends `[]` (`honestPR_stops`). `slotAt_padOps_lt` and `ptsAt_open` read the opened coins as
-  those answers. `Flock.zk_deployZk_masked_exe_live_gap`: `Flock.zk_deployZk_masked_exe_stopped_gap` without that
-  premise (`thrown_stops`).
--/
+/-! The masked session's rounds after a refusal its coins show. -/
 
 @[expose] public section
 
@@ -137,7 +112,6 @@ theorem refused_of_agree {x : Msg} {c c' : Fin (refK x) → FlockDeploy.Coin} {i
       unfold betaAt at hbad ⊢
       rwa [slotAt_congr h hβ] at hbad
 
-/-- **`Refused x c i` reads the coins below `i` only.** -/
 theorem refused_congr {x : Msg} {c c' : Fin (refK x) → FlockDeploy.Coin} {i : ℕ}
     (h : ∀ k : Fin (refK x), k.val < i → c k = c' k) : Refused x c i ↔ Refused x c' i :=
   ⟨refused_of_agree h, refused_of_agree fun k hk => (h k hk).symm⟩
@@ -163,7 +137,6 @@ noncomputable def encStop {C : Tabs}
     (x : Msg) → (c : Fin (refK x) → FlockDeploy.Coin) → ℕ → (∀ j, ((C x j).T (cz x c j)).tab.Cut) → Msg :=
   fun x c i cut => if Refused x c i then [] else enc x c i cut
 
-/-- **Stopping where a refusal is seen keeps a plan causal**: `Refused` reads the coins below the round only. -/
 theorem causal_encStop {C : Tabs}
     {cz : (x : Msg) → (Fin (refK x) → FlockDeploy.Coin) → ∀ j, Composed.CoinsZK (C x j).Rest}
     {enc : (x : Msg) → (c : Fin (refK x) → FlockDeploy.Coin) → ℕ → (∀ j, ((C x j).T (cz x c j)).tab.Cut) → Msg}
@@ -176,8 +149,6 @@ theorem causal_encStop {C : Tabs}
   · rw [ite_eq_right hs, ite_eq_right fun h' => hs ((refused_congr hcc).2 h')]
     exact h x wt ω p c c' i hcc
 
-/-- **An answered outer coin `1` is an outer hit**, after any openings `ops` that answer its round: outer coin
-`i < m − 13` of table `j`'s rep `r`, read at the opened coins, equal to `1` makes `honestPR` stop (`outerHit`). -/
 theorem outerHit_of_lt {x : Msg} (ops : List (Msg × Msg)) {j r i : ℕ} (hj : j < (stsOf x).size) (hr : r < 2)
     (hk : outerSlot x j r < ops.length) (hi : i < (stsOf x)[j]!.m - 13)
     (h1 : outerAt (padOps (x := x) ops) j r i = 1) :
@@ -213,9 +184,6 @@ theorem outerHit_of_lt {x : Msg} (ops : List (Msg × Msg)) {j r i : ℕ} (hj : j
     rw [List.getD_eq_getElem _ _ (by simpa using hk), List.getElem_map]
     exact h1
 
-/-- **`HonestPreOnPos` at a plan that stops where a refusal is seen** (`encStop enc`): at a round where none is seen,
-`enc`'s message is `honestPR`'s (`hlive`); where an outer coin `1` is seen `honestPR` stops (`outerHit_of_lt`); where a
-throw is seen it sends `[]` (`hthrow`). -/
 theorem honestPreOnPos_stop {P : Composed.LigProver}
     {cz : (x : Msg) → (Fin (refK x) → FlockDeploy.Coin) → ∀ j, Composed.CoinsZK (tabC P x j).Rest}
     {enc : (x : Msg) → (c : Fin (refK x) → FlockDeploy.Coin) → ℕ → (∀ j, ((tabC P x j).T (cz x c j)).tab.Cut) → Msg}
@@ -244,7 +212,6 @@ theorem honestPreOnPos_stop {P : Composed.LigProver}
   · rw [ite_eq_right hs]
     exact hlive x hx w hR τ ops h0 hl hs
 
-/-- **An opened coin's element is its opening's**, at a round the openings answer. -/
 theorem slotAt_padOps_lt {x : Msg} (ops : List (Msg × Msg)) {k : ℕ} (hk : k < ops.length) (hK : k < refK x)
     {i : ℕ} (hi : i < 65536) :
     slotAt (padOps (x := x) ops) k i = FlockComplete.coinOf ((ops.map fun p => coinOfD p.2).getD k []) i := by
@@ -253,8 +220,6 @@ theorem slotAt_padOps_lt {x : Msg} (ops : List (Msg × Msg)) {k : ℕ} (hk : k <
   rw [List.getD_eq_getElem _ _ (by simpa using hk), List.getD_eq_getElem _ _ (by simpa using hk)]
   simp only [List.getElem_map, rd]
 
-/-- **A rep's claim points at the openings' answers are its points at the opened coins** (`ptsOpen`), where the
-openings answer its first `m + k_log − 6` rounds. -/
 theorem ptsAt_open {x : Msg} {s spec} (hsx : FlockDeploy.setupOf true x = some (s, spec, stsOf x))
     (ops : List (Msg × Msg)) (hl : ops.length < refK x) {j n : ℕ} (hm : 14 ≤ (stsOf x)[j]!.m)
     (hm35 : (stsOf x)[j]!.m ≤ 35) (hk : 6 ≤ (stsOf x)[j]!.c.kLog)
@@ -267,10 +232,6 @@ theorem ptsAt_open {x : Msg} {s spec} (hsx : FlockDeploy.setupOf true x = some (
   · rw [slotAt_padOps_lt ops (by omega) (by omega) (by norm_num)]
   · rw [slotAt_padOps_lt ops (by omega) (by omega) (by omega)]
 
-/-- **A throw the openings show stops the honest prover**: after openings `ops`, fewer than `refK x`, at which a
-throw is seen (`Thrown`), the masked session on the mask witness stops within the openings' answers, right after the
-send whose reply it refused (`sessionPZk_rho_stop`, `sessionPZk_beta_stop`, `sessionPZk_rank_stop`), so `honestPR`'s
-message is `[]` (`honestPR_stops`). -/
 theorem honestPR_thrown (H : Msg → Msg) {x : Msg} (hx : Live x) (w : Claims.Flock.Wit) (ω : FlockComplete.TapeZk)
     (ops : List (Msg × Msg)) (hl : ops.length < refK x) (ht : Thrown x (padOps ops) ops.length) :
     (((FlockComplete.ZkTables.honestPR w).next x (ops.map fun p => (p.1, coinOfD p.2)) ω).eval H).1 = [] := by
@@ -348,7 +309,6 @@ theorem honestPR_thrown (H : Msg → Msg) {x : Msg} (hx : Live x) (w : Claims.Fl
     dsimp only at h2
     exact ⟨this.1, by omega⟩
 
-/-- **`hthrow` at any tape**: `honestPR_thrown`. -/
 theorem thrown_stops (H : Msg → Msg) {T : Type} (tz : T → FlockComplete.TapeZk) :
     ∀ x, Live x → ∀ w, RZk x w → ∀ (τ : T) (ops : List (Msg × Msg)), ops.length < refK x →
       Thrown x (padOps ops) ops.length →
@@ -360,11 +320,8 @@ end Masked
 open Masked
 
 open Classical in
-/-- **Flock's zero knowledge at the deployed masked session, at the executable's layout and a plan that stops where a
-refusal is seen**: `Flock.zk_deployZk_masked_exe_refusals_gap` at `encStop enc` (causal and `enc0` at round `0` where
-`enc` is), its rounds after the first asked only where no refusal is seen (`honestPreOnPos_stop`). Left: `enc` at those
-rounds, a seen throw stopping `honestPR`, the plan's `Causal`, its round `0` and the last round where every table
-admits. -/
+/-- **Flock's zero knowledge at the deployed masked session, at the executable's layout and a plan that
+stops where a refusal is seen**, its rounds after the first asked only where no refusal is seen. -/
 theorem Flock.zk_deployZk_masked_exe_stopped_gap (H : Msg → Msg) (hH : Claims.hOf H = _root_.Flock.Sha512.hash)
     (nr : Msg → ℕ → ℕ) (P : Composed.LigProver)
     {cz : (x : Msg) → (Fin (refK x) → FlockDeploy.Coin) → ∀ j, Composed.CoinsZK (tabC P x j).Rest}
@@ -396,10 +353,8 @@ theorem Flock.zk_deployZk_masked_exe_stopped_gap (H : Msg → Msg) (hH : Claims.
     (causal_encStop hc) ho hr hp (honestPreOnPos_stop _ nr H hlive hthrow) hfin
 
 open Classical in
-/-- **Flock's zero knowledge at the deployed masked session, at the executable's layout and a plan that stops where a
-refusal is seen**: `Flock.zk_deployZk_masked_exe_stopped_gap` with a seen throw stopping `honestPR`
-(`honestPR_thrown`: the session stops right after the round whose reply it refused). Left: `enc` at the rounds after
-the first where no refusal is seen, the plan's `Causal`, its round `0` and the last round where every table admits. -/
+/-- **Flock's zero knowledge at the deployed masked session, at the executable's layout and a plan that
+stops where a refusal is seen**, with a seen throw stopping `honestPR` (`honestPR_thrown`). -/
 theorem Flock.zk_deployZk_masked_exe_live_gap (H : Msg → Msg) (hH : Claims.hOf H = _root_.Flock.Sha512.hash)
     (nr : Msg → ℕ → ℕ) (P : Composed.LigProver)
     {cz : (x : Msg) → (Fin (refK x) → FlockDeploy.Coin) → ∀ j, Composed.CoinsZK (tabC P x j).Rest}

@@ -33,19 +33,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# A prover of levels ≥ 1 reading salts by level and position
-
-A Ligerito prover of levels ≥ 1 (`Composed.LigProver`) gets rep `r`'s levels ≥ 1 salts as one array `HiOf Tz`, and the
-masked prover reads them by level and position (`ligeritoPZk`'s `salt l q`, `1 ≤ l < |levels|`, `q < 2^d`).
-
-* `HiAt`, `hiSalt`: a level `l ≥ 1` of the schedule and a position of its tree; level `l`'s salt at position `p` of an
-  array of levels ≥ 1's salts, at `hiIdx`, empty off the schedule.
-* `SaltProver`, `SaltsOn`, `ofSalts`: a prover that reads salts by level and position, that it reads only the schedule's,
-  and the Ligerito prover reading them at `hiIdx`.
-* `saltBlob`, `blobSalt`, `PcExe`: the salts as one string, 192 bytes each in `hiIdx` order, and back; the prover sending
-  that string, so a rep's levels ≥ 1 value carries its salts.
--/
+/-! A prover of levels ≥ 1 reading salts by level and position. -/
 
 @[expose] public section
 
@@ -78,7 +66,6 @@ abbrev SaltProver : Type :=
   ∀ {mPts : ℕ} (Tz : ZkSession.TabZK 𝔽 mPts) (st : _root_.Flock.Stmt), Composed.CoinsZK (Composed.RestOf Tz st) →
     Fin 2 → (L : ℕ) → (Fin L → 𝕂) → (ℕ → ℕ → ByteArray) → ByteArray
 
-/-- **`Pc` reads only the schedule's levels ≥ 1 and their positions**: salts that agree there give the same bytes. -/
 def SaltsOn (Pc : SaltProver) : Prop :=
   ∀ {mPts : ℕ} (Tz : ZkSession.TabZK 𝔽 mPts) (st : _root_.Flock.Stmt) (c : Composed.CoinsZK (Composed.RestOf Tz st))
     (r : Fin 2) (L : ℕ) (y : Fin L → 𝕂) (s s' : ℕ → ℕ → ByteArray),
@@ -114,7 +101,6 @@ theorem foldl_congr_mem {α β : Type} {f g : α → β → α} :
     rw [h x List.mem_cons_self a]
     exact foldl_congr_mem xs _ fun y hy => h y (List.mem_cons_of_mem _ hy)
 
-/-- **`PcExe` reads only the schedule's levels ≥ 1 and their positions.** -/
 theorem saltsOn_PcExe : SaltsOn PcExe := by
   intro mPts Tz st c r L y s s' h
   show saltBlob Tz.sch.levels s = saltBlob Tz.sch.levels s'

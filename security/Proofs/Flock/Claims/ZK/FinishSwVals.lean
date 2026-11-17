@@ -2,26 +2,12 @@ module
 
 public import Proofs.Flock.Claims.ZK.FinishSwRep
 
-/-!
-# The ZK server's rep is the switched source's cut, at any clear values
-
-`FinishSwRep.swSrcE_repCut` takes the switched source at the ZK server's clear values (`valsFw`), which read the
-request's values below `zp 64` and level 0's `l0Clear` above. The views' source is at the workers' clear values, so
-here the chain is restated at any clear values `v`, with the two facts `valsFw` supplied as premises: below `zp 64` the
-masked values are the request's values plus its pads (`hmkV`), and from `zp 64` to `h_ab` they are `l0Clear` at the
-coins plus the pads (`hl0`). The rest of the chain
-(`swSrc_sv`, `swViewMasked`, `swRows_coef`, `swSrcE_sv_rank`, `swSrcE_restart`, `swSrcE_innerSrc_rows`) is already
-at any clear values.
-
-* `swSrcE_hinner_v`, `swSrcE_hinner_sv_v`: `hinner` at `v`.
-* `swSrcE_ligHyp_frame_v`, `swSrcE_ligHyp_E_v`: `hlig` at `v`.
-* **`swSrcE_repCut_v`**: `repCut_fw` at the switched source at `v`.
--/
+/-! The ZK server's rep is the switched source's cut, at any clear values. -/
 
 @[expose] public section
 
 set_option synthInstance.maxSize 100000
-set_option synthInstance.maxHeartbeats 1000000 -- as in the ZK files this builds on; its own need is unmeasured
+set_option synthInstance.maxHeartbeats 1000000  -- as in the ZK files this builds on
 
 namespace Claims.ZKMal
 open Claims FlockSoundness.ZK
@@ -31,8 +17,6 @@ open FlockSoundness.Refine (fOf)
 
 namespace Masked
 
-/-- **`swSrcE_hinner` at any clear values `v`**: as `swSrcE_hinner`, with the masked values below `zp 64` given
-(`hmkV`) in place of `valsFw`'s and the tape's pads. -/
 theorem swSrcE_hinner_v {W R : Type} (Lr : Claims.ZKServer.LeanRelease W R) (ρ : R) (tz : FlockComplete.TapeZk)
     (frep : ℕ → ℕ → ℕ) (x : Msg) (hx : Live x) (w : Claims.Flock.Wit) (τ : UE.Tape)
     (c : Fin (refK x) → FlockDeploy.Coin) (n : ℕ) (hnr : ¬ Refused x c n) (s : _) (spec : _root_.Flock.SessionSpec)
@@ -105,7 +89,6 @@ theorem swSrcE_hinner_v {W R : Type} (Lr : Claims.ZKServer.LeanRelease W R) (ρ 
   obtain ⟨zc, t₁, l₁, lc, t₂, l₂, h₁, h₂, h₃⟩ := _root_.Flock.ZkServer.Finish.piopFw_split hP
   obtain ⟨h25, -, hsm, hk0, -, ⟨hn7, h2, -⟩, hlv, -, -⟩ := ZkExec.zk_schedule_seams _ _ _ _ (zkTab x j).hz
   have hk6' : 6 ≤ (stAt x j).c.kLog := (zkTab x j).wf.1.hk6
-  -- the setup is the statement's
   have hm14 : 14 ≤ st.m := by
     subst hst
     show 14 ≤ (stAt x j).m
@@ -130,7 +113,6 @@ theorem swSrcE_hinner_v {W R : Type} (Lr : Claims.ZKServer.LeanRelease W R) (ρ 
     have h := innerLayE_len x j
     rw [innerLayE_layE] at h
     exact h
-  -- the coins from the rep's base are `czExe`'s
   have ez : ligCoin c (l.size + 2) 0 = Composed.zcF (zkTab x j).table (stAt x j) (czExe PE x c j) r := by
     rw [hl]
     rfl
@@ -167,13 +149,11 @@ theorem swSrcE_hinner_v {W R : Type} (Lr : Claims.ZKServer.LeanRelease W R) (ρ 
     subst hst
     rw [hl]
     rfl
-  -- the masked values below `zp 64` are the view's
   have hmk : ∀ k < (Composed.layOf (zkTab x j).table (stAt x j)).zp 64,
       (Composed.msgAt ((swViewE x c w v τ j).pre.2.1 r) k).val =
         q.vals[k]! + (_root_.Flock.ZkServer.Finish.padsOf q.draws).toC.h[k]! := fun k hk => by
     rw [swViewMasked x c w v τ j r hrows k]
     exact hmkV k hk
-  -- the inner proof's slot: the PIOP's sends, then Ligerito's
   have hl0 := (FlockComplete.RankAt.zerocheckCut_round1 (ligCoin c) n hm14 _ _ _ _ _ h₁).1
   obtain ⟨hl1, hl1n, -⟩ := (FlockComplete.CutEq.zerocheckCut_eqAt (ligCoin c) n hm14 st.digest
     (FlockComplete.flat cm0.cap) ic.root (_root_.Flock.Zk.PadLayout.new st.m st.kLog (zkTab x j).sch.k0)
@@ -212,7 +192,6 @@ theorem swSrcE_hinner_v {W R : Type} (Lr : Claims.ZKServer.LeanRelease W R) (ρ 
     rw [repSlot_eq hs hzq, stsOf_half, ← repBase_eq hs (2 * j.val + r.val), ← hl]
     unfold FlockComplete.piopRoundsZk
     omega
-  -- level 0's record holds the rep's coins at its slots (`ligeritoPZk_lanes`), `czExe`'s
   have hrec := (FlockComplete.L0.ligeritoPZk_lanes (respE c) _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ (by omega) hk0 hS4).record
   have hLC : LaneCoins (zkTab x j).table (stAt x j) (czExe PE x c j) r rec := by
     refine ⟨fun i => ?_, fun i hi => ?_, ?_⟩
@@ -233,7 +212,6 @@ theorem swSrcE_hinner_v {W R : Type} (Lr : Claims.ZKServer.LeanRelease W R) (ρ 
       simp only [FlockComplete.coinKOf, coinOf_respE, hslot]
       rw [show l₃.size + 2 + (zkTab x j).sch.k0 = l₃.size + ((zkTab x j).sch.k0 + 2) by omega,
         show l₃.size + 3 + (zkTab x j).sch.k0 = l₃.size + ((zkTab x j).sch.k0 + 2) + 1 by omega]
-  -- the rows
   obtain ⟨hlsz, hlasz, hrow⟩ := Composed.tauFw_at_coef (zkTab x j).table (stAt x j) (czExe PE x c j) r
     ((swViewE x c w v τ j).pre.2.1 r) (swViewE x c w v τ j).pre.1
     ((swViewE x c w v τ j).pre.2.2.2.2.2 r).1 ((swViewE x c w v τ j).pre.2.2.2.2.1 r)
@@ -265,7 +243,6 @@ theorem swSrcE_hinner_v {W R : Type} (Lr : Claims.ZKServer.LeanRelease W R) (ρ 
   exact swSrcE_innerSrc_rows Lr ρ tz frep x hx w τ c n hnr s spec hs j r v q hq hlayR hz hpads hrows _
     hcons hL₀ fun _ => hbat
 
-/-- **`swSrcE_hinner_sv` at any clear values `v`**: `swSrcE_hinner_v` with `hsw` from `hpiop`'s switched vectors. -/
 theorem swSrcE_hinner_sv_v {W R : Type} (Lr : Claims.ZKServer.LeanRelease W R) (ρ : R) (tz : FlockComplete.TapeZk)
     (frep : ℕ → ℕ → ℕ) (x : Msg) (hx : Live x) (w : Claims.Flock.Wit) (τ : UE.Tape)
     (c : Fin (refK x) → FlockDeploy.Coin) (n : ℕ) (hnr : ¬ Refused x c n) (s : _) (spec : _root_.Flock.SessionSpec)
@@ -379,9 +356,6 @@ theorem swSrcE_hinner_sv_v {W R : Type} (Lr : Claims.ZKServer.LeanRelease W R) (
   rw [Nat.add_zero] at e0
   exact ⟨e0, e 1 (by norm_num)⟩
 
-/-- **`swSrcE_ligHyp_frame` at any clear values `v`**: where rep `r`'s masked values from `zp 64` to `h_ab` are
-`l0Clear` at the coins from round `p₀`, the packed table `t` and the basis `b`, plus the request's pads (`hl0`), rep
-`r`'s source holds level 0's opening, given the schedule's facts and the source's `y₁'`, `ȳ` and salts. -/
 theorem swSrcE_ligHyp_frame_v (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (w : Claims.Flock.Wit)
     (v : ∀ j, ((tabC PE x j).T (czExe PE x c j)).tab.Vals) (τ : UE.Tape) (j : Fin (jOf x)) (r : Fin 2)
     (q : _root_.Flock.ZkServer.Finish.RepIn)
@@ -421,9 +395,6 @@ theorem swSrcE_ligHyp_frame_v (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) 
     (_root_.Flock.ZkServer.Finish.padsOf q.draws).h rp tPad extra lanePad salt
     ((swSrcE x c w v τ j.val).rep r.val) hk0 hn0 hlv rfl hlk hl0 hy1 hybar hsalt
 
-/-- **`swSrcE_ligHyp_E` at any clear values `v`**: as `swSrcE_ligHyp_E`, with level 0's masked values from `zp 64` to
-`h_ab` given (`hl0`) in place of `valsFw`'s level 0 part and the tape's
-pads. -/
 theorem swSrcE_ligHyp_E_v (x : Msg) (hx : Live x) (w : Claims.Flock.Wit) (hw : RZk x w) (τ : UE.Tape)
     (c : Fin (refK x) → FlockDeploy.Coin) (n : ℕ) (hn : ¬ Refused x c n) (s : _) (spec : _root_.Flock.SessionSpec)
     (hs : FlockDeploy.setupOf true x = some (s, spec, stsOf x)) (j : Fin (jOf x)) (r : Fin 2)
@@ -459,11 +430,6 @@ theorem swSrcE_ligHyp_E_v (x : Msg) (hx : Live x) (w : Claims.Flock.Wit) (hw : R
     rw [esalt]
     exact hsalt a b
 
-/-- **`swSrcE_repCut` at any clear values `v`**: where table `j`'s rows hold at its base at `v`, rep `r`'s masked values
-below `zp 64` are the request's values plus its pads (`hmkV`) and, wherever the source's PIOP returns, from `zp 64` to
-`h_ab` level 0's `l0Clear` at the coins plus the pads (`hl0`), the ZK server's rep, at extra lanes and lane paddings
-that are the tape's within level 0's sizes (`hex`, `hlp`), returning `p` gives the cut from the switched source at `v` the same transcript and log and a proof `p'` with
-`eraseZ p' = eraseZ p`. -/
 theorem swSrcE_repCut_v {W R : Type} (Lr : Claims.ZKServer.LeanRelease W R) (ρ : R) (tz : FlockComplete.TapeZk)
     (frep : ℕ → ℕ → ℕ) (x : Msg) (hx : Live x) (w : Claims.Flock.Wit) (hw : RZk x w) (τ : UE.Tape)
     (c : Fin (refK x) → FlockDeploy.Coin) (hAd : ∀ j, (tabC PE x j).Admits (czExe PE x c j)) (n : ℕ)
@@ -551,7 +517,6 @@ theorem swSrcE_repCut_v {W R : Type} (Lr : Claims.ZKServer.LeanRelease W R) (ρ 
       .ok ((zkTab x j).sch, (zkTab x j).tPad) := by
     rw [stsOf_half]
     exact (zkTab x j).hz
-  -- rep `r`'s PIOP: `m + k_log − 6` bodies of zerocheck and lincheck, then `2 + |extras| + 1` of ring switch
   have hP : ligP0 x j r =
       repBase x (2 * j.val + r.val) + ((stAt x j).m + (stAt x j).c.kLog - 6) + (2 + extras.size + 1) := by
     show repSlot x (2 * j.val + r.val) (fun _ => 0) = _
@@ -559,7 +524,6 @@ theorem swSrcE_repCut_v {W R : Type} (Lr : Claims.ZKServer.LeanRelease W R) (ρ 
     unfold FlockComplete.piopRoundsZk
     rw [hesz]
     omega
-  -- the ZK server's PIOP returned, so it sent all its bodies before the stop
   have hP0 : ligP0 x j r ≤ n := by
     obtain ⟨_, _, _, _, _, _, _, hpf⟩ := _root_.Flock.ZkServer.Finish.repFwC_piopFw h
     obtain ⟨-, hl₃, hn₃⟩ := FlockComplete.piopFw_at hm14 hpf (trsE x w (UE.tapeZk τ))[j.val]!
@@ -569,12 +533,10 @@ theorem swSrcE_repCut_v {W R : Type} (Lr : Claims.ZKServer.LeanRelease W R) (ρ 
   have hln : l.size ≤ n := by
     rw [hl]
     omega
-  -- the masked values below `zp 64`
   have hmk : ∀ i < (_root_.Flock.Zk.PadLayout.new st.m st.kLog (zkTab x j).sch.k0).zp 64,
       ((swSrcE x c w v τ j.val).rep r.val).masked i =
         q.vals[i]! + (_root_.Flock.ZkServer.Finish.padsOf q.draws).toC.h[i]! := fun i hi =>
     hmkV i (by rw [← hLyE]; exact hi)
-  -- the switched vectors at the ZK server's zerocheck and lincheck
   have hsv : ∀ zp zc t₁ l₁ lp lc t₂ l₂,
       ((FlockComplete.zerocheckCut (FlockComplete.asksCut (ligCoin c) n) st.m st.digest (FlockComplete.flat cm0.cap)
           ic.root (_root_.Flock.Zk.PadLayout.new st.m st.kLog (zkTab x j).sch.k0)
@@ -632,7 +594,6 @@ theorem swSrcE_repCut_v {W R : Type} (Lr : Claims.ZKServer.LeanRelease W R) (ρ 
       rfl
     rw [hpk, FlockComplete.switchVec_packed (by omega) tr _ hx6, FlockComplete.Replay.switchVec_x hxk]
     exact swSrc_sv c hw τ j r v hx hnr hs heS k hkE (by rw [hfk]; omega)
-  -- the rank check
   have hpiop : ∀ zp zc t₁ l₁ lp lc t₂ l₂,
       ((FlockComplete.zerocheckCut (FlockComplete.asksCut (ligCoin c) n) st.m st.digest (FlockComplete.flat cm0.cap)
           ic.root (_root_.Flock.Zk.PadLayout.new st.m st.kLog (zkTab x j).sch.k0)
@@ -657,7 +618,6 @@ theorem swSrcE_repCut_v {W R : Type} (Lr : Claims.ZKServer.LeanRelease W R) (ρ 
     (Composed.maskWordsOf (stsOf x)[j.val]!) t₀ l hm14 hln hkL hmk hpiop ?_
     (swSrcE_hinner_sv_v Lr ρ tz frep x hx w τ c n hnr s spec hs j r v q hq hlayR hz hpads hrows hmkV st hst
       (zkTab x j).tPad dom (ligTab x w τ j) cm0 extras hesz ic _ _ _ ht₀ hl hsv) h
-  -- level 0's opening: the ZK server's PIOP ends at `ligP0` and switched `swsE`
   intro zp lp ss T sws t₃ l₃ h₃
   have hPC := _root_.Flock.ZkServer.Finish.piopCut_fw (ligCoin c) n st _ (ligTab x w τ j) _
     ((swSrcE x c w v τ j.val).rep r.val) _ _ extras (priorE c j.val r.val) (Composed.maskWordsOf (stsOf x)[j.val]!)

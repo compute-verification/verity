@@ -40,31 +40,17 @@ import Proofs.Flock.Claims.ZK.FinishTau
 import Proofs.Flock.Claims.ZK.L0PinCut
 import Proofs.Flock.Claims.ZK.PiopFree
 
-/-!
-# The cut rep returns where the ZK server's rep does
-
-Answered by `asksCut`, the cut's rep from any source runs the ZK server's phases at other values: its PIOP returns
-where the ZK server's phases did and its rank check passes (`piopCut_of_phases`), its Ligerito opening where the
-ZK server's did, with as many messages, lane challenges and out-of-domain values (`ligeritoPZk_cut_fw`), its replay
-where the fold at the ZK server's coins returned (`replay_fold_coins`, `replay_cut_ok`), its lane constraints at the
-record's sizes, and its inner proof where the ZK server's did (`innerP_cut_fw`). No step reads the source's values.
-
-* **`ligeritoConstraints_sizes`**: a returned lane phase read a record of the layout's shape.
-* **`repCut_of_repFwC`**: where the ZK server's rep returned from the empty transcript, the cut's rep from any source,
-  level-0 commitment, pads commitment and extra claims of the same count returns from a log of the same size, with a
-  log of the same size, wherever its rank check passes.
--/
+/-! The cut rep returns where the ZK server's rep does. -/
 
 @[expose] public section
 
 set_option synthInstance.maxSize 100000
-set_option synthInstance.maxHeartbeats 1000000 -- as in the ZK files this builds on; its own need is unmeasured
+set_option synthInstance.maxHeartbeats 1000000  -- as in the ZK files this builds on
 
 namespace FlockComplete.CutFree
 
 open Flock Transcript Replay
 
-/-- **A returned lane phase read a record of the layout's shape.** -/
 theorem ligeritoConstraints_sizes {lay : Zk.PadLayout} {rec : Zk.L0Rec} {lg : LigeritoProof} {msgs : Zk.Level0Msgs}
     {v : Array (String × Zk.Lin)} (h : Zk.ligeritoConstraints lay rec lg msgs = .ok v) :
     rec.ood.size = lay.nOod0 ∧ rec.challenges.size = lay.k0 ∧ lay.k0 ≤ lg.messages.size := by
@@ -79,10 +65,6 @@ theorem ligeritoConstraints_sizes {lay : Zk.PadLayout} {rec : Zk.L0Rec} {lg : Li
 -- one proof of about a hundred lines down `repCut`'s unfolded run against the ZK server's, `rw` and `obtain` on each
 -- step
 set_option maxHeartbeats 4000000 in
-/-- **The cut rep returns where the ZK server's did**: answered by `asksCut` at replies with its coins, where the
-ZK server's rep at SHA-512 returned from the empty transcript and `l`, the cut's rep at SHA-512 from any source,
-level-0 commitment, pads commitment, domain and extra claims of the same count returns from the empty transcript and a
-log of `l`'s size, wherever its rank check passes, with a log of the ZK server's size. -/
 theorem repCut_of_repFwC (coin : ℕ → ℕ → F128) (n : ℕ) {resp : ℕ → Claims.Msg} (hr : ∀ k, coinOf (resp k) = coin k)
     {st : Setup} (hm : 14 ≤ st.m) (hkk : st.kLog = st.fold.kLog) {sch : Schedule} {tPad rep : ℕ} {dom : ByteArray}
     {g : Array F128} {cm0 : Commit} {extras : Array Claim} {pads : PadsZk} {ic : InnerCommit} {vals : Array F128}
@@ -101,7 +83,6 @@ theorem repCut_of_repFwC (coin : ℕ → ℕ → F128) (n : ℕ) {resp : ℕ →
         MaskRank.maskRankOk (prior ++ MaskRank.roundPoints st.m st.kLog t₂.rounds) words = true) :
     ∃ q t₅ L₅, ((repCut (asksCut coin n) (Hashes.ofSha512 h') st sch rep' dom' cm0' extras' ic' src prior words).run
       (Transcript.init #[] dom')).go L = (.ok (q, t₅), L₅) ∧ L₅.size = l'.size := by
-  -- the ZK server's rep, in phases
   dsimp only [_root_.Flock.ZkServer.Finish.repFwC] at h
   obtain ⟨⟨zp, zc⟩, t₁, l₁, h₁, h⟩ := run_ok h
   try dsimp only at h
@@ -133,7 +114,6 @@ theorem repCut_of_repFwC (coin : ℕ → ℕ → F128) (n : ℕ) {resp : ℕ →
   rw [pure_go] at h₉
   simp only [Prod.mk.injEq, Except.ok.injEq] at h₉
   obtain ⟨-, rfl⟩ := h₉
-  -- the ZK server's rounds are answered by the coins from `l.size`
   have hI0 : RankAt.Inv coin l.size (Transcript.init #[] dom) l :=
     ⟨fun j hj => by simp [Transcript.init] at hj, by simp [Transcript.init]⟩
   have hI1 := ((RankAt.zerocheckCut_grows coin n l.size _ _ _ _ _ _) _ _ _ _ _ h₁).2 hI0
@@ -142,16 +122,13 @@ theorem repCut_of_repFwC (coin : ℕ → ℕ → F128) (n : ℕ) {resp : ℕ →
   have hI4 := ((RankAt.ligeritoPZk_grows coin n l.size _ _ _ _ _ _ _ _ _ _ _ _ _ _ _) _ _ _ _ _ h₄).2 hI3
   have hL := replay_fold_coins coin hI4.1 hm hkk _ _ _ _ hrp
   rw [← hLs] at hL
-  -- the cut's PIOP
   obtain ⟨⟨zp', lp', ss', T', sws'⟩, t₃', l₃', hP', hsz₃⟩ := piopCut_of_phases hm h₁ h₂ h₃
     (Zk.PadLayout.new st.m st.kLog sch.k0) src (flat cm0'.cap) ic'.root hes prior words (Transcript.init #[] dom')
     hLs hrk
   obtain ⟨zc', t₁', l₁', lc', t₂', l₂', h₁', h₂', -, h₃'⟩ := piopCut_split_rank hP'
-  -- the cut's Ligerito opening
   obtain ⟨⟨lg', zl', rec'⟩, t₄', l₄', h₄', hsz₄, hmsg, hch, hood⟩ :=
     ligeritoPZk_cut_fw coin n Sha512.hash h' _ st.merkle sch _ T' _ cm0' _ _ (basisVals sws' (st.m - 7)) _
       (Zk.PadLayout.new st.m st.kLog sch.k0) _ _ _ _ _ _ src _ t₃' _ l₃' hsz₃ _ _ _ h₄
-  -- the cut's replay
   have hR : Replay.Prefix t₂'.rounds t₄'.rounds :=
     (RankAt.prefix_of_grows coin 0 (RankAt.ringSwitchCut_grows coin n 0 _ _) h₃').trans
       (RankAt.prefix_of_grows coin 0 (RankAt.ligeritoCut_grows coin n 0 _ _ _ _ _ _ _ _) h₄')
@@ -159,11 +136,9 @@ theorem repCut_of_repFwC (coin : ℕ → ℕ → F128) (n : ℕ) {resp : ℕ →
     (Nat.le_refl _) (by show st.fold.kLog - 6 ≤ st.kLog - 6; rw [hkk]) src.masked
     { cap := cm0'.cap, params := pcsParams st.merkle sch, zerocheck := zp', lincheck := lp', ringSwitches := ss',
       ligerito := lg' } ic'.root dom' h₁' h₂' hR hL
-  -- the cut's lane constraints
   obtain ⟨ho, hc, hk0⟩ := ligeritoConstraints_sizes hlgc
   obtain ⟨lgc', hlgc'⟩ := ligeritoConstraints_ok (lay := Zk.PadLayout.new st.m st.kLog sch.k0) (msgs := zl')
     (by rw [← hood]; exact ho) (by rw [← hch]; exact hc) (by rw [← hmsg]; exact hk0)
-  -- the cut's inner proof
   obtain ⟨inner', t₈', l₈', h₈', hsz₈, -⟩ := innerP_cut_fw coin n Sha512.hash _ pads ic ic' _ zp'.finalC src _
     (rp'.cons ++ #[("ring switch ab", rp'.abValue.addConst (Zk.claimCheck rp'.claims[0]! ss'[0]!)),
       ("ring switch c", rp'.cValue.addConst (Zk.claimCheck rp'.claims[1]! ss'[1]!))] ++ lgc')

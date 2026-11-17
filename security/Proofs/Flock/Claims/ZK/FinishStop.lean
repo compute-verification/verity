@@ -41,30 +41,13 @@ import Proofs.Flock.Claims.ZK.FinishInner
 import Proofs.Flock.Soundness.Refine.Arith
 import Std.Tactic.BVDecide.Normalize.Bool
 
-/-!
-# The ZK server's stop at a worker's values
-
-`repFw` stops where a constraint it hands the inner proof fails on the rep's pads (`failingOn`). Here that stop is put in
-the analysis's terms, at a worker's clear values, toward `LeanRelease.FinishIs`: where the ZK server goes on, the
-worker's rows hold (`Table.RowsAt`), so the switched view is the worker's own (`Table.swView`).
-
-* `failingOn_eq_empty_iff`: no constraint fails on the pads exactly where each vanishes there (`linAt`).
-* `rowsOf_castAdd`: the first seven of rep `r`'s rows read no triple input `(ρ, σ)`.
-* **`rowsAt_of_rows`**: where the first seven rows vanish at a worker's clear values at zero pads, for both reps, at the
-  mask slot `u` and level 0's hiding `V`, its rows hold there at every pad: the residual at every sample through `(u, V)`
-  is the rows' batch at the clear values (`resid_padFree`), and the triple's rows vanish at zero pads (`triple_zero`).
-* **`noFail_iff_rows`**: at constraints whose forms are rep `r`'s first seven rows on the masked values `v' = v + h`,
-  each on the layout's length, at pads with `h_ab = h_fa·h_fb` and `h_tw = h_tx·h_ty`, the ZK server's stop does not
-  fire on the pads exactly where those rows vanish at the clear values at zero pads (`rows_padFree`). The stop bit is
-  `1[some row fails at v]`, a function of the witness, the worker's values, the mask slot and level 0's hiding, never of
-  the pads.
--/
+/-! The ZK server's stop at a worker's values, whose bit is a function of the witness, the worker's values,
+the mask slot and level 0's hiding, never of the pads. -/
 
 @[expose] public section
 
 namespace Flock.ZkServer.Finish
 
-/-- No constraint fails on the pads exactly where each vanishes there. -/
 theorem failingOn_eq_empty_iff {cons : Array (String × Zk.Lin)} {h : Array F128} :
     failingOn cons h = #[] ↔ ∀ q ∈ cons, linAt q.2 h = 0 := by
   unfold failingOn
@@ -80,15 +63,11 @@ open Flock Model ZkSession ZkView ZK Refine
 local notation "𝔽" => FlockLevel3.GF128
 local notation "𝕂" => FlockLevel3.GF256
 
-/-- The first seven of rep `r`'s rows read no triple input `(ρ, σ)`. -/
 theorem rowsOf_castAdd {mPts : ℕ} (Tz : TabZK 𝔽 mPts) (st : Stmt) (c : CoinsZK (RestOf Tz st)) (r : Fin 2) {nE : ℕ}
     (v : Fin nE → 𝔽) {nC : ℕ} (sh : Fin nC → Fin 128 → 𝔽) (T' : 𝕂) (ρσ ρσ' : 𝔽 × 𝔽) (k : Fin 7) :
     rowsOf Tz st c r v sh T' ρσ (Fin.castAdd 3 k) = rowsOf Tz st c r v sh T' ρσ' (Fin.castAdd 3 k) := by
   simp only [rowsOf, Fin.append_left]
 
-/-- **The ZK server's stop at a worker's values is its rows' at zero pads**: at constraints whose forms are rep `r`'s
-first seven rows on the masked values `v' = v + h`, each on the layout's length, at pads with `h_ab = h_fa·h_fb` and
-`h_tw = h_tx·h_ty`, none fails on the pads exactly where those rows vanish at the clear values `v` at zero pads. -/
 theorem noFail_iff_rows {mPts : ℕ} (Tz : TabZK 𝔽 mPts) (st : Stmt) (c : CoinsZK (RestOf Tz st)) (r : Fin 2) {nE : ℕ}
     (v v' : Fin nE → 𝔽) (hp : Fin (nE + 4) → 𝔽) (hE : (layOf Tz st).hab = nE)
     (hvv : ∀ i, v' i = v i + hp (Fin.castAdd 4 i))
@@ -128,9 +107,6 @@ theorem noFail_iff_rows {mPts : ℕ} (Tz : TabZK 𝔽 mPts) (st : Stmt) (c : Coi
 
 variable (P : LigProver) {mPts : ℕ}
 
-/-- **A worker's rows hold where they vanish at its clear values**: where the first seven of each rep's rows vanish on
-the worker's clear values at the mask slot `u` and level 0's hiding `V`, at zero pads, the rows hold at `(u, V)` at
-every pad (`Table.RowsAt`). -/
 theorem rowsAt_of_rows (Tz : TabZK 𝔽 mPts) (st : Stmt) :
     let C := coinedOf P Tz st
     ∀ c p (u : (C.T c).tab.onVals.Mask) (V : (C.T c).tab.onVals.Vis),

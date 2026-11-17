@@ -34,22 +34,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# The masked zerocheck's first round, the model's values against the executable's
-
-Round `3` of the masked session absorbs the padded `round1_ab` and `round1_c`, which a cut holds at layout indices
-`i` and `64 + i` (`Zk.PadLayout.r1ab`, `r1c`). Toward `SimPiop`'s zerocheck:
-
-* `Replay.Zc.r1ab_eq`: the executable's `round1_ab` is the soundness analysis's honest one on the trace's bits, the twin
-  of `Replay.Zc.r1c_eq`.
-* `Zerocheck.honest_round1ab_congr`, `honest_round1c_congr`: the honest first round reads its tables below `64 · 2^n`
-  only (`skipAt_congr`).
-* `Composed.zcH_round1ab`, `zcH_round1c`: so the sample's clear first round is the executable's on a trace whose bits are
-  the model's tables, at the sample's zerocheck vector `rF`; `honestAt_r1ab_exe`, `honestAt_r1c_exe`: the clear values a
-  cut masks at `round1_ab`'s and `round1_c`'s layout indices (`innerOf`'s `vals`).
-* `Masked.outerAt_eq`: a rep's outer coin at the opened coins is the coin of the round after its first
-  (`repBase + 1`), the one the session's second zerocheck squeeze reads.
--/
+/-! The masked zerocheck's first round, the model's values against the executable's. -/
 
 @[expose] public section
 
@@ -59,7 +44,6 @@ open Flock FlockLevel3 FlockSoundness.Discharge.Composed.Zerocheck
 
 local notation "𝔽" => FlockLevel3.GF128
 
-/-- **The prover's `round1_ab` is the honest one** on the trace's `A·z` and `B·z` bits. -/
 theorem r1ab_eq (tr : Trace) (n : ℕ) (r : Array F128) (hrs : r.size = n) (c : ℕ → 𝔽) (rho : Array F128)
     (z : F128) : r1ab tr n r = (honest n (bitF tr.az) (bitF tr.bz) c r rho z).round1ab := by
   unfold r1ab
@@ -81,14 +65,12 @@ open Flock FlockLevel3
 
 local notation "𝔽" => FlockLevel3.GF128
 
-/-- A skip row at block-row `x < N` reads its table below `64 · N` only. -/
 theorem skipAt_congr {t t' : ℕ → 𝔽} {N : ℕ} (h : ∀ i < 64 * N, t i = t' i) (ζ : 𝔽) {x : ℕ} (hx : x < N) :
     skipAt t ζ x = skipAt t' ζ x := by
   unfold skipAt
   refine Finset.sum_congr rfl fun s _ => ?_
   rw [h _ (by have := s.isLt; omega)]
 
-/-- **The honest `round1_ab` reads the A- and B-side tables below `64 · 2^n` only.** -/
 theorem honest_round1ab_congr (n : ℕ) {a b a' b' : ℕ → 𝔽} (c c' : ℕ → 𝔽) (r rho rho' : Array F128) (z z' : F128)
     (ha : ∀ i < 64 * 2 ^ n, a i = a' i) (hb : ∀ i < 64 * 2 ^ n, b i = b' i) :
     (honest n a b c r rho z).round1ab = (honest n a' b' c' r rho' z').round1ab := by
@@ -97,7 +79,6 @@ theorem honest_round1ab_congr (n : ℕ) {a b a' b' : ℕ → 𝔽} (c c' : ℕ �
   refine congrArg _ (Finset.sum_congr rfl fun x hx => ?_)
   rw [skipAt_congr ha _ (Finset.mem_range.mp hx), skipAt_congr hb _ (Finset.mem_range.mp hx)]
 
-/-- **The honest `round1_c` reads the witness table below `64 · 2^n` only.** -/
 theorem honest_round1c_congr (n : ℕ) (a b a' b' : ℕ → 𝔽) {c c' : ℕ → 𝔽} (r rho rho' : Array F128) (z z' : F128)
     (hc : ∀ i < 64 * 2 ^ n, c i = c' i) :
     (honest n a b c r rho z).round1c = (honest n a' b' c' r rho' z').round1c := by
@@ -120,8 +101,6 @@ theorem sixtyFour_mul_pow {mPts : ℕ} (Tz : TabZK 𝔽 mPts) : 64 * 2 ^ (Tz.S.m
 variable {mPts : ℕ} (Tz : TabZK 𝔽 mPts) (st : Stmt) (c : CoinsZK (RestOf Tz st)) (r : Fin 2)
   (zw : Witness Tz.S.m)
 
-/-- **The sample's clear `round1_ab` is the executable's** on a trace whose `A·z`, `B·z` bits are the model's A- and
-B-side tables, at the sample's zerocheck vector. -/
 theorem zcH_round1ab (tr : FlockComplete.Trace) (hrs : (rF Tz st c r).size = Tz.S.m - 6)
     (ha : ∀ i < 2 ^ Tz.S.m, FlockComplete.Replay.Zc.bitF tr.az i = aT Tz zw i)
     (hb : ∀ i < 2 ^ Tz.S.m, FlockComplete.Replay.Zc.bitF tr.bz i = bT Tz zw i) :
@@ -132,7 +111,6 @@ theorem zcH_round1ab (tr : FlockComplete.Trace) (hrs : (rF Tz st c r).size = Tz.
     (fun i hi => (ha i (hi.trans_eq (sixtyFour_mul_pow Tz))).symm)
     (fun i hi => (hb i (hi.trans_eq (sixtyFour_mul_pow Tz))).symm)
 
-/-- **The sample's clear `round1_c` is the executable's** on a trace whose `z` bits are the model's witness table. -/
 theorem zcH_round1c (tr : FlockComplete.Trace) (hrs : (rF Tz st c r).size = Tz.S.m - 6)
     (hz : ∀ i < 2 ^ Tz.S.m, FlockComplete.Replay.Zc.bitF tr.z i = cT Tz zw i) :
     (zcH Tz st c r zw).round1c = FlockComplete.Replay.Zc.r1c tr (Tz.S.m - 6) (rF Tz st c r) := by
@@ -141,8 +119,6 @@ theorem zcH_round1c (tr : FlockComplete.Trace) (hrs : (rF Tz st c r).size = Tz.S
   exact Zerocheck.honest_round1c_congr _ _ _ _ _ _ _ _ _ _
     (fun i hi => (hz i (hi.trans_eq (sixtyFour_mul_pow Tz))).symm)
 
-/-- **The clear value at `round1_ab`'s layout index `i`** is the executable's `round1_ab` at `i`
-(`honestAt_r1ab`, `zcH_round1ab`). -/
 theorem honestAt_r1ab_exe (tr : FlockComplete.Trace) (hrs : (rF Tz st c r).size = Tz.S.m - 6)
     (ha : ∀ i < 2 ^ Tz.S.m, FlockComplete.Replay.Zc.bitF tr.az i = aT Tz zw i)
     (hb : ∀ i < 2 ^ Tz.S.m, FlockComplete.Replay.Zc.bitF tr.bz i = bT Tz zw i)
@@ -151,8 +127,6 @@ theorem honestAt_r1ab_exe (tr : FlockComplete.Trace) (hrs : (rF Tz st c r).size 
       fOf (FlockComplete.Replay.Zc.r1ab tr (Tz.S.m - 6) (rF Tz st c r))[i]! := by
   rw [honestAt_r1ab Tz st c r zw R i hi, zcH_round1ab Tz st c r zw tr hrs ha hb]
 
-/-- **The clear value at `round1_c`'s layout index `i`** is the executable's `round1_c` at `i`
-(`honestAt_r1c`, `zcH_round1c`). -/
 theorem honestAt_r1c_exe (tr : FlockComplete.Trace) (hrs : (rF Tz st c r).size = Tz.S.m - 6)
     (hz : ∀ i < 2 ^ Tz.S.m, FlockComplete.Replay.Zc.bitF tr.z i = cT Tz zw i)
     {L : ℕ} (R : Fin 2 → Fin L → 𝔽) {i : ℕ} (hi : i < 64) :
@@ -168,8 +142,6 @@ open Claims FlockSoundness.Discharge
 
 namespace Masked
 
-/-- **A rep's outer coin is read at the round after its first**: at a live setup, table `j`'s rep `r`'s outer coin
-`i` is element `i` of the coin at `repBase + 1`, the round of the session's `rOuter` squeeze. -/
 theorem outerAt_eq {x : Msg} (c : Fin (refK x) → FlockDeploy.Coin) {s spec sts}
     (hsx : FlockDeploy.setupOf true x = some (s, spec, sts)) (j r i : ℕ) :
     outerAt c j r i = slotAt c (repBase x (2 * j + r) + 1) i := by

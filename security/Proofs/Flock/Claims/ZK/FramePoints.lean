@@ -37,19 +37,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Std.Tactic.BVDecide.Normalize.BitVec
 
-/-!
-# The frame's claim points are the session's (`FrameAdmits`)
-
-At the opening's label the deployed frame's rank check reads a rep's claim points off the algebraic phase's coins as the
-stream answered them, one flat array (`Frame.claimPoints`, `Masker.coins`); the session reads them off the rep's rounds
-(`MaskRank.claimPoints`, `coin j e` element `e` of round `j`). In the phase's sample order the array holds round `0`'s
-`K_SKIP` coins, round `1`'s `m − 13` outer ones, `z`, the `m − 6` rounds of `ρ`, `α`, `β`, the `k_log − 6` rounds of the
-lincheck and `r'`, so:
-
-* `extract_eq_map`: a run of an array that agrees with `f` is `f` over a range.
-* **`claimPoints_frame`**: where the array holds round `1`'s coins from `K_SKIP`, `ρ`'s from `m − 6` and the lincheck's
-  from `2 m − 10`, the frame's claim points are `MaskRank.claimPoints` at the rounds, as lists.
--/
+/-! The frame's claim points are the session's (`FrameAdmits`). -/
 
 @[expose] public section
 
@@ -68,9 +56,6 @@ theorem extract_eq_map {α : Type} [Inhabited α] (a : Array α) {i n : ℕ} (hc
 theorem toList_extract_one {α : Type} (a : Array α) : (a.extract 1 a.size).toList = a.toList.drop 1 := by
   rw [Array.toList_extract, List.extract_eq_take_drop, List.take_of_length_le (by simp)]
 
-/-- **The frame's claim points are the rounds'**: on an algebraic phase of `2 m + k_log − 15` coins holding round `1`'s
-`m − 13` coins from `K_SKIP`, `ρ`'s rounds `3 …` from `m − 6` and the lincheck's rounds `5 + (m − 6) …` from `2 m − 10`,
-`Frame.claimPoints` at the rep's layout returns `MaskRank.claimPoints` at the rounds' coins, as lists. -/
 theorem claimPoints_frame {m kLog : ℕ} (k0 : ℕ) (hm : 13 ≤ m) (hk : 6 ≤ kLog) (a : Array F128)
     (hc : a.size = 2 * m + kLog - 15) (coin : ℕ → ℕ → F128)
     (h1 : ∀ e < m - 13, a[6 + e]! = coin 1 e) (hρ : ∀ j < m - 6, a[m - 6 + j]! = coin (3 + j) 0)
@@ -97,9 +82,6 @@ theorem claimPoints_frame {m kLog : ℕ} (k0 : ℕ) (hm : 13 ≤ m) (hk : 6 ≤ 
     List.map_nil, toList_extract_one, Nat.sub_add_cancel (show 6 ≤ m by omega), Nat.sub_add_cancel hk]
 
 open _root_.Flock.ZkServer.Frame (Masker Cfg MaskSlot isLabel LABEL_PCS) in
-/-- **A label the frame takes at the opening has full rank at the rounds**: where `Masker.label` takes the opening's
-label in a masked phase of a rep with a mask slot, at a layout `PadLayout.new m k_log k0` whose coins hold the rounds as
-`claimPoints_frame` reads them, the earlier reps' points and the rounds' have full rank over the slot's words. -/
 theorem rank_of_label {c : Cfg} {s s' : Masker} {l out : ByteArray} (h : s.label c l = .ok (s', out))
     (hl : isLabel l LABEL_PCS = true) (hon : s.on = true) {ms : MaskSlot} (hms : c.mask = some ms) {m kLog k0 : ℕ}
     (hlay : c.lay = _root_.Flock.Zk.PadLayout.new m kLog k0) (hm : 13 ≤ m) (hk : 6 ≤ kLog)

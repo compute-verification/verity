@@ -35,23 +35,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Complete.Zk.RingSwitch
 
-/-!
-# A rep's PIOP from the cut, against the session's (`SimPiop`'s lincheck, ring switch and PIOP)
-
-`SimZerocheck`'s lockstep (`GoAlike`), past the zerocheck:
-
-* **The lincheck** (`lincheckCut_alike`): both lincheck read only their zerocheck's `z` and `ρ` (`lincheckCut_congr`,
-  `lincheckPZk_congr`); where the cut's masked values at each round's and `z_partial`'s pad indices are the plain
-  prover's at the lincheck's coins (`lcCoins`) plus their pads, the two send the same `3 + (kLog − 6)` bodies, throw
-  together (at a squeeze, or where the circuit fold refuses), and return the same proof, both with the `r'` and `r_in`
-  of those coins (`LcOutAt`), with at most `n` bodies sent.
-* **The ring switch** (`ringSwitchCut_alike`): on claims of one count and the same points, where the cut's switched
-  vector `k` is the session's `switchVec` wherever claim `k`'s body is sent (the cut holds no `ŝ` the session doesn't
-  send), the two run alike and return the same.
-* **The PIOP** (`piopCut_alike`): where a source's masked values and switched vectors are the plain prover's at the
-  cut's coins from `l.size` on plus their pads (`PiopSrc`), the cut's PIOP (`piopCut`) and the session's (`piopPZk`)
-  return the same after the same bodies, or throw the same error after the same bodies.
--/
+/-! A rep's PIOP from the cut, against the session's (`SimPiop`'s lincheck, ring switch and PIOP). -/
 
 @[expose] public section
 
@@ -67,14 +51,9 @@ theorem pure_inv {α : Type} {a b : α} {t t' : Transcript} {l l' : Array Claims
 
 theorem abcClaims_size (m kLog : ℕ) (zc : ZcOut) (lc : LcOut) : (abcClaims m kLog zc lc).size = 2 := rfl
 
-/-! ## The lincheck -/
-
-/-- **The lincheck's coins at the cut's coins** from round `L` on, over `n` rounds: `α`'s at `L`, `β`'s at `L + 1`,
-round `j`'s at `L + 2 + j`, `r'`'s at `L + 2 + n`. -/
 def lcCoins (coin : ℕ → ℕ → F128) (L n : ℕ) : Lc.Challenges :=
   ⟨coin L, coin (L + 1), fun j => coin (L + 2 + j), coin (L + 2 + n)⟩
 
-/-- **A lincheck's `r'` and `r_in` at the coins `cs`**, over `n` rounds, those `Lc.out` returns. -/
 abbrev LcOutAt (n : ℕ) (cs : Lc.Challenges) (o : LcOut) : Prop :=
   o.rPrime = cs.cf 0 ∧ o.rIn = (pushes cs.τ n).reverse
 
@@ -90,11 +69,6 @@ theorem lincheckPZk_congr (io : Asks PS) (c : CircuitFold) (m : ℕ) (lay : Zk.P
   unfold lincheckPZk
   rw [hz, hρ]
 
-/-- **The cut's lincheck in lockstep with the session's**: answered by `asksCut` from `l`, after zerocheck outputs with
-the `z` and `ρ` of `zo`, where the masked values `mk` at each round's pad indices (wherever the circuit fold at `α`
-returns `full`) and at `z_partial`'s are the plain prover's values at the coins from `l.size` on (`lcCoins`) plus their
-pads `h`, the two send the same `3 + (kLog − 6)` bodies, throw together, and return the same proof, both with the `r'`
-and `r_in` of those coins. -/
 theorem lincheckCut_alike (coin : ℕ → ℕ → F128) (n : ℕ) (c : CircuitFold) (m : ℕ) (lay : Zk.PadLayout)
     (h : Array F128) (tr : Trace) (mk : ℕ → F128) {zc zc' : ZcOut} (zo : ZcOut) (hz : zc.z = zo.z)
     (hρ : zc.rho = zo.rho) (hz' : zc'.z = zo.z) (hρ' : zc'.rho = zo.rho) (t : Transcript) (l : Array Claims.Msg)
@@ -171,11 +145,6 @@ theorem lincheckCut_alike (coin : ℕ → ℕ → F128) (n : ℕ) (c : CircuitFo
     exact .inr ⟨_, _, _, _, rfl, rfl, rfl, ⟨rfl, rfl⟩, ⟨rfl, rfl⟩, by simp only [Array.size_push]; omega,
       by simp only [Array.size_push]; omega⟩
 
-/-! ## The ring switch -/
-
-/-- **The cut's ring switch in lockstep with the session's**: on claims of one count and the same points, from at most
-`n` bodies sent, where the cut's switched vector `k` is the session's `switchVec` of claim `k` wherever claim `k`'s
-body is sent (`l.size + k ≤ n`), the two run alike and return the same. -/
 theorem ringSwitchCut_alike (coin : ℕ → ℕ → F128) (n : ℕ) (tr : Trace) (sv : ℕ → Array F128)
     {claims claims' : Array Claim} (hsz : claims.size = claims'.size) (hx : ∀ k : ℕ, claims[k]!.x = claims'[k]!.x)
     (t : Transcript) (l : Array Claims.Msg) (hn : l.size ≤ n)
@@ -213,13 +182,6 @@ theorem ringSwitchCut_alike (coin : ℕ → ℕ → F128) (n : ℕ) (tr : Trace)
     try dsimp only
     exact GoAlike.refl _
 
-/-! ## The PIOP -/
-
-/-- **A source at the cut's coins** from round `L` on: its masked values at the zerocheck's pad indices are the plain
-prover's messages at `zcCoins` plus their pads `h`; at the lincheck's, wherever the circuit fold at `α` returns, the plain
-prover's at `lcCoins` after the zerocheck's `3 + (m − 6)` rounds plus their pads; and its switched vector `k` is the
-plain prover's `switchVec` of claim `k` at those coins wherever claim `k`'s ring-switch body is sent before the stop
-`n`, after the zerocheck's and the lincheck's bodies. -/
 structure PiopSrc (coin : ℕ → ℕ → F128) (n : ℕ) (st : Setup) (lay : Zk.PadLayout) (h : Array F128) (tr : Trace)
     (src : RepSrc) (extras : Array Claim) (L : ℕ) : Prop where
   r1ab : ∀ i < 64, src.masked (lay.r1ab i) = (Zc.r1ab tr (st.m - 6) ((zcCoins coin L).r st.m))[i]! + h[lay.r1ab i]!
@@ -248,9 +210,6 @@ structure PiopSrc (coin : ℕ → ℕ → F128) (n : ℕ) (st : Setup) (lay : Zk
     L + 3 + (st.m - 6) + 3 + (st.fold.kLog - 6) + k ≤ n → src.sv k = switchVec tr (abcClaims st.m st.kLog (Zc.out st.m (zcCoins coin L) tr) (Lc.out st.fold st.m tr
       (Zc.out st.m (zcCoins coin L) tr) (lcCoins coin (L + 3 + (st.m - 6)) (st.fold.kLog - 6))) ++ extras)[k]!
 
-/-- **The cut's PIOP is the session's**: answered by `asksCut` from `l`, from a source at the cut's coins from `l.size`
-on (`PiopSrc`), the cut's zerocheck, lincheck, rank check and ring switch return what the session's do after the same
-bodies, or throw the same error after the same bodies. -/
 theorem piopCut_alike (coin : ℕ → ℕ → F128) (n : ℕ) (st : Setup) (lay : Zk.PadLayout) (h : Array F128)
     (tr : Trace) (src : RepSrc) (cap root : ByteArray) (extras : Array Claim) (prior : Array (List F128))
     (words : List Nat) (hm : 14 ≤ st.m) (t : Transcript) (l : Array Claims.Msg)

@@ -3,22 +3,7 @@ module
 public import Proofs.Flock.Claims.ZK.Cut
 public import Proofs.Flock.Claims.ZK.Prefix
 
-/-!
-# The Goldreich–Kahan simulator, one-sided: where the prover goes on at its last message
-
-`Proto.gkE_zk` bounds every event of the real run against the simulator's output from SHVZK, which holds both ways.
-A prover that sends the `abort` as its last message where its values fail a check meets SHVZK only one way: its
-messages at a coin vector are at most the simulator's on every test that does not grow when the last message becomes
-`abort` (`Proto.SHVZKLe`). That is enough for the event that the run goes on at its last round (`goesOnAt`) and does `Ev`:
-
-* `rewinds_le`, `Model.hyb₁_le_sim`: one rewind's value bounded above bounds hybrid 1's against the simulator's, at
-  `4t·δ_B`, as `sim_hyb₁` bounds it both ways;
-* `Proto.rewindLe_model`: at the protocol's model, one rewind's value is such a test, since a forced run whose last
-  message is `abort` reads the same coins (`fcls_take`, `cls_take`) and does not go on (`goesOnAt_set`);
-* `Proto.gkE_go`: `Pr[goesOnAt ∧ Ev]` of the real run is at most `Pr[Ev]` of the simulator's output plus
-  `4·δ_A + 4t·δ_B + 3^{-t} + t/M` and `4M` times `Fork`'s probability: hybrid 2 (`hyb₂_real`) and hybrid 1's binding
-  failure (`hyb₁_hyb₂`, `Proto.hyb₁_bind_le`) as in `gkE_zk`, then `hyb₁_le_sim`; `Proto.gkE_go_pow` at `M = t·3^t`.
--/
+/-! The Goldreich–Kahan simulator, one-sided: where the prover goes on at its last message. -/
 
 @[expose] public section
 
@@ -30,8 +15,6 @@ section OneSided
 
 variable {V : Type}
 
-/-- **One rewind's value**, given the value `a` of the rewinds after it: `0` at a binding failure, `φ` at a completed
-view, `a` otherwise. -/
 def rwVal (comp bad : V → Bool) (φ : V → ℝ) (a : ℝ) (v : V) : ℝ :=
   if bad v = true then 0 else if comp v = true then φ v else a
 
@@ -47,7 +30,6 @@ theorem rwVal_le_one {comp bad : V → Bool} {φ : V → ℝ} (h1 : ∀ v, φ v 
   split_ifs
   exacts [zero_le_one, h1 v, ha]
 
-/-- **One run's value bounded above by `δ` bounds `n` rewinds' by `n·δ`**, for the value of `φ` at the outcome. -/
 theorem rewinds_le {C₁ C₂ : Type} [Fintype C₁] [Nonempty C₁] [Fintype C₂] [Nonempty C₂] (v₀ : V) (rw₁ : C₁ → V)
     (rw₂ : C₂ → V) (comp bad : V → Bool) {φ : V → ℝ} (h0 : ∀ v, 0 ≤ φ v) (h1 : ∀ v, φ v ≤ 1) {δ : ℝ} (hδ : 0 ≤ δ)
     (h : ∀ a, 0 ≤ a → a ≤ 1 →
@@ -83,14 +65,11 @@ namespace Model
 variable {V P Ω Ωd Ωs : Type} [Fintype Ω] [Nonempty Ω] [Fintype Ωd] [Nonempty Ωd] [Fintype Ωs] [Nonempty Ωs]
   (m : Model V P Ω Ωd Ωs)
 
-/-- **Lemma B one-sided, one rewind**: from every completed dummy view, hybrid 1's rewind is at most the simulator's
-plus `δ_B` on one rewind's value of `φ`, whatever the value in `[0, 1]` of the rewinds after it. -/
 def RewindLe (φ : V → ℝ) (δB : ℝ) : Prop :=
   0 ≤ δB ∧ ∀ ω₀, m.comp (m.dummy ω₀) = true → ∀ a, 0 ≤ a → a ≤ 1 →
     avgR (fun ω => rwVal m.comp (m.bad (m.dummy ω₀)) φ a (m.rwR (m.dummy ω₀) ω)) ≤
       avgR (fun σ => rwVal m.comp (m.bad (m.dummy ω₀)) φ a (m.rwS (m.dummy ω₀) σ)) + δB
 
-/-- **Hybrid 1 against the simulator, one-sided**: hybrid 1's value of `φ` is at most the simulator's plus `4t·δ_B`. -/
 theorem hyb₁_le_sim {φ : V → ℝ} (h0 : ∀ v, 0 ≤ φ v) (h1 : ∀ v, φ v ≤ 1) {δB : ℝ} (hB : m.RewindLe φ δB)
     (t M : ℕ) :
     Rand.ev (fun o => Out.val φ o.1) (m.hyb₁ t M) ≤ Rand.ev (fun o => Out.val φ o.1) (m.sim t M) + 4 * t * δB := by
@@ -137,7 +116,6 @@ local notation "GOut" => FlockSoundness.ZK.GK.Out
 stop. -/
 def goesOnAt (stop : Msg) (t : ℕ) (τ : List (Msg × Out)) : Bool := (τ[t]?).any fun p => decide (p.1 ≠ stop)
 
-/-- How a rewind at `c` ends reads only the transcript's first `L` rounds once its openings end before `L`. -/
 theorem fclsGo_take {Coin : Type} [DecidableEq Coin] (chk : Msg → ℕ → Msg → OC Bool) (dec : Msg → Coin)
     (c : ℕ → Option Coin) (τ : List (Msg × Out)) (ρ : Msg) (L : ℕ) :
     ∀ n j, j + n < L → fclsGo chk dec c (τ.take L) ρ j n = fclsGo chk dec c τ ρ j n
@@ -150,21 +128,16 @@ namespace Proto
 
 variable {W : Type}
 
-/-- **(HB) one-sided**: at every nonce and coin vector `c`, the honest prover's messages at `c` are at most the
-simulator's plus `δ_B(x)` on every test with values in `[0, 1]` that does not grow when the last message becomes
-`abort`. -/
 def SHVZKLe (G : Proto W) (H : Msg → Msg) (R : Rel W) (δB : Msg → ℝ) : Prop :=
   ∀ x w, R x w → ∀ (ν : G.Nonce) (c : Fin (G.K x) → G.Coin) (Ψ : List Msg → ℝ), (∀ v, 0 ≤ Ψ v) → (∀ v, Ψ v ≤ 1) →
     (∀ v, Ψ (v.set (G.K x) G.abort) ≤ Ψ v) →
     Ex (fun r : G.Rand => Ψ (G.realVec H x w ν r c)) ≤ Ex (fun s : G.SimRand x => Ψ ((G.sim x ν c s).eval H).1) + δB x
 
-/-- How a rewind at `c` ends reads only the transcript's first `K + 1` rounds. -/
 theorem fcls_take (G : Proto W) (H : Msg → Msg) (x : Msg) (ν : G.Nonce) (c : Fin (G.K x) → G.Coin)
     (τ : List (Msg × Out)) : G.fcls H x ν c (τ.take (G.K x + 1)) = G.fcls H x ν c τ := by
   simp only [fcls, fclsOC, resp_take (show 0 < G.K x + 1 by omega),
     fclsGo_take _ _ _ τ _ (G.K x + 1) (G.K x) 0 (by omega)]
 
-/-- The forced prover's messages before its last read none of `v`'s last. -/
 theorem pmF_set (G : Proto W) (H : Msg → Msg) (x : Msg) (ν : G.Nonce) (c : Fin (G.K x) → G.Coin) (v : List Msg)
     (m : Msg) (h : List (Msg × Msg)) (hh : h.length ≤ G.K x) :
     G.pmF H x ν c (v.set (G.K x) m) h = G.pmF H x ν c v h := by
@@ -176,7 +149,6 @@ theorem pmF_set (G : Proto W) (H : Msg → Msg) (x : Msg) (ν : G.Nonce) (c : Fi
     simp only [OC.eval, List.length_map, List.getD_eq_getElem?_getD,
       List.getElem?_set_ne (show G.K x ≠ ops.length by omega)]
 
-/-- With `abort` as `v`'s last, the forced prover's last message is `abort`. -/
 theorem pmF_set_last (G : Proto W) (H : Msg → Msg) (x : Msg) (ν : G.Nonce) (c : Fin (G.K x) → G.Coin)
     (v : List Msg) (h : List (Msg × Msg)) (hh : h.length = G.K x + 1) :
     G.pmF H x ν c (v.set (G.K x) G.abort) h = G.abort := by
@@ -188,7 +160,6 @@ theorem pmF_set_last (G : Proto W) (H : Msg → Msg) (x : Msg) (ν : G.Nonce) (c
     by_cases hK : G.K x < v.length <;>
       simp [OC.eval, hh, List.getD_eq_getElem?_getD, List.getElem?_set, hK]
 
-/-- The forced runs with `v` and with `v`'s last message replaced agree on their first `K + 1` rounds. -/
 theorem interact_set_take (G : Proto W) (H : Msg → Msg) (ask : List Msg → Out) (x : Msg) (ν : G.Nonce)
     (c : Fin (G.K x) → G.Coin) (v : List Msg) (m : Msg) :
     (interact ask (G.pmF H x ν c (v.set (G.K x) m)) (G.k x) []).take (G.K x + 1) =
@@ -197,7 +168,6 @@ theorem interact_set_take (G : Proto W) (H : Msg → Msg) (ask : List Msg → Ou
     simp only [List.nil_append]
     exact G.pmF_set H x ν c v m _ (by rw [length_histOf_take]; exact (min_le_left _ _).trans hi)
 
-/-- **A forced run whose last message is `abort` does not go on at its last round.** -/
 theorem goesOnAt_set (G : Proto W) (H : Msg → Msg) (ask : List Msg → Out) (x : Msg) (ν : G.Nonce)
     (c : Fin (G.K x) → G.Coin) (v : List Msg) :
     goesOnAt G.abort (G.K x + 1) (interact ask (G.pmF H x ν c (v.set (G.K x) G.abort)) (G.k x) []) = false := by
@@ -214,8 +184,6 @@ theorem goesOnAt_set (G : Proto W) (H : Msg → Msg) (ask : List Msg → Out) (x
   · rw [List.getElem?_eq_none (by omega)]
     rfl
 
-/-- **One rewind's value does not grow when the last message becomes `abort`**, for a `φ` that vanishes where the run
-does not go on at its last round: the rewind reads the same coins and does not go on. -/
 theorem rwVal_set (G : Proto W) (H : Msg → Msg) (ask : List Msg → Out) (x : Msg) (ν : G.Nonce)
     {τ₀ : List (Msg × Out)} {c : Fin (G.K x) → G.Coin} (hc : G.cls H x ν τ₀ = some c) {φ : List (Msg × Out) → ℝ}
     (h0 : ∀ τ, 0 ≤ φ τ) (hφ : ∀ τ, goesOnAt G.abort (G.K x + 1) τ = false → φ τ = 0) (a : ℝ) (v : List Msg) :
@@ -236,8 +204,6 @@ theorem rwVal_set (G : Proto W) (H : Msg → Msg) (ask : List Msg → Out) (x : 
   split_ifs
   exacts [le_rfl, h0 τ, le_rfl]
 
-/-- **Lemma B one-sided at the model, one rewind**, from `SHVZKLe` at the coins the first run opened, for a `φ` that
-vanishes where the run does not go on at its last round. -/
 theorem rewindLe_model (G : Proto W) (H : Msg → Msg) (ask : List Msg → Out) (R : Rel W) (δB : Msg → ℝ)
     (hB : G.SHVZKLe H R δB) (x : Msg) (w : W) (hR : R x w) (hB0 : 0 ≤ δB x) (ν : G.Nonce)
     {φ : List (Msg × Out) → ℝ} (h0 : ∀ τ, 0 ≤ φ τ) (h1 : ∀ τ, φ τ ≤ 1)
@@ -253,11 +219,6 @@ theorem rewindLe_model (G : Proto W) (H : Msg → Msg) (ask : List Msg → Out) 
     (fun v => FlockSoundness.ZK.GK.rwVal_nonneg h0 ha0 _) (fun v => FlockSoundness.ZK.GK.rwVal_le_one h1 ha1 _)
     (fun v => G.rwVal_set H ask x ν hc h0 hφ a v)
 
-/-- **The Goldreich–Kahan simulator with estimation, one-sided**: for a protocol whose dummy-witness run hides the
-witness until the last coin, whose messages at a fixed coin vector are at most the simulator's on every test that does
-not grow when the last message becomes `abort`, and whose opening check binds, the real run's probability of going on at
-its last round and doing `Ev` is at most the simulator's of `Ev`, plus `4·δ_A + 4t·δ_B + 3^{-t} + t/M` and `4M` times
-`Fork`'s probability. -/
 theorem gkE_go (G : Proto W) (H : Msg → Msg) (R : Rel W) (t M : ℕ) (hM : 0 < M) (δA δB : Msg → ℝ)
     (hA : G.PrefixHides H R δA) (hB : G.SHVZKLe H R δB) (hB0 : ∀ x, 0 ≤ δB x) (hC : G.Binding H) :
     ∀ x w, R x w → ∀ (Θ : Type) (Vs : VStar Θ) (θ : Θ), Vs.k x = G.k x → ∀ Ev : List (Msg × Out) → Prop,
@@ -343,7 +304,6 @@ theorem gkE_go (G : Proto W) (H : Msg → Msg) (R : Rel W) (t M : ℕ) (hM : 0 <
   have := mul_le_mul_of_nonneg_right (G.pr_collR_le H Vs θ x w) (by positivity : (0 : ℝ) ≤ 4 * M)
   linarith
 
-/-- **At the cap `M = t·3^t`**: `4·δ_A + 4t·δ_B + 2·3^{-t}` and `4t·3^t` times `Fork`'s probability. -/
 theorem gkE_go_pow (G : Proto W) (H : Msg → Msg) (R : Rel W) (t : ℕ) (ht : 0 < t) (δA δB : Msg → ℝ)
     (hA : G.PrefixHides H R δA) (hB : G.SHVZKLe H R δB) (hB0 : ∀ x, 0 ≤ δB x) (hC : G.Binding H) :
     ∀ x w, R x w → ∀ (Θ : Type) (Vs : VStar Θ) (θ : Θ), Vs.k x = G.k x → ∀ Ev : List (Msg × Out) → Prop,

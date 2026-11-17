@@ -4,36 +4,7 @@ public import Proofs.Flock.Claims.ZK.Deployed
 public import Proofs.Flock.Claims.ZK.CoinBind
 public import Proofs.Flock.Claims.Recursion.DeployInputs
 
-/-!
-# The reference prover of `flock-circuit --zk`'s outer layer
-
-`Flock.zkAt_of_tables_bind` takes a committed-coin protocol `G` and three Props of it. `RefSession.refP` is that `G`:
-the Lean reference prover, defined from the session's data (`RefSession`), what the ZK server releases on the witness and
-its own randomness. Its coin rounds `refK` are those of the masked session the statement sets up (`sessOf`): Flock's
-masked setup's at a Flock statement, where they are the deployed verifier's but the last message (`V_k_of_R`), and the
-recursive setup's at a V\* part's. Its messages are the session's by definition:
-
-* `Hello`, then before the last coin the round encoding `enc` of the session's pre-final view cut where it stops
-  (`cutAt`), at the executable's leaves (`exeOf`), at the coins opened so far padded to a full vector (`RefSession.pad`);
-* after the last coin, `fin` of the tables' real views (`Coined.viewExe`) where every table admits the coins
-  (`CoinedSetup.Admits`), else `off` of the cut view: the prover refuses by construction where the self-check fails;
-* the opening check is the coin-tree walk `treeChk` on the message read as an opening at its round (`parse`), and the
-  coin it hands on a reading `rd` of the message, one coin for two messages that read as one opening (`rd_eq`).
-
-The tables' randomness at a coin vector (`RefSession.randAt`) reads the same tape as the pre-final leaves: each salt the
-final message reveals is its leaf's (`baseWith`), so the real views' pre-final part is the cut view the round messages
-encode (`viewPre_viewExe`).
-
-What `zkAt_of_tables_bind` asks of `G` is then a theorem about `refP`, from five Props of the session's data:
-`RefSession.binding` (none: `Proto.binding_of_open`), `RefSession.tablesOK` (`Tables`: the tables are tables the
-session sets up, which `setupTable_planZHJ` proves of the hidden-output plan's), and `RefSession.msgLink` (`Complete`: the witness's table
-witnesses valid, the lowering's completeness; `DummyReg`: the dummy's carry the public region data; `Causal`: round `i`'s
-encoding reads the coins before `i` only; `TapeOK`: the tape read with fibers of one size). `Flock.zkAt_deployZk_ref` is
-`Claims.Flock.ZKAt` at `refP`'s prover; `Flock.zk_zkD_ref` is `Claims.Flock.ZK` at the masked record
-`RefSession.zkD`, whose reference prover is `ZkTables.honestPR` behind `refP`'s `Hello` and coin-tree checks, where `refP`'s
-messages are `ZkTables.honestPR`'s (`RefSession.HonestMsgs`, a named Prop until it is proved). `Flock.zk_deployZk_ref` is its case
-at the deployed coin layer (`ZK.CoinLayer`).
--/
+/-! The reference prover of `flock-circuit --zk`'s outer layer. -/
 
 @[expose] public section
 
@@ -44,8 +15,6 @@ open FlockSoundness.Discharge
 
 set_option synthInstance.maxSize 100000
 set_option synthInstance.maxHeartbeats 1000000
-
-/-! ## A table's real view before the last coin -/
 
 /-- **The pre-final messages of a table's view**: every message but the final one's. -/
 def viewPre {K W Hi VL : Type} [Field K] {z : ZkView.Sizes} (T : ZkView.Coined K W Hi VL z) (v : T.tab.View) :
@@ -76,9 +45,6 @@ def hidOf {K W Hi VL : Type} [Field K] {z : ZkView.Sizes} (T : ZkView.Coined K W
   | .inl q => y (.inl (T.s0 (.inr q)))
   | .inr (r, k) => y (.inr (.inl (r, T.sP r (.inr k))))
 
-/-- **The real view's pre-final part is the pre-final view at the executable's leaves**: at the table randomness whose
-revealed salts are the leaves' (`baseWith`) and whose hidden leaves' salts are theirs (`hidOf`), whatever the ideal
-seeds `u`. -/
 theorem viewPre_viewExe {K W Hi VL : Type} [Field K] {z : ZkView.Sizes} (T : ZkView.Coined K W Hi VL z) (w : W)
     (b : ZkView.Base z Hi) (y : ZkView.LeafPos z → ZkView.Salt) (u : ZkView.LeafPos z → ZkView.Bits × ZkView.Salt) :
     viewPre T (T.viewExe w (T.randOf (baseWith T b y) u) (hidOf T y)) =
@@ -99,8 +65,6 @@ theorem viewPre_viewExe {K W Hi VL : Type} [Field K] {z : ZkView.Sizes} (T : ZkV
     · show ZkView.leafP _ _ = _root_.Flock.Hm96.Default512.leaf (T.content w b (.inr (.inl (r, T.sP r (.inr k))))) _
       simp only [ZkView.Coined.content, ZkView.Coined.colPAt, Equiv.symm_apply_apply]
       rfl
-
-/-! ## The reference session -/
 
 /-- **The masked session a statement sets up**: Flock's masked setup's at a Flock statement, the recursive setup's at a
 V\* part's (`RecDeploy.setupO`), none elsewhere. No statement is both (`RecDeploy.decodeRec_none`). -/
@@ -150,8 +114,6 @@ theorem refK_none {x : Msg} (h : sessOf x = none) : refK x = 0 := by
   unfold refK
   rw [h]
 
-/-- **At a statement that is no V\* part's, the deployed masked verifier's rounds are the protocol's coin rounds and the
-last message.** -/
 theorem V_k_eq {x : Msg} (hd : RecDeploy.decodeRec x = none) : (FlockDeploy.V true).k x = refK x + 1 := by
   rcases hs : FlockDeploy.setupOf true x with _ | ⟨s, spec, sts⟩
   · rw [refK_none (sessOf_none hs (RecDeploy.setupO_none hd))]
@@ -160,15 +122,12 @@ theorem V_k_eq {x : Msg} (hd : RecDeploy.decodeRec x = none) : (FlockDeploy.V tr
     simp only [FlockDeploy.V, hs]
     omega
 
-/-- A statement the deployed masked parser parses is Flock's, so no V\* part's. -/
 theorem decodeRec_none_of_parse {rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation} {x : Msg}
     {s : Claims.Flock.Stmt} (h : (FlockDeploy.deployZk rel).parse x = some s) : RecDeploy.decodeRec x = none := by
   obtain ⟨r, hr⟩ := RecDeploy.read_of_parseOf (rel := rel) (rd := FlockDeploy.readOf true) h
   obtain ⟨w, hw⟩ := RecDeploy.decode_of_readOf hr
   exact RecDeploy.decodeRec_none hw
 
-/-- **At a statement in the relation, the deployed masked verifier's rounds are the protocol's coin rounds and the last
-message** (`V_k_eq`). -/
 theorem V_k_of_R {rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation} {x : Msg} {w : Flock.Wit}
     (hR : Flock.R (FlockDeploy.deployZk rel).parse x w) : (FlockDeploy.deployZk rel).V.k x = refK x + 1 := by
   obtain ⟨s, hs, -⟩ := hR
@@ -294,15 +253,12 @@ noncomputable def refP (S : RefSession) : Proto Flock.Wit where
 
 noncomputable instance instFintypeCoinWitRefP (S : RefSession) : Fintype S.refP.Coin := S.finCoin
 
-/-- At a statement in the relation, `refP`'s rounds are `Hello` and the deployed masked verifier's (`V_k_of_R`). -/
 theorem refP_k_of_R (S : RefSession) {rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation} {x : Msg}
     {w : Flock.Wit} (hR : Flock.R (FlockDeploy.deployZk rel).parse x w) :
     S.refP.k x = (FlockDeploy.deployZk rel).V.k x + 1 := by
   have := V_k_of_R hR
   show refK x + 2 = _
   omega
-
-/-! ## Its models -/
 
 /-- The coins the answers `a` open: coin `j` is answer `j + 1`'s. -/
 def coinsOf (S : RefSession) {K : ℕ} (a : Fin (K + 1) → Out) : Fin K → S.Coin := fun j => S.decOf (msgOf (a j.succ))
@@ -315,8 +271,6 @@ noncomputable def kP (S : RefSession) (x : Msg) : ℕ :=
 noncomputable def kT (S : RefSession) (x : Msg) (c : Fin (refK x) → S.Coin) : ℕ :=
   Nat.card {t : S.Tape // S.randAt x c t = S.randAt x c (Classical.arbitrary _)}
 
-/-- **The model before the last coin**: the session's tables at the coins the answers open, and the round encoding of the
-cut view as the committed-coin prover sends it (`Hello`, then `enc`, or `abort` from the first opening that fails). -/
 noncomputable def preModel (S : RefSession) (H : Msg → Msg) (x : Msg) (ν : S.Nonce) : S.refP.TPreModel x where
   J := S.J x
   C := S.C x
@@ -340,8 +294,6 @@ noncomputable def coinModel (S : RefSession) (x : Msg) (c : Fin (refK x) → S.C
     .inr { J := S.J x, C := S.C x, cz := S.cz x c, wt := S.wt x, wt₀ := S.wt₀ x
            out := fun σ => (List.range (refK x + 1)).map fun j => if j < refK x then S.enc x c j σ else S.off x c σ
            eR := S.eP x, kR := S.kP x }
-
-/-! ## What remains of the session's data -/
 
 /-- **The tables are tables the session sets up** (`setupTable_planZHJ` at the hidden-output plan's). -/
 def Tables (S : RefSession) : Prop := ∀ x j, SetupTable (S.C x j)
@@ -370,15 +322,9 @@ def TapeOK (S : RefSession) : Prop :=
   ∀ x, (∀ p p', Nat.card {t // S.eP x t = p} = Nat.card {t // S.eP x t = p'}) ∧
     ∀ c p p', Nat.card {t // S.randAt x c t = p} = Nat.card {t // S.randAt x c t = p'}
 
-/-! ## The three Props, as theorems about `refP` -/
-
-/-- **`Binding` holds of `refP`**: its check is the coin-tree walk on the message read at its round, and two messages
-that read as one opening read as one coin (`Proto.binding_of_open`). -/
 theorem binding (S : RefSession) (H : Msg → Msg) : S.refP.Binding H :=
   S.refP.binding_of_open H S.Tr S.nb S.root S.parse S.pos S.idx S.len S.depth (fun _ _ _ _ _ => rfl) S.rd_eq
 
-/-- **`TablesOK` holds of `refP`'s models** at tables the session sets up: where the prover goes on, every table admits
-the coins, by `refP`'s definition. -/
 theorem tablesOK (S : RefSession) (H : Msg → Msg) (hT : S.Tables) :
     S.refP.TablesOK (fun x ν => S.preModel H x ν) fun x _ c => S.coinModel x c := by
   refine ⟨fun x _ => hT x, fun x _ c => ?_⟩
@@ -388,9 +334,6 @@ theorem tablesOK (S : RefSession) (H : Msg → Msg) (hT : S.Tables) :
   · exact ⟨hT x, h⟩
   · exact hT x
 
-/-! ## The message link -/
-
-/-- The padded coins at a prefix of `c` agree with `c` before it. -/
 theorem pad_take (S : RefSession) {K : ℕ} (c : Fin K → S.Coin) (j : ℕ) (k : Fin K) (hk : k.val < j) :
     S.pad ((List.ofFn c).take j) k = c k := by
   simp [pad, hk]
@@ -398,7 +341,6 @@ theorem pad_take (S : RefSession) {K : ℕ} (c : Fin K → S.Coin) (j : ℕ) (k 
 theorem pad_ofFn (S : RefSession) {K : ℕ} (c : Fin K → S.Coin) : S.pad ((List.ofFn c).take K) = c :=
   funext fun k => S.pad_take c K k k.isLt
 
-/-- **The real views' pre-final part, cut, is the cut view the round messages encode** (`viewPre_viewExe`). -/
 theorem cutV_viewsAt (S : RefSession) (x : Msg) (c : Fin (refK x) → S.Coin)
     (wt : ∀ j, FlockSoundness.Model.Witness (S.C x j).S.m) (t : S.Tape) :
     S.cutV x c (S.viewsAt x c wt t) = S.cutOf x c wt t := by
@@ -406,7 +348,6 @@ theorem cutV_viewsAt (S : RefSession) (x : Msg) (c : Fin (refK x) → S.Coin)
   simp only [cutV, viewsAt, randAt, viewPre_viewExe]
   rfl
 
-/-- **Round `i`'s encoding of the cut view reads the coins before `i` only** (`Causal` at the executable's leaves). -/
 theorem enc_cutOf (S : RefSession) (x : Msg) (hc : S.Causal) (wt : ∀ j, FlockSoundness.Model.Witness (S.C x j).S.m)
     (t : S.Tape) (c c' : Fin (refK x) → S.Coin) (i : ℕ) (h : ∀ k : Fin (refK x), k.val < i → c k = c' k) :
     S.enc x c i (S.cutOf x c wt t) = S.enc x c' i (S.cutOf x c' wt t) := by
@@ -416,8 +357,6 @@ theorem enc_cutOf (S : RefSession) (x : Msg) (hc : S.Causal) (wt : ∀ j, FlockS
   convert e using 4
 
 open Classical in
-/-- **The reference prover's messages at the prefixes of a coin vector** (`Causal`): round `j`'s encoding at `c` before
-the last coin, then the last message at `c`. -/
 theorem msgAt_take (S : RefSession) (x : Msg) (hc : S.Causal) (wt : ∀ j, FlockSoundness.Model.Witness (S.C x j).S.m)
     (t : S.Tape) (c : Fin (refK x) → S.Coin) (j : ℕ) (hj : j < refK x + 1) :
     S.msgAt x wt t ((List.ofFn c).take j) =
@@ -449,8 +388,6 @@ theorem pad_ansHist (S : RefSession) {K : ℕ} (a : Fin (K + 1) → Out) (i : Fi
     List.getElem?_ofFn, hk', dite_true, Option.map_some, Option.getD_some]
   rfl
 
-/-- **Before the last coin, the reference prover sends the round encoding at the coins the answers open**
-(`Causal`). -/
 theorem pre_msg (S : RefSession) (H : Msg → Msg) (x : Msg) (ν : S.Nonce) (hc : S.Causal)
     (wt : ∀ j, FlockSoundness.Model.Witness (S.C x j).S.m) (t : S.Tape) (a : Fin (refK x + 1) → Out)
     (i : Fin (refK x + 1)) :
@@ -506,19 +443,14 @@ theorem coinModel_link (S : RefSession) (H : Msg → Msg) (R : Rel Flock.Wit) (h
       refine List.map_congr_left fun j hj => ?_
       rw [S.msgAt_take x hc _ t c j (List.mem_range.1 hj), ite_eq_right hA]
 
-/-- **`TMsgLink` holds of `refP`'s models**, from the lowering's completeness, the dummy's region data, the round
-encoding's causality and the tape. -/
 theorem msgLink (S : RefSession) (H : Msg → Msg) (R : Rel Flock.Wit) (hV : S.Complete R) (hD : S.DummyReg)
     (hc : S.Causal) (hT : S.TapeOK) :
     S.refP.TMsgLink H R (fun x ν => S.preModel H x ν) fun x _ c => S.coinModel x c := fun x w hR ν =>
   ⟨S.preModel_link H R hV hD hc hT x w hR ν, fun c => S.coinModel_link H R hV hD hc hT x w hR ν c⟩
 
-/-! ## Flock's zero knowledge at the reference prover -/
-
 /-- The session's pre-final leaves at a statement. -/
 noncomputable def nLeaves (S : RefSession) (x : Msg) : ℕ := Fintype.card (ZkView.Leaves fun j => (S.C x j).z)
 
-/-- A hidden leaf's tree position. -/
 def hidPos {K W Hi VL : Type} [Field K] {z : ZkView.Sizes} (T : ZkView.Coined K W Hi VL z) :
     T.tab.Hid → ZkView.LeafPos z
   | .inl q => .inl (T.s0 (.inr q))
@@ -543,10 +475,6 @@ theorem coinModel_size (S : RefSession) (x : Msg) (c : Fin (refK x) → S.Coin) 
 
 end RefSession
 
-/-- **Flock's zero knowledge against a malicious verifier at `FlockDeploy.deployZk`, at the reference prover**:
-`Claims.Flock.ZKAt` at `P_zk = refP`'s prover and its models' Goldreich–Kahan simulator, at
-`ε_zk = 8·n_L·δ₁ + 8t·n_L·δ₁ + 2·3^{-t}` with `n_L` the session's pre-final leaves, under `Claims.Hm96Hiding` at the
-pinned key and five Props of the session's data: `Tables`, `Complete`, `DummyReg`, `Causal`, `TapeOK`. -/
 theorem Flock.zkAt_deployZk_ref (H : Msg → Msg) (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
     (S : RefSession) (t : ℕ) (ht : 0 < t) {δ₁ : ENNReal} (hT1 : Claims.Hm96Hiding ZkView.My ZkView.saltHash δ₁)
     (hδ₁ : δ₁ ≠ ⊤) (hS : S.Tables) (hV : S.Complete (Flock.R (FlockDeploy.deployZk rel).parse)) (hD : S.DummyReg)
@@ -561,12 +489,8 @@ theorem Flock.zkAt_deployZk_ref (H : Msg → Msg) (rel : _root_.Flock.Readable.P
       (fun _ _ => le_rfl) (fun x _ c => S.coinModel_size x c) (S.msgLink H _ hV hD hc hT) (S.tablesOK H hS)
       (S.binding H))
 
-/-! ## At the masked record -/
-
-/-- **`refP`'s messages are the reference prover's** within its rounds, at `H`: after the openings `ops`, at most
-`refK x` of them, `refP`'s message (`msgAt` at the coins they open) is `ZkTables.honestPR`'s at the history with each opening
-read as its coin (`coinOf`), at the tape `tapeOf (ν, t)`. `refP` makes no call, so this is `Proto.Honest`
-(`RefSession.honest_of_msgs`). -/
+/-- **`refP`'s messages are the reference prover's** within its rounds, a named Prop until it is proved.
+`refP` makes no call, so this is `Proto.Honest` (`RefSession.honest_of_msgs`). -/
 def RefSession.HonestMsgs (S : RefSession) (H : Msg → Msg) (coinOf : Msg → Msg)
     (tapeOf : S.refP.Nonce × S.refP.Rand → FlockComplete.TapeZk) : Prop :=
   ∀ x w ν t (ops : List (Msg × Msg)), ops.length ≤ refK x →
@@ -585,11 +509,6 @@ noncomputable def RefSession.zkD (rel : _root_.Flock.Readable.Parsed → _root_.
     Claims.Flock.ZkDeploy FlockDeploy.Coin (List FlockLevel3.GF128) Claims.Flock.ZkTrace :=
   zkOf rel S.refP coinOf tapeOf ((S.refP.withSim fun x _ c => S.coinModel x c).simulatorE t (t * 3 ^ t))
 
-/-- **Flock's zero knowledge against a malicious verifier at the reference session's masked record**:
-`Claims.Flock.ZK` at `RefSession.zkD`, whose reference prover is `ZkTables.honestPR`, at
-`ε_zk = 8·n_L·δ₁ + 8t·n_L·δ₁ + 2·3^{-t}` with `n_L` the session's pre-final leaves, under `Claims.Hm96Hiding` at the
-pinned key, the session's five Props (`Tables`, `Complete`, `DummyReg`, `Causal`, `TapeOK`) and `HonestMsgs`: `refP`'s
-messages are `ZkTables.honestPR`'s. -/
 theorem Flock.zk_zkD_ref (H : Msg → Msg) (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
     (S : RefSession) (t : ℕ) (ht : 0 < t) {δ₁ : ENNReal} (hT1 : Claims.Hm96Hiding ZkView.My ZkView.saltHash δ₁)
     (hδ₁ : δ₁ ≠ ⊤) (hS : S.Tables) (hV : S.Complete (Flock.R (FlockDeploy.deployZk rel).parse)) (hD : S.DummyReg)
@@ -601,7 +520,6 @@ theorem Flock.zk_zkD_ref (H : Msg → Msg) (rel : _root_.Flock.Readable.Parsed �
   zk_zkOf rel S.refP coinOf tapeOf _ (fun _ => by positivity) (fun _ _ hR => S.refP_k_of_R hR)
     (S.honest_of_msgs H coinOf tapeOf hH) (Flock.zkAt_deployZk_ref H rel S t ht hT1 hδ₁ hS hV hD hc hT)
 
-/-- **The same at the pinned key's hiding gap** (`CROnly.hm96Hiding_gap`), with `Claims.Hm96Hiding` discharged. -/
 theorem Flock.zk_zkD_ref_gap (H : Msg → Msg)
     (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (S : RefSession) (t : ℕ) (ht : 0 < t)
     (hS : S.Tables) (hV : S.Complete (Flock.R (FlockDeploy.deployZk rel).parse)) (hD : S.DummyReg) (hc : S.Causal)

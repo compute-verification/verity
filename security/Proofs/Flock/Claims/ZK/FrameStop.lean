@@ -4,19 +4,7 @@ public import Proofs.Flock.Claims.ZK.FrameRanked
 import all Init.Data.String.Defs
 import all Init.Data.Array.Basic
 
-/-!
-# A rep's frame stops only where its check fails
-
-The frame's `stopped` is the rep's stop: once set it stays, and only a failed check sets it. The loop reads it as the
-session's stop (`Flock.ZkServer.Frames.Sessions.stopped`):
-
-* `absorb_stopped`, `label_stopped`, `roundFree_stopped`, `round_stopped`: a masked value, a label and a round keep
-  `stopped`, whatever its bytes.
-* **`check_stopped`**: after the frame's `check` of a device round, the rep is stopped where it was or where the
-  check failed the round (`why`), whose stand-in is the scheduled round of a stopped rep (`check_some`).
-* `roundFree_empty`, **`check_empty`**: no device round (`ByteArray.empty`, what the loop hands a stopped session's
-  frames) is a round, so the check fails it and the rep is stopped after.
--/
+/-! A rep's frame stops only where its check fails. -/
 
 @[expose] public section
 
@@ -137,7 +125,6 @@ theorem label_stopped {c : Cfg} {s : Masker} {l : ByteArray} {q : Masker × Byte
   rfl
 
 open _root_.Flock.ZkServer.Frame (roundFree INNER_ROUNDS) in
-/-- **A round keeps `stopped`**, whatever its bytes. -/
 theorem roundFree_stopped {c : Cfg} {s : Masker} {content : ByteArray} {n : Nat} {q : ByteArray × Masker × Array Nat}
     (h : roundFree c s content n = .ok q) : q.2.1.stopped = s.stopped := by
   unfold roundFree at h
@@ -237,8 +224,6 @@ theorem round_stopped {c : Cfg} {s s' : Masker} {content out : ByteArray} {n : N
   exact roundFree_stopped hr
 
 open _root_.Flock.ZkServer.Frame (check) in
-/-- **The frame's check stops the rep only where it fails**: after it the rep is stopped where it was, or where the
-check failed the device round. -/
 theorem check_stopped {c : Cfg} {s : Masker} {v r : ByteArray} {n : Nat} {out : ByteArray} {s' : Masker}
     {why : Option String} (h : check c s v r n = .ok (out, s', why)) : s'.stopped = (s.stopped || why.isSome) := by
   cases why with
@@ -250,7 +235,6 @@ theorem check_stopped {c : Cfg} {s : Masker} {v r : ByteArray} {n : Nat} {out : 
     simp
 
 open _root_.Flock.ZkServer.Frame (roundFree INNER_ROUNDS) in
-/-- No device round is no round: it has no squeeze. -/
 theorem roundFree_empty (c : Cfg) (s : Masker) (n : Nat) (q : ByteArray × Masker × Array Nat) :
     roundFree c s ByteArray.empty n ≠ .ok q := by
   intro h
@@ -262,7 +246,6 @@ theorem roundFree_empty (c : Cfg) (s : Masker) (n : Nat) (q : ByteArray × Maske
   cases h
 
 open _root_.Flock.ZkServer.Frame (check) in
-/-- **The frame's check of no device round stops the rep**: it fails, whatever the scheduled round. -/
 theorem check_empty {c : Cfg} {s : Masker} {r : ByteArray} {n : Nat} {out : ByteArray} {s' : Masker}
     {why : Option String} (h : check c s ByteArray.empty r n = .ok (out, s', why)) : s'.stopped = true := by
   rw [check_stopped h]

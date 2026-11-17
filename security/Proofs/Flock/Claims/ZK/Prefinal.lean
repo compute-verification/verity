@@ -47,26 +47,7 @@ import Proofs.Flock.Soundness.ZK.Session
 import Std.Tactic.BVDecide.Normalize.Prop
 import VCVio.Prelude.Core
 
-/-!
-# Lemma C at tables of their own types
-
-`Session.adaptive_prefinal_hm96` (Lemma C) takes `J` tables of one type. The tables `verify --zk` sets up each have their
-own witness, hidden-value and Ligerito types (`--session-tables J`). Lemma C reads the tables only through world `W₀`'s
-witness independence at each fixed answer vector (`Session.card_cut_eq`), so:
-
-* `prefinal_of_ideal`: Lemma C for a prover whose messages at fixed answers, at ideal leaves `H(U, c(y))`, take every
-  value equally often on the two witnesses; the leaves' hybrid (T1) and the adaptive verifier (T5) are
-  `Session.adaptive_prefinal_hm96`'s.
-* `prefinal_sw_of_ideal`: the same for a prover `S` whose messages read the salts of leaves `L₀` beyond their leaves:
-  `L₁` goes ideal at `S`, `S` meets the honest prover with real `L₀` leaves, `L₀` goes ideal there, and the witnesses
-  swap at ideal leaves; the bound is `2·|L₀ ⊕ L₁|·δ₁` both ways.
-* `famSent`, `famSent_admits`, `famCard_cut_eq`: the session's schedule (`Session.sent`) and Lemma A at every coin vector
-  (`Session.session_prefinal_indep_cut`) for tables of their own types, from each table's own Lemma A
-  (`Table.table_prefinal_indep_cut`).
-* `Proto.runs_close_of_ideal`, `Proto.refused_close_of_ideal`: `Proto.runs_close_hm96`'s and `Proto.shvzk_refused_hm96`'s
-  bounds from `prefinal_of_ideal`; `Proto.runs_close_sw_of_ideal`, `Proto.refused_close_sw_of_ideal`: the same from
-  `prefinal_sw_of_ideal`.
--/
+/-! Lemma C at tables of their own types. -/
 
 @[expose] public section
 
@@ -77,12 +58,6 @@ open Claims Finset
 set_option synthInstance.maxSize 100000
 set_option synthInstance.maxHeartbeats 1000000 -- instance search over the ZK view's and coins' product types
 
-/-! ## Lemma C from world `W₀` -/
-
-/-- **Lemma C from world `W₀`'s witness independence** (`Session.adaptive_prefinal_hm96` with `hW₀` for its `hI`, `he`,
-`hreg`): against any deterministic verifier, every event on the prover's transcript has probability on `w` at most its
-probability on `w'` plus `2·|L|·δ₁`, when at every fixed answer vector its messages at ideal leaves `H(U, c(y))` take
-every value equally often on `w` and on `w'`. -/
 theorem prefinal_of_ideal {n : ℕ} {Cn M Cc Ω L Salt B D Wt : Type} [Inhabited M] [DecidableEq M] [Fintype Ω]
     [Nonempty Ω] [Fintype L] [DecidableEq L] [AddCommGroup Salt] [AddCommGroup B] [Fintype Salt] [DecidableEq Salt]
     [Fintype B] [DecidableEq B] (My : Salt → B) (cs : Salt → Cc) {δ₁ : ENNReal} (hT1 : Claims.Hm96Hiding My cs δ₁)
@@ -132,12 +107,6 @@ theorem prefinal_of_ideal {n : ℕ} {Cn M Cc Ω L Salt B D Wt : Type} [Inhabited
     _ = _ := by ring
 
 open FlockSoundness FlockSoundness.ZK FlockSoundness.Game in
-/-- **Lemma C at a prover whose leaves `L₀` are read before its messages** (`prefinal_of_ideal`, reordered): `S` runs on
-randomness `ω`, the salts of the leaves `L₀` (which its messages may read beyond their leaves) and the pairs of the
-other leaves `L₁`. When at every fixed answer vector, at ideal `L₁` leaves, `S`'s messages take every value as often as
-`P wt`'s with real `L₀` leaves under the same salts, and `P`'s messages at ideal leaves take every value as often on `wt`
-and on `w₀`, every event on `S`'s transcript at real leaves is within `2·|L₀ ⊕ L₁|·δ₁` of its probability on `P w₀`'s,
-both ways: `L₁` goes ideal at `S`, `L₀` goes ideal at `P wt`, and every leaf goes real at `P w₀`. -/
 theorem prefinal_sw_of_ideal {n : ℕ} {Cn M Cc Ω L0 L1 Salt B D Wt : Type} [Inhabited M] [DecidableEq M] [Fintype Ω]
     [Nonempty Ω] [Fintype L0] [DecidableEq L0] [Fintype L1] [DecidableEq L1] [AddCommGroup Salt] [AddCommGroup B]
     [Fintype Salt] [DecidableEq Salt] [Fintype B] [DecidableEq B] (My : Salt → B) (cs : Salt → Cc) {δ₁ : ENNReal}
@@ -307,8 +276,6 @@ theorem prefinal_sw_of_ideal {n : ℕ} {Cn M Cc Ω L0 L1 Salt B D Wt : Type} [In
           add_le_add (add_le_add s2 le_rfl) le_rfl
       _ = _ := by rw [hc]; ring
 
-/-! ## The schedule and Lemma A, for tables of their own types -/
-
 /-- **The check at table `j`, rep `r`, phase `p`** (`Session.guard`), for tables of their own types. -/
 def famGuard {F K Salt Seed D : Type} [Field F] [Field K] [CharP F 2] {J : ℕ} {Wf Hi VL : Fin J → Type}
     (T : ∀ j, FlockSoundness.ZK.Table F K (Wf j) Salt Seed D (Hi j) (VL j)) (rep : ∀ j, Fin (T j).nC → Fin 2)
@@ -333,7 +300,6 @@ def famSent {F K Salt Seed D : Type} [Field F] [Field K] [CharP F 2] {J : ℕ} {
   y1 r := famPasses T rep j r .restart
   fin r := famPasses T rep j r .inner
 
-/-- **The schedule** (`Session.sent_admits`): at every coin vector, what each table sent is admitted. -/
 theorem famSent_admits {F K Salt Seed D : Type} [Field F] [Field K] [CharP F 2] {J : ℕ} {Wf Hi VL : Fin J → Type}
     (T : ∀ j, FlockSoundness.ZK.Table F K (Wf j) Salt Seed D (Hi j) (VL j)) (rep : ∀ j, Fin (T j).nC → Fin 2)
     (j : Fin J) : (T j).Admits (famSent T rep j) := by
@@ -356,9 +322,6 @@ theorem famSent_admits {F K Salt Seed D : Type} [Field F] [Field K] [CharP F 2] 
       simp only [FlockSoundness.ZK.Session.pos, FlockSoundness.ZK.Session.Phase.idx, Fin.isValue, Fin.val_zero]
       omega
 
-/-- **Lemma A at every coin vector, for tables of their own types** (`Session.session_prefinal_indep_cut`): the session's
-pre-final views in world `W₀` on two tuples of witnesses carrying the public region data, each table's cut to what it
-sent, are equally distributed. -/
 theorem famSession_prefinal_indep_cut {F K Salt Seed D : Type} [Field F] [Field K] [CharP F 2] [AddCommGroup Salt]
     [AddCommGroup Seed] [Fintype F] [DecidableEq F] [Fintype Salt] [DecidableEq Salt] [Fintype Seed]
     [DecidableEq Seed] {J : ℕ} {Wf Hi VL : Fin J → Type} [∀ j, AddCommGroup (Hi j)] [∀ j, Fintype (Hi j)]
@@ -372,9 +335,6 @@ theorem famSession_prefinal_indep_cut {F K Salt Seed D : Type} [Field F] [Field 
     (fun j => fun ω => (T j).cut (famSent T rep j) ((T j).preView (w' j) ω))
     fun j => (T j).table_prefinal_indep_cut (famSent T rep j) (famSent_admits T rep j) (w j) (w' j) (hreg j) (hreg' j)
 
-/-- **At fixed answers, for tables of their own types** (`Session.card_cut_eq`): messages that are a function of the
-session's cut pre-view, on the tables' randomness read through a map with fibers of one size, take every value as often
-on two witnesses carrying the public region data. -/
 theorem famCard_cut_eq {F K Salt Seed D : Type} [Field F] [Field K] [CharP F 2] [AddCommGroup Salt]
     [AddCommGroup Seed] [Fintype F] [DecidableEq F] [Fintype Salt] [DecidableEq Salt] [Fintype Seed]
     [DecidableEq Seed] {J : ℕ} {Wf Hi VL : Fin J → Type} [∀ j, AddCommGroup (Hi j)] [∀ j, Fintype (Hi j)]
@@ -394,13 +354,8 @@ theorem famCard_cut_eq {F K Salt Seed D : Type} [Field F] [Field K] [CharP F 2] 
   congr 1
   exact ((famSession_prefinal_indep_cut T rep w w' hreg hreg').comp out).card_eq v
 
-/-! ## The bounds `Flock.zkR_gkE_hm96` reads -/
-
 namespace Proto
 
-/-- **Lemma C's bound on the runs before the last coin, from world `W₀`** (`Proto.runs_close_hm96` with `hW₀` for its
-tables): the prover's messages before the last coin on `w` and on the dummy are `P`'s on real hm96 leaves, and `P`'s
-messages at fixed answers and ideal leaves take every value as often on both table witnesses. -/
 theorem runs_close_of_ideal {W : Type} (G : Proto W) (H : Msg → Msg) (x : Msg) (ν : G.Nonce) (w : W)
     {Salt B Cc D Wt Ω L : Type} [AddCommGroup Salt] [AddCommGroup B] [Fintype Salt] [DecidableEq Salt] [Fintype B]
     [DecidableEq B] [Fintype Ω] [Nonempty Ω] [Fintype L] [DecidableEq L] (My : Salt → B) (cs : Salt → Cc)
@@ -448,9 +403,6 @@ theorem runs_close_of_ideal {W : Type} (G : Proto W) (H : Msg → Msg) (x : Msg)
   rw [eW, eD, abs_le]
   constructor <;> linarith
 
-/-- **Lemma C at a coin vector where the prover refuses, from world `W₀`** (`Proto.shvzk_refused_hm96`'s bound with `hW₀`
-for its tables): the honest prover's messages at `c` and the dummy-witness prover's are `msgs` of real hm96 leaves, and
-`msgs` at ideal leaves takes every value as often on both table witnesses. -/
 theorem refused_close_of_ideal {W : Type} (G : Proto W) (H : Msg → Msg) (x : Msg) (w : W) (ν : G.Nonce)
     (c : Fin (G.K x) → G.Coin) {Salt B Cc D Wt Ω L : Type} [AddCommGroup Salt] [AddCommGroup B] [Fintype Salt]
     [DecidableEq Salt] [Fintype B] [DecidableEq B] [Fintype Ω] [Nonempty Ω] [Fintype L] [DecidableEq L]
@@ -510,10 +462,6 @@ theorem refused_close_of_ideal {W : Type} (G : Proto W) (H : Msg → Msg) (x : M
   rw [eW, eD, abs_le]
   constructor <;> linarith
 
-/-- **Lemma C's bound on the runs before the last coin, at a prover whose leaves `L₀` are read before its messages**
-(`prefinal_sw_of_ideal`): the prover's messages before the last coin on `w` are `S`'s, which reads `L₀`'s salts, and on
-the dummy `P`'s on real hm96 leaves; at fixed answers and ideal `L₁` leaves, `S`'s messages take every value as often as
-`P`'s on `wt` with real `L₀` leaves, and `P`'s at ideal leaves as often on both table witnesses. -/
 theorem runs_close_sw_of_ideal {W : Type} (G : Proto W) (H : Msg → Msg) (x : Msg) (ν : G.Nonce) (w : W)
     {Salt B Cc D Wt Ω L0 L1 : Type} [AddCommGroup Salt] [AddCommGroup B] [Fintype Salt] [DecidableEq Salt]
     [Fintype B] [DecidableEq B] [Fintype Ω] [Nonempty Ω] [Fintype L0] [DecidableEq L0] [Fintype L1] [DecidableEq L1]
@@ -566,10 +514,6 @@ theorem runs_close_sw_of_ideal {W : Type} (G : Proto W) (H : Msg → Msg) (x : M
   rw [eW, eD, abs_le]
   constructor <;> linarith
 
-/-- **Lemma C at a coin vector where the prover refuses, at a prover whose leaves `L₀` are read before its messages**
-(`prefinal_sw_of_ideal` in one round): the prover's messages at `c` are `msgsS` of `L₀`'s salts and real `L₁` leaves, the
-dummy-witness prover's `msgs` of real hm96 leaves; at ideal `L₁` leaves `msgsS` takes every value as often as `msgs` on
-`wt` with real `L₀` leaves, and `msgs` at ideal leaves as often on both table witnesses. -/
 theorem refused_close_sw_of_ideal {W : Type} (G : Proto W) (H : Msg → Msg) (x : Msg) (w : W) (ν : G.Nonce)
     (c : Fin (G.K x) → G.Coin) {Salt B Cc D Wt Ω L0 L1 : Type} [AddCommGroup Salt] [AddCommGroup B] [Fintype Salt]
     [DecidableEq Salt] [Fintype B] [DecidableEq B] [Fintype Ω] [Nonempty Ω] [Fintype L0] [DecidableEq L0]

@@ -23,32 +23,7 @@ import Mathlib.Tactic.Polynomial.Basic
 import Mathlib.Tactic.ReduceModChar
 import VCVio.Prelude.Core
 
-/-!
-# What the frame releases of a round: the device's frames, masked
-
-The frame releases each device round as the round's frames (`FlockSoundness.Refine.Frame`), domains dropped, with each
-value absorbed in a masked phase sent as `v + h_i` under the next pad of the layout's absorbed order (`Masker.absorb`),
-or as the pad alone in a stopped rep's algebraic phase. This file states that release at the frames `roundFree_encs`
-folds over:
-
-* **The absorbed order** (`absorbed_toList`, `absorbed_getElem!`): the frame masks under every pad below `h_ab` but
-  `final_c`'s, ascending, so absorbed value `p` takes pad `p` up to `final_b`'s and pad `p + 1` after, the indices the
-  masked prover pads its sent values under (`zerocheckPZk`, `lincheckPZk`: `r1ab i = i`, `r1c i = 64 + i`, …). Every
-  such pad is among a rep's samples (`ofSamples_order`), and a rep's pad there is its samples' (`padAt_ofSamples`).
-* **The release in a phase** (`maskFrames`, `maskVal`): the frames with each absorbed value through `maskVal` from the
-  state's position on, or unchanged outside a masked phase; labels that neither end nor start a phase (`plainLabel`)
-  go through as they came (`label_plain`).
-* **The folds** (`foldlM_stepAt_on`, `foldlM_stepAt_off`) and **the rounds** (`roundFree_on`, `roundFree_off`): a round
-  inside a masked phase, or outside one, leaves as its masked frames and its squeeze. **The zerocheck's first round**
-  (`roundFree_zc`, `label_zc`): its label starts the algebraic phase and is followed by the pads' label and their root,
-  as `zerocheckPZk` absorbs them.
-* **An honest device's round** (`roundFree_honest`): the masked prover sends each value as `v' = v + h_i`, so the
-  device's plain value is `v' + h_i` (`unmaskFrames`), and the frame's release of the device's round is the masked
-  prover's round (`maskFrames_unmask`, characteristic 2) without its domain frames (`dropDoms`): a rep's first round
-  carries its stream's domain, which the masked prover's ask sends and the frame never releases. Its pads are the
-  masked prover's: the frame's pad at pad `j`'s absorbed position (`absPos`) is the samples' pad `j`
-  (`padAt_ofSamples_absPos`), which on `tapeOfSamples` is the masked prover's (`padsOf_tapeOfSamples`).
--/
+/-! What the frame releases of a round: the device's frames, masked. -/
 
 @[expose] public section
 
@@ -59,8 +34,6 @@ open _root_.Flock.Transcript (header padded)
 open _root_.Flock.ZkServer.Frame
   (Cfg Masker absorbed nLig isLabel labelFrame bytesFrame roundFree LABEL_PCS LABEL_ZC SKIP)
 open FlockSoundness.Refine (Frame encs colBytes)
-
-/-! ## The absorbed order -/
 
 theorem foldl_push_toList {α : Type} (f : ℕ → α) (L : List ℕ) (v : Array α) :
     (L.foldl (fun b a => b.push (f a)) v).toList = v.toList ++ L.map f := by
@@ -108,7 +81,6 @@ theorem range'_join' (s m n t : ℕ) (ht : s + m = t) :
     List.range' s m ++ List.range' t n = List.range' s (m + n) := by
   subst ht; rw [List.range'_append_1]
 
-/-- The zerocheck's, lincheck's and `z_partial`'s pads in the frame's order, as ranges of pad indices. -/
 theorem absorbed_piop (l : _root_.Flock.Zk.PadLayout) (R : List ℕ) :
     List.map l.r1ab (List.range' 0 64) ++
       (List.map l.r1c (List.range' 0 64) ++
@@ -136,9 +108,6 @@ theorem absorbed_piop (l : _root_.Flock.Zk.PadLayout) (R : List ℕ) :
   simp only [_root_.Flock.Zk.PadLayout.fa]
   omega
 
-/-- **The frame's absorbed order is every pad below `h_ab` but `final_c`'s, ascending**: the zerocheck's `64 + 64`
-skip values, its multilinear rounds and `final_a`, `final_b` (pads `0, …, fb`), then the lincheck's rounds,
-`z_partial` and, with a masked level 0, its OOD values, lane-round messages and the pair's sums (pads `fc + 1, …`). -/
 theorem absorbed_toList (l : _root_.Flock.Zk.PadLayout) :
     (absorbed l).toList = List.range (l.fa + 2) ++ List.range' (l.fa + 3) (2 * l.nLc + 64 + nLig l) := by
   unfold absorbed
@@ -169,7 +138,6 @@ theorem absorbed_size (l : _root_.Flock.Zk.PadLayout) :
     (absorbed l).size = l.fa + 2 + (2 * l.nLc + 64 + nLig l) := by
   rw [← Array.length_toList, absorbed_toList]; simp
 
-/-- **The pad of absorbed value `p`**: pad `p` up to `final_b`'s, then pad `p + 1`, `final_c`'s skipped. -/
 theorem absorbed_getElem? (l : _root_.Flock.Zk.PadLayout) (p : ℕ) :
     (absorbed l)[p]? =
       if p < (absorbed l).size then some (if p < l.fa + 2 then p else p + 1) else none := by
@@ -189,7 +157,6 @@ theorem absorbed_getElem! (l : _root_.Flock.Zk.PadLayout) {p : ℕ} (hp : p < (a
     (absorbed l)[p]! = if p < l.fa + 2 then p else p + 1 := by
   rw [getElem!_def, absorbed_getElem?, ite_eq_left hp]
 
-/-- Every pad the frame absorbs under is one of the layout's. -/
 theorem absorbed_lt_len (l : _root_.Flock.Zk.PadLayout) {p : ℕ} (hp : p < (absorbed l).size) :
     (absorbed l)[p]! < l.len := by
   rw [absorbed_getElem! l hp]
@@ -198,12 +165,10 @@ theorem absorbed_lt_len (l : _root_.Flock.Zk.PadLayout) {p : ℕ} (hp : p < (abs
     _root_.Flock.Zk.PadLayout.zp, _root_.Flock.Zk.PadLayout.lc, _root_.Flock.Zk.PadLayout.fc, nLig] at hp ⊢
   split <;> split at hp <;> omega
 
-/-- The samples' pads are the layout's `len`. -/
 theorem ofBytes_h_size (l : _root_.Flock.Zk.PadLayout) (b : ByteArray) :
     (_root_.Flock.ZkServer.Frame.Draws.ofBytes l b).h.size = l.len := by
   simp [_root_.Flock.ZkServer.Frame.Draws.ofBytes, _root_.Flock.ZkServer.Frame.words]
 
-/-- **A rep's configuration masks under its samples' pads**: each pad of its order is among its samples'. -/
 theorem ofSamples_order (l : _root_.Flock.Zk.PadLayout) (b : ByteArray)
     (m : Option _root_.Flock.ZkServer.Frame.MaskSlot) :
     ∀ p, p < (Cfg.ofSamples l (_root_.Flock.ZkServer.Frame.Draws.ofBytes l b) m).order.size →
@@ -214,13 +179,8 @@ theorem ofSamples_order (l : _root_.Flock.Zk.PadLayout) (b : ByteArray)
   rw [ofBytes_h_size]
   exact absorbed_lt_len l hp
 
-/-! ## The masked phase's release -/
-
-/-- The pad of absorbed value `p`. -/
 def padAt (c : Cfg) (p : ℕ) : F128 := c.h[c.order[p]!]!
 
-/-- Absorbed value `p`, `v`, as the frame releases it: `v + h_i`, or the pad alone in a stopped rep's algebraic
-phase. -/
 def maskVal (c : Cfg) (st : Bool) (p : ℕ) (v : F128) : F128 :=
   (if (st && decide (p < c.nPiop)) = true then 0 else v) + padAt c p
 
@@ -230,7 +190,6 @@ theorem padAt_ofSamples (l : _root_.Flock.Zk.PadLayout) (d : _root_.Flock.ZkServ
   show d.h[(absorbed l)[p]!]! = _
   rw [absorbed_getElem! l hp]
 
-/-- The values `vs` from absorbed value `p` on, each through `g` at its position. -/
 def maskVals (g : ℕ → F128 → F128) : ℕ → List F128 → List F128
   | _, [] => []
   | p, v :: vs => g p v :: maskVals g (p + 1) vs
@@ -240,7 +199,6 @@ theorem maskVals_length (g : ℕ → F128 → F128) :
   | _, [] => rfl
   | p, _ :: vs => by simp [maskVals, maskVals_length g (p + 1) vs]
 
-/-- How many values the frames absorb. -/
 def nAbs : List Frame → ℕ
   | [] => 0
   | .dom _ :: fs => nAbs fs
@@ -250,8 +208,6 @@ def nAbs : List Frame → ℕ
   | .vec vs :: fs => nAbs fs + vs.length
   | .sq _ _ :: fs => nAbs fs
 
-/-- **The frames as the frame releases them**, from absorbed value `p` on: domains dropped, and each absorbed value
-through `g` at its position. -/
 def maskFrames (g : ℕ → F128 → F128) : ℕ → List Frame → List Frame
   | _, [] => []
   | p, .dom _ :: fs => maskFrames g p fs
@@ -261,14 +217,11 @@ def maskFrames (g : ℕ → F128 → F128) : ℕ → List Frame → List Frame
   | p, .vec vs :: fs => .vec (maskVals g p vs) :: maskFrames g (p + vs.length) fs
   | p, .sq k n :: fs => .sq k n :: maskFrames g p fs
 
-/-- A label that neither ends nor starts a phase: none of the opening's, level 0's two, the inner proof's or the
-zerocheck's. -/
 def plainLabel (b : ByteArray) : Prop :=
   isLabel b LABEL_PCS = false ∧ isLabel b _root_.Flock.Zk.LABEL_CLOSE = false ∧
     isLabel b _root_.Flock.Zk.LABEL_INNER = false ∧ isLabel b LABEL_ZC = false ∧
     isLabel b _root_.Flock.Zk.LABEL_OPEN = false
 
-/-- A frame inside a phase: a plain label, or any frame but a squeeze of coins. -/
 def plainFrame : Frame → Prop
   | .label b => plainLabel b
   | .sq k n => k = 2 ∧ n = 0
@@ -286,7 +239,6 @@ theorem labelFrame_data (b : ByteArray) : (labelFrame b).data.toList = (Frame.la
 theorem bytesFrame_data (b : ByteArray) : (bytesFrame b).data.toList = (Frame.bytes b).enc := by
   simp [bytesFrame, Frame.enc, Frame.op, Frame.kind, Frame.len, Frame.pay]
 
-/-- **A masked value**: in a masked phase, at an absorbed position of the order, `v` leaves as `maskVal`. -/
 theorem absorb_on (c : Cfg) (s : Masker) (v : F128) (hon : s.on = true) (hp : s.pos < c.order.size)
     (hc : c.order[s.pos]! < c.h.size) :
     s.absorb c v = .ok ({ s with pos := s.pos + 1 }, maskVal c s.stopped s.pos v) := by
@@ -349,9 +301,6 @@ theorem foldlM_absorb1_off (c : Cfg) :
 theorem sq_enc (k : UInt8) (n : ℕ) : (Frame.sq k n).enc = (header 4 k n).data.toList := by
   simp [Frame.enc, Frame.op, Frame.kind, Frame.len, Frame.pay]
 
-/-- **A masked phase's frames leave masked**: from a state in a masked phase, the fold of the frame's step over frames
-inside the phase releases the frames with each absorbed value `v` as `maskVal`, in the order's positions from the
-state's on. -/
 theorem foldlM_stepAt_on (c : Cfg) (hc : ∀ p, p < c.order.size → c.order[p]! < c.h.size) :
     ∀ (fs : List Frame) (s : Masker) (o : ByteArray) (fr : Array ℕ) (q : ℕ),
       s.on = true → (∀ f ∈ fs, plainFrame f) → s.pos + nAbs fs ≤ c.order.size →
@@ -424,7 +373,6 @@ theorem maskVals_id : ∀ (p : ℕ) (vs : List F128), maskVals (fun _ v => v) p 
   | _, [] => rfl
   | p, v :: vs => by rw [maskVals, maskVals_id (p + 1) vs]
 
-/-- **Outside a masked phase the frames leave as they came**, domains dropped. -/
 theorem foldlM_stepAt_off (c : Cfg) :
     ∀ (fs : List Frame) (s : Masker) (o : ByteArray) (fr : Array ℕ) (q p : ℕ),
       s.on = false → (∀ f ∈ fs, plainFrame f) →
@@ -483,11 +431,6 @@ theorem foldlM_stepAt_off (c : Cfg) :
       refine ⟨r, hr, h1, ?_⟩
       rw [h2, data_append', ← sq_enc]
       simp [maskFrames, encs]
-
-/-! ### No free values past the algebraic phase
-
-`roundFree`'s free offsets are the values it absorbs in the algebraic phase. Outside a masked phase, and in a masked
-phase past the algebraic phase's values, a round's frames add none. -/
 
 theorem foldlM_absorb1_on_fr (c : Cfg) (hc : ∀ p, p < c.order.size → c.order[p]! < c.h.size) :
     ∀ (vs : List F128) (s : Masker) (o : ByteArray) (fr : Array ℕ) (q : ℕ) (r : Masker × ByteArray × Array ℕ × ℕ),
@@ -604,17 +547,12 @@ theorem foldlM_stepAt_off_fr (c : Cfg) :
       obtain ⟨rfl, rfl⟩ : k = 2 ∧ n = 0 := hp _ List.mem_cons_self
       exact foldlM_stepAt_off_fr c fs s (o ++ header 4 2 0) fr (q + 16) r hon hp' h
 
-/-- **The zerocheck's label starts the algebraic phase**: outside a masked phase and before the opening, the frame
-releases it, then the pads' label and their root. -/
 theorem label_zc (c : Cfg) (s : Masker) (hon : s.on = false) (hd : s.done = false) :
     s.label c LABEL_ZC.toUTF8 = .ok ({ s with on := true },
       labelFrame LABEL_ZC.toUTF8 ++ labelFrame _root_.Flock.Zk.LABEL_PADS.toUTF8 ++ bytesFrame c.root) := by
   simp [Masker.label, hon, hd]
   rfl
 
-/-- **A round inside a masked phase**: at the bytes of frames `fs` inside the phase, then the squeeze of `n` coins of
-kind `k`, the frame releases the frames with each absorbed value masked (`maskVal`) from the state's position on, then
-the squeeze, and owes the squeeze's coins. -/
 theorem roundFree_on (c : Cfg) (s : Masker) (fs : List Frame) (k : UInt8) (n : ℕ)
     (hc : ∀ p, p < c.order.size → c.order[p]! < c.h.size) (hon : s.on = true) (hi : s.inner = none)
     (hm : ∀ f ∈ fs, midFrame f) (hp : ∀ f ∈ fs, plainFrame f) (hk : k = 2 ∨ (k = 1 ∧ n = 1))
@@ -632,8 +570,6 @@ theorem roundFree_on (c : Cfg) (s : Masker) (fs : List Frame) (k : UInt8) (n : �
     rfl
   · rw [data_append', h2, sq_enc]; simp
 
-/-- **A round inside a masked phase past the algebraic phase's values carries no free value**: `roundFree_on`, with no
-free offset. -/
 theorem roundFree_on_fr (c : Cfg) (s : Masker) (fs : List Frame) (k : UInt8) (n : ℕ)
     (hc : ∀ p, p < c.order.size → c.order[p]! < c.h.size) (hon : s.on = true) (hi : s.inner = none)
     (hm : ∀ f ∈ fs, midFrame f) (hp : ∀ f ∈ fs, plainFrame f) (hk : k = 2 ∨ (k = 1 ∧ n = 1))
@@ -652,7 +588,6 @@ theorem roundFree_on_fr (c : Cfg) (s : Masker) (fs : List Frame) (k : UInt8) (n 
     rfl
   · rw [data_append', h2, sq_enc]; simp
 
-/-- **A round outside a masked phase**: the frames leave as they came, domains dropped, then the squeeze. -/
 theorem roundFree_off (c : Cfg) (s : Masker) (fs : List Frame) (k : UInt8) (n : ℕ)
     (hon : s.on = false) (hi : s.inner = none)
     (hm : ∀ f ∈ fs, midFrame f) (hp : ∀ f ∈ fs, plainFrame f) (hk : k = 2 ∨ (k = 1 ∧ n = 1))
@@ -670,9 +605,6 @@ theorem roundFree_off (c : Cfg) (s : Masker) (fs : List Frame) (k : UInt8) (n : 
     rfl
   · rw [data_append', h2, sq_enc]; simp
 
-/-- **The zerocheck's first round**: at frames `pre` outside a masked phase, the zerocheck's label, then frames `post`
-inside the algebraic phase and the squeeze, the frame releases `pre` as they came, the zerocheck's label followed by
-the pads' label and root, `post` with each absorbed value masked from the state's position on, then the squeeze. -/
 theorem roundFree_zc (c : Cfg) (s : Masker) (pre post : List Frame) (k : UInt8) (n : ℕ)
     (hc : ∀ p, p < c.order.size → c.order[p]! < c.h.size) (hon : s.on = false) (hd : s.done = false)
     (hi : s.inner = none) (hm : ∀ f ∈ pre ++ Frame.label LABEL_ZC.toUTF8 :: post, midFrame f)
@@ -708,24 +640,17 @@ theorem roundFree_zc (c : Cfg) (s : Masker) (pre post : List Frame) (k : UInt8) 
   · rw [data_append', h2₂, sq_enc, data_append', h2₁]
     simp [labelFrame_data, bytesFrame_data, encs]
 
-/-! ## An honest device's round -/
-
-/-- **A pad added twice cancels** (GF(2^128) has characteristic 2). -/
 theorem add_pad_pad (v x : F128) : v + x + x = v := by
   obtain ⟨a, b⟩ := v
   obtain ⟨c, d⟩ := x
   show F128.mk (a ^^^ c ^^^ c) (b ^^^ d ^^^ d) = F128.mk a b
   rw [UInt64.xor_assoc, UInt64.xor_self, UInt64.xor_zero, UInt64.xor_assoc, UInt64.xor_self, UInt64.xor_zero]
 
-/-- The frames but their domains: what the frame releases of them (the domain frame is the stream's own). -/
 def dropDoms : List Frame → List Frame
   | [] => []
   | .dom _ :: fs => dropDoms fs
   | f :: fs => f :: dropDoms fs
 
-/-- **The device's frames of a masked prover's round** `F`: each value of the masked phase with its pad added back, the
-plain value the masked prover padded (`zerocheckPZk`'s `v' = v + h_i`, so `v = v' + h_i`); every other frame, domains
-included, as it is. -/
 def unmaskFrames (c : Cfg) : ℕ → List Frame → List Frame
   | _, [] => []
   | p, .dom b :: fs => .dom b :: unmaskFrames c p fs
@@ -742,7 +667,6 @@ theorem maskVals_unmask (c : Cfg) : ∀ (p : ℕ) (vs : List F128),
     simp only [maskVals, maskVal, Bool.false_and, Bool.false_eq_true, ↓reduceIte, add_pad_pad,
       maskVals_unmask c (p + 1) vs]
 
-/-- **Masking the device's frames gives the masked prover's back**, but its domains. -/
 theorem maskFrames_unmask (c : Cfg) : ∀ (p : ℕ) (F : List Frame),
     maskFrames (maskVal c false) p (unmaskFrames c p F) = dropDoms F
   | _, [] => rfl
@@ -813,11 +737,6 @@ theorem unmask_plain (c : Cfg) : ∀ (p : ℕ) (F : List Frame), (∀ f ∈ F, p
       · exact h0
       · exact unmask_plain c _ F hm' x hx
 
-/-- **An honest device's round inside the algebraic phase leaves as the masked prover's, but its domains**: where the
-device sends the frames `F` of the masked prover's round with each value's pad added back (`unmaskFrames`, the plain
-values), a rep that has not stopped releases `F` without its domain frames, then the squeeze. A rep's first round
-carries its stream's domain frame (`Transcript.init`), which the masked prover's ask (`squeezeP`'s `framed`) sends and
-the frame keeps for its stream. -/
 theorem roundFree_honest (c : Cfg) (s : Masker) (F : List Frame) (k : UInt8) (n : ℕ)
     (hc : ∀ p, p < c.order.size → c.order[p]! < c.h.size) (hon : s.on = true) (hst : s.stopped = false)
     (hi : s.inner = none) (hm : ∀ f ∈ F, midFrame f) (hp : ∀ f ∈ F, plainFrame f)
@@ -833,14 +752,8 @@ theorem roundFree_honest (c : Cfg) (s : Masker) (F : List Frame) (k : UInt8) (n 
   refine ⟨out, fr, hr, ?_⟩
   rw [ho, hst, maskFrames_unmask c s.pos F]
 
-/-! ## The masked prover's pads in the frame's order -/
-
-/-- The absorbed position of pad `j`: `j` up to `final_b`'s, then `j − 1` (`final_c`'s is never absorbed). -/
 def absPos (l : _root_.Flock.Zk.PadLayout) (j : ℕ) : ℕ := if j < l.fa + 2 then j else j - 1
 
-/-- **The frame's pad at pad `j`'s absorbed position is the samples' pad `j`**, for each pad the frame absorbs under:
-any below `h_ab` but `final_c`'s. So the pad the masked prover adds to a sent value at its layout index (`h[lay.r1ab
-i]`, `h[lay.lc j t]`, …) is the one the frame adds at that value's place in the absorbed order. -/
 theorem padAt_ofSamples_absPos (l : _root_.Flock.Zk.PadLayout) (d : _root_.Flock.ZkServer.Frame.Draws)
     (m : Option _root_.Flock.ZkServer.Frame.MaskSlot) {j : ℕ} (hj : j ≠ l.fc)
     (hlt : j < l.fa + 3 + (2 * l.nLc + 64 + nLig l)) :

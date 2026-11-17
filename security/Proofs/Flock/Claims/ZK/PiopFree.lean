@@ -42,39 +42,17 @@ import Proofs.Flock.Claims.ZK.FinishZc
 import Proofs.Flock.Claims.ZK.L0PinCoins
 import Proofs.Flock.Claims.ZK.L0PinSwitch
 
-/-!
-# The cut PIOP returns on its coins alone
-
-Answered by `asksCut`, the cut PIOP throws only where a send reaches the cut's stop `n`, where the lincheck's circuit
-fold at its coins fails, or where the rank check at its rounds' points fails. Its absorbs never throw, its sends' count
-reads only the claims' count, the fold reads only the zerocheck's coins, and the rounds' points are the coins'. So
-whether it returns, and the log it leaves, read the coins, the log's size, the setup and the extra claims' count: never
-the masked values, the switched vectors, the layout, the cap or the root.
-
-* **`FlockComplete.piopCut_of_phases`**: where zerocheck, lincheck and the ring switch returned from `l` at some masked
-  values, switched vectors and extra claims, the cut PIOP from any source, layout, cap, root and transcript returns from
-  a log of `l`'s size at extra claims of the same count, with a log of the same size, wherever its rank check passes.
-* **`FlockComplete.piopCut_src_free`**: two cut PIOPs from a log of one size and transcripts with no rounds: where one
-  returns, so does the other at any source, layout, cap, root and extra claims of the same count, with a log of the same
-  size; at the same extra claims, with the same switched claims (`piopCut_sws_eq`).
-* **`Masked.piopCut_of_repFwC`**: at a live statement whose opened coins are admitted, where the ZK server's rep `r` of
-  table `j` returned from rep `2j + r`'s base, the cut PIOP from any source returns there, its rank check at the earlier
-  reps' points and the mask slot's words, with no premise on the masked values.
--/
+/-! The cut PIOP returns on its coins alone. -/
 
 @[expose] public section
 
 set_option synthInstance.maxSize 100000
-set_option synthInstance.maxHeartbeats 1000000 -- as in the ZK files this builds on; its own need is unmeasured
+set_option synthInstance.maxHeartbeats 1000000  -- as in the ZK files this builds on
 
 namespace FlockComplete
 
 open Flock Transcript Replay
 
-/-- **The cut PIOP returns where its phases did at other values**: where zerocheck, lincheck and the ring switch
-returned from `l` at the masked values `mk`, switched vectors `sv` and extra claims `extras`, the cut PIOP from any
-source, layout, cap, root and transcript returns from a log of `l`'s size at extra claims of `extras`'s count, wherever
-its rank check passes, with a log of the ring switch's size. -/
 theorem piopCut_of_phases {coin : ℕ → ℕ → F128} {n : ℕ} {st : Setup} (hm : 14 ≤ st.m) {lay : Zk.PadLayout}
     {mk : ℕ → F128} {cap root : ByteArray} {sv : ℕ → Array F128} {extras : Array Claim} {t₀ : Transcript}
     {l : Array Claims.Msg} {zp : ZerocheckProof} {zc : ZcOut} {t₁ : Transcript} {l₁ : Array Claims.Msg}
@@ -129,7 +107,6 @@ theorem piopCut_of_phases {coin : ℕ → ℕ → F128} {n : ℕ} {st : Setup} (
   rw [Replay.bind_go h₃']
   exact ⟨_, t₃', l₃', rfl, by omega⟩
 
-/-- **A returned cut PIOP ran its four phases and passed its rank check** at the lincheck's rounds. -/
 theorem piopCut_split_rank {coin : ℕ → ℕ → F128} {n : ℕ} {st : Setup} {lay : Zk.PadLayout} {src : RepSrc}
     {cap root : ByteArray} {extras : Array Claim} {prior : Array (List F128)} {words : List ℕ} {t₀ : Transcript}
     {l : Array Claims.Msg} {zp lp ss T sws t₃ l₃}
@@ -158,9 +135,6 @@ theorem piopCut_split_rank {coin : ℕ → ℕ → F128} {n : ℕ} {st : Setup} 
   obtain ⟨⟨⟨rfl, rfl, rfl, rfl, rfl⟩, rfl⟩, rfl⟩ := h
   exact ⟨zc, t₁, l₁, lc, t₂, l₂, h₁, h₂, hok, h₃⟩
 
-/-- **The cut PIOP's return reads no masked value**: answered by `asksCut`, from transcripts with no rounds and logs of
-one size, where the cut PIOP from `src` returned, so does the one from any `src'`, layout, cap, root and extra claims of
-the same count, at the same earlier points and words, with a log of the same size. -/
 theorem piopCut_src_free {coin : ℕ → ℕ → F128} {n : ℕ} {st : Setup} (hm : 14 ≤ st.m) (hk : 6 ≤ st.kLog)
     (hfk : st.fold.kLog = st.kLog) {lay : Zk.PadLayout} {src : RepSrc} {cap root : ByteArray} {extras : Array Claim}
     {prior : Array (List F128)} {words : List ℕ} {t₀ : Transcript} (ht₀ : t₀.rounds = #[]) {l : Array Claims.Msg}
@@ -180,7 +154,6 @@ theorem piopCut_src_free {coin : ℕ → ℕ → F128} {n : ℕ} {st : Setup} (h
     ← hpts]
   exact hok
 
-/-- **Two returned cut PIOPs from logs of one size have the same switched claims** at the same extra claims. -/
 theorem piopCut_sws_eq {coin : ℕ → ℕ → F128} {n : ℕ} {st : Setup} (hm : 14 ≤ st.m) {lay lay' : Zk.PadLayout}
     {src src' : RepSrc} {cap root cap' root' : ByteArray} {extras : Array Claim} {prior prior' : Array (List F128)}
     {words words' : List ℕ} {t₀ t₀' : Transcript} {l l' : Array Claims.Msg} {zp lp ss T sws t₃ l₃}
@@ -201,10 +174,6 @@ open CoinLayer
 
 namespace Masked
 
-/-- **The cut PIOP from any source returns where the ZK server's rep did**: at a live statement whose opened coins are
-admitted, where the ZK server's rep of table `j` returned from rep `2j + r`'s base, answered by the opened coins, the cut
-PIOP at table `j`'s setup from any source, layout, cap and root, at extra claims of the rep's count, from a transcript
-with no rounds, returns from that base, its rank check at the earlier reps' points and the mask slot's words. -/
 theorem piopCut_of_repFwC {x : Msg} (hx : Live x) {c : Fin (refK x) → FlockDeploy.Coin}
     (hA : ∀ j, (tabC PE x j).Admits (czExe PE x c j)) {j r : ℕ} (hj : j < (stsOf x).size) (hr : r < 2) (n : ℕ)
     {st : _root_.Flock.Setup} (hsm : st.m = (stsOf x)[j]!.m) (hsk : st.kLog = (stsOf x)[j]!.c.kLog)

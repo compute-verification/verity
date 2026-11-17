@@ -39,30 +39,7 @@ import Proofs.Flock.Claims.Complete.Zk.RingSwitch
 import Proofs.Flock.Claims.DeployK
 import Proofs.Flock.Soundness.Discharge.ZkExec.RunsSeams
 
-/-!
-# Hybrid 2 against hybrid 3: a rep's inner proof from the cut (`SimInner`)
-
-`repMix 2` and `repMix 3` share every phase up to the inner proof (`innerPre`, `repMix_eq`). There `repMix 2` runs
-`innerCut` on the cut's source and `repMix 3` the session's `innerP` on the honest pads. Both absorb the label and
-`final_c`, then send four rounds, `ε`, the batching coins, `β` and the query coins, each answered by `asksCut`
-(`squeezeCut_go`, `sampleCut_go`): the send is recorded, then refused at or past round `n`, else answered by its
-round's coin.
-
-* **`innerCut_alike`**: where the source carries what the session absorbs at each round the session reaches
-  (`InnerSrc`), the two inner proofs send the same bodies, leave the same transcript and agree up to `eraseIP`.
-  `InnerSrc` asks for:
-  - the triple's openings `ρ`, `σ` once `ε` is answered;
-  - the batched constraint at the honest pads, and `τ`'s commitment, once the batching coins are;
-  - `Y` once `β` is, where `β ≠ 0`.
-* **`simInner_of`**: `SimInner` from `InnerSrcE`, the deployed instance of `InnerSrc` at the cut's source, wherever the
-  shared phases reach the inner proof.
-* **`innerPre_slot`**: where they do, the inner proof begins at `repSlot … (innerOff 0)`, the round the cut reads `ε`
-  at: `innerPre_size` counts the shared phases' sends at `asksCut` through the exact counts at `asksS` (`okS`).
-* **`innerSrcE_triple`**: `InnerSrcE`'s `triple` there: the cut's `inner r` is the session's `ρ_in`, `σ_in` at the
-  honest pads (`innerTripleE`).
-* **`innerYE`**: wherever the cut sent `Y₁`, its `Y` read in `yAt`'s order is the session's `h ‖ pad_h + β·(μ ‖ pad_μ)`
-  at the honest pads, `β` the coin two rounds after `ε`'s.
--/
+/-! Hybrid 2 against hybrid 3: a rep's inner proof from the cut (`SimInner`). -/
 
 @[expose] public section
 
@@ -70,9 +47,6 @@ namespace FlockComplete.SimInner
 
 open Flock Transcript Replay
 
-/-! ## Steps in the pure session -/
-
-/-- A bind whose first step both sides share: the continuations need only agree where that step returns. -/
 theorem go_bind_congr_r {α β : Type} {x : TMW PS α} {f g : α → TMW PS β} {t : Transcript} {l : Array Claims.Msg}
     (h : ∀ a t' l', (x.run t).go l = (.ok (a, t'), l') → ((f a).run t').go l' = ((g a).run t').go l') :
     ((x >>= f).run t).go l = ((x >>= g).run t).go l := by
@@ -94,8 +68,6 @@ theorem liftTM_ok_log {α : Type} {x : TM α} {t t' : Transcript} {a : α} {l l'
   rw [liftTM_go] at h
   exact (Prod.mk.inj h).2
 
-/-- **A send answered by `asksCut`**: recorded, then refused at or past round `n`, else answered by round `l.size`'s
-coin. -/
 theorem cutRound_go (coin : ℕ → ℕ → F128) (n : ℕ) (c : ByteArray) (l : Array Claims.Msg) :
     ((asksCut coin n).round c).go l =
       (if n ≤ l.size then .error "past the openings" else .ok (coin l.size), l.push (Claims.toMsg c)) := by
@@ -142,16 +114,8 @@ theorem sampleCut_go (coin : ℕ → ℕ → F128) (n : ℕ) (t : Transcript) (l
     show (Except.ok (_, _), _) = _
     simp
 
-/-! ## The inner proof from the source against the session's -/
-
-/-- The inner proof's coins at `asksCut`'s rounds `L` to `L + 3`. -/
 def cutCoins (coin : ℕ → ℕ → F128) (L : ℕ) : InZ.Challenges := ⟨coin L, coin (L + 1), coin (L + 2), coin (L + 3)⟩
 
-/-- **What the source carries for an inner proof begun after `L` bodies**, against the honest pads `p` and the
-constraints `cons`, at the coins `asksCut coin n` answers (round `k < n`). Each holds where its round is answered:
-* the triple's openings `ρ`, `σ` once `ε` (round `L`) is;
-* once the batching coins (round `L + 1`) are, the batched constraint at the pads, and `τ`'s commitment through `h`;
-* `Y` once `β` (round `L + 2`) is, and is not `0`. -/
 structure InnerSrc (coin : ℕ → ℕ → F128) (n : ℕ) (h : ByteArray → ByteArray) (lay : Zk.PadLayout) (p : PadsZk)
     (cons : Array (String × Zk.Lin)) (src : RepSrc) (L : ℕ) : Prop where
   triple : L < n → src.rhoIn = InZ.rho lay p (cutCoins coin L) ∧ src.sigmaIn = InZ.sigma lay p
@@ -160,9 +124,6 @@ structure InnerSrc (coin : ℕ → ℕ → F128) (n : ℕ) (h : ByteArray → By
   tauCom : L + 1 < n → src.tauCom = InZ.tcOf h (InZ.tau lay p cons (cutCoins coin L)) p.tauSalt
   y : L + 2 < n → (coin (L + 2) 0).isZero = false → src.y = InZ.y p (cutCoins coin L)
 
-/-- **The inner proof from the source sends what the session's sends**: at `asksCut`, where the source carries the
-session's values (`InnerSrc`), `innerCut` and `innerP` send the same bodies, leave the same transcript, and return inner
-proofs equal up to `eraseIP`, so any continuation that reads its inner proof through `eraseIP` agrees. -/
 theorem innerCut_alike {β : Type} {coin : ℕ → ℕ → F128} {n : ℕ} {h : ByteArray → ByteArray} {lay : Zk.PadLayout}
     {p : PadsZk} {ic : InnerCommit} {finalC : F128} {src : RepSrc} {cons : Array (String × Zk.Lin)}
     {f : Zk.InnerProof → TMW PS β} (hf : ∀ i i', eraseIP i = eraseIP i' → f i = f i') {t : Transcript}
@@ -211,11 +172,6 @@ theorem innerCut_alike {β : Type} {coin : ℕ → ℕ → F128} {n : ℕ} {h : 
     simp only [pure_bind]
     exact congrArg (fun z : TMW PS β => (z.run t₉).go l₉) (hf _ _ rfl)
 
-/-! ## The phases hybrids 2 and 3 share -/
-
-/-- **The phases `repMix k` shares for every `k ≥ 2`**, up to its inner proof: the session's PIOP and Ligerito
-(level 0's opening erased), the replay and the constraints. Returns `final_c`, the proof, level 0's messages and the
-constraints. -/
 def innerPre (io : Asks PS) (hs : Hashes PS) (st : Setup) (sch : Schedule) (tPad rep : Nat) (dom : ByteArray)
     (tr : Trace) (t : Array F128) (cm0 : Commit) (extras : Array Claim) (pads : PadsZk) (ic : InnerCommit)
     (extra lanePad : Nat → Nat → F128) (salt : Nat → Nat → ByteArray) (nonce : Nat → Nat → UInt64)
@@ -238,8 +194,6 @@ def innerPre (io : Asks PS) (hs : Hashes PS) (st : Setup) (sch : Schedule) (tPad
   return (zp.finalC, p, zl,
     rp.cons ++ #[("ring switch ab", rp.abValue.addConst ccAb), ("ring switch c", rp.cValue.addConst ccC)] ++ lgc)
 
-/-- **`repMix k` for `k ≥ 2`**: the shared phases (`innerPre`), then the inner proof, from the source at `k = 2` and the
-session's at `k ≥ 3`. -/
 theorem repMix_eq (k : ℕ) (hk : 2 ≤ k) (io : Asks PS) (hs : Hashes PS) (st : Setup) (sch : Schedule) (tPad rep : Nat)
     (dom : ByteArray) (tr : Trace) (t : Array F128) (cm0 : Commit) (extras : Array Claim) (pads : PadsZk)
     (ic : InnerCommit) (extra lanePad : Nat → Nat → F128) (salt : Nat → Nat → ByteArray)
@@ -260,16 +214,10 @@ theorem repMix_eq (k : ℕ) (hk : 2 ≤ k) (io : Asks PS) (hs : Hashes PS) (st :
   refine bind_congr fun lgc => ?_
   by_cases hk2 : k ≤ 2 <;> simp only [hk2, ↓reduceIte]
 
-/-! ## How many bodies the shared phases send
-
-`asksCut` answers what `asksS` would where it answers at all, so an ok run at `asksCut` is the same run at `asksS` on
-responses that carry the cut's coins (`okS`), and the exact counts of `Exact` carry over. -/
-
 section Slots
 
 open With
 
-/-- **Where the left run returns, the right returns the same**, with the same log. -/
 def okS : With.Sim PS PS where
   R x y := ∀ l a l', x.go l = (.ok a, l') → y.go l = (.ok a, l')
   pure _ _ _ _ h := h
@@ -294,7 +242,6 @@ theorem liftT_ok {α : Type} {x y : TMW PS α} (h : (okS.st Transcript).R x y) :
 variable (coin : ℕ → ℕ → F128) (n : ℕ) (resp : ℕ → Claims.Msg) (hc : ∀ k, coinOf (resp k) = coin k)
 include hc
 
-/-- A round `asksCut` answers, `asksS` answers alike. -/
 theorem okS_round (c : ByteArray) : okS.R ((asksCut coin n).round c) ((asksS resp).round c) := by
   intro l a l' h
   have e0 : ((asksCut coin n).round c).go l =
@@ -386,7 +333,6 @@ theorem innerPre_ok (hs : Hashes PS) (st : Setup) (sch : Schedule) (tPad rep : �
   sim_walk [piopPZk_ok coin n resp hc, ligeritoPZk_ok coin n resp hc, okS_refl, okS_refl_st]
 
 omit hc in
-/-- **The PIOP's exact send count at `asksS`**: `piopZk`. -/
 theorem piopPZk_exact (st : Setup) (lay : Zk.PadLayout) (h : Array F128) (tr : Trace) (cap root : ByteArray)
     (extras : Array Claim) (prior : Array (List F128)) (words : List ℕ) (hm : 14 ≤ st.m) {t t' : Transcript}
     {l l' : Array Claims.Msg} {o : ZerocheckProof × LincheckProof × Array (Array F128) × F128 × Array Switched}
@@ -417,8 +363,6 @@ theorem piopPZk_exact (st : Setup) (lay : Zk.PadLayout) (h : Array F128) (tr : T
   omega
 
 omit hc in
-/-- **The shared phases' exact send count at `asksS`**: the PIOP's `piopZk`, then Ligerito's `k₀ + 7 + 11 R`; the
-replay and the constraints send nothing. -/
 theorem innerPre_exact (hsh : ByteArray → ByteArray) (st : Setup) (sch : Schedule) (tPad rep : ℕ) (dom : ByteArray)
     (tr : Trace) (tb : Array F128) (cm0 : Commit) (extras : Array Claim) (pads : PadsZk) (ic : InnerCommit)
     (extra lanePad : ℕ → ℕ → F128) (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64)
@@ -447,7 +391,6 @@ theorem innerPre_exact (hsh : ByteArray → ByteArray) (st : Setup) (sch : Sched
   obtain ⟨-, rfl⟩ := Prod.mk.inj h
   omega
 
-/-- **The PIOP's send count at `asksCut`**, where it returns: `piopZk`. -/
 theorem piopPZk_size (st : Setup) (lay : Zk.PadLayout) (h : Array F128) (tr : Trace) (cap root : ByteArray)
     (extras : Array Claim) (prior : Array (List F128)) (words : List ℕ) (hm : 14 ≤ st.m) {t t' : Transcript}
     {l l' : Array Claims.Msg} {o : ZerocheckProof × LincheckProof × Array (Array F128) × F128 × Array Switched}
@@ -456,7 +399,6 @@ theorem piopPZk_size (st : Setup) (lay : Zk.PadLayout) (h : Array F128) (tr : Tr
   piopPZk_exact resp st lay h tr cap root extras prior words hm
     (piopPZk_ok coin n resp hc st lay h tr cap root extras prior words t l _ _ hrun)
 
-/-- **The shared phases' send count at `asksCut`**, where they return: `piopZk`, then Ligerito's `k₀ + 7 + 11 R`. -/
 theorem innerPre_size (hsh : ByteArray → ByteArray) (st : Setup) (sch : Schedule) (tPad rep : ℕ) (dom : ByteArray)
     (tr : Trace) (tb : Array F128) (cm0 : Commit) (extras : Array Claim) (pads : PadsZk) (ic : InnerCommit)
     (extra lanePad : ℕ → ℕ → F128) (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64)
@@ -482,16 +424,13 @@ open CoinLayer
 
 namespace Masked
 
-/-- Table `j`'s pads layout at the deployed instance. -/
 noncomputable abbrev innerLayE (x : Msg) (j : Fin (jOf x)) : _root_.Flock.Zk.PadLayout :=
   _root_.Flock.Zk.PadLayout.new (FlockDeploy.tabsOf (stsOf x))[j.val]!.m (FlockDeploy.tabsOf (stsOf x))[j.val]!.kLog
     (zkTab x j).sch.k0
 
-/-- Table `j`'s rep `r` honest pads at the tape `τ`. -/
 noncomputable abbrev innerPadsE (x : Msg) (τ : UE.Tape) (j : Fin (jOf x)) (r : Fin 2) : FlockComplete.PadsZk :=
   FlockComplete.padsOf (UE.tapeZk τ) j.val r.val (innerLayE x j)
 
-/-- **The phases hybrids 2 and 3 share** at the deployed instance (`mixE`'s arguments). -/
 noncomputable def innerPreE (x : Msg) (w : Claims.Flock.Wit) (τ : UE.Tape) (c : Fin (refK x) → FlockDeploy.Coin)
     (n : ℕ) (j : Fin (jOf x)) (r : Fin 2) (dom : ByteArray) (cm0 : FlockComplete.Commit)
     (extras : Array _root_.Flock.Claim) (ic : FlockComplete.InnerCommit) :=
@@ -503,7 +442,6 @@ noncomputable def innerPreE (x : Msg) (w : Claims.Flock.Wit) (τ : UE.Tape) (c :
     ((UE.tapeZk τ).extra j.val) ((UE.tapeZk τ).lanePad j.val) ((UE.tapeZk τ).salt j.val r.val)
     ((UE.tapeZk τ).nonce j.val r.val) (priorE c j.val r.val) (FlockComplete.MaskRank.masksOf (stsOf x))[j.val]!
 
-/-- The opened coins as the session's responses: round `k`'s coin's bytes, and a zero coin's past the opened rounds. -/
 noncomputable def respE {x : Msg} (c : Fin (refK x) → FlockDeploy.Coin) (k : ℕ) : Msg :=
   if h : k < refK x then (c ⟨k, h⟩).bytes else (default : FlockDeploy.Coin).bytes
 
@@ -517,9 +455,6 @@ theorem coinOf_respE {x : Msg} (c : Fin (refK x) → FlockDeploy.Coin) (k : ℕ)
     unfold FlockDeploy.Coin.at
     split <;> rfl
 
-/-- **Where the shared phases leave table `j`'s rep `r`**: begun at the rep's base, a run of `innerPreE` that returns
-has sent the rep's PIOP and Ligerito, so its inner proof begins at `repSlot … (innerOff 0)`, the round of `ε` the cut
-reads. -/
 theorem innerPre_slot {x : Msg} {s spec} (hs : FlockDeploy.setupOf true x = some (s, spec, stsOf x))
     (w : Claims.Flock.Wit) (τ : UE.Tape) (c : Fin (refK x) → FlockDeploy.Coin) (n : ℕ) (j : Fin (jOf x)) (r : Fin 2)
     (dom : ByteArray) (cm0 : FlockComplete.Commit) (ic : FlockComplete.InnerCommit)
@@ -569,16 +504,12 @@ theorem val_add_of (b d : _root_.Flock.F128) :
   rw [FlockLevel3.GF128.add_eq]
   rfl
 
-/-- The tape's pad `k` of table `i`'s rep `r` is the cell's, at its index. -/
 theorem tapeH_eq (τ : UE.Tape) {i : ℕ} (hc : i < Claims.Flock.zkTableCap) (r : Fin 2) (k : Fin (2 ^ 64 + 4)) :
     FlockSoundness.Refine.fOf ((UE.tapeZk τ).h i r.val k.val) = (τ ⟨i, hc⟩).1.2.2.1 r k := by
   show FlockSoundness.Refine.fOf (fAt 0 (fun r => fAt 0 ((cellAt τ i).1.2.2.1 r) k.val) r.val) = _
   rw [cellAt_lt τ hc, fAt_lt _ _ r.isLt]
   exact fAt_lt _ _ k.isLt
 
-/-- **The cut's triple openings are the session's** at the honest pads, `ε` the coin at round `L` where the inner proof
-begins (`innerPre_slot`): the cut's `inner r` is `ζ·h_fa + h_tx`, `h_fb + h_ty` at the tape's free pads (`innerMsg`),
-`ζ` read at that round, and the tape's free pads are the executable's (`exeTape`). -/
 theorem innerTripleE (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (w : Claims.Flock.Wit) (τ : UE.Tape)
     (j : Fin (jOf x)) (r : Fin 2) {L : ℕ} (hL : L = repSlot x (2 * j.val + r.val) (innerOff 0)) :
     ((srcE x c w τ j.val).rep r.val).rhoIn =
@@ -679,7 +610,6 @@ private theorem get_append_right' (a b : Array _root_.Flock.F128) {k : ℕ} (hk 
   rw [getElem!_pos (a ++ b) _ (by simp; omega), getElem!_pos b k hk, Array.getElem_append_right (by omega)]
   simp
 
-/-- A cut's `Y` that was sent is the view's. -/
 theorem cut_Y1_of_ne {F K W Salt Seed D Hi VL : Type} [Field F] [Field K] [CharP F 2]
     {T : FlockSoundness.ZK.Table F K W Salt Seed D Hi VL} {S : T.Sent} {v : T.PreView} {r : Fin 2}
     (h : (T.cut S v).Y1 r ≠ none) : (T.cut S v).Y1 r = some (v.Y1 r) := by
@@ -687,8 +617,6 @@ theorem cut_Y1_of_ne {F K W Salt Seed D Hi VL : Type} [Field F] [Field K] [CharP
   · simp [FlockSoundness.ZK.Table.cut, hf]
   · exact absurd (by simp [FlockSoundness.ZK.Table.cut, hf]) h
 
-/-- **`yAt` entry by entry**: where each exposed pad, each of the four tail pads in `yAt`'s order and each padding entry
-reads as `g` at its index, so does every entry. -/
 theorem yAt_of {nE nPad : ℕ} (Y1 : FlockSoundness.ZK.PadIdx nE → FlockLevel3.GF128) (Y2 : Fin nPad → FlockLevel3.GF128)
     (i : Fin (nE + 4 + nPad)) (g : ℕ → _root_.Flock.F128)
     (hlo : ∀ k (hk : k < nE), FlockLevel3.GF128.val (Y1 (.inl ⟨k, hk⟩)) = g k)
@@ -705,9 +633,6 @@ theorem yAt_of {nE nPad : ℕ} (Y1 : FlockSoundness.ZK.PadIdx nE → FlockLevel3
     rw [show nE + 4 + (i.val - (nE + 4)) = i.val by omega] at key
     exact key
 
-/-- **The cut's `Y` is the session's** at the honest pads, `β` the coin two rounds after the inner proof begins
-(`betaSlot`), wherever the cut sent it: the cut's `Y₁ = h + β·μ` and `Y₂ = pad_h + β·pad_μ` (`ZK.Table.view`) read in
-`yAt`'s order are `h ‖ pad_h + β·(μ ‖ pad_μ)` at the tape's pads, `h_ab` and `h_tw` the products `padsOf` sets. -/
 theorem innerYE {x : Msg} {s spec} (hs : FlockDeploy.setupOf true x = some (s, spec, stsOf x))
     (c : Fin (refK x) → FlockDeploy.Coin) (w : Claims.Flock.Wit) (τ : UE.Tape) (j : Fin (jOf x)) (r : Fin 2)
     {L : ℕ} (hL : L = repSlot x (2 * j.val + r.val) (innerOff 0)) (hY : (cutE x c w τ j).Y1 r ≠ none) :
@@ -852,8 +777,6 @@ theorem innerYE {x : Msg} {s spec} (hs : FlockDeploy.setupOf true x = some (s, s
       simp only [hTE, hlen]
       rfl
 
-/-- **`InnerSrcE`'s `triple`**: wherever the shared phases reach table `j`'s rep `r` inner proof, the cut's source
-carries the session's `ρ_in`, `σ_in` at round `l'.size`'s coin (`innerPre_slot`, `innerTripleE`). -/
 theorem innerSrcE_triple {x : Msg} {s spec} (hs : FlockDeploy.setupOf true x = some (s, spec, stsOf x))
     (w : Claims.Flock.Wit) (τ : UE.Tape) (c : Fin (refK x) → FlockDeploy.Coin) (n : ℕ) (j : Fin (jOf x)) (r : Fin 2)
     (dom : ByteArray) (cm0 : FlockComplete.Commit) (ic : FlockComplete.InnerCommit)
@@ -870,11 +793,8 @@ theorem innerSrcE_triple {x : Msg} {s spec} (hs : FlockDeploy.setupOf true x = s
           FlockComplete.Replay.InZ.sigma (innerLayE x j) (innerPadsE x τ j r) :=
   fun _ => innerTripleE x c w τ j r (innerPre_slot hs w τ c n j r dom cm0 ic extras he hl ho)
 
-/-- **What hybrid 2's inner proof reads from the cut** (`SimInner`'s open content): at a live statement and a witness in
-the deployed relation, at any opened coins `c` and stop `n` at which no refusal is seen, wherever the phases hybrids 2
-and 3 share (`innerPreE`) reach table `j`'s rep `r` inner proof after `L` bodies with the constraints `cons`, the cut's
-source carries the session's inner values at the honest pads (`InnerSrc`): `ρ`, `σ` at round `L`'s coin, the batched
-constraint and `τ`'s commitment at round `L + 1`'s, and `Y` at round `L + 2`'s, each where its round is answered. -/
+/-- **What hybrid 2's inner proof reads from the cut** (`SimInner`'s open content), at opened coins and a
+stop at which no refusal is seen. -/
 def InnerSrcE : Prop :=
   ∀ x, Live x → ∀ w, RZk x w → ∀ (τ : UE.Tape) (c : Fin (refK x) → FlockDeploy.Coin) (n : ℕ), ¬ Refused x c n →
     ∀ s spec, FlockDeploy.setupOf true x = some (s, spec, stsOf x) →
@@ -887,9 +807,6 @@ def InnerSrcE : Prop :=
       FlockComplete.SimInner.InnerSrc (fun k i => slotAt c k i) n _root_.Flock.Sha512.hash (innerLayE x j)
         (innerPadsE x τ j r) o.2.2.2 ((srcE x c w τ j.val).rep r.val) l'.size
 
-/-- **`SimInner` from what the cut carries for the inner proof**: hybrids 2 and 3 run the same shared phases
-(`repMix_eq`), and where those reach the inner proof, `innerCut` on the cut's source and `innerP` on the honest pads
-send the same bodies and agree up to what `eraseZ` forgets (`innerCut_alike`). -/
 theorem simInner_of (h : InnerSrcE) : SimInner := by
   intro x hx w hw τ c n hn s spec hs j r dom cm0 ic extras he l hl
   unfold mixE

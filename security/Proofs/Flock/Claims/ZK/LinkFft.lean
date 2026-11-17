@@ -43,21 +43,8 @@ import Proofs.Flock.Soundness.Refine.Arith
 import Proofs.Flock.Soundness.ZK.PadNonvanishing40
 import Std.Tactic.BVDecide.Normalize.BitVec
 
-/-!
-# `Flock.ZkServer.Link`'s FFT is level 0's padded codeword
-
-`Flock.ZkServer.Link.rowsFft` evaluates each lane's entry, one polynomial in the novel basis over `cols + 1` bits
-(`coeffs`), on all `2^d` points by the additive FFT (`fft`). Where the padding fits below `2^cols` and `cols < d ≤ 64`,
-its rows are `FlockComplete.encodeRowsZk`'s (`rowsFft_eq`), so the recheck's rows are the analysis's in every case
-(`rows_eq`).
-
-* `What_omega_low`: `Ŵ_j(ω_q)` reads the bits of `q` from `k ≤ j` up: `s_j` is additive and vanishes below `2^k`.
-* `fftSum_succ`: the butterfly, `T_s(n + 1, u) = T_{s+1}(n, u_even) + Ŵ_s·T_{s+1}(n, u_odd)` at one point.
-* `fft_get`: entry `r` of `fft … s n u` is `T_s(n, u)` at `ω_{r·2^s}`, since `T_{s+1}` is the same at `ω_{r·2^s}` and
-  `ω_{⌊r/2⌋·2^(s+1)}`.
-* `fftSum_coeffs`: at `s = 0` over `cols + 1` bits, a lane's coefficients give its words' encoding plus its padding,
-  `FlockComplete.encodeRowsZk_entry`'s sum.
--/
+/-! `Flock.ZkServer.Link`'s FFT is level 0's padded codeword where the padding fits below `2^cols` and
+`cols < d ≤ 64`. -/
 
 @[expose] public section
 
@@ -66,8 +53,6 @@ namespace Flock.ZkServer.Link
 open FlockSoundness.Refine
 
 local notation "𝔽" => FlockLevel3.GF128
-
-/-! ## `Ŵ_j(ω_q)` reads the bits of `q` from `j` up -/
 
 theorem mul_two_pow_add_eq_xor (a b k : ℕ) (hb : b < 2 ^ k) : a * 2 ^ k + b = a * 2 ^ k ^^^ b := by
   apply Nat.eq_of_testBit_eq
@@ -88,7 +73,6 @@ theorem toUInt64_xor (x y : ℕ) (hx : x < 2 ^ 64) (hy : y < 2 ^ 64) :
   simp only [UInt64.toNat_xor, Nat.toUInt64_eq, UInt64.toNat_ofNat']
   rw [Nat.mod_eq_of_lt hx, Nat.mod_eq_of_lt hy, Nat.mod_eq_of_lt (Nat.xor_lt_two_pow hx hy)]
 
-/-- `ω_{x ⊕ y} = ω_x + ω_y`: the low word's bits are the coefficients of `x^0, …, x^63`. -/
 theorem omega_xor (x y : ℕ) (hx : x < 2 ^ 64) (hy : y < 2 ^ 64) :
     FlockLevel3.omega (x ^^^ y) = FlockLevel3.omega x + FlockLevel3.omega y := by
   simp only [FlockLevel3.omega]
@@ -97,7 +81,6 @@ theorem omega_xor (x y : ℕ) (hx : x < 2 ^ 64) (hy : y < 2 ^ 64) :
   congr 2
   exact toUInt64_xor x y hx hy
 
-/-- `s_j(ω_q)` reads the bits of `q` from `k ≤ j` up. -/
 theorem sPoly_omega_low (j k a b : ℕ) (hk : k ≤ j) (hk64 : k ≤ 64) (hb : b < 2 ^ k) (h : a * 2 ^ k + b < 2 ^ 64) :
     (FlockLevel3.sPoly j).eval (FlockLevel3.omega (a * 2 ^ k + b)) =
       (FlockLevel3.sPoly j).eval (FlockLevel3.omega (a * 2 ^ k)) := by
@@ -110,9 +93,6 @@ theorem What_omega_low (j k a b : ℕ) (hk : k ≤ j) (hk64 : k ≤ 64) (hb : b 
   unfold FlockLevel3.What
   rw [sPoly_omega_low j k a b hk hk64 hb h]
 
-/-! ## The butterfly -/
-
-/-- `T_s(n, u)` at `x`: `Σ_{c < 2^n} u(c)·Π_{i ∈ bits(c)} Ŵ_{s+i}(x)`. -/
 noncomputable def fftSum (s n : ℕ) (u : ℕ → 𝔽) (x : 𝔽) : 𝔽 :=
   ∑ c ∈ Finset.range (2 ^ n), u c * ∏ i : Fin n, if c.testBit i then FlockLevel3.What (s + i) x else 1
 
@@ -185,8 +165,6 @@ theorem fftSum_congr (s n : ℕ) (u : ℕ → 𝔽) (x y : 𝔽) (h : ∀ i, Flo
   congr 1
   exact Finset.prod_congr rfl fun i _ => by rw [h i]
 
-/-! ## The FFT -/
-
 theorem split_two (r s : ℕ) : r * 2 ^ s = r / 2 * 2 ^ (s + 1) + r % 2 * 2 ^ s := by
   have h := Nat.div_add_mod r 2
   rw [Nat.pow_succ]
@@ -210,7 +188,6 @@ theorem mul_two_pow_lt_word (r d s : ℕ) (hs : s ≤ d) (hd : d ≤ 64) (hr : r
   rw [← Nat.pow_add, Nat.sub_add_cancel hs] at h1
   exact Nat.lt_of_lt_of_le h1 (Nat.pow_le_pow_right (by omega) hd)
 
-/-- At `sv`'s inverses, `whatsInvGo` is `whatsGo`. -/
 theorem whatsInvGo_eq (sv : Array F128) (fuel : ℕ) : ∀ (i : ℕ) (s : F128) (out : Array F128), i + fuel ≤ sv.size →
     whatsInvGo sv (sv.map F128.inv) fuel i s out = whatsGo sv fuel i s out := by
   induction fuel with
@@ -223,7 +200,6 @@ theorem whatsInvGo_eq (sv : Array F128) (fuel : ℕ) : ∀ (i : ℕ) (s : F128) 
     simp only [whatsInvGo, whatsGo, hm]
     exact ih (i + 1) _ _ (by omega)
 
-/-- **Level `s`'s twiddle** at `r` is `Ŵ_s(ω_{r·2^s})`. -/
 theorem twiddles_get (N d s r : ℕ) (hs : s < N) (hr : r < 2 ^ (d - s)) :
     fOf ((twiddles (svTable N) d N)[s]!)[r]! = FlockLevel3.What s (FlockLevel3.omega (r * 2 ^ s)) := by
   unfold twiddles twiddlesWith
@@ -231,7 +207,6 @@ theorem twiddles_get (N d s r : ℕ) (hs : s < N) (hr : r < 2 ^ (d - s)) :
     whatsInvGo_eq _ _ _ _ _ (by rw [FlockLevel3.svTable_size]; omega)]
   exact whats_get N (r * 2 ^ s) (s + 1) s (by omega) (by omega)
 
-/-- **The FFT's entry `r`** at level `s` with `n` coefficient bits left is `T_s(n, u)` at `ω_{r·2^s}`. -/
 theorem fft_get (N d : ℕ) (hN : N ≤ d) (hd : d ≤ 64) (n : ℕ) : ∀ (s : ℕ) (u : ℕ → F128), s + n ≤ N → ∀ r,
     r < 2 ^ (d - s) →
     fOf (fft (twiddles (svTable N) d N) d s n u)[r]! =
@@ -264,8 +239,6 @@ theorem fft_get (N d : ℕ) (hN : N ≤ d) (hd : d ≤ 64) (n : ℕ) : ∀ (s : 
       | exact congrArg₂ (· + ·) (fftSum_congr _ _ _ _ _ hx)
           (congrArg (FlockLevel3.What s (FlockLevel3.omega (r * 2 ^ s)) * ·) (fftSum_congr _ _ _ _ _ hx))
 
-/-! ## Level 0's rows -/
-
 theorem rowsFft_size (lv : Level) (tPad : ℕ) (g : Array F128) (extra lanePad : ℕ → ℕ → F128) :
     (rowsFft lv tPad g extra lanePad).size = 2 ^ lv.d := by
   simp [rowsFft]
@@ -287,7 +260,6 @@ theorem encodeRowsZk_get_size (lv : Level) (tPad : ℕ) (g : Array F128) (extra 
   rw [FlockSoundness.Refine.getElem!_range_map _ hq]
   simp
 
-/-- **Entry `l` of `rowsFft`'s row `q`** is lane `l`'s `T_0(cols + 1)` at `ω_q`. -/
 theorem rowsFft_get (lv : Level) (tPad : ℕ) (g : Array F128) (extra lanePad : ℕ → ℕ → F128) (hc : lv.cols < lv.d)
     (hd : lv.d ≤ 64) {q l : ℕ} (hq : q < 2 ^ lv.d) (hl : l < 2 ^ lv.lanes + Zk.EXTRA_LANES) :
     fOf ((rowsFft lv tPad g extra lanePad)[q]!)[l]! =
@@ -319,8 +291,6 @@ theorem sum_range_of_zero {M : Type*} [AddCommMonoid M] (f : ℕ → M) (a b : �
     Finset.sum_eq_zero fun i hi => h (a + i) (by omega) (by rw [Finset.mem_range] at hi; omega)
   rw [Finset.sum_range_add, hz, add_zero]
 
-/-- **A lane's `T_0(cols + 1)`** on its coefficients: its words in the novel basis over `cols` bits, plus its padding
-`Σ_i μ_i·(c·X̂_i + X̂_{2^cols + i})`. -/
 theorem fftSum_coeffs (cols q tPad : ℕ) (v lp : ℕ → F128) (ht : tPad ≤ 2 ^ cols) :
     fftSum 0 (cols + 1) (fun c => fOf (coeffs cols v ((Array.range tPad).map lp) c)) (FlockLevel3.omega q) =
       ∑ c ∈ Finset.range (2 ^ cols),
@@ -369,7 +339,6 @@ theorem arr2_ext {α : Type} [Inhabited α] {A B : Array (Array α)} (n m : ℕ)
   rw [← getElem!_pos _ l l1, ← getElem!_pos _ l l2]
   exact h q hq l hl
 
-/-- **The FFT's rows are level 0's padded codeword** where the padding fits below `2^cols` and `cols < d ≤ 64`. -/
 theorem rowsFft_eq (lv : Level) (tPad : ℕ) (g : Array F128) (extra lanePad : ℕ → ℕ → F128) (ht : tPad ≤ 2 ^ lv.cols)
     (hc : lv.cols < lv.d) (hd : lv.d ≤ 64) :
     rowsFft lv tPad g extra lanePad = FlockComplete.encodeRowsZk lv tPad g extra lanePad := by
@@ -386,8 +355,6 @@ theorem rowsFft_eq (lv : Level) (tPad : ℕ) (g : Array F128) (extra lanePad : �
       FlockSoundness.execArith.Xhat i (lv.cols + 1) (FlockSoundness.execArith.omega q) +
       FlockSoundness.execArith.Xhat (2 ^ lv.cols + i) (lv.cols + 1) (FlockSoundness.execArith.omega q))) tPad]
 
-/-- **The recheck's rows are level 0's padded codeword**: by the FFT (`rowsFft_eq`) or row by row (`rowsDirect`, which
-is `encodeRowsZk` as written). -/
 theorem rows_eq (lv : Level) (tPad : ℕ) (g : Array F128) (extra lanePad : ℕ → ℕ → F128) :
     rows lv tPad g extra lanePad = FlockComplete.encodeRowsZk lv tPad g extra lanePad := by
   unfold rows

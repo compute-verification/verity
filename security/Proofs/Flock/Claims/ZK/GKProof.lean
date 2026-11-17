@@ -39,30 +39,7 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Prob
 import Proofs.Flock.Claims.ZK.Statement
 
-/-!
-# The Goldreich–Kahan simulator meets `ZKmalR`
-
-`Proto.gk_zk`: for a committed-coin protocol whose dummy-witness run hides the witness until the last coin
-(`PrefixHides`, `δ_A`), whose messages at every fixed coin vector are simulated (`SHVZK`, `δ_B`) and whose opening check
-binds in its own calls (`Binding`), the Goldreich–Kahan simulator with `N` rewinds meets `ZKmalR` at
-
-  `ε_zk(x) = 1/(N+1) + δ_A(x) + N·δ_B(x)` and `γ(x) = N`.
-
-At each nonce, the hybrids are:
-
-1. the real run (`runStar`);
-2. the real run followed by `N` rewinds of the honest prover on fresh tapes at the coins it opened (`yReal`), output as
-   the simulator does (`gkOut`): within `1/(N+1)` plus a binding failure among these rewinds (`rewind_close`, with
-   `Forced`'s three facts);
-3. the same with the SHVZK simulator's messages in each rewind (`ySim`): `N·δ_B` (`hyb_sim`, by `Pr_hybrid`);
-4. the same with the dummy-witness run first, which is the simulator (`sim_out`): `δ_A` (`hyb_prefix`).
-
-The binding failure stays at step 2, in the real game: a rewind on the tape `r'` that opens one of the real run's coins
-as another is a collision among the honest prover's calls in its runs on `(ν, r)` and `(ν, r')` (`mism_coll`). The two
-runs send one `Hello` to one verifier, agree up to that coin's opening, and each checks its opening against the one
-commitment (`real_chk_log`). Over `N` rewinds that is at most `N` times `Fork`'s success (`Pr_exists_coord_le`,
-`pr_collR_le`).
--/
+/-! The Goldreich–Kahan simulator meets `ZKmalR`. -/
 
 @[expose] public section
 
@@ -74,22 +51,17 @@ namespace Proto
 
 variable {W : Type}
 
-/-- The forced run at `c` sending `v`: how it ended, and its transcript. -/
 def fRun (G : Proto W) (H : Msg → Msg) (ask : List Msg → Out) (x : Msg) (ν : G.Nonce) (c : Fin (G.K x) → G.Coin)
     (v : List Msg) : St × List (Msg × Out) :=
   (G.fcls H x ν c (interact ask (G.pmF H x ν c v) (G.k x) []), interact ask (G.pmF H x ν c v) (G.k x) [])
 
-/-- The rewinds with the SHVZK simulator's messages, at every coin vector, on the tapes `s`. -/
 def ySim (G : Proto W) (H : Msg → Msg) (ask : List Msg → Out) (x : Msg) (ν : G.Nonce) {N : ℕ}
     (s : Fin N → G.SimRand x) : (Fin (G.K x) → G.Coin) → Fin N → St × List (Msg × Out) :=
   fun c i => G.fRun H ask x ν c ((G.sim x ν c (s i)).eval H).1
 
-/-- The rewinds with the honest prover's messages, at every coin vector, on the fresh tapes `α`. -/
 def yReal (G : Proto W) (H : Msg → Msg) (ask : List Msg → Out) (x : Msg) (w : W) (ν : G.Nonce) {N : ℕ}
     (α : Fin N → G.Rand) : (Fin (G.K x) → G.Coin) → Fin N → St × List (Msg × Out) :=
   fun c i => G.fRun H ask x ν c (G.realVec H x w ν (α i) c)
-
-/-! ## What the simulator computes -/
 
 theorem rewindSP_eval (G : Proto W) (H : Msg → Msg) (ask : List Msg → Out) (x : Msg) (ν : G.Nonce)
     (c : Fin (G.K x) → G.Coin) (s : G.SimRand x) :
@@ -108,8 +80,6 @@ theorem rewindsSP_eval (G : Proto W) (H : Msg → Msg) (ask : List Msg → Out) 
       · simp only [h, ite_false]
         exact rewindsSP_eval G H ask x ν c N _
 
-/-- **The simulator's output**: the dummy-witness run's transcript if it opened no coin vector, else the first rewind
-at its coins that opened them all. -/
 theorem sim_out (G : Proto W) (H : Msg → Msg) (N : ℕ) {Θ : Type} (Vs : VStar Θ) (θ : Θ) (x : Msg) (ν : G.Nonce)
     (r : G.Rand) (s : Fin N → G.SimRand x) :
     (G.simulator N).out H Vs θ x (ν, r, s) =
@@ -128,8 +98,6 @@ theorem sim_out (G : Proto W) (H : Msg → Msg) (N : ℕ) {Θ : Type} (Vs : VSta
   | some cs =>
       simp only [gkOut]
       exact G.rewindsSP_eval H _ x ν cs N s
-
-/-! ## A binding failure in a rewind is a collision in the real game -/
 
 theorem fclsGo_mism_inv (H : Msg → Msg) {Coin : Type} [DecidableEq Coin] (chk : Msg → ℕ → Msg → OC Bool)
     (dec : Msg → Coin) (cc : ℕ → Option Coin) (τ : List (Msg × Out)) (ρ : Msg) : ∀ (n j : ℕ),
@@ -164,8 +132,6 @@ theorem fclsGo_mism_inv (H : Msg → Msg) {Coin : Type} [DecidableEq Coin] (chk 
             · exact ⟨0, by omega, fun l hl => absurd hl (by omega), m, by simpa using hr, by simpa using hb,
                 by simpa using hc⟩
 
-/-- **A rewind that ended in a binding failure**: it opened `c`'s coins before some coin `t`, and coin `t`'s opening
-passed the check against the rewind's commitment and read as another coin. -/
 theorem fcls_mism_inv (G : Proto W) (H : Msg → Msg) (x : Msg) (ν : G.Nonce) (c : Fin (G.K x) → G.Coin)
     (τ : List (Msg × Out)) (h : G.fcls H x ν c τ = .mism) :
     ∃ ρ t m, t < G.K x ∧ resp τ 0 = some ρ ∧
@@ -180,9 +146,6 @@ theorem fcls_mism_inv (G : Proto W) (H : Msg → Msg) (x : Msg) (ν : G.Nonce) (
       simp only [Nat.zero_add] at hpre e1 e2 e3
       exact ⟨ρ, i, m, hi, rfl, hpre, e1, e2, e3⟩
 
-/-- **The honest prover checks every opening so far in its next message's calls**: after a transcript's first `t + 2`
-rounds, whose answers are the commitment `ρ` and openings that pass the check before coin `t`, the check of coin `t`'s
-opening is among them. -/
 theorem chk_log_of_hist (G : Proto W) (H : Msg → Msg) (x : Msg) (w : W) (ν : G.Nonce) (r : G.Rand)
     (τ : List (Msg × Out)) (ρ : Msg) (t : ℕ) (m : Msg) (hlen : t + 2 < τ.length) (h0 : resp τ 0 = some ρ)
     (hpre : ∀ l < t, ∃ m', resp τ (l + 1) = some m' ∧ G.chkP H x ν ρ l m' = true) (hm : resp τ (t + 1) = some m) :
@@ -212,8 +175,6 @@ theorem chk_log_of_hist (G : Proto W) (H : Msg → Msg) (x : Msg) (w : W) (ν : 
   rw [Nat.zero_add, hget t hlt m (by rwa [resp_cons_succ] at hm)] at this
   exact this
 
-/-- **The honest prover's run checks each opening in its own calls**: if the run's commitment is `ρ`, the openings before
-coin `t` pass and coin `t`'s opening is `m`, the check of `m` is among the run's calls of the prover. -/
 theorem real_chk_log (G : Proto W) (H : Msg → Msg) {Θ : Type} (Vs : VStar Θ) (θ : Θ) (x : Msg) (w : W)
     (ν : G.Nonce) (r : G.Rand) (hk : Vs.k x = G.k x) (ρ : Msg) (t : ℕ) (m : Msg) (ht : t < G.K x)
     (h0 : resp (runStar H (G.prover w) Vs x (ν, r) θ).msgs 0 = some ρ)
@@ -227,12 +188,10 @@ theorem real_chk_log (G : Proto W) (H : Msg → Msg) {Θ : Type} (Vs : VStar Θ)
   exact List.Subset.trans (G.chk_log_of_hist H x w ν r _ ρ t m hlen h0 hpre hm)
     (runStar_round_log H (G.prover w) Vs x (ν, r) θ (t + 2) hlen)
 
-/-- Two real runs on one nonce hold a collision among the honest prover's calls. -/
 def collR (G : Proto W) (H : Msg → Msg) {Θ : Type} (Vs : VStar Θ) (θ : Θ) (x : Msg) (w : W) (ν : G.Nonce)
     (r r' : G.Rand) : Prop :=
   findColl ((runStar H (G.prover w) Vs x (ν, r) θ).pLog ++ (runStar H (G.prover w) Vs x (ν, r') θ).pLog) ≠ none
 
-/-- **Over the nonce, two real runs' collision is `Fork`'s.** -/
 theorem pr_collR_le (G : Proto W) (H : Msg → Msg) {Θ : Type} (Vs : VStar Θ) (θ : Θ) (x : Msg) (w : W) :
     Ex (fun ν => Pr fun p : G.Rand × G.Rand => G.collR H Vs θ x w ν p.1 p.2) ≤ (Fork H (G.prover w) Vs θ x).Pr H :=
   calc Ex (fun ν => Pr fun p : G.Rand × G.Rand => G.collR H Vs θ x w ν p.1 p.2)
@@ -240,10 +199,6 @@ theorem pr_collR_le (G : Proto W) (H : Msg → Msg) {Θ : Type} (Vs : VStar Θ) 
         (Pr_prod_left fun s : G.Nonce × G.Rand × G.Rand => G.collR H Vs θ x w s.1 s.2.1 s.2.2).symm
     _ ≤ _ := Fork_pr_ge H (G.prover w) Vs θ x
 
-/-- **A binding failure in a rewind is a collision in the real game**: if the real run on `(ν, r)` opens `c` and the
-forced run at `c` with the honest prover's messages on `r'` opens one of `c`'s coins as another, the honest prover's runs
-on `(ν, r)` and `(ν, r')` agree up to that coin's opening and check its two openings against one commitment, so
-`Binding` puts a collision among their calls. -/
 theorem mism_coll (G : Proto W) (H : Msg → Msg) (hC : G.Binding H) {Θ : Type} (Vs : VStar Θ) (θ : Θ) (x : Msg)
     (w : W) (ν : G.Nonce) (r r' : G.Rand) (hk : Vs.k x = G.k x) (c : Fin (G.K x) → G.Coin)
     (hc : G.cls H x ν (runStar H (G.prover w) Vs x (ν, r) θ).msgs = some c)
@@ -290,8 +245,6 @@ theorem mism_coll (G : Proto W) (H : Msg → Msg) (hC : G.Binding H) {Θ : Type}
       List.Subset.trans log₁ (List.subset_append_right _ _)⟩
   exact ⟨p, sub hp, q, sub hq, hne, heq⟩
 
-/-- **The rewinds' binding failures**, from the real run on `(ν, r)`, against the honest prover's messages on the tapes
-`α`: each is a collision of the real run with the rewind's tape. -/
 theorem gkMM_coll (G : Proto W) (H : Msg → Msg) (hC : G.Binding H) {Θ : Type} (Vs : VStar Θ) (θ : Θ) (x : Msg)
     (w : W) (ν : G.Nonce) (hk : Vs.k x = G.k x) {N : ℕ} (r : G.Rand) (α : Fin N → G.Rand)
     (h : gkMM (G.view0 H x ν (interact (fun as => ((Vs.next x as θ).eval H).1) (G.pmR H x w ν r) (G.k x) []))
@@ -307,16 +260,12 @@ theorem gkMM_coll (G : Proto W) (H : Msg → Msg) (hC : G.Binding H) {Θ : Type}
       rw [runStar_msgs, hk]
       exact hcls
 
-/-! ## The hybrids -/
-
 theorem viewOf_cls (G : Proto W) (H : Msg → Msg) (x : Msg) (ν : G.Nonce) {Ω : Type} (τ : Ω → List (Msg × Out))
     (r : Ω) : viewOf (fun r => G.cls H x ν (τ r)) τ r = G.view0 H x ν (τ r) := by
   unfold viewOf view0
   dsimp only
   cases G.cls H x ν (τ r) <;> rfl
 
-/-- **The rewinds' messages simulated** (step 3), on any event that reads the rewinds only at the first run's coins:
-`N·δ_B`. -/
 theorem hyb_sim (G : Proto W) (H : Msg → Msg) (R : Rel W) (δB : Msg → ℝ) (hB : G.SHVZK H R δB) (x : Msg)
     (hB0 : 0 ≤ δB x) (w : W) (hR : R x w) (ask : List Msg → Out) (ν : G.Nonce) (N : ℕ)
     (V : G.Rand → List (Msg × Out) ⊕ (Fin (G.K x) → G.Coin))
@@ -347,7 +296,6 @@ theorem hyb_sim (G : Proto W) (H : Msg → Msg) (R : Rel W) (δB : Msg → ℝ) 
       exact Pr_hybrid (fun r => G.realVec H x w ν r c) (fun s => ((G.sim x ν c s).eval H).1) (δB x)
         (fun E' => hB x w hR ν c E') N fun vs => E (.inr c) fun _ i => G.fRun H ask x ν c (vs i)
 
-/-- **The dummy witness in the first run** (step 4), on any event of what it passes on and the rewinds: `δ_A`. -/
 theorem hyb_prefix (G : Proto W) (H : Msg → Msg) (R : Rel W) (δA : Msg → ℝ) (hA : G.PrefixHides H R δA)
     (x : Msg) (w : W) (hR : R x w) {Θ : Type} (Vs : VStar Θ) (θ : Θ) (hk : Vs.k x = G.k x) (ν : G.Nonce)
     {S Y : Type} [Fintype S] [Nonempty S] (Ys : S → Y) (E : List (Msg × Out) ⊕ (Fin (G.K x) → G.Coin) → Y → Prop) :
@@ -363,11 +311,6 @@ theorem hyb_prefix (G : Proto W) (H : Msg → Msg) (R : Rel W) (δA : Msg → �
   simp only [runStar_msgs, hk] at this
   exact this
 
-/-! ## The theorem -/
-
-/-- **The Goldreich–Kahan simulator meets `ZKmalR`** at `ε_zk(x) = 1/(N+1) + δ_A(x) + N·δ_B(x)` and `γ(x) = N`, for a
-protocol whose dummy-witness run hides the witness until the last coin, whose messages at a fixed coin vector are
-simulated and whose opening check binds. -/
 theorem gk_zk (G : Proto W) (H : Msg → Msg) (R : Rel W) (N : ℕ) (δA δB : Msg → ℝ) (hA : G.PrefixHides H R δA)
     (hB : G.SHVZK H R δB) (hB0 : ∀ x, 0 ≤ δB x) (hC : G.Binding H) :
     ZKmalR H G.k G.prover R (G.simulator N) (fun x => 1 / ((N : ℝ) + 1) + δA x + N * δB x) fun _ => N := by

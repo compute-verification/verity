@@ -41,16 +41,7 @@ import Proofs.Flock.Claims.ZK.FrameBeta
 import Proofs.Flock.Claims.ZK.FrameOuter
 import Proofs.Flock.Claims.ZK.FrameRankFault
 
-/-!
-# The session loop's own frames refuse every coin fault (`FrameUnrefused` at `ofLoop`)
-
-At a `Live` statement the loop serves, each fault `Masked.Refused` shows by `refK x` is one a rep frame refuses at its
-round: an outer coin `1` (`outer_unrefused`), a rank-deficient mask slot (`rank_unrefused`), `ρ₀, ρ₁` dependent
-(`rho_unrefused`) and `β = 0` (`beta_unrefused`).
-
-* `LeanRelease.slots_lt`: a rep's outer and `β` rounds are below `refK x`.
-* **`LeanRelease.frameUnrefused_ofLoop`**: `FrameUnrefused` at `ofLoop`, at every statement the loop serves.
--/
+/-! The session loop's own frames refuse every coin fault (`FrameUnrefused` at `ofLoop`). -/
 
 @[expose] public section
 
@@ -63,7 +54,6 @@ namespace LeanRelease
 
 open Loop
 
-/-- **A rep's outer and `β` rounds are the session's**: below `refK x`, at a `Live` statement. -/
 theorem slots_lt {x : Msg} (hx : Masked.Live x) {j r : ℕ} (hj : j < (Masked.stsOf x).size) (hr2 : r < 2) :
     Masked.outerSlot x j r < refK x ∧ Masked.betaSlot x j r < refK x := by
   obtain ⟨s0, spec, hsx⟩ := Masked.setupOf_of_pos (lt_of_le_of_lt (Nat.zero_le _) hj)
@@ -97,8 +87,6 @@ theorem slots_lt {x : Msg} (hx : Masked.Live x) {j r : ℕ} (hj : j < (Masked.st
   rw [Masked.repSlot_eq hsx hz]
   constructor <;> omega
 
-/-- **The session loop's own frames refuse every coin fault** (`FrameUnrefused` at `ofLoop`), at every statement the
-loop serves: each fault by `refK x` is one the frames refuse at its round, below `refK x` (`slots_lt`). -/
 theorem frameUnrefused_ofLoop (T : ZKMal.CoinLayer.TableData)
     (L₀ : LeanRelease Flock.Wit
       ((ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand))
