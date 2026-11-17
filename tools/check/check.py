@@ -261,6 +261,9 @@ A pass travels in a pack only once its run has ended, so the check of a candidat
 whose check is still running finds none of that check's passes.  The queue names that candidate (`TRAIN_SUITES_FROM`), and a
 `--record --on --deferred` launch whose base it is sends it (`lender`, `LEND_FILE`): each suite step then leaves out the
 suites whose key in its tree is their key here (`suites.py --lend-from`, a row marked `lent`), which that check answers for.
+A run sent its base (`BASE_FILE`, every `--record --on` run) gives both suite steps `suites.py --allowances BASE`: the tests an
+unexpired allowance of policy.toml at BASE names, where the verified queue reads them, run as expected failures, so a suite
+red only on them passes and its pass is reused, until the allowance lapses.
 
 The evidence store.  A recorded check runs the store-backed tests (adapters/vllm's `store_io`) on the store's remote, never
 skipped: its steps get VERITY_STORE_REQUIRED=1 (a missing remote fails those tests) and, as CHECK_STORE_CUSTODY, the run's custody
@@ -2175,9 +2178,12 @@ def groups(out: Path, n: int, cache: bool = True, urls: Path | None = None,
         2 if with_lean or with_cc else 1)
     # the commit the run was sent as its suites' lender (`LEND_FILE`): each suite step leaves out what its check answers for
     lend = out / "inputs" / LEND_FILE
+    # the run's base (`BASE_FILE`), where the verified queue reads the allowances: the tests they name run as expected failures
+    base = out / "inputs" / BASE_FILE
     tail = ["--timeouts", "--jobs", str(a), *([] if cache else ["--fresh"]), *(["--mem-gb", str(tests_gb)] if tests_gb is not None else []),
             *(["--run", rid] if (rid := SETTINGS.RESEARCH_RUN_ID) else []),
-            *(["--lend-from", lend.read_text().strip()] if cache and lend.is_file() else [])]
+            *(["--lend-from", lend.read_text().strip()] if cache and lend.is_file() else []),
+            *(["--allowances", base.read_text().strip()] if base.is_file() else [])]
     lean = lean_steps(out, cache, urls, regenerate, bookkeeping, agreement_urls)
     # an auto shard's suites (`pytest:SUITE`, `lean-suites:SUITE`): only those
     held = {job: [p.partition(":")[2] for p in only or () if p.partition(":")[0] == job and p.partition(":")[2]]
