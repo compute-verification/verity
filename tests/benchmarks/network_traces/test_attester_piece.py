@@ -1,26 +1,26 @@
 """attester_piece: the front sends one group of the window circuit's class through the gate's scan rehearsal and keeps
 the gate's fetch, witness and all, 0700 under the serve dir's private/certifier, publishing only the bundle less witness/
-and its outcome. The piece, on a serve dir whose window was the network attester's synthetic run's certified requests
+and its outcome. The piece, on a serve dir whose window was the network attester's synthetic run's attested requests
 (the run `test_network_attester_chain.gate_run` publishes in the gate's layout), runs as `served_verdicts.py pieces` runs it and writes
 `network-period`'s answer only when `network-rows` accepted the run's records, the chain accepted and the window's
-requests are certified in the transfer blocks of the scan's execution phase: the period mirror's certifier/v0
+requests are attested in the transfer blocks of the scan's execution phase: the period mirror's certifier/v0
 accept (`period_case`), its
 profile with the placement (the attester on the kept gate's machine and each of the piece's steps on the machine that
 ran it, labels by which the piece establishes no `trusted-device`), then goes through `served_verdicts.py record` into the window
 report and the block record's attester entry, which `block_record.check` holds and its schema admits. Its case.json is
 the three files `network-period` read, as `composite.py` reads a piece's case: witness, kept 0600 in the serve dir's
 private/pieces/certifier with no answer beside it, and at no time under the pieces' directory, which gets
-certificates.json, the five certificates of the case's evidence, each with its own fields alone and each the network
+certificates.json, the five attestations of the case's evidence, each with its own fields alone and each the network
 attester's signature under the run's public key. The chain's endpoint report, with each Commit window's counts, and
 the scan's answers stay in the kept run. A window request the network attester didn't certify, and network attester
 records that `network-rows` refuses, are rejected before any chain runs (`network-rows` itself accepts the synthetic
-run's records and refuses them with cells re-cut, re-clocked or reordered, a certificate of another key, a record
+run's records and refuses them with cells re-cut, re-clocked or reordered, an attestation of another key, a record
 changed under its head and a schedule with a `max_tokens_cap`); a chain that refused, requests outside those
 transfer blocks and a period the check rejects are rejects; a rehearsal the gate's check failed (each request late) and
 a step that can't run (no kept run, no report, no build, the time limit) refuse, which leaves the attester missing, and no process of a step's group outlives
 the piece, the time limit's SIGTERM included, whenever it comes. Of the chain, DIR gets only `PUBLIC`'s key paths,
 which hold none of the window's counts or advice bits; the leak guard reads the piece's DIR against the run's witness
-and moves out any file DIR doesn't declare, a period file among them; the certificates reach DIR only through it, and
+and moves out any file DIR doesn't declare, a period file among them; the attestations reach DIR only through it, and
 a step that ends without its files released keeps no case. The front's
 warm-ups go straight to the endpoint, one at a time, each recorded in a closed window of its own before the gate is
 asked, and the pick passes over those windows for the group's. At a tick of 4000 ms the front's rehearsal reaches this
@@ -95,7 +95,7 @@ def period():
 @pytest.fixture(scope="module")
 def network_attester(tmp_path_factory):
     """The synthetic network attester run, its fetch (``late``: the same run, its rehearsal failed late), the
-    execution phase holding the most whole certified requests, its two row registrations (ingress, egress) and the
+    execution phase holding the most whole attested requests, its two row registrations (ingress, egress) and the
     run's deployment."""
     d = tmp_path_factory.mktemp("network_certifier")
     run = gate_run(d)
@@ -460,7 +460,7 @@ def _piece(tmp_path: Path, network_attester: dict, chain: Path) -> tuple[int, Pa
 def test_sigterm_while_the_guard_reads_releases_nothing_to_dir(tmp_path, network_attester, monkeypatch):
     """SIGTERM from the piece's time limit reaching it while the leak guard reads (the signal sent to this process from
     a stand-in guard) refuses the piece with nothing released: DIR holds only refused.txt, the answer, the chain's
-    report and the certificates stay in the hold, out of the record, and the case the step had written is gone."""
+    report and the attestations stay in the hold, out of the record, and the case the step had written is gone."""
     seen = []
 
     def slow_guard(d, hold, unpacked, quarantine):
@@ -514,7 +514,7 @@ def test_a_chain_file_holding_a_witness_value_is_moved_out_of_dir(tmp_path, netw
 def test_a_rehearsal_the_gates_check_failed_late_leaves_the_attester_missing_not_rejected(tmp_path, network_attester, capsys,
                                                                                           monkeypatch):
     """Each request late past the network attester's D·τ: the gate's check fails the rehearsal, and the served answers, longer
-    than what the attester passed, don't bind to its certified ones. That is the endpoint's lateness, not the protocol
+    than what the attester passed, don't bind to its attested ones. That is the endpoint's lateness, not the protocol
     rejecting a served answer, so the piece refuses before any chain and the attester is missing, as for a busy gate;
     the same window on a rehearsal the check passed is a reject."""
     served = [dict(r, output=[*r["output"], 7]) for r in network_attester["records"]]
@@ -538,9 +538,9 @@ def test_a_rehearsal_the_gates_check_failed_late_leaves_the_attester_missing_not
 def test_the_case_is_cut_from_the_hold_before_the_guard_and_only_its_certificates_are_released(tmp_path, network_attester):
     """A case's evidence and params are witness: `write_case` takes the hold's period files to the private case before
     the leak guard reads the hold, so the guard is never asked to release one, and what it releases of them is the
-    certificates' own fields. A certificate holding a piece of the run's witness (here a salt of its cells.salts as
+    attestations' own fields. An attestation holding a piece of the run's witness (here a salt of its cells.salts as
     its signature) is moved out as any released file is, a period file still in the hold is a file DIR doesn't
-    declare, and evidence that names no certificates refuses the step with no case written."""
+    declare, and evidence that names no attestations refuses the step with no case written."""
     fetch = tmp_path / "fetch.tar.gz"
     fetch.write_bytes(network_attester["fetch"].read_bytes())
     unpacked, run = CP.unpack(fetch)
@@ -687,7 +687,7 @@ def test_network_rows_accepts_the_network_attesters_records_and_refuses_cells_cu
     run's accepted; the same run with a cell of window 0's egress re-cut, connection 1's cells re-clocked or a
     bucket's connections reordered, signed by its key, refused by name, and `rows_check`'s `Rejected` for the piece;
     the run re-signed under another key refused at the record, and, its deployment.json rewritten to the record's, by
-    the audit at its first certificate, which isn't the record's key's; a record changed after its certificate signed
+    the audit at its first attestation, which isn't the record's key's; a record changed after its attestation signed
     it refused at its head; and the honest run's case under a schedule with a `max_tokens_cap` refused by name, the audit
     reading none. The one test that runs the case's encoding, the binding to the signed heads and the audit together
     on real records, which the stand-ins above don't."""
@@ -815,12 +815,12 @@ def _private_chain_out(out: Path) -> Path:
 
 def test_the_piece_publishes_no_count_or_advice_bit_of_the_window_and_the_guard_moves_out_what_isnt_declared(tmp_path):
     """The chain's out/ holds the window's private values: the endpoint's report (its Commit window's request, step and
-    output counts and its advice's bits), the report made of it (the certified I/O's counts, the advice's bits as K's
-    term) and report.md, the certificates step's view of the attester's check and the tie's prompt lengths. `publish`
+    output counts and its advice's bits), the report made of it (the attested I/O's counts, the advice's bits as K's
+    term) and report.md, the attestations step's view of the attester's check and the tie's prompt lengths. `publish`
     puts none of them in the hold, only `PUBLIC`'s key paths, the endpoint's step its verdict and where it ran, and
-    nothing of the scan's answers, the period check's evidence less its certificates. A file put past `publish`, in the
+    nothing of the scan's answers, the period check's evidence less its attestations. A file put past `publish`, in the
     hold (the endpoint's report and the scan's answers copied whole, as the piece once published them) or in DIR (the
-    certificates step's), though none holds a witness piece, is one the leak guard moves to the quarantine and never
+    attestations step's), though none holds a witness piece, is one the leak guard moves to the quarantine and never
     releases: DIR declares only `PIECE_FILES`."""
     out = _private_chain_out(tmp_path / "out")
     held = {p.relative_to(out).as_posix(): _numbers(p) & PRIVATE for p in out.rglob("*") if p.is_file()}
@@ -907,7 +907,7 @@ def test_the_split_piece_chains_on_v3cs_window_and_checks_its_period_json(tmp_pa
     checks the rows case whose one compute audit is V3c's period.json, held to the class circuit of the verifier's own
     window-circuit record beside V3c, its answer the one `pieces` reads (with CERTIFIER_CMD ``true``, as
     `served_verdicts.sh` sets it) into the block record, its case written in the serve dir's private (the chain step
-    first removing the one an earlier run left), its certificates beside the answer and both steps' logs kept."""
+    first removing the one an earlier run left), its attestations beside the answer and both steps' logs kept."""
     accept = period.reference(period.case("accept", 1))
     d = _serve_dir(tmp_path / "serve", network_attester)
     v3c, piece = _v3c(d), tmp_path / "pieces" / "certifier"
