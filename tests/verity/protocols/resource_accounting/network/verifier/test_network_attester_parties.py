@@ -37,7 +37,7 @@ LEAN = Path(__file__).resolve().parents[6] / "verity" / "protocols" / "resource_
 
 
 @pytest.fixture(scope="module")
-def out(tmp_path_factory) -> tuple[O.CertifiedOut, O.PublicKey]:
+def out(tmp_path_factory) -> tuple[O.AttestedOut, O.PublicKey]:
     s = S.signer(tmp_path_factory.mktemp("parties-signer"))
     return O.commit_out(VALUES, shape=SHAPE, key=s, session=S.SESSION, window=WINDOW, link=LINK), s.public_key()
 
@@ -113,7 +113,7 @@ RUN = {NC.WORKERS: [Message(NC.RECORDS, {**HEAD, "record": r}, bytes(range(256))
                      Message(NC.GROUPS, {}, b'{"groups": [{"group": 0, "requests": [0, 1], "windows": [0, 2]}]}')]}
 
 
-def test_the_runs_witness_goes_to_the_workers_and_its_certificates_and_registrations_to_the_verifier() -> None:
+def test_the_runs_witness_goes_to_the_workers_and_its_attestations_and_registrations_to_the_verifier() -> None:
     """The records and the rows' salts reach the workers alone, the attestations, the rows' registrations, the
     deployment and the groups the verifier alone, each as it was sent; the salts read back as the rows' and the wiring's."""
     for receiver, other in ((NC.WORKERS, NC.VERIFIER), (NC.VERIFIER, NC.WORKERS)):
