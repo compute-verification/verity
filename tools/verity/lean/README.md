@@ -206,9 +206,9 @@ keeps or drops from and never adds to.
   `Properties.Verity.Game` there, the bound below 1 at the honest strategy, or is listed in an `unwitnessed` entry
   {type_hash, missing: below_one, targets, owner, why}: a bound of 1 or more holds of every prover (`error_failures`,
   refused as `witnesses.honest-error`). The lemma binds the witness's own parameters and vocabulary by `∀` or names
-  them, and may choose the files and commitments by `∃` only where the witness binds them. The walk unfolds only
-  definitions of modules that import the error's; one that runs out of depth or budget or raises is
-  `witnesses.targets-unread`, and `--update` keeps the entry whole.
+  them, and may choose the files and commitments by `∃` only where the witness binds them. The walk unfolds only a
+  part naming a constant of a module that declares or imports the error's; one that runs out of depth or budget or
+  raises is `witnesses.targets-unread`, and `--update` keeps the entry whole.
 - `compile_time`: the modules that must run code while they compile, one by one, each with its `why` and the `digest`
   of its file as it was reviewed (`listings`, `scans`). None may declare a guarantee or a definition a guarantee reads,
   so a proof-only tactic belongs in a module of its own. The package has a `lakefile.toml`, not a `lakefile.lean`.

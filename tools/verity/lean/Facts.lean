@@ -1184,9 +1184,9 @@ def errorModules (env : Environment) (moduleOf : Name → Option Name) (errors :
 
 /-- What `visit` makes of each error (an application of one of `errors`) a statement is bounded by: past its `∀` and
 `∃` binders and through `∧`, `∨` and `↔`, read where it stands; a part that applies none, when its head is a definition
-of a module under `meaning` or one this repository builds, outside an assumptions module, and of one of `reach` (none
-other can apply an error, `errorModules`), read again unfolded, and when its head is such a structure, each of its
-`Prop` fields read; at most `fuel` unfoldings deep and `budget` in all. A part it would read again with none of either
+of a module under `meaning` or one this repository builds, outside an assumptions module, and the part names a
+constant of one of `reach` (a part naming none cannot apply an error, `errorModules`), read again unfolded, and when its
+head is such a structure, each of its `Prop` fields read; at most `fuel` unfoldings deep and `budget` in all. A part it would read again with none of either
 left is not read, and `short` says where. -/
 partial def errorsOf (env : Environment) (meaning : Array Name) (built reach : NameSet) (moduleOf : Name → Option Name)
     (errors : Array Name) (visit : Expr → MetaM (Option Json)) (short : IO.Ref (Option String)) (budget : IO.Ref Nat)
@@ -1203,7 +1203,8 @@ partial def errorsOf (env : Environment) (meaning : Array Name) (built reach : N
     if !here.isEmpty then return ← here.filterMapM visit
     let .const c us := b.getAppFn | return #[]
     let mine := ((moduleOf c).map fun m =>
-      (under meaning m || built.contains m) && !m.components.contains `Assumptions && reach.contains m).getD false
+      (under meaning m || built.contains m) && !m.components.contains `Assumptions).getD false &&
+      b.getUsedConstants.any fun k => ((moduleOf k).map reach.contains).getD false
     if !mine then return #[]
     if fuel == 0 || (← budget.get) == 0 then
       if (← short.get).isNone then
