@@ -12,7 +12,7 @@ from verity_vllm.pipeline.advice_code import schedule as SC
 from verity_vllm.pipeline.advice_code import tick_step as TS
 
 TODAY = TS.Rule(TT.TICK.bucket_us, TT.TICK.sat_us, TT.TICK.free_us)
-CHOSEN = TS.Rule(10**8, 6_072_000, 6_072_000, 18_130)
+CHOSEN = TS.Rule(10**8, 6_303_000, 6_303_000, 18_126)
 RULES = {f"{name}-{'quiet' if quiet else 'unqueued'}": dataclasses.replace(rule, quiet=quiet)
          for name, rule in (("today", TODAY), ("chosen", CHOSEN)) for quiet in (True, False)}
 
@@ -126,7 +126,7 @@ def test_a_bucket_count_past_32_bits_is_refused() -> None:
 def test_the_binding_refuses_an_advance_that_reaches_a_bucket() -> None:
     e = SC.Engine(max_num_seqs=8, max_num_batched_tokens=2048, max_model_len=512, num_gpu_blocks=64, block_size=16)
     binding(e, 2, 8, 1, 9, CHOSEN)
-    with pytest.raises(ValueError, match=r"max\(CSAT, CFREE\) \+ C1·T = 154592960 reaches the bucket TAU = 100000000"):
+    with pytest.raises(ValueError, match=r"max\(CSAT, CFREE\) \+ C1·T = 154791192 reaches the bucket TAU = 100000000"):
         binding(dataclasses.replace(e, max_num_batched_tokens=8192), 2, 8, 1, 9, CHOSEN)
     with pytest.raises(ValueError, match=r"A ≥ min\(M, R\) \+ 1 = 9"):
         binding(e, 2, 8, 1, 8, CHOSEN)
