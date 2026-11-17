@@ -50,7 +50,7 @@ public import Proofs.Properties.Poub.Remote.Run
 # The memory line of record, proved (`Properties.Poub.Line`: `LineHeld`), and memory held from it
 
 At each outcome where the Lean verifier accepts the record's session (so the trace of record accepts, `ofRecord`) and
-the certifiers observed nothing but the verifier's messages entering the node, the receipts' sketch holds and the
+the network attesters observed nothing but the verifier's messages entering the node, the receipts' sketch holds and the
 trace's wrong receipts are at most the session's pooled bound at the line's `δ` (`holdsAnd` of the sketch bound, from
 `SketchBoundAt`, `Covered` and `IngressCounted` by `sketchBound_of_covered`, and `Sample.pooledSample` at the records read
 through the coin commitment, `recordCommitted`, so at most the W the line reads: `LineCoversRun` at the record's
@@ -645,7 +645,7 @@ theorem heldAt_of_read {Ω : Type} [Fintype Ω] {T : Trace Ω} {node : Node} {re
 /-- **Memory held from bits read, over the outcomes**: on the trace of record under the device model, the outcomes
 where the Lean verifier accepts, `Q` holds and a stretch of form `i` credits more than the trace held are among those
 where it accepts, `Q` holds and the line credits more bits read than the passes read (`heldAt_of_read`), so
-`LineHeld`'s bound, at `Q` the certifiers' observation, bounds them. -/
+`LineHeld`'s bound, at `Q` the network attesters' observation, bounds them. -/
 theorem pr_held_le_read {Ω : Type} [Fintype Ω] {T : Trace Ω} {node : Node} {rec : Ω → Record} (i : ℕ) (hi : i < 2)
     {βl Bl : ℝ} (hβl : 0 ≤ node.rates.linkBytesPerS → 0 ≤ βl) (hl : Links (ofRecord T node rec) βl Bl)
     (hcr : (((if i = 0 then (charges node.rates node.blockBytes).1 else (charges node.rates node.blockBytes).2).rate

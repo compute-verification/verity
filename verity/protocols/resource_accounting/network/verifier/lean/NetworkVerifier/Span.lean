@@ -21,7 +21,7 @@ certified under the schedule, and how many bits can have left on the link over t
     signed digest = SHA-512("verity-network-certifier/mark/v1" ‖ salt ‖ mark)     (`markDigest`)
 
 as an egress certificate on the link's marks link name, `<link>-marks` (`marksLink`), under the message every
-certificate signs (`NetworkCheck.certificateMessage`), which binds the key, the certifier session, the link name and
+certificate signs (`NetworkCheck.certificateMessage`), which binds the key, the network attester session, the link name and
 the execution phase. The mark and its salt are witness; the certificate is a signature over a hiding digest.
 
 **Params**, canonical JSON, all public:
@@ -29,7 +29,7 @@ the execution phase. The mark and its salt are witness; the certificate is a sig
     {"key": hex(I ‖ T[1]), "link": name, "lms": {"H": h, "N": n, "W": w, "toy": bool},
      "schedule": {…}, "session": hex(session)}
 
-the network attester's LMS key and its parameters, the certifier session's id (32 bytes), the link, its name held to
+the network attester's LMS key and its parameters, the network attester session's id (32 bytes), the link, its name held to
 what the period's check holds it to, at most 65,535 UTF-8 bytes, and the schedule, as the period's check reads it (its
 `scheduleOf`).
 
@@ -64,7 +64,7 @@ phases are not public, and a reason is part of an answer.
 
 1. Each mark opens and verifies (`Mark.refusal`, in `CertifiedMark.refusal`'s order): its certificate is on the link's
    marks link name, is an egress certificate, is the key's, signs `markDigest` of its salt and its mark, and its
-   signature verifies in the certifier session.
+   signature verifies in the network attester session.
 2. The marks are in order: w_s ≤ w_e, the execution phases their certificates name.
 3. The span's tail is `tail` execution phases. The network attester releases a connection's response late: its cell
    i leaves D + ⌊i / r⌋ buckets after its admission, and it has at most `egress_cells` cells. It reads a server's bytes
@@ -474,7 +474,7 @@ def guardMark (phase fill : UInt8) : ByteArray :=
 #guard (namedOf guardParams (guardMark 7 1 ++ guardMark 5 4)).map (·.egressBits) == some none
 #guard (namedOf guardParams (guardMark 5 1)).isNone && (namedOf "{}" (guardMark 5 1 ++ guardMark 7 4)).isNone
 /-- The registered hardware of the `#guard`s: the link `eth0` joins the host `node0` and the network attester `cert0`,
-which registers `key`, and `out0` is the certifier's other half, to the outside. -/
+which registers `key`, and `out0` is the network attester's other half, to the outside. -/
 def guardSite (key : String) : Json :=
   Core.Site.toJson ⟨[],
     [{ id := "node0", kind := .host }, { id := "cert0", kind := .certifier, owner := .auditor, key }],
@@ -491,7 +491,7 @@ def guardParamsWith (more : List (String × Json)) : V Params := do
 -- without it the parameters hold none, and the site and the head come together
 #guard ((guardParamsWith []).toOption.map (·.registered)) == some none
 #guard !(guardParamsWith [("site", guardSite ("".pushn '0' 48))]).isOk && !(guardParamsWith [("head", .str "h")]).isOk
--- refused with the parameters: a certifier that registers another key, the certifier's other half, no site
+-- refused with the parameters: a network attester that registers another key, the network attester's other half, no site
 #guard !(guardParamsWith [("head", .str "h"), ("site", guardSite ("".pushn 'a' 48))]).isOk
 #guard !(guardParamsWith [("head", .str "h"), ("link", .str "out0"), ("site", guardSite ("".pushn '0' 48))]).isOk
 #guard !(guardParamsWith [("head", .str "h"), ("site", .arr #[])]).isOk
