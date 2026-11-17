@@ -50,8 +50,7 @@ BINDINGS = {
 RUNTIME_BINDINGS = {**BINDINGS, "bandwidth-verifier": {"bandwidth": {"address": "192.0.2.2:7002"}}}
 #: the memory attesters', which, unbound, are the run's on the workload's machine (`Piece.development`)
 ATTESTERS = ("memory-challenger", "bandwidth-verifier")
-UNBOUND = sorted(f"{p}.{c}.{k}" for p, cs in BINDINGS.items() for c, ks in cs.items() for k in ks
-                 if f"{p}.{c}" not in ("memory-challenger.pous", "bandwidth-verifier.bandwidth"))
+UNBOUND = sorted(f"{p}.{c}.{k}" for p, cs in BINDINGS.items() if p not in ATTESTERS for c, ks in cs.items() for k in ks)
 #: the served window's runner's variables under `BINDINGS`, and the bindings the pieces read, in the pieces' order
 VARIABLES = {
     "CERTIFIER_CHAIN_CMD": '.venv/bin/python benchmarks/network_traces/certifier_piece.py chain "$@"',
@@ -69,8 +68,7 @@ VARIABLES = {
                  f"--bw-trusted-sha512 {PIN['bandwidth']} --bw-host 192.0.2.2",
     "BANDWIDTH_CMD": '"$PY" benchmarks/one_stage/served_bandwidth.py collect --serve-dir "$1" --window "$2" --out "$3"',
 }
-KEYS = ["challenger.pouw.gate", "challenger.pouw.peer", "challenger.pouw.key-sha512", "network-certifier.certifier.gate",
-        "memory-challenger.wipe.address"]
+KEYS = ["challenger.pouw.gate", "challenger.pouw.peer", "challenger.pouw.key-sha512", "network-certifier.certifier.gate"]
 #: each runtime party: its protocol (None while a half isn't in the tree), its role there, its machine and its clock
 RUNTIME = {
     ("memory-challenger", "pous"): ("verity/pous/memory-challenger", "memory-challenger", "auditor-host",
@@ -309,7 +307,7 @@ def test_the_runners_variables_and_the_bindings_keys_are_these():
     assert T.variables(cfg, BINDINGS) == VARIABLES | deployed
     assert T.unbound(cfg, {}) == KEYS and T.unbound(cfg, BINDINGS) == [] and sorted(KEYS) == UNBOUND
     unbound = T.variables(cfg, {})
-    assert set(unbound) == set(VARIABLES) | set(deployed)
+    assert set(unbound) == set(VARIABLES) - {"WIPE_ADDRESS"} | set(deployed)
     assert unbound["CERTIFIER_FRONT"].endswith("--gate '<network-certifier.certifier.gate>'")
     assert all(unbound[k] == VARIABLES[k] for k in ("CERTIFIER_CHAIN_CMD", "CERTIFIER_PERIOD_CMD"))
 
@@ -635,7 +633,7 @@ def test_the_onsite_check_is_the_records_composed_verdict(tmp_path, capsys, monk
     assert line["components"] == {**{c: "accept" for c in T.PROTOCOLS},
                                   **{c: rows.get(c, "absent") for c in ("bandwidth", "inference-only")}}
     assert line["coins"] == "simulated" and line["reason"] == reason and "combined_by" not in line
-    assert line["coins_on"] == {c: T.PROVER_NODE for c in ("pous", "bandwidth")}
+    assert line["coins_on"] == {c: T.PROVER_NODE for c in ("pous", "bandwidth", "wipe")}
 
 
 NETWORK = ROOT / "demos" / "onsite_network.toml"
@@ -745,9 +743,8 @@ def test_an_inherited_or_bound_pous_args_adds_no_word_to_the_tables(tmp_path, ca
 
 # --- a development run: the memory attesters unbound, on the workload's machine under keys made for the run ----------
 
-#: `BINDINGS` without PoUS's and PoUB's attesters'
-NO_ATTESTERS = {**{p: cs for p, cs in BINDINGS.items() if p not in ATTESTERS},
-                "memory-challenger": {"wipe": BINDINGS["memory-challenger"]["wipe"]}}
+#: `BINDINGS` without the memory attesters'
+NO_ATTESTERS = {p: cs for p, cs in BINDINGS.items() if p not in ATTESTERS}
 RUN_KEY = "e" * 128
 #: the tree's Python's stand-in for served_piece.sh --run-keys: the key's directory and its mode, and a key's SHA-512
 TPY = f"""#!/usr/bin/env bash
@@ -774,16 +771,19 @@ def test_unbound_the_memory_attesters_are_the_runs_and_each_piece_says_so_before
     cfg = R.load(CONFIG, REG)
     got = T.variables(cfg, NO_ATTESTERS)
     assert got["POUS_ARGS"] == "--run-keys --rounds 320"
-    assert not [k for k, v in got.items() if k not in ("VERITY_PINS", "WIPE_CMD") and any(p in v for p in PIN.values())]
+    assert got["WIPE_CMD"] == f'bash {T.WIPE_SCRIPT} "$1" "$2" "$3" --run-keys'
+    assert not [k for k, v in got.items() if k != "VERITY_PINS" and any(p in v for p in PIN.values())]
+    assert not {"WIPE_ADDRESS", "WIPE_CHALLENGER", "WIPE_COMMAND"} & set(got)
     rc, plan, err = dry(capsys, "--bindings", bindings(tmp_path, NO_ATTESTERS))
     hooks = {(x["party"], e["component"]): e["hooks"] for x in plan["plan"] for e in x["entries"]}
     assert rc == 0, err
-    assert [hooks[T.PROVER, c]["DEVELOPMENT"] for c in ("pous", "bandwidth")] == ["1"] * 2
+    assert [hooks[T.PROVER, c]["DEVELOPMENT"] for c in ("pous", "bandwidth", "wipe")] == ["1"] * 3
 
 
 @pytest.mark.parametrize("tables, says", [
     ({"memory-challenger": {"pous": {"host": "auditor-1"}}}, "and the deploy bindings bind memory-challenger.pous.host "
                                                              "beside it: bind memory-challenger.pous.address too"),
+    ({"memory-challenger": {"wipe": {"command": "ssh auditor-1"}}}, "bind memory-challenger.wipe.address too"),
     ({"bandwidth-verifier": {"bandwidth": {"host": "192.0.2.2"}}},
      "bind bandwidth-verifier.bandwidth.host but not memory-challenger.pous.address: bind both"),
     ({"memory-challenger": {"pous": {"address": "192.0.2.1:7000"}}},
@@ -867,8 +867,54 @@ def test_the_onsite_line_names_the_machine_each_memory_attesters_key_and_coins_w
     (state / "out" / "machine.txt").write_text("research\nprover-1\n")
     (state / T.BINDINGS).write_text(json.dumps(tables))
     line = T.onsite_check(R.load(CONFIG, REG), state)
-    assert line["coins_on"] == {"pous": on, "bandwidth": on} and line["coins"] == coins
+    assert line["coins_on"] == {"pous": on, "bandwidth": on, "wipe": on} and line["coins"] == coins
 
+
+#: nvidia-smi's stand-in: an idle card
+IDLE = """#!/usr/bin/env bash
+case "$*" in *memory.used*) echo 0 ;; esac
+"""
+#: demo.sh's stand-in: its arguments, and the directory its scratch is made in with that directory's mode
+DEMO = ARGS0 + """echo "$TMPDIR $(stat -c %a "$TMPDIR")" > "$(dirname "$0")/tmpdir.txt"
+"""
+
+
+def served_wipe(tmp: Path, bindings_: dict, **env: str) -> tuple[subprocess.CompletedProcess, Path]:
+    """served_wipe.sh run as the workload runs it on an idle card, with demo.sh's stand-in, its Lean built."""
+    cfg = R.load(CONFIG, REG)
+    hooks = T.PARTIES["wipe"][T.PROVER].variables(cfg, bindings_)
+    executable(tmp, "nvidia-smi", IDLE)
+    demo = executable(tmp, "demo.sh", DEMO)
+    run = {"PATH": os.pathsep.join([str(tmp), str(Path(sys.executable).parent), os.defpath]), "HOME": str(tmp),
+           "VERITY_PINS": json.dumps(cfg["pin"]), "WIPE_PROTOCOL_EXE": "true", "GPU_LEASE_UUID": "card-0",
+           "WIPE_DEMO": str(demo), **{k: v for k, v in hooks.items() if k != "WIPE_CMD"}, **env}
+    p = subprocess.run(["bash", "-c", hooks["WIPE_CMD"], "_", str(tmp / "serve"), "all", str(tmp / "wipe")], cwd=ROOT,
+                       env=run, capture_output=True, text=True, check=False)
+    return p, demo
+
+
+@pytest.mark.parametrize("bound", [True, False])
+def test_the_wipes_key_is_the_pin_when_bound_and_the_runs_otherwise_and_served_json_says_which(tmp_path, bound):
+    tables = {"memory-challenger": {"wipe": {"address": "192.0.2.1:7001", "host": "auditor-1",
+                                             "command": "ssh auditor-1"}}} if bound else {}
+    p, demo = served_wipe(tmp_path, tables)
+    argv, keys = args0(demo), tmp_path / "serve" / "private" / "run-keys" / "wipe"
+    pinned = argv[argv.index("--trusted-sha512") + 1] if "--trusted-sha512" in argv else None
+    assert p.returncode == 0, p.stdout + p.stderr
+    assert json.loads((tmp_path / "wipe" / "served.json").read_text())["key_pin"] == ("configuration" if bound else "run")
+    assert "--run-keys" not in argv and argv[argv.index("--reads") + 1] == "5500"
+    if bound:
+        assert pinned == WIPE_PIN and argv[argv.index("--challenger") + 1] == "auditor-1"
+    else:
+        assert pinned is None and not {"--challenger", "--challenger-address", "--challenger-command"} & set(argv)
+        assert (tmp_path / "tmpdir.txt").read_text().split() == [str(keys), "700"] and not keys.exists()
+
+
+@pytest.mark.parametrize("name", ["WIPE_KEY_SHA512", "WIPE_ADDRESS", "WIPE_CHALLENGER", "WIPE_COMMAND"])
+def test_the_wipes_run_keys_beside_a_pin_or_an_attester_is_refused_before_the_card(tmp_path, name):
+    p, demo = served_wipe(tmp_path, {}, **{name: ""})
+    assert p.returncode == 3 and not Path(f"{demo}.args").exists()
+    assert f"and {name} is set: unset {name}" in (tmp_path / "wipe" / "refused.txt").read_text()
 
 
 @pytest.mark.parametrize("rows, verdict, reason", [

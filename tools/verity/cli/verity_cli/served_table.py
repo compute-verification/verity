@@ -412,7 +412,9 @@ _WIPE = {"address": "WIPE_ADDRESS", "host": "WIPE_CHALLENGER", "command": "WIPE_
 
 def _wipe(cfg, params, bound):
     """The key is the configuration's pin alone, on the command line, so neither the environment nor a binding gives
-    another; with no pin served_wipe.sh refuses."""
+    another; with no pin served_wipe.sh refuses. Unbound, the key is the run's (`RUN_KEYS`), and no pin is passed."""
+    if "address" not in bound:
+        return {"WIPE_CMD": f'bash {WIPE_SCRIPT} "$1" "$2" "$3" {RUN_KEYS}', **DEVELOPMENT}
     pin = next((p["key-sha512"] for p in cfg.get("pin", [])
                 if (p["party"], p["protocol"]) == (MEMORY_CHALLENGER, "wipe")), "")
     return {"WIPE_CMD": f'WIPE_KEY_SHA512={pin} bash {WIPE_SCRIPT} "$1" "$2" "$3"',
@@ -553,8 +555,10 @@ PARTIES: dict[str, dict[str, Piece]] = {
     "wipe": {
         PROVER: Piece("wipe", PROVER, SERVED_WINDOW, "the streamed wipe of the card before the workload's engine loads "
                       "(WIPE_CMD, served_wipe.sh), its session trusted only under the key the configuration pins for "
-                      "the memory challenger's wipe", scripts=(WIPE_SCRIPT,), reaches=MEMORY_CHALLENGER,
-                      binds=("address",), optional=("host", "command"), hooks=_wipe),
+                      "the memory challenger's wipe; unbound, under a key made for the run, with the memory "
+                      "challenger on the workload's machine in a development run", scripts=(WIPE_SCRIPT,),
+                      reaches=MEMORY_CHALLENGER, optional=("address", "host", "command"), hooks=_wipe,
+                      development="address"),
         MEMORY_CHALLENGER: Piece("wipe", MEMORY_CHALLENGER, GATE, "the gate: the wipe's memory challenger, on its own "
                                  "coins and raw clock, signing the session"),
         VERIFIER: Piece("wipe", VERIFIER, CHECK, "the wipe's row"),

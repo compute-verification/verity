@@ -186,7 +186,8 @@ def test_the_wipe_on_the_serves_card_writes_its_core_answer(node, tmp_path) -> N
                      "address": ["10.96.0.36", 47611]}
     assert json.loads((d / "served.json").read_text()) == {
         "serve_dir": str(tmp_path / "pieces" / "serve-run"), "window": "3", "server": "vy-dc-h200", "card": CARD,
-        "run": node.get("RESEARCH_RUN_ID"), "lease": "the serve's: its engine loads on this card after the wipe"}
+        "run": node.get("RESEARCH_RUN_ID"), "lease": "the serve's: its engine loads on this card after the wipe",
+        "key_pin": "run"}
     summary = json.loads((d / "summary.json").read_text())
     assert summary["verdict"] == "accept" and summary["decided_by"] == DECIDED and summary["k"] == W.READS
     key, = case["params"]["trusted"]

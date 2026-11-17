@@ -24,7 +24,10 @@
 #                    give the wipe (period.json's deployment), and otherwise reads a rehearsal with no bound
 #   WIPE_READS       the reads the gate's verb runs, which the subprotocol holds the session to (5500)
 #   WIPE_NODE        the wiped server's id (this host's name, as served_verdicts.py record's --node defaults to)
-# Further arguments go to demo.sh. The Lean judge (wipe-protocol) is built before the card is checked, in a
+# --run-keys is a development run's: the memory challenger is demo.sh's own on this node, under a key it makes for the
+# run in SERVE_DIR/private/run-keys/wipe (0700), removed when the wipe ends, and trusted for this run alone, so
+# served.json says key_pin run and trusted-device reads rehearsal. It is refused beside WIPE_KEY_SHA512, WIPE_ADDRESS,
+# WIPE_CHALLENGER or WIPE_COMMAND. Further arguments go to demo.sh. The Lean judge (wipe-protocol) is built before the card is checked, in a
 # scratch copy of verity/, which holds every package it requires (WIPE_PROTOCOL_EXE names one built already), never in
 # this tree's .lake, which served_verdicts.sh's Lean builds write meanwhile. DIR gets demo.sh's outputs (env.txt, gpu.txt, period.json, wipe.json,
 # summary.json, which names the program that decided and its host under `decided_by`, the SHA-512 of the challenger key
@@ -43,6 +46,8 @@ ROOT=$(cd "$HERE/../../.." && pwd)
 USAGE="usage: served_wipe.sh SERVE_DIR WINDOW DIR [DEMO_OPTIONS]"
 SERVE_DIR=${1:?$USAGE} WINDOW=${2?$USAGE} DIR=${3:?$USAGE}
 shift 3
+RUN_KEYS= DEMO_ARGS=()
+for a in "$@"; do [ "$a" = --run-keys ] && RUN_KEYS=1 || DEMO_ARGS+=("$a"); done
 mkdir -p "$DIR"
 DIR=$(cd "$DIR" && pwd)
 CH=${WIPE_CHALLENGER:-vy-auditor-2} ADDR=${WIPE_ADDRESS:-10.96.0.36:47611} READS=${WIPE_READS:-5500}
@@ -59,14 +64,21 @@ if [ -z "${WIPE_OWN_LEASE:-}" ]; then  # once, before any lease: the pinned key,
   rm -f "$DIR"/{answer,served,summary,wipe,wipe.case}.json "$DIR/refused.txt" "$DIR/stamps.txt" \
     "$SERVE_DIR"/private/wipe/{answer,case,wipe.case}.json
   stamp start
-  [ -n "$PIN" ] || refuse "no challenger key is pinned: set WIPE_KEY_SHA512, the SHA-512 of the public key of $CH's" \
-    "wipe party (its gate's party_key wipe), the one key the wipe trusts"
-  [[ $PIN =~ ^[0-9a-f]{128}$ ]] || refuse "WIPE_KEY_SHA512 is a key's SHA-512 in 128 lowercase hex digits, not $PIN"
-  read -r -a C <<< "$CMD"
-  KEY=
-  for ((i = 0; i + 1 < ${#C[@]}; i++)); do [ "${C[$i]}" = -i ] && KEY=${C[$((i + 1))]}; done
-  KEY=${KEY/#\~/$HOME}
-  [ -z "$KEY" ] || [ -r "$KEY" ] || refuse "no wipe gate key $KEY on $NODE ($(hostname)): infra installs it, and its gate verb on $CH for this card"
+  if [ -n "$RUN_KEYS" ]; then
+    for v in WIPE_KEY_SHA512 WIPE_ADDRESS WIPE_CHALLENGER WIPE_COMMAND; do
+      [ -z "${!v+set}" ] || refuse "--run-keys runs the memory challenger on this node under a key made for the run," \
+        "and $v is set: unset $v, or drop --run-keys and bind the auditor's memory challenger"
+    done
+  else
+    [ -n "$PIN" ] || refuse "no challenger key is pinned: set WIPE_KEY_SHA512, the SHA-512 of the public key of $CH's" \
+      "wipe party (its gate's party_key wipe), the one key the wipe trusts"
+    [[ $PIN =~ ^[0-9a-f]{128}$ ]] || refuse "WIPE_KEY_SHA512 is a key's SHA-512 in 128 lowercase hex digits, not $PIN"
+    read -r -a C <<< "$CMD"
+    KEY=
+    for ((i = 0; i + 1 < ${#C[@]}; i++)); do [ "${C[$i]}" = -i ] && KEY=${C[$((i + 1))]}; done
+    KEY=${KEY/#\~/$HOME}
+    [ -z "$KEY" ] || [ -r "$KEY" ] || refuse "no wipe gate key $KEY on $NODE ($(hostname)): infra installs it, and its gate verb on $CH for this card"
+  fi
   if [ -z "${WIPE_PROTOCOL_EXE:-}" ]; then
     S=$(mktemp -d)
     trap 'rm -rf "$S"' EXIT
@@ -106,16 +118,28 @@ USED=$(nvidia-smi --query-gpu=memory.used --format=csv,noheader,nounits -i "$CAR
   "WIPE_IDLE_MIB $IDLE_MIB; the wipe fills the whole card and kills nothing"
 unset PYTHONPATH VIRTUAL_ENV
 rc=0
-OUT=$DIR bash "$DEMO" --node "$NODE" --challenger "$CH" --challenger-address "$ADDR" --challenger-command "$CMD" \
-  --trusted-sha512 "$PIN" --reads "$READS" ${WIPE_PROTOCOL_EXE:+--wipe-protocol "$WIPE_PROTOCOL_EXE"} "$@" || rc=$?
+if [ -n "$RUN_KEYS" ]; then
+  K=$SERVE_DIR/private/run-keys/wipe
+  rm -rf "$K" && (umask 077 && mkdir -p "$K")
+  OUT=$DIR TMPDIR=$K bash "$DEMO" --node "$NODE" --reads "$READS" \
+    ${WIPE_PROTOCOL_EXE:+--wipe-protocol "$WIPE_PROTOCOL_EXE"} ${DEMO_ARGS[@]+"${DEMO_ARGS[@]}"} || rc=$?
+  rm -rf "$K"
+else
+  OUT=$DIR bash "$DEMO" --node "$NODE" --challenger "$CH" --challenger-address "$ADDR" --challenger-command "$CMD" \
+    --trusted-sha512 "$PIN" --reads "$READS" ${WIPE_PROTOCOL_EXE:+--wipe-protocol "$WIPE_PROTOCOL_EXE"} \
+    ${DEMO_ARGS[@]+"${DEMO_ARGS[@]}"} || rc=$?
+fi
 stamp "the wipe exit $rc"
-HEADLINE=$(python3 - "$DIR" "$SERVE_DIR" "$WINDOW" "$NODE" "$CARD" "${WIPE_OWN_LEASE:+own}" "$rc" <<'EOF'
+KEY_PIN=run
+[ -n "$RUN_KEYS" ] || [ -z "$PIN" ] || [ "$PIN" != "$PINNED" ] || KEY_PIN=configuration
+HEADLINE=$(python3 - "$DIR" "$SERVE_DIR" "$WINDOW" "$NODE" "$CARD" "${WIPE_OWN_LEASE:+own}" "$rc" "$KEY_PIN" <<'EOF'
 import json, os, sys
 from pathlib import Path
 
-d, serve_dir, window, node, card, own, rc = sys.argv[1:]
+d, serve_dir, window, node, card, own, rc, key_pin = sys.argv[1:]
 d = Path(d)
 served = {"serve_dir": serve_dir, "window": window, "server": node, "card": card, "run": os.environ.get("RESEARCH_RUN_ID"),
+          "key_pin": key_pin,
           "lease": "its own (gpu-lease 1 --wait), given back before the serve takes one" if own else
           "the serve's: its engine loads on this card after the wipe"}
 (d / "served.json").write_text(json.dumps(served, indent=1, sort_keys=True) + "\n")
@@ -132,7 +156,8 @@ except (OSError, ValueError):
 print("WIPE " + json.dumps({"verdict": answer["verdict"], "reason": answer["reason"], "protocol": answer["protocol"],
                             "decided_by": s.get("decided_by"), "k": s.get("k"), "segments": s.get("segments"),
                             "fill_GBps": (s.get("challenger") or {}).get("fill_GBps"), "t0": s.get("t0"), "t1": s.get("t1"),
-                            "server": node, "card": card, "exit": int(rc)}, sort_keys=True), flush=True)
+                            "server": node, "card": card, "key_pin": key_pin, "exit": int(rc)}, sort_keys=True),
+      flush=True)
 EOF
 )
 P=$SERVE_DIR/private/wipe
