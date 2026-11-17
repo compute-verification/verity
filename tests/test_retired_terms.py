@@ -18,7 +18,8 @@ a key that mirrors a Lean name such as `faulty_bits`) are code; the retired-term
 record or a digest (``ALLOWED``, one reason each; an entry that matches nothing fails too).
 
 The Lean's declaration names get a pass of their own (``LEAN_WORDS``): a name that carries one of the Glossary's older
-names keeps it until it is renamed, and each word's count of names only falls (``RETIRED_NAMES``). SPOT's older name,
+names keeps it until it is renamed, and each word's count of names only falls (``RETIRED_NAMES``); a word it leaves out for
+a sense the Glossary keeps is held at no name in the areas that renamed all of its retired sense (``LEAN_AREA_WORDS``). SPOT's older name,
 sampled proofs, is held by count in every scanned file's whole text (``SPOT_NAMES``): its words until the prose move
 (`tools/move/spot_term_map.toml`) and the strings' owners rename them, and the code's names until SPOT's code move does.
 The network attester's older name is held in every tracked file but the few that spell it to move or find it
@@ -420,12 +421,21 @@ def test_the_glossary_records_the_retired_terms():
 
 
 #: the Glossary's older names (GLOSSARY.md) a Lean declaration's own name may carry, each word's forms and its term;
-#: `session`, `window` and `block` are left out, as each has a sense the Glossary keeps
+#: `session`, `window` and `block` are left out, as each has a sense the Glossary keeps (`window` is held in the areas of
+#: LEAN_AREA_WORDS)
 LEAN_WORDS = {"draw": (("draw", "draws", "drawn"), "sample"), "law": (("law", "laws"), "sampling design"),
               "escape": (("escape",), "miss probability"), "wrong": (("wrong",), "incorrect"),
               "dampener": (("dampener",), "slowdown"), "firewall": (("firewall",), "ZK server"),
               "horizon": (("horizon",), "monitoring period"), "warden": (("warden",), "network attester"),
               "tap": (("tap", "taps"), "network attester"), "leg": (("leg", "legs"), "subprotocol")}
+
+#: the words LEAN_WORDS leaves out, each held at no name inside the areas where every name in its retired sense was renamed
+#: and none keeps a kept sense (GLOSSARY.md, Older names): each word's forms, its term and its areas
+LEAN_AREA_WORDS = {"window": (("window", "windows"), "execution phase, or run for SPOT's",
+                              ("security/Proofs/Flock/EndToEnd/", "security/Proofs/Flock/Soundness/",
+                               "security/Proofs/Properties/Challenger/", "security/Proofs/Properties/Pouw/",
+                               "security/Proofs/Properties/Verity/", "security/Proofs/WeightSecurity/",
+                               "security/Definitions/Pouw/Window.lean"))}
 
 
 def words(name: str) -> list[str]:
@@ -434,11 +444,11 @@ def words(name: str) -> list[str]:
     return [w.lower() for part in re.split(r"[._']", name) for w in re.findall(r"[A-Z]+(?![a-z])|[A-Z]?[a-z]+|\d+", part)]
 
 
-def retired_names(files: dict[str, str]) -> dict[str, list[str]]:
-    """{word of LEAN_WORDS: `FILE:LINE NAME` for each declaration of ``files`` ({file: its source}) whose name, as the
+def retired_names(files: dict[str, str], table: dict = LEAN_WORDS) -> dict[str, list[str]]:
+    """{word of ``table``: `FILE:LINE NAME` for each declaration of ``files`` ({file: its source}) whose name, as the
     declaration writes it, carries the word}."""
-    forms = {f: w for w, (fs, _) in LEAN_WORDS.items() for f in fs}
-    out: dict[str, list[str]] = {w: [] for w in LEAN_WORDS}
+    forms = {f: w for w, (fs, *_) in table.items() for f in fs}
+    out: dict[str, list[str]] = {w: [] for w in table}
     for f, src in sorted(files.items()):
         for d in declarations(src):
             for w in sorted({forms[x] for x in words(d.written) if x in forms}):
@@ -454,6 +464,21 @@ def test_no_retired_word_in_a_new_lean_name():
     _held("RETIRED_NAMES", RETIRED_NAMES, {w: len(v) for w, v in found.items()}, "the Lean names with a retired word",
           "name the new one with the Glossary's term instead (" + "; ".join(f"{t} for {w}" for w, (_, t) in LEAN_WORDS.items())
           + "; GLOSSARY.md, Older names): `git diff -U0 origin/main -- '*.lean'` shows it")
+
+
+def area_names(files: dict[str, str]) -> dict[str, list[str]]:
+    """{word of LEAN_AREA_WORDS: `FILE:LINE NAME` for each declaration in the word's areas whose name carries it}."""
+    return {w: retired_names({f: s for f, s in files.items() if f.startswith(areas)}, LEAN_AREA_WORDS)[w]
+            for w, (_, _, areas) in LEAN_AREA_WORDS.items()}
+
+
+def test_no_retired_word_in_a_lean_name_where_its_names_were_renamed():
+    """Where every Lean name in a word's retired sense was renamed, and none keeps a sense the Glossary keeps, no new name
+    brings the word back (`LEAN_AREA_WORDS`)."""
+    files = {f: text for f in _tracked() if f.endswith(".lean") and (text := _read(f)) is not None}
+    found = {w: v for w, v in area_names(files).items() if v}
+    assert not found, (f"a Lean name carries a word its area retired: {found}: name it with the Glossary's term instead ("
+                       + "; ".join(f"{t} for {w}" for w, (_, t, _) in LEAN_AREA_WORDS.items()) + "; GLOSSARY.md, Older names)")
 
 
 #: SPOT's older name (GLOSSARY.md, Older names): each spelling's count in the scanned files' whole text, which only falls
@@ -699,6 +724,13 @@ def test_the_lean_name_scan_reads_each_form():
     got = {w: v for w, v in retired_names({"a.lean": src}).items() if v}
     assert got == {"draw": ["a.lean:3 drawnUnits"], "wrong": ["a.lean:4 wrong_set"], "tap": ["a.lean:10 TapLegs"],
                    "leg": ["a.lean:10 TapLegs"]}
+
+
+def test_an_area_word_counts_only_inside_its_areas():
+    """`window` in a name under an area that retired it counts, the same name elsewhere doesn't, nor a comment's."""
+    src = "theorem windowK_le : True := trivial\n-- def windowOf : Nat := 0\ndef executionPhaseK : Nat := 0\n"
+    got = area_names({"security/Proofs/Flock/Soundness/A.lean": src, "security/Definitions/Poub/B.lean": src})
+    assert got == {"window": ["security/Proofs/Flock/Soundness/A.lean:1 windowK_le"]}
 
 
 def test_the_scan_reads_each_form():
