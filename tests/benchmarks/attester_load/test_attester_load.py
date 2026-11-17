@@ -44,7 +44,7 @@ def test_the_stub_arm_runs_end_to_end_and_its_guard_holds(ran) -> None:
     doc, _out, code = ran
     assert code == 0 and doc["model_arm"].startswith("The model arm was not run")
     (arm,) = doc["arms"]
-    assert arm["member"] == "stub-cpu" and arm["egress"] == "id" and arm["card"] == "none"
+    assert arm["member"] == "stand-in-cpu" and arm["arm"] == "stub" and arm["egress"] == "id" and arm["card"] == "none"
     assert arm["guard"]["failed"] == []
     assert abs(arm["guard"]["planted_shift_ms"] - 10) <= R.PLANT_TOL_MS
     assert abs(arm["guard"]["direct_against_itself_ms"]) <= R.SELF_TOL_MS
@@ -59,10 +59,20 @@ def test_each_point_carries_the_schedule_and_its_scheduled_delays(ran) -> None:
     got = json.loads((out / "result.json").read_text())["measurements"]
     assert sorted(m["name"] for m in got) == sorted([R.FIRST, R.LAST, R.TICK])
     for m in got:
-        assert m["member"] == "stub-cpu" and m["unit"] == "ms" and m["mark"] == "measured"
+        assert m["member"] == "stand-in-cpu" and m["unit"] == "ms" and m["mark"] == "measured"
         assert m["schedule"]["delay"] == 4 and m["schedule"]["bucket_ms"] == 50
         assert {"capacity_per_s", "scheduled_first_ms", "scheduled_last_bucket", "egress", "card", "model",
                 "load_per_s"} <= set(m)
+
+
+def test_the_model_arm_writes_ids_of_its_own_under_its_model_and_card(ran, tmp_path) -> None:
+    doc, _out, _code = ran
+    model = {**doc["arms"][0], "arm": "model", "member": "llama-3.2-1b-h200"}
+    assert R.write({**doc, "arms": [doc["arms"][0], model]}, tmp_path) == 2
+    got = json.loads((tmp_path / "result.json").read_text())["measurements"]
+    assert sorted((m["name"], m["member"]) for m in got) == sorted(
+        [(i, "stand-in-cpu") for i in (R.FIRST, R.LAST, R.TICK)]
+        + [(i, "llama-3.2-1b-h200") for i in (R.FIRST_MODEL, R.LAST_MODEL, R.TICK_MODEL)])
 
 
 def test_the_guard_refuses_a_planted_delay_that_doesn_t_show_and_a_direct_arm_that_reads_off_zero() -> None:

@@ -1,15 +1,16 @@
 # This directory's numbers, one [[metric]] each: benchmarks/README.md's "Metrics"; tests/test_metrics_registry.py
 # enforces it.
 
-# one GPU of the node for the model arm (vLLM from the node's VENV), within its lease's 50 minutes; the stub arm on its CPUs
+# the stub arm on a CPU node; the model arm on one leased card of the node its owner picks (vLLM from the node's VENV),
+# within its lease's 50 minutes
 [[metric]]
 id = "network-accounting/attester-added-first-byte"
 title = "Network attester's wait to first byte"
 owner = "network-accounting"
 unit = "ms"
-axis = "The mean extra time to a response's first byte through the network attester over straight to the endpoint, at four fifths of its stated capacity under the application's schedule: the schedule delays every response by its delay on purpose, so the number is what a request waits in all beyond the endpoint's own time."
+axis = "The mean extra time to a response's first byte through the network attester over straight to a stand-in endpoint on a CPU, at four fifths of its stated capacity under the application's schedule: the schedule delays every response by its delay on purpose, so the number is what a request waits in all beyond the endpoint's own time."
 better = "lower"
-command = "research run --on NODE --gpu-host --project verity --source . --cwd source --timeout 60m -- gpu-lease 1 --wait --max-min 50 -- uv run python benchmarks/attester_load/run.py --vllm-python /workspace/jobs/venv312/bin/python"
+command = "research run --on auto --project verity --source . --cwd clone -- bash -lc 'uv sync -q --all-packages --extra torch-cpu && uv run --extra torch-cpu python benchmarks/attester_load/run.py'"
 every = "7d"
 
 [[metric]]
@@ -17,9 +18,9 @@ id = "network-accounting/attester-added-last-byte"
 title = "Network attester's wait to last byte"
 owner = "network-accounting"
 unit = "ms"
-axis = "The mean extra time to a response's last byte through the network attester over straight to the endpoint, at four fifths of its stated capacity under the application's schedule: the schedule releases a response's cells at set buckets on purpose, so the number is what a request waits in all beyond the endpoint's own time."
+axis = "The mean extra time to a response's last byte through the network attester over straight to a stand-in endpoint on a CPU, at four fifths of its stated capacity under the application's schedule: the schedule releases a response's cells at set buckets on purpose, so the number is what a request waits in all beyond the endpoint's own time."
 better = "lower"
-command = "research run --on NODE --gpu-host --project verity --source . --cwd source --timeout 60m -- gpu-lease 1 --wait --max-min 50 -- uv run python benchmarks/attester_load/run.py --vllm-python /workspace/jobs/venv312/bin/python"
+command = "research run --on auto --project verity --source . --cwd clone -- bash -lc 'uv sync -q --all-packages --extra torch-cpu && uv run --extra torch-cpu python benchmarks/attester_load/run.py'"
 every = "7d"
 
 [[metric]]
@@ -27,7 +28,37 @@ id = "network-accounting/attester-tick-lateness"
 title = "Network attester's late ticks"
 owner = "network-accounting"
 unit = "ms"
-axis = "The 99th percentile of how late the network attester's ticks run at the full capacity its schedule states, the device's own cost of carrying that load: past its slack a tick faults and the stated capacity is not carried."
+axis = "The 99th percentile of how late the network attester's ticks run at the full capacity its schedule states in front of a stand-in endpoint on a CPU, the device's own cost of carrying that load: past its slack a tick faults and the stated capacity is not carried."
 better = "lower"
-command = "research run --on NODE --gpu-host --project verity --source . --cwd source --timeout 60m -- gpu-lease 1 --wait --max-min 50 -- uv run python benchmarks/attester_load/run.py --vllm-python /workspace/jobs/venv312/bin/python"
+command = "research run --on auto --project verity --source . --cwd clone -- bash -lc 'uv sync -q --all-packages --extra torch-cpu && uv run --extra torch-cpu python benchmarks/attester_load/run.py'"
+every = "7d"
+
+[[metric]]
+id = "network-accounting/attester-added-first-byte-model"
+title = "Attester's first byte wait through vLLM"
+owner = "network-accounting"
+unit = "ms"
+axis = "The mean extra time to a response's first byte through the network attester over straight to vLLM's server of the model on one card, at four fifths of its stated capacity under the application's schedule: the schedule delays every response by its delay on purpose, so the number is what a request waits in all beyond the endpoint's own time."
+better = "lower"
+command = "research run --on NODE --gpu-host --project verity --source . --cwd source --timeout 60m -- env GPU_LEASE_WHO=network-accounting gpu-lease 1 --wait --on CARD --cores CORES --max-min 50 -- uv run python benchmarks/attester_load/run.py --vllm-python /workspace/jobs/venv312/bin/python"
+every = "7d"
+
+[[metric]]
+id = "network-accounting/attester-added-last-byte-model"
+title = "Attester's last byte wait through vLLM"
+owner = "network-accounting"
+unit = "ms"
+axis = "The mean extra time to a response's last byte through the network attester over straight to vLLM's server of the model on one card, at four fifths of its stated capacity under the application's schedule: the schedule releases a response's cells at set buckets on purpose, so the number is what a request waits in all beyond the endpoint's own time."
+better = "lower"
+command = "research run --on NODE --gpu-host --project verity --source . --cwd source --timeout 60m -- env GPU_LEASE_WHO=network-accounting gpu-lease 1 --wait --on CARD --cores CORES --max-min 50 -- uv run python benchmarks/attester_load/run.py --vllm-python /workspace/jobs/venv312/bin/python"
+every = "7d"
+
+[[metric]]
+id = "network-accounting/attester-tick-lateness-model"
+title = "Attester's late ticks under vLLM"
+owner = "network-accounting"
+unit = "ms"
+axis = "The 99th percentile of how late the network attester's ticks run at the full capacity its schedule states in front of vLLM's server of the model on one card, the device's own cost of carrying that load: past its slack a tick faults and the stated capacity is not carried."
+better = "lower"
+command = "research run --on NODE --gpu-host --project verity --source . --cwd source --timeout 60m -- env GPU_LEASE_WHO=network-accounting gpu-lease 1 --wait --on CARD --cores CORES --max-min 50 -- uv run python benchmarks/attester_load/run.py --vllm-python /workspace/jobs/venv312/bin/python"
 every = "7d"
