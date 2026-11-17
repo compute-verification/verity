@@ -3,7 +3,8 @@ of each rank, sized with ``--estimate``) cut into proof blocks, and the proof bl
 step (step 0) and the decode steps, per token and per request.
 
 A row's cut is its own Definition, or else a unit template for each slot of its split (`serving_rows.unit_templates`):
-a ``CUT`` row's batched members, a ``PARTS`` row's parts and a ``STAGES`` row's stages are a slot each; a
+a ``CUT`` row's batched members, a ``PARTS`` row's parts, a ``KEY_BLOCKS`` row's key blocks and ends (the window circuit's
+cut of its heads) and a ``STAGES`` row's stages are a slot each; a
 ``COORDS``, ``COLS`` or ``SLICES`` row has one slot, its units listed coarse to fine, a ``KCHUNKS`` row's slot is its
 coordinate or its K-chunks of one width, and a ``CHAINS`` row's one slot is a way its key blocks are served
 (`serving_rows.chain_ways`): each key block its scores unit and values units of `CHAIN_COLS` columns and its key rows'
@@ -50,8 +51,9 @@ WIDTH_FLOOR = 22
 CHAIN_COLS = 64
 #: the longest row of a family taken whole, by a static of its spec: past it a row's whole statement, though its block is at
 #: most `K_MAX`, stages past a staging job's memory while its family's units stage, so it is cut like the family's longer
-#: rows (each slot's coarsest fitting option), and taken whole only when no option fits
-WHOLE_UP_TO = {"SparseMlaSplit_v1": ("T", 3), "DsaMqaLogits_v3": ("N", 36)}
+#: rows (each slot's coarsest fitting option), and taken whole only when no option fits; an attention row is cut whatever its
+#: length, as the window circuit cuts its heads
+WHOLE_UP_TO = {"SparseMlaSplit_v1": ("T", 3), "DsaMqaLogits_v3": ("N", 36), "Attention_v4": ("T", 0)}
 
 
 def misfit(e: dict) -> str | None:
@@ -85,7 +87,7 @@ def slots(spec: str, units: list[dict]) -> list[list[list[dict]]]:
     if base in ST.CHAINS:
         by, ways = {u["spec"]: u for u in units}, dict(ST.chain_ways(spec))
         return [[[by[u] for u, _n in ways[g]] for g in (CHAIN_COLS, None) if g in ways and all(u in by for u, _n in ways[g])]]
-    if base in ST.CUT or base in ST.STAGES:
+    if base in ST.CUT or base in ST.STAGES or base in ST.KEY_BLOCKS:
         return [[[u]] for u in units]
     if base in ST.KCHUNKS:
         whole, chunks = [], defaultdict(list)
