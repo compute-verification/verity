@@ -39,7 +39,7 @@ def stand_in(monkeypatch: pytest.MonkeyPatch, lines: list[dict] | None, rc: int)
 
 
 def line(verdict: str = "accept", **components: str) -> dict:
-    return {"block": 0, "components": {"sampled-proofs": "accept", "pearl-plus": "accept", "inference-only": "accept",
+    return {"block": 0, "components": {"spot": "accept", "pearl-plus": "accept", "inference-only": "accept",
                                        **components}, "product": "verity/remote/v1", "verdict": verdict}
 
 
