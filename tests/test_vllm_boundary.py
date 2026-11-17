@@ -82,8 +82,7 @@ ALLOWED = {
     **dict.fromkeys(("benchmarks/dsa_topk/dsa_topk.py", "benchmarks/dsa_topk/stress.py"),
                     "proofs: a general plugin making the DSA indexer's top-k (_custom_ops) a function of its inputs, and "
                     "its stress"),
-    **dict.fromkeys(("benchmarks/replay_ladder/ladder.py", "benchmarks/replay_ladder/topk_probe.py"),
-                    "proofs: each ladder model's window replayed by a stock engine, and a probe of its DSA prefill top-k"),
+    "benchmarks/replay_ladder/topk_probe.py": "proofs: a probe of a ladder replay's DSA prefill top-k",
     **dict.fromkeys(("benchmarks/serve_tax/rebuild.py", "benchmarks/serve_tax/replay.py", "benchmarks/serve_tax/restore.py",
                      "benchmarks/serve_tax/servetax_plugin.py", "benchmarks/serve_tax/tp_edge.py",
                      "benchmarks/serve_tax/tp_restore.py", "benchmarks/serve_tax/tp_state.py"),
