@@ -1,6 +1,6 @@
 """`run.check`, the composed check of a recorded PoUS run: an honest run at a reduced point is accepted under the id the
 auditor designated, each refusal is the first that applies, its reason word for word, an audit has at most one session the
-check accepts, the keys it trusts are the verifier's alone, and `check` is `check_at` at the deployed point under S1's
+verifier accepts, the keys it trusts are the verifier's alone, and `check` is `check_at` at the deployed point under S1's
 LMS.  Every clock is injected, and every session log is a temporary file."""
 from __future__ import annotations
 

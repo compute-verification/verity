@@ -73,7 +73,7 @@ statement reading the leaf's lane partials, a value committed after the sample (
 ``cost`` counts a lane's and the combine's ANDs at a K (4096, the served one) without staging anything. ``prepare`` writes
 WORK/plan.tsv (``S tag dir`` a session; ``C tag dir pub registered program partition expect registration produced
 descriptor rounds unit statement flock-statement`` a Lean check and `pouw-leaf-own-window`'s), WORK/plan.json
-and WORK/prepare.json; ``summarize`` writes OUT/summary.json from the Lean verdicts, and exits 1 unless every check's verdict
+and WORK/prepare.json; ``summarize`` writes OUT/summary.json from the Lean verdicts, and exits 1 unless every verifier's verdict
 is the expected one, the honest statements' reported roots are the produced record's (`produced.opened`) and their
 opened rows its openings (`produced.shared`).
 """

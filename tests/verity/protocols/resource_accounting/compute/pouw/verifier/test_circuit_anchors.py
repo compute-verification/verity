@@ -135,7 +135,7 @@ def public_inputs_file_is_c_flocks(t, label: str, rules: dict):
 
 
 def test_the_public_inputs_file_is_in_parameter_leaf_order():
-    """The verifier's file holds each region in the unit's parameter leaf order, and its check refuses any other order:
+    """The verifier's file holds each region in the unit's parameter leaf order, and its verifier refuses any other order:
     F_B in read order (transposed, code p of line t at word p·k + t, as Flock's staging first read it) or two instances
     swapped, every word otherwise right, is refused at its first differing word, as Flock's Lean verifier refuses it."""
     file_is_in_parameter_leaf_order(RV.anchors("pc8-h100-128", "pc8", 128, "h100"), 128)
