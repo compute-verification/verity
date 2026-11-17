@@ -16,7 +16,8 @@ template `reader`'s units read rows of their parameter `port` whole as row `out`
 `check` decides a circuit's wires in work proportional to its templates and wires, never to the units they cover (AGENTS.md
 "Design rules"): each wire's writers lie in `span`, the least and greatest writer in closed
 form; and two wires wire no reader row twice exactly when they read different ports or their rectangles (reader units ×
-rows) are disjoint, compared pair by pair (#wires² comparisons, each of a few fields). Its summary gives each reader row's writer (`Summary.writerOf`, by the
+rows) are disjoint, which compiled code decides by a sweep in the order of reader port and first unit, comparing only
+the wires whose reader units meet (`pairwiseDisjoint_eq_sweep`). Its summary gives each reader row's writer (`Summary.writerOf`, by the
 wires alone) and the wired rows and bits multiplied through (`wiredRows`, `wiredBits`), the wired term of the count of a
 window's free inputs.
 
@@ -303,7 +304,7 @@ theorem sweepLe_total (a b : Wire) : (sweepLe a b || sweepLe b a) = true := by
 compiled after it, so it stays directly below `pairwiseDisjoint`. -/
 @[csimp] theorem pairwiseDisjoint_eq_sweep : @pairwiseDisjoint = @pairwiseDisjointSweep := by
   funext ws
-  rw [pairwiseDisjointSweep, sweepSorted_eq _ (List.sorted_mergeSort sweepLe_trans sweepLe_total ws),
+  rw [pairwiseDisjointSweep, sweepSorted_eq _ (List.pairwise_mergeSort sweepLe_trans sweepLe_total ws),
     Bool.eq_iff_iff, pairwiseDisjoint_true_iff, pairwiseDisjoint_true_iff]
   exact ((List.mergeSort_perm ws sweepLe).pairwise_iff disjoint_symm).symm
 
