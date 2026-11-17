@@ -54,8 +54,8 @@ namespace Properties.Remote.SecurityProofs
 open Core Core.Composition Verity
 open Lean (Json)
 open Flock.Program (Prog)
-open InferenceOnlyCheck.Properties (Parses Expands LaysOut Names Divides Meets ProvenanceHeld Reported Witnessed)
-open InferenceOnlyCheck.Protocol (instanceOf trustedOf)
+open InferenceOnlyVerifier.Properties (Parses Expands LaysOut Names Divides Meets ProvenanceHeld Reported Witnessed)
+open InferenceOnlyVerifier.Protocol (instanceOf trustedOf)
 
 private theorem getObjVal?_mkObj {l : List (String × Json)} (hd : l.Pairwise (fun a b => ¬ compare a.1 b.1 = .eq))
     {k : String} {v : Json} (hm : (k, v) ∈ l) : (Json.mkObj l).getObjVal? k = .ok v := by
@@ -63,20 +63,20 @@ private theorem getObjVal?_mkObj {l : List (String × Json)} (hd : l.Pairwise (f
   rw [Std.TreeMap.Raw.getElem?_ofList_of_mem (Std.ReflCmp.compare_self) hd hm]
   rfl
 
-theorem instance_program (p : InferenceOnlyCheck.Protocol.Params) (e : InferenceOnlyCheck.Protocol.Evidence) :
+theorem instance_program (p : InferenceOnlyVerifier.Protocol.Params) (e : InferenceOnlyVerifier.Protocol.Evidence) :
     (instanceOf p e).getObjVal? "program" = .ok (.str p.program) :=
   getObjVal?_mkObj (by simp) (by simp)
 
-theorem instance_gamma (p : InferenceOnlyCheck.Protocol.Params) (e : InferenceOnlyCheck.Protocol.Evidence) :
+theorem instance_gamma (p : InferenceOnlyVerifier.Protocol.Params) (e : InferenceOnlyVerifier.Protocol.Evidence) :
     (instanceOf p e).getObjVal? "gamma" = .ok p.gamma :=
   getObjVal?_mkObj (by simp) (by simp)
 
-theorem instance_alpha (p : InferenceOnlyCheck.Protocol.Params) (e : InferenceOnlyCheck.Protocol.Evidence) :
+theorem instance_alpha (p : InferenceOnlyVerifier.Protocol.Params) (e : InferenceOnlyVerifier.Protocol.Evidence) :
     (instanceOf p e).getObjVal? "alpha" = .ok p.alpha :=
   getObjVal?_mkObj (by simp) (by simp)
 
 /-- Two parses of one instance agree on its program, `Γ` and `α`. -/
-theorem parses_same {j : Json} {i i' : InferenceOnlyCheck.Instance} (h : Parses j i) (h' : Parses j i') :
+theorem parses_same {j : Json} {i i' : InferenceOnlyVerifier.Instance} (h : Parses j i) (h' : Parses j i') :
     i.program = i'.program ∧ i.gamma = i'.gamma ∧ i.num = i'.num ∧ i.den = i'.den := by
   obtain ⟨hp, -, -, ⟨v, hv, hg⟩, ⟨a, b, hab, ha, hb⟩, -⟩ := h
   obtain ⟨hp', -, -, ⟨v', hv', hg'⟩, ⟨a', b', hab', ha', hb'⟩, -⟩ := h'
@@ -91,8 +91,8 @@ theorem parses_same {j : Json} {i i' : InferenceOnlyCheck.Instance} (h : Parses 
     Option.some.inj (ha.symm.trans ha'), Option.some.inj (hb.symm.trans hb')⟩
 
 /-- Every parse of an expansion of the policy's instance carries the policy's parameters. -/
-theorem verifier_own {p : InferenceOnlyCheck.Protocol.Params} {e : InferenceOnlyCheck.Protocol.Evidence} {j' : Json}
-    {i : InferenceOnlyCheck.Instance} (hx : Expands (instanceOf p e) j') (hi : Parses j' i) : VerifierOwn p i := by
+theorem verifier_own {p : InferenceOnlyVerifier.Protocol.Params} {e : InferenceOnlyVerifier.Protocol.Evidence} {j' : Json}
+    {i : InferenceOnlyVerifier.Instance} (hx : Expands (instanceOf p e) j') (hi : Parses j' i) : VerifierOwn p i := by
   obtain ⟨i0, -, h0, -, theta', owner', h0', -, -⟩ := hx
   obtain ⟨hpr, hg, hn, hd⟩ := parses_same h0' hi
   obtain ⟨hp0, -, -, ⟨v, hv, hgv⟩, ⟨a, b, hab, ha, hb⟩, -⟩ := h0
@@ -112,8 +112,8 @@ theorem verifier_own {p : InferenceOnlyCheck.Protocol.Params} {e : InferenceOnly
   · rw [hb, hd']
 
 /-- An expansion of the policy's instance, and what it parses to, carry the registered circuit's text. -/
-theorem expands_program {p : InferenceOnlyCheck.Protocol.Params} {e : InferenceOnlyCheck.Protocol.Evidence} {j' : Json}
-    {i : InferenceOnlyCheck.Instance} (hx : Expands (instanceOf p e) j') (hi : Parses j' i) : i.program = p.program := by
+theorem expands_program {p : InferenceOnlyVerifier.Protocol.Params} {e : InferenceOnlyVerifier.Protocol.Evidence} {j' : Json}
+    {i : InferenceOnlyVerifier.Instance} (hx : Expands (instanceOf p e) j') (hi : Parses j' i) : i.program = p.program := by
   obtain ⟨i0, -, h0, -, theta', owner', h0', -, -⟩ := hx
   have a : (instanceOf p e).getObjVal? "program" = .ok (.str i0.program) := h0.1
   rw [instance_program] at a
@@ -158,10 +158,10 @@ theorem remote_check (blobs : Array ByteArray) (ps : List Named) (c : ByteArray)
     (Core.Remote.protocol.on blobs).check ps c ev =
       holdTies [Core.Remote.executionPhases] ev (checkSame "verity/remote/v0"
         ["verity/inference-only/v0", "verity/sampled-proofs/v1"]
-        [InferenceOnlyCheck.Protocol.protocol, PouwVerifier.Period.protocol,
+        [InferenceOnlyVerifier.Protocol.protocol, PouwVerifier.Period.protocol,
           VStar.Recursive.Sampled.protocol.onBlobs (Blobs.ofArray blobs)] ps c ev) := rfl
 
-theorem id_policy : InferenceOnlyCheck.Protocol.protocol.id = "verity/inference-only/v0" := rfl
+theorem id_policy : InferenceOnlyVerifier.Protocol.protocol.id = "verity/inference-only/v0" := rfl
 theorem id_monitoringPeriod : PouwVerifier.Period.protocol.id = "verity/pouw/period/v1" := rfl
 theorem id_sampled (bs : Blobs) : (VStar.Recursive.Sampled.protocol.onBlobs bs).id = "verity/sampled-proofs/v1" := rfl
 
@@ -172,13 +172,13 @@ theorem digestOf_sampled (bs : Blobs) (b : ByteArray) :
 
 /-- What the policy's check accepts: a record naming the registered circuit, and a verdict of compliance of the check of
 record. -/
-theorem policy_accept {p : InferenceOnlyCheck.Protocol.Params} {c : InferenceOnlyCheck.Protocol.Commitment}
-    {e : InferenceOnlyCheck.Protocol.Evidence} {pub : Unit} {prof : Json}
-    (h : InferenceOnlyCheck.Protocol.check p c e = .accept pub prof) :
-    InferenceOnlyCheck.Protocol.names p c = true ∧ ∃ out, InferenceOnlyCheck.Theta.evaluate (instanceOf p e) (trustedOf p c) = .ok out ∧
+theorem policy_accept {p : InferenceOnlyVerifier.Protocol.Params} {c : InferenceOnlyVerifier.Protocol.Commitment}
+    {e : InferenceOnlyVerifier.Protocol.Evidence} {pub : Unit} {prof : Json}
+    (h : InferenceOnlyVerifier.Protocol.check p c e = .accept pub prof) :
+    InferenceOnlyVerifier.Protocol.names p c = true ∧ ∃ out, InferenceOnlyVerifier.Theta.evaluate (instanceOf p e) (trustedOf p c) = .ok out ∧
       out.getObjVal? "complies" = .ok (.bool true) := by
-  unfold InferenceOnlyCheck.Protocol.check at h
-  by_cases hn : InferenceOnlyCheck.Protocol.names p c = true
+  unfold InferenceOnlyVerifier.Protocol.check at h
+  by_cases hn : InferenceOnlyVerifier.Protocol.names p c = true
   · simp only [hn, Bool.not_true, Bool.false_eq_true, ite_false] at h
     refine ⟨hn, ?_⟩
     split at h
@@ -192,10 +192,10 @@ theorem policy_accept {p : InferenceOnlyCheck.Protocol.Params} {c : InferenceOnl
     simp [hn] at h
 
 /-- The record names the circuit the program decodes to. -/
-theorem names_program {p : InferenceOnlyCheck.Protocol.Params} {c : InferenceOnlyCheck.Protocol.Commitment} {P : Prog}
-    (hn : InferenceOnlyCheck.Protocol.names p c = true) (hP : Flock.Program.decode p.program.toUTF8 = .ok P) :
-    InferenceOnlyCheck.Theta.strAt c.record "program" = some (Flock.hexOf P.sha512) := by
-  unfold InferenceOnlyCheck.Protocol.names at hn
+theorem names_program {p : InferenceOnlyVerifier.Protocol.Params} {c : InferenceOnlyVerifier.Protocol.Commitment} {P : Prog}
+    (hn : InferenceOnlyVerifier.Protocol.names p c = true) (hP : Flock.Program.decode p.program.toUTF8 = .ok P) :
+    InferenceOnlyVerifier.Theta.strAt c.record "program" = some (Flock.hexOf P.sha512) := by
+  unfold InferenceOnlyVerifier.Protocol.names at hn
   rw [hP] at hn
   simpa using hn
 
@@ -251,29 +251,29 @@ theorem policyMet_nontrivial : ∃ (d : RegisteredCircuit) (n : ℕ) (U : Partit
   omega
 
 /-- What a verdict of compliance on the policy's instance gives, on each of its expansions. -/
-theorem policy_met {p : InferenceOnlyCheck.Protocol.Params} {e : InferenceOnlyCheck.Protocol.Evidence} {out : Json}
-    (hd : InferenceOnlyCheck.Desc.evaluate (instanceOf p e) = .ok out) (hc : out.getObjVal? "complies" = .ok (.bool true))
+theorem policy_met {p : InferenceOnlyVerifier.Protocol.Params} {e : InferenceOnlyVerifier.Protocol.Evidence} {out : Json}
+    (hd : InferenceOnlyVerifier.Desc.evaluate (instanceOf p e) = .ok out) (hc : out.getObjVal? "complies" = .ok (.bool true))
     {P : Prog} (hP : Flock.Program.decode p.program.toUTF8 = .ok P) :
-    ∀ (j' : Json) (i : InferenceOnlyCheck.Instance) (d : RegisteredCircuit),
+    ∀ (j' : Json) (i : InferenceOnlyVerifier.Instance) (d : RegisteredCircuit),
       Expands (instanceOf p e) j' → Parses j' i → LaysOut P d.D → Names i.theta d.θ → Divides i.owner d.𝓘 →
         VerifierOwn p i ∧ PolicyMet d d.𝓘 i.gamma ((i.num : ℝ) / i.den) := by
   intro j' i d hx hi hL hN hD
   have hP' : Flock.Program.decode i.program.toUTF8 = .ok P := expands_program hx hi ▸ hP
-  have hR := (InferenceOnlyCheck.Properties.SecurityProofs.DescReports _ _ hd).2 j' hx i P d hi hP' hL hN hD
+  have hR := (InferenceOnlyVerifier.Properties.SecurityProofs.DescReports _ _ hd).2 j' hx i P d hi hP' hL hN hD
   exact ⟨verifier_own hx hi, policyMet_of_meets (hR.2.2.1.1 hc)⟩
 
 /-- What the policy's acceptance establishes about its decoded case. -/
-theorem policyHeld {p : InferenceOnlyCheck.Protocol.Params} {c : InferenceOnlyCheck.Protocol.Commitment}
-    {e : InferenceOnlyCheck.Protocol.Evidence} {pub : Unit} {prof : Json}
-    (h : InferenceOnlyCheck.Protocol.check p c e = .accept pub prof) : PolicyHeld p c e := by
+theorem policyHeld {p : InferenceOnlyVerifier.Protocol.Params} {c : InferenceOnlyVerifier.Protocol.Commitment}
+    {e : InferenceOnlyVerifier.Protocol.Evidence} {pub : Unit} {prof : Json}
+    (h : InferenceOnlyVerifier.Protocol.check p c e = .accept pub prof) : PolicyHeld p c e := by
   obtain ⟨hn, out, hb, hc⟩ := policy_accept h
-  obtain ⟨hd, -⟩ := InferenceOnlyCheck.Properties.SecurityProofs.ThetaSteps.evaluate_ok _ _ _ hb
-  obtain ⟨⟨j', hx⟩, hev⟩ := InferenceOnlyCheck.Properties.SecurityProofs.DescAgrees _ _ hd
+  obtain ⟨hd, -⟩ := InferenceOnlyVerifier.Properties.SecurityProofs.ThetaSteps.evaluate_ok _ _ _ hb
+  obtain ⟨⟨j', hx⟩, hev⟩ := InferenceOnlyVerifier.Properties.SecurityProofs.DescAgrees _ _ hd
   obtain ⟨i, P, hpi, hP', D, hL, ⟨θ, hθ, hθin⟩, n, U, hD⟩ :=
-    InferenceOnlyCheck.Properties.SecurityProofs.Decodes _ _ (hev j' hx)
+    InferenceOnlyVerifier.Properties.SecurityProofs.Decodes _ _ (hev j' hx)
   have hP : Flock.Program.decode p.program.toUTF8 = .ok P := expands_program hx hpi ▸ hP'
   let d : RegisteredCircuit := .ofPartition D θ hθin n U
-  exact ⟨P, hP, names_program hn hP, InferenceOnlyCheck.Properties.SecurityProofs.ThetaProvenance _ _ _ hb,
+  exact ⟨P, hP, names_program hn hP, InferenceOnlyVerifier.Properties.SecurityProofs.ThetaProvenance _ _ _ hb,
     ⟨j', i, d, hx, hpi, hL, hθ, hD, policy_met hd hc hP j' i d hx hpi hL hθ hD⟩, policy_met hd hc hP⟩
 
 /-- What one-stage v1's check at any coins gives on acceptance: its record keeps R2 against the audit's own
@@ -398,13 +398,13 @@ named by their ids. -/
 theorem remote_check_ids (blobs : Array ByteArray) (ps : List Named) (c : ByteArray) (ev : List Case) :
     (Core.Remote.protocol.on blobs).check ps c ev =
       holdTies [Core.Remote.executionPhases] ev (checkSame "verity/remote/v0"
-        [InferenceOnlyCheck.Protocol.protocol.id, (VStar.Recursive.Sampled.protocol.onBlobs (Blobs.ofArray blobs)).id]
-        [InferenceOnlyCheck.Protocol.protocol, PouwVerifier.Period.protocol,
+        [InferenceOnlyVerifier.Protocol.protocol.id, (VStar.Recursive.Sampled.protocol.onBlobs (Blobs.ofArray blobs)).id]
+        [InferenceOnlyVerifier.Protocol.protocol, PouwVerifier.Period.protocol,
           VStar.Recursive.Sampled.protocol.onBlobs (Blobs.ofArray blobs)] ps c ev) := by
   rw [remote_check, id_policy, id_sampled]
 
 theorem ne_policy_stage (bs : Blobs) :
-    (InferenceOnlyCheck.Protocol.protocol.id == (VStar.Recursive.Sampled.protocol.onBlobs bs).id) = false := by
+    (InferenceOnlyVerifier.Protocol.protocol.id == (VStar.Recursive.Sampled.protocol.onBlobs bs).id) = false := by
   rw [id_policy, id_sampled]; decide
 
 theorem ne_monitoringPeriod_stage (bs : Blobs) :
@@ -413,17 +413,17 @@ theorem ne_monitoringPeriod_stage (bs : Blobs) :
 
 /-- What remote's tie gives once the policy's commitment decodes: every Commit record the period's windows name, when
 they decode, has the policy's record's digest. -/
-theorem executionPhases_tied {kI kW kS : Case} {cI : InferenceOnlyCheck.Protocol.Commitment}
-    (hI : kI.id = InferenceOnlyCheck.Protocol.protocol.id) (hW : kW.id = PouwVerifier.Period.protocol.id)
-    (hcI : InferenceOnlyCheck.Protocol.protocol.commitment kI.commitment = .ok cI)
+theorem executionPhases_tied {kI kW kS : Case} {cI : InferenceOnlyVerifier.Protocol.Commitment}
+    (hI : kI.id = InferenceOnlyVerifier.Protocol.protocol.id) (hW : kW.id = PouwVerifier.Period.protocol.id)
+    (hcI : InferenceOnlyVerifier.Protocol.protocol.commitment kI.commitment = .ok cI)
     (ht : Properties.Composition.Tied Core.Remote.executionPhases [kI, kW, kS]) :
-    ∀ ds, Core.Remote.executionPhaseRecords kW = some ds → ∀ d ∈ ds, d = InferenceOnlyCheck.Protocol.protocol.digest cI := by
+    ∀ ds, Core.Remote.executionPhaseRecords kW = some ds → ∀ d ∈ ds, d = InferenceOnlyVerifier.Protocol.protocol.digest cI := by
   intro ds hds d hd
   rw [id_policy] at hI
   rw [id_monitoringPeriod] at hW
-  have nI : Properties.Composition.named [kI, kW, kS] (InferenceOnlyCheck.Protocol.protocolId, Core.Remote.policyRecord) =
-      some [InferenceOnlyCheck.Protocol.protocol.digest cI] := by
-    have hid : (kI.id == InferenceOnlyCheck.Protocol.protocolId) = true := by rw [hI]; decide
+  have nI : Properties.Composition.named [kI, kW, kS] (InferenceOnlyVerifier.Protocol.protocolId, Core.Remote.policyRecord) =
+      some [InferenceOnlyVerifier.Protocol.protocol.digest cI] := by
+    have hid : (kI.id == InferenceOnlyVerifier.Protocol.protocolId) = true := by rw [hI]; decide
     simp [Properties.Composition.named, List.find?, hid, Core.Remote.policyRecord, hcI, Except.toOption]
     exact ⟨cI, rfl, rfl⟩
   have nW : Properties.Composition.named [kI, kW, kS] (PouwVerifier.Period.protocolId, Core.Remote.executionPhaseRecords) =
@@ -431,7 +431,7 @@ theorem executionPhases_tied {kI kW kS : Case} {cI : InferenceOnlyCheck.Protocol
     have hI' : (kI.id == PouwVerifier.Period.protocolId) = false := by rw [hI]; decide
     have hW' : (kW.id == PouwVerifier.Period.protocolId) = true := by rw [hW]; decide
     simp [Properties.Composition.named, List.find?, hI', hW', hds]
-  have mI : (InferenceOnlyCheck.Protocol.protocolId, Core.Remote.policyRecord) ∈ Core.Remote.executionPhases.names := by
+  have mI : (InferenceOnlyVerifier.Protocol.protocolId, Core.Remote.policyRecord) ∈ Core.Remote.executionPhases.names := by
     simp [Core.Remote.executionPhases]
   have mW : (PouwVerifier.Period.protocolId, Core.Remote.executionPhaseRecords) ∈ Core.Remote.executionPhases.names := by
     simp [Core.Remote.executionPhases]
@@ -568,14 +568,14 @@ records, which every Commit record the period's windows name has, the policy's c
 check accepts, and SPOT's case decoding to what its check accepts on the blobs. -/
 theorem remote_accept {blobs : Array ByteArray} {ps : List Named} {c : ByteArray} {ev : List Case} {pub prof : Keyed}
     (h : (Core.Remote.protocol.on blobs).check ps c ev = .accept pub prof) :
-    ∃ (kI kW kS : Case) (pI : InferenceOnlyCheck.Protocol.Params) (cI : InferenceOnlyCheck.Protocol.Commitment)
-      (eI : InferenceOnlyCheck.Protocol.Evidence), ev = [kI, kW, kS] ∧
-      Properties.Composition.digestOf InferenceOnlyCheck.Protocol.protocol kI.commitment = some (InferenceOnlyCheck.Protocol.protocol.digest cI) ∧
-      (∀ ds, Core.Remote.executionPhaseRecords kW = some ds → ∀ d ∈ ds, d = InferenceOnlyCheck.Protocol.protocol.digest cI) ∧
-      Properties.Composition.digestOf Spot.OneStage.protocol kS.commitment = some (InferenceOnlyCheck.Protocol.protocol.digest cI) ∧
-      (canonicalJson kI.params.toUTF8 >>= InferenceOnlyCheck.Protocol.paramsOf) = .ok pI ∧
-      InferenceOnlyCheck.Protocol.commitmentOf kI.commitment = .ok cI ∧ InferenceOnlyCheck.Protocol.evidenceOf kI.evidence = .ok eI ∧
-      (∃ pub' prof', InferenceOnlyCheck.Protocol.check pI cI eI = .accept pub' prof') ∧
+    ∃ (kI kW kS : Case) (pI : InferenceOnlyVerifier.Protocol.Params) (cI : InferenceOnlyVerifier.Protocol.Commitment)
+      (eI : InferenceOnlyVerifier.Protocol.Evidence), ev = [kI, kW, kS] ∧
+      Properties.Composition.digestOf InferenceOnlyVerifier.Protocol.protocol kI.commitment = some (InferenceOnlyVerifier.Protocol.protocol.digest cI) ∧
+      (∀ ds, Core.Remote.executionPhaseRecords kW = some ds → ∀ d ∈ ds, d = InferenceOnlyVerifier.Protocol.protocol.digest cI) ∧
+      Properties.Composition.digestOf Spot.OneStage.protocol kS.commitment = some (InferenceOnlyVerifier.Protocol.protocol.digest cI) ∧
+      (canonicalJson kI.params.toUTF8 >>= InferenceOnlyVerifier.Protocol.paramsOf) = .ok pI ∧
+      InferenceOnlyVerifier.Protocol.commitmentOf kI.commitment = .ok cI ∧ InferenceOnlyVerifier.Protocol.evidenceOf kI.evidence = .ok eI ∧
+      (∃ pub' prof', InferenceOnlyVerifier.Protocol.check pI cI eI = .accept pub' prof') ∧
       ∃ nS : Named, kS.params = nS.params ∧ Properties.Composition.DecodedAccepted
         (VStar.Recursive.Sampled.protocol.onBlobs (Blobs.ofArray blobs)) nS.params.toUTF8 kS.commitment kS.evidence := by
   rw [remote_check_ids] at h
@@ -585,10 +585,10 @@ theorem remote_accept {blobs : Array ByteArray} {ps : List Named} {c : ByteArray
     accepted_three hcheck
   have hS₀ := hS
   obtain ⟨pS, cS, eS, -, hcS, -, -⟩ := hS₀
-  have hdS := strays_two (P₁ := InferenceOnlyCheck.Protocol.protocol) (P₂ := PouwVerifier.Period.protocol)
+  have hdS := strays_two (P₁ := InferenceOnlyVerifier.Protocol.protocol) (P₂ := PouwVerifier.Period.protocol)
     (P₃ := VStar.Recursive.Sampled.protocol.onBlobs (Blobs.ofArray blobs)) (ne_policy_stage _) (ne_monitoringPeriod_stage _)
     hcI hcS hstrays
-  have hp : (canonicalJson kI.params.toUTF8 >>= InferenceOnlyCheck.Protocol.paramsOf) = .ok pI := by rw [hpI]; exact hpI'
+  have hp : (canonicalJson kI.params.toUTF8 >>= InferenceOnlyVerifier.Protocol.paramsOf) = .ok pI := by rw [hpI]; exact hpI'
   refine ⟨kI, kW, kS, pI, cI, eI, rfl, digestOf_ok hcI,
     executionPhases_tied hidI hidW hcI (hties _ (List.mem_singleton_self _)),
     (digestOf_sampled _ _).symm.trans ((digestOf_ok hcS).trans (congrArg some hdS)), hp, hcI, heI, hchkI,
@@ -598,7 +598,7 @@ theorem remote_accept {blobs : Array ByteArray} {ps : List Named} {c : ByteArray
 theorem acceptInferenceOnly : AcceptInferenceOnly := by
   intro blobs ps c ev pub prof h
   obtain ⟨kI, kW, kS, pI, cI, eI, hev, hdI, hdW, hdS, hp, hc, he, ⟨pub', prof', hchk⟩, nS, hpS, hS⟩ := remote_accept h
-  exact ⟨kI, kW, kS, InferenceOnlyCheck.Protocol.protocol.digest cI, hev, hdI, hdW, hdS, ⟨pI, cI, eI, hp, hc, he, policyHeld hchk⟩,
+  exact ⟨kI, kW, kS, InferenceOnlyVerifier.Protocol.protocol.digest cI, hev, hdI, hdW, hdS, ⟨pI, cI, eI, hp, hc, he, policyHeld hchk⟩,
     stage_held callerCheckSound hpS hS⟩
 
 /-- **`AcceptInferenceOnly`'s nontrivial lemma**: its conclusion fails at no cases at all, `ev = []`, which a check that
@@ -611,12 +611,12 @@ theorem acceptComplies : AcceptComplies := by
   intro blobs ps c ev pub prof h
   obtain ⟨kI, kW, kS, pI, cI, eI, hev, -, -, -, hp, hc, he, ⟨pub', prof', hchk⟩, -⟩ := remote_accept h
   obtain ⟨hn, out, hb, hcomp⟩ := policy_accept hchk
-  obtain ⟨hd, -⟩ := InferenceOnlyCheck.Properties.SecurityProofs.ThetaSteps.evaluate_ok _ _ _ hb
+  obtain ⟨hd, -⟩ := InferenceOnlyVerifier.Properties.SecurityProofs.ThetaSteps.evaluate_ok _ _ _ hb
   obtain ⟨P, hP, hname, -, ⟨j', i, d, hx, hpi, hL, hθ, -, hown, hmet⟩, -⟩ := policyHeld hchk
   refine ⟨kI, kW, kS, pI, cI, eI, P, hev, hp, hc, he, hP, hname, ⟨j', i, d, hx, hpi, hL, hθ, hown, hmet.2.1⟩, ?_⟩
   intro j' i d hx hi hL hN
   have hP' : Flock.Program.decode i.program.toUTF8 = .ok P := expands_program hx hi ▸ hP
-  exact ⟨verifier_own hx hi, ((InferenceOnlyCheck.Properties.SecurityProofs.DescWitnesses _ _ hd).2 j' hx i P d hi hP' hL hN hcomp).1⟩
+  exact ⟨verifier_own hx hi, ((InferenceOnlyVerifier.Properties.SecurityProofs.DescWitnesses _ _ hd).2 j' hx i P d hi hP' hL hN hcomp).1⟩
 
 /-- **`AcceptComplies`'s nontrivial lemma**, as `AcceptInferenceOnly`'s: its conclusion fails at `ev = []`, which a check
 that accepts every input accepts. -/

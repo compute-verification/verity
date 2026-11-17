@@ -1,7 +1,7 @@
 module
 
-public import InferenceOnlyCheck.Theta
-public import InferenceOnlyCheck.DescDifftest
+public import InferenceOnlyVerifier.Theta
+public import InferenceOnlyVerifier.DescDifftest
 
 /-!
 # The difftest of θ's provenance: against the Python reference, and against the unrolled check
@@ -17,7 +17,7 @@ a proof.
 
 @[expose] public section
 
-namespace InferenceOnlyCheck.ThetaDifftest
+namespace InferenceOnlyVerifier.ThetaDifftest
 
 open Lean (Json)
 
@@ -39,7 +39,7 @@ def differences (i : Nat) (case exp python : String) : List String :=
 `N` lines each and no line differs. -/
 def main (args : List String) : IO UInt32 := do
   let [cases, exp, py, n] := args
-    | IO.eprintln "usage: InferenceOnlyCheck/ThetaDifftestMain.lean CASES EXPANDED PYTHON N"; return 2
+    | IO.eprintln "usage: InferenceOnlyVerifier/ThetaDifftestMain.lean CASES EXPANDED PYTHON N"; return 2
   let lines (p : String) : IO (Array String) := do
     return ((← IO.FS.readFile p).splitOn "\n").filter (! ·.isEmpty) |>.toArray
   let a ← lines cases
@@ -54,4 +54,4 @@ def main (args : List String) : IO UInt32 := do
   IO.println s!"baseline difftest: {a.size} cases compared, {found.length} differences"
   return if found.isEmpty then 0 else 1
 
-end InferenceOnlyCheck.ThetaDifftest
+end InferenceOnlyVerifier.ThetaDifftest

@@ -1,7 +1,7 @@
 module
 
-public import InferenceOnlyCheck.Desc
-public import InferenceOnlyCheck.DescDifftest
+public import InferenceOnlyVerifier.Desc
+public import InferenceOnlyVerifier.DescDifftest
 
 /-!
 # The liveness cases of the description-sized check
@@ -17,7 +17,7 @@ point: the big instances are past anything `InferenceOnlyCheck.Desc` walks one b
 
 @[expose] public section
 
-namespace InferenceOnlyCheck.DescLiveness
+namespace InferenceOnlyVerifier.DescLiveness
 
 open Lean (Json toJson)
 
@@ -47,7 +47,7 @@ def differences (c : Json) : List String :=
   let big := c.getObjValD "big"
   let d := Desc.check small
   let unrolled := match expand small with
-    | .ok x => DescDifftest.compare 0 "InferenceOnlyCheck.check" d (check x)
+    | .ok x => DescDifftest.compare 0 "InferenceOnlyVerifier.check" d (check x)
     | .error e => [s!"the expansion fails: {e}"]
   let verdict := if (d.getObjValD "error").isNull then [] else [s!"small: refused, {d.compress}"]
   let b := Desc.check big
@@ -61,7 +61,7 @@ def differences (c : Json) : List String :=
 
 /-- `lake env lean --run InferenceOnlyCheck/DescLivenessMain.lean CASES N`: fails unless the file has `N` cases and none differs. -/
 def main (args : List String) : IO UInt32 := do
-  let [path, n] := args | IO.eprintln "usage: InferenceOnlyCheck/DescLivenessMain.lean CASES N"; return 2
+  let [path, n] := args | IO.eprintln "usage: InferenceOnlyVerifier/DescLivenessMain.lean CASES N"; return 2
   let lines := ((← IO.FS.readFile path).splitOn "\n").filter (! ·.isEmpty) |>.toArray
   if n.toNat? != some lines.size then
     IO.eprintln s!"desc liveness: {lines.size} cases, not {n}"
@@ -73,4 +73,4 @@ def main (args : List String) : IO UInt32 := do
   IO.println s!"desc liveness: {lines.size} cases checked, {found.length} differences"
   return if found.isEmpty then 0 else 1
 
-end InferenceOnlyCheck.DescLiveness
+end InferenceOnlyVerifier.DescLiveness

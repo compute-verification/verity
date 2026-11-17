@@ -1,8 +1,8 @@
 module
 
-public import InferenceOnlyCheck.Theta
+public import InferenceOnlyVerifier.Theta
 public import CoreProtocol.Protocol
-meta import InferenceOnlyCheck.Theta
+meta import InferenceOnlyVerifier.Theta
 meta import CoreProtocol.Protocol
 
 /-!
@@ -50,7 +50,7 @@ Its case splits the check's instance and trusted input as SPOT's one-stage audit
 set_option backward.privateInPublic true
 set_option backward.privateInPublic.warn false
 
-namespace InferenceOnlyCheck.Protocol
+namespace InferenceOnlyVerifier.Protocol
 
 open Lean (Json)
 open Flock (V)
@@ -182,4 +182,4 @@ private def answer (params commitment evidence : String) : Core.Answer :=
 #guard failureOf (Json.mkObj [("failure", .arr #[Json.num 2, .str "nci"])]) ==
   "the division does not comply: inference block 2 reads more than α bits of fresh input per gate"
 
-end InferenceOnlyCheck.Protocol
+end InferenceOnlyVerifier.Protocol

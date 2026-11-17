@@ -13,7 +13,7 @@ path = "../../../../proofs/flock/verifier"
 
 # The period's check reads a scan's layout off its description as the inference-only check does (`InferenceOnlyCheck.Desc`'s layout checks).
 [[require]]
-name = "inference_only_check"
+name = "inference_only_verifier"
 path = "../../../../workload_classification/training_detection/inference_only/verifier/lean"
 
 # The check is a core protocol, reads the Program's grid from the attester program (`expectedRow`, Σ_sync) and verifies

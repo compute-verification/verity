@@ -1,6 +1,6 @@
 module
 
-public import InferenceOnlyCheck.Desc
+public import InferenceOnlyVerifier.Desc
 public import Std.Data.HashSet
 
 /-!
@@ -40,7 +40,7 @@ fails on any of them. The Lean audit runs it (`runs` in `lean-audit.json`): comp
 
 @[expose] public section
 
-namespace InferenceOnlyCheck.DescFuzz
+namespace InferenceOnlyVerifier.DescFuzz
 
 open Lean (Json toJson)
 open Flock.Program
@@ -346,7 +346,7 @@ def agrees (P : Prog) (text : String) (n : Nat) (given : Array Json := #[]) : Na
     | .error _ => pure ()
     | .ok out =>
       verdicts := verdicts + 1
-      let un := match InferenceOnlyCheck.evaluate (expand P j) with
+      let un := match InferenceOnlyVerifier.evaluate (expand P j) with
         | .ok x => x
         | .error e => Json.mkObj [("refused", Json.str e)]
       if un != out then
@@ -413,7 +413,7 @@ def decided (r : Json) (s : String) : Bool := ((r.getObjValD s).getObjVal? "fail
 `instances`, each `{"theta", "owner", "gamma", "alpha"}`; every instance costs two decodes of the Program), and the run
 fails unless no statement fails on any of them and each statement is decided on some. -/
 def main (args : List String) : IO UInt32 := do
-  let [progs, n] := args | IO.eprintln "usage: InferenceOnlyCheck/DescFuzzMain.lean PROGRAMS N"; return 2
+  let [progs, n] := args | IO.eprintln "usage: InferenceOnlyVerifier/DescFuzzMain.lean PROGRAMS N"; return 2
   let lines := ((← IO.FS.readFile progs).splitOn "\n").filter (! ·.isEmpty) |>.toArray
   if n.toNat? != some lines.size then
     IO.eprintln s!"desc fuzz: {lines.size} programs, not {n}"
@@ -456,4 +456,4 @@ def main (args : List String) : IO UInt32 := do
     return 1
   return 0
 
-end InferenceOnlyCheck.DescFuzz
+end InferenceOnlyVerifier.DescFuzz

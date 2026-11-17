@@ -7,8 +7,8 @@ public import CoreProtocol.Profile
 public import Flock.Program
 public import Flock.Public
 public import Flock.WindowRecord
-public import InferenceOnlyCheck.Desc
-public import InferenceOnlyCheck.DefinitionDigest
+public import InferenceOnlyVerifier.Desc
+public import InferenceOnlyVerifier.DefinitionDigest
 public import NetworkCheck.Period.ConnectionRows
 public import NetworkCheck.Period.Start
 public import Spot.Record
@@ -19,8 +19,8 @@ meta import CoreProtocol.Profile
 meta import Flock.Program
 meta import Flock.Public
 meta import Flock.WindowRecord
-meta import InferenceOnlyCheck.Desc
-meta import InferenceOnlyCheck.DefinitionDigest
+meta import InferenceOnlyVerifier.Desc
+meta import InferenceOnlyVerifier.DefinitionDigest
 meta import NetworkCheck.Period.ConnectionRows
 meta import NetworkCheck.Period.Start
 meta import Spot.Record
@@ -369,7 +369,7 @@ namespace NetworkCheck.Period
 open Lean (Json toJson)
 open Flock (V)
 open NetworkCheck.Check (Certificate)
-open InferenceOnlyCheck.DefinitionDigest (closureDigest)
+open InferenceOnlyVerifier.DefinitionDigest (closureDigest)
 
 /-! ## The check -/
 

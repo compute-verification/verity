@@ -1,6 +1,6 @@
 module
 
-public import InferenceOnlyCheck.Count
+public import InferenceOnlyVerifier.Count
 
 /-!
 # The count mode's difftest, against the Python reference
@@ -16,7 +16,7 @@ other field. The Lean audit runs it (`runs` in `lean-audit.json`): compiled eval
 
 @[expose] public section
 
-namespace InferenceOnlyCheck.CountDifftest
+namespace InferenceOnlyVerifier.CountDifftest
 
 open Lean (Json)
 
@@ -59,7 +59,7 @@ def differences (i : Nat) (inst detail pub : String) : List String :=
 `N` lines and no line differs. -/
 def main (args : List String) : IO UInt32 := do
   let [insts, det, pub, n] := args
-    | IO.eprintln "usage: InferenceOnlyCheck/CountDifftestMain.lean INSTANCES DETAIL PUBLIC N"; return 2
+    | IO.eprintln "usage: InferenceOnlyVerifier/CountDifftestMain.lean INSTANCES DETAIL PUBLIC N"; return 2
   let lines (p : String) : IO (Array String) := do
     return ((← IO.FS.readFile p).splitOn "\n").filter (! ·.isEmpty) |>.toArray
   let a ← lines insts
@@ -74,4 +74,4 @@ def main (args : List String) : IO UInt32 := do
   IO.println s!"count difftest: {a.size} instances compared in both forms, {found.length} differences"
   return if found.isEmpty then 0 else 1
 
-end InferenceOnlyCheck.CountDifftest
+end InferenceOnlyVerifier.CountDifftest
