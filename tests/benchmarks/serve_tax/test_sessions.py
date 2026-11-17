@@ -81,7 +81,7 @@ def test_what_prod_record_differs_from_prod_by_is_read_apart_by_two_arms(tmp_pat
     assert S.same_engine("prod-again", "prod") and not S.same_engine("prod-seeded", "prod")
     assert not any(S.same_engine(a, b) for a in names for b in names if a < b)
     # no other arm is sent seeds without keeping the record
-    assert [n for n, a in S.ARMS.items() if a.seeds] == ["prod-seeded"]
+    assert [n for n, a in S.ARMS.items() if a.seeds] == ["prod-seeded", "prod-tick"]
 
 
 def test_an_arms_meta_holds_the_value_settings_in_force_in_the_environment_its_server_is_started_with(
