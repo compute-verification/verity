@@ -16,21 +16,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.Level3.Assembly
 
-/-!
-# n4's claim tie: `ClaimRel` from `claimO` to the run's claims
-
-`openingRead_of_rows`, `openingRead_of_session` and `openingReadAt_src` take the claim tie: claim `i` as
-`RecCoins.opening` builds it (`coinClaim`, at rep `i`'s sparse coins), with the value w holds at `rec-claim`, is the
-run's registered claim `i` (`ClaimRel`). `ClaimRel`'s sizes are `coinClaim`'s and the shape's (`claimRel_of_ties`), so
-the tie is two facts about the run's claims:
-
-* `PointTie`: claim `i`'s point is the one `coinClaim` builds it at, rep `i`'s sparse coins zero-padded to R's `m`
-  (`coinPt`). Those coins are the challenger's live-coin part's at the verifier's record, so this says the record's sparse coins are
-  the run's.
-* `ValueTie`: claim `i`'s value is the one w holds at `rec-claim`.
-
-`openingReadAt_src_ties` is `openingReadAt_src` with the two in place of the claim tie.
--/
+/-! The claim tie, `ClaimRel` from `claimO` to the run's claims, from a point tie and a value tie. -/
 
 @[expose] public section
 
@@ -50,8 +36,6 @@ theorem shape_m {m c : ℕ} {sh : Flock.Shape} (h : Flock.RecOpening.shape? m c 
     · simp [hf, hc] at h
       rw [← h]
 
-/-- **The claim tie from its point and value**: the claim `coinClaim` built, at the value `wv`, is a registered claim
-whose point is the coin point and whose value is `wv`, at R's `m`. -/
 theorem claimRel_of_ties {c3 : RecCoins.C3} {unit : String} {sh : Shape} {k : ℕ} {a : AClaim Lin}
     {ssh : FlockSoundness.Model.SparseShape} {c : FlockSoundness.Model.RegClaim FlockLevel3.GF128 ssh} {wv : F128}
     (ha : coinClaim c3 unit sh k = .ok a) (hm : sh.m = ssh.mReg)
@@ -93,19 +77,15 @@ theorem claimRel_of_ties {c3 : RecCoins.C3} {unit : String} {sh : Shape} {k : �
     rw [hx, FlockLevel3.extract_get! p 6 p.size i.val (by omega) le_rfl, hpt' (i.val + 6) (by omega),
       Nat.add_comm i.val 6]
 
-/-- **The point tie**: the run's claim `i` is at the point `coinClaim` builds claim `i` at, rep `i`'s sparse coins
-padded to R's `m` (`coinPt`). -/
 def PointTie (c3 : RecCoins.C3) (unit : String) (sh : Shape) {ssh : FlockSoundness.Model.SparseShape}
     (c : Fin 2 → FlockSoundness.Model.RegClaim FlockLevel3.GF128 ssh) : Prop :=
   ∀ i : Fin 2, ∀ sc, RecCoins.sparseCoins c3 unit i.val = .ok sc → ∀ j < ssh.mReg,
     (c i).coord j = FlockSoundness.Refine.fOf (coinPt c3 sh sc)[j]!
 
-/-- **The value tie**: the run's claim `i` has the value w holds at `rec-claim`. -/
 def ValueTie (sh : Shape) (w : Array F128) {ssh : FlockSoundness.Model.SparseShape}
     (c : Fin 2 → FlockSoundness.Model.RegClaim FlockLevel3.GF128 ssh) : Prop :=
   ∀ i : Fin 2, (c i).value = FlockSoundness.Refine.fOf w[RecOpening.claimW sh i]!
 
-/-- **(Item 5) The claim tie** at `claimO`, from the point and value ties. -/
 theorem claimRel_claimO {c3 : RecCoins.C3} {unit : String} {sh : Shape} {a b : AClaim Lin} {w : Array F128}
     {ssh : FlockSoundness.Model.SparseShape} {c : Fin 2 → FlockSoundness.Model.RegClaim FlockLevel3.GF128 ssh}
     (ha : coinClaim c3 unit sh 0 = .ok a) (hb : coinClaim c3 unit sh 1 = .ok b) (hm : sh.m = ssh.mReg)
@@ -130,8 +110,6 @@ variable {nT r : ℕ} {T : Fin nT → Type} {CT : Fin r → Type} [∀ k, Fintyp
 
 local notation "ℐ" => holoInnerAt T CT st hp
 
-/-- **(n7's opening) `OpeningReadAt` at the source from three ties**: `openingReadAt_src` with the claim tie from the
-point and value ties at every accepted outer proof. -/
 theorem openingReadAt_src_ties
     {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'} {dg : ByteArray → ByteArray}
     {N k Rw : ℕ} {src : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → C3Run (holoAt st hp)}

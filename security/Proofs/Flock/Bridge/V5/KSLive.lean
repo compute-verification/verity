@@ -40,27 +40,15 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Bridge.FaultyRightC
 import Proofs.Flock.Bridge.Count
 
-/-!
-# `SampledKSLiveV5`, proved
-
-`Flock.Bridge.sampledKSLiveV5R : Flock.Bridge.SampledKSLiveV5R`: `AssemblyTargetV5` (`assemblyTargetV5`) with
-canonical transport at public inputs (`transportsLiveV5`), M1's core (`faultyRightTargetC`) and `EndToEndHiddenV5`
-(`endToEndHiddenV5_of`, from `openingsCanonV5`) plugged in. `Flock.SecurityProofs.SampledKSLiveV5 :
-Flock.Guarantees.SampledKSLiveV5`: that bound under the roots guard, with `ecr/sha-512`'s term at the roots finder in place
-of the guard (`Bridge.le_add_ecrBoundL`), at the sampling design `Bridge.designAt` names, which the verifier samples under
-(`Bridge.designAt_cases`) or is `subset 0`, whose `δ` is 1 (`Bridge.pa_partOf_subset`); at tags outside `TagsOkZHJ`,
-probability 0, since passing `Flock.KsScope.checkOf` gives them (`Bridge.tagsOkZHJ_of_ksScope`).
--/
+/-! `SampledKSLiveV5`, proved: V5's bound under the roots guard, with `ecr/sha-512`'s term at the roots finder
+in place of the guard. -/
 
 @[expose] public section
 
-/-- **V5's bound under the roots guard** (`Flock.Bridge.SampledKSLiveV5R`). -/
 theorem Flock.Bridge.sampledKSLiveV5R : Flock.Bridge.SampledKSLiveV5R :=
   Flock.Bridge.assemblyTargetV5 Flock.Bridge.transportsLiveV5 Flock.Bridge.faultyRightTargetC
     (Flock.Bridge.endToEndHiddenV5_of Flock.Bridge.openingsCanonV5)
 
-/-- **`verify --zk`'s form check passes only at hidden-output tags**: `Flock.KsScope.checkOf` refuses first at tags that
-`tagsWhy` names, whatever circuit it is given, so passing it gives `TagsOkZHJ`. -/
 theorem Flock.Bridge.tagsOkZHJ_of_ksScope {I : FlockSoundness.Discharge.Exec.Inputs} {parsed : Flock.V Flock.Circuit}
     {count : ℕ} {draw : Option Lean.Json}
     (h : Flock.KsScope.checkOf parsed (FlockSoundness.Discharge.ZkExec.zkTags I) I.publicFile count draw = .ok ()) :

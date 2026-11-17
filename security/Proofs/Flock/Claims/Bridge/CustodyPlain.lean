@@ -34,22 +34,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# `Deploy.V false`'s custody checks, as the old theorems' `RecordsLiveJ`
-
-`Custody` without `--zk`. The old plain theorems bound verity-verify-proof's acceptance of the transcript a writer `wr` makes
-of the live session's outcome, under `RecordsLiveJ I dj Jf wr` (`DecodeZLJ`): the record `verify` accepts carries the
-sample, the outcome's proof files, link points, roots and rounds. `Deploy.V false` takes the record in its last message
-and checks its custody with the same checks as `--zk` (`checks`, `custody`).
-
-* `setupOf_plainInputs`: `verify`'s setup of a record whose sample is the statement's is `Deploy.V`'s, where the statement
-  carries no `--public-inputs`.
-* `RecordsLiveAtP`, `recordsLiveAtP_of_checks`: `RecordsLiveJ` at one outcome, and where the checks pass, the last
-  message's record and proof files record the run's live outcome (`viewOf`).
-* `wrP`, `recordsLiveJ_wrP`, `accepts_wrP`: the writer that, at an outcome, takes a transcript `verify` accepts that
-  records it, where one exists. It satisfies `RecordsLiveJ`, and on every run whose decision accepts at SHA-512,
-  `verify` accepts what it writes for the run's outcome (`Accepts`), the event the old theorems bound.
--/
+/-! `Deploy.V false`'s custody checks, as `RecordsLiveJ`. -/
 
 @[expose] public section
 
@@ -59,8 +44,6 @@ open _root_.Flock FlockDeploy FlockSoundness FlockSoundness.Discharge Claims.Bri
 open FlockSoundness.Refine (ebind_ok ptsOf)
 open Lean (Json)
 
-/-- **`verify`'s setup of a record whose sample is the statement's** is `Deploy.V`'s, where the statement is plain and
-carries no `--public-inputs` (`Exec.setupOf` reads none). -/
 theorem setupOf_plainInputs {r : Readable.Read} {spec : SessionSpec} {sts : Array Stmt} {record : String}
     (hs : r.setup = .ok (spec, sts)) (hzk : r.zk = false) (hpi : r.publicInputs = none)
     (hdraw : Exec.recordDraw record = r.draw) :
@@ -69,8 +52,6 @@ theorem setupOf_plainInputs {r : Readable.Read} {spec : SessionSpec} {sts : Arra
   simp only [Exec.setupOf, Readable.Read.setup, Readable.Read.tags, Readable.Read.coins, hzk, hpi, hdraw,
     Bool.false_eq_true, ↓reduceIte]
 
-/-- **`verify` refuses a session without proof files**: it expects one per rep stream, two per table, and at least one
-table. -/
 theorem verify_nil_plain (spec : SessionSpec) (tabs : Array Setup) (record : String) :
     verify spec tabs record #[] ≠ .ok () := by
   intro h
@@ -92,9 +73,6 @@ theorem verify_nil_plain (spec : SessionSpec) (tabs : Array Setup) (record : Str
   obtain ⟨_, h', _⟩ := ebind_ok h
   cases h'
 
-/-- **`RecordsLiveJ` at one outcome**: where `verify` accepts the transcript `t`, its record carries the sample `d`, its
-proof files are the outcome `o`'s, and the session it decodes to has `o`'s link points and, at each of `o`'s tables,
-`o`'s `root_B` and rep streams' rounds. -/
 def RecordsLiveAtP (I : Exec.Inputs) (d : Json) {J mPts : ℕ} (o : Tables.LiveOutJ J mPts) (t : Exec.Transcript) :
     Prop :=
   Exec.Accepts I t →
@@ -111,9 +89,6 @@ theorem recordsLiveJ_iff {n mPts : ℕ} {Reg : Type} (I : Exec.Inputs) (dj : Fin
     (wr : (S : Finset (Fin n)) → (R : Reg) → Tables.LiveOutJ (Jf S R) mPts → Exec.Transcript) :
     DecodeZLJ.RecordsLiveJ (mPts := mPts) I dj Jf wr ↔ ∀ S R o, RecordsLiveAtP I (dj S) o (wr S R o) := Iff.rfl
 
-/-- **Custody gives `RecordsLiveAtP`**: where `Deploy.V false`'s checks pass on a plain statement that sets up at its
-sample `d` with no `--public-inputs`, and the record's sample is the statement's, the last message's record and proof
-files are a record of the run's live outcome (`viewOf`), at any `J` of the session's tables. -/
 theorem recordsLiveAtP_of_checks {s : Ins} {spec : SessionSpec} {sts : Array Stmt} {x : Claims.Msg}
     {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Claims.Msg × Coin)} {f : Final}
     {J mPts : ℕ} {d : Json} (hs : s.setup = .ok (spec, sts)) (hzk : s.read.zk = false)
@@ -148,10 +123,6 @@ theorem recordsLiveAtP_of_checks {s : Ins} {spec : SessionSpec} {sts : Array Stm
     subst hn hcn hb hbytes
     simp [withSha, hsha _ rfl]
 
-/-- **An accepting decision of `Deploy.V false` at SHA-512 is an accepting `verify` on a record of its live outcome**:
-on a statement with no `--public-inputs` of sample `d`, the last message's record and proof files are accepted by `verify`
-(`Accepts`) at the statement's inputs, and record the run's live outcome `viewOf` (`RecordsLiveAtP`): the record's sample
-is the statement's as a value (`recordSample_of_decide`). -/
 theorem accepts_of_decide_plain {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin} {s : Ins}
     {spec : SessionSpec} {sts : Array Stmt} {link : List ByteArray × List ByteArray} {c₁ : Coin}
     {mids : List (Claims.Msg × Coin)} {f : Final} {J mPts : ℕ} {d : Json}
@@ -168,13 +139,9 @@ theorem accepts_of_decide_plain {x : Claims.Msg} {as : List Claims.Msg} {cs : Li
   exact ⟨⟨spec, sts, setupOf_plainInputs (Ins.setup_read hs) hzk hpi hdraw, hv⟩,
     recordsLiveAtP_of_checks hs hzk hpi hdraw hd hJ hc⟩
 
-/-! ## The writer that reads the record out of the last message -/
-
 open Classical in
-/-- **The record writer of `Deploy.V false`'s runs**: at the live outcome `o` of sample `S`, a transcript `verify` accepts
-that records `o` (`RecordsLiveAtP`), where one exists, else a session without proof files, which `verify` refuses
-(`verify_nil_plain`). A decided run whose last message's record and proof files `verify` accepts is such a transcript
-for its outcome (`accepts_wrP`). -/
+/-- Where no accepted transcript records the outcome, it writes a session without proof files, which `verify`
+refuses (`verify_nil_plain`). -/
 noncomputable def wrP {n mPts : ℕ} {Reg : Type} (I : Exec.Inputs) (dj : Finset (Fin n) → Json)
     (Jf : Finset (Fin n) → Reg → ℕ) (S : Finset (Fin n)) (R : Reg) (o : Tables.LiveOutJ (Jf S R) mPts) :
     Exec.Transcript :=
@@ -184,7 +151,6 @@ theorem not_accepts_nil (I : Exec.Inputs) (record : String) : ¬ Exec.Accepts I 
   rintro ⟨spec, sts, -, h⟩
   exact verify_nil_plain _ _ _ h
 
-/-- **`wrP` records the live session** (`RecordsLiveJ`, the record half of the old plain theorems' custody). -/
 theorem recordsLiveJ_wrP {n mPts : ℕ} {Reg : Type} (I : Exec.Inputs) (dj : Finset (Fin n) → Json)
     (Jf : Finset (Fin n) → Reg → ℕ) : DecodeZLJ.RecordsLiveJ (mPts := mPts) I dj Jf (wrP I dj Jf) := by
   refine (recordsLiveJ_iff I dj Jf _).2 fun S R o => ?_
@@ -194,9 +160,6 @@ theorem recordsLiveJ_wrP {n mPts : ℕ} {Reg : Type} (I : Exec.Inputs) (dj : Fin
     exact (Classical.choose_spec h).2
   · exact fun h => absurd h (not_accepts_nil _ _)
 
-/-- **The old event holds on `Deploy.V false`'s accepting runs**: where its decision accepts at SHA-512, on a statement
-with no `--public-inputs` of sample `dj S`, `verify` accepts what `wrP` writes for the run's live outcome at `Jf S R ≤`
-the session's tables. -/
 theorem accepts_wrP {n mPts : ℕ} {Reg : Type} (dj : Finset (Fin n) → Json) (Jf : Finset (Fin n) → Reg → ℕ)
     {S : Finset (Fin n)} {R : Reg} {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin} {s : Ins}
     {spec : SessionSpec} {sts : Array Stmt} {link : List ByteArray × List ByteArray} {c₁ : Coin}

@@ -7,14 +7,7 @@ import Mathlib.Order.CompletePartialOrder
 import Proofs.Flock.Soundness.Game
 import VCVio.Prelude.Core
 
-/-!
-# a1l, step 4: the coupling's oracle game is no better than the oracle table
-
-`holoOrcL_value_le`: at any level-0 table `C₀`, the oracle game of `lockHoloL` is accepted no more often than
-`holoTable` at the same registered word. `holoRep` is `holoRepO` with a rep that Ligerito rejects handing on nothing
-(`holoRep_eq_map`), so where both reps' Ligerito accept, the two games are the same; elsewhere the oracle game
-rejects.
--/
+/-! The coupling's oracle game is no better than the oracle table. -/
 
 @[expose] public section
 
@@ -30,7 +23,6 @@ theorem value_coin_mono {β γ C : Type} [Fintype C] [Nonempty C] {p : β → Pr
     value p (Game.coin C k) ≤ value q (Game.coin C k') :=
   value_bind_mono h (Game.coin C Game.ret)
 
-/-- `holoRep` is `holoRepO` handing on nothing where Ligerito rejects. -/
 theorem holoRep_eq_map (A : Arith F K) (S : Statement) (sch : Schedule) (hm : 13 ≤ S.m) (C₀ : Oracle F)
     (extra : List (Claim F S.m)) :
     holoRep A S sch hm C₀ extra = (holoRepO A S sch hm C₀ extra).map fun p => if p.2 then p.1 else none := by
@@ -51,8 +43,6 @@ theorem holoRep_eq_map (A : Arith F K) (S : Statement) (sch : Schedule) (hm : 13
   dsimp only
   simp only [Game.bind_assoc, Game.bind_ret]
 
-/-- **The coupling's oracle game against the oracle table**: at any level-0 table `C₀`, `holoOrcL` accepts no more
-often than `holoTable` does at the same registered word `w`. -/
 theorem holoOrcL_value_le {Sl : Type} (A : Arith F K) (S : Statement) (sch : Schedule) (hm : 13 ≤ S.m)
     (ptLocal mPts : ℕ) (sh : SparseShape) (units : Fin (2 ^ sh.sLog) → Finset ℕ) (τ : Fin (2 ^ sh.sLog) → ℕ)
     (rsch : Schedule) (w C₀ : Oracle F) :

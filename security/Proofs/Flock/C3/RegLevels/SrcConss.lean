@@ -16,15 +16,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.Soundness.Refine.Seam
 
-/-!
-# n7's levels: R's Ligerito run's contexts are its levels (`ConssAt`)
-
-G's `Conss.ligerito_conss` is a statement about the symbolic run (`LM Lin`), and a run over F does not give one over
-`Lin` (`Sim` goes from `Lin` to F). `levelsLoop_starts` and `ligeritoRun_starts` are `Runs.levelsLoop_count` and
-`Runs.ligeritoRun_conss` with each context's level and query count in place of their number, and `conssAt_of_lig`
-gives `ConssAt` wherever V*'s Ligerito over F returns zero residuals at a `fast100` schedule (`levelTie_of_lig`'s
-hypotheses).
--/
+/-! R's Ligerito run's contexts are its levels (`ConssAt`). -/
 
 @[expose] public section
 
@@ -35,7 +27,6 @@ open Flock.RecAlgebra (Messages LSt RoundCoins)
 
 variable {c : Array (Array F128)}
 
-/-- V*'s level loop records level `i + 1`'s context at iteration `i`, with the level's `q` positions. -/
 theorem levelsLoop_starts [Fact (RecAlgebra.NoEmpty c)] {M : Messages F128} {sch : Flock.Schedule} {R : ℕ}
     (hq : ∀ i ≤ R, LevelSeam (sch.levels.getD i default)) :
     ∀ (fuel i split : ℕ) (levels : Array (Array F256)) (e : ℕ) (st : LSt F128) (k : ℕ)
@@ -87,8 +78,6 @@ theorem levelsLoop_starts [Fact (RecAlgebra.NoEmpty c)] {M : Messages F128} {sch
         List.nil_append]
       rw [hR]
 
-/-- **V*'s Ligerito up to its final check records level `ℓ`'s context `ℓ`-th**, with the level's `q` positions
-(`Runs.ligeritoRun_conss`, which counts them). -/
 theorem ligeritoRun_starts [Fact (RecAlgebra.NoEmpty c)] {sch : Flock.Schedule} {M : Messages F128} {T : F128}
     {k₀ k' : ℕ} {initCh : Array F256} {levels : Array (Array F256)} {ext : ℕ} {stV : LSt F128}
     (hdim : DimSeam sch) (hlv : ∀ i < sch.levels.size, LevelSeam (sch.levels.getD i default))
@@ -134,9 +123,6 @@ theorem ligeritoRun_starts [Fact (RecAlgebra.NoEmpty c)] {sch : Flock.Schedule} 
   simp only [List.nil_append, List.map_cons, List.map_nil, List.cons_append, hp, Nat.zero_add,
     FlockVBridge.Family.Conss.getD_default]
 
-/-- **(n7's levels) R's run's contexts are its levels** (`ConssAt`): where V*'s Ligerito over F returns zero residuals
-at a `fast100` schedule on rounds with no empty round, it records level `ℓ`'s context `ℓ`-th with the level's `q`
-positions. -/
 theorem conssAt_of_lig {m : ℕ} {sch : Flock.Schedule} {M : Messages F128} {tIn : F128} {sws : Array Switched}
     {k₂ k₃ : ℕ} {lgr : Array F128} {lg : RecAlgebra.LgPts} (hf : Flock.fast100 m = some sch)
     (hlg : RecAlgebra.ligerito sch M tIn sws k₂ (RoundCoins.ofRounds c) = .ok ((lgr, lg), k₃)) (hz : ∀ x ∈ lgr, x = 0)

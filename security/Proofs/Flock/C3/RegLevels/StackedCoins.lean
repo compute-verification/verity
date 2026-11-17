@@ -9,15 +9,7 @@ public import Flock.RecVStar
 import Batteries.Recycling.MonadSatisfying.Array
 import Proofs.Flock.C3.RegLevels.TopHold
 
-/-!
-# R's held stream has a round of coins for each round of R's schedule
-
-`RecVStar.candidate3` holds R's stream (`stacked/rep0`) to the shape staging committed R at (`checkStackedShape`: R's
-two claims, and as many rounds as `stackedRounds` at it), and keeps each of the stream's rounds' coins
-(`Array.mapM` over the rounds). So the stream the verifier holds has a round of coins for each round of R's schedule
-(`candidate3_held`), at the shape `RecVStar.innerCommits` was given (`innerCommits_held`). The walks are
-`TopHold.candidate3_top`'s and `TopHold.innerCommits_top`'s.
--/
+/-! R's held stream has a round of coins for each round of R's schedule. -/
 
 @[expose] public section
 
@@ -26,13 +18,9 @@ namespace FlockC3.RegLevels.StackedCoins
 open Lean Flock.RecVStar
 open FlockC3.RegLevels.TopHold (eok_bind forIn_inv)
 
-/-- **R's stream is held to R's schedule**: the shape `shape` the verifier holds R at is some `sh` at R's two claims,
-and the stream `x` holds one round of coins for each round of `stackedRounds sh`. -/
 def Held (shape : Option StackedShape) (x : InnerStream) : Prop :=
   ∃ sh, shape = some sh ∧ sh.claims = STACKED_CLAIMS ∧ ∃ rs, stackedRounds sh = some rs ∧ x.coins.size = rs.size
 
-/-- **`checkStackedShape` passes only at R's two claims and R's round count**: its rounds `rs` are as many as
-`stackedRounds sh`'s. -/
 theorem shape_of_check {s : String} {sh : StackedShape} {rs : Array Json} (h : checkStackedShape s sh rs = .ok ()) :
     sh.claims = STACKED_CLAIMS ∧ ∃ want, stackedRounds sh = some want ∧ rs.size = want.size := by
   unfold checkStackedShape at h
@@ -50,9 +38,6 @@ theorem shape_of_check {s : String} {sh : StackedShape} {rs : Array Json} (h : c
     refine ⟨by simpa using hc, want, hw, by simpa using hsz⟩
   · cases h
 
-/-- **Candidate 3's session holds R's stream to R's schedule** (`candidate3_top`'s walk, at the coins): the stream it
-builds named `stacked/rep0` passed `checkStackedShape` at the shape it was given, and its coins are its rounds'
-(`Array.mapM` keeps the size). -/
 theorem candidate3_held {tr : Json} {rounds : Array Json} {t : String} {names : List String}
     {msgs : Array (String × Nat × ByteArray)} {regR : Option (String × Json)} {shape : Option StackedShape}
     {out : Array InnerStream} (h : candidate3 tr rounds t names msgs regR shape = .ok out) :
@@ -123,9 +108,6 @@ theorem candidate3_held {tr : Json} {rounds : Array Json} {t : String} {names : 
     rw [← hsz]
     exact SatisfiesM_Except_eq.1 (Array.size_mapM _ rs) coins hco
 
-/-- **The verifier's hold of the inner transcript holds R's stream to R's schedule** (`innerCommits_top`'s walk): its
-`stacked/rep0` stream is `candidate3`'s, so `Held` at the shape `innerCommits` was given, which is the shape the hold
-records (`InnerCommits.stacked`). -/
 theorem innerCommits_held {tr : Json} {record : String} {reg : Option Json} {bound : Option String}
     {shape : Option StackedShape} {cs : InnerCommits} {x : InnerStream}
     (h : innerCommits tr record reg bound shape = .ok cs) (hs : cs.stream? "stacked/rep0" = some x) :

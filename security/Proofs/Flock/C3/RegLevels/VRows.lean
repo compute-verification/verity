@@ -18,22 +18,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.C3.Opening.SessionCoins
 import Proofs.Flock.VBridge.Algebra.Holo
 
-/-!
-# Check 5's `v` rows: `rec-residuals`' rows as bits of `vOf`
-
-`checkResiduals` (check 5, at a `rec-residuals/m<m>-k<k_log>-c<claims>-p<j>` unit) registers, for each rep `r < 2`, part
-`j`'s elements `vs` of `base ++ comb` in u16 words, `base` the rep's `verifierRows` v without its comb and `comb` the
-checked comb where `vs` reaches it, else zero (`RecCoins.checkResiduals`, `rec_vstage.stage`). Here those rows are read
-as `HVCoins`' bits:
-
-* `words_bit`, `padTo_get`: bit `b % 16` of word `b / 16` of `words xs`, padded, is bit `b % 128` of `xs[b / 128]`;
-* `rep_ok`: a rep's v is `verifierRows`' base then the zero comb, and `vOf` at any comb is that base then the comb
-  (`verifierRows_comb`);
-* `full_vOf`, `row_vOf`, `rows_vOf`: the check's rows are bit for bit `wbit` of `sub vs (vOf …)` at the rep's coins,
-  extra claims and the checked comb.
-
-The `mapM` the hypotheses state is `checkResiduals`' rows, definitionally `Recursion.residualRowsOf`.
--/
+/-! `checkResiduals`' `v` rows of a `rec-residuals` unit, as bits of `vOf`. -/
 
 @[expose] public section
 
@@ -61,7 +46,6 @@ private theorem flatMap8 {α : Type} (g : F128 → List α) (hg : ∀ x, (g x).l
       show 8 * (a + 1) + s - 8 = 8 * a + s by omega, flatMap8 g hg xs a s (by simp at ha; omega) hs]
     rfl
 
-/-- `RecCoins.words`' four u16 words of a 64-bit word, low first. -/
 abbrev u16s (x : UInt64) : Array ℕ := (Array.range 4).map fun k => ((x >>> (16 * k).toUInt64) &&& 0xFFFF).toNat
 
 theorem words_get? (xs : Array F128) {a s : ℕ} (ha : a < xs.size) (hs : s < 8) :
@@ -72,7 +56,6 @@ theorem words_get? (xs : Array F128) {a s : ℕ} (ha : a < xs.size) (hs : s < 8)
   rw [← Array.getElem?_toList, Array.toList_flatMap, this, Array.getElem?_toList]
   simp only [Array.getElem_toList]
 
-/-- **A bit of `words xs`** is the element's: bit `b % 16` of word `b / 16` is bit `b % 128` of `xs[b / 128]`. -/
 theorem words_bit (xs : Array F128) {b : ℕ} (hb : b < 128 * xs.size) :
     ((RecCoins.words xs)[b / 16]!).testBit (b % 16) = bitOf xs[b / 128]! (b % 128) := by
   have ha : b / 128 < xs.size := by omega
@@ -91,7 +74,6 @@ theorem words_bit (xs : Array F128) {b : ℕ} (hb : b < 128 * xs.size) :
     rw [u16_testBit _ (by omega) (by omega), if_neg (by omega),
       show 16 * (b / 16 % 8 - 4) + b % 16 = b % 128 - 64 by omega]
 
-/-- Padding with zero words changes no word (`0` is `ℕ`'s default). -/
 theorem padTo_get (ws : Array ℕ) (n k : ℕ) : (RecCoins.padTo ws n)[k]! = ws[k]! := by
   unfold RecCoins.padTo
   rw [getElem!_def, getElem!_def, Array.getElem?_append]
@@ -102,8 +84,6 @@ theorem padTo_get (ws : Array ℕ) (n k : ℕ) : (RecCoins.padTo ws n)[k]! = ws[
     · rename_i heq; split at heq <;> cases heq; rfl
     · rfl
 
-/-- **A rep's v is `verifierRows`' at its coins**: `Inner.rep`'s rounds are the inner session's, its v is `verifierRows`'
-base then the zero comb, and `vOf` at any comb `C` is that base, then `C`. -/
 theorem rep_ok {inn : RecCoins.Inner} {sh : Shape} {extras : Array Claim} {r : ℕ} {rep : RecCoins.Rep}
     (h : inn.rep sh extras r = .ok rep) : inn.rounds r = .ok rep.rounds ∧
       ∃ V : Array F128, rep.v = V ++ RecCoins.ZERO_COMB ∧ ∀ C, vOf sh rep.rounds extras C = fun k => (V ++ C).getD k 0 := by
@@ -116,8 +96,6 @@ theorem rep_ok {inn : RecCoins.Inner} {sh : Shape} {extras : Array Claim} {r : �
     exact ⟨hr, V, rfl, fun C => Decode.vOf_eq (hV C)⟩
   · cases h
 
-/-- **Check 5's elements of a rep's v are `vOf`'s**: at `vs`, `base ++ cb` (`checkResiduals`' `full`) is `vOf` at any
-comb `C` that is `cb` where `vs` reaches the comb. -/
 theorem full_vOf {inn : RecCoins.Inner} {sh : Shape} {extras : Array Claim} {r : ℕ} {rep : RecCoins.Rep}
     (h : inn.rep sh extras r = .ok rep) {vs : Array ℕ} {cb C : Array F128}
     (hCcb : vs.any (· ≥ (rep.v.extract 0 (rep.v.size - 64)).size) = true → cb = C) :
@@ -142,9 +120,6 @@ theorem full_vOf {inn : RecCoins.Inner} {sh : Shape} {extras : Array Claim} {r :
       simpa only [gt_iff_lt, ge_iff_le, decide_eq_true_eq, Nat.not_le] using this k hk
     simp only [Array.getElem?_append_left hiV, hiV, getElem?_pos, Array.getD_eq_getD_getElem?, Option.getD_some]
 
-/-- **Check 5's `v` row of a rep is `vOf`'s bits**: the row `checkResiduals` registers for rep `r` is, bit `b % 16` of
-word `b / 16`, `wbit` of part `vs`'s elements of `vOf` at the rep's coins and extra claims and any comb `C` that is the
-checked comb where `vs` reaches the comb. -/
 theorem row_vOf {inn : RecCoins.Inner} {sh : Shape} {extras : Array Claim} {vs : Array ℕ} {r : ℕ}
     {row : Array ℕ}
     (h : (do
@@ -179,7 +154,6 @@ theorem row_vOf {inn : RecCoins.Inner} {sh : Shape} {extras : Array Claim} {vs :
     dif_pos (by omega)]
   rw [getElem!_pos _ _ (by simp only [Array.size_map]; omega), Array.getElem_map]
 
-/-- **Check 5's `v` rows are `vOf`'s bits** (`row_vOf` at both reps): the two rows `checkResiduals` registers. -/
 theorem rows_vOf {inn : RecCoins.Inner} {sh : Shape} {extras : Array Claim} {vs : Array ℕ} {rows : Array (Array ℕ)}
     (h : (#[0, 1].mapM fun r => do
       let rep ← inn.rep sh extras r

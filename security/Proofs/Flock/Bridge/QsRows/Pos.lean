@@ -21,22 +21,8 @@ public import Proofs.Flock.Soundness.Discharge.ZkBind.BindX
 public import Proofs.Flock.Soundness.Discharge.ZkExec.Event
 public import Proofs.Flock.Soundness.Discharge.ZkHidden.DefsJ
 
-/-!
-# The commit strings a proof block's wires sit at, in the session's value binding
-
-The session's value binding (`vbOf`) puts a committed wire at its row's commit string when it is a row's bit
-(`vbOf_pos_row`) and at a commit string of its own otherwise (`vbOf_pos_none`). At the circuit the session's parse
-accepts, the only committed wires of a proof block that are no row's bit are the zero's gate and the constant's:
-
-* `vbOf_pos_none`: a wire that is no row's bit sits at its own commit string.
-* `vbOf_pos_io`: a committed wire of proof block `u` sits at one of `u`'s rows, at the zero's gate or at the
-  constant's. So a proof block's wires sit at no more than its `c.ports.size` rows and those two gates, the same two for
-  every proof block.
-
-The circuit's facts come from the parse and the scope check, with nothing read from a site's acceptance: the output
-rows' checks (`Hidden.rowsOut_of_checkRows`), that each returned output is an output word (`Layout.check_out`), the
-rows' fit (`rowsFit_of_scopeH`) and the keys' rows (`Layout.keysRow_of_parse`).
--/
+/-! The commit strings a proof block's wires sit at in the session's value binding (`vbOf`), from the parse
+and the scope check alone. -/
 
 @[expose] public section
 
@@ -58,7 +44,6 @@ variable {n mPts : ℕ} {Reg : Type} {I : Inputs} {dj : Finset (Fin n) → Lean.
   {hpt : pub.tables = none}
   {g : Fin ((keyProg c hU n).circuit (Discharge.Layout.outsOf c hU n)).N}
 
-/-- **A wire that is no row's bit sits at its own commit string.** -/
 theorem vbOf_pos_none (h : HiddenExec.rowOfH c hU n (Discharge.Layout.outsOf c hU n) g = none) :
     (vbOf dj y₀ ht hc hscope hU hpub hpt (Reg := Reg)).pos g = (Sum.inr g : PosH c hU n) := by
   dsimp only [vbOf, HmRowsZX.bindingZ, LayoutZ.bindingZ, ZkHidden.rsZHJ, ZkHidden.layZHJ, LayoutZ.ofShadow,
@@ -66,10 +51,6 @@ theorem vbOf_pos_none (h : HiddenExec.rowOfH c hU n (Discharge.Layout.outsOf c h
     HiddenExec.keyReadersH]
   exact Discharge.Layout.ofRows_pos_none _ h
 
-/-- **A committed wire of proof block `u` sits at one of `u`'s rows, at the zero's gate or at the constant's.** A
-committed wire is on a column of the block's instance (`Layout.exists_col_of_io`); one that is no row's bit is the zero,
-the constant or a gate the block computes (`Layout.single_gate`), and a computed one is a returned output's bit
-(`Layout.outsOut_outsOf`), so an output row's (`HiddenExec.outBitRow_ne_none_of_rowsOut`). -/
 theorem vbOf_pos_io (u : Fin n)
     (hg : g ∈ ((keyProg c hU n).partition (Discharge.Layout.outsOf c hU n)).io u) :
     (∃ q : Fin c.ports.size,

@@ -17,22 +17,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.VBridge.Algebra.BitsOk
 
-/-!
-# C3's rep decoder: the reps' unit maps, openings and values over a list of V*'s statements
-
-`RepMaps stmt Vs sh Reg Ω C` is what (a)'s lemmas read of G's `VStarFamily`, generic in the list `stmt` so that it fits
-`Fin (vstarCount ish)` (at the verifier's own list, `RepMaps.atList` in `AtList.lean`): each part's and each opening's
-session and unit, the values read off the history `(R, ω, t)` (`rounds`, `extras`, `alpha`: nothing sent reads the
-coins) and those read off V*'s layers (`rep₀`'s `w` and `comb`, `rows`, `acc`), which stay fields.
-
-* `coef`, `ops`, `rep`: G's `VStarFamily.{coef, ops, rep}` at the history's rounds, extras and `alpha`; `coefsAre` and
-  `consAre` hold by definition.
-* `algebraDecodes`, `accChains`: G's items 1–4 at `rep`, (a)'s `algebraDecodes_of_decodeLH` and `accChains_of_decodeL`
-  at the maps, each instance copy 0 (`Family.cp`, `Family.cpO`).
-* `ExtrasAt`, `CombFoldsAt`: S's two facts about the decoder (`RepExtrasAt`, `CombFolds`) at `rep`, the obligations
-  `proofOfVals_of_src` takes (`proofOfVals`). `rep`'s rounds and extras are the history's and its comb `rep₀`'s,
-  which this file leaves fields.
--/
+/-! C3's rep decoder (`RepMaps`): the reps' unit maps, openings and values over a list of V*'s statements. -/
 
 @[expose] public section
 
@@ -48,10 +33,6 @@ open FlockVBridge.OfVStar (ResZeroAtLH)
 open FlockVBridge.AccChain (Openings CoefsAre ConsAre ReadsEnds levelLanes)
 open FlockVBridge.Family (OpensAtL)
 
-/-- **C3's rep decoder over V*'s statements `stmt`**: G's `VStarFamily`'s unit maps (part `p` of rep `r` is instance
-`r` of the statement tagged `.inner p`, opening `j` of level `ℓ` of rep `r` instance `r q + j` of the one tagged
-`.recOpen ℓ`) and the values it reads off the history `(R, ω, t)` (`rounds`, `extras`, `alpha`) and the layers (`rep₀`'s
-`w` and `comb`, `rows`, `acc`). -/
 structure RepMaps {S : ℕ} (stmt : Fin S → VStar.Stmt) (Vs : Fin S → VStmt) (sh : Shape) (Reg Ω C : Type) where
   sess : ℕ → Fin S
   hsess : ∀ p j, (∃ nm pt, stmt j = .inner p nm pt) → sess p = j
@@ -80,24 +61,19 @@ def q (_ : RepMaps stmt Vs sh Reg Ω C) (ℓ : ℕ) : ℕ := (sh.sched.levels[�
 /-- Each rep's openings. -/
 def nOpen : ℕ := ((List.range sh.sched.levels.size).map M.q).sum
 
-/-- The verifier's `coef` for opening `j` of level `ℓ` of rep `r`, at the history's coins and `alpha` (G's `coef`). -/
 def coef (R : Reg) (ω : Ω) (t : List C) (l : (j : Fin S) → (Vs j).Bits) (r : Fin 2) (ℓ j : ℕ) : Array F128 :=
   match verifierRows sh (M.rounds R ω t r) (M.extras R ω t r) (M.rep₀ l r).comb with
   | .ok (_, _, kappa) => FlockVBridge.coefAt (kappa[ℓ]!) (levelLanes sh ℓ) (eqTable (M.alpha R ω t r ℓ))[j]!
   | .error _ => #[]
 
-/-- **Rep `r`'s openings** (G's `ops`): level `ℓ`'s `q` queries from chain row `r · nOpen`. -/
 def ops (R : Reg) (ω : Ω) (t : List C) (l : (j : Fin S) → (Vs j).Bits) (r : Fin 2) : Openings :=
   ⟨r.val * M.nOpen, M.q, M.rows l r, M.alpha R ω t r, M.coef R ω t l r⟩
 
-/-- **Rep `r`'s values** (G's `rep`): `rep₀`'s `w` and `comb`, the history's rounds and extras, and the levels'
-consistency sums of the opened rows. -/
 def rep (R : Reg) (ω : Ω) (t : List C) (l : (j : Fin S) → (Vs j).Bits) (r : Fin 2) : RepData :=
   { M.rep₀ l r with
     rounds := M.rounds R ω t r, extras := M.extras R ω t r,
     cons := fun ℓ i => Flock.RecAlgebra.consAt (M.rows l r ℓ) (M.q ℓ) (M.alpha R ω t r ℓ) i }
 
-/-- **The verifier's coefficients are the openings'**, by definition of `coef` (G's `coefsAre`). -/
 theorem coefsAre (R : Reg) (ω : Ω) (t : List C) (l : (j : Fin S) → (Vs j).Bits) (r : Fin 2) :
     CoefsAre sh (M.rep R ω t l r) (M.ops R ω t l r) := by
   intro v info kappa h ℓ _ j _
@@ -106,7 +82,6 @@ theorem coefsAre (R : Reg) (ω : Ω) (t : List C) (l : (j : Fin S) → (Vs j).Bi
   unfold coef
   rw [h']
 
-/-- **The rep's consistency sums are the opened rows'**, by definition of `rep`. -/
 theorem consAre (R : Reg) (ω : Ω) (t : List C) (l : (j : Fin S) → (Vs j).Bits) (r : Fin 2) :
     ConsAre sh (M.rep R ω t l r) (M.ops R ω t l r) :=
   fun _ _ _ _ => rfl
@@ -115,7 +90,6 @@ section outer
 
 variable {n : ℕ} {L : SamplingDesign n} {I : Inner} {Cm : Type} {Reg' Reg₂ : Type}
 
-/-- **G items 1–3 at the decoder**: `algebraDecodes_of_decodeLH` at `sess`, `un` and copy 0. -/
 theorem algebraDecodes (M : RepMaps stmt Vs sh Reg L.Ω (Cm × I.Coin))
     (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
     (dg : ByteArray → ByteArray) (N k Rw : ℕ) {GS : RecAlgebra.GfS} {gs : Array (Array ℕ × Array ℕ × Array ℕ)}
@@ -136,8 +110,6 @@ theorem algebraDecodes (M : RepMaps stmt Vs sh Reg L.Ω (Cm × I.Coin))
   algebraDecodes_of_decodeLH zs dg N k Rw sh M.rep hst.1 (Flock.RecAlgebra.structureOf_bitsOk hst.1) hst.2 M.sess
     M.un FlockVBridge.Family.cp hvr hsz hres
 
-/-- **G item 4 at the decoder**: `accChains_of_decodeL` at `ops`, `acc`, `sessO`, `unO` and copy 0, with `coefsAre`
-and `consAre`. -/
 theorem accChains (M : RepMaps stmt Vs sh Reg L.Ω (Cm × I.Coin))
     (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
     (dg : ByteArray → ByteArray) (N k Rw : ℕ)
@@ -166,8 +138,6 @@ variable {nT nR : ℕ} {T : Fin nT → Type} {CT : Fin nR → Type} [∀ k, Fint
 
 local notation "ℐ" => holoInnerAt T CT st hp
 
-/-- **Obligation: the decoder's extras** (S's `hx` at `rep`, as G's `rep_extras`): at every accepted outer proof, each
-rep's extras are the setup `stp`'s at some well-formed link point arrays at the source's `pts`. -/
 def ExtrasAt (M : RepMaps stmt Vs sh Reg L.Ω (Cm × (ℐ).Coin))
     (zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
     (dg : ByteArray → ByteArray) (N k Rw : ℕ)
@@ -177,15 +147,11 @@ def ExtrasAt (M : RepMaps stmt Vs sh Reg L.Ω (Cm × (ℐ).Coin))
     RepExtrasAt (stp Lb i) ((holoAt st hp).cls.pubStatement (holoAt st hp).regs) (holoAt st hp).cls.ptLocal
       (holoAt st hp).cls.mPts (src R ω t Lb).pts (M.rep R ω t Lb i)
 
-/-- **Obligation: the decoder's comb** (S's `hfold` at `rep`): at every accepted outer proof, each rep's comb is the
-lincheck's fold at the setup `stp` (`CombFolds`; G's `combFolds_of`: the comb `combOf` of the rounds, `FoldsOk`). -/
 def CombFoldsAt (M : RepMaps stmt Vs sh Reg L.Ω (Cm × (ℐ).Coin))
     (zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
     (dg : ByteArray → ByteArray) (N k Rw : ℕ) (stp : ((j : Fin S) → (Vs j).Bits) → Fin 2 → Flock.Setup) : Prop :=
   AtRep zs dg N k Rw sh M.rep fun R ω t Lb i => FlockVBridge.Family.CombFolds (stp Lb i) sh (M.rep R ω t Lb i)
 
-/-- **S's `ProofOfVals` at the decoder's values**: `proofOfVals_of_src` at `rep`, its `hx` and `hfold` the
-obligations. -/
 theorem proofOfVals (M : RepMaps stmt Vs sh Reg L.Ω (Cm × (ℐ).Coin))
     (zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
     (dg : ByteArray → ByteArray) (N k Rw : ℕ)
@@ -204,24 +170,18 @@ end obligations
 
 end RepMaps
 
-/-! ## R's openings: the `recOpenStacked` statements -/
-
 /-- Values forgotten: a run's coin points do not read them. -/
 instance instValUnit : RecAlgebra.Val Unit := ⟨(), fun _ _ => (), fun _ _ => (), fun _ _ => .ok (), fun _ => ()⟩
 
 theorem homUnit {α : Type} [RecAlgebra.Val α] : RecAlgebra.Hom (fun _ : α => ()) :=
   ⟨rfl, fun _ _ => rfl, fun _ _ => rfl, fun _ _ _ _ => rfl, fun _ => rfl⟩
 
-/-- R's messages, their values forgotten. -/
 def skel (sh : Shape) : RecAlgebra.Messages Unit := (RecAlgebra.symbolic sh).map fun _ => ()
 
 theorem map_skel (sh : Shape) (g : RecAlgebra.Lin → F128) :
     ((RecAlgebra.symbolic sh).map g).map (fun _ : F128 => ()) = skel sh := by
   simp only [skel, RecAlgebra.Messages.map, Array.map_map, Option.map_map, RecAlgebra.KV.map, Function.comp_def]
 
-/-- **The Ligerito run's α** at level `ℓ`: R's ring switches, then its Ligerito, on `skel`, at the claims' points `cl`
-from coin `k₀` of the rounds `c`. `RecOpening.run`'s and `RecCoins.opening`'s runs both map to it, values forgotten
-(`ringSwitch_sim`, `ligerito_sim` at `homUnit`). -/
 def runAlpha (sh : Shape) (cl : Array (RecAlgebra.AClaim Unit)) (k₀ : ℕ) (c : Array (Array F128)) (ℓ : ℕ) :
     Array F128 :=
   match RecAlgebra.ringSwitch (skel sh) cl k₀ (RecAlgebra.RoundCoins.ofRounds c) with
@@ -231,8 +191,6 @@ def runAlpha (sh : Shape) (cl : Array (RecAlgebra.AClaim Unit)) (k₀ : ℕ) (c 
     | .error _ => #[]
   | .error _ => #[]
 
-/-- **C3's decoder of R's openings** over V*'s statements `stmt` (one rep, `RecCoins.checkStackedLevel`): opening `j` of
-level `ℓ` is instance `j` of the statement tagged `.recOpenStacked ℓ`; its row and the chain's rows, off the layers. -/
 structure StackedMaps {S : ℕ} (stmt : Fin S → VStar.Stmt) (Vs : Fin S → VStmt) where
   sess : ℕ → Fin S
   hsess : ∀ ℓ j, (∃ LANES H n, stmt j = .recOpenStacked ℓ LANES H n) → sess ℓ = j
@@ -247,8 +205,6 @@ variable {S : ℕ} {stmt : Fin S → VStar.Stmt} {Vs : Fin S → VStmt} (M : Sta
   (l : (j : Fin S) → (Vs j).Bits) (kap : Array (Array (Array F128))) (cl : Array (RecAlgebra.AClaim Unit)) (k₀ : ℕ)
   (c : Array (Array F128))
 
-/-- **R's openings** at R's shape `sh`: from chain row 0, level `ℓ`'s `q` rows, the run's α, and the coefficients at the
-verifier's `kappa` `kap` (`RecCoins.opening`'s). -/
 def ops : Openings :=
   ⟨0, fun ℓ => (sh.sched.levels[ℓ]!).q, fun ℓ => Array.ofFn fun j : Fin (sh.sched.levels[ℓ]!).q => M.row l ℓ j,
     runAlpha sh cl k₀ c, fun ℓ j => RecCoins.coefAt (kap[ℓ]!) (levelLanes sh ℓ) (eqTable (runAlpha sh cl k₀ c ℓ))[j]!⟩
@@ -260,7 +216,6 @@ theorem rows_get {ℓ j : ℕ} (hj : j < (sh.sched.levels[ℓ]!).q) :
   rw [getElem!_pos _ j (by rw [rows_size]; exact hj)]
   exact Array.getElem_ofFn ..
 
-/-- `SessionAt`'s coefficient conjunct at `kap := o.kappa`, by definition. -/
 theorem coef_eq (ℓ j : ℕ) : (M.ops sh l kap cl k₀ c).coef ℓ j =
     RecCoins.coefAt (kap[ℓ]!) (levelLanes sh ℓ) (eqTable ((M.ops sh l kap cl k₀ c).alpha ℓ))[j]! := rfl
 

@@ -16,16 +16,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.Soundness.Refine.Seam
 
-/-!
-# n9: R's Ligerito ends in a coin (H's `LigWhole`) from the source's tie
-
-At an accepting `LevelTie` the executable's Ligerito refines to the model's compiled Ligerito played on its messages
-and the rounds it consumes (`ligerito_refines`, whose final program leaves the transcript as it is, `finalProg_ok`),
-and that play is a play on `u.lg` (`Read.playsT_lig_of_tape`). A whole play of compiled Ligerito at a `fast100`
-schedule ends in a coin (`ligEndsInCoin`): such a schedule has two or more levels (`DimSeam`), where compiled
-Ligerito never stops early (`ligeritoC_exact`) and its shape ends in the last level's batching coin
-(`ligShape_coin`), so `u.lg` does (`ligWhole_of_tie`).
--/
+/-! R's Ligerito ends in a coin (H's `LigWhole`), from the source's tie. -/
 
 @[expose] public section
 
@@ -35,14 +26,11 @@ open FlockSoundness FlockSoundness.Discharge FlockSoundness.Discharge.Recursion
 open Game Audit Exec Refine Model ZkSession ZkLink ZkExec Composed ZkReg
 open Flock FlockLevel3 Accounting ZkBind Integrate Placed StrictCR DecodeZL FlockC3.Compose
 
-/-- **A whole play of compiled Ligerito at a `fast100` schedule ends in a coin** (`ligEndsInCoin`): such a schedule
-has more than one level, and the last level's queries close with their coin. -/
 def LigEndsInCoin : Prop :=
   ∀ (m : ℕ) (sch : Flock.Schedule), Flock.fast100 m = some sch → ∀ (T₀ : GF128) (b : ℕ → GF128) (ts : List Step)
     (pend : PendL GF128 Dig), PlaysT (ligeritoC (D := Dig) execArith 2 (schedOf sch) T₀ b) ts pend →
       ∃ (l : List Step) (c : Game.Msg), ts = l ++ [.inr c]
 
-/-- **Compiled Ligerito never stops early**: at every schedule its runs take exactly the steps of `ligShape`. -/
 theorem ligeritoC_exact (r : ℕ) (sch : FlockSoundness.Accounting.Schedule) (T₀ : GF128) (b : ℕ → GF128) :
     Exact (ligeritoC (D := Dig) execArith r sch T₀ b) (ligShape GF128 GF256 Dig sch) := by
   unfold ligeritoC ligShape
@@ -56,7 +44,6 @@ theorem ligeritoC_exact (r : ℕ) (sch : FlockSoundness.Accounting.Schedule) (T�
       exact Exact.bind (queryAndBatchC_exact execArith r lv₀ _ _ _ true) fun _ =>
         ZkExec.recursiveRoundsC_exact execArith r _ b _ sch.ext (lv₁ :: rest') _
 
-/-- **The recursive levels' shape ends in a coin**: the last level's batching coin (`qbShape lv false`). -/
 theorem recShape_coin (F K D : Type) (ext : ℕ) :
     ∀ (lv : FlockSoundness.Accounting.Level) (rest : List FlockSoundness.Accounting.Level),
       ∃ σ, recShape F K D ext (lv :: rest) = σ ++ [.coin F]
@@ -67,7 +54,6 @@ theorem recShape_coin (F K D : Type) (ext : ℕ) :
       exact ⟨foldShape F K lv.lanes ++ .msg (Cap D) :: (oodShape F K (lv'.logCols + lv'.lanes) ++
         (qbShape F K lv true ++ σ)), by rw [recShape, hσ]; simp⟩
 
-/-- **Compiled Ligerito's shape ends in a coin** at two or more levels. -/
 theorem ligShape_coin (F K D : Type) {sch : FlockSoundness.Accounting.Schedule}
     {lv₀ lv₁ : FlockSoundness.Accounting.Level} {rest : List FlockSoundness.Accounting.Level}
     (hl : sch.levels = lv₀ :: lv₁ :: rest) : ∃ σ, ligShape F K D sch = σ ++ [.coin F] := by
@@ -79,8 +65,6 @@ theorem ligShape_coin (F K D : Type) {sch : FlockSoundness.Accounting.Schedule}
 private theorem two_levels {α : Type} : ∀ (l : List α), 2 ≤ l.length → ∃ a b r, l = a :: b :: r
   | a :: b :: r, _ => ⟨a, b, r, rfl⟩
 
-/-- **`LigEndsInCoin` holds**: a `fast100` schedule has two or more levels (`DimSeam`), where compiled Ligerito's runs
-take all of `ligShape`, whose last step is a coin. -/
 theorem ligEndsInCoin : LigEndsInCoin := by
   intro m sch hf T₀ b ts pend hp
   obtain ⟨-, h2, -⟩ := (fast100_dims m sch hf).1
@@ -97,7 +81,6 @@ theorem ligEndsInCoin : LigEndsInCoin := by
     | inl x => simp [kindOf] at hs
     | inr c => exact ⟨l, c, List.concat_eq_append⟩
 
-/-- **An accepting tie's Ligerito ends in a coin.** -/
 theorem ligWhole_of_levelTie (hend : LigEndsInCoin) {cap₀ : Cap Dig} {e : ExecHolo} {u : C3Run e}
     (h : LevelTie cap₀ e u) : ∃ (l : List Step) (c : Game.Msg), u.lg = l ++ [.inr c] := by
   obtain ⟨msId, m, sch, Tw, sws, _nc, cap, p, _rt, _rt', hf, hsch, -, -, hwf, hlig, hk, hl, hr, -⟩ := h
@@ -120,7 +103,6 @@ variable {nT r : ℕ} {T : Fin nT → Type} {CT : Fin r → Type} [∀ k, Fintyp
 
 local notation "ℐ" => holoInnerAt T CT st hp
 
-/-- **H's `LigWhole` from the source's tie**, at any registered cap. -/
 theorem ligWhole_of_srcLevelTie (hend : LigEndsInCoin)
     {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'}
     {dg : ByteArray → ByteArray} {N k Rw : ℕ}
@@ -129,7 +111,6 @@ theorem ligWhole_of_srcLevelTie (hend : LigEndsInCoin)
     FlockC3.Compose.LigWhole zs dg N k Rw src :=
   fun R ω t R₂ τ o hA => ligWhole_of_levelTie hend (h R ω t R₂ τ o hA)
 
-/-- **H's `LigWhole` from the source's tie**, with `LigEndsInCoin` discharged. -/
 theorem ligWhole_of_tie
     {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'}
     {dg : ByteArray → ByteArray} {N k Rw : ℕ}

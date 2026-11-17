@@ -16,22 +16,7 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 
-/-!
-# n7's opening tie at V*'s layer
-
-`OpenTie` asks that the source's two ring switches be the ones w holds (`decodedO`). `OpenTieL` reads them off V*'s
-layer instead: ring switch `i` is what a copy of the `rec-opening` unit holds at its row ports' columns, in the layer
-filled at its registered reads (`fill`), where those columns are ring switch `i`'s slots of w. The unit is RecResiduals'
-laid-out unit (`check_opening`), so its row ports' columns are `rowCol`'s, as for `rec-residuals`; the copy registering
-w where its rows read it (`OpeningZeroAtL`), which they do at the ring switches' columns (`readCol_rs`), makes the
-layer's ring switches w's.
-
-* `fill_rowCol`: at a copy registering w, the filled layer holds w's elements at the row ports' columns it reads
-  (`copyVal_regBit`); `readCol_rsAt`: it reads the ring switches' columns.
-* `RsAt`, `eq_of_rsAt`: ring switch `i` at such a copy, and its elements are w's at their slots.
-* `OpenTieL`, `openTie_of_layer`: the source's opening steps are the opening's on the ring switches V*'s layer holds,
-  which gives `OpenTie`; `openingReadAt_srcL` is `openingReadAt_src` with `OpenTieL` in place of `OpenTie`.
--/
+/-! The opening tie at V*'s layer (`OpenTieL`). -/
 
 @[expose] public section
 
@@ -50,9 +35,6 @@ open FlockVBridge.Decode
 variable {mPts nU J : ℕ} {Reg' : Type} {c : Flock.Circuit} {hU : Built c.unit} {hscope : Layout.scopeOk c = true}
   {Lv : SamplingDesign nU} (zo : ZkOuter mPts nU J Reg' c hU hscope Lv)
 
-/-- **A copy registering w holds w's elements in the filled layer** (`copyVal_regBit`): at copy `j` of unit `u`, opening
-part `p` of the groups `gs` with its row ports w's where they are read (`OpeningZeroAtL`), the layer filled at its
-registered reads holds bit `b` of the part's row-port element `k` at its column, if a computed row reads it. -/
 theorem fill_rowCol {bits : Fin (Layout.keyN c hU nU) → Bool} {u : Fin nU} {j : ℕ} {sh : Shape}
     {gs : Array (Array ℕ × Array ℕ × Array ℕ)} {p : ℕ} {w v : ℕ → F128} (h : OpeningZeroAtL zo bits u j sh gs p w v)
     (hj : j < c.upv) {S0 : RecAlgebra.GfS} (hS : RecOpening.structureOf sh = .ok S0)
@@ -75,8 +57,6 @@ theorem fill_rowCol {bits : Fin (Layout.keyN c hU nU) → Bool} {u : Fin nU} {j 
   rw [show (128 * k + b) / 128 = k by omega, show (128 * k + b) % 128 = b by omega]
   exact congrArg (bitOf · b) (sub_lt _ w k hk)
 
-/-- **A copy registering w as an opening part reads its ring switches' columns** (`readCol_rs` at the unit whose check
-the copy carries): bit `b` of the part's row-port element `k`, slot `e` of w holding ring switch `i`'s element `t`. -/
 theorem readCol_rsAt {bits : Fin (Layout.keyN c hU nU) → Bool} {u : Fin nU} {j : ℕ} {sh : Shape}
     {gs : Array (Array ℕ × Array ℕ × Array ℕ)} {p : ℕ} {w v : ℕ → F128} (h : OpeningZeroAtL zo bits u j sh gs p w v)
     {S0 : RecAlgebra.GfS} (hS : RecOpening.structureOf sh = .ok S0)
@@ -101,7 +81,6 @@ open FlockVBridge.Decode (fill)
 open FlockVBridge.OfVStar (OpeningZeroAtL rowCol partRep fill_rowCol readCol_rsAt)
 open FlockVBridge.PartS (wIdx)
 
-/-- Ring switch `i`'s element `t` of the messages w holds is w's at its slot. -/
 theorem decodedO_rs {sh : Flock.Shape} (w : Array F128) (cons : ℕ → ℕ → F128) {i t e : ℕ} (hi : i < sh.claims)
     (ht : t < 128) (hwi : RecOpening.wi sh (.rs i t) = some e) : ((decodedO sh w cons).rs[i]!)[t]! = w[e]! := by
   have hrs : (decodedO sh w cons).rs =
@@ -123,10 +102,6 @@ section Sessions
 
 variable {nS : ℕ} {Vs : Fin nS → VStmt} {Reg' : Type}
 
-/-- **Ring switch `i` at a copy in V*'s layer**: copy `j` of unit `un` in session `s` is part `p` of the groups `gs` of
-the opening at `sh`, its row ports w's where they are read (`OpeningZeroAtL`); the part's row-port elements
-`k₀ … k₀ + 127` are ring switch `i`'s slots of w (`RecOpening.wi`), and `x` is what the layer, filled at its registered
-reads (`fill`), holds at their columns. -/
 def RsAt (zs : (s : Fin nS) → (Vs s).Outer Reg') (Lb : (s : Fin nS) → (Vs s).Bits) (sh : Flock.Shape)
     (gs : Array (Array ℕ × Array ℕ × Array ℕ)) (w : Array F128) (i : ℕ) (x : Fin 128 → F128) : Prop :=
   ∃ (s : Fin nS) (un : Fin (Vs s).nv) (j p k₀ : ℕ) (v : ℕ → F128) (hj : j < (Vs s).c.upv) (hpg : p < gs.size)
@@ -137,8 +112,6 @@ def RsAt (zs : (s : Fin nS) → (Vs s).Outer Reg') (Lb : (s : Fin nS) → (Vs s)
         copyVal (keyInst (Vs s).hU (Vs s).nv (Layout.outsOf (Vs s).c (Vs s).hU (Vs s).nv) un) (fill (zs s) (Lb s)) hj
           (rowCol (partRep ns nv).ports 0 (128 * (k₀ + t.val) + b)) = bitOf (x t) b
 
-/-- **The layer's ring switch is w's** (`fill_rowCol` at the columns the copy reads, `readCol_rsAt`): each element is
-w's at its slot. -/
 theorem eq_of_rsAt {zs : (s : Fin nS) → (Vs s).Outer Reg'} {Lb : (s : Fin nS) → (Vs s).Bits} {sh : Flock.Shape}
     {S0 : RecAlgebra.GfS} {gs : Array (Array ℕ × Array ℕ × Array ℕ)} (hS : RecOpening.structureOf sh = .ok S0)
     (hg : Flock.RecResiduals.groups S0 (RecOpening.portSizes sh) = .ok gs) {w : Array F128} {i : ℕ} {x : Fin 128 → F128}
@@ -150,9 +123,6 @@ theorem eq_of_rsAt {zs : (s : Fin nS) → (Vs s).Outer Reg'} {Lb : (s : Fin nS) 
   rw [← hb b hb', fill_rowCol (zs s) hz hj hS hg hpg hpart hk hb' (readCol_rsAt (zs s) hz hS hg hpg hpart he hwi hb'),
     hke, RecAlgebra.getElem!_el]
 
-/-- **(n7's opening tie at V*'s layer)** The source's opening steps are the opening's on the ring switches V*'s layer
-holds at copies of the `rec-opening` unit registering w (`RsAt`), at some coins, the groups `gs` those of the opening's
-S at `sh`. -/
 def OpenTieL (zs : (s : Fin nS) → (Vs s).Outer Reg') (Lb : (s : Fin nS) → (Vs s).Bits) (sh : Flock.Shape)
     (w : Array F128) {e : ExecHolo} (u : C3Run e) : Prop :=
   ∃ (S0 : RecAlgebra.GfS) (gs : Array (Array ℕ × Array ℕ × Array ℕ)) (x : Fin 2 → Fin 128 → F128)
@@ -160,8 +130,6 @@ def OpenTieL (zs : (s : Fin nS) → (Vs s).Outer Reg') (Lb : (s : Fin nS) → (V
     RecOpening.structureOf sh = .ok S0 ∧ Flock.RecResiduals.groups S0 (RecOpening.portSizes sh) = .ok gs ∧
     (∀ i : Fin 2, RsAt zs Lb sh gs w i.val (x i)) ∧ u.op = openSteps (fun i t => fOf (x i t)) ρ γ
 
-/-- **The tie at V*'s layer is the tie** (`eq_of_rsAt`, `decodedO_rs`): the layer's ring switches are the ones w
-holds. -/
 theorem openTie_of_layer {zs : (s : Fin nS) → (Vs s).Outer Reg'} {Lb : (s : Fin nS) → (Vs s).Bits} {m : ℕ}
     {sh : Flock.Shape} (hsh : RecOpening.shape? m 2 = some sh) {w : Array F128} (ops : FlockVBridge.AccChain.Openings)
     {e : ExecHolo} {u : C3Run e} (h : OpenTieL zs Lb sh w u) : OpenTie sh w ops u := by
@@ -178,8 +146,6 @@ variable {nT r : ℕ} {T : Fin nT → Type} {CT : Fin r → Type} [∀ k, Fintyp
 
 local notation "ℐ" => holoInnerAt T CT st hp
 
-/-- **(n7's opening) `OpeningReadAt` at the source, from the tie at V*'s layer**: `openingReadAt_src` with `OpenTieL`
-at each accepted outer proof's sessions and layers in place of `OpenTie` (`openTie_of_layer`). -/
 theorem openingReadAt_srcL
     {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'} {dg : ByteArray → ByteArray}
     {N k Rw : ℕ} {src : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → C3Run (holoAt st hp)}

@@ -18,19 +18,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 
-/-!
-# The sparse phases' committed rounds, from each message's stage
-
-A sparse phase's steps weave its messages along `sparseKinds` (`stepsOf`), so its round `j` is its messages of round
-`j` (`roundOf`: the coins before a message), whatever its witness and coins (`groups_weave`, `groups_stepsOf`); rep 0's
-phase has `nS` coins whatever they are (`nCoins_stepsOf`). The sparse stage is rep 0's phase then rep 1's, so its round
-`j` is rep 0's round `j` and rep 1's round `j − nS` (`groups_stage`).
-
-`stageMsgsRead_of_layers`: the stage's committed rounds past `c₀` coins (H's `StageMsgsRead` at `sp 0 ++ sp 1`) where
-each phase's steps are `stepsOf` (`SparseTieL`'s) and its message `m` is read off V*'s layers on stage
-`c₀ + i · nS + roundOf m`'s commit strings (`SparseMsgsOfLayers`, named). `sparseMsgsRead_of_layers`: `SparseMsgsRead`,
-through H's `sparseMsgsRead_of_stage` at the reps' part's `c₀` coins ending in one (`PartEnds repPart`).
--/
+/-! The sparse phases' committed rounds, from each message's stage. -/
 
 @[expose] public section
 
@@ -49,8 +37,6 @@ open FlockVBridge.Sparse (phaseMsgs coinTape vtTape msgTape nc)
 
 local notation "𝔽" => FlockLevel3.GF128
 
-/-! ## A weave's rounds -/
-
 /-- The round of message `m` along the kinds `σ`: the coins before it. -/
 def roundOf : List Exec.Kind → ℕ → ℕ
   | [], _ => 0
@@ -58,7 +44,6 @@ def roundOf : List Exec.Kind → ℕ → ℕ
   | .msg _ :: σ, m + 1 => roundOf σ m
   | .coin _ :: σ, m => roundOf σ m + 1
 
-/-- **A weave's coins are fixed by its lengths.** -/
 theorem nCoins_weave : ∀ (σ : List Exec.Kind) {ms ms' cs cs' : List Msg}, ms.length = ms'.length →
     cs.length = cs'.length → nCoins (weave σ ms cs) = nCoins (weave σ ms' cs')
   | [], _, _, _, _, _, _ => rfl
@@ -71,8 +56,6 @@ theorem nCoins_weave : ∀ (σ : List Exec.Kind) {ms ms' cs cs' : List Msg}, ms.
   | .coin _ :: _, _, _, [], _ :: _, _, hc => absurd hc (by simp)
   | .coin _ :: _, _, _, _ :: _, [], _, hc => absurd hc (by simp)
 
-/-- **A weave's round is its messages of that round**: two weaves along `σ` of messages and coins of the same lengths
-have the same round `j` where their messages of round `j` agree. -/
 theorem groups_weave : ∀ (σ : List Exec.Kind) {ms ms' cs cs' : List Msg} (j : ℕ), ms.length = ms'.length →
     cs.length = cs'.length → (∀ m, roundOf σ m = j → ms[m]? = ms'[m]?) →
     (groups (weave σ ms cs))[j]? = (groups (weave σ ms' cs'))[j]?
@@ -97,8 +80,6 @@ theorem groups_weave : ∀ (σ : List Exec.Kind) {ms ms' cs cs' : List Msg} (j :
   | .coin _ :: _, _, _, [], _ :: _, _, _, hc, _ => absurd hc (by simp)
   | .coin _ :: _, _, _, _ :: _, [], _, _, hc, _ => absurd hc (by simp)
 
-/-! ## A sparse phase's rounds -/
-
 theorem length_phaseMsgs (sh : SparseShape) (w w' : Array Flock.F128) :
     (phaseMsgs sh w).length = (phaseMsgs sh w').length := by
   have hv : (vtTape sh w).length = (vtTape sh w').length := by unfold vtTape; split_ifs <;> rfl
@@ -109,7 +90,6 @@ theorem length_coins (sh : SparseShape) (cs cs' : Array Flock.F128) :
       ((coinTape cs' 0 (nc sh)).map (PlaysCoin.coinArr fOf)).length := by
   simp only [coinTape, List.length_map]
 
-/-- A sparse phase's coins, whatever its witness and coins. -/
 def nS (sh : SparseShape) : ℕ := nCoins (stepsOf sh #[] #[])
 
 theorem nCoins_stepsOf (sh : SparseShape) (w cs : Array Flock.F128) : nCoins (stepsOf sh w cs) = nS sh :=
@@ -120,8 +100,6 @@ theorem groups_stepsOf {sh : SparseShape} {w cs w' cs' : Array Flock.F128} {j : 
     (groups (stepsOf sh w cs))[j]? = (groups (stepsOf sh w' cs'))[j]? :=
   groups_weave _ j (length_phaseMsgs sh w w') (length_coins sh cs cs') h
 
-/-- **The sparse stage's round `j`** is rep 0's phase's round `j` and rep 1's round `j − nS`: two stages agree there
-where rep 0's messages of round `j` agree and rep 1's of round `j − nS` (for `nS ≤ j`). -/
 theorem groups_stage {sh : SparseShape} {w cs w' cs' : Fin 2 → Array Flock.F128} {j : ℕ}
     (h₀ : ∀ m, roundOf (sparseKinds 𝔽 sh) m = j → (phaseMsgs sh (w 0))[m]? = (phaseMsgs sh (w' 0))[m]?)
     (h₁ : ∀ m, nS sh + roundOf (sparseKinds 𝔽 sh) m = j →
@@ -140,8 +118,6 @@ theorem groups_stage {sh : SparseShape} {w cs w' cs' : Fin 2 → Array Flock.F12
     rw [← e, groups_append_succ, e, ← e', groups_append_succ]
     exact groups_stepsOf fun m hm => h₁ m (by omega)
 
-/-! ## The read fact -/
-
 section src
 
 variable {nT r : ℕ} {T : Fin nT → Type} {CT : Fin r → Type} [∀ k, Fintype (CT k)] [∀ k, Nonempty (CT k)]
@@ -149,9 +125,6 @@ variable {nT r : ℕ} {T : Fin nT → Type} {CT : Fin r → Type} [∀ k, Fintyp
 
 local notation "ℐ" => holoInnerAt T CT st hp
 
-/-- **Hypothesis: each sparse phase's messages are read off the layers** (S's `OpensOfLayers` form): at every accepted
-outer proof, rep `i`'s sparse steps are `stepsOf` at a witness `w` and coins (`SparseTieL`'s), and `w`'s message `m` is
-`rd i m` of the layers' bits on the read wires of stage `c₀ + i · nS + roundOf m`'s commit strings. -/
 def SparseMsgsOfLayers (zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
     (dg : ByteArray → ByteArray) (N k Rw : ℕ)
     (src : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → C3Run (holoAt st hp))
@@ -163,8 +136,6 @@ def SparseMsgsOfLayers (zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂
         (c₀ + i.val * nS (holoAt st hp).cls.shape + roundOf (sparseKinds 𝔽 (holoAt st hp).cls.shape) m)
         (layers zs dg N k Rw R ω t R₂ τ))
 
-/-- **The sparse stage's committed rounds from V*'s layers**: each round is rep 0's and rep 1's messages of it, and
-each message is read on its stage's commit strings (`SparseMsgsOfLayers`). -/
 theorem stageMsgsRead_of_layers
     {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'} {dg : ByteArray → ByteArray}
     {N k Rw : ℕ} {src : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → C3Run (holoAt st hp)}
@@ -187,8 +158,6 @@ theorem stageMsgsRead_of_layers
       c₀ + j := by rw [show (1 : Fin 2).val = 1 from rfl, Nat.one_mul]; omega
     rw [e, hX]
 
-/-- **`SparseMsgsRead` from V*'s layers**, through H's lemma for the parts' committed rounds (`sparseMsgsRead_of_stage`)
-at the reps' part's `c₀` coins ending in one. -/
 theorem sparseMsgsRead_of_layers
     {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'} {dg : ByteArray → ByteArray}
     {N k Rw : ℕ} {src : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → C3Run (holoAt st hp)}

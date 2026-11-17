@@ -7,18 +7,7 @@ import Mathlib.Algebra.Order.Module.Field
 import Mathlib.Basic.ENNReal.Inv
 import Proofs.Flock.Soundness.Game
 
-/-!
-# Piece (a), the oracle count: two interactions, each continued on its own
-
-Candidate 3's table runs its two reps concurrently and then each rep's sparse phase on that rep's outputs, rep 0's
-first. `value_interleave_bind_le` is `value_interleave_le` with those continuations: the probability that both
-continued interactions end in their events is at most the product of the two continued values, since each
-continuation reads only its own interaction's output and flips its own coins.
-
-It goes through `valueF`, the value of a game whose outcome `a` pays `u a` (`value p` is `valueF` at `p`'s
-indicator): `value p (g.bind f)` is `valueF` at the continuations' values (`value_bind_valueF`), and the repetition
-theorem holds for products of payoffs (`valueF_interleave_le`).
--/
+/-! Two interactions, each continued on its own output. -/
 
 @[expose] public section
 
@@ -29,7 +18,6 @@ open scoped ENNReal
 
 variable {α β γ δ : Type}
 
-/-- **The value of a game whose outcome `a` pays `u a`**, for an optimal prover. -/
 noncomputable def valueF (u : α → ℝ≥0∞) : Game α → ℝ≥0∞
   | .ret a => u a
   | .send _ k => ⨆ m, valueF u (k m)
@@ -108,8 +96,6 @@ theorem valueF_interleaveWith_le (u : α → ℝ≥0∞) (v : β → ℝ≥0∞)
       · simp only [ite_true]
         exact hadv _
 
-/-- **Repetition for payoffs**: whatever schedule the prover chooses, the product of the two interactions' payoffs is
-worth at most the product of their values. -/
 theorem valueF_interleave_le (u : α → ℝ≥0∞) (v : β → ℝ≥0∞) :
     ∀ (g₁ : Game α) (g₂ : Game β),
       valueF (fun x => u x.1 * v x.2) (interleave g₁ g₂) ≤ valueF u g₁ * valueF v g₂
@@ -135,9 +121,6 @@ theorem valueF_interleave_le (u : α → ℝ≥0∞) (v : β → ℝ≥0∞) :
       · rw [map, valueF_bind]
         exact (valueF_mul_const u (v b) (@Game.coin _ C _ _ k)).le
 
-/-- **Two interactions, each continued on its own output**: run `g₁` and `g₂` concurrently, then `k₁` on `g₁`'s
-output and `k₂` on `g₂`'s. Both continuations end in their events with probability at most the product of the
-continued interactions' values. -/
 theorem value_interleave_bind_le (P : γ → Prop) (Q : δ → Prop) (g₁ : Game α) (g₂ : Game β)
     (k₁ : α → Game γ) (k₂ : β → Game δ) :
     value (fun x => P x.1 ∧ Q x.2) ((interleave g₁ g₂).bind fun ab =>
@@ -155,10 +138,8 @@ theorem value_interleave_bind_le (P : γ → Prop) (Q : δ → Prop) (g₁ : Gam
   simp only [hc]
   rw [valueF_mul_const, ← value_eq_valueF]
 
-/-! ## Leaves
-
-Helpers applied by unification rather than by `rw`, for games whose types agree only up to unfolding (a statement's
-`m` as the class's). -/
+/-! Helpers applied by unification rather than by `rw`, for games whose types agree only up to unfolding (a
+statement's `m` as the class's). -/
 
 theorem eq_le_eq {a b c d : ℝ≥0∞} (h₁ : a = b) (h₂ : c = d) (h : b ≤ d) : a ≤ c := h₁ ▸ h₂ ▸ h
 

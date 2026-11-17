@@ -20,22 +20,7 @@ import Proofs.Flock.C3.Fork.Sound
 import Proofs.Flock.Recursive.ForkInner
 import Proofs.Flock.Recursive.ForkRuns
 
-/-!
-# Recursion: the extraction at the word the prover's runs open
-
-The pieces of `zk_sessions_recursive_fork_reg` (`Recursive/RegExtract.lean`). A run of the transported prover at a
-sample `ω` that opens a position of R's level 0 off `regWord` conflicts there with the run `regWord` reads at that
-position (`RunOpensReg`): both are runs of `σ` at `ω`, so the two are an inner fork at round 0.
-
-* `leaf_of_contF`, `contF_of_leaf`: a trial `contF` reaches is one at a leaf the rounds reach, and back.
-* `LeafRun`, `rec_of_leafRun`, `leafRun_of_rec`: the trials at `σ`'s leaves at `ω` are the recursive game's outcomes at
-  `ω`, decoded.
-* `clash₀_of_two`: two runs that open one position of R's level 0 to different rows against one cap clash (`ClashCL`
-  at R's part).
-* `regClash_fork`, the per-draw fact: a leaf's run that `RegClash`es at `regStmt` is an inner fork at round 0.
-* `innerAtLeavesL_reg`: `innerAtLeavesL_of_forkOn`'s argument at each sample on `holo_runs_sound` at that sample's
-  `regStmt`, its `RegClash` cases by `regClash_fork`.
--/
+/-! The extraction at the word the prover's runs open, for `zk_sessions_recursive_fork_reg`. -/
 
 @[expose] public section
 
@@ -48,8 +33,6 @@ section Leaf
 
 variable {M C β : Type} [Fintype C] [Nonempty C]
 
-/-- **A trial `contF` reaches is a leaf's**: at some leaf `t` of `s`, with its strategy `s'`, whose outcomes are ones
-`s` reaches. -/
 theorem leaf_of_contF {δ : Type} : ∀ (r : ℕ) (f : List (M × C) → Game β)
     (Tr : (t : List (M × C)) → Strategy (f t) → StrictCR.Finder δ) (s : Strategy (rounds M C r f)) {d : δ},
     Game.Outcome (contF r f Tr s).g (contF r f Tr s).s d →
@@ -62,7 +45,6 @@ theorem leaf_of_contF {δ : Type} : ∀ (r : ℕ) (f : List (M × C) → Game β
         leaf_of_contF r (fun t => f ((s.1, ρ) :: t)) (fun t => Tr ((s.1, ρ) :: t)) (s.2 ρ) hd
       exact ⟨(s.1, ρ) :: t, s', fun b hb => ⟨ρ, hl b hb⟩, ht⟩
 
-/-- **An outcome `s` reaches is a leaf's**, at a leaf whose every trial's outcomes `contF` reaches. -/
 theorem contF_of_leaf : ∀ (r : ℕ) (f : List (M × C) → Game β) (s : Strategy (rounds M C r f)) {b : β},
     Game.Outcome (rounds M C r f) s b → ∃ t s', Game.Outcome (f t) s' b ∧
       ∀ {δ : Type} (Tr : (t : List (M × C)) → Strategy (f t) → StrictCR.Finder δ) d,
@@ -95,8 +77,6 @@ theorem rowFin_inj {F : Type} [Field F] [Fintype F] [DecidableEq F] {lanes : ℕ
     Option.getD_some] at e
   exact e
 
-/-- **Two runs that open one position of R's level 0 to different rows against one cap clash**: on R's part, a
-self-clash of either or a level-0 conflict. -/
 theorem clash₀_of_two {F : Type} [Field F] [Fintype F] [DecidableEq F] {D Sl : Type} (H : List UInt8 → D)
     (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H) (rsch : Schedule) (cap : Cap D)
     (a b : OutHL F D Sl) {y z : ℕ × List F × Sl × List D}
@@ -124,7 +104,6 @@ variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K
   {nT r : ℕ} (T : Fin nT → Type) (CT : Fin r → Type)
 
 omit [Fintype K] in
-/-- `outHL` reads the statement only through its cap. -/
 theorem outHL_cap (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H)
     (e : ExecHolo) {w w' : Oracle F} {cap : Cap D} (t : List (List (SMsg T) × ((k : Fin r) → CT k))) :
     outHL T CT A H E Lf e ⟨w, cap⟩ t = outHL T CT A H E Lf e ⟨w', cap⟩ t :=
@@ -157,7 +136,6 @@ open Exec Refine Flock FlockLevel3 Model Accounting ZkSession ZkLink ZkExec ZkBi
 
 variable {S : ℕ} {Vs : Fin S → VStmt} {Reg' Reg₂ : Type} {n : ℕ} {L : SamplingDesign n} {Reg Cm : Type} {I : Inner}
 
-/-- **A trial at one of `σ`'s leaves at the sample `ω` decodes to `d`**: `InnerForkRec`'s trial, run from the root. -/
 def LeafRun (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
     (dg : ByteArray → ByteArray) (N k Rw : ℕ) (wmsg : ((j : Fin S) → (Vs j).Bits) → List I.Msg)
     (σ : Strategy (recGame L Reg I Cm fun R ω t => outerV (zs R ω t) dg N)) (ω : L.Ω) (d : List (I.Msg × I.Coin)) :
@@ -213,10 +191,6 @@ theorem regWord_of {nT r : ℕ} (T : Fin nT → Type) (CT : Fin r → Type) [∀
     Flock.Guarantees.regWord T CT st hp zs dg N k Rw wmsg σ cap ω ℓ pos = hex.choose.getD ℓ 0 := by
   simp only [Flock.Guarantees.regWord, dite_eq_left hex]
 
-/-- **The per-draw fact**: a run at one of `σ`'s leaves at `ω` that opens R's level 0 off the word `σ`'s runs open
-there (`RegClash` at `regStmt`) is an inner fork at round 0. The position it opens off the word is one some run of `σ`
-at `ω` opens (`RunOpensReg`, the run `regWord` reads), to `regWord`'s column, so to another row against one cap: the
-two runs are two continuations of `σ` from its root at `ω`, which `clashPickHL` reads as a conflict (`ClashRunHL`). -/
 theorem regClash_fork {nT r : ℕ} (T : Fin nT → Type) (CT : Fin r → Type) [∀ k, Fintype (CT k)]
     [∀ k, Nonempty (CT k)] {st : Flock.Stmt} (hp : HoloParams)
     (zs : Reg → L.Ω → List (Cm × (holoInnerAt T CT st hp).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
@@ -252,11 +226,6 @@ theorem regClash_fork {nT r : ℕ} (T : Fin nT → Type) (CT : Fin r → Type) [
   rw [← hcol]
   exact fun h => hne (rowFin_inj hv.1 (by simp only [HoloReg.column, List.length_map, List.length_range]) h)
 
-/-- **The inner term at the word the prover's runs open**: `innerAtLeavesL_of_forkOn`'s argument at each sample, on
-`holo_runs_sound` at that sample's `regStmt` in place of `InnerSoundForkOn`. Two of the simulated prover's runs that
-clash against each other are a fork of `σ`'s own runs (`finds_forkG_refL`), and one that opens R's level 0 off the word
-is one at a leaf of `σ` at that sample but for the last coin (`outcome_contF_refL`), so an inner fork at round 0
-(`regClash_fork`). -/
 theorem innerAtLeavesL_reg {nT r : ℕ} (T : Fin nT → Type) (CT : Fin r → Type) [∀ k, Fintype (CT k)]
     [∀ k, Nonempty (CT k)] {st : Flock.Stmt} (hp : HoloParams) (hcls : ClassOk (shapeOf st))
     (zs : Reg → L.Ω → List (Cm × (holoInnerAt T CT st hp).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
@@ -353,8 +322,6 @@ theorem regWord_ofτ {nT r : ℕ} (T : Fin nT → Type) (CT : Fin r → Type) [�
     Flock.Guarantees.regWordτ T CT st hp τv zs dg N k Rw wmsg σ cap ω ℓ pos = hex.choose.getD ℓ 0 := by
   simp only [Flock.Guarantees.regWordτ, dite_eq_left hex]
 
-/-- **`regClash_fork` at the typing `τv`**: the per-draw fact with the runs' outcomes decoded against the table at
-`τv` (`holoAtτ`) and the word theirs (`regStmtτ`). -/
 theorem regClash_forkτ {nT r : ℕ} (T : Fin nT → Type) (CT : Fin r → Type) [∀ k, Fintype (CT k)]
     [∀ k, Nonempty (CT k)] {st : Flock.Stmt} (hp : HoloParams) (τv : Fin (2 ^ hp.sLog) → Fin (2 ^ hp.tLog))
     (zs : Reg → L.Ω → List (Cm × (holoInnerAtτ T CT st hp τv).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
@@ -392,10 +359,6 @@ theorem regClash_forkτ {nT r : ℕ} (T : Fin nT → Type) (CT : Fin r → Type)
   rw [← hcol]
   exact fun h => hne (rowFin_inj hv.1 (by simp only [HoloReg.column, List.length_map, List.length_range]) h)
 
-/-- **`innerAtLeavesL_reg` at the typing `τv`**: the inner term at the word the runs open, with piece (a)'s runs
-(`holo_runs_sound`) at `holoAtτ st hp τv`, whose typing-independent hypotheses are `holoAt st hp`'s
-(`holoAtτ_fast100`, `holoAtτ_rsch`, `holoAtτ_units`) and whose layout reads no typing (`holoAtτ_linkLayout`); the
-error is `holoAt st hp`'s own (`holoError_holoAtτ`). -/
 theorem innerAtLeavesL_regτ {nT r : ℕ} (T : Fin nT → Type) (CT : Fin r → Type) [∀ k, Fintype (CT k)]
     [∀ k, Nonempty (CT k)] {st : Flock.Stmt} (hp : HoloParams) (τv : Fin (2 ^ hp.sLog) → Fin (2 ^ hp.tLog))
     (hcls : ClassOk (shapeOf st))

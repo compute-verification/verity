@@ -18,23 +18,7 @@ import Mathlib.Tactic.ReduceModChar
 import Proofs.Flock.Soundness.Refine.Arith
 import Proofs.Flock.VBridge.Algebra.Sizes
 
-/-!
-# n4's rows: the `rec-opening` unit's residuals are `RecOpening.run`'s
-
-`residuals_eq_runO`, the opening-only analogue of `RecAlgebra.residuals_eq_run`: on the S and the v `RecCoins.opening`
-builds at R's coins (`RecOpening.buildAll` over the residuals `RecOpening.run` returns on the symbolic messages and the
-two claims, `kappa` from zero), `GfResiduals`' residuals at a w are `RecOpening.run` over F at those coins, on the
-messages w holds (`decodedO`) and on the claims at their points with w's `claim` elements for values (`claimO`), when
-w's running sums differ by the consistency sums weighted by `kappa`. `openingRead_of_rows`: so `OpeningRead` holds at
-every accepted outcome where those residuals are all zero, the claims are the run's registered claims and the tape
-begins with the opening's steps on w's ring switches.
-
-* `buildAll_specO`, `build_evalO`: `RecAlgebra.buildAll_spec` and `build_eval` at the opening's w (no comb; `valO`),
-  where residual `i < claims` adds claim `i`'s value from w (`claimAdd`).
-* `run_simO`: `RecOpening.run` commutes with a `Hom`, as `RecAlgebra.run_sim`.
-* `run_shift`: over F, raising each claim's value raises its ring switch's residual by as much; the rest is unchanged.
-* `run_of_inline`: `RecCoins.opening`'s run, which also returns Ligerito's points, is `RecOpening.run`.
--/
+/-! The `rec-opening` unit's residuals are `RecOpening.run`'s (`residuals_eq_runO`). -/
 
 @[expose] public section
 
@@ -44,10 +28,6 @@ section Bridge
 
 open Flock Flock.RecAlgebra FlockSoundness.Refine
 
-/-! ## Values at the opening's w -/
-
-/-- A message element's value at the opening's w (`RecAlgebra.valOf` with no comb): its element of w, its ring
-switch's transpose of w, or the level's consistency sum. -/
 def valO (sh : Shape) (w : Array F128) (cons : Nat → Nat → F128) : Key → F128
   | .rsT k u => match RecOpening.wi sh (.rs k 0) with
     | some i => termValue w #[] (.wt i u)
@@ -58,25 +38,18 @@ def valO (sh : Shape) (w : Array F128) (cons : Nat → Nat → F128) : Key → F
     | some i => w[i]!
     | none => 0
 
-/-- Residual `i`'s claim value as `RecOpening.buildRes` adds it: w's `claim i` for a claim's ring switch, else zero. -/
 def claimAdd (sh : Shape) (w : Array F128) (i : Nat) : F128 :=
   if i < sh.claims then w[RecOpening.claimW sh i]! else 0
 
-/-- Residual `fi.2`'s value as `RecOpening.buildRes` builds it from `fi.1` (`RecAlgebra.resForm`), its claim value
-added. -/
 def resFormO (sh : Shape) (w : Array F128) (val : Key → F128) (fi : Lin × Nat) : F128 :=
   resForm val sh.claims fi + claimAdd sh w fi.2
 
-/-- `kappa` before the passes (`RecOpening.build`, `RecCoins.opening`). -/
 abbrev kappa0 (sh : Shape) : Array (Array (Array F128)) :=
   sh.sched.levels.map fun lv => Array.replicate 2 (Array.replicate (2 ^ lv.lanes) (0 : F128))
 
-/-- The op table's operands for message elements at the opening's w: each is the element's term alone. -/
 def OpsOkO (sh : Shape) (st : BSt) : Prop :=
   st.vNames.size = st.vVals.size ∧
     ∀ k i, st.opOf.lookup k = some i → ∃ t, RecOpening.atomTerm sh k = .ok t ∧ st.ops[i]? = some #[t]
-
-/-! ## What `RecOpening.buildAll`'s passes compute -/
 
 variable {sh : Shape}
 
@@ -351,8 +324,6 @@ theorem buildAll_specO : ∀ (fs : List Lin) (ri : Nat) (st st' : BSt) (rs : Arr
       rw [h1val S V (h2e.trans hSV)]
       rfl
 
-/-- **The opening's built residuals are its symbolic residuals evaluated**, at the message elements w holds, each
-consistency sum read through the running sums (`hacc`), and residual `i < claims` raised by claim `i`'s value in w. -/
 theorem build_evalO {lins : Array Lin} {res : Array Res} {st : BSt}
     (hb : (RecOpening.buildAll sh lins.toList 0).run { kappa := kappa0 sh } = .ok (res, st))
     (hw : w.size = RecOpening.nw sh)
@@ -386,9 +357,6 @@ theorem build_evalO {lins : Array Lin} {res : Array Res} {st : BSt}
     simp only [Nat.sub_zero] at hf
     rw [← hf]
 
-/-! ## `RecOpening.run` -/
-
-/-- `RecOpening.run` commutes with a `Hom` (`RecAlgebra.run_sim`). -/
 theorem run_simO {α β : Type} [Val α] [Val β] {h : α → β} (hh : Hom h) (sh : Shape) (M : Messages α)
     (claims : Array (AClaim α)) :
     Sim (·.map h) (RecOpening.run sh M claims) (RecOpening.run sh (M.map h) (claims.map (AClaim.map h))) := by
@@ -401,7 +369,6 @@ theorem run_simO {α β : Type} [Val α] [Val β] {h : α → β} (hh : Hom h) (
   refine Sim.bind (ligerito_sim hh _ M _ _) fun ⟨lgr, lg⟩ => Sim.pure' ?_
   simp [RsPts.map, hh.add]
 
-/-- `RecCoins.opening`'s run, which also returns Ligerito's points, is `RecOpening.run`. -/
 theorem run_of_inline {α : Type} [Val α] (sh : Shape) (M : Messages α) (claims : Array (AClaim α)) :
     Sim Prod.fst (do
       let (rsr, rs) ← RecAlgebra.ringSwitch M claims
@@ -411,11 +378,9 @@ theorem run_of_inline {α : Type} [Val α] (sh : Shape) (M : Messages α) (claim
   unfold RecOpening.run
   exact Sim.bind_same fun ⟨rsr, rs⟩ => Sim.bind_same fun ⟨lgr, lg⟩ => Sim.pure' rfl
 
-/-- The claims from index `k` on, each value raised by `g` at its index. -/
 def shiftC (g : Nat → F128) (k : Nat) (cls : List (AClaim F128)) : List (AClaim F128) :=
   (cls.zipIdx k).map fun ci => ⟨ci.1.value + g ci.2, ci.1.skip, ci.1.x⟩
 
-/-- The elements from index `k` on, each raised by `g` at its index. -/
 def shiftA (g : Nat → F128) (k : Nat) (xs : Array F128) : Array F128 :=
   ⟨(xs.toList.zipIdx k).map fun xi => xi.1 + g xi.2⟩
 
@@ -470,8 +435,6 @@ theorem ringSwitch_shift (M : Messages F128) (g : Nat → F128) (claims : Array 
   exact Sim.bind (rsClaims_shift M g claims.toList 0) fun ⟨outs, betas, pts⟩ =>
     Sim.bind_same fun _ => Sim.pure' rfl
 
-/-- **Raising the claims' values raises their ring switches' residuals** by as much, over F: the rest of
-`RecOpening.run` does not read the claims' values. -/
 theorem run_shift {sh : Shape} {M : Messages F128} {claims : Array (AClaim F128)} {g : Nat → F128}
     (hn : claims.size ≠ 0) (hg : ∀ i, claims.size ≤ i → g i = 0) {k k' : Nat} {src : RecAlgebra.RoundCoins} {rs : Array F128}
     (h : RecOpening.run sh M claims k src = .ok (rs, k')) :
@@ -485,13 +448,9 @@ theorem run_shift {sh : Shape} {M : Messages F128} {claims : Array (AClaim F128)
   rw [Array.append_assoc, shiftA_append g (fun i hi => hg i (by omega)), ← Array.append_assoc]
   exact (cm_bind_of h2).trans rfl
 
-/-! ## The bridge -/
-
-/-- The messages w holds (`RecOpening`'s elements at `valO`): its elements and the levels' consistency sums `cons`. -/
 def decodedO (sh : Shape) (w : Array F128) (cons : Nat → Nat → F128) : Messages F128 :=
   (symbolic sh).map (Lin.eval (valO sh w cons))
 
-/-- Claim `i` as `RecOpening.run` reads it at w: the symbolic claim's point, w's `claim i` its value. -/
 def claimO (sh : Shape) (w : Array F128) (c : Fin 2 → AClaim Lin) (i : Fin 2) : AClaim F128 :=
   ⟨w[RecOpening.claimW sh i]!, (c i).skip, (c i).x⟩
 
@@ -503,11 +462,6 @@ theorem claimO_eq {c : Fin 2 → AClaim Lin} (hc : ∀ i, (c i).value = Val.zero
     ⟨w[RecOpening.claimW sh i]!, (c i).skip, (c i).x⟩
   rw [hz, f128_zero_add, claimAdd, ite_eq_left (by have := i.isLt; omega)]
 
-/-- **`GfResiduals` on the opening's S and v computes `RecOpening.run`** (`RecAlgebra.residuals_eq_run` at the
-`rec-opening` shape, two claims): at the S and the v the passes build over the residuals `RecOpening.run` returns on
-the symbolic messages and two claims of value zero at some coins, the residuals at a w are `RecOpening.run` over F at
-those coins, on the messages w holds and on the claims with w's `claim` elements for values, when w's running sums
-differ by the consistency sums weighted by the passes' `kappa` (`hacc`). -/
 theorem residuals_eq_runO {c : Fin 2 → AClaim Lin} {src : RecAlgebra.RoundCoins} {lins : Array Lin} {k : Nat}
     {res : Array Res} {st : BSt} (hcl : sh.claims = 2) (hc : ∀ i, (c i).value = Val.zero)
     (hrun : RecOpening.run sh (symbolic sh) #[c 0, c 1] 0 src = .ok (lins, k))
@@ -536,8 +490,6 @@ theorem residuals_eq_runO {c : Fin 2 → AClaim Lin} {src : RecAlgebra.RoundCoin
 
 end Bridge
 
-/-! ## `OpeningRead` from the rows -/
-
 section Read
 
 open FlockSoundness FlockSoundness.Discharge FlockSoundness.Discharge.Recursion
@@ -557,11 +509,6 @@ theorem shape_claims {m c : ℕ} {sh : Flock.Shape} (h : Flock.RecOpening.shape?
 variable {nT r : ℕ} {T : Fin nT → Type} {CT : Fin r → Type} [∀ k, Fintype (CT k)] [∀ k, Nonempty (CT k)]
   {st : Flock.Stmt} {hp : HoloParams} {xR : HoloReg GF128 Dig} {n : ℕ} {L : SamplingDesign n} {Reg Cm Reg' Reg₂ : Type}
 
-/-- **(n4's read fact from the rows) `OpeningRead`**, at every accepted outcome where the `rec-opening` unit's
-residuals are all zero on the S and v `RecCoins.opening` builds at R's coins (two claims of value zero, the passes
-from `kappa` zero) and on a w whose running sums differ by the consistency sums weighted by `kappa`, the claims at
-w's `claim` values are the run's two registered claims, and the tape past both sparse phases begins with the
-opening's steps on the ring switches w holds. -/
 theorem openingRead_of_rows (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂) {dg : ByteArray → ByteArray}
     {N k Rw : ℕ}
     (hrows : F.AtAccepted dg N k Rw fun R ω t Lb =>

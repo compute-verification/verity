@@ -18,19 +18,7 @@ import Proofs.Flock.Soundness.Discharge.PlaysCoin.Coins
 import Proofs.Flock.Soundness.Refine.Seam
 import Proofs.Flock.VBridge.Runs.Lg
 
-/-!
-# n7's levels: `LevelTie` from R's opening's algebra
-
-R's `rec-opening` unit computes, after the claims' ring switches, Ligerito's algebra over F from the absorbed `T`
-(`RecOpening.run`, `opening_parts`), and its last residual makes that `T` the batched sum. Where its residuals are zero,
-V*'s Ligerito passes the final check (`ligerito_checks`); where the proof also carries V*'s messages, OOD values and
-`y_r`, a nonce per query and claim and its cap, and every level's queries pass against that cap (`Opened`), the
-verifier's Ligerito accepts (`ligerito_of_run`) on a record of V*'s rounds built here (`levelTie_of_lig`). At the shape
-`RecOpening.shape?` gives at `mReg` the schedule is `fast100`'s and, where `ℓ` is in the class's range, R's registered
-one (`schedOf_holoAt`), so `levelTie_of_run` gives `LevelTie` from R's opening's run and what V*'s other R units and
-the source hold: the openings (`Opened`), ring switching's output (`OpenRel`), the cap's digests, the proof's fields,
-and the source's Ligerito steps.
--/
+/-! `LevelTie` from R's opening's algebra. -/
 
 @[expose] public section
 
@@ -41,7 +29,6 @@ open Game Audit Exec Refine Model ZkSession ZkLink ZkExec Composed ZkReg
 open Flock FlockLevel3 Accounting ZkBind Integrate Placed StrictCR DecodeZL FlockC3.Compose
 open FlockSoundness.Discharge.PlaysCoin (coinArr)
 
-/-- `RecOpening.shape?`'s shape is at its `m`, on `fast100`'s schedule there. -/
 theorem shape_spec {m c : ℕ} {sh : Flock.Shape} (h : Flock.RecOpening.shape? m c = some sh) :
     sh.m = m ∧ Flock.fast100 m = some sh.sched := by
   unfold Flock.RecOpening.shape? at h
@@ -54,8 +41,6 @@ theorem shape_spec {m c : ℕ} {sh : Flock.Shape} (h : Flock.RecOpening.shape? m
       subst h
       exact ⟨rfl, rfl⟩
 
-/-- **R's shape is on R's registered schedule** where `ℓ` is in the class's range: `holoAt`'s is `schedAt mReg`, the
-model schedule of `fast100`'s at `mReg`, where `RecOpening.shape?` found R's. -/
 theorem schedOf_holoAt {st : Flock.Stmt} {hp : HoloParams} {cl : ℕ} {sh : Flock.Shape}
     (hell : hp.EllOk (execClassAt st).cls.kLog)
     (h : Flock.RecOpening.shape? (holoAt st hp).cls.shape.mReg cl = some sh) :
@@ -68,8 +53,6 @@ theorem schedOf_holoAt {st : Flock.Stmt} {hp : HoloParams} {cl : ℕ} {sh : Floc
   unfold FlockSoundness.Discharge.Recursion.schedAt
   rw [hf]
 
-/-- **R's opening's algebra** is its claims' ring switches, then Ligerito from the absorbed `T` on their output, then
-the absorbed `T` minus the batched sum. -/
 theorem opening_parts {sh : Flock.Shape} {M : Flock.RecAlgebra.Messages Flock.F128}
     {a : Array (Flock.RecAlgebra.AClaim Flock.F128)} {k₀ k₁ : ℕ} {src : Flock.RecAlgebra.RoundCoins}
     {res : Array Flock.F128} (h : Flock.RecOpening.run sh M a k₀ src = .ok (res, k₁)) :
@@ -84,11 +67,6 @@ theorem opening_parts {sh : Flock.Shape} {M : Flock.RecAlgebra.Messages Flock.F1
   cases Flock.RecAlgebra.cm_pure h
   exact ⟨rsr, rs, k₂, lgr, lg, h₁, h₂, rfl⟩
 
-/-- **V*'s Ligerito accepts on a record of `c`'s rounds**: where V*'s Ligerito over F returns zero residuals from `tIn`
-on the rounds `c` from round `k₂`, at a `fast100` schedule, the proof carries V*'s messages, OOD values and `y_r`, a
-nonce per query and claim and the initial cap `cap`, and every level's queries pass against `cap` (`Opened`), the
-verifier's Ligerito accepts from round `k₂` to the end of a well-formed record of `c`'s rounds that retain the bytes it
-frames, consuming `c`'s rounds from `k₂` on. -/
 theorem ligRun_of_lig {m : ℕ} {sch : Flock.Schedule} {M : Flock.RecAlgebra.Messages Flock.F128} {tIn : Flock.F128}
     {sws : Array Flock.Switched} {c : Array (Array Flock.F128)} {k₂ k₃ : ℕ} {lgr : Array Flock.F128}
     {lg : Flock.RecAlgebra.LgPts} (hf : Flock.fast100 m = some sch)
@@ -142,9 +120,6 @@ theorem ligRun_of_lig {m : ℕ} {sch : Flock.Schedule} {M : Flock.RecAlgebra.Mes
     exact (hget j (by omega)).2.1
   exact ⟨rs, P', hwf, hF rs hfit, hcons⟩
 
-/-- **`LevelTie` from V*'s Ligerito**: where V*'s Ligerito accepts on a record of `c`'s rounds (`ligRun_of_lig`), at a
-`fast100` schedule that is R's registered one, and `tIn` and `sws` are R's opening's output (`OpenRel`). The source's
-Ligerito steps take its kinds, the proof's messages, `c`'s rounds from `k₂` as coins, and the proof's rows. -/
 theorem levelTie_of_lig {cap₀ : Cap Dig} {e : ExecHolo} {u : C3Run e} {m : ℕ} {sch : Flock.Schedule}
     {M : Flock.RecAlgebra.Messages Flock.F128} {tIn : Flock.F128} {sws : Array Flock.Switched}
     {c : Array (Array Flock.F128)} {k₂ k₃ : ℕ} {lgr : Array Flock.F128} {lg : Flock.RecAlgebra.LgPts}
@@ -167,11 +142,6 @@ theorem levelTie_of_lig {cap₀ : Cap Dig} {e : ExecHolo} {u : C3Run e} {m : ℕ
   exact ⟨msId, m, sch, tIn, sws, nc, cap, p, ⟨rs, k₂, ByteArray.empty⟩, ⟨rs, c.size, P'⟩, hf, hsch, hcap, hop, hwf,
     hlig, hk, hl, hr.trans (congrArg (List.map (coinArr fOf)) hcons.symm), ho⟩
 
-/-- **R's Ligerito steps woven from the proof's messages and `c`'s rounds are a play's tape** (`levelTie_of_lig`'s
-`hk`, `hl` and `hr`, `repStepsWoven_of_tie`'s analog at R): where V*'s Ligerito accepts on a record of `c`'s rounds
-(`ligRun_of_lig`), the model's compiled Ligerito plays on the proof's messages and the rounds the verifier's consumed
-before its final check (`ligerito_refines`), which consumes none (`finalProg_ok`), so those are `c`'s rounds from `k₂`
-on; steps woven from them along its shape are that play's tape (`weave_of_prefix`). -/
 theorem lgSteps_of_lig {e : ExecHolo} {u : C3Run e} {m : ℕ} {sch : Flock.Schedule}
     {M : Flock.RecAlgebra.Messages Flock.F128} {tIn : Flock.F128} {sws : Array Flock.Switched}
     {c : Array (Array Flock.F128)} {k₂ k₃ : ℕ} {lgr : Array Flock.F128} {lg : Flock.RecAlgebra.LgPts}
@@ -216,12 +186,6 @@ theorem lgSteps_of_lig {e : ExecHolo} {u : C3Run e} {m : ℕ} {sch : Flock.Sched
   rw [he]
   exact ⟨hk, h1, h2'⟩
 
-/-- **(n7's levels) `LevelTie` from R's opening's run**, where `ℓ` is in the class's range: R's opening's algebra at
-the shape `RecOpening.shape?` gives at `mReg` returns zero residuals on V*'s rounds `c`, and at its ring switches'
-output and its Ligerito's points (`hR`) the levels' queries pass against the proof's cap (`Opened`), ring switching's
-`T` and switched claims are R's opening's output (`OpenRel`), and the source's coin steps are `c`'s rounds from
-Ligerito's first; the proof carries V*'s messages (`hpm hpo hyr hic`, a nonce per query and claim), its cap has the
-digests `cap₀`, and the source's Ligerito steps have the shape's kinds, the proof's messages and its rows. -/
 theorem levelTie_of_run {st : Flock.Stmt} {hp : HoloParams} {cap₀ : Cap Dig} {u : C3Run (holoAt st hp)} {cl : ℕ}
     {sh : Flock.Shape} {M : Flock.RecAlgebra.Messages Flock.F128} {a : Array (Flock.RecAlgebra.AClaim Flock.F128)}
     {c : Array (Array Flock.F128)} {k₀ k₁ : ℕ} {res : Array Flock.F128}

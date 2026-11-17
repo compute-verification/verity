@@ -5,28 +5,7 @@ public import Proofs.Flock.Bridge.Draw
 public import Proofs.Flock.Bridge.QsRows.RunsOut
 public import Proofs.Flock.Claims.Sampling.Select.Take
 
-/-!
-# The deployed sample runs out of bytes with probability at most `k_d·2⁻⁶⁴`
-
-The deployed sample (`Spot.Draw.sampleUnits`) reads one byte stream in order (`Spot.Draw.take`): a subset sample is one
-stage, a stratified or work sample one stage per stratum, each stage's sampler run on its first `need` bytes and on
-`need` more whenever it returns nothing (`Flock.Draw.onWith`). A stage whose sampler returns a sample on its first read
-reads nothing more, so the next stage's first read starts where it ends. On a stream that holds every stage's first
-read the sample therefore ends unless some stage's sampler returns nothing on its first read, and a stratum's does with
-probability at most `k_s·2⁻⁶⁴` (`SamplingDesign.subset_prefix_none_le`), whatever the bytes before it.
-
-* `FirstOk`: every stage's first read is there and its sampler returns a sample on it.
-* `firstOk_fail_le`: on a uniform stream that holds the stages' first reads, some stage's first read fails with
-  probability at most the stages' bounds added (the stages' first reads are disjoint blocks of the stream).
-* `onWith_take_first`, `stratifiedWith_take_first`, `units_ok_of_firstOk`: where every first read samples,
-  `onWith`, the stratified sample and `sampleUnits` return.
-* `Flock.Bridge.firstRead`: the bytes the stages read first, in all.
-* `Flock.Bridge.strata_fail_le`: some stratum's first read fails with probability at most `(Σ_s k_s)·2⁻⁶⁴`.
-* `Flock.Bridge.units_error_le`: under a sampling design on strata that samples `kd` units (`SamplingDesignOn`), on a uniform
-  stream of at least `firstRead samplingDesign n` bytes, `sampleUnits` returns no sample with probability at most `kd·2⁻⁶⁴`.
-* `Flock.Bridge.execSel_error_le`, `execSel_card_le`: the same of the deployed sample on a uniform byte source
-  (A3), and a deployed sample that ends holds at most `kd` proof blocks.
--/
+/-! The deployed sample runs out of bytes with probability at most `k_d·2⁻⁶⁴`. -/
 
 @[expose] public section
 
@@ -35,16 +14,11 @@ namespace Properties.Spot.SecurityProofs
 open FlockSoundness FlockSoundness.Game FlockSoundness.Audit FlockSoundness.Audit.SampleExec Finset
 open scoped ENNReal
 
-/-! ## Every stage's first read samples -/
-
-/-- **Every stage's first read samples**: from `p`, each stage's `need` bytes are there and its sampler returns a sample
-on them, the next stage reading from where they end. -/
 def FirstOk : List Stage → ByteArray → ℕ → Prop
   | [], _, _ => True
   | s :: ss, src, p => p + s.need ≤ src.size ∧ (∃ D, s.run (src.extract p (p + s.need)) = some D) ∧
       FirstOk ss src (p + s.need)
 
-/-- The stages' first reads from `p + q` of `src` are their first reads from `q` of `src`'s bytes after `p`. -/
 theorem firstOk_shift {src : ByteArray} {p : ℕ} (hp : p ≤ src.size) :
     ∀ (ss : List Stage) (q : ℕ), FirstOk ss src (p + q) ↔ FirstOk ss (src.extract p src.size) q
   | [], _ => ⟨fun _ => trivial, fun _ => trivial⟩
@@ -89,12 +63,9 @@ theorem firstOk_shift {src : ByteArray} {p : ℕ} (hp : p ≤ src.size) :
         FirstOk ss src (p + q + s.need)
       exact ⟨h1, ⟨D, hD'⟩, h3'⟩
 
-/-- A stage's first read fails with probability at most `q`, on a uniform stream that holds it. -/
 def Stage.FirstBounded (s : Stage) (q : ℝ≥0∞) : Prop :=
   ∀ L, s.need ≤ L → prCoin (fun f : Fin L → Fin 256 => s.run ((SamplingDesign.streamOf f).extract 0 s.need) = none) ≤ q
 
-/-- **Some stage's first read fails with probability at most the stages' bounds added**: on a uniform stream that holds
-the stages' first reads, stage `i`'s failing with probability at most `wt i · 2⁻⁶⁴`. -/
 theorem firstOk_fail_le {ι : Type} (stg : ι → Stage) (wt : ι → ℕ) :
     ∀ (l : List ι), (∀ i ∈ l, (stg i).FirstBounded ((wt i : ℝ≥0∞) * (2 ^ 64 : ℝ≥0∞)⁻¹)) →
       ∀ L, ((l.map stg).map (·.need)).sum ≤ L →
@@ -165,8 +136,6 @@ theorem firstOk_fail_le {ι : Type} (stg : ι → Stage) (wt : ι → ℕ) :
       _ = ((((i :: l).map wt).sum : ℕ) : ℝ≥0∞) * (2 ^ 64 : ℝ≥0∞)⁻¹ := by
           rw [List.map_cons, List.sum_cons, Nat.cast_add, add_mul]
 
-/-- **A stratum's first read fails with probability at most `k_s·2⁻⁶⁴`**: its `subset` on its first `need` bytes
-(`SamplingDesign.subset_prefix_none_le`). -/
 theorem stage_firstBounded (s : Flock.Draw.Stratum) (hk : s.k ≤ s.size) (miss : Array ℕ → Prop) :
     (stage s miss).FirstBounded ((s.k : ℝ≥0∞) * (2 ^ 64 : ℝ≥0∞)⁻¹) := by
   intro L hL
@@ -175,9 +144,6 @@ theorem stage_firstBounded (s : Flock.Draw.Stratum) (hk : s.k ≤ s.size) (miss 
     omega
   exact SamplingDesign.subset_prefix_none_le s.size s.k hk (2 * s.k * Flock.Draw.width s.size + 64) L hN hL
 
-/-! ## Where every first read samples, the sample ends -/
-
-/-- **`onWith` on `take` returns on its first read** when its sampler samples on it: the `N` bytes from `p`. -/
 theorem onWith_take_first (src : ByteArray) (N : ℕ) (run : ByteArray → Option (Array ℕ)) (p : ℕ) (D : Array ℕ)
     (hle : p + N ≤ src.size) (hrun : run (src.extract p (p + N)) = some D) :
     (Flock.Draw.onWith (fun need => _root_.Spot.Draw.take src need) N run).run p = .ok (some D, p + N) := by
@@ -190,8 +156,6 @@ theorem onWith_take_first (src : ByteArray) (N : ℕ) (run : ByteArray → Optio
     ite_eq_right hnot, bind_ok]
   exact hfuel
 
-/-- **`stratifiedWith` on `take` returns a sample** where every stratum's first read samples: each stratum reads its
-`need` bytes once, in turn from `p`. -/
 theorem stratifiedWith_take_first (src : ByteArray) (strata : Array Flock.Draw.Stratum) (p : ℕ)
     (miss : ℕ → Array ℕ → Prop)
     (h : FirstOk ((List.range' 0 strata.size).map fun i => stage strata[i]! (miss i)) src p) :
@@ -253,7 +217,6 @@ theorem stratifiedWith_take_first (src : ByteArray) (strata : Array Flock.Draw.S
       exact ⟨_, _, hr.symm⟩
   exact key _ rfl
 
-/-- **`sampleUnits` returns a sample** where every stage's first read samples. -/
 theorem units_ok_of_firstOk (samplingDesign : Flock.Draw.SamplingDesign) (n : ℕ) (src : ByteArray) (miss : ℕ → Array ℕ → Prop)
     (h : FirstOk (samplingDesignStages samplingDesign n miss) src 0) :
     ∃ units read, _root_.Spot.Draw.sampleUnits samplingDesign n src = .ok (units, read) := by
@@ -307,21 +270,15 @@ namespace Flock.Bridge
 open FlockSoundness FlockSoundness.Game Finset
 open scoped ENNReal
 
-/-! ## The deployed sample at a sampling design on strata -/
-
-/-- **The bytes the deployed sample's stages read first, in all**: `2·k·width n + 64` for a subset sample, each
-stratum's `need` added for a stratified or work sample. -/
 def firstRead (samplingDesign : Flock.Draw.SamplingDesign) (n : ℕ) : ℕ :=
   ((Properties.Spot.SecurityProofs.samplingDesignStages samplingDesign n fun _ _ => True).map (·.need)).sum
 
-/-- The strata's `k`s by index are the strata's `k`s. -/
 theorem range_map_k (St : Array Flock.Draw.Stratum) :
     (List.range' 0 St.size).map (fun i => St[i]!.k) = St.toList.map (·.k) := by
   refine List.ext_getElem (by simp) fun i h₁ _ => ?_
   have hi : i < St.size := by simpa using h₁
   simp [getElem!_pos St i hi]
 
-/-- A stratum by an index of the strata is one of them. -/
 theorem stratum_mem_toList (St : Array Flock.Draw.Stratum) {i : ℕ} (hi : i ∈ List.range' 0 St.size) :
     St[i]! ∈ St.toList := by
   have hlt : i < St.size := by
@@ -330,8 +287,6 @@ theorem stratum_mem_toList (St : Array Flock.Draw.Stratum) {i : ℕ} (hi : i ∈
   rw [getElem!_pos St i hlt]
   exact Array.mem_toList_iff.2 (Array.getElem_mem hlt)
 
-/-- **Some stratum's first read fails with probability at most `(Σ_s k_s)·2⁻⁶⁴`**, on a uniform stream that holds the
-strata's first reads, each stratum sampling at most its size. -/
 theorem strata_fail_le (St : Array Flock.Draw.Stratum) (hks : ∀ s ∈ St.toList, s.k ≤ s.size) (L : ℕ)
     (hL : (((List.range' 0 St.size).map fun i => Properties.Spot.SecurityProofs.stage St[i]! fun _ => True).map
       (·.need)).sum ≤ L) :
@@ -346,9 +301,6 @@ theorem strata_fail_le (St : Array Flock.Draw.Stratum) (hks : ∀ s ∈ St.toLis
   rw [range_map_k St] at hb
   exact hb
 
-/-- **The deployed sample returns no sample with probability at most `kd·2⁻⁶⁴`**, under a sampling design on strata
-that samples `kd` units, on a uniform stream that holds its stages' first reads: it ends where every stage's first read
-samples (`units_ok_of_firstOk`), and stage `s`'s fails with probability at most `k_s·2⁻⁶⁴`. -/
 theorem units_error_le {samplingDesign : Flock.Draw.SamplingDesign} {ns : List ℕ} {kd n : ℕ} (hlaw : SamplingDesignOn samplingDesign ns kd)
     (hns : ns.sum = n) (L : ℕ) (hL : firstRead samplingDesign n ≤ L) :
     prCoin (fun f : Fin L → Fin 256 => ¬ ∃ units read,
@@ -399,8 +351,6 @@ theorem units_error_le {samplingDesign : Flock.Draw.SamplingDesign} {ns : List �
     rw [hsum'] at hb
     exact hb
 
-/-- **The deployed sample runs out with probability at most `kd·2⁻⁶⁴`** on a uniform byte source (A3) that holds its
-stages' first reads. -/
 theorem execSel_error_le {n : ℕ} {Ω : Type} [Fintype Ω] [Nonempty Ω] {L : Fin 1 → ℕ}
     (t : Ω → (i : Fin 1) → Fin (L i) → Fin 256) (ht : Assumptions.UniformRandomBytes L t) {samplingDesign : Flock.Draw.SamplingDesign}
     {ns : List ℕ} {kd : ℕ} (hlaw : SamplingDesignOn samplingDesign ns kd) (hns : ns.sum = n) (hL : firstRead samplingDesign n ≤ L 0) :
@@ -418,8 +368,6 @@ theorem execSel_error_le {n : ℕ} {Ω : Type} [Fintype Ω] [Nonempty Ω] {L : F
     _ = prCoin (E 0) := Fin.prod_univ_one _
     _ ≤ _ := units_error_le hlaw hns (L 0) hL
 
-/-- **A deployed sample that ends holds at most `kd` proof blocks**: the units of `[0, n)` among the `kd` it returns
-(`sampleUnits_size`). -/
 theorem execSel_card_le {n : ℕ} {Ω : Type} [Fintype Ω] [Nonempty Ω] {L : Fin 1 → ℕ}
     (t : Ω → (i : Fin 1) → Fin (L i) → Fin 256) {samplingDesign : Flock.Draw.SamplingDesign} {ns : List ℕ} {kd : ℕ}
     (hlaw : SamplingDesignOn samplingDesign ns kd) (ω : Ω)

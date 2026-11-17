@@ -15,18 +15,7 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 
-/-!
-# G's items 1–4 at the layer-read forms, at the family level
-
-`algebraDecodes_of_decode` and `accHolds_of_units` with the parts' and openings' outputs read in the layers, each
-rep's units its own (`un p r`, `unO ℓ r j`), as `vbridgeRead_of_layers` composes them:
-
-* `algebraDecodes_of_decodeLH`, `algebraDecodes_of_decodeL`: `AlgebraDecodes` from one copy per part per rep at
-  `ResZeroAtLH` (a holo shape) or `ResZeroAtL`, through `algebraHolds_of_decodeLH` and `algebraHolds_of_decodeL`.
-* `accChains_of_decodeL`: `AccChains` from each opening's unit at `OpensAtL`, through `unitSums_of_opensAtL`.
-* `hStruct_of_checkH`: the structure and groups at the holo form of the shape a passing holo part names, as
-  `VStarFamily.hStruct_of_check` at `check_part_holo`.
--/
+/-! `AlgebraDecodes` and `AccChains` at the layer-read forms, at the family level. -/
 
 @[expose] public section
 
@@ -46,8 +35,6 @@ section outer
 variable {T : ℕ} {Vs : Fin T → VStmt} {Reg' : Type}
 variable {n : ℕ} {L : SamplingDesign n} {Reg : Type} {I : Inner} {Cm : Type} {Reg₂ : Type}
 
-/-- **G items 1–3 at a holo shape, the parts' outputs read in the layers**: `algebraDecodes_of_decode` at
-`ResZeroAtLH`, rep `r`'s part `p` copy `cp p r` of unit `un p r`. -/
 theorem algebraDecodes_of_decodeLH (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (s : Fin T) → (Vs s).Outer Reg')
     (dg : ByteArray → ByteArray) (N k Rw : ℕ) (sh : Shape)
     (rep : Reg → L.Ω → List (Cm × I.Coin) → ((s : Fin T) → (Vs s).Bits) → Fin 2 → RepData)
@@ -72,8 +59,6 @@ theorem algebraDecodes_of_decodeLH (zs : Reg → L.Ω → List (Cm × I.Coin) �
   exact FlockVBridge.OfVStar.algebraHolds_of_decodeLH (zs R ω t R₂) (layers zs dg N k Rw R ω t R₂ τ)
     (fun s => (hacc.1 s).2) hS hbits hv hw hc hvs hg sess (fun p => un p r) (fun p => cp p r) (h R ω t R₂ τ o hacc r)
 
-/-- **G items 1–3, the parts' outputs read in the layers**: `algebraDecodes_of_decodeLH` at `ResZeroAtL`, through
-`algebraHolds_of_decodeL`. -/
 theorem algebraDecodes_of_decodeL (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (s : Fin T) → (Vs s).Outer Reg')
     (dg : ByteArray → ByteArray) (N k Rw : ℕ) (sh : Shape)
     (rep : Reg → L.Ω → List (Cm × I.Coin) → ((s : Fin T) → (Vs s).Bits) → Fin 2 → RepData)
@@ -98,9 +83,6 @@ theorem algebraDecodes_of_decodeL (zs : Reg → L.Ω → List (Cm × I.Coin) →
   exact FlockVBridge.OfVStar.algebraHolds_of_decodeL (zs R ω t R₂) (layers zs dg N k Rw R ω t R₂ τ)
     (fun s => (hacc.1 s).2) hS hbits hv hw hc hvs hg sess (fun p => un p r) (fun p => cp p r) (h R ω t R₂ τ o hacc r)
 
-/-- **G item 4, the openings' outputs read in the layers**: `accHolds_of_units` at each accepted outer proof, each
-rep's `UnitSums` from its openings' units at `OpensAtL` (`unitSums_of_opensAtL`), rep `r`'s opening `j` of level `ℓ`
-copy `cpO ℓ r j` of unit `unO ℓ r j` in session `sessO ℓ`. -/
 theorem accChains_of_decodeL (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (s : Fin T) → (Vs s).Outer Reg')
     (dg : ByteArray → ByteArray) (N k Rw : ℕ) (sh : Shape)
     (rep : Reg → L.Ω → List (Cm × I.Coin) → ((s : Fin T) → (Vs s).Bits) → Fin 2 → RepData)
@@ -131,9 +113,6 @@ theorem accChains_of_decodeL (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg�
 
 end outer
 
-/-- **`VStarFamily.hStruct_of_check` on a holo part**: a circuit `RecResiduals.check` passes, its unit named part `p` at
-a shape `RecResiduals.shape?` gives as `sh0`, its META `holo: true`; the structure and the groups return at the holo
-form `{ sh0 with holo := true }` (`check_part_holo`; `RecResiduals.part` computes both). -/
 theorem hStruct_of_checkH {c : Flock.Circuit} (hc : RecResiduals.check c = .ok ()) {m k cl p : ℕ}
     (hp : RecResiduals.params c.unit.name = some (m, k, cl, p)) {sh0 : Flock.Shape}
     (hsh : RecResiduals.shape? m k cl = some sh0) (hh : RecResiduals.holoOf c = .ok true) :

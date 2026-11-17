@@ -5,14 +5,7 @@ public import Properties.Flock.Circuit.Keys
 public import Init.Internal.Order.While
 public import Std.Data.HashMap.Lemmas
 
-/-!
-# The code's source keys are the claims'
-
-`srcKey_toA`: the key `Spot.FilePart.ofCircuit` reads for stacked input `x`,
-`Spot.FilePart.srcKey c (Index.of c) x`, is `Aliased.srcKey c x` under the constructor map `Src.toA`.
-`lastLe`'s binary search is the last row-word start at most `x` on the ascending starts (`lastLe_spec`, `starts_mono`),
-and `Index.of`'s maps are the first leaf cut and the first wire into the unit net (`cuts_get`, `wires_get`).
--/
+/-! The code's source keys (`Spot.FilePart.srcKey`) are the claims' (`Aliased.srcKey`). -/
 
 @[expose] public section
 
@@ -22,7 +15,6 @@ open Std FlockSoundness.Discharge
 
 deriving instance ReflBEq, LawfulBEq for Src
 
-/-- A code key as the claims' key (`Aliased.Src`): the same constructor. -/
 def Src.toA : Src → Aliased.Src
   | .zero => .zero
   | .msg p b t => .msg p b t
@@ -36,11 +28,8 @@ theorem Src.toA_inj {a b : Src} (h : a.toA = b.toA) : a = b := by
 theorem Src.toA_eq_zero {a : Src} : a.toA = .zero ↔ a = .zero := by
   cases a <;> simp [toA]
 
-/-! ## `lastLe` is the last start at most `x` -/
-
 section lastLe
 
-/-- `lastLe`'s loop body. -/
 def lastLeBody (s : Array ℕ) (x : ℕ) : Unit → ℕ × ℕ → Id (ForInStep (ℕ × ℕ)) := fun _ st =>
   if st.1 < st.2 then
     if s.getD ((st.1 + st.2) / 2) 0 ≤ x then pure (.yield ((st.1 + st.2) / 2 + 1, st.2))
@@ -104,7 +93,6 @@ theorem find?_range_reverse (n P : ℕ) (p : ℕ → Bool) (hP : P ≤ n) (hlt :
     rw [List.range_succ, List.reverse_append, List.reverse_singleton, List.singleton_append]
     simp [hlt P (by omega)]
 
-/-- **`lastLe` on an ascending array** is the last index whose entry is at most `x`, or 0. -/
 theorem lastLe_spec (s : Array ℕ) (x : ℕ) (hmono : ∀ i j, i ≤ j → j < s.size → s.getD i 0 ≤ s.getD j 0) :
     lastLe s x = ((List.range s.size).reverse.find? fun q => decide (s[q]! ≤ x)).getD 0 := by
   obtain ⟨P, hP, hPs, hlo, hhi⟩ := lastLe_loop s x hmono (s.size - 0) 0 s.size (Nat.le_refl _) (Nat.zero_le _)
@@ -121,8 +109,6 @@ theorem lastLe_spec (s : Array ℕ) (x : ℕ) (hmono : ∀ i j, i ≤ j → j < 
     simpa [Array.getD, hi'] using this
 
 end lastLe
-
-/-! ## The row words' starts ascend -/
 
 theorem getD_push (a : Array ℕ) (v i : ℕ) :
     (a.push v).getD i 0 = if i < a.size then a.getD i 0 else if i = a.size then v else 0 := by
@@ -170,8 +156,6 @@ theorem starts_mono (c : Flock.Circuit) :
   exact starts_foldl _ _ (fun i j _ hj => by simp at hj) (fun i hi => by simp at hi)
 
 theorem typed_starts (c : Flock.Circuit) : FlockSoundness.Typed.starts c = Flock.KnownRead.starts c := rfl
-
-/-! ## The first-match maps -/
 
 theorem foldl_first {α K V : Type} [BEq K] [Hashable K] [LawfulBEq K] [LawfulHashable K]
     (P : α → Bool) (kf : α → K) (vf : α → V) :
@@ -229,9 +213,6 @@ theorem wires_get (c : Flock.Circuit) (k p : ℕ) :
   rw [Bool.eq_iff_iff]
   simp [Prod.ext_iff]
 
-/-! ## The code's key is the claims' -/
-
-/-- `msgAt`'s key, at any `f` it unfolds to (`rfl` at a call): the claims' row-word key. -/
 theorem msg_toA (c : Flock.Circuit) (x t : ℕ) (wide : Bool) (f : Src)
     (hf : f =
       let q := lastLe (Flock.KnownRead.starts c) x
@@ -306,7 +287,6 @@ theorem mem_portBits (gs : Array Flock.Group) (off : ℕ) :
     rw [getElem!_pos _ p hp] at h
     exact ⟨_, Array.getElem_mem hp, h⟩
 
-/-- **The code's key of stacked input `x` is the claims'** (`Aliased.srcKey`). -/
 theorem srcKey_toA (c : Flock.Circuit) (x : ℕ) : (srcKey c (Index.of c) x).toA = Aliased.srcKey c x := by
   unfold srcKey Aliased.srcKey
   have hcol : ∀ p, (Flock.portCols c.unit.inGroups).getD p (0, 0) = (Flock.portCols c.unit.inGroups)[p]! := fun p =>

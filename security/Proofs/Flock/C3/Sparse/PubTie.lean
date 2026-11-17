@@ -19,16 +19,7 @@ import Proofs.Flock.C3.HoloValues.ZcLc
 import Proofs.Flock.Level3.Assembly
 import Proofs.Flock.Soundness.Refine.Arith
 
-/-!
-# A rep's sparse public values are its outputs' (`SparseRepTie`'s pub half)
-
-`pubOf_eq_holoPub`: the sparse phase's public values at the coins `c` (`pubOf`) are `holoPub`'s at a rep's outputs
-where `c`'s `z`, `alpha` and the first `k_log − 6` coordinates of its `x_rest` and `y_rest` are the outputs' (`ρ`, and
-`ts` reversed), and its `U` is `holoPub`'s sum over the slots' units at those coordinates.
-`pub_of_unit`: at a rep's unit (`RepUnit`), the points check 5's `checkSparse` reads off `verifierRows` at the unit's
-rounds (`info.zc.z`, `info.lc.fold.alpha`, `info.lc.fold.rhoIn`, `info.lc.rIn`) are the coins its play's outputs read
-(`rep_of_unit_coins`, `holoRows_coins`, every round below `z_partial`'s issuing coins: `hpos_of_unit`).
--/
+/-! A rep's sparse public values are its outputs' (`SparseRepTie`'s pub half). -/
 
 @[expose] public section
 
@@ -44,7 +35,6 @@ open FlockVBridge.Sparse (SCoins pubOf)
 open FlockVBridge.Runs (rhoOf tsOf map_range_get)
 open FlockC3.HoloValues (RepUnit rep_of_unit_coins holoRows_coins)
 
-/-- **`pubOf` is `holoPub`** where `c`'s points are the outputs' coordinate by coordinate. -/
 theorem pubOf_eq_holoPub {S : Model.Statement} {sh : SparseShape} (h6 : 6 ≤ sh.ell) (hell : sh.ell ≤ S.kLog)
     {units : Fin (2 ^ sh.sLog) → Finset ℕ} {zc : Model.ZcOut 𝔽 S.m} {lc : HoloLcOut 𝔽 S.m (S.kLog - 6)} {c : SCoins}
     (hz : fOf c.z = zc.z) (ha : fOf c.alpha = lc.alpha)
@@ -71,10 +61,6 @@ theorem pubOf_eq_holoPub {S : Model.Statement} {sh : SparseShape} (h6 : 6 ≤ sh
     · funext i; exact hx' _ (by omega)
     · funext i; exact hy' _ (by omega)
 
-/-- **The layout factors are `holoPub`'s `U`**: slot `σ`'s factor is `eq(x_hi, q) eq(y_hi, q)` at its unit
-`q = pos0 + σ` below the range's count and 0 past it (`layoutFactors`), and `x_hi`, `y_hi` are the coordinates of
-`k_log − 6` points past `ELL − 6` (`eqTable_extract`); the range ends inside both tables, so its units are below
-`2^(k_log − ELL)`. -/
 theorem layoutFactors_U {sh : RecSparse.Shape} {xs ys U : Array Flock.F128} {rng : Flock.Range} {K : ℕ}
     (h : RecCoins.layoutFactors sh xs ys rng = .ok U) (hx : xs.size = K - 6) (hy : ys.size = K - 6)
     (h6 : 6 ≤ sh.ell) (hell : sh.ell ≤ K) (units : Fin (2 ^ sh.sLog) → Finset ℕ)
@@ -126,8 +112,6 @@ section Unit
 variable {S : Model.Statement} {sch₀ : FlockSoundness.Accounting.Schedule} {extra : List (Model.Claim 𝔽 S.m)}
   {cap₀ : Model.Cap Refine.Dig} {os : Model.Opens 𝔽 Refine.Dig} {r : ℕ} {ts : List Game.Step}
 
-/-- **A rep's unit issues coins at every round below `z_partial`'s**: the zerocheck's (`n₀` … `nr`) and the
-lincheck's (`HoloLcAnswered`), each of `n` coins (`RoundsWF`), inside the record (`zp_lt`). -/
 theorem hpos_of_unit (U : RepUnit S sch₀ extra cap₀ os r ts) :
     ∀ j < U.t.k + 3 + (S.m - 6) + 2 + (S.kLog - 6),
       j < U.t.rounds.size ∧ decide ((U.t.rounds[j]!).coins.size ≠ 0) = true := by
@@ -160,10 +144,6 @@ theorem hpos_of_unit (U : RepUnit S sch₀ extra cap₀ os r ts) :
       (U.lc.rounds (j - (3 + (U.st.m - 6) + 2)) (by omega)).1
     rw [k0, Nat.zero_add, show 3 + (U.st.m - 6) + 2 + (j - (3 + (U.st.m - 6) + 2)) = j by omega] at e; omega
 
-/-- **The sparse public values at check 5's points are the rep's outputs'**: at a rep's unit, where `verifierRows`
-accepts the unit's rounds at a shape of the statement's `m` and `k_log` (any extra claims and comb, as check 5's
-`Inner.rep` runs it), and `c`'s `z`, `alpha`, `x_rest` and `y_rest` are the points it returns, the unit's play's
-outputs have `pubOf c` for `holoPub`'s values, wherever `c`'s `U` is `holoPub`'s sum at `c`'s coordinates. -/
 theorem pub_of_unit (hm : 13 ≤ S.m) (U : RepUnit S sch₀ extra cap₀ os r ts) {ash : Flock.Shape}
     {xs : Array Flock.Claim} {cb v : Array Flock.F128} {info : RecAlgebra.Info RecAlgebra.Lin}
     {kappa : Array (Array (Array Flock.F128))} (hrows : verifierRows ash U.d.rounds xs cb = .ok (v, info, kappa))

@@ -35,24 +35,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# The public-coin verifier of a game, and its run, path by path
-
-`ofGame k g I d` is the `Claims.Verifier` that plays the live game `g x` on the prover's bytes: each round it reads the
-prover's message `a_j` (the move, at a `send` node, through the interface's decoder) and answers with its live coin
-`r_j` (the game coin, the projection of `r_j`, at the `coin` node that follows), or with the empty message at a `send`
-node that follows a `send` node; at the game's end its reply is the decision `d x b` on the game's outcome `b`, an
-oracle program whose `H` calls are the verifier's log. A message the prover sends at a `coin` node is dropped (`opn`),
-and a coin's reply carries the projected game coin's bytes only (`reply`: `enc (proj r_j)`). It is stateless: `next` replays the whole transcript every round
-(`walk`), as `Claims.Verifier` requires.
-
-* `opn`, `close`, `reply`, `pos`, `walk`: the verifier as a machine over game positions.
-* `stratOf H P x ω`: a `Claims` prover read as a bytes strategy of the game (`RStrat`): at each `send` node the bytes it
-  sends after the history the verifier's replies make.
-* `run_ofGame` (**the run is the game, path by path**): within `k x` rounds, the run's decision is `d x` on
-  `outcome`, the game played by `stratOf` on the run's coins, its verifier log is `d x`'s calls, and replaying the
-  run's messages (`replay`) gives back that outcome.
--/
+/-! The public-coin verifier of a game, and its run, path by path. -/
 
 @[expose] public section
 
@@ -62,7 +45,6 @@ open FlockSoundness FlockSoundness.Game
 
 variable {β Coin : Type} [Fintype Coin]
 
-/-- A position of the verifier: a game node and its interface. -/
 abbrev Pos (Coin : Type) [Fintype Coin] (β : Type) := Σ g : Game β, Iface Coin g
 
 /-- A round opens: at a `send` node the prover's message is the move; elsewhere the game ignores it. -/
@@ -71,18 +53,15 @@ def opn : Pos Coin β → Msg → Pos Coin β
   | ⟨.send _ k, I⟩, a => ⟨k (I.1 a), I.2 a⟩
   | ⟨@Game.coin _ C iF iN k, I⟩, _ => ⟨@Game.coin _ C iF iN k, I⟩
 
-/-- A round closes on its coin `u`: a `coin` node takes the game coin, the projection of `u`. -/
 def close : Pos Coin β → Coin → Pos Coin β
   | ⟨.ret b, I⟩, _ => ⟨.ret b, I⟩
   | ⟨.send M k, I⟩, _ => ⟨.send M k, I⟩
   | ⟨@Game.coin _ _ _ _ k, I⟩, u => ⟨k (I.1.proj u), I.2 _⟩
 
-/-- `OC` relabelled. -/
 def ocMap {α γ : Type} (f : α → γ) : OC α → OC γ
   | .ret a => .ret (f a)
   | .query q k => .query q fun a => ocMap f (k a)
 
-/-- The decision as a reply. -/
 def toOut (b : Bool) : Out := if b then .acc else .rej
 
 /-- The round's reply: the decision at the end, the game coin's bytes at a `coin` node, the empty message at a `send`
@@ -92,24 +71,20 @@ def reply (d : β → OC Bool) : Pos Coin β → Coin → OC Out
   | ⟨.send _ _, _⟩, _ => .ret (.msg [])
   | ⟨@Game.coin _ _ _ _ _, I⟩, u => .ret (.msg (I.1.enc (I.1.proj u)))
 
-/-- The position after the rounds `l`. -/
 def pos (P : Pos Coin β) (l : List (Msg × Coin)) : Pos Coin β := l.foldl (fun Q e => close (opn Q e.1) e.2) P
 
-/-- The verifier's reply to the last round of `l`, from the start `P`. -/
 def walk (d : β → OC Bool) (P : Pos Coin β) (l : List (Msg × Coin)) : OC Out :=
   match l.getLast? with
   | none => .ret .rej
   | some e => reply d (opn (pos P l.dropLast) e.1) e.2
 
-/-- **The public-coin verifier of the game `g x`**, deciding by `d x` on the game's outcome, in `k x` rounds. The
+/-- Stateless, as `Claims.Verifier` requires: `next` replays the whole transcript every round (`walk`). The
 outcome's type may depend on the statement. -/
 def ofGame {β : Msg → Type} (k : Msg → ℕ) (g : (x : Msg) → Game (β x)) (I : ∀ x, Iface Coin (g x))
     (d : (x : Msg) → β x → OC Bool) : Verifier Coin where
   k := k
   next x as rs := walk (d x) ⟨g x, I x⟩ (as.zip rs)
 
-/-- **A `Claims` prover as a bytes strategy of the game**, from the history `hist` (its messages and the verifier's
-replies so far), with its message `pend` of the open round when that round's reply is still to come. -/
 def stratOf (H : Msg → Msg) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω) :
     (g : Game β) → (I : Iface Coin g) → List (Msg × Msg) → Option Msg → RStrat Coin g I
   | .ret _, _, _, _ => PUnit.unit
@@ -125,26 +100,18 @@ def stratOf (H : Msg → Msg) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω) :
       | none => ((P.next x hist ω).eval H).1
     stratOf H P x ω (k c) (I.2 c) (hist ++ [(a, I.1.enc c)]) none
 
-/-! ## Replaying a transcript -/
-
-/-- A round closes on its reply: a `coin` node reads the game coin from the reply's bytes. -/
 def closeR : Pos Coin β → Out → Pos Coin β
   | ⟨.ret b, I⟩, _ => ⟨.ret b, I⟩
   | ⟨.send M k, I⟩, _ => ⟨.send M k, I⟩
   | ⟨@Game.coin _ _ _ _ k, I⟩, o => ⟨k (I.1.dec (match o with | .msg m => m | _ => [])), I.2 _⟩
 
-/-- The position after the recorded rounds `l`. -/
 def replayPos (P : Pos Coin β) (l : List (Msg × Out)) : Pos Coin β := l.foldl (fun Q e => closeR (opn Q e.1) e.2) P
 
-/-- The outcome at a position, once the game has ended. -/
 def result : Pos Coin β → Option β
   | ⟨.ret b, _⟩ => some b
   | _ => none
 
-/-- **The outcome of a transcript**: the game replayed on its messages, the coins read from the verifier's replies. -/
 def replay (P : Pos Coin β) (l : List (Msg × Out)) : Option β := result (replayPos P l)
-
-/-! ## The machine -/
 
 theorem ocMap_eval (H : Msg → Msg) {α γ : Type} (f : α → γ) (c : OC α) :
     (ocMap f c).eval H = (f (c.eval H).1, (c.eval H).2) := by
@@ -180,7 +147,6 @@ section Run
 variable {Ω : Type} (H : Msg → Msg) (P : Prover Ω) (x : Msg) (ω : Ω) (d : β → OC Bool) (P0 : Pos Coin β)
   (cs : ℕ → Coin)
 
-/-- What a run from a round boundary gives, for the induction. -/
 def Concl (n : ℕ) (b : β) (hist : List (Msg × Msg)) (as : List Msg) (t : Transcript) : Prop :=
   (stepWith H P x ω (fun as => walk d P0 (as.zip ((List.range as.length).map cs))) n hist as t).out =
       toOut ((d b).eval H).1 ∧
@@ -189,15 +155,12 @@ def Concl (n : ℕ) (b : β) (hist : List (Msg × Msg)) (as : List Msg) (t : Tra
     replay P0 (stepWith H P x ω (fun as => walk d P0 (as.zip ((List.range as.length).map cs))) n hist as t).msgs =
       some b
 
-/-- The induction hypothesis at a round boundary, `n` rounds left. -/
 def Inv (n : ℕ) : Prop :=
   ∀ (g : Game β) (I : Iface Coin g) (hist : List (Msg × Msg)) (as : List Msg) (t : Transcript),
     pos P0 (as.zip ((List.range as.length).map cs)) = ⟨g, I⟩ → replayPos P0 t.msgs = ⟨g, I⟩ →
     RoundsLe g I (stratOf H P x ω g I hist none) false n →
     Concl H P x ω d P0 cs n (playOn g I (stratOf H P x ω g I hist none) none fun i => cs (as.length + i)) hist as t
 
-/-- **One round, once its message is open**: the prover's message `a` has taken the verifier to the pending position
-`⟨g', I'⟩`; the round's reply and the rounds after give the outcome of the game played from there. -/
 theorem after_open (n : ℕ) (IH : Inv H P x ω d P0 cs n) (g' : Game β) (I' : Iface Coin g')
     (hist : List (Msg × Msg)) (as : List Msg) (t : Transcript) (a : Msg) (hpa : ((P.next x hist ω).eval H).1 = a)
     (hw : walk d P0 ((as ++ [a]).zip ((List.range (as ++ [a]).length).map cs)) = reply d ⟨g', I'⟩ (cs as.length))
@@ -270,7 +233,6 @@ theorem after_open (n : ℕ) (IH : Inv H P x ω d P0 cs n) (g' : Game β) (I' : 
     simp only [stepWith, hpa, hw, hrep, OC.eval]
     exact ⟨h1, h2.trans (by simp), h3⟩
 
-/-- **The rounds of the run are the game's**, from any round boundary. -/
 theorem inv_all : ∀ n, Inv H P x ω d P0 cs n := by
   intro n
   induction n with
@@ -305,13 +267,10 @@ theorem inv_all : ∀ n, Inv H P x ω d P0 cs n := by
 
 end Run
 
-/-- **The outcome of the run**: the game played by the prover's bytes (`stratOf`) on the run's coins. -/
 def outcome [Inhabited Coin] {β : Msg → Type} (H : Msg → Msg) {Ω : Type} (P : Prover Ω) (k : Msg → ℕ)
     (g : (x : Msg) → Game (β x)) (I : ∀ x, Iface Coin (g x)) (x : Msg) (ω : Ω) (r : Fin (k x) → Coin) : β x :=
   playOn (g x) (I x) (stratOf H P x ω (g x) (I x) [] none) none (coinSeq r)
 
-/-- **The run is the game, path by path**: whenever the game ends within `k x` rounds, the run's decision is `d x` on
-the outcome, the verifier's `H` calls are `d x`'s, and replaying the run's messages gives back the outcome. -/
 theorem run_ofGame [Inhabited Coin] {β : Msg → Type} (H : Msg → Msg) {Ω : Type} (P : Prover Ω) (k : Msg → ℕ)
     (g : (x : Msg) → Game (β x)) (I : ∀ x, Iface Coin (g x)) (d : (x : Msg) → β x → OC Bool) (x : Msg) (ω : Ω)
     (r : Fin (k x) → Coin)

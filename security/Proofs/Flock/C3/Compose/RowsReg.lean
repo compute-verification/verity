@@ -24,24 +24,8 @@ import Proofs.Flock.Soundness.Discharge.Layout.Drawn
 import Proofs.Flock.Soundness.Discharge.ZkExec.Setup
 import Proofs.Flock.Soundness.Discharge.ZkReg.Checked
 
-/-!
-# The rows `own` names are registered reads, at candidate 3's family
-
-`RowsRegisteredC3` is VBridge's `RowsRegistered` (`VBridge/Family/Registered.lean`) at `C3Family`: at every accepted
-outer proof, every row of a port the session's reads file `own` names is a registered read of the session's record `rd`
-at every unit. At the checked family (`C3Family.checked`) the sessions' records are the prover's: `checkedC3` keeps
-`custodied`'s `rd`, which `ZkOuterR.build` takes from `zr` (`Recursive/Raw.lean`), and `RecursiveAuditC3At` quantifies
-`zr`. So no proof from acceptance exists: the prover's `zr` with `rd.isRead := False` meets `hown` and `ReadsX` vacuously,
-`Accepted` reads `rd` only through `RegAgree` and `RegColl`, both vacuous there, and the honest runs stay accepted while
-`RowsRegisteredC3` fails.
-
-* `CoversAt`, `RowsCovered`: the record form, over `rd` and `own` alone, with no outcome, layer or transcript;
-  `rowsRegisteredC3_of_covered` gives `RowsRegisteredC3` from it at every outcome, reached or not.
-* `Flock.Premises.RegistrantCovers` (`Proofs.Flock.Recursive.Premises`): the premise on the prover's sessions `zr`, the
-  record form at each typing of each raw session.
-* `rowsCovered_checked`: `RowsCovered` at the checked family from `RegistrantCovers zr`; `keepOwn` and `ZkOuter.refuse`
-  only narrow `own` to `freshOwn`, which names no port of the circuit (`fresh_not_named`).
--/
+/-! The rows `own` names are registered reads at candidate 3's family (`RowsRegisteredC3`), from the premise
+`RegistrantCovers`. -/
 
 @[expose] public section
 
@@ -51,12 +35,9 @@ open FlockSoundness FlockSoundness.Discharge FlockSoundness.Discharge.Recursion
 open Game Audit Exec Refine Model ZkSession ZkLink ZkExec Composed ZkReg
 open Flock FlockLevel3 Accounting ZkBind Integrate Placed StrictCR DecodeZL FlockVBridge.Compiled
 
-/-- **A session's record covers the rows its reads file names**: every row of a port `own` names is a registered read
-of `rd`, at every unit. -/
 def CoversAt {Q : VStmt} {Reg' : Type} (z : Q.Outer Reg') : Prop :=
   ∀ (u : Fin Q.nv) (q : Fin Q.c.ports.size), (∃ pt ∈ z.own, pt.name = Q.c.ports[q].name) → z.rd.isRead (.inl (u, q))
 
-/-- `freshOwn c` names no port of `c`. -/
 theorem fresh_not_named {c : Flock.Circuit} (q : Fin c.ports.size) {pt : Flock.Registered.Port}
     (hpt : pt ∈ freshOwn c) : pt.name ≠ c.ports[q].name := by
   intro h
@@ -98,16 +79,13 @@ namespace C3Family
 
 variable (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂)
 
-/-- Obligation: `RowsCovered` gives it (`rowsRegisteredC3_of_covered`), and at the checked
-family `RegistrantCovers` gives that (`rowsCovered_checked`). **The rows `own` names are registered reads.** At every
-accepted outer proof, in each session, the row of every port the session's reads file `own` names is a registered
-read at every unit (VBridge's `RowsRegistered` at candidate 3's family). -/
+/-- Acceptance does not give it: a prover's record with no registered reads meets `hown` and `ReadsX`
+vacuously and stays accepted. At the checked family `RegistrantCovers` gives it (`rowsCovered_checked`). -/
 def RowsRegisteredC3 (dg : ByteArray → ByteArray) (N k Rw : ℕ) : Prop :=
   ∀ R ω t R₂ τ o, Accepted (I := holoInnerAt T CT st hp) F.zs dg N k Rw R ω t R₂ τ o → ∀ j (u : Fin (F.Vs j).nv)
     (q : Fin (F.Vs j).c.ports.size), (∃ pt ∈ (F.zs R ω t R₂ j).own, pt.name = (F.Vs j).c.ports[q].name) →
       (F.zs R ω t R₂ j).rd.isRead (.inl (u, q))
 
-/-- **Every session's record covers the rows its reads file names** (`CoversAt`), at every history and registration. -/
 def RowsCovered : Prop :=
   ∀ R ω t R₂ j, CoversAt (F.zs R ω t R₂ j)
 
@@ -117,9 +95,6 @@ theorem rowsRegisteredC3_of_covered (h : F.RowsCovered) (dg : ByteArray → Byte
 
 end C3Family
 
-/-- **`RowsCovered` at the checked family** from `RegistrantCovers` on the prover's sessions: a checked session is
-`keepOwn` of the typed one (`checkedC3`), which is `zr`'s build at a typing, with its `own` and `rd`, or refuses
-(`zsOf`). -/
 theorem rowsCovered_checked (ish : RecVStar.Inner) {ss : Array VStar.Stmt} (hss : RecVStar.statements ish = .ok ss)
     (bind : Fin (vstarCount ish) → VStar.Bindings) {Vs : Fin (vstarCount ish) → VStmt}
     (hob : VStarParsesScoped Flock.Tags.circuit ish bind Vs)
@@ -140,16 +115,11 @@ theorem rowsCovered_checked (ish : RecVStar.Inner) {ss : Array VStar.Stmt} (hss 
 
 end FlockC3.Compose
 
-/-! ## The premise at an honest registrant -/
-
 namespace FlockSoundness.Discharge.ZkReg
 
 open Flock FlockLevel3 Refine ZkLink ZkExec ZkBind ZkHidden HiddenExec HiddenDec DecodeZL Composed
 open FlockSoundness.Discharge.Exec (Inputs recordDraw)
 
-/-- **An accepted transcript reads every port of `own` at every sampled proof block** (`opens_of_acceptsZKR`'s position, which
-`checkPort`'s `badInstance` requires): where the record's sample samples `u` into its table and that table's sampled statement
-labels its instances `idx`, each port of `own` gives a position for `u`'s label. -/
 theorem reads_of_acceptsZKR (I : Inputs) (ht : I.tags.typed = false) {c : Flock.Circuit}
     (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c) {pub : Public}
     (hpub : HmOut.loadPublic (zkTags I) c I.publicFile = .ok pub) (hTags : TagsOkZHJ I)
@@ -186,9 +156,6 @@ theorem reads_of_acceptsZKR (I : Inputs) (ht : I.tags.typed = false) {c : Flock.
   obtain ⟨-, hreads, -⟩ := hall _ (by rw [hn]; exact hi)
   exact ⟨_, hreads⟩
 
-/-- **An accepted transcript sets up the table each unit is sampled into**: at the record's sample `d`, the table `u` is
-sampled into (`partOf`) has a sample, a sampled statement over `pub` at it, and that statement's labels, which the registered
-check reads. -/
 theorem sampled_of_acceptsZKR (I : Inputs) (ht : I.tags.typed = false) {c : Flock.Circuit}
     (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c) {pub : Public}
     (hpub : HmOut.loadPublic (zkTags I) c I.publicFile = .ok pub) (hTags : TagsOkZHJ I)
@@ -217,8 +184,6 @@ theorem sampled_of_acceptsZKR (I : Inputs) (ht : I.tags.typed = false) {c : Floc
   obtain ⟨-, idx, -, hidx, -⟩ := check_tables hck
   exact ⟨D, _, idx, hD, hdp, hidx⟩
 
-/-- **An accepted session's circuit names each port once**: its statements are over `c`, and `checkRegistered` with the
-verifier's own reads refuses a circuit naming a port twice (`dupName_of_checkRegistered`). -/
 theorem names_of_acceptsZKR (I : Inputs) (ht : I.tags.typed = false) {c : Flock.Circuit}
     (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c) (hTags : TagsOkZHJ I)
     {own : Array Registered.Port} {tr : Exec.Transcript} (hacc : AcceptsZKR I own tr) {d : Lean.Json}
@@ -245,16 +210,13 @@ open Game Audit Exec Refine Model ZkSession ZkLink ZkExec Composed ZkReg
 open Flock FlockLevel3 Accounting ZkBind Integrate Placed StrictCR DecodeZL
 open FlockSoundness.Discharge.FailClosed (pubZ)
 
-/-- `own` names port `q` of `c`. -/
 abbrev NamedBy (own : Array Flock.Registered.Port) (c : Flock.Circuit) (q : Fin c.ports.size) : Prop :=
   ∃ pt ∈ own, pt.name = c.ports[q].name
 
-/-- The rows of the ports `own` names, at every unit. -/
 abbrev NamedRow {nv : ℕ} {G : Type} (own : Array Flock.Registered.Port) (c : Flock.Circuit) :
     (Fin nv × Fin c.ports.size) ⊕ G → Prop :=
   fun p => ∃ u q, p = .inl (u, q) ∧ NamedBy own c q
 
-/-- The first port of `own` named `nm`, the one the registered check reads. -/
 def portOf (own : Array Flock.Registered.Port) (nm : String) : Flock.Registered.Port :=
   (own.toList.find? (·.name == nm)).getD default
 
@@ -273,7 +235,6 @@ theorem portOf_spec {own : Array Flock.Registered.Port} {nm : String} (h : ∃ p
   have hb := List.find?_some ha
   simpa using hb
 
-/-- `c` names each port once (G's `PortNamesUnique`; at an accepted session, `names_of_acceptsZKR`). -/
 def NamesOnce (c : Flock.Circuit) : Prop :=
   ∀ q q' : Fin c.ports.size, c.ports[q].name = c.ports[q'].name → q = q'
 
@@ -293,12 +254,8 @@ section Honest
 variable {mPts nv J : ℕ} {Reg' : Type} {c : Flock.Circuit} {hU : Built c.unit} {hscope : Layout.scopeOk c = true}
   {Lv : SamplingDesign nv}
 
-/-- **The registrant holds the rows `own` names**: at each typing of the session, a record of registered reads holding
-every row of a port `own` names, at every unit, under the first port of its name, at the position that port gives the
-unit's label where it gives one. The label is the one the sampled statement of any sample that samples the unit gives it
-(its `units.indices` at the unit's instance, `Registered.unitIndices`), the label `Registered.check` reads the position
-at; the verifier derives it (`Registered.derived`), and `loadPublic` does not make it the unit's own index. The honest
-registrant's: it committed every row it registered. -/
+/-- The label is the one the sampled statement gives the unit's instance, which the verifier derives
+(`Registered.derived`); `loadPublic` does not make it the unit's own index. -/
 def RegistrantOpens (x : ZkOuterR mPts nv J Reg' c hU hscope Lv) : Prop :=
   ∀ (ht : x.I.tags.typed = false) (S₀ : Finset (Fin nv)) (d₀ : Lean.Json)
     (y₀ : ZkHidden.SampleSetupZHJ (inputsJ x.I 0) mPts S₀ d₀)
@@ -315,9 +272,6 @@ def RegistrantOpens (x : ZkOuterR mPts nv J Reg' c hU hscope Lv) : Prop :=
               (portOf x.own c.ports[q].name).reads[idx.getD (D.proved.idxOf u.val) 0]? = some (some pos) →
                 rdH.readAt (.inl (u, q)) = pos
 
-/-- **An accepted session samples each unit of its sample into a sampled statement**: at every accepted outcome, the record
-names the sampling design's sample file (the record's custody, `RecordsLiveZKJ`), its table `u` is sampled into has a sampled statement
-labelling its instances (`sampled_of_acceptsZKR`), and that table's sample proves `u` (the challenger's live-coin part's sample, `hDraw`). -/
 theorem labelsSelf (x : ZkOuterR mPts nv J Reg' c hU hscope Lv) (hRec : RecordsLiveZKJ x.I x.dj (fun _ _ => J) x.wr)
     (ht : x.I.tags.typed = false) (hc : HmOut.parse (zkTags x.I) x.I.circuitFile x.I.tables = .ok c)
     (hpub : HmOut.loadPublic (zkTags x.I) c x.I.publicFile = .ok (pubZ x.I)) (ω : Lv.Ω) (R' : Reg')
@@ -333,11 +287,6 @@ theorem labelsSelf (x : ZkOuterR mPts nv J Reg' c hU hscope Lv) (hRec : RecordsL
       u.val
   exact ⟨_, D, dp, idx, hd, hD, hdp, hidx, ((x.hDraw ω) (partOf x.I _ u.val)).1 D hD u (mem_partS hu)⟩
 
-/-- **The registrant's record is the verifier's own at every accepted outcome** (`hown`): restricted to the rows `own`
-names, each sampled row is a row of a unit its record's sample samples (`labelsSelf`, from the record's custody), its port
-is `own`'s first of its name and the circuit's port `q` by name (an accepted circuit names each port once,
-`names_of_acceptsZKR`), and its position is the one that port gives the unit's label in that sample's statement, which
-acceptance requires (`reads_of_acceptsZKR`). -/
 theorem ownReads_cover (x : ZkOuterR mPts nv J Reg' c hU hscope Lv)
     (hRec : RecordsLiveZKJ x.I x.dj (fun _ _ => J) x.wr) (ht : x.I.tags.typed = false) {S₀ : Finset (Fin nv)}
     {d₀ : Lean.Json}
@@ -371,9 +320,6 @@ theorem ownReads_cover (x : ZkOuterR mPts nv J Reg' c hU hscope Lv)
   · rw [hport, hname]; exact find_of_names hN q
   · rw [hport, hpos, hat d D dp idx hD hdp hidx hmD pos hpos]
 
-/-- **The session with the honest registrant's record**: `x` with, at each typing, the registrant's record
-(`RegistrantOpens`) restricted to the rows `own` names. Its inputs, own list, sample files and writer are `x`'s, so its
-game, its custody and its typings are too. -/
 noncomputable def coveredSession (x : ZkOuterR mPts nv J Reg' c hU hscope Lv) (hO : RegistrantOpens x)
     (hRec : RecordsLiveZKJ x.I x.dj (fun _ _ => J) x.wr) : ZkOuterR mPts nv J Reg' c hU hscope Lv :=
   { x with
@@ -384,7 +330,6 @@ noncomputable def coveredSession (x : ZkOuterR mPts nv J Reg' c hU hscope Lv) (h
 
 end Honest
 
-/-- **V*'s sessions with the honest registrants' records** (`coveredSession` at each). -/
 noncomputable def coveredR {S : ℕ} {Vs : Fin S → VStmt} {Reg' A B C D : Type}
     (zr : A → B → C → D → (j : Fin S) → (Vs j).OuterR Reg') (hO : ∀ R ω t R₂ j, RegistrantOpens (zr R ω t R₂ j))
     (hCust : Flock.Premises.RecordCustody zr) : A → B → C → D → (j : Fin S) → (Vs j).OuterR Reg' :=
@@ -396,10 +341,9 @@ theorem registrantCovers_coveredR {S : ℕ} {Vs : Fin S → VStmt} {Reg' A B C D
   fun R ω t R₂ j ht S₀ d₀ y₀ hc hpub u q hn =>
     And.intro ((hO R ω t R₂ j ht S₀ d₀ y₀ hc hpub).choose_spec u q hn).1 ⟨u, q, rfl, hn⟩
 
-/-- **`RegistrantCovers` is not vacuous**: wherever V*'s sessions as the prover supplies them meet the guarantee's other
-hypotheses on them (the records' custody, the tags, the rate bound) and type, and their registrants hold the rows their
-reads files name at the verifier's labels (`RegistrantOpens`), the same sessions with the registrants' records (`coveredR`) meet all of them and `RegistrantCovers`, with the same
-inputs, own lists and writers, and so the same game: the guarantee at them reads the same prover. -/
+/-- `RegistrantCovers` is not vacuous: where the prover's sessions meet the guarantee's other hypotheses and
+their registrants hold the rows their reads files name, the same sessions with the registrants' records
+(`coveredR`) meet all of them, with the same game. -/
 theorem registrantCovers_attained {S : ℕ} {Vs : Fin S → VStmt} {Reg' A B C D : Type}
     (zr : A → B → C → D → (j : Fin S) → (Vs j).OuterR Reg') (hO : ∀ R ω t R₂ j, RegistrantOpens (zr R ω t R₂ j))
     (hCust : Flock.Premises.RecordCustody zr) (hF : ∀ R ω t R₂ j, TagsFound (zr R ω t R₂ j).I) {k : ℕ} {ρ : ℝ}

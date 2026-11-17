@@ -17,17 +17,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.Level3.Assembly
 import Proofs.Flock.VBridge.PartsCover
 
-/-!
-# n7's opening tie at V*'s layer, from V*'s sessions
-
-`SessionAt` gives a copy of the `rec-opening` unit registering w for every part of the opening's S; `OpenTieL` needs
-one holding ring switch `i`'s 128 slots of w in a run of its row-port elements. The part with the last residual does
-(`cover_rs`): that residual, T against the batched sum, keeps every claim's `t_k[0]` as a term at the zero coins
-`structureOf` runs at (`Lin` keeps a term whose coefficient is zero), so it reads `["wt", 128 k, 0]`
-(`structureOf_rsT`), and a part reading a transpose holds its block in a run (`block_of_partS`).
-`openTieL_of_session` is `OpenTieL` for a source reading the layer there (`ReadsFill`, which w's ring switches are:
-`readsFill_w`), and `openTieL_of_openTie` for a source whose opening is on w's ring switches (`OpenTie`).
--/
+/-! The opening tie at V*'s layer, from V*'s sessions. -/
 
 @[expose] public section
 
@@ -86,7 +76,6 @@ theorem keys_foldl {k : Key} : ∀ (L : List (F128 × Lin)) (acc : Lin),
       · exact Or.inl (keys_add (Or.inr (hs ▸ h)))
       · exact Or.inr ⟨cx', hm, h⟩
 
-/-- A term of one of `dotV`'s values is one of the dot's: a zero coefficient keeps its key. -/
 theorem keys_dotV {cs : Array F128} {xs : Array Lin} {j : ℕ} (hc : j < cs.size) (hx : j < xs.size) {k : Key}
     (h : k ∈ xs[j].t.map (·.1)) : k ∈ (dotV cs xs : Lin).t.map (·.1) := by
   unfold dotV
@@ -97,7 +86,6 @@ theorem keys_dotV {cs : Array F128} {xs : Array Lin} {j : ℕ} (hc : j < cs.size
   rw [Array.getElem_zip] at hm
   exact Array.mem_toList_iff.2 hm
 
-/-- Ring switch `k`'s slots in the opening's w: the first `128 · claims` (`RecOpening.rounds`). -/
 theorem wiO_rs (sh : Shape) {k v : ℕ} (hk : k < sh.claims) (hv : v < 128) :
     RecOpening.wi sh (.rs k v) = some (128 * k + v) := by
   unfold RecOpening.wi RecOpening.wNames RecOpening.rounds
@@ -136,7 +124,6 @@ theorem coefOps_has (ri : ℕ) : ∀ (l : List (Key × F128)) (st st' : BSt) (ps
     · obtain ⟨ab, hab, t', ht', ho'⟩ := coefOps_has ri rest st3 st' ps' h3i hc kx hm
       exact ⟨ab, by simp [hab], t', ht', ho'⟩
 
-/-- `_build` gives each non-consistency term of a residual a product with the term's operand. -/
 theorem buildRes_has {ri : ℕ} {f : Lin} {st st' : BSt} {res : Res} (hi : OpsOkO sh st)
     (hr : RecOpening.buildRes sh ri f st = .ok (res, st')) {k : Key} (hk : k ∈ f.t.map (·.1))
     (hc : k.isCons = false) :
@@ -178,8 +165,6 @@ theorem buildAll_has : ∀ (fs : List Lin) (ri : ℕ) (st st' : BSt) (rs : Array
     · obtain ⟨ri', s₀, s₁, r', h0, h1', he, hm⟩ := buildAll_has rest (ri + 1) st1 st' rs' h1i h2 g hg
       exact ⟨ri', s₀, s₁, r', h0, h1', he, by simp [hm]⟩
 
-/-- **The opening's S reads each ring switch's transpose as a product's operand**: its last residual, T against the
-batched sum, has every claim's `t_k[0]` as a term (`ringSwitch_spec`), so `_build` gives it `["wt", 128 k, 0]`. -/
 theorem structureOf_rsT {S : GfS} (hS : RecOpening.structureOf sh = .ok S) {i : ℕ} (hi : i < sh.claims) :
     ∃ r ∈ S.res, ∃ ab ∈ r.mul.toList, S.ops[ab.2]? = some #[.wt (128 * i) 0] := by
   unfold RecOpening.structureOf at hS
@@ -220,8 +205,6 @@ theorem structureOf_rsT {S : GfS} (hS : RecOpening.structureOf sh = .ok S) {i : 
   cases ht
   exact ⟨r, hrm, ab, hab, he.ops? ho⟩
 
-/-- **A part reading `["wt", e, u]` holds w's elements `e … e + 127` in a run of its row-port elements**: `partS`
-refuses a transpose over row ports the part does not read in a run. -/
 theorem block_of_partS {S : GfS} {sizes R P V : Array ℕ} {S' : RecOpen.GfS} (h : partS S sizes R P V = .ok S')
     {r : ℕ} (hr : r ∈ R.toList) (hrs : r < S.res.size) {ab : ℕ × ℕ} (hab : ab ∈ S.res[r].mul.toList)
     {e u : ℕ} (ho : S.ops[ab.2]? = some #[.wt e u]) : ∃ i', ∀ j < 128, (wIdx sizes P)[i' + j]? = some (e + j) := by
@@ -255,9 +238,6 @@ theorem block_of_partS {S : GfS} {sizes R P V : Array ℕ} {S' : RecOpen.GfS} (h
     · cases ht'
   · cases hko
 
-/-- **(the coverage fact) Some part holds ring switch `i`'s 128 slots of w in a run of its row-port elements**: the
-last residual reads `["wt", 128 i, 0]` (`structureOf_rsT`), some part holds it (`groups_cover`), and that part holds the
-block (`block_of_partS`). -/
 theorem cover_rs {S0 : GfS} {gs : Array (Array ℕ × Array ℕ × Array ℕ)} (hS : RecOpening.structureOf sh = .ok S0)
     (hg : groups S0 (RecOpening.portSizes sh) = .ok gs)
     (hparts : ∀ p < gs.size, ∃ S' ns nv, RecOpening.part sh p = .ok (S', ns, nv)) {i : ℕ} (hi : i < sh.claims) :
@@ -283,15 +263,12 @@ open FlockVBridge.OfVStar (fill_rowCol readCol_rsAt)
 
 variable {nS : ℕ} {Vs : Fin nS → VStmt} {Reg' : Type}
 
-/-- **The source reads ring switch `i` where V*'s layer holds it**: at the groups of the shape's S, whatever the layer
-holds at a copy of the `rec-opening` unit registering w at ring switch `i`'s slots (`RsAt`) is `x i`. -/
 def ReadsFill (zs : (s : Fin nS) → (Vs s).Outer Reg') (Lb : (s : Fin nS) → (Vs s).Bits) (sh : Flock.Shape)
     (w : Array F128) (x : Fin 2 → Fin 128 → F128) : Prop :=
   ∀ (S0 : RecAlgebra.GfS) (gs : Array (Array ℕ × Array ℕ × Array ℕ)), RecOpening.structureOf sh = .ok S0 →
     Flock.RecResiduals.groups S0 (RecOpening.portSizes sh) = .ok gs →
     ∀ (i : Fin 2) (y : Fin 128 → F128), RsAt zs Lb sh gs w i.val y → y = x i
 
-/-- w's ring switches are read where the layer holds them (`eq_of_rsAt`). -/
 theorem readsFill_w {zs : (s : Fin nS) → (Vs s).Outer Reg'} {Lb : (s : Fin nS) → (Vs s).Bits} {m : ℕ}
     {sh : Flock.Shape} (hsh : RecOpening.shape? m 2 = some sh) (w : Array F128) :
     ReadsFill zs Lb sh w fun i t => w[128 * i.val + t.val]! := by
@@ -302,9 +279,6 @@ theorem readsFill_w {zs : (s : Fin nS) → (Vs s).Outer Reg'} {Lb : (s : Fin nS)
   cases hwi
   exact hye
 
-/-- **(n7's opening tie at V*'s layer, from V*'s sessions)** At V*'s sessions (`SessionAt`), some copy registering w
-holds each ring switch (`cover_rs`, `fill_rowCol` at the columns it reads, `readCol_rsAt`), so a source reading the
-layer there (`ReadsFill`), its opening steps the opening's on what it reads, has the tie at V*'s layer. -/
 theorem openTieL_of_session {zs : (s : Fin nS) → (Vs s).Outer Reg'} {Lb : (s : Fin nS) → (Vs s).Bits} {m : ℕ}
     {sh : Flock.Shape} (hsh : RecOpening.shape? m 2 = some sh) {unit : String} {c3 : Flock.RecCoins.C3}
     {w : Array F128} {ops : FlockVBridge.AccChain.Openings} (hs : SessionAt zs Lb sh unit c3 w ops)
@@ -328,9 +302,6 @@ theorem openTieL_of_session {zs : (s : Fin nS) → (Vs s).Outer Reg'} {Lb : (s :
   rw [← hx S gs hS hg i _ hR]
   exact hR
 
-/-- **The tie is the tie at V*'s layer, at V*'s sessions** (`openTie_of_layer`'s converse): an opening on the ring
-switches w holds (`OpenTie`) is on what the layer holds there (`openTieL_of_session` at `readsFill_w`, `decodedO_rs`
-at w's slots `wiO_rs`). -/
 theorem openTieL_of_openTie {zs : (s : Fin nS) → (Vs s).Outer Reg'} {Lb : (s : Fin nS) → (Vs s).Bits} {m : ℕ}
     {sh : Flock.Shape} (hsh : RecOpening.shape? m 2 = some sh) {unit : String} {c3 : Flock.RecCoins.C3}
     {w : Array F128} {ops : FlockVBridge.AccChain.Openings} (hs : SessionAt zs Lb sh unit c3 w ops) {e : ExecHolo}

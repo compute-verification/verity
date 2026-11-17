@@ -20,23 +20,7 @@ import Proofs.Flock.Soundness.Discharge.PlaysCoin.Coins
 import Proofs.Flock.Soundness.Refine.Basis
 import Proofs.Flock.Soundness.Refine.Seam
 
-/-!
-# n5's read fact: R's Ligerito and the openings from the tape
-
-`RegLevelsRead`: at every accepted outcome, the inner transcript's steps, past what the run reads before R's Ligerito
-(the cap, the points, the reps, their sparse phases and R's opening: `tapeR`), begin with an accepting Ligerito run of
-the executable on R's stream (`RegTape`): a `fast100` schedule that is R's registered one, whose proof's level-0 cap is
-the registered cap, at ring switching's `T` and switched claims that are R's opening's output (`OpenRel`), its messages
-(`ligMsgs`) and the rounds it consumes woven along compiled Ligerito's shape, and then the openings' step, whose rep-2
-openings are the proof's rows and siblings (`openRow`). It reads the tape, not the decoder of V*'s messages.
-
-`hRegLevels_of_read`: `HRegLevels` from `RegLevelsRead`, at any family whose run decodes R's Ligerito and the openings
-from the tape as `decodeRun` does (`HLgStages`, which the honest family has: `hLgStages_honest`). The executable's
-acceptance is the model's compiled Ligerito's run to a pending result that accepts the openings
-(`ligerito_accepts_opening`), a play on one tape in the order compiled Ligerito's shape fixes (`playsT_lig_of_tape`),
-whose openings pass the plain leaf's path checks against the proof's cap (`opensOK_of`); and a game plays on at most one
-prefix of a tape (`stageOf_of_playsT`), so the stage the run decodes is that play.
--/
+/-! R's Ligerito and the openings from the tape (`RegLevelsRead`), and `HRegLevels` from it. -/
 
 @[expose] public section
 
@@ -53,7 +37,6 @@ open FlockC3.Compose (stageOf proverAt stageOf_of_playsT)
 local notation "𝔽" => FlockLevel3.GF128
 local notation "𝕂" => FlockLevel3.GF256
 
-/-- **A prover step's value is the step's**, where the step is one of `β`'s. -/
 theorem proverAt_of_eq {β : Type} {s : Option Step} {d b : β} (hs : s = some (.inl ⟨β, b⟩)) :
     proverAt β s d = b := by
   have hex : ∃ a : β, s = some (.inl ⟨β, a⟩) := ⟨b, hs⟩
@@ -61,8 +44,6 @@ theorem proverAt_of_eq {β : Type} {s : Option Step} {d b : β} (hs : s = some (
   rw [dite_eq_left hex]
   exact eq_of_heq (Sigma.mk.inj (Sum.inl.inj (Option.some.inj (hex.choose_spec.symm.trans hs)))).2
 
-/-- **Compiled Ligerito's run on its messages and coins is a run on one tape** that takes steps of its shape's kinds
-(`ligShape`), with those messages and coin steps: the shape places the coins among the messages. -/
 theorem playsT_lig_of_tape {sch : FlockSoundness.Accounting.Schedule} {T₀ : 𝔽} {b : ℕ → 𝔽} {ms : List Game.Msg}
     {cs : List (Array Flock.F128)} {pend : PendL 𝔽 Dig} {ts : List Step}
     (h : Plays fOf (ligeritoC (D := Dig) execArith 2 sch T₀ b) ms cs pend)
@@ -91,25 +72,13 @@ open Game Audit Exec Refine Model ZkSession ZkLink ZkExec Composed ZkReg
 open Flock FlockLevel3 Accounting ZkBind Integrate Placed StrictCR DecodeZL FlockC3.Compose
 open FlockSoundness.Discharge.PlaysCoin (coinArr)
 
-/-! ## The read fact -/
-
-/-- R's Ligerito at the run `u`: on R's registered schedule, at R's opening's output, as `HRegLevels` and `decodeRun`
-take it. -/
 abbrev ligAt (e : ExecHolo) (u : C3Run e) : Game (PendL GF128 Dig) :=
   ligeritoC (D := Dig) execArith 2 e.rsch.sch u.opened.T u.opened.b
 
-/-- The tape `l` past what `decodeRun` reads before R's Ligerito: the cap's and the points' steps, then the reps',
-their sparse phases' and R's opening's at the run `u`'s. -/
 def tapeR {e : ExecHolo} (l : List Step) (u : C3Run e) : List Step :=
   ((((l.drop 2).drop (2 * (u.ts 0).length + (u.ts 1).length)).drop (u.sp 0).length).drop (u.sp 1).length).drop
     u.op.length
 
-/-- **The read fact at a tape** `l`: `l` begins with an accepting run of the executable's Ligerito on R's stream, then
-the openings' step. The run is at a `fast100` schedule `sch` whose model schedule is `rsch`, against a proof `p` whose
-level-0 cap `cap` is `cap₀`, at ring switching's `T` and switched claims `sws`, which are the opening's output `op`
-(`OpenRel`), from the record `rt` (well formed, `RoundsWF`) to `rt'`. Its steps `ts` take the kinds of compiled
-Ligerito's shape, its messages are the proof's (`ligMsgs`) and its coin steps the rounds it consumes (`coinArr`). The
-openings' rep-2 rows and siblings are the proof's (`openRow`). -/
 def RegTape (cap₀ : Cap Dig) (rsch : FlockSoundness.Accounting.Schedule) (op : OpenOut GF128) (l : List Step) :
     Prop :=
   ∃ (msId : String) (m : ℕ) (sch : Flock.Schedule) (Tw : Flock.F128) (sws : Array Flock.Switched) (nc : ℕ)
@@ -124,9 +93,6 @@ def RegTape (cap₀ : Cap Dig) (rsch : FlockSoundness.Accounting.Schedule) (op :
       (l.drop ts.length)[0]? = some (.inl ⟨Opens GF128 Dig × Salts (List UInt8), os⟩) ∧
       ∀ ℓ j, os.1 2 ℓ j = openRow p sch ℓ j
 
-/-- **The run's Ligerito and openings are the tape's**, as `decodeRun` decodes them: R's Ligerito's steps and result
-are the prefix its game plays on past R's opening's steps and the result it plays to there, and the openings are the
-step after them, where it is one. -/
 def LgStages (e : ExecHolo) (l : List Step) (u : C3Run e) : Prop :=
   u.lg = (stageOf (ligAt e u) (tapeR l u) PendL.reject).1 ∧
     u.pendR = (stageOf (ligAt e u) (tapeR l u) PendL.reject).2 ∧
@@ -135,8 +101,6 @@ def LgStages (e : ExecHolo) (l : List Step) (u : C3Run e) : Prop :=
 theorem lgStages_decodeRun (e : ExecHolo) (l : List Step) : LgStages e l (decodeRun e l) :=
   ⟨rfl, rfl, fun _ hos => Read.proverAt_of_eq hos⟩
 
-/-- **R's Ligerito plays to R's result, which accepts the openings against `cap₀`**, at a tape whose Ligerito run and
-openings the read fact gives. -/
 theorem regLevels_of_readAt {e : ExecHolo} {l : List Step} {u : C3Run e} {cap₀ : Cap Dig} (hs : LgStages e l u)
     (hR : RegTape cap₀ e.rsch.sch u.opened (tapeR l u)) :
     PlaysT (ligAt e u) u.lg u.pendR ∧ u.pendR.verdict u.os.1 = true ∧
@@ -162,24 +126,17 @@ theorem regLevels_of_readAt {e : ExecHolo} {l : List Step} {u : C3Run e} {cap₀
 variable {nT r : ℕ} {T : Fin nT → Type} {CT : Fin r → Type} [∀ k, Fintype (CT k)] [∀ k, Nonempty (CT k)]
   {st : Flock.Stmt} {hp : HoloParams} {xR : HoloReg GF128 Dig} {n : ℕ} {L : SamplingDesign n} {Reg Cm Reg' Reg₂ : Type}
 
-/-- **(n5's read fact) R's Ligerito run is on the inner transcript**: at every accepted outcome, the inner
-transcript's steps (V*'s layers' messages zipped with the rounds' coins) hold, past what the run reads before R's
-Ligerito, an accepting run of the executable's Ligerito on R's stream at R's registered schedule, against the
-registered cap and at R's opening's output, then the openings, whose rep-2 rows and siblings are the run's proof's. -/
+/-- It reads the tape, not the decoder of V*'s messages. -/
 def RegLevelsRead (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂) (dg : ByteArray → ByteArray) (N k Rw : ℕ) :
     Prop :=
   F.AtAccepted dg N k Rw fun R ω t Lb =>
     let u := F.run R ω t Lb
     RegTape xR.cap (holoAt st hp).rsch.sch u.opened (tapeR (schedSteps T CT 0 ((F.wmsg Lb).zip (t.map Prod.snd))) u)
 
-/-- **The family's run decodes R's Ligerito and the openings from the inner transcript's steps** as `decodeRun` does,
-at every accepted outcome. -/
 def HLgStages (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂) (dg : ByteArray → ByteArray) (N k Rw : ℕ) : Prop :=
   F.AtAccepted dg N k Rw fun R ω t Lb =>
     LgStages (holoAt st hp) (schedSteps T CT 0 ((F.wmsg Lb).zip (t.map Prod.snd))) (F.run R ω t Lb)
 
-/-- **(n5) R's levels play to R's result, from the read fact**, at any family whose run decodes R's Ligerito and the
-openings as `decodeRun` does. -/
 theorem hRegLevels_of_read {F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂} {dg : ByteArray → ByteArray} {N k Rw : ℕ}
     (hst : HLgStages F dg N k Rw) (hread : RegLevelsRead F dg N k Rw) : HRegLevels F dg N k Rw := by
   intro R ω t R₂ τ o hacc
@@ -197,12 +154,10 @@ variable {ish : RecVStar.Inner} {ss : Array VStar.Stmt} {hss : RecVStar.statemen
 
 local notation "𝓗" => C3Family.honest (xR := xR) ish hss bind hob zs own sel bc dec wr reg
 
-/-- The honest family's run is `decodeRun` of the inner transcript's steps, at any decoder `dec`. -/
 theorem hLgStages_honest {dg : ByteArray → ByteArray} {N k Rw : ℕ} : HLgStages 𝓗 dg N k Rw := by
   intro _ _ _ _ _ _ _
   exact lgStages_decodeRun (holoAt st hp) _
 
-/-- **(n5) at the honest family, from the read fact.** -/
 theorem hRegLevels_honest_of_read {dg : ByteArray → ByteArray} {N k Rw : ℕ} (hread : RegLevelsRead 𝓗 dg N k Rw) :
     HRegLevels 𝓗 dg N k Rw :=
   hRegLevels_of_read hLgStages_honest hread

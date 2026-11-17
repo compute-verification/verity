@@ -16,16 +16,7 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 
-/-!
-# The holo rep's program from E's zerocheck and lincheck
-
-`holoProg_of_zclc` is `Runs.prog_of_zclc` at a holo shape: `holoProg_of_checks` with its zerocheck and lincheck checks
-from `zclc_of_residuals_dec`. A holo record keeps `z_partial`'s round, which issued no coins, so the rep's rounds are
-not `NoEmpty`; E reads them through `RoundCoins.ofRounds`, which skips the empty ones (`ofRounds_filter`). The checks are
-taken at the transcript's rounds with their empty ones filtered out (`R'`), whose rounds below `z_partial`'s are the
-transcript's (`filter_getElem!_of`: every one of them issued coins, `HoloLcAnswered` and the zerocheck's counts), and
-read back at the transcript's.
--/
+/-! The holo rep's program from E's zerocheck and lincheck (`holoProg_of_zclc`). -/
 
 @[expose] public section
 
@@ -52,7 +43,6 @@ theorem list_filter_getElem!_of {α : Type} [Inhabited α] (p : α → Bool) :
             simpa using this) j (by omega)
           simpa using this
 
-/-- Filtering keeps the first `K` elements where each of them passes. -/
 theorem filter_getElem!_of {α : Type} [Inhabited α] (p : α → Bool) (xs : Array α) (K : ℕ)
     (h : ∀ j < K, j < xs.size ∧ p xs[j]! = true) : ∀ j < K, (xs.filter p)[j]! = xs[j]! := by
   intro j hj
@@ -75,7 +65,6 @@ theorem foldl_congr_mem {σ β : Type} (f g : σ → β → σ) : ∀ (l : List 
       rw [List.foldl_cons, List.foldl_cons, h init j (by simp)]
       exact foldl_congr_mem f g l _ fun s j' hj' => h s j' (by simp [hj'])
 
-/-- A round of well-formed rounds that issued coins is one of them, and its coins are not empty. -/
 theorem coins_ne_of_n {R : Array Flock.Round} (hwf : RoundsWF R) {j : ℕ} (h : (R[j]!).n ≠ 0) :
     j < R.size ∧ decide ((R[j]!).coins.size ≠ 0) = true := by
   have hj : j < R.size := by
@@ -84,7 +73,6 @@ theorem coins_ne_of_n {R : Array Flock.Round} (hwf : RoundsWF R) {j : ℕ} (h : 
     exact h rfl
   exact ⟨hj, decide_eq_true (by rw [FlockSoundness.Refine.RoundsWF.get hwf j]; exact h)⟩
 
-/-- `rhoOf` reads only the zerocheck's residual rounds. -/
 theorem rhoOf_congr {R : Array Flock.Round} {t : Transcript} {m : ℕ} {P : ByteArray}
     (h : ∀ i < m - 6, R[t.k + 3 + i]! = t.rounds[t.k + 3 + i]!) : rhoOf ⟨R, t.k, P⟩ m = rhoOf t m := by
   unfold rhoOf
@@ -92,7 +80,6 @@ theorem rhoOf_congr {R : Array Flock.Round} {t : Transcript} {m : ℕ} {P : Byte
   try dsimp only
   rw [h i hi]
 
-/-- `tsOf` reads only the lincheck's rounds. -/
 theorem tsOf_congr {R : Array Flock.Round} {k₀ : ℕ} {P : ByteArray} {t : Transcript} {k₁ kLog : ℕ}
     (h : ∀ j < kLog - 6, R[k₁ + 2 + j]! = t.rounds[k₁ + 2 + j]!) : tsOf ⟨R, k₀, P⟩ k₁ kLog = tsOf t k₁ kLog := by
   unfold tsOf
@@ -100,8 +87,6 @@ theorem tsOf_congr {R : Array Flock.Round} {k₀ : ℕ} {P : ByteArray} {t : Tra
   try dsimp only
   rw [h j hj]
 
-/-- **The points `verifierRows` reads at a holo record** (`rows_coins`): every round below `z_partial`'s issued coins,
-so they are the record's coins there, as at plain, at any extra claims and comb. -/
 theorem holoRows_coins {sh : Shape} {rounds : Array (Array F128)} {xs : Array Claim} {cb v : Array F128}
     {info : Info Lin} {kappa : Array (Array (Array F128))} (hrows : verifierRows sh rounds xs cb = .ok (v, info, kappa))
     (hm : 14 ≤ sh.m) {t : Transcript} (ht : t.k = 0) (hd : rounds = t.rounds.map (·.coins))
@@ -131,10 +116,6 @@ theorem holoRows_coins {sh : Shape} {rounds : Array (Array F128)} {xs : Array Cl
   exact ⟨hr, hz, hrho.trans (rhoOf_congr fun i hi => hget (t.k + 3 + i) (by omega)),
     hts.trans (tsOf_congr fun j hj => hget (t.k + 3 + (sh.m - 6) + 2 + j) (by omega)), hα, hrin, hrIn⟩
 
-/-- **The holo rep's program from E's zerocheck and lincheck.** `holoProg_of_checks` with its zerocheck and lincheck
-checks from `zclc_of_residuals_dec`, at the transcript's coins, where the lincheck's rounds end at `comb + h`
-(`decoded_comb_eq`); the frames, counts, ring switching (from round `k₁ + 2 + (k_log − 6) + 2`, past `z_partial`'s
-round and `r'`'s) and Ligerito stay as `holoProg_of_checks` takes them. The zerocheck ends at round `k₁`. -/
 theorem holoProg_of_zclc (sh : Shape) (d : RepData) (halg : AlgebraHolds sh d) (hacc : AccHolds sh d)
     (st : Setup) (sch : Flock.Schedule) (p : Proof) (extras : Array Claim) (t : Transcript) (ht : t.k = 0)
     (hd : d.rounds = t.rounds.map (·.coins)) (hwf : RoundsWF t.rounds) (hm : st.m = sh.m) (hm14 : 14 ≤ st.m)
@@ -145,7 +126,6 @@ theorem holoProg_of_zclc (sh : Shape) (d : RepData) (halg : AlgebraHolds sh d) (
     (hfoldPts : ∀ v info kappa, verifierRows sh d.rounds d.extras d.comb = .ok (v, info, kappa) →
       st.fold.folded info.lc.fold.alpha info.lc.fold.beta info.lc.fold.lw info.lc.fold.rhoIn info.lc.fold.ts =
         .ok d.comb)
-    -- the zerocheck's frames and counts
     (hn₀ : (t.rounds[t.k]!).n = 6) (hn₁ : (t.rounds[t.k + 1]!).n = st.m - 13) (hn₂ : (t.rounds[t.k + 2]!).n = 1)
     (hnr : ∀ i < st.m - 6, (t.rounds[t.k + 3 + i]!).n = 1)
     (ha₀ : AnswersL (t.rounds[t.k]!) (t.pending.data.toList ++ encs [.label "flock-r1cs-v0".toUTF8,
@@ -155,10 +135,8 @@ theorem holoProg_of_zclc (sh : Shape) (d : RepData) (halg : AlgebraHolds sh d) (
       (encs [.vec p.zerocheck.round1ab.toList, .vec p.zerocheck.round1c.toList, .sq 1 1]))
     (har : ∀ i < st.m - 6, AnswersL (t.rounds[t.k + 3 + i]!)
       (encs [.one (p.zerocheck.rounds[i]!).1, .one (p.zerocheck.rounds[i]!).2, .sq 1 1]))
-    -- the lincheck's frames and counts, with hidden units
     (hlc : HoloLcAnswered ⟨t.rounds, t.k + 3 + (st.m - 6),
       ⟨(encs [.one p.zerocheck.finalA, .one p.zerocheck.finalB]).toArray⟩⟩ st.fold.kLog p.lincheck (hOfW sh d.w))
-    -- ring switching, at the transcript's points
     {claims : Array Claim}
     (hcl : claims = Flock.abcClaims st.m st.kLog
       (zcOf p.zerocheck (pinned ++ (t.rounds[t.k + 1]!).coins) ((t.rounds[t.k + 2]!).coins.getD 0 0) (rhoOf t st.m))
@@ -170,7 +148,6 @@ theorem holoProg_of_zclc (sh : Shape) (d : RepData) (halg : AlgebraHolds sh d) (
     (hval : ∀ k < claims.size, dot (wOf claims[k]!) p.ringSwitches[k]! = claims[k]!.value)
     (hR : RsRounds ⟨t.rounds, t.k + 3 + (st.m - 6) + 2 + (st.fold.kLog - 6) + 2, ByteArray.empty⟩ p.ringSwitches
       claims.size rpp gamma)
-    -- Ligerito
     {t₄ : Transcript}
     (hlg : Flock.ligerito st.merkle sch (rsT claims p.ringSwitches rpp gamma) p.cap p.ligerito
       (Flock.basis (rsSws claims rpp gamma))

@@ -23,26 +23,7 @@ import Proofs.Flock.Soundness.Defs
 import Proofs.Flock.Soundness.Game
 import Proofs.Flock.Soundness.Soundness
 
-/-!
-# Piece (a), the oracle count: candidate 3's table with its oracles sent whole
-
-`holoTable_sound`, `table_sound`'s analogue at `Model.holoTable` (`holoTableOf`): every prover makes the table accept
-while no table close to the registered word has its hidden statement satisfied by a codeword near the committed level-0
-table, with probability at most `holoError`. a1s and a1r are used here:
-
-* within the unique-decoding radius at most one message `M` is near `w` (`card_closeL_ud_le`), and its cells are a table
-  `R` (`RegSchedule.Close`); no claim reads the padding (`RegClaim.coord` is zero there), so a claim holds on
-  `witnessOf M` iff it holds on `R.bits`;
-* a rep whose hidden fold `h` is `R`'s (`sparseFold` at `R.bits`, which needs `hunits`) is a plain rep of
-  `R.toStatement`, counted as `rep_sound` counts one from a doomed start (`repError`), after the link points as
-  `link_sound` counts them (`linkError`);
-* a rep whose `h` is not `R`'s: its sparse phase hands on a claim that holds on `R.bits` with probability at most
-  `sparseError` (`sparse_sound`);
-* a claim that fails on `R.bits`, or no message near `w`: R's opening accepts with probability at most `regOpenError`
-  (`regOpen_sound`, at `fast100`'s schedule for `mReg`; at the empty schedule Ligerito rejects);
-* each rep with its sparse phase plays on its own coins (the sparse phase reads only its rep's outputs), so the two
-  multiply as `value_interleave_le` multiplies the reps: `(repError + sparseError)^2`.
--/
+/-! Candidate 3's table is sound with its oracles sent whole (`holoTable_sound`). -/
 
 @[expose] public section
 
@@ -60,8 +41,6 @@ theorem value_bind_bind_ret {α β γ : Type} (P : γ → Prop) (g : Game α) (f
   rw [← Game.bind_assoc, value_bind_ret]
 
 omit [Fintype K] in
-/-- **`regPhase` is both reps' sparse phases, then R's opening**: it accepts no more often than the two `stage`s
-followed by `openTail`. -/
 theorem regPhase_le (A : Arith F K) (S : Statement) (sh : SparseShape) (units : Fin (2 ^ sh.sLog) → Finset ℕ)
     (τ : Fin (2 ^ sh.sLog) → ℕ) (rsch : Schedule) (w : Oracle F)
     (reps : Option (ZcOut F S.m × HoloLcOut F S.m (S.kLog - 6)) ×
@@ -82,7 +61,6 @@ theorem regPhase_le (A : Arith F K) (S : Statement) (sh : SparseShape) (units : 
   · simp
   exact le_of_eq rfl
 
-/-- **`holoTable_sound` for the optimal prover**, at the table's parts. -/
 theorem holoTable_value_sound (A : Arith F K) (hA : A.Correct) (cls : HoloClass)
     (regs : List (Region cls.kLog (cls.m - cls.kLog))) (sch : Schedule) (rsch : RegSchedule cls)
     (τ : Fin (2 ^ cls.sLog) → Fin (2 ^ cls.tLog)) (hsch : fast100 cls.m = some sch)
@@ -157,10 +135,6 @@ theorem holoTable_value_sound (A : Arith F K) (hA : A.Correct) (cls : HoloClass)
       fun c₁ c₂ _ _ M hM => absurd ⟨tableOf A rsch M, close_tableOf A rsch w M hM⟩ hnone).trans ?_
     simp [value_false]
 
-/-- **(a1o) Candidate 3's table is sound with its oracles sent whole.** At the reps' schedule `fast100`'s, a link
-layout at every table, R's schedule empty or `fast100`'s at `mReg` and every unit slot within the table: for every
-registered word `w` and every prover, the table accepts while no table close to `w` has a codeword near the committed
-level-0 table packing a witness of its hidden statement with probability at most `holoError`. -/
 theorem holoTable_sound (A : Arith F K) (hA : A.Correct) (e : ExecHolo)
     (hsch : Accounting.fast100 e.cls.m = some e.sch)
     (hlay : ∀ R : RegTable e.cls, (R.toStatement e.τ e.regs).LinkLayout e.cls.ptLocal e.cls.mPts)

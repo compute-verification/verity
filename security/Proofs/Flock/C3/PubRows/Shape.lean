@@ -21,28 +21,7 @@ import Proofs.Flock.Soundness.Discharge.ZkExec.Setup
 import Proofs.Flock.VBridge.Family.Structure
 import Proofs.Flock.VBridge.Pinned
 
-/-!
-# n1: a rec-sparse unit the verifier checked is at its RecSparse shape
-
-`SparseAtShape` does not follow from `hob`: `bind` is free, and at a binding `VStar.metaHead` refuses, `hob` says
-nothing of `Vs j`. The verifier's statement check does: `RecVStar.checkStmt` at the inner shape, `j` and `j`'s binding
-finds the checked circuit's unit name in the list (`checkStmt_ok`), and the list names RecSparse only at the inner
-shape's `sparse` entry (`sparse_of_name`: the other statements' names start `rec-o` or `rec-r`, `RecSparse.unitName` is
-injective, and candidate 3's statements after RecSparse are R's levels and opening, `candidate3_rest`).
-
-* `SparseAtShapeChecked`: `SparseAtShape` at a statement of `Vs j`'s circuit that `checkStmt` passes;
-  `sparseAtShapeChecked` proves it of every family. `NameChecked` (`nameChecked`, the same way): such a circuit is
-  named as the family's list's statement `j`.
-* `ChecksAccepted`: where a session accepts, a transcript it accepts passes `checkPubRows` and `checkLabels`
-  (`PubRowsChecked`) and
-  `checkStmt` (`StmtsChecked`, `AcceptsZKV`'s second conjunct), n1b's checks; the checked family meets it
-  (`checksAccepted_checked`, by `checks_of_keepOwn`). `ChecksReached` is it at the transcripts a session writes, which
-  the checked family meets too (`checksReached_checked`), and `hPubRows_of_checked` is `hPubRows_of_check'` with it,
-  `rowsHeld` and `SparseAtShapeChecked`.
-* `ownIn_of_checks`: where `ChecksAccepted` holds, the accepted sessions' reads hold the verifier's message-round ports
-  of their statement (`OwnIn` at `ownAt`), by `checkOwn`'s second and third loops (`checkOwn_ok`,
-  `ownIn_of_checkStmt`); `ownIn_checked` is it at the checked family.
--/
+/-! A rec-sparse unit the verifier checked is at its RecSparse shape. -/
 
 @[expose] public section
 
@@ -55,7 +34,6 @@ open Flock
 theorem take_five {p : String} {t : List Char} (hp : 5 ≤ p.toList.length) :
     (p.toList ++ t).take 5 = p.toList.take 5 := List.take_append_of_le_length hp
 
-/-- **The name `rec-sparse/n<NU>-e<ELL>-s<S_LOG>-t<T_LOG>` determines the shape.** -/
 theorem sparse_unitName_inj {sh sh' : RecSparse.Shape} (h : RecSparse.unitName sh = RecSparse.unitName sh') :
     sh = sh' := by
   have h := congrArg String.toList h
@@ -75,8 +53,6 @@ theorem sparse_unitName_inj {sh sh' : RecSparse.Shape} (h : RecSparse.unitName s
   exact ⟨FlockVBridge.eq_of_toDigits h1, FlockVBridge.eq_of_toDigits h2, FlockVBridge.eq_of_toDigits h3,
     FlockVBridge.eq_of_toDigits h⟩
 
-/-- **No other statement's name is a RecSparse unit's**: V*'s levels and parts, R's levels and R's opening are named
-`rec-o…` or `rec-r…`, RecSparse `rec-s…`. -/
 theorem sparse_ne_names (sh : RecSparse.Shape) :
     (∀ L H : ℕ, RecSparse.unitName sh ≠ s!"rec-open/l{L}-h{H}") ∧
     (∀ m k c j : ℕ, RecSparse.unitName sh ≠ s!"rec-residuals/m{m}-k{k}-c{c}-p{j}") ∧
@@ -90,7 +66,6 @@ theorem sparse_ne_names (sh : RecSparse.Shape) :
     rw [take_five (by decide), take_five (by decide)] at h <;>
     exact absurd h (by decide)
 
-/-- **The link table's part is no RecSparse unit**: it is named `rec-l…`. -/
 theorem sparse_ne_linkName (sh : RecSparse.Shape) (UB PB : ℕ) : RecSparse.unitName sh ≠ VStar.linkName UB PB := by
   intro h
   have h := congrArg (fun s : String => s.toList.take 5) h
@@ -116,7 +91,6 @@ theorem forIn_all {α : Type} (P : VStar.Stmt → Prop)
     | done b => cases h; exact hr'
     | yield b => exact forIn_all P hf l b h hr'
 
-/-- **R's opening is `rec-opening` statements.** -/
 theorem openingParts_kind {r : RecVStar.StackedShape} {x : Array VStar.Stmt} (h : RecVStar.openingParts r = .ok x) :
     ∀ s ∈ x, ∃ m c k S ports nv, s = VStar.Stmt.opening m c k S ports nv := by
   unfold RecVStar.openingParts at h
@@ -141,7 +115,6 @@ theorem openingParts_kind {r : RecVStar.StackedShape} {x : Array VStar.Stmt} (h 
   · exact hacc s hs
   · exact ⟨_, _, _, _, _, _, rfl⟩
 
-/-- **Candidate 3's statements after RecSparse** are R's levels and the parts of R's opening. -/
 theorem candidate3_rest {i : RecVStar.Inner} {C : Array VStar.Stmt} (h : RecVStar.candidate3Statements i = .ok C)
     {sp : RecSparse.Shape} (hsp : i.sparse = some sp) :
     ∃ rest, C = #[.sparse sp (RecVStar.hRound i.m i.kLog)] ++ rest ∧ ∀ s ∈ rest,
@@ -174,8 +147,6 @@ theorem candidate3_rest {i : RecVStar.Inner} {C : Array VStar.Stmt} (h : RecVSta
       exact .inl ⟨_, _, _, _, rfl⟩
     · exact .inr (openingParts_kind hx s hs)
 
-/-- **The list names RecSparse only at the inner shape's `sparse` entry**: a statement of the verifier's list named
-`unitName sh` is candidate 3's RecSparse, at `sh`. -/
 theorem sparse_of_name {i : RecVStar.Inner} {ss : Array VStar.Stmt} (h : RecVStar.statements i = .ok ss)
     {s : VStar.Stmt} (hs : s ∈ ss) {sh : RecSparse.Shape} (hn : RecSparse.unitName sh = s.name) :
     i.sparse = some sh := by
@@ -206,7 +177,6 @@ theorem sparse_of_name {i : RecVStar.Inner} {ss : Array VStar.Stmt} (h : RecVSta
         · exact absurd hn (n3 _ _)
         · exact absurd hn (n4 _ _ _)
 
-/-- **A circuit the verifier checked as V*'s statement `j` is RecSparse only at the inner shape's `sparse` entry.** -/
 theorem sparse_of_checkStmt {i : RecVStar.Inner} {tags : Flock.Tags} {tables : List (String × ByteArray)}
     {st : Flock.Stmt} {circuitB : ByteArray} {partition : Option Lean.Json} {program : Option ByteArray}
     {own : Array Flock.Registered.Port} {j : ℕ} {f : VStar.Bindings} {rows : Option (Array Flock.Registered.Port)}
@@ -216,8 +186,6 @@ theorem sparse_of_checkStmt {i : RecVStar.Inner} {tags : Flock.Tags} {tables : L
   exact sparse_of_name hss (Array.mem_of_getElem? hj)
     ((FlockVBridge.Sparse.unitName_params hp).trans hname.symm)
 
-/-- **`checkOwn` accepting, its second and third loops**: each of the statement's message-round ports is one of the
-reads file's, and each of its `sparseMsgs` is one of the file's ports. -/
 theorem checkOwn_ok {s : VStar.Stmt} {own : Array Flock.Registered.Port} (h : RecVStar.checkOwn s own = .ok ()) :
     (∀ q ∈ RecVStar.ownPorts s, q ∈ RecVStar.msgPorts own) ∧
       ∀ q ∈ RecVStar.sparseMsgs s, q ∈ own.toList.map fun p => (p.name, p.value, p.reads) := by
@@ -245,16 +213,12 @@ theorem checkOwn_ok {s : VStar.Stmt} {own : Array Flock.Registered.Port} (h : Re
             | some q' => exact absurd hf (hnone' q')
           simpa using List.find?_eq_none.1 hfind q hq
 
-/-- **`checkOwn` accepting, its second loop, at the reads file's ports**: each of the statement's message-round ports is
-a port of the reads file, by name, value and reads. -/
 theorem own_of_checkOwn {s : VStar.Stmt} {own : Array Flock.Registered.Port} (h : RecVStar.checkOwn s own = .ok ()) :
     ∀ q ∈ RecVStar.ownPorts s, ∃ p ∈ own, (p.name, p.value, p.reads) = q := by
   intro q hq
   obtain ⟨p, hp, rfl⟩ := List.mem_map.1 ((checkOwn_ok h).1 q hq)
   exact ⟨p, Array.mem_toList_iff.1 (List.mem_filter.1 hp).1, rfl⟩
 
-/-- **A RecSparse statement's reads file names every one of its message ports** (`RecSparse.messagePorts`): `h` and
-`claim` by `checkOwn`'s second loop (`ownPorts`), the others by its third (`sparseMsgs`, `checkOwn_ok`). -/
 theorem sparseOwnNames_of_checkOwn {sh : RecSparse.Shape} {hr : ℕ} {own : Array Flock.Registered.Port}
     (h : RecVStar.checkOwn (.sparse sh hr) own = .ok ()) :
     ∀ nm ∈ (RecSparse.messagePorts sh).map (·.1), ∃ p ∈ own, p.name = nm := by
@@ -276,8 +240,6 @@ theorem sparseOwnNames_of_checkOwn {sh : RecSparse.Shape} {hr : ℕ} {own : Arra
   · obtain ⟨p, hp, he⟩ := hown ("claim", RecVStar.CLAIM_VALUE, #[some 0, some 1]) (by simp [RecVStar.ownPorts])
     exact ⟨p, hp, (Prod.mk.inj he).1⟩
 
-/-- **A statement the verifier checked as V*'s statement `j` has its message ports in the reads file**: each port of
-`ownAt ss j` is one of `own`'s by name, value and reads (`checkStmt_ok`'s `checkOwn`, its second and third loops). -/
 theorem ownIn_of_checkStmt {i : RecVStar.Inner} {tags : Flock.Tags} {tables : List (String × ByteArray)}
     {st : Flock.Stmt} {circuitB : ByteArray} {partition : Option Lean.Json} {program : Option ByteArray}
     {own : Array Flock.Registered.Port} {j : ℕ} {f : VStar.Bindings} {rows : Option (Array Flock.Registered.Port)}
@@ -308,18 +270,12 @@ open FlockSoundness.Discharge.ZkBind FlockSoundness.Discharge.Integrate FlockSou
 open FlockSoundness.Discharge.Composed (drawJ partOf)
 open FlockC3.Compose
 
-/-- **The verifier's check of a session's statements** (`AcceptsZKV`'s second conjunct): `RecVStar.checkStmt` passes
-on each statement the session's record sets up, at the inner shape `i` as V*'s statement `j` under the bindings `f`,
-against the inputs' tags, tables, circuit file, partition object and program, the reads `own` and the shared rows
-`rows`. -/
 def StmtsChecked (i : RecVStar.Inner) (j : ℕ) (f : VStar.Bindings) (rows : Option (Array Flock.Registered.Port))
     (I : Inputs) (own : Array Flock.Registered.Port) (t : Exec.Transcript) : Prop :=
   ∃ spec sts, setupOf (zkInputs I) t.record = .ok (spec, sts) ∧
     sts.forM (RecVStar.checkStmt (some i) I.tags I.tables · I.circuitFile I.partition I.program (some own) (some j)
       (some f) rows) = .ok ()
 
-/-- **A checked session's statement of its circuit**: where the session accepts and its record samples, the statement
-setting up a sampled proof block's part has the session's circuit and passes `checkStmt`. -/
 theorem stmt_of_session {mPts nv J : ℕ} {Reg' : Type} {c : Flock.Circuit} {hU : Built c.unit}
     {hscope : Layout.scopeOk c = true} {Lv : SamplingDesign nv} (zo : ZkOuter mPts nv J Reg' c hU hscope Lv)
     {tr : Exec.Transcript} (hacc : AcceptsZKR zo.I zo.own tr) {i : RecVStar.Inner} {j : ℕ} {f : VStar.Bindings}
@@ -340,8 +296,6 @@ theorem stmt_of_session {mPts nv J : ℕ} {Reg' : Type} {c : Flock.Circuit} {hU 
     exact (Except.ok.inj h1).symm
   exact ⟨_, hcst, array_forM_ok hfm _ hjs⟩
 
-/-- **A kept session that accepts kept its own list** (`Flock.Guarantees.keepOwn`), so some transcript it writes and
-accepts passes the keep's predicate `P`, and so any `Pc` that `P` implies. -/
 theorem checks_of_keepOwn {Q : VStmt} {Reg' : Type} {z : Q.Outer Reg'} {P Pc : Inputs → Array Flock.Registered.Port →
     Exec.Transcript → Prop} (hP : ∀ J o t, P J o t → Pc J o t)
     (h : ∃ t, AcceptsZKR (Flock.Guarantees.keepOwn z P).I (Flock.Guarantees.keepOwn z P).own t) :
@@ -358,7 +312,6 @@ theorem checks_of_keepOwn {Q : VStmt} {Reg' : Type} {z : Q.Outer Reg'} {P Pc : I
     rw [hf] at ht
     exact (not_acceptsZKR_fresh z.I z.ht z.hTags z.hcH t ht).elim
 
-/-- **`checkMsgNames` passing names each port of the circuit once** (its first refusal). -/
 theorem names_of_msgNames {s : VStar.Stmt} {c : Flock.Circuit} {holo : Bool}
     (h : RecVStar.checkMsgNames s c holo = .ok ()) :
     ∀ q q' : Fin c.ports.size, c.ports[q].name = c.ports[q'].name → q = q' := by
@@ -373,7 +326,6 @@ theorem names_of_msgNames {s : VStar.Stmt} {c : Flock.Circuit} {holo : Bool}
     · exact Fin.ext he'
     · exact absurd he.symm (by simpa using List.pairwise_iff_getElem.1 hnd q'.val q.val (by simp) (by simp) hl)
 
-/-- **`checkStmt` accepting passes `checkMsgNames`** at statement `j` of the list, on the circuit. -/
 theorem msgNames_of_checkStmt {i : RecVStar.Inner} {tags : Flock.Tags} {tables : List (String × ByteArray)}
     {st : Flock.Stmt} {circuitB : ByteArray} {partition : Option Lean.Json} {program : Option ByteArray}
     {own : Option (Array Flock.Registered.Port)} {j : ℕ} {f : VStar.Bindings}
@@ -400,8 +352,6 @@ theorem msgNames_of_checkStmt {i : RecVStar.Inner} {tags : Flock.Tags} {tables :
         exact ⟨ss, s, hss, hj, hm⟩
       · cases h
 
-/-- **A circuit `checkStmt` passes as one of V*'s statements names each port once** (`checkMsgNames`' first
-refusal), so the verifier's find of a port by name (`Registered.checkPort`) finds that port. -/
 theorem names_of_checkStmt {i : RecVStar.Inner} {tags : Flock.Tags} {tables : List (String × ByteArray)}
     {st : Flock.Stmt} {circuitB : ByteArray} {partition : Option Lean.Json} {program : Option ByteArray}
     {own : Option (Array Flock.Registered.Port)} {j : ℕ} {f : VStar.Bindings}
@@ -423,40 +373,31 @@ open Flock FlockLevel3 Accounting ZkBind Integrate Placed StrictCR DecodeZL Floc
 variable {nT r : ℕ} {T : Fin nT → Type} {CT : Fin r → Type} [∀ k, Fintype (CT k)] [∀ k, Nonempty (CT k)]
   {st : Flock.Stmt} {hp : HoloParams} {xR : HoloReg GF128 Dig} {n : ℕ} {L : SamplingDesign n} {Reg Cm Reg' Reg₂ : Type}
 
-/-- **(n1) A rec-sparse unit the verifier checked is at the verifier's RecSparse shape**: `SparseAtShape` at `j` where
-`RecVStar.checkStmt` at the inner shape, `j` and `j`'s binding passes on a statement of `Vs j`'s circuit. -/
+/-- `SparseAtShape` does not follow from `hob`: `bind` is free, and at a binding `VStar.metaHead` refuses,
+`hob` says nothing of `Vs j`; the verifier's statement check gives it. -/
 def SparseAtShapeChecked (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂) : Prop :=
   ∀ j (sj : Flock.Stmt) tags tables circuitB partition program own rows, sj.c = (F.Vs j).c →
     RecVStar.checkStmt (some F.ish) tags tables sj circuitB partition program (some own) (some (j : ℕ))
       (some (F.bind j)) rows = .ok () →
     ∀ sh sh₀, RecSparse.params (F.Vs j).c.unit.name = some sh → F.ish.sparse = some sh₀ → sh = sh₀
 
-/-- **(n1) Every family's checked rec-sparse units are at its shape.** -/
 theorem sparseAtShapeChecked (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂) : SparseAtShapeChecked F := by
   intro j sj _ _ _ _ _ _ _ hc h sh sh₀ hsh h₀
   rw [← hc] at hsh
   exact Option.some.inj ((sparse_of_checkStmt h hsh).symm.trans h₀)
 
-/-- **A circuit the verifier checked as V*'s statement `j` is named as the list's statement `j`**: where
-`RecVStar.checkStmt` at the inner shape, `j` and `j`'s binding passes on a statement of `Vs j`'s circuit, the family's
-list has a statement at `j`, and its name is `Vs j`'s unit's. -/
 def NameChecked (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂) : Prop :=
   ∀ j (sj : Flock.Stmt) tags tables circuitB partition program own rows, sj.c = (F.Vs j).c →
     RecVStar.checkStmt (some F.ish) tags tables sj circuitB partition program (some own) (some (j : ℕ))
       (some (F.bind j)) rows = .ok () →
     ∃ s, F.stmts[(j : ℕ)]? = some s ∧ s.name = (F.Vs j).c.unit.name
 
-/-- **Every family's checked circuits are named as its list's statements** (`checkStmt_ok`, as `sparse_of_checkStmt`;
-the list `checkStmt` reads is the family's, `hstmts`). -/
 theorem nameChecked (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂) : NameChecked F := by
   intro j sj _ _ _ _ _ _ _ hc h
   obtain ⟨-, -, ss, s, hss, hj, hname, -⟩ := FlockSoundness.Discharge.Recursion.checkStmt_ok h
   obtain rfl := Except.ok.inj (hss.symm.trans F.hstmts)
   exact ⟨s, hj, by rw [hname, hc]⟩
 
-/-- **(n1b) Where a session accepts, a transcript it accepts passes the verifier's checks** of its public rows against
-its hold of the inner transcript (`PubRowsChecked`) and of its statements as V*'s statement of its index
-(`StmtsChecked`), as the checked sessions keep it (`checksAccepted_checked`). -/
 def ChecksAccepted (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂) (rows : Option (Array Flock.Registered.Port))
     (wr : List (Cm × (holoInnerAt T CT st hp).Coin) → Lean.Json × String) (reg : Lean.Json) : Prop :=
   ∀ R ω t R₂ j, (∃ tr', AcceptsZKR (F.zs R ω t R₂ j).I (F.zs R ω t R₂ j).own tr') →
@@ -465,11 +406,6 @@ def ChecksAccepted (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂) (rows : Opt
         (F.zs R ω t R₂ j).own tr' ∧
       StmtsChecked F.ish j (F.bind j) rows (F.zs R ω t R₂ j).I (F.zs R ω t R₂ j).own tr'
 
-/-- **(n1b) Where a session accepts a transcript it writes, a transcript it writes and accepts passes the verifier's
-checks** of its public rows (`PubRowsChecked`) and statements (`StmtsChecked`): `ChecksAccepted` at the outcomes the
-session's game reaches (`ZkOuter.Writes`), the transcripts whose records the custody reads (`rowsHeld`). The checked
-family keeps a session's list where some transcript it writes and accepts passes the checks
-(`Flock.Guarantees.keepOwn`), so it gives this (`checksReached_checked`). -/
 def ChecksReached (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂) (rows : Option (Array Flock.Registered.Port))
     (wr : List (Cm × (holoInnerAt T CT st hp).Coin) → Lean.Json × String) (reg : Lean.Json) : Prop :=
   ∀ R ω t R₂ j, (∃ R' tr', (F.zs R ω t R₂ j).Writes R' tr' ∧ AcceptsZKR (F.zs R ω t R₂ j).I (F.zs R ω t R₂ j).own tr') →
@@ -488,8 +424,6 @@ variable {ish : RecVStar.Inner} {ss : Array VStar.Stmt} {hss : RecVStar.statemen
   {dec : ℕ → ((j : Fin (vstarCount ish)) → (Vs j).Bits) → (holoInnerAt T CT st hp).Msg}
   {wr : List (Cm × (holoInnerAt T CT st hp).Coin) → Lean.Json × String} {reg : Lean.Json}
 
-/-- **(n1b) The checked family passes the verifier's checks where a session accepts**: a checked session that accepts
-kept its own list, so a transcript it accepts passes `ChecksC3`, whose public-row and statement checks these are. -/
 theorem checksAccepted_checked {coins : String → Option Flock.RecCoins.Source}
     {rows : Option (Array Flock.Registered.Port)}
     {zr : Reg → L.Ω → List (Cm × (holoInnerAt T CT st hp).Coin) → Reg₂ → (j : Fin (vstarCount ish)) →
@@ -508,9 +442,6 @@ theorem checksAccepted_checked {coins : String → Option Flock.RecCoins.Source}
         exact ⟨⟨spec, sts, hs, hpr, hlb⟩, spec, sts, hs, hst⟩) hex
   exact ⟨tr', hc⟩
 
-/-- **(n1b) The checked family passes the verifier's checks where a session accepts a transcript it writes**, at one it
-writes: the checked session keeps its own list only where a transcript it writes and accepts passes `ChecksC3`
-(`Flock.Guarantees.keepOwn`, `checks_of_keepOwn`). `Compose.hbr_honest` reads it at `hPubRows_of_checked`. -/
 theorem checksReached_checked {coins : String → Option Flock.RecCoins.Source}
     {rows : Option (Array Flock.Registered.Port)}
     {zr : Reg → L.Ω → List (Cm × (holoInnerAt T CT st hp).Coin) → Reg₂ → (j : Fin (vstarCount ish)) →
@@ -528,9 +459,6 @@ theorem checksReached_checked {coins : String → Option Flock.RecCoins.Source}
         obtain ⟨-, spec, sts, hs, hst, -, hpr, hlb, -⟩ := hp
         exact ⟨⟨spec, sts, hs, hpr, hlb⟩, spec, sts, hs, hst⟩) ⟨tr', hacc⟩
 
-/-- **(n1b) The accepted sessions' reads hold the verifier's message-round ports** (`OwnIn` at `ownAt`) where a
-transcript they accept passes the statement check (`ChecksAccepted`): the check of the session's first statement
-(`setup_zero_c`) is `checkOwn` at the family's list's statement `j` (`ownIn_of_checkStmt`). -/
 theorem ownIn_of_checks {F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂} {rows : Option (Array Flock.Registered.Port)}
     {wr : List (Cm × (holoInnerAt T CT st hp).Coin) → Lean.Json × String} {reg : Lean.Json}
     (hca : ChecksAccepted F rows wr reg) : OwnIn F fun j => ownAt F.stmts j := by
@@ -539,9 +467,6 @@ theorem ownIn_of_checks {F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂} {rows 
   obtain ⟨h0, -⟩ := setup_zero_c (F.zs R ω t R₂ j).ht (F.zs R ω t R₂ j).hTags.1 (F.zs R ω t R₂ j).hcH hs
   exact ownIn_of_checkStmt (array_forM_ok hfm 0 h0) F.hstmts
 
-/-- **(n1b) The checked family's accepted sessions' reads hold the verifier's message-round ports**, at whatever `own`
-the family is (`checksAccepted_checked`, `ownIn_of_checks`); at `own := fun j => ownAt ss j` it is `hbr_honest`'s
-`hown`. -/
 theorem ownIn_checked {coins : String → Option Flock.RecCoins.Source} {rows : Option (Array Flock.Registered.Port)}
     {zr : Reg → L.Ω → List (Cm × (holoInnerAt T CT st hp).Coin) → Reg₂ → (j : Fin (vstarCount ish)) →
       (Vs j).OuterR Reg'}
@@ -552,11 +477,6 @@ theorem ownIn_checked {coins : String → Option Flock.RecCoins.Source} {rows : 
 
 local notation "𝓗" => C3Family.honest (xR := xR) ish hss bind hob zs own sel bc dec wr reg
 
-/-- **(n1) The public rows at the honest family, from the verifier's checks**: `hPubRows_of_check'` with the
-rec-sparse shape read at a transcript the session writes and accepts whose public rows and statements the verifier
-checks (`ChecksReached`), where `SparseAtShapeChecked` holds (`sparseAtShapeChecked`) and every unit is sampled
-(`rowsHeld`). The port the check finds by name is the session's: the statement check refuses a circuit naming a port
-twice (`names_of_checkStmt`), so `PortsNamed` holds at every accepted session. -/
 theorem hPubRows_of_checked {rows : Option (Array Flock.Registered.Port)} (hchk : ChecksReached 𝓗 rows wr reg)
     (hsp : SparseAtShapeChecked 𝓗) : HPubRows 𝓗 := by
   intro R ω t R₂ j hex rg hrg u q x hname hread b hrow

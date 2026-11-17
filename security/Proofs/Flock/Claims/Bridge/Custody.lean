@@ -44,39 +44,7 @@ import Proofs.Flock.Soundness.Discharge.Composed.CustodyJ
 import Proofs.Flock.Soundness.Refine.Walk
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# `Deploy.V`'s custody checks, as the old theorems' `RecordsLiveZKJ`
-
-The old `--zk` theorems bound verity-verify-proof `--zk`'s acceptance of the transcript a writer `wr` makes of the live
-session's outcome, under `RecordsLiveZKJ I dj Jf wr` (`DefsJ.lean`, the record half of the `live-verifier` assumption
-`RecordCustodyZKJ`): the record `verify --zk` accepts carries the sample, the outcome's proof files, link points, roots
-and rounds. `Deploy.V` takes the record in its last message (`Final`) and checks its custody (`checks`, `custody`):
-the record's roots, link points and rounds are the run's link message, first coin, round messages and their coins.
-
-* `liveOf_ok`, `decode_ok`, `decode_live`: what `liveOf` and `Record.decode` read of the record, field by field, and
-  that the decoded session's roots, points and each rep stream's rounds are `liveOf`'s, with a retained round's recorded
-  digest that of its bytes (S12).
-* `checks_ok`, `custody_ok`, `checks_sample`: what the checks establish, the record's sample the statement's whatever its
-  key order among it (`sampleEq`, `JsonEquiv`).
-* `recordSample_of_checks`, `recordSample_of_decide`: and so the record's sample is the statement's as a value, since the
-  verifier rebuilds both (`Flock.norm`, `JsonNorm`): the `hdraw` of `setupOf_record` and `recordsLiveAt_of_checks`.
-* `viewOf`: the run's live outcome (`LiveOutJ`), its rounds the record's (`viewOf_rounds`: the round messages with
-  their coins, in `spec.repStreams` order). Each round's coin count and each stream's share of the rounds are the
-  record's: a round message carries no count.
-* `publicInputs_none_of_checks`: the checks run the scope check, which refuses `--public-inputs` (which `Exec.Inputs`
-  does not carry); `publicInputs_none_of_inScope`: so does `InScope`, at the verifier's reading of the statement.
-* `setupOf_record`: where the checks pass and the record's sample is the statement's as a value, the setup the shipped
-  verifier makes of the record, at its own sample, is `Deploy.V`'s at the statement's.
-* `recordsLiveAt_of_checks`: where the checks pass and the record's sample is the statement's, the last message's record
-  and proof files record `viewOf` (`RecordsLiveAt`, `RecordsLiveZKJ` at one outcome).
-* `wrD`, `recordsLiveZKJ_wrD`, `acceptsZK_wrD`: the writer that, at an outcome, takes a transcript `verify --zk`
-  accepts that records it, where one exists. It satisfies `RecordsLiveZKJ` (so `RecordCustodyZKJ` is its sample file
-  half alone, `recordCustodyZKJ_wrD`), and on every run whose decision accepts at SHA-512, `verify --zk` accepts what it
-  writes for the run's outcome (`AcceptsZK`), the event the old theorems bound.
-* `decodesOnZKJ_wrD`, `decodesOnZKJ_wrD_file`: at `wrD` the deployed `--zk` decoders are right (`DecodesOnZKJ`,
-  `LiveZk.Pr_acc_zk_le`'s `hdec`) on untyped inputs under `TagsOkZJ` where every sample sets each table up at `mPts`
-  link points (`SampleOkZKJ`), as the sample file half of `RecordCustodyZKJ` gives.
--/
+/-! `Deploy.V`'s custody checks, as `RecordsLiveZKJ`. -/
 
 @[expose] public section
 
@@ -89,8 +57,6 @@ open Lean (Json)
 local instance lawfulBEqByteArrayCustody : LawfulBEq ByteArray where
   eq_of_beq h := ByteArray.ext (beq_iff_eq.1 h)
   rfl {a} := by show (a.data == a.data) = true; exact beq_self_eq_true _
-
-/-! ## Lists -/
 
 theorem list_mapM_forall₂ {α β ε : Type} {f : α → Except ε β} :
     ∀ {l : List α} {l' : List β}, l.mapM f = .ok l' → List.Forall₂ (fun a b => f a = .ok b) l l'
@@ -187,28 +153,21 @@ theorem forall₂_getElem {α β : Type} [Inhabited β] {R : α → β → Prop}
   have := (List.forall₂_iff_get.1 h).2 i (by simpa using hi) (by simpa [hl] using hi)
   simpa using this
 
-/-! ## The record's fields -/
-
-/-- Table `t`'s `root_B` as the record's link has it. -/
 def RootField (l : Json) (t : String) (rb : ByteArray) : Prop :=
   ∃ v s, Record.fld l "root_b" = .ok v ∧ Record.str v t = .ok s ∧ unhex s = .ok rb
 
-/-- A link point as the record has it. -/
 def PointField (p : Json) (pt : Array F128) : Prop := ∃ a, p.getArr? = .ok a ∧ Record.f128s a = .ok pt
 
-/-- A round's coin count, coins and retained bytes as the record has them. -/
 def RoundFields (r : Json) (n : ℕ) (coins : Array F128) (bytes : Option ByteArray) : Prop :=
   Record.nat r "n" = .ok n ∧ (∃ cs, Record.arr r "coins" = .ok cs ∧ Record.f128s cs = .ok coins) ∧
     (Record.isNull r "msg" = true → bytes = none) ∧
     (Record.isNull r "msg" = false → ∃ s b, Record.str r "msg" = .ok s ∧ unhex s = .ok b ∧ bytes = some b)
 
-/-- A stream as `Record.decode` reads it: its name, and its rounds with each retained round's digest. -/
 def DecStream (spec : SessionSpec) (x : Json) (y : StreamRec) : Prop :=
   Record.str x "stream" = .ok y.name ∧ ∃ rs, Record.arr x "rounds" = .ok rs ∧
     List.Forall₂ (fun r rd => RoundFields r rd.n rd.coins rd.bytes ∧ ∀ b, rd.bytes = some b → rd.sha = spec.dg b)
       rs.toList y.rounds.toList
 
-/-- The rep stream `w` as `liveOf` reads it from the record's streams `recs`. -/
 def LiveStream (recs : Array Json) (w : ℕ × ℕ × String) (rds : Array Round) : Prop :=
   ∃ x, recs.find? (fun s => (s.getObjValAs? String "stream").toOption == some w.2.2) = some x ∧
     ∃ rs, Record.arr x "rounds" = .ok rs ∧
@@ -253,7 +212,6 @@ theorem roundFields_unique {r : Json} {n n' : ℕ} {c c' : Array F128} {b b' : O
       rfl
     · rw [hb0 hnull, hb0' hnull]
 
-/-- `liveOf`'s test of a stream's name is `Record.decode`'s, on a stream `decode` reads. -/
 theorem stream_pred {x : Json} {name w : String} (h : Record.str x "stream" = .ok name) :
     ((x.getObjValAs? String "stream").toOption == some w) = (name == w) := by
   unfold Record.str Record.fld at h
@@ -271,8 +229,6 @@ theorem stream_pred {x : Json} {name w : String} (h : Record.str x "stream" = .o
     rw [hs]
     rfl
 
-/-- **What `liveOf` reads**: the record's JSON, its link, its streams, each table's `root_B`, the link points and each
-rep stream's rounds, field by field. -/
 theorem liveOf_ok {spec : SessionSpec} {record : String} {lv : Live} (h : liveOf spec record = .ok lv) :
     ∃ j l recs, Flock.JsonParse.parse record = .ok j ∧ Record.fld j "link" = .ok l ∧ Record.arr j "streams" = .ok recs ∧
       List.Forall₂ (RootField l) spec.tables.toList lv.rootB.toList ∧
@@ -328,9 +284,6 @@ theorem liveOf_ok {spec : SessionSpec} {record : String} {lv : Live} (h : liveOf
               fun _ => ⟨s', u, hs', hu, rfl⟩⟩, rfl⟩
       · cases h
 
-/-- **What `Record.decode` reads**, of what `liveOf` reads: the record's JSON, its link, its streams, each table's
-`root_B`, the link points, and each stream's name and rounds, with a retained round's recorded digest that of its bytes
-(S12). -/
 theorem decode_ok {spec : SessionSpec} {text : String} {sess : RunRecord} (h : Record.decode spec text = .ok sess) :
     ∃ j l recs, Flock.JsonParse.parse text = .ok j ∧ Record.fld j "link" = .ok l ∧ Record.arr j "streams" = .ok recs ∧
       List.Forall₂ (RootField l) spec.tables.toList sess.rootB.toList ∧
@@ -390,9 +343,6 @@ theorem decode_ok {spec : SessionSpec} {text : String} {sess : RunRecord} (h : R
           exact ⟨⟨by assumption, ⟨_, by assumption, by assumption⟩, fun h' => absurd h' hnull,
             fun _ => ⟨s', b, hs', hb, rfl⟩⟩, fun b₀ hb₀ => by cases hb₀; exact (bytes_eq_of_beq hdg.1).symm⟩
 
-/-- **The decoded session's live part is `liveOf`'s**: the same `root_B` and link points, and at each rep stream the
-stream `Record.decode` finds by its name, whose rounds are `liveOf`'s with each retained round's recorded digest that
-of its bytes. -/
 theorem decode_live {spec : SessionSpec} {text : String} {sess : RunRecord} {lv : Live}
     (hd : Record.decode spec text = .ok sess) (hl : liveOf spec text = .ok lv) :
     sess.rootB = lv.rootB ∧ sess.points = lv.points ∧ lv.streams.size = spec.repStreams.size ∧
@@ -424,10 +374,6 @@ theorem decode_live {spec : SessionSpec} {text : String} {sess : RunRecord} {lv 
   obtain ⟨hn, hc, hb⟩ := roundFields_unique h1 h3
   exact ⟨hn, hc, hb, h2⟩
 
-/-! ## The custody checks -/
-
-/-- **What `checks` establishes**: the last message's statement is `x`, the record's live session reads (`liveOf`),
-and its custody passes; the record's sample is the statement's up to key order (`checks_sample`). -/
 theorem checks_ok {zk : Bool} {s : Ins} {spec : SessionSpec} {x : Claims.Msg} {link : List ByteArray × List ByteArray}
     {c₁ : Coin} {mids : List (Claims.Msg × Coin)} {f : Final} (h : checks zk s spec x link c₁ mids f = .ok ()) :
     f.stmt = x ∧ ∃ lv, liveOf spec f.record = .ok lv ∧ custody spec lv link c₁ mids = .ok () := by
@@ -438,8 +384,6 @@ theorem checks_ok {zk : Bool} {s : Ins} {spec : SessionSpec} {x : Claims.Msg} {l
   obtain ⟨_, h4, -⟩ := ebind_ok h
   exact ⟨beq_iff_eq.1 (check_ok_iff.1 h1), lv, h3, h4⟩
 
-/-- **The checks hold the record to its canonical text** (S0, last): it is what `printT` prints of what it parses to
-(`Flock.RecordText.check_ok`). -/
 theorem checks_canonical {zk : Bool} {s : Ins} {spec : SessionSpec} {x : Claims.Msg}
     {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Claims.Msg × Coin)} {f : Final}
     (h : checks zk s spec x link c₁ mids f = .ok ()) : Flock.RecordText.check f.record = .ok () := by
@@ -452,8 +396,6 @@ theorem checks_canonical {zk : Bool} {s : Ins} {spec : SessionSpec} {x : Claims.
   obtain ⟨_, -, h⟩ := ebind_ok h
   exact h
 
-/-- **The checks pin the record's sample to the statement's, whatever its key order**: `sampleEq` passes exactly on
-equivalent values (`sampleEq_iff`). -/
 theorem checks_sample {zk : Bool} {s : Ins} {spec : SessionSpec} {x : Claims.Msg}
     {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Claims.Msg × Coin)} {f : Final}
     (h : checks zk s spec x link c₁ mids f = .ok ()) :
@@ -463,7 +405,6 @@ theorem checks_sample {zk : Bool} {s : Ins} {spec : SessionSpec} {x : Claims.Msg
   obtain ⟨_, h2, -⟩ := ebind_ok h
   exact (sampleEq_iff _ _).1 (check_ok_iff.1 h2)
 
-/-- **A record's sample is rebuilt** (`Flock.norm`, as `Main.recordDraw` keeps it). -/
 theorem recordSample_norm {record : String} {d : Json} (h : Exec.recordDraw record = some d) : Flock.norm d = d := by
   unfold Exec.recordDraw at h
   split at h
@@ -474,26 +415,19 @@ theorem recordSample_norm {record : String} {d : Json} (h : Exec.recordDraw reco
     · cases h
   · cases h
 
-/-- **The record's sample is the statement's, as a value**, wherever the checks pass on a statement the verifier read
-(`insOf`): both samples are rebuilt (`recordSample_norm`, `insOf_sample_norm`), and two rebuilt values the sample check passes
-on are equal (`eq_of_rel_norm`). This is the `hdraw` of `setupOf_record` and `recordsLiveAt_of_checks`, with no premise
-on the JSON parser. -/
+/-- It is the `hdraw` of `setupOf_record` and `recordsLiveAt_of_checks`, with no premise on the JSON parser. -/
 theorem recordSample_of_checks {zk zk' : Bool} {s : Ins} {spec : SessionSpec} {x x' : Claims.Msg}
     {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Claims.Msg × Coin)} {f : Final}
     (hs : insOf zk' x' = some s) (h : checks zk s spec x link c₁ mids f = .ok ()) :
     Exec.recordDraw f.record = s.read.draw :=
   eq_of_rel_norm (checks_sample h) (fun _ hd => recordSample_norm hd) (fun _ hd => (insOf_sample_norm hs hd).1)
 
-/-- **An accepting decision's record carries the statement's sample, as a value** (`recordSample_of_checks`). -/
 theorem recordSample_of_decide {zk : Bool} {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin} {s : Ins}
     {spec : SessionSpec} {sts : Array Stmt} {link : List ByteArray × List ByteArray} {c₁ : Coin}
     {mids : List (Claims.Msg × Coin)} {f : Final} (ha : act zk x as cs = .decide s spec sts link c₁ mids f)
     (hacc : ((next zk x as cs).eval sha512).1 = .acc) : Exec.recordDraw f.record = s.read.draw :=
   recordSample_of_checks (setupOf_some (act_decide ha)).1 ((next_decide_sha512 ha).1 hacc).2
 
-/-- **What the custody check establishes**: the record's `root_B` and public words are the link message's, its link
-points the first coin's, and its rounds, flattened in `spec.repStreams` order, the round messages with their coins: each
-round's retained bytes are its message and its coins the first `n` of its coin. -/
 theorem custody_ok {spec : SessionSpec} {lv : Live} {link : List ByteArray × List ByteArray} {c₁ : Coin}
     {mids : List (Claims.Msg × Coin)} (h : custody spec lv link c₁ mids = .ok ()) :
     lv.rootB.toList = link.1 ∧ lv.publics.toList = link.2 ∧ lv.points = pointsOf spec c₁ ∧
@@ -510,9 +444,6 @@ theorem custody_ok {spec : SessionSpec} {lv : Live} {link : List ByteArray × Li
   obtain ⟨a, c⟩ := am
   simpa only [Bool.and_eq_true, beq_iff_eq] using this
 
-/-! ## No `--public-inputs` -/
-
-/-- **The checks run the verifier's scope check** (`Read.check`, `ProvedScope.check`). -/
 theorem checks_scope {zk : Bool} {s : Ins} {spec : SessionSpec} {x : Claims.Msg}
     {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Claims.Msg × Coin)} {f : Final}
     (h : checks zk s spec x link c₁ mids f = .ok ()) : s.read.check = .ok () := by
@@ -524,19 +455,15 @@ theorem checks_scope {zk : Bool} {s : Ins} {spec : SessionSpec} {x : Claims.Msg}
   obtain ⟨⟨⟩, h5, -⟩ := ebind_ok h
   exact h5
 
-/-- **The scope check refuses `--public-inputs`** (`statementRules`' last rule). -/
 theorem publicInputs_none_of_check {r : Readable.Read} (h : r.check = .ok ()) : r.publicInputs = none := by
   have hR := ((Readable.check_ok_iff _ _ _ _ _ _ _ _).1 h).1
   exact Option.not_isSome_iff_eq_none.1 (by simp [hR.2.2.2.2.2])
 
-/-- **A statement `Deploy.V`'s checks pass carries no `--public-inputs`**: the checks run the scope check. -/
 theorem publicInputs_none_of_checks {zk : Bool} {s : Ins} {spec : SessionSpec} {x : Claims.Msg}
     {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Claims.Msg × Coin)} {f : Final}
     (h : checks zk s spec x link c₁ mids f = .ok ()) : s.read.publicInputs = none :=
   publicInputs_none_of_check (checks_scope h)
 
-/-- **`InScope` excludes `--public-inputs`** at the verifier's reading of the statement: where the claims' parser reads
-`x` as `st` and `st` is in scope, the inputs the verifier reads of `x` (at a decision, `setupOf_some`) carry none. -/
 theorem publicInputs_none_of_inScope {zk : Bool} {rel : Readable.Parsed → Readable.Relation} {x : Claims.Msg}
     {st : Claims.Flock.Stmt} {s : Ins} (hp : FlockDeploy.parse zk rel x = some st)
     (hin : Claims.Flock.InScope zk st) (hs : insOf zk x = some s) : s.read.publicInputs = none := by
@@ -550,7 +477,6 @@ theorem publicInputs_none_of_inScope {zk : Bool} {rel : Readable.Parsed → Read
   rw [← hr', ← Readable.toRead_of_parse hrp]
   exact Option.not_isSome_iff_eq_none.1 (by simp [hpi])
 
-/-- The session's rep streams: table `i`'s rep `r` is stream `2i + r`, named `<table>/rep<r>`. -/
 theorem repStreams_toList (spec : SessionSpec) :
     spec.repStreams.toList = (List.range spec.tables.size).flatMap fun i =>
       [(i, 0, s!"{spec.tables[i]!}/rep{0}"), (i, 1, s!"{spec.tables[i]!}/rep{1}")] := by
@@ -584,9 +510,6 @@ theorem repStreams_getElem (spec : SessionSpec) {i r : ℕ} (hi : i < spec.table
   rw [← repStreams_toList, Array.getElem?_toList, Array.getElem?_eq_getElem hlt] at e
   interval_cases r <;> simpa using e
 
-/-! ## The setup -/
-
-/-- Under `--zk` the setup passes every table's `Zk.shapeOk`. -/
 theorem setup_shapeOk {s : Ins} {spec : SessionSpec} {sts : Array Stmt} (h : s.setup = .ok (spec, sts))
     (hz : s.read.zk = true) : sts.forM Zk.shapeOk = .ok () := by
   unfold Ins.setup at h
@@ -598,8 +521,6 @@ theorem setup_shapeOk {s : Ins} {spec : SessionSpec} {sts : Array Stmt} (h : s.s
     subst h2
     assumption
 
-/-- **`verify --zk`'s setup of a record whose sample is the statement's** is `Deploy.V`'s, where the statement carries no
-`--public-inputs` (`Exec.setupOf` reads none). -/
 theorem setupOf_zkInputs {r : Readable.Read} {spec : SessionSpec} {sts : Array Stmt} {record : String}
     (hs : r.setup = .ok (spec, sts)) (hzk : r.zk = true) (hpi : r.publicInputs = none)
     (hdraw : Exec.recordDraw record = r.draw) :
@@ -608,11 +529,8 @@ theorem setupOf_zkInputs {r : Readable.Read} {spec : SessionSpec} {sts : Array S
   simp only [Exec.setupOf, Readable.Read.setup, Readable.Read.tags, Readable.Read.coins, ZkExec.zkInputs, hzk, hpi,
     hdraw, ite_true]
 
-/-- **`Deploy.V`'s setup is the shipped verifier's**: `verifyCmd` sets a record up at the record's own sample
-(`Exec.setupOf`, at `zkInputs` under `--zk`), and where the checks pass and that sample is the statement's as a value
-(`hdraw`), that is the session and tables `Deploy.V` set up at the statement's. The checks give the sample only up to key
-order (`checks_sample`), and the setup keeps the sample itself: `Stmt.setupTables` makes it the session's `unitSample`, and
-`HmRow.drawn` writes it into the public header (`setObjVal!`), whose `canon` the public digest hashes. -/
+/-- It needs the sample as a value (`hdraw`), not up to key order: the setup writes the sample into the public
+header, whose `canon` the public digest hashes. -/
 theorem setupOf_record {zk : Bool} {s : Ins} {spec : SessionSpec} {sts : Array Stmt} {x : Claims.Msg}
     {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Claims.Msg × Coin)} {f : Final}
     (hs : s.setup = .ok (spec, sts)) (hc : checks zk s spec x link c₁ mids f = .ok ())
@@ -627,8 +545,6 @@ theorem setupOf_record {zk : Bool} {s : Ins} {spec : SessionSpec} {sts : Array S
   · simp only [↓reduceIte]
     exact setupOf_zkInputs hr hz hpi hdraw
 
-/-- **`verify --zk` refuses a session without proof files**: it expects one per rep stream, two per table, and at
-least one table. -/
 theorem verify_nil (spec : SessionSpec) (tabs : Array Setup) (record : String) :
     Zk.verify spec tabs record #[] ≠ .ok () := by
   intro h
@@ -655,20 +571,15 @@ theorem verify_nil (spec : SessionSpec) (tabs : Array Setup) (record : String) :
   obtain ⟨_, h', _⟩ := ebind_ok h
   cases h'
 
-/-! ## The live outcome a decided run records -/
-
-/-- A round with its retained bytes' digest (`spec.dg`, the record's `msg_<dk>`). -/
 def withSha (spec : SessionSpec) (rd : Round) : Round := { rd with sha := spec.dg (rd.bytes.getD ByteArray.empty) }
 
-/-- The record's live session (`liveOf`), empty where the record does not read. -/
 def liveD (spec : SessionSpec) (record : String) : Live :=
   match liveOf spec record with
   | .ok lv => lv
   | .error _ => ⟨#[], #[], #[], #[]⟩
 
-/-- **The live outcome of a decision of `Deploy.V`**, at `J` tables and `mPts` link coordinates: the link message's
-`root_B`, the first coin's two points, each rep stream's rounds as the last message's record lists them, with their
-bytes' digests (table `j`'s rep `r` is stream `2j + r`), and the last message's proof files. -/
+/-- Each round's coin count and each stream's share of the rounds are the record's: a round message carries no
+count. -/
 def viewOf (J mPts : ℕ) (spec : SessionSpec) (link : List ByteArray × List ByteArray) (c₁ : Coin) (f : Final) :
     Tables.LiveOutJ J mPts where
   rootB := link.1.toArray
@@ -676,9 +587,6 @@ def viewOf (J mPts : ℕ) (spec : SessionSpec) (link : List ByteArray × List By
   reps j r := ((liveD spec f.record).streams[2 * j.val + r.val]!).toList.map (withSha spec)
   proofs := f.proofs
 
-/-- **The outcome's rounds are the round messages with their coins**, where the custody checks pass: its streams, one per
-rep stream, flatten in `spec.repStreams` order to rounds whose retained bytes are the round messages and whose coins
-are the first `n` of each message's coin. -/
 theorem viewOf_rounds {zk : Bool} {s : Ins} {spec : SessionSpec} {x : Claims.Msg}
     {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Claims.Msg × Coin)} {f : Final}
     (hc : checks zk s spec x link c₁ mids f = .ok ()) :
@@ -691,11 +599,6 @@ theorem viewOf_rounds {zk : Bool} {s : Ins} {spec : SessionSpec} {x : Claims.Msg
   rw [hD]
   exact ⟨by simpa using hstr.length_eq.symm, (custody_ok hcus).2.2.2⟩
 
-/-! ## The record is the live session's -/
-
-/-- **`RecordsLiveZKJ` at one outcome**: where `verify --zk` accepts the transcript `t`, its record carries the sample
-`d`, its proof files are the outcome `o`'s, and the session it decodes to has `o`'s link points and, at each of `o`'s
-tables, `o`'s `root_B` and rep streams' rounds. -/
 def RecordsLiveAt (I : Exec.Inputs) (d : Json) {J mPts : ℕ} (o : Tables.LiveOutJ J mPts) (t : Exec.Transcript) :
     Prop :=
   ZkExec.AcceptsZK I t →
@@ -712,10 +615,6 @@ theorem recordsLiveZKJ_iff {n mPts : ℕ} {Reg : Type} (I : Exec.Inputs) (dj : F
     (wr : (S : Finset (Fin n)) → (R : Reg) → Tables.LiveOutJ (Jf S R) mPts → Exec.Transcript) :
     Composed.RecordsLiveZKJ I dj Jf wr ↔ ∀ S R o, RecordsLiveAt I (dj S) o (wr S R o) := Iff.rfl
 
-/-- **Custody gives `RecordsLiveAt`**: where `Deploy.V --zk`'s checks pass on a statement that sets up at its sample `d`
-(so with no `--public-inputs`, `publicInputs_none_of_checks`), and the record's sample is the statement's (`hdraw`), the
-last message's record and proof files are a record of the run's live outcome (`viewOf`), at any `J` of the session's
-tables. -/
 theorem recordsLiveAt_of_checks {zk : Bool} {s : Ins} {spec : SessionSpec} {sts : Array Stmt} {x : Claims.Msg}
     {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Claims.Msg × Coin)} {f : Final}
     {J mPts : ℕ} {d : Json} (hs : s.setup = .ok (spec, sts)) (hzk : s.read.zk = true)
@@ -750,13 +649,9 @@ theorem recordsLiveAt_of_checks {zk : Bool} {s : Ins} {spec : SessionSpec} {sts 
     subst hn hcn hb hbytes
     simp [withSha, hsha _ rfl]
 
-/-! ## The writer that reads the record out of the last message -/
-
 open Classical in
-/-- **The record writer of `Deploy.V`'s runs**: at the live outcome `o` of sample `S`, a transcript `verify --zk`
-accepts that records `o` (`RecordsLiveAt`), where one exists, else a session without proof files, which `verify --zk`
-refuses (`verify_nil`). A decided run whose last message's record and proof files `verify --zk` accepts is such a
-transcript for its outcome (`acceptsZK_wrD`). -/
+/-- Where no accepted transcript records the outcome, it writes a session without proof files, which `verify
+--zk` refuses (`verify_nil`). -/
 noncomputable def wrD {n mPts : ℕ} {Reg : Type} (I : Exec.Inputs) (dj : Finset (Fin n) → Json)
     (Jf : Finset (Fin n) → Reg → ℕ) (S : Finset (Fin n)) (R : Reg) (o : Tables.LiveOutJ (Jf S R) mPts) :
     Exec.Transcript :=
@@ -766,8 +661,6 @@ theorem not_acceptsZK_nil (I : Exec.Inputs) (record : String) : ¬ ZkExec.Accept
   rintro ⟨spec, sts, -, -, h⟩
   exact verify_nil _ _ _ h
 
-/-- **`wrD` records the live session** (`RecordsLiveZKJ`, the record half of the old `live-verifier` assumption
-`RecordCustodyZKJ`). -/
 theorem recordsLiveZKJ_wrD {n mPts : ℕ} {Reg : Type} (I : Exec.Inputs) (dj : Finset (Fin n) → Json)
     (Jf : Finset (Fin n) → Reg → ℕ) : Composed.RecordsLiveZKJ (mPts := mPts) I dj Jf (wrD I dj Jf) := by
   refine (recordsLiveZKJ_iff I dj Jf _).2 fun S R o => ?_
@@ -777,16 +670,11 @@ theorem recordsLiveZKJ_wrD {n mPts : ℕ} {Reg : Type} (I : Exec.Inputs) (dj : F
     exact (Classical.choose_spec h).2
   · exact fun h => absurd h (not_acceptsZK_nil _ _)
 
-/-- **`RecordCustodyZKJ` at `wrD`** is its sample file half (`SampleFileZK`) alone. -/
 theorem recordCustodyZKJ_wrD {n mPts : ℕ} {Reg : Type} (I : Exec.Inputs) (dj : Finset (Fin n) → Json)
     (Jf : Finset (Fin n) → Reg → ℕ) (kd : ℕ) (hdf : ZkLink.SampleFileZK dj (.subset kd) n) :
     Assumptions.Zk.RecordCustodyZKJ (mPts := mPts) I dj Jf (wrD I dj Jf) kd :=
   ⟨recordsLiveZKJ_wrD I dj Jf, hdf⟩
 
-/-- **An accepting decision of `Deploy.V --zk` at SHA-512 is an accepting `verify --zk` on a record of its live
-outcome**: on a statement of sample `d`, the last message's record and proof files are accepted by `verify --zk`
-(`AcceptsZK`) at the statement's inputs, and record the run's live outcome `viewOf` (`RecordsLiveAt`): the record's
-sample is the statement's as a value (`recordSample_of_decide`). -/
 theorem accepts_of_decide {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin} {s : Ins} {spec : SessionSpec}
     {sts : Array Stmt} {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Claims.Msg × Coin)}
     {f : Final} {J mPts : ℕ} {d : Json} (ha : act true x as cs = .decide s spec sts link c₁ mids f)
@@ -801,9 +689,6 @@ theorem accepts_of_decide {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coi
   exact ⟨⟨spec, sts, setupOf_zkInputs (Ins.setup_read hs) hzk (publicInputs_none_of_checks hc) hdraw,
     setup_shapeOk hs hzk, hv⟩, recordsLiveAt_of_checks hs hzk hdraw hd hJ hc⟩
 
-/-- **The old event holds on `Deploy.V --zk`'s accepting runs**: where its decision accepts at SHA-512, on a statement
-of sample `dj S`, `verify --zk` accepts what `wrD` writes for the run's live outcome at `Jf S R ≤` the session's
-tables, the event the old theorems bound under `RecordsLiveZKJ`. -/
 theorem acceptsZK_wrD {n mPts : ℕ} {Reg : Type} (dj : Finset (Fin n) → Json) (Jf : Finset (Fin n) → Reg → ℕ)
     {S : Finset (Fin n)} {R : Reg} {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin} {s : Ins}
     {spec : SessionSpec} {sts : Array Stmt} {link : List ByteArray × List ByteArray} {c₁ : Coin}
@@ -818,11 +703,6 @@ theorem acceptsZK_wrD {n mPts : ℕ} {Reg : Type} (dj : Finset (Fin n) → Json)
   rw [dite_eq_left_of_eq_true (eq_true hex)]
   exact (Classical.choose_spec hex).1
 
-/-! ## The deployed decoders at `wrD` -/
-
-/-- **The deployed `--zk` decoders are right at `wrD`** (`DecodesOnZKJ`: at each sample and registration, `LiveZk`'s
-`hdec`): `wrD` records the live session (`recordsLiveZKJ_wrD`), so the old discharge (`runsZCJ_live`) needs only the
-inputs' tags (`TagsOkZJ`, untyped) and every sample setting each table up at `mPts` link points (`SampleOkZKJ`). -/
 theorem decodesOnZKJ_wrD {n mPts : ℕ} {Reg : Type} (I : Exec.Inputs) (ht : I.tags.typed = false)
     (dj : Finset (Fin n) → Json) {S₀ : Finset (Fin n)} {d₀ : Json}
     (y₀ : Composed.SampleSetupZJ (Composed.inputsJ I 0) mPts S₀ d₀) (L : Audit.SamplingDesign n) (hT : Composed.TagsOkZJ I)
@@ -834,9 +714,6 @@ theorem decodesOnZKJ_wrD {n mPts : ℕ} {Reg : Type} (I : Exec.Inputs) (ht : I.t
   Composed.decodesOnZKJ_of_runsOnZCJ execArith ZkExec.hs512 _ I _ _ _ _ _ _
     (Composed.runsZCJ_live I ht dj y₀ _ L hT (recordsLiveZKJ_wrD I dj _) hDraw)
 
-/-- **`decodesOnZKJ_wrD` from the sample file half**: where the circuit parses and the sample file is the challenger's live-coin part's
-subset sample of `kd` units (`SampleFileZK`, the half of `RecordCustodyZKJ` that `wrD` leaves, `recordCustodyZKJ_wrD`),
-every sample sets each table up at `mPtsOf c.g (kd / nTab I)` link points (`sampleOkZKJ_of_file`). -/
 theorem decodesOnZKJ_wrD_file {n : ℕ} {Reg : Type} (I : Exec.Inputs) (ht : I.tags.typed = false) {c : _root_.Flock.Circuit}
     (hc : HmRow.parse (ZkExec.zkTags I) I.circuitFile I.tables = .ok c) (kd : ℕ) (hdiv : kd % Composed.nTab I = 0)
     (dj : Finset (Fin n) → Json) (hdf : ZkLink.SampleFileZK dj (.subset kd) n) {S₀ : Finset (Fin n)} {d₀ : Json}

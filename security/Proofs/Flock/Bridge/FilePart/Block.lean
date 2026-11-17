@@ -3,22 +3,13 @@ module
 public import Proofs.Flock.Bridge.FilePart.Uniform
 public import Proofs.Flock.Bridge.Lowers
 
-/-!
-# The proof blocks of `k` input gates and `n` units of `m` rows
-
-On a circuit whose first `k` gates are inputs and whose gate `k + m·u + i` is unit `u`'s row, unit `u`'s lowered gates
-are `k + 3m·u, …, k + 3m·(u + 1) − 1` (`unitGates_of`). On `k = 2 + n·B` input gates, where unit `v` reads input gate
-`2 + v·B + b` exactly when `b` is a source some row reads, the inputs unit `u` owns sit at `2 + u·B + b`, in order
-(`insOf_of`).
--/
+/-! The proof blocks of a circuit of `k` input gates and `n` units of `m` rows. -/
 
 @[expose] public section
 
 namespace Flock.Bridge.FilePart
 
 open FlockSoundness FlockSoundness.Audit
-
-/-! ## A partition of `k` input gates and `n` units of `m` rows -/
 
 section abstract
 
@@ -47,7 +38,6 @@ theorem posOf_of (hsize : ∀ g : Fin C.N, gateSize (C.op g) = if g.val < k then
   rw [posOf_eq, off_of hsize g.val g.isLt.le, hsize, if_pos hg]
   omega
 
-/-- **Unit `u`'s lowered gates** are positions `k + 3m·u` to `k + 3m·(u + 1) − 1`. -/
 theorem mem_unitGates_of (hN : C.N = k + n * m)
     (hsize : ∀ g : Fin C.N, gateSize (C.op g) = if g.val < k then 1 else 3)
     (hunit : ∀ g : Fin C.N, (P.unit g).map Fin.val = if g.val < k then none else some ((g.val - k) / m))
@@ -116,7 +106,6 @@ theorem unitGates_pairwise (u : Fin n) : (unitGates P u).Pairwise (· < ·) := b
       · simp at hy
     · simp at hx
 
-/-- **Unit `u`'s lowered gates, in order.** -/
 theorem unitGates_of (hN : C.N = k + n * m)
     (hsize : ∀ g : Fin C.N, gateSize (C.op g) = if g.val < k then 1 else 3)
     (hunit : ∀ g : Fin C.N, (P.unit g).map Fin.val = if g.val < k then none else some ((g.val - k) / m))
@@ -130,15 +119,11 @@ theorem unitGates_of (hN : C.N = k + n * m)
   · rintro ⟨a, ha, rfl⟩
     omega
 
-/-- On a list without repeats, a predicate true only at `u` is found at `u`. -/
 theorem find?_finRange_unique {p : Fin n → Bool} {u : Fin n} (hu : p u = true) (h : ∀ v, p v = true → v = u) :
     (List.finRange n).find? p = some u := by
   obtain ⟨x, hx⟩ := Option.isSome_iff_exists.1 (List.find?_isSome.2 ⟨u, List.mem_finRange u, hu⟩)
   rw [hx, h x (List.find?_some hx)]
 
-/-- **Unit `u`'s owned inputs' positions, in order**: on `k = 2 + n·B` input gates, the constant, the zero and `B`
-sources a unit, where unit `u'` reads input gate `2 + v·B + b` exactly when `u' = v` and `b` is a source some row reads
-(`Rd`), they are `2 + u·B + b` for the `b ∈ S`, any ascending list of those sources. -/
 theorem insOf_of (κ : Fin C.N → Option Bool) {B : ℕ} (hk : k = 2 + n * B) (hkN : k ≤ C.N)
     (hsize : ∀ g : Fin C.N, gateSize (C.op g) = if g.val < k then 1 else 3)
     (hin : ∀ g : Fin C.N, (C.op g).isInput = true ↔ g.val < k)
