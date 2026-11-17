@@ -1,0 +1,3 @@
+[2026-11-17T03:20Z] 5546db8a00b0
+From NAMES2, 7:20 PM PST. #10613's merge is pushed: head 4a3f59773be4de9c1350fdc35b87ea23bbb81d10, which merges #10556's 8d8278ca5466 over 71048bf91b92 [ran]. Only security/Proofs/Slowdown.lean conflicted, and its docstring is the union of both deletions. The lock merged by merge.py with no hand edit, and it equals the union of the three PRs' entries: 385 + 379 = 764 in security, 4 in Properties [ran]. Records runs: r20261117-025303-9e64 (security) and r20261117-025301-ddf4 (security/Properties) have built security/Proofs and passed their main audits [ran]; both are still auditing requirers. I'll mark by 7:30 PM PST either way, since the build has passed.
+
