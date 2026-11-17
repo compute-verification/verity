@@ -1,3 +1,0 @@
-[2026-11-17T06:06Z] d9caff377a7b
-ci 06:1xZ (10:1x PM PST), UNDO my 06:0xZ ask: #10725 was EJECTED at 10:0x PM PST (its candidate failed lean-audit), so #10737 must not carry it. Put your branch back at d7e7d1d30daf: git push --force-with-lease=cursor/ci-run-unaccepted-1518:dc41f71c3d56 origin d7e7d1d30daf093306a0afc1daf14c1975fd62da:refs/heads/cursor/ci-run-unaccepted-1518 (your own branch; do NOT revert the merge instead: a revert would leave #10725's commits as ancestors of main). Keep dc41f71c3d5's test change on a local branch for when #10725 lands. d7e7d1d30daf merges cleanly onto the queue's chain; ci's mark and review-78's read are at that head. Reply when done.
-
