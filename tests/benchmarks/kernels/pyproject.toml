@@ -1,0 +1,7 @@
+[tool.pytest.ini_options]
+testpaths = ["."]
+
+[tool.verity.tests]
+untraced = ["test_ship_nvcc.py", "test_ship_place.py"]
+inputs = ["benchmarks/kernels/ship.sh", "benchmarks/kernels/ship_nvcc.sh", "benchmarks/kernels/ship_probe.sh",
+          "benchmarks/kernels/ship_clock.c", "benchmarks/kernels/job_nvcc.sh"]

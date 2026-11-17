@@ -1,5 +1,5 @@
-"""A ship build's cubin doesn't follow where its sources sit, with CUDA's own nvcc and no GPU: this directory's kernel
-(s8_wgmma.cu) compiled as build.sh compiles it (ship.sh's frame, its cubin flags, ship_nvcc.sh) from two copies of the tree
+"""A ship build's cubin doesn't follow where its sources sit, with CUDA's own nvcc and no GPU: a kernel of internal linkage
+compiled as build.sh compiles it (ship.sh's frame, its cubin flags, ship_nvcc.sh) from two copies of the tree
 placed differently is one cubin, byte for byte. In the second copy the tree's root has another length, the kernel's
 directory another name and depth, and its header sits in a directory of its own, with the #include respelled as a move
 respells it. The kernel alone could pass by following no path at all, so the frame's own probe passes here too
@@ -21,8 +21,7 @@ from pathlib import Path
 
 import pytest
 
-KERNEL = (Path(__file__).resolve().parents[4] / "benchmarks" / "kernels" / "s8_linear")
-FRAME = KERNEL.parent
+FRAME = Path(__file__).resolve().parents[3] / "benchmarks" / "kernels"
 #: the frame's files, which keep their place under a copy's root (ship.sh finds the root from its own)
 FRAME_FILES = ("ship.sh", "ship_nvcc.sh", "ship_probe.sh", "ship_clock.c")
 TOOLKITS = ("/usr/local/cuda-13.0", "/usr/local/cuda")
@@ -44,7 +43,7 @@ CUDA=$5
 ship_cuda
 ship_cubin_flags sm_90a
 ship_stage "$2"
-"$SHIP_NVCC" "${FLAGS[@]}" -o "$4" "$SRC/$2/$3"
+"${6:-$SHIP_NVCC}" "${FLAGS[@]}" -o "$4" "$SRC/$2/$3"
 """
 
 #: a build as far as its toolkit: ship.sh, then the toolkit. ship_cuda runs the frame's probe
@@ -55,8 +54,20 @@ ship_cuda
 """
 
 #: where a copy puts the tree's root, the kernel's directory and the header beside the kernel
-AS_IS = ("as_is", "benchmarks/kernels/s8_linear", "")
+AS_IS = ("as_is", "benchmarks/kernels/subject", "")
 MOVED = ("moved_to_a_root_of_another_length", "kernels/exact_linear_at_another_place/and_depth/s8", "headers/of_its_own/")
+
+#: nvcc names a kernel of internal linkage by a hash of its source's path, so without the frame its cubin follows the path
+SUBJECT_CU = '''#include "subject.cuh"
+namespace {
+__global__ void subject(const unsigned *in, unsigned *out, int n) {
+  int i = blockIdx.x * blockDim.x + threadIdx.x;
+  if (i < n) out[i] = mix(in[i]);
+}
+}  // namespace
+void launch(const unsigned *in, unsigned *out, int n) { subject<<<(n + 31) / 32, 32>>>(in, out, n); }
+'''
+SUBJECT_CUH = "__device__ inline unsigned mix(unsigned x) { return x * 2654435761u + 1u; }\n"
 
 #: a source whose header names the file it is in
 USES_FILE_CU = '#include "where.cuh"\nconst char *at() { return where(); }\n'
@@ -95,24 +106,27 @@ def copy(tmp: Path, where: tuple[str, str, str], source: str, text: str, header:
     return root, own
 
 
-def build(cuda: str, root: Path, own: str, source: str) -> tuple[subprocess.CompletedProcess, Path]:
+def build(cuda: str, root: Path, own: str, source: str, nvcc: str = "") -> tuple[subprocess.CompletedProcess, Path]:
     out = root / "ship.cubin"
-    r = subprocess.run(["bash", str(root / "build.sh"), str(root), own, source, str(out), cuda], capture_output=True,
+    r = subprocess.run(["bash", str(root / "build.sh"), str(root), own, source, str(out), cuda, nvcc], capture_output=True,
                        text=True, check=False)
     return r, out
 
 
 @pytest.mark.slow
 def test_the_kernel_is_one_cubin_from_two_places_of_the_tree(cuda: str, tmp_path: Path) -> None:
-    out = []
+    out, plain = [], []
     for where in (AS_IS, MOVED):
-        root, own = copy(tmp_path, where, "s8_wgmma.cu", (KERNEL / "s8_wgmma.cu").read_text(), "s8_acc.h",
-                         (KERNEL / "s8_acc.h").read_text())
-        r, cubin = build(cuda, root, own, "s8_wgmma.cu")
+        root, own = copy(tmp_path, where, "subject.cu", SUBJECT_CU, "subject.cuh", SUBJECT_CUH)
+        r, cubin = build(cuda, root, own, "subject.cu")
         assert r.returncode == 0, r.stderr[-4000:]
         out.append(cubin.read_bytes())
         assert out[-1][:4] == b"\x7fELF"
+        r, cubin = build(cuda, root, own, "subject.cu", f"{cuda}/bin/nvcc")
+        assert r.returncode == 0, r.stderr[-4000:]
+        plain.append(cubin.read_bytes())
     assert out[0] == out[1]
+    assert plain[0] != plain[1]
 
 
 def test_the_frames_probe_passes_with_the_toolkit(cuda: str, tmp_path: Path) -> None:
@@ -127,10 +141,9 @@ def test_the_frames_probe_passes_with_the_toolkit(cuda: str, tmp_path: Path) -> 
 def test_a_frame_whose_wrapper_is_nvcc_itself_builds_nothing(cuda: str, tmp_path: Path) -> None:
     """The probe's refusal with the toolkit: in a copy whose ship_nvcc.sh hands nvcc its arguments as they came, a build
     stops at its toolkit, before it compiles."""
-    root, own = copy(tmp_path, AS_IS, "s8_wgmma.cu", (KERNEL / "s8_wgmma.cu").read_text(), "s8_acc.h",
-                     (KERNEL / "s8_acc.h").read_text())
+    root, own = copy(tmp_path, AS_IS, "subject.cu", SUBJECT_CU, "subject.cuh", SUBJECT_CUH)
     (root / "benchmarks/kernels/ship_nvcc.sh").write_text('#!/usr/bin/env bash\nexec "$CUDA/bin/nvcc" "$@"\n')
-    r, cubin = build(cuda, root, own, "s8_wgmma.cu")
+    r, cubin = build(cuda, root, own, "subject.cu")
     assert r.returncode != 0 and not cubin.exists()
     assert "the second comparison failed: ship_nvcc.sh gives the probe two cubins at two places" in r.stderr, r.stderr[-2000:]
 

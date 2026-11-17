@@ -52,8 +52,6 @@ ALLOWED = {
                      "benchmarks/kernels/exactlin/ksweep.py"),
                     "kernels: vLLM's int8 GEMMs (_custom_ops.cutlass_scaled_mm, triton_scaled_mm) as the exact linear's "
                     "kernel-level baseline and gate"),
-    **dict.fromkeys(("benchmarks/kernels/s8_linear/bench.py", "benchmarks/kernels/s8_linear/run.py"),
-                    "kernels: vLLM's int8 cutlass_scaled_mm as the plain GEMM the exact W8A8 linear is timed against"),
     **dict.fromkeys(("benchmarks/pouw/harness/torch_baselines.py", "benchmarks/pouw/pearl_c_sm90/glm53_timing.py",
                      "benchmarks/pouw/pearl_c_sm90/grouped_check.py"),
                     "compute-accounting: the FP8 GEMMs vLLM serves with (cutlass_scaled_mm, DeepGEMM, fp8_utils) as "
