@@ -62,7 +62,7 @@ Open premises (`open`):
   `link_frame`, `network_attester`, `release`);
   `verity/protocols/compose/verifier/live_challenger`; `verity run`'s served table (`tools/verity/cli`); the tests of
   `../../compute/pouw/verifier` and `tools/verity`; and in `benchmarks/`, `network_traces`, `network_e2e`, `prove_path`,
-  `one_stage`, `pouw`, `remote_session`, `mempool` and `compile_cost`. In this directory, the network check's tests
+  `one_stage`, `pouw`, `poub_session`, `mempool` and `compile_cost`. In this directory, the network check's tests
   (`network/tests`) and vector script (`lean/scripts`) import it too. `../../../proofs/spot`, `../../../proofs/flock`
   and `../../../proofs/recursion` import none.
 - **Lean here**: `lean/` is the Lake package `network_check`, whose library `NetworkCheck` the
@@ -92,7 +92,7 @@ Open premises (`open`):
   no egress cell to the id egress form (the io tie's, `IoTieCell` on every cell) and no response to a `max_tokens_cap`
   (`network-rows` refuses such a schedule).
 - **Documents others read**: the answer of `network-period check`, `verity/certifier/v0`. `benchmarks/network_traces`
-  runs the check and writes it as network certification's piece (`certifier_piece.py`), which `benchmarks/one_stage` reads. It also writes the
+  runs the check and writes it as network attestation's piece (`certifier_piece.py`), which `benchmarks/one_stage` reads. It also writes the
   check's parameters, whose `"keys"` list the link's network attester's entries, each a key, its session and the
   start of its stretch of execution phases (`../prover/scan_period.py`: the deployment's one key and session, from execution
   phase 0), and its evidence, whose `"starts"` show each listed entry's session's signed start (the deployment's
@@ -114,7 +114,7 @@ Open premises (`open`):
 
 ## What this package holds
 
-A spec-level reference for network certification's timing channel:
+A spec-level reference for network attestation's timing channel:
 - the constant-rate, left-packed network attester;
 - the Program's logical schedule, with its clock-sync advice (δ, ρ);
 - the exact audit with record-and-reject, on raw records, records committed by hash (padding elided), or network

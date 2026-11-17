@@ -1,0 +1,15 @@
+# `verity bench attester_load` (`run.py`). Not a package: the stub arm end to end on a CPU, its guard and its result
+# (`uv run tools/check/suites.py benchmarks/attester_load`).
+[tool.pytest.ini_options]
+testpaths = ["."]
+
+[tool.verity.tests]
+# The runner starts the network attester, its client, its check and its stub endpoint as processes of `verity`'s own
+# commands, reads the scan class's schedule from `scan_zk.py`, and writes its result through the harness kit's
+# writer, which reads its settings through verity_config.
+inputs = ["benchmarks/attester_load", "verity",
+    "benchmarks/harness/verity_bench/__init__.py",
+    "benchmarks/harness/verity_bench/kit.py",
+    "benchmarks/harness/verity_bench/kit_report.py",
+    "benchmarks/harness/verity_bench/settings.py",
+    "tools/config"]

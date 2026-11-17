@@ -37,18 +37,16 @@ next layer's fused all-reduce and RMSNorm reduce the sum).
 
 from __future__ import annotations
 
-__models__ = ("zai-org/GLM-5.3",)
-
 import dataclasses
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
 from verity.circuits.defs import bind
+
 from verity_vllm.definitions.registry import act as _ACT
 from verity_vllm.definitions.registry import cublas_bf16, ll_bf16
 from verity_vllm.definitions.registry import moe as _MOE
-
 from verity_vllm.observe.events import ViewDesc
 from verity_vllm.observe.fold.patterns import (
     GeometryError,

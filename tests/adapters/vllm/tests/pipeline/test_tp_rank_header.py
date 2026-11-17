@@ -9,7 +9,7 @@ import pytest
 
 from tests.pipeline import test_tp_target as TT
 from verity_vllm.engine import engine_profile as prof
-from verity_vllm.observe import capture
+from verity_vllm.observe import capture, capture_types
 from verity_vllm.observe.events import RunHeader
 
 METHOD = "sha256 of the manifest"
@@ -31,7 +31,7 @@ def _handed_on(monkeypatch, tmp_path, profile) -> tuple[RunHeader, RunHeader]:
         seen.append(header)
         raise _Installed
 
-    monkeypatch.setattr(capture, "make_header", lambda engine, workload, **kw: made)
+    monkeypatch.setattr(capture_types, "make_header", lambda engine, workload, **kw: made)
     monkeypatch.setattr(capture, "Capture", observer)
     _, w = TT._extension(monkeypatch, object())
     with pytest.raises(_Installed):

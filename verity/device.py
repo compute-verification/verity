@@ -5,7 +5,7 @@ links and log, `Site.ofLog`, and `Registration.Entry.refusal`, check for check a
 
 The Site is a tree of locations, each with its owner: the site at the root, stating the site's unit of time
 (`Site.time_unit`), its hosts, a host's devices, memory leaves by tier and bytes under a device or a host, and at the
-site the auditor's own: its devices, the network attesters and memory challengers, and its hosts, each a machine a
+site the auditor's own: its devices, the network attesters and memory attesters, and its hosts, each a machine a
 device of its may run in and one that holds none of the prover's hardware (`PARENTS`), each with its key, the key's
 scheme (`SCHEMES`). An auditor's device states its time base and how far its clock may drift, which is the drift of
 every device of the auditor's in it (`Site.drift`). A host states its on-chip state and the rate its leaves of a tier
@@ -25,7 +25,7 @@ reads the same and its GPU card's, states those figures on the node's locations,
 interface or the storage path, as a boundary link that no certifier splits. `clock_drift` reads an auditor's device's
 time base card (`kind = "timebase"`): by its `drift.max` mark, the host's premise (`ClockPremise`) or the figure the
 host states and `Auditor.drift` holds it to, never both. `auditor_host` is the host's location as that card gives it,
-which `node_entry` registers a certifier in (`certifier_host`); `Auditor.of_files`' `timebases` hold the same, and a
+which `node_entry` registers a network attester in (`certifier_host`); `Auditor.of_files`' `timebases` hold the same, and a
 premise gives the host's `Account.Premised` (`ClockPremise.premised`).
 
 The log (`Registration`) is append-only: each site entry adds sheets, locations and links and names the head of the log
@@ -47,14 +47,14 @@ end (`incomplete`):
 | `owner` | each new certifier, challenger or auditor's device is the auditor's own, with its key and its key's scheme, one of `SCHEMES`; every other new location is the prover's and states no scheme; each new auditor's device states its time base, the auditor's for it, and the auditor's figure for its clock's drift, below 1 where there is one, and no other new location states a time base or a drift |
 | `inventory` | the log, at its end: under each host, every memory leaf the auditor has figures for, at least its count of devices of each SKU it lists, and each way out it lists, as a link under that id with an end at the host at its rate |
 | `uncertified` | onsite: every boundary link is certified or says why no certifier splits it |
-| `challenger-reach` | onsite: the host of every memory leaf is at an end of a memory challenger's link |
+| `challenger-reach` | onsite: the host of every memory leaf is at an end of a memory attester's link |
 
 The views a protocol reads (`Site.sheet`, `device`, `node`, `tiers`, `held`, `read_rate`, `over`, `time_unit`,
 `clock`, `drift`, `mediated`, `boundary`, `units`, `registered`) are functions of the site alone, but `device`, which reads the
 auditor's sheet too. Digests are SHA-512 over canonical JSON
 (`verity.channel.canonical`) under the registration log's tags; a rational is the string `n` or `n/d` in lowest terms.
 
-**The card files**: one TOML file per SKU (`<sku>.toml` in `CARDS`), the one source of each card's numbers. A card is a
+**The card files**: one TOML file per SKU (`<sku>.toml` in a directory of them), the one source of each card's numbers. A card is a
 GPU's (`kind = "gpu"`), a host's (`kind = "host"`: a server's CPUs and DRAM, apart from the GPUs it carries), a
 server's (`kind = "server"`: a server model's network ports, apart from its CPUs, DRAM and GPUs) or a time base's
 (`kind = "timebase"`: the clock an auditor's device reads, apart from the host it runs in; its one section is `drift`:
@@ -71,20 +71,20 @@ that quotes a figure under every reading iterates it rather than naming a clock 
 
 ~~~python
 from verity.device import load_card, number, rate, readings, skus
-skus("host")                       # ['xeon-6776p-2s', 'xeon-platinum-8468-2s']
-drift = load_card("nebius-vm-monotonic-raw")["drift"]["max"]  # {'value': 0.0005, 'unit': 's/s', 'mark': 'premise', ...}
+skus("host", directory=cards)                       # ['xeon-6776p-2s', 'xeon-platinum-8468-2s']
+drift = load_card("nebius-vm-monotonic-raw", directory=cards)["drift"]["max"]  # {'value': 0.0005, 'unit': 's/s', 'mark': 'premise', ...}
 number(drift)                      # Fraction(1, 2000): the auditor's figure for its device's drift, under that premise
-card = load_card("h200-sxm-141gb")
+card = load_card("h200-sxm-141gb", directory=cards)
 card["clock"]["sm"]["value"]       # 1980 (MHz)
 card["memory"]["bandwidth"]        # {'value': 4916736000000.0, 'unit': 'B/s', 'mark': 'ceiling', 'source': ...}
-load_card("dgx-h200")["link"]["rate"]   # {'value': 5011000000000.0, 'unit': 'bit/s', 'mark': 'ceiling', 'source': ...}
+load_card("dgx-h200", directory=cards)["link"]["rate"]   # {'value': 5011000000000.0, 'unit': 'bit/s', 'mark': 'ceiling', 'source': ...}
 rate(card)                         # Fraction(989429760000000): s8 MACs a second, 132 SMs x 4096 x clock.tensor 1830 MHz
 rate(card, mhz=1980)               # Fraction(1070530560000000): the same at clock.sm's 1980 MHz, the second reading
 readings(card)                     # {'tensor': Fraction(989429760000000), 'sm': Fraction(1070530560000000)}: both
 rate(card, fmt="f16", mhz=1700)    # the f16 MACs a second at a 1700 MHz clock
 ~~~
 
-**The node files**: one TOML file per kind of node (`<kind>.toml` in `NODES`), holding what a node's registration
+**The node files**: one TOML file per kind of node (`<kind>.toml` in a directory of them), holding what a node's registration
 states that no card does. A node is a host and the GPUs it carries. Its file names the GPU card and how many of it the
 node carries (`device.sku`, `device.count`), the host card (`host.sku`), the host's own memory, one table a leaf
 (`memory.NAME`: its `tier`, `dram` or `disk`, its `bytes` and its `rate`, the most its bytes are read back at, in
@@ -115,10 +115,10 @@ the one that bounds the node's disks together, `leaves`'s for `disk`. A server w
 
 ~~~python
 from verity.device import Auditor, Registration, check, leaves, load_card, load_node, node_figures, ways_out
-node = load_node("rtx-pro-6000-server-x8")
-gpu, host = load_card(node["device"]["sku"]), load_card(node["host"]["sku"])
+node = load_node("rtx-pro-6000-server-x8", directory=nodes, cards_directory=cards)
+gpu, host = load_card(node["device"]["sku"], directory=cards), load_card(node["host"]["sku"], directory=cards)
 log = Registration("remote")
-out, own = ways_out(node, "node0"), leaves(node, "node0")
+out, own = ways_out(node, "node0", host), leaves(node, "node0", host)
 entry = log.node_entry(node, gpu, "node0", host_card=host, ways=out, leaves=own)
 memory, figures = node_figures(node, host, "node0", ways=out, leaves=own)
 site = check(log.append(entry), Auditor.of_files([gpu], memory=memory, hosts=[("node0", figures)]))
@@ -128,15 +128,13 @@ site.tiers("node0")                 # {'hbm': 824633720832, 'dram': 187260574105
 each, tier = own
 [(leaf.id, leaf.bw) for leaf in each]   # [('node0/dram', 9011200000000), ('node0/vda', 5584738461544), ...], bit/s
 tier                                # {'dram': 9011200000000, 'disk': 5584738461544}, each tier's leaves together
-ways_out(node, "node0")            # (Way('node0/eth0', 400000000000, True), Way('node0/storage', 5584738461544, False))
+ways_out(node, "node0", host)      # (Way('node0/eth0', 400000000000, True), Way('node0/storage', 5584738461544, False))
 ~~~
 
-`CARDS` and `NODES`, the directories the sheets are in, are `hardware/cards/` and `hardware/nodes/` beside the `verity`
-package's directory, the first of this file's resolved parents so named. The readers of card files (`skus`,
-`load_card`) and of node files (`node_kinds`, `load_node`) take `directory`, and every reader of the node files that
-reads a card file (`load_node`, `leaves`, `ways_out`) takes `cards_directory`, the directories the files are in, so
-that a reader whose copy of them is elsewhere names where it is; `None` is `CARDS` for a card file and `NODES` for a
-node file, read when the reader is called.
+The readers of card files (`skus`, `load_card`) and of node files (`node_kinds`, `load_node`) take `directory`, and
+every reader of the node files that reads a card file (`load_node`, and `leaves` and `ways_out` when given no host
+card) takes `cards_directory`: the directories the files are in, which every caller names (`cards` and `nodes` in the
+examples above), `verity` naming none.
 
 Stdlib, the wire (`verity.channel`) and `verity.errors` only.
 """
@@ -179,7 +177,7 @@ PARENTS: dict[str, tuple[str | None, ...]] = {
 LINKS = (("host", "host"), ("host", "outside"), ("certifier", "host"), ("certifier", "outside"), ("challenger", "host"))
 """The pairs of kinds a link may join, in either order. No link ends at an auditor's device."""
 AUDITOR_KINDS = ("certifier", "challenger", "auditor-host")
-"""The auditor's own: its devices, the network certifiers and the memory challengers, and its hosts."""
+"""The auditor's own: its devices, the network certifiers and the memory attesters, and its hosts."""
 SCHEMES = ("lms-sha512/n64-w1-h20/v0", "hss-lms-sha512/n64-w1-h20/n64-w1-h20/v0")
 """The signature schemes a registered key may be of: one LMS key that signs, and a root LMS key that certifies the
 keys that sign."""
@@ -311,7 +309,7 @@ def _whole(entry: Any, what: str) -> int:
 
 def _way(way: Any, host: str) -> tuple[str, int | None, bool]:
     """A way out of host `host`'s node as `ways_out` gives it: its id under the host, what it
-    carries in whole bits a second, or `None` where its file states no rate, and whether a certifier may split it."""
+    carries in whole bits a second, or `None` where its file states no rate, and whether a network attester may split it."""
     try:
         name, bw, split = way
     except (TypeError, ValueError):
@@ -341,7 +339,7 @@ def _leaf(leaf: Any, host: str) -> tuple[str, str, int, int]:
 class _Node:
     """What a node's files register as one host: its devices' SKU and count, its leaves (each id, tier, bytes and
     bits a second), the rate each tier's leaves share, its ways out (each id, bits a second or None, and whether a
-    certifier may split it) and its host's on-chip state in bits."""
+    network attester may split it) and its host's on-chip state in bits."""
 
     sku: str
     count: int
@@ -905,16 +903,16 @@ class Registration:
         how the node reaches the outside.
 
         `certifier` is the id, the key and the key's scheme of a network attester of the auditor's that stands in
-        front of the node without splitting its interface (a process on another machine, say). It adds the certifier
+        front of the node without splitting its interface (a process on another machine, say). It adds the network attester
         and the two links of a certified way out, host to certifier (`host/ID`) and certifier to outside (`ID/outside`), each at the interfaces' rates summed, beside the ways' own links, which
-        stay. The storage path's rate is not in that sum and no certifier is linked to the path: a certifier's links
-        say nothing of it. A certifier on a node any of whose interfaces has no rate is refused, by its id, since its
-        links' rate would be below what it splits (a missing rate is never read as 0, nor left out of a sum). A certifier splits one host's way out, so each node names its own, and the key and scheme are the
+        stay. The storage path's rate is not in that sum and no certifier is linked to the path: a network attester's links
+        say nothing of it. A network attester on a node any of whose interfaces has no rate is refused, by its id, since its
+        links' rate would be below what it splits (a missing rate is never read as 0, nor left out of a sum). A network attester splits one host's way out, so each node names its own, and the key and scheme are the
         ones the auditor holds for the id or `owner` refuses the entry. None of the auditor's other devices is added.
 
-        `certifier_host` is the auditor's device the certifier runs in (`auditor_host`'s location, which states its
-        time base and its clock's drift): the entry adds it where the log has none, at `site`, and the certifier in
-        it, whose clock is then that host's (`Site.clock`, `Site.drift`). With none the certifier is under the site,
+        `certifier_host` is the auditor's device the network attester runs in (`auditor_host`'s location, which states its
+        time base and its clock's drift): the entry adds it where the log has none, at `site`, and the network attester in
+        it, whose clock is then that host's (`Site.clock`, `Site.drift`). With none the network attester is under the site,
         where it reads no clock and times nothing.
 
         A file that states no `dram` leaf or no `disk` leaf is refused: its entry would pass `check` for `remote` with
@@ -1152,11 +1150,11 @@ class Site:
         return (self.kind(k.ends[0]), self.kind(k.ends[1])) in ((a, b), (b, a))
 
     def is_boundary(self, k: Link) -> bool:
-        """A boundary link of the prover's: a host's link to the outside, or to the certifier that splits its uplink."""
+        """A boundary link of the prover's: a host's link to the outside, or to the network attester that splits its uplink."""
         return self.joins(k, "host", "outside") or self.joins(k, "certifier", "host")
 
     def certified(self, k: Link) -> bool:
-        """A certifier is at one of the link's ends."""
+        """A network attester is at one of the link's ends."""
         return "certifier" in (self.kind(k.ends[0]), self.kind(k.ends[1]))
 
     def far(self, i: str) -> list[str]:
@@ -1173,7 +1171,7 @@ class Site:
         return None if p is None else p.parent
 
     def reached(self) -> list[str]:
-        """What the memory challengers reach: the ends of their links."""
+        """What the memory attesters reach: the ends of their links."""
         return [e for k in self.links if "challenger" in (self.kind(k.ends[0]), self.kind(k.ends[1])) for e in k.ends]
 
     # --- the views a protocol reads -----------------------------------------------------------------------------------
@@ -1472,12 +1470,12 @@ def _covered(c: str, a: Auditor, s: Site, e: Entry) -> str | None:
 
 
 def _reached(c: str, a: Auditor, s: Site, e: Entry) -> str | None:
-    """Onsite: the host of every memory leaf is at an end of a memory challenger's link."""
+    """Onsite: the host of every memory leaf is at an end of a memory attester's link."""
     t = s.add(e)
     if c == "onsite":
         reached = t.reached()
         if far := sorted({h for x in t.locs if x.kind == "memory" and (h := t.host_of(x)) is not None} - set(reached)):
-            return f"hosts {far} hold the prover's memory, and no memory challenger links to them"
+            return f"hosts {far} hold the prover's memory, and no memory attester links to them"
     return None
 
 
@@ -1558,27 +1556,21 @@ def check(log: Registration, auditor: Auditor) -> Site:
 
 # --- the card files and the node files ---------------------------------------------------------------------------------
 
-_PACKAGE = next(p for p in Path(__file__).resolve().parents if p.name == "verity")
-"""The `verity` package's directory, the first of this file's resolved parents so named: the sheets are in the
-top-level `hardware/` beside it, whatever this file's depth in the package, and wherever a link to the package that
-imported it is (a `research run` job imports `verity` through one)."""
-CARDS = _PACKAGE.parent / "hardware" / "cards"
 CARD_KINDS = ("gpu", "host", "server", "timebase")
 MARKS = ("ceiling", "measurement", "premise", "placeholder")
 ENTRY = frozenset({"value", "unit", "mark", "source"})
 WORD = 4  # bytes in a 32-bit word, the unit of every store and of device memory's rate
 
 
-def skus(kind: str | None = None, *, directory: Path | None = None) -> list[str]:
-    """The SKUs with a card file in ``directory`` (``CARDS`` when ``None``), or those of one ``kind``."""
-    every = sorted(p.stem for p in (CARDS if directory is None else directory).glob("*.toml"))
+def skus(kind: str | None = None, *, directory: Path) -> list[str]:
+    """The SKUs with a card file in ``directory``, or those of one ``kind``."""
+    every = sorted(p.stem for p in directory.glob("*.toml"))
     return every if kind is None else [sku for sku in every if load_card(sku, directory=directory)["kind"] == kind]
 
 
-def load_card(sku: str, *, directory: Path | None = None) -> dict:
-    """The card file of ``sku`` in ``directory`` (``CARDS`` when ``None``) as parsed TOML, refused unless every number
-    in it carries its unit, mark and source, and a GPU's unless its ``clock.default`` is one of ``READINGS``."""
-    directory = CARDS if directory is None else directory
+def load_card(sku: str, *, directory: Path) -> dict:
+    """The card file of ``sku`` in ``directory`` as parsed TOML, refused unless every number in it carries its unit,
+    mark and source, and a GPU's unless its ``clock.default`` is one of ``READINGS``."""
     path = directory / f"{sku}.toml"
     if not path.is_file():
         raise KeyError(f"no card {sku!r}: the cards are {skus(directory=directory)} ({directory}/<sku>.toml)")
@@ -1659,7 +1651,6 @@ def _check_entry(entry: dict, at: str) -> None:
             raise InvalidArtifact(f"{at}: give it a {field}")
 
 
-NODES = _PACKAGE.parent / "hardware" / "nodes"
 CARD_KIND = {"device": "gpu", "host": "host"}
 """The kind of card each of a node's tables names by ``sku``."""
 TIER = {"dram": ("memory", "bandwidth_max"), "disk": ("disk", "read_max")}
@@ -1691,16 +1682,14 @@ class Way(NamedTuple):
     """Whether a network certifier may split it: an interface, yes; the storage path, no."""
 
 
-def node_kinds(*, directory: Path | None = None) -> list[str]:
-    """The kinds of node with a file in ``directory`` (``NODES`` when ``None``)."""
-    return sorted(p.stem for p in (NODES if directory is None else directory).glob("*.toml"))
+def node_kinds(*, directory: Path) -> list[str]:
+    """The kinds of node with a file in ``directory``."""
+    return sorted(p.stem for p in directory.glob("*.toml"))
 
 
-def load_node(kind: str, *, directory: Path | None = None, cards_directory: Path | None = None) -> dict:
-    """The node file of ``kind`` in ``directory`` (``NODES`` when ``None``) as parsed TOML, refused unless every number
-    in it is an entry and each card it names is a card of its kind in ``cards_directory`` (``CARDS`` when
-    ``None``)."""
-    directory = NODES if directory is None else directory
+def load_node(kind: str, *, directory: Path, cards_directory: Path) -> dict:
+    """The node file of ``kind`` in ``directory`` as parsed TOML, refused unless every number in it is an entry and
+    each card it names is a card of its kind in ``cards_directory``."""
     path = directory / f"{kind}.toml"
     if not path.is_file():
         raise KeyError(f"no node {kind!r}: the nodes are {node_kinds(directory=directory)} ({directory}/<kind>.toml)")
@@ -1748,11 +1737,13 @@ def leaves(node: Mapping[str, Any], host: str, card: Mapping[str, Any] | None = 
     ``disk.read_max`` for ``disk``. The host reads a tier at no more than the smaller of its leaves' rates summed and
     the tier's.
 
-    ``card`` is the host card's table: the card the file names by ``host.sku``, in ``cards_directory``
-    (``CARDS`` when ``None``), when none is given. A leaf is refused
+    ``card`` is the host card's table: the card the file names by ``host.sku``, in ``cards_directory``, when none
+    is given. A leaf is refused
     when it states no ``rate``, a rate that is no ceiling in ``B/s`` above 0, a tier that is neither, or a rate above
     its tier's, since no leaf is read faster than the host's leaves of its tier together. A ``dram`` leaf's rate is
     its tier's exactly: DRAM has no interface narrower than the server's channels."""
+    if card is None and cards_directory is None:
+        raise TypeError("leaves: give the host card's table, or cards_directory, the directory its card file is in")
     try:
         card = load_card(node["host"]["sku"], directory=cards_directory) if card is None else card
         stated = [(name, leaf["tier"], leaf["bytes"], leaf.get("rate"))

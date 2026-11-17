@@ -7,12 +7,12 @@ import sys
 import types
 
 import pytest
+
 from verity_vllm.definitions.registry.topp_geometry import (
     SPLIT_MAX_BATCH,
     registered_splits,
     splits_for,
 )
-
 from verity_vllm.engine import topp_pin
 
 #: the RTX PRO 6000, the L40S, the H100, and two SM counts below 32

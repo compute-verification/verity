@@ -124,7 +124,7 @@ ALLOWED: dict[str, re.Pattern | frozenset | None] = {
     "--store-read": None,            # a read-only store key for the workload, minted for the run and deleted after it
 }
 OWNERS = "NODE"                                         # `--on NODE`: a machine its owner picks
-PLACEHOLDER = re.compile(r"^\[?([A-Z][A-Z0-9_]+)\]?$")  # FIRE_RUN, [RUN: what the command's owner fills in
+PLACEHOLDER = re.compile(r"^(?:[A-Za-z_][A-Za-z0-9_]*=)?\[?([A-Z][A-Z0-9_]+)\]?$")  # FIRE_RUN, [RUN], A5_CARD=CARD: the owner's
 NEVER_RAN = ("unlaunched", "unrun")                     # the run never registered or reached its machine; it never took its slot
 UNSENT = "unsent"                                       # a registered run whose launch stopped before it reached its machine
 OVER = ("passed", "failed", *NEVER_RAN)

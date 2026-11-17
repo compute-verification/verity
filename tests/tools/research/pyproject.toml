@@ -116,7 +116,6 @@ untraced = [
     "test_tool_rules.py",
     "test_treelock.py",
     "test_undeclared_derivation.py",
-    "test_vqueue_compare.py",
     "test_vqueue_loop.py",
     "test_vqueue_moves.py",
     "test_vqueue_records.py",
@@ -140,7 +139,9 @@ untraced = [
 # and the settings it reads: test_queue commits them into its origin, so the preflight's tests select suites by its own `touched`.
 # tools/check/merge_map.py and merge_rows.py: test_check_merge_drivers merges through them at either layout's place.
 # tools/check/gates/markdown_caps.py and tests/test_repository.py: test_queue commits them into its origin, so its sync
-# runs the Markdown size limits' landing gate on the limits it reads. tools/check/pins.py: test_queue commits it into its origin, so
+# runs the Markdown size limits' landing gate on the limits it reads. tools/check/added_lines.py, GLOSSARY.md and the two lints it
+# loads (tests/lint/test_repo_lane_text.py, test_repo_retired_terms.py): test_queue commits them into its origin, so the mark's
+# preflight runs the added-lines warn gate as `main` has it. tools/check/pins.py: test_queue commits it into its origin, so
 # the sync's pin rebuild (`repinned`) reads the real `PINS`. tests/tools/verity/graph/key_vectors.json: test_executor holds
 # the executor client's graph/v2 key rule to the vectors both sides of the contract reproduce. tools/verity/lean/lean_audit.py
 # and the files it loads (settings.py, module_keys.py, headers.py, tools/check/common.py,
@@ -166,7 +167,8 @@ inputs = ["tools/research", ".agents/skills", "verity/README.md", ".gitignore", 
           "tools/verity/graph/verity_graph/contract.py",
           "tools/verity/graph/verity_graph/__init__.py",
           "hardware/nodes/rtx-pro-6000-server-x8.toml", "hardware/cards/rtx-pro-6000-server.toml",
-          "tools/check/merge_map.py", "tools/check/merge_rows.py"]
+          "tools/check/merge_map.py", "tools/check/merge_rows.py",
+          "tools/check/added_lines.py", "GLOSSARY.md", "tests/lint/test_repo_lane_text.py", "tests/lint/test_repo_retired_terms.py"]
 parallel = true
 # the suite takes about 11 minutes on 3 workers and over an hour in one process (`held_workers`; on fewer, `bound` stretches
 # timeout_s in proportion)

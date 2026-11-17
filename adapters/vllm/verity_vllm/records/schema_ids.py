@@ -7,7 +7,7 @@ is no ``schema``: `SERVED_REQUIRED_MANIFEST_KIND`, the ``kind`` a served Build c
 from __future__ import annotations
 
 # --- the observation of one eager run (`verity_vllm.observe`)
-#: the raw observation log (its `RunHeader.schema`), which `observe.capture.make_header` writes
+#: the raw observation log (its `RunHeader.schema`), which `observe.capture_types.make_header` writes
 CAPTURE_LOG_SCHEMA = "verity-capture/log/v1"
 #: a capture's snapshot index, `snapshots.json`, which `observe.capture.Capture._write_snapshot_index` writes
 CAPTURE_SNAPSHOTS_SCHEMA = "verity-capture/snapshots/v1"

@@ -74,11 +74,10 @@ def grade(f: Fold, weights_check: dict[str, Any] | None, strata_unevaluated: lis
     if strata_unevaluated:
         return None, "partial", f"{len(strata_unevaluated)} strata not evaluated: {strata_unevaluated[:3]}"
     if not_evald:
-        # picks not evaluated INSIDE strata that still had an evaluated pick used to leave the grade 'complete'
-        # with sample.not_evaluated_n > 0 -- a run-time fault (missing committed input, bytes not retained, evaluator error, device) on
-        # some picks then rode a PASS unnamed.  'complete' means every picked VU was evaluated: any not-evaluated pick -> partial, the first
+        # 'complete' means every picked VU was evaluated: any not-evaluated pick (a run-time fault: missing committed input, bytes not
+        # retained, evaluator error, device) -> partial, the first
         # fault named (fault classes first; a by-name pick inside a mixed stratum is named too and, having no fully unevaluated stratum,
-        # cannot be lifted by the named-gap rule -- fail closed).  Real records: 0 complete-with-not-evaluated picks (rev, 38 pairs).
+        # cannot be lifted by the named-gap rule -- fail closed).
         faults = [ne for ne in not_evald if ne.get("why_class") not in WHY_CLASSES_BY_NAME]
         first = (faults or not_evald)[0]
         by_cls = Counter(ne.get("why_class") or "other" for ne in not_evald)

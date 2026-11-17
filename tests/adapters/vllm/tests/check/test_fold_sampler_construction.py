@@ -15,10 +15,11 @@ from pathlib import Path
 import pytest
 import torch
 from verity.circuits.defs import bind
-from verity_vllm.definitions.registry import b1, dead_free, sampling_vocab, topp_words
-from verity_vllm.definitions.registry import sampling as SM
+from verity_torch.frontend.rules.base import RuleSet
 
 from verity_vllm.check.match import split_selects
+from verity_vllm.definitions.registry import b1, dead_free, sampling_vocab, topp_words
+from verity_vllm.definitions.registry import sampling as SM
 from verity_vllm.errors import Refused
 from verity_vllm.observe.events import DispatchEnter, DispatchExit, RunHeader, ViewDesc
 from verity_vllm.observe.fold.patterns.sampling import (
@@ -29,7 +30,6 @@ from verity_vllm.observe.fold.patterns.sampling import (
 from verity_vllm.observe.fold.resolver import Profile, StepContext
 from verity_vllm.observe.fold.tree import TreeNode
 from verity_vllm.program import sampling_event as SE
-from verity_torch.frontend.rules.base import RuleSet
 from verity_vllm.program.frontend.target_profile import DEFAULT_TARGET, TargetProfile
 
 VLLM_DIR = (Path(__file__).resolve().parents[5] / "adapters" / "vllm")
@@ -71,9 +71,9 @@ def _program_dir(tmp_path: Path, V: int, S: int) -> tuple[Path, str]:
     `result.json` spec histogram the Build writes.  -> (dir, select)."""
     from verity_vllm.pipeline.build import _spec_histogram
     from verity_vllm.program.frontend import derive_examples as ex
-    from verity_vllm.program.frontend.vllm_derive import derive_report
     from verity_vllm.program.frontend.rules import DEFAULT_RULES
     from verity_vllm.program.frontend.rules.vllm_sampling import VLLM_SAMPLING_RULES
+    from verity_vllm.program.frontend.vllm_derive import derive_report
     LP, STEPS = 3, 1
     C = dict(b1.B0_CONFIG, NL=1, V=V, MAX_POS=64)
     rules = RuleSet("default+stoch", list(DEFAULT_RULES.rules) + list(VLLM_SAMPLING_RULES), list(DEFAULT_RULES.families))

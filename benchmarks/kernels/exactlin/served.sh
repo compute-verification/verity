@@ -4,7 +4,7 @@
 # at most SERVED_MAX_MIN (25) minutes, with the clocks read before and after, and with an exact-fused arm only after kgate.py's
 # bitwise gate (every config row, both models) passed in the same lease.  Extra arguments go to sbench.py; stock first, so its
 # overheads are against stock.  DITHER_NSYS=1 runs it under nsys with the prof op's per-step kernels (steps.py).
-# SERVED_SCRIPT (a path from the repository root) runs another script in sbench.py's place, e.g. values.py; SERVED_KGATE=1|0
+# SERVED_SCRIPT (a path from the repository root) runs another script in sbench.py's place; SERVED_KGATE=1|0
 # forces the gate on or off.  Inside the lease everything runs on the leased GPU's NUMA node, as dither's sbench.sh runs it
 # (benchmarks/kernels/numabind/numabind.py, DITHER_NUMA=0 unbound; env/numa.json and summary.json's "numa" say which).
 # On an H200 under a GPU lease:
