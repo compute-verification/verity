@@ -1,7 +1,8 @@
 """Remote's configuration (`demos/remote.toml`) under the table (`served_table.py`): `verity run --dry-run` resolves
 every party, Pearl+'s included, and without bindings Pearl+'s coins are an in-process challenger's on the workload's
 machine, which the verifier's line says, with no key blocking and no placeholder reaching the runner; a part of Pearl+'s
-live challenger is refused by name; the runner's variables under remote
+live challenger is refused by name; under onsite, Pearl+ in H1's place is refused until onsite's composite lists it,
+and then its product is onsite and no compute key blocks; the runner's variables under remote
 are Pearl+'s, onsite's carry none of them; Pearl+'s class is refused by name when it disagrees with the workload's slots
 or window-steps, and its uniform tie is asked for only by its parameter. Under remote alone, the runner's exit 2 with
 the compose hand-off written is pending, and the verifier reads only the compose answer's record (Pearl+'s row under
@@ -89,6 +90,47 @@ def test_without_bindings_no_key_blocks_and_pearl_pluss_coins_are_the_workloads_
     variables = T.variables(cfg, {})
     assert [k for k, v in variables.items() if "<" in v] == []
     assert {k: variables.get(k) for k in LOCAL} == LOCAL and "H1_KEY_SHA512" not in variables
+
+
+#: onsite's subprotocols with Pearl+ in H1's place
+ONSITE_PEARLPLUS = tuple("pearl-plus" if c == "pouw" else c for c in T.ONSITE_COMPONENTS)
+ONSITE_UNBOUND = ["memory-challenger.pous.address", "bandwidth-verifier.bandwidth.address",
+                  "network-certifier.certifier.gate", "memory-challenger.wipe.address"]
+
+
+def onsite_pearlplus(tmp: Path, monkeypatch) -> Path:
+    monkeypatch.setitem(T.DEMOS, "onsite_full", ONSITE_PEARLPLUS)
+    cfg = T.configuration(K.parse(ONSITE.read_text())["program"]["commit"])
+    monkeypatch.setitem(T.DEMOS, "onsite_full", T.ONSITE_COMPONENTS)
+    f = tmp / "onsite.toml"
+    f.write_text(K.render(cfg))
+    return f
+
+
+def test_pearl_plus_in_h1s_place_under_onsite_is_refused_until_onsites_composite_lists_it(tmp_path, capsys,
+                                                                                         monkeypatch):
+    monkeypatch.setitem(K.COMPOSITES, T.ONSITE, ONSITE_PEARLPLUS)
+    f = onsite_pearlplus(tmp_path, monkeypatch)
+    monkeypatch.undo()
+    rc, _, err = dry(capsys, config=f)
+    assert rc == 2 and "refused composite" in err and "protocol soundness covers only" in err, err
+
+
+def test_under_onsite_pearl_plus_takes_h1s_place_with_its_product_and_no_compute_key_blocks(tmp_path, capsys,
+                                                                                           monkeypatch):
+    monkeypatch.setitem(K.COMPOSITES, T.ONSITE, ONSITE_PEARLPLUS)
+    f = onsite_pearlplus(tmp_path, monkeypatch)
+    rc, got, err = dry(capsys, config=f)
+    assert rc == 0 and got["dry"][0]["unbound"] == sorted(ONSITE_UNBOUND), err
+    assert hooks_of(got) == LOCAL | {"PRODUCT": "onsite"}
+    assert not {"H1_GATE", "H1_PEER"} & set(T.variables(R.load(f, REG), {}))
+    tables = json.loads(json.dumps(BINDINGS))
+    for key in ONSITE_UNBOUND:
+        p, c, k = key.split(".")
+        tables.setdefault(p, {}).setdefault(c, {})[k] = "192.0.2.1:7000"
+    rc, got, err = dry(capsys, "--bindings", bindings(tmp_path, tables), config=f)
+    assert rc == 0 and hooks_of(got) == PEARLPLUS | {"PRODUCT": "onsite"}, err
+    assert T.unbound(R.load(f, REG), {}) == ONSITE_UNBOUND
 
 
 def test_a_part_of_pearl_pluss_live_challenger_is_refused_by_name(tmp_path, capsys):

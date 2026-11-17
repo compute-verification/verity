@@ -415,7 +415,8 @@ def _pearlplus(cfg, params, bound):
     """With no gate bound the gate variables are set empty, since unset served_verdicts.sh takes the lane's gate: Pearl+'s
     epoch coins are then an in-process challenger's on the workload's machine, its verdict claims none, and the run is a
     development one."""
-    hooks = {"POUW": "pearlplus", "PEARLPLUS_TIE": "1", "PRODUCT": "remote"}
+    product = "remote" if K.composite(cfg["protocols"], MANIFESTS) == REMOTE else "onsite"
+    hooks = {"POUW": "pearlplus", "PEARLPLUS_TIE": "1", "PRODUCT": product}
     if given := [k for k in _PEARLPLUS_LIVE if k in bound]:
         if lacking := [k for k in _PEARLPLUS_LIVE if k not in bound]:
             raise Refused("unbound", f"Pearl+'s live challenger takes {', '.join(_PEARLPLUS_LIVE)} together, and the "
