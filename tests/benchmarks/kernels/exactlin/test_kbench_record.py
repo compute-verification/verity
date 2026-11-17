@@ -53,6 +53,15 @@ def test_a_passed_gate_records_the_ratio_its_member_and_both_arms(kbench: types.
     assert (m["member"], m["fused_ms_per_step"], m["stock_ms_per_step"]) == ("llama-3.2-1b-h200", 1.2, 1.0)
 
 
+def test_the_member_takes_the_card_records_short(kbench: types.ModuleType, tmp_path: Path,
+                                                 monkeypatch: pytest.MonkeyPatch) -> None:
+    from verity_bench import kit
+    monkeypatch.setattr(kit, "host_stamp", lambda: {"card": "NVIDIA H100 80GB HBM3", "gpus": [], "node": "n", "commit": None})
+    kbench.record(tmp_path, _gate(True), STEP, MODEL)
+    [m] = _result(tmp_path)["measurements"]
+    assert m["member"] == "llama-3.2-1b-h100"
+
+
 def test_a_failed_gate_records_no_measurement(kbench: types.ModuleType, tmp_path: Path) -> None:
     kbench.record(tmp_path, _gate(False), STEP, MODEL)
     doc = _result(tmp_path)

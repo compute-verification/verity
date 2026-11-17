@@ -56,8 +56,8 @@ def v3c_window(d: Path, states: list[list[int]], entries: list[list[list[int]]])
                             "bindings": {"o0": dom.binding.hex()}, "owner": RWS.OWNER, "schemas": {"o0": V2}}})
         roots.append({"port": f"{name}/o0", "root": got["o0"].hex(), "leaves": n, "domain": dom.domain_id.hex()})
     (d / "window.json").write_text(json.dumps({"members": members}))
-    (d / "registration.json").write_text(json.dumps({"roots": roots, "window": {
-        "kind": "served", "run": RUN, "activations": {"program": PROGRAM, "values": {sz.SCAN_STATE: st.entry()}}}}))
+    (d / "registration.json").write_text(json.dumps({"program": PROGRAM, "roots": roots, "registered": [st.entry()],
+                                                     "window": {"kind": "served", "run": RUN}}))
     return d
 
 
@@ -74,7 +74,7 @@ def scanned(tmp_path_factory):
 def test_the_scan_reads_v3cs_trees_at_its_roots_and_proves_no_block_round(tmp_path, scanned):
     window = scanned["window"]
     rec = json.loads((window / "registration.json").read_text())
-    state, roots = rec["window"]["activations"]["values"][sz.SCAN_STATE], {r["port"]: r for r in rec["roots"]}
+    (state,), roots = rec["registered"], {r["port"]: r for r in rec["roots"]}
     h = sz.host(tmp_path / "host", setup=S, v3c=window)
     assert list(h.rounds) == ["honest-0", "chain-0", "tampered-0", "unread-0", "stale-1"]
     trees = h.rounds["honest-0"].at.trees
@@ -103,8 +103,16 @@ def _rewrite(window: Path, f: str, change) -> None:
     (window / f).write_text(json.dumps(doc))
 
 
-@pytest.mark.parametrize("case", ["state row", "state root", "entry row", "entry root", "chunks", "body"])
+def _activations_alone(doc: dict) -> None:
+    doc["window"]["activations"] = {"program": PROGRAM, "values": {sz.SCAN_STATE: doc.pop("registered")[0]}}
+
+
+@pytest.mark.parametrize("case", ["state row", "state root", "activations alone", "twice", "no open root",
+                                  "another open root", "another program", "entry row", "entry root", "chunks", "body"])
 def test_a_v3c_window_that_isnt_the_scans_is_refused_by_name(tmp_path, scanned, case):
+    """The scan reads V3c's `SCAN_STATE` from its registration's one ``registered`` entry of it, under the domain bound
+    to the registration's program and its window's open root, and from nowhere else: a state held in the window's
+    activations alone, named twice, or under no open root or another program or open root is refused by name."""
     states, entries = [list(r) for r in scanned["states"]], [[list(e) for e in lane] for lane in scanned["entries"]]
     if case == "state row":
         states[3][0] ^= 1
@@ -112,16 +120,31 @@ def test_a_v3c_window_that_isnt_the_scans_is_refused_by_name(tmp_path, scanned, 
         entries[1][1][-1] ^= 1
     w = v3c_window(tmp_path / "window", states, entries)
     if case == "state root":
-        _rewrite(w, "registration.json",
-                 lambda d: d["window"]["activations"]["values"][sz.SCAN_STATE].update(root="ee" * 64))
+        _rewrite(w, "registration.json", lambda d: d["registered"][0].update(root="ee" * 64))
+    if case == "activations alone":
+        _rewrite(w, "registration.json", _activations_alone)
+    if case == "twice":
+        _rewrite(w, "registration.json", lambda d: d["registered"].append(d["registered"][0]))
+    if case == "no open root":
+        _rewrite(w, "registration.json", lambda d: d["window"].pop("run"))
+    if case == "another open root":
+        _rewrite(w, "registration.json", lambda d: d["window"].update(run="ef" * 64))
+    if case == "another program":
+        _rewrite(w, "registration.json", lambda d: d.update(program="ef" * 64))
     if case == "entry root":
         _rewrite(w, "registration.json", lambda d: d["roots"][2].update(root="ee" * 64))
     if case == "chunks":
         _rewrite(w, "window.json", lambda d: d["members"].pop())
     if case == "body":
         (w / "m2-private.bin").write_bytes((w / "m2-private.bin").read_bytes()[:-1])
+    mismatch = f"under its registration's program and open root isn't its registered {sz.SCAN_STATE}'s root and domain"
     why = {"state row": f"its {sz.SCAN_STATE} rows [3] aren't the scan's",
-           "state root": f"isn't its registered {sz.SCAN_STATE}'s root and domain",
+           "state root": mismatch,
+           "activations alone": f"registered values name {sz.SCAN_STATE} 0 times, not once: register the scan's state",
+           "twice": f"registered values name {sz.SCAN_STATE} 2 times, not once",
+           "no open root": "its registration's window names no open root (``run``)",
+           "another open root": mismatch,
+           "another program": mismatch,
            "entry row": f"{TID}/c1's o0 rows [1] aren't the scan's lane 1 slot entries",
            "entry root": f"isn't the root and domain its registration names for {TID}/c2/o0",
            "chunks": "not one template's 4 chunks of 2 proof blocks, a lane each",
