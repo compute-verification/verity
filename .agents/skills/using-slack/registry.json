@@ -1016,6 +1016,7 @@
       "owns": [
         "verity/protocols/compose/verifier/onsite/",
         "verity/protocols/compose/verifier/remote/",
+        "benchmarks/remote_error/",
         "security/Definitions/Claims.lean",
         "security/Definitions/Claims/",
         "security/Definitions/WeightSecurity.lean",

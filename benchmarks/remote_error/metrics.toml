@@ -1,0 +1,23 @@
+# This directory's numbers, one [[metric]] each: benchmarks/README.md's "Metrics"; tests/test_metrics_registry.py
+# enforces it.
+
+# Each is written for each fleet's week, month and year; the world's month, the one each id names, is written last.
+[[metric]]
+id = "soundness/remote-crypto-error-log2"
+title = "Remote audit cryptography fooled"
+owner = "soundness"
+unit = "log₂ of error"
+axis = "Log₂ of the chance the remote application's cryptography is fooled over the world's month, against the world's GPUs' SHA-512 calls: bound's formula proved, value evaluated in Python at stated parameters, PoUW's and the policy's terms open and left out."
+better = "lower"
+command = "research run --on auto --cwd source -- uv run python benchmarks/remote_error/run.py"
+every = "30d"
+
+[[metric]]
+id = "soundness/remote-crypto-error-share-log2"
+title = "Remote cryptography error per window"
+owner = "soundness"
+unit = "log₂ of error a machine-window"
+axis = "Log₂ of the remote application's cryptographic soundness error over the world's month a machine-window audited: bound's formula proved, value evaluated in Python at stated parameters."
+better = "lower"
+command = "research run --on auto --cwd source -- uv run python benchmarks/remote_error/run.py"
+every = "30d"

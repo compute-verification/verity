@@ -1,0 +1,25 @@
+# The remote application's cryptographic soundness error (benchmarks/remote_error/README.md): `run.py`, which evaluates
+# the remote guarantee's cryptographic terms at stated parameters. Not a package: a script, and the suite that tests it.
+[tool.pytest.ini_options]
+testpaths = ["."]
+pythonpath = ["../../../benchmarks/remote_error"]
+addopts = "-q -p no:cacheprovider"
+markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
+
+[tool.verity.tests]
+# run.py reads the census's reference fleets, the monitoring periods (`verity.protocol.MONITORING_PERIODS`, which imports
+# the wire), the locks' records of the guarantee, and writes a research run's result through the harness kit (stdlib only
+# with verity_config); the tests read the Lean files the terms name
+inputs = ["benchmarks/census/deployments.json", "benchmarks/census/adversary.json",
+          "security/lean-audit.json", "security/Properties/lean-audit.json",
+          "verity/protocol.py", "verity/channel.py", "verity/__init__.py", "verity/errors.py", "tools/config/verity_config",
+          "verity/protocols/__init__.py", "benchmarks/harness/verity_bench/__init__.py",
+          "benchmarks/harness/verity_bench/settings.py", "benchmarks/harness/verity_bench/kit.py",
+          "benchmarks/harness/verity_bench/kit_report.py", "benchmarks/remote_error",
+          "security/Proofs/Properties/Verity/Sampled.lean", "security/Proofs/Properties/Verity/Sampled/Instance.lean",
+          "security/Proofs/Flock/Soundness/Discharge/ZkLink/StrictZ.lean",
+          "security/Proofs/Flock/Soundness/Discharge/ZkLink/Compiled.lean",
+          "security/Proofs/Flock/Claims/NumbersTable.lean",
+          "security/Proofs/Flock/Soundness/Discharge/ZkSession/Numbers.lean",
+          "security/Properties/Verity/Game.lean", "security/Definitions/Core/Interaction.lean",
+          "security/Definitions/Hash/Assumptions.lean", "security/Proofs/Properties/Verity/InferenceOnly.lean"]
