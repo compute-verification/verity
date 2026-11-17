@@ -18,7 +18,7 @@ that GEMM alone; the last two time only M a multiple of 16).
     python kbench.py --out OUT [--reps 15] [--shapes all|decode] [--models llama-3.1-8b,qwen3-8b] [--arms ...] [--skip-gate]
 
 Where the gate ran, the run's result (`verity_bench.kit`) holds its verdict as the validation and, where it passed and
-the first --models model's exact and stock arms were timed, METRIC: exact's decode step at M = 32 over stock's, its
+the first --models model's fused and stock arms were timed, METRIC: fused's decode step at M = 32 over stock's, its
 member the model and the card (`llama-3.2-1b-h200`), with both arms' ms beside it.
 """
 from __future__ import annotations
@@ -219,12 +219,12 @@ def record(out: Path, gate: dict, step: dict, model: str) -> None:
                  f"{gate['shapes']} shapes of {', '.join(gate['models'])}, ok={gate['ok']}",
                  [os.path.relpath(out / "gate.json", w.out)])
     arms = step.get(model, {})
-    if gate["ok"] and {"exact", "stock"} <= arms.keys():
-        exact, stock = arms["exact"]["ms_per_step_m32"], arms["stock"]["ms_per_step_m32"]
+    if gate["ok"] and {"fused", "stock"} <= arms.keys():
+        fused, stock = arms["fused"]["ms_per_step_m32"], arms["stock"]["ms_per_step_m32"]
         card = "-".join(w.stamp["card"].lower().split()).removeprefix("nvidia-")
-        m = w.measurement(METRIC, exact / stock, "times stock", mark="measured", member=f"{model}-{card}",
-                          extra={"exact_ms_per_step": exact, "stock_ms_per_step": stock})
-        print(json.dumps({k: m[k] for k in ("name", "value", "unit", "member", "exact_ms_per_step", "stock_ms_per_step")}),
+        m = w.measurement(METRIC, fused / stock, "times stock", mark="measured", member=f"{model}-{card}",
+                          extra={"fused_ms_per_step": fused, "stock_ms_per_step": stock})
+        print(json.dumps({k: m[k] for k in ("name", "value", "unit", "member", "fused_ms_per_step", "stock_ms_per_step")}),
               flush=True)
 
 

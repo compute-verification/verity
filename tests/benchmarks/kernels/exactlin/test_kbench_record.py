@@ -13,7 +13,7 @@ import pytest
 
 DIR = Path(__file__).resolve().parents[4] / "benchmarks" / "kernels" / "exactlin"
 MODEL = "llama-3.2-1b"
-STEP = {MODEL: {"exact": {"us_per_layer_m32": 75.0, "ms_per_step_m32": 1.2},
+STEP = {MODEL: {"fused": {"us_per_layer_m32": 75.0, "ms_per_step_m32": 1.2},
                 "stock": {"us_per_layer_m32": 62.5, "ms_per_step_m32": 1.0}}}
 
 
@@ -51,7 +51,7 @@ def test_a_passed_gate_records_the_ratio_its_member_and_both_arms(kbench: types.
     assert doc["validation"]["status"] == "passed" and doc["validation"]["evidence"] == ["gate.json"]
     [m] = doc["measurements"]
     assert (m["name"], m["value"], m["unit"], m["mark"]) == (kbench.METRIC, pytest.approx(1.2), "times stock", "measured")
-    assert (m["member"], m["exact_ms_per_step"], m["stock_ms_per_step"]) == ("llama-3.2-1b-h200", 1.2, 1.0)
+    assert (m["member"], m["fused_ms_per_step"], m["stock_ms_per_step"]) == ("llama-3.2-1b-h200", 1.2, 1.0)
 
 
 def test_a_failed_gate_records_no_measurement(kbench: types.ModuleType, tmp_path: Path) -> None:

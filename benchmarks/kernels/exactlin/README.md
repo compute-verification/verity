@@ -23,9 +23,9 @@ RESEARCH_RUN_DIR=DIR bash benchmarks/kernels/exactlin/kbench.sh --models llama-3
 ~~~
 
 It gates, then times, and writes `kernels/exact-linear-decode-over-stock` (`metrics.toml`) into the run's `result.json`:
-the exact arm's linears for one decode step of the first `--models` model at batch 32 over stock vLLM int8's
-(`triton_scaled_mm`), its `member` the model and the card (`llama-3.2-1b-h200`), with both arms' ms beside it. The result's
-validation is the gate's verdict; a failed gate writes no measurement and exits 4.
+the fused arm's linears (the ops' CUDA bodies, as served) for one decode step of the first `--models` model at batch 32
+over stock vLLM int8's (`triton_scaled_mm`), its `member` the model and the card (`llama-3.2-1b-h200`), with both arms'
+ms beside it. The result's validation is the gate's verdict; a failed gate writes no measurement and exits 4.
 With no `gpu-lease` on PATH it runs on the visible card and says so.
 
 ## Entry points
