@@ -1,4 +1,4 @@
-import NetworkCheck.Registered
+import NetworkVerifier.Registered
 
 /-!
 What `NetworkCheck.Registered` answers on a file of vectors, for `test_network_certifier_registered.py`, which holds
@@ -12,7 +12,7 @@ else `{"ok": {"beta", "certifier", "head", "host", "key", "link"}}`.
 -/
 
 open Lean (Json)
-open NetworkCheck (Registered)
+open NetworkVerifier (Registered)
 
 def answer (j : Json) : Flock.V Json := do
   let head ← Flock.J.str j "head" "a vector"

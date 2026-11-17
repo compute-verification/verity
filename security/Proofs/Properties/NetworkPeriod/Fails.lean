@@ -29,7 +29,7 @@ record.
 
 namespace NetTiming.MonitoringPeriodTerms
 
-open NetworkCheck.Period Properties.NetworkPeriod
+open NetworkVerifier.Period Properties.NetworkPeriod
 
 /-- The widest bound. -/
 def boundMax (cells : Array ℕ) : ℕ := cells.foldl max 0

@@ -1210,12 +1210,12 @@ def test_a_lakefile_whose_sides_each_require_a_package_and_add_roots_merges():
     anchor = 'path = "../../pouw/window"\n'
     tail = '"Proofs.Properties.InferenceOnly"]'
     ours = LAKEFILE.replace(anchor, anchor + req("pous_check")).replace(tail, '"Proofs.Properties.InferenceOnly", "Properties.Pous"]')
-    theirs = LAKEFILE.replace(anchor, anchor + req("network_check")).replace(
+    theirs = LAKEFILE.replace(anchor, anchor + req("network_verifier")).replace(
         tail, '"Proofs.Properties.InferenceOnly", "Properties.Network"]')
     text, left = _lakefile(tmp, LAKEFILE, ours, theirs)
     assert left == 0, text
     doc = tomllib.loads(text)
-    assert [r["name"] for r in doc["require"]] == ["security", "pouw_window", "pous_check", "network_check"]
+    assert [r["name"] for r in doc["require"]] == ["security", "pouw_window", "pous_check", "network_verifier"]
     assert doc["lean_lib"][0]["roots"] == ["Properties.Pouw", "Proofs.Properties.Pouw", "Properties.InferenceOnly",
                                            "Proofs.Properties.InferenceOnly", "Properties.Network", "Properties.Pous"]
     assert text.startswith("# Properties: the code's properties.\n") and all(len(s) <= M.WIDTH for s in text.splitlines())

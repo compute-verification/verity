@@ -11,7 +11,7 @@ states no rate; what it returns carries the rate it found (`registeredLinkRated`
 
 @[expose] public section
 
-open NetworkCheck (Registered)
+open NetworkVerifier (Registered)
 
 namespace Properties.Certifier.Registered
 

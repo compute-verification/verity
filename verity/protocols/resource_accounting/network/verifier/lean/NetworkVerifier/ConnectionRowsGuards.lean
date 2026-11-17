@@ -1,7 +1,7 @@
 module
 
-public import NetworkCheck.Period
-meta import NetworkCheck.Period
+public import NetworkVerifier.Period
+meta import NetworkVerifier.Period
 
 /-!
 # The period's check on schedules with connection rows, at a schedule
@@ -14,7 +14,7 @@ schedule with connection rows.
 
 @[expose] public section
 
-namespace NetworkCheck.Period
+namespace NetworkVerifier.Period
 
 open Lean (Json toJson)
 
@@ -144,4 +144,4 @@ def plainSchedule : Schedule :=
     (connectionRowsCheck (p { s with requestWords := true })).isSome && reason s == "accept" &&
     reason { s with lengths := some 2 } == connectionRowsRefusal
 
-end NetworkCheck.Period
+end NetworkVerifier.Period

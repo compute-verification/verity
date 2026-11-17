@@ -30,7 +30,7 @@ reads it from there.
 
 namespace Properties.NetworkScan
 
-open NetworkCheck.Period
+open NetworkVerifier.Period
 
 /-- **The scan is causal** (`NetTiming.BoundaryGates.Fits`'s part (3)). If `scanOf` accepts the scan `j`, its canonical
 text `c` decodes to `P` and `P` is topological, then in every flattening `C` of `P` no egress gate of a step depends on an
@@ -49,7 +49,7 @@ namespace Properties.NetworkScan.CausalProof
 
 open Flock.Program
 open InferenceOnlyVerifier.Properties.SecurityProofs
-open NetworkCheck.Period
+open NetworkVerifier.Period
 open Properties.NetworkScan.WalkProof
 
 theorem fuel_succ : Flock.Steps.FUEL = (Flock.Steps.FUEL - 1) + 1 := by unfold Flock.Steps.FUEL; omega

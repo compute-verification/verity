@@ -3,7 +3,7 @@ module
 public import Properties.Verity.Game
 public import Definitions.Registration.View
 public import Flock.ProvedScope
-public import NetworkCheck.Check
+public import NetworkVerifier.Check
 
 /-!
 # What a protocol names of the registration
@@ -108,12 +108,12 @@ parameters. The code reads both off the registered Site (`NetworkCheck.Registere
 check's parameters to that reading. It becomes a lemma when the network attester's parameters are the ones
 `NetworkCheck.Registered.registered` returns at an accepted log's view, with a property that this reading is
 `certifiedKeys`. -/
-def CertifiedIn (p : NetworkCheck.Check.Params) (v : View) : Prop :=
+def CertifiedIn (p : NetworkVerifier.Check.Params) (v : View) : Prop :=
   certifiedKeys v = (fun l => (l, Flock.hexOf p.key)) '' {l | l ∈ p.egress.toList ++ p.ingress.toList}
 
 /-- **A network attester check reads exactly the certified links registered at the head `h`**: `CertifiedIn` at the
 view of the prefix of the log `h` heads (`AtHead`). -/
-def CertifiedIsParams (p : NetworkCheck.Check.Params) (D : Digests) (c : Composite) (log : Registration) (h : String) :
+def CertifiedIsParams (p : NetworkVerifier.Check.Params) (D : Digests) (c : Composite) (log : Registration) (h : String) :
     Prop :=
   AtHead D c log h (CertifiedIn p)
 

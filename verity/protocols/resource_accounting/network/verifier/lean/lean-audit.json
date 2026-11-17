@@ -1,17 +1,17 @@
 {
  "format": 2,
- "roots": ["NetworkCheck"],
+ "roots": ["NetworkVerifier"],
  "exempt": {
-  "NetworkCheck.DifftestMain": "the difftest against certificate.py, under `runs`: compiled evaluation of NetworkCheck.Difftest.main, audited under NetworkCheck, a test and not a proof",
-  "NetworkCheck.Main": "the network-check executable's entry point, one line; its command is Core.Protocol.main of NetworkCheck.Check.protocol, audited under NetworkCheck",
-  "NetworkCheck.PeriodMain": "the network-period executable's entry point, one line; its command is Core.Protocol.main of NetworkCheck.Period.protocol, audited under NetworkCheck",
-  "NetworkCheck.RecordsMain": "the network-records executable's entry point: Core.Protocol.main of NetworkCheck.Records.protocol, or Difftest.serve of its verdicts with the grid compared (verdicts) or not (verdicts-no-grid) of N2's execution phase verdict of record (execution phase, NetworkCheck.TransferBlocks.transferBlocksFn) and of the client's check of a window's served certificates (certificates, NetworkCheck.TransferBlocks.certificatesFn), audited under NetworkCheck",
-  "NetworkCheck.SpanMain": "the network-span executable's entry point, one line; its command is Core.Protocol.main of NetworkCheck.Span.protocol, audited under NetworkCheck",
-  "NetworkCheck.RowsMain": "the network-rows executable's entry point, one line; its command is Core.Protocol.main of NetworkCheck.RowsAudit.protocol, audited under NetworkCheck"
+  "NetworkVerifier.DifftestMain": "the difftest against certificate.py, under `runs`: compiled evaluation of NetworkVerifier.Difftest.main, audited under NetworkVerifier, a test and not a proof",
+  "NetworkVerifier.Main": "the network-verifier executable's entry point, one line; its command is Core.Protocol.main of NetworkVerifier.Check.protocol, audited under NetworkVerifier",
+  "NetworkVerifier.PeriodMain": "the network-period executable's entry point, one line; its command is Core.Protocol.main of NetworkVerifier.Period.protocol, audited under NetworkVerifier",
+  "NetworkVerifier.RecordsMain": "the network-records executable's entry point: Core.Protocol.main of NetworkVerifier.Records.protocol, or Difftest.serve of its verdicts with the grid compared (verdicts) or not (verdicts-no-grid) of N2's execution phase verdict of record (execution phase, NetworkVerifier.TransferBlocks.transferBlocksFn) and of the client's check of a window's served certificates (certificates, NetworkVerifier.TransferBlocks.certificatesFn), audited under NetworkVerifier",
+  "NetworkVerifier.SpanMain": "the network-span executable's entry point, one line; its command is Core.Protocol.main of NetworkVerifier.Span.protocol, audited under NetworkVerifier",
+  "NetworkVerifier.RowsMain": "the network-rows executable's entry point, one line; its command is Core.Protocol.main of NetworkVerifier.RowsAudit.protocol, audited under NetworkVerifier"
  },
  "runs": {
-  "NetworkCheck.DifftestMain": {
-   "why": "2,000 random instances on which NetworkCheck.Certificate gives what verity/protocols/resource_accounting/network/verifier/certificate.py gives, byte for byte: depth, E_0 … E_D, real_frames, frame_leaf, frames_root, open_frame, verify_frame on openings and tampered ones, parameters_digest and its canonical JSON, record_head and RecordHead's encoding and digest, certificate_digest (the record's digest under a 64-byte salt, and other lengths), certificate_message over the signed digest (with session ids of 32 bytes, and of 0, 31, 33 and 64, refused) and node, with each ValueError a refusal",
+  "NetworkVerifier.DifftestMain": {
+   "why": "2,000 random instances on which NetworkVerifier.Certificate gives what verity/protocols/resource_accounting/network/verifier/certificate.py gives, byte for byte: depth, E_0 … E_D, real_frames, frame_leaf, frames_root, open_frame, verify_frame on openings and tampered ones, parameters_digest and its canonical JSON, record_head and RecordHead's encoding and digest, certificate_digest (the record's digest under a 64-byte salt, and other lengths), certificate_message over the signed digest (with session ids of 32 bytes, and of 0, 31, 33 and 64, refused) and node, with each ValueError a refusal",
    "args": ["{difftest/instances.jsonl}", "{difftest/python.jsonl}", "2000"],
    "data": {
     "difftest/instances.jsonl": "4842750ee211fc220e9b96bb8fb664bfdc4edbaa16d55b7da4a9c27d17ab1a34",
@@ -20,81 +20,81 @@
    "generate": ["python3", "scripts/difftest_vectors.py", "{repo}", "--out", "{out}"]
   }
  },
- "meaning": ["NetworkCheck", "NetworkAttester", "Base"],
+ "meaning": ["NetworkVerifier", "NetworkAttester", "Base"],
  "layers": {
-  "NetworkCheck.Certificate": {
+  "NetworkVerifier.Certificate": {
    "imports": ["Flock.Hash", "Flock.Bytes", "Flock.Canon", "Identity.Tagged"],
    "except": [],
    "why": "the encodings are code: Lean core, C-Flock's hashes, bytes and canonical JSON, and core's tagged SHA-512 only, no Mathlib and nothing of Security"
   },
-  "NetworkCheck.Check": {
-   "imports": ["NetworkCheck.Certificate", "NetworkAttester.Schedule", "Lms.Verify", "CoreProtocol.Cli"],
+  "NetworkVerifier.Check": {
+   "imports": ["NetworkVerifier.Certificate", "NetworkAttester.Schedule", "Lms.Verify", "CoreProtocol.Cli"],
    "except": [],
    "why": "the check is code: the record's encodings, the certifier program's Program grid and Σ_sync, the LMS verifier and the core protocol interface, no Mathlib and nothing of Security"
   },
-  "NetworkCheck.Period": {
+  "NetworkVerifier.Period": {
    "imports": [
-    "NetworkCheck.Check",
-    "NetworkCheck.Clocks",
+    "NetworkVerifier.Check",
+    "NetworkVerifier.Clocks",
     "CoreProtocol.Profile",
     "Flock.Program",
     "Flock.Public",
     "Flock.WindowRecord",
     "InferenceOnlyVerifier.Desc",
     "InferenceOnlyVerifier.DefinitionDigest",
-    "NetworkCheck.ScanOk",
-    "NetworkCheck.Period.ConnectionRows",
-    "NetworkCheck.Period.Start",
-    "NetworkCheck.Period.Decode",
+    "NetworkVerifier.ScanOk",
+    "NetworkVerifier.Period.ConnectionRows",
+    "NetworkVerifier.Period.Start",
+    "NetworkVerifier.Period.Decode",
     "Spot.Record"
    ],
    "except": [],
    "why": "the period's check is code: v4's certificate and sync decoders, the LMS verifier, the core interface with its integrity profile (to read one-stage's answers), SPOT's record (the sample a registration states, `Spot.Record.profileSample`, and one-stage's bound of it, which an answer is held to), C-Flock's program decoder (the scan's Program, whose templates give its terms), C-Flock's frame-v3 hash (the rows' domain) and the window record's digest, the inference-only check's description-sized layout checks (the scan's layout read off its description) and a Definition's digests (the slot entries' pins), and the scan's ok-bit constants (a schedule's members and the roots of their ok rows), which a registration is held to; no Mathlib and nothing of Security"
   },
-  "NetworkCheck.Records": {
-   "imports": ["NetworkCheck.Check", "Difftest"],
+  "NetworkVerifier.Records": {
+   "imports": ["NetworkVerifier.Check", "Difftest"],
    "except": [],
    "why": "the check over raw, committed and certified records is code: v2's check, and the difftest server's line protocol for its verdicts, no Mathlib and nothing of Security"
   },
-  "NetworkCheck.TransferBlocks": {
-   "imports": ["NetworkCheck.Check", "Lms.Verify", "Flock.Hm96", "Flock.Canon", "Flock.FV3", "Identity.Tagged"],
+  "NetworkVerifier.TransferBlocks": {
+   "imports": ["NetworkVerifier.Check", "Lms.Verify", "Flock.Hm96", "Flock.Canon", "Flock.FV3", "Identity.Tagged"],
    "except": [],
    "why": "N2's execution phase verdict of record is code: v4's certificate, its one LMS check and its encodings, the LMS verifier, C-Flock's hm96 row commitment, canonical JSON and frame-v3-sha512 domain, and core's identity hash, no Mathlib and nothing of Security"
   },
-  "NetworkCheck.Clocks": {
-   "imports": ["NetworkCheck.Check"],
+  "NetworkVerifier.Clocks": {
+   "imports": ["NetworkVerifier.Check"],
    "except": [],
    "why": "the period's decoders are code: v4's certificate and its encodings, no Mathlib, nothing of Security and nothing of the inference-only policy's check"
   },
-  "NetworkCheck.Period.Decode": {
+  "NetworkVerifier.Period.Decode": {
    "imports": [
-    "NetworkCheck.Check",
-    "NetworkCheck.Clocks",
+    "NetworkVerifier.Check",
+    "NetworkVerifier.Clocks",
     "CoreProtocol.Profile",
     "Flock.Program",
     "Flock.Public",
     "Flock.WindowRecord",
     "InferenceOnlyVerifier.Desc",
     "InferenceOnlyVerifier.DefinitionDigest",
-    "NetworkCheck.ScanOk",
-    "NetworkCheck.Period.ConnectionRows",
-    "NetworkCheck.Period.Start"
+    "NetworkVerifier.ScanOk",
+    "NetworkVerifier.Period.ConnectionRows",
+    "NetworkVerifier.Period.Start"
    ],
    "except": [],
    "why": "the period check's structures and their decoding are code: what the period's check reads, the same imports as its layer's but the check itself, no Mathlib and nothing of Security"
   },
-  "NetworkCheck.ScanOk": {
+  "NetworkVerifier.ScanOk": {
    "imports": ["Flock.RegKnown", "Identity.Domains", "Identity.Tagged"],
    "except": [],
    "why": "the scan's ok-bit constants are code: C-Flock's rows at known content and their frame root (the ok rows under the public salts), and core's domain registry and tagged SHA-512 (the salts' tag and the frame domain), no Mathlib and nothing of Security"
   },
-  "NetworkCheck.Span": {
-   "imports": ["NetworkCheck.Period", "NetworkCheck.Registered", "Identity.Domains"],
+  "NetworkVerifier.Span": {
+   "imports": ["NetworkVerifier.Period", "NetworkVerifier.Registered", "Identity.Domains"],
    "except": [],
    "why": "the count over a span is code: the period's check with what it imports (its schedule, certificate and row registration decoders, v4's certificate and its one LMS check, the core interface), the read of the link and the key off the registered hardware (the core interface's Site) and the table of domain separators, no Mathlib and nothing of Security"
   },
-  "NetworkCheck.RowsAudit": {
-   "imports": ["NetworkCheck.Period", "NetworkCheck.Records", "NetworkAttester.Rows"],
+  "NetworkVerifier.RowsAudit": {
+   "imports": ["NetworkVerifier.Period", "NetworkVerifier.Records", "NetworkAttester.Rows"],
    "except": [],
    "why": "the audit of the active network certifier's run over its certified records is code: the period's schedule and its digest, the records' encoding and the certificate check, and the certifier program's rows audit, no Mathlib and nothing of Security"
   }
@@ -166,20 +166,20 @@
  "shape": {
   "premises": [],
   "properties": {
-   "NetworkCheck.RecordsBytes.evidenceOf_toEvidence": {
-    "function": "NetworkCheck.Records.evidenceOf",
+   "NetworkVerifier.RecordsBytes.evidenceOf_toEvidence": {
+    "function": "NetworkVerifier.Records.evidenceOf",
     "outcome": "none"
    },
-   "NetworkCheck.RecordsBytes.expectedGridsOfBytes_eq": {
-    "function": "NetworkCheck.Records.expectedGridsOfBytes",
+   "NetworkVerifier.RecordsBytes.expectedGridsOfBytes_eq": {
+    "function": "NetworkVerifier.Records.expectedGridsOfBytes",
     "outcome": "none"
    },
-   "NetworkCheck.RecordsBytes.unhex_eq": {
-    "function": "NetworkCheck.Records.unhex",
+   "NetworkVerifier.RecordsBytes.unhex_eq": {
+    "function": "NetworkVerifier.Records.unhex",
     "outcome": "none"
    },
-   "NetworkCheck.RecordsGrid.expectedGrids_eq": {
-    "function": "NetworkCheck.Records.expectedGrids",
+   "NetworkVerifier.RecordsGrid.expectedGrids_eq": {
+    "function": "NetworkVerifier.Records.expectedGrids",
     "outcome": "none"
    }
   }

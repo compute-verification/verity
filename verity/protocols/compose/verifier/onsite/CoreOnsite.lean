@@ -43,8 +43,8 @@ public import CoreRemote
 public import MemoryAttester.WipeCount
 public import MemoryAttester.WipeProtocol
 public import InferenceOnlyVerifier.Protocol
-public import NetworkCheck.Period
-public import NetworkCheck.Span
+public import NetworkVerifier.Period
+public import NetworkVerifier.Span
 public import PousCheck.RunProtocol
 public import PouwVerifier.Period
 public import Poub.P2Protocol
@@ -58,8 +58,8 @@ meta import CoreRemote
 meta import MemoryAttester.WipeCount
 meta import MemoryAttester.WipeProtocol
 meta import InferenceOnlyVerifier.Protocol
-meta import NetworkCheck.Period
-meta import NetworkCheck.Span
+meta import NetworkVerifier.Period
+meta import NetworkVerifier.Span
 meta import PousCheck.RunProtocol
 meta import PouwVerifier.Period
 meta import Poub.P2Protocol
@@ -75,7 +75,7 @@ open Composition
 
 /-- Onsite's subprotocols, in the order of their ids. -/
 def components : List BlobProtocol :=
-  [NetworkCheck.Period.protocol, InferenceOnlyVerifier.Protocol.protocol, PousCheck.RunProtocol.protocol, PouwVerifier.Period.protocol,
+  [NetworkVerifier.Period.protocol, InferenceOnlyVerifier.Protocol.protocol, PousCheck.RunProtocol.protocol, PouwVerifier.Period.protocol,
     Poub.P2Protocol.protocol, VStar.Recursive.Sampled.protocol, MemoryAttester.WipeProtocol.protocol]
 
 /-- The subprotocols that must commit to one record: the policy and SPOT. -/
@@ -231,17 +231,17 @@ def wipeLink (S : Core.Site) (host : String) : Except String String := do
 /-- The count's parameters as the composition takes them: the count's own (`NetworkCheck.Span.paramsOf`), which must
 hold the registered hardware, the link they name being its host's one link (`wipeLink`). A refusal is a refusal of the
 parameters. Nothing here holds the site to an accepted log: the parameters are the verifier's. -/
-def spanParams (j : Lean.Json) : Flock.V NetworkCheck.Span.Params := do
-  let p ← NetworkCheck.Span.paramsOf j
+def spanParams (j : Lean.Json) : Flock.V NetworkVerifier.Span.Params := do
+  let p ← NetworkVerifier.Span.paramsOf j
   let some r := p.registered
     | throw "the parameters hold no registered hardware (site and head): a wipe's count is on a registered host's link"
-  let S ← NetworkCheck.Registered.siteOf (← Flock.J.get j "site" "the object")
+  let S ← NetworkVerifier.Registered.siteOf (← Flock.J.get j "site" "the object")
   let _ ← wipeLink S r.host
   pure p
 
 /-- The count over the span between a wipe's two marks, on its host's one link: `NetworkCheck.Span.protocol`
 (`verity/certifier/span/v0`) on `spanParams`, the same check on parameters that hold the registered hardware. -/
-def hostSpan : Protocol := { NetworkCheck.Span.protocol with params := spanParams }
+def hostSpan : Protocol := { NetworkVerifier.Span.protocol with params := spanParams }
 
 /-- What the wipe's case names of its span (`MemoryChallenger.WipeProtocol.named`); `none` unless its commitment and
 its evidence decode and name it. -/
@@ -253,7 +253,7 @@ def wipeNamed (k : Case) : Option MemoryAttester.WipeProtocol.Named :=
 
 /-- What the count's case names of its span (`NetworkCheck.Span.named`); `none` unless its parameters and its commitment
 decode. -/
-def spanNamed (k : Case) : Option NetworkCheck.Span.Named := NetworkCheck.Span.namedOf k.params k.commitment
+def spanNamed (k : Case) : Option NetworkVerifier.Span.Named := NetworkVerifier.Span.namedOf k.params k.commitment
 
 /-- A count of egress in whole MiB as the bytes a tie compares: its decimal digits. -/
 def mibBytes (n : Int) : ByteArray := (toString n).toUTF8
@@ -352,23 +352,23 @@ private def bare : Core.Site.Link := { id := "up1", ends := ("node0", Core.Site.
 /-- The count's `#guard`s' parameters (`NetworkCheck.Span.guardParams`) with more keys. -/
 private def spanJson (more : List (String × Lean.Json)) : Lean.Json :=
   more.foldl (fun j (k, v) => j.setObjVal! k v)
-    ((Core.canonicalJson NetworkCheck.Span.guardParams.toUTF8).toOption.getD .null)
+    ((Core.canonicalJson NetworkVerifier.Span.guardParams.toUTF8).toOption.getD .null)
 
 private def onSite (S : Core.Site) : Lean.Json := spanJson [("head", .str "h"), ("site", S.toJson)]
 
 -- the count's parameters hold the registered hardware, and their link is its host's one link
 #guard (spanParams (onSite (siteWith [uplink, challenged]))).isOk
-#guard (NetworkCheck.Span.paramsOf (spanJson [])).isOk && !(spanParams (spanJson [])).isOk
-#guard (NetworkCheck.Span.paramsOf (onSite (siteWith [uplink, between]))).isOk &&
+#guard (NetworkVerifier.Span.paramsOf (spanJson [])).isOk && !(spanParams (spanJson [])).isOk
+#guard (NetworkVerifier.Span.paramsOf (onSite (siteWith [uplink, between]))).isOk &&
   !(spanParams (onSite (siteWith [uplink, between]))).isOk
-#guard hostSpan.id == NetworkCheck.Span.protocolId
+#guard hostSpan.id == NetworkVerifier.Span.protocolId
 
 private def canonText (j : Lean.Json) : String := (Flock.canon j).toOption.getD ""
 
 /-- A mark in the count's commitment bytes that opens to `m`: the count's `#guard`s' certificate and salt
 (`NetworkCheck.Span.guardMark`), then `m`. -/
 private def markOf (phase fill : UInt8) (m : ByteArray) : ByteArray :=
-  (NetworkCheck.Span.guardMark phase fill).extract 0 175 ++ m
+  (NetworkVerifier.Span.guardMark phase fill).extract 0 175 ++ m
 
 private def wipeCommitment : MemoryAttester.StreamedWipe.Commitment :=
   ⟨"node0".toUTF8, ⟨#[0]⟩, ⟨16, 3, 1, 1000, #[("gpu", 16 * MemoryAttester.StreamedWipe.LABEL_BYTES)]⟩⟩
@@ -377,7 +377,7 @@ private def wipeCommitment : MemoryAttester.StreamedWipe.Commitment :=
 mark. No check accepts it; the ties read it. -/
 private def wipeSigned : MemoryAttester.StreamedWipe.Signed :=
   ⟨wipeCommitment, MemoryAttester.StreamedWipe.COMPLETE,
-    Flock.Sha512.hash ((NetworkCheck.Span.guardMark 5 1).extract 4 111), 0, 0, #[], "", .empty, .empty⟩
+    Flock.Sha512.hash ((NetworkVerifier.Span.guardMark 5 1).extract 4 111), 0, 0, #[], "", .empty, .empty⟩
 
 private def startMsg : ByteArray := MemoryAttester.StreamedWipe.startMessage wipeCommitment
 private def endMsg : ByteArray := (MemoryAttester.StreamedWipe.endMessage wipeSigned).toOption.getD .empty

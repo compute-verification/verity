@@ -1,7 +1,7 @@
 module
 
 public import Properties.NetworkScan.Assumptions
-public import NetworkCheck.Period
+public import NetworkVerifier.Period
 public import Definitions.Certifier.SampledAudit
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
@@ -68,7 +68,7 @@ it of every statement the verifier parses.
 
 namespace Properties.NetworkScan
 
-open NetworkCheck.Period
+open NetworkVerifier.Period
 
 /-- The gate the reference `r` resolves to from the activation `sc` (`Flock.Program.resolve`), `0` where it doesn't
 resolve. -/
@@ -79,7 +79,7 @@ def gateAt (P : Flock.Program.Prog) (sc : Flock.Program.Scope) (r : Flock.Progra
 egress member `t`'s verdict and its frame's `8B` bits, and step `t`'s ingress is bucket `t`'s `row` parameter. -/
 def scanLayout (P : Flock.Program.Prog) (s : Schedule) : NetTiming.BoundaryGates 1 s.allocation :=
   let nodes := (P.defs[P.root]!).body.nodes
-  let ts := NetworkCheck.Period.templateNodes P
+  let ts := NetworkVerifier.Period.templateNodes P
   let ke := ts.getLast?.getD 0
   let le := (P.defs[nodes[ke]!.fn]!).outLeaves
   let bits := 8 * s.cellBytes
