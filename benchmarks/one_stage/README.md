@@ -24,7 +24,7 @@ input. What the guarantee rests on: `verity/protocols/proofs/spot/verifier/READM
   (`llama32_1b_rope_d64_l0.json`: layer 0's RoPE d64 heads at steps 1-7) its C2 site commits before the bundle is sealed,
   a `served` window under the 64-byte run root. Then the Commit's CPU replay (the prover's pre-flight check, on the node), and
   `a5.sh` with `WINDOW=served` on the bundle and that window, whose private bodies stay on the node with the row dir: of the
-  workload's files the run's record holds only the ones `adapters/vllm/tools/served_run/published.sh` lists, each with the reason it holds nothing
+  workload's files the run's record holds only the ones `adapters/vllm/tools/workload/published.sh` lists, each with the reason it holds nothing
   of a request, and no file of the workload's `commit/` or `match/`, whose records, bundle, slim keep and request spec hold values.
   Its work directory is made once on the node by `(cd adapters/vllm && WORK=DIR bash verity_vllm/ops/pod_bootstrap.sh --cases
   LLAMA32_1B_INT8)`, and the script then runs with the same `WORK` (default `/workspace`). The bootstrap makes all the script reads
@@ -56,7 +56,7 @@ input. What the guarantee rests on: `verity/protocols/proofs/spot/verifier/READM
   tables over two engine steps, each chunk one table's, as rank 0 of a one-rank step on a local challenger's coins. Lean
   verifies each sampled chunk with its table's registered reads (`--registered`, `tables.registered_reads`).
 - `a5_topp.py` (`a5_tp.sh` with `STANDIN=topp` or `topp:slots`): A5 on a window of top-p select rows cut into their stages,
-  which no served window has yet: `tests/adapters/vllm/tests/pipeline/test_serving_rows_stages.py`'s rows, each carried row wired
+  which no workload has yet: `tests/adapters/vllm/tests/pipeline/test_serving_rows_stages.py`'s rows, each carried row wired
   to the proof block that wrote it, as rank 0 of a one-rank step on a local challenger's coins, run as `a5_sparse_mla.py` runs its
   window. `topp` names each stage on bits, the form Lean's `verify --zk` takes; `topp:slots` names the stages as words, whose
   table reads go in lookup slots, and Lean refuses each sampled proof block's statement. The window holds the stages whose
@@ -65,7 +65,7 @@ input. What the guarantee rests on: `verity/protocols/proofs/spot/verifier/READM
   `--rows`). `--select-only` holds the select chunks alone, composed at any V, each wired to the chunk before it, with the
   rows they read from the step blocks committed as plain input rows that no proof block of the window writes.
 - `a5_network_attester.py` (`a5_tp.sh` with `STANDIN=network_attester`, `network_attester:altered`, `network_attester:pad`, `network_attester:pad-named` or `network_attester:swapped`):
-  A5 on a window with transfer gates, which no served window has yet: two chunks of the certifier's toy Definition whose ports are the
+  A5 on a window with transfer gates, which no workload has yet: two chunks of the certifier's toy Definition whose ports are the
   bucket rows of one connection's ingress and egress cells (a row a bucket, docket v2), committed under the certifier's
   salts, proved whole (the work sampling design's selection All) beside a sampled rest, on a local challenger's coins or the verifier's
   own. The proof blocks' wiring is the Program's (`network_attester_rows.Units`, from public structure alone: ingress cells 0 … n − 1, egress
@@ -74,7 +74,7 @@ input. What the guarantee rests on: `verity/protocols/proofs/spot/verifier/READM
   (`network_attester_rows.port`, after `check_registration` under the certifier's key), which refuses a foreign, a duplicate and a
   padding-slot read by name; the altered run, and a statement made for another wiring of the proof blocks (a pad in a data cell's place,
   its rows under the Program's value, two proof blocks swapped: `--made-for`), are refused by Lean's registered reads. Its certifier run
-  is rehearsed against a fake endpoint, or (`A5_WARDEN_RUN`) is `network_attester_replay.py`'s: a served window's requests through the
+  is rehearsed against a fake endpoint, or (`A5_WARDEN_RUN`) is `network_attester_replay.py`'s: a workload's requests through the
   network attester, each answered with the tokens the server streamed it.
 - `a5_tp_gates.py` (`a5_tp.sh` with `A5_CHALLENGER=local` and `STANDIN=tp-gates`, `tp-gates:altered`, `tp-gates:swapped`,
   `tp-gates:other-collective`, `tp-gates:other-request` or `tp-gates:own`): A5 on both ranks of a synthetic Llama TP2 step
@@ -104,14 +104,14 @@ input. What the guarantee rests on: `verity/protocols/proofs/spot/verifier/READM
   text. `COLD_STAGE=probe` checks the window's files and the tools, `build` builds alone and `run` builds and proves.
   `a5.py --gpus` hands an audit's proof server the same devices.
 - `a5_glm53_commit.sh`, `a5_glm53_cpu.sh`: A5 on GLM-5.3 in its two halves. The first is the GPU job, from the source tree
-  (`bash benchmarks/one_stage/a5_glm53_commit.sh`): the TP8 Commit with served windows, their
+  (`bash benchmarks/one_stage/a5_glm53_commit.sh`): the TP8 Commit with workloads, their
   private bodies kept on the GPU machine off custody. The second, `a5_glm53_cpu.sh GPU_RUN` from a VM, copies them to the CPU
   machine (`A5_ON`) and runs `a5_tp.sh` there in one research run.
-- `adapters/vllm/tools/served_run/commit.sh` (the vLLM served run's): the single-GPU counterpart of `a5_glm53_commit.sh`'s deferred Commit, on Llama-3.2-1B bf16
+- `adapters/vllm/tools/workload/commit.sh` (the vLLM workload's): the single-GPU counterpart of `a5_glm53_commit.sh`'s deferred Commit, on Llama-3.2-1B bf16
   bi-eager TP1 (one RTX PRO 6000 of vy-nebius-1): the workload's Build and Match of record, a config-run Commit that seals
   `commit/replay_bundle_p0/` (a single-GPU workload defers only as a config run) and its replay on CPU. The row dir stays on the
   node, the only copy of its bundle. A deferred single-GPU Commit's window comes from its bundle through `verity-vllm serving-rows`, not `tp-serving-rows`.
-- `served_verdicts.sh` (with `served_verdicts.py`): one served window through every subprotocol, in one job on an H200 node
+- `served_verdicts.sh` (with `served_verdicts.py`): one workload through every subprotocol, in one job on an H200 node
   from a clone of the tree (`bash benchmarks/one_stage/served_verdicts.sh`). It serves
   Llama-3.2-1B int8 on one H200 under `gpu-lease` (`serve-openai --scheme rows-sha512 --seal --admit release-order`), sends a
   few greedy requests from the certifier's traffic generator, and seals each window. Before the first request, the committer
@@ -180,17 +180,17 @@ input. What the guarantee rests on: `verity/protocols/proofs/spot/verifier/READM
   the window's one-stage docket and the proof system's answer to it) or onsite's `verity/pouw/period/v1`
   (`period`: the key, main's first-parent history, the period's name, the auditor's ledger, the pins log and each
   window's evidence), and its answer, `pouw-check`'s or `pouw-period`'s with `--exe`, written private as `composite.py`
-  reads it. From a served run (`--serve-run DIR --window K`) it names the piece MISSING with why and writes no case, so
+  reads it. From a workload (`--serve-run DIR --window K`) it names the piece MISSING with why and writes no case, so
   `composite.py` leaves it out: an H1 window has no `v1` case, and no `period` case outside a period or without its sampled
   proof blocks' proof outcomes.
-- `v2_case.py`: SPOT v2's `--cases` directory from a served window's kept files (`case_v2` of its v1 case,
+- `v2_case.py`: SPOT v2's `--cases` directory from a workload's kept files (`case_v2` of its v1 case,
   partition, public file, sessions and circuit file), with its own Lean answer with `--exe`. A circuit file the run didn't
   keep is rebuilt by the command its `m0/compose.log` records and used only at the log's pin. The case names the public
   file by the digest the audit staged, where the window keeps it (`case-v2.json`), and refuses a kept file with another,
   leaving only `missing.json`; a window keeping none gets the kept file's own digest, so its case shows only that the
   kept files verify. `case.json` says which under `files`, and whether the audit staged the file before the sample or
   after one its caller handed it (the window's `summary.json`), or that the window cannot tell.
-- `kept_composite.sh SRC [K]`: remote's and onsite's Lean verdicts on a served run's kept records (`served_verdicts.sh`'s
+- `kept_composite.sh SRC [K]`: remote's and onsite's Lean verdicts on a workload's kept records (`served_verdicts.sh`'s
   `out/`, or a tarball of it) on a CPU node: it builds the products and the pieces' checks, writes PoUW's pieces
   (`pouw_piece.py`; the period from the kept `pieces/pouw/`, `main.txt`, `H1_KEY_SHA512` and the sampled and live runs'
   statements, `POUW_STATEMENTS` and `POUW_LIVE`), v2's (`v2_case.py`) and every kept piece holding a case beside its
@@ -322,7 +322,7 @@ input. What the guarantee rests on: `verity/protocols/proofs/spot/verifier/READM
   `served_util.py` takes Tensor Active's mean over the longest run of full steps, each step from the previous step's end
   to its own on the step trace's clock, and splits the rest into losses by what the GPU was running at each sample.
   With `PYSPY=1`, `pyspy_steps.py` splits the same steps' host time by Python function and thread, from py-spy's trace.
-- `served_shares.py SERVE_DIR [--credit ANSWER.json]`: a served run's utilization (the work its step trace's
+- `served_shares.py SERVE_DIR [--credit ANSWER.json]`: a workload's utilization (the work its step trace's
   steps declare, the linears at θ and attention and the LM head at θ/2, over the loads' busy wall), term by term, and its
   credited share (the MACs Pearl+'s verdict, `served_passes.py verify`'s answer, credited at θ, over the same wall), at
   each reading of the tensor's clock the card states (`verity.device.readings`: the tensor clock's and the SM clock's).
@@ -349,8 +349,7 @@ input. What the guarantee rests on: `verity/protocols/proofs/spot/verifier/READM
 - `rehearsal.sh check|serve|audit|compose|probe`: the remote demo's served path as one command a node, each verb
   `served_verdicts.sh` at fixed settings (Pearl+ tied to the window, product remote) with its output through a filter
   that withholds a session secret. `check` runs on any CPU node what the other verbs read that needs no card and no
-  gate: the settings, the class's circuit from the serve's φ, a stand-in window of the class through what a served
-  window's close reads of it (`rehearsal_window.py`), the harness's policy step and its limits, the policy's Lean check
+  gate: the settings, the class's circuit from the serve's φ, a stand-in window of the class through what a workload's close reads of it (`rehearsal_window.py`), the harness's policy step and its limits, the policy's Lean check
   on the class's own Program with the settings' `ALPHA`, `GAMMA` and `DAY_PROGRAM` held to what it answers and
   `HELD_ALPHA` and `HELD_GAMMA` to the record form's pair of the class (`rehearsal_limits.py`), the day's declaration,
   the Lean the verbs run, and Pearl+ against this tree's own gate code.

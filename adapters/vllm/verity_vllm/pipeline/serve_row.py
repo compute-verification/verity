@@ -12,7 +12,7 @@ records the engine its workload Program models in `WORKLOAD_PROGRAM` (`global_pr
 async scheduling, 0 synchronous), and the one a record of the row must attest (GM-01 G1). serve-openai reads it (`of`;
 ``serve.json``'s ``row_scheduling``) and refuses a flag that disagrees with it before the model loads, and refuses a server
 whose engine resolved other than the flag (`checked`) before it listens. Under the flag ``serve.json``'s target declares
-async scheduling too (`serve_seal.target_of`), so the φ a served window's Programs are predicted from is specialized for
+async scheduling too (`serve_seal.target_of`), so the φ a workload's Programs are predicted from is specialized for
 LAG 1 by declaration. The Commit (and H1 on it) serves under the flag as it does synchronously: the native collector learns
 the declared static shape's plans before the server listens (`serve_learn`), and an async step commits the rows the
 synchronous step does, under the same rows-sha512 root (``tests/pipeline/serve_async_commit_gpu.py``).

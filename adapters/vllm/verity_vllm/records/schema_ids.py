@@ -231,7 +231,7 @@ STATIC_SCHEDULE_SCHEMA = "verity-vllm/static-schedule/v1"
 INT8_K_SCALES_SCHEMA = "verity-vllm/int8-k-scales/v1"
 #: an int8 checkpoint's error report, which `engine.int8_checkpoint.report` writes
 INT8_ERROR_REPORT_SCHEMA = "verity-vllm/int8-error-report/v1"
-#: a served run's step trace (`engine.step_trace.SCHEMA`): `StepTrace` writes it in the header, the trace's first record,
+#: a workload's step trace (`engine.step_trace.SCHEMA`): `StepTrace` writes it in the header, the trace's first record,
 #: and `load` refuses a trace that opens with any other
 STEP_TRACE_SCHEMA = "verity-vllm/step-trace/v1"
 #: the inventory of the modules vLLM builds for a checkpoint, by rank (`engine.meta_inventory.SCHEMA`), which

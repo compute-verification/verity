@@ -1,4 +1,4 @@
-"""`served_piece.sh`, PoUS's piece of a served window (served_verdicts.sh's POUS_CMD), on a CPU: `lake`, `gpu-lease`
+"""`served_piece.sh`, PoUS's piece of a workload (served_verdicts.sh's POUS_CMD), on a CPU: `lake`, `gpu-lease`
 and the piece's Python are stand-ins on PATH, the library is one named already (P2_LIB) and HOME holds no elan. The
 library is loaded once by the piece's Python with no card to see, and one it doesn't load, or a node that refuses
 `setarch -R` and so builds none, ends the piece before anything else. The two Lean verifiers that decide,

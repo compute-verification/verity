@@ -467,8 +467,8 @@ loaded_by = [
     "verity/protocols/proofs/spot/prover/cost/h200.py",
     "verity/protocols/proofs/spot/prover/cost/inputs.py",
     "verity/protocols/proofs/spot/prover/cost/int8_llama.py",
-    "verity/protocols/proofs/spot/prover/cost/served_window.py",
     "verity/protocols/proofs/spot/prover/cost/transformer.py",
+    "verity/protocols/proofs/spot/prover/cost/workload.py",
     "verity/protocols/resource_accounting/compute/pouw/prover/circuit/h1window.py",
     "verity/protocols/resource_accounting/compute/pouw/prover/kernels/served_zk/served_commit.py",
     "verity/protocols/resource_accounting/compute/pouw/prover/lowering/h1unit.py",
@@ -513,8 +513,8 @@ reaches = [
 loaded_by = [
     "verity/protocols/proofs/spot/prover/cost/glm53.py",
     "verity/protocols/proofs/spot/prover/cost/h200.py",
-    "verity/protocols/proofs/spot/prover/cost/served_window.py",
     "verity/protocols/proofs/spot/prover/cost/transformer.py",
+    "verity/protocols/proofs/spot/prover/cost/workload.py",
     "verity/protocols/resource_accounting/compute/pouw/prover/circuit/plan.py",
 ]
 
@@ -892,8 +892,8 @@ reaches = [
 ]
 loaded_by = [
     "verity/protocols/proofs/spot/prover/cost/cpu_budget.py",
-    "verity/protocols/proofs/spot/prover/cost/served_window.py",
     "verity/protocols/proofs/spot/prover/cost/transformer.py",
+    "verity/protocols/proofs/spot/prover/cost/workload.py",
     "verity/protocols/proofs/spot/prover/workload.py",
     "verity/protocols/resource_accounting/compute/pouw/prover/workload.py",
     "verity/protocols/resource_accounting/memory/poub/prover/p2_party_prover.py",

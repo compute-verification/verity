@@ -662,7 +662,7 @@ KNOWN: dict[str, str] = {
     "benchmarks/harness/verity_bench/served_table.py::Protocol":
         "homonym, a protocol's served benchmark rows: rename (benchmarks)",
     "benchmarks/network_e2e/encodings/replay.py::Trace":
-        "homonym, a served run's step trace (`verity-vllm/step-trace/v1`): rename (network-accounting)",
+        "homonym, a workload's step trace (`verity-vllm/step-trace/v1`): rename (network-accounting)",
     "benchmarks/network_sim/workload/block.py::Block":
         "homonym, the simulator's model of one served block: rename (network-accounting)",
     "benchmarks/network_sim/workload/lab.py::Session":

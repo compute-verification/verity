@@ -74,11 +74,11 @@ other verb shares in either direction:
 
     vy-compose-gate compose   (a lane's own key; the compose hand-off, a tar, on stdin)
 
-It composes a served run's final record and composite off the served node (`benchmarks/one_stage/served_verdicts.sh`'s
+It composes a workload's final record and composite off the served node (`benchmarks/one_stage/served_verdicts.sh`'s
 `compose`), from the hand-off the served node's `served_verdicts.sh gate-compose` sends: the files its
 `private/compose/inputs.txt` lists, `private/compose/inputs.sha256` among them, and nothing else. As `auditor`, in a
 scratch directory of its own under the root's scratch, which it removes however it ends, it takes each regular file of the
-tar (`receive`), refusing the hand-off by a member's name before writing its bytes where the name is a served run's witness
+tar (`receive`), refusing the hand-off by a member's name before writing its bytes where the name is a workload's witness
 (`witness`, the rule its sender holds its list to) and refusing any member that isn't a regular file at a relative path,
 a second copy, a file the sums don't list, a listed file it lacks, and a file whose SHA-256 isn't the one the served node
 wrote. Then it runs
@@ -185,7 +185,7 @@ SAMPLED_EXE = Path("verity/protocols/proofs/spot_flock_recursion/verifier/lean/.
 SUM_LINE = re.compile(r"([0-9a-f]{64})  (\S.*)")
 WITNESS_DIRS = {"values": "a committed value file", "prover": "a prover's input file (its rows and salts)",
                 "served_rows": "a window's committed rows and salts", "certifier-front": "the certifier front's group (its prompts)"}
-"""A served run's witness, by a directory part of its path (`witness`): what the compose gate takes from no hand-off, each
+"""A workload's witness, by a directory part of its path (`witness`): what the compose gate takes from no hand-off, each
 with why. The three tables and `witness` are the rule the sender holds its list to (`served_verdicts.py witness`), in the
 same order and word for word, which `tests/test_host.py` holds them to."""
 WITNESS_TOPS = {"windows": "a sealed row dir (the window's rows)", "advice": "the advice and its opening"}
@@ -843,7 +843,7 @@ def _member_name(m: tarfile.TarInfo) -> str:
 
 
 def witness(paths: Sequence[str]) -> list[tuple[str, str]]:
-    """Each of `paths` (relative to a serve dir) that is a served run's witness, with why (`WITNESS_DIRS`, `WITNESS_TOPS`,
+    """Each of `paths` (relative to a serve dir) that is a workload's witness, with why (`WITNESS_DIRS`, `WITNESS_TOPS`,
     `WITNESS_NAMES`, and H1's prover state under ``private/h1``)."""
     out = []
     for p in paths:
@@ -884,7 +884,7 @@ def compose_settings(body: bytes) -> dict[str, str]:
 def receive(src: BinaryIO, d: Path, *, cap: int = COMPOSE_BYTES) -> dict[str, str]:
     """The hand-off's tar from `src` written under `d` (0700, each file 0600), each file's SHA-256 by its path, held to
     the sums the served node wrote (`COMPOSE_SUMS`): refused, before a member's bytes are written, when its name is a
-    served run's witness (`witness`) or it isn't a regular file at a relative path, or a second copy, or
+    workload's witness (`witness`) or it isn't a regular file at a relative path, or a second copy, or
     past `cap` in all, or it is `COMPOSE_ENV` and not settings `compose_settings` reads, or its path is another member's
     file or directory; and after, when a file the sums list is missing, one isn't listed, or one isn't its listed sum,
     so a path the sums name is only ever one of the members it wrote."""
@@ -899,7 +899,7 @@ def receive(src: BinaryIO, d: Path, *, cap: int = COMPOSE_BYTES) -> dict[str, st
                     continue
                 name = _member_name(m)
                 if held := witness([name]):
-                    raise Refused(f"the hand-off carries the served run's witness: {name} ({held[0][1]}); a hand-off is "
+                    raise Refused(f"the hand-off carries the workload's witness: {name} ({held[0][1]}); a hand-off is "
                                   "verifier-side files alone, and its sender refuses one too (served_verdicts.sh)")
                 if not m.isreg():
                     raise Refused(f"the hand-off's member {name} isn't a regular file (a link or a device)")
@@ -933,7 +933,7 @@ def receive(src: BinaryIO, d: Path, *, cap: int = COMPOSE_BYTES) -> dict[str, st
             raise Refused(f"{COMPOSE_SUMS} has a line that isn't sha256sum's: {ln[:200]!r}")
         listed[posixpath.normpath(s.group(2))] = s.group(1)
     if held := witness(list(listed)):
-        raise Refused(f"the hand-off's sums list the served run's witness: {held[0][0]} ({held[0][1]})")
+        raise Refused(f"the hand-off's sums list the workload's witness: {held[0][0]} ({held[0][1]})")
     if extra := sorted(set(got) - set(listed) - {COMPOSE_SUMS}):
         raise Refused(f"the hand-off carries {extra[0]}, which its sums don't list ({len(extra)} such)")
     if gone := sorted(set(listed) - set(got)):

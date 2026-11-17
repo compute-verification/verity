@@ -26,9 +26,9 @@ hold in their `--json` under `spot_holes`).
 * **Over several runs** a hole is open if no fix is declared for it or it is open in any of them, else not known if it
   is not known in any (or no run was read), else closed. The label is `SPOT soundness` only when every hole is
   closed, otherwise `SPOT`.
-* **On a served run** (`served`, which `verity bench exfiltration --served-run` prints in place of its runs of
+* **On a workload** (`served`, which `verity bench exfiltration --workload` prints in place of its runs of
   record) the commits read are the run's own, from the record its reader gives: the one the record names (`commit`,
-  the second stage's) and each of its runs' (`runs`, `SERVED_RUNS`), all listed. A hole is closed only where it is
+  the second stage's) and each of its runs' (`runs`, `WORKLOAD_RUNS`), all listed. A hole is closed only where it is
   closed at every one of them; a run the record holds no entry for is printed as not given and read at no commit.
   Where any of the four is not given, a hole closed at every commit read is `CLOSED_READ`, printed with the runs
   read and those not given, never closed, and the label stays `SPOT`: `SPOT soundness` needs every hole closed at
@@ -57,12 +57,12 @@ LOCK = Path("security/lean-audit.json")
 #: the deployed vocabulary
 THEOREMS = ("Verity.Sampled.onsite_soundness_deployedReady", "Verity.Sampled.remote_soundness_deployedReady")
 CLOSED, OPEN, UNKNOWN = "closed", "open", "not known"
-#: a served run's hole closed at every commit read while some of its runs were not given, which is never `CLOSED`
+#: a workload's hole closed at every commit read while some of its runs were not given, which is never `CLOSED`
 CLOSED_READ = "closed at the runs read"
 LABEL, SOUND = "SPOT", "SPOT soundness"
 #: a served two-stage run's four runs, as its record's reader names them in the record's `runs`
-SERVED_RUNS = ("serve", "first", "replay", "second")
-#: what a served run's run prints as where the record holds no entry for it
+WORKLOAD_RUNS = ("serve", "first", "replay", "second")
+#: what a workload's run prints as where the record holds no entry for it
 NOT_GIVEN = "not given: the record holds no entry for it, and no commit of it is read"
 #: the line `git revert` writes into a revert's message, naming the commit it reverts (a merge's, with `-m`, too)
 REVERTS = re.compile(r"This reverts commit ([0-9a-f]{7,40})")
@@ -421,9 +421,9 @@ def status(runs: Sequence[str], *, store: Any = None, root: Path | None = None) 
 
 
 def served(record: Mapping[str, Any], *, root: Path | None = None) -> dict:
-    """The block's document over a served run's own code, from its ``record`` as its reader gives it: each hole at the
+    """The block's document over a workload's own code, from its ``record`` as its reader gives it: each hole at the
     commit the record names (``commit``, the one its second stage ran) and at each of its runs' (``runs``, by
-    `SERVED_RUNS`), closed only where it is closed at every one. A run the record holds no entry for (its reader was
+    `WORKLOAD_RUNS`), closed only where it is closed at every one. A run the record holds no entry for (its reader was
     given no directory of it) is listed as not given and read at no commit; then a hole closed at every commit read is
     `CLOSED_READ`, not closed, and the label is `SPOT`. One whose entry names no commit, or a dirty tree, is not
     known. `served` lists each run with its commit and machine and, where its commit is read, each hole there as
@@ -431,17 +431,17 @@ def served(record: Mapping[str, Any], *, root: Path | None = None) -> dict:
     and those not given; the print names the runs at each commit whose status it lists."""
 
     if not isinstance(record, Mapping):
-        raise ValueError(f"a served run's record is one JSON object, not {type(record).__name__}")
+        raise ValueError(f"a workload's record is one JSON object, not {type(record).__name__}")
     runs = record.get("runs") or {}
-    if not isinstance(runs, Mapping) or (other := sorted(set(runs) - set(SERVED_RUNS))):
-        raise ValueError(f"a served run's record holds its runs as `runs`, an object of {', '.join(SERVED_RUNS)}"
+    if not isinstance(runs, Mapping) or (other := sorted(set(runs) - set(WORKLOAD_RUNS))):
+        raise ValueError(f"a workload's record holds its runs as `runs`, an object of {', '.join(WORKLOAD_RUNS)}"
                          + (f", not {', '.join(other)}" if isinstance(runs, Mapping) else ""))
-    run = str(record.get("run") or "the served run")
+    run = str(record.get("run") or "the workload")
     commit = record.get("commit") or None
     mine = None if commit else "the record names no `commit`, the commit its second stage ran"
     sources = {f"{run}'s record (`commit`)": (commit, mine)}
     listed = []
-    for name in SERVED_RUNS:
+    for name in WORKLOAD_RUNS:
         r = runs.get(name)
         if r is None:
             listed.append({"name": name, "given": False, "run": None, "commit": None, "machine": None, "why": None})
@@ -499,7 +499,7 @@ def render(doc: Mapping[str, Any]) -> str:
     plainly closed), the runs read, and the theorem with its open premises."""
 
     t, sv = doc["theorem"], doc.get("served")
-    of = ("of the commit the served run's record names and of each of its runs' commits" if sv else
+    of = ("of the commit the workload's record names and of each of its runs' commits" if sv else
           "of the commit each run's record names")
     lines = ["## SPOT's resampling holes in the code that ran", "",
              (f"Each hole is closed only where its fix's commit (`{doc['fixes']}`; a hole with none is open) is an ancestor "

@@ -1,4 +1,4 @@
-"""`served_case.py`, PoUS's and the wipe's pieces for the composite, built from what a served window kept.
+"""`served_case.py`, PoUS's and the wipe's pieces for the composite, built from what a workload kept.
 
 PoUS's window is `served_piece.py`'s, run on the CPU over the tiny int8 checkpoint at the small point with the PoUS tests'
 signer (`test_pous_served_piece`'s fixture, and its BF16 one); the builder encodes ``C*`` again from the same snapshot on

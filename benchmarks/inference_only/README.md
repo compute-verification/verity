@@ -3,7 +3,7 @@
 It measures how much training a developer could run inside the inference blocks that Llama 3.2 1B's inference-only
 policy lets it serve: the least slowdown of training run inside the policy's inference blocks, under the min-cut bound
 (`benchmarks/slowdown/slowdown/min_cut.py`, whose `HE` names its Lean statement). A number of 1 says the bound shows no
-slowdown. On a served run's record it follows the core benchmarks' interface (`benchmarks/README.md`): a measurement,
+slowdown. On a workload's record it follows the core benchmarks' interface (`benchmarks/README.md`): a measurement,
 not an audit, with a number only where the record's verifiers accepted the run. Without a record it prices the policy
 a file in this tree states, and says under its first line that it reads no run.
 
@@ -14,14 +14,14 @@ uv sync --all-packages --extra torch-cpu
 uv run verity bench inference_only --stated-only --from DIR
 ~~~
 
-`DIR` is a served run's record: its directory, or its `out/`, on your disk, read with nothing else, no store, host or
+`DIR` is a workload's record: its directory, or its `out/`, on your disk, read with nothing else, no store, host or
 key; or a run id, fetched first where `research` is installed (`kit.record_dir`). The command runs the policy's record check on the run's files. Its first lines are the interface's:
 
 ~~~text
 Inference-only: the least slowdown of training run inside the policy's inference blocks
 ran with: coins local challenger; parameters development (scheme SCHEME)
 a measurement, not an audit
-The served run's record read: DIR/out
+The workload's record read: DIR/out
 ~~~
 
 The second line says which coins and parameters the record states PoUW's piece was made with: `local challenger`
@@ -66,7 +66,7 @@ executable on the class's instance), which is heavy work.
 
 ## What you may change
 
-The record: any served run's files, its class and policy, its limits and counts, its PoUW verdict. And the options:
+The record: any workload's files, its class and policy, its limits and counts, its PoUW verdict. And the options:
 `--policy FILE`, a stated policy to price; `--model`, `--class` and `--division`, the built class; `--uncredited-share
 S`, a typed share, whose figures print under a label saying they rest on no PoUW verdict.
 
@@ -189,9 +189,9 @@ statement with the standing the locks give it, `slowdown.lean.status`; a `β_x` 
 proved, being arithmetic on the typed share), what is a premise (the share, the tie, the bound on the untied words, (H)
 and (E)), and what is scaled (every row). `--policy tied.toml` is refused: it would print the number alone.
 
-## A served run's record
+## A workload's record
 
-`--from DIR` reads a served run's record (`record.py`): its `out/` (the compose's `record/verdicts.json`, its
+`--from DIR` reads a workload's record (`record.py`): its `out/` (the compose's `record/verdicts.json`, its
 `inference-only-policy.json`, `inference-only-limits.json` and the `block-counts-CLASS.json` of one class, the one
 `--served-class` names where there are several), and the Program, circuit record and registration log it registered
 (`record.REGISTERED` in its `out/`, or `--program`, `--circuit`, `--log`, its own registration last). A file that isn't

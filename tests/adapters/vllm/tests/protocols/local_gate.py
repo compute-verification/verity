@@ -1,5 +1,5 @@
 """Infra's challenger gate (`verity/protocols/compose/verifier/live_challenger/auditor.py`) run on one node
-under a test key, for a rehearsal of a served window (`pouw_h1_rehearsal.py`); run by hand or by that job, never collected.
+under a test key, for a rehearsal of a workload (`pouw_h1_rehearsal.py`); run by hand or by that job, never collected.
 
     python -I local_gate.py DIR init --tree TGZ --commit SHA [--params W,H] [--peer NAME] [--ports LO-HI] [--coins lean|stub]
     python -I local_gate.py DIR VERB ...   # the gate's verbs as the lane's key: reserve, open, status, ledger, pins,

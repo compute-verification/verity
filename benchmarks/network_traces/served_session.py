@@ -217,7 +217,7 @@ CERTIFIED = "certified-io.json"
 TRACED = ("arrive", "step", "finish")
 #: or a record with one of these fields: the trace's, requests.jsonl's and the certified I/O's request values
 VALUED = ("prompt_len", "sampling", "seed", "rows", "emitted", "prompt_ids", "streamed_ids", "prompt", "output")
-HAND_START = ("serve-openai run directly, not adapters/vllm/tools/served_run/serve.sh: serve.sh's serve-openai line (--required-manifest "
+HAND_START = ("serve-openai run directly, not adapters/vllm/tools/workload/serve.sh: serve.sh's serve-openai line (--required-manifest "
               "ROW/manifest.json, the int8 B4 row's Build of record, with the served node's own taps as "
               "--hidden-so and --norm-tap-so) plus the endpoint's flags, and --disk-floor-gb 40 (serve-openai's own default "
               "under --seal is 300 GB; 72 GB of seals then needs about 112 GB free at the start); serve.sh refuses on "
@@ -259,7 +259,7 @@ def prompts(n: int, ids: int, vocab: int, seed: bytes) -> list[list[int]]:
 
 def words(a: argparse.Namespace) -> list[str]:
     """The request's words: the gate's scan rehearsal, or its relay session where ``a`` names a ``client_port``
-    (`certifier_piece.py front --session`: the relay kept up for the served run's own load, no traffic of ours)."""
+    (`certifier_piece.py front --session`: the relay kept up for the workload's own load, no traffic of ours)."""
     tick = getattr(a, "bucket_ms", None)
     if getattr(a, "client_port", None) is not None:
         return ["relay-session", "--peer", a.peer, "--port", str(a.port), "--client-port", str(a.client_port),

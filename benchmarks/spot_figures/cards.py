@@ -244,7 +244,7 @@ def check(card: dict) -> dict:
         errors += [e for i, r in enumerate(rows) for e in _cells(r["cells"], f"headline.value.rows[{i}].cells")]
     if slot == "serving_rate" and not errors:
         if card["status"] != "measured":
-            errors.append(f"card.status: {card['status']!r}, but a serving rate is measured on a served run")
+            errors.append(f"card.status: {card['status']!r}, but a serving rate is measured on a workload")
         if value["tokens_per_gpu_second"] <= 0:
             errors.append(f"serving_rate.value.tokens_per_gpu_second: {value['tokens_per_gpu_second']!r}, but it is a rate "
                           "above 0")

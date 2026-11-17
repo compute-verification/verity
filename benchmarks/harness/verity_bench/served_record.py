@@ -1,4 +1,4 @@
-"""The reader of a served two-stage run's record: what `verity bench exfiltration --served-run` takes, read from the
+"""The reader of a served two-stage run's record: what `verity bench exfiltration --workload` takes, read from the
 files the run's runs published. It computes no share and decides no verdict. A field the files don't hold is None in
 the record and is named, with the file read for it and what that file holds instead (`read`'s second value), so
 nothing stands in for a time, a count of GPUs or a verdict no run wrote.
@@ -6,9 +6,9 @@ nothing stands in for a time, a count of GPUs or a verdict no run wrote.
     python -m verity_bench.served_record --second DIR [--first DIR] [--serve DIR] [--replay DIR] [--run ID]
                                          [--serving META] [--stock META]
                                          [--serving-cost C --serving-cost-source S] > record.json
-    verity bench exfiltration --served-run record.json
+    verity bench exfiltration --workload record.json
 
-A served run is four runs, and each ``DIR`` is one's directory as `research fetch --all RUN` leaves it, or as its run
+A workload is four runs, and each ``DIR`` is one's directory as `research fetch --all RUN` leaves it, or as its run
 record is fetched from the store: its ``job.json`` beside its ``out/`` (a run's ``out/``, or the file itself, is
 taken too, and then the run's id and commit are not read). Only the second stage is required.
 
@@ -394,7 +394,7 @@ def read(second: Path, *, first: Path | None = None, serve: Path | None = None, 
 def main(argv: Sequence[str] | None = None) -> int:
     ap = argparse.ArgumentParser(
         prog="python -m verity_bench.served_record",
-        description="A served two-stage run's record as `verity bench exfiltration --served-run` reads it, on stdout as "
+        description="A served two-stage run's record as `verity bench exfiltration --workload` reads it, on stdout as "
                     "one JSON object; each field the run's files lack is None there and is named on stderr.")
     ap.add_argument("--second", type=Path, required=True, metavar="DIR",
                     help="the second stage's run directory (or its `out/`, its `second.json` or its `summary.json`)")
@@ -402,7 +402,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--serve", type=Path, metavar="DIR", help="the serve's run directory (or the class's `commit.json`)")
     ap.add_argument("--replay", type=Path, metavar="DIR",
                     help="the run directory of the replay of the sampled spans (or its own `replay.json`)")
-    ap.add_argument("--run", help="the served run's id, where the second stage's directory does not name it")
+    ap.add_argument("--run", help="the workload's id, where the second stage's directory does not name it")
     ap.add_argument("--serving", type=Path, metavar="META", help="the served load's `meta.json` (`verity bench serve_tax`)")
     ap.add_argument("--stock", type=Path, metavar="META", help="stock vLLM's `meta.json` on the same load")
     ap.add_argument("--serving-cost", type=float, metavar="C",

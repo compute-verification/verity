@@ -16,7 +16,7 @@ candidates whose `BlockPool.hit` it called), each of whose hits past the pool bo
 preemptions, cache hits, admissions and stops (`window`) as the vectors the certifier's test reads
 (`tests/verity/protocols/resource_accounting/network/verifier/fixtures/replay_step_vectors.json`).
 
-**A served window as the compile slice's input.** `served_window` cuts one window out of a served run's step trace (the
+**A workload as the compile slice's input.** `workload` cuts one window out of a workload's step trace (the
 server's `window` open and close records, `verity_vllm.engine.step_trace`), renumbered from its first step, and
 refuses a window that doesn't open on a drained engine, since the slice's replay starts from the empty one.
 `slice_inputs` gives `compile_slice.CompileSlice_v1`'s inputs for such a window in `compile_slice_smallkv.json`'s
@@ -236,7 +236,7 @@ def check(st: dict, cases: Sequence[tuple[RS.State, RS.Inputs, RS.Out]], *, circ
     return out
 
 
-def served_window(records: Sequence[Mapping[str, Any]], window: int) -> tuple[list[dict[str, Any]], int]:
+def workload(records: Sequence[Mapping[str, Any]], window: int) -> tuple[list[dict[str, Any]], int]:
     """Window `window` of a served step trace as a trace of its own: the header, then the arrivals the engine core added
     before the window's steps and the steps themselves, each renumbered from its first step; and the session index of
     its first arrival. Refuses a window the trace doesn't open and close, and one that opens on an engine still holding a
@@ -263,9 +263,9 @@ def served_window(records: Sequence[Mapping[str, Any]], window: int) -> tuple[li
 def slice_inputs(trace: RP.Trace, *, R: int, W: int, A: int, base: int = 0, session: int | None = None,
                  Q: int | None = None, D: int | None = None, P: int | None = None,
                  K: int | None = None, AS: int | None = None) -> dict[str, Any]:
-    """CompileSlice_v1's inputs for `trace`, one window from the empty engine (`served_window`'s), at size class
+    """CompileSlice_v1's inputs for `trace`, one window from the empty engine (`workload`'s), at size class
     (R, W, A), in `compile_slice_smallkv.json`'s layout. A request's id is `base` plus its index in
-    the trace (with `served_window`'s base, its index in the session), and IW holds the ids of a session of `session`
+    the trace (with `workload`'s base, its index in the session), and IW holds the ids of a session of `session`
     requests (default the window's last). Q and K default to the window's arrivals, D to its decisions and P to its
     executed units; a public class larger than the window pads it (empty arrival slots, decisions past the count, idle
     steps), and one smaller is refused. AS is the class's scheduler, so one AS holds for every window of a run: by
@@ -348,8 +348,8 @@ def main(argv: Sequence[str] | None = None) -> None:
     ap.add_argument("--EW", type=int, default=0, help="walk entries of this width, and `looked` checked against `BlockPool.hit`")
     ap.add_argument("--circuit", action="store_true", help="evaluate the Definition on the fitting steps too")
     ap.add_argument("--fixture", type=int, default=0, help="keep the first N fitting steps of each trace")
-    ap.add_argument("--slice", type=int, metavar="WINDOW", help="write CompileSlice_v1's inputs for this served window of "
-                    "the one trace (`served_window`, `slice_inputs`)")
+    ap.add_argument("--slice", type=int, metavar="WINDOW", help="write CompileSlice_v1's inputs for this workload of "
+                    "the one trace (`workload`, `slice_inputs`)")
     ap.add_argument("--served", type=Path, help="with --slice: the Commit's seal, whose rows for the window go in `served`")
     ap.add_argument("--max-model-len", type=int, help="with --slice: the engine's, where the trace's header lacks it")
     for k, what in (("Q", "pending arrivals"), ("D", "decisions"), ("P", "steps"), ("K", "certified arrival slots")):
@@ -364,7 +364,7 @@ def main(argv: Sequence[str] | None = None) -> None:
         recs = RP.records(p)
         if a.max_model_len:
             recs[0]["config"]["max_model_len"] = a.max_model_len
-        sub, base = served_window(recs, a.slice)
+        sub, base = workload(recs, a.slice)
         tr = RP.load_step_trace(sub)
         name = p.resolve().relative_to(REPO) if p.resolve().is_relative_to(REPO) else p
         cls = {k: getattr(a, k) for k in ("Q", "D", "P", "K") if getattr(a, k) is not None}

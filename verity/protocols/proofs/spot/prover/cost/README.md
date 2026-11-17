@@ -2,8 +2,8 @@
 
 SPOT's cost model for one served workload under Flock: each file plans a workload's sample with the planner beside
 it (`../optimize.py`, `../candidates.py`, `../costfit.py`), from the measured inputs under `benchmarks/sampling_plan/`
-(`inputs.json`, `glm53_blocks.json`, `served_window_inputs.json`, which `inputs.py` loads, `glm53.py` and
-`served_window.py` read), each with its source and status, measured or
+(`inputs.json`, `glm53_blocks.json`, `workload_inputs.json`, which `inputs.py` loads, `glm53.py` and
+`workload.py` read), each with its source and status, measured or
 assumed. `benchmarks/prove_path/`'s `window_cost.py` and `class_rows.py` price the class-of-record window's commit.
 
 Each workload's plan gives the cost model fitted from proving measurements, the cuts the candidate generator finds, the frontier of
@@ -55,7 +55,7 @@ their floor.
   tiles (`--tiles`) and softmax and PV padded to the context (`--pad`); and gives the frontier over the share, the
   execution phase length in blocks that proves within its own GPU time, and the incorrect ANDs (`Stratified.harm_bound`, not a Lean
   guarantee). `--card h200` prices it with the `h200` card's fit instead of the RTX PRO 6000's.
-- `served_window.py`: the served window (Llama-3.2-1B int8, T 8,192 on the H200, one step a window) cut at each rung of
+- `workload.py`: the workload (Llama-3.2-1B int8, T 8,192 on the H200, one step a window) cut at each rung of
   a ladder (K-chunks of the int8 linears, output coordinates, tiles, and fused attention/MLP, layer and 4-layer proof
   blocks that commit only the residual and K, V), for the free-compute target (a window, and pooled over a week, a month
   and a year) and the exfiltration target, in the planner's two modes (proving only, and proving plus w times the serve-time
@@ -63,12 +63,12 @@ their floor.
   under a code-based commitment at each rate ρ (codeword columns hashed, 1/ρ the bytes, and no row hashed in circuit),
   each total with the replay of the requests the sample meets, each re-run from its prompt at the stock step's share;
   then the chunk family's optimum against √(wβhC/(oΛ)). A rung fits when Flock's block holds each of its proof blocks (`inputs.cap`). Its
-  inputs, each with its status and source, are `benchmarks/sampling_plan/served_window_inputs.json`; it writes `served_window.json` and
-  `served_window.md`.
+  inputs, each with its status and source, are `benchmarks/sampling_plan/workload_inputs.json`; it writes `workload.json` and
+  `workload.md`.
 
 ```text
 uv run python verity/protocols/proofs/spot/prover/cost/int8_llama.py --out DIR [--model qwen3-8b] [--scheme pearl-c] [--weights]
-uv run python verity/protocols/proofs/spot/prover/cost/served_window.py --out DIR [--weight W] [--rates R ...] [--no-planner]
+uv run python verity/protocols/proofs/spot/prover/cost/workload.py --out DIR [--weight W] [--rates R ...] [--no-planner]
 uv run python verity/protocols/proofs/spot/prover/cost/transformer.py --out DIR [--model large] [--share S] [--delta D]
 uv run python verity/protocols/proofs/spot/prover/cost/h200.py --out DIR [--share S] [--batch B] [--step-s T] [--tiles] [--pad] [--card h200]
 ```
@@ -115,7 +115,7 @@ uv run python verity/protocols/proofs/spot/prover/cost/recursion.py --result rec
 `../audit/class_size.py` sizes a class circuit in ANDs and Flock blocks, and `benchmarks/prove_path/class_rows.py` counts its rows by what fills them and
 their SHA-512 compressions (`--probe S,NP,O` lowers one Program at a small class). `window_cost.py` prices a
 window's commit from that census, or from a probe projected to a class (`--project 8,1024,64`, which reproduces the exact
-census proof block for proof block), against its target of 0.20 to 0.25 of the served window. It reports in ANDs (58,120 a
+census proof block for proof block), against its target of 0.20 to 0.25 of the workload. It reports in ANDs (58,120 a
 compression) and in seconds (the window's rows on the GPU's hashing rates, the docket on the CPU's, which
 `--measure-cpu` measures). It covers each lever alone and the plan stacked, the pad pass at three traffics, the
 docket's bytes and files, and totals over a week, a month and a year. With `--stream SIZING` it also prices serving's

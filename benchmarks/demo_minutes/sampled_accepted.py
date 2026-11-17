@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""The share of a served run's sampled proof blocks whose proofs the Lean verifier accepted on the auditor's machine, read off
+"""The share of a workload's sampled proof blocks whose proofs the Lean verifier accepted on the auditor's machine, read off
 its runs' records: the metric ``vllm/served-sampled-proofs-accepted`` (`benchmarks/demo_minutes/metrics.toml`).
 Standard library only; finding the runs and the served commit, and what it writes, are `minutes.py`'s.
 
-    research run --cwd source -- python3 benchmarks/demo_minutes/sampled_accepted.py SERVED_RUN VERDICT_RUN
+    research run --cwd source -- python3 benchmarks/demo_minutes/sampled_accepted.py WORKLOAD_RUN VERDICT_RUN
         [--runs-dir DIR] [--main REF]
 
-SERVED_RUN is the vLLM served run's (`adapters/vllm/tools/served_run/run.sh`), whose ``job.json`` names the served
+WORKLOAD_RUN is the vLLM workload's (`adapters/vllm/tools/workload/run.sh`), whose ``job.json`` names the served
 commit; VERDICT_RUN is the one whose ``out/record/verdicts.json`` (`served_verdicts.py record`) holds SPOT's row, its
 ``protocols.integrity``. The sampled proof blocks are the members its Lean answer's profile sampled at the finest level,
 the checked one (`Core.Integrity`). A proof block counts as accepted only where all of these hold, and the first that doesn't is the
@@ -73,7 +73,7 @@ def off_main(sha: str, ref: str, repo: Path) -> bool:
 
 
 def share(runs: list[str], root: Path, ref: str, repo: Path | None = None) -> dict:
-    """The measurement for ``runs`` (SERVED_RUN, VERDICT_RUN); `Refused` where it can't stand."""
+    """The measurement for ``runs`` (WORKLOAD_RUN, VERDICT_RUN); `Refused` where it can't stand."""
     served, verdicts = (R.run_dir(r, root) for r in runs)
     sha = R.commit(served)
     f = verdicts / RECORD
@@ -106,7 +106,7 @@ def share(runs: list[str], root: Path, ref: str, repo: Path | None = None) -> di
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    ap.add_argument("runs", nargs=2, metavar="RUN", help="SERVED_RUN VERDICT_RUN (module docstring)")
+    ap.add_argument("runs", nargs=2, metavar="RUN", help="WORKLOAD_RUN VERDICT_RUN (module docstring)")
     ap.add_argument("--runs-dir", type=Path, default=R.settings.runs_root())
     ap.add_argument("--main", default="origin/main", help="the ref the served commit must be a commit of")
     a = ap.parse_args(argv)

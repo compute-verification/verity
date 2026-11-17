@@ -9,15 +9,15 @@ says about it beyond its digest, written down from φ: the audit's names without
 inputs, the predicted workload Program and the predictor's code version), `aot` (the
 comparison that switches a row, and a switched row's AOT Build), `compiled` (the served-compiled Build from a model's config and
 its pins), `cli` (`verity-vllm predict`), `domain` (what of φ a predicted Program can't be the prediction of), `steps` (I2,
-the compiler from a served run's advice to the Programs its committed rows must pass) with `batch` (its batch invariance),
+the compiler from a workload's advice to the Programs its committed rows must pass) with `batch` (its batch invariance),
 `segment` (a class-G request's history and launches in a window), `reads` (every field it reads, with its account), `hits` (a
 prefix-cache hit's sources as it reads them), `ingress_policy` (a request's certified body as it reads it), `traced` (the Build
 traces it holds its compiled digests to), `tp_steps` (a node's advice compiled at every rank and composed into one TP workload)
 and `template_counts` (each template's instances in a `dsa` request Program, counted without building it),
-`window_circuit` (a served window as its class's one Circuit) with `window_class` (the class it is of, and H1's tables as it
+`window_circuit` (a workload as its class's one Circuit) with `window_class` (the class it is of, and H1's tables as it
 reads them), `window_lowering` (a slot's class Program lowered node by node into its units), `window_builder` (its proof
 blocks), `window_cut` (it cut at its linears, given Pearl+'s tables), `window_rows` (its units given their output rows from
-a served window's values), `scan_state` (the network attester's scan state as a class's Programs read it),
+a workload's values), `scan_state` (the network attester's scan state as a class's Programs read it),
 `inference_blocks` (its partition into inference blocks, a private table) and `window_weights` (its registered weights)
 with `weights_tie` (`verity-vllm weights-tie`: the checkpoint tie of the committer's registration of them), `block_counts`
 (`verity-vllm block-counts`: a day's inference blocks counted from its windows' circuit records and judged against the day's

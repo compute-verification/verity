@@ -1,4 +1,4 @@
-"""A served window's cases, each on the window's docket R and beside its own Lean answer, in the directory
+"""A workload's cases, each on the window's docket R and beside its own Lean answer, in the directory
 form a composition of the window's subprotocols reads as a case: SPOT's one-stage v1 case (no composite's),
 both composites' SPOT case (one-stage v2's in the form ``one-stage``) and the inference-only case from its
 records audit, PoUW's period case held to the same record, Pearl+'s run case naming it, and with ``--v2`` one-stage v2's
@@ -33,7 +33,7 @@ written: that digest is what remote's record tie compares (`Core.Remote.windows`
   its params name ``proofs`` and its evidence the proofs' files in place of v1's verdicts, as the dispatcher requires.
   None when v2's case is refused, which the refusal says, and each composite then names SPOT missing. a5
   writes v2's case only for a `--zk` audit that drew exactly one member (`a5.v2_proof`), and v2 refuses a windowed
-  docket (`a5.case_v2`), so a served window of several members has none: under H1's tie its audit's sampling design is
+  docket (`a5.case_v2`), so a workload of several members has none: under H1's tie its audit's sampling design is
   `stratified:1`, a sampled reader of each table W registers. Its answer is `vstar-recursive sampled check` on the case
   and its blobs.
 * **The inference-only case** (`inference_only_case`, `INFERENCE_ONLY`: `verity/inference-only/v0`, the inference-only

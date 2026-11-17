@@ -2,7 +2,7 @@
 manifest holds.  `required.request_manifest` writes each through its row adder
 (`add(family, step, invocation, op_path, member, lo, hi, **extra)`):
 
-* the values the served run decides (`run_value_rows`): one request-owned identity per `<op_path>/<member>` field of the Program's
+* the values the workload decides (`run_value_rows`): one request-owned identity per `<op_path>/<member>` field of the Program's
   `fmt.RUN_PARAM` input, at the step whose forward reads it;
 * the MoE block planes (`moe_plane_rows`): kernel geometry, per (MoE body, step);
 * the header's `required_families`, policy lines and TP block for the families present (`header_families`).
@@ -23,7 +23,7 @@ __all__ = ["run_value_rows", "moe_plane_rows", "header_families"]
 
 def run_value_rows(P: ProgramView, corr: Correspondence, step_of: Callable[[int], int], add: Callable[..., None],
                    unmodelled: Counter) -> None:
-    """The values the served run decides (`fmt.RUN_PARAM`): one request-owned identity per `<op_path>/<member>` field, at its
+    """The values the workload decides (`fmt.RUN_PARAM`): one request-owned identity per `<op_path>/<member>` field, at its
     readers' step.  A field no step's forward reads, or several steps' do, is unmodelled."""
     impl = corr.implementation_path
     run = {ValueRef(p.id, port.name): port for p in P.params if p.name == fmt.RUN_PARAM for port in p.port_table if "/" in port.name}

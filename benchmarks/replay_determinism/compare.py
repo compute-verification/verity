@@ -2,7 +2,7 @@
 fingerprints, layer by layer and op by op.
 
 ``--runs DIR`` holds one directory per phase (``serve``, the replays, ``alone``).  Phases with the same schedule are compared
-row by row (step, row and module output); a request alone is compared with the same request inside the served window by
+row by row (step, row and module output); a request alone is compared with the same request inside the workload by
 (request, position), over the positions whose input tokens agree (up to the first token where the two outputs diverge).  The
 result is ``compare.json`` and ``compare.md`` in ``--out``.
 """

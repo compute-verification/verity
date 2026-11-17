@@ -430,13 +430,13 @@ def manifests(passes: Path) -> tuple[list[Path], str | None]:
 def retention(passes: Path, served: dict) -> tuple[list[Path], list[int], tuple[int, ...]]:
     """The passes the verdict reads, their rounds (each one's place among ``served.json``'s passes with calls) and the
     rounds dropped: ``DIR/retention.json``'s (`retain`), else every pass with calls.  ValueError on a retention whose
-    rounds are not in order, distinct, and the served run's."""
+    rounds are not in order, distinct, and the workload's."""
     held = [p for p in served["passes"] if p["units"]]
     rounds = list(range(len(held)))
     if (passes / RETENTION).exists():
         got = json.loads((passes / RETENTION).read_text())["rounds"]
         if not (all(type(s) is int for s in got) and got == sorted(set(got)) and set(got) <= set(rounds)):
-            raise ValueError(f"the retention's rounds {got} are not distinct rounds of the served run's {len(held)}, in order")
+            raise ValueError(f"the retention's rounds {got} are not distinct rounds of the workload's {len(held)}, in order")
         rounds = got
     return [Path(held[s]["manifest"]) for s in rounds], rounds, tuple(s for s in range(len(held)) if s not in rounds)
 
@@ -486,7 +486,7 @@ def volunteer(args: argparse.Namespace) -> int:
             "cubin": str(device), "cubin_sha256": hashlib.sha256(device.read_bytes()).hexdigest(), "cross_check": check,
             **{k: sum(r["device"][k] for r in got) for k in DEVICE_SUMS}}
         doc = {"schema": "verity-pouw/pearl-plus-served-volunteer/v1", "passes_dir": str(passes),
-               "served_run": (served or {}).get("run"), "node": socket.gethostname().split(".")[0], "jobs": args.jobs,
+               "workload": (served or {}).get("run"), "node": socket.gethostname().split(".")[0], "jobs": args.jobs,
                "device": on, "done": done, "of": len(paths), "passes": got,
                "tiles": sum(r["tiles"] for r in got), **total, **given, "s": sum(r["s"] for r in got),
                "ok": done and bool(got) and all(r["ok"] for r in got)}
@@ -545,7 +545,7 @@ def retain(args: argparse.Namespace) -> int:
         return 1
     held = [p for p in served["passes"] if p["units"]]
     if bad := [s for s in args.drop if not 0 <= s < len(held)]:
-        print(f"retain FAIL: no round {bad[0]} among the served run's {len(held)} passes with calls", flush=True)
+        print(f"retain FAIL: no round {bad[0]} among the workload's {len(held)} passes with calls", flush=True)
         return 1
     why = {s: "dropped by the prover (--drop)" for s in args.drop}
     if args.volunteer:
@@ -561,7 +561,7 @@ def retain(args: argparse.Namespace) -> int:
             if not p.get("timed", True):
                 why.setdefault(s, WARM_UP)
     rounds = [s for s in range(len(held)) if s not in why]
-    doc = {"schema": "verity-pouw/pearl-plus-retention/v1", "served_run": served.get("run"), "volunteer": args.volunteer,
+    doc = {"schema": "verity-pouw/pearl-plus-retention/v1", "workload": served.get("run"), "volunteer": args.volunteer,
            "rounds": rounds, "dropped": [{"round": s, "pass": held[s].get("pass"), "manifest": held[s]["manifest"],
                                           "macs": held[s].get("macs"), "why": why[s]} for s in sorted(why)]}
     (passes / RETENTION).write_text(json.dumps(doc, indent=1) + "\n")
@@ -597,7 +597,7 @@ def verify(args: argparse.Namespace) -> int:
     passes = Path(args.passes)
     served = json.loads((passes / "served.json").read_text()) if (passes / "served.json").exists() else None
     record = Path(args.coin_record) if args.coin_record else (passes / COIN if served is not None and not args.manifest else None)
-    doc = {"schema": SCHEMA, "passes_dir": str(passes), "served_run": (served or {}).get("run"), "tie_record": args.tie,
+    doc = {"schema": SCHEMA, "passes_dir": str(passes), "workload": (served or {}).get("run"), "tie_record": args.tie,
            "class": None if args.cls is None else list(args.cls), "coin_record": None if record is None else str(record)}
     paths, rounds, dropped = None, None, ()
     if served is not None and served.get("retained") is False:

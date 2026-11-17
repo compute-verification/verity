@@ -26,11 +26,11 @@ research run --on NODE --project verity --source . --cwd source -- bash benchmar
 
 A session's cost is mostly fixed, so its blocks' marginal cost comes from two statements at the same K and different N.
 
-On a served window instead (the sampled audit's one-stage proof blocks over the values serving committed): `WINDOW` names
+On a workload instead (the sampled audit's one-stage proof blocks over the values serving committed): `WINDOW` names
 `prove_path.py commit`'s window dir, prover's files included, and `SUBCIRCUIT` its member's census-style id.
 `rec_inner.py stage-window` stages every proof block of the member as the statement `served` (hm96 leaves, today's `--zk`
 statement) and `served-plain` (plain SHA-512 leaves). With `SERVE_RUN`, staging first checks that the window's run root is the
-one the served run published. `DRAW=all` has each verifier sample every block, as a deployed one must: a `--zk` one by
+one the workload published. `DRAW=all` has each verifier sample every block, as a deployed one must: a `--zk` one by
 `--draw subset:N`, a plain one by the staged sample of every block (`draw.json`). The step `lean` (add it to `STEPS`)
 verifies every kept session of the two statements with Lean's `verity-verify-proof`, the verifier: `--zk` sets as
 `verity/flock-circuit`, and `served-plain`'s plain sets as `verity/flock-circuit+plain-leaves` (hm96 leaves without `--zk`

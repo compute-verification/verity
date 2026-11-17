@@ -1,6 +1,6 @@
 # verity_vllm.commit
 
-The Commit: it commits a served run's values while it serves. The package's docstring lists its modules.
+The Commit: it commits a workload's values while it serves. The package's docstring lists its modules.
 
 ## Interface
 

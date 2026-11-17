@@ -86,6 +86,6 @@ subprotocols accept, and a wipe is carried but not composed, since it ran on ano
 verdict is undecided, and the error sum is at least SPOT's 1/2 from its 2-unit sample. `block-record-b71a-w30`
 carries its window's Lean `onsite check` answer, which accepts. `block-record-r1-window10` is one window with
 SPOT at δ = 1/100 and the wipe on the same server, the other subprotocols absent.
-`integrity-profile-stratified` is the profile of a served run's SPOT answer, which samples each template's proof blocks as a
+`integrity-profile-stratified` is the profile of a workload's SPOT answer, which samples each template's proof blocks as a
 stratum of their own (all 160 of one, 2 of another's 4): its bound is 2 of 164 at δ = 1/100, where a uniform sample of
 162 of 164 would say 1.

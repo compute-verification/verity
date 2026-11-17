@@ -1,4 +1,4 @@
-"""A served window sealed as a deferred Commit's row dir (`serve_seal.seal_window`) and opened as PROVE-PATH opens it
+"""A workload sealed as a deferred Commit's row dir (`serve_seal.seal_window`) and opened as PROVE-PATH opens it
 (`deferred_rows.of_record`), and the registered registered compiler (`advice_windows.Capped`, PROVE-PATH's, with the cap ℓ).  CPU only."""
 from __future__ import annotations
 
@@ -57,7 +57,7 @@ def test_a_sealed_rows_sha512_window_opens_as_a_deferred_commits_row_dir(tmp_pat
     v = json.loads((d / "commit" / "verdict.json").read_text())
     assert v["run_root"] == rc.run_root.hex() and v["replay_deferred"]["bundles"][0]["manifest_sha256"] == s["manifest_sha256"]
     r = DR.of_record(s["bundle"], str(d))
-    assert r.run.run_root == rc.run_root and r.ctx["served_window"]["window"] == 5 and r.ctx["code"] == "c0de"
+    assert r.run.run_root == rc.run_root and r.ctx["workload_window"]["window"] == 5 and r.ctx["code"] == "c0de"
     assert r.programs == {} and r.arrivals == {"alice": 0, "cmpl-2": 0} and r.ctx["tokens"] == {"alice": [7, 9], "cmpl-2": [8]}
     assert sorted(p.name for p in (d / "commit").iterdir()) == ["binding_map_p0.json", "replay_bundle_p0", "runs.jsonl", "verdict.json"]
     (run,) = CommitRun.load_lines(d / "commit" / "runs.jsonl")
@@ -142,7 +142,7 @@ def test_a_committed_byte_not_retained_outside_the_excluded_interiors_is_refused
 #: the Commit of record of the bench row llama32-1b__bf16__rtxpro6000__tp1__b4__i256__o32__mixed__greedy__bi-eager (its ``source``):
 #: its manifest's rows at engine steps 0 (four prefills) and 1 (four decodes), layers 0-1, its ``op_path_aliases``, and each
 #: committed tensor of those steps in commit order with the identity the record's binding map bound it to
-PARTS = Path(__file__).parent / "fixtures" / "llama32_1b_bi_eager_served_window_parts.json"
+PARTS = Path(__file__).parent / "fixtures" / "llama32_1b_bi_eager_workload_parts.json"
 SERVED_ROWS = {0: [("runner-a", 0, 3, 0, 3), ("runner-b", 3, 5, 0, 2)], 1: [("runner-a", 0, 1, 3, 3), ("runner-b", 1, 2, 2, 2)]}
 SERVED_NAMES = {"runner-a": "b0-1", "runner-b": "b0-2"}
 #: the digest the row's manifest names (``manifest_digest``): the fixture keeps a cut of its identities, so not one computed
@@ -160,8 +160,8 @@ def _i64(xs, T):
 
 
 def _sealed_parts(tmp_path, with_manifest: bool, port=None, embed_ids=None, name=None, kept=None, by=None):
-    """The record's committed tensors of steps 0 and 1 (shapes cut to the served window's 5 and 2 token rows) committed and sealed
-    as a served window of two requests, by a committer that carries the row's manifest (as `serve_seal.committer` leaves it) or not.
+    """The record's committed tensors of steps 0 and 1 (shapes cut to the workload's 5 and 2 token rows) committed and sealed
+    as a workload of two requests, by a committer that carries the row's manifest (as `serve_seal.committer` leaves it) or not.
     With ``port`` ({step: (ids, positions)}) each step's stream starts with the step-input port and, as `serve_seal.single_ids`
     leaves the committer, the embedding's own ids aren't committed, unless ``embed_ids`` ({step: ids}) commits them beside it;
     its `served_record.SamplerInputsSource` kept the rows ``kept`` (`SERVED_ROWS` by default). Sealed by `serve_seal.seal_window`,
@@ -227,13 +227,13 @@ def _store(d, s, opened: bool = False):
     return r, bmap, CommittedStore.of_record(bmap, OpenedReader(r.store, r.run) if opened else (lambda *_a: None), r.manifest)
 
 
-def test_a_served_windows_identities_are_what_the_rows_programs_read(tmp_path):
+def test_a_workloads_identities_are_what_the_rows_programs_read(tmp_path):
     """PROVE-PATH's read on serve-openai's w5 (b0-1, step 1, gate_up_proj/out), and the rest
     of what the row's Programs read: a Gemm's `out`, RoPE's `query` / `key` (layer 1 through the row's alias), an RMSNorm's
     `norm_scale` and an `fa2.m1` member, each bound exactly as the Commit of record bound the same tensor."""
     fx, d, s = _sealed_parts(tmp_path, with_manifest=True)
     r, bmap, store = _store(d, s)
-    assert r.manifest == {"op_path_aliases": fx["op_path_aliases"]} and r.ctx["served_window"]["op_path_aliases"] == fx["op_path_aliases"]
+    assert r.manifest == {"op_path_aliases": fx["op_path_aliases"]} and r.ctx["workload_window"]["op_path_aliases"] == fx["op_path_aliases"]
     for rid in ("b0-1", "b0-2"):
         for step in (0, 1):
             for op, member in [("model.layers.0.mlp.gate_up_proj", "out"), ("model.layers.1.mlp.down_proj", "out"),
@@ -256,7 +256,7 @@ def test_without_the_rows_manifest_a_window_binds_raw_names(tmp_path):
     assert r.manifest is None and store.has("b0-1", 1, "model.layers.0.mlp.gate_up_proj", "0")
     assert not store.has("b0-1", 1, "model.layers.0.mlp.gate_up_proj", "out")
     assert not store.has("b0-1", 1, "model.layers.1.self_attn.rotary_emb", "query")
-    assert "required_manifest" not in r.ctx["served_window"]
+    assert "required_manifest" not in r.ctx["workload_window"]
 
 
 def test_a_sealed_windows_record_binds_the_rows_manifest_by_its_digest(tmp_path):
@@ -265,7 +265,7 @@ def test_a_sealed_windows_record_binds_the_rows_manifest_by_its_digest(tmp_path)
     fx, seal = _parts_window(tmp_path, True, port=PORT, manifest_path=tmp_path / "pred" / "manifest.json")
     d, s = seal(ss.seal_window)
     r = _store(d, s)[0]
-    assert r.ctx["served_window"]["required_manifest"] == {"path": str(tmp_path / "pred" / "manifest.json"),
+    assert r.ctx["workload_window"]["required_manifest"] == {"path": str(tmp_path / "pred" / "manifest.json"),
                                                            "program_digest": fx["program_digest"],
                                                            "manifest_digest": MANIFEST_DIGEST}
 
@@ -318,7 +318,7 @@ def test_a_sealed_windows_programs_read_the_ids_and_positions_at_the_ports_bytes
     fx, d, s = _sealed_parts(tmp_path, True, port=PORT)
     r, bmap, store = _store(d, s, opened=True)
     T = 512
-    assert r.ctx["served_window"]["step_input_port"]["binds_as"] == {"step.input/ids": ["model.embed_tokens", "in"]}
+    assert r.ctx["workload_window"]["step_input_port"]["binds_as"] == {"step.input/ids": ["model.embed_tokens", "in"]}
     assert {row["output_member"] for row in fx["identities"] if row["op_path"].endswith("rotary_emb")} == {"query", "key"}
     for (rid, step), (lo, hi) in TOKEN_ROWS.items():
         for (op, member), name, at in [(("model.embed_tokens", "in"), PORT_NAMES[0], 0), (("step.input", "positions"), PORT_NAMES[1], 8 * T)]:
@@ -468,8 +468,8 @@ def test_a_sealed_windows_context_carries_its_served_rows_and_the_port_its_strea
     s = ss.seal_window(com, rc, d, rec={"window": 2, "run_id": "t/w2", "steps": 2, "passed": True, "served_rows": served}, reqs=reqs,
                        request_rows=rows, tokens={k: v.streamed for k, v in leds.items()}, sampling={}, label="serve-openai:t")
     r = DR.of_record(s["bundle"], str(d))
-    assert r.ctx["served_window"]["served_rows"] == served
-    assert r.ctx["served_window"]["step_input_port"] == {"names": list(PORT_NAMES), "T": T, "IB": 8, "PB": 8,
+    assert r.ctx["workload_window"]["served_rows"] == served
+    assert r.ctx["workload_window"]["step_input_port"] == {"names": list(PORT_NAMES), "T": T, "IB": 8, "PB": 8,
                                                          "ids_bytes": [0, 8 * T], "positions_bytes": [8 * T, 16 * T]}
     assert s["port_layout"] == {"steps": 2, "at_head": 2, "first_other": None}
     com._layouts[1] = list(reversed(com._layouts[1]))

@@ -7,9 +7,9 @@ each scheduler, commits the same rows under the same rows-sha512 roots, and ever
 
 `ab` serves SERVE-OPENAI-ARGS (``--run-id``, ``--admit release-order``, a bench row, the Commit's options, ``--window-steps
 1``) twice, synchronously and then with ``--async-scheduling``, each a `serve` of this module in its own process, and sends
-each the same ``--batches`` loads of ``adapters/vllm/tools/served_run/serve_load.py --fixed``: ``--requests`` requests of ``--prompt-ids``
+each the same ``--batches`` loads of ``adapters/vllm/tools/workload/serve_load.py --fixed``: ``--requests`` requests of ``--prompt-ids``
 ids for one step, the learn-only warm-up's static shape (`serve_learn.shape_of`), each batch its own release run and seed.
-A step's rows-sha512 root binds its salt key, fresh from the OS generator in a served run, the run id and the row's
+A step's rows-sha512 root binds its salt key, fresh from the OS generator in a workload, the run id and the row's
 Program, so `serve` runs serve-openai with the step keys derived from ``--row-key-seed`` (`fixed_row_keys`) and the bench
 row taken whichever scheduler it declares (`either_row`): the two arms differ only in the scheduler. `compare` then holds
 the arms' ``windows.jsonl`` to each other and writes ``compare.json``: PASS when every window of each arm passed and
@@ -26,12 +26,12 @@ import threading
 from pathlib import Path
 from typing import Any
 
-LOAD = Path(__file__).resolve().parents[5] / "adapters" / "vllm" / "tools" / "served_run" / "serve_load.py"
+LOAD = Path(__file__).resolve().parents[5] / "adapters" / "vllm" / "tools" / "workload" / "serve_load.py"
 
 
 def fixed_row_keys(seed: str) -> None:
     """Every rows-sha512 step key SHA-512(``seed``/step=k) in place of the OS generator's, so two runs of the same rows commit
-    the same roots. A test's patch only: a served run's keys are fresh, which is what keeps its leaves hiding."""
+    the same roots. A test's patch only: a workload's keys are fresh, which is what keeps its leaves hiding."""
     from verity_vllm.commit import native_ranges as NR
 
     def row_key(self: Any, step: int) -> bytes:

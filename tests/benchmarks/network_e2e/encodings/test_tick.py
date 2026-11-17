@@ -202,7 +202,7 @@ def serve(e, ios, times, seed: int, *, gated: bool = True, lost: Sequence[int] =
 
 
 def trace_of(e, ios, times, run: Served):
-    """The served run as a tick-admitted run's trace: its requests in release order, each output's time, and the
+    """The workload as a tick-admitted run's trace: its requests in release order, each output's time, and the
     certified releases, counted from the origin."""
     return R.Trace(engine=e, ids=[f"r{i}" for i in range(N)], requests=list(ios), before_step=run.admitted,
                    steps=run.steps, emits=run.emits, ingress_t=list(times), release_t=run.release_t, output_t=run.output_t,
@@ -377,7 +377,7 @@ def test_a_count_capped_at_0_costs_nothing():
 
 
 def write_corpus(d: Path, e, ios, times, run: Served, *, tick: bool, lost: Sequence[int] = (), arrive: Sequence[int] = ()) -> Path:
-    """The served run as a trace-corpus directory (`replay.read_corpus_trace`'s), each step's rows in the runner's batch
+    """The workload as a trace-corpus directory (`replay.read_corpus_trace`'s), each step's rows in the runner's batch
     order (a stable sort by length), and with `tick` its releases and meta.json's ``tick``. A release in `lost` has no
     row in any step; one of them in `arrive`, whose request reached the server, has its requests.jsonl line all the
     same, with no output."""
@@ -467,7 +467,7 @@ def test_the_table_reads_a_tick_trace_on_its_own_buckets(tmp_path):
     assert [q.end for q in rec.requests] == [b - a[0] for b in a]
     with pytest.raises(V.AdviceCodeError, match="250000 µs"):
         V.record_of(tr, (EOS,))
-    # and its row says what was served beside what was charged: the window in seconds on that tick, the rows the cache
+    # and its row says what the workload served beside what was charged: the window in seconds on that tick, the rows the cache
     # served, which no charge shows, and each window's length terms, which every book's charge holds
     row = V.measure("tick", str(d), (EOS,), T=8)
     hits = [x.cache_hit for st in V.advice_of(tr, rec).steps for x in st.rows if x.cache_hit]

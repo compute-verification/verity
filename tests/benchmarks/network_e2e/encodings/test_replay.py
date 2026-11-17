@@ -90,9 +90,9 @@ def test_egress_tells_light_load_arrivals_apart():
 
 
 @pytest.mark.parametrize("name", CASES)
-def test_whatif_is_the_served_run_for_the_request_and_those_ahead(name):
+def test_whatif_is_the_workload_for_the_request_and_those_ahead(name):
     """The egress context's premise: forked where a request is admitted, with nothing arriving after it, the replay
-    emits that request's outputs in the steps the served run did, alongside the same outputs of every earlier request."""
+    emits that request's outputs in the steps the workload did, alongside the same outputs of every earlier request."""
     t = trace(name)
     first, kept = t.first_scheduled(), t.kept_steps()
     at: dict[int, dict[int, int]] = {}

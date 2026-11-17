@@ -145,7 +145,7 @@ def test_a_served_challengers_coins_are_named_by_a_claim_instance():
             Ch.served_claim(source)
 
 
-def test_a_served_window_flips_every_coin_from_its_entropy_and_none_from_the_os(monkeypatch):
+def test_a_workload_flips_every_coin_from_its_entropy_and_none_from_the_os(monkeypatch):
     """The execution phase's salt and flip coins, a live execution phase's salt and round coins and its sampling session's flip coin, and
     every hm96 salt beside them, come from the challenger's named entropy alone: with the operating system's generators
     refusing, they are sampled,

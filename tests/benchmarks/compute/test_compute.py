@@ -1202,7 +1202,7 @@ def test_a_withdrawn_development_piece_is_read_as_absent_and_a_withdrawn_require
 
 
 def test_every_metric_row_reads_the_run_of_record_its_header_names():
-    """`metrics.toml` names the served run its rows read once, in its ``RUN OF RECORD`` line: every row's ``--from`` is
+    """`metrics.toml` names the workload its rows read once, in its ``RUN OF RECORD`` line: every row's ``--from`` is
     that run, so moving the rows to another run is one edit that this holds complete, and every metric `run.py` writes
     has a row."""
     import re

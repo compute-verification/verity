@@ -1,7 +1,7 @@
-"""The stop class's verdict records of a served run, and how they charge the rows that read them (`stop`).
+"""The stop class's verdict records of a workload, and how they charge the rows that read them (`stop`).
 
 `verity bench certifier_term`'s rows that hold the lengths by a stop block charge their stop class below its
-schedule only as a served run's verdict records say. This module reads those records and the signed heads they
+schedule only as a workload's verdict records say. This module reads those records and the signed heads they
 name, asks the network attester's own rule (`class_charge.charge`) how each class of each head is charged, holds
 what the rule charges below to what the rule doesn't read (a negative control for each verifier that accepted,
 the rate the serve registered, the one serve of an execution phase, a verdict under another head and the order of
@@ -19,7 +19,7 @@ caller names, every one of them, with those another run replaces (`read`'s ``run
 readers are the harness's). A run holds, each one JSON object a line:
 
 - its verdict records, in every file named as `RECORDS_FILES`: an object with the fields `class_charge.FIELDS`, as
-  the verdict's own verifier writes it, naming its run, the served run its class came from, the digest of what that
+  the verdict's own verifier writes it, naming its run, the workload its class came from, the digest of what that
   serve registered, and its verifier's module and commit (`class_charge.reads`; a record that lacks one doesn't
   read, whatever its format, and the line says which it lacks). Which of the four verdicts a record is, is read from
   its verdict's ``format`` (`FORMATS`). A verdict whose verifier's format is not listed there reads as missing, and
@@ -263,7 +263,7 @@ RUN_NOT_PROVED = "run, not proved"
 
 
 class Stop(NamedTuple):
-    """How the stop class is charged, as the verdict records of a served run say (`stop_verdicts.stop`, which reads
+    """How the stop class is charged, as the verdict records of a workload say (`stop_verdicts.stop`, which reads
     them through the network attester's own rule, `class_charge.charge`). ``held``: how many execution phases of a
     link are charged below their schedule, those whose signed head was read and in which every class that holds a
     row has its verdicts. Every other execution phase of a scope's monitoring period is charged its whole schedule,

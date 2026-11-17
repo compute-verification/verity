@@ -181,7 +181,7 @@ def failed_words(outcomes: object) -> list[str]:
 
 
 def check(run: Path, registrations: Path | None = None, under: tuple[bytes, bytes] | None = None) -> dict:
-    """The offline check of a served run (the module docstring's `check`). `audit_windows` is the audit's verdict of
+    """The offline check of a workload (the module docstring's `check`). `audit_windows` is the audit's verdict of
     each execution phase that has a record, whole: whether the audit accepted it, and its problems, which `problems`
     gives as ``audit: PROBLEM`` without their execution phase, among its first 50. ``under`` is what the auditor hands
     it: the SHA-512 of the network attester's public key (`connection_rows_check.key_sha512`) and its session, which the

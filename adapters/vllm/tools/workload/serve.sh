@@ -1,9 +1,8 @@
 #!/usr/bin/env bash
-# A LLAMA32_1B committing OpenAI endpoint whose Commit windows are sealed as deferred Commits' workload dirs, for PROVE-PATH's served
-# windows (`--serve-run DIR --window K`): `verity-vllm serve-openai --scheme rows-sha512 --seal` (the bench workload's Commit of record's
+# A LLAMA32_1B committing OpenAI endpoint whose Commit windows are sealed as deferred Commits' workload dirs, for PROVE-PATH's workloads (`--serve-run DIR --window K`): `verity-vllm serve-openai --scheme rows-sha512 --seal` (the bench workload's Commit of record's
 # committer and acquire sources, built from its Build of record's manifest PRED/manifest.json and taps HIDDEN_SO, NORM_TAP_SO:
 # hm96-sha512 rows in frame-v3-sha512 trees) on one leased RTX PRO 6000, a short varied load in bursts (each burst one window,
-# closed at the engine's idle), `verity-vllm advice` per closed window under PROVE-PATH's registered compiler for a served run
+# closed at the engine's idle), `verity-vllm advice` per closed window under PROVE-PATH's registered compiler for a workload
 # (`prove_path.py compiler --serve-run`: the server's, listing its model's transfer gates of record, the one serve_check holds
 # each registration to),
 # a registered cap (--cap) and the committer's weights registration (`prove_path.py weights-registration`: each weight
@@ -42,7 +41,7 @@ set -uo pipefail
 OUT=${OUT:-${RESEARCH_RUN_DIR:-.}/out}; mkdir -p "$OUT"
 PORT=${PORT:-18084} UNTIL=${UNTIL:-13:30} ADMIT=${ADMIT:-arrival} MAX_MODEL_LEN=${MAX_MODEL_LEN:-512} BURSTS=${BURSTS:-8} PER_BURST=${PER_BURST:-4} CAP=${CAP:-8388608}
 for v in REPO REV ROW HIDDEN_SO NORM_TAP_SO VENV CUDA_HOME HF_HOME SERVE_ROOT; do
-  [ -n "${!v:-}" ] || { echo "serve.sh: no $v: start it with \`adapters/vllm/tools/served_run/run.sh serve\`"; exit 2; }
+  [ -n "${!v:-}" ] || { echo "serve.sh: no $v: start it with \`adapters/vllm/tools/workload/run.sh serve\`"; exit 2; }
 done
 TREE=$PWD
 ROOT=$SERVE_ROOT
@@ -63,12 +62,12 @@ rs keep "$ROOT" --owner @vllm --expires 7d --priority high \
   --why "G-A (network certification): LLAMA32_1B serve-openai windows sealed as rows-sha512 row dirs for PROVE-PATH" | tail -2
 cd "$TREE/adapters/vllm"
 vv() { "$PY" -m verity_vllm.pipeline.cli "$@"; }
-compiler_args() {   # DIR: `verity-vllm advice`'s --compiler-name/--compiler-digest for the served run DIR (its serve.json)
+compiler_args() {   # DIR: `verity-vllm advice`'s --compiler-name/--compiler-digest for the workload DIR (its serve.json)
   (cd "$TREE" && "$PY" benchmarks/prove_path/prove_path.py compiler --serve-run "$1" --cap-bits "$CAP") \
     | "$PY" -c "import json, sys; c = json.load(sys.stdin)['inner']; print('--compiler-name', c['name'], '--compiler-digest', c['digest'])"
 }
 CKPT=$HF_HOME/hub/models--${REPO//\//--}/snapshots/$REV
-weights_args() {    # DIR FILE: `verity-vllm advice`'s --weights-of-record for the served run DIR, the committer's registration written to FILE
+weights_args() {    # DIR FILE: `verity-vllm advice`'s --weights-of-record for the workload DIR, the committer's registration written to FILE
   (cd "$TREE" && "$PY" benchmarks/prove_path/prove_path.py weights-registration --serve-run "$1" --checkpoint-dir "$CKPT" \
     --key "$1/private/weights.key" --out "$2") >> "$OUT/weights_registration.txt" 2>&1 && echo "--weights-of-record $2"
 }
@@ -242,7 +241,7 @@ EOF2
   [ "${PIPESTATUS[0]}" = 0 ] || { echo "LONG SMOKE FAILED"; kill -TERM "$SRV"; wait "$SRV"; exit 13; }
 fi
 
-"$PY" "$TREE/adapters/vllm/tools/served_run/serve_load.py" --port "$PORT" --model "$REPO" --bursts "$BURSTS" --per-burst "$PER_BURST" --out "$D/load.jsonl" \
+"$PY" "$TREE/adapters/vllm/tools/workload/serve_load.py" --port "$PORT" --model "$REPO" --bursts "$BURSTS" --per-burst "$PER_BURST" --out "$D/load.jsonl" \
   2>&1 | tee "$OUT/load.log"
 sleep 5
 for _ in $(seq 1 120); do                                   # the load's windows' advice, before they compile
@@ -270,7 +269,7 @@ d, k = Path(sys.argv[1]), sys.argv[2]
 w = d / "windows" / f"w{k}"
 v = json.loads((w / "commit" / "verdict.json").read_text())
 m = json.loads((w / "manifest.json").read_text()) if (w / "manifest.json").exists() else {}
-sw = DR.of_record(v["replay_deferred"]["bundles"][0]["path"], str(w)).ctx["served_window"]
+sw = DR.of_record(v["replay_deferred"]["bundles"][0]["path"], str(w)).ctx["workload_window"]
 seal = next((json.loads(x) for x in (d / "seals.jsonl").read_text().splitlines() if json.loads(x).get("window") == int(k)), {}) \
     if (d / "seals.jsonl").exists() else {}
 srw = sw.get("served_rows") or {}
@@ -317,7 +316,7 @@ done
 if [ "${VARIED:-0}" -gt 0 ]; then   # network-accounting's varied traffic, each run numbered as the network attester releases it
   for i in $(seq 1 "${VARIED_RUNS:-3}"); do
     run=$("$PY" -c "import uuid; print(uuid.uuid4().hex)")
-    "$PY" "$TREE/adapters/vllm/tools/served_run/serve_load.py" --port "$PORT" --model "$REPO" --varied "$VARIED" --rate "${VARIED_RATE:-4}" --prompt-range 16:1024 \
+    "$PY" "$TREE/adapters/vllm/tools/workload/serve_load.py" --port "$PORT" --model "$REPO" --varied "$VARIED" --rate "${VARIED_RATE:-4}" --prompt-range 16:1024 \
       --release "$run" --jitter-ms "${VARIED_JITTER_MS:-400}" --seed "$i" --out "$D/varied_$i.jsonl" > "$OUT/varied_$i.log" 2>&1
     echo "$(date -u +%H:%M:%SZ) varied run $i ($run) rc=$?" | tee -a "$OUT/steps.txt"
   done

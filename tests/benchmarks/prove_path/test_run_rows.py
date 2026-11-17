@@ -1,6 +1,6 @@
 """run.sh's single-GPU Commit (``PP_LLAMA``) is of the row ``LROW`` names, the bf16 RTX PRO 6000 B4 row unless it names
 another, and its workload is the stored one of that name, in whichever stored-workload directory's SHA256SUMS lists it:
-the served run's for the bf16 row, the integration's for the int8 H200 row `a5_llama1b_h200.sh` leaves. A name neither
+the workload's for the bf16 row, the integration's for the int8 H200 row `a5_llama1b_h200.sh` leaves. A name neither
 lists is refused before anything is written, as an art: row dir is."""
 from __future__ import annotations
 
@@ -26,7 +26,7 @@ def lookup() -> str:
 
 
 @pytest.mark.parametrize(("row", "workload"), [
-    (None, f"adapters/vllm/tools/served_run/workloads/{BF16}.json"),
+    (None, f"adapters/vllm/tools/workload/workloads/{BF16}.json"),
     (INT8_H200, f"adapters/vllm/workloads/{INT8_H200}.json"),
 ])
 def test_a_rows_workload_is_the_stored_one_of_its_name(row, workload):
@@ -69,7 +69,7 @@ def test_a_row_dir_row_run_made_is_refused_before_any_build_naming_the_served_ar
     assert got.returncode == 8 and "no row dir on this node" in got.stdout
 
 
-def test_a_served_window_absent_from_this_node_is_refused_before_any_build(tmp_path):
+def test_a_workload_absent_from_this_node_is_refused_before_any_build(tmp_path):
     got = run_sh(tmp_path, PP_SERVE_RUN=str(tmp_path / "gone"), PP_SERVE_ROWS=str(tmp_path / "gone" / "windows" / "w0"))
     assert got.returncode == 8 and "no serve-openai run directory on this node" in got.stdout
     (serve := tmp_path / "serve").mkdir()
@@ -99,7 +99,7 @@ def _lines(first: str, last: str) -> list[str]:
 
 
 def test_the_served_arms_forged_partition_is_settled_before_any_build(tmp_path):
-    """A served window of steps 1 to 2 has no unit at step 24: the served arm's forged partition is derived from the honest
+    """A workload of steps 1 to 2 has no unit at step 24: the served arm's forged partition is derived from the honest
     one, or a given one outside its steps is refused (exit 8, the fix named), after the install and before the builds,
     where its commit would raise only after the honest arm ran. The single-GPU arm's defaults are unchanged."""
     text = RUN_SH.read_text()

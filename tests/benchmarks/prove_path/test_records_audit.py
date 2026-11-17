@@ -13,7 +13,7 @@
   (`declared_count`); the audit counts a record that lists its members and declares its window's ingress so too, and
   prints the window figure beside the run figure with its premise;
 * a circuit reading registered values is audited against the entries the verifier pinned, each under its own domain
-  (`pinned`), and refused before any sample without them, a record that lists its members (a served window's) as one that
+  (`pinned`), and refused before any sample without them, a record that lists its members (a workload's) as one that
   states them; one whose program takes values only tied to the earlier docket that registered them first
   (`tie_of`), its readers' reads registered at that record's roots, and the verifier's tie tests' own tie
   (`window_tie.py`) is that one on their toys;
@@ -539,7 +539,7 @@ def _registered(d: Path, n: int = 8, cap: int = 4, name: str = "w", own: bool = 
     """A window of ``n`` coordinates each reading its ``wrow`` from a registered value ``name`` of 4 rows (coordinate u row u % 4),
     committed by core's registered rows, and the verifier's pin of it; ``own``: the window's own value instead, committed
     under its run root and registered in its ``activations``, as `prove_path.py window-commit` commits the scan's state;
-    ``listed``: its record lists its members and declares the read beside them, a served window's form."""
+    ``listed``: its record lists its members and declares the read beside them, a workload's form."""
     rng = np.random.default_rng(1)
     rows = rng.integers(0, 1 << 16, (4, K // 2), dtype=np.uint16)
     value = REG.Registered.commit("test/model", name, rows.tolist(), schema=REG.SCHEMA_V2, window=RUN if own else None)
@@ -615,8 +615,7 @@ def test_an_expert_tables_registration_is_a_pin_as_written():
 
 
 def test_a_listed_records_registered_weight_reads_are_audited_and_counted_as_a_stated_records(tmp_path, capsys):
-    """A record that lists its members (a served window's form) declares its registered reads beside them, as a served
-    window reads its model's weights: the verifier's window takes it, each member's ``--registered`` file is the one the
+    """A record that lists its members (a workload's form) declares its registered reads beside them, as a workload reads its model's weights: the verifier's window takes it, each member's ``--registered`` file is the one the
     stated record of the same window makes, and its count is the stated record's, the reads registered where the verifier
     pinned the parameter at the root the window's docket records. Without a pin the audit refuses the window before
     any sample; the count names the parameter ``unpinned`` and counts its reads free, as it does for a pin of another root
@@ -650,7 +649,7 @@ def test_a_listed_records_registered_weight_reads_are_audited_and_counted_as_a_s
 
 
 def test_a_tie_pins_the_circuits_values_at_the_earlier_registrations_tables():
-    """`tie_of`: a circuit whose program takes values (a served window's H1 tables, by their Commit names) is tied to the
+    """`tie_of`: a circuit whose program takes values (a workload's H1 tables, by their Commit names) is tied to the
     earlier docket W that registered them first: one-stage's ``log`` is W, each value's ``registered`` words are W's
     entry's, its ``outputs`` W's table of it under the prefix (`credit.window_table`) and its schema v2, and the audit pins
     each at W's     entry under the value's own name. With neither values nor W there's no tie; values without W, W without values, a
@@ -1732,7 +1731,7 @@ print(json.dumps([sorted(m for m in sys.modules if m.split(".")[0] == "verity_vl
 
 
 def test_the_served_compilers_command_charges_the_registered_length_and_refuses_what_it_cant_compile(tmp_path, monkeypatch, capsys):
-    """``prove_path.py circuit``, the served window's registered compiler as `records_audit.compile_check` runs it, on the
+    """``prove_path.py circuit``, the workload's registered compiler as `records_audit.compile_check` runs it, on the
     synthetic serve-openai run of `test_prove_path` (its I2 compile stubbed, and the window over its Programs a coordinate
     window): it writes a circuit record the audit reads (`interface.window_of_record`) under no run and prints the length the
     docket charges, and exits `records_audit.REFUSED` on advice it can't compile."""

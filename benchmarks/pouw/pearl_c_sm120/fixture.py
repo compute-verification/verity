@@ -60,7 +60,7 @@ from verity.protocols.resource_accounting.compute.pouw.prover.schemes.pearl_c_de
 VARIANTS = (SM120, SM120_UNPROMOTED)
 CASE, INDEX, WEIGHT = "gpu-check", 5, 1
 COINS = b"verity-pouw/pearl-c-sm120-gpu-check/coins"
-#: the check's prover hm96 salt key (a served run samples its own)
+#: the check's prover hm96 salt key (a workload samples its own)
 SALT_KEY = hashlib.sha256(b"verity-pouw/pearl-c-sm120-gpu-check/salt-key").digest()
 
 

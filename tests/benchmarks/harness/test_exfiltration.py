@@ -87,13 +87,13 @@ def test_verity_bench_exfiltration_is_the_commands_runner(tmp_path, monkeypatch,
     assert code == 2 and out == "" and "verity bench exfiltration: " in err and "the scan's δ in (0, 1)" in err
     code, out, err = run("--row", "(iv)")
     assert code == 2 and out == "" and "verity bench exfiltration: no run of record holds the planner's rows" in err
-    # a served run's record from its reader: the share it measures, beside the given one
+    # a workload's record from its reader: the share it measures, beside the given one
     (served := tmp_path / "served.json").write_text(json.dumps(SERVED))
-    code, out, _ = run("--served-run", str(served))
+    code, out, _ = run("--workload", str(served))
     assert code == 0 and f"**The audit's share of compute: 12.000% (measured)**, on {SERVED['run']}" in out
-    code, out, _ = run("--json", "--served-run", str(served))
+    code, out, _ = run("--json", "--workload", str(served))
     assert code == 0 and json.loads(out)["compute_share"]["value"] == pytest.approx(0.12)
-    code, out, err = run("--served-run", str(tmp_path / "none.json"))
+    code, out, err = run("--workload", str(tmp_path / "none.json"))
     assert code == 2 and out == "" and "verity bench exfiltration: " in err and "none.json" in err
     # this machine's catalog alone holds no label
     monkeypatch.setenv("RESEARCH_STORE", str(tmp_path / "alone"))
@@ -144,7 +144,7 @@ def test_under_a_research_run_the_runner_records_its_three_figures_and_prints_th
     assert got["workload_fingerprint"] == {
         "source_sha": None, "benchmark": "exfiltration", "row": E.ROW, "step": doc["compute_audit"][0]["step"],
         "variant": None, "share": E.SHARE, "network_check_share": E.NETWORK_CHECK_SHARE, "response_ids": E.RESPONSE_IDS,
-        "scan_delta": doc["certifier"]["scan_delta"]["value"], "served_run": None, "runs": doc["runs"]}
+        "scan_delta": doc["certifier"]["scan_delta"]["value"], "workload": None, "runs": doc["runs"]}
     assert got["validation"]["status"] == "passed" and got["validation"]["evidence"] == [E.DOCUMENT]
     # only what the document has a value over, the world's year last: the fixtures' rows of record hold the compute
     # audit's part over the datacenter's year and the world's alone

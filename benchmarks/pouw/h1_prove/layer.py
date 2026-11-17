@@ -128,7 +128,7 @@ def tokens_of(model: Path, m: int, seed: bytes | None) -> list[int]:
     if importlib.util.find_spec("tokenizers") is not None and file.exists():
         from tokenizers import Tokenizer
         tok = Tokenizer.from_file(str(file))
-        ids = [128000] + tok.encode("The verifier draws tiles of the served window by a live coin, and each drawn tile is "
+        ids = [128000] + tok.encode("The verifier draws tiles of the workload by a live coin, and each drawn tile is "
                                     "proved in zero knowledge and checked by the Lean verifier.", add_special_tokens=False).ids
         if len(ids) >= m:
             return ids[:m]

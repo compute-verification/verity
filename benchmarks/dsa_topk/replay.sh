@@ -4,13 +4,13 @@
 #   research run --on NODE --project verity --source LADDER_TREE --cwd source \
 #     --send benchmarks/dsa_topk/replay.sh --send benchmarks/dsa_topk/dsa_topk.py \
 #     --send benchmarks/dsa_topk/dsa_topk_kernels.py \
-#     -- bash -c 'SRC=<served run dir>/out/pinned/glm53 bash "$RESEARCH_RUN_DIR/inputs/replay.sh"'
-# SRC is the served run's model directory (record/ and its plan); MODEL (glm53) names it in ladder.py; REPLAYS (3).
+#     -- bash -c 'SRC=<workload dir>/out/pinned/glm53 bash "$RESEARCH_RUN_DIR/inputs/replay.sh"'
+# SRC is the workload's model directory (record/ and its plan); MODEL (glm53) names it in ladder.py; REPLAYS (3).
 # Each replay compares itself with the served record and, from the second on, with the first (ladder.py replay);
 # out/pinned/MODEL/replay-I/dsa_topk/ holds each engine process's counters (dsa_topk.log_to), and topk-I.json their sum.
 set -uo pipefail
 D=${RESEARCH_RUN_DIR:?run this under research run}; OUT=$D/out
-SRC=${SRC:?the model directory of the served run}
+SRC=${SRC:?the model directory of the workload}
 MODEL=${MODEL:-glm53}
 VENV=${VENV:-/workspace/venv312}; PY=$VENV/bin/python
 export PATH="$VENV/bin:$PATH"

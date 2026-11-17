@@ -67,7 +67,7 @@ class Releases:
 
 @dataclass
 class Trace:
-    """A served run's step trace (`verity-vllm/step-trace/v1`), its requests in the order they reached the engine, with
+    """A workload's step trace (`verity-vllm/step-trace/v1`), its requests in the order they reached the engine, with
     the certifier's view of its timing when the trace has a clock: each request's ingress time and each step's release
     time (its output's tokens leaving through the egress certifier), or each kept output's own (`output_t`) where the
     recorder saw them leave one by one; and `releases`, a run served under the certified tick's releases."""
@@ -181,7 +181,7 @@ def _asked(engine: Engine, requests: Sequence[RequestIO]) -> tuple[list[RequestI
 def load_step_trace(records: Iterable[dict[str, Any]], *, tokens: dict[str, Sequence[int]] | None = None,
                     ingress_lag_s: float = 0.0, release_lag_s: float = 0.0) -> Trace:
     """A `Trace` from `verity_vllm.engine.step_trace` records. Output lengths and stops come from the trace's `emitted` and
-    `finished` (in a served run the committed sampled tokens and the certified egress say the same); with a draft (the
+    `finished` (in a workload the committed sampled tokens and the certified egress say the same); with a draft (the
     header's `speculative`), so do the drafts each row kept, its `emitted` less its own token. An `arrive` or
     `step` record's `t` is the engine's clock; a record's `ingress_t` / `release_t`, where the recorder has the
     certifier's, wins, and otherwise the engine's clock less `ingress_lag_s` (plus `release_lag_s`) stands in for it."""
@@ -570,7 +570,7 @@ class _Egress:
     same step, which the certified egress shows; of any of them, since a frontend streams one step's outputs over some
     milliseconds. They are compared up to i's first change of bucket, where some earlier request's must change too (2: no
     earlier request's output to compare with). With a draft the fork keeps none of the drafts its rows carry (`_asked`),
-    so each of its rows emits one token, and it is the served run only up to the first of its rows that kept a draft
+    so each of its rows emits one token, and it is the workload only up to the first of its rows that kept a draft
     in the serve: from there its outputs fall behind the served ones, and their buckets need not line up under either
     hypothesis."""
 

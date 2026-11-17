@@ -34,7 +34,7 @@ In a NAME, a `-` stands for a `_`.
 | `verity_cli/__init__.py` | the dispatch, `verity check`, `verity verify proof` and `verity lean try` |
 | `verity_cli/deployed.py` | `verity lean deployed`, over `tools/verity/lean/check.py`'s `trust_gaps` |
 | `verity_cli/run.py` | `verity run` and `verity config`, over `verity.config` |
-| `verity_cli/served_table.py` | the served window's table `verity run` loads (`run.REGISTRY`): each subprotocol's declaration, the workload, each demo's configuration and each party's piece |
+| `verity_cli/served_table.py` | the workload's table `verity run` loads (`run.REGISTRY`): each subprotocol's declaration, the workload, each demo's configuration and each party's piece |
 | `verity_cli/settings.py` | the environment variables `verity run` reads, declared once |
 
 The suite runs a table of its own (`tests/step0.py`).
@@ -43,10 +43,10 @@ The suite runs a table of its own (`tests/step0.py`).
 uv run tools/check/suites.py tools/verity/cli   # the suite, on a node through `research run --on auto`
 ~~~
 
-## The onsite served window
+## The onsite workload
 
 `demos/onsite_full.toml` is one configuration (`verity/config/v0`, `verity.config`) of onsite's seven
-subprotocols on the `served-window` workload: one execution phase of Llama-3.2-1B in int8 served through the vLLM adapter's
+subprotocols on the workload: one execution phase of Llama-3.2-1B in int8 served through the vLLM adapter's
 committing endpoint. `verity run` executes it, reading `verity_cli/served_table.py`. The file is
 `served_table.configuration` rendered by `verity.config.render`, and `tests/test_onsite_served.py` holds it to that byte for
 byte, as it does each other demo file. It names no host and no address: those are the bindings' (`--bindings`, `verity_cli.run`'s
@@ -59,9 +59,9 @@ smaller demo file holds those of the subprotocols it lists), and they are inside
 
 | Entry point | What it is |
 |---|---|
-| `verity run demos/onsite_full.toml [--dry-run] [--on MACHINE] [--bindings FILE] [--state DIR]` | Reads the configuration and the bindings, runs the pieces of the parties placed on this machine, and keeps the run under `STATE`: the served window's public record in `STATE/out`, and the monitoring period's `VERDICT` line, printed and written to `STATE/record/verdicts.jsonl`. |
+| `verity run demos/onsite_full.toml [--dry-run] [--on MACHINE] [--bindings FILE] [--state DIR]` | Reads the configuration and the bindings, runs the pieces of the parties placed on this machine, and keeps the run under `STATE`: the workload's public record in `STATE/out`, and the monitoring period's `VERDICT` line, printed and written to `STATE/record/verdicts.jsonl`. |
 | `served_table.configuration(commit: str, demo: str = "onsite_full") -> dict[str, Any]` | A demo file's configuration as data (`served_table.DEMOS`). |
-| `served_table` | What `verity run` reads of the served window: `MANIFESTS` (each subprotocol's declaration, a `Component`), `WORKLOADS` (the workload's declaration with its piece), `PARTIES` (each subprotocol's piece for each of its parties, a `Piece`), `ORDER`, and `live(cfg: Mapping[str, Any], state: Path, here: Sequence[str]) -> Result`, which runs the pieces of the parties here and returns each party's outcome or refusal. |
+| `served_table` | What `verity run` reads of the workload: `MANIFESTS` (each subprotocol's declaration, a `Component`), `WORKLOADS` (the workload's declaration with its piece), `PARTIES` (each subprotocol's piece for each of its parties, a `Piece`), `ORDER`, and `live(cfg: Mapping[str, Any], state: Path, here: Sequence[str]) -> Result`, which runs the pieces of the parties here and returns each party's outcome or refusal. |
 
 ### Running it
 
@@ -70,13 +70,13 @@ Every party resolved, every channel and piece, and nothing run (no GPU); with `-
     verity run demos/onsite_full.toml --dry-run --bindings BINDINGS
 
 On the developer's node, from the commit `research deploy install` installed (set `[program] commit` to it, else the verdict
-names the difference under `simulated`): the served window, every piece inside it, the auditor's sides opened through
+names the difference under `simulated`): the workload, every piece inside it, the auditor's sides opened through
 their bindings:
 
     verity run demos/onsite_full.toml --on prover-node --bindings BINDINGS --state STATE
 
 The gate's and the auditor device's sides are started by their gates when the developer's pieces open them, so
-`verity run --on gate-host` starts nothing. On the auditor device, with `STATE/out` holding the served window's public
+`verity run --on gate-host` starts nothing. On the auditor device, with `STATE/out` holding the workload's public
 record, the onsite check and the period's verdict:
 
     verity run demos/onsite_full.toml --on auditor-host --state STATE

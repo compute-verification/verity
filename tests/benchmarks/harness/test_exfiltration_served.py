@@ -1,4 +1,4 @@
-"""`verity bench exfiltration`'s share of compute a served run measures."""
+"""`verity bench exfiltration`'s share of compute a workload measures."""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ from verity_bench import exfiltration as E
 BUSY = "`prove`, the proof server's busy seconds a card (`prove_seconds_source`: `busy`)"
 
 
-def test_with_no_served_run_the_share_is_not_measured_and_the_given_share_is_assumed(tmp_path):
+def test_with_no_workload_the_share_is_not_measured_and_the_given_share_is_assumed(tmp_path):
     doc = E.build(store=recorded(tmp_path).store, root=REPO)
     cs = doc["compute_share"]
     assert (cs["run"], cs["value"], cs["mark"], cs["why"], cs["GB"]) == (None, None, None, E.NO_RUN, None)
@@ -26,7 +26,7 @@ def test_with_no_served_run_the_share_is_not_measured_and_the_given_share_is_ass
     assert "- **the compute audit's part: 14,240 GB** (modeled)" in text and "## The audit's share of compute on" not in text
 
 
-def test_a_served_runs_record_gives_the_share_measured_and_the_part_at_it(tmp_path):
+def test_a_workloads_record_gives_the_share_measured_and_the_part_at_it(tmp_path):
     s = recorded(tmp_path)
     doc = E.build(served=SERVED, store=s.store, root=REPO)
     cs = doc["compute_share"]
@@ -99,7 +99,7 @@ def test_a_field_the_record_lacks_names_its_gap_and_no_share_is_claimed(tmp_path
                      ({"stock": None, "serving_cost": -1}, "holds a serving cost of -1: a fraction over -1")):
         with pytest.raises(ValueError, match=f"{SERVED['run']}'s record {why}"):
             E.served_share(SERVED | bad)
-    with pytest.raises(ValueError, match="a served run's record is one JSON object, not list"):
+    with pytest.raises(ValueError, match="a workload's record is one JSON object, not list"):
         E.served_share([SERVED])
 
 

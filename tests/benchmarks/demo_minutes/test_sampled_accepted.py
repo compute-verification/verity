@@ -1,4 +1,4 @@
-"""`sampled_accepted.py`: the share of a served run's sampled proof blocks whose proofs the Lean verifier accepted on the
+"""`sampled_accepted.py`: the share of a workload's sampled proof blocks whose proofs the Lean verifier accepted on the
 auditor's machine, 100 only for SPOT's accept recomputed there off the served node on a commit of main, else 0 with the
 first condition it fails."""
 from __future__ import annotations
@@ -43,7 +43,7 @@ def spot(verdict: str = "accept", answer_from: str = LEAN, sampled: int | None =
 
 
 def demo(root: Path, sha: str, row: dict | None, served_node: bool | None = False, report: dict | None = None) -> list[str]:
-    """The served run and the run whose record holds SPOT's row ``row`` (no record where None), or is ``report``."""
+    """The workload and the run whose record holds SPOT's row ``row`` (no record where None), or is ``report``."""
     for rid in ("r-served", "r-verdicts"):
         d = root / rid
         d.mkdir(parents=True)

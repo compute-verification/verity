@@ -1,4 +1,4 @@
-"""The served rows held to their Programs' statics (`served_statics.ServedStaticsTie_v1`) on a sealed served window's real
+"""The served rows held to their Programs' statics (`served_statics.ServedStaticsTie_v1`) on a sealed workload's real
 rows, proved in zero knowledge: the window's P / G blocks, each a unit whose committed served rows are its leaf of the
 served-rows registration, read through the Lean verifier's registered reads, by Flock `prove --zk` behind the Lean
 ZK server and held by Lean `verify --zk --registered`, through N2-ZK's audit path (`served_tie_zk`'s stager and scan); and
@@ -145,7 +145,7 @@ def plan(S, window: list, programs: list, run_root: bytes, g: int, ids=None) -> 
 def units_of(a) -> SimpleNamespace:
     x = STW.load(a.serve_run, a.window)
     S = STW.statics_of(x)
-    port = x.ctx["served_window"]["step_input_port"]
+    port = x.ctx["workload_window"]["step_input_port"]
     StR = SimpleNamespace(**ST.statics(S, IB=port["IB"], PB=port["PB"]))
     ok, steps, native = STW.bindings(x, S, StR)
     (window,) = STW._session(x.priv)
@@ -239,7 +239,7 @@ def audit(M, N2, a, sg, m: dict, units: list, d: SimpleNamespace, out: Path, por
         roots.append({"port": f"{name}/{p_}", "root": fv["roots"][p_], "leaves": wd["leaves"], "domain": fv["domain_ids"][p_]})
     leaf_layer = hashlib.sha512(M.canonical_json({name: a0.sha512_file(m["dir"] / f"pub-{n}.bin")})).hexdigest()
     law = M.D.parse_design(f"stratified:{n}")
-    win = {"kind": "stand-in", "of": f"the served rows held to their Programs' statics on a sealed served window "
+    win = {"kind": "stand-in", "of": f"the served rows held to their Programs' statics on a sealed workload "
                                       f"({a.serve_run.name} w{a.window})",
            "members": {name: {"template": P.template_id(m["defn"]), "units": [m["base"], m["base"] + n]}},
            "link": "served_statics: each unit's srb row is its leaf of the served-rows registration under the run root "

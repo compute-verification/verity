@@ -1,4 +1,4 @@
-"""On the certified served window (`served_commit.Challenger(certifier=…)`), a sampled proof block's proof is
+"""On the certified workload (`served_commit.Challenger(certifier=…)`), a sampled proof block's proof is
 held to the window's certified salt at its opening of record (`core_check.opening_twin`'s ``salt``, Lean `PouwCheck.opening`'s).
 
 A witness that lifted `salt.unit_reason` and passed rows formed before any certifier salt through every certified

@@ -48,7 +48,7 @@ def _window(**kw):
     return run
 
 
-def test_a_served_window_registers_round_0s_request_headers_and_each_rounds_slot_table():
+def test_a_workload_registers_round_0s_request_headers_and_each_rounds_slot_table():
     """``requests@0`` is round 0's request table (its root the ``request_table`` inside round 0's request root), bound to
     the window's challenge phase; ``slots@0`` is round 0's slot table, bound to the open root and listed whole among round 0's
     segments. Both are among the window's entries, open in the live proof only, and core's ROOTS1 steps tie the window."""

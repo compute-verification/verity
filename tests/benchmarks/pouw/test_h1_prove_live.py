@@ -1,4 +1,4 @@
-"""h1_prove's live units (`h1_prove/live.py`), without a prover or Lean: on a served window's dump (`pouw_h1_live.dump`'s
+"""h1_prove's live units (`h1_prove/live.py`), without a prover or Lean: on a workload's dump (`pouw_h1_live.dump`'s
 form) the verifier's files are the live Program's, every opened row opens its registered root, each round's staged
 statement is the verifier's own public file byte for byte with ok 1 at the served rows, and a prover that claims one row
 more stages ok 0; a tampered opening is refused. The live Program is credit's, `PouwLiveWindow_v2`, each unit reading the
@@ -36,7 +36,7 @@ def salts(n: int) -> list[bytes]:
 
 def dump(out: Path, T: int = T, S: int = S, HEADERS: list = HEADERS, MAX_TOKENS: list = MAX_TOKENS,
          SLOTS: list = SLOTS) -> dict:
-    """A served window's live dump, as `pouw_h1_live.dump` writes it."""
+    """A workload's live dump, as `pouw_h1_live.dump` writes it."""
     heads = HEADERS + [(0,) * LR.HEADER] * (T - len(HEADERS))
     req = G.Registered.commit(PROGRAM, LR.table(PREFIX, LR.REQUESTS), LR.header_words(heads), salts(T), G.WORD_BITS,
                               LR.REQUEST_SCHEMA, session=SESSION)

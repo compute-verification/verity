@@ -4915,7 +4915,7 @@ SECOND_BOUNDARY = {"scheme": SCHEME, "population": BOUNDARY.population, "registe
 def _second_case(s: Setup, named: bool, sample: list[int], drawn: list[int], links=(), allow: bool = False,
                  own=(), wires=()) -> dict:
     """The second_statements piece's input for an honest run over interior `s` after the replay sample `sample` of
-    `BOUNDARY`'s replay blocks: the interior record, of `s`'s program and partition in a served window that names the
+    `BOUNDARY`'s replay blocks: the interior record, of `s`'s program and partition in a workload that names the
     replay sample in order, with roots of each template's `out` and `x` (each `<template>/<port>` when `named`), a tree
     of the template's slots each; the second stage's units `drawn`, and each part's statement (`_second_statement`);
     the templates in `links` read their `x` from the boundary's `x` at their cells' replay blocks instead, unit `j` of

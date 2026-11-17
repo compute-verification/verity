@@ -1,7 +1,7 @@
 """`verity_vllm.check.replay.served_check.population` over the notes of single steps: what the reconciliation reads of a
 step's notes, and what it answers where they leave a note out.
 
-The served check's own tests reconcile the reports of whole served runs; these hold the cases a run of theirs does not
+The served check's own tests reconcile the reports of whole workloads; these hold the cases a run of theirs does not
 reach: a step the Build plans nothing for, notes that are not the check's, and more findings of a kind than it names.
 Last, on that run itself (`tests.check.test_served_check`): the rows a step's attention note counts as not finite.
 """
@@ -94,7 +94,7 @@ def test_an_ids_note_that_names_no_request_reaches_no_request_s_ids(requests):
 
 
 def test_an_attention_note_counts_the_rows_whose_output_is_not_finite():
-    """The served run's attention outputs are finite at every step, and each step's note counts none.  One query word made an
+    """The workload's attention outputs are finite at every step, and each step's note counts none.  One query word made an
     infinity at the last step gives one row that is not finite: the note counts it, and counts it once among the wrong words,
     beside every word of the head that read it."""
     build, weights = SVT._build(), SVT._weights()

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # A single-GPU Commit of record with its sealed replay bundle, the TP1 counterpart of a5_glm53_commit.sh's deferred TP Commit:
-# Llama-3.2-1B bf16 batch-invariant eager on one RTX PRO 6000 (ROW, the served run's workload, its file in adapters/vllm/tools/served_run/workloads/, which
+# Llama-3.2-1B bf16 batch-invariant eager on one RTX PRO 6000 (ROW, the workload, its file in adapters/vllm/tools/workload/workloads/, which
 # the integration finds through VERITY_WORKLOADS: the B4 I256/O32 rtxpro6000 workload, prompt lengths 151, 8, 256 and 87), its Build and
 # Match of record and a deferred config-run Commit in one workload dir, then the Commit's C2 replay on CPU. `run.sh commit`
 # starts it where placement.toml's [run.commit] says, with the node's VENV, CUDA_HOME, HF_HOME and LLAMA_ROOT and the workload's
@@ -21,7 +21,7 @@ set -uo pipefail
 OUT=${OUT:-${RESEARCH_RUN_DIR:-.}/out}; mkdir -p "$OUT"
 . "$(dirname "${BASH_SOURCE[0]}")/published.sh" || exit 2
 for v in ROW ROLE REPO REV VENV CUDA_HOME HF_HOME LLAMA_ROOT; do
-  [ -n "${!v:-}" ] || { echo "commit.sh: no $v: start it with \`adapters/vllm/tools/served_run/run.sh commit\`"; exit 2; }
+  [ -n "${!v:-}" ] || { echo "commit.sh: no $v: start it with \`adapters/vllm/tools/workload/run.sh commit\`"; exit 2; }
 done
 TREE=$PWD
 ROOT=$LLAMA_ROOT
@@ -31,7 +31,7 @@ mkdir -p "$D" "$ROOT/cache" "$BASE/sealed" "$KEPT"
 export PY=$VENV/bin/python PY312=$VENV/bin/python HF_HOME HF_HUB_OFFLINE=1
 export CUDA_HOME TORCH_EXTENSIONS_DIR=$ROOT/cache/torch-extensions
 export PATH=$VENV/bin:$CUDA_HOME/bin:$PATH
-export PYTHONPATH=$TREE:$TREE/adapters/vllm:$TREE/tools/research/src VERITY_WORKLOADS=$TREE/adapters/vllm/tools/served_run/workloads
+export PYTHONPATH=$TREE:$TREE/adapters/vllm:$TREE/tools/research/src VERITY_WORKLOADS=$TREE/adapters/vllm/tools/workload/workloads
 export GPU_LEASE=${GPU_LEASE:-gpu-lease} GPU_LEASE_WHO=${GPU_LEASE_WHO:-vllm-llama1b-commit}
 export TRITON_CACHE_DIR=$ROOT/cache/triton VLLM_CACHE_ROOT=$ROOT/cache/vllm
 if grep -q staged_sources "$TREE/adapters/vllm/verity_vllm/commit/committer/native_jit.py"; then

@@ -1717,7 +1717,7 @@ FIRST_PARENT = [LATER_PIN, MAIN_PIN, OLD_PIN]
 
 
 def _pinned_host(tmp_path, pinned: str, **seal) -> Host:
-    """A served window, on a host of its own key's state, whose open names the tree its host ran (`pinned`) and seals
+    """A workload, on a host of its own key's state, whose open names the tree its host ran (`pinned`) and seals
     the host's pins log as `seal` says (``pins=``; `PINS`, both lines, unless set; DROP: an open from a gate that seals
     none)."""
     tmp_path.mkdir()

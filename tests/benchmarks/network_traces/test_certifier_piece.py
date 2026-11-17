@@ -777,7 +777,7 @@ def _numbers(p: Path) -> set[int]:
 
 
 def _private_chain_out(out: Path) -> Path:
-    """What the chain's relay path leaves in out/ on a served window, the endpoint's report the served node's: each
+    """What the chain's relay path leaves in out/ on a workload, the endpoint's report the served node's: each
     step's file carrying the window's private values where the chain writes them, and the report and report.md that
     ``chain_record.py report`` makes of them."""
     docs = {
@@ -1477,7 +1477,7 @@ def test_close_waits_for_the_sessions_end_keeps_its_fetch_and_publishes_what_a_r
 def test_a_session_the_gates_check_refused_is_closed_and_kept_and_the_piece_doesnt_answer_for_it(tmp_path, monkeypatch):
     """The whole-run rule across a session: an end whose check didn't accept the run (here each connection late) is
     `close`'s exit, its fetch is kept all the same, and the piece's steps refuse on it (`rehearsed`), which leaves the
-    certifier missing for every window of the served run."""
+    certifier missing for every window of the workload."""
     _session_gate(tmp_path, monkeypatch, [LISTENING])
     serve = tmp_path / "serve"
     assert CP.main(_front(tmp_path, *SESSION_FLAGS)) == 0

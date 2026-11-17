@@ -1,7 +1,7 @@
-"""The compile slice (`compile_slice.CompileSlice_v1`) on a served window: window 212 of a vLLM run,
+"""The compile slice (`compile_slice.CompileSlice_v1`) on a workload: window 212 of a vLLM run,
 which `replay_vectors.py --slice 212` builds from the run's scheduler trace and its seal. Its three
 requests' 14 decisions and 20 steps, at the served engine with the slice's sync ReplayStep_v1, whose schedule on this
-window is the served one (the encodings' `test_served_window.py`). `fixtures/compile_slice_w212.json` is the window at
+window is the served one (the encodings' `test_workload.py`). `fixtures/compile_slice_w212.json` is the window at
 its own statics; `fixtures/compile_slice_w212_class.json` is the same window padded into the engine's public sizes
 (R, W, A) = (8, 1, 9), Q 4, D 32, P 54, K 4 under a sync scheduler, the sync class. The engine's own class is its
 AsyncScheduler's (AS = 1), where `benchmarks/network_traces/compile_slice_zk.py` proves w212 as `CompileSlice_v7`. The
@@ -50,7 +50,7 @@ def _cases(x):
     that leaves the last asked decision uncommitted (``cleared``: the window row keeps it; ``cleared-read``: the window
     row drops it too, and the scan reads past the count), a carry-out other than the charge's carry', and six
     passes at w212 (``sixpass``: advice that registers a pass at every ask, its own scan's twenty, where
-    the served window admitted requests 309 and 310 at the seventh and fourteenth), with the served rows in ``srv`` and
+    the workload admitted requests 309 and 310 at the seventh and fourteenth), with the served rows in ``srv`` and
     with its own. The last three read or commit more decisions than the window's own D = 14, so they are the class's
     only."""
     S, sl, served = x.S, x.sl, x.served
@@ -89,7 +89,7 @@ def test_the_slice_accepts_w212(w212):
     negative is refused by its own checks: the early admission by ``load`` and ``rows`` (its steps leave the last
     decision unread, which the chain carries, so ``steps`` holds), the advice that drops an asked decision by ``load``
     or, with the window row cut too, by ``steps`` and ``rows`` (the scan's last ask reads past the count, a pass where
-    the served window admitted), the forged carry-out by ``code``, and the twenty passes (23 bits) by ``rows`` alone
+    the workload admitted), the forged carry-out by ``code``, and the twenty passes (23 bits) by ``rows`` alone
     against the served rows; with its own rows in ``srv`` the unit accepts them, and the native b‖c check refuses
     ``srv``. The padding (an empty arrival slot, 18 decisions past the count, 34 idle steps) changes no verdict and no
     charge."""

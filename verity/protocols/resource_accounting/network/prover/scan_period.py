@@ -46,9 +46,9 @@ and its Lean.
   included): the period check is the consistency check, the committed I/O against the certificates, and what a
   sample of one or two proof blocks leaves unproved is covert capacity, which K charges. That is the case of an audit
   whose registration states its `SCAN_STATE` among its ``roots`` or its ``registered``, the two places the check reads
-  an audit's state entry (`stateEntries`). A served window's registration, as ``prove_path.py window-commit`` writes
+  an audit's state entry (`stateEntries`). A workload's registration, as ``prove_path.py window-commit`` writes
   it, holds that state in its window's ``activations.values`` alone, so a served period's case is refused at the state
-  tie (`period_case.UNSTATED`), in Lean and in the mirror. No served run writes the entry in either of the two places
+  tie (`period_case.UNSTATED`), in Lean and in the mirror. No workload writes the entry in either of the two places
   today. So with ``--v3c`` an honest round whose audit's registration has no state entry in either (the mirror's
   `stateEntries`) is expected refused there, by that refusal's name in both reasons, and its accept is unexpected; one
   whose registration has such an entry is expected accepted.

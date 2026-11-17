@@ -797,9 +797,9 @@ def _member(name: str, kind: bytes = tarfile.REGTYPE, link: str = "") -> tarfile
 
 
 @pytest.mark.parametrize("data, why", [
-    (tar_of(HANDED, extra=((_member("private/h1/key"), b"k"),)), "the hand-off carries the served run's witness: "
+    (tar_of(HANDED, extra=((_member("private/h1/key"), b"k"),)), "the hand-off carries the workload's witness: "
      "private/h1/key (H1's prover state (its key))"),
-    (tar_of({**HANDED, "requests.jsonl": b"{}"}), "the hand-off carries the served run's witness: requests.jsonl"),
+    (tar_of({**HANDED, "requests.jsonl": b"{}"}), "the hand-off carries the workload's witness: requests.jsonl"),
     (tar_of({**HANDED, "sampled-proofs-served/window/m0/inst-0.bin": b"x"}), "witness: "
      "sampled-proofs-served/window/m0/inst-0.bin (a prover's instance file (its rows))"),
     (tar_of(HANDED, extra=((_member("h1/w7", tarfile.SYMTYPE, "/etc/passwd"), b""),)), "h1/w7 isn't a regular file"),
@@ -836,7 +836,7 @@ def test_receive_writes_no_witness_byte_and_holds_the_sums_to_every_file(tmp_pat
         H.receive(io.BytesIO(raw_tar([("h1/log.jsonl", b"x")])), tmp_path / "nosums")
     with pytest.raises(H.Refused, match="lacks h1/gone.json, which its sums list"):
         H.receive(io.BytesIO(tar_of(HANDED, more=f"{'0' * 64}  h1/gone.json\n")), tmp_path / "lacks")
-    with pytest.raises(H.Refused, match=r"sums list the served run's witness: private/h1/key \(H1's prover state"):
+    with pytest.raises(H.Refused, match=r"sums list the workload's witness: private/h1/key \(H1's prover state"):
         H.receive(io.BytesIO(tar_of(HANDED, more=f"{'0' * 64}  private/h1/key\n")), tmp_path / "listed")
     for i, outside in enumerate(("../../etc/passwd", "/etc/passwd", "h1/../../x")):
         with pytest.raises(H.Refused, match="lacks .*, which its sums list"):

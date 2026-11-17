@@ -1,10 +1,10 @@
 # This directory's numbers, one [[metric]] each: benchmarks/README.md's "Metrics"; tests/test_metrics_registry.py
 # enforces it.
 
-# RUN OF RECORD: r20261106-165116-614b, the served run every row below reads (`--from`). To move the rows to another
+# RUN OF RECORD: r20261106-165116-614b, the workload every row below reads (`--from`). To move the rows to another
 # run, replace it in this line and in each row's command; tests/test_compute.py holds every row's --from to this line.
 
-# it reads the served run of record's verifier side from the evidence store, so any CPU node with a --store-read key runs it
+# it reads the workload of record's verifier side from the evidence store, so any CPU node with a --store-read key runs it
 [[metric]]
 id = "compute-accounting/verified-compute-share"
 title = "Verified compute share"
@@ -33,7 +33,7 @@ id = "compute-accounting/credited-of-creditable"
 title = "Credited share of creditable work"
 owner = "compute-accounting"
 unit = "share of multiply-adds"
-axis = "Share of the multiply-adds Pearl+ can credit in a served run that its verifier credits."
+axis = "Share of the multiply-adds Pearl+ can credit in a workload that its verifier credits."
 better = "higher"
 command = "research run --on auto --project verity --source . --cwd source --store-read -- uv run python benchmarks/compute/run.py --from r20261106-165116-614b"
 every = "7d"

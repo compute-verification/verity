@@ -48,7 +48,7 @@ def test_the_python_processes_of_the_workloads_tree(proc):
 
 
 def test_a_dump_names_the_process_by_pid_and_comm_never_its_command_line():
-    """py-spy's header line is the workload's whole argv; a stall dump of a served run's step carried its `--window N`, which
+    """py-spy's header line is the workload's whole argv; a stall dump of a workload's step carried its `--window N`, which
     custody uploads with logs/stall-*.txt."""
     out = b"Process 7: python3 -m serve --window 13 --seal /secret/path\nPython v3.12.3 (/usr/bin/python3.12)\n\n" + STACK.encode()
     got = pyspy.dump([(7, "python3")], run=lambda argv, **kw: subprocess.CompletedProcess(argv, 0, out, b""),

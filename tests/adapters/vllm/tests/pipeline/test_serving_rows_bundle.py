@@ -63,7 +63,7 @@ def test_a_deferred_commits_serving_rows_are_the_verifiers_window_over_the_serve
     got, _doc = IF.of_records(wdir, DR.parse_design(DESIGN), {ROPE: defn}.__getitem__)
     assert (got.partition_digest, got.run, got.members, CS.expected_ports(got)) == (mine.partition_digest, mine.run, mine.members, ports)
 
-    # every hidden row is what was served: x the qkv row's head slice, cs the cache row at the token's position, out the rotated head
+    # every hidden row is what the workload served: x the qkv row's head slice, cs the cache row at the token's position, out the rotated head
     rows: np.ndarray = np.frombuffer((wdir / "m0-private.bin").read_bytes()[:heads * 3 * D * 2], dtype="<u2").reshape(heads, 3, D)
     world, inst = c["world"], c["inst"]
     idx = json.loads((wdir / "index.json").read_text())
@@ -99,9 +99,9 @@ def test_the_in_commit_hook_writes_the_window_as_served(tmp_path):
     assert DRW.source(hook["window"], root, man, step_rows.NAME) == {"kind": True, "run": True, "commitment": True, "sha512": True, "link": True}
 
 
-def test_a_rows_sha512_records_stand_in_names_that_commitment_and_its_served_window_passes_the_source_check(tmp_path):
+def test_a_rows_sha512_records_stand_in_names_that_commitment_and_its_workload_passes_the_source_check(tmp_path):
     """A deferred Commit, committed under rows-sha512: the stand-in's ``of`` and ``link`` name the commitment the record was
-    committed in, and the in-Commit hook's served window over the same record passes the audit's source check; either one naming
+    committed in, and the in-Commit hook's workload over the same record passes the audit's source check; either one naming
     vllm-v1 is refused by name."""
     c = _commit(tmp_path)
     bundle, root = RB.path(c["out"], 1), c["run_root"]
@@ -130,8 +130,8 @@ def test_a_rows_sha512_records_stand_in_names_that_commitment_and_its_served_win
     assert [k for k, v in DRW.source(hook, root, man, r.commitment, "ab" * 32).items() if not v] == ["weights_sha512"]
 
 
-def test_the_audits_source_check_takes_a_served_window_only_over_a_sha512_run_root_of_record():
-    """`deferred_rows.source` on a served window over a 64-byte run root of record, and each field altered refused by its name: the
+def test_the_audits_source_check_takes_a_workload_only_over_a_sha512_run_root_of_record():
+    """`deferred_rows.source` on a workload over a 64-byte run root of record, and each field altered refused by its name: the
     run, the root's size, the record's commitment named, a stand-in link carried, and a kind that is neither form; a stand-in's
     commitment, ``of`` and ``link`` are the record's."""
     man, root, com = "cd" * 32, "ab" * DRW.SERVED_ROOT, step_rows.NAME

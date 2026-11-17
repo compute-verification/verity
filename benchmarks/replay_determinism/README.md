@@ -1,6 +1,6 @@
 # Replay determinism
 
-Whether a served window's recorded schedule, replayed, gives the bytes it served without batch invariance
+Whether a workload's recorded schedule, replayed, gives the bytes it served without batch invariance
 (`VLLM_BATCH_INVARIANT` unset), and whether a request served alone gives the bytes it got inside its batch. One GPU, one
 MoE model, vLLM at the integration's pin with the integration's engine profile (`verity_vllm.engine.env.ENGINE`).
 

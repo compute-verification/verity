@@ -51,7 +51,7 @@
       "share": 3.998121899949004e-05,
       "low": 2.5489908870636987e-05,
       "high": 7.877204096151688e-05,
-      "source": "2,061 B a token hashed at the commitment card's rate, the range at 446 and 289 GB/s; one attention layer's table for each request, 1,472 B hashed on the card a row (the row's 1,152 B, its 192 B salt and the tree node above its leaf) at 1.4 rows a computed token on the chat load's size classes, 1 to 2 over the range; the hashing alone, without the rows' gather from the layer's state and their copy to the host; no served run has built a table"
+      "source": "2,061 B a token hashed at the commitment card's rate, the range at 446 and 289 GB/s; one attention layer's table for each request, 1,472 B hashed on the card a row (the row's 1,152 B, its 192 B salt and the tree node above its leaf) at 1.4 rows a computed token on the chat load's size classes, 1 to 2 over the range; the hashing alone, without the rows' gather from the layer's state and their copy to the host; no workload has built a table"
      },
      {
       "part": "token commits and replay-block edge snapshot",
@@ -113,7 +113,7 @@
       "share": 3.998121899949004e-05,
       "low": 2.5489908870636987e-05,
       "high": 7.877204096151688e-05,
-      "source": "2,061 B a token hashed at the commitment card's rate, the range at 446 and 289 GB/s; one attention layer's table for each request, 1,472 B hashed on the card a row (the row's 1,152 B, its 192 B salt and the tree node above its leaf) at 1.4 rows a computed token on the chat load's size classes, 1 to 2 over the range; the hashing alone, without the rows' gather from the layer's state and their copy to the host; no served run has built a table"
+      "source": "2,061 B a token hashed at the commitment card's rate, the range at 446 and 289 GB/s; one attention layer's table for each request, 1,472 B hashed on the card a row (the row's 1,152 B, its 192 B salt and the tree node above its leaf) at 1.4 rows a computed token on the chat load's size classes, 1 to 2 over the range; the hashing alone, without the rows' gather from the layer's state and their copy to the host; no workload has built a table"
      },
      {
       "part": "token commits and replay-block edge snapshot",

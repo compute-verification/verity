@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # One-stage audit, run A5, its GPU half: GLM-5.3's TP8 Commit on an 8xH200, the Commit of record's row (its Build, Match and
 # manifest of record, read in place from sweep-b3) Committed once more with the verifier's SiluMul_v2 partition
-# (glm53_silu_mul_v2_tp8.json) committed as served windows, one per rank (SERVING_ROWS, REPLAY_DEFERRED=1), one pair, into its
+# (glm53_silu_mul_v2_tp8.json) committed as workloads, one per rank (SERVING_ROWS, REPLAY_DEFERRED=1), one pair, into its
 # own sweep dir (sweep-a5): the Commit of record's commit/ is never written.
 #   bash benchmarks/one_stage/a5_glm53_commit.sh
 #   (a job run from the source tree, up to 12 h, keeping out/**)
@@ -62,11 +62,11 @@ if [ -d "$RD" ]; then
 fi
 rkeep() { $PY -c 'import sys; from research.cli import main; sys.exit(main())' keep "$@" 2>&1 | tail -2; }
 rkeep "$HANDOFF" --owner @circuits --expires 7d --priority high \
-  --why "A5: GLM-5.3 TP8 served windows (private bodies: prover only) and the TP Commit's record, for the CPU audit"
+  --why "A5: GLM-5.3 TP8 workloads (private bodies: prover only) and the TP Commit's record, for the CPU audit"
 # the A5 Commit's own commit/ (its deferred replay bundles); never the row dir, whose build/ and match/ link to the Commit of record's
 rkeep "$BASE/$ROW/commit" --owner @circuits --expires 3d --priority normal \
   --regenerate "research run --on vy-glm53-eu2 ... -- bash benchmarks/one_stage/a5_glm53_commit.sh" \
-  --why "A5's GLM-5.3 TP8 Commit with served windows: its record and deferred replay bundles"
+  --why "A5's GLM-5.3 TP8 Commit with workloads: its record and deferred replay bundles"
 du -sh "$HANDOFF" 2>/dev/null; echo "HANDOFF=$HANDOFF" | tee "$OUT/handoff.txt"
 cat "$HANDOFF/serving-rows/tp.json" 2>/dev/null | head -c 2000; echo
 tail -40 "$OUT/commit.out"

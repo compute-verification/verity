@@ -60,13 +60,13 @@ rule, and never by requests what a check counts by capacity:
 * the scan under each of `CHANGES`, the three changes to its check, and under all three: a response's length held to
   its Program's output count, and that count to its ids by a stop block, a proof block that checks where a response's
   ids stop, sampled on a served audit, so that the schedules are 0 and the connections that fail are charged pooled
-  over the period (`failed`), where a served run's verdict records say the stop class is charged below its schedule
+  over the period (`failed`), where a workload's verdict records say the stop class is charged below its schedule
   and each connection's schedule where they don't (The stop class's verdicts, below); the release times taken once, by the compute side's tick, so that the jitter is 0 at
   either D_j, which rests on the simulated set-time card, so a row under this change carries the label at either
   D_j, in the document and in its printed name; and the entries charged through the compute audit, whose own bound
   then stands in their place and is not counted here;
 * the design, which no run has behind it: head checks, a lengths unit on the network attester's records, and a stop
-  block sampled on a served audit. How its stop class is charged is read from a served run's verdict records and
+  block sampled on a served audit. How its stop class is charged is read from a workload's verdict records and
   from nothing else (The stop class's verdicts, below). Charged below its schedule, the lengths unit holds a
   response's length to its Program's output count and the stop block holds that count to the ids, so the lengths
   are held and its term is the jitter, the pooled failures and the count (below). With no record read, or one
@@ -91,7 +91,7 @@ the count alone: no tick holds when a head leaves, so the line says the head's t
 
 **The stop class's verdicts.** Every row that holds the lengths by a stop block (`Kind.verdicts`: `lengths`,
 `all three` and the design's) is charged below its schedules only on the execution phases a `Stop` holds: the
-answer of the network attester's own rule (`class_charge.charge`) on a served run's signed heads and verdict
+answer of the network attester's own rule (`class_charge.charge`) on a workload's signed heads and verdict
 records, which `stop_verdicts` reads from the evidence store's runs of record and a caller passes to `table` and
 `document`. A row's execution phases are its scope's over its monitoring period, never the ones a run kept a
 registration for: the answer says how many of a link's execution phases are held (`Stop.held`), that share of the
@@ -554,7 +554,7 @@ class Kind(NamedTuple):
     makes to the scan's check (`CHANGES`), what it counts and by
     which rule, whether a stop block holds a response's output count to its ids (`terms`' ``stop``), whether its
     check reads the head that states each content class's held rows, so that it is charged the count (`counted`),
-    whether its stop block holds that count only as a served run's verdict records say (`Stop`), so that with
+    whether its stop block holds that count only as a workload's verdict records say (`Stop`), so that with
     no such records each connection is charged its schedule: every row that holds the lengths by a stop block,
     and the mark its accept carries (`RUN_NOT_PROVED`; None where it carries none)."""
     standing: str
@@ -566,13 +566,13 @@ class Kind(NamedTuple):
     mark: str | None = None
 
 
-#: how the stop class is charged, as a served run's verdict records say (`stop_verdicts`')
+#: how the stop class is charged, as a workload's verdict records say (`stop_verdicts`')
 Stop = SV.Stop
 
 #: the four verdicts a stop class owes, as the network attester's rule names them
 VERDICTS = CC.VERDICTS
 #: what a row that holds the lengths by a stop block, and is not the design's, says of how that block is read
-BY_VERDICTS = ("its stop class is charged as the row `design`'s is, by a served run's verdict records: with one "
+BY_VERDICTS = ("its stop class is charged as the row `design`'s is, by a workload's verdict records: with one "
                "verdict lacking or no record read, each connection is charged its schedule, as is each connection "
                "of an execution phase no registration was read for")
 #: what the count's line says of when a head leaves: no tick holds it, so the line prices no late head
@@ -613,7 +613,7 @@ ROWS = {
         stop=False, count=True),
     "design": Kind("a design with no run behind it", ("lengths", "entries"),
                    "head checks, a lengths unit on the network certifier's records, and a stop block sampled on a "
-                   "served audit. Its stop class is charged as a served run's verdict records say, by the network "
+                   "served audit. Its stop class is charged as a workload's verdict records say, by the network "
                    "certifier's rule: below its schedule only with a count above 0 and its four verdicts, each "
                    "accepted, complete and on the signed head of its execution phase. Then the lengths are held, the stop block holding a "
                    "response's output count to its ids, and its term is the jitter, the failed connections' "

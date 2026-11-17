@@ -68,8 +68,7 @@
     block            the Flock block a whole Definition needs as one unit, read off it before lowering
                      (`verity_flock.circuit.unit_block`: its rows' sha512x3 and hm96 slots and the mask beside its own slot
                      of ANDs and ports, as `compose` places them), within Flock's proved range of 2^``K_MAX`` (`block_range`):
-                     past it, `compose` refuses the unit.  Failed for every Definition checked whole, as PoUW and a served
-                     window's templates each stage one, unless `block_held` says why not (the report's, `summarize`);
+                     past it, `compose` refuses the unit.  Failed for every Definition checked whole, as PoUW and a workload's templates each stage one, unless `block_held` says why not (the report's, `summarize`);
                      a Call serving stages as its cut (its module's ``CUTS``, `cut_of`), for each unit of the cut instead
 
 Correctness and invariant violations are failures, each with a name (``"<check>/<code> <definition> ..."``); redundant and dead

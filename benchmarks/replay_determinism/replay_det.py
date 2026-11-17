@@ -1,4 +1,4 @@
-"""Replay determinism of a served window without batch invariance, on one GPU: does replaying a window's recorded
+"""Replay determinism of a workload without batch invariance, on one GPU: does replaying a window's recorded
 schedule give the served bytes, and does a request alone give the bytes it got inside its batch?
 
 One in-process vLLM engine (`verity_vllm.engine.env.ENGINE`, eager, prefix caching off, synchronous scheduling, a fixed

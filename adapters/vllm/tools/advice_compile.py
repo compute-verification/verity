@@ -1,4 +1,4 @@
-"""The compiler's verdict on a served run's advice: `predict.steps.compile_steps` (I2) over the advice `verity-vllm advice` wrote,
+"""The compiler's verdict on a workload's advice: `predict.steps.compile_steps` (I2) over the advice `verity-vllm advice` wrote,
 its request Programs traced by the Build, and the digests compared.
 
 Reads a run of `tools/advice_run.py`: `advice/private/advice.bin` (I1, the prover's), `step_trace.jsonl` (each request's
@@ -9,7 +9,7 @@ model, its config.json the pin's config of record (`dense_generic.pinned_hf_conf
 its checkpoint dtype the one that config's `quantization_config` states (`checkpoint_dtype`), on that target at that execution,
 at the engine's tensor-parallel world and `--rank`, with the engine args class G states and the layout of an FP8 KV cache
 (`engine_of`; the whole φ is `phi_of`,
-`predict.phi.served_phi`, the formula a served window's registered compiler reads φ by too, so the Builds written here hold
+`predict.phi.served_phi`, the formula a workload's registered compiler reads φ by too, so the Builds written here hold
 the Programs it compiles), without workload, and the public default seed (`engine.served_seed.DEFAULT_SEED`): a run whose
 server says it filled in another is refused (exit 2, `registered_seed`).  Writes, under `--out`:
 
@@ -86,8 +86,7 @@ def checkpoint_dtype(hf_config: dict) -> str | None:
 
 
 def phi_of(meta: dict, hf_config: dict, rank: int):
-    """The registration's φ (module docstring): `predict.phi.served_phi`, the one formula of a served engine's φ, which a served
-    window's registered compiler reads too (`prove_path.phi_of_serve`); `engine_of`'s ValueError is raised."""
+    """The registration's φ (module docstring): `predict.phi.served_phi`, the one formula of a served engine's φ, which a workload's registered compiler reads too (`prove_path.phi_of_serve`); `engine_of`'s ValueError is raised."""
     return P.served_phi(meta, hf_config, rank)
 
 

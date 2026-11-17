@@ -5,7 +5,7 @@
 
 `run_row_v2.sh` calls this on EXIT of a `stage` run (the runner set RESEARCH_RUN_DIR): the stage's small account files are copied
 from the evidence dir into `$RESEARCH_RUN_DIR/outputs/<name>/` and declared in `$RESEARCH_RUN_DIR/outputs.json`, which
-`research.store.attempt.publish` turns into one artifact per entry. A run of several stages (`adapters/vllm/tools/served_run/commit.sh`) names them
+`research.store.attempt.publish` turns into one artifact per entry. A run of several stages (`adapters/vllm/tools/workload/commit.sh`) names them
 all, and gets each stage's entries that stages.txt records (`build_stages`):
 
     plan    -> vllm-commit-plan/v1    plan/commit_plan.json (the Commit's plan: its key and the producer facts), plan.log,
@@ -35,7 +35,7 @@ No entry holds a private file (`private`), wherever it sits, and these stay on t
 - the requests' prompt and served token ids: the Match's token records (`tokens.json`), the Commit's token record
   (`tokens_p<pair>.json`), the sampler value check's rows (`match_stoch.json`) and the C2 replay's executed-prefix facts
   (`sampled_replay*.json`);
-- a served run's requests (`requests.jsonl`), its step traces (`step_trace.jsonl`, `advice_trace.jsonl`: each request's prompt
+- a workload's requests (`requests.jsonl`), its step traces (`step_trace.jsonl`, `advice_trace.jsonl`: each request's prompt
   length, sampling parameters, rows a step and emitted ids) and the load's client records (`load*.jsonl`);
 - where each rank ran, its process and device (`topology.json`), and when each process ran (`timeline.jsonl`,
   `timeline_report.json`).

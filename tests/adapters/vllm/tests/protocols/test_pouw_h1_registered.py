@@ -138,7 +138,7 @@ def test_a_value_of_no_rows_or_not_u16_words_is_refused(words):
         NR.commit(PROGRAM, "v", words, KEY, 0)
 
 
-def test_a_served_window_registers_what_core_would(monkeypatch):
+def test_a_workload_registers_what_core_would(monkeypatch):
     """A small H1 window (`test_pouw_h1_served._window`: two K, q and k on one input, a served and an empty step) and the
     period's weights: every registered value's entry, the window's served digest and each call's manifest row are the
     same as with core's `Registered.commit` registering them."""

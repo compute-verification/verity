@@ -1,4 +1,4 @@
-# The onsite run of the served window: onsite's seven subprotocols, each party on its machine, and the keys
+# The onsite run of the workload: onsite's seven subprotocols, each party on its machine, and the keys
 # the auditor pinned for its devices. Run it on each machine with `verity run THIS --on MACHINE --bindings
 # FILE` (tools/verity/cli/README.md); the deploy bindings hold every host and address, this file none.
 # `verity run THIS --dry-run` resolves it all.
@@ -6,7 +6,7 @@ format = "verity/config/v0"
 protocols = ["sampled-proofs", "pouw", "inference-only", "pous", "bandwidth", "certifier", "wipe"]
 
 [workload]
-name = "served-window"
+name = "workload"
 
 [workload.params]
 model = "verity-int8/Llama-3.2-1B-INT8"

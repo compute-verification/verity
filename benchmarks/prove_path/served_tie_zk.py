@@ -1,4 +1,4 @@
-"""The routed served-rows tie (`served_tie.ServedRowsTie_v2`) on a sealed served window's real rows, proved in zero
+"""The routed served-rows tie (`served_tie.ServedRowsTie_v2`) on a sealed workload's real rows, proved in zero
 knowledge: the window's P / G units by Flock `prove --zk` behind the Lean ZK server and held by Lean `verify --zk`, through
 N2-ZK's audit path (`verity/protocols/resource_accounting/network/prover/n2_zk.py`: its stager, ZK server and received-pieces scan); and the cost.
 
@@ -169,7 +169,7 @@ def units_of(a) -> SimpleNamespace:
     """The window, its steps, each case's registration, and both statements' units: kind, block j, rows, reference."""
     x = STW.load(a.serve_run, a.window)
     S = STW.statics_of(x)
-    port = x.ctx["served_window"]["step_input_port"]
+    port = x.ctx["workload_window"]["step_input_port"]
     st = ST.statics(S, IB=port["IB"], PB=port["PB"], G=a.g)
     St = SimpleNamespace(**st)
     ok, steps, native = STW.bindings(x, S, St)
@@ -264,7 +264,7 @@ def audit(M, N2, a, sg, m: dict, units: list, w: int, run_root: bytes, out: Path
         roots.append({"port": f"{name}/{p_}", "root": fv["roots"][p_], "leaves": wd["leaves"], "domain": fv["domain_ids"][p_]})
     leaf_layer = hashlib.sha512(M.canonical_json({name: a0.sha512_file(m["dir"] / f"pub-{n}.bin")})).hexdigest()
     law = M.D.parse_design(f"stratified:{n}")
-    win = {"kind": "stand-in", "of": f"the served rows' tie on a sealed served window ({a.serve_run.name} w{w})",
+    win = {"kind": "stand-in", "of": f"the served rows' tie on a sealed workload ({a.serve_run.name} w{w})",
            "members": {name: {"template": P.template_id(m["defn"]), "units": [m["base"], m["base"] + n]}},
            "link": "served_tie: each unit's srv row is its served-rows registration's row w; its positions are the step "
                    "streams' port chunks, opened under the run root"}

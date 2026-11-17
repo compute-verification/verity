@@ -13,12 +13,12 @@ What code outside this directory may use. Everything else here is internal.
 | `uv run tools/check/suites.py benchmarks/pous` | The suite, on the CPU: `bench.py` and the harness, P2 (its reference, wire, store and bandwidth session), the served pieces and cases, and the wipe's resume. It writes no result. |
 | `python benchmarks/pous/bench.py --impl IMPL --weight-set ID --hardware ID --out DIR [--scheme NAME] [--max-segments N]` | The harness: one command per scheme, implementation, weight set and hardware. It writes `bench-result.json` (`verity-pous/bench-result/v1`) to `--out`, and `result.json` to `$RESEARCH_RUN_DIR` when that is set. |
 | `bash benchmarks/pous/pod.sh IMPL=NAME [WS=ID] [OPTIONS]` | The harness on a GPU pod as one Attempt: it builds the implementation's kernels and runs `bench.py`. It writes to `$RESEARCH_RUN_DIR`. |
-| `bash benchmarks/pous/served_piece.sh SERVE_DIR WINDOW DIR` | PoUS's piece of the composed served run (`served_piece.py`): one run of PoUS over the served checkpoint's linear weights, held as P2's `C*` on the card that served, with the memory attester on the auditor's device. It writes its core answer to `DIR/answer.json`. |
+| `bash benchmarks/pous/served_piece.sh SERVE_DIR WINDOW DIR` | PoUS's piece of the composed workload (`served_piece.py`): one run of PoUS over the served checkpoint's linear weights, held as P2's `C*` on the card that served, with the memory attester on the auditor's device. It writes its core answer to `DIR/answer.json`. |
 | `bash benchmarks/pous/streamed_wipe/served_wipe.sh SERVE_DIR WINDOW DIR` | The wipe's piece of the same run: one streamed wipe of the card before its engine loads (`streamed_wipe/demo.sh`). It writes its core answer, `verity/wipe/v0`'s, to `DIR/answer.json`. |
-| `onsite_pieces.sh`, sourced | Two shell functions: `onsite_piece_commands` sets the two pieces above as a served run's defaults, each kept where its variable is already set, and `onsite_cases` names PoUS's and the wipe's cases for the composite as their pieces wrote them, each beside its Lean's answer, with no card and no case made, and writes each one's line (`CASE`, `NOT_WRITTEN` or `LEFT_OUT`) to the run's `verdicts.txt`. |
+| `onsite_pieces.sh`, sourced | Two shell functions: `onsite_piece_commands` sets the two pieces above as a workload's defaults, each kept where its variable is already set, and `onsite_cases` names PoUS's and the wipe's cases for the composite as their pieces wrote them, each beside its Lean's answer, with no card and no case made, and writes each one's line (`CASE`, `NOT_WRITTEN` or `LEFT_OUT`) to the run's `verdicts.txt`. |
 
 Read from outside `benchmarks/`: `band_gpu/harness.py`, imported by a test; and `served_piece.sh`,
-`streamed_wipe/served_wipe.sh` and `onsite_pieces.sh`, named by their paths where a served run is configured.
+`streamed_wipe/served_wipe.sh` and `onsite_pieces.sh`, named by their paths where a workload is configured.
 
 - `weight_sets.json` (`pous-weight-sets/v1`) is the dataset. It holds the weight sets as the serving engine holds them,
   with their checkpoint pins:
@@ -158,7 +158,7 @@ default). `bench.py`'s docstring lists the steps; `run.sh` builds for sm_120, ta
 bash benchmarks/pous/streamed_wipe/run.sh   # on an RTX PRO 6000 node, from the source tree's root
 ~~~
 
-`streamed_wipe/served_wipe.sh` is the wipe's piece of a served window: `demo.sh`'s wipe of the H200 a
+`streamed_wipe/served_wipe.sh` is the wipe's piece of a workload: `demo.sh`'s wipe of the H200 a
 window is served on, before its engine loads, with the memory attester on vy-auditor-2. It writes the core answer
 (verity/wipe/v0) to `DIR/answer.json`, with demo.sh's outputs and `served.json` beside it.
 `benchmarks/one_stage/served_verdicts.sh` runs it as
@@ -172,7 +172,7 @@ card. Its record says `trusted-device` holds only under a committed configuratio
 bound. Its header lists the memory attester's
 settings. `tests/test_pous_served_wipe.py` runs it on a CPU, with one segment in host memory.
 
-`served_piece.sh` is PoUS's piece of a served window (`POUS_CMD`), in two parts. On the card, under one lease (the
+`served_piece.sh` is PoUS's piece of a workload (`POUS_CMD`), in two parts. On the card, under one lease (the
 node's `gpu-lease`, else the tree's `gpu_lease.sh`; none of its own only inside the caller's),
 `served_piece.py --sessions` holds the served weights (the decoder's linears as the model's pin has them, int8 with their
 scales or plain BF16) as `C*` for one session with the memory attester on vy-auditor-2, then runs PoUB-P2's session
@@ -196,7 +196,7 @@ from the piece's start through each build's end to each session and answer. `tes
 piece on a CPU, and `tests/test_pous_served_piece_sh.py` the script, with stand-ins for `lake`, the card and the piece.
 
 `served_case.py --window DIR` builds PoUS's or the wipe's piece for the one-stage composite (composite.py, beside
-served_verdicts.py) from what a served window kept: `case.json`, the subprotocol's case, and `answer.json`, its own answer
+served_verdicts.py) from what a workload kept: `case.json`, the subprotocol's case, and `answer.json`, its own answer
 on it, whose commitment is the digest the composite binds. Both go to the window's private directory (0700), never
 beside the public answer. `served_piece.py` and `streamed_wipe/served_wipe.sh` write that piece through it while they
 run, and the composite takes each as written: `onsite_pieces.sh`'s `onsite_cases` names the two cases, each beside its

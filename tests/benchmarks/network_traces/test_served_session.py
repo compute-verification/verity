@@ -45,7 +45,7 @@ SOME_PEER, SOME_AUDITOR = "some-served-node", "some-auditors-node"
 #: a witness value (the stub's witness/certified.jsonl) its status plants with STUB_NOTE: two of the guard's text pieces
 PLANTED = hashlib.sha256(b"a certified line").hexdigest()
 #: the network attester's stall probe's record of its cgroup, as the gate's unit runs it: the unit's name begins one of the guard's
-#: aligned text pieces (`leak_guard.TEXT` bytes), as it did on a served run
+#: aligned text pieces (`leak_guard.TEXT` bytes), as it did on a workload
 _CGROUP = '{"cgroups": {"warden": {"path": "/sys/fs/cgroup/system.slice/system-vy\\\\x2dcertifier.slice/'
 STALLS = (" " * (-len(_CGROUP) % 32) + _CGROUP + f'vy-certifier@{RUN}.service"}}}}}}\n').encode()
 
@@ -103,7 +103,7 @@ def test_the_plan_is_the_scan_rehearsal_at_the_scans_class_and_the_gate_takes_it
     inner = SS.parser().parse_args(shlex.split(run[-1])[2:])
     assert (inner.cmd, inner.endpoint, inner.eos_ids, inner.draw, inner.coins, str(inner.challenger_key)) == (
         "chain", "ART", None, 8, "gate", "$RESEARCH_RUN_DIR/inputs/challenger-key.json")
-    assert all(w in doc["hand_start"] for w in ("--required-manifest ROW/manifest.json", "not adapters/vllm/tools/served_run/serve.sh",
+    assert all(w in doc["hand_start"] for w in ("--required-manifest ROW/manifest.json", "not adapters/vllm/tools/workload/serve.sh",
                                                  "--disk-floor-gb 40", "VERITY_STAGING_BOUNDED stays unset"))
     ep = shlex.split(doc["runs"]["endpoint"])
     inner = SS.parser().parse_args(shlex.split(ep[-1])[2:])

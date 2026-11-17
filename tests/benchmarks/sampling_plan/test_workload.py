@@ -1,4 +1,4 @@
-"""The served window's two modes (`served_window.py`): every rung covers the window's work, the fused rungs and wide tiles
+"""The workload's two modes (`workload.py`): every rung covers the window's work, the fused rungs and wide tiles
 exceed Flock's block and no fitting rung has a proof block past it, proving alone picks the finest rung, the commitment moves the work optimum coarser as the pooled
 period grows and along √(w β h C/(o Λ)), and leaves the exfiltration optimum where it was; a code-based commitment
 hashes 1/ρ the bytes and no row in circuit, and no rung's fit turns on hm96's slots; the replay re-runs each sampled
@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import pytest
 
-from verity.protocols.proofs.spot.prover.cost import served_window as S
+from verity.protocols.proofs.spot.prover.cost import workload as S
 from verity.protocols.proofs.spot.prover.cost.inputs import K_MAX, block_k_log, cap
 from verity.commitments.periods.interface import MASK_LOG
 

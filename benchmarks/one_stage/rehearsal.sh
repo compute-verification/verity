@@ -18,7 +18,7 @@
 #                         pending, and never after one that exited 1 or any other status); the class's
 #                         circuit cut at Pearl+'s linears from the serve's phi (a stand-in for `serve-phi`, which
 #                         reads the card: the H200's compute capability and SMs); a stand-in window of the class at
-#                         the settings' engine args through what a served window's close reads of it
+#                         the settings' engine args through what an execution phase's close reads of it
 #                         (`rehearsal_window.py`: the row dir's Builds hold the Programs the registered compiler
 #                         compiles, the window's commit reads each request's served rows, and W as its writer writes
 #                         it is a W the served compare takes); the harness's own policy step,
@@ -459,8 +459,8 @@ print(json.dumps(doc, sort_keys=True))
   step class-circuit 30m "$PY" benchmarks/prove_path/prove_path.py class-circuit --serve "$D/pearlplus/serve-phi.json" \
     --class "$CLASS" --pearl-tables "$SCHEME" --out "$D/pearlplus/circuit-record.json"
   # a stand-in window of the class through what its close reads of it: its row dir's Builds, its served rows and W
-  step served-window 30m "$PY" benchmarks/one_stage/rehearsal_window.py "$D/pearlplus/serve-phi.json" "$CLASS" "$SCHEME" \
-    "$(settings_engine "$SETTINGS")" "$OUT/served-window.json"
+  step workload 30m "$PY" benchmarks/one_stage/rehearsal_window.py "$D/pearlplus/serve-phi.json" "$CLASS" "$SCHEME" \
+    "$(settings_engine "$SETTINGS")" "$OUT/workload.json"
 
   # the harness's own policy step at the settings' limits: the limits file and its line, with what they prove
   step inference-policy 30m env SETTINGS="$SETTINGS" PEARLC_CHALLENGER_GATE= D="$D" OUT="$OUT" VENV="$TREE/.venv" \

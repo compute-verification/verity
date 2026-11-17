@@ -1909,8 +1909,8 @@ OPT_IN = {
         "VERITY_VLLM_HISTORY_E2E": (
             "pipeline/test_serving_rows_history.py::test_the_window_commits_the_writers_rows_as_its_tables_strings_and_the_verifier_pins_each_root",)},
     "benchmarks/prove_path": {"VERITY_SLOW": (
-        "test_prove_path.py::test_a_served_windows_fused_cut_is_the_row_drivers_window_given_the_tables_and_the_checkpoint",
-        "test_prove_path.py::test_a_served_windows_fused_cut_is_refused_without_the_tables_or_the_checkpoint")},
+        "test_prove_path.py::test_a_workloads_fused_cut_is_the_row_drivers_window_given_the_tables_and_the_checkpoint",
+        "test_prove_path.py::test_a_workloads_fused_cut_is_refused_without_the_tables_or_the_checkpoint")},
 }
 #: where a cold check's opt-in runs write each suite's outcome and log, apart from its steps' own (`suites.json`, `suites/`)
 OPT_IN_DIR = "opt-in"

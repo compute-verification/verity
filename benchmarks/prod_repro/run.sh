@@ -47,7 +47,7 @@
 # report is of ours alone, with no cost.
 # The --report form reads an earlier job's out/ and needs no GPU. Every form ends with the report (prod_repro.py
 # report), written to OUT/prod_repro.{json,txt}, which says how far each arm and the replay got, also where the job is
-# ended early (SIGTERM: the runner's children stop, and the report is of what was served and replayed by then); the
+# ended early (SIGTERM: the runner's children stop, and the report is of what the workload served and replayed by then); the
 # job fails where the serve or the replay does, where a replay was asked for and its tokens were not compared, or
 # where a replayed token or step differs from the served one: the report then names the first token and the first
 # step that differ.
@@ -170,7 +170,7 @@ fi
 [ $rc = 0 ] || echo "prod_repro: the serving cost benchmark's runner ended $rc: an arm, the replay or its own cost step failed (see above; the report below says how far each got)"
 [ -d "$OUT" ] || { echo "prod_repro: nothing was served (no $OUT): no report"; exit $(( rc ? rc : 1 )); }
 if [ $termed = 1 ]; then
-  echo "prod_repro: ended early (SIGTERM): the report is of what was served and replayed by then"
+  echo "prod_repro: ended early (SIGTERM): the report is of what the workload served and replayed by then"
   # an arm that was serving stops its server and then writes its record: wait for it, a little
   for _ in $(seq "${TERM_WAIT_S:-30}"); do
     grep -L '"server_rc"' "$OUT"/*/meta.json 2>/dev/null | grep -q . || break

@@ -163,7 +163,7 @@ def _reference(fn, args) -> np.ndarray:
 # --- the window row against the kernel --------------------------------------------------------------------------------------------
 
 @pytest.mark.parametrize("st", [SWA_SMALL, SWA_ODD, dict(SW=3, BS=8, NB=4), dict(SW=128, BS=64, NB=4), dict(SW=1, BS=1, NB=2)],
-                         ids=["small", "odd", "narrow", "served-window", "one-lane"])
+                         ids=["small", "odd", "narrow", "workload", "one-lane"])
 def test_the_window_row_is_the_kernels_stores_on_edge_tokens(st):
     args = _swa_tokens(st, 1)
     assert np.array_equal(_reference(bind(X.Dsv4SwaIndices, **st), args), _swa_want(st, args))

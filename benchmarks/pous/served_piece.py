@@ -1,4 +1,4 @@
-"""PoUS's piece of the composed served run (`benchmarks/one_stage/served_verdicts.sh`'s ``POUS_CMD``): one period of
+"""PoUS's piece of the composed workload (`benchmarks/one_stage/served_verdicts.sh`'s ``POUS_CMD``): one period of
 PoUS over the served checkpoint's linear weights, held as P2's ``C*`` on the card the window served on, with the memory
 challenger on the auditor's device; its core answer in ``DIR/answer.json``.
 

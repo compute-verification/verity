@@ -382,7 +382,7 @@ slowdown lower bound. The command above grades a config's own jobs; this one, ov
 
 A config names its `start`, its `target.gain`, its `policy`, its `honest` config and its `seeds`; each DIR holds one
 config's records as its jobs wrote them, `DIR/<seed>/<split>/run.json` (`split` is `search` or `final`). The grade
-reads no file of a served run. It prints one block and writes `OUT/slowdown.json` (`slowdown/v1`):
+reads no file of a workload. It prints one block and writes `OUT/slowdown.json` (`slowdown/v1`):
 
 - **the gain** each seed reached, through the fit of the starts on the start's data (loss to effective compute);
 - **H**, the least counted |C| reaching the target gain: over the honest config's records, and over every config's

@@ -1,6 +1,6 @@
 """The scheduler's step trace: what vLLM V1's in-process scheduler decided at every executed step, as data.
 
-A served run's batches, positions, chunked prefills, preemptions, cache hits and finishes are decided by the scheduler while
+A workload's batches, positions, chunked prefills, preemptions, cache hits and finishes are decided by the scheduler while
 serving, so nothing declared before the run predicts them.  `StepTrace` records them from the in-process engine core
 (``VLLM_ENABLE_V1_MULTIPROCESSING=0``, `engine.env`), through `engine.hooks`, without changing what the engine does:
 

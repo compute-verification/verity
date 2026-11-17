@@ -83,7 +83,7 @@ def test_an_inner_statement_past_the_verifiers_rows_is_refused_before_staging(tm
 
 
 @pytest.mark.slow
-def test_a_served_windows_member_stages_as_the_inner_statement_over_its_own_bytes(tmp_path):
+def test_a_workloads_member_stages_as_the_inner_statement_over_its_own_bytes(tmp_path):
     """`stage_window` composes the member's circuit itself (plain leaves, and hm96 for ``--zk-out``) and takes the bodies
     from the window's files alone: the same rows, salts and ``b || c`` the window commits, so its public body is the window's
     ``m0-public.bin``; a window whose partition is not the member's population's is refused."""

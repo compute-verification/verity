@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# capture_flows.py on one machine. Not a served run: the stand-in front, the network attester and the load on one
+# capture_flows.py on one machine. Not a workload: the stand-in front, the network attester and the load on one
 # machine's loopback (`network_attester_serve.py rehearse --fake --watermark`), a capture of the loopback beside them, then the
 # reader on the two. A `research run` job from the tree's root (--cwd source), on a machine where the job may capture:
 # `tcpdump` there, allowed to open the loopback as the job's user. A pool node's job may not.
@@ -8,7 +8,7 @@
 # --watermark, --out and the egress form. PY is a python with the tree's packages (python3 by default, as under
 # `uv run`). EGRESS is the run's egress form, the launch's to give and no flag's: bytes when it isn't given, text
 # requests answered in vLLM's stock framing; id, `rehearse --ids`, id requests each answered an id event a token, the
-# form a network attester holds a served run's server to.
+# form a network attester holds a workload's server to.
 # 1. The capture: `tcpdump -i lo -U -s 54 tcp`, started before the rehearsal and stopped once its file has stopped
 #    growing. It keeps each packet's first 54 bytes, the least a TCP packet's headers are over IPv4 in the loopback's
 #    Ethernet frame, so it holds no content byte of any flow. It holds the headers of every TCP flow on the loopback

@@ -13,7 +13,7 @@ statement staged as M0's ``verity/flock-circuit`` over RoPE d64, proved by the u
                                                              circuit registration META binds, circuit-registration.json, and the
                                                              prover's R.bin, ROOT.json and circuit-registration-private.json)
     python rec_inner.py stage-window --window DIR --member K --subcircuit ID --sets DIR --out DIR [--zk-out DIR]
-                                                             the same files over every unit of a served window's member K
+                                                             the same files over every unit of a workload's member K
                                                              (stage_window), plain leaves, the bodies the window's own bytes;
                                                              --zk-out: the member under the hm96 circuit too (85's stage-zk)
     python rec_inner.py forge --what challenge|query --inner DIR [--record session|prover]
@@ -119,7 +119,7 @@ def stage(n: int, sets: Path, out: Path, plain_leaves: bool = False, sparse=None
 
 
 def stage_window(window: Path, k: int, subcircuit: str, sets: Path, out: Path, zk_out: Path | None = None) -> dict:
-    """The inner statement over every unit of a served window's member ``k`` (``prove_path.py commit``'s window dir:
+    """The inner statement over every unit of a workload's member ``k`` (``prove_path.py commit``'s window dir:
     ``window.json``, ``registration.json``, ``m<k>-public.bin`` and the prover's ``m<k>-private.bin``), with plain SHA-512
     leaves, under the circuit the verifier composes for the member's template from an input set of ``subcircuit`` (its
     lowering alone, as ``compose_circuit.py --input-set`` composes it), bound to the window's own partition object: the one

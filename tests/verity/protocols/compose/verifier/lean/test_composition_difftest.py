@@ -475,7 +475,7 @@ ONSITE = port("onsite", R.ONSITE, SEEN["onsite"], ONSITE_PACKAGE)
 ONSITE_COUNTED = port("onsite-counted", R.ONSITE_COUNTED, SEEN["onsite-counted"], ONSITE_PACKAGE)
 REMOTE = port("remote", R.REMOTE, SEEN["remote"], REMOTE_PACKAGE)
 #: `product IDS serve` over onsite's subprotocols, which `verity run`'s verifier runs (remote v1's Pearl+ run has a
-#: reference case only on a served run, `test_remote_v1_on_a_served_pearl_plus_run`, and H1's development composite is
+#: reference case only on a workload, `test_remote_v1_on_a_served_pearl_plus_run`, and H1's development composite is
 #: no product)
 PRODUCT = {R.ONSITE.id: port("product", R.ONSITE, SEEN["onsite"], ONSITE_PACKAGE, serve=(ids(R.ONSITE), "serve"))}
 onsite_server = D.server_fixture(ONSITE)
@@ -759,7 +759,7 @@ REUSING_SAMPLING_DESIGN = {"k": 1, "law": "subset"}
 
 def reusing(made: list[dict]):
     """A window's Commit record as `pouw_credit_cases.period_instance`'s `commit` makes it: R, the run's registration,
-    chained after W (``previous``), the serving process's registration of the window's tables in a served window's form,
+    chained after W (``previous``), the serving process's registration of the window's tables in a workload's form,
     and registering those tables under the Commit's names (`commit_names`) as output values that reuse W's entries
     (``outputs``), of a program whose parameters they are (registered on `ONE_STAGE.PROGRAMS`). Each call appends W, R,
     R's setup and its outputs to `made`."""
@@ -913,10 +913,10 @@ def _window_audit(made: tuple[dict, dict, dict], w: dict) -> tuple[dict, dict, b
 
 #: A directory holding a served Pearl+ run (`test_remote_v1_on_a_served_pearl_plus_run`).
 SERVED = VERITY_SETTINGS.VERITY_COMPOSITION_SERVED
-#: The served run's window record W's digest and its run commitment (the dress rehearsal r20261105-082550-ed23's).
+#: The workload's window record W's digest and its run commitment (the dress rehearsal r20261105-082550-ed23's).
 SERVED_W = ("50214c57da3ddafad760f1059eb3e2c1b8dd70e45c4906f308215f32589cc504"
             "1901e26b5d927f6249c4d813ba62b3d2a3a531f2652b61941dbab322d3803601")
-SERVED_RUN = ("99841564d3beb02456ad3397c509ef236dd5bcd31e65b2d8187baca7e14b2f91"
+WORKLOAD_RUN = ("99841564d3beb02456ad3397c509ef236dd5bcd31e65b2d8187baca7e14b2f91"
               "e0e343524222acc79dbe4dbae9c4472a651fce81d831de6d9626f596e525d31e")
 
 
@@ -928,7 +928,7 @@ def _paths(j) -> list[str]:
 
 
 @pytest.mark.slow
-@pytest.mark.skipif(not SERVED, reason="VERITY_COMPOSITION_SERVED names no served run (its Lean check hashes 2.1 GB of "
+@pytest.mark.skipif(not SERVED, reason="VERITY_COMPOSITION_SERVED names no workload (its Lean check hashes 2.1 GB of "
                                        "distinct pass files and replays 470 tiles: about an hour on a CPU node)")
 def test_remote_v1_on_a_served_pearl_plus_run(tmp_path, monkeypatch):
     """Remote v1 on a served Pearl+ run with live coins and the challenger's sample: Pearl+ accepts in Python and doesn't
@@ -955,7 +955,7 @@ def test_remote_v1_on_a_served_pearl_plus_run(tmp_path, monkeypatch):
     coin, verified = json.loads((d / "coin.json").read_bytes()), json.loads((d / "verify.json").read_bytes())
     assert OS.R.digest(w) == verified["tie"]["record"] == SERVED_W
     assert (coin["schema"], coin["draw"]["from"], coin["commitment"], verified["commitment"]) == (
-        "verity-pouw/pearl-plus-coin/v2", "challenger", SERVED_RUN, SERVED_RUN)
+        "verity-pouw/pearl-plus-coin/v2", "challenger", WORKLOAD_RUN, WORKLOAD_RUN)
     assert verified["answer"]["verdict"] == R.ACCEPT, verified["answer"]
 
     audit, policy, record = _window_audit(_sessionless_audit(0, canonical(w)), w)
@@ -1041,8 +1041,8 @@ def test_remote_v1_and_the_policy_compiled_on_a_small_window(tmp_path, monkeypat
     remote, which names it.
 
     Remote never accepts on the CPU, and needn't here: the accept path is the served record's (the compiled composite
-    on a served run, `served_verdicts.py record --composite`). SPOT accepts only a session `verity verify proof`
-    verifies, and Pearl+ only a served run's retained passes on a live challenger sample
+    on a workload, `served_verdicts.py record --composite`). SPOT accepts only a session `verity verify proof`
+    verifies, and Pearl+ only a workload's retained passes on a live challenger sample
     (`test_remote_v1_on_a_served_pearl_plus_run`, opt-in). What this catches that no cheaper test does: the compiled
     composite of record, which nothing else in the quick suites runs, decoding and dispatching an honest policy, an
     audit and a tied Pearl+ commitment of one window, and binding the composite's commitment over their digests; its

@@ -62,7 +62,7 @@ written isn't on it, so its sessions are refused as `coins` until infra writes t
 ## The compose gate
 
 The same `host.py`, pinned under `/opt/vy-compose/<commit>` (its `pins.jsonl`, `/var/lib/vy-compose`), is
-`vy-compose-gate`, which serves one verb: `compose`, a served run's final record and composite composed off the served
+`vy-compose-gate`, which serves one verb: `compose`, a workload's final record and composite composed off the served
 node from its compose hand-off. The lane's own gate key is forced to `vy-compose-gate --ssh "$SSH_ORIGINAL_COMMAND"
 --key LANE` for `research` on the auditor device's public address (`restrict`, and `from=` the hosts that send
 hand-offs), and the compose itself runs as `auditor`, and the sender is

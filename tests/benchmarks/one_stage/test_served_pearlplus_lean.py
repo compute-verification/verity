@@ -54,7 +54,7 @@ T = _module("test_pearl_c_vllm", ROOT / "tests" / "benchmarks" / "pouw" / "test_
 SP = T.load("pearl_c_vllm_served_passes", T.POUW / "pearl_c_vllm" / "served_passes.py")
 
 
-def test_the_lean_step_writes_the_real_lean_answer_on_the_served_run_and_the_compose_reads_it(tmp_path, monkeypatch):
+def test_the_lean_step_writes_the_real_lean_answer_on_the_workload_and_the_compose_reads_it(tmp_path, monkeypatch):
     import verity_difftest as D
     from verity.protocols.resource_accounting.compute.pouw.verifier import verifier as PV
     from verity.protocols.proofs.spot.verifier.one_stage import docket as REG
