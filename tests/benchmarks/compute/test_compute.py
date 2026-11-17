@@ -1246,7 +1246,8 @@ def test_each_metric_row_is_the_run_that_measures_it_and_no_reprint_is_rerun():
     rows = {m["id"]: m["command"] for m in tomllib.loads(text)["metric"]}
     served = {C.METRIC, C.CREDITABLE, C.OF_CREDITABLE}
     assert served <= set(rows)
+    readme = (HERE.parents[2] / "benchmarks" / "compute" / "README.md").read_text()
     for i in served:
-        assert rows[i].endswith(" -- bash benchmarks/compute/serve.sh") and "--from" not in rows[i], i
+        assert rows[i] in readme and rows[i].endswith(" bash benchmarks/compute/serve.sh"), i
     assert {i: re.search(r"--from (\S+)", c).group(1) for i, c in rows.items() if i not in served} == dict.fromkeys(
         set(rows) - served, "RUN_OF_RECORD")
