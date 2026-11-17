@@ -4,16 +4,7 @@ public import Definitions.Pouw.Game.Defs
 public import Definitions.Pouw.NCP.RouteU
 public import Definitions.Pouw.PearlC.Game
 
-/-!
-# The advantage form (trusted)
-
-PoUW's security property in the form every protocol states: the adversary's advantage `ε`, with failure probability
-`δ(q, N)`. `G_ε` says that what an adversary spends is at least the honest work of its correct units over `1 + ε`,
-except with probability `δ` or by a break of SHA-512 (`Adversary.Breaks`), which is `GGap`'s property at the gap
-`g = ε/(1 + ε)`: the gap is how the proofs carry it.
-`AuditGε` is the audit's statement in ε form, `Protocol.WrefWithin` the bound `Ω_max` the reduction from TT reads,
-and `Pouw.NCP.Params.InstanceU` route U's instance conditions.
--/
+/-! PoUW's security property in ε form (`G_ε`), with failure probability `δ(q, N)`, and the audit's statement in that form. -/
 
 @[expose] public section
 

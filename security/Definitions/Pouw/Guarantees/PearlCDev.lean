@@ -5,23 +5,7 @@ public import Definitions.Pouw.PearlC.Instance
 public import Definitions.Pouw.Assumptions.PearlC.TTOutW1
 public import Definitions.Pouw.PearlC.FlockTile.Audit
 
-/-!
-# Pearl-C's served form at every device record (trusted)
-
-The served protocol, v1's checks under rev1 with the honest kernel's `W_ref` (`pearlCProtocolDevRev1K`), stated once
-over every device record. Each statement takes the W1 setting `dv` and the device record `d` as parameters, as the
-conjectures it rests on do, and asks one thing of the record: `KernelWithin d ρ c Ss ω`
-(`Definitions.Pouw.PearlC.DeviceWithin`), on the shapes `Ss` its domain holds. Its gap is `1 − (1 − 1/400)/ω`, with no
-hardware figure in it; the gap at a named record is the statement at that record's `ω`.
-
-* `GapDevRev1K`: per unit, from TT_OUT rev1 at W1 (`TTOutPearlCDevRev1W1`).
-* `SampledDevRev1K`: per audit tile, from TT_OUT rev1 per audit tile at W1 (`TTOutTilePearlCDevRev1W1`).
-* `HiddenFlockDevRev1K`: per audit tile under Flock's hidden audit over a TileRead session `F` (`F.audit`), at
-  `t·δzk(q)` more error than the sampled audit, given T3 at the session (`TileReadSound`) and the binding
-  (`TileReadBinds`), the two open obligations `Definitions.Pouw.PearlC.FlockTile.Audit` states.
-
-Each proof is `Pouw.SecurityProofs.PearlC.G : Pouw.Guarantees.PearlC.G` (`Proofs.Pouw.PearlC.DevGap`).
--/
+/-! Pearl-C's served form at every device record, asking only `KernelWithin` of the record; the hidden audit's form rests on two open obligations, `TileReadSound` and `TileReadBinds`. -/
 
 @[expose] public section
 

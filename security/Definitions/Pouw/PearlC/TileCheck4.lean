@@ -4,28 +4,7 @@ public import Definitions.Pouw.PearlC.WholeCircuit4
 public import Definitions.Pouw.PearlC.TileCheck
 public import Definitions.Pouw.PearlC.DeviceFp4
 
-/-!
-# `pc4`'s tile check (definitions only)
-
-The plain `pc4` Program as a `TileCheck`, as `TileCheck8` is `pc8`'s: at each unit shape `(m, k, n)` the circuit is
-`Pc4Check{m, k, n, 64, 64}`'s table (`WholeCircuit.whole4`, the deployed tile `pc4.TILE`) and its partition the
-units', with
-
-* `out sh rows cols`: the `C̃` and `U` gates of the entries in `rows × cols`;
-* `pub sh`: the noise lines `ea` and `eb`, the bases `fa` and `fb`, and `G`. Their anchors (`anchors4`) are the unit's
-  lines (`lines`, the ones `pc4Sem` reads) as their E2M1 codes, and `G_{s,q}` the FP4 chain of `F_B`'s column `s`
-  against `F_A`'s column `q` at scale `1.0`, the words `peelFp4` reads as `G` (`gram4`). That the verifier's public
-  inputs are these is L8;
-* `anchorsOK`: `True`, since E2M1 has no NaN code;
-* `reg sh`: the activation rows `a`, the weight rows `b` and every entry's `C̃` and `U`. The rows are BF16 in the
-  Program, so `a`'s and `b`'s gates hold the commitment's words shifted right by 16, each as the gate's low 16 bits:
-  a widened BF16 word's BF16 word, `−0` included (`Fp4Sem.OperandOK` asks that every word be one), and `C̃` and `U`
-  the ticket and useful words, each as the gate's low 32 bits (`rows4`);
-* `Collides`: `False`, since the checked words are registered wires.
-
-The Program needs whole tiles and `64 ∣ k` (`pc4.Shape.check`); at another shape the table is still defined, and L3 is
-stated on whole-tile layouts.
--/
+/-! The plain `pc4` Program as a `TileCheck`, with L3 stated on whole-tile layouts. -/
 
 @[expose] public section
 

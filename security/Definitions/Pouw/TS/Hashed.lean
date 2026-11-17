@@ -4,37 +4,7 @@ public import Definitions.Pouw.TS.Sampled
 public import Definitions.Hash.RowLeaf
 public import Definitions.Core.Interaction
 
-/-!
-# A sampled window's openings as frame-v3-sha512 paths (trusted)
-
-`Sampled`'s openings with the hash underneath. A `SampledLayer` compares the values accepted proofs open (`opened`) with no
-commitment under them. Here each position is an hm96 row (`Hash.RowLeaf`: `hm96-sha512/row-seg/v1` or
-`hm96-sha512/row/v2`) of a frame-v3-sha512 tree, and an accepted proof's opening of a slot is an hm96 opening of its
-position's leaf (the row's bits, its salt and the path's siblings), as Flock's knowledge extractor takes it from the
-proof's witness: the rows are hidden, so the verifier sees none of them. The hash `H` is a parameter, SHA-512 the
-instance of record, one hash for the frame tree, the hm96 leaf and the row digest.
-
-* `HashedOpenings`: on each path, each position's leaf verifier (its tree's domain, the hm96 key and the format), rank
-  and root; the value a row decodes to; and the opening of each slot that each proof's witness carries.
-* `checked`: what the check of one opening of a position hashed: the hm96 salt's and leaf's messages, the frame leaf's
-  and the path's nodes' (`RowLeaf.outerHashed`), then the row digest's (`RowLeaf.innerHashed`).
-* `Verified`, `Unverified`: round `w`'s proof of its `i`-th sampled proof block opens slot `k` with an opening its position's
-  verifier accepts at the position's root and rank, whose row decodes to the value the proof opens; some accepted proof
-  opens position `ℓ` otherwise.
-* `Split`: position `ℓ`'s verifier, root or rank differs between a path and its continuation from `ℓ`'s cut.
-* `Finds`, `finder`: **the fork finder at positions `L`**, a SHA-512 collision finder (`Claims.Finder`) on the coins
-  `(x, z)`. It runs the period on `x` and on its continuation from `ℓ`'s cut on `z`, and for a position `ℓ ∈ L` that an
-  accepted proof opens on each run it outputs two different messages of one digest among what the two openings'
-  checks hashed, when there are. Its cost is `q`, the SHA-512 calls of the two runs (the prover's, the extractor's and
-  the verifier's) and of the checks of their openings.
-
-Two accepted openings of one position on the two runs to different values (`SampledLayer.Forked`), each `Verified` at one
-verifier, root and rank, have different rows, so their checks hashed a collision (`Hash.Guarantees.RowBinding`), which
-`finder` outputs. A fork escapes it only through an opening that isn't `Verified` or a `Split`. No premise of the
-credit guarantees rules either out yet: none ties a layer's `opened` to an opening of a committed leaf (the service's
-soundness is about its relation alone), and none fixes a position's root by its cut (a window's registration is fixed
-before its sampling coin, not before the coins its sample follows).
--/
+/-! A sampled window's openings as frame-v3-sha512 paths with their fork finder, which a fork escapes only through an opening that isn't `Verified` or a `Split`, and no premise of the credit guarantees rules either out. -/
 
 @[expose] public section
 

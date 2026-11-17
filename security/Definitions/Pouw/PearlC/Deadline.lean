@@ -3,13 +3,7 @@ module
 public import Definitions.Pouw.Game.Deadline
 public import Definitions.Pouw.PearlC.Game
 
-/-!
-# The deadline in Pearl-C's game (trusted)
-
-`Definitions.Pouw.Game.Deadline`'s timed run and verifier's rule are the game's; Pearl-C's adversaries are its own type, so
-their budget by the deadline and what the deadline reads of them are restated here. The named assumption is
-`Pouw.Assumptions.HonestClock`, the one both games read, at `CostModel.adversaries`.
--/
+/-! The deadline in Pearl-C's game, restated for Pearl-C's own adversary type. -/
 
 @[expose] public section
 

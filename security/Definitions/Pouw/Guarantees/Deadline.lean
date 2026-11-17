@@ -14,23 +14,7 @@ public import Definitions.Pouw.Game.Deadline
 public import Definitions.Pouw.PearlC.Game
 import Mathlib.Analysis.SpecialFunctions.Pow.Real
 
-/-!
-# Work between the salt and the deadline (trusted)
-
-A proof of compute utilization: acceptance means at least `W` of work after the salt and before a deadline. `EndToEnd`
-gives the work and its freshness (preprocessing never reads the salt); the deadline is `Definitions.Pouw.Game.Deadline`'s
-timed run and verifier's rule, and time meets the cost model through one named assumption, the honest clock
-(`Pouw.Assumptions.HonestClock`).
-
-* `WorkBetweenSaltAndDeadline`: `EndToEnd` with the budget on the run's spending after the salt and by the deadline, under
-  the honest clock. Its hypotheses are `EndToEnd`'s, `Adversary.Bounded`'s online cost read in the time window
-  (`Adversary.BoundedBy`), and the clock.
-* `SpareCapacityAtDeadline`: remote's exhaustion. A declared fleet that can spend `C·(td − ts)` in the window has at most
-  `C·(td − ts) − (1 − g)(1 − ε_s)·W` of it to spare for undeclared work, except with the same probability.
-* `PearlCSampledByDeadline`: the same in Pearl-C's game, from `GGapSampled`, so at every device record from
-  `PearlC.SampledDevRev1K`. Its instances at the served record's numbers, on the four layouts the sampled g is pinned
-  at, are lemmas (`Proofs.Pouw.Lemmas.Deadline`).
--/
+/-! Work between the salt and the deadline: `EndToEnd` with the budget on what a run spends in that window, under the honest clock. -/
 
 @[expose] public section
 

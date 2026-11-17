@@ -2,19 +2,7 @@ module
 
 public import Definitions.Pouw.PearlC.DeviceKernelWref
 
-/-!
-# What a statement over every device record asks of the record (definitions only)
-
-The statements of `Definitions.Pouw.Guarantees.PearlCDev` take the device record `d` as a parameter and read it through
-two definitions:
-
-* `pearlCDomainDevOn d Ss`: Pearl-C's shape domain at `d` restricted to the shapes `Ss` holds of.
-  `pearlCDomainDevAt d s` is it at `(· = s)`, and `pearlCDomainDevShapes d nks` at the shapes whose `(n, k)` is in
-  `nks`, both by unfolding.
-* `KernelWithin d ρ c Ss ω`: on those shapes the honest kernel's `W_ref` is non-negative and at most `ω` times the
-  credit left after the inert-work share `ρ`. It is the one hypothesis such a statement takes about the record, and
-  the statement's gap is `1 − (1 − 1/400)/ω`, a function of `ω` alone.
--/
+/-! What a statement over every device record asks of the record: `KernelWithin`, its one hypothesis about it. -/
 
 @[expose] public section
 

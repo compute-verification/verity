@@ -5,27 +5,7 @@ public import Definitions.Pouw.PearlC.Skip
 public import Definitions.Pouw.PearlC.PeelExact
 public import Definitions.Pouw.PearlC.SaltDead
 
-/-!
-# Pearl-C's named protocol and error (trusted)
-
-`pearlCProtocol sem` is the protocol of the named assumption. Its reference functions are the shared definitions:
-* the noisy quantize (`FormChain.quantA`, `quantB`) and the promoted ticket chain (`ctChain` at `Params.pi.G`), from
-  `Defs`;
-* the useful output U under the pinned order, `PeelExact.peelExactVal` (`pearl_c_u.py` at `76134352`, op for op): C̃,
-  `A′·F_B`, `B̃·F_A` and the Gram matrix as chain words, `P_A`, `P_B` with its FMA chain, and U by four K16 steps into C̃;
-* the debit's flags, `Skip.unitFlags` (P1's `jointFlags` under G4, per output word, on the noisy codes), P3's
-  `needed` (`Skip.needed`), and P3's salt-dead elements (`SaltDead.saltDead` at the rows' own `alpha` and `beta`).
-
-Its domain rules are `Defs`' liveness rule (`LiveRow` under `Stat.every8`), finite words, and the noise floor. Its costs
-are `creditOf` minus the replayed debit (`unitInertWork`), and `wrefOf`.
-
-`sem` collects the pieces that are not pinned yet, each to be replaced by a shared definition when it lands:
-* `noise`: the unit's noise factors from the oracle, as E4M3 codes: E_A per unit, keyed by (salt, A root, B root, unit
-  index), and F_A, F_B and E_B per job, keyed by (salt, B root);
-* `fc`: the forming chain before the cast (§5's atom-mix);
-* `alpha`, `beta`, `floor`: a row's scale, noise scale and noise-floor quantity (§5: α from the model's quantizer,
-  σ = δ·ρ with ρ over every 8th position, floor σ·α).
--/
+/-! Pearl-C's named protocol and error, with what is not pinned yet (the noise, the forming chain and the scales) collected in `sem`. -/
 
 @[expose] public section
 
@@ -81,9 +61,6 @@ noncomputable def PearlCSem.unitChain (sem : PearlCSem Q R S) (H : Q → R) (s :
   (sem.fc.quantA (fun i => sem.alpha sh.k (X i)) (fun i => sem.beta sh.k (X i)) X z,
    sem.fc.quantB (fun j => sem.alpha sh.k (W j)) (fun j => sem.beta sh.k (W j)) W z)
 
-/-- **The unit's useful output U under the pinned order** (`PeelExact.peelExactVal`), from the unit's noisy codes
-(`unitChain`), the bases' codes `F_A` and `F_B`, and the peel's noise rows under §5's forming: `bf16(E′)` (`codeBf16`)
-with `E′ = lineCodes β e` per row. -/
 noncomputable def PearlCSem.unitUseful (sem : PearlCSem Q R S) (H : Q → R) (s : S) (U : Workload) (u : ℕ) (act : Codes) :
     Matrix (Fin (U.layout.shape u).m) (Fin (U.layout.shape u).n) (Option ℚ) :=
   let sh := U.layout.shape u
@@ -96,13 +73,6 @@ noncomputable def PearlCSem.unitUseful (sem : PearlCSem Q R S) (H : Q → R) (s 
     (fun i => be (sem.beta sh.k (X i)) (z.EA i)) (fun j => be (sem.beta sh.k (W j)) (z.EB j))
 
 open Classical in
-/-- **The unit's replayed debit**, computed by the reference from the committed activations, the weights and the realized
-noise (the same `unitChain` the ticket reads):
-- `atoms`: over every output word `(i, j)`, the atoms `t < k/32` that `Skip.unitFlags` flags on the word's noisy rows
-  `A′ i` and `B̃ j` (P1's `jointFlags` under G4);
-- `elems`: the A′ elements `(i, l)` that are salt-dead (`SaltDead.saltDead`: the code's value is the same at every flat
-  noise pair), or not `Skip.needed` (every word `(i, j)` has the atom
-  containing `l` flagged), each element once. -/
 noncomputable def PearlCSem.unitInertWork (sem : PearlCSem Q R S) (H : Q → R) (s : S) (U : Workload) (u : ℕ) (act : Codes) :
     InertWork :=
   let sh := U.layout.shape u
@@ -112,9 +82,6 @@ noncomputable def PearlCSem.unitInertWork (sem : PearlCSem Q R S) (H : Q → R) 
   ⟨∑ i : Fin sh.m, ∑ j : Fin sh.n, ((range (sh.k / 32)).filter fun t => fl i j t = true).card,
    (univ.filter fun e : Fin sh.m × Fin sh.k => SaltDead.saltDead sem.alpha sem.beta sh.k (X e.1) e.2 ∨ ¬ Skip.needed fl e.1 e.2).card⟩
 
-/-- **Pearl-C's protocol:** the shared reference functions and domain rules, and Pearl-C's accounting at `c` with the
-debit cap `ρ`: the credit is `creditOf` minus the unit's replayed debit, and a unit whose debit exceeds `ρ·creditOf` is
-rejected. -/
 noncomputable def pearlCProtocol (sem : PearlCSem Q R S) (c : Costs) (ρ : ℚ) : Protocol Q R S where
   ticket := fun H s U u act =>
     atNat (ctChain Params.pi.G (sem.unitChain H s U u act).1 (sem.unitChain H s U u act).2)

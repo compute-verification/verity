@@ -8,47 +8,7 @@ public import Definitions.Pouw.Game.Params
 public import Definitions.Pouw.PearlC.W1Stop
 public import Definitions.Pouw.Assumptions.Game
 
-/-!
-# The per-run guarantees (trusted)
-
-`ResourceAccounting.Guarantees.Joint` and `CovertResidual` take each audit's guarantee in the shape of PoUW's `EndToEnd`, a
-sure bound on the account's charge over the audit's own coins, so they bound "accepted, and the worst run below the
-certificate". A device that is cheap on a few coins and honest on the rest escapes them. These state the per-run
-forms: the probability that every audit accepts and the realized charge *on that run* is below a certificate, or the
-other accounts' realized use beyond a residual, is at most the summed error (`JointPerRun`, `CovertResidualPerRun`),
-from each audit's per-run guarantee (`ResourceAccounting.Run.ComputeSoundPerRun` and the two beside it).
-
-The compute audit's per-run guarantee comes from PoUW by truncation (`PouwEndToEndPerRun`, `ComputeOfPouwPerRun`),
-under one more hypothesis on PoUW's cost model, that it truncates (`ResourceAccounting.BudgetAbort`); without it the per-run
-form does not follow from `Pouw.Assumptions.TT` (`ResourceAccounting.PerRunNecessity.tt_not_perRun`). The bandwidth audit's
-guarantee, `ResourceAccounting.Guarantees.Remote.AuditRO`, is already per-run: its event reads the ingress of the run itself.
-PoUS's `EndToEndRing` bounds a server's state by its type, not a charge that varies with the coins, so its per-run form
-is a matter of how a run's device memory maps to a server's state, in the capacity embedding.
-
-**Priced.** The machine charges a PoUW run's arithmetic, at W1's instruction prices with no fetch charge and no refund,
-to the compute account, and its first fetches of pre-salt or supplied bytes, deduplicated within the run, to the
-bandwidth account at the device's price of a bit read. What the compute audit certifies is
-the priced sum: the compute account's work plus `pRead` per bit it read from device memory
-(`ResourceAccounting.Run.ComputeSoundPerRunPriced`). Tables cite the work and the bits separately. Pearl-C's game gives that
-guarantee by the same truncation, from its gap property at a priced cost model that truncates
-(`PearlCEndToEndPerRun`, `ComputeOfPearlCPerRunPriced`). The machine that stops a run at its budget
-(`Pouw.PearlC.CostModel.withStop`) is a proof device, not a deployment requirement: on it every cost model with
-nonnegative costs truncates, and the gap property over it is the gap property per coin (`Pouw.PearlC.GGapPerCoin`),
-so `PearlCStopEndToEndPerRun` and `ComputeOfPearlCStopPerRunPriced` rest on `GGapPerCoin` alone. Its adversary may
-choose no budget, which runs, costs and calls as at `CM`, so a run that realizes Pearl-C's audit at `CM` realizes it on
-the stopping machine (`ResourceAccounting.RealizesPearlCPriced.withStop`), and `ComputeOfPearlCStopPerRunPriced` covers every
-run `ComputeOfPearlCPerRunPriced` covers, whether or not the device ever stops one. At W1 priced (`w1Priced`) the one
-hypothesis is `GGapPerCoin`, a named conjecture (claim `pouw-gamma-per-coin`, in `Definitions.Assumptions.Pouw`).
-PoUW's reads and the bandwidth audit's window reads are different device-model
-accounts' over one window (`ResourceAccounting.Run.ReadsAttributed`), so no bit read is certified twice (`JointPerRunPriced`),
-and the covert residual is one priced budget, `(F + pRead·BW)·T − (W + pRead·Q)` (`CovertResidualPerRunPriced`). The
-unpriced statements stay: a compute guarantee on the work alone gives the priced one at any `pRead ≥ 0`
-(`ResourceAccounting.Run.computeSoundPerRunPriced_of_perRun`).
-
-Each `def G : Prop` is proved by `ResourceAccounting.SecurityProofs.G : ResourceAccounting.Guarantees.G`
-(`Proofs.Pouw.PerRunPouw`, `Proofs.Pouw.PerRunJoint`, `Proofs.Pouw.PerRunPriced` and
-`Proofs.Pouw.PerRunStop`).
--/
+/-! The per-run forms of the joint and covert-residual guarantees; the compute audit's comes from PoUW by truncation, which `Pouw.Assumptions.TT` alone does not give. -/
 
 @[expose] public section
 

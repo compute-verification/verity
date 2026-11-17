@@ -3,30 +3,7 @@ module
 public import Definitions.Core.Partition
 public import Definitions.Pouw.PearlC.PeelExact
 
-/-!
-# The tile unit as a core circuit (definitions only)
-
-`pc8`'s tile template `Pc8Tile_v1{K, TM, TN, DEV}` (`verity.protocols.accounting.work.pouw.circuit.pc8`, its `_tile_body` and `_chain`) as a
-`Verity.Circuit`, written as a gate table (`Spec`): for each gate its width, whether it is an input, the earlier gates
-it reads in order, and its value from theirs. No evaluator for IR Programs: the table is the template's computing graph
-(`verity.ir.cut.CallGraph`), with each IR primitive's semantics a Lean function on words.
-
-* **Inputs**, in the template's parameter-leaf order: the E4M3 codes of `A′`'s `TM` rows (row `i` at gates
-  `i·K, …, i·K + K − 1`, 8 bits) and of `B̃`'s `TN` rows (row `j` from `TM·K + j·K`), then the 64 BF16 words of each
-  `P_A` row (row `i` from `(TM + TN)·K + 64·i`, 16 bits) and each `P_B` row (row `j` from `(TM + TN)·K + 64·TM + 64·j`).
-* **Entry `(i, j)`'s block** (`entryGate`), the entries in row-major order:
-  * **the chain** on the step `p` (`BlackwellE4m3QmmaDot32_v1` on sm_120, `p = sm120E4m3`): per window of 4 atoms, four
-    atoms from `+0` (`atomF`) and one `F32Add_v2` (`addF`, the total `f32Add`) promoting the window's word into the
-    total. The last promotion is `C̃_ij` (`cGate`);
-  * **U**: four `HopperBF16WgmmaDot16_v1` steps (`peelF`, `PeelExact.k16Step`) from `C̃_ij` over the slices of `P_A,i`
-    and `P_B,j`. The last is `U_ij` (`uGate`).
-* **One proof block** (`Spec.part`) holds every computed gate.
-
-Which gate reads which, the widths and the outputs are checked against the template's `CallGraph`, with the checked
-templates' descriptor digests pinned, by `tests/test_circuit_tile_lean.py`. The order of a gate's reads is not in the
-`CallGraph`; it and each primitive's semantics are the trusted part: `F32Add_v2` is `f32Add`, the atom is `p.step` and
-the K16 step is `k16Step`, each pinned by its conformance vectors.
--/
+/-! `pc8`'s tile template as a gate table, checked against its `CallGraph` by a test, so the order of a gate's reads and each primitive's semantics are the trusted part. -/
 
 @[expose] public section
 
@@ -81,7 +58,6 @@ variable (S : Spec)
     · rfl
   outputs := Finset.univ.filter fun g => g.val ∈ S.outs
 
-/-- One proof block holding every computed gate. -/
 def part : Verity.Partition S.toCircuit 1 where
   unit g := if (S.gate g).input then none else some 0
   input_iff g := by
@@ -163,7 +139,6 @@ def uGate (K TM TN i j : ℕ) : ℕ := entryBase K TM TN i j + blockLen K - 1
 
 theorem blockLen_pos (K : ℕ) : 0 < blockLen K := by unfold blockLen; omega
 
-/-- Gate `g` past the inputs lies in entry `e`'s block at position `r`, with `e < TM·TN` below the gate count. -/
 theorem tile_block {K TM TN g : ℕ} (hg : g < tileN K TM TN) (h : tileIn K TM TN ≤ g) :
     g = tileIn K TM TN + (g - tileIn K TM TN) / blockLen K * blockLen K + (g - tileIn K TM TN) % blockLen K ∧
       (g - tileIn K TM TN) / blockLen K / TN < TM ∧ (g - tileIn K TM TN) / blockLen K % TN < TN ∧

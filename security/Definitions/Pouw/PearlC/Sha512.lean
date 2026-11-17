@@ -2,21 +2,7 @@ module
 
 public import Mathlib.Data.Nat.Notation
 
-/-!
-# SHA-512 (FIPS 180-4) on byte lists (trusted; definitions only)
-
-The one hash (SHA-512 with its whole output) as the spec's own function, so that the noise semantics
-(`NoiseSha512.sha512Sem`) and the W1 cost model (`W1.Instr.sha`, one compression per instruction) can name it. The
-executable copies are `hashlib.sha512` in Python and `Flock.Sha512` in the Flock verifier, which the spec may not
-import; this one is written for the kernel: 64-bit words as naturals below `2^64`, the message as a list of bytes
-(naturals, read mod 256), and structural recursion only, so that `decide` evaluates a digest
-(`Proofs.Pouw.PearlC.W1Checks`: FIPS 180-2's `"abc"` vector).
-
-- `compress h w`: one compression of the 8-word state `h` by the 16-word block `w` (FIPS 180-4 §6.4.2).
-- `pad msg`: the message, `0x80`, zeros and its 128-bit length in bits, a whole number of 128-byte blocks (§5.1.2).
-- `digest msg`: the 64-byte digest, big-endian (§6.4).
-- `blocks len`: the compressions `digest` takes on a message of `len` bytes.
--/
+/-! SHA-512 (FIPS 180-4) on byte lists, written for the kernel with structural recursion only, so that `decide` evaluates a digest. -/
 
 @[expose] public section
 

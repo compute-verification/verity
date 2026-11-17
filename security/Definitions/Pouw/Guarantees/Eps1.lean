@@ -33,24 +33,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# Dither's CUDA-core lower bounds in model M3 (trusted)
-
-The proved lower bounds over `Pouw.Eps1`'s model M3, each proved as `Pouw.SecurityProofs.Eps1.G` in
-`Proofs.Pouw.Eps1`:
-
-* `WordLocalZero`: Theorem B at the zero instance, a word-local program costs at least 4 instructions a word;
-* `WordLocalGeneral`: Theorem B at a general instance, at least 8 a word (met by dp4a's 8 IDP.4A);
-* `ClassPSlots`: Theorem C's count over issue slots, with each writer's creations `w` a parameter, at least
-  `1 + (32 − w)/(65·d)` slots a word when a slot writes at most `d` words.
-
-Theorem C's packed form, `(1 + 28/27)·L·m·n` instructions, is retired: its paper proof caps a writer's creations at 4,
-and a writer can create 8. `ClassPSlots` takes the cap as its parameter `w`.
-
-Free words (functions of one side alone) cost nothing, and the fold is not counted. M3 has no data-dependent
-addressing and each instruction writes one 32-bit word from at most three, so these bound the gather-free `q*` in
-M3; whether the ISA's instructions are such is not these statements' business.
--/
+/-! Dither's CUDA-core lower bounds in model M3, which bound the gather-free `q*` there and say nothing about whether the ISA's instructions are M3's. -/
 
 @[expose] public section
 

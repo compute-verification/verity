@@ -3,13 +3,7 @@ module
 public import Mathlib.Data.Nat.Notation
 public import Mathlib.Logic.Function.Basic
 
-/-!
-# Adaptive oracle programs (trusted)
-
-A `QTree Q R α` returns a value, or queries the oracle at a point and continues with the answer. Any computation
-may happen between queries; `calls` counts the queries on the path taken against a given oracle. `bind` sequences two
-programs, `queryAll` queries a list in order, and `upTo` builds a transcript unit by unit.
--/
+/-! Adaptive oracle programs: a `QTree` returns a value, or queries the oracle and continues with the answer. -/
 
 @[expose] public section
 

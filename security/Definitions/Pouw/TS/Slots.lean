@@ -35,19 +35,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# Slot writes, heads and a steered consumer (trusted)
-
-The counting objects of EPS1-TENSOR's T1 (§3), EPS1-SPEC's Lemma 2 (§1.3) and
-SAMPLING's LIN-STEER:
-
-* a tensor run's slot writes: an instruction of form `i` writes `w i` slots and holds its pipe `c i` cycles, and the
-  family's best slots per pipe cycle is `ρ_T = max_i w i / c i` (`rhoT`);
-* a straight-line program's head writes: instance `t` of class `cls t` writes at most `ω (cls t)` words, and each
-  committed position's value traces back through copies to one written word, its head write (`HeadWrite`);
-* a consumer dot product of a lever row, with its noise-active coordinates and its least work once some of them are
-  zeroed (`Consumer`).
--/
+/-! The counting objects of EPS1-TENSOR's T1, EPS1-SPEC's Lemma 2 and SAMPLING's LIN-STEER: slot writes, head writes and a steered consumer. -/
 
 @[expose] public section
 
@@ -69,9 +57,7 @@ abbrev HeadWrite {K : Type} (ω : K → ℕ) (G : ℕ) (cls : Fin G → K) : Typ
 def classCount {K : Type} [DecidableEq K] {G : ℕ} (cls : Fin G → K) (k : K) : ℕ :=
   (univ.filter fun t => cls t = k).card
 
-/-- **A consumer dot product** of a lever row of `m` coordinates: the row's noise-active coordinates `act`, and
-`cost Z`, the consumer's least work (MACs, at its cheapest route) once the coordinates in `Z` are zeroed;
-`cost ∅` is its whole work `C`. -/
+/-- `cost Z` is in MACs at the consumer's cheapest route, and `cost ∅` is its whole work `C`. -/
 structure Consumer (m : ℕ) where
   act : Finset (Fin m)
   cost : Finset (Fin m) → ℝ

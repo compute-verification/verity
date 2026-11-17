@@ -2,29 +2,7 @@ module
 
 public import Definitions.Pouw.PearlC.FormingPDefs
 
-/-!
-# The products a salt cannot make count (definitions only)
-
-rev1's debit (`DeviceRev1`) charges a word's products that no salt of the support can make contribute, so that a program
-which skips them gains nothing. A product's value reaches the word only through the step's first truncation (`aligned`):
-the group's terms are aligned to its largest exponent by a truncating shift, and a product shifted out contributes 0.
-
-* **The cut** (`cutFold`, `cuts`): per product of one step on the pipeline `p`, whether its aligned contribution is 0,
-  each group's exponent `E` being the one `groupStepTotal` aligns to (`maxExp` over the incoming value's and the group's
-  products' finite terms). A zero product is cut.
-* **Along a word's chain** (`chainStep`, `chainCuts`): atom `t` steps from `+0` when `t` is a multiple of `G` (the first
-  atom of a promotion group; with `G = 0` only atom 0), and otherwise from the word atom `t − 1` wrote, as
-  `Accum.chainP p G` does; entry `32·t + r` is product `r` of atom `t`.
-* **The support's ends** (`endRow`): a row's codes under §5's atom-mix (`FormingP.atomMixP p`) when every element's noise
-  line is the flat pair `(flatLine 0, flatLineF s)` of `SaltDead.support`, with `s` clear at the plus end and set at the
-  minus end; each end is a salt of the support for every element at once.
-* **The forced zero** (`ForcedZero`): product `l` of the word of rows `x` and `w` is cut at both ends.
-  `CutForEverySalt` is the property the debit stands for: the product is cut at every choice of support pairs for the
-  two rows' elements (`saltRow`); it gives `ForcedZero`, since the two ends are such choices
-  (`Proofs.Pouw.PearlC.Mend.forcedZero_of_cutForEverySalt`).
-
-This module imports no proofs, so the named protocol may read it.
--/
+/-! The products no salt of the support can make count, which rev1's debit charges; it imports no proofs, so the named protocol may read it. -/
 
 @[expose] public section
 
@@ -71,12 +49,10 @@ def ForcedZero (p : Pipeline) (G : ℕ) (alpha beta : (k : ℕ) → (Fin k → �
     Prop :=
   cutAt p G alpha beta k x w false l = true ∧ cutAt p G alpha beta k x w true l = true
 
-/-- A row's codes when element `l`'s noise line is the pair `σ l`. -/
 def saltRow (p : Pipeline) (alpha beta : (k : ℕ) → (Fin k → ℚ) → ℚ) (k : ℕ) (x : Fin k → ℚ)
     (σ : Fin k → (Fin 32 → Code) × (Fin 32 → Code)) : Fin k → Code :=
   fun l => (FormingP.atomMixP p).elem (alpha k x) (x l) (beta k x) (σ l).1 (σ l).2
 
-/-- Product `l` of the word of rows `x` and `w` is cut at every choice of support pairs for the two rows' elements. -/
 def CutForEverySalt (p : Pipeline) (G : ℕ) (alpha beta : (k : ℕ) → (Fin k → ℚ) → ℚ) (k : ℕ) (x w : Fin k → ℚ)
     (l : Fin k) : Prop :=
   ∀ σ τ : Fin k → (Fin 32 → Code) × (Fin 32 → Code), (∀ t, σ t ∈ SaltDead.support) → (∀ t, τ t ∈ SaltDead.support) →

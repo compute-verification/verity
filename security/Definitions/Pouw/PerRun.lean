@@ -4,36 +4,7 @@ public import Definitions.Compose.Joint
 public import Definitions.Pouw.Game.Defs
 public import Definitions.Pouw.PearlC.Game
 
-/-!
-# Per-run audits, and what makes PoUW's cost model truncate (trusted)
-
-An audit's guarantee in PoUW's `EndToEnd` shape (`ResourceAccounting.Run.ComputeSound` and the two beside it) bounds the
-probability that it accepts with a sure bound below its certificate: the bound holds on every one of the audit's own
-coins. A device that does little charged work on a few coins and honest work on the rest has a large sure bound, so
-those guarantees say nothing about it, and nothing about the covert work its cheap runs leave room for. A per-run
-guarantee bounds the probability that the audit accepts *and the account's realized charge on that run* is below the
-certificate (`Run.ComputeSoundPerRun`, `Run.BandwidthSoundPerRun`, `Run.CapacitySoundPerRun`), at every value of the
-other audits' coins. It implies the sure-bound form.
-
-PoUW's guarantee becomes per-run by truncation: the adversary that runs `A` but stops before its cost would exceed a
-budget `b` costs at most `b` on every coin, and commits `A`'s trace wherever `A` costs at most `b`. PoUW's cost
-model is abstract, so whether that adversary exists is a property of the model (`BudgetAbort`, a named hypothesis in
-`Definitions.Assumptions.ResourceAccounting`), not a theorem: a model whose cost reads what its programs cannot see (the oracle
-at points they never query, say) has no aborting program.
-
-**Pricing.** The machine prices a PoUW run in two parts: its arithmetic, at W1's
-instruction prices with no fetch charge and no refund, is charged to the compute account, and every first fetch of a
-pre-salt or supplied byte, deduplicated within the run, to the bandwidth account, at the device's price of a bit read.
-Those accounts are charges; the device model's accounts are who incurs them. A PoUW run is the compute audit's
-device-model account (`acct .compute`): its work is its compute charge, and the bits it read (`Run.pouwRead`, its first
-fetches among them) are its bandwidth charge, beside the bandwidth audit's window reads (`Run.read`). The bandwidth
-audit's reads are another device-model account's over the same window (`Run.ReadsAttributed`), so no bit read is
-certified twice. What the compute audit certifies is the priced sum, work plus `pRead` per bit read
-(`Run.ComputeSoundPerRunPriced`, `pRead` the price of a bit read in the unit the work is counted in), and tables cite
-the work and the bits separately. Pearl-C's game is a game of its own, with its own cost model; `BudgetAbortPearlC` is
-truncation for it, and `RealizesPearlCPriced` is a run whose compute audit is Pearl-C's audit, its cost covered by the
-priced sum.
--/
+/-! Per-run audits, and `BudgetAbort`, the property that makes PoUW's cost model truncate, a named hypothesis and not a theorem. -/
 
 @[expose] public section
 
@@ -145,15 +116,11 @@ bandwidth charge, `pRead` per bit the compute account read. A run that realizes 
 structure RealizesPearlCPriced {Q R S : Type} (CM : PearlC.CostModel Q R S) (P : PearlC.Protocol Q R S)
     (U : PearlC.Workload) (w : ℕ → ℕ) {t : ℕ} {ι : Type} {d : Device ι} {α ΩQ ΩS : Type} [Fintype α]
     (r : Run d α (PearlCCoins Q R S U w t) ΩQ ΩS) (p : Price) (pRead : ℝ) where
-  /-- the adversary the device is in Pearl-C's game at the other audits' coins -/
   adv : ΩQ × ΩS → PearlC.Adversary CM
-  /-- the compute audit is Pearl-C's audit of the adversary's trace: every ticket's unit is correct -/
   accepts_iff : ∀ x o, r.accepts .compute (x, o) ↔
     AuditAccepts (PearlC.correctSet P U x.1 x.2.1 ((adv o).trace U x.1 x.2.1)) x.2.2
-  /-- the priced sum covers the adversary's online cost -/
   cost_le : ∀ x o, CM.cost (adv o).online x.1 U (adv o).act ((adv o).pre.eval x.1) x.2.1 ≤
     (r.work p (x, o) : ℝ) + pRead * r.pouwRead (x, o)
-  /-- the compute account's oracle queries cover the adversary's oracle calls -/
   calls_le : ∀ x o, (adv o).pre.calls x.1 + CM.calls (adv o).online x.1 U (adv o).act ((adv o).pre.eval x.1) x.2.1 ≤
     (r.schedule (x, o)).ops (r.win .compute) (r.acct .compute) .oracle
 

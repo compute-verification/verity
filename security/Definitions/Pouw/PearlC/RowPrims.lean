@@ -3,24 +3,7 @@ module
 public import Definitions.Pouw.PearlC.Tile4Circuit
 public import Definitions.Pouw.PearlC.Instance
 
-/-!
-# PoUW's own primitives in the row units, as word functions (definitions only)
-
-The six primitives of `verity.protocols.accounting.work.pouw.circuit.words` that `pc8`'s and `pc4`'s row templates read, each a function on
-words as naturals with the Python's arithmetic:
-
-* `sqrtWord` is `PouwF32SqrtRn_v1`, `sqrt.rn.f32` (`verity.ml.tc.fp32.sqrt`, `ρ`'s root): `⌊√m⌋` of the significand
-  widened to at least 54 bits (`isqrt`), rounded by `f32Word` with a half for a nonzero remainder;
-* `eTildeWord` is `PouwETilde_v1`: `Ẽ = bf16(|E|·a_E·2⁻⁴)` with `E`'s sign bit, `0x7FFF` where `a_E`'s low seven bits
-  are the E4M3 NaN (`DeviceFp4`'s `eTilde` on the scale bytes sm_120 reads);
-* `bf16NegWord` is `PouwBf16Neg_v1`, the BF16 sign flip;
-* `sqAccWord`, `sqCeilWord` and `sqGeWord` are `PouwSqAcc_v1`, `PouwSqCeil_v1` and `PouwSqGe_v1`, `live_row`'s exact
-  statistic over `sq300` (`2^300·x²` of an FP32 word) and `up48` (rounded up to 48 significant bits).
-
-`RowPrimVectors` holds them to the Python by vectors the kernel checks (`SecurityProofs.PearlC.RowPrimChecks`;
-`PouwETilde_v1` on its whole domain), written by `verity/protocols/accounting/pouw/verifier/lean/scripts/row_prims_vectors.py` from each primitive's `evaluate`;
-`verity/protocols/accounting/pouw/verifier/tests/test_row_prims_lean.py` checks that the script still writes them.
--/
+/-! PoUW's own primitives that `pc8`'s and `pc4`'s row templates read, as word functions with the Python's arithmetic, held to it by vectors the kernel checks. -/
 
 @[expose] public section
 

@@ -11,31 +11,14 @@ import Mathlib.Data.Finset.Attr
 import Mathlib.Tactic.Finiteness.Attr
 import Mathlib.Tactic.SetLike
 
-/-!
-# `PouwH1Combine_v1{TILE}` on words (trusted)
-
-A sampled H1 leaf's combine statement (`verity/protocols/accounting/pouw/prover/circuit/h1zy.py`, `PouwH1Combine`) reads the leaf's
-lanes' committed partials, `L` rows of `nw` u32 words (`nw = 2 (KS + m)`), and the leaf's committed receipt, `nw` words,
-and returns one bit `ok`. Its body (`h1zy._combine_body`), on its primitives' word views:
-
-* for each word `w`, the XOR of the lanes' words `w` in lane order, as `h1tile._xor` builds it: a tree of
-  `PouwXor32_v2` calls (`xor32`), each pass XORing adjacent pairs and carrying an odd last word, until one is left
-  (`tree`);
-* each XOR against the receipt's word `w` (`PouwEq32_v2`, `eq32`);
-* the comparisons' AND, as `h1zy._and_all` builds it: the same tree of `PouwAndBit_v2` calls (`andBit`).
-
-Python's loops read the first word of a non-empty list; a leaf has at least two lanes and `nw ≥ 2`, so the empty
-list's value (`tree`'s default: `0` for the XOR, `true` for the AND) is never read.
--/
+/-! `PouwH1Combine_v1{TILE}` on words; a leaf has at least two lanes and `nw ≥ 2`, so `tree`'s empty-list default is never read. -/
 
 @[expose] public section
 
 namespace Pouw.H1Zy
 
-/-- `PouwXor32_v1`, `PouwXor32_v2`'s word view: `a xor b`. -/
 def xor32 (a b : BitVec 32) : BitVec 32 := a ^^^ b
 
-/-- `PouwEq32_v1`, `PouwEq32_v2`'s word view (`segment.PouwEq32Word`): `1` exactly when `x = y`. -/
 def eq32 (x y : BitVec 32) : Bool := decide (x = y)
 
 /-- `PouwAndBit_v1`, `PouwAndBit_v2`'s word view: `a and b`. -/
@@ -66,9 +49,6 @@ def tree {α : Type} (f : α → α → α) (d : α) : List α → α
 termination_by l => l.length
 decreasing_by exact length_pairs_lt f a b rest
 
-/-- **The combine's `ok`** (`h1zy._combine_body`) on its `L` lanes' partials and the receipt, `nw` u32 words each:
-for every word `w`, the `PouwXor32` tree over the lanes' words `w` in lane order is the receipt's word `w`
-(`PouwEq32`), and the comparisons' `PouwAndBit` tree. -/
 def combineOk {L nw : ℕ} (partials : Fin L → Fin nw → BitVec 32) (receipt : Fin nw → BitVec 32) : Bool :=
   tree andBit true (List.ofFn fun w => eq32 (tree xor32 0 (List.ofFn fun l => partials l w)) (receipt w))
 

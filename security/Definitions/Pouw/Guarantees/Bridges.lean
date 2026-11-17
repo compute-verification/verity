@@ -5,26 +5,7 @@ public import Definitions.Pouw.CostModel
 public import Definitions.Pouw.Assumptions.Game
 public import Definitions.Pouw.Game.Params
 
-/-!
-# Obligations B1 and B4, and PoUW's row, stated (trusted)
-
-Stated in the actual-circuit model; none is proved here.
-
-* `B1` (conjecture, TT on arbitrary circuits): PoUW's named assumption `Pouw.Assumptions.TT` at the cost model of `A`'s
-  provers, `CM_A`, whose cost is the prover's work between the salt's arrival and the last tick from which a value
-  reaches the verifier by the deadline. It counts the window's work, not dependence on the salt: a prover that branches
-  on the salt carries that dependence by control flow, not by wires. Nothing else about PoUW is conjectured: the
-  deadline theorem holds at every cost model, and the honest clock holds at `CM_A`.
-* `pouwRow` (PoUW's row, from B1): the deadline theorem at `CM_A`. A prover whose work at `π` in the cost window is at
-  most `T` at every oracle and salt is accepted while `T < (1 − γ)(1 − ε_s)·W` with probability at most
-  `(1 − ε_s)^t + ε(q, N)`.
-* `B4` (egress factoring, reduced to the assumptions), across `X`'s secret inputs: under the named physical premises
-  `CausalStrategy`, `DeclaredLinks`, `TrustedUnits` and `Secrets` (each certifier's sends during `[a, b)` a
-  function of its own record before `b`, its gates in declared record cells, and of its own jitter word; the strategy
-  varies only `X`'s secrets), what the outside does during `I` takes at most (the number of records placed in `I`) ×
-  `2^{res_out}` values, `res_out` being `log₂ χ` bits a bucket and certifier plus `β°_X |I|`. Per run, a width bound
-  misses when a send leaves, which signals by its tick.
--/
+/-! Obligations B1 and B4 and PoUW's row, stated in the actual-circuit model; none is proved here. -/
 
 @[expose] public section
 

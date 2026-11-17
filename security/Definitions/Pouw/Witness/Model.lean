@@ -2,17 +2,7 @@ module
 
 public import Definitions.Pouw.Game.Defs
 
-/-!
-# The witness cost model (trusted definitions; used only by the satisfiability witnesses)
-
-`outputPriced`: a program is an adaptive oracle program (`QTree`: a tree of queries to `H`, with any computation
-between queries) that may read the workload, the activation input, the state and the salt; it reaches `H` only
-through queries, and `calls` counts the queries on the path it takes. Its cost is `∑ m_u·k_u·n_u` over the units it
-commits to (`some`): committing a unit's transcript costs that unit's GEMM, and nothing else costs anything.
-
-Every function of the oracle answers is a program here, so the model forbids nothing; it only prices commitments.
-It is not M_4090, where committing (hashing) is free. What this witness shows and does not show: `NOTES.md`.
--/
+/-! The witness cost model `outputPriced`, which forbids nothing and only prices commitments, used only by the satisfiability witnesses. -/
 
 @[expose] public section
 

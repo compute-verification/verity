@@ -2,35 +2,7 @@ module
 
 public import Definitions.Pouw.PearlC.Sha512
 
-/-!
-# J10-R: H1's noise from one seed a call, at call scale (trusted; definitions only)
-
-One SHA-512 stream per call row (its dither bits b and digit coins z) and one per call column (its coin bits c and `U`),
-seeded once a call; a unit reads its rows' and its columns' slices, and its fold keys stay its own. These are the
-bits, op for op, of `verity/protocols/accounting/pouw/prover/circuit/seeds.py` (`call_seed`, `receipt_seed`, `noise_block`, `leaves`)
-and `h1tile.py` (`Layout`, `_noise_at`, `j10r_blocks`, `j10r_noise`, `fold_keys`, `unit_compressions`,
-`j10r_compressions`); the units that compute them are `PouwH1Tile_v5` and `_v6`, beside today's per-unit form, which no
-scheme replaces.
-
-- `tagged tag salt pos rootA rootB`: SHA-512 of `u64 pos ‖ (tag ‖ salt ‖ rootA ‖ rootB) ⊕ (u64 pos)*`, the bytes XORed with
-  the position's eight cyclically (`seeds._tagged`). `seed` and `receiptSeed` are today's seed_j and σ_R; `callSeed` is
-  J10-R's seed_c, at the position of the call's first unit and under the call's registered roots, root(a/<K>@<s>) and
-  root(b/<K>).
-- `noiseChunk s t`: block `t` of seed `s`'s stream, `SHA-512(NOISE_TAG ‖ s ‖ u64 t)`; `bits` a digest's bits as a unit
-  reads them (16 big-endian halves, each least significant bit first); `stream s first n` the first `n` bits from block
-  `first` on.
-- `rowAt s k first`, `colAt s k first`: a row's (dither bits, digit coins) and a column's (coin bits, `U` as int8 codes,
-  `u129`) from block `first` of `s`'s stream. Their widths are functions of `K` alone (`rb k`, `cb k`).
-- `NoiseLayout r c k`: where a tile's or a call's noise blocks sit (`h1tile.Layout`). `row i = i RB`,
-  `col j = r RB + j CB`; `noise s L` is today's noise of a unit (`h1tile.noise`) and, at a call's layout, the
-  call-scale noise.
-- `unitBlocks M k R C I J`: unit `(I, J)`'s public block bases in a call of `M` rows at `R × C` tiles, call row `R I`'s
-  first block and call column `C J`'s; `j10rNoise s L b` the unit's noise from bases `b`, `unitNoise` with
-  `s = callSeed salt call rootA rootB`, `unitKeys` its fold keys, σ_R at its own position.
-- `unitCompressions L`: SHA-512 compressions today's unit takes (its blocks, a key block a lane, two seeds of two each).
-  `callCompressionsNum M N k R C` is J10-R's over the call's `units M N R C` units when each block is derived once a
-  call: the call's blocks and seed_c's two, and each unit's σ_R (two) and its lanes' key blocks.
--/
+/-! J10-R, H1's noise from one SHA-512 seed a call at call scale, bit for bit as `seeds.py` and `h1tile.py` compute it. -/
 
 @[expose] public section
 
@@ -55,7 +27,6 @@ def tagged (tg salt : List ℕ) (pos : ℕ) (rootA rootB : List ℕ) : List ℕ 
   let data := tg ++ salt ++ rootA ++ rootB
   digest (p ++ List.zipWith (fun x b => x ^^^ b) data (List.replicate (data.length / 8 + 1) p).flatten)
 
-/-- Today's seed_j of the unit at `pos`. -/
 def seed (salt : List ℕ) (pos : ℕ) (rootA rootB : List ℕ) : List ℕ := tagged seedTag salt pos rootA rootB
 
 /-- σ_R of the unit at `pos`: its fold keys' seed, under J10-R as today. -/
@@ -122,27 +93,20 @@ structure NoiseLayout where
 
 namespace NoiseLayout
 
-/-- Row `i`'s first block. -/
 def row (L : NoiseLayout) (i : ℕ) : ℕ := i * rb L.k
 
-/-- Column `j`'s first block, after every row's. -/
 def col (L : NoiseLayout) (j : ℕ) : ℕ := L.r * rb L.k + j * cb L.k
 
 /-- The lanes, `r/4 · c/8`, a key block each. -/
 def lanes (L : NoiseLayout) : ℕ := L.r / 4 * (L.c / 8)
 
-/-- The noise blocks: the rows' and the columns'. -/
 def blocks (L : NoiseLayout) : ℕ := L.r * rb L.k + L.c * cb L.k
 
 end NoiseLayout
 
-/-- The noise of layout `L` from seed `s`, rows then columns: today's unit noise (`h1tile.noise`) at a unit's layout, the
-call-scale noise at a call's. -/
 def noise (s : List ℕ) (L : NoiseLayout) : List (List ℕ × List (List ℕ)) × List (List ℕ × List ℕ) :=
   ((List.range L.r).map fun i => rowAt s L.k (L.row i), (List.range L.c).map fun j => colAt s L.k (L.col j))
 
-/-- **Unit `(I, J)`'s public block bases** in a call of `M` rows at `R × C` tiles and contraction `k`: the first block of
-call row `R I` and of call column `C J` in the call-scale layout (`h1tile.j10r_blocks`). -/
 def unitBlocks (M k R C I J : ℕ) : ℕ × ℕ := ((NoiseLayout.mk M C k).row (R * I), (NoiseLayout.mk M C k).col (C * J))
 
 /-- A unit's noise from seed `s` at bases `b`: row `i` from block `b.1 + i RB`, column `j` from `b.2 + j CB`. -/
@@ -164,14 +128,10 @@ def unitNoise (salt rootA rootB : List ℕ) (call : ℕ) (L : NoiseLayout) (b : 
 def unitKeys (salt rootA rootB : List ℕ) (pos : ℕ) (L : NoiseLayout) : List (List ℕ) :=
   foldKeys (receiptSeed salt pos rootA rootB) L
 
-/-- SHA-512 compressions of today's unit: its noise blocks, a key block a lane, and its two seeds of two each. -/
 def unitCompressions (L : NoiseLayout) : ℕ := L.blocks + L.lanes + 4
 
-/-- The units of an `M × N` call at `R × C` tiles. -/
 def units (M N R C : ℕ) : ℕ := M / R * (N / C)
 
-/-- J10-R's SHA-512 compressions over the call's `units` when each block is derived once a call: the call's blocks and
-seed_c's two, and each unit's σ_R (two) and its lanes' key blocks. A unit's share is this over `units M N R C`. -/
 def callCompressionsNum (M N k R C : ℕ) : ℕ :=
   (NoiseLayout.mk M N k).blocks + 2 + units M N R C * (2 + (NoiseLayout.mk R C k).lanes)
 

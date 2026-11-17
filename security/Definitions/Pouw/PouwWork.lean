@@ -3,27 +3,7 @@ module
 public import Definitions.Pouw.Confidence
 public import Definitions.Pouw.Basic.Prob
 
-/-!
-# PoUW's work on one node, on the actual circuit (trusted)
-
-The PoUW half of the converged GPU model (v3.1), on the
-actual-circuit model rather than a device model of its own. A strategy `S` maps the verifier's live coins `r : Ω`
-(uniform over a finite `Ω`, `Pouw.pr`) to a run (`Actual.Run`); the node is a location `X`, and the verifier sits at the
-leaves `V`. The coins are the verifier's, so the strategy, fixed before them, is the prover's circuit for every value
-they take; each coin reaches the node only through what crosses from `V`, at the tick the verifier sends it.
-
-* `Verdict`: the verifier's side, the window `[ts, td)`, the `N` blocks, how it decodes block `k`'s word from what
-  crossed into `V` before the deadline `td` (`word`), the right word at the coins (`target`), and its rule (`accept`),
-  which reads the coins and everything that crossed into `V`.
-* `good`, `goodAll`: the blocks whose word is right at the coin, and those right at every coin (v3.1's `goodAt`,
-  `goodAll`).
-* `credits X π m`: the node's own computed gates in the window outside a marking `m`, priced at the credit pricing `π`
-  (an instruction class's credit, the most target multiply-adds it can stand for), `Placed.work` over `Placed.region`.
-* `help X`: the bits the node and the verifier read, in the window, from gates placed outside both, `in_{X ∪ V}`
-  (`Placed.ingress`): every word that reaches the node, or the verifier directly, from any other machine. The
-  verifier's coins are placed at `V`, so they are no help; nor is what the node itself holds (its inputs and its own
-  gates).
--/
+/-! PoUW's work on one node on the actual-circuit model, with the strategy fixed before the verifier's live coins. -/
 
 @[expose] public section
 

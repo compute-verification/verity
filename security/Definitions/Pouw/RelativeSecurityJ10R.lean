@@ -33,33 +33,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# Relative security at call scope under J10-R: the call design its floors read (trusted)
-
-Theorem K's design (`DBits`, `dPrefix`, `dFrame`) puts the noise `U` on the rows, shared across blocks, and a fresh
-coin on every entry of the columns. J10-R's noise is H1's, one SHA-512 stream per call row and per call column, seeded
-once a call, so a call's coins are shared by the whole call on both sides. This is that call as one stage of `n` rows
-(the call's `M`), `n'` columns (its `N`) and `B` segments of `L` (`KS` segments of 32), as `segment.call_words`
-computes it:
-
-* the call's bits (`JBits`): row `i`'s dither bits `b(i, t, j)`, fresh a segment and read by every column; column `l`'s
-  coin bits `c(t, j, l)`, fresh a segment and read by every row; and the 8 bits of each of column `l`'s `L` bytes of
-  `U` (`β(l, j, ·)`), the same in every segment;
-* the operands, int8 as served (`jS8`): `X(i, tL + j) = s8 (A + b(i, t, j))` on the rows and
-  `W'(l, tL + j) = s8 (W + c(t, j, l) + U(l, j))` on the columns, `U(l, j) = −64 + (byte mod 129)` (`jU`), on the
-  committed `A` (`aq`) and the registered `W` (`wq`);
-* the committed prefix words `T_t(i, l) = Σ_{t' ≤ t} Σ_j X(i, t'L + j) W'(l, t'L + j)` mod `2^32` (`jIncr`,
-  `jPrefix`): a segment's coin × coin part is `b^(t) N^(t)ᵀ` with `N = c + U`, one `⟨n, L, n'⟩` product over the whole
-  call, not `n n' / L²` independent `⟨L, L, L⟩` ones;
-* cell-block `(i, l, t)`'s frame (`jFrame`): its `x` bits are row `i`'s dither bits of segment `t`, its `y` bits column
-  `l`'s coin bits of segment `t`, so mod 2 its target is `⟨x, y⟩` plus terms blind to one side, with no plane weight;
-* charging purity at those frames (`SlpG.ChargePureJ`; across samples, `SlpG.ChargePureAtJ`), one-sided products per sample
-  (`OneSidedAtJ`), a round's coins (`JStage`; overlapped, `OJBits`, `OJDraws`, `OJSpot`) and an adversary's window run
-  on the call design (`JStagedRun`, `JRunMap`; `JOverlapRun`, `JORunMap`).
-
-The digit words `O'` and `D_d` (`U · A_d`, over the digit coins `z`) are not in the design, as no digit word is in
-Theorem K's.
--/
+/-! Relative security at call scope under J10-R, whose noise is seeded once a call, so a call's coins are shared by the whole call on both sides. -/
 
 @[expose] public section
 

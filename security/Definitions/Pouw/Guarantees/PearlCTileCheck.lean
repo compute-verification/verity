@@ -4,16 +4,7 @@ public import Definitions.Pouw.PearlC.TileCheck8
 public import Definitions.Pouw.PearlC.TileCheck4
 public import Definitions.Pouw.PearlC.Device
 
-/-!
-# Pearl-C's tile checks compute the words (trusted)
-
-L3's words (`TileCheck.ComputesWords`, opened) for the plain `pc8` and `pc4` Programs at core's own instance of its
-primitives (`RowCircuit.coreOps`): when `tileCheck8` or `tileCheck4` accepts a tile, its words are good. Each is stated
-on its accept outcome first (`TileCheck.Accepts`), then the premises on the inputs, then the conclusion
-(`TileWordsGood`). `Collides` is `False` for both Programs, so the conclusion has no collision disjunct. There is no
-hypothesis on core's float primitives or on the noise: `pc8`'s check refuses a noise line with a NaN code
-(`tileCheck8`'s `anchorsOK`). Each proof is the theorem `Pouw.SecurityProofs.PearlC.G : Pouw.Guarantees.PearlC.G`.
--/
+/-! Pearl-C's tile checks compute the words: when `tileCheck8` or `tileCheck4` accepts a tile its words are good, with no hypothesis on core's float primitives or on the noise. -/
 
 @[expose] public section
 

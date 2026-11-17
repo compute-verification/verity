@@ -4,18 +4,7 @@ public import Definitions.Pouw.Receipt.Duo
 import Mathlib.Data.Finset.Attr
 import Mathlib.Tactic.SetLike
 
-/-!
-# li, a receipt fold (trusted)
-
-li absorbs a word pair `(d₀, d₁)` into a chain's state `y`, one `n`-bit word, with an XOR key `k` and a multiplier `a`
-(`verity/protocols/accounting/pouw/verifier/receipts/receipt_folds.py`, `li_step`, at `n = 32`):
-
-    y ← (y ⊕ d₀ ⊕ k)·a + d₁
-
-An MMA's four words are two such half steps, `(d0, d1)` with `(k0, a0)` and then `(d2, d3)` with `(k1, a1)`, so a chain
-of MMA steps is a chain of half steps. A thread runs several chains side by side; a checkpoint is the XOR of their states
-at the end of a segment, each chain having absorbed that segment's words from the state it started the segment in.
--/
+/-! li, a receipt fold `y ← (y ⊕ d₀ ⊕ k)·a + d₁`, two half steps per MMA. -/
 
 @[expose] public section
 
