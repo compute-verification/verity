@@ -3,7 +3,7 @@ several runs, and counts a negative that escaped a sampled sample within the sam
 window was sampled; the sample's bound at δ is the integrity profile's count bound, which counts a miss of exactly δ, as
 Lean's does; leak counts the scan's widths and terms on a network attester run's files, and refuses a sample and a
 network attester the scan's class doesn't serve; the job's copy of the
-gates' records into its output keeps no gate run's witness/. On the certifier-only path the report needs no scan,
+gates' records into its output keeps no gate run's witness/. On the network attester-only path the report needs no scan,
 names what it stubs, and counts the rehearsal's refused runs and the I/O tie's verdict on each tampered run the check
 let through as negatives; d1's K is all_protocols' monitoring-period count over the compute audits' samples and free
 inputs and the network's own terms. Given no N2 summary the report is the scan's alone, its verdict `scan accepted`
