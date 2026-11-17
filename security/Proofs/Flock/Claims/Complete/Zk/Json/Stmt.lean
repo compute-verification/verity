@@ -44,22 +44,8 @@ import Std.Data.TreeMap.Raw.Lemmas
 import Std.Data.TreeMap.Raw.WF
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# What the masked record needs of the statement, from its setup
-
-`stmtOkZk`: at every good masked case, a non-empty `Σ`, a printable sample that decodes to the statement's instances
-(`SampleOk`), the statement's sample the one it was set up at, and a `Hello` that parses to an object whose `coins` is an
-object, printable with the prover's nonce put in: `StmtOkZk`, from the case's setup alone, as
-`stmtOk` at the plain verifier.
-
-* `Σ`, the sample's instances and the session's sample are as in `stmtOk`, at the one table `readyZk` asks
-  (`CaseZk.one`). Under `--zk` the sample's sampling design is stratified or a subset (`ProvedScope.samplingDesignWhy true`), printable as at the
-  plain verifier (`good_stratified`, `good_subset`).
-* The masked verifier's coins are the keyed coin tree (`Read.coins`), so the hello's `coins` is the tree's spec with an
-  empty nonce, an object (`helloZk_of`). `canon` prints the hello and `Flock.JsonParse.parse` reads back an alike object
-  (`FlockComplete.JsonRT.parse_canon`), printable as the printed one is (`Same.good`), and so after the prover's nonce is put in
-  (`good_setObjVal`).
--/
+/-! What the masked record needs of the statement (`StmtOkZk`) holds at every good masked case, from its setup alone
+(`stmtOkZk`). -/
 
 @[expose] public section
 
@@ -69,9 +55,6 @@ open Flock FlockDeploy
 open Lean (Json JsonNumber)
 open FlockSoundness FlockSoundness.Refine
 
-/-! ## Printable values -/
-
-/-- **A value alike a printable one is printable.** -/
 theorem _root_.Claims.Json.Same.good {a b : Json} (h : Same a b) (hg : Good a) : Good b := by
   induction h with
   | null => exact .null
@@ -91,7 +74,6 @@ theorem _root_.Claims.Json.Same.good {a b : Json} (h : Same a b) (hg : Good a) :
     obtain ⟨a, ha⟩ := Option.isSome_iff_exists.1 ((hk k).trans (by rw [hv]; rfl))
     exact ih k a v ha hv (hg k a ha)
 
-/-- **Putting a printable value in a printable object** keeps it printable. -/
 theorem good_setObjVal {m : Std.TreeMap.Raw String Json compare} (hg : Good (.obj m)) {v : Json} (hv : Good v)
     (k : String) : Good ((Json.obj m).setObjVal! k v) := by
   cases hg with
@@ -104,14 +86,9 @@ theorem good_setObjVal {m : Std.TreeMap.Raw String Json compare} (hg : Good (.ob
     exact hv
   · exact hg k' v' (by rw [Std.TreeMap.Raw.get?_eq_getElem?]; exact h)
 
-/-- The keyed coin tree's `coins`, at a nonce, is printable. -/
 theorem good_coins (cs : CoinTree.Spec) (nonce : String) : Good (cs.coins nonce) :=
   good_setObjVal (good_specJson cs) (.str _) _
 
-/-! ## The masked verifier's hello -/
-
-/-- **A canonical object with a keyed coin tree's `coins`** parses back to an object whose `coins` is an object, printable
-with the prover's nonce put in. -/
 theorem helloZk_mk {L : List (String × Json)} (hd : Distinct L)
     (hg : ∀ p ∈ L, Good p.2) {cs : CoinTree.Spec} (hc : ("coins", cs.coins "") ∈ L) {hello : String}
     (h : Flock.canon (Json.mkObj L) = .ok hello) :
@@ -135,8 +112,6 @@ theorem helloZk_mk {L : List (String × Json)} (hd : Distinct L)
   rw [hget]
   exact good_setObjVal hgj (good_setObjVal hgc (.str _) _) _
 
-/-- **The masked verifier's hello**: at a keyed coin tree, it parses to an object whose `coins` is an object, printable
-with the prover's nonce put in. -/
 theorem helloZk_of {tags : Tags} {sigma : ByteArray} {mPts : ℕ}
     {cs : CoinTree.Spec} {hello : String} (h : Flock.helloOf tags sigma mPts (.tree cs) = .ok hello) :
     ∃ m kvs : Std.TreeMap.Raw String Json compare, Flock.JsonParse.parse hello = .ok (.obj m) ∧ m.WF ∧ kvs.WF ∧
@@ -157,9 +132,6 @@ theorem helloZk_of {tags : Tags} {sigma : ByteArray} {mPts : ℕ}
       | exact good_arr_strs _
       | exact good_mkObj (by simp) (by simp [good_toJson]; exact .str _)
 
-/-! ## The statement at a good masked case -/
-
-/-- A statement of the masked verifier decodes to inputs that `Raw.ins` read. -/
 theorem insOf_true {x : Claims.Msg} {s : Ins} (h : insOf true x = some s) :
     ∃ w : Raw, w.zk = true ∧ w.ins = .ok s := by
   unfold insOf at h
@@ -174,7 +146,6 @@ theorem insOf_true {x : Claims.Msg} {s : Ins} (h : insOf true x = some s) :
 
 variable {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
 
-/-- **The masked case's one table**: its statement is `setupOne`'s, at the session's tags, coins and sample. -/
 theorem _root_.FlockComplete.CaseZk.one (c : CaseZk H rel) :
     ∃ st, c.sts = #[st] ∧ c.spec = st.spec ∧
       Discharge.HiddenExec.setupOne c.s.read.tags c.s.read.I.circuitFile c.s.read.I.publicFile c.s.read.coins
@@ -191,10 +162,6 @@ theorem _root_.FlockComplete.CaseZk.one (c : CaseZk H rel) :
   · have := c.ready_parts.1
     omega
 
-/-- **What the masked record needs of the statement holds at every good masked case** (`StmtOkZk`), under the JSON
-library's specification: Σ is a SHA-512 digest, the sample is printable and decodes to the statement's instances, the
-session's sample is the statement's, and the keyed coin tree's hello parses to an object whose `coins` is an object,
-printable with the prover's nonce put in. -/
 theorem stmtOkZk : StmtOkZk H rel := by
   intro c
   obtain ⟨st, -, hspec, h1⟩ := c.one

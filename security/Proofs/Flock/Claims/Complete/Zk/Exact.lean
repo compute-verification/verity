@@ -41,20 +41,7 @@ import Proofs.Flock.Claims.Complete.Replay.LigeritoProver
 import Std.Tactic.BVDecide.Normalize.Bool
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# A returning masked rep's sends, and the refusals it passed
-
-Read forward from a run that returns (`LigeritoProverPos`'s steps), each prover step of a masked rep sends a fixed
-number of bodies, and each of its refusals that can fire did not:
-
-* **Ligerito** (`ligeritoPZk_exact`): `k_0 + 7 + 11 R` sends over `R + 1` levels (`k_0 + 11` before the recursive
-  levels, `11` at each but the last and `7` at the last; `oodIntroP_two`, `queryP_two`, `challengeP_one`), and level 0's
-  pair `ρ₀, ρ₁`, the replies to sends `|l| + 2 + k_0` and `|l| + 3 + k_0`, are independent.
-* **The inner proof** (`innerP_exact`): `4` sends, and `β`, the reply to send `|l| + 2`, is not `0`.
-* **A rep** (`repPZk_exact`): the zerocheck's `3 + (m − 6)`, the lincheck's `3 + (k_log − 6)`, the ring switch's
-  `claims + 1` (`repPZk_rs`'s closed forms), then Ligerito and the inner proof; its rank check passed on its
-  transcript after the lincheck.
--/
+/-! A returning masked rep's sends, and the refusals it passed (`repPZk_exact`). -/
 
 @[expose] public section
 
@@ -63,8 +50,6 @@ namespace FlockComplete
 open Flock Transcript Replay Replay.Lg
 
 variable {α β : Type}
-
-/-! ## Ligerito's steps -/
 
 theorem lsilent_pure (a : α) : LSilent (Pure.pure a : LP PS α) := by
   intro st t l b st' t' l' h
@@ -99,7 +84,6 @@ theorem lsilent_forIn_array {γ σ : Type} (xs : Array γ) (s : σ) (f : γ → 
   rw [← Array.forIn_toList]
   exact lsilent_forIn_list f hf xs.toList s
 
-/-- A quiet computation of the pure session, lifted into Ligerito's, sends nothing. -/
 theorem lsilent_quiet {v : V α} {y : PS α} (hq : quietS.R v y) : LSilent (liftT (StateT.lift y) : LP PS α) := by
   intro st t l a st' t' l' e
   change (((StateT.lift y : TMW PS α) >>= fun a => Pure.pure (a, st)).run t).go l = _ at e
@@ -156,10 +140,6 @@ theorem queryP_two (resp : ℕ → Claims.Msg) (nonce : ℕ → ℕ → UInt64) 
   obtain ⟨-, rfl⟩ := lpure_go_ok h
   omega
 
-/-! ## Ligerito -/
-
-/-- **A masked Ligerito prover that returns sent `k_0 + 7 + 11 R` bodies** over its `R + 1` levels, and level 0's pair
-coins, the replies to sends `|l| + 2 + k_0` and `|l| + 3 + k_0`, are independent. -/
 theorem ligeritoPZk_exact (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (ms : MerkleScheme) (sch : Schedule)
     (T : F128) (cm0 : Commit) (tb b : Array F128) (lay : Zk.PadLayout) (hv : Array F128) (rep tPad : ℕ)
     (extra lanePad : ℕ → ℕ → F128) (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64) (hn : sch.n ≠ 0)
@@ -292,9 +272,6 @@ theorem ligeritoPZk_exact (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArr
   rw [ite_eq_left rfl] at hI2
   omega
 
-/-! ## The inner proof -/
-
-/-- **A masked inner proof that returns sent `4` bodies**, and `β`, the reply to send `|l| + 2`, is not `0`. -/
 theorem innerP_exact (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (lay : Zk.PadLayout) (p : PadsZk)
     (ic : InnerCommit) (finalC : F128) (cons : Array (String × Zk.Lin)) {t t' : Transcript}
     {l l' : Array Claims.Msg} {r : Zk.InnerProof}
@@ -323,9 +300,6 @@ theorem innerP_exact (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (
   refine ⟨by simp, ?_⟩
   simpa using hb
 
-/-! ## A rep -/
-
-/-- **The rank check, where it returns, passed** on the transcript it ran at. -/
 theorem rankCheckP_ok {m kLog : ℕ} {prior : Array (List F128)} {words : List ℕ} {t t' : Transcript}
     {l l' : Array Claims.Msg} {u : Unit}
     (h : ((rankCheckP m kLog prior words : TMW PS Unit).run t).go l = (.ok (u, t'), l')) :
@@ -338,7 +312,6 @@ theorem rankCheckP_ok {m kLog : ℕ} {prior : Array (List F128)} {words : List �
     obtain ⟨_, _, h1, -⟩ := JsonRT.go_bind_ok h
     cases h1
 
-/-- A lifted check of the verifier's monad that returns sends nothing. -/
 theorem liftV_bind_ok {v : V α} {f : α → TMW PS β} {t : Transcript} {l l'' : Array Claims.Msg}
     {r : β × Transcript}
     (h : (((StateT.lift (monadLift v : PS α) : TMW PS α) >>= f).run t).go l = (.ok r, l'')) :
@@ -353,13 +326,8 @@ theorem liftV_bind_ok {v : V α} {f : α → TMW PS β} {t : Transcript} {l l'' 
   cases e4
   exact ⟨_, hv, e2⟩
 
-/-- A masked rep's sends before Ligerito: the zerocheck's `3 + (m − 6)`, the lincheck's `3 + (k_log − 6)` and the ring
-switch's `claims + 1`, at its extra claims. -/
 def piopZk (st : Setup) (extras : Array Claim) : ℕ := 3 + (st.m - 6) + (3 + (st.fold.kLog - 6)) + (3 + extras.size)
 
-/-- **A masked rep that returns sent its rounds**, `piopZk` and then Ligerito's `k_0 + 7 + 11 R` and the inner proof's
-`4`; level 0's pair coins, Ligerito's sends `k_0 + 2` and `k_0 + 3`, are independent; the inner proof's `β`, its send
-`2`, is not `0`; and the rank check passed on the transcript after the lincheck. -/
 theorem repPZk_exact (resp : ℕ → Claims.Msg) (hsh : ByteArray → ByteArray) (st : Setup) (sch : Schedule)
     (tPad rep : ℕ) (dom : ByteArray) (tr : Trace) (tb : Array F128) (cm0 : Commit) (extras : Array Claim)
     (pads : PadsZk) (ic : InnerCommit) (extra lanePad : ℕ → ℕ → F128) (salt : ℕ → ℕ → ByteArray)

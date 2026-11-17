@@ -46,19 +46,7 @@ import Proofs.Flock.Claims.Complete.ZkTables.Scope
 import Proofs.Flock.Claims.DeployK
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# The record's checks at the honest masked run of several tables
-
-`Zk/Json/Goals.lean` at a run of any number of tables (`Run`), from `StmtAt` and the prover's pieces
-(`proverOkJ`): the record is the printed honest masked record of one `root_B` per table (`sessionPZk_factsJ`), which
-`Record.decodeWith` reads as `sessOf` (`decode_recordObjZkJ`) and `liveOf` as its live session (`live_recordObjZkJ`):
-`Run.jsonJ`. Its checks follow (`recordJsonJ`): the sample, the live reads, custody (each table's `root_B`, no public
-words, the points, one round per round message and each round its message), the decode, each table's public words, the
-proof digests listing the rep streams (each found under its name, `find?_name`), every rep's stream, and each table's
-extra claims. What `RecordAt` asks of the proof files (`FilesAt`: their sizes, each rep's file decoding at the table's
-shape to a proof of its parameters, cap and pads' root) is left named, and `RecordAt` follows from it (`recordAt_of`;
-at several tables `recordJ_of`); so `complete` holds with `FilesJ` in place of `RecordJ` (`completeJ`).
--/
+/-! The record's checks at the honest masked run of any number of tables (`recordJsonJ`, `recordAt_of`, `completeJ`). -/
 
 @[expose] public section
 
@@ -71,9 +59,6 @@ variable {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Rel
 
 theorem tabsOf_size (sts : Array Flock.Stmt) : (tabsOf sts).size = sts.size := by simp [tabsOf]
 
-/-- **The honest masked run's record**, at any number of tables: it is the printed honest masked record of one
-`root_B` per table, `Record.decodeWith` reads it as `sessOf` and `liveOf` as its live session, the link is its
-`root_B`s and no public words, and the sends after the link are its streams' rounds. -/
 theorem Run.jsonJ (h64 : Out64 H) (o : Run H rel) (hS : StmtAt o.toCase) :
     ∃ rbs streams hz ct, rbs.size = o.spec.tables.size ∧ streams.size = o.spec.repStreams.size ∧
       o.proofs.size = o.spec.repStreams.size ∧
@@ -154,7 +139,6 @@ theorem Run.jsonJ (h64 : Out64 H) (o : Run H rel) (hS : StmtAt o.toCase) :
     (fun b hb => (hrb b (Array.mem_toList_iff.1 hb)).2) (by simp)]
   rfl
 
-/-- **The round messages and their coins**: the sends after the first, the `j`th with coin `1 + j`. -/
 theorem Run.mids_eq (o : Run H rel) {b : Claims.Msg} {bs : List Claims.Msg} (hbs : o.bodies.toList = b :: bs) :
     o.mids = bs.zip ((List.range bs.length).map fun j => Claims.coinSeq o.r (1 + j)) := by
   have hn : o.bodies.size = bs.length + 1 := by
@@ -173,7 +157,6 @@ theorem Run.mids_eq (o : Run H rel) {b : Claims.Msg} {bs : List Claims.Msg} (hbs
   congr 1
   simp [Function.comp_def]
 
-/-- **The record's checks on the record, at a run of several tables**: `RecordAt`'s fields but the proof files'. -/
 structure RecordJsonAt (o : Run H rel) : Prop where
   draw : sampleEq (FlockSoundness.Discharge.Exec.recordDraw o.record) o.s.read.draw = true
   liveReads : liveOf o.spec o.record = .ok o.live
@@ -194,7 +177,6 @@ structure RecordJsonAt (o : Run H rel) : Prop where
   repExtras : ∀ i < o.tabs.size, o.tabs[i]!.extra o.sess.points = .ok (o.extras i)
   canonical : Flock.RecordText.check o.record = .ok ()
 
-/-- **The record's checks hold at every run** where the statement's `hello` prints. -/
 theorem recordJsonJ (h64 : Out64 H) (o : Run H rel) (hS : StmtAt o.toCase) : RecordJsonAt o := by
   obtain ⟨rbs, streams, hz, ct, hrbs, hss, hpf, hlink, ⟨bs, hbs, hrecs⟩, hrec, hsess, hdec, hlv, hlive⟩ :=
     o.jsonJ h64 hS
@@ -307,8 +289,6 @@ theorem recordJsonJ (h64 : Out64 H) (o : Run H rel) (hS : StmtAt o.toCase) : Rec
     rw [show (Setup.ofCircuit o.sts[i]).extra (pointsOf o.spec (Claims.coinSeq o.r 0)) = .ok e from he]
     rfl
 
-/-- **What the record's checks ask of the proof files, at a run**: their sizes, and each rep's file decoding at the
-table's masked shape to a proof of the table's PCS parameters, a 64-byte pads' root, and the table's `root_B` as cap. -/
 structure FilesAt (o : Run H rel) : Prop where
   finalFits : o.record.toUTF8.size < 2 ^ 64 ∧ o.proofs.size < 2 ^ 64 ∧ ∀ b ∈ o.proofs, b.size < 2 ^ 64
   repDecodes : ∀ i < o.tabs.size, ∀ r < 2,
@@ -318,10 +298,8 @@ structure FilesAt (o : Run H rel) : Prop where
   capCommitted : ∀ i < o.tabs.size, ∀ r < 2, (flat (o.zp i r).proof.cap != o.sess.rootB[i]!) = false
 
 variable (H rel) in
-/-- **What the record's checks ask of the proof files, at every run of several tables.** -/
 def FilesJ : Prop := ∀ o : Run H rel, 1 < o.sts.size → FilesAt o
 
-/-- **The record's checks at a run** where the statement's `hello` prints, from what they ask of the proof files. -/
 theorem recordAt_of (h64 : Out64 H) (o : Run H rel) (hS : StmtAt o.toCase) (hFi : FilesAt o) :
     RecordAt H rel o :=
   have hJ := recordJsonJ h64 o hS
@@ -345,13 +323,9 @@ theorem recordAt_of (h64 : Out64 H) (o : Run H rel) (hS : StmtAt o.toCase) (hFi 
     padsRoot := hFi.padsRoot
     capCommitted := hFi.capCommitted }
 
-/-- **The record's checks at every run of several tables**, from what they ask of the proof files. -/
 theorem recordJ_of (h64 : Out64 H) (hS : StmtOkJ H rel) (hF : FilesJ H rel) : RecordJ H rel :=
   fun o hc => recordAt_of h64 o (hS o.toCase hc) (hF o hc)
 
-/-- **Flock's masked verifier is complete** for the honest masked prover on each table's share, with error `δc H`, at
-any number of tables, the record's checks discharged: from `complete`'s premises at one table and at several tables
-`StmtOkJ`, `ProverRunsJ`, what the record's checks ask of the proof files (`FilesJ`) and the rep's checks (`OpenJ`). -/
 theorem completeJ (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation)
     (h64 : JsonRT.Out64 H) (hS : JsonRT.StmtOkZk H rel) (hR : JsonRT.RepShapedZk H rel)
     (hPR : JsonRT.ProverRunsZk H rel) (hRS : FlockComplete.RingSwitchZk H rel) (hLg : FlockComplete.LigeritoZk H rel)

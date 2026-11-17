@@ -34,22 +34,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Complete.Json.Session
 
-/-!
-# The honest prover's table and weight, step by step
-
-`HRuns`: `PRuns` (the prover's step ends where the model's does) together with what the step does to the prover's table
-and weight (`tw`): from a table and weight with `J` it ends with `J'` of its value, on every run whose lists end up the
-proof's first, whose value has `Xb`, from the model's cursors and transcript. The postconditions are forward: each
-step's says what it did to the table and weight and what it read, so a chain of steps needs no intermediate predicate.
-
-* **Steps**: binds (`HRuns.bindD`, `HRuns.bind`: the rest's postcondition may name the step's value), a loop
-  (`HRuns.loop`, on an invariant of the loop's state and the table and weight), weakening (`HRuns.mono`, and
-  `HRuns.preX`, whose precondition may read the value the run returns), and the prover's primitives.
-* **Blocks**, against the model's: a challenge (`HRuns.challenge`: the table and weight folded at the model's coin,
-  then split when asked, and the message their round polynomial), an out-of-domain intro (`HRuns.oodIntro`: the weight
-  gains `β·eq(z, ·)` at the model's point and coin, the value is `mleF`, the message the claim's round polynomial) and a
-  level's query (`HRuns.query`: the opening at the model's positions and the consistency weight at its coins).
--/
+/-! `HRuns`: the prover's step ends where the model's does, with what it does to the prover's table and weight. -/
 
 @[expose] public section
 
@@ -59,31 +44,22 @@ open Flock Transcript
 
 namespace Lg
 
-/-- The prover's table and weight. -/
 abbrev TW := Array F256 × Array F256
 
-/-- The prover's table and weight. -/
 def tw (s : LigState) : TW := (s.tab, s.w)
 
-/-- **The prover's step `y` carries `J` to `J'`** on its table and weight, on every run from `L + k` bodies sent whose
-lists end up `p`'s first and whose value has `Xb`, from the model's cursors `c` and transcript `tm`. -/
 def JRuns (p : LigeritoProof) (L : ℕ) {β : Type} (y : LP PS β) (c : Cur) (tm : Transcript) (Xb : β → Prop)
     (J : TW → Prop) (J' : β → TW → Prop) : Prop :=
   ∀ (st : LigState) (t : Transcript) (l : Array Claims.Msg) (b : β) (st' : LigState) (t' : Transcript)
     (l' : Array Claims.Msg), l.size = L + t.k → ((y.run st).run t).go l = (.ok ((b, st'), t'), l') →
     Ext p st' → Xb b → pcur st = c → t = tm → J (tw st) → J' b (tw st')
 
-/-- **The prover's step on the model's, with its table and weight** (`PRuns` and `JRuns`). -/
 def HRuns (p : LigeritoProof) (L : ℕ) {β : Type} (y : LP PS β) (c : Cur) (tm : Transcript) (c' : Cur)
     (tm' : Transcript) (Q Xb : β → Prop) (J : TW → Prop) (J' : β → TW → Prop) : Prop :=
   PRuns p L y c tm c' tm' Q Xb ∧ JRuns p L y c tm Xb J J'
 
 variable {p : LigeritoProof} {L : ℕ} {α β σ : Type}
 
-/-! ## Binds, loops, weakening -/
-
-/-- **A bind**, where the rest's value `b` may fix what the step's value `a` needs (`hX`); the rest's postcondition may
-name `a`. -/
 theorem HRuns.bindD {x : LP PS α} {f : α → LP PS β} {c₁ c₂ c₃ : Cur} {tm₁ tm₂ tm₃ : Transcript}
     {Qa Ya : α → Prop} {Qf Xf : α → β → Prop} {Q Xb : β → Prop} {J₁ : TW → Prop} {J₂ : α → TW → Prop}
     {J₃ : α → β → TW → Prop} (hx : HRuns p L x c₁ tm₁ c₂ tm₂ Qa Ya J₁ J₂)
@@ -100,7 +76,6 @@ theorem HRuns.bindD {x : LP PS α} {f : α → LP PS β} {c₁ c₂ c₃ : Cur} 
   exact ⟨a, (hf a hQa).2 st₁ t₁ l₁ b st' t' l' hl₁ h2 hE hXa hc₁ ht₁
     (hx.2 st t l a st₁ t₁ l₁ hl h1 (hE.of_grow hG₂) hYa hc ht hJ)⟩
 
-/-- **A bind** whose step needs nothing of the rest. -/
 theorem HRuns.bind {x : LP PS α} {f : α → LP PS β} {c₁ c₂ c₃ : Cur} {tm₁ tm₂ tm₃ : Transcript} {Qa : α → Prop}
     {Q Xb : β → Prop} {J₁ : TW → Prop} {J₂ : α → TW → Prop} {J₃ : α → β → TW → Prop}
     (hx : HRuns p L x c₁ tm₁ c₂ tm₂ Qa (fun _ => True) J₁ J₂)
@@ -124,13 +99,11 @@ theorem HRuns.mono {y : LP PS β} {c c' : Cur} {tm tm' : Transcript} {Q Q' Xb Xb
   obtain ⟨hq, -, -, -⟩ := h.1 st t l b st' t' l' hl e
   exact hJ' b _ hq hx (h.2 st t l b st' t' l' hl e hE (hX b hq hx) hc ht (hJ _ hJ₀))
 
-/-- Weakening the postcondition, which may read the value's `Q` and `Xb`. -/
 theorem HRuns.post {y : LP PS β} {c c' : Cur} {tm tm' : Transcript} {Q Xb : β → Prop} {J : TW → Prop}
     {J' J'' : β → TW → Prop} (h : HRuns p L y c tm c' tm' Q Xb J J')
     (hJ' : ∀ b x, Q b → Xb b → J' b x → J'' b x) : HRuns p L y c tm c' tm' Q Xb J J'' :=
   h.mono (fun _ h => h) (fun _ _ h => h) (fun _ h => h) hJ'
 
-/-- **Strengthening the precondition**, which may read the `Q` and `Xb` of the value the run returns. -/
 theorem HRuns.preX {y : LP PS β} {c c' : Cur} {tm tm' : Transcript} {Q Xb : β → Prop} {J J₀ : TW → Prop}
     {J' : β → TW → Prop} (h : HRuns p L y c tm c' tm' Q Xb J J') (hJ : ∀ b, Q b → Xb b → ∀ x, J₀ x → J x) :
     HRuns p L y c tm c' tm' Q Xb J₀ J' := by
@@ -152,7 +125,6 @@ theorem HRuns.ite {cond : Prop} [Decidable cond] {y z : LP PS β} {c c' : Cur} {
   · rw [ite_eq_left h]; exact hy h
   · rw [ite_eq_right h]; exact hz h
 
-/-- **A loop over `[0:n]`** (`PRuns.loop`), with an invariant `JS j s` of the loop's state and the table and weight. -/
 theorem HRuns.loop (body : ℕ → σ → LP PS (ForInStep σ)) (C : ℕ → Cur) (Tm : ℕ → Transcript) (I : ℕ → σ → Prop)
     (G : σ → σ → Prop) (hGr : ∀ s, G s s) (hGt : ∀ a b c, G a b → G b c → G a c) (Xs : ℕ → σ → Prop) (Xf : σ → Prop)
     (JS : ℕ → σ → TW → Prop) (n : ℕ)
@@ -191,8 +163,6 @@ theorem HRuns.loop (body : ℕ → σ → LP PS (ForInStep σ)) (C : ℕ → Cur
       refine ⟨fun s₃ h₃ => ?_, hx⟩
       obtain rfl : s₁ = s₃ := ForInStep.yield.inj h₃
       exact hX a (by omega) s₁ s' hI₁ (fun h => hk (by omega)) hG₂ hx
-
-/-! ## The prover's steps -/
 
 theorem HRuns.absorb (x : TM Unit) (g : ByteArray → ByteArray) (hx : ∀ t : Transcript, x t = .ok ((), ap g t))
     (c : Cur) (tm : Transcript) (J : TW → Prop) :
@@ -237,7 +207,6 @@ theorem HRuns.absorbAll (ws wsM : Array F128) (c : Cur) (tm : Transcript) (J : T
   obtain ⟨-, rfl, rfl, rfl⟩ := ok_inj h
   exact hJ
 
-/-- A state update: the table and weight end as some state's with `J`, updated. -/
 theorem HRuns.modify (g : LigState → LigState)
     (hg : ∀ s, (g s).msgs = s.msgs ∧ (g s).oods = s.oods ∧ (g s).cbn = s.cbn ∧ (g s).qn = s.qn ∧ (g s).cn = s.cn)
     (c : Cur) (tm : Transcript) (J : TW → Prop) :
@@ -256,7 +225,6 @@ theorem HRuns.get (c : Cur) (tm : Transcript) (J : TW → Prop) :
   obtain ⟨rfl, rfl, rfl, rfl⟩ := ok_inj (show (Except.ok ((st, st), t), l) = _ from h)
   exact ⟨hJ, rfl⟩
 
-/-- **A sumcheck message**: the model reads it at its cursor. -/
 theorem HRuns.sendMsg (m : F256 × F256) (c : Cur) (tm : Transcript) (J : TW → Prop) :
     HRuns p L (FlockComplete.sendMsg m) c tm ⟨c.msg + 1, c.ood, c.cbn, c.qn, c.cn⟩ (ap (pK p.messages[c.msg]!) tm)
       (fun _ => True) (fun _ => True) J fun _ y => J y ∧ p.messages[c.msg]! = m := by
@@ -267,7 +235,6 @@ theorem HRuns.sendMsg (m : F256 × F256) (c : Cur) (tm : Transcript) (J : TW →
   subst hc
   exact ⟨hJ, hE.1.get⟩
 
-/-- **An out-of-domain value** pushed and absorbed: the model reads it at its cursor. -/
 theorem HRuns.oodPush (y : F128) {k : PUnit → LP PS β} {c c' : Cur} {tm tm' : Transcript} {Q Xb : β → Prop}
     {J : TW → Prop} {J' : β → TW → Prop}
     (h : HRuns p L (k ()) ⟨c.msg, c.ood + 1, c.cbn, c.qn, c.cn⟩ (ap (pF p.oodValues[c.ood]!) tm) c' tm' Q Xb
@@ -314,7 +281,6 @@ theorem HRuns.powB (nonce : ℕ → ℕ → UInt64) (c : Cur) (tm : Transcript) 
     ap (pN 0) t), l) = _ from h)
   exact hJ
 
-/-- **A vector of coins**: the model's, at its transcript's position. -/
 theorem HRuns.sampleVec (resp : ℕ → Claims.Msg) {n : ℕ} (hn : n ≠ 0) (c : Cur) (tm : Transcript) (J : TW → Prop) :
     HRuns p L (liftT (sampleVecP (asksS resp) n)) c tm c (afterSq tm 2 n (cfOf resp L tm.k)) (fun _ => True)
       (fun _ => True) J fun z y => J y ∧ z = vec (cfOf resp L) tm n := by
@@ -351,7 +317,6 @@ theorem HRuns.sampleK (resp : ℕ → Claims.Msg) (c : Cur) (tm : Transcript) (J
   rw [hl]
   rfl
 
-/-- **A commitment**: its value is `commitP`'s in the verifier's monad. -/
 theorem HRuns.commit (h : ByteArray → ByteArray) (ms : MerkleScheme) (lv : Level) (g : Array F128)
     (salt : ℕ → ByteArray) (c : Cur) (tm : Transcript) (J : TW → Prop) :
     HRuns p L (liftT (StateT.lift (commitP (Hashes.ofSha512 h : Hashes PS) ms lv g salt))) c tm c tm (fun _ => True)
@@ -374,15 +339,10 @@ theorem HRuns.commit (h : ByteArray → ByteArray) (ms : MerkleScheme) (lv : Lev
     exact ⟨hJ, ha⟩
   · cases e
 
-/-! ## The model's steps -/
-
-/-- A K-table and its weight folded at `r`. -/
 def foldTW (r : F256) (x : TW) : TW := (foldK r x.1, foldK r x.2)
 
-/-- A K-table split into F lanes, and its weight lifted by `u`. -/
 def splitTW (x : TW) : TW := (embedF (splitK x.1), liftU x.2)
 
-/-- **A split when asked**, joining the rest `k`: the rest starts from the table and weight split when `split`. -/
 theorem HRuns.splitJoin (split : Bool) {k : PUnit → LP PS β} {c c' : Cur} {tm tm' : Transcript} {Q Xb : β → Prop}
     {J : TW → Prop} {J' : β → TW → Prop}
     (hk : HRuns p L (k ()) c tm c' tm' Q Xb (fun y => ∃ x, J x ∧ y = if split then splitTW x else x) J') :
@@ -398,8 +358,6 @@ theorem HRuns.splitJoin (split : Bool) {k : PUnit → LP PS β} {c c' : Cur} {tm
   · refine hk.mono (fun _ h => h) (fun _ _ h => h) (fun y hJ => ⟨_, hJ, ?_⟩) fun _ _ _ _ h => h
     rw [ite_eq_right hs]
 
-/-- **A challenge**, against the model's (`chal`): the table and weight fold at the model's coin, split when asked, and
-the message is their round polynomial. -/
 theorem HRuns.challenge (resp : ℕ → Claims.Msg) (split : Bool) (sm : LState) (tm : Transcript) (J : TW → Prop) :
     HRuns p L (challengeP (asksS resp) split) (cur sm) tm (cur (chal p (cfOf resp L) sm tm).2.1)
       (chal p (cfOf resp L) sm tm).2.2 (fun _ => True) (fun _ => True) J fun r y =>
@@ -415,8 +373,6 @@ theorem HRuns.challenge (resp : ℕ → Claims.Msg) (split : Bool) (sm : LState)
   subst hs
   exact ⟨rfl, ⟨_, hJ, hy⟩, hm⟩
 
-/-- **An out-of-domain intro**, against the model's (`ood`): the weight gains `β·eq(z, ·)` at the model's point and
-coin, the value read is `mleF g z`, and the message is the claim's round polynomial. -/
 theorem HRuns.oodIntro (resp : ℕ → Claims.Msg) (nonce : ℕ → ℕ → UInt64) (g : Array F128) {dim : ℕ} (hdim : dim ≠ 0)
     (split : ℕ) (sm : LState) (tm : Transcript) (J : TW → Prop) :
     HRuns p L (oodIntroP (asksS resp) nonce g dim) (cur sm) tm (cur (ood p (cfOf resp L) dim split sm tm).1)
@@ -432,8 +388,6 @@ theorem HRuns.oodIntro (resp : ℕ → Claims.Msg) (nonce : ℕ → ℕ → UInt
   · rintro b y - - ⟨z, -, -, v, s, ⟨⟨⟨⟨hJ, rfl⟩, ho⟩, hm⟩, rfl⟩, rfl⟩
     exact ⟨_, hJ, rfl, ho, hm⟩
 
-/-- **A level's query**, against the model's (`query`): the opening at the model's positions, and the consistency
-weight at its positions and coins. -/
 theorem HRuns.query (resp : ℕ → Claims.Msg) (nonce : ℕ → ℕ → UInt64) (ms : MerkleScheme) (lv : Level) (cm : Commit)
     (hq : lv.q ≠ 0) (rows : Array (Array F128)) (fold : Array F256) (sm : LState) (tm : Transcript) (J : TW → Prop) :
     HRuns p L (queryP (asksS resp) nonce ms lv cm) (cur sm) tm (cur (Lg.query p (cfOf resp L) lv rows fold sm tm).2.1)

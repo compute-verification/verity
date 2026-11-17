@@ -53,21 +53,8 @@ public import Proofs.Flock.Claims.Complete.Replay.LigeritoHonestRun
 public import Proofs.Flock.Claims.Complete.Replay.ProverOk
 public import Proofs.Flock.Claims.Complete.Replay
 
-/-!
-# The session walk
-
-What the honest session records for each rep, read at a run: Ligerito's walk premise `RepWalk` (`Run.repWalk`) and
-the walk's facts `ZcAt`, `LcAt`, `RsAt`, `LgAt` and `LgCount` at every rep (`Run.walkAt`), and from them and the goals
-proved beside it, Flock's completeness at the deployed plain verifier and the deployed relation from named premises
-(`complete_plain`).
-
-* `sessionP_reps`: the one-table session's two reps, unrolled: each runs from the sends before it, the proof files are
-  their proofs' encodings, and the record is the honest record of their rounds.
-* `repP_count`, `repP_prefix`: a returning rep makes one send per round of its four phases, and its rounds begin with
-  those where its ring switch stopped (the honest Ligerito only adds rounds).
-* `Run.walk`: at a run, rep `r` runs from `repStart`'s send on and returns the decoded proof, and the recorded stream is
-  its rounds as the decoder reads them back (`roundRec`), which carry them, on the table's level-0 commitment.
--/
+/-! The session walk at each rep of a run, and Flock's completeness at the deployed plain verifier from named premises
+(`complete_plain`). -/
 
 @[expose] public section
 
@@ -75,9 +62,6 @@ namespace FlockComplete.JsonRT
 
 open Flock Transcript FlockComplete FlockDeploy
 
-/-- **The one-table session's two reps**: the table's schedule, its level-0 commitment `cm` and its extra claims `e`
-at the link's points; rep `0` runs from the link's send, rep `1` from where rep `0` stopped; the proof files are their
-proofs' encodings, and the record is the honest record of their rounds. -/
 theorem sessionP_reps (H : Claims.Msg → Claims.Msg) (resp : ℕ → Claims.Msg) {spec : SessionSpec} {t : String}
     (ht : spec.tables = #[t]) (hct : spec.coinTree = none) (st : Setup) (trs : Array Trace) (tape : Tape)
     {r : String × Array ByteArray} {bodies : Array Claims.Msg}
@@ -168,7 +152,6 @@ theorem sessionP_reps (H : Claims.Msg → Claims.Msg) (resp : ℕ → Claims.Msg
   simp
   rfl
 
-/-- Rounds that are sends retain their bytes. -/
 theorem Recs.bytes {resp : ℕ → Claims.Msg} :
     ∀ {i : ℕ} {rs : List Round} {bs : List Claims.Msg}, Recs resp i rs bs → ∀ r ∈ rs, ∃ c, r.bytes = some c
   | _, [], [], _, _, hr => by simp at hr
@@ -180,8 +163,6 @@ theorem Recs.bytes {resp : ℕ → Claims.Msg} :
   | _, [], _ :: _, h, _, _ => h.elim
   | _, _ :: _, [], h, _, _ => h.elim
 
-/-- **A rep's recorded rounds**, run from its own transcript's start: a round, each of `1 ≤ n ≤ 65536` coins, and each
-round's bytes retained. -/
 theorem repP_rounds (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (st : Setup) (sch : Schedule) (tr : Trace)
     (tbl : Array F128) (cm0 : Commit) (extras : Array Claim) (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64)
     (d : ByteArray) (l : Array Claims.Msg) {p : Proof} {t' : Transcript} {l' : Array Claims.Msg}
@@ -205,7 +186,6 @@ namespace FlockComplete.Replay
 
 open Flock Transcript FlockDeploy
 
-/-- **A returning rep's sends**: one per round of its zerocheck, lincheck, ring switch and Ligerito. -/
 theorem repP_count (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (st : Setup) (sch : Schedule) (tr : Trace)
     (tbl : Array F128) (cm0 : Commit) (extras : Array Claim) (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64)
     (hm : 14 ≤ st.m) (hf : fast100 st.m = some sch) (d : ByteArray) (l : Array Claims.Msg) {p : Proof}
@@ -221,8 +201,6 @@ theorem repP_count (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (st
   simp only [Transcript.init, Array.size_append, abcClaims, List.size_toArray, List.length_cons, List.length_nil]
   omega
 
-/-- **A returning rep's rounds begin with its ring switch's**: the honest Ligerito only adds rounds
-(`ligeritoP_rec`). -/
 theorem repP_prefix (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (st : Setup) (sch : Schedule) (tr : Trace)
     (tbl : Array F128) (cm0 : Commit) (extras : Array Claim) (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64)
     (hm : 14 ≤ st.m) (t : Transcript) (l : Array Claims.Msg) {full : Array F128}
@@ -274,9 +252,6 @@ theorem Rs.prefix_tEnd {tr : Trace} {claims : Array Claim} {cs : Rs.Challenges} 
     Prefix t.rounds (Rs.tEnd tr claims cs t).rounds :=
   Rs.prefix_loop (i := 0) t (Nat.zero_le _)
 
-/-- **The session walk at a run's rep**: rep `r` of the run's one table, run from its first send on and its own
-transcript's start, returns the decoded proof; the recorded stream is its rounds as the decoder reads them back, each
-of its rounds retains its bytes, and the rep's level-0 commitment is a `commitP` of the schedule's level `0`. -/
 theorem _root_.FlockComplete.Run.walk {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
     (h64 : Claims.Out64 H) (hP : JsonRT.ProverOk H rel) (o : Run H rel)
     {r : ℕ} (hr : r < 2) :
@@ -393,9 +368,6 @@ theorem _root_.FlockComplete.Run.tabs_size_one {H : Claims.Msg → Claims.Msg}
   obtain ⟨st, hst, -⟩ := o.table
   simp [Run.tabs, tabsOf, hst]
 
-/-- **The session walk at every rep** (`RepWalk`): table `i`'s rep `r`, on the table's level-0 commitment, run from the
-rep's first send on and its own transcript's start, returns the decoded proof, and the recorded stream carries its
-rounds and holds as many. -/
 theorem _root_.FlockComplete.Run.repWalk {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
     (h64 : Claims.Out64 H) (hP : JsonRT.ProverOk H rel) (o : Run H rel)
     {i : ℕ} (hi : i < o.tabs.size) {r : ℕ} (hr : r < 2) :
@@ -410,9 +382,6 @@ theorem _root_.FlockComplete.Run.repWalk {H : Claims.Msg → Claims.Msg} {rel : 
   rw [Array.getElem?_map, Array.getElem?_eq_getElem hj]
   rfl
 
-/-- **The session walk** at table `i`'s rep `r` of a run: the decoded proof's zerocheck, lincheck and ring switches are
-the prover's, the statement's circuit fold returns, and the recorded stream carries the prover's rounds through each
-phase (`ZcAt`, `LcAt`, `RsAt`), and the model's Ligerito rounds, as many as it records (`LgAt`, `LgCount`). -/
 theorem _root_.FlockComplete.Run.walkAt {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
     (h64 : Claims.Out64 H) (hP : JsonRT.ProverOk H rel) (o : Run H rel)
     {i : ℕ} (hi : i < o.tabs.size) {r : ℕ} (hr : r < 2) :
@@ -441,11 +410,6 @@ theorem _root_.FlockComplete.Run.walkAt {H : Claims.Msg → Claims.Msg} {rel : R
   · rw [hrs]
     rfl
 
-/-- **Flock's completeness at the deployed plain verifier**, at the deployed relation (`Readable.relation`) and the
-record's error (`δc H`, `Complete.Ready`), from the named premises: the oracle's
-64-byte outputs (`Out64`) and Ligerito's final identity at every rep (`LgFinal`). What the record needs of the
-prover's pieces (`ProverOk`, `proverOk`) and the Merkle schemes' digest widths (`SchemeWidths`, `schemeWidths`) follow
-from `Out64`, and the session walk (`Run.walkAt`, `Run.repWalk`) aligns every rep. -/
 theorem complete_plain (H : Claims.Msg → Claims.Msg) (h64 : Claims.Out64 H)
     (hfin : LgFinal H Readable.relation) :
     Claims.Flock.Complete H (deployPlain Readable.relation) := by

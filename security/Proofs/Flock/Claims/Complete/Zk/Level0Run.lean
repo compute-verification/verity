@@ -5,19 +5,8 @@ public import Proofs.Flock.Claims.Complete.Reps
 public import Proofs.Flock.Claims.Complete.Zk.Coins
 public import Proofs.Flock.Claims.Complete.Json.Goals
 
-/-!
-# The masked Ligerito prover returns where its pair's coins are independent
-
-`ligeritoPZk_ret`: the masked Ligerito prover (`ligeritoPZk`), run in the pure session from the bodies `l`, returns
-whenever the replies to sends `|l| + 2 + k_0` and `|l| + 3 + k_0`, its pair's coins `ρ` (`ligeritoPZk_pos`), are
-independent over `F` (`Zk.rhoIndependent`): that refusal is the one step of the prover that a coin can make throw.
-
-* **Returning from `n` sends** (`LRet`): a Ligerito step returns from every state, transcript and `n` sends, with a
-  property of its value and of the sends after. Squeezes are answered by the reply to the send they make
-  (`LRet.sampleKP`, `LRet.sampleP`, `LRet.sampleVecP`), the transcript's and the state's steps send nothing
-  (`LRet.silent`), and a loop over `[0:n]` keeps an invariant of its state and its sends (`LRet.forIn_upto`).
-* After the lane phase the sends no longer matter: the rest returns from any sends (`LRet.ofTot`, Reps' `totL`).
--/
+/-! The masked Ligerito prover returns where its pair's coins are independent (`ligeritoPZk_ret`), the one step a coin
+can make it throw. -/
 
 @[expose] public section
 
@@ -27,8 +16,6 @@ open Flock Transcript FlockComplete Replay Replay.Lg JsonRT
 
 variable {α β : Type}
 
-/-- **A Ligerito prover step returns** from every state, transcript and `n` sends, with `P` of its value and of the
-number of sends after. -/
 def LRet (y : LP PS α) (n : ℕ) (P : α → ℕ → Prop) : Prop :=
   ∀ (st : LigState) (t : Transcript) (l : Array Claims.Msg), l.size = n →
     ∃ a st' t' l', ((y.run st).run t).go l = (.ok ((a, st'), t'), l') ∧ P a l'.size
@@ -50,7 +37,6 @@ theorem LRet.mono {y : LP PS α} {n : ℕ} {Q P : α → ℕ → Prop} (h : LRet
   let ⟨a, st', t', l', e, q⟩ := h st t l hl
   ⟨a, st', t', l', e, hq a _ q⟩
 
-/-- A step that returns and sends nothing. -/
 theorem LRet.silent {x : LP PS α}
     (hx : ∀ st t l, ∃ a st' t', ((x.run st).run t).go l = (.ok ((a, st'), t'), l)) (n : ℕ) :
     LRet x n fun _ m => m = n := fun st t l hl =>
@@ -92,11 +78,9 @@ theorem LRet.ite {c : Prop} [Decidable c] {y z : LP PS α} {n : ℕ} {P : α →
   · rw [ite_eq_left h]; exact hy h
   · rw [ite_eq_right h]; exact hz h
 
-/-- From the totality of Reps (`totL`): the step returns from any sends. -/
 theorem LRet.ofTot {y : LP PS α} {P : α → Prop} (h : totL.T y P) (n : ℕ) : LRet y n fun a _ => P a :=
   fun st t l _ => let ⟨a, l', e, hp⟩ := h st t l; ⟨a.1.1, a.1.2, a.2, l', e, hp⟩
 
-/-- **A loop over `[0:N]`** that keeps an invariant `I` of its state and its sends. -/
 theorem LRet.forIn_upto {σ : Type} (N : ℕ) (b : σ) (f : ℕ → σ → LP PS (ForInStep σ)) (I : ℕ → σ → ℕ → Prop)
     {n : ℕ} (h0 : I 0 b n)
     (h : ∀ i < N, ∀ s m, I i s m → LRet (f i s) m fun r m' => ∃ s', r = .yield s' ∧ I (i + 1) s' m') :
@@ -118,7 +102,6 @@ theorem LRet.forIn_upto {σ : Type} (N : ℕ) (b : σ) (f : ℕ → σ → LP PS
     obtain ⟨s', rfl, hI'⟩ := hr
     exact ih (a + 1) s' m' (by omega) hI'
 
-/-- A Ligerito program run from a state, then a step that returns, returns. -/
 theorem LRet.run_bind {γ : Type} {y : LP PS α} {n : ℕ} {P : α → ℕ → Prop} (h : LRet y n P) (st : LigState)
     {g : α × LigState → TMW PS γ} (hg : ∀ p t l, ∃ c l', ((g p).run t).go l = (.ok c, l')) (t : Transcript)
     (l : Array Claims.Msg) (hl : l.size = n) : ∃ c l', ((y.run st >>= g).run t).go l = (.ok c, l') := by
@@ -130,8 +113,6 @@ theorem lsilentT {x : TM α} (hx : ∀ t, ∃ p, x t = .ok p) {n : ℕ} {P : β 
     (hf : ∀ a, LRet (f a) n P) : LRet (liftT (liftTM x) >>= f) n P :=
   LRet.bind (LRet.liftTM hx n) fun a _ hm => hm ▸ hf a
 
-/-- **The masked Ligerito prover returns** from the bodies `l` where its pair's coins, the replies to sends
-`|l| + 2 + k_0` and `|l| + 3 + k_0` (`ligeritoPZk_pos`), are independent over `F`. -/
 theorem ligeritoPZk_ret (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (ms : MerkleScheme) (sch : Schedule)
     (T : F128) (cm0 : Commit) (tb b : Array F128) (lay : Zk.PadLayout) (hv : Array F128) (rep tPad : ℕ)
     (extra lanePad : ℕ → ℕ → F128) (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64) (hn : sch.n ≠ 0)

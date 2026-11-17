@@ -38,19 +38,7 @@ import Proofs.Flock.Claims.Complete.Encode
 import Proofs.Flock.Claims.Complete.Json.Stmt
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# The honest run's proof files
-
-The rep goals on the proof files, `RepDecodes`, `RepParams` and `CapCommitted`, and `FinalFits` (the record's length
-from `ready`, `Run.recordFits`), at every honest run, under the record goals' hypotheses (`Claims.Out64`, `ProverOk`). Each proof a
-rep returns is `ProofShaped` at the shape the verifier decodes it at (`Shaped`'s `repShaped`), so
-`decodeProof_encodeProof` reads it back.
-
-`sessionP_files`: each proof file of the one-table session encodes a proof its rep returned, on the table's level-0
-commitment and its extra claims, and the first send is the link of that commitment's cap. `Run.rep`: at the run, the
-verifier's decoded proof is that rep's proof, whose cap is the commitment's (the record's `root_B`) and whose PCS
-parameters are the table's (`repP_fields`).
--/
+/-! The rep goals on the proof files and `FinalFits`, at every honest run under the record goals' hypotheses. -/
 
 @[expose] public section
 
@@ -58,7 +46,6 @@ namespace FlockComplete.JsonRT
 
 open Flock Transcript FlockComplete FlockDeploy
 
-/-- **A rep's proof carries the commitment's cap and the table's PCS parameters.** -/
 theorem repP_fields (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (st : Setup) (sch : Schedule) (tr : Trace)
     (t : Array F128) (cm0 : Commit) (extras : Array Claim) (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64)
     (tr₀ : Transcript) :
@@ -72,16 +59,12 @@ theorem repP_fields (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (s
   refine Ret.bind (Ret.true _) fun d _ => ?_
   exact Ret.pure ⟨rfl, rfl⟩
 
-/-- A proof file of a rep: it encodes, at the rep's shape, a proof the rep returned on the table's trace `tr`, its packed
-table, the level-0 commitment `cm` and the extra claims `e`. -/
 def RepFile (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (st : Setup) (sch : Schedule) (tr : Trace) (cm : Commit)
     (e : Array Claim) (b : ByteArray) : Prop :=
   ∃ p salt nonce d l t' l', b = FlockVBridge.Family.encodeProof (shapeOf st sch e.size) p ∧
     ((repP (asksS resp) (Hashes.ofSha512 h) st sch tr (packed tr st.m) cm e salt nonce).run
       (Transcript.init #[] d)).go l = (.ok (p, t'), l')
 
-/-- **The one-table session's proof files**: the table's schedule, its level-0 commitment `cm` and its extra claims `e`
-at the link's points; the first send is the link of `cm`'s cap; one proof file per rep stream, each a `RepFile`. -/
 theorem sessionP_files (H : Claims.Msg → Claims.Msg) (resp : ℕ → Claims.Msg) {spec : SessionSpec} {t : String}
     (ht : spec.tables = #[t]) (hct : spec.coinTree = none) (st : Setup) (trs : Array Trace) (tape : Tape)
     {r : String × Array ByteArray} {bodies : Array Claims.Msg}
@@ -169,9 +152,6 @@ theorem sessionP_files (H : Claims.Msg → Claims.Msg) (resp : ℕ → Claims.Ms
 
 variable {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
 
-/-- **Each rep's decoded proof is the honest one**: at the run's one table, with schedule `sch` and level-0
-commitment `cm`, the record's `root_B` is `cm`'s cap, two proof files, each under `2^64` bytes, and each rep's file
-decodes at the verifier's shape to a proof with `cm`'s cap and the table's PCS parameters. -/
 theorem Run.rep (h64 : Claims.Out64 H) (hP : ProverOk H rel) (o : Run H rel) :
     ∃ (st : Flock.Stmt) (sch : Schedule) (cm : Commit), o.tabs = #[Setup.ofCircuit st] ∧ o.sch 0 = sch ∧
       o.sess.rootB = #[flat cm.cap] ∧
@@ -234,7 +214,6 @@ theorem Run.rep (h64 : Claims.Out64 H) (hP : ProverOk H rel) (o : Run H rel) :
     rw [hp]
     exact ⟨hdec, hc, hpar⟩
 
-/-- **The rep's proof file decodes** at its shape: the goal `RepDecodes`. -/
 theorem repDecodes_goal (h64 : Claims.Out64 H) (hP : ProverOk H rel) :
     RepDecodes H rel := by
   intro o i hi r hr
@@ -243,7 +222,6 @@ theorem repDecodes_goal (h64 : Claims.Out64 H) (hP : ProverOk H rel) :
   obtain rfl : i = 0 := by simpa using hi
   exact (hrep r hr).1
 
-/-- **The rep's PCS parameters are fast100's** (R7/F2): the goal `RepParams`. -/
 theorem repParams_goal (h64 : Claims.Out64 H) (hP : ProverOk H rel) :
     RepParams H rel := by
   intro o i hi r hr
@@ -253,7 +231,6 @@ theorem repParams_goal (h64 : Claims.Out64 H) (hP : ProverOk H rel) :
   rw [(hrep r hr).2.2, hsch0, show o.tabs[0]! = Setup.ofCircuit st by rw [htabs]; rfl]
   exact FlockVBridge.Family.pcs_bne_self _
 
-/-- **The rep's cap is the committed `root_B`** (S16): the goal `CapCommitted`. -/
 theorem capCommitted_goal (h64 : Claims.Out64 H) (hP : ProverOk H rel) :
     CapCommitted H rel := by
   intro o i hi r hr
@@ -265,7 +242,6 @@ theorem capCommitted_goal (h64 : Claims.Out64 H) (hP : ProverOk H rel) :
   rw [bne, bytes_beq_self]
   rfl
 
-/-- **The last message's lengths fit their words**: the goal `FinalFits`. -/
 theorem finalFits_goal (h64 : Claims.Out64 H) (hP : ProverOk H rel) :
     FinalFits H rel := by
   intro o

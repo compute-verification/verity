@@ -55,21 +55,7 @@ import Proofs.Flock.Soundness.Refine.Seam
 import Std.Tactic.BVDecide.Normalize.Bool
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# The verifier's view of a returning masked rep
-
-* `ringSwitchWith_checks`: a verifier's ring switch that returns met every claim's check, so its claims meet their
-  values on the proof's switched vectors. On the prover's ring switches that is each claim's identity, the extra
-  claims' included, with no appeal to the relation (`rs_eq`): the verifier's ring switch, on the replay's claims and
-  rounds carrying the prover's, returns the prover's `T` and switched claims, where the prover's stopped.
-* `replay_bridge`: the verifier's masked replay under any hash returns the prover's own replay's output (`Zk.replay`),
-  on rounds carrying the prover's, each of which carries its bytes.
-* `innerP_ret`: a masked inner proof that returned met its batched constraint at its coins, so the verifier's inner
-  check passes on it (`verifyInnerWith_of'`) with no appeal to the lane rows' algebra.
-* `view`: given level 0's verifier premise (`Level0.Verifier`), the verifier's masked Ligerito, after a replay and a
-  ring switch that returned, runs on the prover's inputs and returns where the prover's stopped, and the prover's
-  inner proof returned on the verifier's constraints.
--/
+/-! The verifier's view of a returning masked rep, given level 0's verifier premise (`view`). -/
 
 @[expose] public section
 
@@ -83,7 +69,6 @@ theorem check_true {c : Bool} {why : String} {t t' : Transcript} {a : Unit} (e :
   · cases e
   · rfl
 
-/-- **A verifier's ring switch that returns met every claim's check.** -/
 theorem ringSwitchWith_checks (hs : Hashes V) (m : ℕ) (claims : Array Claim) (rs : Array (Array F128))
     (t : Transcript) :
     RetV (ringSwitchWith hs m claims rs) t fun _ _ =>
@@ -135,9 +120,6 @@ theorem sws_congr (hn : c₁.size = c₂.size) (hx : ∀ k : ℕ, c₁[k]!.x = c
 
 end Rs
 
-/-- **The verifier's ring switch returns the prover's**: after a masked replay that returned on rounds carrying the
-prover's through its ring switch, a ring switch that returns gives the prover's `T` and switched claims and stops
-where the prover's did. Its checks passing is each claim's identity on the prover's switched vectors. -/
 theorem rs_eq (hs : Hashes V) (st : Setup) (hk : st.fold.kLog = st.kLog) (tr : Trace) (e : Array Claim)
     (lay : Zk.PadLayout) (hp : Array F128) (digest cap root : ByteArray) (cz : Zc.Challenges)
     (full : Array F128) (cl : Lc.Challenges) (crs : Rs.Challenges) (t₀ : Transcript) (h₀ : t₀.k = 0)
@@ -196,8 +178,6 @@ theorem rs_eq (hs : Hashes V) (st : Setup) (hk : st.fold.kLog = st.kLog) (tr : T
   rw [e2, Rs.T_congr hn hx, Rs.sws_congr hn hx, Rs.tEnd_congr hn hx]
   rfl
 
-/-- **Every claim a rep opens has `m − 6` coordinates**, for a table with `k_log ≤ m`, at any link points: the extra
-claims' points are region points, of `m` coordinates (`regionPoint_size`). -/
 theorem claims_xsize' (st : Stmt) (hk : st.c.kLog ≤ st.m) (hm : 13 ≤ st.m) (tr : Trace) (zcs : Zc.Challenges)
     (cs : Lc.Challenges) (points : Array (Array F128)) (extras : Array Claim) (hex : st.extraClaims points = .ok extras) :
     ∀ c ∈ abcClaims st.m st.c.kLog (Zc.out st.m zcs tr) (Lc.out st.circuitFold st.m tr (Zc.out st.m zcs tr) cs) ++
@@ -219,8 +199,6 @@ theorem claims_xsize' (st : Stmt) (hk : st.c.kLog ≤ st.m) (hm : 13 ≤ st.m) (
     simp only [FlockSoundness.Refine.regionClaimOf, Array.size_extract, FlockSoundness.Refine.regionPoint_size,
       Nat.min_self]
 
-/-! ## The verifier's replay is the prover's -/
-
 theorem recs_bytes {resp : ℕ → Claims.Msg} :
     ∀ {i : ℕ} {rs : List Round} {bs : List Claims.Msg}, JsonRT.Recs resp i rs bs → ∀ r ∈ rs, r.bytes.isSome
   | _, [], [], _, _, hr => by simp at hr
@@ -232,9 +210,6 @@ theorem recs_bytes {resp : ℕ → Claims.Msg} :
   | _, [], _ :: _, h, _, _ => h.elim
   | _, _ :: _, [], h, _, _ => h.elim
 
-/-- **The verifier's masked replay is the prover's**: on rounds `R` that carry the prover's rounds `P`, each of which
-carries its sent bytes, the verifier's replay under any hash returns what the prover's own replay (`Zk.replay`, the
-deployed hash's) returned on `P`: it reads only rounds' coins and positions (`replayWith_xfer`). -/
 theorem replay_bridge (hs : Hashes V) (st : Setup) (lay : Zk.PadLayout) (prf : Proof) (root : ByteArray)
     {P R : Array Round} (d : ByteArray) (hb : ∀ j (h : j < P.size), P[j].bytes.isSome) (hAg : Agrees R P 0)
     {rp : Zk.Replayed} {x : Transcript} (hre : (Zk.replay st lay prf root).run (Transcript.init P d) = .ok (rp, x))
@@ -246,10 +221,6 @@ theorem replay_bridge (hs : Hashes V) (st : Setup) (lay : Zk.PadLayout) (prf : P
   obtain rfl := Except.ok.inj (hq.symm.trans e)
   rfl
 
-/-! ## The prover's inner proof that returned -/
-
-/-- **A masked inner proof that returned** passed its two refusals at the replies' coins, and is `InZ.proof` with
-transcript `InZ.tEnd` (`innerP_go`'s converse). -/
 theorem innerP_ret (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (lay : Zk.PadLayout) (p : PadsZk)
     (ic : InnerCommit) (finalC : F128) (cons : Array (String × Zk.Lin)) (t : Transcript) (l : Array Claims.Msg)
     {a : Zk.InnerProof} {t' : Transcript} {l' : Array Claims.Msg}
@@ -296,8 +267,6 @@ theorem innerP_ret (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (la
     simp only [Array.size_push, hz, Bool.not_false, ↓reduceIte] at e
     cases e
 
-/-- **The verifier's inner check passes on the masked prover's inner proof** where its batched constraint holds at
-its coins (`verifyInnerWith_of` with the batched constraint for `ConsHold`). -/
 theorem verifyInnerWith_of' (h : ByteArray → ByteArray) (h64 : ∀ b, (h b).size = 64) (lay : Zk.PadLayout)
     (tape : TapeZk) (i r : ℕ) (salt : ℕ → ByteArray) {ic : InnerCommit}
     (hic : innerCommitP (Hashes.ofSha512 h : Hashes V) (padsOf tape i r lay) salt = .ok ic) (finalC : F128)
@@ -425,11 +394,6 @@ open Flock Transcript FlockComplete FlockDeploy FlockComplete.Replay
 
 variable {H : Claims.Msg → Claims.Msg}
 
-/-- **The verifier's view of a returning rep**, given level 0's verifier premise: on a table and its rep's inputs,
-where the rep returned from `l` sends and the verifier's rounds carry its rounds, the verifier's replay `q` and ring
-switch `sw` (wherever they return) give its masked Ligerito the prover's inputs, which then returns level 0's record
-where the prover's Ligerito stopped; the replay's output is the prover's own replay's; and the prover's inner proof
-returned on the verifier's constraints, the lane rows those of the record. -/
 theorem view (hV : Level0.Verifier) (h64 : Claims.Out64 H) (st : Flock.Stmt) (tr : Trace) (hT : TableT st tr)
     (ω : TapeZk) (i : ℕ) (d : ByteArray) {k : ℕ} (r : Fin k → Coin) (v : Schedule × ℕ) (cm : Commit)
     (pts : Array (Array F128)) (e : Array Claim) (rep : ℕ) (ic : InnerCommit)

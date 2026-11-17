@@ -42,23 +42,7 @@ import Proofs.Flock.Level3.Folded
 import Proofs.Flock.Soundness.Refine.Arith
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# The lincheck's algebra at the deployed relation
-
-`LcAlgebra` at `Readable.relation`, from `RelS` alone: the honest prover's lincheck (`Lc.proof`) on the honest trace
-passes the verifier's checks (§10).
-
-* **The folded circuit** (`folded_ok`): `Stmt.folded` succeeds wherever `Stmt.fold` does (on a structured block
-  `partialRanges` builds the slot types `foldRanges` built, `partialRanges_ok`), on the fold with `β` at the pin, halved
-  at the round coins: the prover's `combT` at the last round, of width 64.
-* **The start** (`start_eq`): `α·v_A + v_B + β = Σ_c comb[c]·zr[c]`. The fold is the statement's matrices at the
-  zerocheck's point (`FoldRealizes.fold`, `comb`), the witness's folded columns are `hcol` (`zr0`), and `combSum_eq`
-  reads `α·a + b + β·pin`, where `v_A`, `v_B` are the true `a`, `b` claims (`finalA_holds`: the trace's A side is
-  `aVec`) and the pin's extension is `1` (the witness satisfies the statement).
-* **The rounds** (`lcFold_claim`): each honest message moves the claim `Σ a·z` to the halved vectors' (`round_next`).
-* `lcAlgebra`: at a good case the trace is the witness's bits (`traceOf_z`), its A and B sides are the statement's
-  (`toZ_mulBlocks`, through `Case.model`'s `placedA = matA`), and `lcAlgebra_of` applies.
--/
+/-! `LcAlgebra` at the deployed relation, from `RelS` alone (`lcAlgebra`). -/
 
 @[expose] public section
 
@@ -66,8 +50,6 @@ namespace FlockLevel3
 
 open Flock GF128
 
-/-- Where `foldRanges` succeeds `partialRanges` does too: both look up or build the same slot types in the same
-order. -/
 theorem partialRanges_ok (st : Stmt) (alpha : F128) (lw rho rr : Array F128) : ∀ (rs : List Range)
     (bases : Array ((Kind × Nat) × Array F128)) (out res : Array F128),
     st.foldRanges alpha lw rho rs bases out = .ok res →
@@ -94,7 +76,6 @@ theorem partialRanges_ok (st : Stmt) (alpha : F128) (lw rho rr : Array F128) : �
         simp only [bind, Except.bind, pure, Except.pure] at h ⊢
         exact ih _ _ _ h _
 
-/-- **`folded` succeeds wherever `fold` does**, on `fold`'s vector with `β` at the pin, halved at `ts` in turn. -/
 theorem folded_ok (st : Stmt) (alpha beta : F128) (lw rho ts v : Array F128) (h : st.fold alpha lw rho = .ok v) :
     st.folded alpha beta lw rho ts = .ok (ts.foldl (fun c t => halve t c) (v.modify st.pin (· + beta))) := by
   suffices hw : ∃ w, st.folded alpha beta lw rho ts = .ok w by
@@ -137,8 +118,6 @@ local notation "𝔽" => FlockLevel3.GF128
 
 namespace Lc
 
-/-! ## The rounds -/
-
 section Rounds
 
 variable {c : CircuitFold} {m : ℕ} {tr : Trace} {zc : ZcOut} {full : Array F128} {cs : Challenges}
@@ -165,8 +144,6 @@ theorem half_pow {K j : ℕ} (hj : j < K) : 2 ^ K / 2 ^ j = 2 * (2 ^ K / 2 ^ (j 
     show K - j = K - (j + 1) + 1 by omega, pow_succ]
   ring
 
-/-- **One honest round**: from the claim `Σ_{k<2H} a[k]·z[k]`, the verifier's step on the honest message `(q(1), q(∞))`
-is the claim `Σ_{k<H}` of the vectors halved at the round's coin. -/
 theorem round_eq (a z : Array F128) (H : ℕ) (ha : a.size = 2 * H) (hz : z.size = 2 * H) (t s : F128)
     (hs : GF128.of s = ∑ k ∈ Finset.range (2 * H), GF128.of a[k]! * GF128.of z[k]!) :
     GF128.of ((sumF (a.size / 2) fun k => (a[k]! + a[k + a.size / 2]!) * (z[k]! + z[k + a.size / 2]!)) * t * t +
@@ -205,8 +182,6 @@ theorem round_eq (a z : Array F128) (H : ℕ) (ha : a.size = 2 * H) (hz : z.size
   rw [h1, h2, hs]
   ring
 
-/-- **The honest rounds**: after `j` rounds the verifier's claim, on the prover's messages, is `Σ a·z` of the circuit's
-and the witness's columns halved at the first `j` round coins. -/
 theorem lcFold_claim (hk : 6 ≤ c.kLog) (hf : full.size = 2 ^ c.kLog) (claim : F128)
     (h0 : GF128.of claim =
       ∑ k ∈ Finset.range (2 ^ c.kLog), GF128.of (combT c full cs 0)[k]! * GF128.of (zrT c m tr zc cs 0)[k]!) :
@@ -232,8 +207,6 @@ theorem foldl_pushes (j : ℕ) :
 
 end Rounds
 
-/-! ## The start -/
-
 theorem bitF_toZ (b : Bool) : (if b then (1 : 𝔽) else 0) = ((Readable.toZ b).val : 𝔽) := by
   cases b
   · show (0 : 𝔽) = ((0 : ZMod 2).val : 𝔽)
@@ -241,11 +214,6 @@ theorem bitF_toZ (b : Bool) : (if b then (1 : 𝔽) else 0) = ((Readable.toZ b).
   · show (1 : 𝔽) = ((1 : ZMod 2).val : 𝔽)
     rw [show (1 : ZMod 2).val = 1 from rfl, Nat.cast_one]
 
-/-- **The lincheck's algebra on a statement's trace** (§10). For a circuit fold `c` realizing `S` whose `folded` succeeds
-where its `fold` does, a witness `w` of `S`'s pin and a trace whose bits are `w`'s and whose A and B sides are `aVec`,
-`bVec`: at the zerocheck's output on that trace, wherever the circuit fold at the lincheck's `α` returns `full`, the
-folded circuit is the prover's `combT` at the last round, of width 64, and the rounds' claim from `α·v_A + v_B + β`
-ends at `dot comb z_partial`. -/
 theorem lcAlgebra_of (S : Model.Statement) (c : CircuitFold) (hc : FoldRealizes c S)
     (hfd : ∀ (α β : F128) (lw ρ ts v : Array F128), c.fold α lw ρ = .ok v → ∃ w, c.folded α β lw ρ ts = .ok w)
     (m : ℕ) (hm : m = S.m) (w : Model.Witness S.m) (hpin : ∀ o, S.block w o S.pin = 1) (tr : Trace)
@@ -378,12 +346,8 @@ theorem lcAlgebra_of (S : Model.Statement) (c : CircuitFold) (hc : FoldRealizes 
 
 end Lc
 
-/-! ## At the deployed relation -/
-
 variable {H : Claims.Msg → Claims.Msg}
 
-/-- The A side of the trace of a witness's bits, as a bit of GF(2): `aVec` of the statement whose matrices are its
-table's. -/
 theorem toZ_mulBlocks (st : Stmt) (hwf : StmtWF st) (w : Claims.Flock.Wit)
     (M : Matrix (Fin (2 ^ st.c.kLog)) (Fin (2 ^ st.c.kLog)) (ZMod 2)) (entry : ℕ → ℕ → Bool)
     (he : ∀ r j : Fin (2 ^ st.c.kLog), entry r.val j.val = Readable.ofZ (M r j))
@@ -404,7 +368,6 @@ theorem toZ_mulBlocks (st : Stmt) (hwf : StmtWF st) (w : Claims.Flock.Wit)
   show _ = _ * Readable.toZ (w.hid.getD ((a.val / 2 ^ st.c.kLog * 2 ^ st.c.kLog + r.val) * 1 + 0) false)
   rw [Nat.mul_one, Nat.add_zero]
 
-/-- **The lincheck's algebra at the deployed relation**, from `RelS` alone. -/
 theorem lcAlgebra (H : Claims.Msg → Claims.Msg) : LcAlgebra H Readable.relation := by
   intro o i hi r _ hfold
   obtain ⟨st, hsts, hwf, -, hmat, hsat⟩ := o.model
@@ -447,7 +410,6 @@ theorem lcAlgebra (H : Claims.Msg → Claims.Msg) : LcAlgebra H Readable.relatio
       simp only [Readable.Tab.b, Readable.Tab.ofStmt, r.isLt, j.isLt, and_self, ↓reduceDIte]
   exact Lc.lcAlgebra_of _ _ hc hfd _ hm _ hsat.2.1 _ hzb (fun a => (hab a).1) (fun a => (hab a).2) _ _ _ hfold
 
-/-- **The lincheck goal at the deployed relation**, at every rep the session walk aligns. -/
 theorem lincheck_relation (H : Claims.Msg → Claims.Msg)
     (hzc : ∀ o : Run H Readable.relation, ∀ i < o.tabs.size, ∀ r < 2, ZcAt o i r)
     (hlc : ∀ o : Run H Readable.relation, ∀ i < o.tabs.size, ∀ r < 2, LcAt o i r) : Lincheck H Readable.relation :=

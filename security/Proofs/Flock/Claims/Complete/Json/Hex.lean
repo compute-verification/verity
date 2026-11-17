@@ -2,13 +2,7 @@ module
 
 public import Flock.Bytes
 
-/-!
-# The record's hex round trips
-
-The record writes bytes as lowercase hex (`hexOf`) and an F128 as `{hi:016x}{lo:016x}` (`F128.toHex`); the decoder reads
-them back with `unhex` and `f128OfHex`. Both round trips are exact: `unhex_hexOf` (`Flock.Hex`, beside the codec),
-`f128OfHex_toHex`.
--/
+/-! The record's hex round trips, `unhex_hexOf` and `f128OfHex_toHex`, are exact. -/
 
 @[expose] public section
 
@@ -74,7 +68,6 @@ theorem fold_get (B : ByteArray) (o : Nat) (l : List UInt8)
   rw [← hl, List.foldl_map]
   rfl
 
-/-- **An F128's hex reads back**: `f128OfHex` of `toHex a` is `a`. -/
 theorem f128OfHex_toHex (a : F128) : f128OfHex a.toHex = .ok a := by
   have e : a.toHex = hexOf ⟨(be8 a.hi ++ be8 a.lo).toArray⟩ := by
     apply String.toList_inj.1

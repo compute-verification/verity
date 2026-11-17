@@ -53,19 +53,7 @@ import Mathlib.Topology.Sheaves.Init
 import Std.Tactic.BVDecide.Normalize.BitVec
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# The verifier's parser reads back what the printers print
-
-`Flock.JsonParse.parse`, the verifier's total parser, reads back an alike value (`Same`) from the honest prover's printer
-`FlockComplete.printJ` of a printable value (`Good`), and from the verifier's canonical printer `Flock.canon`
-(`parse_print`, `parse_canon`).
-
-The proof is one relation, `ReadBack.Pr j t`: a text `t` that `value` reads as a value alike to `j`, whatever follows it
-up to a separator (`Stop`). Both printers print a text in it (`print_pr`, `canon_pr`), and `pr_value` reads it, by
-induction on `Pr`. A string's text is a run of escapes `str` reads back one character at a time (`Esc`, `esc_of`); a
-number's is `Int.repr` (`num_int`); an object's fields are `Flock.canon`'s keys in `Array.qsort`'s order, a permutation
-of the tree's own (`qsort_perm`), and `object` inserts them into a tree alike at every key (`Inv`, `obj_loop`).
--/
+/-! The verifier's parser reads back an alike value from what `printJ` and `Flock.canon` print of a printable value. -/
 
 @[expose] public section
 
@@ -77,8 +65,6 @@ namespace FlockComplete.JsonRT.ReadBack
 open Lean (Json JsonNumber)
 open Flock.JsonParse
 open Claims.Json
-
-/-! ## `Array.qsort` permutes -/
 
 private theorem loop_perm {α} {n} (lt : α → α → Bool) (lo hi : Nat) (hhi : hi < n) (pivot : α) :
     ∀ (as : Vector α n) (i k : Nat) (ilo : lo ≤ i) (ik : i ≤ k) (w : k ≤ hi),
@@ -140,17 +126,12 @@ theorem qsort_perm {α} (as : Array α) (lt : α → α → Bool) : (as.qsort lt
       (by omega) (by omega) (by omega)
     exact Vector.perm_iff_toArray_perm.1 this
 
-/-! ## Texts the parser reads back -/
-
-/-- A string's text between its quotes, which `str` reads back as the string. -/
 def Esc (s : String) (t : List Char) : Prop :=
   ∀ k acc rest o, t.length < k → ∃ o', str k acc (t ++ '"' :: rest) o = .ok rest o' (acc ++ s)
 
-/-- One character's text, which one step of `str` reads back as the character. -/
 def EscC (c : Char) (t : List Char) : Prop :=
   t ≠ [] ∧ ∀ k acc tail o, ∃ o', str (k + 1) acc (t ++ tail) o = str k (acc.push c) tail o'
 
-/-- Characters' texts, joined, read back as the characters. -/
 theorem esc_join (e : Char → List Char) (he : ∀ c, EscC c (e c)) :
     ∀ (l : List Char) k (acc : String) rest o, (l.flatMap e).length < k →
       ∃ o', str k acc (l.flatMap e ++ '"' :: rest) o = .ok rest o' (acc ++ String.ofList l)
@@ -220,7 +201,6 @@ theorem escC_esc (c : Char) : EscC c (FlockComplete.escC c).toList := by
     simp only [show c.toNat < 55296 by omega, ↓reduceIte, Char.ofNat_toNat]
     rw [if_neg (by decide)]
 
-/-- One character's text in `Flock.canonStr`. -/
 def cesc (c : Char) : String :=
   match c with
   | '"' => "\\\""
@@ -406,7 +386,6 @@ theorem cesc_esc (c : Char) : EscC c (cesc c).toList := by
 #print axioms cesc_esc
 #print axioms canonStr_toList
 
-/-- What can follow a value: nothing, or the comma or bracket after it. -/
 def Stop (rest : List Char) : Prop := rest = [] ∨ ∃ c cs, rest = c :: cs ∧ (c = ',' ∨ c = ']' ∨ c = '}')
 
 def dval (a : Nat) (c : Char) : Nat := 10 * a + (c.val - '0'.val).toNat
@@ -424,7 +403,6 @@ theorem toDigits_succ (n : Nat) (h : ¬ n < 10) :
 theorem toDigits_lt (n : Nat) (h : n < 10) : Nat.toDigits 10 n = [Nat.digitChar n] := by
   rw [Nat.toDigits_eq_ite (by decide), if_pos h]
 
-/-- A number's digits: digits, their value the number, the first nonzero unless the number is. -/
 theorem toDigits_facts : ∀ F n, n < F →
     (∀ c ∈ Nat.toDigits 10 n, '0' ≤ c ∧ c ≤ '9') ∧ (Nat.toDigits 10 n).foldl dval 0 = n ∧
     (n ≠ 0 → ∃ d cs, 0 < d ∧ d < 10 ∧ Nat.toDigits 10 n = Nat.digitChar d :: cs)
@@ -486,7 +464,6 @@ theorem stop_digits {rest : List Char} (hs : Stop rest) :
   · exact .inl h
   · exact .inr ⟨c, cs, h, by rcases hc with rfl | rfl | rfl <;> decide⟩
 
-/-- A nonzero number's digits, read by `natNonZero`. -/
 theorem natAfter_pos (n : Nat) (hn : n ≠ 0) (rest : List Char) (hs : Stop rest) (o : Nat) :
     ∃ d cs, 0 < d ∧ d < 10 ∧ Nat.toDigits 10 n = Nat.digitChar d :: cs ∧
       natAfter (fun c => decide ('1' ≤ c ∧ c ≤ '9')) "1-9" (Nat.digitChar d :: (cs ++ rest)) o =
@@ -570,10 +547,8 @@ theorem num_int (m : Int) (rest : List Char) (hs : Stop rest) (o : Nat) :
     simp only [Int.repr, Nat.repr, String.toList_append, String.toList_ofList] at this ⊢
     exact this
 
-/-- A field's text: its key between quotes, a colon, its value. -/
 def fieldT (f : String × Json × List Char × List Char) : List Char := '"' :: f.2.2.1 ++ '"' :: ':' :: f.2.2.2
 
-/-- **`t` is a text of `j`**: the forms both printers print, which the parser reads back alike. -/
 inductive Pr : Json → List Char → Prop
   | null : Pr .null ['n', 'u', 'l', 'l']
   | tru : Pr (.bool true) ['t', 'r', 'u', 'e']
@@ -587,7 +562,6 @@ inductive Pr : Json → List Char → Prop
       (hk : ∀ f ∈ fs, Esc f.1 f.2.2.1) (hv : ∀ f ∈ fs, Pr f.2.1 f.2.2.2) :
       Pr (.obj m) ('{' :: [','].intercalate (fs.map fieldT) ++ ['}'])
 
-/-- A value's first character. -/
 def Lead (c : Char) : Prop :=
   c = 'n' ∨ c = 't' ∨ c = 'f' ∨ c = '"' ∨ c = '[' ∨ c = '{' ∨ c = '-' ∨ ('0' ≤ c ∧ c ≤ '9')
 
@@ -628,7 +602,6 @@ theorem lead_ne {c : Char} (h : Lead c) : c ≠ ']' ∧ c ≠ '}' := by
 theorem stop_ws {rest : List Char} (hs : Stop rest) (o : Nat) : ws rest o = (rest, o) := by
   rcases hs with rfl | ⟨c, cs, rfl, rfl | rfl | rfl⟩ <;> rfl
 
-/-- `value` reads `t` back as a value alike to `j`, whatever stops it. -/
 def VP (j : Json) (t : List Char) : Prop :=
   ∀ k rest o, Stop rest → t.length < k → ∃ o' j', value k (t ++ rest) o = .ok rest o' j' ∧ Same j j'
 
@@ -689,8 +662,6 @@ theorem same_arr (l ys : List Json) (hl : ys.length = l.length) (h : ∀ p ∈ l
   have hi : (l.zip ys)[i]'(by simp [hl]; simpa using h₁) ∈ l.zip ys := List.getElem_mem _
   simpa [List.getElem_zip] using h _ hi
 
-/-- What the parser has built of an object alike to `m`: a well-formed tree, with the keys `K`, its value at each
-alike to `m`'s. -/
 def Inv (m n : Std.TreeMap.Raw String Json) (K : List String) : Prop :=
   n.WF ∧ (∀ k, (n.get? k).isSome = true ↔ k ∈ K) ∧ ∀ k b, n.get? k = some b → ∃ a, m.get? k = some a ∧ Same a b
 
@@ -790,7 +761,6 @@ theorem inv_same {m n : Std.TreeMap.Raw String Json} (hm : m.WF) {K : List Strin
     injection ha' with e
     exact e ▸ hs
 
-/-- **The parser reads a value's text back**: `value` reads `t` and stops before `rest`, with a value alike. -/
 theorem pr_value {j : Json} {t : List Char} (h : Pr j t) :
     ∀ k rest o, Stop rest → t.length < k → ∃ o' j', value k (t ++ rest) o = .ok rest o' j' ∧ Same j j' := by
   induction h with
@@ -922,7 +892,6 @@ theorem pr_value {j : Json} {t : List Char} (h : Pr j t) :
         injection h with h1 h2
         rw [← h1, ← h2, hn']
 
-/-- **A text in `Pr` parses**, as a value alike. -/
 theorem pr_parse {j : Json} {s : String} (h : Pr j s.toList) : ∃ j', parse s = .ok j' ∧ Same j j' := by
   obtain ⟨c, cs, hc, hl⟩ := pr_lead h
   obtain ⟨o', j', hv, hs⟩ := pr_value h (2 * s.toList.length + 2) [] 0 (.inl rfl) (by omega)
@@ -951,13 +920,11 @@ theorem zip_map_self {α β} (f : α → β) : ∀ (l : List α) p, p ∈ l.zip 
     · obtain ⟨h1, h2⟩ := zip_map_self f l p h
       exact ⟨List.mem_cons_of_mem _ h1, h2⟩
 
-/-- A string's text as `printJ` prints it, between its quotes. -/
 def escP (s : String) : List Char := s.toList.flatMap fun c => (FlockComplete.escC c).toList
 
 theorem strJ_toList (s : String) : (FlockComplete.strJ s).toList = '"' :: escP s ++ ['"'] := by
   simp [FlockComplete.strJ, escP, String.toList_join, List.flatMap_map]
 
-/-- **`printJ`'s texts are in `Pr`.** -/
 theorem print_pr {j : Json} (h : Good j) : Pr j (FlockComplete.printJ j).toList := by
   induction h with
   | null => exact .null
@@ -1049,7 +1016,6 @@ theorem array_mapM_zip {α β ε : Type} (f : α → Except ε β) (a : Array α
     cases h
     simpa using mapM_zip f _ bs hl
 
-/-- A string's text as `canon` prints it, between its quotes. -/
 def escK (s : String) : List Char := s.toList.flatMap fun c => (cesc c).toList
 
 theorem toString_int (m : Int) : toString m = Int.repr m := rfl
@@ -1071,7 +1037,6 @@ theorem map_eq_of_zip {α β γ : Type} (f : α → γ) (g : β → γ) :
   | [], _ :: _, hl, _ => by simp at hl
   | _ :: _, [], hl, _ => by simp at hl
 
-/-- **`canon`'s texts are in `Pr`.** -/
 theorem canon_pr {j : Json} (h : Good j) : ∀ s, Flock.canon j = .ok s → Pr j s.toList := by
   induction h with
   | null => intro s h; rw [Flock.canon] at h; cases h; exact .null
@@ -1184,14 +1149,10 @@ namespace FlockComplete.JsonRT
 open Lean (Json)
 open Claims.Json (Same Good)
 
-/-- **The verifier's parser reads back the prover's printer**: `parse` of `printJ j`, for a printable `j`, is a value
-alike to `j`. -/
 theorem parse_print (j : Json) (h : Good j) :
     ∃ j', Flock.JsonParse.parse (FlockComplete.printJ j) = .ok j' ∧ Same j j' :=
   ReadBack.pr_parse (ReadBack.print_pr h)
 
-/-- **The verifier's parser reads back `canon`**: `parse` of what `Flock.canon` printed of a printable `j` is a value
-alike to `j`. -/
 theorem parse_canon (j : Json) (s : String) (h : Good j) (hc : Flock.canon j = .ok s) :
     ∃ j', Flock.JsonParse.parse s = .ok j' ∧ Same j j' :=
   ReadBack.pr_parse (ReadBack.canon_pr h s hc)

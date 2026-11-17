@@ -46,23 +46,8 @@ import Proofs.Flock.Soundness.Refine.Seam
 import Std.Tactic.BVDecide.Normalize.BitVec
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# Every level's Merkle opening passes at every honest rep
-
-`Run.lgMerkle_of`: once the honest rep, run from the rep's first send on, returns the decoded proof, every level's
-Merkle check passes at its query coins (`MerkleOk`), given that the table's scheme returns digests of its width
-(`SchemeWidths`).
-
-* **A level's commitment is its Merkle tree** (`commitP_tree`, `Tree`): `2^d` rows of `2^lanes` elements, salts of the
-  scheme's size, layer `0` the leaves of the rows under their salts, layer `h + 1` the nodes of layer `h`'s pairs, of
-  `2^(d − h)` digests each, and the cap the layer `d − cap`.
-* **Merkle completeness** (`merkle_open`): an opening of such a tree (`openP`) at positions below `2^d` passes the
-  verifier's check (`merkleCheckWith`) against its cap: each query's siblings climb from its leaf to its cap entry
-  (`climb_ok`).
-* **The honest openings** (`ligeritoP_opens`, `Opens`): the honest prover's Ligerito, run from round `k`, opens level
-  `j`'s commitment at the positions of round `k + qOff sch j`'s coins, which is where the verifier samples them; the
-  rounds are counted by `KRuns`, every run of a step from round `k` ending `d` rounds on.
--/
+/-! Every level's Merkle opening passes at every honest rep, given that the table's scheme returns digests of its width
+(`SchemeWidths`). -/
 
 @[expose] public section
 
@@ -71,8 +56,6 @@ namespace FlockComplete.Replay
 open Flock Transcript
 
 namespace Lg
-
-/-! ## A level's commitment, as its Merkle tree -/
 
 theorem mapM_get {α β : Type} [Inhabited β] {f : α → V β} {xs : Array α} {ys : Array β} (h : xs.mapM f = .ok ys) :
     ys.size = xs.size ∧ ∀ i (hi : i < xs.size), f xs[i] = .ok ys[i]! := by
@@ -129,9 +112,6 @@ theorem fitBytes_size' (n : ℕ) (b : ByteArray) : (fitBytes n b).size = n := by
 theorem bytes_empty {b : ByteArray} (h : b.size = 0) : b = ByteArray.empty :=
   ByteArray.ext (Array.eq_empty_of_size_eq_zero h)
 
-/-- **A level's commitment as its Merkle tree**, through `ops`: `2^d` rows of `2^lanes` elements and salts of the
-scheme's size (empty for an unsalted scheme), layer `h ≤ d − cap` of `2^(d − h)` digests of `w` bytes, layer `0` the
-leaves of the rows under their salts, layer `h + 1` the nodes of layer `h`'s pairs, and the cap the layer `d − cap`. -/
 structure Tree (ops : MerkleOps V) (ms : MerkleScheme) (lv : Level) (w : ℕ) (cm : Commit) : Prop where
   rows : cm.rows.size = 2 ^ lv.d
   rowW : ∀ q < 2 ^ lv.d, cm.rows[q]!.size = 2 ^ lv.lanes
@@ -144,7 +124,6 @@ structure Tree (ops : MerkleOps V) (ms : MerkleScheme) (lv : Level) (w : ℕ) (c
     ops.node (cm.layers[h]!)[2 * i]! (cm.layers[h]!)[2 * i + 1]! = .ok (cm.layers[h + 1]!)[i]!
   cap : cm.cap = cm.layers[lv.d - lv.cap]!
 
-/-- **A level's commitment is its Merkle tree**, through `Hashes` whose node and leaf digests are `w` bytes. -/
 theorem commitP_tree {hs : Hashes V} {ms : MerkleScheme} {lv : Level} {g : Array F128} {salt : ℕ → ByteArray}
     {cm : Commit} {w : ℕ} (hn : ∀ l r v, (ms.opsWith hs).node l r = .ok v → v.size = w)
     (hlf : ∀ row s v, (ms.opsWith hs).leaf row s = .ok v → v.size = w) (hcap : lv.cap ≤ lv.d)
@@ -215,8 +194,6 @@ theorem commitP_tree {hs : Hashes V} {ms : MerkleScheme} {lv : Level} {g : Array
     rw [h0]
     exact this
 
-/-! ## Merkle completeness -/
-
 theorem xor_one_even (i : ℕ) : (2 * i) ^^^ 1 = 2 * i + 1 := by
   simp
 
@@ -228,8 +205,6 @@ theorem shiftRight_lt {p d h : ℕ} (hp : p < 2 ^ d) (hh : h ≤ d) : p >>> h < 
   rw [Nat.shiftRight_eq_div_pow, Nat.div_lt_iff_lt_mul (Nat.two_pow_pos h), ← Nat.pow_add, Nat.sub_add_cancel hh]
   exact hp
 
-/-- **A query's siblings climb from its leaf to its cap entry**: from layer `h₀`'s entry at `p`, the siblings of
-layers `h₀` to `D − 1` reach layer `D`'s entry at `p`. -/
 theorem climb_ok {ops : MerkleOps V} {layers : Array (Array ByteArray)} {d D : ℕ} (hD : D ≤ d)
     (hnode : ∀ h < D, ∀ i < 2 ^ (d - h - 1),
       ops.node (layers[h]!)[2 * i]! (layers[h]!)[2 * i + 1]! = .ok (layers[h + 1]!)[i]!)
@@ -284,8 +259,6 @@ theorem flatMap_block {β : Type} (B : ℕ → List β) {D : ℕ} (hB : ∀ p, (
       hB p, show (j + 1) * D - D = j * D by rw [Nat.succ_mul, Nat.add_sub_cancel]]
     exact flatMap_block B hB l j (by simp at hj; omega)
 
-/-- **Merkle completeness**: an opening of a level's Merkle tree, with digests of the scheme's width, at positions
-below `2^d` passes the verifier's check against the tree's cap. -/
 theorem merkle_open {ops : MerkleOps V} {ms : MerkleScheme} {lv : Level} {cm : Commit}
     (ht : Tree ops ms lv ms.digestLen cm) (hcap : lv.cap ≤ lv.d) {pos : Array ℕ} (hp : ∀ p ∈ pos, p < 2 ^ lv.d) :
     merkleCheckWith ops ms cm.cap lv.cap lv.d pos (openP ms cm lv pos).rows (openP ms cm lv pos).siblings
@@ -381,10 +354,6 @@ theorem merkle_open {ops : MerkleOps V} {ms : MerkleScheme} {lv : Level} {cm : C
     rfl]
   rfl
 
-/-! ## The rounds the honest prover's steps take -/
-
-/-- **The prover's step `y` from round `k` to round `k'`**: every run from round `k` with `L + k` bodies sent ends at
-round `k'` with `L + k'` bodies sent, and returns a value with `Q`. -/
 def KRuns (L : ℕ) {β : Type} (y : LP PS β) (k k' : ℕ) (Q : β → Prop) : Prop :=
   ∀ (st : LigState) (t : Transcript) (l : Array Claims.Msg) (b : β) (st' : LigState) (t' : Transcript)
     (l' : Array Claims.Msg), t.k = k → l.size = L + k → ((y.run st).run t).go l = (.ok ((b, st'), t'), l') →
@@ -420,7 +389,6 @@ theorem KRuns.ite {L : ℕ} {β : Type} {c : Prop} [Decidable c] {y z : LP PS β
   · rw [if_pos h]; exact hy h
   · rw [if_neg h]; exact hz h
 
-/-- A step whose every run moves only the state and the pending bytes. -/
 theorem KRuns.still {L : ℕ} {β : Type} {y : LP PS β} {Q : β → Prop}
     (hy : ∀ st t l, ∃ b st' g, ((y.run st).run t).go l = (.ok ((b, st'), ap g t), l) ∧ Q b) (k : ℕ) :
     KRuns L y k k Q := by
@@ -473,7 +441,6 @@ theorem KRuns.sampleK {L : ℕ} (resp : ℕ → Claims.Msg) (k : ℕ) :
   obtain ⟨rfl, rfl, rfl, rfl⟩ := ok_inj h
   exact ⟨by simp [hk], by rw [Array.size_push, hl, Nat.add_assoc], trivial⟩
 
-/-- **A commitment** takes no round and returns the commitment `commitP` returns. -/
 theorem KRuns.commit {L : ℕ} (h : ByteArray → ByteArray) (ms : MerkleScheme) (lv : Level) (g : Array F128)
     (salt : ℕ → ByteArray) (k : ℕ) :
     KRuns L (liftT (StateT.lift (commitP (Hashes.ofSha512 h : Hashes PS) ms lv g salt))) k k
@@ -495,8 +462,6 @@ theorem KRuns.commit {L : ℕ} (h : ByteArray → ByteArray) (ms : MerkleScheme)
     exact ⟨hk, hl, ha⟩
   · cases e
 
-/-- **A loop over `[0:n]`**: step `j`, from a state with `I j`, goes from round `K j` to `K (j + 1)` and yields one
-with `I (j + 1)`. -/
 theorem KRuns.loop {L : ℕ} {σ : Type} (body : ℕ → σ → LP PS (ForInStep σ)) (K : ℕ → ℕ) (I : ℕ → σ → Prop) (n : ℕ)
     (hbody : ∀ j < n, ∀ s, I j s → KRuns L (body j s) (K j) (K (j + 1)) fun r => ∃ s', r = .yield s' ∧ I (j + 1) s')
     (s₀ : σ) (h₀ : I 0 s₀) : KRuns L (forIn [:n] s₀ body) (K 0) (K n) (I n) := by
@@ -524,7 +489,6 @@ theorem KRuns.challenge {L : ℕ} (resp : ℕ → Claims.Msg) (split : Bool) (k 
   refine KRuns.ite (fun _ => (KRuns.modify _ _).bind fun _ _ => ?_) fun _ => ?_
   all_goals exact (KRuns.get _).bind fun _ _ => (KRuns.sendMsg _ _).bind fun _ _ => KRuns.pure trivial rfl
 
-/-- **An out-of-domain value** pushed and absorbed takes no round. -/
 theorem KRuns.oodPush {L : ℕ} {β : Type} (y : F128) {c : PUnit → LP PS β} {k k' : ℕ} {Q : β → Prop}
     (h : KRuns L (c ()) k k' Q) :
     KRuns L (_root_.modify (fun st : LigState => { st with oods := st.oods.push y }) >>= fun _ =>
@@ -544,7 +508,6 @@ theorem KRuns.oodIntro {L : ℕ} (resp : ℕ → Claims.Msg) (nonce : ℕ → �
   exact (KRuns.sendMsg _ _).bind fun _ _ => (KRuns.pow nonce 2 _).bind fun _ _ =>
     (KRuns.sample resp _).bind fun _ _ => KRuns.cast (KRuns.modify _ _) rfl (by omega)
 
-/-- **A level's query** opens the commitment at the positions of its first round's coins. -/
 theorem KRuns.query {L : ℕ} (resp : ℕ → Claims.Msg) (nonce : ℕ → ℕ → UInt64) (ms : MerkleScheme) (lv : Level)
     (cm : Commit) (hq : lv.q ≠ 0) (k : ℕ) :
     KRuns L (queryP (asksS resp) nonce ms lv cm) k (k + 2)
@@ -599,21 +562,14 @@ theorem KRuns.absorbAll {L : ℕ} (ws : Array F128) (k : ℕ) :
   refine KRuns.still (fun st t l => ⟨PUnit.unit, st, fun P => ws.toList.foldl (fun P w => pF w P) P, ?_, trivial⟩) k
   rw [← Array.forIn_toList, key]
 
-/-! ## The honest openings -/
-
-/-- Level `j`'s query positions, sampled at round `k + qOff sch j`. -/
 def posAt (sch : Schedule) (cf : ℕ → ℕ → F128) (k j : ℕ) : Array ℕ :=
   positions (sch.levels.getD j default) ((Array.range (sch.levels.getD j default).q).map (cf (k + qOff sch j)))
 
-/-- **Level `j`'s opening is the honest one**: of a commitment `commitP` returned at level `j` with cap `cap`, at the
-level's query positions. -/
 def LvOpen (hs : Hashes V) (ms : MerkleScheme) (sch : Schedule) (cf : ℕ → ℕ → F128) (k j : ℕ)
     (cap : Array ByteArray) (op : LevelProof) : Prop :=
   ∃ cm g salt, commitP hs ms (sch.levels.getD j default) g salt = .ok cm ∧ cm.cap = cap ∧
     op = openP ms cm (sch.levels.getD j default) (posAt sch cf k j)
 
-/-- **The proof's openings are the honest ones**: level `0`'s opens `cm0` at its query positions and every later
-level's is honest (`LvOpen`) against the recursive cap it names. -/
 def Opens (hs : Hashes V) (ms : MerkleScheme) (sch : Schedule) (cm0 : Commit) (p : LigeritoProof)
     (cf : ℕ → ℕ → F128) (k : ℕ) : Prop :=
   p.initialProof = openP ms cm0 (sch.levels.getD 0 default) (posAt sch cf k 0) ∧
@@ -622,8 +578,6 @@ def Opens (hs : Hashes V) (ms : MerkleScheme) (sch : Schedule) (cm0 : Commit) (p
     LvOpen hs ms sch cf k (sch.levels.size - 1) p.recursiveCaps[sch.levels.size - 1 - 1]!
       ⟨p.finalProof.rows, p.finalProof.siblings, p.finalProof.salts⟩
 
-/-- The level loop's invariant before step `j` of `R`: the next commitment is honest at level `j + 1` and its cap the
-last pushed, the inner levels' openings so far are honest, and after the last step so is the final opening. -/
 def LoopOk (hs : Hashes V) (ms : MerkleScheme) (sch : Schedule) (cf : ℕ → ℕ → F128) (k R j : ℕ)
     (s : ℕ × Commit × Array (Array ByteArray) × Array LevelProof × FinalProof) : Prop :=
   (j < R → (∃ g salt, commitP hs ms (sch.levels.getD (j + 1) default) g salt = .ok s.2.1) ∧
@@ -632,8 +586,6 @@ def LoopOk (hs : Hashes V) (ms : MerkleScheme) (sch : Schedule) (cf : ℕ → �
   (j = R → s.2.2.1.size = R ∧ s.2.2.2.1.size = R - 1 ∧
     LvOpen hs ms sch cf k R s.2.2.1[R - 1]! ⟨s.2.2.2.2.rows, s.2.2.2.2.siblings, s.2.2.2.2.salts⟩)
 
-/-- **The honest prover's Ligerito opens honestly**: run from round `k` with `L + k` bodies sent, it opens level `j`'s
-commitment at the positions of round `k + qOff sch j`'s coins, the replies' coins (`cfOf resp L`). -/
 theorem ligeritoP_opens (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (ms : MerkleScheme) (sch : Schedule)
     (T : F128) (cm0 : Commit) (tb b : Array F128) (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64) (L : ℕ)
     (hn : sch.n ≠ 0) (hL : 2 ≤ sch.levels.size) (hq : ∀ j < sch.levels.size, (sch.levels.getD j default).q ≠ 0)
@@ -741,9 +693,6 @@ theorem ligeritoP_opens (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray
   obtain ⟨hcs, hrs, hlast⟩ := hfin rfl
   exact ⟨hop0, hcs, hrs, fun i hi => hloop i hi (by omega), hlast⟩
 
-/-! ## Every level's check passes at the honest openings -/
-
-/-- A level's query positions are below `2^d` at a level with fast100's seam. -/
 theorem positions_lt_d {lv : Level} (hl : FlockSoundness.Refine.LevelSeam lv) (coins : Array F128) :
     ∀ p ∈ positions lv coins, p < 2 ^ lv.d := by
   intro p hp
@@ -752,7 +701,6 @@ theorem positions_lt_d {lv : Level} (hl : FlockSoundness.Refine.LevelSeam lv) (c
   rw [FlockSoundness.Refine.positions_eq lv hl coins, ← hl.2.2.2.2] at hlt
   exact hlt (Array.mem_toList_iff.2 hp)
 
-/-- fast100's levels cap at most their depth. -/
 theorem fast100_cap {m : ℕ} {s : Schedule} (hs : fast100 m = some s) : ∀ lv ∈ s.levels, lv.cap ≤ lv.d := by
   by_cases hm : m < 40
   · have key : ∀ m : Fin 40, ∀ s ∈ fast100 m.val, (s.levels.all fun lv => decide (lv.cap ≤ lv.d)) = true := by
@@ -767,9 +715,6 @@ theorem getD_mem {α : Type} {a : Array α} {j : ℕ} (d : α) (h : j < a.size) 
   rw [Array.getD, dif_pos h]
   exact Array.getElem_mem h
 
-/-- **Every level's Merkle check passes at honest openings** (`MerkleOk`): level `0`'s of a commitment `cm0` of level
-`0`, every later level's of its own (`Opens`), through a scheme whose node and leaf digests are its width, at levels
-that cap at most their depth and query below `2^d`. -/
 theorem merkleOk_of_opens {hs : Hashes V} {ms : MerkleScheme} {sch : Schedule} {cm0 : Commit} {p : LigeritoProof}
     {cf : ℕ → ℕ → F128} {k : ℕ} (hn : ∀ l r v, (ms.opsWith hs).node l r = .ok v → v.size = ms.digestLen)
     (hlf : ∀ row s v, (ms.opsWith hs).leaf row s = .ok v → v.size = ms.digestLen)

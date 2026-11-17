@@ -37,20 +37,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# The masked Ligerito prover's lane phase in closed form
-
-`ligeritoPZk_lanes`: a masked Ligerito prover (`ligeritoPZk`) that returns, run in the pure session from the bodies `l`,
-has `ZkTables.Level0.LaneForm`'s record, masked out-of-domain value, lane messages, pair's sums and blinded claim.
-
-* **Runs that only push** (`grL`, a `Total` on `LP PS`): every run that returns only pushes onto the state's lists
-  (`Lg.Grow`), with a property of its value. After the lane loop the prover only pushes, so its proof's first
-  out-of-domain value and first `k_0` messages are the lane phase's (`grL_lp`).
-* **The lane phase, state by state** (`lmodify_bind`, `lget_bind`, `lliftTM_bind`, `lsendMsg_bind`, `lpowB_bind`, and a
-  loop over `[0:n]` keeping an invariant of its state, the prover's and the sends, `lforIn_invS`): after `j` lane
-  coins the table and the weights are folded at the first `j`, message `i ≤ j` is `roundPoly` of their `i`-th folds
-  masked, and at `j = k_0` the pair's sums and the blinded claim are those of the `k_0`-th (`LaneInv`).
--/
+/-! The masked Ligerito prover's lane phase in closed form (`ligeritoPZk_lanes`). -/
 
 @[expose] public section
 
@@ -59,8 +46,6 @@ namespace FlockComplete.L0
 open Flock Transcript FlockComplete Replay Replay.Lg JsonRT
 
 variable {α β σ : Type}
-
-/-! ## Runs that only push -/
 
 theorem liftT_ok' {y : TMW PS α} {st st' : LigState} {t t' : Transcript} {l l' : Array Claims.Msg} {a : α}
     (h : (((liftT y : LP PS α).run st).run t).go l = (.ok ((a, st'), t'), l')) :
@@ -72,8 +57,6 @@ theorem liftT_ok' {y : TMW PS α} {st st' : LigState} {t t' : Transcript} {l l' 
   obtain ⟨⟨⟨rfl, rfl⟩, rfl⟩, rfl⟩ := h2
   exact ⟨rfl, h1⟩
 
-/-- **A Ligerito step's runs only push**: every run that returns only pushes onto the state's lists, with `P` of its
-value. -/
 def grL : Total (LP PS) where
   T y P := ∀ st t l a st' t' l', ((y.run st).run t).go l = (.ok ((a, st'), t'), l') → Grow st st' ∧ P a
   mono h hq st t l a st' t' l' e := ⟨(h st t l a st' t' l' e).1, hq a (h st t l a st' t' l' e).2⟩
@@ -189,8 +172,6 @@ theorem Pre.size_le {γ : Type} {A B : Array γ} (h : Pre A B) : A.size ≤ B.si
   obtain ⟨C, rfl⟩ := h
   simp
 
-/-! ## The lane phase, state by state -/
-
 theorem lmodify_bind {g : LigState → LigState} {f : PUnit → LP PS β} {st : LigState} {t : Transcript}
     {l l'' : Array Claims.Msg} {r : (β × LigState) × Transcript}
     (h : (((modify g >>= f).run st).run t).go l = (.ok r, l'')) : (((f ⟨⟩).run (g st)).run t).go l = (.ok r, l'') := by
@@ -237,8 +218,6 @@ theorem lpure_ok {b b' : β} {st st' : LigState} {t t' : Transcript} {l l' : Arr
   have e := ok_inj (show (Except.ok ((b, st), t), l) = _ from h)
   ⟨e.1, e.2.1, e.2.2.2⟩
 
-/-- **A loop over `[0:n]`** whose every step, from a loop state, prover state and bodies with `I j`, yields ones with
-`I (j + 1)`, ends with `I n`. -/
 theorem lforIn_invS (body : ℕ → σ → LP PS (ForInStep σ)) (I : ℕ → σ → LigState → Array Claims.Msg → Prop) (n : ℕ)
     (hb : ∀ j < n, ∀ s st t l r st' t' l', I j s st l → (((body j s).run st).run t).go l = (.ok ((r, st'), t'), l') →
       ∃ s', r = .yield s' ∧ I (j + 1) s' st' l')
@@ -284,10 +263,6 @@ theorem toArray_of_get! {γ : Type} [Inhabited γ] {a : Array γ} {k : ℕ} {f :
   simp
 
 open ZkTables.Level0 in
-/-- **The lane loop's invariant** after `j` lane coins, from `L` sends: the coins flipped are the replies; `j + 2` sends
-since `L` (and the pair's two once `j = k_0`); the out-of-domain value `y`; messages `0` to `j`, the first `k_0` of
-them `roundPoly` of the folds masked; before `k_0` the table and weights folded at the first `j` coins; at `k_0` the
-pair's coins, sums and blinded claim. -/
 def LaneInv (resp : ℕ → Claims.Msg) (sch : Schedule) (tb b : Array F128) (lay : Zk.PadLayout) (hv : Array F128)
     (rep : ℕ) (extra : ℕ → ℕ → F128) (L : ℕ) (y : F128) (j : ℕ) (s : Array F256 × (F256 × F256) × Zk.Level0Msgs)
     (st : LigState) (l : Array Claims.Msg) : Prop :=
@@ -311,9 +286,6 @@ def LaneInv (resp : ℕ → Claims.Msg) (sch : Schedule) (tb b : Array F128) (la
         (pairLane extra (2 * rep + 1) (foldKs (laneCh resp sch.k0 L) (embedF tb)).size)))
 
 open ZkTables.Level0 in
-/-- **The masked Ligerito prover's lane phase in closed form**: a masked Ligerito prover that returns, run in the pure
-session from the bodies `l`, has `LaneForm`'s record, out-of-domain value, lane messages, pair's sums and blinded claim
-at `L = |l|`. -/
 theorem ligeritoPZk_lanes (resp : ℕ → Claims.Msg) (hs : Hashes PS) (ms : MerkleScheme) (sch : Schedule) (T : F128)
     (cm0 : Commit) (tb b : Array F128) (lay : Zk.PadLayout) (hv : Array F128) (rep tPad : ℕ)
     (extra lanePad : ℕ → ℕ → F128) (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64) (hn : sch.n ≠ 0)

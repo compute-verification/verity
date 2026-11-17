@@ -41,19 +41,7 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Soundness.Refine.Seam
 import Std.Tactic.BVDecide.Normalize.Bool
 
-/-!
-# The honest session's sends fit the verifier's rounds
-
-* **The sends** (`sendsC`): at most `n` bodies pushed by a run of the pure session, whether it returns or stops, a
-  cost bound that `cost_walk` reads off each prover step: a squeeze sends at most one round, a commitment (quiet) and
-  the record (`recordJson_sends`) none.
-* **Per step**: zerocheck `3 + (m − 6)`, lincheck `3 + (kLog − 6)`, the ring switch one per claim and one more, Ligerito
-  `k0 + 9` and then `11` per recursive level but the last, which sends `7` (`ligeritoP_sends`); a rep their sum
-  (`repP_sends`).
-* **The session** (`afterLinkP_sends`): one table's two reps, each with the statement's extra claims (one per region
-  and link point), after the link message; with fast100's at least two levels that is `repRounds`, and
-  `sendCount_goal` is the goal `SendCount`.
--/
+/-! The honest session's sends fit the verifier's rounds (`sendCount_goal`). -/
 
 @[expose] public section
 
@@ -62,8 +50,6 @@ open Flock FlockDeploy
 namespace FlockComplete
 
 open With
-
-/-! ## The sends -/
 
 /-- **At most `n` sends**: a run of the pure session pushes at most `n` bodies, whether it returns or stops. -/
 def sendsC : Cost PS where
@@ -87,7 +73,6 @@ def sendsC : Cost PS where
   lift v l := by
     cases v <;> exact Nat.le_add_right _ _
 
-/-- A run from no sends that ends at `l` pushed at most `n` bodies. -/
 theorem sendsC_ran {α : Type} {y : PS α} {n : ℕ} (h : sendsC.P y n) {r : Except String α} {l : Array Claims.Msg}
     (e : y.go #[] = (r, l)) : l.size ≤ n := by
   have := h #[]
@@ -148,8 +133,6 @@ theorem ringSwitchP_sends (resp : ℕ → Claims.Msg) (tr : Trace) (claims : Arr
   · simp only [Std.Legacy.Range.size]
     omega
 
-/-! ## Ligerito -/
-
 theorem commitP_sends (h : ByteArray → ByteArray) (ms : MerkleScheme) (lv : Level) (g : Array F128)
     (salt : ℕ → ByteArray) : sendsC.P (commitP (Hashes.ofSha512 h) ms lv g salt : PS _) 0 :=
   sendsC_quiet (commitP_quiet h ms lv g salt)
@@ -188,7 +171,6 @@ theorem queryP_sends (resp : ℕ → Claims.Msg) (nonce : ℕ → ℕ → UInt64
     cost_walk [sampleVecP_sends resp, powP_sends]
   · omega
 
-/-- **Ligerito's sends**: `k0 + 9` before the recursive levels, then `11` at each level but the last, which sends `7`. -/
 theorem ligeritoP_sends (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (ms : MerkleScheme) (sch : Schedule)
     (T : F128) (cm0 : Commit) (t b : Array F128) (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64) :
     (sendsC.st Transcript).P (ligeritoP (asksS resp) (Hashes.ofSha512 h) ms sch T cm0 t b salt nonce)
@@ -211,15 +193,12 @@ theorem ligeritoP_sends (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray
     all_goals cost_walk
   · omega
 
-/-! ## A rep, the record and the session -/
-
 theorem ringSwitchP_abc_sends (resp : ℕ → Claims.Msg) (tr : Trace) (m kLog : ℕ) (zc : ZcOut) (lc : LcOut)
     (extras : Array Claim) :
     (sendsC.st Transcript).P (ringSwitchP (asksS resp) tr (abcClaims m kLog zc lc ++ extras)) (2 + extras.size + 1) := by
   have := ringSwitchP_sends resp tr (abcClaims m kLog zc lc ++ extras)
   rwa [Array.size_append, show (abcClaims m kLog zc lc).size = 2 from rfl] at this
 
-/-- **A rep's sends**: zerocheck's, lincheck's, the ring switch's on the two claims and the extras, and Ligerito's. -/
 theorem repP_sends (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (st : Setup) (sch : Schedule) (tr : Trace)
     (t : Array F128) (cm0 : Commit) (extras : Array Claim) (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64) :
     (sendsC.st Transcript).P (repP (asksS resp) (Hashes.ofSha512 h) st sch tr t cm0 extras salt nonce)
@@ -236,7 +215,6 @@ theorem roundJ_quiet (h : ByteArray → ByteArray) (spec : SessionSpec) (k : ℕ
   unfold roundJ SessionSpec.dgWith
   sim_walk
 
-/-- **The record sends nothing.** -/
 theorem recordJson_sends (h : ByteArray → ByteArray) (spec : SessionSpec) (rootB : Array ByteArray)
     (points : Array (Array F128)) (streams : Array (Array Round)) (proofs : Array ByteArray) :
     sendsC.P (recordJson (Hashes.ofSha512 h) spec rootB points streams proofs : PS _) 0 := by
@@ -245,7 +223,6 @@ theorem recordJson_sends (h : ByteArray → ByteArray) (spec : SessionSpec) (roo
   unfold recordJson SessionSpec.dgWith
   sim_walk [roundJ_quiet h, Sim.mapM_list]
 
-/-- A lifted verdict's value: what follows it is bounded at the value it returns. -/
 theorem sendsC_lift_bind {α β : Type} (v : V α) {f : α → PS β} {n : ℕ} (h : ∀ a, v = .ok a → sendsC.P (f a) n) :
     sendsC.P (monadLift v >>= f) n := by
   intro l
@@ -254,7 +231,6 @@ theorem sendsC_lift_bind {α β : Type} (v : V α) {f : α → PS β} {n : ℕ} 
   | error _ => exact Nat.le_add_right _ _
   | ok a => exact h a rfl l
 
-/-- A quiet run's value: what follows it is bounded at the value it returns. -/
 theorem sendsC_quiet_bind {α β : Type} {v : V α} {y : PS α} (hq : quietS.R v y) {f : α → PS β} {n : ℕ}
     (h : ∀ a, v = .ok a → sendsC.P (f a) n) : sendsC.P (y >>= f) n := by
   intro l
@@ -268,7 +244,6 @@ theorem sendsC_link (resp : ℕ → Claims.Msg) (a b : Array ByteArray) : sendsC
   show (l.push (linkBody a.toList b.toList)).size ≤ l.size + 1
   simp
 
-/-- **The sends after the link message**, one table's two reps. -/
 theorem afterLinkP_sends (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (spec : SessionSpec) (st : Stmt)
     (sch : Schedule) (trs : Array Trace) (tape : Tape) (tbls : Array (Array F128)) (cms : Array Commit)
     (c1 : ℕ → F128) (hspec : spec.tables.size = 1) :
@@ -304,7 +279,6 @@ theorem afterLinkP_sends (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArra
   · rw [FlockDeploy.repStreams_size, hspec]
     omega
 
-/-- fast100's schedules have at least two levels. -/
 theorem fast100_levels {m : ℕ} {sch : Schedule} (h : fast100 m = some sch) : 2 ≤ sch.levels.size := by
   by_cases hm : m < 40
   · have key : ∀ m : Fin 40, (fast100 m.val).all (fun s => decide (2 ≤ s.levels.size)) = true := by
@@ -315,9 +289,6 @@ theorem fast100_levels {m : ℕ} {sch : Schedule} (h : fast100 m = some sch) : 2
   · rw [FlockSoundness.Refine.exec_fast100_none m (by omega)] at h
     cases h
 
-/-! ## The goal -/
-
-/-- **The sends fit the verifier's rounds**: the goal `SendCount`. -/
 theorem sendCount_goal (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) :
     SendCount H rel := by
   intro o

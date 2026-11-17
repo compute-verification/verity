@@ -48,15 +48,8 @@ import Std.Data.String.ToNat
 import Std.Tactic.BVDecide.Normalize.Bool
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# The honest masked record decodes, reads live and carries the sample
-
-C's `decode_recordObj`, `live_recordObj` and `recordSample_recordObj` read the printed record only through `parse` and its
-fields, so they hold of any printable object with `recordList`'s fields (`decodeZk_ofFields`, `liveZk_ofFields`,
-`recordSampleZk_ofFields`), the masked record among them (`recordObjZk_fields`: `recordList` at `specZ`, `coin_tree`
-added). The masked decoder's S2 passes on it (`checkHello_ok`, `checkRecord_ok`), after which it decodes as the plain
-record of `specZ` (`decodeWith_specZ`): `decode_recordObjZk`, `live_recordObjZk`, `recordSample_recordObjZk`.
--/
+/-! The honest masked record decodes, reads live and carries the statement's sample, as the plain record of `specZ` once
+S2 passes. -/
 
 @[expose] public section
 
@@ -65,7 +58,6 @@ namespace FlockComplete.JsonRT
 open Flock Transcript FlockComplete FlockDeploy
 open Lean (Json JsonNumber)
 
-/-- **A printable object with the honest record's fields decodes** (S1–S14) as `sessOf`, as `decode_recordObj`. -/
 theorem decodeZk_ofFields {h : ByteArray → ByteArray}
     (h64 : ∀ b, (h b).size = 64)
     {spec : SessionSpec} {t : String} (ht : spec.tables = #[t]) (hct : spec.coinTree = none)
@@ -121,7 +113,6 @@ theorem decodeZk_ofFields {h : ByteArray → ByteArray}
       rfl
   rw [hdc _ (fun e => by subst e; rfl) (fun hn => by cases dv <;> first | rfl | exact absurd rfl hn)]
   simp only [ok_bind]
-  -- S5
   obtain ⟨ob, hob, hobs⟩ := fld_same hls (gL (k := "root_b") (v := Json.mkObj (rootBList spec id #[rb]))
     (by simp [linkList]))
   obtain ⟨od, hod, hods⟩ := fld_same hls (gL (k := s!"root_b_{spec.dk}")
@@ -138,14 +129,12 @@ theorem decodeZk_ofFields {h : ByteArray → ByteArray}
       decide_eq_true hrb, check_true, beq_self_eq_true]
     rfl]
   simp only [ok_bind]
-  -- S6
   have hrf : Record.str l "root_f" = .ok (hexOf spec.sigma) :=
     str_same hls (gL (v := hexJ spec.sigma) (by simp [linkList]))
   have hrfd : Record.str l s!"root_f_{spec.dk}" = .ok (hexOf (dgOf spec h spec.sigma)) :=
     str_same hls (gL (v := hexJ (dgOf spec h spec.sigma)) (by simp [linkList]))
   simp only [hrf, hrfd, ok_bind, unhex_hexOf, dgWith_ofSha512, decide_eq_true hsig, check_true, beq_self_eq_true,
     bytes_beq_self]
-  -- S7
   obtain ⟨op, hop, hops⟩ := fld_same hls (gL (k := "publics") (v := Json.mkObj []) (by simp [linkList]))
   obtain ⟨oq, hoq, hoqs⟩ := fld_same hls (gL (k := s!"publics_{spec.dk}") (v := Json.mkObj []) (by simp [linkList]))
   simp only [hop, hoq, ok_bind]
@@ -154,7 +143,6 @@ theorem decodeZk_ofFields {h : ByteArray → ByteArray}
       Bool.and_self, Bool.not_true, Bool.false_eq_true, ite_true, ite_false]
     rfl]
   simp only [ok_bind]
-  -- S9, S10
   have hpt : Record.arr l "points" = .ok (points.map fun p => Json.arr (p.map f128J)) :=
     arr_plain hls (gL (by simp [linkList])) (.arr fun x hx => by
       obtain ⟨p, -, rfl⟩ := Array.mem_map.1 hx
@@ -170,7 +158,6 @@ theorem decodeZk_ofFields {h : ByteArray → ByteArray}
   simp only [hpts] at hall
   simp only [yOf, Array.size_replicate] at hyz
   simp only [ok_bind, hpts, hall, beq_self_eq_true, Bool.and_self, check_true, hyz, yOf, Array.size_replicate]
-  -- S12
   obtain ⟨sj, hsj, hsjs, hsje⟩ := arr_same hs (gR (k := "streams")
     (v := Json.arr ((spec.repStreams.zip streams).map (streamObj spec h #[rb]))) (by simp [recordList]))
   simp only [hsj, ok_bind]
@@ -227,7 +214,6 @@ theorem decodeZk_ofFields {h : ByteArray → ByteArray}
     simp only [ok_bind, hroot, hpar, hlab, hat]
     rfl]
   simp only [ok_bind]
-  -- S11, S13
   have hrs1 : spec.repStreams = #[(0, 0, s!"{t}/rep{(0 : Nat)}"), (0, 1, s!"{t}/rep{(1 : Nat)}")] := by
     unfold SessionSpec.repStreams
     rw [ht]
@@ -254,12 +240,10 @@ theorem decodeZk_ofFields {h : ByteArray → ByteArray}
     List.any_cons, List.all_nil, List.any_nil, streamRec, beq_self_eq_true, hne, hne', Bool.or_false, Bool.false_or,
     check_true, ok_bind, List.forIn_toArray, List.forIn_cons, List.forIn_nil, List.find?_toArray,
     List.find?_cons, Array.size_map, decide_eq_true h0, decide_eq_true h1, Bool.and_self]
-  -- S14
   have hlk : Record.str j s!"link_{spec.dk}" = .ok (hexOf (dgOf spec h (lbOf spec #[rb] points))) :=
     str_same hs (gR (v := hexJ (dgOf spec h (lbOf spec #[rb] points))) (by simp [recordList]))
   simp only [lbOf, yOf] at hlk
   simp only [Array.forIn_pure_yield_eq_foldl, pure_bind, hlk, ok_bind, beq_self_eq_true, check_true]
-  -- the proof digests
   obtain ⟨pj, hpj, hpjs, hpje⟩ := arr_same hs (gR (k := s!"proof_{spec.dk}")
     (v := Json.arr ((spec.repStreams.zip proofs).map (proofObj spec h))) (by simp [recordList]))
   simp only [hpj, ok_bind]
@@ -280,7 +264,6 @@ theorem decodeZk_ofFields {h : ByteArray → ByteArray}
   simp only [ok_bind, sessOf, hsr, yOf, streamRec]
   rfl
 
-/-- **`liveOf` reads a printable object with the honest record's fields**, as `live_recordObj`. -/
 theorem liveZk_ofFields {h : ByteArray → ByteArray} {spec : SessionSpec}
     {t : String}
     (ht : spec.tables = #[t]) {rb : ByteArray} {points : Array (Array F128)} {streams : Array (Array Round)}
@@ -363,8 +346,6 @@ theorem liveZk_ofFields {h : ByteArray → ByteArray} {spec : SessionSpec}
   simp only [ok_bind, List.map_toArray, List.map_cons, List.map_nil]
   rfl
 
-/-- **A printable object with the honest record's fields carries the statement's sample**, up to key order, as
-`recordSample_recordObj`. -/
 theorem recordSampleZk_ofFields {h : ByteArray → ByteArray} {spec : SessionSpec}
     (hdraw : SampleOk spec) (rb : ByteArray) (points : Array (Array F128)) (streams : Array (Array Round))
     (proofs : Array ByteArray) {R : Json} (hgood : Good R)
@@ -395,9 +376,6 @@ theorem recordSampleZk_ofFields {h : ByteArray → ByteArray} {spec : SessionSpe
       (FlockDeploy.jsonEquiv_norm dv (FlockDeploy.same_wf_right hdvs)).trans hdvs.jsonEquiv.symm⟩
     cases dv <;> first | rfl | exact absurd rfl hn'
 
-/-! ## The masked record -/
-
-/-- **The masked record holds the plain record's fields at `specZ`.** -/
 theorem recordObjZk_fields (spec : SessionSpec) (h : ByteArray → ByteArray) (hz : String) (ct : CoinTree.Spec)
     (rootB : Array ByteArray) (points : Array (Array F128)) (streams : Array (Array Round)) (proofs : Array ByteArray)
     {k : String} {v : Json} (hm : (k, v) ∈ recordList (specZ spec hz) h rootB points streams proofs) :
@@ -416,14 +394,10 @@ theorem good_sample {spec : SessionSpec} (hdraw : SampleOk spec) : Good (spec.un
   | none => exact fun _ => .null
   | some d => exact fun hd => hd.2.1
 
-/-- What the masked record needs of the verifier's `Hello`: a JSON object whose `coins` is an object, printable with
-the prover's nonce put in, and the prover's `Hello` its `canon`. -/
 structure HelloOk (spec : SessionSpec) (hz : String) : Prop where
   obj : ∃ m kvs, Flock.JsonParse.parse spec.hello = .ok (.obj m) ∧ m.WF ∧ kvs.WF ∧ m.get? "coins" = some (.obj kvs) ∧
     Good (helloJ (.obj m)) ∧ canon (helloJ (.obj m)) = .ok hz
 
-/-- **The honest masked record decodes** (S1–S14) as `sessOf`: S2 passes on the prover's `Hello` and `coin_tree`, and
-the rest is the plain record's at `specZ`. -/
 theorem decode_recordObjZk {h : ByteArray → ByteArray}
     (h64 : ∀ b, (h b).size = 64)
     {spec : SessionSpec} {t : String} (ht : spec.tables = #[t]) {ct : CoinTree.Spec} (hct : spec.coinTree = some ct)
@@ -448,7 +422,6 @@ theorem decode_recordObjZk {h : ByteArray → ByteArray}
   exact decodeZk_ofFields h64 (spec := specZ spec hz) ht rfl hdraw hsig hrb hpts hpm hss hrs proofs hgood
     fun hm => recordObjZk_fields _ _ _ _ _ _ _ _ hm
 
-/-- **`liveOf` reads the printed honest masked record**, as the plain one's. -/
 theorem live_recordObjZk {h : ByteArray → ByteArray} {spec : SessionSpec}
     {t : String} (ht : spec.tables = #[t]) (hd : Good (spec.unitSample.getD Json.null)) (hz : String) (ct : CoinTree.Spec)
     {rb : ByteArray} {points : Array (Array F128)} {streams : Array (Array Round)}
@@ -458,7 +431,6 @@ theorem live_recordObjZk {h : ByteArray → ByteArray} {spec : SessionSpec}
   liveZk_ofFields (h := h) (spec := specZ spec hz) ht hss proofs
     (good_recordObjZk ht h hz ct rb points streams proofs hd) fun hm => recordObjZk_fields _ _ _ _ _ _ _ _ hm
 
-/-- **The honest masked record's sample is the statement's**, up to key order (`JsonEquiv`). -/
 theorem recordSample_recordObjZk {h : ByteArray → ByteArray}
     {spec : SessionSpec} {t : String}
     (ht : spec.tables = #[t]) (hdraw : SampleOk spec) (hz : String) (ct : CoinTree.Spec) (rb : ByteArray)

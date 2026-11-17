@@ -42,21 +42,8 @@ import Proofs.Flock.Claims.Complete.Replay.LigeritoCons
 import Proofs.Flock.Claims.Complete.Replay.ZerocheckAlgebra
 import Proofs.Flock.Soundness.Refine.Arith
 
-/-!
-# Level 0's masked query identity
-
-The masked verifier (`Zk.ligeritoWith`) checks level 0's opened rows (`encodeRowsZk`, `2^lanes + 4` lanes, each padded
-by `padF`) as the sum of three terms per query `j`, weighted by `eq(α)[j]`: the first `2^lanes` lanes folded by the lane
-challenges (`consE0`), rep `r`'s extra pair weighted by `ρ`, and the padding's codeword `padAt` at the prover's `ybar`
-(`extraE`). On the honest prover's rows and `ybar`, the paddings cancel, and the sum is the plain one at
-`y₁' = f + ρ_0 R_{2r} + ρ_1 R_{2r+1}`, `f` the packed table folded at the lane challenges: `Σ_c y₁'(c)·V(c)` for the
-consistency weight `V = consW` (`consE0_honestZk`), as `consE_fold` is for an unmasked level.
-
-* `embed_padF`: lane `l`'s padding `padF` is `padAt` on its coefficients, which lie in `F` (`padAt_c1`).
-* `padAt_sum`: `padAt` at position `p` is linear in `ybar`, `Σ_i ybar_i·pe(p, i)` (`padAt_eq`).
-* `row_comb`: at one opened row, the three terms are `Enc(y₁')` there: each lane's padding is `Σ_i μ_l[i]·pe(p, i)`,
-  and `ybar`'s is the same combination of them, so the two cancel in characteristic 2.
--/
+/-! Level 0's masked query identity: on the honest rows and `ybar` the paddings cancel, so the sum is the plain one at
+the blinded fold (`consE0_honestZk`). -/
 
 @[expose] public section
 
@@ -68,8 +55,6 @@ local notation "𝔽" => FlockLevel3.GF128
 local notation "𝕂" => FlockLevel3.GF256
 
 namespace L0
-
-/-! ## Sums of scaled words -/
 
 theorem gOf_foldl_smul (a : ℕ → F256) (b : ℕ → F128) : ∀ (n : ℕ) (acc : F256),
     gOf ((List.range n).foldl (fun acc l => acc + (a l).smul (b l)) acc) =
@@ -83,8 +68,6 @@ theorem gOf_foldl_smul (a : ℕ → F256) (b : ℕ → F128) : ∀ (n : ℕ) (ac
         Finset.sum_range_succ, add_assoc]
 
 theorem fOf_sumF (n : ℕ) (f : ℕ → F128) : fOf (sumF n f) = ∑ x ∈ Finset.range n, fOf (f x) := Zc.of_sumF n f
-
-/-! ## A lane's padding -/
 
 theorem f128_zero_mul (a : F128) : 0 * a = 0 := fOf_injective (by rw [fOf_mul, fOf_zero, zero_mul])
 
@@ -104,7 +87,6 @@ theorem foldl_padStep_c1 (ws : Array F128) (ybar : Array F256) (hy : ∀ i : ℕ
   | [], _, hs => hs
   | i :: l, s, hs => foldl_padStep_c1 ws ybar hy l _ (padStep_c1 ws ybar hy s hs i)
 
-/-- `padAt` of coefficients in `F` lies in `F`. -/
 theorem padAt_c1 (ws : Array F128) (logMsg : ℕ) (ybar : Array F256) (hy : ∀ i : ℕ, (ybar[i]!).c1 = 0) :
     (Zk.padAt ws logMsg ybar).c1 = 0 := by
   rw [padAt_foldl]
@@ -118,19 +100,16 @@ theorem ofF_c1 (mu : Array F128) (i : ℕ) : ((mu.map F256.ofF)[i]!).c1 = 0 := b
   · rw [getElem!_neg _ i (by simpa using hi)]
     rfl
 
-/-- **A lane's padding** is `padAt` on its coefficients. -/
 theorem embed_padF (ws : Array F128) (logMsg : ℕ) (mu : Array F128) :
     FlockLevel3.embed (fOf (padF ws logMsg mu)) = gOf (Zk.padAt ws logMsg (mu.map F256.ofF)) := by
   rw [gOf_limbs (Zk.padAt ws logMsg (mu.map F256.ofF)), padAt_c1 _ _ _ (ofF_c1 mu), fOf_zero, map_zero, zero_mul,
     add_zero]
   rfl
 
-/-- The padding's codeword at position `p` and coefficient `i`: `c·X̂_i(ω_p) + X̂_{2^cols + i}(ω_p)`. -/
 noncomputable def pe (cols p i : ℕ) : 𝕂 :=
   execArith.embed (fOf Zk.PAD_C * execArith.Xhat i (cols + 1) (execArith.omega p) +
     execArith.Xhat (2 ^ cols + i) (cols + 1) (execArith.omega p))
 
-/-- **`padAt` is linear in `ybar`**: at position `p`, `Σ_i ybar_i·pe(p, i)`. -/
 theorem padAt_sum (p cols tPad : ℕ) (ybar : Array F256) (hy : ybar.size = tPad) (ht : tPad ≤ 2 ^ cols) :
     gOf (Zk.padAt (whats (svTable (cols + 1)) p (cols + 1)) cols ybar) =
       ∑ i ∈ Finset.range tPad, gOf ybar[i]! * pe cols p i := by
@@ -138,9 +117,6 @@ theorem padAt_sum (p cols tPad : ℕ) (ybar : Array F256) (hy : ybar.size = tPad
   unfold Model.padCorr
   exact Fin.sum_univ_eq_sum_range (fun i => gOf ybar[i]! * pe cols p i) tPad
 
-/-! ## An opened row -/
-
-/-- Entry `l` of level 0's padded row at `q`: lane `l`'s encoding there plus its padding. -/
 theorem encodeRowsZk_get (lv : Level) (tPad : ℕ) (g : Array F128) (extra lanePad : ℕ → ℕ → F128) {q l : ℕ}
     (hq : q < 2 ^ lv.d) (hl : l < 2 ^ lv.lanes + Zk.EXTRA_LANES) :
     ((encodeRowsZk lv tPad g extra lanePad)[q]!)[l]! =
@@ -151,12 +127,10 @@ theorem encodeRowsZk_get (lv : Level) (tPad : ℕ) (g : Array F128) (extra laneP
   simp only
   rw [getElem!_range_map _ hq, getElem!_range_map _ hl, getElem!_range_map _ hl]
 
-/-- A lane's encoding at `q`, in the model's field. -/
 noncomputable def enc (cols q : ℕ) (v : ℕ → F128) : 𝕂 :=
   ∑ c ∈ Finset.range (2 ^ cols), FlockLevel3.embed (fOf (v c)) *
     FlockLevel3.embed (fOf (xhats (svTable (cols + 1)) q cols)[c]!)
 
-/-- A lane's padding at `q`, in the model's field. -/
 noncomputable def padv (cols q tPad : ℕ) (mu : ℕ → F128) : 𝕂 :=
   ∑ i ∈ Finset.range tPad, FlockLevel3.embed (fOf (mu i)) * pe cols q i
 
@@ -173,8 +147,6 @@ theorem entry_eq (lv : Level) (tPad : ℕ) (g : Array F128) (extra lanePad : ℕ
   have hi' := Finset.mem_range.1 hi
   rw [getElem!_pos _ i (by simpa using hi'), Array.getElem_map, Array.getElem_map, Array.getElem_range, gOf_ofF]
 
-/-- **The padding's combination** the honest prover sends: `ybar_i = Σ_l eq(r̄)_l μ_l[i] + ρ_0 μ_{W+2r}[i] +
-ρ_1 μ_{W+2r+1}[i]` (`ligeritoPZk`'s, at `W = 2^lanes` and `ef = eq(r̄)`). -/
 def ybarOf (ef : Array F256) (rho : F256 × F256) (rep W tPad : ℕ) (lanePad : ℕ → ℕ → F128) : Array F256 :=
   (Array.range tPad).map fun i =>
     (List.range W).foldl (fun acc l => acc + (ef[l]!).smul (lanePad l i))
@@ -205,8 +177,6 @@ theorem enc_reorder {K : Type} [CommSemiring K] (C W : ℕ) (a b : K) (e u v xh 
   rw [Finset.sum_comm (s := Finset.range C) (t := Finset.range W)]
   simp only [mul_assoc]
 
-/-- **One opened row, combined**: the first `2^lanes` lanes folded by `ef`, rep `r`'s pair weighted by `ρ`, and the
-padding's codeword at the prover's `ybar` give `Enc(y₁')` at the row's position: the paddings cancel. -/
 theorem row_comb (lv : Level) (tPad : ℕ) (g : Array F128) (extra lanePad : ℕ → ℕ → F128) (ef : Array F256)
     (rep : ℕ) (rho : F256 × F256) {q : ℕ} (hq : q < 2 ^ lv.d) (hrep : rep < 2) (ht : tPad ≤ 2 ^ lv.cols) :
     gOf ((List.range (2 ^ lv.lanes)).foldl (fun acc l =>
@@ -258,11 +228,6 @@ theorem row_comb (lv : Level) (tPad : ℕ) (g : Array F128) (extra lanePad : ℕ
     gOf rho.2 * padv lv.cols q tPad (lanePad (2 ^ lv.lanes + 2 * rep + 1)) +
     ∑ l ∈ Finset.range (2 ^ lv.lanes), gOf ef[l]! * padv lv.cols q tPad (lanePad l))
 
-/-! ## The queries, batched -/
-
-/-- **Level 0's masked consistency value on the honest opening**: the rows the masked prover committed (`encodeRowsZk`
-of the packed table `g`), opened at `pos`, with the prover's `ybar`, give `Σ_c y₁'(c)·V(c)` for any K-table `y` whose
-entries are `y₁' = f + ρ_0 R_{2r} + ρ_1 R_{2r+1}`, `f` the table `g` folded at the lane challenges `ch`. -/
 theorem consE0_honestZk (lv : Level) (tPad : ℕ) (g : Array F128) (extra lanePad : ℕ → ℕ → F128) (pos : Array ℕ)
     (alpha : Array F128) (ch : Array F256) (rep : ℕ) (rho : F256 × F256) (y : Array F256)
     (hch : ch.size = lv.lanes) (hg : g.size = 2 ^ (lv.lanes + lv.cols)) (hpos : ∀ j < pos.size, pos[j]! < 2 ^ lv.d)
@@ -325,8 +290,6 @@ theorem consE0_honestZk (lv : Level) (tPad : ℕ) (g : Array F128) (extra lanePa
   rw [fOf_mul, map_mul, getElem!_pos (pos.map _) j (by simpa using hj'), Array.getElem_map,
     ← getElem!_pos pos j hj']
 
-/-! ## The claim, step by step -/
-
 theorem gOf_foldl_mul (a b : Array F256) : ∀ (n : ℕ) (acc : F256),
     gOf ((List.range n).foldl (fun acc c => acc + a[c]! * b[c]!) acc) =
       gOf acc + ∑ c ∈ Finset.range n, gOf a[c]! * gOf b[c]! := by
@@ -344,8 +307,6 @@ theorem gOf_dotK (a b : Array F256) :
   rw [gOf_foldl_mul, gOf_zero, zero_add]
   exact Finset.sum_congr rfl fun c _ => mul_comm _ _
 
-/-- **The lane phase's close**: the blinded claim `T' = ⟨w, y₁'⟩` and the message of `y₁'` split against the weight
-lifted by `u`, on tables of `2^n` entries. -/
 theorem sync_laneClose (w y : Array F256) (n : ℕ) (hw : w.size = 2 ^ n) (hy : y.size = 2 ^ n) :
     Lg.Sync (dotK w y) (Poly.ofMsg (roundPoly (embedF (splitK y)) (liftU w)) (dotK w y)) (embedF (splitK y))
       (liftU w) n := by
@@ -353,8 +314,6 @@ theorem sync_laneClose (w y : Array F256) (n : ℕ) (hw : w.size = 2 ^ n) (hy : 
     (by rw [(Lg.liftU_spec _).1, hw, pow_succ]; ring) ?_
   rw [Lg.sum_split _ _ n hy hw, gOf_dotK, hw]
 
-/-- **Level 0's masked consistency claim**: on the split of `y₁'`, the claim gains `b·(consE0 + extraE)` at the
-honest opening, and the weight `b·u^bit·V`. -/
 theorem Sync.closeZk {s : F256} {q : Poly} {w : Array F256} {N : ℕ} (lv : Level) (tPad : ℕ) (g : Array F128)
     (extra lanePad : ℕ → ℕ → F128) (pos : Array ℕ) (alpha : Array F128) (ch : Array F256) (rep : ℕ)
     (rho : F256 × F256) (y : Array F256) (hch : ch.size = lv.lanes) (hg : g.size = 2 ^ (lv.lanes + lv.cols))

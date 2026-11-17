@@ -36,13 +36,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Complete.Zk.Sim
 
-/-!
-# The honest run against the masked verifier, at any number of tables
-
-`run_acc_of_zk` and `honestRunZk_eq` for `honestP`: the verifier's side is `act_coin_any` and `act_final_any`, the
-prover's `feed_sim` and `stepWith_acc`, and the run is the pure masked session (`sessionPZk_sim`) on each table's share
-of the witness (`sessionS`, `honestRun_eq`).
--/
+/-! The honest run against the masked verifier at any number of tables (`run_acc_of`, `honestRun_eq`). -/
 
 @[expose] public section
 
@@ -50,15 +44,10 @@ namespace FlockComplete.ZkTables
 
 open Flock FlockDeploy
 
-/-- **The honest masked run** at the coins `r`: the program's sends, each answered by its coin's bytes, and its last
-message. -/
 def honestRun (H : Claims.Msg → Claims.Msg) (x : Claims.Msg) (w : Claims.Flock.Wit) (ω : TapeZk) {k : ℕ}
     (r : Fin k → Coin) : List Claims.Msg × Claims.Msg :=
   (prog x w ω).sim H (fun j => (Claims.coinSeq r j).bytes) 0
 
-/-- **The honest masked prover is accepted** at the coins `r` when the statement sets up, against `H` as at SHA-512,
-the honest run's sends are of tag `0`, fit the verifier's rounds, and start with a link message, its last message
-decodes, and the masked verdict and the checks pass on it. -/
 theorem run_acc_of (H : Claims.Msg → Claims.Msg) (w : Claims.Flock.Wit) (x : Claims.Msg) (ω : TapeZk)
     (r : Fin ((V true).k x) → Coin) {s : Ins} {spec : SessionSpec} {sts : Array Flock.Stmt}
     {link : List ByteArray × List ByteArray} {F : Final} (hs : setupOf true x = some (s, spec, sts))
@@ -123,15 +112,11 @@ theorem run_acc_of (H : Claims.Msg → Claims.Msg) (w : Claims.Flock.Wit) (x : C
     rw [hcs, hms1, List.cons_append] at hc
     exact hc
 
-/-- **The pure honest masked session** at the replies `resp`, on each table's share of the witness: its verdict (the
-record and the proof files) and its sends' bodies. -/
 def sessionS (H : Claims.Msg → Claims.Msg) (resp : ℕ → Claims.Msg) (spec : SessionSpec) (sts : Array Flock.Stmt)
     (w : Claims.Flock.Wit) (ω : TapeZk) : Except String (String × Array ByteArray) × Array Claims.Msg :=
   (sessionPZk (asksS resp) (Hashes.ofSha512 (Claims.hOf H)) spec (tabsOf sts) (MaskRank.masksOf sts) (traces sts w)
     ω).go #[]
 
-/-- **The honest masked run is the pure masked session's**: its sends are the session's bodies, each of tag `0`, and its
-last message the session's record and proof files after the statement. -/
 theorem honestRun_eq (H : Claims.Msg → Claims.Msg) (x : Claims.Msg) (w : Claims.Flock.Wit) (ω : TapeZk) {k : ℕ}
     (r : Fin k → Coin) {s : Ins} {spec : SessionSpec} {sts : Array Flock.Stmt}
     (hs : setupOf true x = some (s, spec, sts)) {rec : String} {pfs : Array ByteArray} {bs : Array Claims.Msg}

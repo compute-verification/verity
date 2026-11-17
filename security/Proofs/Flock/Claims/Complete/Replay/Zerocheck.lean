@@ -36,17 +36,8 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# Zerocheck replays the honest prover's rounds
-
-`zerocheck_replay`: from the honest prover's zerocheck (`zerocheckP`) in the pure session, the verifier's zerocheck
-(`bindAndZerocheckWith`, `Flock.Piop`) replayed on rounds that carry the prover's returns the prover's `ZcOut`,
-consuming exactly the prover's rounds, when the trace satisfies the block R1CS (`a·b = c` bitwise) and no outer coin is
-`1`.
-
-* **The prover in closed form** (`zerocheckP_go`): its rounds (`Zc.rounds`), its proof (`Zc.proof`), its output
-  (`Zc.out`), at the coins of the replies to its sends.
--/
+/-! The verifier's zerocheck replayed on the honest prover's rounds returns the prover's `ZcOut` when the trace
+satisfies the block R1CS and no outer coin is `1`. -/
 
 @[expose] public section
 
@@ -56,27 +47,22 @@ open Flock Transcript
 
 namespace Zc
 
-/-- The coins the prover's zerocheck reads: `r_skip`'s, `r_outer`'s, `z`'s, and residual round `i`'s. -/
 structure Challenges where
   c0 : ℕ → F128
   c1 : ℕ → F128
   c2 : ℕ → F128
   cr : ℕ → ℕ → F128
 
-/-- The zerocheck vector: the pinned coordinates, then `r_outer`. -/
 def Challenges.r (m : ℕ) (cs : Challenges) : Array F128 := pinned ++ (Array.range (m - 13)).map cs.c1
 
 def Challenges.z (cs : Challenges) : F128 := cs.c2 0
 
-/-- Residual round `i`'s challenge. -/
 def Challenges.ρ (cs : Challenges) (i : ℕ) : F128 := cs.cr i 0
 
-/-- A bit table's skip row at `z` over `2^n` rows, folded at `ρ 0, …, ρ (i − 1)`, lowest variable first. -/
 def tab (n : ℕ) (z : F128) (ρ : ℕ → F128) (bits : Array Bool) : ℕ → Array F128
   | 0 => (Array.range (2 ^ n)).map (skipHat bits (skipWeights z))
   | i + 1 => foldLow (ρ i) (tab n z ρ bits i)
 
-/-- Residual round `i`'s message `(g(1), g(∞))`. -/
 def msg (tr : Trace) (n : ℕ) (r : Array F128) (z : F128) (ρ : ℕ → F128) (i : ℕ) : F128 × F128 :=
   let a := tab n z ρ tr.az i
   let b := tab n z ρ tr.bz i
@@ -95,18 +81,15 @@ def r1c (tr : Trace) (n : ℕ) (r : Array F128) : Array F128 :=
     let w := skipWeights (phi8 (64 + i))
     sumF (2 ^ n) fun x => (eqTable r)[x]! * skipHat tr.z w x
 
-/-- **The prover's zerocheck proof.** -/
 def proof (m : ℕ) (cs : Challenges) (tr : Trace) : ZerocheckProof :=
   ⟨r1ab tr (m - 6) (cs.r m), r1c tr (m - 6) (cs.r m), pushes (msg tr (m - 6) (cs.r m) cs.z cs.ρ) (m - 6),
     (tab (m - 6) cs.z cs.ρ tr.az (m - 6))[0]!, (tab (m - 6) cs.z cs.ρ tr.bz (m - 6))[0]!,
     dot (lagrange nodesL den6Inv cs.z) (r1c tr (m - 6) (cs.r m))⟩
 
-/-- **The prover's `ZcOut`.** -/
 def out (m : ℕ) (cs : Challenges) (tr : Trace) : ZcOut :=
   { z := cs.z, rho := pushes cs.ρ (m - 6), rRest := cs.r m, vA := (proof m cs tr).finalA,
     vB := (proof m cs tr).finalB, vC := (proof m cs tr).finalC }
 
-/-- The prover's transcript at the residual rounds, from `t₀`: round `i` absorbs its message and squeezes one coin. -/
 def loopT (m : ℕ) (cs : Challenges) (tr : Trace) (t₀ : Transcript) : ℕ → Transcript
   | 0 => t₀
   | i + 1 =>
@@ -114,7 +97,6 @@ def loopT (m : ℕ) (cs : Challenges) (tr : Trace) (t₀ : Transcript) : ℕ →
     let g := msg tr (m - 6) (cs.r m) cs.z cs.ρ i
     afterSq ⟨t.rounds, t.k, pF g.2 (pF g.1 t.pending)⟩ 1 1 (cs.cr i)
 
-/-- The binding's transcript: the statement's digest and the cap absorbed. -/
 def t₁ (digest cap : ByteArray) (t : Transcript) : Transcript :=
   ⟨t.rounds, t.k, pLabel "flock-zerocheck-v0" (pBytes cap (pBytes digest (pLabel "flock-r1cs-v0" t.pending)))⟩
 
@@ -123,7 +105,6 @@ def t₂ (digest cap : ByteArray) (cs : Challenges) (t : Transcript) : Transcrip
 def t₃ (m : ℕ) (digest cap : ByteArray) (cs : Challenges) (t : Transcript) : Transcript :=
   afterSq (t₂ digest cap cs t) 2 (m - 13) cs.c1
 
-/-- Round 1's transcript: `round1_ab` and `round1_c` absorbed. -/
 def t₄ (m : ℕ) (digest cap : ByteArray) (cs : Challenges) (tr : Trace) (t : Transcript) : Transcript :=
   let t := t₃ m digest cap cs t
   ⟨t.rounds, t.k, pSlice (r1c tr (m - 6) (cs.r m)) (pSlice (r1ab tr (m - 6) (cs.r m)) t.pending)⟩
@@ -131,12 +112,10 @@ def t₄ (m : ℕ) (digest cap : ByteArray) (cs : Challenges) (tr : Trace) (t : 
 def t₅ (m : ℕ) (digest cap : ByteArray) (cs : Challenges) (tr : Trace) (t : Transcript) : Transcript :=
   afterSq (t₄ m digest cap cs tr t) 1 1 cs.c2
 
-/-- **The prover's transcript after zerocheck**: the residual rounds, then `final_a`, `final_b` absorbed. -/
 def tEnd (m : ℕ) (digest cap : ByteArray) (cs : Challenges) (tr : Trace) (t : Transcript) : Transcript :=
   let t := loopT m cs tr (t₅ m digest cap cs tr t) (m - 6)
   ⟨t.rounds, t.k, pF (proof m cs tr).finalB (pF (proof m cs tr).finalA t.pending)⟩
 
-/-- The coins of the replies to the sends from the `L`-th on. -/
 def coinsAt (resp : ℕ → Claims.Msg) (L : ℕ) : Challenges :=
   ⟨coinOf (resp L), coinOf (resp (L + 1)), coinOf (resp (L + 2)), fun i => coinOf (resp (L + 3 + i))⟩
 
@@ -144,7 +123,6 @@ end Zc
 
 open Zc
 
-/-- **The prover's zerocheck, in closed form**, at the coins of the replies to its sends. -/
 theorem zerocheckP_go (resp : ℕ → Claims.Msg) {m : ℕ} (hm : 14 ≤ m) (digest cap : ByteArray) (tr : Trace)
     (t : Transcript) (l : Array Claims.Msg) :
     ∃ l', l'.size = l.size + 3 + (m - 6) ∧
@@ -187,8 +165,6 @@ theorem zerocheckP_go (resp : ℕ → Claims.Msg) {m : ℕ} (hm : 14 ≤ m) (dig
       rw [bind_go (sampleP_go resp _ _), hl₁]
       rfl
   case hsz => simp; omega
-
-/-! ## The prover's rounds -/
 
 namespace Zc
 
@@ -245,10 +221,8 @@ theorem prefix_loop (t : Transcript) {i : ℕ} (hi : i < m - 6) :
   have := loopT_prefix (m := m) (cs := cs) (tr := tr) (t₅ m digest cap cs tr t) (i + 1) (m - 6 - (i + 1))
   rwa [show i + 1 + (m - 6 - (i + 1)) = m - 6 by omega] at this
 
-/-- Residual round `i`'s retained bytes: its message absorbed from nothing pending, then the squeeze's header. -/
 def resBytes (g : F128 × F128) : ByteArray := framed ⟨#[], 0, pF g.2 (pF g.1 ByteArray.empty)⟩ 1 1
 
-/-- `zStep`'s fold, its challenges: each round's first coin. -/
 theorem zcFold_snd (r : Array F128) (p : ZerocheckProof) (C : ℕ → Array F128) (claim : F128) (n : ℕ) :
     (Flock.RecAlgebra.zcFold r p C n claim).2 = pushes (fun i => (C i).getD 0 0) n := by
   unfold Flock.RecAlgebra.zcFold
@@ -264,9 +238,6 @@ end Zc
 
 open Zc
 
-/-- **The verifier's zerocheck on the prover's rounds** (§9): from the prover's start `t` (its rounds all recorded,
-`t.k = |t.rounds|`), on rounds `R` carrying the prover's from `t.k` on, the binding and zerocheck return the prover's
-`ZcOut` and stop where the prover's transcript did, if the residual rounds' claim ends at `final_a · final_b`. -/
 theorem zerocheckWith_of (hs : Hashes V) {m : ℕ} (hm : 14 ≤ m) (digest cap : ByteArray) (cs : Zc.Challenges) (tr : Trace)
     (t : Transcript) (hk : t.k = t.rounds.size) {R : Array Round}
     (hR : Agrees R (tEnd m digest cap cs tr t).rounds t.k)

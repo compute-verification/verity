@@ -44,19 +44,7 @@ import Proofs.Flock.Claims.DeployK
 import Proofs.Flock.Soundness.Refine.Seam
 import Std.Tactic.BVDecide.Normalize.Bool
 
-/-!
-# The honest masked session's sends fit the masked verifier's rounds
-
-`Count.lean` at the masked session, the goal `SendCountZk`:
-
-* **Per step**: the masked zerocheck `3 + (m − 6)` (`zerocheckPZk_sends`), lincheck `3 + (kLog − 6)`
-  (`lincheckPZk_sends`), level 0's masked Ligerito `k0 + 11` and then `11` per recursive level but the last, which
-  sends `7` (`ligeritoPZk_sends`), the inner proof `4` (`innerP_sends`; the tau commitment is quiet), a rep their sum
-  with the ring switch's (`repPZk_sends`).
-* **The session** (`afterLinkPZk_sends`): one table's two reps after the link message, the pads' commitment quiet
-  (`innerCommitP_quiet`); the table's `--zk` schedule keeps fast100's at least one lane round and two levels
-  (`zkSchedule_shape`), so that is `repRounds true`, and `sendCountZk_goal` is the goal `SendCountZk`.
--/
+/-! The honest masked session's sends fit the masked verifier's rounds (`sendCountZk_goal`). -/
 
 @[expose] public section
 
@@ -68,7 +56,6 @@ open With
 
 variable {wideLeaf : Bool}
 
-/-- **The masked zerocheck** sends at most `3 + (m − 6)` rounds. -/
 theorem zerocheckPZk_sends (resp : ℕ → Claims.Msg) (m : ℕ) (digest cap root : ByteArray) (lay : Zk.PadLayout)
     (h : Array F128) (tr : Trace) :
     (sendsC.st Transcript).P (zerocheckPZk (asksS resp) m digest cap root lay h tr) (3 + (m - 6)) := by
@@ -78,7 +65,6 @@ theorem zerocheckPZk_sends (resp : ℕ → Claims.Msg) (m : ℕ) (digest cap roo
   · simp only [Std.Legacy.Range.size]
     omega
 
-/-- **The masked lincheck** sends at most `3 + (kLog − 6)` rounds. -/
 theorem lincheckPZk_sends (resp : ℕ → Claims.Msg) (c : CircuitFold) (m : ℕ) (lay : Zk.PadLayout) (h : Array F128)
     (tr : Trace) (zc : ZcOut) :
     (sendsC.st Transcript).P (lincheckPZk (asksS resp) c m lay h tr zc) (3 + (c.kLog - 6)) := by
@@ -88,16 +74,13 @@ theorem lincheckPZk_sends (resp : ℕ → Claims.Msg) (c : CircuitFold) (m : ℕ
   · simp only [Std.Legacy.Range.size]
     omega
 
-/-- The tau commitment sends nothing. -/
 theorem tau_sends (h : ByteArray → ByteArray) (tau : F128) (salt : ByteArray) :
     sendsC.P (Zk.tauCommitmentWith (Hashes.ofSha512 h : Hashes PS) tau salt) 0 :=
   sendsC_quiet (zk_tauCommitmentWith_sim quietS (quietS_hashes h) tau salt)
 
-/-- A stop sends nothing. -/
 theorem sendsC_st_throw {α : Type} (e : String) : (sendsC.st Transcript).P (throw e : TMW PS α) 0 :=
   (sendsC.st Transcript).throw e 0
 
-/-- **The inner proof** sends at most `4` rounds. -/
 theorem innerP_sends (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (lay : Zk.PadLayout) (p : PadsZk)
     (ic : InnerCommit) (finalC : F128) (cons : Array (String × Zk.Lin)) :
     (sendsC.st Transcript).P (innerP (asksS resp) (Hashes.ofSha512 h) lay p ic finalC cons) 4 := by
@@ -106,11 +89,9 @@ theorem innerP_sends (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (
     cost_walk [sampleP_sends resp, squeezeP_sends resp, tau_sends h, sendsC_st_throw]
   · omega
 
-/-- A stop inside Ligerito sends nothing. -/
 theorem sendsC_lp_throw {α : Type} (e : String) : ((sendsC.st Transcript).st LigState).P (throw e : LP PS α) 0 :=
   ((sendsC.st Transcript).st LigState).throw e 0
 
-/-- **Level 0's masked Ligerito** sends at most `k0 + 11`, then `11` per recursive level but the last's `7`. -/
 theorem ligeritoPZk_sends (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (ms : MerkleScheme) (sch : Schedule)
     (T : F128) (cm0 : Commit) (t b : Array F128) (lay : Zk.PadLayout) (hp : Array F128) (rep tPad : ℕ)
     (extra lanePad : ℕ → ℕ → F128) (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64) :
@@ -146,14 +127,12 @@ theorem ligeritoPZk_sends (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArr
     all_goals cost_walk
   · omega
 
-/-- The rank check sends nothing. -/
 theorem rankCheckP_sends (m kLog : ℕ) (prior : Array (List F128)) (words : List ℕ) :
     (sendsC.st Transcript).P (rankCheckP m kLog prior words : TMW PS Unit) 0 := by
   unfold rankCheckP
   refine (sendsC.st Transcript).bind0 sendsC.get fun t => (sendsC.st Transcript).mono
     (Cost.ite _ (fun _ => (sendsC.st Transcript).pure ()) fun _ => (sendsC.st Transcript).throw _ 0) (by simp)
 
-/-- **A masked rep** sends at most the sum of its steps. -/
 theorem repPZk_sends (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (st : Setup) (sch : Schedule)
     (tPad rep : ℕ) (dom : ByteArray) (tr : Trace) (t : Array F128) (cm0 : Commit) (extras : Array Claim)
     (pads : PadsZk) (ic : InnerCommit) (extra lanePad : ℕ → ℕ → F128) (salt : ℕ → ℕ → ByteArray)
@@ -168,7 +147,6 @@ theorem repPZk_sends (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (
       ligeritoPZk_sends resp h, innerP_sends resp h]
   · omega
 
-/-- The pads' commitment is quiet. -/
 theorem innerCommitP_quiet (h : ByteArray → ByteArray) (p : PadsZk) (salt : ℕ → ByteArray) :
     quietS.R (innerCommitP (Hashes.ofSha512 h : Hashes V) p salt)
       (innerCommitP (Hashes.ofSha512 h : Hashes PS) p salt) := by
@@ -176,7 +154,6 @@ theorem innerCommitP_quiet (h : ByteArray → ByteArray) (p : PadsZk) (salt : �
   unfold innerCommitP MerkleOps.hm96With
   sim_walk [leafWith_sim quietS hh]
 
-/-- **The masked session after the link** sends at most two masked reps' rounds. -/
 theorem afterLinkPZk_sends (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (spec : SessionSpec) (st : Stmt)
     (v : Schedule × ℕ) (words : Array (List ℕ)) (trs : Array Trace) (tape : TapeZk) (tbls : Array (Array F128))
     (cms : Array Commit) (c1 : ℕ → F128) (hspec : spec.tables.size = 1) :
@@ -215,7 +192,6 @@ theorem afterLinkPZk_sends (resp : ℕ → Claims.Msg) (h : ByteArray → ByteAr
   · rw [FlockDeploy.repStreams_size, hspec]
     omega
 
-/-- One table's `--zk` schedules: its `--zk` schedule. -/
 theorem schedsPZk_one {st : Stmt} {schs : Array (Schedule × ℕ)}
     (hs : (schedsPZk #[Setup.ofCircuit st] : V _) = .ok schs) : ∃ v, Zk.schedule st.wideLeaf st.m = .ok v ∧ schs = #[v] := by
   unfold schedsPZk at hs
@@ -229,7 +205,6 @@ theorem schedsPZk_one {st : Stmt} {schs : Array (Schedule × ℕ)}
   subst this
   rfl
 
-/-- fast100's schedules have at least one lane round. -/
 theorem fast100_k0 {m : ℕ} {sch : Schedule} (h : fast100 m = some sch) : 1 ≤ sch.k0 := by
   by_cases hm : m < 40
   · have key : ∀ m : Fin 40, (fast100 m.val).all (fun s => decide (1 ≤ s.k0)) = true := by
@@ -259,7 +234,6 @@ theorem zkSchedule_shape {m : ℕ} {v : Schedule × ℕ} (h : Zk.schedule wideLe
     simp [show ¬m ≤ 24 by omega, show m ≠ 25 by omega, show m ≠ 26 by omega, show m ≠ 27 by omega,
       show ¬m ≤ 31 by omega, show ¬m ≤ 35 by omega] at hq0
 
-/-- **The masked sends fit the masked verifier's rounds**: the goal `SendCountZk`. -/
 theorem sendCountZk_goal (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) :
     SendCountZk H rel := by
   intro o
