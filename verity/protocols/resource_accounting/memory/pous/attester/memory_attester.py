@@ -387,7 +387,7 @@ PREMISE_BEFORE = "trusted-host"
 REHEARSAL = "rehearsal: key not the auditor's pinned key, no bound"
 UNCOMMITTED = "rehearsal, no bound: the configuration is not a committed one"
 COMMITTED = Path(__file__).resolve().parents[6] / "tools" / "verity" / "cli" / "verity_cli" / "configurations.toml"
-"""The committed configurations' hashes, each demo's configuration by its path: the only configurations under which
+"""The committed configurations' hashes, each application's configuration by its path: the only configurations under which
 `trusted_device` says `PREMISE` holds."""
 
 

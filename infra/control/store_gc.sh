@@ -24,7 +24,7 @@ while :; do
       x=$(sed -n "s/^\(export \)\{0,1\}$v=//p" /root/.config/verity/relay.env | tr -d "\"'"); [ -n "$x" ] && export "$v=$x"
     done
     APPLY=; [ -f $D/apply ] && APPLY="--apply --state $D/marks.json"
-    cd /data/infra/store-gc-src && PYTHONPATH=src LC_ALL=C.UTF-8 timeout 18000 \
+    cd /data/infra/store-gc-src && PYTHONPATH=src LC_ALL=C.UTF-8 timeout -s INT -k 300 18000 \
       python3.12 -m research data gc --store /root/store-gc-store --cite $NOTES --cite $CODE --cite-linear --cache $D/cache --work /root \
       --report $D/reports/$(date -u +%Y%m%dT%H%MZ).json $APPLY
   ) >> "$LOG" 2>&1
