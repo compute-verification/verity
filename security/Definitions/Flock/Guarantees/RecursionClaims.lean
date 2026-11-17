@@ -33,25 +33,8 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# The recursion's claims are stated (trusted)
-
-`RecursionClaimsStated` reads every claim of `Definitions.Claims.Recursion`, the shared claims they instantiate, and the
-named assumptions and trusted base they use, so the Lean check records each one's text (and every definition it reads)
-under `reads`: a changed claim is a changed record, which is reported when it lands. It says nothing about the
-compiled verifier. A claim leaves it when a guarantee states that claim at the deployed compiled verifier, and the
-guarantee's own record holds the text from then on.
-
-The recursion's KS (`KS`, `Bits`, `KSFlock`, `KSBound`, and the private variant's) is at its level
-`Claims.Recursion.lam`, about 65 bits per SHA-512 call at the deployed shape (one inner table at `m = 35`, the deployed
-bound record's weight at `IVStar` at `coverW`), below the 100-bit floor and the `2^-128` target under every
-weight. `BitsLin2`'s level λ₂ (`lamLin2`) evaluates to at least 100 at the deployed records
-(`RecDeploy.lamLin2_deployed_ge_dep`, about 165.8) as a number, and `KSLin2` at the deployment's dense statements
-(`KSLin2On` at `RecDeploy.DenseAt`) is proved with no hypothesis at the deployed reader's record, the challenger's live-coin part's
-(`Flock.Guarantees.RecursiveKS`); `RecDeploy.ksLin2_deployed_open`, at the earlier `finOpen` layout, still takes
-`PartChecksBV`, `PartOpensB` and `DecompB`. Holo statements have a model of their own, and `BitsLin2` at the dense
-statements follows from it (`bitsLin2On_of_ksLin2On`).
--/
+/-! `RecursionClaimsStated` reads every claim of `Definitions.Claims.Recursion` so that the Lean check records its
+text; the recursion's `KS` level is below the 100-bit floor at the deployed shape. -/
 
 @[expose] public section
 

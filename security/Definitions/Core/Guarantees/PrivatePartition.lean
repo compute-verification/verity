@@ -37,6 +37,6 @@ def CommittedMeets : Prop :=
         ∀ r : Advice.Committed, r.root H F A = root →
           ((B.run θ r.a).m ≤ Q.units ∧ (B.run θ r.a).P.Fits Q.X ∧
             ∀ T : Finset (Fin (B.run θ r.a).m), ∑ u ∈ T, (B.run θ r.a).P.outBits u ≤ T.card * Q.X) ∨
-            ∃ x ∈ r₀.hashInputs H F A, ∃ y ∈ r.hashInputs H F A, x ≠ y ∧ H x = H y  -- a collision of `H`
+            ∃ x ∈ r₀.hashInputs H F A, ∃ y ∈ r.hashInputs H F A, x ≠ y ∧ H x = H y
 
 end Verity.Guarantees

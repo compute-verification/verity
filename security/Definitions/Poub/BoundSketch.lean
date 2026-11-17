@@ -4,24 +4,7 @@ public import Mathlib.Algebra.BigOperators.Group.Finset.Defs
 public import Mathlib.Data.ZMod.Defs
 import Mathlib.Tactic.Bound.Init
 
-/-!
-# The deployed bound receipt's sketch: a relay as a two-party protocol (trusted)
-
-The remote protocol's bound receipt (`ro-bound-sketch-blake3/v0`) hashes a sketch of the block's bytes against a
-multiplier matrix sampled from the matmul: for a tile of `r` vectors `e_i` of `m` bytes and a matrix `B` of `r` columns of
-`m` bytes, the sketch is `v_i[c] = Σ_q e_i[q]·B[c][q]` and the receipt `H(σ_p, j, v)`. The matrix is `B = R ⊕ M`: `M`
-the pass's fresh sign mask (one buffer for every tile of the pass, derived from the chained seed), `R` bytes of the
-matmul's own values (the bound tile's partial accumulators). A location makes the right receipt only knowing `v`, so a
-relay between the block side (the memory, holding the tile's bytes) and the tile side (holding `R`) ends with one of
-them knowing the sketch.
-
-This file states that relay in the communication model: a deterministic two-party protocol (`Protocol`) over the two
-inputs, each step one side sending one bit of its input and the bits before it, and at the end one side outputting a
-function of its input and the transcript. Public coins (the seed, the mask `M`) are fixed: a randomized protocol is
-an average of these. The bytes are read in `𝔽_p` (`p = 257` for the deployed sketch, where a byte embeds
-injectively); the sketch is the integer sketch's image mod `p`, which a location knowing the integer sketch knows. `ip` is the inner product on `𝔽_p^ι`, and the sketch's trace
-`Σ_i v_i[i]` is `ip` of the tile's bytes and the matrix (`sketch`, with `ι = Fin r × Fin m`).
--/
+/-! The deployed bound receipt's sketch, a relay of it as a deterministic two-party protocol (`Protocol`). -/
 
 @[expose] public section
 
@@ -55,7 +38,6 @@ def bits : Protocol X Y O → ℕ
   | sendX _ t f => max t.bits f.bits + 1
   | sendY _ t f => max t.bits f.bits + 1
 
-/-- The protocol with its output read through `g`. -/
 def map (g : O → O') : Protocol X Y O → Protocol X Y O'
   | outX o => outX (g ∘ o)
   | outY o => outY (g ∘ o)

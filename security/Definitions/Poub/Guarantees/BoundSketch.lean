@@ -4,19 +4,7 @@ public import Definitions.Poub.BoundSketch
 public import Mathlib.Analysis.Real.Sqrt
 public import Mathlib.Data.Nat.Prime.Defs
 
-/-!
-# The deployed bound receipt's sketch: what a relay must exchange (trusted)
-
-The game is `security/Definitions/Poub/BoundSketch.lean`; proofs are in
-`security/Proofs/Poub/BoundReceipt/Sketch.lean`. No named assumption of its own: the two sides' inputs are
-independent with given guessing probabilities, which is the ideal tile and the ideal store, read in this model.
-
-* `InnerProductRelay`: a protocol of `c` bits that ends with either side knowing `⟨x, y⟩` over `𝔽_p^n`, for
-  independent inputs whose guessing probabilities are at most `κ_E` and `κ_R`, succeeds with probability at most
-  `1/p + 2^c·√(κ_E·κ_R·p^n)` (Lindsey's lemma, by Cauchy–Schwarz and the kernels of `𝔽_p^n`'s linear forms).
-* `BoundSketchRelay`: the same for the deployed sketch of a tile, `r` vectors of `m` bytes against `r` columns of
-  `m` bytes: the sketch's trace is that inner product, at `n = r·m`.
--/
+/-! What a relay of the deployed bound receipt's sketch must exchange (`InnerProductRelay`, `BoundSketchRelay`). -/
 
 @[expose] public section
 

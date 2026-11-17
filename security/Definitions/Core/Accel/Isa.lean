@@ -10,29 +10,8 @@ import Mathlib.Data.Finset.Attr
 import Mathlib.Tactic.Finiteness.Attr
 import Mathlib.Tactic.SetLike
 
-/-!
-# The ACCEL ops (trusted)
-
-The machine 𝓜's instructions: a handful of coarse classes (`Opcode`), each at least as powerful a unit of its resource as
-any instruction of the card it covers (`Assumptions.CardWithinAccel`). What a class computes is the card's own
-(`Open`, the card's semantics, which no table states): the ops fix only what an instruction reads, what it writes and
-its units (`Card.use`). Two things have semantics here, the ones an honest kernel needs: a move copies its
-words unchanged, and an integer MMA is exact within the table's range (P1, `Card.Exact`). Every MMA's dot is a function
-of its accumulator and its pairs' products (P2, `ProductForm`).
-
-* **tensor** (`Opcode.mma`, `Opcode.mmaSp`): an MMA tile of any shape `m × n × k` on one of the card's MMA opcodes (operand
-  formats, 32- or 64-bit accumulators): output `(i, j)` is the opcode's dot of accumulator `(i, j)` with row `i` of `A`
-  and column `j` of `B` (`mmaEval`), so each of its `m·n·k` products meets one output; a 2:4 sparse tile keeps `k/2`
-  pairs a row, chosen by metadata (`mmaSpEval`);
-* **lane** (`Opcode.lane`): one of the card's lane functions, from at most `Pipe.nIn` register words to two;
-* **move** (`Opcode.move`): `n` words of one store, read once, to `k` copies in another, unchanged;
-* **read-modify-write** (`Opcode.atom`, `Opcode.red`): one of the card's functions of a memory word and two register words to
-  the new word and a returned word (atomics), or of `n` words of one store into `n` words of another (reductions);
-* **branch** (`Machine.Instr.bra`), on a predicate bit.
-
-The hash oracle has no instruction: a program reaches it only through the accelerator's priced calls
-(`Pouw.Dither.Accel.G3`, `Pouw.Dither.CallsAtPub`).
--/
+/-! The ACCEL ops, the machine 𝓜's coarse instruction classes (`Opcode`), which fix only what an instruction reads,
+writes and uses. -/
 
 @[expose] public section
 
@@ -74,8 +53,6 @@ def Pipe.res : Pipe → Option Res
 def Pipe.nIn : Pipe → ℕ
   | .f64 => 6
   | _ => 4
-
-/-! ## Tensor-core formats -/
 
 /-- A tensor-core operand format: the integers `s8`, `u8` and `b1`, the floats, the block-scaled FP4 formats `nvf4` (a
 UE4M3 scale per 16 E2M1 operands) and `mxf4` (a UE8M0 scale per 32), and FP64. -/
@@ -166,8 +143,6 @@ def mulOut (fa fb : Fmt) (x y : ℕ) : Spec.Cls × Spec.Cls × Bool × ℕ × �
     (f.cls u, g.cls v, ((u >>> (f.expBits + f.manBits)) ^^^ (v >>> (g.expBits + g.manBits))) &&& 1 = 1, su * sv,
       (if eu ≠ 0 then eu else 1) + (if ev ≠ 0 then ev else 1))
 
-/-! ## MMA tiles -/
-
 /-- One accumulator's step: the accumulator's bits and a row's and a column's elements to the new accumulator's bits. -/
 abbrev Dot : Type := ℕ → List ℕ → List ℕ → ℕ
 
@@ -251,13 +226,10 @@ def mmaSpEval (dot : Dot) (fa fb : Fmt) (wide : Bool) (s : Shape) (v : ℕ → W
   BitVec.ofNat 32 (dot (accC wide (s.waSp fa + s.wsel + s.wb fb) v q) (rowASp fa s v (q / s.n))
     (colBSp fa fb s v (q / s.n) (q % s.n)) / 2 ^ (32 * (o % accWords wide)))
 
-/-! ## The card's semantics and the ACCEL ops -/
-
 /-- **The card's semantics**: the functions its instructions compute. No table states them; a statement over the model
 holds at every `Open` meeting P1 (`Card.Exact`) and P2 (`Open.ProductForm`, as `Assumptions.AccelProductForm`), and
 the card's own is one (`Assumptions.CardWithinAccel`). -/
 structure Open where
-  /-- the card's lane opcodes, each on its pipe, with what it computes from its input words (`pipe.nIn` of them) -/
   Lane : Type
   pipe : Lane → Pipe
   lane : Lane → (ℕ → Word) → Fin 2 → Word
@@ -286,7 +258,6 @@ inductive Opcode (x : Open) where
   | mma (o : x.Mma) (sh : Shape) (sa sb : Store)
   /-- a 2:4 sparse tile at logical shape `sh`, its kept `A` from `sa`, its metadata from registers and `B` from `sb` -/
   | mmaSp (o : x.Mma) (sh : Shape) (sa sb : Store)
-  /-- a lane function on registers -/
   | lane (o : x.Lane)
   /-- `n` words of store `s`, read once, to `k` copies in store `t` (output `i` is word `i % n`) -/
   | move (s t : Store) (n k : ℕ)

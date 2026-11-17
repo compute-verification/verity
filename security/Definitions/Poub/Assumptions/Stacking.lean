@@ -3,27 +3,8 @@ module
 public import Definitions.Poub.Carrier
 public import Definitions.Assumptions.ResourceAccounting
 
-/-!
-# Stacking's named assumptions: bound keys, the registered circuit's carriers, the steered layout (trusted)
-
-What the stacking guarantees (`Definitions/Poub/Guarantees/Stacking.lean`, `RegisteredCircuit.lean`) assume beyond
-PoUB's own and the gate model's `ResourceAccounting.Assumptions.SquaringFloor` and `ResourceAccounting.Assumptions.ChainSum`,
-each a named `Prop` taken as a hypothesis, never an `axiom`:
-
-* `KeyBinding T M δ enc` (declared in `Definitions.Assumptions.ResourceAccounting`, which this module re-exports): under the
-  append-coin rule (`ResourceAccounting.appendCoinBlocks`), whatever the writers choose for
-  each append from the codec and the coins of the appends before it, the blocks a pass reads at any layout fixed apart
-  from the encodings are on every event at most `δ` likelier than uniform blocks (claim `key-binding`).
-* `CircuitCarriers A store layout joined X L B εnum εden W Aud`: when each append's blocks are read within `L` windows
-  of the one it joined (`RateSketch.LifetimeCapped`), every pass device rebuilds at most `X` bits of its appended tiles
-  besides the sectors of one carrier, and that carrier is the registered circuit `W`'s computation over at most `L` of
-  the audit's windows (`RateSketch.Provenance.OfCircuit`). Registered tiles, whose keys are fixed for the
-  registration, are not bounded.
-* `SteeredLayout layout steer`: at each prefix of the session's coins, a pass's layout reads the codec and the append
-  coins only through the `a`-bit summary `steer` its devices are told. What `a` is, is the schedule check's
-  (`ResourceAccounting.ScheduleDeterministic`, `Poub.Schedule.check`): the bits of the schedule each credited plan is
-  the verifier's plan of.
--/
+/-! Stacking's named assumptions `KeyBinding`, `CircuitCarriers` and `SteeredLayout`; registered tiles, whose keys the
+registration fixes, are not bounded. -/
 
 @[expose] public section
 

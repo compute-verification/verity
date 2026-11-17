@@ -3,34 +3,8 @@ module
 public import Definitions.Poub.RateAudit
 public import Definitions.Poub.RateAuditJoint
 
-/-!
-# The rate audit with partial completion (trusted)
-
-`RateAudit.lean`'s game, except that rebuilding is no longer all-or-nothing. There, `rebuild j` returns the whole word
-`E_j` at `c_enc`, so a device that keeps part of a word and completes the rest (keep a word's top bits, complete the
-bottom `x` from the known payload by a lattice) falls outside the game. Here the chip may instead `complete j x g`:
-obtain `x ≤ b` bits of information about word `j`, any `x`-bit function `g` of it (its bottom `x` bits, or anything
-else), at a compute cost `cost x` that depends only on `x`. The device keeps whatever else of the word it needs in its
-on-chip state, device memory or side sources, which the audit counts as before. A whole rebuild is `complete j b _ id`,
-at `cost b`, so every device of `RateAudit.lean`'s game is one of this game.
-
-The cost is a parameter of the game, as `c_enc` is in `RateAudit.lean`. What it must be for a deployed codec is the
-named assumption `ResourceAccounting.Assumptions.WorkHardness` (`Definitions/Poub/Assumptions/RateAudit.lean`): completing `x`
-of a word's `b` bits costs at least `x/b` of a word's price, `rounds·c_root` for a codec of `rounds` rounds. The game is
-generous to the device: a completion returns its bits whether or not the device holds the rest of the word, and its cost does not depend on what it holds, so a device that
-completes from a hint is a device of this game whose hint it reads as before. A completion takes one word, so the game
-has no amortization across words (the claim `rate-codec-work`).
-
-Everything else (the random oracle at a fresh seed, the certified stream, on-chip state laid out before the seed,
-device memory read only through `ingress`, side sources answering any function of the store and the chip's address, the
-side link's `L` bits with the stream's `ρ` among them, the `q` queries, the sample sampled after the output) is
-`RateAudit.lean`'s, and a run's world is `Rate.World`, whose `store` answers completions.
-
-`RealizesRatePartial` is `RealizesRate` (`RateAuditJoint.lean`) for a joint run whose bandwidth audit a partial device
-plays, without `RealizesRate`'s compute field: that the game's compute and the compute account's work share no work is
-the named assumption `ResourceAccounting.Assumptions.RateComputeAdditive` (the actual-circuit model's W), which the guarantees take
-as a hypothesis.
--/
+/-! The rate audit with partial completion: the chip may obtain any `x` bits of a word at `cost x`, whose deployed price
+is `WorkHardness`. -/
 
 @[expose] public section
 
@@ -178,12 +152,9 @@ bandwidth account's reads from device memory cover. Unlike `RealizesRate`, it sa
 it shares no work with the compute account is `ResourceAccounting.Assumptions.RateComputeAdditive`. -/
 structure RealizesRatePartial {N b h ρ s : ℕ} {ι : Type} [Fintype ι] {d : Device ι} {α ΩW ΩS : Type} [Fintype α]
     (r : Run d α ΩW (RateCoins N b h ρ s) ΩS) where
-  /-- the device of the game at the other audits' coins -/
   dev : ΩW × ΩS → Rate.PartialDevice N b h ρ d.chip (∑ i, d.cap i * (r.win .bandwidth).len)
     (d.rate .oracle * (r.win .bandwidth).len)
-  /-- the bandwidth audit's verdict is the game's -/
   accepts_iff : ∀ x y s', r.accepts .bandwidth (x, y, s') ↔ (dev (x, s')).Accepts y.1 y.2.1.1 y.2.1.2 y.2.2
-  /-- the bandwidth account's reads from device memory cover the game's ingress -/
   ingress_le : ∀ x y s', (dev (x, s')).ingress y.1 y.2.1.1 y.2.1.2 ≤ r.read (x, y, s')
 
 end ResourceAccounting

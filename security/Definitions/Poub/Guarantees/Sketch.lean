@@ -4,28 +4,7 @@ public import Mathlib.Probability.Distributions.Uniform
 public import Definitions.Core.Prob
 public import Definitions.Poub.Tag.Sketch
 
-/-!
-# Exact integer ±1 sketches: the statements (trusted)
-
-The down-projection tag (`security/Definitions/Poub/Tag/Sketch.lean`): `k` rows of uniform signs, each row's inner
-product with a block's elements, computed exactly on the tensor cores.
-
-* `NonCollision`: two integer vectors fixed before the signs, if different, have the same sketch with probability at
-  most `2^-k` over `k` independent uniform ±1 rows.
-* `SmallCode`: `smallCode i` is the E4M3 code of the integer `smallValue i = i − 16`.
-* `Exact`: on sm_120's E4M3 tensor cores (`Pouw.PearlC.sm120Step`, the `⟨[32], 26, −133⟩` pipeline) a chain of up to
-  `2^15 − 1` steps from `+0`, with ±1 codes against data codes of `−16 … 16`, writes the exact integer sum: no step
-  rounds or truncates, since every partial sum stays below `2^24`.
-* `TensorCoreNonCollision`: the two together, for the words the tensor cores write.
-* `CommitThenProject`: a wrong product `C ≠ A·B`, committed before the signs, passes the check `S·C = (S·A)·B` with
-  probability at most `2^-k`, however `C` was computed.
-* `LittlewoodOfford`: one row is weak against partial reads. Whatever the row, `u` unread elements that each take one of
-  two values leave its inner product guessable with probability up to `C(u, ⌊u/2⌋)/2^u ≈ √(2/(π u))`, and no more.
-
-Each takes no hypothesis: a condition on its inputs (the vectors differ) is part of the event it bounds, and the bounds
-on the data and the chain's length are in their types. The theorems are in `security/Proofs/ResourceAccounting/Sketch.lean`, on
-the lemmas of `security/Proofs/Poub/Tag/`.
--/
+/-! Exact integer ±1 sketches: the statements, each with no hypothesis. -/
 
 @[expose] public section
 

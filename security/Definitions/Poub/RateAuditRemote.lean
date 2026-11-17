@@ -3,42 +3,8 @@ module
 public import Definitions.Poub.RateAudit
 public import Definitions.Poub.RateAuditInteractive
 
-/-!
-# The remote rate audit: a store over tiers, and chained passes (trusted)
-
-Two additions to the rate audit's game (`RateAudit.lean`, `RateAuditInteractive.lean`) for the remote protocol, where
-no prover hardware is trusted, the store spans the node's memory tiers, and the verifier sends one challenge a window.
-
-**Tiers.** The node's memory is one address space, device memory as `RateAudit.lean` lays it out before the seed, split
-into tiers by a map `tier : ℕ → Fin τ` from addresses (each GPU's HBM, host DRAM: any partition). The chip is everything
-on the node that computes (its GPUs and its host CPUs together), so a receipt the node computed is the chip's wherever
-on the node it was computed, and a read of any tier is a read of device memory: host DRAM read over PCIe is not side
-traffic. `IChip.tierBits` counts one tier's reads. A tier's read capacity over the window, `cap t = R_t·T` in bits,
-bounds the chip's reads of it in every world (`InteractiveProver.TierCapped`). The side link `L` is then what crosses
-the node's boundary (its NIC) in the window and a round trip, and the side sources are everything beyond it.
-
-**Correct receipts.** A receipt is `RateAudit.lean`'s tag. `InteractiveProver.correct` is the set of words whose
-committed receipt is the oracle's, `H(σ, R, j, E_j)`, however it was produced: queried by the chip, relayed in by a side
-source that sees the oracle, or guessed. The verifier never sees this count; the guarantees bound it directly, with no
-sample.
-
-**Chained passes.** A window runs `P` passes, each one read of the store with a receipt per word. Pass `j`'s seed is
-`H(σ_t, j, root_{j−1})`: its oracle is the family `H(σ_t, j, ·, ·, ·, ·)`, a uniform function of the root and the
-receipt's inputs, evaluated at the root the prover committed for pass `j − 1` (the Merkle root of its receipts; any
-root for pass 0). The pass index in the seed separates the passes' oracles, so equal roots in two passes give
-independent oracles; the design's seed `H(σ_t, root_{j−1})` has no index. The pass boundary is where `root_{j−1}` is
-fixed: from there on the chip runs pass `j` from what it holds then, at most `S` bits on chip (`bandwidth-s-chip` at
-every boundary), and device memory as laid out. So pass `j`'s device (its state, device memory, side sources and chip
-program) and the root it is seeded at are any function of the store and of the earlier passes' coins (their streams,
-their oracle families at every root and their samples), and of nothing of its own pass or later. `Chain.oracle` is pass
-`j`'s oracle at that root. Each pass samples its own sample of `s` words after its output.
-
-**Grinding.** The seed is Fiat–Shamir (`fiat-shamir`), so a prover may hash candidate roots with pass `j`'s seed before
-it commits one, and keep the root whose oracle it likes. `GrindChain` gives it `G` candidates, fixed by the earlier
-passes' coins and the store, and lets it pick one as any function of pass `j`'s whole oracle family; pass `j`'s device
-may depend on the pick. Keeping one candidate at every pass is a `Chain` (`GrindChain.atCand`), so grinding costs at
-most a factor `G` in each pass's error.
--/
+/-! The remote rate audit's additions: a store over the node's memory tiers, and chained passes whose roots the prover
+may grind. -/
 
 @[expose] public section
 
@@ -146,7 +112,6 @@ def oracle (A : GrindChain P N b h ρ S L q r s G) (j : Fin P) (E : Store N b) (
     Oracle N b h ρ :=
   (ω j).2.1 (A.cand j (fun i => ω i.1) E (A.kept j E ω))
 
-/-- The chained prover that keeps candidate `c` at every pass. -/
 def atCand (A : GrindChain P N b h ρ S L q r s G) (c : Fin G) : Chain P N b h ρ S L q r s where
   device j η := A.device j η c
   root j η E := A.cand j η E c

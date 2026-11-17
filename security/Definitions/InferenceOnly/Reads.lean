@@ -2,12 +2,7 @@ module
 
 public import Definitions.InferenceOnly
 
-/-!
-# The inference-only policy in reads form: reads in a set of gates
-
-`readsIn d R G` counts what `R` reads physically, baseline included, but only in the gates `G`: the width of
-`in(R) ∩ G`. At `G = univ` it is at least `freshInput d R`, which leaves the baseline out.
--/
+/-! The inference-only policy in reads form: what a set of gates reads, baseline included, within the gates `G`. -/
 
 @[expose] public section
 

@@ -33,29 +33,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# The receipts' fork game (trusted)
-
-What the receipts' binding term (`Receipts.binding`) is bounded by: two runs of the session from window `t`'s cut on
-independent openings coins (`cont t`, `Remote.Sample`), and what each break of them costs. `Receipts.held` is the
-plurality of the rows a receipt shows (`Receipts.Shows`) over those continuations, so a move squared is at most a fork.
-
-* `Receipts.Broken D prf rest t ω ζ`: **the fork's break**. Some receipt window `t` opens in both runs, `ω` and
-  `cont t ω ζ`, has two different messages of one SHA-512 digest among what the two openings' checks hashed: under the
-  leaf and path checks, or under the row digests (`Hash.RowLeaf.outerHashed`, `innerHashed`).
-* `Receipts.Split D prf rest t ω ζ`: **the roots split**. Some receipt window `t` opens in both runs has its verifier,
-  root or rank differ between them. Two accepted openings bind each other only at one root (`Hash.Guarantees.RowBinding`),
-  so a fork whose roots split breaks nothing. A window whose receipts' roots, ranks and verifiers are fixed by its cut
-  never splits. The deployed prover is sent window `t`'s coin only after its roots are in, and the challenger's
-  commitment to the coins only with the outcome, so its roots read only what precedes window `t`'s coin; that the cut
-  fixes them is not yet a premise of the guarantees, and nothing here bounds `split` (the gap `binding-split`).
-* `Receipts.fork` and `Receipts.split`: their probabilities over a uniform pair `(ω, ζ)`.
-* `Receipts.finder D prf rest t q`: **window `t`'s fork finder**, a SHA-512 collision finder (`Claims.Finder`) on the
-  coins `(ω, ζ)`. It runs the session on `ω` and on `cont t ω ζ`, and for a receipt both runs open it outputs two
-  different messages of one digest among what the two openings' checks hashed, when there are (`Receipts.Finds`). Its
-  cost is `q`, the SHA-512 calls of two runs of the prover and the verifier's checks of their openings; claim
-  `cr/sha-512` (`Claims.StrictBirthday`) bounds its chance by `q²/2^513`.
--/
+/-! The receipts' fork game, which bounds their binding term; nothing here bounds `split`. -/
 
 @[expose] public section
 
@@ -69,8 +47,6 @@ namespace Receipts
 
 variable (R : Receipts n κ X) {m : ℕ} {s : Fin n → ℕ}
 
-/-- **The fork's break at window `t`**: some receipt the window opens in both `ω` and its continuation on `ζ` has two
-different messages of one digest among what the two openings' checks hashed. -/
 def Broken (D : Run n m s κ X) (prf : Fin n → Pous.Bits κ → Blocks m) (rest : SampleCoins n κ X → Fin n → ℕ → ℕ)
     (t : Fin n) (ω ζ : SampleCoins n κ X) : Prop :=
   ∃ p ∈ D.opened prf rest t ω, p ∈ D.opened prf rest t (cont t ω ζ) ∧
@@ -90,7 +66,6 @@ def Split (D : Run n m s κ X) (prf : Fin n → Pous.Bits κ → Blocks m) (rest
     ¬ (R.verifier t (cont t ω ζ) p = R.verifier t ω p ∧ R.root t (cont t ω ζ) p = R.root t ω p ∧
       R.rank t (cont t ω ζ) p = R.rank t ω p)
 
-/-- The probability of window `t`'s fork break over a uniform pair of coins. -/
 noncomputable def fork [Fintype X] (D : Run n m s κ X) (prf : Fin n → Pous.Bits κ → Blocks m)
     (rest : SampleCoins n κ X → Fin n → ℕ → ℕ) (t : Fin n) : ℝ≥0∞ :=
   Pous.pr fun y : SampleCoins n κ X × SampleCoins n κ X => R.Broken D prf rest t y.1 y.2

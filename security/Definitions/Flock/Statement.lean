@@ -8,21 +8,8 @@ public import Mathlib.Data.ZMod.Basic
 public import Mathlib.Tactic.Ring
 import Mathlib.Tactic.Ring.RingNF
 
-/-!
-# Statements, witnesses, claims and the committed values
-
-Every statement proves one block R1CS over GF(2) (`Flock.Statement`): `A·z ∘ B·z = z` with
-`A = I ⊗ A₀`, `B = I ⊗ B₀`, a pinned constant column equal to 1 in every block, and public
-regions whose bits the verifier knows (`Flock.Statement`). This block R1CS is the circuit's lowered layout;
-that it means the named circuit is the lowering theorem (level 3), outside this lane.
-
-**The committed values.** The prover commits a level-0 table `C₀` (`Flock.Ligerito`: `2^k₀` lanes, one
-Reed–Solomon codeword position per column). In Flock's list-decoding regime a table is close to
-up to `L₀` codewords, and no out-of-domain sample follows the commitment (`Flock.Piop`, paper Remark 11),
-so the commitment binds to that short list, not to one witness. `CommittedSatisfies` says that
-some message whose encoding is within the level-0 proximity radius of `C₀` unpacks to a witness
-satisfying the statement. This is the claim soundness certifies.
--/
+/-! Statements (one block R1CS over GF(2)), witnesses, claims, and the committed values soundness certifies
+(`CommittedSatisfies`). -/
 
 @[expose] public section
 
@@ -90,8 +77,6 @@ def Satisfies (z : Witness S.m) : Prop :=
 
 end Statement
 
-/-! ## Claims -/
-
 variable {F : Type} [Field F]
 
 /-- A claim handed to the opening (`Flock.Piop`): `(value, skip weights, point)`. -/
@@ -107,10 +92,7 @@ def Claim.eval {m : ℕ} (c : Claim F m) (z : Witness m) : F :=
   ∑ a : Fin (2 ^ m), c.skip ⟨a.val % 64, Nat.mod_lt _ (by norm_num)⟩ * eqAt c.x (a.val / 64)
     * ((z a).val : F)
 
-/-- A claim holds for a witness. -/
 def Claim.Holds {m : ℕ} (c : Claim F m) (z : Witness m) : Prop := c.eval z = c.value
-
-/-! ## The committed values -/
 
 /-- A level-0 table: `2^k₀` lanes, `2^d₀` codeword positions (`Flock.Ligerito`). -/
 abbrev Table (F : Type) (lanes d : ℕ) := Fin (2 ^ lanes) → Fin (2 ^ d) → F

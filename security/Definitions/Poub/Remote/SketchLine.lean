@@ -35,27 +35,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# The memory line's coins as a sketch outcome (trusted)
-
-The memory line (`Properties.Poub.Line.LineHeld`) is a statement over a session's coins
-`ResourceAccounting.Remote.Sample.SampleCoins n κ X`: the other coins `X` (the prover's, the world's, every window's challenge) and each
-window's openings coin, all uniform. The receipts' sketch bound (`ResourceAccounting.Guarantees.Remote.SketchBoundDeployed`) is
-a statement over a session's outcomes `ResourceAccounting.Remote.Sketch.Outcome β Hs N m`: the prover's own coins, the
-registered store and SHA-512's outputs, all uniform. One space carries both: the line's coins whose other coins are a
-sketch outcome, `Sample.SampleCoins n κ (Outcome β Hs N m)`. Read the other way round it is a sketch outcome whose
-prover's coins are `β` and the windows' openings coins, `Outcome (β × (Fin n → Bits κ)) Hs N m` (`lineCoins`, a
-bijection). The prover is sent every openings coin once it is released, and the sketch model's devices may read its
-prover's coins in any way, so a device that reads an openings coin early is one of the model's.
-
-* `lineCoins ω`: the sketch outcome `ω` read as the line's coins.
-* `Trace.sketch T O`: the line's trace `T` on that space read on the sketch model's outcomes, with the registered blocks
-  a device outside the node computes on at a tick (`Outside.blocks`) counted with the chips' then. Where a block is,
-  the sketch model reads only `present`, so `Present A (T.sketch O)` is the sketch model's `Present` with outside
-  computation allowed (a block the kept candidate obtained whole was on the node or computed on outside it at a tick
-  of its pass), which the relay prover meets, and `SketchBound (T.sketch O) δ` is `SketchBoundAt T O δ` over the line's
-  coins.
--/
+/-! The memory line's coins read as a sketch outcome (`lineCoins`). -/
 
 @[expose] public section
 

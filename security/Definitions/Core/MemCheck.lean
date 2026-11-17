@@ -6,25 +6,8 @@ public import Mathlib.Algebra.Field.Defs
 public import Mathlib.Data.Fintype.Card
 public import Mathlib.FieldTheory.Finite.GaloisField
 
-/-!
-# Offline memory checking
-
-Offline memory checking (Blum, Evans, Gemmell, Kannan and Naor) checks a log of memory accesses without keeping the
-memory. Each access reads an address, finding a value and the time it was written, and writes a value there at its own
-time (`Access`); `ram` is the memory the log describes. The check (`Checked`) asks that times increase along the log, that
-each access reads a time before its own, and one equality of multisets of records (address, value, time): the records the
-reads consume with the final contents of the touched addresses, against the records the writes produce with their initial
-contents at time `0`. What an accepted log reads is `Verity.Guarantees.MemoryChecked`.
-
-The verifier tests that equality by a fingerprint over a finite field `F`, at coins it samples after both multisets are
-committed. A record is packed into `m` chunks `c : Fin m → F`; its element at a coin `γ` is `∑ i, γ^i · c i` (`element`),
-and a multiset of packed records has the fingerprint `∏ c, (α + element γ c)` at coins `α` and `γ` (`fingerprint`). The
-same `element`, at a coin of its own, prints a key packed into `m` chunks as one field element. Packing is the caller's:
-an injective one keeps different multisets of records different. The deployed field is GF(2^128), Mathlib's
-`GaloisField 2 128`, finite by `gf128Fintype`.
-
-What a collision of each costs is `Verity.Guarantees.FingerprintCollision` and `Verity.Guarantees.PrintCollision`.
--/
+/-! Offline memory checking of a log of accesses, and the fingerprint over a finite field that tests its multiset
+equality. -/
 
 @[expose] public section
 
@@ -33,7 +16,6 @@ namespace Verity.MemCheck
 /-- One access of a memory log: it reads the address `a`, finding the value `v` written there at time `t`, and writes the
 value `w` there at its own time `now`. -/
 structure Access (A V : Type) where
-  /-- The address it accesses. -/
   a : A
   /-- The value it reads. -/
   v : V

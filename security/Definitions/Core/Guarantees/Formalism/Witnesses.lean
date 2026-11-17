@@ -3,21 +3,7 @@ module
 public import Definitions.Core.Guarantees.Formalism
 public import Definitions.Core.Formalism.Instances
 
-/-!
-# The size of a `(c, k)`-partitioned circuit and Theorem 3: honest and nontrivial lemmas
-
-`CKSize` and `Counting` each have two statements here, at the instances of
-`security/Definitions/Core/Formalism/Instances.lean`.
-`CKSize_honest`: its premise holds at `Honest`, a `(2, 1)`-partition with a proof block of fewer than `c` gates.
-`CKSize_nontrivial`: at `Counter`, one proof block of three gates, the premise fails at `(c, k) = (2, 1)`, and so does
-the bound, `|C| = 3 > 2 · 1`.
-`Counting_honest`: at `Honest`, counting the operation gates at `weight` with the allowance `q = 2`, its premises hold
-and its bound is attained: each proof block weighs `q`, so `(c / q) Σ ω = 4 = c · B`.
-`Counting_nontrivial`: the same, at `heavy`, every premise but the allowance holds, the second proof block weighs `3`,
-above `q`, and the bound fails, `(c / q) Σ ω = 5 > c · B = 4`.
-
-The proofs are in `security/Proofs/Core/Formalism/Witnesses.lean`.
--/
+/-! The honest and nontrivial lemmas of `CKSize` and `Counting`, at the instances of `Formalism/Instances.lean`. -/
 
 @[expose] public section
 

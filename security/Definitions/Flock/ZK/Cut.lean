@@ -4,31 +4,7 @@ public import Definitions.Flock.ZK.Table
 import Mathlib.Tactic.NormNum.Inv
 import Mathlib.Tactic.NormNum.Pow
 
-/-!
-# Zero knowledge: what a prover that stops has sent
-
-The prover refuses three kinds of coins (`backends/flock/live/PROTOCOL.md` §7 "Refused coins", `flock-circuit.rs`'s
-`refused_coins`), each checked just before the messages it guards and each stopping the whole session, after which no
-proof is sent (the barrier: every proof follows the session's last coin):
-
-* **the opening's rank check** (§6, `zk_masking`'s `at_open`): before rep `r`'s `ŝ`, the mask slot's weights must span
-  over every masked claim point of the table so far, rep `r`'s and the earlier reps' (`all.extend(…)` then
-  `mask_rank_ok(&all)`, one list per table);
-* **the restart's `ρ` check** (§7 item 3): `ρ^r₀, ρ^r₁` independent over `F`, before `T'^r`, `ȳ^r` and levels ≥ 1;
-* **the inner proof's `β` check** (§5 step 3): `β^r ≠ 0`, before `Y`.
-
-The prover sends tables in order, each table's rep 0 before its rep 1 (`for rep in 0..2`: rep 1's stream opens after rep
-0's last round), and in each rep the opening, then the restart, then the inner proof (§1). So the session stops at the
-first failing check in that order, and a guarded message is sent exactly when every check up to its own passes.
-
-* `Table.Sent`: which guarded messages one table sent. `Table.RankOn`: the rank check over a set of claims.
-  `Table.Admits`: the checks that guard the sent messages passed.
-* `Table.Cut` and `Table.cut`: the pre-final view in world `W₀` with the guarded messages a table didn't send removed.
-  It keeps everything else whole, even where the prover stopped before sending it: a stopped prover's view is a fixed
-  function of the cut (at fixed coins), so a statement about the cut is at least as strong.
-* `Session.pos`, `Session.guard`, `Session.passes`, `Session.sent`: the session's order, its checks, and what each table
-  sent when the session stops at the first failing check. `Refusal.Session.sent_admits` proves that it is admitted.
--/
+/-! Zero knowledge: what a prover that stops at the first failing refused-coin check has sent (`Session.sent`). -/
 
 @[expose] public section
 
@@ -54,8 +30,6 @@ words reaches every vector of their values. `Rank` is the check over every claim
 def RankOn (P : Fin T.nC → Prop) : Prop :=
   Function.Surjective fun c : Fin T.nMask → ZMod 2 => fun k : {k // P k} => ∑ x, T.eqw k.1 x * castF (c x)
 
-/-- **The sent messages' checks passed**: the rank check over the claims whose `ŝ` was sent, `W^r` invertible for each rep
-whose restarted table was sent, `β^r ≠ 0` for each rep whose `Y` was sent. -/
 def Admits (S : T.Sent) : Prop :=
   T.RankOn S.cl ∧ (∀ r, S.y1 r → Function.Bijective fun p : F × F => T.Wr r p.1 p.2) ∧ (∀ r, S.fin r → T.β r ≠ 0)
 

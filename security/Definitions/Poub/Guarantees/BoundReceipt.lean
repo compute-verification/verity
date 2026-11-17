@@ -7,33 +7,8 @@ public import Definitions.Pouw.Assumptions.NCP.RouteUAssumptions
 public import Definitions.Pouw.Assumptions.PearlC.TTOutW1
 import Mathlib.Basic.ENNReal.Real
 
-/-!
-# Receipts bound to the matmul: co-location and the link relay (trusted)
-
-The game is `security/Definitions/Poub/BoundReceipt.lean`; proofs are in
-`security/Proofs/Poub/BoundReceipt/`. No named assumption of its own: the generic-mix model (the mix a random
-oracle, the tile outputs uniform) is the game, and deployment premises carry it to the deployed receipt
-(`random-oracle` for the mix and the sketch inside it,
-`rate-codec-work` for `c_enc`, `bandwidth-instantiation` for the store), with the ideal tile's work half stated in
-PoUW's game (`TileUnpredictable`), from PoUW's named assumptions.
-
-* `Colocation`: a receipt is right only where it was made. At every store and tile outputs, the probability over the
-  mix that the GPU or the rest commits block `j`'s right receipt without having queried the mix at both `E_j` and
-  `z_j` is at most `2/2^h`.
-* `BoundReceiptLink`: relaying a block costs its tile output out or its contents in. An accepted node whose GPU's
-  compute is within `F`, whose rest's tile work is within `F_z` and whose GPU's HBM footprint is short of `RateAudit`'s
-  floor at `k − m` blocks, with `m` blocks the rest's link and tile work can't cover, has probability at most
-  `((k − 1)/N)^s + 2s/2^h + C(q, k − m)/2^λ + C(q_z, m + 1)/2^λ`.
-* `BoundReceiptLinkInteractive`: the same bound when the locations' answers to each other depend on the mix (`e > 0`),
-  for a node the mix reaches only through its queries.
-* `BoundReceiptShare`: the link's share. At `m = covered`, the link bits each way stand in for at most
-  `|E|/min(|z|, |E|)` times their number of the store's bits, so `μ_link ≤ (link capacity/ΣR)·|E|/min(|z|, |E|)`.
-* `TileUnpredictableOfTT` and `TileUnpredictableOfNCPU`: PoUW's `TT` and `TT_NCP_U` each give `TileUnpredictable`.
-* `TileUnpredictableMono`: `TileUnpredictable` carries to more compared entries and less credit, so one for the bound
-  partial accumulators (`boundEntries`) gives it for every set that contains them.
-* `TileUnpredictablePearlCOfTTOut`: an assumption of Pearl-C's `TT_OUT` shape at W1, at any Pearl-C protocol, gives the
-  same hypothesis in Pearl-C's game at W1 (`TileUnpredictablePearlC` at `W1.w1Priced`).
--/
+/-! Receipts bound to the matmul: co-location, the link relay and the tile's unpredictability, with no named
+assumption of their own. -/
 
 @[expose] public section
 
@@ -241,10 +216,7 @@ def TileUnpredictableOfNCPU : Prop :=
     Pouw.NCP.Assumptions.TTNCP_U β CM P D g₀ δ →
       TileUnpredictable CM (P.toProtocolU β) (fun sh => 3 * (sh.Wmm : ℝ)) D g₀ δ
 
-/-- The protocol `P` comparing only those of its entries in `keep`: the partial accumulators a receipt binds. NCP's
-checked values are its running sums at the block ends `min((t + 1)·d, 3k)` (`Pouw.NCP.Params.YU` on route U), so at
-`d = k_s` the checkpoints at depths `k_s·t`, `1 ≤ t ≤ t_s`, are
-`boundEntries (P.toProtocolU β) (fun sh => range t_s ×ˢ (range sh.m ×ˢ range sh.n))`, whose work is `m·n·k_s·t_s`. -/
+/-- The protocol `P` comparing only its entries in `keep`: the partial accumulators a receipt binds. -/
 def boundEntries {Q R S : Type} (P : Pouw.Protocol Q R S) (keep : Pouw.Shape → Finset (ℕ × ℕ × ℕ)) :
     Pouw.Protocol Q R S :=
   { P with checkIdx := fun sh => P.checkIdx sh ∩ keep sh }

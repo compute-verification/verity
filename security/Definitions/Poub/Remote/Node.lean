@@ -3,36 +3,7 @@ module
 public import Mathlib.Basic.Real.Basic
 public import Mathlib.Algebra.BigOperators.Group.Finset.Defs
 
-/-!
-# PoUB's node, its parameters and the γ terms (trusted)
-
-PoUB (`verity/protocols/accounting/poub/verifier/PROTOCOL.md`) certifies that a node's memory read bandwidth went to
-registered data. The node is a set of compute (every GPU die, host CPU and root complex: the console's actual-circuit
-model's location `X_N`), its memory tiers and its boundary links (the NIC; NVLink to any GPU outside the node). A memory
-tier (each GPU's HBM, the host's DRAM) is a location whose links all go to the node's compute; with the tag's oracle a
-location of its own, causality and the Links row give that it hears only the node's compute (`HearsChip`), so its port
-is counted at `β_m` bits a tick. A tier the audit rates at `R = 0` is unrated. A fleet audited at once, or an NVLink
-domain, is a node too (`Node.fleet`): its boundary is the fleet's, and the links between its members are inside it.
-
-Over an audited interval `I` of `T` ticks, in `P` chained passes of `T + RTT` each, the audit's receipts cover the
-declared capacity `C = Σ_m R_m · T` (`Node.declared`), against the node's calibrated capacity `C_true = Σ_m β_m · T`
-(`Node.capacity`). Each γ term is a quantity of the model, named for the row of the model it comes from:
-
-* `muChip` (μ_chip, the Memory row and the content's length bit): `P · (M_N + 1) / C`.
-* `muRebuild` (μ_rebuild, the rebuild as a fit at π_r: the Compute row, WorkHardness in partial-completion form, and W
-  when `W_r > 0`): `b · (Φ_r · T − W_r) / (c_word · C)`.
-* `muHost` (μ_host, the tiers' calibrated ceilings): `(C_true − C) / C_true`, host DRAM's ceiling above its rate, any
-  HBM rated below its ceiling, and the whole ceiling of an unrated tier.
-* `muLambda` (λ, the guessing slack of each pass): `P · λ / C`.
-* μ_sample is the sampler's `ε` itself (`Run.Sampled`).
-* `muLink` (μ_link, the Links row, counted by signals, and the bound receipt): `(β_in + β_out · b / z_b) · T / C`.
-* `muOut` (outside work at PoUW's pricing): `b · Φ_out · T / (W_tile · C)`.
-
-`gamma` is the node-level guarantee's γ under Identity (statement C): μ_sample + μ_chip + μ_rebuild + μ_host + λ. Under
-Identity there is no undeclared device of any kind, so μ_link is reported beside it, not charged. `gammaLinks` adds
-μ_link and μ_out, for the weaker statement that allows memory-only helpers and outside work. Every term but `muHost` is
-relative to `C`; `muHost` converts `C` into `C_true`.
--/
+/-! PoUB's node, its audit parameters and the γ terms. -/
 
 @[expose] public section
 
@@ -55,7 +26,6 @@ structure Node (τ : Type) where
   /-- Φ_r: the node compute's priced work per tick at the rebuild pricing π_r (the codec's squarings, on every GPU and
   CPU of the node), the Compute row's fit at π_r -/
   rebuild : ℕ
-  /-- a tier's rate is within its calibrated ceiling -/
   rate_le : ∀ m, rate m ≤ ceil m
 
 /-- PoUB's parameters over an audited interval. -/
@@ -64,7 +34,6 @@ structure Audit where
   T : ℕ
   /-- the chained passes; pass `j`'s seed is `H(σ_t, root_{j−1})` -/
   P : ℕ
-  /-- b: a word's bits -/
   b : ℕ
   /-- z_b: the bits of the prior PoUW tile's noised output `z` that a receipt binds (`sketch(E_j ⊙ expand(z_{j−1}))`) -/
   zb : ℕ
@@ -78,7 +47,6 @@ variable {τ : Type} [Fintype τ]
 /-- C: the declared capacity over `T` ticks, `Σ_m R_m · T` bits, which the audit's receipts cover. -/
 def Node.declared (N : Node τ) (T : ℕ) : ℕ := ∑ m, N.rate m * T
 
-/-- C_true: the node's calibrated capacity over `T` ticks, `Σ_m β_m · T` bits, all its memory tiers could carry. -/
 def Node.capacity (N : Node τ) (T : ℕ) : ℕ := ∑ m, N.ceil m * T
 
 /-- A fleet audited at once, or an NVLink domain, as one node: the members' tiers, chips and rebuild work together, with
@@ -93,17 +61,13 @@ def Node.fleet {ι : Type} {τ : ι → Type} [Fintype ι] (Ns : ∀ i, Node (τ
   rebuild := ∑ i, (Ns i).rebuild
   rate_le m := (Ns m.1).rate_le m.2
 
-/-- μ_chip: `P · (M_N + 1) / C`, the node's on-chip state, with its length bit, at each pass boundary. -/
 noncomputable def muChip (N : Node τ) (a : Audit) : ℝ := a.P * (N.chip + 1) / N.declared a.T
 
-/-- μ_rebuild: `b · (Φ_r · T − W_r) / (c_word · C)`, the bits the node's spare work at the rebuild pricing can rebuild,
-where `W_r` is the work at π_r that PoUW certifies. At `W_r = 0` it rests on the Compute row alone; subtracting `W_r`
+/-- μ_rebuild: `b · (Φ_r · T − W_r) / (c_word · C)`, `W_r` the work at π_r that PoUW certifies. Subtracting `W_r`
 needs W (`Run.Fit`). -/
 noncomputable def muRebuild (N : Node τ) (a : Audit) (Wr : ℝ) : ℝ :=
   a.b * (N.rebuild * a.T - Wr) / (a.cWord * N.declared a.T)
 
-/-- μ_host: `(C_true − C) / C_true`, the tiers' calibrated capacity the rates leave unexhausted (host DRAM's ceiling
-above R_host, any HBM rated below its ceiling, an unrated tier's whole ceiling). -/
 noncomputable def muHost (N : Node τ) (a : Audit) : ℝ :=
   ((N.capacity a.T : ℝ) - N.declared a.T) / N.capacity a.T
 
@@ -112,11 +76,8 @@ carried out unlocks `b / z_b` bits of reads outside the node. -/
 noncomputable def muLink (N : Node τ) (a : Audit) : ℝ :=
   (N.linkIn + N.linkOut * a.b / a.zb) * a.T / N.declared a.T
 
-/-- λ's share: `P · λ / C`. -/
 noncomputable def muLambda (N : Node τ) (a : Audit) : ℝ := a.P * a.lam / N.declared a.T
 
-/-- μ_out: `b · Φ_out · T / (W_tile · C)`, the bound `z` that outside work at PoUW's pricing (at most `Φ_out` per tick,
-each `z` costing `W_tile`) can compute, amplified by `b / z_b`. -/
 noncomputable def muOut (N : Node τ) (a : Audit) (Φout Wtile : ℝ) : ℝ := a.b * Φout * a.T / (Wtile * N.declared a.T)
 
 /-- γ under Identity (statement C) = μ_sample + μ_chip + μ_rebuild + μ_host + λ, at sampler error `ε` (μ_sample) and

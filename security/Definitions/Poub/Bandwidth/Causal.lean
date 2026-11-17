@@ -4,25 +4,8 @@ public import Definitions.Poub.Bandwidth.Game
 public import Definitions.Pouw.Confidence
 import Mathlib.Basic.ENNReal.Real
 
-/-!
-# The bandwidth audit on a strategy's runs: the chip's ports (trusted)
-
-The vocabulary of the actual-circuit model's rows B3 and Mbw on the runs of a strategy. A strategy here maps the store
-(for Mbw, the store and `z`) and the oracle to a run, `S : ε × Oracle N b h → Actual.Run L`; the chip is the location
-`X` and the window is `[t₀, t₀ + T)`. What the chip did since `t₀` is `Actual.Run.acts` over `X` (`Acts`), and what
-reaches it at a tick is what its ports carry (`portSignals`: each port a link and the leaf of `X` it delivers to).
-
-Three hypotheses on the chip's ports, each over the window, each a constraint of the model's table that the guarantees
-take as a hypothesis:
-- `PassiveMemory` (the model's passive memory): HBM's ports deliver a function of the strategy's input other than the
-  oracle and of what the chip did, and given what the chip did, one of at most `2^{wd}` signals: a read carries only its
-  values, at the width `wd` the chip's requests fix. HBM computes no tag and signals nothing through when it delivers.
-- `HearsChip` (the capacity form's): HBM's ports deliver a function of the strategy's input other than the oracle and of
-  what the chip did, with no bound on how many signals; with HBM's links as alphabets that is passive memory at their
-  capacities summed.
-- `OracleLocation`: the oracle's ports deliver a function of what the chip did and of the oracle's answers to the
-  queries `Q` that fixes, the oracle being a location the chip queries and nothing else reads.
--/
+/-! The bandwidth audit on a strategy's runs: the chip's ports and the hypotheses on them (`PassiveMemory`, `HearsChip`,
+`OracleLocation`). -/
 
 @[expose] public section
 

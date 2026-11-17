@@ -5,25 +5,8 @@ public import Definitions.Poub.RateAuditInteractive
 public import Definitions.Poub.RateAuditRemote
 public import Definitions.Poub.RateAuditPooled
 
-/-!
-# Conservation over tiers with named words (trusted)
-
-`RateConservationRO`'s compression names which `k` of the run's `q` oracle queries hold the correct receipts' words,
-`log₂ C(q, k)` bits, which `λ` must cover. Naming the `k` words themselves costs `log₂ C(N, k)`: a decoder that replays
-the chip recomputes its queries and the receipts it committed, and finds each named word's contents at the query whose
-oracle value is that word's receipt. Two of the run's queries with one oracle value could mislead it, at
-`C(q, 2)/2^h`. Proofs are in `security/Proofs/Poub/RateAudit/Named.lean`. No named assumption, as for
-`RateConservationRO`.
-
-* `RateConservationNamedRO`: at a count `k`, `C(N, k)/2^λ` in place of `C(q, k)/2^λ`.
-* `RatePaidNamedRO`: at every count at once, `2^N/2^λ` in place of `RatePaidRO`'s `2^q/2^λ`.
-* `RateChainSampledNamedRO`: the route `Sampled` (`RateChainSampledRO`) with that error at each pass.
-* `RateRunSampledNamedRO`: the route `Sampled` for a session of windows, each closed by its pooled sample
-  (`RateRunSample`): over the monitoring period and in every window at once.
-
-The prover is one undifferentiated resource: these conserve the words read, rebuilt or held, whichever devices or
-parties read, rebuild or hold them, with no assumption on who they are.
--/
+/-! Conservation over tiers naming the `k` words themselves, at `C(N, k)/2^λ` in place of `C(q, k)/2^λ`, with no named
+assumption. -/
 
 @[expose] public section
 

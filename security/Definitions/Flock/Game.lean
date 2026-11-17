@@ -11,13 +11,7 @@ public import Mathlib.Algebra.BigOperators.Group.Finset.Defs
 public import Mathlib.Basic.ENNReal.Basic
 public import Mathlib.Data.Fintype.Card
 
-/-!
-# Flock's game vocabulary is Core's
-
-Every name here is an alias (`export`) of Core's definition in `Definitions.Core.Game` and its `Batch`, `Expect`,
-`Lock`, `Prob` and `Seq`, so Flock's spec and every other protocol's read one game library. Flock's own game
-vocabulary, the bind tape and `seqG`, is `Definitions.Flock.Game.Tape`.
--/
+/-! Flock's game vocabulary, aliases of Core's one game library. -/
 
 @[expose] public section
 

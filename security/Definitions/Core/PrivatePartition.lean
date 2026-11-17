@@ -3,30 +3,8 @@ module
 public import Definitions.Core.Advice
 public import Definitions.Core.RegisteredCircuit
 
-/-!
-# Private partitions with public predicates
-
-A private partition is the registered compiler's output on the prover's advice, and the advice is committed under a hidden
-root before any coin that depends on it: its rows, under salts of the prover's choosing, in the advice tree (`Advice`).
-The verifier never sees it: it holds the public predicates `Q` and the root, and the commitment's proof shows that the
-compiler's partition on advice with that root meets `Q` (`Commits`). This is `verity/partition/v2`; `verity/partition/v1`'s public partition is unchanged.
-
-`Partition`'s type already gives covering and disjointness: every computed gate is in exactly one unit, and inputs are in
-none. The predicates add the rest of the draft's global ones:
-* no unit is empty (G2);
-* the width rule (G4, `Fits`): unit `u`'s outputs, out(R) for its gates `R` (`outs`), total at most `X` bits, with no
-  single-value exception (`from_v1` maps Q_word{X, W} to `X`);
-* the count (G6): `n` units, at most the padded count `Q.units`;
-* the caps (G7): each unit has at most `Q.maxGates` gates and reads at most `Q.maxInBits` bits from outside.
-
-The width rule holds for every unit, wrong or not, which is what bounds the bits that incorrect proof blocks can leak.
-
-The commitment's proof checks the width rule once per Definition, not per unit. Its advice is a Call table, the circuit's
-computed gates grouped into root Calls with each Call's returned gates (`Calls`), and per Definition a cut, an owner per
-gate of the Call. Unit `u`'s outputs inside its Call (`localOuts`) are its gates that the Call returns, or that a gate of
-another unit of the same Call reads. They depend only on the Call's own graph, so all Calls of one Definition share them,
-and every global output of `u` is a local one.
--/
+/-! Private partitions with public predicates (`verity/partition/v2`), which the verifier checks against the advice
+root without seeing the partition. -/
 
 @[expose] public section
 
@@ -40,7 +18,6 @@ structure Predicates where
   X : ℕ
   /-- The padded unit count, a level of a public grid. -/
   units : ℕ
-  /-- The most gates a unit may have. -/
   maxGates : ℕ
   /-- The most bits a unit may read from outside its gates. -/
   maxInBits : ℕ
@@ -55,7 +32,6 @@ def outs (u : Fin n) : Finset (Fin C.N) := C.exits (P.gates u)
 /-- `ob(u)`: the total width of unit `u`'s outputs, in bits. -/
 def outBits (u : Fin n) : ℕ := C.width (P.outs u)
 
-/-- `og(u)`: the number of unit `u`'s outputs. -/
 def outCount (u : Fin n) : ℕ := (P.outs u).card
 
 /-- The width rule for a set of outputs `S`: at most `X` bits. -/

@@ -2,15 +2,7 @@ module
 
 public import Definitions.Core.Rec
 
-/-!
-# Zero knowledge carries through a recursion
-
-`RecZK`: over any recursion `Rec.system O G go` (`Definitions/Core/Rec.lean`), zero knowledge of the outer proof system
-`O` and hm96's hiding at `δ₁` give zero knowledge of the recursion, additively: `2 (kI + nC) δ₁` for the prefix's
-commitment strings, swapped for zero commitments, and each session's `O` bound, its runs replaced one at a time. The
-leak at public stop positions, the multiplicative form, is its corollary (`Verity.recZK_leak`, through
-`Claims.zkmalRLeak_of_cuts`).
--/
+/-! `RecZK`: zero knowledge of the outer proof system and hm96's hiding give zero knowledge of a recursion, additively. -/
 
 @[expose] public section
 

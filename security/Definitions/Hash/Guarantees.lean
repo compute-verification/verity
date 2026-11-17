@@ -35,30 +35,8 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# The hash area's guarantee statements
-
-Each is proved by a theorem `Hash.SecurityProofs.G : Hash.Guarantees.G` in `security/Proofs/Hash/`. All are
-deterministic and assume nothing about the hash: each conclusion is the property, or a collision among
-the messages the two openings' checks themselves hashed, never an advantage bound. So no proof takes an assumption.
-
-* `RowBinding`: two openings of one root at one rank, in the hm96 row leaf format the verifier holds (frame-v3-sha512
-  tree, frame leaf, hm96-sha512 leaf under the verifier's key, and a `sha512/row-seg/v1`, `sha512/row/v2` or
-  `sha512/row/v1` row digest), carry the same row, or the checks hashed a collision.
-* `TreeBinding`: two openings of one frame-v3 root at one rank carry the same leaf digest, or the path checks hashed a
-  collision of node messages.
-* `EmbeddingReadBinding`: when `EmbeddingRead_v1` returns ok for a token in the vocabulary, the row it returns is the
-  registered table's row at that token, or the checks hashed a collision. It is `RowBinding` at rank `tok`.
-* `HistoryReadBinding`: when `EmbeddingRead_v1` returns ok at an index below the count, against the root the verifier
-  computes from the rows' public commit strings (`HistoryTable.root`), the row it returns is the row behind the string
-  at that index, under any salt that string commits it with, or the checks hashed a collision.
-
-SHA-512 is the served hash, not BLAKE3. A probability read from
-any of them is per prover: the collision comes from that prover's (extracted) openings, so it is a bound on that
-prover's link finders under `ecr/sha-512` (`FlockSoundness.Assumptions.SHA512CRExpected`), never one `δ_bind` for every
-prover, which is false at SHA-512 (a prover that hard-codes one collision opens one leaf two ways). In particular
-none of them discharges a constant over all provers such as `Pouw.Assumptions.ServiceSoundStaged`'s `δb`.
--/
+/-! The hash area's guarantees, each concluding its property or a collision among the messages the checks hashed, never
+a bound for every prover. -/
 
 @[expose] public section
 

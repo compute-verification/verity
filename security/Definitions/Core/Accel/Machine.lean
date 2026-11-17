@@ -2,27 +2,7 @@ module
 
 public import Definitions.Core.Accel.Card
 
-/-!
-# The machine 𝓜 (trusted)
-
-The machine at a card's numbers `card` and its semantics `sem`. Store `s` is `size s` words (`Loc`). A program is a
-text per thread (`Prog`); a thread runs its text in order (`step`) and the threads share the stores. An instruction
-is an ACCEL op on operands, predicated on a register bit, or a branch on one, the one data-dependent control.
-A run is a function of its initial state and its schedule, the threads stepped one after another (`run`). The schedule
-is fixed with the program, before the content: one chosen after it would be a free lookup table (step, of threads
-writing different constants, the one that writes the answer). A card's data-dependent work is the branches its code
-takes on words it computed.
-
-A run of `T` seconds meets the model (`Fits`) if
-
-* **(G1) capacity**: the texts of the threads it steps hold at most `text` instructions (code is data in device memory;
-  the stores' capacities hold by construction, store `s` has exactly `size s` locations), and
-* **(G2) rate**: over the run, its instructions use at most `ρ_r T` units of each resource `r`, device memory's carrying
-  the code too, fetched once at 16 bytes an instruction.
-
-The model has no latency, no per-clock limit and no SM boundaries (each resource and store is pooled over the card, and
-any thread names any location), and a resource with no stated rate is free: each lets a program do more than the card.
--/
+/-! The machine 𝓜 at a card's numbers and semantics, its runs, and what a run of `T` seconds meets (`Fits`). -/
 
 @[expose] public section
 

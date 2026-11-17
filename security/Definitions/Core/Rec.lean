@@ -3,31 +3,8 @@ module
 public import Definitions.Core.Compose
 public import Definitions.Core.Hm96
 
-/-!
-# A recursion: a proof system's sessions after a committed prefix, and its zero knowledge
-
-The objects `RecZK` (`Definitions/Core/Guarantees/Rec.lean`) is stated over. A recursion `Rec.system O G` runs the
-compiled prover `G` and then, one at a time, sessions of an outer proof system `O` (`ZkSystem`) at statements built
-from the history before each.
-
-* **The prefix** (`Rec.Compiled`): `kI x` inner rounds, each one hm96 commitment string, then one stage round of
-  `nC x` commitment strings (`stg`). Its tape is the inner prover's coins `Rnd x` and a salt per string. How many
-  strings each round sends is a function of the statement, so it is public.
-* **The sessions**: session `j < nS x` runs `O`'s prover for `n x j` rounds at the statement `xs x j u` with the
-  witness `ws j w x t₀ u`, read from the history `u` before it and the prefix's tape `t₀` (`Rec.Compiled.lay`). Each
-  runs on its own slot of the tape, on coins of one type `NB x × ΩB x` for every session, through a bijection with the
-  coins of `O` at its statement (`Rec.slotP`).
-* **The public stop** (`stop`): once it holds at a history within the prefix, the prover sends the empty message, and
-  every session after it is silent.
-* **The simulator** (`Rec.sim`): zero messages under fresh salts for the prefix's strings (`Rec.Compiled.S₀`), cut where
-  the stop fires, then `O`'s simulator on each session's statement after the history it simulated, where the
-  continuation test `go` holds at it.
-
-What the recursion rests on is stated here as conditions on `G` and `O`: zero knowledge of `O` (`ZkSystem.ZK`), the
-prefix's strings are hm96 commitments (`Rec.Compiled.Commits`), each session's shape is public (`Rec.Compiled.ByShape`),
-each session's witness is in `O`'s relation unless the stop fired (`Rec.Compiled.WitnessIn`), and the continuation test
-is `goesOn` at every real run (`Rec.Compiled.GoesOnAt`).
--/
+/-! The recursion `Rec.system O G`, a committed prefix then sessions of an outer proof system, that `RecZK` is stated
+over. -/
 
 @[expose] public section
 

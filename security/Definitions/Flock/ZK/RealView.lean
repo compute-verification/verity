@@ -4,19 +4,7 @@ public import Definitions.Flock.ZK.Table
 import Mathlib.Tactic.NormNum.Inv
 import Mathlib.Tactic.NormNum.Pow
 
-/-!
-# Zero knowledge: the real prover's view and `S_shvzk`'s, with real hm96 leaves
-
-`Table.view` and `Table.sim` have every leaf the final message doesn't open ideal (world `W₁`). Here those hidden leaves
-are real: hm96 leaves of what they commit, each under a fresh salt. For the prover, that is level 0's columns at the other
-positions and each rep's pads columns at its other positions; for `S_shvzk`, its dummy run's level-0 columns and zero pads
-columns (§3.2 step 6).
-
-* `Table.Hid`: the hidden leaves. `Table.viewWith`, `Table.simWith`: the view with its hidden leaves given.
-* `Table.Hm96`: hm96's structure (a leaf of content `col` under salt `y` is `H(dig(col) + M·y, c(y))`, an ideal one
-  `H(U, c(y))`) and the two codes at the positions nobody opens.
-* `Table.Hm96.viewR`, `Table.Hm96.simR`: the two views with real leaves. `RealLeaves.table_shvzk_hm96` is about them.
--/
+/-! Zero knowledge: the real prover's view and `S_shvzk`'s, with real hm96 leaves where the final message opens none. -/
 
 @[expose] public section
 
@@ -60,7 +48,6 @@ structure Hm96 (C : Type) where
   leaf0_eq : ∀ col y, T.leaf0 col y = H (dig0 col + My y, cs y)
   leafP_eq : ∀ col y, T.leafP col y = H (digP col + My y, cs y)
   ideal_eq : ∀ u y, T.ideal (u, y) = H (u, cs y)
-  /-- The level-0 code at the other positions, and each rep's pads code at its other positions. -/
   EU : Fin T.nU → Fin T.L → F
   GpU : Fin T.nU → Fin T.tpad → F
   ChU : Fin 2 → Fin T.nPU → PadIdx T.nE → F
@@ -76,17 +63,13 @@ def Hm96.dig (M : T.Hm96 C) (w : W) (ω : T.Rand) : T.Hid → B
   | .inr ⟨r, k⟩ => M.digP (∑ i, M.ChU r k i * T.hFull (ω.2.2.1 r) i + ∑ j, M.CpU r k j * ω.2.2.2.1 r j,
       ∑ i, M.ChU r k i * ω.2.2.2.2.2.1 r i + ∑ j, M.CpU r k j * ω.2.2.2.2.1 r j)
 
-/-- The digests `S_shvzk`'s hidden leaves commit: its dummy run's level-0 columns, and zero pads columns (§3.2 step 6). -/
 def Hm96.digS (M : T.Hm96 C) (w0 : W) (σ : T.SimRand) : T.Hid → B
   | .inl q => M.dig w0 (T.dummyOf σ) (.inl q)
   | .inr _ => M.digP (0, 0)
 
-/-- **The real prover's view**: `Table.view` with its hidden leaves real hm96 leaves, each under its own fresh salt. -/
 noncomputable def Hm96.viewR [CharP F 2] (M : T.Hm96 C) (w : W) (ω : T.Rand) (ys : T.Hid → Salt) : T.View :=
   T.viewWith w ω fun i => M.H (M.dig w ω i + M.My (ys i), M.cs (ys i))
 
-/-- **`S_shvzk` with real leaves**: its hidden leaves are hm96 leaves of its dummy run's level-0 columns and of zero pads
-columns, each under a fresh salt. -/
 noncomputable def Hm96.simR [CharP F 2] (M : T.Hm96 C) (w0 : W) (σ : T.SimRand) (ys : T.Hid → Salt) : T.View :=
   T.simWith w0 σ fun i => M.H (M.digS w0 σ i + M.My (ys i), M.cs (ys i))
 

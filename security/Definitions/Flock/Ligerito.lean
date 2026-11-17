@@ -6,17 +6,7 @@ public import Definitions.Flock.Game
 import Mathlib.Algebra.Order.Algebra
 import Mathlib.Tactic.Positivity.Finset
 
-/-!
-# Ligerito (`Flock.Ligerito`), as an interactive oracle proof
-
-The verifier of `Flock.Ligerito` and its final check (`Flock.Ligerito`), with one change of model: a level's
-commitment is the committed table itself (an oracle, `ℕ → ℕ → F`, lane then position), and the
-opened rows are that table's columns at the query positions. The Merkle layer (`Flock.Merkle`) replaces the
-oracle by a cap and authentication paths; `Merkle` relates the two.
-
-Sumcheck messages are `(u₀, u₂) ∈ K²`; with running claim `s` a message defines
-`q(X) = u₀ + (s + u₂)·X + u₂·X²`, so `q(0) + q(1) = s` holds by construction (`Flock.Ligerito`).
--/
+/-! Ligerito as an interactive oracle proof, a level's commitment being the committed table itself, an oracle. -/
 
 @[expose] public section
 
@@ -177,7 +167,6 @@ structure LigState (F K : Type) where
   levels : List (List K)
   oods : List (OodCtx F)
   cons : List (ConsCtx F)
-  /-- The previous commitment and its level (queried in the next round). -/
   prev : Oracle F
   prevLevel : Level
 
@@ -186,14 +175,14 @@ recursive counterparts). `ch` are the challenges that folded the previous level'
 def queryAndBatch (A : Arith F K) (lv : Level) (C : Oracle F) (ch : List K) (start : ℕ)
     (st : LigState F K) (withMessage : Bool) : Game (LigState F K) := do
   let w ← draw (Fin lv.queries → F)                       -- queries (PoW is a message, R4)
-  let α ← draw (Fin (ceilLog2 lv.queries) → F)            -- consistency coins
+  let α ← draw (Fin (ceilLog2 lv.queries) → F)
   let pos := positions A lv.queries lv.logLen w
   let e := consValue A (List.ofFn α) ch C pos
   let q ← if withMessage then do
       let msg ← recv (K × K)
       pure (some (fromMsg msg e))
     else pure none
-  let β ← draw F                                          -- claim batching coin
+  let β ← draw F
   let ctx : ConsCtx F := ⟨lv.logCols, pos, List.ofFn α, β, start⟩
   pure { st with
     s := st.s + A.embed β * e
@@ -205,7 +194,6 @@ def recursiveRounds (A : Arith F K) (n : ℕ) (b : ℕ → F) (initial : List K)
     List Level → LigState F K → Game Bool
   | [], _ => pure false
   | [lv], st => do
-      -- the last level: fold its lanes, read yr, query it, final batching, final check
       let (ch, s, q) ← foldRounds A lv.lanes st.s st.q
       let st := { st with s := s, q := q, levels := st.levels ++ [ch] }
       let yr ← recv (Fin (2 ^ (ext + 1)) → F)
@@ -215,7 +203,7 @@ def recursiveRounds (A : Arith F K) (n : ℕ) (b : ℕ → F) (initial : List K)
       let (ch, s, q) ← foldRounds A lv.lanes st.s st.q
       let st := { st with s := s, q := q, levels := st.levels ++ [ch] }
       let dim := lv'.logCols + lv'.lanes
-      let C' ← recv (Oracle F)                               -- the next commitment
+      let C' ← recv (Oracle F)
       let (s, q, oods) ← twoOod A dim st.levels.length st.s st.q
       let st := { st with s := s, q := q, oods := st.oods ++ oods }
       let st ← queryAndBatch A lv st.prev ch st.levels.length st true
@@ -227,23 +215,19 @@ def ligerito (A : Arith F K) (sch : Schedule) (T : F) (b : ℕ → F) (C₀ : Or
   match sch.levels with
   | [] => pure false
   | lv₀ :: rest => do
-      -- step 2: one out-of-domain sample on level 0
       let z₀ ← draw (Fin n → F)
       let y₀ ← recv F
       let β₀ ← draw F
       let s := A.embed T + A.embed β₀ * A.embed y₀
-      -- steps 3–4: the first message and the level-0 folds
       let msg ← recv (K × K)
       let (initial, s, q) ← foldRounds A sch.k0 s (fromMsg msg s)
       match rest with
       | [] => pure false
       | lv₁ :: _ => do
-          -- step 5: the level-1 commitment; step 6: its two out-of-domain samples
           let C₁ ← recv (Oracle F)
           let dim := n - sch.k0 + 1
           let (s, q, oods) ← twoOod A dim 0 s q
           let st : LigState F K := ⟨s, q, dim, [], ⟨List.ofFn z₀, β₀, none⟩ :: oods, [], C₀, lv₀⟩
-          -- steps 7–11: queries on level 0 and its consistency claim
           let st ← queryAndBatch A lv₀ C₀ initial 0 st true
           recursiveRounds A n b initial sch.ext rest { st with prev := C₁, prevLevel := lv₁ }
 

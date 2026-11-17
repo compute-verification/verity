@@ -2,19 +2,7 @@ module
 
 public import Definitions.Core.TC.Relation
 
-/-!
-# The range and is-zero gadgets, chunk by chunk
-
-`Relation.RANGE` and `Relation.ISZERO` are the predicates the gadgets of `relation.Census` enforce. Here the gadgets
-themselves, with their chunk columns as a circuit holds them:
-
-* `Census.RANGE x bits`: `x` split into little-endian chunks of 16 bits (the last one `bits % 16` wide), one linear
-  split and one range-table lookup per chunk (`rangeWidths`, `Chunks`).
-* `Census.ISZERO x bits z`: `x` split into chunks of 12 bits, one is-zero lookup per chunk, the flags multiplied into
-  `z` (`isZeroWidths`, `ZeroChunks`).
-
-`Verity.SecurityProofs.TC.Gadgets` proves that each holds exactly when its predicate does.
--/
+/-! The range and is-zero gadgets of `relation.Census`, chunk by chunk. -/
 
 @[expose] public section
 
