@@ -1781,6 +1781,20 @@ def spot_row(audit_dir: Path, run: str | None = None) -> dict[str, Any]:
         return {"verdict": "error", "owner": INTEGRITY_OWNER, "reason": f"{type(e).__name__}: {e}"[:2000]}
 
 
+def members_reached(members: Mapping[str, Any], answer: Mapping[str, Any]) -> dict[str, Any]:
+    from verity_e2e_demo import block_record as BR
+
+    drawn, delta = answer["public"].get("drawn") or [], Fraction(answer["profile"]["delta"])
+    bounds = []
+    for name, m in sorted(members.items()):
+        n = sum(hi - lo for lo, hi in m["units"])
+        k = sum(lo <= u < hi for u in drawn for lo, hi in m["units"])
+        if k:
+            b = BR.integrity_bound(n, k, delta)
+            bounds.append(f"at most {b} incorrect of member {name}'s {n} proof blocks at δ {delta}")
+    return {"members": {"sampled": len(bounds), "registered": len(members)}, "bounds": bounds}
+
+
 def lean_sampled_row(audit_dir: Path, scratch: Path, exe: str | os.PathLike | None = None,
                      run: str | None = None) -> dict[str, Any]:
     """SPOT's row from this host's own run of remote's SPOT Lean (`served_cases.sampled_case`: the
@@ -1791,7 +1805,8 @@ def lean_sampled_row(audit_dir: Path, scratch: Path, exe: str | os.PathLike | No
     was not started (`served_cases.NotStarted`: its blob files sum past the limit, or the host makes no memory scope):
     the row is `spot_row`'s, ``answer_from`` and ``not_started`` naming why, the sum and the limit. A case the Lean
     doesn't make or answer, or an answer about another record, is the row's error. An accept of a case in the
-    per-member form carries ``covers`` (`MEMBERS_COVER`)."""
+    per-member form carries ``covers`` (`MEMBERS_COVER`), ``members`` (sampled of registered) and each sampled
+    member's bound over its own proof blocks (``bounds``), and no ε over the workload."""
     import served_cases as SC
 
     if not (audit_dir / "window" / "case-v2.json").is_file():
@@ -1803,8 +1818,10 @@ def lean_sampled_row(audit_dir: Path, scratch: Path, exe: str | os.PathLike | No
         answer, _line = SC.lean_answer(exe or SC.build(*SC.SAMPLED_LEAN), case, scratch, SC.SAMPLED_CMD)
         SC.tie(answer, SC.SAMPLED, SC.record_of(case)[1])
         row = {**row_of(INTEGRITY_OWNER, answer, audit_dir, run), "answer_from": LEAN_HERE}
-        members = isinstance(case["params"].get("proofs"), dict) and "members" in case["params"]["proofs"]
-        return {**row, "covers": MEMBERS_COVER} if members and row["verdict"] == "accept" else row
+        proofs = case["params"].get("proofs")
+        if isinstance(proofs, dict) and "members" in proofs and row["verdict"] == "accept":
+            return {**row, "covers": MEMBERS_COVER, "epsilon": None, **members_reached(proofs["members"], answer)}
+        return row
     except SC.NotStarted as e:
         return {**spot_row(audit_dir, run), "not_started": {"reason": str(e), **e.line},
                 "answer_from": f"{AS_WRITTEN} ({WRITTEN['integrity']}): this host's Lean check of the audit's v2 case was "
