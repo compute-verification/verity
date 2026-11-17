@@ -4,7 +4,7 @@ public import Difftest
 public import PousVerifier.Setup
 
 /-!
-# The setup difftest: `PousVerifier`'s functions behind `Difftest.serve`
+# The setup difftest: `PousCheck`'s functions behind `Difftest.serve`
 
 `pous-setup-difftest` serves `table` to the core difftest harness (`verity/core/difftest`), whose Python half
 (`tests/test_setup_difftest.py`) samples inputs and holds each function's output to `verity.protocols.accounting.pous.verifier`

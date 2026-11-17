@@ -12,7 +12,7 @@ import Mathlib.Basic.ENNReal.Real
 (`Pous.EndToEnd.AcceptedAt`, read by `AuditsOf.Accepts`) accepts a period with no break while the node held too few
 bit-ticks, over an audit whose verifier's keys and session id are fixed and whose setup commitment, `C*`, setup outputs
 and table are functions of the coins flipped before the memory challenger's (`AuditsOf`). Onsite's verifier
-runs `PousVerifier.RunProtocol.protocol` on bytes instead: protocol soundness's subprotocol for PoUS turns that protocol's
+runs `PousCheck.RunProtocol.protocol` on bytes instead: protocol soundness's subprotocol for PoUS turns that protocol's
 acceptance into `AcceptedAt` on fields of that kind.
 Each statement below is one step of it, about one function of the code, in the shape of the code's properties.
 

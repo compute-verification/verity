@@ -6,7 +6,7 @@ public import PousVerifier.Audit
 # The difftest: the PoUS check against the Python verifier, on generated instances
 
 `scripts/difftest_vectors.py` writes instances and the Python's answers on each, one canonical JSON line per instance in
-two files. `evaluate` computes the answers from the instance with `PousVerifier`'s definitions, and `main` fails unless
+two files. `evaluate` computes the answers from the instance with `PousCheck`'s definitions, and `main` fails unless
 every line's canonical JSON is the Python's line, byte for byte. The Lean audit runs it (`runs` in `lean-audit.json`):
 a test, not a proof.
 
@@ -15,11 +15,11 @@ a test, not a proof.
   from its name and arguments), and the leaf of each sample block.
 * `randomness`: `FlockSoundness.Randomness.derive` of a random source, domain and context, its streams and exact uniforms
   (`uniformExact`) over random indices, and P2's audit id, mode-0 key, indices and nonces and mode-1 round indices
-  (`PousVerifier.Challenge`).
+  (`PousCheck.Challenge`).
 * `audit`: `Audit.check` on a challengePhase (frames, measured latencies, the verifier's secret, beacons, seen pairs, its own
   root of a private setup and its held `W`): its `FINAL` frame, the fault's code when there is none, or the refusal.
   An accepted `FINAL` also gives the challengePhase's `Certificate.assess`: its verdict, coverage and StorageProfile.
-* `storage`: the certificate gate and StorageProfile (`PousVerifier.Certificate`) at a store, `k` and `Δ + RTT`.
+* `storage`: the certificate gate and StorageProfile (`PousCheck.Certificate`) at a store, `k` and `Δ + RTT`.
 * `sha512`: the SHA-512 of labelled bytes, against the pins `reference.py` and `audit-vectors.json` hold for them.
 
 `transcript` is not a kind of the run: `pous-audit-difftest serve` answers it for `interop.py`, which holds it to

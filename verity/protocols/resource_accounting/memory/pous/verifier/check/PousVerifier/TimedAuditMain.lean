@@ -3,7 +3,7 @@ module
 public import Difftest
 public import PousVerifier.TimedAudit
 
-/-! `pous-timed-audit READY.json LEAVES.bin AUDIT.json`: `PousVerifier.TimedAudit.verdict` on a strict audit's record, the
+/-! `pous-timed-audit READY.json LEAVES.bin AUDIT.json`: `PousCheck.TimedAudit.verdict` on a strict audit's record, the
 verdict of record that the memory challenger's `timed_audit.VERDICT = "lean"` reads. With the one argument `serve`, the
 same verdict behind `Difftest.serve`, which `timed_audit.py` drives against `timed_audit.verdict`. -/
 
