@@ -16,7 +16,7 @@ path = "../../../../proofs/flock/verifier"
 name = "inference_only_check"
 path = "../../../../workload_classification/training_detection/inference_only/verifier/lean"
 
-# The check is a core protocol, reads the Program's grid from the certifier program (`expectedRow`, Σ_sync) and verifies
+# The check is a core protocol, reads the Program's grid from the attester program (`expectedRow`, Σ_sync) and verifies
 # certificates with the LMS port.
 [[require]]
 name = "core_protocol"

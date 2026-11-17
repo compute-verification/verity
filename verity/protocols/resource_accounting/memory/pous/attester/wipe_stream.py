@@ -1,4 +1,4 @@
-"""The streamed wipe's fill at link speed: `wipe_stream.c`, native on the memory challenger's own CPUs, derives the labels
+"""The streamed wipe's fill at link speed: `wipe_stream.c`, native on the memory attester's own CPUs, derives the labels
 `streamed_wipe.label` does and writes them to the prover's connection as `wipe_party`'s fill frames, so the challenger
 streams a whole GPU's memory in minutes, not the hour Python's labels take.
 

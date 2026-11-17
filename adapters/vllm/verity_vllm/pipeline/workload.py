@@ -1,17 +1,17 @@
-"""sweep/workload.py — the ONE deterministic heterogeneous workload generator of the sweep.
+"""`verity-vllm workload`: the one deterministic heterogeneous workload generator of the sweep.
 
-    verity-vllm workload <row-id> [--tokenizer <snapshot dir or tokenizer.json>]      (a row `workloads/generation.toml` lists)
+    verity-vllm workload <row-id> [--tokenizer <snapshot dir or tokenizer.json>]      (a workload `workloads/generation.toml` lists)
     verity-vllm workload --row-id <row-id> --hf-repo <repo> --revision <rev> --batch B --max-input I --max-output O \\
         [--sampling greedy|stoch-t0.8-p0.95|stoch-t0.8-p1] [--arrivals none|staggered] [--tokenizer <snapshot dir or tokenizer.json>] [--case <ROLE>] \\
         [--shared-prefix N] [--lengths-only] [--check] --out workloads/<row-id>.json
 
-A row `generation.toml` lists needs only its id: the table states what the id doesn't give (the checkpoint, the tokenizer's
+A workload `generation.toml` lists needs only its id: the table states what the id doesn't give (the checkpoint, the tokenizer's
 sha256, the target, the reasons, the note's prefix, the arrival rule), the output is byte for byte the file `SHA256SUMS` names,
 and a flag that disagrees with the table or the id is refused by name.
 
-Output = the existing request-list workload format (a row file, `config.RowConfig`, see `workloads/workload_cov_*.json`) that
-`verity_vllm.engine.vllm_adapter.load_workload` / `bench/commit_delta.py` / `zk/bench/e2e_commit_run.py` / the eager capture consume unchanged,
-plus one extra top-level key `sweep` (row id, seed, the length/cap/seed/arrival vectors, the plan) that existing loaders ignore.
+Output = the request-list workload format (a workload file, `config.RowConfig`; the files of record are named in
+`adapters/vllm/workloads/SHA256SUMS`) that `verity_vllm.engine.vllm_adapter.load_workload` and the eager capture consume unchanged,
+plus one extra top-level key `sweep` (`row_id`, seed, the length/cap/seed/arrival vectors, the plan) that existing loaders ignore.
 
 Determinism: `seed = SHA256(row_id)`; every sample comes from `numpy.random.default_rng` seeded from that digest and a purpose tag.
 
@@ -31,8 +31,8 @@ others at seeded offsets over the first ~60 % of a full-length run; stored as `a
 where the serving loop admits it (`arrivals.realized_arrive_steps`): an arrival after every earlier request has finished is the
 forward after the last of them, since the loop never idles.  The TP Commit places the Build's manifest at the declared steps, so a
 declaration the engine doesn't realize leaves the served identities unbound.
-`--shared-prefix N` (a prefix-caching row): every prompt longer than N starts with the same N tokens of one seeded passage, then its own
-text (`requests[i].shared_prefix_tokens`), the row's `engine.args.enable_prefix_caching` is true, and `--check` requires a request
+`--shared-prefix N` (a prefix-caching workload): every prompt longer than N starts with the same N tokens of one seeded passage, then its own
+text (`requests[i].shared_prefix_tokens`), the workload's `engine.args.enable_prefix_caching` is true, and `--check` requires a request
 longer than N to arrive after the first one (a hit needs the first one's blocks computed).
 `--lengths-only` writes the plan without text/token ids (no tokenizer needed) so lanes can see the shape plan on a laptop.
 """
@@ -442,7 +442,7 @@ def case_for(hf_repo: str, revision: str, explicit: str | None) -> str | None:
 @dataclass(frozen=True, kw_only=True)
 class Options:
     row: str | None = option("row", nargs="?", default=None, metavar="ROW",
-                             help="the row id (or --row-id); a row workloads/generation.toml lists needs no other flag")
+                             help="the row id (or --row-id); a workload workloads/generation.toml lists needs no other flag")
     row_id: str | None = option("--row-id", default=None)
     hf_repo: str | None = option("--hf-repo", default=None)
     revision: str | None = option("--revision", default=None)
@@ -458,17 +458,17 @@ class Options:
     lengths_only: bool = option("--lengths-only", default=False, action="store_true",
                                 help="emit the shape plan without text / token ids (no tokenizer needed)")
     check: bool = option("--check", default=False, action="store_true",
-                         help="run the §12 self-check on the plan; exit 1 on a violation")
+                         help="run the self-check on the plan (`check_plan`); exit 1 on a violation")
     shared_prefix: int | None = option("--shared-prefix", type=int, default=None,
-                                help="every prompt longer than N tokens starts with the same N tokens (one seeded corpus passage) and the row "
+                                help="every prompt longer than N tokens starts with the same N tokens (one seeded corpus passage) and the workload "
                                 "runs with enable_prefix_caching (vLLM reuses whole KV blocks: N a multiple of the block size reuses all of it)")
     out: str | None = option("--out", default=None, help="default workloads/<row-id>.json (relative to the repo)")
     target: str | None = option("--target", default=None,
-                                help="TargetProfile overrides of the workload as JSON (e.g. '{\"flash_attn_version\": 2}' for an `…__bi-eager-fa2` row): written "
-                                "to the row's `engine.target` (every GPU stage builds its engine for it; `TargetProfile.engine_args()` is merged into "
-                                "`engine.args`, a TP row's `engine.env` takes `TargetProfile.env()`) and `sweep.execution` = the profile's execution label")
+                                help="TargetProfile overrides of the workload as JSON (e.g. '{\"flash_attn_version\": 2}' for an `…__bi-eager-fa2` workload): written "
+                                "to the workload's `engine.target` (every GPU stage builds its engine for it; `TargetProfile.engine_args()` is merged into "
+                                "`engine.args`, a TP workload's `engine.env` takes `TargetProfile.env()`) and `sweep.execution` = the profile's execution label")
     reason: list[str] = option("--reason", action="append", default=[], metavar="SWITCH=TEXT",
-                               help="why the row sets a served switch (`engine.served.DEFAULTS`) away from vLLM's default, written to "
+                               help="why the workload sets a served switch (`engine.served.DEFAULTS`) away from vLLM's default, written to "
                                     "`engine.reasons`; repeatable.  A served Commit refuses a switch away from the default without one")
 
 
@@ -567,7 +567,7 @@ def main(a: Options) -> int:
         if bad:
             return 1
     elif bad:
-        logger.warning("§12 self-check: %s", "; ".join(bad))
+        logger.warning("self-check: %s", "; ".join(bad))
 
     tok = None
     if not a.lengths_only:
@@ -596,7 +596,7 @@ def main(a: Options) -> int:
         label = row_execution(s.row_id)
         exec_suffix = s.row_id if label is None else label
         if exec_suffix != profile.execution_label:
-            logger.error("row id execution suffix %r != the target's execution label %r", exec_suffix, profile.execution_label)
+            logger.error("workload id execution suffix %r != the target's execution label %r", exec_suffix, profile.execution_label)
             return 3
         if "attention" in profile.int8_parts:
             reasons.setdefault("attention_backend", INT8_ATTENTION_REASON)

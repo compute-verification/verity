@@ -3054,6 +3054,21 @@ def test_the_preflight_collects_no_suite_when_memory_is_short_and_still_marks(wo
     assert StoreLabels(world.store, log=world.logs.append).ready(2, h2) is True and _no_worktree_left(world)
 
 
+def test_the_preflight_collects_each_suite_without_the_suites_under_its_test_paths(world, capsys):
+    """The root's `tests/` holds every suite's tests, so a suite's test paths hold the suites mirrored under them (the root's
+    hold them all, the PoUW verifier's its `lean/window` difftest), which `suites.py` has its pytest ignore (`Suite.inner`).
+    Collected without them, the root suite imports the nested suite's `test_doc_paths.py` beside its own and fails, on the
+    merged tree alone, so the head was refused; collected as `suites.py` runs them, both suites pass and the head is marked."""
+    from research.queue import MarkOnly, StoreLabels, ready
+
+    _preflight_main(world, {"tests/inner/pyproject.toml": '[project]\nname = "inner"\nversion = "0"\n\n[tool.pytest.ini_options]\n'})
+    world.gh.put(2, h2 := world.change({"tests/inner/test_doc_paths.py": "def test_inner():\n    pass\n"}), ready=False)
+    assert ready(world.gh, world.store, 2, "lane-2", MarkOnly(), preflight=_preflight(world)) == 0, capsys.readouterr().err
+    said = next(s for s in world.logs if "preflight" in s)
+    assert "nothing refused" in said and "collected 2 suite(s) (., tests/inner)" in said, said
+    assert StoreLabels(world.store, log=world.logs.append).ready(2, h2) is True and _no_worktree_left(world)
+
+
 #: a fetched fixture's bytes, and the tree that reads it: pkg's test reads it at import, as benchmarks/numerical's
 #: tests/explore/test_authentication.py reads tests/benchmarks/numerical/checker/fixtures/typed-obligation-v0's K=1536 vector
 #: (`auth.read_openings()`), so the suite's collection fails without it; `other` registers one too, in a suite no change
@@ -3466,6 +3481,31 @@ def test_the_preflight_prints_what_a_warn_gate_at_main_says_as_a_warning_and_tak
         f"research queue: preflight: warning: #2 at {h2[:12]}: the warn gate gates/g.py at `main` {main[:12]}: touches bad.txt; "
         "delete bad.txt (`python3 gates/g.py origin/main HEAD` in the branch runs it). A warn gate refuses nothing: the PR "
         "lands, and its owner fixes it in their next PR"], world.logs
+    assert StoreLabels(world.store, log=world.logs.append).ready(2, h2) is True and _no_worktree_left(world)
+
+
+#: the added-lines warn gate and what it reads at `main`, committed into the origin as they are in this checkout
+ADDED = "tools/check/added_lines.py"
+ADDED_FILES = {DRIVE_FLAGS: f'warn_gates = ["{ADDED}"]\n', **{f: (Path(__file__).resolve().parents[3] / f).read_text() for f in (
+    ADDED, "GLOSSARY.md", "tests/lint/test_repo_lane_text.py", "tests/lint/test_repo_retired_terms.py")}}
+
+
+def test_the_preflight_prints_the_lines_an_issue_id_is_added_on_and_the_fix_and_marks_the_pr(world, capsys):
+    """added-lines is a warn gate: a PR whose added comment names an issue id is marked, and the mark prints the line and the
+    lane-text lint's fix."""
+    from research.queue import WARN_GATE_SAYS, MarkOnly, StoreLabels, ready
+
+    _preflight_main(world, ADDED_FILES)
+    main = _git(world.origin, "rev-parse", "main")
+    issue = "-".join(("CI", "4850"))
+    world.gh.put(2, h2 := world.change({"pkg/tests/test_pkg.py": f"def test_pkg():  # {issue}\n    pass\n"}), ready=False)
+    assert ready(world.gh, world.store, 2, "lane-2", MarkOnly(), preflight=_preflight(world)) == 0, capsys.readouterr().err
+    (said,) = [s for s in world.logs if "warning" in s]
+    assert said.startswith(
+        f"research queue: preflight: warning: #2 at {h2[:12]}: the warn gate {ADDED} at `main` {main[:12]}: pkg/tests/test_pkg.py "
+        f"gains 1 issue id(s), 0 -> 1: pkg/tests/test_pkg.py:1 linear: {issue} in `def test_pkg(): # {issue}`; Say what is "
+        "true now"), said
+    assert said.endswith(f"(`python3 {ADDED} origin/main HEAD` in the branch runs it). {WARN_GATE_SAYS}"), said
     assert StoreLabels(world.store, log=world.logs.append).ready(2, h2) is True and _no_worktree_left(world)
 
 
