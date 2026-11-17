@@ -37,7 +37,7 @@ theorem mem_all (a : Subprotocol) : a ∈ Subprotocol.all := by cases a <;> deci
 
 /-- At every composite, the subprotocols' ids are distinct. -/
 theorem ids_nodup (k : Verity.Registration.Composite) : (Subprotocol.all.map (·.idAt k)).Nodup := by
-  by_cases h : PouwCheck.PearlPlus.Protocol.protocolId ∈ k <;> by_cases hr : rowsId ∈ k <;>
+  by_cases h : PouwVerifier.PearlPlus.Protocol.protocolId ∈ k <;> by_cases hr : rowsId ∈ k <;>
     simp only [Subprotocol.all, List.map_cons, List.map_nil, idAt, protocolAt, h, hr, ↓reduceIte, rowsCheck] <;>
     decide
 
@@ -140,7 +140,7 @@ theorem verifier_mem (hk : k = .onsite ∨ k = .remote) : (verifier k, k) ∈ Co
 /-- **The plain sibling's subprotocols** are remote's but for the inference-only policy's check: the rows check in v0's
 place. -/
 theorem componentsOf_plain :
-    componentsOf .plain = [rowsCheck, PouwCheck.PearlPlus.Protocol.protocol, VStar.Recursive.Sampled.protocol] := rfl
+    componentsOf .plain = [rowsCheck, PouwVerifier.PearlPlus.Protocol.protocol, VStar.Recursive.Sampled.protocol] := rfl
 
 /-- **The code refuses the plain sibling's list**, by name: no verifier the code builds is the plain sibling's. -/
 theorem ofIds_plain : Composites.ofIds Verity.Registration.Composite.plain = .error Composites.plainRefusal := rfl

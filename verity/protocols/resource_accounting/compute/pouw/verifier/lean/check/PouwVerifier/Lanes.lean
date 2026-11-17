@@ -1,13 +1,13 @@
 module
 
-public import PouwCheck.Credit
+public import PouwVerifier.Credit
 public import PouwWindow.KnownRows
 public import Spot.Produced
 
 /-!
 # A sampled leaf past the cap verified as its lanes and the combine (`credit.py`'s lanes form)
 
-`PouwCheck.Verified`'s steps for the lanes form (`leaf_lanes`), each `credit.py`'s of its name, string for string: at a K
+`PouwVerifier.Verified`'s steps for the lanes form (`leaf_lanes`), each `credit.py`'s of its name, string for string: at a K
 the period-open commits as `lane<K>` and `combine<K>` (`lanesFiles`, `formOf`), each sampled leaf's statements are its
 (R/4)(C/8) lanes and the combine (`leafAsks`), each verified against its own one-call leaf Program (the lanes evidence's
 descriptor, `leafOf` the window's template at K and hashing to `LEAF_PROGRAMS`' digest), a population of one
@@ -27,10 +27,10 @@ least `LEAST_K`, of one chunk and not J10-R's; any other sampled lanes-form leaf
 set_option backward.privateInPublic true
 set_option backward.privateInPublic.warn false
 
-namespace PouwCheck.Lanes
+namespace PouwVerifier.Lanes
 
 open Lean (Json toJson)
-open PouwCheck.Credit
+open PouwVerifier.Credit
 
 /-- `credit.LEAF_PROGRAMS`: the committed circuit files' field of each lanes-form file's leaf Program's digest. -/
 def LEAF_PROGRAMS : String := "leaf_programs"
@@ -586,4 +586,4 @@ def outcomes (rec : Json) (held : Held) (program : String) : R (Array Json) := d
     Json.mkObj [("unit", toJson u), ("verdict", Json.str "accept"), ("program", Json.str program),
       ("registered", Json.mkObj ps.toList)]
 
-end PouwCheck.Lanes
+end PouwVerifier.Lanes

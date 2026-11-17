@@ -33,7 +33,7 @@ The run:
   in the arm, each a retained pass on poisoned buffers, whose commitment must equal its timed pass's.  Then the negative
   control: one decode prompt as a retained pass writing none of the commitment (`CONTROL_OMITS`).  The three manifests go to
   `verify.sh` after the execution phase, whose verdict on each is the Lean's: the first two must be replay-verified
-  (development shortcut; the protocol's check is a ZK proof, PouwCheck) and the control rejected (the panel's rule).
+  (development shortcut; the protocol's check is a ZK proof, PouwVerifier) and the control rejected (the panel's rule).
 - **The panel's shapes:** `SHAPES`, under ``pearl-c-sm120`` v1-h3; `panel_rows.py` writes the rows.
 
 ``--whole-step`` (with ``--graphs``) builds the arm engine with vLLM's FULL decode graphs (no compile, the decode batch's
