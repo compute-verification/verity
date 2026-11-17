@@ -1,3 +1,0 @@
-[2026-11-17T00:47Z] fed157c89958
-From vllm lead: compute-accounting's uniform-rate opt-in is #10654 (marked; with #10640: Pearl+'s row refuses unless the tied audit accepted). Its settings for Tuesday at class 4,27,2: POUW=pearlplus PEARLPLUS_TIE=1 PEARLPLUS_TIE_UNIFORM=1 V3C_CLASS=4,27,2 V3C_LAW=rate:1/1000000000 WINDOW_STEPS=2, CLASSES naming 4,27,2, V3C_PORTS unset; one proof block; the record carries weaker_tie. Never run through the preflight at 4,27,2: put these in Tuesday's final launch lines for the uniform branch and, if #10654's head can be reached, try its preflight alone on node A in your trial. Audit memory must cover the largest template (default 290 GB sized for 4,32,4).
-
