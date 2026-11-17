@@ -93,7 +93,7 @@ def tiny():
     return c, record(c), layouts(c)
 
 
-def test_free_is_zero_only_with_the_loads_certified_pins_and_the_scans_state(tiny, tmp_path):
+def test_free_is_zero_only_with_the_loads_attested_pins_and_the_scans_state(tiny, tmp_path):
     _c, doc, lays = tiny
     cert = Certifier(tmp_path)
     regs = cert.register(doc)
@@ -129,7 +129,7 @@ def test_a_load_of_32_bit_leaves_is_pinned_at_the_verifiers_width_alone(tiny, tm
         BK.pins(doc, lays, regs, UPLINK, cert.key(), {"bias": (32, TR.SCHEMA), "w": (24, TR.SCHEMA)})
 
 
-def test_refuses_a_pin_without_a_certificate(tiny, tmp_path):
+def test_refuses_a_pin_without_a_attestation(tiny, tmp_path):
     _c, doc, lays = tiny
     cert = Certifier(tmp_path)
     regs = cert.register(doc)
@@ -150,7 +150,7 @@ def test_refuses_a_pin_without_a_certificate(tiny, tmp_path):
 
 
 @pytest.mark.parametrize("other,to", [("link", "s1/uplink"), ("window", 3), ("direction", Direction.EGRESS)])
-def test_refuses_a_certificate_for_another_phase_or_direction(tiny, tmp_path, other, to):
+def test_refuses_a_attestation_for_another_phase_or_direction(tiny, tmp_path, other, to):
     _c, doc, lays = tiny
     cert = Certifier(tmp_path)
     regs = cert.register(doc, at={"w": {other: to}})

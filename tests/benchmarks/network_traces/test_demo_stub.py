@@ -252,7 +252,7 @@ def test_with_out_its_records_are_the_endpoints_that_the_endpoint_step_binds_and
 
 
 @pytest.mark.parametrize("window_steps", [16, 64])
-def test_on_the_served_node_the_endpoint_step_binds_its_records_to_the_certified_io_and_publishes_none(tmp_path,
+def test_on_the_served_node_the_endpoint_step_binds_its_records_to_the_attested_io_and_publishes_none(tmp_path,
                                                                                                        monkeypatch,
                                                                                                        window_steps):
     """served_session's endpoint step on a serve dir whose requests.jsonl and advice_trace.jsonl stay there: its copy's

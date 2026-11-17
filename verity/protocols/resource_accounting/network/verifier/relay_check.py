@@ -242,13 +242,13 @@ def check(run: Path, registrations: Path | None = None, under: tuple[bytes, byte
         lags += lag
         row = {"index": conn["index"], "ordinal": o, "outcome": conn["outcome"], "cells": len(sched),
                "same_cells": "".join(KIND_CHARS[k] for _, k in sched) == conn["kinds"],
-               "in_bucket": sum(0 <= x < tau for x in lag), "request_certified":
+               "in_bucket": sum(0 <= x < tau for x in lag), "request_attested":
                    a.get("ingress_sha256") == conn["request_sha256"],
-               "response_certified": a.get("egress_sha256") == conn["data_sha256"], **conn["response"]}
+               "response_attested": a.get("egress_sha256") == conn["data_sha256"], **conn["response"]}
         rows.append(row)
-        if not (row["same_cells"] and row["in_bucket"] == row["cells"] and row["request_certified"]
-                and row["response_certified"]):
-            keys = ("same_cells", "in_bucket", "cells", "request_certified", "response_certified")
+        if not (row["same_cells"] and row["in_bucket"] == row["cells"] and row["request_attested"]
+                and row["response_attested"]):
+            keys = ("same_cells", "in_bucket", "cells", "request_attested", "response_attested")
             problems.append(f"connection {o}: { {k: row[k] for k in keys} }")
         if conn["outcome"] != "end" or not row["complete"] or (row["status"] != 200 and row.get("ids") is None):
             problems.append(f"connection {o}: {conn['outcome']}, HTTP {row['status']}, complete {row['complete']}")

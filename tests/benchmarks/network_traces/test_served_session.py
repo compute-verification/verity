@@ -371,10 +371,10 @@ def _stub_step(monkeypatch, report: dict | None = None) -> dict:
     return seen
 
 
-def test_io_writes_the_kept_runs_certified_io_private_in_keep(tmp_path, monkeypatch, capsys):
+def test_io_writes_the_kept_runs_attested_io_private_in_keep(tmp_path, monkeypatch, capsys):
     ps = SS.prompts(2, 4, 256, b"seed")
     doc = json.loads(_certified(tmp_path / "c", ps).read_text())
-    monkeypatch.setattr(SS, "certified_io", lambda fetch: (doc["deployment"], doc["io"]))
+    monkeypatch.setattr(SS, "attested_io", lambda fetch: (doc["deployment"], doc["io"]))
     keep = tmp_path / "keep"
     assert SS.main(["io", "--run", RUN, "--keep", str(keep)]) == 2 and "no kept fetch" in capsys.readouterr().err
     (keep / RUN).mkdir(parents=True)
@@ -509,7 +509,7 @@ def test_chain_reads_the_endpoints_art_as_given_and_needs_no_eos_ids_for_it(tmp_
     assert (tmp_path / "seen").read_text().splitlines() == ["CR_ENDPOINT=art:ep"]
 
 
-def test_the_endpoints_requests_jsonl_is_rebuilt_from_its_users_map_and_the_certified_io(tmp_path, capsys):
+def test_the_endpoints_requests_jsonl_is_rebuilt_from_its_users_map_and_the_attested_io(tmp_path, capsys):
     ps = [[5, 6], [7], [8]]
     src = _serve_dir(tmp_path / "serve", ps)
     io = [{"user": "user-0", "prompt": [5, 6], "max_tokens": 4, "output": [9, 128001]},

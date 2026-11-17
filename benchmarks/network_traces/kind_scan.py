@@ -111,11 +111,11 @@ ONE_STAGE = {
     "public": O, "public.bound": O, "public.per_template": O, "public.per_template.*": O, "public.drawn[]": C,
     "public.proved[]": C,
 }
-#: an attestation (`scan_period.CERTIFICATE_KEYS`), the network attester's in the clear
-CERTIFICATE_DOC = dict.fromkeys(("digest", "direction", "key_id", "link", "signature", "window"), X)
+#: an attestation (`scan_period.ATTESTATION_KEYS`), the network attester's in the clear
+ATTESTATION_DOC = dict.fromkeys(("digest", "direction", "key_id", "link", "signature", "window"), X)
 #: the execution phase's attestations as the piece publishes them (`attester_piece.certificates`): its records' and
 #: its row registrations', each with its own fields alone
-CERTIFICATES = {**under("records[]", CERTIFICATE_DOC), **under("rows[]", CERTIFICATE_DOC)}
+CERTIFICATES = {**under("records[]", ATTESTATION_DOC), **under("rows[]", ATTESTATION_DOC)}
 #: ``verity/certifier/v0``'s answer (`Answer.toJson`) with the piece's placement: K, ε and their terms the protocol's
 #: outputs, the profile where each party ran
 ANSWER = {

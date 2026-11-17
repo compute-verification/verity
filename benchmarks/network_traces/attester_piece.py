@@ -968,17 +968,17 @@ def guard(d: Path, hold: Path, unpacked: Path | None, quarantine: Path) -> int:
 
 def certificates(evidence: bytes) -> dict:
     """The attestations of a case's ``evidence``, what the network attester signed where the period check accepts
-    them, each with its own fields alone (`scan_period.CERTIFICATE_KEYS`): ``records``, each execution phase's three
+    them, each with its own fields alone (`scan_period.ATTESTATION_KEYS`): ``records``, each execution phase's three
     records' attestations (requests, responses, fails), and ``rows``, its two row registrations' (ingress, egress),
     with the link, direction and window its registration names, which the attestation's message signs. Nothing else of
     the evidence is here: no registration's head, no answer and no audit."""
-    from verity.protocols.resource_accounting.network.prover.scan_period import CERTIFICATE_KEYS
+    from verity.protocols.resource_accounting.network.prover.scan_period import ATTESTATION_KEYS
     windows = json.loads(evidence)["windows"]
     rows = [{"link": r["link"], "direction": r["direction"], "window": r["window"], "key_id": r["certificate"]["key"],
              "digest": r["certificate"]["digest"], "signature": r["certificate"]["signature"]}
             for x in windows for r in x["registrations"]]
-    return {"records": [{k: c[k] for k in CERTIFICATE_KEYS} for x in windows for c in x["certificates"]],
-            "rows": [{k: r[k] for k in CERTIFICATE_KEYS} for r in rows]}
+    return {"records": [{k: c[k] for k in ATTESTATION_KEYS} for x in windows for c in x["certificates"]],
+            "rows": [{k: r[k] for k in ATTESTATION_KEYS} for r in rows]}
 
 
 def write_case(hold: Path, case: Path) -> None:

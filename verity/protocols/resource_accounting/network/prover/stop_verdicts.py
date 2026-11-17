@@ -250,11 +250,11 @@ CONTROL_FIELDS = (CC.RUN, CC.VERIFIER, CONTROL, CC.VERDICT, REASON)
 #: the negative control each verdict's verifier owes, as a control record names it, and what it changes
 CONTROLS = {CC.STOP_RECORD: ("stop_word", "a stop word changed, the count off by one"),
             CC.RESPONSE_TIE: ("id", "a released id changed"),
-            CC.CERTIFIED_READ: ("max_tokens", "a request word changed, `max_tokens`"),
+            CC.ATTESTED_READ: ("max_tokens", "a request word changed, `max_tokens`"),
             CC.COMPUTE_AUDIT: ("output", "a committed output changed")}
 #: the word each verdict's control is refused for where its verifier refuses it for what was changed: a control
 #: refused for any other reason is none of its verifier's
-REASONS = {CC.STOP_RECORD: "stop_word", CC.RESPONSE_TIE: "id", CC.CERTIFIED_READ: "max_tokens",
+REASONS = {CC.STOP_RECORD: "stop_word", CC.RESPONSE_TIE: "id", CC.ATTESTED_READ: "max_tokens",
            CC.COMPUTE_AUDIT: "output"}
 #: the mark of what a run gives and no proof covers: a verdict a run produced is printed under it, since a
 #: verifier judged it and no proof of that verifier is read (the harness's mark of that name,

@@ -145,13 +145,13 @@ def test_the_gate_publishes_a_registration_less_its_wiring_and_the_guard_holds_t
         [*released, *gate_files])
 
 
-def test_a_network_attester_runs_certificates_io_and_link_are_its_own(tmp_path):
+def test_a_network_attester_runs_attestations_io_and_link_are_its_own(tmp_path):
     run = gate_run(tmp_path)
     got, private = WC.checked(run)
     assert got == WC.certificates(run) and not set(WC.WITNESS_KEYS) & set(got) and set(private) == set(WC.WITNESS_KEYS)
     assert (got["verdict"], got["why"], got["windows"]) == ("accepted", None, sz.W63.windows)
     assert (private["certified_windows"], private["issuer_refused"], private["problems"]) == (sz.W63.windows, [], 0)
-    assert got["public_is_the_records"] is True and got["clock_certificates"] == 0 and got["sync_bits"] == 0.0
+    assert got["public_is_the_records"] is True and got["clock_attestations"] == 0 and got["sync_bits"] == 0.0
     assert got["warden_run"] == "00" * 32 and got["warden_check"]["accepted"]
     io = WC.io(run)
     assert io["accepted"] and io["requests"] == len(sz.W63.prompts) and not io["violations"]
@@ -188,7 +188,7 @@ def test_a_network_attester_runs_certificates_io_and_link_are_its_own(tmp_path):
     assert not [p for p in check["problems"] if p in json.dumps(got)]
 
 
-def test_the_certificates_step_writes_of_the_check_what_the_gates_end_publishes(tmp_path):
+def test_the_attestations_step_writes_of_the_check_what_the_gates_end_publishes(tmp_path):
     """Of the network attester's own check, the attestations step writes the gate's end's verdict, key for key:
     whether it accepted and the gate's own list of counts (`auditor.NETWORK_ATTESTER_COUNTS`, its `cell_rows` cut to
     `auditor.CELL_ROWS`). The step's list is the gate's, so a key the gate does not publish is not written by the
@@ -228,7 +228,7 @@ def test_the_certificates_step_writes_of_the_check_what_the_gates_end_publishes(
     assert WC.verdict(worded)["failed"] == ["cut", "error"] == G.failed_words(worded["summary"]["failed"])
 
 
-def test_the_certificates_step_releases_its_declared_keys_and_keeps_the_traffics_in_the_witness(tmp_path,
+def test_the_attestations_step_releases_its_declared_keys_and_keeps_the_traffics_in_the_witness(tmp_path,
                                                                                                monkeypatch):
     """``chain_record.py certs`` writes ``certs.json`` with only the keys the list of released_keys.json names, on an
     accepted run and on one the network attester's own check refuses, and every count of `verdict` the list names;
@@ -409,7 +409,7 @@ def test_the_network_attester_path_requires_every_step_on_one_network_attester_r
     got = cr.report(steps)
     assert got["verdict"] == "accepted" and got["stubbed"] == list(cr.NETWORK_ATTESTER_STUBBED)
     assert got["negatives_refused"] == {"tie/forged": True, "n2/tampered": True, "scan/forged": True}
-    assert got["steps"]["certificates"]["clock_certificates"] == 0 and got["d1"]["acc"] == [True] * sz.W63.windows
+    assert got["steps"]["certificates"]["clock_attestations"] == 0 and got["d1"]["acc"] == [True] * sz.W63.windows
     assert got["steps"]["n2"]["clocks"]["source"] == "none"
     md = cr.markdown(got)
     assert f"on the {cr.NETWORK_ATTESTER} path" in md and "| tie | accepted |" in md and "certified I/O" in md
