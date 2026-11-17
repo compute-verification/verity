@@ -1164,9 +1164,11 @@ def tiny_wired():
     return circuit, *wired(circuit)
 
 
+@pytest.mark.slow
 def test_the_tiny_class_circuit_is_one_wired_program_of_registered_rows_with_a_wiring_at_each_width_change(tiny_wired):
     """Every root parameter is a registered read's value, a table read's root or domain or an opening's port, and no row is
-    free: the 14 wires and the scan state's read between words and bits pass through `WordBits`/`BitsWord`."""
+    free: the 14 wires and the scan state's read between words and bits pass through `WordBits`/`BitsWord`. Slow (about a
+    minute to build): only the whole class holds every wire kind."""
     circuit, prog, query = tiny_wired
     assert prog.annotations["free"] == []
     assert root_kinds(circuit, prog) == {"read": 17, "table read": 2, "opening": 3}
@@ -1178,7 +1180,7 @@ def test_the_tiny_class_circuit_is_one_wired_program_of_registered_rows_with_a_w
 @pytest.mark.slow
 def test_the_tiny_class_wired_program_is_its_members_fed_by_hand(tiny_wired):
     """The wired Program, node by node on made-up parameters, gives each unit the outputs its template gives on the rows the
-    record names, read in committed words: so each width change agrees with the commitments' bit order. Slow (about two
-    minutes, both sides evaluating the embedding read's 110M gates): only the whole class holds every wire kind."""
+    record names, read in committed words: so each width change agrees with the commitments' bit order. Slow (about a
+    minute): only the whole class holds every wire kind."""
     circuit, prog, _ = tiny_wired
     wired_matches_by_hand(circuit, prog)

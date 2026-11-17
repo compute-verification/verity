@@ -13,7 +13,9 @@ import re
 import numpy as np
 import pytest
 from verity.circuits.codec import descriptor_id
+from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate_batch
+from verity.circuits.population import BitsWord, WordBits
 from verity.circuits.types import Array, Value
 from verity.commitments.periods import interface as IF
 from verity.protocols.resource_accounting.compute.pouw.prover.schemes import SCHEMES
@@ -32,7 +34,10 @@ from tests.program.predict.test_window_circuit import (
     _label,
     _source,
     held,
+    root_kinds,
     state_row,
+    wired,
+    wired_matches_by_hand,
 )
 from tests.program.predict.test_window_circuit_int8 import GRAIN as INT8_GRAIN
 from tests.program.predict.test_window_circuit_int8 import _registered as _int8
@@ -422,3 +427,28 @@ def test_a_windows_cut_units_are_their_definitions_on_the_inputs_it_commits(low,
                 bad[tid] = u.tolist()
     assert bad == {}
     assert win.close(salt_key=bytes(32)) is not None
+
+
+@pytest.fixture(scope="module")
+def pearl_wired():
+    circuit = WC.class_circuit(_registered(), CLASS, None, GRAIN, provable=False, tables=PEARL)
+    return circuit, *wired(circuit)
+
+
+@pytest.mark.slow
+def test_the_tiny_pearl_class_circuit_is_one_wired_program_of_registered_rows(pearl_wired):
+    """As `test_window_circuit`'s tiny class, with Pearl+'s table reads among its registered reads. Slow (about a minute to
+    build): only the whole cut class holds Pearl+'s reads beside every wire kind."""
+    circuit, prog, query = pearl_wired
+    assert prog.annotations["free"] == []
+    assert root_kinds(circuit, prog) == {"read": 41, "table read": 2, "opening": 3}
+    assert prog.fn.gates == 110_433_824
+    assert query["params"]["templates"][len(circuit.ids):] == [
+        descriptor_id(t) for t in (*(bind(BitsWord, W=w) for w in (16, 32)), *(bind(WordBits, W=w) for w in (16, 32)))]
+
+
+@pytest.mark.slow
+def test_the_tiny_pearl_class_wired_program_is_its_members_fed_by_hand(pearl_wired):
+    """As `test_window_circuit`'s, on the cut class. Slow (about a minute): only the whole cut class holds every wire kind."""
+    circuit, prog, _ = pearl_wired
+    wired_matches_by_hand(circuit, prog)
