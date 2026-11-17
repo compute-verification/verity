@@ -158,6 +158,9 @@ if [ "$RUN" = settings ] || [ "$RUN" = bindings ]; then
   for kv in "${ARGV[@]}"; do export "${kv?}"; done
   log() { echo "run.sh settings: $*" >&2; }
   . adapters/vllm/tools/served_run/workload_env.sh || exit 2
+  if [ -n "${CARD:-}" ]; then
+    . adapters/vllm/tools/served_run/pin_card.sh "$(mktemp -d "${RESEARCH_RUN_DIR:-${TMPDIR:-/tmp}}/card-$CARD.XXXXXX")" || exit 2
+  fi
   mkdir -p "$SERVE_ROOT" && chmod 700 "$SERVE_ROOT"
   "$@"
   exit

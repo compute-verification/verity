@@ -148,7 +148,9 @@ run starts. FLAGs go to the recorder (`--timeout 200m` to end with the row); `--
    base) as `NAME=value` lines, which name no address; with `-- CMD`, CMD run under them wherever its environment sets
    none, after the node's env files (`env_files`, each mode 600) are read and each `${NAME}` they or the environment
    set is filled in, the INT8 pin linked and the venv's CUDA headers found. The window run's `served_verdicts.sh` runs
-   so. An application's command takes no bindings: every party runs on node A, the challenger with coins of its own. For a run
+   so. With `CARD=N`, every `gpu-lease` CMD starts leases card N alone, by a `gpu-lease` first on its PATH
+   (`pin_card.sh`, the window's too), and `PORT` reaches CMD as given, so two applications on one node each keep their
+   own card and endpoint port; with no `CARD`, a lease takes any free card. An application's command takes no bindings: every party runs on node A, the challenger with coins of its own. For a run
    on the auditor's coins, `uv run bash run.sh bindings applications/X.toml` prints `verity run --bindings` for that application:
    node A's `bindings` values, each to every party whose piece reads its key, the addresses such `${NAME}`s.
 
