@@ -110,7 +110,7 @@ def pouw_salt(reveal: bytes, window: int, stream: bytes, prover: bytes) -> bytes
     from fresh randomness, so no execution phase is bound beside it. A proxy started again counts from 0 with fresh salts, so the
     stream an execution phase is registered under names the network attester's run."""
     if type(reveal) is not bytes or len(reveal) != SALT_BYTES:
-        raise DomainError(f"the certifier's salt is {SALT_BYTES} bytes")
+        raise DomainError(f"the network attester's salt is {SALT_BYTES} bytes")
     return hashlib.sha512(SALT_TAG + reveal + _window(window).to_bytes(8, "big") + _bound(stream, prover)).digest()
 
 
@@ -275,9 +275,9 @@ def revealed(certifier: Any, window: int, registration: WindowCommitmentRecord |
     try:
         salt = certifier.reveal(window, registration)
     except (RuntimeError, ValueError) as e:
-        raise Unrevealed(f"the certifier doesn't reveal PoUW window {window}'s salt: {e}") from None
+        raise Unrevealed(f"the network attester doesn't reveal PoUW window {window}'s salt: {e}") from None
     if type(salt) is not bytes or len(salt) != SALT_BYTES:
-        raise Unrevealed(f"missing: the certifier's reveal of PoUW window {window} is not a {SALT_BYTES}-byte salt")
+        raise Unrevealed(f"missing: the network attester's reveal of PoUW window {window} is not a {SALT_BYTES}-byte salt")
     return salt
 
 
@@ -292,9 +292,9 @@ def committed(certifier: Any, window: int, registration: WindowCommitmentRecord 
     try:
         record = certifier.committed(window, registration)
     except (RuntimeError, ValueError) as e:
-        raise Unrevealed(f"the certifier doesn't give what PoUW recorded for window {window}: {e}") from None
+        raise Unrevealed(f"the network attester doesn't give what PoUW recorded for window {window}: {e}") from None
     if type(record) is not bytes or len(record) != WEIGHTS_ROOT_BYTES:
-        raise Unrevealed(f"uncommitted: what the certifier recorded for PoUW window {window} is not "
+        raise Unrevealed(f"uncommitted: what the network attester recorded for PoUW window {window} is not "
                          f"{WEIGHTS_ROOT_BYTES} bytes")
     return record
 
