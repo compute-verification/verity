@@ -749,14 +749,16 @@ UNDER_AUDITOR = "what the same sample would establish under an auditor's challen
 
 def sampled_coins(audit: Path, key_sha512: str | None) -> str:
     """``live`` when the challenger key the audit's v2 case names (its params' ``challenger.key``) is the one this machine
-    pins (``key_sha512``), else ``simulated``, whatever else the run says: a missing or unreadable case, a case naming no
-    key and no pin are all simulated."""
-    try:
-        public = json.loads((audit / "window" / "case-v2.json").read_text())["params"]["challenger"]["key"]["public"]
-        named = hashlib.sha512(bytes.fromhex(public)).hexdigest()
-    except (OSError, ValueError, KeyError, TypeError, AttributeError):
+    pins (``key_sha512``), else ``simulated``, whatever else the run says: a missing case, a case naming no key and no
+    pin are all simulated."""
+    f = audit / "window" / "case-v2.json"
+    params = json.loads(f.read_text()).get("params") if f.is_file() else None
+    ch = params.get("challenger") if isinstance(params, dict) else None
+    key = ch.get("key") if isinstance(ch, dict) else None
+    public = key.get("public") if isinstance(key, dict) else None
+    if not key_sha512 or not isinstance(public, str) or not re.fullmatch(r"(?:[0-9a-fA-F]{2})+", public):
         return "simulated"
-    return "live" if key_sha512 and named == key_sha512.lower() else "simulated"
+    return "live" if hashlib.sha512(bytes.fromhex(public)).hexdigest() == key_sha512.lower() else "simulated"
 
 
 def with_coins(report: dict[str, Any], rec: dict[str, Any] | None, line: dict[str, Any],

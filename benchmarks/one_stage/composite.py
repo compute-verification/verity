@@ -266,11 +266,12 @@ def sampled_coins(cases: Sequence[dict[str, Any]], key_sha512: str | None) -> st
     for p in cases:
         if p["id"] != SAMPLED:
             continue
-        try:
-            named = hashlib.sha512(bytes.fromhex(p["params"]["challenger"]["key"]["public"])).hexdigest()
-        except (KeyError, TypeError, ValueError, AttributeError):
+        ch = p["params"].get("challenger")
+        key = ch.get("key") if isinstance(ch, dict) else None
+        public = key.get("public") if isinstance(key, dict) else None
+        if not key_sha512 or not isinstance(public, str) or not re.fullmatch(r"(?:[0-9a-fA-F]{2})+", public):
             return "simulated"
-        return "live" if key_sha512 and named == key_sha512.lower() else "simulated"
+        return "live" if hashlib.sha512(bytes.fromhex(public)).hexdigest() == key_sha512.lower() else "simulated"
     return None
 
 
