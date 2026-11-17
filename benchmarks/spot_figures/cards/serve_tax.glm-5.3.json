@@ -7,7 +7,9 @@
  "source": "priced from each configuration's parts against a token's GPU-seconds at serving's MFU on the H200's dense FP8 peak (total_cost.priced_card); measured values replace it configuration by configuration",
  "runs": [
   "r20261107-155724-3f53",
-  "r20261111-162328-f498"
+  "r20261111-162328-f498",
+  "r20261116-122320-c688",
+  "r20261116-225304-47b9"
  ],
  "owner": "@proofs",
  "value": {
@@ -16,9 +18,9 @@
    {
     "config": "tokens",
     "status": "priced",
-    "tax": 0.021199400232077538,
-    "low": 0.020418985843830076,
-    "high": 0.07486033922950965,
+    "tax": 0.10239940023207754,
+    "low": 0.08921898584383008,
+    "high": 0.16846033922950965,
     "lower_bound": false,
     "parts": [
      {
@@ -63,24 +65,26 @@
      },
      {
       "part": "deterministic top-k",
-      "status": "modeled",
-      "share": 0.0025,
-      "low": 0.0025,
-      "high": 0.0025,
-      "source": "the canonical DSA top-k that makes GLM-5.3's replay bit-exact at TP8 mid-traffic, kernel-modeled"
+      "status": "measured",
+      "share": 0.0837,
+      "low": 0.0713,
+      "high": 0.0961,
+      "source": "the canonical DSA top-k that makes GLM-5.3's replay bit-exact at TP8, measured on the served engine against the same server with it off (prod-record over prod-trace), one engine on eight H200 SXM at a median SM clock of 1,980 MHz with no thermal slowdown, sampled agentic sessions at 4 users whose contexts pass 2,048 keys, the mean over 8 server-lifetime pairs and its 95% interval; the old pass's cost, which bisects every wrong fast selection by one program: right for main today and an upper bound once the new select lands, until prod-record-bisect measures the new one"
      }
     ],
     "runs": [
      "r20261107-155724-3f53",
-     "r20261111-162328-f498"
+     "r20261111-162328-f498",
+     "r20261116-122320-c688",
+     "r20261116-225304-47b9"
     ]
    },
    {
     "config": "tokens_bi",
     "status": "priced",
-    "tax": 0.25819940023207755,
-    "low": 0.16141898584383005,
-    "high": 0.38586033922950963,
+    "tax": 0.33939940023207754,
+    "low": 0.23021898584383008,
+    "high": 0.47946033922950965,
     "lower_bound": false,
     "parts": [
      {
@@ -125,11 +129,11 @@
      },
      {
       "part": "deterministic top-k",
-      "status": "modeled",
-      "share": 0.0025,
-      "low": 0.0025,
-      "high": 0.0025,
-      "source": "the canonical DSA top-k that makes GLM-5.3's replay bit-exact at TP8 mid-traffic, kernel-modeled"
+      "status": "measured",
+      "share": 0.0837,
+      "low": 0.0713,
+      "high": 0.0961,
+      "source": "the canonical DSA top-k that makes GLM-5.3's replay bit-exact at TP8, measured on the served engine against the same server with it off (prod-record over prod-trace), one engine on eight H200 SXM at a median SM clock of 1,980 MHz with no thermal slowdown, sampled agentic sessions at 4 users whose contexts pass 2,048 keys, the mean over 8 server-lifetime pairs and its 95% interval; the old pass's cost, which bisects every wrong fast selection by one program: right for main today and an upper bound once the new select lands, until prod-record-bisect measures the new one"
      },
      {
       "part": "batch-invariant kernels",
@@ -142,15 +146,17 @@
     ],
     "runs": [
      "r20261107-155724-3f53",
-     "r20261111-162328-f498"
+     "r20261111-162328-f498",
+     "r20261116-122320-c688",
+     "r20261116-225304-47b9"
     ]
    },
    {
     "config": "layer_of_token",
     "status": "priced",
-    "tax": 0.039152291563916475,
-    "low": 0.03696148138850862,
-    "high": 0.07229063988897876,
+    "tax": 0.12035229156391647,
+    "low": 0.10576148138850862,
+    "high": 0.16589063988897876,
     "lower_bound": false,
     "parts": [
      {
@@ -179,12 +185,16 @@
      },
      {
       "part": "deterministic top-k",
-      "status": "modeled",
-      "share": 0.0025,
-      "low": 0.0025,
-      "high": 0.0025,
-      "source": "the canonical DSA top-k that makes GLM-5.3's replay bit-exact at TP8 mid-traffic, kernel-modeled"
+      "status": "measured",
+      "share": 0.0837,
+      "low": 0.0713,
+      "high": 0.0961,
+      "source": "the canonical DSA top-k that makes GLM-5.3's replay bit-exact at TP8, measured on the served engine against the same server with it off (prod-record over prod-trace), one engine on eight H200 SXM at a median SM clock of 1,980 MHz with no thermal slowdown, sampled agentic sessions at 4 users whose contexts pass 2,048 keys, the mean over 8 server-lifetime pairs and its 95% interval; the old pass's cost, which bisects every wrong fast selection by one program: right for main today and an upper bound once the new select lands, until prod-record-bisect measures the new one"
      }
+    ],
+    "runs": [
+     "r20261116-122320-c688",
+     "r20261116-225304-47b9"
     ]
    },
    {
