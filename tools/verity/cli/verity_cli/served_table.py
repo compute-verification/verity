@@ -20,7 +20,7 @@ A piece is what one party does in the run (`Piece`), in one of four ways (``runs
   this machine hands it its party key (`held`). What doesn't reach the table yet (the served store, the card, setup's
   request, the party key) raises `NotImplementedError` (`NOT_YET`) before anything starts;
 - ``check``: the verifier's onsite check, `served_verdicts.py record` over the served window's public record, whose
-  composed verdict is the period's.
+  composed verdict is the period's; under remote, the record the compose answer holds (`remote_check`).
 
 A piece names the scripts it runs (``scripts``), which must be in the tree, and the deploy bindings it reads: those of
 the party it reaches (``reaches``, default its own), ``party.component.key`` each, the ``binds`` ones bound before the run
@@ -76,6 +76,7 @@ VERDICTS_SCRIPT = "benchmarks/one_stage/served_verdicts.py"
 CERTIFIER_PIECE = "benchmarks/network_traces/certifier_piece.py"
 PEARLPLUS_SCRIPT = "benchmarks/one_stage/served_pearlplus.sh"
 ONSITE = "verity/onsite/v0"
+REMOTE = "verity/remote/v1"
 #: the deploy bindings `begin` keeps beside the run (`verity_cli.run.BINDINGS`)
 BINDINGS = "bindings.json"
 WORKERS, ZK_SERVER, PROVER, VERIFIER = SP.WORKERS, SP.ZK_SERVER, WP.PROVER, SP.VERIFIER
@@ -84,6 +85,8 @@ BANDWIDTH_VERIFIER, NETWORK_CERTIFIER = "bandwidth-verifier", NC.NETWORK_CERTIFI
 #: served_verdicts.py's record reads each piece's answer by its runner name
 RECORD_NAMES = {"integrity": "sampled-proofs", "work": "pouw", "inference-only": "inference-only", "space": "pous",
                 "bandwidth": "bandwidth", "communication": "certifier", "wipe": "wipe"}
+#: each component's row in the record: Pearl+'s is ``work``, as H1's is
+ROWS = {v: k for k, v in RECORD_NAMES.items()} | {"pearl-plus": "work"}
 
 
 # --- what each component and the workload declare -------------------------------------------------------------------
@@ -685,9 +688,8 @@ def onsite_check(cfg: Mapping[str, Any], state: Path) -> dict[str, Any]:
     line = next((json.loads(x.split(" ", 1)[1]) for x in p.stdout.splitlines() if x.startswith("RECORD ")), None)
     if line is None:
         raise Refused("record", (p.stderr or p.stdout).strip()[-800:] or "served_verdicts.py record wrote no RECORD")
-    names = {v: k for k, v in RECORD_NAMES.items()}
     rows = json.loads((state / "record" / "onsite" / "verdicts.json").read_text())["protocols"]
-    components = {c: rows.get(names[c], {}).get("verdict", "absent") for c in cfg["protocols"]}
+    components = {c: rows.get(ROWS.get(c, c), {}).get("verdict", "absent") for c in cfg["protocols"]}
     absent = sorted(c for c, v in components.items() if v == "absent")
     verdict = VERDICTS.get(line["composed"], "undecided")
     return {"block": k, "components": components, "product": K.composite(cfg["protocols"], MANIFESTS),
@@ -695,6 +697,48 @@ def onsite_check(cfg: Mapping[str, Any], state: Path) -> dict[str, Any]:
             or (f"no row for {absent}" if absent else None),
             "registration": None, "coins": coins_of(cfg),
             "verdict": "undecided" if verdict == "accept" and absent else verdict}
+
+
+def _record_line(said: Path) -> dict[str, Any] | None:
+    lines = said.read_text().splitlines() if said.is_file() else []
+    return next((json.loads(x.split(" ", 1)[1]) for x in reversed(lines) if x.startswith("RECORD ")), None)
+
+
+def remote_check(cfg: Mapping[str, Any], state: Path) -> dict[str, Any]:
+    out = state / "out"
+    answer = out / "compose"
+    composed = (answer / "record" / "verdicts.json").is_file()
+    base = answer if composed else out
+    line, f = _record_line(base / "verdicts.txt"), base / "record" / "verdicts.json"
+    if line is None or not f.is_file():
+        raise Refused("record", f"remote's verifier reads the record in {base}, which has "
+                                + ("no RECORD line in verdicts.txt" if line is None else "no record/verdicts.json"))
+    if line.get("product") != "remote":
+        raise Refused("record", f"the record in {base} is composed for {line.get('product')!r}, not remote")
+    report = json.loads(f.read_text())
+    rows = report.get("protocols", {})
+    components = {c: rows.get(ROWS.get(c, c), {}).get("verdict", "absent") for c in cfg["protocols"]}
+    io = base / "record" / "inference-only.json"
+    if components.get("inference-only") == "absent" and io.is_file():
+        components["inference-only"] = json.loads(io.read_text()).get("verdict", "absent")
+    held = sorted(f"{c} {v}" for c, v in components.items() if v != "accept")
+    verdict = VERDICTS.get(line.get("composed"), "undecided")
+    reason = (None if composed else f"no compose answer in {answer}: remote's final record is composed off the "
+                                    "served node, from its compose hand-off") \
+        or line.get("why") or (f"missing {sorted(line['missing'])}" if line.get("missing") else None) \
+        or (f"not accepted: {', '.join(held)}" if held else None)
+    return {"block": report.get("window"), "components": components, "product": REMOTE, "reason": reason,
+            "registration": None, "coins": coins_of(cfg),
+            "verdict": "undecided" if verdict == "accept" and (held or not composed) else verdict}
+
+
+def pending(cfg: Mapping[str, Any], state: Path, rc: int) -> str | None:
+    if rc != 2 or K.composite(cfg["protocols"], MANIFESTS) != REMOTE:
+        return None
+    said = state / "out" / "verdicts.txt"
+    handed = next((x for x in reversed(said.read_text().splitlines() if said.is_file() else [])
+                   if x.startswith("HANDOFF ")), None)
+    return None if handed is None or handed.startswith("HANDOFF refused") else handed
 
 
 #: what a registration raises with once its configuration item is written, while no run's log holds the item: the goal
@@ -732,7 +776,7 @@ def coins_of(cfg: Mapping[str, Any]) -> str:
 def live(cfg: Mapping[str, Any], state: Path, here: Sequence[str]) -> Result:
     """The pieces of the parties ``here`` (module docstring): each runtime party's run, the wipe's before the served
     window and the others' beside it; the served window when the workload's party is here; a gate's side as started by
-    the gate; and the onsite check when the verifier is here, its line with each memory challenger's `trusted-device`
+    the gate; and the onsite check (`remote_check` under remote) when the verifier is here, its line with each memory challenger's `trusted-device`
     premise as `placement` read it from the challenger's outcome here (``trusted-device``: component -> premise). Refused by name (``unbound``) while a listed piece's
     binding is missing, and raised while a runtime party's `held` does, before anything starts."""
     bindings = bindings_of(state)
@@ -759,9 +803,11 @@ def live(cfg: Mapping[str, Any], state: Path, here: Sequence[str]) -> Result:
         beside = [(x, pool.submit(start)) for x, start in ready if not x.session.before]
         if WORKERS in here:
             rc = served_window(cfg, state, bindings)
+            wait = pending(cfg, state, rc)
             for p in here:
                 if any(x.runs == SERVED_WINDOW for x in pieces(cfg, p)):
-                    out[p] = {"outcome": {"served-window": rc}, "refused": None if rc == 0 else SERVED_WINDOW}
+                    out[p] = {"outcome": {"served-window": rc, **({"pending": wait} if wait else {})},
+                              "refused": None if rc == 0 or wait else SERVED_WINDOW}
         for x, f in beside:
             done(x, f.result())
     for p in here:
@@ -777,7 +823,8 @@ def live(cfg: Mapping[str, Any], state: Path, here: Sequence[str]) -> Result:
     if VERIFIER in here:
         devices = {c: where[mc.PREMISE] for x in out.values() for c, where in x.get("placement", {}).items()}
         try:
-            out[VERIFIER] = {"outcome": {"verdicts": [{**onsite_check(cfg, state), mc.PREMISE: devices}]},
+            check = remote_check if K.composite(cfg["protocols"], MANIFESTS) == REMOTE else onsite_check
+            out[VERIFIER] = {"outcome": {"verdicts": [{**check(cfg, state), mc.PREMISE: devices}]},
                              "refused": None}
         except Refused as e:
             out[VERIFIER] = {"outcome": {"error": e.detail}, "refused": e.name}
@@ -785,5 +832,6 @@ def live(cfg: Mapping[str, Any], state: Path, here: Sequence[str]) -> Result:
 
 
 __all__ = ["DEMOS", "HEADERS", "MANIFESTS", "NOT_YET", "ORDER", "PARTIES", "PROTOCOLS", "REGISTRATION_GOAL", "SERVED",
-           "WORKLOADS", "Held", "Piece", "Result", "Session", "held", "live", "onsite_check", "pieces", "placement",
-           "prepare", "registration", "request_bound", "served_window", "unbound", "variables"]
+           "WORKLOADS", "Held", "Piece", "Result", "Session", "held", "live", "onsite_check", "pending", "pieces",
+           "placement", "prepare", "registration", "remote_check", "request_bound", "served_window", "unbound",
+           "variables"]
