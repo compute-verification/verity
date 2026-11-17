@@ -56,13 +56,22 @@ request ids and kinds are wired past). N is public, as the Commit's binding map 
 """
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
-from functools import lru_cache
+from functools import cache
 from types import SimpleNamespace
-from typing import Sequence
 
 from verity.circuits import boolean as BL
-from verity.circuits.boolean.forms import ZERO, Circuit, add, and_reduce, const_bits, mux, or_reduce
+from verity.circuits.boolean import BIT
+from verity.circuits.boolean.forms import (
+    ZERO,
+    Circuit,
+    add,
+    and_reduce,
+    const_bits,
+    mux,
+    or_reduce,
+)
 from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.evaluation.bits import evaluate_bits
 from verity.circuits.types import Array
@@ -70,9 +79,10 @@ from verity.commitments import hm96
 from verity.commitments.gates.frame_v3 import _part, _refs
 from verity.commitments.merkle import CommitmentDomain, merkle_depth
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2, row_leaf
-from verity.protocols.resource_accounting.network.verifier import head_check as HC, io_tie as IT
+from verity.protocols.resource_accounting.network.verifier import head_check as HC
+from verity.protocols.resource_accounting.network.verifier import io_tie as IT
+
 from verity_vllm.compiler import replay_chain as RC
-from verity.circuits.boolean import BIT
 
 STATICS = ("R", "P", "G", "IW", "L", "T", "IB", "PB")
 STEP = ("R", "L", "T", "IB", "PB")
@@ -511,7 +521,7 @@ def _count(build, params) -> int:
     return C.counts()["ands"]
 
 
-@lru_cache(maxsize=None)
+@cache
 def _step_ands(key: tuple) -> int:
     """The step's parts counted as Flock lowers them, each activation by its builder on its own wires: the slots, the
     routing with its M − R zero records constant, the scan."""

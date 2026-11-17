@@ -8,7 +8,7 @@ re-exported by `kit`:
   in the fixed words (`COINS`, `PARAMETERS`), and its object for the document.
 - `report(name, text, doc, measured, ...)`: a command's last step: prints the text and the one line of JSON, writes them
   where there is a place, gives no number for a run the Lean verifier didn't accept, says where it is not an audit and
-  where its record is made up.
+  where its record is made up, and writes no measurement where it reprints another run's record (`from_run=`).
 """
 
 from __future__ import annotations
@@ -41,6 +41,8 @@ WITHDRAWN_LINE = "  part of the run's record was withdrawn, none of it a file re
 OWN_WORD = "coins by the record's own word, not checked"
 #: how the store ends the reason of a withdrawal of only the files under some prefixes of a record
 SCOPED = re.compile(r" \(only ([^()]+)\)$")
+#: what `report` says, on stderr, where it writes no measurement of a reprint
+REPRINT = "{name}: a reprint of run {run}'s record: its numbers are that run's measurements, and this writes none"
 #: research's run ids, the one form `record_dir` reads through the store
 RUN_ID = re.compile(r"r\d{8}-\d{6}-[0-9a-f]{4}")
 
@@ -146,12 +148,13 @@ _pair = ran_with
 def report(name: str, text: str, doc: Mapping[str, Any], measured: Iterable[Mapping[str, Any]] = (), *,
            document: bool = True, mark: str | None = None, out: str | os.PathLike | None = None,
            ran_with: tuple[str, Mapping[str, Any]] | None | _Unsaid = _UNSAID, accepted: bool | None = None,
-           why: str | None = None, made_up: bool = False, withdrawn: Sequence[str] = ()) -> int:
+           why: str | None = None, made_up: bool = False, withdrawn: Sequence[str] = (),
+           from_run: str | None = None) -> int:
     """A command's last step, the one way it prints and writes its number: prints `text`, then `doc` as one line of
     JSON, and where it has a place to write (`out` where the caller names one, its `--out`; else under a research run its
     `out/`, `$RESEARCH_RUN_DIR/out`, and outside one `$OUT` where set) writes that line to `<name>.json` there and
-    appends each of `measured`, the keywords of a `Writer.measurement`, at `mark` (``"measured"`` where None) to the
-    run's result (`kit.writer`). An empty variable names no place. With `document` False the place keeps the
+    appends each of `measured`, the keywords of a `Writer.measurement`, at its own ``mark`` where it gives one (a chosen
+    parameter's, which no run measured), else at `mark` (``"measured"`` where None), to the run's result (`kit.writer`). An empty variable names no place. With `document` False the place keeps the
     `<name>.json` it holds.
 
     `ran_with` (`ran_with()`'s pair, or None for a record that predates the field, printed as `NOT_STATED`) is printed
@@ -163,8 +166,13 @@ def report(name: str, text: str, doc: Mapping[str, Any], measured: Iterable[Mapp
     Lean verifier didn't accept the run) the first line is ``NAME: no number: WHY``, in place of the text's headline (its
     first line where that opens with ``NAME:``) and above the rest of the text, the document's value is null beside
     ``no_number``, and each measurement is written with no value and `why`. `withdrawn` (`record_dir`'s) is printed
-    last and is the document's ``withdrawn``. Given none of these, it prints and writes as it did before them. Its exit
+    last and is the document's ``withdrawn``. `from_run` is the run whose record the command read; where it names a run
+    other than this one (`RESEARCH_RUN_ID`) the command is a reprint, and `report` prints and writes the document as
+    above but writes no measurement, saying so on stderr (`REPRINT`): a number reaches the Metrics tab once, from the run
+    that measured it, with that run's commit. Given none of these, it prints and writes as it did before them. Its exit
     code: 1 with no number, else 0."""
+    if from_run is not None and (not isinstance(from_run, str) or not from_run):
+        raise ValueError(f"from_run names the run whose record was read, a run id, not {from_run!r}")
     lines = text.split("\n")
     doc = dict(doc)
     if made_up:
@@ -172,7 +180,7 @@ def report(name: str, text: str, doc: Mapping[str, Any], measured: Iterable[Mapp
             raise ValueError(f"a made-up record's measurements are marked {MADE_UP_MARK!r}, figures no run measured, not "
                              f"{mark!r}: drop mark=")
         mark = MADE_UP_MARK
-        measured = [{**m, "extra": {**(m.get("extra") or {}), "made_up": True}} for m in measured]
+        measured = [{**m, "mark": mark, "extra": {**(m.get("extra") or {}), "made_up": True}} for m in measured]
     if accepted is False:
         if not why:
             raise ValueError("a run the Lean verifier didn't accept prints no number and says why: give why")
@@ -212,11 +220,15 @@ def report(name: str, text: str, doc: Mapping[str, Any], measured: Iterable[Mapp
         if document:
             place.mkdir(parents=True, exist_ok=True)
             (place / f"{name}.json").write_text(line + "\n")
-        if measured := list(measured):
+        measured = list(measured)
+        if measured and from_run is not None and from_run != settings.RESEARCH_RUN_ID:
+            print(REPRINT.format(name=name, run=from_run), file=sys.stderr)
+            measured = []
+        if measured:
             # kit re-exports this module, so it is imported here and not above
             from verity_bench.kit import writer
 
             w = writer(place)
             for m in measured:
-                w.measurement(**m, mark=mark or "measured")
+                w.measurement(**{"mark": mark or "measured", **m})
     return 1 if accepted is False else 0

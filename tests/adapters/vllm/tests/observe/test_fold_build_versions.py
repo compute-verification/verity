@@ -28,11 +28,11 @@ from pathlib import Path
 
 import pytest
 from verity.circuits.defs import CompositeDefinition, SpecializedDefinition
+
+import verity_vllm
 from verity_vllm.definitions.registry import b1
 from verity_vllm.definitions.registry import prims as P
 from verity_vllm.definitions.registry.hopper import Fa3InvSum
-
-import verity_vllm
 from verity_vllm.program.frontend import targets as TG
 from verity_vllm.program.frontend.rules.vocab import PROFILES
 from verity_vllm.program.frontend.target_profile import TargetProfile

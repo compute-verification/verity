@@ -64,8 +64,6 @@ from typing import Any
 
 import numpy as np
 from verity.commitments.randomness import Key
-from verity_vllm.definitions.numerics import prims_twins
-from verity_vllm.definitions.numerics.rows import EVALUATOR_PROVENANCE, EVALUATORS
 
 from verity_vllm import settings
 from verity_vllm.check.replay import cached_prefix as CP
@@ -101,6 +99,8 @@ from verity_vllm.check.replay.population import (
 )
 from verity_vllm.check.replay.sample import _catch_probability, challenge_seed, sample
 from verity_vllm.commit.opened import opened_in_children
+from verity_vllm.definitions.numerics import prims_twins
+from verity_vllm.definitions.numerics.rows import EVALUATOR_PROVENANCE, EVALUATORS
 from verity_vllm.program.compact import p_item_weight_span
 from verity_vllm.query import norm_scales
 from verity_vllm.query.required import QUERIES
@@ -196,7 +196,7 @@ _FAMILY_LIBS = {"RMSNormTriton_v1": ("rms",), "RMSNormTriton_v5": ("rms",), "RMS
 
 def _prewarm_evaluators(picked: list[dict]) -> dict[str, str]:
     """Build + dlopen every twin library the sample's families need in the PARENT before the fork:
-    the children inherit the mapping and never race a first-use JIT build (a sibling used to dlopen the half-written .so -> 'file too
+    the children inherit the mapping and never race a first-use JIT build (a sibling would otherwise dlopen the half-written .so -> 'file too
     short' -> a stratum 'not evaluated').  The build itself is atomic + locked (`verity_vllm.definitions.numerics._jit`); this makes the fast path
     the only path.  Returns {library: path} for the record; a failure here is reported, not fatal (the children fall back to their own
     locked build)."""
