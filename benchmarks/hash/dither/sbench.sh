@@ -138,10 +138,10 @@ case " $* " in *dither-a-hbc*)
     export DITHER_H1C_KC=$S/libh1c_kc.so
   fi ;;
 esac
-# --bw-passes (dbw.py): PoUB's prover libraries, as remote_session/run.sh builds them (BW_LIB, BW_KV)
+# --bw-passes (dbw.py): PoUB's prover libraries, as poub_session/run.sh builds them (BW_LIB, BW_KV)
 case " $* " in *" --bw-passes"*)
   nvcc -O3 -gencode "$GEN" -std=c++17 -Xcompiler -fPIC -shared -Xptxas -v \
-    -o "$S/session.so" verity/protocols/resource_accounting/memory/poub/prover/remote_session/session.cu > "$OUT/build-session.log" 2>&1 \
+    -o "$S/session.so" verity/protocols/resource_accounting/memory/poub/prover/poub_session/session.cu > "$OUT/build-session.log" 2>&1 \
     || { echo "sbench: NVCC_FAIL session"; grep -v "^ptxas info" "$OUT/build-session.log" | tail -30; exit 11; }
   nvcc -O3 -gencode "$GEN" -std=c++17 -Xcompiler -fPIC -shared -Xptxas -v -DKV_FIELD=1024 \
     -DKV_MASK=1 -o "$S/kv.so" verity/protocols/resource_accounting/memory/poub/prover/word_codec/kv.cu > "$OUT/build-kv.log" 2>&1 \
@@ -171,7 +171,7 @@ command -v lake >/dev/null || export PATH="$HOME/.elan/bin:$PATH"
   > "$OUT/lean-coins-build.log" 2>&1 \
   || { echo "sbench: LEAN_BUILD_FAIL"; tail -20 "$OUT/lean-coins-build.log"; exit 13; }
 # and with --bw-passes PoUB's verifier, under the lock lean_verifier.build takes (BW_LEAN_EXE);
-# BW_PY runs the audit's side (verifier and prover), by default remote_session/run.sh's torch venv
+# BW_PY runs the audit's side (verifier and prover), by default poub_session/run.sh's torch venv
 if [ -n "${BW_LIB:-}" ]; then
   (mkdir -p verity/circuits/difftest/.lake && cd verity/protocols/resource_accounting/memory/poub/verifier/lean \
     && flock "$ROOT/verity/circuits/difftest/.lake/harness-build.lock" lake build poub-verifier) \

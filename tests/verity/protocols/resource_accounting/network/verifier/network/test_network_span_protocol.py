@@ -129,7 +129,7 @@ def test_each_rejection_has_its_own_reason(server):
 @lean
 def test_the_registered_hardware_refuses_the_parameters(server):
     """Lean and the mirror refuse the parameters on every form of each change to the registered hardware: a link that
-    is none of the site's, or that joins something else than a network attester and a host; a certifier that
+    is none of the site's, or that joins something else than a network attester and a host; a network attester that
     registers another key, or one that is not lower-case hex; a site without a head and a head without a site; a site
     that is not one a registration log's view writes. A refusal by the registered hardware names what is public
     there, in the same words on both sides: the link, the site's network attesters' links, the attester and its
@@ -199,7 +199,7 @@ def test_every_change_reaches_its_verdict_in_the_mirror():
 def test_the_registered_hardware_in_the_parameters():
     """With the site and the head, the parameters hold what the registered hardware states of the link and the key,
     as the Lean's `#guard`s have it, and the count is the one without them; a site without a head, a head without a
-    site, a certifier that registers another key, the attester's other half and a site that is none are refused."""
+    site, a network attester that registers another key, the attester's other half and a site that is none are refused."""
     with_site = GUARD_PARAMS | {"head": "h", "site": GUARD_SITE}
     assert span.params(with_site).registered == registered.Registered(
         head="h", link="eth0", host="node0", certifier="cert0", key="00" * 24, beta=100)

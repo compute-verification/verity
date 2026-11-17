@@ -250,7 +250,7 @@ PIECES: dict[str, tuple[str, str, str, str]] = {
              ("H1's credit on the served window, its coins from vy-challenger-1's gate (H1_GATE), or with POUW=pearlplus "
               "the reference replay of Pearl+'s own served run (served_pearlplus.sh)")),
     "space": ("PoUS", "pous", "memory-accounting",
-              ("PoUS over the served model's int8 weights on the serving card, against the memory challenger on "
+              ("PoUS over the served model's int8 weights on the serving card, against the memory attester on "
                "vy-auditor-2; served_verdicts.sh sets it where the tree has benchmarks/pous/served_piece.sh and this node "
                "the challenger's key")),
     "bandwidth": ("the bandwidth audit", "bandwidth", "memory-accounting",
@@ -303,7 +303,7 @@ PEARLPLUS_COINS_IN_PROCESS = {"draws": PEARLPLUS_NODE_SAMPLES,
                               "epoch": "an in-process challenger of epoch 0 (verity_bench's protocols_config, "
                                        "pouw.challenged), held by the serving process"}
 #: `pearlplus_epoch_tied` where its epoch's coins are an in-process challenger's
-PEARLPLUS_EPOCH_TIED_IN_PROCESS = ("an in-process challenger of the window's epoch over the Lean verifier of record's "
+PEARLPLUS_EPOCH_TIED_IN_PROCESS = ("an in-process challenger of the window's epoch over the Lean verifier's "
                                    "entropy (serve_pearl.in_process), held by the serving process")
 
 
@@ -789,7 +789,7 @@ def sampled_line(records: Mapping[str, Any], partition: Mapping[str, Any] | None
     return f"{over}, {drawn}{coins}: RECORDS {json.dumps(row, sort_keys=True)}"
 
 
-#: The certifier front's session fields the CERTIFIER-FRONT line says. The rest (its prompts, request, kept fetch, gate
+#: The network attester front's session fields the CERTIFIER-FRONT line says. The rest (its prompts, request, kept fetch, gate
 #: and verdict's cells) count or name the group's requests, and stay in the serve dir.
 FRONT_PUBLIC = ("rc", "run", "ended", "session_s", "pinned", "leaked_removed")
 
@@ -819,7 +819,7 @@ def pieces(serve_dir: Path, window: int, out: Path, env: Mapping[str, str] | Non
            product: str = "onsite") -> dict[str, dict[str, Any]]:
     """Each piece of `PIECES` run where ``<COMPONENT>_CMD`` names it, under `timeout` at its limit, else named missing;
     one line each on stdout, its verdict the one `piece` gives the record. ``only`` and ``skip`` name components: those
-    alone, or all but those, so one piece can run beside the others (`served_verdicts.sh` starts the certifier's early).
+    alone, or all but those, so one piece can run beside the others (`served_verdicts.sh` starts the network attester's early).
     A piece ``product`` drops isn't run, whatever its command (`dropped_row`)."""
     from verity_e2e_demo import block_record as BR
 
@@ -1238,7 +1238,7 @@ Check = Callable[[Path, Path, Path, Path, "Path | None", str, Path, Mapping[str,
 #: the premises the pouw piece's verdict says whether the window meets (`premises`)
 PREMISES = ("AcceptedLive", "SaltIsLiveCoin")
 #: why a window meets ``AcceptedLive`` (`ResourceAccounting.TS.Session`'s, ``accounting-ts-accepted-live``)
-LIVE_MET = ("credit accepted the window, and it credits a drawn unit or a live round only where the verifier of record "
+LIVE_MET = ("credit accepted the window, and it credits a drawn unit or a live round only where the verifier "
             "accepted its session (verity-verify-proof verify --zk with the --registered file credit builds)")
 #: why a window meets ``SaltIsLiveCoin`` (`Properties.Pouw.MonitoringPeriod`'s)
 SALT_MET = ("core_check.salt_of_record accepted the window's salt as its live salt coin, opened after the window's open root and read "

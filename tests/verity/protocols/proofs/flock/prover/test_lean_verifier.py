@@ -744,7 +744,7 @@ def _one_stage_sample():
 
 @pytest.mark.slow
 @pytest.mark.skipif(shutil.which("lake") is None or _one_stage_sample() is None,
-                    reason="no Lean toolchain or no stratified law in core")
+                    reason="no Lean toolchain or no stratified sampling design in core")
 def test_stratified_sample_agrees_with_core(tmp_path):
     lake_build(LEAN)
     p = subprocess.run(["python3", str(Path(__file__).resolve().parent / "stratified_agree.py"), "--lean", str(LEAN / ".lake/build/bin/verity-verify-proof"),

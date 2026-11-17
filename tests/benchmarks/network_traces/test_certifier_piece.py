@@ -1477,7 +1477,7 @@ def test_close_waits_for_the_sessions_end_keeps_its_fetch_and_publishes_what_a_r
 def test_a_session_the_gates_check_refused_is_closed_and_kept_and_the_piece_doesnt_answer_for_it(tmp_path, monkeypatch):
     """The whole-run rule across a session: an end whose check didn't accept the run (here each connection late) is
     `close`'s exit, its fetch is kept all the same, and the piece's steps refuse on it (`rehearsed`), which leaves the
-    certifier missing for every window of the served run."""
+    network attester missing for every window of the served run."""
     _session_gate(tmp_path, monkeypatch, [LISTENING])
     serve = tmp_path / "serve"
     assert CP.main(_front(tmp_path, *SESSION_FLAGS)) == 0
