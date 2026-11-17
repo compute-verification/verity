@@ -61,7 +61,7 @@
 #  3. SPOT, on the window `served_verdicts.py window` picks (the most requests, none carried across windows; under
 #     PEARLPLUS_TIE the fixed load's, the one window holding its requests and no other, with CERTIFIER_FRONT's group in a
 #     window of its own, the one whose requests are all the network attester's, which the network attester's piece takes
-#     and the record's `not_covered` names, its case left out of the composite; the
+#     and the record's `not_covered` names, its case in onsite's composite with --front-group; the
 #     pick stays in the serve dir's private/window.json, the WINDOW line saying only the class's SLOTS slots, and CLASSES
 #     the window circuit's classes beside network attestation's scan class, CERTIFIER_SCAN, default W63, the one the gate serves): every
 #     closed window's advice under the prove path's registered compiler and the weights registration (`--weights-of-record`),
@@ -1883,7 +1883,7 @@ if [ -n "$PEARLPLUS_TIE" ] && [ -n "${CERTIFIER_FRONT:-}" ]; then  # the network
   [ -n "$KN" ] && [ "$KN" != "$K" ] \
     || { say "WINDOW refused: the network attester's front's group is in no one sealed window of its own apart from the fixed load's (why in the serve dir's private/window.err)"; stop window 12; }
   (umask 077; echo "$KN" > "$D/private/front-window")
-  say "NETWORK-WINDOW: the network attester's row is over its front's group, the one sealed window of its requests alone, not the tied load's: it stands as its own verdict, its case left out of the composite"
+  say "NETWORK-WINDOW: the network attester's row is over its front's group, the one sealed window of its requests alone, not the tied load's: it stands as its own verdict, and onsite's composite takes its case as not covering the tied load and is not established"
 fi
 say "CLASSES: the window circuit's ${CLASSES}; network attestation's scan ${CERTIFIER_SCAN:-W63}, the one class the gate serves"
 }

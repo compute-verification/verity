@@ -2579,3 +2579,20 @@ def test_beside_takes_the_records_and_to_alone_and_otherwise_the_record_takes_an
     with pytest.raises(SystemExit) as e:
         main(args)
     assert e.value.code == 2
+
+
+def test_a_composite_of_record_naming_a_case_not_covering_the_tied_load_is_not_established(tmp_path):
+    """Where the composite of record's composite.json names the network attester's case under ``not_covered`` (its
+    front's own group, `composite.py --front-group`), its accept is withheld by that name, and the run isn't of record;
+    the network attester's own verdict stands."""
+    audit = {**NO_ADVICE, "window": {**NO_ADVICE["window"], "activations": {"program": "ab" * 64, "values": {}}}}
+    out = accepted(tmp_path, dict(PUBLIC, held=["free", "circuit"]), audits=(audit,))
+    path, doc = OR.composites(out)[record(out)["of_record"]["composite"]]
+    why = "over the network attester's front's own group of requests"
+    (out / path).write_text(json.dumps(doc | {"not_covered": {OR.NETWORK: why}}))
+    rec = record(out)
+    v = rec["verdicts"]
+    assert {k: v["onsite"][k] for k in ("verdict", "answer", "open", "why")} == {
+        "verdict": OR.NOT_ESTABLISHED, "answer": "accept", "open": [OR.FRONT_APART], "why": f"{OR.NETWORK}'s case is {why}"}
+    assert v["the network certifier"]["verdict"] == "accept"
+    assert rec["of_record"]["holds"] is False and "onsite" in rec["of_record"]["not_established"]
