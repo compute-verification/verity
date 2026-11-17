@@ -92,44 +92,19 @@ def test_without_bindings_no_key_blocks_and_pearl_pluss_coins_are_the_workloads_
     assert {k: variables.get(k) for k in LOCAL} == LOCAL and "H1_KEY_SHA512" not in variables
 
 
-#: onsite's subprotocols with Pearl+ in H1's place
-ONSITE_PEARLPLUS = tuple("pearl-plus" if c == "pouw" else c for c in T.ONSITE_COMPONENTS)
-ONSITE_UNBOUND = [k for k in T.unbound(R.load(ONSITE, REG), {}) if k.split(".")[1] != "pouw"]
+#: onsite's unbound bindings that `verity run` doesn't write where it starts a party (`served_table.STARTS`)
+ONSITE_UNBOUND = [k for k in T.unbound(R.load(ONSITE, REG), {}) if k.split(".")[0] not in T.STARTS]
 
 
-def onsite_pearlplus(tmp: Path, monkeypatch) -> Path:
-    monkeypatch.setitem(T.DEMOS, "onsite_full", ONSITE_PEARLPLUS)
-    cfg = T.configuration(K.parse(ONSITE.read_text())["program"]["commit"])
-    monkeypatch.setitem(T.DEMOS, "onsite_full", T.ONSITE_COMPONENTS)
-    f = tmp / "onsite.toml"
-    f.write_text(K.render(cfg))
-    return f
-
-
-def test_pearl_plus_in_h1s_place_under_onsite_is_refused_until_onsites_composite_lists_it(tmp_path, capsys,
-                                                                                         monkeypatch):
-    monkeypatch.setitem(K.COMPOSITES, T.ONSITE, ONSITE_PEARLPLUS)
-    f = onsite_pearlplus(tmp_path, monkeypatch)
-    monkeypatch.undo()
-    rc, _, err = dry(capsys, config=f)
-    assert rc == 2 and "refused composite" in err and "protocol soundness covers only" in err, err
-
-
-def test_under_onsite_pearl_plus_takes_h1s_place_with_its_product_and_no_compute_key_blocks(tmp_path, capsys,
-                                                                                           monkeypatch):
-    monkeypatch.setitem(K.COMPOSITES, T.ONSITE, ONSITE_PEARLPLUS)
-    f = onsite_pearlplus(tmp_path, monkeypatch)
-    rc, got, err = dry(capsys, config=f)
+def test_under_onsite_pearl_plus_takes_h1s_place_with_its_product_and_no_compute_key_blocks(tmp_path, capsys):
+    assert "pearl-plus" in T.ONSITE_COMPONENTS and "pouw" not in T.ONSITE_COMPONENTS
+    rc, got, err = dry(capsys, config=ONSITE)
     assert rc == 0 and got["dry"][0]["unbound"] == sorted(ONSITE_UNBOUND), err
     assert hooks_of(got) == LOCAL | {"PRODUCT": "onsite"}
-    assert not {"H1_GATE", "H1_PEER"} & set(T.variables(R.load(f, REG), {}))
+    assert not {"H1_GATE", "H1_PEER"} & set(T.variables(R.load(ONSITE, REG), {}))
     tables = json.loads(json.dumps(BINDINGS))
-    for key in ONSITE_UNBOUND:
-        p, c, k = key.split(".")
-        tables.setdefault(p, {}).setdefault(c, {})[k] = "192.0.2.1:7000"
-    rc, got, err = dry(capsys, "--bindings", bindings(tmp_path, tables), config=f)
+    rc, got, err = dry(capsys, "--bindings", bindings(tmp_path, tables), config=ONSITE)
     assert rc == 0 and hooks_of(got) == PEARLPLUS | {"PRODUCT": "onsite"}, err
-    assert T.unbound(R.load(f, REG), {}) == ONSITE_UNBOUND
 
 
 def test_a_part_of_pearl_pluss_live_challenger_is_refused_by_name(tmp_path, capsys):
@@ -152,9 +127,7 @@ def test_the_runners_variables_under_remote_are_pearl_pluss_and_onsites_carry_no
                                           "main-file": "/tmp/main.json"}}}
     assert T.variables(cfg, both) == variables | {"PEARLC_CHALLENGER_LANE": "vllm-2", "MAIN_FILE": "/tmp/main.json"}
     onsite = T.variables(R.load(ONSITE, REG), {})
-    assert not (set(PEARLPLUS) - {"H1_KEY_SHA512"} | {"PEARLC_CHALLENGER_LANE", "MAIN_FILE", "PEARLPLUS_TIE_UNIFORM"}) \
-        & set(onsite)
-    assert onsite["V3C_CLASS"] == T.SCAN_CLASS and onsite["H1_KEY_SHA512"] == "<challenger.pouw.key-sha512>"
+    assert onsite["PRODUCT"] == "onsite" and not {"PEARLC_CHALLENGER_LANE", "MAIN_FILE", "PEARLPLUS_TIE_UNIFORM"} & set(onsite)
 
 
 def test_pearl_pluss_class_is_the_runners_and_refused_by_name_where_the_workload_disagrees(tmp_path, capsys):
