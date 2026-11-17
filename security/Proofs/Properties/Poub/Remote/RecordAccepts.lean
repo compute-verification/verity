@@ -8,24 +8,8 @@ import all Init.Data.Array.Basic
 import all Init.Data.Array.QSort.Basic
 import all Init.Data.Range.Basic
 
-/-!
-# An accepted session of the remote audit, without evaluating SHA-512
-
-`record_verified`: the Lean verifier accepts a record (`Properties.Poub.Line.Verified`). The node stores one
-registered block under the deployed codec, and runs one window of one pass under one sample, at one window a sample. The
-session starts, receives the pass's root over the whole store, ends the window, samples its one receipt and verifies its
-opening. The sample of one receipt among one is position 0 whatever the coin (`receiptSample_one`). The opening is
-`Schedule`'s zero-block opening at one block: its leaf is the block's receipt alone, and the receipt and payload trees
-each have one leaf, so their roots are the leaves' digests (`zeroRoot`). The session's steps read the roots and coins
-only through their sizes (`run_accepts`, over any registration of one block, any coins and any root of 64 bytes), so no
-SHA-512 is evaluated.
-
-`lineHeld_accepted`: `Properties.Poub.Line.LineHeld`'s premises hold together with an accepted play. The record's
-one window is one group, its coin released at 0 and its root arriving at 1 (`groups_one`), so pass 0 runs over `[0, 1)`
-inside its span (`honestSchedule_one`), and `Subprotocol.lineHeldAtSubprotocol_honest` gives every premise. Stated with
-`Shared.run` as `Record.run` applies it, that is `LineHeld`'s honest witness
-(`Properties.Poub.Line.SecurityProofs.lineHeld_honest`).
--/
+/-! An accepted session of the remote audit and `LineHeld`'s honest witness, without evaluating SHA-512, because the
+session's steps read the roots and coins only through their sizes. -/
 
 @[expose] public section
 
@@ -39,8 +23,6 @@ open ResourceAccounting.Remote.Held ResourceAccounting.Remote.Held.Assumptions R
   ResourceAccounting.Remote.Sample.Assumptions
 
 attribute [local irreducible] zeroRoot
-
-/-! ## The sample of one receipt among one -/
 
 theorem hash_size (m : ByteArray) : (Flock.Sha512.hash m).size = 64 := by
   unfold Flock.Sha512.hash
@@ -68,7 +50,6 @@ theorem width_one : Flock.Draw.width 1 = 9 := by
   have h : Nat.log2 1 = 0 := (Nat.log2_eq_iff (by decide)).2 ⟨by decide, by decide⟩
   simp [Flock.Draw.width, h]
 
-/-- One uniform sample in `[0, 1)` from 64 bytes is 0: its 9-byte word is below `2^72`, which 1 divides. -/
 theorem uniformOn_one (s : ByteArray) (hs : s.size = 64) : FlockSoundness.Randomness.uniformOn 1 s = some 0 := by
   have hx : Flock.Draw.beNat s 0 9 < 4722366482869645213696 := by
     have h := beNat_lt s 0 9
@@ -113,12 +94,9 @@ theorem bisectRight_one : bisectRight #[1] 0 = 0 := by
     | decide
     | decide +kernel
 
-/-- A window of one pass of one receipt samples that receipt, whatever the registration and the coin. -/
 theorem receiptSample_one (digest coin : ByteArray) : receiptSample digest 0 coin 1 #[1] = some #[(0, 0)] := by
   unfold receiptSample
   simp [subsetExact_one, bisectRight_one]
-
-/-! ## The window: one block, one pass, its opening -/
 
 theorem plan_length : (Plan.whole 1).length = 1 := rfl
 
@@ -132,19 +110,15 @@ theorem leafReceipt_one {R : ByteArray} (hR : R.size = 64) : leafReceipt R 0 1 =
   · show some (R.extract 0 64) = some R
     rw [← hR, ByteArray.extract_zero_size]
 
-/-- The receipt of the zero block under seed `s`: position 0's leaf, the plan's only one. -/
 def leaf1 (reg : Registration) (s : ByteArray) : ByteArray :=
   (receipter reg.receipt s reg.rows).receipt 0 (zeros Codec.BLOCK_BYTES)
 
-/-- The receipt tree's root of a pass over the one-block store under seed `s`. -/
 def root1 (reg : Registration) (s : ByteArray) : ByteArray :=
   zeroRoot (treeDomain s (Plan.whole 1)) 0 (hidden (leaf1 reg s) (zeros SALT_BYTES))
 
-/-- Window 0 under challenge `c`, one pass over the whole store, chained to the registration. -/
 def window1 (reg : Registration) (c root : ByteArray) : WindowRecord :=
   ⟨0, c, reg.digest, #[⟨root, Plan.whole 1, none⟩]⟩
 
-/-- The opening of position 0 of pass 0 under challenge `c`. -/
 def opening1 (reg : Registration) (c : ByteArray) : Opening :=
   let s := seed c 0 reg.digest
   ⟨0, 0, zeros Codec.BLOCK_BYTES, leaf1 reg s, zeros SALT_BYTES, zeroPath (treeDomain s (Plan.whole 1)),
@@ -200,20 +174,12 @@ theorem checkWindow_one (reg : Registration) (c : ByteArray) (hB : reg.blocks = 
   rw [checkWindow_eq]
   simp [rejectAt, checks_one reg c hB hk hroot]
 
-/-! ## The session -/
-
-/-- One window of one pass, one sample of one receipt; no deadline, no stated length, no pace. -/
 def params1 : _root_.Poub.Session.Params :=
   { deadlineNs := 0, windows := 1, samples := 1, minPasses := 1, windowNs := 0, lifetime := 1 }
 
-/-- Start at 0; receive window 0's one root, over the whole store at step 0, at 1; end window 0 at 1; sample it at 2;
-verify its opening. -/
 def events1 (root : ByteArray) (o : Opening) : Array _root_.Poub.Session.Event :=
   #[.start 0, .receive 0 0 root none none (some 0) 1, .boundary 1, .close 0 2, .verify 0 #[o]]
 
-/-- The session's run accepts, over any registration of one block, any two coins and any root of 64 bytes whose
-window's openings `checkWindow` accepts, and its record has one window, of one pass of one block, which drew one
-receipt. -/
 theorem run_accepts (reg : Registration) (hB : reg.blocks = 1) (c0 c1 root : ByteArray) (hroot : root.size = 64)
     (o : Opening) (hcheck : checkWindow reg reg.digest #[] (window1 reg c0 root) #[(0, 0)] #[o] = .accept) :
     ∃ rs s, _root_.Poub.Session.run (_root_.Poub.Session.State.init params1 reg #[c0, c1] #[] 0)
@@ -237,25 +203,18 @@ theorem run_accepts (reg : Registration) (hB : reg.blocks = 1) (c0 c1 root : Byt
   · simp [_root_.Poub.Session.State.summary, _root_.Poub.Session.State.outcome, hr1, plan_length]
     rfl
 
-/-! ## The instance -/
-
-/-- The one-block registration of node `zeros 1` under the zero codec seed and the deployed codec, sketch-sha512
-receipts of 16 rows, its payload tree holding `zeroPayload` at block 0. -/
 def reg1 : Registration :=
   let key := Codec.key (zeros Codec.SEED_BYTES) honestCodec
   let pd := Flock.FV3.Sha512.Domain.make (Poub.sha512 (PAYLOAD_DOMAIN ++ frameBytes (zeros 1))) 0 0 1
   { node := zeros 1, blocks := 1, payloadRoot := zeroRoot pd 0 (hidden (zeroPayload key) (zeros SALT_BYTES)),
     codecSeed := zeros Codec.SEED_BYTES, codec := honestCodec, receipt := .sketch, rows := 16, key }
 
-/-- The node: `params1` at one window a sample over `reg1`; the line's other fields are arbitrary. -/
 def node1 : Node :=
   { params := params1, groupsPerCoin := 1, reg := reg1, per := 1, blockBytes := 1, chipBytes := 0, nodeBytes := 0,
     rates := ⟨0, 0, 0, 0, 0, 0, 0⟩, delta := 0 }
 
-/-- What the auditor saw of window 0: its coin released at 0 and its last root at 1. -/
 def seen1 : Array _root_.Poub.Line.Seen := #[⟨0, 1, 1, 0, 1, 0⟩]
 
-/-- The record: both coins zero, no appends, `events1` with `root1` and `opening1`, and `seen1`. -/
 def record1 : Record :=
   let c := zeros 64
   { coins := #[c, c], appendCoins := #[], notBeforeNs := 0,
@@ -291,12 +250,8 @@ theorem record_verified : Verified node1 record1 := by
   obtain ⟨rs, s, hr, ho, -⟩ := record_run
   exact ⟨rs, s, hr, ho⟩
 
-/-- `Record.run` has an accepted play: some node and record the Lean verifier accepts. -/
 theorem record_accepts : ∃ (node : Node) (r : Record), Verified node r := ⟨node1, record1, record_verified⟩
 
-/-! ## `LineHeld`'s premises at the record -/
-
-/-- Window 0 as one group: coin at 0, last root at 1, one pass. -/
 def group1 : _root_.Poub.Line.Group := ⟨0, 1, 1, 1, 0, 1, 0⟩
 
 theorem ofSummary_one (sm : _root_.Poub.Session.Summary)
@@ -323,11 +278,8 @@ theorem groups_one : record1.groups node1 = #[group1] := by
   rw [show node1.groupsPerCoin = 1 from rfl, show node1.params.samples = 1 from rfl,
     show record1.seen = seen1 from rfl, ofSummary_one sm hw]
 
-/-- The play: `record1` at every commitment and every coin. -/
 abbrev recs1 : Unit → SampleCoins node1.samples 0 Unit → Record := fun _ _ => record1
 
-/-- **`record1`'s schedule is honest**: one window, one pass over `[0, 1)`, the sample's receipts the same at every
-coin, and the record's one group, of one pass from coin 0 to last root 1, spans it. -/
 theorem honestSchedule_one :
     Subprotocol.HonestSchedule node1 1 (fun _ p => p) recs1 (fun _ => ()) := by
   refine ⟨by decide, fun _ p => Nat.lt_succ_self p, fun _ _ _ _ _ => rfl, fun ω _ gs hgs => ?_⟩
@@ -354,12 +306,9 @@ def receipts1 : Receipts node1.samples 0 Unit :=
   ⟨fun _ _ => 0, fun _ _ _ => ⟨⟨fun _ => 0, 0, fun _ => 0⟩, [], .v2⟩, fun _ _ _ _ => 0, fun _ _ _ => 0,
     fun _ _ _ => ⟨[], [], []⟩⟩
 
-/-- **`LineHeld`'s premises hold together at an accepted play.** At `node1` (one registered block under the deployed
-codec, one window of one pass, one sample), the play `record1` at every commitment and coin, the honest trace on
-`[p, p + 1)` for pass `p` (the whole store in node memory, every receipt correct), no outside device, nothing but the
-verifier's messages entering it as its certifiers count, every receipt correct and the sampler's fallbacks 0, every
-premise of `Properties.Poub.Line.LineHeld` holds at `δs = δnet = 0`, and the Lean verifier accepts the play at
-every coin. -/
+/-- **`LineHeld`'s premises hold together at an accepted play**: at `node1`, the play `record1` at every commitment and
+coin and the honest trace on `[p, p + 1)` for pass `p`, every premise holds at `δs = δnet = 0`, and the Lean verifier
+accepts the play at every coin. -/
 theorem lineHeld_accepted :
     ∃ (node : Node) (κ : ℕ) (X Cm : Type) (_ : Fintype X)
       (prf : Fin node.samples → Pous.Bits κ → Blocks receiptMax)

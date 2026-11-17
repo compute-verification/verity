@@ -22,13 +22,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 
-/-!
-# What `buildNode` checks of a node
-
-`Flock.Program.buildNode` rebuilds a node from its arguments and its callee, and refuses one whose arguments don't fit
-the callee's parameters. `buildNode_spec` reads off what it accepted: per form, the arguments' types against the
-callee's parameters, the batch axes and scan `xs` all of length `n`, and the output type it computed.
--/
+/-! What `buildNode` checks of a node, which it refuses where its arguments don't fit the callee's parameters. -/
 
 @[expose] public section
 
@@ -37,7 +31,6 @@ namespace InferenceOnlyCheck.Properties.SecurityProofs.BodiesOk
 open Flock.Program
 open private buildNode from Circuits.Program
 
-/-- What `buildNode` establishes of a node of form `form` calling `c` with arguments `args`, computing `out`. -/
 def Shape (c : Defn) (form : Form) (args : Array Arg) (out : Ty) (n nxs : ℕ) : Prop :=
   match form with
   | .prim | .call => out = c.ret ∧ ∀ i < args.size, (args[i]!).ty = (c.params[i]!).2
@@ -330,18 +323,13 @@ theorem buildNode_spec (fid : String) (k : ℕ) (form : Form) (callee : Defn) (a
     all_goals (rw [hR] at h; conv at h => lhs; whnf)
     all_goals exact absurd h (by intro h; injection h)
 
-/-- What the decoder establishes of a Definition a node may call: a primitive is one gate with one output leaf and an empty
-body, a composite's body has its parameters and returns as many references as its type has leaves. -/
 def CalleeOk (c : Defn) : Prop :=
   (c.prim = true → c.body = default ∧ c.gates = 1 ∧ c.outLeaves = 1 ∧ ∃ w, c.ret = .value w) ∧
   (c.prim = false → c.body.params = c.params ∧ c.body.ret.count = c.ret.leaves ∧ c.outLeaves = c.ret.leaves)
 
-/-- A node's argument of no leaves to a member (a batch's or scan's) goes to a parameter of `c` of none. -/
 def DimsOk (c : Defn) (nd : Node) : Prop :=
   ∀ i < nd.args.size, ∀ e L : ℕ, (nd.args[i]!).dims = some (e, L) → L = 0 → (c.params[i]!).2.leaves = 0
 
-/-- What the decoder establishes of a node calling `c`: one argument per parameter, each as many references as its type
-has leaves, a primitive node calling a primitive and a call or scan a composite, `buildNode`'s `Shape`, and `DimsOk`. -/
 def NodeOk (c : Defn) (nd : Node) : Prop :=
   nd.args.size = c.params.size ∧ (∀ i < nd.args.size, (nd.args[i]!).seq.count = (nd.args[i]!).ty.leaves) ∧
   (nd.form = .prim → c.prim = true) ∧ (nd.form = .call ∨ nd.form = .scan → c.prim = false) ∧
@@ -473,8 +461,6 @@ theorem op_ok (c : Defn) (nd : Node) (hn : NodeOk c nd) : Resolve.OpOk nd c := b
     rw [hcnt i hi]
     exact hb t (by rw [hmt]; exact ht) m hm
 
-/-- **Every reference of a node calling a primitive is read by a member**, unless it is a batch of none: a batch over
-an axis of length `n` and leaf stride `L` covers its argument by `memberIdx`'s `(j / L * n + m) * L + j % L`. -/
 theorem cover_of_nodeOk (c : Defn) (nd : Node) (hn : NodeOk c nd) (hp : c.prim = true)
     (hb : ¬ (nd.form == .batch && nd.n == 0) = true) :
     ∀ i < nd.args.size, ∀ t < (nd.args[i]!).seq.count, ∃ m < nd.members,

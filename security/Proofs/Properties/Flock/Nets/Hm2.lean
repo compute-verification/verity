@@ -3,12 +3,7 @@ module
 public import Proofs.Properties.Flock.Nets.Seg
 public import Proofs.Properties.Flock.Nets.SaltMid
 
-/-!
-# `hm96`'s first salt block, chunk by chunk
-
-The compression of the salt's first 16 words from the salt prefix's midstate (`hmTail`'s second): its certificate `hm2`,
-each of its fifteen chunks checked in the kernel, and the run they make (`seg_hm2`).
--/
+/-! `hm96`'s first salt block, chunk by chunk. -/
 
 @[expose] public section
 
@@ -16,13 +11,10 @@ open Flock Flock.HmNets FlockSoundness.Discharge.Hm
 
 namespace FlockDeploy.Concrete.Nets
 
-/-- `hm96`'s first salt block's chaining input. -/
 def hm2Cv : List Word := saltMidLit.map constW
 
-/-- `hm96`'s first salt block's message. -/
 def hm2Msg : List Word := (saltWords (vars 1536 1536)).take 16
 
-/-- Where `hm96`'s first salt block's run puts each committed word. -/
 def hm2 : Cert :=
   ⟨84474, [84699, 84988, 85277, 85566, 85855, 86144, 86433, 86722, 87011, 87300, 87589, 87878, 88167, 88456, 88745,
   89034, 89323, 89612, 89901, 90190, 90479, 90768, 91057, 91346, 91635, 91924, 92213, 92502, 92791, 93080, 93369,

@@ -14,48 +14,7 @@ import all Init.Data.Array.QSort.Basic
 import all Init.Data.Range.Basic
 import all Init.Data.Repr
 
-/-!
-# The schedule check fixes each credited pass's plan (`ScheduleChecked`, `ScheduleFixesLayout`)
-
-`check` throws unless `malformed`, `appendsDiffer` and `passesDiffer` each find nothing and the schedule's bits are at
-most the cap (`check_ok`). `appendsDiffer`
-finding nothing makes the appends the schedule's, entry by entry (`appends_of`), and `passesDiffer` finding nothing puts
-each pass at the schedule's step with the schedule's plan there (`passes_of`). Two sessions accepted on one schedule
-then have the same appends and, pass by pass, the same steps and so the same plans (`scheduleFixesLayout`).
-
-The schedule's bits are one-to-one on well-formed schedules (`ScheduleCode.scheduleBits_injective`): bits to bytes
-(eight a byte, `flatMap_byteBits_injective`), bytes to integers (LEB128 is prefix-free, `varint_prefix`), and integers
-to the schedule (each list after its length, a block's tag before its write's step, `numbers_injective`). That reads
-two facts off `malformed` finding nothing (`wf_of_malformed`): a freed block's free comes after its write, so its tag
-`f − w + 1` is at least 2, and the steps increase, so their rises give them back.
-
-From the code to the model, at the verifier's layout (`runLayout`, where `ScheduleLayoutGap` holds by definition,
-`scheduleLayoutGap_code`): a layout the check accepted at the cap `a` the session committed before its coins is the
-verifier's plan of a well-formed schedule of at most `a` bits
-(`scheduleDeterministic_of_checked`; the cap is one `a` at every coin, where the bits of each coin's own schedule
-would not be), and a layout that is
-`ScheduleDeterministic` at `a` is `SteeredLayout` at `a + 1`: its summary is the schedule's bits padded to `a + 1` with
-a one and zeros (`pad`, one-to-one on strings of at most `a` bits), read back by the schedule they pad
-(`steered_of_scheduleDeterministic`).
-
-That layout is where the verifier checks. A plan's position `p` is entry `p` of its runs' blocks (`planBlocks`: the
-running ends' bisection finds the run, `block_spec`, and the offset into it is the entry, `getElem?_flatMap_range'`). A
-plan the verifier makes reads distinct blocks (`planReadsDistinct`), and a tile's position's second coordinate is its
-block (`snd_of_tileAt`), so a plan of `N` blocks with positions in range is one embedding, which `codeLayout` picks
-(`codeLayoutTiles`). An accepted opening passed `checkOpening`'s checks (`checkOpening_none`), whose tree is the
-registration's below `N` and `appendOf`'s above, the tree `position` names (`opensAtPosition`).
-
-The collapse it rules out: `coinLayout` puts a pass's one block where a coin bit says. It is `SteeredLayout` at one bit
-(`coinLayout_steered`), as every layout is at `a = |Y|`, and `ScheduleDeterministic` at no `a` under a schedule that
-fixes the layout (`coinLayout_not_scheduled`). In the code: the published schedule `honest` keeps block 12 resident
-from step 3, so a session whose third pass's plan drops it, as a coin might say, is refused, and the honest one passes
-at 200 bits under a cap of 200 and is refused under 199 (`coinPasses_refused`, `coinPasses_accepted`,
-`coinPasses_overCap`; `test_schedule.py` plays the same session in Python).
-
-Each guarantee's premises hold at the deployed shape, one pass over all 130023424 blocks (the `_honest` lemmas),
-and each conclusion is false for some input a verifier that accepted everything would take (the `_nontrivial`
-lemmas): the lock's `witnesses`.
--/
+/-! The schedule check fixes each credited pass's plan (`ScheduleChecked`, `ScheduleFixesLayout`). -/
 
 @[expose] public section
 
@@ -206,7 +165,6 @@ theorem flatMap_varint_injective :
     obtain ⟨rfl, h'⟩ := varint_prefix x y _ _ h
     rw [flatMap_varint_injective xs ys h']
 
-/-- A code that is prefix-free on the values `P` holds of decodes a list of known length, and the rest after it. -/
 theorem flatMap_prefix {α β : Type} (enc : α → List β) (P : α → Prop)
     (hp : ∀ x y r r', P x → P y → enc x ++ r = enc y ++ r' → x = y ∧ r = r') :
     ∀ (xs ys : List α) (r r' : List β), xs.length = ys.length → (∀ x ∈ xs, P x) → (∀ y ∈ ys, P y) →
@@ -251,7 +209,6 @@ theorem flatMap_byteBits_injective {l l' : List UInt8} (h : l.flatMap byteBits =
   have := List.append_inj he (by simp [byteBits])
   exact ⟨byteBits_injective this.1, this.2⟩
 
-/-- A block a well-formed schedule may hold: freed only after its write. -/
 def BlockOk : Schedule.Chunk → Prop
   | some (w, some f) => w < f
   | _ => True
@@ -292,7 +249,6 @@ theorem appendCode_prefix (x y : Array Schedule.Chunk) (r r' : List Nat) (hx : �
     (by simpa using hs) hx hy h
   exact ⟨Array.toList_inj.mp e, rfl⟩
 
-/-- Each at least the one before it, the first at least `p`. -/
 def Mono : Nat → List Nat → Prop
   | _, [] => True
   | p, x :: xs => p ≤ x ∧ Mono x xs
@@ -379,14 +335,12 @@ theorem numbers_injective {sc sc' : Schedule.Schedule} {blocks : Nat} (hm : Sche
   simp only [Array.toList_inj] at hR hA hS
   rw [hR, hA, hS]
 
-/-- **The schedule's bits are one-to-one on well-formed schedules.** -/
 theorem scheduleBits_injective {sc sc' : Schedule.Schedule} {blocks : Nat} (hm : Schedule.malformed sc blocks = none)
     (hm' : Schedule.malformed sc' blocks = none) (h : scheduleBits sc = scheduleBits sc') : sc = sc' :=
   numbers_injective hm hm' (flatMap_varint_injective _ _ (flatMap_byteBits_injective h))
 
 end ScheduleCode
 
-/-- A string of at most `a` bits as `a + 1` bits: the string, a one, then zeros. -/
 def pad (a : ℕ) (l : List Bool) : Pous.Bits (a + 1) := fun i =>
   if h : i.val < l.length then l[i.val] else decide (i.val = l.length)
 
@@ -407,7 +361,6 @@ theorem pad_injective {a : ℕ} {l l' : List Bool} (hl : l.length ≤ a) (hl' : 
   have := congrFun h ⟨i, by omega⟩
   simpa [pad, h1, h2] using this
 
-/-- A layout that is the plan of a schedule of at most `a` bits is steered by `a + 1` bits: the schedule's, padded. -/
 theorem steered_of_scheduleDeterministic {Pfx Y S : Type} [Nonempty S] {N T M : ℕ}
     {canon : Pfx → S → Fin N ↪ Fin T × Fin M} {enc : S → List Bool} {a : ℕ}
     {layout : Pfx → Y → Fin N ↪ Fin T × Fin M} (h : ResourceAccounting.ScheduleDeterministic canon enc a layout) :
@@ -421,11 +374,8 @@ theorem steered_of_scheduleDeterministic {Pfx Y S : Type} [Nonempty S] {N T M : 
   simp only [hex, ↓reduceDIte]
   rw [(hs c y).2, inj (pad_injective hex.choose_spec.1 (hs c y).1 hex.choose_spec.2)]
 
-/-- **The check's acceptance at the committed cap gives `ScheduleDeterministic`, under `ScheduleLayoutGap`.** If at
-every prefix `c` and coins `y` the check at the cap `a` the session committed before its coins accepts some schedule
-for a session whose appends are `appended c y` and whose pass `idx c` sent the runs `sent c y`, the layout is the
-verifier's plan of a well-formed schedule (its appends, and its plan at its own step `idx c`) whose bits are at most
-`a`. The cap is the check's argument, one `a` at every coin, not the bits of each coin's own schedule. -/
+/-- **The check's acceptance at the committed cap gives `ScheduleDeterministic`, under `ScheduleLayoutGap`.** The cap is
+the check's argument, one `a` at every coin, not the bits of each coin's own schedule. -/
 theorem scheduleDeterministic_of_checked {Pfx Y : Type} {N T M : ℕ} {blocks a : ℕ} {idx : Pfx → ℕ}
     {pos : Pfx → Array (ℕ × ℕ) → Array (ℕ × ℕ) → Fin N ↪ Fin T × Fin M} {appended sent : Pfx → Y → Array (ℕ × ℕ)}
     {layout : Pfx → Y → Fin N ↪ Fin T × Fin M} (gap : ScheduleLayoutGap pos appended sent layout)
@@ -450,8 +400,6 @@ theorem scheduleDeterministic_of_checked {Pfx Y : Type} {N T M : ℕ} {blocks a 
   dsimp only
   rw [hstep]
 
-/-- **`ScheduleLayoutGap` holds of the verifier's layout**: `runLayout` is `codeLayout` of the session's appends and
-the runs the pass sent, at every prefix and coin. -/
 theorem scheduleLayoutGap_code {Pfx Y : Type} {N T M : ℕ} (blocks : ℕ) (dflt : Pfx → Fin N ↪ Fin T × Fin M)
     (appended sent : Pfx → Y → Array (ℕ × ℕ)) :
     ScheduleLayoutGap (fun c => codeLayout blocks (dflt c)) appended sent (runLayout blocks dflt appended sent) :=
@@ -470,8 +418,6 @@ theorem steered_of_checked {Pfx Y : Type} {N T M : ℕ} {blocks a : ℕ} {idx : 
   have : Nonempty {sc : Schedule.Schedule // Schedule.malformed sc blocks = none} := ⟨⟨⟨#[], #[], #[]⟩, rfl⟩⟩
   steered_of_scheduleDeterministic
     (scheduleDeterministic_of_checked (idx := idx) (scheduleLayoutGap_code blocks dflt appended sent) checked)
-
-/-! ## The verifier's layout is where it checks -/
 
 theorem make_ends {runs : Array (Int × Int)} {blocks : ℕ} {pl : Plan} (h : Plan.make? runs blocks = some pl) :
     pl.ends = Poub.endsOf pl.runs := by
@@ -493,7 +439,6 @@ theorem make_ends {runs : Array (Int × Int)} {blocks : ℕ} {pl : Plan} (h : Pl
 theorem length_runBlocks (rs : Array (ℕ × ℕ)) : (runBlocks rs).length = (rs.toList.map (·.2)).sum := by
   simp [runBlocks, List.length_flatMap]
 
-/-- Entry `p` of runs' blocks, `p` in run `r`: the run's first block, `p`'s offset into it on. -/
 theorem getElem?_flatMap_range' : ∀ (l : List (ℕ × ℕ)) (r p : ℕ) (hr : r < l.length),
     ((l.map (·.2)).take r).sum ≤ p → p < ((l.map (·.2)).take r).sum + l[r].2 →
       (l.flatMap fun x => List.range' x.1 x.2)[p]? = some (l[r].1 + (p - ((l.map (·.2)).take r).sum))
@@ -534,7 +479,6 @@ theorem planBlocks : PlanBlocks := by
   subst he
   exact planBlocks_of b rs _ (endsOf_prefix rs)
 
-/-- A tile's position's second coordinate is its block. -/
 theorem snd_of_tileAt {blocks : ℕ} {appends runs : Array (ℕ × ℕ)} {i t m : ℕ}
     (h : tileAt blocks appends runs i = some (t, m)) : (runBlocks runs)[i]? = some m := by
   unfold tileAt at h
@@ -604,15 +548,12 @@ theorem opensAtPosition : OpensAtPosition := by
 def coinLayout : Unit → Fin 2 → Fin 1 ↪ Fin 1 × Fin 2 :=
   fun _ y => ⟨fun _ => (0, y), fun _ _ _ => Subsingleton.elim _ _⟩
 
-/-- `coinLayout` is `SteeredLayout` at one bit, the coin's. -/
 theorem coinLayout_steered :
     ResourceAccounting.Assumptions.SteeredLayout coinLayout (fun _ y => (fun _ => decide (y = 1) : Pous.Bits 1)) :=
   ⟨fun _ b => coinLayout () (if b 0 then 1 else 0), fun _ y => by match y with | 0 => rfl | 1 => rfl⟩
 
-/-- The one schedule's plan: the block at position `0`. -/
 def storeOrder : Unit → Unit → Fin 1 ↪ Fin 1 × Fin 2 := fun _ _ => coinLayout () 0
 
-/-- `coinLayout` is `ScheduleDeterministic` at no `a` under a schedule that fixes the block. -/
 theorem coinLayout_not_scheduled (enc : Unit → List Bool) (a : ℕ) :
     ¬ ResourceAccounting.ScheduleDeterministic storeOrder enc a coinLayout := by
   rintro ⟨_, h⟩
@@ -620,8 +561,6 @@ theorem coinLayout_not_scheduled (enc : Unit → List Bool) (a : ℕ) :
   have : (1 : Fin 2) = 0 := congrArg (fun f => (f 0).2) hs
   exact absurd this (by decide)
 
-/-- A store of 8 registered blocks, block 2 freed at step 1, and two appends: blocks 8–11 written at step 0 (block 9
-freed at step 1), blocks 12–13 written at step 2; passes at steps 0 to 4. -/
 def honest : Schedule.Schedule :=
   ⟨#[(2, 1, 1)],
     #[#[some (0, none), some (0, some 1), some (0, none), some (0, none)], #[some (2, none), some (2, none)]],
@@ -647,15 +586,8 @@ theorem coinPasses_overCap : Schedule.check honest 8 199 (coinPasses true) #[(8,
 
 /-! ## Honest and nontrivial lemmas
 
-Each property's honest lemma (`_honest`) shows its premises hold at the deployed instance, the session of
-`benchmarks/remote_session/tests/fixtures/gate_run_7.json.gz`: a store of 130023424 blocks of 4096 bytes under
-p1024/k3/masked with sketch-sha512 receipts, each window one pass over the whole store (`Plan.whole`), with no appends
-and no schedule cap committed. Its nontrivial lemma (`_nontrivial`) shows its conclusion fails where the code's
-check is dropped, for a verifier that accepts everything.
-
-The lock lists both as the property's `witnesses`, so each builds its instance: no binder ranges over it (a
-nontrivial lemma's one `∀` stands for its property's `∃`), and its statement reads only the spec and the code, its
-instance written out rather than named by a definition of this file. -/
+The lock lists each property's `_honest` and `_nontrivial` lemmas as its `witnesses`, so each writes its instance out:
+no binder ranges over it, and its statement names no definition of this file. -/
 
 theorem size_qsort {α : Type} (as : Array α) (lt : α → α → Bool) (lo hi : ℕ) :
     (as.qsort lt lo hi).size = as.size := by
@@ -704,7 +636,6 @@ theorem codeLayoutTiles_honest :
       ∀ i < 130023424, tileAt 130023424 #[] (Plan.whole 130023424).runs i = some (0, i) :=
   ⟨planBlocks_honest, by rw [runBlocks_whole, List.length_range'], fun _ hi => tileAt_whole hi⟩
 
-/-- An embedding that puts each tile at `tileAt` of the runs is the verifier's layout. -/
 theorem codeLayout_eq {N T M blocks : ℕ} {dflt : Fin N ↪ Fin T × Fin M} {appends runs : Array (ℕ × ℕ)}
     (e : Fin N ↪ Fin T × Fin M) (hN : (runBlocks runs).length = N)
     (he : ∀ i : Fin N, tileAt blocks appends runs i = some (((e i).1 : ℕ), ((e i).2 : ℕ))) :
@@ -722,16 +653,12 @@ theorem codeLayout_eq {N T M blocks : ℕ} {dflt : Fin N ↪ Fin T × Fin M} {ap
   obtain ⟨h1, h2⟩ := Prod.mk.inj (Option.some.inj ((hex.choose_spec.2 i).symm.trans (he i)))
   exact Prod.ext (Fin.ext h1) (Fin.ext h2)
 
-/-- Store order: tile `i` at block `i` of the registration's tree. -/
 def wholeLayout (B : ℕ) : Fin B ↪ Fin 1 × Fin B := ⟨fun i => (0, i), fun _ _ h => (Prod.mk.inj h).2⟩
 
-/-- At the deployed plan the verifier's layout is store order. -/
 theorem codeLayout_whole (B : ℕ) (dflt : Fin B ↪ Fin 1 × Fin B) :
     codeLayout B dflt #[] (Plan.whole B).runs = wholeLayout B :=
   codeLayout_eq (wholeLayout B) (by rw [runBlocks_whole, List.length_range']) fun i => tileAt_whole i.2
 
-/-- Runs that repeat a block put both tiles at one position, which no embedding does, so the verifier's layout of them
-is the default. -/
 theorem codeLayout_repeat (dflt : Fin 2 ↪ Fin 1 × Fin 2) : codeLayout 1 dflt #[] #[(0, 1), (0, 1)] = dflt := by
   have ht : ∀ i < 2, tileAt 1 #[] #[(0, 1), (0, 1)] i = some (0, 0) := by decide
   unfold codeLayout
@@ -760,13 +687,7 @@ theorem codeLayoutTiles_nontrivial :
 
 /-! ### An opening the verifier accepts at the deployed shape
 
-A tree whose siblings are all 64 zero bytes (`zeroPath`) has the root its leaf climbs to (`zeroRoot`), and its
-opening verifies (`verifyOpening_zeroRoot`). The zero block decodes under every key (its words are 0, below `p`), to a
-payload `zeroPayload`; a registration whose payload tree holds that payload at block 0, and a pass over the whole store
-whose receipt tree holds the zero block's receipt at position 0, accept the opening of position 0
-(`opensAtPosition_honest`). The payload is the zero block's decoding under the codec key, which an honest prover stores
-after the key is sampled; at `Registration.register` the root comes before the seed, so this exhibits acceptance at the
-deployed registration (`Registration.make?`), parameters and plan, not a prover that registered first. -/
+This exhibits acceptance at the deployed registration, parameters and plan, not a prover that registered first. -/
 
 theorem size_sha512 (b : ByteArray) : (Poub.sha512 b).size = 64 := by
   unfold Poub.sha512 Flock.Sha512.hash
@@ -790,7 +711,6 @@ theorem receipt_size (r : Receipter) (j : ℕ) (b : ByteArray) : (r.receipt j b)
   unfold Receipter.receipt
   split <;> exact size_sha512 _
 
-/-- A digest of 64 bytes climbs, through any siblings, to a node or itself: 64 bytes. -/
 theorem climbL_size (dom : ByteArray) : ∀ (cur : ByteArray) (idx l : ℕ) (sibs : List ByteArray), cur.size = 64 →
     (Flock.FV3.Sha512.scheme.climbL dom cur idx l sibs).size = 64
   | _, _, _, [], h => h
@@ -798,7 +718,6 @@ theorem climbL_size (dom : ByteArray) : ∀ (cur : ByteArray) (idx l : ℕ) (sib
     simp only [Flock.FV3.Scheme.climbL]
     exact climbL_size dom _ _ _ rest (by split <;> exact size_frameHash _ _)
 
-/-- A root climbed to is a node or the leaf: 64 bytes. -/
 theorem climb_size (d : Flock.FV3.Sha512.Domain) (pos : ℕ) (schema : String) (value : ByteArray)
     (path : Array ByteArray) : (d.climb pos schema value path).size = 64 := by
   simp only [Flock.FV3.Domain.climb]
@@ -806,10 +725,8 @@ theorem climb_size (d : Flock.FV3.Sha512.Domain) (pos : ℕ) (schema : String) (
 
 theorem scheme_bytes : Flock.FV3.Sha512.scheme.bytes = 64 := rfl
 
-/-- A path of `log2ceil count` siblings, each 64 zero bytes. -/
 def zeroPath (d : Flock.FV3.Sha512.Domain) : Array ByteArray := Array.replicate (Flock.log2ceil d.count) (zeros 64)
 
-/-- The root `value` at `position` climbs to along `zeroPath`. -/
 def zeroRoot (d : Flock.FV3.Sha512.Domain) (position : ℕ) (value : ByteArray) : ByteArray :=
   d.climb position SCHEMA value (zeroPath d)
 
@@ -871,7 +788,6 @@ theorem leNat_zeros (n a c : ℕ) : leNat ((zeros n).extract a c) = 0 := by
   obtain ⟨i, hi, rfl⟩ := Array.mem_iff_getElem.1 hx
   simp [ByteArray.data_extract, zeros]
 
-/-- The zero block decodes, under any key of a codec whose stores hold a block. -/
 theorem decode_zeros (k : Codec.Key) (hj : 0 < k.codec.maxBlocks) (hp : 0 < k.codec.field.p) :
     ∃ payload, Codec.decode (zeros Codec.BLOCK_BYTES) 0 k none = .ok (some payload) := by
   have hw : ∀ x ∈ Codec.words (zeros Codec.BLOCK_BYTES) k.codec.field, x = 0 := by
@@ -892,7 +808,6 @@ theorem decode_zeros (k : Codec.Key) (hj : 0 < k.codec.maxBlocks) (hp : 0 < k.co
   simp [Nat.not_le.mpr hj, zeros_size]
   try exact ⟨_, rfl⟩
 
-/-- The zero block's decoding under `k`. -/
 def zeroPayload (k : Codec.Key) : ByteArray :=
   match Codec.decode (zeros Codec.BLOCK_BYTES) 0 k none with
   | .ok (some p) => p
@@ -905,7 +820,6 @@ theorem decode_zeroPayload (k : Codec.Key) (hj : 0 < k.codec.maxBlocks) (hp : 0 
   rw [h]
   try rfl
 
-/-- `checkOpening` accepts an opening of a registered block that passes checks 1–5. -/
 theorem checkOpening_of {reg : Registration} {digest : ByteArray} {appends : Array Append} {w : WindowRecord}
     {R : Receipter} {i p : ℕ} {o : Opening} {pr : PassRecord} {j : ℕ} {y payload : ByteArray}
     (hpr : w.passes[i]! = pr) (hpass : o.pass = i) (hpos : o.position = p)
@@ -941,11 +855,9 @@ def honestReg (node codecSeed : ByteArray) (rows : ℕ) : Registration :=
   { node, blocks := 130023424, payloadRoot := zeroRoot pd 0 (hidden (zeroPayload key) (zeros SALT_BYTES)),
     codecSeed, codec := honestCodec, receipt := .sketch, rows, key }
 
-/-- The receipts of position 0's leaf: the zero block's receipt under seed `s`, then the 15 others' bytes. -/
 def honestLeaf (reg : Registration) (s : ByteArray) : ByteArray :=
   (receipter reg.receipt s reg.rows).receipt 0 (zeros Codec.BLOCK_BYTES) ++ zeros 960
 
-/-- A pass over the whole store under seed `s` whose receipt tree holds `honestLeaf` at leaf 0. -/
 def honestPass (reg : Registration) (s : ByteArray) : PassRecord :=
   ⟨zeroRoot (treeDomain s (Plan.whole 130023424)) 0 (hidden (honestLeaf reg s) (zeros SALT_BYTES)),
     Plan.whole 130023424, none⟩
@@ -954,7 +866,6 @@ def honestPass (reg : Registration) (s : ByteArray) : PassRecord :=
 def honestWindow (reg : Registration) (challenge previous : ByteArray) : WindowRecord :=
   ⟨0, challenge, previous, #[honestPass reg (seed challenge 0 previous)]⟩
 
-/-- The opening of position 0 of pass 0. -/
 def honestOpening (reg : Registration) (challenge previous : ByteArray) : Opening :=
   let s := seed challenge 0 previous
   ⟨0, 0, zeros Codec.BLOCK_BYTES, honestLeaf reg s, zeros SALT_BYTES, zeroPath (treeDomain s (Plan.whole 130023424)),
@@ -1044,13 +955,8 @@ theorem opensAtPosition_nontrivial :
     decide +kernel
   exact Option.some_ne_none _ (h.symm.trans hn)
 
-/-! ### The scheduled layout -/
-
-/-- **The schedule check meets the deployed session.** The deployed session commits no schedule cap and appends
-nothing, so its ledger asks no schedule; had it committed one, its T = 1 s session's 96 passes over the whole store are
-the plans of the schedule with no frees and no appends at steps 0 to 95, which the check accepts at its 792 bits (99
-one-byte integers). The premises of `Properties.RegisteredCircuit.ScheduledRequirement` besides the check are `G`'s,
-whose honest lemma is `G`'s; at the deployed plan the verifier's layout is store order (`codeLayout_whole`). -/
+/-- **The schedule check meets the deployed session's shape**: the deployed session commits no schedule cap, so this is
+the check at 792 bits of the schedule whose plans are its 96 passes over the whole store. -/
 theorem scheduled_meets : Schedule.check ⟨#[], #[], (List.range 96).toArray⟩ 130023424 792
     ((List.range 96).map fun s => (s, (Plan.whole 130023424).runs)).toArray #[] = .ok 792 := by
   decide +kernel
@@ -1065,13 +971,10 @@ theorem steered_of_checked_honest :
         ∀ s < 96, (passes[s]?).map Prod.snd = some (Plan.whole 130023424).runs :=
   ⟨_, _, _, scheduled_meets, by first | decide +kernel | (intro s hs; simp [hs])⟩
 
-/-- No appends. -/
 def noAppends : Unit → Fin 3 → Array (ℕ × ℕ) := fun _ _ => #[]
 
-/-- A pass of one block that reads block `y` of a store of three. -/
 def coinRun : Unit → Fin 3 → Array (ℕ × ℕ) := fun _ y => #[((y : ℕ), 1)]
 
-/-- One tile at block `y` of the registration's tree. -/
 def threeLayout (y : Fin 3) : Fin 1 ↪ Fin 1 × Fin 3 := ⟨fun _ => (0, y), fun _ _ _ => Subsingleton.elim _ _⟩
 
 theorem runBlocks_coinRun : ∀ y : Fin 3, (runBlocks (coinRun () y)).length = 1 := by decide

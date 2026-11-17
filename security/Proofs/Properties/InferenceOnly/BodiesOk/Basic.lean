@@ -28,21 +28,13 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 import Proofs.Properties.InferenceOnly.Walk
 
-/-!
-# Lemmas for `BodiesOk`: types, loops and streams
-
-What the decoder's spec (`Proofs.Properties.InferenceOnly.BodiesOk.Decode`) reads off `Flock.Program`'s code: type equality from
-`Ty.beq`, the leaves of the types a node computes, the leaves of a batch member mapped over an axis (`axis_spec`), and
-invariants of `for` loops in `Id`, `Except` and the decoder's `StateT` monad, index by index.
--/
+/-! Lemmas for `BodiesOk` on types, loops and streams, which the decoder's spec reads off `Flock.Program`'s code. -/
 
 @[expose] public section
 
 namespace InferenceOnlyCheck.Properties.SecurityProofs.BodiesOk
 
 open Flock.Program
-
-/-! ### Types -/
 
 theorem zip_all {α β : Type} (as : Array α) (bs : Array β) (p : α → β → Bool) (hs : as.size = bs.size)
     (h : (as.zip bs).all (fun x => p x.1 x.2) = true) :
@@ -90,7 +82,6 @@ theorem beq_eq : ∀ (n : ℕ) (a b : Ty), sizeOf a < n → a.beq b = true → a
         simp at hs; omega
       exact Prod.ext hi.1 (ih _ _ hlt hi.2)
 
-/-- `Ty`'s `==` is equality. -/
 theorem ty_beq {a b : Ty} (h : (a == b) = true) : a = b := beq_eq _ a b (Nat.lt_succ_self _) h
 
 theorem ty_not_beq {a b : Ty} (h : (!(a == b)) = false) : a = b := ty_beq (by simpa using h)
@@ -104,7 +95,6 @@ theorem leaves_array (n : ℕ) (e : Ty) : (Ty.array n e).leaves = n * e.leaves :
 theorem leaves_value (w : ℕ) : (Ty.value w).leaves = 1 := by
   rw [Ty.leaves]
 
-/-- A batch argument mapped over axis `ax` of length `ln`: member `m`'s leaf `j` is in range of the whole. -/
 theorem axis_spec : ∀ (ax : ℕ) (t : Ty) (ln : ℕ) (mt : Ty), t.removeAxis ax = some (ln, mt) →
     ∃ L, t.axisDims ax = some (ln, L) ∧ t.leaves = ln * mt.leaves ∧ L ∣ mt.leaves ∧
       ∀ j < mt.leaves, ∀ m < ln, (j / L * ln + m) * L + j % L < t.leaves := by
@@ -165,10 +155,6 @@ theorem axis_spec : ∀ (ax : ℕ) (t : Ty) (ln : ℕ) (mt : Ty), t.removeAxis a
       generalize n * (ln * inner.leaves) = Z at hq1 ⊢
       omega
 
-/-! ### Loops -/
-
-/-- An invariant of a `for` loop in `Id`, index by index: it holds after every element unless the loop stops early,
-when `D` holds. -/
 theorem forIn_id_inv {α β : Type} (f : α → β → Id (ForInStep β)) (D : β → Prop) :
     ∀ (l : List α) (I : ℕ → β → Prop) (b : β), I 0 b →
     (∀ i (hi : i < l.length) b, I i b → match (f l[i] b).run with
@@ -187,7 +173,6 @@ theorem forIn_id_inv {α β : Type} (f : α → β → Id (ForInStep β)) (D : �
       simp only [List.length_cons]
       exact this
 
-/-- The same in `Except`: an invariant of a `for` loop that finished. -/
 theorem forIn_except_inv {α β ε : Type} (f : α → β → Except ε (ForInStep β)) (D : β → Prop) :
     ∀ (l : List α) (I : ℕ → β → Prop) (b r : β), I 0 b →
     (∀ i (hi : i < l.length) b s, I i b → f l[i] b = .ok s → match s with
@@ -205,7 +190,6 @@ theorem forIn_except_inv {α β ε : Type} (f : α → β → Except ε (ForInSt
         (fun i hi b s hb hf => hs (i + 1) (by simp; omega) b s hb (by simpa using hf)) h
       simpa using this
 
-/-- The same in a state monad over `Except` (the decoder's `D`). -/
 theorem forIn_stateT_inv {α β σ ε : Type} (f : α → β → StateT σ (Except ε) (ForInStep β)) (D : β → σ → Prop) :
     ∀ (l : List α) (I : ℕ → β → σ → Prop) (b r : β) (s s' : σ), I 0 b s →
     (∀ i (hi : i < l.length) b s t s', I i b s → f l[i] b s = .ok (t, s') → match t with
@@ -229,8 +213,6 @@ theorem forIn_stateT_inv {α β σ ε : Type} (f : α → β → StateT σ (Exce
 theorem range_length (a b : ℕ) : (List.range' a (([a:b] : Std.Legacy.Range).size) 1).length = b - a := by
   simp [Std.Legacy.Range.size]
 
-/-! ### Arrays -/
-
 theorem mapM_size {α β ε : Type} (f : α → Except ε β) :
     ∀ (l : List α) (ys : List β), l.mapM f = .ok ys → ys.length = l.length
   | [], ys, h => by
@@ -250,7 +232,6 @@ theorem array_mapM_size {α β ε : Type} (f : α → Except ε β) (xs : Array 
   injection h with h; subst h
   simp [mapM_size f _ l hl]
 
-/-- `Array.mapM` in `Except`, element by element. -/
 theorem list_mapM_get {α β ε : Type} (f : α → Except ε β) :
     ∀ (l : List α) (ys : List β), l.mapM f = .ok ys → ∀ i (h1 : i < l.length) (h2 : i < ys.length),
       f l[i] = .ok ys[i]
@@ -281,9 +262,6 @@ theorem getElem!_push_lt {α : Type} [Inhabited α] (a : Array α) (x : α) {i :
 theorem getElem!_push_eq {α : Type} [Inhabited α] (a : Array α) (x : α) : (a.push x)[a.size]! = x := by
   rw [getElem!_pos (a.push x) a.size (by simp), Array.getElem_push_eq]
 
-/-! ### Streams -/
-
-/-- One step of the stream a zipped `for` loop reads an array through. -/
 theorem next_some {α : Type} (s : Subarray α) (h : s.start < s.stop) :
     ∃ s', Std.Stream.next? s = some (s.array[s.start]'(Nat.lt_of_lt_of_le h s.stop_le_array_size), s') ∧
       s'.array = s.array ∧ s'.start = s.start + 1 ∧ s'.stop = s.stop := by

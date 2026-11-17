@@ -37,27 +37,9 @@ import Std.Tactic.BVDecide.Normalize.Bool
 import Std.Tactic.BVDecide.Normalize.Prop
 import VCVio.Prelude.Core
 
-/-!
-# A step of `acc_of_accepts`: a V\* part's base setup, compiled and model
-
-A V\* part's verdict (`VStar.Recursive.partVerdict`) sets its session up with `Spot.OneStageZk.buildSessionOf`
-at the statement `verity/flock-circuit`'s tags `tags0`, on one table's keyed coin tree, with `--zk`'s hooks at the
-circuit's `mask_log`, and no lookup tables. The model's recursive setup (`RecDeploy.RecIns.setup`) starts with the same
-calls at its statement's reading `r` (`Readable.Read`): the hm96-sha512 rows check, `Read.setup`, each table's
-`checkRegistered` and `noIdentifier`, and `Registered.checkFull` at the reading's sample.
-
-`baseSetup_of_build`: where `r` reads the part's inputs as `FlockDeploy.Raw.ins` reads a `--zk` statement (the tags
-`tags0`, the coin tree, one table, no tables, no `--work`, `--stratified`, `--closure` or
-`--public-inputs`), the compiled setup's success gives each of those model calls, with the same `(spec, sts)`:
-
-* the tags agree: `r.tags` (`ZkExec.zkTags`) is the compiled `tags`, and `r.coins` (`ZkExec.zkCoins`) the compiled `coins`;
-* the session agrees: under hidden outputs the compiled setup runs `Stmt.setupTablesOf` on `ProvedScope.circuitOf`'s
-  parse, which is `Stmt.setupTables` (`Stmt.setupTables_eq`);
-* the compiled `checkIdentifier` refuses every header naming an identifier, which is `noIdentifier`'s refusal.
-
-The compiled `checkProgram`, `checkComplete`, `checkCover` and `KnownRead.check` have no counterpart in the model's
-setup, so this needs none of them.
--/
+/-! A step of `acc_of_accepts`: a V\* part's compiled base setup gives the model's recursive setup calls; the compiled
+`checkProgram`, `checkComplete`, `checkCover` and `KnownRead.check` have no counterpart in the model, so none is
+needed. -/
 
 @[expose] public section
 
@@ -80,7 +62,6 @@ theorem forIn_list_ok {α : Type} {l : List α} {f : α → PUnit → V (ForInSt
     rw [List.forIn_cons, h a List.mem_cons_self]
     exact ih fun b hb => h b (List.mem_cons_of_mem _ hb)
 
-/-- A `for` loop over an array whose every step yields is `.ok`. -/
 theorem forIn_ok {α : Type} {xs : Array α} {f : α → PUnit → V (ForInStep PUnit)}
     (h : ∀ a ∈ xs, f a PUnit.unit = .ok (.yield PUnit.unit)) : forIn xs PUnit.unit f = .ok PUnit.unit := by
   rw [← Array.forIn_toList]
@@ -103,14 +84,12 @@ theorem forIn_list_mem {α : Type} {l : List α} {f : α → PUnit → V (ForInS
       · exact hf
       · exact ih h b hb
 
-/-- A `.ok` `for` loop over an array, whose steps only yield, yields at each element. -/
 theorem forIn_mem {α : Type} {xs : Array α} {f : α → PUnit → V (ForInStep PUnit)}
     (hy : ∀ a s, f a PUnit.unit = .ok s → s = .yield PUnit.unit)
     (h : forIn xs PUnit.unit f = .ok PUnit.unit) : ∀ a ∈ xs, f a PUnit.unit = .ok (.yield PUnit.unit) := by
   rw [← Array.forIn_toList] at h
   exact fun a ha => forIn_list_mem hy h a (Array.mem_toList_iff.2 ha)
 
-/-- A loop step `do A a; B a; pure (.yield ())` yields exactly when both calls are `.ok`. -/
 theorem body_ok {α : Type} {A B : α → V Unit} {a : α} :
     (do A a; B a; pure (ForInStep.yield PUnit.unit) : V (ForInStep PUnit)) = .ok (.yield PUnit.unit) ↔
       A a = .ok () ∧ B a = .ok () := by
@@ -125,8 +104,6 @@ theorem body_yield {α : Type} {A B : α → V Unit} :
     simp [hA, hB, bind, Except.bind, pure, Except.pure] at h
   exact h.symm
 
-/-- The compiled `checkIdentifier` (no `--identifier`) passing is the model's `noIdentifier` passing: both pass exactly
-when the public header names no identifier, and the compiled one refuses every header that names one. -/
 theorem noIdentifier_of_check {st : Flock.Stmt} (h : Spot.OneStageZk.checkIdentifier st = .ok ()) :
     FlockDeploy.noIdentifier st = .ok () := by
   unfold Spot.OneStageZk.checkIdentifier at h
@@ -146,13 +123,6 @@ end Verity.Recursive.BaseSetup
 namespace Verity.Recursive
 
 open BaseSetup in
-/-- **A V\* part's base setup.** Let `tags0` be the part's statement tags, and `coins` and `tags` the coin tree
-and tags `partVerdict` sets its session up on. Suppose the compiled `buildSessionOf` sets the part's circuit `circuitB`
-and staged public file `pubB` up at the sample `draw`, with `partition`, `program` and the verifier's registered reads
-`registered`, to `(spec, sts)`. Let `r` read the same inputs as `Raw.ins` reads a `--zk` statement. Then the model's
-calls at the start of `RecIns.setup` all succeed at `r` with the same `(spec, sts)`: the hm96-sha512 rows check,
-`Read.setup`, each table's `checkRegistered` and `noIdentifier` (pointwise, and as `RecIns.setup`'s loop), and
-`Registered.checkFull` at `r`'s sample. -/
 theorem baseSetup_of_build {tags0 : Flock.Tags} {circuitB pubB : ByteArray} {draw partition : Option Json}
     {program : Option ByteArray} {registered : Option (Array Flock.Registered.Port)} {spec : Flock.SessionSpec}
     {sts : Array Flock.Stmt}

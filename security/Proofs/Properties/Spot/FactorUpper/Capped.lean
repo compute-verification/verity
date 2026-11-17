@@ -2,18 +2,7 @@ module
 
 public import Proofs.Properties.Spot.FactorUpper.Patterns
 
-/-!
-# Rankin's capped factor bounded above
-
-`FactorUpperCappedSound`. A set's capped weight `2^{min(b(U), S)}` is at most the product over the keys (a stratum and
-a width) of `2^{min(b_k(U), S)}`, as `min(a + b, S) ≤ min(a, S) + min(b, S)` (`capped_term_le`), and a sum over the sets
-of a product over the keys is the product over the keys of their sums over counts, `Σ_j C(n, j) f(j)` (`binS`,
-`sum_prod_cnt`). Each key's sum is at most the lesser of `(1 + 2^b w)^n` and its sets of at most `⌊S/b⌋` proof blocks
-plus `2^S` times the rest (`binS_served`), the rest at most `(1 + w)^n − 1` and, at `z = n w < ⌊S/b⌋ + 2`, its closed
-form (`tailS_le_closed`); `servedFac` bounds the lesser (`servedFac_bounds`). The whole sum over the sets avoiding the
-cells sampled whole is also at most `2^S (∏ (1 + w)^n − 1)` (`served_sound`). The sets meeting one are bounded both
-ways, by `∏_F G (∏_I G − 1)` (`whole_capped_le`) and by `2^S 2^{n_F} (2^{n_I} − 1)` (`whole_count_le`).
--/
+/-! Rankin's capped factor bounded above (`FactorUpperCappedSound`). -/
 
 @[expose] public section
 
@@ -24,7 +13,6 @@ open _root_.Spot.FactorUpper
 open Claims.Sampling
 open Nat
 
-/-- `Σ_{j≤n} C(n, j) f(j)`: a key's sum over its sets of `n` proof blocks, `f(j)` for each set of `j`. -/
 noncomputable def binS (n : ℕ) (f : ℕ → ℝ) : ℝ := ∑ j ∈ Finset.range (n + 1), (n.choose j : ℝ) * f j
 
 theorem binS_zero (f : ℕ → ℝ) : binS 0 f = f 0 := by simp [binS]
@@ -58,8 +46,6 @@ theorem one_le_binS (n : ℕ) {f : ℕ → ℝ} (hf : ∀ j, 0 ≤ f j) (h0 : 1 
   simp only [Nat.choose_zero_right, Nat.cast_one, one_mul] at this
   linarith
 
-/-- **Sums over sets factor over the keys**: `Σ_{A ⊆ D} ∏_k g_k(n_k(A)) = ∏_k Σ_{j≤n_k} C(n_k, j) g_k(j)`, `n_k(A)` the
-proof blocks of `A` of key `k`. -/
 theorem sum_prod_cnt {G : Type*} [DecidableEq G] (K : Finset G) (κ : ℕ → G) (D : Finset ℕ)
     (hD : ∀ v ∈ D, κ v ∈ K) (g : G → ℕ → ℝ) :
     ∑ A ∈ D.powerset, ∏ k ∈ K, g k (cntOf κ A k) = ∏ k ∈ K, binS (cntOf κ D k) (g k) := by
@@ -87,7 +73,6 @@ theorem sum_prod_cnt {G : Type*} [DecidableEq G] (K : Finset G) (κ : ℕ → G)
     rw [hE', hE, cntOf_insert_self hv, binS_succ, hg', Function.update_self]
     ring
 
-/-- `∏_{v∈U} f(κ v) = ∏_k f(k)^{n_k(U)}`. -/
 theorem prod_cnt {G : Type*} [DecidableEq G] (K : Finset G) (κ : ℕ → G) (U : Finset ℕ) (hU : ∀ v ∈ U, κ v ∈ K)
     (f : G → ℝ) : ∏ v ∈ U, f (κ v) = ∏ k ∈ K, f k ^ cntOf κ U k := by
   rw [Finset.prod_comp]
@@ -100,7 +85,6 @@ theorem prod_cnt {G : Type*} [DecidableEq G] (K : Finset G) (κ : ℕ → G) (U 
     unfold cntOf at this
     rw [this, pow_zero]
 
-/-- `Σ_{v∈U} β(κ v) = Σ_k n_k(U) β(k)`. -/
 theorem sum_cnt {G : Type*} [DecidableEq G] (K : Finset G) (κ : ℕ → G) (U : Finset ℕ) (hU : ∀ v ∈ U, κ v ∈ K)
     (β : G → ℕ) : ∑ v ∈ U, β (κ v) = ∑ k ∈ K, cntOf κ U k * β k := by
   rw [Finset.sum_comp]
@@ -120,8 +104,6 @@ theorem min_sum_le {G : Type*} (K : Finset G) (a : G → ℕ) (S : ℕ) :
   | empty => simp
   | @insert k K hk ih => rw [Finset.sum_insert hk, Finset.sum_insert hk]; omega
 
-/-- **A set's capped term is below its keys'**: `2^{min(b(U), S)} ∏_{v∈U} w_v ≤ ∏_k 2^{min(n_k b_k, S)} w_k^{n_k}`, as
-`min(a + b, S) ≤ min(a, S) + min(b, S)`. -/
 theorem capped_term_le {G : Type*} [DecidableEq G] (K : Finset G) (κ : ℕ → G) (U : Finset ℕ)
     (hU : ∀ v ∈ U, κ v ∈ K) (β : G → ℕ) (w : G → ℝ) (hw : ∀ k, 0 ≤ w k) (S : ℕ) :
     (2 : ℝ) ^ min (∑ v ∈ U, β (κ v)) S * ∏ v ∈ U, w (κ v) ≤
@@ -130,7 +112,6 @@ theorem capped_term_le {G : Type*} [DecidableEq G] (K : Finset G) (κ : ℕ → 
   exact mul_le_mul_of_nonneg_right (pow_le_pow_right₀ (by norm_num) (min_sum_le K _ S))
     (Finset.prod_nonneg fun k _ => pow_nonneg (hw k) _)
 
-/-- `Σ_{m<j≤n} C(n, j) w^j`: a key's sets of more than `m` of its `n` proof blocks, at weight `w` each. -/
 noncomputable def tailS (m n : ℕ) (w : ℝ) : ℝ :=
   ∑ j ∈ (Finset.range (n + 1)).filter (m < ·), (n.choose j : ℝ) * w ^ j
 
@@ -149,8 +130,6 @@ theorem tailS_le_grow (m n : ℕ) {w : ℝ} (hw : 0 ≤ w) : tailS m n w ≤ (1 
   rw [Finset.mem_filter] at hj
   exact Finset.mem_erase.2 ⟨by omega, hj.1⟩
 
-/-- **The tail's closed form**: at `z = n w < m + 2`, `Σ_{m<j≤n} C(n, j) w^j ≤ z^{m+1}/(m+1)! · 1/(1 − z/(m+2))`, as
-`C(n, j) ≤ n^j/j!` and `j! ≥ (m+1)! (m+2)^{j−m−1}`. -/
 theorem tailS_le_closed (m n : ℕ) {w : ℝ} (hw : 0 ≤ w) (hz : (n : ℝ) * w < m + 2) :
     tailS m n w ≤ ((n : ℝ) * w) ^ (m + 1) / ((m + 1)! : ℝ) / (1 - (n : ℝ) * w / (m + 2)) := by
   set z := (n : ℝ) * w with hzdef
@@ -186,7 +165,6 @@ theorem tailS_le_closed (m n : ℕ) {w : ℝ} (hw : 0 ≤ w) (hz : (n : ℝ) * w
         mul_le_mul_of_nonneg_left ((geom_le_min _ hr0 hr1).trans (min_le_right _ _)) hA0
     _ = A / (1 - r) := by ring
 
-/-- A key's served value: `(1 + 2^b w)^n`, and its sets of at most `⌊S/b⌋` proof blocks plus `2^S` times the rest. -/
 noncomputable def servVal (b n S : ℕ) (w : ℝ) : ℝ :=
   min ((1 + 2 ^ b * w) ^ n) (capP (S / b) n (2 ^ b * w) + 2 ^ S * tailS (S / b) n w)
 
@@ -198,7 +176,6 @@ theorem one_le_servVal (b n S : ℕ) {w : ℝ} (hw : 0 ≤ w) : 1 ≤ servVal b 
   have h3 : 0 ≤ (2 : ℝ) ^ S * tailS (S / b) n w := mul_nonneg (by positivity) (tailS_nonneg _ _ hw)
   exact le_min h1 (by linarith)
 
-/-- **A key's served sum**: `Σ_{j≤n} C(n, j) 2^{min(j b, S)} w^j` is at most its served value. -/
 theorem binS_served (b n S : ℕ) {w : ℝ} (hw : 0 ≤ w) :
     binS n (fun j => (2 : ℝ) ^ min (j * b) S * w ^ j) ≤ servVal b n S w := by
   have hx : 0 ≤ (2 : ℝ) ^ b * w := mul_nonneg (by positivity) hw
@@ -239,7 +216,6 @@ theorem binS_served (b n S : ℕ) {w : ℝ} (hw : 0 ≤ w) :
 theorem FacBounds.mono {F : Fac} {A B : ℝ} (hA : 0 ≤ A) (hAB : A ≤ B) (h : FacBounds F B) : FacBounds F A :=
   ⟨hA, (Real.log_le_log (by linarith) (by linarith)).trans h.2.1, h.2.2.mono hA hAB⟩
 
-/-- **`heavyTail` bounds a key's tail**: the grow form always, and the closed form once `z = n w < m + 2`. -/
 theorem heavyTail_bounds {g : Group} {S : ℕ} (hg : groupOk g S) (lw : ℚ) (p : ℕ) :
     LogUB (heavyTail g lw S p) (tailS (S / g.b) g.n (Real.exp lw)) := by
   have hw := Real.exp_pos (lw : ℝ)
@@ -329,7 +305,6 @@ section Capped
 
 variable {s : AuditStatement} {Pt : Partition} {d : Design.Two} {ρ : ℕ} {cs : List Cell}
 
-/-- A set's capped term at weights `w` by key, as a product over its proof blocks. -/
 theorem capped_exp (S : ℕ) (c : ℝ) (U : Finset ℕ) :
     (2 : ℝ) ^ min (bitsOf s Pt U) S * Real.exp (-(c * yOf Pt cs U)) =
       (2 : ℝ) ^ min (∑ v ∈ U, (keyOf s Pt v).2) S *
@@ -342,8 +317,6 @@ theorem fin_keys_mem (hc : Properties.Spot.Covers s Pt d ρ cs) :
     ∀ v ∈ finBlocks Pt d ρ cs, keyOf s Pt v ∈ (finKeys cs (cs.map Cell.parts)).toFinset :=
   fun v hv => List.mem_toFinset.2 ((fin_keys hc).1 v hv)
 
-/-- **The served sets' sum is above a chord's capped sum**: at slope `σ`, `Σ_{∅ ≠ U} 2^{min(b(U), S)} e^{−θ σ y(U)}`
-over the sets of the cells sampled at a rate. -/
 theorem served_sound (hc : Properties.Spot.Covers s Pt d ρ cs) (S : ℕ) (θ σ : ℚ) (p : ℕ) :
     LogUB (servedSets (Ln2.of p) (((finKeys cs (cs.map Cell.parts)).map (grp cs (cs.map Cell.parts) S p)).map
         fun g => (g, -(θ * σ * g.r))) S p)
@@ -375,7 +348,6 @@ theorem served_sound (hc : Properties.Spot.Covers s Pt d ρ cs) (S : ℕ) (θ σ
     simp only [hwdef, G, grp, Group.r, rateOf]
     push_cast
     ring_nf
-  -- the product of the groups' served sums
   have hF := prod_map_bounds' gs (fun x => servedFac L x.1 x.2 S p) (fun x => servVal x.1.b x.1.n S (Real.exp x.2))
     (fun x hx => servedFac_bounds hL (hgs x hx) x.2 p) p
   have hFeq : (gs.map fun x => servVal x.1.b x.1.n S (Real.exp x.2)).prod =
@@ -401,7 +373,6 @@ theorem served_sound (hc : Properties.Spot.Covers s Pt d ρ cs) (S : ℕ) (θ σ
               (one_le_binS _ (fun j => by have := hw k; positivity) (by simp))) fun k _ =>
             (binS_mono ((fin_keys hc).2 k) fun j => by have := hw k; positivity).trans (binS_served k.2 _ S (hw k))
       _ = _ := List.prod_toFinset _ (finKeys_nodup cs reads)
-  -- the sets' sum at `2^S`
   have hO := prod_map_bounds' gs (fun x => (Fac.one x.2 p).pow x.1.n x.1.lnN p) (fun x => (1 + Real.exp x.2) ^ x.1.n)
     (fun x hx => pow_bounds p (one_bounds p (Real.exp_pos _).le le_rfl) fun _ => (hgs x hx).2.1) p
   have hS := LogUB.scale hO.2.2 hO.1 (k := (2 : ℝ) ^ S) (c := (S : ℚ) * L.up)
@@ -435,7 +406,6 @@ theorem served_sound (hc : Properties.Spot.Covers s Pt d ρ cs) (S : ℕ) (θ σ
   · rw [hFeq]; linarith
   · rw [hOeq]; exact hgrow
 
-/-- The cells sampled at a rate hold all of the replay block's proof blocks of their keys, and none of the others'. -/
 theorem cnt_finBlocks (k : ℕ × ℕ) :
     cntOf (keyOf s Pt) (finBlocks Pt d ρ cs) k =
       if (cs.getD k.1 default).rate.isSome then cntOf (keyOf s Pt) (blocksIn Pt d.part ρ) k else 0 := by
@@ -461,8 +431,6 @@ theorem keys_disjoint (cs : List Cell) :
   have h2 := (List.mem_filter.1 (List.mem_toFinset.1 hi)).2
   cases h : (cs.getD k.1 default).rate <;> simp_all
 
-/-- **The capped sets meeting a cell sampled whole, by key**: `Σ_{U ⊄ F} 2^{min(b(U), S)} ≤ ∏_F G_k (∏_I G_k − 1)`, the
-keys' served values at `w = 1`. -/
 theorem whole_capped_le (hc : Properties.Spot.Covers s Pt d ρ cs) (S : ℕ) :
     ∑ U ∈ (blocksIn Pt d.part ρ).powerset.filter (fun U => ¬ U ⊆ finBlocks Pt d ρ cs), (2 : ℝ) ^ min (bitsOf s Pt U) S ≤
       ((finKeys cs (cs.map Cell.parts)).map fun k =>
@@ -528,8 +496,6 @@ theorem whole_capped_le (hc : Properties.Spot.Covers s Pt d ρ cs) (S : ℕ) :
         rw [hsplit, hall, hfin]; ring
     _ ≤ _ := mul_le_mul hPf (by linarith) (by linarith) (le_trans hPf0 hPf)
 
-/-- **The capped sets meeting a cell sampled whole, counted**:
-`Σ_{U ⊄ F} 2^{min(b(U), S)} ≤ 2^S 2^{|F|} (2^{|I|} − 1)`. -/
 theorem whole_count_le (S : ℕ) :
     ∑ U ∈ (blocksIn Pt d.part ρ).powerset.filter (fun U => ¬ U ⊆ finBlocks Pt d ρ cs), (2 : ℝ) ^ min (bitsOf s Pt U) S ≤
       (2 : ℝ) ^ S * 2 ^ (finBlocks Pt d ρ cs).card * (2 ^ (infBlocks Pt d ρ cs).card - 1) := by
@@ -551,8 +517,6 @@ theorem whole_count_le (S : ℕ) :
         Finset.sum_le_sum fun U _ => pow_le_pow_right₀ (by norm_num) (min_le_right _ _)
     _ = _ := by rw [Finset.sum_const, nsmul_eq_mul, hcR]; ring
 
-/-- **The sets meeting a cell sampled whole, capped**: `(1 − q)^θ` times the lesser of `∏_F G_g (∏_I G_g − 1)` and
-`2^S 2^{n_F} (2^{n_I} − 1)`. -/
 theorem wholeCapped_sound (hc : Properties.Spot.Covers s Pt d ρ cs) {q θ : ℚ} (hq1 : (q : ℝ) ≤ 1)
     (hθ : (0 : ℝ) ≤ θ) (S p : ℕ) :
     LogUB (if ((infKeys cs (cs.map Cell.parts)).map (grp cs (cs.map Cell.parts) S p)).isEmpty then none
@@ -602,7 +566,7 @@ theorem wholeCapped_sound (hc : Properties.Spot.Covers s Pt d ρ cs) {q θ : ℚ
     | cons _ _ => rfl
   rw [if_neg (by rw [hne]; simp)]
   refine LogUB.oadd (lnPassWhole_sound hq1 hθ p) (LogUB.omin ?_ ?_) hX0
-  · -- the keys' served values at `w = 1`
+  ·
     have hgk : ∀ l : List (ℕ × ℕ), (∀ k ∈ l, k ∈ keysOf cs reads) →
         ∀ g ∈ l.map G, FacBounds (servedFac L g 0 S p) (servVal g.b g.n S (Real.exp ((0 : ℚ) : ℝ)) - 1) := by
       intro l hl g hg
@@ -623,7 +587,7 @@ theorem wholeCapped_sound (hc : Properties.Spot.Covers s Pt d ρ cs) {q θ : ℚ
       have := le_exp_of_bounds hPf; linarith
     have hb := LogUB.scale hPi.2.2 hPi.1 hPfe
     exact hb.mono hX0 (whole_capped_le hc S)
-  · -- counted, at `2^S` each
+  ·
     have hQ := prod_map_bounds' (Ki.map G) (fun g => (Fac.one 0 p).pow g.n g.lnN p)
       (fun g => (1 + Real.exp ((0 : ℚ) : ℝ)) ^ g.n)
       (fun g hg => by
@@ -658,8 +622,6 @@ theorem wholeCapped_sound (hc : Properties.Spot.Covers s Pt d ρ cs) {q θ : ℚ
     rw [Finset.prod_const] at this
     exact this
 
-/-- **Rankin's capped factor, split**: the empty set, the nonempty sets in cells sampled at a rate, and the sets meeting
-a cell sampled whole, each passing with probability `1 − q`. -/
 theorem rankinFactorCapped_le (hc : Properties.Spot.Covers s Pt d ρ cs) (S : ℕ) (q θ : ℝ) :
     rankinFactorCapped s Pt d S q θ ρ ≤
       1 + ∑ U ∈ (finBlocks Pt d ρ cs).powerset.erase ∅,
@@ -690,7 +652,6 @@ theorem rankinFactorCapped_le (hc : Properties.Spot.Covers s Pt d ρ cs) (S : �
 
 end Capped
 
-/-- **The capped bound is above Rankin's capped factor.** -/
 theorem factorUpperCapped_sound : Properties.Spot.FactorUpperCappedSound := by
   intro cs S P v hv s Pt d ρ hc
   by_cases hP : P.valid = true

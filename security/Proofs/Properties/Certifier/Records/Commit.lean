@@ -3,15 +3,7 @@ module
 public import Proofs.Properties.Certifier.Records.Program
 public import Proofs.Properties.Certifier.Check.Check
 
-/-!
-# A committed record's digest binds its frames
-
-`committedDigest` is the hex of SHA-512 of `recordInput` (`committedDigest_ok`), which writes the header and each row's
-64-byte SHA-512 digest of `rowInput` (`rowDigest_ok`), which writes the row's frames; each refuses what `tagged_sha512`
-refuses. So two grids of `B`-byte frames with one digest, where SHA-512 has no collision on the strings the two digests
-hash, have the same frames row by row (`frames_eq`), and a committed record whose digest is the Program's grid's commits
-to it (`commitsTo`).
--/
+/-! A committed record's digest binds its frames, where SHA-512 has no collision on the strings the digests hash. -/
 
 @[expose] public section
 
@@ -38,8 +30,6 @@ theorem afoldl_bs {α : Type} (F : α → ByteArray) (arr : Array α) (init : By
     bs (arr.foldl (fun acc a => acc ++ F a) init) = bs init ++ (arr.toList.map fun a => bs (F a)).flatten := by
   rw [← Array.foldl_toList, foldl_bs]
 
-/-- A fold that appends each element's bytes, where each may refuse, refuses if one does; otherwise each gave bytes and
-the result is `init` followed by them in order. -/
 theorem foldlM_ok {α : Type} (F : α → Flock.V ByteArray) :
     ∀ (l : List α) (init rows : ByteArray),
       l.foldlM (fun acc a => do return acc ++ (← F a)) init = .ok rows →
@@ -84,7 +74,6 @@ theorem header_def (l : String) (w : Nat) (g : Grid) : header l w g = Flock.cano
     ("allocation", Lean.toJson g.allocation), ("frame_bytes", Lean.toJson g.frameBytes),
     ("bucket_ms", Lean.toJson g.bucketMs), ("status", .str "complete")]) := rfl
 
-/-- A row's digest is SHA-512 of its `rowInput`. -/
 theorem rowDigest_ok {row : Array (Option ByteArray)} {d : ByteArray} (h : Records.rowDigest row = .ok d) :
     ∃ x, rowInput row = .ok x ∧ d = Flock.Sha512.hash x := by
   unfold Records.rowDigest at h
@@ -104,7 +93,6 @@ theorem committedDigest_ok {l : String} {w : Nat} {grid : Records.RawGrid} {g : 
   rw [hr]
   exact hx
 
-/-- The frames of one row with one `rowInput`, where every frame is `B ≥ 1` bytes, are one. -/
 theorem rowInput_inj {B : Nat} (hB : 0 < B) {a b : Array (Option ByteArray)} {x : ByteArray}
     (ha : ∀ f ∈ (a.filterMap id).toList, f.size = B) (hb : ∀ f ∈ (b.filterMap id).toList, f.size = B)
     (h : rowInput a = .ok x) (h' : rowInput b = .ok x) : (a.filterMap id).toList = (b.filterMap id).toList := by
@@ -117,8 +105,6 @@ theorem rowInput_inj {B : Nat} (hB : 0 < B) {a b : Array (Option ByteArray)} {x 
   have e'' := flatten_inj hB (by simpa [bs_length] using ha) (by simpa [bs_length] using hb) e'
   exact List.map_injective_iff.mpr (fun x y h => bs_inj h) e''
 
-/-- **Two grids with one record digest have one grid's frames**, where every frame of both is `B ≥ 1` bytes and
-SHA-512 has no collision on the strings the two digests hash. -/
 theorem frames_eq {l : String} {w : Nat} {g : Grid} {G P : Records.RawGrid} {dg : String}
     (hB : 0 < g.frameBytes) (hG : ∀ row ∈ G.toList, ∀ f ∈ (row.filterMap id).toList, f.size = g.frameBytes)
     (hP : ∀ row ∈ P.toList, ∀ f ∈ (row.filterMap id).toList, f.size = g.frameBytes)
@@ -157,7 +143,6 @@ theorem frames_eq {l : String} {w : Nat} {g : Grid} {G P : Records.RawGrid} {dg 
     (ea.symm.trans ((bs_inj hab).trans eb))
   exact rowInput_inj hB (hG a ha) (hP b hb) hxa hxb
 
-/-- A committed record whose digest is the Program's grid's commits to it, where that grid's frames are `B` bytes. -/
 theorem commitsTo {p : Params} {l : String} {w : Nat} {dg : String} {P : Records.RawGrid}
     (eP : Records.committedDigest l w P p.grid = .ok dg)
     (hP : ∀ row ∈ P.toList, ∀ f ∈ (row.filterMap id).toList, f.size = p.grid.frameBytes) : CommitsTo p l w dg P := by

@@ -36,31 +36,7 @@ import Proofs.Flock.Claims.Recursion.PartsVStar
 import Std.Tactic.BVDecide.Normalize.Bool
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# The compiled part's setup is the model's recursive setup
-
-Each part `j` of the compiled recursive component (`VStar.Recursive.partVerdict`) sets its session up as
-`verity-verify-proof verify --zk` does with that part's recursive flags: Flock's session (`OneStageZk.buildSessionOf`) and the
-verifier's own checks on it (`BaseSetup`), then V\*'s checks block (after `RecSetup.checkInner` and
-`RecLinkPart.checkShape` at no link table), `RecSetup.checks`, `RecSetup.oneFull`, `Zk.shapeOk`, `RecCoins.check`,
-`RecVStar.checkPubRows`, `RecVStar.checkLinkRounds`, `RecVStar.checkTopRows`, `RecCoins.checkLink`, `RecLinkPart.check`
-at no link table, `RecVStar.checkLabels` and the sample's sampling design. The model's recursive setup (`RecDeploy.RecIns.setup`,
-which `setupO` runs on a V\* statement) makes the same calls in the same order. This module matches them.
-
-* `recIns_setup_of_compiled`: where the staged statement's inputs `i` are the compiled part's (`SetupMatch`, `PartStatement`),
-  the model's Flock setup and its registered-reads checks pass with the compiled session (`BaseSetup`), and the compiled
-  checks block passes (`RecChecks`), the model's recursive setup passes with the same session.
-* `setupO_staged_of_compiled`: so `setupO (staged st x ms s) = some (i, spec, sts)`.
-* `readX_of_compiled`: where every part's setup passes that way and the compiled scope check passes, `readX x` reads
-  what `readXPre x` read (`readX_of_sessions`), and each part's circuit is V\*'s statement's of its index
-  (`partsVStar`).
-* `partVerdict_setup`: what an accepted compiled part's verdict shows of its setup, in the terms the lemmas above and
-  `BaseSetup`'s take.
-
-The inner session's META binding (`InnerHeld.bound`) is read by the setup only at a RecSparse shape (`checkMeta`), so
-at the dense shape the compiled component accepts (`shapeOf`: no sparse shape) the two readings of the inner circuit's
-META need not be compared.
--/
+/-! The compiled part's setup is the model's recursive setup: the same calls in the same order. -/
 
 @[expose] public section
 
@@ -70,12 +46,8 @@ open Flock
 open RecDeploy
 open FlockDeploy (noIdentifier)
 
-/-- **The staged statement's inputs are the compiled part's** (`PartStatement`'s conclusion, at the fields the recursive setup
-and the scope check read): the model's reading `i` of part `j`'s staged statement holds, field by field, the values the
-compiled part `j`'s check passes to the same calls: `--zk`, the statement's tags (`tags0`) and the session's
-(`tags`), the part's circuit and staged public file, no lookup table, one table, the part's partition and program, the
-verifier's registered reads, the record's sample, the inner shape, check 5's source, the inner commits and link the
-compiled component holds (`h`), `--rec-part j`, the bindings, the rows and no link table. -/
+/-- The model's reading `i` of part `j`'s staged statement holds, field by field, the values compiled part `j`'s check
+passes to the same calls. -/
 structure SetupMatch (i : RecIns) (h : VStar.Recursive.InnerHeld) (j : ℕ) (tags0 tags : Tags)
     (circuitB pubB : ByteArray) (partition : Lean.Json) (program : ByteArray)
     (registered : Option (Array Registered.Port)) (bindings : VStar.Bindings)
@@ -102,11 +74,8 @@ structure SetupMatch (i : RecIns) (h : VStar.Recursive.InnerHeld) (j : ℕ) (tag
   rows : i.rows = rows
   links : i.links = none
 
-/-- **The compiled part's checks block** after Flock's session and the checks `BaseSetup` matches, each as the compiled
-part `j`'s check calls it on the session's tables `sts`: the inner checks, the inner shape at no link table, the
-registration's and V\*'s list's caps, V\*'s checks, one full table, the table's cap, `Zk.shapeOk`, check 5, the public
-rows, the link rounds, the top rows, the link, the link table's part checks at no table, the labels, and the sample's sampling design
-where there is a sample. -/
+/-- The compiled part's checks after Flock's session and the checks `BaseSetup` matches, each as compiled part `j`'s
+check calls it on the session's tables `sts`. -/
 structure RecChecks (h : VStar.Recursive.InnerHeld) (j : ℕ) (tags0 tags : Tags) (circuitB : ByteArray)
     (partition : Lean.Json) (program : ByteArray) (registered : Option (Array Registered.Port))
     (bindings : VStar.Bindings) (rows : Option (Array Registered.Port)) (draw : Option Lean.Json)
@@ -137,7 +106,6 @@ theorem checkInner_dense {sh : RecVStar.Inner} {src : RecCoins.Source}
     RecSetup.checkInner (some sh) (some src) b = RecSetup.checkInner (some sh) (some src) b' := by
   cases src <;> simp [RecSetup.checkInner, hs]
 
-/-- A loop each of whose steps passes and goes on passes. -/
 theorem forIn_ok_of_all {α : Type} {xs : Array α} {b : α → PUnit → V (ForInStep PUnit)}
     (hb : ∀ a ∈ xs, ∀ u, b a u = .ok (.yield PUnit.unit)) : forIn xs PUnit.unit b = .ok PUnit.unit := by
   rcases xs with ⟨l⟩
@@ -149,12 +117,6 @@ theorem forIn_ok_of_all {α : Type} {xs : Array α} {b : α → PUnit → V (For
     rw [hb c (by simp) PUnit.unit]
     exact ih fun a ha u => hb a (by simp_all) u
 
-/-- **The model's recursive setup passes where the compiled part's does.** Suppose the model's reading `i` of part
-`j`'s staged statement holds the compiled part's inputs (`SetupMatch`), the inner shape has no RecSparse phase and the
-session's tags hm96-sha512 rows (as the compiled part's do wherever it has a sample). Suppose the model's Flock setup
-gives the compiled session `(spec, sts)`, every table passes the registered-reads and identifier checks and the
-registration is full (`BaseSetup`'s conclusion), and the compiled checks block passes on `sts` (`RecChecks`). Then the
-model's recursive setup (`RecIns.setup`) passes with `(spec, sts)`. -/
 theorem recIns_setup_of_compiled {i : RecIns} {h : VStar.Recursive.InnerHeld} {j : ℕ} {tags0 tags : Tags}
     {circuitB pubB : ByteArray} {partition : Lean.Json} {program : ByteArray}
     {registered : Option (Array Registered.Port)} {bindings : VStar.Bindings}
@@ -185,10 +147,6 @@ theorem recIns_setup_of_compiled {i : RecIns} {h : VStar.Recursive.InnerHeld} {j
   · simp only [hd, ↓reduceIte, hc.samplingDesign hd]
   · simp only [hd, Bool.false_eq_true, ↓reduceIte]
 
-/-- **The staged statement's setup is the compiled part's.** Where `readX x` reads `r`, part `s` is `p`, its staged
-statement reads back as itself (`decodeRec`, `PartStatement`) and the model reads it as `i`, the recursive setup that
-`setupO` runs on the staged statement passes with the compiled session, under `recIns_setup_of_compiled`'s
-hypotheses. -/
 theorem setupO_staged_of_compiled {x : Claims.Msg} {r : XR} {st : Stage} {ms : List (Claims.Msg × Claims.Out)}
     {s : ℕ} {p : PartX} {i : RecIns} {h : VStar.Recursive.InnerHeld} {j : ℕ} {tags0 tags : Tags}
     {circuitB pubB : ByteArray} {partition : Lean.Json} {program : ByteArray}
@@ -219,7 +177,6 @@ theorem setupO_staged_of_compiled {x : Claims.Msg} {r : XR} {st : Stage} {ms : L
   unfold setupO
   simp [hins, hsu, Except.toOption]
 
-/-- **The compiled part's scope check is the model's statement check** at the staged statement's inputs. -/
 theorem read_check_of_scope {i : RecIns} {h : VStar.Recursive.InnerHeld} {j : ℕ} {tags0 tags : Tags}
     {circuitB pubB : ByteArray} {partition : Lean.Json} {program : ByteArray}
     {registered : Option (Array Registered.Port)} {bindings : VStar.Bindings}
@@ -232,10 +189,6 @@ theorem read_check_of_scope {i : RecIns} {h : VStar.Recursive.InnerHeld} {j : �
   rw [hm.tags, hm.zk, hm.circuitFile, hm.publicFile, hm.tables, hm.count, hm.publicInputs, hm.readRegistered]
   exact hscope
 
-/-- **What a compiled part shows of its setup**, at the staging `st`, `ms`: the model reads part `s`'s statement
-(`partRaw`) as `i` (`PartStatement`), `i` holds the compiled part's inputs (`SetupMatch`, `PartStatement`), the model's Flock setup and
-its registered-reads checks pass with the compiled session (`BaseSetup`), the compiled checks block passes (`RecChecks`),
-and so does the compiled scope check. -/
 def PartSetup (r : XR) (st : Stage) (x : Claims.Msg) (ms : List (Claims.Msg × Claims.Out)) (s : ℕ) (p : PartX) :
     Prop :=
   ∃ (i : RecIns) (h : VStar.Recursive.InnerHeld) (j : ℕ) (tags0 tags : Tags) (circuitB pubB : ByteArray)
@@ -251,9 +204,6 @@ def PartSetup (r : XR) (st : Stage) (x : Claims.Msg) (ms : List (Claims.Msg × C
     RecChecks h j tags0 tags circuitB partition program registered bindings rows draw sts ∧
     ProvedScope.checkOf (ProvedScope.circuitOf tags circuitB []) tags true pubB 1 false registered.isSome = .ok ()
 
-/-- **The compiled statement reads where every compiled part sets up**: where `readXPre x` reads `r` (`Names`) and
-every part's compiled setup and scope check pass as the model's (`PartSetup`) at one staging, `readX x` reads `r`, and
-each part's circuit is V\*'s statement's of its index (`partsVStar`). -/
 theorem readX_of_compiled {x : Claims.Msg} {r : XR} {st : Stage} {ms : List (Claims.Msg × Claims.Out)}
     (hr : readXPre x = some r) (hparts : ∀ s p, r.w.parts[s]? = some p → PartSetup r st x ms s p) :
     readX x = some r ∧
@@ -296,12 +246,6 @@ def PartRegistered (pr : Option Lean.Json) (registered : Option (Array Registere
   | none => registered = none ∧ complete = false ∧ known = #[] ∧ regParams = #[]
   | some r => ∃ own, VStar.Recursive.registeredOf r = .ok (own, complete, known, regParams) ∧ registered = some own
 
-/-- **What an accepted compiled part shows of its setup.** Where part `j`'s verdict (`VStar.Recursive.partVerdict`)
-is `.ok ()`, its readers read (the statement's tags, without plain leaves, the part's circuit and staged public file,
-under `FIELD_MAX` bytes, its registered reads and bindings, its record and the record's sample, under hm96-sha512 rows;
-its rows are the inner session's, `h.rows`), Flock's session and the verifier's
-own checks on it pass (`BaseSetup`'s inputs: `checkProgram`, `buildSessionOf`, `checkComplete`, `checkCover`,
-`KnownRead.check`), the checks block passes (`RecChecks`), and so does the scope check. -/
 theorem partVerdict_setup {h : VStar.Recursive.InnerHeld} {j : ℕ} {p : VStar.Recursive.PartOwn}
     {s : VStar.Recursive.PartProof} {bs : Core.Blobs} {v : V Unit}
     (hv : VStar.Recursive.partVerdict h j p s bs = .ok v) (hok : v = .ok ()) :
