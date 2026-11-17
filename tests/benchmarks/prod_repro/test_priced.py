@@ -133,11 +133,21 @@ def test_the_point_is_the_priced_layer_and_the_measured_one_below_marked_modeled
     c = ly["cost"]
     assert c["lo"] <= c["mid"] <= c["hi"]
     assert ly["measured"]["value"] == 0.02 and ly["measured"]["run"] == "r-ab"
-    assert p["name"] == Q.METRIC and p["mark"] == "modeled" and p["tested_by"] == "r-ab"
+    assert p["name"] == Q.PRICED != Q.METRIC and p["mark"] == "modeled" and p["tested_by"] == "r-ab"
     assert p["member"] == "glm-5.3-h200x8-prod-record-over-prod-priced"
     assert p["value"] == pytest.approx(100 * (c["mid"] + 0.006))
     assert p["ci95"] == pytest.approx([100 * (c["lo"] - 0.01), 100 * (c["hi"] + 0.02)])
     assert p["inputs"][0].startswith("modeled: ")
+    # the door's call: the same layers and point, its runs in the point's inputs, under the id it gives
+    d = Q.price(out, Q.units(units_file(tmp_path)), tested_by="r-capture", units_from="r-minify", ours=["prod-record"],
+                name="x/priced")
+    assert d["layers"][0]["cost"] == c and d["member"] == p["member"] and "no_point" not in d
+    assert d["point"]["name"] == "x/priced" and d["point"]["tested_by"] == "r-capture"
+    assert "at r-minify's device times a call" in d["point"]["inputs"][0]
+    with pytest.raises(SystemExit, match="none of prod-record-bisect was served"):
+        Q.price(out, Q.units(units_file(tmp_path)), tested_by="r", units_from="u", ours=["prod-record-bisect"])
+    with pytest.raises(SystemExit):
+        Q.main([str(out), "--units", str(units_file(tmp_path)), "--result"])
 
 
 def test_a_lifetime_whose_server_ran_no_canonical_top_k_is_refused(tmp_path):

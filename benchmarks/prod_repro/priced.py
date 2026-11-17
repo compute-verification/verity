@@ -2,7 +2,7 @@
 time a call, in percent of the reference arm's serving time. It needs no GPU.
 
     priced.py OUT --units TOPK_CUT.jsonl [--prefill-units FILE] [--reference prod-trace] [--stock prod]
-              [--ours ARM ...] [--tested-by RUN] [--json] [--result]
+              [--ours ARM ...] [--tested-by RUN] [--json]
 
 A step makes `CALLS` top-k calls on each card, each over the step's rows past `K` keys. A call costs the pass's time
 with no failed row (`units`' ``base``, by rows and the longest row), and one with a failed row costs ``failed``
@@ -16,6 +16,9 @@ bounds and the point, unless the counts by step hold the calls a remedy failed i
 A step that runs a prefill is priced at prefill shapes (``--prefill-units``, in `units`' form), and refused without
 them; the reader then gives the prefill steps' measured added seconds, from both arms' step traces, as a term apart,
 marked measured.
+
+It writes `priced.json` beside the job's files and no result: a priced point is stored by `verity bench serving_cost
+price`, under `PRICED`, never under the measured line `METRIC` it prices.
 """
 from __future__ import annotations
 
@@ -25,9 +28,13 @@ import json
 import math
 import sys
 from bisect import bisect_left
+from collections.abc import Sequence
 from pathlib import Path
 
 METRIC = "vllm/prod-serving-cost-glm53"
+#: the id a priced point goes under, which the serving cost's door declares
+PRICED = "benchmarks/serving-cost-priced"
+OURS = ("prod-record", "prod-record-bisect")
 UNIT = "percent of stock's serving time"
 INSTRUMENT = "priced"
 #: the indexer's top-k calls a decode step: 21 of GLM-5.3's 78 layers, and the MTP layer once a step
@@ -398,8 +405,8 @@ def measured(out: Path, ours: str, over: str) -> dict | None:
     return None
 
 
-def point(priced: dict, below: dict, tested_by: str, units_from: str, member: str) -> dict:
-    """The point under `METRIC`: ours over stock, the priced layer plus the measured layers below it (``below``,
+def point(priced: dict, below: dict, tested_by: str, units_from: str, member: str, name: str = PRICED) -> dict:
+    """The point under ``name``: ours over stock, the priced layer plus the measured layers below it (``below``,
     ours's reference over stock), marked modeled; its interval the sum of the priced bounds and the measured interval.
     Where the prefill steps were not priced, their measured added seconds are a term of it, named as measured."""
     c = priced["cost"]
@@ -417,8 +424,36 @@ def point(priced: dict, below: dict, tested_by: str, units_from: str, member: st
                       f"{100 * pm['value']:+.2f}% from both arms' step traces in run {tested_by}")
     val, lo, hi = val + below["value"], lo + below["ci95"][0], hi + below["ci95"][1]
     inputs.append(f"measured: {priced['over']} over stock, {100 * below['value']:+.2f}% in run {below['run']}")
-    return {"name": METRIC, "value": 100 * val, "unit": UNIT, "mark": "modeled", "member": member,
+    return {"name": name, "value": 100 * val, "unit": UNIT, "mark": "modeled", "member": member,
             "ci95": [100 * lo, 100 * hi], "inputs": inputs, "tested_by": tested_by}
+
+
+def price(out: Path, u: dict, *, tested_by: str, units_from: str, ours: Sequence[str] = OURS,
+          reference: str = "prod-trace", stock: str = "prod", model: str = "glm-5.3", card: str = "h200x8",
+          pu: dict | None = None, name: str = PRICED) -> dict:
+    """Each served arm of ``ours`` priced over ``reference`` (`layer`, with its measured and step-adjusted layers
+    beside it), and the first one's point under ``name`` over ``stock`` (`point`) with its ``member``; where none
+    stands, ``no_point`` says why. Refuses a job that served none of ``ours``."""
+    layers = []
+    for arm in ours:
+        if not lifetimes(out, arm):
+            continue
+        ly = layer(out, arm, reference, u, pu)
+        ly["measured"] = measured(out, arm, reference)
+        ly["adjusted"] = adjusted(out, arm, reference)
+        layers.append(ly)
+    if not layers:
+        raise SystemExit(f"{out}: none of {', '.join(ours)} was served")
+    first = layers[0]
+    member = f"{model}-{card}-{first['ours']}-over-{stock}-{INSTRUMENT}"
+    below = measured(out, reference, stock)
+    why = ("no lifetime pair was priced" if not first["cost"] else
+           "the counters hold no failed rows, so only the pass's base is priced" if not first["failed_priced"] else
+           f"the job measured no {reference} over {stock} with an interval" if not (below and below.get("ci95"))
+           else None)
+    return {"layers": layers, "member": member,
+            "point": None if why else point(first, below, tested_by, units_from, member, name),
+            **({"no_point": why} if why else {})}
 
 
 def text(r: dict) -> str:
@@ -475,45 +510,18 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--prefill-units", type=Path)
     ap.add_argument("--reference", default="prod-trace")
     ap.add_argument("--stock", default="prod")
-    ap.add_argument("--ours", nargs="+", default=["prod-record", "prod-record-bisect"])
+    ap.add_argument("--ours", nargs="+", default=list(OURS))
     ap.add_argument("--tested-by")
     ap.add_argument("--model", default="glm-5.3")
     ap.add_argument("--card", default="h200x8")
     ap.add_argument("--json", action="store_true")
-    ap.add_argument("--result", action="store_true")
     a = ap.parse_args(argv)
-    u = units(a.units)
-    pu = units(a.prefill_units) if a.prefill_units else None
     rep = json.loads((a.out / "prod_repro.json").read_text()) if (a.out / "prod_repro.json").is_file() else {}
-    tested_by = a.tested_by or rep.get("run") or "not named"
-    layers = []
-    for ours in a.ours:
-        if not lifetimes(a.out, ours):
-            continue
-        ly = layer(a.out, ours, a.reference, u, pu)
-        ly["measured"] = measured(a.out, ours, a.reference)
-        ly["adjusted"] = adjusted(a.out, ours, a.reference)
-        layers.append(ly)
-    if not layers:
-        raise SystemExit(f"{a.out}: none of {', '.join(a.ours)} was served")
-    first = layers[0]
-    member = f"{a.model}-{a.card}-{first['ours']}-over-{a.stock}-{INSTRUMENT}"
-    below = measured(a.out, a.reference, a.stock)
-    why = ("no lifetime pair was priced" if not first["cost"] else
-           "the counters hold no failed rows, so only the pass's base is priced" if not first["failed_priced"] else
-           f"the job measured no {a.reference} over {a.stock} with an interval" if not (below and below.get("ci95"))
-           else None)
-    r = {"layers": layers, "point": None if why else point(first, below, tested_by, a.units.name, member),
-         **({"no_point": why} if why else {})}
+    r = price(a.out, units(a.units), tested_by=a.tested_by or rep.get("run") or "not named", units_from=a.units.name,
+              ours=a.ours, reference=a.reference, stock=a.stock, model=a.model, card=a.card,
+              pu=units(a.prefill_units) if a.prefill_units else None)
     (a.out / "priced.json").write_text(json.dumps(r, indent=1))
     print(json.dumps(r, indent=1) if a.json else text(r))
-    if a.result and r["point"]:
-        sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "harness"))
-        from verity_bench import kit
-
-        p = r["point"]
-        kit.writer(a.out).measurement(p["name"], p["value"], p["unit"], p["ci95"], inputs=p["inputs"], mark="modeled",
-                                      member=p["member"], extra={"tested_by": p["tested_by"]})
     return 0
 
 
