@@ -25,7 +25,8 @@ without one, for any free GPU.
 verity-bench plan SPEC       # expand a spec; each point's identity and its passing run, if any
 verity-bench run SPEC        # one recorded run per point without a passing run, queued for any free GPU
                              # (--direct NODE: on NODE itself, through its GPU slots, instead; --again POINT: that
-                             # point too, though a passing run stands for it; plan takes --again to show it first)
+                             # point too, though a passing run stands for it; plan takes --again to show it first;
+                             # --card INDEX --cores CPUS: a booked card and its slot's cores, with --direct)
 verity-bench check SPEC      # exit 0 only when every point has a passing run, here or on the store's remote
 verity-bench compare A B     # accept two results only when their identities agree (--allow PATH to permit one)
 verity-bench table R1 R2...  # one table from one spec's per-point results, only when their identities agree
@@ -33,7 +34,7 @@ verity-bench served-table    # every protocol's served overhead from the store: 
 verity-bench breakdown [RESULT...]  # where the bandwidth audit's time goes, by span: the store's newest passing runs, or these files
 verity-bench vllm --preset SPEC --arms A,B --out DIR   # the same measurement in this process, no point's run: under a
                                                         # research run its numbers go into the run's result (the kit's writer)
-verity-bench overhead table             # γ at a card's operating points, from runs of record (`verity bench overhead`,
+verity-bench overhead points|run|table  # the front door for γ at a card's operating points (`verity bench overhead`,
                                         # benchmarks/overhead/README.md): the PoUW harness's kernels, not served vLLM
 verity-bench prove --system S --workload W  # a proof system's prover on a workload, a block type a row, from the store's
                                             # labelled records (`verity bench prove`, benchmarks/prove/README.md)

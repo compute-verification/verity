@@ -88,7 +88,7 @@ at two windows in flight, as the Lean's `session` refuses one in flight at G > 1
 its end is complete. An append past them refuses the session as `disagreement`: the books refuse it as `coin`, and
 the Lean's session, which holds only the append coins released, otherwise.
 
-Openings are checked in the clear: zero-knowledge proof blocks are not in this harness (PROTOCOL.md §8).
+Openings are checked in the clear: zero-knowledge proof blocks are not in this harness.
 
 Its process is `verity/protocols/resource_accounting/memory/poub/verifier/poub_session/verifier_process.py`, which hands `main` what a verifier imports none of:
 the LMS verify a served or gate session's signatures are checked with, and the challenger's process `--challenger
@@ -1558,7 +1558,7 @@ class Verifier:
                 out[name] = {"capacity_bytes_per_s": r, "refused": str(e)}
                 continue
             readings[name] = g
-            out[name] = reading
+            out[name] = {**reading, "gamma_decided_by": "lean"}
         out["delta"] = {k: line.text(v) for k, v in ledger.delta_parts(record).items()}
         out["named"] = ledger.NAMED_TERMS
         out["declared"] = (ledger.Declared(len(record.windows), readings["spec"], readings["measured"],
@@ -1739,7 +1739,7 @@ def main(argv: Sequence[str] | None = None, *, figures: timing.Figures, verify: 
     a.out.mkdir(parents=True, exist_ok=True)
     if a.challenger == "gate" and a.port in challengers.GATE_PORTS:
         ap.error(f"--port {a.port} is one of the gate's session ports ({challengers.GATE_PORTS.start}.."
-                 f"{challengers.GATE_PORTS.stop - 1}), which this machine's certifier coin link binds")
+                 f"{challengers.GATE_PORTS.stop - 1}), which this machine's attester coin link binds")
     try:
         challenger = challengers.of(a.challenger, a.out / "challenger", a.challenger_key, a.challenger_params,
                                     verify=verify, served_verify=served_verify, serve=serve, ssh=a.challenger_ssh,

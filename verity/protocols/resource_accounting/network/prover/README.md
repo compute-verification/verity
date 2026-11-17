@@ -16,7 +16,7 @@ statics and tie are vLLM's compiler's (`adapters/vllm/verity_vllm/compiler`).
   - `benchmarks/network_e2e`: `window_chain`, `window_charge`;
   - `benchmarks/one_stage`: `leak_scan`, `n2_zk`, `network_attester_zk`, `scan_zk`;
   - `benchmarks/prove_path`: `leak_scan`, `n2_zk`;
-  - `benchmarks/sampling_plan`: `response_tie`;
+  - `calibration/sampling_plan`: `response_tie`;
   - `tools/verity`: `ingress_scan`;
   - `verity/protocols/resource_accounting/network/attester`: its `program/lean/scripts/window_vectors.py`,
     `window_charge`;

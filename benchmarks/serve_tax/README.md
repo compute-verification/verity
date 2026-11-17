@@ -124,6 +124,36 @@ of the corpus's. `verity bench serve_tax` is `run.sh`, here with the flags of it
 research run --on NODE --source . --cwd source -- bash benchmarks/serve_tax/run.sh --model glm53
 ~~~
 
+On Llama 3.2 1B and one H200, whose number is a point of `vllm/serving-cost-glm53` like GLM-5.3's (each point's
+`member` names its model, card and arm over its reference; the id's name is older than its other models):
+
+~~~text
+research run --on NODE --source . --cwd source -- bash benchmarks/serve_tax/run.sh --model llama32-1b --arms 'compiled compiled-again record'
+~~~
+
+The 1B's number is its `chat` and `long` loads' alone: the `prefix` load fills its whole context of 131,072 tokens,
+an engine of another limit than the two loads', so its number waits for no row (`Model.prefix_row`).
+
+`--model glm53-standin` serves GLM-5.3's recipe on one H200: the adapter's stand-in (`verity_vllm.engine.profiles.stand_in`:
+7 layers, 16 routed experts and the 8 attention heads one card holds at tensor parallel 8, with GLM-5.3's hidden size,
+vocabulary, indexer, cache layout, MTP layer and FP8 blocks), served from vLLM's random weights (`--load-format dummy`)
+with GLM-5.3's tokenizer, at the recipe's flags and context limit. `run.sh` writes its checkpoint directory under
+`/tmp` (`serve_tax.py standin`), its tokenizer files copied from `TOKENIZER_FROM`, a directory holding them (by
+default the node's GLM-5.3 checkpoint), and `GPU_LEASE_ON` and `GPU_LEASE_CORES` pick its card and cores. It is for
+optimizing the parts, not for a figure of GLM-5.3's serving cost: its runs write no measurement into `result.json`, and
+its report keeps each arm's steps and seconds a pass, the replay's verdict and, with `PRIVATE` set, the top-k's counter
+files in OUT, with its cost over stock only as a reading that every part runs on one card. What transfers from it to GLM-5.3 is per call and per step: the seconds a call of the canonical top-k's pass, of the step
+record, of keeping the ids and of the seeds, the tick's admission and the snapshot's pause, and that these parts run
+together with MTP, the FP8 cache and the prefix cache. What does not transfer: its serving time; how often
+top-k takes its slow path, since random weights' rows tie at the k-th key at their own rate, not a real model's; a step
+waiting for its slowest card, the all-reduce and the balance of tokens across experts, which only eight cards have.
+
+~~~text
+research run --on NODE --source . --cwd source --env GPU_LEASE_ON=4 --env PRIVATE=DIR -- bash benchmarks/prod_repro/run.sh \
+  --client vllm-bench --model glm53-standin --again none --arms 'prod prod-seeded prod-trace prod-record' \
+  --load agentic=4 --pass-prompts agentic=4 --lifetimes 2 --leave-out 1 --reps 2 --sampled
+~~~
+
 - **A load** (`serve_tax.LOADS`) is one of the client's datasets with its flags. The number has two, and a third,
   `prefix`, has the row under it (below). `chat` is the load
   of vLLM's standing serving tests: ShareGPT's first turns, 200 prompts, each decoding its recorded answer's length.
@@ -246,7 +276,7 @@ research run --on NODE --source . --cwd source -- bash benchmarks/serve_tax/run.
   it, and no target is made of the parts that are on. The `two-stage` arm leaves off admission on the certified
   tick and the edge snapshot, which need the corpus's client, and turns on prefix caching off, which GLM-5.3's
   target has no part for, so its cost against the model's target is not comparable. `two-stage-tick` is that line with the tick on, and no cost
-  here is of it: vLLM's own client can't drive a tick arm whose certifier the corpus's client stands in for.
+  here is of it: vLLM's own client can't drive a tick arm whose attester the corpus's client stands in for.
   `tick-certifier` is not comparable either (below). A target given with `--target` has no parts.
 - **Stock has vLLM's prefix cache on,** its default at the pin for a model that generates text, and so does
   `boundary-rows`: a request's boundary is its own prompt ids and the ids it was served, whichever KV pages its
@@ -272,9 +302,9 @@ research run --on NODE --source . --cwd source -- bash benchmarks/serve_tax/run.
   them.
 - **What it leaves out.** `serve_tax.NO_ARM` lists what a served engine of ours changes that no arm turns on; the output
   prints it under the number, which counts none of it. The arms that need the corpus's client (the tick's fed by the
-  stand-in certifier, and the restore arms' seeded sampling) aren't served by vLLM's.
+  stand-in attester, and the restore arms' seeded sampling) aren't served by vLLM's.
 - **The arm behind the network attester,** `tick-certifier`, is the tick arm with the network attester itself in front
-  (`serve_tax.CERTIFIER`), which vLLM's client drives through a shim (`cell_shim`). Two commands serve it, since the
+  (`serve_tax.ATTESTER`), which vLLM's client drives through a shim (`cell_shim`). Two commands serve it, since the
   network attester never runs on the node it certifies: `--side server` there, `--side client` on the network attester's host.
   The network attester's schedule (`serve_tax.CELLS`) paces every answer, so its verdict is `not comparable`;
   `serve_tax.py`'s docstring has the rest.
@@ -414,13 +444,13 @@ research run --on NODE --source . --cwd source --send C4.json.gz \
 `run.sh`'s header lists its parameters (the model, reps, the loads' span, the Commit period and the KV edge's window).
 `MODEL_ID=glm53` serves GLM-5.3 at TP8 on an 8-GPU node, with the GLM-5.3 TP drivers' checkpoint; `kv` there needs the
 edge in each worker process, which the plugin's model runner hook gives where vLLM loads general plugins in its workers.
-The `tick`, `tokens` and `kv` arms need `verity_vllm.pipeline.tick_plugin` and the corpus client's stand-in certifier,
+The `tick`, `tokens` and `kv` arms need `verity_vllm.pipeline.tick_plugin` and the corpus client's stand-in attester,
 and refuse a tree without them. `tick-certifier` is two jobs: the node's (`SIDE=server`, in `run.sh`'s header),
 then the network attester's host's (`serve_tax.py run --side client`), which needs no GPU. A saturated load keeps a connection open for every request queued in the server, so the
 client raises its open-file limit to the hard limit first.
 
-On one GPU, `MODEL_ID` is `moonlight` (the default), `llama8b` or `qwen3-30b`, the last two read from their pinned
-snapshots under `HF_HOME` (`serve_tax.py checkpoint --model-id ID` prints the path).
+On one GPU, `MODEL_ID` is `moonlight` (the default), `glm53-standin`, `llama8b`, `qwen3-30b` or `llama32-1b`, the last three read
+from their pinned snapshots under `HF_HOME` (`serve_tax.py checkpoint --model-id ID` prints the path).
 
 Under a deployment's traffic, the job serves the replay ladder's plan (`benchmarks/replay_ladder/prod_plan.py`: ShareGPT,
 multi-turn and 8k-32k-token prompts, half of them sampled at temperature 0.7 under the public seed rule, each stopping at

@@ -109,6 +109,8 @@ class AuditResult:
 
     @property
     def accepted(self) -> bool:
+        """Every answer correct and on time: the graded audit at `t = 0`.  Its grace of `t` late answers
+        (`Pous.SecurityProofs.BandGradedMeetsFamily`) is not implemented."""
         return not self.aborted and all(a.correct and a.on_time for a in self.answers)
 
     @property

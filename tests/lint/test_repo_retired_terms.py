@@ -69,7 +69,7 @@ SKIP = {
     "tools/move/": "the word maps name the words they retire",
     "tests/tools/check/test_move_check.py": "its toy moves rename the words the maps retire",
     "fixtures/": "replicated fixtures and their notes are data, named by what they hold",
-    "benchmarks/census/": "data only (AGENTS.md: verity never reads it)",
+    "calibration/census/": "data only (AGENTS.md: verity never reads it)",
     f"tests/lint/test_{NAME}.py": "its examples are the terms it refuses",
     "tests/test_retired_terms.py": "the prose lint that holds a few of the terms at zero names them to find them",
 }
@@ -79,12 +79,12 @@ FIXTURE_DIRS = ("fixtures", "testdata", "golden")
 HISTORY = ("CHANGELOG.md",)
 #: quoted old names the table lists alone that keep another live sense, which the lint can't tell apart
 LIVE = {
-    "session": "the table retires it by sense (a run, a release, a certifier's attachment, a challenge phase)",
+    "session": "the table retires it by sense (a run, a release, a network attester's attachment, a challenge phase)",
     "kind": "the SP1-era kind; every other kind (a Definition's, a record's, a store's) is live",
     "pin": "a digest pin (`TRUSTED.sha256`, circuit-check's pins) is live; only a pinned guarantee is retired",
     "instance": "Lean's `instance`, Python's `isinstance` and a template instance are live",
     "slack": "the table keeps its other senses, Slack among them",
-    "tap": "vLLM's capture taps are live; the certifier's are retired as \"uplink tap\" and \"the auditor's tap\"",
+    "tap": "vLLM's capture taps are live; the network attester's are retired as \"uplink tap\" and \"the auditor's tap\"",
     "remote audit": "PoUB's Lean names keep the words until their rename, and the remote configuration's audit "
                     "(`benchmarks/rho`'s `Remote`) is live; the docs' prose holds it at zero (`tests/test_retired_terms.py`)",
     "M0": "a label the code uses for other things", "M1": "a label the code uses for other things",
@@ -96,7 +96,7 @@ LIVE = {
 }
 #: words the narrower senses say carry two senses that this lint tells apart itself, so they stay enforced alone: each
 #: kept sense is in ``OTHER_SENSES`` or ``OWN_CAPS``, and the retired one counts everywhere else
-SENSED = {"cap": "SPOT's served cap and the certifier's response cap (``max_tokens_cap``) are ``CAP_SENSES``; Pearl's is retired"}
+SENSED = {"cap": "SPOT's served cap and the network attester's response cap (``max_tokens_cap``) are ``CAP_SENSES``; Pearl's is retired"}
 #: other senses of an enforced word, never counted: nvidia-smi's fields (``power.draw``, ``compute_cap``) among them, the
 #: names of PoUS's cap on an audit's duration and PoUB's lifetime cap, the stacking property's caps as its Lean names
 #: them (``Gates.Caps``, ``FoolingCap``), a kernel's bound on its launch grid (``grid_cap``), the public length ℓ a
@@ -114,7 +114,7 @@ OTHER_NAMES = (r"(?i:power[- ]laws?|laws? of large numbers|(?:Amdahl|Moore|Littl
                r"|cublasLt\w*Cap\w*|CUBLASLT_\w*CAP\w*"
                r"|(?i:(?<!\w)cap_(?:sys_ptrace|sys_admin|dac_read_search|dac_override|chown|fowner|ipc_lock)(?!\w))")
 #: other senses of "cap" that name none of Pearl's, each by its names: a request's length cap, its ``max_tokens`` (the
-#: certifier's registered response cap); SPOT's served cap S, in prose; a soft
+#: network attester's registered response cap); SPOT's served cap S, in prose; a soft
 #: cap in prose (a logit's, or a resource limit's); a cap counted in bytes, MiB, GiB or words, as its name says (a memory
 #: or buffer cap); a CUDA compute capability as the tests name one (``cap80``, ``cap90_fa2``); the served-commit
 #: profile's cap on the CTAs one launch hashes; FA3's cap on its number of splits
@@ -149,12 +149,11 @@ def _vllm(path: str) -> str:
 #: controller that lifts a request to its cap, the workload and executed prefix that declare it, and their tests, whose
 #: ``CAP`` in capitals is the same cap
 REQUEST_CAPS = tuple(_vllm(p) for p in (
-    "verity_vllm/program/lifting/continuation.py", "verity_vllm/program/lifting/lifted_compose.py",
-    "verity_vllm/program/workload.py", "verity_vllm/commit/executed_prefix.py", "verity_vllm/commit/served_record.py",
+    "verity_vllm/program/lifting/continuation.py", "verity_vllm/program/workload.py",
+    "verity_vllm/commit/executed_prefix.py", "verity_vllm/commit/served_record.py",
     "tests/program/test_continuation.py", "tests/program/test_lifted_request.py",
     "tests/program/test_lifted_request_padrev.py", "tests/program/test_lifted_dense_b1.py",
-    "tests/program/test_lifted_dense_b1_padrev.py", "tests/program/test_lifted_mixed.py",
-    "tests/program/test_lifted_workload_padrev.py", "tests/program/test_lifted_tiny.py",
+    "tests/program/test_lifted_dense_b1_padrev.py", "tests/program/test_lifted_tiny.py",
     "tests/program/test_lifted_tiny_padrev.py"))
 #: the vLLM and torch adapters' files of a logit soft cap, which name no Pearl term: the softcapped attention chain's static ``CAP``
 #: (``AttentionSoftcap_v2{...,CAP}``) and the scalar ``cap`` its rules and tests pass
@@ -223,7 +222,7 @@ OWN_NAMES = {
         (r"Period(?:Signed|Sound|Run)",
          "the attestation period of `Attest.Period`, in its guarantees' names (`PeriodSigned`, `PeriodSound`, "
          "`PeriodRun`), in their two files only: elsewhere `PeriodRun` is compose's and `PeriodSound` PoUW's",
-         ("security/Properties/Attest.lean", "security/Proofs/Properties/Pous/MemoryChallenger/Attest.lean")),
+         ("security/Properties/Attest.lean", "security/Proofs/Properties/Pous/MemoryAttester/Attest.lean")),
         (r"_PeriodAuditor",
          "the auditor of H1's challenge period in the vLLM adapter's PoUW tests: a span of time, which GLOSSARY.md's row "
          "of \"window\" calls a period, and not the stretch of time a bound is about that its row of `*Period*` retires",
@@ -253,18 +252,14 @@ OWN_NAME = {term: tuple((re.compile(pattern), files) for pattern, _, files in na
 #: refused as stale); when an owner writes a new key beside the old one, the entry's reason gets the day the old key stops
 #: being read.  A file's entry in the list falls by its held sites (``--prune``) and never rises for them.
 HELD_KEYS = {
-    "firewall": (("benchmarks/recursion_e2e/rec_profile.py",), "reads a stored recursion run, benchmarks'"),
-    "flock_firewall": (("benchmarks/recursion_e2e/rec_profile.py",), "reads a stored recursion run, benchmarks'"),
-    "flock-firewall": (("benchmarks/recursion_e2e/rec_profile.py", "benchmarks/recursion_e2e/README.md"),
-                       "reads a stored recursion run, benchmarks'"),
-    "FIREWALL-REFUSED": (("benchmarks/recursion_e2e/rec_profile.py", "benchmarks/recursion_e2e/README.md",
-                          "tests/benchmarks/recursion_e2e/test_recursion_e2e.py"),
-                         "reads a stored recursion run, benchmarks'"),
-    "t.firewall_recheck": (("benchmarks/recursion_e2e/rec_profile.py",), "reads a stored recursion run, benchmarks'"),
     "sampled-proofs:*": (("benchmarks/harness/README.md", "benchmarks/harness/specs/llama31-8b-fp8-1gpu-commit-served.toml",
                           "tests/benchmarks/harness/test_bench.py", "benchmarks/harness/verity_bench/vllm/commit_arm.py"),
                          "a stored run's arm key, vllm's"),
-    "coin_source": (("benchmarks/harness/verity_bench/vllm/runner.py", "tests/benchmarks/harness/test_bench.py"),
+    "coin_source": (("benchmarks/harness/verity_bench/vllm/runner.py", "tests/benchmarks/harness/test_bench.py",
+                     "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/__init__.py",
+                     "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/challenger.py",
+                     "verity/protocols/resource_accounting/compute/pouw/prover/serving/lead/__init__.py",
+                     "verity/protocols/resource_accounting/compute/pouw/prover/serving/pearl_c/window.py"),
                     "the PoUW commitment's key, compute-accounting's"),
 }
 #: a character of an identifier a held key stands in
@@ -984,8 +979,8 @@ def test_pearl_s_debit_cap_still_counts_against_the_real_table() -> None:
 
 def test_a_word_of_two_kept_senses_the_lint_tells_apart_still_counts_in_its_retired_one() -> None:
     """A word the narrower senses list is enforced only in the phrases that retire it, but one in ``SENSED`` stays
-    enforced alone: "cap" keeps SPOT's served cap and the certifier's response cap, by their names, and Pearl's counts."""
-    two = "\n## Narrower senses\n\n- Two words still carry two senses in the code:\n  - **Cap**: SPOT's, the certifier's.\n"
+    enforced alone: "cap" keeps SPOT's served cap and the network attester's response cap, by their names, and Pearl's counts."""
+    two = "\n## Narrower senses\n\n- Two words still carry two senses in the code:\n  - **Cap**: SPOT's, the network attester's.\n"
     assert "cap" in {t.old for t in terms_of(SENSES_EXAMPLE + two)}
     assert "draw" not in {t.old for t in terms_of(SENSES_EXAMPLE + two.replace("Cap", "Draw"))}
     assert "cap" in {t.old for t in terms()[0]}, "GLOSSARY.md's two-senses list no longer stops Pearl's cap from counting"
@@ -1137,12 +1132,6 @@ def test_the_adapter_s_row_of_record_and_h1_s_period_auditor_keep_their_words_on
     assert [w.split("'")[1] for _, w in sites(text, "verity/a.py")] == ["row of record", "row_of_record", "_PeriodAuditor"]
 
 
-RECORDED_KEYS = ('ZK_SERVER_MODE, RECORDED_MODE = "zk_server", "firewall"\n'
-                 'LOOP, RECORDED_LOOP = "lean_session_loop", "flock_firewall"\n'
-                 'LOOP_PROCESSES = ("flock-zk-server", "flock-firewall")\n'
-                 "#: a recorded run's ZK server refused as ``FIREWALL-REFUSED``\n"
-                 'STOPS = ("ZK-SERVER-REFUSED", "FIREWALL-REFUSED", "PROVER-STOPPED")\n'
-                 'RECORDED_BUCKETS = {"t.firewall_recheck": "t.zk_server_recheck"}\n')
 ARM_KEYS = ('bound_arm, _control = resolve_arms("sampled-proofs:hm96,stock-fp8")\n'
             'assert build_bound(bound_arm) == ("sampled-proofs:hm96",)\n'
             'live = _pearl_c_gate(Run(exact_y, coin_source="challenger", session=session, pass_index=0))\n')
@@ -1157,9 +1146,6 @@ def retired(text: str, path: str) -> list[tuple[int, str]]:
 def test_a_held_key_in_a_file_its_entry_doesn_t_name_still_counts() -> None:
     """A key is held only in the files its entry names: in a file beside them, and in a file another key's entry names,
     every site of it counts."""
-    recorded = [(1, "firewall"), (2, "firewall"), (3, "flock-firewall"), (4, "FIREWALL"), (5, "FIREWALL"), (6, "firewall")]
-    assert retired(RECORDED_KEYS, RECURSION + "forge_after.py") == recorded
-    assert retired(RECORDED_KEYS, HARNESS + "verity_bench/vllm/runner.py") == recorded
     assert retired(ARM_KEYS, HARNESS + "verity_bench/vllm/runner.py") == [(1, "sampled-proofs"), (2, "sampled-proofs")]
     assert retired(ARM_KEYS, HARNESS + "verity_bench/vllm/commit_arm.py") == [(3, "coin_source")]
     assert retired(ARM_KEYS, "benchmarks/one_stage/run.py") == [(1, "sampled-proofs"), (2, "sampled-proofs"),
@@ -1169,11 +1155,6 @@ def test_a_held_key_in_a_file_its_entry_doesn_t_name_still_counts() -> None:
 def test_the_word_in_prose_or_in_a_new_name_in_a_listed_file_still_counts() -> None:
     """In a file its entry names, a key is held only where it stands whole: the bare word, a plain word unquoted or quoted
     with more beside it, another spelling, and a longer name holding the key still count."""
-    recursion = ('# the firewall refused it: mode = firewall, "the firewall", FIREWALL\n'
-                 'firewall_mode, "firewall_v2", flock_firewall_loop, "FIREWALL-REFUSED-AGAIN", "t.firewall_recheck2"\n')
-    assert retired(recursion, RECURSION + "rec_profile.py") == [
-        (1, "firewall"), (1, "firewall"), (1, "firewall"), (1, "FIREWALL"),
-        (2, "firewall"), (2, "firewall"), (2, "firewall"), (2, "FIREWALL"), (2, "firewall")]
     harness = ('# the coin source, coin_source_v2, c["coin_sources"]; the sampled proofs, "sampled-proofs", sampled-proofs:\n')
     assert retired(harness, "tests/" + HARNESS + "test_bench.py") == [
         (1, "coin source"), (1, "coin_source"), (1, "coin_sources"), (1, "sampled proofs"), (1, "sampled-proofs"),
@@ -1183,12 +1164,6 @@ def test_the_word_in_prose_or_in_a_new_name_in_a_listed_file_still_counts() -> N
 def test_a_held_key_in_a_listed_file_is_not_a_site() -> None:
     """Each key where it stands whole in a file its entry names, quoted or as the identifier it is, in code, a comment or
     Markdown; a site beside it on the same line still counts."""
-    assert retired(RECORDED_KEYS, RECURSION + "rec_profile.py") == []
-    readme = ("  `FIREWALL-REFUSED`) or Lean refused it\n"
-              "  cost is read from `flock-zk-server`'s (`flock-firewall`'s in a recorded run) CPU seconds\n")
-    assert retired(readme, RECURSION + "README.md") == []
-    stop = '(d / "prove.err").write_text("FIREWALL-REFUSED R7: the witness does not open the registered row; no proof\\n")\n'
-    assert retired(stop + 'assert "FIREWALL-REFUSED" in outer["note"]\n', "tests/" + RECURSION + "test_recursion_e2e.py") == []
     assert retired(ARM_KEYS, "tests/" + HARNESS + "test_bench.py") == []
     coins = ('check.coins = ({"source": c["coin_source"]} if c.get("coin_source", "in-process") != "in-process"\n'
              "               else {}  # the firewall's coins\n")

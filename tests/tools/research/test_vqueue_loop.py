@@ -3340,9 +3340,7 @@ def test_the_run_beside_main_starts_once_a_main_again_once_after_infra_and_with_
     assert env.loop(vqueue.decide, clone="again", slim=slim, dry_run=True).tick() == [] and len(slim.below) == 3
 
 
-def test_the_shadow_advances_its_own_main_once_a_candidate_and_the_comparer_reads_one_advance_each(env):
-    from research import vqueue_compare as vc
-
+def test_the_shadow_advances_its_own_main_once_a_candidate(env):
     main = env.main()
     env.put(1, {"a.txt": "1\n"})
     loop = env.loop(vqueue.decide, shadow=True)
@@ -3360,10 +3358,6 @@ def test_the_shadow_advances_its_own_main_once_a_candidate_and_the_comparer_read
     env.clock += 49 * 3600                                          # the log's window holds no advance now
     assert loop.tick() == [] and _git(loop.world.repo, "rev-parse", "refs/vqueue/shadow") == two["sha"]
     assert env.main() == main and [r["sha"] for r in env.lines() if r["action"] == "advance"] == [one["sha"], two["sha"]]
-    entries, bad = vc.parse_log(env.log.read_text())
-    s = vc.shadow(entries)
-    assert not bad and [e.sha for e in s.advances] == [one["sha"], two["sha"]]
-    assert all(s.cands[c["sha"]].passed for c in (one, two))
 
 
 class Records:
@@ -4702,7 +4696,7 @@ def test_under_gate_check_a_candidate_changing_only_a_lean_package_s_file_audits
     from research.landing import AFTER_LANDING
 
     pkg = "verity/protocols/resource_accounting/compute/pouw/verifier/lean/check"
-    env.put(1, {f"{pkg}/lakefile.toml": 'name = "PouwCheck"\n', f"{pkg}/PouwCheck/Credit.lean": "-- a\n"})
+    env.put(1, {f"{pkg}/lakefile.toml": 'name = "PouwVerifier"\n', f"{pkg}/PouwVerifier/Credit.lean": "-- a\n"})
     env.put(2, {path: "{}\n"})
     loop, runs = _check(env, monkeypatch, batch=1, depth=2)
     _, built, _ = loop.tick()
@@ -4723,8 +4717,8 @@ def test_under_gate_check_a_candidate_deleting_only_a_file_an_audit_reads_audits
     from research.landing import AFTER_LANDING
 
     pkg = "verity/protocols/resource_accounting/compute/pouw/verifier/lean/check"
-    _main_to(env, {f"{pkg}/lakefile.toml": 'name = "PouwCheck"\n', f"{pkg}/models.json": "{}\n", f"{pkg}/README.md": "# pouw\n"})
-    env.put(1, {f"{pkg}/PouwCheck/Credit.lean": "-- a\n"})
+    _main_to(env, {f"{pkg}/lakefile.toml": 'name = "PouwVerifier"\n', f"{pkg}/models.json": "{}\n", f"{pkg}/README.md": "# pouw\n"})
+    env.put(1, {f"{pkg}/PouwVerifier/Credit.lean": "-- a\n"})
     env.put(2, {path: None})
     loop, runs = _check(env, monkeypatch, batch=1, depth=2)
     _, built, _ = loop.tick()

@@ -3,7 +3,6 @@ packages by path, and they require only each other), and no escape hatch that wo
 definitions a proof is about (`native_decide`, `implemented_by`, `extern`, `unsafe`)."""
 from __future__ import annotations
 
-import fcntl
 import hashlib
 import importlib.util
 import json
@@ -11,7 +10,6 @@ import random
 import re
 import shutil
 import subprocess
-import tempfile
 import tomllib
 from pathlib import Path
 
@@ -35,13 +33,21 @@ def lake_build(cwd: Path, *targets: str) -> None:
         pytest.fail(f"`lake build {' '.join(targets)}` in {cwd} exited {p.returncode}:\n{tail}", pytrace=False)
 
 
-def build_proofs_verifier() -> None:
-    """`lake build Proofs.Flock.Verifier` in `security_proofs`, one process at a time: on a fresh tree Lake first clones that
-    package's dependencies, and two Lake processes cloning them at once (two xdist workers) both fail."""
-    key = hashlib.sha256(str(PROOFS).encode()).hexdigest()[:16]
-    with open(Path(tempfile.gettempdir()) / f"verity-security-proofs-{key}.lock", "w") as lock:
-        fcntl.flock(lock, fcntl.LOCK_EX)
-        lake_build(PROOFS, "Proofs.Flock.Verifier")
+def build_proofs_verifier(pkg: Path) -> Path:
+    """`Proofs.Flock.Verifier` built in ``pkg``, a package that requires only the verifier by path, with `security_proofs`'
+    sources and options: that module imports nothing else, and loading `security_proofs` itself fetches its ArkLib and Mathlib
+    over the network."""
+    def flat(d: dict, pre: str = "") -> list[str]:
+        return [x for k, v in d.items() for x in (flat(v, f"{pre}{k}.") if isinstance(v, dict) else [f"{pre}{k} = {json.dumps(v)}"])]
+    options = flat(tomllib.loads((PROOFS / "lakefile.toml").read_text())["leanOptions"])
+    pkg.mkdir(parents=True, exist_ok=True)
+    (pkg / "lakefile.toml").write_text("\n".join([
+        'name = "proofs_flock_verifier"', f"srcDir = {json.dumps(str(PROOFS.parent))}", "", "[leanOptions]", *options, "",
+        "[[require]]", 'name = "flock_verifier"', f"path = {json.dumps(str(LEAN))}", "",
+        "[[lean_lib]]", 'name = "Proofs"', 'roots = ["Proofs.Flock.Verifier"]', ""]))
+    shutil.copy(PROOFS / "lean-toolchain", pkg)
+    lake_build(pkg, "Proofs.Flock.Verifier")
+    return pkg
 
 
 def sources():
@@ -863,7 +869,7 @@ def test_merkle_collision_is_not_met_by_a_split_string(tmp_path):
     """`MerkleScheme.HasCollision` is a collision of the hash, not of how its input is split: one byte string split two ways
     (`[0] ‖ []` against `[] ‖ [0]`) gives one node, and must not count, since the children are not of the digest's width
     (a red-team review's case). The same witness for `Sha256.Collision` needs two different inputs, which it does not have."""
-    build_proofs_verifier()
+    pkg = build_proofs_verifier(tmp_path / "pkg")
     for goal, witness in [
         ('(MerkleScheme.sha256 "flock-leaf/sha256-unsalted").HasCollision',
          "⟨.node (ByteArray.mk #[0]) ByteArray.empty ByteArray.empty (ByteArray.mk #[0]), by simp only [MerklePair.Collides]; "
@@ -874,7 +880,7 @@ def test_merkle_collision_is_not_met_by_a_split_string(tmp_path):
     ]:
         f = tmp_path / "Split.lean"
         f.write_text(f"import Proofs.Flock.Verifier\nopen Flock\nexample : {goal} :=\n  {witness}\n")
-        p = subprocess.run(["lake", "env", "lean", str(f)], cwd=PROOFS, capture_output=True, text=True)
+        p = subprocess.run(["lake", "env", "lean", str(f)], cwd=pkg, capture_output=True, text=True)
         assert p.returncode != 0 and "decide" in p.stdout + p.stderr, (goal, p.stdout[-800:])
 
 

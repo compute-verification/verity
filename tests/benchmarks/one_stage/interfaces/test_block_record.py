@@ -20,7 +20,7 @@ from verity.protocols.resource_accounting.memory.poub.verifier import ledger
 FIXTURES = Path(__file__).parent / "fixtures"
 #: the census's deployments, which the block record's reference deployment is held to here (the record itself is public
 #: and the census is the team's, so the record carries the entry and doesn't read the file)
-CENSUS = Path(__file__).resolve().parents[4] / "benchmarks" / "census" / "deployments.json"
+CENSUS = Path(__file__).resolve().parents[4] / "calibration" / "census" / "deployments.json"
 SCHEMA = json.loads((Path(R.__file__).parent / "schemas" / "block-record.v2.schema.json").read_text())
 NAMES = ("block-record-r2-period0", "block-record-r1-window10", "block-record-b71a-w30")
 ONSITE = {"protocol": "verity/onsite/v0", "verdict": "accept", "reason": None, "commitment": "ab" * 64, "public": None}
@@ -102,6 +102,20 @@ def test_a_stratified_sample_is_bounded_by_its_strata_and_not_as_a_uniform_one()
     row["answer"]["profile"] = {**profile, "levels": [{**profile["levels"][-1], "size": 165}]}
     with pytest.raises(ValueError, match="the strata hold 164 units and sample 162 of them, not the 162 of 165"):
         R.from_period(report, steps=(4, 6), deployment=R.REFERENCE, extra={"wipe": wipe})
+
+
+@pytest.mark.parametrize("value, members, clean", [
+    (None, None, False), (None, {"sampled": 2, "registered": 2}, False), (1, {"sampled": 1, "registered": 2}, False),
+    (None, {"sampled": 1, "registered": 2}, True),
+])
+def test_an_integrity_bound_is_null_exactly_when_its_sample_missed_a_member(value, members, clean) -> None:
+    rec = _load("block-record-r2-period0")
+    lg = rec[R.BY_SUBPROTOCOL]["integrity"]
+    lg["quantity"]["value"] = value
+    if members is not None:
+        lg["quantity"] |= {"members": members, "by_member": [{"member": "m0", "of": 1, R.SAMPLED: 1}]}
+    lg["at"] = R.at_deltas("integrity", lg["quantity"], Fraction(lg["error"]))
+    assert ("subprotocol:integrity" not in R.check(rec)) is clean
 
 
 def test_a_flipped_subprotocol_verdict_is_refused() -> None:
@@ -235,7 +249,7 @@ def test_remote_composes_spot_and_pouw_alone_its_other_subprotocols_dropped() ->
     assert (c["verdict"], c["answer"], c["product"], c["missing"], c["dropped"]) == (
         "undecided", None, "remote", [], ["bandwidth", "certifier", "pous", "wipe"])
     assert c["legs"] == {"integrity": "accept", "pouw": "accept"} and sorted(c["joint_horizon"]["terms"]) == ["integrity", "pouw"]
-    remote = {**ONSITE, "protocol": "verity/remote/v0"}
+    remote = {**ONSITE, "protocol": "verity/remote/v1"}
     decided = R.from_period(report, steps=(4, 6), deployment=R.REFERENCE, answer=remote, product="remote")
     jsonschema.Draft202012Validator(SCHEMA).validate(decided)
     assert R.check(decided) == {} and decided["composed"]["verdict"] == "accept"
@@ -246,6 +260,9 @@ def test_remote_composes_spot_and_pouw_alone_its_other_subprotocols_dropped() ->
         "reject", "verity/remote/v1")
     with pytest.raises(ValueError, match="not an answer of the remote check"):
         R.from_period(report, steps=(4, 6), deployment=R.REFERENCE, answer=ONSITE, product="remote")
+    with pytest.raises(ValueError, match="not an answer of the remote check"):
+        R.from_period(report, steps=(4, 6), deployment=R.REFERENCE, answer={**ONSITE, "protocol": "verity/remote/v0"},
+                      product="remote")
     with pytest.raises(ValueError, match="not an answer of the onsite check"):
         R.from_period(report, steps=(4, 6), deployment=R.REFERENCE, answer=remote)
     with pytest.raises(ValueError, match="not an answer of the onsite check"):

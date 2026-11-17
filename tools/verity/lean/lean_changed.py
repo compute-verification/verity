@@ -102,7 +102,7 @@ status, read from its own report and its provers' (`own_reports`), and its own `
 directory. Of the facts documents, only PKG's own stays beside its reports (`check_argv`: `check.py --facts named`, which
 `trusted_size.py --run` reads); its provers' and the requirers' are not kept. A change to what another package's pinned
 guarantees read
-(`security/Properties`' when `security` changes) fails here, not at the Lean check of `next`. With `--update`, a requirer whose every
+(`security/Properties`' when `security` changes) fails here, not at a candidate's Lean check. With `--update`, a requirer whose every
 failure is a record difference (`settles`) is audited again with `--update`, in a check.py of its own, so one run
 regenerates every lock the change moved; one failing for any other reason fails. That check.py runs once more after a
 sampled recompile differs only when the one the requirer shared did not, and reads the artifact cache only then. With `--moved` too, each requirer's first
@@ -149,7 +149,7 @@ result the store holds (`stored`, by `research data select`: the store's index w
 otherwise) lists its key under `passes` (`kept`; the record names that run and commit, `reused_from`), or
 when HEAD merges a commit of `main` into one whose records passed, possibly through further such merges, and each merge took
 every Lean input of the package whole from main's side, its locks aside, which must be `merge.py`'s merge of the two sides
-(`merged`). That lock is a candidate, never a verdict: the Lean check of `next` rebuilds every record and regenerates one
+(`merged`). That lock is a candidate, never a verdict: a candidate's Lean check rebuilds every record and regenerates one
 that differs. `--rebuild`, and `--moved`, run every package.
 
 `--inputs-key` prints the key of each package at a commit from git's objects alone (`keys_at`), so a caller with only a
@@ -158,7 +158,7 @@ clone, its worktree not checked out, can ask the store for a pass on it before a
 Its result is of kind `FAST_KIND`, never a Lean verdict: no kernel replay and no tests. The kind is written into the
 `audit.json` and each package's `report.json` it leaves (`--out`, else the run's `lean-audit/`, else a temporary directory) and,
 in a recorded run, into its `result.json`, the Attempt's result. `check` fails its lean-audit step on a report of that kind or
-one without the replay (`check.lean_fast`), and `research merge` refuses an attempt whose result is of that kind
+one without the replay (`check.lean_fast`), and `research.merge` refuses an attempt whose result is of that kind
 (`research.merge.REFUSED_KINDS`), whatever `--tool` recorded it. The compiled modules it leaves are not a verdict either: in a
 run they go into its `lean-audit/` in bundles (`lean_audit.LakeArtifacts.bundle_into`), and a node that restores one still
 replays every declaration through the kernel. `research run` sends a records run the URLs of the newest such bundles and of
@@ -208,7 +208,7 @@ SAMPLED_ONLY = ("sampled", "proved_in.unpassed", "proved_in.sampled", "requires.
 SIBLINGS = _module(ROOT / "tools" / "verity" / "lean" / "siblings.py", "lean_siblings_for_lean_changed")
 PROBE = _module(ROOT / "tools" / "verity" / "lean" / "axiom_probe.py", "axiom_probe_for_lean_changed")
 #: the audit's build sandbox, as `tools/verity/lean/check.py` runs it: writable only in the `.lake` directories it is given
-UNSHARE = ["unshare", "--user", "--map-root-user", "--mount", "--net", "--pid", "--fork", "--kill-child"]
+UNSHARE = ["unshare", "--user", "--map-root-user", "--mount", "--net", "--ipc", "--pid", "--fork", "--kill-child"]
 SANDBOX = ROOT / "tools" / "verity" / "lean" / "sandbox.sh"
 #: Lake's two lines for a write the sandbox's read-only mount refused, the second naming the path
 REFUSED_WRITE = re.compile(r"^error: read-only file system \(error code: \d+\)\n[ \t]+file: (\S.*?)[ \t]*$", re.M)
@@ -235,9 +235,11 @@ def in_tree(pkg: str, entry: str, file: str) -> str:
     """``entry`` of ``pkg``'s ``file`` (a path dependency's `dir`, a `proved_in` package) as a repository path: a package
     whose build the audit of ``pkg`` writes, so one outside the tree is refused (`check.OutsideTree`)."""
     p = posixpath.normpath(posixpath.join(pkg, entry))
-    if p == ".." or p.startswith(("../", "/")):
-        raise AUDIT.OutsideTree(f"{pkg}/{file}: {entry!r} names {p}, outside the tree, whose .lake a build of {pkg} would "
-                                f"write: a package it requires by path or names under proved_in must lie in the tree")
+    real = (ROOT / p).resolve()
+    if p == ".." or p.startswith(("../", "/")) or not real.is_relative_to(ROOT.resolve()):
+        raise AUDIT.OutsideTree(f"{pkg}/{file}: {entry!r} names {p!r}, which resolves to {str(real)!r}, outside the tree, "
+                                f"whose .lake a build of {pkg} would write: a package it requires by path or names under "
+                                f"proved_in must lie in the tree")
     return p
 
 
@@ -322,24 +324,30 @@ def sync(pkgs: list[str], files: list[str], tree: Path) -> int:
     """Make ``tree``'s copy of ``pkgs`` this checkout's tracked files, leaving each `.lake`; the number of files written.
     The product of a source it unlinks, or rewrites, stays: a tree serves several branches, and Lake replays the product
     when one of them brings that source back as it was built from. Until then neither Lake nor a sibling check's stub
-    loads it: each reads in the module's trace which source it was built from (`siblings.py`)."""
+    loads it: each reads in the module's trace which source it was built from (`siblings.py`). The tree holds no links: a
+    tracked one is refused (`check.OutsideTree`), and one ``tree`` keeps in a package or above it is removed, since a
+    file written through it, or its `.lake` emptied (`link`, `lake_dirs`), would land outside the tree."""
     tracked, n = set(files), 0
     for p in pkgs:
+        for up in [*reversed(Path(p).parents[:-1]), Path(p)]:
+            if (tree / up).is_symlink():
+                os.unlink(tree / up)
         for d, dirs, names in os.walk(tree / p):
+            for x in [x for x in dirs if os.path.islink(os.path.join(d, x))]:
+                os.unlink(os.path.join(d, x))
+                dirs.remove(x)
             dirs[:] = [x for x in dirs if x != ".lake"]
             for f in names:
                 rel = os.path.relpath(os.path.join(d, f), tree)
-                if rel not in tracked:
+                if rel not in tracked or os.path.islink(tree / rel):
                     os.unlink(tree / rel)
         for f in LA.own_files(p, files):
             src, dst = ROOT / f, tree / f
             if src.is_symlink():
-                if dst.is_symlink() and os.readlink(dst) == os.readlink(src):
-                    continue
-                dst.unlink(missing_ok=True)
-                dst.parent.mkdir(parents=True, exist_ok=True)
-                dst.symlink_to(os.readlink(src))
-            elif src.is_file():
+                raise AUDIT.OutsideTree(f"{f!r} is a symbolic link (to {os.readlink(src)!r}), which the slot tree would "
+                                        f"keep and the run then write through (`link`, `lake_dirs`): the tree holds no "
+                                        f"links, so replace it with the file or directory it points to")
+            if src.is_file():
                 data = src.read_bytes()
                 if dst.is_file() and not dst.is_symlink() and dst.read_bytes() == data:
                     continue
@@ -1150,7 +1158,7 @@ def merged(pkg: str, files: list[str]) -> str | None:
     """Why this checkout's records of ``pkg`` need no run although its inputs are new, or None: HEAD merges a commit of `main`
     into a commit whose records passed (`kept`), possibly through further such merges, and each merge takes every Lean input
     of ``pkg`` from one side whole, its locks aside, which are `merge.py`'s merge of the two sides. The lock is then a candidate,
-    never a verdict: the Lean check of `next` rebuilds every record and regenerates one that differs."""
+    never a verdict: a candidate's Lean check rebuilds every record and regenerates one that differs."""
     prefixes = sorted({*closure(pkg), LA.LEAN_TOOL.rstrip("/"), AUDIT.FIXTURES.relative_to(AUDIT.ROOT).as_posix(), *tool_inputs(files)})
     if git("status", "--porcelain", "--untracked-files=no", "--", *prefixes) != "":
         return None
@@ -1189,7 +1197,7 @@ def merged(pkg: str, files: list[str]) -> str | None:
         found = kept(pkg, fb, blob_reader({f: hb[f] for f in closure_inputs(pkg, fb) if f in hb}))
         if hit := found and found[0]:
             return (f"HEAD merges main's {', '.join(took)} into {b[:12]}, where {hit}; every Lean input it changed is main's "
-                    f"and its lock merge.py's merge: a candidate, which the Lean check of `next` rebuilds and compares (a record "
+                    f"and its lock merge.py's merge: a candidate, which a candidate's Lean check rebuilds and compares (a record "
                     f"that differs is regenerated there)")
         c = b
     return None
@@ -1252,7 +1260,7 @@ def write_result(run_dir: Path, run_id: str, pkg: str, outcome: str, rc: int, ou
                  records: dict[str, dict] | None = None, passes: dict[str, str] | None = None,
                  allow: list[str] | None = None, stale: list[str] | None = None,
                  mismatched: dict[str, str] | None = None) -> None:
-    """A recorded run's `result.json`, of kind ``FAST_KIND``: what `research merge` and `research queue`'s records gate read
+    """A recorded run's `result.json`, of kind ``FAST_KIND``: what `research.merge` and `research queue`'s records gate read
     of the Attempt. ``outcome`` is one of `OUTCOMES`, and its `validation.status` is `passed` exactly when it is `PASS` or
     `REGENERATED`; ``records`` is each package's (`verdicts`), and ``passes`` {inputs key: package} each key a package's
     records passed on in this run (`passed`), which the store indexes as `passes.<key>` (`stored`). ``path``: `slot` (a
@@ -1580,7 +1588,7 @@ def conclude(pkg: str, records: dict[str, dict], rc: int, out: Path, update: boo
         outcome = max(outcome, FAILED, key=OUTCOMES.index)
     if outcome == ALLOWED:
         log(f"lean-records: every failure left is one --allow named, each still in its package's report: exit {ALLOWED_RC}, "
-            f"which is no pass; check, research merge and the records gate take nothing from this run for "
+            f"which is no pass; check and the merge gate take nothing from this run for "
             f"{', '.join(q for q, r in records.items() if r['outcome'] == ALLOWED)}")
     if mismatched:
         log(f"lean-records: a sampled recompile caught {len(mismatched)} module(s) whose restored or kept outputs are not "
@@ -1728,7 +1736,7 @@ def audit_records(name: str, deps: Path, tree: Path | None = None, update: bool 
                 put_built(artifacts, LA.built(all_out), since, tree, log, f"lean-records: {who}")
                 log(f"lean-records: {who}: check.py exit {all_got} in {time.monotonic() - t0:.0f} s on {tree} ({n} files "
                     f"changed there{', audited twice' if redone else ''}), without the kernel replay or the tests: a "
-                    f"{FAST_KIND} result, which check and research merge refuse; reports in {all_out}")
+                    f"{FAST_KIND} result, which check and the merge gate refuse; reports in {all_out}")
                 own = own_reports(batch, pkg, out, tree, all_got, log) if len(batch) > 1 else {batch[0]: all_got}
                 for p in batch:
                     mine_out, up, got = reports(out, pkg, p), first, own[p]
@@ -1819,7 +1827,7 @@ def dev_records(pkg: str, todo: list[str], update: bool, moved: Path | None, out
         all_got = subprocess.run(check_argv([ROOT / p for p in batch], all_out, first, moved, pkg in batch, dev=True,
                                             facts_cache=facts_dir()), cwd=ROOT).returncode
         log(f"lean-records: {who}: check.py --dev-cache exit {all_got} in {time.monotonic() - t0:.0f} s on {ROOT}, without the "
-            f"kernel replay or the tests: a {FAST_KIND} result, which check and research merge refuse; reports in {all_out}")
+            f"kernel replay or the tests: a {FAST_KIND} result, which check and the merge gate refuse; reports in {all_out}")
         own = own_reports(batch, pkg, out, ROOT, all_got, log) if len(batch) > 1 else {batch[0]: all_got}
         for p in batch:
             mine_out, up, got = reports(out, pkg, p), first, own[p]

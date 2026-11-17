@@ -17,7 +17,7 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
 # test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
-untraced = ["test_bench.py", "test_bench_engines.py", "test_bench_results.py",
+untraced = ["test_bench.py", "test_booked_card.py", "test_bench_engines.py", "test_bench_results.py",
             "test_bench_resume.py", "test_bench_served.py", "test_env.py",
             "test_spot_status.py", "test_steady_launch.py", "test_steady_node.py",
             "test_steady_node_kept.py", "test_steady_node_refusals.py", "test_steady_point.py",
@@ -46,12 +46,15 @@ inputs = [
     "benchmarks/pouw/pearl_c_vllm/served_passes.py",
     "benchmarks/pouw/settings.py",
     "benchmarks/harness/README.md",
+    # the served table's metrics are its runner's, which a test runs
+    "benchmarks/harness/served_overhead.py",
     "benchmarks/served_commit/arm.py",
     "benchmarks/served_commit/prof_arm.py",
     "benchmarks/served_commit/tp_decode.py",
     "benchmarks/harness/specs",
     "infra/cluster/kinds/benchmarks.toml",
     "adapters/vllm/verity_vllm/engine/hooks.py",
+    "adapters/vllm/verity_vllm/engine/profiles/hf_configs/LLAMA32_1B.config.json",
     "adapters/vllm/verity_vllm/protocols/__init__.py",
     "verity/protocols/resource_accounting/compute/pouw/prover/serving/credit_gate.py",
     "adapters/vllm/verity_vllm/protocols/interface.py",
@@ -104,13 +107,13 @@ inputs = [
     "tools/research/src/research/pods/nebius/slot_only.py",
     # the overhead table scales γ by the census's datacenter, world and datasheet rates and the slowdown calculator's FLOP-to-gates conversion,
     # and `verity bench overhead` is the door's runner, which a test runs
-    "benchmarks/census/deployments.json",
-    "benchmarks/census/adversary.json",
-    "benchmarks/census/hardware.json",
+    "calibration/census/deployments.json",
+    "calibration/census/adversary.json",
+    "calibration/census/hardware.json",
     "benchmarks/slowdown/data/hardware.toml",
     "benchmarks/overhead/run.py",
     # a card the door measures on reads its SMs and L2 from its card file through verity.device
-    "hardware/cards",
+    "calibration/hardware/cards",
           "adapters/vllm/verity_vllm/__init__.py", "adapters/vllm/verity_vllm/engine/__init__.py", "tools/research/src/research/__init__.py", "tools/research/src/research/store/__init__.py",
     # the proof-system table prices serving at the reference fleet's assumed serving MFU, and `verity bench prove` is the
     # door's runner, which a test runs
