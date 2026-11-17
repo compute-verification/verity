@@ -149,7 +149,7 @@ def test_the_pous_piece_runs_first_and_the_bandwidth_piece_collects_what_its_ses
     piece's directory is there when ``collect`` reads it, and the record reads it as the bandwidth audit's."""
     monkeypatch.chdir(ROOT)
     serve, held = _serve_dir(tmp_path / "serve"), _held(tmp_path, 0)
-    env = dict(os.environ) | {"POUS_CMD": f'mkdir -p "$3/../bandwidth" && cp {held}/*.json "$3/../bandwidth/"',
+    env = dict(os.environ) | {"POUS_CMD": f'mkdir -p "$3/../../calibration/bandwidth" && cp {held}/*.json "$3/../../calibration/bandwidth/"',
                               "BANDWIDTH_CMD": COLLECT.replace("python", sys.executable, 1)}
     got = S.pieces(serve, 0, tmp_path / "pieces", env=env)
     assert got["bandwidth"] == {"verdict": "accept", "rc": 0}

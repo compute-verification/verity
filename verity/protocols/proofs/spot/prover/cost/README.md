@@ -1,7 +1,7 @@
 # prover/cost
 
 SPOT's cost model for one served workload under Flock: each file plans a workload's sample with the planner beside
-it (`../optimize.py`, `../candidates.py`, `../costfit.py`), from the measured inputs under `benchmarks/sampling_plan/`
+it (`../optimize.py`, `../candidates.py`, `../costfit.py`), from the measured inputs under `calibration/sampling_plan/`
 (`inputs.json`, `glm53_blocks.json`, `served_window_inputs.json`, which `inputs.py` loads, `glm53.py` and
 `served_window.py` read), each with its source and status, measured or
 assumed. `benchmarks/prove_path/`'s `window_cost.py` and `class_rows.py` price the class-of-record window's commit.
@@ -63,7 +63,7 @@ their floor.
   under a code-based commitment at each rate ρ (codeword columns hashed, 1/ρ the bytes, and no row hashed in circuit),
   each total with the replay of the requests the sample meets, each re-run from its prompt at the stock step's share;
   then the chunk family's optimum against √(wβhC/(oΛ)). A rung fits when Flock's block holds each of its proof blocks (`inputs.cap`). Its
-  inputs, each with its status and source, are `benchmarks/sampling_plan/served_window_inputs.json`; it writes `served_window.json` and
+  inputs, each with its status and source, are `calibration/sampling_plan/served_window_inputs.json`; it writes `served_window.json` and
   `served_window.md`.
 
 ```text
@@ -74,7 +74,7 @@ uv run python verity/protocols/proofs/spot/prover/cost/h200.py --out DIR [--shar
 ```
 
 - `glm53.py`: GLM-5.3 as served (vLLM, H200, TP8, FP8) as the planner's candidates, from its proof-block census
-  (`benchmarks/sampling_plan/glm53_blocks.json`, `benchmarks/one_stage/block_census.py`'s card over the Commit Build it names, the census in the
+  (`calibration/sampling_plan/glm53_blocks.json`, `benchmarks/one_stage/block_census.py`'s card over the Commit Build it names, the census in the
   store): each proof-block Definition one candidate, its proof blocks one request's count over every rank, its work its
   estimated ANDs, its outputs committed and its opened rows' bytes; the gaps, rows no cut fits, are listed by row family
   and are no candidate. It prints the proof blocks, output bits, ANDs, served MACs and opened bytes per prefill token,

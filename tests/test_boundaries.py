@@ -160,7 +160,7 @@ BENCHMARKS_IMPORTERS = {
     "tests/verity/protocols/resource_accounting/compute/pouw/verifier/lean/window/test_known_rows.py": "proofs: H1's known rows "
                                                                        "(`benchmarks/pouw/h1_lanes/leaf.py`)",
     "tests/verity/circuits/ops/test_tc_probe_families.py": "circuits: the tensor-core probe's families "
-                                                              "(`benchmarks/tc_probe`)",
+                                                              "(`calibration/tc_probe`)",
 }
 #: circuit-check's own code, a developer tool of ``verity``: it imports ``verity`` and itself, and no other distribution of
 #: the workspace.  What a check needs of one, that distribution hands it in a sidecar it owns (`circuit_check.sidecars`).
@@ -838,7 +838,7 @@ def test_a_benchmarks_import_is_found() -> None:
     doesn't import its module, and a standard-library function named like a loader (``subprocess.run``) are not.  A loader
     called on a local module named like a standard-library one (``from x import tool as platform``) is found."""
     texts = {
-        "x/names.py": ("import verity_bench.vllm\nfrom benchmarks.tc_probe import tool\nimport importlib\n"
+        "x/names.py": ("import verity_bench.vllm\nfrom calibration.tc_probe import tool\nimport importlib\n"
                        "importlib.import_module('datacenter.graph')\nTOOL = 'benchmarks.commitments.tool:COMMIT_COST'\n"),
         "x/syspath.py": ("import sys\nfrom pathlib import Path\nPPL = Path(__file__).parents[2] / 'benchmarks' / 'ppl'\n"
                          "sys.path.insert(0, str(PPL))\nsys.path[:0] = ['../../benchmarks/census']\n"),
@@ -860,7 +860,7 @@ def test_a_benchmarks_import_is_found() -> None:
     }
     found = _benchmarks_importers(texts, {"benchmarks", "verity_bench", "datacenter"})
     assert found == {
-        "x/names.py": ["1: verity_bench.vllm", "2: benchmarks.tc_probe", "4: datacenter.graph", "5: benchmarks.commitments.tool"],
+        "x/names.py": ["1: verity_bench.vllm", "2: calibration.tc_probe", "4: datacenter.graph", "5: benchmarks.commitments.tool"],
         "x/syspath.py": ["4: sys.path.insert(0, str(PPL))", "5: sys.path[:0] = ['../../benchmarks/census']"],
         "x/loader.py": ["6: importlib.util.spec_from_file_location(named(name), directory / f'{name}.py')"],
         "x/caller.py": ["2: loader.load('paged', config.SESSION.parent / 'vllm_encoded')"],

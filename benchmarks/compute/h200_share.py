@@ -9,10 +9,10 @@ The number, at each reading r of `READINGS` (the card's `clock.tensor` and `cloc
 each the card file's value):
 
     value(r) = rate / ceiling(r) * share
-    rate       an honest H200's e4m3 MACs a second: `benchmarks/tensor_duty`'s `--arms fp32-beside` arm A (the e4m3
+    rate       an honest H200's e4m3 MACs a second: `calibration/tensor_duty`'s `--arms fp32-beside` arm A (the e4m3
                wgmma alone) on uniform operands at the driver's default clocks, its MACs over the host's interval
                around the kernel, read from that run's `out/beside.jsonl` (`--duty RUN`)
-    ceiling(r) the card's peak e4m3 MACs a second at reading r (`verity.device.rate` on `hardware/cards/` `CARD`)
+    ceiling(r) the card's peak e4m3 MACs a second at reading r (`verity.device.rate` on `calibration/hardware/cards/` `CARD`)
     share      `compute-accounting/verified-compute-share`: the MACs the Pearl+ verifier credits over the MACs the
                served model computes, on a served run of record (`run.py --from RUN`, which refuses an answer that
                isn't an accept)
@@ -66,7 +66,7 @@ def honest_rate(points: list[dict]) -> Fraction:
     honest = [p for p in points if (p.get("arm"), p.get("class"), p.get("clock", CLOCK)) == (ARM, CLASS, CLOCK)]
     if not honest:
         raise compute.Unreadable(f"the duty run holds no arm {ARM} point on {CLASS} operands at the {CLOCK} clocks: "
-                                 f"run benchmarks/tensor_duty/run.sh --arms fp32-beside")
+                                 f"run calibration/tensor_duty/run.sh --arms fp32-beside")
     rates = []
     for p in honest:
         span = Fraction(str(p["host_t1"])) - Fraction(str(p["host_t0"]))
@@ -130,7 +130,7 @@ def main(argv: list[str] | None = None, *,
     ap.add_argument("--from", dest="run", metavar="RUN", required=True,
                     help="a served run of record: its verified compute share read from its record (run.py --from)")
     ap.add_argument("--duty", metavar="RUN", required=True,
-                    help="a benchmarks/tensor_duty --arms fp32-beside run on an H200: its honest arm A rate")
+                    help="a calibration/tensor_duty --arms fp32-beside run on an H200: its honest arm A rate")
     a = ap.parse_args(argv)
     try:
         store = store_of()

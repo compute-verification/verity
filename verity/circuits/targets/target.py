@@ -220,7 +220,7 @@ class Target:
     anchor_device: str
     status: Status = "frozen"
     instruction: str | None = None
-    #: The ``trust-dossier/v1`` artifact id whose computed trust level this target cites (``benchmarks/tc_probe/trust.py``),
+    #: The ``trust-dossier/v1`` artifact id whose computed trust level this target cites (``calibration/tc_probe/trust.py``),
     #: from :data:`EVIDENCE_IDS`.
     dossier: str | None = None
 

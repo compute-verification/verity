@@ -90,7 +90,7 @@ untraced = [
 # tests/protocols/test_pous_option.py runs the memory challenger, which reads the configuration hashes the verity command
 # commits (tools/verity/cli/verity_cli/configurations.toml).
 inputs_only = true
-inputs = ["adapters/vllm", "verity", "adapters/vllm/verity_vllm/definitions", "adapters/torch/verity_torch", "hardware/cards", "verity/README.md",
+inputs = ["adapters/vllm", "verity", "adapters/vllm/verity_vllm/definitions", "adapters/torch/verity_torch", "calibration/hardware/cards", "verity/README.md",
           "tools/config/verity_config", "artifacts.json", "adapters/vllm/tools/served_run/workloads/SHA256SUMS",
           ".gitignore",
           "verity/protocols/proofs/spot/verifier/lean/lakefile.toml", "verity/protocols/resource_accounting/compute/pouw/verifier/lean/check/lakefile.toml",

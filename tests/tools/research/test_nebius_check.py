@@ -15,8 +15,8 @@ _spec.loader.exec_module(C)
 
 
 def test_the_checks_figures_are_the_node_files_and_its_cards():
-    node = tomllib.loads((REPO / "hardware/nodes" / f"{C.NODE}.toml").read_text())
-    card = tomllib.loads((REPO / "hardware/cards" / f"{node['device']['sku']}.toml").read_text())
+    node = tomllib.loads((REPO / "calibration/hardware/nodes" / f"{C.NODE}.toml").read_text())
+    card = tomllib.loads((REPO / "calibration/hardware/cards" / f"{node['device']['sku']}.toml").read_text())
     assert C.HARDWARE == REPO / "hardware"
     assert C.WANT["gpus"] == node["device"]["count"]["value"]
     assert C.WANT["sms"] == card["sm"]["count"]["value"]
@@ -25,5 +25,5 @@ def test_the_checks_figures_are_the_node_files_and_its_cards():
 
 
 def test_a_missing_file_stops_the_check_naming_its_path(tmp_path):
-    with pytest.raises(SystemExit, match=re.escape(str(tmp_path / "hardware/nodes" / f"{C.NODE}.toml"))):
+    with pytest.raises(SystemExit, match=re.escape(str(tmp_path / "calibration/hardware/nodes" / f"{C.NODE}.toml"))):
         C.figures(tmp_path / "hardware")

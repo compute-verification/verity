@@ -5,7 +5,7 @@ request are the Definitions' sums; the planner certifies a sample over the card'
 each gap's rows, ANDs and why; and `main --stop` refuses without the stop block and the network attester's response tie,
 which SPOT never imports. A stop class's populations, with the adapter's stop rule and the certifier's tie, are tested
 where they may be imported
-(`tests/benchmarks/sampling_plan/test_glm53_stop_class.py`)."""
+(`tests/calibration/sampling_plan/test_glm53_stop_class.py`)."""
 
 from __future__ import annotations
 

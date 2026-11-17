@@ -642,14 +642,14 @@ def test_uv_lock_names_a_moved_distribution_by_its_new_directory(tmp_path):
     for p, t in files.items():
         (r / p).parent.mkdir(parents=True, exist_ok=True)
         (r / p).write_text(t)
-    (tmp_path / "map.toml").write_text('[roots]\nold = {}\nnew = {}\n\n[paths]\n"bench/model/" = "hardware/model/"\n\n[modules]\n'
+    (tmp_path / "map.toml").write_text('[roots]\nold = {}\nnew = {}\n\n[paths]\n"bench/model/" = "calibration/hardware/model/"\n\n[modules]\n'
                                        '"bench.model" = "hardware.model"\n\n[rewrite]\nexclude = ["uv.lock"]\n')
     git(r, "init", "-q", "-b", "main")
     git(r, "add", "-A")
     git(r, "commit", "-q", "-m", "old")
     run = ["python3", str(LAYOUT), "--root", str(r), "--map", str(tmp_path / "map.toml"), "--no-lock"]
     subprocess.run(run, check=True, capture_output=True)
-    want = lock.replace('"bench/model/probe"', '"hardware/model/probe"').replace('"bench/model"', '"hardware/model"')
+    want = lock.replace('"bench/model/probe"', '"calibration/hardware/model/probe"').replace('"bench/model"', '"calibration/hardware/model"')
     assert (r / "uv.lock").read_text() == want and '"bench/other"' in want
     git(r, "commit", "-q", "-m", "moved")
     subprocess.run(run, check=True, capture_output=True)
@@ -976,8 +976,8 @@ old = { verity = "verity" }
 new = { verity = "verity" }
 
 [paths]
-"verity/hardware/cards/a100.toml" = "hardware/cards/a100.toml"
-"verity/hardware/nodes/n1.toml" = "hardware/nodes/n1.toml"
+"verity/hardware/cards/a100.toml" = "calibration/hardware/cards/a100.toml"
+"verity/hardware/nodes/n1.toml" = "calibration/hardware/nodes/n1.toml"
 """
 HELD_TREE = {"verity/__init__.py": "", "verity/hardware/__init__.py": "", "verity/hardware/site.py": "S = 1\n",
              "verity/hardware/cards/a100.toml": "peak = 1\n", "verity/hardware/nodes/n1.toml": "gpus = 8\n"}

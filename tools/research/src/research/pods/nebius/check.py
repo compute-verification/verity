@@ -12,7 +12,7 @@ Checks, each PASS or FAIL on one line (exit 1 on any FAIL; with RESEARCH_RUN_DIR
     disk_read    sequential direct-I/O read of a file fio lays out on /workspace >= 1,500 MiB/s (the disk type's bound is 2 GiB/s)
     lease        vy-lease.service is active, so the VM stops itself when its lease runs out
     gpu_lease    gpu-lease answers `status`
-The node's figures are its node file's (NODE) and its card's, read by path from the repository's hardware/ as the shipped
+The node's figures are its node file's (NODE) and its card's, read by path from the repository's calibration/hardware/ as the shipped
 tree lays it out, or the copy deploy.toml installs beside the research tool.  Stdlib only.  VY_CHECK_SKIP_FIO=1 skips the
 disk read (a quick re-check).
 """
@@ -39,7 +39,7 @@ def figures(hardware: Path = HARDWARE) -> dict:
     def read(path: Path) -> dict:
         if not path.is_file():
             raise SystemExit(f"check: no {path}: the check reads the node's figures from it; ship the tree (research run "
-                             f"--source .) or install hardware/ beside the research tool (deploy.toml)")
+                             f"--source .) or install calibration/hardware/ beside the research tool (deploy.toml)")
         return tomllib.loads(path.read_text())
     node = read(hardware / "nodes" / f"{NODE}.toml")
     card = read(hardware / "cards" / f"{node['device']['sku']}.toml")

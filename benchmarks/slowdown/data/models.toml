@@ -1,5 +1,5 @@
 # Model architectures and training runs (slowdown/instances.py): the one place a model's shape is stated, which the other
-# benchmarks read through instances.models (benchmarks/nci/kappa.py, benchmarks/circuit_properties' references). A model's
+# benchmarks read through instances.models (benchmarks/nci/kappa.py, calibration/circuit_properties' references). A model's
 # matrices are, by group, rows of [name, d_in, d_out, copies in the model, copies a token uses]; fanin and fanout are
 # derived from them (instances.derived_fanin, instances.derived_fanout) wherever their status is "derived". Its attention
 # table is the attention as its config.json states it (kind "gqa" or "mla"), which the attention matrices follow from

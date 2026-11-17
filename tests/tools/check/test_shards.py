@@ -56,7 +56,7 @@ WITH_RUST = (COMPOSITION[1], POUW[0], *VLLM[1:], CERTIFIER[1], *THIRDS[2], "lean
 #: pytest's suites the 3-pod plan runs beside lean-build; the rest (`pytest:*`) go beside the security analysis's audit
 PYTEST_BESIDE_BUILD = tuple(f"pytest:{s}" for s in (
     "research", "adapters/vllm/verity_vllm/definitions", "verity/circuits/ops", "verity-graph",
-    "benchmarks/training_slowdown", "repository", "verity/protocols/resource_accounting/memory/pous/verifier"))
+    "calibration/training", "repository", "verity/protocols/resource_accounting/memory/pous/verifier"))
 
 
 @pytest.fixture(autouse=True)
