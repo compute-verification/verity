@@ -1,4 +1,4 @@
-// What the guest kernel and the hypervisor took from two cores, the timed audit's memory challenger's ($1) and responder's
+// What the guest kernel and the hypervisor took from two cores, the timed audit's memory attester's ($1) and responder's
 // ($2), each line stamped with bpftrace's nsecs (CLOCK_MONOTONIC, the clock of verity/protocols/resource_accounting/memory/pous/attester/timed_audit.py's host_trace):
 //   switch CPU T PREV_COMM PREV_PID NEXT_COMM NEXT_PID    every context switch
 //   irq|softirq|vec CPU T WHAT NS                        a hard interrupt, softirq or APIC vector (the local timer, IPIs) over $3 ns

@@ -32,7 +32,7 @@ its pacer, the server and the observer a core each of the run's; `--gate-ms` kee
 server around each release (`parties.network`); `--waker-ms` keeps the host's network path in use (`parties.waker`);
 `--awake` keeps every one of the run's cores from halting (`parties.awake`).
 
-`guard` is the check that the measurement sees a channel: against a certifier that paces nothing (`relay`), a server
+`guard` is the check that the measurement sees a channel: against a network attester that paces nothing (`relay`), a server
 that delays an interval's bytes by half an interval on bit 1 must show at least `PLANTED_MIN` bits an interval, and
 the same server writing as for bit 0 whatever its bits at most `IGNORED_MAX`.
 
@@ -496,7 +496,7 @@ def _table(docs: list[dict]) -> str:
 
 
 def _hello(certifier: str, tree: Path) -> tuple[str, int]:
-    """What an observer sends a certifier of `tree` and the bytes of one interval: the relay takes the request as it
+    """What an observer sends a network attester of `tree` and the bytes of one interval: the relay takes the request as it
     is, the network attester in its cells."""
     if certifier == "relay":
         return parties.HELLO.hex(), SCHEDULE["slots"] * (SCHEDULE["cell_bytes"] - HEADER_BYTES)

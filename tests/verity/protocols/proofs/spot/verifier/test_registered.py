@@ -1808,7 +1808,7 @@ def test_a_hit_on_a_page_an_older_window_wrote_reads_it_through_the_carried_copi
 # -- cut and continue ---------------------------------------------------------------------------------------------------
 
 #: three windows' arrivals as the network attester saw them: each one's id, the values it arrives with, the window it
-#: arrives in, and the outputs the certifier released of it in each window from then on. It closes in its last window,
+#: arrives in, and the outputs the network attester released of it in each window from then on. It closes in its last window,
 #: and at the edge of each window before that it is open: it is cut there and continues in the next window.
 ARRIVALS = ((7, (11, 12, 13, 14, 15), 0, ((21, 22, 23), (24, 25))), (8, (31, 32), 0, ((41,),)),
             (9, (51, 52, 53), 0, ((), (61,), (62,))), (10, (71,), 1, ((), (72, 73))))
@@ -1820,7 +1820,7 @@ def _cut_rows(w: int, served=None) -> tuple[list[list[int]], list[list[int]]]:
     """Window `w`'s certified arrivals (`ing`: each slot's valid bit, id and input length) and its rows (`req`: each
     slot's outputs in the window, its cut bit, then its values), from `ARRIVALS`. The arrivals open at window w − 1's
     edge come first, in release order, each a fresh arrival whose input is the cut one's and the e outputs the
-    certifier released of it, so its length is P + e. `served`: for an id, how many outputs serving had computed past
+    network attester released of it, so its length is P + e. `served`: for an id, how many outputs serving had computed past
     those released when it was cut, which a continuation counted from serving (P + n) takes into its input."""
     continued, arriving = [], []
     for ident, given, at, outs in ARRIVALS:
@@ -1852,10 +1852,10 @@ def _continued() -> Program:
 
 def _cut_window(prog: Program, w: G.Registered, i: int, log, pin=None, ing=None, verdicts=None, reset=False):
     """Window `i`'s record of `_continued`, the next after `log`: x, `req` (`_cut_rows(i)`'s) and `pout` (`POOLS[i]`)
-    afresh under its window's open root, the weights `w` held, `ing` the certifier's commitment of `_cut_rows(i)`'s
+    afresh under its window's open root, the weights `w` held, `ing` the network attester's commitment of `_cut_rows(i)`'s
     arrivals (or the entry `ing`), `pin` the entry `pin`, the empty pool filled from `genesis` by default, and its
     window naming the pool fields `_pool` gives for `verdicts` and `reset`. With the verifier's R7 arguments: the
-    certifier's root of the window's arrivals pinned, and its pool (`_pool`)."""
+    network attester's root of the window's arrivals pinned, and its pool (`_pool`)."""
     d = P.program_digest(prog)
     pool, marks = _pool(log, reset, verdicts=verdicts)
     base, ports = _record(prog, w)
@@ -1883,7 +1883,7 @@ def test_an_arrival_open_at_a_windows_edge_continues_in_the_next_from_the_pool_i
     """Cut and continue: an arrival open at a window's edge is cut there, at the e outputs the network attester released
     of it, and continues in the next window as a fresh arrival, (its id, P + e), whose row is the values it arrived with
     then those outputs, first among that window's arrivals in release order. The record needs nothing new for it. The
-    window's arrivals are a certified input, the root the certifier signed for the window, which the verifier pins
+    window's arrivals are a certified input, the root the network attester signed for the window, which the verifier pins
     (`ing`); its rows (`req`: each arrival's outputs in the window and its cut bit) are its own values, under its open
     root; and its pool chains, `pin` the previous window's `pout`. So window 0 cuts two arrivals, windows 1 and 2 each
     open the pool the one before left and serve the continuations, and a continuation counted from the outputs serving
@@ -1917,7 +1917,7 @@ def test_a_window_that_restarts_its_pool_still_serves_the_continuations():
     the previous window's edge: its certified arrivals list them first, at the outputs released through that window, as
     when it carries the pool. They find the pool empty and recompute what it held of them, which costs more and is
     correct. The previous window's pool is then refused by name (`R7-pool-chain`), and the arrivals are held to the
-    certifier's root as in any window."""
+    network attester's root as in any window."""
     prog = _continued()
     w = _registered(prog)
     first, _ = _cut_window(prog, w, 0, [])
