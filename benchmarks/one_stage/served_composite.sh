@@ -153,9 +153,10 @@ for f in sorted(root.rglob("case.json")):
 EOF
 )
   "${scope[@]}" timeout -k 1m "${COMPOSITE_TIMEOUT:-60m}" "$TPY" benchmarks/one_stage/composite.py "$x" "${cases[@]}" \
-    --private-out "$P/$x/private" --public-out "$OUT/composite/$x" --exe "$e" > "$P/$x.log" 2>&1
+    --private-out "$P/$x/private" --public-out "$OUT/composite/$x" --exe "$e" \
+    ${H1_KEY_SHA512:+--key-sha512 "$H1_KEY_SHA512"} --coins-on "${COINS_ON:-unnamed}" > "$P/$x.log" 2>&1
   r=$?
-  grep -E '^(NOT_ESTABLISHED|VERDICT) ' "$P/$x.log" | sed "s/^/COMPOSITE $x: /" | tee -a "$OUT/verdicts.txt"
+  grep -E '^(NOT_ESTABLISHED|NOT_COVERED|VERDICT) ' "$P/$x.log" | sed "s/^/COMPOSITE $x: /" | tee -a "$OUT/verdicts.txt"
   case $r in
     0 | 1 | 2) ;;
     65) say "COMPOSITE $x: composite.py wrote no public line (exit 65: they share bytes with a case's evidence)"; bad=1 ;;
