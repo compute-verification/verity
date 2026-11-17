@@ -36,24 +36,8 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Pouw.H1Zy.Combine
 import Proofs.Pouw.H1Zy.CombineBits
 
-/-!
-# The combine's part of `LeafChecks` from its Definition
-
-`ResourceAccounting.Assumptions.TS.LeafChecks`' combine field bundles three claims: the combine circuit's input wires sit where
-`decC` reads them, the circuit computes `PouwH1Combine_v1`, and that Definition's `ok = 1` means `CombineOk`. The third is
-proved here for every input: the Definition on words (`Pouw.H1Zy.combineOk`, `h1zy._combine_body`) is `true` exactly
-when the lanes' partials XOR, in lane order, to the receipt (`combineOk_iff_xorAll`), so a view whose `ok` is the
-Definition's on its own partials and receipt meets `CombineOk` wherever `ok = 1` (`combineOk_of_def`).
-
-What stays of the field is the first two claims, `CombineComputes`: on every wire assignment the session's evaluation
-agrees with, the decoded `ok` is the Definition's on the decoded partials and receipt. `leafChecks_of_combineComputes`
-gives `LeafChecks` from it and the lanes' field.
-
-`CombineComputes` is in turn split at the combine's pieces: `CombineLowers` says the circuit computes the body on bits,
-its pieces (`PouwXor32_v2`, `PouwEq32_v2`, `PouwAndBit_v2`) at their lowerings (`Pouw.H1Zy.combineBits`), and that each
-piece's lowering computes its word view, and so their composition the body on words, is proved
-(`Pouw.H1Zy.combineBits_bitsOf`). The two are equivalent (`combineLowers_iff`).
--/
+/-! The combine's part of `LeafChecks`: its Definition's `ok = 1` means `CombineOk` at every input, which leaves
+`CombineComputes`, equivalent to `CombineLowers`. -/
 
 @[expose] public section
 
@@ -61,23 +45,17 @@ namespace ResourceAccounting.TS.Lanes
 
 open ResourceAccounting.TS ResourceAccounting.TS.Checked Flock.SoundAtBridge PouwWindow.Lanes
 
-/-- `PouwH1Combine_v1`'s `ok` on a leaf's 32 lanes' partials is `true` exactly when they XOR, in lane order, to the
-receipt (`xorAll`). -/
 theorem combineOk_iff_xorAll {nw : ℕ} (p : Fin 32 → Fin nw → BitVec 32) (r : Fin nw → BitVec 32) :
     Pouw.H1Zy.combineOk p r = true ↔ xorAll p = r := by
   rw [Pouw.H1Zy.combineOk_iff]
   exact ⟨fun h => funext h, fun h w => congrFun h w⟩
 
-/-- **Claim 3 of `LeafChecks` at the combine**: a combine view whose `ok` is `PouwH1Combine_v1`'s on its own partials
-and receipt meets `CombineOk` where `ok = 1`. -/
 theorem combineOk_of_def {nw : ℕ} (v : CombineView nw) (hdef : v.ok = Pouw.H1Zy.combineOk v.parts v.receipt)
     (hok : v.ok = true) : CombineOk v :=
   (combineOk_iff_xorAll v.parts v.receipt).1 (hdef ▸ hok)
 
-/-- **The combine's circuit computes its Definition at its port rows** (claims 1 and 2 of `LeafChecks`' combine field):
-at the combine's session `sess none`, on every wire assignment the key program's evaluation agrees with on every unit's
-wires, the `ok` word `decC` reads from the port rows (`portRead`) is `PouwH1Combine_v1`'s on the partials and receipt
-`decC` reads from them. -/
+/-- Claims 1 and 2 of `LeafChecks`' combine field: the input wires sit where `decC` reads them, and the circuit computes
+`PouwH1Combine_v1`. -/
 def CombineComputes {nw : ℕ} (sess : Option (Fin 32) → RowsSession)
     (decC : RowsSession → (ℕ → ℕ → Option Bool) → CombineView nw) : Prop :=
   ∀ vals : Fin (sess none).Circ.N → Bool,
@@ -99,23 +77,17 @@ def CombineLowers {nw : ℕ} (sess : Option (Fin 32) → RowsSession)
       Pouw.H1Zy.combineBits (fun l w => Pouw.H1Zy.bitsOf ((decC (sess none) (portRead (sess none) vals)).parts l w))
         (fun w => Pouw.H1Zy.bitsOf ((decC (sess none) (portRead (sess none) vals)).receipt w))
 
-/-- **`CombineComputes` is `CombineLowers`**: the pieces' lowerings compose to the body on words
-(`Pouw.H1Zy.combineBits_bitsOf`). -/
 theorem combineLowers_iff {nw : ℕ} (sess : Option (Fin 32) → RowsSession)
     (decC : RowsSession → (ℕ → ℕ → Option Bool) → CombineView nw) :
     CombineLowers sess decC ↔ CombineComputes sess decC := by
   unfold CombineLowers CombineComputes
   simp only [Pouw.H1Zy.combineBits_bitsOf]
 
-/-- **`CombineComputes` from `CombineLowers`.** -/
 theorem combineComputes_of_lowers {nw : ℕ} {sess : Option (Fin 32) → RowsSession}
     {decC : RowsSession → (ℕ → ℕ → Option Bool) → CombineView nw} (h : CombineLowers sess decC) :
     CombineComputes sess decC :=
   (combineLowers_iff sess decC).1 h
 
-/-- **`LeafChecks` from the lanes' field and `CombineComputes`**: the combine's field of
-`ResourceAccounting.Assumptions.TS.LeafChecks` needs only that its circuit computes its Definition at its port rows; that the
-Definition's `ok = 1` is `CombineOk` is `combineOk_of_def`. -/
 theorem leafChecks_of_combineComputes {K nw : ℕ} {Pub : Type} (dq : List ℤ → ℤ)
     (part : Pub → Fin 32 → (Fin 4 → Row K) → (Fin 8 → Row K) → Fin nw → BitVec 32)
     (sess : Option (Fin 32) → RowsSession)

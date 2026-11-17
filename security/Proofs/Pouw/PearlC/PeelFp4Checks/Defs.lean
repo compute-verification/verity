@@ -33,7 +33,6 @@ def opB (p : Fp4Atom) (K : PeelCase) : Op4 4 := fun j => some (rowB p K j.val)
 def basis (k : Nat) (cols : List Nat) : Matrix (Fin k) (Fin 32) Nib :=
   fun t q => ⟨(cols.getD q 0 >>> (4 * t.val)) % 16, Nat.mod_lt _ (by decide)⟩
 
-/-- A byte. -/
 def byte (s : Nat) : Fin 256 := ⟨s % 256, Nat.mod_lt _ (by decide)⟩
 
 /-- The selected rows' `Ẽ_A = eTilde E_A a_E`. -/
@@ -44,7 +43,6 @@ def beA (K : PeelCase) : Matrix (Fin 4) (Fin 32) Nat :=
 def beB (K : PeelCase) : Matrix (Fin 4) (Fin 32) Nat :=
   fun j => eTilde (line (K.eb.getD j (0, 0)).1) (byte (K.eb.getD j (0, 0)).2)
 
-/-- Entry `(i, j)` of a list of rows. -/
 def cell (M : List (List Nat)) (i j : Nat) : Nat := (M.getD i []).getD j 0
 
 end Pouw.PearlC.PeelFp4Checks

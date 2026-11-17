@@ -34,33 +34,8 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# The leaf's decodes, over its statements' port layout
-
-`ResourceAccounting.Guarantees.TS.LeafLanesSound` reads a session's registered rows through a decode per statement (`decL` for
-a lane's, `decC` for the combine's). These are the decodes, from the statements' layout (`PouwWindow.Lanes`) and the
-session's own circuit:
-
-* `portBit s v name k`: bit `k` of the row of the port named `name`, at unit 0, in a layer value `v` (the registered reads
-  `openedReg` or `rowsReg` give): `v` at a gate of the key program that carries it and is a wire of unit 0, by the
-  hidden-output layout (`HiddenExec.rowOfH`) at the session's row widths (`portRowW`, the ones its rows are laid out
-  at). At an input row (`keyRowOf`), input gate `2 + u·B + b` is bit `8·byte + bit` of unit `u`'s row port `q` where
-  input `b`'s key is that message bit of the parsed circuit's row `q`; at an output row (`outRowOf`), the gate a copy of
-  `u` returns on that bit. No circuit file is assumed: the gate is the parsed circuit's;
-* `bitsN`, `sgnBits`: a field's bits as a natural number, least significant first, and its two's complement;
-* `decLane T rd`, `decComb T rd`: lane `l`'s and the combine's view from a reader `rd` of ports' row bits, each field at
-  its port and first bit in the layout (`fieldBit`, `PouwWindow.Lanes.fieldOf?`): an A row's codes (s8) and scale (its
-  f32 encoding), the record's z (s32) and y (its bf16 encoding) cell by cell, a partials row's or the receipt's u32 words,
-  the admit bits, salt, position and roots (`LanePub`), the index and `ok`;
-* `decL T`, `decC T`: those at `portBit`.
-
-A field's place in its port's row is the same in every lane (`lanePorts`' fields don't read the lane), so `decLane`
-reads them at lane 0's ports.
-
-`decL_congr` and `decC_congr`: a decode reads only the ports' row bits, so two sessions or layer values that agree on
-them decode alike. The leaf `LeafLanesSound` opens is the one the data ports' rows decode to (`Lanes.Committed`); the
-known values' content is verity-verify-proof's to check (`Lanes.KnownRead`).
--/
+/-! The leaf's decodes `decL` and `decC`, over its statements' port layout and the session's own parsed circuit, with no
+circuit file assumed. -/
 
 @[expose] public section
 
@@ -87,7 +62,6 @@ noncomputable def portBit (s : RowsSession) (v : ℕ → ℕ → Option Bool) (n
 def bitsN (rd : ℕ → Option Bool) (lo n : ℕ) : ℕ :=
   ∑ i ∈ Finset.range n, if rd (lo + i) = some true then 2 ^ i else 0
 
-/-- A field's `n` bits spell a number below `2^n`. -/
 theorem bitsN_lt (rd : ℕ → Option Bool) (lo : ℕ) : ∀ n, bitsN rd lo n < 2 ^ n
   | 0 => by simp [bitsN]
   | n + 1 => by
@@ -151,14 +125,12 @@ noncomputable def decL (K nw : ℕ) (T : Tile) (s : RowsSession) (v : ℕ → �
 noncomputable def decC (nw : ℕ) (T : Tile) (s : RowsSession) (v : ℕ → ℕ → Option Bool) : CombineView nw :=
   decComb nw T (portBit s v)
 
-/-- A lane's decode reads only the ports' row bits. -/
 theorem decL_congr {K nw : ℕ} (T : Tile) {s s' : RowsSession} {v v' : ℕ → ℕ → Option Bool}
     (h : ∀ name k, portBit s v name k = portBit s' v' name k) : decL K nw T s v = decL K nw T s' v' := by
   have e : portBit s v = portBit s' v' := funext fun name => funext fun k => h name k
   unfold decL
   rw [e]
 
-/-- The combine's decode reads only the ports' row bits. -/
 theorem decC_congr {nw : ℕ} (T : Tile) {s s' : RowsSession} {v v' : ℕ → ℕ → Option Bool}
     (h : ∀ name k, portBit s v name k = portBit s' v' name k) : decC nw T s v = decC nw T s' v' := by
   have e : portBit s v = portBit s' v' := funext fun name => funext fun k => h name k

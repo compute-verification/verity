@@ -8,36 +8,14 @@ import Proofs.Pouw.Fp8Atom.H1TAtomProofs
 import Proofs.Pouw.Fp8Atom.H1TSliceProofs
 import Proofs.Pouw.PearlC.FormingP
 
-/-!
-# One group's step on a flat support: the cast reads a monotone function of the sum
-
-The pieces of the salt-dead two-ends lemma (`Cap/SaltDead.lean`) that do not mention the support.
-
-* **Rounding to a grid that coarsens with the binade is monotone** (`grid_mono`): for any monotone rounding
-  `r : ℚ → ℤ` that fixes the integers, `x ↦ r(x / u(x))·u(x)` with `u(x) = 2^(max (binade x) emin − k)` is monotone on
-  the positive rationals. E4M3's encoder is the instance `r = roundEven`, `emin = −6`, `k = 3`; the step's normalization
-  is `r = ⌊·⌋`, `emin = −126`, `k = p − 1`.
-* **E4M3's encoder** (`codeVal_e4m3_mono`, `codeVal_e4m3_neg`, `codeVal_e4m3_sat`): `codeVal ∘ e4m3` is monotone, odd,
-  and `448` from `464` up; every code's value is at most `448`; `e4m3Mag` is at most `126`.
-* **The normalization** (`normalize_nat`): on a nonzero sum `n`, `normalize w E n` is a canonical term (`Canon`) of
-  value `truncF (min w 24) (n·2^(E − w + 1))`, the sum truncated toward zero to `min w 24` significant bits with
-  FP32's subnormals; its exponent is `E + bitLength n − w` when that is at least `−126`. A negated sum negates the term
-  (`normalize_neg`).
-* **The read** (`codeW_mono`): the value the cast reads from a group's sum `t` at exponent `E`, through the overflow
-  branch (`±inf`, read as `±480`), `packValue` and `wordVal`, then `codeVal ∘ e4m3`, is monotone in `t` for every
-  width `w ≥ 1` and every `E`.
-* **The FP32 word's sign** (`f32Word_sign`, `e4m3Word_signs`): `f32Word y` is its sign bit plus the word of `|y|`, a
-  finite word or `+inf`; so `e4m3Word (f32Word y)` and `e4m3Word (f32Word (−y))` differ in the sign bit alone, below
-  `126` in their other bits.
--/
+/-! The pieces of the salt-dead two-ends lemma that do not mention the support: on a flat support one group's step casts
+a monotone function of its sum. -/
 
 @[expose] public section
 
 namespace Pouw.PearlC.InertBound
 
 open Pouw.Fp8Atom Pouw.Fp8Atom.Proofs Pouw.Fp8Atom.H1T Pouw.Fp8Atom.H1T.Proofs Pouw.PearlC
-
-/-! ## Monotone and odd -/
 
 theorem monotone_of_odd {α : Type*} [AddCommGroup α] [LinearOrder α] [IsOrderedAddMonoid α] {f : α → ℚ}
     (hp : ∀ a b, 0 ≤ a → a ≤ b → f a ≤ f b) (ho : ∀ x, f (-x) = -f x) : Monotone f := by
@@ -54,12 +32,6 @@ theorem monotone_of_odd {α : Type*} [AddCommGroup α] [LinearOrder α] [IsOrder
     rw [ho, ho] at this
     linarith
 
-/-! ## Rounding to a grid that coarsens with the binade -/
-
-/-- **Rounding to a binade grid is monotone.** For a monotone `r : ℚ → ℤ` fixing the integers, the rounding
-`x ↦ r(x / u x)·u x` on the grid `u x = 2^(max (binade x) emin − k)` is monotone on the positive rationals: in one
-grid it is `r`'s monotonicity; across a binade `2^B` of the larger, `2^B` lies on both grids, below the larger's
-rounding and above the smaller's. -/
 theorem grid_mono (r : ℚ → ℤ) (hr : Monotone r) (hri : ∀ n : ℤ, r n = n) (emin : ℤ) (k : ℕ) {a b : ℚ}
     (ha : 0 < a) (hab : a ≤ b) :
     (r (a / 2 ^ (max (binade a) emin - k)) : ℚ) * 2 ^ (max (binade a) emin - k) ≤
@@ -76,7 +48,6 @@ theorem grid_mono (r : ℚ → ℤ) (hr : Monotone r) (hri : ∀ n : ℤ, r n = 
       · exact max_eq_left h
     obtain ⟨hb1, -⟩ := binade_spec hb
     obtain ⟨-, ha2⟩ := binade_spec ha
-    -- the larger rounds to at least `2^Eb`
     have hgb : (0 : ℚ) < 2 ^ (Eb - k) := two_zpow_pos _
     have hkk : ((2 : ℤ) ^ k : ℤ) = ((2 : ℚ) ^ k : ℚ) := by push_cast; ring
     have h1 : ((2 ^ k : ℤ) : ℚ) ≤ b / 2 ^ (Eb - k) := by
@@ -88,7 +59,6 @@ theorem grid_mono (r : ℚ → ℤ) (hr : Monotone r) (hri : ∀ n : ℤ, r n = 
       have : ((2 ^ k : ℤ) : ℚ) * 2 ^ (Eb - k) ≤ (r (b / 2 ^ (Eb - k)) : ℚ) * 2 ^ (Eb - k) :=
         mul_le_mul_of_nonneg_right (by exact_mod_cast h2) hgb.le
       rwa [hkk, ← zpow_natCast, ← zpow_add₀ two_ne_zero, show (k : ℤ) + (Eb - k) = Eb by ring] at this
-    -- the smaller rounds to at most `2^Eb`
     have hga : (0 : ℚ) < 2 ^ (Ea - k) := two_zpow_pos _
     obtain ⟨N, hN⟩ : ∃ N : ℕ, (N : ℤ) = Eb - Ea + k := ⟨(Eb - Ea + k).toNat, Int.toNat_of_nonneg (by omega)⟩
     have hNq : ((2 ^ N : ℤ) : ℚ) * 2 ^ (Ea - k) = 2 ^ Eb := by
@@ -106,8 +76,6 @@ theorem grid_mono (r : ℚ → ℤ) (hr : Monotone r) (hri : ∀ n : ℤ, r n = 
     have hg : (0 : ℚ) < 2 ^ (Eb - k) := two_zpow_pos _
     exact mul_le_mul_of_nonneg_right (by exact_mod_cast hr (div_le_div_of_nonneg_right hab hg.le)) hg.le
 
-/-! ## E4M3's encoder -/
-
 theorem codes_le_448 : ∀ c : Code, codeVal c ≤ 448 := by decide +kernel
 
 theorem codeVal_flip : ∀ c : Code, codeVal ⟨(128 + c.val) % 256, Nat.mod_lt _ (by decide)⟩ = -codeVal c := by
@@ -115,7 +83,6 @@ theorem codeVal_flip : ∀ c : Code, codeVal ⟨(128 + c.val) % 256, Nat.mod_lt 
 
 theorem codeVal_e4m3_le (x : ℚ) : codeVal (e4m3 x) ≤ 448 := codes_le_448 _
 
-/-- E4M3 saturates from `464` up. -/
 theorem codeVal_e4m3_sat {x : ℚ} (hx : 464 ≤ x) : codeVal (e4m3 x) = 448 := by
   have h1 : ¬ x < 0 := by linarith
   have h2 : x ≠ 0 := by intro h; rw [h] at hx; norm_num at hx
@@ -155,7 +122,6 @@ theorem codeVal_e4m3_mono_nonneg {a b : ℚ} (ha : 0 ≤ a) (hab : a ≤ b) : co
       rw [← h0]; exact roundEven_mono (div_nonneg hb0 (two_zpow_pos _).le)
     exact mul_nonneg (by exact_mod_cast this) (two_zpow_pos _).le
 
-/-- **`codeVal ∘ e4m3` is monotone.** -/
 theorem codeVal_e4m3_mono : Monotone fun x : ℚ => codeVal (e4m3 x) :=
   monotone_of_odd (fun _ _ ha hab => codeVal_e4m3_mono_nonneg ha hab) codeVal_e4m3_neg
 
@@ -199,8 +165,6 @@ theorem e4m3Mag_le {t : ℚ} (ht : 0 ≤ t) : e4m3Mag t ≤ 126 := by
     · omega
     · have := htop h; omega
 
-/-! ## Truncation to `p` bits with FP32's subnormals -/
-
 /-- Truncation toward zero to `p` significant bits, on FP32's exponent range from below: the grid is
 `2^(max (binade |y|) (−126) − (p − 1))` (`FormingP.truncP` above `2^−126`). -/
 def truncF (p : ℕ) (y : ℚ) : ℚ :=
@@ -233,12 +197,9 @@ theorem truncF_mono_nonneg {p : ℕ} (hp : 1 ≤ p) {a b : ℚ} (ha : 0 ≤ a) (
   · have : truncF p 0 = 0 := by simp [truncF]
     rw [this]; exact truncF_nonneg p (le_trans le_rfl hab)
 
-/-! ## The normalization -/
-
 theorem bitLength_of_ne {n : ℕ} (hn : n ≠ 0) : bitLength n = n.log2 + 1 := by
   unfold bitLength; rw [ite_eq_right hn]
 
-/-- The adder's `w` bits of `n` from its leading bit `L`: a right shift if `n` is wider, else a left shift. -/
 theorem shift_bounds {w n L : ℕ} (hw : 1 ≤ w) (hL1 : 2 ^ L ≤ n) (hL2 : n < 2 ^ (L + 1)) :
     2 ^ (w - 1) ≤ (if w < L + 1 then n >>> (L + 1 - w) else n <<< (w - (L + 1))) ∧
       (if w < L + 1 then n >>> (L + 1 - w) else n <<< (w - (L + 1))) < 2 ^ w := by
@@ -255,7 +216,6 @@ theorem shift_bounds {w n L : ℕ} (hw : 1 ≤ w) (hL1 : 2 ^ L ≤ n) (hL2 : n <
             Nat.mul_lt_mul_of_pos_right hL2 (by positivity)
         _ = 2 ^ w := by rw [← pow_add]; congr 1; omega
 
-/-- A further right shift by `d` of the adder's bits is the adder's bits of `n` read from `L + d`. -/
 theorem shift_shiftRight (w n L d : ℕ) :
     (if w < L + 1 then n >>> (L + 1 - w) else n <<< (w - (L + 1))) >>> d =
       (if w < L + d + 1 then n >>> (L + d + 1 - w) else n <<< (w - (L + d + 1))) := by
@@ -270,9 +230,6 @@ theorem shift_shiftRight (w n L d : ℕ) :
         show 2 ^ (w - (L + 1)) = 2 ^ (w - (L + d + 1)) * 2 ^ d by rw [← pow_add]; congr 1; omega,
         ← mul_assoc, Nat.mul_div_cancel _ (by positivity)]
 
-/-- **The normalization of a nonzero natural sum.** At any width `w ≥ 1` and exponent `E`, `normalize w E n` is a
-canonical, nonnegative term whose value is `n·2^(E − w + 1)` truncated to `min w 24` bits with FP32's subnormals; its
-exponent is `e = E + bitLength n − w` when `e ≥ −126` (and the term is nonzero), else `−126` or the term is zero. -/
 theorem normalize_nat {w : ℕ} (hw : 1 ≤ w) (E : ℤ) {n : ℕ} (hn : n ≠ 0) :
     (normalize w E n).neg = false ∧ HonestWords.Canon (normalize w E n) ∧
       (normalize w E n).value = truncF (min w 24) ((n : ℚ) * 2 ^ (E - w + 1)) ∧
@@ -295,7 +252,7 @@ theorem normalize_nat {w : ℕ} (hw : 1 ≤ w) (E : ℤ) {n : ℕ} (hn : n ≠ 0
   unfold normalize
   simp only [hn0, ite_false, Int.natAbs_natCast, hbl, ← hm0, hdec]
   by_cases hsub : E + ((L + 1 : ℕ) : ℤ) - (w : ℤ) < -126
-  · -- the subnormal branch
+  ·
     simp only [hsub, ite_true]
     set d := (-126 - (E + ((L + 1 : ℕ) : ℤ) - (w : ℤ))).toNat with hd
     have hd1 : 1 ≤ d := by omega
@@ -304,7 +261,6 @@ theorem normalize_nat {w : ℕ} (hw : 1 ≤ w) (E : ℤ) {n : ℕ} (hn : n ≠ 0
     have hfl := FormingP.fromAdder_floor w n (L + d)
     rw [← hsh] at hfl
     set M := fromAdder w (m0 >>> d) with hM
-    -- the magnitude is below `2^23`
     have hm2 : m0 >>> d < 2 ^ (w - 1) := by
       rw [Nat.shiftRight_eq_div_pow, Nat.div_lt_iff_lt_mul (by positivity)]
       calc m0 < 2 ^ w := hb1.2
@@ -319,7 +275,6 @@ theorem normalize_nat {w : ℕ} (hw : 1 ≤ w) (E : ℤ) {n : ℕ} (hn : n ≠ 0
         calc (m0 >>> d) * 2 ^ (24 - w) < 2 ^ (w - 1) * 2 ^ (24 - w) :=
               Nat.mul_lt_mul_of_pos_right hm2 (by positivity)
           _ = 2 ^ 23 := by rw [← pow_add]; congr 1; omega
-    -- the value
     have hval : ((M : ℕ) : ℚ) * 2 ^ ((-126 : ℤ) - 23) = truncF (min w 24) ((n : ℚ) * 2 ^ (E - w + 1)) := by
       unfold truncF
       rw [ite_eq_right hX0, hbin, max_eq_right (by omega), truncTo_of_pos hXp, hfl]
@@ -338,7 +293,7 @@ theorem normalize_nat {w : ℕ} (hw : 1 ≤ w) (E : ℤ) {n : ℕ} (hn : n ≠ 0
       refine ⟨rfl, Or.inr ⟨show M < 2 ^ 24 by omega, show (-126 : ℤ) ≤ -126 from le_rfl, Or.inr rfl⟩, ?_,
         fun h => absurd h (by omega), fun _ _ => rfl⟩
       rw [← hval]; simp [Term.value]
-  · -- the normal branch (`FormingP.normalizeW_spec`'s computation)
+  ·
     simp only [hsub, ite_false]
     have hfl := FormingP.fromAdder_floor w n L
     rw [← hm0] at hfl
@@ -372,7 +327,6 @@ theorem normalize_nat {w : ℕ} (hw : 1 ≤ w) (E : ℤ) {n : ℕ} (hn : n ≠ 0
     rw [mul_assoc, ← zpow_natCast, ← zpow_add₀ two_ne_zero]
     congr 2; omega
 
-/-- A term with its sign flipped (zero stays zero). -/
 def negT (T : Term) : Term := if T.mag = 0 then T else ⟨!T.neg, T.exp, T.mag⟩
 
 theorem negT_mag (T : Term) : (negT T).mag = T.mag := by unfold negT; split_ifs <;> rfl
@@ -391,7 +345,6 @@ theorem negT_canon {T : Term} (h : HonestWords.Canon T) : HonestWords.Canon (neg
   · exact h
   · exact h
 
-/-- A negated sum normalizes to the negated term. -/
 theorem normalize_neg (w : ℕ) (E t : ℤ) : normalize w E (-t) = negT (normalize w E t) := by
   by_cases h : t = 0
   · subst h; simp [normalize, negT, Term.zero]
@@ -420,8 +373,6 @@ theorem canon_normalize {w : ℕ} (hw : 1 ≤ w) (E t : ℤ) : HonestWords.Canon
     · exact negT_canon (Or.inl (by simp [normalize, Term.zero]))
     · exact negT_canon (normalize_nat hw E hn).2.1
 
-/-! ## The read -/
-
 /-- The group step's outgoing value from its normalized term: `±inf` above exponent 127. -/
 def ovfV (T : Term) : Value := if T.mag ≠ 0 ∧ 127 < T.exp then .inf T.neg else .fin T
 
@@ -429,7 +380,6 @@ def ovfV (T : Term) : Value := if T.mag ≠ 0 ∧ 127 < T.exp then .inf T.neg el
 writes (`pipeStep_fin`'s `packValue` of the normalized term, or of its infinity). -/
 def readW (w : ℕ) (E t : ℤ) : ℚ := PearlC.wordVal (packValue (ovfV (normalize w E t)))
 
-/-- The code's value: `e4m3` of the read. -/
 def codeW (w : ℕ) (E t : ℤ) : ℚ := codeVal (e4m3 (readW w E t))
 
 theorem wordVal_ovfV {T : Term} (hc : HonestWords.Canon T) :
@@ -457,8 +407,6 @@ theorem readW_neg {w : ℕ} (hw : 1 ≤ w) (E t : ℤ) : readW w E (-t) = -readW
 theorem codeW_neg {w : ℕ} (hw : 1 ≤ w) (E t : ℤ) : codeW w E (-t) = -codeW w E t := by
   unfold codeW; rw [readW_neg hw, codeVal_e4m3_neg]
 
-/-- The read of a natural sum: `480` (the overflow branch) when `E + bitLength n − w` exceeds 127, else the
-truncated sum. -/
 theorem readW_nat {w : ℕ} (hw : 1 ≤ w) (E : ℤ) (n : ℕ) :
     readW w E n = if n ≠ 0 ∧ 127 < E + ((n.log2 + 1 : ℕ) : ℤ) - w then 480
       else truncF (min w 24) ((n : ℚ) * 2 ^ (E - w + 1)) := by
@@ -494,16 +442,12 @@ theorem codeW_mono_nat {w : ℕ} (hw : 1 ≤ w) (E : ℤ) {a b : ℕ} (hab : a �
     exact codeVal_e4m3_mono_nonneg (truncF_nonneg _ (mul_nonneg (Nat.cast_nonneg _) hg))
       (truncF_mono_nonneg hp (mul_nonneg (Nat.cast_nonneg _) hg) hab')
 
-/-- **The read is monotone in the group's sum**, at every width `w ≥ 1` and alignment exponent `E`. -/
 theorem codeW_mono {w : ℕ} (hw : 1 ≤ w) (E : ℤ) : Monotone (codeW w E) := by
   refine monotone_of_odd (fun a b ha hab => ?_) (codeW_neg hw E)
   obtain ⟨n, rfl⟩ := Int.eq_ofNat_of_zero_le ha
   obtain ⟨m, rfl⟩ := Int.eq_ofNat_of_zero_le (le_trans ha hab)
   exact codeW_mono_nat hw E (by exact_mod_cast hab)
 
-/-! ## The FP32 word's sign -/
-
-/-- `f32Word y` is its sign bit plus the word of `|y|`. -/
 theorem f32Word_sign (y : ℚ) : f32Word y = (if y < 0 then 2 ^ 31 else 0) + f32Word |y| := by
   rcases eq_or_ne y 0 with rfl | hy
   · simp [f32Word]
@@ -511,7 +455,6 @@ theorem f32Word_sign (y : ℚ) : f32Word y = (if y < 0 then 2 ^ 31 else 0) + f32
     simp only [f32Word, abs_abs, not_lt.2 (abs_nonneg y), ↓reduceIte, ha, zero_add]
     split_ifs <;> omega
 
-/-- The word of `|y|` is `+inf` or a finite word: exponent field below 255 and a 23-bit mantissa. -/
 theorem f32Word_abs_form (y : ℚ) :
     f32Word |y| = 0x7F800000 ∨ ∃ e m : ℕ, e < 255 ∧ m < 2 ^ 23 ∧ f32Word |y| = e * 2 ^ 23 + m := by
   rcases eq_or_ne y 0 with rfl | hy
@@ -544,14 +487,10 @@ theorem abs_term_value (b b' : Bool) (ex : ℤ) (mg : ℕ) :
     |Term.value ⟨b, ex, mg⟩| = |Term.value ⟨b', ex, mg⟩| := by
   simp only [Term.value]; cases b <;> cases b' <;> simp [abs_mul]
 
-/-- An E4M3 code below `126` in its magnitude bits and that code with the sign bit set: neither is NaN, they share
-the significand and exponent, and only the second is negative. -/
 theorem code_pair : ∀ c d : Code, c.val ≤ 126 → d.val = 128 + c.val →
     c.isNaN = false ∧ c.sign = false ∧ d.isNaN = false ∧ d.sign = true ∧ d.sig = c.sig ∧ d.expOr1 = c.expOr1 := by
   decide +kernel
 
-/-- **The cast of an FP32 product and of its negation**: `e4m3Word (f32Word y)` and `e4m3Word (f32Word (−y))` are one
-magnitude code `K ≤ 126` with the sign bit of `y < 0` and of `0 < y` respectively. -/
 theorem e4m3Word_signs (y : ℚ) : ∃ K : ℕ, K ≤ 126 ∧
     (e4m3Word (f32Word y)).val = (if y < 0 then 128 else 0) + K ∧
       (e4m3Word (f32Word (-y))).val = (if 0 < y then 128 else 0) + K := by

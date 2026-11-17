@@ -43,32 +43,7 @@ import Proofs.Flock.Soundness.Discharge.FailClosed.TmplStmt
 import Proofs.Flock.Soundness.Discharge.Placed.Wiring
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# Every bit of a known port is on a wire of the unit, from verity-verify-proof's check
-
-`verity-verify-proof --registered F`, where `F` names known content, refuses a statement whose circuit names a port twice or
-has no port of a name the known content names (`Flock.KnownRead.namesOk`), and one of whose ports `F` names at known
-content is not a `sha512/row/v2` row of the known rows' words, or has a row bit that no computed row of the unit reads
-(an input row) or no copy returns (an output row) (`Flock.KnownRead.readsOk`; `check` is both, run on every statement
-beside the complete check). `readsOk` checks the input bits at columns every one of which the unit's computed rows read
-(`FlockSoundness.TmplFold.readsAt_of_readsOk`). What that refusal establishes, from the verifier's code:
-
-* `names_of_check`: the circuit names each port once, and has a port of each known name;
-
-* `srcAt_of_srcAtMsg`, `srcKey_of_srcMsg`: the check's `srcMsg` at copy `u`'s input column `y` is Δ's source key at
-  stacked input `u · W + y` (`Aliased.srcKey`) where it names a message bit (its port bits a mask, `portMask_getD`);
-* `colRead_of_read`: a column `readIns` marks, at a copy of the unit, whose key is bit `k` of port `q`, is a column a
-  row of the circuit's template instance reads (`ColRead`), through the stack's rows (`stack_a`, `stack_b`);
-* `read_of_check`, `colRead_of_check`: so every bit `k < 16 · words` of an input port (`HmOut.nIn`) the known content
-  names is `ColRead`, and `rowBitRead_of_checkIn` on a wire of every unit (`RowBitRead`, `rowBitRead_of_col`);
-* `out_of_check`, `outPortOf_eq`, `rowBitRead_of_out`, `rowBitRead_of_checkOut`: every bit of an output port the known
-  content names is returned by a copy, at a computed column, whose gate in each unit's instance the hidden-output
-  layout places on that bit (`HiddenExec.rowOfH`) and the unit commits as an output: on a wire of every unit;
-* `shape_of_check`, `knownPort_of_check`: a known port is a known value's row (`KnownPort`) of its known rows' words;
-* `laneKnownHolds_of_check`, `combKnownOk_of_check`: `laneKnownHolds` and `combKnownOk` from the check alone: the
-  circuit names each port once, and `admit`, `pub` and `o0` are its ports, known values' rows of 32, 1616 and 16 bits
-  (`knownRows`' words), each bit on a wire of unit 0.
--/
+/-! What verity-verify-proof's known-read check establishes: every bit of a known port is on a wire of the unit. -/
 
 @[expose] public section
 
@@ -81,7 +56,6 @@ section
 
 variable {c : _root_.Flock.Circuit}
 
-/-- The check's source at a leaf port is `srcAt`'s where it names a message bit. -/
 theorem srcAt_of_srcAtMsg {k p t : ℕ} {r : ℕ × ℕ × ℕ} (h : _root_.Flock.KnownRead.srcAtMsg c k p t = some r) :
     Aliased.srcAt c k p t = .msg r.1 r.2.1 r.2.2 := by
   have hs : _root_.Flock.KnownRead.starts c = FlockSoundness.Typed.starts c := rfl
@@ -91,8 +65,6 @@ theorem srcAt_of_srcAtMsg {k p t : ℕ} {r : ℕ × ℕ × ℕ} (h : _root_.Floc
   dsimp only at h ⊢
   split_ifs at h ⊢ <;> first | (cases h; done) | (cases h; rfl) | simp_all
 
-/-- **The check's `srcMsg` is Δ's source key**: at copy `u`'s input column `y < W`, where it names message bit
-`r`, `srcKey` at stacked input `u · W + y` is that bit. -/
 theorem srcKey_of_srcMsg {u y : ℕ} (hy : y < c.unit.inWords * _root_.Flock.WORD) {r : ℕ × ℕ × ℕ}
     (h : _root_.Flock.KnownRead.srcMsg c
       (_root_.Flock.ProvedScope.portMask c.unit.inGroups (c.unit.inWords * _root_.Flock.WORD))
@@ -116,9 +88,6 @@ theorem srcKey_of_srcMsg {u y : ℕ} (hy : y < c.unit.inWords * _root_.Flock.WOR
       exact absurd hp' hn
   · cases h
 
-/-- **A column the unit reads at one of its copies is read by the circuit's rows**: where a computed row of the unit
-reads input column `y` (`readIns`), copy `u` is below `upv` and Δ's key at stacked input `u · W + y` is bit `k` of row
-port `q`, that bit is `ColRead`: the copy's own computed row in the stack reads the column. -/
 theorem colRead_of_read (hU : FlockSoundness.Built c.unit) (hu : c.unit.unitLog ≤ 32) {q : Fin c.ports.size}
     {k u y : ℕ} (hup : u < c.upv) (hrd : (_root_.Flock.RecResiduals.readIns c.unit).getD y false = true)
     (hkey : Aliased.srcKey c (u * (c.unit.inWords * _root_.Flock.WORD) + y) = .msg q.val (k / 8) (k % 8)) :
@@ -148,7 +117,6 @@ theorem colRead_of_read (hU : FlockSoundness.Built c.unit) (hu : c.unit.unitLog 
   · rw [hcol]
     exact hkey
 
-/-- The check is the names' check, then the reads'. -/
 theorem parts_of_check {known : Known} (h : _root_.Flock.KnownRead.check c known = .ok ()) :
     _root_.Flock.KnownRead.namesOk c known = .ok () ∧ _root_.Flock.KnownRead.readsOk c known = .ok () := by
   unfold _root_.Flock.KnownRead.check at h
@@ -156,8 +124,6 @@ theorem parts_of_check {known : Known} (h : _root_.Flock.KnownRead.check c known
   | error e => rw [hn] at h; cases h
   | ok v => rw [hn] at h; exact ⟨rfl, h⟩
 
-/-- **The names the check accepted**: where the known content names a port, the circuit names each port once, and has
-a port of each name the known content names. -/
 theorem names_of_check {known : Known} (h : _root_.Flock.KnownRead.check c known = .ok ()) {nm : String}
     {ks : Array (Array ℕ × ByteArray)} (hm : (nm, ks) ∈ known) :
     (∀ q q' : Fin c.ports.size, c.ports[q].name = c.ports[q'].name → q = q') ∧
@@ -193,9 +159,6 @@ theorem names_of_check {known : Known} (h : _root_.Flock.KnownRead.check c known
         exact ⟨⟨i, hi⟩, beq_iff_eq.1 hn⟩
       · cases h2
 
-/-- **What the check accepted of a known input port**: at each bit `k < 16 · words` of an input port `q` the known
-content names, a copy `u` of the unit and an input column `y` a computed row reads, where the check's `srcMsg` is bit `k`
-of `q`. -/
 theorem read_of_check {known : Known} (h : _root_.Flock.KnownRead.check c known = .ok ()) {nm : String}
     {ks : Array (Array ℕ × ByteArray)} (hm : (nm, ks) ∈ known) {q : ℕ} (hq : q < _root_.Flock.HmOut.nIn c)
     (hn : c.ports[q]!.name = nm) {k : ℕ} (hk : k < 16 * c.ports[q]!.words) :
@@ -227,9 +190,6 @@ theorem read_of_check {known : Known} (h : _root_.Flock.KnownRead.check c known 
       simp only [Bool.and_eq_true, decide_eq_true_eq] at hb
       exact ⟨u, _, hb.1.1, hrd _ hb.1.2, hb.2⟩
 
-/-- **What the check accepted of a known output port**: at each bit `k < 16 · words` of an output port `q` the known
-content names, the bit's word is word `k / 16` of output port `q - nIn` (`outAt`), and some copy `u` of the unit returns
-it as its output `j`, the bit at a computed column of the unit's output group. -/
 theorem out_of_check {known : Known} (h : _root_.Flock.KnownRead.check c known = .ok ()) {nm : String}
     {ks : Array (Array ℕ × ByteArray)} (hm : (nm, ks) ∈ known) {q : ℕ} (hqs : q < c.ports.size)
     (hq : ¬ q < _root_.Flock.HmOut.nIn c) (hn : c.ports[q]!.name = nm) {k : ℕ} (hk : k < 16 * c.ports[q]!.words) :
@@ -267,8 +227,6 @@ theorem out_of_check {known : Known} (h : _root_.Flock.KnownRead.check c known =
       obtain ⟨⟨⟨⟨hu, hj⟩, hw'⟩, h3⟩, h4⟩ := hc
       exact ⟨hw, u, j, hu, hj, hw', h3, h4⟩
 
-/-- **The shape of a known port's row, from the check**: a port the known content names with rows `ks` is a
-`sha512/row/v2` row without segments, of each known row's words. -/
 theorem shape_of_check {known : Known} (h : _root_.Flock.KnownRead.check c known = .ok ()) {nm : String}
     {ks : Array (Array ℕ × ByteArray)} (hm : (nm, ks) ∈ known) {q : ℕ} (hqs : q < c.ports.size)
     (hn : c.ports[q]!.name = nm) :
@@ -293,7 +251,6 @@ theorem shape_of_check {known : Known} (h : _root_.Flock.KnownRead.check c known
     obtain ⟨⟨hv, hsg⟩, ha⟩ := hb
     exact ⟨hv, Option.isNone_iff_eq_none.1 hsg, fun i hi => by simpa using Array.all_eq_true.1 ha i hi⟩
 
-/-- The check's `outAt` is `Hidden.outAt`. -/
 theorem outAt_eq (j : ℕ) : _root_.Flock.KnownRead.outAt c j = Hidden.outAt c j := rfl
 
 theorem outAt_le_succ (j : ℕ) : Hidden.outAt c j ≤ Hidden.outAt c (j + 1) := by
@@ -306,8 +263,6 @@ theorem outAt_mono {a b : ℕ} (h : a ≤ b) : Hidden.outAt c a ≤ Hidden.outAt
   | refl => exact le_rfl
   | step _ ih => exact ih.trans (outAt_le_succ _)
 
-/-- **Output word `o` is of output port `p`** where it is between `p`'s first word and the next port's
-(`HiddenExec.outPortOf`, the greatest port starting at or before `o`). -/
 theorem outPortOf_eq {p o : ℕ} (h1 : Hidden.outAt c p ≤ o) (h2 : o < Hidden.outAt c (p + 1)) :
     HiddenExec.outPortOf c o = p := by
   have e : ∀ j, c.outPorts.size ≤ j → Hidden.outAt c j = Hidden.outAt c c.outPorts.size := by
@@ -333,7 +288,6 @@ theorem outBitRow_of {n : ℕ} (u : Fin n) {d : ℕ × ℕ × ℕ} {q k : ℕ} (
   unfold HiddenExec.outBitRow
   rw [dite_eq_left hq, dite_eq_left hk]
 
-/-- **Every bit of a known input port is read by the circuit's rows**, where verity-verify-proof's check accepts. -/
 theorem colRead_of_check (hU : FlockSoundness.Built c.unit) (hu : c.unit.unitLog ≤ 32) {known : Known}
     (h : _root_.Flock.KnownRead.check c known = .ok ()) {nm : String} {ks : Array (Array ℕ × ByteArray)}
     (hm : (nm, ks) ∈ known) {q : Fin c.ports.size} (hq : q.val < _root_.Flock.HmOut.nIn c)
@@ -346,13 +300,11 @@ theorem colRead_of_check (hU : FlockSoundness.Built c.unit) (hu : c.unit.unitLog
 
 end
 
-/-- A statement in the proved scope (`scopeOkH`) has a unit log of at most 32. -/
 theorem unitLog_of_scopeOkH {c : _root_.Flock.Circuit} (h : Layout.scopeOkH c = true) : c.unit.unitLog ≤ 32 := by
   unfold Layout.scopeOkH at h
   simp only [Bool.and_eq_true, decide_eq_true_eq] at h
   exact h.1.1.2
 
-/-- An output a unit computes is one of its committed wires. -/
 theorem mem_io_of_output {C : Verity.Boolean.Circuit} {n : ℕ} (P : FlockSoundness.Audit.Partition C n)
     {u : Fin n} {g : Fin C.N} (hg : g ∈ C.outputs) (hu : P.unit g = some u) : g ∈ P.io u := by
   classical
@@ -361,10 +313,6 @@ theorem mem_io_of_output {C : Verity.Boolean.Circuit} {n : ℕ} (P : FlockSoundn
 
 variable {s : RowsSession}
 
-/-- **A returned output's bit is on a wire of every unit**: where copy `j` of the unit returns its output `j'`, bit `t`,
-at a computed column of the unit's rows, and that is bit `k` of output row `q` (`outBitRow`), unit `u`'s instance puts
-a gate on the column that the hidden-output layout places on bit `k` of `u`'s row of `q` (`rowOfH_of_none`,
-`outRowOf_wire`) and that `u` returns, so commits (`outsOf`): a wire of `u`. -/
 theorem rowBitRead_of_out (u : Fin s.n) {j j' t : ℕ} {q : Fin s.c.ports.size} {k : Fin (portRowW s.c q)}
     (hj : j < s.c.upv) (hj' : j' < (s.c.leavesOut.getD j #[]).size) (ht : t < 16)
     (h1 : (FlockSoundness.Rows.ofNet s.hU).nIn ≤ Layout.outCol s.c j' t)
@@ -414,17 +362,12 @@ theorem rowBitRead_of_out (u : Fin s.n) {j j' t : ℕ} {q : Fin s.c.ports.size} 
   refine ⟨_, k.isLt, hrowH, ?_⟩
   exact mem_io_of_output _ hmem hgu
 
-/-- **A known input port's bits are read at every unit**, where verity-verify-proof's check accepts the session's circuit at
-its known content. -/
 theorem rowBitRead_of_checkIn (u : Fin s.n) {known : Known} (h : _root_.Flock.KnownRead.check s.c known = .ok ())
     {nm : String} {ks : Array (Array ℕ × ByteArray)} (hm : (nm, ks) ∈ known) {q : Fin s.c.ports.size}
     (hq : q.val < _root_.Flock.HmOut.nIn s.c) (hn : s.c.ports[q].name = nm) {k : ℕ} (hk : k < portRowW s.c q) :
     RowBitRead s u q k :=
   rowBitRead_of_col u hk (colRead_of_check s.hU (unitLog_of_scopeOkH s.hscope) h hm hq hn hk)
 
-/-- **A known output port's bits are returned at every unit**, where verity-verify-proof's check accepts the session's
-circuit at its known content: the copy and output the check found (`out_of_check`) return the bit, of output row `q`
-(`outPortOf_eq`, `outBitRow_of`), at a computed column (`ofNet_nIn_eq`, `ofNet_one`), so `rowBitRead_of_out`. -/
 theorem rowBitRead_of_checkOut (u : Fin s.n) {known : Known} (h : _root_.Flock.KnownRead.check s.c known = .ok ())
     {nm : String} {ks : Array (Array ℕ × ByteArray)} (hm : (nm, ks) ∈ known) {q : Fin s.c.ports.size}
     (hq : ¬ q.val < _root_.Flock.HmOut.nIn s.c) (hn : s.c.ports[q].name = nm) {k : ℕ} (hk : k < portRowW s.c q) :
@@ -447,9 +390,6 @@ theorem rowBitRead_of_checkOut (u : Fin s.n) {known : Known} (h : _root_.Flock.K
   exact rowBitRead_of_out (k := ⟨k, hk⟩) u hj hj' (Nat.mod_lt _ (by norm_num))
     (by rw [Layout.ofNet_nIn_eq]; exact h1) (by rw [hc]; exact h2) hrow
 
-/-- **A known port's bits are on wires of every unit**, where verity-verify-proof's check accepts the session's circuit at
-its known content: read at an input row (`rowBitRead_of_checkIn`), returned at an output row
-(`rowBitRead_of_checkOut`). -/
 theorem rowBitRead_of_check (u : Fin s.n) {known : Known} (h : _root_.Flock.KnownRead.check s.c known = .ok ())
     {nm : String} {ks : Array (Array ℕ × ByteArray)} (hm : (nm, ks) ∈ known) {q : Fin s.c.ports.size}
     (hn : s.c.ports[q].name = nm) {k : ℕ} (hk : k < portRowW s.c q) : RowBitRead s u q k := by
@@ -457,7 +397,6 @@ theorem rowBitRead_of_check (u : Fin s.n) {known : Known} (h : _root_.Flock.Know
   · exact rowBitRead_of_checkIn u h hm hq hn hk
   · exact rowBitRead_of_checkOut u h hm hq hn hk
 
-/-- **A known port's row, from the check**: a known value's row (`KnownPort`) of each known row's words. -/
 theorem knownPort_of_check {known : Known} (h : _root_.Flock.KnownRead.check s.c known = .ok ()) {nm : String}
     {ks : Array (Array ℕ × ByteArray)} (hm : (nm, ks) ∈ known) {q : Fin s.c.ports.size}
     (hn : s.c.ports[q].name = nm) :
@@ -471,11 +410,6 @@ theorem knownPort_of_check {known : Known} (h : _root_.Flock.KnownRead.check s.c
 theorem size_rowWords (bs : List Bool) : (rowWords bs).size = (bs.length + 15) / 16 := by
   simp [rowWords]
 
-/-- **Lane `l`'s known fields hold at the opened rows, from verity-verify-proof's check**: `laneKnownHolds` where the check
-accepts the session's circuit at `knownOf P salts (some l)` and any rows after it (`more`, the ports read in full), which
-makes the circuit name each port once, and each of
-`admit`, `pub` and `o0` a port of it, a known value's row of its known row's words (32, 1616 and 16 bits) whose every
-bit is on a wire of unit 0. -/
 theorem laneKnownHolds_of_check (T : Tile)
     {P : LanePub} {salts : String → ByteArray} {l : Fin 32} (hK : KnownHeld s (knownOf P salts (some l)))
     {u : Fin s.n} (hu : u.val = 0) (hS : s.ServedRegistered u)
@@ -512,9 +446,6 @@ theorem laneKnownHolds_of_check (T : Tile)
     (fun k hk => rowBitRead_of_check u hread hmp hp (by omega))
     (rowBitRead_of_check u hread hmo ho (by omega))
 
-/-- **The combine reads `ok = 1`, from verity-verify-proof's check**: `combKnownOk` where the check accepts the session's
-circuit at `knownOf P salts none` and any rows after it (`more`), which makes the circuit name each port once, and `o0` a port of it, a known value's
-row of one word whose bits are on wires of unit 0. -/
 theorem combKnownOk_of_check
     {P : LanePub} {salts : String → ByteArray} (hK : KnownHeld s (knownOf P salts none)) {u : Fin s.n}
     (hu : u.val = 0) (hS : s.ServedRegistered u) (hcomp : _root_.Flock.Registered.checkComplete s.c s.own = .ok ())
