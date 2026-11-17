@@ -75,7 +75,8 @@ onsite's ``block`` is its execution phase's seal digest, the one the served wind
 onsite's line reads a record the serving node composed, so its accepts, each row's and the combined one, read
 ``undecided`` (`served_table.AS_WRITTEN` in the reason); ``answer_from`` names each row's stated source and decides nothing.
 onsite's line also has ``trusted-device``: each memory attester's premise that its device ran on a machine the
-developer doesn't control (`memory_attester.trusted_device`), by component, from the outcome of its run here.
+developer doesn't control (`memory_attester.trusted_device`), by component, from the outcome of its run here, and the
+network attester's, from its piece's placement (where it ran, its key and its ``coins_on``).
 onsite's has ``coins_on``: the machine each memory attester's key and coins were made on, the attester's where its
 binding is given, else the workload's, a development run's, which makes ``coins`` ``simulated``.
 remote's has ``coins_on``, over the placement's: the machine each component whose challenger gate is optional had its
