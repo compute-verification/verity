@@ -734,7 +734,7 @@ def test_a_connection_still_open_when_a_session_ends_is_cut_and_the_records_say_
 
 
 def test_one_connection_failed_closed_refuses_a_sessions_whole_run_whichever_client_it_was(tmp_path):
-    """The check's verdict is the whole session's. Of four connections, three end and one's answer is out of the id
+    """The verifier's verdict is the whole session's. Of four connections, three end and one's answer is out of the id
     form, which the relay fails closed: every execution phase is still certified, the audit refuses the one the
     failure is in and accepts the other, and the check refuses the run, whoever's the three that ended were."""
     args, p, load = _session(tmp_path, 2)
@@ -1018,7 +1018,7 @@ def test_a_run_under_another_key_gets_no_file_under_the_keys_hash_and_one_under_
 def test_a_registration_with_a_wrong_signature_gives_no_file_and_the_reader_holds_nothing(tmp_path, monkeypatch):
     """A registration whose signature is changed still names its own head's digest, so the reader's `head_of` reads
     the head it read before, and a reader handed that registration would hold its execution phase: the reader
-    checks no signature. The check refuses it under the key, so it writes no file and removes the one an earlier
+    checks no signature. The verifier refuses it under the key, so it writes no file and removes the one an earlier
     check wrote, with the lines of the two execution phases it still holds; the reader, handed what the check left,
     charges every class its whole schedule and says no registration was read. With the run's files put back the
     check writes the file it wrote before."""

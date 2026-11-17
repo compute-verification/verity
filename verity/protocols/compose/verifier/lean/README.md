@@ -43,7 +43,7 @@ The JSON key `components` below is the wire format's name for the list of subpro
 | commitment | 64 bytes: SHA-512 of the product's id, a zero byte, and `{"components":[{"commitment":HEX,"id":ID},...]}`, the subprotocols' digests in order (`bind`); the product's own digest |
 | evidence | `{"components":[{"commitment":HEX,"evidence":HEX,"id":ID,"params":PARAMS},...]}`: each subprotocol's case (what its own `serve` reads), under its id, in the same order |
 
-All three are canonical JSON or bytes, and an object with a key missing or a key more is refused. The check runs each
+All three are canonical JSON or bytes, and an object with a key missing or a key more is refused. The verifier runs each
 subprotocol's `answer` on its case, then decides, reject first:
 
 | the subprotocols' answers | onsite / remote |

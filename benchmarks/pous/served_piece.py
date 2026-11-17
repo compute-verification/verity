@@ -43,7 +43,7 @@ same sessions, which no second session replaces. With neither, one process does 
    ``pous.json``'s ``key_pinned`` says whether it was signed under that pin, and ``key_pin`` whether the pin is the
    configuration's for the memory attester's PoUS sessions, ``configuration``, or the run's own, ``run``), and what
    an accepted run certifies (`period.certify`): ``⌊ρ·|C|⌋`` bits at ``1% + 2^-128``, at `ROUNDS` challenges as at
-   105 (`p2.wide320_certificate`'s ``2^-20`` is no run's certificate). The check's cost is the tie, which reads all of
+   105 (`p2.wide320_certificate`'s ``2^-20`` is no run's certificate). The verifier's cost is the tie, which reads all of
    ``C*``, not the rounds. With ``--case-exe``
    (``pous-run-protocol``, which `served_piece.sh` builds) the Lean answers the same case, and its answer is the
    verdict, refused unless it is the Python's but for the reason (`served_case.judged`): a Lean that answers

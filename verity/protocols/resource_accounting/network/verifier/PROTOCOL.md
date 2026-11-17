@@ -978,7 +978,7 @@ The inference-only policy charges an inference block the ingress covert capacity
 plus what survived that wipe, as a share of K: 9.12e7 bits under the inference-only policy (α·Γ = 9.6e−11 × 9.5e17).
 
 Every statement in the table's Lean column named `SecurityProofs.…` is a guarantee in `security/lean-audit.json`, frozen
-as no-function: each is stated over the model, not the network check's code (`security/Proofs/Certifier/README.md`,
+as no-function: each is stated over the model, not the network verifier's code (`security/Proofs/Certifier/README.md`,
 "The records"); one named `NetTiming.…` is a lemma, proved and audited, with no record. The ingress bounds
 are over a monitoring period (the K charge, `SecurityProofs.EncardIngressObsDecodableLe`) and per execution phase
 (`SecurityProofs.EncardIngressObsDecodableLePerExecutionPhase`, whose interaction is any link's). The egress charge per

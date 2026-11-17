@@ -1123,7 +1123,7 @@ Two gaps stood between these statements and the deployed verifier:
   24-byte salt, the table's leaves have the published root, the session audits that setup at the deployed point, is
   bound to that root and carries the designated id, and the verdict accepts it against the table under a key of the
   verifier's own list (`TRUSTED.json`, never the run's record). `check/tests/test_run.py` holds the two
-  to one another, and `Accepted` is now setup's acceptance and this check's.
+  to one another, and `Accepted` is now setup's acceptance and this verifier's.
 
 ## Named assumptions (`security/Definitions/Pous/Assumptions.lean`)
 

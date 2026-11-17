@@ -141,7 +141,7 @@ SHA-512 (`checkpoint` in `verity/protocols/registration/verifier/lean/Registrati
 recomputes the committed weight rows' root from the published checkpoint, so other weights of the same shapes can be
 credited.
 
-**A faster exact method.** No check refuses a program that gives the same words bit for bit (a Strassen-like schedule,
+**A faster exact method.** No verifier refuses a program that gives the same words bit for bit (a Strassen-like schedule,
 a low-rank split, a preprocessing of the fixed operand). One that does materially less work than the credit counts
 breaks no check: it falsifies TT_OUT rev1, and with it what the credit means.
 

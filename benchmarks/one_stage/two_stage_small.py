@@ -74,7 +74,7 @@ def template(v: int, units: int = 0) -> str:
 
 
 def token(out: Sequence[int]) -> int:
-    """The id a check's output is: its one 32-bit word, or its (low, high) 16-bit words."""
+    """The id a verifier's output is: its one 32-bit word, or its (low, high) 16-bit words."""
     return int(out[0]) if len(out) == 1 else int(out[0]) | int(out[1]) << 16
 
 

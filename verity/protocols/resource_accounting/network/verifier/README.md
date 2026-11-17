@@ -27,7 +27,7 @@ any of them commits; k_i is its steps and `Dj` bounds each step's jitter class.
 
 It bounds each execution phase's failure on its own: the union over the monitoring period's live coins is not stated,
 and `ExecutionPhaseGood` adds a condition no proof gives, the registration's values at the prover's registered inputs. It is a
-statement about the network attester's code (`recordingCode`), not about runs of the network check's Lean
+statement about the network attester's code (`recordingCode`), not about runs of the network verifier's Lean
 (`lean`, `NetworkCheck`), which is the verifier's code and states no bound.
 `NetTiming.Guarantees.PooledLeakAccepted` (`security/Definitions/Certifier/Guarantees/PooledLeak.lean`) is the
 pooled count, with the incorrect proof blocks paid for once over the monitoring period,
@@ -62,7 +62,7 @@ Open premises (`open`):
   `link_frame`, `network_attester`, `release`);
   `verity/protocols/compose/verifier/live_challenger`; `verity run`'s served table (`tools/verity/cli`); the tests of
   `../../compute/pouw/verifier` and `tools/verity`; and in `benchmarks/`, `network_traces`, `network_e2e`, `prove_path`,
-  `one_stage`, `pouw`, `poub_session`, `mempool` and `compile_cost`. In this directory, the network check's tests
+  `one_stage`, `pouw`, `poub_session`, `mempool` and `compile_cost`. In this directory, the network verifier's tests
   (`network/tests`) and vector script (`lean/scripts`) import it too. `../../../proofs/spot`, `../../../proofs/flock`
   and `../../../proofs/recursion` import none.
 - **Lean here**: `lean/` is the Lake package `network_check`, whose library `NetworkCheck` the

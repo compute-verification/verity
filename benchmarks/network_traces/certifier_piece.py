@@ -81,7 +81,7 @@ the active network attester in front of serve-openai there (its ``CERTIFIER_FRON
   SERVE_DIR/`PRIVATE`/held (0700) and reach DIR only through the record's leak guard (`leak_guard.py`), which reads DIR
   and the hold against the network attester run's witness, DIR declared to hold those files, the split's `CHAINED` and the logs
   alone (`PIECE_FILES`), moves what holds a piece of it or lies at another path to SERVE_DIR/`PRIVATE`/quarantine and
-  only then releases the rest. The check's three input files are the piece's case, and a case's evidence and params
+  only then releases the rest. The verifier's three input files are the piece's case, and a case's evidence and params
   are witness (`composite.py`), as the scan's answers are, that evidence less its certificates: neither is ever in
   DIR. Before the guard reads the hold, its period files become SERVE_DIR/`CASES`/`CASE` (`write_case`; the directory
   0700, the file 0600), the case as `composite.py` reads a piece's: ``{"commitment", "evidence", "params"}``, the
@@ -107,7 +107,7 @@ the active network attester in front of serve-openai there (its ``CERTIFIER_FRON
   a reject is DIR/answer.json as the piece's, an accept DIR/`CHAINED`. **period** runs once V3c's audit wrote
   V3C/period.json: steps 1, 2 and 4 again on the chain's kept report (no chain runs), then step 5 on the rows case whose
   one compute audit is V3C/period.json (`scan_period.rows_case`), held to the class circuit of the verifier's own
-  window-circuit record beside V3C (`class_circuit`); its answer is DIR/answer.json. The check reads an audit's state
+  window-circuit record beside V3C (`class_circuit`); its answer is DIR/answer.json. The verifier reads an audit's state
   entry among its ``roots`` and its ``registered`` alone, and V3c's registration holds its `SCAN_STATE` in its window's
   ``activations.values`` alone, so a workload's answer is a reject at the state tie. It answers nothing
   where the chain step refused (DIR/`REFUSED`) or rejected (its answer stands), and refuses where it left no

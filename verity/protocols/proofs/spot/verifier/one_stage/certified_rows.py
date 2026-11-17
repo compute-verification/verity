@@ -4,7 +4,7 @@
 A template's port may be one row of a certified table (PROTOCOL.md §12, `ports.In(certified=label)` on a parameter,
 `ports.Out(certified=label)` on its return). The label is the Program's, bound by its digest; the certified values it
 stands for are the verifier's: `labels`, ``{label: [value, ...]}`` in order, and `certified`, ``{value: {"root",
-"leaves", ...}}``. No check calls this yet.
+"leaves", ...}}``. No verifier calls this yet.
 
 * `read`, and `marks`, which raises its refusal: the Program's marked ports, sorted by template and port. A marked
   parameter is read by the port of its own name, a marked field `j` of the return by the output port ``o<j>``. Refused

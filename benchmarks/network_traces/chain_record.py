@@ -136,7 +136,7 @@ NETWORK_CERTIFIER_SERVED_STUBBED = (
     "the endpoint's advice is bound to the network certifier's certified I/O and rebuilt from it in the clear on the served node, "
     "the prover's, so the chain's endpoint step is the prover's report of that check, and the output tie to the "
     "Commit's port isn't proved", NETWORK_CERTIFIER_STUBBED[1])
-#: the rehearsal's strategies its own check accepts: token's changed bytes only the tie refuses
+#: the rehearsal's strategies its own verifier accepts: token's changed bytes only the tie refuses
 REHEARSAL_ACCEPTS = ("honest", "token")
 #: the scan's kinds of round whose window is accepted (scan_zk.ROUNDS), one a round an execution phase: the toy
 #: block's is proved like the honest one's
