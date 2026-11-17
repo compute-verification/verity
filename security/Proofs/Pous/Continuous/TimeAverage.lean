@@ -3,31 +3,7 @@ module
 public import Mathlib.Data.Fintype.Fin
 public import Proofs.Pous.Continuous.PerAnswer
 
-/-!
-# The continuous audit's time-averaged bound: `Pous.Guarantees.ContinuousTimeAverage`
-
-The proof, pinned as `Pous.SecurityProofs.ContinuousTimeAverage`. The memory challenger and the
-responder are `security/Definitions/Pous/Model/Continuous.lean`'s; the memory challenger flips one coin and one
-index per slot, and a challenge arrives at slot `t` iff its coin is below `a`.
-
-1. **The arrivals before `t`** (`pre`) are a prefix of all the arrivals, because the arrivals are sorted
-   (`arrivals_split`). If a challenge arrives at `t`, it is the next one (`arrAt_pre`, `histAt_get`).
-2. **The view at slot `t`.** Replace the arrival schedule by `arrS a x t`: the arrivals before `t`, then `t`. The state
-   after the challenges that arrived before `t` is the same under both (`contAfter_slot`), and it depends only on the
-   samples before `t` (`pre_congr`, `histAt_congr`). This is where queueing matters: the indices sent before the
-   challenge that arrives at `t` are `histAt a x t`, whatever the rounds did.
-3. **The bridge.** A challenge arriving at `t` is challenge `|pre a x t|`, and its record is the record of index
-   `(x t).2` in the view at `t` (`record_slot`). At an idle slot the view's memory at the send time is `contHeldAt`
-   (`contMem_slot`). The arriving slots inject into the records (`misses_le`), so an accepting run has at most `f`
-   arriving slots that miss.
-4. **One slot.** In the view at `t` the history `histAt a x t` and the schedule are fixed by the earlier samples, so
-   `PerAnswer.lean`'s `pr_bad_le` and `miss_ge` apply as they are: off `bad`, the slot's sample `(c, i)` is an arrival
-   that misses with probability at least `(a/b)·(ε_t − ε_proof)` (`slotQ_le`, with `pr_coin` and `pr_and_prod`).
-5. **Counting** (`pr_misses_gt_le`) over the `T` slot samples, with `q_t = (a/b)·max(ε_t − ε_proof, 0)` at an idle slot
-   off `bad` (`slotQ_eq`) and `0` elsewhere; the history `pr_misses_gt_le` indexes by is the list of earlier samples,
-   read back as a schedule by `pad`. The stopped union over the `T` slots costs `T·(β + 1)·π`
-   (`continuous_time_average`).
--/
+/-! The proof of `Pous.Guarantees.ContinuousTimeAverage`, the continuous audit's time-averaged bound. -/
 
 @[expose] public section
 
@@ -36,17 +12,13 @@ namespace PousContinuous
 open Pous PousThm1
 open scoped ENNReal
 
-/-! ## The arrivals before a time -/
-
 section Arrivals
 
 variable {T b B : ℕ}
 
-/-- The arrivals before time `t`. -/
 def pre (a : ℕ) (x : Fin T → Fin b × Fin B) (t : ℕ) : List (Fin T) :=
   (arrivals a x).filter fun s : Fin T => (s : ℕ) < t
 
-/-- The arrival schedule as seen at time `t`: the arrivals before `t`, then `t` for every later challenge. -/
 def arrS (a : ℕ) (x : Fin T → Fin b × Fin B) (t : ℕ) : ℕ → ℕ :=
   fun j => ((pre a x t).map Fin.val).getD j t
 
@@ -60,7 +32,6 @@ theorem length_histAt (a : ℕ) (x : Fin T → Fin b × Fin B) (t : ℕ) :
 theorem arrS_length (a : ℕ) (x : Fin T → Fin b × Fin B) (t : ℕ) : arrS a x t (pre a x t).length = t := by
   simp [arrS, List.getD_eq_getElem?_getD]
 
-/-- A sorted list is its elements below `t` followed by the rest. -/
 theorem sorted_split {l : List (Fin T)} (hl : l.Pairwise (· < ·)) (t : ℕ) :
     l = l.filter (fun s : Fin T => (s : ℕ) < t) ++ l.filter (fun s : Fin T => ¬ (s : ℕ) < t) := by
   induction l with
@@ -81,7 +52,6 @@ theorem sorted_split {l : List (Fin T)} (hl : l.Pairwise (· < ·)) (t : ℕ) :
       rw [List.filter_cons_of_neg (by simpa using hs), List.filter_cons_of_pos (by simpa using hs), h1, h2,
         List.nil_append]
 
-/-- In a sorted list that contains `t`, the first element not below `t` is `t`. -/
 theorem sorted_head {l : List (Fin T)} (hl : l.Pairwise (· < ·)) (t : Fin T) (ht : t ∈ l) :
     (l.filter fun s : Fin T => ¬ (s : ℕ) < t)[0]? = some t := by
   induction l with
@@ -110,12 +80,10 @@ theorem mem_arrivals {a : ℕ} {x : Fin T → Fin b × Fin B} {t : Fin T} (ht : 
     t ∈ arrivals a x := by
   simp [arrivals, ht]
 
-/-- The arrivals are those before `t`, then the rest. -/
 theorem arrivals_split (a : ℕ) (x : Fin T → Fin b × Fin B) (t : ℕ) :
     arrivals a x = pre a x t ++ (arrivals a x).filter fun s : Fin T => ¬ (s : ℕ) < t :=
   sorted_split (arrivals_sorted a x) t
 
-/-- Before the arrivals at or after `t`, the two schedules agree. -/
 theorem arrAt_lt (a : ℕ) (x : Fin T → Fin b × Fin B) (t j : ℕ) (hj : j < (pre a x t).length) :
     arrAt a x j = arrS a x t j := by
   have hj' : j < ((pre a x t).map Fin.val).length := by rwa [List.length_map]
@@ -124,7 +92,6 @@ theorem arrAt_lt (a : ℕ) (x : Fin T → Fin b × Fin B) (t j : ℕ) (hj : j < 
     List.getD_eq_getElem?_getD, List.getElem?_eq_getElem hj']
   rfl
 
-/-- **A challenge arriving at `t` is the next one**: its arrival time is `t`. -/
 theorem arrAt_pre (a : ℕ) (x : Fin T → Fin b × Fin B) (t : Fin T) (ht : ((x t).1 : ℕ) < a) :
     arrAt a x (pre a x t).length = t := by
   unfold arrAt
@@ -145,20 +112,17 @@ theorem histAt_T_split (a : ℕ) (x : Fin T → Fin b × Fin B) (t : ℕ) :
   rw [List.map_append]
   rfl
 
-/-- The indices sent before the challenge that arrives at `t` are `histAt a x t`. -/
 theorem take_histAt (a : ℕ) (x : Fin T → Fin b × Fin B) (t : ℕ) :
     (histAt a x T).take (pre a x t).length = histAt a x t := by
   rw [histAt_T_split a x t]
   exact List.take_left' (length_histAt a x t)
 
-/-- The challenge that arrives at `t` carries the index sampled at `t`. -/
 theorem histAt_get (a : ℕ) (x : Fin T → Fin b × Fin B) (t : Fin T) (ht : ((x t).1 : ℕ) < a) :
     (histAt a x T)[(pre a x t).length]? = some (x t).2 := by
   rw [histAt_T_split a x t, List.getElem?_append_right (by rw [length_histAt]), length_histAt, Nat.sub_self,
     List.getElem?_map, sorted_head (arrivals_sorted a x) t (mem_arrivals ht)]
   rfl
 
-/-- **The arrivals before `t` depend only on the samples before `t`.** -/
 theorem pre_congr (a : ℕ) {x x' : Fin T → Fin b × Fin B} {t : ℕ}
     (hx : ∀ s : Fin T, (s : ℕ) < t → x s = x' s) : pre a x t = pre a x' t := by
   unfold pre arrivals
@@ -182,8 +146,6 @@ theorem arrS_congr (a : ℕ) {x x' : Fin T → Fin b × Fin B} {t : ℕ}
 
 end Arrivals
 
-/-! ## The memory challenger reads the schedule only up to the next challenge -/
-
 section Congr
 
 variable {M : IdealModel} {sch : Scheme M} (mach : ContMachine sch) (D Q D_late Q_late : ℕ) (W : Bits sch.n)
@@ -196,7 +158,6 @@ theorem contAfter_append (arr : ℕ → ℕ) (h : List (Fin sch.B)) (i : Fin sch
   rw [List.foldl_append]
   rfl
 
-/-- The state after `h` reads the schedule only at the challenges of `h`. -/
 theorem contAfter_congr {arr arr' : ℕ → ℕ} (h : List (Fin sch.B)) (hag : ∀ j < h.length, arr j = arr' j) :
     contAfter mach D_late W pp C ω arr h = contAfter mach D_late W pp C ω arr' h := by
   induction h using List.reverseRecOn with
@@ -210,7 +171,6 @@ theorem contAfter_congr {arr arr' : ℕ → ℕ} (h : List (Fin sch.B)) (hag : �
     unfold contNext contProg contMem contSend
     rw [hl]
 
-/-- The record of the next round reads the schedule only at its own challenge. -/
 theorem contRecord_congr {arr arr' : ℕ → ℕ} (s : ContState sch.B) (i : Fin sch.B)
     (hl : arr s.sent.length = arr' s.sent.length) :
     contRecord mach D Q D_late Q_late W pp C ω arr s i = contRecord mach D Q D_late Q_late W pp C ω arr' s i := by
@@ -219,14 +179,11 @@ theorem contRecord_congr {arr arr' : ℕ → ℕ} (s : ContState sch.B) (i : Fin
 
 end Congr
 
-/-! ## The view at slot `t` -/
-
 section Slot
 
 variable {M : IdealModel} {sch : Scheme M} (mach : ContMachine sch) (D Q D_late Q_late : ℕ) (W : Bits sch.n)
   (pp : Bits sch.t) (C : sch.Code) (ω : M.Ω) (a : ℕ) {T b : ℕ} (x : Fin T → Fin b × Fin sch.B)
 
-/-- The state after the challenges that arrived before `t` is the same in the view at `t`. -/
 theorem contAfter_slot (t : ℕ) :
     contAfter mach D_late W pp C ω (arrAt a x) (histAt a x t) =
       contAfter mach D_late W pp C ω (arrS a x t) (histAt a x t) :=
@@ -238,7 +195,6 @@ theorem contIdle_iff (t : ℕ) :
   unfold contIdle
   rw [contAfter_slot]
 
-/-- **At an idle slot, the view's memory at the send time is the memory at `t`.** -/
 theorem contMem_slot (t : ℕ) (hi : contIdle mach D_late W pp C ω a x t) :
     (contMem mach W pp C ω (arrS a x t) (contAfter mach D_late W pp C ω (arrS a x t) (histAt a x t))).length =
       contHeldAt mach D_late W pp C ω a x t := by
@@ -247,8 +203,6 @@ theorem contMem_slot (t : ℕ) (hi : contIdle mach D_late W pp C ω a x t) :
   simp only [contAfter_sent, length_histAt, arrS_length, contAfter_slot]
   rw [max_eq_left hi]
 
-/-- **The bridge.** The challenge that arrives at `t` is round `|pre a x t|`, and its record is the record of index
-`(x t).2` in the view at `t`. -/
 theorem record_slot (t : Fin T) (ht : ((x t).1 : ℕ) < a) :
     (contRecords mach D Q D_late Q_late W pp C ω (arrAt a x) .start (histAt a x T))[(pre a x t).length]? =
       some (contRecord mach D Q D_late Q_late W pp C ω (arrS a x t)
@@ -270,7 +224,6 @@ theorem length_filter_eq_card {α : Type} (l : List α) (p : α → Prop) [Decid
   refine Finset.filter_congr fun j _ => ?_
   simp
 
-/-- **The arriving slots that miss are at most the rounds that miss.** -/
 theorem misses_le :
     (Finset.univ.filter fun t : Fin T => ((x t).1 : ℕ) < a ∧
         (contRecord mach D Q D_late Q_late W pp C ω (arrS a x t)
@@ -289,13 +242,9 @@ theorem misses_le :
 
 end Slot
 
-/-! ## One slot's sample -/
-
-/-- The coin is below `a` with probability `a/b`. -/
 theorem pr_coin (a b : ℕ) (hab : a ≤ b) : (pr fun c : Fin b => (c : ℕ) < a).toReal = a / b := by
   rw [pr_toReal, Fin.card_filter_val_lt, min_eq_right hab, Fintype.card_fin]
 
-/-- The two parts of a slot's sample are independent. -/
 theorem pr_and_prod {α β : Type} [Fintype α] [Fintype β] (P : α → Prop) (R : β → Prop) :
     (pr fun d : α × β => P d.1 ∧ R d.2).toReal = (pr P).toReal * (pr R).toReal := by
   classical
@@ -305,30 +254,24 @@ theorem pr_and_prod {α β : Type} [Fintype α] [Fintype β] (P : α → Prop) (
   rw [pr_toReal, pr_toReal, pr_toReal, hf, Finset.card_product, Fintype.card_prod, Nat.cast_mul, Nat.cast_mul,
     mul_div_mul_comm]
 
-/-- A history of samples, oldest first, as a sample at every slot: `d₀` past its end. -/
 def pad {α : Type} {T : ℕ} (d₀ : α) (h : List α) : Fin T → α := fun s => h.getD s d₀
 
 theorem pad_take {α : Type} {T : ℕ} (d₀ : α) (y : Fin T → α) (j : ℕ) (s : Fin T) (hs : (s : ℕ) < j) :
     pad d₀ ((List.ofFn y).take j) s = y s := by
   simp [pad, List.getD_eq_getElem?_getD, List.getElem?_take_of_lt hs]
 
-/-! ## The slot's verdict, its bad event and its share of the bound, in the view at `t` -/
-
 section SlotQ
 
 variable {M : IdealModel} (sch : Scheme M) (D Q D_late Q_late β : ℕ) (W : Bits sch.n) (mach : ContMachine sch)
   (a : ℕ) {T b : ℕ}
 
-/-- In the view at `t`, a challenge with index `i` arriving at `t` is a hit. -/
 def slotHit (u : M.Ω × sch.Coins) (x : Fin T → Fin b × Fin sch.B) (t : ℕ) (i : Fin sch.B) : Prop :=
   hitAt sch D Q D_late Q_late W mach (arrS a x t) u (histAt a x t) i
 
-/-- In the view at `t`, the memory and the non-hits fit in `β` bits. -/
 def slotBad (u : M.Ω × sch.Coins) (x : Fin T → Fin b × Fin sch.B) (t : ℕ) : Prop :=
   bad sch D Q D_late Q_late W mach (arrS a x t) β u (histAt a x t)
 
 open Classical in
-/-- The slot's share of the bound: `(a/b)·max(ε_t − ε_proof, 0)` at an idle slot off `slotBad`, else `0`. -/
 noncomputable def slotQ (u : M.Ω × sch.Coins) (x : Fin T → Fin b × Fin sch.B) (t : ℕ) : ℝ :=
   if slotBad sch D Q D_late Q_late β W mach a u x t then 0
   else if (contAfter mach D_late W (sch.enc W u.1 u.2).1 (sch.enc W u.1 u.2).2 u.1 (arrS a x t)
@@ -351,8 +294,6 @@ theorem slotQ_congr (u : M.Ω × sch.Coins) {x x' : Fin T → Fin b × Fin sch.B
   unfold slotQ slotBad
   rw [arrS_congr a hx, histAt_congr a hx]
 
-/-- **One slot.** The slot's share of the bound is at most the probability that its sample is an arrival that misses:
-`(a/b)·(ε_t − ε_proof)` off `slotBad`, by `miss_ge`. -/
 theorem slotQ_le (hab : a ≤ b) (u : M.Ω × sch.Coins) (x : Fin T → Fin b × Fin sch.B) (t : ℕ) :
     slotQ sch D Q D_late Q_late β W mach a u x t ≤
       (pr fun d : Fin b × Fin sch.B => (d.1 : ℕ) < a ∧ ¬ slotHit sch D Q D_late Q_late W mach a u x t d.2).toReal := by
@@ -367,7 +308,6 @@ theorem slotQ_le (hab : a ≤ b) (u : M.Ω × sch.Coins) (x : Fin T → Fin b ×
       (by positivity)
   · exact ENNReal.toReal_nonneg
 
-/-- At an idle slot off `slotBad`, the slot's share is `(a/b)·max(ε_t − ε_proof, 0)` at the memory at `t`. -/
 theorem slotQ_eq (u : M.Ω × sch.Coins) (x : Fin T → Fin b × Fin sch.B) (t : ℕ)
     (hb : ¬ slotBad sch D Q D_late Q_late β W mach a u x t) :
     slotQ sch D Q D_late Q_late β W mach a u x t =
@@ -386,7 +326,6 @@ theorem slotQ_eq (u : M.Ω × sch.Coins) (x : Fin T → Fin b × Fin sch.B) (t :
 end SlotQ
 
 open Classical in
-/-- **The continuous audit's time-averaged bound**, `Pous.Guarantees.ContinuousTimeAverage`, from `TimedINC`. -/
 theorem continuous_time_average : Pous.Guarantees.ContinuousTimeAverage := by
   intro M sch D Q D_late Q_late β T a b π hb hab hinc W mach f βe hβe
   have : Nonempty (Fin sch.B) := ⟨⟨0, sch.B_pos⟩⟩

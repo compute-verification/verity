@@ -40,19 +40,8 @@ import Mathlib.Topology.Sheaves.Init
 import Std.Tactic.BVDecide.Normalize.Prop
 import Proofs.Pous.Prob
 
-/-!
-# PoUB's per-pass lemma, the bandwidth audit v0 in the random-oracle model: the proof
-
-An accepted run with low ingress falls in one of three events, by whether the device queried the oracle at the
-contents of at least `k` blocks (`queried`):
-
-- fewer than `k`, and every sampled block among them: the sample's chance, `((k − 1)/N)^s` (`card_sample`);
-- a sampled block it never queried, with the right tag anyway: `2^-h` per sampled block, because changing the oracle
-  at that one point changes neither the run nor the tag the device committed to (`card_guess_le`);
-- at least `k`, with low ingress: `C(q, k)·2^-λ`, by compression (`card_compress_le`). The chip's state, the bits
-  device memory, side sources and regeneration answered with, and which `k` of its queries named blocks, determine
-  those `k` blocks given the oracle, since replaying the chip recomputes its queries (`Chip.replay_trace`).
--/
+/-! The proof of PoUB's per-pass lemma in the random-oracle model, over three events: the sample's chance, a guessed
+tag and compression. -/
 
 @[expose] public section
 
@@ -63,13 +52,10 @@ open scoped ENNReal
 
 variable {N b h S c G q : ℕ}
 
-/-- The blocks whose contents the device queried the oracle at. -/
 def queried (A : Device N b h S c G q) (E : Store N b) (O : Oracle N b h) : Finset (Fin N) :=
   Finset.univ.filter (fun j => (j, E j) ∈ (A.chip (A.state E)).queries (A.world E O))
 
 namespace AuditRO
-
-/-! ## The sample misses the blocks never queried -/
 
 theorem card_sample (K : Finset (Fin N)) (s : ℕ) [DecidablePred (fun I : Fin s → Fin N => ∀ i, I i ∈ K)] :
     (Finset.univ.filter (fun I : Fin s → Fin N => ∀ i, I i ∈ K)).card = K.card ^ s := by
@@ -77,8 +63,6 @@ theorem card_sample (K : Finset (Fin N)) (s : ℕ) [DecidablePred (fun I : Fin s
     ext I; simp [Fintype.mem_piFinset]
   rw [this, Fintype.card_piFinset]
   simp
-
-/-! ## A guessed tag -/
 
 theorem card_guess_le (A : Device N b h S c G q) (E : Store N b) (j : Fin N)
     [DecidablePred (fun O : Oracle N b h => j ∉ queried A E O ∧ A.tags E O j = O (j, E j))] :
@@ -97,24 +81,18 @@ theorem card_guess_le (A : Device N b h S c G q) (E : Store N b) (j : Fin N)
     rw [← h₁.2, ← h₂.2, ht]
   · exact hoff x hx
 
-/-! ## Compression -/
-
-/-- The stream a padded trace replays from. -/
 def stream (r : ℕ) (bits : Bits r) (n : ℕ) : Bool := if hn : n < r then bits ⟨n, hn⟩ else false
 
-/-- The queries a code (the chip's state, a padded trace and a set of query positions) replays to. -/
 def decoded (A : Device N b h S c G q) (O : Oracle N b h) (r : ℕ) (code : Bits S × Bits r × Finset ℕ) :
     List (Fin N × Bits b) :=
   (A.chip code.1).replay O (stream r code.2.1)
 
 open Classical in
-/-- The stores a code describes: those holding, at each named position's query, its block. -/
 noncomputable def fib (A : Device N b h S c G q) (O : Oracle N b h) (r : ℕ) (code : Bits S × Bits r × Finset ℕ) :
     Finset (Store N b) :=
   Finset.univ.filter (fun E => ∀ p ∈ code.2.2, ∀ x, (decoded A O r code)[p]? = some x → E x.1 = x.2)
 
 open Classical in
-/-- The blocks a code names. -/
 noncomputable def named (A : Device N b h S c G q) (O : Oracle N b h) (r : ℕ) (code : Bits S × Bits r × Finset ℕ) :
     Finset (Fin N) :=
   Finset.univ.filter (fun j => ∃ p ∈ code.2.2, ∃ x, (decoded A O r code)[p]? = some x ∧ x.1 = j)
@@ -262,7 +240,7 @@ theorem _root_.ResourceAccounting.SecurityProofs.Remote.AuditRO : ResourceAccoun
     exact bot_le
   refine (pr_mono hsplit).trans ?_
   refine (pr_or_le _ _).trans (add_le_add ((pr_or_le _ _).trans (add_le_add ?_ ?_)) ?_)
-  · -- the sample misses the blocks never queried
+  ·
     have hc := pr_le_of_card (fun x : Store N b × Oracle N b h × (Fin s → Fin N) =>
         (queried A x.1 x.2.1).card < k ∧ ∀ i, x.2.2 i ∈ queried A x.1 x.2.1) (N ^ s) ((k - 1) ^ s) hN (by
       rw [hΩ]
@@ -276,7 +254,7 @@ theorem _root_.ResourceAccounting.SecurityProofs.Remote.AuditRO : ResourceAccoun
       · simp [hk])
     refine hc.trans (le_of_eq ?_)
     rw [Nat.cast_pow, Nat.cast_pow, div_eq_mul_inv, div_eq_mul_inv, mul_pow, ENNReal.inv_pow]
-  · -- a guessed tag
+  ·
     refine (pr_exists_le _).trans ?_
     have hi : ∀ i : Fin s, pr (fun x : Store N b × Oracle N b h × (Fin s → Fin N) =>
         x.2.2 i ∉ queried A x.1 x.2.1 ∧ A.tags x.1 x.2.1 (x.2.2 i) = x.2.1 (x.2.2 i, x.1 (x.2.2 i))) ≤
@@ -289,7 +267,7 @@ theorem _root_.ResourceAccounting.SecurityProofs.Remote.AuditRO : ResourceAccoun
         exact card_guess_le A E (I i))
     refine (Finset.sum_le_sum (fun i _ => hi i)).trans (le_of_eq ?_)
     simp [div_eq_mul_inv]
-  · -- compression
+  ·
     refine (pr_le_of_card _ (2 ^ lam) (q.choose k) (by positivity) (by
       rw [hΩ]
       refine (card_filter_prod_le' _ _ (q.choose k * Fintype.card (Store N b)) (fun y => ?_)).trans

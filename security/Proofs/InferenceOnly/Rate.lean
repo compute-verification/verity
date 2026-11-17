@@ -2,15 +2,8 @@ module
 
 public import Definitions.InferenceOnly
 
-/-!
-# An exact tiling at `(c, k)` complies at its rate
-
-An inference block of a `(c, k)`-partition has at most `c` gates and at most `k` fresh input bits, each gate one bit
-wide. A block of fewer than `c` gates may read more than `k / c` fresh input bits per gate, so only a partition whose
-blocks have exactly `c` gates complies at `c` gates per block and the rate `k / c` (`compliesRate_of_complies`, with the
-tiling as its hypothesis). The guarantees are stated over `CompliesRate`, the form the inference-only check's verdicts
-read.
--/
+/-! An exact tiling at `(c, k)` complies at its rate; a block of fewer than `c` gates may read more than `k / c`
+fresh input bits per gate. -/
 
 @[expose] public section
 

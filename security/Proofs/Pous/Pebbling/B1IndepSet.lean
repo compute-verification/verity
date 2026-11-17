@@ -9,18 +9,12 @@ public import Proofs.Pous.Statements
 public import Proofs.Pous.Sanity
 public import Proofs.Pous.Accounting.Numbers
 
-/-!
-# B1: independent sets under a degree bound
-
-The draft `PousProofs.b1_indep_set`, stated verbatim and proved. A maximum independent set `s` dominates the graph:
-a vertex outside `s` with no neighbour in `s` could be added to it. So `n ≤ |s| + Σ_{u ∈ s} deg u ≤ (Δ + 1)|s|`.
--/
+/-! B1, independent sets under a degree bound: the draft `PousProofs.b1_indep_set`, stated verbatim and proved. -/
 
 @[expose] public section
 
 namespace PousPebbling
 
-/-- B1. A graph of maximum degree `Δ` on `n` vertices has an independent set of at least `n/(Δ + 1)` vertices. -/
 theorem b1_indep_set (n Δ : ℕ) (G : SimpleGraph (Fin n)) [DecidableRel G.Adj] (hΔ : ∀ v, G.degree v ≤ Δ) :
     ∃ s : Finset (Fin n), G.IsIndepSet (s : Set (Fin n)) ∧ n ≤ (Δ + 1) * s.card := by
   obtain ⟨s, hs⟩ := G.maximumIndepSet_exists (α := Fin n)
@@ -43,9 +37,6 @@ theorem b1_indep_set (n Δ : ℕ) (G : SimpleGraph (Fin n)) [DecidableRel G.Adj]
     _ ≤ s.card + ∑ _u ∈ s, Δ := Nat.add_le_add_left (Finset.sum_le_sum fun u _ => hΔ u) _
     _ = (Δ + 1) * s.card := by rw [Finset.sum_const, smul_eq_mul, Nat.succ_mul, Nat.mul_comm]; omega
 
-/-! ### Proposed corollary
-
-`construction-paths.md` §4 names the corollary only in prose: "the free fraction under local re-derivation". This is
-one reading of it, for review. -/
+/-! The proposed corollary below is one reading of "the free fraction under local re-derivation", for review. -/
 
 end PousPebbling

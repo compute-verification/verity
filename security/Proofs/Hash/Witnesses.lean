@@ -34,13 +34,8 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# What the hash area's witnesses share
-
-A list of messages whose digests are pairwise different holds no collision among any of its messages
-(`not_collisionIn`), and the hm96 mask of an all-zero salt is zero (`mask_zero`), so a witness's commit string is its
-digest beside the salt's hash, which the kernel computes without the mask's 1536 terms a bit.
--/
+/-! Lemmas the hash area's witnesses share: pairwise-different digests hold no collision, and an all-zero salt's
+hm96 mask is zero. -/
 
 @[expose] public section
 

@@ -7,25 +7,7 @@ import Mathlib.Combinatorics.SimpleGraph.Init
 import Mathlib.Data.Sym.Sym2.Init
 import Mathlib.Tactic.IntervalCases
 
-/-!
-# The band-graph certificate for the two-directional column game
-
-`band_scheduleBound` proves the schedule bound of `columnHard_of_schedule` for `B(n, k)`, so
-`band_columnHard_twoWay` gives `ColumnHard (bandGraph n k) d n X` from arithmetic side conditions.
-
-**Proof.** Charge each rebuilt label to the start of its rebuild segment (`weighted_starts`); a start at round `t`
-collects `Ψ t = Σ_{u ∈ U} (r u − t)`.
-* **The truncated start.** At most one start is below `k`. It collects at most `Ψ 1 = Σ_u (r u − 1)`, bounded by the
-  rank sum (`band_rank_sum`).
-* **A full start** has a window of `k` seeds (held or promoted), all whole before it. Its benefit is charged to the
-  dropped segments by their ends (`weighted_ends`).
-  - **Rounds 1–2.** Every seed pays `n − |U|`.
-  - **A late non-final dropped segment exists.** Every seed pays for that segment's `k` held successors, whose
-    columns are not yet revealed, so the window pays `k²` per late segment.
-  - **Free.** No non-final segment is late, so only the final segment benefits, by at most `tri (d − t)`.
-* **Free starts from round `τ` on.** Every non-final dropped top finishes by `τ − 3`. So the rank sum is at most
-  `⌊n/k⌋·tri (τ − 4) + tri (d − 1)`, and the free starts add at most `⌊n/(k+1)⌋·tri (d − τ)`.
--/
+/-! The band-graph certificate for the two-directional column game. -/
 
 @[expose] public section
 
@@ -35,7 +17,6 @@ open Pous Pous.ColumnGame
 
 variable {n : ℕ}
 
-/-- **The band schedule bound.** -/
 theorem band_scheduleBound (n k d X p q : ℕ) (hk : 1 ≤ k) (hq : 1 ≤ q)
     (hA : ∑ i ∈ Finset.range d, (q * i - p) ≤ p * k) (hX : p * (n + k) ≤ q * X * n)
     (hT : 2 * tri (d - 3) ≤ k * k)
@@ -49,7 +30,6 @@ theorem band_scheduleBound (n k d X p q : ℕ) (hk : 1 ≤ k) (hq : 1 ≤ q)
   have htB : ∀ a b, Band k a b → a ∈ R → b ∈ R → t a < t b := fun a b h _ hb =>
     ((hR b hb).2.2 a ((mem_par_band hk a b).2 h)).2
   have hUn : U.card ≤ n := by have := Finset.card_le_univ U; rwa [Fintype.card_fin] at this
-  -- the dropped tops fill at most `⌊d(n+k)/(k+d)⌋` nodes
   have hUmax : U.card ≤ d * (n + k) / (k + d) := by
     have hchains : ∀ p : List (Fin n), p.IsChain (Band k) → (∀ x ∈ p, x ∈ U) → p.length ≤ d :=
       chain_length_le_of_rank (fun x => x ∈ U) r d (fun a b h ha hb => hrB a b h ha hb) hrU
@@ -59,7 +39,6 @@ theorem band_scheduleBound (n k d X p q : ℕ) (hk : 1 ≤ k) (hq : 1 ≤ q)
       have e : d * (n - U.card) + d * U.card = d * n := by rw [← Nat.mul_add, Nat.sub_add_cancel hUn]
       nlinarith
     exact (Nat.le_div_iff_mul_le (by omega)).2 this
-  -- the rank sum
   set S1 := ∑ u ∈ U, (r u - 1) with hS1def
   have hS1q : q * S1 ≤ p * (n + k) := by
     have hrank := band_rank_sum k p q d U r hrB hrU
@@ -80,7 +59,6 @@ theorem band_scheduleBound (n k d X p q : ℕ) (hk : 1 ≤ k) (hq : 1 ≤ q)
         _ ≤ q * (k * (n - d * (n + k) / (k + d))) := hK
         _ ≤ q * (k * (n - U.card)) := by gcongr
     exact Nat.le_of_mul_le_mul_left h1 (by omega)
-  -- weights per rebuilt label and per start
   set φ : ℕ → ℕ := fun x => (U.filter fun u => x < r u).card with hφ
   set Ψ : ℕ → ℕ := fun x => ∑ u ∈ U, (r u - x) with hΨdef
   have hΨ : ∀ x, φ x + Ψ (x + 1) ≤ Ψ x := by
@@ -91,15 +69,12 @@ theorem band_scheduleBound (n k d X p q : ℕ) (hk : 1 ≤ k) (hq : 1 ≤ q)
     split_ifs <;> omega
   have hmono : ∀ x y, x ≤ y → Ψ y ≤ Ψ x := fun x y h => Finset.sum_le_sum fun u _ => by omega
   have hWS : ∑ w ∈ R, φ (t w) ≤ ∑ s ∈ starts k R, Ψ (t s) := weighted_starts k t φ Ψ hΨ hmono R htB
-  -- ends of the dropped set: non-final (with `k` successors) and final
   set NF := (ends k U).filter fun x => x.val + k < n with hNF
-  -- seed costs
   set c : Fin n → ℕ := fun a => if a ∈ L0 then n - U.card else (ndHeld (bandGraph n k) U r (t a)).card with hc
   set F : Fin n → ℕ := fun s => if 3 ≤ t s ∧ ∀ x ∈ NF, r x + 3 ≤ t s then tri (d - t s) else 0 with hF
   set St := starts k R with hSt
   set Fu := St.filter fun v => k ≤ v.val with hFu
   set Sm := St.filter fun v => ¬ k ≤ v.val with hSm
-  -- per full start
   have hper : ∀ s ∈ Fu, Ψ (t s) ≤ ∑ a ∈ window k s, c a + F s := by
     intro s hs
     have hsSt : s ∈ St := Finset.filter_subset _ _ hs
@@ -138,7 +113,6 @@ theorem band_scheduleBound (n k d X p q : ℕ) (hk : 1 ≤ k) (hq : 1 ≤ q)
         _ ≤ ∑ a ∈ window k s, c a := Finset.sum_le_sum hca
         _ ≤ _ := Nat.le_add_right _ _
     · push Not at hts
-      -- charge the benefit to the ends of the dropped segments
       have hWE := weighted_ends k r (fun x => x - t s) (fun x => tri (x - t s)) (fun x => tri_step (t s) x)
         (fun x y h => tri_mono (by omega)) U hrB
       have hsplitE := Finset.sum_filter_add_sum_filter_not (ends k U) (fun x => x.val + k < n)
@@ -174,7 +148,7 @@ theorem band_scheduleBound (n k d X p q : ℕ) (hk : 1 ≤ k) (hq : 1 ≤ q)
               rw [← hNFsplit, hearly, add_zero]
               exact Nat.add_le_add hlate hfinal
       rcases Nat.eq_zero_or_pos LateNF.card with h0 | hpos
-      · -- free: only the final segment benefits
+      ·
         have hfree : 3 ≤ t s ∧ ∀ x ∈ NF, r x + 3 ≤ t s := by
           refine ⟨hts, fun x hx => ?_⟩
           by_contra hlt
@@ -186,7 +160,7 @@ theorem band_scheduleBound (n k d X p q : ℕ) (hk : 1 ≤ k) (hq : 1 ≤ q)
         rw [hFs]
         rw [h0, zero_mul, zero_add] at hΨle
         exact hΨle.trans (Nat.le_add_left _ _)
-      · -- a late non-final segment: the seeds pay `k` per late end
+      ·
         set Kset := Finset.univ.filter fun v : Fin n =>
           v ∉ U ∧ ∃ x ∈ (bandGraph n k).par v, x ∈ U ∧ t s ≤ r x + 2 with hK'
         have hKcard : LateNF.card * k ≤ Kset.card := by
@@ -223,7 +197,6 @@ theorem band_scheduleBound (n k d X p q : ℕ) (hk : 1 ≤ k) (hq : 1 ≤ q)
           _ ≤ k * Kset.card := Nat.mul_le_mul_left _ hKcard
           _ ≤ ∑ a ∈ window k s, c a := hsumK
           _ ≤ _ := Nat.le_add_right _ _
-  -- the windows of full starts are disjoint and lie in the held and promoted labels
   have hcost : ∑ s ∈ Fu, ∑ a ∈ window k s, c a ≤
       L0.card * (n - U.card) + ∑ p ∈ P, (ndHeld (bandGraph n k) U r (t p)).card := by
     have hdisj : (Fu : Set (Fin n)).PairwiseDisjoint (window k) := by
@@ -251,14 +224,12 @@ theorem band_scheduleBound (n k d X p q : ℕ) (hk : 1 ≤ k) (hq : 1 ≤ q)
           · refine Finset.sum_congr rfl fun a ha => ?_
             have : a ∉ L0 := (hP a ha).1
             simp only [hc, this, ↓reduceIte]
-  -- the truncated start
   have hSmle : ∑ s ∈ Sm, Ψ (t s) ≤ S1 := by
     have hcard : Sm.card ≤ 1 := starts_small_card_le_one k R
     calc ∑ s ∈ Sm, Ψ (t s) ≤ Sm.card • Ψ 1 := Finset.sum_le_card_nsmul _ _ _ fun s hs =>
           hmono _ _ (hR s (starts_subset k R (Finset.filter_subset _ _ hs))).2.1
       _ ≤ 1 * Ψ 1 := by rw [smul_eq_mul]; exact Nat.mul_le_mul_right _ hcard
       _ = S1 := one_mul _
-  -- the free starts
   have hfree : S1 + ∑ s ∈ Fu, F s ≤ X * n := by
     set Fr := Fu.filter fun s => 3 ≤ t s ∧ ∀ x ∈ NF, r x + 3 ≤ t s with hFr
     have hFsum : ∑ s ∈ Fu, F s = ∑ s ∈ Fr, tri (d - t s) :=
@@ -279,7 +250,7 @@ theorem band_scheduleBound (n k d X p q : ℕ) (hk : 1 ≤ k) (hq : 1 ≤ q)
               rw [smul_eq_mul]; exact Nat.mul_le_mul_right _ (Finset.card_le_card (Finset.filter_subset _ _))
       have hFu : Fu.card ≤ n / (k + 1) := (Nat.le_div_iff_mul_le (by omega)).2 (full_starts_mul_le k R)
       by_cases hτd : τ ≤ d
-      · -- the rank sum, charged to ends: non-final ends finish by `τ − 3`
+      ·
         have hWE := weighted_ends k r (fun x => x - 1) (fun x => tri (x - 1)) (fun x => tri_step 1 x)
           (fun x y h => tri_mono (by omega)) U hrB
         have hsplitE := Finset.sum_filter_add_sum_filter_not (ends k U) (fun x => x.val + k < n)
@@ -313,13 +284,12 @@ theorem band_scheduleBound (n k d X p q : ℕ) (hk : 1 ≤ k) (hq : 1 ≤ q)
               gcongr
               exact hFrle.trans (Nat.mul_le_mul_right _ hFu)
           _ ≤ X * n := hB τ hτ3 hτd
-      · -- past the horizon the free starts collect nothing
+      ·
         have h0 : ∑ s ∈ Fr, tri (d - t s) = 0 := by
           refine Finset.sum_eq_zero fun s hs => ?_
           have h1 : d - t s = 0 := by have := hτle s hs; omega
           rw [h1]; rfl
         rw [hFsum, h0, add_zero]; exact hS1X
-  -- assemble
   have hsplitS : ∑ s ∈ St, Ψ (t s) = ∑ s ∈ Fu, Ψ (t s) + ∑ s ∈ Sm, Ψ (t s) :=
     (Finset.sum_filter_add_sum_filter_not St _ _).symm
   have hFuΨ : ∑ s ∈ Fu, Ψ (t s) ≤ ∑ s ∈ Fu, ∑ a ∈ window k s, c a + ∑ s ∈ Fu, F s := by
@@ -332,7 +302,6 @@ theorem band_scheduleBound (n k d X p q : ℕ) (hk : 1 ≤ k) (hq : 1 ≤ q)
         gcongr
     _ ≤ X * n + L0.card * (n - U.card) + ∑ p ∈ P, (ndHeld (bandGraph n k) U r (t p)).card := by omega
 
-/-- **The band certificate, two-directional game.** -/
 theorem band_columnHard_twoWay (n k d X p q : ℕ) (hk : 1 ≤ k) (hq : 1 ≤ q)
     (hA : ∑ i ∈ Finset.range d, (q * i - p) ≤ p * k) (hX : p * (n + k) ≤ q * X * n)
     (hT : 2 * tri (d - 3) ≤ k * k)
@@ -341,19 +310,14 @@ theorem band_columnHard_twoWay (n k d X p q : ℕ) (hk : 1 ≤ k) (hq : 1 ≤ q)
     ColumnHard (bandGraph n k) d n X :=
   columnHard_of_schedule _ d X (band_scheduleBound n k d X p q hk hq hA hX hT hK hB)
 
-/-! ### The operating points -/
-
-/-- **`B(220, 12)` at `d = 10`** (`D = 20` oracle rounds): saving at most 3 labels (`p/q = 5/2`). -/
 theorem band_twoWay_220_12 : ColumnHard (bandGraph 220 12) 10 220 3 :=
   band_columnHard_twoWay 220 12 10 3 5 2 (by norm_num) (by norm_num) (by decide) (by norm_num) (by decide)
     (by norm_num) (by intro τ h3 hd; interval_cases τ <;> decide)
 
-/-- **`B(220, 12)` at `d = 11`** (`D ≤ 22`): saving at most 3 labels (`p/q = 13/5`). -/
 theorem band_twoWay_220_12_d11 : ColumnHard (bandGraph 220 12) 11 220 3 :=
   band_columnHard_twoWay 220 12 11 3 13 5 (by norm_num) (by norm_num) (by decide) (by norm_num) (by decide)
     (by norm_num) (by intro τ h3 hd; interval_cases τ <;> decide)
 
-/-- **`B(220, 16)` at `d = 12`** (`D ≤ 24`): saving at most 3 labels (`p/q = 13/5`). -/
 theorem band_twoWay_220_16 : ColumnHard (bandGraph 220 16) 12 220 3 :=
   band_columnHard_twoWay 220 16 12 3 13 5 (by norm_num) (by norm_num) (by decide) (by norm_num) (by decide)
     (by norm_num) (by intro τ h3 hd; interval_cases τ <;> decide)

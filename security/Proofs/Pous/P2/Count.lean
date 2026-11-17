@@ -20,13 +20,7 @@ public import Proofs.Pous.Statements
 public import Proofs.Pous.Sanity
 public import Proofs.Pous.Accounting.Numbers
 
-/-!
-# Lemma A over permutations of any finite type
-
-A2's lazy-sampling count with `Bits ℓ` replaced by any finite type `X` with `N = |X|` points, and the
-responder given directly as query trees over `Fin B × X`. `count_main` is the counting form of Lemma A with `N^g` in
-place of `2^(ℓ·g)`.
--/
+/-! Lemma A over permutations of any finite type. -/
 
 @[expose] public section
 
@@ -35,9 +29,6 @@ namespace PousGen
 open Pous Finset
 open scoped ENNReal
 
-/-! ## Query trees -/
-
-/-- A query tree: one query per node. -/
 inductive Tree (Q A α : Type) : Type where
   | ret : α → Tree Q A α
   | ask : Q → (A → Tree Q A α) → Tree Q A α
@@ -88,7 +79,6 @@ theorem work_askList (f : Q → A) (qs : List Q) (c : List A → Tree Q A α) :
 
 end Tree
 
-/-- An `OracleAlgorithm` as a query tree, one query per node. -/
 def toTree {M : IdealModel} {α : Type} : OracleAlgorithm M α → Tree M.Qry M.Ans α
   | .ret a => .ret a
   | .round qs k => Tree.askList qs (fun as => toTree (k as))
@@ -105,7 +95,6 @@ theorem work_toTree {M : IdealModel} {α : Type} (f : M.Qry → M.Ans) (p : Orac
   | ret a => rfl
   | round qs k ih => simp only [toTree, Tree.work_askList, OracleAlgorithm.work]; rw [ih]; omega
 
-/-- The trees `p i`, `i ∈ l`, one after another; block `i` of the output is `p i`'s output. -/
 def comb {Q A ι β : Type} [DecidableEq ι] (p : ι → Tree Q A β) (d : ι → β) : List ι → Tree Q A (ι → β)
   | [] => .ret d
   | i :: l => (p i).bind fun b => (comb p d l).bind fun F => .ret (Function.update F i b)
@@ -129,35 +118,27 @@ theorem work_comb {Q A ι β : Type} [DecidableEq ι] (p : ι → Tree Q A β) (
       have := hp j
       nlinarith
 
-/-! ## Counting permutation tuples along a transcript -/
-
 section Count
 
 variable {B : ℕ} {X : Type} [Fintype X] [DecidableEq X]
 
-/-- The sample space of M1. -/
 abbrev Om (B : ℕ) (X : Type) : Type := Fin B → Equiv.Perm (X)
 
-/-- An answered query: `((j, x), y)` records `Π_j(x) = y`. -/
 abbrev Ent (B : ℕ) (X : Type) : Type := (Fin B × X) × X
 
-/-- The query tree the responder runs. -/
 abbrev T0 (B : ℕ) (X : Type) : Type := Tree (Fin B × X) (X) (Fin B → X)
 
 def ans (ω : Om B X) (q : Fin B × X) : X := ω q.1 q.2
 
 open Classical in
-/-- The permutation tuples consistent with the transcript `L`. -/
 noncomputable def cons (L : List (Ent B X)) : Finset (Om B X) :=
   univ.filter fun ω => ∀ e ∈ L, ω e.1.1 e.1.2 = e.2
 
 open Classical in
-/-- The answers of block `j` recorded in `L`. -/
 noncomputable def R (L : List (Ent B X)) (j : Fin B) : Finset (X) :=
   univ.filter fun y => ∃ x, ((j, x), y) ∈ L
 
 open Classical in
-/-- The blocks of `G` whose target has not been hit in `L`. -/
 noncomputable def Gp (G : Finset (Fin B)) (Wv : Fin B → X) (L : List (Ent B X)) : Finset (Fin B) :=
   G.filter fun i => Wv i ∉ R L i
 
@@ -213,7 +194,6 @@ theorem R_cons_ne (L : List (Ent B X)) {i j : Fin B} (h : i ≠ j) (x y : X) :
     · exact ⟨x', h'⟩
   · rintro ⟨x', h'⟩; exact ⟨x', Or.inr h'⟩
 
-/-- Splitting the consistent tuples by the answer to `(j, x)`. -/
 theorem card_split (L : List (Ent B X)) (j : Fin B) (x : X) (P : Om B X → Prop) [DecidablePred P] :
     ((cons L).filter P).card = ∑ y, ((cons (((j, x), y) :: L)).filter P).card := by
   classical
@@ -223,7 +203,6 @@ theorem card_split (L : List (Ent B X)) (j : Fin B) (x : X) (P : Om B X → Prop
   congr 1
   ext ω; simp [and_comm]
 
-/-- Swapping two answers unused by block `j` maps the tuples answering `y` at `(j, x)` into those answering `y'`. -/
 theorem card_cons_le (L : List (Ent B X)) (j : Fin B) (x : X) {y y' : X} (hy : y ∉ R L j)
     (hy' : y' ∉ R L j) : (cons (((j, x), y) :: L)).card ≤ (cons (((j, x), y') :: L)).card := by
   classical
@@ -249,7 +228,6 @@ theorem card_cons_le (L : List (Ent B X)) (j : Fin B) (x : X) {y y' : X} (hy : y
     have h2 := congrArg (fun ω => Function.update ω j (Equiv.swap y y' * ω j)) h
     simpa [φ, ← mul_assoc] using h2
 
-/-- Each answer unused by block `j` is taken by at most a `1/(M − r)` fraction of the consistent tuples. -/
 theorem cons_step_le (L : List (Ent B X)) (j : Fin B) (x : X) {y : X} (hy : y ∉ R L j) :
     (cons (((j, x), y) :: L)).card * (Fintype.card (X) - (R L j).card) ≤ (cons L).card := by
   classical
@@ -285,8 +263,6 @@ theorem Ssum_succ (T g : ℕ) : Ssum (T + 1) (g + 1) = Ssum T (g + 1) + Ssum T g
 
 variable (G : Finset (Fin B)) (Wv : Fin B → X)
 
-/-- Guessing: the targets of the unhit blocks `s` at fixed points `o i` hold on at most a
-`∏_{i ∈ s} 1/(M − r_i)` fraction of the consistent tuples. -/
 theorem base (o : Fin B → X) : ∀ (s : Finset (Fin B)) (L : List (Ent B X)), (∀ i ∈ s, Wv i ∉ R L i) →
     ((cons L).filter fun ω => ∀ i ∈ s, ω i (o i) = Wv i).card *
       ∏ i ∈ s, (Fintype.card (X) - (R L i).card) ≤ (cons L).card := by
@@ -315,8 +291,6 @@ theorem base (o : Fin B → X) : ∀ (s : Finset (Fin B)) (L : List (Ent B X)), 
           Nat.mul_le_mul_right _ h1
       _ ≤ _ := h2
 
-/-- **The invariant.** Along a transcript `L`, a tree of at most `T` further queries gets every block of `G` right
-on at most a `Σ_{h ≤ |G'|} C(T, h) / ∏_{i ∈ G'} (M − r_i)` fraction of the consistent tuples. -/
 theorem inv (t : T0 B X) : ∀ (L : List (Ent B X)) (T : ℕ), (∀ ω ∈ cons L, t.work (ans ω) ≤ T) →
     cnt G Wv t L * Pi G Wv L ≤ Ssum T (Gp G Wv L).card * (cons L).card := by
   classical
@@ -363,7 +337,7 @@ theorem inv (t : T0 B X) : ∀ (L : List (Ent B X)) (T : ℕ), (∀ ω ∈ cons 
       have hωy := (hmem y ω hω).2
       simp only [Tree.run, ans, hωy]
     by_cases hj : j ∉ Gp G Wv L
-    · -- a query to a block outside `G'`: nothing to hit
+    ·
       have hGp : ∀ y, Gp G Wv (((j, x), y) :: L) = Gp G Wv L := by
         intro y; ext i
         simp only [Gp, mem_filter]
@@ -391,7 +365,7 @@ theorem inv (t : T0 B X) : ∀ (L : List (Ent B X)) (T : ℕ), (∀ ω ∈ cons 
     push Not at hj
     have hWj : Wv j ∉ R L j := (mem_filter.1 hj).2
     by_cases hx : ∃ v, ((j, x), v) ∈ L
-    · -- a repeated query: its answer is known
+    ·
       obtain ⟨v, hv⟩ := hx
       have hconsv : cons (((j, x), v) :: L) = cons L := by
         rw [cons_cons]
@@ -416,7 +390,6 @@ theorem inv (t : T0 B X) : ∀ (L : List (Ent B X)) (T : ℕ), (∀ ω ∈ cons 
       rw [hc]
       exact this.trans (Nat.mul_le_mul_right _ (Ssum_mono (by omega) _))
     push Not at hx
-    -- a fresh query to a block of `G'`: a hit, or a miss that shrinks the free range
     obtain ⟨m, hm⟩ : ∃ m, Fintype.card (X) - (R L j).card = m := ⟨_, rfl⟩
     obtain ⟨P0, hP0⟩ : ∃ P0, ∏ i ∈ (Gp G Wv L).erase j, (Fintype.card (X) - (R L i).card) = P0 :=
       ⟨_, rfl⟩
@@ -433,7 +406,6 @@ theorem inv (t : T0 B X) : ∀ (L : List (Ent B X)) (T : ℕ), (∀ ω ∈ cons 
       exact absurd (this ▸ hx') (hx y)
     have hRne : ∀ i ∈ (Gp G Wv L).erase j, ∀ y, R (((j, x), y) :: L) i = R L i :=
       fun i hi y => R_cons_ne L (ne_of_mem_erase hi) _ _
-    -- the hit
     have hGpW : Gp G Wv (((j, x), Wv j) :: L) = (Gp G Wv L).erase j := by
       ext i
       simp only [Gp, mem_filter, mem_erase]
@@ -453,7 +425,6 @@ theorem inv (t : T0 B X) : ∀ (L : List (Ent B X)) (T : ℕ), (∀ ω ∈ cons 
             Nat.mul_le_mul_right _ h
         _ = Ssum T' ((Gp G Wv L).erase j).card * ((cons (((j, x), Wv j) :: L)).card * m) := by ring
         _ ≤ _ := Nat.mul_le_mul_left _ (hm ▸ cons_step_le L j x hWj)
-    -- the misses
     obtain ⟨rest, hrest0⟩ : ∃ rest, (insert (Wv j) (R L j))ᶜ = rest := ⟨_, rfl⟩
     have hrest : rest.card = m - 1 := by
       rw [← hrest0, card_compl, card_insert_of_notMem hWj]; omega
@@ -500,8 +471,6 @@ theorem inv (t : T0 B X) : ∀ (L : List (Ent B X)) (T : ℕ), (∀ ω ∈ cons 
 
 end Count
 
-/-! ## One state, one set of blocks, and the union -/
-
 section Main
 
 variable {B : ℕ} {X : Type} [Fintype X] [DecidableEq X]
@@ -516,8 +485,6 @@ theorem Pi_nil (G : Finset (Fin B)) (Wv : Fin B → X) :
   have hR : ∀ i, R ([] : List (Ent B X)) i = ∅ := fun i => by ext y; simp [mem_R]
   simp [Pi, Gp_nil, hR]
 
-/-- The `|G|` trees of one state, run one after another: all of `G` correct on at most a
-`Σ_{h ≤ |G|} C(|G|·Q, h) / N^|G|` fraction of the permutation tuples, `N = |X|`. -/
 theorem count_G (p : Fin B → Tree (Fin B × X) X X) (Q : ℕ) (hp : ∀ i (ω : Om B X), (p i).work (ans ω) ≤ Q)
     (d : Fin B → X) (Wv : Fin B → X) (G : Finset (Fin B)) :
     (univ.filter fun ω : Om B X => ∀ i ∈ G, ω i ((p i).run (ans ω)) = Wv i).card *
@@ -539,8 +506,6 @@ theorem count_G (p : Fin B → Tree (Fin B × X) X X) (Q : ℕ) (hp : ∀ i (ω 
   rw [← e]
   exact h
 
-/-- **Lemma A over any finite domain, as a count.** The union over the `2^S` states and the `C(B, g)` sets of `g`
-blocks. -/
 theorem count_main (S Q g : ℕ) (p : Bits S → Fin B → Tree (Fin B × X) X X)
     (hp : ∀ σ i (ω : Om B X), (p σ i).work (ans ω) ≤ Q) (d : Fin B → X) (Wv : Fin B → X)
     (σf : Om B X → Bits S) :
@@ -584,7 +549,6 @@ theorem count_main (S Q g : ℕ) (p : Bits S → Fin B → Tree (Fin B × X) X X
 
 end Main
 
-/-- Filters by equivalent predicates, whatever their decidability instances, have the same size. -/
 theorem card_filter_congr {α : Type} [Fintype α] (P P' : α → Prop) (d : DecidablePred P) (d' : DecidablePred P')
     (h : ∀ x, P x ↔ P' x) : (@Finset.filter α P d univ).card = (@Finset.filter α P' d' univ).card := by
   congr 1

@@ -22,19 +22,8 @@ import Mathlib.Tactic.ReduceModChar
 import Proofs.Pous.Sanity
 import Proofs.Pous.Thm1.Theorem1iTimed
 
-/-!
-# The certificate in model M1 (`Pous.m1`)
-
-`m1`'s correctness and sizes; `gammaA2`, A2's bound at a domain of `2^ℓ` points; the certificate `P2Row`, `A7Row`'s log
-form, which closes the history union at `λ' = 128` (`hist_gamma_le`); and `meets_m1_of_row`, `Meets` for `m1` given the
-open `Pous.Guarantees.A2LemmaAM1` and a row. A3′ is `PousTrackA.a3_prime_lam`, the proof of `Guarantees.A3PrimeLam`.
-`security/Proofs/Pous/P2/Domain.lean` applies the same certificate on P2's exact domain, where Lemma A is proved,
-not assumed.
-
-The certificate bounds `log₂ |Hist| ≤ k·log₂ B`, `log₂ C(B, g) ≤ B`, and
-`log₂ Σ_{h ≤ g} C((g+1)T, h) ≤ g·log₂ T + (g + 1)/ln 2` (from `C(N, h) ≤ N^h/h!` and `Σ g^h/h! ≤ e^g`), so the
-final check is linear arithmetic with `ln 2 > 0.6931471803`.
--/
+/-! The certificate in model M1 (`Pous.m1`), which gives `Meets` for `m1` given the open
+`Pous.Guarantees.A2LemmaAM1` and a row. -/
 
 @[expose] public section
 
@@ -42,8 +31,6 @@ namespace PousP2
 
 open Pous Pous.Assumptions
 open scoped ENNReal
-
-/-! ### Model M1: correctness and sizes -/
 
 theorem m1_correct (B ℓ : ℕ) [NeZero B] : (m1 B ℓ).Correct := by
   intro W ω r
@@ -59,13 +46,9 @@ theorem m1_spaceBound (B ℓ : ℕ) [NeZero B] : (m1 B ℓ).SpaceBound Params.ex
   rw [Nat.add_zero]
   linarith
 
-/-! ### Lemma A in M1 from A2 -/
-
-/-- A2's bound, `2^S · C(B, g) · Σ_{h ≤ g} C((g+1)·Q, h) / 2^(ℓ·g)`: `gammaM1` at a domain of `2^ℓ` points. -/
 noncomputable def gammaA2 (B ℓ S Q g : ℕ) : ℝ≥0∞ :=
   2 ^ S * (B.choose g) * (∑ h ∈ Finset.range (g + 1), (((g + 1) * Q).choose h : ℝ≥0∞)) / 2 ^ (ℓ * g)
 
-/-- A2 is Lemma A for `m1` with the good event `True` (M1 has no coins, so the setup is the permutations alone). -/
 theorem lemmaA_of_A2 (hA2 : Guarantees.A2LemmaAM1) (B ℓ S D Q g : ℕ) [NeZero B] :
     LemmaA (m1 B ℓ) S D Q g (gammaA2 B ℓ S Q g) (fun _ _ => True) := by
   intro W A₁ A₂
@@ -74,11 +57,7 @@ theorem lemmaA_of_A2 (hA2 : Guarantees.A2LemmaAM1) (B ℓ S D Q g : ℕ) [NeZero
   simp only [true_and]
   exact h
 
-/-! ### The certificate: `A7Row`'s log form at a domain of `2^ℓ` points -/
-
-/-- **P2's certificate row.** `A7Row` with the domain fixed at `M = 2^ℓ`, M1's `Bits ℓ`, instead of A7′'s
-`M ≥ 2^2048 − 2^2029` (a 2048-bit `φ(N)`), which does not apply at `ℓ ≠ 2048`: some `g ∈ [1, B]` has
-`((g − 1)/B)^k ≤ 1/100` and `log₂(|Hist|·Γ(g)) ≤ −128`. -/
+/-- `A7Row` with the domain fixed at `M = 2^ℓ`, because A7′'s `M ≥ 2^2048 − 2^2029` does not apply at `ℓ ≠ 2048`. -/
 def P2Row (B ℓ S T k : ℕ) : Prop :=
   ∃ g, 1 ≤ g ∧ g ≤ B ∧ (((g - 1 : ℕ) : ℚ) / B) ^ k ≤ 1 / 100 ∧
     logHistGammaM1 B S T g k (2 ^ ℓ) ≤ -128
@@ -97,7 +76,6 @@ theorem histCount_pos (B k : ℕ) (hk : 1 ≤ k) : 0 < histCount B k := by
   simp
 
 open Real in
-/-- `Σ_{h ≤ g} C(N, h) ≤ (N/g)^g·e^g` for `N = (g + 1)·T ≥ g`. -/
 theorem sum_choose_le (g T : ℕ) (hg : 1 ≤ g) (hT : 1 ≤ T) :
     (∑ h ∈ Finset.range (g + 1), (((g + 1) * T).choose h : ℝ)) ≤
       ((((g + 1) * T : ℕ) : ℝ) / g) ^ g * exp g := by
@@ -123,24 +101,20 @@ theorem sum_choose_le (g T : ℕ) (hg : 1 ≤ g) (hT : 1 ≤ T) :
         mul_le_mul_of_nonneg_left (sum_le_exp_of_nonneg hg0.le _) (by positivity)
 
 open Real in
-/-- The certificate's bound on `log₂(|Hist|·Γ(g))` at `M = 2^ℓ`, linear in `g` once `B` and `T` are fixed. -/
 theorem logHistGammaM1_le (B S T g k ℓ : ℕ) (hB : 2 ≤ B) (hk : 1 ≤ k) (hg : 1 ≤ g) (hgB : g ≤ B) (hT : 1 ≤ T) :
     logHistGammaM1 B S T g k (2 ^ ℓ) ≤
       k * logb 2 B + S + B + (g * logb 2 T + (g + 1) / log 2) - g * ℓ := by
   have hl2 : 0 < log 2 := log_pos one_lt_two
   have hg0 : (0 : ℝ) < g := by exact_mod_cast hg
-  -- `|Hist| ≤ B^k`
   have hH : logb 2 (histCount B k) ≤ k * logb 2 B := by
     rw [← logb_pow]
     refine logb_le_logb_of_le one_lt_two (by exact_mod_cast histCount_pos B k hk) ?_
     exact_mod_cast histCount_le B hB k
-  -- `C(B, g) ≤ 2^B`
   have hC : logb 2 (B.choose g) ≤ B := by
     have hpos : (0 : ℝ) < B.choose g := by exact_mod_cast Nat.choose_pos hgB
     calc logb 2 (B.choose g) ≤ logb 2 ((2 : ℝ) ^ B) :=
           logb_le_logb_of_le one_lt_two hpos (by exact_mod_cast Nat.choose_le_two_pow B g)
       _ = B := by rw [logb_pow, logb_self_eq_one one_lt_two, mul_one]
-  -- `Σ_{h ≤ g} C((g+1)T, h) ≤ (N/g)^g e^g`
   have hsum : logb 2 (∑ h ∈ Finset.range (g + 1), (((g + 1) * T).choose h : ℝ)) ≤
       g * logb 2 T + (g + 1) / log 2 := by
     have hpos : (0 : ℝ) < ∑ h ∈ Finset.range (g + 1), (((g + 1) * T).choose h : ℝ) := by
@@ -172,7 +146,6 @@ theorem logHistGammaM1_le (B S T g k ℓ : ℕ) (hB : 2 ≤ B) (hk : 1 ≤ k) (h
   rw [hM]
   linarith
 
-/-- The row's log bound gives A3′'s hypothesis `|Hist|·Γ ≤ 2^-128`. -/
 theorem hist_gamma_le (B ℓ S T g k : ℕ) (hk : 1 ≤ k) (hgB : g ≤ B)
     (h : logHistGammaM1 B S T g k (2 ^ ℓ) ≤ -128) :
     (∑ j ∈ Finset.range k, (B : ℝ≥0∞) ^ j) * gammaA2 B ℓ S T g ≤ (2⁻¹ : ℝ≥0∞) ^ 128 := by
@@ -223,12 +196,9 @@ theorem hist_gamma_le (B ℓ S T g k : ℕ) (hk : 1 ≤ k) (hgB : g ≤ B)
   rw [hL, ← ENNReal.ofReal_ofNat 2, ← ENNReal.ofReal_inv_of_pos (by norm_num), ← ENNReal.ofReal_pow (by norm_num)]
   exact ENNReal.ofReal_le_ofReal hXle
 
-/-! ### `Meets` for `m1` from A2 and a row -/
-
 theorem pr_false {α : Type} [Fintype α] : pr (fun _ : α => False) = 0 := by
   rw [pr_def, Finset.filter_false, Finset.card_empty, Nat.cast_zero, ENNReal.zero_div]
 
-/-- **`m1` meets the requirement, given A2 and a certificate row at its state bound.** -/
 theorem meets_m1_of_row (hA2 : Guarantees.A2LemmaAM1) (B ℓ Q k : ℕ) [NeZero B] (hk : 1 ≤ k)
     (hrow : P2Row B ℓ ((m1 B ℓ).stateBound Params.ρ) Q k) (D : ℕ) :
     Meets (m1 B ℓ) .sequential D Q k Params.εMax := by

@@ -23,14 +23,7 @@ import Mathlib.Tactic.ReduceModChar
 import Proofs.Pous.P2.Domain
 import Proofs.Pous.P2.Margin
 
-/-!
-# `P2SlackFamilyFreeBlocks`: P2's family with `⌊B/100⌋` free blocks, `k = 140`
-
-`a3_prime_free` on `m1p` with Lemma A on `[0, p)` (`lemmaA_m1p`) and the uniform certificate `g = ⌊c·B⌋ + 1`. The free
-blocks enter the 1% term only: `((g − 1 + ⌊B/100⌋)/B)^k ≤ (c + 1/100)^k ≤ 1/100`, so `c = 0.9576` at `k = 140`. The
-state, `⌊ρ·(99/100)·|C|⌋ + 128·B`, is below `(18/19)·16448·B`, so the row is the `λ = 0` one, with a margin of 146
-bits per block.
--/
+/-! The proof of `P2SlackFamilyFreeBlocks`, P2's family with `⌊B/100⌋` free blocks at `k = 140`. -/
 
 @[expose] public section
 
@@ -39,8 +32,6 @@ namespace Pous.FreeBlocks
 open Pous Pous.Assumptions PousP2 PousP2p PousMargin
 open scoped ENNReal
 
-/-- **`m1p` with `F` free blocks meets the audit at `2^-e`, given a row whose 1% term counts the free blocks.**
-`PousMargin.slack_of_row`'s route through `a3_prime_free`. -/
 theorem audit_free_of_row (B w p b c F S Q k e : ℕ) [NeZero B] (hb : 2 ^ b ≤ p) (hp2 : p ≤ 2 ^ w)
     (hc : 2 ^ w ≤ p + c) (hBc : 2 * B * c ≤ 2 ^ w) (hk : 1 ≤ k)
     (hrow : ∃ g, 1 ≤ g ∧ g ≤ B ∧ (((g - 1 + F : ℕ) : ℚ) / B) ^ k ≤ 1 / 100 ∧
@@ -68,8 +59,6 @@ theorem audit_free_of_row (B w p b c F S Q k e : ℕ) [NeZero B] (hb : 2 ^ b ≤
   exact add_le_add hδ le_rfl
 
 open Real in
-/-- **The uniform row with `F` free blocks** at `w = 16,448`, `T = 2^20`: `PousMargin.row_uniform_gen` with the 1%
-term `(c + 1/100)^k`, for `F ≤ B/100`. -/
 theorem row_uniform_free (B n S k e lam F : ℕ) (c m : ℚ) (hB2 : 2 ≤ B) (hBn : B ≤ 2 ^ n) (hk : 1 ≤ k)
     (hc0 : 0 ≤ c) (hc1 : c < 1) (hF : (F : ℚ) ≤ B / 100) (hck : (c + 1 / 100) ^ k ≤ 1 / 100)
     (hm : m ≤ c * (16448 - 20 - 14427 / 10000) - 18 / 19 * 16448 - lam - 1)
@@ -124,7 +113,6 @@ theorem row_uniform_free (B n S k e lam F : ℕ) (c m : ℚ) (hB2 : 2 ≤ B) (hB
     push_cast at hL ⊢
     nlinarith
 
-/-- The free-blocks state `⌊ρ·(99/100)·B·16448⌋ + 128·B` is at most `(18/19)·16448·B`, the `λ = 0` state. -/
 theorem stateBound_free_le (B p b : ℕ) [NeZero B] :
     ((((m1p B 16448 p b).stateBound (Params.ρ * (99 / 100)) + 128 * B : ℕ)) : ℝ) ≤
       (18 / 19 * 16448 + (0 : ℕ)) * (B : ℝ) := by
@@ -138,12 +126,8 @@ theorem stateBound_free_le (B p b : ℕ) [NeZero B] :
   push_cast at h'' ⊢
   nlinarith
 
-/-- `(0.9576 + 0.01)^140 ≤ 1/100`. -/
 theorem free_one_percent : ((9576 / 10000 : ℚ) + 1 / 100) ^ 140 ≤ 1 / 100 := by norm_num
 
-/-- **`P2SlackFamilyFreeBlocks`.** For `2^8 ≤ B ≤ 2^23`, every payload width in range and every `D`, the `k = 140`
-audit with `⌊B/100⌋` free blocks against a state of `⌊ρ·(99/100)·|C|⌋ + 128·B` bits passes with probability at most
-`1/100 + 2^-129`. -/
 theorem p2_slack_family_free_blocks : Pous.Guarantees.P2SlackFamilyFreeBlocks := by
   intro B _ h0 h1 b hsp hb D
   obtain ⟨hlo', hhi, hc, hBc⟩ := hyps_16448

@@ -3,19 +3,7 @@ module
 public import Definitions.Pous.Assumptions.P2
 public import Proofs.Pous.P2.RingTight
 
-/-!
-# P2 in the ring model: dropping low bits breaks `k = 88` at `L = 2^30`
-
-A responder keeps `m` code blocks without their low `t` bits (`w − t` bits a block) and, when block `i` is
-challenged, runs P2's decoder on all `2^t` completions at once (`truncProg`): a round asks for the block's two keys,
-a round for the `2^t` squares, a round for the `2^t` squares after the mask, and it answers with a completion that is
-a valid label and decodes to the block's offset label. Decoding is injective on valid labels, so that completion is
-the code block (`truncProg_run`). Every challenge below `m` is answered within `2` multiplication rounds, `2` key queries
-and `2^(t+1)` ring queries, and the sequential audit passes with probability at least `(m/B)^k`
-(`trunc_seq_accepted`). At `2^19` blocks of P2's modulus, `t = 29` keeps `497,571` blocks within the state bound and
-`(497571/2^19)^88 > 1% + 2^-128`, so `MeetsOn` fails at every `k ≤ 88`, `D ≥ 2`, `Q ≥ 2` and `L ≥ 2^30`
-(`not_meetsOn_b19_k88`).
--/
+/-! P2 in the ring model: dropping low bits breaks `k = 88` at `L = 2^30`. -/
 
 @[expose] public section
 
@@ -24,19 +12,14 @@ namespace PousP2Ring
 open Pous PousP2p PousThm1 Pous.P2.Assumptions
 open scoped ENNReal
 
-/-! ### The responder -/
-
 section Programs
 
 variable {B w p : ℕ} [NeZero p]
 
-/-- Bits `t, …, w − 1` of a label: what the responder keeps of a block. -/
 def hiBits (t : ℕ) (c : Bits w) : Bits (w - t) := fun k => c ⟨k + t, by have := k.2; omega⟩
 
-/-- Bits `0, …, t − 1` of a label: what the responder drops. -/
 def loBits {t : ℕ} (ht : t ≤ w) (c : Bits w) : Bits t := fun k => c (Fin.castLE ht k)
 
-/-- The completion of the kept bits `h` by `e` in the low `t` bits. -/
 def cand (t : ℕ) (h : Bits (w - t)) (e : ℕ) : Bits w := fun k =>
   if hk : (k : ℕ) < t then bitsOfNat t e ⟨k, hk⟩ else h ⟨k - t, by have := k.2; omega⟩
 
@@ -48,25 +31,20 @@ theorem cand_hiBits {t : ℕ} (ht : t ≤ w) (c : Bits w) : cand t (hiBits t c) 
     rfl
   · exact congrArg c (Fin.ext (Nat.sub_add_cancel (not_lt.1 hk)))
 
-/-- The first multiplication round: the square of every completion. -/
 def sqQs (t : ℕ) (h : Bits (w - t)) : List (RingQry B w) :=
   (List.range (2 ^ t)).map fun e => RingQry.mul (cand t h e) (cand t h e)
 
-/-- Completion `e` after the first square and the mask, from the keys `r₀` and the squares `r₁`. -/
 def uOf (p t : ℕ) (h : Bits (w - t)) (r₀ r₁ : List (Bits w)) (e : ℕ) : Bits w :=
   sigmaK p (nthAns r₀ 0) (sqFix p (cand t h e) (nthAns r₁ e))
 
-/-- The second multiplication round: the square of every completion after the first square and the mask. -/
 def sqQs₂ (p t : ℕ) (h : Bits (w - t)) (r₀ r₁ : List (Bits w)) : List (RingQry B w) :=
   (List.range (2 ^ t)).map fun e => RingQry.mul (uOf p t h r₀ r₁ e) (uOf p t h r₀ r₁ e)
 
 open Classical in
-/-- A completion that is a valid label and decodes to the offset label, if there is one. -/
 noncomputable def pick (p t : ℕ) (h : Bits (w - t)) (r₀ r₁ r₂ : List (Bits w)) : Bits w :=
   if hx : ∃ e, e < 2 ^ t ∧ bitsVal (cand t h e) < p ∧ sqFix p (uOf p t h r₀ r₁ e) (nthAns r₂ e) = nthAns r₀ 1
   then cand t h (Classical.choose hx) else fun _ => false
 
-/-- **The search**: block `i`'s two keys, then two rounds of `2^t` multiplications each. -/
 noncomputable def truncProg (t : ℕ) (i : Fin B) (h : Bits (w - t)) : OracleAlgorithm (ringRO B w p) (Bits w) :=
   .round [RingQry.key i .mask, RingQry.key i .offset] fun r₀ =>
     .round (sqQs t h) fun r₁ =>
@@ -89,7 +67,6 @@ theorem countP_ring_sqQs₂ (p t : ℕ) (h : Bits (w - t)) (r₀ r₁ : List (Bi
     (sqQs₂ (B := B) p t h r₀ r₁).countP (fun q => !q.isKey) = 2 ^ t :=
   (countP_ring_mulMap _ _ _).trans List.length_range
 
-/-- No multiplication in the key round, then two rounds with one: two key queries, `2^(t+1)` ring queries. -/
 theorem truncProg_bounded (t : ℕ) (i : Fin B) (h : Bits (w - t)) :
     (truncProg (p := p) t i h).RingBounded 2 2 (2 ^ (t + 1)) := fun ω => by
   let r₀ : List (Bits w) :=
@@ -117,14 +94,10 @@ theorem nthAns_map_range {w : ℕ} {α : Type} (f : α → Bits w) (n : ℕ) (g 
 
 end Programs
 
-/-! ### The search finds the code block -/
-
 section Run
 
 variable {B w p : ℕ} [NeZero p]
 
-/-- The decoder up to the offset, on a valid label `lab a`: `sqFix(u, u²)` with `u = σ_K(sqFix(a, a²))` is the label
-of `sqE(σ_K(sqE a))`. -/
 theorem fwd_lab (hp2 : p ≤ 2 ^ w) (hodd : p % 2 = 1) (ω : (ringRO B w p).Ω) (K : Bits w) (a : ZMod p) :
     sqFix p (sigmaK p K (sqFix p (lab w ω.1 a) ((ringRO B w p).answer ω (RingQry.mul (lab w ω.1 a) (lab w ω.1 a)))))
       ((ringRO B w p).answer ω (RingQry.mul
@@ -137,8 +110,6 @@ theorem fwd_lab (hp2 : p ≤ 2 ^ w) (hodd : p % 2 = 1) (ω : (ringRO B w p).Ω) 
   conv_lhs => rw [← lab_eltD ω.1 hv]
   rw [answer_mul ω hp2, sqFix_lab ω.1 hp2 hodd]
 
-/-- **`pick` returns `lab c`** when the answers are the model's and `lab c` decodes to block `i`'s offset: the true
-completion passes the check, and any completion that passes is `lab c`. -/
 theorem pick_eq (hp : p.Prime) (h4 : p % 4 = 3) (hp2 : p ≤ 2 ^ w) (ω : (ringRO B w p).Ω) {t : ℕ} (ht : t ≤ w)
     (i : Fin B) (c : ZMod p)
     (hc : sqE ω.1 (eltD ω.1 (sigmaK p (ω.2 i).1 (lab w ω.1 (sqE ω.1 c)))) = ω.1.1.symm (ω.2 i).2)
@@ -181,7 +152,6 @@ theorem pick_eq (hp : p.Prime) (h4 : p % 4 = 3) (hp2 : p ≤ 2 ^ w) (ω : (ringR
   obtain ⟨he', hspec⟩ := Classical.choose_spec hex
   exact (key _ he').1 hspec
 
-/-- **The search answers `lab c`** when `lab c` decodes to block `i`'s offset. -/
 theorem truncProg_run (hp : p.Prime) (h4 : p % 4 = 3) (hp2 : p ≤ 2 ^ w) (ω : (ringRO B w p).Ω) {t : ℕ} (ht : t ≤ w)
     (i : Fin B) (c : ZMod p)
     (hc : sqE ω.1 (eltD ω.1 (sigmaK p (ω.2 i).1 (lab w ω.1 (sqE ω.1 c)))) = ω.1.1.symm (ω.2 i).2) :
@@ -191,24 +161,19 @@ theorem truncProg_run (hp : p.Prime) (h4 : p % 4 = 3) (hp2 : p ≤ 2 ^ w) (ω : 
 
 end Run
 
-/-! ### The audit passes with probability `(m/B)^k` -/
-
 section Accept
 
 variable {B w p b : ℕ} [NeZero B] [NeZero p]
 
-/-- Keep the first `m` blocks without their low `t` bits, padded to `S` bits. -/
 noncomputable def truncPre (t : ℕ) {m S : ℕ} (hm : m ≤ B) : Preprocessor (p2ring B w p b) S :=
   fun _ _ C _ => Pous.pad (codeEquiv m (w - t) fun j => hiBits t (C (Fin.castLE hm j)))
 
 open Classical in
-/-- Search a kept block, and answer zeros for any other index. -/
 noncomputable def truncStep (t : ℕ) {m S : ℕ} (hS : m * (w - t) ≤ S) (σ : Bits S) (i : Fin B) :
     OracleAlgorithm (ringRO B w p) (Bits w) :=
   if hi : (i : ℕ) < m then truncProg t i ((codeEquiv m (w - t)).symm (Pous.trunc hS σ) ⟨i, hi⟩)
   else .ret fun _ => false
 
-/-- The responder: `truncStep` on every challenge, keeping its state. -/
 noncomputable def truncSeq (t : ℕ) {m S : ℕ} (hS : m * (w - t) ≤ S) :
     SeqResponderOn (p2ring B w p b) S 2 2 (2 ^ (t + 1)) :=
   ⟨fun _ _ _ σ i => progMap (fun c => (c, σ)) (truncStep (p := p) t hS σ i), fun _ _ _ σ i =>
@@ -219,8 +184,6 @@ noncomputable def truncSeq (t : ℕ) {m S : ℕ} (hS : m * (w - t) ≤ S) :
       · exact ringBounded_ret _ _ _ _)⟩
 
 omit [NeZero B] in
-/-- With the all-zero payload, block `i` decodes to its offset: `p2ring`'s code block passes `truncProg_run`'s
-check. -/
 theorem p2ring_zero_dec (hp : p.Prime) (h4 : p % 4 = 3) (hp2 : p ≤ 2 ^ w) (ω : (ringRO B w p).Ω) (i : Fin B) :
     let c := rhoE ω.1 (eltD ω.1 (sigmaK p (ω.2 i).1
       (lab w ω.1 (rhoE ω.1 (eltD ω.1 (PousP2p.pad B w b (fun _ => false) i) + ω.1.1.symm (ω.2 i).2)))))
@@ -239,8 +202,6 @@ theorem p2ring_zero_dec (hp : p.Prime) (h4 : p % 4 = 3) (hp2 : p ≤ 2 ^ w) (ω 
   rw [lab_eltD ω.1 (sigmaK_lt (lab_lt ω.1 hp2 _)), sigmaK_sigmaK (lab_lt ω.1 hp2 _), eltD_lab ω.1 hp2,
     sqE_rhoE hp h4, h0, zero_add]
 
-/-- **Dropping `t` low bits of `m` blocks passes with probability at least `(m/B)^k`**, for every prime `p ≡ 3 mod 4`
-with `p ≤ 2^w`, every `b` and every `k`, against `truncSeq` within `(2, 2, 2^(t+1))`, at the all-zero payload. -/
 theorem trunc_seq_accepted (hp : p.Prime) (h4 : p % 4 = 3) (hp2 : p ≤ 2 ^ w) {t m S : ℕ} (k : ℕ) (ht : t ≤ w)
     (hm : m ≤ B) (hS : m * (w - t) ≤ S) :
     ((m : ℝ≥0∞) / B) ^ k ≤
@@ -259,9 +220,6 @@ theorem trunc_seq_accepted (hp : p.Prime) (h4 : p % 4 = 3) (hp2 : p ≤ 2 ^ w) {
 
 end Accept
 
-/-! ### At P2's parameters -/
-
-/-- `S = ⌊(18/19)·2^19·16448⌋`, whatever `p` and `b`. -/
 theorem stateBound_p2ring_b19 (p b : ℕ) [NeZero p] :
     (p2ring (2 ^ 19) 16448 p b).stateBound Params.ρ = 8169621180 := by
   rw [Scheme.stateBound, Nat.floor_eq_iff (mul_nonneg (by norm_num [Params.ρ]) (Nat.cast_nonneg _))]
@@ -269,12 +227,6 @@ theorem stateBound_p2ring_b19 (p b : ℕ) [NeZero p] :
     18 / 19 * ((2 ^ 19 * 16448 : ℕ) : ℚ) < (8169621180 : ℕ) + 1
   norm_num
 
-/-- **P2 fails `MeetsOn` at `k = 88` from `L = 2^30`.** At `2^19` blocks of P2's modulus `p = 2^16448 − 21065`, if
-`p` is prime: keeping `497,571` blocks without their low `29` bits (`16,419` bits a block, within the state bound
-`8,169,621,180`) and searching the `2^29` completions with the decoder (`trunc_seq_accepted`) passes `k`
-sequential challenges with probability at least `(497571/2^19)^k ≥ (497571/2^19)^88 > 1% + 2^-128`. So `p2ring`
-fails `MeetsOn` for every payload width `b`, `k ≤ 88`, `D ≥ 2`, `Q ≥ 2`, `L ≥ 2^30` and `ε`: at `k = 88` the
-requirement can hold only under a ring-operation cap below `2^30` per answer. -/
 theorem not_meetsOn_b19_k88 (hP : PrimeP16448) (b D Q L k : ℕ) (hD : 2 ≤ D) (hQ : 2 ≤ Q) (hL : 2 ^ 30 ≤ L)
     (hk : k ≤ 88) (ε : ℝ≥0∞) :
     ¬ MeetsOn (p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) b) .sequential D Q L k ε := by

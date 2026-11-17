@@ -7,14 +7,7 @@ public import Proofs.Pous.Sanity
 public import Proofs.Pous.Accounting.Numbers
 public import Definitions.Pous.Model.BandGraph
 
-/-!
-# Band-graph combinatorics (game-independent)
-
-The band relation `Band k a b` (`a` is one of the `k` nodes before `b`), the **starts** of a set (no node of the set
-among the `k` predecessors) and its **ends** (none among the `k` successors), the band graph `bandGraph n k`
-(parents `v − k, …, v − 1`, a `basePath`), and the counting lemmas the column-saving certificate uses. Nothing here
-refers to the column game.
--/
+/-! Band-graph combinatorics, independent of the column game. -/
 
 @[expose] public section
 
@@ -23,8 +16,6 @@ namespace PousP3Column
 open Pous Pous.ColumnGame
 
 variable {n : ℕ}
-
-/-! ### Chains with a strictly increasing weight -/
 
 theorem length_le_of_isChain {α : Type} {R : α → α → Prop} (f : α → ℕ) (hf : ∀ a b, R a b → f a < f b) (d : ℕ) :
     ∀ (a : α) (t : List α), (a :: t).IsChain R → (∀ v ∈ a :: t, f v ≤ d) → t.length + f a ≤ d := by
@@ -39,17 +30,12 @@ theorem length_le_of_isChain {α : Type} {R : α → α → Prop} (f : α → �
     simp only [List.length_cons]
     omega
 
-/-! ### The band relation, starts and windows -/
-
-/-- `a` is one of the `k` nodes before `b`. -/
 def Band (k : ℕ) (a b : Fin n) : Prop := a.val < b.val ∧ b.val ≤ a.val + k
 
 instance instDecidableBand (k : ℕ) (a b : Fin n) : Decidable (Band k a b) := by unfold Band; infer_instance
 
-/-- The nodes of `S` with no node of `S` among their `k` predecessors. -/
 def starts (k : ℕ) (S : Finset (Fin n)) : Finset (Fin n) := S.filter fun v => ∀ u ∈ S, ¬ Band k u v
 
-/-- The `k` predecessors of `v`. -/
 def window (k : ℕ) (v : Fin n) : Finset (Fin n) := Finset.univ.filter fun u => Band k u v
 
 theorem starts_subset (k : ℕ) (S : Finset (Fin n)) : starts k S ⊆ S := Finset.filter_subset _ _
@@ -60,7 +46,6 @@ theorem exists_band_of_not_start {k : ℕ} {S : Finset (Fin n)} {v : Fin n} (hv 
   push Not at hne
   exact hns (Finset.mem_filter.2 ⟨hv, fun u hu h => hne u hu h⟩)
 
-/-- A chain whose nodes carry strictly increasing ranks in `[1, r]` has at most `r` nodes. -/
 theorem chain_length_le_of_rank {α : Type} {R : α → α → Prop} (A : α → Prop) (f : α → ℕ) (r : ℕ)
     (hf : ∀ a b, R a b → A a → A b → f a < f b) (hrange : ∀ a, A a → 1 ≤ f a ∧ f a ≤ r) :
     ∀ p : List α, p.IsChain R → (∀ x ∈ p, A x) → p.length ≤ r := by
@@ -82,9 +67,6 @@ theorem chain_length_le_of_rank {α : Type} {R : α → α → Prop} (A : α →
     simp only [List.length_cons]
     omega
 
-/-! ### Nodes per start -/
-
-/-- **Nodes per start.** If every chain of `S` has at most `ℓ` nodes, `S` has at most `ℓ` nodes per start. -/
 theorem card_le_mul_starts (k : ℕ) : ∀ (ℓ : ℕ) (S : Finset (Fin n)),
     (∀ p : List (Fin n), p.IsChain (Band k) → (∀ x ∈ p, x ∈ S) → p.length ≤ ℓ) →
     S.card ≤ ℓ * (starts k S).card := by
@@ -118,7 +100,6 @@ theorem card_le_mul_starts (k : ℕ) : ∀ (ℓ : ℕ) (S : Finset (Fin n)),
         simp only [List.length_cons] at this ⊢
         omega
     have h1 := ih S' hS'
-    -- every start of `S'` has a start of `S` among its predecessors, and distinct ones have distinct ones
     have h2 : (starts k S').card ≤ T.card := by
       let f : Fin n → Fin n := fun v => if hv : ∃ u ∈ S, Band k u v then Classical.choose hv else v
       have hf : ∀ v ∈ starts k S', f v ∈ S ∧ Band k (f v) v ∧ f v ∈ T := by
@@ -152,8 +133,6 @@ theorem card_le_mul_starts (k : ℕ) : ∀ (ℓ : ℕ) (S : Finset (Fin n)),
       _ ≤ ℓ * T.card + T.card := by gcongr
       _ = (ℓ + 1) * T.card := by ring
 
-/-! ### Windows of starts -/
-
 theorem window_card (k : ℕ) (v : Fin n) (hv : k ≤ v.val) : k ≤ (window k v).card := by
   let f : ℕ → Fin n := fun j => if h : v.val - k + j < n then ⟨v.val - k + j, h⟩ else v
   have hmem : ∀ j ∈ Finset.range k, f j ∈ window k v := by
@@ -177,7 +156,6 @@ theorem window_card (k : ℕ) (v : Fin n) (hv : k ≤ v.val) : k ≤ (window k v
     omega
   simpa using Finset.card_le_card_of_injOn f hmem hinj
 
-/-- **Windows of starts.** If every start of `S` has its window inside `Z`, then `|starts|·k ≤ |Z| + k`. -/
 theorem starts_card_mul_le (k : ℕ) (S Z : Finset (Fin n)) (hZ : ∀ v ∈ starts k S, window k v ⊆ Z) :
     (starts k S).card * k ≤ Z.card + k := by
   classical
@@ -216,9 +194,6 @@ theorem starts_card_mul_le (k : ℕ) (S Z : Finset (Fin n)) (hZ : ∀ v ∈ star
     _ = Tb.card * k + k := by ring
     _ ≤ Z.card + k := by omega
 
-/-! ### 1. Depth robustness -/
-
-/-- **The counting core.** If every chain of `S` has at most `ℓ` nodes, then `k·|S| ≤ ℓ·(n − |S| + k)`. -/
 theorem band_card_le (k : ℕ) (S : Finset (Fin n)) (ℓ : ℕ)
     (hℓ : ∀ p : List (Fin n), p.IsChain (Band k) → (∀ x ∈ p, x ∈ S) → p.length ≤ ℓ) :
     k * S.card ≤ ℓ * (n - S.card + k) := by
@@ -234,14 +209,11 @@ theorem band_card_le (k : ℕ) (S : Finset (Fin n)) (ℓ : ℕ)
     _ = ℓ * ((starts k S).card * k) := by ring
     _ ≤ ℓ * (n - S.card + k) := Nat.mul_le_mul_left _ hB
 
-/-! ### The band graph -/
-
 theorem mem_par_band {n k : ℕ} (hk : 1 ≤ k) (u v : Fin n) : u ∈ (bandGraph n k).par v ↔ Band k u v := by
   simp only [bandGraph, basePath, bandExtra, Finset.mem_union, Finset.mem_filter, Finset.mem_univ, true_and]
   unfold Band
   omega
 
-/-- The nodes of `U` with no node of `U` among their `k` successors. -/
 def ends (k : ℕ) (U : Finset (Fin n)) : Finset (Fin n) := U.filter fun a => ∀ b ∈ U, ¬ Band k a b
 
 theorem starts_sdiff_ends_subset (k : ℕ) (U : Finset (Fin n)) : starts k (U \ ends k U) ⊆ starts k U := by
@@ -252,8 +224,6 @@ theorem starts_sdiff_ends_subset (k : ℕ) (U : Finset (Fin n)) : starts k (U \ 
   · exact (Finset.mem_filter.1 hue).2 v (Finset.mem_sdiff.1 hv.1).1 huv
   · exact hv.2 u (Finset.mem_sdiff.2 ⟨hu, hue⟩) huv
 
-/-- There are no more ends than starts: the next node after an end, if any, is a start, and the first node is a
-start that no end reaches. -/
 theorem ends_card_le_starts (k : ℕ) (U : Finset (Fin n)) : (ends k U).card ≤ (starts k U).card := by
   classical
   rcases U.eq_empty_or_nonempty with h | hne
@@ -315,9 +285,6 @@ theorem ends_card_le_starts (k : ℕ) (U : Finset (Fin n)) : (ends k U).card ≤
   have h3 : ((starts k U).erase m0).card + 1 = (starts k U).card := Finset.card_erase_add_one hm0
   omega
 
-/-- **Ranks per segment.** For a top set `U` with ranks `f ∈ [1, d]` increasing along band edges, and any
-`p, q`: `q·Σ (f − 1) ≤ p·|U| + A(d)·|starts U|` with `A(d) = Σ_{i < d} (q·i − p)⁺`. Peel the ends: an end has
-rank at most `d`, and the rest has rank at most `d − 1` and no more starts. -/
 theorem band_rank_sum (k p q : ℕ) : ∀ (d : ℕ) (U : Finset (Fin n)) (f : Fin n → ℕ),
     (∀ a b, Band k a b → a ∈ U → b ∈ U → f a < f b) → (∀ a ∈ U, 1 ≤ f a ∧ f a ≤ d) →
     q * ∑ a ∈ U, (f a - 1) ≤ p * U.card + (∑ i ∈ Finset.range d, (q * i - p)) * (starts k U).card := by

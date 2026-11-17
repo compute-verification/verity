@@ -34,14 +34,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Pouw.Prob
 
-/-!
-# The receipts' sketch bound on the memory line's coins: the proof
-
-The line's coins whose other coins are a sketch outcome and the sketch outcomes whose prover's coins carry the openings
-coins are one uniform space read two ways (`lineCoinsEquiv`, whose forward map is `lineCoins`), so an event has one
-probability on both (`Pouw.pr_equiv`). On the sketch outcomes the line's trace `T.sketch O` counts a block computed on
-outside the node with the chips', so its sketch bound's event is `SketchBoundAt T O`'s read through `lineCoins`.
--/
+/-! The proof of the receipts' sketch bound on the memory line's coins, read through `lineCoins`. -/
 
 @[expose] public section
 
@@ -49,8 +42,6 @@ namespace ResourceAccounting.SecurityProofs.Remote
 
 open ResourceAccounting.Remote.Held ResourceAccounting.Remote.Held.Assumptions ResourceAccounting.Remote.Sketch
 
-/-- The sketch outcomes whose prover's coins carry the openings coins are the line's coins whose other coins are a
-sketch outcome, reordered. -/
 def lineCoinsEquiv {β Hs : Type} {n κ N m : ℕ} :
     Outcome (β × (Fin n → Pous.Bits κ)) Hs N m ≃ ResourceAccounting.Remote.Sample.SampleCoins n κ (Outcome β Hs N m) where
   toFun := lineCoins

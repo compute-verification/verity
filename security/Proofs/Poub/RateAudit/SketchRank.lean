@@ -38,15 +38,7 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Poub.Bandwidth.Chip
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# Signs of rank `r`: the tensor-core sketch's fiber is at most `256^(32 − r)`
-
-Two contents of one sector that give one sketch, with the rest of the tile fixed, have equal projections under the
-sector's block of signs, exactly (`project_eq_of_sketch_eq`, `SketchBinds`'s argument). The block's columns over `ℚ`
-hold `rank` independent ones (`exists_linearIndependent'`); two such contents that agree off those columns agree on
-them too, so the contents of a fiber are told apart by their other `32 − rank` bytes (`card_fiber_le`). The guarantees
-are `ResourceAccounting.SecurityProofs.SketchRankFiber` and `RateAuditTensorSketchRank`.
--/
+/-! Signs of rank `r` bound the tensor-core sketch's fiber by `256^(32 − r)`. -/
 
 @[expose] public section
 
@@ -66,8 +58,6 @@ theorem int8_injective : Function.Injective int8 := by
   split_ifs at h <;> omega
 
 set_option linter.constructorNameAsVariable false in
-/-- Two contents of sector `u` that give one sketch, with the rest of the tile fixed, have one projection under the
-sector's block. -/
 theorem project_eq_of_sketch_eq {k m : ℕ} (σ : SketchSigns k m) (x : Fin m → Sector) (u : Fin m) (a b : Sector)
     (h : sketch σ (Function.update x u a) = sketch σ (Function.update x u b)) :
     ResourceAccounting.Tag.project (σ.block u) (fun l => int8 (a l)) =
@@ -94,8 +84,6 @@ theorem project_eq_of_sketch_eq {k m : ℕ} (σ : SketchSigns k m) (x : Fin m �
   exact (sub_eq_zero.1 (Int.eq_zero_of_abs_lt_dvd h2 hlt)).symm
 
 set_option linter.constructorNameAsVariable false in
-/-- **The fiber at rank `r`.** If sector `u`'s block has rank at least `r` over `ℚ`, at most `256^(32 − r)` contents of
-the sector give the sketch `d` with the rest of the tile `x` fixed. -/
 theorem card_fiber_le {k m r : ℕ} (σ : SketchSigns k m) (x : Fin m → Sector) (u : Fin m) (d : Fin k → ZMod (2 ^ 32))
     (hr : r ≤ ((ResourceAccounting.Tag.signMatrix (σ.block u)).map (Int.cast : ℤ → ℚ)).rank) :
     (Finset.univ.filter fun a : Sector => sketch σ (Function.update x u a) = d).card ≤ 256 ^ (32 - r) := by

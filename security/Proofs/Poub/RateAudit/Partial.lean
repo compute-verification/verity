@@ -6,25 +6,8 @@ public import Proofs.Poub.RateAudit.Audit
 public import Proofs.Poub.RateAudit.Honest
 public import Proofs.Poub.RateAudit.PartialChip
 
-/-!
-# The rate audit with partial completion: the proof
-
-`Audit.lean`'s argument, with completions in place of rebuilds. An accepted run whose compute is within `F` and whose
-footprint is short of the floor at `c_enc = rounds · c_root` falls in one of three events, by whether the device queried
-the oracle, under the certified stream, at the contents of at least `k` words (`queried`):
-
-- fewer than `k`, and every sampled word among them: the sample's chance, `((k − 1)/N)^s`;
-- a sampled word it never queried, with the right tag anyway: `2^-h` per sampled word (`card_guess_le`);
-- at least `k`: then the run's state, footprint, link bits and completed bits (`taken`) fall short of the stream and
-  those `k` words by `λ` bits (`taken_lt_of_floor`), because tagging `k` words leaves `F − k·c_tag` of the compute for
-  completions, and under `WorkHardness` that completes at most `(F − k·c_tag)·b/(rounds · c_root)` bits
-  (`PChip.completed_mul_le`). That happens for at most a `C(q, k)·2^-λ` fraction of stores and streams, by compression
-  (`card_compress_le`): the trace records `x` bits per completion of `x` (`PChip.trace_length`), and replaying the chip
-  recomputes its queries (`PChip.replay_trace`).
-
-The honest device is `RateHonest`'s, as a partial device (`Prover.toPartial`), and the rebuild route
-(`RatePartialRebuild`) is `PChip.completed_mul_le` at the device.
--/
+/-! The proof of the rate audit with partial completion: `Audit.lean`'s argument with completions in place of
+rebuilds. -/
 
 @[expose] public section
 
@@ -38,12 +21,9 @@ variable {N b h ρ S L q : ℕ}
 
 namespace PartialDevice
 
-/-- The words whose contents the device queried the oracle at, under the certified stream. -/
 def queried (A : PartialDevice N b h ρ S L q) (E : Store N b) (R : Bits ρ) (O : Oracle N b h ρ) : Finset (Fin N) :=
   Finset.univ.filter (fun j => (R, j, E j) ∈ (A.chip (A.state E)).queries (A.world E R O))
 
-/-- What a run had besides the oracle, in bits: its on-chip state, its footprint, the link's bits and the bits it
-completed. -/
 def taken (A : PartialDevice N b h ρ S L q) (E : Store N b) (R : Bits ρ) (O : Oracle N b h ρ) : ℕ :=
   A.footprint E R O + S + (A.chip (A.state E)).linkBits (A.world E R O) + A.completed E R O
 
@@ -55,9 +35,6 @@ theorem card_queried_le (A : PartialDevice N b h ρ S L q) (E : Store N b) (R : 
   · intro j₁ _ j₂ _ he
     exact (Prod.mk.inj (Prod.mk.inj he).2).1
 
-/-- A run that queried at least `k` words within the compute budget `F` and whose footprint is short of the floor at
-`c_enc = rounds · c_root` had less than the stream and `k` words: tagging `k` words leaves `F − k·c_tag` for
-completions, which under `WorkHardness` complete at most `(F − k·c_tag)·b/(rounds · c_root)` bits. -/
 theorem taken_lt_of_floor (A : PartialDevice N b h ρ S L q) (E : Store N b) (R : Bits ρ) (O : Oracle N b h ρ)
     {k F cTag rounds cRoot lam : ℕ} {cost : ℕ → ℕ} (hw : Assumptions.WorkHardness b rounds cRoot cost)
     (hk : k ≤ (A.queried E R O).card) (hc : A.compute cTag cost E R O ≤ F)
@@ -89,9 +66,6 @@ theorem taken_lt_of_floor (A : PartialDevice N b h ρ S L q) (E : Store N b) (R 
   have h4 := Nat.lt_of_mul_lt_mul_right h3
   omega
 
-/-! ## A guessed tag -/
-
-/-- A word the device never queried has the right tag for at most a `2^-h` fraction of oracles. -/
 theorem card_guess_le (A : PartialDevice N b h ρ S L q) (E : Store N b) (R : Bits ρ) (j : Fin N)
     [DecidablePred (fun O : Oracle N b h ρ => j ∉ A.queried E R O ∧ A.tags E R O j = O (R, j, E j))] :
     (Finset.univ.filter (fun O : Oracle N b h ρ => j ∉ A.queried E R O ∧ A.tags E R O j = O (R, j, E j))).card *
@@ -114,27 +88,20 @@ theorem card_guess_le (A : PartialDevice N b h ρ S L q) (E : Store N b) (R : Bi
     rw [← h₁.2, ← h₂.2, ht]
   · exact hoff x hx
 
-/-! ## Compression -/
-
-/-- The queries a code (the chip's state, a padded trace and a set of query positions) replays to. -/
 def decoded (A : PartialDevice N b h ρ S L q) (O : Oracle N b h ρ) (r : ℕ) (code : Bits S × Bits r × Finset ℕ) :
     List (Bits ρ × Fin N × Bits b) :=
   (A.chip code.1).replay O (fun _ => none) (Bandwidth.AuditRO.stream r code.2.1)
 
 open Classical in
-/-- The stores and streams a code describes: those whose stream is each named position's query's, and whose word
-there holds the query's contents. -/
 noncomputable def fib (A : PartialDevice N b h ρ S L q) (O : Oracle N b h ρ) (r : ℕ)
     (code : Bits S × Bits r × Finset ℕ) : Finset (Store N b × Bits ρ) :=
   Finset.univ.filter (fun x => ∀ p ∈ code.2.2, ∀ y, (A.decoded O r code)[p]? = some y → y.1 = x.2 ∧ x.1 y.2.1 = y.2.2)
 
 open Classical in
-/-- The words a code names. -/
 noncomputable def named (A : PartialDevice N b h ρ S L q) (O : Oracle N b h ρ) (r : ℕ)
     (code : Bits S × Bits r × Finset ℕ) : Finset (Fin N) :=
   Finset.univ.filter (fun j => ∃ p ∈ code.2.2, ∃ y, (A.decoded O r code)[p]? = some y ∧ y.2.1 = j)
 
-/-- A code that names a word fixes the stream, and the words it names. -/
 theorem card_fib (A : PartialDevice N b h ρ S L q) (O : Oracle N b h ρ) (r : ℕ) (code : Bits S × Bits r × Finset ℕ)
     (hn : 0 < (A.named O r code).card) :
     (A.fib O r code).card ≤ (2 ^ b) ^ (N - (A.named O r code).card) := by
@@ -247,7 +214,6 @@ theorem card_compress_le (A : PartialDevice N b h ρ S L q) (O : Oracle N b h ρ
 
 end PartialDevice
 
-/-- A device of `RateAudit.lean`'s game as a partial device: its rebuilds are completions of all `b` bits. -/
 def Prover.toPartial (A : Prover N b h ρ S L q) : PartialDevice N b h ρ S L q where
   state := A.state
   mem := A.mem
@@ -258,8 +224,6 @@ def Prover.toPartial (A : Prover N b h ρ S L q) : PartialDevice N b h ρ S L q 
     rw [h4, h5]
     exact A.bounded st w
 
-/-- As a partial device, a device commits to the same tags with the same footprint and ingress, completes `b` bits per
-rebuilt word and pays `cost b` for each. -/
 theorem Prover.toPartial_eq (A : Prover N b h ρ S L q) (E : Store N b) (R : Bits ρ) (O : Oracle N b h ρ) :
     A.toPartial.tags E R O = A.tags E R O ∧ A.toPartial.footprint E R O = A.footprint E R O ∧
       A.toPartial.ingress E R O = A.ingress E R O ∧
@@ -274,8 +238,6 @@ theorem Prover.toPartial_eq (A : Prover N b h ρ S L q) (E : Store N b) (R : Bit
       (A.chip (A.state E)).toPartial.work cost (A.world E R O) = _
   rw [e5, ew]
 
-/-- Under `WorkHardness`, the bits a partial device completes, at `rounds · c_root` per `b` of them, cost at most its
-completions' compute. -/
 theorem PartialDevice.completed_mul_le {rounds cRoot : ℕ} {cost : ℕ → ℕ}
     (hw : Assumptions.WorkHardness b rounds cRoot cost) (A : PartialDevice N b h ρ S L q) (E : Store N b)
     (R : Bits ρ) (O : Oracle N b h ρ) : A.completed E R O * (rounds * cRoot) ≤ b * A.work cost E R O :=
@@ -325,7 +287,7 @@ theorem RateAuditPartial : ResourceAccounting.Guarantees.RateAuditPartial := by
     exact bot_le
   refine (pr_mono hsplit).trans ?_
   refine (pr_or_le _ _).trans (add_le_add ((pr_or_le _ _).trans (add_le_add ?_ ?_)) ?_)
-  · -- the sample misses the words never queried
+  ·
     have hc := pr_le_of_card (fun x : Store N b × (Bits ρ × Oracle N b h ρ × (Fin s → Fin N)) =>
         (A.queried x.1 x.2.1 x.2.2.1).card < k ∧ ∀ i, x.2.2.2 i ∈ A.queried x.1 x.2.1 x.2.2.1) (N ^ s)
         ((k - 1) ^ s) hN (by
@@ -342,7 +304,7 @@ theorem RateAuditPartial : ResourceAccounting.Guarantees.RateAuditPartial := by
       · simp [hk])
     refine hc.trans (le_of_eq ?_)
     rw [Nat.cast_pow, Nat.cast_pow, div_eq_mul_inv, div_eq_mul_inv, mul_pow, ENNReal.inv_pow]
-  · -- a guessed tag
+  ·
     refine (pr_exists_le _).trans ?_
     have hi : ∀ i : Fin s, pr (fun x : Store N b × (Bits ρ × Oracle N b h ρ × (Fin s → Fin N)) =>
         x.2.2.2 i ∉ A.queried x.1 x.2.1 x.2.2.1 ∧
@@ -358,7 +320,7 @@ theorem RateAuditPartial : ResourceAccounting.Guarantees.RateAuditPartial := by
         exact A.card_guess_le E R (I i))
     refine (Finset.sum_le_sum (fun i _ => hi i)).trans (le_of_eq ?_)
     simp [div_eq_mul_inv]
-  · -- compression
+  ·
     refine (pr_le_of_card _ (2 ^ lam) (q.choose k) (by positivity) (by
       rw [hΩ, card_filter_equiv (Equiv.prodAssoc (Store N b) (Bits ρ) (Oracle N b h ρ × (Fin s → Fin N))).symm]
       refine (card_filter_prod_le' _ _ (q.choose k * Fintype.card (Store N b × Bits ρ)) (fun y => ?_)).trans
@@ -371,8 +333,6 @@ theorem RateAuditPartial : ResourceAccounting.Guarantees.RateAuditPartial := by
 theorem RatePartialRebuild : ResourceAccounting.Guarantees.RatePartialRebuild :=
   fun _ _ _ _ _ _ _ _ _ _ A hw E R O => A.completed_mul_le hw E R O
 
-/-- **Completeness of the rate audit with partial completion** (`ResourceAccounting.Guarantees.RatePartialHonest`):
-`RateHonest`'s device, as a partial device. -/
 theorem RatePartialHonest : ResourceAccounting.Guarantees.RatePartialHonest := by
   intro N b h ρ
   refine ⟨(Completeness.honest N b h ρ).toPartial, fun cTag cost E R O s I => ?_⟩

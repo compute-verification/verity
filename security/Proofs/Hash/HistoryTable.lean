@@ -35,15 +35,8 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# `Hash.SecurityProofs.HistoryReadBinding : Hash.Guarantees.HistoryReadBinding`
-
-A row and salt behind the string at `tok` open at `tok` against the history table's root with the tree's own path
-(`accepts_opening`): their frame leaf is the table's leaf at `tok`, and the tree over the table's leaves accepts every
-rank below its count (`TreeRoot.accepts_rootOf`). That opening is the registered one `EmbeddingReadBinding` compares the
-read's witness with. Past the table's length the string is the placeholder's, so the read returns the zero row
-(`read_past_length`).
--/
+/-! The proof of `Hash.Guarantees.HistoryReadBinding`: the table opens at each rank below its count, and a read past
+its length returns the zero row. -/
 
 @[expose] public section
 
@@ -51,14 +44,11 @@ namespace Hash.SecurityProofs.HistoryTable
 
 open Hash
 
-/-- The frame leaf of a row and salt whose commit string is the string at `r` is the table's leaf at `r`. -/
 theorem leaf_eq (H G : Msg → Digest) (D : Tree.Domain) (key : Msg) (s : ℕ → Msg) (row : Row) (salt : Msg) (r : ℕ)
     (sibs : List Digest) (hs : Hm96.commitString H key (RowLeaf.Format.seg.digest G row) salt = s r) :
     H (RowLeaf.leafMsg H G (EmbeddingRead.verifier D key) r ⟨row, salt, sibs⟩) = Hash.HistoryTable.leaf H D key s r := by
   simp only [RowLeaf.leafMsg, Hash.HistoryTable.leaf, EmbeddingRead.verifier, Hm96.leaf, hs]
 
-/-- **The table opens at each rank below its count**: a row and 192-byte salt whose commit string is the string at `tok`
-open there against the table's root, with the tree's own path. -/
 theorem accepts_opening (H G : Msg → Digest) (D : Tree.Domain) (key : Msg) (s : ℕ → Msg) (row : Row) (salt : Msg)
     (tok : ℕ) (hin : tok < D.count) (hrow : row.length < 2 ^ 64) (hsalt : salt.length = Hm96.SALT_BYTES)
     (hs : Hm96.commitString H key (RowLeaf.Format.seg.digest G row) salt = s tok) :
@@ -82,9 +72,6 @@ namespace Hash.SecurityProofs.HistoryTable
 
 open Hash
 
-/-- **A read past the table's length returns the zero row**: when the strings past the length `len` are the
-placeholder's, a read at an index between `len` and the count that returns ok returns the zero row of `words` words, or
-the checks hashed a collision against the placeholder's own opening. -/
 theorem read_past_length (H G : Msg → Digest) (D : Tree.Domain) (key : Msg) (len : ℕ) (bc : ℕ → Msg) (words tok : ℕ)
     (o : RowLeaf.Opening) (hwords : 16 * words < 2 ^ 64)
     (hok : EmbeddingRead.ok H G D key

@@ -37,21 +37,7 @@ import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# The rate audit with relayed tags: the proof
-
-`Bandwidth.SecurityProofs.AuditRelay`'s argument on the rate audit's game, for a `RelayDevice` whose side sources may
-depend on the oracle. An accepted run whose compute is within `F` and whose footprint is short of the floor at `k − m`
-words falls in one of three events, by `correct`, the words whose committed tag is right, and `relayed`, those among
-them whose contents the chip never queried under the stream:
-
-- fewer than `k` correct, and every sampled word among them: `((k − 1)/N)^s` (`Bandwidth.AuditRO.card_sample`);
-- at least `m` relayed: `C(N, m)·2^L/2^(h·m)` (`card_relay_le`). For a fixed store and stream, an oracle with `m`
-  relayed words is determined by those words, the side bits the chip read and the oracle off the `m` points, because
-  replaying the chip from its side bits recomputes the tags (`Chip.runSide_sideTrace`) without querying those points;
-- otherwise at least `k − m` queried: `RateAudit`'s compression at `k − m` words (`card_compress_le`), which never
-  reads the side sources.
--/
+/-! The proof of the rate audit with relayed tags: `AuditRelay`'s argument on the rate audit's game. -/
 
 @[expose] public section
 
@@ -64,7 +50,6 @@ namespace Chip
 
 variable {N b h ρ : ℕ} {α : Type}
 
-/-- The side-source bits a run read, in order. -/
 def sideTrace (w : World N b h ρ) : Chip N b h ρ α → List Bool
   | done _ => []
   | tag x k => (k (w.oracle x)).sideTrace w
@@ -73,8 +58,6 @@ def sideTrace (w : World N b h ρ) : Chip N b h ρ α → List Bool
   | stream i k => (k (w.stream i)).sideTrace w
   | rebuild j k => (k (w.store j)).sideTrace w
 
-/-- A run's value, recomputed from an oracle, device memory, the certified stream, the store and a stream of the
-side-source bits it read. -/
 def runSide (O : Oracle N b h ρ) (mem : ℕ → Bool) (R : Bits ρ) (E : Store N b) : Chip N b h ρ α → (ℕ → Bool) → α
   | done a, _ => a
   | tag x k, f => (k (O x)).runSide O mem R E f
@@ -83,7 +66,6 @@ def runSide (O : Oracle N b h ρ) (mem : ℕ → Bool) (R : Bits ρ) (E : Store 
   | stream i k, f => (k (R i)).runSide O mem R E f
   | rebuild j k, f => (k (E j)).runSide O mem R E f
 
-/-- A run reads at most its link bits from the side sources. -/
 theorem sideTrace_length_le (w : World N b h ρ) (c : Chip N b h ρ α) : (c.sideTrace w).length ≤ c.linkBits w := by
   induction c with
   | done a => simp [sideTrace, linkBits]
@@ -93,8 +75,6 @@ theorem sideTrace_length_le (w : World N b h ρ) (c : Chip N b h ρ α) : (c.sid
   | stream i k ih => exact (ih _).trans (Nat.le_succ _)
   | rebuild j k ih => simpa [sideTrace, linkBits] using ih _
 
-/-- Given device memory, the stream and the store, the run is a function of the oracle at its queries and the side bits
-it read: any oracle that agrees with the world's at the run's queries recomputes it from those bits. -/
 theorem runSide_sideTrace (w : World N b h ρ) (O' : Oracle N b h ρ) (c : Chip N b h ρ α)
     (ho : ∀ x ∈ c.queries w, O' x = w.oracle x) :
     c.runSide O' w.mem w.stream w.store (fun n => (c.sideTrace w).getD n false) = c.run w := by
@@ -118,11 +98,9 @@ variable {N b h ρ S L q : ℕ}
 
 namespace RelayDevice
 
-/-- The words whose committed tag is the oracle's under the stream. -/
 def correct (A : RelayDevice N b h ρ S L q) (E : Store N b) (R : Bits ρ) (O : Oracle N b h ρ) : Finset (Fin N) :=
   Finset.univ.filter (fun j => A.tags E R O j = O (R, j, E j))
 
-/-- The words with a correct tag whose contents the chip never queried the oracle at, under the stream. -/
 def relayed (A : RelayDevice N b h ρ S L q) (E : Store N b) (R : Bits ρ) (O : Oracle N b h ρ) : Finset (Fin N) :=
   A.correct E R O \ queried A E R O
 
@@ -221,8 +199,6 @@ open scoped ENNReal
 open Bandwidth (card_filter_prod_le card_filter_prod_le' pr_le_of_card pr_mono pr_or_le pr_eq_zero_of_card)
 open Bandwidth.AuditRO (card_sample)
 
-/-- The rate audit's bound with relayed tags, for a relay device whose side sources may depend on the oracle: the floor
-at `k − m` words, at `((k − 1)/N)^s + C(N, m)·2^L/2^(h·m) + C(q, k − m)/2^λ`. -/
 theorem _root_.ResourceAccounting.Rate.RelayDevice.auditRelay {N b h ρ S L q : ℕ} (A : RelayDevice N b h ρ S L q)
     (s k m F cTag cEnc lam : ℕ) :
     pr (fun x : Store N b × (Bits ρ × Oracle N b h ρ × (Fin s → Fin N)) =>
@@ -261,7 +237,7 @@ theorem _root_.ResourceAccounting.Rate.RelayDevice.auditRelay {N b h ρ S L q : 
     exact bot_le
   refine (pr_mono hsplit).trans ?_
   refine (pr_or_le _ _).trans (add_le_add ((pr_or_le _ _).trans (add_le_add ?_ ?_)) ?_)
-  · -- the sample misses the words without a correct tag
+  ·
     have hc := pr_le_of_card (fun x : Store N b × (Bits ρ × Oracle N b h ρ × (Fin s → Fin N)) =>
         (A.correct x.1 x.2.1 x.2.2.1).card < k ∧ ∀ i, x.2.2.2 i ∈ A.correct x.1 x.2.1 x.2.2.1) (N ^ s)
         ((k - 1) ^ s) hN (by
@@ -278,7 +254,7 @@ theorem _root_.ResourceAccounting.Rate.RelayDevice.auditRelay {N b h ρ S L q : 
       · simp [hk])
     refine hc.trans (le_of_eq ?_)
     rw [Nat.cast_pow, Nat.cast_pow, div_eq_mul_inv, div_eq_mul_inv, mul_pow, ENNReal.inv_pow]
-  · -- relayed tags
+  ·
     have hc := pr_le_of_card (fun x : Store N b × (Bits ρ × Oracle N b h ρ × (Fin s → Fin N)) =>
         m ≤ (A.relayed x.1 x.2.1 x.2.2.1).card) (2 ^ (h * m)) (N.choose m * 2 ^ L) (by positivity) (by
       rw [hΩ]
@@ -292,7 +268,7 @@ theorem _root_.ResourceAccounting.Rate.RelayDevice.auditRelay {N b h ρ S L q : 
     refine hc.trans (le_of_eq ?_)
     push_cast
     rfl
-  · -- compression at `k − m` words
+  ·
     refine (pr_le_of_card _ (2 ^ lam) (q.choose (k - m)) (by positivity) (by
       rw [hΩ, card_filter_equiv (Equiv.prodAssoc (Store N b) (Bits ρ) (Oracle N b h ρ × (Fin s → Fin N))).symm]
       refine (card_filter_prod_le' _ _ (q.choose (k - m) * Fintype.card (Store N b × Bits ρ)) (fun y => ?_)).trans

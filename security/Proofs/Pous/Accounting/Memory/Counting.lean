@@ -5,13 +5,7 @@ import Mathlib.Algebra.Order.BigOperators.Group.Finset
 import Mathlib.Basic.ENNReal.Real
 import Mathlib.Data.Fintype.BigOperators
 
-/-!
-# The counting core of lemma M
-
-The fibres of `π : (Fin M → Bool) → Fin q → Bool` partition the `2^M` states, so the values whose fibre has more
-than `T` states number at most `2^M / T` (`card_heavy_mul_le`, Markov's inequality over `z`). At `T = 2^(M − q + k)`
-that is at most `2^(q − k)` of the `2^q` values (`counting`).
--/
+/-! The counting core of lemma M: few values of `π` have a heavy fibre. -/
 
 @[expose] public section
 
@@ -19,7 +13,6 @@ namespace ResourceAccounting.MemoryProofs
 
 open ResourceAccounting.Memory
 
-/-- **Markov over the fibres.** `T` times the number of values whose fibre exceeds `T` is at most `2^M`. -/
 theorem card_heavy_mul_le {M q : ℕ} (π : (Fin M → Bool) → Fin q → Bool) (T : ℕ) :
     T * (Finset.univ.filter fun z => T < (fibre π z).card).card ≤ 2 ^ M := by
   classical
@@ -36,7 +29,6 @@ theorem card_heavy_mul_le {M q : ℕ} (π : (Fin M → Bool) → Fin q → Bool)
     _ ≤ ∑ z, (fibre π z).card := Finset.sum_le_sum_of_subset (Finset.subset_univ _)
     _ = 2 ^ M := hsum
 
-/-- **The threshold's arithmetic.** If `2^(M + k − q)` times `N` is at most `2^M`, then `2^k · N ≤ 2^q`. -/
 theorem two_pow_mul_le {M q k N : ℕ} (h : 2 ^ (M + k - q) * N ≤ 2 ^ M) : 2 ^ k * N ≤ 2 ^ q := by
   rcases le_or_gt q (M + k) with hq | hq
   · have hpow : 2 ^ (M + k - q) * 2 ^ q = 2 ^ M * 2 ^ k := by
@@ -51,13 +43,10 @@ theorem two_pow_mul_le {M q k N : ℕ} (h : 2 ^ (M + k - q) * N ≤ 2 ^ M) : 2 ^
       _ = 2 ^ (M + k) := by rw [← pow_add, add_comm]
       _ ≤ 2 ^ q := Nat.pow_le_pow_right (by norm_num) hq.le
 
-/-- **The counting core.** At most `2^(q − k)` of the `2^q` values leave more than `2^(M − q + k)` states. -/
 theorem counting (M q k : ℕ) (π : (Fin M → Bool) → Fin q → Bool) :
     2 ^ k * (Finset.univ.filter fun z => 2 ^ (M + k - q) < (fibre π z).card).card ≤ 2 ^ q :=
   two_pow_mul_le (card_heavy_mul_le π _)
 
-/-- **Markov over the fibres with advice.** Each state reads at most `2^a` values under all advice, so `T` times the
-number of values whose fibre exceeds `T` is at most `2^(M + a)`. -/
 theorem card_heavy_advice_mul_le {M a q : ℕ} (π : (Fin M → Bool) → (Fin a → Bool) → Fin q → Bool) (T : ℕ) :
     T * (Finset.univ.filter fun z => T < (fibreAdvice π z).card).card ≤ 2 ^ (M + a) := by
   classical
@@ -82,8 +71,6 @@ theorem card_heavy_advice_mul_le {M a q : ℕ} (π : (Fin M → Bool) → (Fin a
     _ ≤ ∑ z, (fibreAdvice π z).card := Finset.sum_le_sum_of_subset (Finset.subset_univ _)
     _ ≤ 2 ^ (M + a) := hsum
 
-/-- **The counting core with advice.** At most `2^(q − k)` of the `2^q` values leave more than `2^(M + a − q + k)`
-states that read them with some advice. -/
 theorem countingAdvice (M a q k : ℕ) (π : (Fin M → Bool) → (Fin a → Bool) → Fin q → Bool) :
     2 ^ k * (Finset.univ.filter fun z => 2 ^ (M + a + k - q) < (fibreAdvice π z).card).card ≤ 2 ^ q :=
   two_pow_mul_le (card_heavy_advice_mul_le π _)
