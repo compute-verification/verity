@@ -3029,12 +3029,6 @@
    "issue": "TRN-168",
    "due": "2026-11-30"
   },
-  "Slowdown.Cover.MulBlocks.Upstream": {
-   "owner": "@training",
-   "digest": "56a4eaf3bd6d46fab7599fd8370ce2f50d8f2473f007100a30dc08103aa537c8",
-   "issue": "TRN-167",
-   "due": "2026-11-30"
-  },
   "Slowdown.Covering.Covers": {
    "owner": "@compute-accounting",
    "digest": "69dd86aea0c7081406c15b337e9b0a651f5f6da40b74bbd42cd8ce4ee7c724cd",
@@ -32500,10 +32494,9 @@
    }
   },
   "Definitions.Core.Prob": {
-   "digest": "34d49b4df40002f425456422a2197214e963ec01104bdce146d2e6c4e52acb4c",
+   "digest": "5ebcecacba062b26d5aa3c8160fb75eb54b3b3eef11552713e188250a9d2323f",
    "definitions": {
-    "Verity.Game.prPMF": "9b5a9af8fb7746fac48dbb415307a17399d0af89a2a0fbb7942e420041423575",
-    "Verity.Game.prPMFReal": "6229e666416051c38a491834817d3f4deed1badef918f1ed30c0bec3c196ba7c"
+    "Verity.Game.prPMF": "9b5a9af8fb7746fac48dbb415307a17399d0af89a2a0fbb7942e420041423575"
    }
   },
   "Definitions.Core.Rec": {

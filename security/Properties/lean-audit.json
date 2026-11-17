@@ -23,7 +23,6 @@
   "Properties.InferenceOnly.Count",
   "Properties.InferenceOnly.Desc",
   "Properties.InferenceOnly.Desc.Verdict",
-  "Properties.InferenceOnly.Desc.Cover",
   "Properties.Pous",
   "Properties.Certifier.Check",
   "Properties.Certifier.Check.TransferBlocks",
