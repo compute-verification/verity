@@ -104,7 +104,7 @@ theorem append_W {s : State} {c a : Array ByteArray} {root : ByteArray} {count :
 
 theorem close_W {s : State} {c a : Array ByteArray} {t : Int} {now : Nat} {r : Result} {s₁ : State}
     (h₁ : close s t now = .ok (r, s₁))
-    (hc : ∀ d, r = .drew d → c[s.params.windows + t.toNat]! = s.coins[s.params.windows + t.toNat]!) :
+    (hc : ∀ d, r = .sampled d → c[s.params.windows + t.toNat]! = s.coins[s.params.windows + t.toNat]!) :
     close (W c a s) t now = .ok (r, W c a s₁) := by
   generalize hres : close (W c a s) t now = res
   unfold close at h₁ hres
@@ -168,7 +168,7 @@ it releases, the openings coin it samples from, and the next append coin. -/
 theorem step_W {s : State} {e : Event} {r : Result} {s₁ : State} {c a : Array ByteArray}
     (he : Session.step s e = .ok (r, s₁))
     (hs : ∀ k, (∃ now, e = .start now ∨ e = .boundary now) → r = .released (some k) → c[k]! = s.coins[k]!)
-    (hd : ∀ t now d, e = .close t now → r = .drew d →
+    (hd : ∀ t now d, e = .close t now → r = .sampled d →
       c[s.params.windows + t.toNat]! = s.coins[s.params.windows + t.toNat]!)
     (ha : ∀ x, s.appendCoins[s.appendSampled]? = some x → a[s.appendSampled]? = some x) :
     Session.step (W c a s) e = .ok (r, W c a s₁) := by
@@ -267,7 +267,7 @@ theorem withCoin_le {g : Nat} {s : State} {e : Event} {c : ByteArray} {s₁ : St
 
 theorem sclose_W {g : Nat} {s : State} {c a : Array ByteArray} {t : Int} {now : Nat} {r : Result} {s₁ : State}
     (h₁ : Shared.close g s t now = .ok (r, s₁))
-    (hc : (∃ d, r = .drew d) → c[s.params.windows + t.toNat / g]! = s.coins[s.params.windows + t.toNat / g]!) :
+    (hc : (∃ d, r = .sampled d) → c[s.params.windows + t.toNat / g]! = s.coins[s.params.windows + t.toNat / g]!) :
     Shared.close g (W c a s) t now = .ok (r, W c a s₁) := by
   generalize hres : Shared.close g (W c a s) t now = res
   unfold Shared.close at h₁ hres
@@ -337,7 +337,7 @@ theorem sstep_verify {g : Nat} (s : State) (t : Int) (o : Array Opening) :
 theorem sstep_W {g : Nat} (hg : 1 ≤ g) {s : State} {e : Event} {r : Result} {s₁ : State} {c a : Array ByteArray}
     (he : Shared.step g s e = .ok (r, s₁))
     (hs : ∀ k, (∃ now, e = .start now ∨ e = .boundary now) → r = .released (some k) → c[k]! = s.coins[k]!)
-    (hd : ∀ t now d, e = .close t now → r = .drew d →
+    (hd : ∀ t now d, e = .close t now → r = .sampled d →
       c[s.params.windows + t.toNat / g]! = s.coins[s.params.windows + t.toNat / g]!)
     (ha : ∀ x, s.appendCoins[s.appendSampled]? = some x → a[s.appendSampled]? = some x) :
     Shared.step g (W c a s) e = .ok (r, W c a s₁) := by
@@ -406,7 +406,7 @@ theorem unset_released {g : Nat} {s : State} {e : Event} {k : Nat} (he : ∃ now
     | some x => simp [hk] at h; exact ⟨x, rfl, h⟩
 
 theorem unset_drew {g : Nat} {s : State} {t : Int} {now : Nat} {d : Array (Nat × Nat)}
-    (h : Verifier.unset g s (.close t now) (some (.drew d)) = none) :
+    (h : Verifier.unset g s (.close t now) (some (.sampled d)) = none) :
     ∃ x, s.coins[s.params.windows + t.toNat / g]? = some x ∧ x.size = Codec.COIN_BYTES := by
   unfold Verifier.unset at h
   cases hk : s.coins[s.params.windows + t.toNat / g]? with
