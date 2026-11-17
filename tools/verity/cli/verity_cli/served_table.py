@@ -175,7 +175,7 @@ SERVED = Workload(SERVED_WINDOW, frozenset({"windows", "noise", "store", "receip
 #: onsite's subprotocols, the seven `Core.Composites.composites` holds for it
 ONSITE_COMPONENTS = ("sampled-proofs", "pouw", "inference-only", "pous", "bandwidth", "certifier", "wipe")
 PROTOCOLS = ONSITE_COMPONENTS
-#: each demo's subprotocols, the file `demos/NAME.toml` that `verity demo NAME` runs: onsite's seven, its two smaller
+#: each demo's subprotocols, the file `applications/NAME.toml` that `verity demo NAME` runs: onsite's seven, its two smaller
 #: sets (`verity.config.UNACCEPTED`) and remote's
 DEMOS = {"onsite_full": ONSITE_COMPONENTS,
          "onsite_compute": ("sampled-proofs", "pouw", "inference-only", "certifier", "wipe"),
@@ -189,7 +189,7 @@ PLACEMENT = {WORKERS: PROVER_NODE, ZK_SERVER: PROVER_NODE, PROVER: PROVER_NODE, 
              NETWORK_CERTIFIER: GATE_HOST, MEMORY_ATTESTER: AUDITOR_HOST, BANDWIDTH_VERIFIER: AUDITOR_HOST,
              VERIFIER: AUDITOR_HOST}
 #: the configuration this table's demo runs, whose `[[pin]]` entries are the only statement of the keys the auditor pinned
-CONFIG = ROOT / "demos" / "onsite_full.toml"
+CONFIG = ROOT / "applications" / "onsite_full.toml"
 _UNDECIDED = ("`verity run` records each period's verdict under that id, undecided unless the line says who",
               "combined it: no composite takes it.")
 #: each demo file's header
@@ -217,7 +217,7 @@ HEADER = HEADERS["onsite_full"]
 
 def configuration(commit: str, demo: str = "onsite_full",
                   pins: Sequence[Mapping[str, str]] | None = None) -> dict[str, Any]:
-    """The configuration `demos/<demo>.toml` holds, at program ``commit``: `config new`'s over the demo's subprotocols
+    """The configuration `applications/<demo>.toml` holds, at program ``commit``: `config new`'s over the demo's subprotocols
     (`DEMOS`), each party at its `PLACEMENT` (remote's auditor parties at `AUDITOR_REMOTE`), the workload's and PoUS's
     parameters stated, and ``pins``, the keys the auditor pinned for its devices (by default `CONFIG`'s own `[[pin]]`
     entries for the subprotocols the demo lists: no code states a key)."""
