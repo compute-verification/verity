@@ -1,14 +1,16 @@
 """`verity run` and `verity config`: a configuration's parties, run on this machine, and the file itself
 (`verity.config`).
 
-    verity run CONFIG [--party ROLE ...] [--on MACHINE] [--periods N] [--state DIR] [--bindings FILE] [--dry-run]
+    verity run CONFIG|NAME [--party ROLE ...] [--on MACHINE] [--periods N] [--state DIR] [--bindings FILE] [--dry-run]
     verity config new --workload W --protocols P,... [--on MACHINE] [--out FILE]
     verity config check CONFIG
     verity config hash CONFIG
 
-`verity run` checks the configuration, refusing any set of subprotocols that is neither a composite's nor one of
-onsite's smaller sets (``composite``, `verity.config.COMPOSITES`: onsite and remote, whose work is Pearl+'s run verdict,
-the only two protocol soundness covers; `verity.config.UNACCEPTED`; H1's development composite is refused), then runs
+`verity run` reads CONFIG, a configuration's path, or NAME, an application's, `applications/NAME.toml` (a - in NAME is
+a _; one that is neither is refused by name, ``application``, with the applications' names). It checks the
+configuration, refusing any set of subprotocols that is neither a composite's nor one of onsite's smaller sets
+(``composite``, `verity.config.COMPOSITES`: onsite and remote, whose work is Pearl+'s run verdict, the only two protocol
+soundness covers; `verity.config.UNACCEPTED`; H1's development composite is refused), then runs
 the parties it places on this machine (``--on``, default ``local``), or only the ``--party`` ones, for ``--periods``
 periods (default 1), in the shared state ``--state`` (default a new directory under the system's temporary one). The
 parties are those of the static table `REGISTRY` names: the served window's (`tools/verity/cli/verity_cli/served_table.py`);
@@ -81,6 +83,7 @@ from verity.channel import Refused
 from . import settings
 
 ROOT = Path(__file__).resolve().parents[4]
+APPLICATIONS = ROOT / "applications"
 #: the static table: the directory on its import path, and its module (module docstring)
 REGISTRY: tuple[Path, str] | None = (Path(__file__).resolve().parent, "served_table")
 #: the bindings `begin` keeps beside the run (module docstring)
@@ -429,10 +432,21 @@ def hooks_of(cfg: Mapping[str, Any], reg: Registry) -> set[str]:
     return set().union(*(reg.components[c].needs for c in cfg["protocols"]))
 
 
+def application(arg: str) -> Path:
+    if (path := Path(arg)).is_file() or path.suffix or len(path.parts) > 1:
+        return path
+    if (named := APPLICATIONS / f"{arg.replace('-', '_')}.toml").is_file():
+        return named
+    names = sorted(p.stem for p in APPLICATIONS.glob("*.toml"))
+    raise Refused("application", f"{arg} is neither a configuration's path nor an application's name: NAME is one of "
+                                 f"{', '.join(names) or 'none'}")
+
+
 def run_main(argv: Sequence[str], reg: Registry | None = None, in_process: bool = False) -> int:
     ap = argparse.ArgumentParser(prog="verity run", description="Run a configuration's parties on this "
                                  "machine (module docstring of verity_cli.run).")
-    ap.add_argument("config", metavar="CONFIG")
+    ap.add_argument("config", metavar="CONFIG|NAME", help="a configuration's path, or an application's name "
+                    "(applications/NAME.toml)")
     ap.add_argument("--party", action="append", default=[], metavar="ROLE", help="only this party (repeatable)")
     ap.add_argument("--on", dest="machine", metavar="MACHINE", help="this machine's name in the configuration "
                     f"(default {K.LOCAL})")
@@ -445,7 +459,8 @@ def run_main(argv: Sequence[str], reg: Registry | None = None, in_process: bool 
         ap.error(f"--periods is at least 1, not {a.periods}")
     try:
         reg = reg or registry()
-        cfg = load(Path(a.config), reg)
+        config = application(a.config)
+        cfg = load(config, reg)
         bound = bindings(Path(a.bindings) if a.bindings else None, cfg, reg)
         machine = a.machine or K.LOCAL
         if a.dry_run:
@@ -465,7 +480,7 @@ def run_main(argv: Sequence[str], reg: Registry | None = None, in_process: bool 
         return 2
     say("RUN", {"state": str(state), "parties": chosen, "configuration": K.digest(cfg), "periods": a.periods})
     runner = (InProcess(cfg, reg, state, len(set(placed(cfg).values())) == 1) if in_process else
-              Processes(Path(a.config), state))
+              Processes(config, state))
     return execute(cfg, reg, state, chosen, runner, unmet(cfg, reg, head()))
 
 
