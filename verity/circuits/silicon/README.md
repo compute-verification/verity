@@ -27,7 +27,7 @@ hardware probe), hypothesis or unprobed, with the evidence. [`captures/`](captur
 measured on silicon elsewhere, [`../../../tests/verity/circuits/ops/fixtures/`](../../../tests/verity/circuits/ops/fixtures/README.md)
 the captures the tests replay, `hawkeye/PIN.json` the pinned source-close reference, and `discrepancy_log.json` each
 place where the paper, the pinned simulator, the reference and the hardware disagree, open until its resolution names
-its evidence. The benchmarks [`tc_probe`](../../../benchmarks/tc_probe/README.md) and
-[`tc_probe_fp4`](../../../benchmarks/tc_probe_fp4/README.md) capture the hardware.
+its evidence. The benchmarks [`tc_probe`](../../../calibration/tc_probe/README.md) and
+[`tc_probe_fp4`](../../../calibration/tc_probe_fp4/README.md) capture the hardware.
 
 The package's tests are in `verity/circuits/ops`'s suite, under `tests/verity/circuits/ops/`.
