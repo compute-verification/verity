@@ -200,11 +200,11 @@ HEADERS = {
         "FILE` (tools/verity/cli/README.md); the deploy bindings hold every host and address, this file none.",
         "`verity run THIS --dry-run` resolves it all."),
     "onsite_compute": (
-        "The served window under SPOT, PoUW, the inference-only policy, the network attester and the memory",
+        "The workload under SPOT, PoUW, the inference-only policy, the network attester and the memory",
         "wipe (verity/onsite-compute/v0, a deployment of its own, never onsite): onsite without PoUS and PoUB,",
         "each party on its machine, and the key the auditor pinned for its memory attester.", *_UNDECIDED),
     "onsite_network": (
-        "The served window under the network attester, SPOT and the memory wipe (verity/onsite-network/v0, a",
+        "The workload under the network attester, SPOT and the memory wipe (verity/onsite-network/v0, a",
         "deployment of its own, never onsite), each party on its machine, and the key the auditor pinned for",
         "its memory attester.", *_UNDECIDED),
     "remote": (
@@ -399,7 +399,7 @@ WIPE = Session(("verity.protocols.resource_accounting.memory.pous.attester.wipe_
                 "verity.protocols.resource_accounting.memory.pous.prover.wipe_prover:PROTOCOL"),
                {MEMORY_ATTESTER: WP.CHALLENGER, PROVER: WP.PROVER}, {WP.CHALLENGER: (sw.raw_clock_ns, sw.CLOCK)},
                MEMORY_ATTESTER, before=True)
-#: PoUS's timed rounds (`challenger_session`'s parties), beside the served window: the memory attester's header names the
+#: PoUS's timed rounds (`challenger_session`'s parties), beside the workload: the memory attester's header names the
 #: monotonic clock
 POUS = Session(("verity.protocols.resource_accounting.memory.pous.attester.challenger_party:PROTOCOL",
                 "verity.protocols.resource_accounting.memory.pous.prover.challenger_prover:PROTOCOL"),
