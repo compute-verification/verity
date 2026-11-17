@@ -3,7 +3,7 @@
 # stream's samples) built from this tree, then the honest run and the --altered run, each one's records under $OUT/<case>
 # (never a circuit, a prover file, a private body, or a challenger's key or secret: its *-work/).
 #   research run --on vy-nebius-cpu-11 --pool research --as proofs --project verity --source . --cwd clone -- \
-#     bash benchmarks/two_stage/audit.sh
+#     bash benchmarks/one_stage/audit.sh
 #   TWO_FLOCK_WORK=DIR keeps flock-circuit's build there across runs (default: scratch); TWO_CASES="honest" runs those only;
 #   TWO_ARGS="--n 8 --q 4" passes audit.py more; FLOCK_CHALLENGER=1 gives each session a challenger of its own, audited
 #   at the sessions' end (in Lean too, which builds SPOT's difftest); TWO_GUARD=0 keeps no <case>/guard/ under $OUT, for
@@ -46,7 +46,7 @@ rc=0
 for c in ${TWO_CASES:-honest altered}; do
   flags=(); [ "$c" = altered ] && flags=(--altered)
   # shellcheck disable=SC2086
-  PYTHONPATH=$M0PATH uv run --no-sync python benchmarks/two_stage/audit.py --m0-pythonpath "$M0PATH" --bin "$BIN" --lean "$LEAN" \
+  PYTHONPATH=$M0PATH uv run --no-sync python benchmarks/one_stage/audit.py --m0-pythonpath "$M0PATH" --bin "$BIN" --lean "$LEAN" \
     --main "$O/main.txt" --out "$W/$c" "${flags[@]}" ${TWO_ARGS:-} > "$O/$c.log" 2>&1 || rc=1
   grep '^TWO ' "$O/$c.log" || tail -20 "$O/$c.log"
   mkdir -p "$O/$c"
