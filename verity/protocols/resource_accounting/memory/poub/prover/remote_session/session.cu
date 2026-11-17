@@ -898,6 +898,13 @@ constexpr int LEAF_PASS_WARPS = 8;
 constexpr size_t LEAF_PASS_SHARED = (size_t)LEAF_PASS_WARPS * 32 * 8 * sizeof(u64) + SK16_PACK * sizeof(u32) +
                                     (size_t)LEAF_PASS_WARPS * 32 * SK_ROWS * sizeof(int);
 
+// On sm_90 a leaf pass CTA's warps claim, read and hash in step (leaf_pass_kernel); elsewhere each warp claims alone.
+#if defined(__CUDA_ARCH__) && __CUDA_ARCH__ == 900
+#define LEAF_IN_PHASE 1
+#else
+#define LEAF_IN_PHASE 0
+#endif
+
 // sketch16_pass_kernel with no receipt kept or stored: a warp takes the next 16 tiles from ctr[0], which are 32
 // leaves, and for s = 0 … 15 computes block s of each (lane l's receipt is receipt s of leaf 2 tile0 + l); every
 // second step the lane compresses its last two receipts into its leaf's hash, whose state stays in its registers.
@@ -907,11 +914,15 @@ constexpr size_t LEAF_PASS_SHARED = (size_t)LEAF_PASS_WARPS * 32 * 8 * sizeof(u6
 // consumer warp that helps takes one tile, help_leaf_tile), and one that runs past the shard's last tile computes and
 // counts only the leaves and tiles the shard has. The receipts are sketch16_pass_kernel's (the same blocks at the same
 // store indices); only which 32 blocks share a step differs. ctr, tiles_per and started are sketch16_pass_kernel's.
-// The hash takes every register a thread can have, so a CTA has its SM to itself.
+// The hash takes every register a thread can have, so a CTA has its SM to itself. With LEAF_IN_PHASE the CTA claims
+// its warps' 16 tiles each at once (warp w the w-th 16), and a warp whose claim is past the shard's last tile has none.
 __global__ void __launch_bounds__(32 * LEAF_PASS_WARPS, 1)
 leaf_pass_kernel(const uint4 *__restrict__ data, u64 n, u64 base, const u32 *__restrict__ pk, u64 *leaves,
                  u64 *receipts, unsigned *ctr, unsigned tiles_per, unsigned *started) {
   extern __shared__ __align__(16) u64 scratch[];
+#if LEAF_IN_PHASE
+  __shared__ unsigned claim;
+#endif
   const int lane = threadIdx.x & 31, warp = threadIdx.x >> 5, g = lane >> 2, t = lane & 3;
   u64 *held = scratch + (u64)warp * 256;
   u32 *sg = reinterpret_cast<u32 *>(scratch + (u64)LEAF_PASS_WARPS * 256);
@@ -920,10 +931,20 @@ leaf_pass_kernel(const uint4 *__restrict__ data, u64 n, u64 base, const u32 *__r
   sk16_prologue(sg, pk);
   const u64 tiles = n / 32, nl = n / PER_LEAF;
   for (;;) {
+#if LEAF_IN_PHASE
+    if (!threadIdx.x) claim = atomicAdd(ctr, (unsigned)(PER_LEAF * LEAF_PASS_WARPS));
+    __syncthreads();
+    const unsigned c0 = claim;
+    __syncthreads();
+    if (c0 >= tiles) break;
+    const u64 mine0 = (u64)c0 + warp * PER_LEAF;
+    const unsigned tile0 = (unsigned)(mine0 < tiles ? mine0 : tiles);
+#else
     unsigned tile0 = 0;
     if (!lane) tile0 = atomicAdd(ctr, (unsigned)PER_LEAF);
     tile0 = __shfl_sync(~0u, tile0, 0);
     if (tile0 >= tiles) break;
+#endif
     const u64 leaf0 = 2 * (u64)tile0, leaf = leaf0 + lane;
     const u64 mine = nl - leaf0 < 32 ? nl - leaf0 : 32;   // the claim's leaves that the shard has
     u64 x[8], w[16];
@@ -955,6 +976,11 @@ leaf_pass_kernel(const uint4 *__restrict__ data, u64 n, u64 base, const u32 *__r
       }
       __syncwarp();
     }
+#if LEAF_IN_PHASE
+    // The CTA's warps hash only when all have read: warps in both phases at once are far slower on sm_90, most likely
+    // because the two phases' code together outgrows the instruction cache.
+    __syncthreads();
+#endif
     sha::compress_kw(x, kC.kw_xpad);
     if (leaf < nl) {
       u64 d[8];
@@ -974,14 +1000,17 @@ constexpr int LEAF64_WARPS = 8;
 constexpr size_t LEAF64_SHARED =
     (size_t)SK64_SIGNS * sizeof(uint4) + (size_t)LEAF64_WARPS * 32 * SK64_ROWS * sizeof(int);
 
-// leaf_pass_kernel at 64 rows: the same claims, leaves, counts and receipts' store indices, block s of the claim's 32
-// leaves by reader.cu's sk64_tile_of (pk: the 32 KiB of reader.py's `pack64`) staged as sketch64_receipts_kernel
-// stages them, and each lane's receipt by sk64_receipt into its registers, from which it goes to the leaf's hash (and
-// to receipts[8 j], with `receipts`).
+// leaf_pass_kernel at 64 rows: the same claims (in step under LEAF_IN_PHASE), leaves, counts and receipts' store
+// indices, block s of the claim's 32 leaves by reader.cu's sk64_tile_of (pk: the 32 KiB of reader.py's `pack64`) staged
+// as sketch64_receipts_kernel stages them, and each lane's receipt by sk64_receipt into its registers, from which it
+// goes to the leaf's hash (and to receipts[8 j], with `receipts`).
 __global__ void __launch_bounds__(32 * LEAF64_WARPS, 1)
 leaf_pass64_kernel(const uint4 *__restrict__ data, u64 n, u64 base, const uint4 *__restrict__ pk, u64 *leaves,
                    u64 *receipts, unsigned *ctr, unsigned tiles_per, unsigned *started) {
   extern __shared__ __align__(16) uint4 smem64[];
+#if LEAF_IN_PHASE
+  __shared__ unsigned claim;
+#endif
   const int lane = threadIdx.x & 31, warp = threadIdx.x >> 5, g = lane >> 2, t = lane & 3;
   const uint4 *sg = smem64;
   int *st = reinterpret_cast<int *>(smem64 + SK64_SIGNS) + warp * 32 * SK64_ROWS;
@@ -990,10 +1019,20 @@ leaf_pass64_kernel(const uint4 *__restrict__ data, u64 n, u64 base, const uint4 
   __syncthreads();
   const u64 tiles = n / 32, nl = n / PER_LEAF;
   for (;;) {
+#if LEAF_IN_PHASE
+    if (!threadIdx.x) claim = atomicAdd(ctr, (unsigned)(PER_LEAF * LEAF64_WARPS));
+    __syncthreads();
+    const unsigned c0 = claim;
+    __syncthreads();
+    if (c0 >= tiles) break;
+    const u64 mine0 = (u64)c0 + warp * PER_LEAF;
+    const unsigned tile0 = (unsigned)(mine0 < tiles ? mine0 : tiles);
+#else
     unsigned tile0 = 0;
     if (!lane) tile0 = atomicAdd(ctr, (unsigned)PER_LEAF);
     tile0 = __shfl_sync(~0u, tile0, 0);
     if (tile0 >= tiles) break;
+#endif
     const u64 leaf0 = 2 * (u64)tile0, leaf = leaf0 + lane;
     u64 x[8], w[16];
 #pragma unroll
@@ -1042,6 +1081,11 @@ leaf_pass64_kernel(const uint4 *__restrict__ data, u64 n, u64 base, const uint4 
         for (int i = 0; i < 8; ++i) w[i] = y[i];
       }
     }
+#if LEAF_IN_PHASE
+    // The CTA's warps hash only when all have read: warps in both phases at once are far slower on sm_90, most likely
+    // because the two phases' code together outgrows the instruction cache.
+    __syncthreads();
+#endif
     sha::compress_kw(x, kC.kw_xpad);
     if (leaf < nl) {
       u64 d[8];
