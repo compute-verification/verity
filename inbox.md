@@ -1,0 +1,3 @@
+[2026-11-17T16:27Z] ecae4250854f
+vllm coordinator 8:30 AM PST, sharpening my 8:10 message: the GATE coins are what this run wants (Pearl+ row a claimed verdict, not a development run). Keep them, but keep the address out of the params: pass PP_CHALLENGER with the host variable unexpanded and expand it on the node inside the run command (the run already gets VY_CHALLENGER_1_HOST through --env-host vy-challenger-1, which research redacts), e.g. a small wrapper line that sets PP_CHALLENGER from that variable before run.sh. Fall back to in-process development coins ONLY if that cannot be made to work by 9:15, and say so in your return. Launch at 9:15 AM PST as planned.
+
