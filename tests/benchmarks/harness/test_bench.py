@@ -4,6 +4,7 @@ import argparse
 import os
 import re
 import subprocess
+import sys
 import tomllib
 from dataclasses import replace
 from pathlib import Path
@@ -354,6 +355,25 @@ def test_a_point_refuses_a_local_checkpoint_whose_files_differ_from_the_spec_dig
     with pytest.raises(SystemExit):
         main(["_vllm-point", "--spec", str(path), "--point", item.point.id, "--identity", item.identity])
     assert f"not the spec's model_digest {digest}" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("card", ["NVIDIA H100 80GB HBM3", "NVIDIA H200"])
+def test_a_point_refuses_a_card_that_is_not_its_specs_before_anything_is_timed(tmp_path, monkeypatch, capsys, card):
+    path = _spec_with(tmp_path, "")
+    path.write_text(path.read_text().replace('gpu_id = "rtx-pro-6000"', 'gpu_id = "h200"'))
+    monkeypatch.setenv("RESEARCH_SOURCE_SHA", "a" * 40)
+    monkeypatch.setenv("RESEARCH_RUN_DIR", str(tmp_path))
+    item = jobs.make_plan(path, lookup=lambda identity, commit: None).points[0]
+    monkeypatch.setattr(result_format.kit, "host_stamp", lambda: {"card": card})
+    monkeypatch.setattr("verity_bench.cli.run_benchmark", lambda *args, **kwargs: sys.exit("timed"))
+    with pytest.raises(SystemExit) as stop:
+        main(["_vllm-point", "--spec", str(path), "--point", item.point.id, "--identity", item.identity])
+    if card == GPUS["h200"].nvidia_smi_name:
+        assert stop.value.code == "timed"
+    else:
+        assert stop.value.code == 2 and (
+            f"the card is a {card}, not the h200 of spec 'llama31-8b-fp8-1gpu' (NVIDIA H200): run it on a node whose "
+            "card is a NVIDIA H200, or use the spec for this card") in capsys.readouterr().err
 
 
 def test_a_local_checkpoint_is_bound_by_the_files_a_loader_reads_not_the_hub_snapshots_metadata(tmp_path):
