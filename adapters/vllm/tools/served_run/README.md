@@ -75,7 +75,7 @@ directory holds the served run's own: its placement and its commands.
 
 Onsite (`verity/onsite/v1`, in `verity/protocols/compose/verifier/onsite/`) is the superset of remote's composite of
 record: beside SPOT, the inference-only policy and Pearl+'s run verdict it composes PoUS, PoUB-P2
-(`verity/remote-bandwidth/p2/v0`), network attestation and the memory wipe. Each runs on the served run as its piece where `served_verdicts.sh` names
+(`verity/remote-bandwidth/p2/v0`), network attestation and the memory wipe. Each runs on the workload as its piece where `served_verdicts.sh` names
 its command (`POUS_CMD`, `BANDWIDTH_CMD`, `CERTIFIER_CMD`, `WIPE_CMD`). A piece that doesn't run is named `MISSING` and
 gets no verdict.
 

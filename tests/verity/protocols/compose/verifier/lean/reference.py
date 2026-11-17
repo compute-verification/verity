@@ -373,7 +373,7 @@ POUS = Recorded("verity/pous/p2/v4/run")
 PEARL_PLUS_REFUSED = "params: keys are not coins,"
 #: Pearl+'s run verdict, the work of onsite and of remote's composite of record: on a run whose commitment names a
 #: record and a window record, with params that aren't its coins, which it refuses with no digest (`REJECT`, the case a
-#: product's sample takes, since no case here makes the passes it would accept); on the served run a test records for
+#: product's sample takes, since no case here makes the passes it would accept); on a workload a test records for
 #: it (`pearl_plus_answer`); and else it refuses a commitment that isn't JSON, as Pearl+'s decoder does, and has no
 #: answer to any other case
 PEARL_PLUS = Recorded("verity/pouw/pearl-plus/v1", {REJECT: (

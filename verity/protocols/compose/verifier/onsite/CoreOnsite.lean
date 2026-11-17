@@ -134,7 +134,7 @@ private def allRefused : Answer := answer (components.map refused)
   some "params: verity/certifier/v0 is missing"
 #guard (answer ((components.filter (·.id != InferenceOnlyVerifier.Protocol.protocolId)).map refused)).reason ==
   some "params: verity/inference-only/v0 is missing"
--- a served run that leaves Pearl+'s case, PoUS's or the wipe's out of the composite gets a rejection naming the one
+-- a workload that leaves Pearl+'s case, PoUS's or the wipe's out of the composite gets a rejection naming the one
 -- missing
 private def without (id : String) : Answer := answer ((components.filter (·.id != id)).map refused)
 #guard [PouwVerifier.PearlPlus.Protocol.protocolId, PousVerifier.RunProtocol.protocol.id,

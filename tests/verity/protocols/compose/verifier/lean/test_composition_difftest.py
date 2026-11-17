@@ -477,7 +477,7 @@ ONSITE = port("onsite", R.ONSITE, SEEN["onsite"], ONSITE_PACKAGE)
 ONSITE_COUNTED = port("onsite-counted", R.ONSITE_COUNTED, SEEN["onsite-counted"], ONSITE_PACKAGE)
 REMOTE = port("remote", R.REMOTE, SEEN["remote"], REMOTE_PACKAGE)
 #: `product IDS serve` over onsite's subprotocols, which `verity run`'s verifier runs (remote v1's Pearl+ run is
-#: accepted in the reference only on a served run, `test_remote_v1_on_a_served_pearl_plus_run`, and H1's development
+#: accepted in the reference only on a workload, `test_remote_v1_on_a_served_pearl_plus_run`, and H1's development
 #: composite is no product)
 PRODUCT = {R.ONSITE.id: port("product", R.ONSITE, SEEN["onsite"], ONSITE_PACKAGE, serve=(ids(R.ONSITE), "serve"))}
 onsite_server = D.server_fixture(ONSITE)
