@@ -237,6 +237,8 @@ class Snapshot:
     flying: tuple[Ready, ...] = ()  # each member of a candidate on the chain not ready at its head as built, at that head:
                                    # the files a fail's blame reads of it
     fill: int = 1                  # the most batches a tick builds on main's chain, each on the one before (`Build.name`)
+    plain: frozenset[int] = frozenset()  # the ready PRs that land on the quick tier (`vqueue_loop.Loop._plain`): a batch of PRs
+                                   # with no Lean change holds only them or none, so one needing the whole check holds none back
 
 
 @dataclass(frozen=True)
@@ -386,7 +388,8 @@ def decide(s: Snapshot) -> list[Action]:
     nothing, and nothing is built above it), what each staged batch's records run calls for, the rebuilds of what a red or a
     leave dropped (`_restack`), then the tick's builds on the chain's top: a Lean batch while none is staged (`_next`), and
     as many batches of PRs with no Lean change as the chain has room for under `depth`, up to `fill` with the Lean batch
-    built on it, each on the one built before it (`Build.name`).  The Lean batch is staged with its records run first (`Build.records`), ahead of the batches built
+    built on it, each on the one built before it (`Build.name`), each holding only PRs that land on the quick tier
+    (`Snapshot.plain`) or none of them.  The Lean batch is staged with its records run first (`Build.records`), ahead of the batches built
     beside it; it takes no place in the chain, so it is built on the top of a full chain too, and none is staged while a PR
     changing a Lean input that a batch may take waits: it goes first (`_next`).  With no records run (`Snapshot.records`
     off) it takes the chain's last place this tick, on top of the tick's other batches, so long as its members cross
@@ -558,7 +561,7 @@ def _decide(s: Snapshot, leaves: list[Leave] | None) -> list[Action]:
 
     while made < free and not (made == free - 1 and fits()):
         batch = _moves_last(_batch([r for r in _pool(ready, busy | taken, beside) if not (r.move and scripts)
-                                    and _crossing(r, moves)], outcomes, s.batch, 0, s.wide), ready)
+                                    and _crossing(r, moves)], outcomes, s.batch, 0, s.wide, s.plain), ready)
         if not batch or (beside and _aside(batch, ready, outcomes)):
             break
         top = _on(builds, made, top)
@@ -690,6 +693,9 @@ def _left(s: Snapshot, r: Ready, newest: dict[int, Outcome], ready: dict[int, Re
     allowed = max(1, len(o.suspects) // 2) if o is not None and o.state == FAIL and r.number in o.suspects else None
     if allowed is not None and allowed <= len(t.plain):
         return "suspect limit", f"a suspect of a failed candidate goes in a batch of at most {allowed}"
+    if t.plain and (r.number in s.plain) != (t.plain[0] in s.plain):
+        return "kind", ("a batch holds only PRs that land on the quick tier or only PRs that take the whole check: the "
+                        "tick's last batch was of the other kind")
     if t.plain:
         return "batch full", (f"behind the PRs ranked before it: a batch holds at most {len(t.plain)} "
                               + ("(--batch)" if len(t.plain) >= s.batch else "(a suspect's limit)"))
@@ -1182,9 +1188,11 @@ def _takes(r: Ready, newest: dict[int, Outcome]) -> bool:
     return (o := newest.get(r.number)) is None or o.state not in (PASS, INFRA)
 
 
-def _batch(pool: list[Ready], outcomes: list[Outcome], size: int, lean: int, wide: frozenset[int]) -> tuple[int, ...]:
+def _batch(pool: list[Ready], outcomes: list[Outcome], size: int, lean: int, wide: frozenset[int],
+           plain: frozenset[int] = frozenset()) -> tuple[int, ...]:
     """The next batch from ``pool`` (in rank order): each PR whose own limit allows it, while the batch is under its limit, with at
-    most ``lean`` Lean PRs, and a wide one (`_wide`) only as its first Lean PR, which fills that limit.  A suspect's limit is
+    most ``lean`` Lean PRs, a wide one (`_wide`) only as its first Lean PR, which fills that limit, and only PRs of ``plain``
+    or none, as its first is.  A suspect's limit is
     half the suspects of the newest outcome holding it at its head (a fail or an infra split, `INFRA_SPLIT`), at least 1; a
     PR set aside (`infra`) comes after every other, alone, the longest set aside first."""
     newest = _newest(outcomes, {r.number: r.head for r in pool})
@@ -1195,7 +1203,8 @@ def _batch(pool: list[Ready], outcomes: list[Outcome], size: int, lean: int, wid
         if len(batch) >= limit:
             break
         o, w = newest.get(r.number), _wide(r, wide)
-        if (o is not None and o.state == PASS) or (r.lean and (leans >= lean or w and leans > 0)):
+        if (o is not None and o.state == PASS) or (r.lean and (leans >= lean or w and leans > 0)) or (
+                batch and (r.number in plain) != (batch[0] in plain)):
             continue
         if o is not None and o.state == INFRA and batch:
             break

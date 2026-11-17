@@ -133,6 +133,23 @@ def test_a_tick_builds_as_many_batches_as_the_chain_has_room_for_under_fill_each
     assert decide(snap(ready=ready, batch=2, depth=3)) == [Build((1, 2), MAIN, 3)]
 
 
+def test_a_batch_holds_only_prs_that_land_on_the_quick_tier_or_none_and_a_tick_builds_both_kinds():
+    """A batch holds only the PRs that land on the quick tier (`Snapshot.plain`) or only the others, as the first in rank is,
+    so one needing the whole check sends none of them there; under `fill` a tick builds a batch of each kind, and under 1 the
+    other kind waits, its leave saying so.  With none plain, a batch takes PRs as before."""
+    ready = prs(1, 2, 3, 4, 5)
+    plain = frozenset({1, 3, 5})
+    assert decide(snap(ready=ready, batch=4, depth=3, fill=3, plain=plain)) == [
+        Build((1, 3, 5), MAIN, 3, name=f"{BUILT}1"), Build((2, 4), f"{BUILT}1", 2)]
+    assert decide(snap(ready=ready, batch=4, depth=3, fill=3, plain=frozenset({2}))) == [
+        Build((1, 3, 4, 5), MAIN, 3, name=f"{BUILT}1"), Build((2,), f"{BUILT}1", 2)]
+    s = snap(ready=ready, batch=4, depth=3, plain=plain)
+    assert decide(s) == [Build((1, 3, 5), MAIN, 3)]
+    assert [(x.number, x.cause) for x in left_out(s)] == [(2, "kind"), (4, "kind")]
+    assert decide(snap(ready=ready, batch=4, depth=3, fill=3)) == [
+        Build((1, 2, 3, 4), MAIN, 3, name=f"{BUILT}1"), Build((5,), f"{BUILT}1", 2)]
+
+
 def test_a_lean_batch_and_a_batch_of_prs_with_no_lean_change_build_in_one_tick():
     """Under `fill`, with no records run, a Lean batch takes the chain's last place, on the batches of PRs with no Lean
     change its tick builds; one that is a move above a change to the move scripts built below it gives that place to the
@@ -1850,7 +1867,8 @@ class World:
     records, so only the invariants catch them.  A staged batch keeps the PRs changing a Lean input out of the builds
     beside it, each behind one staged batch at most (`waits`).  ``lean`` is the `lean` limit, in place of the seed's (1 or
     3): at 0 no batch takes a Lean PR the pins file doesn't name, and the world is done without them.  Two seeds in three
-    build as many batches a tick as the chain has room for (`Snapshot.fill`), the rest one."""
+    build as many batches a tick as the chain has room for (`Snapshot.fill`), the rest one; about half the PRs with no Lean
+    change land on the quick tier (`Snapshot.plain`)."""
 
     def __init__(self, seed: int, red: bool | None = None, bad: bool = True,
                  policy: Callable[[Snapshot], list] = decide, wide: bool = False, pinned: bool = False,
@@ -1862,6 +1880,8 @@ class World:
         self.batch, self.depth, self.rings = rng.choice((1, 2, 3, 4, 6)), rng.choice((1, 2, 3)), rng.choice((1, 2, 3))
         self.lean = rng.choice((1, 3)) if lean is None else (rng.choice((1, 3)), lean)[1]
         self.fill = 1 if seed % 3 == 0 else self.depth
+        kinds = random.Random(f"{seed} plain")
+        self.plain = frozenset(m for m in numbers if kinds.random() < 0.5)
         roll = {m: rng.random() for m in numbers}
         self.bad = {m: "own" if rng.random() < 0.5 else "interaction" for m in numbers if bad and roll[m] < 0.25}
         self.erring = {m: rng.choice(("meets", "nobody")) for m in numbers if bad and 0.25 <= roll[m] < 0.32}
@@ -1959,7 +1979,7 @@ class World:
         return Snapshot(self.main, ready, tuple(cands), tuple(self.history), self.batch, self.depth, self.rings, self.lean,
                         self.tick * TICK_S, PENDING_S, self.tree_ejects, wide=self.wide, pinned=self.pinned,
                         pulled=frozenset(self.held), flying=tuple(flying.values()), records=self.records_first,
-                        fill=self.fill)
+                        fill=self.fill, plain=frozenset(m for m in self.plain if not self.marks[m].lean))
 
     def done(self) -> bool:
         out = {m for m, r in self.marks.items() if r.lean and m not in self.pinned} if self.lean == 0 else set()
@@ -2407,6 +2427,8 @@ class World:
         top = by[a.after].members if a.after else self.top(s, acts, a.base)
         leans = [m for m in a.members if ready[m].lean]
         assert 1 <= len(a.members) <= s.batch and not any(ready[m].conflict for m in a.members), where
+        assert len({m in s.plain for m in a.members}) == 1, f"{where}: a batch mixes PRs of the quick tier and the whole check"
+        self.seen["a batch of PRs of the quick tier built"] += a.members[0] in s.plain
         ranked = sorted(a.members, key=lambda m: (ready[m].rank, m))
 
         def opens(first: list[int]) -> set[int]:
@@ -2806,7 +2828,7 @@ def test_the_simulated_queue_keeps_every_invariant_and_settles():
                  "a leaver's others rebuilt in its tick", "a leaver subtracted", "a fail above decided at once on main's word",
                  "a fail above waited for the word of the one below", "advanced through two candidates in a tick",
                  "a tick built several batches on the chain", "a batch built on the one its tick built before it",
-                 "a Lean batch built on a batch its tick built"):
+                 "a Lean batch built on a batch its tick built", "a batch of PRs of the quick tier built"):
         assert seen[what], f"no seed exercised: {what}"
 
 

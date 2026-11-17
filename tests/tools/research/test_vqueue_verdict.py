@@ -145,6 +145,21 @@ def test_under_gate_verdict_a_candidate_that_is_not_plain_still_takes_the_whole_
     assert [kw["shard"] for kw in _shards_of(runs, sha)] == ["1/3", "2/3", "3/3"]
 
 
+def test_under_gate_verdict_one_tick_builds_the_plain_prs_apart_from_one_taking_the_whole_check(env, monkeypatch):
+    """Two plain PRs and, ranked between them, one changing a path `lowrisk_excludes` names: the plain two go in a candidate of
+    their own on the quick tier, and the third in one above it that takes the whole check, both built in one tick."""
+    main = env.main()
+    env.put(1, {"a.txt": "1\n"})
+    env.put(2, {"verity/core/v.py": "x = 1\n"})
+    env.put(3, {"c.txt": "3\n"})
+    loop, runs, quick = _verdict(env, monkeypatch, depth=2, fill=2)
+    logged = loop.tick()
+    built = [r for r in logged if r["action"] == "build"]
+    started = {r["sha"]: r["record"]["gate"] for r in logged if r["action"] == "slim"}
+    assert [(b["members"], b["base"]) for b in built] == [([1, 3], main), ([2], built[0]["sha"])]
+    assert [started[b["sha"]] for b in built] == [vqueue_slim.QUICK, "check"] and len(quick.launches) == 1
+
+
 def _tree_drive(**lists: list[str] | None) -> str:
     """drive.toml on `main` with the low-risk lane on and this tree's own `lowrisk_excludes`, `verdict_excludes` and
     `verdict_plain`, but each ``lists`` names: that list in its place, or, as None, left out."""
