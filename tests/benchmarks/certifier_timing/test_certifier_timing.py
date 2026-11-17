@@ -5,7 +5,7 @@ the test gives, the guard on a clock the test moves, and the network attester on
   rate; `step` reads through a drift; `samples_to_show` is where a decoder at chance has its upper bound at the value.
 - `Plan.writes` keeps `write`'s and `burst`'s bytes in time for the next interval, bit 1's by the release and bit
   0's away from it, and `delay`'s bit 1 half an interval late.
-- `run.score` on recorded timestamps: through a certifier that passes bytes on as they come the planted delay is one
+- `run.score` on recorded timestamps: through a network attester that passes bytes on as they come the planted delay is one
   bit an interval and the ignored bit none (the guard's two bounds), on one host and from an observer on another
   whose clock drifts; through one that releases at a fixed time neither attack shows; and a first arrival an
   interval off the server's, an admission the server didn't take, a chunk of another interval's bytes or a failed
@@ -234,7 +234,7 @@ def _path(rng: random.Random) -> float:
 
 
 def test_the_guard_on_a_clock_the_test_moves(tmp_path):
-    """A certifier that passes bytes on as they come: an interval arrives when the server wrote it, plus a path of
+    """A network attester that passes bytes on as they come: an interval arrives when the server wrote it, plus a path of
     300 µs ± 100 µs. The planted delay is one bit an interval and the ignored bit none: the guard's two bounds, with
     room (over seeds 0–199 the planted bit's `bits` is 1.0 at every seed and the ignored bit's at most 0.0210 at
     these 400 intervals)."""
@@ -282,7 +282,7 @@ def test_the_guard_from_another_hosts_clock(tmp_path):
 
 
 def test_a_release_at_a_fixed_time_shows_neither_attack(tmp_path):
-    """A certifier whose release time nothing moves: an interval arrives its path after its release time, whenever
+    """A network attester whose release time nothing moves: an interval arrives its path after its release time, whenever
     the server wrote. Over seeds 0–199 `bits` is at most 0.0235, on one host and from another's clock."""
     rng = random.Random(2)
     for attack in ("write", "burst"):
@@ -365,7 +365,7 @@ def test_the_number_is_the_most_any_attack_showed_and_the_ceiling_every_attacks_
 
 def test_halts_counts_every_idle_state_that_stops_a_core(tmp_path):
     """`halts` sums the entries of every core's idle states but the polling one, and says why where it has no count:
-    no state to read, or one that went while it was read. A case's `halted` is its certifier's count after less
+    no state to read, or one that went while it was read. A case's `halted` is its network attester's count after less
     before, None where either is no count, and a row's the sum of its cases'."""
     assert "no cpuidle driver" in parties.halts(tmp_path)
     for cpu, (polls, stops, deeper) in enumerate([(5, 7, 1), (9, 3, 0)]):

@@ -1090,7 +1090,7 @@ def test_a_build_whose_sources_run_code_while_they_compile_indexes_nothing(tmp_p
 
 def test_a_staged_package_takes_its_path_dependency_outside_its_parent_and_refuses_one_outside_the_staged_tree(tmp_path):
     """`lean_audit` builds in a scratch tree it made and `lean_changed` in its slot, both outside the checkout, so
-    `check.home` took a staged package's parent directory for its tree: the certifier's in-tree path dependency
+    `check.home` took a staged package's parent directory for its tree: the network attester's in-tree path dependency
     (`../../../../../commitments/identity`) lay outside it, and `put` raised `OutsideTree` and ended the audit. Given the
     tree its caller staged, `put` takes that dependency, and still stores nothing of a build whose path dependency
     resolves out of that tree."""

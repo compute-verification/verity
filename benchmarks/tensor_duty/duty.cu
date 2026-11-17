@@ -8,7 +8,7 @@
 // to back with no drain or fill. Bursts repeat until SECS seconds of %globaltimer have passed, checked about every
 // 65,536 cycles.
 // Arms:    wg_s8    wgmma m64n256k32 s8.s8 -> s32, one warpgroup with A and B resident in shared memory (KS k-slices,
-//                   cycled), as int8_class_rate's wgmma kernel;
+//                   cycled);
 //          wg_e4m3  the same, e4m3.e4m3 -> f32, each batch drained;
 //          sync_s8  mma.sync m16n8k32 s8.s8 -> s32, SW warps with SA accumulators each, operands in registers (KS sets).
 // Classes: zero; const (every byte 0x7F, e4m3 0x38 = 1.0); uniform (bytes uniform: s8 on [-128, 127], or every finite
@@ -31,8 +31,7 @@
 // wall clock; clock64 over %globaltimer for the kernel and for each mode's steps (thread 0's, step start to step
 // start); the first FP32 warp's own adding time (fp32_share, of the kernel's) and its clock64 MHz.
 //
-// Build: python3 gen_wgmma.py && nvcc -O3 -std=c++17 -gencode arch=compute_90a,code=sm_90a -I. -I../int8_class_rate \
-//          -o duty duty.cu
+// Build: python3 gen_wgmma.py && nvcc -O3 -std=c++17 -gencode arch=compute_90a,code=sm_90a -I. -o duty duty.cu
 // Run:   duty ARM CLASS FILL BURST SECS DUTY...    (BURST in SM-cycles, DUTY in percent)
 //        duty A|B|C|D CLASS SECS X...               (X: C's MACs an add, D's phase in ms; A and B a point each X)
 // One JSON line for the calibration, then one a point, on stdout (arms A to D: one a point).
