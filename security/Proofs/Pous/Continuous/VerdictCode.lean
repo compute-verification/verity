@@ -38,7 +38,7 @@ import Mathlib.Topology.Sheaves.Init
 /-!
 # The PoUS verdict unit's code is the analysis's
 
-`PousVerifier.Verdict` (`verity/protocols/accounting/pous/verifier/check/PousVerifier/Verdict.lean`) is the verdict unit
+`PousCheck.Verdict` (`verity/protocols/accounting/pous/verifier/check/PousCheck/Verdict.lean`) is the verdict unit
 `PousVerdict_v1{K, M, LIMIT}` as executable code: its gates (`prog`), a run of a program (`Prog.eval`), and the
 verdicts and acceptance a run decides. The difftest
 `verity/protocols/accounting/pous/verifier/check/tests/test_verdict_difftest.py` runs `prog` against the Definition's

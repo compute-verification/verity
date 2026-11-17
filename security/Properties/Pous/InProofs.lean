@@ -18,8 +18,8 @@ says that a fixed extractor, rerunning any prover, recovers a signed session tha
 on this branch yet, so the statement takes them as parameters at the signature its issue gives; the deployed instance is
 `RunInProofsDeployed H UnitOutcome sessionInProofs`.
 
-**The setup.** `C*` and `W` never reach the auditor. The auditor decides by SETUPUNIT's `PousVerifier.SetupInProofs.check`
-(`PousVerifier/SetupInProofs.lean`, memory-accounting/pous-setup-as-proof) on the setup's claim: the sampled audit at
+**The setup.** `C*` and `W` never reach the auditor. The auditor decides by SETUPUNIT's `PousCheck.SetupInProofs.check`
+(`PousCheck/SetupInProofs.lean`, memory-accounting/pous-setup-as-proof) on the setup's claim: the sampled audit at
 `rate:8828/B` of one `PousP2SetupCheck_v1` instance a block of `C*`. `SetupInProofsDeployed` says that a fixed extractor
 recovers a store `C*` of which at most `⌊B/100⌋` blocks fail to decode to their slice of the registered `W`, except
 `ε_Pa + ε_ks + ε_bind` (`ε_Pa ≤ 0.99^8828`, the chance the sample misses `⌊B/100⌋ + 1` wrong blocks) and the collision
