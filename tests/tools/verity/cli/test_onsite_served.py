@@ -296,6 +296,17 @@ def test_a_dry_run_without_bindings_names_every_one_it_lacks(capsys):
         if e["component"] == "pous")
 
 
+@pytest.mark.parametrize("demo", ["onsite_network", "onsite_compute"])
+def test_a_dry_run_of_a_smaller_onsite_demo_resolves_every_party_and_channel(capsys, demo):
+    path = ROOT / "demos" / f"{demo}.toml"
+    rc, got, err = dry(capsys, config=path)
+    cfg = R.load(path, REG)
+    assert rc == 0, err
+    assert K.composite(cfg["protocols"], REG.components) in K.UNACCEPTED
+    assert sorted(x["party"] for x in got["plan"]) == sorted(p["name"] for p in cfg["party"])
+    assert len(got["channel"]) == len(cfg["channel"]) and got["dry"][0]["configuration"] == K.digest(cfg)
+
+
 def test_a_dry_run_on_a_machine_resolves_its_parties(capsys):
     rc, got, _ = dry(capsys, "--on", T.PROVER_NODE)
     assert rc == 0 and [x["party"] for x in got["plan"]] == ["workers", "firewall", "prover"]
@@ -552,6 +563,36 @@ def test_the_served_window_runs_once_with_every_piece_s_hooks(tmp_path, capsys, 
 
 #: two of the prover node's parties, whose pieces are the served window's
 SERVED_PARTIES = ("--party", "workers", "--party", "firewall")
+
+
+def test_the_workloads_piece_is_the_prover_nodes_first_and_each_verb_it_names_is_the_runners(capsys):
+    rc, got, _ = dry(capsys, "--on", T.PROVER_NODE)
+    first = got["plan"][0]["entries"][0]
+    assert rc == 0 and (got["plan"][0]["party"], first["component"]) == (T.WORKERS, T.SERVED_WINDOW)
+    assert first["verbs"] == ["predict", "serve", "seal", "window", "advice", "circuits", "publish"]
+    runner = (ROOT / T.RUNNER).read_text()
+    assert [v for v in first["verbs"] if f'if [ "${{1:-}}" = {v} ]; then' not in runner] == []
+    assert first["writes"] and all(w.split("/", 1)[0] in ("D", "OUT") for w in first["writes"])
+    assert all("verbs" not in e for x in got["plan"] for e in x["entries"] if e is not first)
+
+
+#: what the adapter's `run.sh settings MODEL -- verity run ...` sets of the node the workload runs on
+NODE_SETTINGS = ("VENV", "CUDA_HOME", "HF_HOME", "FLOCK_WORK", "DISK_FLOOR_GB", "HIDDEN_SO", "NORM_TAP_SO",
+                 "SERVE_ROOT", "ROW", "ROW_ID")
+
+
+def test_the_workloads_piece_hands_the_runner_the_nodes_settings(tmp_path, capsys, monkeypatch):
+    settings = {k: str(tmp_path / "node" / k.lower()) for k in NODE_SETTINGS}
+    for k, v in settings.items():
+        monkeypatch.setenv(k, v)
+    names = "|".join(NODE_SETTINGS)
+    monkeypatch.setattr(T, "RUNNER", stand_in(tmp_path, "runner.sh", f'mkdir -p "$OUT"\n/usr/bin/env | grep -E '
+                                                                    f"'^({names})=' | sort > \"$OUT/node.txt\"\n"))
+    state = tmp_path / "state"
+    rc = R.run_main([str(CONFIG), "--on", T.PROVER_NODE, *SERVED_PARTIES, "--bindings", bindings(tmp_path), "--state",
+                     str(state)], REG)
+    assert rc == 0, capsys.readouterr().err
+    assert dict(x.split("=", 1) for x in (state / "out" / "node.txt").read_text().splitlines()) == settings
 
 
 def test_serve_openais_flags_are_every_listed_pieces():

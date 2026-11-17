@@ -46,6 +46,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str((HERE.parents[1] / "verity/protocols/resource_accounting/memory/poub/prover/codec_tensor/reader.py").parent))
 sys.path.insert(0, str((HERE.parents[1] / "verity/protocols/resource_accounting/memory/poub/prover/word_codec/cuda_lib.py").parent))
+CARD_FILES = HERE.parents[1] / "hardware/cards"
 sys.path.append(str(HERE.parents[1]))
 
 import cuda_lib  # noqa: E402
@@ -60,7 +61,7 @@ RECEIPT_SEED = SR.rb.seed(TAG_SEED, 0, bytes(64))    # a WT_RECEIPT build's wind
 STORE_KEY = hashlib.sha256(b"verity/codec-tensor/bench/store-key").digest()  # the receipt tree's salt key
 COMMIT_GATE_BLOCKS = 4096      # sketch-sha512's commit gate: the driver's tree over a launch's first receipts
 READER = None                  # a WT_RECEIPT build's commit: reader.Reader (reader.cu), set by --reader-lib
-SMS = load_card("rtx-pro-6000-server")["sm"]["count"]["value"]   # the card's `sm.count`: one CTA an SM
+SMS = load_card("rtx-pro-6000-server", directory=CARD_FILES)["sm"]["count"]["value"]   # the card's `sm.count`: one CTA an SM
 PIPE_OPS = ("imad_wide", "imad", "iadd", "mac")   # wt_chain 5's ops
 MODELS = {   # Llama-3.1's layers (for the tree's share of a step) and linears (N, K)
     "8b": (32, {"qkv": (6144, 4096), "o": (4096, 4096), "gate_up": (28672, 4096), "down": (4096, 14336)}),
