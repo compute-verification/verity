@@ -6639,10 +6639,12 @@ print(json.dumps({"protocol": f"verity/{Path(sys.argv[0]).name}/v0", "reason": "
                   "verdict": "reject"}))
 sys.exit(1)
 '''
-#: What composite.py's provenance leaves unshown after a product's Lean runs in a toy tree, which is no git checkout,
-#: and for onsite, whose CITES names no guarantee
-UNSHOWN = {"remote": ["COMPOSITE remote: NOT_ESTABLISHED the tree is no git checkout"],
-           "onsite": ["COMPOSITE onsite: NOT_ESTABLISHED the product cites no listed guarantee"]}
+#: What composite.py's provenance leaves unshown after a product's Lean runs: neither remote v1 nor onsite has a CITES
+#: entry
+UNSHOWN = {x: [f"COMPOSITE {x}: NOT_ESTABLISHED the product cites no listed guarantee"] for x in ("remote-v1", "onsite")}
+#: Onsite's run as served_table.py's pearl-plus piece sets it: remote v1 composes beside onsite where the tree has its Lean
+ONSITE_POUW = {"POUW": "pearlplus"}
+REMOTE_V1_MAIN = "verity/protocols/compose/verifier/remote/RemoteV1Main.lean"
 
 
 @pytest.mark.parametrize("protocol", list(ONSITE_OWN))
@@ -6656,8 +6658,9 @@ def test_the_composite_leaves_out_a_pous_or_wipe_case_that_is_not_its_pieces_and
     answer and before it published its summary (PoUS's pous.json, the wipe's summary.json): the protocol is
     NOT_WRITTEN and its directory LEFT_OUT; the case composite.py makes for onsite's Lean names every other
     subprotocol and not that one, in its params and in its evidence; OUT/verdicts.txt and onsite's composite.json name
-    that protocol, and it alone, as missing (NOT_ESTABLISHED), before the Lean's verdict line; remote, which composes
-    neither protocol, is handed its three cases and misses none; and the exit is 0, each product's Lean having
+    that protocol, and it alone, as missing (NOT_ESTABLISHED), before the Lean's verdict line; remote v1, which
+    composes beside onsite under POUW=pearlplus and composes neither protocol, is handed its three cases and misses
+    none; and the exit is 0, each product's Lean having
     answered. A case of the protocol in another directory beside the piece's own (a second window's; the wipe's left
     by an earlier run): the piece's own is composed, the other is not, and nothing is missing. No path reaches
     OUT/verdicts.txt. What onsite's Lean answers on a case that lacks a subprotocol is not shown here, where its Lean
@@ -6672,6 +6675,7 @@ def test_the_composite_leaves_out_a_pous_or_wipe_case_that_is_not_its_pieces_and
     _script(bin_ / "systemd-run", "exit 1")
     for pkg in ("verity/protocols/compose/verifier/remote", "verity/protocols/compose/verifier/onsite"):
         (tree / pkg).mkdir(parents=True)
+    (tree / REMOTE_V1_MAIN).touch()
     (tree / "benchmarks" / "one_stage").mkdir(parents=True)
     shutil.copy(HERE.parents[2] / "benchmarks" / "one_stage" / "composite.py", tree / "benchmarks" / "one_stage")
 
@@ -6693,7 +6697,7 @@ def test_the_composite_leaves_out_a_pous_or_wipe_case_that_is_not_its_pieces_and
     else:
         case(ONSITE_OWN[protocol][3], protocol)
     env = {"PATH": f"{bin_}:{os.defpath}", "HOME": str(tmp_path), "PY": sys.executable, "TPY": sys.executable,
-           "ONSITE_PIECES": str(ONSITE_PIECES), "SERVED_NODE": "the-served-node"}
+           "ONSITE_PIECES": str(ONSITE_PIECES), "SERVED_NODE": "the-served-node", **ONSITE_POUW}
     r = subprocess.run(["bash", str(HERE.parents[2] / "benchmarks" / "one_stage" / "served_composite.sh"), str(d), str(out)], cwd=tree, env=env,
                        check=False, capture_output=True, text=True)
     assert r.returncode == 0, r.stderr
@@ -6705,11 +6709,11 @@ def test_the_composite_leaves_out_a_pous_or_wipe_case_that_is_not_its_pieces_and
     assert said.splitlines()[:-1] == [
         *lines["verity/pous/p2/v4/run"], *lines["verity/wipe/v0"],
         "COMPOSITE CASES: PoUS's and the wipe's as their pieces wrote them, none made here",
-        "COMPOSITE remote: VERDICT verity/remote/v0 reject stand-in", *UNSHOWN["remote"],
+        "COMPOSITE remote-v1: VERDICT verity/remote/v1 reject stand-in", *UNSHOWN["remote-v1"],
         *([f"COMPOSITE onsite: NOT_ESTABLISHED missing {protocol}"] if killed else []),
-        "COMPOSITE onsite: VERDICT verity/onsite/v0 reject stand-in", *UNSHOWN["onsite"]]
+        "COMPOSITE onsite: VERDICT verity/onsite/v1 reject stand-in", *UNSHOWN["onsite"]]
     assert str(tmp_path) not in said
-    for x in ("remote", "onsite"):
+    for x in ("remote-v1", "onsite"):
         want = [p for p in C.COMPONENTS[x] if not (killed and p == protocol)]
         made = d / "private" / "composite" / x / "private"
         assert [(c["id"], c["params"]) for c in json.loads((made / "params.json").read_text())["components"]] == [
@@ -6725,8 +6729,8 @@ def test_the_composite_takes_no_case_from_the_certifier_pieces_private_directory
     onsite_pieces.sh's `onsite_cases` and composite.py as they are and a stand-in for each product's Lean (`NO_LEAN`),
     takes a directory for a case beside an answer, so it composes every other subprotocol's case and nothing of that
     directory: no product's case has a component of it, onsite names the certifier missing (NOT_ESTABLISHED), and
-    remote, which doesn't compose it, misses nothing. What reads the certifier's private case into a composite is not
-    shown here."""
+    remote v1, which composes beside it under POUW=pearlplus and doesn't compose the certifier, misses nothing. What
+    reads the certifier's private case into a composite is not shown here."""
     import composite as C
     certifier = "verity/certifier/v0"
     tree, bin_, d, out = tmp_path / "tree", tmp_path / "bin", tmp_path / "serve", tmp_path / "out"
@@ -6736,6 +6740,7 @@ def test_the_composite_takes_no_case_from_the_certifier_pieces_private_directory
     _script(bin_ / "systemd-run", "exit 1")
     for pkg in ("protocols/compose/verifier/remote", "protocols/compose/verifier/onsite"):
         (tree / "verity" / pkg).mkdir(parents=True)
+    (tree / REMOTE_V1_MAIN).touch()
     (tree / "benchmarks" / "one_stage").mkdir(parents=True)
     shutil.copy(HERE.parents[2] / "benchmarks" / "one_stage" / "composite.py", tree / "benchmarks" / "one_stage")
     own = {p: ONSITE_OWN[p][0] if p in ONSITE_OWN else f"piece{n}" for n, p in enumerate(C.COMPONENTS["onsite"])
@@ -6757,14 +6762,14 @@ def test_the_composite_takes_no_case_from_the_certifier_pieces_private_directory
     (out / "pieces" / "certifier").mkdir(parents=True)
     (out / "pieces" / "certifier" / "answer.json").write_text(json.dumps({"protocol": certifier, "verdict": "accept"}))
     env = {"PATH": f"{bin_}:{os.defpath}", "HOME": str(tmp_path), "PY": sys.executable, "TPY": sys.executable,
-           "ONSITE_PIECES": str(ONSITE_PIECES), "SERVED_NODE": "the-served-node"}
+           "ONSITE_PIECES": str(ONSITE_PIECES), "SERVED_NODE": "the-served-node", **ONSITE_POUW}
     r = subprocess.run(["bash", str(HERE.parents[2] / "benchmarks" / "one_stage" / "served_composite.sh"), str(d), str(out)], cwd=tree, env=env,
                        check=False, capture_output=True, text=True)
     assert r.returncode == 0, r.stderr
-    assert certifier in C.COMPONENTS["onsite"] and certifier not in C.COMPONENTS["remote"]
+    assert certifier in C.COMPONENTS["onsite"] and certifier not in C.COMPONENTS["remote-v1"]
     said = [x for x in (out / "verdicts.txt").read_text().splitlines() if "NOT_ESTABLISHED" in x or "LEFT_OUT" in x]
-    assert said == [*UNSHOWN["remote"], f"COMPOSITE onsite: NOT_ESTABLISHED missing {certifier}", *UNSHOWN["onsite"]]
-    for x in ("remote", "onsite"):
+    assert said == [*UNSHOWN["remote-v1"], f"COMPOSITE onsite: NOT_ESTABLISHED missing {certifier}", *UNSHOWN["onsite"]]
+    for x in ("remote-v1", "onsite"):
         want = [p for p in C.COMPONENTS[x] if p != certifier]
         made = d / "private" / "composite" / x / "private"
         assert [(c["id"], c["params"]) for c in json.loads((made / "params.json").read_text())["components"]] == [
