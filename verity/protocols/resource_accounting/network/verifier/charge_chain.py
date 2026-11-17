@@ -267,7 +267,7 @@ def book_of(D: int, v: dict[str, list[int]]) -> ChargeBook:
     return ChargeBook(tuple(v["arrived"]), v["total"][0], tuple(zip(v["zfreq"], v["ztotal"])))
 
 
-#: a length slot's width: its max_tokens and its output length, each a u32 of the certified body (`window_charge.MW`)
+#: a length slot's width: its max_tokens and its output length, each a u32 of the attested body (`window_charge.MW`)
 LENGTH_BITS = 32
 
 

@@ -1,10 +1,10 @@
-"""Network certificates: the network attester's signed record of each execution phase, on SHA-512 (record v2).
+"""Network attestations: the network attester's signed record of each execution phase, on SHA-512 (record v2).
 
 The network attester is the auditor-trusted device on a node's uplink that shapes each link into the grid
-(`grid.Certifier`). Once per execution phase whose record is complete it signs one **network certificate**: a signature
+(`grid.Certifier`). Once per execution phase whose record is complete it signs one **network attestation**: a signature
 over a hiding digest of the window's record, salted by the attester. An execution phase whose record isn't complete gets
 none (`Issuer`), so it fails closed. The record head and the salt are witness: they enter proofs and never reach
-the auditor in the clear, so the record's own hashes are unsalted, and what the certificate signs is the salted digest.
+the auditor in the clear, so the record's own hashes are unsalted, and what the attestation signs is the salted digest.
 
 **The record (v2).** The record is still exactly the grid and one status (W5), encoded with padding elided:
 
@@ -34,13 +34,13 @@ fresh for each record (`Issuer`'s `coins`), never the prover's:
 
 The attester hands `salt_c` to the prover with the head, as witness only (`CertifiedRecord`). N2's head check
 (`head_check`) links the two: R is the digest of the head it opened, and the salted digest of R is the one the
-certificate signs. So the signature check reads only the certificate's public fields and its signed digest
+attestation signs. So the signature check reads only the attestation's public fields and its signed digest
 (`Certificate.verify`), never a hash of witness. Until N2's proof block is proved, its verifier checks that
 link on the host too, over the opening (`CertifiedRecord.verify`).
 
-**The certificate** signs a 64-byte message that binds the signed digest to the key, the attester session and the
-execution phase, so a certificate can't be replayed onto another window, link, direction, key or session. It is LMS's
-network-certificate role digest (`verity.commitments.crypto.lms.certificate_message`), each field but I and the window prefixed
+**The attestation** signs a 64-byte message that binds the signed digest to the key, the attester session and the
+execution phase, so an attestation can't be replayed onto another window, link, direction, key or session. It is LMS's
+network-attestation role digest (`verity.commitments.crypto.lms.certificate_message`), each field but I and the window prefixed
 with its length as a u64be:
 
     message = SHA-512( [tag] ‖ I ‖ [ [session] ‖ [link] ‖ [direction] ‖ u64be window ] ‖ [signed digest] ),
@@ -48,50 +48,50 @@ with its length as a u64be:
 
 `session` is the attester session's id, 32 bytes (`lms.SESSION_BYTES`) that the challenger samples for the session and
 issues to the attester; the audit takes it from its parameters, as it takes the key, so the record head and the
-certificate's encoding don't carry it. The tag is the message's own, distinct from the ids of the checks that read it
+attestation's encoding don't carry it. The tag is the message's own, distinct from the ids of the checks that read it
 (`verity/network-certificate/v4`, `verity/network-records/v3`).
 
-**The mark certificate** (`CertifiedMark`, `Issuer.mark`) certifies a mark, 64 bytes handed to the attester, at an
+**The mark attestation** (`CertifiedMark`, `Issuer.mark`) certifies a mark, 64 bytes handed to the attester, at an
 execution phase of a link. The attester signs the mark hidden under a salt of its own, under the same message, on a
-link name of the marks' own (`marks_link`) as an egress certificate, so it names the key, the session, the link and
+link name of the marks' own (`marks_link`) as an egress attestation, so it names the key, the session, the link and
 the execution phase:
 
     signed digest = SHA-512( "verity-network-certifier/mark/v1" ‖ salt_c ‖ mark )     (`mark_digest`)
     link          = <link>-marks
 
-`salt_c` is 64 fresh bytes of the attester's own coins, and never one an earlier mark certificate of the issuer has:
-under one salt two certificates of one mark would sign one digest, which shows that they certify one mark. The mark
-and its salt are witness, the opening the attester hands back with the certificate. Only the certificate is public:
-that the key certified a mark of the link at that execution phase, and a hiding digest of the mark. A reader holds a
-mark to its certificate through that opening (`CertifiedMark.refusal`). The digest has its own tag, so a mark
-certificate opens as a record's, or a record's as a mark's, only on a SHA-512 collision.
+`salt_c` is 64 fresh bytes of the attester's own coins, and never one an earlier mark attestation of the issuer has:
+under one salt two attestations of one mark would sign one digest, which shows that they certify one mark. The mark
+and its salt are witness, the opening the attester hands back with the attestation. Only the attestation is public:
+that the key attested a mark of the link at that execution phase, and a hiding digest of the mark. A reader holds a
+mark to its attestation through that opening (`CertifiedMark.refusal`). The digest has its own tag, so a mark
+attestation opens as a record's, or a record's as a mark's, only on a SHA-512 collision.
 `Issuer.mark` is the signing step alone: the execution phase is its caller's to give.
 
-An issuer certifies a mark once. Asked for a mark it has signed a certificate of, at any execution phase and for any
-link, it raises (`MarkRefused`): it hands back nothing, takes no coins and uses no leaf. So the mark certificates of
-one issuer are of distinct marks, and a mark has one certificate of it, which names one execution phase. A second
+An issuer certifies a mark once. Asked for a mark it has signed an attestation of, at any execution phase and for any
+link, it raises (`MarkRefused`): it hands back nothing, takes no coins and uses no leaf. So the mark attestations of
+one issuer are of distinct marks, and a mark has one attestation of it, which names one execution phase. A second
 signer on the key's leaf state signs nothing in a session the state has started (`Signer.start`), so a session's mark
-certificates are those of the issuers on the one signer that started it, and the network attester's run builds one
+attestations are those of the issuers on the one signer that started it, and the network attester's run builds one
 issuer.
 
-**A certificate's bytes** (`Certificate.encode`, its inverse `Certificate.decode`) are its one serialization, every
+**An attestation's bytes** (`Certificate.encode`, its inverse `Certificate.decode`) are its one serialization, every
 field fixed-width or length-prefixed:
 
     u16be len(I) ‖ I ‖ u16be len(link) ‖ link (UTF-8) ‖ u8 direction (0 egress, 1 ingress) ‖ u64be execution phase ‖
     signed digest (64) ‖ u32be len(signature) ‖ signature
 
-They are the bytes a certified record's leaf ends with, after its head and its salt (`service.encode`), where the Lean
-reads them (`NetworkCheck.Check`'s commitment). `encode` refuses a certificate the layout cannot hold, and `decode`
+They are the bytes an attested record's leaf ends with, after its head and its salt (`service.encode`), where the Lean
+reads them (`NetworkCheck.Check`'s commitment). `encode` refuses an attestation the layout cannot hold, and `decode`
 bytes that end inside a part, a length that names more bytes than are left, bytes left after the signature, a
-direction code other than 0 and 1 and a link that is not UTF-8. So a certificate has one encoding and an encoding one
-certificate, and SHA-512 of these bytes names a certificate up to a collision.
+direction code other than 0 and 1 and a link that is not UTF-8. So an attestation has one encoding and an encoding one
+attestation, and SHA-512 of these bytes names an attestation up to a collision.
 
 The scheme is LMS over SHA-512 (`lms.DEPLOYED`: n = 64, w = 1, h = 20, the whole SHA-512 output, not truncated), whose
 unforgeability is ``euf-cma/lms-sha512-n64``. The attester's signing step (`Issuer`) is handed it as a `Signer`
 (`LmsSigner`), and the audit as a `PublicKey` (`LmsKey`). A signer whose leaf state is missing, behind or held by another
-signer refuses (`SignerRefused`), and then the execution phase has no certificate: it fails closed, as a `no-verdict`.
+signer refuses (`SignerRefused`), and then the execution phase has no attestation: it fails closed, as a `no-verdict`.
 So does a signer asked to start a session its state has already started (`Signer.start`): the issuer starts its session
-before its first signature, and a refused start leaves every execution phase of the run without a certificate.
+before its first signature, and a refused start leaves every execution phase of the run without an attestation.
 
 **The device state** (`DeviceState`): what the network attester keeps for its registered key across sessions, in a file
 of its own beside the key and apart from the key's leaf state: the key's life so far, in milliseconds on the network
@@ -103,9 +103,9 @@ and no two sessions of the key have one ordinal. The state is held, under a lock
 from before its first tick to after its last, so no two sessions under a key run at once, and it refuses a session id it
 has started (`StartRefused`). It is keyed by the registered key, which today is the key that signs.
 
-**The start's certificate** (`CertifiedStart`, `Issuer.certify_start`): once a session, before its first tick, the
+**The start's attestation** (`CertifiedStart`, `Issuer.certify_start`): once a session, before its first tick, the
 network attester signs where the session starts on its key's life, and which of the key's sessions it is, under the
-message every certificate signs, for the link's name with ``-origin`` (`start_link`), ``egress``, window 0:
+message every attestation signs, for the link's name with ``-origin`` (`start_link`), ``egress``, window 0:
 
     signed digest = tagged_sha512("verity-network-certifier/start/v2", u64be base_ms ‖ u64be ordinal ‖ schedule)
                                                                                                         (`start_digest`)
@@ -113,8 +113,8 @@ message every certificate signs, for the link's name with ``-origin`` (`start_li
 `base_ms` is the session's base, `ordinal` its ordinal and `schedule` the schedule's parameters digest (64 bytes), so
 tick t of the session is millisecond `base_ms` + t·τ_b of the key's life, and two of the key's sessions whose ordinals
 are n and n + 1 have no session of the key between them. All three are public, so the digest carries no salt, and a
-verifier that holds them checks the certificate alone (`CertifiedStart.verify`). The tag and the link name are the
-start's own, so a start's certificate opens as no record's or mark's.
+verifier that holds them checks the attestation alone (`CertifiedStart.verify`). The tag and the link name are the
+start's own, so a start's attestation opens as no record's or mark's.
 
 The tag says which clock the session's ticks are read on: ``verity-network-certifier/start/v2`` means the host's raw
 clock, and a device whose ticks read any other clock signs its starts under another tag. The digest names no clock:
@@ -154,7 +154,7 @@ CERTIFICATE_TAG = b"verity/net-cert/v1"
 MARK_TAG = domains.CERTIFIER_MARK.encode()
 DIGEST_BYTES = _DIGEST_BYTES["sha512"]
 SALT_BYTES = 64
-#: what a link's name gains for the link its marks are certified under (`marks_link`)
+#: what a link's name gains for the link its marks are attested under (`marks_link`)
 MARKS = "marks"
 
 STATUS_CODES: dict[Reason | None, int] = {
@@ -338,7 +338,7 @@ def record_head(link: str, direction: Direction, window: int, grid: Grid, status
 
 
 def certificate_digest(salt: bytes, record: bytes) -> bytes:
-    """The digest a certificate signs: SHA-512("verity/net-cert/v1" ‖ salt_c ‖ R) of the record digest R under the
+    """The digest an attestation signs: SHA-512("verity/net-cert/v1" ‖ salt_c ‖ R) of the record digest R under the
     attester's salt."""
     return hashlib.sha512(CERTIFICATE_TAG + salt + record).digest()
 
@@ -351,12 +351,12 @@ def certificate_message(key_id: bytes, session: bytes, link: str, direction: Dir
 
 
 def start_link(link: str) -> str:
-    """The link name a session's start is certified under: `link`'s with ``-origin``, which no record or mark has."""
+    """The link name a session's start is attested under: `link`'s with ``-origin``, which no record or mark has."""
     return f"{link}-origin"
 
 
 def start_digest(base_ms: int, ordinal: int, schedule: bytes) -> bytes:
-    """The digest a start's certificate signs: tagged_sha512("verity-network-certifier/start/v2", u64be base_ms ‖
+    """The digest a start's attestation signs: tagged_sha512("verity-network-certifier/start/v2", u64be base_ms ‖
     u64be ordinal ‖ schedule), `base_ms` the key's life at the session's start, in milliseconds on the network
     attester's clock, `ordinal` the number of the key's sessions started before it, and `schedule` the schedule's
     parameters digest. All are public, so it carries no salt."""
@@ -495,12 +495,12 @@ class DeviceState:
 
 
 def marks_link(link: str) -> str:
-    """The link name `link`'s marks are certified under, `<link>-marks`."""
+    """The link name `link`'s marks are attested under, `<link>-marks`."""
     return f"{link}-{MARKS}"
 
 
 def mark_digest(salt: bytes, mark: bytes) -> bytes:
-    """The digest a mark certificate signs: SHA-512("verity-network-certifier/mark/v1" ‖ salt_c ‖ mark), the 64-byte
+    """The digest a mark attestation signs: SHA-512("verity-network-certifier/mark/v1" ‖ salt_c ‖ mark), the 64-byte
     mark hidden under the attester's 64-byte salt."""
     if type(salt) is not bytes or len(salt) != SALT_BYTES:
         raise ValueError(f"a mark certificate's salt is {SALT_BYTES} bytes")
@@ -515,7 +515,7 @@ class SignerRefused(Exception):
 
 
 class MarkRefused(Exception):
-    """The issuer has signed a mark certificate of these 64 bytes already and certifies a mark once: it hands back
+    """The issuer has signed a mark attestation of these 64 bytes already and certifies a mark once: it hands back
     nothing, takes no coins and uses no leaf."""
 
 
@@ -619,9 +619,9 @@ class Certificate:
     signature: bytes
 
     def encode(self) -> bytes:
-        """The certificate's bytes, its one serialization: u16be len(I) ‖ I ‖ u16be len(link) ‖ link (UTF-8) ‖
+        """The attestation's bytes, its one serialization: u16be len(I) ‖ I ‖ u16be len(link) ‖ link (UTF-8) ‖
         u8 direction (0 egress, 1 ingress) ‖ u64be execution phase ‖ signed digest (64) ‖ u32be len(signature) ‖
-        signature. Raises `ValueError` on a certificate the layout cannot hold: a field of another type, a key id,
+        signature. Raises `ValueError` on an attestation the layout cannot hold: a field of another type, a key id,
         link or signature too long for its length, an execution phase that is not a u64, a digest that is not 64
         bytes."""
         if not (type(self.key_id) is bytes and type(self.link) is str and type(self.direction) is Direction
@@ -637,7 +637,7 @@ class Certificate:
 
     @classmethod
     def decode(cls, data: bytes) -> Certificate:
-        """The certificate whose bytes `data` is, `encode`'s inverse. Raises `ValueError`, saying which, on bytes that
+        """The attestation whose bytes `data` is, `encode`'s inverse. Raises `ValueError`, saying which, on bytes that
         end inside a fixed-width part (a short buffer), on a length that names more bytes than are left (a length that
         does not fit), on bytes left after the signature (trailing bytes), on a direction code other than 0 and 1, on
         a link that is not UTF-8 and on anything that is not bytes."""
@@ -678,13 +678,13 @@ class Certificate:
         return cls(key_id, link, (Direction.EGRESS, Direction.INGRESS)[code], window, digest, signature)
 
     def message(self, session: bytes) -> bytes:
-        """The message the certificate signs in attester session ``session``."""
+        """The message the attestation signs in attester session ``session``."""
         return certificate_message(self.key_id, session, self.link, self.direction, self.window, self.digest)
 
     def verify(self, key: PublicKey, session: bytes) -> bool:
-        """The host's signature check: the certificate is `key`'s and its signature verifies over its message in
-        attester session `session`. It reads the certificate's public fields and its signed digest, nothing of the
-        head. The Lean's is `NetworkCheck.Check.Certificate.signs`, which every Lean certificate check reads."""
+        """The host's signature check: the attestation is `key`'s and its signature verifies over its message in
+        attester session `session`. It reads the attestation's public fields and its signed digest, nothing of the
+        head. The Lean's is `NetworkCheck.Check.Certificate.signs`, which every Lean attestation check reads."""
         if self.key_id != key.key_id:
             return False
         try:
@@ -697,7 +697,7 @@ class Certificate:
 @dataclass(frozen=True, slots=True)
 class CertifiedRecord:
     """What the attester hands over per execution phase: the record head, the salt it sampled for it (`salt_c`, witness
-    like the head) and the certificate, which signs the head's digest salted by it (`certificate_digest`)."""
+    like the head) and the attestation, which signs the head's digest salted by it (`certificate_digest`)."""
 
     head: RecordHead
     salt: bytes
@@ -724,7 +724,7 @@ class CertifiedRecord:
         return self.head.status
 
     def verify(self, key: PublicKey, session: bytes) -> bool:
-        """The certificate names the head's execution phase, signs the head's digest under the record's salt, and
+        """The attestation names the head's execution phase, signs the head's digest under the record's salt, and
         verifies under `key` in attester session `session` (`Certificate.verify`)."""
         c, h = self.certificate, self.head
         if (c.link, c.direction, c.window) != (h.link, h.direction, h.window):
@@ -740,7 +740,7 @@ class CertifiedRecord:
 class CertifiedStart:
     """What the network attester hands over once a session, before its first tick: the session's base on its key's
     life (`base_ms`, milliseconds on the network attester's clock), its ordinal among the key's sessions (`ordinal`),
-    the schedule's parameters digest it runs under, and the certificate, which signs their start digest
+    the schedule's parameters digest it runs under, and the attestation, which signs their start digest
     (`start_digest`) for the link's start name (`start_link`), ``egress``, window 0. All of it is public."""
 
     base_ms: int
@@ -749,8 +749,8 @@ class CertifiedStart:
     certificate: Certificate
 
     def refusal(self, key: PublicKey, session: bytes, link: str, schedule: bytes) -> str | None:
-        """Why the start's certificate fails under `key` in attester session `session` for `link` under the schedule
-        whose parameters digest is `schedule`, or None when it holds: ``start`` unless it is an egress certificate of
+        """Why the start's attestation fails under `key` in attester session `session` for `link` under the schedule
+        whose parameters digest is `schedule`, or None when it holds: ``start`` unless it is an egress attestation of
         window 0 under `link`'s start name, ``key`` unless it is `key`'s, ``schedule`` unless it names `schedule`,
         ``opening`` unless its base, ordinal and schedule give the digest it signs, and ``signature`` unless its
         signature verifies over its message in the session (`Certificate.verify`)."""
@@ -778,8 +778,8 @@ class CertifiedStart:
 @dataclass(frozen=True, slots=True)
 class CertifiedMark:
     """What the attester hands back for a mark: the mark and the salt it sampled for it (`salt_c`), both witness, and
-    the certificate, the one public part, which signs the mark salted by it (`mark_digest`) on the marks' link name
-    (`marks_link`) at the execution phase the mark is certified at (`window`)."""
+    the attestation, the one public part, which signs the mark salted by it (`mark_digest`) on the marks' link name
+    (`marks_link`) at the execution phase the mark is attested at (`window`)."""
 
     mark: bytes
     salt: bytes
@@ -793,12 +793,12 @@ class CertifiedMark:
 
     @property
     def window(self) -> int:
-        """The execution phase the certificate names."""
+        """The execution phase the attestation names."""
         return self.certificate.window
 
     def refusal(self, key: PublicKey, session: bytes, link: str) -> str | None:
         """Why the opening fails as a mark of `link` under `key` in attester session `session`, or None when it
-        holds: ``link`` unless the certificate is on `link`'s marks link name, ``egress`` unless it is an egress one,
+        holds: ``link`` unless the attestation is on `link`'s marks link name, ``egress`` unless it is an egress one,
         ``key`` unless it is `key`'s, ``opening`` unless the mark and the salt open the digest it signs, and
         ``signature`` unless its signature verifies over its message in the session (`Certificate.verify`), which
         binds the link name and the execution phase."""
@@ -821,17 +821,17 @@ class CertifiedMark:
 
 @dataclass
 class Issuer:
-    """The network attester's signing step, beside its grid (`grid.Certifier`): one certificate per closed execution
+    """The network attester's signing step, beside its grid (`grid.Certifier`): one attestation per closed execution
     phase, in attester session `session`. Before its first signature it starts the session on its signer, which refuses
-    a session its state has already started. A refusal, of the start or of a leaf, leaves the execution phase without a
-    certificate (fail-closed) and is listed in `refused`; a refused start is asked again at the next execution phase, and
+    a session its state has already started. A refusal, of the start or of a leaf, leaves the execution phase without an
+    attestation (fail-closed) and is listed in `refused`; a refused start is asked again at the next execution phase, and
     refused again. **It certifies only a complete record**: a record whose status isn't complete is refused the same
-    way, before the session's start or a leaf, so an execution phase that isn't covered has no certificate and fails closed
-    (`no-verdict`), and a certificate that verifies under the key is of a complete record unless it is a forgery. Each
+    way, before the session's start or a leaf, so an execution phase that isn't covered has no attestation and fails closed
+    (`no-verdict`), and an attestation that verifies under the key is of a complete record unless it is a forgery. Each
     record's salt is `SALT_BYTES` fresh bytes of `coins`, the attester's own randomness (the operating system's by
     default; a test injects its own). It certifies a mark the same way (`mark`), at the
     execution phase its caller gives, under a salt of the same coins; `mark_salts` are those its signed mark
-    certificates have taken, none of which it takes again, and `marked` the marks they certify, none of which it
+    attestations have taken, none of which it takes again, and `marked` the marks they certify, none of which it
     certifies again (`MarkRefused`). Its calls are made one at a time: it holds no lock."""
 
     signer: Signer
@@ -859,7 +859,7 @@ class Issuer:
         return None if certificate is None else CertifiedRecord(head, salt, certificate)
 
     def certify_start(self, link: str, base_ms: int, ordinal: int, schedule: bytes) -> CertifiedStart | None:
-        """The start's certificate of this session on `link`: its base on the key's life, `base_ms`, and its ordinal
+        """The start's attestation of this session on `link`: its base on the key's life, `base_ms`, and its ordinal
         among the key's sessions, `ordinal`, under the schedule whose parameters digest is `schedule`
         (`start_digest`), or None when the signer refuses. The network attester signs it before its first tick, with
         the base and the ordinal its device state gave the session (`DeviceState.start`), and does not start without
@@ -868,16 +868,16 @@ class Issuer:
         return None if certificate is None else CertifiedStart(base_ms, ordinal, schedule, certificate)
 
     def mark(self, link: str, window: int, mark: bytes) -> CertifiedMark | None:
-        """The mark certificate of the 64-byte `mark` for `link` at the execution phase `window`, which is the
+        """The mark attestation of the 64-byte `mark` for `link` at the execution phase `window`, which is the
         caller's to give: the mark salted by `SALT_BYTES` fresh bytes of `coins` (`mark_digest`), signed as an egress
-        certificate on `link`'s marks link name (`marks_link`), or None when the signer refuses (that link name's
+        attestation on `link`'s marks link name (`marks_link`), or None when the signer refuses (that link name's
         execution phase is then listed in `refused`). Raises `MarkRefused`, before it takes a coin or asks its signer
-        anything, on a mark an earlier signed mark certificate of this issuer is of, whatever the link and the
+        anything, on a mark an earlier signed mark attestation of this issuer is of, whatever the link and the
         execution phase: it certifies a mark once. Raises `ValueError`, before it takes a coin, on a mark that is not
         64 `bytes`, and after it on coins of another length and on a salt the coins gave an earlier signed mark
-        certificate of this issuer, under which two certificates of one mark would sign one digest. A salt and a mark
+        attestation of this issuer, under which two attestations of one mark would sign one digest. A salt and a mark
         are taken once signed under: a refused one signed nothing, so nothing public shares the salt, and the mark is
-        certified when it is asked for again."""
+        attested when it is asked for again."""
         if type(mark) is not bytes or len(mark) != DIGEST_BYTES:
             raise ValueError(f"a mark is {DIGEST_BYTES} bytes")
         if mark in self.marked:
@@ -897,7 +897,7 @@ class Issuer:
         return CertifiedMark(mark, salt, certificate)
 
     def sign(self, link: str, direction: Direction, window: int, digest: bytes) -> Certificate | None:
-        """A certificate of the 64-byte `digest` for the execution phase in this session, or None when the signer
+        """An attestation of the 64-byte `digest` for the execution phase in this session, or None when the signer
         refuses (the execution phase is then listed in `refused`). `certify` signs a record's salted digest with it,
         `certify_start` the session's start, `mark` a salted mark,
         and the network attester's cell rows their head's digest (`network_attester_rows`)."""

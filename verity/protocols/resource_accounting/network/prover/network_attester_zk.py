@@ -32,7 +32,7 @@ the one-stage audit as `n2_zk.py` proves N2's head checks.
   - ``receiver``: ``row`` registered: the receiver's check opens the same rows as its input;
   - ``unsigned``: ``o0`` under the prover's own tree over the window's rows, proof block 0's cell one byte off: rows the
     network attester didn't sign (and the prover's registration of its own root, under the network attester's
-    certificate, is refused by `check_registration`);
+    attestation, is refused by `check_registration`);
   - ``altered``: ``o0`` under the network attester's salts and paths, proof block 0's input row one bit off in its
     cell, so its output differs from the network attester's row;
   - ``pad``: ``o0`` under the network attester's salts and paths, made for proof blocks whose proof block 0 reads the
