@@ -6,17 +6,7 @@ public import Proofs.Pouw.NCP.RouteUProofs
 public import Definitions.Pouw.Guarantees.NCP
 public import Proofs.Pouw.Lemmas.NCP
 
-/-!
-# The word layer on route U: proofs
-
-* `checkedUPos_sub`: route U's value minus the unbiased one is `shiftU`, a function of `F₁` alone.
-* `reductionOnlyIfU`: at the four noise points `RelationProofs.pt` the shift is `shiftU` at `F₁ = 0` or at
-  `F₁ = unitAt b j`, the same for both values of `E₁`, so the mixed difference cancels it (`mixdiff_U`) and the
-  unbiased argument goes through.
-* `ncpFinalOnlyIndU`, `ncpWordFloorIndU`: `RelationProofs.not_identity`, `final_of_identity`, `ncpFinalOnly` and
-  `ncpWordFloor` with `reductionOnlyIfU` in place of `reductionOnlyIf`.
-* `int7Int32UPos`, `wrapFinalOnlyIndU`, `wrapWordFloorIndU`: `ChainProofs`' wrap argument on route U.
--/
+/-! The word layer on route U. -/
 
 @[expose] public section
 
@@ -24,7 +14,6 @@ namespace Pouw.NCP.RouteUWordProofs
 
 open Finset Pouw.NCP.Relation Pouw.NCP.RelationProofs Pouw.NCP.RouteU
 
-/-- Route U's shift at position `p`, a function of `F₁` (for the fixed `B u` and `R`). -/
 def shiftU (β : ℤ) (k m n : ℕ) (R : Mat) (B : ℕ → Mat) (F : Mat) (u p : ℕ) : ℤ :=
   β * (∑ l ∈ range (16 * (p / (m * n) + 1)), stackY k (B u) R F l (p % (m * n) % n) -
     ∑ l ∈ range (3 * k), stackY k (B u) R F l (p % (m * n) % n))
@@ -35,7 +24,6 @@ theorem checkedUPos_sub (β : ℤ) (k m n N : ℕ) (R : Mat) (A B : ℕ → Mat)
   simp only [mm]
   ring
 
-/-- Route U's values at the four noise points: the unbiased ones plus the shift at `F₁ ∈ {0, unitAt b j}`. -/
 theorem checkedUPos_pt (β : ℤ) {k m n N : ℕ} (R : Mat) (A B : ℕ → Mat) (bE bF : Bool) {u i a b j : ℕ}
     (hu : u < N) (hi : i < m) (ha : a < k) (hb : b < k) (hj : j < n) (q : ℕ) :
     checkedUPos β k m n N R A B (pt N m n k bE bF u i a b j) u q =
@@ -47,7 +35,6 @@ theorem checkedUPos_pt (β : ℤ) {k m n N : ℕ} (R : Mat) (A B : ℕ → Mat) 
   rw [f1Of_pt bE bF u i a hb hj] at h
   linarith
 
-/-- **The reduction on route U.** -/
 theorem reductionOnlyIfU : ReductionOnlyIfU := by
   intro β k m n N R A B u p r hu hid e he a ha b hb
   have hn : 0 < n := by
@@ -72,7 +59,6 @@ theorem reductionOnlyIfU : ReductionOnlyIfU := by
   have h4 : X false false p = r.target (X false false) := hid _
   rw [← hx p, h1, h2, h3, h4, key]
 
-/-- No non-final position of a relation-free instance is an identity of route U's values. -/
 theorem not_identityU (β : ℤ) {k m n N : ℕ} {R : Mat} {A B : ℕ → Mat} {adv : Word.Adversary}
     (hRF : RelationFree k 16 R) (hV : Word.Valid (fun _ => positions k m n) adv) {u p : ℕ} (hu : u < N)
     (hp : p < positions k m n) (hnf : 16 * (p / (m * n) + 1) < 3 * k) :
@@ -116,7 +102,6 @@ theorem not_identityU (β : ℤ) {k m n N : ℕ} {R : Mat} {A B : ℕ → Mat} {
     rw [this]
     ring
 
-/-- An identity position of route U's values, for a relation-free instance, is in the final checkpoint. -/
 theorem final_of_identityU (β : ℤ) {k m n N : ℕ} {R : Mat} {A B : ℕ → Mat} {adv : Word.Adversary} (h16 : 16 ∣ k)
     (hRF : RelationFree k 16 R) (hV : Word.Valid (fun _ => positions k m n) adv) {u p : ℕ} (hu : u < N)
     (hp : p < positions k m n) (hid : Word.Identity (checkedUPos β k m n N R A B) adv u p) :
@@ -131,7 +116,6 @@ theorem final_of_identityU (β : ℤ) {k m n N : ℕ} {R : Mat} {A B : ℕ → M
   generalize p / (m * n) = q at hlt hf ⊢
   omega
 
-/-- **FinalOnly for route U under independence.** -/
 theorem ncpFinalOnlyIndU : NCPFinalOnlyIndU := by
   intro β k m n N R A B adv h16 hI hV u hu
   have hRF := RelationWitness.independentRelationFree k R hI
@@ -156,7 +140,6 @@ theorem ncpFinalOnlyIndU : NCPFinalOnlyIndU := by
     simp only at h
     rw [← Nat.div_add_mod p (m * n), ← Nat.div_add_mod p' (m * n), e1, e2, h]
 
-/-- `wordBound`'s sum at `identCount ≤ m·n` per unit. -/
 theorem floor_sum {Ω : Type} {k m n N : ℕ} (X : Ω → ℕ → ℕ → ℤ) (adv : Word.Adversary) (g₀ : ℝ)
     (hF : ∀ u < N, Word.identCount (fun _ => positions k m n) X adv u ≤ m * n) :
     ∑ u ∈ range N, (2 : ℝ) ^ (-(g₀ * ((fun _ => positions k m n) u : ℕ) -
@@ -175,14 +158,12 @@ theorem floor_sum {Ω : Type} {k m n N : ℕ} (X : Ω → ℕ → ℕ → ℤ) (
     _ = N * (2 : ℝ) ^ (-((m * n : ℕ) * (g₀ * (3 * k / 16 : ℕ) - 1))) := by
         rw [sum_const, card_range, nsmul_eq_mul]
 
-/-- **The floor for route U under independence.** -/
 theorem ncpWordFloorIndU : Pouw.Guarantees.NCP.NCPWordFloorIndU := by
   intro β k m n N R A B adv g₀ h16 hI hg0 hg1 hV hNz
   exact (WordProofs.wordBound (Noise N m n k) (fun _ => positions k m n) (checkedUPos β k m n N R A B) N adv g₀
     hg0 hg1 hV hNz).trans
     (floor_sum _ adv g₀ fun u hu => ncpFinalOnlyIndU β k m n N R A B adv h16 hI hV u hu)
 
-/-- **The int32 range of route U's checked values.** -/
 theorem int7Int32UPos : Pouw.Guarantees.NCP.Int7Int32UPos := by
   intro β k m n N R A B ω u p hβ1 hβ2 hR hA hB hp
   simp only [checkedUPos, checkedU]
@@ -215,13 +196,11 @@ theorem identCount_wrappedU (β : ℤ) {k m n N : ℕ} {R : Mat} {A B : ℕ → 
   · rintro ⟨hne, h⟩
     exact ⟨hne, fun ω => by rw [heq ω p le_rfl, ht ω]; exact h ω⟩
 
-/-- **FinalOnly for route U's protocol checked values.** -/
 theorem wrapFinalOnlyIndU : Pouw.Guarantees.NCP.WrapFinalOnlyIndU := by
   intro β k m n N R A B adv h16 hI hV hr u hu
   rw [identCount_wrappedU β hV hr hu]
   exact ncpFinalOnlyIndU β k m n N R A B adv h16 hI hV u hu
 
-/-- **The floor for route U's protocol checked values.** -/
 theorem wrapWordFloorIndU : Pouw.Guarantees.NCP.WrapWordFloorIndU := by
   intro β k m n N R A B adv g₀ h16 hI hg0 hg1 hV hr hNz
   exact (WordProofs.wordBound (Noise N m n k) (fun _ => positions k m n) (wrappedU β k m n N R A B) N adv g₀

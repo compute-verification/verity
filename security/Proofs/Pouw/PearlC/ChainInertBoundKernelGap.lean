@@ -9,20 +9,7 @@ import Proofs.Pouw.PearlC.KernelWrefGap
 import Proofs.Pouw.PearlC.TileGap
 public import Proofs.Pouw.PearlC.Records
 
-/-!
-# v2 at the chain cap 1/1,000 against the honest kernel's `W_ref`: the exact in-loop values (staged)
-
-* **The gap at any record against the kernel's `W_ref`, with the chain cap** (`pearlCGapDevChainInertBoundKAt`,
-  `pearlCSampledDevChainInertBoundKAt`), from the record's own chain-cap TT_OUT, which doesn't read `W_ref` (`ttOut_wref`). Per
-  unit `wrefDevK d c = ω·(creditDev − ρ·chainCreditDev)`; per audit tile `wrefDevK d c = ω·(1 − ρ)·creditDev`, since
-  a good tile's credit is the unit cap's.
-* **The exact in-loop instances** at `devSm120v2 Prices.sm120Loop` with `c = 8 − 8953/1000`: the statement's cast at
-  the credited 8.0 and the A-only forming at its measured 1.047. Per unit `754963/209826175` (0.35980%) at 8192³ and
-  `490417/138208725` (0.35484%) at 16384³; per audit tile the unit cap's exact values, `1519901/419652350` (0.36218%)
-  and `109351/30713050` (0.35604%). `ChainInertBoundLoopGap`'s and `DeviceSm120LoopGap`'s chain-cap twins bound them from
-  above (`qa` rounded up to 2). At FADD 8.00 the kernel's `W_ref` at the statement's cast is the statement's own, so
-  `DeviceSm120Gap`'s chain-cap instances are the issue-bound values (0.35925%, 0.35456%).
--/
+/-! v2 at the chain cap 1/1,000 against the honest kernel's `W_ref`: the exact in-loop values (staged). -/
 
 @[expose] public section
 
@@ -30,9 +17,6 @@ namespace Pouw.PearlC
 
 open Finset Pouw.PearlC.Assumptions Pouw.Fp8Atom
 
-/-- TT_OUT with the chain cap gives `G_g` against the kernel's `W_ref` on the one-shape domain at
-`g = 1 − (399/400)/ω`, where `wrefDevK d c = ω·(creditDev − ρ·chainCreditDev)`: an admitted unit's debit is at most
-`ρ·chainCreditDev`. -/
 theorem pearlCGapDevChainInertBoundKAt {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
     (CM : CostModel Q R S) (d : PearlCDevice) (sem : PearlCSem Q R S) (ρ c : ℚ) (s : Shape) (ω g : ℚ) (hω0 : 0 < ω)
     (hω : wrefDevK d c s = ω * (creditDev d s - ρ * chainCreditDev d s)) (hg : g = 1 - (1 - 1 / 400) / ω)
@@ -61,8 +45,6 @@ theorem pearlCGapDevChainInertBoundKAt {Q R S : Type} [Fintype Q] [DecidableEq Q
   rw [e]
   exact key
 
-/-- TT_OUT per tile with the chain cap gives `GGapSampled` against the kernel's `W_ref` on the one-shape domain at
-`γ = 1 − (399/400)/ω`, where `wrefDevK d c = ω·(1 − ρ)·creditDev ≥ 0`: the tiles' credit is `pearlCTilesDev`'s. -/
 theorem pearlCSampledDevChainInertBoundKAt {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
     (CM : CostModel Q R S) (d : PearlCDevice) (sem : PearlCSem Q R S) (ρ c : ℚ) (s : Shape) (ω γ : ℚ) (hω0 : 0 < ω)
     (hw0 : 0 ≤ wrefDevK d c s) (hω : wrefDevK d c s = ω * ((1 - ρ) * creditDev d s))
@@ -103,9 +85,6 @@ section Instances
 variable {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S)
   (sem : PearlCSem Q R S)
 
-/-- **v2 at the chain cap 1/1,000, per unit, 8192³, the exact in-loop value**: FP32 at 8.376, the statement's cast at
-8.0 and the A-only forming at its measured 1.047, `g = 754963/209826175` (0.35980%).
-`pearlCGapSm120v2LoopChainInertShare1000_8192` bounds it from above (`qa` rounded up to 2). -/
 theorem pearlCGapSm120v2LoopCast8ChainInertShare1000_8192
     (hTT : TTOutPearlCDevChainInertBound CM (devSm120v2 Prices.sm120Loop) sem (1 / 1000)) :
     GGap CM (pearlCProtocolDevChainInertBoundK (devSm120v2 Prices.sm120Loop) sem (1 / 1000) (8 - 8953 / 1000))
@@ -117,9 +96,6 @@ theorem pearlCGapSm120v2LoopCast8ChainInertShare1000_8192
         norm_num [Prices.sm120Loop, Params.pi, sh8192])
     (by norm_num) hTT
 
-/-- **v2 at the chain cap 1/1,000, per unit, 16384³, the exact in-loop value**: FP32 at 8.376, the statement's cast at
-8.0 and the A-only forming at its measured 1.047, `g = 490417/138208725` (0.35484%).
-`pearlCGapSm120v2LoopChainInertShare1000_16384` bounds it from above (`qa` rounded up to 2). -/
 theorem pearlCGapSm120v2LoopCast8ChainInertShare1000_16384
     (hTT : TTOutPearlCDevChainInertBound CM (devSm120v2 Prices.sm120Loop) sem (1 / 1000)) :
     GGap CM (pearlCProtocolDevChainInertBoundK (devSm120v2 Prices.sm120Loop) sem (1 / 1000) (8 - 8953 / 1000))
@@ -131,9 +107,6 @@ theorem pearlCGapSm120v2LoopCast8ChainInertShare1000_16384
         norm_num [Prices.sm120Loop, Params.pi, sh16384])
     (by norm_num) hTT
 
-/-- **v2 at the chain cap 1/1,000, per audit tile, 8192³, the exact in-loop value**: FP32 at 8.376, the statement's
-cast at 8.0 and the A-only forming at its measured 1.047, `g = 1519901/419652350` (0.36218%), the unit cap's.
-`pearlCSampledSm120v2LoopChainInertShare1000_8192` bounds it from above (`qa` rounded up to 2). -/
 theorem pearlCSampledSm120v2LoopCast8ChainInertShare1000_8192
     (hTT : TTOutTilePearlCDevChainInertBound CM (devSm120v2 Prices.sm120Loop) sem (1 / 1000)) :
     GGapSampled CM (pearlCProtocolDevChainInertBoundK (devSm120v2 Prices.sm120Loop) sem (1 / 1000) (8 - 8953 / 1000))
@@ -150,9 +123,6 @@ theorem pearlCSampledSm120v2LoopCast8ChainInertShare1000_8192
         norm_num [Prices.sm120Loop, Params.pi, sh8192])
     (by norm_num) hTT
 
-/-- **v2 at the chain cap 1/1,000, per audit tile, 16384³, the exact in-loop value**: FP32 at 8.376, the statement's
-cast at 8.0 and the A-only forming at its measured 1.047, `g = 109351/30713050` (0.35604%), the unit cap's.
-`pearlCSampledSm120v2LoopChainInertShare1000_16384` bounds it from above (`qa` rounded up to 2). -/
 theorem pearlCSampledSm120v2LoopCast8ChainInertShare1000_16384
     (hTT : TTOutTilePearlCDevChainInertBound CM (devSm120v2 Prices.sm120Loop) sem (1 / 1000)) :
     GGapSampled CM (pearlCProtocolDevChainInertBoundK (devSm120v2 Prices.sm120Loop) sem (1 / 1000) (8 - 8953 / 1000))

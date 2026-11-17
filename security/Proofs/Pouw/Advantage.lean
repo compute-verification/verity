@@ -5,14 +5,7 @@ public import Proofs.Pouw.Game
 public import Proofs.Pouw.NCP
 public import Proofs.Pouw.PearlC
 
-/-!
-# The advantage form
-
-`G_ε` and the gap property `G_g` are one property: `G_g` at `g < 1` is `G_ε` at `ε = g/(1 − g)`, and `G_ε` at `ε ≥ 0` is
-`G_g` at `g = ε/(1 + ε)`, in the game (`gGap_iff_gε`, `gε_iff_gGap`) and in Pearl-C's (`Pouw.PearlC.gGap_iff_gε`,
-`Pouw.PearlC.gε_iff_gGap`). Theorem 1 in ε form (`theorem1Eps`), and each guarantee of
-`Definitions.Pouw.Guarantees.Advantage` from its gap form: `Pouw.SecurityProofs.….G : Pouw.Guarantees.….G`.
--/
+/-! `G_ε` and the gap property `G_g` are one property, in the game and in Pearl-C's; Theorem 1 in ε form. -/
 
 @[expose] public section
 
@@ -20,18 +13,15 @@ namespace Pouw.Proofs
 
 open Finset
 
-/-- `(1 + g/(1 − g))·T = T/(1 − g)` for `g < 1`. -/
 theorem one_add_div_one_sub_mul {g : ℝ} (hg : g < 1) (T : ℝ) : (1 + g / (1 - g)) * T = T / (1 - g) := by
   have h : (1 : ℝ) - g ≠ 0 := (sub_pos.mpr hg).ne'
   rw [one_add_div h, sub_add_cancel, div_mul_eq_mul_div, one_mul]
 
-/-- `T/(1 − ε/(1 + ε)) = (1 + ε)·T` for `ε > −1`. -/
 theorem div_one_sub_div_one_add {ε : ℝ} (hε : -1 < ε) (T : ℝ) : T / (1 - ε / (1 + ε)) = (1 + ε) * T := by
   have h : (1 : ℝ) + ε ≠ 0 := (by linarith : (0 : ℝ) < 1 + ε).ne'
   rw [one_sub_div h, add_sub_cancel_right, div_div_eq_mul_div, div_one]
   ring
 
-/-- The reduction's advantage: `g/(1 − g) = Ω_max/(1 − g₀) − 1` at the reduction's gap `g = 1 − (1 − g₀)/Ω_max`. -/
 theorem reductionGap_div {g₀ Ωmax : ℝ} (hg₀ : g₀ < 1) (hΩ : 0 < Ωmax) :
     reductionGap g₀ Ωmax / (1 - reductionGap g₀ Ωmax) = Ωmax / (1 - g₀) - 1 := by
   have h1 : (1 : ℝ) - g₀ ≠ 0 := (sub_pos.mpr hg₀).ne'
@@ -42,21 +32,16 @@ theorem reductionGap_div {g₀ Ωmax : ℝ} (hg₀ : g₀ < 1) (hΩ : 0 < Ωmax)
 
 variable {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
 
-/-- **`G_g` at `g < 1` is `G_ε` at `ε = g/(1 − g)`.** -/
 theorem gGap_iff_gε (CM : CostModel Q R S) (P : Protocol Q R S) (D : Layout → Prop) {g : ℝ} (hg : g < 1)
     (δ : ℕ → ℕ → ℝ) : GGap CM P D g δ ↔ Gε CM P D (g / (1 - g)) δ := by
   unfold GGap Gε Wins
   simp only [one_add_div_one_sub_mul hg, iff_self]
 
-/-- **`G_ε` at `ε ≥ 0` is `G_g` at `g = ε/(1 + ε)`.** -/
 theorem gε_iff_gGap (CM : CostModel Q R S) (P : Protocol Q R S) (D : Layout → Prop) {ε : ℝ} (hε : 0 ≤ ε)
     (δ : ℕ → ℕ → ℝ) : Gε CM P D ε δ ↔ GGap CM P D (ε / (1 + ε)) δ := by
   unfold GGap Gε Wins
   simp only [div_one_sub_div_one_add (by linarith : (-1 : ℝ) < ε), iff_self]
 
-/-- **Theorem 1 in ε form** (§3.5): if `G_ε` holds at the advantage `ε_a` with error `δ` and, for an adversary within
-`(T, q)`, the audit (any coins `C`, any acceptance predicate) satisfies `Pr[accept ∧ ∑_{u ∉ K} W_ref(u) > ε_s·W] ≤ δ_s`
-with `ε_s < 1`, then `Pr[accept ∧ (1 + ε_a)/(1 − ε_s)·T < W ∧ the run doesn't break SHA-512] ≤ δ_s + δ`. -/
 theorem theorem1Eps (CM : CostModel Q R S) (P : Protocol Q R S) (D : Layout → Prop) (εa : ℝ) (δ : ℕ → ℕ → ℝ)
     (hG : Gε CM P D εa δ) (U : Workload) (hU : U.InDomain D) (T : ℝ) (hT : 0 ≤ T) (q : ℕ) (hq : q ≤ 2 ^ 64)
     (A : Adversary CM) (hA : A.Bounded U T q) (C : Type) [Fintype C] (accept : (Q → R) → S → C → Prop)
@@ -103,13 +88,11 @@ open Finset Pouw.Proofs
 
 variable {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
 
-/-- **Pearl-C's `G_g` at `g < 1` is its `G_ε` at `ε = g/(1 − g)`.** -/
 theorem gGap_iff_gε (CM : CostModel Q R S) (P : Protocol Q R S) (D : Layout → Prop) {g : ℝ} (hg : g < 1)
     (δ : ℕ → ℕ → ℝ) : GGap CM P D g δ ↔ Gε CM P D (g / (1 - g)) δ := by
   unfold GGap Gε Wins
   simp only [one_add_div_one_sub_mul hg, iff_self]
 
-/-- **Pearl-C's `G_ε` at `ε ≥ 0` is its `G_g` at `g = ε/(1 + ε)`.** -/
 theorem gε_iff_gGap (CM : CostModel Q R S) (P : Protocol Q R S) (D : Layout → Prop) {ε : ℝ} (hε : 0 ≤ ε)
     (δ : ℕ → ℕ → ℝ) : Gε CM P D ε δ ↔ GGap CM P D (ε / (1 + ε)) δ := by
   unfold GGap Gε Wins
@@ -154,9 +137,7 @@ end Pouw.SecurityProofs.NCP
 
 namespace Pouw.SecurityProofs.PearlC
 
-/-- **Pearl-C's design point at 8192³ on the RTX PRO 6000, in ε form** (not the served point, which is Llama 3.2 1B's
-linears under the H100 record): `GapSm120v1LoopCast8p72Rev1InertShare1000_8192` and `Pouw.PearlC.gGap_iff_gε`, at
-`ε = g/(1 − g) = 1648180439/444424569561`. -/
+/-- Pearl-C's design point at 8192³ on the RTX PRO 6000 in ε form; not the served point. -/
 theorem EpsSm120v1LoopCast8p72Rev1InertShare1000_8192 :
     Pouw.Guarantees.PearlC.EpsSm120v1LoopCast8p72Rev1InertShare1000_8192 := by
   intro Q R S _ _ _ _ sha fetch salt sem hTT

@@ -11,25 +11,11 @@ import Mathlib.Tactic.NormNum.DivMod
 import Mathlib.Tactic.NormNum.OfScientific
 import Mathlib.Tactic.Ring.RingNF
 
-/-!
-# What the tile's `ok = 1` gives, on words
-
-`Pouw.H1Zy.tileOk`, `PouwH1TileZy_v1{TILE}`'s `ok` on words, is `1` only where each cell's record z is the exact dot of
-its A row's and B row's codes as an s32 word and its y the dequant of that z at the rows' scales (`tileOk_spec`), at a
-`K` the tile's EXACT binds at (`32 ∣ K`, `K < 2^17`), for TILE either form (`TileForm.z_eq`):
-
-* v1's z is EXACT, which never clamps there (`gemmAccS8_eq`);
-* v3's z is the exact dot at any noise (`streamZ_eq`). Every word is the integer it names mod `2^32`, so the stream's
-  `X W′`, less `Σ_d 128^d D_d`, plus the wrap correction, less the dither peel, is `Σ_k A_k B_k` entry by entry
-  (`X = A + b - 256 xa`, `W′ = B + c + U - 256 wb⁺ + 256 wb⁻`), once the digits recombine to each residue sum exactly:
-  at `K / 32 ≤ 4095` segments every rest is within s32 and the top digit within int8 (`digits_val`).
--/
+/-! What the tile's `ok = 1` gives, on words. -/
 
 @[expose] public section
 
 namespace Pouw.H1Zy
-
-/-! ### Words mod `2^32` as integers -/
 
 theorem ofInt_sub32 (x y : ℤ) : BitVec.ofInt 32 (x - y) = BitVec.ofInt 32 x - BitVec.ofInt 32 y := by
   rw [sub_eq_add_neg, BitVec.ofInt_add, BitVec.ofInt_neg, ← sub_eq_add_neg]
@@ -45,7 +31,6 @@ theorem ofInt_shiftLeft32 (v : ℤ) (n : ℕ) : BitVec.ofInt 32 v <<< n = BitVec
   rw [BitVec.toNat_twoPow, show ((2 : ℤ) ^ n) = ((2 ^ n : ℕ) : ℤ) by push_cast; rfl, BitVec.ofInt_natCast,
     BitVec.toNat_ofNat]
 
-/-- A fold whose every step adds a word adds their sum. -/
 theorem segFold_add (f : ℕ → BitVec 32 → BitVec 32) (g : ℕ → ℤ)
     (hf : ∀ s acc, f s acc = acc + BitVec.ofInt 32 (g s)) (init : BitVec 32) :
     ∀ n, segFold f init n = init + BitVec.ofInt 32 (∑ s ∈ Finset.range n, g s)
@@ -53,22 +38,18 @@ theorem segFold_add (f : ℕ → BitVec 32 → BitVec 32) (g : ℕ → ℤ)
   | n + 1 => by
       rw [segFold, hf, segFold_add f g hf init n, Finset.sum_range_succ, BitVec.ofInt_add, add_assoc]
 
-/-- A fold whose every step subtracts a word subtracts their sum. -/
 theorem segFold_sub (f : ℕ → BitVec 32 → BitVec 32) (g : ℕ → ℤ)
     (hf : ∀ s acc, f s acc = acc - BitVec.ofInt 32 (g s)) (init : BitVec 32) (n : ℕ) :
     segFold f init n = init - BitVec.ofInt 32 (∑ s ∈ Finset.range n, g s) := by
   rw [segFold_add f (fun s => -g s) (fun s acc => by rw [hf, BitVec.ofInt_neg, sub_eq_add_neg]) init n,
     Finset.sum_neg_distrib, BitVec.ofInt_neg, ← sub_eq_add_neg]
 
-/-- A sum over `n` segments of 32 entries is the sum over their `32 n` entries. -/
 theorem sum_segs (g : ℕ → ℤ) : ∀ n,
     ∑ s ∈ Finset.range n, ∑ e : Fin 32, g (32 * s + e.val) = ∑ k ∈ Finset.range (32 * n), g k
   | 0 => by simp
   | n + 1 => by
       rw [Finset.sum_range_succ, sum_segs g n, show 32 * (n + 1) = 32 * n + 32 by ring, Finset.sum_range_add,
         Fin.sum_univ_eq_sum_range (fun e => g (32 * n + e))]
-
-/-! ### int8 entries -/
 
 theorem toInt8_bounds (a : BitVec 8) : -128 ≤ a.toInt ∧ a.toInt ≤ 127 := by
   have h1 := BitVec.le_toInt a
@@ -79,7 +60,6 @@ theorem toInt8_bounds (a : BitVec 8) : -128 ≤ a.toInt ∧ a.toInt ≤ 127 := b
 theorem bmod256_of (v : ℤ) (h1 : -128 ≤ v) (h2 : v ≤ 127) : v.bmod (2 ^ 8) = v :=
   Int.bmod_eq_of_le (by norm_num; omega) (by norm_num; omega)
 
-/-- `X = A + b` as an int8 is `A + b`, less 256 where it wraps (`PouwXWrap`). -/
 theorem i8AddBit_toInt (a : BitVec 8) (d : Bool) :
     (i8AddBit a d).toInt = a.toInt + (if d then 1 else 0) - 256 * (if xWrap a d then 1 else 0) := by
   have ha := toInt8_bounds a
@@ -94,7 +74,6 @@ theorem i8AddBit_toInt (a : BitVec 8) (d : Bool) :
       rw [bmod256_of _ (by omega) (by omega), if_neg (by simpa using h)]
       ring
 
-/-- `PouwU129`'s word is within `±64`. -/
 theorem u129_toInt (x : BitVec 8) : (u129 x).toInt = -64 + ((x.toNat % 129 : ℕ) : ℤ) := by
   unfold u129
   rw [BitVec.toInt_ofInt]
@@ -117,7 +96,6 @@ theorem bmod256_wrap (s : ℤ) (h1 : -384 ≤ s) (h2 : s ≤ 383) :
   norm_num
   split_ifs <;> omega
 
-/-- `W′ = B + c + U` as an int8 is `B + c + U`, less 256 at `wb⁺` and plus 256 at `wb⁻` (`PouwWrapBits`). -/
 theorem i8Add_toInt (b : BitVec 8) (c : Bool) (u : BitVec 8) (h1 : -64 ≤ u.toInt) (h2 : u.toInt ≤ 64) :
     (i8Add (i8AddBit b c) u).toInt = b.toInt + (if c then 1 else 0) + u.toInt -
       256 * (if (wrapBits b c u).1 then 1 else 0) + 256 * (if (wrapBits b c u).2 then 1 else 0) := by
@@ -129,8 +107,6 @@ theorem i8Add_toInt (b : BitVec 8) (c : Bool) (u : BitVec 8) (h1 : -64 ≤ u.toI
   have hc : (0 : ℤ) ≤ (if c then 1 else 0) ∧ (if c then 1 else 0 : ℤ) ≤ 1 := by cases c <;> simp
   rw [e, bmod256_wrap _ (by omega) (by omega)]
   simp only [wrapBits, decide_eq_true_eq]
-
-/-! ### The digits -/
 
 theorem toInt32_bounds (r : BitVec 32) : -2 ^ 31 ≤ r.toInt ∧ r.toInt < 2 ^ 31 := by
   have h1 := BitVec.le_toInt r
@@ -195,8 +171,6 @@ theorem nDigits_three {ks : ℕ} (h1 : 129 ≤ ks) (h2 : ks ≤ 16384) : nDigits
 theorem b2i_bounds (z : Bool) : (0 : ℤ) ≤ (if z then 1 else 0) ∧ (if z then 1 else 0 : ℤ) ≤ 1 := by
   cases z <;> simp
 
-/-- **The digits are exact**: at `KS ≤ 4095` segments (`K < 2^17`), a residue sum `r` of `KS` int8s has its `m` digits'
-values sum, at powers of 128, to `r`: every rest is within s32 and the top digit within int8, so `PouwLow8` keeps it. -/
 theorem digits_val (z : ℕ → Bool) (r : BitVec 32) (ks : ℕ) (hks : ks ≤ 4095)
     (h1 : -(128 * (ks : ℤ)) ≤ r.toInt) (h2 : r.toInt ≤ 127 * (ks : ℤ)) :
     ∑ d ∈ Finset.range (nDigits ks), 128 ^ d * ((digits (nDigits ks) z r).getD d 0).toInt = r.toInt := by
@@ -243,8 +217,6 @@ theorem sum_range_pred_succ (f : ℕ → ℤ) {m : ℕ} (hm : 1 ≤ m) :
     ∑ d ∈ Finset.range m, f d = f 0 + ∑ t : Fin (m - 1), f (t.val + 1) := by
   obtain ⟨m', rfl⟩ : ∃ m', m = m' + 1 := ⟨m - 1, by omega⟩
   rw [Finset.sum_range_succ', Fin.sum_univ_eq_sum_range (fun t => f (t + 1)), Nat.add_sub_cancel, add_comm]
-
-/-! ### The stream's words -/
 
 theorem sum_i8_bounds (f : ℕ → BitVec 8) : ∀ n : ℕ,
     -(128 * (n : ℤ)) ≤ ∑ s ∈ Finset.range n, (f s).toInt ∧ ∑ s ∈ Finset.range n, (f s).toInt ≤ 127 * n
@@ -307,9 +279,6 @@ theorem uOf_seg {R C K : ℕ} (n : TileNoise R C K) (j : Fin C) (s : ℕ) (e : F
   congr 1
   exact Fin.ext (by have := e.isLt; simp only []; omega)
 
-/-- **v3's z is the exact dot** at a `K` EXACT binds at, whatever the noise: `X W′` less the one-stream's `X U`
-(the residue sums' digits recombine exactly), plus the wrap correction, less the dither peel, is `A B` entry by
-entry. -/
 theorem streamZ_eq {R C K : ℕ} {P : Type} (n : TileNoise R C K) (x : TileIn R C K P) (i : Fin R) (j : Fin C)
     (hK32 : 32 ∣ K) (hK : K < 2 ^ 17) :
     streamZ n x i j = BitVec.ofInt 32 (∑ k, (x.a i k).toInt * (x.b j k).toInt) := by
@@ -394,9 +363,6 @@ theorem streamZ_eq {R C K : ℕ} {P : Type} (n : TileNoise R C K) (x : TileIn R 
   rw [hR]
   linarith [hmid, hsum]
 
-/-! ### The tile -/
-
-/-- **TILE's z is the exact dot** in either form, at a `K` its EXACT binds at. -/
 theorem TileForm.z_eq {R C K : ℕ} {P : Type} (form : TileForm R C K P) (x : TileIn R C K P) (i : Fin R) (j : Fin C)
     (hK32 : 32 ∣ K) (hK : K < 2 ^ 17) :
     form.z x i j = BitVec.ofInt 32 (∑ k, (x.a i k).toInt * (x.b j k).toInt) := by
@@ -404,9 +370,6 @@ theorem TileForm.z_eq {R C K : ℕ} {P : Type} (form : TileForm R C K P) (x : Ti
   | exact => exact gemmAccS8_eq _ _ hK32 hK
   | stream noise => exact streamZ_eq _ _ _ _ hK32 hK
 
-/-- **What the tile's `ok = 1` gives** (`PouwH1TileZy_v1{TILE}`, TILE v1 or v3, at a `K` its EXACT binds at): each
-cell `(i, j)` has record z the s32 word of the exact dot of A row `i`'s and B row `j`'s codes and record y `dqW` of
-that z at the rows' scales. -/
 theorem tileOk_spec {R C K : ℕ} {P : Type} (form : TileForm R C K P)
     (dqW : BitVec 32 → BitVec 32 → BitVec 32 → BitVec 16) (x : TileIn R C K P) (hK32 : 32 ∣ K) (hK : K < 2 ^ 17)
     (hok : tileOk form dqW x = true) (i : Fin R) (j : Fin C) :

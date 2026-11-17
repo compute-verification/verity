@@ -9,24 +9,8 @@ import Proofs.Pouw.PearlC.TTOutW1
 import Proofs.Pouw.Prob
 public import Proofs.Pouw.PearlC.Records
 
-/-!
-# The unpromoted record, the cap, and g at sm_120's prices
-
-Staged; nothing pinned.
-* **The unpromoted domain is not empty:** `pearlCDomainDev_unpromoted` puts a `1 × 64 × 128` layout in `pearlCDomainDev d`
-  at any record with `G = 0`. Before the domain's group condition became `G = 0 ∨ 32·G ∣ k`, `32·0 ∣ k` forced `k = 0`,
-  so every statement at `devSm120v2` was vacuous.
-* **A stricter cap asserts less, per unit:** `ttOutPearlCDev_inert_bound_anti` gives TT_OUT at `ρ'` from TT_OUT at `ρ` for
-  `ρ' ≤ ρ ≤ 1` at any record with non-negative prices. The credit doesn't read the cap, and a unit within `ρ'` is
-  within `ρ`. So `tt-out/pearl-c-sm120-unpromoted-inert_share1000` is weaker than `tt-out/pearl-c-sm120-unpromoted`. Per tile
-  there is no such theorem: a good tile's fixed credit `(1 − ρ)·creditDev·share` grows as the cap tightens.
-* **v2 at the cap 1/1,000**, at any record with `G = 0` and `Prices.sm120`: `216793/59950000` (0.36162%) at 8192³ and
-  `2950127/829250000` (0.35576%) at 16384³, per unit and per audit tile.
-* **v1 under rev1**, at any record with `G = 4` and `Prices.sm120`, cap 1/400: `16223/3177500` (0.51056%) at 8192³ and
-  `2963/586700` (0.50503%) at 16384³, per unit and per audit tile.
-
-`devSm120v1` and `devSm120v2` meet the hypotheses by `rfl` once the flags twin defines them.
--/
+/-! The unpromoted record, the cap, and g at sm_120's prices (staged, nothing pinned); a stricter cap asserts less
+per unit, and per tile there is no such theorem. -/
 
 @[expose] public section
 
@@ -34,7 +18,6 @@ namespace Pouw.PearlC
 
 open Finset Pouw.PearlC.Assumptions Pouw.Fp8Atom
 
-/-- A record without promotion admits a `1 × 64 × 128` unit (`m n k`). -/
 theorem pearlCDomainDev_unpromoted (d : PearlCDevice) (hG : d.G = 0) :
     pearlCDomainDev d ⟨1, fun _ => ⟨1, 64, 128⟩, fun _ => 0⟩ := by
   intro u _
@@ -71,7 +54,6 @@ theorem inert_bound_credit_sum_le (d : PearlCDevice) (sem : PearlCSem Q R S) (ρ
   have : (0 : ℚ) ≤ creditDev d (U.layout.shape u) - inertWorkDev d (sem.unitInertWorkDev d H s U u c.act) := by nlinarith
   exact_mod_cast this
 
-/-- **A stricter cap asserts less**: TT_OUT at a device record at cap `ρ` gives it at any cap `ρ' ≤ ρ ≤ 1`. -/
 theorem ttOutPearlCDev_inert_bound_anti [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S)
     (d : PearlCDevice) (sem : PearlCSem Q R S) (ρ ρ' : ℚ) (hadd : 0 ≤ d.prices.add) (hbf : 0 ≤ d.prices.bf16)
     (hle : ρ' ≤ ρ) (hρ1 : ρ ≤ 1) (h : TTOutPearlCDev CM d sem ρ) : TTOutPearlCDev CM d sem ρ' := by
@@ -81,7 +63,6 @@ theorem ttOutPearlCDev_inert_bound_anti [Fintype Q] [DecidableEq Q] [Fintype R] 
 
 end
 
-/-- **v2 at the cap 1/1,000, 8192³**, at a record with no promotion and sm_120's prices: `g = 216793/59950000`. -/
 theorem pearlCGapUnpromotedInertShare1000_8192 {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
     (CM : CostModel Q R S) (d : PearlCDevice) (sem : PearlCSem Q R S) (hG : d.G = 0) (hp : d.prices = Prices.sm120)
     (hTT : TTOutPearlCDev CM d sem (1 / 1000)) :
@@ -89,7 +70,6 @@ theorem pearlCGapUnpromotedInertShare1000_8192 {Q R S : Type} [Fintype Q] [Decid
   pearlCGapDevAt CM d sem _ _ (1049125 / 1047951) _ (by norm_num)
     (by rw [wrefDev, creditDev, hG, hp]; norm_num [Prices.sm120, Params.pi, sh8192]) (by norm_num) hTT
 
-/-- **v2 at the cap 1/1,000, 16384³**, at a record with no promotion and sm_120's prices: `g = 2950127/829250000`. -/
 theorem pearlCGapUnpromotedInertShare1000_16384 {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
     (CM : CostModel Q R S) (d : PearlCDevice) (sem : PearlCSem Q R S) (hG : d.G = 0) (hp : d.prices = Prices.sm120)
     (hTT : TTOutPearlCDev CM d sem (1 / 1000)) :
@@ -98,7 +78,6 @@ theorem pearlCGapUnpromotedInertShare1000_16384 {Q R S : Type} [Fintype Q] [Deci
   pearlCGapDevAt CM d sem _ _ (2073125 / 2070927) _ (by norm_num)
     (by rw [wrefDev, creditDev, hG, hp]; norm_num [Prices.sm120, Params.pi, sh16384]) (by norm_num) hTT
 
-/-- **v2 at the cap 1/1,000 per audit tile, 8192³**: `GGapSampled` at `g = 216793/59950000`. -/
 theorem pearlCSampledUnpromotedInertShare1000_8192 {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
     (CM : CostModel Q R S) (d : PearlCDevice) (sem : PearlCSem Q R S) (hG : d.G = 0) (hp : d.prices = Prices.sm120)
     (hTT : TTOutTilePearlCDev CM d sem (1 / 1000)) :
@@ -108,7 +87,6 @@ theorem pearlCSampledUnpromotedInertShare1000_8192 {Q R S : Type} [Fintype Q] [D
     (by rw [wrefDev, creditDev, hG, hp]; norm_num [Prices.sm120, Params.pi, sh8192])
     (by rw [wrefDev, creditDev, hG, hp]; norm_num [Prices.sm120, Params.pi, sh8192]) (by norm_num) hTT
 
-/-- **v2 at the cap 1/1,000 per audit tile, 16384³**: `GGapSampled` at `g = 2950127/829250000`. -/
 theorem pearlCSampledUnpromotedInertShare1000_16384 {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
     (CM : CostModel Q R S) (d : PearlCDevice) (sem : PearlCSem Q R S) (hG : d.G = 0) (hp : d.prices = Prices.sm120)
     (hTT : TTOutTilePearlCDev CM d sem (1 / 1000)) :
@@ -118,7 +96,6 @@ theorem pearlCSampledUnpromotedInertShare1000_16384 {Q R S : Type} [Fintype Q] [
     (by rw [wrefDev, creditDev, hG, hp]; norm_num [Prices.sm120, Params.pi, sh16384])
     (by rw [wrefDev, creditDev, hG, hp]; norm_num [Prices.sm120, Params.pi, sh16384]) (by norm_num) hTT
 
-/-- **v1 under rev1, 8192³**, at a record promoted every 4 atoms with sm_120's prices, cap 1/400: `g = 16223/3177500`. -/
 theorem pearlCGapSm120Rev1_8192 {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
     (CM : CostModel Q R S) (d : PearlCDevice) (sem : PearlCSem Q R S) (hG : d.G = 4) (hp : d.prices = Prices.sm120)
     (hTT : TTOutPearlCDevRev1 CM d sem (1 / 400)) :
@@ -127,7 +104,6 @@ theorem pearlCGapSm120Rev1_8192 {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fint
     (by rw [wrefDevRev1, creditDevRev1, firstAddDev, creditDev, hG, hp]; norm_num [Prices.sm120, Params.pi, sh8192])
     (by norm_num) hTT
 
-/-- **v1 under rev1, 16384³**, at a record promoted every 4 atoms with sm_120's prices, cap 1/400: `g = 2963/586700`. -/
 theorem pearlCGapSm120Rev1_16384 {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
     (CM : CostModel Q R S) (d : PearlCDevice) (sem : PearlCSem Q R S) (hG : d.G = 4) (hp : d.prices = Prices.sm120)
     (hTT : TTOutPearlCDevRev1 CM d sem (1 / 400)) :
@@ -136,7 +112,6 @@ theorem pearlCGapSm120Rev1_16384 {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fin
     (by rw [wrefDevRev1, creditDevRev1, firstAddDev, creditDev, hG, hp]; norm_num [Prices.sm120, Params.pi, sh16384])
     (by norm_num) hTT
 
-/-- **v1 under rev1 per audit tile, 8192³**, at sm_120's prices: `GGapSampled` at `g = 16223/3177500`. -/
 theorem pearlCSampledSm120Rev1_8192 {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
     (CM : CostModel Q R S) (d : PearlCDevice) (sem : PearlCSem Q R S) (hG : d.G = 4) (hp : d.prices = Prices.sm120)
     (hTT : TTOutTilePearlCDevRev1 CM d sem (1 / 400)) :
@@ -147,7 +122,6 @@ theorem pearlCSampledSm120Rev1_8192 {Q R S : Type} [Fintype Q] [DecidableEq Q] [
     (by rw [wrefDevRev1, creditDevRev1, firstAddDev, creditDev, hG, hp]; norm_num [Prices.sm120, Params.pi, sh8192])
     (by norm_num) hTT
 
-/-- **v1 under rev1 per audit tile, 16384³**, at sm_120's prices: `GGapSampled` at `g = 2963/586700`. -/
 theorem pearlCSampledSm120Rev1_16384 {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
     (CM : CostModel Q R S) (d : PearlCDevice) (sem : PearlCSem Q R S) (hG : d.G = 4) (hp : d.prices = Prices.sm120)
     (hTT : TTOutTilePearlCDevRev1 CM d sem (1 / 400)) :

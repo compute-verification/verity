@@ -10,26 +10,13 @@ import Mathlib.Tactic.NormNum.OfScientific
 import Mathlib.Tactic.Ring.RingNF
 import Proofs.Pouw.H1Zy.Combine
 
-/-!
-# What a lane's `ok = 1` gives, on words
-
-`Pouw.H1Zy.laneOk`, `PouwH1LaneZy_v1{PouwH1Tile_v1}`'s body on words at a 32 × 32 leaf, is `1` only where (`laneOk_spec`):
-
-* the index's 11 high bits are `0`, so the lane `x.l` its low 5 bits name is its index;
-* each of its 32 cells `(laneRow l s, laneCol l t)` of the record has z the exact dot of its A row's and B row's codes,
-  as an s32 word, and y the dequant of that z at the rows' scales: the `PouwMuxBit` tree picks lane `l`'s cell
-  (`pick_ofFn`), and the EXACT dot's `BlackwellS8ImmaDot32` steps never clamp at a `K` its bind takes (`gemmAccS8_eq`:
-  `32 ∣ K` and `K < 2^17`, every partial sum within `K · 2^14 < 2^31`);
-* its partials row is its chain's words masked by the admit bits' OR.
--/
+/-! What a lane's `ok = 1` gives, on words. -/
 
 @[expose] public section
 set_option backward.privateInPublic true
 set_option backward.privateInPublic.warn false
 
 namespace Pouw.H1Zy
-
-/-! ### Trees and picks -/
 
 theorem length_pairs {α : Type} (f : α → α → α) : ∀ l : List α, (pairs f l).length = (l.length + 1) / 2
   | [] => by simp [pairs]
@@ -38,7 +25,6 @@ theorem length_pairs {α : Type} (f : α → α → α) : ∀ l : List α, (pair
       simp only [pairs, List.length_cons, length_pairs f rest]
       omega
 
-/-- A pass of `PouwMuxBit` at `s` keeps candidate `2 i + s` at `i`. -/
 theorem pairs_mux_getElem? {α : Type} (s : Bool) : ∀ (l : List α) (i : ℕ), 2 * i + 1 < l.length →
     (pairs (mux s) l)[i]? = l[2 * i + (if s then 1 else 0)]?
   | [], _, h => by simp at h
@@ -53,7 +39,6 @@ theorem pairs_mux_getElem? {α : Type} (s : Bool) : ∀ (l : List α) (i : ℕ),
       rw [e]
       simp
 
-/-- The passes over the selector `sel` keep candidate `i · 2^|sel| + sel` at `i`. -/
 theorem foldl_pick_getElem? {α : Type} : ∀ (sel : List Bool) (cands : List α) (i : ℕ),
     (i + 1) * 2 ^ sel.length ≤ cands.length →
     (sel.foldl (fun cs s => pairs (mux s) cs) cands)[i]? = cands[i * 2 ^ sel.length + bitsVal sel]?
@@ -73,8 +58,6 @@ theorem foldl_pick_getElem? {α : Type} : ∀ (sel : List Bool) (cands : List α
       simp only [bitsVal, pow_succ]
       split <;> ring
 
-/-- **The `PouwMuxBit` tree picks the candidate the selector names**: over the 32 lanes' candidates, the 5 selector bits
-pick lane `bitsVal sel`'s. -/
 theorem pick_ofFn {α : Type} (d : α) (sel : List Bool) (hsel : sel.length = 5) (f : Fin 32 → α) :
     pick d sel (List.ofFn f) = f ⟨bitsVal sel, by have := bitsVal_lt sel; rw [hsel] at this; omega⟩ := by
   have hlt : bitsVal sel < 32 := by have := bitsVal_lt sel; rw [hsel] at this; omega
@@ -84,7 +67,6 @@ theorem pick_ofFn {α : Type} (d : α) (sel : List Bool) (hsel : sel.length = 5)
   rw [List.headD_eq_head?_getD, List.head?_eq_getElem?, h]
   simp [hlt]
 
-/-- The `PouwOrBit` tree is `false` exactly when every bit is. -/
 theorem tree_orBit (l : List Bool) : tree orBit false l = false ↔ ∀ b ∈ l, b = false := by
   rw [tree_eq_foldl orBit false (fun a b c => Bool.or_assoc a b c) (fun a => Bool.false_or a) l]
   have key : ∀ (l : List Bool) (x : Bool), l.foldl orBit x = (x || l.any id) := by
@@ -94,9 +76,6 @@ theorem tree_orBit (l : List Bool) : tree orBit false l = false ↔ ∀ b ∈ l,
     | cons b l ih => intro x; simp [List.foldl_cons, ih, orBit, Bool.or_assoc]
   simp [key]
 
-/-! ### The cell check -/
-
-/-- **`PouwZyCheck`'s `ok`** is `true` exactly when every cell's record z is z and its record y is the dequant of z. -/
 theorem zyCheck_iff {R C : ℕ} (dqW : BitVec 32 → BitVec 32 → BitVec 32 → BitVec 16) (zr : Fin R → Fin C → BitVec 32)
     (yr : Fin R → Fin C → BitVec 16) (z : Fin R → Fin C → BitVec 32) (sa : Fin R → BitVec 32)
     (sw : Fin C → BitVec 32) :
@@ -113,8 +92,6 @@ theorem zyCheck_iff {R C : ℕ} (dqW : BitVec 32 → BitVec 32 → BitVec 32 →
     obtain ⟨j, rfl⟩ := List.mem_ofFn.1 hbl
     simp [zyCell, (h i j).1, (h i j).2]
 
-/-! ### The EXACT dot -/
-
 theorem toInt_mul_bounds (a b : BitVec 8) : -16384 ≤ a.toInt * b.toInt ∧ a.toInt * b.toInt ≤ 16384 := by
   have h1 := BitVec.le_toInt a
   have h2 := BitVec.toInt_lt (x := a)
@@ -127,7 +104,6 @@ theorem toInt_ofInt_of_range (v : ℤ) (h1 : -2 ^ 31 ≤ v) (h2 : v < 2 ^ 31) : 
   rw [BitVec.toInt_ofInt]
   exact Int.bmod_eq_of_le (by norm_num at h1 ⊢; omega) (by norm_num at h2 ⊢; omega)
 
-/-- Product `k` of the rows' codes, `0` past their end. -/
 private def prodAt {K : ℕ} (x w : Fin K → BitVec 8) (k : ℕ) : ℤ := (codeAt x k).toInt * (codeAt w k).toInt
 
 private theorem sum_prodAt_bounds {K : ℕ} (x w : Fin K → BitVec 8) : ∀ m : ℕ,
@@ -140,8 +116,6 @@ private theorem sum_prodAt_bounds {K : ℕ} (x w : Fin K → BitVec 8) : ∀ m :
       push_cast
       constructor <;> linarith [ih.1, ih.2, hb.1, hb.2]
 
-/-- **No step clamps**: below `K < 2^17`, the accumulator after `n` steps (`32 n ≤ K`) is the exact sum of the first
-`32 n` products. -/
 theorem gemmAccSteps_toInt {K : ℕ} (x w : Fin K → BitVec 8) (hK : K < 2 ^ 17) : ∀ n, 32 * n ≤ K →
     (gemmAccSteps x w n).toInt = ∑ k ∈ Finset.range (32 * n), prodAt x w k
   | 0, _ => by simp [gemmAccSteps]
@@ -162,7 +136,6 @@ theorem gemmAccSteps_toInt {K : ℕ} (x w : Fin K → BitVec 8) (hK : K < 2 ^ 17
       rw [min_eq_left hi, max_eq_right lo]
       exact toInt_ofInt_of_range _ lo (by linarith)
 
-/-- The EXACT dot's accumulator reads, as s32, the exact sum at a `K` its bind takes (`32 ∣ K`, `K < 2^17`). -/
 theorem gemmAccS8_toInt {K : ℕ} (x w : Fin K → BitVec 8) (hK32 : 32 ∣ K) (hK : K < 2 ^ 17) :
     (gemmAccS8 x w).toInt = ∑ k, (x k).toInt * (w k).toInt := by
   have h := gemmAccSteps_toInt x w hK (K / 32) (Nat.mul_div_le K 32 |>.trans_eq' (by ring))
@@ -172,25 +145,16 @@ theorem gemmAccS8_toInt {K : ℕ} (x w : Fin K → BitVec 8) (hK32 : 32 ∣ K) (
   refine Finset.sum_congr rfl fun k _ => ?_
   simp [prodAt, codeAt, k.isLt]
 
-/-- **The EXACT dot is the exact sum**: at a `K` `GemmAccumulatorS8`'s bind takes (`32 ∣ K`, `K < 2^17`), its word is
-the s32 word of `Σ_k a_k b_k`. -/
 theorem gemmAccS8_eq {K : ℕ} (x w : Fin K → BitVec 8) (hK32 : 32 ∣ K) (hK : K < 2 ^ 17) :
     gemmAccS8 x w = BitVec.ofInt 32 (∑ k, (x k).toInt * (w k).toInt) := by
   rw [← gemmAccS8_toInt x w hK32 hK, BitVec.ofInt_toInt]
 
-/-- At such a `K` the dot is within s32, so its s32 word reads back as the dot. -/
 theorem toInt_ofInt_dot {K : ℕ} (x w : Fin K → BitVec 8) (hK32 : 32 ∣ K) (hK : K < 2 ^ 17) :
     (BitVec.ofInt 32 (∑ k, (x k).toInt * (w k).toInt)).toInt = ∑ k, (x k).toInt * (w k).toInt := by
   rw [← gemmAccS8_eq x w hK32 hK, gemmAccS8_toInt x w hK32 hK]
 
-/-! ### The lane -/
-
 theorem LaneIn.sel_length {K nw : ℕ} {P : Type} (x : LaneIn K nw P) : x.sel.length = 5 := by simp [LaneIn.sel]
 
-/-- **What a lane's `ok = 1` gives** (`PouwH1LaneZy_v1{PouwH1Tile_v1}` at a 32 × 32 leaf, at a `K` its tile's EXACT binds
-at): its index's high bits are `0`; each of its cells `(laneRow l s, laneCol l t)`, `l` the lane its low bits name, has
-record z the s32 word of the exact dot of its A row's and B row's codes and record y `dqW` of that z at the rows'
-scales; and its partials row is its chain's words masked by the admit bits' OR. -/
 theorem laneOk_spec {K nw : ℕ} {P : Type}
     (chain : P → Fin 32 → (Fin 4 → Fin K → BitVec 8) → (Fin 8 → Fin K → BitVec 8) → Fin nw → BitVec 32)
     (dqW : BitVec 32 → BitVec 32 → BitVec 32 → BitVec 16) (x : LaneIn K nw P) (hK32 : 32 ∣ K) (hK : K < 2 ^ 17)

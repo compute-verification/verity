@@ -3,9 +3,7 @@ module
 public import Definitions.Pouw.NCP.Word
 public import Proofs.Pouw.Copy
 
-/-!
-# R_word-NCP: the bound under NzNCP, the floor, and the witnesses
--/
+/-! R_word-NCP: the bound under NzNCP, the floor, and the witnesses. -/
 
 @[expose] public section
 
@@ -16,11 +14,9 @@ open Finset Pouw.NCP.Word Pouw.Proofs
 variable {Ω : Type} (n : ℕ → ℕ) (X : Ω → ℕ → ℕ → ℤ) (A : Word.Adversary)
 
 open Classical in
-/-- Unit `u`'s fresh positions. -/
 noncomputable def freshSet (u : ℕ) : Finset ℕ := (range (n u)).filter (fun p => A.rule u p = .fresh)
 
 open Classical in
-/-- Unit `u`'s positions whose rule is neither fresh nor an identity. -/
 noncomputable def openSet (u : ℕ) : Finset ℕ :=
   (range (n u)).filter (fun p => A.rule u p ≠ .fresh ∧ ¬ ∀ ω, X ω u p = (A.rule u p).target (X ω u))
 
@@ -62,7 +58,6 @@ theorem unit_le [Fintype Ω] (hV : Valid n A) (hNz : NzNCP n X) (u : ℕ) :
   · obtain ⟨hp1, hp2⟩ := (mem_openSet n X A).1 hp
     exact ⟨hp2.1, hV u p (mem_range.1 hp1), hp2.2⟩
 
-/-- **R_word-NCP's bound.** -/
 theorem wordBound : WordBound := by
   intro Ω _ n X N A g₀ hg0 hg1 hV hNz
   classical
@@ -105,7 +100,6 @@ theorem wordBound : WordBound := by
     _ ≤ ∑ u ∈ range N, (2 : ℝ) ^ (-(g₀ * n u - identCount n X A u)) :=
         sum_le_sum_of_subset_of_nonneg (filter_subset _ _) fun _ _ _ => by positivity
 
-/-- **The floor.** -/
 theorem wordFloor : WordFloor := by
   intro Ω _ n X N A g₀ w c hg0 hg1 hV hNz hn hF
   refine (wordBound Ω n X N A g₀ hg0 hg1 hV hNz).trans ?_
@@ -138,9 +132,6 @@ theorem bits_flip_self {M : ℕ} (a : Fin M) (ω : Fin M → Bool) : bits (RCopy
   rw [bits_eq, bits_eq]
   exact_mod_cast RCopy.bits_flip_self a ω
 
-/-- Independent uniform bits satisfy NzNCP: flipping the largest constrained bit leaves every target unchanged (they
-read earlier positions), so it maps the event for `P` into the event for `P` without that bit, and out of the event
-for `P`. -/
 theorem bits_nz (M : ℕ) (P : Finset ℕ) :
     P ⊆ range M → ∀ r : ℕ → Word.Rule, (∀ p ∈ P, (r p).Reads p) →
       pr (fun ω : Fin M → Bool => ∀ p ∈ P, bits ω p = (r p).target (bits ω)) ≤ (1 / 2 : ℝ) ^ P.card := by

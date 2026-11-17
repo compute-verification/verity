@@ -2,13 +2,7 @@ module
 
 public import Definitions.Pouw.Assumptions.GameStatements
 
-/-!
-# (e) Usefulness and int32 exactness
-
-The int32 facts go through `ZMod (2^32)`: `wrap32` is the identity there, so every int32 computation of `H_ref` is
-the exact computation mod `2^32`, where the decode identity holds in any commutative ring; two int32 values that
-agree mod `2^32` are equal.
--/
+/-! Usefulness and int32 exactness, through `ZMod (2^32)`. -/
 
 @[expose] public section
 
@@ -16,13 +10,10 @@ namespace Pouw.Proofs
 
 open Finset
 
-/-! ## Matrices over a commutative ring -/
-
 section Ring
 
 variable {A : Type} [CommRing A]
 
-/-- The product over inner dimension `k`, over any commutative ring (`mm` is the case `ℤ`). -/
 def mmR (k : ℕ) (X Y : ℕ → ℕ → A) : ℕ → ℕ → A := fun i j => ∑ l ∈ range k, X i l * Y l j
 
 theorem mmR_add_left (k : ℕ) (X X' Y : ℕ → ℕ → A) : mmR k (X + X') Y = mmR k X Y + mmR k X' Y := by
@@ -37,7 +28,6 @@ theorem mmR_assoc (a b : ℕ) (X Y Z : ℕ → ℕ → A) : mmR a (mmR b X Y) Z 
   rw [Finset.sum_comm]
   exact Finset.sum_congr rfl fun _ _ => Finset.sum_congr rfl fun _ _ => mul_assoc _ _ _
 
-/-- The decode identity in any commutative ring. -/
 theorem decode_ring (k r : ℕ) (X B EL ER FL FR : ℕ → ℕ → A) :
     mmR k (X + mmR r EL ER) (B + mmR r FL FR) - mmR r (mmR k X FL) FR - mmR r EL (mmR k ER (B + mmR r FL FR))
       = mmR k X B := by
@@ -46,10 +36,7 @@ theorem decode_ring (k r : ℕ) (X B EL ER FL FR : ℕ → ℕ → A) :
 
 end Ring
 
-/-- **(e1) Usefulness over the integers.** -/
 theorem usefulness : GameStatements.Usefulness := fun k r A B EL ER FL FR => decode_ring k r A B EL ER FL FR
-
-/-! ## int32 -/
 
 theorem wrap32_mem (x : ℤ) : InInt32 (wrap32 x) := by
   unfold wrap32 InInt32; omega
@@ -57,7 +44,6 @@ theorem wrap32_mem (x : ℤ) : InInt32 (wrap32 x) := by
 theorem wrap32_of_mem {x : ℤ} (h : InInt32 x) : wrap32 x = x := by
   unfold wrap32 InInt32 at *; omega
 
-/-- The ring of int32 values mod `2^32`. -/
 abbrev Z32 : Type := ZMod (2 ^ 32)
 
 theorem wrap32_cast (x : ℤ) : ((wrap32 x : ℤ) : Z32) = (x : Z32) := by
@@ -77,7 +63,6 @@ theorem accW_cast (f : ℕ → ℤ) (n : ℕ) : ((accW f n : ℤ) : Z32) = ∑ l
   | zero => simp [accW]
   | succ n ih => rw [accW, wrap32_cast, Int.cast_add, ih, Finset.sum_range_succ]
 
-/-- Entrywise cast of an integer matrix to `Z32`. -/
 def castM (X : Mat) : ℕ → ℕ → Z32 := fun i j => ((X i j : ℤ) : Z32)
 
 theorem castM_mmW (k : ℕ) (X Y : Mat) : castM (mmW k X Y) = mmR k (castM X) (castM Y) := by
@@ -107,13 +92,10 @@ theorem accW_eq (f : ℕ → ℤ) (n : ℕ) : accW f n = wrap32 (∑ l ∈ range
     | succ n => exact wrap32_mem _
   · rw [accW_cast, wrap32_cast, Int.cast_sum]
 
-/-- The int32 accumulator is exact when the exact sum is in int32. -/
 theorem mmW_eq_of_mem {k : ℕ} {X Y : Mat} {i j : ℕ} (h : InInt32 (mm k X Y i j)) : mmW k X Y i j = mm k X Y i j := by
   unfold mmW
   rw [accW_eq]
   exact wrap32_of_mem h
-
-/-! ## Range bounds -/
 
 theorem sum_bounds (k : ℕ) (f : ℕ → ℤ) (lo hi : ℤ) (h : ∀ l < k, lo ≤ f l ∧ f l ≤ hi) :
     (k : ℤ) * lo ≤ ∑ l ∈ range k, f l ∧ ∑ l ∈ range k, f l ≤ (k : ℤ) * hi := by
@@ -156,19 +138,16 @@ theorem int7_sum_mem (k : ℕ) (a b : ℕ → ℤ) (hk : k ≤ 2 ^ 19 - 1) (ha :
   have hk' : (k : ℤ) ≤ 524287 := by exact_mod_cast (show k ≤ 524287 by omega)
   constructor <;> nlinarith [this.1, this.2]
 
-/-- **(e2)** int32 exactness of the noised transcript for `k ≤ 133144`. -/
 theorem int32Trace : GameStatements.Int32Trace := by
   intro k A B i j hk hA hB
   have hmem : InInt32 (mm k A B i j) := noised_sum_mem k (fun l => A i l) (fun l => B l j) hk hA hB
   exact ⟨mmW_eq_of_mem hmem, hmem⟩
 
-/-- **(e3)** The exact `k` bound for noised operands. -/
 theorem noisedKBound : GameStatements.NoisedKBound := by
   refine ⟨fun k a b hk ha hb => noised_sum_mem k a b hk ha hb, ?_⟩
   simp only [Finset.sum_const, Finset.card_range, nsmul_eq_mul, InInt32]
   norm_num
 
-/-- **(e3′)** The problem statement's int8 bound. -/
 theorem int8KBound : GameStatements.Int8KBound := by
   refine ⟨fun k a b hk ha hb => ?_, ?_⟩
   · have := sum_bounds k (fun l => a l * b l) (-16256) 16384 fun l hl => mul_bounds_int8 (ha l hl) (hb l hl)
@@ -178,7 +157,6 @@ theorem int8KBound : GameStatements.Int8KBound := by
   · simp only [Finset.sum_const, Finset.card_range, nsmul_eq_mul, InInt32]
     norm_num
 
-/-- **(e4)** `H_ref`'s int32 decode is exact for int7 operands and `k ≤ 2^19 − 1`, whatever the factors. -/
 theorem int32Decode : GameStatements.Int32Decode := by
   intro k r A B EL ER FL FR i j hk hA hB
   refine eq_of_cast_eq (wrap32_mem _) (int7_sum_mem k (fun l => A i l) (fun l => B l j) hk hA hB) ?_
@@ -186,8 +164,6 @@ theorem int32Decode : GameStatements.Int32Decode := by
     (castM FR)) i) j
   simp only [wrap32_cast, Int.cast_sub, cast_mmW_apply, cast_mm_apply, castM_mmW, castM_wrapAdd]
   exact key
-
-/-! ## D1's honest reference is complete -/
 
 section D1
 
@@ -222,7 +198,6 @@ theorem refWt_eq (hN : P.NoiseRange) {H : Q → R} {s : S} {U : Workload} {u : �
     unfold D1.Params.refWt; rw [hW]; exact wrap32_of_mem (by unfold InInt32; omega)
   refine ⟨h.trans rfl, ?_, ?_⟩ <;> rw [h] <;> omega
 
-/-- **(e5)** D1's `H_ref` is complete on the default domain when noise is in `[−63, 63]`. -/
 theorem d1Complete : GameStatements.D1Complete := by
   intro Q R S P hN U hU u hu H s A hA
   have hD := hU.2.1 u hu

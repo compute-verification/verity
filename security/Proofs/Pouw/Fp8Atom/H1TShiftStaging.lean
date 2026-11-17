@@ -5,47 +5,14 @@ import Mathlib.Data.Fin.VecNotation
 import Mathlib.Tactic.Positivity.Finset
 import Proofs.Pouw.Fp8Atom.H1TProofs
 
-/-!
-# H-1T: the late words against staircases (staging, unpinned)
-
-`H1TCrossLate` compares a block-2 running word `R_p(j)` with another column's running word `R_q(j′)`, with `p` and `q`
-from `T − 1` to `2T − 3`. Fix every salt but slice `T − 1`'s. Then `R_p(j) = chainFrom A (I :: cs)`: `A = R_(T−2)(j)`,
-`I` is column `j`'s block-1 word of slice `T − 1`, and `cs` are the block-2 words of slices `0..p − T`, none of which
-reads slice `T − 1`'s salt. The same holds for `j′`, with `cs′ = []` at `q = T − 1`.
-
-* `rn_shift2`, `rnAdd_shift`, `chainFrom_shift`: a chain commutes with adding `D` to its start while each step's two
-  sums share an ulp `u` and `D ∈ 2uℤ` (`SameCell`). `chainFrom_equivariant` gets that from one binade (`InBinade`).
-* `staircase_extend`, `split_of_staircase`: a monotone map that commutes with `+ W` on a window gives a step-`W`
-  staircase (`Staircase`) there, `⌊g / W⌋`. So if no two staircases agree on two families of values, no two such maps
-  agree either.
-* `lateWords_split`: where both columns' sums after `A` stay in one binade of ulp at most `W / 2` for every word in a
-  window, the words separate the two chains whenever no two staircases agree on them. `lateWords_of_tagSplit` takes
-  that from `TagStaircaseSplit W`, a statement about one slice's two block-1 words that reads neither `A` nor the
-  positions. It is not proved; its evidence is simulation.
-* `chainFrom_shift_ok`, `late_shift_ok`, `lateWords_split_on`: the same with each step checked on its own
-  (`StepOK`: its two sums in one binade, which may change from step to step, or both exact; `stepOK_of_grid` is the
-  exact region below `2^24` grid steps).
-* `lateWords_split_cut`, `lateWords_of_cutSplit`: **the straddle lemma**. A chain that crosses one power of two at
-  one step passes `+ W` on each side of a cut, so the words separate unless four staircases, one per column and side,
-  agree on them; `TagCutSplit W` (not proved, and it implies `TagStaircaseSplit W`) says they never do.
-* `lateWords_split_cut2`, `lateWords_of_cutSplit2`: the same with two cuts per column and three staircases each;
-  `TagCutSplit2 W` (not proved, and it implies `TagCutSplit W`). `lateWords_split_cut2_on` needs windows only on a
-  sub-family, for words that lie in no window.
-* `lateWords_of_cutSplit2Off`: the same with windows only off exclusion zones, `z` intervals of width `w` per column
-  (`InZones`); `TagCutSplit2Off W z w` (not proved, and it implies `TagCutSplit2 W`) asks the separating tag setting
-  to avoid them.
-* `chainFrom_err`, `lateWords_margin`: below `2^e` a chain is its exact sum to within `2^(e − 25)` per step, across
-  any binades; so two tag settings whose difference `Y′ − Y` moves by more than `(n + n′ + 2)·2^(e − 24)` separate
-  the chains outright.
--/
+/-! H-1T's late words against staircases (staging, unpinned): `TagStaircaseSplit`, `TagCutSplit`,
+`TagCutSplit2` and `TagCutSplit2Off` are not proved, and their evidence is simulation. -/
 
 @[expose] public section
 
 namespace Pouw.Fp8Atom.H1T.Shift
 
 open Pouw.Fp8Atom Pouw.Fp8Atom.Proofs Pouw.Fp8Atom.H1T
-
-/-! ## Rounding commutes with even shifts -/
 
 theorem roundEven_add_two (m : ℚ) (n : ℤ) : roundEven (m + 2 * n) = roundEven m + 2 * n := by
   have hf : ⌊m + 2 * (n : ℚ)⌋ = ⌊m⌋ + 2 * n := by
@@ -75,7 +42,6 @@ theorem rn_div (x : ℚ) : rn x = (roundEven (x / ulp x) : ℚ) * ulp x := by
   · rw [ite_eq_left hx, abs_of_neg hx, neg_div, roundEven_neg]; push_cast; ring
   · rw [ite_eq_right (not_lt.2 hx), abs_of_nonneg hx, one_mul]
 
-/-- Adding an even number of ulps that keeps the ulp moves the rounded value by the same amount. -/
 theorem rn_shift2 {y : ℚ} {n : ℤ} (hu : ulp (y + 2 * n * ulp y) = ulp y) :
     rn (y + 2 * n * ulp y) = rn y + 2 * n * ulp y := by
   have h0 := (ulp_pos y).ne'
@@ -84,7 +50,6 @@ theorem rn_shift2 {y : ℚ} {n : ℤ} (hu : ulp (y + 2 * n * ulp y) = ulp y) :
     rw [add_div, mul_div_assoc, div_self h0, mul_one]
   rw [e, roundEven_add_two]; push_cast; ring
 
-/-- `x` and `y` share an ulp, and `D` is an even number of it. -/
 def SameCell (D x y : ℚ) : Prop := ulp x = ulp y ∧ ∃ n : ℤ, D = 2 * n * ulp y
 
 theorem rnAdd_shift {a b c D : ℚ} (hab : a = b + D) (h : SameCell D (a + c) (b + c)) :
@@ -94,12 +59,8 @@ theorem rnAdd_shift {a b c D : ℚ} (hab : a = b + D) (h : SameCell D (a + c) (b
   rw [hx] at hu
   unfold rnAdd; rw [hx, rn_shift2 hu, ← hn]
 
-/-! ## The chain commutes with shifts inside one binade -/
-
 theorem chainFrom_cons (a c : ℚ) (cs : List ℚ) : chainFrom a (c :: cs) = chainFrom (rnAdd a c) cs := rfl
 
-/-- **The chain shift**: two chains through the same increments, whose starts differ by `D`, still differ by `D` while
-each step's two sums are `SameCell D`. -/
 theorem chainFrom_shift {D : ℚ} : ∀ (cs : List ℚ) (a b : ℚ), a = b + D →
     (∀ (k : ℕ) (c : ℚ), cs[k]? = some c →
       SameCell D (chainFrom a (cs.take k) + c) (chainFrom b (cs.take k) + c)) →
@@ -115,7 +76,6 @@ theorem chainFrom_mono : ∀ (cs : List ℚ) {a b : ℚ}, a ≤ b → chainFrom 
   | [], _, _, h => h
   | c :: cs, a, b, h => chainFrom_mono cs (rnAdd_mono a c b c (by linarith))
 
-/-- Every step's sum of the chain from `a` through `cs` lies in the binade `[2^e, 2^(e+1))` in magnitude. -/
 def InBinade (e : ℤ) (a : ℚ) (cs : List ℚ) : Prop :=
   ∀ (k : ℕ) (c : ℚ), cs[k]? = some c →
     2 ^ e ≤ |chainFrom a (cs.take k) + c| ∧ |chainFrom a (cs.take k) + c| < 2 ^ (e + 1)
@@ -130,12 +90,8 @@ theorem chainFrom_equivariant {W : ℚ} {e n : ℤ} (hWn : W = 2 * n * 2 ^ (e - 
     obtain ⟨b1, b2⟩ := hb k c hk
     exact ⟨by rw [ulp_of_binade a1 a2, ulp_of_binade b1 b2], n, by rw [ulp_of_binade b1 b2, hWn]⟩
 
-/-! ## Staircases -/
-
-/-- A step-`W` staircase: monotone, and one step up for every `W`. -/
 def Staircase (W : ℚ) (N : ℚ → ℤ) : Prop := Monotone N ∧ ∀ x, N (x + W) = N x + 1
 
-/-- A monotone `g` that commutes with `+ W` on `[L, H]` agrees there with a step-`W` staircase, `⌊g / W⌋`. -/
 theorem staircase_extend {W L H : ℚ} (hW : 0 < W) (hLH : L + W ≤ H) {g : ℚ → ℚ} (hg : Monotone g)
     (he : ∀ x, L ≤ x → x + W ≤ H → g (x + W) = g x + W) :
     ∃ N, Staircase W N ∧ ∀ x, L ≤ x → x ≤ H → N x = ⌊g x / W⌋ := by
@@ -187,8 +143,6 @@ theorem staircase_extend {W L H : ℚ} (hW : 0 < W) (hLH : L + W ≤ H) {g : ℚ
     rw [hg', hmq, show (g (r x) + (k x : ℚ) * W) / W = g (r x) / W + (k x : ℚ) by
       rw [add_div, mul_div_assoc, div_self hW.ne', mul_one], Int.floor_add_intCast]
 
-/-- **Staircases to maps**: if no two step-`W` staircases agree on `Y` and `Y′`, then no two monotone maps agree on
-them that commute with `+ W` on windows at least `W` wide holding `Y` and `Y′`. -/
 theorem split_of_staircase {ι : Type*} {W : ℚ} (hW : 0 < W) {Y Y' : ι → ℚ}
     (h : ∀ N N', Staircase W N → Staircase W N' → ∃ i, N (Y i) ≠ N' (Y' i))
     {g g' : ℚ → ℚ} {L H L' H' : ℚ} (hg : Monotone g) (hg' : Monotone g') (hLH : L + W ≤ H)
@@ -207,9 +161,6 @@ theorem staircase_double {W : ℚ} {N : ℚ → ℤ} (h : Staircase W N) : Stair
   rw [show x + 2 * W = x + W + W by ring, h.2, h.2, show N x + 1 + 1 = N x + 1 * 2 by ring,
     Int.add_mul_ediv_right _ _ (by norm_num)]
 
-/-! ## The late words -/
-
-/-- The chain from `A` whose first increment is `x`, then `cs`, sums in binade `e` throughout. -/
 def LateInBinade (e : ℤ) (A x : ℚ) (cs : List ℚ) : Prop :=
   (2 ^ e ≤ |A + x| ∧ |A + x| < 2 ^ (e + 1)) ∧ InBinade e (rnAdd A x) cs
 
@@ -230,10 +181,6 @@ theorem late_equivariant {W A L H : ℚ} {cs : List ℚ} {e n : ℤ} (hW : 0 < W
   rw [chainFrom_cons, chainFrom_cons]
   exact chainFrom_equivariant hWn hstep ha hb
 
-/-- **The late words split**: two chains from `A`, `A′` whose first increments are `Y i`, `Y′ i` and whose later
-increments `cs`, `cs′` do not depend on `i`. If each chain's sums stay in one binade (`e`, `e′`) for every first
-increment in a window at least `W` wide that holds the words, `W` is an even number of both ulps, and no two step-`W`
-staircases agree on the words, then some `i` separates the chains. -/
 theorem lateWords_split {ι : Type*} {W : ℚ} (hW : 0 < W) {Y Y' : ι → ℚ}
     (h : ∀ N N', Staircase W N → Staircase W N' → ∃ i, N (Y i) ≠ N' (Y' i))
     {A A' L H L' H' : ℚ} {cs cs' : List ℚ} {e e' n n' : ℤ}
@@ -246,10 +193,6 @@ theorem lateWords_split {ι : Type*} {W : ℚ} (hW : 0 < W) {Y Y' : ι → ℚ}
     (fun x y hxy => chainFrom_mono cs' (rnAdd_mono A' x A' y (by linarith))) hLH hLH'
     (late_equivariant hW hWn hB) (late_equivariant hW hWn' hB') hY hY'
 
-/-! ## The one-slice statement -/
-
-/-- Column `j`'s block-1 word of a slice with real codes `xs`, column codes `b`, real signs `pos` and tag bits
-`neg`, `man`. -/
 def tagWord (xs : Fin 29 → Code) (b : ℕ → Code) (j τ : ℕ) (pos : Fin 29 → Bool) (neg : Fin 3 → Bool)
     (man : Fin 3 → Fin 8) : ℚ :=
   wordVal (hopperStep 0 (formSlice xs ⟨pos, neg, man⟩).1 (colLanes b j τ))
@@ -268,8 +211,6 @@ theorem tagStaircaseSplit_half {W : ℚ} (h : TagStaircaseSplit (2 * W)) : TagSt
   obtain ⟨neg, man, hne⟩ := h xs b b' j j' τ pos hx hb hb' ht _ _ (staircase_double hN) (staircase_double hN')
   exact ⟨neg, man, fun he => hne (by simp only [he])⟩
 
-/-- **`TagStaircaseSplit` separates the late words** of one slice's two columns, under `lateWords_split`'s binade
-windows. -/
 theorem lateWords_of_tagSplit {W : ℚ} (hW : 0 < W) (hS : TagStaircaseSplit W) {xs : Fin 29 → Code}
     {b b' : ℕ → Code} {j j' τ : ℕ} {pos : Fin 29 → Bool} (hx : ∀ l, (xs l).isNaN = false)
     (hb : ∀ r, (b r).isNaN = false) (hb' : ∀ r, (b' r).isNaN = false) (ht : tuple j ≠ tuple j')
@@ -288,10 +229,6 @@ theorem lateWords_of_tagSplit {W : ℚ} (hW : 0 < W) (hS : TagStaircaseSplit W) 
     hWn hWn' hLH hLH' hB hB' (fun s => hY s.1 s.2) (fun s => hY' s.1 s.2)
   exact ⟨neg, man, hne⟩
 
-/-! ## Step by step: binades that change between steps, exact steps, and a straddle -/
-
-/-- A step's sums `z + D` and `z` pass the shift `D` through `rn`: they share an ulp of which `D` is an even
-number, or both are representable. -/
 def StepOK (D z : ℚ) : Prop := SameCell D (z + D) z ∨ (Representable (z + D) ∧ Representable z)
 
 theorem rn_shift_ok {D z : ℚ} (h : StepOK D z) : rn (z + D) = rn z + D := by
@@ -303,7 +240,6 @@ theorem stepOK_of_binade {D z : ℚ} {e n : ℤ} (hD : D = 2 * n * 2 ^ (e - 23))
     (h2 : |z + D| < 2 ^ (e + 1)) (h3 : 2 ^ e ≤ |z|) (h4 : |z| < 2 ^ (e + 1)) : StepOK D z :=
   Or.inl ⟨by rw [ulp_of_binade h1 h2, ulp_of_binade h3 h4], n, by rw [ulp_of_binade h3 h4, hD]⟩
 
-/-- A multiple of `2^g` below `2^(24 + g)` in magnitude is representable. -/
 theorem representable_of_grid {x : ℚ} {g m : ℤ} (hx : x = m * 2 ^ g) (h : |x| < 2 ^ (24 + g)) :
     Representable x := by
   refine ⟨m, g, ?_, hx⟩
@@ -313,15 +249,10 @@ theorem representable_of_grid {x : ℚ} {g m : ℤ} (hx : x = m * 2 ^ g) (h : |x
   have : |(m : ℚ)| < 2 ^ 24 := by simpa using hm
   exact_mod_cast this
 
-/-- **The exact region**: both sums multiples of `2^g` below `2^(24 + g)` in magnitude. Every word of a slice is a
-multiple of `F/8` (its tag products are at least `1024·F`), so below `2^21·F` for the least `F` of the slices read,
-every add is exact. -/
 theorem stepOK_of_grid {D z : ℚ} {g a b : ℤ} (ha : z + D = a * 2 ^ g) (hb : z = b * 2 ^ g)
     (h1 : |z + D| < 2 ^ (24 + g)) (h2 : |z| < 2 ^ (24 + g)) : StepOK D z :=
   Or.inr ⟨representable_of_grid ha h1, representable_of_grid hb h2⟩
 
-/-- **The chain shift, step by step**: the chain from `b + D` is the chain from `b` plus `D` while every sum `z` of
-`b`'s chain has `StepOK D z`, each step in a binade of its own or exact. -/
 theorem chainFrom_shift_ok {D : ℚ} : ∀ (cs : List ℚ) (b : ℚ),
     (∀ (k : ℕ) (c : ℚ), cs[k]? = some c → StepOK D (chainFrom b (cs.take k) + c)) →
     chainFrom (b + D) cs = chainFrom b cs + D
@@ -334,8 +265,6 @@ theorem chainFrom_shift_ok {D : ℚ} : ∀ (cs : List ℚ) (b : ℚ),
     exact chainFrom_shift_ok cs (rnAdd b c) fun k c' hk => by
       simpa [chainFrom] using h (k + 1) c' (by simpa using hk)
 
-/-- The late word from `A` with first increment `x` passes `+ W` at every step: the sum `A + x`, then every sum of
-the chain from `RN(A + x)`. -/
 def LateOK (W A x : ℚ) (cs : List ℚ) : Prop :=
   StepOK W (A + x) ∧ ∀ (k : ℕ) (c : ℚ), cs[k]? = some c → StepOK W (chainFrom (rnAdd A x) (cs.take k) + c)
 
@@ -346,8 +275,6 @@ theorem late_shift_ok {W A x : ℚ} {cs : List ℚ} (h : LateOK W A x cs) :
   rw [chainFrom_cons, chainFrom_cons, e]
   exact chainFrom_shift_ok cs _ h.2
 
-/-- **The late words split on a sub-family**: `lateWords_split` with the steps checked one by one (`LateOK` on each
-window) and the staircase split taken only over the indices in `P`, whose words lie in the windows. -/
 theorem lateWords_split_on {ι : Type*} {W : ℚ} (hW : 0 < W) {Y Y' : ι → ℚ} {P : ι → Prop}
     (h : ∀ N N', Staircase W N → Staircase W N' → ∃ i, P i ∧ N (Y i) ≠ N' (Y' i))
     {A A' L H L' H' : ℚ} {cs cs' : List ℚ} (hLH : L + W ≤ H) (hLH' : L' + W ≤ H')
@@ -363,10 +290,6 @@ theorem lateWords_split_on {ι : Type*} {W : ℚ} (hW : 0 < W) {Y Y' : ι → �
     (fun i => hY i.1 i.2) (fun i => hY' i.1 i.2)
   exact ⟨i, hi, hne⟩
 
-/-- **The straddle lemma**: each column's chain passes `+ W` on two windows, one holding its words below a cut (`κ`,
-`κ′`) and one holding those from the cut on. A chain that crosses one power of two at one step does, with the cut
-where that step's sum reaches the power. If no four step-`W` staircases, one per column and side, agree on the words,
-some index separates the chains. -/
 theorem lateWords_split_cut {ι : Type*} {W : ℚ} (hW : 0 < W) {Y Y' : ι → ℚ} {κ κ' : ℚ}
     (h : ∀ N₁ N₂ N₁' N₂', Staircase W N₁ → Staircase W N₂ → Staircase W N₁' → Staircase W N₂' →
       ∃ i, (if Y i < κ then N₁ else N₂) (Y i) ≠ (if Y' i < κ' then N₁' else N₂') (Y' i))
@@ -412,8 +335,6 @@ theorem tagStaircaseSplit_of_cut {W : ℚ} (h : TagCutSplit W) : TagStaircaseSpl
   obtain ⟨neg, man, hne⟩ := h xs b b' j j' τ pos hx hb hb' ht 0 0 N N N' N' hN hN hN' hN'
   exact ⟨neg, man, by simpa only [ite_self] using hne⟩
 
-/-- **`TagCutSplit` separates the late words** of one slice's two columns when each chain crosses at most one power
-of two at one step (`lateWords_split_cut`'s windows). -/
 theorem lateWords_of_cutSplit {W : ℚ} (hW : 0 < W) (hS : TagCutSplit W) {xs : Fin 29 → Code}
     {b b' : ℕ → Code} {j j' τ : ℕ} {pos : Fin 29 → Bool} (hx : ∀ l, (xs l).isNaN = false)
     (hb : ∀ r, (b r).isNaN = false) (hb' : ∀ r, (b' r).isNaN = false) (ht : tuple j ≠ tuple j') {κ κ' : ℚ}
@@ -439,15 +360,8 @@ theorem lateWords_of_cutSplit {W : ℚ} (hW : 0 < W) (hS : TagCutSplit W) {xs : 
     h₁ h₂ h₁' h₂' hB₁ hB₂ hB₁' hB₂' (fun s => hY s.1 s.2) (fun s => hY' s.1 s.2)
   exact ⟨neg, man, hne⟩
 
-/-! ## Two cuts per column -/
-
-/-- The cell of `y` for the cuts `κ₁`, `κ₂`: `0` below `κ₁`, `1` on `[κ₁, κ₂)`, `2` from `max κ₁ κ₂`. -/
 def cell3 (κ₁ κ₂ y : ℚ) : Fin 3 := if y < κ₁ then 0 else if y < κ₂ then 1 else 2
 
-/-- **The straddle lemma with two cuts**: each column's chain passes `+ W` on three windows, holding its words below
-`κ₁`, on `[κ₁, κ₂)` and from `κ₂`. A chain whose steps cross powers of two in two bands of the words does, with a cut
-at each band. If no six step-`W` staircases, one per column and cell, agree on the words, some index separates the
-chains. -/
 theorem lateWords_split_cut2 {ι : Type*} {W : ℚ} (hW : 0 < W) {Y Y' : ι → ℚ} {κ₁ κ₂ κ₁' κ₂' : ℚ}
     (h : ∀ N N' : Fin 3 → ℚ → ℤ, (∀ c, Staircase W (N c)) → (∀ c, Staircase W (N' c)) →
       ∃ i, N (cell3 κ₁ κ₂ (Y i)) (Y i) ≠ N' (cell3 κ₁' κ₂' (Y' i)) (Y' i))
@@ -468,8 +382,6 @@ theorem lateWords_split_cut2 {ι : Type*} {W : ℚ} (hW : 0 < W) {Y Y' : ι → 
   have hr : N' (cell3 κ₁' κ₂' (Y' i)) (Y' i) = ⌊chainFrom A' (Y' i :: cs') / W⌋ := e' _ _ (hY' i).1 (hY' i).2
   rw [hl, hr, heq]
 
-/-- **The straddle lemma with two cuts, on a sub-family**: `lateWords_split_cut2` with the windows needed only for the
-indices in `P` and the staircase split taken over them. It lets words that lie in no window be dropped. -/
 theorem lateWords_split_cut2_on {ι : Type*} {W : ℚ} (hW : 0 < W) {Y Y' : ι → ℚ} {P : ι → Prop}
     {κ₁ κ₂ κ₁' κ₂' : ℚ}
     (h : ∀ N N' : Fin 3 → ℚ → ℤ, (∀ c, Staircase W (N c)) → (∀ c, Staircase W (N' c)) →
@@ -518,8 +430,6 @@ theorem tagCutSplit_of_cutSplit2 {W : ℚ} (h : TagCutSplit2 W) : TagCutSplit W 
       rw [hc, ite_eq_right hy]; rfl
   exact ⟨neg, man, by rw [← e, ← e]; exact hne⟩
 
-/-- **`TagCutSplit2` separates the late words** of one slice's two columns when each chain passes `+ W` on three
-windows per column (`lateWords_split_cut2`). -/
 theorem lateWords_of_cutSplit2 {W : ℚ} (hW : 0 < W) (hS : TagCutSplit2 W) {xs : Fin 29 → Code}
     {b b' : ℕ → Code} {j j' τ : ℕ} {pos : Fin 29 → Bool} (hx : ∀ l, (xs l).isNaN = false)
     (hb : ∀ r, (b r).isNaN = false) (hb' : ∀ r, (b' r).isNaN = false) (ht : tuple j ≠ tuple j')
@@ -541,13 +451,10 @@ theorem lateWords_of_cutSplit2 {W : ℚ} (hW : 0 < W) (hS : TagCutSplit2 W) {xs 
     hLH hLH' hB hB' (fun s => hY s.1 s.2) (fun s => hY' s.1 s.2)
   exact ⟨neg, man, hne⟩
 
-/-- `y` lies in one of the `z` closed intervals `[e i, e i + w]`. -/
 def InZones {z : ℕ} (w : ℚ) (e : Fin z → ℚ) (y : ℚ) : Prop := ∃ i, e i ≤ y ∧ y ≤ e i + w
 
-/-- **The two-cut tag split off exclusion zones** (not proved): `TagCutSplit2` with the separating tag setting's two
-words outside given exclusion sets, in each column `z` intervals of width `w` placed anywhere. The words that lie in
-no window, near a crossing, form such sets, so the windows are needed only off them (`lateWords_of_cutSplit2Off`).
-It implies `TagCutSplit2 W`, and fewer or narrower zones (`tagCutSplit2Off_mono`). -/
+/-- **The two-cut tag split off exclusion zones** (not proved): `TagCutSplit2` with the separating tag setting's
+two words outside `z` intervals of width `w` per column. It implies `TagCutSplit2 W`. -/
 def TagCutSplit2Off (W : ℚ) (z : ℕ) (w : ℚ) : Prop :=
   ∀ (xs : Fin 29 → Code) (b b' : ℕ → Code) (j j' τ : ℕ) (pos : Fin 29 → Bool), (∀ l, (xs l).isNaN = false) →
     (∀ r, (b r).isNaN = false) → (∀ r, (b' r).isNaN = false) → tuple j ≠ tuple j' →
@@ -573,8 +480,6 @@ theorem tagCutSplit2Off_mono {W w w' : ℚ} {z z' : ℕ} (hz : z' ≤ z) (hw : w
   obtain ⟨neg, man, h₁, h₂, hne⟩ := h xs b b' j j' τ pos hx hb hb' ht (pad e) (pad e') κ₁ κ₂ κ₁' κ₂' N N' hN hN'
   exact ⟨neg, man, fun h => h₁ (hpad e _ h), fun h => h₂ (hpad e' _ h), hne⟩
 
-/-- **`TagCutSplit2Off` separates the late words** of one slice's two columns when every word outside the exclusion
-zones lies in one of three windows per column (`lateWords_split_cut2_on`); the words inside them need no window. -/
 theorem lateWords_of_cutSplit2Off {W w : ℚ} {z : ℕ} (hW : 0 < W) (hS : TagCutSplit2Off W z w)
     {xs : Fin 29 → Code} {b b' : ℕ → Code} {j j' τ : ℕ} {pos : Fin 29 → Bool} (hx : ∀ l, (xs l).isNaN = false)
     (hb : ∀ r, (b r).isNaN = false) (hb' : ∀ r, (b' r).isNaN = false) (ht : tuple j ≠ tuple j')
@@ -599,8 +504,6 @@ theorem lateWords_of_cutSplit2Off {W w : ℚ} {z : ℕ} (hW : 0 < W) (hS : TagCu
     hLH hLH' hB hB' (fun s hs => hY s.1 s.2 hs.1) (fun s hs => hY' s.1 s.2 hs.2)
   exact ⟨neg, man, hne⟩
 
-/-! ## Small magnitudes: the rounding margin, across any binades -/
-
 theorem rn_err_pow {y : ℚ} {e : ℤ} (h : |y| < 2 ^ e) : |rn y - y| ≤ 2 ^ (e - 25) := by
   rcases eq_or_ne y 0 with rfl | hy
   · have : rn 0 = 0 := rn_exact ⟨0, 0, by norm_num, by simp⟩
@@ -613,11 +516,9 @@ theorem rn_err_pow {y : ℚ} {e : ℤ} (h : |y| < 2 ^ e) : |rn y - y| ≤ 2 ^ (e
       rw [show e - 24 = (e - 25) + 1 by ring, zpow_add_one₀ two_ne_zero]; ring
     linarith [Proofs.rn_err y]
 
-/-- Every sum of the chain from `a` through `cs` is below `2^e` in magnitude. -/
 def SumsBelow (e : ℤ) (a : ℚ) (cs : List ℚ) : Prop :=
   ∀ (k : ℕ) (c : ℚ), cs[k]? = some c → |chainFrom a (cs.take k) + c| < 2 ^ e
 
-/-- A chain whose sums stay below `2^e` is within `2^(e − 25)` per step of its exact sum. -/
 theorem chainFrom_err {e : ℤ} : ∀ (cs : List ℚ) (a : ℚ), SumsBelow e a cs →
     |chainFrom a cs - (a + cs.sum)| ≤ cs.length * 2 ^ (e - 25)
   | [], a, _ => by simp [chainFrom]
@@ -634,10 +535,6 @@ theorem chainFrom_err {e : ℤ} : ∀ (cs : List ℚ) (a : ℚ), SumsBelow e a c
       _ ≤ cs.length * 2 ^ (e - 25) + 2 ^ (e - 25) := add_le_add ih e1
       _ = (cs.length + 1) * 2 ^ (e - 25) := by ring
 
-/-- **The margin at small magnitudes**: two chains from `A`, `A′` whose first increments are `Y i`, `Y′ i` and whose
-later increments do not depend on `i`. If, at two indices `s` and `t`, every sum of both chains stays below `2^e`,
-and the words' differences `Y′ − Y` at `s` and `t` differ by more than the rounding can absorb, one of the two
-separates the chains. The sums may change binade at every step. -/
 theorem lateWords_margin {ι : Type*} {Y Y' : ι → ℚ} {A A' : ℚ} {cs cs' : List ℚ} {e : ℤ} (s t : ι)
     (hs : SumsBelow e A (Y s :: cs)) (ht : SumsBelow e A (Y t :: cs))
     (hs' : SumsBelow e A' (Y' s :: cs')) (ht' : SumsBelow e A' (Y' t :: cs'))

@@ -5,16 +5,7 @@ public import Proofs.Pouw.HMu
 public import Proofs.ResourceAccounting.Lemmas.TS.Receipt
 public import Proofs.ResourceAccounting.Lemmas.HMu
 
-/-!
-# The headlines' luck from the receipt
-
-* `operandLuck_of_pointMass`: (H-μ) at the operands (`ReceiptGame.OperandPointMass μ`) gives the operand luck at `μ`.
-  Each round is a word-level `SkipRound` whose honest receipt is the skipped value itself, so (Inj) holds with fibre 1,
-  and Lemma B at `Z = 1` bounds the round's luck by `μ` times its deficiency.
-* `luck_of_receipt_half`: (I7) at `7/8` for a play whose ideal game is a receipt game's, its openings pinned, (H-μ) at
-  its operands at `¾` (`OperandHMu`) and its receipt luck at `½` (`ReceiptLuckAt`): `LuckOfReceipt` gives (I7) at
-  `¾ + ¼·½`.
--/
+/-! The headlines' luck from the receipt. -/
 
 @[expose] public section
 
@@ -22,7 +13,6 @@ namespace ResourceAccounting.SecurityProofs.TS.Headline
 
 open ResourceAccounting.TS ResourceAccounting.Assumptions.TS ResourceAccounting.SecurityProofs.TS Pouw.RelativeSecurity
 
-/-- (H-μ) at the operands at `μ` gives the operand luck at `μ`, through Lemma B at fibre 1. -/
 theorem operandLuck_of_pointMass {Ω : Type} [Fintype Ω] (μ : ℝ) :
     ∀ {S : ℕ} (G : ReceiptGame Ω S), G.OperandPointMass μ → G.OperandLuck μ
   | _, .done, _ => trivial
@@ -45,7 +35,6 @@ theorem operandLuck_of_pointMass {Ω : Type} [Fintype Ω] (μ : ℝ) :
       _ ≤ ((1 : ℕ) : ℝ) * μ * prob (fun ω => 0 < d ω) := hB
       _ = μ * prob (fun ω => 0 < d ω) := by rw [Nat.cast_one, one_mul]
 
-/-- (I7) at `7/8` from the receipt split: (H-μ) at the operands at `¾` and the receipt luck at `½`. -/
 theorem luck_of_receipt_half {Ω : Type} [Fintype Ω] {S : ℕ} (g : RoundGame Ω S) (G : ReceiptGame Ω S)
     (hG : g = G.game) (hPin : G.Pinned) (hOp : OperandHMu (3 / 4) G) (hRL : ReceiptLuckAt (1 / 2) G) :
     LuckAt (7 / 8) g := by
