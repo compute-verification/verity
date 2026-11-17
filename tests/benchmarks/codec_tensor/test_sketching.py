@@ -8,7 +8,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "benchmarks" / "codec_tensor"))
+sys.path.insert(0, str((Path(__file__).resolve().parents[3] / "benchmarks" / "codec_tensor")))
 sys.path.insert(0, str((Path(__file__).resolve().parents[3] / "verity/protocols/resource_accounting/memory/poub/prover/codec_tensor/sketch_receipt.py").parent))
 
 import sketch_receipt as SR
