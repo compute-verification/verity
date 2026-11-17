@@ -7,7 +7,9 @@ as it gave it (`{"accepted", "reasons"}`), as `decide` names:
 - `lean`: the Lean's verdict; the Python's isn't computed.
 - `both`: both computed, and the Lean's verdict where they agree on every field; where they differ, a rejection naming
   both (`DISAGREE`).
-- `python`: the Python's alone (`streamed_wipe.verdict`), and no Lean process.
+- `python`: the Python's alone (`streamed_wipe.verdict`), and no Lean process. Its reject stands; its accept decides
+  nothing, so the verdict is not accepted and names why (`NO_JUDGE`, which `outcome` reads as `undecided`), the
+  Python's accept kept only in its own side.
 
 Each side rejects a session whose batch size the guarantee doesn't cover (`WipeParams.covered`), however it ran.
 `VERDICT` is the default, the one line that switches it. `tests/test_wipe_verdict.py` holds the Lean to the Python on
@@ -37,6 +39,9 @@ VERDICT = "lean"
 """Who decides the verdict (module docstring): `lean`, `both` or `python`."""
 VERDICTS = ("lean", "both", "python")
 DISAGREE = "the Lean and Python verdicts disagree"
+#: why a session the Python accepted under `decide="python"` is undecided
+NO_JUDGE = ("no streamed-wipe-verdict judged the session: the Lean decides the wipe, and the Python's accept decides "
+            "nothing alone")
 
 
 def record(signed: sw.SignedWipe, commitment: sw.WipeCommitment, *, trusted: frozenset[bytes] | set[bytes],
@@ -92,11 +97,18 @@ def judge(signed: sw.SignedWipe, commitment: sw.WipeCommitment, *, trusted: froz
     if decide != "lean":
         sides["python"] = python(signed, commitment, **kw)
     if decide == "python":
-        return _of(sides["python"]), sides
+        return (sw.Verdict(False, (NO_JUDGE,)) if sides["python"]["accepted"] else _of(sides["python"])), sides
     if decide == "both" and sides["lean"] != sides["python"]:
         why = f"{DISAGREE}: lean {json.dumps(sides['lean'])}, python {json.dumps(sides['python'])}"
         return sw.Verdict(False, (why,)), sides
     return _of(sides["lean"]), sides
 
 
-__all__ = ["DISAGREE", "EXE", "VERDICT", "VERDICTS", "judge", "lean", "python", "record", "server", "verdict"]
+def outcome(v: sw.Verdict) -> str:
+    """`judge`'s verdict as a caller records it: `accept`, `reject`, or `undecided` where no Lean judged a session the
+    Python accepted (`NO_JUDGE`)."""
+    return "accept" if v.accepted else "undecided" if v.reasons == (NO_JUDGE,) else "reject"
+
+
+__all__ = ["DISAGREE", "EXE", "NO_JUDGE", "VERDICT", "VERDICTS", "judge", "lean", "outcome", "python", "record",
+           "server", "verdict"]

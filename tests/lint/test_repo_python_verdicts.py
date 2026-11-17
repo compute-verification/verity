@@ -220,6 +220,26 @@ def test_no_newly_missing_site() -> None:
     assert not bad, f"places where Python can accept: {len(bad)} listed site(s) don't stand. {FIX}\n" + "\n".join(bad)
 
 
+#: memory accounting's paths, and the only places under them, or of its owner, where Python can still accept: each where
+#: no Lean verifier of the verdict is written (the pair session's LMS signatures, and the memory attester's)
+MEMORY_PATHS = ("verity/protocols/resource_accounting/memory/", "benchmarks/memory/", "benchmarks/pous/",
+                "benchmarks/poub_session/")
+MEMORY_PLACES = {
+    ("pair-session-signatures", "verity/protocols/resource_accounting/memory/poub/verifier/poub_session/verifier_process.py"),
+    ("signatures", "verity/protocols/resource_accounting/memory/pous/attester/memory_attester.py"),
+}
+
+
+def test_memory_accounting_lists_no_place_but_those_with_no_lean() -> None:
+    got = {(e["kind"], e["file"]) for e in load()
+           if e["owner"] == "memory-accounting" or e["file"].startswith(MEMORY_PATHS)}
+    assert got <= MEMORY_PLACES, (
+        "places where Python can accept: memory accounting lists a place beyond those with no Lean verifier "
+        f"(`MEMORY_PLACES`): {sorted(got - MEMORY_PLACES)}. Where a Lean verifier of the verdict is written, the Python "
+        "refuses, or leaves the verdict undecided, unless the Lean decided, and the entry goes; where none is written, "
+        "add the place to `MEMORY_PLACES` in the same pull request and say there why no Lean decides it.")
+
+
 def test_no_listed_function_changed_since_it_was_read() -> None:
     bad = changed(load(), reader())
     assert not bad, (f"places where Python can accept: {len(bad)} listed function(s) changed since they were read. Nothing "

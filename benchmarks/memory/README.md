@@ -81,10 +81,8 @@ target is 0.14 at an error of at most 2^-100.**
 - **It is a measurement to improve on, not an audit.** The verifier and its coins run on the machine being measured,
   so you could re-roll them. The line under it says so, and the JSON's `audit` is false.
 - **Who decided each number is in the document.** `gamma_decided_by` is `lean` where PoUB's Lean verifier decided the
-  share. Where it is `python-ledger`, the share and its error are the Python ledger's reading of the accepted session,
-  which the verifier records beside its own, and a line of the text says so. Where the document holds
-  `numbers_decided_by`, it lists by key which printed numbers are the Lean verifier's and which are the Python
-  ledger's: the error's sketch and sample terms are among the latter.
+  share. Where the document holds `numbers_decided_by`, it lists by key which printed numbers are the Lean verifier's
+  and which are the Python ledger's: the error's sketch and sample terms are among the latter.
 - **It certifies reads, not contents.** The audit certifies reads of the registered store whatever it holds; the
   verifier holds no checkpoint, so the store's bytes are the developer's choice, which the store's line says.
 - **The store is the card's memory, not a request's.** A session whose store is below half the card's memory

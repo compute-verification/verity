@@ -202,9 +202,16 @@ def serve(exe: str | os.PathLike, cases: Sequence[Mapping[str, Any]]) -> list[di
     return [json.loads(x) for x in p.stdout.splitlines()]
 
 
-def judged(case: Mapping[str, Any], session: Mapping[str, Any], exe: str | os.PathLike | None = None) -> dict[str, Any]:
-    """The case's answer: the Lean's (`serve`) with `exe`, else `answer`'s of the session's own."""
-    return serve(exe, [case])[0] if exe is not None else answer(case, session)
+#: why `judged` refuses a case with no executable to answer it
+NO_EXE = ("no poub-p2-protocol to answer the case: the Lean decides it, and with none the case is `unjudged`'s, never "
+          "the session's own accept")
+
+
+def judged(case: Mapping[str, Any], session: Mapping[str, Any], exe: str | os.PathLike | None) -> dict[str, Any]:
+    """The case's answer, the Lean's (`serve`) at `exe`; with no `exe`, a `ValueError` (`NO_EXE`)."""
+    if exe is None:
+        raise ValueError(NO_EXE)
+    return serve(exe, [case])[0]
 
 
 #: why a case no `poub-p2-protocol` answered is undecided where its session accepted (`unjudged`)
@@ -234,6 +241,6 @@ def write(private: Path, case: Mapping[str, Any], answer_: Mapping[str, Any]) ->
     return private
 
 
-__all__ = ["ANSWER", "CASE", "CLOSE_TAG", "COIN_BYTES", "DIGEST_DOMAIN", "EPS_TERMS", "EXE", "NO_JUDGE", "PROTOCOL",
-           "STORE_ROOT", "answer", "case_of", "chain", "close_key", "close_of", "close_record", "digest", "head", "head_of",
-           "judged", "same_store", "serve", "store_root", "trusting", "unjudged", "write"]
+__all__ = ["ANSWER", "CASE", "CLOSE_TAG", "COIN_BYTES", "DIGEST_DOMAIN", "EPS_TERMS", "EXE", "NO_EXE", "NO_JUDGE",
+           "PROTOCOL", "STORE_ROOT", "answer", "case_of", "chain", "close_key", "close_of", "close_record", "digest",
+           "head", "head_of", "judged", "same_store", "serve", "store_root", "trusting", "unjudged", "write"]
