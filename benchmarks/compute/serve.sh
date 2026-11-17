@@ -288,7 +288,7 @@ doc = {"model": sys.argv[1], "revision": sys.argv[2], "default_seed": DEFAULT_SE
        "execution": "bi-eager"}
 open(sys.argv[3], "w").write(json.dumps(doc, indent=1) + "\n")
 print(json.dumps(doc, sort_keys=True))
-' "$REPO" "$REV" "$REC/serve-phi.json" "$TREE/hardware/cards"
+' "$REPO" "$REV" "$REC/serve-phi.json" "$TREE/calibration/hardware/cards"
 }
 step cubin cubin || fail cubin
 step serve-phi phi || fail serve-phi

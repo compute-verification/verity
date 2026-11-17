@@ -23,7 +23,7 @@ Two of the four statements `Properties.Record.Complies` follows from, of this fo
 
 @[expose] public section
 
-namespace InferenceOnlyCheck.Record.SecurityProofs
+namespace InferenceOnlyVerifier.Record.SecurityProofs
 
 open Spot.RecordText
 open Lean (Json)
@@ -136,4 +136,4 @@ theorem form_rates : Properties.Record.Rates form := by
     · simp [hg, hn] at h2
     · exact ⟨Nat.not_lt.mp hg, Nat.not_lt.mp hn⟩
 
-end InferenceOnlyCheck.Record.SecurityProofs
+end InferenceOnlyVerifier.Record.SecurityProofs
