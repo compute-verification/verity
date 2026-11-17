@@ -718,3 +718,21 @@ def test_a_smaller_demos_check_reads_no_onsite_composite(tmp_path, monkeypatch):
     got = T.onsite_check(cfg, tmp_path)
     assert "--composite" not in json.loads((tmp_path / "record" / "argv.json").read_text())
     assert got["product"] != T.ONSITE and got["verdict"] == "undecided" and got["reason"] == "no composite was read"
+
+
+def test_pouws_piece_hands_the_runner_the_main_file_its_challenger_writes():
+    cfg, piece = R.load(CONFIG, REG), T.PARTIES["pouw"][T.WORKERS]
+    gate = BINDINGS["challenger"]["pouw"]
+    assert "MAIN_FILE" not in piece.variables(cfg, BINDINGS)
+    assert piece.variables(cfg, {"challenger": {"pouw": {**gate, "main-file": "/run/public/challenger/main.txt"}}}
+                           )["MAIN_FILE"] == "/run/public/challenger/main.txt"
+
+
+def test_a_dry_run_counts_what_a_challenger_started_first_writes_as_bound(capsys):
+    start = R.Start({"pouw": ("gate", "peer", "key-sha512", "main-file")}, lambda c, s: None, lambda c, s: None)
+    rc, got, err = dry(capsys, reg=dataclasses.replace(REG, starts={T.CHALLENGER: start}))
+    assert rc == 0, err
+    assert {x["party"]: x.get("writes") for x in got["plan"]}[T.CHALLENGER] == {
+        "pouw": ["gate", "peer", "key-sha512", "main-file"]}
+    assert got["dry"][0]["unbound"] == sorted(set(UNBOUND) - {f"challenger.pouw.{k}" for k in ("gate", "peer",
+                                                                                              "key-sha512")})
