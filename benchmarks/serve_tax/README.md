@@ -135,6 +135,24 @@ research run --on NODE --source . --cwd source -- bash benchmarks/serve_tax/run.
 The 1B's number is its `chat` and `long` loads' alone: the `prefix` load fills its whole context of 131,072 tokens,
 an engine of another limit than the two loads', so its number waits for no row (`Model.prefix_row`).
 
+`--model glm53-standin` serves GLM-5.3's recipe on one H200: the adapter's stand-in (`verity_vllm.engine.profiles.stand_in`:
+7 layers, 16 routed experts and the 8 attention heads one card holds at tensor parallel 8, with GLM-5.3's hidden size,
+vocabulary, indexer, cache layout, MTP layer and FP8 blocks), served from vLLM's random weights (`--load-format dummy`)
+with GLM-5.3's tokenizer, at the recipe's flags and context limit. `run.sh` writes its checkpoint directory under
+`/tmp` (`serve_tax.py standin`), and `GPU_LEASE_ON` and `GPU_LEASE_CORES` pick its card and cores. Its points go under
+GLM-5.3's ids, marked `partial`, with a `member` that names the stand-in, its random weights and its one card. What
+transfers from it to GLM-5.3 is per call and per step: the seconds a call of the canonical top-k's pass, of the step
+record, of keeping the ids and of the seeds, the tick's admission and the snapshot's pause, and that these parts run
+together with MTP, the FP8 cache and the prefix cache. What does not transfer: its points of serving time; how often
+top-k takes its slow path, since random rows almost never tie or miss at the k-th key and a real model's do; a step
+waiting for its slowest card, the all-reduce and the balance of tokens across experts, which only eight cards have.
+
+~~~text
+research run --on NODE --source . --cwd source --env GPU_LEASE_ON=4 -- bash benchmarks/prod_repro/run.sh \
+  --client vllm-bench --model glm53-standin --again none --arms 'prod prod-seeded prod-trace prod-record' \
+  --load agentic=4 --pass-prompts agentic=4 --lifetimes 2 --leave-out 1 --reps 2 --sampled
+~~~
+
 - **A load** (`serve_tax.LOADS`) is one of the client's datasets with its flags. The number has two, and a third,
   `prefix`, has the row under it (below). `chat` is the load
   of vLLM's standing serving tests: ShareGPT's first turns, 200 prompts, each decoding its recorded answer's length.
@@ -446,6 +464,8 @@ SAMPLED=1 PASS_PROMPTS=agentic=4 TICK_MS=SAT,FREE EDGES_EVERY_S=60 LIFETIMES=8 L
   bash benchmarks/serve_tax/run.sh --model glm53 --arms "prod prod-all-on" --loads agentic=4 --reps 2
 ~~~
 
+`--model glm53-standin` serves the same arms on one card.
+
 ## Running it
 
 On a node with the pinned vLLM venv, under `research run`, the C4 shard `benchmarks/ppl/datasets.json` pins sent with
@@ -469,8 +489,8 @@ and refuse a tree without them. `tick-certifier` is two jobs: the node's (`SIDE=
 then the network attester's host's (`serve_tax.py run --side client`), which needs no GPU. A saturated load keeps a connection open for every request queued in the server, so the
 client raises its open-file limit to the hard limit first.
 
-On one GPU, `MODEL_ID` is `moonlight` (the default), `llama8b`, `qwen3-30b` or `llama32-1b`, the last three read from their pinned
-snapshots under `HF_HOME` (`serve_tax.py checkpoint --model-id ID` prints the path).
+On one GPU, `MODEL_ID` is `moonlight` (the default), `glm53-standin`, `llama8b`, `qwen3-30b` or `llama32-1b`, the last three read
+from their pinned snapshots under `HF_HOME` (`serve_tax.py checkpoint --model-id ID` prints the path).
 
 Under a deployment's traffic, the job serves the replay ladder's plan (`benchmarks/replay_ladder/prod_plan.py`: ShareGPT,
 multi-turn and 8k-32k-token prompts, half of them sampled at temperature 0.7 under the public seed rule, each stopping at

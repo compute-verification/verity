@@ -457,6 +457,10 @@ class Model:
     published: tuple[str, ...] = ()
     published_context: int | str | None = None
     published_tokenizer: dict = field(default_factory=dict)
+    #: where it is a stand-in, served from vLLM's random weights, the adapter's cut of the model's config
+    #: (`verity_vllm.engine.profiles.stand_in`: ``layers``, ``experts``, ``heads``); its checkpoint is a directory
+    #: `standin` writes, and its points are marked partial and name it in their member (`member`, `mark`)
+    stand_in: dict = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         unknown = [c for p in self.target_parts for c in p.changes if c not in CHANGES]
@@ -468,6 +472,17 @@ class Model:
         total = round(sum(p.points for p in self.target_parts), 2)
         if self.target_parts and total != self.target:
             raise ValueError(f"{self.served}: the target's parts sum to {total}, and the target is {self.target}")
+
+    @property
+    def ref(self) -> str:
+        """What a record names the model by: its repository at its revision, and a stand-in's cut beside it."""
+        cut = ", ".join(f"{v} {k}" for k, v in self.stand_in.items())
+        return f"{self.repo}@{self.revision}" + (f" stand-in ({cut}, random weights)" if cut else "")
+
+    @property
+    def mark(self) -> str:
+        """The kit's mark of a point measured on it: a stand-in's covers part of what its metric names."""
+        return "partial" if self.stand_in else "measured"
 
     def checkpoint(self) -> Path:
         hub = Path(SHARED.HF_HOME or "/workspace/hf") / "hub"
@@ -535,7 +550,34 @@ MODELS = {
                               "--speculative-config.num_speculative_tokens", "5", "--tool-call-parser", "glm47",
                               "--reasoning-parser", "glm47", "--enable-auto-tool-choice"),
                    published_context=262144, published_tokenizer={PYTHON: "auto", RUST: "glm5_next"}),
+    # glm53's recipe on one card: the stand-in's cut keeps the hidden size, the vocabulary, the indexer, the cache layout,
+    # the MTP layer and the FP8 blocks, and a rank's attention heads at tensor parallel 8; README.md says what of its
+    # points transfers to glm53
+    "glm53-standin": Model("zai-org/GLM-5.3", "aca966e4e02791568aa6a4ced368624b3d897f42", "glm-5.3-stand-in",
+                           ("--tensor-parallel-size", "1", "--load-format", "dummy"), (2.0, 0.08),
+                           metric="vllm/serving-cost-glm53", check="GreedySelect_v1{V=154880,N=7744}",
+                           published=("--kv-cache-dtype", "fp8", "--speculative-config.method", "mtp",
+                                      "--speculative-config.num_speculative_tokens", "5", "--tool-call-parser", "glm47",
+                                      "--reasoning-parser", "glm47", "--enable-auto-tool-choice"),
+                           published_context=262144, published_tokenizer={PYTHON: "auto", RUST: "glm5_next"},
+                           stand_in={"layers": 7, "experts": 16, "heads": 8}),
 }
+
+
+def standin(model: Model, tokenizer_from: Path, out: Path) -> int:
+    """Writes a stand-in's checkpoint directory ``out``: its config, the adapter's cut of the model's (`Model.stand_in`),
+    and the tokenizer files of the model's checkpoint ``tokenizer_from``; never a weight."""
+    if str(ROOT / "adapters/vllm") not in sys.path:
+        sys.path.insert(0, str(ROOT / "adapters/vllm"))
+    from verity_vllm.engine.profiles.stand_in import stand_in
+
+    try:
+        cfg = stand_in(out, tokenizer_from=tokenizer_from, **model.stand_in)
+    except (FileNotFoundError, ValueError) as e:
+        raise SystemExit(f"standin: {e}") from None
+    print(f"[serve-tax] {model.served}: {cfg['num_hidden_layers']} layers, {cfg['n_routed_experts']} experts, "
+          f"{cfg['num_attention_heads']} heads, the tokenizer of {tokenizer_from}, in {out}", flush=True)
+    return 0
 
 
 def corpus():
@@ -1801,7 +1843,7 @@ def serve(a: argparse.Namespace, private: Path | None) -> int:
     if no_nvml:
         print(f"[serve-tax] no busy GPU-seconds: {no_nvml}", flush=True)
     meta = {"schema": SCHEMA, "arm": a.arm, "what": arm.what, "parent": arm.parent, "model_id": a.model_id,
-            "model": f"{model.repo}@{model.revision}", "checkpoint": str(checkpoint), "server_argv": argv[1:],
+            "model": model.ref, "checkpoint": str(checkpoint), "server_argv": argv[1:],
             "front_end": front,
             "plugin": list(arm.plugin), "env": arm.env, "settings": value_settings(env), "tick": tick, "window_s": a.window_s, "kv_window_s": a.kv_window_s, "rates": rates, "reps": a.reps, "plan": a.plan,
             "lifetime": a.lifetime, "left_out": a.leave_out,
@@ -2176,7 +2218,7 @@ def certified_server(a: argparse.Namespace, popen: Callable[..., subprocess.Pope
         shutil.rmtree(out / ".site", ignore_errors=True)
         raise
     rec = {"schema": SCHEMA, "arm": a.arm, "what": arm.what, "side": SERVER, "model_id": a.model_id,
-           "model": f"{model.repo}@{model.revision}", "checkpoint": str(checkpoint), "server_argv": argv[1:],
+           "model": model.ref, "checkpoint": str(checkpoint), "server_argv": argv[1:],
            "front_argv": front[1:], "plugin": list(arm.plugin), "general": entry_points(arm),
            "settings": value_settings(env), "tick": tick, "lifetime": a.lifetime,
            "cells": cells, "stop_at": a.stop_at, "commit": source_commit(), "versions": versions(),
@@ -2273,7 +2315,7 @@ def certified_client(a: argparse.Namespace, run: Callable[..., subprocess.Comple
     cert.mkdir(parents=True, exist_ok=True)
     env = tree_env()
     meta = {"schema": SCHEMA, "arm": a.arm, "what": arm.what, "parent": arm.parent, "side": CLIENT,
-            "model_id": a.model_id, "model": f"{model.repo}@{model.revision}", "checkpoint": str(checkpoint),
+            "model_id": a.model_id, "model": model.ref, "checkpoint": str(checkpoint),
             "plugin": list(arm.plugin), "client": a.client, "reps": a.reps, "lifetime": a.lifetime,
             "left_out": a.leave_out, "seed": a.seed, "sampled": None, "seeded": False,
             "passes": {k: {"load": n, "concurrency": c} for k, (n, c) in passes.items()}, "pass_prompts": sizes,
@@ -3539,7 +3581,7 @@ def cost_report(arms: list[dict], arm: str = OURS, reference: str = REFERENCE, t
                        "arm": c["arm"], "within": within(c),
                        **job(c["load"])} for c in per],
             "commitment": commitment(ours), "certifier": ours.get("certifier"), "arms": rows, "no_arm": list(NO_ARM),
-            "prefix_row": model.prefix_row, "checkpoint": f"{model.repo}@{model.revision}"}
+            "prefix_row": model.prefix_row, "checkpoint": model.ref}
 
 
 def _c(c: dict | None) -> str:
@@ -3863,10 +3905,11 @@ def hardware(model: Model) -> str:
 
 def member(model: Model, arm: str, reference: str | None = None) -> str:
     """A point's ``member``, what tells its line from the lines of the metric's other configurations: the model's
-    served name, this host's card and the arm, over its reference where it has one, lower-case words joined by hyphens
-    (``llama-3.2-1b-h200-record-over-compiled``)."""
+    served name, for a stand-in its random weights and its cards, this host's card and the arm, over its reference where
+    it has one, lower-case words joined by hyphens (``llama-3.2-1b-h200-record-over-compiled``)."""
     kind = card().removeprefix("NVIDIA ").lower().replace(" ", "-")
-    return "-".join((model.served, kind, arm, *(("over", reference) if reference else ())))
+    stand_in = ("random-weights", f"{tp_size(model)}-card") if model.stand_in else ()
+    return "-".join((model.served, *stand_in, kind, arm, *(("over", reference) if reference else ())))
 
 
 def write_result(r: dict, out: Path) -> None:
@@ -3877,6 +3920,8 @@ def write_result(r: dict, out: Path) -> None:
     model = next(m for m in MODELS.values() if m.served == r["model"])
     ok, detail, what, measurements = result_of(r | {"hardware": hardware(model),
                                                     "member": member(model, r["arm"], r["reference"])})
+    if model.stand_in:
+        measurements = [m | {"mark": model.mark, "inputs": [model.mark, *m.get("inputs", ())]} for m in measurements]
     kit()[1].write_result(Path(run_dir), run_id, out, "serving_cost.json", ok, detail, what, measurements)
 
 
@@ -4133,6 +4178,10 @@ def main(argv: list[str] | None = None) -> int:
     f.add_argument("--reps", type=int, required=True)
     c = sub.add_parser("checkpoint", help="the model's pinned snapshot under HF_HOME")
     c.add_argument("--model-id", required=True, choices=sorted(MODELS))
+    c = sub.add_parser("standin", help="a stand-in's checkpoint directory: its cut config and the model's tokenizer")
+    c.add_argument("--model-id", required=True, choices=sorted(n for n, m in MODELS.items() if m.stand_in))
+    c.add_argument("--tokenizer-from", required=True, help="the model's checkpoint, whose tokenizer files are copied")
+    c.add_argument("--out", required=True)
     a = ap.parse_args(argv)
     if a.cmd == "edges":
         windows = edge_windows(a.arm, a.load, a.rep)
@@ -4152,6 +4201,8 @@ def main(argv: list[str] | None = None) -> int:
     if a.cmd == "checkpoint":
         print(MODELS[a.model_id].checkpoint())
         return 0
+    if a.cmd == "standin":
+        return standin(MODELS[a.model_id], Path(a.tokenizer_from), Path(a.out))
     if a.cmd == "plan":
         ck = Path(a.checkpoint) if a.checkpoint else MODELS[a.model_id].checkpoint()
         n = plan_need(parse_rates(a.rates), a.span_s, a.requests)
