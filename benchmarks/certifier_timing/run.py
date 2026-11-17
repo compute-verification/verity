@@ -651,8 +651,10 @@ def record(doc: dict, out: Path, code: int) -> None:
     writer.validation("passed" if code == 0 else "failed", "benchmarks/certifier_timing/run.py", detail,
                       [kept.relative_to(base).as_posix()] if kept.is_relative_to(base) else [])
     if code == 0:
+        one_host = all(c.get("observer_host") in (None, c.get("host")) for c in doc["cases"])
         writer.measurement(METRIC, doc["value"], "bits a release interval", (doc["lower"], doc["upper"]),
-                           mark="measured", extra={"n": doc["n"], "best": doc["best"]})
+                           mark="measured", extra={"cpu": doc["host"]["cpu"], "interval_ms": doc["interval_ms"],
+                                                   "n": doc["n"], "best": doc["best"], "one_host": one_host})
 
 
 if __name__ == "__main__":
