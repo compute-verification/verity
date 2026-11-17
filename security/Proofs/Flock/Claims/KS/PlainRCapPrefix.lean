@@ -48,25 +48,7 @@ import Proofs.Flock.Recursive.HoloRepCoins
 import Proofs.Flock.Soundness.Discharge.Exec.VerifyKJ
 import Proofs.Flock.Soundness.Refine.Seam
 
-/-!
-# The cap two accepted runs of `VR rd` absorb, from the rows before its round
-
-`CapPrefixR rd` (`plain_capPrefixK`'s form at `VR rd`) holds. At `nextR`, a rep's stream rounds are the framed bytes of
-the proof `readRep` fits to the rep's opened rows (`readRep_fits`), and custody makes them the rounds the verdict reads.
-So the decoded proof's chunk at the cap's round has the fitted proof's chunk's bytes (`plainR_capChunk`). That chunk is
-the round's sumcheck message and the cap (`repFrames_capChunk`): the message is the round's absorbed row
-(`FitsRep.elems`), and the cap the round's committed top (`FitsRep.tops`), the `ℓ`-th of the rep's tops
-(`repSchedAt_cap`). Two runs whose coins agree before the plain fork round open the same rows up to it
-(`depMsg_congr`), so their fitted chunks there have the same bytes, and their decoded proofs one cap
-(`capFr_eq_of_chunk`).
-
-* `repSchedAt_cap`: the rep's schedule has `repRounds` rounds, and commits its `ℓ`-th top alone, in an absorbing round,
-  at `preLig + capRound k0 (ℓ + 1)` (evaluated at each `m` below 36, `repRounds_tail`).
-* `repFrames_capChunk`: any proof's frames' chunk at that round is `kFr` of one message, the cap, and one squeeze.
-* `plainR_capChunk`: an accepted run's decoded rep-`r` chunks have the fitted proof's bytes.
-* `capPrefixR`: `CapPrefixR rd`. `plainR_tableBoundAbortLin_R`, `plainR_KSFlockLin_R`: the table bound and
-  `KSFlockLin` at the deployed reader from `PlainRdInR` alone.
--/
+/-! `CapPrefixR rd` holds, so the table bound and `KSFlockLin` at the deployed reader follow from `PlainRdInR` alone. -/
 
 @[expose] public section
 
@@ -77,9 +59,6 @@ open Claims.Bridge.Custody (checksAtJ_ok custody_ok)
 open Claims.Bridge.PlainSample (decideR_sha512)
 open Lean (Json)
 
-/-! ## The rep's schedule at the cap's round -/
-
-/-- Compiled Ligerito's rounds `T` at `sch` commit each recursive cap alone, in an absorbing round, at `capRound`. -/
 def ligTailOk (sch : Flock.Schedule) (T : List Flock.RecVStar.SchedRound) : Bool :=
   T.length == sch.k0 + 5 + 11 * (sch.levels.size - 1) &&
     (List.range (sch.levels.size - 1)).all fun ℓ =>
@@ -87,7 +66,6 @@ def ligTailOk (sch : Flock.Schedule) (T : List Flock.RecVStar.SchedRound) : Bool
         (T.getD (capRound sch.k0 (ℓ + 1)) default).2.1.size == 1 &&
         (T.getD (capRound sch.k0 (ℓ + 1)) default).2.2.2
 
-/-- `repRounds` at `m` returns where `fast100` does, with a tail `ligTailOk` holds of. -/
 def schedOk (m : ℕ) : Bool :=
   match fast100 m, Flock.RecVStar.repRounds m 6 1 with
   | none, _ => true
@@ -105,9 +83,6 @@ theorem repHead_tops (m kLog claims : ℕ) :
     ((FlockC3.Compose.repHead m kLog claims).toList.map (·.2.1.size)).sum = 0 := by
   simp [FlockC3.Compose.repHead, List.map_replicate]
 
-/-- **The rep's schedule commits its `ℓ`-th top alone, in an absorbing round, at the cap's round**: table `st`'s rep
-schedule has `repRounds false spec st` rounds; the rounds before `preLig + capRound k0 (ℓ + 1)` commit `ℓ` tops, and
-that round one, and it absorbs. -/
 theorem repSchedAt_cap {spec : SessionSpec} {st : Stmt} {sch : Flock.Schedule} (hsch : fast100 st.m = some sch) :
     (RecDeploy.repSchedAt spec st).length = repRounds false spec st ∧
       ∀ ℓ, ℓ + 1 < sch.levels.size →
@@ -159,8 +134,6 @@ theorem repSchedAt_cap {spec : SessionSpec} {st : Stmt} {sch : Flock.Schedule} (
       rw [List.take_append, List.take_of_length_le (by omega), hH, Nat.add_sub_cancel_left, List.map_append,
         List.sum_append_nat, repHead_tops, hsum, Nat.zero_add]
 
-/-! ## A proof's frames at the cap's round -/
-
 theorem chunks_nc : ∀ B : List Frame, B.countP closes = 0 → chunks B = ([], B)
   | [], _ => rfl
   | f :: fs, h => by
@@ -183,7 +156,6 @@ theorem pend_close (zs : List Frame) {s : Frame} (hs : closes s = true) : (chunk
   rw [e]
   rfl
 
-/-- **The frames pending after a run of folding challenges are its last message's.** -/
 theorem pend_chFr (p : LigeritoProof) : ∀ (k msg : ℕ) (pre : List Frame), (chunks pre).2 = [] →
     (chunks (pre ++ (kFr p.messages[msg]! ++ chFr p (msg + 1) k))).2 = kFr p.messages[msg + k]!
   | 0, msg, pre, hX => by
@@ -195,15 +167,11 @@ theorem pend_chFr (p : LigeritoProof) : ∀ (k msg : ℕ) (pre : List Frame), (c
       simp only [chFr, List.append_assoc, List.cons_append, List.nil_append]
     rw [e, pend_chFr p k (msg + 1) _ (pend_close _ (by simp [closes])), show msg + 1 + k = msg + (k + 1) by omega]
 
-/-- The sumcheck message the round absorbing the `ℓ`-th recursive cap carries. -/
 def capMsg (k0 ℓ : ℕ) : ℕ := if ℓ = 0 then k0 else k0 + 7 + 7 * (ℓ - 1)
 
-/-- The squeeze that closes the round absorbing the `ℓ`-th recursive cap. -/
 def capSq (sch : Flock.Schedule) (ℓ : ℕ) : Frame :=
   if ℓ = 0 then .sq 2 (sch.n - sch.k0 + 1) else .sq 2 ((sch.levels.getD ℓ default).cols + 1)
 
-/-- **A proof's frames' round absorbing its `ℓ`-th recursive cap** (`repFrames_capSplit`'s split, finer): for any
-proof and `T`, the round `preLig + capRound k0 (ℓ + 1)` is `kFr` of message `capMsg k0 ℓ`, the cap, and `capSq`. -/
 theorem repFrames_capChunk (st : Setup) (sch : Flock.Schedule) (domain : ByteArray) (n : ℕ) (p : Proof) (T : F128)
     (hm : 14 ≤ st.m) (hn : n ≠ 0) (hn0 : sch.n ≠ 0) (hq : ∀ i < sch.levels.size, (sch.levels.getD i default).q ≠ 0)
     {ℓ : ℕ} (hℓ : ℓ + 1 < sch.levels.size) :
@@ -294,9 +262,6 @@ theorem repFrames_capChunk (st : Setup) (sch : Flock.Schedule) (domain : ByteArr
       show sch.k0 + 4 + 7 * i + 3 = sch.k0 + 7 + 7 * i by omega]
     simp [capMsg, capSq]
 
-/-! ## An accepted run's decoded rep, round by round -/
-
-/-- The first two lists' entries in a flattening, by list and position. -/
 theorem flat_two_list {α : Type} (L : List (List α)) {n r j : ℕ} (h0 : (L.getD 0 []).length = n) (hr : r < 2)
     (hj : j < (L.getD r []).length) : L.flatten[r * n + j]? = (L.getD r [])[j]? := by
   subst h0
@@ -315,14 +280,6 @@ theorem flat_two_list {α : Type} (L : List (List α)) {n r j : ℕ} (h0 : (L.ge
       rw [Nat.one_mul, List.getElem?_append_right (Nat.le_add_right _ _), Nat.add_sub_cancel_left]
       exact List.getElem?_append_left hj
 
-/-- **An accepted run of `VR rd` decodes rep `r` to a proof with its read proof's bytes, round by round.** At an
-accepted run deciding at `actR`, rep `r < 2` of table 0's file of the read proofs, decoded at the table's `fast100`
-schedule and `|regions| · points` extra claims, has frames (at some `T`) whose `j`-th chunk has, for every round `j` of
-the rep's `repRounds`, the bytes of the `j`-th chunk of the proof `readRep` fitted to the rep's opened rows (at the
-fit's `T'`): the verdict accepts the rep at the shipped oracle and the table's named scheme, so its stream's rounds
-retained its chunks (`rep_rounds`), and custody makes the stream's rounds the decision's round messages
-(`custody_ok`), which are the fitted proofs' framed bytes, rep by rep (`decR_some`, `readRep_fits`). The fit's context
-is the decoding's. -/
 theorem plainR_capChunk {rd : Claims.Msg → Option FinalP} {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω}
     {c : Fin ((VR rd).k x) → Coin} (h : (Claims.run sha512 P (VR rd) x ω c).out = .acc) {s : Ins}
     {spec : SessionSpec} {sts : Array Stmt} {link : List ByteArray × List ByteArray} {e : Coin}
@@ -490,9 +447,6 @@ theorem plainR_capChunk {rd : Claims.Msg → Option FinalP} {Ω : Type} {P : Cla
     rw [hbytes j hj] at e'
     simpa using e'.symm
 
-/-! ## Two accepted runs' caps -/
-
-/-- **An accepted run's messages are `P`'s along its coins** (`run_depK`'s proof, at `VR rd`). -/
 theorem run_depR (rd : Claims.Msg → Option FinalP) {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω)
     (c : Fin ((VR rd).k x) → Coin) :
     (Claims.run sha512 P (VR rd) x ω c).msgs.map Prod.fst =
@@ -515,7 +469,6 @@ theorem mapM_getElem? {α β : Type} {f : α → Option β} : ∀ {l : List α} 
     | zero => simp [hb]
     | succ t => simpa using mapM_getElem? hr' t
 
-/-- The first two blocks of `cutLens` at two equal leading lengths, by position. -/
 theorem cutLens_two {α : Type} (n : ℕ) (ns : List ℕ) (l : List α) {r j : ℕ} (hr : r < 2) (hj : j < n) :
     ((cutLens (n :: n :: ns) l).getD r [])[j]? = l[r * n + j]? := by
   obtain rfl | rfl : r = 0 ∨ r = 1 := by omega
@@ -539,8 +492,6 @@ theorem repLens_getElem? {spec : SessionSpec} {sts : Array Stmt} {st : Stmt} (hs
   simp only [repLens, List.getElem?_map, List.getElem?_range (show k < 2 * sts.size by omega), Option.map_some]
   rw [show k / 2 = 0 by omega, getElem!_pos sts 0 h0, hst0]
 
-/-- **A flattened zip's first entries read only its first rows**: where `A` and `B` agree below `N`, the flattening of
-`g` over `S` zipped with them agrees below the first `N` rows' widths. -/
 theorem flatMap_zip_congr {σ β γ : Type} (g : σ → β → List γ) (w : σ → ℕ) (hw : ∀ s b, (g s b).length = w s) :
     ∀ (S : List σ) (A B : List β) (N : ℕ), (∀ j < N, A[j]? = B[j]?) → N ≤ A.length →
       ∀ i < ((S.take N).map w).sum,
@@ -579,11 +530,6 @@ theorem vals_capChunk (m : F256 × F256) (cap : Array ByteArray) (sch : Flock.Sc
   unfold capSq
   split <;> rfl
 
-/-- **`CapPrefixR` holds.** At two accepted runs of `VR rd` whose coins agree before the plain fork round, the rows
-they open agree up to the cap's round (`depMsg_congr`), so the proofs `readRep` fits there commit one cap there
-(`FitsRep.tops`, `flatMap_zip_congr`) and absorb one message there (`FitsRep.elems`, `RowsAt.vals_eq`), and their
-chunks there are one (`repFrames_capChunk`). The decoded proofs' chunks there have those bytes (`plainR_capChunk`), so
-they absorb one cap (`capFr_eq_of_chunk`). -/
 theorem capPrefixR (rd : Claims.Msg → Option FinalP) : CapPrefixR rd := by
   intro Ω P x ω c₁ c₂ h₁ h₂ s spec sts st sch r ℓ _ hst hsch hr hℓ hc link₁ link₂ e₁ e₂ mids₁ mids₂ f₁ f₂ p₁ p₂
     hact₁ hact₂ hp₁ hp₂
@@ -706,18 +652,12 @@ theorem capPrefixR (rd : Claims.Msg → Option FinalP) : CapPrefixR rd := by
   rw [hcnt, hT₁ _ hJR, hT₂ _ hJR, hfc cx₁ q₁ T₁' hst₁ hsch₁ hdom₁ hn₁, hfc cx₂ q₂ T₂' hst₂ hsch₂ hdom₂ hn₂, hcap,
     hkf]
 
-/-! ## The table bound at the deployed reader -/
-
-/-- **The table bound at the deployed reader's plain record, from `PlainRdInR` alone**
-(`plainR_tableBoundAbortLin_of_capPrefix` at `capPrefixR`). -/
 theorem plainR_tableBoundAbortLin_R (rd : Claims.Msg → Option FinalP)
     (hIn : ∀ x, ¬ Claims.Flock.NoAcc sha512 (VR rd) x → PlainRdInR rd x) :
     Claims.Recursion.TableBoundAbortLin sha512 (deployPlainR Readable.relation rd) (wordLen false) (wide false)
       CpDep :=
   plainR_tableBoundAbortLin_of_capPrefix rd hIn (capPrefixR rd)
 
-/-- **`KSFlockLin` at the deployed reader's trimmed plain record, from `PlainRdInR` alone**
-(`plainR_KSFlockLin_of_capPrefix` at `capPrefixR`). -/
 theorem plainR_KSFlockLin_R (rd : Claims.Msg → Option FinalP)
     (hIn : ∀ x, ¬ Claims.Flock.NoAcc sha512 (VR rd) x → PlainRdInR rd x) :
     Claims.Recursion.KSFlockLin sha512 (deployPlainTrimR Readable.relation rd) CpDep :=

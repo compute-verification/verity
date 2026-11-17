@@ -36,24 +36,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# The plain table bound at one tape, each slot at read sets, at any leaf
-
-The simulator's chain (`plain_le_sessionsE`, `plain_le_sessionsEU`, `plain_tableBoundθAt_of_simD(U)`) bounds each
-plain fork slot by `Lock.leafE_off_le`'s root. Before that step each slot's term is its per-position off mass at its
-node (`session_sound_of_table_accL_nodeOff`), and averaged over the simulator's tape that is one run's: the chance
-over the deployed coins of reading anything but a table that reads their first `forkRound` coins
-(`plainOffU_le_rd`'s chain). Here that chain is written once, at any model leaf `Lf` and decoders `hdec` at it, so
-that it serves the public and hm96 cases at `leaf512` and the plain-leaf case at `leafPlain`:
-
-* `plainOffL_le_rd`: one slot's term, averaged over the tape, at read sets `rdD` holding every decoded live opening
-  (`plainOffAtU_le_live` then `plainOffU_le_rd`, written at `Lf`: `slotOffRSL_le_offC`, `offC_simAt_le`,
-  `offC_liveStrat_le`).
-* `plain_le_sessionsRawL`: the table bound at one tape from salted sessions after `Commit`, each slot's term raw
-  (`plain_le_sessionsEU`'s proof at `session_sound_of_table_accL_nodeOff`).
-* `plain_accPr_le_rdL`: at the concrete simulator, a run accepts with probability at most `ε_table`, the one-run
-  event's probability, each slot's read-set term and the chance of opening off the table.
--/
+/-! The plain table bound at one tape with each fork slot's term at read sets, written once at any model leaf. -/
 
 @[expose] public section
 
@@ -65,7 +48,6 @@ open Lean (Json)
 
 local notation "𝔽" => FlockLevel3.GF128
 
-/-- Averaging a double sum of terms over `τ`: the double sum of the averages. -/
 theorem mean_sum_sum {τ ι κ : Type} [Fintype τ] (s : Finset ι) (s' : Finset κ) (f : ι → κ → τ → ℝ) :
     (∑ t, ∑ i ∈ s, ∑ k ∈ s', f i k t) / Fintype.card τ = ∑ i ∈ s, ∑ k ∈ s', (∑ t, f i k t) / Fintype.card τ := by
   rw [Finset.sum_comm, Finset.sum_div]
@@ -73,10 +55,6 @@ theorem mean_sum_sum {τ ι κ : Type} [Fintype τ] (s : Finset ι) (s' : Finset
   rw [Finset.sum_comm, Finset.sum_div]
 
 open Classical in
-/-- **A plain slot's term averaged over the tape, at any leaf, is at most the chance over the deployed coins of
-reading anything but a table that reads their first `j`**, at read sets `rdD` that hold every decoded live opening,
-where the simulated strategy reaches the slot's node after `j` coins: `plainOffAtU_le_live` then `plainOffU_le_rd`,
-at `Lf`. -/
 theorem plainOffL_le_rd {x : Claims.Msg} {ins : Ins} {spec : SessionSpec} {st : Stmt}
     (Lf : Merkle.Leaf (List 𝔽) (List UInt8) Refine.Dig Refine.H512) (L : Layout st) (m k0 : ℕ)
     (l₀ l₁ : Accounting.Level) (rest : List Accounting.Level) (ext : ℕ)
@@ -168,9 +146,6 @@ theorem plainOffL_le_rd {x : Claims.Msg} {ins : Ins} {spec : SessionSpec} {st : 
   exact congrArg some hd
 
 open Classical in
-/-- **The plain bound at one tape and table, from salted sessions after `Commit`, each slot's term raw, at any
-leaf**: `plain_le_sessionsEU`'s proof at `session_sound_of_table_accL_nodeOff`, so each plain fork slot keeps its
-per-position off mass at its node, averaged over the mixture. -/
 theorem plain_le_sessionsRawLK (keep : Bool → Bool) {x : Claims.Msg} {spec : SessionSpec} {st : Stmt}
     (Lf : Merkle.Leaf (List 𝔽) (List UInt8) Refine.Dig Refine.H512) (h : tables false x = [(spec, st)])
     (L : Layout st) (m k0 : ℕ) (l₀ l₁ : Accounting.Level) (rest : List Accounting.Level) (ext : ℕ)
@@ -280,7 +255,6 @@ theorem plain_le_sessionsRawLK (keep : Bool → Bool) {x : Claims.Msg} {spec : S
     · exact Or.inl ⟨hr, hq⟩
   linarith [hsplit, hacc, hdiv]
 
-/-- `plain_le_sessionsRawLK` at the deployed plain verifier (`keep := id`). -/
 theorem plain_le_sessionsRawL {x : Claims.Msg} {spec : SessionSpec} {st : Stmt}
     (Lf : Merkle.Leaf (List 𝔽) (List UInt8) Refine.Dig Refine.H512) (h : tables false x = [(spec, st)])
     (L : Layout st) (m k0 : ℕ) (l₀ l₁ : Accounting.Level) (rest : List Accounting.Level) (ext : ℕ)
@@ -320,13 +294,6 @@ theorem plain_le_sessionsRawL {x : Claims.Msg} {spec : SessionSpec} {st : Stmt}
   plain_le_sessionsRawLK id (x := x) (spec := spec) (st := st) (Lf := Lf) (h := h) (L := L) (m := m) (k0 := k0) (l₀ := l₀) (l₁ := l₁) (rest := rest) (ext := ext) (hsch := hsch) (hk0 := hk0) (hm := hm) (hlay := hlay) (Ω := Ω) (P := P) (ω := ω) (C := C) (hT := hT) (τ := τ) (cap₀ := cap₀) (σ := σ) (hacc := hacc)
 
 open Classical in
-/-- **A plain run accepts with probability at most `ε_table`, its one-run event's, each slot's read-set term and
-that of opening off the table**, at the concrete simulator at any leaf `Lf`, its decoders `hdec` and openings `opn`,
-at a table off which the model statement isn't committed: `plain_le_sessionsRawL` at the simulated strategies
-(`plain_first_of_simD`, `mean_live_le_simAt`), the self-clash through the live one to the one-run event
-(`mean_selfClash_le_live`, `liveMix_le_Pr`), and each slot's term by `plainOffL_le_rd` at the slot's fork round,
-where the simulated strategy meets the slot (`hslot`), at read sets holding every decoded opening (`hrel`) and
-tables that read only the coins before that round (`hwj`). -/
 theorem plain_accPr_le_rdL {x : Claims.Msg} {ins : Ins} {spec : SessionSpec} {sts : Array Stmt} {st : Stmt}
     (Lf : Merkle.Leaf (List 𝔽) (List UInt8) Refine.Dig Refine.H512) (hset : setupOf false x = some (ins, spec, sts))
     (h : tables false x = [(spec, st)]) {d : Json} (hd : ins.read.draw = some d) (L : Layout st) (m k0 : ℕ)

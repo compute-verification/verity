@@ -3,27 +3,7 @@ module
 public import Proofs.Flock.Claims.KS.ForkAlign
 public import Proofs.Flock.Claims.KS.PlainForkClash
 
-/-!
-# The simulated fork's alignment, from the slot's coin count
-
-`PlainAlignQ` compares the fork at rep `r`'s level-`ℓ + 1` table node against the simulated strategy after `Commit`
-(`plainAdvAt`, `Lock.forkE`) with the fork after `plainJ r ℓ` coins of `ForkEvL`. By `Lock.forkE_le_forkC` the
-comparison is the alignment alone, since the session's leaves record the cap of the entry they hold:
-
-* `capAtL_of_sessRelL`: an outcome the session's leaf relation relates to an index holding rep `r`'s level-`ℓ + 1`
-  entry with cap `d`, and which opens a position at `d` there, records `d` as that rep's level-`ℓ + 1` cap
-  (`RecStruct`);
-* `sessFork_le`: so at that entry the session's fork event at the slot (`advRSL`'s) is `ForkEvL`'s;
-* `SlotRSL`, `advRSL_le_forkC`: where the strategy reaches the slot's node after `j` coins (`Lock.SlotAt` at
-  `advRSL`'s lockstep), `advRSL` is at most the fork after `j` coins of `ForkEvL`;
-* `opRL_of_nul`, `not_conflictAt_nul`, `opens_of_outN_bind`, `opens_of_outN_sessAfterL`, `slotAt_answerWith_nul`,
-  `slotRSL_answerWith_nul`: a dead branch, which answers the openings with `nulOp`, reaches only empty rows, so two of
-  its runs never conflict and it meets `Lock.SlotAt` by `nul` at any number of coins (`Lock.forkE_answerWith`);
-* `PlainSlotAlign`, `plainForkAlign_of_slot`: so `PlainForkAlign` holds where the simulated strategy reaches each
-  plain fork slot after `plainJ r ℓ` coins.
-* `PlainSlotQK`, `plainAlignQ_of_slotK`, `PlainSlotAlignK`, `plainForkAlign_of_slotK`: the same at `VK keep`
-  (`plainSimAtK keep`, `plain_hdecAtK keep`, `plain_hdecHAtK keep`).
--/
+/-! The simulated fork's alignment (`PlainForkAlign`), from the coins after which the simulated strategy reaches each plain fork slot. -/
 
 @[expose] public section
 
@@ -37,10 +17,6 @@ open Lean (Json)
 
 local notation "𝔽" => FlockLevel3.GF128
 
-/-- **A leaf records the cap of the entry it holds** where it opens a position at it: an outcome the session's leaf
-relation relates to an index holding rep `r`'s level-`ℓ + 1` entry `(t, d)`, opening a position at `d` at that level,
-has `d` as rep `r`'s recorded level-`ℓ + 1` cap, since the opening is a request at level `ℓ + 1`, which `RecStruct`
-pairs with the entry's cap. -/
 theorem capAtL_of_sessRelL {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [Inhabited D] [Inhabited Sl]
     {A : Model.Arith 𝔽 K} {Hc : List UInt8 → D} {E : Merkle.Enc (List 𝔽) D} {Lf : Merkle.Leaf (List 𝔽) Sl D Hc}
     {S : Model.Statement} {sch : FlockSoundness.Accounting.Schedule} {C₀ : Model.Oracle 𝔽} {cap₀ : Model.Cap D}
@@ -90,9 +66,6 @@ theorem capAtL_of_sessRelL {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K]
     simp only [one_ne_zero, ↓reduceIte] at hmem
     exact key _ _ hs₁ hmem hi
 
-/-- **At the slot's entry the session's fork event is `ForkEvL`**: two outcomes the session relates to indices holding
-rep `r`'s level-`ℓ + 1` entry `(t, d)` and opening a position at `d` there to different rows record `d` as that cap in
-both. -/
 theorem sessFork_le {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [Inhabited D] [Inhabited Sl]
     (A : Model.Arith 𝔽 K) (Hc : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D) (Lf : Merkle.Leaf (List 𝔽) Sl D Hc)
     (S : Model.Statement) (sch : FlockSoundness.Accounting.Schedule) (C₀ : Model.Oracle 𝔽) (cap₀ : Model.Cap D) (r : Fin 2)
@@ -109,8 +82,6 @@ theorem sessFork_le {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [Inhab
   ind_le_ind fun ⟨p, hs₁, hs₂, hne⟩ =>
     ⟨d, capAtL_of_sessRelL h₁ hg₁ hs₁, capAtL_of_sessRelL h₂ hg₂ hs₂, p, hs₁, hs₂, hne⟩
 
-/-- **The strategy reaches rep `r`'s level-`ℓ + 1` table node after `j` coins** in the session after `Commit`:
-`Lock.SlotAt` at `advRSL`'s chooser, slot, fork event and lockstep. -/
 def SlotRSL {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [Inhabited D] [Inhabited Sl]
     (A : Model.Arith 𝔽 K) (Hc : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D) (Lf : Merkle.Leaf (List 𝔽) Sl D Hc)
     (S : Model.Statement) (m k0 : ℕ) (l₀ l₁ : Accounting.Level) (rest : List Accounting.Level) (ext : ℕ)
@@ -122,8 +93,6 @@ def SlotRSL {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [Inhabited D] 
         opRL Hc E Lf ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ r (ℓ + 1) d (outs.getD 0 dfltOutL)) x p) (b, b'))
     j (lockSessL A Hc E Lf S m k0 l₀ l₁ rest ext hk0 hm ptLocal mPts [] [] default cap₀) σ
 
-/-- **`Adv_{r,ℓ+1}` in the session is at most the fork after `j` coins of `ForkEvL`** where the strategy reaches rep
-`r`'s level-`ℓ + 1` table node after `j` coins. -/
 theorem advRSL_le_forkC {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [Inhabited D] [Inhabited Sl]
     (A : Model.Arith 𝔽 K) (Hc : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D) (Lf : Merkle.Leaf (List 𝔽) Sl D Hc)
     (S : Model.Statement) (m k0 : ℕ) (l₀ l₁ : Accounting.Level) (rest : List Accounting.Level) (ext : ℕ)
@@ -137,8 +106,6 @@ theorem advRSL_le_forkC {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [I
     (fun t d i₁ a₁ b₁ i₂ a₂ b₂ h₁ h₂ hg₁ hg₂ =>
       sessFork_le A Hc E Lf S _ default cap₀ r ℓ t d i₁ a₁ b₁ i₂ a₂ b₂ h₁ h₂ hg₁ hg₂) h
 
-/-- **Empty rows open only the empty row**: where every opening of an output has an empty row, every position its
-rep-`r` level-`ℓ` openings open at a cap opens to the empty row. -/
 theorem opRL_of_nul {D Sl : Type} (Hc : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D)
     (Lf : Merkle.Leaf (List 𝔽) Sl D Hc) (sch : FlockSoundness.Accounting.Schedule) (r ℓ : ℕ) (cap : Model.Cap D)
     {out : Model.OutCL 𝔽 D Sl} (ho : ∀ r ℓ i, (out.opens r ℓ i).1 = []) (p : Fin (2 ^ (lvOf sch ℓ).logLen))
@@ -153,7 +120,6 @@ theorem opRL_of_nul {D Sl : Type} (Hc : List UInt8 → D) (E : Merkle.Enc (List 
   · obtain ⟨pj, -, rfl⟩ := List.mem_map.1 hmem
     simp only [ho]
 
-/-- **Two runs with empty rows never conflict** at a position of a cap. -/
 theorem not_conflictAt_nul {D Sl : Type} [Inhabited D] [Inhabited Sl] (Hc : List UInt8 → D)
     (E : Merkle.Enc (List 𝔽) D) (Lf : Merkle.Leaf (List 𝔽) Sl D Hc) (sch : FlockSoundness.Accounting.Schedule) (r ℓ : ℕ)
     (cap : Model.Cap D) {b b' : List (Model.OutCL 𝔽 D Sl)}
@@ -167,8 +133,6 @@ theorem not_conflictAt_nul {D Sl : Type} [Inhabited D] [Inhabited Sl] (Hc : List
   exact hne (by
     rw [hv, hv', opRL_of_nul Hc E Lf sch r ℓ cap hb p hv, opRL_of_nul Hc E Lf sch r ℓ cap hb' p hv'])
 
-/-- **Openings answered with `nulOp` are empty**: an outcome of a game ending in an openings message, reached with
-that message `nulOp`, has empty rows. -/
 theorem opens_of_outN_bind {D Sl P : Type} [Inhabited Sl]
     (mk : P → Model.Opens 𝔽 D × Model.Salts Sl → Model.OutCL 𝔽 D Sl) (hmk : ∀ p os, (mk p os).opens = os.1)
     {h : Game P} {o : Model.OutCL 𝔽 D Sl}
@@ -187,7 +151,6 @@ theorem outN_batch_one {Op A : Type} {nul : Op} {g : Game A} {outs : List A} (d 
   cases Claims.Bridge.OutN.of_batch h with
   | cons hg hr => cases hr; exact hg
 
-/-- **The session after `Commit`, answered with `nulOp`, reaches only empty rows.** -/
 theorem opens_of_outN_sessAfterL {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [Inhabited D]
     [Inhabited Sl] (A : Model.Arith 𝔽 K) (Hc : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D)
     (Lf : Merkle.Leaf (List 𝔽) Sl D Hc) (S : Model.Statement) (sch : FlockSoundness.Accounting.Schedule) (hm : 13 ≤ S.m)
@@ -209,9 +172,6 @@ theorem allInh_sessAfterL {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] 
     (AllInh.bind (fun _ => .send ⟨nulOp (D := D) (Sl := Sl)⟩ fun _ => .ret _)
       (AllInh.interleave (Model.allInh_repC A 0 S sch hm _) (Model.allInh_repC A 1 S sch hm _))) (.ret []))
 
-/-- **A dead branch meets `SlotAt` by `nul`**: below any lockstep whose compiled game reaches, with the openings
-`nulOp`, only outcomes with empty rows, `answerWith nulOp` forks to `0` at the conflict event of any cap's openings,
-whatever the chooser and the number of coins. -/
 theorem slotAt_answerWith_nul {D Sl T I α : Type} [Inhabited D] [Inhabited Sl] (Hc : List UInt8 → D)
     (E : Merkle.Enc (List 𝔽) D) (Lf : Merkle.Leaf (List 𝔽) Sl D Hc) (sch : FlockSoundness.Accounting.Schedule)
     (plur : Lock.Chooser T (Model.Cap D) (List (Model.OutCL 𝔽 D Sl))) (slot r ℓ j : ℕ)
@@ -226,8 +186,6 @@ theorem slotAt_answerWith_nul {D Sl T I α : Type} [Inhabited D] [Inhabited Sl] 
   .nul (Lock.forkE_answerWith plur slot _ L hg (fun d b b' hb hb' =>
     ite_eq_right fun ⟨p, hp⟩ => not_conflictAt_nul Hc E Lf sch r ℓ d (hN b hb) (hN b' hb') p hp) σ)
 
-/-- **A strategy after `Commit` answering the openings with `nulOp` meets `SlotRSL`** at every rep, level and number
-of coins. -/
 theorem slotRSL_answerWith_nul {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [Inhabited D] [Inhabited Sl]
     (A : Model.Arith 𝔽 K) (Hc : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D) (Lf : Merkle.Leaf (List 𝔽) Sl D Hc)
     (S : Model.Statement) (m k0 : ℕ) (l₀ l₁ : Accounting.Level) (rest : List Accounting.Level) (ext : ℕ)
@@ -238,8 +196,6 @@ theorem slotRSL_answerWith_nul {K D Sl : Type} [Field K] [Fintype K] [DecidableE
   slotAt_answerWith_nul Hc E Lf _ _ _ r (ℓ + 1) j _ (allInh_sessAfterL A Hc E Lf S _ hm ptLocal mPts cap₀)
     (fun _ hb => opens_of_outN_sessAfterL A Hc E Lf S _ hm ptLocal mPts cap₀ hb) σ
 
-/-- **The simulated strategy reaches the plain fork slot after `plainJ r ℓ` coins**, at tape `u`: `SlotRSL` at rep
-`r`'s level-`ℓ + 1` table node against `plainSimAt`. -/
 def PlainSlotQ {spec : SessionSpec} {st : Stmt} (L : Layout st) (m k0 : ℕ) (l₀ l₁ : Accounting.Level)
     (rest : List Accounting.Level) (ext : ℕ) (hsch : Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩)
     (hk0 : l₀.lanes = k0) (hm : 13 ≤ (L.model (Refine.regionsOf st)).m)
@@ -264,9 +220,6 @@ theorem plainAlignQ_of_slot {spec : SessionSpec} {st : Stmt} {L : Layout st} {m 
     PlainAlignQ L m k0 l₀ l₁ rest ext hsch hk0 hm hlay I d x opn hdec hw P ω C r ℓ j u :=
   advRSL_le_forkC _ _ _ _ _ m k0 l₀ l₁ rest ext hk0 hm _ _ _ r ℓ.val j _ h
 
-/-- **The simulated strategy reaches each plain fork slot after `plainJ r ℓ` coins**: `PlainForkAlign` with
-`PlainSlotQ` for `PlainAlignQ`, at every plain statement in scope, its one table's `fast100` schedule and the plain
-decoders where the outputs are public and where they are hidden under hm96 leaves. -/
 def PlainSlotAlign (x : Claims.Msg) : Prop :=
   ∀ (s : Claims.Flock.Stmt) (hs : parse false Readable.relation x = some s) (hin : Claims.Flock.InScope false s)
     (ins : Ins) (spec : SessionSpec) (sts : Array Stmt) (hset : setupOf false x = some (ins, spec, sts)) (st : Stmt)
@@ -293,9 +246,6 @@ theorem plainForkAlign_of_slot {x : Claims.Msg} (h : PlainSlotAlign x) : PlainFo
       fun hh hl C r ℓ u => plainAlignQ_of_slot
         ((h s hs hin ins spec sts hset st ht d hd L m k0 l₀ l₁ rest ext hsch hk0 hm hlay Ω P ω).2 hh hl C r ℓ u)⟩
 
-/-! ## At `VK keep` -/
-
-/-- `PlainSlotQ` at `VK keep`. -/
 def PlainSlotQK (keep : Bool → Bool) {spec : SessionSpec} {st : Stmt} (L : Layout st) (m k0 : ℕ) (l₀ l₁ : Accounting.Level)
     (rest : List Accounting.Level) (ext : ℕ) (hsch : Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩)
     (hk0 : l₀.lanes = k0) (hm : 13 ≤ (L.model (Refine.regionsOf st)).m)
@@ -308,7 +258,6 @@ def PlainSlotQK (keep : Bool → Bool) {spec : SessionSpec} {st : Stmt} (L : Lay
     hm PT_LOCAL spec.mPts (capOfRoot (plainRoot P x ω)[0]!) r.val ℓ.val j
     (plainSimAtK keep L m k0 l₀ l₁ rest ext hsch hm hlay I d x opn hdec hw P ω C u)
 
-/-- `plainAlignQ_of_slot` at `VK keep`. -/
 theorem plainAlignQ_of_slotK (keep : Bool → Bool) {spec : SessionSpec} {st : Stmt} {L : Layout st} {m k0 : ℕ} {l₀ l₁ : Accounting.Level}
     {rest : List Accounting.Level} {ext : ℕ} {hsch : Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩}
     {hk0 : l₀.lanes = k0} {hm : 13 ≤ (L.model (Refine.regionsOf st)).m}
@@ -321,7 +270,6 @@ theorem plainAlignQ_of_slotK (keep : Bool → Bool) {spec : SessionSpec} {st : S
     PlainAlignQK keep L m k0 l₀ l₁ rest ext hsch hk0 hm hlay I d x opn hdec hw P ω C r ℓ j u :=
   advRSL_le_forkC _ _ _ _ _ m k0 l₀ l₁ rest ext hk0 hm _ _ _ r ℓ.val j _ h
 
-/-- `PlainSlotAlign` at `VK keep`. -/
 def PlainSlotAlignK (keep : Bool → Bool) (x : Claims.Msg) : Prop :=
   ∀ (s : Claims.Flock.Stmt) (hs : parse false Readable.relation x = some s) (hin : Claims.Flock.InScope false s)
     (ins : Ins) (spec : SessionSpec) (sts : Array Stmt) (hset : setupOf false x = some (ins, spec, sts)) (st : Stmt)
@@ -341,7 +289,6 @@ def PlainSlotAlignK (keep : Bool → Bool) (x : Claims.Msg) : Prop :=
         (plain_hdecHAtK keep hs hin hset h hh hl hd L m k0 l₀ l₁ rest ext hsch hm hlay) (plain_mPts hs hin hset).1 P ω C r ℓ
         (plainJ (x := x) (tables_head_one h) hsch r ℓ).val u)
 
-/-- `plainForkAlign_of_slot` at `VK keep`. -/
 theorem plainForkAlign_of_slotK (keep : Bool → Bool) {x : Claims.Msg} (h : PlainSlotAlignK keep x) : PlainForkAlignK keep x :=
   fun s hs hin ins spec sts hset st ht d hd L m k0 l₀ l₁ rest ext hsch hk0 hm hlay Ω P ω =>
     ⟨fun hh C r ℓ u => plainAlignQ_of_slotK keep

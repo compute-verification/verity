@@ -35,26 +35,12 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import VCVio.Prelude.Core
 
-/-!
-# A slot's coin count through two interleaved locksteps, under a schedule that leads with the first
-
-`Dist` fixes a slot's coin count inside one lockstep. Two locksteps interleaved (`interleaveLock`) meet a slot of either
-after a count that depends on the choices the strategy makes at `interleave`'s nodes. Where the strategy advances the
-first game at every choice until it ends, after exactly `n` coins (`Lead`), or plays a part of the run whose every
-reached outcome is `Dead` (`Lead.dead`, `Reach`), a continuation with no table node of the slot after both:
-
-* `forkE_of_reach`: the fork is `0` against a strategy reaching only `Dead` outcomes where `Φ` vanishes on two of them;
-* `NoSlot.interleaveLock`, `Dist.embedLeft`, `Dist.embedRight`, `Dist.interleaveLock_ret`, `Dist.bind_noSlot`: no table
-  node of the slot, and a distance, survive interleaving and a continuation with no such node;
-* `SlotAt.lead_fst`: a slot of the first lockstep at distance `j` is met after `j` coins;
-* `SlotAt.lead_snd`: a slot of the second at distance `j` is met after `n + j` coins.
--/
+/-! A slot's coin count through two interleaved locksteps, under a strategy that leads with the first. -/
 
 @[expose] public section
 
 namespace FlockSoundness.Game.Lock
 
-/-- **An outcome `σ` reaches in `g`**, at some coins. -/
 def Reach {β : Type} : (g : Game β) → Strategy g → β → Prop
   | .ret b, _, b' => b = b'
   | .send _ k, σ, b' => Reach (k σ.1) σ.2 b'
@@ -68,7 +54,6 @@ theorem expect_of_reach {β : Type} {f : β → ℝ} :
       simp only [expect]
       rw [Finset.sum_eq_zero fun c _ => expect_of_reach (k c) (σ c) fun b hb => h b ⟨c, hb⟩, zero_div]
 
-/-- **Against a strategy reaching only `Dead` outcomes the fork is `0`**, where `Φ` vanishes on two `Dead` outcomes. -/
 theorem forkE_of_reach {T D I α β : Type} {get : I → ℕ → Option (T × D)} {R : I → α → β → Prop}
     (plur : Chooser T D β) (slot : ℕ) {Φ : D → β → β → ℝ} {Dead : β → Prop}
     (hΦ : ∀ d b b', Dead b → Dead b' → Φ d b b' = 0) :
@@ -86,7 +71,6 @@ theorem forkE_of_reach {T D I α β : Type} {get : I → ℕ → Option (T × D)
       · exact expect_of_reach _ _ fun b hb => expect_of_reach _ _ fun b' hb' => hΦ _ _ _ (h b hb) (h b' hb')
       · exact forkE_of_reach plur slot hΦ _ σ'.2 h
 
-/-- **Sequencing a distance with a continuation that has no table node of the slot** keeps the distance. -/
 theorem Dist.bind_noSlot {T D I α β α₂ β₂ : Type} {get : I → ℕ → Option (T × D)} {R : I → α → β → Prop}
     {R₂ : I → α₂ → β₂ → Prop} {f : α → Game α₂} {f' : β → Game β₂} {slot j : ℕ}
     {h : ∀ i a b, R i a b → Lock T D get R₂ i (f a) (f' b)} (hK : ∀ i a b (hr : R i a b), NoSlot slot (h i a b hr))
@@ -141,7 +125,6 @@ theorem Dist.embedRight {i₁ : I₁} {a₁ : α₁} {b₁ : β₁} (h₁ : R₁
   | here => exact .here
   | noSlot h0 => exact .noSlot (h0.embedRight hd h₁)
 
-/-- **Interleaving with a finished lockstep keeps a distance.** -/
 theorem Dist.interleaveLock_ret {i₂ : I₂} {a₂ : α₂} {b₂ : β₂} (h₂ : R₂ i₂ a₂ b₂) {j : ℕ} {i₁ : I₁}
     {g₁ : Game α₁} {g₁' : Game β₁} {L : Lock T D get₁ R₁ i₁ g₁ g₁'} (hL : Dist slot j L) :
     Dist slot j (interleaveLock hd L (.ret h₂)) := by
@@ -180,7 +163,6 @@ theorem NoSlot.lockWith {i₁ : I₁} {adv₁ : Game α₂ → Game (α₁ × α
       cases b
       exacts [.table s hne ih, hA _ (.table s hne ht)]
 
-/-- **Two locksteps with no table node of the slot interleave to none.** -/
 theorem NoSlot.interleaveLock {i₁ : I₁} {g₁ : Game α₁} {g₁' : Game β₁} {L₁ : Lock T D get₁ R₁ i₁ g₁ g₁'}
     (h₁ : NoSlot slot L₁) : ∀ {i₂ : I₂} {g₂ : Game α₂} {g₂' : Game β₂} {L₂ : Lock T D get₂ R₂ i₂ g₂ g₂'},
       NoSlot slot L₂ → NoSlot slot (interleaveLock hd L₁ L₂) := by
@@ -210,9 +192,6 @@ theorem NoSlot.interleaveLock {i₁ : I₁} {g₁ : Game α₁} {g₁' : Game β
 
 end Interleave
 
-/-- **The strategy leads with the first game**: at every choice of `interleave` it advances the first game, which ends
-after exactly `n` coins (`done`), until the second has ended (`last`), except below a part of the run every reached
-outcome of which is `Dead` (`dead`). -/
 inductive Lead {α β γ : Type} (f : α × β → Game γ) (Dead : γ → Prop) :
     ℕ → (g₁ : Game α) → (g₂ : Game β) → Strategy ((interleave g₁ g₂).bind f) → Prop
   | dead {n : ℕ} {g₁ : Game α} {g₂ : Game β} {σ : Strategy ((interleave g₁ g₂).bind f)} :
@@ -243,7 +222,6 @@ variable {T D α₁ β₁ α₂ β₂ I₁ I₂ γ γ' : Type} {get₁ : I₁ �
 
 include hd
 
-/-- **A slot of the first lockstep at distance `j` is met after `j` coins** by a strategy leading with it. -/
 theorem SlotAt.lead_fst (hΦ : ∀ d b b', Dead b → Dead b' → Φ d b b' = 0)
     (hKn : ∀ i a b (hr : RPair R₁ R₂ i a b), NoSlot slot (hK i a b hr)) {n : ℕ} {g₁' : Game β₁} {g₂' : Game β₂}
     {σ : Strategy ((interleave g₁' g₂').bind f')} (hS : Lead f' Dead n g₁' g₂' σ) :
@@ -357,8 +335,6 @@ theorem SlotAt.lead_fst (hΦ : ∀ d b b', Dead b → Dead b' → Φ d b b' = 0)
             exact .here _
         | noSlot h0 => exact .of_noSlot ((h0.interleaveLock hd hN₂).bind hKn) _
 
-/-- **A slot of the second lockstep at distance `j` is met after `n + j` coins** by a strategy leading with the first,
-which ends after `n` coins. -/
 theorem SlotAt.lead_snd (hΦ : ∀ d b b', Dead b → Dead b' → Φ d b b' = 0)
     (hKn : ∀ i a b (hr : RPair R₁ R₂ i a b), NoSlot slot (hK i a b hr)) {n : ℕ} {g₁' : Game β₁} {g₂' : Game β₂}
     {σ : Strategy ((interleave g₁' g₂').bind f')} (hS : Lead f' Dead n g₁' g₂' σ) :

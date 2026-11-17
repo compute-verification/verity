@@ -34,15 +34,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.KS.PlainLive
 
-/-!
-# The plain simulator's schedule at `VK keep`
-
-`PlainSched`'s `PlainSchedAlign` and `plainSlotAlign_of_sched`, `PlainLead`'s `leadsAfter_plainSimAt` and `PlainLive`'s
-`plainSchedAlign`, over the verifier `VK keep`:
-
-* `PlainSchedAlignK`, `plainSlotAlign_of_schedK`: `PlainSlotAlignK` holds where the simulated strategy leads.
-* `leadsAfter_plainSimAtK`, `plainSchedAlignK`: it leads at every statement.
--/
+/-! `PlainSched`'s, `PlainLead`'s and `PlainLive`'s schedule at `VK keep`. -/
 
 @[expose] public section
 
@@ -56,7 +48,6 @@ open Lean (Json)
 
 local notation "𝔽" => FlockLevel3.GF128
 
-/-- `PlainSchedAlign` at `VK keep`. -/
 def PlainSchedAlignK (keep : Bool → Bool) (x : Claims.Msg) : Prop :=
   ∀ (s : Claims.Flock.Stmt) (hs : parse false Readable.relation x = some s) (hin : Claims.Flock.InScope false s)
     (ins : Ins) (spec : SessionSpec) (sts : Array Stmt) (hset : setupOf false x = some (ins, spec, sts)) (st : Stmt)
@@ -78,7 +69,6 @@ def PlainSchedAlignK (keep : Bool → Bool) (x : Claims.Msg) : Prop :=
           (plainOpnH (plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay) ins.read.I d)
           (plain_hdecHAtK keep hs hin hset h hh hl hd L m k0 l₀ l₁ rest ext hsch hm hlay) (plain_mPts hs hin hset).1 P ω C u))
 
-/-- `plainSlotAlign_of_sched` at `VK keep`. -/
 theorem plainSlotAlign_of_schedK (keep : Bool → Bool) {x : Claims.Msg} (h : PlainSchedAlignK keep x) : PlainSlotAlignK keep x :=
   fun s hs hin ins spec sts hset st ht d hd L m k0 l₀ l₁ rest ext hsch hk0 hm hlay Ω P ω =>
     ⟨fun hh C r ℓ u => slotRSL_lead L (plain_mPts hs hin hset).2.2 _ _ _ _ m k0 l₀ l₁ rest ext hsch hk0 hm _ _ _
@@ -86,7 +76,6 @@ theorem plainSlotAlign_of_schedK (keep : Bool → Bool) {x : Claims.Msg} (h : Pl
       fun hh hl C r ℓ u => slotRSL_lead L (plain_mPts hs hin hset).2.2 _ _ _ _ m k0 l₀ l₁ rest ext hsch hk0 hm _ _ _
         ((h s hs hin ins spec sts hset st ht d hd L m k0 l₀ l₁ rest ext hsch hm hlay Ω P ω).2 hh hl C u) r ℓ.val⟩
 
-/-- `leadsAfter_plainSimAt` at `VK keep`. -/
 theorem leadsAfter_plainSimAtK (keep : Bool → Bool) {spec : SessionSpec} {st : Stmt} (L : Layout st) (m k0 : ℕ) (l₀ l₁ : Accounting.Level)
     (rest : List Accounting.Level) (ext : ℕ) (hsch : Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩)
     (hm : 13 ≤ (L.model (Refine.regionsOf st)).m)
@@ -105,7 +94,6 @@ theorem leadsAfter_plainSimAtK (keep : Bool → Bool) {spec : SessionSpec} {st :
     (fun rs _ => capOfRoot rs[0]!) (plainN x) (hdec C (plainRoot P x ω)) (fun _ => rfl) (plainRoot P x ω)
     (plainLiveK keep x spec st hw P ω u) (plainSim_rootK keep P x spec st ω hw u) hS
 
-/-- `plainSchedAlign` at `VK keep`. -/
 theorem plainSchedAlignK (keep : Bool → Bool) (x : Claims.Msg) : PlainSchedAlignK keep x := by
   intro s hs hin ins spec sts hset st ht d hd L m k0 l₀ l₁ rest ext hsch hm hlay Ω P ω
   have hS := fun u => plainLive_schedLK keep hset ht hsch (by simp) (plain_mPts hs hin hset).1 P ω u

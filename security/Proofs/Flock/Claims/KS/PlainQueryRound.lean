@@ -39,23 +39,7 @@ import Proofs.Flock.Soundness.Discharge.Exec.Tables
 import Proofs.Flock.Soundness.Refine.Seam
 import Std.Tactic.BVDecide.Normalize.Bool
 
-/-!
-# Level 0's query round in the plain verifier over the hash oracle
-
-`plainQueryRound m kLog k0 claims` (`Claims.Flock.plainQueryRound`) is the round of a plain rep's stream whose coins are
-level 0's query positions. As `Proofs.Flock.Claims.ZkQueryRound` does for the masked verifier, it is proved here from
-the plain verifier's own transcript, `verifyRepWith hs` run in `V` with any hash oracle `hs`:
-
-* zerocheck consumes `m − 3` rounds (`zerocheckWith_moves`), and lincheck `kLog − 3` on a circuit fold that refuses a
-  point of the wrong length (`lincheckWith_moves`; the statement's fold, `Stmt.folded_size`), the ring switch
-  `claims + 1` (`ZkQuery.ringSwitchWith_moves`);
-* Ligerito flips level 0's query coins after `k0 + 6` rounds of its own: the OOD point and its coin, the `k0` lane
-  challenges, and level 1's two OOD intros (`plainLigeritoWith_query`);
-* so an accepted rep passed level 0's Merkle check on its proof's rows at the positions of round `plainQueryRound` of
-  its stream, against the committed `root_B` (`plainQueryRound_verifyRepWith`), and the reader's columns
-  (`plainRepColsOf`) are those positions with those rows, for every rep of every table of an accepted session
-  (`plainQueryRound_verifyWithM`).
--/
+/-! Level 0's query round `plainQueryRound`, proved from the plain verifier's own transcript under any hash oracle. -/
 
 @[expose] public section
 
@@ -63,9 +47,6 @@ namespace FlockDeploy.KS
 
 open Flock Transcript FlockSoundness FlockSoundness.Refine FlockSoundness.Discharge.Exec FlockSoundness.ZkQuery
 
-/-! ## Phases -/
-
-/-- **Zerocheck's rounds**: `m − 3` (the skip and outer coins, `z`, and `m − 6` sumcheck rounds), at `m ≥ 14`. -/
 theorem zerocheckWith_moves (hs : Hashes Flock.V) (m : ℕ) (digest cap : ByteArray) (p : ZerocheckProof) (hm : 14 ≤ m)
     {t t' : Flock.Transcript} {zc : ZcOut} (h : bindAndZerocheckWith hs m digest cap p t = .ok (zc, t')) :
     t'.rounds = t.rounds ∧ t'.k = t.k + (m - 3) := by
@@ -102,8 +83,6 @@ theorem zerocheckWith_moves (hs : Hashes Flock.V) (m : ℕ) (digest cap : ByteAr
   rw [k₁₂.1, k₁₁.1, hk₁₀, hk₉, k₈.1, k₇.1, hk₆, hk₅, k₄.1, k₃.1, k₂.1, k₁.1]
   omega
 
-/-- **Lincheck's rounds**: `kLog − 3` (`α`, `β`, `kLog − 6` sumcheck rounds and `r′`), on a circuit fold that reads a
-point of `kLog − 6` coordinates; so `kLog ≥ 6`. -/
 theorem lincheckWith_moves (hs : Hashes Flock.V) (c : CircuitFold) (zc : ZcOut) (p : LincheckProof)
     (hf : ∀ a b lw rho ts v, c.folded a b lw rho ts = .ok v → rho.size + 6 = c.kLog)
     {t t' : Flock.Transcript} {lc : LcOut} (h : lincheckWith hs c zc p t = .ok (lc, t')) :
@@ -146,7 +125,6 @@ theorem lincheckWith_moves (hs : Hashes Flock.V) (c : CircuitFold) (zc : ZcOut) 
     rw [hk₇, k₆.1, hk₄, hk₃, hk₂, k₁.1]
     omega
 
-/-- The statement's circuit fold refuses a point whose length is not `kLog − 6`. -/
 theorem Stmt.folded_size (st : Stmt) {a b : F128} {lw rho ts v : Array F128} (h : st.folded a b lw rho ts = .ok v) :
     rho.size + 6 = st.c.kLog := by
   unfold Stmt.folded at h
@@ -163,9 +141,6 @@ theorem Stmt.folded_size (st : Stmt) {a b : F128} {lw rho ts v : Array F128} (h 
     · simp only [Bool.or_eq_true, bne_iff_ne, ne_eq, not_or, not_not] at c
       exact c.1
 
-/-! ## Ligerito up to level 0's queries -/
-
-/-- A Ligerito loop whose every step yields and consumes `c` rounds consumes `n · c` rounds over `n` steps. -/
 theorem lforIn_moves {σ : Type} (body : ℕ → σ → LM (ForInStep σ)) (c : ℕ)
     (hbody : ∀ i s st t b st' t', body i s st t = .ok ((b, st'), t') →
       (∃ s', b = .yield s') ∧ t'.rounds = t.rounds ∧ t'.k = t.k + c) :
@@ -182,7 +157,6 @@ theorem lforIn_moves {σ : Type} (body : ℕ → σ → LM (ForInStep σ)) (c : 
       obtain ⟨hr, hk⟩ := lforIn_moves body c hbody n (a + 1) s₁ st₁ t₁ out st' t' h₂
       exact ⟨hr.trans hr₁, by rw [hk, hk₁, Nat.succ_mul]; omega⟩
 
-/-- `challengeWith`: a lane challenge, one round. -/
 theorem challengeWith_moves (hs : Hashes Flock.V) (p : LigeritoProof) {st st' : LState} {t t' : Flock.Transcript}
     {r : F256} (h : challengeWith hs p st t = .ok ((r, st'), t')) : t'.rounds = t.rounds ∧ t'.k = t.k + 1 := by
   unfold challengeWith at h
@@ -195,8 +169,6 @@ theorem challengeWith_moves (hs : Hashes Flock.V) (p : LigeritoProof) {st st' : 
   obtain ⟨rfl, rfl, rfl⟩ := lpure_ok h
   exact ⟨k₉.2.trans hrR, by rw [k₉.1, hkR]⟩
 
-/-- **Level 0's queries over the oracle**, plain: the Merkle check passes on the proof's level-0 rows at the positions
-of the query coins, round `t.k`'s. -/
 theorem queryLevelWith_mc (hs : Hashes Flock.V) {ms : MerkleScheme} {p : LigeritoProof} {lv : Flock.Level}
     {cap : Array ByteArray} {rows : Array (Array F128)} {sibs salts : Array ByteArray} {fold : Array F256}
     (hq : lv.q ≠ 0) {β : Type} {f : Array ℕ × Array F128 × F256 → LM β} {st st' : LState} {t t' : Flock.Transcript}
@@ -227,9 +199,6 @@ theorem queryLevelWith_mc (hs : Hashes Flock.V) {ms : MerkleScheme} {p : Ligerit
     rw [← k₃.2, ← k₃.1]
     exact ⟨hlt, hmc⟩
 
-/-- **Ligerito's rounds before level 0's queries**, plain: `k0 + 6`. The OOD point and its coin, the `k0` lane
-challenges, and level 1's two OOD intros, two rounds each; so level 0's Merkle check passes at the positions of round
-`t.k + k0 + 6`'s coins. -/
 theorem plainLigeritoWith_query (hs : Hashes Flock.V) (ms : MerkleScheme) (sch : Flock.Schedule) (T : F128)
     (cap : Array ByteArray) (p : LigeritoProof) (basisAt : Array F256 → ℕ → Array F256) {t t' : Flock.Transcript}
     {u : Unit} (hn : sch.n ≠ 0) (hq : (sch.levels.getD 0 default).q ≠ 0)
@@ -279,17 +248,11 @@ theorem plainLigeritoWith_query (hs : Hashes Flock.V) (ms : MerkleScheme) (sch :
   rw [er, ek] at hmc
   exact hmc
 
-/-! ## An accepted rep, and an accepted session -/
-
 theorem getD_zero_mem {α : Type} [Inhabited α] {xs : Array α} (h : 0 < xs.size) : xs.getD 0 default ∈ xs := by
   unfold Array.getD
   rw [dite_eq_left h]
   exact Array.getElem_mem h
 
-/-- **An accepted plain rep's level-0 queries sit at round `plainQueryRound` of its stream.** At the table's `fast100`
-schedule, on a circuit fold that refuses a point of the wrong length, a rep that `verifyRepWith hs` accepts (in `V`, any
-oracle) has a stream with that round, and level 0's Merkle check passed against the committed `root_B` on the proof's
-opened rows at the positions of that round's coins. -/
 theorem plainQueryRound_verifyRepWith (hs : Hashes Flock.V) (spec : SessionSpec) (st : Setup) (sch : Flock.Schedule)
     (sess : RunRecord) (i r : ℕ) (bytes cap : ByteArray) (hsch : fast100 st.m = some sch)
     (hf : ∀ a b lw rho ts v, st.fold.folded a b lw rho ts = .ok v → rho.size + 6 = st.fold.kLog)
@@ -352,7 +315,6 @@ theorem plainQueryRound_verifyRepWith (hs : Hashes Flock.V) (spec : SessionSpec)
   rw [er, ek] at hlt hmc
   exact ⟨stream, extras, p, hstream, hext, hp, hlt, hmc, rfl, bytes_eq_of_beq hb⟩
 
-/-- `plainProofShape` at a table's `fast100` schedule is the shape `verifyRep` decodes its proofs at. -/
 theorem plainProofShape_eq (st : Setup) (sch : Flock.Schedule) (extras : Array Flock.Claim)
     (hsch : fast100 st.m = some sch) :
     Claims.Flock.plainProofShape st.m st.kLog (2 + extras.size) st.merkle.digestLen
@@ -360,9 +322,6 @@ theorem plainProofShape_eq (st : Setup) (sch : Flock.Schedule) (extras : Array F
       shapeOf st sch extras.size := by
   simp only [Claims.Flock.plainProofShape, Claims.Flock.plainSched, hsch, Option.getD_some, shapeOf]
 
-/-- **The reader's columns of an accepted plain rep are the verifier's openings**: `plainRepColsOf` on the rep's stream
-and proof file is the proof's level-0 rows at the positions of round `plainQueryRound`'s coins, the positions and rows
-on which level 0's Merkle check passed against the committed `root_B` (`plainQueryRound_verifyRepWith`). -/
 theorem plainRepColsOf_verifyRepWith (hs : Hashes Flock.V) (spec : SessionSpec) (st : Setup) (sch : Flock.Schedule)
     (sess : RunRecord) (i r : ℕ) (bytes cap : ByteArray) (hsch : fast100 st.m = some sch)
     (hf : ∀ a b lw rho ts v, st.fold.folded a b lw rho ts = .ok v → rho.size + 6 = st.fold.kLog)
@@ -390,9 +349,6 @@ theorem plainRepColsOf_verifyRepWith (hs : Hashes Flock.V) (spec : SessionSpec) 
   simp only [shapeOf, Array.getElem?_eq_getElem hlt, Option.map_some, Option.getD_some,
     getElem!_pos stream.rounds (Claims.Flock.plainQueryRound st.m st.kLog sch.k0 (2 + extras.size)) hlt]
 
-/-- **`verifyWithM`'s accepted session, table by table and rep by rep**: in `V`, under any oracle, an accepted
-session decodes, has one statement per table, and each table `i`'s rep `r` (`r < 2`, proof file `2i + r`) is accepted
-by `verifyRepWith` at the table's `fast100` schedule, both with one cap. -/
 theorem plainVerifyWithM_reps (hs : Hashes Flock.V) (spec : SessionSpec) (tabs : Array Setup) (record : String)
     (proofs : Array ByteArray) (h : verifyWithM hs spec tabs record proofs = .ok ()) :
     ∃ sess : RunRecord, Record.decodeWith hs spec record = .ok sess ∧ tabs.size = spec.tables.size ∧
@@ -448,11 +404,6 @@ theorem plainVerifyWithM_reps (hs : Hashes Flock.V) (spec : SessionSpec) (tabs :
   · simpa using h0
   · exact h1
 
-/-- **Level 0's query round in an accepted plain session** (`verifyWithM` in `V`, any oracle), on tables whose circuit
-folds refuse a point of the wrong length: for every table `i` and rep `r < 2`, the rep's stream has round
-`plainQueryRound m kLog k0 claims` at the table's `m`, `kLog`, schedule and claim count, the reader's columns of the rep
-(`plainRepColsOf` at `plainProofShape`) are the proof's level-0 rows at the positions of that round's coins, and level
-0's Merkle check passed on exactly those rows at exactly those positions against the table's committed `root_B`. -/
 theorem plainQueryRound_verifyWithM (hs : Hashes Flock.V) (spec : SessionSpec) (tabs : Array Setup) (record : String)
     (proofs : Array ByteArray)
     (hf : ∀ st ∈ tabs, (∀ a b lw rho ts v, st.fold.folded a b lw rho ts = .ok v → rho.size + 6 = st.fold.kLog) ∧

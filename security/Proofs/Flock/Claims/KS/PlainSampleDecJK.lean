@@ -51,12 +51,7 @@ import Proofs.Flock.Soundness.Discharge.PlaysCoin.Coins
 import Proofs.Flock.Soundness.Discharge.PlaysCoin.Decodes
 import Proofs.Flock.Soundness.Refine.Seam
 
-/-!
-# The deployed plain decoders at the sample, at the parsed record
-
-`PlainSampleDecK` at `wrPDJK` and `plainVerdictAtJK` (`plain_hdecAtJK`, `plain_hdecHAtJK`), on `PlainSampleAccJK`'s
-acceptance lemmas. `PlaysCoin`'s erasure lemmas are `PlainSampleDecK`'s.
--/
+/-! `PlainSampleDecK` at `wrPDJK` and `plainVerdictAtJK`. -/
 
 @[expose] public section
 
@@ -68,9 +63,6 @@ open Lean (Json)
 
 local notation "𝔽" => FlockLevel3.GF128
 
-/-- **A transcript that records one table's live session at the setup at `d`, through `keep`**: its proof files are
-the outcome's, and the session its record decodes to through `keep` there has the outcome's root, link points and rep
-streams' rounds up to their digests, read as one table's (`oneOf`). -/
 theorem recordsLive_wrK1_ofJ (keep : Bool → Bool) (I : Exec.Inputs) (d : Json) {mPts : ℕ} (o : Tables.LiveOutJ 1 mPts)
     {t : TranscriptJ} (hrl : RecordsLiveAtDJK keep I d o t) (hacc : AcceptsAtDJK keep I (some d) t) :
     t.proofs = (oneOf o).proofs ∧
@@ -91,7 +83,6 @@ theorem recordsLive_wrK1_ofJ (keep : Bool → Bool) (I : Exec.Inputs) (d : Json)
   rw [hr]
   fin_cases r <;> rfl
 
-/-- **`wrPDJK` records one table's live session at the setup at `d`** (`recordsLive_wrK1_ofJ`). -/
 theorem recordsLive_wrPDK1J (keep : Bool → Bool) (I : Exec.Inputs) (d : Json) {mPts : ℕ} (o : Tables.LiveOutJ 1 mPts)
     (hacc : AcceptsAtDJK keep I (some d) (wrPDJK keep I d o)) :
     (wrPDJK keep I d o).proofs = (oneOf o).proofs ∧
@@ -105,11 +96,6 @@ theorem recordsLive_wrPDK1J (keep : Bool → Bool) (I : Exec.Inputs) (d : Json) 
   recordsLive_wrK1_ofJ keep I d o (recordsLiveAtDJK_wrPDJK keep I d o) hacc
 
 open DecodeZL Integrate in
-/-- **The deployed plain decoders are right at a record writer for accepting with no opening off `C` without a
-self-clash**, at one table: `decodesTable_wrPD_sc` through `keep`, at any writer `wr` whose transcripts record their
-outcome at the setup at the sample `dj S` (`RecordsLiveAtDJK`), on the outcomes whose transcript `verifyJWithMK keep`
-accepts there, whose root is `rootB₀`'s and on which the deployed plain reader looks up no column off `C` there
-(`TxNoOffAtJK`). -/
 theorem decodesTable_wrK_sc_ofJ (keep : Bool → Bool)
     {c : _root_.Flock.Circuit} {n : ℕ} {I : Exec.Inputs} (ht : I.tags.typed = false)
     (hc : HmRow.parse I.tags I.circuitFile I.tables = .ok c) (ho : c.outNet = c.unitNet) {mPts : ℕ}
@@ -227,8 +213,6 @@ theorem decodesTable_wrK_sc_ofJ (keep : Bool → Bool)
     hver hent hoff hsc
 
 open DecodeZL Integrate in
-/-- **The deployed plain decoders are right at `wrPDJK` for accepting with no opening off `C` without a self-clash**
-(`decodesTable_wrK_sc_ofJ` at `wrPDJK`). -/
 theorem decodesTable_wrPDK_scJ (keep : Bool → Bool)
     {c : _root_.Flock.Circuit} {n : ℕ} {I : Exec.Inputs} (ht : I.tags.typed = false)
     (hc : HmRow.parse I.tags I.circuitFile I.tables = .ok c) (ho : c.outNet = c.unitNet) {mPts : ℕ}
@@ -250,8 +234,6 @@ theorem decodesTable_wrPDK_scJ (keep : Bool → Bool)
     (recordsLiveAtDJK_wrPDJK keep I (dj S)) j
 
 open DecodeZL HiddenExec HiddenDec in
-/-- **The deployed plain decoders are right at a record writer at hidden outputs, at a leaf form `F`**:
-`decodesTable_wrK_sc_ofJ` at the hidden tables and their openings `opnAtH` (`decodesTable_wrPD_scH` through `keep`). -/
 theorem decodesTable_wrK_scHLf_ofJ (keep : Bool → Bool) (F : LeafFormJ)
     {c : _root_.Flock.Circuit} {n : ℕ} {I : Exec.Inputs} (ht : I.tags.typed = false)
     (hc : HmOut.parse I.tags I.circuitFile I.tables = .ok c) {mPts : ℕ}
@@ -369,9 +351,6 @@ theorem decodesTable_wrK_scHLf_ofJ (keep : Bool → Bool) (F : LeafFormJ)
     hver hent hoff hsc
 
 open DecodeZL HiddenExec HiddenDec in
-/-- **The deployed plain decoders are right at a record writer at hidden outputs**: `decodesTable_wrK_sc_ofJ` at the
-hidden tables and their openings `opnAtH` (`decodesTable_wrPD_scH` through `keep`):
-`decodesTable_wrK_scHLf_ofJ` at `LeafFormJ.hm96`. -/
 theorem decodesTable_wrK_scH_ofJ (keep : Bool → Bool)
     {c : _root_.Flock.Circuit} {n : ℕ} {I : Exec.Inputs} (ht : I.tags.typed = false)
     (hc : HmOut.parse I.tags I.circuitFile I.tables = .ok c) {mPts : ℕ}
@@ -393,7 +372,6 @@ theorem decodesTable_wrK_scH_ofJ (keep : Bool → Bool)
   decodesTable_wrK_scHLf_ofJ keep LeafFormJ.hm96 ht hc dj x₀ hT hS R hN C rootB₀ wr hwr j
 
 open DecodeZL HiddenExec HiddenDec in
-/-- **The deployed plain decoders are right at `wrPDJK` at hidden outputs** (`decodesTable_wrK_scH_ofJ` at `wrPDJK`). -/
 theorem decodesTable_wrPDK_scHJ (keep : Bool → Bool)
     {c : _root_.Flock.Circuit} {n : ℕ} {I : Exec.Inputs} (ht : I.tags.typed = false)
     (hc : HmOut.parse I.tags I.circuitFile I.tables = .ok c) {mPts : ℕ}
@@ -424,9 +402,6 @@ open Lean (Json)
 local notation "𝔽" => FlockLevel3.GF128
 
 open Classical Discharge.Tables Claims.Bridge.PlainSample in
-/-- **The deployed plain decoders are right at `plainTab` for the verdict at the sample, at a record writer**:
-`plain_hdecAt` through `keep`, at any writer `wr` whose transcripts record their outcome at the setup at `d`, from
-`decodesTable_wrK_sc_ofJ` at `d` and no sampled proof block. -/
 theorem plain_hdecAtK_ofJ (keep : Bool → Bool)
     {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
     (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
@@ -482,9 +457,6 @@ theorem plain_hdecAtK_ofJ (keep : Bool → Bool)
   exact hdec
 
 open Classical Discharge.Tables Claims.Bridge.PlainSample in
-/-- **The deployed plain decoders are right at `plainTab` for the verdict at the sample, at hidden outputs and a leaf
-form `F`, at a record writer**: `plain_hdecHAt` through `keep`, at any writer `wr` whose transcripts record their
-outcome at the setup at `d`, from `decodesTable_wrK_scHLf_ofJ`. -/
 theorem plain_hdecHLfAtK_ofJ (keep : Bool → Bool) (F : AtSample.LeafFormJ)
     {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
     (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
@@ -541,9 +513,6 @@ theorem plain_hdecHLfAtK_ofJ (keep : Bool → Bool) (F : AtSample.LeafFormJ)
   exact hdec
 
 open Classical Discharge.Tables Claims.Bridge.PlainSample in
-/-- **The deployed plain decoders are right at `plainTab` for the verdict at the sample, at hidden outputs and
-`hm96-sha512/v1` leaves, at a record writer**: `plain_hdecHAt` through `keep`, at any writer `wr` whose transcripts
-record their outcome at the setup at `d`: `plain_hdecHLfAtK_ofJ` at `LeafFormJ.hm96`. -/
 theorem plain_hdecHAtK_ofJ (keep : Bool → Bool)
     {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
     (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
@@ -573,8 +542,6 @@ theorem plain_hdecHAtK_ofJ (keep : Bool → Bool)
     hwr
 
 open Classical Discharge.Tables Claims.Bridge.PlainSample in
-/-- **The deployed plain decoders are right at `plainTab` for the verdict at the sample**: `plain_hdecAt` with
-`plainVerdictAtJK keep` for `plainVerdictAt` (`plain_hdecAtK_ofJ` at `wrPDJK`). -/
 theorem plain_hdecAtJK (keep : Bool → Bool)
     {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
     (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
@@ -601,9 +568,6 @@ theorem plain_hdecAtJK (keep : Bool → Bool)
     (recordsLiveAtDJK_wrPDJK keep ins.read.I d)
 
 open Classical Discharge.Tables Claims.Bridge.PlainSample in
-/-- **The deployed plain decoders are right at `plainTab` for the verdict at the sample, at hidden outputs and
-`hm96-sha512/v1` leaves**: `plain_hdecHAt` with `plainVerdictAtJK keep` for `plainVerdictAt` (`plain_hdecHAtK_ofJ` at
-`wrPDJK`). -/
 theorem plain_hdecHAtJK (keep : Bool → Bool)
     {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
     (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}

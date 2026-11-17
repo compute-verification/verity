@@ -13,14 +13,7 @@ import Proofs.Flock.Soundness.Refine.Plays
 import Proofs.Flock.Soundness.Refine.Zerocheck
 import VCVio.Prelude.Core
 
-/-!
-# Level 0's request in an accepted Ligerito run
-
-`ligerito_refines` leaves the model's requests as ones that passed their Merkle checks (`ReqOK`), which does not fix
-their positions. Here the same run also says which request comes first: level 0's, at the positions of the coins of the
-round Ligerito samples them from, `k0 + 6` rounds in (`ligerito_refines_req0`, `ligerito_accepts_req0`,
-`ligerito_accepts_opening_req0`).
--/
+/-! In an accepted Ligerito run level 0's request comes first, at the coins of the round `k0 + 6` rounds in. -/
 
 @[expose] public section
 
@@ -31,7 +24,6 @@ open Flock FlockLevel3 Game Transcript Model Accounting
 local notation "𝔽" => FlockLevel3.GF128
 local notation "𝕂" => FlockLevel3.GF256
 
-/-- A query step keeps the requests' head: `qbOut` appends its request after the ones before. -/
 theorem qbOut_reqs_cons {D : Type} (r : ℕ) (lv : Accounting.Level) (ch : List 𝕂) (start : ℕ)
     (stM : LigStateC 𝔽 𝕂 D) (cw cα cβ : Array F128) (w : Bool) (m : F256 × F256) {R : Req} {rest : List Req}
     (h : stM.reqs = R :: rest) : ∃ rest', (qbOut r lv ch start stM cw cα cβ w m).reqs = R :: rest' :=
@@ -39,9 +31,6 @@ theorem qbOut_reqs_cons {D : Type} (r : ℕ) (lv : Accounting.Level) (ch : List 
     pathLen lv⟩], by simp only [qbOut, h, List.cons_append]⟩
 
 set_option maxHeartbeats 4000000 in
-/-- **Ligerito's rounds refine the model's, level 0's request first** (`Flock.Ligerito`): `ligerito_refines`, and the result's
-first request is level 0's, at the positions of the coins of round `k + k0 + 6` of the transcript, where `k` is the
-round Ligerito starts at. -/
 theorem ligerito_refines_req0 {D : Type} (ms : MerkleScheme) (sch : Flock.Schedule) (T : F128)
     (cap : Array ByteArray) (p : LigeritoProof) (basisAt : Array F256 → ℕ → Array F256) (r : ℕ) (b : ℕ → 𝔽)
     (capD : Array ByteArray → Cap D) (o : Opens 𝔽 D) (hdim : DimSeam sch)
@@ -565,8 +554,6 @@ theorem ligerito_refines_req0 {D : Type} (ms : MerkleScheme) (sch : Flock.Schedu
   simp only [List.append_assoc, List.cons_append, List.nil_append] at hmain ⊢
   exact hmain
 
-/-- **Ligerito refines the model's, level 0's request first** (`Flock.Ligerito`): `ligerito_accepts`, and the result's first
-request is level 0's, at the positions of the coins of round `k + k0 + 6`. -/
 theorem ligerito_accepts_req0 {D : Type} (ms : MerkleScheme) (sch : Flock.Schedule) (T : F128)
     (cap : Array ByteArray) (p : LigeritoProof) (basisAt : Array F256 → ℕ → Array F256) (r : ℕ) (b : ℕ → 𝔽)
     (capD : Array ByteArray → Cap D) (o : Opens 𝔽 D) (hdim : DimSeam sch)
@@ -594,9 +581,6 @@ theorem ligerito_accepts_req0 {D : Type} (ms : MerkleScheme) (sch : Flock.Schedu
   rw [hver, ← hn7]
   exact hfc
 
-/-- **Ligerito on the opening's output refines the model's, level 0's request first** (`Flock.Opening`, `Flock.Ligerito`):
-`ligerito_accepts_opening`, and the result's first request is level 0's, at the positions of the coins of round
-`k + k0 + 6`. -/
 theorem ligerito_accepts_opening_req0 {D : Type} (ms : MerkleScheme) (sch : Flock.Schedule) (T : F128)
     (sws : Array Switched) (n : ℕ) (op : Model.OpenOut 𝔽) (hop : OpenRel sch.m n T sws op) (cap : Array ByteArray)
     (p : LigeritoProof) (r : ℕ) (capD : Array ByteArray → Cap D) (o : Opens 𝔽 D) (hdim : DimSeam sch)
@@ -617,7 +601,6 @@ theorem ligerito_accepts_opening_req0 {D : Type} (ms : MerkleScheme) (sch : Floc
   exact ligerito_accepts_req0 ms sch T cap p (basis sws) r op.b capD o hdim hlv hα1 ho
     (fun orig y horig hy => basis_eq hop orig sch.ext horig y hy) hwf h
 
-/-- **Lincheck's rounds**: `3 + (kLog − 6)` (`α`, `β`, `kLog − 6` sumcheck rounds and `r′`). -/
 theorem lincheck_moves (c : CircuitFold) (zc : Flock.ZcOut) (p : LincheckProof) {t t' : Transcript} {lc : LcOut}
     (h : Flock.lincheck c zc p t = .ok (lc, t')) : t'.rounds = t.rounds ∧ t'.k = t.k + 3 + (c.kLog - 6) := by
   unfold Flock.lincheck at h
@@ -654,9 +637,6 @@ theorem lincheck_moves (c : CircuitFold) (zc : Flock.ZcOut) (p : LincheckProof) 
     rw [kk₇, k₆.1, hk₅, kk₃, kk₂, k₁.1]
     omega
 
-/-- **One rep refines the model's, level 0's request first** (§9–§14): `rep_refines`, and the result's first request
-is level 0's, at the positions of the coins of the stream's round after zerocheck's `3 + (m − 6)` rounds, lincheck's
-`3 + (kLog − 6)`, the ring switch's `claims + 1` and Ligerito's `k0 + 6`. -/
 theorem rep_refines_req0 {D : Type} (spec : SessionSpec) (st : Setup) (S : Model.Statement) (hm : 13 ≤ S.m)
     (h15 : 15 ≤ S.m) (sch : Flock.Schedule) (hmS : st.m = S.m) (hkS : st.kLog = S.kLog)
     (hfold : FoldRealizes st.fold S) (extra : List (Model.Claim 𝔽 S.m)) (sess : RunRecord)

@@ -41,26 +41,7 @@ import Proofs.Flock.Claims.Recursion.FlockKSRecord
 import Proofs.Flock.Claims.Recursion.InnerAbort
 import Proofs.Flock.Claims.Recursion.KSStated
 
-/-!
-# The recursion's KS over the masked record, from the masked table bound counted per round
-
-The recursion's chain at the abort distribution (`KSAbort_of_tableBoundOnAcc`) reads the table bound with escapes on accepted
-runs fitting as `Escapes.FitsFork` asks, every fork event charged at the busiest round's count, which the masked
-escapes with level 0's fork event do not fit at the deployed weight (`ZkFitsW`). Counted per round
-(`Claims.Recursion.TableBoundθOnAccR`, at every statement `Flock.TableBoundθAccAtR`, which `TableBoundθOnAcc` gives:
-`Claims.Recursion.tableBoundθOnAccR_of_onAcc`), the same chain holds once the abort-law escapes with the conflict fork
-are merged by round (`Claims.Recursion.EscapesD.mergeR`, as `Escapes.mergeR`): the abort-law bound carries the
-per-round fit (`Claims.Recursion.TableBoundθAbortR`, `Claims.Recursion.tableBoundθAbortR_of_onAccR`), the merged
-escapes fit as `OneWaitAbort` asks with a term no smaller
-(`Claims.Recursion.EscapesD.fitsR_addFork`, `Claims.Recursion.EscapesD.FitsR.fits_mergeR`,
-`Claims.Recursion.EscapesD.term_le_mergeR`, `Claims.Recursion.oneWaitAbort_of_tableBoundR`), and so Flock meets
-`Inner.KSAbort` (`Claims.Recursion.KSAbort_of_tableBoundOnAccR`). At the masked record the claims read that is
-`FlockDeploy.KS.zk_KSAbortR`, and the recursion's KS over it `FlockDeploy.KS.zk_KSFlockR`, each from the bound over
-full-width tables at the untrimmed record carried by padding back (`Claims.Recursion.tableBoundθOnAccR_mapCols`) and
-one table wherever some run accepts; the bound follows from a simulator of each masked prover
-(`FlockDeploy.KS.zk_tableBoundθOnAccR_of_simWJ`, `FlockDeploy.KS.zk_KSAbort_of_simWJ`,
-`FlockDeploy.KS.zk_KSFlock_of_simWJ`).
--/
+/-! The recursion's KS over the masked record from the masked table bound counted per round, as the masked escapes do not fit the deployed weight charged at the busiest round's count. -/
 
 @[expose] public section
 
@@ -68,26 +49,18 @@ namespace Claims.Recursion
 
 open Claims Claims.Flock FlockSoundness FlockSoundness.Game FlockSoundness.Extract FlockSoundness.Rewinding
 
-/-! ## Fork events over samples, merged by round -/
-
 section MergeD
 
 variable {Ω Coin A : Type} {H : Msg → Msg} {n : ℕ} {tr : Ω → (Fin n → Coin) × A → Transcript}
 
-/-- **The escapes fit `C` counted per round**: `Σ_i m_i c_i ≤ 2C`, with `m_i` the fork events at `i`'s round, and
-`Σ_l β_l ≤ n`. -/
 def EscapesD.FitsR (e : EscapesD H n tr) (C : ℝ) : Prop :=
   ∑ i, ((Finset.univ.filter fun i' => e.j i' = e.j i).card : ℝ) * e.c i ≤ 2 * C ∧ ∑ l, e.β l ≤ n
 
-/-- **The escapes fit `C` with one more fork event** of weight `c` at round `0`, each counted at its own round:
-`(m_0 + 1)·c + Σ_i m'_i c_i ≤ 2C`, with `m_0` the fork events at round `0` and `m'_i` those at `i`'s round counting the
-extra one, and `Σ_l β_l ≤ n`. -/
 def EscapesD.FitsForkR (e : EscapesD H n tr) (C c : ℝ) : Prop :=
   (((Finset.univ.filter fun i => (e.j i).val = 0).card : ℝ) + 1) * c +
       ∑ i, (((Finset.univ.filter fun i' => e.j i' = e.j i).card : ℝ) + if (e.j i).val = 0 then 1 else 0) * e.c i ≤
     2 * C ∧ ∑ l, e.β l ≤ n
 
-/-- **With the extra fork event at round `0`, escapes fitting with it per round fit per round.** -/
 theorem EscapesD.fitsR_addFork (e : EscapesD H n tr) (C c : ℝ) (hc : 0 ≤ c) (j₀ : Fin n) (hj₀ : j₀.val = 0)
     (ev : Ω → (Fin n → Coin) × A → (Fin n → Coin) × A → Prop) (tied) (h : e.FitsForkR C c) :
     (e.addFork c hc j₀ ev tied).FitsR C := by
@@ -114,8 +87,6 @@ theorem EscapesD.fitsR_addFork (e : EscapesD H n tr) (C c : ℝ) (hc : 0 ≤ c) 
   push_cast
   exact congrArg₂ (· + ·) (by ring) (Finset.sum_congr rfl fun i _ => by ring)
 
-/-- **The escapes' fork events merged by round**: at each round one event, that some event at the round holds, of
-weight the round's count of events times their total weight. -/
 def EscapesD.mergeR (e : EscapesD H n tr) : EscapesD H n tr where
   I := Fin n
   c r := ((Finset.univ.filter fun i => e.j i = r).card : ℝ) * ∑ i ∈ Finset.univ.filter (fun i => e.j i = r), e.c i
@@ -131,7 +102,6 @@ def EscapesD.mergeR (e : EscapesD H n tr) : EscapesD H n tr where
     exact e.tied i ω d d' h
   tied₁ := e.tied₁
 
-/-- **Merged by round, escapes that fit `C` per round fit it** with one event per round. -/
 theorem EscapesD.FitsR.fits_mergeR {e : EscapesD H n tr} {C : ℝ} (h : e.FitsR C) : e.mergeR.Fits C := by
   refine ⟨1, fun r => ?_, ?_, h.2⟩
   · show (Finset.univ.filter fun r' : Fin n => r' = r).card ≤ 1
@@ -147,8 +117,6 @@ theorem EscapesD.FitsR.fits_mergeR {e : EscapesD H n tr} {C : ℝ} (h : e.FitsR 
     rw [Finset.mul_sum]
     exact Finset.sum_congr rfl fun i hi => by rw [(Finset.mem_filter.1 hi).2]
 
-/-- **Merging by round only raises the escapes' term**: at each round, by Cauchy–Schwarz,
-`Σ_i √(c_i·Pr[ev_i]) ≤ √(n·Σ_i c_i·Pr[∃ i, ev_i])` over its `n` events. -/
 theorem EscapesD.term_le_mergeR [Fintype Coin] [Fintype A] (e : EscapesD H n tr) (ω : Ω) :
     e.term ω ≤ e.mergeR.term ω := by
   unfold EscapesD.term
@@ -177,25 +145,18 @@ theorem EscapesD.term_le_mergeR [Fintype Coin] [Fintype A] (e : EscapesD H n tr)
 
 end MergeD
 
-/-! ## The chain at the abort distribution, counted per round -/
-
 section TableBound
 
 variable {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col]
 
-/-- **`TableBoundθOnAcc` with the escapes counted per round** (`Escapes.FitsForkR`): `Flock.TableBoundθAccAtR` at
-every statement. -/
 def TableBoundθOnAccR (H : Msg → Msg) (D : Flock.Deploy Coin Col T) (N : Msg → ℕ) (Ok : Msg → Col → Prop) : Prop :=
   ∀ x, Flock.TableBoundθAccAtR H D N Ok x
 
-/-- **`TableBoundθOnAcc` gives it**: an event charged at the busiest round's count is charged at least its own
-round's (`TableBoundθAccAt.tableBoundθAccAtR`). -/
 theorem tableBoundθOnAccR_of_onAcc {H : Msg → Msg} {D : Flock.Deploy Coin Col T} {N : Msg → ℕ}
     {Ok : Msg → Col → Prop} (htab : TableBoundθOnAcc H D N Ok) (hVk : ∀ x, 0 < D.V.k x) :
     TableBoundθOnAccR H D N Ok :=
   fun x => Flock.TableBoundθAccAt.tableBoundθAccAtR (fun Ω _ _ P => htab x Ω P) (hVk x)
 
-/-- **`TableBoundθAbort` with the escapes counted per round** (`EscapesD.FitsForkR`). -/
 def TableBoundθAbortR (H : Msg → Msg) (D : Flock.Deploy Coin Col T) (N : Msg → ℕ) (Ok : Msg → Col → Prop) : Prop :=
   ∀ (x : Msg) (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Prover Ω) (A : Type) [Fintype A] [Nonempty A]
     (keep : Ω → (Fin (D.V.k x) → Coin) → A → Bool),
@@ -206,8 +167,6 @@ def TableBoundθAbortR (H : Msg → Msg) (D : Flock.Deploy Coin Col T) (N : Msg 
             ∃ (p : Fin (N x)) (u : Col),
               lookCol (D.cols (abortRun H P D.V x keep ω d).seen 0) p.val = some u ∧ u ≠ C p
 
-/-- **The abort-law table bound counted per round, from the table bound with escapes on accepted runs counted per
-round**: `tableBoundθAbort_of_onAcc`, whose escapes at the abort distribution have the same rounds and weights. -/
 theorem tableBoundθAbortR_of_onAccR (H : Msg → Msg) (D : Flock.Deploy Coin Col T) (N : Msg → ℕ)
     (Ok : Msg → Col → Prop) (decC : Msg → Msg → Coin) (htab : TableBoundθOnAccR H D N Ok) (hVk : ∀ x, 0 < D.V.k x)
     (hpc : CoinsShown H D.V decC) (hlast : AccLast H D.V) (hfree : DecideFree H D.V) (href : Refusable H D.V) :
@@ -222,8 +181,6 @@ theorem tableBoundθAbortR_of_onAccR (H : Msg → Msg) (D : Flock.Deploy Coin Co
     (fun s => ∃ (p : Fin (N x)) (u : Col), lookCol (D.cols s 0) p.val = some u ∧ u ≠ C p) ω
     (fun g => hb (ω, g) C hC hg)
 
-/-- **Flock's one-wait bound at the abort distribution, from the table's bound there counted per round**:
-`oneWaitAbort_of_tableBound`, the escapes with the conflict fork merged by round (`EscapesD.mergeR`). -/
 theorem oneWaitAbort_of_tableBoundR (H : Msg → Msg) (D : Flock.Deploy Coin Col T) (N : Msg → ℕ)
     (hN : ∀ x, (N x : ℝ) ≤ D.N₀ x) (hεt : ∀ x, 0 ≤ D.εtable x) (hVk : ∀ x, 0 < D.V.k x)
     (hk : ∀ x, 1 ≤ D.k x ∨ NoAcc H D.V x)
@@ -244,8 +201,6 @@ theorem oneWaitAbort_of_tableBoundR (H : Msg → Msg) (D : Flock.Deploy Coin Col
   have := oneWaitAbort_le_of_tableBound H D N hN hεt hVk hk hone Ok hz hok hconf x P keep e₀ hb ω hε
   linarith
 
-/-- **Flock as the inner protocol meets `Inner.KSAbort`, from the KS chain's obligations counted per round**:
-`KSAbort_of_tableBoundOnAcc` at `TableBoundθOnAccR`. -/
 theorem KSAbort_of_tableBoundOnAccR (H : Msg → Msg) (D : Flock.Deploy Coin Col T) (N : Msg → ℕ)
     (Ok : Msg → Col → Prop) (decC : Msg → Msg → Coin) (hN : ∀ x, (N x : ℝ) ≤ D.N₀ x) (hεt : ∀ x, 0 ≤ D.εtable x)
     (hVk : ∀ x, 0 < D.V.k x) (hK : ∀ x, 0 < D.cap x) (hk : ∀ x, (8 ≤ D.k x ∧ Splits D x) ∨ NoAcc H D.V x)
@@ -257,7 +212,6 @@ theorem KSAbort_of_tableBoundOnAccR (H : Msg → Msg) (D : Flock.Deploy Coin Col
     (oneWaitAbort_of_tableBoundR H D N hN hεt hVk (fun x => (hk x).imp (fun h => by omega) id) hone Ok hz hok hconf
       (tableBoundθAbortR_of_onAccR H D N Ok decC htab hVk hpc hlast hfree href)) decode hdec
 
-/-- **`TableBoundθOnAccR` through `f`, by padding back**, as `tableBoundθOnAcc_mapCols`. -/
 theorem tableBoundθOnAccR_mapCols (H : Msg → Msg) (D : Flock.Deploy Coin Col T) (N : Msg → ℕ) (f : Col → Col)
     (hf : f 0 = 0) (Ok : Msg → Col → Prop) (hok : ColsOk H D N Ok)
     (hinj : ∀ x u v, Ok x u → Ok x v → f u = f v → u = v) (htab : TableBoundθOnAccR H D N Ok) :
@@ -285,9 +239,6 @@ namespace FlockDeploy.KS
 open Flock
 open Claims.Recursion
 
-/-- **The masked (`--zk`) record the claims read meets `Inner.KSAbort`**, at SHA-512, at every decoder within the
-radius: `zk_KSAbort` from the table bound with escapes on accepted runs counted per round over full-width tables at the
-untrimmed instance, and one table wherever the verifier accepts some run. -/
 theorem zk_KSAbortR (rel : Readable.Parsed → Readable.Relation)
     (hone : ∀ x, (∃ s, (deployZk rel).parse x = some s ∧ s.tables = 1) ∨
       Claims.Flock.NoAcc sha512 (deployZk rel).V x)
@@ -304,8 +255,6 @@ theorem zk_KSAbortR (rel : Readable.Parsed → Readable.Relation)
     (coinsShown_V sha512 true) (accLast_V_sha512 true) (decideFree_V sha512 true) (refusable_V sha512 true)
     decode hdec
 
-/-- **KS of the recursion over the masked (`--zk`) record the claims read as the inner protocol**, at SHA-512:
-`zk_KSFlock` with `Inner.KSAbort` from `zk_KSAbortR`. -/
 theorem zk_KSFlockR (rel : Readable.Parsed → Readable.Relation) (D : Deploy Coin)
     (DO : Claims.Flock.Deploy Coin (List FlockLevel3.GF128) Claims.Flock.ZkTrace)
     (opening : Claims.Recursion.Opening) (hF : Claims.Flock.KS sha512 DO)
@@ -325,14 +274,10 @@ theorem zk_KSFlockR (rel : Readable.Parsed → Readable.Relation) (D : Deploy Co
     (zk_KSAbortR rel hone htab decI h) hRef hRounds hN hε (hRd decI) hS (hR decI) (hV decI) (hT decI) (hL decI)
     (hO decI) (hAcc decI) (coinsShown_V sha512 true) hN0
 
-/-- **The recursion's masked table bound counted per round**, at full-width columns, from a simulator of each prover
-at the statements some run accepts (`zk_tableBoundθAccAtR_of_simWJ`). -/
 theorem zk_tableBoundθOnAccR_of_simWJ (hs : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V true) x → ZkSimWJ x) :
     TableBoundθOnAccR sha512 (deployZk Readable.relation) (wordLen true) (wide true) :=
   zk_tableBoundθAccAtR_of_simWJ hs
 
-/-- **The masked record the claims read meets `Inner.KSAbort`** at the deployed relation, from a simulator of each
-prover at the statements some run accepts and one table wherever some run accepts. -/
 theorem zk_KSAbort_of_simWJ
     (hone : ∀ x, (∃ s, (deployZk Readable.relation).parse x = some s ∧ s.tables = 1) ∨
       Claims.Flock.NoAcc sha512 (deployZk Readable.relation).V x)
@@ -342,8 +287,6 @@ theorem zk_KSAbort_of_simWJ
     (Inner.ofFlock (deployZkTrim Readable.relation) decode).KSAbort sha512 :=
   zk_KSAbortR Readable.relation hone (zk_tableBoundθOnAccR_of_simWJ hs) decode hdec
 
-/-- **KS of the recursion over the masked record the claims read** at the deployed relation, from a simulator of each
-prover at the statements some run accepts and one table wherever some run accepts (`zk_KSFlockR`). -/
 theorem zk_KSFlock_of_simWJ (D : Deploy Coin)
     (DO : Claims.Flock.Deploy Coin (List FlockLevel3.GF128) Claims.Flock.ZkTrace)
     (opening : Claims.Recursion.Opening) (hF : Claims.Flock.KS sha512 DO)

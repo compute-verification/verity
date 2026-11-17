@@ -4,42 +4,18 @@ public import Proofs.Flock.Claims.KS.Wait
 import Proofs.Flock.Claims.ERepCost
 import Proofs.Flock.Claims.Prob
 
-/-!
-# What `E^rep`'s waits find, one wait finds at half the rate
-
-`E^rep` returns the candidate of the first of its `m` waits that assembles one `check` accepts (`firstWait_eval`,
-`ERep_eval_fst`). The waits are independent given the tape. So at a tape where one wait fails with probability `f`,
-the waits return a candidate with a property `G` with probability `g·(1 + f + … + f^{m−1})`, `g` the probability that
-one wait returns a candidate with `G` (`Pr_findSome`, `ERep_hit`).
-
-At a tape whose acceptance `ε` is above `2k/K` and above four times its escapes `a`, one wait fails with probability
-at most `1/2 + 2^k·e^{−k}` (the cases of `tape_bound`), so the sum is at most `2 + 2·e^{−k/8}` (`geom_le_two_add`); the
-other tapes accept with probability at most `2k/K + 4·a` (`tape_finds`). Averaged over the tape, under `ERep_trunc`'s
-hypotheses, for every property `G` of the judged run's coins and the candidate (`ERep_finds`):
-
-  `Pr[acc ∧ E^rep returns w ∧ G(r₀, w)] ≤ 2·Pr[acc ∧ E^rep at one wait returns w ∧ G(r₀, w)]
-    + 4·𝔼[a] + 2k/K + 2·e^{−k/8}`.
-
-`Finds` names that bound at an extractor, its one-wait form and the errors of a knowledge-soundness claim,
-`2·κ + √(γ·Pr[B])` in place of the last three terms. A bound on a finder that reads `E^rep`'s candidates only through
-such a property can then be stated at the one-wait extractor, which reruns the prover `1 + k` times in expectation in
-place of `1 + m·k`.
--/
+/-! What `E^rep`'s waits find, one wait finds at half the rate, plus `4·𝔼[a] + 2k/K + 2·e^{−k/8}`. -/
 
 @[expose] public section
 
 namespace Claims
 
-/-! ## One wait's candidate, and the first of the waits' -/
-
-/-- What one wait over the coin samples `rs` returns: the candidate it assembles, where `check` accepts it. -/
 def waitOut {R W Op : Type} (H : Msg → Msg) (run : R → Transcript) (k : ℕ) (opens : Seen → List Op)
     (assemble : List Op → Option W) (check : W → Bool) (rs : List R) : Option W :=
   match assemble (((waitAcc k rs []).eval H run).1.flatMap opens) with
   | some w => if check w then some w else none
   | none => none
 
-/-- One wait returns nothing exactly when it fails (`WaitOk`). -/
 theorem waitOut_eq_none {R W Op : Type} (H : Msg → Msg) (run : R → Transcript) (k : ℕ) (opens : Seen → List Op)
     (assemble : List Op → Option W) (check : W → Bool) (rs : List R) :
     waitOut H run k opens assemble check rs = none ↔ ¬ WaitOk H run k opens assemble check rs := by
@@ -48,7 +24,6 @@ theorem waitOut_eq_none {R W Op : Type} (H : Msg → Msg) (run : R → Transcrip
   | none => simp
   | some w => by_cases hc : check w = true <;> simp [hc]
 
-/-- **The waits return the first wait's candidate that `check` accepts.** -/
 theorem firstWait_eval {R W Op : Type} (H : Msg → Msg) (run : R → Transcript) (k : ℕ) (opens : Seen → List Op)
     (assemble : List Op → Option W) (check : W → Bool) :
     ∀ rss : List (List R), ((firstWait k opens assemble check rss).eval H run).1 =
@@ -66,14 +41,10 @@ theorem firstWait_eval {R W Op : Type} (H : Msg → Msg) (run : R → Transcript
     | none => simpa using ih
     | some w => by_cases hc : check w = true <;> simp [hc, RP.eval, ih]
 
-/-! ## The first of `m` independent tries -/
-
 section FindSome
 
 variable {δ W : Type} [Fintype δ] [Nonempty δ]
 
-/-- **The first of `m` independent tries that returns something** has a property `G` with the probability that one
-try returns something with `G`, times `1 + f + … + f^{m−1}`, `f` the probability that one try returns nothing. -/
 theorem Pr_findSome (o : δ → Option W) (G : W → Prop) : ∀ m : ℕ,
     Pr (fun ρ : Fin m → δ => ∃ w, ((List.finRange m).map ρ).findSome? o = some w ∧ G w) =
       Pr (fun d : δ => ∃ w, o d = some w ∧ G w) * ∑ i ∈ Finset.range m, Pr (fun d : δ => o d = none) ^ i
@@ -121,9 +92,6 @@ theorem Pr_findSome (o : δ → Option W) (G : W → Prop) : ∀ m : ℕ,
 
 end FindSome
 
-/-! ## One tape -/
-
-/-- `1 + f + … + f^{m−1} ≤ 2 + 8·t` when `f ≤ 1/2 + t` and `t ≤ 1/4`. -/
 theorem geom_le_two_add {f t : ℝ} (hf0 : 0 ≤ f) (ht0 : 0 ≤ t) (ht : t ≤ 1 / 4) (hf : f ≤ 1 / 2 + t) (m : ℕ) :
     ∑ i ∈ Finset.range m, f ^ i ≤ 2 + 8 * t := by
   have hle : ∑ i ∈ Finset.range m, f ^ i ≤ ∑ i ∈ Finset.range m, (1 / 2 + t) ^ i :=
@@ -133,10 +101,6 @@ theorem geom_le_two_add {f t : ℝ} (hf0 : 0 ≤ f) (ht0 : 0 ≤ t) (ht : t ≤ 
   have hS : 0 ≤ ∑ i ∈ Finset.range m, (1 / 2 + t) ^ i := Finset.sum_nonneg fun i _ => pow_nonneg (by linarith) i
   nlinarith [mul_nonneg ht0 (sub_nonneg.2 ht), mul_nonneg hS (mul_nonneg ht0 (sub_nonneg.2 ht))]
 
-/-- **One tape**: acceptance `ε`, one wait's failure `f ≤ t + Q` with `t` the short-wait probability and `Q` the
-failure on `k` accepted runs, `ε·Q ≤ a + ε/4`, as `tape_bound` takes them; `X ≤ ε` the probability that the run accepts
-and one wait returns a candidate with the property, and `X·(1 + f + … + f^{m−1}) ≤ ε` that of `m` waits. Then
-`X·(1 + f + … + f^{m−1}) ≤ 2·X + 4a + 2k/K + 2·e^{−k/8}`. -/
 theorem tape_finds {ε f a t Q X : ℝ} {m k K : ℕ} (hε1 : ε ≤ 1) (hf0 : 0 ≤ f) (ha : 0 ≤ a) (ht0 : 0 ≤ t)
     (hK : 0 < K) (hk : 8 ≤ k) (hf : 0 < ε → f ≤ t + Q) (hQ : 0 < ε → ε * Q ≤ a + ε / 4)
     (ht : 2 * (k : ℝ) ≤ ε * K → t ≤ 2 ^ k * Real.exp (-(k : ℝ))) (hX0 : 0 ≤ X) (hXε : X ≤ ε)
@@ -167,13 +131,10 @@ theorem tape_finds {ε f a t Q X : ℝ} {m k K : ℕ} (hε1 : ε ≤ 1) (hf0 : 0
   have h2' := mul_le_mul_of_nonneg_right (hXε.trans hε1) ht0
   linarith
 
-/-! ## `E^rep` -/
-
 section ERep
 
 variable {Coin W Op : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
 
-/-- **What `E^rep` returns**: on an accepted judged run, the first of its waits' candidates; else nothing. -/
 theorem ERep_eval_fst (H : Msg → Msg) (V : Verifier Coin) (m k K : Msg → ℕ) (opens : Seen → List Op)
     (assemble : Msg → List Op → Option W) (check : Msg → W → Bool) (x : Msg) {Ω : Type} (P : Prover Ω) (ω : Ω)
     (r₀ : Fin (V.k x) → Coin) (ρ : Fin (m x) → Fin (K x) → Fin (V.k x) → Coin) :
@@ -188,15 +149,11 @@ theorem ERep_eval_fst (H : Msg → Msg) (V : Verifier Coin) (m k K : Msg → ℕ
     rfl
   · simp only [Extractor.eval, ERep, RP.eval, Transcript.seen, hacc, ↓reduceIte]
 
-/-- `g`: the probability that one of `E^rep`'s waits at tape `ω`, over `K` fresh coin samples, returns a candidate
-with `G`. -/
 noncomputable def waitHit (H : Msg → Msg) (V : Verifier Coin) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω)
     (k K : ℕ) (opens : Seen → List Op) (assemble : List Op → Option W) (check : W → Bool) (G : W → Prop) : ℝ :=
   Claims.Pr fun σ : Fin K → Fin (V.k x) → Coin =>
     ∃ w, waitOut H (run H P V x ω) k opens assemble check ((List.finRange K).map σ) = some w ∧ G w
 
-/-- **`E^rep` at one judged run**: over its coins, the run accepts and it returns a candidate with `G` with the
-probability `g` that one wait returns one, times `1 + f + … + f^{m−1}`, `f` one wait's failure probability. -/
 theorem ERep_hit (H : Msg → Msg) (V : Verifier Coin) (m k K : Msg → ℕ) (opens : Seen → List Op)
     (assemble : Msg → List Op → Option W) (check : Msg → W → Bool) (x : Msg) {Ω : Type} (P : Prover Ω) (ω : Ω)
     (r₀ : Fin (V.k x) → Coin) (G : W → Prop) [Decidable ((run H P V x ω r₀).out = .acc)] :
@@ -218,11 +175,6 @@ theorem ERep_hit (H : Msg → Msg) (V : Verifier Coin) (m k K : Msg → ℕ) (op
   · rw [ite_eq_right hacc, zero_mul]
     exact (Pr_congr fun ρ => ⟨fun h => hacc h.1, False.elim⟩).trans Pr_false
 
-/-- **`E^rep`: one wait finds what the waits find, at half the rate.** Under `ERep_trunc`'s hypotheses (`K > 0`,
-`k ≥ 8`, and at each tape with acceptance `ε > 0` one wait's bound on `k` accepted runs, `ε·Q/ε^k ≤ a + rate·ε` with
-`rate ≤ 1/4`), for every property `G` of the judged run's coins and the candidate: the run accepts and `E^rep` returns
-a candidate with `G` with probability at most twice that at `E^rep` with one wait, plus
-`4·𝔼[a] + 2k/K + 2·e^{−k/8}`. -/
 theorem ERep_finds (H : Msg → Msg) (V : Verifier Coin) (m k K : Msg → ℕ) (opens : Seen → List Op)
     (assemble : Msg → List Op → Option W) (check : Msg → W → Bool) (x : Msg) {Ω : Type} [Fintype Ω] [Nonempty Ω]
     (P : Prover Ω) (hK : 0 < K x) (hk : 8 ≤ k x) (a : Ω → ℝ) (ha : ∀ ω, 0 ≤ a ω) {rate : ℝ} (hrate : rate ≤ 1 / 4)
@@ -293,16 +245,10 @@ theorem ERep_finds (H : Msg → Msg) (V : Verifier Coin) (m k K : Msg → ℕ) (
 
 end ERep
 
-/-! ## The claim -/
-
 section Finds
 
 variable {Coin W : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
 
-/-- **`Finds(V, E, E₁, κ, γ)`: what `E` finds, `E₁` finds at half the rate.** For every prover and every property `G`
-of the judged run's coins and a witness, the run accepts and `E` returns a witness with `G` with probability at most
-twice that at `E₁`, plus `2·κ(x) + √(γ(x)·Pr[B^{P*}(x) outputs a collision])`. Read at `E^rep` and `E^rep` with one
-wait (`ERep_finds`), at the errors of the proof system's knowledge soundness (`KS`). -/
 def Finds (H : Msg → Msg) (V : Verifier Coin) (E E₁ : Extractor Coin W V) (κ γ : Msg → ℝ) : Prop :=
   ∀ (x : Msg) (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Prover Ω) (G : (Fin (V.k x) → Coin) → W → Prop),
     Pr (fun s : Ω × (Fin (V.k x) → Coin) × E.C x => (run H P V x s.1 s.2.1).out = .acc ∧

@@ -42,26 +42,13 @@ import Proofs.Flock.Soundness.Discharge.ZkExec.RunsReplay
 import Proofs.Flock.Soundness.Discharge.ZkExec.RunsSeams
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# The coins each recorded masked round issues
-
-`RoundsN` for `--zk`. Where a masked rep accepts, every round of its stream issued the number of coins the statement
-fixes, whatever the hashes (`ReadsN`): the masked replay's zerocheck and lincheck at `m` and `kLog` (`zcNs`, `lcNs`, as
-plain; `replayWith_readsN`), the ring switch's at its claims (`rsNs`), masked Ligerito's at the `--zk` schedule
-(`zkLigNs`: the plain count with the lane phase's `ρ` pair after the last lane challenge; `zkLigeritoWith_readsN`) and
-the inner proof's `ε`, its ten batching coins, `β` and its `Q` column queries (`innerNs`; `verifyInnerWith_readsN`), in
-that order (`zkRepNs`, `zkVerifyRepWith_readsN`). So each rep stream of an accepted masked record issued its table's
-`zkRepNsOf` (`streams_ns_zk`), its rounds in `spec.repStreams` order the session's `zkNs` (`rounds_ns_zk`), and custody
-reads each round message's coin at that count (`custody_vals_zk`).
--/
+/-! `RoundsN` for `--zk`: where a masked rep accepts, every round of its stream issued the number of coins the statement fixes. -/
 
 @[expose] public section
 
 namespace FlockDeploy
 
 open Flock Transcript FlockSoundness.Refine
-
-/-! ## The masked replay and the inner proof -/
 
 theorem replayWith_readsN (hs : Hashes Flock.V) {st : Setup} {lay : Zk.PadLayout} {p : Proof} {root : ByteArray}
     (hm : 14 ≤ st.m) {t t' : Transcript} {rp : Zk.Replayed} (h : Zk.replayWith hs st lay p root t = .ok (rp, t')) :
@@ -142,8 +129,6 @@ theorem replayWith_readsN (hs : Hashes Flock.V) {st : Setup} {lay : Zk.PadLayout
         (readsN_cons n₂₀ rfl (readsN_nil _ _))) <;>
       simp only [zcNs, List.length_append, List.length_cons, List.length_nil, List.length_replicate] <;> omega
 
-/-- The inner proof's coins at its constraints' count: `ε`, the batching coins of those and the triple's three, `β`,
-and the `Q` column queries. -/
 def innerNs (n : ℕ) : List ℕ := [1, n + 3, 1, Zk.Q]
 
 theorem verifyInnerWith_readsN (hs : Hashes Flock.V) {lay : Zk.PadLayout} {pr : Zk.InnerProof} {finalC : F128}
@@ -191,10 +176,7 @@ theorem verifyInnerWith_readsN (hs : Hashes Flock.V) {lay : Zk.PadLayout} {pr : 
   rw [hk₁₀, kk₉, k₈.1, kk₇, k₆.1, kk₅, k₄.1, kk₃, k₂.1, k₁.1]
   rfl
 
-/-! ## Masked Ligerito -/
-
 open FlockSoundness.Discharge.ZkExec in
-/-- `Zk.queryLevel0With lv`: level 0's query coins, then its consistency coins (`qNs`). -/
 theorem queryLevel0With_readsN {β : Type} (hs : Hashes Flock.V) {ms : MerkleScheme} {p : LigeritoProof}
     {lv : Flock.Level} {cap : Array ByteArray} {fold : Array F256} (hq : lv.q ≠ 0)
     {f : Array ℕ × Array F128 × F256 → LM β} {st st' : LState} {t t' : Transcript} {b : β}
@@ -230,8 +212,6 @@ theorem queryLevel0With_readsN {β : Type} (hs : Hashes Flock.V) {ms : MerkleSch
     exact ⟨readsN_cons hn₄ rfl (readsN_cons hn₆ rfl (readsN_nil _ _)), _, _, _, by rw [hr₆, e₅r],
       by rw [hk₆, e₅k], h₂⟩
 
-/-- The masked lane loop: each of its `k0` steps reads one `K` coin, and the last two more (the lane phase's `ρ`
-pair), so `n ≥ 1` steps read `n + 2` coins of two field elements. -/
 theorem lforIn_lanes_readsN {σ : Type} (body : ℕ → σ → LM (ForInStep σ)) (k0 : ℕ)
     (hbody : ∀ i s st t b st' t', i < k0 → body i s st t = .ok ((b, st'), t') →
       t'.rounds = t.rounds ∧ t'.k = t.k + (if i + 1 = k0 then 3 else 1) ∧
@@ -266,8 +246,6 @@ theorem lforIn_lanes_readsN {σ : Type} (body : ℕ → σ → LM (ForInStep σ)
     refine ⟨hr.trans hr₁, ?_, e ▸ readsN_append R₁ (by rw [hk₁, List.length_replicate]) R⟩
     rw [hk, hk₁, ite_eq_right (Nat.succ_ne_zero n), Nat.add_assoc, hc]
 
-/-- Masked Ligerito's coins at `sch`: the plain count's (`ligNs`), with the lane phase's `ρ` pair, two `K` coins, after
-the `k0` lane challenges. -/
 def zkLigNs (sch : Schedule) : List ℕ :=
   [sch.n, 1] ++ List.replicate (sch.k0 + 2) 2 ++ [sch.n - sch.k0 + 1, 1] ++ [sch.n - sch.k0 + 1, 1] ++
     qNs (sch.levels.getD 0 default) ++ [1] ++
@@ -465,18 +443,10 @@ theorem zkLigeritoWith_readsN (hs : Hashes Flock.V) (ms : MerkleScheme) (sch : S
         (readsN_cons n₁₇ rfl (readsN_nil _ _))) ?_ RL <;>
       simp only [qNs, List.length_append, List.length_replicate, List.length_cons, List.length_nil] <;> omega
 
-/-! ## One masked rep -/
-
-/-- A masked rep's coins at `m`, `kLog`, `claims` claims and the `--zk` schedule `sch`: the replay's, the ring
-switch's, masked Ligerito's and the inner proof's at its ten constraints (the replay's three, the ring switch's two,
-the lane phase's two and the triple's three). -/
 def zkRepNs (m kLog claims : ℕ) (sch : Schedule) : List ℕ :=
   zcNs m ++ lcNs kLog ++ rsNs claims ++ zkLigNs sch ++ innerNs 7
 
 open FlockSoundness.Discharge.ZkExec in
-/-- **A masked rep's rounds issued its statement's coins**: when `Zk.verifyRepWith hs` accepts rep `r` of table `i` at
-the table's `--zk` schedule, whatever the hashes `hs` are, its stream's rounds issued `zkRepNs` at `m`, `kLog` and
-`2 + |extras|` claims, one count per round. -/
 theorem zkVerifyRepWith_readsN (hs : Hashes Flock.V) {spec : SessionSpec} {st : Setup} {sch : Schedule} {tPad : ℕ}
     {sess : RunRecord} {i r : ℕ} {bytes c : ByteArray} (hsch : Zk.schedule st.wideLeaf st.m = .ok (sch, tPad))
     (h : Zk.verifyRepWith hs spec st sch tPad sess i r bytes = .ok c) :
@@ -550,18 +520,11 @@ theorem zkVerifyRepWith_readsN (hs : Hashes Flock.V) {spec : SessionSpec} {st : 
   simp only [Transcript.init, zkRepNs, List.length_append]
   omega
 
-/-! ## The masked session -/
-
-/-- A masked rep's coins at its table's statement: `zkRepNs` at the table's `m`, `kLog`, claims and `--zk` schedule,
-none where the schedule refuses `m`. -/
 def zkRepNsOf (spec : SessionSpec) (st : Stmt) : List ℕ :=
   match Zk.schedule st.wideLeaf st.m with
   | .ok (sch, _) => zkRepNs st.m st.c.kLog (2 + spec.points * st.regions.size) sch
   | .error _ => []
 
-/-- **Each masked rep stream's rounds issued its table's coins**: when the masked verdict accepts the record at any
-hashes and `liveOf` reads it, there are two rep streams per table, and the rounds of stream `k` (table `k / 2`'s rep
-`k % 2`) issued `zkRepNsOf spec sts[k / 2]`, one count per round. -/
 theorem streams_ns_zk (hs : Hashes Flock.V) {spec : SessionSpec} {sts : Array Stmt} {record : String}
     {proofs : Array ByteArray} {lv : Live} (hv : Zk.verifyWithM hs spec (tabsOf sts) record proofs = .ok ())
     (hl : liveOf spec record = .ok lv) :
@@ -579,13 +542,9 @@ theorem streams_ns_zk (hs : Hashes Flock.V) {spec : SessionSpec} {sts : Array St
   rw [Nat.mul_comm]
   rfl
 
-/-- The masked session's coins, round by round in `spec.repStreams` order: each table's two reps' `zkRepNsOf`. -/
 def zkNs (spec : SessionSpec) (sts : Array Stmt) : List ℕ :=
   (List.range (2 * sts.size)).flatMap fun k => zkRepNsOf spec sts[k / 2]!
 
-/-- **An accepted masked record's rounds issued the session's coins**: when the masked verdict accepts the record at
-any hashes and `liveOf` reads it, its rounds, in `spec.repStreams` order, issued `zkNs spec sts`, one count per
-round. -/
 theorem rounds_ns_zk (hs : Hashes Flock.V) {spec : SessionSpec} {sts : Array Stmt} {record : String}
     {proofs : Array ByteArray} {lv : Live} (hv : Zk.verifyWithM hs spec (tabsOf sts) record proofs = .ok ())
     (hl : liveOf spec record = .ok lv) :
@@ -601,9 +560,6 @@ theorem rounds_ns_zk (hs : Hashes Flock.V) {spec : SessionSpec} {sts : Array Stm
   rw [getElem!_pos lv.streams k hk']
   exact hall k hk'
 
-/-- **Custody reads each masked round's coin at the statement's count**: where the masked verdict accepts the record at
-any hashes and its custody passes on the round messages `mids`, each message's coin is read at its round's count in
-`zkNs spec sts`, by a recorded round of that count carrying the message. -/
 theorem custody_vals_zk (hs : Hashes Flock.V) {spec : SessionSpec} {sts : Array Stmt} {record : String}
     {proofs : Array ByteArray} {lv : Live} (hv : Zk.verifyWithM hs spec (tabsOf sts) record proofs = .ok ())
     (hl : liveOf spec record = .ok lv) {link : List ByteArray × List ByteArray} {c₁ : Coin}

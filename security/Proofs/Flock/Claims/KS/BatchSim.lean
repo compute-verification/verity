@@ -42,29 +42,7 @@ import Proofs.Flock.Claims.KS.BatchSteps
 import Std.Tactic.BVDecide.Normalize.Prop
 import VCVio.Prelude.Core
 
-/-!
-# The simulated strategy of `J` tables follows the batch's schedule
-
-The simulation of a session of `J` tables (`simRJ`) follows the live prover round by round, each round moving one rep
-of one table (`ctxAt`). When the live prover submits its rounds stream by stream (`SchedLJ`), the tables in front of
-table `j` first, each rep 0 then rep 1, then table `j`'s, the simulated strategy, with every dead branch answering the
-openings with `nul`, follows the batch's schedule (`Lock.Front` over the tables in front, then `Lock.Sess` at table
-`j`), short of runs `Dead` reads at table `j` alone:
-
-* `tr_list`, `round_heq_gen`, `ofFn_tabG_upd₀`, `ofFn_tabG_upd₁`, `step0`, `step1`: a round through `ctxAt` is a
-  round through `Ctx.batchAt` at the table's position;
-* `front_step`, `sess_step0`, `sess_step1`: so a round at a table in front, and at the session's table's rep 0 and
-  rep 1, keeps the schedule one coin further on;
-* `SchedLJ`, `reps_of_schedLJ`, `noAcc_of_schedLJ`: the live strategy submits its rounds on a list of streams, and a
-  rep whose stream is not in it ends with the rounds it has, so a rep that has not ended accepts no live outcome;
-* `dead_answerWith`, `dead_mapDead_dead`, `dead_noAcc`: a branch answered with `nul` reaches only `Dead` outputs;
-* `coin_ind`, `round_ind`: a round of the simulation, by its follow and its coin, either dead or `roundS`;
-* `OnSched`, `onSched_cons`, `onSched_of`: a predicate of the simulated strategy wherever the live strategy follows a
-  schedule, one stream's round at a time;
-* `onSched_spent`, `onSched_rep1`, `onSched_rep0`, `onSched_front`, `onSched_tabs`: the schedule's phases, past the
-  slot, the session's table's rep 1 and rep 0, a table in front rep by rep, and the tables from `t` on;
-* `front_simRJ`: the tables in front of `j` by `Lock.Front`, then table `j` by `Lock.Sess`.
--/
+/-! The simulated strategy of `J` tables follows the batch's schedule where the live prover submits its rounds stream by stream. -/
 
 @[expose] public section
 
@@ -79,7 +57,6 @@ section Batch
 
 variable {ζ : Type}
 
-/-- A predicate of a batch's strategy read along an equality of the batch's games and a strategy equal to it. -/
 theorem tr_list (Φ : (l : List (Game ζ)) → Strategy (batch l) → Prop) {l l' : List (Game ζ)} (e : l = l')
     {σ : Strategy (batch l)} {σ' : Strategy (batch l')} (h : HEq σ σ') (hΦ : Φ l' σ') : Φ l σ := by
   subst e
@@ -90,8 +67,6 @@ theorem ofFn_split {J : ℕ} (f : Fin J → Game ζ) (j : Fin J) :
     List.ofFn f = (List.ofFn f).take j ++ f j :: (List.ofFn f).drop (j + 1) := by
   rw [← ofFn_update, Function.update_eq_self]
 
-/-- **A round through a table's context at a position of a batch over `Fin J`**, read through `Ctx.batchAt` there:
-the table's path to its coin, then the coin. -/
 theorem round_heq_gen {A : Type} {C : Game A → Game ζ} (c : Ctx C) {J : ℕ} (f : Fin J → Game ζ) (t : Fin J)
     {E : Game A → Game (List ζ)} (hE : ∀ g, batch (List.ofFn (Function.update f t (C g))) = E g) {g₀ : Game A}
     {Cm : Type} [Fintype Cm] [Nonempty Cm] (kk : Cm → Game A) (s : Steps g₀ (.coin Cm kk))
@@ -113,7 +88,6 @@ theorem round_heq_gen {A : Type} {C : Game A → Game ζ} (c : Ctx C) {J : ℕ} 
     (playSteps_trans ((Ctx.batchFn f t).lift (c.coin kk).steps) ((Ctx.batchFn f t).coin (c.coin kk).next).steps
       ψ))).trans ((heq_of_eq (playSteps_lift_trans _ _ _ _).symm).trans h₂)
 
-/-- `paused_round` with the paused count given. -/
 theorem paused_round' {b : Option ℕ} {Inner : (List ζ → Prop) → (l : List (Game ζ)) → Strategy (batch l) → Prop}
     {C : Type} [Fintype C] [Nonempty C] {X : Game ζ} {N : C → Game ζ} (T : Steps X (.coin C N)) (B : List (Game ζ))
     (Inner' : C → (List ζ → Prop) → (l : List (Game ζ)) → Strategy (batch l) → Prop)
@@ -129,7 +103,6 @@ theorem paused_round' {b : Option ℕ} {Inner : (List ζ → Prop) → (l : List
   subst hnp
   exact paused_round T B Inner' hInner A ψ hP
 
-/-- `sess_dead` at any batch with a first game. -/
 theorem sess_dead' {α₁ β₁ : Type} {b : Option ℕ} {nL : ℕ} {f : α₁ × β₁ → Game ζ} {g₁ : Game α₁} {g₂ : Game β₁}
     {Dead : List ζ → Prop} (hd : DepAt 0 Dead) {l : List (Game ζ)} (hl : l ≠ []) {σ : Strategy (batch l)}
     (hσ : ∀ x, Lock.Reach _ σ x → Dead x) : Sess b nL f g₁ g₂ Dead l σ := by
@@ -139,21 +112,16 @@ theorem sess_dead' {α₁ β₁ : Type} {b : Option ℕ} {nL : ℕ} {f : α₁ �
 
 end Batch
 
-/-! ## A round of the simulation at a position of the batch -/
-
 section Round
 
 variable {P OutT Cp Op : Type} [Nonempty Op] {J : ℕ} (out : Fin J → Cp → P × P → Op → OutT) (caps : Fin J → Cp)
 
-/-- The batch's context at table `t`'s position. -/
 abbrev ctxB (gs : Fin J → Fin 2 → Game P) (t : Fin J) :=
   Ctx.batchAt ((List.ofFn (tabG out caps gs)).take t) ((List.ofFn (tabG out caps gs)).drop (t + 1))
 
-/-- Table `t`'s context at rep 0. -/
 abbrev ctx₀ (gs : Fin J → Fin 2 → Game P) (t : Fin J) :=
   (Ctx.left (gs t 1)).comp (Ctx.bind (KgJ out t (caps t)))
 
-/-- Table `t`'s context at rep 1. -/
 abbrev ctx₁ (gs : Fin J → Fin 2 → Game P) (t : Fin J) :=
   (Ctx.right (gs t 0)).comp (Ctx.bind (KgJ out t (caps t)))
 
@@ -192,8 +160,6 @@ theorem length_take_ofFn (gs : Fin J → Fin 2 → Game P) (t : Fin J) :
     ((List.ofFn (tabG out caps gs)).take t).length = t := by
   simp [t.isLt.le]
 
-/-- **A round of the simulation at rep `r` of table `t`**, as a strategy of the batch: the rep's path `s` to its coin
-`kk`, then `ψn` at each of the coin's branches. -/
 abbrev roundS (gs : Fin J → Fin 2 → Game P) (t : Fin J) (r : Fin 2) {Cm : Type} [Fintype Cm] [Nonempty Cm]
     (kk : Cm → Game P) (s : Steps (gs t r) (.coin Cm kk))
     (ψn : (x : Cm) → Strategy (posOf out caps (upd gs t r (kk x)))) : Strategy (posOf out caps gs) :=
@@ -209,8 +175,6 @@ theorem round_heq_ofEq {A : Type} {C : Game A → Game (List OutT)} (c : Ctx C) 
   rw [playSteps_trans]
   exact playSteps_ofEq_heq _ _
 
-/-- **A round at rep 0 of table `t`**, read through `Ctx.batchAt` at the table's position: a predicate `Φ` there
-from `Φ'` at each coin's next position. -/
 theorem step0 {gs : Fin J → Fin 2 → Game P} (t : Fin J) {Cm : Type} [Fintype Cm] [Nonempty Cm] (kk : Cm → Game P)
     (s : Steps (gs t 0) (.coin Cm kk)) (Φ : (l : List (Game OutT)) → Strategy (batch l) → Prop)
     (Φ' : Cm → (l : List (Game OutT)) → Strategy (batch l) → Prop)
@@ -234,7 +198,6 @@ theorem step0 {gs : Fin J → Fin 2 → Game P} (t : Fin J) {Cm : Type} [Fintype
         (((ctx₀ out caps gs t).coin kk).eq x)).trans (ofFn_tabG_upd₀ out caps gs t (kk x)).symm)
       ((cast_heq _ _).trans (cast_heq _ _)) (hN x))
 
-/-- **A round at rep 1 of table `t`**, read through `Ctx.batchAt` at the table's position. -/
 theorem step1 {gs : Fin J → Fin 2 → Game P} (t : Fin J) {Cm : Type} [Fintype Cm] [Nonempty Cm] (kk : Cm → Game P)
     (s : Steps (gs t 1) (.coin Cm kk)) (Φ : (l : List (Game OutT)) → Strategy (batch l) → Prop)
     (Φ' : Cm → (l : List (Game OutT)) → Strategy (batch l) → Prop)
@@ -258,7 +221,6 @@ theorem step1 {gs : Fin J → Fin 2 → Game P} (t : Fin J) {Cm : Type} [Fintype
         (((ctx₁ out caps gs t).coin kk).eq x)).trans (ofFn_tabG_upd₁ out caps gs t (kk x)).symm)
       ((cast_heq _ _).trans (cast_heq _ _)) (hN x))
 
-/-- **A round at a table in front**, at either rep: the paused games keep waiting, and the table advances one coin. -/
 theorem front_step {k : ℕ} {S : (List OutT → Prop) → (l : List (Game OutT)) → Strategy (batch l) → Prop}
     {gs : Fin J → Fin 2 → Game P} (t : Fin J) (r : Fin 2) {Cm : Type} [Fintype Cm] [Nonempty Cm] (kk : Cm → Game P)
     (s : Steps (gs t r) (.coin Cm kk)) (m c : ℕ) (ns : List ℕ) {D : List OutT → Prop}
@@ -279,7 +241,6 @@ theorem front_step {k : ℕ} {S : (List OutT → Prop) → (l : List (Game OutT)
         _ t (length_take_ofFn out caps gs t) ψ hP) hN
   · omega
 
-/-- **A round at rep 0 of the session's table**: the paused games keep waiting, and rep 0 leads one coin. -/
 theorem sess_step0 {gs : Fin J → Fin 2 → Game P} (t : Fin J) {Cm : Type} [Fintype Cm] [Nonempty Cm]
     (kk : Cm → Game P) (s : Steps (gs t 0) (.coin Cm kk)) (b : Option ℕ) (c : ℕ) {D : List OutT → Prop}
     (ψn : (x : Cm) → Strategy (posOf out caps (upd gs t 0 (kk x))))
@@ -294,7 +255,6 @@ theorem sess_step0 {gs : Fin J → Fin 2 → Game P} (t : Fin J) {Cm : Type} [Fi
     (fun ψ hP => paused_round' _ _ (fun x => Sess (predS b) c (KgJ out t (caps t)) (kk x) (gs t 1))
       (fun D ψ hS => sess_round0 (gs t 1) s _ D ψ hS) _ t (length_take_ofFn out caps gs t) ψ hP) hN
 
-/-- **A round at rep 1 of the session's table** once rep 0 has ended: the paused games keep waiting. -/
 theorem sess_step1 {gs : Fin J → Fin 2 → Game P} (t : Fin J) {Cm : Type} [Fintype Cm] [Nonempty Cm]
     (kk : Cm → Game P) (s : Steps (gs t 1) (.coin Cm kk)) (b : Option ℕ) {a : P} (g₂ : Game P)
     {D : List OutT → Prop} (ψn : (x : Cm) → Strategy (posOf out caps (upd gs t 1 (kk x))))
@@ -320,8 +280,6 @@ theorem strategy_mapDead_coin_castR {β α : Type} {pL : β → Prop} {pg : α �
   funext fun x => (congrArg (fun d => Sim.strategy d (τ (e x))) (mapDead_castR f (H x) (d x))).trans
     (strategy_castR (H x) _ _)
 
-/-! ## The live rounds stream by stream -/
-
 section SchedJ
 
 variable {P OutT Cp Op : Type} [Nonempty Op] {J mPts : ℕ} (out : Fin J → Cp → P × P → Op → OutT)
@@ -331,8 +289,7 @@ variable {P OutT Cp Op : Type} [Nonempty Op] {J mPts : ℕ} (out : Fin J → Cp 
   (pts : Fin 2 → Fin mPts → 𝔽) (nul : Op) {Dead : List OutT → Prop}
   {G : Fin J → (Fin 2 → Fin mPts → 𝔽) → Fin 2 → Game P}
 
-/-- **The live strategy submits its next rounds on the streams `ss`**, stream `2 · t + r` rep `r` of table `t`, and
-then stops or runs out of rounds. -/
+/-- Stream `2 · t + r` is rep `r` of table `t`. -/
 def SchedLJ : (n : ℕ) → (rs : Fin J → Fin 2 → List Flock.Round) → List ℕ →
     Strategy ((liveRoundsJ dg J n rs).bind (KLJ rootB pts)) → Prop
   | 0, _, ss, _ => ss = []
@@ -341,7 +298,6 @@ def SchedLJ : (n : ℕ) → (rs : Fin J → Fin 2 → List Flock.Round) → List
     | ⟨some s, τ⟩ => ∃ ss', ss = (2 * s.tab.val + s.rep.val) :: ss' ∧
         ∀ c, SchedLJ n (addRoundJ rs s.tab s.rep (roundOf dg s.bytes s.n c)) ss' (τ c)
 
-/-- Under a schedule without stream `2 · t + r`, rep `r` of table `t` ends with the rounds it has. -/
 theorem reps_of_schedLJ : ∀ (n : ℕ) (rs : Fin J → Fin 2 → List Flock.Round) (ss : List ℕ)
     (σ : Strategy ((liveRoundsJ dg J n rs).bind (KLJ rootB pts))), SchedLJ dg rootB pts n rs ss σ →
       ∀ (t : Fin J) (r : Fin 2), 2 * t.val + r.val ∉ ss → ∀ o, Lock.Reach _ σ o → o.reps t r = rs t r
@@ -356,7 +312,6 @@ theorem reps_of_schedLJ : ∀ (n : ℕ) (rs : Fin J → Fin 2 → List Flock.Rou
       exact List.mem_cons_self
 
 omit [Nonempty Op] in
-/-- **No accepted live outcome when a rep has not ended and its stream is not in the schedule**: its tape is over. -/
 theorem noAcc_of_schedLJ (hfin : ∀ t r proofs, fin t r proofs = []) {n : ℕ} {rs : Fin J → Fin 2 → List Flock.Round}
     {gs : Fin J → Fin 2 → Game P}
     (hI : InvJ out ok pL opn caps ((liveRoundsJ dg J n rs).bind (KLJ rootB pts)) gs (restJ dec one fin rs))
@@ -372,7 +327,6 @@ theorem noAcc_of_schedLJ (hfin : ∀ t r proofs, fin t r proofs = []) {n : ℕ} 
   rw [hr] at h0
   exact hg _ (PlaysT.nil_inv h0)
 
-/-- **A position answered with `nul`** reaches only outputs at which table `j` is at the openings `nul`. -/
 theorem dead_answerWith (j : Fin J) (dz : OutT)
     (hnul : ∀ outs cap pend, outs.getD j dz = out j cap pend nul → Dead outs) {caps' : Fin J → Cp}
     {gs' : Fin J → Fin 2 → Game P} (hinh : ∀ j r, AllInh (gs' j r)) (σ : Strategy (posOf out caps' gs')) :
@@ -382,7 +336,6 @@ theorem dead_answerWith (j : Fin J) (dz : OutT)
       (reach_answerWith nul (allInh_posOf out caps' hinh) σ x hx) j
     exact hnul x _ _ hp
 
-/-- **A dead node of a simulation**, its strategy answered with `nul`. -/
 theorem dead_mapDead_dead (j : Fin J) (dz : OutT)
     (hnul : ∀ outs cap pend, outs.getD j dz = out j cap pend nul → Dead outs) {β : Type} {pβ : β → Prop}
     {pg : List OutT → Prop} {L : Game β} {caps' : Fin J → Cp} {gs' : Fin J → Fin 2 → Game P}
@@ -391,8 +344,6 @@ theorem dead_mapDead_dead (j : Fin J) (dz : OutT)
   obtain ⟨hp, σ, rfl⟩ := hd
   exact dead_answerWith out nul j dz hnul hinh σ
 
-/-- **No accepted live outcome below**: everything the simulated strategy reaches is a dead branch's, answered with
-`nul`. -/
 theorem dead_noAcc (j : Fin J) (dz : OutT) (hnul : ∀ outs cap pend, outs.getD j dz = out j cap pend nul → Dead outs)
     {β : Type} {pβ : β → Prop} {pg : List OutT → Prop} {L : Game β} {gs : Fin J → Fin 2 → Game P}
     (d : Sim pβ pg L (posOf out caps gs)) (hA : Sim.All (fun b _ => pβ b) (DeadAt out G) d) (s : Strategy L)
@@ -403,8 +354,6 @@ theorem dead_noAcc (j : Fin J) (dz : OutT) (hnul : ∀ outs cap pend, outs.getD 
   · exact absurd hp (hno b hb)
   · exact dead_answerWith out nul j dz hnul hinh σ x hr
 
-/-- **A round's coins**, every dead branch answered with `nul`: `Φ` holds at them where it holds below runs every
-outcome of which is `Dead`, and at a round whose coins lead to positions `Ψ` holds at. -/
 theorem coin_ind (j : Fin J) (dz : OutT) (hnul : ∀ outs cap pend, outs.getD j dz = out j cap pend nul → Dead outs)
     {n : ℕ} {rs : Fin J → Fin 2 → List Flock.Round} {t : Fin J} {r : Fin 2} {bb : ByteArray} {k : ℕ}
     {gs : Fin J → Fin 2 → Game P} (h : ∀ j r, AllInh (gs j r))
@@ -441,8 +390,6 @@ theorem coin_ind (j : Fin J) (dz : OutT) (hnul : ∀ outs cap pend, outs.getD j 
         rw [mapDead_ofSteps, strategy_ofSteps, strategy_mapDead_coin_castR]
         exact hstep Cm _ _ kk s _ fun x => hnext (e x) _ _ (hI' x) (all_castR_inv _ _ (all_ofSteps_inv _ _ hA x))
 
-/-- **A round of the simulation**, every dead branch answered with `nul`: `Φ` holds at it where it holds below runs
-every outcome of which is `Dead`, and at a round whose coins lead to positions `Ψ` holds at. -/
 theorem round_ind (j : Fin J) (dz : OutT) (hnul : ∀ outs cap pend, outs.getD j dz = out j cap pend nul → Dead outs)
     {n : ℕ} {rs : Fin J → Fin 2 → List Flock.Round} {t : Fin J} {r : Fin 2} {bb : ByteArray} {k : ℕ}
     {gs : Fin J → Fin 2 → Game P} (h : ∀ j r, AllInh (gs j r))
@@ -472,8 +419,6 @@ theorem round_ind (j : Fin J) (dz : OutT) (hnul : ∀ outs cap pend, outs.getD j
     exact coin_ind out ok dflt pL opn dg dec one fin caps rootB pts nul j dz hnul h next τ Φ Ψ hdead hstep hnext g'
       (stepsOfFollow _ _ hf) _ _ (all_ofSteps_inv _ _ hA)
 
-/-- **`Φ` at the simulated strategy wherever the live strategy submits its next rounds on the streams `ss`**, every
-dead branch answered with `nul`. -/
 def OnSched (G : Fin J → (Fin 2 → Fin mPts → 𝔽) → Fin 2 → Game P) (ss : List ℕ)
     (Φ : (gs : Fin J → Fin 2 → Game P) → Strategy (posOf out caps gs) → Prop) : Prop :=
   ∀ n rs gs (h : ∀ j r, AllInh (gs j r))
@@ -486,8 +431,6 @@ def OnSched (G : Fin J → (Fin 2 → Fin mPts → 𝔽) → Fin 2 → Game P) (
 set_option hygiene false in
 local notation "OnS" => OnSched out ok dflt pL opn dg dec one fin caps rootB pts nul
 
-/-- **A round on stream `p = 2 · t + r` first**: `Φ` holds where it holds below dead runs, and at a round at rep `r`
-of table `t` whose next positions `Ψ` holds at, where `Ψ` holds on the rest of the schedule. -/
 theorem onSched_cons (j : Fin J) (dz : OutT)
     (hnul : ∀ outs cap pend, outs.getD j dz = out j cap pend nul → Dead outs) (t : Fin J) (r : Fin 2) {p : ℕ}
     (hp : p = 2 * t.val + r.val) {ss : List ℕ}
@@ -515,8 +458,6 @@ theorem onSched_cons (j : Fin J) (dz : OutT)
     (fun _ gs' h' hI' => simRJ out ok dflt pL opn dg dec one fin caps rootB pts n _ gs' h' hI') τ (Φ gs) Ψ
     (hdead gs) (hstep gs) (fun c gs' h' hI' hA' => hss n _ gs' h' hI' (τ c) (hS' c) hA') (hA (some ⟨t, r, bb, k⟩))
 
-/-- **`OnSched` below dead runs**: `Φ` holds wherever it holds at strategies every outcome of which is `Dead` when a
-rep that has not ended has no stream in the schedule. -/
 theorem onSched_of (hfin : ∀ t r proofs, fin t r proofs = []) (j : Fin J) (dz : OutT)
     (hnul : ∀ outs cap pend, outs.getD j dz = out j cap pend nul → Dead outs) (ss : List ℕ)
     {Φ : (gs : Fin J → Fin 2 → Game P) → Strategy (posOf out caps gs) → Prop}
@@ -539,7 +480,6 @@ theorem pred_cond {b : Option ℕ} {N N' : ℕ} (hN : N = N' + 1) (hb : b = none
   · exact .inr ⟨m, rfl, by omega⟩
 
 omit [Nonempty Op] in
-/-- **Below dead runs the session's table holds** past the tables in front of it. -/
 theorem paused_sess_dead (j : Fin J) (hD : DepAt j.val Dead) {b : Option ℕ} {nL : ℕ} {g₁ g₂ : Game P}
     (gs : Fin J → Fin 2 → Game P) (σ : Strategy (posOf out caps gs)) (hσ : ∀ x, Lock.Reach _ σ x → Dead x) :
     Paused b (Sess b nL (KgJ out j (caps j)) g₁ g₂) j Dead (List.ofFn (tabG out caps gs)) σ :=
@@ -547,7 +487,6 @@ theorem paused_sess_dead (j : Fin J) (hD : DepAt j.val Dead) {b : Option ℕ} {n
     (by simp) hσ
 
 omit [Nonempty Op] in
-/-- **Below dead runs the tables in front hold**, past the paused ones. -/
 theorem paused_front_dead (j : Fin J) (hD : DepAt j.val Dead) {b : Option ℕ} {k : ℕ}
     {S : (List OutT → Prop) → (l : List (Game OutT)) → Strategy (batch l) → Prop}
     (hS : ∀ D l σ, DepAt 0 D → l ≠ [] → (∀ x, Lock.Reach (batch l) σ x → D x) → S D l σ) (t : ℕ) (ns : List ℕ)
@@ -556,8 +495,6 @@ theorem paused_front_dead (j : Fin J) (hD : DepAt j.val Dead) {b : Option ℕ} {
   Lock.paused_dead (fun _ _ _ hd hl hσ => Lock.front_dead k hS ns hd hl hσ) t (ht ▸ hD)
     (by rw [List.length_ofFn, ht]; exact j.isLt) hσ
 
-/-- **Past the slot**: where every stream left is table `j`'s or a later table's, the session's table holds with the
-budget spent. -/
 theorem onSched_spent (hfin : ∀ t r proofs, fin t r proofs = []) (j : Fin J) (dz : OutT)
     (hnul : ∀ outs cap pend, outs.getD j dz = out j cap pend nul → Dead outs) (hD : DepAt j.val Dead)
     (ss : List ℕ) (hss : ∀ p ∈ ss, 2 * j.val ≤ p) (a : P) (g₂ : Game P) :
@@ -578,8 +515,6 @@ theorem onSched_spent (hfin : ∀ t r proofs, fin t r proofs = []) (j : Fin J) (
       have := r.isLt
       exact paused_sess_dead j hD gs σ (hnd i r (fun hm => by have := hss _ hm; omega) hr)
 
-/-- **Rep 1 of the session's table** with rep 0 ended: through its next `c` rounds, then past the slot, the session's
-table holds with any budget short of them. -/
 theorem onSched_rep1 (hfin : ∀ t r proofs, fin t r proofs = []) (j : Fin J) (dz : OutT)
     (hnul : ∀ outs cap pend, outs.getD j dz = out j cap pend nul → Dead outs) (hD : DepAt j.val Dead)
     (rest : List ℕ) (hrest : ∀ p ∈ rest, 2 * j.val + 2 ≤ p) (a : P) (g₂ : Game P) :
@@ -614,8 +549,6 @@ theorem onSched_rep1 (hfin : ∀ t r proofs, fin t r proofs = []) (j : Fin J) (d
         (fun gs _ _ _ kk s ψn hN => sess_step1 out caps j kk s (some m) g₂ ψn fun x => hN x _ (pred_cond rfl hb))
         ih n rs gs h hI Pr hS hA
 
-/-- **Rep 0 of the session's table**: through its next `c` rounds, then rep 1's `R`, the session's table leads with
-rep 0 for `c` coins, with any budget short of both reps' rounds. -/
 theorem onSched_rep0 (hfin : ∀ t r proofs, fin t r proofs = []) (j : Fin J) (dz : OutT)
     (hnul : ∀ outs cap pend, outs.getD j dz = out j cap pend nul → Dead outs) (hD : DepAt j.val Dead) (R : ℕ)
     (rest : List ℕ) (hrest : ∀ p ∈ rest, 2 * j.val + 2 ≤ p) :
@@ -649,8 +582,6 @@ theorem onSched_rep0 (hfin : ∀ t r proofs, fin t r proofs = []) (j : Fin J) (d
     have h' := hN x (predS b) (pred_cond (by omega) hb)
     rwa [upd_self, upd_ne gs (kk x) (show ¬ (j = j ∧ (1 : Fin 2) = 0) by simp)] at h'
 
-/-- **A table in front, rep by rep**: through its next `c` rounds on stream `p` of table `t`'s rep `r`, the table in
-front advances `c` more coins, with `c` more coins on the paused tables' budget. -/
 theorem onSched_front (j : Fin J) (dz : OutT)
     (hnul : ∀ outs cap pend, outs.getD j dz = out j cap pend nul → Dead outs) (hD : DepAt j.val Dead) {k : ℕ}
     {S : (List OutT → Prop) → (l : List (Game OutT)) → Strategy (batch l) → Prop}
@@ -675,12 +606,10 @@ theorem onSched_front (j : Fin J) (dz : OutT)
       (fun gs _ _ _ kk s ψn hN e₁ e₂ => front_step out caps t r kk s (M + (off + c)) (off + c) ns ψn fun x =>
         hN x ((upd_ne gs (kk x) (hne 0)).trans e₁) ((upd_ne gs (kk x) (hne 1)).trans e₂)) ih
 
-/-- The streams of the tables `t, …, t + d - 1`: each table's rep 0 `Rf t` times, then its rep 1 `Rf t` times. -/
 def fromS (Rf : ℕ → ℕ) : ℕ → ℕ → List ℕ
   | _, 0 => []
   | t, d + 1 => List.replicate (Rf t) (2 * t) ++ (List.replicate (Rf t) (2 * t + 1) ++ fromS Rf (t + 1) d)
 
-/-- The coins of the tables `t, …, t + d - 1`, both reps'. -/
 def nsFrom (Rf : ℕ → ℕ) : ℕ → ℕ → List ℕ
   | _, 0 => []
   | t, d + 1 => (Rf t + Rf t) :: nsFrom Rf (t + 1) d
@@ -689,9 +618,6 @@ theorem length_nsFrom (Rf : ℕ → ℕ) : ∀ t d, (nsFrom Rf t d).length = d
   | _, 0 => rfl
   | t, d + 1 => congrArg (· + 1) (length_nsFrom Rf (t + 1) d)
 
-/-- **The tables from `t` on**: through the streams of the tables `t, …, j - 1` and then table `j`'s, the tables
-from `t` on advance by `Front` past the `t` paused, and then table `j` by `Sess`, with the budget `k` short of both
-of table `j`'s reps' rounds. -/
 theorem onSched_tabs (hfin : ∀ t r proofs, fin t r proofs = []) (j : Fin J) (dz : OutT)
     (hnul : ∀ outs cap pend, outs.getD j dz = out j cap pend nul → Dead outs) (hD : DepAt j.val Dead)
     (Rf : ℕ → ℕ) (k R : ℕ) (hk : k < R + R) (rest : List ℕ) (hrest : ∀ p ∈ rest, 2 * j.val + 2 ≤ p)
@@ -734,11 +660,6 @@ theorem onSched_tabs (hfin : ∀ t r proofs, fin t r proofs = []) (j : Fin J) (d
       simp only [nsFrom, List.sum_cons]
       omega] at h'
 
-/-- **The simulated strategy follows the batch's schedule**: where the live strategy submits the rounds of the tables
-in front of `j` stream by stream, `Rf t` on each of table `t`'s reps, then table `j`'s `R` on rep 0 and `R` on rep
-1, then only later tables', the simulated strategy, every dead branch answered with `nul`, advances the tables in
-front by `Lock.Front` and then table `j` by `Lock.Sess`, rep 0 first, with the budget `k` short of both reps' rounds,
-short of runs `Dead` reads at table `j` alone. -/
 theorem front_simRJ (hfin : ∀ t r proofs, fin t r proofs = []) (j : Fin J) (dz : OutT)
     (hnul : ∀ outs cap pend, outs.getD j dz = out j cap pend nul → Dead outs) (hD : DepAt j.val Dead)
     (Rf : ℕ → ℕ) (k R : ℕ) (hk : k < R + R) (rest : List ℕ) (hrest : ∀ p ∈ rest, 2 * j.val + 2 ≤ p) (n : ℕ)

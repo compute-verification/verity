@@ -38,15 +38,7 @@ import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
 import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysDet
 import Proofs.Flock.Soundness.Refine.Seam
 
-/-!
-# Level 0's request first, at verity-verify-proof's acceptance
-
-`accepts_req0`: when `Accepts I t`, whether or not the outputs are hidden, at every table `j` and rep `r`, every
-result of the rep's compiled game played with its proof file's messages and its stream's coins requests level 0 first,
-at the positions of the coins of the stream's round `plainQueryRound` (`rep_refines_req0` at `verifyRep`'s acceptance;
-a run has one result, `plays_det`), where the proof opens one level-0 row per position (`merkleCheck_rows`), and every
-request has its level's lanes and path length in the model's schedule `schedOf sch` (`ReqOK`, `lvOf_schedOf`).
--/
+/-! When `Accepts I t`, every rep requests level 0 first, at the coins of its stream's round `plainQueryRound`. -/
 
 @[expose] public section
 
@@ -56,16 +48,10 @@ open Flock Refine Model Game
 
 local notation "𝔽" => FlockLevel3.GF128
 
-/-- A level of an executable schedule is the model schedule's. -/
 theorem lvOf_schedOf {s : Flock.Schedule} {i : ℕ} (hi : i < s.levels.size) :
     lvOf (schedOf s) i = levelOf (s.levels.getD i default) := by
   simp [lvOf, schedOf, Array.getD, hi, List.getD_eq_getElem?_getD]
 
-/-- **An accepted rep requests level 0 first** (§9–§14). When `Accepts I t`, at every table `j`,
-its `fast100` schedule and rep `r < 2`, every result of the rep's compiled game,
-played with its proof file's messages and its stream's coins, has level 0's request first, at the positions of the
-coins of the stream's round `plainQueryRound` at the table's `m`, `kLog`, `k0` and claims, where the proof opens one
-level-0 row per position, and every request has its level's lanes and path length in the model's schedule. -/
 theorem accepts_req0 {I : Inputs} {t : Transcript} (h : Accepts I t) :
     ∃ (spec : SessionSpec) (sts : Array Flock.Stmt) (sess : RunRecord), setupOf I t.record = .ok (spec, sts) ∧
       Record.decode spec t.record = .ok sess ∧

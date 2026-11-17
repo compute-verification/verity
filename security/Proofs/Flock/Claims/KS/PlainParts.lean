@@ -36,25 +36,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# The plain chain from the concrete simulator's parts
-
-The plain table bound asks, at each plain statement some run accepts, for a simulator of each prover at the verdict
-at the sample (`PlainSimWD`). The concrete simulator `plainSim P` at the coins `plainΦ x` has its uniform distribution
-(`Pr_plainΦ`), its roots (`plainSim_root`), the simulation (`plainSimRun`), the abort (`plainSimAbortAt`) and, at the
-coupling's chances, the slack's fit (`plain_slack_fits`) and the fork's slack (`plain_fork_le_fnAt`). What it does not
-have yet is two parts, each a named Prop here:
-
-* `PlainSimClashAt`: a live outcome decoded at the verdict at the sample with a self-clash, where `P`'s run accepts,
-  gives that run a raw clash at some level or a collision (`PlainRawClashL`);
-* `PlainSimForkLe`: the strategies' fork advantage at each plain fork round is at most the simulated fork there.
-
-* `plainDecQ`, `PlainClashQ`: the live outcome decoded at the verdict at the sample with a property `Q` of the table's
-  output, and `Q` giving `P`'s accepting runs a raw clash; `LiveSelfClash` is `plainDecQ` at `SelfClashL`.
-* `plainAdv`: the strategies' fork advantage `PlainSimWrPAtD` bounds, at the concrete simulator.
-* `plainRawClashRunL_of_abort`, `plainSimWrPAtD_of_parts`, `plainSimWD_of_parts`: so `PlainSimWD` holds from
-  `PlainSimClashAt` and `PlainSimForkLe` alone.
--/
+/-! The plain table bound's simulator `PlainSimWD` from the concrete simulator's parts and `PlainSimClashAt` and `PlainSimForkLe` alone. -/
 
 @[expose] public section
 
@@ -66,9 +48,6 @@ open Flock FlockSoundness FlockSoundness.Game FlockSoundness.Discharge FlockSoun
 open FlockSoundness.Discharge.Tables Claims.Bridge.Live
 open Lean (Json)
 
-/-- **A raw clash in `P`'s run at coins `c`**: two different columns its reps open at one level-0 position, two
-openings of one position to different rows against one root at a later level, or a collision among the verifier's
-calls (`PlainRawClashRunL`'s outcome). -/
 def PlainRawClashL {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω) (c : Fin ((V false).k x) → Coin) :
     Prop :=
   (∃ (q : ℕ) (a b : List 𝔽), (q, a) ∈ plainRawCols (Claims.run sha512 P (V false) x ω c).seen ∧
@@ -77,9 +56,6 @@ def PlainRawClashL {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω)
       PlainLevelClash ms lv lanes (Claims.run sha512 P (V false) x ω c).vLog) ∨
     Claims.TiedColl sha512 (Claims.run sha512 P (V false) x ω c).vLog
 
-/-- **A raw clash in `P`'s run at coins `c`**: two different columns its reps open at one level-0 position, two
-openings of one position to different rows against one root at a later level, or a collision among the verifier's
-calls (`PlainRawClashRunL`'s outcome). -/
 def PlainRawClashLK (keep : Bool → Bool) {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω) (c : Fin ((V false).k x) → Coin) :
     Prop :=
   (∃ (q : ℕ) (a b : List 𝔽), (q, a) ∈ plainRawCols (Claims.run sha512 P (VK keep) x ω c).seen ∧
@@ -88,8 +64,6 @@ def PlainRawClashLK (keep : Bool → Bool) {Ω : Type} (P : Claims.Prover Ω) (x
       PlainLevelClash ms lv lanes (Claims.run sha512 P (VK keep) x ω c).vLog) ∨
     Claims.TiedColl sha512 (Claims.run sha512 P (VK keep) x ω c).vLog
 
-/-- **The raw clash at any level from the abort and the accepting runs' clash**: `PlainRawClashRunL` where `P'`
-aborts on rejected runs and, at the accepting ones, the live event gives a raw clash. -/
 theorem plainRawClashRunL_of_abortK (keep : Bool → Bool) {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω} {mPts : ℕ}
     {N : Claims.Msg → ℕ} {dg : ByteArray → ByteArray} {w : Claims.Msg → Wire 65536 1 mPts} {τ : Type}
     {P' : Claims.Prover (Ω × τ)} {Φ : τ × (Fin (N x + 2) → LCoin 65536) → Fin ((V false).k x) → Coin}
@@ -99,7 +73,6 @@ theorem plainRawClashRunL_of_abortK (keep : Bool → Bool) {Ω : Type} {P : Clai
     PlainRawClashRunLK keep P x ω mPts N dg w P' Φ pL := fun u r' hp =>
   ⟨plain_acc_of_abortK keep habort hp, hclash u r' hp (plain_acc_of_abortK keep habort hp)⟩
 
-/-- `plainRawClashRunL_of_abortK` at the deployed plain verifier (`keep := id`). -/
 theorem plainRawClashRunL_of_abort {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω} {mPts : ℕ}
     {N : Claims.Msg → ℕ} {dg : ByteArray → ByteArray} {w : Claims.Msg → Wire 65536 1 mPts} {τ : Type}
     {P' : Claims.Prover (Ω × τ)} {Φ : τ × (Fin (N x + 2) → LCoin 65536) → Fin ((V false).k x) → Coin}
@@ -109,9 +82,6 @@ theorem plainRawClashRunL_of_abort {Ω : Type} {P : Claims.Prover Ω} {x : Claim
     PlainRawClashRunL P x ω mPts N dg w P' Φ pL :=
   plainRawClashRunL_of_abortK id (Ω := Ω) (P := P) (x := x) (ω := ω) (mPts := mPts) (N := N) (dg := dg) (w := w) (τ := τ) (P' := P') (Φ := Φ) (pL := pL) (habort := habort) (hclash := hclash)
 
-/-- **A live outcome decoded at the verdict at the sample, with a property `Q` of table 0's output**: the verdict
-`plainVerdictAt I d C rootB₀` holds, the reps' decoded tapes play to pendings, and the output at them and the
-openings `opn` has `Q`. At `Q := SelfClashL` it is `LiveSelfClash` at the plain decoders. -/
 def plainDecQ {mPts : ℕ} (Q : Model.OutCL 𝔽 Refine.Dig (List UInt8) → Prop) (T : TabSpec mPts) (I : Exec.Inputs)
     (d : Json) {M : ℕ} (C : Fin M → List 𝔽) (rootB₀ : Array ByteArray)
     (opn : Array ByteArray → Fin 1 → Model.Opens 𝔽 Refine.Dig × Model.Salts (List UInt8)) (o : LiveOutJ 1 mPts) :
@@ -121,9 +91,6 @@ def plainDecQ {mPts : ℕ} (Q : Model.OutCL 𝔽 Refine.Dig (List UInt8) → Pro
     (fun rs _ => capOfRoot rs[0]!) (fun j => repsOf (D := Refine.Dig) execArith ([T].get j)) o a ∧
     Q (a.getD 0 dfltOutL)
 
-/-- **`Q` at the decoded live outcome gives `P`'s accepting runs a raw clash**: at the concrete simulator, wherever
-`plainDecQ Q` holds at `plainSim P`'s live outcome and `V false` accepts `P` at `plainΦ x`, that run has a raw clash
-(`PlainRawClashL`). -/
 def PlainClashQ {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω) {spec : SessionSpec} (st : Stmt)
     (T : TabSpec spec.mPts) (hw : 2 * spec.mPts ≤ 65536) (I : Exec.Inputs) (d : Json)
     (opn : Array ByteArray → Fin 1 → Model.Opens 𝔽 Refine.Dig × Model.Salts (List UInt8))
@@ -134,10 +101,6 @@ def PlainClashQ {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω) {s
     (Claims.run sha512 P (V false) x ω (plainΦ x spec st (u, r'))).out = .acc →
     PlainRawClashL P x ω (plainΦ x spec st (u, r'))
 
-/-- **The live self-clash's clash**: at every plain statement in scope and its one table's `fast100` schedule, at the
-plain decoders' openings where the outputs are public (`plainOpn`) and where they are hidden under hm96 leaves
-(`plainOpnH`), a live self-clash at the concrete simulator's outcome where `P`'s run accepts gives that run a raw
-clash (`PlainClashQ` at `SelfClashL`). -/
 def PlainSimClashAt (x : Claims.Msg) : Prop :=
   ∀ (s : Claims.Flock.Stmt) (hs : parse false Readable.relation x = some s) (hin : Claims.Flock.InScope false s)
     (ins : Ins) (spec : SessionSpec) (sts : Array Stmt) (hset : setupOf false x = some (ins, spec, sts)) (st : Stmt)
@@ -157,9 +120,6 @@ def PlainSimClashAt (x : Claims.Msg) : Prop :=
         (SelfClashL Refine.H512 Refine.enc512 Refine.leaf512 ⟨m, k0, l₀ :: l₁ :: rest, ext⟩))
 
 open Classical in
-/-- **The strategies' fork advantage at the concrete simulator**: `PlainSimWrPAtD`'s fork clause's left side at
-`plainSim P`, its tape `plainTape x`, round digest `plainDg`, wire `plainW` and roots `plainSim_root`, at rep `r`'s
-level `ℓ + 1`. -/
 noncomputable def plainAdv {spec : SessionSpec} {st : Stmt} (L : Layout st) (m k0 : ℕ) (l₀ l₁ : Accounting.Level)
     (rest : List Accounting.Level) (ext : ℕ) (hsch : Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩)
     (hk0 : l₀.lanes = k0) (hm : 13 ≤ (L.model (Refine.regionsOf st)).m)
@@ -186,11 +146,6 @@ noncomputable def plainAdv {spec : SessionSpec} {st : Stmt} (L : Layout st) (m k
           (plainSim P x spec st) x (ω, u)) (plainSim_root P x spec st ω hw u))) /
     Fintype.card (plainTape x)
 
-/-- **The simulated fork bounds the strategies' fork advantage**: at every plain statement in scope and its one
-table's `fast100` schedule, at the plain decoders where the outputs are public (`plainOpn`, `plain_hdecAt`) and where
-they are hidden under hm96 leaves (`plainOpnH`, `plain_hdecHAt`), the concrete simulator's fork advantage at each
-plain fork round
-(`plainAdv`) is at most its simulated fork there, at the live fork `forkN` (`Flock.simForkPr` at `plainΦ x`). -/
 def PlainSimForkLe (x : Claims.Msg) : Prop :=
   ∀ (s : Claims.Flock.Stmt) (hs : parse false Readable.relation x = some s) (hin : Claims.Flock.InScope false s)
     (ins : Ins) (spec : SessionSpec) (sts : Array Stmt) (hset : setupOf false x = some (ins, spec, sts)) (st : Stmt)
@@ -218,10 +173,6 @@ def PlainSimForkLe (x : Claims.Msg) : Prop :=
             (plainJ (tables_head_one h) hsch r ℓ).val)
 
 open Classical in
-/-- **The concrete simulator at the verdict at the sample, from its clash and its fork bound**: `PlainSimWrPAtD` at any
-openings `opn` and decoders `hdec`, with `plainSim P`, `plainΦ x` and the coupling's chances
-`FnFork.δN GF128 65536 (plainNOf x spec st)`, where its live self-clashes give `P`'s accepting runs a raw clash and its
-fork advantage is at most its simulated fork. -/
 theorem plainSimWrPAtD_of_parts {x : Claims.Msg} {s : Claims.Flock.Stmt}
     (hs : parse false Readable.relation x = some s) (hin : Claims.Flock.InScope false s) {ins : Ins}
     {spec : SessionSpec} {sts : Array Stmt} (hset : setupOf false x = some (ins, spec, sts)) {st : Stmt}
@@ -265,8 +216,6 @@ theorem plainSimWrPAtD_of_parts {x : Claims.Msg} {s : Claims.Flock.Stmt}
   · exact plain_fork_le_fnAt h hsch P ω hL (plainNOf x spec st) (Claims.Flock.FnFork.prefixKey_histKey _) r ℓ
       ((hf Ω P ω C hC r ℓ).trans_eq (by rw [plainΦ_eq hL]; rfl))
 
-/-- **The concrete simulator at a plain statement, from its clash and its fork bound**: `PlainSimWD` from
-`PlainSimClashAt` and `PlainSimForkLe`, by `plainSimWrPAtD_of_parts` at the public and the hidden decoders. -/
 theorem plainSimWD_of_parts {x : Claims.Msg} (hc : PlainSimClashAt x) (hf : PlainSimForkLe x) : PlainSimWD x :=
   fun s hs hin ins spec sts hset st h d hd L m k0 l₀ l₁ rest ext hsch hk0 hm hlay =>
     ⟨fun hh => plainSimWrPAtD_of_parts hs hin hset h L m k0 l₀ l₁ rest ext hsch hk0 hm hlay _ _
