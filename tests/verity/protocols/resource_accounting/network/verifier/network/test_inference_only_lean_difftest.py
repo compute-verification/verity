@@ -6,7 +6,7 @@ neighbours, and three pinned ones (θ with an input bound per run, refused, θ t
 declaration with a constant gate, accepted), and
 `scripts/inference_only_reference.py`'s results on each (per inference block its size and fresh input bits, the verdict and the first failing inference block, or
 the first malformation's code). `check` runs the Lean half in its Lean audit (`runs` in that package's
-`lean-audit.json`): `InferenceOnlyVerifier/DifftestMain.lean` checks every instance with `InferenceOnlyVerifier.check` and fails on any difference.
+`lean-audit.json`): `InferenceOnlyCheck/DifftestMain.lean` checks every instance with `InferenceOnlyCheck.check` and fails on any difference.
 The audit checks the data against the record's SHA-256, and its pass is cached on the Lean package's files alone, so the
 test here is what says the data is still what the generator and the reference write: a change to either changes the
 data, fails this test, and `audit.py --update` records the new data, which makes `check` run the Lean half on it. The
@@ -97,7 +97,7 @@ def test_the_reference_on_a_declaration_worked_by_hand():
 def test_the_pinned_instances_get_their_results():
     """The data's last three lines: θ holding b, bound per run, is refused (`theta-not-registered`), θ of the
     registered a alone gets its verdict, and so does the declaration with a constant gate, which reads nothing (a
-    `Const<w>` primitive, the deployed spelling). The difftest holds `InferenceOnlyVerifier.check` to these results."""
+    `Const<w>` primitive, the deployed spelling). The difftest holds `InferenceOnlyCheck.check` to these results."""
     pins = vectors.pinned()
     assert [p["theta_kind"] for p in pins] == ["all", "registered", "registered"]
     defs = json.loads(pins[-1]["instance"]["program"])["definitions"]

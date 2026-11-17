@@ -4,7 +4,7 @@ accounts for space, bandwidth and communication. Its subprotocols are integrity 
 (`VStar.Recursive.Sampled.protocol`, `verity/sampled-proofs/v1`: one-stage v2's audit on the proofs themselves, on the
 blobs the caller hands in; one-stage v1, whose verdicts are the evidence's, and the recursive audit, which SPOT's
 soundness doesn't cover, are refused), the
-inference-only policy (`InferenceOnlyVerifier.Protocol.protocol`,
+inference-only policy (`InferenceOnlyCheck.Protocol.protocol`,
 `verity/inference-only/v0`: the registered circuit divides into inference blocks within their gate and fresh-input
 budgets), work by proof of useful work over the period (`PouwCheck.Period.protocol`, `verity/pouw/period/v1`: the
 period's execution phases credited all or nothing), space by PoUS's check of a run (`PousCheck.RunProtocol.protocol`), bandwidth

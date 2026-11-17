@@ -5,19 +5,19 @@ public import InferenceOnlyVerifier.Desc
 /-!
 # θ's provenance: the baseline is registered
 
-`InferenceOnlyVerifier.Desc.evaluate` takes θ as given: every entry is a registered input node (`theta-not-registered`), but nothing
+`InferenceOnlyCheck.Desc.evaluate` takes θ as given: every entry is a registered input node (`theta-not-registered`), but nothing
 says what value it holds, so a developer could put values computed on unregistered hardware in θ and read them for free.
 `InferenceOnly.Assumptions.ThetaRegistered` states what θ must hold: registered public data, registered at the start of the
 deployment. An output of an earlier run, certified or not, is never θ (registration happens at the start
 of a deployment and essentially never changes). One registration log is one deployment, and θ holds what its first
 record registers: the first run's θ cites its own record, which opens the log, and every
 later run's cites that same record, so new public data takes a new log, a new deployment the auditor sees as such.
-`evaluate` checks it: the policy check (`InferenceOnlyVerifier.Desc.evaluate`) first, unchanged, then each θ entry's provenance
+`evaluate` checks it: the policy check (`InferenceOnlyCheck.Desc.evaluate`) first, unchanged, then each θ entry's provenance
 against what the proof system holds.
 
 ## The instance and the trusted input
 
-The instance is `InferenceOnlyVerifier.Desc`'s with one more field:
+The instance is `InferenceOnlyCheck.Desc`'s with one more field:
 * `provenance`: one object per θ entry, in θ's order, each `{"kind": "registered", "registration": D, "value": V,
   "root": R}`: registered public data, the value `V` that the registration record with digest `D`, the log's first,
   registers (its `registered` list, `verity/registration/v2`) under the root `R`. There is no other kind.
@@ -42,9 +42,9 @@ R7's `held` rule: a value keeps its root across records.
 
 ## Refusals
 
-In the order checked, after every code of `InferenceOnlyVerifier.Desc.evaluate` (whose θ codes come first: `theta-unknown`,
+In the order checked, after every code of `InferenceOnlyCheck.Desc.evaluate` (whose θ codes come first: `theta-unknown`,
 `theta-not-input`, `theta-not-registered`, `theta-duplicate`; then its owners' and `empty-iu`), so that the policy check's
-statements (`InferenceOnlyVerifier.Properties`) stand as they are:
+statements (`InferenceOnlyCheck.Properties`) stand as they are:
 * `theta-provenance`: `provenance` missing, not an array of one entry per θ entry, or an entry not of that form (an
   entry of any other kind, `output` among them);
 * `trusted`: the trusted input is not as stated: its keys, a log record that is no object or breaks the chain, `run` the
@@ -294,14 +294,14 @@ def provenance (j tr : Json) (node : Array Nat → Nat → Nat) : Except String 
     let width := (inputWidth? (P.defs[(body.nodes[k]!).fn]!).key).getD 0
     entryStep T own counts k width ps[t]!
 
-/-- The check of record: `InferenceOnlyVerifier.Desc.evaluate` (θ and the owners per root node), then θ's provenance against the
+/-- The check of record: `InferenceOnlyCheck.Desc.evaluate` (θ and the owners per root node), then θ's provenance against the
 trusted input `tr`; the verdict is the policy check's. -/
 def evaluate (j tr : Json) : Except String Json := do
   let out ← Desc.evaluate j
   provenance j tr fun _ k => k
   return out
 
-/-- The reference: `InferenceOnlyVerifier.evaluate` (θ and the owners per gate), then θ's provenance, gate `g` of θ lying in the root
+/-- The reference: `InferenceOnlyCheck.evaluate` (θ and the owners per gate), then θ's provenance, gate `g` of θ lying in the root
 node that holds it (`Desc.nodeOf`). -/
 def evaluateUnrolled (j tr : Json) : Except String Json := do
   let out ← InferenceOnlyVerifier.evaluate j
@@ -324,7 +324,7 @@ def fixOf : String → Option String
   | "theta-width" => some "the cited value's rows, words and word bits must give the theta node's parameter"
   | _ => none
 
-/-- A refusal of `j` as JSON: `{"error": code}`, with its `message` (`fixOf`, else as `InferenceOnlyVerifier.Desc.refusal` writes it). -/
+/-- A refusal of `j` as JSON: `{"error": code}`, with its `message` (`fixOf`, else as `InferenceOnlyCheck.Desc.refusal` writes it). -/
 def refusal (j : Json) (code : String) : Json :=
   match fixOf code with
   | some m => Json.mkObj [("error", Json.str code), ("message", Json.str m)]

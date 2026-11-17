@@ -1,13 +1,13 @@
 """The provenance check's difftest data: declarations with θ, θ's provenance and the service's trusted input, for
-`InferenceOnlyVerifier/ThetaDifftestMain.lean`.
+`InferenceOnlyCheck/ThetaDifftestMain.lean`.
 
     python scripts/theta_difftest_vectors.py <verity checkout> --out DIR [--count N]
 
 Writes three files under `DIR/baseline_difftest/`, one line per case: `cases.jsonl`, `{"instance", "trusted"}` as
-`InferenceOnlyVerifier.Theta.check` reads them (`InferenceOnlyVerifier.Theta`'s docstring); `expanded.jsonl`, the same case expanded gate by
-gate (`inference_only_reference.expand_theta`) as `InferenceOnlyVerifier.Theta.checkUnrolled` reads it, or `null` where the policy check
+`InferenceOnlyCheck.Theta.check` reads them (`InferenceOnlyCheck.Theta`'s docstring); `expanded.jsonl`, the same case expanded gate by
+gate (`inference_only_reference.expand_theta`) as `InferenceOnlyCheck.Theta.checkUnrolled` reads it, or `null` where the policy check
 refuses the instance or its provenance is not one entry per θ entry; and `python.jsonl`, `inference_only_reference.check_theta`'s
-results. The Lean audit runs `InferenceOnlyVerifier/ThetaDifftestMain.lean` on the three (`runs` in `lean-audit.json`).
+results. The Lean audit runs `InferenceOnlyCheck/ThetaDifftestMain.lean` on the three (`runs` in `lean-audit.json`).
 
 Case `seed`'s declaration, for the first `COUNT`, is one of `difftest_vectors`' shapes with each parameter bound at
 registration with probability 0.6, divided into one inference block, with `Γ` and `α` large enough that the policy check gives a

@@ -29,7 +29,7 @@ An instance is `{"program", "record", "gamma", "alpha", "pins"}`, and optionally
 
 * `program`: the Program, a v1 descriptor, as text;
 * `record`: the circuit record, as the text the run's registration record commits;
-* `gamma`, `alpha`: `Γ`, and `α = [num, den]`, as `InferenceOnlyVerifier.parse` reads them;
+* `gamma`, `alpha`: `Γ`, and `α = [num, den]`, as `InferenceOnlyCheck.parse` reads them;
 * `pins`: SHA-512s in lower-case hex, each the closure digest (`DefinitionDigest.closureDigest`) of a
   Definition the policy takes as the reader of a table opening. The pins are the policy's parameter, the verifier's
   own: nothing of the Program or the record sets them;
@@ -151,7 +151,7 @@ The rest are a block's fresh bits, and where `kindOf` cannot show a row inside o
 * `openings`: a port of an opening that is not held.
 
 `summarize` gives, per kind of fresh bits and in all, the greatest over the slots, with the record's wired rows and
-bits as SPOT counts them. `rate` is the rate rule on it, `InferenceOnlyVerifier.failure` on the one pair `(gates, fresh)`: `size`
+bits as SPOT counts them. `rate` is the rate rule on it, `InferenceOnlyCheck.failure` on the one pair `(gates, fresh)`: `size`
 where a block has more than `Γ` gates, else `inference_only` where its fresh bits exceed `α` times its gates.
 
 ## θ
@@ -847,7 +847,7 @@ def summarize (c : Case) : Summary :=
     openings := greatest (·[Kind.openings.index]!),
     wiredRows := c.wired.wiredRows, wiredBits := c.wired.wiredBits, units }
 
-/-- **The rate rule** on a summary, `InferenceOnlyVerifier.failure` on its one pair: `size` where a block has more than `Γ` gates,
+/-- **The rate rule** on a summary, `InferenceOnlyCheck.failure` on its one pair: `size` where a block has more than `Γ` gates,
 else `inference_only` where its fresh bits exceed `α = num/den` times its gates. -/
 def rate (gamma num den : Nat) (s : Summary) : Option String :=
   (InferenceOnlyVerifier.failure gamma num den #[(s.gates, s.fresh)]).map (·.2)
@@ -886,7 +886,7 @@ def messageOf (j tr : Json) (code : String) : Option String :=
     | .error _ => none
   else none
 
-/-- A refusal as JSON, `{"error": code}`, with its `message` where `messageOf` has one, else as `InferenceOnlyVerifier.refusal`
+/-- A refusal as JSON, `{"error": code}`, with its `message` where `messageOf` has one, else as `InferenceOnlyCheck.refusal`
 writes it. -/
 def refusalOf (j tr : Json) (code : String) : Json :=
   match messageOf j tr code with

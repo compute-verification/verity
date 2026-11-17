@@ -8,8 +8,8 @@ import Proofs.Properties.InferenceOnly.ThetaSteps
 /-!
 # The inference-only policy's core protocol's property, proved
 
-`ProtocolAccepts` (`Properties.InferenceOnly.Protocol`) by unfolding `InferenceOnlyVerifier.Protocol.check` past its `names` check, with the policy check's verdict
-from `ThetaSteps.evaluate_ok`: `InferenceOnlyVerifier.Theta.evaluate` returns the verdict `InferenceOnlyVerifier.Desc.evaluate` gives.
+`ProtocolAccepts` (`Properties.InferenceOnly.Protocol`) by unfolding `InferenceOnlyCheck.Protocol.check` past its `names` check, with the policy check's verdict
+from `ThetaSteps.evaluate_ok`: `InferenceOnlyCheck.Theta.evaluate` returns the verdict `InferenceOnlyCheck.Desc.evaluate` gives.
 -/
 
 @[expose] public section
@@ -38,7 +38,7 @@ theorem unparsed_refused :
       (InferenceOnlyVerifier.Protocol.trustedOf ⟨.null, 1, #[], Json.arr #[], ""⟩ ⟨.null, "", .empty⟩)).toBool = false := by
   decide +kernel
 
-/-- **`ProtocolAccepts` fails without `InferenceOnlyVerifier.Protocol.check`.** At a case whose α is no fraction, which a verifier that
+/-- **`ProtocolAccepts` fails without `InferenceOnlyCheck.Protocol.check`.** At a case whose α is no fraction, which a verifier that
 accepted every case would accept, the check of record gives no verdict at all: its conclusion's first part fails. -/
 theorem ProtocolAccepts_nontrivial :
     ∀ out, ¬ InferenceOnlyVerifier.Theta.evaluate

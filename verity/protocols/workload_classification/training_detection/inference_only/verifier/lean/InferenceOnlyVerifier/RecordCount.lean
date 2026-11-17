@@ -95,7 +95,7 @@ def evaluate (j tr limits : Json) : Except String Json := do
   let f := failure l bool s
   return Json.mkObj [("bool_gates", toJson bool), ("complies", Json.bool f.isNone), ("failure", Record.failureJson f)]
 
-/-- `evaluate`, with a refusal as `InferenceOnlyVerifier.refusal` writes it: the whole verdict, for the private record only. -/
+/-- `evaluate`, with a refusal as `InferenceOnlyCheck.refusal` writes it: the whole verdict, for the private record only. -/
 def checkDetail (j tr limits : Json) : Json :=
   match evaluate j tr limits with
   | .ok r => r

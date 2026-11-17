@@ -7,7 +7,7 @@ public import Definitions.Slowdown.Assumptions.Threads
 /-!
 # A verdict of compliance carries the thread bound
 
-`Witnesses` (`Properties.InferenceOnly`) says that a verdict of `InferenceOnlyVerifier.evaluate` whose `complies` is `true` means every
+`Witnesses` (`Properties.InferenceOnly`) says that a verdict of `InferenceOnlyCheck.evaluate` whose `complies` is `true` means every
 declaration the Program lays out, with the registered information `theta` names, complies with the inference-only policy
 at its rate, `InferenceOnly.CompliesRate c α`, at the gate budget `c = gamma` and the rate `α = num / den`. The thread
 bounds, `Slowdown.Guarantees.ThreadedThrottled`, `ThreadedThrottledDark` and their `Slots` forms
@@ -27,7 +27,7 @@ budget `k = α c`, for every reference training circuit `r` it contains, under t
 
 `k` need not be a natural here, since the check's rate is any `num / den`: the bounds are stated at the rate
 (proved as `Slowdown.SecurityProofs.ThreadedThrottled_rate` and its forms), and their `0 ≤ α` is no premise: `num / den` of
-naturals is nonnegative. Each statement is proved as `InferenceOnlyVerifier.Properties.SecurityProofs.X : InferenceOnlyVerifier.Properties.X` in
+naturals is nonnegative. Each statement is proved as `InferenceOnlyCheck.Properties.SecurityProofs.X : InferenceOnlyCheck.Properties.X` in
 `Proofs.InferenceOnly.Verdict` (package `security_proofs`), from `Witnesses` and the bound's proof: a property whose
 proof needs `security_proofs` is stated here and proved there.
 -/
