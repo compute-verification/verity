@@ -1,9 +1,9 @@
 module
 
-public import InferenceOnlyCheck.RecordCount
-public import InferenceOnlyCheck.RecordRows
-public import InferenceOnlyCheck.RecordChosen
-public import InferenceOnlyCheck.CountDifftest
+public import InferenceOnlyVerifier.RecordCount
+public import InferenceOnlyVerifier.RecordRows
+public import InferenceOnlyVerifier.RecordChosen
+public import InferenceOnlyVerifier.CountDifftest
 
 /-!
 # The record check's difftest, against the Python reference
@@ -38,10 +38,10 @@ The Lean audit runs it (`runs` in `lean-audit.json`): compiled evaluation, a tes
 
 @[expose] public section
 
-namespace InferenceOnlyCheck.RecordDifftest
+namespace InferenceOnlyVerifier.RecordDifftest
 
 open Lean (Json)
-open InferenceOnlyCheck.CountDifftest (compare unpublishable)
+open InferenceOnlyVerifier.CountDifftest (compare unpublishable)
 
 /-- The fields of the whole verdict compared: a refusal's code and message, or the summary's counts and the verdict. -/
 def detailFields : List String := ["error", "message", "blocks", "gates", "inputs", "fresh", "cross_wires", "free",
@@ -76,7 +76,7 @@ def closedOf (inst tr : Json) : Json :=
   match Record.front inst tr with
   | .ok f =>
     Json.arr (f.leaves.map fun l => Json.arr #[Json.str l.tid, Json.arr (l.closed.map Json.str).toArray]).toArray
-  | .error code => InferenceOnlyCheck.refusal code
+  | .error code => InferenceOnlyVerifier.refusal code
 
 /-- The wiring SPOT's reader reads from the `wires` piece's instance `j`, shown; `refused` where it refuses. -/
 def shown (j : Json) : String :=
@@ -129,11 +129,11 @@ def differences (i : Nat) (case py : String) : List String :=
       rowsDiffer "closed" i (closedOf inst tr) (p.getObjValD "closed") ++
       circuitDiffers i inst tr (c.getObjValD "spot") (detail.getObjValD "error")
 
-/-- `lake env lean --run InferenceOnlyCheck/RecordDifftestMain.lean CASES PYTHON N`: fails unless the two files have `N` lines
+/-- `lake env lean --run InferenceOnlyVerifier/RecordDifftestMain.lean CASES PYTHON N`: fails unless the two files have `N` lines
 and no line differs. -/
 def main (args : List String) : IO UInt32 := do
   let [cases, python, n] := args
-    | IO.eprintln "usage: InferenceOnlyCheck/RecordDifftestMain.lean CASES PYTHON N"; return 2
+    | IO.eprintln "usage: InferenceOnlyVerifier/RecordDifftestMain.lean CASES PYTHON N"; return 2
   let lines (p : String) : IO (Array String) := do
     return ((← IO.FS.readFile p).splitOn "\n").filter (! ·.isEmpty) |>.toArray
   let a ← lines cases
@@ -147,4 +147,4 @@ def main (args : List String) : IO UInt32 := do
   IO.println s!"record difftest: {a.size} cases compared, {found.length} differences"
   return if found.isEmpty then 0 else 1
 
-end InferenceOnlyCheck.RecordDifftest
+end InferenceOnlyVerifier.RecordDifftest
