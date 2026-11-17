@@ -2,7 +2,7 @@ module
 
 public import Properties.Pous.EndToEnd
 public import Proofs.Properties.Pous.TimedAudit
-public import Proofs.Properties.Pous.MemoryChallenger
+public import Proofs.Properties.Pous.MemoryAttester
 public import Proofs.Properties.Pous.Setup
 
 /-!
@@ -24,8 +24,8 @@ block, or two of the run's strings collide.
 
 namespace Pous.EndToEnd.SecurityProofs
 
-open Flock MemoryChallenger MemoryChallenger.Properties PousCheck PousCheck.Properties
-open PousCheck.Properties.SecurityProofs (hash_size append_cancel mth_binds leaves_entry root_mth)
+open Flock MemoryAttester MemoryAttester.Properties PousVerifier PousVerifier.Properties
+open PousVerifier.Properties.SecurityProofs (hash_size append_cancel mth_binds leaves_entry root_mth)
 
 local instance instLawfulBEqByteArray_run : LawfulBEq ByteArray where
   eq_of_beq h := ByteArray.ext (beq_iff_eq.1 h)
@@ -69,7 +69,7 @@ theorem checkAt_ok {schemes : Schemes} {pt : Run.Point} {trusted : List ByteArra
 /-! ## The device's record -/
 
 /-- The round the device records for the `j`-th answer it keeps. -/
-def roundOf (coins : CoinTree) (j : Nat) (o : Observed) : MemoryChallenger.Round :=
+def roundOf (coins : CoinTree) (j : Nat) (o : Observed) : MemoryAttester.Round :=
   ⟨j, coins.indices[j]!, o.sendNs, o.receiptNs, blockDigest o.block⟩
 
 /-- A record of the answers `kept` so far: one round for each of the first ones, all of them while it hasn't ended. -/
@@ -278,13 +278,13 @@ theorem runCheckAccepts : RunCheckAccepts := by
   intro trusted pub digests r sid hcheck dev C
   obtain ⟨hau, hsid, -, hroot, hv⟩ := check_ok hcheck
   obtain ⟨⟨p, hp, htr, m, hm, hlms⟩, hcom, hend, hsize, hrounds⟩ :=
-    MemoryChallenger.Properties.SecurityProofs.verdictAccepts _ _ _ _ _ _ hv
+    MemoryAttester.Properties.SecurityProofs.verdictAccepts _ _ _ _ _ _ hv
   refine ⟨hau, hsid, htr, fun hS hCroot => ?_⟩
   by_cases hT : TableBreak pub digests C
   · exact .inr (.inr hT)
   by_cases hR : RunBreak trusted r.signed dev C
   · exact .inr (.inl hR)
-  rcases MemoryChallenger.Properties.SecurityProofs.verdictSigned _ _ _ _ _ _ dev hv with
+  rcases MemoryAttester.Properties.SecurityProofs.verdictSigned _ _ _ _ _ _ dev hv with
     ⟨run, hrun, hrc, hre, hrr⟩ | ⟨x, hx, y, hy, hxy⟩ | hforge
   rotate_left
   · exact absurd (.inl ⟨x, List.mem_append_left _ hx, y, List.mem_append_left _ hy, hxy⟩) hR
@@ -315,7 +315,7 @@ theorem runCheckAccepts : RunCheckAccepts := by
     rw [hrr, Array.getElem?_eq_getElem hjs] at this
     exact Option.some.inj this
   rw [hround] at hexp hel0 hel1
-  simp only [roundOf, MemoryChallenger.Round.elapsedNs] at hexp hel0 hel1
+  simp only [roundOf, MemoryAttester.Round.elapsedNs] at hexp hel0 hel1
   have htime : o.sendNs ≤ o.receiptNs ∧ o.receiptNs ≤ o.sendNs + run.limitNs := by rw [hlim]; omega
   refine ⟨?_, htime⟩
   generalize hidx : run.coins.indices[j]! = idx at hexp
@@ -385,8 +385,8 @@ theorem shaped_of {c : SetupProtocol.Commitment} {C : Array (Array ByteArray)} (
 root, which is all `runCheckAccepts` asks of it. -/
 theorem runCertifies : RunCertifies := by
   intro trusted c C pub digests r sid dev ⟨hs, hc⟩
-  have hD := PousCheck.Properties.SecurityProofs.acceptsDecodes q c C ⟨pub, (), hs⟩
-  have hP := PousCheck.Properties.SecurityProofs.publishesRoot q c C pub () hs
+  have hD := PousVerifier.Properties.SecurityProofs.acceptsDecodes q c C ⟨pub, (), hs⟩
+  have hP := PousVerifier.Properties.SecurityProofs.publishesRoot q c C pub () hs
   obtain ⟨ha, hsid, htr, hrest⟩ := runCheckAccepts trusted pub digests r sid hc dev C
   have hroot : Merkle.root (leaves pub.salt C) = some pub.root := by rw [hP.2.2.1]; exact hP.1
   exact ⟨hD, hP, ha, hsid, htr, hrest (shaped_of hD) hroot⟩

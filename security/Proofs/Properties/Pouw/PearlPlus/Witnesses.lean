@@ -45,7 +45,7 @@ publish: the honest pass's at no samples, and the test pass's at one, a test ins
 
 namespace Properties.Pouw.PearlPlus
 
-open PouwCommit PouwCheck.PearlPlus
+open PouwCommit PouwVerifier.PearlPlus
 
 namespace Witness
 
@@ -429,7 +429,7 @@ theorem loadedGivesUp_nontrivial :
 theorem planMeans_honest :
     plan (honestRun 1) = .ok ⟨[honestPass], runCommitment [honestPass], honestSource, [(0, 0)], 1, [(0, 0)], none⟩ := by
   apply eq_ok_of_toOption
-  simp only [plan, afterTie, honestRun, List.mapM_cons, List.mapM_nil, loadedGivesUp_honest, PouwCheck.PearlPlus.drawKey,
+  simp only [plan, afterTie, honestRun, List.mapM_cons, List.mapM_nil, loadedGivesUp_honest, PouwVerifier.PearlPlus.drawKey,
     key?, FlockSoundness.Randomness.derive, qsort_run]
   decide +kernel
 
@@ -1019,7 +1019,7 @@ theorem test_load : load honestCoins testManifest = .ok testPass := by
 
 theorem test_plan : plan testRun = .ok testPlan := by
   apply eq_ok_of_toOption
-  simp only [plan, afterTie, testRun, List.mapM_cons, List.mapM_nil, test_load, PouwCheck.PearlPlus.drawKey, key?,
+  simp only [plan, afterTie, testRun, List.mapM_cons, List.mapM_nil, test_load, PouwVerifier.PearlPlus.drawKey, key?,
     FlockSoundness.Randomness.derive, qsort_run]
   decide +kernel
 
