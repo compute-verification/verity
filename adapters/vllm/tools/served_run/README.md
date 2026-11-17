@@ -121,7 +121,9 @@ run starts. FLAGs go to the recorder (`--timeout 200m` to end with the row); `--
    its traced Build and their compare. Its last line names the run id to add to `builds`. A tap's bytes change when it
    is rebuilt even where its sources don't, so a rebuilt tap is not live until its exactness test passes on the card
    (`fa_tap_exactness_gpu.py`, the guarded build against the default build's record): only then does setup install
-   both taps and name the commit to set `TAPS_AT` to.
+   both taps, each replaced one kept beside it as `.replaced`, and name the commit to set `TAPS_AT` to. Nothing holds a
+   traced Build to the live taps, so after the taps change rerun setup whole for each row (its Build step always runs)
+   and name the new runs in `builds`.
 2. `CARD=N CORES=A-B END=UTC run.sh [--tie]` (`window`, the default): `window.sh`, which runs `served_verdicts.sh` on
    that card under its own lease and packs the compose hand-off into the run's `out/handoff/`; 75 with nothing run when
    the card is in use or `END` leaves under an hour (or under `LEASE_MIN`, a short window's length in minutes, which

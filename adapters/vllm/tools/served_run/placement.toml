@@ -14,7 +14,7 @@ HIDDEN_SO = "/workspace/research/vllm-servedproof/taps/fa2/build/fa3_matReqG/ver
 NORM_TAP_SO = "/workspace/research/vllm-servedproof/taps/norm_tap/build/verity_norm_tap.so"
 SERVE_ROOT = "/workspace/research/vllm-servedproof/serve-root"
 # the commit the taps were built at
-TAPS_AT = "811eb216fe373d3ae3d19973cf4925d98cc87528"
+TAPS_AT = "962b517e613e5c0eece1dce159083c3ee4ec85d0"
 
 [node.vy-spot-glm53.builds]
 # each row's setup run whose traced Build passed
