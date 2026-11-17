@@ -420,15 +420,19 @@ def steps_to(canon: Canon, d: str, runners: Sequence[Any] | None = None) -> Step
     return steps
 
 
-def settings() -> tuple[str, str, str]:
-    """The plugin's three variables, read here only: ``VERITY_DSA_TOPK``, ``VERITY_DSA_TOPK_LOG`` and
-    ``VERITY_DSA_TOPK_STEPS`` ("" when unset)."""
-    return os.environ.get(ENV, ""), os.environ.get(LOG_ENV, ""), os.environ.get(STEPS_ENV, "")
+def settings() -> tuple[str, str]:
+    """The plugin's two variables, read here only: ``VERITY_DSA_TOPK`` and ``VERITY_DSA_TOPK_LOG`` ("" when unset)."""
+    return os.environ.get(ENV, ""), os.environ.get(LOG_ENV, "")
+
+
+def steps_setting() -> str:
+    """``VERITY_DSA_TOPK_STEPS``, read here only ("" when unset)."""
+    return os.environ.get(STEPS_ENV, "")
 
 
 def register() -> None:
     """The plugin: with ``VERITY_DSA_TOPK=canonical``, `install` on ``torch.ops._C`` in this process."""
-    mode, log, steps = settings()
+    mode, log = settings()
     if mode in ("", "0"):
         return
     if mode != "canonical":
@@ -436,7 +440,7 @@ def register() -> None:
     canon = install()
     if log:
         log_to(canon, log)
-    if steps:
+    if steps := steps_setting():
         steps_to(canon, steps)
 
 
