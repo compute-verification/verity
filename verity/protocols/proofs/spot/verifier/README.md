@@ -52,7 +52,7 @@ Its guarantee is soundness, and it rests on:
   reads that log and the record the challenger wrote (`ChallengerLogsCoins`, `FlipsAfterRecorded`, `VerifierReadsLog`,
   `RecordCustodyZKJ`), and it runs the Lean verifier;
 - where it reads the network attester's stamp, network attestation's own assumptions, which that layer states (`trusted-device` among
-  them, `verity/protocols/resource_accounting/network/verifier/PROTOCOL.md`).
+  them, `verity/protocols/resource_accounting/network/verifier/README.md`).
 
 ## Guarantee and assumptions
 

@@ -1,4 +1,4 @@
-"""IoTieRequest (`PROTOCOL.md`, "The I/O tie", "The ingress tie"), a prototype on the network attester's own ingress:
+"""IoTieRequest, the ingress tie, a prototype on the network attester's own ingress:
 the proof block a bucket row that binds each request's prompt_len and arrival ordinal to the network attester's
 certified ingress cells, its reference in the clear and the Boolean Definitions it is built from. Nothing here is in a
 Spec or proved.

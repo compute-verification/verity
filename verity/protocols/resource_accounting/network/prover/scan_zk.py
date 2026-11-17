@@ -92,7 +92,7 @@ the honest round on the challenger's coins (``--challenger``), a `service.Stream
   and ``o2``, its view, committed as view leaf t. Egress unit t reads ``state`` (view leaf t) and outputs ``o0``, its
   render bit, and ``o1``, the row it computes, committed as the network attester's egress row t. Each output row but a
   public o0 is a registered read of the row it is committed as (`Registered.checkPort` holds a hidden-output statement's
-  output rows, the verifier's PROTOCOL.md §16.13), so S_t is the one leaf unit t computes and unit t + 1 reads, the
+  output rows), so S_t is the one leaf unit t computes and unit t + 1 reads, the
   view the one leaf ingress t computes and egress t reads, and the egress row the one the network attester signed: the
   chains are wires through the registered roots, not the prover's word. `Registered.checkPort` holds every instance of a
   registered port, so the last unit's o1, the state the execution phase ends in, which no state leaf holds, is a

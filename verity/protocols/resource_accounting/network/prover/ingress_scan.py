@@ -120,7 +120,7 @@ arrivals and the prompt lengths, which stay private.
 `row` the network attester's signed row t (`network_attester_rows.bucket_port`), `sin` the scan's state row t − 1 and `prog<j>`
 the slot-entries row of slot j at t's boundary. o1 and o2 are gates, never inputs: the unit's statement commits o1 as
 the scan's state row t and o2 as its view row t, each registered as a read of its row (`checkPort` accepts a
-hidden-output statement's output row, the verifier's PROTOCOL.md §16.13), so bucket t + 1's `sin` and egress bucket t's
+hidden-output statement's output row), so bucket t + 1's `sin` and egress bucket t's
 `state`, which read those rows, read what bucket t computed: the carried state and the view are wires through the
 registered roots. Only o0 is public: a unit proof's public output is at most 16 bits, and o1 and o2 are committed.
 

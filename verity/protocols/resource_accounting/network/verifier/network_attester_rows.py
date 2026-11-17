@@ -79,7 +79,7 @@ the same row, say. A bare sequence of reads binds nothing (the value is the head
 it states `Units`. `bucket_port` names the head's value too, and needs no `Units`: its proof block t reads row t whole,
 so a statement's positions are all it can vary, and Lean's registered reads hold each to its proof block's row.
 
-**The wiring is opened to the verifier for now** (the named gap, whose plan is in PROTOCOL.md): it gives away each
+**The wiring is opened to the verifier for now** (a named gap): it gives away each
 connection's first row and cells. q is the cells' stream field, the network attester's ordinal: the k-th connection to
 reach it, from 0, is q = k + 1, as the active network attester's `Requests` streams it and the I/O tie's map puts advice
 request k (`order[k] + 1`).
