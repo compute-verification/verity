@@ -26,7 +26,7 @@ bits). So the window charges each request whose body lands in it, the window's c
 each window from the empty state, so a window that opens with a request running is no slice), and ``code`` refuses an
 output length past its max_tokens' width. No input of the charge is free witness: qen, mt and olen are ``cert``'s, and en
 is ``adv``'s count. What holds ``cert`` to the certified record is a stand-in: the honest cert row, opened by its b‖c
-under the certifier's salt (`compile_slice_zk`), until max_tokens is read from the certified body. The circuit bounds
+under the network attester's salt (`compile_slice_zk`), until max_tokens is read from the certified body. The circuit bounds
 max_tokens only from above, so until then a lower max_tokens the output still fits passes at a lower charge. H = O = 0: the
 slice's class runs inside the pool bound with the network attester's ingress, so its windows send no hits and no order
 entries (`protocol/charge-chain.md`, "The slice"), and a window that sends either is CompileSlice_v1's stand-in, the
@@ -39,20 +39,21 @@ place of 96.
 """
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
-from functools import lru_cache, partial
+from functools import cache, partial
 from types import SimpleNamespace
-from typing import Sequence
 
 from verity.circuits import boolean as BL
 from verity.circuits.boolean.forms import ZERO, Circuit
+from verity.circuits.boolean.trace import part as _part
 from verity.circuits.defs import bind
 from verity.circuits.evaluation.bits import evaluate_bits
 from verity.protocols.resource_accounting.network.prover import window_charge as WC
 from verity.protocols.resource_accounting.network.verifier import charge_chain as CC
-from verity_vllm.compiler import replay_chain as RC
+
 from verity_vllm.compiler import compile_slice as CS
-from verity.circuits.boolean.trace import part as _part
+from verity_vllm.compiler import replay_chain as RC
 
 STATICS, BLOCK_STATICS, FLAGS, ACCEPT = CS.STATICS, CS.BLOCK_STATICS, CS.FLAGS, CS.ACCEPT
 
@@ -182,7 +183,7 @@ def evaluate(st: dict, cases: Sequence[CS.Case]) -> list[int]:
     return [sum(int(b) << j for j, b in enumerate(o)) for o in out]
 
 
-@lru_cache(maxsize=None)
+@cache
 def _counted(key: tuple) -> dict[str, int]:
     S = SimpleNamespace(**dict(key))
     C = Circuit(cse=True)

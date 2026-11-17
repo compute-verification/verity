@@ -7,7 +7,7 @@ The Program gives every real frame an **anchor** and a **logical index**:
 A window declares one clock-sync value, `ClockSync(delta, rho)`, from the protocol's set `SyncSet`. The rate ρ is a
 positive fraction of frames per bucket, and may be below 1 for sessions slower than one frame per bucket. A frame is
 eligible at `anchor + delta + ⌊λ / rho⌋`, using the sync of the window that holds its anchor. The sender's shaper hands frames to
-the certifier in canonical order, each at `h(k) = max(eligible(k), h(k−1))`. The certifier's own rule (FIFO at the allocation
+the attester in canonical order, each at `h(k) = max(eligible(k), h(k−1))`. The attester's own rule (FIFO at the allocation
 r, left-packed) then fixes every grid. So the Program's grids are a function of its frames, the recorded anchors and the
 sync advice, and the timing channel of accepted runs is at most `log2 #Σ_sync` bits per window, summed from the run's
 first window: a later window alone may carry more.
@@ -91,7 +91,7 @@ def eligible(frame: LogicalFrame, sync: ClockSync) -> int:
 
 
 def handing_buckets(frames: Sequence[LogicalFrame], syncs: Sequence[ClockSync], window_buckets: int) -> list[int]:
-    """When the shaper hands each frame to the certifier: `h(k) = max(eligible(k), h(k−1))`, in canonical order.
+    """When the shaper hands each frame to the attester: `h(k) = max(eligible(k), h(k−1))`, in canonical order.
 
     A frame anchored past the last window with advice is handed after the horizon, and so is every frame behind it
     (FIFO)."""
@@ -107,7 +107,7 @@ def handing_buckets(frames: Sequence[LogicalFrame], syncs: Sequence[ClockSync], 
 
 
 def expected_grids(frames: Sequence[LogicalFrame], syncs: Sequence[ClockSync], params: GridParams) -> list[Grid]:
-    """The Program's grids for windows 0 … len(syncs) − 1: the certifier's rule applied to the logical handing times.
+    """The Program's grids for windows 0 … len(syncs) − 1: the attester's rule applied to the logical handing times.
 
     Frames still queued, or handed after the horizon, appear in no grid. Window w's grid reads only syncs[0 … w]: a
     frame is eligible no earlier than its anchor, so a frame handed by the end of window w, and every frame before it

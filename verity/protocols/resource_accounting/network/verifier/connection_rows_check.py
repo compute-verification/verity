@@ -25,7 +25,7 @@ MISSED = "missed"
 CHECKED = "verity-network-certifier/checked-registrations/v1"
 #: what a check says that is asked for the registrations' file and was handed nothing to check under
 UNHANDED = ("the registrations' file is written only by a check that is handed the SHA-512 of the network "
-            "certifier's public key and its session")
+            "attester's public key and its session")
 
 
 def read(run: Path, params: NetworkAttesterParams) -> list[tuple[dict, dict[str, list[bytes]]]]:
@@ -63,7 +63,7 @@ def _counted(doc: Mapping, blob: bytes, listed: Sequence[tuple[str, int]]) -> li
     phase has no head."""
     if "registration" not in doc:
         if blob and NO_HEAD in doc:
-            raise ValueError(f"execution phase {_phase(doc)} has the network certifier's word that it has no head, "
+            raise ValueError(f"execution phase {_phase(doc)} has the network attester's word that it has no head, "
                              f"and {len(blob)} bytes of {SALTS}")
         return []
     mine = [(t["name"], t["rows"]) for t in doc["registration"]["tables"]]
@@ -208,7 +208,7 @@ def check(run: Path, dep: Mapping, params: NetworkAttesterParams, ingress: Seque
                 problems.append(f"execution phase {w} has connection rows, and it or an execution phase beside it "
                                 f"wasn't published complete")
             elif doc is None or NO_HEAD not in doc:
-                problems.append(f"execution phase {w} has neither connection rows nor the network certifier's word "
+                problems.append(f"execution phase {w} has neither connection rows nor the network attester's word "
                                 f"that it has none")
             else:
                 try:

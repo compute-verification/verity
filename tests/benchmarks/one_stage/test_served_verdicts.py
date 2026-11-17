@@ -461,6 +461,157 @@ def test_the_spot_line_names_the_partition_and_its_sample_and_no_advice_length_p
     assert S.main(["sampled-line", str(tmp_path / "log")]) == 1
 
 
+GATE = "gate:research@challenger.invalid"
+
+
+@pytest.mark.parametrize("challenger, coins", [
+    (GATE, "coins the gate's, the auditor's challenger"),
+    ("local", "coins a development challenger's (local), not the auditor's"),
+    ("loopback:127.0.0.1:7811", "coins a development challenger's (loopback), not the auditor's"),
+])
+def test_the_spot_line_says_whose_coins_they_were_and_where_the_sessions_coin_trees_came_from(tmp_path, capsys,
+                                                                                               challenger, coins):
+    """A reader of the record tells a development session's run from the auditor's, and sees the audit's coin_trees,
+    which the RECORDS row of the audit itself leaves out; the gate's address is not in the line."""
+    row = {"ok": True, "accepted": True, "draw": [1, 2]}
+    line = S.sampled_line(row, None, challenger, {"coin_trees": "window"})
+    head, _, rec = line.partition(": RECORDS ")
+    assert head.endswith(f"drawn members [1, 2], {coins}") and "invalid" not in line and "127.0.0.1" not in line
+    assert json.loads(rec)["coin_trees"] == "window"
+    (tmp_path / "log").write_text("RECORDS " + json.dumps(row) + "\n")
+    (tmp_path / "summary.json").write_text(json.dumps({"coin_trees": "window", "ok": True}))
+    assert S.main(["sampled-line", str(tmp_path / "log"), "--challenger", challenger,
+                   "--summary", str(tmp_path / "summary.json")]) == 0
+    assert capsys.readouterr().out == line + "\n"
+    (tmp_path / "summary.json").write_text("{")
+    assert S.main(["sampled-line", str(tmp_path / "log"), "--challenger", challenger,
+                   "--summary", str(tmp_path / "summary.json")]) == 0
+    assert "unread: summary.json is not JSON" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("challenger, summary, refused", [
+    (GATE, {"coin_trees": "own"}, True),
+    (GATE, {"coin_trees": "window"}, False),
+    (GATE, {"coin_trees": "own", "plain": True}, False),
+    (GATE, {"ok": False}, False),
+    (GATE, None, False),
+    ("local", {"coin_trees": "own"}, False),
+    ("loopback:127.0.0.1:7811", {"coin_trees": "own"}, False),
+], ids=["gate, own trees", "gate, the sample's session's trees", "gate, plain", "gate, no session reached",
+        "gate, no summary", "local", "loopback"])
+def test_only_an_audit_on_the_gates_coins_whose_sessions_took_their_own_coin_trees_is_refused(challenger, summary, refused):
+    why = S.coin_trees_refusal(challenger, summary)
+    assert bool(why) is refused
+    if why:
+        assert "coin_trees='own'" in why and "OneStageZk.treesHeld" in why and "FLOCK_CHALLENGER unset" in why
+        assert "\n" not in why
+
+
+def _sampled_coins(tmp_path: Path, summary: dict | str | None, *args: str, audit: str = "sampled-proofs-served",
+                   **extra: str) -> tuple[int, list[str]]:
+    """`served_verdicts.sh ARGS` (default `sampled-coins`) on a serve dir whose records audit under ``audit`` (step 3's
+    by default) kept ``summary`` as its summary.json (none where None; a string as the file's text), ``extra`` added to
+    the environment: the exit status and the verdict lines."""
+    venv, serve = tmp_path / "venv" / "bin", tmp_path / "serve"
+    for d in (venv, serve / audit):
+        d.mkdir(parents=True)
+    (venv / "python").write_text(f'#!/bin/sh\nexec {sys.executable} "$@"\n')
+    (venv / "python").chmod(0o755)
+    if summary is not None:
+        (serve / audit / "summary.json").write_text(summary if isinstance(summary, str) else json.dumps(summary))
+    env = {"PATH": os.defpath, "HOME": str(tmp_path), "VENV": str(venv.parent), "D": str(serve),
+           "OUT": str(tmp_path / "out"), **extra}
+    rc = subprocess.run(["bash", str(HERE.parents[2] / "benchmarks" / "one_stage" / "served_verdicts.sh"),
+                         *(args or ("sampled-coins",))], cwd=tmp_path, env=env, check=False).returncode
+    said = tmp_path / "out" / "verdicts.txt"
+    return rc, said.read_text().splitlines() if said.exists() else []
+
+
+@pytest.mark.parametrize("summary, extra, rc", [
+    ({"coin_trees": "own", "ok": True}, {"PP_CHALLENGER": GATE, "V3C_CLASS": ""}, 20),
+    ("{", {"PP_CHALLENGER": GATE, "V3C_CLASS": ""}, 20),
+    ({"coin_trees": "window", "ok": True}, {"PP_CHALLENGER": GATE, "V3C_CLASS": ""}, 0),
+    (None, {"PP_CHALLENGER": GATE, "V3C_CLASS": ""}, 0),
+    ({"coin_trees": "own", "ok": True}, {"PP_CHALLENGER": "local", "V3C_CLASS": "", "DEVELOPMENT": "1"}, 0),
+    ({"coin_trees": "own", "ok": True}, {"V3C_CLASS": "", "DEVELOPMENT": "1"}, 0),
+    ({"coin_trees": "own", "ok": True}, {"PP_CHALLENGER": GATE}, 0),
+], ids=["gate, own trees", "gate, a summary that isn't JSON", "gate, the sample's session's trees",
+        "gate, no summary", "local", "PP_CHALLENGER unset", "gate with V3c on: step 3 local"])
+def test_step_3_on_the_gates_coins_stops_where_its_sessions_took_their_own_coin_trees(tmp_path, summary, extra, rc):
+    """The served run of the gate's coins whose proving sessions each sampled a coin tree of their own was accepted by
+    every check on the served node and refused by the auditor's Lean verifier off it; step 3 now stops there, exit 20,
+    with one line naming the fix. A development session's coins, and step 3 while V3c's audit takes the gate's (step
+    3's then local), pass as before."""
+    got, lines = _sampled_coins(tmp_path, summary, **extra)
+    assert got == rc
+    if rc:
+        assert len(lines) == 1 and lines[0].startswith("SAMPLED-PROOFS refused: "), lines
+        assert ("FLOCK_CHALLENGER unset" in lines[0]) is (summary != "{")
+    else:
+        assert lines == []
+
+
+def test_the_main_run_checks_step_3s_coin_trees_right_after_its_line_and_stops_on_a_refusal():
+    """The main run serves before step 3, which no harness here stubs, so this reads the script: its SAMPLED-PROOFS line
+    passes the audit's challenger and summary, and the next command is the check, its refusal the run's stop."""
+    script = (HERE.parents[2] / "benchmarks" / "one_stage" / "served_verdicts.sh").read_text()
+    line, = re.findall(r'^say "SAMPLED-PROOFS \(run\.sh exit \$rc\).*?\n(?=\S)', script, re.M | re.S)
+    assert '--challenger "$SP_CHALLENGER" --summary "$SP/summary.json"' in line
+    after = script[script.index(line) + len(line):].splitlines()[0]
+    assert after == "sampled_coins || stop sampled-proofs 20"
+
+
+@pytest.mark.parametrize("challenger, summary, said", [
+    (GATE, {"coin_trees": "window"}, "coins the gate's, the auditor's challenger, coin_trees window"),
+    ("local", {"coin_trees": "own"}, "coins a development challenger's (local), not the auditor's, coin_trees own"),
+    (GATE, None, "coins the gate's, the auditor's challenger, coin_trees none"),
+    (GATE, "{", "coins the gate's, the auditor's challenger, coin_trees unread: summary.json is not JSON"),
+])
+def test_v3cs_line_says_whose_coins_its_audit_took_and_its_coin_trees(tmp_path, capsys, challenger, summary, said):
+    path = tmp_path / "summary.json"
+    if summary is not None:
+        path.write_text(summary if isinstance(summary, str) else json.dumps(summary))
+    assert S.main(["coins", "--challenger", challenger, "--summary", str(path)]) == 0
+    assert capsys.readouterr().out == said + "\n" and "invalid" not in said
+
+
+V3C_AUDIT = "v3c-w7-4-32-4/audit"
+
+
+@pytest.mark.parametrize("summary, extra, rc", [
+    ({"coin_trees": "own", "ok": True}, {"V3C_CHALLENGER": GATE}, 20),
+    ({"coin_trees": "own", "ok": True}, {"PP_CHALLENGER": GATE}, 20),
+    ("{", {"V3C_CHALLENGER": GATE}, 20),
+    ({"coin_trees": "window", "ok": True}, {"V3C_CHALLENGER": GATE}, 0),
+    (None, {"V3C_CHALLENGER": GATE}, 0),
+    ({"coin_trees": "own", "ok": True}, {"V3C_CHALLENGER": "local", "DEVELOPMENT": "1"}, 0),
+    ({"coin_trees": "own", "ok": True}, {"DEVELOPMENT": "1"}, 0),
+], ids=["V3C_CHALLENGER the gate, own trees", "the gate by PP_CHALLENGER, own trees", "the gate, a summary that isn't JSON",
+        "the gate, the sample's session's trees",
+        "the gate, no summary", "local", "unset"])
+def test_v3cs_audit_on_the_gates_coins_fails_where_its_sessions_took_their_own_coin_trees(tmp_path, summary, extra, rc):
+    """V3c's audit, the sampled-proofs audit of record where it runs, is held as step 3's is: on the gate's coins, an
+    audit whose sessions each sampled a coin tree of their own, which the auditor's Lean verifier refuses, fails with
+    exit 20 and one line naming the fix; a development session's coins pass as before."""
+    got, lines = _sampled_coins(tmp_path, summary, "v3c-coins", "7", audit=V3C_AUDIT, **extra)
+    assert got == rc
+    if rc:
+        assert len(lines) == 1 and lines[0].startswith("V3C-AUDIT refused: "), lines
+        assert ("FLOCK_CHALLENGER unset" in lines[0]) is (summary != "{")
+    else:
+        assert lines == []
+
+
+def test_v3cs_audit_says_its_coins_and_fails_on_its_coin_trees_after_its_records_line():
+    """The audit's own run needs a records audit, which the V3c harnesses here stub without coin trees, so this reads
+    the script: v3c_audit's V3C-AUDIT line says its coins, and its last check before its exit is the coin trees'."""
+    script = (HERE.parents[2] / "benchmarks" / "one_stage" / "served_verdicts.sh").read_text()
+    body = script[script.index("\nv3c_audit() {"):]
+    body = body[:body.index("\n}\n")]
+    assert '"$PY" "$SV" coins --challenger "$V3C_CHALLENGER"' in body and '--summary "$VW/audit/summary.json"' in body
+    assert body.rstrip().splitlines()[-2:] == ["  v3c_trees || return 20", "  return $rc"]
+
+
 def test_the_front_line_says_the_sessions_public_fields_alone(tmp_path, capsys):
     """The CERTIFIER-FRONT line carries `FRONT_PUBLIC` of the front's session and none of its prompts, request, kept
     fetch, gate or verdict's cells; a refused front's line names no reason, and a missing session says so."""
@@ -1483,6 +1634,20 @@ def live(monkeypatch, tmp_path):
     return calls, {"gate": GATE, "key": "ff" * 64, "main": tmp_path / "main.txt"}
 
 
+@pytest.mark.parametrize("host", ["local-challenger", "vy-challenger-1"])
+def test_a_pearlplus_piece_names_the_challenger_its_session_was_opened_on(tmp_path, live, host):
+    """The piece's coins and why it credits nothing name the challenger whose gate opened the served run's salt session,
+    as that open answer's ``host`` (``<host>.<session>``) names it: a local gate's scratch host where serve.sh's local
+    challenger made the coins, the deployed auditor's where it did, never one for the other."""
+    served, verified = _pearlplus_run()
+    served["coins"]["session"] = {"session": SID, "host": f"{host}.{SID}"}
+    doc = S.pearlplus(tmp_path / "pieces" / "pouw", served, verified, **live[1])
+    assert S.challenger_of(served) == host and doc["why"] == S.pearlplus_why(host)
+    assert S.pearlplus_coins_from(host).items() <= doc["coins"].items()
+    other = ({"local-challenger", "vy-challenger-1"} - {host}).pop()
+    assert f"on {host}" in doc["why"] and other not in json.dumps({k: doc[k] for k in ("why", "coins")})
+
+
 def test_a_pearlplus_piece_replays_its_own_served_run_and_credits_nothing(tmp_path, capsys, live):
     """``pearlplus``: Pearl+'s own served run, accepted by Pearl+'s verdict over its passes and its epoch's salt its live
     session's, is accepted with that verdict's line and credit and its shares (the timed passes' MACs and their credit at
@@ -1492,9 +1657,10 @@ def test_a_pearlplus_piece_replays_its_own_served_run_and_credits_nothing(tmp_pa
     calls, args = live
     served, verified = _pearlplus_run()
     doc = S.pearlplus(tmp_path / "pieces" / "pouw", served, verified, **args)
-    assert (doc["verdict"], doc["reasons"], doc["credited"], doc["why"]) == ("accept", [], False, S.PEARLPLUS_WHY)
+    assert (doc["verdict"], doc["reasons"], doc["credited"], doc["why"]) == ("accept", [], False,
+                                                                             S.pearlplus_why(S.UNNAMED_CHALLENGER))
     assert calls == [(GATE, "ff" * 64, tmp_path / "main.txt")] and doc["coin_source"] == S.LIVE_SOURCE
-    assert doc["coins"] == {**S.PEARLPLUS_COINS, "check": {"session": SID, "closed": served["coins"]["closed"],
+    assert doc["coins"] == {**S.pearlplus_coins_from(S.UNNAMED_CHALLENGER), "check": {"session": SID, "closed": served["coins"]["closed"],
                                                            "passes": 4, "reason": None}}
     assert (doc["scheme"], doc["passes"], doc["line"]) == ("pearl-c-h100-v1-h3", 4, verified["line"])
     assert doc["credit"] == verified["answer"]["public"]["work"]
@@ -1927,7 +2093,7 @@ def test_a_pearlplus_piece_rejects_a_run_pearlpluss_verdict_rejects_and_one_that
     credit of 0; a run that served nothing has none."""
     s, v = _pearlplus_run(verified is not False)
     doc = S.pearlplus(tmp_path / "pieces" / "pouw", s if served else None, None if verified is None else v, **live[1])
-    assert (doc["verdict"], doc["reasons"][0], doc["why"]) == ("reject", reason, S.PEARLPLUS_WHY)
+    assert (doc["verdict"], doc["reasons"][0], doc["why"]) == ("reject", reason, S.pearlplus_why(S.UNNAMED_CHALLENGER))
     if served:
         rho = 4096 * 132 * 1830e6
         assert doc["shares"]["macs"] == {"declared_linears": 6000, "credited": 0}
@@ -2144,13 +2310,17 @@ def test_publish_holds_window_steps_under_a_load_and_publishes_the_callers_servi
 ])
 def test_a_tied_pearlplus_piece_on_a_live_salt_session_names_the_period_it_joined(tmp_path, live, reserved, joined):
     """Under PEARLPLUS_TIE the window's salt coin is a live session's reserved as the window opened
-    (`PEARLPLUS_EPOCH_TIED`), and why the piece credits nothing by itself names the Pearl-C period that session joined,
-    as the gate's reserve answer in the window's served.json names it, or says it joined none."""
+    (`pearlplus_epoch_tied`), and why the piece credits nothing by itself names the Pearl-C period that session joined,
+    as the gate's reserve answer in the window's served.json names it, or says it joined none; both name the challenger
+    the session's open answer names."""
     _calls, args = live
     window, verified, w = _tied_epoch(tmp_path, S.LIVE_SOURCE, reserved)
+    window["coins"]["session"] = {"session": SID, "host": f"local-challenger.{SID}"}
     doc = S.pearlplus(tmp_path / "a", window, verified, tie=w, **args)
-    assert (doc["verdict"], doc["reasons"], doc["coins"]["epoch"]) == ("accept", [], S.PEARLPLUS_EPOCH_TIED)
-    assert doc["why"] == S.pearlplus_why_tied(reserved) and doc["why"].endswith(f"on vy-challenger-1, {joined}")
+    assert (doc["verdict"], doc["reasons"], doc["coins"]["epoch"]) == ("accept", [],
+                                                                      S.pearlplus_epoch_tied("local-challenger"))
+    assert doc["why"] == S.pearlplus_why_tied(reserved, "local-challenger")
+    assert doc["why"].endswith(f"on local-challenger, {joined}")
     assert doc["why"].startswith("development piece, which the record takes as PoUW's verdict of record, the prover "
                                  "side's, only where")
 
@@ -2453,7 +2623,7 @@ def test_the_pearlplus_piece_holds_the_verifiers_sample_to_its_sample_session(tm
                       coin=out / S.COIN_PUT)
     assert doc["verdict"] == "reject" and doc["reasons"] == [f"draw: {doc['coins']['draw']['reason']}"]
     assert doc["coins"]["draw"]["reason"].startswith("CoinError: the challenger key at ")
-    assert doc["coins"]["draws"] == S.PEARLPLUS_COINS["draws"]
+    assert doc["coins"]["draws"] == S.pearlplus_coins_from(S.UNNAMED_CHALLENGER)["draws"]
 
 
 def test_the_pearlplus_period_opens_around_the_retained_serve_and_closes_before_the_sample(tmp_path, monkeypatch, capsys):
@@ -4241,8 +4411,7 @@ def test_the_preflight_refuses_pearlplus_tie_without_pearls_piece_beside_h1s_tie
 
 #: the toy tree's compiler of record for the BF16 1B, as prove_path.py lists it: its RoPE heads hold transfer gates
 TOY_GATES = 'GATES_OF_RECORD: dict = {"unsloth/Llama-3.2-1B": ("RoPEHead_v1{D=64}",)}\n'
-TG_PARTITION = {"templates": ["RoPEHead_v1{D=64}", "SiluMul_v2{I=8192}"], "law": "work:2",
-                "scope": {"op_path_prefix": "model.layers.0.", "steps": [1, 2]}}
+TG_PARTITION = json.loads((HERE.parents[2] / "benchmarks" / "prove_path" / "llama32_1b_tg_l0_step1.json").read_text())
 #: PEARLPLUS_TIE with V3c after step 4, the certifier unsplit, on the BF16 row
 PEARL_TIED = {**PEARL_TIES, "CERTIFIER_CHAIN_CMD": None, "CERTIFIER_PERIOD_CMD": None,
               "ROW_ID": "llama32-1b__bf16__h200__tp1__b4__i256__o32__mixed__greedy__bi-eager"}
@@ -4344,8 +4513,9 @@ def _rehearsal_settings(tmp_path: Path, **changed: str | None) -> tuple[int, lis
 
 def _no_transfer_gates(part: str, sampling_design: str, templates: list[str]) -> str:
     return (f"PREFLIGHT: unsloth/Llama-3.2-1B's compiler of record lists ['RoPEHead_v1{{D=64}}'] as transfer gates "
-            f"(prove_path.GATES_OF_RECORD), every unit of which step 3 proves beside work:K of the rest, and PP_PARTITION "
-            f"{part} is {sampling_design} over {templates}: give a work:K partition that holds them, and in PP_SETS their input sets")
+            f"(prove_path.GATES_OF_RECORD), every unit of which step 3 proves beside work-rate:NUM/DEN of the rest, and "
+            f"PP_PARTITION {part} is {sampling_design} over {templates}: give a work-rate:NUM/DEN partition that holds them, "
+            "and in PP_SETS their input sets")
 
 
 def _partition_preflight(tmp_path: Path, tie: bool, **extra: str) -> tuple[int, list[str], list[str], list[str]]:
@@ -4360,15 +4530,17 @@ def _partition_preflight(tmp_path: Path, tie: bool, **extra: str) -> tuple[int, 
     (None, True, None),
     ({"templates": ["SiluMul_v2{I=8192}"], "law": "subset:2"}, True, ("subset:2", ["SiluMul_v2{I=8192}"])),
     ({**TG_PARTITION, "law": "stratified:2"}, True, ("stratified:2", TG_PARTITION["templates"])),
-    ({**TG_PARTITION, "templates": ["SiluMul_v2{I=8192}"]}, True, ("work:2", ["SiluMul_v2{I=8192}"])),
+    ({**TG_PARTITION, "law": "work:2"}, True, ("work:2", TG_PARTITION["templates"])),
+    ({**TG_PARTITION, "templates": ["SiluMul_v2{I=8192}"]}, True, ("work-rate:2/N", ["SiluMul_v2{I=8192}"])),
     ({"templates": ["SiluMul_v2{I=8192}"], "law": "subset:2"}, False, None),
 ])
 def test_the_preflight_refuses_a_step_3_partition_that_leaves_out_the_served_compilers_transfer_gates(
         tmp_path, given, tie, refusal):
     """Under PEARLPLUS_TIE the served BF16 1B's compiler of record lists its RoPE heads as transfer gates, every unit of
-    which step 3 proves beside the sampled rest (`serving_rows.work_table_of`), so step 3's partition defaults to a work:2
-    one holding them, and the preflight refuses another sampling design or a partition without them, before anything runs. The int8
-    checkpoint's compiler lists none, so its subset:2 partition passes."""
+    which step 3 proves beside the sampled rest (`serving_rows.work_table_of`), so step 3's partition defaults to the tree's
+    work-rate one holding them, which passes, and the preflight refuses another sampling design (a fixed work:K too, which
+    step 3's stream refuses) or a partition without them, before anything runs. The int8 checkpoint's compiler lists none,
+    so its subset:2 partition passes."""
     (pp := tmp_path / "tree" / "benchmarks" / "prove_path").mkdir(parents=True)
     (pp / "llama32_1b_tg_l0_step1.json").write_text(json.dumps(TG_PARTITION))
     extra = {}

@@ -83,23 +83,39 @@ bitlen(NS) follow (`stream_statics`).
 from __future__ import annotations
 
 import hashlib
+from collections.abc import Callable, Sequence
 from types import SimpleNamespace
-from typing import Callable, Sequence
+from typing import Any
 
+from verity.circuits.boolean import BIT
 from verity.circuits.boolean import memcheck as MC
-from verity.circuits.boolean.forms import ONE, ZERO, and_reduce, const_bits, mux, or_reduce
+from verity.circuits.boolean.forms import (
+    ONE,
+    ZERO,
+    and_reduce,
+    const_bits,
+    mux,
+    or_reduce,
+)
 from verity.circuits.boolean.gf128 import mul_forms
+from verity.circuits.boolean.trace import part as _part
 from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.evaluation.bits import evaluate_bits
 from verity.circuits.types import Array, Tuple
 from verity.commitments.gates import block_key as BK
-from verity_vllm.compiler import cache_step as CST, compile_slice as CS
-from verity_vllm.compiler import cache_step_v3 as V3S, compile_slice_v4 as V4
-from verity_vllm.compiler import replay_chain as RC, replay_step as RS
-from verity.circuits.boolean import BIT
-from verity.circuits.boolean.trace import part as _part
 from verity.commitments.gates.frame_v3 import _refs
-from verity.protocols.resource_accounting.network.verifier.head_check import _coll, _Consts, ands
+from verity.protocols.resource_accounting.network.verifier.head_check import (
+    _coll,
+    _Consts,
+    ands,
+)
+
+from verity_vllm.compiler import cache_step as CST
+from verity_vllm.compiler import cache_step_v3 as V3S
+from verity_vllm.compiler import compile_slice as CS
+from verity_vllm.compiler import compile_slice_v4 as V4
+from verity_vllm.compiler import replay_chain as RC
+from verity_vllm.compiler import replay_step as RS
 
 STATICS = V4.STATICS + ("NRB", "NRK")
 #: the statics a step reads: ReplayStep_v1's, the window's shape and the slot row's widths
@@ -367,7 +383,7 @@ class _Bus(V4._Bus):
         self.nc[p] = RS._sel(C, x["leave"].inv(), self.nc[p])
         return list(ret)
 
-    def finish(self, tap) -> tuple[object, object, list]:
+    def finish(self, tap) -> tuple[Any, Any, list]:
         """(1 iff an active step's bounds hold, 1 iff every result no record carries is zero, the next slot row)."""
         C, S = self.C, self.S
         upd = tap["update"]
@@ -785,7 +801,7 @@ def reference(S, sl: CS.Slice, delta: int = COINS[2], counts: Sequence[int] | No
     stm = sc.stream
     got = touched_counts(S, stm)
     counts = got if counts is None else list(counts)
-    by = {}
+    by: dict[int, list] = {}
     for x in stm.entries():
         by.setdefault(x[0], []).append(x)
     where = set(dense(S))
@@ -800,7 +816,8 @@ def reference(S, sl: CS.Slice, delta: int = COINS[2], counts: Sequence[int] | No
     rnum = V4.request_numbers(sl)
     last = sc.states[-1]
     rq = tuple(rnum[x[0]] for x in last.running) + (0,) * (S.R - len(last.running))
-    cout = list(RC.encode(last, Sc)) + list(RC.encode_window(sc.window, Sc)) + _encode_pool(S, *sc.pools[-1], rq)
+    nc, fl = sc.pools[-1]
+    cout = list(RC.encode(last, Sc)) + list(RC.encode_window(sc.window, Sc)) + _encode_pool(S, nc, fl, rq)
     return SimpleNamespace(srv=srv, cout=cout, chk=checked(S, sc, counts), counts=counts, scan=sc)
 
 
@@ -815,7 +832,7 @@ def checked(S, sc, counts: Sequence[int]) -> list[int]:
     for i in range(4):
         out += [b for w in wit for v in w[i] for b in bits(v, CW)]
     stm = sc.stream
-    slots = list(stm.slots) + [V3S.Slot(*[0] * 11, use=0)] * (S.NS - len(stm.slots))
+    slots = list(stm.slots) + [V3S.Slot(*(0,) * 11, use=0)] * (S.NS - len(stm.slots))
     out += [x.start for x in slots]
     out += [b for x in slots for b in bits(x.kind, 3)] + [b for x in slots for b in bits(x.r, S3.RW)]
     out += [b for x in slots for b in bits(x.a, CW)] + [b for x in slots for b in bits(x.b, CW)]
