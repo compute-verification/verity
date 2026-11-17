@@ -108,9 +108,9 @@ def _demo(args: list[str]) -> int:
     """`verity demo [NAME] [ARGS]`: `verity run demos/NAME.toml ARGS`, NAME `onsite_compute` when the first of ``args`` is
     a flag or there is none."""
     name, rest = (args[0], args[1:]) if args and not args[0].startswith("-") else (DEFAULT_DEMO, args)
-    config = ROOT / "demos" / f"{name.replace('-', '_')}.toml"
+    config = ROOT / "applications" / f"{name.replace('-', '_')}.toml"
     if not config.is_file():
-        names = sorted(p.stem for p in (ROOT / "demos").glob("*.toml"))
+        names = sorted(p.stem for p in (ROOT / "applications").glob("*.toml"))
         raise SystemExit(f"verity demo [NAME] [ARGS] (a - in NAME is a _): NAME is one of {', '.join(names) or 'none'}")
     from . import run
 
