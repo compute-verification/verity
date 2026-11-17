@@ -217,12 +217,10 @@ CERTIFIED = "certified-io.json"
 TRACED = ("arrive", "step", "finish")
 #: or a record with one of these fields: the trace's, requests.jsonl's and the certified I/O's request values
 VALUED = ("prompt_len", "sampling", "seed", "rows", "emitted", "prompt_ids", "streamed_ids", "prompt", "output")
-HAND_START = ("serve-openai run directly, not adapters/vllm/tools/served_run/serve.sh: serve.sh's serve-openai line (--required-manifest "
+HAND_START = ("serve-openai run directly (--required-manifest "
               "ROW/manifest.json, the int8 B4 row's Build of record, with the served node's own taps as "
               "--hidden-so and --norm-tap-so) plus the endpoint's flags, and --disk-floor-gb 40 (serve-openai's own default "
-              "under --seal is 300 GB; 72 GB of seals then needs about 112 GB free at the start); serve.sh refuses on "
-              "a served node with less than its 300 GB disk floor free "
-              "and sends its own smoke and load requests into the records. VERITY_STAGING_BOUNDED stays unset: bounded "
+              "under --seal is 300 GB; 72 GB of seals then needs about 112 GB free at the start). VERITY_STAGING_BOUNDED stays unset: bounded "
               "staging, on by default under windowed staging, is what --retain-exclude needs, and the collector refuses "
               "VERITY_STAGING_BOUNDED=0 beside it. Its --copy-records-to copies requests.jsonl and advice_trace.jsonl "
               "too, so it is left off or points at a private dir on the served node: the serve dir's records stay "
@@ -604,7 +602,7 @@ def coin_args(a: argparse.Namespace, fetch: Path) -> list[str]:
         raise Refused(f"{fetch} holds no request naming the node it served on (the gate gives it in witness/request.json, "
                       "to the run's own lane's key), so the coin peer can't be checked")
     if a.coin_peer in (served, PEER):
-        raise Refused(f"--coin-peer {a.coin_peer} is the served node, the prover's: the gate key and the network certifier run's "
+        raise Refused(f"--coin-peer {a.coin_peer} is the served node, the prover's: the gate key and the network attester run's "
                       f"witness are the auditor's, so the sample runs where the chain does, {AUDITOR} by default")
     if a.challenger_key is None:
         raise Refused("--coins gate needs --challenger-key, the deployment's challenger-key/v1 record "
@@ -638,7 +636,7 @@ def certified(a: argparse.Namespace) -> int:
         raise Refused(f"no kept fetch {fetch}: the session's run writes it")
     dep, io = certified_io(fetch)
     if not io["accepted"]:
-        raise Refused(f"the kept network certifier run's I/O doesn't read whole off its cells: {io['violations'][:3]}")
+        raise Refused(f"the kept network attester run's I/O doesn't read whole off its cells: {io['violations'][:3]}")
     dest = a.keep / a.run / CERTIFIED
     fd = os.open(dest, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
     with os.fdopen(fd, "w") as f:
@@ -669,7 +667,7 @@ def rebuild(src: Path, dest: Path, records: list[dict], eos: list[int]) -> Path:
     for m in map(json.loads, filter(str.strip, (src / USERS).read_text().splitlines())):
         if (r := by.pop(m["user"], None)) is None:
             raise Refused(f"{USERS}: engine request {m['engine_id']}'s user {m['user']!r} is no certified request left "
-                          "(none sent, not the network certifier's, or an earlier line's)")
+                          "(none sent, not the network attester's, or an earlier line's)")
         lines.append(json.dumps({"engine_id": m["engine_id"], "user": m["user"], "prompt_ids": r["prompt"],
                                  "streamed_ids": r["output"], "finish": finish(r["output"], r["max_tokens"], set(eos))}))
     fd = os.open(dest / "requests.jsonl", os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
@@ -744,7 +742,7 @@ def endpoint(a: argparse.Namespace) -> int:
     doc = json.load(sys.stdin) if given is None else json.loads(given.read_text())
     dep, io = doc["deployment"], doc["io"]
     if not io.get("accepted"):
-        raise Refused(f"--io: the network certifier run's I/O doesn't read whole off its cells: {io.get('violations', [])[:3]}")
+        raise Refused(f"--io: the network attester run's I/O doesn't read whole off its cells: {io.get('violations', [])[:3]}")
     eos = [int(t) for t in a.eos_ids.split(",")]
     ep = rebuild(src, keep / "records", io["records"], eos)
     sys.path[:0] = [str(TREE), str(TREE / "adapters" / "vllm"), str(HERE)]

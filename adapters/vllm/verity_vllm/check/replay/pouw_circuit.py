@@ -49,17 +49,17 @@ from typing import Any
 
 import numpy as np
 from verity.circuits.evaluation import evaluate
-from verity_vllm.definitions.numerics.kernel_registry import Declined
 from verity.protocols.resource_accounting.compute.pouw.prover.circuit import SCHEMES
 from verity.protocols.resource_accounting.compute.pouw.prover.circuit import anchors as CA
 from verity.protocols.resource_accounting.compute.pouw.prover.circuit import plan as CPL
 from verity.protocols.resource_accounting.compute.pouw.prover.circuit.ncp2 import D
+from verity.protocols.resource_accounting.compute.pouw.prover.serving import circuit as PC
+from verity.protocols.resource_accounting.compute.pouw.prover.serving import native as PN
 from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import DomainError
 
 from verity_vllm.check.replay.delegate import Place, delegated
+from verity_vllm.definitions.numerics.kernel_registry import Declined
 from verity_vllm.protocols import pouw
-from verity.protocols.resource_accounting.compute.pouw.prover.serving import circuit as PC
-from verity.protocols.resource_accounting.compute.pouw.prover.serving import native as PN
 from verity_vllm.records.schema_ids import POUW_CIRCUIT_REPLAY_SCHEMA
 
 M32 = 0xFFFFFFFF

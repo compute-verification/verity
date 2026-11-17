@@ -13,7 +13,7 @@ import Proofs.Pous.Thm1.Theorem1iTimed
 
 namespace Pous.EndToEnd.SecurityProofs
 
-open MemoryChallenger
+open MemoryAttester
 open scoped ENNReal
 
 theorem size_bytesOf {n : ℕ} (x : Bytes n) : (bytesOf x).size = n := by

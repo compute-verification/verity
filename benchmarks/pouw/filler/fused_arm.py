@@ -1,17 +1,16 @@
-"""FILL's fused arm: the decode step's own kernels carry the filler. Its linears run
-through flin (dcap.cu's flin.cuh: a warp-specialized int8 GEMM whose filler warps run FILL's DRAM-free chain while its
-consumers wait on memory) and its attention blocks carry filler warps too, on a green split's step SMs, beside FILL v1's
-filler pumped on the rest. filler-arm/v1 can't place a filler inside serving's kernels, so the arm's `placement` is its
-split, the contract's, and `fused(phase, B, L)` names the step's filler warps; fused_score.py runs the pair through
-fscore.cu and scores the out dir with the locked `score.py report`. dcap.cu's filler is pfill unless built with
--DDFILL_V1, so these arms pass it through NVCC_APPEND_FLAGS (pfill_arm.py's way), which score.py's and fscore's nvcc read.
+"""FILL's fused arms: the decode step's own kernels on a green split's step SMs, beside pfill pumped on the rest.
+Its linears run through flin (dcap.cu's flin.cuh: a warp-specialized int8 GEMM whose filler warps run pfill's step while
+its consumers wait on memory). filler-arm/v1 can't place a filler inside serving's kernels, so the arm's `placement` is
+its split, the contract's, and `fused(phase, B, L)` names the step's filler warps; fused_score.py runs the pair through
+fscore.cu and scores the out dir with the locked `score.py report`. Each arm passes its pfill build's flags through
+NVCC_APPEND_FLAGS (pfill_arm.py's way), which score.py's and fscore's nvcc read.
 
-  python3 benchmarks/pouw/filler/fused_score.py benchmarks/pouw/filler/fused_arm.py:Fused
+  python3 benchmarks/pouw/filler/fused_score.py benchmarks/pouw/filler/fused_arm.py:FusedPumpK
 """
 
 import os
 import sys
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, field
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -37,96 +36,6 @@ class FusedStep:
     ST: int = 0
 
 
-#: (B, L) -> (split SMs, fused step): FILL's round-2 picks, each at
-#: slowdown <= 1.04 over runs 8-16 and 20-22 and holdouts 1-3 against the whole-GPU cuBLASLt step, then holdout 4
-#: (every pick <= 1.040, fresh coins); suite points between them take `point_lookup`'s row
-TABLE = {
-    (1, 2048): (108, FusedStep(AFW=4, ANC=4, APS=0, ALZ=0)),
-    (8, 2048): (108, FusedStep()), (8, 32768): (108, FusedStep()),
-    (32, 1024): (116, FusedStep(AFW=6, ALZ=2)), (32, 2048): (108, FusedStep()), (32, 5120): (108, FusedStep()),
-    (32, 8192): (108, FusedStep()), (32, 16384): (100, FusedStep()), (32, 24576): (92, FusedStep()),
-    (48, 2048): (92, FusedStep(FW=4)), (48, 16384): (68, FusedStep()),
-    (64, 2048): (92, FusedStep(FW=4)), (64, 12288): (68, FusedStep()),
-    (96, 8192): (68, FusedStep(FW=4)),
-    (128, 2048): (92, FusedStep(FW=4, AFW=6, ALZ=0)), (128, 4096): (76, FusedStep(FW=4)),
-    (132, 5120): (68, FusedStep(FW=0)), (144, 5120): (68, FusedStep(FW=0)),
-    (192, 2048): (60, FusedStep(FW=0)),
-    (256, 1024): (36, FusedStep(FW=0, LT=15)), (256, 2048): (36, FusedStep(FW=0, LT=15)),
-    (256, 3072): (36, FusedStep(FW=0, LT=15)),
-}
-#: prefill is psched's (fill-v1-phase-att-co2, psched_arm.py's CO_PREFILL_V3): FILL v1's filler co-scheduled at the
-#: lowest stream priority in 4-warp blocks of 2^16 MMAs, 1.042 / 0.195 on its three screens
-CO_PREFILL = A.Filler(W=4, NC=4, S=128, chunk_log2=16, noise="chained")
-
-
-@dataclass
-class Fused:
-    """The fused step (flin + attention filler warps) on a per-point split beside FILL v1's pump; psched's prefill."""
-
-    name: str = "fill-fused"
-    lineage: dict = field(default_factory=lambda: {
-        "parent": "cursor/fused-filler-ea24@da86371a1", "approach": "pouw/filler-fused",
-        "mechanism": ["filler:chained-imma-registers", "place:split", "split:per-point-table", "fused:flin-filler-warps",
-                      "fused:attention-filler-warps", "fused:persistent-attention", "fused:lazy-done",
-                      "prefill:co", "sched:prio-short-blocks"],
-        "hypothesis": "decode's kernels leave the tensor pipe idle while they wait on memory: filler warps in the "
-                      "linears and attention blocks, beside the pump on the rest, cover 0.70-0.82 of int8 peak on "
-                      "decode at <= 5% slowdown"})
-    sources: tuple = ("verity/protocols/resource_accounting/compute/pouw/prover/kernels/filler/dcap.cu", "verity/protocols/resource_accounting/compute/pouw/prover/kernels/filler/flin.cuh",
-                      "benchmarks/pouw/filler/fscore.cu", "benchmarks/pouw/filler/fused_arm.py",
-                      "benchmarks/pouw/filler/fused_score.py")
-    filler: A.Filler | None = A.Filler(W=8, NC=4, S=2048, chunk_log2=19, noise="chained")
-    choice: str = ("an offline table of 22 (B, L) points (split SMs, flin and attention filler warps) from FILL's round-2 "
-                   "picks and holdouts, HC-SCHED's prefill co shape; at serving time a lookup, a green split and one "
-                   "graph a step")
-    table: dict = field(default_factory=lambda: TABLE, repr=False)
-    nvcc_flags: str = "-DDFILL_V1"
-
-    def __post_init__(self):
-        os.environ["NVCC_APPEND_FLAGS"] = self.nvcc_flags
-
-    def _row(self, b, l):
-        return A.point_lookup(self.table, b, l)
-
-    def placement(self, phase: str, b: int, l: int) -> A.Colocation:
-        if phase == "prefill":
-            return A.Colocation("co")
-        return A.Colocation("split", self._row(b, l)[0])
-
-    def fused(self, phase: str, b: int, l: int) -> FusedStep | None:
-        return None if phase == "prefill" else self._row(b, l)[1]
-
-    def filler_at(self, phase: str, b: int, l: int) -> A.Filler | None:
-        return CO_PREFILL if phase == "prefill" else self.filler
-
-
-#: round 3's picks over TABLE (two screens): lm_head through flin at B <= 64 (+0.003-0.022 of peak, the step no slower:
-#: flin's lm_head beats cuBLASLt's at M = 32) but B 32 L 1K (+0.005 slowdown at 1.024-1.030 without it, where prefill's
-#: 1.043 already sits), not at M = 128 (<= +0.004 for +0.002-0.006 slowdown); B 1 L 32K its own row, persistent
-#: attention and the pump on 100 SMs (the 2K row read 1.045 under the scorer there, this one 0.999). Not taken:
-#: FLIN_LAZY 2/4 (+2-10% slowdown) and flin's filler warps at B >= 132 (1:4, 2:2, 2:4: +0.008-0.015 of peak for
-#: +2.3-4.5%, the pump's trade is ~4x better).
-TABLE_V2 = {k: (sms, replace(q, LM=1) if k[0] <= 64 and k != (32, 1024) else q) for k, (sms, q) in TABLE.items()}
-TABLE_V2[(1, 32768)] = (100, FusedStep(LM=1))
-
-
-@dataclass
-class FusedV2(Fused):
-    """Fused with round 3's table."""
-
-    name: str = "fill-fused-v2"
-    lineage: dict = field(default_factory=lambda: {
-        "parent": "fill-fused", "approach": "pouw/filler-fused",
-        "mechanism": ["filler:chained-imma-registers", "place:split", "split:per-point-table", "fused:flin-filler-warps",
-                      "fused:attention-filler-warps", "fused:persistent-attention", "fused:lazy-done",
-                      "fused:lm-head-flin", "prefill:co", "sched:prio-short-blocks"],
-        "hypothesis": "lm_head through flin at B <= 64 and persistent attention at B 1 L 32K add 0.01-0.02 of peak to "
-                      "fill-fused's decode points (0.624, r20261016-081018-591c) at no more slowdown"})
-    choice: str = ("fill-fused's table with lm_head through flin at B <= 64 (but B 32 L 1K) and a B 1 L 32K row, from "
-                   "FILL's round-3 screens")
-    table: dict = field(default_factory=lambda: TABLE_V2, repr=False)
-
-
 def _pump(sms, lm=1, aps=1, lt=0):
     return sms, FusedStep(FW=0, AFW=0, APS=aps, ALZ=0, LT=lt, LM=lm)
 
@@ -145,33 +54,16 @@ TABLE_PUMP = {
 }
 
 
-@dataclass
-class FusedPump(Fused):
-    """FILL's step without filler warps on a narrower split, the pump alone on the rest: no arm-side fixed work, so the
-    filler is the pump's alone, the form filler-scorer/v3's theorem entries read (with a Theorem K pump)."""
-
-    name: str = "fill-fused-pump"
-    lineage: dict = field(default_factory=lambda: {
-        "parent": "fill-fused-v2", "approach": "pouw/filler-fused",
-        "mechanism": ["filler:chained-imma-registers", "place:split", "split:per-point-table", "fused:flin-serving",
-                      "fused:persistent-attention", "fused:lm-head-flin", "prefill:co", "sched:prio-short-blocks"],
-        "hypothesis": "FILL's step without filler warps (flin, persistent attention, lm_head through flin) holds <= 1.02 "
-                      "on 48-144 SMs, so the pump alone takes 44-140: no fixed work, the shape a Theorem K pump is read "
-                      "in under filler-scorer/v3"})
-    choice: str = ("an offline table of FILL's pump-only splits (no filler warps) from round 3's screens; at serving time a "
-                   "lookup, a green split and one graph a step")
-    table: dict = field(default_factory=lambda: TABLE_PUMP, repr=False)
-
-
 #: pfill-k's chunk (pfill_arm.PFillK's: 8 warps a block, 256 fragments a warp a tile, about 2^19 MMAs an SM a chunk)
 K_FILLER = A.Filler(W=8, NC=4, S=256, chunk_log2=19, noise="bits01", fold="ram")
 
 
 @dataclass
-class FusedPumpK(FusedPump):
-    """FusedPump's splits with pfill-k pumped on the filler SMs (-DPFILL_BITS: fresh {0,1} SHA-512 noise for
-    every IMMA, each k32 word into the ram receipt), and pfill-k's prefill (the linears on 184 SMs, the filler on 4):
-    a split's slowdown is the split's own, whatever runs on its filler SMs."""
+class FusedPumpK:
+    """FILL's step without filler warps (flin, persistent attention, lm_head through flin) on TABLE_PUMP's splits, with
+    pfill-k pumped on the filler SMs (-DPFILL_BITS: fresh {0,1} SHA-512 noise for every IMMA, each k32 word into the
+    ram receipt), and pfill-k's prefill (the linears on 184 SMs, the filler on 4): a split's slowdown is the split's
+    own, whatever runs on its filler SMs."""
 
     name: str = "fill-fused-pump-k"
     lineage: dict = field(default_factory=lambda: {
@@ -181,15 +73,26 @@ class FusedPumpK(FusedPump):
                       "prefill:split"],
         "hypothesis": "FusedPump's splits beside a pfill-k pump read Theorem K's 0.9 under filler-scorer/v3: the pump's "
                       "0.88 of FILL v1's rate an SM, on 44-140 SMs, projects 0.365"})
+    sources: tuple = ("verity/protocols/resource_accounting/compute/pouw/prover/kernels/filler/dcap.cu", "verity/protocols/resource_accounting/compute/pouw/prover/kernels/filler/flin.cuh",
+                      "benchmarks/pouw/filler/fscore.cu", "benchmarks/pouw/filler/fused_arm.py",
+                      "benchmarks/pouw/filler/fused_score.py")
     filler: A.Filler | None = K_FILLER
     choice: str = ("FusedPump's offline table of pump-only splits, pfill-k's 4-SM prefill split; at serving time a lookup, "
                    "a green split and one graph a step")
+    table: dict = field(default_factory=lambda: TABLE_PUMP, repr=False)
     nvcc_flags: str = "-DPFILL_BITS"
 
+    def __post_init__(self):
+        os.environ["NVCC_APPEND_FLAGS"] = self.nvcc_flags
+
+    def _row(self, b, l):
+        return A.point_lookup(self.table, b, l)
+
     def placement(self, phase: str, b: int, l: int) -> A.Colocation:
-        if phase == "prefill":
-            return A.Colocation("split", 4)
-        return super().placement(phase, b, l)
+        return A.Colocation("split", 4 if phase == "prefill" else self._row(b, l)[0])
+
+    def fused(self, phase: str, b: int, l: int) -> FusedStep | None:
+        return None if phase == "prefill" else self._row(b, l)[1]
 
     def filler_at(self, phase: str, b: int, l: int) -> A.Filler | None:
         return self.filler
@@ -273,7 +176,7 @@ def _warp(sms, fw, st=32, lm=1, aps=1):
 
 
 #: pfill-k's filler warps (dfill_k_warp) in flin's blocks with FLIN_STOP 32, beside the pfill-k pump, at every point where
-#: they fit (screened <= 1.02, the linears' filler >= 0.005 of peak), else FusedPump's pump-only row: six
+#: they fit (screened <= 1.02, the linears' filler >= 0.005 of peak), else TABLE_PUMP's row: six
 #: screens. No attention filler
 #: warps (a pfill-k step outlasts an attention launch: 32/2K FW 8 + AFW 8 2.02 against FW 8 alone 1.37);
 #: none at 96/8K (stop 32 1.021, stop 64 never steps) or B >= 132 (1.04-1.07 at 2 warps, stops 32-64, on 44-76 SMs).
@@ -289,7 +192,7 @@ TABLE_WARP_K = {
 
 @dataclass
 class FusedWarpK(FusedPumpK):
-    """FusedV2's in-kernel filler warps on pfill-k's arithmetic: each flin block's filler warps call `dfill_k_warp`
+    """In-kernel filler warps on pfill-k's arithmetic: each flin block's filler warps call `dfill_k_warp`
     (flin.cuh, a `__noinline__` step that holds every filler MMA and reads only the coins, the slot's public tile id and
     the step), each k32 word into the ram receipt, beside FusedPumpK's pump and prefill. A step hashes one SHA-512 block a
     lane (~17 issue slots an MMA against FILL v1's ~1), so the warps fit only on narrower splits than the pump alone's,

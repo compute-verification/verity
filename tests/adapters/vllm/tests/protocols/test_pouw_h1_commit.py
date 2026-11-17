@@ -27,12 +27,16 @@ else:
 from torch import nn
 from verity.circuits.codec import canonical_json
 from verity.protocols.resource_accounting.compute.pouw.prover.circuit import h1window as HW
+from verity.protocols.resource_accounting.compute.pouw.prover.serving import h1 as PH
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import challenger as PHC
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import commit as CT
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import served as SV
 from verity.protocols.resource_accounting.compute.pouw.verifier import credit as CR
 from verity.protocols.resource_accounting.compute.pouw.verifier import weights as Wt
 from verity.protocols.resource_accounting.compute.pouw.verifier import window as Wd
 from verity.protocols.proofs.spot.verifier.challenger import remote as R
-from verity.protocols.proofs.spot.verifier.one_stage import registered as G
 from verity.protocols.proofs.spot.verifier.one_stage import docket as REG
+from verity.protocols.proofs.spot.verifier.one_stage import registered as G
 
 from tests.check import opened as O
 from tests.protocols import challenger_host as CH
@@ -49,11 +53,7 @@ from verity_vllm.engine import int8_experts as X
 from verity_vllm.engine import int8_ops
 from verity_vllm.engine.hooks import Hooks
 from verity_vllm.protocols import pouw
-from verity.protocols.resource_accounting.compute.pouw.prover.serving import h1 as PH
-from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import challenger as PHC
-from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import commit as CT
 from verity_vllm.protocols.pouw import h1_hooks as PHK
-from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import served as SV
 
 K, ROWS, STEPS = 64, 32, 2
 ENTRY = f"pouw:{PH.SCHEME}"

@@ -5,7 +5,7 @@ and its outcome. The piece, on a serve dir whose window was the network attester
 `network-period`'s answer only when `network-rows` accepted the run's records, the chain accepted and the window's
 requests are certified in the transfer blocks of the scan's execution phase: the period mirror's certifier/v0
 accept (`period_case`), its
-profile with the placement (the certifier on the kept gate's machine and each of the piece's steps on the machine that
+profile with the placement (the attester on the kept gate's machine and each of the piece's steps on the machine that
 ran it, labels by which the piece establishes no `trusted-device`), then goes through `served_verdicts.py record` into the window
 report and the block record's certifier entry, which `block_record.check` holds and its schema admits. Its case.json is
 the three files `network-period` read, as `composite.py` reads a piece's case: witness, kept 0600 in the serve dir's
@@ -17,7 +17,7 @@ records that `network-rows` refuses, are rejected before any chain runs (`networ
 run's records and refuses them with cells re-cut, re-clocked or reordered, a certificate of another key, a record
 changed under its head and a schedule with a `max_tokens_cap`); a chain that refused, requests outside those
 transfer blocks and a period the check rejects are rejects; a rehearsal the gate's check failed (each request late) and
-a step that can't run (no kept run, no report, no build, the time limit) refuse, which leaves the certifier missing, and no process of a step's group outlives
+a step that can't run (no kept run, no report, no build, the time limit) refuse, which leaves the attester missing, and no process of a step's group outlives
 the piece, the time limit's SIGTERM included, whenever it comes. Of the chain, DIR gets only `PUBLIC`'s key paths,
 which hold none of the window's counts or advice bits; the leak guard reads the piece's DIR against the run's witness
 and moves out any file DIR doesn't declare, a period file among them; the certificates reach DIR only through it, and
@@ -415,7 +415,7 @@ def test_a_step_leaves_no_process_of_its_group_behind_however_it_ends(tmp_path, 
 def test_a_step_that_cant_run_refuses_and_leaves_the_certifier_missing(case, tmp_path, network_attester, capsys, monkeypatch):
     """The front's failures (the gate refusing or busy, its tunnel or ssh) keep no run; a corrupt fetch, a chain that
     ends without a report, a missing Lean build (``network-period``'s or ``network-rows``'), SIGTERM from the piece's time limit and a check that answers no
-    certifier/v0 verdict can't run: each leaves DIR/refused.txt and its log, no answer, and the certifier missing."""
+    certifier/v0 verdict can't run: each leaves DIR/refused.txt and its log, no answer, and the attester missing."""
     d = _serve_dir(tmp_path / "serve", network_attester, kept=case != "no kept run")
     if case == "corrupt fetch":
         (d / CP.PRIVATE / RUN / "fetch.tar.gz").write_bytes(b"not a tarball")
@@ -514,8 +514,8 @@ def test_a_chain_file_holding_a_witness_value_is_moved_out_of_dir(tmp_path, netw
 def test_a_rehearsal_the_gates_check_failed_late_leaves_the_certifier_missing_not_rejected(tmp_path, network_attester, capsys,
                                                                                           monkeypatch):
     """Each request late past the network attester's D·τ: the gate's check fails the rehearsal, and the served answers, longer
-    than what the certifier passed, don't bind to its certified ones. That is the endpoint's lateness, not the protocol
-    rejecting a served answer, so the piece refuses before any chain and the certifier is missing, as for a busy gate;
+    than what the attester passed, don't bind to its certified ones. That is the endpoint's lateness, not the protocol
+    rejecting a served answer, so the piece refuses before any chain and the attester is missing, as for a busy gate;
     the same window on a rehearsal the check passed is a reject."""
     served = [dict(r, output=[*r["output"], 7]) for r in network_attester["records"]]
     d = _serve_dir(tmp_path / "serve", network_attester, served, fetch="late")
@@ -816,7 +816,7 @@ def _private_chain_out(out: Path) -> Path:
 def test_the_piece_publishes_no_count_or_advice_bit_of_the_window_and_the_guard_moves_out_what_isnt_declared(tmp_path):
     """The chain's out/ holds the window's private values: the endpoint's report (its Commit window's request, step and
     output counts and its advice's bits), the report made of it (the certified I/O's counts, the advice's bits as K's
-    term) and report.md, the certificates step's view of the certifier's check and the tie's prompt lengths. `publish`
+    term) and report.md, the certificates step's view of the attester's check and the tie's prompt lengths. `publish`
     puts none of them in the hold, only `PUBLIC`'s key paths, the endpoint's step its verdict and where it ran, and
     nothing of the scan's answers, the period check's evidence less its certificates. A file put past `publish`, in the
     hold (the endpoint's report and the scan's answers copied whole, as the piece once published them) or in DIR (the
@@ -983,7 +983,7 @@ def test_a_split_step_that_cant_run_refuses_keeping_both_logs(case, tmp_path, ne
     (CERTIFIER_TIMEOUT) ends it; the period step then refuses too, naming the chain's refusal. The period step refuses
     where no chain step accepted in DIR, where the chain's scan read no V3c window, where V3c wrote no period.json, and
     where the verifier kept no window-circuit record beside V3c, whose class circuit V3c's audit is held to: DIR keeps
-    its logs and refused.txt, and the certifier is missing."""
+    its logs and refused.txt, and the attester is missing."""
     d = _serve_dir(tmp_path / "serve", network_attester)
     v3c, piece = _v3c(d, None if case == "no period.json" else PERIOD, committed=case != "no v3c window",
                       circuit=case != "no window-circuit record"), tmp_path / "pieces" / "certifier"
@@ -1021,6 +1021,10 @@ def test_n2_and_the_tie_take_every_phase_of_a_short_run_unless_named():
     assert CP.sized(9, ["CR_SCAN_ONLY=1"]) == ["CR_SCAN_ONLY=1"]
 
 
+#: a made-up name of a served node, a session's peer
+PEER = "some-served-node"
+
+
 @pytest.fixture(autouse=True)
 def challenger_host(monkeypatch):
     monkeypatch.setenv("VY_CHALLENGER_1_HOST", CHALLENGER_HOST)
@@ -1038,9 +1042,9 @@ def _stub_gate(tmp_path: Path, monkeypatch) -> None:
 def test_the_front_sends_one_group_of_the_class_and_keeps_the_fetch_in_the_serve_dirs_private(tmp_path, monkeypatch):
     _stub_gate(tmp_path, monkeypatch)
     serve, out = tmp_path / "serve", tmp_path / "out" / "certifier-front"
-    assert CP.main(["front", "18190", str(serve), str(out), "--key", str(tmp_path / "key")]) == 0
+    assert CP.main(["front", "18190", str(serve), str(out), "--peer", PEER, "--key", str(tmp_path / "key")]) == 0
     assert (tmp_path / "request").read_text() == (
-        "warden-rehearse --peer vy-dc-h200 --port 18190 --minutes 7 --requests 4 --height 10 --scan --prompts "
+        f"warden-rehearse --peer {PEER} --port 18190 --minutes 7 --requests 4 --height 10 --scan --prompts "
         "--tokens 4 --scan-class w63k4 --window-per-group")
     prompts = json.loads((tmp_path / "prompts.json").read_text())
     assert [len(p) for p in prompts] == [CP.PROMPT_IDS] * CP.PROMPTS and all(t < 128000 for p in prompts for t in p)
@@ -1051,11 +1055,11 @@ def test_the_front_sends_one_group_of_the_class_and_keeps_the_fetch_in_the_serve
     assert json.loads((out / "session.json").read_text())["keep"] == str(kept)
     assert (kept.parent / CP.SESSION).read_text() == (out / "session.json").read_text()
     assert json.loads((out / "session.json").read_text())["gate"] == LIVE_GATE
-    assert CP.main(["front", "18190", str(serve), str(out), "--tokens", "64"]) == 2
+    assert CP.main(["front", "18190", str(serve), str(out), "--peer", PEER, "--tokens", "64"]) == 2
     assert "past one execution phase" in json.loads((out / "session.json").read_text())["refused"]
-    assert CP.main(["front", "18190", str(serve), str(out), "--tokens", "5"]) == 2
+    assert CP.main(["front", "18190", str(serve), str(out), "--peer", PEER, "--tokens", "5"]) == 2
     assert "1 to KO = 4 ids" in json.loads((out / "session.json").read_text())["refused"]
-    assert CP.main(["front", "18190", str(tmp_path / "serve-w63"), str(tmp_path / "out-w63"), "--key",
+    assert CP.main(["front", "18190", str(tmp_path / "serve-w63"), str(tmp_path / "out-w63"), "--peer", PEER, "--key",
                     str(tmp_path / "key"), "--scan-class", "w63"]) == 0
     assert (tmp_path / "request").read_text().endswith("--tokens 4 --scan-class w63 --window-per-group")
 
@@ -1067,15 +1071,28 @@ def test_the_front_without_the_challenger_hosts_address_is_refused_by_the_variab
     _stub_gate(tmp_path, monkeypatch)
     monkeypatch.delenv("VY_CHALLENGER_1_HOST")
     serve, out = tmp_path / "serve", tmp_path / "out"
-    assert CP.main(["front", "18190", str(serve), str(out), "--key", str(tmp_path / "key")]) == 2
+    assert CP.main(["front", "18190", str(serve), str(out), "--peer", PEER, "--key", str(tmp_path / "key")]) == 2
     assert json.loads((out / "session.json").read_text())["refused"].startswith("VY_CHALLENGER_1_HOST is unset: the gate is ")
     assert not (tmp_path / "request").exists()
+
+
+@pytest.mark.parametrize("flags", [(), ("--session", "--client-port", "8012", "--windows", "20"),
+                                   ("--gate", "local")])
+def test_the_front_without_its_peer_is_refused_by_the_settings_name_before_the_gate(tmp_path, monkeypatch, flags):
+    """The front names no served node of its own: without ``--peer`` the rehearsal, the relay session and the dry run
+    are refused, naming the binding `verity run` passes it from, and the gate is never asked."""
+    _stub_gate(tmp_path, monkeypatch)
+    serve, out = tmp_path / "serve", tmp_path / "out"
+    assert CP.main(["front", "18190", str(serve), str(out), "--key", str(tmp_path / "key"), *flags]) == 2
+    why = json.loads((out / "session.json").read_text())["refused"]
+    assert why == CP.NO_PEER and "network-certifier.certifier.peer" in why
+    assert not (tmp_path / "request").exists() and not (tmp_path / "asked").exists()
 
 
 def test_a_fronts_rehearsal_at_4000_ms_reaches_the_gate_with_its_tick_and_the_scans_schedule_there(tmp_path,
                                                                                                    monkeypatch):
     """``--gate local``, this tree's gate in this process: the run's request records the tick and the minutes counted
-    at it, and the certifier's command is the scan's schedule at it. The tunnel and the rehearsal are stand-ins, the
+    at it, and the attester's command is the scan's schedule at it. The tunnel and the rehearsal are stand-ins, the
     rehearsal's check accepting and counting the requests the front asks for."""
     real, ran = CP.SS.A.certifier_run, []
     check = json.dumps({"accepted": True, "problems": [], "summary": {"requests": 4}})
@@ -1093,7 +1110,8 @@ def test_a_fronts_rehearsal_at_4000_ms_reaches_the_gate_with_its_tick_and_the_sc
     monkeypatch.setattr(CP.SS.A, "certifier_run", certifier_run)
     monkeypatch.setattr(CP.SS, "pinned", lambda: "unpinned")
     serve, out = tmp_path / "serve", tmp_path / "out"
-    assert CP.main(["front", "18190", str(serve), str(out), "--gate", "local", "--bucket-ms", "4000"]) == 0
+    assert CP.main(["front", "18190", str(serve), str(out), "--peer", PEER, "--gate", "local", "--bucket-ms",
+                    "4000"]) == 0
     minutes = CP.SS.A.network_attester_group_minutes(1, CP.TOKENS, CP.HEIGHT, 4000) + CP.SS.MARGIN
     assert minutes > CP.SS.A.network_attester_group_minutes(1, CP.TOKENS, CP.HEIGHT) + CP.SS.MARGIN
     (req,) = [json.loads(p.read_text()) for p in (serve / CP.PRIVATE).rglob("request.json")]
@@ -1106,7 +1124,7 @@ def test_a_fronts_rehearsal_at_4000_ms_reaches_the_gate_with_its_tick_and_the_sc
     assert network_attester[at:at + 1 + len(CP.SS.A.SCAN_SCHEDULE)] == ["--ids", *CP.SS.A.scan_schedule(4000, CP.V3C_SCAN_CLASS)]
     assert CP.SS.A.scan_schedule(4000) != CP.SS.A.SCAN_SCHEDULE
     doc = json.loads((out / "session.json").read_text())
-    assert doc["request"] == (f"warden-rehearse --peer vy-dc-h200 --port 18190 --minutes {minutes} --requests 4 "
+    assert doc["request"] == (f"warden-rehearse --peer {PEER} --port 18190 --minutes {minutes} --requests 4 "
                               "--height 10 --scan --bucket-ms 4000 --prompts --tokens 4 --scan-class w63k4 "
                               "--window-per-group")
     assert (doc["rc"], doc["verdict"]["accepted"]) == (0, True)
@@ -1126,7 +1144,8 @@ def test_a_tick_the_gate_refuses_refuses_the_front_before_the_gate_is_asked(tmp_
         monkeypatch.setattr(CP.SS, "words", lambda a: [w for w in words(a)
                                                        if w not in ("--scan", "--prompts", "--window-per-group")])
     serve, out = tmp_path / "serve", tmp_path / "out"
-    assert CP.main(["front", "18190", str(serve), str(out), "--key", str(tmp_path / "key"), "--bucket-ms", tick]) == 2
+    assert CP.main(["front", "18190", str(serve), str(out), "--peer", PEER, "--key", str(tmp_path / "key"),
+                    "--bucket-ms", tick]) == 2
     assert json.loads((out / "session.json").read_text())["refused"] == f"the gate refuses it: {why}"
     assert not (tmp_path / "request").exists()
 
@@ -1196,7 +1215,8 @@ def endpoint(tmp_path, monkeypatch):
 
 def test_the_front_warms_the_endpoint_up_a_window_at_a_time_before_it_asks_the_gate(tmp_path, endpoint):
     port, serve, out = endpoint.server_address[1], endpoint.serve, tmp_path / "out"
-    assert CP.main(["front", str(port), str(serve), str(out), "--key", str(tmp_path / "key"), "--warmup", "2"]) == 0
+    assert CP.main(["front", str(port), str(serve), str(out), "--peer", PEER, "--key", str(tmp_path / "key"),
+                    "--warmup", "2"]) == 0
     assert [(s["path"], s["gate asked"]) for s in endpoint.seen] == [("/v1/completions", False)] * 2
     assert not any(h.startswith("x-verity-release") for s in endpoint.seen for h in s["headers"])
     bodies = [s["body"] for s in endpoint.seen]
@@ -1205,7 +1225,7 @@ def test_the_front_warms_the_endpoint_up_a_window_at_a_time_before_it_asks_the_g
     users = [b["user"] for b in bodies]
     assert len(set(users)) == 2 and all(u.startswith("warmup-") for u in users)
     assert (tmp_path / "request").read_text() == (
-        f"warden-rehearse --peer vy-dc-h200 --port {port} --minutes 7 --requests 4 --height 10 --scan --prompts "
+        f"warden-rehearse --peer {PEER} --port {port} --minutes 7 --requests 4 --height 10 --scan --prompts "
         "--tokens 4 --scan-class w63k4 --window-per-group")
     warm = json.loads((out / "warmup.json").read_text())["requests"]
     assert [(w["user"], w["finish_reason"]) for w in warm] == [(u, "length") for u in users]
@@ -1216,7 +1236,7 @@ def test_the_front_warms_the_endpoint_up_a_window_at_a_time_before_it_asks_the_g
 def test_a_warm_up_that_fails_or_isnt_recorded_closed_refuses_the_front_before_the_gate(tmp_path, endpoint):
     port, serve, out = endpoint.server_address[1], endpoint.serve, tmp_path / "out"
     endpoint.status = 503
-    assert CP.main(["front", str(port), str(serve), str(out), "--warmup", "1"]) == 2
+    assert CP.main(["front", str(port), str(serve), str(out), "--peer", PEER, "--warmup", "1"]) == 2
     assert json.loads((out / "session.json").read_text())["refused"].startswith("--warmup: request 0: HTTPError")
     assert not (tmp_path / "request").exists() and not (out / "warmup.json").exists()
     endpoint.status, endpoint.record, clock = 200, False, _Clock()
@@ -1244,8 +1264,6 @@ class _Clock:
 # rehearsal's front does; the piece's steps close a session nobody closed before they read the kept run; and a request
 # this tree's gate refuses is refused before the gate is asked.
 
-#: a made-up name of a served node, a session's peer
-PEER = "some-served-node"
 #: the relay's deployment, as the gate's status gives it once the relay listens and the run's bundle at its end
 #: a relay session's deployment as the gate gives it out, and as its relay wrote it in the witness: with where it
 #: listened, which the gate gives no one
@@ -1477,7 +1495,7 @@ def test_close_waits_for_the_sessions_end_keeps_its_fetch_and_publishes_what_a_r
 def test_a_session_the_gates_check_refused_is_closed_and_kept_and_the_piece_doesnt_answer_for_it(tmp_path, monkeypatch):
     """The whole-run rule across a session: an end whose check didn't accept the run (here each connection late) is
     `close`'s exit, its fetch is kept all the same, and the piece's steps refuse on it (`rehearsed`), which leaves the
-    certifier missing for every window of the served run."""
+    network attester missing for every window of the served run."""
     _session_gate(tmp_path, monkeypatch, [LISTENING])
     serve = tmp_path / "serve"
     assert CP.main(_front(tmp_path, *SESSION_FLAGS)) == 0
