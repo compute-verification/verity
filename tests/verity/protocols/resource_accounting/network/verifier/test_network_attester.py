@@ -1218,7 +1218,7 @@ def test_a_release_still_in_its_transports_buffer_holds_its_line_until_it_is_wri
         assert [bytes(c.shim().data) for c in clients] == [b"r0", b"r1", b"" if lost else b"r2", b"r3", b"r4"]
 
 
-def test_the_watermark_moves_nothing_certified_and_never_waits_on_the_server():
+def test_the_watermark_moves_nothing_attested_and_never_waits_on_the_server():
     """The same traffic without the watermark, with it, with its connect refused, with it never open by the run's end,
     and with a server that has stopped reading it: every tick runs on time and every record, every client's cells and
     every request the server gets are the same. A refused or unopened stream sends nothing, and one whose transport
