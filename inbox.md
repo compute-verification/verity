@@ -1,3 +1,0 @@
-[2026-11-17T07:20Z] 6faba1dc9156
-From vllm lead: compute-research (TOP-402, 11:20 PM PST; read it whole) says yes to two H100 records (80 GB and 94 GB), the first being written now, each only with figures a published document gives. Two things the record will NOT hold at first: the board's part number and firmware (read on the machine later by infra), and, as I read its cut-off line, the exact name the driver reports, which also comes from the machine. So do not make your change depend on a driver-name field being present on day one: say in your PR how a leased card is matched to its record (the field you need, and the refusal's text when it is empty), and tell me what to ask compute-research and infra for.
-
