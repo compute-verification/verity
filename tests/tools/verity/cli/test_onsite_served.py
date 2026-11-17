@@ -732,8 +732,8 @@ def test_the_onsite_line_is_the_published_records_and_takes_none_of_its_accepts(
                                             "inference-only": "absent",
                                             **{ROW_OF[k]: v for k, v in rows.items()}})
     assert line["coins"] == "simulated" and line["reason"] == reason
-    assert line["coins_on"] == {**{c: T.PROVER_NODE for c in ("pous", "bandwidth", "wipe")},
-                                "sampled-proofs": T.GATE_HOST, "pearl-plus": T.GATE_HOST}
+    assert line["coins_on"] == {**{c: T.PROVER_NODE for c in ("pous", "bandwidth", "wipe", "pearl-plus")},
+                                "sampled-proofs": T.GATE_HOST}
     assert line["answer_from"] == {ROW_OF[k]: f"{T.AS_WRITTEN} (its piece files in {k}/)"
                                    for k in ("integrity", "work", "space", "communication", "wipe", *rows)}
 
@@ -981,15 +981,15 @@ def test_the_run_attesters_take_the_gates_words_and_the_runs_key(tmp_path):
     assert refused.returncode == 2 and "got --fixture" in refused.stderr
 
 
-@pytest.mark.parametrize("tables, on, coins", [({}, T.PROVER_NODE, "simulated"),
-                                               (BINDINGS, T.AUDITOR_HOST, "development")])
-def test_the_onsite_line_names_the_machine_each_memory_attesters_key_and_coins_were_made_on(tmp_path, monkeypatch,
-                                                                                         tables, on, coins):
+@pytest.mark.parametrize("tables, on, pearl, coins", [({}, T.PROVER_NODE, T.PROVER_NODE, "simulated"),
+                                                      (BINDINGS, T.AUDITOR_HOST, T.GATE_HOST, "development")])
+def test_the_onsite_line_names_the_machine_each_attesters_and_pearl_pluss_coins_were_made_on(tmp_path, monkeypatch,
+                                                                                            tables, on, pearl, coins):
     state = tmp_path / "state"
     published(state, {})
     (state / T.BINDINGS).write_text(json.dumps(tables))
     line = T.onsite_check(R.load(CONFIG, REG), state)
-    assert line["coins_on"] == {"pous": on, "bandwidth": on, "wipe": on} and line["coins"] == coins
+    assert line["coins_on"] == {"pous": on, "bandwidth": on, "wipe": on, "pearl-plus": pearl} and line["coins"] == coins
 
 
 #: nvidia-smi's stand-in: an idle card

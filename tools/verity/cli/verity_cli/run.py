@@ -79,7 +79,8 @@ developer doesn't control (`memory_attester.trusted_device`), by component, from
 onsite's has ``coins_on``: the machine each memory attester's key and coins were made on, the attester's where its
 binding is given, else the workload's, a development run's, which makes ``coins`` ``simulated``.
 remote's has ``coins_on``, over the placement's: the machine each component whose challenger gate is optional had its
-coins flipped on, the challenger's where its gate is bound, else the workload's, which makes ``coins`` ``simulated``.
+coins flipped on, the challenger's where its gate is bound, else the workload's, which makes ``coins`` ``simulated``;
+onsite's has Pearl+'s by the same rule.
 
 ``coins`` is ``simulated`` when the challenger's host is one a prover's party is on (its machine, or two machines this
 host stands for), else ``development`` (the keys are made for the run). ``simulated`` names each premise the placement
