@@ -50,7 +50,7 @@ row: the Lean verifier checks each read's path (`registered.verify_read`).
 - With TAU, the certified tick's bucket (0 for none), the state ends with `tick_step.TickStep_v1`'s clock T = q·TAU + r
   (`tick_q` 32 bits, `tick_r` bitlen(TAU − 1); `Row.clock`) and an arrival ends with its release bucket (`q_bucket`,
   `arr_bucket`, `a_bucket`, 32 bits), so the state is TickStep_v1's and the front its arrivals. The parts are then
-  `ReplayAdvance_v2`, `ReplayLoad_v2` and `ReplayClose_v2`, the v1 parts at these rows with TAU among their statics:
+  `TickAdvance_v1`, `TickLoad_v1` and `TickClose_v1`, the three parts at these rows with TAU among their statics:
   the load copies the clock, so a window's steps start at the clock the last window's ended at, which the carry holds.
 - Widths, from the size class and the public config (`widths`): LW = bitlen(L), BW = bitlen(NB), AC = bitlen(A),
   QW = bitlen(Q), DW = bitlen(D), PW = bitlen(P), bitlen(0) being 1; IW is a request id's and EW a walk entry's.
@@ -124,7 +124,7 @@ VALUE = "replay-state"
 WINDOW = "replay-window"
 WORD_BITS = 16
 STATICS = ("R", "W", "A", "L", "NB", "IW", "Q", "D", "P", "K", "AS", "EW")
-#: the v2 parts' statics, at TAU ≥ 1
+#: the tick's parts' statics, at TAU ≥ 1
 TICK_STATICS = STATICS + ("TAU",)
 _INST = hm96.SHA512
 
@@ -739,34 +739,33 @@ ReplayClose = _part(
     "ReplayClose", STATICS, _sig_close, _build_close,
     "a session's last unit: its last state row has no step to run and has read every decision of its window row")
 
-_TICK = ("; v1's at the certified tick's rows (TAU ≥ 1): the state row ends with TickStep_v1's clock T = q·TAU + r "
-         "and each arrival with its release bucket")
-ReplayAdvance2 = _part("ReplayAdvance", TICK_STATICS, _sig_advance, _build_advance, ReplayAdvance.doc + _TICK, version=2)
-ReplayLoad2 = _part("ReplayLoad", TICK_STATICS, _sig_load, _build_load,
-                    ReplayLoad.doc + _TICK + ", the clock state row 0's", version=2)
-ReplayClose2 = _part("ReplayClose", TICK_STATICS, _sig_close, _build_close, ReplayClose.doc + _TICK, version=2)
+_TICK = (", at the certified tick's rows (TAU ≥ 1): the state row ends with TickStep_v1's clock T = q·TAU + r and each "
+         "arrival with its release bucket")
+TickAdvance = _part("TickAdvance", TICK_STATICS, _sig_advance, _build_advance, ReplayAdvance.doc + _TICK)
+TickLoad = _part("TickLoad", TICK_STATICS, _sig_load, _build_load, ReplayLoad.doc + _TICK + ", the clock state row 0's")
+TickClose = _part("TickClose", TICK_STATICS, _sig_close, _build_close, ReplayClose.doc + _TICK)
 
 
 def _refuse_tick(b: dict) -> str | None:
     if "TAU" in b and b["TAU"] < 1:
-        return f"TAU = {b['TAU']}: the v2 parts are the tick's, TAU ≥ 1 (without the tick the parts are v1)"
+        return f"TAU = {b['TAU']}: the tick's parts have TAU ≥ 1 (without the tick the parts are the Replay ones)"
     return None
 
 
-for _d in (ReplayAdvance2, ReplayLoad2, ReplayClose2):
+for _d in (TickAdvance, TickLoad, TickClose):
     _d.refuse = _refuse_tick
 
 
 def advance_unit(S: Shape) -> SpecializedDefinition:
-    return bind(ReplayAdvance2 if _tau(S) else ReplayAdvance, **_statics(S))
+    return bind(TickAdvance if _tau(S) else ReplayAdvance, **_statics(S))
 
 
 def load_unit(S: Shape) -> SpecializedDefinition:
-    return bind(ReplayLoad2 if _tau(S) else ReplayLoad, **_statics(S))
+    return bind(TickLoad if _tau(S) else ReplayLoad, **_statics(S))
 
 
 def close_unit(S: Shape) -> SpecializedDefinition:
-    return bind(ReplayClose2 if _tau(S) else ReplayClose, **_statics(S))
+    return bind(TickClose if _tau(S) else ReplayClose, **_statics(S))
 
 
 def _statics(S) -> dict[str, int]:

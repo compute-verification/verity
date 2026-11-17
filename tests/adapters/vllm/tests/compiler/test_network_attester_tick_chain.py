@@ -1,5 +1,5 @@
 """The replay's state chain at the certified tick's rows (`replay_chain` with TAU): the state row is TickStep_v1's state
-and clock and the front its arrivals and buckets; `ReplayAdvance_v2`, `ReplayLoad_v2` and `ReplayClose_v2` against
+and clock and the front its arrivals and buckets; `TickAdvance_v1`, `TickLoad_v1` and `TickClose_v1` against
 `advance`, `load` and `close` on random rows with clocks; a two-window chain of the replay's steps, each step
 `tick_step.reference` on what the chain shows, carrying T as `Replay.clock` does; and the seam between two windows: one
 that ends mid-bucket, one across which several buckets pass, and the chain refusing a window that starts at another
@@ -24,8 +24,9 @@ from verity_vllm.pipeline.advice_code import replay as RP
 from verity_vllm.pipeline.advice_code import schedule as SC
 from verity_vllm.pipeline.advice_code import tick_step as TS
 
-SMALL = RC.Shape(**{**CT.SMALL.statics(), "TAU": 5})
-ASYNC = RC.Shape(**{**CT.ASYNC.statics(), "TAU": 100_000})
+#: the replay chain's shapes with A ≥ R + 1, as TickStep_v1 needs
+SMALL = RC.Shape(**{**CT.SMALL.statics(), "A": 4, "TAU": 5})
+ASYNC = RC.Shape(**{**CT.ASYNC.statics(), "A": 4, "TAU": 100_000})
 SERVED = RC.Shape(**{**CT.SERVED.statics(), "TAU": 10**8})
 SHAPES = (SMALL, ASYNC, SERVED)
 
@@ -50,11 +51,11 @@ def test_the_rows_are_tick_steps():
         v1 = RC.Shape(**{k: v for k, v in S.statics().items() if k != "TAU"})
         assert RC.state_fields(v1) == RC.state_fields(S)[:-2] and "bucket" not in RC.arrival_names(v1)
         assert [f(S).id.split("{")[0] for f in (RC.advance_unit, RC.load_unit, RC.close_unit)] == [
-            "ReplayAdvance_v2", "ReplayLoad_v2", "ReplayClose_v2"]
+            "TickAdvance_v1", "TickLoad_v1", "TickClose_v1"]
         assert [f(v1).id.split("{")[0] for f in (RC.advance_unit, RC.load_unit, RC.close_unit)] == [
             "ReplayAdvance_v1", "ReplayLoad_v1", "ReplayClose_v1"]
     with pytest.raises(ValueError, match="TAU ≥ 1"):
-        RC.ReplayAdvance2.bind(**{**CT.SMALL.statics(), "TAU": 0})
+        RC.TickAdvance.bind(**{**CT.SMALL.statics(), "TAU": 0})
 
 
 def test_round_trip_and_refusals():
@@ -79,8 +80,8 @@ def test_round_trip_and_refusals():
 
 @pytest.mark.parametrize("S", SHAPES[:2])
 def test_the_parts_are_their_specifications(S):
-    """The v2 parts on random rows with clocks, and each case with one bit of its next rows flipped: `ReplayAdvance_v2`
-    takes the step's clock into the next row, `ReplayLoad_v2` state row 0's and an idle step the row's own."""
+    """The tick's parts on random rows with clocks, and each case with one bit of its next rows flipped: `TickAdvance_v1`
+    takes the step's clock into the next row, `TickLoad_v1` state row 0's and an idle step the row's own."""
     rng = random.Random(12)
     cases, want = [], []
     for k in range(300):
@@ -188,9 +189,9 @@ def run(Sc: RC.Shape, St: SimpleNamespace, rule: TS.Rule, windows: list[tuple[tu
 
 
 def held(Sc: RC.Shape, st_: dict, windows: list[Window]) -> list[RC.Committed]:
-    """Each window's load and steps held by their circuits (`ReplayLoad_v2`, `ReplayAdvance_v2` and each active step's
+    """Each window's load and steps held by their circuits (`TickLoad_v1`, `TickAdvance_v1` and each active step's
     `TickStep_v1` on the state row it reads), committed as the chain's produced values, and the session's openings
-    through `check_chain`; the last rows through `ReplayClose_v2`."""
+    through `check_chain`; the last rows through `TickClose_v1`."""
     loads, advances, ticks, want = [], [], [], []
     for w in windows:
         loads.append(RC.load_arguments(Sc, w.rows[0], w.last, w.arrivals, (), 0, w.n, RC.encode(w.rows[1], Sc),
@@ -341,7 +342,7 @@ def test_the_chain_refuses_a_window_that_starts_at_another_clock() -> None:
     """The first window of the mid-bucket seam ends at T = 220,000. A second window that starts at that row with T
     restarted at 0 runs on (request 2 a step late), but: `commit_window` refuses it as the carry, its state row 0
     committed under the carried row's salt opens to another b‖c, so `check_chain` refuses the session (C-carry), and
-    `ReplayLoad_v2` refuses a state row 1 whose clock isn't row 0's, as `ReplayAdvance_v2` refuses a next row whose clock
+    `TickLoad_v1` refuses a state row 1 whose clock isn't row 0's, as `TickAdvance_v1` refuses a next row whose clock
     isn't the step's."""
     rule = TC.RULES["today-quiet"]
     released = [0, 1, 2]
