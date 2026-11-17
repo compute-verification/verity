@@ -561,7 +561,7 @@ def test_the_published_arm_starts_the_server_as_the_models_recipe_does(tmp_path,
 def test_glm53s_stand_in_is_its_recipe_on_one_card_from_random_weights(tmp_path, monkeypatch):
     """The stand-in's line is GLM-5.3's recipe line but for its served name, one card in place of eight and vLLM's random
     weights; its checkpoint directory holds the adapter's cut config and GLM-5.3's tokenizer and no weight; a record
-    names its cut, and its points are marked partial and name it in their member, under GLM-5.3's metric id."""
+    names its cut; it has no metric id, and its runs write no measurement into result.json."""
     glm, std = S.MODELS["glm53"], S.MODELS["glm53-standin"]
     context = S.published_context("prod", "glm53-standin", None)
     assert context == glm.published_context and S.tp_size(std) == 1 and S.tp_size(glm) == 8
@@ -570,13 +570,19 @@ def test_glm53s_stand_in_is_its_recipe_on_one_card_from_random_weights(tmp_path,
     swap = {"glm-5.3": "glm-5.3-stand-in", "8": "1"}
     assert [x for x in line if x not in ("--load-format", "dummy")] == [swap.get(x, x) for x in real]
     assert line[line.index("--load-format") + 1] == "dummy"
-    assert (std.repo, std.revision, std.metric, std.check, std.target) == (glm.repo, glm.revision, glm.metric, glm.check, None)
-    assert glm.ref == f"{glm.repo}@{glm.revision}" and glm.mark == "measured" and std.mark == "partial"
+    assert (std.repo, std.revision, std.check, std.metric, std.target) == (glm.repo, glm.revision, glm.check, None, None)
+    assert glm.ref == f"{glm.repo}@{glm.revision}"
     assert std.ref == f"{glm.ref} stand-in (7 layers, 16 experts, 8 heads, random weights)"
     monkeypatch.setattr(S, "card", lambda: "NVIDIA H200")
-    assert S.member(std, "prod-record", "prod") == "glm-5.3-stand-in-random-weights-1-card-h200-prod-record-over-prod"
-    assert S.member(glm, "prod-record", "prod") == "glm-5.3-h200-prod-record-over-prod"
     assert S.hardware(std) == "1 × NVIDIA H200"
+    written = {}
+    monkeypatch.setattr(S, "kit", lambda: (None, NS(write_result=lambda *a: written.update(m=a[-1]))))
+    monkeypatch.setattr(S, "result_of", lambda r: (True, "line", {}, [{"name": "agentic", "value": 2.6}]))
+    monkeypatch.setenv("RESEARCH_RUN_DIR", str(tmp_path / "run"))
+    monkeypatch.setenv("RESEARCH_RUN_ID", "r-9")
+    for model, kept in ((std, []), (glm, [{"name": "agentic", "value": 2.6}])):
+        S.write_result({"model": model.served, "arm": "prod-record", "reference": "prod"}, tmp_path)
+        assert written["m"] == kept
     ck, out = tmp_path / "glm53", tmp_path / "standin"
     ck.mkdir()
     for name in ("tokenizer.json", "tokenizer_config.json", "config.json", "model-00001-of-00282.safetensors"):

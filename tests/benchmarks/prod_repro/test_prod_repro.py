@@ -1456,18 +1456,19 @@ def test_llama32_1bs_arms_keep_each_requests_ids_and_its_cost_is_a_point_of_glm5
         {"member": "a"}, {})
 
 
-def test_glm53s_stand_in_serves_the_published_arms_and_its_points_are_partial_under_glm53s_ids():
-    """The stand-in has GLM-5.3's recipe, so its default arms are the published settings' arms; its points go under
-    GLM-5.3's ids, marked partial, as its mark and at the head of each input, beside the full model's measured ones."""
+def test_glm53s_stand_in_serves_the_published_arms_and_writes_no_point():
+    """The stand-in has GLM-5.3's recipe, so its default arms are the published settings' arms; it has no id, so its
+    cost, its replay's match and its advice are lines of its report and no measurement."""
     assert P.default_arms("glm53-standin") == P.PROD
-    assert all(ids["glm53-standin"] == ids["glm53"] for ids in (P.METRICS, P.MATCH, P.ADVICE))
-    r = {"cost": {"measured": True, "stands": True, "metric": P.METRICS["glm53-standin"], "value": 0.01, "target": 1,
+    assert all("glm53-standin" not in ids for ids in (P.METRICS, P.MATCH, P.ADVICE))
+    r = {"cost": {"measured": True, "stands": True, "metric": P.METRICS.get("glm53-standin"), "value": 0.01, "target": 1,
                   "verdict": "meets", "how": {"reps": 2, "client": S.BENCH, "rung": 4, "saturated": False},
                   "lifetimes": {"pairs": 2, "ci95": None}},
          "tokens": {}, "advice": {}, "arms": {"stock": "prod", "ours": "prod-record"}, "load": "agentic", "commit": "c",
-         "run": "r", "mark": S.MODELS["glm53-standin"].mark}
-    assert [(m["mark"], m["inputs"][0].split(":")[0]) for m in P.measurements(r)] == [("partial", "partial")]
-    assert [m["mark"] for m in P.measurements(r | {"mark": "measured"})] == ["measured"]
+         "run": "r"}
+    assert P.measurements(r) == []
+    assert [m["name"] for m in P.measurements(r | {"cost": r["cost"] | {"metric": P.METRICS["glm53"]}})] == [
+        P.METRICS["glm53"]]
 
 
 # --------------------------------------------------------------------------------------------------------- the runner

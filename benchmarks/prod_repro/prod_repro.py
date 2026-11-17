@@ -104,17 +104,14 @@ TARGET = 1.0
 #: by model, as the benchmark names it: the id its cost (its default arms' ours over their stock, `default_arms`) is
 #: recorded under in a run's result.json (`measurement`; benchmarks/prod_repro/metrics.toml), and that measurement's
 #: unit
-METRICS = {"glm53": "vllm/prod-serving-cost-glm53", "glm53-standin": "vllm/prod-serving-cost-glm53",
-           "llama32-1b": "vllm/prod-serving-cost-glm53"}
+METRICS = {"glm53": "vllm/prod-serving-cost-glm53", "llama32-1b": "vllm/prod-serving-cost-glm53"}
 UNIT = "percent of stock's serving time"
 #: the kind of a cost's interval over lifetimes, as its measurement names it (`serve_tax.session_cost`)
 INTERVAL = "Student's t 95% over the lifetime pairs, t at the pairs less one, every pair counted"
 #: by model: the ids the replay's match and the advice of the pass it re-ran are recorded under, of its default arms'
 #: ours, and their units (`measurements`; benchmarks/prod_repro/metrics.toml)
-MATCH = {"glm53": "vllm/prod-replay-match-glm53", "glm53-standin": "vllm/prod-replay-match-glm53",
-         "llama32-1b": "vllm/prod-replay-match-glm53"}
-ADVICE = {"glm53": "vllm/prod-advice-bits-glm53", "glm53-standin": "vllm/prod-advice-bits-glm53",
-          "llama32-1b": "vllm/prod-advice-bits-glm53"}
+MATCH = {"glm53": "vllm/prod-replay-match-glm53", "llama32-1b": "vllm/prod-replay-match-glm53"}
+ADVICE = {"glm53": "vllm/prod-advice-bits-glm53", "llama32-1b": "vllm/prod-advice-bits-glm53"}
 MATCH_UNIT, ADVICE_UNIT = "percent of served tokens", "bits a request"
 #: the replay's match it is held to: every served token given back
 MATCH_TARGET = 100.0
@@ -984,15 +981,15 @@ def outputs(out: Path, replay_dir: Path) -> list[str]:
 def measurement(r: dict) -> dict | None:
     """The cost line as a measurement under its metric id (``metric``: `METRICS`), every figure in `UNIT`, where the
     cost stands (``stands``) and ours and stock were served at the same settings: else the figure is not our changes'
-    cost (`UNLIKE`). None otherwise. Its mark, ``measured`` (``partial`` for a stand-in: `serve_tax.Model.mark`), is
-    its ``mark`` and the head of its first input, before what was timed. It names how it was measured: its lifetime pairs, its counted passes an arm, each lifetime's
+    cost (`UNLIKE`). None otherwise. Its mark, ``measured``, is its ``mark`` and the head of its first input, before
+    what was timed. It names how it was measured: its lifetime pairs, its counted passes an arm, each lifetime's
     passes left out (``left_out``), its interval's kind (`INTERVAL`, where it has one) and stock against stock, its
     noise floor."""
-    c, mark = r["cost"], r.get("mark", "measured")
+    c = r["cost"]
     if not (c.get("measured") and c.get("stands") and c.get("metric")) or c.get("settings_differ"):
         return None
     life, n = c["lifetimes"], c.get("noise_floor")
-    return {"name": c["metric"], "value": S._pct(c["value"]), "unit": UNIT, "mark": mark, "better": "lower",
+    return {"name": c["metric"], "value": S._pct(c["value"]), "unit": UNIT, "mark": "measured", "better": "lower",
             "target": c["target"],
             "ci95": life["ci95"] and [S._pct(x) for x in life["ci95"]], "verdict": c["verdict"], "load": r["load"],
             "stock": r["arms"]["stock"], "ours": r["arms"]["ours"], "lifetimes": life["pairs"],
@@ -1001,7 +998,7 @@ def measurement(r: dict) -> dict | None:
                                   "ci95": n["ci95"] and [S._pct(x) for x in n["ci95"]], "pairs": n.get("pairs")},
             "commit": r["commit"],
             "run": r["run"], "model": r.get("model"), "hardware": r.get("hardware"), **member(r, "cost"),
-            "inputs": [f"{mark}: {r['arms']['ours']}'s serving time over {r['arms']['stock']}'s on the {r['load']} load, "
+            "inputs": [f"measured: {r['arms']['ours']}'s serving time over {r['arms']['stock']}'s on the {r['load']} load, "
                        f"the mean over {life['pairs']} server lifetime{'s' * (life['pairs'] != 1)} an arm ({scope(c)})"]}
 
 
@@ -1019,28 +1016,26 @@ def measurements(r: dict) -> list[dict]:
     and steps it kept; and the advice of the pass it re-ran,
     the bits charged a request (`ADVICE_UNIT`), where the advice line is measured. A line's id (``metric``) is None
     but for the default arms' ours on a model `MATCH` and `ADVICE` name. Each is read from the run's own
-    record, so each has the mark ``measured`` (``partial`` for a stand-in), as its ``mark`` and at the head of its first
-    input, where the Metrics tab
+    record, so each has the mark ``measured``, as its ``mark`` and at the head of its first input, where the Metrics tab
     reads it (benchmarks/README.md, "Metrics"), and names the ``model`` and the ``hardware`` it was measured on and,
     where given, its ``member`` (`member`): a metric's points are of every model, card and arm."""
     t, a, ours, load = r["tokens"], r.get("advice") or {}, r["arms"]["ours"], r["load"]
-    mark = r.get("mark", "measured")
     on = {"load": load, "ours": ours, "commit": r["commit"], "run": r["run"], "model": r.get("model"),
           "hardware": r.get("hardware"), **member(r, "arm")}
     out = [m] if (m := measurement(r)) else []
     if t.get("measured") and t.get("metric") and not t["record_disagrees"]:
         given, rep = t["tokens_before_first_difference"], t["window"]["rep"]
         out.append({"name": t["metric"], "value": 100 * given / t["tokens_served"], "unit": MATCH_UNIT,
-                    "mark": mark, "better": "higher", "target": MATCH_TARGET, "tokens_served": t["tokens_served"],
+                    "mark": "measured", "better": "higher", "target": MATCH_TARGET, "tokens_served": t["tokens_served"],
                     "tokens_before_first_difference": given, "requests": t["requests"],
                     "requests_differing": t["requests_differing"], "reproduces": t["reproduces"], "rep": rep, **on,
-                    "inputs": [f"{mark}: {ours}'s served tokens on the {load} load's burst rep {rep} against its "
+                    "inputs": [f"measured: {ours}'s served tokens on the {load} load's burst rep {rep} against its "
                                "replay's, up to each request's first difference"]})
     if a.get("measured") and a.get("metric"):
         rep = a["window"]["rep"]
-        out.append({"name": a["metric"], "value": a["bits_a_request"], "unit": ADVICE_UNIT, "mark": mark,
+        out.append({"name": a["metric"], "value": a["bits_a_request"], "unit": ADVICE_UNIT, "mark": "measured",
                     "better": "lower", "bits": a["bits"], "requests": a["requests"], "tick": a["tick"], "rep": rep, **on,
-                    "inputs": [f"{mark}: the advice {ours}'s record of the {load} load's burst rep {rep} charges, "
+                    "inputs": [f"measured: the advice {ours}'s record of the {load} load's burst rep {rep} charges, "
                                f"over its {a['requests']} requests"]})
     return out
 
@@ -1077,7 +1072,7 @@ def declare(out: Path, r: dict, replay_dir: Path) -> Path | None:
     ids = {*METRICS.values(), *MATCH.values(), *ADVICE.values()}
     model = next((m for m in S.MODELS.values() if m.ref == r.get("model")), None)
     ours, stock = r["arms"]["ours"], r["arms"]["stock"]
-    r = r | {"hardware": model and S.hardware(model), "mark": model.mark if model else "measured",
+    r = r | {"hardware": model and S.hardware(model),
              "members": model and {"cost": S.member(model, ours, stock), "arm": S.member(model, ours)}}
     doc["measurements"] = [*(x for x in doc.get("measurements") or () if x.get("name") not in ids), *measurements(r)]
     if isinstance(doc.get("validation"), dict):
