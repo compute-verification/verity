@@ -34,13 +34,8 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# Flock's admission of plain leaves
-
-The one fact the recursion's deployed stop takes of its inner statement (`ZKStop_meets_ready`), and nothing proves:
-some concrete inner statement passes the checked reader, is small enough for Flock's completeness, and is in Flock's
-scope and true. `DeployChecked.lean` proves what follows from it.
--/
+/-! `PlainLeavesAdmitted`: some concrete inner statement passes the checked reader, fits Flock's completeness and is in
+Flock's scope and true, which nothing proves. -/
 
 @[expose] public section
 

@@ -43,18 +43,8 @@ import Proofs.Flock.Claims.Recursion.DeploySessions
 import Proofs.Flock.Claims.Recursion.FlockKSRecord
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# `KSBoundRouteCols` with no bridge and no `WeightCovers` (route 2B)
-
-`ksBoundRoute_of_bridge_cols` takes the bridge (`Claims.Recursion.Bridge`) and reads (P3, `Bound.WeightCovers`) there:
-`γ`'s weight at `IVStar` must cover `DE`'s plus the bridge's second plurality, `N_I·√(k_I/32)`.
-`Bound.KS_of_plainKSAbort_binds` reaches the inner stage from (P1) at `DE` through one plurality, so the route needs
-neither: `γ`'s weight at `IVStar` need only be at least `DE`'s.
-
-`RecDeploy.KSBoundRouteMerged` is `KSBoundRouteCols` with `WeightCovers` replaced by `∀ x, wE x ≤ w x`, and
-`RecDeploy.ksBoundRoute_merged` proves it outright, with every other premise `ksBoundRoute_of_bridge_cols`'s.
-`RecDeploy.ksBoundDeployed_merged_wE` is the route at `w := wE`, where that premise holds.
--/
+/-! `KSBoundRouteCols` with no bridge and no `WeightCovers` (route 2B), where `γ`'s weight at `IVStar` need only be at
+least `DE`'s (`RecDeploy.ksBoundRoute_merged`). -/
 
 @[expose] public section
 
@@ -64,8 +54,6 @@ open Claims (Msg Out Prover run coinSeq replay findColl Collision)
 open FlockDeploy (Coin)
 open Claims.Recursion (Bound Inner)
 
-/-- **`KSBoundRouteCols` with `DE`'s weight for (P3)**: its premises with `Bound.WeightCovers` replaced by `γ`'s
-weight at `IVStar` (`w`) at least `DE`'s (`wE`). -/
 def KSBoundRouteMerged (rel relO : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (b : Brings)
     (L : Claims.Recursion.VStarB.LayoutB) : Prop :=
   ∀ (nextE : Msg → List Msg → List Coin → Claims.OC Out)
@@ -94,9 +82,6 @@ def KSBoundRouteMerged (rel relO : _root_.Flock.Readable.Parsed → _root_.Flock
     ReadersRunPlayed FlockDeploy.sha512 Bd.IVStar bL (deployZkRec relO) →
     KSBoundDeployed rel relO b L nextE colsE wE join rowIn final w
 
-/-- **`KSBoundRouteMerged`, with no bridge**: `ksBoundRoute_of_bridge_cols`'s argument with
-`Bound.KS_of_plainKSAbort_binds` at `deployRecC` for `KS_of_flockKS_binds`, which reads (P1) at `DE` directly and
-`DE`'s weight at most `w` for the bridge and (P3). -/
 theorem ksBoundRoute_merged (rel relO : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
     (b : Brings) (L : Claims.Recursion.VStarB.LayoutB)
     (hRows : L.ReadsRows FlockDeploy.sha512) : KSBoundRouteMerged rel relO b L := by
@@ -133,7 +118,6 @@ theorem ksBoundRoute_merged (rel relO : _root_.Flock.Readable.Parsed → _root_.
     hTc hLn hFk hAn hM (callsNil I.V ivScope bL FlockDeploy.sha512)
   exact ksA_of_C FlockDeploy.sha512 Bd decI ivScope bL (deployZkRec relO) hCF hKSn
 
-/-- **The route at `γ`'s weight `DE`'s own** (`w := wE`), where `KSBoundRouteMerged`'s weight premise holds. -/
 theorem ksBoundDeployed_merged_wE (rel relO : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
     (b : Brings) (L : Claims.Recursion.VStarB.LayoutB)
     (hRows : L.ReadsRows FlockDeploy.sha512) (nextE : Msg → List Msg → List Coin → Claims.OC Out)

@@ -46,31 +46,8 @@ import Proofs.Flock.Claims.Recursion.VStarTopsOk
 import Proofs.Flock.Claims.Recursion.VStarTraceAt
 public import Proofs.Flock.Claims.Recursion.IrDep
 
-/-!
-# The honest half of `RecursiveKSAt`'s non-vacuity at the deployed V\* (`honest_half_tops`)
-
-`honest_half_tops`: at the deployed brings at `x` with the deployed inner prover `IrDep x`, where the compiled verifier
-accepts the reference prover's run, every V\* part `s < nS x` accepts on it (`PartAccepts` at
-`DeployedR.layR OpenRows.elemR`, `RecursiveKSAt`'s layout). It is `honest_partAccepts_final` with its pieces discharged:
-
-* `hA`, the run lemma (`run_msg_inner`);
-* `hpE`, hp before the last round: the rounds without pieces (round 0, and every stream round that commits no tops,
-  where `layR elemR`'s `pieceAt` is empty while the round has rows) hold none, so hp there is vacuous
-  (`hpEarly_tops`), and at the rounds with pieces `rowsFit_tops` proves the fitted rows (`RowsFit`);
-* `hhFit`, hh from the fitting (`hh_A0` at the dense schedule `schedMatches_dense`, the trace `traceAt_staged` and the
-  messages `hmsg_run`);
-* `hTm`, the extra calls `layR` records (`moreSlotsTrue_deployed` at the run's staged part, whose outer witness
-  `Flock.check` accepts: `vstar_complete_run_setup_at`);
-* the stager accepting every part (`hok_honest`: the level tops and the caps from `hTops`, at the history
-  `hist.take (kI x - 1)`, which holds the schedule's `2R` rounds since `kI x = 2 + 2R` (`hH`); the inner parts' port
-  names from `VStar.parts`, `innerPorts_named`; the inner prover's openings fitting V\*'s levels, `irShaped_dep`);
-* the holders of one round's row agreeing on its port's words (`heldRows_words`, the verifier's `checkRoundWords`);
-* the schedule (`schedMatches_dense`) and each part's staging (`stagedPart_run`, from the run accepting).
-
-What it takes is the run accepting (`HonestRunAccepted`), V\*'s gate-level completeness at the run
-(`HonestWitSatisfies`), no collision among a part's recorded calls (`NoCollAt`) and the tape exception (`hTops`: the
-reps' tops differ at every level above 0).
--/
+/-! The honest half of `RecursiveKSAt`'s non-vacuity at the deployed V\* (`honest_half_tops`), taking the run accepting,
+`HonestWitSatisfies`, `NoCollAt` and the tape exception `TopsAt`. -/
 
 @[expose] public section
 
@@ -84,13 +61,7 @@ open RecDeploy.VStarBuild
 open RecDeploy.VStarHonest
 open RecDeploy.HonestHalf
 
-/-- **Every V\* part accepts at an honest run**: at the deployed brings at `x` with the deployed inner prover `IrDep x`,
-where the reference prover `refP`'s run is accepted and satisfies V\*, no recorded calls collide and the reps' tops
-differ (`TopsAt`), `PartAccepts` holds at every part `s < nS x`.
-
-The premises are about Lean's `refP`; the session `HonestFixture` takes them of used Python's builder and Flock's CPU
-prover. `HonestFixture`'s docstring says which difftests tie the two (`test_vstar_trace_difftest`,
-`test_irdep_difftest`) and which of the premises a test in the tree checks on that session. -/
+/-- Its premises are about Lean's `refP`; `HonestFixture` takes them of the Python builder and Flock's CPU prover. -/
 theorem honest_half_tops (mask : ℕ → ℕ → Bool) (b0 : Brings) (x : Msg)
     (aux : Msg → ℕ → Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ) (hd : Msg → Flock.RecRecord.Record)
     (recRest : Msg → List (Msg × Out) → List UInt8)

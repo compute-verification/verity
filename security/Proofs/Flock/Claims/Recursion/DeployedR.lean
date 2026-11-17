@@ -36,45 +36,8 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Complete.Encode
 
-/-!
-# The deployed parameters of the bound record at `nextR` (U8)
-
-The bound record at the recursive verifier, `bdDeployed rel (nextR rdR) cols wER joinR rowInDeployed finalR wR`, at
-V\*'s bound layout `layR elem` (`layoutBTops (finOpen (restR elem))` with the output rows', check 5's and the
-`rec-acc` chain's calls, `moreCalls`), fixes every choice the code side makes:
-
-* **The columns** are the reader's, the trimmed plain record's at `rdR` (`deployPlainTrimR rel rdR`), as
-  `RecursiveKSAt` reads them: `bdR` is `RecDeploy.bdR rdR wER finalR wR`.
-
-* **The weights**: `DE`'s is the deployed plain record's (`wER`), `γ`'s at `IVStar` its cover (`wR`,
-  `wCover`). **The join** is `FlockDeploy.joinR`, the rows' digest input `rowInDeployed`.
-* **The element-level last message** (`rdR`): tag `1`, the statement (length-prefixed), then each rep's proof's
-  openings, the fields no frame reads (`readRep`'s `q`, all that `absorbedFrom` keeps of it): the initial level's,
-  each recursive level's and the final level's opened rows, siblings and salts (`encOpens`), every list
-  length-prefixed. `rdR` returns the proofs with those fields and every other field default; `readPs` takes every
-  other field from the opened rounds. The record value is not in it: `decR` builds it (`recJ`).
-* **V\*'s last message** (`finalR`): every earlier round's openings, row then salt, round by round in commit order;
-  then the element-level last message; then a trailer the statement fixes (`trailer`): each opened row's byte length,
-  round by round, then the trailer's own length, every number in variable-length bytes (`FlockDeploy.encV`, so no
-  length needs to fit a word). `finalR` reads the trailer from the end, then cuts the rest at it (`cutRounds`). Every
-  byte `finalR` reads as a length is a constant of the statement, so it reads every witness.
-* **The last round's pieces past the openings** (`restR elem`): the element-level last message's pieces (`elem`),
-  then the trailer, constant bytes at the last part (`trailerPiece`). `elem` is the one choice still open: the
-  pieces at the `rec-open` level parts' hidden rows and siblings. `ElemFramed elem` is the fact it is to meet: its
-  pieces read as `encLast` of the statement and some openings at every witness.
-* **The output rows' calls** (`outsCalls`): a level part's `out` and a RecCap's `out` register the same rows as
-  RecCap's `top` (`RecVStar.checkShared`), but no message carries a level's `out` row, so a level's climb binds to
-  its cap only through the two slots' hm96 calls. `layR` records them for every instance (`outCalls`, the row at its
-  output bits, `outRowForms`) beside `layoutBTops`' calls (`layR_calls`). The locked statements read the calls only
-  through their count's cap (`lamLin2_deployed_ge`: any `L`, `n ≤ 2^55`).
-* **Check 5's rows' calls** (`valCalls`): the rows `RecCoins.checkResiduals` and `checkOpen` hold to the verifier's own
-  (`v` and `out` at an algebra part, `dirs` at a `rec-open` part), at `rowForms`. `layR` is the one layout of record:
-  every other layout's calls are among its calls (`layoutBTops_sub_layR`, `valCalls_sub_layR`, `outsCalls_sub_layR`,
-  `accCalls_sub_layR`).
-* **The `rec-acc` chain's calls** (`RecDeploy.accCalls`): at each part's holding of the chain (`accHeld`, every port
-  and instance at which its statement reads a chain row), the port's hm96 calls (`hmCalls`), and at a level's `acc`
-  its unit's `acc_out` row's at the output bits (`accOutCalls`, which is `outCalls`: `accOutCalls_eq_outCalls`).
--/
+/-! The deployed parameters of the bound record at `nextR` (U8), at V\*'s layout of record `layR`; the last round's
+element-level pieces `elem` stay a parameter, held to `ElemFramed`. -/
 
 @[expose] public section
 
@@ -87,17 +50,13 @@ open FlockDeploy (Coin FinalP Rd rdTake rdNat rdBytes rdList encNat encBytes enc
 open Claims.Recursion.VStarB (pieceLen readSegs)
 open Lean (Json)
 
-/-! ## The weights and the join -/
-
 /-- **`DE`'s weight**: the deployed plain record's. -/
 noncomputable def wER : Msg → ℝ := (FlockDeploy.deployPlainTrim _root_.Flock.Readable.relation).weight
 
 /-- **`γ`'s weight at `IVStar`**: `wCover` of the deployed plain record's. -/
 noncomputable def wR : Msg → ℝ := wCover _root_.Flock.Readable.relation
 
-/-! ## The element-level last message (`rdR`) -/
-
-/-- An `F128`'s 16 bytes, `le64(lo) ‖ le64(hi)` (`F128.toBytes`' order). -/
+/-- `le64(lo) ‖ le64(hi)`, `F128.toBytes`' order. -/
 def encF (a : F128) : Msg := encNat a.lo.toNat ++ encNat a.hi.toNat
 
 /-- An `F128` off 16 bytes: any 16 bytes read. -/
@@ -106,7 +65,6 @@ def rdF : Rd F128 := do
   let hi ← rdNat
   pure ⟨lo.toUInt64, hi.toUInt64⟩
 
-/-- **A level's openings**: its opened rows, its siblings and its salts, each list length-prefixed. -/
 def encLevel (rows : Array (Array F128)) (sibs salts : Array ByteArray) : Msg :=
   encList (encList encF) (rows.toList.map Array.toList) ++ encList encBytes sibs.toList ++
     encList encBytes salts.toList
@@ -117,7 +75,6 @@ def rdLevel : Rd (Array (Array F128) × Array ByteArray × Array ByteArray) := d
   let salts ← rdList rdBytes
   pure ((rows.map List.toArray).toArray, sibs.toArray, salts.toArray)
 
-/-- **A proof's openings**: its initial level's, each recursive level's, then its final level's. -/
 def encOpens (p : Flock.Proof) : Msg :=
   encLevel p.ligerito.initialProof.rows p.ligerito.initialProof.siblings p.ligerito.initialProof.salts ++
     encList (fun q : LevelProof => encLevel q.rows q.siblings q.salts) p.ligerito.recursiveProofs.toList ++
@@ -137,12 +94,10 @@ def rdOpens : Rd Flock.Proof := do
   let f ← rdLevel
   pure (opensOnly { rows := i.1, siblings := i.2.1, salts := i.2.2 } rps.toArray f.1 f.2.1 f.2.2)
 
-/-- What of a proof the element-level last message carries: `opensOnly` at its openings. -/
 def opensOf (p : Flock.Proof) : Flock.Proof :=
   opensOnly p.ligerito.initialProof p.ligerito.recursiveProofs p.ligerito.finalProof.rows
     p.ligerito.finalProof.siblings p.ligerito.finalProof.salts
 
-/-- **The element-level last message**: tag `1`, the statement, then each proof's openings. -/
 def encLast (stmt : Msg) (ps : List Flock.Proof) : Msg :=
   1 :: (encNat stmt.length ++ stmt ++ encList encOpens ps)
 
@@ -160,8 +115,6 @@ def rdR : Msg → Option FinalP
     | some ((stmt, ps), []) => some ⟨stmt, Json.null, ps.toArray⟩
     | _ => none
   | _ => none
-
-/-! ## V\*'s last message (`finalR`) -/
 
 /-- A salt off its bytes. -/
 def saltOf (m : Msg) : Salt := fun i => m.getD i.val 0
@@ -197,8 +150,6 @@ def finalR (m : Msg) : Option (List (List (Msg × Salt)) × Msg) :=
     else none
   | none => none
 
-/-! ## The last round's pieces past the openings (`restR`) -/
-
 /-- The row lengths of a list of openings (`openSegs`' row, then salt), in bytes. -/
 def rowLens : List (Msg × List HmNets.Lin) → List ℕ
   | row :: _ :: t => pieceLen [row] :: rowLens t
@@ -220,12 +171,9 @@ def restR (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List H
     List (Fin r.w.parts.length × List (Msg × List HmNets.Lin)) :=
   elem r ++ trailerPiece r
 
-/-- Pieces read off the witnesses, as `LayoutB.assembled` reads them. -/
 def readPieces (ps : List (ℕ × List (Msg × List HmNets.Lin))) (ws : List Claims.Flock.Wit) : Msg :=
   ps.flatMap fun p => (ws[p.1]?.map fun w => readSegs w p.2).getD (List.replicate (pieceLen p.2) 0)
 
-/-- **What `elem` is to meet**: at every compiled statement and every witnesses, `rdR` reads its pieces, at the inner
-statement, two proofs a table where the inner statement sets up. -/
 def ElemFramed (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))) : Prop :=
   ∀ x r, readX x = some r → ∀ ws : List Claims.Flock.Wit, ws.length = r.w.parts.length →
     ∃ ps : Array Flock.Proof, (∀ v, FlockDeploy.setupOf false (xIOf x) = some v → ps.size = 2 * v.2.2.size) ∧
@@ -236,8 +184,6 @@ noncomputable abbrev bdR : Claims.Recursion.Bound Coin (List FlockLevel3.GF128) 
   bdDeployed _root_.Flock.Readable.relation (FlockDeploy.nextR rdR)
     (FlockDeploy.deployPlainTrimR _root_.Flock.Readable.relation rdR).cols wER FlockDeploy.joinR rowInDeployed finalR
     wR
-
-/-! ## The output rows' calls -/
 
 /-- **Output port `q`'s row at instance `n`**, at forms: word `k` bit `t` (row bit `16 k + t`) the output bit
 `HmOut.outCol` places it at in the instance's block and VU, where `k` is within the port's run of output words
@@ -270,8 +216,6 @@ def outsCalls (r : XR) (s : ℕ) : List (Msg × List HmNets.Lin × List HmNets.L
   | some (.recOpenStacked _ _ _ n), some c => outPortCalls c n
   | some (.cap _ N), some c => outPortCalls c N
   | _, _ => []
-
-/-! ## Check 5's rows' calls -/
 
 /-- **Port `q`'s row at instance `n`**, at forms: an input row's unit input columns (`rowHidden`), an output row's
 output bits (`outRowForms`). -/
@@ -308,9 +252,6 @@ def valPorts (r : XR) (s : ℕ) : List (String × ℕ × ℕ) :=
 def valCalls (r : XR) (s : ℕ) : List (Msg × List HmNets.Lin × List HmNets.Lin) :=
   ((r.w.parts[s]?.bind partCircuit).map fun c => (valPorts r s).flatMap fun h => portCalls c h.1 h.2.1 h.2.2).getD []
 
-/-! ## The layout -/
-
-/-- **The `rec-acc` chain's `acc_out` rows' calls are the output rows' calls**, at the same forms. -/
 theorem accOutCalls_eq_outCalls : accOutCalls = outCalls := rfl
 
 /-- **The calls `layR` records beside `layoutBTops`' at part `s`**: the output rows' (`outsCalls`), check 5's
@@ -335,7 +276,6 @@ theorem layR_calls (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg 
   unfold Claims.Recursion.VStarB.LayoutB.calls
   exact List.map_append ..
 
-/-- **`layoutBTops`' calls are `layR`'s**, at every layout of the last round (`layoutBTops`' calls don't read it). -/
 theorem layoutBTops_sub_layR (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin)))
     (fin : Msg → List (ℕ × List (Msg × List HmNets.Lin))) (x : Msg) (s : ℕ) (w : Claims.Flock.Wit) :
     ∀ e ∈ (layoutBTops fin).calls x s w, e ∈ (layR elem).calls x s w := fun e he => by
@@ -343,7 +283,6 @@ theorem layoutBTops_sub_layR (elem : (r : XR) → List (Fin r.w.parts.length × 
   refine List.mem_append_left _ ?_
   simpa only [Claims.Recursion.VStarB.LayoutB.calls, layoutBTops] using he
 
-/-- **Check 5's calls are `layR`'s**: each of `valCalls`' at part `s`, at the witness `w`. -/
 theorem valCalls_sub_layR (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))) {x : Msg}
     {r : XR} (hr : readX x = some r) (s : ℕ) (w : Claims.Flock.Wit) :
     ∀ p ∈ valCalls r s,
@@ -352,7 +291,6 @@ theorem valCalls_sub_layR (elem : (r : XR) → List (Fin r.w.parts.length × Lis
   rw [layR_calls, hr, Option.map_some, Option.getD_some]
   exact List.mem_append_right _ (List.mem_map.2 ⟨p, List.mem_append_left _ (List.mem_append_right _ hp), rfl⟩)
 
-/-- **The output rows' calls are `layR`'s**: each of `outsCalls`' at part `s`, at the witness `w`. -/
 theorem outsCalls_sub_layR (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))) {x : Msg}
     {r : XR} (hr : readX x = some r) (s : ℕ) (w : Claims.Flock.Wit) :
     ∀ p ∈ outsCalls r s,
@@ -361,7 +299,6 @@ theorem outsCalls_sub_layR (elem : (r : XR) → List (Fin r.w.parts.length × Li
   rw [layR_calls, hr, Option.map_some, Option.getD_some]
   exact List.mem_append_right _ (List.mem_map.2 ⟨p, List.mem_append_left _ (List.mem_append_left _ hp), rfl⟩)
 
-/-- **The `rec-acc` chain's calls are `layR`'s**: each of `accCalls`' at part `s`, at the witness `w`. -/
 theorem accCalls_sub_layR (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))) {x : Msg}
     {r : XR} (hr : readX x = some r) (s : ℕ) (w : Claims.Flock.Wit) :
     ∀ p ∈ accCalls r s,
@@ -370,15 +307,12 @@ theorem accCalls_sub_layR (elem : (r : XR) → List (Fin r.w.parts.length × Lis
   rw [layR_calls, hr, Option.map_some, Option.getD_some]
   exact List.mem_append_right _ (List.mem_map.2 ⟨p, List.mem_append_right _ hp, rfl⟩)
 
-/-! ## The readers read what they're laid at -/
-
 theorem rdF_encF (a : F128) (rest : Msg) : rdF.run (encF a ++ rest) = some (a, rest) := by
   simp only [rdF, encF, List.append_assoc, StateT.run_bind, FlockComplete.rdNat_encNat a.lo.toNat_lt,
     FlockComplete.rdNat_encNat a.hi.toNat_lt, Option.bind_eq_bind, Option.bind_some]
   show some ((⟨a.lo.toNat.toUInt64, a.hi.toNat.toUInt64⟩ : F128), rest) = some (a, rest)
   simp
 
-/-- A level's lists and byte strings fit their length words. -/
 def LevelFits (rows : Array (Array F128)) (sibs salts : Array ByteArray) : Prop :=
   rows.size < 2 ^ 64 ∧ (∀ r ∈ rows.toList, r.size < 2 ^ 64) ∧ sibs.size < 2 ^ 64 ∧ (∀ b ∈ sibs.toList, b.size < 2 ^ 64) ∧
     salts.size < 2 ^ 64 ∧ ∀ b ∈ salts.toList, b.size < 2 ^ 64
@@ -400,7 +334,6 @@ theorem rdLevel_encLevel {rows : Array (Array F128)} {sibs salts : Array ByteArr
     rdBytes_list (by simpa using h3) h4, rdBytes_list (by simpa using h5) h6, Option.bind_eq_bind, Option.bind_some]
   simp [StateT.run_pure, Option.pure_def, Function.comp_def]
 
-/-- A proof's openings fit their length words. -/
 def OpensFit (p : Flock.Proof) : Prop :=
   LevelFits p.ligerito.initialProof.rows p.ligerito.initialProof.siblings p.ligerito.initialProof.salts ∧
     p.ligerito.recursiveProofs.size < 2 ^ 64 ∧ (∀ q ∈ p.ligerito.recursiveProofs.toList, LevelFits q.rows q.siblings q.salts) ∧
@@ -421,20 +354,14 @@ theorem rdOpens_encOpens {p : Flock.Proof} (h : OpensFit p) (rest : Msg) :
   simp only [StateT.run_pure, Option.pure_def]
   rfl
 
-/-- **What a reader takes of the last message's proof is its openings**: `absorbedFrom` keeps of `q` only the fields
-`opensOf` keeps. -/
 theorem absorbedFrom_opensOf (c : FlockDeploy.RepCtx) (a q : Flock.Proof) :
     FlockDeploy.absorbedFrom c a (opensOf q) = FlockDeploy.absorbedFrom c a q := rfl
 
-/-- **A rep reads the same off a proof's openings as off the proof** (so `ReadsBack` at `fl.ps = ps` carries over
-to `rdR`'s `ps.map opensOf`). -/
 theorem readRep_opensOf (c : FlockDeploy.RepCtx) (rows : List (List ByteArray)) (q : Flock.Proof) :
     FlockDeploy.readRep c rows (opensOf q) = FlockDeploy.readRep c rows q := by
   unfold FlockDeploy.readRep
   simp only [absorbedFrom_opensOf]
 
-/-- **`rdR` reads `encLast`**: the statement, and each proof's openings (`opensOf`), where every length fits its
-word. -/
 theorem rdR_encLast {stmt : Msg} {ps : List Flock.Proof} (hs : stmt.length < 2 ^ 64) (hl : ps.length < 2 ^ 64)
     (hp : ∀ p ∈ ps, OpensFit p) :
     rdR (encLast stmt ps) = some ⟨stmt, Json.null, (ps.map opensOf).toArray⟩ := by
@@ -462,7 +389,6 @@ theorem rdR_encLast {stmt : Msg} {ps : List Flock.Proof} (hs : stmt.length < 2 ^
   unfold rdR encLast
   simp only [hb]
 
-/-- **`finalR` reads its trailer**: at any body `B`, the openings at the trailer's lengths and what follows. -/
 theorem finalR_trailer (B : Msg) (lens : List (List ℕ)) : finalR (B ++ trailer lens) = cutRounds lens B := by
   have hrd : (rdVLs (rdVLs rdV)).run (encVL (encVL encV) lens) = some (lens, []) := by
     simpa using rdVLs_encVL (r := rdVLs rdV) (e := encVL encV) (l := lens)

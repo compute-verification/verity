@@ -34,18 +34,8 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# `KSLin2On` at Hello-committed coins
-
-`KSLin2On` reads the compiled recursive verifier's run at coins flipped after each message. Deployed, the coins are
-committed at Hello in an hm96 coin tree and each opened with its round's answer, except where that answer is `[]` (a
-V\* session before the last one, accepted). The prover reads every root at Hello, so a deployment that sends a tree's
-root later gives it less. `KSLin2OnC` is `KSLin2On`'s bound at that run: every hm96 tree whose leaves hide at `δ₁ ≠ ∞`
-(`Hm96Hiding`) has a simulator `S` such that, for every prover that reads the root and the openings, the committed run
-accepts at most as often as `KSLin2On`'s extractor, run on the prover with `S`'s root and openings
-(`Bridge.simProverM`), recovers a witness, plus `KSLin2On`'s bound at that prover (`lin2Rhs`) and `2 · k(x) · δ₁`.
-`ksLin2OnC_of_ksLin2On` derives it from `KSLin2On` (`Bridge.Pr_acc_runCM_le`).
--/
+/-! `KSLin2On` at Hello-committed coins (`KSLin2OnC`), from `KSLin2On` at `2·k(x)·δ₁` more wherever every hm96 tree's
+leaves hide (`ksLin2OnC_of_ksLin2On`). -/
 
 @[expose] public section
 
@@ -99,9 +89,6 @@ def KSLin2OnC [Zero Col] [Zero Col'] (H : Msg → Msg) (D : RecAt Coin) (Bd : Bo
           lin2Rhs H D Bd DO Cp decI decO x (Bridge.simProverM S (D.record Bd.IVStar).V.k P) M R +
           2 * (D.record Bd.IVStar).V.k x * δ₁.toReal
 
-/-- **`KSLin2On` gives `KSLin2OnC`** wherever the compiled record's verifier answers each round with its coin, through
-an injective `ans`, or with nothing: `Bridge.Pr_acc_runCM_le` at `KSLin2On`'s extractor, with `PrBad` at the simulating
-prover bounded by `KSLin2On` there. -/
 theorem ksLin2OnC_of_ksLin2On [Zero Col] [Zero Col'] {H : Msg → Msg} {D : RecAt Coin} {Bd : Bound Coin Col T}
     {DO : Flock.Deploy Coin Col' T'} {Cp : Caps Coin} {G : Msg → Prop} (h : KSLin2On H D Bd DO Cp G)
     (ans : Coin → Msg) (hans : Function.Injective ans)

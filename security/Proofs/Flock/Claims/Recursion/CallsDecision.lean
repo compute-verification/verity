@@ -36,13 +36,8 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Recursion.CallsTop
 import Proofs.Flock.Claims.Recursion.LastCallsR
 
-/-!
-# A decision's SHA-512 calls on every run
-
-`decisionAtS` digests the proofs' files, then runs the plain verdict at the reader's record `jAt` (`decisionAtS_log`),
-whose oracle log is its logged run's (`verifyJ_log`). So on every run, accepting or not, it calls SHA-512 at most once a
-file (`filesDg_calls_le`) and then `cl_verifyJ_rec`'s count at `jAt`'s streams (`decisionAtS_calls_le`).
--/
+/-! A decision's SHA-512 calls on every run, accepting or not: one per proof file, then the verdict's at the reader's
+record (`decisionAtS_calls_le`). -/
 
 @[expose] public section
 
@@ -50,7 +45,6 @@ namespace FlockDeploy.KS
 
 open Flock FlockSoundness.Refine
 
-/-- **The files' digests over `OC` call at most once a file.** -/
 theorem filesDg_calls_le (H : Claims.Msg → Claims.Msg) (spec : SessionSpec) (xs : Array ByteArray) :
     ((xs.mapM (spec.dgWith Claims.Hashes.oc)).run.eval H).2.length ≤ xs.size := by
   have hs := ((Claims.ocLog H).mapM_array xs
@@ -61,8 +55,6 @@ theorem filesDg_calls_le (H : Claims.Msg → Claims.Msg) (spec : SessionSpec) (x
   have h0 : (#[] : Array ByteArray).size = 0 := rfl
   omega
 
-/-- **A decision's SHA-512 calls on every run**: one per proof file, then the verdict's at the reader's record, whose
-streams are `sj`, each of at most `R` rounds. -/
 theorem decisionAtS_calls_le (H : Claims.Msg → Claims.Msg) (s : Ins) (spec : SessionSpec) (sts : Array Stmt)
     (x : Claims.Msg) (link : List ByteArray × List ByteArray) (c₁ : Coin) (mids : List (Claims.Msg × Coin))
     (f : FinalP) (sj : Array Lean.Json) (R : ℕ) (hsj : Record.arr (jAt H spec sts c₁ mids f) "streams" = .ok sj)

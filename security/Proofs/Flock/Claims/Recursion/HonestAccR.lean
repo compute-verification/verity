@@ -52,34 +52,8 @@ import Proofs.Flock.Claims.Recursion.RestLive
 import Proofs.Flock.Claims.Recursion.RestVerdictCustody
 import Proofs.Flock.Soundness.Refine.Seam
 
-/-!
-# The deployed verifier accepts the honest recursive prover (non-vacuity, the honest half)
-
-`RecursiveKSAt` at the deployed reader (`rdR`, `finalR`, `DeployedR.bdR`) is not vacuous: an honest run meets the
-premises it reads of the inner verifier. At every plain completeness run (`FlockComplete.Run` at SHA-512 and the
-deployed relation), `RecDeploy.honest_accepts_nextR` gives, at the
-run's own coins (`Run.recCoins`) and the honest prover's messages (`Run.recMsgs` with the last message `Run.recLast`):
-
-* **The reading and the five checks** (`ReadOkR`, `holdsR` at every `VerdictR`): the setup, the shapes, the names
-  (`honestSetup`, `honestShaped`, `honestNames`), the verdict (`honestVerdict`), the checks after it (`checksAtJ`:
-  the statement, the sample `honest_sampleJ`, custody `custodyRecJ`, the scope check) and custody's read (`decLive`).
-* **`nextR rdR` accepts** (`nextR_sound`).
-* **`IVStar` at `DeployedR.bdR` accepts the honest committed run** (`ivstar_honest_filesR`), at any salts `ys`.
-* **Row D's `hlev`** at every decision on the honest messages (`hlev_honest_deployed`), with the rep streams' names
-  distinct (`namesDistinct_of_setup`: the statement carries no public inputs).
-
-What the run must fix and where it is fixed here:
-
-* **The last message reads** (`honest_rdR`): `rdR` reads `encLast` of the statement and the files' proofs where every
-  length fits a word (`rdR_encLast`): the statement by `ready`, the proofs' count (two a table, one table), and each
-  proof's openings by its shape (`opensFit_of_shaped`): its levels' query counts, sibling counts and lanes are
-  `fast100`'s (`fast100_level_bounds`, `fast100_levels_le`, by kernel evaluation), its digests and salts its
-  registered scheme's (`scheme_bounds`).
-* **As many coins as messages** (`honest_len`): round 0, the reps' rounds (`honestRounds_nAt`) and the last message,
-  against `(V false).k x` coins (`repLens_sum`).
-* **The record's sample is the statement's** (`honest_sampleTied`): the session's `unitSample` is the statement's sample
-  (`stmtOk`), not `null` (`SampleOk`), and rebuilt (`Raw.ins_read`), so rebuilding it again changes nothing (`norm_norm`).
--/
+/-! The deployed verifier accepts the honest recursive prover, the honest half of `RecursiveKSAt`'s non-vacuity
+(`honest_accepts_nextR`). -/
 
 @[expose] public section
 
@@ -89,10 +63,8 @@ open Flock FlockDeploy
 
 variable {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
 
-/-- **The deployed verifier's coins at the run**: the run's coins `r`, in order. -/
 def recCoins (o : Run H rel) : List Coin := List.ofFn o.r
 
-/-- **The honest last message**: tag `1`, the statement, then each file's proof's openings (`encLast`). -/
 def recLast (o : Run H rel) : Claims.Msg := RecDeploy.DeployedR.encLast o.x o.recPs.toList
 
 theorem recCoins_length (o : Run H rel) : o.recCoins.length = (V false).k o.x := List.length_ofFn
@@ -103,8 +75,6 @@ theorem coinsAt_recCoins (o : Run H rel) : o.CoinsAt o.recCoins := by
   show (List.ofFn o.r).getD i default = Claims.coinSeq o.r i
   rw [List.getD_eq_getElem _ _ (by simpa using hi'), List.getElem_ofFn, Claims.coinSeq, dif_pos hi']
 
-/-- **What the honest prover sends `IVStar` at `DeployedR.bdR`**: its committed rounds under the salts `ys`, then its
-last message to V\* (`lastOR`), at the run's coins. -/
 noncomputable def recAsR (o : Run sha512 Readable.relation) (ys : ℕ → ℕ → RecDeploy.Salt) : List Claims.Msg :=
   KS.honestAsR Readable.relation RecDeploy.DeployedR.rdR
     (deployPlainTrimR Readable.relation RecDeploy.DeployedR.rdR).cols RecDeploy.DeployedR.wER RecDeploy.rowInDeployed
@@ -119,15 +89,10 @@ namespace FlockDeploy
 
 open Flock FlockComplete
 
-/-! ## The honest last message reads -/
-
-/-- **Every registered scheme's digests are at most 64 bytes, its salts at most 192.** -/
 theorem scheme_bounds {ms : MerkleScheme} (h : ms ∈ MerkleScheme.all) : ms.digestLen ≤ 64 ∧ ms.saltBytes ≤ 192 := by
   simp only [MerkleScheme.all, List.mem_cons, List.not_mem_nil, or_false] at h
   rcases h with rfl | rfl | rfl | rfl <;> exact ⟨by decide, by decide⟩
 
-/-- **Every level a `fast100` schedule reads** (`default` past its end) queries fewer than `2^64` times, opens fewer
-than `2^64` siblings, and has fewer than 64 lanes (log2). -/
 theorem fast100_level_bounds (m i : ℕ) {lv : Flock.Level} (h : lv = ((fast100 m).getD default).levels.getD i default) :
     lv.q < 2 ^ 64 ∧ lv.q * (lv.d - lv.cap) < 2 ^ 64 ∧ lv.lanes < 64 := by
   have key : ∀ m : Fin 40, ∀ s ∈ fast100 m.val, (s.levels.all fun lv =>
@@ -158,7 +123,6 @@ theorem fast100_level_bounds (m i : ℕ) {lv : Flock.Level} (h : lv = ((fast100 
   · rw [Array.getD_eq_getD_getElem?, Array.getElem?_eq_none (by omega), Option.getD_none]
     exact hdef
 
-/-- **A `fast100` schedule has at most seven levels.** -/
 theorem fast100_levels_le (m : ℕ) : ((fast100 m).getD default).levels.size ≤ 7 := by
   have key : ∀ m : Fin 40, ∀ s ∈ fast100 m.val, decide (s.levels.size ≤ 7) = true := by
     decide +kernel
@@ -172,8 +136,6 @@ theorem fast100_levels_le (m : ℕ) : ((fast100 m).getD default).levels.size ≤
         cases hf
     simpa using key ⟨m, hm⟩ s hf
 
-/-- **A level's openings of its shape fit `rdR`'s words**, where its query and sibling counts, its lanes, its digests
-and its salts do. -/
 theorem levelFits_of {sh : Flock.Shape} {l : Flock.Level} {w : ℕ} {p : Flock.LevelProof}
     (h : FlockSoundness.Discharge.ZkView.LevelOk sh l w p) (hq : l.q < 2 ^ 64) (hs : l.q * (l.d - l.cap) < 2 ^ 64)
     (hw : w < 2 ^ 64) (hh : sh.hashLen < 2 ^ 64) (hsl : ∀ s, sh.saltLen = some s → s < 2 ^ 64) :
@@ -191,8 +153,6 @@ theorem levelFits_of {sh : Flock.Shape} {l : Flock.Level} {w : ℕ} {p : Flock.L
     · obtain ⟨hsz, hall⟩ := h5
       exact ⟨by rw [hsz]; exact hq, fun b hb => by rw [hall b (Array.mem_toList_iff.1 hb)]; exact hsl _ ‹_›⟩
 
-/-- **A proof shaped for its file has openings that fit `rdR`'s words** (`OpensFit`), at a table of a registered
-scheme. -/
 theorem opensFit_of_shaped {tabs : Array Flock.Setup} {pts : Array (Array F128)} {k : ℕ} {p : Flock.Proof}
     (hms : tabs[k / 2]!.merkle ∈ MerkleScheme.all)
     (hp : FlockVBridge.Family.ProofShaped (shapeAt tabs pts k) p) : RecDeploy.DeployedR.OpensFit p := by
@@ -227,7 +187,6 @@ theorem opensFit_of_shaped {tabs : Array Flock.Setup} {pts : Array (Array F128)}
 theorem toArray_map_toList {α β : Type} (f : α → β) (xs : Array α) : (xs.toList.map f).toArray = xs.map f := by
   cases xs; simp
 
-/-- **`rdR` reads the honest last message** as the statement and the files' proofs' openings. -/
 theorem honest_rdR (o : Run sha512 Readable.relation) :
     RecDeploy.DeployedR.rdR o.recLast = some ⟨o.x, Lean.Json.null, o.recPs.map RecDeploy.DeployedR.opensOf⟩ := by
   obtain ⟨-, hts⟩ := setup_tables o.setup
@@ -249,10 +208,7 @@ theorem honest_rdR (o : Run sha512 Readable.relation) :
     exact (o.recTabsOk (k / 2) hk2).1.scheme
   rw [Run.recLast, RecDeploy.DeployedR.rdR_encLast o.ready_parts.2.1 hl hp, toArray_map_toList]
 
-/-! ## As many coins as messages -/
-
 open Rows in
-/-- **The honest messages number the deployed verifier's coins**: round 0, the reps' rounds and the last message. -/
 theorem honest_len (o : Run sha512 Readable.relation) {cs : List Coin} (hcs : o.CoinsAt cs)
     (hk : cs.length = (V false).k o.x) (last : Claims.Msg) : (o.recMsgs cs last).length = cs.length := by
   have h64 := out64_sha512
@@ -297,9 +253,6 @@ theorem honest_len (o : Run sha512 Readable.relation) {cs : List Coin} (hcs : o.
   simp only [V, hx]
   omega
 
-/-! ## The record's sample -/
-
-/-- **The session's sample is the statement's** at a plain completeness run. -/
 theorem honest_sampleTied (o : Run sha512 Readable.relation) :
     sampleEq (RecDeploy.sampleOfU o.spec.unitSample) o.s.read.draw = true := by
   obtain ⟨-, -, hDO, hU⟩ := JsonRT.stmtOk (H := sha512) (rel := Readable.relation) o.toCase
@@ -327,7 +280,6 @@ theorem honest_sampleTied (o : Run sha512 Readable.relation) :
     rw [e]
     exact sampleEq_refl _
 
-/-- **The reader's record carries the statement's sample** at the honest decision. -/
 theorem honest_sampleJ (o : Run sha512 Readable.relation)
     (cs : List Coin) : sampleEq (sampleOfJ (o.recDec cs).f.j) o.s.read.draw = true := by
   show sampleEq (sampleOfJ (recJ o.spec o.sts o.recLink o.recC₁ (o.recFrames cs) cs.tail.dropLast o.recPs))
@@ -336,9 +288,6 @@ theorem honest_sampleJ (o : Run sha512 Readable.relation)
   exact RecDeploy.sampleEq_map_norm
     (fun e he => (FlockDeploy.insOf_sample_norm (FlockDeploy.setupOf_some o.setup).1 he).1) (honest_sampleTied o)
 
-/-! ## The reading and the checks -/
-
-/-- **`decR` decides on the honest messages at `Run.recDec`**, at the deployed reader. -/
 theorem honest_decR_deployed (o : Run sha512 Readable.relation) :
     decR RecDeploy.DeployedR.rdR o.x (o.recMsgs o.recCoins o.recLast) o.recCoins = some (o.recDec o.recCoins) :=
   honest_decR out64_sha512 o o.coinsAt_recCoins (honest_rdR o) rfl rfl (recShaped out64_sha512 o)
@@ -350,7 +299,6 @@ theorem honest_actR_deployed (o : Run sha512 Readable.relation) :
   honest_actR out64_sha512 o o.coinsAt_recCoins (honest_rdR o) (RecDeploy.DeployedR.encLast_head o.x o.recPs.toList)
     rfl rfl
 
-/-- **Custody reads the reader's record** at the honest messages (`decLive`). -/
 theorem honest_readOkR (o : Run sha512 Readable.relation) :
     ReadOkR RecDeploy.DeployedR.rdR o.x (o.recMsgs o.recCoins o.recLast) o.recCoins := by
   unfold ReadOkR
@@ -358,7 +306,6 @@ theorem honest_readOkR (o : Run sha512 Readable.relation) :
   exact RecDeploy.RestRead.decLive RecDeploy.DeployedR.rdR o.x _ _ _
     (honest_len o o.coinsAt_recCoins o.recCoins_length _) (honest_decR_deployed o) o.scope_ok
 
-/-- **The five checks hold at the honest messages.** -/
 theorem honest_holdsR (o : Run sha512 Readable.relation) :
     ∀ q : VerdictR, holdsR sha512 RecDeploy.DeployedR.rdR q o.x (o.recMsgs o.recCoins o.recLast) o.recCoins := by
   have hcs := o.coinsAt_recCoins
@@ -386,17 +333,6 @@ namespace RecDeploy
 open Flock
 open FlockComplete (Run)
 
-/-- **The deployed verifier accepts the honest recursive prover** (non-vacuity of `RecursiveKSAt`'s premises, the honest
-half). At every plain completeness run at SHA-512 and the deployed relation, at the run's coins and the honest prover's messages (its tables' caps, each rep's rows of its file's proof, then
-`encLast` of the statement and the proofs' openings):
-
-1. `nextR rdR`'s reading and its five checks hold (`ReadOkR`, `holdsR`);
-2. `nextR rdR` accepts;
-3. `IVStar` at `DeployedR.bdR` accepts the honest committed run (its rows under any salts `ys`, then `lastOR`);
-4. row D's `hlev` holds at every decision on the honest messages.
-
-The only hypothesis is the run (`o`: a statement in scope that the verifier can accept, a witness in the relation, a
-tape, coins outside `Bad`, and the honest session's run on them). -/
 theorem honest_accepts_nextR (o : Run FlockDeploy.sha512 Readable.relation) (ys : ℕ → ℕ → Salt) :
     FlockDeploy.ReadOkR DeployedR.rdR o.x (o.recMsgs o.recCoins o.recLast) o.recCoins ∧
       (∀ q : FlockDeploy.VerdictR,

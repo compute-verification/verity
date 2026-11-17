@@ -51,29 +51,12 @@ import Proofs.Flock.Soundness.Refine.Walk
 
 set_option Elab.async false
 
-/-!
-# A staged table's labels ascend
-
-`CopySite.LabelsAscend` at every V\* table staged as V\* stages it (`labels_staged`), from the recursive setup's own
-checks (`RecIns.setup`), with no premise:
-
-* A V\* session is one table (`RecSetup.oneFull`, `oneFull_staged`), so `setupTables` sets table 0 up at the session's
-  sample (`setupTables_okAny`), and the label check reads that sample (`RecVStar.tableSample` at one table).
-* Without a sample the table's public file is the registered population's (`setupOne_pub`), whose labels `loadPublic`
-  refuses unless they ascend, one per instance (`loadPublic_asc`).
-* With a sample the table is the sampled proof blocks' (`HmRow.drawn`, `Layout.sampled_spec`: `n` is the proved units' count), and
-  the setup's label check (`RecVStar.checkLabels`, which runs under the verifier's inner shape, `insO_staged`) makes its
-  labels the proved units (`checkLabel_idx`). These ascend (`proved_asc`): `UnitSample.ofJson` refuses sampled proof blocks, or a
-  closure, that are not ascending and distinct, or a closure holding a sampled proof block (`ofJson_asc`), and with a closure
-  `proved` is their `qsort`, which sorts (`Verity.QSort.ByKey.qsort_sorted`) and permutes (`CoinPos.qsort_perm`) them.
--/
+/-! A staged table's labels ascend, from the recursive setup's own checks with no premise (`labels_staged`). -/
 
 namespace RecDeploy.CopySite
 
 open Flock FlockSoundness.Refine
 open Claims (Msg)
-
-/-! ## The proved units ascend -/
 
 theorem asc_of_all {a : Array ℕ} {N : ℕ}
     (h : (List.range a.size).all (fun i => a[i]! < N && (i == 0 || a[i - 1]! < a[i]!)) = true) :
@@ -89,9 +72,7 @@ theorem not_mem_of_any {cs us : Array ℕ} (h : ¬ (cs.any us.contains) = true) 
   intro u hu hm
   exact h (Array.any_eq_true'.2 ⟨u, hu, Array.contains_iff_mem.2 hm⟩)
 
--- `walk_step` down the unfolded do-block of `ofJson`, the sample's decoder, a goal per branch
 set_option maxHeartbeats 2000000 in
-/-- **A sample's units ascend, and so does its closure, which holds no sampled proof block**: `UnitSample.ofJson` refuses any other. -/
 theorem ofJson_asc {d : Lean.Json} {D : Draw.UnitSample} (h : Draw.UnitSample.ofJson d = .ok D) :
     (∀ j, 0 < j → j < D.units.size → D.units[j - 1]! < D.units[j]!) ∧
       (∀ j, 0 < j → j < D.closure.size → D.closure[j - 1]! < D.closure[j]!) ∧ ∀ u ∈ D.closure, u ∉ D.units := by
@@ -143,8 +124,6 @@ theorem asc_of_pairwise {a : Array ℕ} (h : a.toList.Pairwise (· < ·)) :
   rw [getElem!_pos a (j - 1) (by omega), getElem!_pos a j hj]
   exact this
 
-/-- **A sample's proved units ascend**: its sampled proof blocks without a closure (`ofJson_asc`), else their `qsort` with the
-closure, sorted (`qsort_sorted`) and distinct, since it permutes distinct units (`qsort_perm`). -/
 theorem proved_asc {d : Lean.Json} {D : Draw.UnitSample} (h : Draw.UnitSample.ofJson d = .ok D) :
     ∀ j, 0 < j → j < D.proved.size → D.proved[j - 1]! < D.proved[j]! := by
   obtain ⟨hu, hc, hdis⟩ := ofJson_asc h
@@ -164,8 +143,6 @@ theorem proved_asc {d : Lean.Json} {D : Draw.UnitSample} (h : Draw.UnitSample.of
       (Array.perm_iff_toList_perm.1 (RecDeploy.CoinPos.qsort_perm (D.units ++ D.closure) (· < ·))).nodup_iff.2 hnd
     exact (hs.and hnd').imp fun ⟨h1, h2⟩ => Nat.lt_of_le_of_ne h1 h2
 
-/-! ## The registered population's labels ascend -/
-
 theorem asc_of_any {a : Array ℕ} {n : ℕ} {b : Bool}
     (h : ¬ (a.size != n || (List.range a.size).any (fun i => i > 0 && a[i - 1]! ≥ a[i]!) || b) = true) :
     a.size = n ∧ ∀ j, 0 < j → j < n → a[j - 1]! < a[j]! := by
@@ -177,9 +154,7 @@ theorem asc_of_any {a : Array ℕ} {n : ℕ} {b : Bool}
   by_contra hge
   exact this hj0 (Nat.le_of_not_lt hge)
 
--- `walk_step` down `HmRow.loadPublic`'s unfolded do-block, a goal per branch
 set_option maxHeartbeats 4000000 in
-/-- **A registered population's labels ascend, one per instance**: `loadPublic` refuses any other. -/
 theorem loadPublic_asc {tags : Tags} {c : Circuit} {file : ByteArray} {pop : Public}
     (h : HmRow.loadPublic tags c file = .ok pop) : LabelsAscend pop := by
   unfold HmRow.loadPublic at h
@@ -195,9 +170,6 @@ theorem loadPublic_asc {tags : Tags} {c : Circuit} {file : ByteArray} {pop : Pub
     simp only [‹J.get _ "units" _ = _›, ‹J.arr _ "indices" _ = _›, bind, Except.bind]
     assumption
 
-/-! ## The staged table's public file -/
-
--- `walk_step` down `Stmt.setupH`'s unfolded do-block, a goal per branch
 set_option maxHeartbeats 4000000 in
 theorem setupH_none {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
     {partition : Option Lean.Json} {program : Option ByteArray} {st : Stmt}
@@ -212,8 +184,6 @@ theorem setupH_none {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : 
     subst h
     assumption
 
-/-- **A table's public file** (`setupOne`, either output mode): the registered population's without a sample, the sampled
-proof blocks' (`HmRow.drawn`) at one. -/
 theorem setupOne_pub {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
     {draw partition : Option Lean.Json} {program : Option ByteArray} {st : Stmt}
     (h : FlockSoundness.Discharge.HiddenExec.setupOne tags cf pf coins tables draw partition program = .ok st) :
@@ -229,8 +199,6 @@ theorem setupOne_pub {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables :
     | some d =>
       obtain ⟨pop, hl, hd⟩ := FlockSoundness.Discharge.Layout.setupH_sampled h
       exact ⟨st.c, pop, hl, (fun (e : some d = none) => nomatch e), fun d' (e : some d = some d') => by cases e; exact hd⟩
-
-/-! ## The setup's label check -/
 
 theorem recSetup_labels {s : RecIns} {spec : SessionSpec} {sts : Array Stmt} (h : s.setup = .ok (spec, sts))
     (hi : s.inner.isSome = true) :
@@ -250,11 +218,6 @@ theorem checkLabel_idx {dj : Lean.Json} {pub : Public} {j : ℕ} (h : RecVStar.c
     simp [RecVStar.checkLabel, hD, hidx, Bind.bind, Except.bind] at h
   | ok idx => exact ⟨idx, rfl, FlockC3.PubRows.checkLabel_ok h hD hidx⟩
 
-/-! ## At a staged table -/
-
-/-- **A staged table's labels ascend, one per instance**: its one table is set up at the session's sample; without one
-its labels are the registered population's (`loadPublic_asc`), with one the proved units (`checkLabel_idx`), which
-ascend (`proved_asc`) and are its instances (`sampled_spec`). -/
 theorem labels_staged {st : RecDeploy.Stage} {s : ℕ} {x xO : Msg} (hS : RecDeploy.StagedPart st s x xO) {i : RecIns}
     {spec : SessionSpec} {sts : Array Stmt} (hsu : RecDeploy.setupO xO = some (i, spec, sts)) (h0 : 0 < sts.size) :
     LabelsAscend sts[0].pub := by

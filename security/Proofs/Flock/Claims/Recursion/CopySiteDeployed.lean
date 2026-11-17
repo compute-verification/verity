@@ -41,20 +41,8 @@ import Proofs.Flock.Soundness.Discharge.ZkReg.Checked
 import Proofs.Flock.VBridge.Pinned
 import Proofs.Flock.VBridge.Sparse.Unit
 
-/-!
-# Check 5's site at a staged `rec-open` or `rec-residuals` part
-
-What `ResLower.resTie_copyOf` and `OpenDirs.dirsTie_staged` take of check 5 beyond the staging, from the recursive
-setup's own checks (`RecIns.setup`):
-
-* `params_open`, `params_res`: a `rec-open/…` or `rec-residuals/…` name is no other V\* unit's, so check 5 runs
-  `checkOpen` or `checkResiduals` at it (`hso`, `hop`, `hsp`, and `ho` at `rec-residuals`).
-* `copySite_staged`: check 5 there holds the verifier's registered reads (`hown`) and the inner session's source (`hf`):
-  it refuses either missing (`RecCoins.check`).
-* `idx_staged`: the table labels its instances `0` to `n − 1` in order (`hidx`), where its labels ascend
-  (`LabelsAscend`) and check 5's value rows are no more than its instances: the setup's registered check
-  (`checkRegistered`) reads row `idx[i]` of check 5's rows at instance `i`, so every label is a row (`idx_lt_rows`).
--/
+/-! Check 5's site at a staged `rec-open` or `rec-residuals` part (`copySite_staged`, `idx_staged`), from the recursive
+setup's own checks. -/
 
 @[expose] public section
 
@@ -63,10 +51,6 @@ namespace RecDeploy.CopySite
 open Flock
 open Claims (Msg)
 
-/-! ## The names -/
-
-/-- A `rec-open/l<L>-h<H>` unit is no other V\* unit check 5 reads: no R level, R opening, RecSparse or `rec-residuals`
-unit. -/
 theorem params_open (L H : ℕ) :
     RecCoins.stackedParams (RecOpen.unitName L H) = none ∧ RecOpening.params (RecOpen.unitName L H) = none ∧
       RecSparse.params (RecOpen.unitName L H) = none ∧ RecResiduals.params (RecOpen.unitName L H) = none := by
@@ -91,8 +75,6 @@ theorem params_open (L H : ℕ) :
       obtain ⟨m, k, c, j⟩ := p
       exact absurd (residualsName_of_params hq) ((FlockC3.Reps.resName_ne m k c j).1 L H)
 
-/-- A `rec-residuals/m<m>-k<k>-c<c>-p<j>` unit is no other V\* unit check 5 reads: no R level, R opening, RecSparse or
-`rec-open` unit. -/
 theorem params_res (m k c j : ℕ) :
     RecCoins.stackedParams (RecResiduals.unitName m k c j) = none ∧
       RecOpening.params (RecResiduals.unitName m k c j) = none ∧
@@ -120,10 +102,6 @@ theorem params_res (m k c j : ℕ) :
       obtain ⟨L, H⟩ := p
       exact absurd (FlockVBridge.unitName_params hq).symm ((FlockC3.Reps.resName_ne m k c j).1 L H)
 
-/-! ## Check 5's inputs -/
-
-/-- **Check 5 refuses a `rec-open` or `rec-residuals` unit without the verifier's registered reads or the inner
-session.** -/
 theorem site_of_check {st : Stmt} {own : Option (Array Registered.Port)} {f : Option RecCoins.Source}
     {c3 : Option RecCoins.C3} (h : RecCoins.check st own f c3 = .ok ())
     (hso : RecCoins.stackedParams st.c.unit.name = none) (hop : RecOpening.params st.c.unit.name = none)
@@ -142,10 +120,6 @@ theorem site_of_check {st : Stmt} {own : Option (Array Registered.Port)} {f : Op
       | none => cases h
       | some f => exact ⟨own, f, rfl, rfl⟩
 
-/-- **Check 5's site at a staged `rec-open` or `rec-residuals` part** (`resTie_copyOf`'s and `dirsTie_staged`'s
-`hown`, `hf`, `hso`, `hop`, `hsp`, and `ho` at `rec-residuals`): the setup ran check 5 at the table (`setup_coins`),
-which refuses either unit without the verifier's registered reads or the inner session (`site_of_check`), and the
-unit's name is no other V\* unit's (`params_open`, `params_res`). -/
 theorem copySite_staged {i : RecIns} {spec : SessionSpec} {sts : Array Stmt} {xO : Msg}
     (hsu : setupO xO = some (i, spec, sts)) (h0 : 0 < sts.size)
     (hnm : (RecOpen.params sts[0].c.unit.name).isSome ∨ (RecResiduals.params sts[0].c.unit.name).isSome) :
@@ -172,9 +146,6 @@ theorem copySite_staged {i : RecIns} {spec : SessionSpec} {sts : Array Stmt} {xO
   obtain ⟨own, f, hown, hf⟩ := site_of_check hcoin hso hop hnm
   exact ⟨own, f, hown, hf, hso, hop, hsp, ho⟩
 
-/-! ## The table's labels -/
-
-/-- What `checkRows` holds of the reads file: its port `port` reads row `i` of the verifier's rows in unit `i`. -/
 theorem checkRows_reads {salt : String → ℕ → ByteArray} {c : Circuit} {pub : Public}
     {own : Array Registered.Port} {port value : String} {rows : Array (Array ℕ)} {what : ℕ → String}
     (h : RecCoins.checkRows salt c pub own port value rows what = .ok ()) :
@@ -194,8 +165,7 @@ theorem checkRows_reads {salt : String → ℕ → ByteArray} {c : Circuit} {pub
     exact ⟨reg, hf, hr⟩
   · cases h
 
-/-- **Every label is one of check 5's rows**: the registered check reads, at instance `i`, the reads file's entry at its
-label `idx[i]` (`checkPort`), and the entries `checkRows` holds are the rows' (`checkRows_reads`). -/
+/-- The registered check reads, at instance `i`, the reads file's entry at its label `idx[i]` (`checkPort`). -/
 theorem idx_lt_rows {st : Stmt} {own : Array Registered.Port} (hreg : checkRegistered st (some own) = .ok ())
     {salt : String → ℕ → ByteArray} {port value : String} {rows : Array (Array ℕ)} {what : ℕ → String}
     (hrows : RecCoins.checkRows salt st.c st.pub own port value rows what = .ok ()) :
@@ -212,7 +182,6 @@ theorem idx_lt_rows {st : Stmt} {own : Array Registered.Port} (hreg : checkRegis
   rw [Array.getElem?_eq_none (by simp only [Array.size_map, Array.size_range]; omega)] at hrd
   cases hrd
 
-/-- An ascending array of `N` naturals below `N` is `0, …, N − 1`. -/
 theorem eq_range_of_lt {a : Array ℕ} {N : ℕ} (hs : a.size = N)
     (hasc : ∀ j, 0 < j → j < N → a[j - 1]! < a[j]!) (hlt : ∀ j < N, a[j]! < N) : a = Array.range N := by
   have hup : ∀ j, j < N → j ≤ a[j]! := by
@@ -250,13 +219,10 @@ theorem eq_range_of_lt {a : Array ℕ} {N : ℕ} (hs : a.size = N)
 theorem getD_of_lt {a : Array ℕ} {j : ℕ} (hj : j < a.size) : a.getD j 0 = a[j]! := by
   rw [Array.getD_eq_getD_getElem?, Array.getElem?_eq_getElem hj, Option.getD_some, getElem!_pos a j hj]
 
-/-- **The table's labels ascend, one per instance** (`loadPublic`'s order, kept by a full sample). -/
+/-- `loadPublic`'s order, which a full sample keeps. -/
 def LabelsAscend (pub : Public) : Prop :=
   ∃ idx, Registered.unitIndices pub = .ok idx ∧ idx.size = pub.n ∧ ∀ j, 0 < j → j < pub.n → idx[j - 1]! < idx[j]!
 
-/-- **`hidx` at a staged table** (`resTie_copyOf`'s and `dirsTie_staged`'s): where its labels ascend and check 5's value
-rows at some port are no more than its instances, every label is a row (`idx_lt_rows`), so the labels are
-`0, …, n − 1` (`eq_range_of_lt`). -/
 theorem idx_staged {i : RecIns} {spec : SessionSpec} {sts : Array Stmt} {xO : Msg}
     (hsu : setupO xO = some (i, spec, sts)) (h0 : 0 < sts.size) {own : Array Registered.Port}
     (hown : i.base.registered = some own) {salt : String → ℕ → ByteArray} {port value : String}

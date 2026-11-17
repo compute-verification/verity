@@ -14,34 +14,8 @@ public import Proofs.Flock.Soundness.Discharge.ZkExec.Setup
 public import Proofs.Flock.Claims.Recursion.SlotsCheck
 public import Proofs.Flock.Claims.Recursion.RowsCover
 
-/-!
-# The deployed brings' setup count from the verifier's own refusals
-
-`setupCalls_deployedB_le_at` bounds the compiled verifier's own evaluations by `nS x · c` when each staged V\*
-statement's `deployedSetup` has at most `c` inputs. This file derives `c` from what the verifier refuses, with no
-condition on `x` beyond `lamLin2_deployedB_ge`'s `hS`, and `hn` from its `hO` (`nS_le_of_partIn`):
-
-* **Tables**: a session has at most `Tags.MAX_TABLES = 64` statements (`setupTables_le`, at any `publicInputs`), and
-  under the verifier's inner shape exactly one (`RecSetup.oneFull`, `oneFull_ok`).
-* **Instances**: every statement `Stmt.setupTables` returns, at any `publicInputs` (`setupTables_counts`; the plain path
-  refuses `publicInputs`, the hidden one passes it to `Stmt.setupHidden`), has `m ≤ 35` (the `k_log > 27 || m > 35`
-  refusal), `0 < g` (`HmRow.pin` refuses a net range of no slots, and `HmRow.check` makes each net range `g · per_vu`
-  slots) and `g · 2^7 ≤ 2^k_log` (`HmRow.check`'s slots of at least `2^7` inside the block), so
-  `n ≤ g · 2^nbl ≤ 2^(k_log - 7) · 2^(35 - k_log) = 2^28` (`Counts.n_le`); a V\* table holds at most `4096`
-  (`RecBudget.table`, `budget_table_ok`).
-* **Check 5's rows** (`resSetup_length_le`): `rec-residuals` registers two rows of `v` and two zero rows, `rec-open`
-  `2 q` rows each of `coef` and `dirs`, two inputs a row; `q < 256` at every level of every `fast100` schedule, a constant of the
-  verifier (`fast100_small`), so no condition on `x` bounds it. At most `64 · (8 + 2040) = 131072` inputs.
-* **Registered reads** (`regIns_length_le`): at most `|sts| · |own| · n · D`, and an accepted part's registration has
-  at most `512` ports of trees at most `64` levels deep (`RecBudget.regs`, `regSize_staged`), so `D ≤ 66`.
-
-So each staged statement has at most `131072 + 512 · 4096 · 66 = 138543104` setup inputs (`deployedSetup_staged_le`),
-the run at most `nS x · 138543104` (`setupCalls_deployedB_le_cap`). The parts are at most
-`RecBudget.MAX_STATEMENTS = 16` wherever one staged part sets up: they are one a statement of `RecVStar.statements` at
-the verifier's inner shape (`readX_listed`), which `RecBudget.statements` caps (`nS_le_staged`). So the run's calls are
-at most `16 · 138543104 ≤ 2^32` (`setupCalls_deployedB_le_32`), and at `nS x ≤ 2^16` at most `2^55`
-(`setupCalls_deployedB_le_joint`), the call bound `lamLin2_deployedB_ge` charges (`lamLin2_deployedB_ge_joint`).
--/
+/-! The deployed brings' setup count from the verifier's own refusals, with no condition on `x`
+(`setupCalls_deployedB_le_cap`, `lamLin2_deployedB_ge_joint`). -/
 
 @[expose] public section
 
@@ -53,8 +27,6 @@ open Flock Refine
 open FlockSoundness.Discharge.Exec (range_mapM_ok ok_of_refuse)
 open Lean (Json)
 
-/-- **What a set-up statement's sizes satisfy**: `n` is the public file's, `nbl` its blocks' `log2ceil` (at least 3),
-`m = k_log + nbl ≤ 35`, and the circuit's `g` is positive with `g · 2^7 ≤ 2^k_log`. -/
 structure Counts (st : Stmt) : Prop where
   n : st.n = st.pub.n
   nbl : st.nbl = max 3 (log2ceil (max ((st.n + st.c.g - 1) / st.c.g) 1))
@@ -63,8 +35,6 @@ structure Counts (st : Stmt) : Prop where
   g0 : 0 < st.c.g
   g7 : st.c.g * 2 ^ 7 ≤ 2 ^ st.c.kLog
 
-/-- **A net range with a slot bounds `g`**: `HmRow.check` makes it `g · per_vu` slots of at least `2^7` each inside
-the block, so `0 < g` and `g · 2^7 ≤ 2^k_log`. -/
 theorem g_of_range {c : Circuit} {tags : Tags} {ls : Lean.Json} (h : HmRow.check c tags ls = .ok ()) {r}
     (hr : r ∈ c.ranges.toList) {i : ℕ} (hk : r.kind = .net i) (hcnt : 0 < r.count) :
     0 < c.g ∧ c.g * 2 ^ 7 ≤ 2 ^ c.kLog := by
@@ -94,7 +64,6 @@ theorem g_of_range {c : Circuit} {tags : Tags} {ls : Lean.Json} (h : HmRow.check
     _ ≤ r.start + spanH r := Nat.le_add_left _ _
     _ ≤ 2 ^ c.kLog := hbr
 
-/-- `g_of_range` at a circuit `HmOut.parse` returned: `HmRow.parse`'s, with its block or class set. -/
 theorem hmOut_g {tags : Tags} {cf : ByteArray} {tables : List (String × ByteArray)} {c : Circuit}
     (h : HmOut.parse tags cf tables = .ok c) {r} (hr : r ∈ c.ranges.toList) {i : ℕ} (hk : r.kind = .net i)
     (hcnt : 0 < r.count) : 0 < c.g ∧ c.g * 2 ^ 7 ≤ 2 ^ c.kLog := by
@@ -108,7 +77,6 @@ theorem hmOut_g {tags : Tags} {cf : ByteArray} {tables : List (String × ByteArr
     have hg := g_of_range (c := c₀) hls hr hk hcnt
     exact hg
 
-/-- `n` instances in `2^nbl` blocks of `g`, at `m ≤ 35` and `g · 2^7 ≤ 2^k_log`: at most `2^28`. -/
 theorem Counts.n_le {st : Stmt} (C : Counts st) : st.pub.n ≤ 268435456 := by
   have hf : st.n ≤ st.c.g * 2 ^ st.nbl := by
     rw [C.nbl]
@@ -130,9 +98,7 @@ variable {tags : Tags} {cf pf : ByteArray} {coins : Coins} {count : ℕ} {tables
   {stratified : Option ℕ} {closure : Option (Std.HashMap ℕ (Array ℕ))} {publicInputs : Option ByteArray}
   {spec : SessionSpec} {sts : Array Stmt} {st : Stmt}
 
--- `walk_step` down `Stmt.setupH`'s unfolded do-block, a goal per branch
 set_option maxHeartbeats 4000000 in
-/-- **`Stmt.setupH`'s statements satisfy `Counts`.** -/
 theorem setupH_counts (h : Stmt.setupH tags cf pf coins tables draw partition program = .ok st) : Counts st := by
   unfold Stmt.setupH at h
   dsimp only at h
@@ -150,8 +116,6 @@ theorem setupH_counts (h : Stmt.setupH tags cf pf coins tables draw partition pr
     have hg := g_of_range hc hr hki hcnt
     exact ⟨rfl, rfl, rfl, hk.2, hg.1, hg.2⟩
 
-/-- `hmOut_g` at a circuit `HmOut.parseCommit` returned, flat (`HmOut.parse`'s) or templated (`HmRow.parse`'s with the
-template's unit net first). -/
 theorem hmOutC_g {tags : Tags} {cf : ByteArray} {tables : List (String × ByteArray)} {c : Circuit}
     (h : HmOut.parseCommit tags cf tables = .ok c) {r} (hr : r ∈ c.ranges.toList) {i : ℕ} (hk : r.kind = .net i)
     (hcnt : 0 < r.count) : 0 < c.g ∧ c.g * 2 ^ 7 ≤ 2 ^ c.kLog := by
@@ -163,9 +127,7 @@ theorem hmOutC_g {tags : Tags} {cf : ByteArray} {tables : List (String × ByteAr
     obtain ⟨ls, hls⟩ := hm_parse_check_any hp
     exact g_of_range (c := c₀) hls hr hk hcnt
 
--- `walk_step` down `Stmt.setupHidden`'s unfolded do-block with a sample and without, a goal per branch
 set_option maxHeartbeats 8000000 in
-/-- **`Stmt.setupHidden`'s statements satisfy `Counts`**, at any public input words. -/
 theorem setupHidden_counts
     (h : Stmt.setupHidden tags cf pf coins tables draw partition program publicInputs = .ok st) : Counts st := by
   cases draw <;> unfold Stmt.setupHidden at h <;> dsimp only at h <;> simp only [throw_bind', pure_bind] at h <;>
@@ -178,10 +140,7 @@ theorem setupHidden_counts
     have hg := hmOutC_g (by with_reducible assumption) hr hki hcnt
     exact ⟨rfl, rfl, rfl, hk.2, hg.1, hg.2⟩
 
--- `walk_step` down `Stmt.setupTables`' unfolded do-block, a goal per branch
 set_option maxHeartbeats 8000000 in
-/-- **Every statement `Stmt.setupTables` returns satisfies `Counts`**, at any public input words: the plain path
-refuses them, and the hidden path passes them to `Stmt.setupHidden` (`setupHidden_counts`). -/
 theorem setupTables_counts
     (h : Stmt.setupTables tags cf pf coins count tables draw partition program work stratified closure publicInputs =
       .ok (spec, sts)) :
@@ -250,17 +209,12 @@ section Counts
 open Flock
 open FlockSoundness.Discharge.SetupCounts (Counts setupTables_counts)
 
-/-! ## The setup's statements -/
-
-/-- **A V\* statement's recursive setup**: at most 64 statements, each satisfying `Counts`. -/
 theorem setupO_counts {xO : Msg} {i : RecIns} {spec : SessionSpec} {sts : Array Stmt}
     (hs : setupO xO = some (i, spec, sts)) : sts.size ≤ 64 ∧ ∀ st ∈ sts.toList, Counts st := by
   have h := RecIns.setup_read (setupO_some hs).2
   have hmax : Tags.MAX_TABLES = 64 := rfl
   have hle := (FlockDeploy.setupTables_le h).1
   exact ⟨by omega, setupTables_counts h⟩
-
-/-! ## Check 5's rows -/
 
 theorem commitIns_length_le (rows : Array (Array ℕ)) (salt : ℕ → ByteArray) :
     (ResLower.commitIns rows salt).length ≤ rows.size * 2 := by
@@ -276,7 +230,6 @@ theorem residualRowsOf_size {inn : RecCoins.Inner} {sh : Shape} {extras : Array 
   have := (FlockSoundness.Discharge.Exec.array_mapM_ok_getElem h).1
   simpa using this
 
-/-- `rec-residuals` registers two rows of `v`, one a rep. -/
 theorem residualRows_size {inn : RecCoins.Inner} {j : ℕ} {rows : Array (Array ℕ)}
     (h : FlockSoundness.Discharge.Recursion.residualRows inn j = some rows) : rows.size = 2 := by
   unfold FlockSoundness.Discharge.Recursion.residualRows at h
@@ -285,9 +238,6 @@ theorem residualRows_size {inn : RecCoins.Inner} {j : ℕ} {rows : Array (Array 
     | (cases h; done)
     | (cases h; exact residualRowsOf_size (by assumption))
 
-/-- **`rec-open` registers at most 510 rows each of `coef` and `dirs`**: `2 q` at the inner schedule's one level of
-its lanes and siblings, and `q < 256` at every level of every `fast100` schedule (`fast100_small`), which
-`RecResiduals.shape?` requires of the inner session's `m`: a constant of the verifier, not a condition on `x`. -/
 theorem openRows_size_le {inn : RecCoins.Inner} {LANES H : ℕ} {cr dr : Array (Array ℕ)}
     (hor : FlockSoundness.Discharge.Recursion.openRows inn LANES H = some (cr, dr)) : cr.size ≤ 510 ∧ dr.size ≤ 510 := by
   unfold FlockSoundness.Discharge.Recursion.openRows at hor
@@ -353,7 +303,6 @@ theorem openSetupSt_length_le (src : Option RecCoins.Source) (st : Stmt) :
        have hd := openRows_size_le ‹_›
        omega)
 
-/-- **Check 5's evaluations at a V\* statement**: at most `64 · (8 + 2040)`. -/
 theorem resSetup_length_le (xO : Msg) : (ResLower.resSetup xO).length ≤ 131072 := by
   unfold ResLower.resSetup
   cases hs : setupO xO with
@@ -368,9 +317,6 @@ theorem resSetup_length_le (xO : Msg) : (ResLower.resSetup xO).length ≤ 131072
     · rw [Array.length_toList]
       omega
 
-/-! ## The registered reads -/
-
-/-- **`RecBudget.regs` at an inner shape**: at most `512` ports, each of a tree of at most `64` levels. -/
 theorem budget_regs_ok {n : RecVStar.Inner} {own : Array Registered.Port}
     (h : RecBudget.regs (some n) (some own) = .ok ()) :
     own.size ≤ 512 ∧ ∀ reg ∈ own.toList, log2ceil reg.leaves ≤ 64 := by
@@ -389,7 +335,6 @@ theorem budget_regs_ok {n : RecVStar.Inner} {own : Array Registered.Port}
     · first | cases hj' | simp [throw, throwThe, MonadExceptOf.throw] at hj'
     · omega
 
-/-- **`RecBudget.table` at an inner shape**: every table holds at most `4096` instances. -/
 theorem budget_table_ok {n : RecVStar.Inner} {sts : Array Stmt} (h : RecBudget.table (some n) sts = .ok ()) :
     ∀ st ∈ sts.toList, st.pub.n ≤ 4096 := by
   have hI : RecBudget.MAX_INSTANCES = 4096 := rfl
@@ -403,7 +348,6 @@ theorem budget_table_ok {n : RecVStar.Inner} {sts : Array Stmt} (h : RecBudget.t
   · first | cases hj' | simp [throw, throwThe, MonadExceptOf.throw] at hj'
   · omega
 
-/-- `RecBudget.statements` at an inner shape where `RecVStar.statements` returns a list has passed both its checks. -/
 theorem budget_statements_split {n : RecVStar.Inner} {ss : Array VStar.Stmt}
     (h : RecBudget.statements (some n) = .ok ()) (hss : RecVStar.statements n = .ok ss) :
     RecBudget.count ss.size = .ok () ∧ RecBudget.recorded (RecBudget.recordedCalls n ss) = .ok () := by
@@ -415,8 +359,6 @@ theorem budget_statements_split {n : RecVStar.Inner} {ss : Array VStar.Stmt}
   | error e => rw [hc] at h; simp [bind, Except.bind] at h
   | ok u => rw [hc] at h; exact ⟨rfl, h⟩
 
-/-- **`RecBudget.statements` at an inner shape**: V\*'s list there, where `RecVStar.statements` returns one, holds at
-most `RecBudget.MAX_STATEMENTS = 16` statements. -/
 theorem budget_statements_ok {n : RecVStar.Inner} {ss : Array VStar.Stmt}
     (h : RecBudget.statements (some n) = .ok ()) (hss : RecVStar.statements n = .ok ss) :
     ss.size ≤ RecBudget.MAX_STATEMENTS := by
@@ -427,8 +369,6 @@ theorem budget_statements_ok {n : RecVStar.Inner} {ss : Array VStar.Stmt}
   · first | cases h | simp [throw, throwThe, MonadExceptOf.throw] at h
   · omega
 
-/-- **`RecBudget.statements` at an inner shape**: V\*'s list there, where `RecVStar.statements` returns one, records at
-most `2^32` hm96 calls (`RecBudget.recordedCalls`). -/
 theorem budget_recorded_ok {n : RecVStar.Inner} {ss : Array VStar.Stmt}
     (h : RecBudget.statements (some n) = .ok ()) (hss : RecVStar.statements n = .ok ss) :
     RecBudget.recordedCalls n ss ≤ 2 ^ 32 := by
@@ -439,7 +379,6 @@ theorem budget_recorded_ok {n : RecVStar.Inner} {ss : Array VStar.Stmt}
   · first | cases h | simp [throw, throwThe, MonadExceptOf.throw] at h
   · omega
 
-/-- The recursive setup has passed `RecBudget.regs` on its registration. -/
 theorem RecIns.setup_regs {s : RecIns} {spec : SessionSpec} {sts : Array Stmt} (h : s.setup = .ok (spec, sts)) :
     RecBudget.regs s.inner s.base.registered = .ok () := by
   unfold RecIns.setup at h
@@ -451,7 +390,6 @@ theorem RecIns.setup_regs {s : RecIns} {spec : SessionSpec} {sts : Array Stmt} (
     subst h2
     assumption
 
-/-- The recursive setup has passed `RecBudget.statements` at its inner shape. -/
 theorem RecIns.setup_statements {s : RecIns} {spec : SessionSpec} {sts : Array Stmt}
     (h : s.setup = .ok (spec, sts)) : RecBudget.statements s.inner = .ok () := by
   unfold RecIns.setup at h
@@ -463,7 +401,6 @@ theorem RecIns.setup_statements {s : RecIns} {spec : SessionSpec} {sts : Array S
     subst h2
     assumption
 
-/-- The recursive setup has passed `RecBudget.table` on its tables. -/
 theorem RecIns.setup_table {s : RecIns} {spec : SessionSpec} {sts : Array Stmt} (h : s.setup = .ok (spec, sts)) :
     RecBudget.table s.inner sts = .ok () := by
   unfold RecIns.setup at h
@@ -475,9 +412,6 @@ theorem RecIns.setup_table {s : RecIns} {spec : SessionSpec} {sts : Array Stmt} 
     subst h2
     assumption
 
-/-- **An accepted V\* part's registration is of size at most `33792`**: wherever the recursive setup of a staged
-statement passes, its registration `own` has at most `512` ports, each opening at most `2 + 64` inputs
-(`RecBudget.regs`, which the setup runs at the verifier's inner shape, `insO_staged`), so `|own| · 66 ≤ 33792`. -/
 theorem regSize_staged {st : Stage} {x : Msg} {ms : List (Msg × Out)} {s : ℕ} {i : RecIns} {spec : SessionSpec}
     {sts : Array Stmt} {own : Array Registered.Port} (hs : setupO (staged st x ms s) = some (i, spec, sts))
     (hown : i.base.registered = some own) :
@@ -489,9 +423,6 @@ theorem regSize_staged {st : Stage} {x : Msg} {ms : List (Msg × Out)} {s : ℕ}
   obtain ⟨hsz, hdep⟩ := budget_regs_ok hR
   exact ⟨fun reg hreg => by have := hdep reg hreg; omega, by omega⟩
 
-/-- **`x` has at most `RecBudget.MAX_STATEMENTS = 16` V\* parts wherever one staged part sets up**: the parts are one a
-statement of V\*'s list at the verifier's inner shape (`readX_listed`), which the setup's `RecBudget.statements` holds
-to `MAX_STATEMENTS` (`insO_staged`: the setup's inner shape is `x`'s). -/
 theorem nS_le_staged {st : Stage} {x : Msg} {ms : List (Msg × Out)} {s : ℕ} {i : RecIns} {spec : SessionSpec}
     {sts : Array Stmt} (hs : setupO (staged st x ms s) = some (i, spec, sts)) :
     nS x ≤ RecBudget.MAX_STATEMENTS := by
@@ -504,8 +435,6 @@ theorem nS_le_staged {st : Stage} {x : Msg} {ms : List (Msg × Out)} {s : ℕ} {
   rw [hn, hlen]
   exact budget_statements_ok hB hvs
 
-/-- **`hn` from `hO`**: where every staged part is in scope (`PartIn`, whose setup passes), `x` has at most
-`RecBudget.MAX_STATEMENTS = 16` V\* parts (`nS_le_staged` at part 0, or none). -/
 theorem nS_le_of_partIn {st : Stage} {x : Msg}
     (hO : ∀ j < nS x, ∃ i spec' sts', PartIn (staged st x (pick st x j) j) i spec' sts') :
     nS x ≤ RecBudget.MAX_STATEMENTS := by
@@ -523,11 +452,6 @@ theorem mem_vstar_staged {st : Stage} {x : Msg} {ps : List (Msg × Out)} {xO : M
   · exact ⟨_, _, rfl⟩
   · exact ⟨_, _, rfl⟩
 
-/-! ## The count -/
-
-/-- **A staged statement's `deployedSetup`**: at most `131072 + 512 · 4096 · 66 = 138543104` inputs, check 5's
-(`resSetup_length_le`) and the registered reads of its one table (`RecSetup.oneFull`) of at most `4096` instances
-(`RecBudget.table`) over at most `512` ports of at most `66` inputs an opening (`regSize_staged`). -/
 theorem deployedSetup_staged_le {st : Stage} {x : Msg} {ms : List (Msg × Out)} {s : ℕ} :
     (deployedSetup (staged st x ms s)).length ≤ 138543104 := by
   rw [deployedSetup_length]
@@ -564,10 +488,6 @@ theorem deployedSetup_staged_le {st : Stage} {x : Msg} {ms : List (Msg × Out)} 
 
 end Counts
 
-/-- **The compiled verifier's own evaluations at the deployed brings**: at most `nS x · 138543104` at a run's V\*
-statements. The tables, instances, check 5's rows and the registered reads are all bounded by the verifier's own
-refusals and constants (`RecSetup.oneFull`'s one table, `RecBudget`'s caps on a V\* session's registration and table,
-`fast100`'s `q < 256`), so no condition on `x` enters. -/
 theorem setupCalls_deployedB_le_cap (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
     (b : Brings) (L : Claims.Recursion.VStarB.LayoutB) (IV : Claims.Verifier Coin) (H : Msg → Msg) (x : Msg)
     (ps : List (Msg × Out)) :
@@ -577,8 +497,6 @@ theorem setupCalls_deployedB_le_cap (rel : _root_.Flock.Readable.Parsed → _roo
     obtain ⟨ms, s, rfl⟩ := mem_vstar_staged hx
     exact deployedSetup_staged_le
 
-/-- **`v ≤ 2^32` at the deployed brings**, at `nS x ≤ 16` V\* parts (`RecBudget.MAX_STATEMENTS`, `nS_le_of_partIn`):
-`16 · 138543104 ≤ 2^32`, `recursiveBitsK`'s `hv` at `kappa_eps_deployed`'s `v`. -/
 theorem setupCalls_deployedB_le_32 (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
     (b : Brings) (L : Claims.Recursion.VStarB.LayoutB) (IV : Claims.Verifier Coin) (H : Msg → Msg) (x : Msg)
     (ps : List (Msg × Out)) (hn : nS x ≤ 16) :
@@ -586,8 +504,6 @@ theorem setupCalls_deployedB_le_32 (rel : _root_.Flock.Readable.Parsed → _root
       ((recBound rel (deployedB b) L IV).vstar x ps)).length ≤ 2 ^ 32 :=
   (setupCalls_deployedB_le_cap rel b L IV H x ps).trans ((Nat.mul_le_mul_right _ hn).trans (by norm_num))
 
-/-- **`v ≤ 2^55` at the deployed brings**, at `nS x ≤ 2^16` V\* parts (`lamLin2_deployedB_ge`'s `hn`):
-`2^16 · 138543104 ≤ 2^55`, `lamLin2_deployed_ge_dep`'s `hV`. -/
 theorem setupCalls_deployedB_le_joint (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
     (b : Brings) (L : Claims.Recursion.VStarB.LayoutB) (IV : Claims.Verifier Coin) (H : Msg → Msg) (x : Msg)
     (ps : List (Msg × Out)) (hn : nS x ≤ 2 ^ 16) :
@@ -595,18 +511,8 @@ theorem setupCalls_deployedB_le_joint (rel : _root_.Flock.Readable.Parsed → _r
       ((recBound rel (deployedB b) L IV).vstar x ps)).length ≤ 2 ^ 55 :=
   (setupCalls_deployedB_le_cap rel b L IV H x ps).trans ((Nat.mul_le_mul_right _ hn).trans (by norm_num))
 
-/-- **Route 2C's `λ₂ ≥ 100` at the deployed brings, with its call bound**: `lamLin2_deployedB_ge` at `v = 2^55`, and
-the compiled verifier's own evaluations at its V\* statements at most `2^55` (`setupCalls_deployedB_le_joint`).
-
-What is left, none a hash premise or a statement about the prover: `hU`, the claim's adversary (at most `2^55` oracle
-queries); `hO` (the scope condition `PartIn` at each staged part, which the verifier's own `setupO` evaluates on the
-staged public statement) and `hin` (the inner statement's plain setup); and `hS` (the inner setup at most `2^56` hm96
-inputs), a deployment-size condition read off `x`. The V\* parts' count needs none: they are one a statement of
-`RecVStar.statements` at the verifier's inner shape, which `RecBudget.statements` refuses past `MAX_STATEMENTS = 16`
-(`nS_le_of_partIn`, from `hO`). The registrations need none either: the verifier refuses a V\* session's registration of more than
-`512` ports or a tree of more than `64` levels and a table of more than `4096` instances (`RecBudget`), and the
-tables (one, `RecSetup.oneFull`), statements with public inputs (`setupTables_counts`) and check 5's query count
-(`q < 256`, `fast100`'s, a verifier constant) need no hypothesis either. -/
+/-- What it still takes is no hash premise and no statement about the prover: `hU` (at most `2^55` oracle queries), the
+scope conditions `hO` and `hin`, and `hS`, a deployment-size condition read off `x`. -/
 theorem lamLin2_deployedB_ge_joint (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (b : Brings)
     (L : Claims.Recursion.VStarB.LayoutB) (nextE : Msg → List Msg → List Coin → Claims.OC Out)
     (colsE : Claims.Seen → ℕ → List (ℕ × List FlockLevel3.GF128)) (wE : Msg → ℝ) (join : List Msg → Msg)

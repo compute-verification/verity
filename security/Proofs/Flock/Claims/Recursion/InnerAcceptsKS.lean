@@ -39,26 +39,8 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Prob
 import Proofs.Flock.Claims.Recursion.Abort
 
-/-!
-# The recursion's KS where the inner view may reject on a collision
-
-`innerKS_of_KSAbort` reads `InnerAccepts`: wherever `E_O` gives witnesses on an accepted run, the inner view is
-accepted. At SHA-512 V* meets the weaker `InnerAcceptsColl` (`InnerAccepts.lean`): accepted, or two of the witnesses'
-recorded calls collide. This file proves `InnerKS` at the same bound, `γ_eA` unchanged, from `InnerAcceptsColl` and
-one more code fact, `RoundsMargin`: on an accepted run the inner protocol takes a round and the compiled verifier at
-least three rounds past the inner ones.
-
-* The inner stage fails where `E^rep` fails against `P_I`'s aborting runs, at a bad rerun, or where the judged sample's
-  inner view rejects (`PrBadGood_le_abort_rej`): `InnerAccepts` only closed the last case.
-* A bad sample costs at most `√(k_I·Σ_{j<k_I} Pr[forkColl j])` (`Pr_bad_le_fork`): the differing openings are collisions
-  at the inner rounds' forks only.
-* A rejecting judged sample is a collision at every fork (`Pr_innerRejects_le_fork`), so at the forks past the inner
-  rounds, which `Pr_bad_le_fork` leaves unused, it costs at most a third of their sum. Those forks' spare mass covers
-  it (`sqrt_margin`), so `N_I·Pr[bad] + Pr[rejects] ≤ N_I·√(k_I·k(x)·Pr[Be])` (`bad_rej_le`), the term `InnerKS`
-  holds for bad reruns alone.
-
-`KSFlock_of_flockKS_V_coll` is `KSFlock_of_flockKS_V` with `InnerAcceptsColl` and the margin for `InnerAccepts`.
--/
+/-! The recursion's KS where the inner view may reject on a collision, at the same `γ_eA`, from `InnerAcceptsColl` and
+`RoundsMargin` (`innerKS_of_KSAbort_coll`). -/
 
 @[expose] public section
 
@@ -70,14 +52,10 @@ section Coupling
 
 variable {Coin W Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
 
-/-- **The compiled verifier's rounds past the inner ones** (a code fact): on an accepted run, the inner protocol takes a
-round at the inner statement, and the compiled verifier at least three more than it. -/
 def RoundsMargin (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) : Prop :=
   ∀ (x : Msg) (Ω : Type) (P : Prover Ω) (ω : Ω) (r : Fin (D.V.k x) → Coin), (run H P D.V x ω r).out = .acc →
     0 < I.V.k (xI D x) ∧ I.V.k (xI D x) + 3 ≤ D.V.k x
 
-/-- **A sample is bad at most as `√(k_I·Σ_{j<k_I} Pr[forkColl j])`**: `Pr_bad_le`'s argument, stopped before the inner
-rounds' forks are bounded by all of `Be`'s. -/
 theorem Pr_bad_le_fork {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {DO : Flock.Deploy Coin Col T}
     {opening : Opening} (hV : InnerViewRun H D I DO) (hO : CallsOpenPlayed H D I DO opening)
     (hT : CallsTrue H D I DO) (decO : List (ℕ × Col) → List T) (x : Msg) {Ω : Type} [Fintype Ω] [Nonempty Ω]
@@ -87,8 +65,6 @@ theorem Pr_bad_le_fork {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {D
   exact (Pr_bad_le_opens H D I DO decO x P).trans (Real.sqrt_le_sqrt (mul_le_mul_of_nonneg_left
     (Finset.sum_le_sum fun j _ => Pr_mono fun t => forkColl_of_opening hV hO hT decO x P t) (Nat.cast_nonneg _)))
 
-/-- **Spare mass under the root**: `n·√(a·A) + E ≤ n·√(a·(A+B))` when `B` holds three `E`s, `E ≤ 1`, `A ≤ a`,
-`a ≥ 1` and `n ≥ 1`, since `(√(a·A) + E)² ≤ a·A + 2a·E + a·E`. -/
 theorem sqrt_margin {n a A B E : ℝ} (hn : 1 ≤ n) (ha : 1 ≤ a) (hA0 : 0 ≤ A) (hAa : A ≤ a) (hE0 : 0 ≤ E)
     (hE1 : E ≤ 1) (hB : 3 * E ≤ B) : n * Real.sqrt (a * A) + E ≤ n * Real.sqrt (a * (A + B)) := by
   have ha0 : 0 ≤ a := by linarith
@@ -117,9 +93,6 @@ theorem unifMap_drop {Ω R C Q : Type} [Fintype Ω] [Fintype R] [Fintype C] [Fin
     simp only [Ex_const]
   exact (UnifMap.equiv e).comp hfst
 
-/-- **The inner stage fails where `E^rep` fails against `P_I`'s aborting runs, at a bad rerun, or where the judged
-sample's inner view rejects**: `PrBadGood_le_abort`'s argument, where the judged sample's acceptance is read off the sample
-where its inner view doesn't reject, in place of `InnerAccepts`. -/
 theorem PrBadGood_le_abort_rej {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {DO : Flock.Deploy Coin Col T}
     {decC : Msg → Msg → Coin} (hV : InnerViewRun H D I DO) (hpc : PublicCoin H I decC) (hR : InnerRounds D I)
     (decO : List (ℕ × Col) → List T) (x : Msg) {Ω : Type} [Fintype Ω] (P : Prover Ω) :
@@ -223,11 +196,6 @@ theorem PrBadGood_le_abort_rej {H : Msg → Msg} {D : Deploy Coin} {I : Inner Co
       (InnerRejects H D I DO decO P x)
   linarith
 
-/-- **Bad reruns and a rejecting judged sample together cost what `InnerKS` holds for bad reruns**:
-`N_I·Pr[bad] + Pr[rejects] ≤ N_I·√(k_I·k(x)·Pr[Be])`. A bad sample costs at most `√(k_I·A)`, `A` the inner rounds'
-forks' collisions (`Pr_bad_le_fork`); a rejecting sample at most each fork's, so a third of `B`, the forks' past the
-inner rounds (`Pr_innerRejects_le_fork`, `RoundsMargin`), and `k(x)·Pr[Be] = A + B` (`sqrt_margin`). Where no run is
-accepted, no sample rejects, and `Pr_bad_le` alone gives it. -/
 theorem bad_rej_le {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {DO : Flock.Deploy Coin Col T}
     {opening : Opening} (hV : InnerViewRun H D I DO) (hO : CallsOpenPlayed H D I DO opening)
     (hT : CallsTrue H D I DO) (hR : InnerRounds D I) (hA : InnerAcceptsColl H D I DO) (hN0 : CallsNil H D)
@@ -286,8 +254,6 @@ theorem bad_rej_le {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {DO : 
     _ = NI D I x * Real.sqrt (I.V.k (xI D x) * D.V.k x * PrBe H D I DO decO P x) := by
         rw [mul_assoc, htot, hsplit]
 
-/-- **`InnerKS` from `Inner.KSAbort` where V* meets `InnerAcceptsColl`**: `innerKS_of_KSAbort`, with the judged sample's
-rejection paid from the spare forks (`PrBadGood_le_abort_rej`, `bad_rej_le`), at the same bound. -/
 theorem innerKS_of_KSAbort_coll [DecidableEq Col] [Zero Col] {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W}
     {DO : Flock.Deploy Coin Col T} {opening : Opening} {decC : Msg → Msg → Coin} (hKS : I.KSAbort H)
     (hR : InnerRounds D I) (hV : InnerViewRun H D I DO) (hT : CallsTrue H D I DO) (hL : CallsLogColl H D I DO)
@@ -317,8 +283,6 @@ section RecursionKS
 
 variable {Coin W Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col]
 
-/-- **The recursion's KS from Flock's KS at the outer deployment and the inner protocol's KS against provers that may
-abort, where V* meets `InnerAcceptsColl`**: `KS_of_flockKS` with `innerKS_of_KSAbort_coll`. -/
 theorem KS_of_flockKS_coll [Zero Col] (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W)
     (DO : Flock.Deploy Coin Col T) (opening : Opening) (decC : Msg → Msg → Coin) (hF : Flock.KS H DO)
     (hKS : I.KSAbort H) (hRef : Refuses H D) (hRounds : InnerRounds D I) (hN : SessionNums D DO)
@@ -330,9 +294,6 @@ theorem KS_of_flockKS_coll [Zero Col] (H : Msg → Msg) (D : Deploy Coin) (I : I
   KS_of H D I DO hRef hRounds (outerKS_of_flockKS hF hN hε hRd hS hR)
     (innerKS_of_KSAbort_coll hKS hRounds hV hT hL hO hA hM hpc hN0)
 
-/-- **KS of the recursion over Flock where V* meets `InnerAcceptsColl`**: `KSFlock_of_flockKS` with
-`KS_of_flockKS_coll`. The margin is the compiled verifier's: on an accepted run, three rounds past the inner
-deployment's, which takes a round at every statement. -/
 theorem KSFlock_of_flockKS_coll [Zero Col] (H : Msg → Msg) (D : Deploy Coin) (DI DO : Flock.Deploy Coin Col T)
     (opening : Opening) (decC : Msg → Msg → Coin) (hF : Flock.KS H DO) (NI : Msg → ℕ) (Ok : Msg → Col → Prop)
     (hNI : ∀ x, (NI x : ℝ) ≤ DI.N₀ x) (hεI : ∀ x, 0 ≤ DI.εtable x) (hVkI : ∀ x, 0 < DI.V.k x)
@@ -365,9 +326,6 @@ namespace FlockDeploy
 
 open Claims.Recursion
 
-/-- **KS of the recursion over Flock's deployed verifier as the inner protocol, where V* meets `InnerAcceptsColl`**, at
-SHA-512: `KSFlock_of_flockKS_V` with `InnerAcceptsColl` and the compiled verifier's margin (`KSFlock_of_flockKS_coll`)
-for `InnerAccepts`. -/
 theorem KSFlock_of_flockKS_V_coll {Col T : Type} [DecidableEq Col] [Zero Col] (zk : Bool) (D : Deploy Coin)
     (DI DO : Claims.Flock.Deploy Coin Col T) (hVI : DI.V = V zk) (opening : Opening)
     (decC : Claims.Msg → Claims.Msg → Coin) (hF : Claims.Flock.KS sha512 DO) (NI : Claims.Msg → ℕ)

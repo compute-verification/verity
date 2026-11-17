@@ -34,16 +34,8 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# The honest deployed recursive run (`HonestFixture`)
-
-The one fact the honest half of `RecursiveKSAt`'s non-vacuity (`honest_half_fixture`) takes, and nothing in Lean proves:
-one honest deployed recursive run, at one statement `x` and with the deployed inner prover `IrDep x`, on which every
-premise of `honest_half_tops` holds at once. Its conjuncts are the named Props that theorem reads, with their statements
-unchanged where they are stated (`HonestRunAccepted` and `NoCollAt` in `HonestHalf`, `HonestWitSatisfies` in
-`HonestWitR`), and the tape exception, named here (`TopsAt`). That the inner prover's openings fit V\*'s levels
-(`IrShaped`) is proved at `IrDep` (`irShaped_dep`).
--/
+/-! `HonestFixture`: one honest deployed recursive run on which every premise of `honest_half_tops` holds at once, which
+nothing in Lean proves. -/
 
 @[expose] public section
 

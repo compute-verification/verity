@@ -41,21 +41,8 @@ import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
 import Proofs.Flock.Soundness.Discharge.Layout.Drawn
 import Proofs.Flock.Soundness.Discharge.Layout.SharedRows
 
-/-!
-# A full sample sets the inner statement up as its files do, region for region
-
-`innerSetup_files` gives Flock's plain verifier's inner statement (set up at the inner statement's sample) the files'
-`m`, `k_log` and region count. `innerSetup_same` gives it the files' statement whole, as the verifier's algebra reads
-it: the extra claims at any points (`Stmt.extraClaims`) and the lincheck's circuit fold (`Stmt.circuitFold`).
-
-* `drawn_rows`: a hidden-output statement set up at a sample that proves every one of the unsampled statement's units, in
-  order, has its circuit, its instance count and every instance's `b ‖ c`, which the sampled file keeps at each proved unit
-  (`sampled_digestW`); `innerSetup_rows` gives the plain verifier's inner statement the files' rows.
-* `sampled_same`: such a statement has the unsampled one's circuit, leaf, `nbl`, `m`, pin, Δ and regions. The regions read
-  the public file only at its instances' `b ‖ c` (`regions_same`).
-* `extraClaims_congr`, `circuitFold_congr`: the extra claims read a statement's `k_log`, `m`, `nbl` and regions, and the
-  circuit fold its circuit, leaf, pin and Δ.
--/
+/-! A full sample sets the inner statement up as its files do, as the verifier's algebra reads it (`innerSetup_same`,
+`innerSetup_rows`). -/
 
 @[expose] public section
 
@@ -65,8 +52,6 @@ open Flock FlockSoundness.Refine
 open Claims (Msg)
 
 namespace SetupSame
-
-/-! ## The statement's algebra reads few of its fields -/
 
 theorem listMapM_congr {β : Type} :
     ∀ {l : List ℕ} {f g : ℕ → Except String β}, (∀ p ∈ l, f p = g p) → l.mapM f = l.mapM g
@@ -80,7 +65,6 @@ theorem mapM_range_congr {β : Type} {n : ℕ} {f g : ℕ → Except String β} 
   rw [Array.mapM_eq_mapM_toList, Array.mapM_eq_mapM_toList, Array.toList_range,
     listMapM_congr fun p hp => h p (List.mem_range.1 hp)]
 
-/-- **The extra claims read the statement's `k_log`, `m`, `nbl` and regions.** -/
 theorem extraClaims_congr {st st' : Stmt} (hk : st.c.kLog = st'.c.kLog) (hm : st.m = st'.m) (hn : st.nbl = st'.nbl)
     (hr : st.regions = st'.regions) : st.extraClaims = st'.extraClaims := by
   have hp : st.regionPoint = st'.regionPoint := by
@@ -126,7 +110,6 @@ theorem partialRangesT_congr (hc : st.c = st'.c) (hl : st.leaf = st'.leaf) (a : 
     rw [Stmt.partialRangesT, Stmt.partialRangesT]
     simp only [slotBase_congr hc hl, unitShare_congr hc, partialRangesT_congr hc hl a lw rho rr rs]
 
-/-- **The circuit fold reads the statement's circuit, leaf, pin and Δ.** -/
 theorem circuitFold_congr (hc : st.c = st'.c) (hl : st.leaf = st'.leaf) (hpin : st.pin = st'.pin)
     (hda : st.da = st'.da) (hdb : st.db = st'.db) : st.circuitFold = st'.circuitFold := by
   have hfold : st.fold = st'.fold := by
@@ -149,9 +132,6 @@ theorem circuitFold_congr (hc : st.c = st'.c) (hl : st.leaf = st'.leaf) (hpin : 
 
 end Fold
 
-/-! ## A full sample keeps the regions -/
-
-/-- **`HmOut.regions` reads the public file only at its instances' `b ‖ c`.** -/
 theorem regions_same {c : Circuit} {pub pop : Public} (hn : pub.n = pop.n)
     (hd : ∀ r < pop.n, ∀ p < c.ports.size, pub.digest r p c.ports.size = pop.digest r p c.ports.size) :
     HmOut.regions c pub = HmOut.regions c pop := by
@@ -180,9 +160,6 @@ theorem getElem_range_of {A : Array ℕ} {N r : ℕ} (h : A = Array.range N) (hr
   subst h
   simp
 
-/-- **A full sample keeps the statement's rows**: a hidden-output statement set up at a sample that proves every one of the
-unsampled statement's units, in order, has its circuit, its instance count and every instance's `b ‖ c`, which the sampled
-file keeps at each proved unit (`sampled_digestW`). -/
 theorem drawn_rows {T : Tags} {cf pf : ByteArray} {co co' : Coins} {tb : List (String × ByteArray)}
     {pa pa' : Option Lean.Json} {pr pr' : Option ByteArray} {d : Lean.Json} {D : Draw.UnitSample} {st st' : Stmt}
     (h' : Stmt.setupHidden T cf pf co tb none pa pr = .ok st')
@@ -220,8 +197,6 @@ theorem drawn_rows {T : Tags} {cf pf : ByteArray} {co co' : Coins} {tb : List (S
   rw [getElem_range_of hp hr'] at this
   exact this
 
-/-- **A full sample keeps the statement's algebra**: a hidden-output statement set up at a sample that proves every one
-of the unsampled statement's units, in order, has its circuit, leaf, `nbl`, `m`, pin, Δ and regions. -/
 theorem sampled_same {T : Tags} {cf pf : ByteArray} {co co' : Coins} {tb : List (String × ByteArray)}
     {pa pa' : Option Lean.Json} {pr pr' : Option ByteArray} {d : Lean.Json} {D : Draw.UnitSample} {st st' : Stmt}
     (h' : Stmt.setupHidden T cf pf co tb none pa pr = .ok st')
@@ -256,7 +231,6 @@ theorem sampled_same {T : Tags} {cf pf : ByteArray} {co co' : Coins} {tb : List 
   · rw [s.da, s'.da, hc, hpin]
   · rw [s.db, s'.db, hc, hpin]
 
-/-- **A full sample keeps the statement's extra claims, circuit fold and link points' length.** -/
 theorem sampled_setup {T : Tags} {cf pf : ByteArray} {co co' : Coins} {tb : List (String × ByteArray)}
     {pa pa' : Option Lean.Json} {pr pr' : Option ByteArray} {d : Lean.Json} {D : Draw.UnitSample} {st st' : Stmt}
     (h' : Stmt.setupHidden T cf pf co tb none pa pr = .ok st')
@@ -273,11 +247,6 @@ end SetupSame
 
 open SetupSame
 
-/-- **Flock's plain verifier sets the inner statement up at a full sample of the files' statement**: where the setup's
-checks accept what the verifier reads of a compiled statement (`RecScope.accepts`), the files (`filesOf`) set the inner
-statement up as one hidden-output table at no sample (`files_stmt`), and Flock's plain verifier sets it up as one table,
-in a session of two link points, by the same setup at the files' tags (`RecCoins.innerTags`) at a sample proving every
-one of the files' units in order (`checkForm_ok`), with no public inputs (`check_plain`). As `innerSetup_files`. -/
 theorem innerSetup_sampled {x : Msg} {r : XR} (hr : readX x = some r) (ha : RecScope.accepts (readOf r) = true) :
     ∃ f spec' st' s spec st, filesOf r = some (.files f) ∧ f.stmt "the inner session" = .ok (spec', st') ∧
       FlockDeploy.setupOf false r.w.inner = some (s, spec, #[st]) ∧ spec.points = 2 ∧ spec.mPts = st.mPts ∧
@@ -339,11 +308,6 @@ theorem innerSetup_sampled {x : Msg} {r : XR} (hr : readX x = some r) (ha : RecS
       hpr⟩
   · omega
 
-/-- **Flock's plain verifier sets the inner statement up as its files do, as the algebra reads it**: where the
-setup's checks accept what the verifier reads of a compiled statement (`RecScope.accepts`), Flock's plain verifier sets
-the inner statement up as one table whose `m`, `k_log`, extra claims (at any points) and circuit fold are the files'
-statement's (`RecCoins.Files.stmt`), in a session of two link points of the files' `m_pts`: `innerSetup_sampled`, with
-`sampled_setup`. -/
 theorem innerSetup_same {x : Msg} {r : XR} (hr : readX x = some r) (ha : RecScope.accepts (readOf r) = true) :
     ∃ f spec' st' s spec st, filesOf r = some (.files f) ∧ f.stmt "the inner session" = .ok (spec', st') ∧
       FlockDeploy.setupOf false r.w.inner = some (s, spec, #[st]) ∧
@@ -354,10 +318,6 @@ theorem innerSetup_same {x : Msg} {r : XR} (hr : readX x = some r) (ha : RecScop
   obtain ⟨e1, e2, e3, e4, e5⟩ := sampled_setup hst' hst hD hpr
   exact ⟨f, spec', st', s, spec, st, hfs, hstm, hset, e1, e2, e3, e4, hp2, hmp.trans e5⟩
 
-/-- **Flock's plain verifier sets the inner statement up with the files' rows**: where the setup's checks accept what
-the verifier reads of a compiled statement (`RecScope.accepts`), Flock's plain verifier sets the inner statement up as
-one table, at the files' tags, with the files' statement's circuit, instance count and every instance's `b ‖ c`
-(`RecCoins.Files.stmt`): `innerSetup_sampled`, with `drawn_rows`. -/
 theorem innerSetup_rows {x : Msg} {r : XR} (hr : readX x = some r) (ha : RecScope.accepts (readOf r) = true) :
     ∃ f spec' st' s spec st, filesOf r = some (.files f) ∧ f.stmt "the inner session" = .ok (spec', st') ∧
       FlockDeploy.setupOf false r.w.inner = some (s, spec, #[st]) ∧ s.read.tags = RecCoins.innerTags ∧

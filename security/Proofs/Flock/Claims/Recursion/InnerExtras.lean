@@ -46,29 +46,14 @@ import Proofs.Flock.Claims.Recursion.RestLens
 import Proofs.Flock.Claims.Recursion.SchedDense
 import Proofs.Flock.Soundness.Discharge.Hidden.Spec
 
-/-!
-# Check 5's extra claims and comb are the deployed table's
-
-`ExtrasR` at a dense compiled statement (`staged_extrasR`), so `InnerCoinsR` (`innerCoinsR_staged`) and `PosTieR`
-(`posTieR_dense`) follow from the verifier's checks alone, and the comb check 5 computes is the deployed table's circuit
-fold (`staged_comb`). Check 5 takes the inner session's extra claims and comb from its files' statement (`Inner.load`),
-which is the deployed one as the algebra reads it (`innerSetup_same`), and the extra claims at its record's link
-points, which are `pointsOf` the first coin:
-
-* the record's link points are the challenger's live-coin part's: `RecVStar.innerLink` refuses others (`innerLink_points`, `held_eq`);
-* the challenger's live-coin part's record read in its own format holds them (`RecSetup.checkReads`), and the reader reads that record
-  back off the first coin (`Drawn`);
-* the record decodes at a spec of two points of the files' `m_pts`, whatever full sample it carries (`sampledSpec_shape`),
-  as the deployed spec (`innerSetup_same`), so its points are `pointsOf` the first coin (`points_of_flat`).
--/
+/-! Check 5's extra claims and comb are the deployed table's (`staged_extrasR`, `staged_comb`), so `InnerCoinsR` and
+`PosTieR` follow from the verifier's checks alone. -/
 
 @[expose] public section
 
 namespace RecDeploy.InnerExtras
 
 open Flock
-
-/-! ## Lists -/
 
 theorem flatten_getD {α : Type} {d : α} {m : ℕ} : ∀ {L : List (List α)}, (∀ l ∈ L, l.length = m) →
     ∀ {p i : ℕ}, i < m → L.flatten.getD (p * m + i) d = (L.getD p []).getD i d
@@ -110,8 +95,6 @@ theorem headD_range {α : Type} [Inhabited α] (c : ℕ → α) {B : ℕ} (hB : 
   obtain ⟨B, rfl⟩ : ∃ B', B = B' + 1 := ⟨B - 1, by omega⟩
   simp [List.range_succ_eq_map]
 
-/-- **Points read off a coin, point-major**: rows of `m` elements whose concatenation is the first elements of `f`
-are `f`'s, row `p` at `p * m`. -/
 theorem points_of_flat {α : Type} (d : α) {P : Array (Array α)} {n m : ℕ} {f : ℕ → α}
     (hsz : P.size = n) (hrow : ∀ p ∈ P.toList, p.size = m)
     (hdr : (P.toList.map (·.toList)).flatten.toArray =
@@ -149,8 +132,6 @@ theorem points_of_flat {α : Type} (d : α) {P : Array (Array α)} {n m : ℕ} {
   rw [hrowp, e1, e3] at e
   exact e.symm
 
-/-! ## The link points, as the record and the challenger's live-coin part's transcript hold them -/
-
 theorem mapError_ok {ε ε' α : Type} {x : Except ε α} {g : ε → ε'} {a : α} (h : x.mapError g = .ok a) :
     x = .ok a := by
   cases x with
@@ -184,8 +165,6 @@ theorem getArr_ok {q : Lean.Json} {a : Array Lean.Json} (h : q.getArr? = .ok a) 
   subst h
   rfl
 
-/-- **The inner session's record's link points are the challenger's live-coin part's**: `RecVStar.innerLink` reads the record's
-`link.points` as hex coins and refuses them unless they are the transcript's (`lk.points`). -/
 theorem innerLink_points {tr : Lean.Json} {record : String} {lk : RecVStar.InnerLink} {j l : Lean.Json}
     (hj : Flock.JsonParse.parse record = .ok j) (hl : j.getObjVal? "link" = .ok l)
     (h : RecVStar.innerLink tr record = .ok lk) :
@@ -211,7 +190,6 @@ theorem innerLink_points {tr : Lean.Json} {record : String} {lk : RecVStar.Inner
       (s!"rec inner transcript: {"the inner session's record's link points"}: " ++ ·)) _ = .ok _ := hmap
   exact (Claims.Bridge.Custody.mapM_forall₂ hmap').imp fun _ _ hx => mapError_forall₂ hx
 
-/-- **The decoded link points are the record's `link.points`, read as `innerLink` reads them.** -/
 theorem held_eq {spec : SessionSpec} {text : String} {sess : RunRecord} {j l : Lean.Json}
     {rp : Array (Array String)} {pts : Array (Array F128)}
     (hdec : Record.decode spec text = .ok sess) (hj : Flock.JsonParse.parse text = .ok j)
@@ -241,10 +219,6 @@ theorem held_eq {spec : SessionSpec} {text : String} {sess : RunRecord} {j l : L
   dsimp only at hz
   exact Except.ok.inj (hz.symm.trans hz')
 
-/-! ## The inner session check 5 loads -/
-
-/-- **What `Inner.load` reads its extra claims at**: the files' statement's, at the link points of the record decoded
-at the spec its sample gives (`Files.sampledSpec`). -/
 theorem load_extras {unit : String} {f : RecCoins.Files} {inn : RecCoins.Inner}
     (h : RecCoins.Inner.load unit f = .ok inn) :
     ∃ spec st specD sess, f.stmt unit = .ok (spec, st) ∧ f.sampledSpec spec st = .ok specD ∧
@@ -269,9 +243,6 @@ theorem load_extras {unit : String} {f : RecCoins.Files} {inn : RecCoins.Inner}
     cases hsp
     exact ⟨_, _, hs, by assumption, by assumption, rfl⟩
 
-/-- **The record decodes at two link points of the files' `m_pts`**: without a sample at the files' spec, and at a sample
-that proves every unit in order (the only one `sampledSpec` takes) at the sampled statement's, whose `nbl` is the files'
-(`sampled_same`). -/
 theorem sampledSpec_shape {f : RecCoins.Files} {spec' : SessionSpec} {st' : Stmt} {specD : SessionSpec}
     (h : f.sampledSpec spec' st' = .ok specD)
     (hst' : Stmt.setupHidden RecCoins.innerTags f.circuit f.pub RecVStar.innerTree [] none (some f.partition) f.program =
@@ -303,7 +274,6 @@ theorem sampledSpec_shape {f : RecCoins.Files} {spec' : SessionSpec} {st' : Stmt
     rw [(FlockSoundness.Discharge.Hidden.setupHidden_spec' hst'').mPts,
       (FlockSoundness.Discharge.Hidden.setupHidden_spec' hst').mPts, hn]
 
-/-- **Check 5's source at candidate 3's streams is the files, but their inner shape.** -/
 theorem atC3_with {g : RecCoins.Files} {inner : Option RecVStar.Inner} {commits : Option RecVStar.InnerCommits}
     {f : RecCoins.Source} (h : RecCoins.Source.atC3 (some (.files g)) inner commits = some f) :
     ∃ inner', f = .files { g with inner := inner' } := by
@@ -328,8 +298,6 @@ open RecDeploy.Rows (posAt)
 open RecDeploy.InnerAt
 open RecDeploy.InnerExtras
 
-/-- **`ExtrasR` at a dense compiled statement**, from the verifier's checks: wherever check 5 loads the inner session
-at a staged part that shows the coins `c`, its extra claims are the deployed table 0's at `pointsOf` the first coin. -/
 theorem staged_extrasR {b : Brings} {Bk : Msg → ℕ} {s : ℕ} {x : Msg} {c : ℕ → Coin} {st0 : Claims.Recursion.CompiledStatement}
     (hst : parse x = some st0) (hd : Claims.Recursion.Form.Dense st0.form) (hB : RestRead.kI x ≤ Bk (xIOf x)) :
     ExtrasR recRead b Bk s x c := by
@@ -341,7 +309,6 @@ theorem staged_extrasR {b : Brings} {Bk : Msg → ℕ} {s : ℕ} {x : Msg} {c : 
   have hins := (setupO_some hsu).1
   obtain ⟨hc, ms, _, _, _, hxO, -, -⟩ := hsh
   subst hxO
-  -- the challenger's live-coin part's record, its link points the first coin's
   obtain ⟨xr, hxr, hinner, -⟩ := insO_staged hins
   rw [hr] at hxr
   cases hxr
@@ -367,7 +334,6 @@ theorem staged_extrasR {b : Brings} {Bk : Msg → ℕ} {s : ℕ} {x : Msg} {c : 
     have hget : ((R.msgs.map fun mc => (mc.1, mc.2.toArray)).getD 0 ([], #[])).2 = R.points.toArray := by
       simp [Flock.RecRecord.Record.msgs]
     rwa [hget] at hd
-  -- the source is the files `x` carries, with the record the transcript was checked against
   obtain ⟨r2, rec, hr2, pj, hpj, hsrc2⟩ := src_staged hins
   rw [hr] at hr2
   cases hr2
@@ -381,7 +347,6 @@ theorem staged_extrasR {b : Brings} {Bk : Msg → ℕ} {s : ℕ} {x : Msg} {c : 
     exact (Option.some.inj this).symm
   obtain ⟨specL, stL, specD, sess, hstL, hdS, hdec, hext⟩ :=
     load_extras (hload : RecCoins.Inner.load _ _ = .ok inn)
-  -- the files' statement, the deployed one as the algebra reads it
   obtain ⟨f0, spec', st', s0, specS, stS, hfs0, hstm, hset', -, -, hex, -, hpts2, hmpts⟩ := innerSetup_same hr ha
   have hf0 : f0 = ⟨r.innerRaw.circuit, r.innerRaw.publicFile, pj, "", none, some (innerFormOf r.innerRaw),
       r.innerRaw.program⟩ := by
@@ -400,7 +365,6 @@ theorem staged_extrasR {b : Brings} {Bk : Msg → ℕ} {s : ℕ} {x : Msg} {c : 
   rw [← hstLe] at hext
   obtain ⟨hst', hspec'⟩ := files_stmt hstm
   obtain ⟨hDp, hDm⟩ := sampledSpec_shape hdS hst' hspec'
-  -- the decoded link points are the challenger's live-coin part's, so the first coin's
   have hdec' : Record.decode specD record = .ok sess := by rw [← hrec]; exact hdec
   obtain ⟨j, l, -, hj, hl, -⟩ := Claims.Bridge.Custody.decode_ok hdec'
   obtain ⟨rp, hrp, hh⟩ := innerLink_points hj (fld_val hl) hlk
@@ -414,7 +378,6 @@ theorem staged_extrasR {b : Brings} {Bk : Msg → ℕ} {s : ℕ} {x : Msg} {c : 
     unfold Drawn FlockDeploy.Coin.vals at h3
     rw [hRp, ← hpe] at h3
     exact h3
-  -- the deployed table's extra claims at those points
   have hxI : xIOf x = r.w.inner := by unfold xIOf; rw [hst]; rfl
   rw [hxI, hset'] at hv
   cases hv
@@ -424,22 +387,17 @@ theorem staged_extrasR {b : Brings} {Bk : Msg → ℕ} {s : ℕ} {x : Msg} {c : 
   show st'.extraClaims sess.points = stS.extraClaims sess.points
   rw [hex]
 
-/-- **`InnerCoinsR` at a dense compiled statement**, from the verifier's checks alone. -/
 theorem innerCoinsR_staged {b : Brings} {Bk : Msg → ℕ} {s : ℕ} {x : Msg} {c : ℕ → Coin}
     {st0 : Claims.Recursion.CompiledStatement} (hst : parse x = some st0) (hd : Claims.Recursion.Form.Dense st0.form)
     (hB : RestRead.kI x ≤ Bk (xIOf x)) : InnerCoinsR recRead b Bk s x c :=
   innerCoinsR_of hst hd hB (staged_extrasR hst hd hB)
 
-/-- **`PosTieR` at row D's position reader, at a dense compiled statement**, from the verifier's checks and the
-pieces' ranges. -/
 theorem posTieR_dense {b : Brings} {pieces : Msg → List OpenPiece} {Bk : Msg → ℕ} {s : ℕ} {x : Msg}
     {c : ℕ → Coin} {st0 : Claims.Recursion.CompiledStatement} (hst : parse x = some st0)
     (hd : Claims.Recursion.Form.Dense st0.form) (hR : PiecesInRangeR pieces) (hB : RestRead.kI x ≤ Bk (xIOf x)) :
     PosTieR recRead b pieces posAt Bk s x c :=
   posTieR_staged hst hd hR hB (staged_extrasR hst hd hB)
 
-/-- **Check 5's comb is the deployed table's circuit fold**: wherever check 5 loads the inner session at a staged part,
-its comb at any rep's fold coins is table 0's `CircuitFold.folded` at them. -/
 theorem staged_comb {b : Brings} {s : ℕ} {x xO : Msg} {c : ℕ → Coin} {st0 : Claims.Recursion.CompiledStatement}
     (hst : parse x = some st0) (hsh : showsPart recRead b s x xO c) {i : RecIns} (hins : insO xO = some i)
     {f : RecCoins.Source} {unit : String} {inn : RecCoins.Inner}
@@ -481,9 +439,6 @@ theorem staged_comb {b : Brings} {s : ℕ} {x xO : Msg} {c : ℕ → Coin} {st0 
   show stL.circuitFold.folded _ _ _ _ _ = st.circuitFold.folded _ _ _ _ _
   rw [hfold, hstLe]
 
-/-- **The inner session check 5 loads is the deployed setup's, as its algebra reads it**: at a dense compiled
-statement, wherever check 5 loads it at a staged part that shows the coins `c`, its extra claims are table 0's at
-`pointsOf` the first coin (`staged_extrasR`) and its comb is table 0's circuit fold (`staged_comb`). -/
 theorem staged_bridges {b : Brings} {Bk : Msg → ℕ} {s : ℕ} {x : Msg} {c : ℕ → Coin} {st0 : Claims.Recursion.CompiledStatement}
     (hst : parse x = some st0) (hd : Claims.Recursion.Form.Dense st0.form) (hB : RestRead.kI x ≤ Bk (xIOf x)) :
     ExtrasR recRead b Bk s x c ∧

@@ -35,29 +35,8 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Recursion.BoundBridge
 
-/-!
-# The deployed bound record at `coverW`, and the route with (P3) discharged
-
-The deployed bound record states its inner claim at `IVStar` at the weight `coverW` of `deployPlainTrim`'s weight, the
-least at which (P3) (`Bound.WeightCovers`) holds.
-
-* **The weight** is `wCover rel = coverW (deployPlainTrim rel).weight`, and **the deployed bound record** `bdCover` is
-  `bdDeployed` at it, at every other choice the code side makes. `bdDeployed` keeps `γ`'s weight at `IVStar` a parameter,
-  which `KSBoundRouteCols` quantifies over.
-* **(P3) holds at `bdCover`** wherever `DE`'s weight is at most the deployed plain record's (`weightCovers_bdCover`, as
-  `coverW` is monotone, `coverW_mono`), at the intended choice `wE = (deployPlainTrim rel).weight` in particular
-  (`weightCovers_bdCover_plain`, `weightCovers_coverW` there).
-* **The route with (P3) discharged** (`ksBoundRouteCols_cover`): `ksBoundRoute_of_bridge_cols` at `bdCover`, its
-  premises but (P3) giving `KSBoundCover`, `KSBoundDeployed` at `wCover rel`.
-
-At one table of `N₀ = 2^23` and the bounds `k_I = 4402`, `C_DE = 2^33`, `wCover` is about `2^69.65`. No theorem
-evaluates the recursion's security level (`Claims.Recursion.lam`) at the deployment, at `wCover` or at any other
-weight. Route 2C's bound λ₂ (`lamLin2`) evaluates to at least 135.7 at the deployed records
-(`RecDeploy.lamLin2_deployed_ge_dep_tight`; at least 100, `RecDeploy.lamLin2_deployed_ge_dep`), and `KSLin2` at the
-deployment's dense statements (`KSLin2On` at `RecDeploy.DenseAt`, at the deployed reader) is proved with no hypothesis
-(`Flock.Guarantees.RecursiveKS`, `Flock.SecurityProofs.RecursiveKS`). Holo statements are candidate 3's own model, and
-`BitsLin2` at the dense statements follows from `KSLin2` there (`bitsLin2On_of_ksLin2On`).
--/
+/-! The deployed bound record at `coverW` (`bdCover`) and the route with (P3) discharged; no theorem evaluates
+`Claims.Recursion.lam` at the deployment, at any weight. -/
 
 @[expose] public section
 
@@ -79,21 +58,18 @@ noncomputable def bdCover (rel : _root_.Flock.Readable.Parsed → _root_.Flock.R
     Claims.Recursion.Bound Coin (List FlockLevel3.GF128) Claims.Flock.PlainTrace :=
   bdDeployed rel nextE colsE wE join rowIn final (wCover rel)
 
-/-- **`KSBoundDeployed` at the deployed bound record**: at `γ`'s weight `wCover` at `IVStar`. -/
 def KSBoundCover (rel relO : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (b : Brings)
     (L : Claims.Recursion.VStarB.LayoutB) (nextE : Msg → List Msg → List Coin → Claims.OC Out)
     (colsE : Claims.Seen → ℕ → List (ℕ × List FlockLevel3.GF128)) (wE : Msg → ℝ) (join : List Msg → Msg)
     (rowIn : Msg → Msg) (final : Msg → Option (List (List (Msg × Salt)) × Msg)) : Prop :=
   KSBoundDeployed rel relO b L nextE colsE wE join rowIn final (wCover rel)
 
-/-- **`coverW` is monotone in `DE`'s weight.** -/
 theorem coverW_mono {wE wE' : Msg → ℝ} {x : Msg} (h : wE x ≤ wE' x) : coverW wE x ≤ coverW wE' x := by
   unfold coverW
   have hc : 0 ≤ (1 + 210 * (⌈4 * FlockDeploy.N₀ false x / Real.exp 1⌉₊ : ℝ)) *
       Real.sqrt ((FlockDeploy.V false).k x / 32) := by positivity
   exact pow_le_pow_left₀ (add_nonneg (Real.sqrt_nonneg _) hc) (add_le_add (Real.sqrt_le_sqrt h) le_rfl) 2
 
-/-- **(P3) at the deployed bound record**, wherever `DE`'s weight is at most the deployed plain record's. -/
 theorem weightCovers_bdCover (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
     (nextE : Msg → List Msg → List Coin → Claims.OC Out)
     (colsE : Claims.Seen → ℕ → List (ℕ × List FlockLevel3.GF128)) (wE : Msg → ℝ) (join : List Msg → Msg)
@@ -103,8 +79,6 @@ theorem weightCovers_bdCover (rel : _root_.Flock.Readable.Parsed → _root_.Floc
   (weightCovers_deployed_iff rel nextE colsE wE join rowIn final (wCover rel)).2 fun x =>
     coverW_mono (wE' := (FlockDeploy.deployPlainTrim rel).weight) (hwE x)
 
-/-- **(P3) at the deployed bound record, at the intended `DE` weight**, the deployed plain record's: there `wCover` is
-`coverW` at `DE`'s weight (`weightCovers_coverW`). -/
 theorem weightCovers_bdCover_plain (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
     (nextE : Msg → List Msg → List Coin → Claims.OC Out)
     (colsE : Claims.Seen → ℕ → List (ℕ × List FlockLevel3.GF128)) (join : List Msg → Msg)
@@ -112,13 +86,7 @@ theorem weightCovers_bdCover_plain (rel : _root_.Flock.Readable.Parsed → _root
     (bdCover rel nextE colsE (FlockDeploy.deployPlainTrim rel).weight join rowIn final).WeightCovers :=
   weightCovers_coverW rel nextE colsE (FlockDeploy.deployPlainTrim rel).weight join rowIn final
 
-/-- **The deployed route with (P3) discharged**: `ksBoundRoute_of_bridge_cols` at the bridge (`bridge_bdDeployed`) at
-the deployed bound record (`bdCover`), wherever `DE`'s weight is at most the deployed plain record's (the intended
-choice among them), with (P3) from `weightCovers_bdCover`. The other premises are `KSBoundRouteCols`', at `bdCover`. No
-theorem evaluates its level (`Claims.Recursion.lam`) at the deployment. Route 2C's bound λ₂ (`lamLin2`) evaluates to at
-least 135.7 at the deployed records (`RecDeploy.lamLin2_deployed_ge_dep_tight`), and `KSLin2` at the deployment's
-dense statements (`KSLin2On` at `RecDeploy.DenseAt`) is proved (`Flock.SecurityProofs.RecursiveKS`), Holo statements
-being candidate 3's own model, and `BitsLin2` at those statements follows from it (`bitsLin2On_of_ksLin2On`). -/
+/-- No theorem evaluates its level (`Claims.Recursion.lam`) at the deployment. -/
 theorem ksBoundRouteCols_cover (rel relO : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (b : Brings)
     (L : Claims.Recursion.VStarB.LayoutB)
     (hRows : L.ReadsRows FlockDeploy.sha512) (nextE : Msg → List Msg → List Coin → Claims.OC Out)

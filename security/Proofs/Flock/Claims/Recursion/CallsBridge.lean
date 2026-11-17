@@ -41,22 +41,8 @@ import Proofs.Flock.Claims.KS.PlainQueryRound
 import Proofs.Flock.Claims.KS.Width
 import Proofs.Flock.Soundness.Refine.Seam
 
-/-!
-# The calls half where a proof file differs
-
-`RecDeploy.PlainCallsBindOrSlack` compares the calls of two decisions the deployed plain verifier accepts after the
-same rounds and coins. They split at their proof files:
-
-* where the files agree, the two decisions' calls are one set (`RecDeploy.PlainCallsOfProofs`, proved at SHA-512 in
-  `CallsOfProofs`);
-* where a file differs, custody pins both records' rounds to the same round messages at the counts the statement fixes,
-  so the two sessions have the same rounds on every rep stream, the same points and the same `root_B`
-  (`sess_rounds_eq`). The two files are then accepted as one rep on one session (`verifyRep_congr`), and
-  `rep_bind_proof` gives one proof, which is `RecDeploy.ProofSlack`, or two of their openings that collide. Every
-  SHA-512 input of each opening is among its decision's calls (`rep_level_logs`), so the collision is among the calls.
-
-`RecDeploy.plainCallsBindOrSlack_of_proofs` reduces `PlainCallsBindOrSlack` to `PlainCallsOfProofs`.
--/
+/-! The calls half where a proof file differs: two openings collide among the calls, or the files decode alike
+(`plainCallsBindOrSlack_of_proofs`). -/
 
 @[expose] public section
 
@@ -64,12 +50,8 @@ namespace FlockDeploy.KS
 
 open Flock FlockSoundness.Refine
 
-/-! ## Two records under one custody have one session's rounds -/
-
-/-- A round's coin count, coins and retained bytes. -/
 def roundKey (rd : Round) : ℕ × Array F128 × Option ByteArray := (rd.n, rd.coins, rd.bytes)
 
-/-- Streams of the same sizes whose rounds, read in order, agree under `g` agree under `g` stream by stream. -/
 theorem streams_eq_of_flat {β : Type} (g : Round → β) : ∀ {S S' : List (Array Round)},
     S.map (fun s => s.size) = S'.map (fun s => s.size) →
     (S.flatMap (·.toList)).map g = (S'.flatMap (·.toList)).map g →
@@ -95,8 +77,6 @@ theorem keys_of_forall₂ : ∀ {rs : List Round} {ms : List (Claims.Msg × Coin
     show (rd.n, rd.coins, rd.bytes) :: _ = _
     rw [hab.1, hab.2]
 
-/-- **Two accepted plain records under custody of the same round messages carry the same rounds' counts, coins and
-bytes, stream by stream**, whatever hashes each verdict ran with. -/
 theorem live_keys_eq (hs hs' : Hashes Flock.V) {spec : SessionSpec} {sts : Array Stmt} {record record' : String}
     {proofs proofs' : Array ByteArray} {lv lv' : Live} {link link' : List ByteArray × List ByteArray} {c₁ c₁' : Coin}
     {mids : List (Claims.Msg × Coin)}
@@ -132,7 +112,6 @@ theorem forall₂_left {α β : Type} {R : α → β → Prop} :
     · exact ⟨_, hab⟩
     · exact forall₂_left h x hx
 
-/-- Every round of an accepted record's live session retained its bytes. -/
 theorem live_retained {spec : SessionSpec} {lv : Live} {link : List ByteArray × List ByteArray} {c₁ : Coin}
     {mids : List (Claims.Msg × Coin)} (hc : custody spec lv link c₁ mids = .ok ()) (q : ℕ) :
     ∀ rd ∈ (lv.streams[q]!).toList, ∃ B, rd.bytes = some B := by
@@ -146,7 +125,6 @@ theorem live_retained {spec : SessionSpec} {lv : Live} {link : List ByteArray ×
   obtain ⟨am, hb, -⟩ := forall₂_left (Claims.Bridge.Custody.custody_ok hc).2.2.2 rd hflat
   exact ⟨_, hb⟩
 
-/-- How the verifier's decoder reads a round that `liveOf` reads (`Claims.Bridge.Custody.decode_live`). -/
 abbrev DecRound (spec : SessionSpec) (rd rd' : Round) : Prop :=
   rd.n = rd'.n ∧ rd.coins = rd'.coins ∧ rd.bytes = rd'.bytes ∧ ∀ b, rd.bytes = some b → rd.sha = spec.dg b
 
@@ -159,8 +137,6 @@ theorem retained_of {spec : SessionSpec} : ∀ {a c : List Round}, List.Forall�
       exact ⟨B, hab.2.2.1.trans hB⟩
     · exact retained_of h (fun x hx => hr x (List.mem_cons_of_mem _ hx)) rd hm
 
-/-- Two decoded round lists over retained rounds with the same counts, coins and bytes are one list: a retained round's
-digest is its bytes'. -/
 theorem rounds_eq_of_keys {spec : SessionSpec} : ∀ {a b c d : List Round},
     List.Forall₂ (DecRound spec) a c → List.Forall₂ (DecRound spec) b d → c.map roundKey = d.map roundKey →
     (∀ rd ∈ c, ∃ B, rd.bytes = some B) → a = b
@@ -186,8 +162,6 @@ theorem rounds_eq_of_keys {spec : SessionSpec} : ∀ {a b c d : List Round},
       rw [hn₁, hc₁, hxb, hxs, hn₂, hc₂, hyb, hys, kn, kc]
     rw [e, rounds_eq_of_keys ha hb hk2 (fun rd h => hret rd (List.mem_cons_of_mem _ h))]
 
-/-- **Two accepted plain records under custody of the same link and round messages decode to sessions with the same
-rounds on every rep stream**, all retained. -/
 theorem sess_rounds_eq (hs hs' : Hashes Flock.V) {spec : SessionSpec} {sts : Array Stmt} {record record' : String}
     {proofs proofs' : Array ByteArray} {lv lv' : Live} {link link' : List ByteArray × List ByteArray} {c₁ c₁' : Coin}
     {mids : List (Claims.Msg × Coin)} {sess sess' : RunRecord}
@@ -210,9 +184,6 @@ theorem sess_rounds_eq (hs hs' : Hashes Flock.V) {spec : SessionSpec} {sts : Arr
   rw [getElem!_pos y.rounds j hj]
   exact retained_of hfa hr _ (Array.mem_toList_iff.2 (Array.getElem_mem hj))
 
-/-! ## One rep on two sessions with one stream -/
-
-/-- **A rep reads its session only through its stream's rounds, the points and its table's `root_B`.** -/
 theorem verifyRep_congr {spec : SessionSpec} {st : Setup} {sch : Flock.Schedule} {sess sess' : RunRecord} {i r : ℕ}
     (bytes : ByteArray) {y y' : StreamRec}
     (hy : sess.streams.find? (fun x => x.name == s!"{spec.tables[i]!}/rep{r}") = some y)
@@ -225,10 +196,6 @@ theorem verifyRep_congr {spec : SessionSpec} {st : Setup} {sch : Flock.Schedule}
   dsimp only
   rw [hP, hB, hr]
 
-/-! ## Every opening's inputs are among the calls -/
-
-/-- **An accepted plain rep passed every level's Merkle check through the oracle `hs`**: `rep_levels_check` before
-the oracle is replaced. -/
 theorem rep_levels_checkWith (hs : Hashes Flock.V) {spec : SessionSpec} {st : Setup} {sch : Flock.Schedule}
     {sess : RunRecord} {i r : ℕ} {bytes cap : ByteArray} (hsch : fast100 st.m = some sch)
     (hf : ∀ a b lw rho ts v, st.fold.folded a b lw rho ts = .ok v → rho.size + 6 = st.fold.kLog)
@@ -265,8 +232,6 @@ theorem rep_levels_checkWith (hs : Hashes Flock.V) {spec : SessionSpec} {st : Se
     rw [e]
     exact hmc
 
-/-- **Every SHA-512 input of an accepted plain rep's openings is among the calls `L`**, when the rep ran with SHA-512
-answered only within `L`: at every level `ℓ` and query `j`, the inputs of the proof's opening (`levelIns`). -/
 theorem rep_level_logs {L : List Claims.Msg} {spec : SessionSpec} {st : Setup} {sch : Flock.Schedule}
     {sess : RunRecord} {i r : ℕ} {bytes cap : ByteArray} (hsch : fast100 st.m = some sch)
     (hf : ∀ a b lw rho ts v, st.fold.folded a b lw rho ts = .ok v → rho.size + 6 = st.fold.kLog)
@@ -285,8 +250,6 @@ theorem rep_level_logs {L : List Claims.Msg} {spec : SessionSpec} {st : Setup} {
     st.merkle _ _ _ _ _ _ _ _ () (hmc ℓ hℓ)
   exact (merkleCheck_logsOf hms hruns).2 j hj u hu
 
-/-! ## The verdict's reps -/
-
 theorem verifyWithM_proofs_size (hs : Hashes Flock.V) {spec : SessionSpec} {tabs : Array Setup} {record : String}
     {proofs : Array ByteArray} (h : verifyWithM hs spec tabs record proofs = .ok ()) :
     proofs.size = spec.repStreams.size := by
@@ -303,7 +266,6 @@ theorem verifyWithM_proofs_size (hs : Hashes Flock.V) {spec : SessionSpec} {tabs
   rename_i hne
   simpa [bne_iff_ne] using hne
 
-/-- **Rep `k` of an accepted plain verdict**: table `k / 2`'s rep `k % 2` passes on proof file `k`. -/
 theorem verifyWithM_rep (hs : Hashes Flock.V) {spec : SessionSpec} {tabs : Array Setup} {record : String}
     {proofs : Array ByteArray} (h : verifyWithM hs spec tabs record proofs = .ok ()) :
     ∃ (sess : RunRecord) (schs : Array Schedule), Record.decodeWith hs spec record = .ok sess ∧
@@ -323,11 +285,6 @@ theorem verifyWithM_rep (hs : Hashes Flock.V) {spec : SessionSpec} {tabs : Array
     rw [e, e']
     exact ⟨c₁, h₁⟩
 
-/-! ## The calls half where a proof file differs -/
-
-/-- **Two last messages the deployed plain verifier accepts after the same rounds and coins** have the same proof
-files, or two of their openings collide among the two decisions' calls, or two of their proof files at one position
-differ and decode alike. -/
 theorem plain_calls_tied {x : Claims.Msg} {ms : List Claims.Msg} {l l' : Claims.Msg} {cs : List Coin}
     (hc : cs.length = ms.length + 1)
     (hacc : ((next false x (ms ++ [l]) cs).eval sha512).1 = .acc)
@@ -486,13 +443,6 @@ namespace RecDeploy
 open Claims (Msg Out OC)
 open FlockDeploy (Coin)
 
-/-- **The calls half where the proof files agree**: two last messages the deployed plain verifier accepts after the
-same rounds and coins, where it answered each earlier round with that round's coin, with the same proof files, make
-the same set of calls. Proved at SHA-512 (`RecDeploy.plainCallsOfProofs_sha512`): every call `Record.decodeWith`
-makes hashes a value custody or the statement pins (`root_B`, `root_F = Σ`, the publics, `H(ε)`, the rounds' bytes,
-S13's roots, S14's exchange), the S17 digests are of the files, each rep reads its session only through what
-`sess_rounds_eq` pins (`verifyRep_congr`), and S11 leaves no stream outside the rep streams, whose names are distinct
-(`FlockDeploy.KS.plain_calls_agree`). -/
 def PlainCallsOfProofs (H : Msg → Msg) : Prop :=
   ∀ (x : Msg) (ms : List Msg) (l l' : Msg) (cs : List Coin) (f f' : FlockDeploy.Final),
     ms.length + 1 = (FlockDeploy.V false).k x → cs.length = ms.length + 1 →
@@ -504,8 +454,6 @@ def PlainCallsOfProofs (H : Msg → Msg) : Prop :=
     ((FlockDeploy.next false x (ms ++ [l]) cs).eval H).2.toFinset =
       ((FlockDeploy.next false x (ms ++ [l']) cs).eval H).2.toFinset
 
-/-- **The calls half from the case where the proof files agree**, at SHA-512: where a proof file differs, two
-openings collide among the calls (`FlockDeploy.KS.plain_calls_tied`), or the files decode alike. -/
 theorem plainCallsBindOrSlack_of_proofs (hR : PlainCallsOfProofs FlockDeploy.sha512) :
     PlainCallsBindOrSlack FlockDeploy.sha512 := by
   intro x ms l l' cs hk hc hearly hacc hacc' hne

@@ -36,40 +36,8 @@ import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Recursion.FlockKSRecord
 
-/-!
-# `KSBound` at the deployment (option (d))
-
-`Claims.Recursion.KSBound` takes the compiled record as a function of the inner verifier its inner view runs and the
-bound record (`Claims.Recursion.Bound`). Here both are pinned to the deployment:
-
-* **The compiled record** is `deployRec IV ivScope b` at each inner verifier `IV`, its inner view running `IV`
-  (`recBoundAt`, a `Claims.Recursion.RecAt`), applied at `IVStar` (`innerView_ksBound`). Its inner scope check is the
-  deployed plain parser's, and its readers are V*'s bound layout's (`LayoutB.readers`: every round off the parts,
-  `VStarB.HeldB`). A compiled record that ignores the inner verifier it is given is no `RecAt` (`RecAt.not_const`).
-* **The element-level inner Flock `DE`** is the deployed plain record at plain leaves as the claims read it,
-  `deployPlainTrim rel` (columns and code trimmed of trailing zeros), with only three fields replaced: its verifier's
-  steps (at the deployed plain verifier's rounds, `FlockDeploy.V false`'s `k`), its columns and its weight (`deE`). Its
-  parser, scope, tables, code, decoder and numbers are `deployPlainTrim`'s, so the inner decoder `KSBound` quantifies
-  over meets the spec where `deployPlainTrim`'s does. At the deployed plain verifier's own steps, columns and weight,
-  `DE` is `deployPlainTrim rel` (`deE_plainTrim`), so (P1) there is `plain_KSAbort`'s statement (`plainKSAbort_bd`).
-* **The bound record** (`bdDeployed`) answers a round with its coin's bytes as `FlockDeploy.next` does, counts the
-  schedule's commit strings (`nAtSched`, off `rec_live.rep_rounds`), and opens at the pinned hm96 key
-  (`Hm96.Default512`, as `deployRec`'s). Its rows' digest input, how its last message reads and the element-level
-  verifier's steps stay parameters: they are the code side's, which has no element-level verdict yet.
-
-**The guarantee** is `KSBoundDeployed`, and its ∀-form is `KSBoundRouteCols` (`BoundRouteCols`, proved:
-`RecDeploy.ksBoundRoute_of_bridge_cols`): at every choice the code side makes, the premises (P1) to (P4) at the deployed
-bound record, (P4) the last message's binding modulo what `E*` reads (`Bound.LastBindsEC` with `Bound.LastCoinFree`),
-Flock's KS at the outer record, and the code facts of the staging, V*'s parts and the readers at the bound layout
-(`VStar.RunPairs`; `VStarB.HeldB`, `VStarB.VstarShowsB`, `VStarB.PartChecksB`, `VStarB.PartOpensB`, `VStarB.DecompB`;
-`ReadersTrue`, `ReadersLogColl` and `ReadersRunPlayed` at `LayoutB.readers`) give `KSBoundDeployed`.
-
-**What reads the last message.** `IVStar` and the opened view read it only through `final`
-(`Bound.ivstar_congr_final`, `Bound.openView_congr_final`), so (P4) compares two last messages only where `final`
-reads them apart.
-
-Statements only, with those three lemmas and (P1) at the deployed plain verifier's own steps (`plainKSAbort_bd`).
--/
+/-! `KSBound` pinned to the deployment (option (d)), `KSBoundDeployed`, at the records `recBoundAt`, `deE` and
+`bdDeployed`. -/
 
 @[expose] public section
 
@@ -82,8 +50,6 @@ open FlockDeploy (Coin)
 witnesses. -/
 def _root_.Claims.Recursion.VStarB.LayoutB.readers (L : Claims.Recursion.VStarB.LayoutB) : RecDeploy.Readers :=
   ⟨L.msgs, L.calls⟩
-
-/-! ## The schedule's commit strings -/
 
 /-- A rep's schedule at a table of the session (`rec_live.rep_rounds`, `Flock.RecVStar.repRounds`): at the table's `m`
 and `k_log` and the session's claims, `2 + points · regions` as `FlockDeploy.repRounds` counts them; empty off
@@ -109,8 +75,6 @@ def nAtSched (x : Msg) (j : ℕ) : ℕ :=
       match (sts.toList.flatMap fun st => repSchedAt spec st ++ repSchedAt spec st)[j - 1]? with
       | some r => r.2.1.toList.sum + if r.2.2.2 then 1 else 0
       | none => 0
-
-/-! ## The pinned records -/
 
 /-- **The element-level inner Flock, pinned to the deployed plain record the claims read**: `deployPlainTrim rel` (the
 trimmed record `plain_KSAbort` and `ksA_deployed` take) with only its verifier, its columns and its weight replaced.
@@ -158,13 +122,8 @@ noncomputable def recBoundAt (rel : _root_.Flock.Readable.Parsed → _root_.Floc
   xI := xIOf
   runs _ _ _ _ _ := rfl
 
-/-- **`KSBound` at the deployment**, the guarantee option (d) states: at SHA-512, the compiled record `deployRec` whose
-inner view runs `IVStar` at V*'s bound layout (`recBoundAt`), the deployed bound record (`bdDeployed`) and the deployed
-outer `--zk` record (`deployZkRec`). At `γ`'s weight `wCover` at `IVStar` it is `KSBoundCover`. No theorem
-evaluates its level (`Claims.Recursion.lam`) at the deployment. Route 2C's bound λ₂ (`lamLin2`) evaluates to at least
-135.7 at the deployed records (`RecDeploy.lamLin2_deployed_ge_dep_tight`), and `KSLin2` at the deployment's dense
-statements (`KSLin2On` at `RecDeploy.DenseAt`) is proved (`Flock.SecurityProofs.RecursiveKS`), Holo statements being
-candidate 3's own model, and `BitsLin2` at those statements follows from it (`bitsLin2On_of_ksLin2On`). -/
+/-- No theorem evaluates its level (`Claims.Recursion.lam`) at the deployment. Holo statements are candidate 3's own
+model. -/
 def KSBoundDeployed (rel relO : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (b : Brings)
     (L : Claims.Recursion.VStarB.LayoutB) (nextE : Msg → List Msg → List Coin → Claims.OC Out)
     (colsE : Claims.Seen → ℕ → List (ℕ × List FlockLevel3.GF128)) (wE : Msg → ℝ) (join : List Msg → Msg)
@@ -173,7 +132,6 @@ def KSBoundDeployed (rel relO : _root_.Flock.Readable.Parsed → _root_.Flock.Re
   Claims.Recursion.KSBound FlockDeploy.sha512 (recBoundAt rel b L) (bdDeployed rel nextE colsE wE join rowIn final w)
     (deployZkRec relO)
 
-/-- **The private variant at the deployment**, at the same records. -/
 def KSPrivBoundDeployed (rel relO : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (b : Brings)
     (L : Claims.Recursion.VStarB.LayoutB) (nextE : Msg → List Msg → List Coin → Claims.OC Out)
     (colsE : Claims.Seen → ℕ → List (ℕ × List FlockLevel3.GF128)) (wE : Msg → ℝ) (join : List Msg → Msg)
@@ -182,7 +140,6 @@ def KSPrivBoundDeployed (rel relO : _root_.Flock.Readable.Parsed → _root_.Floc
   Claims.Recursion.KSPrivBound FlockDeploy.sha512 (recBoundAt rel b L)
     (bdDeployed rel nextE colsE wE join rowIn final w) (deployZkRec relO)
 
-/-- **The compiled record's inner view runs `IVStar`**, at V*'s bound layout's messages and the run's first coins. -/
 theorem innerView_ksBound (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (b : Brings)
     (L : Claims.Recursion.VStarB.LayoutB) (Bd : Claims.Recursion.Bound Coin (List FlockLevel3.GF128)
       Claims.Flock.PlainTrace) (H : Msg → Msg) (x : Msg) (r : Fin ((recBound rel b L Bd.IVStar).V.k x) → Coin)
@@ -191,15 +148,12 @@ theorem innerView_ksBound (rel : _root_.Flock.Readable.Parsed → _root_.Flock.R
       (Claims.run H (Claims.replay (L.msgs x ws)) Bd.IVStar (xIOf x) () fun i => Claims.coinSeq r i.val).seen :=
   rfl
 
-/-- **`DE`'s rounds are the deployed plain verifier's.** -/
 theorem deE_k (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
     (nextE : Msg → List Msg → List Coin → Claims.OC Out)
     (colsE : Claims.Seen → ℕ → List (ℕ × List FlockLevel3.GF128)) (wE : Msg → ℝ) :
     (deE rel nextE colsE wE).V.k = (FlockDeploy.V false).k :=
   rfl
 
-/-- **The inner decoder meets the spec at the pinned `DE`** wherever it does at the deployed plain record the claims
-read: `decOK` reads the code (`enc`, `len`, `θ`), which `deE` keeps. -/
 theorem decOK_deE (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
     (nextE : Msg → List Msg → List Coin → Claims.OC Out)
     (colsE : Claims.Seen → ℕ → List (ℕ × List FlockLevel3.GF128)) (wE : Msg → ℝ)
@@ -208,15 +162,11 @@ theorem decOK_deE (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.
       Claims.Recursion.decOK (FlockDeploy.deployPlainTrim rel) decI :=
   Iff.rfl
 
-/-- **At the deployed plain verifier's own steps, columns and weight, `DE` is the trimmed plain record.** -/
 theorem deE_plainTrim (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) :
     deE rel (FlockDeploy.V false).next (FlockDeploy.deployPlainTrim rel).cols
       (FlockDeploy.deployPlainTrim rel).weight = FlockDeploy.deployPlainTrim rel :=
   rfl
 
-/-- **(P1) at the deployed plain verifier's own steps, columns and weight is `plain_KSAbort`'s statement**: from the
-plain record's table bound with escapes on accepted runs (`TableBoundθOnAcc` at `deployPlain rel`), whatever the bound
-record's other choices. -/
 theorem plainKSAbort_bd (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
     (htab : Claims.Recursion.TableBoundθOnAcc FlockDeploy.sha512 (FlockDeploy.deployPlain rel)
       (FlockDeploy.KS.wordLen false) (FlockDeploy.KS.wide false))
@@ -226,15 +176,8 @@ theorem plainKSAbort_bd (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Rea
       (FlockDeploy.deployPlainTrim rel).weight join rowIn final w).PlainKSAbort FlockDeploy.sha512 :=
   fun decI hdec => FlockDeploy.KS.plain_KSAbort rel htab decI hdec
 
-/-! ## V*'s readers at the bound layout -/
-
-/-- **The readers' rounds before the last are the run's** (a code fact about V*'s circuits and the readers, option (d)'s
-`ReadersOpenPlayed`): at outer witnesses in the outer relation at the V* statements staged at inner and staging messages
-`as` and coins `cs`, each part's staged as V\* stages it (`StagedPart`), whose recorded calls are true evaluations, at
-each round before `IV`'s last that `IV`'s run of the readers' messages plays, the readers' message is the run's
-(`as[j]`, the challenger's live-coin part's commit strings), or two recorded calls collide. `ReadersOpenPlayed` can't hold at
-`IVStar`'s last round: its message, the openings, is never sent in the run, and `IVStar` checks the openings itself
-(`Bound.opens`). -/
+/-- Only the rounds before `IV`'s last: the last message, the openings, is never sent in the run, and `IVStar` checks
+the openings itself. -/
 def ReadersRunPlayed {Col T : Type} (H : Msg → Msg) (IV : Claims.Verifier Coin) (b : Brings)
     (DO : Claims.Flock.Deploy Coin Col T) : Prop :=
   ∀ (x : Msg) (as : List Msg) (cs : List Coin) (ws : List Claims.Flock.Wit), as.length = IV.k (xIOf x) + kS x →
@@ -249,15 +192,12 @@ end RecDeploy
 
 namespace Claims.Recursion
 
-/-- **`IVStar` reads the last message only through `final`**: two last messages `final` reads alike give one decision
-at the same coins, with the same calls. -/
 theorem Bound.ivstar_congr_final {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
     [DecidableEq Col] (Bd : Bound Coin Col T) (x : Claims.Msg) (pre : List Claims.Msg) (a a' : Claims.Msg)
     (cs : List Coin) (hfin : Bd.final a = Bd.final a') :
     Bd.IVStar.next x (pre ++ [a]) cs = Bd.IVStar.next x (pre ++ [a']) cs := by
   simp [Bound.IVStar, hfin]
 
-/-- **The opened view, whose columns `Bound.deploy` takes, reads the last message only through `final`.** -/
 theorem Bound.openView_congr_final {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
     [DecidableEq Col] (Bd : Bound Coin Col T) (ms : List (Claims.Msg × Claims.Out)) (a a' : Claims.Msg)
     (o out : Claims.Out) (p : List (List (Claims.Msg × (Fin Bd.saltLen → UInt8))) × Claims.Msg)
@@ -265,9 +205,6 @@ theorem Bound.openView_congr_final {Coin Col T : Type} [Fintype Coin] [Nonempty 
     Bd.openView ⟨ms ++ [(a, o)], out⟩ = Bd.openView ⟨ms ++ [(a', o)], out⟩ := by
   simp [Bound.openView, hfin, hfin']
 
-/-- **No `RecAt` ignores the inner verifier it is given**: its record at an accept-all verifier and at a reject-all one
-differ in their inner views' decisions. So `KSBound` is never `KSFlock` at a compiled record fixed in advance, where its
-inner record's verifier would be read only for its rounds. -/
 theorem RecAt.not_const {Coin : Type} [Inhabited Coin] (D : RecAt Coin) (D₀ : Claims.Recursion.Deploy Coin) :
     ¬ ∀ IV, D.record IV = D₀ := by
   intro h

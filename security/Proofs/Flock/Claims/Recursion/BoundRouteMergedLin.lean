@@ -45,19 +45,8 @@ import Proofs.Flock.Claims.Recursion.DeploySessions
 import Proofs.Flock.Claims.Recursion.FlockKSRecord
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# `KSBoundLin` at the deployment with no bridge and no `WeightCovers` (route 2B, linearly)
-
-A route through the bridge reads (P3, `Bound.WeightCovers`): `γ`'s weight at `IVStar` must cover `DE`'s plus the
-bridge's second plurality. `Bound.KSLin_of_plainKSAbort_binds`
-reaches `KSLin` from (P1) at `DE` through one plurality, with `P_O`'s bad samples linear in `Fdev`, so the route needs
-neither: `γ`'s weight at `IVStar` need only be at least `DE`'s.
-
-`RecDeploy.KSBoundRouteLinMerged` is `KSBoundRouteMerged`'s premises with `KSBoundLin` for its conclusion, and
-`RecDeploy.ksBoundRouteLin_merged` proves it outright: `ksBoundRoute_merged`'s facts at `deployRecC`, with
-`KSLin_of_plainKSAbort_binds` there, carried to the deployed record by `ksLin_of_C` as `ksA_of_C` carries `KSA`.
-`RecDeploy.ksBoundDeployedLin_merged_wE` is the route at `w := wE`, where the weight premise holds.
--/
+/-! `KSBoundLin` at the deployment with no bridge and no `WeightCovers` (route 2B, linearly;
+`RecDeploy.ksBoundRouteLin_merged`). -/
 
 @[expose] public section
 
@@ -71,8 +60,6 @@ section Cols
 
 variable {Col T : Type}
 
-/-- **`KSLin` at `deployRecC` is `KSLin` at the deployed record**: `E*`'s output is the same (`E_eval_C`), and the
-bound reads no inner view. -/
 theorem ksLin_of_C {Col' T' : Type} [DecidableEq Col] [DecidableEq Col'] [Zero Col'] (H : Msg → Msg)
     (Bd : Bound Coin Col T) (decI : List (ℕ × Col) → List T) (ivScope : Msg → Bool) (b : Brings)
     (DO : Claims.Flock.Deploy Coin Col' T') (hCF : Bd.LastCoinFree H)
@@ -93,7 +80,6 @@ theorem ksLin_of_C {Col' T' : Type} [DecidableEq Col] [DecidableEq Col'] [Zero C
 
 end Cols
 
-/-- **`KSBoundRouteMerged` with the deviation term linear**: its premises give `KSBoundLin` at the deployed records. -/
 def KSBoundRouteLinMerged (rel relO : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (b : Brings)
     (L : Claims.Recursion.VStarB.LayoutB) : Prop :=
   ∀ (nextE : Msg → List Msg → List Coin → Claims.OC Out)
@@ -122,9 +108,6 @@ def KSBoundRouteLinMerged (rel relO : _root_.Flock.Readable.Parsed → _root_.Fl
     ReadersRunPlayed FlockDeploy.sha512 Bd.IVStar bL (deployZkRec relO) →
     Claims.Recursion.KSBoundLin FlockDeploy.sha512 (recBoundAt rel b L) Bd (deployZkRec relO)
 
-/-- **`KSBoundRouteLinMerged`, with no bridge**: `ksBoundRoute_merged`'s argument with
-`Bound.KSLin_of_plainKSAbort_binds` at `deployRecC` for `Bound.KS_of_plainKSAbort_binds`, carried back by
-`ksLin_of_C`. -/
 theorem ksBoundRouteLin_merged (rel relO : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
     (b : Brings) (L : Claims.Recursion.VStarB.LayoutB)
     (hRows : L.ReadsRows FlockDeploy.sha512) : KSBoundRouteLinMerged rel relO b L := by
@@ -162,8 +145,6 @@ theorem ksBoundRouteLin_merged (rel relO : _root_.Flock.Readable.Parsed → _roo
     (callsNil I.V ivScope bL FlockDeploy.sha512)
   exact ksLin_of_C FlockDeploy.sha512 Bd decI ivScope bL (deployZkRec relO) hCF hKSn
 
-/-- **The linear route at `γ`'s weight `DE`'s own** (`w := wE`), where `KSBoundRouteLinMerged`'s weight premise
-holds. -/
 theorem ksBoundDeployedLin_merged_wE (rel relO : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
     (b : Brings) (L : Claims.Recursion.VStarB.LayoutB)
     (hRows : L.ReadsRows FlockDeploy.sha512) (nextE : Msg → List Msg → List Coin → Claims.OC Out)

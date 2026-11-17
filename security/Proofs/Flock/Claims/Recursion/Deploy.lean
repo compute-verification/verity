@@ -38,74 +38,8 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# The compiled verifier in public-coin form (`RecDeploy.V`) and its record (`deployRec`)
-
-The shipped recursive verifier is the inner session, then `verity-verify-proof verify --zk` once per V* part with that part's
-recursive inputs (`--rec-inner`, `--rec-part J`, `--rec-bindings`, the inner statement's files, the inner session's
-record and the challenger's live-coin part's transcript). `RecDeploy.V` is that as one `Claims.Verifier` over Flock's live coins
-(`FlockDeploy.Coin`):
-
-* **Statement.** `x` is the canonical bytes (`RecX.encode`) of what the verifier holds before the run: the inner
-  statement's bytes (a `FlockDeploy.Raw` encoding: its circuit, public and partition files), the verifier's own inner
-  shape (`--rec-inner`), the circuit registration, and per V* part its Flock statement and the verifier's own bindings
-  of it (`--rec-bindings`, which the auditor computes from that part's partition object and program, so parts differ).
-  V*'s shared rows (`--rec-rows`) are no part of `x`: they are staged (below). `parse` and `scopeCheck` are the
-  deployed parser's (`Flock.RecScope.parseOf`, `scopeCheckOf`) at
-  `decodeR`: what `readX` reads (it refuses unless the inner statement's dimensions read, `RecVStar.innerOf`, Flock's
-  plain verifier sets the inner statement up, its statement check passes and it carries a sample, which at one table is
-  the public file's header's, `innerOk`, and there is
-  one part per V*
-  statement of the verifier's inner shape, `RecVStar.statements`, each part's circuit V*'s statement's of its index,
-  `partsVStar`, as each part's session holds it, `RecVStar.checkCircuit`), as the verifier's inner
-  shape and the inner statement's files with no records (`readOf`), where the setup's checks accept that shape
-  (`RecScope.accepts`). The V* records are run messages, so the statement carries no samples, and `scopeCheck` reads
-  only the inner scope check: the compiled verifier refuses the sample and shape conditions at each session's decision
-  (`DeployScope`). `parse` reads no circuit commitment: the shipped verifier has no private-circuit form of the
-  compiled statement.
-* **Rounds.** The inner session's `k_I = IV.k (x_I)` rounds, then one staging round (`kS`), each message answered by
-  its live coin, then each V* session in order, part `s` at its V* statement (`vstar`), over `VO.k` rounds, each step
-  the outer verifier's (`VO`, `verify --zk` at the recursive setup). A session that accepts at its last round is
-  answered `.msg []`, the last one `.acc`; the compiled verifier refuses a session that accepts before its last round,
-  and a session whose last round ended on a coin rather than a decision (`decided`).
-* **Staging.** `vstar stage` (`rec_vstage.stage`) is the prover's: each part's public file holds the prover's
-  registered entries (its running sums' chain, committed under its own salts), the inner session's record is the
-  prover's, and so are V*'s shared rows (`--rec-rows`: `acc0`, `rec-top-L<l>` and `rec-c<k>`, registrations of the
-  prover's values), one set for every part. So the prover sends them, after the inner rounds and before any V*
-  session, as the staging round's message (`encStage`); the challenger's live-coin part's transcript of the inner rounds is the
-  verifier's own (`Brings.tr`). The deployed composer (`verity-verify-proof rec-compose`) accepts only where every part was
-  checked against one staged rows file and one set of every other input the parts share, each part at its own index
-  (`ComposeParts.composed_parts`: each part is then `partRaw`'s form, up to a SHA-512 collision). That the parts'
-  sessions are one run of `V` is the open condition C10 `OneRun` (`ComposeParts`), which needs the service's
-  interactive-run record.
-* **V\* statements.** Part `s`'s statement is what the prover staged (`Stage.ofMsg`: the part's public file, the
-  inner session's record and the shared rows off the staging message, the transcript the challenger's live-coin part's), in the part's
-  recursive flags (`staged`). Its numbers (`numsOf`: `VO`'s rounds and `deployZkRec`'s errors, `N₀` and weight) are to be the ones `x`
-  fixes (`nums`, those of a staged statement that sets up, when one does): the compiled verifier refuses a part whose
-  staged statement has others, and `vstar` reads such a part as that statement (`vstarAt`), so every V* statement
-  `vstar` gives has `nums`' numbers.
-
-`next_rej`, `next_coin` and `next_sess` are the steps; `next_decide_sha512` is the acceptance theorem: at a session's
-decision, the compiled verifier accepts the session exactly when it is the session's last round and the deployed
-`Zk.verify` at the part's recursive setup accepts the record and proof files with the custody checks
-(`FlockDeploy.checks`) and the verdict's last refusals (`fullSampleO`: `RecSetup.fullSample`, `RecSetup.innerSampled`), the part's statement
-being the one the prover staged (`ract_sess`). `next_acc`: the whole run
-accepts only at the last session's last round, where the outer verifier accepts.
-
-`deployRec IV ivScope b` is the record the recursion's claims read, at the inner verifier `IV`, its scope check and
-what the deployment brings (`Brings`): the challenger's live-coin part's transcript, the stager `stage` reads, the outer witnesses'
-readers (`Readers`: the inner messages and the SHA-512 evaluations they record), each outer session's `--zk` leaf counts
-and the reference prover's pieces. `innerView` runs `IV` at the claim's oracle on those messages and the run's first
-`k_I` coins. The hm96 key is the pinned one (`Hm96.Default512`). The record's `stage` lays out the staging message
-from the inner rounds and its commit strings (`Brings.hs`, `Brings.nC`), as the spec has it. The reference prover
-(`refP`) is a composition: the native inner prover; that stager at the commit strings of its staged values' digests
-under the staging salts on its tape (`commitThen`), so the record's `stage` is its own; then Flock's masked honest
-prover `honestPZk` on each V* session, its witness read off the inner prover's tape and transcript. `OuterRef` names
-what a faithful one needs beyond it. The record's completeness error (`δcRec`) is a union bound over the sessions:
-the inner session's plain `δc` (`FlockComplete.δc`) plus each V* session's masked one at the recursive setup (`δcO`,
-`FlockComplete.δcZk`'s bad coins at `setupO`), at the V* statements `nums` reads, and `1` wherever one of them cannot
-be accepted (`readyRec`).
--/
+/-! The compiled verifier in public-coin form (`RecDeploy.V`), the inner session then one `verify --zk` per V\* part,
+and its record (`deployRec`). -/
 
 @[expose] public section
 
@@ -115,8 +49,6 @@ open Flock
 open FlockDeploy (Raw Coin Final Ins encNat encBytes encStr encOpt encList Rd rdTake rdNat rdBytes rdStr rdOpt rdList
   jsonOf checks tabsOf sha512)
 open Lean (Json)
-
-/-! ## The compiled verifier's statement -/
 
 /-- A V* part as the compiled statement holds it: its Flock statement (its public file the prover's, staged) and the
 verifier's own bindings of it (`--rec-bindings`, `verity_flock.rec_bindings` of the part's partition object and
@@ -183,8 +115,6 @@ theorem decodeX_encode {x : Claims.Msg} {w : RecX} (h : decodeX x = some w) : w.
 
 theorem decodeX_injective {x y : Claims.Msg} {w : RecX} (hx : decodeX x = some w) (hy : decodeX y = some w) : x = y :=
   (decodeX_encode hx).symm.trans (decodeX_encode hy)
-
-/-! ## Its parser -/
 
 /-- The compiled statement as read: its fields, the inner statement's, the verifier's own inner shape and the inner
 statement's shape as `RecVStar.innerOf` reads it. -/
@@ -330,8 +260,6 @@ theorem readX_parts {x : Claims.Msg} {r : XR} (h : readX x = some r) :
         subst h
         exact ⟨vs, hv, by simpa using hp⟩
 
-/-- **`readX` refuses only what `partsVStar` refuses**: where `readXPre` reads and every part's circuit is V\*'s
-statement's of its index, `readX` reads the same. -/
 theorem readX_of_pre {x : Claims.Msg} {r : XR} (h : readXPre x = some r) {vs : Array VStar.Stmt}
     (hvs : RecVStar.statements r.shape = .ok vs) (hp : partsVStar r.shape r.w.parts vs = true) :
     readX x = some r := by
@@ -377,8 +305,6 @@ def nS (x : Claims.Msg) : ℕ :=
   match readX x with
   | some r => r.w.parts.length
   | none => 0
-
-/-! ## The V* statements -/
 
 /-- **The V* parts' staged inputs**, read off the compiled statement and the rounds before the sessions as the run
 shows them: each part's public file, the inner session's record, the challenger's live-coin part's transcript, and V*'s shared rows
@@ -511,7 +437,6 @@ theorem vstar_length (st : Stage) (x : Claims.Msg) (ms : List (Claims.Msg × Cla
     (vstar st x ms).length = nS x := by
   simp [vstar]
 
-/-- **Every V* statement's rounds are its numbers'.** -/
 theorem vstar_map_k (st : Stage) (x : Claims.Msg) (ms : List (Claims.Msg × Claims.Out)) :
     (vstar st x ms).map VO.k = (List.range (nS x)).map fun s => (nums st x s).rounds := by
   unfold vstar
@@ -519,8 +444,6 @@ theorem vstar_map_k (st : Stage) (x : Claims.Msg) (ms : List (Claims.Msg × Clai
   congr 1
   funext s
   exact congrArg Claims.Recursion.Nums.rounds (numsOf_vstarAt st x ms s)
-
-/-! ## The verifier -/
 
 /-- The inner rounds as a run shows them: each message with its coin's bytes. -/
 def innerPairs (kI : ℕ) (as : List Claims.Msg) (cs : List Coin) : List (Claims.Msg × Claims.Out) :=
@@ -606,8 +529,6 @@ noncomputable def V (IV : Claims.Verifier Coin) (st : Stage) : Claims.Verifier C
   k x := IV.k (xIOf x) + kS x + ((List.range (nS x)).map fun s => (nums st x s).rounds).sum
   next := next IV st
 
-/-! ## What the record reads off a run -/
-
 /-- An accepted session's answer, `.msg []` before the last session, as its verifier's `.acc`. -/
 def fixLast (last : Bool) (k : ℕ) (seg : List (Claims.Msg × Claims.Out)) : List (Claims.Msg × Claims.Out) :=
   if seg.length == k && !last then
@@ -651,8 +572,6 @@ its run's calls at `H`, at the coins `c` (a sample's, whose first are the inner 
 def innerCallsOf (H : Claims.Msg → Claims.Msg) (IV : Claims.Verifier Coin) (rd : Readers) (x : Claims.Msg)
     (c : ℕ → Coin) (ws : List Claims.Flock.Wit) : List Claims.Msg :=
   (Claims.run H (Claims.replay (rd.msgs x ws)) IV (xIOf x) () fun i => c i.val).vLog.map Prod.fst
-
-/-! ## The reference prover -/
 
 /-- **The reference prover's pieces the inner protocol brings**: the native inner prover on its tapes; the digests of
 the values its staging message commits (`vstar stage`'s registered entries: each part's running sums' chain), read
@@ -738,14 +657,8 @@ noncomputable def refP (IV : Claims.Verifier Coin) (b : Brings) (w : Claims.Floc
           (hist.drop (hist.length - j)) (ω.2.2 s)
       | none => .ret []⟩
 
-/-- **What a faithful reference prover needs beyond the composition**: `honestPZk` is the deployed
-`flock-circuit --zk` prover of a plain statement (`FlockDeploy.V true`'s, where `Assembled` takes its completeness as
-`hComplete`); on a V* session it runs at the recursive outer record `deployZkRec`, whose statements set up at the
-recursive setup (`setupO`), and is to be complete there, with error `δ`. -/
 def OuterRef (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) (δ : Claims.Msg → ℝ) : Prop :=
   FlockComplete.CompleteWith H (deployZkRec rel) FlockComplete.honestPZk δ
-
-/-! ## The completeness error -/
 
 /-- **A V\* session's zerocheck outer coins**: the masked verifier's (`FlockComplete.outerSlotsZk`) at the recursive
 setup. -/
@@ -807,8 +720,6 @@ noncomputable def δcRec (st : Stage) (H : Claims.Msg → Claims.Msg) (x : Claim
     FlockComplete.δc H (xIOf x) + ∑ s ∈ Finset.range (nS x), δcO H (staged st x (pick st x s) s)
   else 1
 
-/-! ## The record -/
-
 /-- **The inputs of the SHA-512 evaluations the plain inner verifier's setup makes at the inner statement `xI`**: the
 calls its run logs at SHA-512, at the statement's own setup (`FlockDeploy.setupOf`), and none where it sets up none.
 A function of the statement alone, which no deployment choice moves. -/
@@ -850,8 +761,6 @@ noncomputable def deployRec (IV : Claims.Verifier Coin) (ivScope : Claims.Msg �
 theorem xI_deployRec (IV : Claims.Verifier Coin) (ivScope : Claims.Msg → Bool) (b : Brings) (x : Claims.Msg) :
     Claims.Recursion.xI (deployRec IV ivScope b) x = xIOf x := rfl
 
-/-! ## The verifier's steps against `H` -/
-
 section Steps
 
 variable {IV : Claims.Verifier Coin} {st : Stage} {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin}
@@ -860,21 +769,16 @@ theorem next_rej (H : Claims.Msg → Claims.Msg) (h : ract IV st x as cs = .rej)
     (next IV st x as cs).eval H = (.rej, []) := by
   simp only [next, h, Claims.OC.eval]
 
-/-- **An inner or staging round is answered by its coin, with no query.** -/
 theorem next_coin (H : Claims.Msg → Claims.Msg) {c : Coin} (h : ract IV st x as cs = .coin c) :
     (next IV st x as cs).eval H = (.msg c.bytes, []) := by
   simp only [next, h, Claims.OC.eval]
 
-/-- **A session's round is the outer verifier's**, its answer as `sessOut` gives it and its oracle log the outer
-verifier's. -/
 theorem next_sess (H : Claims.Msg → Claims.Msg) {s j : ℕ} {xO : Claims.Msg} {as' : List Claims.Msg} {cs' : List Coin}
     (h : ract IV st x as cs = .sess s j xO as' cs') :
     (next IV st x as cs).eval H =
       (sessOut (s + 1 == nS x) (j + 1 == VO.k xO) ((nextO xO as' cs').eval H).1, ((nextO xO as' cs').eval H).2) := by
   simp only [next, h, Claims.OC.eval_bind, Claims.OC.eval, List.append_nil]
 
-/-- **A session's round is part `s`'s, at its staged statement**: `s` is a part, `j` a round of its outer verifier,
-and the V* statement is the one the prover staged, read off the inner and staging rounds. -/
 theorem ract_sess {s j : ℕ} {xO : Claims.Msg} {as' : List Claims.Msg} {cs' : List Coin}
     (h : ract IV st x as cs = .sess s j xO as' cs') :
     s < nS x ∧ j < VO.k xO ∧ xO = staged st x (innerPairs (IV.k (xIOf x) + kS x) as cs) s := by
@@ -901,7 +805,6 @@ theorem ract_sess {s j : ℕ} {xO : Claims.Msg} {as' : List Claims.Msg} {cs' : L
   · rw [vstar_getD st x _ hs]
     simp [vstarAt, not_not.1 hn]
 
-/-- **The compiled verifier accepts a run only at the last session's last round**, where the outer verifier accepts. -/
 theorem next_acc (H : Claims.Msg → Claims.Msg) (h : ((next IV st x as cs).eval H).1 = .acc) :
     ∃ s j xO as' cs', ract IV st x as cs = .sess s j xO as' cs' ∧ s + 1 = nS x ∧ j + 1 = VO.k xO ∧
       ((nextO xO as' cs').eval H).1 = .acc := by
@@ -921,12 +824,6 @@ theorem next_acc (H : Claims.Msg → Claims.Msg) (h : ((next IV st x as cs).eval
       split_ifs at h with h1 h2
       exact ⟨by simpa using h2, by simpa using h1, rfl⟩
 
-/-- **The acceptance theorem: at SHA-512 a session's decision is the shipped recursive check's.** Where session `s`'s
-outer verifier decides, the compiled verifier accepts the session (`.acc` at the last session, `.msg []` before it)
-exactly when this is the session's last round and the deployed `verity-verify-proof verify --zk` with part `s`'s recursive
-inputs, `Zk.verify` at the statement's recursive setup (`actO_decide`, `RecIns.setup`), accepts the record and proof
-files with the custody checks and the verdict's last refusals; else it refuses. The statement is the part's as the prover
-staged it (`ract_sess`). -/
 theorem next_decide_sha512 {s j : ℕ} {xO : Claims.Msg} {as' : List Claims.Msg} {cs' : List Coin} {i : Ins}
     {spec : SessionSpec} {sts : Array Stmt} {link : List ByteArray × List ByteArray} {c₁ : Coin}
     {mids : List (Claims.Msg × Coin)} {f : Final} (h : ract IV st x as cs = .sess s j xO as' cs')
