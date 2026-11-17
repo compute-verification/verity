@@ -304,7 +304,9 @@ have network, Python 3.12 and no root. The DGX's driver is CUDA 13.0's, which `m
 its PATH, and the H100 has no card file in `calibration/hardware/cards/`, so a card-bound benchmark refuses there. Use only idle
 capacity: one job at a time, at most 30 minutes, one GPU and 16 CPUs; `vcf-job-run.sh` cancels a job still pending
 after 20 minutes. A job that pends on `Resources` while the DGX's GPUs are idle may find them held by a reservation
-of the account (`scontrol show reservation`), which `--reservation=NAME` runs it in.
+of the account (`scontrol show reservation`), which `--reservation=NAME` runs it in. Inside it a GPU job can still wait for
+another user's job that holds no GPU, while a CPU-only one starts at once: `sbatch --test-only` with the job's arguments and
+`--wrap true` prints its start without submitting anything.
 
 ## Index
 
