@@ -49,13 +49,13 @@ from typing import Any
 
 import numpy as np
 from verity.commitments.randomness import Key, derive
-from verity_vllm.definitions.numerics import derived_rows as D
-from verity_vllm.definitions.numerics import rows as RK
 
 from verity_vllm.check.replay import evaluate as EV
 from verity_vllm.check.replay.index import ProgramIndex
 from verity_vllm.check.replay.opening import CommittedStore
 from verity_vllm.commit import challenge as CH
+from verity_vllm.definitions.numerics import derived_rows as D
+from verity_vllm.definitions.numerics import rows as RK
 from verity_vllm.query.manifest import format as RM
 
 SET_SCHEMA = "vllm-vu-set/v1"

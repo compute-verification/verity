@@ -911,6 +911,35 @@ def test_a_flock_file_whose_name_git_quotes_still_requires_the_agreement(tmp_pat
     assert required_steps(repo, base, _git(repo, "rev-parse", "HEAD"), "mytools.agree:T") == {"lean-agreement": ["verity/protocols/proofs/flock/prover/"]}
 
 
+def test_the_bases_declaration_requires_the_agreement_when_the_checkout_holds_an_older_one(tmp_path):
+    """The loop's checkout sat days behind `main`, its declaration naming Flock's verifier at the path before a move, so a
+    candidate changing the verifier at its new path required no `lean-agreement` and its check skipped the step by name. Read
+    at the candidate's base (``at``), the declaration names the path the candidate changed."""
+    from research.merge import required_steps
+
+    repo = tmp_path / "repo"
+    (repo / "mytools").mkdir(parents=True)
+    decl = ("from research.store.tool import Tool\nT = Tool(name='check', version='1', "
+            "merge_requires={{'lean-agreement': ['{path}']}})\n")
+    (repo / "mytools" / "agree.py").write_text(decl.format(path="verity/ml/flock/"))
+    _git(repo, "init", "-q", "-b", "main")
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-q", "-m", "before the move")
+    before = _git(repo, "rev-parse", "HEAD")
+    (repo / "mytools" / "agree.py").write_text(decl.format(path="verity/protocols/proofs/flock/verifier/"))
+    _git(repo, "commit", "-q", "-am", "the move")
+    base = _git(repo, "rev-parse", "HEAD")
+    (repo / "verity" / "protocols" / "proofs" / "flock" / "verifier").mkdir(parents=True)
+    (repo / "verity" / "protocols" / "proofs" / "flock" / "verifier" / "Hello.lean").write_text("-- a verifier change\n")
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-q", "-m", "a verifier change")
+    tip = _git(repo, "rev-parse", "HEAD")
+    _git(repo, "checkout", "-q", "--detach", before)
+    assert required_steps(repo, base, tip, "mytools.agree:T") == {}
+    assert required_steps(repo, base, tip, "mytools.agree:T", at=base) == {
+        "lean-agreement": ["verity/protocols/proofs/flock/verifier/"]}
+
+
 def test_the_canary_passes_only_while_every_gate_refuses_the_bad_attempts_and_admits_the_control(tmp_path, monkeypatch, capsys):
     """The monitors' daily `research merge --canary`: under the target's own declaration, each bad attempt (no result, another
     kind or a refused one, a record that can't be read or disagrees with the index, another command, a failed verdict, a step

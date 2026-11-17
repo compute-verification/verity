@@ -231,7 +231,6 @@ def _geom(v: dict | None) -> tuple | None:
 def _definition_for(kind: str, count: int | None, world: int | None, rows: dict[int, dict]) -> dict:
     if kind == "all_reduce":
         from verity_vllm.definitions.registry import b1_tp2 as TP2
-
         from verity_vllm.program.quarantine.collective.allreduce import (
             all_reduce_sum_bf16,
         )
