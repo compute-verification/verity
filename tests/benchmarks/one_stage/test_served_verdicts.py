@@ -2490,7 +2490,7 @@ def test_pearlpluss_accepted_piece_under_every_condition_of_record_is_pouws_verd
                                                                                              capsys, live):
     """Pearl+'s accepted piece whose live coins the compose holds to its pin, whose session the lane reserved under its own
     gate key in its open Pearl-C period, whose passes are tied to the window SPOT audited, and which the Lean
-    `PouwCheck.PearlPlus` verdict accepts on the same run with nonzero work, is PoUW's verdict of record: its row is
+    `PouwVerifier.PearlPlus` verdict accepts on the same run with nonzero work, is PoUW's verdict of record: its row is
     Pearl+'s answer with the Lean's work, and remote's record composes it with W_cert that work, nothing missing, pending
     the remote check's answer."""
     monkeypatch.setenv("RESEARCH_RUN_ID", "r1")
@@ -2619,8 +2619,8 @@ def test_the_record_reads_pearlpluss_tie_from_the_window_tied_to_w_under_window_
                                   f"..., not {hashlib.sha512(PEARL_RECORD).hexdigest()[:16]}..., the SHA-512 of the "
                                   "window-circuit record V3c held R's circuit to: its salt session counts toward another "
                                   "circuit than the window served"),
-    ("no Lean", f"no Lean PouwCheck.PearlPlus verdict ({S.PEARLPLUS_LEAN}: FileNotFoundError"),
-    ("Lean rejects", "the Lean PouwCheck.PearlPlus verdict is reject: the live session's coins are out of scope"),
+    ("no Lean", f"no Lean PouwVerifier.PearlPlus verdict ({S.PEARLPLUS_LEAN}: FileNotFoundError"),
+    ("Lean rejects", "the Lean PouwVerifier.PearlPlus verdict is reject: the live session's coins are out of scope"),
     ("Lean other run", f"the Lean verdict is on run {'c2' * 8}... at source {SAMPLE_COIN[:16]}..., not Pearl+'s verdict's "
                        "run and source"),
     ("Lean untied", f"the Lean verdict doesn't hold the passes to Pearl+'s window record W {PEARL_W[:16]}..."),

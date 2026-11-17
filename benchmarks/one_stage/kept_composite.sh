@@ -4,7 +4,7 @@
 #     bash benchmarks/one_stage/kept_composite.sh SRC [K]
 # SRC is the served run's out/ (`served_verdicts.sh`'s $OUT), or a .tgz of the part of it read here: serve/windows.jsonl
 # and serve/h1/, sampled-proofs/served/window/, and pieces/NAME/ for each kept piece. K is the window (default 0).
-# It builds remote, onsite, pouw-check, pouw-period and spot-one-stage-zk, then writes each case private in
+# It builds remote, onsite, pouw-verifier, pouw-period and spot-one-stage-zk, then writes each case private in
 # scratch (0700, files 0600; a case's evidence is witness):
 #  - PoUW's: pouw_piece.py v1 (remote) and period (onsite, and remote once composite.py lists it among remote's
 #    components) from the serve dir, each MISSING with why where the run holds no case of it. With pieces/pouw/ kept,
@@ -41,12 +41,12 @@ build() {  # DIR TARGET
 }
 build verity/protocols/compose/verifier/remote remote || exit 3
 build verity/protocols/compose/verifier/onsite onsite || exit 3
-build verity/protocols/resource_accounting/compute/pouw/verifier/lean/check pouw-check || exit 3
+build verity/protocols/resource_accounting/compute/pouw/verifier/lean/check pouw-verifier || exit 3
 build verity/protocols/resource_accounting/compute/pouw/verifier/lean/check pouw-period || exit 3
 build verity/protocols/proofs/spot/verifier/lean spot-one-stage-zk || exit 3
 B=.lake/build/bin
 REMOTE=$TREE/verity/protocols/compose/verifier/remote/$B/remote ONSITE=$TREE/verity/protocols/compose/verifier/onsite/$B/onsite
-POUW=$TREE/verity/protocols/resource_accounting/compute/pouw/verifier/lean/check/$B/pouw-check PERIOD=$TREE/verity/protocols/resource_accounting/compute/pouw/verifier/lean/check/$B/pouw-period
+POUW=$TREE/verity/protocols/resource_accounting/compute/pouw/verifier/lean/check/$B/pouw-verifier PERIOD=$TREE/verity/protocols/resource_accounting/compute/pouw/verifier/lean/check/$B/pouw-period
 V2=$TREE/verity/protocols/proofs/spot/verifier/lean/$B/spot-one-stage-zk
 P=$W/cases
 log() { "$@" 2>&1 | tee -a "$OUT/kept_composite.txt"; return "${PIPESTATUS[0]}"; }

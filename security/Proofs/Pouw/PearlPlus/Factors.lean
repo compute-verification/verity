@@ -18,7 +18,7 @@ overflows `coreOps_fmaOvf`, which makes the check's word that overflow).
 
 namespace Pouw.PearlPlus.Bridge
 
-open Pouw.PearlC Pouw.Fp8Atom PouwCheck.PearlPlus
+open Pouw.PearlC Pouw.Fp8Atom PouwVerifier.PearlPlus
 
 namespace FactorsSim
 
@@ -209,7 +209,7 @@ theorem accLoop_ok {be : Array ℕ} {gram : Array (Array ℕ)} {q : ℕ} {eb gq 
     {body : ℕ → ℕ → Except String (ForInStep ℕ)}
     (hbody : ∀ i r y, body i r = .ok y →
       ∃ v, Words.finite (Evaluate.Fp32.f32FmaV2 (be[i]! <<< 16) (gram[i]!)[q]! r) = .ok v ∧ y = .yield v)
-    {acc : ℕ} (h : forIn [0:PouwCheck.PearlPlus.R] 0 body = .ok acc) :
+    {acc : ℕ} (h : forIn [0:PouwVerifier.PearlPlus.R] 0 body = .ok acc) :
     PeelExact.accChain? (List.ofFn eb) (List.ofFn gq) = some acc := by
   have eF : Evaluate.Fp32.f32FmaV2 = Verity.Fp32.f32FmaV2 := Properties.Evaluator.Fp32.f32FmaV2
   have hlen : ((List.ofFn eb).zip (List.ofFn gq)).length = 32 := by simp
@@ -223,7 +223,7 @@ theorem accLoop_ok {be : Array ℕ} {gram : Array (Array ℕ)} {q : ℕ} {eb gq 
     _ 0 ⟨by norm_num, by decide, rfl⟩ (fun i hi z r hz hr => by
       rw [List.getElem_range'] at hr
       simp only [Nat.zero_add, Nat.one_mul] at hz hr ⊢
-      have hi32 : i < 32 := by simpa [Std.Legacy.Range.size, PouwCheck.PearlPlus.R] using hi
+      have hi32 : i < 32 := by simpa [Std.Legacy.Range.size, PouwVerifier.PearlPlus.R] using hi
       obtain ⟨v, hv, rfl⟩ := hbody _ _ _ hr
       obtain ⟨rfl, hf⟩ := finite_ok hv
       obtain ⟨hz1, hz2, hz3⟩ := hz
@@ -235,7 +235,7 @@ theorem accLoop_ok {be : Array ℕ} {gram : Array (Array ℕ)} {q : ℕ} {eb gq 
       rw [List.take_add_one, hget i hi32, Option.toList_some, List.foldlM_append, hz3]
       simp only [List.foldlM_cons, List.foldlM_nil, Option.bind_eq_bind, Option.bind_some, hfma,
         Option.pure_def]) h
-  simp only [List.length_range', Std.Legacy.Range.size, PouwCheck.PearlPlus.R, Nat.zero_add] at this
+  simp only [List.length_range', Std.Legacy.Range.size, PouwVerifier.PearlPlus.R, Nat.zero_add] at this
   rw [List.take_of_length_le (le_of_eq hlen)] at this
   unfold PeelExact.accChain?
   exact this.2.2
@@ -289,7 +289,7 @@ theorem peelBRow : PeelBRow := by
       PeelExact.addWord? acc (PeelExact.negWord b) = some s ∧ PeelExact.rnBf16? s = some mid[q.val]! := by
     intro q
     have h1 := hma q.val (by rw [Array.size_range]; exact q.isLt)
-    rw [range_getElem! (n := PouwCheck.PearlPlus.R) q.isLt] at h1
+    rw [range_getElem! (n := PouwVerifier.PearlPlus.R) q.isLt] at h1
     obtain ⟨acc, hloop, h1⟩ := bind_ok h1
     obtain ⟨b, hb, h1⟩ := bind_ok h1
     obtain ⟨s, hs, h1⟩ := bind_ok h1
@@ -304,7 +304,7 @@ theorem peelBRow : PeelBRow := by
         exact ⟨v, hv, (pure_ok hy).symm⟩) hloop,
       addWord_of fp32AddIsTheSpec hsf, (toBf16_ok h1).1⟩
   choose bf accs ss hbf hacc hadd hrn using hq
-  refine ⟨by rw [hps, hzs], by rw [← hpj]; simp [hms, hbs, PouwCheck.PearlPlus.R], bf, hbf, ?_⟩
+  refine ⟨by rw [hps, hzs], by rw [← hpj]; simp [hms, hbs, PouwVerifier.PearlPlus.R], bf, hbf, ?_⟩
   have hmidL : mid.toList.length = Params.pi.r := Array.length_toList.trans (hms.trans Array.size_range)
   rw [← hpj, Array.toList_append, Array.toList_map, toList_eq_ofFn hbs hbv]
   exact pbRow_of hmidL fun q hq => by
