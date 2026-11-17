@@ -9,19 +9,14 @@ public import CoreProtocol.Ratio
 # The Site in code
 
 The spec's `Verity.Site` (`security/Definitions/Core/Site.lean`) as code, on Lean core and Flock's canonical JSON and
-SHA-512: the registered hardware, folded from the registration log (`Site.ofLog`), and the views the protocols read.
-The check each entry passes (`Registration.Entry.refusal`) is registration's (`RegistrationLog.SiteCheck`, in
-`core_registration`). Its log holds site entries only; the spec's
-declarations of a day's circuit are the registration log's (`Core.Registration`). Its checks are the spec's, clause for
-clause and in the spec's order, over this file's own types, each decidable; `Properties.Core.Site` states that each is the spec's, and
-`verity.accelerator` is its Python mirror, held to it by the difftest (`site-difftest`). A sheet carries its device's
-figures (`DeviceFigures`, the spec's `Definitions/Core/DeviceFigures.lean`), nonnegative rationals (`Figure`, the spec's
-`ℚ≥0`).
+SHA-512: the registered hardware and the views the protocols read. The log it is folded from (`Site.ofLog`), its
+entries, digests and refusals, and the check each entry passes are registration's (`RegistrationLog.SiteLog` and
+`RegistrationLog.SiteCheck`, in `core_registration`). `verity.device` is its Python mirror, held to it by the difftest
+(`site-difftest`). A sheet carries its device's figures (`DeviceFigures`, the spec's
+`Definitions/Core/DeviceFigures.lean`), nonnegative rationals (`Figure`, the spec's `ℚ≥0`).
 
-The digests are parameters as in the spec (`Registration.Digests`); the deployed ones (`Registration.sha512`) are
-`SHA-512(tag ‖ 0 ‖ canon(j))` over the JSON `verity.accelerator` writes, under `verity/registration/site/v2`,
-`verity/registration/sheet/v2` and `verity/registration/genesis/v1`,
-a rational written as `Core.Ratio` writes one. The views (`Site.sheetOf`, `device`, `node`, `tiers`, `boundary`, `units`,
+The JSON `verity.device` writes, hashed as `SHA-512(tag ‖ 0 ‖ canon(j))` (`tagged`), a sheet's under
+`verity/registration/sheet/v2`, a rational written as `Core.Ratio` writes one. The views (`Site.sheetOf`, `device`, `node`, `tiers`, `boundary`, `units`,
 `registered`, `host`) are functions of the site alone, but `device`, which reads the auditor's sheet too.
 -/
 
@@ -249,35 +244,7 @@ structure Site where
   links : List Site.Link
   deriving DecidableEq
 
-/-- An entry of the registration, by its kind, naming the head of the log it follows: the site entry. -/
-inductive Site.Registration.Entry
-  | site (previous : String) (entry : Site.Entry)
-  deriving DecidableEq
-
-/-- **The registration**: the log the Site is folded from, oldest entry first. -/
-abbrev Site.Registration : Type := List Site.Registration.Entry
-
 namespace Site
-
-namespace Registration.Entry
-
-/-- The head of the log the entry follows. -/
-def previous : Entry → String
-  | .site p _ => p
-
-/-- What the entry adds to the Site. -/
-def added : Entry → Site.Entry
-  | .site _ s => s
-
-end Registration.Entry
-
-/-- The Site an entry's additions extend `S` to, unchecked. -/
-def add (S : Site) (e : Entry) : Site :=
-  ⟨S.sheets ++ e.sheets, S.locs ++ e.locs, S.links ++ e.links⟩
-
-/-- **The Site of a log**: its entries' sheets, locations and links, in the log's order. -/
-def ofLog (log : Registration) : Site :=
-  ⟨log.flatMap (·.added.sheets), log.flatMap (·.added.locs), log.flatMap (·.added.links)⟩
 
 variable (S : Site)
 
@@ -361,12 +328,6 @@ name. -/
 def Composite.plain : Composite :=
   ["verity/inference-only/rows/v1", "verity/pouw/pearl-plus/v1", "verity/sampled-proofs/v1"]
 
-/-- The digests the log names things by: a sheet's, an entry's, and the head of a composite's empty log. -/
-structure Digests where
-  sheet : Sheet → String
-  entry : Entry → String
-  genesis : Composite → String
-
 /-- What the auditor brings to the check: its data sheet for each SKU, public, whose figures are its estimate of the
 SKU's; the tolerance registration allows around an estimate; the key of each of its own devices and hosts, by its id;
 its figures for each memory leaf directly under a host, by the leaf's id; its figures for each host of the prover's, by
@@ -385,21 +346,6 @@ structure Auditor where
 
 /-- The auditor's estimate its sheet `a` states: `a`'s figures, at the auditor's tolerance. -/
 def Auditor.estimate (A : Auditor) (a : Sheet) : DeviceEstimate := ⟨a.figures, A.tolerance⟩
-
-/-- A refusal, named by the check that fails. -/
-inductive Refusal
-  | previous
-  | duplicateId
-  | unknownRef
-  | kind
-  | sheetDigest
-  | figures
-  | capacity
-  | owner
-  | inventory
-  | uncertified
-  | challengerReach
-  deriving DecidableEq, Repr
 
 end Site.Registration
 
@@ -579,9 +525,7 @@ namespace Site
 open Lean (Json)
 open Flock (V)
 
-def SITE : String := "verity/registration/site/v2"
 def SHEET : String := "verity/registration/sheet/v2"
-def GENESIS : String := "verity/registration/genesis/v1"
 
 /-- `SHA-512(tag ‖ 0 ‖ canon(j))` as hex. Every JSON these types write holds integers and strings only, which
 `Flock.canon` always writes, so the fallback is never taken. -/
@@ -605,12 +549,6 @@ it is named by its ids, comma-separated, and no log read from JSON is registered
 reads the two names). -/
 def Registration.Composite.name (c : Registration.Composite) : String :=
   if c = .onsite then "onsite" else if c = .remote then "remote" else ",".intercalate c
-
-/-- A refusal's name in `verity.device` (`REFUSALS`): the constructor's, in kebab case. -/
-def Registration.Refusal.name : Registration.Refusal → String
-  | .previous => "previous" | .duplicateId => "duplicate-id" | .unknownRef => "unknown-ref" | .kind => "kind"
-  | .sheetDigest => "sheet-digest" | .figures => "figures" | .capacity => "capacity" | .owner => "owner"
-  | .inventory => "inventory" | .uncertified => "uncertified" | .challengerReach => "challenger-reach"
 
 /-- An operand class's name in `verity.device` (`OPERAND_CLASSES`): the constructor's, in kebab case. -/
 def OperandClass.name : OperandClass → String
@@ -646,20 +584,9 @@ def Link.toJson (k : Link) : Json :=
   Json.mkObj [("beta", optJson Lean.toJson k.β), ("ends", .arr #[.str k.ends.1, .str k.ends.2]), ("id", .str k.id),
     ("latency", Lean.toJson k.latency), ("unmediated", optJson .str k.unmediated)]
 
-def Registration.Entry.toJson : Registration.Entry → Json
-  | .site p s => Json.mkObj [("format", .str SITE), ("links", .arr (s.links.map Link.toJson).toArray),
-      ("locs", .arr (s.locs.map Loc.toJson).toArray), ("previous", .str p),
-      ("sheets", .arr (s.sheets.map Sheet.toJson).toArray)]
-
 def toJson (S : Site) : Json :=
   Json.mkObj [("links", .arr (S.links.map Link.toJson).toArray), ("locs", .arr (S.locs.map Loc.toJson).toArray),
     ("sheets", .arr (S.sheets.map Sheet.toJson).toArray)]
-
-/-- The deployed digests: SHA-512 over the JSON `verity.device` writes, under the registration log's tags. -/
-def Registration.sha512 : Registration.Digests where
-  sheet k := tagged SHEET k.toJson
-  entry e := tagged SITE e.toJson
-  genesis c := tagged GENESIS (Json.mkObj [("composite", .str c.name)])
 
 private def keysOf : Json → Option (List String)
   | .obj kvs => some (kvs.toList.map (·.1))
@@ -739,14 +666,6 @@ def Link.ofJson (j : Json) : V Link := do
          latency := ← Flock.J.nat j "latency" "a link",
          unmediated := ← optOf (Flock.J.asStr · "a link's unmediated") (← Flock.J.get j "unmediated" "a link") }
 
-def Registration.Entry.ofJson (j : Json) : V Registration.Entry := do
-  exactly j ["format", "links", "locs", "previous", "sheets"] "an entry"
-  if (← Flock.J.str j "format" "an entry") != SITE then throw s!"an entry: format is not {SITE}"
-  let sheets ← (← Flock.J.arr j "sheets" "an entry").toList.mapM Sheet.ofJson
-  let locs ← (← Flock.J.arr j "locs" "an entry").toList.mapM Loc.ofJson
-  let links ← (← Flock.J.arr j "links" "an entry").toList.mapM Link.ofJson
-  pure (.site (← Flock.J.str j "previous" "an entry") ⟨sheets, locs, links⟩)
-
 /-- A Site as `toJson` writes it, and only so: what a check that takes the registered hardware as a parameter reads. -/
 def ofJson (j : Json) : V Site := do
   exactly j ["links", "locs", "sheets"] "a site"
@@ -757,12 +676,6 @@ def ofJson (j : Json) : V Site := do
 
 def Registration.Composite.ofJson (j : Json) : V Registration.Composite :=
   byName [.onsite, .remote] Registration.Composite.name j "the log's composite"
-
-/-- A log as `Registration.to_json` writes it: its composite and its entries. -/
-def Registration.ofJson (j : Json) : V (Registration.Composite × Registration) := do
-  exactly j ["composite", "entries"] "the log"
-  pure (← Registration.Composite.ofJson (← Flock.J.get j "composite" "the log"),
-    ← (← Flock.J.arr j "entries" "the log").toList.mapM Registration.Entry.ofJson)
 
 /-- The auditor as `Auditor.to_json` writes it: its devices' and hosts' keys, its data sheets, the first under an SKU
 or a device being the one the check reads, its hosts' time bases and its tolerance. -/

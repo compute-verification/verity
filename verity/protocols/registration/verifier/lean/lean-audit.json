@@ -8,9 +8,14 @@
  "escapes": {},
  "layers": {
   "RegistrationLog.SiteCheck": {
+   "imports": ["CoreProtocol.Site", "RegistrationLog.SiteLog"],
+   "except": [],
+   "why": "the site's registration check is stated over core's site (`CoreProtocol.Site`) and the site log alone, which `Properties.Site` reads; nothing of Mathlib or of `security`"
+  },
+  "RegistrationLog.SiteLog": {
    "imports": ["CoreProtocol.Site"],
    "except": [],
-   "why": "the site's registration check is stated over core's site (`CoreProtocol.Site`) alone, which `Properties.Site` reads; nothing of Mathlib or of `security`"
+   "why": "the site log is stated over core's site (`CoreProtocol.Site`) alone, which `Properties.Site` reads; nothing of Mathlib or of `security`"
   }
  },
  "guarantees": {},
