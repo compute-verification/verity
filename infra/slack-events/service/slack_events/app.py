@@ -1,10 +1,9 @@
 """The HTTP side (`api/index.py`): Slack's Events and Interactivity requests, the health route and the three crons.
 
 Slack's requests are checked (HMAC SHA-256 of `v0:{timestamp}:{raw body}` with SLACK_SIGNING_SECRET, at most MAX_SKEW_S
-old), published to the queue synchronously, keyed on the message's channel and ts (`message_key`, which reconciliation
-uses too; anything else on Slack's id), and answered 200; a publish that fails answers 503, so Slack retries.  Every
-signed request to the events route stamps slack_heard_at, which reconciliation's silence check reads.  Nothing runs
-after the answer: the `drain` cron consumes the queue (`subscriber.py`)."""
+old), published to the queue synchronously, keyed on Slack's id, and answered 200; a publish that fails answers 503, so
+Slack retries.  Every signed request to the events route stamps slack_heard_at, which reconciliation's silence check
+reads.  Nothing runs after the answer: the `drain` cron consumes the queue (`subscriber.py`)."""
 from __future__ import annotations
 
 import hashlib
@@ -19,7 +18,7 @@ from starlette.concurrency import run_in_threadpool
 
 from . import comms, crons, subscriber
 from .deps import (CANARY_DONE, CANARY_SENT, DEAD, DEAD_TOPIC, LAST_DONE, LAST_ENQUEUED, LAST_SUCCESS, OLDEST, SLACK_HEARD,
-                   TOPIC, Deps, error, deployed, message_key)
+                   TOPIC, Deps, error, deployed)
 
 MAX_SKEW_S = 300
 HEALTH_NOTE = ("from Vercel's Runtime Cache, best effort: null is unknown (a cold or evicted cache), not down; "
@@ -66,10 +65,10 @@ def create_app(deps: Callable[[], Deps] = deployed) -> FastAPI:
             return d, body, JSONResponse({"error": why}, status_code=401)
         return d, body, None
 
-    async def enqueue(d: Deps, payload: dict, key: str | None = None) -> JSONResponse:
+    async def enqueue(d: Deps, payload: dict) -> JSONResponse:
         eid = payload["event_id"]
         try:
-            await run_in_threadpool(d.queue.send, TOPIC, payload, idempotency_key=key or eid)
+            await run_in_threadpool(d.queue.send, TOPIC, payload, idempotency_key=eid)
         except Exception as e:  # noqa: BLE001 - Slack retries a 5xx, keyed on the same id
             d.log("publish-failed", event_id=eid, error=error(e))
             return JSONResponse({"error": "publish failed"}, status_code=503)
@@ -98,9 +97,8 @@ def create_app(deps: Callable[[], Deps] = deployed) -> FastAPI:
                                                                   "username", "bot_id") if k in ev}})
         if ev.get("bot_id") and ev.get("bot_id") == d.registry.get("bot_id") and not d.rs.external_post(ev, d.registry):
             return JSONResponse({"ok": True, "ignored": "our bot's post"})
-        key = message_key(ev["channel"], ev["ts"]) if ev.get("type") == "message" and ev.get("channel") and ev.get("ts") else None
         return await enqueue(d, {"kind": "event", "event_id": eid, "event": ev, "team_id": data.get("team_id"),
-                                 "source": "events"}, key)
+                                 "source": "events"})
 
     @app.post("/api/slack/interactivity")
     async def interactivity(request: Request):

@@ -1,10 +1,10 @@
-"""``pearl-c-h100-v0``, ``pearl-c-h100-v1``, ``pearl-c-h100-v1-h3``, ``pearl-c-sm120-v1`` and ``pearl-c-sm120-v1-h3``:
+"""``pearl-c-h100-v1-h3`` and ``pearl-c-sm120-v1-h3``:
 Pearl-C, Pearl's FP8 product with its noisy clean-up checked, on the H100 and on the RTX PRO 6000 Blackwell.
 
 The design is Pearl's H100 product and its output tickets, plus Pearl v4's noisy clean-up
 ("peel") pinned bit for bit, so that the useful output U is a checked value
 and no part of the clean-up can be skipped at a degenerate input.  The gap rests on the named conjecture TT_OUT(ρ) at the device
-record's inert-work bound ρ (`Device.cap`: 1/400 on the H100, 1/1,000 on sm_120); nothing here is proved by counting.  Pearl's own pieces (noise lines, BF16 compute ops, norms, the noisy quantization, the H100
+record's inert-work bound ρ (`Device.cap`: 1/400 on the H100, 1/1,000 on sm_120); nothing here is proved by counting.  Pearl's own pieces (noise lines, BF16 compute ops, the H100
 reset-and-promote replay) are `pearl_kw`'s ports of pearl-research-labs/pearl's certificate-v4 code and its ``zk-pow``
 verifier.
 
@@ -17,8 +17,7 @@ seeds     seed_B = H_"pearl-c/v0/seed-B"(salt ‖ root_B);  seed_A = H_"pearl-c/
           (-h3, SHA-512 throughout: every H_ℓ `s512` (SHA-512 after a 128-byte label block, 32 bytes kept), the line rule
           `sample_line`'s 32 bytes of H_"line" for BLAKE3's, and row i's E_A line 0 of its own seed, `row_seed` keyed on
           the row's `sha512/row-seg/v1` digest; the tickets keep seed_A)
-forming  v0, Pearl v4's as ported (`pearl_kw`): FP10 rows -> BF16 X, exact norms, α, β, N = E·Fᵀ on the H100 atom,
-          X̃ = fp8(clamp(fma(α, X, β·N), ±448));  A′ = X̃_A, B̃ = X̃_B
+forming  below;  A′ = X̃_A, B̃ = X̃_B
 chain     C̃_ij = the H100 replay of A′_i · B̃_j: every 128 products a fresh accumulator at +0 chains four
           HOPPER_E4M3_K32 atoms, and one FP32 nearest-even add promotes it into the total (−0 becomes +0)
 fused     AF_ip = chain(A′_i, F_B[:, p]) (32 extra columns);  BF_jq = chain(B̃_j, F_A[:, q]) and
@@ -41,9 +40,7 @@ useful    U_ij / (α_A,i · α_B,j), the model's own unscale (glue)
 (A′ − β_A⊙N_A)(B̃ − β_B⊙N_B)ᵀ = C̃ + (β_A⊙E_A)·[(β_B⊙E_B)·G − B̃·F_A]ᵀ + (A′·F_B)·(−β_B⊙E_B)ᵀ with G = F_Bᵀ·F_A, which is
 the rank-64 BF16 product P_A·P_Bᵀ.  Pearl v4 runs G and the B-side factor on a tolerance path; here both are pinned.
 
-**Two formings.**  ``pearl-c-h100-v0`` keeps Pearl v4's FP10 decode and exact norms (the port), whose 176–256 A-only units
-are skippable.  ``pearl-c-h100-v1`` is the rework, on rows of FP32
-words x, with every rounding pinned here:
+**The forming** is on rows of FP32 words x, with every rounding pinned here:
 
 ~~~text
 stats     s = max|x|;  S = Σ x_p² over p = 0, 8, 16, …: 32 partial FMA chains from +0 (partial j takes the positions 8(j + 32i),
@@ -57,7 +54,7 @@ peel      P_A = [bf16(E′_A) ‖ RNE_bf16(A′·F_B)],  P_B = [RNE_bf16(Σ_p fm
 Only ρ depends on A alone (about 4 units per element).  The model adopts s, ρ and α as its own FP8 quantizer (e4m3(α·x)
 with PoUW off), and the accounting is Lean's ``Costs.adopted``: 68 units per element, 64 of them credited
 (the noise atom and the cast), at the H100's prices.  Every price is a device's (`Prices`): `H100_PRICES` (sm_90) for
-the registered schemes, and `SM120_PRICES` (the device statement's `Prices.sm120`, measured) for sm_120's atom.  v1 shares v0's seed labels (``pearl-c/v0/seed-*``): the two formings sample the same seeds.
+the registered schemes, and `SM120_PRICES` (the device statement's `Prices.sm120`, measured) for sm_120's atom.
 
 **The domain** (TT_OUT's `pearlCDomain` and `OperandOK`): 128 ∣ k (whole promotion groups), and on every row of both
 operands the noise floor ρ·α ≥ 1 (the exact product of the FP32 words) and liveness `LiveRow 1 x Stat.every8`: with the
@@ -76,10 +73,10 @@ its cells' credit (4ρ at a census k, `row_inert_share_at`) beside the tile's: t
 doesn't transfer.  The registered -h3 schemes are ``pearl-c-sm120-v1-h3`` (the served default) and ``pearl-c-h100-v1-h3``.
 
 **The device** (`pearl_c_device.Device`) is a scheme parameter: the atom, the peel's step, G and the W1 prices above are
-the record's, and the H100 names in this docstring are `pearl_c_device.H100`'s.  ``pearl-c-sm120-v1`` is v1 on
-`pearl_c_device.SM120`: the RTX PRO 6000's captured atom at `SM120_PRICES`, with the peel, G and the k bound as stand-ins
+the record's, and the H100 names in this docstring are `pearl_c_device.H100`'s.  On `pearl_c_device.SM120` it is the
+RTX PRO 6000's captured atom at `SM120_PRICES`, with the peel, G and the k bound as stand-ins
 (its `standins`); the promotion window is G atoms and the domain's whole groups are 32·G ∣ k.  An unpromoted record (G None,
-`pearl_c_device.SM120_UNPROMOTED`) chains one accumulator over all of k, and its domain is 32 ∣ k.  v0 is the H100's only.
+`pearl_c_device.SM120_UNPROMOTED`) chains one accumulator over all of k, and its domain is 32 ∣ k.
 """
 
 from __future__ import annotations
@@ -106,7 +103,6 @@ from verity.protocols.resource_accounting.compute.pouw.verifier.serving import H
 from . import pearl_kw as P
 from .pearl_c_device import H100, H100_PRICES, PRICES, SM120_PRICES, Device, Prices  # noqa: F401 - re-exported
 
-NAME = "pearl-c-h100-v0"
 R = P.R
 SLICE = 32
 PEEL_K = 2 * R                     # the peel's BF16 depth, four k16 slices
@@ -130,9 +126,6 @@ TREE_HASH = {h: HASH_FORMATS[h].tree_hash for h in HASHINGS}
 CENSUS_ROW_INERT_SHARE_MULTIPLE = 4
 
 
-#: Forming v0 (Pearl v4's, as ported) per operand element: 240–320 for the port, at the upper end
-#: of the H100's prices; v0 is priced on the H100 only
-FORMING_V0_UNITS = 320
 #: F's line norm under v1 (E keeps Pearl's 256)
 LINE_NORM_V1 = 16.0
 S5_STRIDE = 8
@@ -254,11 +247,6 @@ def _bf16_of_word(word: int) -> int:
     return P.f32_to_bf16(P.f32_of_bits(word))
 
 
-def _bf16_scaled(beta: int, code: int) -> int:
-    """bf16(β · e) for an E4M3 noise code e (Pearl's BF16 compute semantics: exact decode, one f32 product, RNE)."""
-    return P.bf16_mul(beta, P.f32_to_bf16(P.fp8_to_f32(code)))
-
-
 def _bf16_of_code(code: int) -> int:
     return P.f32_to_bf16(P.fp8_to_f32(code))
 
@@ -286,8 +274,8 @@ class Formed:
 class Ops:
     """One tile's formed operands and peel factors."""
 
-    a: P.Built | Formed             # A′ = a.codes, with α_A, β_A
-    b: P.Built | Formed             # B̃ = b.codes, with α_B, β_B
+    a: Formed                       # A′ = a.codes, with α_A, β_A
+    b: Formed                       # B̃ = b.codes, with α_B, β_B
     e_a: list[list[int]]            # E_A lines of the tile's rows
     e_b: list[list[int]]            # E_B lines of the tile's columns
     pa: list[list[int]]             # P_A rows, 64 BF16 words
@@ -320,11 +308,9 @@ def gram(seed_b: bytes, k: int, norm: float = P.NOISE_NORM, device: Device = H10
     return tuple(tuple(chain(_column(fb, p), fa_cols[q], device) for q in range(R)) for p in range(R))
 
 
-def scaled_noise(side: P.Built | Formed, e_rows: Sequence[Sequence[int]]) -> list[list[int]]:
-    """The peel's noise rows as BF16 words: bf16(β·E) for v0, bf16(E′) (exact) for v1."""
-    if isinstance(side, Formed):
-        return [[_bf16_of_code(c) for c in row] for row in side.ep]
-    return [[_bf16_scaled(beta, e) for e in e_row] for beta, e_row in zip(side.beta, e_rows)]
+def scaled_noise(side: Formed, e_rows: Sequence[Sequence[int]]) -> list[list[int]]:
+    """The peel's noise rows as BF16 words: bf16(E′), exact."""
+    return [[_bf16_of_code(c) for c in row] for row in side.ep]
 
 
 def peel_factors_a(codes: Sequence[Sequence[int]], be_rows: Sequence[Sequence[int]], seed_b: bytes, k: int,
@@ -461,38 +447,32 @@ def tickets(seed_a: bytes, checked: Checked, hashing: str = "h3") -> list[bytes]
 
 
 class PearlC:
-    """Pearl-C on a device (`pearl_c_device`, the H100 by default): ``k_min`` = 1024 (Pearl's domain), and under forming v1
-    and -h3 the device record's `census_ks` below it (each row bounded at 4ρ there, `row_inert_share_at`), and 64 x 64 tiles; smaller bounds make a test instance.  ``hashing`` h3,
-    the default (h0, Pearl's keyed-BLAKE3 seeds, lines and tickets, is taken by name), names the scheme ``…-h3``: SHA-512 throughout (the module docstring), each row of A sampling its E_A line from its own seed keyed on its SHA-512 row digest (`row_seeds`,
+    """Pearl-C on a device (`pearl_c_device`, the H100 by default): ``k_min`` = 1024 (Pearl's domain), and
+    under -h3 the device record's `census_ks` below it (each row bounded at 4ρ there, `row_inert_share_at`), and 64 x 64 tiles; smaller bounds make a test instance.  ``hashing`` h3,
+    the default (h0, Pearl's keyed-BLAKE3 seeds, lines and tickets, only when asked for), names the scheme ``…-h3``: SHA-512 throughout (the module docstring), each row of A sampling its E_A line from its own seed keyed on its SHA-512 row digest (`row_seeds`,
     `row_digest`), the work sampling design checking the inert-work bound per row too.  The tree hash is `TREE_HASH[hashing]`, on the instance.  ``prices`` is the W1 price record that `wref`, `credit_of`, `job_cost` and the count of inert work read, the
     device's own by default; another record marks the name ``…@<device>`` (the H100's atom at sm_120's prices is
-    ``pearl-c-h100-v1@sm_120``)."""
+    ``pearl-c-h100-v1-h3@sm_120``)."""
 
-    def __init__(self, k_min: int = K_MIN, tile: tuple[int, int] = (TILE, TILE), forming: str = "v0", device: Device = H100,
+    def __init__(self, k_min: int = K_MIN, tile: tuple[int, int] = (TILE, TILE), forming: str = "v1", device: Device = H100,
                  hashing: str = "h3", prices: Prices | None = None):
-        if forming not in ("v0", "v1"):
-            raise ValueError(f"forming {forming!r}: v0 (the H100 port's) or v1 (§5's)")
-        if forming == "v0" and device != H100:
-            raise ValueError(f"forming v0 is the H100 port's; {device.name} takes v1")
+        if forming != "v1":
+            raise ValueError(f"forming {forming!r}: Pearl-C forms by §5 (v1)")
         if hashing not in HASHINGS:
             raise ValueError(f"hashing {hashing!r}: h0 (TurboSHAKE128 and SHA-256) or h3 (SHA-512, per-row seeds)")
         prices = prices or device.prices
-        if forming == "v0" and prices != H100_PRICES:
-            raise ValueError(f"forming v0 is the H100 port's, priced on the H100 only, not {prices.device}")
-        self.name = ((NAME if forming == "v0" else f"pearl-c-{device.name}-v1") + ("" if hashing == "h0" else f"-{hashing}")
+        self.name = (f"pearl-c-{device.name}-v1" + ("" if hashing == "h0" else f"-{hashing}")
                      + ("" if prices == device.prices else f"@{prices.device}"))
         self.k_min, self.tile, self.forming, self.device, self.hashing, self.prices = k_min, tile, forming, device, hashing, prices
         #: the ks below k_min the domain takes: the device record's census-passed ks, whose census ran §5's forming (v1)
         #: under a row-bounded format (-h3), where a row's inert-work bound there is `CENSUS_ROW_INERT_SHARE_MULTIPLE`·ρ (`row_inert_share_at`)
         self.census_ks = (tuple(k for k in device.census_ks if k < k_min)
-                          if forming == "v1" and HASH_FORMATS[hashing].row_inert_bound else ())
+                          if HASH_FORMATS[hashing].row_inert_bound else ())
         #: ρ, the device record's: the tile rule's inert-work bound and the credit's (1 − ρ) (`clear_work`)
         self.cap = device.cap
         self.commitment_hash = TREE_HASH[hashing]
-        self.line_norm = P.NOISE_NORM if forming == "v0" else LINE_NORM_V1
-        allowance = ("forming v0 is the H100 port's (FP10 decode and exact norms depend on A alone and are skippable); "
-                     "pearl-c-h100-v1 has the reworked forming") if forming == "v0" else (
-                     "forming v1 is §5's: ρ over every 8th position depends on A alone (about 4 units per element) and is "
+        self.line_norm = LINE_NORM_V1
+        allowance = ("forming v1 is §5's: ρ over every 8th position depends on A alone (about 4 units per element) and is "
                      "not credited; the model adopts s, ρ and α as its own FP8 quantizer (Costs.adopted)")
         rho, honest = device.cap, f"{float(100 * (1 - device.cap)):g}%"
         if device == H100:
@@ -552,9 +532,6 @@ class PearlC:
     def tiles(self, shape: Shape) -> list[Tile]:
         return grid_tiles(shape, *self.tile)
 
-    def _forming(self) -> int:
-        return FORMING_V0_UNITS if self.forming == "v0" else self.prices.forming
-
     def _chain_units(self, rows: int, cols: int, k: int) -> int:
         return rows * cols * (k + self.prices.fadd * self.device.promotions(k))
 
@@ -568,26 +545,23 @@ class PearlC:
         """The honest W1 cost of one unit at the scheme's prices under rev1, Lean's `wrefDevRev1` (`DeviceRev1.lean`;
         `wrefOfRev1` at the H100's prices, and `wrefDevRev1K` at the cast offset 0): the chain (1 per MAC) with its
         promotion adds (one FADD per G atoms) less the first of every word (`first_adds`), the fused A′·F_B (r per element
-        of A), the peel in BF16 (a BF16 MAC per product over depth 2r) and A's forming (fs + qa per element under v1, 320
-        under v0).  The weight side (B's forming, B̃·F_A, G, P_B) is done once per weight and epoch, not per unit: it is
+        of A), the peel in BF16 (a BF16 MAC per product over depth 2r) and A's forming (fs + qa per element).  The weight side (B's forming, B̃·F_A, G, P_B) is done once per weight and epoch, not per unit: it is
         `job_cost`, outside W_ref and the credit.  Hashing is the random oracle's."""
         m, k, n = shape.m, shape.k, shape.n
         return (self._chain_units(m, n, k) - self.first_adds(shape) + m * k * R + self.prices.bf16_mac * PEEL_K * m * n
-                + self._forming() * m * k)
+                + self.prices.forming * m * k)
 
     def credit_of(self, shape: Shape) -> int:
         """Lean's `creditDevRev1` (`creditOfRev1` at the H100's prices): `wref` less ρ's qa per element of A, which
         depends on A alone, so `creditDev` less `first_adds`.  An accepted unit is credited (1 − ρ)·`credit_of`
-        (`pearlCProtocolDevRev1`).  v0 has no TT_OUT accounting."""
-        if self.forming != "v1":
-            raise ValueError(f"{self.name}: TT_OUT's accounting is stated for forming v1 only")
+        (`pearlCProtocolDevRev1`)."""
         return self.wref(shape) - self.prices.forming_a_only * shape.m * shape.k
 
     def job_cost(self, n: int, k: int) -> int:
         """The weight side of an (n, k) weight, once per weight and epoch: B's forming, B̃·F_A and G as chains, and P_B's
         FP32 FMA chain (r² per row at an add's price).  Neither W_ref nor the credit counts it (`creditDevRev1` leaves it
         out, which only raises the gap)."""
-        return (self._forming() * n * k + self._chain_units(n, R, k) + self._chain_units(R, R, k)
+        return (self.prices.forming * n * k + self._chain_units(n, R, k) + self._chain_units(R, R, k)
                 + self.prices.fadd * n * R * R)
 
     def noise(self, ctx: Context) -> Noise:
@@ -601,15 +575,10 @@ class PearlC:
         return [row_seed(ctx.salt, row_digest(r), ctx.root_b, u.index, i, self.hashing) for i, r in zip(idx, a_rows, strict=True)]
 
     def _side(self, rows: Sequence[bytes], idx: Sequence[int], side: int, seed_e: bytes, seed_b: bytes, k: int,
-              e: list[list[int]] | None = None) -> tuple[P.Built | Formed, list[list[int]]]:
+              e: list[list[int]] | None = None) -> tuple[Formed, list[list[int]]]:
         e = [sample_line(seed_e, side, 0, i) for i in idx] if e is None else e
         f = _basis(seed_b, side, k, self.line_norm)
-        if self.forming == "v1":
-            return form_v1([parse_f32_row(r, k) for r in rows], e, f, self.device), e
-        planes = [P.parse_row(r, k) for r in rows]
-        clean = [P.open_row(c, s) for c, s in planes]
-        norms = [P.exact_norms(c, s) for c, s in planes]
-        return P.noisy_quantize(P.H100, clean, norms, e, [list(x) for x in f]), e
+        return form_v1([parse_f32_row(r, k) for r in rows], e, f, self.device), e
 
     def encode(self, ctx: Context, noise: Noise, a_rows: Sequence[bytes], b_rows: Sequence[bytes], tile: Tile) -> Ops | None:
         k = ctx.matmul.shape.k
@@ -626,11 +595,8 @@ class PearlC:
             return None
 
     def admissible(self, ctx: Context, ops: Ops) -> bool:
-        """v0: TT_OUT's domain is every input under δ = 1 with promotion every 4 atoms.  v1: every row of both operands passes
-        TT_OUT's `OperandOK`, the noise floor ρ·α ≥ 1 (exact product) and `live_row` (per row, on the exact statistic).
-        Pearl's census policy is not used."""
-        if self.forming == "v0":
-            return True
+        """Every row of both operands passes TT_OUT's `OperandOK`, the noise floor ρ·α ≥ 1 (exact product) and `live_row`
+        (per row, on the exact statistic).  Pearl's census policy is not used."""
         return all(P.f32_of_bits(r) * P.f32_of_bits(a) >= P.SIGMA_MIN and live_row(row)
                    for side in (ops.a, ops.b) for r, a, row in zip(side.rho, side.alpha, side.x))
 
@@ -650,8 +616,7 @@ class PearlC:
     def useful(self, ctx: Context, noise: Noise, ops: Ops, checked: Checked) -> list[list[float]]:
         """U/(α_A,i · α_B,j) in double, for measuring quality.  It is not the served y: the served y is the integration's
         pinned y_unit = RN_f32(RN_f32(U · RN_f32(1/α_A)) · RN_f32(1/α_B)), two FP32 products in that order, then its glue."""
-        value = P.bf16_to_f32 if self.forming == "v0" else P.f32_of_bits
-        return [[P.f32_of_bits(w) / (value(ops.a.alpha[i]) * value(ops.b.alpha[j]))
+        return [[P.f32_of_bits(w) / (P.f32_of_bits(ops.a.alpha[i]) * P.f32_of_bits(ops.b.alpha[j]))
                  for j, w in enumerate(row)] for i, row in enumerate(checked.u)]
 
 
@@ -666,7 +631,7 @@ def keys_of(scheme: PearlC, epoch: Epoch, matmul: Matmul, seed_b: bytes) -> dict
             "unit": unit_block(salt, epoch.weight_roots[matmul.weight], matmul.index)}
 
 
-__all__ = ["CHUNK", "Checked", "D_LEAF", "D_MESSAGE", "FORMING_V0_UNITS", "Formed", "HASHINGS", "K_MIN", "LABELS",
+__all__ = ["CHUNK", "Checked", "D_LEAF", "D_MESSAGE", "Formed", "HASHINGS", "K_MIN", "LABELS",
            "LINE_NORM_V1", "Noise", "Ops", "PEEL_K", "PearlC", "R", "ROW_SEEDED", "S512Seed", "S512_LABELS", "S5_FLOOR",
            "S5_FOUR", "S5_LINE", "S5_QMAX", "S5_STRIDE", "SLICE", "TILE", "TREE_HASH", "chain", "eprime", "f32_row",
            "form_v1", "gram", "keys_of", "leaf", "line_key", "live_row", "message_digest", "messages", "parse_f32_row",

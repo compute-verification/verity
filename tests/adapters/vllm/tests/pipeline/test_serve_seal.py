@@ -108,7 +108,8 @@ def test_a_window_committed_without_its_attention_interior_seals_it_as_committed
     plane's interior, its manifest (and the context, and the seal's line) name that as committed and not retained, and the window
     opens as PROVE-PATH opens it: a module output reads verified against the run root, a read inside the interior answers None."""
     from verity_vllm.commit.opened import OpenedReader
-    from verity_vllm.pipeline import deferred_rows as DR, replay_bundle as RB
+    from verity_vllm.pipeline import deferred_rows as DR
+    from verity_vllm.pipeline import replay_bundle as RB
 
     w = _interior_window(tmp_path)
     s, n = w.seal(), w.hi - w.lo
@@ -177,7 +178,11 @@ def _parts_window(tmp_path, with_manifest: bool, port=None, embed_ids=None, name
     keys ``drop``."""
     torch = pytest.importorskip("torch")
     from tests.check.opened import commit_steps
-    from verity_vllm.commit.served_record import PORT_NAMES, SamplerInputsSource, StepInputPort
+    from verity_vllm.commit.served_record import (
+        PORT_NAMES,
+        SamplerInputsSource,
+        StepInputPort,
+    )
 
     fx = json.loads(PARTS.read_text())
     T = 4096 // 8
@@ -445,7 +450,11 @@ def test_a_steps_stream_starts_with_its_input_ids_then_positions_padded_to_the_t
 def test_a_sealed_windows_context_carries_its_served_rows_and_the_port_its_streams_start_with(tmp_path):
     torch = pytest.importorskip("torch")
     from tests.check.opened import commit_steps
-    from verity_vllm.commit.served_record import PORT_NAMES, SamplerInputsSource, StepInputPort
+    from verity_vllm.commit.served_record import (
+        PORT_NAMES,
+        SamplerInputsSource,
+        StepInputPort,
+    )
     from verity_vllm.pipeline import deferred_rows as DR
 
     def i64(xs, T):
@@ -538,6 +547,7 @@ def test_the_registered_compiler_is_prove_paths_capped_compiler():
     import hashlib
 
     from verity.circuits.codec import canonical_json
+
     from verity_vllm.pipeline import advice_windows as AW
     from verity_vllm.program.predict import steps as ST
 

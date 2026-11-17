@@ -21,8 +21,6 @@ import pytest
 import torch
 from verity.circuits.codec import encode_program, program_digest
 from verity.circuits.program import Program
-from verity_vllm.definitions.registry import b1
-
 from verity_torch.correspondence.runtime import (
     JSON_SCHEMA,
     NAMESPACE,
@@ -33,9 +31,11 @@ from verity_torch.correspondence.runtime import (
     load_correspondence,
     validate_document,
 )
+
+from verity_vllm.definitions.registry import b1
 from verity_vllm.program.frontend import derive_examples as ex
-from verity_vllm.program.frontend.vllm_derive import derive_report
 from verity_vllm.program.frontend.rules.vllm_bindings import vllm_ruleset
+from verity_vllm.program.frontend.vllm_derive import derive_report
 
 sys.path.insert(0, str(Path(__file__).parent))
 import test_tp_collective_site as tp  # the synthetic tensor-parallel Program: one rank of a world of 2

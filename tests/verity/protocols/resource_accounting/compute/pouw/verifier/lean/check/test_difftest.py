@@ -612,6 +612,34 @@ def test_passes_distinct(pass_server):
     print(f"pouw-check-difftest passes-distinct: {D.run(PASSES_DISTINCT, examples=500, server=pass_server)}")
 
 
+def period_roots_instance(rng: random.Random, name: str = "honest") -> dict:
+    """A `period` case's ledger, key and name with the roots its windows present (`credit.presented`), as `credit.period`
+    takes them; none for windows not of the evidence's form."""
+    case = credit_cases.period_instance(rng, name)
+    roots = Cr.presented(case["windows"]) if Cr._formed(case["windows"], Cr.PROVED_KEYS) else []
+    return {"key": case["key"], "ledger": case["ledger"], "name": case["name"], "roots": roots}
+
+
+def period_roots(case: dict) -> dict | None:
+    why = Cr.period_twin(case["key"], case["ledger"], case["name"], case["roots"], rounds_cases.lms_verify)
+    return None if why is None else {"refused": list(why)}
+
+
+PERIOD_ROOTS = _port("period-roots", period_roots, period_roots_instance, credit_cases.PERIOD_NAMES)
+
+
+def test_period_roots(pass_server):
+    """`credit.period_twin` against `Credit.period`, the verdict of record `credit.period` reads, on each `period`
+    case's presented roots: a period unclosed, closed incomplete, a window of it missing, out of order, past the close
+    or not its own, a forged ledger or a malformed key, then every other mutation, which leaves the roots as presented."""
+    stats = D.run(PERIOD_ROOTS, examples=100, server=pass_server)
+    swept = Counter(json.loads(D.replay(PERIOD_ROOTS, period_roots_instance(random.Random(f"{name}/{seed}"), name),
+                                        pass_server)[1]) is None
+                    for name in ["honest", *credit_cases.PERIOD_NAMES] for seed in range(3))
+    print(f"pouw-check-difftest period-roots: {stats}; swept {dict(swept)} (True: accepted)")
+    assert swept[True] and swept[False]
+
+
 def chunks(k) -> dict:
     if type(k) is not int or k < 0:
         raise D.Reject("the input is not a natural number K")

@@ -1,0 +1,32 @@
+# This directory's numbers, one [[metric]] each: benchmarks/README.md's "Metrics"; tests/test_metrics_registry.py
+# enforces it.
+
+[[metric]]
+id = "compute-accounting/perplexity-shipped"
+title = "Perplexity as shipped"
+owner = "compute-accounting"
+unit = "perplexity"
+axis = "Perplexity of the model's own BF16 checkpoint on the benchmark's sixteen C4 windows of 2048 tokens, the reference the Pearl-C rows are against."
+better = "lower"
+command = "research run --on NODE --gpus 1 --project verity --source . --cwd source --max-min 90 -- env WORK=/workspace bash benchmarks/ppl/h200.sh"
+every = "7d"
+
+[[metric]]
+id = "compute-accounting/perplexity-pearl-c"
+title = "Perplexity under Pearl-C linears"
+owner = "compute-accounting"
+unit = "perplexity"
+axis = "Perplexity on the same windows with the decoder linears computed as the compute benchmark's served engine computes them (Pearl-C on its sm_90a kernel, lm_head and attention BF16), the mean over three seeds of its noise."
+better = "lower"
+command = "research run --on NODE --gpus 1 --project verity --source . --cwd source --max-min 90 -- env WORK=/workspace bash benchmarks/ppl/h200.sh"
+every = "7d"
+
+[[metric]]
+id = "compute-accounting/perplexity-cost-pearl-c"
+title = "Perplexity cost of Pearl-C"
+owner = "compute-accounting"
+unit = "percent"
+axis = "Increase in perplexity, in percent of the shipped model's, from computing the decoder linears with Pearl-C's served kernel instead of BF16."
+better = "lower"
+command = "research run --on NODE --gpus 1 --project verity --source . --cwd source --max-min 90 -- env WORK=/workspace bash benchmarks/ppl/h200.sh"
+every = "7d"

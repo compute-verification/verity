@@ -1,4 +1,4 @@
-Part of network certification's [PROTOCOL.md](../PROTOCOL.md).
+Part of network attestation's [PROTOCOL.md](../PROTOCOL.md).
 
 ## The charge's carry across execution phases (`charge_chain`)
 

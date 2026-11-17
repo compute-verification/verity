@@ -29,15 +29,15 @@ from __future__ import annotations
 
 import bisect
 import re
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from dataclasses import replace
 from typing import Any
 
 import numpy as np
-
 from verity.commitments import history as HT
 from verity.commitments.periods import interface as IF
 from verity.commitments.periods import rows as CS
+
 from verity_vllm.commit import history_tables as H
 from verity_vllm.pipeline import slice_rows as SL
 from verity_vllm.pipeline.expert_rows import _digest_words, _entry
@@ -152,6 +152,9 @@ class Plan:
     def keys(self) -> list[tuple[str, int]]:
         """Every table the window appends to or reads: its writers' first, then the reads' others."""
         return list(dict.fromkeys([*self.written, *self.read_keys()]))
+
+    def __iter__(self) -> Iterator[tuple[str, int]]:
+        return iter(self.keys())
 
 
 def cut(ms: Sequence[CS.Member], plan: Plan) -> list[CS.Member]:
@@ -303,6 +306,7 @@ class Reader:
                 root, dom = _digest_words(table.root), _digest_words(table.domain.domain_id)
             x = rs[p]
             e = int(self.tok(x)[j])
+            assert table is not None
             held = e < len(table.rows)
             row = table.rows[e] if held else np.zeros(table.words, dtype=np.uint16)
             salt = table.salts[e] if held else bytes(CS.SALT_BYTES)

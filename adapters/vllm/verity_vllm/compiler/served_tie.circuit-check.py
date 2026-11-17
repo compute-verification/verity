@@ -11,8 +11,14 @@ def _network_served_tie_roots() -> list[Any]:
     (`tests/verity/protocols/resource_accounting/network/verifier/fixtures/compile_slice_smallkv.json`), as one proof block (G = P) and as
     seven (G = 1, the block's selection), with the step and its slots, routing and scan."""
     from verity.circuits.defs import bind
-    from verity_vllm.compiler.served_tie import (ServedTieScan, ServedTieSelect, ServedTieSlots, ServedTieStep,
-                                                            unit)
+
+    from verity_vllm.compiler.served_tie import (
+        ServedTieScan,
+        ServedTieSelect,
+        ServedTieSlots,
+        ServedTieStep,
+        unit,
+    )
 
     return [
         bind(ServedTieSlots, R=2, L=4096, T=256),

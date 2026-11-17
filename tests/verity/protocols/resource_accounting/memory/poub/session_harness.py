@@ -1,7 +1,7 @@
 """PoUB's sessions in one process: the verifier's (`poub/verifier/session/verifier.py`) and the prover's
-(`poub/prover/remote_session/prover.py`, the driver's reference as its backend) over a loopback socket, on a clock that
+(`poub/prover/poub_session/prover.py`, the driver's reference as its backend) over a loopback socket, on a clock that
 advances one tick per pass with both sides settled around each tick, so a session runs one schedule (`run`). PoUB's
-session tests (`tests/benchmarks/remote_session/test_session.py` and the tests beside it) and the live verifier's stub
+session tests (`tests/benchmarks/poub_session/test_session.py` and the tests beside it) and the live verifier's stub
 (`poub/attester/live_verifier/tests/stub_verifier.py`) run it."""
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ import threading
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[6]
-sys.path.insert(0, str((ROOT / "verity/protocols/resource_accounting/memory/poub/prover/remote_session/prover.py").parent))
+sys.path.insert(0, str((ROOT / "verity/protocols/resource_accounting/memory/poub/prover/poub_session/prover.py").parent))
 sys.path.insert(0, str(ROOT))
 
 import prover  # noqa: E402
