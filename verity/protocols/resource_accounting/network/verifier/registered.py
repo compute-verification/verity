@@ -2,7 +2,7 @@
 `NetworkCheck.Registered` (`lean/NetworkCheck/Registered.lean`), which defines it.
 
 `registered(site, head, link, key)` reads a link's name and a network attester's key off the site of an accepted registration
-log's view: the link joins a network attester and a host, and the key is the one that certifier registered. It returns
+log's view: the link joins a network attester and a host, and the key is the one that attester registered. It returns
 what the registration states of them (`Registered`): the link's id, its host end, the attester's id and registered
 key, the link's capacity β in bits a second each way, and the head of the log the site was read at, which it carries
 and doesn't read. `Refused`, with the Lean's message, for a link that is no link of the site, a link that doesn't join a
@@ -160,17 +160,17 @@ def _kind(site: Mapping[str, Any], i: str) -> str | None:
     return None if x is None else x["kind"]
 
 
-def _joins_certifier_and_host(site: Mapping[str, Any], k: Mapping[str, Any]) -> bool:
+def _joins_attester_and_host(site: Mapping[str, Any], k: Mapping[str, Any]) -> bool:
     return sorted((_kind(site, k["ends"][0]) or "", _kind(site, k["ends"][1]) or "")) == ["certifier", "host"]
 
 
-def certifier_links(site: Mapping[str, Any]) -> list[str]:
+def attester_links(site: Mapping[str, Any]) -> list[str]:
     """The network attesters' links of the site, by id, in its order: those that join a network attester and a host."""
-    return [k["id"] for k in site["links"] if _joins_certifier_and_host(site, k)]
+    return [k["id"] for k in site["links"] if _joins_attester_and_host(site, k)]
 
 
 def _right_links(site: Mapping[str, Any]) -> str:
-    return f"the network certifiers' links there are [{', '.join(certifier_links(site))}]"
+    return f"the network certifiers' links there are [{', '.join(attester_links(site))}]"
 
 
 def _end(site: Mapping[str, Any], i: str) -> str:
@@ -185,10 +185,10 @@ def lower_hex(s: str) -> bool:
     return _LOWER_HEX.fullmatch(s) is not None
 
 
-def key_refusal(certifier: Mapping[str, Any], key: str) -> str | None:
+def key_refusal(attester: Mapping[str, Any], key: str) -> str | None:
     """Why `key` is not the key of the network attester, or None when it is: the attester's registered key is its LMS
     public key in lower-case hex, and `key` is that string. The one reading of a network attester's registered key."""
-    c, registered_key = certifier["id"], certifier["key"]
+    c, registered_key = attester["id"], attester["key"]
     if not lower_hex(registered_key):
         return (f"network certifier {c} registers the key {registered_key}, which is not lower-case hex; a network "
                 "certifier registers its LMS public key in lower-case hex")
@@ -206,7 +206,7 @@ def registered(site: Mapping[str, Any], head: str, link: str, key: str) -> Regis
     if k is None:
         raise Refused(f"link {link}: no link of the registered hardware; {_right_links(site)}")
     a, b = k["ends"]
-    if not _joins_certifier_and_host(site, k):
+    if not _joins_attester_and_host(site, k):
         raise Refused(f"link {link}: it joins {_end(site, a)} and {_end(site, b)}, not a network certifier and a host; "
                       f"{_right_links(site)}")
     c, host = (a, b) if _kind(site, a) == "certifier" else (b, a)

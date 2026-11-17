@@ -9,7 +9,7 @@ as `__mp_main__`, which times its `Publisher.keep` into `PUBLISHER_KEEPS` in `--
 records when it handed each record's close over (`PublisherProcess.__call__`) and how long serve's `close` waited for
 the last one, and writes the process's pid to `PUBLISHER_PID` once it has started (for `host_sample.py`).
 
-Every time is read on the network attester's own clock, its host's raw clock (`certifier_clock`), which its origin
+Every time is read on the network attester's own clock, its host's raw clock (`attester_clock`), which its origin
 is a reading of. When serve ends they go to `ticks.json` in its `--out` directory, times in seconds after that origin:
 `lateness_ms` (tick t's lateness past its deadline, origin + t·τ, in ms), `tick_ms` (tick t's `_tick`, in ms), `publish`
 ([start, ms, link, window] each, an inline publisher's), `gc` ([start, generation, ms, objects collected] of each
@@ -38,7 +38,7 @@ PUBLISHER_KEEPS = "publisher_keeps.jsonl"
 PUBLISHER_PID = "publisher.pid"
 
 
-def certifier_clock():
+def attester_clock():
     """The network attester's own clock, which its origin is a reading of: its host's raw clock, read by its clock id
     (`pacer.raw_clock`). A probe's times are laid against that origin, so a probe given no clock reads this one: on
     another clock its times would be off by however far the two clocks stand apart."""
@@ -50,7 +50,7 @@ class Collections:
     """`gc.callbacks` entry recording each collection's start and length on `clock` (seconds)."""
 
     def __init__(self, clock=None) -> None:
-        self.clock, self.events, self.counts, self._start = clock or certifier_clock(), [], [0, 0, 0], None
+        self.clock, self.events, self.counts, self._start = clock or attester_clock(), [], [0, 0, 0], None
 
     def __call__(self, phase: str, info: dict) -> None:
         if phase == "start":
@@ -73,7 +73,7 @@ class Probe:
     `--out` (where a spawned publisher's keeps are, and its pid goes)."""
 
     def __init__(self, clock=None, out: Path | None = None) -> None:
-        self.clock, self.out, self.network_attester, self.work, self.publish = clock or certifier_clock(), out, None, [], []
+        self.clock, self.out, self.network_attester, self.work, self.publish = clock or attester_clock(), out, None, [], []
         self.collections = Collections(self.clock)
         self.publisher_pid, self.handoff, self.close = None, [], None
 
@@ -147,7 +147,7 @@ class Probe:
 def time_keeps(publisher_cls: type, clock=None) -> None:
     """In a spawned publisher's process: each `Publisher.keep`'s start and length, appended to `PUBLISHER_KEEPS` in the
     publisher's `out` as it returns."""
-    keep, clock = publisher_cls.keep, clock or certifier_clock()
+    keep, clock = publisher_cls.keep, clock or attester_clock()
 
     def timed_keep(self, record, *args, **kwargs) -> None:
         start = clock()

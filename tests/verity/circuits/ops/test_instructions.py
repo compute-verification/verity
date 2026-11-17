@@ -95,7 +95,7 @@ def test_pinned_instructions_and_their_models() -> None:
         "sm100.tcgen05.mma.s8": BLACKWELL_SM100_S8_K32,  # B200
         "sm100.mma.m16n8k32.s8": BLACKWELL_SM100_S8_K32,  # B200
     }
-    # registry <= computed level: the sm120 FP4 pair is "pinned" only because benchmarks/tc_probe/trust.py computed PINNED
+    # registry <= computed level: the sm120 FP4 pair is "pinned" only because calibration/tc_probe/trust.py computed PINNED
     # (P2 closed by the fresh-seed sweeps), and each points at its published dossier
     for iid in ("sm120.mma.m16n8k64.e2m1.nvf4", "sm120.mma.m16n8k64.e2m1.mxf4", "sm120.mma.m16n8k32.e4m3", "sm120.mma.m16n8k32.e5m2",
                 "sm120.mma.m16n8k32.s8", "sm90.wgmma.m64n8k32.s8", "sm90.wgmma.m64n64k32.s8", "sm90.wgmma.m64n128k32.s8",
@@ -138,7 +138,7 @@ def test_mnemonics_come_from_the_source_repos_or_are_none() -> None:
         "mma.sync.aligned.kind::mxf4nvf4.block_scale.scale_vec::4X.m16n8k64.row.col.f32.e2m1.e2m1.f32.ue4m3"
     )
     # the tcgen05 mnemonics carry descriptors, not register lists: recorded as the PTX ISA spells the instruction plus the
-    # descriptor fields the probe kernel set (benchmarks/tc_probe_fp4/tcgen05_fp4.cu)
+    # descriptor fields the probe kernel set (calibration/tc_probe_fp4/tcgen05_fp4.cu)
     assert INSTRUCTIONS["sm100.tcgen05.mma.e2m1.nvf4"].ptx.startswith("tcgen05.mma.cta_group::1.kind::mxf4nvf4.block_scale.scale_vec::4X")
     assert INSTRUCTIONS["sm100.tcgen05.mma.e2m1.mxf4"].ptx.startswith("tcgen05.mma.cta_group::1.kind::mxf4.block_scale.scale_vec::2X")
     assert INSTRUCTIONS["sm100.tcgen05.mma.bf16"].ptx.startswith("tcgen05.mma.cta_group::1.kind::f16 ")

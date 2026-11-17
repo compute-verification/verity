@@ -59,10 +59,10 @@ machine shares a zone's rack). Weight custody over a monitoring period needs tha
 
 A result here is about a monitoring period: the stretch of time it covers, not one epoch, execution phase or run. Present it
 for a week, a month and a year, over all compute, the adversary resource model (`world-inference-2027` in
-`benchmarks/census/adversary.json`), with the datacenter's figure beside it, even though the demo checks two nodes. Lead with
+`calibration/census/adversary.json`), with the datacenter's figure beside it, even though the demo checks two nodes. Lead with
 the pooled total over the period and its share of the compute it covers, at δ = 1% and 10⁻⁶, with the per-epoch figure
 beside it, never alone. Each epoch flips its own live coins, so the pooled total stays about the same as the period
-grows. The datacenter's size and the epoch's length are stated parameters (from `benchmarks/census`), and a figure
+grows. The datacenter's size and the epoch's length are stated parameters (from `calibration/census`), and a figure
 scaled up from the demo's machines says which parts are proved and which are scaled.
 
 `examples` is the one place hardware is declared, every number with its source: `rtx_node` (one of our measured
