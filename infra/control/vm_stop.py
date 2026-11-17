@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
-"""The control pod's VM stops: the Nebius API stops for VMs that can't stop themselves, which ran on infra's VM
-(h200-idle.sh, dc-backstop.sh, glm53-cpu2-backstop.sh) and stopped nothing while that VM was suspended.
+"""The control pod's VM stops: the Nebius API stops for VMs that can't stop themselves.
 
     vm_stop.py loop [--config PATH] [--state PATH]     a pass every EVERY_S (the watchers supervisor runs it)
     vm_stop.py once [--config PATH] [--state PATH] [--dry-run]   one pass; --dry-run stops nothing and saves no state

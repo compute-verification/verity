@@ -329,7 +329,7 @@ def test_of_a_deployment_the_gate_gives_out_every_key_but_the_auditors_devices(t
 
 def test_the_gates_forms_are_the_verifiers_constants_and_hold_a_runs_own_lines(tmp_path):
     """The gate publishes a certificate and a cells' registration only in forms it states itself, since it loads
-    nothing of the certifier's verifier: its constants are `network_attester_rows`' and the runner's word for word, and
+    nothing of the network attester's verifier: its constants are `network_attester_rows`' and the runner's word for word, and
     every line a run writes passes them under the run's own deployment, so an honest run publishes all its
     certificates and registrations. A value changed in a line is out of form, and nothing of its file is
     published."""
